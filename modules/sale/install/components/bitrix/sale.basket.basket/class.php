@@ -1,4 +1,4 @@
-<?
+<?php
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 
@@ -420,6 +420,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 
 		$this->columns = $params['COLUMNS_LIST'];
 		$this->offersProps = $params['OFFERS_PROPS'];
+		$this->offersProps = array_values(array_unique($this->offersProps));
 
 		$this->quantityFloat = $params['QUANTITY_FLOAT'];
 		$this->priceVatShowValue = $params['PRICE_VAT_SHOW_VALUE'];
@@ -549,7 +550,10 @@ class CBitrixBasketComponent extends CBitrixComponent
 		$arr = [];
 		foreach ($array as $key => $value)
 		{
-			if (is_array($value) || preg_match("/[;&<>\"]/", $value))
+			if (
+				is_array($value)
+				|| (is_string($value) && preg_match("/[;&<>\"]/", $value))
+			)
 			{
 				$arr[$key] = htmlspecialcharsEx($value);
 			}
@@ -692,11 +696,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 					{
 						$saveResult = $basket->save();
 
-						if ($saveResult->isSuccess())
-						{
-							$_SESSION['SALE_BASKET_NUM_PRODUCTS'][$this->getSiteId()]--;
-						}
-						else
+						if (!$saveResult->isSuccess())
 						{
 							$deleteResult->addErrors($saveResult->getErrors());
 						}
@@ -732,11 +732,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 					{
 						$saveResult = $basket->save();
 
-						if ($saveResult->isSuccess())
-						{
-							$_SESSION['SALE_BASKET_NUM_PRODUCTS'][$this->getSiteId()]--;
-						}
-						else
+						if (!$saveResult->isSuccess())
 						{
 							$delayResult->addErrors($saveResult->getErrors());
 						}
@@ -774,11 +770,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 						{
 							$saveResult = $basket->save();
 
-							if ($saveResult->isSuccess())
-							{
-								$_SESSION['SALE_BASKET_NUM_PRODUCTS'][$this->getSiteId()]++;
-							}
-							else
+							if (!$saveResult->isSuccess())
 							{
 								$delayResult->addErrors($saveResult->getErrors());
 							}
@@ -870,7 +862,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 	{
 		$result = $this->recalculateBasket($this->request->get('basket'));
 
-		list($basketRefreshed, $changedBasketItems) = $this->refreshAndCorrectRatio();
+		[$basketRefreshed, $changedBasketItems] = $this->refreshAndCorrectRatio();
 		$result['BASKET_REFRESHED'] = $basketRefreshed;
 		$result['CHANGED_BASKET_ITEMS'] = array_merge($result['CHANGED_BASKET_ITEMS'], $changedBasketItems);
 
@@ -974,7 +966,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 
 		if ($this->arParams['USE_GIFTS'] === 'Y')
 		{
-			list($found, $coupon) = $this->getCouponFromRequest($this->request->toArray());
+			[$found, $coupon] = $this->getCouponFromRequest($this->request->toArray());
 
 			if ($found && !empty($coupon) && $result['VALID_COUPON'] === true)
 			{
@@ -1021,7 +1013,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 			{
 				if (strncmp($value, 'PROPERTY_', 9) === 0)
 				{
-					$propCode = ToUpper(mb_substr($value, 9));
+					$propCode = mb_strtoupper(mb_substr($value, 9));
 
 					if ($propCode == '')
 					{
@@ -1082,7 +1074,10 @@ class CBitrixBasketComponent extends CBitrixComponent
 						'=ACTIVE' => 'Y',
 						'@CODE' => $propertyCodes,
 					],
-					'order' => ['SORT' => 'ASC', 'ID' => 'ASC'],
+					'order' => [
+						'SORT' => 'ASC',
+						'ID' => 'ASC',
+					],
 				]);
 				while ($property = $propertyIterator->fetch())
 				{
@@ -1608,6 +1603,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 			$filterItems = array_fill_keys($filterItems, true);
 		}
 
+		$this->storage['ORDERABLE_BASKET_ITEMS_COUNT'] = 0;
 		if (!$fullBasket->isEmpty())
 		{
 			$orderableBasket = $basketStorage->getOrderableBasket();
@@ -1819,7 +1815,14 @@ class CBitrixBasketComponent extends CBitrixComponent
 			['=ID' => $this->storage['ELEMENT_IDS']],
 			false,
 			false,
-			['ID', 'IBLOCK_ID', 'PREVIEW_PICTURE', 'DETAIL_PICTURE', 'PREVIEW_TEXT', 'DETAIL_PAGE_URL']
+			[
+				'ID',
+				'IBLOCK_ID',
+				'PREVIEW_PICTURE',
+				'DETAIL_PICTURE',
+				'PREVIEW_TEXT',
+				'DETAIL_PAGE_URL',
+			]
 		);
 		if ($this->arParams['DETAIL_URL'] !== '')
 		{
@@ -1879,7 +1882,10 @@ class CBitrixBasketComponent extends CBitrixComponent
 
 				foreach ($productProperties as $code => $property)
 				{
-					if (!empty($this->arIblockProps[$productIblockId]) && array_key_exists($code, $this->arIblockProps[$productIblockId]))
+					if (
+						!empty($this->arIblockProps[$productIblockId])
+						&& isset($this->arIblockProps[$productIblockId][$code])
+					)
 					{
 						$temporary = [];
 
@@ -1978,7 +1984,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 			}
 
 			// if sku element doesn't have value of some property - we'll show parent element value instead
-			$parentId = isset($this->storage['SKU_TO_PARENT'][$productId]) ? $this->storage['SKU_TO_PARENT'][$productId] : 0;
+			$parentId = $this->storage['SKU_TO_PARENT'][$productId] ?? 0;
 			if ((int)$parentId > 0)
 			{
 				$parentDetailUrl = $productsData[$parentId]['DETAIL_PAGE_URL'] ?? '';
@@ -1998,6 +2004,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 					)
 					{
 						$item[$fieldVal] = $productsData[$parentId][$fieldVal];
+						$item['~' . $fieldVal] = $productsData[$parentId]['~' . $fieldVal] ?? $item[$fieldVal];
 					}
 				}
 			}
@@ -2046,33 +2053,40 @@ class CBitrixBasketComponent extends CBitrixComponent
 				if ((mb_strpos($key, 'PROPERTY_', 0) === 0) && (mb_strrpos($key, '_VALUE') == mb_strlen($key) - 6))
 				{
 					$iblockId = $productsData[$productId]['IBLOCK_ID'];
-					$code = ToUpper(str_replace(['PROPERTY_', '_VALUE'], '', $key));
+					$code = mb_strtoupper(str_replace(['PROPERTY_', '_VALUE'], '', $key));
 
-					$propData = isset($this->arIblockProps[$iblockId][$code])
-						? $this->arIblockProps[$iblockId][$code]
-						: $this->arIblockProps[$this->storage['PARENTS'][$productId]['IBLOCK_ID']][$code];
+					$propData = $this->arIblockProps[$iblockId][$code]
+						??
+						$this->arIblockProps[$this->storage['PARENTS'][$productId]['IBLOCK_ID']][$code];
 
-					if ($propData['PROPERTY_TYPE'] === 'F')
+					$prepared = false;
+
+					if ($propData['PROPERTY_TYPE'] === Iblock\PropertyTable::TYPE_FILE)
 					{
 						$this->makeFileSources($item, $propData);
 					}
 
 					// display linked property type
-					if ($propData['PROPERTY_TYPE'] === 'E')
+					if ($propData['PROPERTY_TYPE'] === Iblock\PropertyTable::TYPE_ELEMENT)
 					{
 						$this->makeLinkedProperty($item, $propData);
+						$prepared = true;
 					}
 
-					if ($propData['PROPERTY_TYPE'] === 'S' && $propData['USER_TYPE'] === 'directory')
+					if ($propData['PROPERTY_TYPE'] === Iblock\PropertyTable::TYPE_STRING && $propData['USER_TYPE'] === 'directory')
 					{
 						$this->makeDirectoryProperty($item, $propData);
+						$prepared = true;
 					}
 
-					$item[$key] = CSaleHelper::getIblockPropInfo(
-						$value,
-						$propData,
-						['width' => self::IMAGE_SIZE_STANDARD, 'height' => self::IMAGE_SIZE_STANDARD]
-					);
+					if (!$prepared)
+					{
+						$item[$key] = CSaleHelper::getIblockPropInfo(
+							$value,
+							$propData,
+							['width' => self::IMAGE_SIZE_STANDARD, 'height' => self::IMAGE_SIZE_STANDARD]
+						);
+					}
 				}
 			}
 
@@ -2092,7 +2106,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 			elseif (
 				empty($item['PREVIEW_PICTURE'])
 				&& empty($item['DETAIL_PICTURE'])
-				&& $additionalImages[$parentId]
+				&& isset($additionalImages[$parentId])
 			)
 			{
 				$item['PREVIEW_PICTURE'] = $additionalImages[$parentId];
@@ -2126,7 +2140,6 @@ class CBitrixBasketComponent extends CBitrixComponent
 				}
 			}
 		}
-
 		unset($item);
 	}
 
@@ -2183,69 +2196,66 @@ class CBitrixBasketComponent extends CBitrixComponent
 	{
 		$propertySources = [];
 
-		if (!empty($item['PROPERTY_'.$property['CODE'].'_VALUE']))
+		$valueKey = 'PROPERTY_'.$property['CODE'].'_VALUE';
+		if (!empty($valueKey))
 		{
 			if ($property['MULTIPLE'] === 'Y')
 			{
-				$property['VALUE'] = explode(',', $item['PROPERTY_'.$property['CODE'].'_VALUE']);
+				$property['VALUE'] = explode(',', $item[$valueKey]);
 			}
+			$property['~VALUE'] ??= $property['VALUE'];
 
-			$formattedProperty = CIBlockFormatProperties::GetDisplayValue($item, $property, 'sale_out');
+			$formattedProperty = CIBlockFormatProperties::GetDisplayValue($item, $property);
 			if (!empty($formattedProperty['DISPLAY_VALUE']))
 			{
-				if (is_array($formattedProperty['DISPLAY_VALUE']))
-				{
-					foreach ($formattedProperty['DISPLAY_VALUE'] as $key => $formatValue)
-					{
-						$propertySources[] = $formatValue;
-					}
-				}
-				else
-				{
-					$propertySources[] = $formattedProperty['DISPLAY_VALUE'];
-				}
+				$propertySources =
+					is_array($formattedProperty['DISPLAY_VALUE'])
+						? $formattedProperty['DISPLAY_VALUE']
+						: [$formattedProperty['DISPLAY_VALUE']]
+				;
 			}
 		}
 
-		$item['PROPERTY_'.$property['CODE'].'_VALUE_LINK'] = $propertySources;
+		$item[$valueKey . '_LINK'] = $propertySources;
+		$item['~' . $valueKey . '_LINK'] = $propertySources;
 	}
 
 	protected function makeDirectoryProperty(&$item, $property)
 	{
 		$propertySources = [];
 
-		if (!empty($item['PROPERTY_'.$property['CODE'].'_VALUE']))
+		$valueKey = 'PROPERTY_'.$property['CODE'].'_VALUE';
+		if (!empty($item[$valueKey]))
 		{
 			if ($property['MULTIPLE'] === 'Y')
 			{
-				$property['VALUE'] = explode(', ', $item['PROPERTY_'.$property['CODE'].'_VALUE']);
+				$property['VALUE'] = explode(', ', $item[$valueKey]);
+			}
+			else
+			{
+				$property['VALUE'] = $item[$valueKey];
 			}
 
-			$property['~VALUE'] = $property['VALUE'];
+			$property['~VALUE'] ??= $property['VALUE'];
 
 			if (CheckSerializedData($property['USER_TYPE_SETTINGS']))
 			{
 				$property['USER_TYPE_SETTINGS'] = unserialize($property['USER_TYPE_SETTINGS'], ['allowed_classes' => false]);
 			}
 
-			$formattedProperty = CIBlockFormatProperties::GetDisplayValue($item, $property, 'sale_out');
+			$formattedProperty = CIBlockFormatProperties::GetDisplayValue($item, $property);
 			if (!empty($formattedProperty['DISPLAY_VALUE']))
 			{
-				if (is_array($formattedProperty['DISPLAY_VALUE']))
-				{
-					foreach ($formattedProperty['DISPLAY_VALUE'] as $key => $formatValue)
-					{
-						$propertySources[] = $formatValue;
-					}
-				}
-				else
-				{
-					$propertySources[] = $formattedProperty['DISPLAY_VALUE'];
-				}
+				$propertySources =
+					is_array($formattedProperty['DISPLAY_VALUE'])
+						? $formattedProperty['DISPLAY_VALUE']
+						: [$formattedProperty['DISPLAY_VALUE']]
+				;
 			}
 		}
 
-		$item['PROPERTY_'.$property['CODE'].'_VALUE_DISPLAY'] = implode(', ', $propertySources);
+		$item[$valueKey] = implode(', ', $propertySources);
+		$item['~' . $valueKey] = $item[$valueKey];
 	}
 
 	/**
@@ -2505,38 +2515,22 @@ class CBitrixBasketComponent extends CBitrixComponent
 
 	protected function getSessionFUserBasketPrice($fUserId)
 	{
-		$price = null;
-		$siteId = $this->getSiteId();
-
-		if (isset($_SESSION['SALE_USER_BASKET_PRICE'][$siteId][$fUserId]))
-		{
-			$price = $_SESSION['SALE_USER_BASKET_PRICE'][$siteId][$fUserId];
-		}
-
-		return $price;
+		return Sale\BasketComponentHelper::getFUserBasketPrice($fUserId, $this->getSiteId());
 	}
 
 	protected function setSessionFUserBasketPrice($price, $fUserId)
 	{
-		$_SESSION['SALE_USER_BASKET_PRICE'][$this->getSiteId()][$fUserId] = $price;
+		Sale\BasketComponentHelper::setFUserBasketPrice($fUserId, $price, $this->getSiteId());
 	}
 
 	protected function getSessionFUserBasketQuantity($fUserId)
 	{
-		$quantity = null;
-		$siteId = $this->getSiteId();
-
-		if (isset($_SESSION['SALE_USER_BASKET_QUANTITY'][$siteId][$fUserId]))
-		{
-			$quantity = $_SESSION['SALE_USER_BASKET_QUANTITY'][$siteId][$fUserId];
-		}
-
-		return $quantity;
+		return Sale\BasketComponentHelper::getFUserBasketQuantity($fUserId, $this->getSiteId());
 	}
 
 	protected function setSessionFUserBasketQuantity($quantity, $fUserId)
 	{
-		$_SESSION['SALE_USER_BASKET_QUANTITY'][$this->getSiteId()][$fUserId] = $quantity;
+		Sale\BasketComponentHelper::setFUserBasketQuantity($fUserId, $quantity, $this->getSiteId());
 	}
 
 	protected function getAffectedReformattedBasketItemsInDiscount(Sale\BasketBase $basket, array $discountData, array $calcResults)
@@ -2647,7 +2641,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 			$basketBasePrice = $basket->getBasePrice();
 			$basketVatSum = $basket->getVatSum();
 
-			list($result['FULL_DISCOUNT_LIST'], $result['APPLIED_DISCOUNT_LIST']) = $this->getDiscountData($basket);
+			[$result['FULL_DISCOUNT_LIST'], $result['APPLIED_DISCOUNT_LIST']] = $this->getDiscountData($basket);
 		}
 
 		$siteCurrency = Sale\Internals\SiteCurrencyTable::getSiteCurrency($this->getSiteId());
@@ -2917,8 +2911,6 @@ class CBitrixBasketComponent extends CBitrixComponent
 						foreach ($offer['PROPERTIES'] as $propName => $property)
 						{
 							$property['VALUE'] = (string)$property['VALUE'];
-							if ($property['VALUE'] == '')
-								continue;
 
 							$currentSkuPropValues[$propName] = [
 								'~CODE' => $property['~CODE'] ?? $property['CODE'],
@@ -3070,6 +3062,12 @@ class CBitrixBasketComponent extends CBitrixComponent
 							];
 						}
 						unset($arEnum, $rsPropEnums);
+						$arValues['n0'] = [
+							'ID' => 0,
+							'NAME' => '-',
+							'SORT' => PHP_INT_MAX,
+							'PICT' => false,
+						];
 						break;
 					case Iblock\PropertyTable::TYPE_ELEMENT:
 						$rsPropEnums = CIBlockElement::GetList(
@@ -3091,6 +3089,14 @@ class CBitrixBasketComponent extends CBitrixComponent
 							];
 						}
 						unset($arEnum, $rsPropEnums);
+						$arValues['n0'] = [
+							'ID' => 0,
+							'NAME' => '-',
+							'SORT' => PHP_INT_MAX,
+							'FILE' => false,
+							'PICT' => false,
+							'XML_ID' => '-',
+						];
 						break;
 					case Iblock\PropertyTable::TYPE_STRING:
 						$arProp['USER_TYPE'] = (string)$arProp['USER_TYPE'];
@@ -3130,6 +3136,14 @@ class CBitrixBasketComponent extends CBitrixComponent
 											'XML_ID' => $arData['UF_XML_ID'],
 										];
 									}
+									$arValues['n0'] = [
+										'ID' => 0,
+										'NAME' => '-',
+										'SORT' => PHP_INT_MAX,
+										'FILE' => false,
+										'PICT' => false,
+										'XML_ID' => '-',
+									];
 								}
 							}
 						}
@@ -3234,15 +3248,44 @@ class CBitrixBasketComponent extends CBitrixComponent
 
 				if (!empty($arUsedValues))
 				{
+					$removeCodes = [];
 					$clearValues = [];
 					foreach (array_keys($arUsedValues) as $code)
 					{
-						if (count($arUsedValues[$code]) == 1 && $arUsedValues[$code][0] == '-')
+						if (count($arUsedValues[$code]) === 1 && $arUsedValues[$code][0] === '-')
+						{
+							$removeCodes[$code] = true;
 							continue;
+						}
 						$clearValues[$code] = $arUsedValues[$code];
 					}
 					$arUsedValues = $clearValues;
 					unset($clearValues);
+					if (
+						!empty($removeCodes)
+						&& !empty($item['PROPS'])
+						&& is_array($item['PROPS'])
+					)
+					{
+						$updateProps = false;
+						foreach (array_keys($item['PROPS']) as $propertyIndex)
+						{
+							$propertyCode = $item['PROPS'][$propertyIndex]['CODE'] ?? '';
+							if (isset($removeCodes[$propertyCode]))
+							{
+								$updateProps = true;
+								unset($item['PROPS'][$propertyIndex]);
+							}
+							unset($propertyCode);
+						}
+						unset($propertyIndex);
+						if ($updateProps)
+						{
+							$item['PROPS'] = array_values($item['PROPS']);
+						}
+						unset($updateProps);
+					}
+					unset($removeCodes);
 				}
 
 				if (!empty($arUsedValues))
@@ -3288,9 +3331,14 @@ class CBitrixBasketComponent extends CBitrixComponent
 												['width' => self::IMAGE_SIZE_STANDARD, 'height' => self::IMAGE_SIZE_STANDARD],
 												BX_RESIZE_IMAGE_PROPORTIONAL, false, false
 											);
-											$arValue['PICT']['SRC'] = Iblock\Component\Tools::getImageSrc([
-												'SRC' => $tmpImg['src']
-											]);
+											if (is_array($tmpImg))
+											{
+												$arValue['PICT'] = [
+													'SRC' => Iblock\Component\Tools::getImageSrc([
+														'SRC' => $tmpImg['src']
+													]),
+												];
+											}
 										}
 									}
 								}
@@ -3397,7 +3445,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 		}
 		else
 		{
-			list($found, $coupon) = $this->getCouponFromRequest($postList);
+			[$found, $coupon] = $this->getCouponFromRequest($postList);
 
 			if ($found)
 			{
@@ -3659,8 +3707,6 @@ class CBitrixBasketComponent extends CBitrixComponent
 			{
 				unset($_SESSION['NOTIFY_PRODUCT'][$userId][$item->getProductId()]);
 			}
-
-			$_SESSION['SALE_BASKET_NUM_PRODUCTS'][$this->getSiteId()]--;
 		}
 		else
 		{
@@ -3706,14 +3752,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 	protected function processDelay(&$result, Sale\BasketItemBase $item, $delay)
 	{
 		$res = $item->setField('DELAY', $delay);
-		if ($res->isSuccess())
-		{
-			if ($delay === 'Y')
-			{
-				$_SESSION['SALE_BASKET_NUM_PRODUCTS'][$this->getSiteId()]--;
-			}
-		}
-		else
+		if (!$res->isSuccess())
 		{
 			$this->addErrors($res->getErrors(), $item->getId());
 		}
@@ -4010,7 +4049,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 			}
 			else
 			{
-				$oldProperties = $this->updateOffersProperties($oldProperties, $offerProperties);
+				$oldProperties = $this->updateOffersProperties($oldProperties, $offerProperties, $this->offersProps);
 			}
 
 			$properties->setProperty($oldProperties);
@@ -4058,6 +4097,10 @@ class CBitrixBasketComponent extends CBitrixComponent
 				$clearProperties[$code] = $propertyValues[$code];
 			else
 				unset($properties[$code]);
+			if ($clearProperties[$code] === '-')
+			{
+				$clearProperties[$code] = '';
+			}
 		}
 		unset($code);
 		$propertyValues = $clearProperties;
@@ -4234,7 +4277,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 	 */
 	protected static function getMissingPropertyCodes(array $itemProperties, array $propertyCodes)
 	{
-		if (empty($propertyCodes) || !is_array($propertyCodes))
+		if (empty($propertyCodes))
 			return [];
 		if (empty($itemProperties))
 			return $propertyCodes;
@@ -4292,9 +4335,9 @@ class CBitrixBasketComponent extends CBitrixComponent
 	 */
 	protected static function fillMissingProperties(array &$itemProperties, array $missingCodes, array $values)
 	{
-		if (empty($missingCodes) || !is_array($missingCodes))
+		if (empty($missingCodes))
 			return;
-		if (empty($values) || !is_array($values))
+		if (empty($values))
 			return;
 		foreach ($missingCodes as &$code)
 		{
@@ -4317,7 +4360,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 		unset($code);
 	}
 
-	protected static function updateOffersProperties($oldProps, $newProps)
+	protected static function updateOffersProperties($oldProps, $newProps, $offersProps)
 	{
 		if (!is_array($oldProps) || !is_array($newProps))
 			return false;
@@ -4332,6 +4375,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 			$oldValue = $oldProps[$code];
 			$found = false;
 			$key = false;
+			$shortPropId = (string)($oldValue['CODE'] ?? '');
 			$propId = (isset($oldValue['CODE']) ? (string)$oldValue['CODE'] : '').':'.$oldValue['NAME'];
 			foreach ($newProps as $newKey => $newValue)
 			{
@@ -4348,7 +4392,14 @@ class CBitrixBasketComponent extends CBitrixComponent
 				$oldValue['VALUE'] = $newProps[$key]['VALUE'];
 				unset($newProps[$key]);
 			}
-			$result[$code] = $oldValue;
+			elseif ($shortPropId !== '' && in_array($shortPropId, $offersProps))
+			{
+				$oldValue = null;
+			}
+			if ($oldValue !== null)
+			{
+				$result[$code] = $oldValue;
+			}
 			unset($oldValue);
 		}
 		unset($code, $oldValue);
