@@ -1,0 +1,366 @@
+<?php
+/**
+ * Bitrix Framework
+ * @package bitrix
+ * @subpackage sender
+ * @copyright 2001-2012 Bitrix
+ */
+
+namespace Bitrix\Sender\Entity;
+
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Sender\Internals\Model\MessageFieldTable;
+use Bitrix\Sender\Internals\Model\MessageTable;
+use Bitrix\Sender\Internals\Model\MessageUtmTable;
+use Bitrix\Sender\Message\Configuration;
+use Bitrix\Sender\Message\Result;
+
+Loc::loadMessages(__FILE__);
+
+/**
+ * Class Message
+ *
+ * @package Bitrix\Sender\Entity
+ */
+class Message extends Base
+{
+	/**
+	 * Load configuration.
+	 *
+	 * @param integer|null $id ID.
+	 * @param Configuration $configuration Configuration.
+	 * @return Configuration
+	 */
+	public function loadConfiguration($id = null, Configuration $configuration = null)
+	{
+		if (!$configuration)
+		{
+			$configuration = new Configuration;
+		}
+
+		if ($id && $this->load($id))
+		{
+			$data = $this->getFields();
+			foreach ($configuration->getOptions() as $option)
+			{
+				$key = $option->getCode();
+				$value = isset($data[$key]) ? $data[$key] : null;
+				if ($option->getType() === $option::TYPE_FILE)
+				{
+					$value = ($value <> '') ? explode(',', $value) : $value;
+				}
+
+				$configuration->set($key, $value);
+			}
+
+			$configuration->setId($id);
+		}
+
+		return $configuration;
+	}
+
+	/**
+	 * Save configuration.
+	 *
+	 * @param Configuration $configuration Configuration.
+	 * @return \Bitrix\Main\Result
+	 */
+	public function saveConfiguration(Configuration $configuration)
+	{
+		$this->setId($configuration->getId());
+		$result = $configuration->checkOptions();
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		$data = [];
+		foreach ($configuration->getOptions() as $option)
+		{
+			$value = $option->getValue();
+			if ($option->getType() === $option::TYPE_FILE)
+			{
+				$value = is_array($value) ? implode(',', $value) : $value;
+			}
+
+			$data[] = [
+				'CODE' => $option->getCode(),
+				'TYPE' => $option->getType(),
+				'VALUE' => $value,
+			];
+		}
+
+		if (count($data) == 0)
+		{
+			$result->addError(new Error('No options.'));
+		}
+
+		$this->setFields($data)->save();
+
+		if ($this->hasErrors())
+		{
+			$result->addErrors($this->errors->toArray());
+		}
+		else
+		{
+			$configuration->setId($this->getId());
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Copy configuration.
+	 *
+	 * @param integer|string|null $id ID.
+	 * @return Result|null
+	 */
+	public function copyConfiguration($id)
+	{
+		$copiedId = $this->copyData($id);
+		$result = new Result();
+		$result->setId($copiedId);
+
+		return $result;
+	}
+
+	/**
+	 * Remove configuration.
+	 *
+	 * @param integer $id ID.
+	 * @return bool
+	 */
+	public function removeConfiguration($id)
+	{
+		$result = static::removeById($id);
+		return $result->isSuccess();
+	}
+
+	/**
+	 * Remove by ID.
+	 *
+	 * @param integer $id ID.
+	 * @return \Bitrix\Main\Result
+	 */
+	public static function removeById($id)
+	{
+		return MessageTable::delete($id);
+	}
+
+	/**
+	 * Get fields.
+	 *
+	 * @return array
+	 */
+	public function getFields(): array
+	{
+		$result = [];
+		$data = $this->getData();
+		foreach ($data['FIELDS'] as $field)
+		{
+			$result[$field['CODE']] = $field['VALUE'];
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Set fields.
+	 *
+	 * @param array $fields Fields.
+	 * @return $this
+	 */
+	public function setFields(array $fields)
+	{
+		$this->set('FIELDS', $fields);
+		return $this;
+	}
+
+	/**
+	 * Get fields.
+	 *
+	 * @return array
+	 */
+	public function getUtm(): array
+	{
+		$result = [];
+		$data = $this->getData();
+		foreach ($data['UTM'] as $field)
+		{
+			$result[$field['CODE']] = $field['VALUE'];
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Set fields.
+	 *
+	 * @param array $utm
+	 * @return $this
+	 */
+	public function setUtm(array $utm): Message
+	{
+		$this->set('UTM', $utm);
+		return $this;
+	}
+
+	/**
+	 * Get code.
+	 *
+	 * @return ?string
+	 */
+	public function getCode(): ?string
+	{
+		return $this->get('CODE');
+	}
+
+	/**
+	 * Set code.
+	 *
+	 * @param string $code Code.
+	 * @return $this
+	 */
+	public function setCode(string $code)
+	{
+		return $this->set('CODE', $code);
+	}
+
+	/**
+	 * Get default data.
+	 *
+	 * @return array
+	 */
+	protected function getDefaultData()
+	{
+		return [
+			'CODE' => '',
+			'FIELDS' => [],
+			'UTM' => [],
+		];
+	}
+
+	/**
+	 * Load data.
+	 *
+	 * @param integer $id ID.
+	 * @return array|null
+	 */
+	protected function loadData($id)
+	{
+		$data = MessageTable::getRowById($id);
+		if (!is_array($data))
+		{
+			return null;
+		}
+		if ($this->getCode() && $this->getCode() != $data['CODE'])
+		{
+			return null;
+		}
+
+		$data['FIELDS'] = [];
+		$fieldsDb = MessageFieldTable::getList([
+			'select' => ['TYPE', 'CODE', 'VALUE'],
+			'filter' => [
+				'=MESSAGE_ID' => $id,
+			],
+		]);
+		while ($field = $fieldsDb->fetch())
+		{
+			$data['FIELDS'][] = $field;
+		}
+
+		return $data;
+	}
+
+	protected function parsePersonalizeList($text)
+	{
+	}
+
+	/**
+	 * Save data.
+	 *
+	 * @param integer|null $id ID.
+	 * @param array $data Data.
+	 * @return integer|null
+	 */
+	protected function saveData($id, array $data)
+	{
+		$fields = $data['FIELDS'];
+		$utmTags = $data['UTM'];
+		unset($data['FIELDS']);
+		unset($data['UTM']);
+
+		if (!is_array($fields) && count($fields) === 0)
+		{
+			$this->addError('No message fields.');
+			return $id;
+		}
+
+		$id = $this->saveByEntity(MessageTable::getEntity(), $id, $data);
+		if ($this->hasErrors())
+		{
+			return $id;
+		}
+
+		MessageFieldTable::deleteByMessageId($id);
+		foreach ($fields as $field)
+		{
+			if (!$field['CODE'])
+			{
+				continue;
+			}
+
+			if (in_array($field['CODE'], ['MESSAGE_PERSONALIZE', 'SUBJECT_PERSONALIZE', 'TITLE_PERSONALIZE']))
+			{
+				continue;
+			}
+
+			if (in_array($field['CODE'], ['MESSAGE', 'SUBJECT', 'TITLE']))
+			{
+				preg_match_all("/#([0-9a-zA-Z_.|]+?)#/", $field['VALUE'], $matchesFindPlaceHolders);
+				$matchesFindPlaceHoldersCount = count($matchesFindPlaceHolders[1]);
+				if ($matchesFindPlaceHoldersCount > 0)
+				{
+					$list = json_encode($matchesFindPlaceHolders);
+					MessageFieldTable::add(
+						[
+							'MESSAGE_ID' => $id,
+							'TYPE' => $field['TYPE'],
+							'CODE' => $field['CODE'] . '_PERSONALIZE',
+							'VALUE' => $list,
+						]
+					);
+				}
+			}
+			MessageFieldTable::add([
+				'MESSAGE_ID' => $id,
+				'TYPE' => $field['TYPE'],
+				'CODE' => $field['CODE'],
+				'VALUE' => $field['VALUE'],
+			]);
+		}
+
+		MessageUtmTable::deleteByMessageId($id);
+		if ($utmTags)
+		{
+			foreach ($utmTags as $utm)
+			{
+				if (empty($utm['VALUE']) || empty($utm['CODE']))
+				{
+					continue;
+				}
+				MessageUtmTable::add(
+					[
+						'MESSAGE_ID' => $id,
+						'CODE' => $utm['CODE'],
+						'VALUE' => $utm['VALUE'],
+					]
+				);
+			}
+		}
+
+		return $id;
+	}
+}

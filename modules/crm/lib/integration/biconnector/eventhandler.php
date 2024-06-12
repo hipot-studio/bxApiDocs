@@ -1,0 +1,52 @@
+<?php
+
+namespace Bitrix\Crm\Integration\BiConnector;
+
+use Bitrix\BIConnector\DB\MysqliConnection;
+use Bitrix\Main\Event;
+use Bitrix\Main\Localization\Loc;
+
+class EventHandler
+{
+	/**
+	 * Event handler for onBIConnectorDataSources event.
+	 * Adds a key crm_contact to the second event parameter.
+	 * Fills it with data to retrieve information from b_crm_dynamic_type table.
+	 *
+	 * @param Event $event Event data.
+	 *
+	 * @return void
+	 */
+	public static function onBIConnectorDataSources(Event $event): void
+	{
+		$params = $event->getParameters();
+		$result = &$params[1];
+		$languageId = $params[2];
+
+		/** @var MysqliConnection $connection */
+		$connection = $params[0]->getDatabaseConnection();
+		$helper = $connection->getSqlHelper();
+
+		$result['crm_smart_proc'] = DynamicTypeMapping::getMapping();
+		$result['crm_stages'] = StagesMapping::getMapping($helper, $languageId);
+		$result = array_merge($result, AutomatedSolutionMapping::getMapping($languageId));
+		$result['crm_entity_relation'] = EntityRelationMapping::getMapping();
+
+		self::addDescriptions(['crm_smart_proc', 'crm_stages', 'crm_entity_relation'], $result, $params[2]);
+	}
+
+	private static function addDescriptions(array $keys, array &$mapping, ?string $languageId): void
+	{
+		foreach ($keys as $key)
+		{
+			$entityName = strtoupper($key);
+			$mapping[$key]['TABLE_DESCRIPTION'] = Localization::getMessage($entityName . '_TABLE', $languageId) ?: $key;
+			foreach ($mapping[$key]['FIELDS'] as $fieldCode => &$fieldInfo)
+			{
+				$fieldInfo['FIELD_DESCRIPTION'] =  Localization::getMessage($entityName . '_FIELD_' . $fieldCode, $languageId) ?: $fieldCode;
+				$fieldInfo['FIELD_DESCRIPTION_FULL'] = Localization::getMessage($entityName . '_FIELD_' . $fieldCode . '_FULL', $languageId) ?? '';
+			}
+			unset($fieldInfo);
+		}
+	}
+}

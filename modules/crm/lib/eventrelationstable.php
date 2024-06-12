@@ -1,0 +1,200 @@
+<?php
+
+namespace Bitrix\Crm;
+
+use Bitrix\Crm\Service\EventHistory;
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\Result;
+
+/**
+ * Class EventRelationsTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_EventRelations_Query query()
+ * @method static EO_EventRelations_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_EventRelations_Result getById($id)
+ * @method static EO_EventRelations_Result getList(array $parameters = [])
+ * @method static EO_EventRelations_Entity getEntity()
+ * @method static \Bitrix\Crm\EO_EventRelations createObject($setDefaultValues = true)
+ * @method static \Bitrix\Crm\EO_EventRelations_Collection createCollection()
+ * @method static \Bitrix\Crm\EO_EventRelations wakeUpObject($row)
+ * @method static \Bitrix\Crm\EO_EventRelations_Collection wakeUpCollection($rows)
+ */
+class EventRelationsTable extends DataManager
+{
+	private const MAX_ROWS_IN_BATCH_UPDATE = 500;
+
+	public static function getTableName(): string
+	{
+		return 'b_crm_event_relations';
+	}
+
+	public static function getMap(): array
+	{
+		return [
+			(new IntegerField('ID'))
+				->configurePrimary()
+				->configureAutocomplete(),
+			new IntegerField('ASSIGNED_BY_ID'),
+			new StringField('ENTITY_TYPE'),
+			new IntegerField('ENTITY_ID'),
+			new StringField('ENTITY_FIELD'),
+			new IntegerField('EVENT_ID'),
+			new Reference(
+				'EVENT_BY',
+				EventTable::class,
+				[
+					'=this.EVENT_ID' => 'ref.ID',
+				]
+			),
+		];
+	}
+
+	public static function deleteByEntityType(string $entityType): Result
+	{
+		return static::deleteRecords($entityType);
+	}
+
+	public static function deleteByItem(int $entityTypeId, int $id): Result
+	{
+		return static::deleteRecords(\CCrmOwnerType::ResolveName($entityTypeId), $id);
+	}
+
+	private static function deleteRecords(string $entityTypeName, ?int $id = null): Result
+	{
+		$result = new Result();
+
+		$eventIds = [];
+
+		foreach (self::getRelationRecordsToDelete($entityTypeName, $id) as $row)
+		{
+			$deleteResult = $row->delete();
+			if ($deleteResult->isSuccess())
+			{
+				$eventIds[] = $row->requireEventId();
+			}
+			else
+			{
+				$result->addErrors($deleteResult->getErrors());
+			}
+		}
+
+		$eventIds = array_unique($eventIds);
+		if (empty($eventIds))
+		{
+			return $result;
+		}
+
+			$list =
+				EventTable::query()
+					->setSelect(['ID', 'FILES'])
+					->whereIn('ID', $eventIds)
+					// delete only events that have no more references in relations table
+					->whereNull('EVENT_RELATION.EVENT_ID')
+					->exec()
+			;
+
+		while ($item = $list->fetchObject())
+		{
+			$deleteResult = $item->delete();
+			if ($deleteResult->isSuccess())
+			{
+				$serializedFileIds = $item->requireFiles();
+				if (is_string($serializedFileIds) && !empty($serializedFileIds))
+				{
+					$fileIds = unserialize($serializedFileIds, ['allowed_classes' => false]);
+					if (is_array($fileIds))
+					{
+						foreach ($fileIds as $fileId)
+						{
+							\CFile::Delete((int)$fileId);
+						}
+					}
+				}
+			}
+			else
+			{
+				$result->addErrors($deleteResult->getErrors());
+			}
+		}
+
+		return $result;
+	}
+
+	private static function getRelationRecordsToDelete(
+		string $entityTypeName,
+		?int $id = null
+	): EO_EventRelations_Collection
+	{
+		$ownedRecordsQuery = self::query()
+			->setSelect(['ID', 'EVENT_ID'])
+			->where('ENTITY_TYPE', $entityTypeName)
+		;
+		if (!is_null($id))
+		{
+			$ownedRecordsQuery->where('ENTITY_ID', $id);
+		}
+
+		$relationEventsWithThisEntityQuery = EventTable::query()
+			->setSelect(['ID'])
+			->whereIn('EVENT_TYPE', [EventHistory::EVENT_TYPE_LINK, EventHistory::EVENT_TYPE_UNLINK])
+			->where('EVENT_RELATION.ENTITY_TYPE', $entityTypeName)
+		;
+		if (!is_null($id))
+		{
+			$relationEventsWithThisEntityQuery->where('EVENT_RELATION.ENTITY_ID', $id);
+		}
+
+		$boundRecordsQuery = self::query()
+			->setSelect(['ID', 'EVENT_ID'])
+			->whereIn('EVENT_ID', $relationEventsWithThisEntityQuery)
+		;
+
+		return
+			$ownedRecordsQuery
+				->union($boundRecordsQuery)
+				->fetchCollection()
+		;
+	}
+
+	public static function setAssignedByItem(ItemIdentifier $itemIdentifier, int $assignedById): Result
+	{
+		$ids = static::query()
+			->setSelect(['ID'])
+			->where('ENTITY_TYPE', \CCrmOwnerType::ResolveName($itemIdentifier->getEntityTypeId()))
+			->where('ENTITY_ID', $itemIdentifier->getEntityId())
+			->fetchCollection()
+			->getIdList()
+		;
+
+		if (empty($ids))
+		{
+			return new Result();
+		}
+
+		$connection = Application::getConnection();
+		foreach (array_chunk($ids, self::MAX_ROWS_IN_BATCH_UPDATE) as $idsChunk)
+		{
+			$query = new SqlExpression(
+				/** @lang text */
+				'UPDATE ?# SET ?# = ?i WHERE ID IN (' . implode(',', $idsChunk) . ')',
+				static::getTableName(),
+				'ASSIGNED_BY_ID',
+				$assignedById,
+			);
+
+			$connection->queryExecute((string)$query);
+		}
+
+		static::cleanCache();
+
+		return new Result();
+	}
+}

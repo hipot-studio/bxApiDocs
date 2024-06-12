@@ -1,0 +1,517 @@
+<templateSet group="iblock_fields_templates">
+  <template name="ID" value="ID" description="ID файла" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="CODE" value="CODE" description="Мнемонический код свойства" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="EXTERNAL_ID" value="EXTERNAL_ID" description="EXTERNAL_ID или XML_ID Внешний идентификатор" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="XML_ID" value="XML_ID" description="Внешний код свойства" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="NAME" value="NAME" description="Название свойства" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="IBLOCK_ID" value="IBLOCK_ID" description="Код информационного блока" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="IBLOCK_SECTION_ID" value="IBLOCK_SECTION_ID" description="ID группы. Если не задан, то элемент не привязан к группе. Если элемент привязан к нескольким группам, то в этом поле ID одной из групп. По умолчанию содержит привязку к разделу с минимальным ID." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="IBLOCK_CODE" value="IBLOCK_CODE" description="Символический код инфоблока" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="ACTIVE" value="ACTIVE" description="Активность свойства (Y|N)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DATE_ACTIVE_FROM" value="DATE_ACTIVE_FROM" description="Дата начала действия элемента" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DATE_ACTIVE_TO" value="DATE_ACTIVE_TO" description="Дата окончания действия элемента" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="SORT" value="SORT" description="Индекс сортировки" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PREVIEW_PICTURE" value="PREVIEW_PICTURE" description="Код картинки в таблице файлов для предварительного просмотра (анонса)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PREVIEW_TEXT" value="PREVIEW_TEXT" description="Предварительное описание (анонс)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PREVIEW_TEXT_TYPE" value="PREVIEW_TEXT_TYPE" description="Тип предварительного описания (text/html)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DETAIL_PICTURE" value="DETAIL_PICTURE" description="Код картинки в таблице файлов для детального просмотра" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DETAIL_TEXT" value="DETAIL_TEXT" description="Детальное описание" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DETAIL_TEXT_TYPE" value="DETAIL_TEXT_TYPE" description="Тип детального описания (text/html)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="SEARCHABLE_CONTENT" value="SEARCHABLE_CONTENT" description="Содержимое для поиска при фильтрации групп. Вычисляется автоматически. Складывается из полей NAME и DESCRIPTION (без html тэгов, если DESCRIPTION_TYPE установлен в html)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DATE_CREATE" value="DATE_CREATE" description="Дата создания элемента" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="CREATED_BY" value="CREATED_BY" description="Код пользователя, создавшего элемент" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="CREATED_USER_NAME" value="CREATED_USER_NAME" description="Имя пользователя, создавшего элемент (доступен только для чтения)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="TIMESTAMP_X" value="TIMESTAMP_X" description="Дата изменения записи" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="MODIFIED_BY" value="MODIFIED_BY" description="Код пользователя, в последний раз изменившего элемент" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="USER_NAME" value="USER_NAME" description="Имя пользователя, в последний раз изменившего элемент. (доступен только для чтения)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="LANG_DIR" value="LANG_DIR" description="Путь к папке сайта. Определяется из параметров информационного блока. Изменяется автоматически. (доступен только для чтения)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="LIST_PAGE_URL" value="LIST_PAGE_URL" description="Шаблон URL-а к странице для публичного просмотра списка элементов информационного блока. Определяется из параметров информационного блока. Изменяется автоматически. (доступен только для чтения)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DETAIL_PAGE_URL" value="DETAIL_PAGE_URL" description="Шаблон URL-а к странице для детального просмотра элемента. Определяется из параметров информационного блока. Изменяется автоматически. (доступен только для чтения)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="SHOW_COUNTER" value="SHOW_COUNTER" description="Количество показов элемента (изменяется при вызове функции CIBlockElement::CounterInc)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="SHOW_COUNTER_START" value="SHOW_COUNTER_START" description="Дата первого показа элемента (изменяется при вызове функции CIBlockElement::CounterInc)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="WF_COMMENTS" value="WF_COMMENTS" description="Комментарий администратора документооборота." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="WF_STATUS_ID" value="WF_STATUS_ID" description="Код статуса элемента в документообороте" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="TAGS" value="TAGS" description="Теги элемента. Используются для построения облака тегов модулем Поиска" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DEFAULT_VALUE" value="DEFAULT_VALUE" description="Значение свойства по умолчанию (кроме свойства типа список L)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PROPERTY_TYPE" value="PROPERTY_TYPE" description="Тип свойства. Возможные значения: S - строка, N - число, F - файл, L - список, E - привязка к элементам, G - привязка к группам" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="ROW_COUNT" value="ROW_COUNT" description="Количество строк в ячейке ввода значения свойства" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="COL_COUNT" value="COL_COUNT" description="Количество столбцов в ячейке ввода значения свойства" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="LIST_TYPE" value="LIST_TYPE" description="Тип для свойства список (L). Может быть &quot;L&quot; - выпадающий список или &quot;C&quot; - флажки" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="MULTIPLE" value="MULTIPLE" description="Множественность (Y|N)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="FILE_TYPE" value="FILE_TYPE" description="Список допустимых расширений для свойств файл &quot;F&quot;(через запятую)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="MULTIPLE_CNT" value="MULTIPLE_CNT" description="Количество строк в выпадающем списке для свойств типа &quot;список&quot;" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="LINK_IBLOCK_ID" value="LINK_IBLOCK_ID" description="Для свойств типа привязки к элементам и группам задает код информационного блока с элементами/группами которого и будут связано значение." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="WITH_DESCRIPTION" value="WITH_DESCRIPTION" description="Признак наличия у значения свойства дополнительного поля описания. Только для типов S - строка, N - число и F - файл (Y|N)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="SEARCHABLE" value="SEARCHABLE" description="Индексировать значения данного свойства (Y|N)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="FILTRABLE" value="FILTRABLE" description="Выводить поля для фильтрации по данному свойству на странице списка элементов в административном разделе" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="IS_REQUIRED" value="IS_REQUIRED" description="Обязательное (Y|N)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="VERSION" value="VERSION" description="Флаг хранения значений свойств элементов инфоблока (1 - в общей таблице | 2 - в отдельной). (доступен только для чтения)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="USER_TYPE" value="USER_TYPE" description="Идентификатор пользовательского типа свойства" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="USER_TYPE_SETTINGS" value="USER_TYPE_SETTINGS" description="Свойства пользовательского типа" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PROPERTY_VALUE_ID" value="PROPERTY_VALUE_ID" description="ID значения свойства" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="VALUE" value="VALUE" description="Значение свойства у элемента. Массив в случае свойств типа HTML/Text ([TEXT] =&gt; значение, [TYPE] =&gt; text|html)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DESCRIPTION" value="DESCRIPTION" description="Описание файла" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="VALUE_ENUM" value="VALUE_ENUM" description="Значение варианта свойства" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="VALUE_XML_ID" value="VALUE_XML_ID" description="Внешний код варианта свойства" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="FILE_PARAMS" value="FILE_PARAMS" description="Поля параметров файла, возвращаемые методом CFile::GetFileArray()" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="MODULE_ID" value="MODULE_ID" description="Идентификатор модуля которому принадлежит файл." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="HEIGHT" value="HEIGHT" description="Высота изображения (если файл - графический)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="WIDTH" value="WIDTH" description="Ширина изображения (если файл - графический)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="FILE_SIZE" value="FILE_SIZE" description="Размер файла (байт)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="CONTENT_TYPE" value="CONTENT_TYPE" description="MIME тип файла" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="SUBDIR" value="SUBDIR" description="Подкаталог в котором находится файл на диске. Основной каталог для хранения файлов задается в параметре &quot;Папка по умолчанию для загрузки файлов&quot; в настройках главного модуля, значение данного параметра программно можно получить с помощью вызова функции: COption::GetOptionString(&quot;main&quot;, &quot;upload_dir&quot;, &quot;upload&quot;);" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="FILE_NAME" value="FILE_NAME" description="Имя файла на диске сервера" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="ORIGINAL_NAME" value="ORIGINAL_NAME" description="Оригинальное имя файла в момент загрузки его на сервер" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="SRC" value="SRC" description="Функция возвращает путь от корня к зарегистрированному файлу. Путь к файлу начинающийся от каталога указанного в параметре DocumentRoot в настройках веб-сервера, заданный по правилам формирования URL-адресов. Пример: /ru/about/index.php" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="ASC" value="ASC" description="ASC - сортировка" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DESC" value="DESC" description="DESC - сортировка" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="SECTION_CODE" value="SECTION_CODE" description="Фильтрация по мнемоническому коду родительской группы." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="SECTION_ID" value="SECTION_ID" description="Фильтрация по родительской группе." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="INCLUDE_SUBSECTIONS" value="INCLUDE_SUBSECTIONS" description="Фильтрация если задан фильтр по родительским группам SECTION_ID, то будут также выбраны элементы находящиеся в подгруппах этих групп" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="ACTIVE_DATE" value="ACTIVE_DATE" description="Фильтрация Будут выбраны активные по датам элементы." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="GLOBAL_ACTIVE" value="GLOBAL_ACTIVE" description="Флаг активности, учитывая активность вышележащих (родительских) групп (Y|N). Вычисляется автоматически (не может быть изменен вручную)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PICTURE" value="PICTURE" description="Код картинки в таблице файлов." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DESCRIPTION_TYPE" value="DESCRIPTION_TYPE" description="Тип описания группы (text/html)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="LEFT_MARGIN" value="LEFT_MARGIN" description="Левая граница группы. Вычисляется автоматически (не устанавливается вручную)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="RIGHT_MARGIN" value="RIGHT_MARGIN" description="Правая граница группы. Вычисляется автоматически (не устанавливается вручную)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DEPTH_LEVEL" value="DEPTH_LEVEL" description="Уровень вложенности группы. Вычисляется автоматически (не устанавливается вручную)." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="SECTION_PAGE_URL" value="SECTION_PAGE_URL" description="Шаблон URL-а к странице для детального просмотра раздела. Определяется из параметров информационного блока. Изменяется автоматически." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PRODUCT_ID" value="PRODUCT_ID" description="Уникальный в рамках модуля код товара." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PRODUCT_PRICE_ID" value="PRODUCT_PRICE_ID" description="Дополнительный код товара." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PRICE" value="PRICE" description="Стоимость единицы товара." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="CURRENCY" value="CURRENCY" description="Валюта стоимости единицы товара." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="WEIGHT" value="WEIGHT" description="Вес единицы товара." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="QUANTITY" value="QUANTITY" description="Количество единиц товара." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DELAY" value="DELAY" description="Флаг 'товар отложен' (Y/N)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="CAN_BUY" value="CAN_BUY" description="Флаг 'товар можно купить' (Y/N)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="NOTES" value="NOTES" description="Особые заметки, например, тип цены." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="ORDER_ALLOW_DELIVERY" value="ORDER_ALLOW_DELIVERY" description="Доставка заказа корзины разрешена. (Для корзин, уже привязанных к заказу.)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="ORDER_PAYED" value="ORDER_PAYED" description="Заказ корзины оплачен. (Для корзин, уже привязанных к заказу.)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="ORDER_PRICE" value="ORDER_PRICE" description="Стоимость заказа корзины. (Для корзин, уже привязанных к заказу.)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="FUSER_ID" value="FUSER_ID" description="Внутренний код владельца корзины (не совпадает с кодом пользователя)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="ORDER_ID" value="ORDER_ID" description="Код заказа, в который вошла эта запись (товар). Для товаров, которые помещены в корзину, но ещё не заказаны, это поле равно NULL. " toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DATE_INSERT" value="DATE_INSERT" description="Дата добавления товара в корзину." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DATE_UPDATE" value="DATE_UPDATE" description="Дата последнего изменения записи." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DISCOUNT_PRICE" value="DISCOUNT_PRICE" description="Скидка на товар. Значение устанавливается только после оформления заказа." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="ORDER_PROPS_ID" value="ORDER_PROPS_ID" description="Код свойства." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PERSON_TYPE_ID" value="PERSON_TYPE_ID" description="Тип плательщика, к которому принадлежит посетитель, сделавший заказ (заказчик)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PAYED" value="PAYED" description="Флаг (Y/N) оплачен ли заказ." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DATE_PAYED" value="DATE_PAYED" description="Дата оплаты заказа." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="CANCELED" value="CANCELED" description="Флаг (Y/N) отменён ли заказ." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DATE_CANCELED" value="DATE_CANCELED" description="Дата отмены заказа." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="PAY_SYSTEM_ID" value="PAY_SYSTEM_ID" description="Платежная система, которой (будет) оплачен заказа." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="DELIVERY_ID" value="DELIVERY_ID" description="Способ (служба) доставки заказа." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="USER_DESCRIPTION" value="USER_DESCRIPTION" description="Описание заказа заказчиком." toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+</templateSet>

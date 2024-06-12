@@ -1,0 +1,53 @@
+<?php
+
+namespace Bitrix\Crm\Tour;
+
+use Bitrix\Main\Localization\Loc;
+
+final class CopilotInCallAutomatically extends CopilotInCall
+{
+	protected const OPTION_NAME = 'copilot-in-call-automatically';
+
+	protected int $numberOfViewsLimit = 1;
+
+	protected function canShow(): bool
+	{
+		if (
+			!$this->isShowEnabled()
+			|| $this->isUserSeenTour()
+		)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	protected function getSteps(): array
+	{
+		return [
+			[
+				'id' => 'copilot-in-call-automatically',
+				'title' => Loc::getMessage('CRM_TOUR_COPILOT_IN_CALL_AUTO_TITLE'),
+				'text' => Loc::getMessage('CRM_TOUR_COPILOT_IN_CALL_AUTO_BODY'),
+				'position' => 'top',
+				'useDynamicTarget' => true,
+				'eventName' => 'BX.Crm.Timeline.Call:onShowTourWhenManualStartTooMuch',
+				'article' => 18799442,
+			],
+		];
+	}
+
+	protected function getOptions(): array
+	{
+		return [
+			'showOverlayFromFirstStep' => true,
+			'hideTourOnMissClick' => true,
+			'steps' => [
+				'popup' => [
+					'width' => 400,
+				],
+			],
+		];
+	}
+}

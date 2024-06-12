@@ -1,0 +1,59 @@
+<?php
+$MESS["SALE_HPS_YANDEX_CHECKOUT_HTTP_STATUS_400"] = "Неправильный запрос. Некорректное взаимодействие с API ЮKassa";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_HTTP_STATUS_401"] = "Ошибка аутентификации. Неверный идентификатор вашего аккаунта в ЮKassa или секретный ключ. Проверьте настройки подключения платежной системы";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_HTTP_STATUS_OAUTH_401"] = "Ошибка аутентификации. Невалидный OAuth-токен: истек срок жизни токена или токен был отозвал через Яндекс.Паспорт. Запросите токен заново";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_HTTP_STATUS_403"] = "Недостаточно прав для осуществления операции";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_HTTP_STATUS_404"] = "Ресурс не найден";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_HTTP_STATUS_500"] = "На стороне ЮKassa что-то пошло не так";
+
+$MESS["SALE_HPS_YANDEX_CHECKOUT_TRANSACTION"] = "Транзакция ";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_QUERY"] = "Некорректный или пустой ответ сервера";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_SUM"] = "Сумма платежа не совпадает с суммой оплаты";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_STATUS"] = "Некорректный статус платежа";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_CHECK_IP"] = "Ошибка проверки подлинности уведомления. IP-адрес не соответствует списку разрешенных IP адресов. Уведомление пришло с адреса: #IP_ADDRESS#";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_EXTERNAL_PAYMENT"] = "Ошибка при выставлении счета";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_PAYMENT_CANCELED"] = "Платеж отменен";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_PAYMENT_METHOD_NOT_SUPPORT"] = "Способ оплаты \"#PAYMENT_METHOD#\" не поддерживается. Необходимо обратиться в ЮKassa";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_ERROR_EMPTY_RECEIPT"] = "Ошибка при формировании чека";
+
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_3D_SECURE_FAILED"] = "Не пройдена аутентификация по 3-D Secure.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_CALL_ISSUER"] = "Оплата данным платежным средством отклонена по неизвестным причинам. Клиенту следует обратиться в банк.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_CARD_EXPIRED"] = "Истек срок действия банковской карты.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_COUNTRY_FORBIDDEN"] = "Нельзя заплатить банковской картой, выпущенной в этой стране.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_FRAUD_SUSPECTED"] = "Платеж заблокирован из-за подозрения в мошенничестве.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_GENERAL_DECLINE"] = "Ошибка не детализирована.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_IDENTIFICATION_REQUIRED"] = "Превышены ограничения на платежи для кошелька в ЮMoney.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_INSUFFICIENT_FUNDS"] = "Недостаточно средств.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_INVALID_CARD_NUMBER"] = "Неправильно указан номер карты.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_INVALID_CSC"] = "Неправильно указан код CVV2 (CVC2, CID).";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_ISSUER_UNAVAILABLE"] = "Банк клиента недоступен.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_PAYMENT_METHOD_LIMIT_EXCEEDED"] = "Исчерпан лимит платежей для данного платежного средства или вашего магазина.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_PAYMENT_METHOD_RESTRICTED"] = "Запрещены операции данным платежным средством.";
+$MESS["SALE_HPS_YANDEX_CHECKOUT_RESPONSE_ERROR_PAYMENT_PERMISSION_REVOKED"] = "Нельзя провести безакцептное списание: пользователь отозвал разрешение на автоплатежи.";
+
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_PARTY"] = 'Инициатор отмены платежа: #PARTY#';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_PARTY_MERCHANT"] = 'Продавец товаров и услуг (вы)';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_PARTY_YOO_MONEY"] = 'ЮKassa';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_PARTY_PAYMENT_NETWORK"] = 'Любые участники процесса платежа, кроме ЮKassa и вас (например, эмитент, сторонний платежный сервис)';
+
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON"] = 'Причина отмены платежа: #REASON#';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_3D_SECURE_FAILED"] = 'Не пройдена аутентификация по 3-D Secure. При новой попытке оплаты пользователю следует пройти аутентификацию, использовать другое платежное средство или обратиться в банк за уточнениями';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_CALL_ISSUER"] = 'Оплата данным платежным средством отклонена по неизвестным причинам. Пользователю следует обратиться в организацию, выпустившую платежное средство';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_CANCELED_BY_MERCHANT"] = 'Платеж отменен по API при оплате в две стадии';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_CARD_EXPIRED"] = 'Истек срок действия банковской карты. При новой попытке оплаты пользователю следует использовать другое платежное средство';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_COUNTRY_FORBIDDEN"] = 'Нельзя заплатить банковской картой, выпущенной в этой стране. При новой попытке оплаты пользователю следует использовать другое платежное средство.';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_DEAL_EXPIRED"] = 'Закончился срок жизни сделки. Если вы еще хотите принять оплату, создайте новую сделку и проведите для нее новый платеж';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_EXPIRED_ON_CAPTURE"] = 'Истек срок списания оплаты у двухстадийного платежа. Если вы еще хотите принять оплату, повторите платеж и спишите деньги после подтверждения платежа пользователем';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_EXPIRED_ON_CONFIRMATION"] = 'Истек срок оплаты: пользователь не подтвердил платеж за время, отведенное на оплату выбранным способом. Если пользователь еще хочет оплатить, вам необходимо повторить платеж, а пользователю - подтвердить его';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_FRAUD_SUSPECTED"] = 'Платеж заблокирован из-за подозрения в мошенничестве. При новой попытке оплаты пользователю следует использовать другое платежное средство';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_GENERAL_DECLINE"] = 'Причина не детализирована. Пользователю следует обратиться к инициатору отмены платежа за уточнением подробностей';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_IDENTIFICATION_REQUIRED"] = 'Превышены ограничения на платежи для кошелька ЮMoney. При новой попытке оплаты пользователю следует идентифицировать кошелек или выбрать другое платежное средство';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_INSUFFICIENT_FUNDS"] = 'Не хватает денег для оплаты. Пользователю следует пополнить баланс или использовать другое платежное средство';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_INTERNAL_TIMEOUT"] = 'Технические неполадки на стороне ЮKassa: не удалось обработать запрос в течение 30 секунд. Повторите платеж';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_INVALID_CARD_NUMBER"] = 'Неправильно указан номер карты. При новой попытке оплаты пользователю следует ввести корректные данные';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_INVALID_CSC"] = 'Неправильно указан код CVV2 (CVC2, CID). При новой попытке оплаты пользователю следует ввести корректные данные';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_ISSUER_UNAVAILABLE"] = 'Организация, выпустившая платежное средство, недоступна. При новой попытке оплаты пользователю следует использовать другое платежное средство или повторить оплату позже';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_PAYMENT_METHOD_LIMIT_EXCEEDED"] = 'Исчерпан лимит платежей для данного платежного средства или вашего магазина. При новой попытке оплаты пользователю следует использовать другое платежное средство или повторить оплату на следующий день';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_PAYMENT_METHOD_RESTRICTED"] = 'Запрещены операции данным платежным средством (например, карта заблокирована из-за утери, кошелек — из-за взлома мошенниками). Пользователю следует обратиться в организацию, выпустившую платежное средство';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_PERMISSION_REVOKED"] = 'Нельзя провести безакцептное списание: пользователь отозвал разрешение на автоплатежи. Если пользователь еще хочет оплатить, вам необходимо создать новый платеж, а пользователю — подтвердить оплату';
+$MESS["SALE_HPS_YANDEX_CHECKOUT_REQUEST_CANCEL_REASON_UNSUPPORTED_MOBILE_OPERATOR"] = 'Нельзя заплатить с номера телефона этого мобильного оператора. При новой попытке оплаты пользователю следует использовать другое платежное средство';
