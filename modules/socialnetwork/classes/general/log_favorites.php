@@ -1,7 +1,7 @@
-<?
+<?php
+
 class CAllSocNetLogFavorites
 {
-
 	public static function Change($user_id, $log_id, array $params = array('TRIGGER_EVENT' => true))
 	{
 		global $DB, $APPLICATION;
@@ -20,13 +20,16 @@ class CAllSocNetLogFavorites
 		}
 
 		$strSQL = "SELECT * FROM b_sonet_log_favorites WHERE USER_ID = ".$user_id." AND LOG_ID = ".$log_id;
-		$dbRes = $DB->Query($strSQL, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+		$dbRes = $DB->Query($strSQL);
+
+		$pool = \Bitrix\Main\Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
 
 		$result = false;
 		if (!$arRes = $dbRes->Fetch())
 		{
 			$strSQL = "INSERT INTO b_sonet_log_favorites (USER_ID, LOG_ID) VALUES(".$user_id.", ".$log_id.")";
-			if ($DB->Query($strSQL, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__))
+			if ($DB->Query($strSQL))
 				$result = "Y";
 			else
 				$APPLICATION->ThrowException(GetMessage("SONET_LF_CANNOT_INSERT"), "CANNOT_INSERT");
@@ -34,11 +37,13 @@ class CAllSocNetLogFavorites
 		else
 		{
 			$strSQL = "DELETE FROM b_sonet_log_favorites WHERE USER_ID = ".$user_id." AND LOG_ID = ".$log_id;
-			if ($DB->Query($strSQL, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__))
+			if ($DB->Query($strSQL))
 				$result = "N";
 			else
 				$APPLICATION->ThrowException(GetMessage("SONET_LF_CANNOT_INSERT"), "CANNOT_DELETE");
 		}
+
+		$pool->useMasterOnly(false);
 
 		if(
 			$result
@@ -54,4 +59,3 @@ class CAllSocNetLogFavorites
 		return $result;
 	}
 }
-?>

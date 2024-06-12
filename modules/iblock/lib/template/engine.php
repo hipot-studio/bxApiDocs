@@ -77,39 +77,6 @@ class Engine
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод принимает сущность ('элемент, секцию или инфоблок) и обрабатывает для нее шаблон. Метод статический.</p>
-	*
-	*
-	* @param mixed $Bitrix  Сущность для обработки шаблона.
-	*
-	* @param Bitri $Iblock  Шаблон, по которому выполняется замена.
-	*
-	* @param Ibloc $Template  
-	*
-	* @param Templat $Entity  
-	*
-	* @param Base $entity  
-	*
-	* @param string $template  
-	*
-	* @return string 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* if (\Bitrix\Main\Loader::includeModule('iblock'))
-	* {
-	* 	$e = new \Bitrix\Iblock\Template\Entity\Element(6369);
-	* 	echo "&lt;pre&gt;", print_r(\Bitrix\Iblock\Template\Engine::process($e, "Name: {=this.Name}. Code:{=this.code}"), 1), "&lt;/pre&gt;";
-	* }
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/engine/process.php
-	* @author Bitrix
-	*/
 	public static function process(Entity\Base $entity, $template)
 	{
 		$rootNode = self::parseTemplateTree($template, new NodeRoot);
@@ -131,7 +98,7 @@ class Engine
 			$parent->setModifiers($modifiers);
 
 		$parsedTemplate = preg_split('/({=|})/',  $template, -1, PREG_SPLIT_DELIM_CAPTURE);
-		while (list(,$token) = each($parsedTemplate))
+		while (($token = array_shift($parsedTemplate)) !== null)
 		{
 			$node = null;
 
@@ -162,7 +129,7 @@ class Engine
 	protected static function parseFormula(array &$parsedTemplate)
 	{
 		$node = null;
-		if (list(,$token) = each($parsedTemplate))
+		if (($token = array_shift($parsedTemplate)) !== null)
 		{
 			if (preg_match("/^([a-zA-Z0-9_]+\\.[a-zA-Z0-9_.]+)\\s*\$/", $token, $match))
 			{
@@ -175,7 +142,7 @@ class Engine
 			}
 		}
 		//Eat up to the formula end
-		while (list(,$token) = each($parsedTemplate))
+		while (($token = array_shift($parsedTemplate)) !== null)
 		{
 			if ($token === "}")
 				break;
@@ -202,11 +169,11 @@ class Engine
 		if ($token !== "")
 			self::explodeFunctionArgument($token, $function);
 
-		while (list(,$token) = each($parsedTemplate))
+		while (($token = array_shift($parsedTemplate)) !== null)
 		{
 			if ($token === "}")
 			{
-				prev($parsedTemplate);
+				array_unshift($parsedTemplate, $token);
 				break;
 			}
 			elseif ($token === "{=")
@@ -276,29 +243,6 @@ abstract class NodeBase
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод преобразует внутренние данные в значения наследуемых свойств. Возвращаемое значение - строка или массив строк. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $Bitrix  Устанавливает сущность для обработки.
-	*
-	* @param Bitri $Iblock  
-	*
-	* @param Ibloc $Template  
-	*
-	* @param Templat $Entity  
-	*
-	* @param Base $entity  
-	*
-	* @return string <h4>Параметры</h4><table width="100%" class="tnormal"><tbody> <tr> <th width="15%">Параметр</th>
-	* <th>Описание</th> <th width="10%">Версия</th> </tr> <tr> <td>$entity</td> <td>Устанавливает
-	* сущность для обработки.</td> <td></td> </tr> </tbody></table><a name="example"></a>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/nodebase/process.php
-	* @author Bitrix
-	*/
 	abstract public function process(Entity\Base $entity);
 }
 
@@ -321,25 +265,6 @@ class NodeRoot extends NodeBase
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод дописывает дочернюю сущность в коллекцию дочерних сущностей. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $Bitrix  Объект, который будет добавлен как дочерняя сущность.
-	*
-	* @param Bitri $Iblock  
-	*
-	* @param Ibloc $Template  
-	*
-	* @param NodeBase $child  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/noderoot/addchild.php
-	* @author Bitrix
-	*/
 	public function addChild(NodeBase $child)
 	{
 		$this->children[] = $child;
@@ -352,19 +277,6 @@ class NodeRoot extends NodeBase
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод устанавливает модификаторы, которые будут использоваться на последней стадии обработки шаблона. Нестатический метод.</p>
-	*
-	*
-	* @param string $modifiers  Строка, содержащая модификаторы.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/noderoot/setmodifiers.php
-	* @author Bitrix
-	*/
 	public function setModifiers($modifiers)
 	{
 		$this->modifiers = array();
@@ -374,7 +286,7 @@ class NodeRoot extends NodeBase
 				$modifierFunction = Functions\Fabric::createInstance("lower");
 			else
 				$modifierFunction = Functions\Fabric::createInstance("translit", array(
-					"replace_space" => substr($mod, 1),
+					"replace_space" => mb_substr($mod, 1),
 				));
 			$this->modifiers[] = $modifierFunction;
 		}
@@ -388,27 +300,6 @@ class NodeRoot extends NodeBase
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Вызывает метод <code>process</code> для каждой дочерней сущности. Возвращает конкатенацию их результатов. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $Bitrix  Устанавливает сущность для обработки.
-	*
-	* @param Bitri $Iblock  
-	*
-	* @param Ibloc $Template  
-	*
-	* @param Templat $Entity  
-	*
-	* @param Base $entity  
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/noderoot/process.php
-	* @author Bitrix
-	*/
 	public function process(Entity\Base $entity)
 	{
 		$content = "";
@@ -447,20 +338,7 @@ class NodeText extends NodeBase
 	 *
 	 * @param string $content A text to be saved.
 	 */
-	
-	/**
-	* <p>Конструктор устанавливает текстовое содержимое в параметр <code>$content</code>.</p>
-	*
-	*
-	* @param string $content = "" Текст, который должен быть сохранен.
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/nodetext/__construct.php
-	* @author Bitrix
-	*/
-	public function __construct($content = "")
+	function __construct($content = "")
 	{
 		$this->content = $content;
 	}
@@ -472,27 +350,6 @@ class NodeText extends NodeBase
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает текстовое содержимое. Результат - строка или массив строк. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $Bitrix  Устанавливается сущность для обработки.
-	*
-	* @param Bitri $Iblock  
-	*
-	* @param Ibloc $Template  
-	*
-	* @param Templat $Entity  
-	*
-	* @param Base $entity  
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/nodetext/process.php
-	* @author Bitrix
-	*/
 	public function process(Entity\Base $entity)
 	{
 		return $this->content;
@@ -516,22 +373,9 @@ class NodeEntityField extends NodeBase
 	 *
 	 * @param string $entityField Field of the Entity.
 	 */
-	
-	/**
-	* <p>Конструктор инициализирует объект класса. <code>$entityName</code> и <code>$entityField</code> не чувствительны к регистру.</p>
-	*
-	*
-	* @param string $entityField = "" Поле сущности.
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/nodeentityfield/__construct.php
-	* @author Bitrix
-	*/
-	public function __construct($entityField = "")
+	function __construct($entityField = "")
 	{
-		$this->entityField = strtolower($entityField);
+		$this->entityField = mb_strtolower($entityField);
 	}
 
 	/**
@@ -543,27 +387,6 @@ class NodeEntityField extends NodeBase
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Вызывает метод <code>resolve</code> для сущности <code>$entity</code>. В случае успеха возвращает значение поля, в противном случае - пустую строку. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $Bitrix  Устанавливает сущность для обработки.
-	*
-	* @param Bitri $Iblock  
-	*
-	* @param Ibloc $Template  
-	*
-	* @param Templat $Entity  
-	*
-	* @param Base $entity  
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/nodeentityfield/process.php
-	* @author Bitrix
-	*/
 	public function process(Entity\Base $entity)
 	{
 		$entityObject = $entity;
@@ -595,22 +418,9 @@ class NodeFunction extends NodeBase
 	 *
 	 * @param string $functionName Name of the function. Case insensitive.
 	 */
-	
-	/**
-	* <p>Конструктор инициализирует объект функции.</p>
-	*
-	*
-	* @param string $functionName = "" Название функции (без учета регистра).
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/nodefunction/__construct.php
-	* @author Bitrix
-	*/
 	public function __construct($functionName = "")
 	{
-		$this->functionName = strtolower($functionName);
+		$this->functionName = mb_strtolower($functionName);
 	}
 
 	/**
@@ -620,25 +430,6 @@ class NodeFunction extends NodeBase
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод добавляет новые параметры в вызов функции. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $Bitrix  Новые параметры для добавления.
-	*
-	* @param Bitri $Iblock  
-	*
-	* @param Ibloc $Template  
-	*
-	* @param NodeBase $parameter  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/nodefunction/addparameter.php
-	* @author Bitrix
-	*/
 	public function addParameter(NodeBase $parameter)
 	{
 		$this->parameters[] = $parameter;
@@ -653,27 +444,6 @@ class NodeFunction extends NodeBase
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Использует класс <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/functions/fabric/index.php">Functions\Fabric</a> для создания экземпляра объекта функции по ее имени. В случае успеха вызывает метод <code>onPrepareParameters</code> и затем метод <code>calculate</code>. В противном случае возвращает пустую строку. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $Bitrix  Устанавливает сущность для обработки.
-	*
-	* @param Bitri $Iblock  
-	*
-	* @param Ibloc $Template  
-	*
-	* @param Templat $Entity  
-	*
-	* @param Base $entity  
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/nodefunction/process.php
-	* @author Bitrix
-	*/
 	public function process(Entity\Base $entity)
 	{
 		$functionObject = Functions\Fabric::createInstance($this->functionName);

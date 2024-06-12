@@ -10,7 +10,7 @@ class DocumentType extends Node
 		$this->nodeName = '#document';
 	}
 
-	static public function getTextContent()
+	public function getTextContent()
 	{
 		return null;
 	}

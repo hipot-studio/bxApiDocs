@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CEventFileman
@@ -21,7 +22,7 @@ class CEventFileman
 		
 		return  $arFilter;
 	}
-	
+
 	public static function GetAuditTypes()
 	{
 		return array(
@@ -50,7 +51,7 @@ class CEventFileman
 	{
 		$site = CFileMan::__CheckSite($site);
 		$DOC_ROOT = CSite::GetSiteDocRoot($site);		
-		$DESCRIPTION = unserialize($row['DESCRIPTION']);
+		$DESCRIPTION = unserialize($row['DESCRIPTION'], ['allowed_classes' => false]);
 		
 		if (empty($DESCRIPTION['path']))
 		{ 
@@ -59,7 +60,7 @@ class CEventFileman
 		}
 		else
 		{						
-			if ((is_file($DOC_ROOT."/".$DESCRIPTION['path']) || is_dir($DOC_ROOT."/".$DESCRIPTION['path'])) && !strrpos($DESCRIPTION['path'], " "))
+			if ((is_file($DOC_ROOT."/".$DESCRIPTION['path']) || is_dir($DOC_ROOT."/".$DESCRIPTION['path'])) && !mb_strrpos($DESCRIPTION['path'], " "))
 				$fileURL = SITE_DIR.$DESCRIPTION['path'];
 		}
 		
@@ -165,4 +166,3 @@ class CEventFileman
 		return $ar;
 	}
 }
-?>

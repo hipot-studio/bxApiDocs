@@ -103,7 +103,7 @@ class CAllCatalogDiscountSave
 		global $DB;
 		global $USER;
 
-		$strAction = strtoupper($strAction);
+		$strAction = mb_strtoupper($strAction);
 		if ('UPDATE' != $strAction && 'ADD' != $strAction)
 			return false;
 		$intID = (int)$intID;
@@ -150,6 +150,7 @@ class CAllCatalogDiscountSave
 		$arFields['PRIORITY'] = 1;
 		$arFields['LAST_DISCOUNT'] = 'N';
 		$arFields['VERSION'] = Catalog\DiscountTable::ACTUAL_VERSION;
+		$arFields['USE_COUPONS'] = 'N';
 
 		if ((is_set($arFields, "SITE_ID") || $strAction=="ADD") && empty($arFields["SITE_ID"]))
 		{
@@ -166,7 +167,7 @@ class CAllCatalogDiscountSave
 			}
 		}
 
-		if ((is_set($arFields, "NAME") || $strAction=="ADD") && (strlen(trim($arFields["NAME"])) <= 0))
+		if ((is_set($arFields, "NAME") || $strAction=="ADD") && (trim($arFields["NAME"]) == ''))
 		{
 			$arMsg[] = array('id' => 'NAME', 'text' => Loc::getMessage('BT_MOD_CAT_DSC_SV_ERR_EMPTY_NAME'));
 			$boolResult = false;

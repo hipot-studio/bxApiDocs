@@ -1,22 +1,5 @@
 <?php
 
-
-/**
- * <br><br>
- *
- *
- * @return mixed 
- *
- * <h4>Example</h4> 
- * <pre bgcolor="#323232" style="padding:5px;">
- * <code>// Формируем запрос к веб-сервису ws.strikeiron.com/relauto/iplookup/DNS $request = new CSOAPRequest( "DNSLookup", "http://tempuri.org/"); $request-&gt;addSOAPHeader( "LicenseInfo xmlns=\"http://ws.strikeiron.com\"", array("UnregisteredUser" =&gt; array( "EmailAddress" =&gt; "qwerty@mail.ru" )) ); $request-&gt;addParameter("server", "www.yandex.ru");</code>
- * </pre>
- *
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/webservice/classes/csoaprequest/index.php
- * @author Bitrix
- */
 class CSOAPRequest extends CSOAPEnvelope
 {
     /// The request name
@@ -34,13 +17,13 @@ class CSOAPRequest extends CSOAPEnvelope
     /// Contains the request parameters
     var $Parameters = array(); 
 	
-    public function CSOAPRequest( $name="", $namespace="", $parameters = array() )
+    public function __construct( $name="", $namespace="", $parameters = array() )
     {
         $this->Name = $name;
         $this->Namespace = $namespace;
 
         // call the parents constructor
-        $this->CSOAPEnvelope();
+        parent::__construct();
 
         foreach( $parameters as $name => $value )
         {
@@ -48,93 +31,45 @@ class CSOAPRequest extends CSOAPEnvelope
         }
     }
 
-    public function name()
+    function name()
     {
         return $this->Name;
     }
 
-	public function get_namespace()
+	function get_namespace()
     {
         return $this->Namespace;
     }
 	
-	public function GetSOAPAction($separator = '/')
+	function GetSOAPAction($separator = '/')
 	{			
-		if ($this->Namespace[strlen($this->Namespace)-1] != $separator)
+		if ($this->Namespace[mb_strlen($this->Namespace) - 1] != $separator)
 		{
 			return $this->Namespace . $separator . $this->Name;
 		}
 		return $this->Namespace . $this->Name;
 	}
     
-    
-    /**
-    * <p>Метод добавляет в SOAP запрос часть заголовка. Нестатический метод.</p>
-    *
-    *
-    * @param string $name  Название сообщения в заголовке soap запроса.
-    *
-    * @return void 
-    *
-    * <h4>Example</h4> 
-    * <pre bgcolor="#323232" style="padding:5px;">
-    * $request-&gt;addSOAPHeader( 
-    *     "LicenseInfo xmlns=\"http://ws.strikeiron.com\"",
-    *     array(
-    *         "UnregisteredUser" =&gt; array( "EmailAddress" =&gt; "qwerty@mail.ru" ))
-    *     );
-    * </pre>
-    *
-    *
-   * @link http://dev.1c-bitrix.ru/api_help/webservice/classes/csoaprequest/addsoapheader.php
-    * @author Bitrix
-    */
-    public function addSOAPHeader( $name, $value )
+    function addSOAPHeader( $name, $value )
     {
     	$this->Headers[] = CXMLCreator::encodeValueLight($name, $value);
     }
 
 	//     Adds a new attribute to the body element.
-    
-    /**
-    * <p>Метод добавляет атрибут к тегу <b>body</b> SOAP запроса. Нестатический метод.</p>
-    *
-    *
-    * @param string $name  Название атрибута.
-    *
-    * @param string $value  Значение атрибута.
-    *
-    * @return void 
-    *
-   * @link http://dev.1c-bitrix.ru/api_help/webservice/classes/csoaprequest/addbodyattribute.php
-    * @author Bitrix
-    */
-    public function addBodyAttribute( $name, $value )
+    function addBodyAttribute( $name, $value )
     {
         $this->BodyAttributes[$name] = $value;
     }
 	
 	//      Adds a new parameter to the request. You have to provide a prameter name
 	//      and value.
-    
-    /**
-    * <p>Метод добавляет данные для передачи в SOAP запрос. Для веб-сервиса -  параметры вызываемого метода. Нестатический метод.</p>
-    *
-    *
-    * @param string $name  Название параметра.
-    *
-    * @return void 
-    *
-   * @link http://dev.1c-bitrix.ru/api_help/webservice/classes/csoaprequest/addparameter.php
-    * @author Bitrix
-    */
-    public function addParameter( $name, $value )
+    function addParameter( $name, $value )
     {
         $this->Parameters[$name] = $value;        
     }
     
 	//      Returns the request payload
-    public function payload()
+    function payload()
     {
         $root = new CXMLCreator( "soap:Envelope" );
         $root->setAttribute("xmlns:soap", BX_SOAP_ENV);

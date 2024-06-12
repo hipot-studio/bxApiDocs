@@ -9,6 +9,7 @@ namespace Bitrix\Seo\Engine;
 
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Context;
+use Bitrix\Main\Application;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
@@ -22,8 +23,7 @@ use Bitrix\Main\Text;
 use Bitrix\Seo\Service;
 
 // to use Yandex.Direct Sandbox
-// define('YANDEX_DIRECT_API_URL', "https://api-sandbox.direct.yandex.ru/v4/json/");
-if(!defined('YANDEX_DIRECT_API_URL'))
+if (!defined('YANDEX_DIRECT_API_URL'))
 {
 	define('YANDEX_DIRECT_API_URL', 'https://api.direct.yandex.ru/v4/json/');
 }
@@ -31,9 +31,9 @@ if(!defined('YANDEX_DIRECT_API_URL'))
 class YandexDirect extends Engine\YandexBase implements IEngine
 {
 	const ENGINE_ID = 'yandex_direct';
-
+	
 	const API_URL = YANDEX_DIRECT_API_URL;
-
+	
 	const METHOD_REGION_GET = 'GetRegions';
 	const METHOD_CAMPAIGN_ADD = 'CreateOrUpdateCampaign';
 	const METHOD_CAMPAIGN_UPDATE = 'CreateOrUpdateCampaign';
@@ -62,51 +62,56 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 	const METHOD_FORECAST_REPORT_GET = 'GetForecast';
 	const METHOD_FORECAST_REPORT_LIST = 'GetForecastList';
 	const METHOD_STAT_BANNER = 'GetBannersStat';
-
+	
 	const BOOL_YES = "Yes";
 	const BOOL_NO = "No";
-
+	
 	const STATUS_NEW = "New";
 	const STATUS_PENDING = "Pending";
-
+	
 	const PRIORITY_LOW = "Low";
 	const PRIORITY_MEDIUM = "Medium";
 	const PRIORITY_HIGH = "High";
-
+	
 	const TTL_WORDSTAT_REPORT = 3600; // session report lifetime
 	const TTL_WORDSTAT_REPORT_EXT = 18000; // yandex report lifetime
 	const TTL_FORECAST_REPORT = 3600; // session report lifetime
 	const TTL_FORECAST_REPORT_EXT = 18000; // yandex report lifetime
-
+	
 	const MAX_WORDSTAT_REPORTS = 5;
 	const MAX_FORECAST_REPORTS = 5;
 	const MAX_CAMPAIGNS_BANNER_UPDATE = 10;
-
+	
 	const ERROR_NOT_FOUND = 27;
 	const ERROR_NO_STATS = 2;
-
+	
 	const MAX_STAT_DAYS_DELTA = 7;
 	const CAMPAIGN_LIMIT = 100;
-
+	
 	const ERROR_WRONG_CURRENCY = 245;
-
+	
+	const CACHE_DIR = '/seo/yandexdirect/';
+	const CACHE_TTL = 86400;
+	const CACHE_ID = "yandexdirect_client_cache";
+	
 	public $allowedCurrency = array('RUB', 'CHF', 'EUR', 'KZT', 'TRY', 'UAH', 'USD');
-
+	
 	protected $engineId = 'yandex_direct';
-	protected $locale = null;
-
+	protected $locale = NULL;
+	
 	public function __construct()
 	{
 		$this->locale = in_array(LANGUAGE_ID, array("ru", "en", "ua")) ? LANGUAGE_ID : 'en';
-
+		
 		parent::__construct();
 	}
-
+	
 	public function getCurrentUser()
 	{
-		if(Service::isRegistered())
+		if (Service::isRegistered())
 		{
 			$currentAuth = Service::getAuth($this->getCode());
+			
 			return $currentAuth['user'];
 		}
 		else
@@ -114,7 +119,7 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 			return false;
 		}
 	}
-
+	
 	/**
 	 * Sends request to create new campaign
 	 *
@@ -125,35 +130,18 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 	 * @throws YandexDirectException
 	 * @see YandexCampaignTable::createParam
 	 */
-	
-	/**
-	* <p>Метод посылает запрос на создание новой кампании. Метод нестатический.</p>
-	*
-	*
-	* @param array $campaignParam  Параметры кампании.
-	*
-	* @return public 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li>\Bitrix\Seo\Adv\YandexCampaignTable::createParam</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/yandexdirect/addcampaign.php
-	* @author Bitrix
-	*/
 	public function addCampaign(array $campaignParam)
 	{
 		$result = $this->getProxy()->getInterface()->addCampaign(static::ENGINE_ID, $campaignParam);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	/**
 	 * Sends request to update an existing campaign
 	 *
@@ -164,189 +152,160 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 	 * @throws YandexDirectException
 	 * @see YandexCampaignTable::createParam
 	 */
-	
-	/**
-	* <p>Метод посылает запрос на обновление существующей кампании. Метод нестатический.</p>
-	*
-	*
-	* @param array $campaignParam  Параметры кампании.
-	*
-	* @return public 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li>\Bitrix\Seo\Adv\YandexCampaignTable::createParam</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/yandexdirect/updatecampaign.php
-	* @author Bitrix
-	*/
 	public function updateCampaign(array $campaignParam)
 	{
 		$result = $this->getProxy()->getInterface()->updateCampaign(static::ENGINE_ID, $campaignParam);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	/**
-	 * Returns campaign params got from Yandex
+	 * Get campaigns by IDs (not all)
 	 *
-	 * @param mixed $campaignId XML_ID or array of XML_IDs
+	 * @param mixed $campaignsId XML_ID or array of XML_IDs
 	 *
 	 * @return array with campaign data
 	 * @throws SystemException
 	 * @throws YandexDirectException
 	 */
-	
-	/**
-	* <p>Метод возвращает параметры кампании, полученные от Яндекса. Метод нестатический.</p>
-	*
-	*
-	* @param mixed $campaignId  Внешний код кампании или массив внешних кодов.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/yandexdirect/getcampaign.php
-	* @author Bitrix
-	*/
-	public function getCampaign($campaignId)
+	public function getCampaign($campaignsId)
 	{
-		if(empty($campaignId))
+		if (empty($campaignsId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
-		if(!is_array($campaignId))
+		
+		if (!is_array($campaignsId))
 		{
-			$campaignId = array($campaignId);
+			$campaignsId = array($campaignsId);
 		}
-
+		
 		$offset = 0;
-
+		
 		$result = array();
-
-		while($offset < count($campaignId))
+		
+		while ($offset < count($campaignsId))
 		{
-			$currentCampaigns = array_slice($campaignId, $offset, static::CAMPAIGN_LIMIT);
-
+			$currentCampaigns = array_slice($campaignsId, $offset, static::CAMPAIGN_LIMIT);
+			
 			$currentResult = $this->getProxy()->getInterface()->getCampaign(static::ENGINE_ID, $currentCampaigns);
-
-			if(!empty($currentResult['error']))
+			
+			if (!empty($currentResult['error']))
 			{
 				throw new YandexDirectException($currentResult);
 			}
-
+			
 			$result = array_merge($result, $currentResult);
-
+			
 			$offset += static::CAMPAIGN_LIMIT;
 		}
-
+		
 		return $result;
 	}
-
+	
+//	get ALL campaigns for current client
 	public function getCampaignList()
 	{
 		$result = $this->getProxy()->getInterface()->getCampaignList(static::ENGINE_ID);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function archiveCampaign($campaignId)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
+		
 		$result = $this->getProxy()->getInterface()->archiveCampaign(static::ENGINE_ID, $campaignId);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function unArchiveCampaign($campaignId)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
+		
 		$result = $this->getProxy()->getInterface()->unArchiveCampaign(static::ENGINE_ID, $campaignId);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function resumeCampaign($campaignId)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
+		
 		$result = $this->getProxy()->getInterface()->resumeCampaign(static::ENGINE_ID, $campaignId);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function stopCampaign($campaignId)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
+		
 		$result = $this->getProxy()->getInterface()->stopCampaign(static::ENGINE_ID, $campaignId);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function deleteCampaign($campaignId)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
+		
 		$result = $this->getProxy()->getInterface()->deleteCampaign(static::ENGINE_ID, $campaignId);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	/**
 	 * Sends request to create new banner
 	 *
@@ -357,35 +316,18 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 	 * @throws YandexDirectException
 	 * @see YandexBannerTable::createParam
 	 */
-	
-	/**
-	* <p>Метод посылает запрос на создание нового баннера. Метод нестатический.</p>
-	*
-	*
-	* @param array $bannerParam  Параметры баннера.
-	*
-	* @return public 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li>\Bitrix\Seo\Adv\YandexBannerTable::createParam</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/yandexdirect/addbanner.php
-	* @author Bitrix
-	*/
 	public function addBanner(array $bannerParam)
 	{
 		$result = $this->getProxy()->getInterface()->addBanner(static::ENGINE_ID, $bannerParam);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	/**
 	 * Sends request to update an existing banner
 	 *
@@ -396,216 +338,199 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 	 * @throws YandexDirectException
 	 * @see YandexBannerTable::createParam
 	 */
-	
-	/**
-	* <p>Метод посылает запрос на обновление существующего баннера. Метод нестатический.</p>
-	*
-	*
-	* @param array $bannerParam  Параметры баннера.
-	*
-	* @return public 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li>\Bitrix\Seo\Adv\YandexBannerTable::createParam</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/yandexdirect/updatebanner.php
-	* @author Bitrix
-	*/
 	public function updateBanner(array $bannerParam)
 	{
 		$result = $this->getProxy()->getInterface()->updateBanner(static::ENGINE_ID, $bannerParam);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function getBanners($bannerId)
 	{
-		if(empty($bannerId))
+		if (empty($bannerId))
 		{
 			throw new ArgumentNullException("bannerId");
 		}
-
-		if(!is_array($bannerId))
+		
+		if (!is_array($bannerId))
 		{
 			$bannerId = array($bannerId);
 		}
-
+		
 		$result = $this->getProxy()->getInterface()->getBannerList(static::ENGINE_ID, array(
-			'BannerIDS' => $bannerId
+			'BannerIDS' => $bannerId,
 		));
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function getCampaignBanners($campaignId)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
-		if(!is_array($campaignId))
+		
+		if (!is_array($campaignId))
 		{
 			$campaignId = array($campaignId);
 		}
-
+		
 		$result = $this->getProxy()->getInterface()->getBannerList(static::ENGINE_ID, array(
-			'CampaignIDS' => $campaignId
+			'CampaignIDS' => $campaignId,
 		));
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function moderateBanners($campaignId, array $bannerIDs)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
+		
 		$queryData = array(
 			'CampaignID' => $campaignId,
 			'BannerIDS' => $bannerIDs,
 		);
-
+		
 		$result = $this->getProxy()->getInterface()->moderateBanners(static::ENGINE_ID, $queryData);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function stopBanners($campaignId, array $bannerIDs)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
+		
 		$queryData = array(
 			'CampaignID' => $campaignId,
 			'BannerIDS' => $bannerIDs,
 		);
-
-
+		
+		
 		$result = $this->getProxy()->getInterface()->stopBanners(static::ENGINE_ID, $queryData);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function resumeBanners($campaignId, array $bannerIDs)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
+		
 		$queryData = array(
 			'CampaignID' => $campaignId,
 			'BannerIDS' => $bannerIDs,
 		);
-
+		
 		$result = $this->getProxy()->getInterface()->resumeBanners(static::ENGINE_ID, $queryData);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function archiveBanners($campaignId, array $bannerIDs)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
+		
 		$queryData = array(
 			'CampaignID' => $campaignId,
 			'BannerIDS' => $bannerIDs,
 		);
-
+		
 		$result = $this->getProxy()->getInterface()->archiveBanners(static::ENGINE_ID, $queryData);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function unArchiveBanners($campaignId, array $bannerIDs)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
+		
 		$queryData = array(
 			'CampaignID' => $campaignId,
 			'BannerIDS' => $bannerIDs,
 		);
-
+		
 		$result = $this->getProxy()->getInterface()->unArchiveBanners(static::ENGINE_ID, $queryData);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function deleteBanners($campaignId, array $bannerIDs)
 	{
-		if(empty($campaignId))
+		if (empty($campaignId))
 		{
 			throw new ArgumentNullException("campaignId");
 		}
-
+		
 		$queryData = array(
 			'CampaignID' => $campaignId,
 			'BannerIDS' => $bannerIDs,
 		);
-
+		
 		$result = $this->getProxy()->getInterface()->deleteBanners(static::ENGINE_ID, $queryData);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	/**
 	 * Returns Yandex regions list
 	 *
@@ -613,146 +538,156 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 	 * @throws SystemException
 	 * @see https://tech.yandex.ru/direct/doc/dg-v4/reference/GetRegions-docpage/
 	 */
-	
-	/**
-	* <p>Метод возвращает список местоположений Яндекса. Метод нестатический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return array 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li>https://tech.yandex.ru/direct/doc/dg-v4/reference/GetRegions-docpage/</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/yandexdirect/getregions.php
-	* @author Bitrix
-	*/
 	public function getRegions()
 	{
 		$result = $this->getProxy()->getInterface()->getRegions(static::ENGINE_ID);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
-	public function createWordstatReport(array $phrase, $geo = null)
+	
+	public function getClientsSettings()
+	{
+		$cacheManager = Application::getInstance()->getManagedCache();
+		
+		if ($cacheManager->read(self::CACHE_TTL, self::CACHE_ID))
+		{
+			$result = $cacheManager->get(self::CACHE_ID);
+		}
+		else
+		{
+			$result = $this->getProxy()->getInterface()->getClientsSettings(static::ENGINE_ID);
+		}
+		
+		if(!is_array($result) || empty($result))
+			$result = array('error' => 'No authentication.');
+		
+		if (!empty($result['error']))
+			throw new YandexDirectException($result);
+		else
+			$cacheManager->set(self::CACHE_ID, $result);
+		
+		return $result;
+	}
+	
+	public function createWordstatReport(array $phrase, $geo = NULL)
 	{
 		$queryData = array(
-			'Phrases' => $phrase
+			'Phrases' => $phrase,
 		);
-
-		if(is_array($geo))
+		
+		if (is_array($geo))
 		{
 			$queryData['GeoID'] = $geo;
 		}
-
+		
 		$result = $this->getProxy()->getInterface()->createWordstatReport(static::ENGINE_ID, $queryData);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function deleteWordstatReport($reportId)
 	{
 		$result = $this->getProxy()->getInterface()->deleteWordstatReport(static::ENGINE_ID, $reportId);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function getWordstatReport($reportId)
 	{
 		$result = $this->getProxy()->getInterface()->getWordstatReport(static::ENGINE_ID, $reportId);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function getWordstatReportList()
 	{
 		$result = $this->getProxy()->getInterface()->getWordstatReportList(static::ENGINE_ID);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-	public function createForecastReport(array $phrase, $geo = null)
+	
+	public function createForecastReport(array $phrase, $geo = NULL)
 	{
 		$queryData = array(
-			'Phrases' => $phrase
+			'Phrases' => $phrase,
 		);
-
-		if(is_array($geo))
+		
+		if (is_array($geo))
 		{
 			$queryData['GeoID'] = $geo;
 		}
-
+		
 		$result = $this->getProxy()->getInterface()->createForecastReport(static::ENGINE_ID, $queryData);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function deleteForecastReport($reportId)
 	{
 		$result = $this->getProxy()->getInterface()->deleteForecastReport(static::ENGINE_ID, $reportId);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function getForecastReport($reportId)
 	{
 		$result = $this->getProxy()->getInterface()->getForecastReport(static::ENGINE_ID, $reportId);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	public function getForecastReportList()
 	{
 		$result = $this->getProxy()->getInterface()->getForecastReportList(static::ENGINE_ID);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	/**
 	 * Sends request for banner stats.
 	 *
@@ -764,35 +699,18 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 	 *
 	 * @see https://tech.yandex.ru/direct/doc/dg-v4/live/GetBannersStat-docpage/
 	 */
-	
-	/**
-	* <p>Метод посылает запрос на выдачу статистики по баннеру. Метод нестатический.</p>
-	*
-	*
-	* @param array $params  Параметры запроса о статистике.
-	*
-	* @return array 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li>https://tech.yandex.ru/direct/doc/dg-v4/live/GetBannersStat-docpage/</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/yandexdirect/getbannerstats.php
-	* @author Bitrix
-	*/
 	public function getBannerStats(array $params)
 	{
 		$result = $this->getProxy()->getInterface()->getBannerStats(static::ENGINE_ID, $params);
-
-		if(!empty($result['error']))
+		
+		if (!empty($result['error']))
 		{
 			throw new YandexDirectException($result);
 		}
-
+		
 		return $result;
 	}
-
+	
 	/**
 	 * Returns HttpClient object with query result
 	 *
@@ -804,52 +722,52 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 	 * @throws SystemException
 	 * @throws \Exception
 	 */
-	protected function query($scope, $method = "GET", $param = null, $skipRefreshAuth = false)
+	protected function query($scope, $method = "GET", $param = NULL, $skipRefreshAuth = false)
 	{
-		if($param === null)
+		if ($param === NULL)
 		{
 			$param = array();
 		}
-
-		if($this->engineSettings['AUTH'])
+		
+		if ($this->engineSettings['AUTH'])
 		{
 			$http = new HttpClient();
 			$http->setRedirect(false);
 			$http->setHeader("Content-Type", "application/json; charset=utf-8");
-
+			
 			$postData = array(
 				"method" => $method,
 				"locale" => $this->locale,
 				"token" => $this->engineSettings['AUTH']['access_token'],
 			);
-
-			if(!empty($param))
+			
+			if (!empty($param))
 			{
 				$postData["param"] = $param;
 			}
-
+			
 			$postData = YandexJson::encode($postData, JSON_UNESCAPED_UNICODE);
-
+			
 			$ts = microtime(true);
 			$http->post(static::API_URL, $postData);
-
+			
 			LogTable::add(array(
 				'ENGINE_ID' => $this->getId(),
 				'REQUEST_URI' => static::API_URL,
 				'REQUEST_DATA' => Text\Encoding::convertEncoding($postData, 'UTF-8', SITE_CHARSET),
-				'RESPONSE_TIME' => microtime(true)-$ts,
+				'RESPONSE_TIME' => microtime(true) - $ts,
 				'RESPONSE_STATUS' => $http->getStatus(),
 				'RESPONSE_DATA' => Text\Encoding::convertEncoding($http->getResult(), 'UTF-8', SITE_CHARSET),
 			));
-
-			if($http->getStatus() == 401 && !$skipRefreshAuth)
+			
+			if ($http->getStatus() == 401 && !$skipRefreshAuth)
 			{
-				if($this->checkAuthExpired())
+				if ($this->checkAuthExpired())
 				{
 					$this->query($scope, $method, $param, true);
 				}
 			}
-
+			
 			return $http;
 		}
 		else
@@ -857,21 +775,21 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 			throw new SystemException("No Yandex auth data");
 		}
 	}
-
+	
 	public function finance_query($method, $masterToken, $operationNum, $param = array(), $skipRefreshAuth = false)
 	{
-		if($this->engineSettings['AUTH'])
+		if ($this->engineSettings['AUTH'])
 		{
 			$http = new HttpClient();
 			$http->setRedirect(false);
 			$http->setHeader("Content-Type", "application/json; charset=utf-8");
-
+			
 			$auth = $this->getCurrentUser();
-
+			
 			$financeToken = hash(
 				"sha256",
-				$masterToken.$operationNum.$method.$auth['login']);
-
+				$masterToken . $operationNum . $method . $auth['login']);
+			
 			$postData = array(
 				"method" => $method,
 				"finance_token" => $financeToken,
@@ -879,24 +797,24 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 				"locale" => $this->locale,
 				"token" => $this->engineSettings['AUTH']['access_token'],
 			);
-
-			if(!empty($param))
+			
+			if (!empty($param))
 			{
 				$postData["param"] = $param;
 			}
-
+			
 			$postData = YandexJson::encode($postData, JSON_UNESCAPED_UNICODE);
-
+			
 			$http->post(self::API_URL, $postData);
-
-			if($http->getStatus() == 401 && !$skipRefreshAuth)
+			
+			if ($http->getStatus() == 401 && !$skipRefreshAuth)
 			{
-				if($this->checkAuthExpired())
+				if ($this->checkAuthExpired())
 				{
 					$this->query("", $method, $param, true);
 				}
 			}
-
+			
 			return $http;
 		}
 		else
@@ -904,169 +822,182 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 			throw new SystemException("No Yandex auth data");
 		}
 	}
-
-	public function updateCampaignManual($campaignId = null)
+	
+	public function updateCampaignManual($campaignId = NULL)
 	{
 		$newCampaigns = array();
-
+		
 		$res = array(
 			'added' => 0,
 			'updated' => 0,
 			'error' => 0,
 		);
-
+		
 		$keys = array();
-
-		if(!is_array($campaignId) && $campaignId > 0)
+		
+		if (!is_array($campaignId) && $campaignId > 0)
 		{
 			$campaignId = array($campaignId);
 		}
-
-		if(is_array($campaignId) && count($campaignId) > 0)
+		
+		$campaignList = array();
+		if (is_array($campaignId) && count($campaignId) > 0)
 		{
+//			get just current campaigns by ID
 			$dbRes = YandexCampaignTable::getList(array(
 				'filter' => array(
 					'=ID' => $campaignId,
-					'=ENGINE_ID' => $this->getId()
+					'=ENGINE_ID' => $this->getId(),
 				),
-				'select' => array('XML_ID')
+				'select' => array('XML_ID'),
 			));
-
-			while($campaign = $dbRes->fetch())
+			
+			while ($campaign = $dbRes->fetch())
 			{
 				$keys[] = $campaign['XML_ID'];
 			}
+			
+			if (count($keys) > 0)
+				$campaignList = $this->getCampaign($keys);
 		}
 		else
 		{
+//			get ALL campaigns, if IDs not set
 			$campaignList = $this->getCampaignList();
-			foreach($campaignList as $campaignInfo)
-			{
-				$keys[] = $campaignInfo['CampaignID'];
-			}
 		}
-
-		if(count($keys) > 0)
+		
+		$campaignListSorted = array();
+		$campaignListToDelete = array();
+		
+		foreach ($campaignList as $campaignInfo)
 		{
-			$campaignList = $this->getCampaign($keys);
-
-			$campaignListSorted = array();
-			foreach($campaignList as $campaignInfo)
+			$campaignListSorted[$campaignInfo['CampaignID']] = $campaignInfo;
+		}
+		
+		$filter = array('=ENGINE_ID' => $this->getId());
+//		get filtered items only if we update only selected campaigns. Else - get ALL from table
+		if(is_array($campaignId) && count($campaignId) > 0 && count($campaignListSorted) > 0)
+			$filter['=XML_ID'] = array_keys($campaignListSorted);
+		$dbCampaigns = YandexCampaignTable::getList(array('filter' => $filter));
+		
+		YandexCampaignTable::setSkipRemoteUpdate(true);
+//		UPDATE existing in table campaigns
+		while ($campaign = $dbCampaigns->fetch())
+		{
+			if (isset($campaignListSorted[$campaign['XML_ID']]))
 			{
-				$campaignListSorted[$campaignInfo['CampaignID']] = $campaignInfo;
-			}
-
-			$dbCampaigns = YandexCampaignTable::getList(array(
-				'filter' => array(
-					'=XML_ID' => array_keys($campaignListSorted),
-					'=ENGINE_ID' => $this->getId(),
-				)
-			));
-
-			YandexCampaignTable::setSkipRemoteUpdate(true);
-			while($campaign = $dbCampaigns->fetch())
-			{
-				if(isset($campaignListSorted[$campaign['XML_ID']]))
+				$result = YandexCampaignTable::update(
+					$campaign['ID'], array(
+						"SETTINGS" => $campaignListSorted[$campaign['XML_ID']],
+					)
+				);
+				
+				unset($campaignListSorted[$campaign['XML_ID']]);
+				
+				if ($result->isSuccess())
 				{
-					$result = YandexCampaignTable::update(
-						$campaign['ID'], array(
-							"SETTINGS" => $campaignListSorted[$campaign['XML_ID']]
-						)
-					);
-
-					unset($campaignListSorted[$campaign['XML_ID']]);
-
-					if($result->isSuccess())
-					{
-						$res['updated']++;
-					}
-					else
-					{
-						$res['error']++;
-					}
-				}
-			}
-
-			foreach($campaignListSorted as $campaignId => $campaignInfo)
-			{
-				$result = YandexCampaignTable::add(array(
-					"SETTINGS" => $campaignInfo
-				));
-
-				if($result->isSuccess())
-				{
-					$newCampaigns[] = $result->getId();
-					$res['added']++;
+					$res['updated']++;
 				}
 				else
 				{
 					$res['error']++;
 				}
 			}
-			YandexCampaignTable::setSkipRemoteUpdate(false);
+//			collect campaigns, then not exist in YD, but exist in table
+			else
+			{
+				$campaignListToDelete[$campaign['ID']] = $campaign['ID'];
+			}
 		}
 
-		if(count($newCampaigns) > 0)
+//		REMOVE from table deleted campaigns
+		if (count($campaignListToDelete) > 0)
+		{
+			foreach ($campaignListToDelete as $campaignId)
+			{
+				$resultDelete = YandexCampaignTable::delete($campaignId);
+//					todo: skipRempoteUpdate in campaign table or in banner table? o_O
+				YandexCampaignTable::setSkipRemoteUpdate(true);
+			}
+		}
+
+//		ADD in table new campaignt from YD
+		foreach ($campaignListSorted as $campaignId => $campaignInfo)
+		{
+			$result = YandexCampaignTable::add(array(
+				"SETTINGS" => $campaignInfo,
+			));
+			
+			if ($result->isSuccess())
+			{
+				$newCampaigns[] = $result->getId();
+				$res['added']++;
+			}
+			else
+			{
+				$res['error']++;
+			}
+		}
+		YandexCampaignTable::setSkipRemoteUpdate(false);
+		
+		if (count($newCampaigns) > 0)
 		{
 			set_time_limit(300);
-
+			
 			$res['new'] = $newCampaigns;
-
+			
 			$res['banner'] = array();
-			$cnt = ceil(count($newCampaigns)/static::MAX_CAMPAIGNS_BANNER_UPDATE);
-			for($i = 0; $i < $cnt; $i++)
+			$cnt = ceil(count($newCampaigns) / static::MAX_CAMPAIGNS_BANNER_UPDATE);
+			for ($i = 0; $i < $cnt; $i++)
 			{
 				$res['banner'] = array_merge(
 					$res['banner'],
 					$this->updateBannersManual(
 						array_slice(
 							$newCampaigns,
-							$i*static::MAX_CAMPAIGNS_BANNER_UPDATE,
+							$i * static::MAX_CAMPAIGNS_BANNER_UPDATE,
 							static::MAX_CAMPAIGNS_BANNER_UPDATE
 						)
 					)
 				);
 			}
-
-			if(count($newCampaigns) <= static::MAX_CAMPAIGNS_BANNER_UPDATE)
-			{
-				$res['banner'] = $this->updateBannersManual($newCampaigns);
-			}
 		}
-
+		
 		return $res;
 	}
-
-	public function updateBannersManual($campaignId, $bannerId = null)
+	
+	public function updateBannersManual($campaignId, $bannerId = NULL)
 	{
 		$res = array(
 			'added' => 0,
 			'updated' => 0,
 			'error' => 0,
 		);
-
-		if(!is_array($bannerId) && $bannerId > 0)
+		
+		if (!is_array($bannerId) && $bannerId > 0)
 		{
 			$bannerId = array($bannerId);
 		}
-
+		
 		$bannerList = array();
-		if(is_array($bannerId) && count($bannerId) > 0)
+		if (is_array($bannerId) && count($bannerId) > 0)
 		{
+//			get banners by ID
 			$dbRes = YandexBannerTable::getList(array(
 				'filter' => array(
 					'=ID' => $bannerId,
-					'=ENGINE_ID' => $this->getId()
+					'=ENGINE_ID' => $this->getId(),
 				),
-				'select' => array('XML_ID')
+				'select' => array('XML_ID'),
 			));
-
-			while($banner = $dbRes->fetch())
+			
+			while ($banner = $dbRes->fetch())
 			{
 				$keys[] = $banner['XML_ID'];
 			}
-
-			$bannerList = $this->getBanners($keys);
+			
+			if(count($keys) > 0)
+				$bannerList = $this->getBanners($keys);
 		}
 		else
 		{
@@ -1077,83 +1008,107 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 				),
 				'select' => array('ID', 'XML_ID'),
 			));
-
-			while($campaign = $dbCampaigns->fetch())
+			
+			while ($campaign = $dbCampaigns->fetch())
 			{
 				$campaignIndex[$campaign['XML_ID']] = $campaign['ID'];
 			}
-
-			if(count($campaignIndex) > 0)
-			{
+			
+//			get ALL banners for current campaign
+			if (count($campaignIndex) > 0)
 				$bannerList = $this->getCampaignBanners(array_keys($campaignIndex));
-			}
 		}
-		if(count($bannerList) > 0)
+		
+		$bannerListSorted = array();
+		$bannerListToDelete = array();
+		foreach ($bannerList as $bannerInfo)
 		{
-			$bannerListSorted = array();
-			foreach($bannerList as $bannerInfo)
+			$bannerListSorted[$bannerInfo['BannerID']] = $bannerInfo;
+		}
+		
+		$filter = array('=ENGINE_ID' => $this->getId());
+//			get filtered items only if we update only selected banners. Else - get ALL from table
+		if(is_array($bannerId) && count($bannerId) > 0 && count($bannerListSorted) > 0)
+			$filter['=XML_ID'] = array_keys($bannerListSorted);
+		if($campaignId)
+			$filter['=CAMPAIGN_ID'] = $campaignId;
+		$dbBanners = YandexBannerTable::getList(array('filter' => $filter));
+					
+		YandexBannerTable::setSkipRemoteUpdate(true);
+//			UPDATE existing in table banners
+		while ($banner = $dbBanners->fetch())
+		{
+			if (isset($bannerListSorted[$banner['XML_ID']]))
 			{
-				$bannerListSorted[$bannerInfo['BannerID']] = $bannerInfo;
-			}
-
-			$dbBanners = YandexBannerTable::getList(array(
-				'filter' => array(
-					'=XML_ID' => array_keys($bannerListSorted),
-					'=ENGINE_ID' => $this->getId(),
-				)
-			));
-
-			YandexBannerTable::setSkipRemoteUpdate(true);
-			while($banner = $dbBanners->fetch())
-			{
-				if(isset($bannerListSorted[$banner['XML_ID']]))
+				$result = YandexBannerTable::update(
+					$banner['ID'], array(
+						"SETTINGS" => $bannerListSorted[$banner['XML_ID']],
+					)
+				);
+				
+				unset($bannerListSorted[$banner['XML_ID']]);
+				
+				if ($result->isSuccess())
 				{
-					$result = YandexBannerTable::update(
-						$banner['ID'], array(
-							"SETTINGS" => $bannerListSorted[$banner['XML_ID']]
-						)
-					);
-
-					unset($bannerListSorted[$banner['XML_ID']]);
-
-					if($result->isSuccess())
-					{
-						$res['updated']++;
-					}
-					else
-					{
-						$res['error']++;
-					}
-				}
-			}
-
-			foreach($bannerListSorted as $bannerId => $bannerInfo)
-			{
-				$result = YandexBannerTable::add(array(
-					"CAMPAIGN_ID" => $campaignIndex[$bannerInfo['CampaignID']],
-					"SETTINGS" => $bannerInfo,
-				));
-
-				if($result->isSuccess())
-				{
-					$res['added']++;
+					$res['updated']++;
 				}
 				else
 				{
 					$res['error']++;
 				}
 			}
-			YandexBannerTable::setSkipRemoteUpdate(false);
+//				collect banners, then not exist in YD, but exist in table
+			else
+			{
+				$bannerListToDelete[$banner['ID']] = $banner['ID'];
+			}
+		}
+		
+//			REMOVE from table deleted banners
+		if (count($bannerListToDelete) > 0)
+		{
+			foreach ($bannerListToDelete as $bannerId)
+			{
+				$resultDelete = YandexBannerTable::delete($bannerId);
+				YandexBannerTable::setSkipRemoteUpdate(true);
+			}
 		}
 
+//			ADD in table new campaignt from YD
+		foreach ($bannerListSorted as $bannerId => $bannerInfo)
+		{
+			$result = YandexBannerTable::add(array(
+				"CAMPAIGN_ID" => $campaignIndex[$bannerInfo['CampaignID']],
+				"SETTINGS" => $bannerInfo,
+			));
+			
+			if ($result->isSuccess())
+			{
+				$res['added']++;
+			}
+			else
+			{
+				$res['error']++;
+			}
+		}
+		YandexBannerTable::setSkipRemoteUpdate(false);
+		
 		return $res;
 	}
-
-
+	
+	
 	public static function updateAgent()
 	{
-		$engine = new self();
-		if($engine->getAuthSettings())
+		try
+		{
+			$engine = new self();
+		}
+		catch (\Bitrix\Main\SystemException $e)
+		{
+			return __CLASS__ . "::updateAgent();";
+		}
+
+		if ($engine->getAuthSettings())
 		{
 			try
 			{
@@ -1164,24 +1119,24 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 					),
 					'select' => array('CNT'),
 					'runtime' => array(
-						new ExpressionField('CNT', 'COUNT(*)')
-					)
+						new ExpressionField('CNT', 'COUNT(*)'),
+					),
 				));
-
+				
 				$res = $dbRes->fetch();
-				if($res['CNT'] > 0)
+				if ($res['CNT'] > 0)
 				{
 					$engine->updateCampaignManual();
 				}
-
+				
 				$availableCampaigns = array();
 				$campaignList = $engine->getCampaignList();
-				foreach($campaignList as $campaignInfo)
+				foreach ($campaignList as $campaignInfo)
 				{
 					$availableCampaigns[] = $campaignInfo['CampaignID'];
 				}
-
-				if(count($availableCampaigns) > 0)
+				
+				if (count($availableCampaigns) > 0)
 				{
 					$dbRes = YandexBannerTable::getList(array(
 						'group' => array('CAMPAIGN_ID'),
@@ -1192,23 +1147,24 @@ class YandexDirect extends Engine\YandexBase implements IEngine
 						),
 						'select' => array('CAMPAIGN_ID'),
 					));
-
+					
 					$campaignId = array();
-					while($res = $dbRes->fetch())
+					while ($res = $dbRes->fetch())
 					{
 						$campaignId[] = $res['CAMPAIGN_ID'];
 					}
-
-					if(count($campaignId) > 0)
+					
+					if (count($campaignId) > 0)
 					{
 						$engine->updateBannersManual($campaignId);
 					}
 				}
 			}
-			catch(YandexDirectException $e)
-			{}
+			catch (YandexDirectException $e)
+			{
+			}
 		}
-
-		return __CLASS__."::updateAgent();";
+		
+		return __CLASS__ . "::updateAgent();";
 	}
 }

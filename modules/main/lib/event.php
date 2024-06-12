@@ -6,6 +6,8 @@ class Event
 	protected $moduleId;
 	protected $type;
 	protected $parameters = array();
+	/** @var callable */
+	protected $parametersLoader = null;
 	protected $filter = null;
 	protected $sender = null;
 
@@ -46,28 +48,56 @@ class Event
 
 	public function setParameters($parameters)
 	{
-		if (!is_array($parameters))
-			throw new ArgumentTypeException("parameter", "array");
-
-		$this->parameters = $parameters;
+		if (is_array($parameters))
+		{
+			$this->parameters = $parameters;
+		}
+		elseif ($parameters instanceof \Closure)
+		{
+			$this->parameters = null;
+			$this->parametersLoader = $parameters;
+		}
+		else
+		{
+			throw new ArgumentTypeException("parameter", "array or closure, which returns array");
+		}
 	}
 
 	public function getParameters()
 	{
+		$this->loadParameters();
+
 		return $this->parameters;
 	}
 
 	public function setParameter($key, $value)
 	{
+		$this->loadParameters();
+
 		$this->parameters[$key] = $value;
 	}
 
 	public function getParameter($key)
 	{
+		$this->loadParameters();
+
 		if (isset($this->parameters[$key]))
 			return $this->parameters[$key];
 
 		return null;
+	}
+
+	protected function loadParameters()
+	{
+		if (!$this->parametersLoader)
+		{
+			return false;
+		}
+
+		$this->setParameters(call_user_func_array($this->parametersLoader, array()));
+		$this->parametersLoader = null;
+
+		return true;
 	}
 
 	public function setFilter($filter)

@@ -20,7 +20,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Sale\Internals
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_DiscountGroup_Query query()
+ * @method static EO_DiscountGroup_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_DiscountGroup_Result getById($id)
+ * @method static EO_DiscountGroup_Result getList(array $parameters = [])
+ * @method static EO_DiscountGroup_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_DiscountGroup createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_DiscountGroup_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_DiscountGroup wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_DiscountGroup_Collection wakeUpCollection($rows)
+ */
 
 class DiscountGroupTable extends Main\Entity\DataManager
 {
@@ -29,17 +42,6 @@ class DiscountGroupTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы привязок правил корзины к группам пользователей. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/discountgrouptable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_sale_discount_group';
@@ -50,17 +52,6 @@ class DiscountGroupTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы привязок правил корзины к группам пользователей. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/discountgrouptable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -97,19 +88,6 @@ class DiscountGroupTable extends Main\Entity\DataManager
 	 * @param int $discount			Discount id.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод удаляет список групп пользователей, привязанных к правилу с кодом <code>$discount</code>. Метод статический.</p>
-	*
-	*
-	* @param integer $discount  Идентификатор правила.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/discountgrouptable/deletebydiscount.php
-	* @author Bitrix
-	*/
 	public static function deleteByDiscount($discount)
 	{
 		$discount = (int)$discount;
@@ -131,25 +109,6 @@ class DiscountGroupTable extends Main\Entity\DataManager
 	 * @param bool $clear			Clear old values.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод обновляет параметры списка групп пользователей в соответствии с правилом, имеющим код <code>$discount</code>. Метод статический.</p>
-	*
-	*
-	* @param integer $discount  Идентификатор правила.
-	*
-	* @param array $groupList  Массив групп пользователей.
-	*
-	* @param string $active  Флаг активности правила.
-	*
-	* @param boolean $clear  Если параметр принимает <i>true</i>, то будут очищены старые данные.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/discountgrouptable/updatebydiscount.php
-	* @author Bitrix
-	*/
 	public static function updateByDiscount($discount, $groupList, $active, $clear)
 	{
 		$discount = (int)$discount;
@@ -196,27 +155,12 @@ class DiscountGroupTable extends Main\Entity\DataManager
 	}
 
 	/**
-	 * Change active flag in table by diiscount.
+	 * Change active flag in table by discount.
 	 *
 	 * @param int $discount			Discount id.
 	 * @param string $active		Discount active flag.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод изменяет флаг активности для записей в таблице, связанных с правилом с кодом <code>$discount</code>. Метод статический.</p>
-	*
-	*
-	* @param integer $discount  Идентификатор правила.
-	*
-	* @param string $active  Флаг активности правила.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/discountgrouptable/changeactivebydiscount.php
-	* @author Bitrix
-	*/
 	public static function changeActiveByDiscount($discount, $active)
 	{
 		$discount = (int)$discount;
@@ -239,21 +183,6 @@ class DiscountGroupTable extends Main\Entity\DataManager
 	 * @param array $filter				Additional filter.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает массив правил корзины в соответствии с заданным массивом <code>$groupList</code>. Метод статический.</p>
-	*
-	*
-	* @param array $groupList  Массив групп пользователей.
-	*
-	* @param array $filter = array() Массив дополнительной фильтрации данных.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/discountgrouptable/getdiscountbygroups.php
-	* @author Bitrix
-	*/
 	public static function getDiscountByGroups($groupList, $filter = array())
 	{
 		$result = array();
@@ -295,19 +224,6 @@ class DiscountGroupTable extends Main\Entity\DataManager
 	 * @param array $groupList			User group list.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает массив активных правил корзины в соответствии с заданным массивом <code>$groupList</code>. Метод статический.</p>
-	*
-	*
-	* @param array $groupList  Массив групп пользователей.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/discountgrouptable/getactivediscountbygroups.php
-	* @author Bitrix
-	*/
 	public static function getActiveDiscountByGroups($groupList)
 	{
 		return self::getDiscountByGroups($groupList, array('ACTIVE' => 'Y'));

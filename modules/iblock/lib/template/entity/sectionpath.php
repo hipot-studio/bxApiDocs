@@ -34,17 +34,6 @@ class SectionPath extends Base
 	 *
 	 * @return boolean
 	 */
-	
-	/**
-	* <p>Метод выбирает значения путей до элементов из базы данных. Возвращает значение <i>true</i> в случае успеха. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/sectionpath/loadfromdatabase.php
-	* @author Bitrix
-	*/
 	public function loadFromDatabase()
 	{
 		if (!isset($this->fields))
@@ -101,7 +90,7 @@ class SectionPath extends Base
 			{
 				//TODO $uf["USER_TYPE"]["BASE_TYPE"] == "enum"
 				$propertyCode = $id;
-				$fieldCode = "property.".strtolower(substr($id, 3));
+				$fieldCode = "property.".mb_strtolower(mb_substr($id, 3));
 				$this->fieldMap[$fieldCode] = $propertyCode;
 				if (is_array($uf["VALUE"]))
 				{

@@ -47,7 +47,7 @@ class Finder
 		$types = Option::get('sale', self::SALE_LOCATION_INDEXED_TYPES_OPT, '', '');
 		$typesFromDb = static::getTypesFromDb();
 
-		if(!strlen($types)) // means "all"
+		if($types == '') // means "all"
 			return array_keys($typesFromDb);
 
 		$types = explode(':', $types);
@@ -91,7 +91,7 @@ class Finder
 		$langs = Option::get('sale', self::SALE_LOCATION_INDEXED_LANGUAGES_OPT, '', '');
 		$langsFromDb = static::getLangsFromDb();
 
-		if(!strlen($langs))
+		if($langs == '')
 			return array_keys($langsFromDb);
 
 		$result = array();
@@ -154,12 +154,15 @@ class Finder
 	}
 
 	/**
-	 * 
+	 *
 	 * $parameters is an ORM`s getList compatible array of parameters
-	 * 
-	 * 
+	 *
+	 *
 	 */
-	public static function find($parameters, $behaviour = array('FALLBACK_TO_NOINDEX_ON_NOTFOUND' => true, 'USE_INDEX' => true, 'USE_ORM' => true))
+	public static function find(
+		$parameters,
+		$behaviour = ['FALLBACK_TO_NOINDEX_ON_NOTFOUND' => true, 'USE_INDEX' => true, 'USE_ORM' => true]
+	)
 	{
 		/////////////////////////////////
 		// parameter check and process
@@ -264,10 +267,14 @@ class Finder
 				$found = array();
 				preg_match("#^(=?)(.+)#", $field, $found);
 
-				if(strlen($found[1]))
+				if($found[1] <> '')
+				{
 					$op = $found[1];
+				}
 				else
+				{
 					$op = '=';
+				}
 
 				if(!isset(static::$allowedOperations[$op]))
 					throw new Main\ArgumentException('Unknown modifier in the filter');
@@ -275,7 +282,7 @@ class Finder
 				$fieldParsed = $found[2];
 
 				$parsed[$fieldParsed] = array(
-					'OP' => strlen($op) ? $op : '=',
+					'OP' => $op <> ''? $op : '=',
 					'VALUE' => $value
 				);
 			}
@@ -293,31 +300,33 @@ class Finder
 
 		$filter = static::parseFilter($parameters['filter']);
 
-		$filterByPhrase = isset($filter['PHRASE']) && strlen($filter['PHRASE']['VALUE']);
+		$filterByPhrase = isset($filter['PHRASE']) && mb_strlen($filter['PHRASE']['VALUE']);
 
 		if($filterByPhrase) // filter by phrase
 		{
 			$bounds = WordTable::getBoundsForPhrase($filter['PHRASE']['VALUE']);
-
-			$firstBound = array_shift($bounds);
-			$k = 0;
-			foreach($bounds as $bound)
+			if (!empty($bounds))
 			{
-				$query['JOIN'][] = " inner join ".ChainTable::getTableName()." A".$k." on A.LOCATION_ID = A".$k.".LOCATION_ID and (
+				$firstBound = array_shift($bounds);
+				$k = 0;
+				foreach($bounds as $bound)
+				{
+					$query['JOIN'][] = " inner join ".ChainTable::getTableName()." A".$k." on A.LOCATION_ID = A".$k.".LOCATION_ID and (
+	
+						".($bound['INF'] == $bound['SUP']
+							? " A".$k.".POSITION = '".$bound['INF']."'"
+							: " A".$k.".POSITION >= '".$bound['INF']."' and A".$k.".POSITION <= '".$bound['SUP']."'"
+						)."
+					)";
+					$k++;
+				}
 
-					".($bound['INF'] == $bound['SUP']
-						? " A".$k.".POSITION = '".$bound['INF']."'"
-						: " A".$k.".POSITION >= '".$bound['INF']."' and A".$k.".POSITION <= '".$bound['SUP']."'"
-					)."
-				)";
-				$k++;
+				$query['WHERE'][] = (
+					$firstBound['INF'] == $firstBound['SUP']
+					? " A.POSITION = '".$firstBound['INF']."'"
+					: " A.POSITION >= '".$firstBound['INF']."' and A.POSITION <= '".$firstBound['SUP']."'"
+				);
 			}
-
-			$query['WHERE'][] = (
-				$firstBound['INF'] == $firstBound['SUP']
-				? " A.POSITION = '".$firstBound['INF']."'"
-				: " A.POSITION >= '".$firstBound['INF']."' and A.POSITION <= '".$firstBound['SUP']."'"
-			);
 
 			$mainTableJoinCondition = 'A.LOCATION_ID';
 		}
@@ -327,7 +336,12 @@ class Finder
 		}
 
 		// site link search
-		if(strlen($filter['SITE_ID']['VALUE']) && SiteLinkTable::checkTableExists())
+		if (
+			isset($filter['SITE_ID']['VALUE'])
+			&& is_string($filter['SITE_ID']['VALUE'])
+			&& $filter['SITE_ID']['VALUE'] !== ''
+			&& SiteLinkTable::checkTableExists()
+		)
 		{
 			$query['JOIN'][] = "inner join ".SiteLinkTable::getTableName()." SL on SL.LOCATION_ID = ".$mainTableJoinCondition." and SL.SITE_ID = '".$dbHelper->forSql($filter['SITE_ID']['VALUE'])."'";
 		}
@@ -337,7 +351,7 @@ class Finder
 
 		$map = Location\LocationTable::getMap();
 		$nameRequired = false;
-		$locationRequred = false;
+		$locationRequired = false;
 
 		if(is_array($parameters['select']))
 		{
@@ -350,7 +364,7 @@ class Finder
 				}
 
 				if(
-					!isset($map[$field]) || 
+					!isset($map[$field]) ||
 					!in_array($map[$field]['data_type'], array('integer', 'string', 'float', 'boolean')) ||
 					isset($map[$field]['expression'])
 				)
@@ -358,7 +372,7 @@ class Finder
 					unset($parameters['select'][$alias]);
 				}
 
-				$locationRequred = true;
+				$locationRequired = true;
 			}
 		}
 
@@ -371,7 +385,7 @@ class Finder
 			}
 
 			if(
-				!isset($map[$field]) || 
+				!isset($map[$field]) ||
 				!in_array($map[$field]['data_type'], array('integer', 'string', 'float', 'boolean')) ||
 				isset($map[$field]['expression'])
 			)
@@ -379,12 +393,12 @@ class Finder
 				unset($filter[$field]);
 			}
 
-			$locationRequred = true;
+			$locationRequired = true;
 		}
 
 		// data join, only if extended select specified
 
-		if($locationRequred && $filterByPhrase)
+		if($locationRequired && $filterByPhrase)
 			$query['JOIN'][] = "inner join ".Location\LocationTable::getTableName()." L on A.LOCATION_ID = L.ID";
 
 		if($nameRequired)
@@ -416,7 +430,13 @@ class Finder
 			if($field != 'NAME.NAME' && $field != 'NAME.LANGUAGE_ID')
 				$field = 'L.'.$dbHelper->forSql($field);
 
-			$query['WHERE'][] = $field.' '.$params['OP']." '".$dbHelper->forSql($params['VALUE'])."'";
+			$values = $params['VALUE'];
+
+			if(!is_array($values))
+				$values = array($values);
+
+			foreach($values as $value)
+				$query['WHERE'][] = $field.' '.$params['OP']." '".$dbHelper->forSql($value)."'";
 		}
 
 		if($filterByPhrase)
@@ -429,7 +449,7 @@ class Finder
 
 					".implode(' ', $query['JOIN'])."
 
-				".(count($query['WHERE']) ? 'where ' : '').implode(' and ', $query['WHERE'])."
+				".(!empty($query['WHERE']) ? 'where ' : '').implode(' and ', $query['WHERE'])."
 
 				order by A.RELEVANCY asc
 			";
@@ -445,19 +465,19 @@ class Finder
 
 					".implode(' ', $query['JOIN'])."
 
-				".(count($query['WHERE']) ? 'where ' : '').implode(' and ', $query['WHERE'])."
+				".(!empty($query['WHERE']) ? 'where ' : '').implode(' and ', $query['WHERE'])."
 			";
 		}
 
-		$offset = intval($parameters['offset']);
-		$limit = intval($parameters['limit']);
+		$offset = (int)($parameters['offset'] ?? 0);
+		$limit = (int)($parameters['limit'] ?? 0);
 
-		if($limit)
+		if ($limit)
+		{
 			$sql = $dbHelper->getTopSql($sql, $limit, $offset);
+		}
 
-		$res = $dbConnection->query($sql);
-
-		return $res;
+		return $dbConnection->query($sql);
 	}
 
 	/**
@@ -485,70 +505,136 @@ class Finder
 
 		$filter = static::parseFilter($parameters['filter']);
 
-		if(strlen($filter['SITE_ID']['VALUE']))
+		$doFilterBySite = false;
+		$hasLocLinks = false;
+		$hasGrpLinks = false;
+		if (($filter['SITE_ID']['VALUE'] ?? '') !== '')
 		{
-			$filterSite = $dbHelper->forSql(substr($filter['SITE_ID']['VALUE'], 0, 2));
+			$filterSite = $dbHelper->forSql(mb_substr($filter['SITE_ID']['VALUE'], 0, 2));
 
 			$hasLocLinks = Location\SiteLocationTable::checkLinkUsage($filterSite, Location\SiteLocationTable::DB_LOCATION_FLAG);
 			$hasGrpLinks = Location\SiteLocationTable::checkLinkUsage($filterSite, Location\SiteLocationTable::DB_GROUP_FLAG);
 			$doFilterBySite = true;
 		}
-		if(strlen($filter['PHRASE']['VALUE']))
+
+		$doFilterByName = false;
+		$filterName = '';
+		$phrase = (string)($filter['PHRASE']['VALUE'] ?? '');
+		if ($phrase !== '')
 		{
 			$doFilterByName = true;
-
-			$filterName = ToUpper($dbHelper->forSql($filter['PHRASE']['VALUE']));
+			$filterName = $dbHelper->forSql(mb_strtoupper($phrase));
 		}
 
-		if(intval($filter['ID']['VALUE']))
+		$doFilterById = false;
+		$filterId = null;
+		if (isset($filter['ID']))
 		{
-			$doFilterById = true;
-			$filterId = intval($filter['ID']['VALUE']);
+			if (is_array($filter['ID']['VALUE']))
+			{
+				$doFilterById = true;
+
+				if (count($filter['ID']['VALUE']) === 1)
+				{
+					reset($filter['ID']['VALUE']);
+					$filterId = (int)current($filter['ID']['VALUE']);
+				}
+				else
+				{
+					$filterId = $filter['ID']['VALUE'];
+				}
+			}
+			elseif ((int)$filter['ID']['VALUE'])
+			{
+				$doFilterById = true;
+				$filterId = (int)$filter['ID']['VALUE'];
+			}
 		}
-		if(intval($filter['CODE']['VALUE']))
+
+		$doFilterByCode = false;
+		$filterCode = '';
+		$codeValue = (int)($filter['CODE']['VALUE'] ?? 0);
+		if ($codeValue)
 		{
 			$doFilterByCode = true;
-			$filterCode = $dbHelper->forSql($filter['CODE']['VALUE']);
+			$filterCode = $dbHelper->forSql((string)$codeValue);
 		}
+		unset($codeValue);
 
-		$doFilterByLang = true;
-		if(strlen($filter['NAME.LANGUAGE_ID']['VALUE']))
+		if (($filter['NAME.LANGUAGE_ID']['VALUE'] ?? '') !== '')
 		{
-			$filterLang = $dbHelper->forSql(substr($filter['NAME.LANGUAGE_ID']['VALUE'], 0, 2));
+			$filterLang = $dbHelper->forSql(mb_substr((string)$filter['NAME.LANGUAGE_ID']['VALUE'], 0, 2));
 		}
 		else
+		{
 			$filterLang = LANGUAGE_ID;
+		}
 
-		if(isset($filter['PARENT_ID']) && intval($filter['PARENT_ID']['VALUE']) >= 0)
+		$doFilterByCountry = false;
+		$filterCountryId = 0;
+		if (isset($filter['COUNTRY_ID']) && (int)$filter['COUNTRY_ID']['VALUE'] >= 0)
+		{
+			$doFilterByCountry = true;
+			$filterCountryId = (int)$filter['COUNTRY_ID']['VALUE'];
+		}
+
+		$doFilterByParent = false;
+		$filterParentId = 0;
+		if (isset($filter['PARENT_ID']) && (int)$filter['PARENT_ID']['VALUE'] >= 0)
 		{
 			$doFilterByParent = true;
-			$filterParentId = intval($filter['PARENT_ID']['VALUE']);
+			$filterParentId = (int)$filter['PARENT_ID']['VALUE'];
 		}
-		if(intval($filter['TYPE_ID']['VALUE']))
+
+		$doFilterByType = false;
+		$filterTypeId = 0;
+		if ((int)($filter['TYPE_ID']['VALUE'] ?? 0))
 		{
 			$doFilterByType = true;
-			$filterTypeId = intval($filter['TYPE_ID']['VALUE']);
+			$filterTypeId = (int)$filter['TYPE_ID']['VALUE'];
 		}
 
 		// filter select fields
+		$parameters['select'] ??= [];
 		if(!is_array($parameters['select']))
-			$parameters['select'] = array();
+		{
+			$parameters['select'] = [];
+		}
 
+		$doCountChildren = false;
 		$map = Location\LocationTable::getMap();
 		$nameAlias = false;
+		$allowTypes = [
+			'integer' => true,
+			'string' => true,
+			'float' => true,
+			'boolean' => true,
+		];
 		foreach($parameters['select'] as $alias => $field)
 		{
-			if($field == 'CHILD_CNT')
+			if ($field === 'CHILD_CNT')
+			{
 				$doCountChildren = true;
+			}
 
-			if($field == 'NAME.NAME')
+			if ($field === 'NAME.NAME')
+			{
 				$nameAlias = $alias;
+			}
 
-			if(/*in_array($field, array('ID', 'CODE', 'SORT', 'LEFT_MARGIN', 'RIGHT_MARGIN')) || */
-				!isset($map[$field]) || 
-				!in_array($map[$field]['data_type'], array('integer', 'string', 'float', 'boolean')) ||
-				isset($map[$field]['expression'])
+			$badField = false;
+			if (!isset($map[$field]))
+			{
+				$badField = true;
+			}
+			elseif (
+				!isset($allowTypes[$map[$field]['data_type']])
+				|| isset($map[$field]['expression'])
 			)
+			{
+				$badField = true;
+			}
+			if ($badField)
 			{
 				unset($parameters['select'][$alias]);
 			}
@@ -609,14 +695,16 @@ class Finder
 			$groupFields[$lFld] = $lFld;
 		}
 
-		if($doCountChildren)
+		if ($doCountChildren)
+		{
 			$fields['CHILD_CNT'] = 'COUNT(LC.ID)';
+		}
 
 		// make select sql
-		$selectSql = array();
-		foreach($fields as $alias => $fld)
+		$selectSql = [];
+		foreach ($fields as $alias => $fld)
 		{
-			if($fld == $alias)
+			if ($fld === $alias)
 				$selectSql[] = $fld;
 			else
 				$selectSql[] = $fld.' as '.$alias;
@@ -646,23 +734,49 @@ class Finder
 
 		$where = array();
 
-		if($doFilterByLang)
-			$where[] = "LN.LANGUAGE_ID = '".$filterLang."'";
+		$where[] = "LN.LANGUAGE_ID = '" . $filterLang . "'";
 
-		if($doFilterByParent)
-			$where[] = "L.PARENT_ID = '".$filterParentId."'";
+		if ($doFilterByCountry)
+		{
+			$where[] = "L.COUNTRY_ID = " . $filterCountryId . " ";
+		}
 
-		if($doFilterById)
-			$where[] = "L.ID = '".$filterId."'";
+		if ($doFilterByParent)
+		{
+			$where[] = "L.PARENT_ID = " . $filterParentId . " ";
+		}
+
+		if ($doFilterById)
+		{
+			if(is_array($filterId))
+			{
+				foreach($filterId as $idx => $id)
+				{
+					$filterId[$idx] = (int)$id;
+				}
+
+				$where[] = "L.ID IN (".implode(',', $filterId).")";
+			}
+			else
+			{
+				$where[] = "L.ID = ".$filterId;
+			}
+		}
 
 		if($doFilterByCode)
+		{
 			$where[] = "L.CODE = '".$filterCode."'";
+		}
 
 		if($doFilterByType)
-			$where[] = "L.TYPE_ID = '".$filterTypeId."'";
+		{
+			$where[] = "L.TYPE_ID = '" . $filterTypeId . "'";
+		}
 
 		if($doFilterByName)
-			$where[] = "LN.NAME_UPPER like '".$filterName."%'";
+		{
+			$where[] = "LN.NAME_UPPER like '" . $filterName . "%'";
+		}
 
 		$mainSql = 			str_replace('%MAIN_FILTER_CONDITION%', implode(' and ', $where), $mainSql);
 		$needDistinct = 	false;
@@ -716,23 +830,26 @@ class Finder
 		// set groupping if needed
 		$sql = str_replace('%GROUP_BY%', $needDistinct || $doCountChildren ? "group by {$groupSql}" : '', $sql);
 
-		if(!is_array($parameters['order']))
+		$parameters['order'] ??= null;
+		if (!is_array($parameters['order']))
 		{
 			$sql .= " order by 3, 4 asc, 5";
 		}
 		else
 		{
 			// currenly spike
-			if(isset($parameters['order']['NAME.NAME']))
-				$sql .= " order by 5 ".($parameters['order']['NAME.NAME'] == 'asc' ? 'asc' : 'desc');
+			if (isset($parameters['order']['NAME.NAME']))
+			{
+				$sql .= " order by 5 " . ($parameters['order']['NAME.NAME'] == 'asc' ? 'asc' : 'desc');
+			}
 		}
 
-		$offset = intval($parameters['offset']);
-		$limit = intval($parameters['limit']);
+		$offset = (int)($parameters['offset'] ?? 0);
+		$limit = (int)($parameters['limit'] ?? 0);
 
-		if($limit)
+		if ($limit)
 		{
-			if($dbConnection->getType() == 'mssql')
+			if ($dbConnection->getType() == 'mssql')
 			{
 				// due to huge amount of limitations of windowed functions in transact, using artificial nav here
 				// (does not support UNION and integer indices in ORDER BY)
@@ -746,7 +863,7 @@ class Finder
 
 		$res = $dbConnection->query($sql);
 
-		if($artificialNav)
+		if ($artificialNav)
 		{
 			$result = array();
 			$i = -1;
@@ -771,4 +888,3 @@ class Finder
 		}
 	}
 }
-

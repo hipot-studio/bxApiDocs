@@ -1,8 +1,9 @@
 <?
 /**
- * BX_ROOT
+ * @file
+ * имя каталога где ядро битрикса лежит, /bitrix по умолчанию
  */
-define('BX_ROOT', "/bitrix");
+define('BX_ROOT', '/bitrix');
 
 /**
  * BX_PERSONAL_ROOT
@@ -489,5 +490,21 @@ define('AM_PM_UPPER', 1);
  */
 define('AM_PM_LOWER', 2);
 
+/**
+ * если указано значение true, то запускается упрощенный мастер установки
+ */
+define('SHORT_INSTALL', true);
 
+/**
+ * проверка параметров окружения (права доступа к файлам, БД и т.п). Если такой константы нет, проверка будет выполнена на первом хите.
+ * После этого в начало dbconn.php запишется define("SHORT_INSTALL_CHECK", true);
+ */
+deine('SHORT_INSTALL_CHECK', true);
+
+/**
+ * Если true - подключение к базе данных будет автоматически устанавливаться при первом запросе через API-функции.
+ */
+define('DELAY_DB_CONNECT', true);
+
+define('LICENSE_KEY', 'DEMO');
 ?>

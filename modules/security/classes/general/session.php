@@ -1,4 +1,10 @@
 <?
+
+/**
+ * Class CSecuritySession
+ * @deprecated
+ * @see \Bitrix\Main\Session\Session
+ */
 class CSecuritySession
 {
 	const GC_AGENT_NAME = "CSecuritySession::CleanUpAgent();";
@@ -13,6 +19,10 @@ class CSecuritySession
 		elseif(CSecuritySessionMC::isStorageEnabled())
 		{
 			static::registerHandler('CSecuritySessionMC');
+		}
+		elseif(CSecuritySessionRedis::isStorageEnabled())
+		{
+			static::registerHandler('CSecuritySessionRedis');
 		}
 		else
 		{
@@ -93,7 +103,9 @@ class CSecuritySession
 	public static function activate()
 	{
 		COption::SetOptionString("security", "session", "Y");
+		session_write_close();
 		CSecuritySession::Init();
+		session_start();
 		CAgent::RemoveAgent(self::GC_AGENT_NAME, "security");
 		CAgent::Add(array(
 			"NAME" => self::GC_AGENT_NAME,
@@ -126,27 +138,8 @@ class CSecuritySession
 			);
 		}
 
-		//may return false with session.auto_start is set to On
-		// ToDo: change to SessionHandlerInterface when Bitrix reached PHP 5.4.0
-		$params = array(
-			array($class, "open"),
-			array($class, "close"),
-			array($class, "read"),
-			array($class, "write"),
-			array($class, "destroy"),
-			array($class, "gc")
-		);
-
-		if (version_compare(phpversion(),"5.5.0",">"))
-		{
-			// Due to PHP bug we must always set all 7 handlers
-			$params[] = array('CSecuritySession', 'createSid');
-		}
-
-		if (call_user_func_array('session_set_save_handler', $params))
-		{
-			register_shutdown_function("session_write_close");
-		}
+		$handler = new CSecuritySessionHandler($class);
+		session_set_save_handler($handler, true);
 	}
 
 	public static function createSid()

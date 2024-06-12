@@ -1,6 +1,13 @@
 <?
 IncludeModuleLangFile(__FILE__);
 
+use Bitrix\Main\Config\Ini;
+use Bitrix\Main\Application;
+use Bitrix\Security\VirusTable;
+use Bitrix\Main\EventLog\Internal\EventLogTable;
+use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Security\WhiteListTable;
+
 /*
 Here is testing code:
 $s=<<<EOT
@@ -47,7 +54,7 @@ class CSecurityAntiVirus
 
 	private $quotes = array();
 
-	public function __construct($place = "body")
+	function __construct($place = "body")
 	{
 		$this->place = $place;
 		global $BX_SECURITY_AV_ACTION;
@@ -61,8 +68,8 @@ class CSecurityAntiVirus
 		foreach(GetModuleEvents("main", "OnPageStart", true) as $event)
 		{
 			if(
-				$event["TO_MODULE_ID"] == "security"
-				&& $event["TO_CLASS"] == "CSecurityAntiVirus"
+				isset($event["TO_MODULE_ID"]) && $event["TO_MODULE_ID"] === "security"
+				&& isset($event["TO_CLASS"]) && $event["TO_CLASS"] === "CSecurityAntiVirus"
 			)
 			{
 				$bActive = true;
@@ -111,7 +118,7 @@ class CSecurityAntiVirus
 		if (self::isSafetyRequest()) //Check only GET and POST request
 			return;
 
-		global $APPLICATION, $DB, $BX_SECURITY_AV_TIMEOUT, $BX_SECURITY_AV_ACTION;
+		global $APPLICATION, $BX_SECURITY_AV_TIMEOUT, $BX_SECURITY_AV_ACTION;
 		$BX_SECURITY_AV_TIMEOUT = COption::GetOptionInt("security", "antivirus_timeout");
 		$BX_SECURITY_AV_ACTION = COption::GetOptionInt("security", "antivirus_action");
 
@@ -131,7 +138,6 @@ class CSecurityAntiVirus
 		}
 
 		//Init DB in order to be able to register the event in the shutdown function
-		CSecurityDB::Init();
 
 		//Check if we started output buffering in auto_prepend_file
 		//so we'll have chances to detect virus before prolog
@@ -139,7 +145,7 @@ class CSecurityAntiVirus
 		{
 			$content = ob_get_contents();
 			ob_end_clean();
-			if(strlen($content))
+			if($content <> '')
 			{
 				$Antivirus = new CSecurityAntiVirus("pre");
 				$Antivirus->Analyze($content);
@@ -154,32 +160,39 @@ class CSecurityAntiVirus
 		$fname = $_SERVER["DOCUMENT_ROOT"].BX_PERSONAL_ROOT."/managed_cache/b_sec_virus";
 		if(file_exists($fname))
 		{
-			$rsInfo = $DB->Query("select * from b_sec_virus where SENT='N'");
+			$rsInfo = VirusTable::getList(["filter" => ["=SENT" => "N"]]);
+
 			if($arInfo = $rsInfo->Fetch())
 			{
-				if($table_lock = CSecurityDB::LockTable('b_sec_virus', $APPLICATION->GetServerUniqID()."_virus"))
+				$connection = Application::getConnection();
+				if($connection->lock("b_sec_virus"))
 				{
 					$SITE_ID = false;
 					do {
 						$SITE_ID = $arInfo["SITE_ID"];
-						if(strlen($arInfo["INFO"]))
+						if($arInfo["INFO"] <> '')
 						{
-							$arEvent = unserialize(base64_decode($arInfo["INFO"]));
+							$arEvent = unserialize(base64_decode($arInfo["INFO"]), ['allowed_classes' => false]);
 							if(is_array($arEvent))
-								$DB->Add("b_event_log", $arEvent, array("DESCRIPTION"));
+							{
+								$arEvent["TIMESTAMP_X"] = $arInfo["TIMESTAMP_X"];
+								$arEvent["USER_ID"] = null;
+								$arEvent["GUEST_ID"] = null;
+								EventLogTable::add($arEvent);
+							}
 						}
-						CSecurityDB::Query("update b_sec_virus set SENT='Y' where ID='".$arInfo["ID"]."'", '');
+						VirusTable::update($arInfo["ID"], ["SENT" => "Y"]);
+
 					} while ($arInfo = $rsInfo->Fetch());
 
-					CTimeZone::Disable();
-					$arDate = localtime(time());
-					$date = mktime($arDate[2], $arDate[1]-$BX_SECURITY_AV_TIMEOUT, 0, $arDate[4]+1, $arDate[3], 1900+$arDate[5]);
-					CSecurityDB::Query("DELETE FROM b_sec_virus WHERE TIMESTAMP_X <= ".$DB->CharToDateFunction(ConvertTimeStamp($date, "FULL")), '');
-					CTimeZone::Enable();
+					$date = new \Bitrix\Main\Type\DateTime();
+					$date->add("-{$BX_SECURITY_AV_TIMEOUT} minutes");
+
+					VirusTable::deleteList(["<=TIMESTAMP_X" => $date]);
 
 					CEvent::Send("VIRUS_DETECTED", $SITE_ID? $SITE_ID: SITE_ID, array("EMAIL" => COption::GetOptionString("main", "email_from", "")));
 
-					CSecurityDB::UnlockTable($table_lock);
+					$connection->unlock("b_sec_virus");
 
 					@unlink($fname);
 				}
@@ -204,7 +217,7 @@ class CSecurityAntiVirus
 
 		//start monitoring of output that can be after working antivirus.
 		ob_start();
-		// define("BX_SECURITY_AV_AFTER_EPILOG", true);
+		define("BX_SECURITY_AV_AFTER_EPILOG", true);
 	}
 
 	public static function PHPShutdown()
@@ -212,14 +225,18 @@ class CSecurityAntiVirus
 		if(defined("BX_SECURITY_AV_AFTER_EPILOG"))
 		{
 			$content = ob_get_contents();
-			if(strlen($content))
+			if($content <> '')
 			{
 				ob_end_clean();
 
-				if(substr($content, 0, 6) == "<html>" && preg_match("#</html>\\s*\$#is", $content))
+				if(mb_substr($content, 0, 6) == "<html>" && preg_match("#</html>\\s*\$#is", $content))
+				{
 					$Antivirus = new CSecurityAntiVirus("body");
+				}
 				else
+				{
 					$Antivirus = new CSecurityAntiVirus("post");
+				}
 
 				$Antivirus->Analyze($content);
 				echo $content;
@@ -229,36 +246,36 @@ class CSecurityAntiVirus
 
 	public static function GetWhiteList()
 	{
-		global $DB;
-		$res = $DB->Query("SELECT * FROM b_sec_white_list ORDER BY ID", false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+		$res = WhiteListTable::getList(["order" => "ID"]);
 		return $res;
 	}
 
 	public static function UpdateWhiteList($arWhiteList)
 	{
-		global $DB, $CACHE_MANAGER;
+		global $CACHE_MANAGER;
 
-		$DB->Query("DELETE FROM b_sec_white_list", false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+		WhiteListTable::deleteList([]);
 		$i = 1;
 		foreach($arWhiteList as $white_str)
 		{
 			$white_str = trim($white_str);
-			if($white_str)
-				$DB->Add("b_sec_white_list", array("ID" => $i++, "WHITE_SUBSTR" => $white_str));
+			if($white_str){
+				WhiteListTable::add(["ID" => $i++, "WHITE_SUBSTR" => $white_str]);
+			}
 		}
 		$CACHE_MANAGER->Clean("b_sec_white_list");
 	}
 
 	// function returns 1, if current block is in white list and needs not processing.
-	public function isInWhiteList()
+	function isInWhiteList()
 	{
-		if(strpos($this->atributes, 'src="/bitrix/') !== false)
+		if(mb_strpos($this->atributes, 'src="/bitrix/') !== false)
 			return 1;
 
 		if(preg_match('#src="http[s]?://(api-maps\\.yandex|maps\\.google|apis\\.google|stg\\.odnoklassniki)\\.[a-z]{2,3}/#', $this->atributes))
 			return 2;
 
-		if(strpos($this->body, 'BX_DEBUG_INFO') !== false)
+		if(mb_strpos($this->body, 'BX_DEBUG_INFO') !== false)
 			return 3;
 
 		if(preg_match('#(google-analytics\\.com/ga\\.js|openstat\\.net/cnt\\.js|autocontext\\.begun\\.ru/autocontext\\.js|counter\\.yadro\\.ru/hit)#', $this->body))
@@ -273,16 +290,16 @@ class CSecurityAntiVirus
 		if(preg_match('/(addPathRow|MoveProgress|Import|DoNext|JCMenu|AttachFile|CloseDialog|_processData|showComment|ShowWarnings|SWFObject|deliveryCalcProceed|structReload|addForumImagesShow|rsasec_form_bind|BX_YMapAddPolyline|BX_YMapAddPlacemark|CloseWaitWindow|DoChangeExternalSaleId|AjaxSend|readFileChunk|EndDump|createMenu|addProperty)\(/', $this->body))
 			return 7;
 
-		if(strpos($this->body, 'window.operation_success = true;') !== false)
+		if(mb_strpos($this->body, 'window.operation_success = true;') !== false)
 			return 8;
 
 		if(preg_match('/(jsAjaxUtil|jsUtils|jsPopup|elOnline|jsAdminChain|jsEvent|jsAjaxHistory|bxSession|BXHotKeys|oSearchDialog)\./', $this->body))
 			return 9;
 
-		if(preg_match('/new\s+(PopupMenu|JCAdminFilter|JCSmartFilter|JCAdminMenu|BXHint|ViewTabControl|BXHTMLEditor|JCTitleSearch|JCWDTitleSearch|BxInterfaceForm|Date|JCEmployeeSelectControl|JCCatalogBigdataProducts|JCCatalogSection|JCCatalogElement|JCCatalogTopSlider|JCCatalogTopSection|JCCatalogSectionRec|JCCatalogSectionViewed|JCCatalogCompareList|B24\.SearchTitle)/', $this->body))
+		if(preg_match('/new\s+(PopupMenu|JCAdminFilter|JCSmartFilter|JCAdminMenu|BXHint|ViewTabControl|BXHTMLEditor|JCTitleSearch|JCWDTitleSearch|BxInterfaceForm|Date|JCEmployeeSelectControl|JCCatalogBigdataProducts|JCCatalogSection|JCCatalogElement|JCCatalogTopSlider|JCCatalogTopSection|JCCatalogSectionRec|JCCatalogSectionViewed|JCCatalogCompareList|JCCatalogItem|JCSaleGiftProduct|B24\.SearchTitle)/', $this->body))
 			return 10;
 
-		if(strpos($this->body, 'document\.write(\'<link href="/bitrix/templates/') !== false)
+		if(mb_strpos($this->body, 'document\.write(\'<link href="/bitrix/templates/') !== false)
 			return 11;
 
 		if(preg_match('/(BX|document\.getElementById)\(\'session_time_result\'\).innerHTML/', $this->body))
@@ -347,7 +364,7 @@ class CSecurityAntiVirus
 
 		if(preg_match('/(TasksUsers|IntranetUsers).arEmployees/',$this->body))
 			return 35;
-	
+
 		if(preg_match('/window\.location\s*=\s*[\'"]\/bitrix\/admin\/iblock_bizproc_workflow_edit.php/', $this->body))
 			return 36;
 
@@ -360,18 +377,18 @@ class CSecurityAntiVirus
 		if(preg_match('/^\s*window\.__bxResult\[\'\d+\'\]\s*=\s*\{/', $this->body))
 			return 46;
 
-		if(strpos($this->body, 'showFLVPlayer') !== false)
+		if(mb_strpos($this->body, 'showFLVPlayer') !== false)
 			return 37;
 
 		if(preg_match('/var\s+formSettingsDialogCRM_(LEAD|DEAL|COMPANY|CONTACT)_SHOW/', $this->body))
 			return 38;
-		
+
 		if(preg_match('/parent\.(FILE_UPLOADER_CALLBACK)/', $this->body))
 			return 39;
-		
+
 		if(preg_match('/bxForm_CRM/', $this->body))
 			return 40;
-		
+
 		if(preg_match('/\$\(([\'"])[^\'"]*[\'"]\)/', $this->body))
 			return 41;
 
@@ -382,8 +399,8 @@ class CSecurityAntiVirus
 		if(preg_match('/var\s*fix_mode\s*=/i', $this->body))
 			return 43;
 
-		//Voximplant document uploader
-		if($this->type == 'iframe' && preg_match('#\s*src=[\'"]https://verify.voximplant.com/#i', $this->atributes))
+		//Voximplant && powerBi && gtm
+		if($this->type == 'iframe' && preg_match('#\s*src=[\'"]https://(verify\.voximplant\.com|lookerstudio\.google\.com|datastudio\.google\.com|app\.powerbi\.com|www\.googletagmanager\.com)/#i', $this->atributes))
 			return 45;
 
 		if(preg_match('#function\s+bizvalChange#', $this->body))
@@ -392,6 +409,12 @@ class CSecurityAntiVirus
 		if($this->type === "script")
 		{
 			if(preg_match('#type="application/json"#is', $this->atributes))
+				return 44;
+
+			if(preg_match('#type="application/ld\+json"#is', $this->atributes))
+				return 44;
+
+			if(preg_match('#type="text/x-template"#is', $this->atributes))
 				return 44;
 
 			$filter = new CSecurityXSSDetect(array("action" => "none", "log" => "N"));
@@ -409,7 +432,7 @@ class CSecurityAntiVirus
 		global $BX_SECURITY_AV_WHITE_LIST;
 		if(is_array($BX_SECURITY_AV_WHITE_LIST))
 			foreach($BX_SECURITY_AV_WHITE_LIST as $white_substr)
-				if(strpos($this->data, $white_substr) !== false)
+				if(mb_strpos($this->data, $white_substr) !== false)
 					return 34;
 
 		return 0;
@@ -417,34 +440,37 @@ class CSecurityAntiVirus
 
 	//заглушка. Возщвращает рейтинг опасности текущего блока из кеша, или FALSE
 	// кешируются только составляющся рейтинга, вложденная внутренними правилами.
-	public function returnfromcache()
+	function returnfromcache()
 	{
 		// тут можно вставить кеширование. Для кеширование вычислять и сохранять кеш от $this->data
 		return false;
 	}
 
 	//заглушка. Добавляет рейтинг опасности для текущего блока в кеш.
-	public function addtocache()
+	function addtocache()
 	{
 		// тут можно вставить кеширование. Для кеширование вычислять и сохранять кеш от $this->data
 		return true;
 	}
 
 	//механизм для вывода сообщения об обнаруженном подозрительном текущем блоке
-	public function dolog()
+	function dolog()
 	{
 		global $BX_SECURITY_AV_TIMEOUT;
 		if(defined("ANTIVIRUS_CREATE_TRACE"))
 			$this->CreateTrace();
 
 		$uniq_id = md5($this->data);
-		$rsLog = CSecurityDB::Query("SELECT * FROM b_sec_virus WHERE ID = '".$uniq_id."'", "Module: security; Class: CSecurityAntiVirus; Function: AddEventLog; File: ".__FILE__."; Line: ".__LINE__);
-		$arLog = CSecurityDB::Fetch($rsLog);
+		$arLog = VirusTable::getByPrimary($uniq_id)->fetch();
+
 		if($arLog && ($arLog["SENT"] == "Y"))
 		{
-			CSecurityDB::Query("DELETE FROM b_sec_virus WHERE SENT = 'Y' AND TIMESTAMP_X < ".CSecurityDB::SecondsAgo($BX_SECURITY_AV_TIMEOUT*60)."", "Module: security; Class: CSecurityAntiVirus; Function: AddEventLog; File: ".__FILE__."; Line: ".__LINE__);
-			$rsLog = CSecurityDB::Query("SELECT * FROM b_sec_virus WHERE ID = '".$uniq_id."'", "Module: security; Class: CSecurityAntiVirus; Function: AddEventLog; File: ".__FILE__."; Line: ".__LINE__);
-			$arLog = CSecurityDB::Fetch($rsLog);
+			$date = new \Bitrix\Main\Type\DateTime();
+			$date->add("-{$BX_SECURITY_AV_TIMEOUT} minutes");
+
+			VirusTable::deleteList(["SENT" => "Y", "<TIMESTAMP_X" => $date]);
+
+			$arLog = VirusTable::getByPrimary($uniq_id)->fetch();
 		}
 
 		if(!$arLog)
@@ -461,12 +487,13 @@ class CSecurityAntiVirus
 			}
 			else
 			{
-				$rsDefSite = CSecurityDB::Query("SELECT LID FROM b_lang WHERE ACTIVE='Y' ORDER BY DEF desc, SORT", "Module: security; Class: CSecurityAntiVirus; Function: AddEventLog; File: ".__FILE__."; Line: ".__LINE__);
-				$arDefSite = CSecurityDB::Fetch($rsDefSite);
-				if($arDefSite)
-					$SITE_ID = $arDefSite["LID"];
-				else
-					$SITE_ID = false;
+				$arDefSite = \Bitrix\Main\SiteTable::getList([
+					"select" => ["LID"],
+					"filter" => ["=ACTIVE" => "Y"],
+					"order" => ["DEF" => "DESC", "SORT" => "ASC"]
+				])->fetch();
+
+				$SITE_ID = $arDefSite ? $arDefSite["LID"] : null;
 			}
 
 			$s = serialize(array(
@@ -482,11 +509,14 @@ class CSecurityAntiVirus
 				"GUEST_ID" => array_key_exists("SESS_GUEST_ID", $_SESSION) && ($_SESSION["SESS_GUEST_ID"] > 0)? $_SESSION["SESS_GUEST_ID"]: false,
 				"DESCRIPTION" => "==".base64_encode($ss),
 			));
-			CSecurityDB::QueryBind(
-				"insert into b_sec_virus (ID, TIMESTAMP_X, SITE_ID, INFO) values ('".$uniq_id."', ".CSecurityDB::CurrentTimeFunction().", ".($SITE_ID? "'".$SITE_ID."'": "null").", :INFO)",
-				array("INFO" => base64_encode($s)),
-				"Module: security; Class: CSecurityAntiVirus; Function: AddEventLog; File: ".__FILE__."; Line: ".__LINE__
-			);
+
+			VirusTable::add([
+				"ID" => $uniq_id,
+				"TIMESTAMP_X" => new \Bitrix\Main\Type\DateTime(),
+				"SITE_ID" => $SITE_ID,
+				"INFO" => base64_encode($s)
+			]);
+
 			@fclose(@fopen($_SERVER["DOCUMENT_ROOT"].BX_PERSONAL_ROOT."/managed_cache/b_sec_virus","w"));
 		}
 	}
@@ -494,19 +524,19 @@ class CSecurityAntiVirus
 
 	// вызывается каждый раз, когда обработка блока закончена и блок признан нормальным.
 	// функция должна возвратить содержимое блока.
-	public function end_okblock()
+	function end_okblock()
 	{
 		return $this->data;
 	}
 
-	public function end_whiteblock()
+	function end_whiteblock()
 	{
 		return $this->data;
 	}
 
 	// вызывается каждый раз, когда обработка блока закончена и блок признан опасным.
 	// функция должна возвратить содержимое блока.
-	public function end_blkblock()
+	function end_blkblock()
 	{
 		if($this->replace)
 			return $this->replacement;
@@ -514,7 +544,7 @@ class CSecurityAntiVirus
 			return $this->data;
 	}
 
-	public function CreateTrace()
+	function CreateTrace()
 	{
 		$cache_id = md5($this->data);
 		$fn = $_SERVER["DOCUMENT_ROOT"]."/bitrix/cache/virus.db/".$cache_id.".vir";
@@ -543,14 +573,14 @@ class CSecurityAntiVirus
 	{
 		static $arLocalCache = array();
 
-		$content_len = CUtil::BinStrlen($content) * 2;
-		CUtil::AdjustPcreBacktrackLimit($content_len);
+		$content_len = strlen($content) * 2;
+		Ini::adjustPcreBacktrackLimit($content_len);
 
 		$this->stylewithiframe = preg_match("/<style.*>\s*iframe/", $content);
 
 		$arData = preg_split("/(<script.*?>.*?<\\/script.*?>|<iframe.*?>.*?<\\/iframe.*?>)/is", $content, -1, PREG_SPLIT_DELIM_CAPTURE);
 
-		$cData = count($arData);
+		$cData = is_array($arData) ? count($arData) : 0;
 
 		if($cData < 2)
 			return;
@@ -577,7 +607,7 @@ class CSecurityAntiVirus
 			$this->resultrules = array();
 			$this->bodylines = false;
 			$this->atributes = $ret[2];
-			if(strtolower($ret[1]) == 'script')
+			if(mb_strtolower($ret[1]) == 'script')
 			{
 				$this->body = $this->returnscriptbody($this->data);
 				$this->type = 'script';
@@ -616,7 +646,7 @@ class CSecurityAntiVirus
 	Возвращает рейтинг опасности блока (ифрейм или скрипт)
 	входные параметры класса должны быть заполнеы.
 	*/
-	public function returnblockrating()
+	function returnblockrating()
 	{
 		if($this->type=='iframe')
 		{
@@ -654,7 +684,7 @@ class CSecurityAntiVirus
 
 	// ПРАВИЛА
 	// надбавки и скидки действующие для каждого скрипта (возможно с некоторыми условиями)
-	public function rulescriptglobals()
+	function rulescriptglobals()
 	{
 		return 0;
 		$r = 0;
@@ -689,7 +719,7 @@ class CSecurityAntiVirus
 	}
 
 	//правила, учитывающие окружение скрипта
-	public function rulescriptblocks()
+	function rulescriptblocks()
 	{
 		$r = 0;
 		$strp = preg_replace('/<!\-\-.*?\-\->$/', '', $this->prev);
@@ -755,7 +785,7 @@ class CSecurityAntiVirus
 	}
 
 	//правила, отлавливающие "невидимость" блока
-	public function ruleframevisiblity()
+	function ruleframevisiblity()
 	{
 		$r = 0;
 		if(
@@ -788,7 +818,7 @@ class CSecurityAntiVirus
 	}
 
 	//правила, отлавливающие потенциально опасныеключевые слова в скрипте
-	public function rulescriptbasics()
+	function rulescriptbasics()
 	{
 		$r = 0;
 		if(preg_match("/\<iframe/is", $this->body))
@@ -875,7 +905,7 @@ class CSecurityAntiVirus
 	}
 
 	//правила, отлавливающие vbscript
-	public function rulescriptvbscript()
+	function rulescriptvbscript()
 	{
 		$r = 0;
 		if(preg_match('/vbscript/is', $this->atributes))
@@ -976,7 +1006,7 @@ class CSecurityAntiVirus
 	}
 
 	//правила, учитываюбщие подозрительные длины строк и объектов
-	public function rulescriptlenghts()
+	function rulescriptlenghts()
 	{
 		if(!$this->bodylines)
 			$this->bodylines = explode("\n", $this->body);
@@ -985,7 +1015,7 @@ class CSecurityAntiVirus
 
 		if(count($this->bodylines) == 1)
 		{
-			$ll = strlen(bin2hex($this->body))/2;
+			$ll = mb_strlen(bin2hex($this->body)) / 2;
 			if($ll > 500)
 			{
 				$val = 9;
@@ -1014,7 +1044,7 @@ class CSecurityAntiVirus
 			$mxl = 0;
 			foreach($this->bodylines as $str)
 			{
-				$ll = strlen(bin2hex($str))/2;
+				$ll = mb_strlen(bin2hex($str)) / 2;
 				if($mxl < $ll)
 					$mxl = $ll;
 			}
@@ -1046,7 +1076,7 @@ class CSecurityAntiVirus
 	}
 
 	// Анализ частотных вхождений символов...
-	public function rulescriptfrequensy()
+	function rulescriptfrequensy()
 	{
 		if(!$this->bodylines)
 			$this->bodylines = explode("\n", $this->body);
@@ -1454,12 +1484,12 @@ class CSecurityAntiVirus
 	}
 
 	// признаки, уменьшающие рейтинг опасности скрипта
-	public function rulescriptwhiterules()
+	function rulescriptwhiterules()
 	{
 		if(!$this->bodylines)
 			$this->bodylines = explode("\n", $this->body);
 
-		$ll = strlen(bin2hex($this->body))/2;
+		$ll = mb_strlen(bin2hex($this->body)) / 2;
 		$r = 0;
 		$lstr = count($this->bodylines);
 
@@ -1533,7 +1563,7 @@ class CSecurityAntiVirus
 	}
 
 	//анализ признаков в именах функций и переменных
-	public function rulescriptnamerules()
+	function rulescriptnamerules()
 	{
 
 		$rr = $this->getnames($this->body);
@@ -1582,7 +1612,7 @@ class CSecurityAntiVirus
 		$mxs = 0;
 		foreach($rr['s'] as $k=>$v)
 		{
-			$l = strlen(bin2hex($v))/2;
+			$l = mb_strlen(bin2hex($v)) / 2;
 			if($l > $mxs)
 				$mxs = $l;
 		}
@@ -1661,9 +1691,9 @@ class CSecurityAntiVirus
 				$arCharClasses['B'][] = $i;
 
 			$strPunct = "`~!@#$%^&*[]{}();:'\",.\/?\|";
-			$len = strlen($strPunct);
+			$len = mb_strlen($strPunct);
 			for($i = 0; $i < $len; $i++)
-				$arCharClasses['NW'][] = ord(substr($strPunct, $i ,1));
+				$arCharClasses['NW'][] = ord(mb_substr($strPunct, $i, 1));
 		}
 
 		$chars = count_chars($str, 1);
@@ -1697,13 +1727,13 @@ class CSecurityAntiVirus
 		return $out;
 	}
 
-	public function getnames_cb($m)
+	function getnames_cb($m)
 	{
 		$this->quotes[] = ($m[2]);
 		return $m[1].$m[3];
 	}
 
-	public function getnames($str)
+	function getnames($str)
 	{
 		$flt = new CSecurityXSSDetect(array("action" => "none", "log" => "N"));
 		$flt->removeQuotedStrings($str);
@@ -1733,9 +1763,9 @@ class CSecurityAntiVirus
 		return $r;
 	}
 
-	public static function isnormalname($nm, &$l)
+	function isnormalname($nm, &$l)
 	{
-		$lnm = strtolower($nm);
+		$lnm = mb_strtolower($nm);
 		if($lnm == 'ac_fl_runcontent')
 			return 1;
 		if($lnm == 'innerhtml')
@@ -1789,7 +1819,7 @@ class CSecurityAntiVirus
 		return $cache[$nm];
 	}
 
-	public static function returnscriptbody($str)
+	function returnscriptbody($str)
 	{
 		if(preg_match("/<script.*?>((\s*<!\-\-)|(<!\[CDATA\[))?\s*(.*?)\s*((\/\/\s*\-\->\s*)|(\/\/\s*\]\s*\]\s*))?<\/script.*>/is", $str, $ret))
 			return $ret[4];
@@ -1798,6 +1828,6 @@ class CSecurityAntiVirus
 
 	public static function isSafetyRequest()
 	{
-		return (!in_array($_SERVER['REQUEST_METHOD'],array('GET','POST')));
+		return (!isset($_SERVER['REQUEST_METHOD']) || !in_array($_SERVER['REQUEST_METHOD'],array('GET','POST')));
 	}
 }

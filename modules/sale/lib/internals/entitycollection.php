@@ -1,9 +1,14 @@
 <?php
+
 namespace Bitrix\Sale\Internals;
 
 use Bitrix\Sale;
 use Bitrix\Main;
 
+/**
+ * Class EntityCollection
+ * @package Bitrix\Sale\Internals
+ */
 abstract class EntityCollection
 	extends CollectionBase
 {
@@ -11,21 +16,35 @@ abstract class EntityCollection
 
 	protected $isClone = false;
 
-	protected function __construct()
-	{
-
-	}
+	protected $anyItemDeleted = false;
+	protected $anyItemAdded = false;
 
 	/**
+	 * EntityCollection constructor.
+	 */
+	protected function __construct() {}
+
+	/**
+	 * @internal
+	 *
 	 * @param CollectableEntity $item
 	 * @param null $name
 	 * @param null $oldValue
 	 * @param null $value
 	 * @return Sale\Result
 	 */
-	static public function onItemModify(CollectableEntity $item, $name = null, $oldValue = null, $value = null)
+	public function onItemModify(CollectableEntity $item, $name = null, $oldValue = null, $value = null)
 	{
 		return new Sale\Result();
+	}
+
+	/**
+	 * @throws Main\NotImplementedException
+	 * @return string
+	 */
+	public static function getRegistryType()
+	{
+		throw new Main\NotImplementedException();
 	}
 
 	/**
@@ -38,18 +57,26 @@ abstract class EntityCollection
 	public function deleteItem($index)
 	{
 		if (!isset($this->collection[$index]))
+		{
 			throw new Main\ArgumentOutOfRangeException("collection item index wrong");
+		}
 
 		$oldItem = $this->collection[$index];
 
-		/** @var Main\Entity\Event $event */
-		$event = new Main\Event('sale', 'OnBeforeCollectionDeleteItem', array(
-			'COLLECTION' => $this->collection,
-			'ENTITY' => $oldItem,
-		));
-		$event->send();
+		$eventManager = Main\EventManager::getInstance();
+		$eventsList = $eventManager->findEventHandlers('sale', 'OnBeforeCollectionDeleteItem');
+		if (!empty($eventsList))
+		{
+			/** @var Main\Entity\Event $event */
+			$event = new Main\Event('sale', 'OnBeforeCollectionDeleteItem', array(
+				'COLLECTION' => $this->collection,
+				'ENTITY' => $oldItem,
+			));
+			$event->send();
+		}
 
 		unset($this->collection[$index]);
+		$this->setAnyItemDeleted(true);
 
 		return $oldItem;
 	}
@@ -57,41 +84,92 @@ abstract class EntityCollection
 	/**
 	 * @param CollectableEntity $item
 	 * @return CollectableEntity
-	 * @throws Main\ArgumentTypeException
 	 */
 	protected function addItem(CollectableEntity $item)
 	{
-		$this->index++;
-		$item->setInternalIndex($this->index);
-		$this->collection[$this->index] = $item;
+		$item = $this->bindItem($item);
 
-		/** @var Main\Entity\Event $event */
-		$event = new Main\Event('sale', 'OnCollectionAddItem', array(
-			'COLLECTION' => $this->collection,
-			'ENTITY' => $item,
-		));
-		$event->send();
+		$this->setAnyItemAdded(true);
+
+		$eventManager = Main\EventManager::getInstance();
+		$eventsList = $eventManager->findEventHandlers('sale', 'OnCollectionAddItem');
+		if (!empty($eventsList))
+		{
+			/** @var Main\Entity\Event $event */
+			$event = new Main\Event('sale', 'OnCollectionAddItem', array(
+				'COLLECTION' => $this->collection,
+				'ENTITY' => $item,
+			));
+			$event->send();
+		}
 
 		return $item;
 	}
 
+	protected function bindItem(CollectableEntity $item): CollectableEntity
+	{
+		$index = $this->createIndex();
+		$item->setInternalIndex($index);
+		$this->collection[$index] = $item;
+
+		return $item;
+	}
+
+	/**
+	 * @return int
+	 */
+	protected function createIndex()
+	{
+		$this->index++;
+		return $this->index;
+	}
+
+	/**
+	 * @throws Main\ArgumentOutOfRangeException
+	 * @throws Main\ObjectNotFoundException
+	 */
 	public function clearCollection()
 	{
-		/** @var Main\Entity\Event $event */
-		$event = new Main\Event('sale', 'OnBeforeCollectionClear', array(
-			'COLLECTION' => $this->collection,
-		));
-		$event->send();
+		$this->callEventOnBeforeCollectionClear();
+
 		/** @var CollectableEntity $item */
-		foreach ($this->collection as $item)
+		foreach ($this->getDeletableItems() as $item)
+		{
 			$item->delete();
+		}
+	}
+
+	/**
+	 * @return array
+	 */
+	protected function getDeletableItems()
+	{
+		return $this->collection;
 	}
 
 
 	/**
+	 * @return void
+	 */
+	protected function callEventOnBeforeCollectionClear()
+	{
+		$eventManager = Main\EventManager::getInstance();
+
+		$eventsList = $eventManager->findEventHandlers('sale', 'OnBeforeCollectionClear');
+		if (!empty($eventsList))
+		{
+			/** @var Main\Entity\Event $event */
+			$event = new Main\Event('sale', 'OnBeforeCollectionClear', array(
+				'COLLECTION' => $this->collection,
+			));
+			$event->send();
+		}
+	}
+
+	/**
 	 * @param $id
 	 *
-	 * @return CollectableEntity|bool
+	 * @return CollectableEntity|null
 	 * @throws Main\ArgumentNullException
 	 */
 	public function getItemById($id)
@@ -140,6 +218,33 @@ abstract class EntityCollection
 		return null;
 	}
 
+	/**
+	 * @param $index
+	 *
+	 * @return CollectableEntity|null
+	 * @throws Main\ArgumentNullException
+	 */
+	public function getItemByIndex($index)
+	{
+		if (intval($index) < 0)
+		{
+			throw new Main\ArgumentNullException('id');
+		}
+
+		/** @var CollectableEntity $item */
+		foreach ($this->collection as $item)
+		{
+			if ($item->getInternalIndex() == $index)
+			{
+				return $item;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * @return Entity
+	 */
 	abstract protected function getEntityParent();
 
 	/**
@@ -150,7 +255,9 @@ abstract class EntityCollection
 	{
 		$parent = $this->getEntityParent();
 		if ($parent === null)
+		{
 			return false;
+		}
 
 		return $parent->isStartField($isMeaningfulField);
 	}
@@ -162,7 +269,10 @@ abstract class EntityCollection
 	{
 		$parent = $this->getEntityParent();
 		if ($parent === null)
+		{
 			return false;
+		}
+
 		return $parent->clearStartField();
 	}
 
@@ -173,7 +283,10 @@ abstract class EntityCollection
 	{
 		$parent = $this->getEntityParent();
 		if ($parent === null)
+		{
 			return false;
+		}
+
 		return $parent->hasMeaningfulField();
 	}
 
@@ -185,7 +298,9 @@ abstract class EntityCollection
 	{
 		$parent = $this->getEntityParent();
 		if ($parent === null)
+		{
 			return new Sale\Result();
+		}
 
 		return $parent->doFinalAction($hasMeaningfulField);
 	}
@@ -197,7 +312,9 @@ abstract class EntityCollection
 	{
 		$parent = $this->getEntityParent();
 		if ($parent === null)
+		{
 			return false;
+		}
 
 		return $parent->isMathActionOnly();
 	}
@@ -210,7 +327,9 @@ abstract class EntityCollection
 	{
 		$parent = $this->getEntityParent();
 		if ($parent == null)
+		{
 			return false;
+		}
 
 		return $parent->setMathActionOnly($value);
 	}
@@ -226,16 +345,19 @@ abstract class EntityCollection
 			foreach ($this->collection as $item)
 			{
 				if ($item->isChanged())
+				{
 					return true;
+				}
 			}
 		}
-		return false;
+
+		return $this->isAnyItemDeleted() || $this->isAnyItemAdded();
 	}
 
 	/**
 	 * @return Sale\Result
 	 */
-	static public function verify()
+	public function verify()
 	{
 		return new Sale\Result();
 	}
@@ -246,5 +368,97 @@ abstract class EntityCollection
 	public function isClone()
 	{
 		return $this->isClone;
+	}
+
+
+	/**
+	 * @return bool
+	 */
+	public function isAnyItemDeleted()
+	{
+		return $this->anyItemDeleted;
+	}
+
+	/**
+	 * @param $value
+	 *
+	 * @return bool
+	 */
+	protected function setAnyItemDeleted($value)
+	{
+		return $this->anyItemDeleted = ($value === true);
+	}
+
+	/**
+	 * @return bool
+	 */
+	public function isAnyItemAdded()
+	{
+		return $this->anyItemAdded;
+	}
+
+	/**
+	 * @param $value
+	 *
+	 * @return bool
+	 */
+	protected function setAnyItemAdded($value)
+	{
+		return $this->anyItemAdded = ($value === true);
+	}
+
+	/**
+	 * @internal
+	 */
+	public function clearChanged()
+	{
+		if (!empty($this->collection))
+		{
+			foreach ($this->collection as $entityItem)
+			{
+				if ($entityItem instanceof Entity)
+				{
+					$entityItem->clearChanged();
+				}
+			}
+		}
+	}
+
+	/**
+	 * @internal
+	 * @param \SplObjectStorage $cloneEntity
+	 *
+	 * @return EntityCollection
+	 */
+	public function createClone(\SplObjectStorage $cloneEntity)
+	{
+		if ($this->isClone() && $cloneEntity->contains($this))
+		{
+			return $cloneEntity[$this];
+		}
+
+		$entityClone = clone $this;
+		$entityClone->isClone = true;
+
+		if (!$cloneEntity->contains($this))
+		{
+			$cloneEntity[$this] = $entityClone;
+		}
+
+		/**
+		 * @var int key
+		 * @var CollectableEntity $entity
+		 */
+		foreach ($entityClone->collection as $key => $entity)
+		{
+			if (!$cloneEntity->contains($entity))
+			{
+				$cloneEntity[$entity] = $entity->createClone($cloneEntity);
+			}
+
+			$entityClone->collection[$key] = $cloneEntity[$entity];
+		}
+
+		return $entityClone;
 	}
 }

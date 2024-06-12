@@ -1,17 +1,6 @@
 <?
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CSocNetUserPerms</b> - класс для работы с правами на доступ к профилю пользователя.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetuserperms/index.php
- * @author Bitrix
- */
 class CAllSocNetUserPerms
 {
 	/***************************************/
@@ -21,13 +10,13 @@ class CAllSocNetUserPerms
 	{
 		global $DB, $arSocNetUserOperations, $arSocNetAllowedRelationsType;
 
-		if ($ACTION != "ADD" && IntVal($ID) <= 0)
+		if ($ACTION != "ADD" && intval($ID) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException("System error 870164", "ERROR");
 			return false;
 		}
 
-		if ((is_set($arFields, "USER_ID") || $ACTION=="ADD") && IntVal($arFields["USER_ID"]) <= 0)
+		if ((is_set($arFields, "USER_ID") || $ACTION=="ADD") && intval($arFields["USER_ID"]) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_GB_EMPTY_USER_ID"), "EMPTY_USER_ID");
 			return false;
@@ -42,7 +31,7 @@ class CAllSocNetUserPerms
 			}
 		}
 
-		if ((is_set($arFields, "OPERATION_ID") || $ACTION=="ADD") && strlen($arFields["OPERATION_ID"]) <= 0)
+		if ((is_set($arFields, "OPERATION_ID") || $ACTION=="ADD") && $arFields["OPERATION_ID"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_GG_EMPTY_OPERATION_ID"), "EMPTY_OPERATION_ID");
 			return false;
@@ -53,7 +42,7 @@ class CAllSocNetUserPerms
 			return false;
 		}
 
-		if ((is_set($arFields, "RELATION_TYPE") || $ACTION=="ADD") && strlen($arFields["RELATION_TYPE"]) <= 0)
+		if ((is_set($arFields, "RELATION_TYPE") || $ACTION=="ADD") && $arFields["RELATION_TYPE"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_GG_EMPTY_RELATION_TYPE"), "EMPTY_RELATION_TYPE");
 			return false;
@@ -74,19 +63,6 @@ class CAllSocNetUserPerms
 		return True;
 	}
 
-	
-	/**
-	* <p>Метод удаляет запись из базы данных. Метод статический.</p>
-	*
-	*
-	* @param int $intid  Код записи.
-	*
-	* @return bool <p>True в случае успешного удаления и false - в противном случае.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetuserperms/delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		global $DB;
@@ -94,7 +70,7 @@ class CAllSocNetUserPerms
 		if (!CSocNetGroup::__ValidateID($ID))
 			return false;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$bSuccess = True;
 
 		if ($bSuccess)
@@ -110,7 +86,7 @@ class CAllSocNetUserPerms
 		if (!CSocNetGroup::__ValidateID($userID))
 			return false;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		$bSuccess = True;
 
 		if ($bSuccess)
@@ -119,24 +95,6 @@ class CAllSocNetUserPerms
 		return $bSuccess;
 	}
 
-	
-	/**
-	* <p>Метод изменяет параметры записи. Метод статический.</p>
-	*
-	*
-	* @param int $intid  Код записи.
-	*
-	* @param array $arFields  Массив измененных параметров записи с ключами:<br><b>USER_ID</b>- код
-	* пользователя,<br><b>OPERATION_ID</b> - операция,<br><b>RELATION_TYPE</b> - тип отношений
-	* между пользователями.
-	*
-	* @return int <p>Код записи в случае успешного выполнения и false - в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetuserperms/update.php
-	* @author Bitrix
-	*/
 	public static function Update($ID, $arFields)
 	{
 		global $DB;
@@ -144,37 +102,23 @@ class CAllSocNetUserPerms
 		if (!CSocNetGroup::__ValidateID($ID))
 			return false;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
-		$arFields1 = array();
-		foreach ($arFields as $key => $value)
-		{
-			if (substr($key, 0, 1) == "=")
-			{
-				$arFields1[substr($key, 1)] = $value;
-				unset($arFields[$key]);
-			}
-		}
+		$arFields1 = \Bitrix\Socialnetwork\Util::getEqualityFields($arFields);
 
 		if (!CSocNetUserPerms::CheckFields("UPDATE", $arFields, $ID))
 			return false;
 
 		$strUpdate = $DB->PrepareUpdate("b_sonet_user_perms", $arFields);
+		\Bitrix\Socialnetwork\Util::processEqualityFieldsToUpdate($arFields1, $strUpdate);
 
-		foreach ($arFields1 as $key => $value)
-		{
-			if (strlen($strUpdate) > 0)
-				$strUpdate .= ", ";
-			$strUpdate .= $key."=".$value." ";
-		}
-
-		if (strlen($strUpdate) > 0)
+		if ($strUpdate <> '')
 		{
 			$strSql =
 				"UPDATE b_sonet_user_perms SET ".
 				"	".$strUpdate." ".
 				"WHERE ID = ".$ID." ";
-			$DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 		}
 		else
 		{
@@ -187,21 +131,6 @@ class CAllSocNetUserPerms
 	/***************************************/
 	/**********  DATA SELECTION  ***********/
 	/***************************************/
-	
-	/**
-	* <p>Метод возвращает массив параметров записи. Метод статический.</p>
-	*
-	*
-	* @param int $intid  Код записи.
-	*
-	* @return array <p>Массив с ключами:<br><b>ID</b> - код записи,<br><b>USER_ID</b> - код
-	* пользователя,<br><b>OPERATION_ID</b> - операция,<br><b>RELATION_TYPE</b> - тип отношений
-	* между пользователями.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetuserperms/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		global $DB;
@@ -209,7 +138,7 @@ class CAllSocNetUserPerms
 		if (!CSocNetGroup::__ValidateID($ID))
 			return false;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$dbResult = CSocNetUserPerms::GetList(Array(), Array("ID" => $ID));
 		if ($arResult = $dbResult->GetNext())
@@ -223,21 +152,6 @@ class CAllSocNetUserPerms
 	/***************************************/
 	/**********  COMMON METHODS  ***********/
 	/***************************************/
-	
-	/**
-	* <p>Метод возвращает необходимые права на выполнение заданной операции над профайлом заданного пользователя. Метод статический.</p>
-	*
-	*
-	* @param int $userID  Код пользователя, к профайлу которого осуществляется доступ.
-	*
-	* @param string $operation  Операция.
-	*
-	* @return char <p>Права на доступ.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetuserperms/getoperationperms.php
-	* @author Bitrix
-	*/
 	public static function GetOperationPerms($userID, $operation)
 	{
 		global $arSocNetUserOperations;
@@ -251,12 +165,12 @@ class CAllSocNetUserPerms
 
 		if (!is_array($userID))
 		{
-			$userID = IntVal($userID);
+			$userID = intval($userID);
 			if ($userID <= 0)
 				return false;
 		}
 
-		$operation = StrToLower(Trim($operation));
+		$operation = mb_strtolower(Trim($operation));
 		if (!array_key_exists($operation, $arSocNetUserOperations))
 			return false;
 
@@ -314,35 +228,15 @@ class CAllSocNetUserPerms
 		}
 	}
 
-	
-	/**
-	* <p>Метод проверяет, может ли пользователь совершать указанную операцию над профайлом заданного пользователя. Метод статический.</p>
-	*
-	*
-	* @param int $fromUserID  Код пользователя, права которого проверяются.
-	*
-	* @param int $toUserID  Код пользователя, к профайлу которого осуществляется доступ.
-	*
-	* @param string $operation  Операция.
-	*
-	* @param bool $bCurrentUserIsAdmin = false Является ли администратором пользователь, права которого
-	* проверяются. Необязательный парамтер. По умолчанию равен false.
-	*
-	* @return bool <p>True, если права на выполнение операции есть. Иначе - false.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetuserperms/canperformoperation.php
-	* @author Bitrix
-	*/
 	public static function CanPerformOperation($fromUserID, $toUserID, $operation, $bCurrentUserIsAdmin = false)
 	{
 		global $arSocNetUserOperations;
 
-		$fromUserID = IntVal($fromUserID);
-		$toUserID = IntVal($toUserID);
+		$fromUserID = intval($fromUserID);
+		$toUserID = intval($toUserID);
 		if ($toUserID <= 0)
 			return false;
-		$operation = StrToLower(Trim($operation));
+		$operation = mb_strtolower(Trim($operation));
 		if (!array_key_exists($operation, $arSocNetUserOperations))
 			return false;
 
@@ -383,65 +277,19 @@ class CAllSocNetUserPerms
 		return false;
 	}
 
-	
-	/**
-	* <p>Метод инициализирует массив прав пользователя на операции над профайлом заданного пользователя. Метод статический.</p>
-	*
-	*
-	* @param int $currentUserID  Код пользователя, права которого проверяются.
-	*
-	* @param int $userID  Код пользователя, к профайлу которого осуществляется доступ.
-	*
-	* @param bool $bCurrentUserIsAdmin  Флаг, является ли администратором пользователь, права которого
-	* проверяются.
-	*
-	* @return array <p>Массив с ключами:<br><b>IsCurrentUser</b> - флаг, осуществляется ли доступ к
-	* собственному профайлу,<br><b>Relation</b> - отношения между
-	* пользователями,<br><b>Operations</b> - массив операций: <br> modifyuser - право на
-	* изменение профайла, если в главном модуле разрешено
-	* редактировать профиль,<br> modifyuser_main - право на изменение
-	* профайла,<br> viewcontacts - право на просмотр контактной информации,<br>
-	* invitegroup - приглашение в группу, <br> message - отправка персонального
-	* сообщения, <br> viewfriends - просмотр друзей, <br> viewgroups - просмотр групп,
-	* <br> viewprofile - просмотр профиля. </p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* Array 
-	* ( 
-	*  [Operations] =&gt; Array 
-	* 	 ( 
-	* 		 [modifyuser] =&gt; 1 
-	* 		 [viewcontacts] =&gt; 1 
-	* 		 [invitegroup] =&gt; 1 
-	* 		 [message] =&gt; 1 
-	* 		 [viewfriends] =&gt; 1 
-	* 		 [viewgroups] =&gt; 1 
-	* 		 [viewprofile] =&gt; 1 
-	* 		 [modifyuser_main] =&gt; 
-	* 	 ) 
-	* 
-	*  [IsCurrentUser] =&gt; 
-	*  [Relation] =&gt; 
-	* )
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetuserperms/inituserperms.php
-	* @author Bitrix
-	*/
 	public static function InitUserPerms($currentUserID, $userID, $bCurrentUserIsAdmin)
 	{
 		global $arSocNetUserOperations, $USER;
 
 		$arReturn = array();
 
-		$currentUserID = IntVal($currentUserID);
-		$userID = IntVal($userID);
+		$currentUserID = intval($currentUserID);
+		$userID = intval($userID);
 
 		if ($userID <= 0)
+		{
 			return false;
+		}
 
 		$arReturn["Operations"] = array();
 		if ($currentUserID <= 0)
@@ -451,32 +299,43 @@ class CAllSocNetUserPerms
 			$arReturn["Operations"]["modifyuser"] = false;
 			$arReturn["Operations"]["viewcontacts"] = false;
 			foreach ($arSocNetUserOperations as $operation => $defPerm)
+			{
 				$arReturn["Operations"][$operation] = CSocNetUserPerms::CanPerformOperation($currentUserID, $userID, $operation, false);
+			}
 		}
 		else
 		{
 			$arReturn["IsCurrentUser"] = ($currentUserID == $userID);
-			if ($arReturn["IsCurrentUser"])
-				$arReturn["Relation"] = false;
-			else
-				$arReturn["Relation"] = CSocNetUserRelations::GetRelation($currentUserID, $userID);
+			$arReturn["Relation"] = (
+				$arReturn["IsCurrentUser"]
+					? false
+					: CSocNetUserRelations::GetRelation($currentUserID, $userID)
+			);
 
-			if ($bCurrentUserIsAdmin || $arReturn["IsCurrentUser"])
+			if (
+				$bCurrentUserIsAdmin
+				|| $arReturn["IsCurrentUser"]
+			)
 			{
 				$arReturn["Operations"]["modifyuser"] = true;
 				$arReturn["Operations"]["viewcontacts"] = true;
 				foreach ($arSocNetUserOperations as $operation => $defPerm)
+				{
 					$arReturn["Operations"][$operation] = true;
+				}
 			}
 			else
 			{
 				$arReturn["Operations"]["modifyuser"] = false;
-				if (CSocNetUser::IsFriendsAllowed())
-					$arReturn["Operations"]["viewcontacts"] = ($arReturn["Relation"] == SONET_RELATIONS_FRIEND);
-				else
-					$arReturn["Operations"]["viewcontacts"] = true;
+				$arReturn["Operations"]["viewcontacts"] = (
+					CSocNetUser::IsFriendsAllowed()
+						? ($arReturn["Relation"] == SONET_RELATIONS_FRIEND)
+						: true
+				);
 				foreach ($arSocNetUserOperations as $operation => $defPerm)
+				{
 					$arReturn["Operations"][$operation] = CSocNetUserPerms::CanPerformOperation($currentUserID, $userID, $operation, false);
+				}
 			}
 
 			$arReturn["Operations"]["modifyuser_main"] = false;
@@ -495,33 +354,16 @@ class CAllSocNetUserPerms
 				)
 			)
 			{
-				$arReturn["Operations"]["modifyuser_main"] = true;				
+				$arReturn["Operations"]["modifyuser_main"] = true;
 			}
 		}
-		
+
 		return $arReturn;
 	}
 
-	
-	/**
-	* <p>Изменяет право на операцию, если таковое есть. Иначе добавляет новую запись. Метод статический.</p>
-	*
-	*
-	* @param int $userID  Код пользователя.
-	*
-	* @param string $feature  Название функционала.
-	*
-	* @param string $perm  Право.
-	*
-	* @return int <p>Код записи при успешном сохранении и false - в случае ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetuserperms/setperm.php
-	* @author Bitrix
-	*/
 	public static function SetPerm($userID, $feature, $perm)
 	{
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		$feature = Trim($feature);
 		$perm = Trim($perm);
 
@@ -546,7 +388,7 @@ class CAllSocNetUserPerms
 			$errorMessage = "";
 			if ($e = $GLOBALS["APPLICATION"]->GetException())
 				$errorMessage = $e->GetString();
-			if (StrLen($errorMessage) <= 0)
+			if ($errorMessage == '')
 				$errorMessage = GetMessage("SONET_GF_ERROR_SET").".";
 
 			$GLOBALS["APPLICATION"]->ThrowException($errorMessage, "ERROR_SET_RECORD");

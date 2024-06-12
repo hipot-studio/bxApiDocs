@@ -29,25 +29,6 @@ class Double extends Base
 	 * @param mixed $value Field value.
 	 * @return mixed Normalized value
 	 */
-	
-	/**
-	* <p>Статический метод нормализует одиночное значение.</p>
-	*
-	*
-	* @param mixed $Bitrix  Тип поля документа.
-	*
-	* @param Bitri $Bizproc  Значение поля.
-	*
-	* @param FieldType $fieldType  
-	*
-	* @param mixed $value  
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/basetype/double/tosinglevalue.php
-	* @author Bitrix
-	*/
 	public static function toSingleValue(FieldType $fieldType, $value)
 	{
 		if (is_array($value))
@@ -103,17 +84,6 @@ class Double extends Base
 	 * Return conversion map for current type.
 	 * @return array Map.
 	 */
-	
-	/**
-	* <p>Статический метод возвращает таблицу преобразования для текущего типа.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/basetype/double/getconversionmap.php
-	* @author Bitrix
-	*/
 	public static function getConversionMap()
 	{
 		return array(
@@ -140,15 +110,42 @@ class Double extends Base
 	 */
 	protected static function renderControl(FieldType $fieldType, array $field, $value, $allowSelection, $renderMode)
 	{
+		if ($allowSelection && !($renderMode & FieldType::RENDER_MODE_PUBLIC))
+		{
+			return static::renderControlSelector($field, $value, 'combine', '', $fieldType);
+		}
+
 		$name = static::generateControlName($field);
 		$controlId = static::generateControlId($field);
-		$renderResult = '<input type="text" size="10" id="'.htmlspecialcharsbx($controlId).'" name="'
-			.htmlspecialcharsbx($name).'" value="'.htmlspecialcharsbx((string) $value).'"/>';
+		$className = static::generateControlClassName($fieldType, $field);
 
-		if ($allowSelection)
+		if ($renderMode & FieldType::RENDER_MODE_PUBLIC)
 		{
-			$renderResult .= static::renderControlSelector($field, null, false, '', $fieldType);
+			$selectorAttributes = '';
+			if ($allowSelection)
+			{
+				$selectorAttributes = sprintf(
+					'data-role="inline-selector-target" data-property="%s" ',
+					htmlspecialcharsbx(Main\Web\Json::encode($fieldType->getProperty()))
+				);
+			}
+
+			$renderResult = sprintf(
+				'<input type="text" class="%s" name="%s" value="%s" placeholder="%s" %s/>',
+				htmlspecialcharsbx($className),
+				htmlspecialcharsbx($name),
+				htmlspecialcharsbx((string)$value),
+				htmlspecialcharsbx($fieldType->getDescription()),
+				$selectorAttributes
+			);
 		}
+		else
+		{
+			$renderResult = '<input type="text" class="'.htmlspecialcharsbx($className)
+				.'" size="10" id="'.htmlspecialcharsbx($controlId).'" name="'
+				.htmlspecialcharsbx($name).'" value="'.htmlspecialcharsbx((string) $value).'"/>';
+		}
+
 		return $renderResult;
 	}
 
@@ -205,7 +202,15 @@ class Double extends Base
 				$renderMode
 			);
 		}
-		$renderResult = static::wrapCloneableControls($controls, static::generateControlName($field));
+
+		if ($renderMode & FieldType::RENDER_MODE_PUBLIC)
+		{
+			$renderResult = static::renderPublicMultipleWrapper($fieldType, $field, $controls);
+		}
+		else
+		{
+			$renderResult = static::wrapCloneableControls($controls, static::generateControlName($field));
+		}
 
 		return $renderResult;
 	}
@@ -216,11 +221,11 @@ class Double extends Base
 	 * @param array $request
 	 * @return float|null
 	 */
-	protected static function extractValue(FieldType $fieldType, $field, $request)
+	protected static function extractValue(FieldType $fieldType, array $field, array $request)
 	{
 		$value = parent::extractValue($fieldType, $field, $request);
 
-		if ($value !== null && is_string($value) && strlen($value) > 0)
+		if ($value !== null && is_string($value) && $value <> '')
 		{
 			if (\CBPActivity::isExpression($value))
 				return $value;

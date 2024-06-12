@@ -1,18 +1,11 @@
-<?
+<?php
 
-/**
- * <b>CIBlockProperty</b> - класс для работы со свойствами информационных разделов.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/index.php
- * @author Bitrix
- */
+use Bitrix\Main;
+use Bitrix\Iblock\PropertyTable;
+
 class CIBlockProperty extends CAllIBlockProperty
 {
-	public function _Update($ID, $arFields, $bCheckDescription = false)
+	function _Update($ID, $arFields, $bCheckDescription = false)
 	{
 		global $DB;
 		$ID=intval($ID);
@@ -23,6 +16,7 @@ class CIBlockProperty extends CAllIBlockProperty
 			$this->LAST_ERROR = $this->FormatNotFoundError($ID);
 			return false;
 		}
+		\Bitrix\Iblock\PropertyIndex\Manager::onPropertyUpdate($arProperty["IBLOCK_ID"], $arProperty, $arFields);
 		if($arProperty["VERSION"]!=2)
 		{
 			return true;
@@ -68,10 +62,20 @@ class CIBlockProperty extends CAllIBlockProperty
 					$this->LAST_ERROR =  $this->FormatUpdateError($ID, "MY02");
 					return false;
 				}
-				$strSql = "
-					ALTER TABLE b_iblock_element_prop_s".$arProperty["IBLOCK_ID"]."
-					CHANGE PROPERTY_".$arProperty["ID"]." PROPERTY_".$arProperty["ID"]." longtext
-				";
+				if ($DB->type === 'MYSQL')
+				{
+					$strSql = '
+						ALTER TABLE b_iblock_element_prop_s' . $arProperty['IBLOCK_ID'] . '
+						CHANGE PROPERTY_' . $arProperty['ID'] . ' PROPERTY_' . $arProperty['ID'] . ' ' . self::getLongTextType() . '
+					';
+				}
+				else
+				{
+					$strSql = '
+						ALTER TABLE b_iblock_element_prop_s' . $arProperty['IBLOCK_ID'] . '
+						ALTER COLUMN PROPERTY_' . $arProperty['ID'] . ' TYPE ' . self::getLongTextType() . '
+					';
+				}
 				if(!$DB->DDL($strSql))
 				{
 					$this->LAST_ERROR =  $this->FormatUpdateError($ID, "MY03");
@@ -92,15 +96,36 @@ class CIBlockProperty extends CAllIBlockProperty
 					case "F":
 					case "G":
 					case "E":
-						$strType = "int(11)";
+						$strType = self::getIntegerType();
 						break;
 					default://s - small string
 						$strType = "varchar(255)";
 				}
 				$strSql = "
-					ALTER TABLE b_iblock_element_prop_s".$arProperty["IBLOCK_ID"]."
-					CHANGE PROPERTY_".$arProperty["ID"]." PROPERTY_".$arProperty["ID"]." ".$strType."
+					UPDATE b_iblock_element_prop_s" . $arProperty["IBLOCK_ID"] . "
+					SET PROPERTY_" . $arProperty["ID"] . "=null
+					" . (isset($tableFields["DESCRIPTION_".$arProperty["ID"]]) ? ", DESCRIPTION_" . $arProperty["ID"] . "=null": "") . "
 				";
+				if(!$DB->Query($strSql))
+				{
+					$this->LAST_ERROR =  $this->FormatUpdateError($ID, "MY05");
+
+					return false;
+				}
+				if ($DB->type === 'MYSQL')
+				{
+					$strSql = "
+						ALTER TABLE b_iblock_element_prop_s".$arProperty["IBLOCK_ID"]."
+						CHANGE PROPERTY_".$arProperty["ID"]." PROPERTY_".$arProperty["ID"]." ".$strType."
+					";
+				}
+				else
+				{
+					$strSql = "
+						ALTER TABLE b_iblock_element_prop_s".$arProperty["IBLOCK_ID"]."
+						ALTER COLUMN PROPERTY_".$arProperty["ID"]." TYPE ".$strType." USING PROPERTY_".$arProperty["ID"]."::" .$strType. "
+					";
+				}
 				if(!$DB->DDL($strSql))
 				{
 					$this->LAST_ERROR =  $this->FormatUpdateError($ID, "MY04");
@@ -123,17 +148,16 @@ class CIBlockProperty extends CAllIBlockProperty
 					default:
 						$strTrans = "VALUE";
 				}
-				$strSql = "
-					UPDATE
-						b_iblock_element_prop_s".$arProperty["IBLOCK_ID"]." EL
-						,b_iblock_element_prop_m".$arProperty["IBLOCK_ID"]." EN
-					SET
-						PROPERTY_".$ID." = ".$strTrans."
-						".(isset($tableFields["DESCRIPTION_".$ID])? ",DESCRIPTION_".$ID." = DESCRIPTION": "")."
-					WHERE
-						EN.IBLOCK_ELEMENT_ID = EL.IBLOCK_ELEMENT_ID
-						AND EN.IBLOCK_PROPERTY_ID = ".$ID."
-				";
+				$helper = Main\Application::getConnection()->getSqlHelper();
+				$strSql = $helper->prepareCorrelatedUpdate(
+					'b_iblock_element_prop_s' . $arProperty["IBLOCK_ID"],
+					'EL',
+					[
+						'PROPERTY_' . $ID => $strTrans . (isset($tableFields['DESCRIPTION_' . $ID]) ? ',DESCRIPTION_'.$ID.' = DESCRIPTION' : '')
+					],
+					'b_iblock_element_prop_m' . $arProperty["IBLOCK_ID"] . ' AS EN',
+					'EN.IBLOCK_ELEMENT_ID = EL.IBLOCK_ELEMENT_ID AND EN.IBLOCK_PROPERTY_ID = ' . $ID
+				);
 				if(!$DB->Query($strSql))
 				{
 					$this->LAST_ERROR = $this->FormatUpdateError($ID, "MY05");
@@ -170,7 +194,7 @@ class CIBlockProperty extends CAllIBlockProperty
 					case "F":
 					case "G":
 					case "E":
-						$strType = "int(11)";
+						$strType = self::getIntegerType();
 						break;
 					default://s - small string
 						$strType = "varchar(255)";
@@ -254,28 +278,45 @@ class CIBlockProperty extends CAllIBlockProperty
 			return array();
 	}
 
-	public static function _Add($ID, $arFields)
+	function _Add($ID, $arFields)
 	{
 		global $DB;
-		$ID = IntVal($ID);
 
-		if($arFields["MULTIPLE"]=="Y")
-			$strType = "longtext";
+		$ID = (int)$ID;
+		if ($ID <= 0)
+		{
+			return false;
+		}
+
+		$arFields['IBLOCK_ID'] = (int)($arFields['IBLOCK_ID'] ?? 0);
+		if ($arFields['IBLOCK_ID'] <= 0)
+		{
+			return false;
+		}
+
+		$arFields['PROPERTY_TYPE'] ??= PropertyTable::TYPE_STRING;
+		$arFields['MULTIPLE'] ??= 'N';
+		$arFields['WITH_DESCRIPTION'] ??= 'N';
+
+		if ($arFields["MULTIPLE"] === "Y")
+		{
+			$strType = self::getLongTextType();
+		}
 		else
 		{
 			switch($arFields["PROPERTY_TYPE"])
 			{
-				case "S":
+				case PropertyTable::TYPE_STRING:
 					$strType = "text";
 					break;
-				case "N":
+				case PropertyTable::TYPE_NUMBER:
 					$strType = "numeric(18,4)";
 					break;
-				case "L":
-				case "F":
-				case "G":
-				case "E":
-					$strType = "int(11)";
+				case PropertyTable::TYPE_LIST:
+				case PropertyTable::TYPE_FILE:
+				case PropertyTable::TYPE_SECTION:
+				case PropertyTable::TYPE_ELEMENT:
+					$strType = self::getIntegerType();
 					break;
 				default://s - small string
 					$strType = "varchar(255)";
@@ -286,7 +327,35 @@ class CIBlockProperty extends CAllIBlockProperty
 			ADD PROPERTY_".$ID." ".$strType."
 			".($arFields["WITH_DESCRIPTION"] == "Y"? ", ADD DESCRIPTION_".$ID." varchar(255)": "")."
 		";
-		$rs = $DB->DDL($strSql, true);
-		return $rs;
+
+		return $DB->DDL($strSql, true);
+	}
+
+	private static function getLongTextType(): string
+	{
+		$connection = Main\Application::getConnection();
+		$helper = $connection->getSqlHelper();
+		unset($connection);
+
+		$field = (new Main\ORM\Fields\TextField('TMP'))
+			->configureLong(true)
+		;
+
+		return $helper->getColumnTypeByField($field);
+	}
+
+	private static function getIntegerType(?int $size = null): string
+	{
+		$connection = Main\Application::getConnection();
+		$helper = $connection->getSqlHelper();
+		unset($connection);
+
+		$field = (new Main\ORM\Fields\IntegerField('TMP'));
+		if ($size !== null)
+		{
+			$field->configureSize($size);
+		}
+
+		return $helper->getColumnTypeByField($field);
 	}
 }

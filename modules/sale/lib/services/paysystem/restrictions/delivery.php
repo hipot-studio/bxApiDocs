@@ -5,6 +5,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Delivery\Services;
 use Bitrix\Sale\Internals\CollectableEntity;
 use Bitrix\Sale\Internals\DeliveryPaySystemTable;
+use Bitrix\Sale\Internals\Entity;
 use Bitrix\Sale\Order;
 use Bitrix\Sale\Payment;
 use Bitrix\Sale\PaymentCollection;
@@ -39,6 +40,11 @@ class Delivery extends Restriction
 		return Loc::getMessage("SALE_SRV_RSTR_BY_DELIVERY_DESC");
 	}
 
+	public static function getOnApplyErrorMessage(): string
+	{
+		return Loc::getMessage('SALE_SRV_RSTR_BY_DELIVERY_ON_APPLY_ERROR_MSG');
+	}
+
 	/**
 	 * @param $params
 	 * @param array $restrictionParams
@@ -64,11 +70,12 @@ class Delivery extends Restriction
 	}
 
 	/**
-	 * @param CollectableEntity $entity
+	 * @param Entity $entity
 	 * @return array
 	 */
-	protected static function extractParams(CollectableEntity $entity)
+	protected static function extractParams(Entity $entity)
 	{
+		$shipmentCollection = null;
 		$result = array();
 
 		if ($entity instanceof Payment)
@@ -82,6 +89,14 @@ class Delivery extends Restriction
 			/** @var ShipmentCollection $shipmentCollection */
 			$shipmentCollection = $order->getShipmentCollection();
 
+		}
+		elseif ($entity instanceof Order)
+		{
+			$shipmentCollection = $entity->getShipmentCollection();
+		}
+
+		if ($shipmentCollection)
+		{
 			/** @var \Bitrix\Sale\Shipment $shipment */
 			foreach ($shipmentCollection as $shipment)
 			{

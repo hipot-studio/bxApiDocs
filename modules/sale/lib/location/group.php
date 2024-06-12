@@ -17,6 +17,22 @@ use Bitrix\Sale\Location\Util\Assert;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class GroupTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Group_Query query()
+ * @method static EO_Group_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Group_Result getById($id)
+ * @method static EO_Group_Result getList(array $parameters = [])
+ * @method static EO_Group_Entity getEntity()
+ * @method static \Bitrix\Sale\Location\EO_Group createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Location\EO_Group_Collection createCollection()
+ * @method static \Bitrix\Sale\Location\EO_Group wakeUpObject($row)
+ * @method static \Bitrix\Sale\Location\EO_Group_Collection wakeUpCollection($rows)
+ */
 class GroupTable extends Entity\DataManager
 {
 	const PROJECT_USES_GROUPS_OPT = 'project_uses_groups';
@@ -92,6 +108,7 @@ class GroupTable extends Entity\DataManager
 		if($delResult->isSuccess())
 		{
 			Name\GroupTable::deleteMultipleForOwner($primary);
+			GroupLocationTable::deleteByGroupId($primary);
 
 			// set flag that indicates whether project still uses groups or not
 			self::checkGroupUsage();
@@ -147,7 +164,7 @@ class GroupTable extends Entity\DataManager
 			'SORT' => array(
 				'data_type' => 'integer',
 				'title' => Loc::getMessage('SALE_LOCATION_GROUP_ENTITY_SORT_FIELD'),
-				'default' => '100'
+				'default_value' => '100'
 			),
 
 			// virtual

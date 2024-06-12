@@ -23,12 +23,12 @@ class CSecurityCloudMonitorTest
 	protected $checkingResults = array();
 	protected $protocolVersion = 2;
 
-	static public function __construct()
+	public function __construct()
 	{
 		IncludeModuleLangFile(__FILE__);
 	}
 
-	static public function checkRequirements($params = array())
+	public function checkRequirements($params = array())
 	{
 		if(!function_exists('json_decode'))
 			throw new CSecurityRequirementsException(GetMessage('SECURITY_SITE_CHECKER_CLOUD_JSON_UNAVAILABLE'));
@@ -40,7 +40,7 @@ class CSecurityCloudMonitorTest
 	 * @param array $params
 	 * @return array
 	 */
-	public function check($params)
+	public function check(array $params = array())
 	{
 		$this->initializeParams($params);
 		$testID = $this->getParam('TEST_ID', $this->internalName);

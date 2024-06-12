@@ -8,45 +8,62 @@ class CCrmSearch
 	static $oCallback = null;
 	static $callback_method = '';
 	static $arMess = array();
+	protected static bool $updateSearchIndexEnabled = true;
 
-	static public function UpdateSearch($arFilter, $ENTITY_TYPE, $bOverWrite = false)
+	public static function isUpdateSearchIndexEnabled(): bool
 	{
-		if (!CModule::IncludeModule('search'))
+		return CModule::IncludeModule('search') && self::$updateSearchIndexEnabled;
+	}
+
+	public static function enableUpdateSearchIndex(bool $enable = true): void
+	{
+		self::$updateSearchIndexEnabled = $enable;
+	}
+
+	public static function UpdateSearch($arFilter, $ENTITY_TYPE, $bOverWrite = false)
+	{
+		if (!self::isUpdateSearchIndexEnabled())
+		{
 			return false;
+		}
 
 		$limit = 1000;
 		switch ($ENTITY_TYPE)
 		{
 			case 'CONTACT':
-				$obRes = CCrmContact::GetList(array('ID' => 'ASC'), $arFilter, array(), $limit);
+				$obRes = CCrmContact::GetListEx(array('ID' => 'ASC'), $arFilter, false, array('nTopCount' => $limit));
 				$sTitleID = 'FULL_NAME';
 				break;
 			case 'DEAL':
-				$obRes = CCrmDeal::GetList(array('ID' => 'ASC'), $arFilter, array(), $limit);
+				$obRes = CCrmDeal::GetListEx(array('ID' => 'ASC'), $arFilter, false, array('nTopCount' => $limit));
 				$sTitleID = 'TITLE';
 				break;
 			case 'INVOICE':
-				$obRes = CCrmInvoice::GetList(array('ID' => 'DESC'), $arFilter, false, array('nTopCount' => $limit), array('*'));
+				$obRes = CCrmInvoice::GetList(array('ID' => 'ASC'), $arFilter, false, array('nTopCount' => $limit), array('*'));
 				$sTitleID = 'ORDER_TOPIC';
 				break;
 			case 'QUOTE':
-				$obRes = CCrmQuote::GetList(array('ID' => 'ASC'), $arFilter, false, array('nTopCount' => intval($limit)), array());
+				$obRes = CCrmQuote::GetList(array('ID' => 'ASC'), $arFilter, false, array('nTopCount' => $limit), array());
 				$sTitleID = 'TITLE';
 				break;
 			case 'COMPANY':
-				$obRes = CCrmCompany::GetList(array('ID' => 'ASC'), $arFilter, array(), $limit);
+				$obRes = CCrmCompany::GetListEx(array('ID' => 'ASC'), $arFilter, false, array('nTopCount' => $limit));
 				$sTitleID = 'TITLE';
 				break;
 			default:
 			case 'LEAD':
-				$obRes = CCrmLead::GetList(array('ID' => 'ASC'), $arFilter, array(), $limit);
+				$obRes = CCrmLead::GetListEx(array('ID' => 'ASC'), $arFilter, false, array('nTopCount' => $limit));
 				$sTitleID = 'TITLE';
 				$ENTITY_TYPE = 'LEAD';
 				break;
 		}
 
 		if (!isset(self::$arMess[$ENTITY_TYPE]))
-			self::$arMess[$ENTITY_TYPE] = __IncludeLang($_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/components/bitrix/crm.'.strtolower($ENTITY_TYPE).'.show/lang/'.LANGUAGE_ID.'/component.php', true);
+		{
+			self::$arMess[$ENTITY_TYPE] = \Bitrix\Main\Localization\Loc::loadLanguageFile(
+				$_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/components/bitrix/crm.'.mb_strtolower($ENTITY_TYPE).'.show/component.php'
+			);
+		}
 
 		$arAllResult = array();
 		$qty = 0;
@@ -131,7 +148,7 @@ class CCrmSearch
 		return $arAllResult;
 	}
 
-	static protected function _buildEntityCard($arEntity, $sTitle, $ENTITY_TYPE, $arOptions = null)
+	protected static function _buildEntityCard($arEntity, $sTitle, $ENTITY_TYPE, $arOptions = null)
 	{
 		static $arEntityGroup = array();
 		static $arStatuses = array();
@@ -152,7 +169,7 @@ class CCrmSearch
 		);
 		foreach ($arEntity as $_k => $_v)
 		{
-			if ($_k == $sTitle || strpos($_k, '_BY_') !== false || strpos($_k, 'DATE_') === 0 || strpos($_k, 'UF_') === 0)
+			if ($_k == $sTitle || mb_strpos($_k, '_BY_') !== false || mb_strpos($_k, 'DATE_') === 0 || mb_strpos($_k, 'UF_') === 0)
 				continue ;
 
 			if($ENTITY_TYPE === 'CONTACT' && ($_k === 'NAME' || $_k === 'SECOND_NAME' || $_k === 'LAST_NAME'))
@@ -174,11 +191,11 @@ class CCrmSearch
 			{
 				if (!isset($arStatuses[$_k]))
 					$arStatuses[$_k] = CCrmStatus::GetStatusList($arField2status[$_k]);
-				$_v = $arStatuses[$_k][$_v];
+				$_v = $arStatuses[$_k][$_v] ?? null;
 			}
 
 			if (!empty($_v) && !is_numeric($_v) && $_v != 'N' && $_v != 'Y')
-				$sBody .= self::$arMess[$ENTITY_TYPE]['CRM_FIELD_'.$_k].": $_v\n";
+				$sBody .= (self::$arMess[$ENTITY_TYPE]['CRM_FIELD_'.$_k] ?? null).": $_v\n";
 		}
 
 		if($ENTITY_TYPE === 'CONTACT' || $ENTITY_TYPE === 'COMPANY' || $ENTITY_TYPE === 'LEAD')
@@ -200,18 +217,20 @@ class CCrmSearch
 			}
 		}
 
-		$sDetailURL = CComponentEngine::MakePathFromTemplate(COption::GetOptionString('crm', 'path_to_'.strtolower($ENTITY_TYPE).'_show'),
+		$sDetailURL = CComponentEngine::MakePathFromTemplate(COption::GetOptionString('crm', 'path_to_'.mb_strtolower($ENTITY_TYPE).'_show'),
 			array(
-				strtolower($ENTITY_TYPE).'_id' => $arEntity['ID']
+				mb_strtolower($ENTITY_TYPE).'_id' => $arEntity['ID']
 			)
 		);
 
-		$_arAttr = CCrmPerms::GetEntityAttr($ENTITY_TYPE, $arEntity['ID']);
+		$_arAttr = \Bitrix\Crm\Security\EntityAuthorization::getPermissionAttributes(
+			CCrmOwnerType::ResolveID($ENTITY_TYPE),
+			array($arEntity['ID'])
+		);
+
 		if (empty($arSite))
 		{
-			$by="sort";
-			$order="asc";
-			$rsSite = CSite::GetList($by, $order);
+			$rsSite = CSite::GetList();
 			while ($_arSite = $rsSite->Fetch())
 				$arSite[] = $_arSite['ID'];
 		}
@@ -224,7 +243,15 @@ class CCrmSearch
 		if (!isset($_arAttr[$arEntity['ID']]))
 			$_arAttr[$arEntity['ID']] = array();
 
-		$arAttr[] = $ENTITY_TYPE; // for perm X
+		$permEntity = $ENTITY_TYPE;
+		if($ENTITY_TYPE === 'DEAL')
+		{
+			$permEntity = \Bitrix\Crm\Category\DealCategory::convertToPermissionEntityType(
+				$arEntity['CATEGORY_ID']
+			);
+		}
+
+		$arAttr[] = $permEntity; // for perm X
 		foreach ($_arAttr[$arEntity['ID']] as $_s)
 		{
 			if (preg_match('/^U/', $_s))
@@ -243,26 +270,26 @@ class CCrmSearch
 			{
 				$sattr_o = $_s;
 			}
-			$arAttr[] = "{$ENTITY_TYPE}_{$_s}";
+			$arAttr[] = "{$permEntity}_{$_s}";
 		}
 
 		if (!empty($sattr_s))
 		{
-			$arAttr[] = "{$ENTITY_TYPE}_{$sattr_s}";  // for perm X in status
+			$arAttr[] = "{$permEntity}_{$sattr_s}";  // for perm X in status
 
 			if (!empty($sattr_u))
 			{
-				$arAttr[] = "{$ENTITY_TYPE}_{$sattr_u}_{$sattr_s}";
+				$arAttr[] = "{$permEntity}_{$sattr_u}_{$sattr_s}";
 			}
 
 			if (!empty($sattr_d))
 			{
-				$arAttr[] = "{$ENTITY_TYPE}_{$sattr_d}_{$sattr_s}";
+				$arAttr[] = "{$permEntity}_{$sattr_d}_{$sattr_s}";
 			}
 
 			if (!empty($sattr_o))
 			{
-				$arAttr[] = "{$ENTITY_TYPE}_{$sattr_o}_{$sattr_s}";
+				$arAttr[] = "{$permEntity}_{$sattr_o}_{$sattr_s}";
 			}
 		}
 
@@ -279,7 +306,7 @@ class CCrmSearch
 			'SITE_ID' => $arSitePath,
 			'PERMISSIONS' => $arAttr,
 			'BODY' => $sBody,
-			'TAGS' => 'crm,'.strtolower($ENTITY_TYPE).','.GetMessage('CRM_'.$ENTITY_TYPE)
+			'TAGS' => 'crm,'.mb_strtolower($ENTITY_TYPE).','.GetMessage('CRM_'.$ENTITY_TYPE)
 		);
 
 		if (self::$bReIndex)
@@ -288,11 +315,11 @@ class CCrmSearch
 		return $arResult;
 	}
 
-	static public function OnSearchReindex($NS = array(), $oCallback = null, $callback_method = '')
+	public static function OnSearchReindex($NS = array(), $oCallback = null, $callback_method = '')
 	{
 		$arFilter = array();
 		$ENTITY_TYPE = 'LEAD';
-		if (isset($NS['ID']) && strlen($NS['ID']) > 0 && preg_match('/^[A-Z]+\.\d+$/'.BX_UTF_PCRE_MODIFIER, $NS['ID']))
+		if (isset($NS['ID']) && $NS['ID'] <> '' && preg_match('/^[A-Z]+\.\d+$/u', $NS['ID']))
 		{
 			$arTemp = explode('.', $NS['ID']);
 			$ENTITY_TYPE = $arTemp[0];
@@ -385,6 +412,10 @@ class CCrmSearch
 				//Save deals and go to invoices
 				$arAllResult = array_merge($arAllResult, $arResult);
 				$ENTITY_TYPE = 'INVOICE';
+				if(!empty($arFilter))
+				{
+					$arFilter = array();
+				}
 			}
 			else
 			{
@@ -404,6 +435,10 @@ class CCrmSearch
 				//Save deals and go to quotes
 				$arAllResult = array_merge($arAllResult, $arResult);
 				$ENTITY_TYPE = 'QUOTE';
+				if(!empty($arFilter))
+				{
+					$arFilter = array();
+				}
 			}
 			else
 			{
@@ -444,17 +479,35 @@ class CCrmSearch
 		return $arAllResult;
 	}
 
-	function OnSearchCheckPermissions($FIELD)
+	public static function OnSearchCheckPermissions($FIELD)
 	{
-		global $USER;
+		$arAttr = array();
+		if(CCrmPerms::IsAdmin())
+		{
+			$arAttr['LEAD'] = $arAttr['DEAL'] = $arAttr['INVOICE'] =
+				$arAttr['QUOTE'] = $arAttr['CONTACT'] = $arAttr['COMPANY'] = array(array());
 
-		$CCrmPerms = new CCrmPerms($USER->GetID());
-		$arAttr['LEAD'] = $CCrmPerms->GetUserAttrForSelectEntity('LEAD', 'READ');
-		$arAttr['DEAL'] = $CCrmPerms->GetUserAttrForSelectEntity('DEAL', 'READ');
-		$arAttr['INVOICE'] = $CCrmPerms->GetUserAttrForSelectEntity('INVOICE', 'READ');
-		$arAttr['QUOTE'] = $CCrmPerms->GetUserAttrForSelectEntity('QUOTE', 'READ');
-		$arAttr['CONTACT'] = $CCrmPerms->GetUserAttrForSelectEntity('CONTACT', 'READ');
-		$arAttr['COMPANY'] = $CCrmPerms->GetUserAttrForSelectEntity('COMPANY', 'READ');
+			foreach(\Bitrix\Crm\Category\DealCategory::getAllPermissionEntityTypes() as $permEntity)
+			{
+				$arAttr[$permEntity] = array(array());
+			}
+		}
+		else
+		{
+			$CCrmPerms = CCrmPerms::GetCurrentUserPermissions();
+			$arAttr['LEAD'] = $CCrmPerms->GetUserAttrForSelectEntity('LEAD', 'READ');
+			$arAttr['DEAL'] = $CCrmPerms->GetUserAttrForSelectEntity('DEAL', 'READ');
+
+			foreach(\Bitrix\Crm\Category\DealCategory::getAllPermissionEntityTypes() as $permEntity)
+			{
+				$arAttr[$permEntity] = $CCrmPerms->GetUserAttrForSelectEntity($permEntity, 'READ');
+			}
+
+			$arAttr['INVOICE'] = $CCrmPerms->GetUserAttrForSelectEntity('INVOICE', 'READ');
+			$arAttr['QUOTE'] = $CCrmPerms->GetUserAttrForSelectEntity('QUOTE', 'READ');
+			$arAttr['CONTACT'] = $CCrmPerms->GetUserAttrForSelectEntity('CONTACT', 'READ');
+			$arAttr['COMPANY'] = $CCrmPerms->GetUserAttrForSelectEntity('COMPANY', 'READ');
+		}
 
 		$arRel = array();
 		foreach ($arAttr as $ENTITY_TYPE => $_arRel)
@@ -482,15 +535,11 @@ class CCrmSearch
 						$sattr_o = $_s;
 				}
 
-				$sattr = $ENTITY_TYPE;
 				if (!empty($arattr_d))
 				{
 					foreach ($arattr_d as $sattr_d)
 					{
-						$sattr = $sattr_u !== ''
-							? "{$ENTITY_TYPE}_{$sattr_u}_{$sattr_d}"
-							: "{$ENTITY_TYPE}_{$sattr_d}";
-
+						$sattr = "{$ENTITY_TYPE}_{$sattr_d}";
 						if (!empty($sattr_s))
 						{
 							$sattr .= '_'.$sattr_s;
@@ -500,18 +549,24 @@ class CCrmSearch
 					}
 					if (!empty($sattr_o))
 					{
-						$sattr  .= '_'.$sattr_o;
-						$arRel[] = $sattr;
+						$arRel[] = "{$ENTITY_TYPE}_{$sattr_o}";
 					}
 				}
 				else
 				{
+					$sattr = $ENTITY_TYPE;
 					if (!empty($sattr_u))
-						$sattr .= '_'.$sattr_u;
-					if (!empty($sattr_s))
-						$sattr .= '_'.$sattr_s;
+					{
+						$sattr .= '_' . $sattr_u;
+					}
 					if (!empty($sattr_o))
-						$sattr .= '_'.$sattr_o;
+					{
+						$sattr .= '_' . $sattr_o;
+					}
+					if (!empty($sattr_s))
+					{
+						$sattr .= '_' . $sattr_s;
+					}
 					$arRel[] = $sattr;
 				}
 			}
@@ -520,7 +575,7 @@ class CCrmSearch
 		return $arRel;
 	}
 
-	static public function DeleteSearch($ENTITY_TYPE, $ENTITY_ID)
+	public static function DeleteSearch($ENTITY_TYPE, $ENTITY_ID)
 	{
 		if (CModule::IncludeModule('search'))
 		{
@@ -528,5 +583,3 @@ class CCrmSearch
 		}
 	}
 }
-
-?>

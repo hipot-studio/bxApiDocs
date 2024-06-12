@@ -3,10 +3,8 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2014 Bitrix
+ * @copyright 2001-2022 Bitrix
  */
-
-use Bitrix\Main\Text\BinaryString;
 
 class CCSVData
 {
@@ -34,10 +32,16 @@ class CCSVData
 	public function LoadFile($filename)
 	{
 		$this->sFileName = $filename;
-		$this->__file = fopen($this->sFileName, "rb");
-		$this->iFileLength = filesize($this->sFileName);
-		$this->CheckUTF8BOM();
-		$this->SetPos(0);
+		$file = fopen($this->sFileName, "rb");
+		if (is_resource($file))
+		{
+			$this->__file = $file;
+			$this->iFileLength = filesize($this->sFileName);
+			$this->CheckUTF8BOM();
+			$this->SetPos();
+			return true;
+		}
+		return false;
 	}
 
 	public function CloseFile()
@@ -51,6 +55,11 @@ class CCSVData
 
 	public function CheckUTF8BOM()
 	{
+		if (!$this->__file)
+		{
+			return;
+		}
+
 		//check UTF-8 Byte-Order Mark
 		fseek($this->__file, 0);
 		$sBOM = fread($this->__file, 3);
@@ -67,7 +76,7 @@ class CCSVData
 
 	public function SetDelimiter($delimiter = ";")
 	{
-		$this->cDelimiter = (strlen($delimiter) > 1? substr($delimiter, 0, 1) : $delimiter);
+		$this->cDelimiter = (mb_strlen($delimiter) > 1? mb_substr($delimiter, 0, 1) : $delimiter);
 	}
 
 	public function SetFirstHeader($first_header = false)
@@ -91,6 +100,11 @@ class CCSVData
 
 	public function FetchDelimiter()
 	{
+		if (!$this->__file)
+		{
+			return false;
+		}
+
 		$bInString = false;
 		$str = "";
 		$res_r = array();
@@ -166,7 +180,7 @@ class CCSVData
 				{
 					$this->__buffer = fread($this->__file, 1024*1024);
 				}
-				$this->__buffer_size = BinaryString::getLength($this->__buffer);
+				$this->__buffer_size = strlen($this->__buffer);
 				$this->__buffer_pos = 0;
 			}
 
@@ -190,6 +204,11 @@ class CCSVData
 
 	public function FetchWidth()
 	{
+		if (!$this->__file)
+		{
+			return false;
+		}
+
 		$str = "";
 		$ind = 1;
 		$jnd = 0;
@@ -246,7 +265,7 @@ class CCSVData
 				{
 					$this->__buffer = fread($this->__file, 1024*1024);
 				}
-				$this->__buffer_size = BinaryString::getLength($this->__buffer);
+				$this->__buffer_size = strlen($this->__buffer);
 				$this->__buffer_pos = 0;
 			}
 
@@ -291,6 +310,11 @@ class CCSVData
 
 	public function IncCurPos()
 	{
+		if (!$this->__file)
+		{
+			return;
+		}
+
 		$this->iCurPos++;
 		$this->__buffer_pos++;
 		if($this->__buffer_pos >= $this->__buffer_size)
@@ -303,14 +327,14 @@ class CCSVData
 			{
 				$this->__buffer = fread($this->__file, 1024*1024);
 			}
-			$this->__buffer_size = BinaryString::getLength($this->__buffer);
+			$this->__buffer_size = strlen($this->__buffer);
 			$this->__buffer_pos = 0;
 		}
 	}
 
 	public function MoveFirst()
 	{
-		$this->SetPos(0);
+		$this->SetPos();
 	}
 
 	public function GetPos()
@@ -320,6 +344,11 @@ class CCSVData
 
 	public function SetPos($iCurPos = 0)
 	{
+		if (!$this->__file)
+		{
+			return;
+		}
+
 		$iCurPos = intval($iCurPos);
 		if ($iCurPos <= $this->iFileLength)
 		{
@@ -345,7 +374,7 @@ class CCSVData
 		{
 			$this->__buffer = fread($this->__file, 1024*1024);
 		}
-		$this->__buffer_size = BinaryString::getLength($this->__buffer);
+		$this->__buffer_size = strlen($this->__buffer);
 		$this->__buffer_pos = 0;
 	}
 
@@ -362,10 +391,10 @@ class CCSVData
 				{
 					$this->sContent .= $this->cDelimiter;
 				}
-				$pos1 = strpos($arFields[$i], $this->cDelimiter);
-				$pos2 = strpos($arFields[$i], "\"");
-				$pos3 = strpos($arFields[$i], "\n");
-				$pos4 = strpos($arFields[$i], "\r");
+				$pos1 = mb_strpos($arFields[$i], $this->cDelimiter);
+				$pos2 = mb_strpos($arFields[$i], "\"");
+				$pos3 = mb_strpos($arFields[$i], "\n");
+				$pos4 = mb_strpos($arFields[$i], "\r");
 				if ($pos1 !== false || $pos2 !== false || $pos3 !== false || $pos4 !== false)
 				{
 					$this->sContent .= "\"";

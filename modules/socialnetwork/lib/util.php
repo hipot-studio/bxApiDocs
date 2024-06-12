@@ -59,7 +59,7 @@ class Util
 			|| intval($fields["logEntryId"]) <= 0
 			|| !isset($fields["userId"])
 			|| !isset($fields["logEntryUrl"])
-			|| strlen($fields["logEntryUrl"]) <= 0
+			|| $fields["logEntryUrl"] == ''
 		)
 		{
 			return false;
@@ -116,7 +116,7 @@ class Util
 
 		if (
 			!isset($fields["type"])
-			|| !in_array(strtoupper($fields["type"]), array("LOG_ENTRY", "LOG_COMMENT"))
+			|| !in_array(mb_strtoupper($fields["type"]), array("LOG_ENTRY", "LOG_COMMENT"))
 		)
 		{
 			$fields["type"] = "LOG_COMMENT";
@@ -137,7 +137,7 @@ class Util
 		$logEntryTitle = str_replace(array("\r\n", "\n"), " ", ($arLogEntry["TITLE"] != '__EMPTY__' ? $arLogEntry["TITLE"] : $arLogEntry["MESSAGE"]));
 		$logEntryTitle = truncateText($logEntryTitle, 100);
 
-		switch (strtoupper($fields["type"]))
+		switch(mb_strtoupper($fields["type"]))
 		{
 			case "LOG_COMMENT":
 				$mailMessageId = "<LOG_COMMENT_".$fields["logCommentId"]."@".$GLOBALS["SERVER_NAME"].">";
@@ -154,11 +154,11 @@ class Util
 		foreach ($arEmail as $userId => $user)
 		{
 			$email = $user["EMAIL"];
-			$nameFormatted = $user["NAME_FORMATTED"];
+			$nameFormatted = str_replace(array('<', '>', '"'), '', $user["NAME_FORMATTED"]);
 
 			if (
 				intval($userId) <= 0
-				&& strlen($email) <= 0
+				&& $email == ''
 			)
 			{
 				continue;
@@ -180,6 +180,7 @@ class Util
 					&& $backUrl
 				)
 				{
+					$authorName = str_replace(array('<', '>', '"'), '', $authorName);
 					\CEvent::send(
 						$mailTemplateType,
 						$fields["siteId"],
@@ -203,5 +204,83 @@ class Util
 		return true;
 	}
 
+	public static function getEqualityFields(&$fields)
+	{
+		$fields1 = array();
+		foreach ($fields as $key => $value)
+		{
+			if (mb_substr($key, 0, 1) == "=")
+			{
+				$fields1[mb_substr($key, 1)] = $value;
+				unset($fields[$key]);
+			}
+		}
+
+		return $fields1;
+	}
+
+	public static function processEqualityFieldsToInsert($fields1, &$insert)
+	{
+		foreach ($fields1 as $key => $value)
+		{
+			if ($insert[0] <> '')
+			{
+				$insert[0] .= ", ";
+			}
+			$insert[0] .= $key;
+			if ($insert[1] <> '')
+			{
+				$insert[1] .= ", ";
+			}
+			$insert[1] .= $value;
+		}
+	}
+
+	public static function processEqualityFieldsToUpdate($fields1, &$update)
+	{
+		foreach ($fields1 as $key => $value)
+		{
+			if ($update <> '')
+			{
+				$update .= ", ";
+			}
+			$update .= $key."=".$value." ";
+		}
+	}
+
+	public static function detectTags($fieldList, $codeList = array())
+	{
+		static $parser = null;
+
+		$result = array();
+
+		if (
+			!is_array($fieldList)
+			|| !is_array($codeList)
+		)
+		{
+			return false;
+		}
+
+		foreach($codeList as $code)
+		{
+			if (
+				empty($code)
+				|| empty($fieldList[$code])
+			)
+			{
+				continue;
+			}
+
+			if ($parser === null)
+			{
+				$parser = new \CTextParser();
+			}
+
+			$result = array_merge($result, $parser->detectTags($fieldList[$code]));
+		}
+
+		return array_unique($result);
+	}
 }
 ?>

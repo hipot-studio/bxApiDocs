@@ -15,27 +15,11 @@ class ActionModifyer
 	 * @param string $actionId - action idenifyer
 	 * @param array $actionParams - action parameterss
 	 * @param string $hostname - server hostname
+	 * @param array $userParamsValues
 	 * @return array - modifyed action params
 	 * @throws NeedMoreUserInfoException
 	 */
-	
-	/**
-	* <p>Модификатор параметра <b>MYSQL_ADD_SLAVE</b> (добавить slave БД) задания <i>BitrixVM</i>. Метод статический.</p>
-	*
-	*
-	* @param string $actionId  ID задания <i>BitrixVM</i>.
-	*
-	* @param array $actionParams  Параметры задания.
-	*
-	* @param string $hostname  Имя хоста.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/scale/actionmodifyer/mysqladdslave.php
-	* @author Bitrix
-	*/
-	public static function mysqlAddSlave($actionId, $actionParams, $hostname)
+	public static function mysqlAddSlave($actionId, $actionParams, $hostname, $userParamsValues)
 	{
 		$action =  new Action("MYSQL_ADD_SLAVE_MODIFYER", array(
 				"START_COMMAND_TEMPLATE" => "sudo -u root /opt/webdir/bin/bx-mysql -a options -o json",
@@ -90,27 +74,11 @@ class ActionModifyer
 	 * @param string $actionId - action idenifyer
 	 * @param array $actionParams - action parameters
 	 * @param string $hostname - server hostname
+	 * @param array $userParamsValues
 	 * @return array - modifyed action params
 	 * @throws NeedMoreUserInfoException
 	 */
-	
-	/**
-	* <p>Проверяет, существует ли дополнительные ядра сайтов. Если существуют, добавляет к параметрам <code>CHECK_EXTRA_DB_USER_ASK" = "Y"</code>. Метод статический.</p>
-	*
-	*
-	* @param string $actionId  ID задания <i>BitrixVM</i>.
-	*
-	* @param array $actionParams  Массив параметров задания.
-	*
-	* @param string $hostname  Имя хоста.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/scale/actionmodifyer/checkextradbexist.php
-	* @author Bitrix
-	*/
-	public static function checkExtraDbExist($actionId, $actionParams, $hostname)
+	public static function checkExtraDbExist($actionId, $actionParams, $hostname, $userParamsValues)
 	{
 		if($actionId == "MYSQL_ADD_SLAVE" || $actionId == "MYSQL_CHANGE_MASTER")
 			$hostname = ServersData::getDbMasterHostname();
@@ -120,6 +88,59 @@ class ActionModifyer
 			$actionParams["CHECK_EXTRA_DB_USER_ASK"] = "Y";
 			throw new NeedMoreUserInfoException("Need more user's info", $actionParams);
 		}
+
+		return $actionParams;
+	}
+
+	/**
+	 * SET_EMAIL_SETTINGS modifier
+	 * @param string $actionId
+	 * @param array $actionParams
+	 * @param string $hostname
+	 * @param array $userParamsValues
+	 * @return array mixed
+	 */
+	public static function emailSettingsModifier($actionId, $actionParams, $hostname, $userParamsValues)
+	{
+		if($actionId != 'SET_EMAIL_SETTINGS')
+			return $actionParams;
+
+		if($userParamsValues['USE_AUTH'] == 'Y')
+			$pattern = '/(--8<--AUTH_BEGIN----|----AUTH_END--8<--)/';
+		else
+			$pattern = '/--8<--AUTH_BEGIN----.*----AUTH_END--8<--/';
+
+		$actionParams['START_COMMAND_TEMPLATE'] = preg_replace($pattern, '', $actionParams['START_COMMAND_TEMPLATE']);
+		return $actionParams;
+	}
+
+	/**
+	 * SITE_CREATE_LINK modifier
+	 * @param string $actionId
+	 * @param array $actionParams
+	 * @param string $hostname
+	 * @param array $userParamsValues
+	 * @return array mixed
+	 */
+	public static function siteCreateLinkModifier($actionId, $actionParams, $hostname, $userParamsValues)
+	{
+		if($actionId != 'SITE_CREATE_LINK')
+			return $actionParams;
+
+		if(empty($userParamsValues['KERNEL_SITE']))
+			return $actionParams;
+
+		$siteId = $userParamsValues['KERNEL_SITE'];
+		$sites = SitesData::getList();
+
+		if(empty($sites[$siteId]))
+			return $actionParams;
+
+		$actionParams['START_COMMAND_TEMPLATE'] =  str_replace(
+			'##MODIFYER:KERNEL_ROOT##',
+			$sites[$siteId]['DocumentRoot'],
+			$actionParams['START_COMMAND_TEMPLATE']
+		);
 
 		return $actionParams;
 	}

@@ -27,11 +27,11 @@ class Manager
 	}
 
 	/**
-	 * @param Internals\CollectableEntity $entity
+	 * @param Internals\Entity $entity
 	 * @param int $mode
 	 * @return array
 	 */
-	public static function getListWithRestrictions(Internals\CollectableEntity $entity, $mode = Restrictions\Manager::MODE_CLIENT)
+	public static function getListWithRestrictions(Internals\Entity $entity, $mode = Restrictions\Manager::MODE_CLIENT)
 	{
 		$result = array();
 
@@ -62,11 +62,11 @@ class Manager
 	}
 
 	/**
-	 * @param Internals\CollectableEntity $entity
+	 * @param Internals\Entity $entity
 	 * @param int $mode
 	 * @return int
 	 */
-	public static function getAvailableCompanyIdByEntity(Internals\CollectableEntity $entity, $mode = Restrictions\Manager::MODE_CLIENT)
+	public static function getAvailableCompanyIdByEntity(Internals\Entity $entity, $mode = Restrictions\Manager::MODE_CLIENT)
 	{
 		$dbRes = self::getList(array(
 			'select' => array('ID'),
@@ -99,5 +99,49 @@ class Manager
 	public static function getLocationConnectorEntityName()
 	{
 		return	'Bitrix\Sale\Internals\CompanyLocation';
+	}
+
+	/**
+	 * @param $id
+	 *
+	 * @return array
+	 */
+	public static function getUserCompanyList($id)
+	{
+		static $list = array();
+
+		if (empty($list[$id]))
+		{
+			$list[$id] = array();
+
+			$groups = \CUser::GetUserGroup($id);
+
+			$filterCompany = array(
+				'select' => array(
+					'ID',
+				),
+				'filter' => array(
+					'=GROUP.GROUP_ID' => $groups
+				),
+				'runtime' => array(
+					new Main\Entity\ReferenceField(
+						'GROUP',
+						'\Bitrix\Sale\Internals\CompanyGroupTable',
+						array(
+							'=this.ID' => 'ref.COMPANY_ID',
+						)
+					)
+				),
+				'order'  => array('ID'),
+			);
+
+			$resCompany = Internals\CompanyTable::getList($filterCompany);
+			while($companyData = $resCompany->fetch())
+			{
+				$list[$id][] = $companyData['ID'];
+			}
+		}
+
+		return $list[$id];
 	}
 }

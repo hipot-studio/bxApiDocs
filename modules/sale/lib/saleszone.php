@@ -57,28 +57,13 @@ class SalesZone
 	 * @param string $siteId
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод проверяет, входит ли идентификатор страны <i>countryId</i> в перечень идентификаторов стран из зоны обслуживания магазина. Метод статический.</p>
-	*
-	*
-	* @param integer $countryId  Идентификатор страны.
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/saleszone/checkcountryid.php
-	* @author Bitrix
-	*/
 	public static function checkCountryId($countryId, $siteId)
 	{
-		if(!strlen($siteId))
+		if($siteId == '')
 			return false;
 
 		$cIds = static::getCountriesIds($siteId);
-		return in_array($countryId, $cIds) || in_array("", $cIds);
+		return !$cIds || in_array($countryId, $cIds) || in_array("", $cIds);
 	}
 
 	/**
@@ -87,28 +72,13 @@ class SalesZone
 	 * @param string $siteId
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод проверяет, входит ли идентификатор региона <i>regionId</i> в перечень идентификаторов регионов из зоны обслуживания магазина. Метод статический.</p>
-	*
-	*
-	* @param integer $regionId  Идентификатор региона.
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/saleszone/checkregionid.php
-	* @author Bitrix
-	*/
 	public static function checkRegionId($regionId, $siteId)
 	{
-		if(!strlen($siteId))
+		if($siteId == '')
 			return false;
 
 		$rIds = static::getRegionsIds($siteId);
-		return in_array($regionId, $rIds) || in_array("", $rIds);
+		return !$rIds || in_array($regionId, $rIds) || in_array("", $rIds);
 	}
 
 	/**
@@ -117,28 +87,13 @@ class SalesZone
 	 * @param string $siteId
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод проверяет, входит ли идентификатор города <i>cityId</i> в перечень идентификаторов городов из зоны обслуживания магазина. Метод статический.</p>
-	*
-	*
-	* @param integer $cityId  Идентификатор города.
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/saleszone/checkcityid.php
-	* @author Bitrix
-	*/
 	public static function checkCityId($cityId, $siteId)
 	{
-		if(!strlen($siteId))
+		if($siteId == '')
 			return false;
 
 		$cIds = static::getCitiesIds($siteId);
-		return in_array($cityId, $cIds) || in_array("", $cIds);
+		return !$cIds || in_array($cityId, $cIds) || in_array("", $cIds);
 	}
 
 	/**
@@ -147,26 +102,11 @@ class SalesZone
 	 * @param string $siteId
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод проверяет, входит ли идентификатор местоположения <i>locationId</i> в зону обслуживания магазина. Метод статический.</p>
-	*
-	*
-	* @param integer $locationId  Идентификатор местоположения.
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/saleszone/checklocationid.php
-	* @author Bitrix
-	*/
 	public static function checkLocationId($locationId, $siteId)
 	{
 		if(\CSaleLocation::isLocationProMigrated())
 		{
-			if(!intval($locationId) || !strlen($siteId))
+			if(!intval($locationId) || !mb_strlen($siteId))
 				return false;
 
 			return Location\SiteLocationTable::checkConnectionExists($siteId, $locationId);
@@ -374,24 +314,13 @@ class SalesZone
 	}
 
 	/**
-	 * A very important function. Here we decide what locations we need to take, 
+	 * A very important function. Here we decide what locations we need to take,
 	 * making a descision based on $_REQUEST from sales zone selector.
-	 * 
+	 *
 	 * Then we normalize the selection and store to database.
-	 * 
+	 *
 	 * Also this function is used in data migrator.
 	 */
-	
-	/**
-	* <p>Метод используется для миграции от старых местоположений к новым. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/saleszone/saveselectedtypes.php
-	* @author Bitrix
-	*/
 	public static function saveSelectedTypes($typeList, $siteId)
 	{
 		$types = \CSaleLocation::getTypes();
@@ -419,9 +348,9 @@ class SalesZone
 
 		// make up list of ids
 		$res = Location\LocationTable::getList(array('select' => array(
-			'ID', 
-			'COUNTRY_ID', 
-			'REGION_ID', 
+			'ID',
+			'COUNTRY_ID',
+			'REGION_ID',
 			'CITY_ID',
 			'TYPE_ID',
 			//'LNAME' => 'NAME.NAME'
@@ -458,7 +387,7 @@ class SalesZone
 						$allRegions // we take all regions (of selected countries)
 						&& // and
 						$countryTaken // country is selected already
-					) 
+					)
 					|| // or ..
 					isset($typeList['REGION'][$regionId]) // we manually selected this region
 					|| // or ..
@@ -476,7 +405,7 @@ class SalesZone
 						$allCities // we take all cities (of selected regions of selected countries)
 						&& // and
 						$regionTaken // region is selected already
-					) 
+					)
 					|| // or..
 					isset($typeList['REGION'][$regionId]) // we manually selected this city
 					|| // or ..
@@ -502,7 +431,7 @@ class SalesZone
 		$locations[Location\Connector::DB_LOCATION_FLAG] = $class::normalizeLocationList($locations[Location\Connector::DB_LOCATION_FLAG]);
 
 		// store to database
-		$class::resetMultipleForOwner(strlen($siteId) ? $siteId : $class::ALL_SITES, $locations);
+		$class::resetMultipleForOwner($siteId <> ''? $siteId : $class::ALL_SITES, $locations);
 	}
 
 	/**
@@ -511,21 +440,6 @@ class SalesZone
 	 * @param string $siteId
 	 * @return array
 	 */
-	
-	/**
-	* <p>Возвращает фильтр для использования в запросах, подобных <a href="http://dev.1c-bitrix.ru/user_help/store/sale/components_2/order/sale_ajax_locations.php">AJAX-местоположениям</a>. Метод статический.</p>
-	*
-	*
-	* @param string $object  Объект (город/регион/страна).
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/saleszone/makesearchfilter.php
-	* @author Bitrix
-	*/
 	public static function makeSearchFilter($object, $siteId)
 	{
 		$result = array();
@@ -554,18 +468,18 @@ class SalesZone
 
 		$regions = array();
 		$regionsList = static::getAllRegions($lang);
-		$getCountryNull = in_array("NULL", $countriesIds) ? true : false;
+		$getCountryNull = in_array("NULL", $countriesIds);
 		$filter = in_array("", $countriesIds) ? array() : array(($getCountryNull ? "+" : "")."COUNTRY_ID" => $countriesIds);
 
 		$dbLocationsList = \CSaleLocation::GetList(
-			array("SORT"=>"ASC", "REGION_NAME_LANG"=>"ASC"),
+			array(),
 			$filter,
 			array("REGION_ID", "COUNTRY_ID")
 		);
 
 		while($arRegion = $dbLocationsList->GetNext())
 		{
-			if(strlen($arRegion["REGION_ID"]) > 0 && $arRegion["REGION_ID"] != "0")
+			if($arRegion["REGION_ID"] <> '' && $arRegion["REGION_ID"] != "0")
 				$regions[$arRegion["REGION_ID"]] = $regionsList[$arRegion["REGION_ID"]];
 		}
 
@@ -582,10 +496,10 @@ class SalesZone
 	{
 		$cities = array();
 		$citiesList = static::getAllCities($lang);
-		$getRegionNull = in_array("NULL", $regionsIds) ? true : false;
-		$getRegionAll = in_array("", $regionsIds) ? true : false;
-		$getCountryNull = in_array("NULL", $countriesIds) ? true : false;
-		$getCountryAll = in_array("", $countriesIds) ? true : false;
+		$getRegionNull = in_array("NULL", $regionsIds);
+		$getRegionAll = in_array("", $regionsIds);
+		$getCountryNull = in_array("NULL", $countriesIds);
+		$getCountryAll = in_array("", $countriesIds);
 
 		$filter = in_array("", $regionsIds) ? array() : array(($getRegionNull ? "+" : "")."REGION_ID" => $regionsIds);
 
@@ -595,13 +509,13 @@ class SalesZone
 				$filter[($getCountryNull ? "+" : "")."COUNTRY_ID"] = $countryId;
 
 			$dbLocationsList = \CSaleLocation::GetList(
-				array("SORT"=>"ASC", "CITY_NAME_LANG"=>"ASC"),
+				array(),
 				$filter,
 				array("CITY_ID")
 			);
 
 			while($arCity = $dbLocationsList->GetNext())
-				if(strlen($arCity["CITY_ID"]) > 0)
+				if($arCity["CITY_ID"] <> '')
 					$cities[$arCity["CITY_ID"]] =  $citiesList[$arCity["CITY_ID"]];
 		}
 

@@ -16,6 +16,7 @@ class CCrmVCard
 	public function ReadCard($path = false, $data = null)
 	{
 		// read vCard
+		$cardData = '';
 		if ($path != false && is_null($data))
 		{
 			$fp = fopen ($path, 'r');
@@ -23,21 +24,23 @@ class CCrmVCard
 			fclose ($fp);
 		}
 		else if (!is_null($data))
+		{
 			$cardData = $data;
+		}
 		else
+		{
 			$this->lastError = GetMessage('CRM_VCARD_ERR_READ');
-
-
+		}
 
 		// split read data
 		$arCard = preg_split('/(?:\r\n|\r|\n)/', $cardData);
-
+		$arCardData = array();
 		$i = 0;
 		foreach($arCard as $value)
 		{
 			if (!empty($value))
 			{
-				if (!strstr($value, ':'))
+				if (!mb_strstr($value, ':'))
 				{
 					if ($i > 0)
 						$arCardData[($i - 1)].= $value;
@@ -60,7 +63,7 @@ class CCrmVCard
 			// check begin vCard
 			if ($this->GetParam($arCardData[0], 'TYPE') != 'BEGIN' ||
 				$this->GetParam($arCardData[0], 'PARAM') ||
-				strtoupper($this->GetParam($arCardData[0], 'VALUE')) != 'VCARD')
+				mb_strtoupper($this->GetParam($arCardData[0], 'VALUE')) != 'VCARD')
 			{
 				$this->lastError = GetMessage('CRM_VCARD_ERR_FORMAT');
 			}
@@ -78,13 +81,13 @@ class CCrmVCard
 			// check end vCard
 			if ($this->GetParam($arCardData[($cardDataCnt-1)], 'TYPE') != 'END' ||
 				$this->GetParam($arCardData[($cardDataCnt-1)], 'PARAM') ||
-				strtoupper($this->GetParam($arCardData[($cardDataCnt-1)], 'VALUE')) != 'VCARD')
+				mb_strtoupper($this->GetParam($arCardData[($cardDataCnt - 1)], 'VALUE')) != 'VCARD')
 			{
 				$this->lastError = GetMessage('CRM_VCARD_ERR_FORMAT');
 			}
 		}
 
-		if (strlen($this->lastError) == 0)
+		if ($this->lastError == '')
 		{
 			$n = 0;
 			foreach($arCardData as $value)
@@ -95,35 +98,6 @@ class CCrmVCard
 					$this->arCard['NAME'] = isset($arName[1])? $arName[1]: '';
 					$this->arCard['LAST_NAME'] = isset($arName[0])? $arName[0]: '';
 					$this->arCard['SECOND_NAME'] = isset($arName[2])? $arName[2]: '';
-				}
-				if ($this->GetParam($value, 'TYPE') == 'PHOTO')
-				{
-					$photo = $this->GetParam($value, 'VALUE');
-
-					$tmpFile = $_SERVER['DOCUMENT_ROOT'].'/upload/crm/vCardImage.tmp';
-					$fh = fopen($tmpFile, 'w') or $this->lastError = GetMessage('CRM_VCARD_ERR_TMP_FILE');
-					fwrite($fh, base64_decode($photo));
-					fclose($fh);
-
-					$arPhoto = @CFile::GetImageSize($tmpFile);
-
-					if (is_array($arPhoto))
-					{
-						if ($arPhoto['mime'] == 'image/jpeg')
-							$photoName = md5($photo).'.jpg';
-						if ($arPhoto['mime'] == 'image/png')
-							$photoName = md5($photo).'.png';
-						if ($arPhoto['mime'] == 'image/gif')
-							$photoName = md5($photo).'.gif';
-
-						$this->arCard['PHOTO'] = array(
-							'name'		=> $photoName,
-							'type'		=> $arPhoto['mime'],
-							'content'	=> base64_decode($photo),
-							'MODULE_ID'	=> 'crm'
-						);
-					}
-					unlink($tmpFile);
 				}
 				if ($this->GetParam($value, 'TYPE') == 'ADR')
 				{
@@ -203,35 +177,47 @@ class CCrmVCard
 	protected function GetParam($value, $type = '')
 	{
 
-		if (strstr($value, ':'))
+		if(mb_strstr($value, ':'))
 		{
-			if ($type == 'TYPE' ||
+			if($type == 'TYPE' ||
 				$type == 'PARAM' ||
 				$type == 'MIXED')
 			{
 
-				$value = strtoupper(substr($value, 0, strpos($value, ':')));
-				if ($type == 'TYPE')
-					return (strstr($value, ';'))? substr($value, 0, strpos($value, ';')): trim($value);
-				else if ($type == 'PARAM')
-					return (strstr($value, ';'))? str_replace(',', ';', str_replace('TYPE=', '', substr(strstr($value, ';'), 1))): '';
+				$value = mb_strtoupper(mb_substr($value, 0, mb_strpos($value, ':')));
+				if($type == 'TYPE')
+				{
+					return (mb_strstr($value, ';'))? mb_substr($value, 0, mb_strpos($value, ';')) : trim($value);
+				}
 				else
-					return str_replace(',', ';', str_replace('TYPE=', '', $value));echo $type.'-'.$value;
+				{
+					if($type == 'PARAM')
+					{
+						return (mb_strstr($value, ';'))? str_replace(',', ';', str_replace('TYPE=', '', mb_substr(mb_strstr($value, ';'), 1))) : '';
+					}
+					else
+					{
+						return str_replace(',', ';', str_replace('TYPE=', '', $value));
+					}
+				}
+				echo $type.'-'.$value;
 			}
 			else
 			{
-				$arParam = explode(';',$this->GetParam($value, 'PARAM'));
+				$arParam = explode(';', $this->GetParam($value, 'PARAM'));
 				foreach($arParam as $paramValue)
 				{
-					$arParamType = (strstr($paramValue, '='))? substr($paramValue, 0, strpos($paramValue, '=')): trim($paramValue);
-					if ($arParamType == 'CHARSET')
+					$arParamType = (mb_strstr($paramValue, '='))? mb_substr($paramValue, 0, mb_strpos($paramValue, '=')) : trim($paramValue);
+					if($arParamType == 'CHARSET')
 					{
-						$arParamValue = (trim(substr(strstr($paramValue, '='), 1)));
-						if(strtoupper(LANG_CHARSET) != $arParamValue)
+						$arParamValue = (trim(mb_substr(mb_strstr($paramValue, '='), 1)));
+						if(mb_strtoupper(LANG_CHARSET) != $arParamValue)
+						{
 							$value = $GLOBALS['APPLICATION']->ConvertCharset($value, $arParamValue, LANG_CHARSET);
+						}
 					}
 				}
-				return (trim(substr(strstr($value, ':'), 1)));
+				return (trim(mb_substr(mb_strstr($value, ':'), 1)));
 			}
 		}
 		else

@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CFormValidatorFileSize
 {
-	public static function GetDescription()
+	function GetDescription()
 	{
 		return array(
 			"NAME" => "file_size", // unique validator string ID
@@ -16,7 +16,7 @@ class CFormValidatorFileSize
 		);
 	}
 
-	public static function GetSettings()
+	function GetSettings()
 	{
 		return array(
 			"SIZE_FROM" => array(
@@ -34,7 +34,7 @@ class CFormValidatorFileSize
 		);
 	}
 
-	public static function ToDB($arParams)
+	function ToDB($arParams)
 	{
 		$arParams["SIZE_FROM"] = intval($arParams["SIZE_FROM"]);
 		$arParams["SIZE_TO"] = intval($arParams["SIZE_TO"]);
@@ -49,12 +49,12 @@ class CFormValidatorFileSize
 		return serialize($arParams);
 	}
 
-	public static function FromDB($strParams)
+	function FromDB($strParams)
 	{
 		return unserialize($strParams);
 	}
 
-	public static function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
+	function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
 	{
 		global $APPLICATION;
 

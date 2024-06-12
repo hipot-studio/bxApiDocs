@@ -22,7 +22,20 @@ use Bitrix\Main\Entity\DataManager;
  * </ul>
  *
  * @package Bitrix\Sale\Discount\Gift
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_RelatedData_Query query()
+ * @method static EO_RelatedData_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_RelatedData_Result getById($id)
+ * @method static EO_RelatedData_Result getList(array $parameters = [])
+ * @method static EO_RelatedData_Entity getEntity()
+ * @method static \Bitrix\Sale\Discount\Gift\EO_RelatedData createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Discount\Gift\EO_RelatedData_Collection createCollection()
+ * @method static \Bitrix\Sale\Discount\Gift\EO_RelatedData wakeUpObject($row)
+ * @method static \Bitrix\Sale\Discount\Gift\EO_RelatedData_Collection wakeUpCollection($rows)
+ */
 
 final class RelatedDataTable extends DataManager
 {
@@ -175,7 +188,7 @@ final class RelatedDataTable extends DataManager
 			(empty($discount['ACTIONS_LIST']) || !is_array($discount['ACTIONS_LIST']))
 			&& checkSerializedData($discount['ACTIONS']))
 		{
-			$discount['ACTIONS_LIST'] = unserialize($discount['ACTIONS']);
+			$discount['ACTIONS_LIST'] = unserialize($discount['ACTIONS'], ['allowed_classes' => false]);
 		}
 
 		if(!isset($discount['ACTIONS_LIST']['CHILDREN']) && is_array($discount['ACTIONS_LIST']['CHILDREN']))
@@ -222,7 +235,7 @@ final class RelatedDataTable extends DataManager
 			(empty($discount['CONDITIONS_LIST']) || !is_array($discount['CONDITIONS_LIST']))
 			&& checkSerializedData($discount['CONDITIONS']))
 		{
-			$discount['CONDITIONS_LIST'] = unserialize($discount['CONDITIONS']);
+			$discount['CONDITIONS_LIST'] = unserialize($discount['CONDITIONS'], ['allowed_classes' => false]);
 		}
 
 		if(!isset($discount['CONDITIONS_LIST']['CLASS_ID']) || $discount['CONDITIONS_LIST']['CLASS_ID'] !== 'CondGroup')
@@ -291,7 +304,7 @@ final class RelatedDataTable extends DataManager
 				list($prefix, $values) = $sqlHelper->prepareInsert($tableName, $item);
 
 				$query .= ($query? ', ' : ' ') . '(' . $values . ')';
-				if(strlen($query) > self::MAX_LENGTH_BATCH_MYSQL_QUERY)
+				if(mb_strlen($query) > self::MAX_LENGTH_BATCH_MYSQL_QUERY)
 				{
 					$connection->queryExecute("INSERT INTO {$tableName} ({$prefix}) VALUES {$query}");
 					$query = '';

@@ -9,147 +9,10 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
-
-/**
- * <b>CAgent</b> - класс для работы с функциями-агентами.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/main/reference/cagent/index.php
- * @author Bitrix
- */
 class CAllAgent
 {
-	
-	/**
-	* <p>Метод регистрирует новую функцию-агента. Нестатический метод.</p> <p> </p>
-	*
-	*
-	* @param string $name  PHP строка для запуска функции-агента.
-	*
-	* @param string $module = "" Идентификатор модуля. Необходим для подключения файлов
-	* модуля.<br>Необязательный. По умолчанию пустой.
-	*
-	* @param string $period = "N" <p>Если значение - "Y", то очередная дата запуска агента (<i>next_exec</i>)
-	* будет рассчитываться как:</p> <pre bgcolor="#323232" style="padding:5px;"><i>next_exec</i> = <i>next_exec</i> + <i>interval</i></pre>
-	* 	Т.е. при очередном запуске, если прошло уже больше времени чем
-	* указано в параметре <i>interval</i>, агент сначала будет запускаться
-	* ровно столько раз сколько он должен был запуститься (т.е. столько
-	* раз сколько он "пропустил"), а затем, когда <i>next_exec</i> достигнет либо
-	* превысит текущую дату, он будет в дальнейшем запускаться с
-	* периодичностью указанной в параметре <i>interval</i>. Как правило,
-	* подобное используется в агентах которые должны гарантированно
-	* запуститься определённое количество раз. 	 	<p>Если значение - "N", то
-	* очередная дата запуска агента (<i>next_exec</i>) будет рассчитываться
-	* как:</p> <pre bgcolor="#323232" style="padding:5px;"><i>next_exec</i> = дата последнего запуска + <i>interval</i></pre>Т.е.
-	* агент после первого запуска будет в дальнейшем запускаться с
-	* периодичностью указанной в параметре <i>interval</i>. 	Параметр
-	* необязательный, по умолчанию - "N".
-	*
-	* @param int $interval = 86400 Интервал (в секундах), с какой периодичностью запускать агента.<br>
-	* Необязательный. По умолчанию - 86400 (1 сутки).
-	*
-	* @param string $datecheck = "" Дата первой проверки "не пора ли запустить агент" в формате
-	* текущего языка.<br> Необязательный. По умолчанию - текущее время.
-	*
-	* @param string $active = "Y" Активность агента (Y|N).<br> Необязательный. По умолчанию - "Y"
-	* (активен).
-	*
-	* @param string $next_exec = "" Дата первого запуска агента в формате текущего
-	* языка.<br>Необязательный. По умолчанию - текущее время.
-	*
-	* @param int $sort = 100 Индекс сортировки позволяющий указать порядок запуска данного
-	* агента относительно других агентов для которых подошло время
-	* запуска.<br>Необязательный. По умолчанию - 100.
-	*
-	* @return mixed <p>При успешном выполнении, возвращает ID вновь добавленного
-	* агента, иначе - <i>false</i>. Если агент ничего не возвращает, он
-	* удаляется. Как правило он должен вернуть вызов самого себя.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // добавим агент модуля "Статистика"
-	* <b>CAgent::AddAgent</b>(
-	*     "CStatistic::CleanUpStatistics_2();", // имя функции
-	*     "statistic",                          // идентификатор модуля
-	*     "N",                                  // агент не критичен к кол-ву запусков
-	*     86400,                                // интервал запуска - 1 сутки
-	*     "07.04.2005 20:03:26",                // дата первой проверки на запуск
-	*     "Y",                                  // агент активен
-	*     "07.04.2005 20:03:26",                // дата первого запуска
-	*     30);
-	* ?&gt;
-	* &lt;?
-	* // добавим агент модуля "Техподдержка"
-	* <b>CAgent::AddAgent</b>(
-	*     "CTicket::AutoClose();",  // имя функции
-	*     "support",                // идентификатор модуля
-	*     "N",                      // агент не критичен к кол-ву запусков
-	*     86400,                    // интервал запуска - 1 сутки
-	*     "",                       // дата первой проверки - текущее
-	*     "Y",                      // агент активен
-	*     "",                       // дата первого запуска - текущее
-	*     30);
-	* ?&gt;
-	* &lt;?
-	* // добавим произвольный агент не принадлежащий ни одному модулю
-	* <b>CAgent::AddAgent</b>("My_Agent_Function();");
-	* ?&gt;
-	* 
-	* &lt;?
-	* // файл /bitrix/php_interface/init.php
-	* 
-	* function My_Agent_Function()
-	* {
-	*    // выполняем какие-либо действия
-	*    return "My_Agent_Function();";
-	* }
-	* ?&gt;
-	* &lt;?
-	* // добавим произвольный агент принадлежащий модулю
-	* // с идентификатором my_module
-	* 
-	* <b>CAgent::AddAgent</b>(
-	*    "CMyModule::Agent007(1)", 
-	*    "my_module", 
-	*    "Y", 
-	*     86400);
-	* ?&gt;
-	* 
-	* &lt;?
-	* // данный агент будет запущен ровно 7 раз с периодичностью раз в сутки, 
-	* // после чего будет удален из таблицы агентов.
-	* 
-	* Class CMyModule
-	* {
-	*    function Agent007($cnt=1)
-	*    {
-	*       echo "Hello!";
-	*       if($cnt&gt;=7)
-	*          return "";
-	*       return "CMyModule::Agent007(".($cnt+1).")";
-	*    }
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;LESSON_ID=3436" >Агенты</a>
-	* </li> <li><a href="http://dev.1c-bitrix.ru/api_help/main/reference/cagent/removeagent.php">CAgent::RemoveAgent</a></li>
-	* <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cagent/removemoduleagents.php">CAgent::RemoveModuleAgents</a></li>
-	* <li><a href="https://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;LESSON_ID=2823" >Структура
-	* файлов</a></li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/main/reference/cagent/addagent.php
-	* @author Bitrix
-	*/
+	protected const LOCK_TIME = 600;
+
 	public static function AddAgent(
 		$name, // PHP function name
 		$module = "", // module
@@ -168,7 +31,7 @@ class CAllAgent
 		$z = $DB->Query("
 			SELECT ID
 			FROM b_agent
-			WHERE NAME = '".$DB->ForSql($name, 2000)."'
+			WHERE NAME = '".$DB->ForSql($name)."'
 			AND USER_ID".($user_id? " = ".(int)$user_id: " IS NULL")
 		);
 		if (!($agent = $z->Fetch()))
@@ -194,16 +57,19 @@ class CAllAgent
 			if (!$existError)
 				return $agent['ID'];
 
-			$e = new CAdminException(array(
-				array(
-					"id" => "agent_exist",
-					"text" => ($user_id
-						? Loc::getMessage("MAIN_AGENT_ERROR_EXIST_FOR_USER", array('#AGENT#' => $name, '#USER_ID#' => $user_id))
-						: Loc::getMessage("MAIN_AGENT_ERROR_EXIST_EXT", array('#AGENT#' => $name))
+			if ($APPLICATION instanceof CMain)
+			{
+				$e = new CAdminException(array(
+					array(
+						"id" => "agent_exist",
+						"text" => ($user_id
+							? Loc::getMessage("MAIN_AGENT_ERROR_EXIST_FOR_USER", array('#AGENT#' => $name, '#USER_ID#' => $user_id))
+							: Loc::getMessage("MAIN_AGENT_ERROR_EXIST_EXT", array('#AGENT#' => $name))
+						)
 					)
-				)
-			));
-			$APPLICATION->throwException($e);
+				));
+				$APPLICATION->throwException($e);
+			}
 			return false;
 		}
 	}
@@ -231,44 +97,6 @@ class CAllAgent
 		return false;
 	}
 
-	
-	/**
-	* <p>Метод удаляет функцию-агента из таблицы зарегистрированных агентов. Нестатический метод.</p>
-	*
-	*
-	* @param string $name  Функция-агент.
-	*
-	* @param string $module = "" Идентификатор модуля. Необязательный. По умолчанию - главный
-	* модуль ("main").
-	*
-	* @param string $user_id = false Идентификатор пользователя. Необязательный.
-	*
-	* @return mixed 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* <b>CAgent::RemoveAgent</b>("CCatalog::PreGenerateXML(\"yandex\");", "catalog");
-	* if ($bNeedAgent)
-	* {
-	*     CAgent::AddAgent("CCatalog::PreGenerateXML(\"yandex\");", "catalog", "N", 24*60*60, "", "Y");
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="http://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;LESSON_ID=3436"
-	* >Агенты</a></li> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cagent/removemoduleagents.php">CAgent::RemoveModuleAgents</a></li>
-	* <li><a href="http://dev.1c-bitrix.ru/api_help/main/reference/cagent/delete.php">CAgent::Delete</a></li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/main/reference/cagent/removeagent.php
-	* @author Bitrix
-	*/
 	public static function RemoveAgent($name, $module = "", $user_id = false)
 	{
 		global $DB;
@@ -280,42 +108,13 @@ class CAllAgent
 
 		$strSql = "
 				DELETE FROM b_agent
-				WHERE NAME = '".$DB->ForSql($name, 2000)."'
+				WHERE NAME = '".$DB->ForSql($name)."'
 				".$module."
 				AND  USER_ID".($user_id ? " = ".(int)$user_id : " IS NULL");
 
-		$DB->Query($strSql, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+		$DB->Query($strSql);
 	}
 
-	
-	/**
-	* <p>Метод удаляет функцию-агент из таблицы зарегистрированных агентов. Нестатический метод.</p> <p> </p>
-	*
-	*
-	* @param mixed $intid  ID функции-агента.
-	*
-	* @return mixed 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (<b>CAgent::Delete</b>(34)) echo "Агент #34 успешно удален.";
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="http://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;LESSON_ID=3436"
-	* >Агенты</a></li> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cagent/removeagent.php">CAgent::RemoveAgent</a></li> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cagent/removemoduleagents.php">CAgent::RemoveModuleAgents</a></li>
-	* </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/main/reference/cagent/delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($id)
 	{
 		global $DB;
@@ -324,48 +123,19 @@ class CAllAgent
 		if ($id <= 0)
 			return false;
 
-		$DB->Query("DELETE FROM b_agent WHERE ID = ".$id, false, "FILE: ".__FILE__."<br>LINE: ");
+		$DB->Query("DELETE FROM b_agent WHERE ID = ".$id);
 
 		return true;
 	}
 
-	
-	/**
-	* <p>Метод удаляет все функции-агенты указанного модуля из таблицы зарегистрированных агентов. Нестатический метод.</p>
-	*
-	*
-	* @param string $module  Идентификатор модуля.
-	*
-	* @return mixed 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* <b>CAgent::RemoveModuleAgents</b>("statistic");
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="http://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;LESSON_ID=3436"
-	* >Агенты</a></li> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cagent/removeagent.php">CAgent::RemoveAgent</a></li> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cagent/delete.php">CAgent::Delete</a></li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/main/reference/cagent/removemoduleagents.php
-	* @author Bitrix
-	*/
 	public static function RemoveModuleAgents($module)
 	{
 		global $DB;
 
-		if (strlen($module) > 0)
+		if ($module <> '')
 		{
 			$strSql = "DELETE FROM b_agent WHERE MODULE_ID='".$DB->ForSql($module,255)."'";
-			$DB->Query($strSql, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+			$DB->Query($strSql);
 		}
 	}
 
@@ -390,7 +160,7 @@ class CAllAgent
 
 			$strUpdate = $DB->PrepareUpdate("b_agent", $arFields);
 			$strSql = "UPDATE b_agent SET ".$strUpdate." WHERE ID=".$ID;
-			$res = $DB->Query($strSql, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+			$res = $DB->Query($strSql);
 			return $res;
 		}
 
@@ -399,13 +169,12 @@ class CAllAgent
 
 	public static function GetById($ID)
 	{
-		return CAgent::GetList(Array(), Array("ID"=>IntVal($ID)));
+		return CAgent::GetList(Array(), Array("ID"=>intval($ID)));
 	}
 
 	public static function GetList($arOrder = Array("ID" => "DESC"), $arFilter = array())
 	{
 		global $DB;
-		$err_mess = "FILE: ".__FILE__."<br>LINE: ";
 
 		$arSqlSearch = array();
 		$arSqlOrder = array();
@@ -420,33 +189,33 @@ class CAllAgent
 			"LAST_EXEC" => "A.LAST_EXEC",
 			"AGENT_INTERVAL" => "A.AGENT_INTERVAL",
 			"NEXT_EXEC" => "A.NEXT_EXEC",
+			"DATE_CHECK" => "A.DATE_CHECK",
 			"SORT" => "A.SORT"
 		);
 
-		if(!is_array($arFilter))
-			$filter_keys = array();
-		else
-			$filter_keys = array_keys($arFilter);
-
-		for($i = 0, $n = count($filter_keys); $i < $n; $i++)
+		if (!is_array($arFilter))
 		{
-			$val = $arFilter[$filter_keys[$i]];
-			$key = strtoupper($filter_keys[$i]);
-			if(strlen($val)<=0 || ($key=="USER_ID" && $val!==false && $val!==null))
+			$arFilter = [];
+		}
+		foreach ($arFilter as $key => $val)
+		{
+			if ((string)$val == '')
+			{
 				continue;
+			}
 
-			switch($key)
+			switch(strtoupper($key))
 			{
 				case "ID":
 					$arSqlSearch[] = "A.ID=".(int)$val;
 					break;
 				case "ACTIVE":
-					$t_val = strtoupper($val);
+					$t_val = mb_strtoupper($val);
 					if($t_val == "Y" || $t_val == "N")
 						$arSqlSearch[] = "A.ACTIVE='".$t_val."'";
 					break;
 				case "IS_PERIOD":
-					$t_val = strtoupper($val);
+					$t_val = mb_strtoupper($val);
 					if($t_val=="Y" || $t_val=="N")
 						$arSqlSearch[] = "A.IS_PERIOD='".$t_val."'";
 					break;
@@ -460,7 +229,7 @@ class CAllAgent
 					$arSqlSearch[] = "A.MODULE_ID = '".$DB->ForSQL($val)."'";
 					break;
 				case "USER_ID":
-					$arSqlSearch[] = "A.USER_ID ".(IntVal($val)<=0?"IS NULL":"=".IntVal($val));
+					$arSqlSearch[] = "A.USER_ID ".(intval($val)<=0?"IS NULL":"=".intval($val));
 					break;
 				case "LAST_EXEC":
 					$arr = ParseDateTime($val, CLang::GetDateFormat());
@@ -483,28 +252,29 @@ class CAllAgent
 
 		foreach($arOrder as $by => $order)
 		{
-			$by = strtoupper($by);
-			$order = strtoupper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			if (isset($arOFields[$by]))
 			{
 				if ($order != "ASC")
-					$order = "DESC".($DB->type=="ORACLE" ? " NULLS LAST" : "");
-				else
-					$order = "ASC".($DB->type=="ORACLE" ? " NULLS FIRST" : "");
+				{
+					$order = "DESC";
+				}
 				$arSqlOrder[] = $arOFields[$by]." ".$order;
 			}
 		}
 
 		$strSql = "SELECT A.ID, A.MODULE_ID, A.USER_ID, B.LOGIN, B.NAME as USER_NAME, B.LAST_NAME, A.SORT, ".
-			"A.NAME, A.ACTIVE, ".
+			"A.NAME, A.ACTIVE, A.RUNNING, ".
 			$DB->DateToCharFunction("A.LAST_EXEC")." as LAST_EXEC, ".
 			$DB->DateToCharFunction("A.NEXT_EXEC")." as NEXT_EXEC, ".
-			"A.AGENT_INTERVAL, A.IS_PERIOD ".
+			$DB->DateToCharFunction("A.DATE_CHECK")." as DATE_CHECK, ".
+			"A.AGENT_INTERVAL, A.IS_PERIOD, A.RETRY_COUNT ".
 			"FROM b_agent A LEFT JOIN b_user B ON(A.USER_ID = B.ID)";
-		$strSql .= (count($arSqlSearch)>0) ? " WHERE ".implode(" AND ", $arSqlSearch) : "";
-		$strSql .= (count($arSqlOrder)>0) ? " ORDER BY ".implode(", ", $arSqlOrder) : "";
+		$strSql .= !empty($arSqlSearch) ? " WHERE ".implode(" AND ", $arSqlSearch) : "";
+		$strSql .= !empty($arSqlOrder) ? " ORDER BY ".implode(", ", $arSqlOrder) : "";
 
-		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$res = $DB->Query($strSql);
 
 		return $res;
 	}
@@ -515,14 +285,14 @@ class CAllAgent
 
 		$errMsg = array();
 
-		if(!$ign_name && (!is_set($arFields, "NAME") || strlen(trim($arFields["NAME"])) <= 2))
+		if(!$ign_name && (!is_set($arFields, "NAME") || mb_strlen(trim($arFields["NAME"])) <= 2))
 			$errMsg[] = array("id" => "NAME", "text" => Loc::getMessage("MAIN_AGENT_ERROR_NAME"));
 
 		if(
 			array_key_exists("NEXT_EXEC", $arFields)
 			&& (
 				$arFields["NEXT_EXEC"] == ""
-				|| !$DB->IsDate($arFields["NEXT_EXEC"], false, LANG, "FULL")
+				|| !$DB->IsDate($arFields["NEXT_EXEC"], false, false, "FULL")
 			)
 		)
 		{
@@ -532,7 +302,7 @@ class CAllAgent
 		if(
 			array_key_exists("DATE_CHECK", $arFields)
 			&& $arFields["DATE_CHECK"] <> ""
-			&& !$DB->IsDate($arFields["DATE_CHECK"], false, LANG, "FULL")
+			&& !$DB->IsDate($arFields["DATE_CHECK"], false, false, "FULL")
 		)
 		{
 			$errMsg[] = array("id" => "DATE_CHECK", "text" => Loc::getMessage("MAIN_AGENT_ERROR_DATE_CHECK"));
@@ -541,22 +311,34 @@ class CAllAgent
 		if(
 			array_key_exists("LAST_EXEC", $arFields)
 			&& $arFields["LAST_EXEC"] <> ""
-			&& !$DB->IsDate($arFields["LAST_EXEC"], false, LANG, "FULL")
+			&& !$DB->IsDate($arFields["LAST_EXEC"], false, false, "FULL")
 		)
 		{
 			$errMsg[] = array("id" => "LAST_EXEC", "text" => Loc::getMessage("MAIN_AGENT_ERROR_LAST_EXEC"));
 		}
 
-		if($arFields["MODULE_ID"] <> '')
-			if(!IsModuleInstalled($arFields["MODULE_ID"]))
-				$errMsg[] = array("id" => "MODULE_ID", "text" => Loc::getMessage("MAIN_AGENT_ERROR_MODULE"));
-
 		if(!empty($errMsg))
 		{
-			$e = new CAdminException($errMsg);
-			$APPLICATION->ThrowException($e);
+			if ($APPLICATION instanceof CMain)
+			{
+				$e = new CAdminException($errMsg);
+				$APPLICATION->ThrowException($e);
+			}
 			return false;
 		}
 		return true;
+	}
+
+	/**
+	 * Three states: no cron (null), on cron (true), on hit (false).
+	 * @return bool|null
+	 */
+	protected static function OnCron()
+	{
+		if (COption::GetOptionString('main', 'agents_use_crontab', 'N') == 'Y' || (defined('BX_CRONTAB_SUPPORT') && BX_CRONTAB_SUPPORT === true))
+		{
+			return (defined('BX_CRONTAB') && BX_CRONTAB === true);
+		}
+		return null;
 	}
 }

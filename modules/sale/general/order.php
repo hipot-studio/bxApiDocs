@@ -1,23 +1,14 @@
-<?
+<?php
+
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale;
+use Bitrix\Sale\Internals;
 use Bitrix\Sale\PriceMaths;
 
 Loc::loadMessages(__FILE__);
 
 $GLOBALS["SALE_ORDER"] = array();
 
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorder/index.php
- * @author Bitrix
- */
 class CAllSaleOrder
 {
 	/**
@@ -33,9 +24,14 @@ class CAllSaleOrder
 	 * @param $arWarnings
 	 * @return array|null
 	 */
-	static function DoCalculateOrder($siteId, $userId, $arShoppingCart, $personTypeId, $arOrderPropsValues,
+	public static function DoCalculateOrder($siteId, $userId, $arShoppingCart, $personTypeId, $arOrderPropsValues,
 		$deliveryId, $paySystemId, $arOptions, &$arErrors, &$arWarnings)
 	{
+		if(!is_array($arErrors))
+		{
+			$arErrors = array();
+		}
+
 		if(!is_array($arOptions))
 		{
 			$arOptions = array();
@@ -58,10 +54,15 @@ class CAllSaleOrder
 
 		$arOrder = static::makeOrderArray($siteId, $userId, $arShoppingCart, $arOptions);
 
+		// init defaults
+		$arOrder["TAX_PRICE"] ??= 0.0;
+		$arOrder["DELIVERY_PRICE"] ??= 0.0;
+		$arOrder["DISCOUNT_PRICE"] ??= 0.0;
+
 		foreach(GetModuleEvents("sale", "OnSaleCalculateOrderShoppingCart", true) as $arEvent)
 			ExecuteModuleEventEx($arEvent, array(&$arOrder));
 
-		CSalePersonType::DoProcessOrder($arOrder, $personTypeId, $arErrors);
+		CSalePersonType::DoProcessOrder($arOrder, $personTypeId, $arErrors, $arOptions);
 		if (count($arErrors) > 0)
 			return null;
 
@@ -171,7 +172,7 @@ class CAllSaleOrder
 	 *
 	 * @return array
 	 */
-	static function makeOrderArray($siteId, $userId = null, array $shoppingCart, array $options = array())
+	public static function makeOrderArray($siteId, $userId = null, array $shoppingCart = [], array $options = [])
 	{
 		// calculate weight for set parent
 		$parentWeight = array();
@@ -210,19 +211,24 @@ class CAllSaleOrder
 			"DELIVERY_ID" => false,
 		);
 
-		if(isset($options["DELIVERY_EXTRA_SERVICES"]))
+		if (isset($options["DELIVERY_EXTRA_SERVICES"]))
+		{
 			$arOrder["DELIVERY_EXTRA_SERVICES"] = $options["DELIVERY_EXTRA_SERVICES"];
+		}
 
 		$orderPrices = CSaleOrder::CalculateOrderPrices($shoppingCart);
-
-		$arOrder['ORDER_PRICE'] = $orderPrices['ORDER_PRICE'];
-		$arOrder['ORDER_WEIGHT'] = $orderPrices['ORDER_WEIGHT'];
-		$arOrder['VAT_RATE'] = $orderPrices['VAT_RATE'];
-		$arOrder['VAT_SUM'] = $orderPrices['VAT_SUM'];
-		$arOrder["USE_VAT"] = ($orderPrices['USE_VAT'] == "Y");
+		if (is_array($orderPrices))
+		{
+			$arOrder['ORDER_PRICE'] = $orderPrices['ORDER_PRICE'];
+			$arOrder['ORDER_WEIGHT'] = $orderPrices['ORDER_WEIGHT'];
+			$arOrder['VAT_RATE'] = $orderPrices['VAT_RATE'];
+			$arOrder['VAT_SUM'] = $orderPrices['VAT_SUM'];
+			$arOrder["USE_VAT"] = ($orderPrices['USE_VAT'] == "Y");
+		}
 
 		return $arOrder;
 	}
+
 	/**
 	 * calculate the cost according to the order basket
 	 * @param array $arBasketItems
@@ -248,21 +254,27 @@ class CAllSaleOrder
 			{
 				if (array_key_exists('CUSTOM_PRICE', $arItem) && $arItem['CUSTOM_PRICE'] == 'Y')
 				{
-					$arItem['DISCOUNT_PRICE'] = $arItem['DEFAULT_PRICE'] - $arItem['PRICE'];
+					$defaultPrice = (float)($arItem['DEFAULT_PRICE'] ?? 0.0);
+					$arItem['DISCOUNT_PRICE'] = $defaultPrice - $arItem['PRICE'];
 
 					if ($arItem['DISCOUNT_PRICE'] < 0)
+					{
 						$arItem['DISCOUNT_PRICE'] = 0;
+					}
 
-					if (doubleval($arItem['DEFAULT_PRICE']) > 0)
-						$arItem['DISCOUNT_PRICE_PERCENT'] = $arItem['DISCOUNT_PRICE'] * 100 / $arItem['DEFAULT_PRICE'];
+					if ($defaultPrice > 0)
+					{
+						$arItem['DISCOUNT_PRICE_PERCENT'] = $arItem['DISCOUNT_PRICE'] * 100 / $defaultPrice;
+					}
 					else
+					{
 						$arItem['DISCOUNT_PRICE_PERCENT'] = 0;
+					}
 
 					$arItem["DISCOUNT_PRICE_PERCENT_FORMATED"] = roundEx($arItem["DISCOUNT_PRICE_PERCENT"], SALE_VALUE_PRECISION)."%";
-
 				}
 
-				if (isset($arItem['CURRENCY']) && strlen($arItem['CURRENCY']) > 0 )
+				if (isset($arItem['CURRENCY']) && $arItem['CURRENCY'] <> '' )
 					$arItem["PRICE_FORMATED"] = SaleFormatCurrency($arItem["PRICE"], $arItem["CURRENCY"]);
 
 				$arResult['ORDER_PRICE'] += CSaleBasketHelper::getFinalPrice($arItem);
@@ -276,7 +288,11 @@ class CAllSaleOrder
 						$arResult['VAT_RATE'] = $arItem["VAT_RATE"];
 
 					$v = CSaleBasketHelper::getVat($arItem);
-					$arItem["VAT_VALUE"] = \Bitrix\Sale\PriceMaths::roundPrecision($v / $arItem["QUANTITY"]);
+
+					$arItem["VAT_VALUE"] = $arItem["QUANTITY"] > 0
+						? \Bitrix\Sale\PriceMaths::roundPrecision($v / $arItem["QUANTITY"])
+						: 0.0;
+
 					$arResult["VAT_SUM"] += $v;
 
 				}
@@ -308,7 +324,7 @@ class CAllSaleOrder
 			);
 			while($item = $dbOrderProps->fetch())
 			{
-				if($item['TYPE'] == 'LOCATION' && strlen($orderProps[$item['ID']]))
+				if($item['TYPE'] == 'LOCATION' && mb_strlen($orderProps[$item['ID']]))
 				{
 					$source = $orderProps[$item['ID']];
 					$replace = $direct ? CSaleLocation::getLocationCODEbyID($source) : CSaleLocation::getLocationIDbyCODE($source);
@@ -323,38 +339,6 @@ class CAllSaleOrder
 	*
 	*
 	*/
-	
-	/**
-	* <p>Метод выполняет сохранение данных заказа: данных по уменьшению/увеличению количества, штрих-кодов, свойств заказа и данных по налогам. Метод статический.</p>
-	*
-	*
-	* @param array &$arOrder  Массив данных по заказу (все параметры, атрибуты, свойства,
-	* корзина). Является ссылкой на исходные параметры.
-	*
-	* @param array $arAdditionalFields  Массив с дополнительными параметрами заказа. Это данные, которых
-	* либо нет в <b>arOrder</b>, либо их требуется заменить для изменения
-	* логики работы метода.
-	*
-	* @param int $orderId  Идентификатор заказа (если заказ уже был создан ранее). Если не
-	* задан, то метод выставляет: <pre class="syntax">"PAYED" = "N"; "CANCELED" = "N"; "STATUS_ID" =
-	* "N";</pre>
-	*
-	* @param array &$arErrors  Массив с текстами ошибок (общий массив на весь цикл заказа).
-	* Является ссылкой на исходные параметры.
-	*
-	* @param array $arCoupons  Массив скидочных купонов.
-	*
-	* @param int $arStoreBarcodeOrderFormData  Массив штрих-кодов.
-	*
-	* @param bool $bSaveBarcodes  Флаг (<i>true/false</i>) добавления новых штрих-кодов.
-	*
-	* @return int <p>Возвращается идентификатор заказа или <i>null</i> в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorder/dosaveorder.php
-	* @author Bitrix
-	*/
 	public static function DoSaveOrder(&$arOrder, $arAdditionalFields, $orderId, &$arErrors, $arCoupons = array(), $arStoreBarcodeOrderFormData = array(), $bSaveBarcodes = false)
 	{
 		global $APPLICATION;
@@ -362,7 +346,7 @@ class CAllSaleOrder
 		$orderId = (int)$orderId;
 		$isNew = ($orderId <= 0);
 
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
+		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
 		$arFields = array(
 			"ID" => $arOrder["ID"],
@@ -373,7 +357,7 @@ class CAllSaleOrder
 			"USER_ID" => $arOrder["USER_ID"],
 			"PAY_SYSTEM_ID" => $arOrder["PAY_SYSTEM_ID"],
 			"PRICE_DELIVERY" => $arOrder["DELIVERY_PRICE"],
-			"DELIVERY_ID" => (strlen($arOrder["DELIVERY_ID"]) > 0 ? $arOrder["DELIVERY_ID"] : false),
+			"DELIVERY_ID" => ($arOrder["DELIVERY_ID"] <> '' ? $arOrder["DELIVERY_ID"] : false),
 			"DISCOUNT_VALUE" => $arOrder["DISCOUNT_PRICE"],
 			"TAX_VALUE" => $arOrder["TAX_VALUE"],
 			"TRACKING_NUMBER" => $arOrder["TRACKING_NUMBER"]
@@ -398,7 +382,7 @@ class CAllSaleOrder
 		unset($arOrder['LOCATION_IN_CODES']);
 
 
-		if ($isOrderConverted == "Y")
+		if ($isOrderConverted != 'N')
 		{
 			$orderFields = array_merge($arOrder, $arFields, $arAdditionalFields);
 			if (isset($orderFields['CUSTOM_DISCOUNT_PRICE']) && $orderFields['CUSTOM_DISCOUNT_PRICE'] === true)
@@ -459,7 +443,7 @@ class CAllSaleOrder
 
 			CSaleBasket::DoSaveOrderBasket($orderId, $arOrder["SITE_ID"], $arOrder["USER_ID"], $arOrder["BASKET_ITEMS"], $arErrors, $arCoupons, $arStoreBarcodeOrderFormData, $bSaveBarcodes);
 
-			CSaleTax::DoSaveOrderTax($orderId, $arOrder["TAX_LIST"], $arErrors);
+			CSaleTax::DoSaveOrderTax($orderId, $arOrder["TAX_LIST"]);
 			CSaleOrderProps::DoSaveOrderProps($orderId, $arOrder["PERSON_TYPE_ID"], $arOrder["ORDER_PROP"], $arErrors);
 			Sale\DiscountCouponsManager::finalApply();
 			Sale\DiscountCouponsManager::saveApplied();
@@ -481,10 +465,10 @@ class CAllSaleOrder
 	 */
 	public static function CanUserViewOrder($ID, $arUserGroups = false, $userID = 0)
 	{
-		$ID = IntVal($ID);
-		$userID = IntVal($userID);
+		$ID = intval($ID);
+		$userID = intval($userID);
 
-		$permList = static::checkUserPermissionOrderList(array($ID), 'view', $arUserGroups, $userID);
+		$permList = self::checkUserPermissionOrderList(array($ID), 'view', $arUserGroups, $userID);
 		return (isset($permList[$ID]) && $permList[$ID] === true);
 	}
 
@@ -494,9 +478,9 @@ class CAllSaleOrder
 	 * @param bool $siteID
 	 * @return bool
 	 */
-	static function CanUserUpdateOrder($ID, $arUserGroups = false, $siteID = false)
+	public static function CanUserUpdateOrder($ID, $arUserGroups = false, $siteID = false)
 	{
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		static $cacheGroupAccess = array();
 		$userRights = CMain::GetUserRight("sale", $arUserGroups, "Y", "Y");
@@ -508,7 +492,7 @@ class CAllSaleOrder
 		{
 			if ($ID > 0)
 			{
-				$permList = static::checkUserPermissionOrderList(array($ID), 'update', $arUserGroups);
+				$permList = self::checkUserPermissionOrderList(array($ID), 'update', $arUserGroups);
 				return (isset($permList[$ID]) && $permList[$ID] === true);
 			}
 			else // order not created yet
@@ -534,7 +518,7 @@ class CAllSaleOrder
 						$cacheGroupAccess[$hashGroupAccess] = $num;
 					}
 
-					if (IntVal($num) > 0)
+					if (intval($num) > 0)
 						return True;
 				}
 			}
@@ -549,12 +533,12 @@ class CAllSaleOrder
 	 * @param int $userID
 	 * @return bool
 	 */
-	static function CanUserCancelOrder($ID, $arUserGroups = false, $userID = 0)
+	public static function CanUserCancelOrder($ID, $arUserGroups = false, $userID = 0)
 	{
-		$ID = IntVal($ID);
-		$userID = IntVal($userID);
+		$ID = intval($ID);
+		$userID = intval($userID);
 
-		$permList = static::checkUserPermissionOrderList(array($ID), 'cancel', $arUserGroups, $userID);
+		$permList = self::checkUserPermissionOrderList(array($ID), 'cancel', $arUserGroups, $userID);
 		return (isset($permList[$ID]) && $permList[$ID] === true);
 	}
 
@@ -566,10 +550,10 @@ class CAllSaleOrder
 	 */
 	public static function CanUserMarkOrder($ID, $arUserGroups = false, $userID = 0)
 	{
-		$ID = IntVal($ID);
-		$userID = IntVal($userID);
-		
-		$permList = static::checkUserPermissionOrderList(array($ID), 'mark', $arUserGroups, $userID);
+		$ID = intval($ID);
+		$userID = intval($userID);
+
+		$permList = self::checkUserPermissionOrderList(array($ID), 'mark', $arUserGroups, $userID);
 		return (isset($permList[$ID]) && $permList[$ID] === true);
 	}
 
@@ -581,7 +565,7 @@ class CAllSaleOrder
 	 */
 	public static function CanUserChangeOrderFlag($ID, $flag, $arUserGroups = false)
 	{
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$flag = trim($flag);
 
 		$userRights = CMain::GetUserRight("sale", $arUserGroups, "Y", "Y");
@@ -602,7 +586,7 @@ class CAllSaleOrder
 						array()
 					);
 
-				if (IntVal($num) > 0)
+				if (intval($num) > 0)
 				{
 					if ($flag == "P" || $flag == "PERM_PAYMENT")
 						$fieldName = "PERM_PAYMENT";
@@ -637,7 +621,7 @@ class CAllSaleOrder
 	 */
 	public static function CanUserChangeOrderStatus($ID, $statusID, $arUserGroups = false)
 	{
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$statusID = Trim($statusID);
 
 		$userRights = CMain::GetUserRight("sale", $arUserGroups, "Y", "Y");
@@ -658,7 +642,7 @@ class CAllSaleOrder
 						array()
 					);
 
-				if (IntVal($num) > 0)
+				if (intval($num) > 0)
 				{
 					$dbStatusPerms = CSaleStatus::GetPermissionsList(
 						array(),
@@ -698,35 +682,34 @@ class CAllSaleOrder
 	 * @param int $userID
 	 * @return bool
 	 */
-	static function CanUserDeleteOrder($ID, $arUserGroups = false, $userID = 0)
+	public static function CanUserDeleteOrder($ID, $arUserGroups = false, $userID = 0)
 	{
-		$ID = IntVal($ID);
-		$userID = IntVal($userID);
+		$ID = intval($ID);
+		$userID = intval($userID);
 
-		$permList = static::checkUserPermissionOrderList(array($ID), 'delete', $arUserGroups, $userID);
+		$permList = self::checkUserPermissionOrderList(array($ID), 'delete', $arUserGroups, $userID);
 		return (isset($permList[$ID]) && $permList[$ID] === true);
 	}
-
 
 	//*************** ADD, UPDATE, DELETE *********************/
 	public static function CheckFields($ACTION, &$arFields, $ID = 0)
 	{
 		global $USER_FIELD_MANAGER, $DB, $APPLICATION;
 
-		if (is_set($arFields, "SITE_ID") && strlen($arFields["SITE_ID"]) > 0)
+		if (is_set($arFields, "SITE_ID") && $arFields["SITE_ID"] <> '')
 			$arFields["LID"] = $arFields["SITE_ID"];
 
-		if ((is_set($arFields, "LID") || $ACTION=="ADD") && strlen($arFields["LID"])<=0)
+		if ((is_set($arFields, "LID") || $ACTION=="ADD") && $arFields["LID"] == '')
 		{
 			$APPLICATION->ThrowException(Loc::getMessage("SKGO_EMPTY_SITE"), "EMPTY_SITE_ID");
 			return false;
 		}
-		if ((is_set($arFields, "PERSON_TYPE_ID") || $ACTION=="ADD") && IntVal($arFields["PERSON_TYPE_ID"])<=0)
+		if ((is_set($arFields, "PERSON_TYPE_ID") || $ACTION=="ADD") && intval($arFields["PERSON_TYPE_ID"])<=0)
 		{
 			$APPLICATION->ThrowException(Loc::getMessage("SKGO_EMPTY_PERS_TYPE"), "EMPTY_PERSON_TYPE_ID");
 			return false;
 		}
-		if ((is_set($arFields, "USER_ID") || $ACTION=="ADD") && IntVal($arFields["USER_ID"])<=0)
+		if ((is_set($arFields, "USER_ID") || $ACTION=="ADD") && intval($arFields["USER_ID"])<=0)
 		{
 			$APPLICATION->ThrowException(Loc::getMessage("SKGO_EMPTY_USER_ID"), "EMPTY_USER_ID");
 			return false;
@@ -736,7 +719,7 @@ class CAllSaleOrder
 			$arFields["PAYED"]="N";
 		if (is_set($arFields, "CANCELED") && $arFields["CANCELED"]!="Y")
 			$arFields["CANCELED"]="N";
-		if (is_set($arFields, "STATUS_ID") && strlen($arFields["STATUS_ID"])<=0)
+		if (is_set($arFields, "STATUS_ID") && $arFields["STATUS_ID"] == '')
 			$arFields["STATUS_ID"]="N";
 		if (is_set($arFields, "ALLOW_DELIVERY") && $arFields["ALLOW_DELIVERY"]!="Y")
 			$arFields["ALLOW_DELIVERY"]="N";
@@ -775,7 +758,7 @@ class CAllSaleOrder
 			$arFields["~VERSION"] = "VERSION+0+1";
 		}
 
-		if ((is_set($arFields, "CURRENCY") || $ACTION=="ADD") && strlen($arFields["CURRENCY"])<=0)
+		if ((is_set($arFields, "CURRENCY") || $ACTION=="ADD") && $arFields["CURRENCY"] == '')
 		{
 			$APPLICATION->ThrowException(Loc::getMessage("SKGO_EMPTY_CURRENCY"), "EMPTY_CURRENCY");
 			return false;
@@ -819,16 +802,16 @@ class CAllSaleOrder
 			}
 		}
 
-		if (is_set($arFields, "PAY_SYSTEM_ID") && IntVal($arFields["PAY_SYSTEM_ID"]) > 0)
+		if (is_set($arFields, "PAY_SYSTEM_ID") && intval($arFields["PAY_SYSTEM_ID"]) > 0)
 		{
-			if (!($arPaySystem = CSalePaySystem::GetByID(IntVal($arFields["PAY_SYSTEM_ID"]))))
+			if (!($arPaySystem = CSalePaySystem::GetByID(intval($arFields["PAY_SYSTEM_ID"]))))
 			{
 				$APPLICATION->ThrowException(str_replace("#ID#", $arFields["PAY_SYSTEM_ID"], Loc::getMessage("SKGO_WRONG_PS")), "ERROR_NO_PAY_SYSTEM");
 				return false;
 			}
 		}
 
-		if (is_set($arFields, "DELIVERY_ID") && IntVal($arFields["DELIVERY_ID"]) > 0)
+		if (is_set($arFields, "DELIVERY_ID") && intval($arFields["DELIVERY_ID"]) > 0)
 		{
 			if (!($delivery = \Bitrix\Sale\Delivery\Services\Table::getById($arFields["DELIVERY_ID"])))
 			{
@@ -848,7 +831,7 @@ class CAllSaleOrder
 
 		if (is_set($arFields, "ACCOUNT_NUMBER") && $ACTION=="UPDATE")
 		{
-			if (strlen($arFields["ACCOUNT_NUMBER"]) <= 0)
+			if ($arFields["ACCOUNT_NUMBER"] == '')
 			{
 				$APPLICATION->ThrowException(Loc::getMessage("SKGO_EMPTY_ACCOUNT_NUMBER"), "EMPTY_ACCOUNT_NUMBER");
 				return false;
@@ -882,7 +865,7 @@ class CAllSaleOrder
 	{
 		global $DB, $USER_FIELD_MANAGER;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$bSuccess = True;
 
 		foreach(GetModuleEvents("sale", "OnBeforeOrderDelete", true) as $arEvent)
@@ -946,28 +929,6 @@ class CAllSaleOrder
 		return $bSuccess;
 	}
 
-	
-	/**
-	* <p>Метод удаляет заказ с кодом <i>ID</i>. При этом заказ отменяется, если не был отменён, снимается флаг оплаты с возвращением денег на счет покупателя, если он был оплачен, и снимается флаг разрешения доставки, если он был установлен. Нестатический метод.</p> <p>Перед удалением заказа вызываются обработчики события <b>OnBeforeOrderDelete</b> модуля магазина, в которых можно отменить удаление вернув значение <i>false</i>. Сразу после удаления вызываются обработчики события <b>OnOrderDelete</b> модуля магазина.</p> <p></p> <div class="note"> <b>Примечание</b>. Метод использует внутреннюю транзакцию. Если у вас используется <b>MySQL</b> и <b>InnoDB</b>, и  ранее была открыта транзакция, то ее необходимо закрыть до подключения метода.</div>
-	*
-	*
-	* @param mixed $intID  Код заказа.
-	*
-	* @return bool <p>Возвращается <i>true</i> при успешном удалении и <i>false</i> - в противном
-	* случае.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* CSaleOrder::Delete(23);
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorder/csaleorder__delete.f9925f50.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		global $APPLICATION;
@@ -975,13 +936,13 @@ class CAllSaleOrder
 		if ($ID <= 0)
 			return false;
 
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
+		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
 		$arOrder = CSaleOrder::GetByID($ID);
 		if ($arOrder)
 		{
 
-			if ($isOrderConverted == "Y")
+			if ($isOrderConverted != 'N')
 			{
 				$errorMessage = "";
 
@@ -1048,52 +1009,52 @@ class CAllSaleOrder
 	public static function GetFilterOperation($key)
 	{
 		$strNegative = "N";
-		if (substr($key, 0, 1)=="!")
+		if (mb_substr($key, 0, 1) == "!")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strNegative = "Y";
 		}
 
 		$strOrNull = "N";
-		if (substr($key, 0, 1)=="+")
+		if (mb_substr($key, 0, 1) == "+")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOrNull = "Y";
 		}
 
-		if (substr($key, 0, 2)==">=")
+		if (mb_substr($key, 0, 2) == ">=")
 		{
-			$key = substr($key, 2);
+			$key = mb_substr($key, 2);
 			$strOperation = ">=";
 		}
-		elseif (substr($key, 0, 1)==">")
+		elseif (mb_substr($key, 0, 1) == ">")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = ">";
 		}
-		elseif (substr($key, 0, 2)=="<=")
+		elseif (mb_substr($key, 0, 2) == "<=")
 		{
-			$key = substr($key, 2);
+			$key = mb_substr($key, 2);
 			$strOperation = "<=";
 		}
-		elseif (substr($key, 0, 1)=="<")
+		elseif (mb_substr($key, 0, 1) == "<")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "<";
 		}
-		elseif (substr($key, 0, 1)=="@")
+		elseif (mb_substr($key, 0, 1) == "@")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "IN";
 		}
-		elseif (substr($key, 0, 1)=="~")
+		elseif (mb_substr($key, 0, 1) == "~")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "LIKE";
 		}
-		elseif (substr($key, 0, 1)=="%")
+		elseif (mb_substr($key, 0, 1) == "%")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "QUERY";
 		}
 		else
@@ -1132,7 +1093,7 @@ class CAllSaleOrder
 					$strSqlGroupBy .= $arFields[$val]["FIELD"];
 
 					if (isset($arFields[$val]["FROM"])
-						&& strlen($arFields[$val]["FROM"]) > 0
+						&& $arFields[$val]["FROM"] <> ''
 						&& !in_array($arFields[$val]["FROM"], $arAlreadyJoined))
 					{
 						if ($strSqlFrom != '')
@@ -1154,7 +1115,7 @@ class CAllSaleOrder
 		}
 		else
 		{
-			if (isset($arSelectFields) && !is_array($arSelectFields) && is_string($arSelectFields) && strlen($arSelectFields)>0 && array_key_exists($arSelectFields, $arFields))
+			if (isset($arSelectFields) && !is_array($arSelectFields) && is_string($arSelectFields) && $arSelectFields <> '' && array_key_exists($arSelectFields, $arFields))
 				$arSelectFields = array($arSelectFields);
 
 			if (!isset($arSelectFields)
@@ -1192,10 +1153,10 @@ class CAllSaleOrder
 						$strSqlSelect .= $arFields[$arFieldsKeys[$i]]["FIELD"]." as ".$arFieldsKeys[$i];
 
 					if (isset($arFields[$arFieldsKeys[$i]]["FROM"])
-						&& strlen($arFields[$arFieldsKeys[$i]]["FROM"]) > 0
+						&& $arFields[$arFieldsKeys[$i]]["FROM"] <> ''
 						&& !in_array($arFields[$arFieldsKeys[$i]]["FROM"], $arAlreadyJoined))
 					{
-						if (strlen($strSqlFrom) > 0)
+						if ($strSqlFrom <> '')
 							$strSqlFrom .= " ";
 						$strSqlFrom .= $arFields[$arFieldsKeys[$i]]["FROM"];
 						$arAlreadyJoined[] = $arFields[$arFieldsKeys[$i]]["FROM"];
@@ -1210,7 +1171,7 @@ class CAllSaleOrder
 					$key = ToUpper($key);
 					if (array_key_exists($val, $arFields))
 					{
-						if (strlen($strSqlSelect) > 0)
+						if ($strSqlSelect <> '')
 							$strSqlSelect .= ", ";
 
 						if (in_array($key, $arGroupByFunct))
@@ -1238,10 +1199,10 @@ class CAllSaleOrder
 						}
 
 						if (isset($arFields[$val]["FROM"])
-							&& strlen($arFields[$val]["FROM"]) > 0
+							&& $arFields[$val]["FROM"] <> ''
 							&& !in_array($arFields[$val]["FROM"], $arAlreadyJoined))
 						{
-							if (strlen($strSqlFrom) > 0)
+							if ($strSqlFrom <> '')
 								$strSqlFrom .= " ";
 							$strSqlFrom .= $arFields[$val]["FROM"];
 							$arAlreadyJoined[] = $arFields[$val]["FROM"];
@@ -1250,9 +1211,9 @@ class CAllSaleOrder
 				}
 			}
 
-			if (strlen($strSqlGroupBy) > 0)
+			if ($strSqlGroupBy <> '')
 			{
-				if (strlen($strSqlSelect) > 0)
+				if ($strSqlSelect <> '')
 					$strSqlSelect .= ", ";
 				$strSqlSelect .= "COUNT(%%_DISTINCT_%% ".$arFields[$arFieldsKeys[0]]["FIELD"].") as CNT";
 			}
@@ -1305,7 +1266,12 @@ class CAllSaleOrder
 						{
 							if ($arFields[$key]["TYPE"] == "int")
 							{
-								array_walk($vals, create_function("&\$item", "\$item=IntVal(\$item);"));
+								array_walk(
+									$vals,
+									function (&$item) {
+										$item = (int)$item;
+									}
+								);
 								$vals = array_unique($vals);
 								$val = implode(",", $vals);
 
@@ -1316,7 +1282,12 @@ class CAllSaleOrder
 							}
 							elseif ($arFields[$key]["TYPE"] == "double")
 							{
-								array_walk($vals, create_function("&\$item", "\$item=DoubleVal(\$item);"));
+								array_walk(
+									$vals,
+									function (&$item) {
+										$item = (float)$item;
+									}
+								);
 								$vals = array_unique($vals);
 								$val = implode(",", $vals);
 
@@ -1327,7 +1298,12 @@ class CAllSaleOrder
 							}
 							elseif ($arFields[$key]["TYPE"] == "string" || $arFields[$key]["TYPE"] == "char")
 							{
-								array_walk($vals, create_function("&\$item", "\$item=\"'\".\$GLOBALS[\"DB\"]->ForSql(\$item).\"'\";"));
+								array_walk(
+									$vals,
+									function (&$item) {
+										$item = "'".$GLOBALS["DB"]->ForSql($item)."'";
+									}
+								);
 								$vals = array_unique($vals);
 								$val = implode(",", $vals);
 
@@ -1338,7 +1314,12 @@ class CAllSaleOrder
 							}
 							elseif ($arFields[$key]["TYPE"] == "datetime")
 							{
-								array_walk($vals, create_function("&\$item", "\$item=\"'\".\$GLOBALS[\"DB\"]->CharToDateFunction(\$GLOBALS[\"DB\"]->ForSql(\$item), \"FULL\").\"'\";"));
+								array_walk(
+									$vals,
+									function (&$item) {
+										$item = $GLOBALS["DB"]->CharToDateFunction($item, "FULL");
+									}
+								);
 								$vals = array_unique($vals);
 								$val = implode(",", $vals);
 
@@ -1349,7 +1330,12 @@ class CAllSaleOrder
 							}
 							elseif ($arFields[$key]["TYPE"] == "date")
 							{
-								array_walk($vals, create_function("&\$item", "\$item=\"'\".\$GLOBALS[\"DB\"]->CharToDateFunction(\$GLOBALS[\"DB\"]->ForSql(\$item), \"SHORT\").\"'\";"));
+								array_walk(
+									$vals,
+									function (&$item) {
+										$item = $GLOBALS["DB"]->CharToDateFunction($item, "SHORT");
+									}
+								);
 								$vals = array_unique($vals);
 								$val = implode(",", $vals);
 
@@ -1380,16 +1366,16 @@ class CAllSaleOrder
 							{
 								if ($arFields[$key]["TYPE"] == "int")
 								{
-									if ((IntVal($val) == 0) && (strpos($strOperation, "=") !== False))
+									if ((intval($val) == 0) && (mb_strpos($strOperation, "=") !== False))
 										$arSqlSearch_tmp[] = "(".$arFields[$key]["FIELD"]." IS ".(($strNegative == "Y") ? "NOT " : "")."NULL) ".(($strNegative == "Y") ? "AND" : "OR")." ".(($strNegative == "Y") ? "NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." 0)";
 									else
-										$arSqlSearch_tmp[] = (($strNegative == "Y") ? " ".$arFields[$key]["FIELD"]." IS NULL OR NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." ".IntVal($val)." )";
+										$arSqlSearch_tmp[] = (($strNegative == "Y") ? " ".$arFields[$key]["FIELD"]." IS NULL OR NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." ".intval($val)." )";
 								}
 								elseif ($arFields[$key]["TYPE"] == "double")
 								{
 									$val = str_replace(",", ".", $val);
 
-									if ((DoubleVal($val) == 0) && (strpos($strOperation, "=") !== False))
+									if ((DoubleVal($val) == 0) && (mb_strpos($strOperation, "=") !== False))
 										$arSqlSearch_tmp[] = "(".$arFields[$key]["FIELD"]." IS ".(($strNegative == "Y") ? "NOT " : "")."NULL) ".(($strNegative == "Y") ? "AND" : "OR")." ".(($strNegative == "Y") ? "NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." 0)";
 									else
 										$arSqlSearch_tmp[] = (($strNegative == "Y") ? " ".$arFields[$key]["FIELD"]." IS NULL OR NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." ".DoubleVal($val)." )";
@@ -1402,7 +1388,7 @@ class CAllSaleOrder
 									}
 									else
 									{
-										if ((strlen($val) == 0) && (strpos($strOperation, "=") !== False))
+										if (($val == '') && (mb_strpos($strOperation, "=") !== False))
 											$arSqlSearch_tmp[] = "(".$arFields[$key]["FIELD"]." IS ".(($strNegative == "Y") ? "NOT " : "")."NULL) ".(($strNegative == "Y") ? "AND NOT" : "OR")." (".$DB->Length($arFields[$key]["FIELD"])." <= 0) ".(($strNegative == "Y") ? "AND NOT" : "OR")." (".$arFields[$key]["FIELD"]." ".$strOperation." '".$DB->ForSql($val)."' )";
 										else
 											$arSqlSearch_tmp[] = (($strNegative == "Y") ? " ".$arFields[$key]["FIELD"]." IS NULL OR NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." '".$DB->ForSql($val)."' )";
@@ -1410,14 +1396,14 @@ class CAllSaleOrder
 								}
 								elseif ($arFields[$key]["TYPE"] == "datetime")
 								{
-									if (strlen($val) <= 0)
+									if ($val == '')
 										$arSqlSearch_tmp[] = ($strNegative=="Y"?"NOT":"")."(".$arFields[$key]["FIELD"]." IS NULL)";
 									else
 										$arSqlSearch_tmp[] = ($strNegative=="Y"?" ".$arFields[$key]["FIELD"]." IS NULL OR NOT ":"")."(".$arFields[$key]["FIELD"]." ".$strOperation." ".$DB->CharToDateFunction($DB->ForSql($val), "FULL").")";
 								}
 								elseif ($arFields[$key]["TYPE"] == "date")
 								{
-									if (strlen($val) <= 0)
+									if ($val == '')
 										$arSqlSearch_tmp[] = ($strNegative=="Y"?"NOT":"")."(".$arFields[$key]["FIELD"]." IS NULL)";
 									else
 										$arSqlSearch_tmp[] = ($strNegative=="Y"?" ".$arFields[$key]["FIELD"]." IS NULL OR NOT ":"")."(".$arFields[$key]["FIELD"]." ".$strOperation." ".$DB->CharToDateFunction($DB->ForSql($val), "SHORT").")";
@@ -1428,10 +1414,10 @@ class CAllSaleOrder
 				}
 
 				if (isset($arFields[$key]["FROM"])
-					&& strlen($arFields[$key]["FROM"]) > 0
+					&& $arFields[$key]["FROM"] <> ''
 					&& !in_array($arFields[$key]["FROM"], $arAlreadyJoined))
 				{
-					if (strlen($strSqlFrom) > 0)
+					if ($strSqlFrom <> '')
 						$strSqlFrom .= " ";
 					$strSqlFrom .= $arFields[$key]["FROM"];
 					$arAlreadyJoined[] = $arFields[$key]["FROM"];
@@ -1447,19 +1433,19 @@ class CAllSaleOrder
 				}
 				if ($strOrNull == "Y")
 				{
-					if (strlen($strSqlSearch_tmp) > 0)
+					if ($strSqlSearch_tmp <> '')
 						$strSqlSearch_tmp .= ($strNegative=="Y" ? " AND " : " OR ");
 					$strSqlSearch_tmp .= "(".$arFields[$key]["FIELD"]." IS ".($strNegative=="Y" ? "NOT " : "")."NULL)";
 
 					if ($arFields[$key]["TYPE"] == "int" || $arFields[$key]["TYPE"] == "double")
 					{
-						if (strlen($strSqlSearch_tmp) > 0)
+						if ($strSqlSearch_tmp <> '')
 							$strSqlSearch_tmp .= ($strNegative=="Y" ? " AND " : " OR ");
 						$strSqlSearch_tmp .= "(".$arFields[$key]["FIELD"]." ".($strNegative=="Y" ? "<>" : "=")." 0)";
 					}
 					elseif ($arFields[$key]["TYPE"] == "string" || $arFields[$key]["TYPE"] == "char")
 					{
-						if (strlen($strSqlSearch_tmp) > 0)
+						if ($strSqlSearch_tmp <> '')
 							$strSqlSearch_tmp .= ($strNegative=="Y" ? " AND " : " OR ");
 						$strSqlSearch_tmp .= "(".$arFields[$key]["FIELD"]." ".($strNegative=="Y" ? "<>" : "=")." '')";
 					}
@@ -1509,10 +1495,10 @@ class CAllSaleOrder
 				$arSqlOrder[] = " ".$arFields[$by]["FIELD"]." ".$order." ";
 
 				if (isset($arFields[$by]["FROM"])
-					&& strlen($arFields[$by]["FROM"]) > 0
+					&& $arFields[$by]["FROM"] <> ''
 					&& !in_array($arFields[$by]["FROM"], $arAlreadyJoined))
 				{
-					if (strlen($strSqlFrom) > 0)
+					if ($strSqlFrom <> '')
 						$strSqlFrom .= " ";
 					$strSqlFrom .= $arFields[$by]["FROM"];
 					$arAlreadyJoined[] = $arFields[$by]["FROM"];
@@ -1530,10 +1516,10 @@ class CAllSaleOrder
 		$countSqlOrder = count($arSqlOrder);
 		for ($i=0; $i < $countSqlOrder; $i++)
 		{
-			if (strlen($strSqlOrderBy) > 0)
+			if ($strSqlOrderBy <> '')
 				$strSqlOrderBy .= ", ";
 
-			$order = (substr($arSqlOrder[$i], -3)=="ASC") ? "ASC" : "DESC";
+			$order = (mb_substr($arSqlOrder[$i], -3) == "ASC") ? "ASC" : "DESC";
 			if (!$nullsLast)
 			{
 				if(ToUpper($DB->type)=="ORACLE")
@@ -1548,7 +1534,7 @@ class CAllSaleOrder
 			}
 			else
 			{
-				$field = substr($arSqlOrder[$i], 0, -strlen($order)-1);
+				$field = mb_substr($arSqlOrder[$i], 0, -mb_strlen($order) - 1);
 				if(ToUpper($DB->type) === "MYSQL")
 				{
 					if($order === 'ASC')
@@ -1586,87 +1572,10 @@ class CAllSaleOrder
 
 
 	//*************** SELECT *********************/
-	
-	/**
-	* <p>Метод возвращает параметры заказа с кодом ID. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код заказа.
-	*
-	* @return array <p>Возвращается ассоциативный массив с ключами:</p><table class="tnormal"
-	* width="100%"> <tr> <th width="15%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>ID</td>     <td>Код
-	* заказа.</td> </tr> <tr> <td>LID</td>     <td>Код сайта, на котором сделан заказ.</td> 
-	*  </tr> <tr> <td>PERSON_TYPE_ID</td>     <td>Тип плательщика, к которому принадлежит
-	* посетитель, сделавший заказ (заказчик)</td>   </tr> <tr> <td>PAYED</td>     <td>Флаг
-	* (Y/N) оплачен ли заказ.</td>   </tr> <tr> <td>DATE_PAYED</td>     <td>Дата оплаты
-	* заказа.</td>   </tr> <tr> <td>EMP_PAYED_ID</td>     <td>Код пользователя (сотрудника
-	* магазина), который установил флаг оплаченности.</td>   </tr> <tr>
-	* <td>CANCELED</td>     <td>Флаг (Y/N) отменён ли заказ.</td>   </tr> <tr> <td>DATE_CANCELED</td>    
-	* <td>Дата отмены заказа.</td>   </tr> <tr> <td>EMP_CANCELED_ID</td>     <td>Код
-	* пользователя, который установил флаг отмены заказа.</td>   </tr> <tr>
-	* <td>RESPONSIBLE_ID</td>     <td>ID ответственного лица.</td>   </tr> <tr> <td>REASON_CANCELED</td>    
-	* <td>Текстовое описание причины отмены заказа.</td>   </tr> <tr> <td>STATUS_ID</td>  
-	*   <td>Код статуса заказа.</td>   </tr> <tr> <td>DATE_STATUS</td>     <td>Дата изменения
-	* статуса заказа.</td>   </tr> <tr> <td>EMP_STATUS_ID</td>     <td>Код пользователя
-	* (сотрудника магазина), который установил текущий статус
-	* заказа.</td>   </tr> <tr> <td>PRICE_DELIVERY</td>     <td>Стоимость доставки заказа.</td>  
-	* </tr> <tr> <td>ALLOW_DELIVERY</td>     <td>Флаг (Y/N) разрешена ли доставка (отгрузка)
-	* заказа.</td>   </tr> <tr> <td>DATE_ALLOW_DELIVERY</td>     <td>Дата, когда была разрешена
-	* доставка заказа.</td>   </tr> <tr> <td>EMP_ALLOW_DELIVERY_ID</td>     <td>Код пользователя
-	* (сотрудника магазина), который разрешил доставку заказа.</td>   </tr>
-	* <tr> <td>PRICE</td>     <td>Общая стоимость заказа.</td>   </tr> <tr> <td>CURRENCY</td>    
-	* <td>Валюта стоимости заказа.</td>   </tr> <tr> <td>DISCOUNT_VALUE</td>     <td>Общая
-	* величина скидки.</td>   </tr> <tr> <td>USER_ID</td>     <td>Код пользователя
-	* заказчика.</td>   </tr> <tr> <td>PAY_SYSTEM_ID</td>     <td>Платежная система, которой
-	* (будет) оплачен заказа.</td>   </tr> <tr> <td>DELIVERY_ID</td>     <td>Способ (служба)
-	* доставки заказа.</td>   </tr> <tr> <td>DATE_INSERT</td>     <td>Дата добавления
-	* заказа.</td>   </tr> <tr> <td>DATE_UPDATE</td>     <td>Дата последнего изменения
-	* заказа.</td>   </tr> <tr> <td>USER_DESCRIPTION</td>     <td>Описание заказа
-	* заказчиком.</td>   </tr> <tr> <td>ADDITIONAL_INFO</td>     <td>Дополнительная
-	* информация по заказу.</td>   </tr> <tr> <td>PS_STATUS</td>     <td>Флаг (Y/N) статуса
-	* платежной системы - успешно ли оплачен заказ (для платежных
-	* систем, которые позволяют автоматически получать данные по
-	* проведенным через них заказам)</td>   </tr> <tr> <td>PS_STATUS_CODE</td>     <td>Код
-	* статуса платежной системы (значение зависит от системы)</td>   </tr> <tr>
-	* <td>PS_STATUS_DESCRIPTION</td>     <td>Описание результата работы платежной
-	* системы.</td>   </tr> <tr> <td>PS_STATUS_MESSAGE</td>     <td>Сообщение от платежной
-	* системы.</td>   </tr> <tr> <td>PS_SUM</td>     <td>Сумма, которая была реально
-	* оплачена через платежную систему.</td>   </tr> <tr> <td>PS_CURRENCY</td>    
-	* <td>Валюта суммы.</td>   </tr> <tr> <td>PS_RESPONSE_DATE</td>     <td>Дата получения
-	* статуса платежной системы.</td> </tr> <tr> <td>COMMENTS</td>     <td>Произвольные
-	* комментарии.</td>   </tr> <tr> <td>TAX_VALUE</td>     <td>Общая сумма налогов.</td>   </tr>
-	* <tr> <td>STAT_GID</td>     <td>Параметр события в статистике.</td>   </tr> <tr>
-	* <td>SUM_PAID</td>     <td>Сумма, которая уже была оплачена покупателем по
-	* данному счету (например, с внутреннего счета).</td>   </tr> <tr>
-	* <td>PAY_VOUCHER_NUM</td>     <td>Номер платежного поручения.</td>   </tr> <tr>
-	* <td>PAY_VOUCHER_DATE</td>     <td>Дата платежного поручения.</td>   </tr> </table><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (!($arOrder = CSaleOrder::GetByID($ORDER_ID)))
-	* {
-	*    echo "Заказ с кодом ".$ORDER_ID." не найден";
-	* }
-	* else
-	* {
-	*    echo "&lt;pre&gt;";
-	*    print_r($arOrder);
-	*    echo "&lt;/pre&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorder/csaleorder__getbyid.5cbe0078.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		global $DB;
-		
+
 		if (intval($ID) <= 0)
 			return false;
 
@@ -1676,9 +1585,9 @@ class CAllSaleOrder
 		}
 		else
 		{
-			$isOrderConverted = (\Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N') == 'Y');
+			$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
-			if ($isOrderConverted == "Y")
+			if ($isOrderConverted != 'N')
 			{
 				$db_res = \Bitrix\Sale\Compatible\OrderCompatibility::getById($ID);
 			}
@@ -1698,7 +1607,7 @@ class CAllSaleOrder
 
 			if ($res = $db_res->Fetch())
 			{
-				if ($isOrderConverted == "Y")
+				if ($isOrderConverted != 'N')
 				{
 					$dataKeys = array_keys($res);
 					foreach ($dataKeys as $key)
@@ -1747,95 +1656,77 @@ class CAllSaleOrder
 	public static function OnBeforeCurrencyDelete($currency)
 	{
 		global $APPLICATION;
-		if (strlen($currency)<=0) return false;
 
-		$dbOrders = CSaleOrder::GetList(array(), array("CURRENCY" => $currency), false, array("nTopCount" => 1), array("ID", "CURRENCY"));
-		if ($arOrders = $dbOrders->Fetch())
+		$currency = (string)$currency;
+		if ($currency === '')
+			return true;
+
+		if (Internals\OrderTable::getList(array(
+			'filter' => array('=CURRENCY' => $currency),
+			'limit' => 1
+		))->fetch())
 		{
-			$APPLICATION->ThrowException(str_replace("#CURRENCY#", $currency, Loc::getMessage("SKGO_ERROR_ORDERS_CURRENCY")), "ERROR_ORDERS_CURRENCY");
-			return False;
+			$APPLICATION->ThrowException(Loc::getMessage("SKGO_ERROR_ORDERS_CURRENCY" , array("#CURRENCY#" => $currency)), "ERROR_ORDERS_CURRENCY");
+			return false;
 		}
 
-		return True;
+		if (Internals\OrderArchiveTable::getList(array(
+			'select' => array('ID'),
+			'filter' => array('=CURRENCY' => $currency),
+			'limit' => 1
+		))->fetch())
+		{
+			$APPLICATION->ThrowException(Loc::getMessage("SKGO_ERROR_ORDERS_ARCHIVE_CURRENCY", array("#CURRENCY#" => $currency)), "ERROR_ORDERS_ARCHIVE_CURRENCY");
+			return false;
+		}
+
+		return true;
 	}
 
 	public static function OnBeforeUserDelete($userID)
 	{
 		global $APPLICATION;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		if ($userID <= 0)
 		{
 			$APPLICATION->ThrowException("Empty user ID", "EMPTY_USER_ID");
 			return false;
 		}
 
-		$dbOrders = CSaleOrder::GetList(array(), array("USER_ID" => $userID), false, array("nTopCount" => 1), array("ID", "USER_ID"));
-		if ($arOrders = $dbOrders->Fetch())
+		if (Internals\OrderTable::getList(array(
+			'filter' => array('=USER_ID' => $userID),
+			'limit' => 1
+		))->fetch())
 		{
-			$APPLICATION->ThrowException(str_replace("#USER_ID#", $userID, Loc::getMessage("SKGO_ERROR_ORDERS")), "ERROR_ORDERS");
-			return False;
+			$APPLICATION->ThrowException(Loc::getMessage("SKGO_ERROR_ORDERS", array("#USER_ID#" => $userID)), "ERROR_ORDERS");
+			return false;
 		}
 
-		return True;
+		if (Internals\OrderArchiveTable::getList(array(
+			'filter' => array('=USER_ID' => $userID),
+			'limit' => 1
+		))->fetch())
+		{
+			$APPLICATION->ThrowException(Loc::getMessage("SKGO_ERROR_ORDERS_ARCHIVE", array("#USER_ID#" => $userID)), "ERROR_ORDERS_ARCHIVE");
+			return false;
+		}
+
+		return true;
 	}
 
 	//*************** ACTIONS *********************/
-	
-	/**
-	* <p>Метод меняет значение флага "заказ оплачен" (поле <b>PAYED</b>) на значение параметра <i> Val </i> для заказа с кодом <i>ID</i>. Кроме флага оплаты заказа, устанавливаются также поля даты изменения значения флага (<b>DATE_PAYED</b>) и кода пользователя, изменившего значение флага (<b>EMP_PAYED_ID</b>). Нестатический метод.</p> <p>Перед изменением флага вызываются обработчики события OnSaleBeforePayOrder модуля магазина, в которых можно отменить изменение флага вернув значение <i>false</i>. После изменения флага вызываются обработчики события OnSalePayOrder модуля магазина.</p> <p>В случае установки флага генерируется почтовое событие типа <b>SALE_ORDER_PAID</b>.</p>
-	*
-	*
-	* @param mixed $intID  Код заказа.
-	*
-	* @param string $val  Новое значение флага оплаты 		заказа (Y/N).
-	*
-	* @param bool $bWithdraw = True[ Значение <i>true </i>отражает 		изменение флага на внутреннем счете
-	* пользователя. 		Значение <i>false</i> изменяет только флаг, не
-	* затрагивая счет.
-	*
-	* @param bool $bPay = True[ Если параметр <b> bWithdraw </b> установлен в <i>true</i>, то установка
-	* параметра 		<b> bPay </b> в <i>true</i> приведет к тому, что необходимая сумма
-	* денег будет внесена на счет покупателя перед оплатой, а установка
-	* в <i>false</i> приведет к тому, что оплата будет происходить целиком с
-	* внутреннего счета.<br><br> 		Если параметр bWithdraw установлен в <i>false</i>,
-	* то операции со счетом не производятся и значение параметра bPay не
-	* играет роли.
-	*
-	* @param int $recurringID = 0[ Должен быть равен 0.
-	*
-	* @param array $arAdditionalFields = array()]]]] Массив дополнительно обновляемых параметров (обычно это номер и
-	* дата платежного поручения).
-	*
-	* @return int <p>Возвращается код заказа или <i>false</i> в случае ошибки. Повторная
-	* оплата заказа невозможна.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (!CSaleOrder::PayOrder($ID, "Y", True, True, 0, array("PAY_VOUCHER_NUM" =&gt; "19210")))
-	* {
-	*    echo "Ошибка обновления заказа";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorder/csaleorder__payorder.88101c0f.php
-	* @author Bitrix
-	*/
 	public static function PayOrder($ID, $val, $bWithdraw = True, $bPay = True, $recurringID = 0, $arAdditionalFields = array())
 	{
 		global $DB, $USER, $APPLICATION;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$val = (($val != "Y") ? "N" : "Y");
 		$bWithdraw = ($bWithdraw ? True : False);
 		$bPay = ($bPay ? True : False);
-		$recurringID = IntVal($recurringID);
+		$recurringID = intval($recurringID);
 
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
+		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
 
 		$NO_CHANGE_STATUS = "N";
@@ -1868,7 +1759,7 @@ class CAllSaleOrder
 			if (ExecuteModuleEventEx($arEvent, Array($ID, $val, $bWithdraw, $bPay, $recurringID, $arAdditionalFields))===false)
 				return false;
 
-		if ($isOrderConverted != "Y" && $bWithdraw)
+		if ($isOrderConverted == "N" && $bWithdraw)
 		{
 			if ($val == "Y")
 			{
@@ -1892,7 +1783,7 @@ class CAllSaleOrder
 			$arFields = array(
 				"PAYED" => $val,
 				"=DATE_PAYED" => $DB->GetNowFunction(),
-				"EMP_PAYED_ID" => ( IntVal($USER->GetID())>0 ? IntVal($USER->GetID()) : false ),
+				"EMP_PAYED_ID" => ( intval($USER->GetID())>0 ? intval($USER->GetID()) : false ),
 				"SUM_PAID" => 0
 			);
 			if (count($arAdditionalFields) > 0)
@@ -1904,7 +1795,7 @@ class CAllSaleOrder
 				}
 			}
 
-		if ($isOrderConverted == "Y")
+		if ($isOrderConverted != 'N')
 		{
 			$errorMessage = "";
 			/** @var \Bitrix\Sale\Result $r */
@@ -1930,6 +1821,8 @@ class CAllSaleOrder
 				ExecuteModuleEventEx($arEvent, Array($ID, $val));
 		}
 
+		unset($GLOBALS["SALE_ORDER"]["SALE_ORDER_CACHE_".$ID]);
+
 		if ($val == "Y")
 		{
 			CTimeZone::Disable();
@@ -1939,7 +1832,7 @@ class CAllSaleOrder
 			if ($NO_CHANGE_STATUS != "Y")
 			{
 				$orderStatus = COption::GetOptionString("sale", "status_on_paid", "");
-				if(strlen($orderStatus) > 0 && $orderStatus != $arOrder["STATUS_ID"])
+				if($orderStatus <> '' && $orderStatus != $arOrder["STATUS_ID"])
 				{
 					$dbStatus = CSaleStatus::GetList(Array("SORT" => "ASC"), Array("LID" => LANGUAGE_ID));
 					while ($arStatus = $dbStatus->GetNext())
@@ -1957,14 +1850,14 @@ class CAllSaleOrder
 			if($arOrderProp = $dbOrderProp->Fetch())
 				$userEMail = $arOrderProp["VALUE"];
 
-			if(strlen($userEMail) <= 0)
+			if($userEMail == '')
 			{
 				$dbUser = CUser::GetByID($arOrder["USER_ID"]);
 				if($arUser = $dbUser->Fetch())
 					$userEMail = $arUser["EMAIL"];
 			}
 
-			if ($isOrderConverted != "Y")
+			if ($isOrderConverted == 'N')
 			{
 				$arFields = Array(
 						"ORDER_ID" => $arOrder["ACCOUNT_NUMBER"],
@@ -2003,7 +1896,7 @@ class CAllSaleOrder
 			}
 		}
 
-		if ($isOrderConverted != "Y")
+		if ($isOrderConverted == 'N')
 		{
 			//reservation
 			if (COption::GetOptionString("sale", "product_reserve_condition", "O") == "P" && $arOrder["RESERVED"] != $val)
@@ -2025,45 +1918,15 @@ class CAllSaleOrder
 		return $res;
 	}
 
-	
-	/**
-	* <p>Метод меняет значение флага "доставка разрешена" (поле <b>ALLOW_DELIVERY</b>) на значение параметра <i>val</i> для заказа с кодом <i>ID</i>. Нестатический метод.</p> <p>Кроме флага разрешения доставки, устанавливаются также поля даты изменения значения флага (<b>DATE_ALLOW_DELIVERY</b>) и кода пользователя, изменившего значение флага (<b>EMP_ALLOW_DELIVERY_ID</b>).</p> <p>При изменении флага "Доставка разрешена" для каждого элемента заказа (товара) вызывается функция обратного вызова из поля <b> PAY_CALLBACK_FUNC </b> корзины (если она установлена).</p> <p>Перед изменением флага вызываются обработчики события OnSaleBeforeDeliveryOrder модуля магазина, в которых можно отменить изменение флага вернув значение <i>false</i>. После изменения флага вызываются обработчики события OnSaleDeliveryOrder модуля магазина.</p> <p>В случае разрешения доставки генерируется почтовое событие типа <b>SALE_ORDER_DELIVERY</b>.</p>
-	*
-	*
-	* @param mixed $intID  Код заказа.
-	*
-	* @param string $val  Новое значение флага р<span class="style1">азрешения  	доставки </span>(Y/N).
-	*
-	* @param int $recurringID = 0[ Код продления подписки (если он есть).
-	*
-	* @param array $arAdditionalFields = array()]] Массив дополнительно обновляемых параметров (обычно это номер и
-	* дата платежного поручения).
-	*
-	* @return int <p>Возвращается код заказа или <i>false</i> в случае ошибки.</p><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (!CSaleOrder::DeliverOrder(23, "Y"))
-	*    echo "Ошибка изменения заказа 23";
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorder/csaleorder__deliverorder.fd0e66d5.php
-	* @author Bitrix
-	*/
 	public static function DeliverOrder($ID, $val, $recurringID = 0, $arAdditionalFields = array())
 	{
 		global $DB, $USER, $APPLICATION;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$val = (($val != "Y") ? "N" : "Y");
-		$recurringID = IntVal($recurringID);
+		$recurringID = intval($recurringID);
 
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
+		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
 		$NO_CHANGE_STATUS = "N";
 		if (is_set($arAdditionalFields["NOT_CHANGE_STATUS"]) && $arAdditionalFields["NOT_CHANGE_STATUS"] == "Y")
@@ -2095,12 +1958,12 @@ class CAllSaleOrder
 			if (ExecuteModuleEventEx($arEvent, Array($ID, $val, $recurringID, $arAdditionalFields))===false)
 				return false;
 
-		if ($isOrderConverted != "Y")
+		if ($isOrderConverted == 'N')
 		{
 			$arFields = array(
 				"ALLOW_DELIVERY" => $val,
 				"=DATE_ALLOW_DELIVERY" => $DB->GetNowFunction(),
-				"EMP_ALLOW_DELIVERY_ID" => ( IntVal($USER->GetID())>0 ? IntVal($USER->GetID()) : false )
+				"EMP_ALLOW_DELIVERY_ID" => ( intval($USER->GetID())>0 ? intval($USER->GetID()) : false )
 			);
 			if (count($arAdditionalFields) > 0)
 			{
@@ -2136,13 +1999,13 @@ class CAllSaleOrder
 
 		if ($recurringID <= 0)
 		{
-			if (IntVal($arOrder["RECURRING_ID"]) > 0)
-				$recurringID = IntVal($arOrder["RECURRING_ID"]);
+			if (intval($arOrder["RECURRING_ID"]) > 0)
+				$recurringID = intval($arOrder["RECURRING_ID"]);
 		}
 
 		CSaleBasket::OrderDelivery($ID, (($val=="Y") ? True : False), $recurringID);
 
-		if ($isOrderConverted != "Y")
+		if ($isOrderConverted == 'N')
 		{
 			foreach(GetModuleEvents("sale", "OnSaleDeliveryOrder", true) as $arEvent)
 				ExecuteModuleEventEx($arEvent, Array($ID, $val));
@@ -2157,7 +2020,7 @@ class CAllSaleOrder
 			if ($NO_CHANGE_STATUS != "Y")
 			{
 				$orderStatus = COption::GetOptionString("sale", "status_on_allow_delivery", "");
-				if(strlen($orderStatus) > 0 && $orderStatus != $arOrder["STATUS_ID"])
+				if($orderStatus <> '' && $orderStatus != $arOrder["STATUS_ID"])
 				{
 					$dbStatus = CSaleStatus::GetList(Array("SORT" => "ASC"), Array("LID" => LANGUAGE_ID), false, false, Array("ID", "SORT"));
 					while ($arStatus = $dbStatus->GetNext())
@@ -2175,14 +2038,14 @@ class CAllSaleOrder
 			if($arOrderProp = $dbOrderProp->Fetch())
 				$userEMail = $arOrderProp["VALUE"];
 
-			if(strlen($userEMail) <= 0)
+			if($userEMail == '')
 			{
 				$dbUser = CUser::GetByID($arOrder["USER_ID"]);
 				if($arUser = $dbUser->Fetch())
 					$userEMail = $arUser["EMAIL"];
 			}
 
-			if ($isOrderConverted != "Y")
+			if ($isOrderConverted == 'N')
 			{
 				$eventName = "SALE_ORDER_DELIVERY";
 				$arFields = Array(
@@ -2231,12 +2094,12 @@ class CAllSaleOrder
 	{
 		global $DB, $USER, $APPLICATION;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$val = (($val != "Y") ? "N" : "Y");
 		$description = Trim($description);
-		$recurringID = IntVal($recurringID);
+		$recurringID = intval($recurringID);
 
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
+		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
 		if ($ID <= 0)
 		{
@@ -2265,15 +2128,15 @@ class CAllSaleOrder
 
 		if ($recurringID <= 0)
 		{
-			if (IntVal($arOrder["RECURRING_ID"]) > 0)
-				$recurringID = IntVal($arOrder["RECURRING_ID"]);
+			if (intval($arOrder["RECURRING_ID"]) > 0)
+				$recurringID = intval($arOrder["RECURRING_ID"]);
 		}
 
 		$arDeductResult = CSaleBasket::OrderDeduction($ID, (($val == "N") ? true : false), $recurringID, $bAutoDeduction, $arStoreBarcodeOrderFormData);
 
 		if (array_key_exists("ERROR", $arDeductResult))
 		{
-			if ($isOrderConverted != "Y")
+			if ($isOrderConverted == 'N')
 			{
 				CSaleOrder::SetMark($ID, Loc::getMessage("SKGB_DEDUCT_ERROR", array("#MESSAGE#" => $arDeductResult["ERROR"]["MESSAGE"])));
 			}
@@ -2289,7 +2152,7 @@ class CAllSaleOrder
 			}
 		}
 
-		if ($isOrderConverted == "Y")
+		if ($isOrderConverted != 'N')
 		{
 			if ($arDeductResult["RESULT"])
 			{
@@ -2308,7 +2171,7 @@ class CAllSaleOrder
 				{
 					$arFields = array(
 						"DEDUCTED" => "Y",
-						"EMP_DEDUCTED_ID" => ( IntVal($USER->GetID())>0 ? IntVal($USER->GetID()) : false ),
+						"EMP_DEDUCTED_ID" => ( intval($USER->GetID())>0 ? intval($USER->GetID()) : false ),
 						"=DATE_DEDUCTED" => $DB->GetNowFunction()
 					);
 				}
@@ -2316,11 +2179,11 @@ class CAllSaleOrder
 				{
 					$arFields = array(
 						"DEDUCTED" => "N",
-						"EMP_DEDUCTED_ID" => ( IntVal($USER->GetID())>0 ? IntVal($USER->GetID()) : false ),
+						"EMP_DEDUCTED_ID" => ( intval($USER->GetID())>0 ? intval($USER->GetID()) : false ),
 						"=DATE_DEDUCTED" => $DB->GetNowFunction()
 					);
 
-					if (strlen($description) > 0)
+					if ($description <> '')
 						$arFields["REASON_UNDO_DEDUCTED"] = $description;
 				}
 				$res = CSaleOrder::Update($ID, $arFields, false);
@@ -2348,11 +2211,11 @@ class CAllSaleOrder
 	{
 		global $APPLICATION;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$val = (($val != "Y") ? "N" : "Y");
 		$errorMessage = "";
 
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
+		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
 		if ($ID <= 0)
 		{
@@ -2379,7 +2242,7 @@ class CAllSaleOrder
 
 		unset($GLOBALS["SALE_ORDER"]["SALE_ORDER_CACHE_".$ID]);
 
-		if ($isOrderConverted == "Y")
+		if ($isOrderConverted != 'N')
 		{
 			/** @var \Bitrix\Sale\Result $r */
 			$r = \Bitrix\Sale\Compatible\OrderCompatibility::reserve($ID, $val);
@@ -2429,39 +2292,13 @@ class CAllSaleOrder
 		return $res;
 	}
 
-	
-	/**
-	* <p>Метод меняет значение флага "заказ отменён" (поле <b>CANCELED</b>) на значение параметра <i> Val </i> для заказа с кодом <i>ID</i>. Кроме флага отмены заказа, устанавливаются также поля даты изменения значения флага (<b>DATE_CANCELED</b>) и кода пользователя, изменившего значение флага (<b>EMP_CANCELED_ID</b>). Поле с описанием причины отмены заказа (<b>REASON_CANCELED</b>) заполняется значением параметра <i>Descr</i>.</p> <p>Если заказ был оплачен, то при отмене снимается флаг оплаты с возвращением денег на счет покупателя. Если заказ был частично оплачен, то при отмене внесённая сумма возвращается на счет покупателя.</p> <p>Перед отменой заказа вызываются обработчики события OnSaleBeforeCancelOrder модуля магазина, в которых можно отменить отмену заказа, вернув значение <i>false</i>. После отмены вызываются обработчики события OnSaleCancelOrder модуля магазина.</p> <p>В случае отмены заказа генерируется почтовое событие типа <b>SALE_ORDER_CANCEL</b>. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код заказа.
-	*
-	* @param string $val  Новое значение флага отмены заказа (Y/N).
-	*
-	* @param string $description = "" Описание причины отмены заказа.
-	*
-	* @return int <p>Возвращается код заказа или <i>false</i> в случае ошибки.</p><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* CSaleOrder::CancelOrder(25, "Y", "Потому что передумал");
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorder/csaleorder__cancelorder.fa562b77.php
-	* @author Bitrix
-	*/
 	public static function CancelOrder($ID, $val, $description = "")
 	{
 		global $DB, $USER, $APPLICATION;
 
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
+		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$val = (($val != "Y") ? "N" : "Y");
 		$description = Trim($description);
 
@@ -2484,7 +2321,7 @@ class CAllSaleOrder
 			return false;
 		}
 
-		if ($isOrderConverted == "Y")
+		if ($isOrderConverted != 'N')
 		{
 			$r = \Bitrix\Sale\Compatible\OrderCompatibility::cancel($ID, $val, $description);
 			if ($r->isSuccess(true))
@@ -2558,15 +2395,15 @@ class CAllSaleOrder
 			$arFields = array(
 				"CANCELED" => $val,
 				"=DATE_CANCELED" => $DB->GetNowFunction(),
-				"REASON_CANCELED" => ( strlen($description)>0 ? $description : false ),
-				"EMP_CANCELED_ID" => ( IntVal($USER->GetID())>0 ? IntVal($USER->GetID()) : false )
+				"REASON_CANCELED" => ( $description <> '' ? $description : false ),
+				"EMP_CANCELED_ID" => ( intval($USER->GetID())>0 ? intval($USER->GetID()) : false )
 			);
 			$res = CSaleOrder::Update($ID, $arFields);
 		}
 
 		unset($GLOBALS["SALE_ORDER"]["SALE_ORDER_CACHE_".$ID]);
 
-		if ($isOrderConverted != "Y")
+		if ($isOrderConverted == 'N')
 		{
 			//this method is used only for catalogs without reservation and deduction support
 			CSaleBasket::OrderCanceled($ID, (($val=="Y") ? True : False));
@@ -2585,7 +2422,7 @@ class CAllSaleOrder
 			$dbOrderProp = CSaleOrderPropsValue::GetList(Array(), Array("ORDER_ID" => $ID, "PROP_IS_EMAIL" => "Y"));
 			if($arOrderProp = $dbOrderProp->Fetch())
 				$userEmail = $arOrderProp["VALUE"];
-			if(strlen($userEmail) <= 0)
+			if($userEmail == '')
 			{
 				$dbUser = CUser::GetByID($arOrder["USER_ID"]);
 				if($arUser = $dbUser->Fetch())
@@ -2601,38 +2438,13 @@ class CAllSaleOrder
 		return $res;
 	}
 
-	
-	/**
-	* <p>Метод меняет значение статуса заказа (поле <b>STATUS_ID</b>) на значение параметра <i> Val </i> для заказа с кодом <i>ID</i>. Кроме статуса заказа устанавливаются так же поля даты изменения статуса заказа (<b>DATE_STATUS</b>) и кода пользователя, изменившего статус заказа (<b>EMP_STATUS_ID</b>). Нестатический метод.</p> <p>Перед изменением статуса вызываются обработчики события OnSaleBeforeStatusOrder модуля магазина, в которых можно отменить изменение статуса вернув значение <i>false</i>. После изменения флага вызываются обработчики события OnSaleStatusOrder модуля магазина.</p> <p>Генерируется почтовое событие типа <b> SALE_STATUS_CHANGED_&lt;код статуса&gt;</b>, если есть подходящий почтовый шаблон. Иначе генерируется почтовое событие типа <b>SALE_STATUS_CHANGED</b>.</p>
-	*
-	*
-	* @param mixed $intID  Код заказа.
-	*
-	* @param string $Val  Код статуса заказа.
-	*
-	* @return int <p>Возвращается код заказа или <i>false</i> в случае ошибки.</p><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (!CSaleOrder::StatusOrder($ID, "F"))
-	*    echo "Ошибка установки нового статуса заказа";
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorder/csaleorder__statusorder.f21c0322.php
-	* @author Bitrix
-	*/
 	public static function StatusOrder($ID, $val)
 	{
 		global $DB, $USER, $APPLICATION;
 
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
+		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$val = trim($val);
 
 		if ($ID <= 0)
@@ -2654,124 +2466,25 @@ class CAllSaleOrder
 			return false;
 		}
 
-		foreach(GetModuleEvents("sale", "OnSaleBeforeStatusOrder", true) as $arEvent)
-			if (ExecuteModuleEventEx($arEvent, Array($ID, $val))===false)
-				return false;
-
 		$arFields = array(
 			"STATUS_ID" => $val,
 			"=DATE_STATUS" => $DB->GetNowFunction(),
-			"EMP_STATUS_ID" => ( IntVal($USER->GetID())>0 ? IntVal($USER->GetID()) : false )
+			"EMP_STATUS_ID" => ((isset($USER) && $USER instanceof \CUser) && intval($USER->GetID())>0 ? intval($USER->GetID()) : false )
 		);
 		$res = CSaleOrder::Update($ID, $arFields);
 
 		unset($GLOBALS["SALE_ORDER"]["SALE_ORDER_CACHE_".$ID]);
 
-		foreach(GetModuleEvents("sale", "OnSaleStatusOrder", true) as $arEvent)
-			ExecuteModuleEventEx($arEvent, Array($ID, $val));
-
-		CTimeZone::Disable();
-		$arOrder = CSaleOrder::GetByID($ID);
-		CTimeZone::Enable();
-
-		CSaleMobileOrderPush::send("ORDER_STATUS_CHANGED", array("ORDER" => $arOrder));
-
-		$userEmail = "";
-		$dbOrderProp = CSaleOrderPropsValue::GetList(Array(), Array("ORDER_ID" => $ID, "PROP_IS_EMAIL" => "Y"));
-		if($arOrderProp = $dbOrderProp->Fetch())
-			$userEmail = $arOrderProp["VALUE"];
-		if(strlen($userEmail) <= 0)
-		{
-			$dbUser = CUser::GetByID($arOrder["USER_ID"]);
-			if($arUser = $dbUser->Fetch())
-				$userEmail = $arUser["EMAIL"];
-		}
-		$dbSite = CSite::GetByID($arOrder["LID"]);
-		$arSite = $dbSite->Fetch();
-		$arStatus = CSaleStatus::GetByID($arOrder["STATUS_ID"], $arSite["LANGUAGE_ID"]);
-
-		if ($arStatus['NOTIFY'] == 'Y')
-		{
-			$arFields = Array(
-				"ORDER_ID" => $arOrder["ACCOUNT_NUMBER"],
-				"ORDER_DATE" => $arOrder["DATE_INSERT_FORMAT"],
-				"ORDER_STATUS" => $arStatus["NAME"],
-				"EMAIL" => $userEmail,
-				"ORDER_DESCRIPTION" => $arStatus["DESCRIPTION"],
-				"TEXT" => "",
-				"SALE_EMAIL" => COption::GetOptionString("sale", "order_email", "order@".$_SERVER["SERVER_NAME"])
-			);
-
-			foreach(GetModuleEvents("sale", "OnSaleStatusEMail", true) as $arEvent)
-				$arFields["TEXT"] = ExecuteModuleEventEx($arEvent, Array($ID, $arStatus["ID"]));
-
-			if ($isOrderConverted != "Y")
-			{
-				$eventName = "SALE_STATUS_CHANGED_".$arOrder["STATUS_ID"];
-
-				$bSend = true;
-				foreach(GetModuleEvents("sale", "OnOrderStatusSendEmail", true) as $arEvent)
-					if (ExecuteModuleEventEx($arEvent, Array($ID, &$eventName, &$arFields, $arOrder["STATUS_ID"]))===false)
-						$bSend = false;
-
-				if($bSend)
-				{
-					$b = '';
-					$o = '';
-					$eventMessage = new CEventMessage;
-					$dbEventMessage = $eventMessage->GetList(
-							$b,
-							$o,
-							array(
-									"EVENT_NAME" => $eventName,
-									"SITE_ID" => $arOrder["LID"],
-									'ACTIVE' => 'Y'
-							)
-					);
-					if (!($arEventMessage = $dbEventMessage->Fetch()))
-						$eventName = "SALE_STATUS_CHANGED";
-					unset($o, $b);
-					$event = new CEvent;
-					$event->Send($eventName, $arOrder["LID"], $arFields, "N");
-				}
-			}
-		}
-
 		return $res;
 	}
 
-	
-	/**
-	* <p>Метод устанавливает новое значение <i> Val</i> комментария (поле <b>COMMENTS</b>) к заказу с кодом <i> ID</i>. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код заказа.
-	*
-	* @param string $Val  Новое значение комментария.
-	*
-	* @return int <p>Возвращается код заказа или <i>false</i> в случае ошибки.</p><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (!CSaleOrder::CommentsOrder(12, "Не отгружать до оплаты!"))
-	*    echo "Ошибка изменения комментария к заказу";
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorder/csaleorder__commentsorder.edec4495.php
-	* @author Bitrix
-	*/
 	public static function CommentsOrder($ID, $val)
 	{
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$val = Trim($val);
 
 		$arFields = array(
-			"COMMENTS" => ( strlen($val)>0 ? $val : false )
+			"COMMENTS" => ( $val <> '' ? $val : false )
 		);
 		$res = CSaleOrder::Update($ID, $arFields);
 
@@ -2779,13 +2492,12 @@ class CAllSaleOrder
 
 		return $res;
 	}
-
 
 	public static function Lock($ID)
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 			return False;
 
@@ -2794,13 +2506,12 @@ class CAllSaleOrder
 			"LOCKED_BY" => $GLOBALS["USER"]->GetID()
 		);
 
-		return Sale\Internals\OrderTable::update($ID, $arFields);
-//		return CSaleOrder::Update($ID, $arFields, false);
+		return Sale\Internals\OrderTable::update($ID, $arFields)->isSuccess();
 	}
 
 	public static function UnLock($ID)
 	{
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 			return False;
 
@@ -2817,10 +2528,7 @@ class CAllSaleOrder
 				"LOCKED_BY" => false
 			);
 
-			if (!Sale\Internals\OrderTable::update($ID, $arFields))
-				return False;
-			else
-				return True;
+			return Sale\Internals\OrderTable::update($ID, $arFields)->isSuccess();
 		}
 
 		return False;
@@ -2828,7 +2536,7 @@ class CAllSaleOrder
 
 	public static function IsLocked($ID, &$lockedBY, &$dateLock)
 	{
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$lockStatus = CSaleOrder::GetLockStatus($ID, $lockedBY, $dateLock);
 		if ($lockStatus == "red")
@@ -2840,23 +2548,26 @@ class CAllSaleOrder
 	public static function RemindPayment()
 	{
 		$reminder = COption::GetOptionString("sale", "pay_reminder", "");
-		$arReminder = unserialize($reminder);
+		$arReminder = unserialize($reminder, ['allowed_classes' => false]);
 
 		if(!empty($arReminder))
 		{
 			$arSites = Array();
-			$minDay = mktime();
+			$minDay = time();
 			foreach($arReminder as $key => $val)
 			{
-				if($val["use"] == "Y" && $val["frequency"] > 0)
+				$use = $val["use"] ?? null;
+				$frequency = (float)($val["frequency"] ?? 0.0);
+
+				if ($use === "Y" && $frequency > 0)
 				{
 					$arSites[] = $key;
 					$days = Array();
 
-					for($i=0; $i <= floor($val["period"] / $val["frequency"]); $i++)
+					for($i=0; $i <= floor($val["period"] / $frequency); $i++)
 					{
-						$day = AddToTimeStamp(Array("DD" => -($val["after"] + $val["period"] - $val["frequency"]*$i)));
-						if($day < mktime())
+						$day = AddToTimeStamp(Array("DD" => -($val["after"] + $val["period"] - $frequency*$i)));
+						if($day < time())
 						{
 							if($minDay > $day)
 								$minDay = $day;
@@ -2918,10 +2629,23 @@ class CAllSaleOrder
 						$dbUser = CUser::GetByID($arOrder["USER_ID"]);
 						if ($arUser = $dbUser->Fetch())
 						{
-							if (strlen($payerName) <= 0)
-								$payerName = $arUser["NAME"].((strlen($arUser["NAME"])<=0 || strlen($arUser["LAST_NAME"])<=0) ? "" : " ").$arUser["LAST_NAME"];
-							if (strlen($payerEMail) <= 0)
+							if ($payerName == '')
+								$payerName = $arUser["NAME"].(($arUser["NAME"] == '' || $arUser["LAST_NAME"] == '') ? "" : " ").$arUser["LAST_NAME"];
+							if ($payerEMail == '')
 								$payerEMail = $arUser["EMAIL"];
+						}
+
+						$publicLink = '';
+
+						$registry = Sale\Registry::getInstance(Sale\Registry::REGISTRY_TYPE_ORDER);
+
+						/** @var Sale\Order $orderClass */
+						$orderClass = $registry->getOrderClassName();
+
+						$order = $orderClass::load($arOrder['ID']);
+						if (Sale\Helpers\Order::isAllowGuestView($order))
+						{
+							$publicLink = Sale\Helpers\Order::getPublicLink($order);
 						}
 
 						$arFields = Array(
@@ -2932,7 +2656,8 @@ class CAllSaleOrder
 							"BCC" => COption::GetOptionString("sale", "order_email", "order@".$_SERVER["SERVER_NAME"]),
 							"EMAIL" => $payerEMail,
 							"ORDER_LIST" => $strOrderList,
-							"SALE_EMAIL" => COption::GetOptionString("sale", "order_email", "order@".$_SERVER['SERVER_NAME'])
+							"SALE_EMAIL" => COption::GetOptionString("sale", "order_email", "order@".$_SERVER['SERVER_NAME']),
+							"ORDER_PUBLIC_URL" => $publicLink
 						);
 
 						$eventName = "SALE_ORDER_REMIND_PAYMENT";
@@ -2945,7 +2670,7 @@ class CAllSaleOrder
 						if($bSend)
 						{
 							$event = new CEvent;
-							$event->Send($eventName, $arOrder["LID"], $arFields, "N");
+							$event->Send($eventName, $arOrder["LID"], $arFields, "Y");
 						}
 					}
 				}
@@ -2958,6 +2683,111 @@ class CAllSaleOrder
 			}
 		}
 		return "CSaleOrder::RemindPayment();";
+	}
+
+	/**
+	 * @deprecated
+	 *
+	 * Use \Bitrix\Main\Numerator\Numerator::previewNextNumber instead
+	 *
+	 * Generates next account number according to the scheme selected in the module options
+	 *
+	 * @param int $orderID - order ID
+	 * @param string $templateType - account number template type code
+	 * @param string $param - account number template param
+	 * @return mixed - generated number or false
+	*/
+	public static function GetNextAccountNumber($orderID, $templateType, $param)
+	{
+		global $DB;
+		$value = false;
+
+		switch ($templateType)
+		{
+			case 'NUMBER':
+
+				$param = intval($param);
+				$maxLastID = 0;
+
+				$strSql = "SELECT ID, ACCOUNT_NUMBER FROM b_sale_order WHERE ACCOUNT_NUMBER IS NOT NULL ORDER BY ID DESC LIMIT 1";
+
+				$dbres = $DB->Query($strSql, true);
+				if ($arRes = $dbres->GetNext())
+				{
+					if (mb_strlen($arRes["ACCOUNT_NUMBER"]) === mb_strlen(intval($arRes["ACCOUNT_NUMBER"])))
+						$maxLastID = intval($arRes["ACCOUNT_NUMBER"]);
+				}
+
+				$value = ($maxLastID >= $param) ? $maxLastID + 1 : $param;
+				break;
+
+			case 'PREFIX':
+
+				$value = $param.$orderID;
+				break;
+
+			case 'RANDOM':
+
+				$rand = randString(intval($param), array("ABCDEFGHIJKLNMOPQRSTUVWXYZ", "0123456789"));
+				$dbres = $DB->Query("SELECT ID, ACCOUNT_NUMBER FROM b_sale_order WHERE ACCOUNT_NUMBER = '".$rand."'", true);
+				$value = ($arRes = $dbres->GetNext()) ? false : $rand;
+				break;
+
+			case 'USER':
+
+				$dbres = $DB->Query("SELECT USER_ID FROM b_sale_order WHERE ID = '".$orderID."'", true);
+
+				if ($arRes = $dbres->GetNext())
+				{
+					$userID = $arRes["USER_ID"];
+
+					$strSql = "SELECT MAX(CAST(SUBSTRING(ACCOUNT_NUMBER, LENGTH('".$userID."_') + 1) as UNSIGNED)) as NUM_ID FROM b_sale_order WHERE ACCOUNT_NUMBER LIKE '".$userID."\_%'";
+					$dbres = $DB->Query($strSql, true);
+					if ($arRes = $dbres->GetNext())
+					{
+						$numID = (intval($arRes["NUM_ID"]) > 0) ? $arRes["NUM_ID"] + 1 : 1;
+						$value = $userID."_".$numID;
+					}
+					else
+						$value = $userID."_1";
+				}
+				else
+					$value = false;
+
+				break;
+
+			case 'DATE':
+
+				switch ($param)
+				{
+					// date in the site format but without delimeters
+					case 'day':
+						$date = date($DB->DateFormatToPHP(CSite::GetDateFormat("SHORT")), mktime(0, 0, 0, date("m"), date("d"), date("Y")));
+						$date = preg_replace("/[^0-9]/", "", $date);
+						break;
+					case 'month':
+						$date = date($DB->DateFormatToPHP(str_replace("DD", "", CSite::GetDateFormat("SHORT"))), mktime(0, 0, 0, date("m"), date("d"), date("Y")));
+						$date = preg_replace("/[^0-9]/", "", $date);
+						break;
+					case 'year':
+						$date = date('Y');
+						break;
+				}
+
+				$strSql = "SELECT MAX(CAST(SUBSTRING(ACCOUNT_NUMBER, LENGTH('".$date." / ') + 1) as UNSIGNED)) as NUM_ID FROM b_sale_order WHERE ACCOUNT_NUMBER LIKE '".$date." / %'";
+				$dbres = $DB->Query($strSql, true);
+				if ($arRes = $dbres->GetNext())
+				{
+					$numID = (intval($arRes["NUM_ID"]) > 0) ? $arRes["NUM_ID"] + 1 : 1;
+					$value = $date." / ".$numID;
+				}
+				else
+					$value = $date." / 1";
+
+				break;
+		}
+
+		return $value;
 	}
 
 	public static function __SaleOrderCount($arFilter, $strCurrency = '')
@@ -3000,6 +2830,35 @@ class CAllSaleOrder
 				unset($intTimeStamp);
 			}
 			unset($arSaleOrder, $rsSaleOrders);
+
+			$archiveData = Sale\Archive\Manager::getList(
+				array(
+					'filter' => $arFilter,
+					'select' => array('DATE_INSERT', 'PRICE', 'CURRENCY')
+				)
+			);
+
+			while($archiveOrder = $archiveData->fetch())
+			{
+				$intTimeStamp = MakeTimeStamp($archiveOrder['DATE_INSERT']);
+				if ($intMaxTimestamp < $intTimeStamp)
+				{
+					$intMaxTimestamp = $intTimeStamp;
+					$mxLastOrderDate = $archiveOrder['DATE_INSERT'];
+				}
+				if (empty($strCurrency))
+				{
+					$dblPrice += $archiveOrder['PRICE'];
+					$strCurrency = $archiveOrder['CURRENCY'];
+				}
+
+				$dblPrice += (
+					$strCurrency != $archiveOrder['CURRENCY']
+						? CCurrencyRates::ConvertCurrency($archiveOrder['PRICE'], $archiveOrder['CURRENCY'], $strCurrency)
+						: $archiveOrder['PRICE']
+				);
+			}
+
 			$mxResult = array(
 				'PRICE' => $dblPrice,
 				'CURRENCY' => $strCurrency,
@@ -3009,7 +2868,6 @@ class CAllSaleOrder
 		}
 		return $mxResult;
 	}
-
 
 	/**
 	* @deprecated Use CSaleOrderChange::GetList instead
@@ -3022,7 +2880,7 @@ class CAllSaleOrder
 	* @param array $arSelectFields - array to selectes fields
 	* @return object $dbRes - object result
 	*/
-	static public function GetHistoryList($arOrder = array("ID"=>"DESC"), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
+	public static function GetHistoryList($arOrder = array("ID"=>"DESC"), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		global $DB;
 
@@ -3142,11 +3000,11 @@ class CAllSaleOrder
 		$arSqls["SELECT"] = str_replace("%%_DISTINCT_%%", "", $arSqls["SELECT"]);
 		$strSql = "SELECT ".$arSqls["SELECT"]." FROM b_sale_order_history V ";
 
-		if (strlen($arSqls["WHERE"]) > 0)
+		if ($arSqls["WHERE"] <> '')
 			$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-		if (strlen($arSqls["GROUPBY"]) > 0)
+		if ($arSqls["GROUPBY"] <> '')
 			$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
-		if (strlen($arSqls["ORDERBY"]) > 0)
+		if ($arSqls["ORDERBY"] <> '')
 			$strSql .= "ORDER BY ".$arSqls["ORDERBY"]." ";
 
 		if (is_array($arGroupBy) && count($arGroupBy) == 0)
@@ -3158,17 +3016,17 @@ class CAllSaleOrder
 				return false;
 		}
 
-		if (is_array($arNavStartParams) && IntVal($arNavStartParams["nTopCount"]) <= 0 )
+		if (is_array($arNavStartParams) && intval($arNavStartParams["nTopCount"]) <= 0 )
 		{
 			$strSql_tmp = "SELECT COUNT('x') as CNT FROM b_sale_order_history V ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql_tmp .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql_tmp .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
 			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 			$cnt = 0;
-			if (strlen($arSqls["GROUPBY"]) <= 0)
+			if ($arSqls["GROUPBY"] == '')
 			{
 				if ($arRes = $dbRes->Fetch())
 					$cnt = $arRes["CNT"];
@@ -3183,7 +3041,11 @@ class CAllSaleOrder
 		}
 		else
 		{
-			$strSql = $DB->TopSql($strSql, $arNavStartParams["nTopCount"]);
+			if (isset($arNavStartParams["nTopCount"]))
+			{
+				$strSql = $DB->TopSql($strSql, $arNavStartParams["nTopCount"]);
+			}
+
 			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 		}
 
@@ -3194,11 +3056,11 @@ class CAllSaleOrder
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID < 0)
 			return false;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 
 		$arFields = array(
 			"MARKED" => "Y",
@@ -3216,11 +3078,11 @@ class CAllSaleOrder
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID < 0)
 			return false;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 
 		$arFields = array(
 			"MARKED" => "N",
@@ -3257,537 +3119,56 @@ class CAllSaleOrder
 	public static function setAccountNumberById($id)
 	{
 		$result = new Sale\Result();
-		$id = intval($id);
-		if ($id <= 0)
-		{
-			$result->addError(new Sale\ResultError(Loc::getMessage('SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_WRONG_ID'), 'SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_WRONG_ID'));
-			return $result;
-		}
-
-		$type = COption::GetOptionString("sale", "account_number_template", "");
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
-
-		$accountNumber = null;
-		$isCustomAlgorithm = false;
-		$value = null;
-		/** @var Sale\Result $r */
-		$r = static::generateCustomAccountNumber($id);
-		if ($r->isSuccess())
-		{
-			if ($accountData = $r->getData())
-			{
-				if (array_key_exists('IS_CUSTOM', $accountData))
-				{
-					$isCustomAlgorithm = $accountData['IS_CUSTOM'];
-				}
-				if (array_key_exists('VALUE', $accountData))
-				{
-					$value = $accountData['VALUE'];
-				}
-			}
-
-		}
-
-		if ($isCustomAlgorithm)
-		{
-			if ($isOrderConverted == "Y")
-			{
-				try
-				{
-					/** @var \Bitrix\Sale\Result $r */
-					$r = \Bitrix\Sale\Internals\OrderTable::update($id, array("ACCOUNT_NUMBER" => $value));
-					$res = $r->isSuccess(true);
-				}
-				catch (\Bitrix\Main\DB\SqlQueryException $exception)
-				{
-					$res = false;
-				}
-
-			}
-			else
-			{
-				$res = CSaleOrder::Update($id, array("ACCOUNT_NUMBER" => $value), false);
-			}
-
-			if ($res)
-			{
-				$accountNumber = $value;
-			}
-		}
-		else
-		{
-			$r = static::generateAccountNumber($id);
-			if ($res = $r->isSuccess())
-			{
-				if ($accountData = $r->getData())
-				{
-					if (array_key_exists('VALUE', $accountData))
-					{
-						$accountNumber = $accountData['VALUE'];
-					}
-				}
-			}
-		}
-
-		if ($type == "" || !$res) // if no special template is used or error occured
-		{
-			$r = static::setIdAsAccountNumber($id);
-			$res = $r->isSuccess();
-
-			if ($res)
-			{
-				if ($accountData = $r->getData())
-				{
-					if (array_key_exists('ACCOUNT_NUMBER', $accountData))
-					{
-						$accountNumber = $accountData['ACCOUNT_NUMBER'];
-					}
-				}
-			}
-		}
-
-		$result->setData(array(
-							'ACCOUNT_NUMBER' => $accountNumber
-						 ));
-		return $result;
-	}
-
-	/**
-	 * @param $id
-	 *
-	 * @return Sale\Result
-	 * @throws \Bitrix\Main\ArgumentNullException
-	 */
-	protected static function generateCustomAccountNumber($id)
-	{
-		$result = new Sale\Result();
 
 		$id = intval($id);
 		if ($id <= 0)
 		{
-			$result->addError(new Sale\ResultError(Loc::getMessage('SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_WRONG_ID'), 'SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_WRONG_ID'));
+			$result->addError(
+				new Sale\ResultError(
+					Loc::getMessage('SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_WRONG_ID'),
+					'SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_WRONG_ID'
+				)
+			);
+
+			return $result;
+		}
+		$registry = Sale\Registry::getInstance(Sale\Registry::REGISTRY_TYPE_ORDER);
+
+		/** @var Sale\Order $orderClass */
+		$orderClass = $registry->getOrderClassName();
+
+		$order = $orderClass::load($id);
+		if (!$order)
+		{
+			$result->addError(
+				new \Bitrix\Main\Error(
+					Bitrix\Main\Localization\Loc::getMessage('ERROR')
+				)
+			);
+
 			return $result;
 		}
 
-		$type = \Bitrix\Main\Config\Option::get("sale", "account_number_template", "");
+		$accountNumber = Internals\AccountNumberGenerator::generateForOrder($order);
 
-		$isCustomAlgorithm = false;
-		$value = null;
-		foreach(GetModuleEvents("sale", "OnBeforeOrderAccountNumberSet", true) as $arEvent)
+		$r = Internals\OrderTable::update($id, ['ACCOUNT_NUMBER' => $accountNumber]);
+		if (!$r->isSuccess())
 		{
-			$tmpRes = ExecuteModuleEventEx($arEvent, array($id, $type));
-			if ($tmpRes !== false)
-			{
-				$isCustomAlgorithm = true;
-				$value = $tmpRes;
-			}
+			$result->addErrors($r->getErrors());
 		}
-
-		$result->setData(array(
-							 'IS_CUSTOM' => $isCustomAlgorithm,
-							 'VALUE' => $value
-						 ));
 
 		return $result;
-	}
-
-	/**
-	 * @internal
-	 * @param $id
-	 *
-	 * @return Sale\Result
-	 * @throws Exception
-	 * @throws \Bitrix\Main\ArgumentNullException
-	 */
-	protected static function generateAccountNumber($id)
-	{
-		$result = new Sale\Result();
-
-		$id = intval($id);
-		if ($id <= 0)
-		{
-			$result->addError(new Sale\ResultError(Loc::getMessage('SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_WRONG_ID'), 'SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_WRONG_ID'));
-			return $result;
-		}
-
-		$type = \Bitrix\Main\Config\Option::get("sale", "account_number_template", "");
-		$param = \Bitrix\Main\Config\Option::get("sale", "account_number_data", "");
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
-
-		$res = false;
-		$value = null;
-		if ($type != "") // if special template is selected
-		{
-			for ($i = 0; $i < 10; $i++)
-			{
-				$value = CSaleOrder::GetNextAccountNumber($id, $type, $param);
-
-				if ($value)
-				{
-					if ($isOrderConverted == "Y")
-					{
-						try
-						{
-							/** @var \Bitrix\Sale\Result $r */
-							$r = \Bitrix\Sale\Internals\OrderTable::update($id, array("ACCOUNT_NUMBER" => $value));
-							$res = $r->isSuccess();
-						}
-						catch(\Bitrix\Main\DB\SqlQueryException $exception)
-						{
-							$res = false;
-						}
-
-					}
-					else
-					{
-						$res = CSaleOrder::Update($id, array("ACCOUNT_NUMBER" => $value), false);
-					}
-
-					if ($res)
-						break;
-				}
-			}
-		}
-
-		if (!$res)
-		{
-			$result->addError(new Sale\ResultError(Loc::getMessage('SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_IS_NOT_SET'), 'SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_IS_NOT_SET'));
-			return $result;
-		}
-
-		$result->setData(array(
-							'VALUE' => (strval($value) != '')? $value : null,
-						 ));
-
-		return $result;
-	}
-
-	/**
-	 * @internal
-	 * @param $id
-	 *
-	 * @return Sale\Result
-	 * @throws Exception
-	 * @throws \Bitrix\Main\ArgumentNullException
-	 */
-	protected static function setIdAsAccountNumber($id)
-	{
-		$result = new Sale\Result();
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
-		if ($isOrderConverted == "Y")
-		{
-			$accountNumber = $id;
-			for ($i = 1; $i <= 10; $i++)
-			{
-				try
-				{
-					/** @var \Bitrix\Sale\Result $r */
-					$r = \Bitrix\Sale\Internals\OrderTable::update($id, array("ACCOUNT_NUMBER" => $accountNumber));
-					$res = $r->isSuccess(true);
-				}
-				catch (\Bitrix\Main\DB\SqlQueryException $exception)
-				{
-					$res = false;
-					$accountNumber = $id."-".$i;
-				}
-
-				if ($res)
-					break;
-			}
-
-		}
-		else
-		{
-			$res = CSaleOrder::Update($id, array("ACCOUNT_NUMBER" => $id), false);
-		}
-
-		if (!$res)
-		{
-			$result->addError(new Sale\ResultError(Loc::getMessage('SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_IS_NOT_SET_AS_ID'), 'SALE_ORDER_GENERATE_ACCOUNT_NUMBER_ORDER_NUMBER_IS_NOT_SET_AS_ID'));
-			return $result;
-		}
-
-		$result->setData(array(
-							'ACCOUNT_NUMBER' => $id
-						 ));
-
-		return $result;
-	}
-
-	/**
-	* Generates next account number according to the scheme selected in the module options
-	*
-	* @param int $orderID - order ID
-	* @param string $templateType - account number template type code
-	* @param string $param - account number template param
-	* @return mixed - generated number or false
-	*/
-	public static function GetNextAccountNumber($orderID, $templateType, $param)
-	{
-		global $DB;
-		$value = false;
-
-		switch ($templateType)
-		{
-			case 'NUMBER':
-
-				$param = intval($param);
-				$maxLastID = 0;
-
-				switch(strtolower($DB->type))
-				{
-					case "mysql":
-						$strSql = "SELECT ID, ACCOUNT_NUMBER FROM b_sale_order WHERE ACCOUNT_NUMBER IS NOT NULL ORDER BY ID DESC LIMIT 1";
-						break;
-					case "oracle":
-						$strSql = "SELECT ID, ACCOUNT_NUMBER FROM b_sale_order WHERE ACCOUNT_NUMBER IS NOT NULL AND ROWNUM <= 1 ORDER BY ID DESC";
-						break;
-					case "mssql":
-						$strSql = "SELECT TOP 1 ID, ACCOUNT_NUMBER FROM b_sale_order WHERE ACCOUNT_NUMBER IS NOT NULL ORDER BY ID DESC";
-						break;
-				}
-
-				$dbres = $DB->Query($strSql, true);
-				if ($arRes = $dbres->GetNext())
-				{
-					if (strlen($arRes["ACCOUNT_NUMBER"]) === strlen(intval($arRes["ACCOUNT_NUMBER"])))
-						$maxLastID = intval($arRes["ACCOUNT_NUMBER"]);
-				}
-
-				$value = ($maxLastID >= $param) ? $maxLastID + 1 : $param;
-				break;
-
-			case 'PREFIX':
-
-				$value = $param.$orderID;
-				break;
-
-			case 'RANDOM':
-
-				$rand = randString(intval($param), array("ABCDEFGHIJKLNMOPQRSTUVWXYZ", "0123456789"));
-				$dbres = $DB->Query("SELECT ID, ACCOUNT_NUMBER FROM b_sale_order WHERE ACCOUNT_NUMBER = '".$rand."'", true);
-				$value = ($arRes = $dbres->GetNext()) ? false : $rand;
-				break;
-
-			case 'USER':
-
-				$dbres = $DB->Query("SELECT USER_ID FROM b_sale_order WHERE ID = '".$orderID."'", true);
-
-				if ($arRes = $dbres->GetNext())
-				{
-					$userID = $arRes["USER_ID"];
-
-					switch (strtolower($DB->type))
-					{
-						case "mysql":
-							$strSql = "SELECT MAX(CAST(SUBSTRING(ACCOUNT_NUMBER, LENGTH('".$userID."_') + 1) as UNSIGNED)) as NUM_ID FROM b_sale_order WHERE ACCOUNT_NUMBER LIKE '".$userID."\_%'";
-							break;
-						case "oracle":
-							$strSql = "SELECT MAX(CAST(SUBSTR(ACCOUNT_NUMBER, LENGTH('".$userID."_') + 1) as NUMBER)) as NUM_ID FROM b_sale_order WHERE ACCOUNT_NUMBER LIKE '".$userID."_%'";
-							break;
-						case "mssql":
-							$strSql = "SELECT MAX(CAST(SUBSTRING(ACCOUNT_NUMBER, LEN('".$userID."_') + 1, LEN(ACCOUNT_NUMBER)) as INT)) as NUM_ID FROM b_sale_order WHERE ACCOUNT_NUMBER LIKE '".$userID."_%'";
-							break;
-					}
-
-					$dbres = $DB->Query($strSql, true);
-					if ($arRes = $dbres->GetNext())
-					{
-						$numID = (intval($arRes["NUM_ID"]) > 0) ? $arRes["NUM_ID"] + 1 : 1;
-						$value = $userID."_".$numID;
-					}
-					else
-						$value = $userID."_1";
-				}
-				else
-					$value = false;
-
-				break;
-
-			case 'DATE':
-
-				switch ($param)
-				{
-					// date in the site format but without delimeters
-					case 'day':
-						$date = date($DB->DateFormatToPHP(CSite::GetDateFormat("SHORT")), mktime(0, 0, 0, date("m"), date("d"), date("Y")));
-						$date = preg_replace("/[^0-9]/", "", $date);
-						break;
-					case 'month':
-						$date = date($DB->DateFormatToPHP(str_replace("DD", "", CSite::GetDateFormat("SHORT"))), mktime(0, 0, 0, date("m"), date("d"), date("Y")));
-						$date = preg_replace("/[^0-9]/", "", $date);
-						break;
-					case 'year':
-						$date = date('Y');
-						break;
-				}
-
-				switch (strtolower($DB->type))
-				{
-					case "mysql":
-						$strSql = "SELECT MAX(CAST(SUBSTRING(ACCOUNT_NUMBER, LENGTH('".$date." / ') + 1) as UNSIGNED)) as NUM_ID FROM b_sale_order WHERE ACCOUNT_NUMBER LIKE '".$date." / %'";
-						break;
-					case "oracle":
-						$strSql = "SELECT MAX(CAST(SUBSTR(ACCOUNT_NUMBER, LENGTH('".$date." / ') + 1) as NUMBER)) as NUM_ID FROM b_sale_order WHERE ACCOUNT_NUMBER LIKE '".$date." / %'";
-						break;
-					case "mssql":
-						$strSql = "SELECT MAX(CAST(SUBSTRING(ACCOUNT_NUMBER, LEN('".$date." / ') + 1, LEN(ACCOUNT_NUMBER)) as INT)) as NUM_ID FROM b_sale_order WHERE ACCOUNT_NUMBER LIKE '".$date." / %'";
-						break;
-				}
-
-				$dbres = $DB->Query($strSql, true);
-				if ($arRes = $dbres->GetNext())
-				{
-					$numID = (intval($arRes["NUM_ID"]) > 0) ? $arRes["NUM_ID"] + 1 : 1;
-					$value = $date." / ".$numID;
-				}
-				else
-					$value = $date." / 1";
-
-				break;
-
-			default: // if unknown template
-
-				$value = false;
-				break;
-		}
-
-		return $value;
 	}
 
 	/**
 	* The agent function. Moves reserved quantity back to the quantity field for each product
 	* for orders which were placed earlier than specific date
 	*
-	* @return agent name string
+	* @return string
 	*/
 	public static function ClearProductReservedQuantity()
 	{
-		global $DB, $USER;
-
-		if (!is_object($USER))
-			$USER = new CUser;
-
-		$days_ago = (int)COption::GetOptionString("sale", "product_reserve_clear_period");
-
-		if ($days_ago > 0)
-		{
-
-			$shipmentList = array();
-			$date = new \Bitrix\Main\Type\DateTime();
-
-			$filter = array(
-				'filter' => array(
-					"<=DATE_INSERT" => $date->add('-'.$days_ago.' day'),
-					"=SHIPMENT.RESERVED" => "Y",
-					"=SHIPMENT.DEDUCTED" => "N",
-					"=SHIPMENT.MARKED" => "N",
-					"=SHIPMENT.ALLOW_DELIVERY" => "N",
-					"=PAYED" => "N",
-					"=CANCELED" => "N",
-				),
-				'select' => array(
-					"ID",
-					"SHIPMENT_ID" => "SHIPMENT.ID",
-					"SHIPMENT_RESERVED" => "SHIPMENT.RESERVED",
-					"SHIPMENT_DEDUCTED" => "SHIPMENT.DEDUCTED",
-					"DATE_INSERT", "PAYED", "CANCELED", "MARKED"
-				)
-			);
-
-			$res = \Bitrix\Sale\Internals\OrderTable::getList($filter);
-			while($data = $res->fetch())
-			{
-				if (!array_key_exists($data['ID'], $shipmentList))
-				{
-					$shipmentList[$data['ID']] = array();
-				}
-
-				if (in_array($data['SHIPMENT_ID'], $shipmentList[$data['ID']]))
-				{
-					continue;
-				}
-
-				$shipmentList[$data['ID']][] = $data['SHIPMENT_ID'];
-			}
-
-
-			if (!empty($shipmentList))
-			{
-				foreach ($shipmentList as $orderId => $shipmentData)
-				{
-					/** @var Sale\Order $order */
-					$order = Sale\Order::load($orderId);
-					$orderSaved = false;
-					$errors = array();
-
-					try
-					{
-						/** @var Sale\ShipmentCollection $shipmentCollection */
-						if ($shipmentCollection = $order->getShipmentCollection())
-						{
-							foreach ($shipmentData as $shipmentId)
-							{
-								/** @var Sale\Shipment $shipment */
-								if ($shipment = $shipmentCollection->getItemById($shipmentId))
-								{
-									$r = $shipment->tryUnreserve();
-									if (!$r->isSuccess())
-									{
-										if (!$shipment->isMarked())
-										{
-											$shipment->setField('MARKED', 'Y');
-											if (is_array($r->getErrorMessages()))
-											{
-												$oldErrorText = $shipment->getField('REASON_MARKED');
-												foreach($r->getErrorMessages() as $error)
-												{
-													$oldErrorText .= (strval($oldErrorText) != '' ? "\n" : ""). $error;
-												}
-
-												$shipment->setField('REASON_MARKED', $oldErrorText);
-											}
-										}
-									}
-								}
-							}
-						}
-
-						$r = $order->save();
-						if ($r->isSuccess())
-						{
-							$orderSaved = true;
-						}
-						else
-						{
-							$errors = $r->getErrorMessages();
-						}
-					}
-					catch(Exception $e)
-					{
-						$errors[] = $e->getMessage();
-					}
-
-					if (!$orderSaved)
-					{
-						if (!empty($errors))
-						{
-							$oldErrorText = $order->getField('REASON_MARKED');
-							foreach($errors as $error)
-							{
-								$oldErrorText .= (strval($oldErrorText) != '' ? "\n" : ""). $error;
-							}
-
-							Sale\Internals\OrderTable::update($order->getId(), array(
-								"MARKED" => "Y",
-								"REASON_MARKED" => $oldErrorText
-							));
-						}
-					}
-				}
-			}
-		}
-
+		\Bitrix\Sale\Helpers\ReservedProductCleaner::bind(60);
 		return "CSaleOrder::ClearProductReservedQuantity();";
 	}
 
@@ -3904,12 +3285,17 @@ class CAllSaleOrder
 			$selectOrder[] = 'USER_ID';
 		}
 
-		$res = Sale\Order::getList(array(
-									   'filter' => array(
-										   '=ID' => $list
-									   ),
-									   'select' => $selectOrder
-								   ));
+		$registry = Sale\Registry::getInstance(Sale\Registry::REGISTRY_TYPE_ORDER);
+
+		/** @var Sale\Order $orderClass */
+		$orderClass = $registry->getOrderClassName();
+
+		$res = $orderClass::getList(array(
+		   'filter' => array(
+			   '=ID' => $list
+		   ),
+		   'select' => $selectOrder
+	   ));
 		while($orderData = $res->fetch())
 		{
 			if (!in_array($orderData['LID'], array_keys($siteList)))
@@ -4039,4 +3425,3 @@ class CAllSaleOrder
 		return $output;
 	}
 }
-?>

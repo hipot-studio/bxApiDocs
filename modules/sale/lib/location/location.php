@@ -19,6 +19,22 @@ use Bitrix\Sale\Location\DB\Helper;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class LocationTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Location_Query query()
+ * @method static EO_Location_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Location_Result getById($id)
+ * @method static EO_Location_Result getList(array $parameters = [])
+ * @method static EO_Location_Entity getEntity()
+ * @method static \Bitrix\Sale\Location\EO_Location createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Location\EO_Location_Collection createCollection()
+ * @method static \Bitrix\Sale\Location\EO_Location wakeUpObject($row)
+ * @method static \Bitrix\Sale\Location\EO_Location_Collection wakeUpCollection($rows)
+ */
 final class LocationTable extends Tree
 {
 	public static function getFilePath()
@@ -39,21 +55,6 @@ final class LocationTable extends Tree
 	* @throws Bitrix\Main\ArgumentNullException
 	*
 	* @return Bitrix\Main\DB\Result location
-	*/
-	
-	/**
-	* <p>Метод возвращает параметры местоположения с кодом <code>$code</code>. Метод статический.</p>
-	*
-	*
-	* @param string $code = '' Код местоположения.
-	*
-	* @param array $parameters = array() Массив дополнительных параметров выборки.
-	*
-	* @return \Bitrix\Main\DB\Result 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/location/locationtable/getbycode.php
-	* @author Bitrix
 	*/
 	public static function getByCode($code = '', $parameters = array())
 	{
@@ -76,25 +77,49 @@ final class LocationTable extends Tree
 		{
 			$error = false;
 
-			if($field->getName() == 'LATITUDE' && strlen($data['LATITUDE']))
+			if ($field->getName() === 'LATITUDE')
 			{
-				// latitude is set in data and not empty, it must lay between -90 and 90
-				if(!is_numeric($data['LATITUDE']))
-					$error = Loc::getMessage('SALE_LOCATION_LOCATION_ENTITY_LATITUDE_TYPE_ERROR');
-				elseif(($latitude = floatval($data['LATITUDE'])) && ($latitude < -90 || $latitude > 90))
-					$error = Loc::getMessage('SALE_LOCATION_LOCATION_ENTITY_LATITUDE_RANGE_ERROR');
+				$latitude = (string)($data['LATITUDE'] ?? null);
+				if ($latitude !== '')
+				{
+					// latitude is set in data and not empty, it must lay between -90 and 90
+					if (!is_numeric($latitude))
+					{
+						$error = Loc::getMessage('SALE_LOCATION_LOCATION_ENTITY_LATITUDE_TYPE_ERROR');
+					}
+					else
+					{
+						$latitude = (float)$latitude;
+						if ($latitude < -90 || $latitude > 90)
+						{
+							$error = Loc::getMessage('SALE_LOCATION_LOCATION_ENTITY_LATITUDE_RANGE_ERROR');
+						}
+					}
+				}
 			}
 
-			if($field->getName() == 'LONGITUDE' && strlen($data['LONGITUDE']))
+			if ($field->getName() === 'LONGITUDE')
 			{
-				// longitude is set in data and not empty, it must lay between -180 and 180
-				if(!is_numeric($data['LONGITUDE']))
-					$error = Loc::getMessage('SALE_LOCATION_LOCATION_ENTITY_LONGITUDE_TYPE_ERROR');
-				elseif(($longitude = floatval($data['LONGITUDE'])) && ($longitude < -180 || $longitude > 180))
-					$error = Loc::getMessage('SALE_LOCATION_LOCATION_ENTITY_LONGITUDE_RANGE_ERROR');
+				$longitude = (string)($data['LONGITUDE'] ?? null);
+				if ($longitude !== '')
+				{
+					// longitude is set in data and not empty, it must lay between -180 and 180
+					if (!is_numeric($longitude))
+					{
+						$error = Loc::getMessage('SALE_LOCATION_LOCATION_ENTITY_LONGITUDE_TYPE_ERROR');
+					}
+					else
+					{
+						$longitude = (float)$longitude;
+						if ($longitude < -180 || $longitude > 180)
+						{
+							$error = Loc::getMessage('SALE_LOCATION_LOCATION_ENTITY_LONGITUDE_RANGE_ERROR');
+						}
+					}
+				}
 			}
 
-			if($error !== false)
+			if ($error !== false)
 			{
 				$result->addError(new Entity\FieldError(
 					$field,
@@ -105,23 +130,6 @@ final class LocationTable extends Tree
 		}
 	}
 
-	
-	/**
-	* <p>Метод добавляет новое местоположение. Метод статический.</p>
-	*
-	*
-	* @param array $arraydata = array() Массив параметров местоположения с ключами:<br><ul> <li> <b>NAME</b> -
-	* название нового местоположения;</li> <li> <b>EXTERNAL</b> - внешние
-	* сервисы.</li> </ul>
-	*
-	* @param array $arraybehaviour = array('REBALANCE' => true, 'RESET_LEGACY' => true) Массив дополнительных флагов поведения.
-	*
-	* @return \Bitrix\Main\Entity\AddResult 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/location/locationtable/add.php
-	* @author Bitrix
-	*/
 	public static function add(array $data)
 	{
 		return self::addExtended($data);
@@ -169,7 +177,7 @@ final class LocationTable extends Tree
 
 		// force code to lowercase
 		if(isset($data['CODE']))
-			$data['CODE'] = ToLower($data['CODE']);
+			$data['CODE'] = mb_strtolower($data['CODE']);
 
 		// you are not allowed to modify tree data over LocationTable::add()
 		self::applyRestrictions($data);
@@ -203,31 +211,10 @@ final class LocationTable extends Tree
 	protected static function resetLegacy($typeId)
 	{
 		$type = TypeTable::getList(array('filter' => array('=ID' => $typeId), 'select' => array('CODE')))->fetch();
-		if(strlen($type['CODE']) && in_array($type['CODE'], array('COUNTRY', 'REGION', 'CITY')))
+		if(mb_strlen($type['CODE']) && in_array($type['CODE'], array('COUNTRY', 'REGION', 'CITY')))
 			static::resetLegacyPath();
 	}
 
-	
-	/**
-	* <p>Метод обновляет параметры существующего местоположения. Метод статический.</p>
-	*
-	*
-	* @param integer $primary  Идентификатор местоположения.
-	*
-	* @param integer $arraydata = array() Массив параметров местоположения с ключами:<br><ul> <li> <b>NAME</b> -
-	* название нового местоположения;</li> <li> <b>EXTERNAL</b> - внешние
-	* сервисы.</li> </ul>
-	*
-	* @param array $arraybehaviour = array('REBALANCE' Массив дополнительных флагов поведения. Системный параметр.
-	*
-	* @param true, $RESET_LEGACY  
-	*
-	* @return \Bitrix\Main\Entity\UpdateResult 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/location/locationtable/update.php
-	* @author Bitrix
-	*/
 	public static function update($primary, array $data)
 	{
 		return self::updateExtended($primary, $data);
@@ -278,7 +265,7 @@ final class LocationTable extends Tree
 
 		// force code to lowercase
 		if(isset($data['CODE']))
-			$data['CODE'] = ToLower($data['CODE']);
+			$data['CODE'] = mb_strtolower($data['CODE']);
 
 		// you are not allowed to modify tree data over LocationTable::update()
 		self::applyRestrictions($data);
@@ -308,25 +295,6 @@ final class LocationTable extends Tree
 		return $updResult;
 	}
 
-	
-	/**
-	* <p>Метод удаляет местоположение из дерева местоположений. Метод статический.</p>
-	*
-	*
-	* @param integer $primary  Идентификатор местоположения.
-	*
-	* @param array $behaviour = array('REBALANCE' Массив дополнительных флагов поведения.
-	*
-	* @param true, $DELETE_SUBTREE  
-	*
-	* @param true, $RESET_LEGACY  
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/location/locationtable/delete.php
-	* @author Bitrix
-	*/
 	public static function delete($primary)
 	{
 		return self::deleteExtended($primary);
@@ -369,7 +337,7 @@ final class LocationTable extends Tree
 			if($resetLegacy && intval($data['TYPE_ID']))
 			{
 				$type = TypeTable::getList(array('filter' => array('=ID' => $data['TYPE_ID']), 'select' => array('CODE')))->fetch();
-				if(strlen($type['CODE']) && in_array($type['CODE'], array('COUNTRY', 'REGION', 'CITY')))
+				if(mb_strlen($type['CODE']) && in_array($type['CODE'], array('COUNTRY', 'REGION', 'CITY')))
 					static::resetLegacyPath();
 			}
 
@@ -401,27 +369,10 @@ final class LocationTable extends Tree
 
 	/**
 	 * Fetches a parent chain of a specified node, using its code
-	 * 
+	 *
 	 * Available keys in $behaviour
 	 * SHOW_LEAF : if set to true, return node itself in the result
 	 */
-	
-	/**
-	* <p>Метод выдает родительскую цепь указанного местоположения по его коду. Метод статический.</p>
-	*
-	*
-	* @param string $code  Код местоположения.
-	*
-	* @param array $parameters  Массив дополнительных параметров выборки.
-	*
-	* @param array $behaviour = array('SHOW_LEAF' Массив дополнительных флагов поведения. Системный параметр.
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/location/locationtable/getpathtonodebycode.php
-	* @author Bitrix
-	*/
 	public static function getPathToNodeByCode($code, $parameters, $behaviour = array('SHOW_LEAF' => true))
 	{
 		$code = Assert::expectStringNotNull($code, '$code');
@@ -537,12 +488,12 @@ final class LocationTable extends Tree
 			),
 			'SORT' => array(
 				'data_type' => 'integer',
-				'default' => 100,
+				'default_value' => 100,
 				'title' => Loc::getMessage('SALE_LOCATION_LOCATION_ENTITY_SORT_FIELD')
 			),
 			'PARENT_ID' => array(
 				'data_type' => 'integer',
-				'default' => 0,
+				'default_value' => 0,
 				'title' => Loc::getMessage('SALE_LOCATION_LOCATION_ENTITY_PARENT_ID_FIELD')
 			),
 			'TYPE_ID' => array(
@@ -615,7 +566,7 @@ final class LocationTable extends Tree
 			'CHILDREN_CNT' => array(
 				'data_type' => 'integer',
 				'expression' => array(
-					'count(%s)', 
+					'count(%s)',
 					'CHILD.ID'
 				)
 			),
@@ -651,7 +602,7 @@ final class LocationTable extends Tree
 			'CHILD_CNT' => array(
 				'data_type' => 'integer',
 				'expression' => array(
-					'count(%s)', 
+					'count(%s)',
 					'CHILD.ID'
 				)
 			),

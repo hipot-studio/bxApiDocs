@@ -12,7 +12,7 @@ class PostDecodeFilter implements Type\IRequestFilter
 	 * @param array $values
 	 * @return array
 	 */
-	static public function filter(array $values)
+	public function filter(array $values)
 	{
 		if(Application::getInstance()->isUtfMode())
 		{

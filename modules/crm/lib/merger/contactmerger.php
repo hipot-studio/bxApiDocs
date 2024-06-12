@@ -1,12 +1,18 @@
 <?php
 namespace Bitrix\Crm\Merger;
-use Bitrix\Main;
 use Bitrix\Crm;
-use Bitrix\Crm\Integrity;
+use Bitrix\Crm\Binding;
+use Bitrix\Crm\EntityRequisite;
 use Bitrix\Crm\Recovery;
+use Bitrix\Crm\Timeline;
+use Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
+
+Loc::loadMessages($_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/modules/crm/lib/webform/entity.php');
+
 class ContactMerger extends EntityMerger
 {
-	private static $LANG_INCLUDED = false;
+	private static $langIncluded = false;
 	private $entity = null;
 
 	public function __construct($userID, $enablePermissionCheck = false)
@@ -28,6 +34,15 @@ class ContactMerger extends EntityMerger
 	protected function getEntityUserFieldsInfo()
 	{
 		return \CCrmContact::GetUserFields();
+	}
+	/**
+	 * Get field caption
+	 * @param string $fieldId
+	 * @return string
+	 */
+	protected function getFieldCaption(string $fieldId):string
+	{
+		return \CCrmContact::GetFieldCaption($fieldId);
 	}
 	protected function getEntityResponsibleID($entityID, $roleID)
 	{
@@ -75,16 +90,144 @@ class ContactMerger extends EntityMerger
 	}
 	protected function setupRecoveryData(Recovery\EntityRecoveryData $recoveryData, array &$fields)
 	{
-		$recoveryData->setTitle(\CCrmContact::GetFullName($fields, true));
+		$recoveryData->setTitle(\CCrmContact::PrepareFormattedName($fields));
 		if(isset($fields['ASSIGNED_BY_ID']))
 		{
 			$recoveryData->setResponsibleID((int)$fields['ASSIGNED_BY_ID']);
 		}
 	}
-	protected function updateEntity($entityID, array &$fields, $roleID)
+
+	protected static function getFieldConflictResolver(string $fieldId, string $type): ConflictResolver\Base
+	{
+		$userDefinedResolver = static::getUserDefinedConflictResolver(
+			\CCrmOwnerType::Contact,
+			$fieldId,
+			$type
+		);
+		if ($userDefinedResolver)
+		{
+			return $userDefinedResolver;
+		}
+
+		switch($fieldId)
+		{
+			case 'NAME':
+				$resolver = new Crm\Merger\ConflictResolver\NameField($fieldId);
+				$resolver->setRelatedFieldsCheckRequired(true);
+				$resolver->setEmptyValues(static::getEqualTitleValues());
+				return $resolver;
+
+			case 'SECOND_NAME':
+			case 'LAST_NAME':
+				return new Crm\Merger\ConflictResolver\NameField($fieldId);
+
+			case 'COMMENTS':
+				return new Crm\Merger\ConflictResolver\HtmlField($fieldId);
+
+			case 'SOURCE_ID':
+				return new Crm\Merger\ConflictResolver\SourceField($fieldId);
+
+			case 'SOURCE_DESCRIPTION':
+				return new Crm\Merger\ConflictResolver\TextField($fieldId);
+
+			case 'EXPORT':
+			case 'OPENED':
+				return new Crm\Merger\ConflictResolver\IgnoredField($fieldId);
+		}
+
+		return parent::getFieldConflictResolver($fieldId, $type);
+	}
+
+	protected static function canMergeEntityField($fieldID)
+	{
+		//Field CompanyID is obsolete. It is replaced by CompanyIDs
+		if($fieldID === 'COMPANY_ID')
+		{
+			return false;
+		}
+		return parent::canMergeEntityField($fieldID);
+	}
+
+	protected function mergeBoundEntitiesBatch(array &$seeds, array &$targ, $skipEmpty = false, array $options = array())
+	{
+		$companyMerger = new ContactCompanyBindingMerger();
+		$companyMerger->merge($seeds, $targ, $skipEmpty, $options);
+
+		parent::mergeBoundEntitiesBatch($seeds, $targ, $skipEmpty, $options);
+	}
+
+	protected function innerPrepareEntityFieldMergeData($fieldID, array $fieldParams,  array $seeds, array $targ, array $options = null)
+	{
+		if($fieldID === 'COMPANY_IDS')
+		{
+			$enabledIdsMap = null;
+			if(isset($options['enabledIds']) && is_array($options['enabledIds']))
+			{
+				$enabledIdsMap = array_fill_keys($options['enabledIds'], true);
+			}
+
+			$sourceEntityIDs = array();
+			$resultCompanyBindings = array();
+			foreach($seeds as $seed)
+			{
+				$seedID = (int)$seed['ID'];
+				if(is_null($enabledIdsMap) || isset($enabledIdsMap[$seedID]))
+				{
+					$seedCompanyBindings = Binding\ContactCompanyTable::getContactBindings($seedID);
+					if(!empty($seedCompanyBindings))
+					{
+						$sourceEntityIDs[] = $seedID;
+						self::mergeEntityBindings(
+							\CCrmOwnerType::Company,
+							$seedCompanyBindings,
+							$resultCompanyBindings
+						);
+					}
+				}
+			}
+
+			$targID = (int)$targ['ID'];
+			if(is_null($enabledIdsMap) || isset($enabledIdsMap[$targID]))
+			{
+				$targCompanyBindings = Binding\ContactCompanyTable::getContactBindings($targID);
+				if(!empty($targCompanyBindings))
+				{
+					$sourceEntityIDs[] = $targID;
+					self::mergeEntityBindings(
+						\CCrmOwnerType::Company,
+						$targCompanyBindings,
+						$resultCompanyBindings
+					);
+				}
+			}
+
+			return array(
+				'FIELD_ID' => 'COMPANY_IDS',
+				'TYPE' => 'crm_company',
+				'IS_MERGED' => true,
+				'IS_MULTIPLE' => true,
+				'SOURCE_ENTITY_IDS' => array_unique($sourceEntityIDs, SORT_NUMERIC),
+				'VALUE' => Binding\EntityBinding::prepareEntityIDs(\CCrmOwnerType::Company, $resultCompanyBindings),
+			);
+		}
+		return parent::innerPrepareEntityFieldMergeData($fieldID, $fieldParams, $seeds, $targ, $options);
+	}
+
+	/**
+	 * Update entity
+	 * @param int $entityID Entity ID.
+	 * @param array &$fields Entity Fields.
+	 * @param int $roleID Entity Role ID (is not required).
+	 * @param array $options Options.
+	 * @return void
+	 * @throws EntityMergerException
+	 */
+	protected function updateEntity($entityID, array &$fields, $roleID, array $options = array())
 	{
 		$entity = $this->getEntity();
-		if(!$entity->Update($entityID, $fields))
+		//Required for set current user as last modification author
+		unset($fields['CREATED_BY_ID'], $fields['DATE_CREATE'], $fields['MODIFY_BY_ID'], $fields['DATE_MODIFY']);
+		if(!$entity->Update($entityID, $fields, true, true, $options))
 		{
 			throw new EntityMergerException(
 				\CCrmOwnerType::Contact,
@@ -113,14 +256,52 @@ class ContactMerger extends EntityMerger
 			);
 		}
 	}
+
+	/**
+	 * Unbind dependencies from seed entity and bind them to target entity
+	 * @param int $seedID Seed entity ID.
+	 * @param int $targID Target entity ID.
+	 * @return void
+	 */
 	protected function rebind($seedID, $targID)
 	{
-		\CCrmDeal::Rebind(\CCrmOwnerType::Contact, $seedID, $targID);
-		\CCrmQuote::Rebind(\CCrmOwnerType::Contact, $seedID, $targID);
+		$seedID = (int)$seedID;
+		$targID = (int)$targID;
+
+		//Skip companies if they were processed by map
+		if(!($this->map !== null && isset($this->map['COMPANY_IDS'])))
+		{
+			Binding\ContactCompanyTable::rebindAllCompanies($seedID, $targID);
+		}
+
+		$relations = \Bitrix\Crm\Service\Container::getInstance()
+			->getRelationManager()
+			->getChildRelations(\CCrmOwnerType::Contact)
+		;
+		$itemFrom = new Crm\ItemIdentifier(\CCrmOwnerType::Contact, $seedID);
+		$itemTo = new Crm\ItemIdentifier(\CCrmOwnerType::Contact, $targID);
+		foreach ($relations as $relation)
+		{
+			$relation->replaceAllItemBindings($itemFrom, $itemTo);
+		}
+
 		\CCrmActivity::Rebind(\CCrmOwnerType::Contact, $seedID, $targID);
 		\CCrmLiveFeed::Rebind(\CCrmOwnerType::Contact, $seedID, $targID);
 		\CCrmSonetRelation::RebindRelations(\CCrmOwnerType::Contact, $seedID, $targID);
 		\CCrmEvent::Rebind(\CCrmOwnerType::Contact, $seedID, $targID);
+		EntityRequisite::rebind(\CCrmOwnerType::Contact, $seedID, $targID);
+
+		Timeline\ActivityEntry::rebind(\CCrmOwnerType::Contact, $seedID, $targID);
+		Timeline\CreationEntry::rebind(\CCrmOwnerType::Contact, $seedID, $targID);
+		Timeline\MarkEntry::rebind(\CCrmOwnerType::Contact, $seedID, $targID);
+		Timeline\CommentEntry::rebind(\CCrmOwnerType::Contact, $seedID, $targID);
+		Timeline\LogMessageEntry::rebind(\CCrmOwnerType::Contact, $seedID, $targID);
+		Timeline\AI\Call\Entry::rebind(\CCrmOwnerType::Contact, $seedID, $targID);
+
+		Crm\Tracking\Entity::rebindTrace(
+			\CCrmOwnerType::Contact, $seedID,
+			\CCrmOwnerType::Contact, $targID
+		);
 	}
 	protected function resolveMergeCollisions($seedID, $targID, array &$results)
 	{
@@ -176,11 +357,30 @@ class ContactMerger extends EntityMerger
 			'NOTIFY_MESSAGE_OUT' => $html
 		);
 	}
+
+	protected static function isFieldNotEmpty(array $fieldInfo, array $fields, string $fieldId): bool
+	{
+		$fieldValue = $fields[$fieldId];
+		return !($fieldId === 'NAME'
+			&& in_array($fieldValue, static::getEqualTitleValues(), true));
+	}
+
+	/**
+	 * @return array
+	 */
+	protected static function getEqualTitleValues(): array
+	{
+		return [
+			Loc::getMessage('CRM_WEBFORM_ENTITY_FIELD_NAME_CONTACT_TEMPLATE'),
+			Loc::getMessage('CRM_CONTACT_UNNAMED')
+		];
+	}
+
 	private static function includeLangFile()
 	{
-		if(!self::$LANG_INCLUDED)
+		if(!self::$langIncluded)
 		{
-			self::$LANG_INCLUDED = IncludeModuleLangFile(__FILE__);
+			self::$langIncluded = IncludeModuleLangFile(__FILE__);
 		}
 	}
 }

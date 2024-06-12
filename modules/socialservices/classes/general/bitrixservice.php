@@ -15,7 +15,7 @@ class CBitrixServiceOAuthInterface extends CSocServOAuthTransport
 
 	protected $authResult = array();
 
-	static public function __construct($appID = false, $appSecret = false, $code = false)
+	public function __construct($appID = false, $appSecret = false, $code = false)
 	{
 		parent::__construct($appID, $appSecret, $code);
 	}
@@ -141,6 +141,11 @@ class CBitrixServiceTransport
 	public function getMethods()
 	{
 		return $this->call(self::METHOD_METHODS);
+	}
+
+	public function setTimeout($timeout)
+	{
+		$this->httpTimeout = $timeout;
 	}
 
 	protected static function getLicense()

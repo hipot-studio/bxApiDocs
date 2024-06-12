@@ -1,5 +1,7 @@
-<?
+<?php
+
 use Bitrix\Main\Loader;
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/product.php");
 
 class CSaleProduct extends CALLSaleProduct
@@ -214,16 +216,16 @@ class CSaleProduct extends CALLSaleProduct
 			$field_val = "(";
 			foreach($value as $val)
 			{
-				if(strlen($val) > 0)
+				if($val <> '')
 					$field_val .= "\"".$DB->ForSQL($val)."\", ";
 			}
-			$field_val = substr($field_val, 0, -2);
+			$field_val = mb_substr($field_val, 0, -2);
 			$field_val .= ")";
 
-			if (substr($key, 0, 1) == "!")
+			if (mb_substr($key, 0, 1) == "!")
 			{
 				$operation = "NOT IN";
-				$field = $DB->ForSQL(substr($key, 1));
+				$field = $DB->ForSQL(mb_substr($key, 1));
 			}
 			else
 			{
@@ -235,36 +237,36 @@ class CSaleProduct extends CALLSaleProduct
 		{
 			$field_val = "\"".$DB->ForSQL($value)."\"";
 
-			if (substr($key, 0, 1) == "!")
+			if (mb_substr($key, 0, 1) == "!")
 			{
 				$operation = "<>";
-				$field = $DB->ForSQL(substr($key, 1));
+				$field = $DB->ForSQL(mb_substr($key, 1));
 
 			}
-			elseif (substr($key, 0, 1) == "%")
+			elseif (mb_substr($key, 0, 1) == "%")
 			{
 				$operation = "LIKE";
-				$field = $DB->ForSQL(substr($key, 1));
+				$field = $DB->ForSQL(mb_substr($key, 1));
 			}
-			elseif (substr($key, 0, 2) == "<=")
+			elseif (mb_substr($key, 0, 2) == "<=")
 			{
 				$operation = "<=";
-				$field = $DB->ForSQL(substr($key, 2));
+				$field = $DB->ForSQL(mb_substr($key, 2));
 			}
-			elseif (substr($key, 0, 2) == ">=")
+			elseif (mb_substr($key, 0, 2) == ">=")
 			{
 				$operation = ">=";
-				$field = $DB->ForSQL(substr($key, 2));
+				$field = $DB->ForSQL(mb_substr($key, 2));
 			}
-			elseif (substr($key, 0, 1) == ">")
+			elseif (mb_substr($key, 0, 1) == ">")
 			{
 				$operation = ">";
-				$field = $DB->ForSQL(substr($key, 1));
+				$field = $DB->ForSQL(mb_substr($key, 1));
 			}
-			elseif (substr($key, 0, 1) == "<")
+			elseif (mb_substr($key, 0, 1) == "<")
 			{
 				$operation = "<";
-				$field = $DB->ForSQL(substr($key, 1));
+				$field = $DB->ForSQL(mb_substr($key, 1));
 			}
 			else
 			{
@@ -288,7 +290,7 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 	* @param array $arFields - params for add
 	* @return true false
 	*/
-	static public function Add($arFields)
+	public static function Add($arFields)
 	{
 		global $DB;
 
@@ -299,19 +301,19 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 		if (isset($arFields["ID"]))
 			unset($arFields["ID"]);
 
-		$arFields["PRODUCT_ID"] = IntVal($arFields["PRODUCT_ID"]);
-		$arFields["USER_ID"] = IntVal($arFields["USER_ID"]);
-		$arFields["FUSER_ID"] = IntVal($arFields["FUSER_ID"]);
-		$arFields["IBLOCK_ID"] = IntVal($arFields["IBLOCK_ID"]);
-		if (strlen($arFields["CALLBACK_FUNC"]) <= 0)
+		$arFields["PRODUCT_ID"] = intval($arFields["PRODUCT_ID"]);
+		$arFields["USER_ID"] = intval($arFields["USER_ID"]);
+		$arFields["FUSER_ID"] = intval($arFields["FUSER_ID"]);
+		$arFields["IBLOCK_ID"] = intval($arFields["IBLOCK_ID"]);
+		if ($arFields["CALLBACK_FUNC"] == '')
 			$arFields["CALLBACK_FUNC"] = "CatalogViewedProductCallback";
-		if (strlen($arFields["MODULE"]) <= 0)
+		if ($arFields["MODULE"] == '')
 			$arFields["MODULE"] = "catalog";
-		if (strlen($arFields["PRODUCT_PROVIDER_CLASS"]) <= 0 && $arFields["MODULE"] == 'catalog')
+		if ($arFields["PRODUCT_PROVIDER_CLASS"] == '' && $arFields["MODULE"] == 'catalog')
 			$arFields["PRODUCT_PROVIDER_CLASS"] = "CCatalogProductProvider";
 		if ($arFields["PRODUCT_ID"] <= 0)
 			return false;
-		if (strlen($arFields["LID"]) <= 0)
+		if ($arFields["LID"] == '')
 			return false;
 
 		if (\Bitrix\Main\Loader::includeModule('statistic') && isset($_SESSION['SESS_SEARCHER_ID']) && (int)$_SESSION['SESS_SEARCHER_ID'] > 0)
@@ -321,7 +323,15 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 		{
 			if (\Bitrix\Main\Loader::includeModule('catalog'))
 			{
-				return \Bitrix\Catalog\CatalogViewedProductTable::refresh($arFields["PRODUCT_ID"], CSaleBasket::GetBasketUserID(), $arFields["LID"]);
+				if ((string)\Bitrix\Main\Config\Option::get('catalog', 'enable_viewed_products') !== 'N')
+				{
+					$result = \Bitrix\Catalog\CatalogViewedProductTable::refresh(
+						$arFields["PRODUCT_ID"],
+						CSaleBasket::GetBasketUserID(),
+						$arFields["LID"]
+					);
+					return ($result > 0);
+				}
 			}
 		}
 
@@ -347,7 +357,7 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 				$arFilter,
 				false,
 				false,
-				array('ID')
+				array('ID', 'DATE_VISIT')
 		);
 		if (!$arItems = $db_res->Fetch())//insert
 		{
@@ -375,7 +385,7 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 				if ($arResultTmp && count($arResultTmp) > 0)
 					$arFields = array_merge($arFields, $arResultTmp);
 
-				if (strlen($arFields["NAME"]) <= 0)
+				if ($arFields["NAME"] == '')
 					return false;
 
 				$arInsert = $DB->PrepareInsert("b_sale_viewed_product", $arFields);
@@ -393,24 +403,42 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 					$arCount = $db_res->Fetch();
 					$viewedCount = COption::GetOptionString("sale", "viewed_count", "100");
 
-					if ($arCount["ID"] > IntVal($viewedCount))
+					if ($arCount["ID"] > intval($viewedCount))
 					{
 						$limit = ($arCount["ID"] - $viewedCount) + ($viewedCount * 0.2);
 						CSaleViewedProduct::DeleteForUser($FUSER_ID, $limit);
 					}
 				}
 
-				$strSql = "INSERT INTO b_sale_viewed_product (".$arInsert[0].", DATE_VISIT) VALUES(".$arInsert[1].", ".$DB->GetNowFunction().")";
+				
+				$sqlInsertNames = $arInsert[0];
+				if (strval(trim($sqlInsertNames)) != '')
+				{
+					$sqlInsertNames .= ', ';
+				}
+
+				$sqlInsertValues = $arInsert[1];
+				if (strval(trim($sqlInsertValues)) != '')
+				{
+					$sqlInsertValues .= ', ';
+				}
+
+				$strSql = "INSERT INTO b_sale_viewed_product (".$sqlInsertNames." DATE_VISIT) VALUES(".$sqlInsertValues." ".$DB->GetNowFunction().")";
 				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 
-				$ID = IntVal($DB->LastID());
+				$ID = intval($DB->LastID());
 			}
 		}
 		else//update
 		{
-			$ID = IntVal($arItems["ID"]);
-			$arFields["~DATE_VISIT"] = $DB->GetNowFunction();
-			CSaleViewedProduct::Update($ID, $arFields);
+			$dateVisit = new \Bitrix\Main\Type\DateTime($arItems["DATE_VISIT"]);
+			$offset = $dateVisit->add('1 day')->getTimestamp();
+			if ($offset <= time())
+			{
+				$arFields = ["DATE_VISIT" => $DB->GetNowFunction()];
+				$id = (int)$arItems["ID"];
+				CSaleViewedProduct::Update($id, $arFields);
+			}
 		}
 
 		foreach(GetModuleEvents("sale", "OnViewedAdd", true) as $arEvent)
@@ -429,7 +457,7 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 	 * @param array $arSelectFields			Select fields.
 	 * @return bool|CDBResult
 	 */
-	static public function GetList($arOrder = array("ID"=>"DESC"), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
+	public static function GetList($arOrder = array("ID"=>"DESC"), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		global $DB;
 
@@ -461,9 +489,9 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 				}
 
 				$limit = 100;
-				if(is_array($arNavStartParams) && IntVal($arNavStartParams["nTopCount"]) >= 0)
+				if(is_array($arNavStartParams) && intval($arNavStartParams["nTopCount"]) >= 0)
 				{
-					$limit = IntVal($arNavStartParams["nTopCount"]);
+					$limit = intval($arNavStartParams["nTopCount"]);
 				}
 
 				$viewedIterator = \Bitrix\Catalog\CatalogViewedProductTable::getList(
@@ -604,11 +632,11 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 		$arSqls["SELECT"] = str_replace("%%_DISTINCT_%%", "", $arSqls["SELECT"]);
 
 		$strSql = "SELECT ".$arSqls["SELECT"]." FROM b_sale_viewed_product V ";
-		if (strlen($arSqls["WHERE"]) > 0)
+		if ($arSqls["WHERE"] <> '')
 			$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-		if (strlen($arSqls["GROUPBY"]) > 0)
+		if ($arSqls["GROUPBY"] <> '')
 			$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
-		if (strlen($arSqls["ORDERBY"]) > 0)
+		if ($arSqls["ORDERBY"] <> '')
 			$strSql .= "ORDER BY ".$arSqls["ORDERBY"]." ";
 
 		if (is_array($arGroupBy) && count($arGroupBy) == 0)
@@ -620,17 +648,17 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 				return false;
 		}
 
-		if (is_array($arNavStartParams) && IntVal($arNavStartParams["nTopCount"]) <= 0 )
+		if (is_array($arNavStartParams) && intval($arNavStartParams["nTopCount"]) <= 0 )
 		{
 			$strSql_tmp = "SELECT COUNT('x') as CNT FROM b_sale_viewed_product B ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql_tmp .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql_tmp .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
 			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 			$cnt = 0;
-			if (strlen($arSqls["GROUPBY"]) <= 0)
+			if ($arSqls["GROUPBY"] == '')
 			{
 				if ($arRes = $dbRes->Fetch())
 					$cnt = $arRes["CNT"];
@@ -659,12 +687,12 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 	* @param
 	* @return true false
 	*/
-	static public function _ClearViewed()
+	public static function _ClearViewed()
 	{
 		global $DB;
 
 		$viewed_time = COption::GetOptionString("sale", "viewed_time", "90");
-		$viewed_time = IntVal($viewed_time);
+		$viewed_time = intval($viewed_time);
 
 		$strSql =
 			"DELETE ".
@@ -682,7 +710,7 @@ class CSaleViewedProduct extends CAllSaleViewedProduct
 	* @param int $LIMIT - fields count for delete
 	* @return true false
 	*/
-	static public function DeleteForUser($FUSER_ID, $LIMIT = NULL)
+	public static function DeleteForUser($FUSER_ID, $LIMIT = NULL)
 	{
 		global $DB;
 

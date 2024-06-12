@@ -13,19 +13,30 @@ use Bitrix\Sale\ShipmentCollection;
  * Class Site
  * @package Bitrix\Sale\Services\Company\Restrictions
  */
-class Site extends Services\PaySystem\Restrictions\Site
+class Site extends Services\Base\SiteRestriction
 {
-	protected static function extractParams(Internals\CollectableEntity $entity)
+	/**
+	 * @param Internals\Entity $entity
+	 * @return Internals\Entity|Order|null
+	 */
+	protected static function getOrder(Internals\Entity $entity)
 	{
-		if (!($entity instanceof Payment) && !($entity instanceof Shipment))
-			return false;
+		if (!($entity instanceof Payment) && !($entity instanceof Shipment) && !($entity instanceof Order))
+		{
+			return null;
+		}
 
-		/** @var PaymentCollection|ShipmentCollection $collection */
-		$collection = $entity->getCollection();
+		if ($entity instanceof Order)
+		{
+			return $entity;
+		}
+		else
+		{
+			/** @var PaymentCollection|ShipmentCollection $collection */
+			$collection = $entity->getCollection();
 
-		/** @var Order $order */
-		$order = $collection->getOrder();
-
-		return $order->getSiteId();
+			/** @var Order $order */
+			return $collection->getOrder();
+		}
 	}
 }

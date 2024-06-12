@@ -7,6 +7,22 @@
  */
 namespace Bitrix\Sale\Location;
 
+/**
+ * Class SiteLocationTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_SiteLocation_Query query()
+ * @method static EO_SiteLocation_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_SiteLocation_Result getById($id)
+ * @method static EO_SiteLocation_Result getList(array $parameters = [])
+ * @method static EO_SiteLocation_Entity getEntity()
+ * @method static \Bitrix\Sale\Location\EO_SiteLocation createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Location\EO_SiteLocation_Collection createCollection()
+ * @method static \Bitrix\Sale\Location\EO_SiteLocation wakeUpObject($row)
+ * @method static \Bitrix\Sale\Location\EO_SiteLocation_Collection wakeUpCollection($rows)
+ */
 class SiteLocationTable extends Connector
 {
 	const ALL_SITES = '*';
@@ -21,12 +37,12 @@ class SiteLocationTable extends Connector
 		return 'b_sale_loc_2site';
 	}
 
-	static public function getLinkField()
+	public static function getLinkField()
 	{
 		return 'SITE_ID';
 	}
 
-	static public function getTargetEntityName()
+	public static function getTargetEntityName()
 	{
 		return 'Bitrix\Main\Site';
 	}
@@ -64,7 +80,7 @@ class SiteLocationTable extends Connector
 			),
 			'LOCATION_TYPE' => array(
 				'data_type' => 'string',
-				'default' => self::DB_LOCATION_FLAG,
+				'default_value' => self::DB_LOCATION_FLAG,
 				'required' => true,
 				'primary' => true
 			),

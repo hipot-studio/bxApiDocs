@@ -54,10 +54,11 @@ class Delivery extends Base\Restriction
 	}
 
 	/**
-	 * @param CollectableEntity $entity
+	 * @param Sale\Internals\Entity $entity
+	 *
 	 * @return array
 	 */
-	protected static function extractParams(CollectableEntity $entity)
+	protected static function extractParams(Sale\Internals\Entity $entity)
 	{
 		$result = array();
 
@@ -79,7 +80,10 @@ class Delivery extends Base\Restriction
 				if ($order)
 					$shipmentCollection = $order->getShipmentCollection();
 			}
-
+		}
+		elseif ($entity instanceOf Sale\Order)
+		{
+			$shipmentCollection = $entity->getShipmentCollection();
 		}
 
 		if ($shipmentCollection !== null)
@@ -87,8 +91,15 @@ class Delivery extends Base\Restriction
 			/** @var \Bitrix\Sale\Shipment $shipment */
 			foreach ($shipmentCollection as $shipment)
 			{
+				if ($shipment->isSystem())
+				{
+					continue;
+				}
+
 				if ($deliveryId = $shipment->getDeliveryId())
+				{
 					$result[] = $deliveryId;
+				}
 			}
 		}
 

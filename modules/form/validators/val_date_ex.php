@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CFormValidatorDateEx
 {
-	public static function GetDescription()
+	function GetDescription()
 	{
 		return array(
 			"NAME" => "date_ext", // unique validator string ID
@@ -16,7 +16,7 @@ class CFormValidatorDateEx
 		);
 	}
 
-	public static function GetSettings()
+	function GetSettings()
 	{
 		return array(
 			"DATE_FROM" => array(
@@ -33,7 +33,7 @@ class CFormValidatorDateEx
 		);
 	}
 
-	public static function ToDB($arParams)
+	function ToDB($arParams)
 	{
 		if (strlen($arParams["DATE_FROM"]) > 0) $arParams["DATE_FROM"] = MakeTimeStamp($arParams["DATE_FROM"]);
 		if (strlen($arParams["DATE_TO"]) > 0) $arParams["DATE_TO"] = MakeTimeStamp($arParams["DATE_TO"]);
@@ -48,7 +48,7 @@ class CFormValidatorDateEx
 		return serialize($arParams);
 	}
 
-	public static function FromDB($strParams)
+	function FromDB($strParams)
 	{
 		$arParams = unserialize($strParams);
 		if (strlen($arParams["DATE_FROM"]) > 0) $arParams["DATE_FROM"] = ConvertTimeStamp($arParams["DATE_FROM"], "SHORT");
@@ -57,7 +57,7 @@ class CFormValidatorDateEx
 		return $arParams;
 	}
 
-	public static function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
+	function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
 	{
 		global $APPLICATION;
 

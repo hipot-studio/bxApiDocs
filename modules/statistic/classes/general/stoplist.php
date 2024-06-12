@@ -1,65 +1,24 @@
-<?
+<?php
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CStopList</b> - класс для работы со <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#stop_list">стоп-листом</a>.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cstoplist/index.php
- * @author Bitrix
- */
 class CAllStopList
 {
-	
-	/**
-	* <p>Возвращает данные по <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#stop_list_record">записи</a> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#stop_list">стоп-листа</a>.</p>
-	*
-	*
-	* @param int $record_id  ID записи сто-листа.
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $stop_id = 1;
-	* if ($rs = <b>CStopList::GetByID</b>($stop_id))
-	* {
-	*     $ar = $rs-&gt;Fetch();
-	*     // выведем параметры записи стоп-листа
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul><li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#stop_list">Термин "Стоп-лист"</a>
-	* </li></ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cstoplist/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($STOPLIST_ID)
 	{
 		$STOPLIST_ID = intval($STOPLIST_ID);
 		if($STOPLIST_ID <= 0)
 			return false;
+
 		$arFilter = array(
 			"ID" => $STOPLIST_ID,
 			"ID_EXACT_MATCH" => "Y",
 		);
-		$rs = CStopList::GetList($v1, $v2, $arFilter, $v3);
+		$rs = CStopList::GetList('', '', $arFilter);
+
 		return $rs;
 	}
 
-	public function CheckFields($ID, &$arFields)
+	function CheckFields($ID, &$arFields)
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
 
@@ -72,7 +31,7 @@ class CAllStopList
 		unset($arFields["TIMESTAMP_X"]);
 		$arFields["~TIMESTAMP_X"] = $DB->GetNowFunction();
 
-		if(strlen($arFields["SITE_ID"]) <= 0 || $arFields["SITE_ID"] == "NOT_REF")
+		if($arFields["SITE_ID"] == '' || $arFields["SITE_ID"] == "NOT_REF")
 			$arFields["SITE_ID"] = false;
 
 		if($arFields["ACTIVE"] != "N")
@@ -84,7 +43,7 @@ class CAllStopList
 		$arIPFields = array("IP_1", "IP_2", "IP_3", "IP_4", "MASK_1", "MASK_2", "MASK_3", "MASK_4");
 		foreach($arIPFields as $FIELD_ID)
 		{
-			if(strlen(trim($arFields[$FIELD_ID])) > 0)
+			if(trim($arFields[$FIELD_ID]) <> '')
 			{
 				$arFields[$FIELD_ID] = intval($arFields[$FIELD_ID]);
 				if($arFields[$FIELD_ID] < 0)
@@ -101,10 +60,10 @@ class CAllStopList
 		if($arFields["USER_AGENT_IS_NULL"] != "Y")
 			$arFields["USER_AGENT_IS_NULL"] = "N";
 
-		if(strlen($arFields["DATE_END"]) > 0 && !CheckDateTime($arFields["DATE_END"]))
+		if($arFields["DATE_END"] <> '' && !CheckDateTime($arFields["DATE_END"]))
 			$aMsg[] = array("id"=>"DATE_END", "text"=> GetMessage("STAT_WRONG_END_DATE"));
 
-		if(strlen($arFields["DATE_START"]) > 0 && !CheckDateTime($arFields["DATE_START"]))
+		if($arFields["DATE_START"] <> '' && !CheckDateTime($arFields["DATE_START"]))
 			$aMsg[] = array("id"=>"DATE_START", "text"=> GetMessage("STAT_WRONG_START_DATE"));
 
 		$arTestFields = $arFields;
@@ -132,7 +91,7 @@ class CAllStopList
 		return true;
 	}
 
-	public function Add($arFields)
+	function Add($arFields)
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
 
@@ -145,7 +104,7 @@ class CAllStopList
 		return $ID;
 	}
 
-	public function Update($ID, $arFields)
+	function Update($ID, $arFields)
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
 		$ID = intval($ID);
@@ -165,7 +124,7 @@ class CAllStopList
 		return true;
 	}
 
-	public function SetActive($ID, $active = "N")
+	function SetActive($ID, $active = "N")
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
 		$ID = intval($ID);
@@ -202,7 +161,7 @@ class CAllStopList
 		return true;
 	}
 
-	public static function Delete($ID)
+	function Delete($ID)
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
 		$ID = intval($ID);
@@ -218,4 +177,3 @@ class CAllStopList
 			unlink($file);
 	}
 }
-?>

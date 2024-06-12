@@ -1,12 +1,12 @@
 <?php
 /**
  * Nested sets table tree implementation
- * 
+ *
  * Tree struct and data fields are kept in a single table
- * 
+ *
  * This class is for internal use only, not a part of public API.
  * It can be changed at any time without notification.
- * 
+ *
  * @access private
  */
 namespace Bitrix\Sale\Location;
@@ -47,11 +47,13 @@ abstract class Tree extends Entity\DataManager
 	{
 		$rebalance = !isset($additional['REBALANCE']) || $additional['REBALANCE'] !== false;
 
+		$node = [];
+		$parentId = (int)($data['PARENT_ID'] ?? 0);
 		// determine LEFT_MARGIN, RIGHT_MARGIN and DEPTH_LEVEL
-		if($data['PARENT_ID'] = intval($data['PARENT_ID']))
+		if ($parentId > 0)
 		{
 			// if we have PARENT_ID set, just use it`s info
-			$node = self::getNodeInfo($data['PARENT_ID']);
+			$node = self::getNodeInfo($parentId);
 
 			$needResort = true;
 
@@ -80,8 +82,10 @@ abstract class Tree extends Entity\DataManager
 
 		$addResult = parent::add($data);
 
-		if($addResult->isSuccess() && $needResort && $rebalance)
+		if ($addResult->isSuccess() && $needResort && $rebalance)
+		{
 			self::rebalance($node, $addResult->getId());
+		}
 
 		return $addResult;
 	}
@@ -101,7 +105,7 @@ abstract class Tree extends Entity\DataManager
 
 		foreach (static::getEntity()->getFields() as $field)
 		{
-			if($field->getName() == 'PARENT_ID' && strlen($data['PARENT_ID']))
+			if($field->getName() == 'PARENT_ID' && mb_strlen($data['PARENT_ID']))
 			{
 				//it cant be parent for itself
 				if(intval($primary['ID']) == intval($data['PARENT_ID']))
@@ -155,7 +159,7 @@ abstract class Tree extends Entity\DataManager
 		$rebalance = !isset($additional['REBALANCE']) || $additional['REBALANCE'] !== false;
 		$node = self::getNodeInfo($primary);
 
-		if(isset($data['PARENT_ID']) && !strlen($data['PARENT_ID']))
+		if(isset($data['PARENT_ID']) && !mb_strlen($data['PARENT_ID']))
 			$data['PARENT_ID'] = 0;
 
 		$updResult = parent::update($primary, $data);
@@ -193,7 +197,7 @@ abstract class Tree extends Entity\DataManager
 		{
 			// it means we want to delete not only the following node, but the whole subtree that belongs to it
 			// note that with this option set to Y tree structure integrity will be compromised
-			
+
 			$node = self::getNodeInfo($primary);
 			if(intval($node['ID']))
 			{
@@ -205,7 +209,7 @@ abstract class Tree extends Entity\DataManager
 				if($rebalance)
 				{
 					self::manageFreeSpace(
-						$node['RIGHT_MARGIN'], 
+						$node['RIGHT_MARGIN'],
 						($node['RIGHT_MARGIN'] - $node['LEFT_MARGIN']) + 1,
 						self::SPACE_REMOVE
 					);
@@ -222,7 +226,7 @@ abstract class Tree extends Entity\DataManager
 
 	/**
 	 * This method is for internal use only. It may be changed without any notification further, or even mystically disappear.
-	 * 
+	 *
 	 * @access private
 	 */
 	public static function getSubtreeRangeSqlForNode($primary, $node = array())
@@ -248,6 +252,19 @@ abstract class Tree extends Entity\DataManager
 		));
 
 		return $query->getQuery();
+	}
+
+	public static function checkIntegrity()
+	{
+		return !self::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'LOGIC' => 'OR',
+				['LEFT_MARGIN' => false],
+				['RIGHT_MARGIN' => false]
+			],
+			'limit' => 1
+		])->fetch();
 	}
 
 	public static function checkNodeIsParentOfNodeById($primary, $childPrimary, $behaviour = array('CHECK_DIRECT' => false))
@@ -303,14 +320,14 @@ abstract class Tree extends Entity\DataManager
 		$entityTableName = static::getTableName();
 
 		$dbConnection = Main\HttpApplication::getConnection();
- 		
+
 		$dbConnection->query("create table ".$tabName." (
 			ID ".Helper::getSqlForDataType('int').",
 			LEFT_MARGIN ".Helper::getSqlForDataType('int').",
 			RIGHT_MARGIN ".Helper::getSqlForDataType('int').",
 			DEPTH_LEVEL ".Helper::getSqlForDataType('int')."
 		)");
-		
+
 		$handle = new BlockInserter(array(
 			'tableName' => $tabName,
 			'exactFields' => array(
@@ -353,10 +370,10 @@ abstract class Tree extends Entity\DataManager
 
 	/**
 	 * Fetches a parent chain of a specified node
-	 * 
+	 *
 	 * Available keys in $behaviour
 	 * SHOW_LEAF : if set to true, return node itself in the result
-	 * 
+	 *
 	 * @access private
 	 */
 	public static function getPathToNodeByCondition($filter, $parameters = array(), $behaviour = array('SHOW_LEAF' => true))
@@ -406,9 +423,6 @@ abstract class Tree extends Entity\DataManager
 			$originSelect = $parameters['select'];
 		else
 			$originSelect = array();
-
-		if(is_array($parameters['order']))
-			throw new Main\NotSupportedException('"Order" clause is not supported here');
 
 		$parameters['order'] = array(
 			'LEFT_MARGIN' => 'asc'
@@ -493,7 +507,7 @@ abstract class Tree extends Entity\DataManager
 		$filter = array();
 
 		$min = false;
-		$max = false; 
+		$max = false;
 		foreach($nodeInfo as $node)
 		{
 			Assert::expectNotEmptyArray($node, '$nodeInfo[]');
@@ -570,7 +584,7 @@ abstract class Tree extends Entity\DataManager
 
 	/**
 	* Fetches a chain of parents with their subtrees expanded
-	* 
+	*
 	* Available keys in $behaviour
 	* SHOW_CHILDREN : if set to true, do return direct ancestors of $primary in the result
 	* START_FROM
@@ -640,7 +654,7 @@ abstract class Tree extends Entity\DataManager
 
 	/**
 	 * Do not call directly, only inside update()
-	 * 
+	 *
 	 * @param int $primary Subtree`s root id to move
 	 * @param int $primaryDst Item id to attach our subtree to
 	 *
@@ -813,10 +827,10 @@ abstract class Tree extends Entity\DataManager
 			$neighbourId = $data['INSERT_BEFORE'] ? $data['INSERT_BEFORE'] : $data['INSERT_AFTER'];
 
 			$sort = self::makeSortSpace(
-				$neighbourId, 
+				$neighbourId,
 				($data['INSERT_BEFORE'] ? self::SORT_FREE_BEFORE : self::SORT_FREE_AFTER),
-				$data['PARENT_ID'], 
-				isset($data['SORT']) ? $data['SORT'] : false
+				$data['PARENT_ID'],
+				$data['SORT'] ?? false
 			);
 
 			unset($data['INSERT_AFTER']);
@@ -843,7 +857,7 @@ abstract class Tree extends Entity\DataManager
 			LEFT_MARGIN = case when LEFT_MARGIN > {$right} then LEFT_MARGIN {$sign} {$length} else LEFT_MARGIN end,
 			RIGHT_MARGIN = case when RIGHT_MARGIN >= {$right} then RIGHT_MARGIN {$sign} {$length} else RIGHT_MARGIN end 
 			where RIGHT_MARGIN >= {$right}".($exceptId ? " and ID <> {$exceptId}" : "");
-			
+
 		$shifted = Main\HttpApplication::getConnection()->query($query);
 
 		if(!$shifted)
@@ -851,7 +865,7 @@ abstract class Tree extends Entity\DataManager
 	}
 
 	// act in assumption sort field is always defined for each node and also it`s value positive signed
-	protected final static function makeSortSpace($primary, $direction = self::SORT_FREE_AFTER, $primaryParent, $knownSort = false)
+	protected final static function makeSortSpace($primary, $direction, $primaryParent, $knownSort = false)
 	{
 		$primary = Assert::expectIntegerPositive($primary, '$primary');
 		$primaryParent = Assert::expectIntegerPositive($primary, '$primaryParent');
@@ -881,7 +895,7 @@ abstract class Tree extends Entity\DataManager
 		}
 
 		// no node exists or they are not neighbours
-		if(!$nodeFound) 
+		if(!$nodeFound)
 			return false;
 
 		// add extra items
@@ -988,13 +1002,18 @@ abstract class Tree extends Entity\DataManager
 		return $node;
 	}
 
-	protected static function getMaxMargin()
+	protected static function getMaxMargin(): int
 	{
-		$tableName = static::getTableName();
+		$row = static::getRow([
+			'select' => [
+				'RIGHT_MARGIN',
+			],
+			'order' => [
+				'RIGHT_MARGIN' => 'DESC',
+			]
+		]);
 
-		// todo: write it in orm way
-		$res = Main\HttpApplication::getConnection()->query("select A.RIGHT_MARGIN from {$tableName} A order by A.RIGHT_MARGIN desc")->fetch();
-		return intval($res['RIGHT_MARGIN']);
+		return (int)($row['RIGHT_MARGIN'] ?? 0);
 	}
 
 	public static function mergeRelationsFromTemporalTable($temporalTabName, $additinalFlds = array(), $fldMap = array())
@@ -1021,7 +1040,7 @@ abstract class Tree extends Entity\DataManager
 
 		$idReplace = is_array($fldMap) && isset($fldMap['ID']) ? $dbHelper->forSql($fldMap['ID']) : 'ID';
 
-		if($dbConnection->getType() == 'mysql')
+		if ($dbConnection->getType() === 'mysql')
 		{
 			$sql = 'update '.$entityTableName.', '.$temporalTabName.' set ';
 			$additFldCnt = count($additinalFlds);
@@ -1033,7 +1052,15 @@ abstract class Tree extends Entity\DataManager
 
 			$sql .= ' where '.$entityTableName.'.ID = '.$temporalTabName.'.'.$idReplace;
 		}
-		elseif($dbConnection->getType() == 'mssql')
+		elseif ($dbConnection->getType() === 'pgsql')
+		{
+			$sql = 'update '.$entityTableName.' set ('.
+				implode(', ', $additinalFlds).
+				') = (select '.
+				implode(', ', $fldReplace).
+				' from '.$temporalTabName.' where '.$entityTableName.'.ID = '.$temporalTabName.'.'.$idReplace.')';
+		}
+		elseif ($dbConnection->getType() === 'mssql')
 		{
 			$sql = 'update '.$entityTableName.' set ';
 			$additFldCnt = count($additinalFlds);
@@ -1045,7 +1072,7 @@ abstract class Tree extends Entity\DataManager
 
 			$sql .= ' from '.$entityTableName.' join '.$temporalTabName.' on '.$entityTableName.'.ID = '.$temporalTabName.'.'.$idReplace;
 		}
-		elseif($dbConnection->getType() == 'oracle')
+		elseif ($dbConnection->getType() === 'oracle')
 		{
 			// update tab1 set (aa,bb) = (select aa,bb from tab2 where tab2.id = tab1.id)
 
@@ -1084,7 +1111,15 @@ abstract class Tree extends Entity\DataManager
 		// left margin MAY be equal to zero, right margin MAY NOT
 		if(!is_numeric($node['LEFT_MARGIN']) || (int) $node['LEFT_MARGIN'] < 0 || !intval($node['RIGHT_MARGIN']) || !intval($node['ID']))
 		{
-			throw new Tree\NodeIncorrectException(false, array('INFO' => array('ID' => $node['ID'])));
+			throw new Tree\NodeIncorrectException(
+				false,
+				array(
+					'INFO' => array(
+						'ID' => $node['ID'],
+						'CODE' => $node['CODE'],
+						'LEFT_MARGIN' => $node['LEFT_MARGIN'],
+						'RIGHT_MARGIN' => $node['RIGHT_MARGIN']
+			)));
 		}
 	}
 

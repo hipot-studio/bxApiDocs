@@ -50,7 +50,7 @@ class CCrmTemplateManager
 		return null;
 	}
 
-	public static function PrepareTemplate($template, $entityTypeID, $entityID, $contentTypeID = 0)
+	public static function PrepareTemplate($template, $entityTypeID, $entityID, $contentTypeID = 0, $senderId = 0)
 	{
 		$template = strval($template);
 		if($template === '')
@@ -58,50 +58,64 @@ class CCrmTemplateManager
 			return '';
 		}
 
-		$entityTypeName = CCrmOwnerType::ResolveName($entityTypeID);
+		$template = self::decodeApostrophe($template);
+
+		$entityTypeName = \CCrmOwnerType::System == $entityTypeID ? 'SENDER' : \CCrmOwnerType::resolveName($entityTypeID);
 		$entityID = intval($entityID);
-		if($entityTypeName === '' || $entityID <= 0)
-		{
-			return $template;
-		}
 
-		$matches = null;
-		$result = preg_match_all('/#'.$entityTypeName.'\.[^#]+#/i', $template, $matches, PREG_OFFSET_CAPTURE);
-		if(!(is_int($result) && $result > 0))
-		{
-			return $template;
-		}
+		$contentTypeID = (int) $contentTypeID;
+		if (!\CCrmContentType::isDefined($contentTypeID))
+			$contentTypeID = \CCrmContentType::PlainText;
 
-		$mapper = self::ResolveMapper($entityTypeID, $entityID);
-		if($mapper === null)
+		if ($entityTypeName != '' && $entityID > 0)
 		{
-			return $template;
-		}
-
-		$contentTypeID = intval($contentTypeID);
-		if(!CCrmContentType::IsDefined($contentTypeID))
-		{
-			$contentTypeID = CCrmContentType::PlainText;
-		}
-		$mapper->SetContentType($contentTypeID);
-
-		$replaceKeys = array();
-		$replaceValues = array();
-
-		foreach($matches[0] as &$match)
-		{
-			$key = $match[0];
-			if(isset($replacements[$key]))
+			if (preg_match_all(sprintf('/#%s\.[^#]+#/i', preg_quote($entityTypeName, '/')), $template))
 			{
-				continue;
+				$entityMapper = self::resolveMapper($entityTypeID, $entityID);
+				$entityMapper->setContentType($contentTypeID);
 			}
-
-			$path = substr($key, 1, strlen($key) - 2);
-			$replaceKeys[] = $key;
-			$replaceValues[] = $mapper->MapPath($path);
 		}
-		unset($match);
 
-		return !empty($replaceKeys) ? str_replace($replaceKeys, $replaceValues, $template) : $template;
+		if (\CCrmOwnerType::System == $entityTypeID)
+		{
+			$senderMapper = $entityMapper;
+		}
+		else if ($senderId > 0)
+		{
+			if (preg_match_all('/#SENDER\.[^#]+#/i', $template))
+			{
+				$senderMapper = self::resolveMapper(\CCrmOwnerType::System, $senderId);
+				$senderMapper->setContentType($contentTypeID);
+			}
+		}
+
+		if (empty($entityMapper) && empty($senderMapper))
+			return $template;
+
+		preg_match_all(sprintf('/#(SENDER|%s)\.[^#]+#/i', preg_quote($entityTypeName, '/')), $template, $matches);
+
+		$replacements = array();
+		foreach ($matches[0] as $i => $key)
+		{
+			$mapper = $matches[1][$i] == 'SENDER' ? $senderMapper : $entityMapper;
+
+			if (array_key_exists($key, $replacements) || empty($mapper))
+				continue;
+
+			$replacements[$key] = htmlspecialcharsback($mapper->mapPath(mb_substr($key, 1, -1)));
+		}
+
+		$template = str_replace(array_keys($replacements), array_values($replacements), $template);
+		return self::encodeApostrophe($template);
+	}
+
+	private static function encodeApostrophe(string $template): string
+	{
+		return str_replace('\'', '&#039;', $template);
+	}
+
+	private static function decodeApostrophe(string $template): string
+	{
+		return str_replace('&#039;', '\'', $template);
 	}
 }

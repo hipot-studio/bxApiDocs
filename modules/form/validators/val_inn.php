@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CFormValidatorINN
 {
-	public static function GetDescription()
+	function GetDescription()
 	{
 		return array(
 			"NAME" => "INN", // validator string ID
@@ -16,7 +16,7 @@ class CFormValidatorINN
 		);
 	}
 
-	public static function GetSettings()
+	function GetSettings()
 	{
 		return array(
 			"TYPE" => array(
@@ -32,7 +32,7 @@ class CFormValidatorINN
 		);
 	}
 
-	public static function ToDB($arParams)
+	function ToDB($arParams)
 	{
 		$arPar = array(
 			"TYPE" => $arParams["TYPE"] == "phys" || $arParams["TYPE"] == "jur"? $arParams["TYPE"] : "both"
@@ -41,12 +41,12 @@ class CFormValidatorINN
 		return serialize($arPar);
 	}
 
-	public static function FromDB($strParams)
+	function FromDB($strParams)
 	{
 		return unserialize($strParams);
 	}
 
-	public static function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
+	function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
 	{
 		global $APPLICATION;
 
@@ -107,7 +107,7 @@ class CFormValidatorINN
 		return true;
 	}
 
-	public static function __checkINN($value)
+	function __checkINN($value)
 	{
 		$arCheck = array(41,37,31,29,23,19,17,13,7,5,3);
 

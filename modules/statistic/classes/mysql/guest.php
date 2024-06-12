@@ -1,16 +1,6 @@
-<?
+<?php
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/statistic/classes/general/guest.php");
 
-/**
- * <b>CGuest</b> - класс для получения данных по <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">посетителям</a> сайта.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cguest/index.php
- * @author Bitrix
- */
 class CGuest extends CAllGuest
 {
 	public static function GetLastByID($ID)
@@ -40,4 +30,3 @@ class CGuest extends CAllGuest
 		return $res;
 	}
 }
-?>

@@ -98,8 +98,7 @@ class SkuProps
 
 	/**
 	 * @param array $skuProps
-	 * @param $productId
-	 * @param $iblock
+	 * @param int $productId
 	 * @param array $skuOrder
 	 * @param $changedSkuId
 	 * @return int|mixed
@@ -148,7 +147,7 @@ class SkuProps
 	}
 
 	/**
-	 * @param $productId
+	 * @param int|array $productIds
 	 * @return array
 	 * @throws \Bitrix\Main\LoaderException
 	 */
@@ -164,11 +163,17 @@ class SkuProps
 		{
 			foreach($offers as $productId => $items)
 			{
+				$result[$productId] ??= [];
+
 				if(!is_array($result[$productId]))
-					$result[$productId] = array();
+				{
+					$result[$productId] = [];
+				}
 
 				foreach($items as $item)
+				{
 					$result[$productId][] = $item['ID'];
+				}
 			}
 		}
 
@@ -262,8 +267,11 @@ class SkuProps
 
 			$offerId = intval($param['OFFER_ID']);
 
-			if(!is_array($result[$offerId]))
-				$result[$offerId] = array();
+			$result[$offerId] ??= [];
+			if (!is_array($result[$offerId]))
+			{
+				$result[$offerId] = [];
+			}
 
 			if(empty($param['SKU_PROPS']) || empty($param['SKU_ORDER']))
 				continue;

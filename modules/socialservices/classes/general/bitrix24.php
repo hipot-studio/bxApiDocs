@@ -1,4 +1,7 @@
 <?
+
+use Bitrix\Socialservices\UserTable;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocServBitrixOAuth extends CSocServAuth
@@ -15,7 +18,7 @@ class CSocServBitrixOAuth extends CSocServAuth
 
 	protected $signature = null;
 
-	public function __construct($appID, $appSecret, $portalURI, $redirectURI, $userId = null)
+	function __construct($appID, $appSecret, $portalURI, $redirectURI, $userId = null)
 	{
 		$this->appID = $appID;
 		$this->appSecret = $appSecret;
@@ -69,8 +72,16 @@ class CSocServBitrixOAuth extends CSocServAuth
 		$userId = intval($this->userId);
 		if($userId > 0)
 		{
-			$dbSocservUser = CSocServAuthDB::GetList(array(), array('USER_ID' => $userId, 'XML_ID' => $this->appID, "EXTERNAL_AUTH_ID" => "Bitrix24OAuth", 'PERSONAL_WWW' => $this->portalURI), false, false, array("OATOKEN", "REFRESH_TOKEN", "OATOKEN_EXPIRES", "OASECRET"));
-			if($arOauth = $dbSocservUser->Fetch())
+			$dbSocservUser = UserTable::getList([
+				'filter' => [
+					'=USER_ID' => $userId,
+					'=XML_ID' => $this->appID,
+					"=EXTERNAL_AUTH_ID" => "Bitrix24OAuth",
+					'=PERSONAL_WWW' => $this->portalURI
+				],
+				'select' => ["OATOKEN", "REFRESH_TOKEN", "OATOKEN_EXPIRES", "OASECRET"]
+			]);
+			if($arOauth = $dbSocservUser->fetch())
 			{
 				$accessToken = $arOauth["OATOKEN"];
 				if(
@@ -109,7 +120,7 @@ class CSocServBitrixOAuth extends CSocServAuth
 			$appID = trim(COption::GetOptionString("socialservices", "bitrix24_gadget_appid", ''));
 			$appSecret = trim(COption::GetOptionString("socialservices", "bitrix24_gadget_appsecret", ''));
 			$portalURI = $_REQUEST['domain'];
-			if(strpos($portalURI, "http://") === false && strpos($portalURI, "https://") === false)
+			if(mb_strpos($portalURI, "http://") === false && mb_strpos($portalURI, "https://") === false)
 				$portalURI = "https://".$portalURI;
 			$gAuth = new CBitrixOAuthInterface($appID, $appSecret, $portalURI, $_REQUEST["code"]);
 
@@ -132,10 +143,10 @@ class CSocServBitrixOAuth extends CSocServAuth
 
 		echo $JSScript;
 
-		die();
+		CMain::FinalActions();
 	}
 
-	static public function gadgetAuthorize()
+	public static function gadgetAuthorize()
 	{
 		global $APPLICATION;
 		$APPLICATION->RestartBuffer();
@@ -290,7 +301,14 @@ class CBitrixOAuthInterface extends CSocServOAuthTransport
 	{
 		global $USER;
 
-		$dbSocUser = CSocServAuthDB::GetList(array(), array('XML_ID' => $this->appID, 'PERSONAL_WWW' => $this->portalURI, 'EXTERNAL_AUTH_ID' => "Bitrix24OAuth"), false, false, array("ID"));
+		$dbSocUser = UserTable::getList([
+			'filter' => [
+				'=XML_ID' => $this->appID,
+				'=PERSONAL_WWW' => $this->portalURI,
+				'=EXTERNAL_AUTH_ID' => 'Bitrix24OAuth'
+			],
+			'select' => ['ID']
+		]);
 
 		if($USER->IsAuthorized())
 		{
@@ -310,13 +328,15 @@ class CBitrixOAuthInterface extends CSocServOAuthTransport
 				$arFields['REFRESH_TOKEN'] = $this->refresh_token;
 			}
 
-			if($arUser = $dbSocUser->Fetch())
+			if($arUser = $dbSocUser->fetch())
 			{
-				return CSocServAuthDB::Update($arUser["ID"], $arFields);
+				$result = UserTable::update($arUser["ID"], $arFields);
+				return $result->isSuccess() ? $arUser["ID"] : false;
 			}
 			else
 			{
-				return CSocServAuthDB::Add($arFields);
+				$result = UserTable::add($arFields);
+				return $result->isSuccess() ? $result->getId() : false;
 			}
 		}
 		return true;

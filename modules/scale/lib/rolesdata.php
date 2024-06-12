@@ -13,22 +13,9 @@ class RolesData
 	 * @return array role params
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Возвращает роль. Метод статический.</p>
-	*
-	*
-	* @param string $roleId  ID роли сервера.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/scale/rolesdata/getrole.php
-	* @author Bitrix
-	*/
 	public static function getRole($roleId)
 	{
-		if(strlen($roleId) <= 0)
+		if($roleId == '')
 			throw new \Bitrix\Main\ArgumentNullException("roleId");
 
 		$rolesDefinitions = self::getList();
@@ -74,7 +61,7 @@ class RolesData
 	 */
 	public static function getGraphsCategories($roleId)
 	{
-		if(strlen($roleId) <= 0)
+		if($roleId == '')
 			throw new \Bitrix\Main\ArgumentNullException("roleId");
 
 		$result = array();

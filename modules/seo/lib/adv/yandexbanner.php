@@ -33,14 +33,27 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Seo
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_YandexBanner_Query query()
+ * @method static EO_YandexBanner_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_YandexBanner_Result getById($id)
+ * @method static EO_YandexBanner_Result getList(array $parameters = array())
+ * @method static EO_YandexBanner_Entity getEntity()
+ * @method static \Bitrix\Seo\Adv\EO_YandexBanner createObject($setDefaultValues = true)
+ * @method static \Bitrix\Seo\Adv\EO_YandexBanner_Collection createCollection()
+ * @method static \Bitrix\Seo\Adv\EO_YandexBanner wakeUpObject($row)
+ * @method static \Bitrix\Seo\Adv\EO_YandexBanner_Collection wakeUpCollection($rows)
+ */
 
 class YandexBannerTable extends AdvEntity
 {
 	const ENGINE = 'yandex_direct';
 
-	const MAX_TITLE_LENGTH = 33;
-	const MAX_TEXT_LENGTH = 75;
+	const MAX_TITLE_LENGTH = 35;
+	const MAX_TEXT_LENGTH = 81;
 
 	const CACHE_LIFETIME = 3600;
 
@@ -59,17 +72,6 @@ class YandexBannerTable extends AdvEntity
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает путь к файлу, содержащему определение класса. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/yandexbannertable/getfilepath.php
-	* @author Bitrix
-	*/
 	public static function getFilePath()
 	{
 		return __FILE__;
@@ -80,17 +82,6 @@ class YandexBannerTable extends AdvEntity
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы, содержащей локальную копию объявлений в Яндекс.Директ. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/yandexbannertable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_seo_adv_banner';
@@ -101,17 +92,6 @@ class YandexBannerTable extends AdvEntity
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей таблицы, содержащей локальную копию объявлений в Яндекс.Директ. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/yandexbannertable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array_merge(
@@ -153,17 +133,6 @@ class YandexBannerTable extends AdvEntity
 	 *
 	 * @return Engine\YandexDirect|null
 	 */
-	
-	/**
-	* <p>Метод возвращает ссылку на экземпляр класса <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/yandexdirect/index.php">\Bitrix\Seo\Engine\YandexDirect</a>, отвечающего за подготовку и отправку запросов к Яндекс.Директ. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Seo\Engine\YandexDirect|null 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/yandexbannertable/getengine.php
-	* @author Bitrix
-	*/
 	public static function getEngine()
 	{
 		if(!self::$engine)
@@ -184,25 +153,6 @@ class YandexBannerTable extends AdvEntity
 	 * @throws Main\ArgumentException
 	 * @throws Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Метод выполняет проверку полей и добавляет новый баннер Яндекс.Директ.</p>
-	*
-	*
-	* @param mixed $Bitrix  Данные для добавления.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $Entity  
-	*
-	* @param Event $event  
-	*
-	* @return \Bitrix\Main\Entity\EventResult 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/yandexbannertable/onbeforeadd.php
-	* @author Bitrix
-	*/
 	public static function onBeforeAdd(Entity\Event $event)
 	{
 		$result = new Entity\EventResult();
@@ -268,25 +218,6 @@ class YandexBannerTable extends AdvEntity
 	 * @throws Main\ArgumentException
 	 * @throws Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Метод выполняет проверку полей и обновляет баннер Яндекс.Директ. Метод статический.</p>
-	*
-	*
-	* @param mixed $Bitrix  Обновляемые данные.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $Entity  
-	*
-	* @param Event $event  
-	*
-	* @return \Bitrix\Main\Entity\EventResult 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/yandexbannertable/onbeforeupdate.php
-	* @author Bitrix
-	*/
 	public static function onBeforeUpdate(Entity\Event $event)
 	{
 		$result = new Entity\EventResult();
@@ -388,25 +319,6 @@ class YandexBannerTable extends AdvEntity
 	 * @throws Engine\YandexException
 	 * @throws Main\ArgumentException
 	 */
-	
-	/**
-	* <p>Метод удаляет баннер из Яндекс.Директ. Метод статический.</p>
-	*
-	*
-	* @param mixed $Bitrix  Удаляемые данные.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $Entity  
-	*
-	* @param Event $event  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/yandexbannertable/ondelete.php
-	* @author Bitrix
-	*/
 	public static function onDelete(Entity\Event $event)
 	{
 		if(!static::$skipRemoteUpdate)
@@ -499,14 +411,14 @@ class YandexBannerTable extends AdvEntity
 		{
 			$bannerParam["Title"] = trim($data['SETTINGS']["Title"]);
 
-			if(strlen($bannerParam["Title"]) <= 0)
+			if($bannerParam["Title"] == '')
 			{
 				$result->addError(new Entity\FieldError(
 					static::getEntity()->getField('NAME'),
 					Loc::getMessage('SEO_BANNER_ERROR_NO_NAME')
 				));
 			}
-			elseif(strlen($bannerParam["Title"]) > static::MAX_TITLE_LENGTH)
+			elseif(mb_strlen($bannerParam["Title"]) > static::MAX_TITLE_LENGTH)
 			{
 				$result->addError(new Entity\FieldError(
 					static::getEntity()->getField('NAME'),
@@ -520,14 +432,14 @@ class YandexBannerTable extends AdvEntity
 		if($newBanner || isset($data['SETTINGS']["Text"]))
 		{
 			$bannerParam["Text"] = trim($data['SETTINGS']["Text"]);
-			if(strlen($bannerParam["Text"]) <= 0)
+			if($bannerParam["Text"] == '')
 			{
 				$result->addError(new Entity\FieldError(
 					static::getEntity()->getField('SETTINGS'),
 					Loc::getMessage('SEO_BANNER_ERROR_NO_TEXT')
 				));
 			}
-			elseif(strlen($bannerParam["Text"]) > static::MAX_TEXT_LENGTH)
+			elseif(mb_strlen($bannerParam["Text"]) > static::MAX_TEXT_LENGTH)
 			{
 				$result->addError(new Entity\FieldError(
 					static::getEntity()->getField('SETTINGS'),
@@ -541,7 +453,7 @@ class YandexBannerTable extends AdvEntity
 		if($newBanner || isset($data['SETTINGS']["Href"]))
 		{
 			$bannerParam["Href"] = trim($data['SETTINGS']["Href"]);
-			if(strlen($bannerParam["Href"]) <= 0)
+			if($bannerParam["Href"] == '')
 			{
 				$result->addError(new Entity\FieldError(
 					static::getEntity()->getField('SETTINGS'),
@@ -550,6 +462,7 @@ class YandexBannerTable extends AdvEntity
 			}
 		}
 
+//		format Geolocation seletc to string
 		if($newBanner || isset($data["SETTINGS"]["Geo"]))
 		{
 			if(is_array($data["SETTINGS"]["Geo"]))
@@ -562,7 +475,14 @@ class YandexBannerTable extends AdvEntity
 
 		if($newBanner || isset($data["SETTINGS"]["Phrases"]))
 		{
-			if(!is_array($data["SETTINGS"]["Phrases"]) || count($data["SETTINGS"]["Phrases"]) <= 0)
+			if($data["SETTINGS"]["Geo"] == '')
+			{
+				$result->addError(new Entity\FieldError(
+					static::getEntity()->getField('SETTINGS'),
+					Loc::getMessage('SEO_BANNER_ERROR_NO_GEO')
+				));
+			}
+			elseif(!is_array($data["SETTINGS"]["Phrases"]) || count($data["SETTINGS"]["Phrases"]) <= 0)
 			{
 				$result->addError(new Entity\FieldError(
 					static::getEntity()->getField('SETTINGS'),
@@ -575,7 +495,8 @@ class YandexBannerTable extends AdvEntity
 
 				foreach($bannerParam["Phrases"] as $key => $phraseInfo)
 				{
-					$phraseInfo['AutoBudgetPriority'] = static::$priorityList[intval($phraseInfo['AutoBudgetPriority'])];
+					if(is_numeric($phraseInfo['AutoBudgetPriority']))
+						$phraseInfo['AutoBudgetPriority'] = static::$priorityList[intval($phraseInfo['AutoBudgetPriority'])];
 
 					$bannerParam["Phrases"][$key] = $phraseInfo;
 				}
@@ -586,7 +507,7 @@ class YandexBannerTable extends AdvEntity
 		{
 			if(!is_array($data["SETTINGS"]["MinusKeywords"]))
 			{
-				if(strlen($data["SETTINGS"]["MinusKeywords"]) > 0)
+				if($data["SETTINGS"]["MinusKeywords"] <> '')
 				{
 					$data["SETTINGS"]["MinusKeywords"] = array();
 				}

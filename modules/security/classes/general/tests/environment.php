@@ -6,6 +6,9 @@
  * @copyright 2001-2013 Bitrix
  */
 
+use Bitrix\Main\Config\Configuration;
+use Bitrix\Main\Session\SessionConfigurationResolver;
+
 /**
  * Class CSecurityEnvironmentTest
  * @since 12.5.0
@@ -39,11 +42,18 @@ class CSecurityEnvironmentTest
 	);
 	//TODO: check custom php/py/perl/etc handlers in .htaccess files
 
-	static public function __construct()
+	public function __construct()
 	{
 		IncludeModuleLangFile(__FILE__);
 	}
 
+	protected function getSessionGeneralHandlerType(): ?string
+	{
+		$resolver = new SessionConfigurationResolver(Configuration::getInstance());
+		$sessionConfig = $resolver->getSessionConfig();
+
+		return $sessionConfig['handlers']['general']['type'] ?? null;
+	}
 
 	/**
 	 * Check if any server-side script executed in /upload dir and push those information to detail error
@@ -255,7 +265,7 @@ HTACCESS;
 			$response = self::doRequestToLocalhost($uploadPath);
 			if($response)
 			{
-				if($response != $pText && strpos($response, $pSearch) !== false)
+				if($response != $pText && mb_strpos($response, $pSearch) !== false)
 				{
 					$result = true;
 				}
@@ -330,7 +340,7 @@ HTACCESS;
 		if(self::isRunOnWin())
 			return self::STATUS_PASSED;
 
-		if(COption::GetOptionString("security", "session") == "Y")
+		if($this->getSessionGeneralHandlerType() !== SessionConfigurationResolver::TYPE_FILE)
 			return self::STATUS_PASSED;
 
 		if(ini_get("session.save_handler") != "files")
@@ -365,11 +375,11 @@ HTACCESS;
 			if(is_readable($fileName))
 			{
 				$fileContent = file_get_contents($fileName);
-				if (strpos($fileContent, $sessionSign) === false)
+				if (mb_strpos($fileContent, $sessionSign) === false)
 				{
 					$additionalInfo = getMessage("SECURITY_SITE_CHECKER_COLLECTIVE_SESSION_ADDITIONAL_SIGN", array(
 						"#FILE#" => $fileName,
-						"#FILE_CONTENT#" => htmlspecialcharsbx(substr($fileContent, 0, 1024)),
+						"#FILE_CONTENT#" => htmlspecialcharsbx(mb_substr($fileContent, 0, 1024)),
 						"#SIGN#" => $sessionSign
 					));
 					$isFailed = true;
@@ -400,7 +410,7 @@ HTACCESS;
 		if (self::isRunOnWin())
 			return self::STATUS_PASSED;
 
-		if (COption::GetOptionString("security", "session") == "Y")
+		if ($this->getSessionGeneralHandlerType() !== SessionConfigurationResolver::TYPE_FILE)
 			return self::STATUS_PASSED;
 
 		if (ini_get("session.save_handler") != "files")
@@ -593,7 +603,7 @@ HTACCESS;
 		$documentRoot = self::getParam("DOCUMENT_ROOT", $_SERVER["DOCUMENT_ROOT"]);
 		$documentRoot = $io->CombinePath($documentRoot);
 
-		if (strpos($path, $documentRoot) === 0)
+		if (mb_strpos($path, $documentRoot) === 0)
 		{
 			$this->addUnformattedDetailError(
 					"SECURITY_SITE_CHECKER_BITRIX_TMP_DIR",

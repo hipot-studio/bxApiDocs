@@ -21,14 +21,14 @@ class Token
 	public $level;
 
 	/**
-	 * @param integer $type Type of the token.
+	 * @param int $type Type of the token.
 	 * @param string $text Text of the token.
 	 */
 	public function __construct($type, $text)
 	{
 		$this->type = $type;
 		$this->text = $text;
-		$this->upper = strtoupper($this->text);
+		$this->upper = mb_strtoupper($this->text);
 	}
 
 	/**
@@ -40,23 +40,10 @@ class Token
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает новый текст для токена.</p> <br>
-	*
-	*
-	* @param string $text  Новый текст.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/token/settext.php
-	* @author Bitrix
-	*/
 	public function setText($text)
 	{
 		$this->text = $text;
-		$this->upper = strtoupper($this->text);
+		$this->upper = mb_strtoupper($this->text);
 	}
 
 	/**
@@ -68,23 +55,10 @@ class Token
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Нестатический метод добавляет новый текст к токену.</p> <br>
-	*
-	*
-	* @param string $text  Добавляемая часть.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/token/appendtext.php
-	* @author Bitrix
-	*/
 	public function appendText($text)
 	{
 		$this->text .= $text;
-		$this->upper = strtoupper($this->text);
+		$this->upper = mb_strtoupper($this->text);
 	}
 }
 
@@ -93,7 +67,7 @@ class Tokenizer
 	protected $index = 0;
 	protected $bookmark = 0;
 	/** @var array[Token] */
-	protected $tokens = array();
+	protected $tokens = [];
 
 	/**
 	 * Splits a text into tokens, creates new Tokenizer object, and returns it.
@@ -102,19 +76,6 @@ class Tokenizer
 	 *
 	 * @return Tokenizer
 	 */
-	
-	/**
-	* <p>Статический метод разбивает текст на токены, создавая новый объект потока токенов. Возвращает созданный объект.</p>
-	*
-	*
-	* @param string $sql  Sql-текст.
-	*
-	* @return \Bitrix\Perfmon\Sql\Tokenizer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/createfromstring.php
-	* @author Bitrix
-	*/
 	public static function createFromString($sql)
 	{
 		$tokenizer = new self;
@@ -131,27 +92,6 @@ class Tokenizer
 	 *
 	 * @return Tokenizer
 	 */
-	
-	/**
-	* <p>Статический метод создает новые объекты потока токенов и устанавливает их токены в данное.</p>
-	*
-	*
-	* @param mixed $Bitrix  Новые токены.
-	*
-	* @param Bitri $Perfmon  
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param Sq $array  
-	*
-	* @param arra $Token  
-	*
-	* @return \Bitrix\Perfmon\Sql\Tokenizer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/createfromtokens.php
-	* @author Bitrix
-	*/
 	public static function createFromTokens(array $tokens)
 	{
 		$tokenizer = new self;
@@ -164,17 +104,6 @@ class Tokenizer
 	 *
 	 * @return array[Token]
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает все токены.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Perfmon\Sql\array[Token] 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/gettokens.php
-	* @author Bitrix
-	*/
 	public function getTokens()
 	{
 		return $this->tokens;
@@ -185,17 +114,6 @@ class Tokenizer
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Нестатический метод сбрасывает внутреннее состояние.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/resetstate.php
-	* @author Bitrix
-	*/
 	public function resetState()
 	{
 		$this->index = 0;
@@ -207,22 +125,6 @@ class Tokenizer
 	 * @return void
 	 * @see Tokenizer::restoreBookmark
 	 */
-	
-	/**
-	* <p>Нестатический метод фиксирует и запоминает текущую позицию.</p> <p>Без параметров</p>
-	*
-	*
-	* @return void 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/restorebookmark.php">restoreBookmark</a>
-	* (<code>\Bitrix\Perfmon\Sql\Tokenizer::restoreBookmark</code>)</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/setbookmark.php
-	* @author Bitrix
-	*/
 	public function setBookmark()
 	{
 		$this->bookmark = $this->index;
@@ -234,22 +136,6 @@ class Tokenizer
 	 * @return void
 	 * @see Tokenizer::setBookmark
 	 */
-	
-	/**
-	* <p>Нестатический метод восстанавливает ранее запомненную позицию.</p> <p>Без параметров</p>
-	*
-	*
-	* @return void 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/setbookmark.php">setBookmark</a>
-	* (<code>\Bitrix\Perfmon\Sql\Tokenizer::setBookmark</code>)</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/restorebookmark.php
-	* @author Bitrix
-	*/
 	public function restoreBookmark()
 	{
 		$this->index = $this->bookmark;
@@ -260,17 +146,6 @@ class Tokenizer
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Нестатический метод передвигает текущую позицию на шаг назад.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/putback.php
-	* @author Bitrix
-	*/
 	public function putBack()
 	{
 		$this->index--;
@@ -279,22 +154,25 @@ class Tokenizer
 	/**
 	 * Checks if end of tokens reached.
 	 *
-	 * @return boolean
+	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод проверяет, достигнут ли конец списка токенов.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/endofinput.php
-	* @author Bitrix
-	*/
 	public function endOfInput()
 	{
 		return !isset($this->tokens[$this->index]);
+	}
+
+	/**
+	 * Returns previous token.
+	 * <p>
+	 * Leaves position intact.
+	 *
+	 * @return Token
+	 */
+	public function getPrevToken()
+	{
+		/** @var Token $token */
+		$token = $this->tokens[$this->index - 1] ?? null;
+		return $token;
 	}
 
 	/**
@@ -304,21 +182,10 @@ class Tokenizer
 	 *
 	 * @return Token
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает текущий токен, не меняя текущую позицию.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Perfmon\Sql\Token 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/getcurrenttoken.php
-	* @author Bitrix
-	*/
 	public function getCurrentToken()
 	{
 		/** @var Token $token */
-		$token = $this->tokens[$this->index];
+		$token = $this->tokens[$this->index] ?? null;
 		return $token;
 	}
 
@@ -329,23 +196,36 @@ class Tokenizer
 	 *
 	 * @return Token
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает следующий токен в списке, продвигая текущую позицию на шаг вперед.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Perfmon\Sql\Token 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/nexttoken.php
-	* @author Bitrix
-	*/
 	public function nextToken()
 	{
 		$this->index++;
 		/** @var Token $token */
-		$token = $this->tokens[$this->index];
+		$token = $this->tokens[$this->index] ?? null;
 		return $token;
+	}
+
+	/**
+	 * Skips all whitespace and commentaries.
+	 *
+	 * @return Token
+	 */
+	public function nextNotWhiteSpaceToken()
+	{
+		$i = $this->index + 1;
+		while (isset($this->tokens[$i]))
+		{
+			/** @var Token $token */
+			$token = $this->tokens[$i];
+			if ($token->type == Token::T_WHITESPACE || $token->type == Token::T_COMMENT)
+			{
+				$i++;
+			}
+			else
+			{
+				break;
+			}
+		}
+		return $this->tokens[$i] ?? null;
 	}
 
 	/**
@@ -353,17 +233,6 @@ class Tokenizer
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Нестатический метод пропускает все пробелы и комментарии.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/skipwhitespace.php
-	* @author Bitrix
-	*/
 	public function skipWhiteSpace()
 	{
 		while (isset($this->tokens[$this->index]))
@@ -371,9 +240,13 @@ class Tokenizer
 			/** @var Token $token */
 			$token = $this->tokens[$this->index];
 			if ($token->type == Token::T_WHITESPACE || $token->type == Token::T_COMMENT)
+			{
 				$this->index++;
+			}
 			else
+			{
 				break;
+			}
 		}
 	}
 
@@ -384,21 +257,8 @@ class Tokenizer
 	 *
 	 * @param string $text Text to compare.
 	 *
-	 * @return boolean
+	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод проверяет соответствие текста в параметре <code>$text</code> с текстом, содержащемуся в токене. В случае соответствия текущая позиция продвигается на шаг вперед.</p> <br>
-	*
-	*
-	* @param string $text  Сравниваемый текст.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/testuppertext.php
-	* @author Bitrix
-	*/
 	public function testUpperText($text)
 	{
 		if (isset($this->tokens[$this->index]))
@@ -421,21 +281,8 @@ class Tokenizer
 	 *
 	 * @param string $text Text to compare.
 	 *
-	 * @return boolean
+	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод проверяет соответствие текста в параметре <code>$text</code> с текстом, содержащемуся в токене. В случае соответствия текущая позиция продвигается на шаг вперед.</p> <br>
-	*
-	*
-	* @param string $text  Сравниваемый текст.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/tokenizer/testtext.php
-	* @author Bitrix
-	*/
 	public function testText($text)
 	{
 		if (isset($this->tokens[$this->index]))
@@ -460,7 +307,7 @@ class Tokenizer
 	 */
 	private function _tokenize($sql)
 	{
-		$this->tokens = array();
+		$this->tokens = [];
 		$tokenCount = 0;
 		$chars = '(),.:=;/';
 		$rawTokens = preg_split("/(
@@ -468,21 +315,24 @@ class Tokenizer
 			|\\\\+                          # BACKSLASHES
 			|\"                             # DOUBLE QUOTE
 			|'                              # SINGLE QUOTE
-			|`[^`]`                         # BACK QUOTE
+			|`[^`]+`                        # BACK QUOTE
 			|\\[[^\\]]+\\]                  # SQUARE QUOTE
 			|\\/\\*.*?\\*\\/                # COMMENTARY
 			|--.*?\\n                       # COMMENTARY
-			|[".preg_quote($chars, "/")."]  # CHARACTER
-		)/xs", $sql, -1, PREG_SPLIT_DELIM_CAPTURE);
+			|\\#[^']*?\\n                   # COMMENTARY
+			|[" . preg_quote($chars, '/') . ']  # CHARACTER
+		)/xs', $sql, -1, PREG_SPLIT_DELIM_CAPTURE);
 		$isInSingleQuote = false;
 		$isInDoubleQuote = false;
-		foreach ($rawTokens as $i => $rawToken)
+		foreach ($rawTokens as $rawToken)
 		{
-			if ($rawToken === "")
+			if ($rawToken === '')
+			{
 				continue;
+			}
 
 			/** @var Token $prevToken */
-			$prevToken = $this->tokens[$tokenCount-1];
+			$prevToken = $this->tokens[$tokenCount - 1] ?? null;
 
 			if ($isInSingleQuote)
 			{
@@ -490,7 +340,10 @@ class Tokenizer
 				if (
 					$rawToken === "'"
 					&& preg_match("/(\\\\)*'\$/", $prevToken->text, $match)
-					&& (strlen($match[0]) % 2) === 1
+					&& (
+						mb_strlen($match[0]) === 0
+						|| (mb_strlen($match[0]) % 2) === 1
+					)
 				)
 				{
 					$isInSingleQuote = false;
@@ -500,34 +353,35 @@ class Tokenizer
 			{
 				$prevToken->appendText($rawToken);
 				if (
-					$rawToken === "\""
-					&& preg_match("/(\\\\)*\"\$/", $prevToken->text, $match)
-					&& (strlen($match[0]) % 2) === 1
+					$rawToken === '"'
+					&& preg_match('/(\\\\)*"$/', $prevToken->text, $match)
+					&& (mb_strlen($match[0]) % 2) === 1
 				)
 				{
 					$isInDoubleQuote = false;
 				}
 			}
-			elseif ($rawToken[0] === "`")
+			elseif ($rawToken[0] === '`')
 			{
 				$this->tokens[$tokenCount++] = new Token(Token::T_BACK_QUOTE, $rawToken);
 			}
-			elseif ($rawToken[0] === "[")
+			elseif ($rawToken[0] === '[')
 			{
 				$this->tokens[$tokenCount++] = new Token(Token::T_SQUARE_QUOTE, $rawToken);
 			}
 			elseif (
-				($rawToken[0] === "/" && $rawToken[1] === '*')
-				|| ($rawToken[0] === "-" && $rawToken[1] === '-')
+				($rawToken[0] === '/' && $rawToken[1] === '*')
+				|| ($rawToken[0] === '-' && $rawToken[1] === '-')
+				|| ($rawToken[0] === '#')
 			)
 			{
 				$this->tokens[$tokenCount++] = new Token(Token::T_COMMENT, $rawToken);
 			}
-			elseif (strlen($rawToken) == 1 && strpos($chars, $rawToken) !== false)
+			elseif (mb_strlen($rawToken) == 1 && mb_strpos($chars, $rawToken) !== false)
 			{
 				$this->tokens[$tokenCount++] = new Token(Token::T_CHAR, $rawToken);
 			}
-			elseif ($rawToken === "\"")
+			elseif ($rawToken === '"')
 			{
 				$this->tokens[$tokenCount++] = new Token(Token::T_DOUBLE_QUOTE, $rawToken);
 				$isInDoubleQuote = true;
@@ -586,10 +440,14 @@ class Tokenizer
 		foreach ($this->tokens as $token)
 		{
 			if ($token->text === ')')
+			{
 				$level--;
+			}
 			$token->level = $level;
 			if ($token->text === '(')
+			{
 				$level++;
+			}
 		}
 	}
 }

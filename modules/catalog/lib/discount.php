@@ -43,14 +43,27 @@ Loc::loadMessages(__FILE__);
  * <li> NOTES string(255) optional
  * <li> CONDITIONS string optional
  * <li> UNPACK string optional
- * <li> COUPON reference to {@link \Bitrix\Catalog\DiscountCoupon}
+ * <li> USE_COUPONS bool optional default 'N'
  * <li> CREATED_BY_USER reference to {@link \Bitrix\Main\UserTable}
  * <li> MODIFIED_BY_USER reference to {@link \Bitrix\Main\UserTable}
  * <li> RESTRICTION reference to {@link \Bitrix\Catalog\DiscountRestriction}
  * </ul>
  *
  * @package Bitrix\Catalog
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Discount_Query query()
+ * @method static EO_Discount_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Discount_Result getById($id)
+ * @method static EO_Discount_Result getList(array $parameters = [])
+ * @method static EO_Discount_Entity getEntity()
+ * @method static \Bitrix\Catalog\EO_Discount createObject($setDefaultValues = true)
+ * @method static \Bitrix\Catalog\EO_Discount_Collection createCollection()
+ * @method static \Bitrix\Catalog\EO_Discount wakeUpObject($row)
+ * @method static \Bitrix\Catalog\EO_Discount_Collection wakeUpCollection($rows)
+ */
 
 class DiscountTable extends Main\Entity\DataManager
 {
@@ -85,17 +98,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы скидок на товары. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_catalog_discount';
@@ -106,17 +108,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы скидок на товары. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -186,7 +177,10 @@ class DiscountTable extends Main\Entity\DataManager
 			)),
 			'TIMESTAMP_X' => new Main\Entity\DatetimeField('TIMESTAMP_X', array(
 				'required' => true,
-				'default_value' => new Main\Type\DateTime(),
+				'default_value' => function()
+					{
+						return new Main\Type\DateTime();
+					},
 				'title' => Loc::getMessage('DISCOUNT_ENTITY_TIMESTAMP_X_FIELD')
 			)),
 			'COUNT_PERIOD' => new Main\Entity\EnumField('COUNT_PERIOD', array(
@@ -247,26 +241,26 @@ class DiscountTable extends Main\Entity\DataManager
 				'title' => Loc::getMessage('DISCOUNT_ENTITY_CONDITIONS_LIST_FIELD')
 			)),
 			'UNPACK' => new Main\Entity\TextField('UNPACK', array()),
-			'COUPON' => new Main\Entity\ReferenceField(
-				'COUPON',
-				'Bitrix\Catalog\DiscountCoupon',
-				array('=this.ID' => 'ref.DISCOUNT_ID'),
-				array('join_type' => 'LEFT')
-			),
+			'USE_COUPONS' => new Main\Entity\BooleanField('USE_COUPONS', array(
+				'values' => array('N', 'Y'),
+				'default_value' => 'N',
+				'title' => Loc::getMessage('DISCOUNT_ENTITY_USE_COUPONS_FIELD')
+			)),
+			'SALE_ID' => new Main\Entity\IntegerField('SALE_ID'),
 			'CREATED_BY_USER' => new Main\Entity\ReferenceField(
 				'CREATED_BY_USER',
-				'Bitrix\Main\User',
+				'\Bitrix\Main\User',
 				array('=this.CREATED_BY' => 'ref.ID')
 			),
 			'MODIFIED_BY_USER' => new Main\Entity\ReferenceField(
 				'MODIFIED_BY_USER',
-				'Bitrix\Main\User',
+				'\Bitrix\Main\User',
 				array('=this.MODIFIED_BY' => 'ref.ID')
 			),
-			'RESTRICTION' => new Main\Entity\ReferenceField(
-				'RESTRICTIONS',
-				'Bitrix\Catalog\DiscountRestriction',
-				array('=this.ID' => 'ref.DISCOUNT_ID')
+			'SALE_DISCOUNT' => new Main\Entity\ReferenceField(
+				'SALE_DISCOUNT',
+				'Bitrix\Sale\Internals\DiscountTable',
+				array('=this.SALE_ID' => 'ref.ID')
 			)
 		);
 	}
@@ -275,17 +269,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>XML_ID</code> (внешний код). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/validatexmlid.php
-	* @author Bitrix
-	*/
 	public static function validateXmlId()
 	{
 		return array(
@@ -297,17 +280,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>SITE_ID</code> (идентификатор сайта). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/validatesiteid.php
-	* @author Bitrix
-	*/
 	public static function validateSiteId()
 	{
 		return array(
@@ -319,17 +291,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>TYPE</code> (тип скидки). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/validatetype.php
-	* @author Bitrix
-	*/
 	public static function validateType()
 	{
 		return array(
@@ -341,17 +302,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>NAME</code> (название скидки). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/validatename.php
-	* @author Bitrix
-	*/
 	public static function validateName()
 	{
 		return array(
@@ -363,17 +313,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>CURRENCY</code> (код валюты). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/validatecurrency.php
-	* @author Bitrix
-	*/
 	public static function validateCurrency()
 	{
 		return array(
@@ -385,17 +324,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>NOTES</code> (краткое описание скидки). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/validatenotes.php
-	* @author Bitrix
-	*/
 	public static function validateNotes()
 	{
 		return array(
@@ -412,33 +340,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 * @param Main\Entity\Field $field		Field object.
 	 * @return bool|string
 	 */
-	
-	/**
-	* <p>Метод проверяет поле <code>TYPE</code> (вид скидки: обычная или накопительная). Метод статический.</p>
-	*
-	*
-	* @param integer $value  Текущее значение поля.
-	*
-	* @param integer $integer  Первичный ключ записи.
-	*
-	* @param array $primary  Массив обновляемых значений.
-	*
-	* @param array $row  Поле объекта.
-	*
-	* @param array $Bitrix  
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $Entity  
-	*
-	* @param Field $field  
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/checktype.php
-	* @author Bitrix
-	*/
 	public static function checkType($value, $primary, array $row, Main\Entity\Field $field)
 	{
 		if (
@@ -457,19 +358,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 * @param array $data			Discount data.
 	 * @return Main\Entity\AddResult
 	 */
-	
-	/**
-	* <p>Метод добавляет новую скидку в соответствии с данными из массива <i>$data</i>. Метод статический и является методом-заглушкой, порождающим исключения для добавления скидок. В настоящий момент необходимо использовать <a href="http://dev.1c-bitrix.ru/api_help/index.php" >АПИ старого ядра</a>.</p>
-	*
-	*
-	* @param array $data  Массив параметров новой скидки.
-	*
-	* @return \Bitrix\Main\Entity\AddResult 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/add.php
-	* @author Bitrix
-	*/
 	public static function add(array $data)
 	{
 		$result = new Main\Entity\AddResult();
@@ -486,21 +374,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 * @param array $data			Discount data.
 	 * @return Main\Entity\UpdateResult
 	 */
-	
-	/**
-	* <p>Метод изменяет параметры скидки с ключом <code>$primary</code> в соответствии с данными из массива <code>$data</code>.  Метод статический и является методом-заглушкой, порождающим исключения для изменения скидок. В настоящий момент необходимо использовать <a href="http://dev.1c-bitrix.ru/api_help/index.php" >АПИ старого ядра</a>.</p>
-	*
-	*
-	* @param mixed $primary  Первичный ключ скидки.
-	*
-	* @param array $data  Массив параметров скидки.
-	*
-	* @return \Bitrix\Main\Entity\UpdateResult 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/update.php
-	* @author Bitrix
-	*/
 	public static function update($primary, array $data)
 	{
 		$result = new Main\Entity\UpdateResult();
@@ -516,19 +389,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 * @param mixed $primary		Discount primary key.
 	 * @return Main\Entity\DeleteResult
 	 */
-	
-	/**
-	* <p>Метод удаляет скидку с первичным ключом <code>$primary</code>.  Метод статический и является методом-заглушкой, порождающим исключения для удаления скидок. В настоящий момент необходимо использовать <a href="http://dev.1c-bitrix.ru/api_help/index.php" >АПИ старого ядра</a>.</p>
-	*
-	*
-	* @param mixed $primary  Первичный ключ скидки.
-	*
-	* @return \Bitrix\Main\Entity\DeleteResult 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/delete.php
-	* @author Bitrix
-	*/
 	public static function delete($primary)
 	{
 		$result = new Main\Entity\DeleteResult();
@@ -545,21 +405,6 @@ class DiscountTable extends Main\Entity\DataManager
 	 * @param string $currency				New currency.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод пересчитывает параметры скидки в другой валюте (валюте магазина). Метод статический.</p>
-	*
-	*
-	* @param array &$discount  Массив с параметрами скидки.
-	*
-	* @param string $currency  Новая валюта.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discounttable/convertcurrency.php
-	* @author Bitrix
-	*/
 	public static function convertCurrency(&$discount, $currency)
 	{
 		$currency = Currency\CurrencyManager::checkCurrencyID($currency);
@@ -572,20 +417,45 @@ class DiscountTable extends Main\Entity\DataManager
 		{
 			case self::VALUE_TYPE_FIX:
 			case self::VALUE_TYPE_SALE:
-				$discount['VALUE'] = roundEx(
-					\CCurrencyRates::convertCurrency($discount['VALUE'], $discount['CURRENCY'], $currency),
-					CATALOG_VALUE_PRECISION
+				$discount['VALUE'] = round(
+					\CCurrencyRates::convertCurrency($discount['VALUE'], $discount['CURRENCY'], $currency)
 				);
 				$discount['CURRENCY'] = $currency;
 				break;
 			case self::VALUE_TYPE_PERCENT:
 				if ($discount['MAX_DISCOUNT'] > 0)
-					$discount['MAX_DISCOUNT'] = roundEx(
-						\CCurrencyRates::convertCurrency($discount['MAX_DISCOUNT'], $discount['CURRENCY'], $currency),
-						CATALOG_VALUE_PRECISION
+					$discount['MAX_DISCOUNT'] = round(
+						\CCurrencyRates::convertCurrency($discount['MAX_DISCOUNT'], $discount['CURRENCY'], $currency)
 					);
 				$discount['CURRENCY'] = $currency;
 				break;
 		}
+	}
+
+	/**
+	 * Set exist coupons flag for discount list.
+	 *
+	 * @param array|int $discountList		Discount ids for update.
+	 * @param string $use					Value for update use coupons.
+	 * @return void
+	 */
+	public static function setUseCoupons($discountList, $use)
+	{
+		if (!is_array($discountList))
+			$discountList = array($discountList);
+		$use = (string)$use;
+		if ($use !== 'Y' && $use !== 'N')
+			return;
+		Main\Type\Collection::normalizeArrayValuesByInt($discountList);
+		if (empty($discountList))
+			return;
+		$conn = Main\Application::getConnection();
+		$helper = $conn->getSqlHelper();
+		$conn->queryExecute(
+			'update '.$helper->quote(self::getTableName()).
+			' set '.$helper->quote('USE_COUPONS').' = \''.$use.'\' where '.
+			$helper->quote('ID').' in ('.implode(',', $discountList).')'
+		);
+		unset($helper, $conn);
 	}
 }

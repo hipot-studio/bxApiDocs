@@ -28,25 +28,6 @@ class IntType extends Double
 	 * @param mixed $value Field value.
 	 * @return mixed Normalized value
 	 */
-	
-	/**
-	* <p>Статический метод нормализует одиночное значение.</p>
-	*
-	*
-	* @param mixed $Bitrix  Тип поля документа.
-	*
-	* @param Bitri $Bizproc  Значение поля.
-	*
-	* @param FieldType $fieldType  
-	*
-	* @param mixed $value  
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/basetype/inttype/tosinglevalue.php
-	* @author Bitrix
-	*/
 	public static function toSingleValue(FieldType $fieldType, $value)
 	{
 		if (is_array($value))
@@ -67,7 +48,7 @@ class IntType extends Double
 	{
 		$value = Base::extractValue($fieldType, $field, $request);
 
-		if ($value !== null && is_string($value) && strlen($value) > 0)
+		if ($value !== null && is_string($value) && $value <> '')
 		{
 			if (\CBPActivity::isExpression($value))
 				return $value;
@@ -86,6 +67,10 @@ class IntType extends Double
 					'parameter' => static::generateControlName($field),
 				));
 			}
+		}
+		elseif (is_numeric($value))
+		{
+			$value = (int)$value;
 		}
 		else
 		{

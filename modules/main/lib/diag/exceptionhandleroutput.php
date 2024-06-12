@@ -11,7 +11,7 @@ class ExceptionHandlerOutput implements IExceptionHandlerOutput
 	 * @param \Error|\Exception $exception
 	 * @param bool $debug
 	 */
-	static public function renderExceptionMessage($exception, $debug = false)
+	public function renderExceptionMessage($exception, $debug = false)
 	{
 		if ($debug)
 		{

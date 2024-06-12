@@ -14,72 +14,91 @@ class FieldType
 	/**
 	 * Base type BOOL
 	 */
-	const BOOL = 'bool';
+	public const BOOL = 'bool';
 
 	/**
 	 * Base type DATE
 	 */
-	const DATE = 'date';
+	public const DATE = 'date';
 
 	/**
 	 * Base type DATETIME
 	 */
-	const DATETIME = 'datetime';
+	public const DATETIME = 'datetime';
 
 	/**
 	 * Base type DOUBLE
 	 */
-	const DOUBLE = 'double';
+	public const DOUBLE = 'double';
 
 	/**
 	 * Base type FILE
 	 */
-	const FILE = 'file';
+	public const FILE = 'file';
 
 	/**
 	 * Base type INT
 	 */
-	const INT = 'int';
+	public const INT = 'int';
 
 	/**
 	 * Base type SELECT
 	 */
-	const SELECT = 'select';
+	public const SELECT = 'select';
 
 	/**
 	 * Base type INTERNALSELECT
 	 */
-	const INTERNALSELECT = 'internalselect';
+	public const INTERNALSELECT = 'internalselect';
 
 	/**
 	 * Base type STRING
 	 */
-	const STRING = 'string';
+	public const STRING = 'string';
 
 	/**
 	 * Base type TEXT
 	 */
-	const TEXT = 'text';
+	public const TEXT = 'text';
 
 	/**
 	 * Base type USER
 	 */
-	const USER = 'user';
+	public const USER = 'user';
+
+	/**
+	 * Base type TIME
+	 */
+	public const TIME = 'time';
 
 	/**
 	 * Control render mode - Bizproc Designer
 	 */
-	const RENDER_MODE_DESIGNER = 1;
+	public const RENDER_MODE_DESIGNER = 1;
 
 	/**
 	 * Control render mode - Admin panel
 	 */
-	const RENDER_MODE_ADMIN = 2;
+	public const RENDER_MODE_ADMIN = 2;
 
 	/**
 	 * Control render mode - Mobile application
 	 */
-	const RENDER_MODE_MOBILE = 4;
+	public const RENDER_MODE_MOBILE = 4;
+
+	/**
+	 * Control render mode - Automation designer
+	 */
+	public const RENDER_MODE_PUBLIC = 8;
+
+	/**
+	 * Control render mode - Native mobile controls
+	 */
+	public const RENDER_MODE_JN_MOBILE = 16;
+
+	public const VALUE_CONTEXT_DOCUMENT = 'Document';
+	public const VALUE_CONTEXT_REST = 'rest';
+	public const VALUE_CONTEXT_JN_MOBILE = 'jn_mobile';
 
 	/** @var \Bitrix\Bizproc\BaseType\Base $typeClass */
 	protected $typeClass;
@@ -106,6 +125,14 @@ class FieldType
 
 		$this->typeClass = $typeClass;
 		$this->documentId = $documentId;
+	}
+
+	/**
+	 * @return array
+	 */
+	public function getProperty()
+	{
+		return $this->property;
 	}
 
 	/**
@@ -139,19 +166,6 @@ class FieldType
 	 * @return $this
 	 * @throws Main\ArgumentException
 	 */
-	
-	/**
-	* <p>Менеджер установки типа класса.</p>
-	*
-	*
-	* @param string $typeClass  Имя типа класса.
-	*
-	* @return \Bitrix\Bizproc\FieldType 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/fieldtype/settypeclass.php
-	* @author Bitrix
-	*/
 	public function setTypeClass($typeClass)
 	{
 		if (is_subclass_of($typeClass, '\Bitrix\Bizproc\BaseType\Base'))
@@ -245,6 +259,45 @@ class FieldType
 	}
 
 	/**
+	 * Get field settings.
+	 * Settings contain additional information that may be required for rendering of field.
+	 * @return array
+	 */
+	public function getSettings()
+	{
+		return isset($this->property['Settings']) && is_array($this->property['Settings'])
+			? $this->property['Settings'] : array();
+	}
+
+	/**
+	 * set field settings.
+	 * Settings contain additional information that may be required for rendering of field.
+	 * @param array $settings Settings array.
+	 * @return $this
+	 */
+	public function setSettings(array $settings)
+	{
+		$this->property['Settings'] = $settings;
+		return $this;
+	}
+
+	/**
+	 * @return null|string
+	 */
+	public function getName()
+	{
+		return $this->property['Name'];
+	}
+
+	/**
+	 * @return null|string
+	 */
+	public function getDescription()
+	{
+		return $this->property['Description'];
+	}
+
+	/**
 	 * @param mixed $value Field value.
 	 * @param string $format Format name.
 	 * @return mixed|null|string
@@ -280,6 +333,24 @@ class FieldType
 		{
 			return $typeClass::convertValueSingle($this, $value, $toTypeClass);
 		}
+	}
+
+	/**
+	 * @param array $baseValue Base value.
+	 * @param mixed $appendValue Value to append.
+	 * @return mixed Merge result.
+	 */
+	public function mergeValue($baseValue, $appendValue): array
+	{
+		$typeClass = $this->typeClass;
+		$baseValue = (array) $baseValue;
+
+		if ($this->isMultiple() && !\CBPHelper::isEmptyValue($appendValue))
+		{
+			return $typeClass::mergeValue($this, $baseValue, $appendValue);
+		}
+
+		return $baseValue;
 	}
 
 	/**
@@ -366,35 +437,107 @@ class FieldType
 	}
 
 	/**
+	 * @param string $context Context identification (Document, Variable etc.)
+	 * @param mixed $value Field value.
+	 * @return mixed
+	 */
+	public function internalizeValue($context, $value)
+	{
+		$typeClass = $this->typeClass;
+
+		if ($this->isMultiple())
+		{
+			return $typeClass::internalizeValueMultiple($this, $context, $value);
+		}
+		else
+		{
+			return $typeClass::internalizeValueSingle($this, $context, $value);
+		}
+	}
+
+	/**
+	 * @param string $context Context identification (Document, Variable etc.)
+	 * @param mixed $value Field value.
+	 * @return mixed
+	 */
+	public function externalizeValue($context, $value)
+	{
+		$typeClass = $this->typeClass;
+
+		if ($this->isMultiple())
+		{
+			return $typeClass::externalizeValueMultiple($this, $context, $value);
+		}
+		else
+		{
+			return $typeClass::externalizeValueSingle($this, $context, $value);
+		}
+	}
+
+	/**
 	 * Get list of supported base types.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает список поддерживаемых базовых типов.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/fieldtype/getbasetypesmap.php
-	* @author Bitrix
-	*/
 	public static function getBaseTypesMap()
 	{
 		return array(
-			static::BOOL => '\Bitrix\Bizproc\BaseType\BoolType',
-			static::DATE => '\Bitrix\Bizproc\BaseType\Date',
-			static::DATETIME => '\Bitrix\Bizproc\BaseType\Datetime',
-			static::DOUBLE => '\Bitrix\Bizproc\BaseType\Double',
-			static::FILE => '\Bitrix\Bizproc\BaseType\File',
-			static::INT => '\Bitrix\Bizproc\BaseType\IntType',
-			static::SELECT => '\Bitrix\Bizproc\BaseType\Select',
-			static::STRING => '\Bitrix\Bizproc\BaseType\StringType',
-			static::TEXT => '\Bitrix\Bizproc\BaseType\Text',
-			static::USER => '\Bitrix\Bizproc\BaseType\User',
-			static::INTERNALSELECT => '\Bitrix\Bizproc\BaseType\InternalSelect',
+			static::BOOL => BaseType\BoolType::class,
+			static::DATE => BaseType\Date::class,
+			static::DATETIME => BaseType\Datetime::class,
+			static::DOUBLE => BaseType\Double::class,
+			static::FILE => BaseType\File::class,
+			static::INT => BaseType\IntType::class,
+			static::SELECT => BaseType\Select::class,
+			static::STRING => BaseType\StringType::class,
+			static::TEXT => BaseType\Text::class,
+			static::USER => BaseType\User::class,
+			static::INTERNALSELECT => BaseType\InternalSelect::class,
+			static::TIME => BaseType\Time::class,
 		);
+	}
+
+	public static function isBaseType(string $type): bool
+	{
+		return array_key_exists($type, static::getBaseTypesMap());
+	}
+
+	public static function convertUfType(string $type): ?string
+	{
+		$bpType = null;
+		switch ($type)
+		{
+			case 'string':
+			case 'datetime':
+			case 'date':
+			case 'double':
+			case 'file':
+				$bpType = $type;
+				break;
+			case 'integer':
+				$bpType = 'int';
+				break;
+			case 'boolean':
+				$bpType = 'bool';
+				break;
+			case 'employee':
+				$bpType = 'user';
+				break;
+			case 'enumeration':
+				$bpType = 'select';
+				break;
+			case 'money':
+			case 'url':
+			case 'address':
+			case 'resourcebooking':
+			case 'crm_status':
+			case 'iblock_section':
+			case 'iblock_element':
+			case 'crm':
+				$bpType = "UF:{$type}";
+				break;
+		}
+
+		return $bpType;
 	}
 
 	/**
@@ -402,52 +545,111 @@ class FieldType
 	 * @param string|array $property Document property.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод нормализует структуру свойства.</p>
-	*
-	*
-	* @param mixed $string  Свойство документа.
-	*
-	* @param array $property  
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/fieldtype/normalizeproperty.php
-	* @author Bitrix
-	*/
 	public static function normalizeProperty($property)
 	{
-		$normalized = array('Type' => null, 'Multiple' => false, 'Required' => false, 'Options' => null);
-		if (is_array($property))
+		$normalized = [
+			'Id' => null,
+			'Type' => null,
+
+			'Name' => null,
+			'Description' => null,
+
+			'Multiple' => false,
+			'Required' => false,
+
+			'Options' => null,
+			'Settings' => null,
+			'Default' => null,
+		];
+
+		if (!is_array($property))
 		{
-			foreach ($property as $key => $val)
-			{
-				switch (strtoupper($key))
-				{
-					case 'TYPE':
-					case '0':
-						$normalized['Type'] = (string) $val;
-						break;
-					case 'MULTIPLE':
-					case '1':
-						$normalized['Multiple'] = (!$val || is_int($val) && ($val == 0) || (strtoupper($val) == 'N')) ? false : true;
-						break;
-					case 'REQUIRED':
-					case '2':
-						$normalized['Required'] = (!$val || is_int($val) && ($val == 0) || (strtoupper($val) == 'N')) ? false : true;
-						break;
-					case 'OPTIONS':
-					case '3':
-						$normalized['Options'] = is_array($val) ? $val : (string)$val;
-						break;
-				}
-			}
-		}
-		else
 			$normalized['Type'] = (string) $property;
 
+			return $normalized;
+		}
+
+		foreach ($property as $key => $val)
+		{
+			switch(mb_strtoupper($key))
+			{
+				case 'TYPE':
+				case '0':
+					$normalized['Type'] = (string)$val;
+					break;
+				case 'MULTIPLE':
+				case '1':
+					$normalized['Multiple'] = \CBPHelper::getBool($val);
+					break;
+				case 'REQUIRED':
+				case '2':
+					$normalized['Required'] = \CBPHelper::getBool($val);
+					break;
+				case 'OPTIONS':
+				case '3':
+					$normalized['Options'] = is_array($val)? $val : (string)$val;
+					break;
+				case 'SETTINGS':
+					$normalized['Settings'] = is_array($val) ? $val : null;
+					break;
+				case 'ID':
+					$normalized['Id'] = (string)$val;
+					break;
+				case 'NAME':
+				case 'TITLE':
+					$normalized['Name'] = (string)$val;
+					break;
+				case 'DESCRIPTION':
+					$normalized['Description'] = (string)$val;
+					break;
+				case 'DEFAULT':
+					$normalized['Default'] = $val;
+					break;
+			}
+		}
+
 		return $normalized;
+	}
+
+	public static function normalizePropertyList(array $props): array
+	{
+		$normalized = [];
+		foreach ($props as $id => $item)
+		{
+			$item['Id'] ??= $id;
+			$normalized[] = static::normalizeProperty($item);
+		}
+
+		return $normalized;
+	}
+
+	/**
+	 * @param $value
+	 * @return void
+	 */
+	public function setValue($value)
+	{
+		$typeClass = $this->typeClass;
+
+		$this->property['Default'] =
+			($this->isMultiple())
+				? $typeClass::validateValueMultiple($value, $this)
+				: $typeClass::validateValueSingle($value, $this)
+		;
+	}
+
+	/**
+	 * @return mixed
+	 */
+	public function getValue()
+	{
+		return $this->property['Default'];
+	}
+
+	public function convertPropertyToView(int $viewMode): array
+	{
+		$typeClass = $this->typeClass;
+
+		return $typeClass::convertPropertyToView($this, $viewMode, $this->getProperty());
 	}
 }

@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CAllSaleStoreBarcode
@@ -8,19 +9,19 @@ class CAllSaleStoreBarcode
 		if (defined("SALE_DEBUG") && SALE_DEBUG)
 			CSaleHelper::WriteToLog("CSaleStoreBarcode checking fields", array("ACTION" => $ACTION, "arFields" => $arFields), "SSBA1");
 
-		if ((is_set($arFields, "BASKET_ID") || $ACTION=="ADD") && StrLen($arFields["BASKET_ID"]) <= 0)
+		if ((is_set($arFields, "BASKET_ID") || $ACTION=="ADD") && $arFields["BASKET_ID"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SSB_EMPTY_BASKET_ID"), "BARCODE_ADD_EMPTY_BASKET_ID");
 			return false;
 		}
 
-		if ((is_set($arFields, "BASKET_ID") || $ACTION=="ADD") && StrLen($arFields["BASKET_ID"]) <= 0)
+		if ((is_set($arFields, "BASKET_ID") || $ACTION=="ADD") && $arFields["BASKET_ID"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SSB_EMPTY_STORE_ID"), "BARCODE_ADD_EMPTY_STORE_ID");
 			return false;
 		}
 			
-		if ((is_set($arFields, "QUANTITY") || $ACTION=="ADD") && StrLen($arFields["QUANTITY"]) <= 0)
+		if ((is_set($arFields, "QUANTITY") || $ACTION=="ADD") && $arFields["QUANTITY"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SSB_EMPTY_QUANTITY"), "BARCODE_ADD_EMPTY_QUANTITY");
 			return false;
@@ -29,11 +30,11 @@ class CAllSaleStoreBarcode
 		return true;
 	}
 
-	static public function GetByID($ID)
+	public static function GetByID($ID)
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$strSql =
 			"SELECT O.*, ".
@@ -51,11 +52,11 @@ class CAllSaleStoreBarcode
 		return False;
 	}
 
-	static public function Delete($ID)
+	public static function Delete($ID)
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 			return False;
 

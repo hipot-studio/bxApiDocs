@@ -9,5 +9,5 @@
 interface IShipmentOrder
 {
 	public function getShipmentCollection();
-	static public function loadShipmentCollection();
+	public function loadShipmentCollection();
 }

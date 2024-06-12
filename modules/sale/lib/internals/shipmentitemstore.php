@@ -22,7 +22,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Sale
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_ShipmentItemStore_Query query()
+ * @method static EO_ShipmentItemStore_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_ShipmentItemStore_Result getById($id)
+ * @method static EO_ShipmentItemStore_Result getList(array $parameters = [])
+ * @method static EO_ShipmentItemStore_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentItemStore createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentItemStore_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentItemStore wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentItemStore_Collection wakeUpCollection($rows)
+ */
 
 class ShipmentItemStoreTable extends Main\Entity\DataManager
 {
@@ -31,17 +44,6 @@ class ShipmentItemStoreTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы штрихкодов товаров в базе данных. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/shipmentitemstoretable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_sale_store_barcode';
@@ -52,17 +54,6 @@ class ShipmentItemStoreTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы штрихкодов товаров. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/shipmentitemstoretable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -77,6 +68,12 @@ class ShipmentItemStoreTable extends Main\Entity\DataManager
 				'required' => true,
 				'title' => Loc::getMessage('STORE_BARCODE_ENTITY_ORDER_DELIVERY_BASKET_ID_FIELD'),
 			),
+			'ORDER_DELIVERY_BASKET' => array(
+				'data_type' => 'Bitrix\Sale\Internals\ShipmentItem',
+				'reference' => array(
+					'=this.ORDER_DELIVERY_BASKET_ID' => 'ref.ID'
+				)
+			),
 			'BASKET_ID' => array(
 				'data_type' => 'integer',
 				'required' => true,
@@ -86,6 +83,10 @@ class ShipmentItemStoreTable extends Main\Entity\DataManager
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateBarcode'),
 				'title' => Loc::getMessage('STORE_BARCODE_ENTITY_BARCODE_FIELD'),
+			),
+			'MARKING_CODE' => array(
+				'data_type' => 'string',
+				'title' => Loc::getMessage('STORE_BARCODE_ENTITY_MARKING_CODE_FIELD'),
 			),
 			'STORE_ID' => array(
 				'data_type' => 'integer',
@@ -119,17 +120,6 @@ class ShipmentItemStoreTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>BARCODE</code> (штрихкод товара). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/shipmentitemstoretable/validatebarcode.php
-	* @author Bitrix
-	*/
 	public static function validateBarcode()
 	{
 		return array(

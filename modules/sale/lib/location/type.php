@@ -13,9 +13,26 @@ use Bitrix\Main\Localization\Loc;
 
 use Bitrix\Sale\Location\Name;
 use Bitrix\Sale\Location\Util\Assert;
+use Bitrix\Sale\Result;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class TypeTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Type_Query query()
+ * @method static EO_Type_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Type_Result getById($id)
+ * @method static EO_Type_Result getList(array $parameters = [])
+ * @method static EO_Type_Entity getEntity()
+ * @method static \Bitrix\Sale\Location\EO_Type createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Location\EO_Type_Collection createCollection()
+ * @method static \Bitrix\Sale\Location\EO_Type wakeUpObject($row)
+ * @method static \Bitrix\Sale\Location\EO_Type_Collection wakeUpCollection($rows)
+ */
 class TypeTable extends Entity\DataManager
 {
 	public static function getFilePath()
@@ -30,6 +47,17 @@ class TypeTable extends Entity\DataManager
 
 	public static function add(array $data)
 	{
+		$res = self::getList(array(
+			'filter' => array('=CODE' => $data['CODE'])
+		));
+		
+		if($res->fetch())
+		{
+			$addResult = new Entity\AddResult();
+			$addResult->addError(new Main\Error(Loc::getMessage('SALE_LOCATION_TYPE_ENTITY_CODE_FIELD_EXIST_ERROR')));
+			return $addResult;
+		}
+
 		if(isset($data['NAME']))
 		{
 			$name = $data['NAME'];
@@ -59,6 +87,23 @@ class TypeTable extends Entity\DataManager
 	public static function update($primary, array $data)
 	{
 		$primary = Assert::expectIntegerPositive($primary, '$primary');
+
+		if(isset($data['CODE']))
+		{
+			$res = self::getList(array(
+				'filter' => array(
+					'=CODE' => $data['CODE'],
+					'!=ID' => $primary
+				)
+			));
+
+			if($res->fetch())
+			{
+				$updResult = new Entity\UpdateResult();
+				$updResult->addError(new Main\Error(Loc::getMessage('SALE_LOCATION_TYPE_ENTITY_CODE_FIELD_EXIST_ERROR')));
+				return $updResult;
+			}
+		}
 
 		// first update parent, and if it succeed, do updates of the connected data
 

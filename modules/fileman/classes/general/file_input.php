@@ -49,7 +49,7 @@ class CFileInput
 		self::$minPreviewWidth = min((isset($showInfo['MIN_SIZE']['W']) ? $showInfo['MIN_SIZE']['W'] : 120), 500);
 		self::$minPreviewHeight = min((isset($showInfo['MIN_SIZE']['H']) ? $showInfo['MIN_SIZE']['H'] : 100), 500);
 
-		self::$jsId = 'bx_file_'.strtolower(preg_replace("/[^a-z0-9]/i", "_", $inputName));
+		self::$jsId = 'bx_file_'.mb_strtolower(preg_replace("/[^a-z0-9]/i", "_", $inputName));
 	}
 
 /**
@@ -136,7 +136,7 @@ class CFileInput
 		{
 			if (is_array($fileId))
 				continue;
-			if (strlen($fileId) <= 1 && intVal($fileId) === 0)
+			if (mb_strlen($fileId ?? '') <= 1 && intval($fileId) === 0)
 				continue;
 
 			self::$bFileExists = true;
@@ -249,9 +249,14 @@ class CFileInput
 		self::$curFiles = array();
 		self::$bFileExists = false;
 
+		if ($arDescInput)
+		{
+			reset($arDescInput['VALUES']);
+		}
+
 		foreach($values as $inputName => $fileId)
 		{
-			if (strlen($fileId) <= 1 && intVal($fileId) === 0)
+			if (mb_strlen($fileId) <= 1 && intval($fileId) === 0)
 				continue;
 
 			self::$bFileExists = true;
@@ -264,9 +269,9 @@ class CFileInput
 
 				if ($arDescInput)
 				{
-					list($descName, $descVal) = each($arDescInput['VALUES']);
-					$arFile['DESC_NAME'] = $descName;
-					$arFile['DESCRIPTION'] = $descVal;
+					$arFile['DESC_NAME'] = key($arDescInput['VALUES']);
+					$arFile['DESCRIPTION'] = current($arDescInput['VALUES']);
+					next($arDescInput['VALUES']);
 				}
 			}
 			else
@@ -329,7 +334,7 @@ class CFileInput
 		$sImagePath = isset($arFile["PATH"]) ? $arFile["PATH"] : $arFile["SRC"];
 		if(
 			$arFile["HANDLER_ID"]
-			|| (defined("BX_IMG_SERVER") && substr($sImagePath, 0, strlen(BX_IMG_SERVER)) === BX_IMG_SERVER)
+			|| (defined("BX_IMG_SERVER") && mb_substr($sImagePath, 0, mb_strlen(BX_IMG_SERVER)) === BX_IMG_SERVER)
 			|| $io->FileExists($_SERVER["DOCUMENT_ROOT"].$sImagePath)
 		)
 		{
@@ -337,7 +342,7 @@ class CFileInput
 			$arFile["IS_IMAGE"] = $arFile["WIDTH"] > 0 && $arFile["HEIGHT"] > 0 && self::$showInfo['IMAGE'] != 'N';
 
 			//Mantis:#65168
-			if ($arFile["CONTENT_TYPE"] && $arFile["IS_IMAGE"] && strpos($arFile["CONTENT_TYPE"], 'application') !== false)
+			if ($arFile["CONTENT_TYPE"] && $arFile["IS_IMAGE"] && mb_strpos($arFile["CONTENT_TYPE"], 'application') !== false)
 			{
 				$arFile["IS_IMAGE"] = false;
 			}
@@ -416,7 +421,10 @@ class CFileInput
 				foreach(self::$curFiles as $ind => $arFile)
 					self::DisplayFile($arFile, $ind);
 		?>
-		<script type="text/javascript">new top.BX.file_input(<?= CUtil::PHPToJSObject($arConfig)?>);</script>
+		<script type="text/javascript">
+			var topWindow = BX.PageObject.getRootWindow();
+			(topWindow.BX.file_input) ? new topWindow.BX.file_input(<?= CUtil::PHPToJSObject($arConfig)?>) : new BX.file_input(<?= CUtil::PHPToJSObject($arConfig)?>)
+		</script>
 		</div>
 		<?/* Used to refresh form content - workaround for IE bug (mantis:37969) */?>
 	<div id="<?= self::$jsId.'_ie_bogus_container'?>"><input type="hidden" value="" /></div>
@@ -472,7 +480,7 @@ class CFileInput
 			if ($arFile['IS_IMAGE'])
 				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('ADM_FILE_INFO_DIM').':&nbsp;&nbsp;'.$arFile['WIDTH'].'x'.$arFile['HEIGHT'].'</span>';
 			if ($sImagePath != '')
-				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('ADM_FILE_INFO_LINK').':&nbsp;&nbsp;<a href="'.CHTTP::urnEncode($sImagePath, "UTF-8").'">'.$sImagePath.'</a></span>';
+				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('ADM_FILE_INFO_LINK').':&nbsp;&nbsp;<a href="'.CHTTP::urnEncode($sImagePath, "UTF-8").'">'.htmlspecialcharsbx($sImagePath).'</a></span>';
 
 			if (!self::$bShowDescInput && $arFile['DESCRIPTION'] != "")
 				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('ADM_FILE_DESCRIPTION').':&nbsp;&nbsp;'.htmlspecialcharsbx($arFile['DESCRIPTION']).'</span>';
@@ -493,10 +501,13 @@ class CFileInput
 			$file = CFile::ResizeImageGet($arFile['ID'], array('width' => self::$maxPreviewWidth, 'height' => self::$maxPreviewHeight), BX_RESIZE_IMAGE_PROPORTIONAL, true);
 			?>
 			<span id="<?= $hintId?>" class="adm-input-file-preview" style="<?if(self::$minPreviewWidth > 0){echo 'min-width: '.self::$minPreviewWidth.'px;';}?> <?if(self::$minPreviewHeight > 0){echo 'min-height:'.self::$minPreviewHeight.'px;';}?>">
-				<?= CFile::Show2Images($file['src'], $arFile['SRC'], self::$maxPreviewWidth, self::$maxPreviewHeight);?>
-				<div id="<?= self::$jsId.'_file_del_lbl_'.$ind?>" class="adm-input-file-del-lbl"><?= GetMessage
-			('ADM_FILE_DELETED_TITLE')?></div>
-			</span>
+				<?= CFile::Show2Images($file['src'], $arFile['SRC'], self::$maxPreviewWidth, self::$maxPreviewHeight);?><?
+				if (!self::IsViewMode() || self::$bShowDelInput)
+				{
+					?><div id="<?= self::$jsId.'_file_del_lbl_'.$ind?>" class="adm-input-file-del-lbl"><?= GetMessage
+			('ADM_FILE_DELETED_TITLE')?></div><?
+				}
+			?></span>
 			<?
 		}
 		else
@@ -511,8 +522,8 @@ class CFileInput
 		{
 		?>
 		<script type="text/javascript">
-			new top.BX.CHint({
-				parent: top.BX("<?= $hintId?>"),
+			new (BX.PageObject.getRootWindow()).BX.CHint({
+				parent: (BX.PageObject.getRootWindow()).BX("<?= $hintId?>"),
 				show_timeout: 10,
 				hide_timeout: 200,
 				dx: 2,
@@ -550,8 +561,8 @@ class CFileInput
 	{
 		if ($type == "")
 			return $inputName;
-		$p = strpos($inputName, "[");
-		return  ($p > 0) ? substr($inputName, 0, $p).$type.substr($inputName, $p) : $inputName.$type;
+		$p = mb_strpos($inputName, "[");
+		return  ($p > 0) ? mb_substr($inputName, 0, $p).$type.mb_substr($inputName, $p) : $inputName.$type;
 	}
 
 	private static function IsViewMode()
@@ -559,4 +570,3 @@ class CFileInput
 		return !self::$bUseUpload && !self::$bUseMedialib && !self::$bUseFileDialog && !self::$bUseCloud;
 	}
 }
-?>

@@ -1,347 +1,256 @@
 <?php
 namespace Bitrix\Pull;
 
-use Bitrix\Main;
-use Bitrix\Main\Entity\Event;
-use Bitrix\Main\Entity\FieldError;
-use Bitrix\Main\Entity\Result;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Entity;
-
-Loc::loadMessages(__FILE__);
-
-/**
- * Class PushTable
- *
- * Fields:
- * <ul>
- * <li> ID int mandatory
- * <li> USER_ID int mandatory
- * <li> DEVICE_TYPE string(50) optional
- * <li> APP_ID string(50) optional
- * <li> UNIQUE_HASH string(50) optional
- * <li> DEVICE_ID string(255) optional
- * <li> DEVICE_NAME string(50) optional
- * <li> DEVICE_TOKEN string(255) mandatory
- * <li> DATE_CREATE datetime mandatory
- * <li> DATE_AUTH datetime optional
- * <li> USER reference to {@link \Bitrix\User\UserTable}
- * </ul>
- *
- * @package Bitrix\Pull
- **/
-
-class PushTable extends Main\Entity\DataManager
+class Push
 {
-	/**
-	 * Returns DB table name for entity.
-	 *
-	 * @return string
-	 */
-	
-	/**
-	* <p>Статический метод возвращает имя таблицы базы данных, соответствующей данной сущности.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/pull/pushtable/gettablename.php
-	* @author Bitrix
-	*/
-	public static function getTableName()
+	static $types = null;
+	static $config = array();
+
+	public static function add($users, $parameters)
 	{
-		return 'b_pull_push';
+		unset($parameters['command']);
+		unset($parameters['params']);
+		return \Bitrix\Pull\Event::add($users, $parameters);
 	}
 
-	/**
-	 * Returns entity map definition.
-	 *
-	 * @return array
-	 */
-	
-	/**
-	* <p>Статический метод возвращает список полей с типами.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/pull/pushtable/getmap.php
-	* @author Bitrix
-	*/
-	public static function getMap()
+	public static function send()
 	{
-		return array(
-			'ID' => array(
-				'data_type' => 'integer',
-				'primary' => true,
-				'autocomplete' => true,
-				'title' => Loc::getMessage('PUSH_ENTITY_ID_FIELD'),
-			),
-			'USER_ID' => array(
-				'data_type' => 'integer',
-				'required' => true,
-				'title' => Loc::getMessage('PUSH_ENTITY_USER_ID_FIELD'),
-			),
-			'DEVICE_TYPE' => array(
-				'data_type' => 'string',
-				'validation' => array(__CLASS__, 'validateDeviceType'),
-				'title' => Loc::getMessage('PUSH_ENTITY_DEVICE_TYPE_FIELD'),
-			),
-			'APP_ID' => array(
-				'data_type' => 'string',
-				'validation' => array(__CLASS__, 'validateAppId'),
-				'title' => Loc::getMessage('PUSH_ENTITY_APP_ID_FIELD'),
-			),
-			'UNIQUE_HASH' => array(
-				'data_type' => 'string',
-				'validation' => array(__CLASS__, 'validateUniqueHash'),
-				'title' => Loc::getMessage('PUSH_ENTITY_UNIQUE_HASH_FIELD'),
-			),
-			'DEVICE_ID' => array(
-				'data_type' => 'string',
-				'validation' => array(__CLASS__, 'validateDeviceId'),
-				'title' => Loc::getMessage('PUSH_ENTITY_DEVICE_ID_FIELD'),
-			),
-			'DEVICE_NAME' => array(
-				'data_type' => 'string',
-				'validation' => array(__CLASS__, 'validateDeviceName'),
-				'title' => Loc::getMessage('PUSH_ENTITY_DEVICE_NAME_FIELD'),
-			),
-			'DEVICE_TOKEN' => array(
-				'data_type' => 'string',
-				'required' => true,
-				'validation' => array(__CLASS__, 'validateDeviceToken'),
-				'title' => Loc::getMessage('PUSH_ENTITY_DEVICE_TOKEN_FIELD'),
-			),
-			'DATE_CREATE' => array(
-				'data_type' => 'datetime',
-				'required' => true,
-				'default_value' => new \Bitrix\Main\Type\DateTime,
-				'title' => Loc::getMessage('PUSH_ENTITY_DATE_CREATE_FIELD'),
-			),
-			'DATE_AUTH' => array(
-				'data_type' => 'datetime',
-				'default_value' => new \Bitrix\Main\Type\DateTime,
-				'title' => Loc::getMessage('PUSH_ENTITY_DATE_AUTH_FIELD'),
-			),
-			'USER' => array(
-				'data_type' => 'Bitrix\User\User',
-				'reference' => array('=this.USER_ID' => 'ref.ID'),
-			),
-		);
-	}
-	/**
-	 * Returns validators for DEVICE_TYPE field.
-	 *
-	 * @return array
-	 */
-	
-	/**
-	* <p>Статический метод возвращает валидаторы для поля <code>DEVICE_TYPE</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/pull/pushtable/validatedevicetype.php
-	* @author Bitrix
-	*/
-	public static function validateDeviceType()
-	{
-		return array(
-			new Main\Entity\Validator\Length(null, 50),
-		);
-	}
-	/**
-	 * Returns validators for APP_ID field.
-	 *
-	 * @return array
-	 */
-	
-	/**
-	* <p>Статический метод возвращает валидаторы для поля  <code>APP_ID</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/pull/pushtable/validateappid.php
-	* @author Bitrix
-	*/
-	public static function validateAppId()
-	{
-		return array(
-			new Main\Entity\Validator\Length(null, 50),
-		);
-	}
-	/**
-	 * Returns validators for UNIQUE_HASH field.
-	 *
-	 * @return array
-	 */
-	
-	/**
-	* <p>Статический метод возвращает валидаторы для поля <code>UNIQUE_HASH</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/pull/pushtable/validateuniquehash.php
-	* @author Bitrix
-	*/
-	public static function validateUniqueHash()
-	{
-		return array(
-			new Main\Entity\Validator\Length(null, 50),
-		);
+		return \Bitrix\Pull\Event::send();
 	}
 
-	/**
-	 * Checks the data fields before saving to DB. Result stores in the $result object
-	 *
-	 * @param Result $result
-	 * @param mixed $primary
-	 * @param array $data
-	 * @throws Main\ArgumentException
-	 */
-	public static function checkFields(Result $result, $primary, array $data)
+	public static function getTypes()
 	{
-		parent::checkFields($result, $primary, $data);
-		$pushManager = new \CPushManager();
-		$availableDataTypes = array_keys($pushManager->getServices());
-
-		if ($result instanceof Entity\AddResult)
+		if (is_array(self::$types))
 		{
-			$entity = self::getEntity();
-
-			if (!$data["DEVICE_TYPE"] || !in_array($data["DEVICE_TYPE"], $availableDataTypes))
-			{
-				$result->addError(new Entity\FieldError($entity->getField("DEVICE_TYPE"), "Wrong field value", FieldError::INVALID_VALUE));
-			}
-			if (!preg_match('~^[a-f0-9]{64}$~i', $data["DEVICE_TOKEN"]) && $data["DEVICE_TYPE"] == "APPLE")
-			{
-				$result->addError(new Entity\FieldError($entity->getField("DEVICE_TYPE"), "Wrong format of token for iOS", FieldError::INVALID_VALUE));
-			}
+			return self::$types;
 		}
-	}
 
-
-	public static function onBeforeAdd(Event $event)
-	{
-		$result = new Entity\EventResult;
-		$data = $event->getParameter("fields");
-
-		if(!$data["APP_ID"])
+		if (!\Bitrix\Main\Loader::includeModule('im'))
 		{
-			if(defined("MOBILEAPP_DEFAULT_APP_ID"))
+			return Array();
+		}
+
+		$notifySchema = \CIMNotifySchema::GetNotifySchema();
+
+		$result = Array();
+		foreach ($notifySchema as $moduleId => $module)
+		{
+			if ($module['NAME'] == '')
 			{
-				$data["APP_ID"] = MOBILEAPP_DEFAULT_APP_ID;
+				$info = \CModule::CreateModuleObject($moduleId);
+				$name= $info->MODULE_NAME;
 			}
 			else
 			{
-				$data["APP_ID"] = "unknown";
+				$name = $module['NAME'];
+			}
+
+			$types = Array();
+			foreach ($module['NOTIFY'] as $notifyType => $notifyConfig)
+			{
+				if (!$notifyConfig['PUSH'] && $notifyConfig['DISABLED']['PUSH'])
+				{
+					continue;
+				}
+				$types[$notifyType] = Array(
+					'NAME' => $notifyConfig['NAME'],
+					'TYPE' => $notifyType,
+					'DISABLED' => (bool)$notifyConfig['DISABLED']['PUSH'],
+					'DEFAULT' => (bool)$notifyConfig['PUSH'],
+				);
+			}
+			if (empty($types))
+			{
+				continue;
+			}
+
+			$result[$moduleId] = Array(
+				'NAME' => $name,
+				'MODULE_ID' => $moduleId,
+				'TYPES' => $types
+			);
+		}
+
+		self::$types = $result;
+
+		return $result;
+	}
+
+	public static function getConfig($userId = null)
+	{
+		if (!\Bitrix\Main\Loader::includeModule('im'))
+		{
+			return Array();
+		}
+
+		if (is_null($userId) && is_object($GLOBALS['USER']))
+		{
+			$userId = $GLOBALS['USER']->getId();
+		}
+
+		$userId = intval($userId);
+		if (!$userId)
+		{
+			return false;
+		}
+
+		if (isset(self::$config[$userId]))
+		{
+			return self::$config[$userId];
+		}
+
+		$pushDisabled = !\Bitrix\Pull\Push::getStatus($userId);
+
+		$userOptions = \CIMSettings::Get($userId)[\CIMSettings::NOTIFY] ?? [];
+
+		$result = Array();
+		foreach ($userOptions as $optionId => $optionValue)
+		{
+			list($clientId, $moduleId, $type) =  explode('|', $optionId);
+			if ($clientId != \CIMSettings::CLIENT_PUSH)
+			{
+				continue;
+			}
+
+			$result[$moduleId][$type] = (bool)$optionValue;
+		}
+
+		$notifySchema = \CIMNotifySchema::GetNotifySchema();
+
+		foreach ($notifySchema as $moduleId => $module)
+		{
+			foreach ($module['NOTIFY'] as $notifyType => $notifyConfig)
+			{
+				if ($pushDisabled)
+				{
+					$result[$moduleId][$notifyType] = false;
+					continue;
+				}
+
+				if (!$notifyConfig['PUSH'] && $notifyConfig['DISABLED']['PUSH'])
+				{
+					continue;
+				}
+
+				if (!isset($result[$moduleId][$notifyType]) || $notifyConfig['DISABLED']['PUSH'])
+				{
+					$result[$moduleId][$notifyType] = (bool)$notifyConfig['PUSH'];
+				}
 			}
 		}
 
-		if(!$data["DEVICE_NAME"])
+		self::$config[$userId] = $result;
+
+		return $result;
+	}
+
+	public static function setConfig($config, $userId = null)
+	{
+		if (!\Bitrix\Main\Loader::includeModule('im'))
 		{
-			$data["DEVICE_NAME"] = $data["DEVICE_ID"];
+			return false;
 		}
 
-		$data["UNIQUE_HASH"] = \CPullPush::getUniqueHash($data["USER_ID"], $data["APP_ID"]);
-		$data["DATE_AUTH"] = new Main\Type\DateTime();
-		$result->modifyFields($data);
+		if (!is_array($config))
+		{
+			return false;
+		}
 
-		return $result;
+		if (is_null($userId) && is_object($GLOBALS['USER']))
+		{
+			$userId = $GLOBALS['USER']->getId();
+		}
+		$userId = intval($userId);
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		$types = self::getTypes();
+		$userConfig = self::getConfig($userId);
+		$userOptions = \CIMSettings::Get($userId)[\CIMSettings::NOTIFY] ?? [];
+
+		$needUpdate = false;
+		foreach ($types as $moduleId => $module)
+		{
+			foreach ($module['TYPES'] as $typeId => $type)
+			{
+				if (isset($config[$moduleId][$typeId]))
+				{
+					$needUpdate = true;
+					$userConfig[$moduleId][$typeId] = (bool)$config[$moduleId][$typeId];
+				}
+				if ($type['DEFAULT'] == $userConfig[$moduleId][$typeId])
+				{
+					unset($userOptions['push|'.$moduleId.'|'.$typeId]);
+				}
+				else
+				{
+					$userOptions['push|'.$moduleId.'|'.$typeId] = $userConfig[$moduleId][$typeId];
+				}
+			}
+		}
+
+		if ($needUpdate)
+		{
+			\CIMSettings::Set(\CIMSettings::NOTIFY, $userOptions, $userId);
+			\CIMSettings::ClearCache($userId);
+			unset(self::$config[$userId]);
+		}
+
+		return true;
 	}
 
-	public static function onAfterAdd(Event $event)
+	public static function setConfigTypeStatus($moduleId, $typeId, $status, $userId = null)
 	{
-		parent::onAfterAdd($event);
-		\CAgent::AddAgent("CPullPush::cleanTokens();", "pull", "N", 43200, "", "Y", ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 30, "FULL"));
+		return self::setConfig(Array($moduleId => Array($typeId => $status)), $userId);
 	}
 
-
-	public static function onBeforeUpdate(Event $event)
+	public static function getConfigTypeStatus($moduleId, $typeId, $userId = null)
 	{
-		parent::onBeforeUpdate($event);
-
-		$result = new Entity\EventResult;
-		$data = $event->getParameter("fields");
-		$data["DATE_AUTH"] = new Main\Type\DateTime();
-		$result->modifyFields($data);
-
-		return $result;
+		$config = self::getConfig($userId);
+		return isset($config[$moduleId][$typeId])? $config[$moduleId][$typeId]: true;
 	}
 
+	public static function getStatus($userId = null)
+	{
+		if (!\CPullOptions::GetPushStatus())
+		{
+			return null;
+		}
 
-	/**
-	 * Returns validators for DEVICE_ID field.
-	 *
-	 * @return array
-	 */
-	
-	/**
-	* <p>Статический метод возвращает валидаторы для поля <code>DEVICE_ID</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/pull/pushtable/validatedeviceid.php
-	* @author Bitrix
-	*/
-	public static function validateDeviceId()
-	{
-		return array(
-			new Main\Entity\Validator\Length(null, 255),
-		);
+		if (is_null($userId) && is_object($GLOBALS['USER']))
+		{
+			$userId = $GLOBALS['USER']->getId();
+		}
+		$userId = intval($userId);
+		if (!$userId)
+		{
+			return false;
+		}
+
+		return (bool)\CUserOptions::GetOption('pull', 'push_status', true, $userId);
 	}
-	/**
-	 * Returns validators for DEVICE_NAME field.
-	 *
-	 * @return array
-	 */
-	
-	/**
-	* <p>Статический метод возвращает валидаторы для поля <code>DEVICE_NAME</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/pull/pushtable/validatedevicename.php
-	* @author Bitrix
-	*/
-	public static function validateDeviceName()
+
+	public static function setStatus($status, $userId = null)
 	{
-		return array(
-			new Main\Entity\Validator\Length(null, 50),
-		);
-	}
-	/**
-	 * Returns validators for DEVICE_TOKEN field.
-	 *
-	 * @return array
-	 */
-	
-	/**
-	* <p>Статический метод возвращает валидаторы для поля <code>DEVICE_TOKEN</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/pull/pushtable/validatedevicetoken.php
-	* @author Bitrix
-	*/
-	public static function validateDeviceToken()
-	{
-		return array(
-			new Main\Entity\Validator\Length(null, 255),
-		);
+		if (!\CPullOptions::GetPushStatus())
+		{
+			return null;
+		}
+
+		if (is_null($userId) && is_object($GLOBALS['USER']))
+		{
+			$userId = $GLOBALS['USER']->getId();
+		}
+		$userId = intval($userId);
+		if (!$userId)
+		{
+			return false;
+		}
+
+		$status = $status === false? false: true;
+
+		return (bool)\CUserOptions::SetOption('pull', 'push_status', $status, false, $userId);
 	}
 }

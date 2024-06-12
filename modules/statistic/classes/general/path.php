@@ -1,137 +1,18 @@
-<?
-
-/**
- * <b>CPath</b> - класс для получения данных о <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#path">путях</a> по сайту.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cpath/index.php
- * @author Bitrix
- */
+<?php
 class CPath
 {
-	
-	/**
-	* <p>Возвращает данные из таблицы, хранящей статистическую информацию как по <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#path">полным путям</a>, так и по <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#path_step">отрезкам путей</a> в разрезе по дням.</p>
-	*
-	*
-	* @param int $parent_id = "" ID "родительского" отрезка пути (предшествовавшему текущему).
-	*
-	* @param string $counter_type = "COUNTER_FULL_PATH" Тип счетчика, возможные значения:          <ul> <li> <b>COUNTER_FULL_PATH</b> -
-	* количество переходов по полному пути; </li>                    <li> <b>COUNTER</b> -
-	* количество переходов по отрезку пути. </li>         </ul>
-	*
-	* @param string &$by = "s_counter" Поле для сортировки. Возможные значения:          <ul> <li> <b>s_counter</b> -
-	* значение счетчика тип которого задается в <i>counter_type</i>; </li>                
-	*    <li> <b>s_last_page</b> - последняя страница отрезка пути (используется
-	* только если <i>counter_type</i>=<b>COUNTER</b>); </li>                    <li> <b>s_pages</b> - набор
-	* всех страниц полного пути (используется только если
-	* <i>counter_type</i>=<b>COUNTER_FULL_PATH</b>). </li>         </ul>
-	*
-	* @param string &$order = "desc" Порядок сортировки. Возможные значения:          <ul> <li> <b>asc</b> - по
-	* возрастанию; </li>                    <li> <b>desc</b> - по убыванию. </li>         </ul>
-	*
-	* @param array $filter = array() Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи:          <ul> <li> <b>PATH_ID</b>* - ID отрезка пути; </li>
-	*                    <li> <b>PATH_ID_EXACT_MATCH</b> - если значение равно "N", то при
-	* фильтрации по <b>PATH_ID</b> будет искаться вхождение; </li>                    <li>
-	* <b>DATE1</b> - начальное значение для интервала даты; </li>                    <li>
-	* <b>DATE2</b> - конечное значение для интервала даты; </li>                    <li>
-	* <b>FIRST_PAGE</b>* - первая страница пути; </li>                    <li> <b>FIRST_PAGE_EXACT_MATCH</b>
-	* - если значение равно "Y", то при фильтрации по <b>FIRST_PAGE</b> будет
-	* искаться точное совпадение; </li>                    <li> <b>FIRST_PAGE_SITE_ID</b> - ID
-	* сайта первой страницы пути; </li>                    <li> <b>FIRST_PAGE_SITE_ID_EXACT_MATCH</b> -
-	* если значение равно "N", то при фильтрации по <b>FIRST_PAGE_SITE_ID</b> будет
-	* искаться вхождение; </li>                    <li> <b>FIRST_PAGE_404</b> - была ли <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#404">404 ошибка</a> на первой странице
-	* пути, возможные значения:              <ul> <li> <b>Y</b> - была; </li>                        
-	*    <li> <b>N</b> - не была. </li>             </ul> </li>                    <li> <b>LAST_PAGE</b>* -
-	* последняя страница пути; </li>                    <li> <b>LAST_PAGE_EXACT_MATCH</b> - если
-	* значение равно "Y", то при фильтрации по <b>LAST_PAGE</b> будет искаться
-	* точное совпадение; </li>                    <li> <b>LAST_PAGE_SITE_ID</b>* - ID сайта
-	* последней страницы пути; </li>                    <li> <b>LAST_PAGE_SITE_ID_EXACT_MATCH</b> -
-	* если значение равно "N", то при фильтрации по <b>LAST_PAGE_SITE_ID</b> будет
-	* искаться вхождение; </li>                    <li> <b>LAST_PAGE_404</b> - была ли <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#404">404 ошибка</a> на последней
-	* странице пути, возможные значения:              <ul> <li> <b>Y</b> - была; </li>       
-	*                     <li> <b>N</b> - не была. </li>             </ul> </li>                    <li> <b>PAGE</b>* -
-	* произвольная страница пути </li>                    <li> <b>PAGE_EXACT_MATCH</b> - если
-	* значение равно "N", то при фильтрации по <b>PAGE</b> будет искаться
-	* вхождение </li>                    <li> <b>PAGE_SITE_ID</b> - ID сайта произвольной
-	* страницы пути </li>                    <li> <b>PAGE_404</b> - была ли <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#404">404 ошибка</a> на произвольной
-	* странице пути, возможные значения:              <ul> <li> <b>Y</b> - была </li>        
-	*                    <li> <b>N</b> - не была. </li>             </ul> </li>                    <li> <b>ADV</b>* - ID
-	* рекламной кампании, по посетителям которой надо получить данные;
-	* </li>                    <li> <b>ADV_EXACT_MATCH</b> - если значение равно "N", то при
-	* фильтрации по <b>ADV</b> будет искаться вхождение; </li>                    <li>
-	* <b>ADV_DATA_TYPE</b> - флаг типа данных для рекламной кампании, возможные
-	* значения:              <ul> <li> <b>P</b> - только по <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv_first">прямым заходам</a> по
-	* рекламной кампании; </li>                            <li> <b>B</b> - только по <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv_back">возвратам</a> по рекламной
-	* кампании; </li>                            <li> <b>S</b> - сумма по прямым заходам и
-	* возвратам. </li>             </ul> </li>                    <li> <b>STEPS1</b> - начальное
-	* значение интервала для поля "количество страниц в пути"; </li>            
-	*        <li> <b>STEPS2</b> - конечное значение интервала для поля "количество
-	* страниц в пути". </li>         </ul>       * - допускается <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/general/filter.php">сложная логика</a>
-	*
-	* @param bool &$is_filtered  Флаг отфильтрованности списка записей. Если значение равно "true",
-	* то список был отфильтрован.
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // выберем данные по полным путям пройденных посетителями
-	* // рекламной кампании #1 или #2
-	* $arFilter = array(
-	*     "ADV" =&gt; "1 | 2"
-	*     );
-	* 
-	* // получим список записей
-	* $rs = <b>CPath::GetList</b>(
-	*     "",
-	*     "COUNTER_FULL_PATH",
-	*     ($by = "s_counter"), 
-	*     ($order = "desc"), 
-	*     $arFilter, 
-	*     $is_filtered
-	*     );
-	* 
-	* // выведем все записи
-	* while ($ar = $rs-&gt;Fetch())
-	* {
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";    
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#path">Термин "Полный путь"</a>
-	* </li>   <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#path_step">Термин "Отрезок
-	* пути"</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cpath/getlist.php
-	* @author Bitrix
-	*/
-	public static function GetList($PARENT_ID="", $COUNTER_TYPE="COUNTER_FULL_PATH", &$by, &$order, $arFilter=Array(), &$is_filtered)
+	public static function GetList($PARENT_ID = '', $COUNTER_TYPE = 'COUNTER_FULL_PATH', $by = 's_counter', $order = 'desc', $arFilter = [])
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
-		if ($COUNTER_TYPE!="COUNTER_FULL_PATH") $COUNTER_TYPE = "COUNTER";
+		if ($COUNTER_TYPE!="COUNTER_FULL_PATH")
+			$COUNTER_TYPE = "COUNTER";
 		$arSqlSearch = Array();
-		$strSqlSearch = "";
+
 		$counter = "P.".$COUNTER_TYPE;
 		$where_counter = "and P.".$COUNTER_TYPE.">0";
-		if (strlen($PARENT_ID)<=0 && $COUNTER_TYPE=="COUNTER")
+
+		if ($PARENT_ID == '' && $COUNTER_TYPE=="COUNTER")
 		{
 			$where_parent = "and (P.PARENT_PATH_ID is null or ".$DB->Length("P.PARENT_PATH_ID")."<=0)";
 		}
@@ -139,9 +20,18 @@ class CPath
 		{
 			$where_parent = "and P.PARENT_PATH_ID = '".$DB->ForSql($PARENT_ID)."'";
 		}
+		else
+		{
+			$where_parent = "";
+		}
+
+		$from_adv = "";
+		$where_adv = "";
+		$ADV_EXIST = "N";
+
 		if (is_array($arFilter))
 		{
-			if (strlen($arFilter["ADV"])>0)
+			if ($arFilter["ADV"] <> '')
 			{
 				$from_adv = " , b_stat_path_adv A ";
 				$where_adv = "and A.PATH_ID = P.PATH_ID and A.DATE_STAT = P.DATE_STAT ";
@@ -162,12 +52,6 @@ class CPath
 					$where_counter = "and (".$counter.")>0";
 				}
 			}
-			else
-			{
-				$from_adv = "";
-				$where_adv = "";
-				$ADV_EXIST = "N";
-			}
 
 			foreach ($arFilter as $key => $val)
 			{
@@ -178,7 +62,7 @@ class CPath
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -241,6 +125,7 @@ class CPath
 				}
 			}
 		}
+
 		if ($COUNTER_TYPE=="COUNTER")
 		{
 			$select1 = "P.LAST_PAGE, P.LAST_PAGE_404, P.LAST_PAGE_SITE_ID";
@@ -249,20 +134,25 @@ class CPath
 		{
 			$select1 = "P.PAGES";
 		}
+		else
+		{
+			$select1 = "";
+		}
+
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
 		if ($by == "s_last_page" && $COUNTER_TYPE=="COUNTER")				$strSqlOrder = "ORDER BY P.LAST_PAGE";
 		elseif ($by == "s_pages" && $COUNTER_TYPE=="COUNTER_FULL_PATH")		$strSqlOrder = "ORDER BY P.PAGES";
 		elseif ($by == "s_counter")	$strSqlOrder = "ORDER BY COUNTER";
 		else
 		{
-			$by = "s_counter";
 			$strSqlOrder = "ORDER BY COUNTER desc, ".$select1;
 		}
-		if ($order!="asc")
+
+		if ($order != "asc")
 		{
 			$strSqlOrder .= " desc ";
-			$order="desc";
 		}
+
 		$strSql = "
 			SELECT /*TOP*/
 				P.PATH_ID,
@@ -281,43 +171,10 @@ class CPath
 		";
 
 		$res = $DB->Query(CStatistics::DBTopSql($strSql), false, $err_mess.__LINE__);
-		$is_filtered = (IsFiltered($strSqlSearch));
+
 		return $res;
 	}
 
-	
-	/**
-	* <p>По указанному ID записи, метод возвращает данные из таблицы, хранящей статистическую информацию как по <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#path">полным путям</a>, так и по <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#path_step">отрезкам путей</a> в разрезе по дням.</p>
-	*
-	*
-	* @param mixed $intid  ID записи из таблицы.
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $path_id = 1;
-	* if ($rs = <b>CPath::GetByID</b>($path_id))
-	* {
-	*     $ar = $rs-&gt;Fetch();
-	*     // выведем параметры отрезка пути
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#path">Термин "Полный путь"</a>
-	* 	</li> <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#path_step">Термин "Отрезок
-	* пути"</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cpath/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -325,4 +182,3 @@ class CPath
 		return $DB->Query(CStatistics::DBTopSql($strSql, 1), false, "File: ".__FILE__."<br>Line: ".__LINE__);
 	}
 }
-?>

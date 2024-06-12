@@ -1,19 +1,37 @@
 <?php
 namespace Bitrix\Sale\Internals;
 
-class EventsPool
+class EventsPool extends PoolBase
 {
 	protected static $events = array();
 
-
 	public static function getEvents($code)
 	{
-		if (isset(static::$events[$code]))
+		$resultList = array();
+		$list = parent::getPoolByCode($code);
+
+		if (is_array($list) && !empty($list))
 		{
-			return static::$events[$code];
+			foreach ($list as $eventName => $eventData)
+			{
+				$resultList[$eventName] = reset($eventData);
+			}
+
+			$list = $resultList;
 		}
 
-		return null;
+		return $list;
+	}
+
+	public static function getEventsByType($code, $type)
+	{
+		$data = parent::get($code, $type);
+		if (!empty($data))
+		{
+			$data = reset($data);
+		}
+
+		return $data;
 	}
 
 	/**
@@ -23,21 +41,26 @@ class EventsPool
 	 */
 	public static function addEvent($code, $type, $event)
 	{
-		static::$events[$code][$type] = $event;
+		parent::add($code, $type, $event);
 	}
 
 	/**
 	 * @param $code
+	 * @param $type
+	 *
+	 * @return bool
 	 */
-	public static function resetEvents($code = null)
+	public static function isEventTypeExists($code, $type)
 	{
-		if ($code !== null)
-		{
-			unset(static::$events[$code]);
-		}
-		else
-		{
-			static::$events = array();
-		}
+		return parent::isTypeExists($code, $type);
+	}
+
+	/**
+	 * @param null $code
+	 * @param null $type
+	 */
+	public static function resetEvents($code = null, $type = null)
+	{
+		parent::resetPool($code, $type);
 	}
 }

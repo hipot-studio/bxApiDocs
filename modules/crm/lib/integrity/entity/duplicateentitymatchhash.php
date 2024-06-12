@@ -4,9 +4,26 @@ namespace Bitrix\Crm\Integrity\Entity;
 use Bitrix\Main;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\SystemException;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class DuplicateEntityMatchHashTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_DuplicateEntityMatchHash_Query query()
+ * @method static EO_DuplicateEntityMatchHash_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_DuplicateEntityMatchHash_Result getById($id)
+ * @method static EO_DuplicateEntityMatchHash_Result getList(array $parameters = [])
+ * @method static EO_DuplicateEntityMatchHash_Entity getEntity()
+ * @method static \Bitrix\Crm\Integrity\Entity\EO_DuplicateEntityMatchHash createObject($setDefaultValues = true)
+ * @method static \Bitrix\Crm\Integrity\Entity\EO_DuplicateEntityMatchHash_Collection createCollection()
+ * @method static \Bitrix\Crm\Integrity\Entity\EO_DuplicateEntityMatchHash wakeUpObject($row)
+ * @method static \Bitrix\Crm\Integrity\Entity\EO_DuplicateEntityMatchHash_Collection wakeUpCollection($rows)
+ */
 class DuplicateEntityMatchHashTable extends Entity\DataManager
 {
 	public static function getTableName()
@@ -36,9 +53,18 @@ class DuplicateEntityMatchHashTable extends Entity\DataManager
 				'primary' => true,
 				'required' => true
 			),
+			'SCOPE' => array(
+				'data_type' => 'string',
+				'primary' => true,
+				'required' => true
+			),
 			'IS_PRIMARY' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
+			),
+			'DATE_MODIFY' => array(
+				'data_type' => 'datetime',
+				'required' => false
 			)
 		);
 	}
@@ -59,60 +85,73 @@ class DuplicateEntityMatchHashTable extends Entity\DataManager
 			{
 				$isPrimary = $data['IS_PRIMARY'] ? 'Y' : 'N';
 			}
-			elseif(is_string($data['IS_PRIMARY']) && strtoupper(trim($data['IS_PRIMARY'])) === 'Y')
+			elseif(is_string($data['IS_PRIMARY']) && mb_strtoupper(trim($data['IS_PRIMARY'])) === 'Y')
 			{
 				$isPrimary = 'Y';
 			}
 		}
 
-		if($connection instanceof Main\DB\MysqlCommonConnection)
-		{
-			$connection->queryExecute(
-				"INSERT INTO b_crm_dp_entity_hash(ENTITY_ID, ENTITY_TYPE_ID, TYPE_ID, MATCH_HASH, IS_PRIMARY)
-					VALUES({$entityID}, {$entityTypeID}, {$typeID}, '{$matchHash}', '{$isPrimary}')
-					ON DUPLICATE KEY UPDATE IS_PRIMARY = '{$isPrimary}'"
-			);
-		}
-		elseif($connection instanceof Main\DB\MssqlConnection)
-		{
-			$dbResult = $connection->query(
-				"SELECT 'X' FROM b_crm_dp_entity_hash WHERE ENTITY_ID = {$entityID} AND ENTITY_TYPE_ID = {$entityTypeID} AND TYPE_ID = {$typeID} AND MATCH_HASH = '{$matchHash}'"
-			);
+		$scope = isset($data['SCOPE']) ? $sqlHelper->forSql($data['SCOPE'], 6) : '';
 
-			if(!is_array($dbResult->fetch()))
-			{
-				$connection->queryExecute(
-					"INSERT INTO b_crm_dp_entity_hash(ENTITY_ID, ENTITY_TYPE_ID, TYPE_ID, MATCH_HASH, IS_PRIMARY)
-						VALUES({$entityID}, {$entityTypeID}, {$typeID}, '{$matchHash}', '{$isPrimary}')"
-				);
-			}
-		}
-		elseif($connection instanceof Main\DB\OracleConnection)
+		$dateModify = (isset($data['DATE_MODIFY']) && $data['DATE_MODIFY'] instanceof Main\Type\DateTime)
+			? $data['DATE_MODIFY']
+			: new Main\Type\DateTime();
+
+		$updateFields = [
+			'IS_PRIMARY' => $isPrimary,
+			'DATE_MODIFY' => $dateModify
+		];
+
+		$keyFields = [
+			'ENTITY_ID' => $entityID,
+			'ENTITY_TYPE_ID' => $entityTypeID,
+			'TYPE_ID' => $typeID,
+			'MATCH_HASH' => $matchHash,
+			'SCOPE' => $scope,
+		];
+
+		$upsertSql = $sqlHelper->prepareMerge(
+			'b_crm_dp_entity_hash',
+			array_keys($keyFields),
+			array_merge($keyFields, $updateFields),
+			$updateFields
+		)[0] ?? null;
+
+		if (empty($upsertSql))
 		{
-			$connection->queryExecute("MERGE INTO b_crm_dp_entity_hash USING (SELECT {$entityID} ENTITY_ID, {$entityTypeID} ENTITY_TYPE_ID, {$typeID} TYPE_ID, '{$matchHash}' MATCH_HASH FROM dual)
-				source ON
-				(
-					source.ENTITY_ID = b_crm_dp_entity_hash.ENTITY_ID
-					AND source.ENTITY_TYPE_ID = b_crm_dp_entity_hash.ENTITY_TYPE_ID
-					AND source.TYPE_ID = b_crm_dp_entity_hash.TYPE_ID
-					AND source.MATCH_HASH = b_crm_dp_entity_hash.MATCH_HASH
-				)
-				WHEN MATCHED THEN
-					UPDATE SET b_crm_dp_entity_hash.IS_PRIMARY = '{$isPrimary}'
-				WHEN NOT MATCHED THEN
-					INSERT (ENTITY_ID, ENTITY_TYPE_ID, TYPE_ID, MATCH_HASH, IS_PRIMARY)
-					VALUES({$entityID}, {$entityTypeID}, {$typeID}, '{$matchHash}', '{$isPrimary}')"
-			);
+			throw new SystemException("Generate upsert sql to b_crm_dp_entity_hash table was failed.");
 		}
-		else
-		{
-			$dbType = $connection->getType();
-			throw new Main\NotSupportedException("The '{$dbType}' is not supported in current context");
-		}
+
+		$connection->queryExecute($upsertSql);
+
 	}
 	public static function deleteByFilter(array $filter)
 	{
-		$conditions = array();
+		$conditions = self::buildSqlConditions($filter);
+
+		if(!empty($conditions))
+		{
+			Main\Application::getConnection()->queryExecute('DELETE FROM  b_crm_dp_entity_hash WHERE '.implode(' AND ', $conditions));
+		}
+	}
+
+	public static function setDateModify(array $filter, Main\Type\DateTime $date)
+	{
+		$conditions = self::buildSqlConditions($filter);
+		if(!empty($conditions))
+		{
+			$sqlDate = $date->format('Y-m-d H:i:s');
+			$conditionSql = implode(' AND ', $conditions);
+			Main\Application::getConnection()->queryExecute("UPDATE b_crm_dp_entity_hash SET DATE_MODIFY='{$sqlDate}' WHERE {$conditionSql}");
+		}
+	}
+
+	protected static function buildSqlConditions(array $filter): array
+	{
+		$conditions = [];
+
+		$connection = Main\Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
 
 		$entityID = isset($filter['ENTITY_ID']) ? (int)$filter['ENTITY_ID'] : 0;
 		if($entityID > 0)
@@ -126,15 +165,66 @@ class DuplicateEntityMatchHashTable extends Entity\DataManager
 			$conditions[] = "ENTITY_TYPE_ID = {$entityTypeID}";
 		}
 
-		$typeID = isset($filter['TYPE_ID']) ? (int)$filter['TYPE_ID'] : 0;
-		if($typeID > 0)
+		if(isset($filter['TYPE_ID']))
 		{
-			$conditions[] = "TYPE_ID = {$typeID}";
+			if(is_array($filter['TYPE_ID']))
+			{
+				if(!empty($filter['TYPE_ID']))
+				{
+					$typeIds = '';
+					$i = 0;
+					foreach ($filter['TYPE_ID'] as $value)
+					{
+						if($value > 0)
+							$typeIds .= ($i++ === 0 ? '' : ',').(int)$value;
+					}
+					if(!empty($typeIds))
+					{
+						$typeIds = 'TYPE_ID IN ('.$typeIds.')';
+						$conditions[] = $typeIds;
+					}
+					unset($typeIds);
+				}
+			}
+			else
+			{
+				$typeID = (int)$filter['TYPE_ID'];
+				if($typeID > 0)
+				{
+					$conditions[] = "TYPE_ID = {$typeID}";
+				}
+			}
 		}
 
-		if(!empty($conditions))
+		if(isset($filter['SCOPE']))
 		{
-			Main\Application::getConnection()->queryExecute('DELETE FROM  b_crm_dp_entity_hash WHERE '.implode(' AND ', $conditions));
+			if (is_array($filter['SCOPE']))
+			{
+				if (!empty($filter['SCOPE']))
+				{
+					$scopes = '';
+					$i = 0;
+					foreach ($filter['SCOPE'] as $value)
+					{
+						$value = strval($value);
+						if(!empty($value))
+							$scopes .= ($i++ === 0 ? '' : ',')."'".$sqlHelper->forSql($value)."'";
+					}
+					if(!empty($scopes))
+					{
+						$scopes = 'SCOPE IN ('.$scopes.')';
+						$conditions[] = $scopes;
+					}
+					unset($scopes);
+				}
+			}
+			else
+			{
+				$scope = $sqlHelper->forSql($filter['SCOPE'], 6);
+				$conditions[] = "SCOPE = '{$scope}'";
+			}
 		}
+
+		return $conditions;
 	}
 }

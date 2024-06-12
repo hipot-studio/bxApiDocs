@@ -14,16 +14,26 @@ use Bitrix\Main\Entity;
  * <li> FIELD string(255) mandatory
  * <li> FIELD_VALUE string(255) mandatory
  * <li> CONFIRM_CODE string(32) mandatory
+ * <li> ATTEMPTS int
  * </ul>
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_UserFieldConfirm_Query query()
+ * @method static EO_UserFieldConfirm_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_UserFieldConfirm_Result getById($id)
+ * @method static EO_UserFieldConfirm_Result getList(array $parameters = [])
+ * @method static EO_UserFieldConfirm_Entity getEntity()
+ * @method static \Bitrix\Main\EO_UserFieldConfirm createObject($setDefaultValues = true)
+ * @method static \Bitrix\Main\EO_UserFieldConfirm_Collection createCollection()
+ * @method static \Bitrix\Main\EO_UserFieldConfirm wakeUpObject($row)
+ * @method static \Bitrix\Main\EO_UserFieldConfirm_Collection wakeUpCollection($rows)
+ */
 
 class UserFieldConfirmTable extends Entity\DataManager
 {
-	public static function getFilePath()
-	{
-		return __FILE__;
-	}
-
+	const MAX_ATTEMPTS_COUNT = 3;
 	public static function getTableName()
 	{
 		return 'b_user_field_confirm';
@@ -56,6 +66,10 @@ class UserFieldConfirmTable extends Entity\DataManager
 				'data_type' => 'string',
 				'required' => true,
 				'validation' => array(__CLASS__, 'validateConfirmCode'),
+			),
+			"ATTEMPTS" => array(
+				'data_type' => 'integer',
+				"default_value" => 0,
 			),
 		);
 	}

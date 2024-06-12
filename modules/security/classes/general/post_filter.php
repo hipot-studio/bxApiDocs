@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Config\Ini;
+
 class CSecurityXSSDetect
 {
 	const SCRIPT_MARK = '<!-- deleted by bitrix WAF -->';
@@ -16,7 +18,7 @@ class CSecurityXSSDetect
 	/** @var string[] */
 	private $quotedSearches = null;
 
-	public function __construct($options = array())
+	function __construct($options = array())
 	{
 		if(isset($options["action"]))
 		{
@@ -64,6 +66,7 @@ class CSecurityXSSDetect
 		$this->variables = new CSecurityXSSDetectVariables();
 		$this->extractVariablesFromArray("\$_GET", $_GET);
 		$this->extractVariablesFromArray("\$_POST", $_POST);
+		$this->extractVariablesFromArray("\$_SERVER[REQUEST_URI]", explode("/",$_SERVER['REQUEST_URI']));
 
 		if(!$this->variables->isEmpty())
 		{
@@ -181,41 +184,47 @@ class CSecurityXSSDetect
 	/**
 	 * @param string $string
 	 * @param array $searches
-	 * @return bool
+	 * @return null|string
 	 */
-	protected static function isFoundInString($string, $searches)
+	protected function findInArray($string, $searches)
 	{
-		foreach($searches as $search)
+		foreach($searches as $i => $search)
 		{
-			$pos = static::fastStrpos($string, $search);
+			$pos = strpos($string, $search["value"]);
+			if ($pos !== false)
+			{
+				$prevChar = substr($string, $pos - 1, 1);
+				$isFound = ($prevChar !== '\\');
+				if ($isFound && preg_match("/^[a-zA-Z_]/", $search["value"]))
+				{
+					$isFound = preg_match("/^[a-zA-Z_]/", $prevChar) <= 0;
+				}
 
-			$isFound = (
-				$pos !== false
-				&& (static::fastSubstr($string, $pos - 1, 1) !== '\\')
-			);
-
-			if($isFound)
-				return true;
+				if ($isFound)
+					return $i;
+			}
 		}
-		return false;
+		return null;
 	}
 
 	/**
 	 * @param string $body
-	 * @return bool
+	 * @return array|false
 	 */
 	protected function isDangerBody($body)
 	{
-		if (self::isFoundInString($body, $this->quotedSearches))
+		$search = $this->findInArray($body, $this->quotedSearches);
+		if ($search !== null)
 		{
-			return true;
+			return $this->quotedSearches[$search];
 		}
 		else if (!empty($this->searches))
 		{
 			$bodyWithoutQuotes = $this->removeQuotedStrings($body, false);
-			if (self::isFoundInString($bodyWithoutQuotes, $this->searches))
+			$search = $this->findInArray($bodyWithoutQuotes, $this->searches);
+			if ($search !== null)
 			{
-				return true;
+				return $this->searches[$search];
 			}
 		}
 
@@ -228,12 +237,13 @@ class CSecurityXSSDetect
 	 */
 	protected function getFilteredScriptBody($body)
 	{
-		if($this->isDangerBody($body))
+		if($var = $this->isDangerBody($body))
 		{
-//                if($this->mIsLogNeeded)
-//			      {
-//                    $this->logVariable($var_name, $value, $str);
-//                }
+			if($this->doLog)
+			{
+				$this->logVariable($var["name"], $var["value"], $_SERVER["SCRIPT_NAME"]);
+			}
+
 			if($this->action !== "none")
 			{
 				$body = self::SCRIPT_MARK;
@@ -249,6 +259,9 @@ class CSecurityXSSDetect
 	 */
 	protected function getFilteredScript($strs)
 	{
+		if(preg_match('#\btype="text/html"#', $strs[1]))
+			return $strs[0];
+
 		if(trim($strs[2]) === "")
 			return $strs[0];
 		else
@@ -261,8 +274,8 @@ class CSecurityXSSDetect
 	 */
 	protected function filter($string)
 	{
-		$stringLen = CUtil::BinStrlen($string) * 2;
-		CUtil::AdjustPcreBacktrackLimit($stringLen);
+		$stringLen = strlen($string) * 2;
+		Ini::adjustPcreBacktrackLimit($stringLen);
 
 		return preg_replace_callback("/(<script[^>]*>)(.*?)(<\\/script[^>]*>)/is", array($this, "getFilteredScript"), $string);
 	}
@@ -275,14 +288,16 @@ class CSecurityXSSDetect
 	{
 		if(!is_string($value))
 			return;
-		if(strlen($value) <= 2)
+		if(mb_strlen($value) <= 2)
 			return; //too short
 		if(preg_match("/^(?P<quot>[\"']?)[^`,;+\-*\/\{\}\[\]\(\)&\\|=\\\\]*(?P=quot)\$/D", $value))
 			return; //there is no potantially dangerous code
 		if(preg_match("/^[,0-9_-]*\$/D", $value))
 			return; //there is no potantially dangerous code
+		if(preg_match("/^[0-9 \n\r\t\\[\\]]*\$/D", $value))
+			return; //there is no potantially dangerous code
 
-		$this->variables->addVariable($name, str_replace(chr(0), "", $value));
+		$this->variables->addVariable($name, $value);
 	}
 
 	/**
@@ -303,25 +318,4 @@ class CSecurityXSSDetect
 				$this->addVariable($variableName, $value);
 		}
 	}
-
-	protected static function fastStrpos($haystack, $needle)
-	{
-		if (function_exists("mb_orig_strpos"))
-		{
-			return mb_orig_strpos($haystack, $needle);
-		}
-
-		return strpos($haystack, $needle);
-	}
-
-	protected static function fastSubstr($string, $start, $length = null)
-	{
-		if (function_exists("mb_orig_substr"))
-		{
-			return mb_orig_substr($string, $start, $length);
-		}
-
-		return substr($string, $start, $length);
-	}
-
 }

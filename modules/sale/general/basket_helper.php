@@ -1,4 +1,6 @@
 <?
+use Bitrix\Main\Loader;
+
 class CSaleBasketHelper
 {
 	/*
@@ -211,6 +213,36 @@ class CSaleBasketHelper
 		return $vat;
 	}
 
+	public static function getPriceTypeName(array $basketItemData): string
+	{
+		static $priceTypeList = null;
+
+		if ($priceTypeList === null)
+		{
+			$priceTypeList = [];
+			if (Loader::includeModule('catalog'))
+			{
+				$priceTypeList = \CCatalogGroup::GetListArray();
+			}
+		}
+
+		$result = '';
+		if (isset($basketItemData['NOTES']) && $basketItemData['NOTES'] !== '')
+		{
+			$result = $basketItemData['NOTES'];
+		}
+		elseif (isset($basketItemData['PRICE_TYPE_ID']))
+		{
+			$typeid = (int)$basketItemData['PRICE_TYPE_ID'];
+			if (isset($priceTypeList[$typeid]))
+			{
+				$result = $priceTypeList[$typeid]['NAME_LANG'] ?: $priceTypeList[$typeid]['NAME'];
+			}
+		}
+
+		return $result;
+	}
+
 	/**
 	 * @param array $basketItemData
 	 *
@@ -218,7 +250,7 @@ class CSaleBasketHelper
 	 */
 	public static function getFinalPrice(array $basketItemData)
 	{
-		$price = roundEx($basketItemData['PRICE'] * $basketItemData['QUANTITY'], SALE_VALUE_PRECISION);
+		$price = \Bitrix\Sale\PriceMaths::roundPrecision($basketItemData['PRICE'] * $basketItemData['QUANTITY']);
 		if (isset($basketItemData['VAT_INCLUDED']) && $basketItemData['VAT_INCLUDED'] === 'N')
 		{
 			$price += static::getVat($basketItemData);
@@ -234,9 +266,9 @@ class CSaleBasketHelper
 	 */
 	public static function formatQuantity($quantity)
 	{
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
+		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
-		if ($isOrderConverted == "Y")
+		if ($isOrderConverted != 'N')
 		{
 			return \Bitrix\Sale\BasketItem::formatQuantity($quantity);
 		}

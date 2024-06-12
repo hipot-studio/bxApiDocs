@@ -21,24 +21,11 @@ class RandomSequence
 	 * @param string $seed
 	 * @return void
 	 */
-	
-	/**
-	* <p>Нестатический метод запускает новую последовательность псевдослучайных значений.</p>
-	*
-	*
-	* @param string $seed = "" 
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/type/randomsequence/__construct.php
-	* @author Bitrix
-	*/
 	public function __construct($seed = "")
 	{
 		$md = md5($seed);
-		$this->mz = crc32(substr($md, 0, 16));
-		$this->mw = crc32(substr($md, -16));
+		$this->mz = crc32(mb_substr($md, 0, 16));
+		$this->mw = crc32(mb_substr($md, -16));
 	}
 
 	/**
@@ -47,17 +34,6 @@ class RandomSequence
 	 *
 	 * @return int
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает следующее псевдослучайное значение последовательности.</p> <p>Результат - подписанное 32-хбитное целое число.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/type/randomsequence/getnext.php
-	* @author Bitrix
-	*/
 	public function getNext()
 	{
 		$this->mz = 36969 * ($this->mz & 65535) + ($this->mz >> 16);
@@ -90,21 +66,6 @@ class RandomSequence
 	 * @return int
 	 * @throws \Bitrix\Main\NotSupportedException
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает следующее псевдослучайное числовое значение последовательности.</p> <p>Значение выбирается между <code>$min</code> и <code>$max</code>, включая границы.</p>
-	*
-	*
-	* @param integer $min  
-	*
-	* @param integer $max  
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/type/randomsequence/rand.php
-	* @author Bitrix
-	*/
 	public function rand($min, $max)
 	{
 		if ($min >= $max)
@@ -120,19 +81,6 @@ class RandomSequence
 	 * @param int $length
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает следующую псевдослучайную строку из последовательности.</p>
-	*
-	*
-	* @param integer $length = 10 
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/type/randomsequence/randstring.php
-	* @author Bitrix
-	*/
 	public function randString($length = 10)
 	{
 		static $allChars = "abcdefghijklnmopqrstuvwxyzABCDEFGHIJKLNMOPQRSTUVWXYZ0123456789";

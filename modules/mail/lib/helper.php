@@ -3,464 +3,631 @@
 namespace Bitrix\Mail;
 
 use Bitrix\Main;
+use Bitrix\Main\ORM;
+use Bitrix\Mail\Internals;
+use Bitrix\Main\Text\Emoji;
 
 class Helper
 {
+	const SYNC_TIMEOUT = 300;
+
+	public static function syncAllDirsInMailboxForTheFirstSyncDayAgent()
+	{
+		$userMailboxes = \Bitrix\Mail\MailboxTable::getList([
+			'select' => [
+				'ID'
+			],
+			'filter' => [
+				'=ACTIVE' => 'Y',
+				'=SERVER_TYPE' => 'imap',
+			],
+		])->fetchAll();
+
+		if (empty($userMailboxes))
+		{
+			return '';
+		}
+
+		$numberOfUnSynchronizedMailboxes = count($userMailboxes);
+
+		foreach ($userMailboxes as $mailbox)
+		{
+			$mailboxID = $mailbox['ID'];
+			$mailboxHelper = Helper\Mailbox::createInstance($mailboxID, false);
+			if (empty($mailboxHelper))
+			{
+				$numberOfUnSynchronizedMailboxes--;
+				continue;
+			}
+
+			$keyRow = [
+				'MAILBOX_ID' => $mailboxID,
+				'ENTITY_TYPE' => 'MAILBOX',
+				'ENTITY_ID' => $mailboxID,
+				'PROPERTY_NAME' => 'SYNC_FIRST_DAY',
+			];
+
+			$filter = [
+				'=MAILBOX_ID' => $keyRow['MAILBOX_ID'],
+				'=ENTITY_TYPE' => $keyRow['ENTITY_TYPE'],
+				'=ENTITY_ID' => $keyRow['ENTITY_ID'],
+				'=PROPERTY_NAME' => $keyRow['PROPERTY_NAME'],
+			];
+
+			$startValue = 'started_for_id_'.$mailboxID;
+
+			if(\Bitrix\Mail\Internals\MailEntityOptionsTable::getCount($filter))
+			{
+				if(Internals\MailEntityOptionsTable::getList([
+					'select' => [
+						'VALUE',
+					],
+					'filter' => $filter,
+				])->fetchAll()[0]['VALUE'] !== 'completed')
+				{
+					\Bitrix\Mail\Internals\MailEntityOptionsTable::update(
+						$keyRow,
+						['VALUE' => $startValue]
+					);
+
+					$synchronizationSuccess = $mailboxHelper->syncFirstDay();
+
+					if($synchronizationSuccess)
+					{
+						\Bitrix\Mail\Internals\MailEntityOptionsTable::update(
+							$keyRow,
+							['VALUE' => 'completed']
+						);
+						$numberOfUnSynchronizedMailboxes--;
+					}
+				}
+				else
+				{
+					$numberOfUnSynchronizedMailboxes--;
+				}
+			}
+			else
+			{
+				$fields = $keyRow;
+				$fields['VALUE'] = $startValue;
+				\Bitrix\Mail\Internals\MailEntityOptionsTable::add(
+					$fields
+				);
+				$synchronizationSuccess = $mailboxHelper->syncFirstDay();
+
+				if($synchronizationSuccess)
+				{
+					\Bitrix\Mail\Internals\MailEntityOptionsTable::update(
+						$keyRow,
+						['VALUE' => 'completed']
+					);
+					$numberOfUnSynchronizedMailboxes--;
+				}
+			}
+		}
+
+		if($numberOfUnSynchronizedMailboxes === 0)
+		{
+			return '';
+		}
+		else
+		{
+			return 'Bitrix\Mail\Helper::syncAllDirsInMailboxForTheFirstSyncDayAgent();';
+		}
+	}
 
 	public static function syncMailboxAgent($id)
 	{
-		$result = self::syncMailbox($id, $error);
+		$mailboxHelper = Helper\Mailbox::createInstance($id, false);
 
-		if ($result === false)
+		if (empty($mailboxHelper))
+		{
 			return '';
+		}
+
+		$mailbox = $mailboxHelper->getMailbox();
+
+		if ($mailbox['OPTIONS']['next_sync'] <= time())
+		{
+			$mailboxHelper->sync();
+
+			$mailbox = $mailboxHelper->getMailbox();
+		}
+
+		global $pPERIOD;
+
+		$pPERIOD = min($pPERIOD, max($mailbox['OPTIONS']['next_sync'] - time(), 60));
 
 		return sprintf('Bitrix\Mail\Helper::syncMailboxAgent(%u);', $id);
 	}
 
-	public static function syncMailbox($id, &$error)
+	public static function syncOutgoingAgent($id)
 	{
-		global $DB;
+		$mailboxHelper = Helper\Mailbox::createInstance($id, false);
 
-		$error = null;
+		$result = empty($mailboxHelper) ? false : $mailboxHelper->syncOutgoing();
 
-		$id = (int) $id;
-
-		$mailbox = MailboxTable::getList(array(
-			'filter' => array('ID' => $id, 'ACTIVE' => 'Y'),
-			'select' => array('*', 'LANG_CHARSET' => 'SITE.CULTURE.CHARSET')
-		))->fetch();
-
-		if (empty($mailbox))
-		{
-			$error = 'no mailbox';
-			return false;
-		}
-
-		if (!in_array($mailbox['SERVER_TYPE'], array('imap', 'controller', 'domain', 'crdomain')))
-		{
-			$error = 'unsupported mailbox type';
-			return false;
-		}
-
-		if ($mailbox['USER_ID'])
-			\CUserOptions::setOption('global', 'last_mail_sync_'.$mailbox['LID'], time(), false, $mailbox['USER_ID']);
-
-		if ($mailbox['SYNC_LOCK'] > time()-600)
-			return;
-
-		if (in_array($mailbox['SERVER_TYPE'], array('controller', 'crdomain')))
-		{
-			// @TODO: request controller
-			$result = \CMailDomain2::getImapData();
-
-			$mailbox['SERVER']  = $result['server'];
-			$mailbox['PORT']    = $result['port'];
-			$mailbox['USE_TLS'] = $result['secure'];
-		}
-		elseif ($mailbox['SERVER_TYPE'] == 'domain')
-		{
-			$result = \CMailDomain2::getImapData();
-
-			$mailbox['SERVER']  = $result['server'];
-			$mailbox['PORT']    = $result['port'];
-			$mailbox['USE_TLS'] = $result['secure'];
-		}
-
-		$DB->query(sprintf('UPDATE b_mail_mailbox SET SYNC_LOCK = %u WHERE ID = %u', time(), $id));
-
-		$result = static::syncImapMailbox($mailbox, $error);
-
-		$DB->query(sprintf('UPDATE b_mail_mailbox SET SYNC_LOCK = 0 WHERE ID = %u', $id));
-
-		return $result;
+		return '';
 	}
 
-	protected static function syncImapMailbox($mailbox, &$error)
+	public static function markOldMessagesAgent()
 	{
-		$error = null;
+		$userMailboxes = \Bitrix\Mail\MailboxTable::getList([
+			'select' => [
+				'ID'
+			],
+			'filter' => [
+				'=ACTIVE' => 'Y',
+				'=SERVER_TYPE' => 'imap',
+			],
+		])->fetchAll();
 
-		if (empty($mailbox['OPTIONS']['imap']) || !is_array($mailbox['OPTIONS']['imap']))
-			return false;
+		if (empty($userMailboxes))
+		{
+			return '';
+		}
 
-		$imapOptions = $mailbox['OPTIONS']['imap'];
-		if (empty($imapOptions['income']) || !is_array($imapOptions['income']))
-			return false;
+		$numberOfUnSynchronizedMailboxes = count($userMailboxes);
 
-		$client = new Imap(
-			$mailbox['SERVER'], $mailbox['PORT'],
-			$mailbox['USE_TLS'] == 'Y' || $mailbox['USE_TLS'] == 'S',
-			$mailbox['USE_TLS'] == 'Y',
-			$mailbox['LOGIN'], $mailbox['PASSWORD'],
-			$mailbox['LANG_CHARSET']
+		foreach ($userMailboxes as $mailbox)
+		{
+			$mailboxID = $mailbox['ID'];
+			$mailboxHelper = Helper\Mailbox::createInstance($mailboxID, false);
+			if (empty($mailboxHelper))
+			{
+				$numberOfUnSynchronizedMailboxes--;
+				continue;
+			}
+
+			$keyRow = [
+				'MAILBOX_ID' => $mailboxID,
+				'ENTITY_TYPE' => 'MAILBOX',
+				'ENTITY_ID' => $mailboxID,
+				'PROPERTY_NAME' => 'SYNC_IS_OLD_STATUS',
+			];
+
+			$filter = [
+				'=MAILBOX_ID' => $keyRow['MAILBOX_ID'],
+				'=ENTITY_TYPE' => $keyRow['ENTITY_TYPE'],
+				'=ENTITY_ID' => $keyRow['ENTITY_ID'],
+				'=PROPERTY_NAME' => $keyRow['PROPERTY_NAME'],
+			];
+
+			$startValue = 'started_for_id_'.$mailboxID;
+
+			if(\Bitrix\Mail\Internals\MailEntityOptionsTable::getCount($filter))
+			{
+				if(Internals\MailEntityOptionsTable::getList([
+						'select' => [
+							'VALUE',
+						],
+						'filter' => $filter,
+					])->fetchAll()[0]['VALUE'] !== 'completed')
+				{
+					\Bitrix\Mail\Internals\MailEntityOptionsTable::update(
+						$keyRow,
+						['VALUE' => $startValue]
+					);
+
+					$synchronizationSuccess = $mailboxHelper->resyncIsOldStatus();
+
+					if($synchronizationSuccess)
+					{
+						\Bitrix\Mail\Internals\MailEntityOptionsTable::update(
+							$keyRow,
+							['VALUE' => 'completed']
+						);
+						$numberOfUnSynchronizedMailboxes--;
+					}
+				}
+				else
+				{
+					$numberOfUnSynchronizedMailboxes--;
+				}
+			}
+			else
+			{
+				$fields = $keyRow;
+				$fields['VALUE'] = $startValue;
+				\Bitrix\Mail\Internals\MailEntityOptionsTable::add(
+					$fields
+				);
+				$synchronizationSuccess = $mailboxHelper->resyncIsOldStatus();
+
+				if($synchronizationSuccess)
+				{
+					\Bitrix\Mail\Internals\MailEntityOptionsTable::update(
+						$keyRow,
+						['VALUE' => 'completed']
+					);
+					$numberOfUnSynchronizedMailboxes--;
+				}
+			}
+		}
+
+		if($numberOfUnSynchronizedMailboxes === 0)
+		{
+			return '';
+		}
+		else
+		{
+			return 'Bitrix\Mail\Helper::markOldMessagesAgent();';
+		}
+	}
+
+	public static function cleanupMailboxAgent($id)
+	{
+		$mailboxHelper = Helper\Mailbox::rawInstance($id, false);
+
+		if (empty($mailboxHelper))
+		{
+			return '';
+		}
+
+		$mailboxHelper->setCheckpoint();
+
+		MailMessageUidTable::deleteList(
+			[
+				'=MAILBOX_ID' => $id,
+				'=IS_OLD' => 'R',
+			]
 		);
 
-		if (!$client->singin($error))
-			return $client->getState() ? false : null;
+		$stage1 = $mailboxHelper->dismissOldMessages();
+		$stage2 = $mailboxHelper->dismissDeletedUidMessages();
+		$stage3 = $mailboxHelper->cleanup();
 
-		$localList = array();
-		$localSeen = array();
-		$res = MailMessageUidTable::getList(array(
-			'filter' => array('MAILBOX_ID' => $mailbox['ID']),
-			'select' => array('ID', 'HASH' => 'HEADER_MD5', 'IS_SEEN')
+		global $pPERIOD;
+
+		$pPERIOD = min($pPERIOD, max($stage1 && $stage2 && $stage3 ? $pPERIOD : 600, 60));
+
+		if ($pPERIOD === null)
+		{
+			$pPERIOD = 60;
+		}
+
+		return sprintf('Bitrix\Mail\Helper::cleanupMailboxAgent(%u);', $id);
+	}
+
+	/**
+	 * @deprecated
+	 */
+	public static function resortTreeAgent($id)
+	{
+		$mailboxHelper = Helper\Mailbox::createInstance($id, false);
+
+		$result = empty($mailboxHelper) ? false : $mailboxHelper->resortTree();
+
+		return '';
+	}
+
+	public static function deleteMailboxAgent($id)
+	{
+		return \CMailbox::delete($id) ? '' : sprintf('Bitrix\Mail\Helper::deleteMailboxAgent(%u);', $id);
+	}
+
+	public static function resyncDomainUsersAgent()
+	{
+		$res = MailServicesTable::getList(array(
+			'filter' => array(
+				'=ACTIVE'       => 'Y',
+				'@SERVICE_TYPE' => array('domain', 'crdomain'),
+			)
 		));
 		while ($item = $res->fetch())
 		{
-			$localList[$item['ID']]   = $item['HASH'];
-			$localSeen[$item['HASH']] = $item['IS_SEEN'];
-		}
-
-		$obsoleteList = $localList;
-		$modifiedList = array();
-
-		// @TODO: blacklist entity
-		$blacklist = array(
-			'domain' => array(),
-			'email'  => array(),
-		);
-		foreach ((array) $mailbox['OPTIONS']['blacklist'] as $item)
-		{
-			if (strpos($item, '@') === 0)
-				$blacklist['domain'][] = $item;
-			else
-				$blacklist['email'][] = $item;
-		}
-
-		$domains = array();
-		$defaultDomain = \COption::getOptionString('main', 'server_name', '');
-		$res = Main\SiteTable::getList(array('select' => array('LID', 'SERVER_NAME')));
-		while ($site = $res->fetch())
-		{
-			$domains[$site['LID']] = $site['SERVER_NAME'] ?: $defaultDomain;
-
-			if (preg_match('/^(?<domain>.+):(?<port>\d+)$/', $domains[$site['LID']], $matches))
-				$domains[$site['LID']] = $matches['domain'];
-		}
-
-		$res = UserRelationsTable::getList(array('filter' => array('=USER_ID' => $mailbox['USER_ID'], '=ENTITY_ID' => null)));
-		while ($relation = $res->fetch())
-			$blacklist['email'][] = sprintf('fwd%s@%s', $relation['TOKEN'], $domains[$relation['SITE_ID']]);
-
-		$blacklist['domain'] = array_map('strtolower', $blacklist['domain']);
-		$blacklist['email']  = array_map('strtolower', $blacklist['email']);
-
-		$session = md5(uniqid(''));
-
-		foreach (array_merge($imapOptions['income'], $imapOptions['outcome']) as $name)
-		{
-			$list = $client->listMessages($name, $uidtoken, $error);
-
-			if ($list === false) // an error occurred
+			if ($item['SERVICE_TYPE'] == 'domain')
 			{
-				$obsoleteList = array();
-				continue;
+				$lockName = sprintf('domain_users_sync_lock_%u', $item['ID']);
+				$syncLock = \Bitrix\Main\Config\Option::get('mail', $lockName, 0);
+
+				if ($syncLock < time()-3600)
+				{
+					\Bitrix\Main\Config\Option::set('mail', $lockName, time());
+					\CMailDomain2::getDomainUsers($item['TOKEN'], $item['SERVER'], $error, true);
+					\Bitrix\Main\Config\Option::set('mail', $lockName, 0);
+				}
 			}
-
-			if (empty($list))
-				continue;
-
-			foreach ($list as $item)
+			else if ($item['SERVICE_TYPE'] == 'crdomain')
 			{
-				$skip = false;
-
-				$item['seen'] = (bool) preg_match('/ ( ^ | \x20 ) \x5c ( Seen ) ( \x20 | $ ) /ix', $item['flags']);
-
-				if (!is_null($item['uid']))
-				{
-					$item['uid'] = md5(sprintf('%s:%u:%u', $name, $uidtoken, $item['uid']));
-
-					unset($obsoleteList[$item['uid']]);
-					if (array_key_exists($item['uid'], $localList))
-					{
-						$item['hash'] = $localList[$item['uid']];
-
-						$skip = true;
-					}
-				}
-
-				if ($skip === false)
-				{
-					$header = $client->getMessage($name, $item['id'], 'header', $error);
-
-					if ($header === false) // an error occurred
-					{
-						$obsoleteList = array();
-						$skip = true;
-					}
-					else
-					{
-						$item['hash'] = md5(sprintf('%s:%s:%u', trim($header), $item['date'], $item['size']));
-
-						if (is_null($item['uid']))
-							$item['uid'] = $item['hash'];
-
-						if ($uid = array_search($item['hash'], $localList))
-						{
-							unset($obsoleteList[$uid]);
-							if ($uid != $item['hash'])
-							{
-								MailMessageUidTable::update(
-									array('ID' => $uid, 'MAILBOX_ID' => $mailbox['ID']),
-									array('ID' => $item['uid'])
-								);
-							}
-
-							$skip = true;
-						}
-					}
-				}
-
-				if ($skip === true)
-				{
-					if ($item['seen'] != in_array($localSeen[$item['hash']], array('Y', 'S')))
-					{
-						if (in_array($localSeen[$item['hash']], array('S', 'U')))
-						{
-							$item['seen'] = $localSeen[$item['hash']] == 'S';
-
-							$result = $client->updateMessageFlags($name, $item['id'], array(
-								'\Seen' => $item['seen'],
-							), $err);
-
-							if ($result !== false)
-							{
-								MailMessageUidTable::update(
-									array('ID' => $item['uid'], 'MAILBOX_ID' => $mailbox['ID']),
-									array('IS_SEEN' => $item['seen'] ? 'Y' : 'N')
-								);
-							}
-						}
-						else
-						{
-							$modifiedList[$item['uid']] = array(
-								'hash' => $item['hash'],
-								'seen' => $item['seen'],
-							);
-						}
-					}
-
-					continue;
-				}
-
-				MailMessageUidTable::add(array(
-					'ID'          => $item['uid'],
-					'MAILBOX_ID'  => $mailbox['ID'],
-					'HEADER_MD5'  => $item['hash'],
-					'IS_SEEN'     => $item['seen'] ? 'Y' : 'N',
-					'SESSION_ID'  => $session,
-					'DATE_INSERT' => new Main\Type\DateTime(),
-					'MESSAGE_ID'  => 0,
-				));
-				$localList[$item['uid']] = $item['hash'];
-
-				$item['outcome'] = in_array($name, $imapOptions['outcome']);
-
-				$parsedHeader = \CMailMessage::parseHeader($header, $mailbox['LANG_CHARSET']);
-
-				$parsedFrom = array_unique(array_map('strtolower', array_filter(array_merge(
-					\CMailUtil::extractAllMailAddresses($parsedHeader->getHeader('FROM')),
-					\CMailUtil::extractAllMailAddresses($parsedHeader->getHeader('REPLY-TO'))
-				), 'trim')));
-				$parsedTo = array_unique(array_map('strtolower', array_filter(array_merge(
-					\CMailUtil::extractAllMailAddresses($parsedHeader->getHeader('TO')),
-					\CMailUtil::extractAllMailAddresses($parsedHeader->getHeader('CC')),
-					\CMailUtil::extractAllMailAddresses($parsedHeader->getHeader('BCC')),
-					\CMailUtil::extractAllMailAddresses($parsedHeader->getHeader('X-Original-Rcpt-to'))
-				), 'trim')));
-
-				if (!empty($blacklist['email']))
-				{
-					if (!$item['outcome'] && array_intersect($parsedFrom, $blacklist['email']))
-						continue;
-
-					if ($item['outcome'] && !array_diff($parsedTo, $blacklist['email']))
-						continue;
-				}
-
-				if (!empty($blacklist['domain']))
-				{
-					$skip = false;
-
-					$haystack = $item['outcome'] ? $parsedTo : $parsedFrom;
-					foreach ($haystack as $email)
-					{
-						$domain = substr($email, strrpos($email, '@'));
-						if ($domain != $email)
-						{
-							if (in_array($domain, $blacklist['domain']))
-							{
-								$skip = true;
-								if (!$item['outcome'])
-									break;
-							}
-							else
-							{
-								$skip = false;
-								if ($item['outcome'])
-									break;
-							}
-						}
-					}
-
-					if ($skip)
-						continue;
-				}
-
-				if (!empty($mailbox['OPTIONS']['sync_from']))
-				{
-					$syncFrom = (int) $mailbox['OPTIONS']['sync_from'];
-					if (strtotime($item['date']) < $syncFrom)
-						continue;
-				}
-
-				$body = $client->getMessage($name, $item['id'], null, $error);
-
-				if ($body === false) // an error occurred
-					continue;
-
-				if (!preg_match('/\r\n$/', $body))
-					$body .= "\r\n";
-
-				$messageId = \CMailMessage::addMessage(
-					$mailbox['ID'], $body,
-					$mailbox['CHARSET'] ?: $mailbox['LANG_CHARSET'],
-					array(
-						'outcome' => $item['outcome'],
-						'seen'    => $item['seen'],
-						'hash'    => $item['hash'],
-					)
-				);
-				if ($messageId > 0)
-				{
-					MailMessageUidTable::update(
-						array('ID' => $item['uid'], 'MAILBOX_ID' => $mailbox['ID']),
-						array('MESSAGE_ID' => $messageId)
-					);
-				}
+				\CControllerClient::executeEvent('OnMailControllerResyncMemberUsers', array('DOMAIN' => $item['SERVER']));
 			}
 		}
 
-		if (!empty($obsoleteList))
-		{
-			foreach ($obsoleteList as $msgUid => $dummy)
-			{
-				MailMessageUidTable::delete(array(
-					'ID' => $msgUid, 'MAILBOX_ID' => $mailbox['ID']
-				));
-			}
-
-			foreach ($obsoleteList as $msgHash)
-			{
-				$event = new Main\Event(
-					'mail', 'OnMessageObsolete',
-					array(
-						'user' => $mailbox['USER_ID'],
-						'hash' => $msgHash,
-					)
-				);
-				$event->send();
-			}
-		}
-
-		if (!empty($modifiedList))
-		{
-			foreach ($modifiedList as $msgUid => $msgData)
-			{
-				MailMessageUidTable::update(
-					array('ID' => $msgUid, 'MAILBOX_ID' => $mailbox['ID']),
-					array('IS_SEEN' => $msgData['seen'] ? 'Y' : 'N')
-				);
-			}
-
-			foreach ($modifiedList as $msgData)
-			{
-				$event = new Main\Event(
-					'mail', 'OnMessageModified',
-					array(
-						'user' => $mailbox['USER_ID'],
-						'hash' => $msgData['hash'],
-						'seen' => $msgData['seen'],
-					)
-				);
-				$event->send();
-			}
-		}
-
-		return true;
+		return 'Bitrix\Mail\Helper::resyncDomainUsersAgent();';
 	}
 
-	public static function listImapDirs($mailbox, &$error)
+	public static function syncMailbox($id, &$error)
 	{
-		$error = null;
+		$mailboxHelper = Helper\Mailbox::createInstance($id, false);
 
-		$client = new Imap(
-			$mailbox['SERVER'], $mailbox['PORT'],
-			$mailbox['USE_TLS'] == 'Y' || $mailbox['USE_TLS'] == 'S',
-			$mailbox['USE_TLS'] == 'Y',
-			$mailbox['LOGIN'], $mailbox['PASSWORD'],
-			$mailbox['LANG_CHARSET'] ?: $mailbox['CHARSET']
-		);
+		return empty($mailboxHelper) ? false : $mailboxHelper->sync();
+	}
 
-		$list = $client->listMailboxes('*', $error);
+	public static function listImapDirs($mailbox, &$error = [], &$errors = null)
+	{
+		$error  = null;
+		$errors = null;
+
+		$client = static::createClient($mailbox);
+
+		$list   = $client->listMailboxes('*', $error, true);
+		$errors = $client->getErrors();
 
 		if ($list === false)
 			return false;
 
-		$flat = function($list, $prefix = '', $level = 0) use (&$flat)
+		$k = count($list);
+		for ($i = 0; $i < $k; $i++)
 		{
-			$k = count($list);
-			for ($i = 0; $i < $k; $i++)
+			$item = $list[$i];
+
+			$list[$i] = array(
+				'path' => $item['name'],
+				'name' => $item['title'],
+				'level' => $item['level'],
+				'disabled' => (bool) preg_grep('/^ \x5c Noselect $/ix', $item['flags']),
+				'income' => mb_strtolower($item['name']) == 'inbox',
+				'outcome' => (bool) preg_grep('/^ \x5c Sent $/ix', $item['flags']),
+			);
+		}
+
+		return $list;
+	}
+
+	public static function getImapUIDsForSpecificDay($mailboxID, $dirPath = 'inbox', $internalDate)
+	{
+		$error  = null;
+		$errors = null;
+
+		$mailbox = Helper\Mailbox::prepareMailbox([
+			'=ID'=>$mailboxID,
+			'=ACTIVE'=>'Y'
+		]);
+
+		$client = static::createClient($mailbox);
+
+		$result = $client->getUIDsForSpecificDay($dirPath, $internalDate);
+
+		return $result;
+	}
+
+	public static function getLastDeletedOldMessageInternaldate($mailboxId,$dirPath,$filter = [])
+	{
+		$firstSyncUID = MailMessageUidTable::getList(
+			[
+				'select' => [
+					'INTERNALDATE'
+				],
+				'filter' => array_merge(
+					[
+						'!=IS_OLD' => 'D',
+						'=MESSAGE_ID' => 0,
+						'=MAILBOX_ID' => $mailboxId,
+						'=DIR_MD5' => md5($dirPath),
+					],
+					$filter
+				),
+				'order' => [
+					'INTERNALDATE' => 'DESC',
+				],
+				'limit' => 1,
+			]
+		)->fetchAll();
+
+		if(isset($firstSyncUID[0]['INTERNALDATE']))
+		{
+			return $firstSyncUID[0]['INTERNALDATE'];
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	public static function getStartInternalDateForDir(
+		$mailboxId,
+		$dirPath,
+		$order = 'ASC',
+		$filter =
+		[
+			'!=MESSAGE_UID.IS_OLD' => 'Y',
+			'==MESSAGE_UID.DELETE_TIME' => 0,
+			'!@MESSAGE_UID.IS_OLD' => ['M', 'R'],
+		]
+	)
+	{
+		$firstSyncUID = MailMessageTable::getList(
+			[
+				'runtime' => [
+					new ORM\Fields\Relations\Reference(
+						'MESSAGE_UID', MailMessageUidTable::class, [
+						'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+						'=this.ID' => 'ref.MESSAGE_ID',
+					], [
+							'join_type' => 'INNER',
+						]
+					),
+				],
+				'select' => [
+					'INTERNALDATE' => 'MESSAGE_UID.INTERNALDATE',
+				],
+				'filter' => array_merge(
+					[
+						'=MAILBOX_ID' => $mailboxId,
+						'=MESSAGE_UID.DIR_MD5' => md5(Emoji::encode($dirPath)),
+					],
+					$filter
+				),
+				'order' => [
+					'FIELD_DATE' => $order,
+				],
+				'limit' => 1,
+			]
+		)->fetchAll();
+
+		if(isset($firstSyncUID[0]['INTERNALDATE']))
+		{
+			return $firstSyncUID[0]['INTERNALDATE'];
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	public static function getImapUnseenSyncForDir($mailbox = null, $dirPath ,$mailboxID = null)
+	{
+		//for testing via mailbox id
+		if(is_int($mailboxID) && is_null($mailbox))
+		{
+			$mailbox = Helper\Mailbox::prepareMailbox([
+				'=ID'=>$mailboxID,
+				'=ACTIVE'=>'Y'
+			]);
+		}
+
+		$startInternalDate = static::getStartInternalDateForDir($mailbox['ID'],$dirPath);
+
+		if($startInternalDate)
+		{
+			$error = [];
+			$errors = [];
+			return static::getImapUnseen($mailbox, $dirPath,$error,$errors, $startInternalDate);
+		}
+		else
+		{
+			return 0;
+		}
+
+		return false;
+	}
+
+	public static function setMailboxUnseenCounter($mailboxId,$count)
+	{
+		$keyRow = [
+			'MAILBOX_ID' => $mailboxId,
+			'ENTITY_TYPE' => 'MAILBOX',
+			'ENTITY_ID' => $mailboxId
+		];
+
+		$filter = [
+			'=MAILBOX_ID' => $keyRow['MAILBOX_ID'],
+			'=ENTITY_TYPE' => $keyRow['ENTITY_TYPE'],
+			'=ENTITY_ID' => $keyRow['ENTITY_ID']
+		];
+
+		$rowValue = ['VALUE' => $count];
+
+		if(Internals\MailCounterTable::getCount($filter))
+		{
+			Internals\MailCounterTable::update($keyRow, $rowValue);
+		}
+		else
+		{
+			Internals\MailCounterTable::add(array_merge($rowValue,$keyRow));
+		};
+
+		\CPullWatch::addToStack(
+			'mail_mailbox_' .$mailboxId,
+			[
+				'module_id' => 'mail',
+				'params' => [
+					'mailboxId' => $mailboxId,
+				],
+				'command' => 'counters_updated',
+			]
+		);
+		\Bitrix\Pull\Event::send();
+	}
+
+	public static function updateMailboxUnseenCounter($mailboxId)
+	{
+		$count = Internals\MailCounterTable::getList([
+			'filter' => [
+				'ENTITY_TYPE' => 'DIR',
+				'MAILBOX_ID' => $mailboxId,
+			],
+			'runtime' => [
+				new \Bitrix\Main\Entity\ExpressionField('COUNT', 'SUM(%s)', 'VALUE'),
+			],
+			'select' => [
+				'COUNT'
+			]
+		])->fetchAll();
+
+		if(!is_null($count[0]["COUNT"]))
+		{
+			static::setMailboxUnseenCounter($mailboxId,(int)$count[0]["COUNT"]);
+		}
+	}
+
+	public static function updateMailCounters($mailbox)
+	{
+		$mailboxId = $mailbox['ID'];
+
+		$directoryHelper = new Helper\MailboxDirectoryHelper($mailboxId);
+		$syncDirs = $directoryHelper->getSyncDirs();
+
+		$totalCount = 0;
+
+		foreach ($syncDirs as $dir)
+		{
+			if($dir->isInvisibleToCounters())
 			{
-				$item = $list[$i];
+				continue;
+			}
 
-				$list[$i] = array(
-					'level' => $level,
-					'name'  => preg_replace(sprintf('/^%s/', preg_quote($prefix, '/')), '', $item['name']),
-					'path'  => $item['name']
-				);
+			$dirPath = $dir->getPath();
 
-				if (preg_match('/ ( ^ | \x20 ) \x5c Noselect ( \x20 | $ ) /ix', $item['flags']))
+			//since we work with internalDate inside the method
+			\CTimeZone::Disable();
+			$dirCount = static::getImapUnseenSyncForDir($mailbox,$dirPath);
+			\CTimeZone::Enable();
+
+			if($dirCount !== false)
+			{
+				$totalCount += $dirCount;
+
+				$keyRow = [
+					'MAILBOX_ID' => $mailboxId,
+					'ENTITY_TYPE' => 'DIR',
+					'ENTITY_ID'=>$dir->getId()
+				];
+
+				$filter = [
+					'=MAILBOX_ID' => $keyRow['MAILBOX_ID'],
+					'=ENTITY_TYPE' => $keyRow['ENTITY_TYPE'],
+					'=ENTITY_ID' => $keyRow['ENTITY_ID']
+				];
+
+				$rowValue = ['VALUE' => $dirCount];
+
+				if(Internals\MailCounterTable::getCount($filter))
 				{
-					$list[$i]['disabled'] = true;
+					Internals\MailCounterTable::update($keyRow, $rowValue);
 				}
 				else
 				{
-					if (strtolower($item['name']) == 'inbox')
-						$list[$i]['income'] = true;
-
-					if (preg_match('/ ( ^ | \x20 ) \x5c Sent ( \x20 | $ ) /ix', $item['flags']))
-						$list[$i]['outcome'] = true;
-				}
-
-				if (!empty($item['children']))
-				{
-					$children = $flat($item['children'], $item['name'].$item['delim'], $level+1);
-
-					array_splice($list, $i+1, 0, $children);
-
-					$i += count($children);
-					$k += count($children);
-				}
+					Internals\MailCounterTable::add(array_merge($rowValue,$keyRow));
+				};
 			}
+		}
 
-			return $list;
-		};
-
-		return $flat($list);
+		return $totalCount;
 	}
 
-	public static function getImapUnseen($mailbox, $dir = 'inbox', &$error)
+	public static function getImapUnseen($mailbox, $dirPath = 'inbox', &$error = [], &$errors = null, $startInternalDate = null)
 	{
-		$error = null;
+		$error  = null;
+		$errors = null;
 
-		$client = new Imap(
-			$mailbox['SERVER'], $mailbox['PORT'],
-			$mailbox['USE_TLS'] == 'Y' || $mailbox['USE_TLS'] == 'S',
-			$mailbox['USE_TLS'] == 'Y',
-			$mailbox['LOGIN'], $mailbox['PASSWORD'],
-			$mailbox['LANG_CHARSET'] ?: $mailbox['CHARSET']
-		);
+		$client = static::createClient($mailbox);
 
-		return $client->getUnseen($dir, $error);
+		$result = $client->getUnseen($dirPath, $error, $startInternalDate);
+		$errors = $client->getErrors();
+
+		return $result;
 	}
 
 	public static function addImapMessage($id, $data, &$error)
@@ -498,44 +665,66 @@ class Helper
 			$mailbox['USE_TLS'] = $result['secure'];
 		}
 
-		$client = new Imap(
-			$mailbox['SERVER'], $mailbox['PORT'],
-			$mailbox['USE_TLS'] == 'Y' || $mailbox['USE_TLS'] == 'S',
-			$mailbox['USE_TLS'] == 'Y',
-			$mailbox['LOGIN'], $mailbox['PASSWORD'],
-			$mailbox['LANG_CHARSET'] ?: $mailbox['CHARSET']
-		);
+		$client = static::createClient($mailbox, $mailbox['LANG_CHARSET'] ?: $mailbox['CHARSET']);
 
-		$imapOptions = $mailbox['OPTIONS']['imap'];
-		if (empty($imapOptions['outcome']) || !is_array($imapOptions['outcome']))
-			return;
+		$dir = MailboxDirectory::fetchOneOutcome($mailbox['ID']);
+		$path = $dir ? $dir->getPath() : 'INBOX';
 
-		return $client->addMessage(reset($imapOptions['outcome']), $data, $error);
+		return $client->addMessage($path, $data, $error);
 	}
 
 	public static function updateImapMessage($userId, $hash, $data, &$error)
 	{
 		$error = null;
 
-		$msgUid = MailMessageUidTable::getList(array(
-			'select' => array('ID', 'MAILBOX_ID', 'IS_SEEN'),
-			'filter' => array(
-				'HEADER_MD5'      => $hash,
-				'MAILBOX.USER_ID' => $userId
+		$res = MailMessageUidTable::getList(array(
+			'select' => array(
+				'ID', 'MAILBOX_ID', 'IS_SEEN',
+				'MAILBOX_USER_ID' => 'MAILBOX.USER_ID',
+				'MAILBOX_OPTIONS' => 'MAILBOX.OPTIONS',
 			),
-		))->fetch();
+			'filter' => array(
+				'=HEADER_MD5'  => $hash,
+				'==DELETE_TIME' => 0,
+			),
+		));
 
-		if ($msgUid && in_array($msgUid['IS_SEEN'], array('Y', 'S')) != $data['seen'])
+		while ($item = $res->fetch())
 		{
-			MailMessageUidTable::update(
-				array('ID' => $msgUid['ID'], 'MAILBOX_ID' => $msgUid['MAILBOX_ID']),
-				array('IS_SEEN' => $data['seen'] ? 'S' : 'U')
-			);
+			$isOwner = $item['MAILBOX_USER_ID'] == $userId;
+			$isPublic = in_array('crm_public_bind', (array) $item['MAILBOX_OPTIONS']['flags']);
+			$inQueue = in_array($userId, (array) $item['MAILBOX_OPTIONS']['crm_lead_resp']);
+			if (!$isOwner && !$isPublic && !$inQueue)
+			{
+				continue;
+			}
+
+			if (in_array($item['IS_SEEN'], array('Y', 'S')) != $data['seen'])
+			{
+				MailMessageUidTable::update(
+					array(
+						'ID' => $item['ID'],
+						'MAILBOX_ID' => $item['MAILBOX_ID'],
+					),
+					array(
+						'IS_SEEN' => $data['seen'] ? 'S' : 'U',
+					)
+				);
+			}
 		}
 	}
 
+	private static function createClient($mailbox, $langCharset = null)
+	{
+		return new Imap(
+			$mailbox['SERVER'], $mailbox['PORT'],
+			$mailbox['USE_TLS'] == 'Y' || $mailbox['USE_TLS'] == 'S',
+			$mailbox['USE_TLS'] == 'Y',
+			$mailbox['LOGIN'], $mailbox['PASSWORD'],
+			$langCharset ? $langCharset : LANG_CHARSET
+		);
+	}
 }
-
 
 class DummyMail extends Main\Mail\Mail
 {
@@ -547,6 +736,8 @@ class DummyMail extends Main\Mail\Mail
 		$this->settingServerMsSmtp = false;
 		$this->settingMailFillToEmail = false;
 		$this->settingMailConvertMailHeader = true;
+		$this->settingConvertNewLineUnixToWindows = true;
+		$this->useBlacklist = false;
 	}
 
 	public static function getMailEol()
@@ -557,6 +748,17 @@ class DummyMail extends Main\Mail\Mail
 	public function __toString()
 	{
 		return sprintf("%s\r\n\r\n%s", $this->getHeaders(), $this->getBody());
+	}
+
+	/**
+	 * @deprecated
+	 */
+	public static function overwriteMessageHeaders(Main\Mail\Mail $message, array $headers)
+	{
+		foreach ($headers as $name => $value)
+		{
+			$message->headers[$name] = $value;
+		}
 	}
 
 }

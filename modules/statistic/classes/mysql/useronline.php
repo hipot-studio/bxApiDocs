@@ -1,42 +1,7 @@
-<?
+<?php
 
-/**
- * <b>CUserOnline</b> - класс для получения данных о недавних <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">посетителях</a> сайта и их <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#session">сессиях</a>.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cuseronline/index.php
- * @author Bitrix
- */
 class CUserOnline
 {
-	
-	/**
-	* <p>Возвращает количество <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">посетителей</a>, проявивших активность на сайте (совершивших <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#hit">хит</a>) за определённый интервал времени. Данный интервал времени задается в настройках модуля "Статистика" в параметре "Интервал посетителей в online (сек.)".</p>
-	*
-	*
-	* @return int 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* echo "Сейчас на сайте посетителей: ".<b>CUserOnline::GetGuestCount</b>();
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/ctraffic/getcommonvalues.php">CTraffic::GetCommonValues</a></li>
-	* </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cuseronline/getguestcount.php
-	* @author Bitrix
-	*/
 	public static function GetGuestCount()
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -57,53 +22,6 @@ class CUserOnline
 		return intval($ar["CNT"]);
 	}
 
-	
-	/**
-	* <p>Возвращает список <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#session">сессий</a> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">посетителей</a>, проявивших активность (совершивших <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#hit">хит</a>) на сайте за определённый интервал времени.</p>
-	*
-	*
-	* @param function $GetList  Ссылка на переменную, которая после выполнения метода будет
-	* содержать количество <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#online">посетителей в online</a>.
-	*
-	* @param function &$(guest_count  Ссылка на переменную, которая после выполнения метода будет
-	* содержать количество сессий посетителей в online.
-	*
-	* @param (&$guest_coun &$session_count  
-	*
-	* @param &$session_coun $arOrder = Array() 
-	*
-	* @param array $arFilter = Array()) 
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // получим список записей
-	* $rs = <b>CUserOnline::GetList</b>($guest_counter, $session_counter);
-	* 
-	* echo "Количество посетителей в онлайн: ".$guest_counter;
-	* echo "Количество сессий в онлайн: ".$session_counter;
-	* 
-	* // выведем все записи
-	* while ($ar = $rs-&gt;Fetch())
-	* {
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";    
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://www.1c-bitrix.ru/user_help/statistic/users_online.php">Отчет "Кто на сайте"</a>
-	* </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cuseronline/getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList(&$guest_count, &$session_count, $arOrder=Array(), $arFilter=Array())
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -112,7 +30,6 @@ class CUserOnline
 
 		$arSqlSearch = Array();
 		$from1 = "";
-		$from2 = "";
 		if (is_array($arFilter))
 		{
 			foreach ($arFilter as $key => $val)
@@ -124,7 +41,7 @@ class CUserOnline
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -177,7 +94,6 @@ class CUserOnline
 					case "COUNTRY":
 						$match = ($arFilter[$key."_EXACT_MATCH"]=="Y" && $match_value_set) ? "N" : "Y";
 						$arSqlSearch[] = GetFilterQuery("C.NAME", $val, $match);
-						$from2 = "INNER JOIN b_stat_country C ON (C.ID = S.COUNTRY_ID)";
 						break;
 					case "LAST_SITE_ID":
 						$arSqlSearch[] = GetFilterQuery("S.".$key, $val, "N");
@@ -216,8 +132,8 @@ class CUserOnline
 		{
 			foreach($arOrder as $by=>$order)
 			{
-				$by = strtolower($by);
-				$order = strtolower($order);
+				$by = mb_strtolower($by);
+				$order = mb_strtolower($order);
 				if ($order!="asc")
 					$order = "desc";
 			}
@@ -270,7 +186,6 @@ class CUserOnline
 				INNER JOIN b_stat_guest G ON (G.ID = S.GUEST_ID)
 				INNER JOIN b_stat_country C ON (C.ID = S.COUNTRY_ID)
 				".$from1."
-				".$from2."
 				LEFT JOIN b_stat_city CITY ON (CITY.ID = S.CITY_ID)
 			WHERE
 				S.DATE_STAT >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)
@@ -294,4 +209,3 @@ class CUserOnline
 		return $rs;
 	}
 }
-?>

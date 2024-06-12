@@ -1,4 +1,6 @@
-<?
+<?php
+use Bitrix\Main\Loader;
+
 IncludeModuleLangFile(__FILE__);
 
 class CIBlockSectionPropertyLink
@@ -6,8 +8,8 @@ class CIBlockSectionPropertyLink
 	public static function Set($SECTION_ID, $PROPERTY_ID, $arLink = array())
 	{
 		global $DB;
-		$SECTION_ID = intval($SECTION_ID);
-		$PROPERTY_ID = intval($PROPERTY_ID);
+		$SECTION_ID = (int)$SECTION_ID;
+		$PROPERTY_ID = (int)$PROPERTY_ID;
 		$rs = $DB->Query("
 			SELECT *
 			FROM b_iblock_section_property
@@ -46,12 +48,13 @@ class CIBlockSectionPropertyLink
 					$arUpdate["DISPLAY_EXPANDED"] = $arLink["DISPLAY_EXPANDED"] === "Y"? "Y": false;
 				}
 
-				if (
-					array_key_exists("FILTER_HINT", $arLink)
-					&& $arLink["FILTER_HINT"] !== $sectionProperty["FILTER_HINT"]
-				)
+				if (array_key_exists("FILTER_HINT", $arLink))
 				{
-					$arUpdate["FILTER_HINT"] = $arLink["FILTER_HINT"];
+					$filterHint = self::cleanFilterHint($arLink["FILTER_HINT"]);
+					if ($filterHint !== $sectionProperty["FILTER_HINT"])
+					{
+						$arUpdate["FILTER_HINT"] = $filterHint;
+					}
 				}
 
 				if (
@@ -67,7 +70,7 @@ class CIBlockSectionPropertyLink
 				else
 					$strUpdate = "";
 
-				if (strlen($strUpdate) > 0)
+				if ($strUpdate <> '')
 				{
 					$DB->Query("
 						UPDATE b_iblock_section_property
@@ -77,11 +80,15 @@ class CIBlockSectionPropertyLink
 					");
 
 					if (
-						array_key_exists("SMART_FILTER", $arUpdate)
+						isset($arUpdate["SMART_FILTER"])
 						&& $arUpdate["SMART_FILTER"] === "Y"
 					)
 					{
-						\Bitrix\Iblock\PropertyIndex\Manager::markAsInvalid($arUpdate["IBLOCK_ID"]? $arUpdate["IBLOCK_ID"]: $ar["IBLOCK_ID"]);
+						\Bitrix\Iblock\PropertyIndex\Manager::markAsInvalid(
+							isset($arUpdate["IBLOCK_ID"]) && $arUpdate["IBLOCK_ID"]
+								? $arUpdate["IBLOCK_ID"]
+								: $ar["IBLOCK_ID"]
+						);
 					}
 				}
 			}
@@ -95,8 +102,8 @@ class CIBlockSectionPropertyLink
 	public static function Add($SECTION_ID, $PROPERTY_ID, $arLink = array())
 	{
 		global $DB;
-		$SECTION_ID = intval($SECTION_ID);
-		$PROPERTY_ID = intval($PROPERTY_ID);
+		$SECTION_ID = (int)$SECTION_ID;
+		$PROPERTY_ID = (int)$PROPERTY_ID;
 		$rs = $DB->Query("
 			SELECT *
 			FROM b_iblock_section_property
@@ -119,7 +126,7 @@ class CIBlockSectionPropertyLink
 				if (array_key_exists("DISPLAY_EXPANDED", $arLink))
 					$arUpdate["DISPLAY_EXPANDED"] = $arLink["DISPLAY_EXPANDED"];
 				if (array_key_exists("FILTER_HINT", $arLink))
-					$arUpdate["FILTER_HINT"] = $arLink["FILTER_HINT"];
+					$arUpdate["FILTER_HINT"] = self::cleanFilterHint($arLink["FILTER_HINT"]);
 				if (array_key_exists("IBLOCK_ID", $arLink))
 					$arUpdate["IBLOCK_ID"] = $arLink["IBLOCK_ID"];
 
@@ -128,7 +135,7 @@ class CIBlockSectionPropertyLink
 				else
 					$strUpdate = "";
 
-				if (strlen($strUpdate) > 0)
+				if ($strUpdate <> '')
 				{
 					$DB->Query("
 						UPDATE b_iblock_section_property
@@ -139,12 +146,16 @@ class CIBlockSectionPropertyLink
 					");
 
 					if (
-						array_key_exists("SMART_FILTER", $arUpdate)
+						isset($arUpdate["SMART_FILTER"])
 						&& $arUpdate["SMART_FILTER"] === "Y"
-						&& $arLink["INVALIDATE"] !== "N"
+						&& (!isset($arLink["INVALIDATE"]) || $arLink["INVALIDATE"] !== "N")
 					)
 					{
-						\Bitrix\Iblock\PropertyIndex\Manager::markAsInvalid($arUpdate["IBLOCK_ID"]? $arUpdate["IBLOCK_ID"]: $ar["IBLOCK_ID"]);
+						\Bitrix\Iblock\PropertyIndex\Manager::markAsInvalid(
+							isset($arUpdate["IBLOCK_ID"]) && $arUpdate["IBLOCK_ID"]
+								? $arUpdate["IBLOCK_ID"]
+								: $ar["IBLOCK_ID"]
+						);
 					}
 				}
 			}
@@ -154,8 +165,8 @@ class CIBlockSectionPropertyLink
 	public static function CheckProperty($SECTION_ID, $PROPERTY_ID)
 	{
 		global $DB;
-		$SECTION_ID = intval($SECTION_ID);
-		$PROPERTY_ID = intval($PROPERTY_ID);
+		$SECTION_ID = (int)$SECTION_ID;
+		$PROPERTY_ID = (int)$PROPERTY_ID;
 
 		if ($SECTION_ID == 0)
 		{
@@ -194,7 +205,7 @@ class CIBlockSectionPropertyLink
 	public static function DeleteByIBlock($IBLOCK_ID)
 	{
 		global $DB;
-		$IBLOCK_ID = intval($IBLOCK_ID);
+		$IBLOCK_ID = (int)$IBLOCK_ID;
 		$DB->Query("DELETE FROM b_iblock_section_property WHERE IBLOCK_ID = ".$IBLOCK_ID);
 		$DB->Query("UPDATE b_iblock SET SECTION_PROPERTY = 'N' WHERE ID = ".$IBLOCK_ID);
 		\Bitrix\Iblock\PropertyIndex\Manager::deleteIndex($IBLOCK_ID);
@@ -224,10 +235,20 @@ class CIBlockSectionPropertyLink
 		$DB->Query("DELETE FROM b_iblock_section_property WHERE PROPERTY_ID = ".$PROPERTY_ID);
 	}
 
+	/**
+	 * @param int $IBLOCK_ID
+	 * @return bool
+	 */
 	public static function HasIBlockLinks($IBLOCK_ID)
 	{
 		global $DB;
-		$IBLOCK_ID = intval($IBLOCK_ID);
+
+		$result = false;
+
+		$IBLOCK_ID = (int)$IBLOCK_ID;
+		if ($IBLOCK_ID <= 0)
+			return $result;
+
 		$rs = $DB->Query($DB->TopSQL("
 			SELECT
 				1
@@ -238,12 +259,61 @@ class CIBlockSectionPropertyLink
 			WHERE
 				B.ID = ".$IBLOCK_ID."
 				AND (
-					BSP.SECTION_ID IS NULL
-					OR BSP.SECTION_ID > 0
+					BSP.SECTION_ID IS NOT NULL
 					OR BSP.SMART_FILTER = 'Y'
 				)
 		", 1));
-		return is_array($rs->Fetch());
+		$row = $rs->Fetch();
+		unset($rs);
+		if (!empty($row))
+			$result = true;
+		unset($row);
+
+		if (!$result)
+		{
+			if (Loader::includeModule('catalog'))
+			{
+				$catalog = CCatalogSku::GetInfoByProductIBlock($IBLOCK_ID);
+				if (!empty($catalog))
+				{
+					$rs = $DB->Query($DB->TopSQL("
+						SELECT
+							1
+						FROM
+							b_iblock B
+							INNER JOIN b_iblock_property BP ON BP.IBLOCK_ID = B.ID
+							LEFT JOIN b_iblock_section_property BSP ON BSP.IBLOCK_ID = ".$IBLOCK_ID." AND BSP.PROPERTY_ID = BP.ID
+						WHERE
+							B.ID = ".$catalog['IBLOCK_ID']."
+							AND (
+								BSP.SECTION_ID IS NOT NULL
+								OR BSP.SMART_FILTER = 'Y'
+							)
+					", 1));
+					$row = $rs->Fetch();
+					unset($rs);
+					if (!empty($row))
+						$result = true;
+					unset($row);
+				}
+				unset($catalog);
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param int $iblockId
+	 * @return void
+	 */
+	public static function CleanIBlockLinks(int $iblockId)
+	{
+		if ($iblockId <= 0)
+			return;
+
+		if (!static::HasIBlockLinks($iblockId))
+			static::DeleteByIBlock($iblockId);
 	}
 
 	public static function GetArray($IBLOCK_ID, $SECTION_ID = 0, $bNewSection = false)
@@ -265,7 +335,8 @@ class CIBlockSectionPropertyLink
 				0 LEFT_MARGIN,
 				B.NAME LINK_TITLE,
 				BP.PROPERTY_TYPE,
-				BP.USER_TYPE
+				BP.USER_TYPE,
+				BP.ACTIVE
 			FROM
 				b_iblock B
 				INNER JOIN b_iblock_property BP ON BP.IBLOCK_ID = B.ID
@@ -285,7 +356,7 @@ class CIBlockSectionPropertyLink
 
 			if ($ar["SECTION_PROPERTY"] === "Y")
 			{
-				if (strlen($ar["LINK_ID"]))
+				if($ar["LINK_ID"] <> '')
 				{
 					$result[$ar["PROPERTY_ID"]] = array(
 						"PROPERTY_ID" => $ar["PROPERTY_ID"],
@@ -300,6 +371,7 @@ class CIBlockSectionPropertyLink
 						"LINK_TITLE" => $ar["LINK_TITLE"],
 						"PROPERTY_TYPE" => $ar["PROPERTY_TYPE"],
 						"USER_TYPE" => $ar["USER_TYPE"],
+						"ACTIVE" => $ar["ACTIVE"],
 					);
 				}
 			}
@@ -310,6 +382,7 @@ class CIBlockSectionPropertyLink
 					"SMART_FILTER" => "N",
 					"DISPLAY_TYPE" => $DISPLAY_TYPE,
 					"DISPLAY_EXPANDED" => $ar["DISPLAY_EXPANDED"],
+					"FILTER_HINT" => $ar["FILTER_HINT"],
 					"INHERITED" => $SECTION_ID == 0 && !$bNewSection? "N" : "Y",
 					"INHERITED_FROM" => 0,
 					"SORT" => $ar["SORT"],
@@ -317,6 +390,7 @@ class CIBlockSectionPropertyLink
 					"LINK_TITLE" => $ar["LINK_TITLE"],
 					"PROPERTY_TYPE" => $ar["PROPERTY_TYPE"],
 					"USER_TYPE" => $ar["USER_TYPE"],
+					"ACTIVE" => $ar["ACTIVE"],
 				);
 			}
 		}
@@ -336,7 +410,8 @@ class CIBlockSectionPropertyLink
 					BS.LEFT_MARGIN,
 					BS.NAME LINK_TITLE,
 					BP.PROPERTY_TYPE,
-					BP.USER_TYPE
+					BP.USER_TYPE,
+					BP.ACTIVE
 				FROM
 					b_iblock B
 					INNER JOIN b_iblock_property BP ON BP.IBLOCK_ID = B.ID
@@ -370,6 +445,8 @@ class CIBlockSectionPropertyLink
 					"LEFT_MARGIN" => $ar["LEFT_MARGIN"],
 					"LINK_TITLE" => $ar["LINK_TITLE"],
 					"PROPERTY_TYPE" => $ar["PROPERTY_TYPE"],
+					"USER_TYPE" => $ar["USER_TYPE"],
+					"ACTIVE" => $ar["ACTIVE"],
 				);
 			}
 		}
@@ -508,7 +585,7 @@ class CIBlockSectionPropertyLink
 		return $js;
 	}
 
-	public static function _sort($a, $b)
+	public static function _sort($a, $b): int
 	{
 		if($a["SORT"] > $b["SORT"])
 			return 1;
@@ -517,5 +594,32 @@ class CIBlockSectionPropertyLink
 		else
 			return 0;
 	}
+
+	public static function cleanFilterHint(?string $filterHint): ?string
+	{
+		if ($filterHint === null)
+		{
+			return null;
+		}
+		$cleanHint = trim($filterHint);
+		if ($cleanHint === '')
+		{
+			return '';
+		}
+		$TextParser = null;
+		if (!$TextParser)
+		{
+			$TextParser = new CBXSanitizer();
+			$TextParser->SetLevel(CBXSanitizer::SECURE_LEVEL_LOW);
+			$TextParser->ApplyDoubleEncode(false);
+		}
+
+		$cleanHint = $TextParser->SanitizeHtml($cleanHint);
+		if (preg_match('/^(<br>)+$/', $cleanHint))
+		{
+			$cleanHint = '';
+		}
+
+		return $cleanHint;
+	}
 }
-?>

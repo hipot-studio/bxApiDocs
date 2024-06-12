@@ -25,7 +25,7 @@ class Product
 		if(!$this->ebay->isActive())
 			throw new SystemException("Ebay is not active!".__METHOD__);
 
-		if(!isset($params["SITE_ID"]) || strlen($params["SITE_ID"]) <= 0)
+		if(!isset($params["SITE_ID"]) || $params["SITE_ID"] == '')
 			throw new ArgumentNullException("SITE_ID");
 
 		$this->siteId = $params["SITE_ID"];
@@ -63,7 +63,7 @@ class Product
 		return $result;
 	}
 
-	protected  function  getMappedGroups($iblockId)
+	protected function getMappedGroups($iblockId)
 	{
 		$result = array();
 		$catMapEntId = \Bitrix\Sale\TradingPlatform\Ebay\MapHelper::getCategoryEntityId($iblockId);
@@ -75,7 +75,8 @@ class Product
 		));
 
 		while($category = $catRes->fetch())
-			$result[] = $category["VALUE_INTERNAL"];
+			if(intval($category["VALUE_INTERNAL"]) > 0)
+				$result[] = $category["VALUE_INTERNAL"];
 
 		return $result;
 	}
@@ -98,7 +99,7 @@ class Product
 
 	public function setStartPosition($startPos = "")
 	{
-		if(strlen($startPos) > 3) // format: iBlockId_RecordNumber
+		if(mb_strlen($startPos) > 3) // format: iBlockId_RecordNumber
 		{
 			$positions = explode("_", $startPos);
 

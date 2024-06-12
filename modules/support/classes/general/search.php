@@ -51,7 +51,7 @@ class CSupportSearch
 	/**
 	 * @deprecated
 	 */
-	public static function GetFilterQuery($q, $idName, $titleName, $messageName, &$error)
+	function GetFilterQuery($q, $idName, $titleName, $messageName, &$error)
 	{
 		if(!self::CheckModule()) return "";
 		$res = self::ParseQ(HTMLToTxt($q));
@@ -62,7 +62,7 @@ class CSupportSearch
 	/**
 	 * @deprecated
 	 */
-	public static function PrepareQuery($q, $idName, $titleName, $messageName, &$error)
+	function PrepareQuery($q, $idName, $titleName, $messageName, &$error)
 	{
 		global $DB;
 		$state = 0;
@@ -77,7 +77,7 @@ class CSupportSearch
 		foreach($arrQ as $k => $t)
 		{
 			$t = trim($t);
-			if(strlen($t) <= 0)
+			if($t == '')
 			{
 				continue;
 			}
@@ -170,10 +170,10 @@ class CSupportSearch
 	/**
 	 * @deprecated
 	 */
-	public static function ParseQ($q)
+	function ParseQ($q)
 	{
 		$q = trim($q);
-		if(strlen($q) <= 0)
+		if($q == '')
 		{
 			return '';
 		}
@@ -193,7 +193,7 @@ class CSupportSearch
 	/**
 	 * @deprecated
 	 */
-	public static function ParseStr($qwe, $default_op = "&")
+	function ParseStr($qwe, $default_op = "&")
 	{
 		$qwe=trim($qwe);
 
@@ -344,7 +344,7 @@ class CSupportSearch
 		if ($messages === null)
 		{
 			$messages = array();
-			$result = $DB->Query("SELECT MESSAGE FROM b_ticket_message WHERE IS_LOG='N' AND IS_HIDDEN='N' AND TICKET_ID = ".intval($ticket['ID']));
+			$result = $DB->Query("SELECT MESSAGE FROM b_ticket_message WHERE IS_LOG='N' AND TICKET_ID = ".intval($ticket['ID'])." AND LENGTH(MESSAGE) < 10240");
 			while ($row = $result->Fetch())
 			{
 				$messages[] = $row;
@@ -449,7 +449,7 @@ class CSupportSearch
 					b_ticket T,
 					b_ticket_message TM
 				WHERE
-					TM.TICKET_ID = T.ID AND T.ID > " . $lastId . " AND TM.IS_LOG='N' AND IS_HIDDEN='N'
+					TM.TICKET_ID = T.ID AND T.ID > " . $lastId . " AND TM.IS_LOG='N'
 				ORDER BY
 					T.ID ASC"
 			, 100));
@@ -475,7 +475,7 @@ class CSupportSearch
 
 			// reselect last ticket's messages to complete them because of previous limit in query
 			unset($messages[$endTicketId]);
-			$result = $DB->Query("SELECT MESSAGE FROM b_ticket_message WHERE TICKET_ID = ".$endTicketId." AND IS_LOG='N' AND IS_HIDDEN='N'");
+			$result = $DB->Query("SELECT MESSAGE FROM b_ticket_message WHERE TICKET_ID = ".$endTicketId." AND IS_LOG='N' AND LENGTH(MESSAGE) < 10240");
 			while ($row = $result->Fetch())
 			{
 				$messages[$endTicketId][] = $row;
@@ -532,7 +532,7 @@ class CSupportSearch
 	static function ReindexMessages($firstID, $periodS = 8)
 	{		
 		global $DB;
-		$firstID = intval( $firstID);
+		$firstID = intval($firstID);
 		
 		$err_mess = (self::err_mess()) . "<br>Function: reindexMessages<br>Line: ";
 		$endTime = time() + $periodS;
@@ -547,6 +547,7 @@ class CSupportSearch
 					ON T.ID = TM.TICKET_ID
 						AND TM.ID > $firstID
 						AND TM.IS_LOG = 'N'
+						AND LENGTH(TM.MESSAGE) < 10240
 			ORDER BY TM.ID";
 		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
 		$lastID = 0;

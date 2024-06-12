@@ -11,5 +11,5 @@ interface IRefundExtended extends IRefund
 	/**
 	 * @return bool
 	 */
-	static public function isRefundableExtended();
+	public function isRefundableExtended();
 }

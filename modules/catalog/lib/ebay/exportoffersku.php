@@ -174,6 +174,9 @@ class ExportOfferSKU extends ExportOffer
 
 		$arOfferFilter = array('IBLOCK_ID' => $this->intOfferIBlockID, 'PROPERTY_'.$this->arOffers['SKU_PROPERTY_ID'] => 0,
 			"ACTIVE" => "Y", "ACTIVE_DATE" => "Y");
+		
+		if($this->onlyAvailableElements)
+			$arOfferFilter["CATALOG_AVAILABLE"] = "Y";
 
 		if (YANDEX_SKU_EXPORT_PROP == $this->arSKUExport['SKU_EXPORT_COND'])
 		{
@@ -300,6 +303,7 @@ class ExportOfferSKU extends ExportOffer
 		$arItem["DETAIL_PICTURE_URL"] = $this->getPictureUrl((int)$arItem["DETAIL_PICTURE"]);
 		$arItem["PREVIEW_PICTURE_URL"] = $this->getPictureUrl((int)$arItem["PREVIEW_PICTURE"]);
 		$arItem['OFFERS'] = array();
+		$arItem['SELECT_OFFER_PROPS'] = $this->arSelectOfferProps;
 
 		$strOfferTemplateURL = $this->getOfferTemplateUrl();
 		$rsOfferItems = $this->getOffersItemsDb($arItem["ID"]);

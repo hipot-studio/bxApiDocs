@@ -5,6 +5,10 @@ use Bitrix\Main;
 use Bitrix\Sale\Internals;
 use Bitrix\Sale\Result;
 
+/**
+ * Class CollectableEntity
+ * @package Bitrix\Sale\Internals
+ */
 abstract class CollectableEntity
 	extends Internals\Entity
 {
@@ -15,12 +19,22 @@ abstract class CollectableEntity
 
 	protected $isClone = false;
 
+	/**
+	 * @param string $name
+	 * @param mixed $oldValue
+	 * @param mixed $value
+	 *
+	 * @return Result
+	 */
 	protected function onFieldModify($name, $oldValue, $value)
 	{
 		$collection = $this->getCollection();
 		return $collection->onItemModify($this, $name, $oldValue, $value);
 	}
 
+	/**
+	 * @param EntityCollection $collection
+	 */
 	public function setCollection(EntityCollection $collection)
 	{
 		$this->collection = $collection;
@@ -60,9 +74,6 @@ abstract class CollectableEntity
 	 */
 	public function setInternalIndex($index)
 	{
-		if (!is_numeric($index))
-			throw new Main\ArgumentTypeException("index");
-
 		$this->internalIndex = $index;
 	}
 
@@ -80,20 +91,19 @@ abstract class CollectableEntity
 	 */
 	public function isStartField($isMeaningfulField = false)
 	{
-		$parent = $this->getEntityParent();
+		$parent = $this->getCollection();
 		if ($parent == null)
 			return false;
 
 		return $parent->isStartField($isMeaningfulField);
 	}
 
-
 	/**
 	 * @return bool
 	 */
 	public function clearStartField()
 	{
-		$parent = $this->getEntityParent();
+		$parent = $this->getCollection();
 		if ($parent == null)
 			return false;
 
@@ -105,7 +115,7 @@ abstract class CollectableEntity
 	 */
 	public function hasMeaningfulField()
 	{
-		$parent = $this->getEntityParent();
+		$parent = $this->getCollection();
 		if ($parent == null)
 			return false;
 
@@ -114,9 +124,11 @@ abstract class CollectableEntity
 
 	public function doFinalAction($hasMeaningfulField = false)
 	{
-		$parent = $this->getEntityParent();
+		$parent = $this->getCollection();
 		if ($parent == null)
+		{
 			return false;
+		}
 
 		return $parent->doFinalAction($hasMeaningfulField);
 	}
@@ -127,9 +139,11 @@ abstract class CollectableEntity
 	 */
 	public function setMathActionOnly($value = false)
 	{
-		$parent = $this->getEntityParent();
+		$parent = $this->getCollection();
 		if ($parent == null)
+		{
 			return false;
+		}
 
 		return $parent->setMathActionOnly($value);
 	}
@@ -139,34 +153,11 @@ abstract class CollectableEntity
 	 */
 	public function isMathActionOnly()
 	{
-		$parent = $this->getEntityParent();
+		$parent = $this->getCollection();
 		if ($parent == null)
 			return false;
 
 		return $parent->isMathActionOnly();
-	}
-
-	/**
-	 * @internal
-	 * @param array $map
-	 *
-	 * @return array
-	 */
-	public static function getAllFieldsByMap(array $map)
-	{
-		$fields = array();
-		foreach ($map as $key => $value)
-		{
-			if (is_array($value) && !array_key_exists('expression', $value))
-			{
-				$fields[] = $key;
-			}
-			elseif ($value instanceof Main\Entity\ScalarField)
-			{
-				$fields[] = $value->getName();
-			}
-		}
-		return $fields;
 	}
 
 	/**
@@ -177,4 +168,46 @@ abstract class CollectableEntity
 		return $this->isClone;
 	}
 
+	/**
+	 * @internal
+	 * @param \SplObjectStorage $cloneEntity
+	 *
+	 * @return CollectableEntity
+	 */
+	public function createClone(\SplObjectStorage $cloneEntity)
+	{
+		if ($this->isClone() && $cloneEntity->contains($this))
+		{
+			return $cloneEntity[$this];
+		}
+
+		$collectableEntity = clone $this;
+		$collectableEntity->isClone = true;
+
+		/** @var Internals\Fields $fields */
+		if ($fields = $this->fields)
+		{
+			$collectableEntity->fields = $fields->createClone($cloneEntity);
+		}
+
+		if (!$cloneEntity->contains($this))
+		{
+			$cloneEntity[$this] = $collectableEntity;
+		}
+
+		if ($collection = $this->getCollection())
+		{
+			if (!$cloneEntity->contains($collection))
+			{
+				$cloneEntity[$collection] = $collection->createClone($cloneEntity);
+			}
+
+			if ($cloneEntity->contains($collection))
+			{
+				$collectableEntity->collection = $cloneEntity[$collection];
+			}
+		}
+
+		return $collectableEntity;
+	}
 }

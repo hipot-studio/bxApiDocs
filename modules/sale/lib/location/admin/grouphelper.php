@@ -24,7 +24,7 @@ class GroupHelper extends NameHelper
 	* 
 	* @return string Entity class name
 	*/
-	static public function getEntityRoadMap()
+	public static function getEntityRoadMap()
 	{
 		return array(
 			'main' => array(
@@ -83,6 +83,11 @@ class GroupHelper extends NameHelper
 		}
 
 		return $result;
+	}
+
+	public static function updateFields($gId, $data)
+	{
+		return parent::update($gId, $data);
 	}
 
 	public static function delete($gId)

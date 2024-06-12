@@ -11,7 +11,7 @@ class ElementSkuPrice extends Base
 	/**
 	 * @param integer $id Catalog product identifier.
 	 */
-	static public function __construct($id)
+	public function __construct($id)
 	{
 		parent::__construct($id);
 	}
@@ -23,19 +23,6 @@ class ElementSkuPrice extends Base
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Используется для инициализации полей сущности из некоторого внешнего источника. Нестатический метод.</p>
-	*
-	*
-	* @param array $fields  Массив полей сущности.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/elementskuprice/setfields.php
-	* @author Bitrix
-	*/
 	public function setFields(array $fields)
 	{
 		parent::setFields($fields);

@@ -1,54 +1,12 @@
-<?
+<?php
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/recurring.php");
 
 /***********************************************************************/
 /***********  CSaleRecurring  ******************************************/
 /***********************************************************************/
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalerecurring/index.php
- * @author Bitrix
- */
 class CSaleRecurring extends CAllSaleRecurring
 {
-	
-	/**
-	* <p>Метод возвращает параметры информации о продлении с кодом ID. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код записи с информацией о продлении.
-	*
-	* @return array <p>Метод возвращает ассоциативный массив параметров информации о
-	* продлении с ключами:</p><ul> <li> <b>ID</b> - код записи;</li> 	<li> <b>USER_ID</b> - код
-	* пользователя;</li> 	<li> <b>MODULE</b> - модуль, товар которого
-	* продлевается;</li> 	<li> <b>PRODUCT_ID</b> - код продлеваемого товара;</li> 	<li>
-	* <b>PRODUCT_NAME</b> - название продлеваемого товара;</li> 	<li> <b>PRODUCT_URL</b> -
-	* ссылка на продлеваемый товар;</li> 	<li> <b>RECUR_SCHEME_TYPE</b> - тип периода
-	* оплаты;</li> 	<li> <b>RECUR_SCHEME_LENGTH</b> - длина периода оплаты;</li> 	<li>
-	* <b>WITHOUT_ORDER</b> - флаг "Без оформления заказа";</li> 	<li> <b>ORDER_ID</b> - код
-	* базового заказа для продления;</li> 	<li> <b>CANCELED</b> - флаг отмены
-	* продления;</li> 	<li> <b>DESCRIPTION</b> - описание;</li> 	<li> <b>CALLBACK_FUNC</b> - функция
-	* обратного вызова для обновления параметров продления;</li> 	<li>
-	* <b>REMAINING_ATTEMPTS</b> - количество оставшихся попыток осуществления
-	* продления;</li> 	<li> <b>SUCCESS_PAYMENT</b> - успешное осуществление
-	* продления;</li> 	<li> <b>CANCELED_REASON</b> - причина отмены;</li> 	<li> <b>DATE_CANCELED</b> -
-	* дата отмены;</li> 	<li> <b>PRIOR_DATE</b> - дата последнего продления;</li> 	<li>
-	* <b>NEXT_DATE</b> - дата очередного продления;</li> 	<li> <b>TIMESTAMP_X</b> - дата
-	* последнего изменения записи.</li> </ul><p></p><div class="note"> <b>Примечание:</b>
-	* результат выполнения метода кешируется в рамках одной страницы.
-	* Поэтому повторные вызовы метода не влекут за собой
-	* дополнительных запросов к базе данных.</div><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalerecurring/csalerecurring.getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		global $DB;
@@ -86,106 +44,6 @@ class CSaleRecurring extends CAllSaleRecurring
 		return false;
 	}
 
-	
-	/**
-	* <p>Метод возвращает результат выборки записей информации и продлении подписки в соответствии со своими параметрами. Нестатический метод.</p>
-	*
-	*
-	* @param array $arOrder = array() Массив, в соответствии с которым сортируются результирующие
-	* записи. Массив имеет вид: 		<pre class="syntax">array( "название_поля1" =&gt;
-	* "направление_сортировки1", "название_поля2" =&gt;
-	* "направление_сортировки2", . . . )</pre> 		В качестве "название_поля<i>N</i>"
-	* может стоять любое поле 		информации о продлении подписки, а в
-	* качестве "направление_сортировки<i>X</i>" могут быть значения "<i>ASC</i>"
-	* (по возрастанию) и "<i>DESC</i>" (по убыванию).<br><br> 		Если массив
-	* сортировки имеет несколько элементов, то 		результирующий набор
-	* сортируется последовательно по каждому элементу (т.е. сначала
-	* сортируется по первому элементу, потом результат сортируется по
-	* второму и т.д.). <br><br>  Значение по умолчанию - пустой массив array() -
-	* означает, что результат отсортирован не будет.
-	*
-	* @param array $arFilter = array() Массив, в соответствии с которым фильтруются 		записи информации
-	* о продлении подписки. Массив имеет вид: 		<pre class="syntax">array(
-	* "[модификатор1][оператор1]название_поля1" =&gt; "значение1",
-	* "[модификатор2][оператор2]название_поля2" =&gt; "значение2", . . . )</pre>
-	* Удовлетворяющие фильтру записи возвращаются в результате, а
-	* записи, которые не удовлетворяют условиям фильтра,
-	* отбрасываются.<br><br> 	Допустимыми являются следующие
-	* модификаторы: 		<ul> <li> <b> 	!</b>  - отрицание;</li> 			<li> <b> 	+</b>  - значения
-	* null, 0 и пустая строка так же удовлетворяют условиям фильтра.</li>
-	* 		</ul> 	Допустимыми являются следующие операторы: 	<ul> <li> <b>&gt;=</b> -
-	* значение поля больше или равно передаваемой в фильтр величины;</li>
-	* 			<li> <b>&gt;</b>  - значение поля строго больше передаваемой в фильтр
-	* величины;</li> 			<li> <b>&lt;=</b> - значение поля меньше или равно
-	* передаваемой в фильтр величины;</li> 			<li> <b>&lt;</b> - значение поля
-	* строго меньше передаваемой в фильтр величины;</li> 			<li> <b>@</b>  -
-	* значение поля находится в передаваемом в фильтр разделенном
-	* запятой списке значений. Можно передавать и массив обычный,
-	* стандартно.</li> 			<li> <b>~</b>  - значение поля проверяется на
-	* соответствие передаваемому в фильтр шаблону;</li> 			<li> <b>%</b>  -
-	* значение поля проверяется на соответствие передаваемой в фильтр
-	* строке в соответствии с языком запросов.</li> 	</ul> В качестве
-	* "название_поляX" может стоять любое поле 		информации о продлении
-	* подписки.<br><br> 		Пример фильтра: 		<pre class="syntax">array("USER_ID" =&gt; 150)</pre>
-	* 		Этот фильтр означает "выбрать все записи, в которых значение в
-	* поле USER_ID (код пользователя) равно 150".<br><br> 	Значение по умолчанию -
-	* пустой массив array() - означает, что результат отфильтрован не
-	* будет.
-	*
-	* @param array $arGroupBy = false Массив полей, по которым группируются записи 		информации о
-	* продлении подписки. Массив имеет вид: 		<pre
-	* class="syntax">array("название_поля1",        "группирующая_функция2" =&gt;
-	* "название_поля2", . . .)</pre> 	В качестве "название_поля<i>N</i>" может
-	* стоять любое поле 		информации о продлении подписки. В качестве
-	* группирующей функции могут стоять: 		<ul> <li> 	<b> 	COUNT</b> - подсчет
-	* количества;</li> 			<li> <b>AVG</b> - вычисление среднего значения;</li> 			<li>
-	* <b>MIN</b> - вычисление минимального значения;</li> 			<li> 	<b> 	MAX</b> -
-	* вычисление максимального значения;</li> 			<li> <b>SUM</b> - вычисление
-	* суммы.</li> 		</ul> 	Если массив пустой, то метод вернет число записей,
-	* удовлетворяющих фильтру.<br><br> 		Значение по умолчанию - <i>false</i> -
-	* означает, что результат группироваться не будет.
-	*
-	* @param array $arNavStartParams = false Массив параметров выборки. Может содержать следующие ключи: 		<ul>
-	* <li>"<b>nTopCount</b>" - количество возвращаемых методом записей будет
-	* ограничено сверху значением этого ключа;</li> 			<li> 	любой ключ,
-	* принимаемый методом <b> CDBResult::NavQuery</b> 				в качестве третьего
-	* параметра.</li> 		</ul> Значение по умолчанию - <i>false</i> - означает, что
-	* параметров выборки нет.
-	*
-	* @param array $arSelectFields = array() Массив полей записей, которые будут возвращены методом. Можно
-	* указать только те поля, которые необходимы. Если в массиве
-	* присутствует значение 		"*", то будут возвращены все доступные
-	* поля.<br><br> 		Значение по умолчанию - пустой массив 		array() - означает,
-	* что будут возвращены все поля основной таблицы запроса.
-	*
-	* @return CDBResult <p>Возвращается объект класса CDBResult, содержащий набор
-	* ассоциативных массивов параметров информации и продлении
-	* подписки.</p><ul> <li> <b>ID</b> - код записи;</li> 	<li> <b>USER_ID</b> - код
-	* пользователя;</li> 	<li> <b>MODULE</b> - модуль, товар которого
-	* продлевается;</li> 	<li> <b>PRODUCT_ID</b> - код продлеваемого товара;</li> 	<li>
-	* <b>PRODUCT_NAME</b> - название продлеваемого товара;</li> 	<li> <b>PRODUCT_URL</b> -
-	* ссылка на продлеваемый товар;</li> 	<li> <b>RECUR_SCHEME_TYPE</b> - тип периода
-	* оплаты;</li> 	<li> <b>RECUR_SCHEME_LENGTH</b> - длина периода оплаты;</li> 	<li>
-	* <b>WITHOUT_ORDER</b> - флаг "Без оформления заказа";</li> 	<li> <b>ORDER_ID</b> - код
-	* базового заказа для продления;</li> 	<li> <b>CANCELED</b> - флаг отмены
-	* продления;</li> 	<li> <b>DESCRIPTION</b> - описание;</li> 	<li> <b>CALLBACK_FUNC</b> - функция
-	* обратного вызова для обновления параметров продления;</li> 	<li>
-	* <b>REMAINING_ATTEMPTS</b> - количество оставшихся попыток осуществления
-	* продления;</li> 	<li> <b>SUCCESS_PAYMENT</b> - успешное осуществление
-	* продления;</li> 	<li> <b>CANCELED_REASON</b> - причина отмены;</li> 	<li> <b>DATE_CANCELED</b> -
-	* дата отмены;</li> 	<li> <b>PRIOR_DATE</b> - дата последнего продления;</li> 	<li>
-	* <b>NEXT_DATE</b> - дата очередного продления;</li> 	<li> <b>TIMESTAMP_X</b> - дата
-	* последнего изменения записи;</li> 	<li> <b>USER_LOGIN</b> - логин
-	* пользователя;</li> 	<li> <b>USER_ACTIVE</b> - флаг активности пользователя;</li>
-	* 	<li> <b>USER_NAME</b> - имя пользователя;</li> 	<li> <b>USER_LAST_NAME</b> - фамилия
-	* пользователя;</li> 	<li> <b>USER_EMAIL</b> - E-Mail пользователя.</li> </ul><p>Если в
-	* качестве параметра <i> arGroupBy</i> передается пустой массив, то метод
-	* вернет число записей, удовлетворяющих фильтру.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalerecurring/csalerecurring.getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		global $DB;
@@ -238,9 +96,9 @@ class CSaleRecurring extends CAllSaleRecurring
 				"SELECT ".$arSqls["SELECT"]." ".
 				"FROM b_sale_recurring SR ".
 				"	".$arSqls["FROM"]." ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
 			//echo "!1!=".htmlspecialcharsbx($strSql)."<br>";
@@ -256,29 +114,29 @@ class CSaleRecurring extends CAllSaleRecurring
 			"SELECT ".$arSqls["SELECT"]." ".
 			"FROM b_sale_recurring SR ".
 			"	".$arSqls["FROM"]." ";
-		if (strlen($arSqls["WHERE"]) > 0)
+		if ($arSqls["WHERE"] <> '')
 			$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-		if (strlen($arSqls["GROUPBY"]) > 0)
+		if ($arSqls["GROUPBY"] <> '')
 			$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
-		if (strlen($arSqls["ORDERBY"]) > 0)
+		if ($arSqls["ORDERBY"] <> '')
 			$strSql .= "ORDER BY ".$arSqls["ORDERBY"]." ";
 
-		if (is_array($arNavStartParams) && IntVal($arNavStartParams["nTopCount"])<=0)
+		if (is_array($arNavStartParams) && intval($arNavStartParams["nTopCount"])<=0)
 		{
 			$strSql_tmp =
 				"SELECT COUNT('x') as CNT ".
 				"FROM b_sale_recurring SR ".
 				"	".$arSqls["FROM"]." ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql_tmp .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql_tmp .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
 			//echo "!2.1!=".htmlspecialcharsbx($strSql_tmp)."<br>";
 
 			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 			$cnt = 0;
-			if (strlen($arSqls["GROUPBY"]) <= 0)
+			if ($arSqls["GROUPBY"] == '')
 			{
 				if ($arRes = $dbRes->Fetch())
 					$cnt = $arRes["CNT"];
@@ -297,8 +155,8 @@ class CSaleRecurring extends CAllSaleRecurring
 		}
 		else
 		{
-			if (is_array($arNavStartParams) && IntVal($arNavStartParams["nTopCount"])>0)
-				$strSql .= "LIMIT ".IntVal($arNavStartParams["nTopCount"]);
+			if (is_array($arNavStartParams) && intval($arNavStartParams["nTopCount"])>0)
+				$strSql .= "LIMIT ".intval($arNavStartParams["nTopCount"]);
 
 			//echo "!3!=".htmlspecialcharsbx($strSql)."<br>";
 
@@ -308,34 +166,6 @@ class CSaleRecurring extends CAllSaleRecurring
 		return $dbRes;
 	}
 
-	
-	/**
-	* <p>Метод добавляет новую запись на продление подписки в соответствии с параметрами из массива arFields. Нестатический метод.</p>
-	*
-	*
-	* @param array $arFields  Ассоциативный массив параметров новой записи 		продления
-	* подписки с ключами: <ul> <li> <b>USER_ID</b> - код пользователя;</li> 	<li> <b>MODULE</b>
-	* - модуль, товар которого продлевается;</li> 	<li> <b>PRODUCT_ID</b> - код
-	* продлеваемого товара;</li> 	<li> <b>PRODUCT_NAME</b> - название продлеваемого
-	* товара;</li> 	<li> <b>PRODUCT_URL</b> - ссылка на продлеваемый товар;</li> 	<li>
-	* <b>RECUR_SCHEME_TYPE</b> - тип периода оплаты;</li> 	<li> <b>RECUR_SCHEME_LENGTH</b> - длина
-	* периода оплаты;</li> 	<li> <b>WITHOUT_ORDER</b> - флаг "Без оформления заказа";</li>
-	* 	<li> <b>ORDER_ID</b> - код базового заказа для продления;</li> 	<li> <b>CANCELED</b> -
-	* флаг отмены продления;</li> 	<li> <b>DESCRIPTION</b> - описание;</li> 	<li>
-	* <b>CALLBACK_FUNC</b> - функция обратного вызова для обновления параметров
-	* продления;</li> 	<li> <b>REMAINING_ATTEMPTS</b> - количество оставшихся попыток
-	* осуществления продления;</li> 	<li> <b>SUCCESS_PAYMENT</b> - успешное
-	* осуществление продления;</li> 	<li> <b>CANCELED_REASON</b> - причина отмены;</li>
-	* 	<li> <b>DATE_CANCELED</b> - дата отмены;</li> 	<li> <b>PRIOR_DATE</b> - дата последнего
-	* продления;</li> 	<li> <b>NEXT_DATE</b> - дата очередного продления.</li> </ul>
-	*
-	* @return int <p>Метод возвращает код добавленной записи или <i>false</i> в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalerecurring/csalerecurring.add.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		global $DB;
@@ -350,9 +180,8 @@ class CSaleRecurring extends CAllSaleRecurring
 			"VALUES(".$arInsert[1].")";
 		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 
-		$ID = IntVal($DB->LastID());
+		$ID = intval($DB->LastID());
 
 		return $ID;
 	}
 }
-?>

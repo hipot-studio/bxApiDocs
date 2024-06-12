@@ -26,33 +26,11 @@ class BaseContext
 	 * @throws ArgumentTypeException
 	 * @throws SystemException
 	 */
-	
-	/**
-	* <p>Нестатический метод добавляет значение к счетчику. Если счетчик не создан, то создает и устанавливает значение. Сохраняет в базу данных.</p>
-	*
-	*
-	* @param mixed $Bitrix  Дата.
-	*
-	* @param Bitri $Main  Имя счетчика
-	*
-	* @param Mai $Type  Добавляемое значение.
-	*
-	* @param Date $day  
-	*
-	* @param string $name  
-	*
-	* @param string $integer  
-	*
-	* @param float $value  
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/basecontext/addcounter.php
-	* @author Bitrix
-	*/
-	public function addCounter(Date $day, $name, $value)
+	public function addCounter($day, $name, $value = null)
 	{
+		if (!($day instanceof Date))
+			throw new ArgumentTypeException('day', '\Bitrix\Main\Type\Date');
+
 		if (! is_string($name))
 			throw new ArgumentTypeException('name', 'string');
 
@@ -101,33 +79,25 @@ class BaseContext
 		$result->isSuccess(); // TODO isSuccess
 	}
 
+	/**
+	 * Subtraction from counter value
+	 *
+	 * @param Date $day
+	 * @param string $name
+	 * @param int|float $value
+	 * @return void
+	 */
+	public function subCounter($day, $name, $value = 1)
+	{
+		return $this->addCounter($day, $name, -$value);
+	}
+
 	/** Set attribute with value.
 	 * @param string                $name  - attribute name
 	 * @param string|int|float|null $value - attribute value
 	 * @throws ArgumentTypeException
 	 * @throws SystemException
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает атрибут со значением.</p>
-	*
-	*
-	* @param string $name  Имя атрибута.
-	*
-	* @param string $string  Значение атрибута.
-	*
-	* @param strin $integer  
-	*
-	* @param intege $float  
-	*
-	* @param null $value = null 
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/basecontext/setattribute.php
-	* @author Bitrix
-	*/
 	public function setAttribute($name, $value = null)
 	{
 		if (! is_string($name))
@@ -170,7 +140,6 @@ class BaseContext
 			if (! $groupedTypes)
 			{
 				$groupedTypes = AttributeManager::getGroupedTypes();
-				unset($groupedTypes[null]);
 			}
 
 			foreach ($groupedTypes as $types)

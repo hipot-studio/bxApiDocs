@@ -6,31 +6,37 @@ use Bitrix\Main;
 
 class PriceMaths
 {
+	private static ?int $valuePrecision = null;
+
 	/**
 	 * @param $value
 	 *
 	 * @return float
-	 * @throws Main\ArgumentNullException
 	 */
 	public static function roundPrecision($value)
 	{
-		$valuePrecision = Main\Config\Option::get('sale', 'value_precision', 2);
-		if (intval($valuePrecision) <= 0)
+		if (!isset(self::$valuePrecision))
 		{
-			$valuePrecision = 2;
+			self::$valuePrecision = (int)Main\Config\Option::get('sale', 'value_precision');
+			if (self::$valuePrecision < 0)
+			{
+				self::$valuePrecision = 2;
+			}
 		}
 
-		return roundEx($value, $valuePrecision);
+		return round((float)$value, self::$valuePrecision);
 	}
 
 	/**
+	 * @deprecated Use \Bitrix\Sale\PriceMaths::roundPrecision instead it
+	 *
 	 * @param $price
 	 * @param $currency
-	 * 
+	 *
 	 * @return float
 	 */
 	public static function roundByFormatCurrency($price, $currency)
 	{
-		return floatval(SaleFormatCurrency($price, $currency, false, true));
+		return (float)SaleFormatCurrency($price, $currency, false, true);
 	}
 }

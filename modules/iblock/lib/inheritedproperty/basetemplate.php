@@ -14,7 +14,7 @@ class BaseTemplate
 	/**
 	 * @param BaseValues $entity Sets the context for template substitution.
 	 */
-	public function __construct(BaseValues $entity)
+	function __construct(BaseValues $entity)
 	{
 		$this->entity = $entity;
 	}
@@ -24,17 +24,6 @@ class BaseTemplate
 	 *
 	 * @return BaseValues|null
 	 */
-	
-	/**
-	* <p>Метод возвращает сущность, для которой применяется шаблон вычисляемых свойств. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Iblock\InheritedProperty\BaseValues|null 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/inheritedproperty/basetemplate/getvaluesentity.php
-	* @author Bitrix
-	*/
 	public function getValuesEntity()
 	{
 		return $this->entity;
@@ -48,19 +37,6 @@ class BaseTemplate
 	 * @return void
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	
-	/**
-	* <p>Метод сохраняет шаблоны вычисляемых свойств для сущности в базе данных. Нестатический метод.</p>
-	*
-	*
-	* @param array $templates  Массив шаблонов вычисляемых наследуемых свойств.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/inheritedproperty/basetemplate/set.php
-	* @author Bitrix
-	*/
 	public function set(array $templates)
 	{
 		$templateList = \Bitrix\Iblock\InheritedPropertyTable::getList(array(
@@ -118,45 +94,32 @@ class BaseTemplate
 	 * @return array
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	
-	/**
-	* <p>Метод возвращает массив шаблонов вычисляемых свойств, хранящихся в базе данных для заданной сущности. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $Bitrix  Сущность модуля.
-	*
-	* @param Bitri $Iblock  
-	*
-	* @param Ibloc $InheritedProperty  
-	*
-	* @param BaseValues $entity = null 
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/inheritedproperty/basetemplate/get.php
-	* @author Bitrix
-	*/
 	public function get(BaseValues $entity = null)
 	{
+		static $cache = array();
 		if ($entity === null)
 			$entity = $this->entity;
 
-		$result = array();
-		$templateList = \Bitrix\Iblock\InheritedPropertyTable::getList(array(
-			"select" => array("ID", "CODE", "TEMPLATE", "ENTITY_TYPE", "ENTITY_ID"),
-			"filter" => array(
-				"=IBLOCK_ID" => $entity->getIblockId(),
-				"=ENTITY_TYPE" => $entity->getType(),
-				"=ENTITY_ID" => $entity->getId(),
-			),
-		));
-		while ($row = $templateList->fetch())
+		$filter = array(
+			"=IBLOCK_ID" => $entity->getIblockId(),
+			"=ENTITY_TYPE" => $entity->getType(),
+			"=ENTITY_ID" => $entity->getId(),
+		);
+		$cacheKey = implode('|', $filter);
+		if (!isset($cache[$cacheKey]))
 		{
-			$result[$row["CODE"]] = $row;
+			$result = array();
+			$templateList = \Bitrix\Iblock\InheritedPropertyTable::getList(array(
+				"select" => array("ID", "CODE", "TEMPLATE", "ENTITY_TYPE", "ENTITY_ID"),
+				"filter" => $filter,
+			));
+			while ($row = $templateList->fetch())
+			{
+				$result[$row["CODE"]] = $row;
+			}
+			$cache[$cacheKey] = $result;
 		}
-
-		return $result;
+		return $cache[$cacheKey];
 	}
 
 	/**
@@ -168,26 +131,7 @@ class BaseTemplate
 	 * @return boolean
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	
-	/**
-	* <p>Метод проверяет, имеются ли в базе данных шаблоны вычисляемых свойств для заданной сущности. Нестатический метод.</p> <p>Результат кешируется в статической переменной.</p>
-	*
-	*
-	* @param mixed $Bitrix  Сущность модуля.
-	*
-	* @param Bitri $Iblock  
-	*
-	* @param Ibloc $InheritedProperty  
-	*
-	* @param BaseValues $entity  
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/inheritedproperty/basetemplate/hastemplates.php
-	* @author Bitrix
-	*/
-	static public function hasTemplates(BaseValues $entity)
+	public function hasTemplates(BaseValues $entity)
 	{
 		static $cache = array();
 		$iblockId = $entity->getIblockId();
@@ -211,17 +155,6 @@ class BaseTemplate
 	 * @return void
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	
-	/**
-	* <p>Метод удаляет шаблоны вычисляемых свойств для сущности из базы данных. Нестатический метод.</p> <p>Без параметров</p>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/inheritedproperty/basetemplate/delete.php
-	* @author Bitrix
-	*/
 	public function delete()
 	{
 		$templateList = \Bitrix\Iblock\InheritedPropertyTable::getList(array(
@@ -268,17 +201,6 @@ class BaseTemplate
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает шаблоны вычисляемых свойств для заданной сущности и всех ее родителей. Кроме того, устанавливает флаг <code>INHERITED</code> для каждого найденного шаблона. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/inheritedproperty/basetemplate/findtemplates.php
-	* @author Bitrix
-	*/
 	public function findTemplates()
 	{
 		$templates = array();

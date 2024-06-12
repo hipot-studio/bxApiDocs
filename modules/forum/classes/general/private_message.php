@@ -1,6 +1,6 @@
 <?
 IncludeModuleLangFile(__FILE__);
-// define("FORUM_SystemFolder", 4);
+define("FORUM_SystemFolder", 4);
 //*****************************************************************************************************************
 //	PM
 //************************************!****************************************************************************
@@ -13,11 +13,11 @@ class CAllForumPrivateMessage
 		if(!CForumPrivateMessage::CheckFields($arFields))
 			return false;
 
-		$arFields["RECIPIENT_ID"] = $arFields["USER_ID"];
-		$arFields["IS_READ"] = $arFields["IS_READ"]!="Y" ? "N" : "Y";
-		$arFields["USE_SMILES"] = $arFields["USE_SMILES"]!="Y" ? "N" : "Y";
-		$arFields["FOLDER_ID"] = intval($arFields["FOLDER_ID"])<=0 ? 1 : intval($arFields["FOLDER_ID"]);
-		$arFields["REQUEST_IS_READ"] = $arFields["REQUEST_IS_READ"]!="Y" ? "N" : "Y";
+		$arFields["RECIPIENT_ID"] = $arFields["USER_ID"] ?? null;
+		$arFields["IS_READ"] = !isset($arFields["IS_READ"]) || $arFields["IS_READ"]!="Y" ? "N" : "Y";
+		$arFields["USE_SMILES"] = !isset($arFields["USE_SMILES"]) || $arFields["USE_SMILES"]!="Y" ? "N" : "Y";
+		$arFields["FOLDER_ID"] = !isset($arFields["FOLDER_ID"]) || intval($arFields["FOLDER_ID"])<=0 ? 1 : intval($arFields["FOLDER_ID"]);
+		$arFields["REQUEST_IS_READ"] = !isset($arFields["REQUEST_IS_READ"]) || $arFields["REQUEST_IS_READ"]!="Y" ? "N" : "Y";
 
 		foreach (GetModuleEvents("forum", "onBeforePMSend", true) as $arEvent)
 		{
@@ -28,10 +28,10 @@ class CAllForumPrivateMessage
 		if(!isset($arFields["POST_DATE"]))
 			$arFields["~POST_DATE"] = $DB->GetNowFunction();
 
-		if ($version == 2 && $arFields["COPY_TO_OUTBOX"] == "Y")
+		if ($version == 2 && isset($arFields["COPY_TO_OUTBOX"]) && $arFields["COPY_TO_OUTBOX"] == "Y")
 		{
 			$arFieldsTmp = $arFields;
-			$arFieldsTmp["USER_ID"] = $arFields["AUTHOR_ID"];
+			$arFieldsTmp["USER_ID"] = $arFields["AUTHOR_ID"] ?? null;
 			$arFieldsTmp["IS_READ"] = "Y";
 			$arFieldsTmp["FOLDER_ID"] = "3";
 			$DB->Add("b_forum_private_message", $arFieldsTmp, Array("POST_MESSAGE"));
@@ -96,11 +96,11 @@ class CAllForumPrivateMessage
 		global $DB, $USER;
 		$ID = intval($ID);
 
-		if (is_set($arFields, "AUTHOR_ID")&&(intVal($arFields["AUTHOR_ID"])))
+		if (is_set($arFields, "AUTHOR_ID")&&(intval($arFields["AUTHOR_ID"])))
 			$arFields["AUTHOR_ID"] = $arFields["USER_ID"];
-		if (is_set($arFields, "RECIPIENT_ID")&&(intVal($arFields["RECIPIENT_ID"])))
+		if (is_set($arFields, "RECIPIENT_ID")&&(intval($arFields["RECIPIENT_ID"])))
 			$arFields["RECIPIENT_ID"] = $arFields["USER_ID"];
-		if (is_set($arFields, "POST_DATE")&&(strLen(trim($arFields["POST_DATE"])) <= 0))
+		if (is_set($arFields, "POST_DATE")&&(trim($arFields["POST_DATE"]) == ''))
 			$arFields["~POST_DATE"] =  $DB->GetNowFunction();
 		if(is_set($arFields, "USE_SMILES") && $arFields["USE_SMILES"]!="Y")
 			$arFields["USE_SMILES"]="N";
@@ -119,7 +119,7 @@ class CAllForumPrivateMessage
 		{
 			$strUpdate = $DB->PrepareUpdate("b_forum_private_message", $arFields);
 			$strSql = "UPDATE b_forum_private_message SET ".$strUpdate." WHERE ID=".$ID;
-			$res = $DB->QueryBind($strSql, Array("POST_MESSAGE"=>$arFields["POST_MESSAGE"]), false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+			$res = $DB->QueryBind($strSql, Array("POST_MESSAGE"=>$arFields["POST_MESSAGE"] ?? null));
 			return $res;
 		}
 		return false;
@@ -128,7 +128,7 @@ class CAllForumPrivateMessage
 	public static function Delete($ID)
 	{
 		global $DB, $USER;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$list = array();
 		$list = CForumPrivateMessage::GetList(array(), array("ID"=>$ID));
@@ -166,8 +166,8 @@ class CAllForumPrivateMessage
 	public static function MakeRead($ID)
 	{
 		global $DB;
-		$ID = IntVal($ID);
-		$version = intVal(COption::GetOptionString("forum", "UsePMVersion", "2"));
+		$ID = intval($ID);
+		$version = intval(COption::GetOptionString("forum", "UsePMVersion", "2"));
 		if($ID>0)
 		{
 			$db_res = CForumPrivateMessage::GetListEx(array(), array("ID" => $ID));
@@ -180,7 +180,7 @@ class CAllForumPrivateMessage
 				}
 
 				$strSql = "UPDATE b_forum_private_message SET IS_READ='Y' WHERE ID=".$ID;
-				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql);
 				if ($version == 1 && ($resFields["IS_READ"] == "N"))
 				{
 					$resFields = array_merge($resFields, array("USER_ID"=>$resFields["AUTHOR_ID"], "FOLDER_ID"=>3, "IS_READ"=>"Y"));
@@ -206,8 +206,8 @@ class CAllForumPrivateMessage
 		$dbr = CForumPrivateMessage::GetByID($ID);
 		if($arRes = $dbr->Fetch())
 		{
-			if((intVal($arRes["USER_ID"]) == $USER->GetID()) ||
-				((intVal($arRes["AUTHOR_ID"]) == intVal($USER->GetID())) && ($arRes["IS_READ"]=="N")))
+			if((intval($arRes["USER_ID"]) == $USER->GetID()) ||
+				((intval($arRes["AUTHOR_ID"]) == intval($USER->GetID())) && ($arRes["IS_READ"]=="N")))
 			return true;
 		}
 		return false;
@@ -219,11 +219,11 @@ class CAllForumPrivateMessage
 		$strError = "";
 		if ((CForumPrivateMessage::PMSize($USER->GetId()) < COption::GetOptionInt("forum", "MaxPrivateMessages", 100)))
 		{
-			if((is_set($arFields, "USER_ID")&&(strlen($arFields["USER_ID"])<=0)))
+			if((is_set($arFields, "USER_ID")&&($arFields["USER_ID"] == '')))
 			$strError .= GetMessage("PM_ERR_USER_EMPTY");
-			if((is_set($arFields, "POST_SUBJ"))&&(strlen(trim($arFields["POST_SUBJ"]))<=0))
+			if((is_set($arFields, "POST_SUBJ"))&&(trim($arFields["POST_SUBJ"]) == ''))
 			$strError .= GetMessage("PM_ERR_SUBJ_EMPTY");
-			if((is_set($arFields, "POST_MESSAGE"))&&(strlen(trim($arFields["POST_MESSAGE"]))<=0))
+			if((is_set($arFields, "POST_MESSAGE"))&&(trim($arFields["POST_MESSAGE"]) == ''))
 			$strError .= GetMessage("PM_ERR_TEXT_EMPTY");
 		}
 		else
@@ -237,7 +237,7 @@ class CAllForumPrivateMessage
 			$APPLICATION->ThrowException($strError);
 			return false;
 		}
-		$arFields["REQUEST_IS_READ"] = $arFields["REQUEST_IS_READ"]!="Y" ? "N" : "Y";
+		$arFields["REQUEST_IS_READ"] = !isset($arFields["REQUEST_IS_READ"]) || $arFields["REQUEST_IS_READ"]!="Y" ? "N" : "Y";
 		if(is_set($arFields, "FOLDER_ID") && intval($arFields["FOLDER_ID"]) == 4)
 			$arFields["IS_READ"]="Y";
 		return true;
@@ -248,7 +248,7 @@ class CAllForumPrivateMessage
 		global $DB;
 		static $arMessage = array();
 		$result = false;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 			return false;
 		if (!is_set($arMessage, $ID))
@@ -282,14 +282,14 @@ class CAllForumPrivateMessage
 			switch($key)
 			{
 				case "OWNER_ID":
-				$orSql = array("M.AUTHOR_ID=".intVal($val), "M.FOLDER_ID=1", "M.IS_READ='N'");
+				$orSql = array("M.AUTHOR_ID=".intval($val), "M.FOLDER_ID=1", "M.IS_READ='N'");
 				break;
 				case "ID":
 				case "FOLDER_ID":
 				case "AUTHOR_ID":
 				case "RECIPIENT_ID":
 				case "USER_ID":
-				$arSql[] = "M.".$key."=".intVal($val);
+				$arSql[] = "M.".$key."=".intval($val);
 				break;
 				case "POST_SUBJ":
 				case "POST_MESSAGE":
@@ -297,9 +297,9 @@ class CAllForumPrivateMessage
 				break;
 				case "USE_SMILES":
 				case "IS_READ":
-				$t_val = strtoupper($val);
+				$t_val = mb_strtoupper($val);
 				if($t_val=="Y" || $t_val=="N")
-				$arSql[] = "M.".strtoupper($key)."='".$t_val."'";
+				$arSql[] = "M.".mb_strtoupper($key)."='".$t_val."'";
 				break;
 			}
 		}
@@ -318,8 +318,8 @@ class CAllForumPrivateMessage
 		$arSqlOrder = array();
 		foreach($arOrder as $by => $order)
 		{
-			$by = strtoupper($by);
-			$order = strtoupper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			if(array_key_exists($by, $arOFields))
 			{
 				if ($order != "ASC")
@@ -343,7 +343,7 @@ class CAllForumPrivateMessage
 			$strSql .= (count($orSql)>0) ? " OR (".implode(" AND ", $orSql).")" : "";
 			$strSql .= (count($arSqlOrder)>0) ? " ORDER BY ".implode(", ", $arSqlOrder) : "";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 		}
 		else
 		{
@@ -357,12 +357,12 @@ class CAllForumPrivateMessage
 			//$strSql .= (count($orSql)>0) ? " OR (".implode(" AND ", $orSql).")" : "";
 			$strSql .= (count($arSqlOrder)>0) ? " ORDER BY ".implode(", ", $arSqlOrder) : "";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			$arResult = array();
 			if ($dbRes && ($res = $dbRes->GetNext()))
 			{
-				$arResult["CNT"] = intVal($res["CNT"]);
-				$arResult["CNT_NEW"] = intVal($res["CNT_NEW"]);
+				$arResult["CNT"] = intval($res["CNT"]);
+				$arResult["CNT_NEW"] = intval($res["CNT_NEW"]);
 			}
 
 			if (!empty($orSql))
@@ -370,12 +370,20 @@ class CAllForumPrivateMessage
 				$strSql = $strSqlTmp;
 				$arSql = $orSql;
 				$strSql .= ((count($arSql)>0) ? " WHERE (".implode(" AND ", $arSql).")" : "");
-				$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$dbRes = $DB->Query($strSql);
 				$arResult = array();
 				if ($dbRes && ($res = $dbRes->GetNext()))
 				{
-					$arResult["CNT"] += intVal($res["CNT"]);
-					$arResult["CNT_NEW"] += intVal($res["CNT"]);
+					if (!isset($arResult["CNT"]))
+					{
+						$arResult["CNT"] = 0;
+					}
+					if (!isset($arResult["CNT_NEW"]))
+					{
+						$arResult["CNT_NEW"] = 0;
+					}
+					$arResult["CNT"] += intval($res["CNT"]);
+					$arResult["CNT_NEW"] += intval($res["CNT"]);
 				}
 			}
 			$dbRes = new CDBResult;
@@ -387,7 +395,7 @@ class CAllForumPrivateMessage
 
 	public static function PMSize($USER_ID, $CountMess = false)
 	{
-		$USER_ID = intVal($USER_ID);
+		$USER_ID = intval($USER_ID);
 		if (COption::GetOptionString("forum", "UsePMVersion", "2") == 2)
 			$count = CForumPrivateMessage::GetList(array(), array("USER_ID"=>$USER_ID), true);
 		else
@@ -405,7 +413,7 @@ class CAllForumPrivateMessage
 	public static function GetNewPM($FOLDER_ID = false)
 	{
 		global $DB, $USER;
-		$FOLDER_ID = ($FOLDER_ID === false ? 1 : intVal($FOLDER_ID));
+		$FOLDER_ID = ($FOLDER_ID === false ? 1 : intval($FOLDER_ID));
 		static $PMessageCache = array();
 		if (!is_set($PMessageCache, $FOLDER_ID))
 		{
@@ -416,7 +424,7 @@ class CAllForumPrivateMessage
 			($FOLDER_ID <= 0 ? "" : "	AND PM.FOLDER_ID = ".$FOLDER_ID." ").
 			"	AND PM.IS_READ = 'N'";
 
-			$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$db_res = $DB->Query($strSql);
 			if ($db_res && $res = $db_res->Fetch())
 				$PMessageCache[$FOLDER_ID] = $res;
 			else
@@ -459,7 +467,7 @@ class CALLForumPMFolder
 		}
 		$strUpdate = $DB->PrepareUpdate("b_forum_pm_folder", $arFields);
 		$strSql = "UPDATE b_forum_pm_folder SET ".$strUpdate." WHERE ID=".$ID;
-		$res = $DB->Query($strSql, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+		$res = $DB->Query($strSql);
 		return $res;
 
 	}
@@ -469,7 +477,7 @@ class CALLForumPMFolder
 		global $DB;
 
 		$strSql = "SELECT F.ID, F.USER_ID, F.SORT, F.TITLE FROM b_forum_pm_folder F WHERE F.ID=".intval($ID);
-		$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbRes = $DB->Query($strSql);
 		return $dbRes;
 	}
 
@@ -484,16 +492,16 @@ class CALLForumPMFolder
 		for($i = 0; $i < count($filter_keys); $i++)
 		{
 			$val = $arFilter[$filter_keys[$i]];
-			$key = strtoupper($filter_keys[$i]);
+			$key = mb_strtoupper($filter_keys[$i]);
 			switch($key)
 			{
 				case "USER_ID":
 					$sAddJoin = "F.USER_ID=FPM.USER_ID AND ";
-					$arSqlSearch[] = "F.USER_ID=".intVal($val);
+					$arSqlSearch[] = "F.USER_ID=".intval($val);
 					break;
 				case "ID":
 				case "SORT":
-					$arSqlSearch[] = "F.".$key."=".intVal($val);
+					$arSqlSearch[] = "F.".$key."=".intval($val);
 					break;
 				case "TITLE":
 					$arSqlSearch[] = "F.".$key."='".$DB->ForSQL($val)."'";
@@ -509,7 +517,8 @@ class CALLForumPMFolder
 		$arSqlOrder = array();
 		foreach($arOrder as $by => $order)
 		{
-			$by = strtoupper($by); $order = strtoupper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			if(array_key_exists($by, $arOFields))
 			{
 				if ($order != "ASC")
@@ -535,14 +544,14 @@ class CALLForumPMFolder
 		if(!$bCnt)
 			$strSql .= " GROUP BY F.ID, F.USER_ID, F.SORT, F.TITLE";
 		$strSql .= (count($arSqlOrder)>0) ? " ORDER BY ".implode(", ", $arSqlOrder) : "";
-		$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbRes = $DB->Query($strSql);
 		return $dbRes;
 	}
 
 	public static function CheckPermissions($ID)
 	{
 		global $USER, $APPLICATION;
-		$ID = intVal($ID);
+		$ID = intval($ID);
 		if(CForumUser::IsAdmin())
 			return true;
 		$dbr = CForumPMFolder::GetByID($ID);
@@ -557,7 +566,7 @@ class CALLForumPMFolder
 	public static function Delete($ID)
 	{
 		global $DB;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if($ID < FORUM_SystemFolder)
 		return false;
 

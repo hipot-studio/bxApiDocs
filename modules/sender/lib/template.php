@@ -7,15 +7,37 @@
  */
 namespace Bitrix\Sender;
 
-use Bitrix\Main\Application;
-use Bitrix\Main\Entity;
+use Bitrix\Main\DB;
+use Bitrix\Main\ORM;
+use Bitrix\Main\Type as MainType;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Loader;
+use Bitrix\Fileman\Block\Editor as BlockEditor;
+use Bitrix\Fileman\Block\EditorMail as BlockEditorMail;
 
 Loc::loadMessages(__FILE__);
 
-class TemplateTable extends Entity\DataManager
+/**
+ * Class TemplateTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Template_Query query()
+ * @method static EO_Template_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Template_Result getById($id)
+ * @method static EO_Template_Result getList(array $parameters = array())
+ * @method static EO_Template_Entity getEntity()
+ * @method static \Bitrix\Sender\EO_Template createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sender\EO_Template_Collection createCollection()
+ * @method static \Bitrix\Sender\EO_Template wakeUpObject($row)
+ * @method static \Bitrix\Sender\EO_Template_Collection wakeUpCollection($rows)
+ */
+class TemplateTable extends ORM\Data\DataManager
 {
 	const LOCAL_DIR_IMG = '/images/sender/preset/template/';
+	public const PER_PAGE_LIMIT = 9;
+	private static array $loadedTemplates = [];
 
 	/**
 	 * Handler of event that return array of templates
@@ -33,8 +55,13 @@ class TemplateTable extends Entity\DataManager
 			return $resultList;
 		}
 
+		if (!empty(self::$loadedTemplates[$templateId]))
+		{
+			return self::$loadedTemplates[$templateId];
+		}
+
 		$localPathOfIcon = static::LOCAL_DIR_IMG . 'my.png';
-		$fullPathOfIcon = \Bitrix\Main\Loader::getLocal($localPathOfIcon);
+		//$fullPathOfIcon = Loader::getLocal($localPathOfIcon);
 
 		// return only active templates, but if requested template by id return any
 		$filter = array();
@@ -47,19 +74,50 @@ class TemplateTable extends Entity\DataManager
 			$filter['ACTIVE'] = 'Y';
 		}
 
-		$templateDb = static::getList(array('filter' => $filter, 'order' => array('ID' => 'DESC')));
-		while($template = $templateDb->fetch())
+		$templateDb = static::getList([
+			'filter' => $filter,
+			'order' => ['ID' => 'DESC'],
+			'limit' => self::PER_PAGE_LIMIT,
+		]);
+
+		$count = static::getCount($filter);
+
+		while ($template = $templateDb->fetch())
 		{
 			$resultList[] = array(
 				'TYPE' => 'USER',
 				'ID' => $template['ID'],
 				'NAME' => $template['NAME'],
-				'ICON' => (!empty($fullPathOfIcon) ? '/bitrix'.$localPathOfIcon : ''),
-				'HTML' => $template['CONTENT']
+				'ICON' => '',//(!empty($fullPathOfIcon) ? '/bitrix'.$localPathOfIcon : ''),
+				'FIELDS' => array(
+					'MESSAGE' => array(
+						'CODE' => 'MESSAGE',
+						'VALUE' => Security\Sanitizer::fixTemplateStyles($template['CONTENT']),
+						'ON_DEMAND' => static::isContentForBlockEditor($template['CONTENT'])
+					),
+					'SUBJECT' => array(
+						'CODE' => 'SUBJECT',
+						'VALUE' => $template['NAME'],
+					),
+				),
+				'COUNT' => $count,
 			);
 		}
-
+		self::$loadedTemplates[$templateId] = $resultList;
 		return $resultList;
+	}
+
+	/**
+	 * Increment use counter.
+	 *
+	 * @return bool
+	 */
+	public static function incUseCount($id)
+	{
+ 		return static::update($id, array(
+			'USE_COUNT' => new DB\SqlExpression('?# + 1', 'USE_COUNT'),
+			'DATE_USE' => new MainType\DateTime()
+		))->isSuccess();
 	}
 
 	/**
@@ -98,41 +156,85 @@ class TemplateTable extends Entity\DataManager
 			'CONTENT' => array(
 				'data_type' => 'string',
 				'required' => true,
-				'title' => Loc::getMessage('SENDER_ENTITY_TEMPLATE_FIELD_TITLE_CONTENT')
+				'title' => Loc::getMessage('SENDER_ENTITY_TEMPLATE_FIELD_TITLE_CONTENT'),
+				'save_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getSaveModificator'),
+				'fetch_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getFetchModificator'),
+			),
+			'USE_COUNT' => array(
+				'data_type' => 'integer',
+				'default_value' => 0,
+				'required' => true,
+			),
+			'DATE_INSERT' => array(
+				'data_type' => 'datetime',
+				'required' => true,
+				'default_value' => new MainType\DateTime(),
+			),
+			'DATE_USE' => array(
+				'data_type' => 'datetime',
 			),
 		);
 	}
 
 	/**
-	 * Handler of before delete event
-	 * @param Entity\Event $event
-	 * @return Entity\EventResult
+	 * @param ORM\Event $event
+	 * @return ORM\EventResult
 	 */
+	public static function onBeforeAdd(ORM\Event $event)
+	{
+		$result = new ORM\EventResult;
+		$data = $event->getParameters();
+		$data['fields']['CONTENT'] = Security\Sanitizer::fixTemplateStyles($data['fields']['CONTENT']);
+		$result->modifyFields($data['fields']);
+
+		return $result;
+	}
+
+	public static function onAfterAdd(ORM\Event $event)
+	{
+		$result = new ORM\EventResult;
+		$data = $event->getParameters();
+		if (isset($data['fields']['CONTENT']))
+		{
+			\Bitrix\Sender\FileTable::syncFiles($data['primary']['ID'], 1, $data['fields']['CONTENT']);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Handler of before delete event.
+	 *
+	 * @param ORM\Event $event Event.
+	 * @return ORM\EventResult
+	 */
+	public static function onBeforeUpdate(ORM\Event $event)
+	{
+		$result = new ORM\EventResult;
+
+		$data = $event->getParameters();
+		if (array_key_exists('CONTENT', $data['fields']))
+		{
+			$data['fields']['CONTENT'] = Security\Sanitizer::fixTemplateStyles($data['fields']['CONTENT']);
+			$result->modifyFields($data['fields']);
+			\Bitrix\Sender\FileTable::syncFiles($data['primary']['ID'], 1, $data['fields']['CONTENT']);
+		}
+
+		return $result;
+	}
 	
 	/**
-	* <p>Обработчик события <code>onBeforeDelete</code>. Метод статический. </p>
-	*
-	*
-	* @param mixed $Bitrix  Данные для удаления.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $Entity  
-	*
-	* @param Event $event  
-	*
-	* @return \Bitrix\Main\Entity\EventResult 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sender/templatetable/onbeforedelete.php
-	* @author Bitrix
-	*/
-	public static function onBeforeDelete(Entity\Event $event)
+	 * Handler of before delete event.
+	 * 
+	 * @param ORM\Event $event Event.
+	 * @return ORM\EventResult
+	 */
+	public static function onBeforeDelete(ORM\Event $event)
 	{
-		$result = new Entity\EventResult;
+		$result = new ORM\EventResult;
 		$data = $event->getParameters();
 		$chainListDb = MailingChainTable::getList(array(
-			'select' => array('ID', 'SUBJECT', 'MAILING_ID', 'MAILING_NAME' => 'MAILING.NAME'),
+			'select' => array('ID', 'SUBJECT', 'MAILING_ID', 'MAILING_NAME' => 'TITLE'),
 			'filter' => array('TEMPLATE_TYPE' => 'USER', 'TEMPLATE_ID' => $data['primary']['ID']),
 			'order' => array('MAILING_NAME' => 'ASC', 'ID')
 		));
@@ -152,9 +254,13 @@ class TemplateTable extends Entity\DataManager
 				$message .= Loc::getMessage('SENDER_ENTITY_TEMPLATE_DELETE_ERROR_MAILING', array('#NAME#' => $mailingName)) . "\n" . $messageItem . "\n";
 			}
 
-			$result->addError(new Entity\EntityError($message));
+			$result->addError(new ORM\EntityError($message));
 		}
 
+		if (!$result->getErrors())
+		{
+			\Bitrix\Sender\FileTable::syncFiles($data['primary']['ID'], 1, '');
+		}
 		return $result;
 	}
 
@@ -166,7 +272,8 @@ class TemplateTable extends Entity\DataManager
 	 */
 	public static function isContentForBlockEditor($content)
 	{
-		return \Bitrix\Fileman\Block\Editor::isContentSupported($content);
+		Loader::includeModule('fileman');
+		return BlockEditor::isContentSupported($content);
 	}
 
 	/**
@@ -194,81 +301,45 @@ class TemplateTable extends Entity\DataManager
 			PostingRecipientTable::setPersonalizeList($params['PERSONALIZE_LIST']);
 		}
 
-
-		\CJSCore::RegisterExt("editor_mailblock", Array(
-			"js" => array(
-				"/bitrix/js/sender/editor_mailblock.js",
-			),
-			"rel" => array()
-		));
-		\CJSCore::Init(array("editor_mailblock"));
-
 		static $isInit;
 
 		$isDisplayBlockEditor = ($templateType && $templateId) || static::isContentForBlockEditor($fieldValue);
 
-		$editorHeight = 650;
+		$editorHeight = '650px';
 		$editorWidth = '100%';
+
+		Loader::includeModule('fileman');
+
+		\CJSCore::RegisterExt("sender_editor", Array(
+			"js" => array("/bitrix/js/sender/editor/htmleditor.js"),
+			"rel" => array()
+		));
+		\CJSCore::Init(array("sender_editor"));
 
 		ob_start();
 		?>
 		<div id="bx-sender-visual-editor-<?=$fieldName?>" style="<?if($isDisplayBlockEditor):?>display: none;<?endif;?>">
-		<?
-		if(\Bitrix\Main\Config\Option::get('fileman', 'use_editor_3') == 'Y'):
-			\Bitrix\Main\Loader::includeModule('fileman');
-		?>
-		<script>
-			BX.ready(function(){
-				<?if(!$isInit): $isInit = true;?>
-					var letterManager = new SenderLetterManager;
-					letterManager.setMailBlockList(<?=\CUtil::PhpToJSObject(\Bitrix\Sender\Preset\MailBlock::getBlockForVisualEditor());?>);
-					letterManager.setPlaceHolderList(<?=\CUtil::PhpToJSObject(\Bitrix\Sender\PostingRecipientTable::getPersonalizeList());?>);
-				<?endif;?>
-			});
+			<script>
+				BX.ready(function(){
+					<?if(!$isInit): $isInit = true;?>
+						var letterManager = new SenderLetterManager;
+						letterManager.setPlaceHolderList(<?=\CUtil::PhpToJSObject(PostingRecipientTable::getPersonalizeList());?>);
+					<?endif;?>
+				});
 
-			BX.message({
-				"BXEdMailBlocksTitle" : "<?=Loc::getMessage('SENDER_TEMPLATE_EDITOR_MAILBLOCK')?>",
-				"BXEdMailBlocksSearchPlaceHolder" : "<?=Loc::getMessage('SENDER_TEMPLATE_EDITOR_MAILBLOCK_SEARCH')?>",
-				"BXEdPlaceHolderSelectorTitle" : "<?=Loc::getMessage('SENDER_TEMPLATE_EDITOR_PLACEHOLDER')?>"
-			});
-		</script>
-		<?\CFileMan::AddHTMLEditorFrame(
-			$fieldName,
-			$fieldValue,
-			false,
-			"text",
-			array(
-				'height' => $editorHeight,
-				'width' => $editorWidth
-			),
-			"N",
-			0,
-			"",
-			"onfocus=\"t=this\"",
-			false,
-			!$isUserHavePhpAccess,
-			false,
-			array(
-				//'templateID' => $str_SITE_TEMPLATE_ID,
-				'componentFilter' => array('TYPE' => 'mail'),
-				'limit_php_access' => !$isUserHavePhpAccess
-			)
-		);?>
-		<?
-		else:
-			$fieldValue = htmlspecialcharsback($fieldValue);
-			?>
-			<br>
-			<?=Loc::getMessage("SENDER_ENTITY_TEMPLATE_NOTE_OLD_EDITOR", array("%LINK_START%" => '<a href="/bitrix/admin/settings.php?mid=fileman&lang=' . LANGUAGE_ID . '">',	"%LINK_END%" => '</a>'))?>
-			<br>
-			<br>
-			<textarea class="typearea" style="width:<?=$editorWidth?>;height:<?=$editorHeight?>px;" name="<?=$fieldName?>" id="bxed_<?=$fieldName?>" wrap="virtual"><?= htmlspecialcharsbx($fieldValue)?></textarea>
-			<?
-		endif;
-		?>
+				BX.message({
+					"BXEdPlaceHolderSelectorTitle" : "<?=Loc::getMessage('SENDER_TEMPLATE_EDITOR_PLACEHOLDER')?>"
+				});
+			</script>
+			<textarea id="bxed_<?=htmlspecialcharsbx($fieldName)?>"
+				name="<?=htmlspecialcharsbx($fieldName)?>"
+				style="height: <?=htmlspecialcharsbx($editorHeight)?>; width: <?=htmlspecialcharsbx($editorWidth)?>;"
+				class="typearea"
+			><?=htmlspecialcharsbx($fieldValue)?></textarea>
+
 		</div>
 
-		<div id="bx-sender-block-editor-<?=$fieldName?>" style="<?if(!$isDisplayBlockEditor):?>display: none;<?endif;?>">
+		<div id="bx-sender-block-editor-<?=htmlspecialcharsbx($fieldName)?>" style="<?if(!$isDisplayBlockEditor):?>display: none;<?endif;?>">
 			<br/>
 			<input type="hidden" name="<?=htmlspecialcharsbx($templateTypeInput)?>" value="<?=htmlspecialcharsbx($templateType)?>" />
 			<input type="hidden" name="<?=htmlspecialcharsbx($templateIdInput)?>" value="<?=htmlspecialcharsbx($templateId)?>" />
@@ -287,7 +358,7 @@ class TemplateTable extends Entity\DataManager
 					$url = $contentUrl;
 				}
 			}
-			echo \Bitrix\Fileman\Block\EditorMail::show(array(
+			echo BlockEditorMail::show(array(
 				'id' => $fieldName,
 				'charset' => $charset,
 				'site' => $site,

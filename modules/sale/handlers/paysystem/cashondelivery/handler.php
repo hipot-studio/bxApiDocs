@@ -19,7 +19,7 @@ class CashOnDeliveryHandler extends PaySystem\BaseServiceHandler
 	 * @param Request|null $request
 	 * @return PaySystem\ServiceResult
 	 */
-	static public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, Request $request = null)
 	{
 		return new PaySystem\ServiceResult();
 	}
@@ -27,7 +27,7 @@ class CashOnDeliveryHandler extends PaySystem\BaseServiceHandler
 	/**
 	 * @return array
 	 */
-	static public function getCurrencyList()
+	public function getCurrencyList()
 	{
 		return array();
 	}

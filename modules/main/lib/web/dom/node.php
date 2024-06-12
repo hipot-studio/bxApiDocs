@@ -47,6 +47,8 @@ abstract class Node
 	/*@var bool $bxClosable*/
 	public $bxClosable = true;
 
+	public $bxNodeFoundCloseTag = false;
+
 	public function __construct()
 	{
 		$this->init();
@@ -88,7 +90,7 @@ abstract class Node
 
 		if(self::$isNodeListAsArray)
 		{
-			return count($this->attributes) > 0;
+			return !empty($this->attributes);
 		}
 		else
 		{
@@ -104,6 +106,11 @@ abstract class Node
 	public function getNodeName()
 	{
 		return $this->nodeName;
+	}
+
+	public function setNodeName($a)
+	{
+		$this->nodeName = $a;
 	}
 
 	public function getNodeValue()
@@ -229,7 +236,7 @@ abstract class Node
 	{
 		if(self::$isNodeListAsArray)
 		{
-			return (count($this->getChildNodes()) > 0);
+			return (!empty($this->getChildNodes()));
 		}
 		else
 		{
@@ -250,7 +257,7 @@ abstract class Node
 		return false;
 	}
 
-	/*
+	/**
 	 * Adds the node newChild to the end of the list of children of this node.
 	 * If the newChild is already in the tree, it is first removed.
 	 * */
@@ -259,7 +266,7 @@ abstract class Node
 		$this->insertBefore($newChild);
 	}
 
-	public function insertBefore(Node $newChild, Node $refChild = null)
+	public function insertBefore(Node $newChild, Node $refChild = null, $removeExist = true)
 	{
 		if($newChild->getOwnerDocument() !== $this->getOwnerDocument())
 		{
@@ -271,7 +278,7 @@ abstract class Node
 			throw new DomException('Node refChild not found in childList', DomException::NOT_FOUND_ERR);
 		}
 
-		if($this->haveChild($newChild))
+		if ($removeExist && $this->haveChild($newChild))
 		{
 			$this->removeChild($newChild);
 		}
@@ -333,12 +340,12 @@ abstract class Node
 		return $oldChild;
 	}
 
-	static public function replaceChild(Node $newChild, Node $oldChild)
+	public function replaceChild(Node $newChild, Node $oldChild)
 	{
 		throw new DomException('Not implemented');
 	}
 
-	static public function isEqual(Node $node = null)
+	public function isEqual(Node $node = null)
 	{
 		if($node && $node === $this)
 		{
@@ -379,20 +386,21 @@ abstract class Node
 		$this->getOwnerDocument()->getParser()->parse($html, $this);
 	}
 
-	/*
+	/**
 	 * @param string $queryString
 	 * @return Node[]
 	 * */
-	static public function querySelectorAll($queryString)
+
+	public function querySelectorAll($queryString)
 	{
 		return QueryEngine::getQuerySelectorEngine()->query($queryString, $this);
 	}
 
-	/*
+	/**
 	 * @param string $queryString
 	 * @return Node|null
 	 * */
-	static public function querySelector($queryString)
+	public function querySelector($queryString)
 	{
 		$list = QueryEngine::getQuerySelectorEngine()->query($queryString, $this, 1);
 		return current($list);
@@ -404,7 +412,7 @@ abstract class Node
 		return current($list);
 	}
 
-	static public function toString()
+	public function toString()
 	{
 		throw new DomException('Not implemented');
 	}

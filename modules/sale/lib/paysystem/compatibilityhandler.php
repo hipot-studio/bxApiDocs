@@ -3,29 +3,46 @@
 namespace Bitrix\Sale\PaySystem;
 
 use Bitrix\Main\Application;
-use Bitrix\Main\Entity\EntityError;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Request;
+use Bitrix\Main\Type;
 use Bitrix\Sale\Payment;
 use Bitrix\Main\IO;
 
+Loc::loadMessages(__FILE__);
+
+/**
+ * Class CompatibilityHandler
+ * @package Bitrix\Sale\PaySystem
+ */
 class CompatibilityHandler extends ServiceHandler implements ICheckable
 {
 	/**
 	 * @param Request $request
 	 * @return mixed
 	 */
-	static public function getPaymentIdFromRequest(Request $request) {}
+	public function getPaymentIdFromRequest(Request $request)
+	{
+		return array();
+	}
 
 	/**
 	 * @param Payment $payment
 	 * @return mixed
 	 */
-	protected function isTestMode(Payment $payment = null) {}
+	protected function isTestMode(Payment $payment = null)
+	{
+		return false;
+	}
 
 	/**
 	 * @return mixed
 	 */
-	protected function getUrlList() {}
+	protected function getUrlList()
+	{
+		return array();
+	}
 
 	/**
 	 * @param Payment $payment
@@ -48,7 +65,7 @@ class CompatibilityHandler extends ServiceHandler implements ICheckable
 			$content = $this->includeFile('payment.php');
 
 			$buffer = ob_get_contents();
-			if (strlen($buffer) > 0)
+			if ($buffer <> '')
 				$content = $buffer;
 
 			$result->setTemplate($content);
@@ -57,7 +74,44 @@ class CompatibilityHandler extends ServiceHandler implements ICheckable
 
 		if ($this->service->getField('ENCODING') != '')
 		{
-			// define("BX_SALE_ENCODING", $this->service->getField('ENCODING'));
+			define("BX_SALE_ENCODING", $this->service->getField('ENCODING'));
+			AddEventHandler('main', 'OnEndBufferContent', array($this, 'OnEndBufferContent'));
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param Payment|null $payment
+	 * @param string $template
+	 * @return ServiceResult
+	 */
+	public function showTemplate(Payment $payment = null, $template = '')
+	{
+		$result = new ServiceResult();
+
+		$this->getParamsBusValue($payment);
+
+		if ($this->initiateMode == self::STREAM)
+		{
+			$this->includeFile('payment.php');
+		}
+		else if ($this->initiateMode == self::STRING)
+		{
+			ob_start();
+			$content = $this->includeFile('payment.php');
+
+			$buffer = ob_get_contents();
+			if ($buffer <> '')
+				$content = $buffer;
+
+			$result->setTemplate($content);
+			ob_end_clean();
+		}
+
+		if ($this->service->getField('ENCODING') != '')
+		{
+			define("BX_SALE_ENCODING", $this->service->getField('ENCODING'));
 			AddEventHandler('main', 'OnEndBufferContent', array($this, 'OnEndBufferContent'));
 		}
 
@@ -68,14 +122,62 @@ class CompatibilityHandler extends ServiceHandler implements ICheckable
 	 * @param Payment $payment
 	 * @return mixed
 	 */
-	static public function getParamsBusValue(Payment $payment = null)
+	public function getParamsBusValue(Payment $payment = null)
 	{
-		/** @var \Bitrix\Sale\PaymentCollection $paymentCollection */
-		$paymentCollection = $payment->getCollection();
+		$orderId = 0;
+		$orderFields = array();
+		$paymentFields = array();
+		$relatedData = array();
 
-		$order = $paymentCollection->getOrder();
+		if ($payment !== null)
+		{
+			/** @var \Bitrix\Sale\PaymentCollection $paymentCollection */
+			$paymentCollection = $payment->getCollection();
 
-		\CSalePaySystemAction::InitParamArrays($order->getFieldValues(), $order->getId(), '', array(), $payment->getFieldValues());
+			$order = $paymentCollection->getOrder();
+
+			if ($order->getId() > 0)
+			{
+				$orderId = $order->getId();
+				$orderFields = $order->getFieldValues();
+				$paymentFields = $payment->getFieldValues();
+			}
+		}
+
+		if ($orderId <= 0)
+		{
+			$data = Manager::getHandlerDescription($this->service->getField('ACTION_FILE'));
+			$templateParams = $this->getExtraParams();
+
+			$relatedData['TEMPLATE_PARAMS'] = array();
+			foreach ($data['CODES'] as $codeId => $code)
+			{
+				if (array_key_exists($codeId, $templateParams))
+				{
+					$code['VALUE'] = $templateParams[$codeId];
+					$relatedData['TEMPLATE_PARAMS'][$codeId] = $code;
+				}
+			}
+
+			if (isset($templateParams['ORDER']))
+				$orderFields = $templateParams['ORDER'];
+
+			if (isset($templateParams['BASKET_ITEMS']))
+			{
+				$relatedData['BASKET_ITEMS'] = $templateParams['BASKET_ITEMS'];
+				unset($templateParams['BASKET_ITEMS']);
+			}
+
+			if (isset($templateParams['TAX_LIST']))
+			{
+				$relatedData['TAX_LIST'] = $templateParams['TAX_LIST'];
+				unset($templateParams['TAX_LIST']);
+			}
+
+			$paymentFields['PAY_SYSTEM_ID'] = $this->service->getField('ID');
+		}
+
+		\CSalePaySystemAction::InitParamArrays($orderFields, $orderId, '', $relatedData, $paymentFields);
 
 		return $GLOBALS['SALE_INPUT_PARAMS'];
 	}
@@ -116,17 +218,20 @@ class CompatibilityHandler extends ServiceHandler implements ICheckable
 	 * @param Request $request
 	 * @return mixed
 	 */
-	static public function getEntityIds(Request $request) {}
-
-	/**
-	 * @return array
-	 */
-	static public function getCurrencyList()
+	public function getEntityIds(Request $request)
 	{
 		return array();
 	}
 
-	static public function getPrice(Payment $payment)
+	/**
+	 * @return array
+	 */
+	public function getCurrencyList()
+	{
+		return array();
+	}
+
+	public function getPrice(Payment $payment)
 	{
 		$paySystemId = $payment->getPaymentSystemId();
 		$psData = Manager::getById($paySystemId);
@@ -190,7 +295,7 @@ class CompatibilityHandler extends ServiceHandler implements ICheckable
 
 	/**
 	 * @param Payment $payment
-	 * @return ServiceResult
+	 * @return string|boolean
 	 */
 	public function check(Payment $payment)
 	{
@@ -210,4 +315,186 @@ class CompatibilityHandler extends ServiceHandler implements ICheckable
 
 		return false;
 	}
+
+	protected function includeDescription(): array
+	{
+		$data = array();
+
+		$documentRoot = Application::getDocumentRoot();
+		$handler = $this->service->getField('ACTION_FILE');
+
+		$psTitle = '';
+		$arPSCorrespondence = array();
+
+		$actionFile = $documentRoot.$handler.'/.description.php';
+		if (IO\File::isFileExists($actionFile))
+		{
+			require $actionFile;
+
+			if ($arPSCorrespondence)
+			{
+				$codes = $this->convertCodesToNewFormat($arPSCorrespondence);
+
+				if ($codes)
+					$data = array('NAME' => $psTitle, 'SORT' => 100, 'CODES' => $codes);
+			}
+		}
+
+		if (isset($data["CODES"]) && is_array($data["CODES"]))
+		{
+			$data["CODES"] = $this->filterDescriptionCodes($data["CODES"]);
+		}
+
+		return $data;
+	}
+
+	/**
+	 * @param array $arPSCorrespondence
+	 * @return array
+	 */
+	private function convertCodesToNewFormat(array $arPSCorrespondence)
+	{
+		if ($arPSCorrespondence)
+		{
+			foreach ($arPSCorrespondence as $i => $property)
+			{
+				if ($property['TYPE'] == 'SELECT')
+				{
+					$options = array();
+					foreach ($property['VALUE'] as $code => $value)
+						$options[$code] = $value['NAME'];
+
+					$arPSCorrespondence[$i] = array(
+						'NAME' => $property['NAME'],
+						'INPUT' => array(
+							'TYPE' => 'ENUM',
+							'OPTIONS' => $options
+						),
+						'SORT' => $property['SORT'],
+					);
+				}
+				else if ($property['TYPE'] == 'FILE')
+				{
+					$arPSCorrespondence[$i] = array(
+						'NAME' => $property['NAME'],
+						'INPUT' => array(
+							'TYPE' => 'FILE'
+						),
+						'SORT' => $property['SORT'],
+					);
+				}
+				else if ($property['TYPE'] == 'CHECKBOX')
+				{
+					$arPSCorrespondence[$i] = array(
+						'NAME' => $property['NAME'],
+						'INPUT' => array(
+							'TYPE' => 'Y/N'
+						),
+						'SORT' => $property['SORT'],
+					);
+
+					if (isset($property['VALUE']))
+					{
+						$arPSCorrespondence[$i]['VALUE'] = $property['VALUE'];
+					}
+				}
+
+				if (array_key_exists('DESCR', $property))
+					$arPSCorrespondence[$i]['DESCRIPTION'] = $property['DESCR'];
+
+				if (!isset($arPSCorrespondence[$i]['GROUP']))
+					$arPSCorrespondence[$i]['GROUP'] = (isset($property['GROUP'])) ? $property['GROUP'] : 'PS_OTHER';
+			}
+
+			return $arPSCorrespondence;
+		}
+
+		return array();
+	}
+
+	/**
+	 * @return array
+	 */
+	public function getDemoParams()
+	{
+		$data = array(
+			'ORDER' => array(
+				'ACCOUNT_NUMBER' => 'A1',
+				'DATE_INSERT' => new Type\DateTime(),
+				'CURRENCY' => 'RUB',
+				'SHOULD_PAY' => 2000,
+				'PRICE' => 2000,
+				'SUM_PAID' => 0,
+			),
+			'TAX_LIST' => array(
+				array(
+					'TAX_NAME' => Loc::getMessage('SALE_COMPATIBILITY_TAX'),
+					'IS_IN_PRICE' => 'Y',
+					'VALUE_MONEY' => 200,
+					'VALUE' => 0.1,
+					'IS_PERCENT' => 10
+				)
+			),
+			'BASKET_ITEMS' => array(
+				array(
+					'NAME' => Loc::getMessage('SALE_COMPATIBILITY_BASKET_ITEM_NAME'),
+					'IS_VAT_IN_PRICE' => true,
+					'PRICE' => 900,
+					'VAT_RATE' => 0.1,
+					'QUANTITY' => 2,
+					'MEASURE_NAME' => Loc::getMessage('SALE_COMPATIBILITY_BASKET_ITEM_MEASURE'),
+					'CURRENCY' => 'RUB'
+				)
+			),
+			'SELLER_CITY' => Loc::getMessage('SALE_COMPATIBILITY_BANK_CITY'),
+			'SELLER_BCITY' => Loc::getMessage('SALE_COMPATIBILITY_BANK_CITY'),
+			'SELLER_ADDRESS' => Loc::getMessage('SALE_COMPATIBILITY_BANK_ADDRESS'),
+			'SELLER_PHONE' => '+76589321451',
+			'SELLER_BANK_IBAN' => '1989 000 92',
+			'SELLER_BANK_SWIFT' => '0000000000',
+			'SELLER_BANK_PHONE' => '+76589321451',
+			'SELLER_BANK' => Loc::getMessage('SALE_COMPATIBILITY_BANK_NAME'),
+			'SELLER_RS' => '0000 0000 0000 0000 0000',
+			'SELLER_BANK_ACCNO' => '0000 0000 0000 0000 0000',
+			'SELLER_INN' => '000011112222',
+			'SELLER_EU_INN' => '000011112222',
+			'SELLER_REG' => '1615 00 785',
+			'SELLER_KPP' => '123456789',
+			'SELLER_NAME' => Loc::getMessage('SALE_COMPATIBILITY_COMPANY_NAME'),
+			'SELLER_BIK' => '0123456',
+			'SELLER_BIC' => '0123456',
+			'SELLER_BANK_BLZ' => '0123456',
+			'SELLER_KS' => '1111 1111 1111 1111',
+			'SELLER_BANK_ROUTENO' => '1111 1111 1111 1111',
+			'BUYER_NAME' => Loc::getMessage('SALE_COMPATIBILITY_BUYER_COMPANY_NAME'),
+			'BUYER_INN' => '0123456789',
+			'BUYER_PHONE' => '79091234523',
+			'BUYER_FAX' => '88002000600',
+			'BUYER_ADDRESS' => Loc::getMessage('SALE_COMPATIBILITY_BUYER_COMPANY_ADDRESS'),
+			'BUYER_PAYER_NAME' => Loc::getMessage('SALE_COMPATIBILITY_BUYER_NAME_CONTACT'),
+			'SELLER_DIR_POS' => Loc::getMessage('SALE_COMPATIBILITY_DIRECTOR_POSITION'),
+			'SELLER_DIR' => Loc::getMessage('SALE_COMPATIBILITY_DIRECTOR_NAME'),
+			'SELLER_ACC_POS' => Loc::getMessage('SALE_COMPATIBILITY_ACCOUNTANT_POSITION'),
+			'SELLER_ACC' => Loc::getMessage('SALE_COMPATIBILITY_ACCOUNTANT_NAME'),
+			'SELLER_EMAIL' => 'my@company.com',
+			'COMMENT1' => Loc::getMessage('SALE_COMPATIBILITY_COMMENT1'),
+			'COMMENT2' => Loc::getMessage('SALE_COMPATIBILITY_COMMENT2'),
+		);
+
+		if (Loader::includeModule('crm') && Loader::includeModule('iblock'))
+		{
+			$arFilter = array(
+				'IBLOCK_ID' => intval(\CCrmCatalog::EnsureDefaultExists()),
+				'CHECK_PERMISSIONS' => 'N',
+				'!PROPERTY_TYPE' => 'G'
+			);
+
+			$dbRes = \CIBlockProperty::GetList(array(), $arFilter);
+			while ($arRow = $dbRes->Fetch())
+				$data['BASKET_ITEMS'][0]['PROPERTY_'.$arRow['ID']] = 'test';
+		}
+
+		return $data;
+	}
+
 }

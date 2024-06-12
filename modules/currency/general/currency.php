@@ -1,22 +1,12 @@
-<?
-use Bitrix\Main,
-	Bitrix\Main\ModuleManager,
-	Bitrix\Main\Localization\Loc,
-	Bitrix\Currency;
+<?php
+
+use Bitrix\Main;
+use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Currency;
 
 Loc::loadMessages(__FILE__);
 
-
-/**
- * <b>CCurrency</b> - класс для управления валютами: добавление, удаление, перечисление.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/index.php
- * @author Bitrix
- */
 class CAllCurrency
 {
 	protected static $currencyCache = array();
@@ -25,75 +15,18 @@ class CAllCurrency
 * @deprecated deprecated since currency 9.0.0
 * @see CCurrency::GetByID()
 */
-	
-	/**
-	* <p>Метод возвращает массив языконезависимых параметров валюты по ее коду <b>currency</b>. Метод является оболочкой метода <a href="http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/ccurrency__getbyid.a0947d8b.php">CCurrency::GetByID</a>. Нестатический метод.</p> <p></p> <div class="note"> <b>Важно!</b> Метод устарел и не поддерживается с версии 9.0.0.</div>
-	*
-	*
-	* @param string $currency  
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/ccurrency__getcurrency.205e6985.php
-	* @author Bitrix
-	* @deprecated deprecated since currency 9.0.0  ->  CCurrency::GetByID()
-	*/
 	public static function GetCurrency($currency)
 	{
 		return CCurrency::GetByID($currency);
 	}
 
-	
-	/**
-	* <p>Выполняет проверку полей валюты при добавлении или изменении. Нестатический метод.</p>
-	*
-	*
-	* @param  $strCurrencyID = false Равен <b>ADD</b> или <b>UPDATE</b> с учетом регистра. Если значение в другом
-	* регистре или другое значение - вернет <i>false</i> без текста ошибки
-	* (exception). Если значение равно <b>UPDATE</b>, то дополнительно проверяется
-	* <b>CurrencyID</b>. Если значение пустое - вернет ошибку, если не пустое, то
-	* обрежет до 3 символов.
-	*
-	* @return boolean <p>В случае успеха возвращает <i>true</i>. В случае ошибки - <i>false</i>.
-	* Текст ошибки можно получить через <code>$APPLICATION-&gt;GetException()</code>.</p><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* $arFields = array(
-	* 		'CURRENCY' =&gt; 'руб',
-	* 		'AMOUNT_CNT' =&gt; 1,
-	* 		'AMOUNT' =&gt; 0
-	* 	);
-	* 	
-	* 	$boolRes = CCurrency::CheckFields('ADD', $arFields);
-	* 	if (!$boolRes)
-	* 	{
-	* 		if ($ex = $APPLICATION-&gt;GetException())
-	* 		{
-	* 			$strError = $ex-&gt;GetString();
-	* 			ShowError($strError);
-	* 		}
-	* 	}
-	* 	
-	* 	//<
-	* 	Вернет ошибки по полям CURRENCY и AMOUNT
-	* 	*
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/checkfields.php
-	* @author Bitrix
-	*/
-	static public function CheckFields($ACTION, &$arFields, $strCurrencyID = false)
+	public static function CheckFields($ACTION, &$arFields, $strCurrencyID = false)
 	{
 		global $APPLICATION, $DB, $USER;
 
 		$arMsg = array();
 
-		$ACTION = strtoupper($ACTION);
+		$ACTION = mb_strtoupper($ACTION);
 		if ($ACTION != 'UPDATE' && $ACTION != 'ADD')
 			return false;
 		if (!is_array($arFields))
@@ -143,7 +76,7 @@ class CAllCurrency
 			}
 			else
 			{
-				$arFields['CURRENCY'] = strtoupper($arFields['CURRENCY']);
+				$arFields['CURRENCY'] = mb_strtoupper($arFields['CURRENCY']);
 				$currencyExist = Currency\CurrencyTable::getList(array(
 					'select' => array('CURRENCY'),
 					'filter' => array('=CURRENCY' => $arFields['CURRENCY'])
@@ -165,6 +98,28 @@ class CAllCurrency
 			$strCurrencyID = Currency\CurrencyManager::checkCurrencyID($strCurrencyID);
 			if ($strCurrencyID === false)
 				$arMsg[] = array('id' => 'CURRENCY','text' => Loc::getMessage('BT_MOD_CURR_ERR_CURR_CUR_ID_BAD'));
+			$iterator = Currency\CurrencyTable::getList(array(
+				'select' => array('*'),
+				'filter' => array('=CURRENCY' => $strCurrencyID)
+			));
+			$row = $iterator->fetch();
+			unset($iterator);
+			if (!empty($row) && $row['BASE'] == 'Y')
+			{
+				if (array_key_exists('AMOUNT_CNT', $arFields))
+				{
+					$arFields['AMOUNT_CNT'] = (int)$arFields['AMOUNT_CNT'];
+					if ($arFields['AMOUNT_CNT'] != 1)
+						$arMsg[] = array('id' => 'AMOUNT_CNT','text' => Loc::getMessage('BX_CURRENCY_ERR_CURR_BASE_AMOUNT_CNT_BAD'));
+				}
+				if (array_key_exists('AMOUNT', $arFields))
+				{
+					$arFields['AMOUNT'] = (float)$arFields['AMOUNT'];
+					if ($arFields['AMOUNT'] != 1)
+						$arMsg[] = array('id' => 'AMOUNT','text' => Loc::getMessage('BX_CURRENCY_ERR_CURR_BASE_AMOUNT_BAD'));
+				}
+			}
+			unset($row);
 		}
 
 		if (empty($arMsg))
@@ -239,11 +194,7 @@ class CAllCurrency
 				{
 					if (empty($settings) || !is_array($settings))
 						continue;
-					$langAction = 'ADD';
-					if ($ACTION == 'UPDATE')
-					{
-						$langAction = (CCurrencyLang::isExistCurrencyLanguage($currency, $lang) ? 'UPDATE' : 'ADD');
-					}
+					$langAction = (CCurrencyLang::isExistCurrencyLanguage($currency, $lang) ? 'UPDATE' : 'ADD');
 					$checkLang = CCurrencyLang::checkFields($langAction, $settings, $currency, $lang, true);
 					$settings['CURRENCY'] = $currency;
 					$settings['LID'] = $lang;
@@ -267,52 +218,6 @@ class CAllCurrency
 		return true;
 	}
 
-	
-	/**
-	* <p>Метод добавляет новую валюту, если ее еще не было. После добавления новой валюты необходимо установить ее языкозависимые параметры в помощью метода <a href="http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrencylang/ccurrencylang__add.7ce2349e.php">CCurrencyLang::Add</a>. Нестатический метод.</p>
-	*
-	*
-	* @param array $arFields  <p>Ассоциативный массив параметров валюты, в котором ключами
-	* являются названия параметров, а значениями - значения
-	* параметров.</p> 	  <p>Допустимые названия параметров:</p> <ul> <li>
-	* <b>CURRENCY</b> - трехсимвольный код валюты (обязательный);</li> <li>
-	* <b>AMOUNT_CNT</b> - количество единиц валюты по-умолчанию, которое
-	* учавствует в задании курса валюты (например, если 10 Датских крон
-	* стоят 48.7 рублей, то 10 - это количество единиц);</li>  <li> <b>AMOUNT</b> - курс
-	* валюты по-умолчанию (одна из валют сайта должна иметь курс 1, она
-	* называется базовой, остальные валюты имеют курс относительно
-	* базовой валюты);</li>  <li> <b>SORT</b> - порядок сортировки;</li> <li> <b>NUMCODE</b> -
-	* трехзначный цифровой код валюты;</li>  <li> <b>BASE</b> - флаг (Y/N) является
-	* ли валюта базовой (если для добавляемой валюты указано <b>Y</b> и в
-	* системе уже есть некоторая базовая валюта, то флаг с существующей
-	* валюты будет снят и <b>AMOUNT</b> у базовой валюты станет равен <b>1</b>);</li>
-	* <li> <b>CREATED_BY</b> - ID пользователя, добавившего валюту;</li>  <li> <b>MODIFIED_BY</b>
-	* - ID последнего пользователя, изменившего валюту.</li>  </ul>
-	*
-	* @return string <p>Метод возвращает код добавленной валюты (сбрасывает кеш
-	* <b>currency_currency_list</b> и <b>currency_base_currency</b> в случае успешного добавления).
-	* Или <i>false</i> в случае ошибки (текст ошибки берётся через
-	* <code>$APPLICATION-&gt;GetException()</code>).</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // Добавим новую валюту "Исландские кроны"
-	* $arFields = array(
-	*    "CURRENCY" =&gt; "ISK",
-	*    "AMOUNT" =&gt; 44.8378,
-	*    "AMOUNT_CNT" =&gt; 100,
-	*    "SORT" =&gt; 250
-	* );
-	* CCurrency::Add($arFields);
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/ccurrency__add.17dc7357.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		global $DB;
@@ -343,6 +248,7 @@ class CAllCurrency
 			unset($settings, $lang);
 		}
 
+		Currency\CurrencyTable::getEntity()->cleanCache();
 		Currency\CurrencyManager::updateBaseRates($arFields['CURRENCY']);
 		Currency\CurrencyManager::clearCurrencyCache();
 
@@ -354,35 +260,6 @@ class CAllCurrency
 		return $arFields["CURRENCY"];
 	}
 
-	
-	/**
-	* <p>Метод изменяет параметры валюты <b>currency</b> на параметры, указанные в массиве <i>arFields</i>. Языкозависимые параметры (название, формат и прочее) обновляются отдельно, через класс <a href="http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrencylang/ccurrencylang__update.8a1e7a7b.php">CCurrencyLang</a>. Нестатический метод.</p>   <p>Сбрасывает кеш <b>currency_currency_list</b> и <b>currency_base_currency</b> в случае успешного обновления (только если произошел запрос к базе). Так же сбросит тегированный кеш <b>currency_id_КОД_ВАЛЮТЫ</b>.</p>
-	*
-	*
-	* @param string $currency  Код валюты, параметры которой нужно изменить.
-	*
-	* @param array $arFields  Массив новых параметров валюты.          <ul> <li> <b>CURRENCY</b> -
-	* трехсимвольный код валюты (обязательный). Должно совпадать с
-	* кодом <b>currency</b> изменяемой валюты;</li>                     <li> <b>AMOUNT_CNT</b> -
-	* количество единиц валюты по-умолчанию, которое участвует в
-	* задании курса валюты (например, если 10 Датских крон стоят 48.7
-	* рублей, то 10 - это количество единиц);</li>                     <li> <b>AMOUNT</b> -
-	* курс валюты по-умолчанию (одна из валют сайта должна иметь курс 1,
-	* она называется базовой, остальные валюты имеют курс относительно
-	* базовой валюты);</li>                     <li> <b>SORT</b> - порядок сортировки;</li> <li>
-	* <b>NUMCODE</b> - трехзначный цифровой код валюты;</li>  <li> <b>BASE</b> - флаг (Y/N)
-	* является ли валюта базовой;</li> <li> <b>MODIFIED_BY</b> - ID последнего
-	* пользователя, изменившего валюту.</li>                     <p>Если в массиве
-	* нет ни одного из полей, то обращения к базе данных не будет, но
-	* вернет код валюты.</p>          </ul>
-	*
-	* @return bool <p>Код валюты, параметры которой изменили, или <i>false</i> в случае
-	* ошибки (текст получается через <code>$APPLICATION-&gt;GetException()</code>).</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/ccurrency__update.16586d51.php
-	* @author Bitrix
-	*/
 	public static function Update($currency, $arFields)
 	{
 		global $DB;
@@ -421,6 +298,7 @@ class CAllCurrency
 		}
 		if (!empty($strUpdate) || isset($arFields['LANG']))
 			Currency\CurrencyManager::clearCurrencyCache();
+		Currency\CurrencyTable::getEntity()->cleanCache();
 
 		foreach (GetModuleEvents("currency", "OnCurrencyUpdate", true) as $arEvent)
 			ExecuteModuleEventEx($arEvent, array($currency, $arFields));
@@ -428,28 +306,6 @@ class CAllCurrency
 		return $currency;
 	}
 
-	
-	/**
-	* <p>Метод удаляет валюту с кодом <b>currency</b>. Удаляются в том числе все введенные курсы для этой валюты, а так же языкозависимые свойства валюты. Нестатический метод.</p> <p>Перед удалением вызывает событие <b>OnBeforeCurrencyDelete</b>, где можно отменить удаление. Формат обработчика: <code>boolean Handler($currency)</code>.</p> <p>Сбрасывает кеш <b>currency_currency_list</b> и <b>currency_base_currency</b>. Так же сбросит тегированный кеш <b>currency_id_КОД_ВАЛЮТЫ</b>.</p>
-	*
-	*
-	* @param string $currency  Код валюты.
-	*
-	* @return bool <p>Метод возвращает <i>True</i> в случае успешного удаления и <i>False</i> - в
-	* противном случае </p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* CCurrency::Delete("USD");
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/ccurrency__delete.140a51ba.php
-	* @author Bitrix
-	*/
 	public static function Delete($currency)
 	{
 		global $DB;
@@ -489,57 +345,14 @@ class CAllCurrency
 		$DB->Query("delete from b_catalog_currency_rate where CURRENCY = '".$sqlCurrency."'", true);
 
 		Currency\CurrencyManager::clearTagCache($currency);
+		Currency\CurrencyTable::getEntity()->cleanCache();
+		Currency\CurrencyLangTable::getEntity()->cleanCache();
 
 		if (isset(self::$currencyCache[$currency]))
 			unset(self::$currencyCache[$currency]);
 		return $DB->Query("delete from b_catalog_currency where CURRENCY = '".$sqlCurrency."'", true);
 	}
 
-	
-	/**
-	* <p>Метод возвращает массив языконезависимых параметров валюты по ее коду <b>currency</b>. Нестатический метод.</p>
-	*
-	*
-	* @param string $currency  Код валюты.
-	*
-	* @return array <p>Ассоциативный массив с ключами:</p><table class="tnormal" width="100%"> <tr> <th
-	* width="20%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>CURRENCY</td>     <td>Код валюты
-	* (трехсимвольный)</td>   </tr> <tr> <td>AMOUNT_CNT</td>     <td>Количество единиц
-	* валюты по-умолчанию, которое учавствует в задании курса валюты
-	* (например, если 10 Датских крон стоят 48.7 рублей, то 10 - это
-	* количество единиц)</td>   </tr> <tr> <td>AMOUNT</td>     <td>Курс валюты
-	* по-умолчанию (одна из валют сайта должна иметь курс 1, она
-	* называется базовой, остальные валюты имеют курс относительно
-	* базовой валюты)</td>   </tr> <tr> <td>SORT</td>     <td>Порядок сортировки.</td> </tr>
-	* <tr> <td>BASE</td>     <td>Флаг (Y/N) является ли валюта базовой.</td> </tr> <tr>
-	* <td>NUMCODE</td>     <td>Трехзначный цифровой код валюты.</td> </tr> <tr>
-	* <td>CREATED_BY</td>     <td>ID пользователя, добавившего валюту.</td> </tr> <tr>
-	* <td>MODIFIED_BY</td>     <td>ID последнего пользователя, изменившего валюту.</td>
-	* </tr> <tr> <td>DATE_UPDATE_FORMAT</td>     <td>Отформатированная в соответствии с
-	* настройками сайта дата последнего изменения записи.</td> </tr> </table><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (!($ar_usd_cur = CCurrency::GetByID("USD")))
-	* {
-	*     echo "Валюта USD не найдена";
-	* }
-	* else
-	* {
-	*     echo "Валюта USD имеет параметры:&lt;pre&gt;";
-	*     print_r($ar_usd_cur);
-	*     echo "&lt;/pre&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/ccurrency__getbyid.a0947d8b.php
-	* @author Bitrix
-	*/
 	public static function GetByID($currency)
 	{
 		$currency = Currency\CurrencyManager::checkCurrencyID($currency);
@@ -576,18 +389,6 @@ class CAllCurrency
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает код базовой валюты.</p> <p>Одна из валют сайта должна иметь курс "по-умолчанию" равный 1. Эта валюта называется базовой. Курс всех валют, кроме базовой, задается  относительно базовой валюты. Нестатический метод.</p>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/ccurrency__getbasecurrency.98c474fc.php
-	* @author Bitrix
-	* @deprecated deprecated since currency 16.0.0  ->  \Bitrix\Currency\CurrencyManager::getBaseCurrency
-	*/
 	public static function GetBaseCurrency()
 	{
 		return Currency\CurrencyManager::getBaseCurrency();
@@ -615,43 +416,6 @@ class CAllCurrency
 		return false;
 	}
 
-	
-	/**
-	* <p>Метод для формирования готового кода выпадающего списка (select) валют. Список валют при построении списка кешируется. Поэтому вывод дополнительных выпадающих списков в рамках одной страницы не приводит к дополнительным запросам к базе данных. Нестатический метод.</p>
-	*
-	*
-	* @param string $sFieldName  Название выпадающего списка.
-	*
-	* @param string $sValue  Код валюты, которую нужно установить в списке выбранной.
-	*
-	* @param string $sDefaultValue = "" Особое значение в списке, которое не соответствует ни одной
-	* валюте. Например, значение "Все" или "Не установлено". В этом случае
-	* код валюты в списке будет пустым. Если параметр пуст, то особое
-	* значение не отображается. Необязательный параметр.
-	*
-	* @param bool $bFullName = True Выводить ли полное имя валюты. Если параметр равен False, то в списке
-	* выводятся только коды валют. Необязательный параметр.
-	*
-	* @param string $JavaFunc = "" Название JavaScript функции, которая вызывается на событие OnChange
-	* списка. Если значение пустое, то функция не вызывается.
-	* Необязательный параметр.
-	*
-	* @param string $sAdditionalParams = "" Строка произвольных дополнительных атрибутов тега &lt;select&gt;
-	* Необязательный параметр.
-	*
-	* @return string <p>Строка, содержащая код для формирования выпадающего списка
-	* валют </p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>// Выведем выпадающий список валют <br>// с именем CURRENCY_DEFAULT, выбранной по умолчанию,<br>// валютой RUB, без особого значения<br><br>echo CCurrency::SelectBox("CURRENCY_DEFAULT",<br>                          "RUB",<br>                          "",<br>                          True, <br>                          "",<br>                          "class='typeselect'");<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/ccurrency__selectbox.a14c0d6e.php
-	* @author Bitrix
-	*/
 	public static function SelectBox($sFieldName, $sValue, $sDefaultValue = '', $bFullName = true, $JavaFunc = '', $sAdditionalParams = '')
 	{
 		$s = '<select name="'.$sFieldName.'"';
@@ -679,83 +443,24 @@ class CAllCurrency
 	 * @deprecated deprecated since currency 16.5.0
 	 * @see \Bitrix\Currency\CurrencyTable::getList
 	 *
-	 * @param string &$by
-	 * @param string &$order
+	 * @param string $by
+	 * @param string $order
 	 * @param string $lang
 	 * @return CDBResult
 	 */
-	
-	/**
-	* <p>Метод возвращает список валют, отсортированный по полю из параметра by в направлении order. Языкозависимые параметры валют берутся для языка, указанного в параметре lang (по умолчанию равен текущему языку). Нестатический метод.</p>
-	*
-	*
-	* @param string &$by  Переменная, содержащая порядок сортировки валют. Допустимые
-	* значения переменной:<br> 	  currency - код валюты<br> 	  name - название валюты
-	* на языке lang<br> 	  sort - индекс сортировки (по-умолчанию)
-	*
-	* @param string &$order  Переменная, содержащая направление сортировки. Допустимые
-	* значения:<br> 	  asc - по возрастанию значений (по-умолчанию) <br> 	  desc -
-	* по убыванию значений.
-	*
-	* @param string $lang = LANGUAGE_ID Код языка, для которого выбираются языкозависимые параметры
-	* валют. Необязательный параметр.
-	*
-	* @return CDBResult <p>Возвращается объект класса CDBResult, каждая запись в котором
-	* представляет собой массив с ключами:</p><table class="tnormal" width="100%"> <tr> <th
-	* width="20%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>CURRENCY</td>     <td>Код валюты
-	* (трехсимвольный)</td>   </tr> <tr> <td>AMOUNT_CNT</td>     <td>Количество единиц
-	* валюты по-умолчанию, которое учавствует в задании курса валюты
-	* (например, если 10 Датских крон стоят 48.7 рублей, то 10 - это
-	* количество единиц)</td>   </tr> <tr> <td>AMOUNT</td>     <td>Курс валюты
-	* по-умолчанию (одна из валют сайта должна иметь курс 1, она
-	* называется базовой, остальные валюты имеют курс относительно
-	* базовой валюты)</td>   </tr> <tr> <td>SORT</td>     <td>Порядок сортировки.</td> </tr>
-	* <tr> <td>DATE_UPDATE</td>     <td>Дата последнего изменения записи (в формате
-	* базы данных).</td> </tr> <tr> <td>BASE</td>     <td>Флаг (Y/N) является ли валюта
-	* базовой.</td> </tr> <tr> <td>NUMCODE</td>     <td>Трехзначный цифровой код
-	* валюты.</td> </tr> <tr> <td>CREATED_BY</td>     <td>ID пользователя, добавившего
-	* валюту.</td> </tr> <tr> <td>MODIFIED_BY</td>     <td>ID последнего пользователя,
-	* изменившего валюту.</td> </tr> <tr> <td>DATE_UPDATE_FORMAT</td>    
-	* <td>Отформатированная в соответствии с настройками сайта дата
-	* последнего изменения записи.</td> </tr> <tr> <td>LID</td>     <td>Код языка.</td> </tr>
-	* <tr> <td>FORMAT_STRING</td>     <td>Строка формата для показа сумм в этой
-	* валюте.</td> </tr> <tr> <td>FULL_NAME</td>     <td>Полное название валюты.</td> </tr> <tr>
-	* <td>DEC_POINT</td>     <td>Символ, который используется при показе сумм в
-	* этой валюте для отображения десятичной точки.</td> </tr> <tr>
-	* <td>THOUSANDS_SEP</td>     <td>Символ, который используется при показе сумм в
-	* этой валюте для отображения разделителя тысяч.</td> </tr> <tr> <td>DECIMALS</td>
-	*     <td>Количество знаков после запятой при показе.</td> </tr> <tr>
-	* <td>HIDE_ZERO</td>     <td>Флаг (Y/N) убирает показ в публичной части
-	* незначащих нулей у дробной части цены.</td> </tr> </table><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // Выведем список валют на текущем языке, отсортированный по названию
-	* // Кроме того выведем сумму 11.95 в формате этой валюты на текущем языке
-	* $lcur = CCurrency::GetList(($by="name"), ($order1="asc"), LANGUAGE_ID);
-	* while($lcur_res = $lcur-&gt;Fetch())
-	* {
-	*     echo "[".$lcur_res["CURRENCY"]."] ".$lcur_res["FULL_NAME"].": ";
-	*     echo CurrencyFormat(11.95, $lcur_res["CURRENCY"])."&lt;br&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrency/ccurrency__getlist.efde2fe7.php
-	* @author Bitrix
-	* @deprecated deprecated since currency 16.5.0  ->  \Bitrix\Currency\CurrencyTable::getList
-	*/
-	public static function GetList(&$by, &$order, $lang = LANGUAGE_ID)
+	public static function GetList($by = 'sort', $order = 'asc', $lang = LANGUAGE_ID)
 	{
 		global $CACHE_MANAGER;
 
-		if (defined("CURRENCY_SKIP_CACHE") && CURRENCY_SKIP_CACHE
-			|| strtolower($by) == "name"
-			|| strtolower($by) == "currency"
-			|| strtolower($order) == "desc")
+		$by = strtolower($by);
+		$order = strtolower($order);
+
+		if (
+			defined("CURRENCY_SKIP_CACHE") && CURRENCY_SKIP_CACHE
+			|| $by == "name"
+			|| $by == "currency"
+			|| $order == "desc"
+		)
 		{
 			/** @noinspection PhpDeprecationInspection */
 			$dbCurrencyList = static::__GetList($by, $order, $lang);
@@ -794,25 +499,23 @@ class CAllCurrency
 	 * @deprecated deprecated since currency 16.5.0
 	 * @see \Bitrix\Currency\CurrencyTable::getList
 	 *
-	 * @param string &$by
-	 * @param string &$order
+	 * @param string $by
+	 * @param string $order
 	 * @param string $lang
 	 * @return CDBResult
 	 */
-	public static function __GetList(&$by, &$order, $lang = LANGUAGE_ID)
+	public static function __GetList($by = 'sort', $order = 'asc', $lang = LANGUAGE_ID)
 	{
 		$lang = substr((string)$lang, 0, 2);
 		$normalBy = strtolower($by);
 		if ($normalBy != 'currency' && $normalBy != 'name')
 		{
 			$normalBy = 'sort';
-			$by = 'sort';
 		}
 		$normalOrder = strtoupper($order);
 		if ($normalOrder != 'DESC')
 		{
 			$normalOrder = 'ASC';
-			$order = 'asc';
 		}
 		switch($normalBy)
 		{
@@ -986,5 +689,4 @@ class CAllCurrency
 
 class CCurrency extends CAllCurrency
 {
-
 }

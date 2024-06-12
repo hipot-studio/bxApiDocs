@@ -1,17 +1,24 @@
 <?php
+
 namespace Bitrix\Seo;
 
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Fields\ArrayField;
+use Bitrix\Main\ORM\Fields\DatetimeField;
+use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\BooleanField;
+use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Seo\Engine;
+use Bitrix\Main\ORM\Query\Join;
 
 Loc::loadMessages(__FILE__);
 
 /**
  * Class AdvEntity
  *
- * Interface for Yandex.Direct and Google AdWords local data mirrors. Contains common fields defeinitions.
+ * Interface for Yandex.Direct and Google Ads local data mirrors. Contains common fields defeinitions.
  *
  * Implemented fields:
  * <ul>
@@ -24,106 +31,82 @@ Loc::loadMessages(__FILE__);
  *
  * @package Bitrix\Seo
  **/
-
 class AdvEntity extends Entity\DataManager
 {
 	const ACTIVE = 'Y';
 	const INACTIVE = 'N';
-
+	
 	protected static $skipRemoteUpdate = false;
-
+	
 	/**
 	 * Returns entity map definition.
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы сущностей внешнего сервиса рекламы. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adventity/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
-			'ID' => array(
-				'data_type' => 'integer',
+			new IntegerField('ID', array(
 				'primary' => true,
 				'autocomplete' => true,
 				'title' => Loc::getMessage('ADV_CAMPAIGN_ENTITY_ID_FIELD'),
-			),
-			'ENGINE_ID' => array(
-				'data_type' => 'integer',
+			)),
+			new IntegerField('ENGINE_ID', array(
 				'required' => true,
 				'title' => Loc::getMessage('ADV_CAMPAIGN_ENTITY_ENGINE_ID_FIELD'),
-			),
-			'ACTIVE' => array(
-				'data_type' => 'boolean',
+			)),
+			new BooleanField('ACTIVE', array(
 				'values' => array(static::INACTIVE, static::ACTIVE),
-			),
-			'OWNER_ID' => array(
-				'data_type' => 'string',
+			)),
+			new StringField('OWNER_ID', array(
 				'required' => true,
 				'title' => Loc::getMessage('ADV_CAMPAIGN_ENTITY_OWNER_ID_FIELD'),
-			),
-			'OWNER_NAME' => array(
-				'data_type' => 'string',
+			)),
+			new StringField('OWNER_NAME', array(
+				'required' => true,
 				'title' => Loc::getMessage('ADV_CAMPAIGN_ENTITY_OWNER_NAME_FIELD'),
-			),
-			'XML_ID' => array(
-				'data_type' => 'string',
+			)),
+			new StringField('XML_ID', array(
 				'required' => true,
 				'title' => Loc::getMessage('ADV_CAMPAIGN_ENTITY_XML_ID_FIELD'),
-			),
-			'NAME' => array(
-				'data_type' => 'string',
+			)),
+			new StringField('NAME', array(
 				'title' => Loc::getMessage('ADV_CAMPAIGN_ENTITY_NAME_FIELD'),
-			),
-			'LAST_UPDATE' => array(
-				'data_type' => 'datetime',
+			)),
+			new DatetimeField('LAST_UPDATE', array(
 				'title' => Loc::getMessage('ADV_CAMPAIGN_ENTITY_LAST_UPDATE_FIELD'),
-			),
-			'SETTINGS' => array(
-				'data_type' => 'text',
+			)),
+			new ArrayField('SETTINGS', array(
 				'title' => Loc::getMessage('ADV_CAMPAIGN_ENTITY_SETTINGS_FIELD'),
-				'serialized' => true,
-			),
-			'ENGINE' => array(
-				'data_type' => 'Bitrix\Seo\SearchEngineTable',
-				'reference' => array('=this.ENGINE_ID' => 'ref.ID'),
-			)
+			)),
+			new Reference("ENGINE", SearchEngineTable::class, Join::on("this.ENGINE_ID", "ref.ID"), [
+				"join_type" => "left",
+			]),
 		);
 	}
-
+	
 	public static function setSkipRemoteUpdate($value)
 	{
 		static::$skipRemoteUpdate = $value;
 	}
-
+	
 	public static function onBeforeAdd(Entity\Event $event)
 	{
 		$result = new Entity\EventResult();
-
-		$result->modifyFields(array(
+		$result->modifyFields([
 			'LAST_UPDATE' => new DateTime(),
-			'ACTIVE' => static::ACTIVE)
-		);
-
+			'ACTIVE' => static::ACTIVE,
+		]);
+		
 		return $result;
 	}
-
+	
 	public static function onBeforeUpdate(Entity\Event $event)
 	{
 		$result = new Entity\EventResult();
-
-		$result->modifyFields(array('LAST_UPDATE' => new DateTime()));
-
+		$result->modifyFields(['LAST_UPDATE' => new DateTime()]);
+		
 		return $result;
 	}
-
+	
 }

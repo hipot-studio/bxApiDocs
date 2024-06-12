@@ -14,12 +14,12 @@ use Bitrix\Seo\IEngine;
 
 if(!defined("BITRIX_CLOUD_ADV_URL"))
 {
-	// define("BITRIX_CLOUD_ADV_URL", 'https://cloud-adv.bitrix.info');
+	define("BITRIX_CLOUD_ADV_URL", 'https://cloud-adv.bitrix.info');
 }
 
 if(!defined("SEO_BITRIX_API_URL"))
 {
-	// define("SEO_BITRIX_API_URL", BITRIX_CLOUD_ADV_URL."/rest/");
+	define("SEO_BITRIX_API_URL", BITRIX_CLOUD_ADV_URL."/rest/");
 }
 
 class Bitrix extends Engine implements IEngine
@@ -46,17 +46,6 @@ class Bitrix extends Engine implements IEngine
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод проверяет, зарегистрирован ли домен. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/bitrix/isregistered.php
-	* @author Bitrix
-	*/
 	public function isRegistered()
 	{
 		return $this->engineRegistered;

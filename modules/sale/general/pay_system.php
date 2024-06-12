@@ -1,24 +1,13 @@
-<?
-use \Bitrix\Sale\Internals\PaySystemActionTable;
+<?php
+use Bitrix\Sale\PaySystem;
+use Bitrix\Sale\Internals\PaySystemActionTable;
 
 IncludeModuleLangFile(__FILE__);
 
 /** @deprecated */
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalepaysystem/index.php
- * @author Bitrix
- * @deprecated
- */
 class CAllSalePaySystem
 {
-	static function DoProcessOrder(&$arOrder, $paySystemId, &$arErrors)
+	public static function DoProcessOrder(&$arOrder, $paySystemId, &$arErrors)
 	{
 		if (intval($paySystemId) > 0)
 		{
@@ -76,7 +65,7 @@ class CAllSalePaySystem
 					foreach ($val[$deliveryId] as $v)
 						$arFilter["ID"][] = $v;
 				}
-				elseif (IntVal($val[$deliveryId]) > 0)
+				elseif (intval($val[$deliveryId]) > 0)
 					$arFilter["ID"][] = $val[$deliveryId];
 			}
 		}
@@ -90,53 +79,6 @@ class CAllSalePaySystem
 		return $arResult;
 	}
 
-	
-	/**
-	* <p>Метод возвращает параметры платежной системы с кодом ID. Если установлен параметр PERSON_TYPE_ID, то возвращаются так же параметры соответствующего обработчика платежной системы. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код платежной системы.
-	*
-	* @param int $PERSON_TYPE_ID = 0 Код типа плательщика. Если установлен, то дополнительно
-	* возвращаются параметры соответствующего обработчика платежной
-	* системы. Иначе - только параметры самой платежной системы.
-	*
-	* @return array <p>Возвращается ассоциативный массив параметров с ключами:</p><table
-	* class="tnormal" width="100%"> <tr> <th width="15%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>ID</td> 
-	*    <td>Код платежной системы.</td> </tr> <tr> <td>LID</td>     <td>Сайт, на котором
-	* работает эта система.</td> </tr> <tr> <td>CURRENCY</td>     <td>Валюта, с которой
-	* работает эта система.</td> </tr> <tr> <td>NAME</td>     <td>Название платежной
-	* системы.</td> </tr> <tr> <td>ACTIVE</td>     <td>Флаг (Y/N) активности системы.</td> </tr>
-	* <tr> <td>SORT</td>     <td>Индекс сортировки.</td> </tr> <tr> <td>DESCRIPTION</td>    
-	* <td>Описание платежной системы.</td> </tr> <tr> <td>PSA_ID</td>     <td>Код
-	* обработчика платежной системы (возвращается, если в метод
-	* передается тип плательщика) </td>   </tr> <tr> <td>PSA_NAME</td>     <td>Название
-	* обработчика (возвращается, если в метод передается тип
-	* плательщика)</td>   </tr> <tr> <td>PSA_ACTION_FILE</td>     <td>Скрипт обработчика
-	* (возвращается, если в метод передается тип плательщика)</td>   </tr> <tr>
-	* <td>PSA_RESULT_FILE</td>     <td>Скрипт запроса результатов (возвращается, если
-	* в метод передается тип плательщика)</td>   </tr> <tr> <td>PSA_NEW_WINDOW</td>    
-	* <td>Флаг (Y/N) открывать ли скрипт обработчика в новом окне
-	* (возвращается, если в метод передается тип плательщика)</td>   </tr>
-	* </table><p>  </p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // Выведем название обработчика платежной системы с кодом $PAY_SYSTEM_ID
-	* // для типа плательщика с кодом $PERSON_TYPE
-	* if ($arPaySys = CSalePaySystem::GetByID($PAY_SYSTEM_ID, $PERSON_TYPE))
-	* {
-	*    echo $arPaySys["PSA_NAME"];
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalepaysystem/csalepaysystem__getbyid.c3560000.php
-	* @author Bitrix
-	*/
 	public static function GetByID($id, $personTypeId = 0)
 	{
 		$id = (int)$id;
@@ -146,14 +88,14 @@ class CAllSalePaySystem
 		{
 			$select = array_merge(array('ID', 'NAME', 'DESCRIPTION', 'ACTIVE', 'SORT'), self::getAliases());
 
-			$dbRes = \Bitrix\Sale\Internals\PaySystemActionTable::getList(array(
+			$dbRes = PaySystem\Manager::getList(array(
 				'select' => $select,
 				'filter' => array('ID' => $id)
 			));
 		}
 		else
 		{
-			$dbRes = \Bitrix\Sale\Internals\PaySystemActionTable::getById($id);
+			$dbRes = PaySystemActionTable::getById($id);
 		}
 
 		if ($result = $dbRes->fetch())
@@ -195,7 +137,7 @@ class CAllSalePaySystem
 	{
 		global $DB, $USER;
 
-		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && strlen($arFields["NAME"])<=0)
+		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && $arFields["NAME"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGPS_EMPTY_NAME"), "ERROR_NO_NAME");
 			return false;
@@ -203,34 +145,12 @@ class CAllSalePaySystem
 
 		if (is_set($arFields, "ACTIVE") && $arFields["ACTIVE"]!="Y")
 			$arFields["ACTIVE"] = "N";
-		if (is_set($arFields, "SORT") && IntVal($arFields["SORT"])<=0)
+		if (is_set($arFields, "SORT") && intval($arFields["SORT"])<=0)
 			$arFields["SORT"] = 100;
 
 		return True;
 	}
 
-	
-	/**
-	* <p>Метод обновляет параметры платежной системы с кодом ID в соответствии со значениями из массива arFields. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код платежной системы.
-	*
-	* @param array $arFields  Ассоциативный массив новых параметров платежной системы, в
-	* котором ключами являются названия параметров, а значениями -
-	* соответствующие значения.<br>  	  Допустимые ключи: 		<ul> <li> <b>LID</b> -
-	* сайт платежной системы;</li>  			<li> <b>CURRENCY</b> - валюта платежной
-	* системы;</li>  			<li> <b>NAME</b> - название платежной системы;</li>  			<li>
-	* <b>ACTIVE</b> - флаг (Y/N) активности 				платежной системы;</li>  			<li> <b>SORT</b> -
-	* индекс сортировки;</li>  			<li> <b>DESCRIPTION</b> - описание.</li>  		</ul>
-	*
-	* @return int <p>Возвращается код измененной записи или <i>false</i> в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalepaysystem/csalepaysystem__update.cba446b8.php
-	* @author Bitrix
-	*/
 	public static function Update($id, $arFields)
 	{
 		if (isset($arFields['LID']))
@@ -247,47 +167,25 @@ class CAllSalePaySystem
 		return CSalePaySystemAction::Update($id, $arFields);
 	}
 
-	
-	/**
-	* <p>Метод удаляет платежную систему с кодом ID. Если к платежной системе с кодом ID привязаны заказы, то эта платежная система удалена не будет. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код платежной системы.
-	*
-	* @return bool <p>Возвращается <i>true</i> в случае успешного удаления и <i>false</i> - в
-	* противном случае.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* CSalePaySystem::Delete(25);
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalepaysystem/csalepaysystem__delete.c8c60e70.php
-	* @author Bitrix
-	*/
 	public static function Delete($id)
 	{
 		$id = (int)$id;
 
-		$dbRes = \Bitrix\Sale\Internals\PaySystemActionTable::getById($id);
+		$dbRes = PaySystemActionTable::getById($id);
 		if (!$dbRes->fetch())
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGPS_ORDERS_TO_PAYSYSTEM"), "ERROR_ORDERS_TO_PAYSYSTEM");
 			return false;
 		}
 
-		$dbRes = \Bitrix\Sale\Internals\PaySystemActionTable::delete($id);
+		$dbRes = PaySystem\Manager::delete($id);
 
 		return $dbRes->isSuccess();
 	}
 
 	public static function getNewIdsFromOld($ids, $personTypeId = null)
 	{
-		$dbRes = PaySystemActionTable::getList(array(
+		$dbRes = PaySystem\Manager::getList(array(
 			'select' => array('ID'),
 			'filter' => array('PAY_SYSTEM_ID' => $ids)
 		));
@@ -301,7 +199,7 @@ class CAllSalePaySystem
 					'filter' => array(
 						'SERVICE_ID' => $ps['ID'],
 						'SERVICE_TYPE' => \Bitrix\Sale\Services\PaySystem\Restrictions\Manager::SERVICE_TYPE_PAYMENT,
-						'=CLASS_NAME' => '\Bitrix\Sale\Services\PaySystem\Restrictions\PersonType'
+						'=CLASS_NAME' => '\\'.\Bitrix\Sale\Services\PaySystem\Restrictions\PersonType::class
 					)
 				));
 
@@ -326,7 +224,7 @@ class CAllSalePaySystem
 			'filter' => array(
 				'SERVICE_ID' => $paySystemId,
 				'SERVICE_TYPE' => \Bitrix\Sale\Services\PaySystem\Restrictions\Manager::SERVICE_TYPE_PAYMENT,
-				'=CLASS_NAME' => '\Bitrix\Sale\Services\PaySystem\Restrictions\PersonType'
+				'=CLASS_NAME' => '\\'.\Bitrix\Sale\Services\PaySystem\Restrictions\PersonType::class
 			)
 		));
 		while ($restriction = $dbRestriction->fetch())
@@ -335,114 +233,6 @@ class CAllSalePaySystem
 		return $data;
 	}
 
-	
-	/**
-	* <p>Метод возвращает результат выборки записей из платежных систем в соответствии со своими параметрами. Нестатический метод.</p>
-	*
-	*
-	* @param array $arOrder = array(("SORT"=>"ASC" Массив, в соответствии с которым сортируются результирующие
-	* записи. Массив имеет вид: 		         <pre class="syntax">array(<br>"название_поля1"
-	* =&gt; "направление_сортировки1",<br>"название_поля2" =&gt;
-	* "направление_сортировки2",<br>. . .<br>)</pre>        		В качестве
-	* "название_поля<i>N</i>" может стоять любое поле 		платежных систем, а в
-	* качестве "направление_сортировки<i>X</i>" могут быть значения "<i>ASC</i>"
-	* (по возрастанию) и "<i>DESC</i>" (по убыванию).         <br><br>        		Если массив
-	* сортировки имеет несколько элементов, то 		результирующий набор
-	* сортируется последовательно по каждому элементу (т.е. сначала
-	* сортируется по первому элементу, потом результат сортируется по
-	* второму и т.д.). 
-	*
-	* @param mixed $NAME  Массив, в соответствии с которым фильтруются 		записи платежных
-	* систем. Массив имеет вид: 		         <pre
-	* class="syntax">array(<br>"[модификатор1][оператор1]название_поля1" =&gt;
-	* "значение1",<br>"[модификатор2][оператор2]название_поля2" =&gt;
-	* "значение2",<br>. . .<br>)</pre>        Удовлетворяющие фильтру записи
-	* возвращаются в результате, а записи, которые не удовлетворяют
-	* условиям фильтра, отбрасываются.         <br><br>        	Допустимыми
-	* являются следующие модификаторы: 		         <ul> <li> <b> 	!</b> - отрицание;</li>
-	*          			           <li> <b> 	+</b> - значения null, 0 и пустая строка так же
-	* удовлетворяют условиям фильтра.</li>          		</ul>        	Допустимыми
-	* являются следующие операторы: 	         <ul> <li> <b>&gt;=</b> - значение поля
-	* больше или равно передаваемой в фильтр величины;</li>          			          
-	* <li> <b>&gt;</b> - значение поля строго больше передаваемой в фильтр
-	* величины;</li>          			           <li> <b>&lt;=</b> - значение поля меньше или
-	* равно передаваемой в фильтр величины;</li>          			           <li> <b>&lt;</b> -
-	* значение поля строго меньше передаваемой в фильтр величины;</li>     
-	*     			           <li> <b>@</b> - значение поля находится в передаваемом в
-	* фильтр разделенном запятой списке значений;</li>          			           <li>
-	* <b>~</b> - значение поля проверяется на соответствие передаваемому в
-	* фильтр шаблону;</li>          			           <li> <b>%</b> - значение поля
-	* проверяется на соответствие передаваемой в фильтр строке в
-	* соответствии с языком запросов.</li>          	</ul>        В качестве
-	* "название_поляX" может стоять любое поле 		заказов.         <br><br>       
-	* 	Значение по умолчанию - пустой массив array() - означает, что
-	* результат отфильтрован не будет.
-	*
-	* @param NAM $ASC  Массив полей, по которым группируются записи 		платежных систем.
-	* Массив имеет вид: 		         <pre class="syntax">array("название_поля1",<br>     
-	* "группирующая_функция2" =&gt; "название_поля2", ...)</pre>        	В качестве
-	* "название_поля<i>N</i>" может стоять любое поле 		платежных систем. В
-	* качестве группирующей функции могут стоять: 		         <ul> <li> 	<b> 	COUNT</b> -
-	* подсчет количества;</li>          			           <li> <b>AVG</b> - вычисление среднего
-	* значения;</li>          			           <li> <b>MIN</b> - вычисление минимального
-	* значения;</li>          			           <li> 	<b> 	MAX</b> - вычисление максимального
-	* значения;</li>          			           <li> <b>SUM</b> - вычисление суммы.</li>          		</ul>
-	* <br>        		Значение по умолчанию - <i>false</i> - означает, что результат
-	* группироваться не будет.
-	*
-	* @param array $arFilter = array() Массив параметров выборки. Может содержать следующие ключи: 		       
-	*  <ul> <li>"<b>nTopCount</b>" - количество возвращаемых методом записей будет
-	* ограничено сверху значением этого ключа;</li>          			           <li> 	любой
-	* ключ, принимаемый методом <b> CDBResult::NavQuery</b> 				в качестве третьего
-	* параметра.</li>          		</ul>        Значение по умолчанию - <i>false</i> -
-	* означает, что параметров выборки нет.
-	*
-	* @param array $arGroupBy = false Массив полей записей, которые будут возвращены методом. Можно
-	* указать только те поля, которые необходимы. Если в массиве
-	* присутствует значение 		"*", то будут возвращены все доступные
-	* поля.         <br><br>        		Значение по умолчанию - пустой массив 		array() -
-	* означает, что будут возвращены все поля основной таблицы запроса.
-	*
-	* @param array $arNavStartParams = false 
-	*
-	* @param array $arSelectFields = array() Код платежной системы.
-	*
-	* @return CDBResult <p>Возвращается объект класса CDBResult, содержащий набор
-	* ассоциативных массивов параметров платежных систем с
-	* ключами:</p><table width="100%" class="tnormal"><tbody> <tr> <th width="15%">Ключ</th>
-	* <th>Описание</th> </tr> <tr> <td>ID</td> <td>Код платежной системы.</td> </tr> <tr>
-	* <td>NAME</td> <td>Название платежной системы.</td> </tr> <tr> <td>ACTIVE</td> <td>Флаг (Y/N)
-	* активности системы.</td> </tr> <tr> <td>SORT</td> <td>Индекс сортировки.</td> </tr>
-	* <tr> <td>DESCRIPTION</td> <td>Описание платежной системы.</td> </tr> <tr> <td>PSA_ID</td>
-	* <td>Код обработчика платежной системы (возвращается, если в метод
-	* передается тип плательщика) </td> </tr> <tr> <td>PSA_NAME</td> <td>Название
-	* обработчика (возвращается, если в метод передается тип
-	* плательщика)</td> </tr> <tr> <td>PSA_ACTION_FILE</td> <td>Скрипт обработчика
-	* (возвращается, если в метод передается тип плательщика)</td> </tr> <tr>
-	* <td>PSA_RESULT_FILE</td> <td>Скрипт запроса результатов (возвращается, если в
-	* метод передается тип плательщика)</td> </tr> <tr> <td>PSA_NEW_WINDOW</td> <td>Флаг
-	* (Y/N) открывать ли скрипт обработчика в новом окне (возвращается,
-	* если в метод передается тип плательщика)</td> 	</tr> <tr> <td>PSA_PERSON_TYPE_ID</td>
-	* <td>Код типа плательщика.</td> </tr> <tr> <td>PSA_PARAMS</td> <td>Параметры вызова
-	* обработчика.</td> </tr> <tr> <td>PSA_HAVE_PAYMENT</td> <td>Есть вариант обработчика
-	* для работы после оформления заказа.</td> </tr> <tr> <td>PSA_HAVE_ACTION</td> <td>Есть
-	* вариант обработчика для мгновенного списания денег.</td> </tr> <tr>
-	* <td>PSA_HAVE_RESULT</td> <td>Есть скрипт запроса результатов.</td> </tr> <tr>
-	* <td>PSA_HAVE_PREPAY</td> <td>Есть вариант обработчика для работы во время
-	* оформления заказа.</td> </tr> </tbody></table><p>Если в качестве параметра
-	* arGroupBy передается пустой массив, то метод вернет число записей,
-	* удовлетворяющих фильтру.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>// Выведем все активные платежные системы для текущего сайта, для типа плательщика с кодом 2, работающие с валютой RUR<br>$db_ptype = CSalePaySystem::GetList($arOrder = Array("SORT"=&gt;"ASC", "PSA_NAME"=&gt;"ASC"), Array("LID"=&gt;SITE_ID, "CURRENCY"=&gt;"RUB", "ACTIVE"=&gt;"Y", "PERSON_TYPE_ID"=&gt;2));<br>$bFirst = True;<br>while ($ptype = $db_ptype-&gt;Fetch())<br>{<br>   ?&gt;&lt;input type="radio" name="PAY_SYSTEM_ID" value="&lt;?echo $ptype["ID"] ?&gt;"&lt;?if ($bFirst) echo " checked";?&gt;&gt;&lt;b&gt;&lt;?echo $ptype["PSA_NAME"] ?&gt;&lt;/b&gt;&lt;br&gt;&lt;?<br>   $bFirst = <i>false</i>;<br>   if (strlen($ptype["DESCRIPTION"])&gt;0)<br>      echo $ptype["DESCRIPTION"]."&lt;br&gt;";<br>   ?&gt;&lt;hr size="1" width="90%"&gt;&lt;?<br>}<br>?&gt;<br>
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalepaysystem/csalepaysystem__getlist.b3a25180.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder = array("SORT" => "ASC", "NAME" => "ASC"), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		if (array_key_exists("PSA_PERSON_TYPE_ID", $arFilter))
@@ -500,7 +290,7 @@ class CAllSalePaySystem
 			foreach ($arGroupBy as $key => $value)
 				$groupBy[$key] = self::getAlias($value);
 		}
-		$dbRes = PaySystemActionTable::getList(
+		$dbRes = PaySystem\Manager::getList(
 			array(
 				'select' => $select,
 				'filter' => $filter,
@@ -576,11 +366,11 @@ class CAllSalePaySystem
 	private static function getAlias($key)
 	{
 		$prefix = '';
-		$pos = strpos($key, 'PSA_');
+		$pos = mb_strpos($key, 'PSA_');
 		if ($pos > 0)
 		{
-			$prefix = substr($key, 0, $pos);
-			$key = substr($key, $pos);
+			$prefix = mb_substr($key, 0, $pos);
+			$key = mb_substr($key, $pos);
 		}
 
 		$aliases = self::getAliases();
@@ -604,26 +394,6 @@ class CAllSalePaySystem
 	 * @return bool|int
 	 * @throws Exception
 	 */
-	
-	/**
-	* <p>Метод добавляет новую платежную систему на основании параметров из массива arFields. Нестатический метод.</p>
-	*
-	*
-	* @param array $arFields  Ассоциативный массив параметров новой платежной системы, в
-	* котором ключами являются названия параметров, а значениями -
-	* соответствующие значения.<br>  		Допустимые ключи: 		<ul> <li> <b>  	 
-	* CURRENCY</b> - валюта платежной системы;</li>  			<li> <b>  	  NAME</b> - название
-	* платежной системы;</li>  			<li> <b>ACTIVE</b> - флаг (Y/N) активности платежной
-	* системы;</li>  			<li> <b>SORT</b> - индекс сортировки;</li>  			<li> <b>DESCRIPTION</b> -
-	* описание.</li>  		</ul>
-	*
-	* @return int <p>Возвращается код измененной записи или <i>false</i> в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalepaysystem/csalepaysystem__add.eba446b8.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		if (isset($arFields['LID']))
@@ -638,4 +408,3 @@ class CAllSalePaySystem
 		return CSalePaySystemAction::add($arFields);
 	}
 }
-?>

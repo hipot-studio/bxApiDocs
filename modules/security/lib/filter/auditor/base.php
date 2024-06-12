@@ -23,7 +23,7 @@ abstract class Base
 	protected $name = '';
 
 
-	public function __construct($splittingChar = '')
+	function __construct($splittingChar = '')
 	{
 		$this->setSplittingChar($splittingChar);
 	}
@@ -39,30 +39,9 @@ abstract class Base
 	 * if ($ob->process($someValue))
 	 *     $someValue = $ob->getFilteredValue();
 	 * </code>
-	 * @param string $value
+	 * @param string $value A value to filter.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод обрабатывает и сохраняет отфильтрованное значение. Возвращает <code>true</code>, если значение было отфильтровано аудитором. Для использования отфильтрованного значения используется <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/filter/auditor/base/getfilteredvalue.php">Base::getFilteredValue</a> (<code>\Bitrix\Security\Filter\Auditor\Base::getFilteredValue</code>).</p>
-	*
-	*
-	* @param string $value  Обрабатываемое значение.
-	*
-	* @return boolean 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* $ob = new Base();
-	* if ($ob-&gt;process($someValue))
-	*     $someValue = $ob-&gt;getFilteredValue();
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/filter/auditor/base/process.php
-	* @author Bitrix
-	*/
 	public function process($value)
 	{
 		$this->initializeFilters();
@@ -73,15 +52,15 @@ abstract class Base
 		$strX = $value;
 		while ($str2 != $strX)
 		{
-				$str2 = $strX;
-				$strX = preg_replace($this->filters['search'], $this->filters['replace'], $str2);
+			$str2 = $strX;
+			$strX = preg_replace($this->filters['search'], $this->filters['replace'], $str2);
 		}
 
 		if ($str2 != $value)
 		{
 			$this->setFilteredValue($str2);
 			$found = true;
-		} 
+		}
 		return $found;
 	}
 
@@ -92,22 +71,6 @@ abstract class Base
 	 * @see Base::process
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает отфильтрованное значение после последней обработки значений.</p> <p>Без параметров</p>
-	*
-	*
-	* @return string 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/filter/auditor/base/process.php">Base::process</a>
-	* (<code>\Bitrix\Security\Filter\Auditor\Base::process</code>)</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/filter/auditor/base/getfilteredvalue.php
-	* @author Bitrix
-	*/
 	public function getFilteredValue()
 	{
 		return $this->filteredValue;
@@ -119,17 +82,6 @@ abstract class Base
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает имя аудитора.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/filter/auditor/base/getname.php
-	* @author Bitrix
-	*/
 	public function getName()
 	{
 		return $this->name;
@@ -141,7 +93,7 @@ abstract class Base
 	 */
 	protected function setFilteredValue($string)
 	{
-			$this->filteredValue = $string;
+		$this->filteredValue = $string;
 	}
 
 

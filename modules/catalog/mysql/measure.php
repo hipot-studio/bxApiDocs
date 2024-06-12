@@ -3,28 +3,13 @@ require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/catalog/general/measure.
 
 class CCatalogMeasure extends CCatalogMeasureAll
 {
-	public static function add($arFields)
-	{
-		global $DB;
-		if (!static::checkFields('ADD', $arFields))
-			return false;
-
-		$arInsert = $DB->PrepareInsert("b_catalog_measure", $arFields);
-		$strSql = "INSERT INTO b_catalog_measure (".$arInsert[0].") VALUES(".$arInsert[1].")";
-
-		$res = $DB->Query($strSql, true, "File: ".__FILE__."<br>Line: ".__LINE__);
-		if (!$res)
-			return false;
-		return (int)$DB->LastID();
-	}
-
 	/**
 	 * @param array $arOrder
 	 * @param array $arFilter
 	 * @param bool|array $arGroupBy
 	 * @param bool|array $arNavStartParams
 	 * @param array $arSelectFields
-	 * @return CCatalogMeasureResult
+	 * @return false|CCatalogMeasureResult
 	 */
 	public static function getList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
@@ -49,12 +34,15 @@ class CCatalogMeasure extends CCatalogMeasureAll
 				unset($selectCodes);
 			}
 		}
+		if (in_array('SYMBOL_RUS', $arSelectFields))
+			$arSelectFields[] = 'SYMBOL';
 
 		$arFields = array(
 			"ID" => array("FIELD" => "CM.ID", "TYPE" => "int"),
 			"CODE" => array("FIELD" => "CM.CODE", "TYPE" => "int"),
 			"MEASURE_TITLE" => array("FIELD" => "CM.MEASURE_TITLE", "TYPE" => "string"),
 			"SYMBOL_RUS" => array("FIELD" => "CM.SYMBOL_RUS", "TYPE" => "string"),
+			"SYMBOL" => array("FIELD" => "CM.SYMBOL_RUS", "TYPE" => "string"),
 			"SYMBOL_INTL" => array("FIELD" => "CM.SYMBOL_INTL", "TYPE" => "string"),
 			"SYMBOL_LETTER_INTL" => array("FIELD" => "CM.SYMBOL_LETTER_INTL", "TYPE" => "string"),
 			"IS_DEFAULT" => array("FIELD" => "CM.IS_DEFAULT", "TYPE" => "char"),

@@ -88,7 +88,7 @@ class InternalSelect extends Select
 		$fields = $documentService->getDocumentFields($fieldType->getDocumentType());
 		foreach ($fields as $key => $field)
 		{
-			if ($field['Type'] == 'select' && substr($key, -10) != '_PRINTABLE')
+			if ($field['Type'] == 'select' && mb_substr($key, -10) != '_PRINTABLE')
 			{
 				$result[$key] = $field;
 				if (isset($field['Alias']) && !$ignoreAliases)
@@ -96,5 +96,15 @@ class InternalSelect extends Select
 			}
 		}
 		return $result;
+	}
+
+	public static function convertPropertyToView(FieldType $fieldType, int $viewMode, array $property): array
+	{
+		if ($viewMode === FieldType::RENDER_MODE_JN_MOBILE)
+		{
+			$property['Type'] = FieldType::SELECT;
+		}
+
+		return parent::convertPropertyToView($fieldType, $viewMode, $property);
 	}
 }

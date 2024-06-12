@@ -28,7 +28,7 @@ class Tools
 	{
 		if($haveDefault)
 		{
-			$optionList = array_merge(array('' => Loc::getMessage('BLOCK_EDITOR_COMMON_DEFAULT')), $optionList);
+			$optionList = array('' => Loc::getMessage('BLOCK_EDITOR_TOOLS_DEFAULT')) + $optionList;
 		}
 
 		$options = '';
@@ -46,15 +46,9 @@ class Tools
 	 */
 	public static function getControlColor()
 	{
-		static $includeColorPicker = false;
-		if(!$includeColorPicker)
-		{
-			$GLOBALS['APPLICATION']->IncludeComponent('bitrix:main.colorpicker', '');
-			$includeColorPicker = true;
-		}
-
-		return '<input type="text" data-bx-editor-tool-input="item" class="bx-editor-color-picker">' .
-			'<span class="bx-editor-color-picker-view"></span>';
+		return '<input type="hidden" data-bx-editor-tool-input="item" class="bx-editor-color-picker">' .
+			'<span class="bx-editor-color-picker-view"></span>' .
+			'<span class="bx-editor-color-picker-text">' . Loc::getMessage('BLOCK_EDITOR_TOOLS_COLOR') .'</span>';
 	}
 
 	/**

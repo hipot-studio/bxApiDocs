@@ -1,11 +1,15 @@
-<?
+<?php
+
 #############################################
 # Bitrix Site Manager Forum					#
 # Copyright (c) 2002-2009 Bitrix			#
-# http://www.bitrixsoft.com					#
+# https://www.bitrixsoft.com					#
 # mailto:admin@bitrixsoft.com				#
 #############################################
-IncludeModuleLangFile(__FILE__); 
+
+use Bitrix\Vote;
+
+IncludeModuleLangFile(__FILE__);
 
 class CAllVoteAnswer
 {
@@ -14,46 +18,80 @@ class CAllVoteAnswer
 		$module_id = "vote";
 		return "<br>Module: ".$module_id."<br>Class: CAllVoteAnswer<br>File: ".__FILE__;
 	}
-	
+
 	public static function CheckFields($ACTION, &$arFields, $ID = 0)
 	{
 		global $APPLICATION;
-		$aMsg = array();
+		global $USER;
+		$aMsg = [];
 		$ID = intval($ID);
-		$ACTION = ($ID > 0 && $ACTION == "UPDATE" ? "UPDATE" : "ADD");
+		$ACTION = ($ID > 0 && $ACTION == 'UPDATE' ? 'UPDATE' : 'ADD');
 
-		unset($arFields["ID"]);
-		if (is_set($arFields, "QUESTION_ID") || $ACTION == "ADD"):
-			$arFields["QUESTION_ID"] = intval($arFields["QUESTION_ID"]);
-			if ($arFields["QUESTION_ID"] <= 0):
-				$aMsg[] = array(
-					"id" => "QUESTION_ID", 
-					"text" => GetMessage("VOTE_FORGOT_QUESTION_ID"));
+		unset($arFields['ID']);
+
+		if (isset($arFields['QUESTION_ID']) || $ACTION == 'ADD'):
+			$arFields['QUESTION_ID'] = intval($arFields['QUESTION_ID'] ?? 0);
+			if ($arFields['QUESTION_ID'] <= 0):
+				$aMsg[] = [
+					'id' => 'QUESTION_ID',
+					'text' => GetMessage('VOTE_FORGOT_QUESTION_ID')
+				];
 			endif;
 		endif;
-		
-		if (is_set($arFields, "MESSAGE") || $ACTION == "ADD"):
-			//$arFields["MESSAGE"] = trim($arFields["MESSAGE"]);
-			$arFields["MESSAGE"] = ($arFields["MESSAGE"] != ' ') ? trim($arFields["MESSAGE"]):' ';
-			if (strlen($arFields["MESSAGE"]) <= 0):
+
+		if (isset($arFields['MESSAGE']) || $ACTION == 'ADD')
+		{
+			$arFields['MESSAGE'] = ($arFields['MESSAGE'] ?? '');
+			if (!$USER || $USER->CanDoOperation('edit_php') !== true)
+			{
+				$arFields['MESSAGE'] = Vote\Inner\Sanitizer::cleanText($arFields['MESSAGE']);
+			}
+			if ($arFields['MESSAGE'] === '')
+			{
+				$aMsg[] = ['id' => 'MESSAGE', 'text' => GetMessage('VOTE_FORGOT_MESSAGE')];
+			}
+		}
+
+		if (array_key_exists('IMAGE_ID', $arFields))
+		{
+			if (!is_array($arFields['IMAGE_ID']))
+			{
+				$arFields['IMAGE_ID'] = intval($arFields['IMAGE_ID']);
+			}
+			else if ($arFields['IMAGE_ID']['name'] == '' && $arFields['IMAGE_ID']['del'] == '')
+			{
+				unset($arFields['IMAGE_ID']);
+			}
+			else if ($str = CFile::CheckImageFile($arFields['IMAGE_ID']))
+			{
 				$aMsg[] = array(
-					"id" => "MESSAGE", 
-					"text" => GetMessage("VOTE_FORGOT_MESSAGE"));
-			endif;
-		endif;
-		
-		if (is_set($arFields, "ACTIVE") || $ACTION == "ADD") $arFields["ACTIVE"] = ($arFields["ACTIVE"] == "N" ? "N" : "Y");
-		unset($arFields["TIMESTAMP_X"]);
-		if (is_set($arFields, "C_SORT") || $ACTION == "ADD") $arFields["C_SORT"] = (intval($arFields["C_SORT"]) > 0 ? intval($arFields["C_SORT"]) : 100);
-		if (is_set($arFields, "COUNTER") || $ACTION == "ADD") $arFields["COUNTER"] = intval($arFields["COUNTER"]);
-		if (is_set($arFields, "FIELD_TYPE") || $ACTION == "ADD") $arFields["FIELD_TYPE"] = intval($arFields["FIELD_TYPE"]);
-		if (is_set($arFields, "FIELD_WIDTH") || $ACTION == "ADD") $arFields["FIELD_WIDTH"] = intval($arFields["FIELD_WIDTH"]);
-		if (is_set($arFields, "FIELD_HEIGHT") || $ACTION == "ADD") $arFields["FIELD_HEIGHT"] = intval($arFields["FIELD_HEIGHT"]);
-		
-		if (is_set($arFields, "FIELD_PARAM") || $ACTION == "ADD") $arFields["FIELD_PARAM"] = substr(trim($arFields["FIELD_PARAM"]), 0, 255);
-		if (is_set($arFields, "COLOR") || $ACTION == "ADD") $arFields["COLOR"] = substr(trim($arFields["COLOR"]), 0, 7);
-		
-		if(!empty($aMsg))
+					'id' => 'IMAGE_ID',
+					'text' => 'Answer: '.$str);
+			}
+			else
+			{
+				$arFields['IMAGE_ID']['MODULE_ID'] = 'vote';
+			}
+		}
+
+		unset($arFields['TIMESTAMP_X']);
+		if (isset($arFields['ACTIVE']) || $ACTION == 'ADD') $arFields['ACTIVE'] = (($arFields['ACTIVE'] ?? 'Y') == 'N' ? 'N' : 'Y');
+		if (isset($arFields['C_SORT']) || $ACTION == 'ADD') $arFields['C_SORT'] = intval($arFields['C_SORT'] ?? 100);
+		if (isset($arFields['COUNTER']) || $ACTION == 'ADD') $arFields['COUNTER'] = intval($arFields['COUNTER'] ?? 0);
+		if (isset($arFields['FIELD_TYPE']) || $ACTION == 'ADD') $arFields['FIELD_TYPE'] = intval($arFields['FIELD_TYPE'] ?? 0);
+		if (isset($arFields['FIELD_WIDTH']) || $ACTION == 'ADD') $arFields['FIELD_WIDTH'] = intval($arFields['FIELD_WIDTH'] ?? 0);
+		if (isset($arFields['FIELD_HEIGHT']) || $ACTION == 'ADD') $arFields['FIELD_HEIGHT'] = intval($arFields['FIELD_HEIGHT'] ?? 0);
+
+		if (isset($arFields['FIELD_PARAM']))
+		{
+			$arFields['FIELD_PARAM'] = ((!$USER || $USER->CanDoOperation('edit_php') !== true)
+				? '' : trim($arFields['FIELD_PARAM']))
+			;
+		}
+
+		if (isset($arFields['COLOR']) || $ACTION == 'ADD') $arFields['COLOR'] = mb_substr(trim($arFields['COLOR'] ?? ''), 0, 7);
+
+		if (!empty($aMsg))
 		{
 			$e = new CAdminException(array_reverse($aMsg));
 			$APPLICATION->ThrowException($e);
@@ -75,6 +113,15 @@ class CAllVoteAnswer
 /***************** /Event ******************************************/
 		if (empty($arFields))
 			return false;
+
+		if (
+			array_key_exists("IMAGE_ID", $arFields) &&
+			is_array($arFields["IMAGE_ID"])
+		)
+		{
+			$arFields["IMAGE_ID"]["MODULE_ID"] = "vote";
+			CFile::SaveForDB($arFields, "IMAGE_ID", "vote");
+		}
 
 		if ($DB->type == "ORACLE")
 			$arFields["ID"] = $DB->NextID("SQ_B_VOTE_ANSWER");
@@ -102,11 +149,20 @@ class CAllVoteAnswer
 			return false;
 /***************** Event onBeforeVoteQuestionUpdate ****************/
 		foreach (GetModuleEvents("vote", "onBeforeVoteAnswerUpdate", true) as $arEvent)
-			if (ExecuteModuleEventEx($arEvent, array(&$ID, &$arFields)) === false)
+			if (ExecuteModuleEventEx($arEvent, array($ID, &$arFields)) === false)
 				return false;
 /***************** /Event ******************************************/
 		if (empty($arFields))
 			return false;
+
+		if (
+			array_key_exists("IMAGE_ID", $arFields) &&
+			is_array($arFields["IMAGE_ID"])
+		)
+		{
+			$arFields["IMAGE_ID"]["MODULE_ID"] = "vote";
+			CFile::SaveForDB($arFields, "IMAGE_ID", "vote");
+		}
 
 		$arFields["~TIMESTAMP_X"] = $DB->GetNowFunction();
 		$strUpdate = $DB->PrepareUpdate("b_vote_answer", $arFields);
@@ -157,7 +213,7 @@ class CAllVoteAnswer
 		else:
 			return false;
 		endif;
-		
+
 		$DB->Query($strSqlEventAnswer, false, $err_mess.__LINE__);
 		$DB->Query($strSqlAnswer, false, $err_mess.__LINE__);
 /***************** Event onAfterVoteAnswerDelete *******************/
@@ -195,7 +251,7 @@ class CAllVoteAnswer
 					break;
 			}
 		}
-		
+
 		$order = ($order!="desc" ? "asc" : "desc");
 		$by = (($by == "s_id" || $by == "s_counter") ? $by : "s_c_sort");
 		if ($by == "s_id")				$strSqlOrder = " ORDER BY A.ID";
@@ -206,6 +262,7 @@ class CAllVoteAnswer
 		$strSqlFrom = "FROM b_vote_answer A WHERE ".$strSqlSearch." and A.QUESTION_ID=".$QUESTION_ID."";
 		$strSql = "SELECT A.* ".$strSqlFrom.$strSqlOrder;
 
+		$arAddParams["nTopCount"] = ($arAddParams["nTopCount"] ?? 0);
 		if ($arAddParams["nTopCount"] > 0)
 		{
 			$arAddParams["nTopCount"] = intval($arAddParams["nTopCount"]);
@@ -230,7 +287,7 @@ class CAllVoteAnswer
 	public static function GetListEx($arOrder = array("ID" => "ASC"), $arFilter=array())
 	{
 		global $DB;
-		
+
 		$arSqlSearch = Array();
 		$strSqlSearch = "";
 		$arSqlOrder = Array();
@@ -245,8 +302,8 @@ class CAllVoteAnswer
 			$key_res = VoteGetFilterOperation($key);
 			$strNegative = $key_res["NEGATIVE"];
 			$strOperation = $key_res["OPERATION"];
-			$key = strtoupper($key_res["FIELD"]);
-			
+			$key = mb_strtoupper($key_res["FIELD"]);
+
 			switch($key)
 			{
 				case "ID":
@@ -308,10 +365,11 @@ class CAllVoteAnswer
 		}
 		if (count($arSqlSearch) > 0)
 			$strSqlSearch = " AND (".implode(") AND (", $arSqlSearch).") ";
-		
+
 		foreach ($arOrder as $by => $order)
 		{
-			$by = strtoupper($by); $order = strtoupper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			$by = (in_array($by, array("ACTIVE", "QUESTION_ID", "C_SORT", "COUNTER")) ? $by : "ID");
 			if ($order!="ASC") $order = "DESC";
 			if ($by == "ACTIVE") $arSqlOrder[] = " VA.ACTIVE ".$order." ";
@@ -320,7 +378,7 @@ class CAllVoteAnswer
 			elseif ($by == "COUNTER") $arSqlOrder[] = " VA.COUNTER ".$order." ";
 			else $arSqlOrder[] = " VA.ID ".$order." ";
 		}
-		DelDuplicateSort($arSqlOrder); 
+		DelDuplicateSort($arSqlOrder);
 		if (count($arSqlOrder) > 0)
 			$strSqlOrder = " ORDER BY ".implode(", ", $arSqlOrder);
 

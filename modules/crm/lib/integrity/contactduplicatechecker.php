@@ -22,7 +22,9 @@ class ContactDuplicateChecker extends DuplicateChecker
 			$secondName = ($processAllFields || in_array('SECOND_NAME', $fieldNames, true)) ? $adapter->getFieldValue('SECOND_NAME', '') : '';
 
 			$criterion = new DuplicatePersonCriterion($lastName, $name, $secondName);
-			$duplicate = $criterion->find(\CCrmOwnerType::Undefined, 20);
+			$criterion->setCategoryId($params->getCategoryId());
+
+			$duplicate = $criterion->find($params->getEntityTypeId() ?? \CCrmOwnerType::Undefined, 20);
 			if($duplicate !== null)
 			{
 				$result[] = $duplicate;
@@ -45,6 +47,19 @@ class ContactDuplicateChecker extends DuplicateChecker
 				$result = array_merge($result, $email);
 			}
 		}
+
+		$requisites = $this->findRequisiteDuplicates($adapter, $params);
+		if (!empty($requisites))
+		{
+			$result = array_merge($result, $requisites);
+		}
+
+		$bankDetails = $this->findBankDetailDuplicates($adapter, $params);
+		if (!empty($bankDetails))
+		{
+			$result = array_merge($result, $bankDetails);
+		}
+
 		return $result;
 	}
 }

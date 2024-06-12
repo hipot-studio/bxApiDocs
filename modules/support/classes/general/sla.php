@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CAllTicketSLA
@@ -154,7 +155,7 @@ class CAllTicketSLA
 					}
 					*/
 
-					$FIRST_SITE_ID = strlen($FIRST_SITE_ID)>0 ? "'".$DB->ForSql($FIRST_SITE_ID)."'" : "null";
+					$FIRST_SITE_ID = $FIRST_SITE_ID <> '' ? "'".$DB->ForSql($FIRST_SITE_ID)."'" : "null";
 					$DB->Update($table, array("FIRST_SITE_ID" => $FIRST_SITE_ID), "WHERE ID=".intval($id), $err_mess.__LINE__);
 				}
 			}
@@ -397,7 +398,7 @@ class CAllTicketSLA
 
 	public static function GetDropDown($siteID="")
 	{
-		if (strlen($siteID)>0 && strtoupper($siteID)!="ALL")
+		if ($siteID <> '' && mb_strtoupper($siteID) != "ALL")
 		{
 			$arFilter = array("SITE" => $siteID);
 		}
@@ -459,14 +460,14 @@ class CAllTicketSLA
 
 		$userID = intval($userID);
 			
-		if( strlen( $coupon ) > 0 )
+		if( $coupon <> '' )
 		{
 			$rsCoupon = CSupportSuperCoupon::GetList( false, array( 'COUPON' => $coupon ) );
 			if($arCoupon = $rsCoupon->Fetch())
 			{
-				if(intval($arCoupon['SLA_ID'] ) > 0)
+				if(intval($arCoupon['SLA_ID']) > 0)
 				{
-					return intval( $arCoupon['SLA_ID'] );
+					return intval($arCoupon['SLA_ID']);
 				}
 			}
 		}
@@ -483,7 +484,7 @@ class CAllTicketSLA
 		$fields = "1";
 		if( $categoryID != null )
 		{
-			$categoryID = intval( $categoryID );
+			$categoryID = intval($categoryID);
 			$fields = "CASE
 						WHEN SC.SLA_ID IS NOT NULL THEN 1
 						ELSE 0
@@ -541,5 +542,3 @@ class CAllTicketSLA
 		return $slaID;
 	}
 }
-
-?>

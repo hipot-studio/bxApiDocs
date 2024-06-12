@@ -3,7 +3,7 @@ Class CIdeaManagmentIdeaComment
 {
 	private $CommentId = false;
 
-	public function __construct($CommentId = false)
+	function __construct($CommentId = false)
 	{
 		$this->SetId($CommentId);
 	}

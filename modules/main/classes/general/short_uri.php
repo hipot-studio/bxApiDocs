@@ -50,7 +50,7 @@ abstract class CBXAllShortUri
 			"	".$strUpdate.", ".
 			"	MODIFIED = ".$DB->CurrentTimeFunction()." ".
 			"WHERE ID = ".$id;
-		$DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		return $id;
 	}
@@ -111,7 +111,7 @@ abstract class CBXAllShortUri
 			"	NUMBER_USED = NUMBER_USED + 1, ".
 			"	LAST_USED = ".$DB->CurrentTimeFunction()." ".
 			"WHERE ID = ".intval($id);
-		$DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 	}
 
 	public static function Delete($id)
@@ -168,7 +168,7 @@ abstract class CBXAllShortUri
 		if (is_set($arFields, "URI") || $addMode)
 		{
 			$arFields["URI"] = trim($arFields["URI"]);
-			if (strlen($arFields["URI"]) <= 0)
+			if ($arFields["URI"] == '')
 			{
 				self::AddError(GetMessage("MN_SU_NO_URI"));
 				return false;
@@ -180,7 +180,7 @@ abstract class CBXAllShortUri
 		if (is_set($arFields, "SHORT_URI") || $addMode)
 		{
 			$arFields["SHORT_URI"] = trim($arFields["SHORT_URI"]);
-			if (strlen($arFields["SHORT_URI"]) <= 0)
+			if ($arFields["SHORT_URI"] == '')
 			{
 				self::AddError(GetMessage("MN_SU_NO_SHORT_URI"));
 				return false;
@@ -192,7 +192,7 @@ abstract class CBXAllShortUri
 
 			//$arFields["SHORT_URI"] = @parse_url($arFields["SHORT_URI"], PHP_URL_PATH);
 			$arFields["SHORT_URI"] = trim($arFields["SHORT_URI"], "/");
-			if (strlen($arFields["SHORT_URI"]) <= 0)
+			if ($arFields["SHORT_URI"] == '')
 			{
 				self::AddError(GetMessage("MN_SU_WRONG_SHORT_URI"));
 				return false;
@@ -218,15 +218,15 @@ abstract class CBXAllShortUri
 
 		if (is_set($arFields, "NUMBER_USED") || $addMode)
 		{
-			$arFields["NUMBER_USED"] = intval($arFields["NUMBER_USED"]);
+			$arFields["NUMBER_USED"] = intval($arFields["NUMBER_USED"] ?? 0);
 			if ($arFields["NUMBER_USED"] <= 0)
 				$arFields["NUMBER_USED"] = 0;
 		}
 
 		return true;
 	}
-	
-	static public function GetHttpStatusCodeText($code)
+
+	public static function GetHttpStatusCodeText($code)
 	{
 		$code = intval($code);
 
@@ -247,7 +247,7 @@ abstract class CBXAllShortUri
 			$m = GetMessage("MN_SU_HTTP_STATUS_".$code);
 			$s1 .= '<option value="'.$code.'"'.($found ? ' selected':'').'>'.(empty($m) ? htmlspecialcharsex($codeText) : htmlspecialcharsex($m)).'</option>'."\n";
 		}
-		if (strlen($defaultValue) > 0)
+		if ($defaultValue <> '')
 			$s .= "<option value='' ".($found ? "" : "selected").">".htmlspecialcharsex($defaultValue)."</option>";
 		return $s.$s1.'</select>';
 	}

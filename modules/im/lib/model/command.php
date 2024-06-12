@@ -8,10 +8,9 @@
 
 namespace Bitrix\Im\Model;
 
-use Bitrix\Main,
-	Bitrix\Main\Localization\Loc;
+use Bitrix\Im\V2\Entity\Command\Command;
+use Bitrix\Main;
 
-Loc::loadMessages(__FILE__);
 
 /**
  * Class CommandTable
@@ -32,7 +31,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Im
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Command_Query query()
+ * @method static EO_Command_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Command_Result getById($id)
+ * @method static EO_Command_Result getList(array $parameters = array())
+ * @method static EO_Command_Entity getEntity()
+ * @method static \Bitrix\Im\Model\EO_Command createObject($setDefaultValues = true)
+ * @method static \Bitrix\Im\Model\EO_Command_Collection createCollection()
+ * @method static \Bitrix\Im\Model\EO_Command wakeUpObject($row)
+ * @method static \Bitrix\Im\Model\EO_Command_Collection wakeUpCollection($rows)
+ */
 
 class CommandTable extends Main\Entity\DataManager
 {
@@ -58,68 +70,68 @@ class CommandTable extends Main\Entity\DataManager
 				'data_type' => 'integer',
 				'primary' => true,
 				'autocomplete' => true,
-				'title' => Loc::getMessage('COMMAND_ENTITY_ID_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_ID_FIELD'),
 			),
 			'BOT_ID' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('COMMAND_ENTITY_BOT_ID_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_BOT_ID_FIELD'),
 			),
 			'APP_ID' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateAppId'),
-				'title' => Loc::getMessage('COMMAND_ENTITY_APP_ID_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_APP_ID_FIELD'),
 				'default_value' => '',
 			),
 			'COMMAND' => array(
 				'data_type' => 'string',
 				'required' => true,
 				'validation' => array(__CLASS__, 'validateCommand'),
-				'title' => Loc::getMessage('COMMAND_ENTITY_COMMAND_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_COMMAND_FIELD'),
 			),
 			'COMMON' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
-				'title' => Loc::getMessage('COMMAND_ENTITY_COMMON_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_COMMON_FIELD'),
 				'default_value' => 'N',
 			),
 			'HIDDEN' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
-				'title' => Loc::getMessage('COMMAND_ENTITY_HIDDEN_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_HIDDEN_FIELD'),
 				'default_value' => 'N',
 			),
 			'EXTRANET_SUPPORT' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
-				'title' => Loc::getMessage('COMMAND_ENTITY_EXTRANET_SUPPORT_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_EXTRANET_SUPPORT_FIELD'),
 				'default_value' => 'N',
 			),
 			'SONET_SUPPORT' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
-				'title' => Loc::getMessage('COMMAND_ENTITY_SONET_SUPPORT_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_SONET_SUPPORT_FIELD'),
 				'default_value' => 'N',
 			),
 			'CLASS' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateClass'),
-				'title' => Loc::getMessage('COMMAND_ENTITY_CLASS_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_CLASS_FIELD'),
 			),
 			'METHOD_COMMAND_ADD' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateMethodCommandAdd'),
-				'title' => Loc::getMessage('COMMAND_ENTITY_METHOD_COMMAND_ADD_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_METHOD_COMMAND_ADD_FIELD'),
 			),
 			'METHOD_LANG_GET' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateMethodLangGet'),
-				'title' => Loc::getMessage('COMMAND_ENTITY_METHOD_LANG_GET_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_METHOD_LANG_GET_FIELD'),
 			),
 			'MODULE_ID' => array(
 				'data_type' => 'string',
 				'required' => true,
 				'validation' => array(__CLASS__, 'validateModuleId'),
-				'title' => Loc::getMessage('COMMAND_ENTITY_MODULE_ID_FIELD'),
+				//'title' => Loc::getMessage('COMMAND_ENTITY_MODULE_ID_FIELD'),
 			),
 		);
 	}
@@ -189,6 +201,39 @@ class CommandTable extends Main\Entity\DataManager
 			new Main\Entity\Validator\Length(null, 50),
 		);
 	}
-}
 
-class_alias("Bitrix\\Im\\Model\\CommandTable", "Bitrix\\Im\\CommandTable", false);
+	public static function onAfterAdd(\Bitrix\Main\ORM\Event $event)
+	{
+		return self::clearCommandCache($event);
+	}
+
+	public static function onAfterUpdate(\Bitrix\Main\ORM\Event $event)
+	{
+		return self::clearCommandCache($event);
+	}
+
+	public static function onAfterDelete(\Bitrix\Main\ORM\Event $event)
+	{
+		return self::clearCommandCache($event);
+	}
+
+	protected static function clearCommandCache(\Bitrix\Main\ORM\Event $event): Main\Entity\EventResult
+	{
+		$id = (int)$event->getParameter('primary')['ID'];
+		$botId = self::getBotId($id);
+
+		if (isset($botId))
+		{
+			Command::cleanCache($botId);
+		}
+
+		return new Main\Entity\EventResult();
+	}
+
+	protected static function getBotId(int $id): ?int
+	{
+		$result = CommandTable::getById($id)->fetch();
+
+		return $result['BOT_ID'] ?: null;
+	}
+}

@@ -2,11 +2,34 @@
 IncludeModuleLangFile(__FILE__);
 class CLightHTMLEditor // LHE
 {
-	public function Init(&$arParams)
+	private $Id;
+	private $cssPath;
+	private $arJSPath;
+	private $bBBCode;
+	private $bRecreate;
+	private $mess;
+	private $messOld;
+	private $bAutorized;
+	private $bUseFileDialogs;
+	private $bUseMedialib;
+	private $bResizable;
+	private $bManualResize;
+	private $bAutoResize;
+	private $bInitByJS;
+	private $bSaveOnBlur;
+	private $content;
+	private $inputName;
+	private $inputId;
+	private $videoSettings;
+	private $jsObjName;
+	private $JSConfig;
+
+	function Init(&$arParams)
 	{
 		global $USER, $APPLICATION;
 		$basePath = '/bitrix/js/fileman/light_editor/';
-		$this->Id = (isset($arParams['id']) && strlen($arParams['id']) > 0) ? $arParams['id'] : 'bxlhe'.substr(uniqid(mt_rand(), true), 0, 4);
+		$this->Id = (isset($arParams['id']) && $arParams['id'] <> '') ? $arParams['id'] : 'bxlhe'.mb_substr(uniqid(mt_rand(), true), 0, 4);
+		$this->Id = preg_replace("/[^a-zA-Z0-9_:\.]/is", "", $this->Id);
 
 		$this->cssPath = $basePath."light_editor.css";
 		$APPLICATION->SetAdditionalCSS($this->cssPath);
@@ -18,8 +41,8 @@ class CLightHTMLEditor // LHE
 			$basePath.'le_core.js'
 		);
 
-		$this->bBBCode = $arParams['BBCode'] === true;
-		$this->bRecreate = $arParams['bRecreate'] === true;
+		$this->bBBCode = ($arParams['BBCode'] ?? null) === true;
+		$this->bRecreate = ($arParams['bRecreate'] ?? null) === true;
 		$arJS = Array();
 		$arCSS = Array();
 
@@ -62,17 +85,19 @@ class CLightHTMLEditor // LHE
 
 		$this->bAutorized = is_object($USER) && $USER->IsAuthorized();
 		$this->bUseFileDialogs = $arParams['bUseFileDialogs'] !== false && $this->bAutorized;
-		$this->bUseMedialib = $arParams['bUseMedialib'] !== false && COption::GetOptionString('fileman', "use_medialib", "Y") == "Y" && CMedialib::CanDoOperation('medialib_view_collection', 0);
+		$this->bUseMedialib = ($arParams['bUseMedialib'] ?? null) !== false && COption::GetOptionString('fileman', "use_medialib", "Y") == "Y" && CMedialib::CanDoOperation('medialib_view_collection', 0);
 
-		$this->bResizable = $arParams['bResizable'] === true;
-		$this->bManualResize = $this->bResizable && $arParams['bManualResize'] !== false;
-		$this->bAutoResize = $arParams['bAutoResize'] !== false;
-		$this->bInitByJS = $arParams['bInitByJS'] === true;
-		$this->bSaveOnBlur = $arParams['bSaveOnBlur'] !== false;
-		$this->content = $arParams['content'];
+		$this->bResizable = ($arParams['bResizable'] ?? null) === true;
+		$this->bManualResize = $this->bResizable && ($arParams['bManualResize'] ?? null) !== false;
+		$this->bAutoResize = ($arParams['bAutoResize'] ?? null) !== false;
+		$this->bInitByJS = ($arParams['bInitByJS'] ?? null) === true;
+		$this->bSaveOnBlur = ($arParams['bSaveOnBlur'] ?? null) !== false;
+		$this->content = ($arParams['content'] ?? null);
+		$arParams['inputName'] ??= null;
 		$this->inputName = isset($arParams['inputName']) ? $arParams['inputName'] : 'lha_content';
+		$arParams['inputId'] ??= null;
 		$this->inputId = isset($arParams['inputId']) ? $arParams['inputId'] : 'lha_content_id';
-		$this->videoSettings = is_array($arParams['videoSettings']) ? $arParams['videoSettings'] : array(
+		$this->videoSettings = is_array($arParams['videoSettings'] ?? null) ? $arParams['videoSettings'] : array(
 				'maxWidth' => 640,
 				'maxHeight' => 480,
 				'WMode' => 'transparent',
@@ -82,15 +107,16 @@ class CLightHTMLEditor // LHE
 				'logo' => ''
 			);
 
-		if (!is_array($arParams['arFonts']) || count($arParams['arFonts']) <= 0)
+		if (!is_array($arParams['arFonts'] ?? null) || count($arParams['arFonts']) <= 0)
 			$arParams['arFonts'] = array('Arial', 'Verdana', 'Times New Roman', 'Courier', 'Tahoma', 'Georgia', 'Optima', 'Impact', 'Geneva', 'Helvetica');
 
-		if (!is_array($arParams['arFontSizes']) || count($arParams['arFontSizes']) <= 0)
+		if (!is_array($arParams['arFontSizes'] ?? null) || count($arParams['arFontSizes']) <= 0)
 			$arParams['arFontSizes'] = array('1' => 'xx-small', '2' => 'x-small', '3' => 'small', '4' => 'medium', '5' => 'large', '6' => 'x-large', '7' => 'xx-large');
 
 		// Tables
 		//$this->arJSPath[] = $this->GetActualPath($basePath.'le_table.js');
-		$this->jsObjName = (isset($arParams['jsObjName']) && strlen($arParams['jsObjName']) > 0) ? $arParams['jsObjName'] : 'LightHTMLEditor'.$this->Id;
+		$this->jsObjName = (isset($arParams['jsObjName']) && $arParams['jsObjName'] <> '') ? $arParams['jsObjName'] : 'LightHTMLEditor'.$this->Id;
+		$this->jsObjName = preg_replace("/[^a-zA-Z0-9_:\.]/is", "", $this->jsObjName);
 
 		if ($this->bResizable)
 		{
@@ -109,21 +135,21 @@ class CLightHTMLEditor // LHE
 			'bBBCode' => $this->bBBCode,
 			'bUseFileDialogs' => $this->bUseFileDialogs,
 			'bUseMedialib' => $this->bUseMedialib,
-			'arSmiles' => $arParams['arSmiles'],
-			'arFonts' => $arParams['arFonts'],
-			'arFontSizes' => $arParams['arFontSizes'],
+			'arSmiles' => ($arParams['arSmiles'] ?? null),
+			'arFonts' => ($arParams['arFonts'] ?? null),
+			'arFontSizes' => ($arParams['arFontSizes'] ?? null),
 			'inputName' => $this->inputName,
 			'inputId' => $this->inputId,
 			'videoSettings' => $this->videoSettings,
 			'bSaveOnBlur' => $this->bSaveOnBlur,
 			'bResizable' => $this->bResizable,
-			'autoResizeSaveSize' => $arParams['autoResizeSaveSize'] !== false,
+			'autoResizeSaveSize' => ($arParams['autoResizeSaveSize'] ?? null) !== false,
 			'bManualResize' => $this->bManualResize,
 			'bAutoResize' => $this->bAutoResize,
 			'bReplaceTabToNbsp' => true,
 			'bSetDefaultCodeView' => isset($arParams['bSetDefaultCodeView']) && $arParams['bSetDefaultCodeView'],
 			'bBBParseImageSize' => isset($arParams['bBBParseImageSize']) && $arParams['bBBParseImageSize'],
-			'smileCountInToolbar' => intVal($arParams['smileCountInToolbar']),
+			'smileCountInToolbar' => intval(($arParams['smileCountInToolbar'] ?? null)),
 			'bQuoteFromSelection' => isset($arParams['bQuoteFromSelection']) && $arParams['bQuoteFromSelection'],
 			'bConvertContentFromBBCodes' => isset($arParams['bConvertContentFromBBCodes']) && $arParams['bConvertContentFromBBCodes'],
 			'oneGif' => '/bitrix/images/1.gif',
@@ -134,9 +160,9 @@ class CLightHTMLEditor // LHE
 		if (!isset($this->JSConfig['bSetDefaultCodeView']) && CLightHTMLEditor::IsMobileDevice())
 			$this->JSConfig['bSetDefaultCodeView'] = true;
 
-		if (isset($arParams['width']) && intVal($arParams['width']) > 0)
+		if (isset($arParams['width']) && intval($arParams['width']) > 0)
 			$this->JSConfig['width'] = $arParams['width'];
-		if (isset($arParams['height']) && intVal($arParams['height']) > 0)
+		if (isset($arParams['height']) && intval($arParams['height']) > 0)
 			$this->JSConfig['height'] = $arParams['height'];
 		if (isset($arParams['toolbarConfig']))
 			$this->JSConfig['toolbarConfig'] = $arParams['toolbarConfig'];
@@ -166,12 +192,12 @@ class CLightHTMLEditor // LHE
 			$this->JSConfig['ctrlEnterHandler'] = $arParams['ctrlEnterHandler'];
 	}
 
-	public static function GetActualPath($path)
+	function GetActualPath($path)
 	{
 		return $path.'?'.@filemtime($_SERVER['DOCUMENT_ROOT'].$path);
 	}
 
-	public function Show($arParams)
+	function Show($arParams)
 	{
 		CUtil::InitJSCore(array('window', 'ajax'));
 		$this->Init($arParams);
@@ -185,13 +211,13 @@ class CLightHTMLEditor // LHE
 			$this->InitMedialibDialogs();
 	}
 
-	public function BuildSceleton()
+	function BuildSceleton()
 	{
 		$width = isset($this->JSConfig['width']) && intval($this->JSConfig['width']) > 0 ? $this->JSConfig['width'] : "100%";
 		$height = isset($this->JSConfig['height']) && intval($this->JSConfig['height']) > 0 ? $this->JSConfig['height'] : "100%";
 
-		$widthUnit = strpos($width, "%") === false ? "px" : "%";
-		$heightUnit = strpos($height, "%") === false ? "px" : "%";
+		$widthUnit = mb_strpos($width, "%") === false ? "px" : "%";
+		$heightUnit = mb_strpos($height, "%") === false ? "px" : "%";
 		$width = intval($width);
 		$height = intval($height);
 
@@ -208,7 +234,7 @@ class CLightHTMLEditor // LHE
 		<?
 	}
 
-	public function InitScripts()
+	function InitScripts()
 	{
 		ob_start();
 		foreach(GetModuleEvents("fileman", "OnIncludeLightEditorScript", true) as $arEvent)
@@ -244,7 +270,7 @@ class CLightHTMLEditor // LHE
 				<?endif;?>
 
 				if (
-					<?= ($this->bRecreate ? 'true' : 'false')?> || 
+					<?= ($this->bRecreate ? 'true' : 'false')?> ||
 					JCLightHTMLEditor.items['<?= $this->Id?>'] == undefined ||
 					!document.body.contains(JCLightHTMLEditor.items['<?= $this->Id?>'].pFrame)
 				)
@@ -275,7 +301,7 @@ class CLightHTMLEditor // LHE
 		</script><?
 	}
 
-	public static function InitFileDialogs()
+	function InitFileDialogs()
 	{
 		// Link
 		CAdminFileDialog::ShowScript(Array(
@@ -337,7 +363,7 @@ class CLightHTMLEditor // LHE
 		));
 	}
 
-	public static function InitMedialibDialogs()
+	function InitMedialibDialogs()
 	{
 		CMedialib::ShowDialogScript(array(
 			"event" => "LHED_Img_MLOpen",

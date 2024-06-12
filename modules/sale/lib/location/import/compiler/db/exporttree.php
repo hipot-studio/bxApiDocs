@@ -151,14 +151,14 @@ class ExportTreeTable extends Entity\DataManager
 		$this->cleanup();
 	}
 
-	static public function getLastOccupiedCode()
+	public function getLastOccupiedCode()
 	{
 		$res = static::getList(array('order' => array('ID' => 'desc'), 'limit' => 1, 'select' => array('CODE')))->fetch();
 
 		return $res['CODE'];
 	}
 
-	static public function getNextFreeCode()
+	public function getNextFreeCode()
 	{
 		return self::formatCode(intval(static::getLastOccupiedCode()) + 1);
 	}
@@ -176,7 +176,7 @@ class ExportTreeTable extends Entity\DataManager
 		return $value;
 	}
 
-	static public function getByCode($code)
+	public function getByCode($code)
 	{
 		return static::getList(array('filter' => array(
 			'=CODE' => $code
@@ -286,7 +286,7 @@ class ExportTreeTable extends Entity\DataManager
 		}
 	}
 
-	static public function dropIndexes()
+	public function dropIndexes()
 	{
 		$dbConnection = Main\HttpApplication::getConnection();
 		$table = static::getTableName();
@@ -316,7 +316,7 @@ class ExportTreeTable extends Entity\DataManager
 		}
 	}
 
-	static public function restoreIndexes()
+	public function restoreIndexes()
 	{
 		$dbConnection = Main\HttpApplication::getConnection();
 		$table = static::getTableName();
@@ -346,7 +346,7 @@ class ExportTreeTable extends Entity\DataManager
 		}
 	}
 
-	static public function cleanup()
+	public function cleanup()
 	{
 		Main\HttpApplication::getConnection()->query('truncate table '.static::getTableName());
 	}
@@ -356,7 +356,7 @@ class ExportTreeTable extends Entity\DataManager
 		Main\HttpApplication::getConnection()->query('alter table '.static::getTableName().' '.($way ? 'enable' : 'disable').' keys');
 	}
 
-	static public function output($data, $important = true)
+	public function output($data, $important = true)
 	{
 		if(!$important)
 			return false;

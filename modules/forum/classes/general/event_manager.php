@@ -2,12 +2,12 @@
 #############################################
 # Bitrix Site Manager Forum					#
 # Copyright (c) 2002-2013 Bitrix			#
-# http://www.bitrixsoft.com					#
+# https://www.bitrixsoft.com				#
 # mailto:admin@bitrixsoft.com				#
 #############################################
 class ForumEventManager
 {
-	public static function ForumEventManager()
+	public function __construct()
 	{
 		if (IsModuleInstalled("iblock")) {
 			AddEventHandler("forum", "onAfterMessageAdd", array(&$this, "updateIBlockPropertyAfterAddingMessage"));
@@ -16,7 +16,7 @@ class ForumEventManager
 		}
 	}
 
-	public static function updateIBlockPropertyAfterAddingMessage($ID, $arFields, $arTopic = array())
+	function updateIBlockPropertyAfterAddingMessage($ID, $arFields, $arTopic = array())
 	{
 		if ($ID > 0 && $arFields["PARAM1"] != "IB" && $arFields["APPROVED"] == "Y")
 		{
@@ -24,7 +24,7 @@ class ForumEventManager
 		}
 	}
 
-	public static function updateIBlockPropertyAfterDeletingMessage($ID, $arFields)
+	function updateIBlockPropertyAfterDeletingMessage($ID, $arFields)
 	{
 		if ($ID > 0 && $arFields["PARAM1"] != "IB" && $arFields["APPROVED"] == "Y")
 		{

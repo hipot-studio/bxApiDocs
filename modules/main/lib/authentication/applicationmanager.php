@@ -27,7 +27,7 @@ class ApplicationManager
 			$result = $eventResult->getParameters();
 			if(is_array($result))
 			{
-				if(!is_array($result[0]))
+				if(!isset($result[0]) || !is_array($result[0]))
 				{
 					$result = array($result);
 				}
@@ -61,17 +61,6 @@ class ApplicationManager
 	 * 			"CLASS" => application class name
 	 * 		))
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает сортированный массив с описанием возможных приложений:</p> <pre class="syntax">array("ID" =&gt; array(    	    "ID" =&gt; id приложения, 			"NAME" =&gt; имя приложения, 			"SORT" =&gt; индекс сортировки, 			"CLASS" =&gt; имя класса приложения  		))</pre> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/authentication/applicationmanager/getapplications.php
-	* @author Bitrix
-	*/
 	public function getApplications()
 	{
 		return $this->applications;
@@ -83,19 +72,6 @@ class ApplicationManager
 	 * @param string $applicationId
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод проверяет валидность значений для приложения.</p>
-	*
-	*
-	* @param string $applicationId  ID приложения
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/authentication/applicationmanager/checkscope.php
-	* @author Bitrix
-	*/
 	public function checkScope($applicationId)
 	{
 		if(isset($this->applications[$applicationId]))

@@ -69,7 +69,7 @@ class EntityRecoveryManager
 			}
 			$item->setDataItem('FIELDS', $fields);
 
-			$item->setTitle(\CCrmContact::GetFullName($fields, true));
+			$item->setTitle(\CCrmContact::PrepareFormattedName($fields));
 			if(isset($fields['ASSIGNED_BY_ID']))
 			{
 				$item->setResponsibleID(intval($fields['ASSIGNED_BY_ID']));

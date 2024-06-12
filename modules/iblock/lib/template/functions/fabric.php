@@ -15,7 +15,21 @@ namespace Bitrix\Iblock\Template\Functions;
  */
 class Fabric
 {
-	protected static $functionMap = array();
+	protected static $defaultFunctionMap = [
+		'upper' => FunctionUpper::class,
+		'lower' => FunctionLower::class,
+		'translit' => FunctionTranslit::class,
+		'concat' => FunctionConcat::class,
+		'limit' => FunctionLimit::class,
+		'contrast' => FunctionContrast::class,
+		'min' => FunctionMin::class,
+		'max' => FunctionMax::class,
+		'distinct' => FunctionDistinct::class,
+		'ucfirst' => FunctionUcfirst::class,
+		'ucwords' => FunctionUcwords::class,
+	];
+
+	protected static $functionMap = [];
 	/**
 	 * Instantiates an function object by function name.
 	 *
@@ -26,26 +40,19 @@ class Fabric
 	 */
 	public static function createInstance($functionName, $data = null) //todo rename createInstance
 	{
-		if ($functionName === "upper")
-			return new FunctionUpper($data);
-		elseif ($functionName === "lower")
-			return new FunctionLower($data);
-		elseif ($functionName === "translit")
-			return new FunctionTranslit($data);
-		elseif ($functionName === "concat")
-			return new FunctionConcat($data);
-		elseif ($functionName === "limit")
-			return new FunctionLimit($data);
-		elseif ($functionName === "contrast")
-			return new FunctionContrast($data);
-		elseif ($functionName === "min")
-			return new FunctionMin($data);
-		elseif ($functionName === "max")
-			return new FunctionMax($data);
-		elseif ($functionName === "distinct")
-			return new FunctionDistinct($data);
+		if (!is_string($functionName))
+		{
+			return new FunctionBase($data);
+		}
+		if (isset(self::$defaultFunctionMap[$functionName]))
+		{
+			/** @var FunctionBase $functionClass */
+			$functionClass = self::$defaultFunctionMap[$functionName];
+			return new $functionClass($data);
+		}
 		elseif (isset(self::$functionMap[$functionName]))
 		{
+			/** @var FunctionBase $functionClass */
 			$functionClass = self::$functionMap[$functionName];
 			return new $functionClass($data);
 		}
@@ -74,6 +81,7 @@ class Fabric
 				return new $functionClass($data);
 			}
 		}
+
 		return new FunctionBase($data);
 	}
 }
@@ -91,7 +99,7 @@ class FunctionBase
 	/**
 	 * @param mixed|null $data Additional data for function instance.
 	 */
-	public function __construct($data = null)
+	function __construct($data = null)
 	{
 		$this->data = $data;
 	}
@@ -103,7 +111,7 @@ class FunctionBase
 	 *
 	 * @return array
 	 */
-	static public function onPrepareParameters(\Bitrix\Iblock\Template\Entity\Base $entity, array $parameters)
+	public function onPrepareParameters(\Bitrix\Iblock\Template\Entity\Base $entity, array $parameters)
 	{
 		$arguments = array();
 		/** @var \Bitrix\Iblock\Template\NodeBase $parameter */
@@ -121,7 +129,7 @@ class FunctionBase
 	 *
 	 * @return string
 	 */
-	static public function calculate(array $parameters)
+	public function calculate(array $parameters)
 	{
 		return "";
 	}
@@ -343,7 +351,7 @@ class FunctionContrast extends FunctionBase
 		{
 			foreach ($result as $word)
 			{
-				if (strlen($word) > 1)
+				if (mb_strlen($word) > 1)
 					$words[$word]++;
 			}
 			$len = log(max(20, array_sum($words)));
@@ -375,15 +383,17 @@ class FunctionMin extends FunctionBase
 	public function calculate(array $parameters)
 	{
 		$result = $this->parametersToArray($parameters);
-		$asFloat = array();
-		foreach ($result as $value)
+		$asFloat = [];
+		foreach ($result as $rawValue)
 		{
-			if (!isset($asFloat[$value]))
+			if (!isset($asFloat[$rawValue]))
 			{
-				$floatFalue = doubleval(preg_replace("/[^0-9.]+/", "", $value));
-				$asFloat[$value] = $floatFalue;
+				$value = preg_replace("/&\#[0-9]+;/", '', $rawValue);
+				$floatFalue = (float)preg_replace("/[^0-9.]+/", "", $value);
+				$asFloat[$rawValue] = $floatFalue;
 			}
 		}
+
 		if (empty($asFloat))
 		{
 			return '';
@@ -395,6 +405,7 @@ class FunctionMin extends FunctionBase
 		else
 		{
 			$min = min($asFloat);
+
 			return array_search($min, $asFloat);
 		}
 	}
@@ -418,13 +429,14 @@ class FunctionMax extends FunctionBase
 	public function calculate(array $parameters)
 	{
 		$result = $this->parametersToArray($parameters);
-		$asFloat = array();
-		foreach ($result as $value)
+		$asFloat = [];
+		foreach ($result as $rawValue)
 		{
-			if (!isset($asFloat[$value]))
+			if (!isset($asFloat[$rawValue]))
 			{
-				$floatFalue = doubleval(preg_replace("/[^0-9.]+/", "", $value));
-				$asFloat[$value] = $floatFalue;
+				$value = preg_replace("/&\#[0-9]+;/", '', $rawValue);
+				$floatFalue = (float)preg_replace("/[^0-9.]+/", '', $value);
+				$asFloat[$rawValue] = $floatFalue;
 			}
 		}
 		if (empty($asFloat))
@@ -438,6 +450,7 @@ class FunctionMax extends FunctionBase
 		else
 		{
 			$max = max($asFloat);
+
 			return array_search($max, $asFloat);
 		}
 	}

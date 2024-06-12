@@ -8,10 +8,29 @@
 
 namespace Bitrix\Main\Mail\Internal;
 
-use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Data;
 
-class EventTypeTable extends Entity\DataManager
+/**
+ * Class EventTypeTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_EventType_Query query()
+ * @method static EO_EventType_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_EventType_Result getById($id)
+ * @method static EO_EventType_Result getList(array $parameters = [])
+ * @method static EO_EventType_Entity getEntity()
+ * @method static \Bitrix\Main\Mail\Internal\EO_EventType createObject($setDefaultValues = true)
+ * @method static \Bitrix\Main\Mail\Internal\EO_EventType_Collection createCollection()
+ * @method static \Bitrix\Main\Mail\Internal\EO_EventType wakeUpObject($row)
+ * @method static \Bitrix\Main\Mail\Internal\EO_EventType_Collection wakeUpCollection($rows)
+ */
+class EventTypeTable extends Data\DataManager
 {
+	const TYPE_EMAIL = 'email';
+	const TYPE_SMS = 'sms';
+
 	/**
 	 * @return string
 	 */
@@ -50,7 +69,9 @@ class EventTypeTable extends Entity\DataManager
 				'required' => true,
 				'default_value' => 100,
 			),
+			'EVENT_TYPE' => array(
+				'data_type' => 'string',
+			),
 		);
 	}
-
 }

@@ -101,7 +101,7 @@ class DuplicateEntityRanking
 		}
 		return $result;
 	}
-	public static function compareReversed(DuplicateEntityRanking &$a, DuplicateEntityRanking &$b)
+	public static function compareReversed(DuplicateEntityRanking $a, DuplicateEntityRanking $b)
 	{
 		return (-1 * self::compare($a, $b));
 	}
@@ -335,7 +335,7 @@ class DuplicateEntityRanking
 
 					if(isset($fields['RANKING_DATA']) && $fields['RANKING_DATA'] !== '')
 					{
-						$data = unserialize($fields['RANKING_DATA']);
+						$data = unserialize($fields['RANKING_DATA'], ['allowed_classes' => false]);
 
 						/** @var DuplicateEntityRanking $ranking */
 						$ranking = $itemMap[$key];
@@ -404,7 +404,7 @@ class DuplicateEntityRanking
 					$itemMap[$key]->referenceCount = isset($fields['QTY']) ? intval($fields['QTY']) : 0;
 					if(isset($fields['RANKING_DATA']) && $fields['RANKING_DATA'] !== '')
 					{
-						$data = unserialize($fields['RANKING_DATA']);
+						$data = unserialize($fields['RANKING_DATA'], ['allowed_classes' => false]);
 
 						/** @var DuplicateEntityRanking $ranking */
 						$ranking = $itemMap[$key];

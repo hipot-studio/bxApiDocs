@@ -89,14 +89,17 @@ class CssParser
 		return implode("\n", $cssList);
 	}
 
-	public static function getDeclarationArray($declarationBlock)
+	public static function getDeclarationArray($declarationBlock, $singleStyle = true)
 	{
 		$styleList = array();
 		$declarationBlock = trim($declarationBlock);
 		if($declarationBlock)
 		{
+			// fix image urls in data:URL format with base64 encoding
+			$declarationBlock = str_replace(';base64', '__base64', $declarationBlock);
 			foreach(explode(";", $declarationBlock) as $declaration)
 			{
+				$declaration = str_replace('__base64', ';base64', $declaration);
 				$declaration = trim($declaration);
 				if(!$declaration)
 				{
@@ -114,7 +117,20 @@ class CssParser
 					continue;
 				}
 
-				$styleList[trim($matches[1])] = trim($matches[2]);
+				$matches[1] = trim($matches[1]);
+
+				if ($singleStyle)
+				{
+					$styleList[$matches[1]] = trim($matches[2]);
+				}
+				else
+				{
+					if (!isset($styleList[$matches[1]]))
+					{
+						$styleList[$matches[1]] = [];
+					}
+					$styleList[$matches[1]][] = trim($matches[2]);
+				}
 			}
 		}
 
@@ -126,7 +142,17 @@ class CssParser
 		$result = '';
 		foreach($declarationList as $property => $value)
 		{
-			$result .= trim($property) . ': ' . trim($value) . ';';
+			if (is_array($value))
+			{
+				foreach ($value as $valueChunk)
+				{
+					$result .= trim($property) . ': ' . trim($valueChunk) . ';';
+				}
+			}
+			else
+			{
+				$result .= trim($property) . ': ' . trim($value) . ';';
+			}
 		}
 
 		return $result;
@@ -138,12 +164,15 @@ class CssParser
 		foreach($styleList as $k => $v)
 		{
 			$styleList[$k]['SORT'] = static::getSelectorSort($v['SELECTOR']);
+			$styleList[$k]['SORT'][] = $k;
 		}
 
-		usort($styleList, function ($a, $b)	{
-			$a = $a['SORT'];
-			$b = $b['SORT'];
-			for($i = 0; $i<3; $i++)
+		usort($styleList, function ($first, $second)
+		{
+			$a = $first['SORT'];
+			$b = $second['SORT'];
+
+			for($i = 0; $i < 4; $i++)
 			{
 				if($a[$i] !== $b[$i])
 				{
@@ -151,7 +180,7 @@ class CssParser
 				}
 			}
 
-			return 1; // last class have more priority
+			return -1; // last class have more priority
 		});
 
 		foreach($styleList as $k => $v)

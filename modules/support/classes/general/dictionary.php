@@ -1,17 +1,7 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CTicketDictionary</b> - класс для работы со справочником обращений.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/support/classes/cticketdictionary/index.php
- * @author Bitrix
- */
 class CAllTicketDictionary
 {
 	public static function err_mess()
@@ -28,8 +18,7 @@ class CAllTicketDictionary
 			$siteID = "";
 		}
 		$arFilter = array("DEFAULT" => "Y", "TYPE" => $type, "SITE" => $siteID);
-		$v2 = $v3 = null;
-		$rs = CTicketDictionary::GetList(($v1="s_dropdown"), $v2, $arFilter, $v3);
+		$rs = CTicketDictionary::GetList("s_dropdown", '', $arFilter);
 		$ar = $rs->Fetch();
 		return $ar["ID"];
 	}
@@ -53,17 +42,16 @@ class CAllTicketDictionary
 			$siteID = "";
 		}
 		$arFilter = array("TYPE" => $type, "SITE" => $siteID);
-		$v2 = $v3 = null;
-		$rs = CTicketDictionary::GetList(($v1="s_dropdown"), $v2, $arFilter, $v3);
+		$rs = CTicketDictionary::GetList("s_dropdown", '', $arFilter);
 		
 		$oldFunctionality = COption::GetOptionString( "support", "SUPPORT_OLD_FUNCTIONALITY", "Y" );
-		if( intval( $sla_id ) <= 0 || $oldFunctionality != "Y" || ( $type != "C" && $type!="K" && $type!="M" ) ) return $rs;
+		if( intval($sla_id) <= 0 || $oldFunctionality != "Y" || ( $type != "C" && $type!="K" && $type!="M" ) ) return $rs;
 		
 		switch($type)
 		{
-			case "C": $strSql = "SELECT CATEGORY_ID as DID FROM b_ticket_sla_2_category WHERE SLA_ID=" . intval( $sla_id ); break;
-			case "K": $strSql = "SELECT CRITICALITY_ID as DID FROM b_ticket_sla_2_criticality WHERE SLA_ID=" . intval( $sla_id ); break;
-			case "M": $strSql = "SELECT MARK_ID as DID FROM b_ticket_sla_2_mark WHERE SLA_ID=" . intval( $sla_id ); break;
+			case "C": $strSql = "SELECT CATEGORY_ID as DID FROM b_ticket_sla_2_category WHERE SLA_ID=" . intval($sla_id); break;
+			case "K": $strSql = "SELECT CRITICALITY_ID as DID FROM b_ticket_sla_2_criticality WHERE SLA_ID=" . intval($sla_id); break;
+			case "M": $strSql = "SELECT MARK_ID as DID FROM b_ticket_sla_2_mark WHERE SLA_ID=" . intval($sla_id); break;
 		}
 		$r = $DB->Query( $strSql, false, $err_mess . __LINE__ );
 		while( $a = $r->Fetch() ) $arDID[] = $a["DID"];
@@ -75,7 +63,6 @@ class CAllTicketDictionary
 		
 		return $rs;
 	}
-
 
 	public static function GetDropDownArray($siteID = false, $SLA_ID = false, $arUnsetType = Array("F"))
 	{
@@ -89,8 +76,7 @@ class CAllTicketDictionary
 		$arFilter = Array("SITE" => $siteID);
 
 		$arReturn = Array();
-		$v2 = $v3 = null;
-		$rs = CTicketDictionary::GetList(($v1="s_dropdown"), $v2, $arFilter, $v3);
+		$rs = CTicketDictionary::GetList("s_dropdown", '', $arFilter);
 		while ($ar = $rs->Fetch())
 		{
 			if (in_array($ar["C_TYPE"], $arUnsetType))
@@ -218,39 +204,6 @@ class CAllTicketDictionary
 		return $arr["reference"][$KEY];
 	}
 
-	
-	/**
-	* <p>Метод возвращает данные по одной записи справочника. Метод нестатический.</p>
-	*
-	*
-	* @param int $intID  ID записи.
-	*
-	* @return record 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* Array
-	* (
-	*     [ID] =&gt; 3
-	*     [LID] =&gt; ru
-	*     [C_TYPE] =&gt; C
-	*     [SID] =&gt; 
-	*     [SET_AS_DEFAULT] =&gt; N
-	*     [C_SORT] =&gt; 500
-	*     [NAME] =&gt; Доставка программного продукта и обновлений
-	*     [DESCR] =&gt; 
-	*     [RESPONSIBLE_USER_ID] =&gt; 2
-	*     [ <code>EVENT1</code>] =&gt; ticket
-	*     [ <code>EVENT2</code>] =&gt; 
-	*     [ <code>EVENT3</code>] =&gt; 
-	* )
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/support/classes/cticketdictionary/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($id)
 	{
 		$err_mess = (CAllTicketDictionary::err_mess())."<br>Function: GetByID<br>Line: ";
@@ -260,17 +213,14 @@ class CAllTicketDictionary
 		{
 			return;
 		}
-		$by = $order = $is_filtered = null;
-		$res = CTicketDictionary::GetList($by, $order, array("ID" => $id), $is_filtered);
+		$res = CTicketDictionary::GetList('', '', array("ID" => $id));
 		return $res;
 	}
 
 	public static function GetBySID($sid, $type, $siteID=SITE_ID)
 	{
 		$err_mess = (CAllTicketDictionary::err_mess())."<br>Function: GetBySID<br>Line: ";
-		global $DB;
-		$v1 = $v2 = $v3 = null;
-		$rs = CTicketDictionary::GetList($v1, $v2, array("SITE_ID"=>$siteID, "TYPE"=>$type, "SID"=>$sid), $v3);
+		$rs = CTicketDictionary::GetList('', '', array("SITE_ID"=>$siteID, "TYPE"=>$type, "SID"=>$sid));
 		return $rs;
 	}
 
@@ -303,7 +253,7 @@ class CAllTicketDictionary
 	{
 		$arMsg = Array();
 
-		if ( $id ===false && !(array_key_exists('NAME', $arFields) && strlen($arFields['NAME']) > 0) )
+		if ( $id ===false && !(array_key_exists('NAME', $arFields) && $arFields['NAME'] <> '') )
 		{
 			$arMsg[] = array("id"=>"NAME", "text"=> GetMessage("SUP_FORGOT_NAME"));
 		}
@@ -322,7 +272,7 @@ class CAllTicketDictionary
 			$arMsg[] = array("id"=>"SID", "text"=> GetMessage("SUP_INCORRECT_SID"));
 		}
 		elseif (
-				strlen($arFields['SID']) > 0 && array_key_exists('arrSITE', $arFields) &&
+				$arFields['SID'] <> '' && array_key_exists('arrSITE', $arFields) &&
 				is_array($arFields['arrSITE']) && count($arFields['arrSITE']) > 0
 			)
 		{
@@ -336,8 +286,7 @@ class CAllTicketDictionary
 				$arFilter['ID'] = '~'.intval($id);
 			}
 
-			$v1 = $v2 = $v3 = null;
-			$z = CTicketDictionary::GetList($v1, $v2, $arFilter, $v3);
+			$z = CTicketDictionary::GetList('', '', $arFilter);
 			if ($zr = $z->Fetch())
 			{
 				$arMsg[] = array(
@@ -346,7 +295,7 @@ class CAllTicketDictionary
 									'SUP_SID_ALREADY_IN_USE',
 									array(
 										'#TYPE#' => CTicketDictionary::GetTypeNameByID($arFields['C_TYPE']),
-										'#LANG#' => strlen($zr['LID']) > 0? $zr['LID']: $zr['SITE_ID'],
+										'#LANG#' => $zr['LID'] <> ''? $zr['LID']: $zr['SITE_ID'],
 										'#RECORD_ID#' => $zr['ID'],
 									)
 							)
@@ -404,7 +353,7 @@ class CAllTicketDictionary
 
 		$strUpdate = $DB->PrepareUpdate('b_ticket_dictionary', $arFields);
 		$rs = $DB->Query('UPDATE b_ticket_dictionary SET ' . $strUpdate . ' WHERE ID=' . $id);
-		if ($rs->AffectedRowsCount() > 0);
+		if ($rs->AffectedRowsCount() > 0)
 		{
 			CTicketDictionary::__SetSites($id, $arFields);
 			$DB->Commit();
@@ -428,8 +377,7 @@ class CAllTicketDictionary
 				'TYPE'	=> $arFields['C_TYPE'],
 				'SITE'	=> $arFields['arrSITE']
 				);
-			$v1 = $v2 = $v3 = null;
-			$z = CTicketDictionary::GetList($v1, $v2, $arFilter, $v3);
+			$z = CTicketDictionary::GetList('', '', $arFilter);
 			while ($zr = $z->Fetch())
 			{
 				$DB->Update('b_ticket_dictionary', array('SET_AS_DEFAULT' => "'N'"), 'WHERE ID=' . $zr['ID'], '', false, false, false);
@@ -460,5 +408,3 @@ class CAllTicketDictionary
 		}
 	}
 }
-
-?>

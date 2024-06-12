@@ -1,75 +1,8 @@
-<?
+<?php
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/statistic/classes/general/traffic.php");
 
-/**
- * <b>CTraffic</b> - класс для получения общих данных по посещаемости сайта.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/statistic/classes/ctraffic/index.php
- * @author Bitrix
- */
 class CTraffic extends CAllTraffic
 {
-	
-	/**
-	* <p>Возвращает количество <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#hit">хитов</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#host">хостов</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#session">сессий</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">посетителей</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event">событий</a> в разрезе по часам, дням недели и месяцам.</p>
-	*
-	*
-	* @param string $data_type  Тип данных. Возможные значения:          <ul> <li> <b>hour</b> - данные в
-	* разрезе по часам; </li>                    <li> <b>weekday</b> - данные в разрезе по
-	* дням недели; </li>                    <li> <b>month</b> - данные в разрезе по месяцам.
-	* </li>         </ul>
-	*
-	* @param array $filter = array() Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи:          <ul> <li> <b>SITE_ID</b> - ID сайта для
-	* которого необходимо получить статистику по ссылающимся сайтам;
-	* </li>                    <li> <b>DATE1</b> - начальная дата; </li>                    <li> <b>DATE2</b> -
-	* конечная дата. </li>         </ul>
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // получим данные по посещаемости в разрезе по дням недели
-	* $rs = <b>CTraffic::GetSumList</b>("weekday");
-	* $ar = $rs-&gt;Fetch();
-	* for ($i=0; $i&lt;=6; $i++)
-	* {
-	*     switch($i)
-	*     {
-	*         case 0: echo "воскресенье"; break;
-	*         case 1: echo "понедельник"; break;
-	*         case 2: echo "вторник"; break;
-	*         case 3: echo "среда"; break;
-	*         case 4: echo "четверг"; break;
-	*         case 5: echo "пятница"; break;
-	*         case 6: echo "суббота"; break;
-	*     }
-	*     echo "&lt;br&gt;";
-	*     echo "Хостов: ".$ar["WEEKDAY_HOST_".$i]."&lt;br&gt;";
-	*     echo "Сессий: ".$ar["WEEKDAY_SESSION_".$i]."&lt;br&gt;";
-	*     echo "Хитов: ".$ar["WEEKDAY_HIT_".$i]."&lt;br&gt;";
-	*     echo "Посетителей: ".$ar["WEEKDAY_GUEST_".$i]."&lt;br&gt;";
-	*     echo "Новых посетителей: ".$ar["WEEKDAY_NEW_GUEST_".$i]."&lt;br&gt;";
-	*     echo "&lt;br&gt;&lt;br&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://www.1c-bitrix.ru/user_help/statistic/site_traffic/traffic.php">Отчет
-	* "Посещаемость"</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/ctraffic/getsumlist.php
-	* @author Bitrix
-	*/
 	public static function GetSumList($DATA_TYPE, $arFilter=Array())
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
@@ -87,7 +20,7 @@ class CTraffic extends CAllTraffic
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -203,116 +136,7 @@ class CTraffic extends CAllTraffic
 		return $rs;
 	}
 
-	
-	/**
-	* <p>Возвращает количество <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#hit">хитов</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#host">хостов</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#session">сессий</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">посетителей</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event">событий</a>, коэфициенты оценки внимательности посетителей в разрезе по дням.</p>
-	*
-	*
-	* @param string &$by = "s_date" Поле для сортировки. Возможные значения:          <ul> <li> <b>s_id</b> - ID
-	* записи; </li>                     <li> <b>s_date</b> - дата; </li>                     <li> <b>s_hits</b> -
-	* количество хитов; </li>                     <li> <b>s_hosts</b> - количество хостов;
-	* </li>                     <li> <b>s_sessions</b> - количество сессий; </li>                     <li>
-	* <b>s_events</b> - количество событий; </li>                     <li> <b>s_guests</b> -
-	* количество посетителей; </li>                     <li> <b>s_new_guests</b> - количество
-	* <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#new_guest">новых посетителей</a>; </li>   
-	*                  <li> <b>s_favorites</b> - количество посетителей, добавивших сайт в
-	* "<a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#favorites">Избранное</a>". </li>          </ul>
-	*
-	* @param string &$order = "desc" Порядок сортировки. Возможные значения:          <ul> <li> <b>asc</b> - по
-	* возрастанию; </li>                     <li> <b>desc</b> - по убыванию. </li>          </ul>
-	*
-	* @param array &$max_min  Ссылка на массив содержащий максимальную и минимальную даты из
-	* выбранного результирующего списка. Структура данного массива:     
-	*     <pre style="font-size: 95%;">Array (     [DATE_FIRST] =&gt; минимальная дата     [MIN_DAY] =&gt;
-	* день минимальной даты (1-31)     [MIN_MONTH] =&gt; месяц минимальной даты (1-12) 
-	*    [MIN_YEAR] =&gt; год минимальной даты     [DATE_LAST] =&gt; максимальная дата    
-	* [MAX_DAY] =&gt; день максимальной даты (1-31)     [MAX_MONTH] =&gt; месяц
-	* максимальной даты (1-12)     [MAX_YEAR] =&gt; год максимальной даты  )</pre>
-	*
-	* @param array $filter = array() Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи:          <ul> <li> <b>ID</b>* - ID записи; </li>                
-	*     <li> <b>ID_EXACT_MATCH</b> - если значение равно "N", то при фильтрации по
-	* <b>ID</b> будет искаться вхождение; </li>                     <li> <b>DATE1</b> -
-	* начальное значение интервала для поля "дата"; </li>                     <li>
-	* <b>DATE2</b> - конечное значение интервала для поля "дата"; </li>                   
-	*  <li> <b>HITS_1</b> - начальное значение интервала для поля "количество
-	* хитов"; </li>                     <li> <b>HITS_2</b> - конечное значение интервала для
-	* поля "количество хитов"; </li>                     <li> <b>HOSTS_1</b> - начальное
-	* значение интервала для поля "количество хостов"; </li>                     <li>
-	* <b>HOSTS_2</b> - начальное значение интервала для поля "количество
-	* хостов"; </li>                     <li> <b>SESSIONS_1</b> - начальное значение интервала
-	* для поля "количество сессий"; </li>                     <li> <b>SESSIONS_2</b> - конечное
-	* значение интервала для поля "количество сессий"; </li>                     <li>
-	* <b>EVENTS_1</b> - начальное значение интервала для поля "количество
-	* событий"; </li>                     <li> <b>EVENTS_2</b> - конечное значение интервала
-	* для поля "количество событий"; </li>                     <li> <b>GUESTS_1</b> -
-	* начальное значение интервала для поля "количество посетителей";
-	* </li>                     <li> <b>GUESTS_2</b> - конечное значение интервала для поля
-	* "количество посетителей"; </li>                     <li> <b>NEW_GUESTS_1</b> - начальное
-	* значение интервала для поля "количество новых посетителей"; </li>     
-	*                <li> <b>NEW_GUESTS_2</b> - конечное значение интервала для поля
-	* "количество новых посетителей"; </li>                     <li> <b>FAVORITES_1</b> -
-	* начальное значение интервала для поля "количество посетителей
-	* добавивших сайт в "Избранное""; </li>                     <li> <b>FAVORITES_2</b> -
-	* конечное значение интервала для поля "количество посетителей
-	* добавивших сайт в "Избранное"; </li>                     <li> <b>SITE_ID</b>* - ID сайта;
-	* </li>                     <li> <b>SITE_ID_EXACT_MATCH</b> - если значение равно "N", то при
-	* фильтрации по <b>SITE_ID</b> будет искаться вхождение. </li>          </ul>        * -
-	* допускается <a href="http://dev.1c-bitrix.ru/api_help/main/general/filter.php">сложная
-	* логика</a>
-	*
-	* @param bool &$is_filtered  Флаг отфильтрованности результирующего списка. Если значение
-	* равно "true", то список был отфильтрован.
-	*
-	* @param string $get_maxmin = "Y" Если значение данной переменной равно "Y", то в параметр <i>max_min</i>
-	* будет возвращен соответствующий массив содержащий максимальную
-	* и минимальную даты из выбранного результирующего списка.
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // ограничимся данными только за декабрь 2007 года
-	* $arFilter = array(
-	*     "DATE1" =&gt; "01.12.2007",
-	*     "DATE2" =&gt; "31.12.2007"
-	*     );
-	* 
-	* // получим данные по посещаемости
-	* $rsDays = <b>CTraffic::GetDailyList</b>(
-	*     ($by="s_date"), 
-	*     ($order="desc"), 
-	*     $arMaxMin, 
-	*     $arFilter, 
-	*     $is_filtered
-	*     );
-	* 
-	* while ($arDay = $rsDays-&gt;Fetch())
-	* {
-	*     echo "дата: ".$arDay["DATE_STAT"]."&lt;br&gt;";
-	*     echo "количество хитов: ".$arDay["HITS"]."&lt;br&gt;";
-	*     echo "количество хостов: ".$arDay["C_HOSTS"]."&lt;br&gt;";
-	*     echo "количество сессий: ".$arDay["SESSIONS"]."&lt;br&gt;";
-	*     echo "количество событий: ".$arDay["C_EVENTS"]."&lt;br&gt;";
-	*     echo "количество посетителей: ".$arDay["GUESTS"]."&lt;br&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/ctraffic/getcommonvalues.php">CTraffic::GetCommonValues</a>
-	* </li>     <li> <a href="http://www.1c-bitrix.ru/user_help/statistic/site_traffic/traffic.php">Отчет
-	* "Динамика посещаемости"</a> </li>  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/ctraffic/getdailylist.php
-	* @author Bitrix
-	*/
-	public static function GetDailyList(&$by, &$order, &$arMaxMin, $arFilter=Array(), &$is_filtered, $get_maxmin="Y")
+	public static function GetDailyList($by = 's_date', $order = 'desc', &$arMaxMin = [], $arFilter = [], $is_filtered = null, $get_maxmin = "Y")
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -330,7 +154,7 @@ class CTraffic extends CAllTraffic
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -425,14 +249,14 @@ class CTraffic extends CAllTraffic
 			$strSqlOrder = "ORDER BY D.FAVORITES";
 		else
 		{
-			$by = "s_date";
 			$strSqlOrder = "ORDER BY D.DATE_STAT";
 		}
-		if ($order!="asc")
+
+		if ($order != "asc")
 		{
 			$strSqlOrder .= " desc ";
-			$order="desc";
 		}
+
 		$table_name = ($site_filtered) ? "b_stat_day_site" : "b_stat_day";
 		$strSql = "
 			SELECT
@@ -462,7 +286,6 @@ class CTraffic extends CAllTraffic
 			";
 
 		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
-		$is_filtered = (IsFiltered($strSqlSearch));
 
 		if ($get_maxmin=="Y")
 		{
@@ -496,96 +319,13 @@ class CTraffic extends CAllTraffic
 		return $res;
 	}
 
-	
-	/**
-	* <p>Возвращает количество <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#hit">хитов</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#host">хостов</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#session">сессий</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">посетителей</a>, <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event">событий</a> за весь период ведения статистики, за последние 3 дня, а также за произвольный указанный интервал времени.</p> <p class="note"><b>Примечание</b>: при фильтрации по сайту (<i>filter</i>[<b>SITE_ID</b>]), будут доступны только данные по хитам, хостам, сессиям, событиям. Данные по посетителям будут отсутствовать, т.к. текущая версия модуля предполагает, что посетитель один на весь портал.</p>
-	*
-	*
-	* @param array $arrayfilter = array() Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи:          <ul> <li> <b>SITE_ID</b> - ID сайта для
-	* которого необходимо получить статистику; </li>                    <li> <b>DATE1</b>
-	* - начальная дата; </li>                    <li> <b>DATE2</b> - конечная дата. </li>        
-	* </ul>
-	*
-	* @return array <p>В случае если не установлена фильтрация по сайту, то структура
-	* возвращаемого массива будет следующей:</p><pre class="syntax">Array (     [TOTAL_HITS]
-	* =&gt; суммарное количество хитов за все время ведения статистики    
-	* [TOTAL_SESSIONS] =&gt; суммарное количество сессий за все время ведения
-	* статистики     [TOTAL_EVENTS] =&gt; суммарное количество событий за все
-	* время ведения статистики     [TOTAL_HOSTS] =&gt; суммарное количество
-	* хостов за все время ведения статистики     [TOTAL_GUESTS] =&gt; суммарное
-	* количество посетителей за все время ведения статистики    
-	* [TOTAL_FAVORITES] =&gt; суммарное количество посетителей, добавивших сайт в
-	*                          "<a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#favorites">Избранное</a>" за все время
-	* ведения статистики     [TODAY_HITS] =&gt; количество хитов за сегодня    
-	* [TODAY_SESSIONS] =&gt; количество сессий за сегодня     [TODAY_EVENTS] =&gt;
-	* количество событий за сегодня     [TODAY_HOSTS] =&gt; количество хостов за
-	* сегодня     [TODAY_GUESTS] =&gt; суммарное количество посетителей за
-	* сегодня     [TODAY_NEW_GUESTS] =&gt; количество <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#new_guest">новых посетителей</a>  за
-	* сегодня     [TODAY_FAVORITES] =&gt; количество посетителей, добавивших сайт в
-	*                          "Избранное", за сегодня     [YESTERDAY_HITS] =&gt; количество
-	* хитов за вчера     [YESTERDAY_SESSIONS] =&gt; количество сессий за вчера    
-	* [YESTERDAY_EVENTS] =&gt; количество событий за вчера     [YESTERDAY_HOSTS] =&gt;
-	* количество хостов за вчера     [YESTERDAY_GUESTS] =&gt; суммарное количество
-	* посетителей за вчера     [YESTERDAY_NEW_GUESTS] =&gt; количество новых
-	* посетителей за вчера     [YESTERDAY_FAVORITES] =&gt; количество посетителей,
-	* добавивших сайт в                              "Избранное", за вчера    
-	* [B_YESTERDAY_HITS] =&gt; количество хитов за позавчера     [B_YESTERDAY_SESSIONS] =&gt;
-	* количество сессий за позавчера     [B_YESTERDAY_EVENTS] =&gt; количество
-	* событий за позавчера     [B_YESTERDAY_HOSTS] =&gt; количество хостов за
-	* позавчера     [B_YESTERDAY_GUESTS] =&gt; суммарное количество посетителей за
-	* позавчера     [B_YESTERDAY_NEW_GUESTS] =&gt; количество новых посетителей за
-	* позавчера     [B_YESTERDAY_FAVORITES] =&gt; количество посетителей, добавивших
-	* сайт в                                "Избранное", за позавчера     [PERIOD_HITS] =&gt;
-	* количество хитов за установленный период времени                     
-	* (<i>filter</i>[<b>DATE1</b>], <i>filter</i>[<b>DATE2</b>])     [PERIOD_SESSIONS] =&gt; количество сессий
-	* за установленный период времени     [PERIOD_EVENTS] =&gt; количество
-	* событий за установленный период времени     [PERIOD_NEW_GUESTS] =&gt;
-	* количество новых посетителей за установленный                           
-	* период времени     [PERIOD_FAVORITES] =&gt; количество посетителей,
-	* добавивших сайт в                           "Избранное", за установленный
-	* период времени     [ONLINE_GUESTS] =&gt; количество <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#online">посетителей в online</a> )</pre><p></p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // получим данные по посещаемости сайта
-	* $arr = <b>CTraffic::GetCommonValues</b>();
-	* 
-	* echo "Всего хитов: ".$arr["TOTAL_HITS"];
-	* echo "Сегодня хитов: ".$arr["TODAY_HITS"];
-	* 
-	* echo "Всего хостов: ".$arr["TOTAL_HOSTS"];
-	* echo "Сегодня хостов: ".$arr["TODAY_HOSTS"];
-	* 
-	* echo "Всего посетителей: ".$arr["TOTAL_GUESTS"];
-	* echo "Сегодня посетителей: ".$arr["TODAY_GUESTS"];
-	* echo "Посетителей в онлайн: ".$arr["ONLINE_GUESTS"];
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cuseronline/getguestcount.php">CUserOnline::GetGuestCount</a>
-	* </li>   <li> <a href="http://www.1c-bitrix.ru/user_help/statistic/stat_list.php">Отчет "Сводная
-	* статистика"</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/ctraffic/getcommonvalues.php
-	* @author Bitrix
-	*/
 	public static function GetCommonValues($arFilter=Array(), $bIgnoreErrors=false)
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
 
-		$site_id = $arFilter["SITE_ID"];
-		if(strlen($site_id)>0 && $site_id!="NOT_REF")
+		$site_id = ($arFilter["SITE_ID"] ?? '');
+		if($site_id <> '' && $site_id!="NOT_REF")
 		{
 			$site_filter = true;
 			$strSqlSearch = " and SITE_ID = '".$DB->ForSql($site_id, 2)."' ";
@@ -596,13 +336,13 @@ class CTraffic extends CAllTraffic
 			$strSqlSearch = "";
 		}
 
-		$date1 = $arFilter["DATE1"];
-		$date2 = $arFilter["DATE2"];
-		if(strlen($date1)>0 && CheckDateTime($date1))
+		$date1 = ($arFilter["DATE1"] ?? '');
+		$date2 = ($arFilter["DATE2"] ?? '');
+		if($date1 <> '' && CheckDateTime($date1))
 		{
 			$is_filtered = true;
 			$date_from = MkDateTime(ConvertDateTime($date1,"D.M.Y"),"d.m.Y");
-			if(strlen($date2)>0 && CheckDateTime($date2))
+			if($date2 <> '' && CheckDateTime($date2))
 			{
 				$date_to = MkDateTime(ConvertDateTime($date2,"D.M.Y")." 23:59","d.m.Y H:i");
 				$strSqlPeriod = "sum(if(DATE_STAT<FROM_UNIXTIME('$date_from'),0, if(DATE_STAT>FROM_UNIXTIME('$date_to'),0,";
@@ -614,7 +354,7 @@ class CTraffic extends CAllTraffic
 				$strT="))";
 			}
 		}
-		elseif(strlen($date2)>0 && CheckDateTime($date2))
+		elseif($date2 <> '' && CheckDateTime($date2))
 		{
 			$is_filtered = true;
 			$date_to = MkDateTime(ConvertDateTime($date2,"D.M.Y")." 23:59","d.m.Y H:i");
@@ -694,90 +434,13 @@ class CTraffic extends CAllTraffic
 		return $result;
 	}
 
-
-	
-	/**
-	* <p>Возвращает количество <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#referer">ссылающихся сайтов</a> за весь период ведения статистики, за последние 3 дня, а также за произвольный указанный интервал времени.</p>
-	*
-	*
-	* @param string &$by = "ref_today" Поле для сортировки. Возможные значения:          <ul> <li> <b>ref_server</b> -
-	* ссылающийся сайт; </li>                    <li> <b>ref_today</b> - количество заходов с
-	* ссылающегося сайта за сегодня; </li>                    <li> <b>ref_yesterday</b> -
-	* количество заходов с ссылающегося сайта за вчера; </li>                   
-	* <li> <b>ref_bef_yesterday</b> - количество заходов с ссылающегося сайта за
-	* позавчера; </li>                    <li> <b>ref_total</b> - суммарное количество
-	* заходов с ссылающегося сайта; </li>                    <li> <b>ref_period</b> -
-	* количество заходов с ссылающегося сайта за установленный период
-	* времени <nobr>(<i>filter</i>[<b>DATE1</b>], <i>filter</i>[<b>DATE2</b>])</nobr>. </li>         </ul>
-	*
-	* @param string &$order = "desc" Порядок сортировки. Возможные значения:          <ul> <li> <b>asc</b> - по
-	* возрастанию; </li>                    <li> <b>desc</b> - по убыванию. </li>         </ul>
-	*
-	* @param array $filter = array() Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи:          <ul> <li> <b>SITE_ID</b> - ID сайта для
-	* которого необходимо получить статистику по ссылающимся сайтам;
-	* </li>                    <li> <b>DATE1</b> - начальная дата; </li>                    <li> <b>DATE2</b> -
-	* конечная дата. </li>         </ul>
-	*
-	* @param bool &$is_filtered  Флаг отфильтрованности списка ссылающихся сайтов. Если значение
-	* равно "true", то список был отфильтрован.
-	*
-	* @param mixed $limit = 10 Максимальное число записей результирующего списка. Если задано
-	* число &gt;0, то число записей будет ограничено, иначе ограничений не
-	* будет.
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // получим дополнительные данные за декабрь 2007 года
-	* $arFilter = array(
-	*     "DATE1" =&gt; "01.12.2007",
-	*     "DATE2" =&gt; "31.12.2007"
-	*     );
-	* 
-	* // получим список поисковых фраз и статистику по ним
-	* $rs = <b>CTraffic::GetRefererList</b>(
-	*     ($by="ref_today"), 
-	*     ($order="desc"), 
-	*     $arFilter, 
-	*     $is_filtered, 
-	*     false
-	*     );
-	* 
-	* while ($ar = $rs-&gt;Fetch())
-	* {
-	*     echo "ссылающийся сайт: ".$ar["SITE_NAME"]."&lt;br&gt;";
-	*     echo "всего заходов с данного ссылающегося сайта: ".
-	*          $ar["TOTAL_REFERERS"]."&lt;br&gt;";
-	*     echo "сегодня: ".$ar["TODAY_REFERERS"]."&lt;br&gt;";
-	*     echo "вчера: ".$ar["YESTERDAY_REFERERS"]."&lt;br&gt;";
-	*     echo "позавчера: ".$ar["B_YESTERDAY_REFERERS"]."&lt;br&gt;";
-	*     echo "в течение декабря 2005 года: ".
-	*          $ar["PERIOD_REFERERS"]."&lt;br&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/classes/creferer/index.php">Класс "CReferer"</a>
-	* </li>   <li> <a href="http://www.1c-bitrix.ru/user_help/statistic/stat_list.php">Отчет "Сводная
-	* статистика"</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/ctraffic/getrefererlist.php
-	* @author Bitrix
-	*/
-	public static function GetRefererList(&$by, &$order, $arFilter=Array(), &$is_filtered, $limit=10)
+	public static function GetRefererList($by = 'ref_today', $order = 'desc', $arFilter = [], &$is_filtered = false, $limit = 10)
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
 
-		$site_id = $arFilter["SITE_ID"];
-		if (strlen($site_id)>0 && $site_id!="NOT_REF")
+		$site_id = $arFilter["SITE_ID"] ?? '';
+		if ($site_id <> '' && $site_id!="NOT_REF")
 		{
 			$is_filtered = true;
 			$strSqlSearch = " and SITE_ID = '".$DB->ForSql($site_id, 2)."' ";
@@ -788,19 +451,19 @@ class CTraffic extends CAllTraffic
 			$strSqlSearch = "";
 		}
 
-		$date1 = $arFilter["DATE1"];
-		$date2 = $arFilter["DATE2"];
+		$date1 = $arFilter["DATE1"] ?? '';
+		$date2 = $arFilter["DATE2"] ?? '';
 		$date_from = MkDateTime(ConvertDateTime($date1,"D.M.Y"),"d.m.Y");
 		$date_to = MkDateTime(ConvertDateTime($date2,"D.M.Y")." 23:59","d.m.Y H:i");
-		if (strlen($date1)>0)
+		if ($date1 <> '')
 		{
 			$date_filtered = $is_filtered = true;
-			if (strlen($date2)>0)
+			if ($date2 <> '')
 				$strSqlPeriod = " sum(if(DATE_HIT<FROM_UNIXTIME('$date_from'),0, if(date_hit>FROM_UNIXTIME('$date_to'),0,1)))";
 			else
 				$strSqlPeriod = " sum(if(DATE_HIT<FROM_UNIXTIME('$date_from'),0,1))";
 		}
-		elseif (strlen($date2)>0)
+		elseif ($date2 <> '')
 		{
 			$date_filtered = $is_filtered = true;
 			$strSqlPeriod = " sum(if(DATE_HIT>FROM_UNIXTIME('$date_to'),0,1))";
@@ -825,15 +488,14 @@ class CTraffic extends CAllTraffic
 			$strSqlOrder = " ORDER BY PERIOD_REFERERS";
 		else
 		{
-			$by = "ref_today";
 			$strSqlOrder = "ORDER BY TODAY_REFERERS desc, YESTERDAY_REFERERS desc, B_YESTERDAY_REFERERS desc, TOTAL_REFERERS ";
 		}
 
 		if ($order!="asc")
 		{
 			$strSqlOrder .= " desc ";
-			$order="desc";
 		}
+
 		$strSql = "
 			SELECT
 				SITE_NAME,
@@ -860,105 +522,32 @@ class CTraffic extends CAllTraffic
 		return $DB->Query($strSql, false, $err_mess.__LINE__);
 	}
 
-	
-	/**
-	* <p>Возвращает количество <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#search">поисковых фраз</a> за весь период ведения статистики, за последние 3 дня, а также за произвольный указанный интервал времени.</p>
-	*
-	*
-	* @param string &$by = "s_today" Поле для сортировки. Возможные значения:          <ul> <li> <b>s_phrase</b> -
-	* поисковая фраза; </li>                    <li> <b>s_today</b> - количество поисковых
-	* фраз за сегодня; </li>                    <li> <b>s_yesterday</b> - количество поисковых
-	* фраз за вчера; </li>                    <li> <b>s_bef_yesterday</b> - количество поисковых
-	* фраз за позавчера; </li>                    <li> <b>s_total</b> - суммарное количество
-	* поисковых фраз; </li>                    <li> <b>s_period</b> - количество поисковых
-	* фраз за установленный период времени <nobr>(<i>filter</i>[<b>DATE1</b>],
-	* <i>filter</i>[<b>DATE2</b>])</nobr>. </li>         </ul>
-	*
-	* @param string &$order = "desc" Порядок сортировки. Возможные значения:          <ul> <li> <b>asc</b> - по
-	* возрастанию; </li>                    <li> <b>desc</b> - по убыванию. </li>         </ul>
-	*
-	* @param array $filter = array() Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи:          <ul> <li> <b>SITE_ID</b> - ID сайта для
-	* которого необходимо получить статистику по поисковым фразам; </li> 
-	*                   <li> <b>DATE1</b> - начальная дата; </li>                    <li> <b>DATE2</b> -
-	* конечная дата. </li>         </ul>
-	*
-	* @param bool &$is_filtered  Флаг отфильтрованности списка поисковых фраз. Если значение
-	* равно "true", то список был отфильтрован.
-	*
-	* @param mixed $limit = 10 Максимальное число записей результирующего списка. Если задано
-	* число &gt;0, то число записей будет ограничено, иначе ограничений не
-	* будет.
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // получим дополнительные данные за декабрь 2007 года
-	* $arFilter = array(
-	*     "DATE1" =&gt; "01.12.2007",
-	*     "DATE2" =&gt; "31.12.2007"
-	*     );
-	* 
-	* // получим список поисковых фраз и статистику по ним
-	* $rs = CTraffic::GetPhraseList($by="s_today", 
-	*                               $order="desc", 
-	*                               $arFilter, 
-	*                               $is_filtered, 
-	*                               false);
-	* while ($ar = $rs-&gt;Fetch())
-	* {
-	*     echo "поисковая фраза: ".$ar["PHRASE"]."&lt;br&gt;";
-	*     echo "всего заходов с данной поисковой фразой: ".
-	*          $ar["TOTAL_PHRASES"].
-	*          "&lt;br&gt;";
-	*     echo "сегодня: ".$ar["TODAY_PHRASES"]."&lt;br&gt;";
-	*     echo "вчера: ".$ar["YESTERDAY_PHRASES"]."&lt;br&gt;";
-	*     echo "позавчера: ".$ar["B_YESTERDAY_PHRASES"]."&lt;br&gt;";
-	*     echo "в течение декабря 2005 года: ".
-	*          $ar["PERIOD_PHRASES"]."&lt;br&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cphrase/index.php">Класс "CPhrase"</a> </li> 
-	*  <li> <a href="http://www.1c-bitrix.ru/user_help/statistic/stat_list.php">Отчет "Сводная
-	* статистика"</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/ctraffic/getphraselist.php
-	* @author Bitrix
-	*/
-	public static function GetPhraseList(&$s_by, &$s_order, $arFilter=Array(), &$is_filtered, $limit=10)
+	public static function GetPhraseList($s_by = 's_today', $s_order = 'desc', $arFilter = [], &$is_filtered = false, $limit = 10)
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
 		$strSqlSearch = "";
 
-		$site_id = $arFilter["SITE_ID"];
-		if (strlen($site_id)>0 && $site_id!="NOT_REF")
+		$site_id = $arFilter["SITE_ID"] ?? '';
+		if ($site_id <> '' && $site_id!="NOT_REF")
 		{
 			$is_filtered = true;
 			$strSqlSearch = " and SITE_ID = '".$DB->ForSql($site_id, 2)."' ";
 		}
 
-		$date1 = $arFilter["DATE1"];
-		$date2 = $arFilter["DATE2"];
+		$date1 = $arFilter["DATE1"] ?? '';
+		$date2 = $arFilter["DATE2"] ?? '';
 		$date_from = MkDateTime(ConvertDateTime($date1,"D.M.Y"),"d.m.Y");
 		$date_to = MkDateTime(ConvertDateTime($date2,"D.M.Y")." 23:59","d.m.Y H:i");
-		if (strlen($date1)>0)
+		if ($date1 <> '')
 		{
 			$date_filtered = $is_filtered = true;
-			if (strlen($date2)>0)
+			if ($date2 <> '')
 				$strSqlPeriod = " sum(if(DATE_HIT<FROM_UNIXTIME('$date_from'),0, if(date_hit>FROM_UNIXTIME('$date_to'),0,1)))";
 			else
 				$strSqlPeriod = " sum(if(DATE_HIT<FROM_UNIXTIME('$date_from'),0,1))";
 		}
-		elseif (strlen($date2)>0)
+		elseif ($date2 <> '')
 		{
 			$date_filtered = $is_filtered = true;
 			$strSqlPeriod = " sum(if(DATE_HIT>FROM_UNIXTIME('$date_to'),0,1))";
@@ -983,14 +572,12 @@ class CTraffic extends CAllTraffic
 			$strSqlOrder = " ORDER BY PERIOD_PHRASES ";
 		else
 		{
-			$s_by = "s_today";
 			$strSqlOrder = " ORDER BY TODAY_PHRASES desc, YESTERDAY_PHRASES desc, B_YESTERDAY_PHRASES desc, TOTAL_PHRASES ";
 		}
 
 		if ($s_order != "asc")
 		{
 			$strSqlOrder .= " desc ";
-			$s_order="desc";
 		}
 
 		$strSql = "
@@ -1019,4 +606,3 @@ class CTraffic extends CAllTraffic
 		return $DB->Query($strSql, false, $err_mess.__LINE__);
 	}
 }
-?>

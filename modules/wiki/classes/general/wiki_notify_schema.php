@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CWikiNotifySchema
 {
-	static public function __construct()
+	public function __construct()
 	{
 	}
 
@@ -23,5 +23,3 @@ class CWikiNotifySchema
 		);
 	}
 }
-
-?>

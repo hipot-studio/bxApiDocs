@@ -1,22 +1,22 @@
-<?
+<?php
+
 abstract class CBPRuntimeService
 {
 	protected $runtime;
 
-	public function SetRuntime(CBPRuntime $runtime)
+	public function setRuntime(CBPRuntime $runtime)
 	{
 		$this->runtime = $runtime;
 	}
 
-	public function Start(CBPRuntime $runtime = null)
+	public function start(CBPRuntime $runtime = null)
 	{
 		if ($runtime != null)
 			$this->SetRuntime($runtime);
 	}
 
-	static public function Stop()
+	public function stop()
 	{
 		
 	}
 }
-?>

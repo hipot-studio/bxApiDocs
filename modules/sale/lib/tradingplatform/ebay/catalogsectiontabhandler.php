@@ -23,7 +23,7 @@ class CatalogSectionTabHandler extends TabHandler
 	protected static $ebayCategoriesVariations = array();
 	protected static $ebayRequiredVariations = array();
 
-	static public function Action($arArgs)
+	public function Action($arArgs)
 	{
 		if(!isset($_POST["SALE"]["EBAY"]))
 			return true;
@@ -74,7 +74,7 @@ class CatalogSectionTabHandler extends TabHandler
 
 		foreach($ebayCatVar as $key => $ebayCategoryVariation)
 		{
-			if(!isset($bitrixCatProps[$key]) || strlen($ebayCategoryVariation) <=0 )
+			if(!isset($bitrixCatProps[$key]) || $ebayCategoryVariation == '' )
 				continue;
 
 			$fields = array(
@@ -98,7 +98,7 @@ class CatalogSectionTabHandler extends TabHandler
 
 		foreach($ebayCategoriesIds as $ebayCategoryId)
 		{
-			if(strlen(trim($ebayCategoryId)) <= 0)
+			if(trim($ebayCategoryId) == '')
 				continue;
 
 			$fields = array(
@@ -125,7 +125,7 @@ class CatalogSectionTabHandler extends TabHandler
 		return $result;
 	}
 
-	static public function Check($arArgs)
+	public function Check($arArgs)
 	{
 		if(!isset($_POST["SALE"]["EBAY"]["EBAY_CATEGORY_VARIATIONS"]) || !is_array($_POST["SALE"]["EBAY"]["EBAY_CATEGORY_VARIATIONS"]))
 			return true;
@@ -151,7 +151,7 @@ class CatalogSectionTabHandler extends TabHandler
 
 				if($variationIdx === false
 				||!isset($_POST["SALE"]["EBAY"]["BITRIX_CATEGORY_PROPS"][$variationIdx])
-				|| strlen($_POST["SALE"]["EBAY"]["BITRIX_CATEGORY_PROPS"][$variationIdx]) <=0 )
+				|| $_POST["SALE"]["EBAY"]["BITRIX_CATEGORY_PROPS"][$variationIdx] == '' )
 				{
 					$result = false;
 					break;
@@ -165,7 +165,7 @@ class CatalogSectionTabHandler extends TabHandler
 		return $result;
 	}
 
-	static public function ShowTabSection($divName, $arArgs, $bVarsFromForm)
+	public function ShowTabSection($divName, $arArgs, $bVarsFromForm)
 	{
 		$ebay = \Bitrix\Sale\TradingPlatform\Ebay\Ebay::getInstance();
 		$settings = $ebay->getSettings();
@@ -180,8 +180,8 @@ class CatalogSectionTabHandler extends TabHandler
 		//categories
 		$resultHtml =
 			'<tr>'.
-				'<td width="20%" valign="top">'.Loc::getMessage("SALE_EBAY_CSTH_CATEGORY").':</td>'.
-				'<td width="80%">';
+				'<td width="40%" valign="top">'.Loc::getMessage("SALE_EBAY_CSTH_CATEGORY").':</td>'.
+				'<td width="60%">';
 
 		$catMapRes = \Bitrix\Sale\TradingPlatform\MapTable::getList(array(
 			"filter" => array(
@@ -259,16 +259,16 @@ class CatalogSectionTabHandler extends TabHandler
 				$policyPayment = $arMapRes["PARAMS"]["POLICY"]["PAYMENT"];
 		}
 
-		if(strlen($policyReturn) <= 0 && !empty($siteSettings["POLICY"]["RETURN"]["DEFAULT"]))
+		if($policyReturn == '' && !empty($siteSettings["POLICY"]["RETURN"]["DEFAULT"]))
 			$policyReturn = $siteSettings["POLICY"]["RETURN"]["DEFAULT"];
 
-		if(strlen($policyShipping) <= 0 && !empty($siteSettings["POLICY"]["SHIPPING"]["DEFAULT"]))
+		if($policyShipping == '' && !empty($siteSettings["POLICY"]["SHIPPING"]["DEFAULT"]))
 			$policyShipping = $siteSettings["POLICY"]["SHIPPING"]["DEFAULT"];
 
-		if(strlen($policyPayment) <= 0 && !empty($siteSettings["POLICY"]["PAYMENT"]["DEFAULT"]))
+		if($policyPayment == '' && !empty($siteSettings["POLICY"]["PAYMENT"]["DEFAULT"]))
 			$policyPayment = $siteSettings["POLICY"]["PAYMENT"]["DEFAULT"];
 
-		if(isset($siteSettings["API"]["AUTH_TOKEN"]) && strlen($siteSettings["API"]["AUTH_TOKEN"]) > 0)
+		if(isset($siteSettings["API"]["AUTH_TOKEN"]) && $siteSettings["API"]["AUTH_TOKEN"] <> '')
 			$policy = new \Bitrix\Sale\TradingPlatform\Ebay\Policy($siteSettings["API"]["AUTH_TOKEN"], $arArgs["IBLOCK"]["LID"]);
 		else
 			$errorMsg .= "You must set API token first!\n";

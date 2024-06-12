@@ -6,7 +6,7 @@ use Bitrix\Main\ArgumentNullException;
 
 class Results extends DataConverter
 {
-	static public function convert($data)
+	public function convert($data)
 	{
 		if(!isset($data["RESULT_ID"]))
 			throw new ArgumentNullException("data[\"RESULT_ID\"]");
@@ -16,7 +16,7 @@ class Results extends DataConverter
 
 		$result["ARRAY"]= \Bitrix\Sale\TradingPlatform\Xml2Array::convert($data["CONTENT"]);
 		$result["RESULT_ID"] = $data["RESULT_ID"];
-		$result["XML"] = $data["CONTENT"];
+		$result["XML"] = $data["CONTENT"] <> '' ? $data["CONTENT"] : "<?xml version='1.0' encoding='UTF-8'?>";
 
 		return $result;
 	}

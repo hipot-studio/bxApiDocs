@@ -9,6 +9,7 @@ namespace Bitrix\Sale\Internals;
 
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Data\DataManager;
 
 Loc::loadMessages(__FILE__);
 
@@ -22,12 +23,26 @@ Loc::loadMessages(__FILE__);
  * <li> BASKET_ID int mandatory
  * <li> QUANTITY unknown mandatory
  * <li> RESERVED_QUANTITY unknown mandatory
+ * <li> PURCHASING_PRICE float mandatory
  * </ul>
  *
  * @package Bitrix\Sale
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_ShipmentItem_Query query()
+ * @method static EO_ShipmentItem_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_ShipmentItem_Result getById($id)
+ * @method static EO_ShipmentItem_Result getList(array $parameters = [])
+ * @method static EO_ShipmentItem_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentItem createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentItem_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentItem wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentItem_Collection wakeUpCollection($rows)
+ */
 
-class ShipmentItemTable extends Main\Entity\DataManager
+class ShipmentItemTable extends DataManager
 {
 
 	/**
@@ -35,17 +50,6 @@ class ShipmentItemTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает путь к файлу, содержащему определение класса. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/shipmentitemtable/getfilepath.php
-	* @author Bitrix
-	*/
 	public static function getFilePath()
 	{
 		return __FILE__;
@@ -82,17 +86,6 @@ class ShipmentItemTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы базы данных, в которой хранятся составы отгрузок. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/shipmentitemtable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_sale_order_dlv_basket';
@@ -103,17 +96,6 @@ class ShipmentItemTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы, в которой хранятся составы отгрузок. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/shipmentitemtable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		global $DB;
@@ -141,6 +123,12 @@ class ShipmentItemTable extends Main\Entity\DataManager
 				'required' => true,
 				'title' => Loc::getMessage('ORDER_DELIVERY_BASKET_ENTITY_BASKET_ID_FIELD'),
 			),
+			'BASKET' => array(
+				'data_type' => 'Bitrix\Sale\Internals\Basket',
+				'reference' => array(
+					'=this.BASKET_ID' => 'ref.ID'
+				)
+			),
 			'DATE_INSERT' => array(
 				'data_type' => 'datetime'
 			),
@@ -160,6 +148,7 @@ class ShipmentItemTable extends Main\Entity\DataManager
 				'required' => true,
 				'title' => Loc::getMessage('ORDER_DELIVERY_BASKET_ENTITY_RESERVED_QUANTITY_FIELD'),
 			),
+			'XML_ID' => array('data_type' => 'string'),
 		);
 	}
 }

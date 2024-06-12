@@ -6,6 +6,8 @@
  * @copyright 2001-2013 Bitrix
  */
 
+use Bitrix\Main;
+
 class CTimeZone
 {
 	protected static $enabled = 1;
@@ -70,8 +72,15 @@ class CTimeZone
 		uasort($aTZ, array('CTimeZone', '__tzsort'));
 
 		$aZones = array(""=>GetMessage("tz_local_time"));
-		foreach($aTZ as $z)
-			$aZones[$z['timezone_id']] = '(UTC'.($z['offset'] <> 0? ' '.($z['offset'] < 0? '-':'+').sprintf("%02d", ($h = floor(abs($z['offset'])/3600))).':'.sprintf("%02d", abs($z['offset'])/60 - $h*60) : '').') '.$z['timezone_id'];
+		foreach ($aTZ as $z)
+		{
+			$offset = '';
+			if ($z['offset'] != 0)
+			{
+				$offset = ' ' . Main\Type\DateTime::secondsToOffset($z['offset'], ':');
+			}
+			$aZones[$z['timezone_id']] = '(UTC' . $offset . ') ' . $z['timezone_id'];
+		}
 
 		return $aZones;
 	}
@@ -81,38 +90,64 @@ class CTimeZone
 		/** @global CMain $APPLICATION */
 		global $APPLICATION, $USER;
 
-		$cookie_prefix = COption::GetOptionString('main', 'cookie_name', 'BITRIX_SM');
-		if(self::IsAutoTimeZone(trim($USER->GetParam("AUTO_TIME_ZONE"))))
+		$cookiePrefix = COption::GetOptionString('main', 'cookie_name', 'BITRIX_SM');
+		$autoTimeZone = $USER->GetParam("AUTO_TIME_ZONE") ?: '';
+		if (self::IsAutoTimeZone(trim($autoTimeZone)))
 		{
+			$cookieDate = (new \Bitrix\Main\Type\DateTime())->add("12M");
+			$cookieDate->setDate((int)$cookieDate->format('Y'), (int)$cookieDate->format('m'), 1);
+			$cookieDate->setTime(0,	0);
+
 			$APPLICATION->AddHeadString(
-				'<script type="text/javascript">var bxDate = new Date(); document.cookie="'.$cookie_prefix.'_TIME_ZONE="+bxDate.getTimezoneOffset()+"; path=/; expires=Fri, 01-Jan-2038 00:00:00 GMT"</script>', true
+				'<script type="text/javascript">if (Intl && Intl.DateTimeFormat) document.cookie="'.$cookiePrefix.'_TZ="+Intl.DateTimeFormat().resolvedOptions().timeZone+"; path=/; expires='.$cookieDate->format("r").'";</script>', true
 			);
 		}
-		elseif(isset($_COOKIE[$cookie_prefix."_TIME_ZONE"]))
+		elseif (isset($_COOKIE[$cookiePrefix."_TZ"]))
 		{
-			unset($_COOKIE[$cookie_prefix."_TIME_ZONE"]);
-			setcookie($cookie_prefix."_TIME_ZONE", "", time()-3600, "/");
+			setcookie($cookiePrefix."_TZ", "", time()-3600, "/");
 		}
+
+		if (isset($_COOKIE[$cookiePrefix."_TIME_ZONE"]))
+		{
+			// delete deprecated cookie
+			setcookie($cookiePrefix."_TIME_ZONE", "", time()-3600, "/");
+		}
+	}
+
+	public static function getTzCookie()
+	{
+		$context = Main\Context::getCurrent();
+		if ($context)
+		{
+			return $context->getRequest()->getCookie('TZ');
+		}
+		return null;
 	}
 
 	public static function IsAutoTimeZone($autoTimeZone)
 	{
-		if($autoTimeZone == "Y")
+		if ($autoTimeZone === "Y")
 		{
 			return true;
 		}
-		if($autoTimeZone == '')
+		if (empty($autoTimeZone))
 		{
 			static $defAutoZone = null;
-			if($defAutoZone === null)
+			if ($defAutoZone === null)
 			{
 				$defAutoZone = (COption::GetOptionString("main", "auto_time_zone", "N") == "Y");
 			}
+
 			return $defAutoZone;
 		}
+
 		return false;
 	}
 
+	/**
+	 * @deprecated
+	 * @return int|null
+	 */
 	public static function GetCookieValue()
 	{
 		static $cookie_prefix = null;
@@ -130,6 +165,7 @@ class CTimeZone
 	}
 
 	/**
+	 * @deprecated
 	 * Emulates timezone got from JS cookie setter like in SetAutoCookie.
 	 *
 	 * @param int $timezoneOffset Time zone offset
@@ -154,16 +190,16 @@ class CTimeZone
 	{
 		global $USER;
 
-		if($forced)
+		if ($forced)
 		{
-			if(!self::OptionEnabled())
+			if (!self::OptionEnabled())
 			{
 				return 0;
 			}
 		}
 		else
 		{
-			if(!self::Enabled())
+			if (!self::Enabled())
 			{
 				return 0;
 			}
@@ -171,62 +207,68 @@ class CTimeZone
 
 		try //possible DateTimeZone incorrect timezone
 		{
-			$localTime = new DateTime();
-			$localOffset = $localTime->getOffset();
-			$userOffset = $localOffset;
+			$timeZone = '';
 
-			$autoTimeZone = $userZone = '';
-			$factOffset = 0;
-			if($USER_ID !== null)
+			if ($USER_ID !== null)
 			{
-				$dbUser = CUser::GetByID($USER_ID);
-				if(($arUser = $dbUser->Fetch()))
+				$dbUser = CUser::GetList('id', 'asc', ['ID_EQUAL_EXACT' => $USER_ID], ['FIELDS' => ['AUTO_TIME_ZONE', 'TIME_ZONE', 'TIME_ZONE_OFFSET']]);
+				if (($arUser = $dbUser->Fetch()))
 				{
-					$autoTimeZone = trim($arUser["AUTO_TIME_ZONE"]);
-					$userZone = $arUser["TIME_ZONE"];
-					$factOffset = $arUser["TIME_ZONE_OFFSET"];
+					if (self::IsAutoTimeZone(trim($arUser["AUTO_TIME_ZONE"])))
+					{
+						// can't detect auto timezone for a non-current user, return actual offset from the DB
+						return intval($arUser["TIME_ZONE_OFFSET"]);
+					}
+					$timeZone = $arUser["TIME_ZONE"];
 				}
 			}
-			elseif(is_object($USER))
+			elseif (is_object($USER))
 			{
-				$autoTimeZone = trim($USER->GetParam("AUTO_TIME_ZONE"));
-				$userZone = $USER->GetParam("TIME_ZONE");
-			}
-
-			if($autoTimeZone == "N")
-			{
-				//manually set time zone
-				$userTime = ($userZone <> ""? new DateTime(null, new DateTimeZone($userZone)) : $localTime);
-				$userOffset = $userTime->getOffset();
-			}
-			else
-			{
-				if(self::IsAutoTimeZone($autoTimeZone))
+				// current user
+				$autoTimeZone = $USER->GetParam("AUTO_TIME_ZONE") ?: '';
+				if (self::IsAutoTimeZone(trim($autoTimeZone)))
 				{
-					if($USER_ID !== null)
+					if (($cookie = static::getTzCookie()) !== null)
 					{
-						//auto time zone from DB
-						return $factOffset;
+						// auto time zone from the cookie
+						$timeZone = $cookie;
 					}
-					if(($cookie = self::GetCookieValue()) !== null)
+					elseif (($cookie = static::GetCookieValue()) !== null)
 					{
-						//auto time zone from cookie
-						$userOffset = -($cookie)*60;
+						//auto time offset from old cookie - deprecated
+						$localOffset = (new DateTime())->getOffset();
+						$userOffset = -($cookie) * 60;
+
+						return $userOffset - $localOffset;
 					}
 				}
 				else
 				{
-					//default server time zone
-					$serverZone = COption::GetOptionString("main", "default_time_zone", "");
-					$serverTime = ($serverZone <> ""? new DateTime(null, new DateTimeZone($serverZone)) : $localTime);
-					$userOffset = $serverTime->getOffset();
+					// user set time zone manually
+					$timeZone = $USER->GetParam("TIME_ZONE");
 				}
 			}
+
+			if ($timeZone == '')
+			{
+				//default server time zone
+				$timeZone = COption::GetOptionString("main", "default_time_zone", "");
+			}
+
+			if ($timeZone != '')
+			{
+				$localOffset = (new DateTime())->getOffset();
+
+				$userTime = new DateTime('now', new DateTimeZone($timeZone));
+				$userOffset = $userTime->getOffset();
+
+				return $userOffset - $localOffset;
+			}
 		}
-		catch(Exception $e)
+		catch (Throwable $e)
 		{
-			return 0;
 		}
-		return $userOffset - $localOffset;
+
+		return 0;
 	}
 }

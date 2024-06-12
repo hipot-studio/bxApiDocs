@@ -1,4 +1,6 @@
-<?
+<?php
+
+use Bitrix\Main;
 use Bitrix\Sale;
 
 IncludeModuleLangFile(__FILE__);
@@ -38,10 +40,15 @@ class CSaleLang
 		return Bitrix\Sale\Internals\SiteCurrencyTable::getCurrency($siteId);
 	}
 
-	/*
-	* @deprecated deprecated since sale 15.0.0
-	* @see \Bitrix\Sale\Internals\SiteCurrencyTable::getSiteCurrency
-	*/
+	/**
+	 * Return site currency.
+	 *
+	 * @deprecated deprecated since sale 15.0.0
+	 * @see \Bitrix\Sale\Internals\SiteCurrencyTable::getSiteCurrency
+	 *
+	 * @param string $siteId        Site identifier.
+	 * @return string
+	 */
 	public static function GetLangCurrency($siteId)
 	{
 		return Sale\Internals\SiteCurrencyTable::getSiteCurrency($siteId);
@@ -49,14 +56,15 @@ class CSaleLang
 
 	public static function OnBeforeCurrencyDelete($currency)
 	{
-		global $DB, $APPLICATION;
+		global $APPLICATION;
 
-		if (strlen($currency)<=0)
+		$currency = (string)$currency;
+		if ($currency === '')
 			return true;
 
 		if (Bitrix\Sale\Internals\SiteCurrencyTable::getList(array(
 			'select' => array('*'),
-			'filter' => array('=CURRENCY' => $DB->ForSQL($currency, 3)),
+			'filter' => array('=CURRENCY' => $currency),
 			'limit'  => 1
 		))->fetch())
 		{
@@ -64,22 +72,42 @@ class CSaleLang
 			return false;
 		}
 
+		//TODO: change this call Option::get after remove RUB from default_option
+		$saleCurrency = (string)Main\Config\Option::get('sale', 'default_currency', '-');
+		if ($saleCurrency == $currency)
+		{
+			$APPLICATION->ThrowException(
+				GetMessage(
+					"SKGO_ERROR_DEFAULT_CURRENCY",
+					array("#CURRENCY#" => $currency)
+				),
+				"ERROR_CURRENCY"
+			);
+			return false;
+		}
+
+		return true;
+	}
+
+	public static function OnLangDelete($langId)
+	{
+		Sale\Internals\SiteCurrencyTable::delete($langId);
+
 		return true;
 	}
 }
-
 
 class CAllSaleGroupAccessToSite
 {
 	public static function CheckFields($ACTION, &$arFields, $ID = 0)
 	{
-		if ((is_set($arFields, "GROUP_ID") || $ACTION=="ADD") && IntVal($arFields["GROUP_ID"])<=0)
+		if ((is_set($arFields, "GROUP_ID") || $ACTION=="ADD") && intval($arFields["GROUP_ID"])<=0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException("Empty group field", "EMPTY_GROUP_ID");
 			return false;
 		}
 
-		if ((is_set($arFields, "SITE_ID") || $ACTION=="ADD") && strlen($arFields["SITE_ID"])<=0)
+		if ((is_set($arFields, "SITE_ID") || $ACTION=="ADD") && $arFields["SITE_ID"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException("Empty site field", "EMPTY_SITE_ID");
 			return false;
@@ -92,7 +120,7 @@ class CAllSaleGroupAccessToSite
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGS_NO_ID"), "NO_ID");
@@ -113,7 +141,7 @@ class CAllSaleGroupAccessToSite
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$strSql =
 			"SELECT * ".
@@ -131,7 +159,7 @@ class CAllSaleGroupAccessToSite
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGS_NO_DEL_ID"), "NO_ID");
@@ -146,7 +174,7 @@ class CAllSaleGroupAccessToSite
 		global $DB;
 
 		$SITE_ID = Trim($SITE_ID);
-		if (strlen($SITE_ID) <= 0)
+		if ($SITE_ID == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGS_NO_DEL_SITE"), "NO_SITE_ID");
 			return false;
@@ -159,7 +187,7 @@ class CAllSaleGroupAccessToSite
 	{
 		global $DB;
 
-		$GROUP_ID = IntVal($GROUP_ID);
+		$GROUP_ID = intval($GROUP_ID);
 		if ($GROUP_ID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGS_NO_DEL_GROUP"), "NO_GROUP_ID");
@@ -170,18 +198,17 @@ class CAllSaleGroupAccessToSite
 	}
 }
 
-
 class CAllSaleGroupAccessToFlag
 {
 	public static function CheckFields($ACTION, &$arFields, $ID = 0)
 	{
-		if ((is_set($arFields, "GROUP_ID") || $ACTION=="ADD") && IntVal($arFields["GROUP_ID"])<=0)
+		if ((is_set($arFields, "GROUP_ID") || $ACTION=="ADD") && intval($arFields["GROUP_ID"])<=0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException("Empty group field", "EMPTY_GROUP_ID");
 			return false;
 		}
 
-		if ((is_set($arFields, "ORDER_FLAG") || $ACTION=="ADD") && strlen($arFields["ORDER_FLAG"])<=0)
+		if ((is_set($arFields, "ORDER_FLAG") || $ACTION=="ADD") && $arFields["ORDER_FLAG"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException("Empty flag field", "EMPTY_ORDER_FLAG");
 			return false;
@@ -194,7 +221,7 @@ class CAllSaleGroupAccessToFlag
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGS_NO_ID"), "NO_ID");
@@ -215,7 +242,7 @@ class CAllSaleGroupAccessToFlag
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$strSql =
 			"SELECT * ".
@@ -233,7 +260,7 @@ class CAllSaleGroupAccessToFlag
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGS_NO_DEL_ID"), "NO_ID");
@@ -247,7 +274,7 @@ class CAllSaleGroupAccessToFlag
 	{
 		global $DB;
 
-		$GROUP_ID = IntVal($GROUP_ID);
+		$GROUP_ID = intval($GROUP_ID);
 		if ($GROUP_ID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGS_NO_DEL_GROUP"), "NO_GROUP_ID");
@@ -262,7 +289,7 @@ class CAllSaleGroupAccessToFlag
 		global $DB;
 
 		$ORDER_FLAG = Trim($ORDER_FLAG);
-		if (strlen($ORDER_FLAG) <= 0)
+		if ($ORDER_FLAG == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGS_NO_DEL_FLAG"), "NO_ORDER_FLAG");
 			return false;

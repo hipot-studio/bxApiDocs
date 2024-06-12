@@ -4,10 +4,10 @@ use Bitrix\Main;
 class YahooCsvFileImport extends CsvFileImport
 {
 	protected $headerMap = null;
-	protected static $PHONE_TYPES = array('Home', 'Work', 'Pager', 'Fax', 'Mobile', 'Other');
-	protected static $WEB_SITE_TYPES = array('Personal', 'Business');
-	protected static $ADDRESS_TYPES = array('Work', 'Home');
-	protected static $IM_TYPES = array('Skype', 'ICQ', 'MSN', 'Jabber');
+	protected static $phoneTypes = array('Home', 'Work', 'Pager', 'Fax', 'Mobile', 'Other');
+	protected static $webSiteTypes = array('Personal', 'Business');
+	protected static $addressTypes = array('Work', 'Home');
+	protected static $imTypes = array('Skype', 'ICQ', 'MSN', 'Jabber');
 
 	public function __construct()
 	{
@@ -92,7 +92,7 @@ class YahooCsvFileImport extends CsvFileImport
 		$phoneInfos = $this->getPhones($data);
 		foreach($phoneInfos as &$phoneInfo)
 		{
-			$valueType = strtoupper($phoneInfo['VALUE_TYPE']);
+			$valueType = mb_strtoupper($phoneInfo['VALUE_TYPE']);
 			$result["PHONE_{$valueType}"] = $phoneInfo['VALUE'];
 		}
 		unset($phoneInfo);
@@ -100,7 +100,7 @@ class YahooCsvFileImport extends CsvFileImport
 		$websiteInfos = $this->getWebsites($data);
 		foreach($websiteInfos as &$websiteInfo)
 		{
-			$valueType = strtoupper($websiteInfo['VALUE_TYPE']);
+			$valueType = mb_strtoupper($websiteInfo['VALUE_TYPE']);
 			if($valueType === 'PERSONAL')
 			{
 				$valueType = 'HOME';
@@ -120,7 +120,7 @@ class YahooCsvFileImport extends CsvFileImport
 		$imInfos = $this->getInstantMessengers($data);
 		foreach($imInfos as $imInfo)
 		{
-			$valueType = strtoupper($imInfo['VALUE_TYPE']);
+			$valueType = mb_strtoupper($imInfo['VALUE_TYPE']);
 			$this->addMultifieldValue('IM', $valueType, $imInfo['VALUE'], $result);
 		}
 		unset($imInfo);
@@ -182,7 +182,7 @@ class YahooCsvFileImport extends CsvFileImport
 
 		$result = array();
 		$value = '';
-		foreach(self::$PHONE_TYPES as $type)
+		foreach(self::$phoneTypes as $type)
 		{
 			if($this->tryToGetValue($type, $data, $value, $map, true) && $value !== '')
 			{
@@ -200,7 +200,7 @@ class YahooCsvFileImport extends CsvFileImport
 		$result = array();
 
 		$value = '';
-		foreach(self::$WEB_SITE_TYPES as $type)
+		foreach(self::$webSiteTypes as $type)
 		{
 			if($this->tryToGetValue("{$type} Website", $data, $value, $map, true) && $value !== '')
 			{
@@ -221,7 +221,7 @@ class YahooCsvFileImport extends CsvFileImport
 		}
 
 		$result = array();
-		foreach(self::$ADDRESS_TYPES as $type)
+		foreach(self::$addressTypes as $type)
 		{
 			$info = $this->getAddress(
 				$data,
@@ -253,7 +253,7 @@ class YahooCsvFileImport extends CsvFileImport
 
 		$result = array();
 		$value = '';
-		foreach(self::$IM_TYPES as $type)
+		foreach(self::$imTypes as $type)
 		{
 			if($this->tryToGetValue("{$type} ID", $data, $value, $map, true) && $value !== '')
 			{

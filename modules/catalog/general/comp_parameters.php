@@ -4,35 +4,28 @@ use Bitrix\Main\Localization\Loc,
 
 Loc::loadMessages(__FILE__);
 
-
-/**
- * Данный класс используется в файле <b>.parameters.php</b> компонентов модуля <b>Торговый каталог</b>.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/catalog/classes/ccatalogiblockparameters/index.php
- * @author Bitrix
- */
 class CCatalogIBlockParameters
 {
-	
 	/**
-	* <p>Метод возвращает массив полей каталога, по которым можно сортировать. Метод статический.</p>
-	*
-	*
-	* @return array <br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/catalog/classes/ccatalogiblockparameters/getcatalogsortfields.php
-	* @author Bitrix
-	*/
+	 * @return array
+	 */
 	public static function GetCatalogSortFields()
 	{
-		return array(
-			'CATALOG_AVAILABLE' => Loc::getMessage('IBLOCK_SORT_FIELDS_CATALOG_AVAILABLE_EXT')
-		);
+		$result = [
+			'CATALOG_AVAILABLE' => Loc::getMessage('IBLOCK_SORT_FIELDS_CATALOG_AVAILABLE_EXT'),
+			//'CATALOG_WEIGHT' => Loc::getMessage('IBLOCK_SORT_FIELDS_CATALOG_WEIGHT')
+		];
+
+		foreach (\CCatalogGroup::getListArray() as $row)
+		{
+			$id = 'SCALED_PRICE_'.$row['ID'];
+			$title = (string)$row['NAME_LANG'];
+			$result[$id] = '['.$row['ID'].'] ['.$row['NAME'].']'.($title != '' ? ' '.$title : '').' '.
+				Loc::getMessage('IBLOCK_SORT_FIELDS_PRICE_WITHOUT_DISCOUNT');
+		}
+		unset($title, $id, $row);
+
+		return $result;
 	}
 
 	/**

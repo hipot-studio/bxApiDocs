@@ -2,13 +2,14 @@
 namespace Bitrix\Sale\PaySystem;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Context;
+use Bitrix\Main\Text;
 use Bitrix\Main\Error;
 use Bitrix\Main\IO;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Request;
 use Bitrix\Sale\BusinessValue;
 use Bitrix\Sale\Payment;
-use Bitrix\Sale\Result;
 
 Loc::loadMessages(__FILE__);
 
@@ -21,14 +22,16 @@ abstract class BaseServiceHandler
 	const ACTIVE_URL = 'active';
 
 	protected $handlerType = '';
-	
+
 	protected $service = null;
-	
+
 	protected $extraParams = array();
 	protected $initiateMode = self::STREAM;
-	
+
 	/** @var bool */
 	protected $isClone = false;
+
+	private array $businessCodes = [];
 
 	/**
 	 * @param Payment $payment
@@ -38,6 +41,7 @@ abstract class BaseServiceHandler
 	abstract public function initiatePay(Payment $payment, Request $request = null);
 
 	/**
+	 * BaseServiceHandler constructor.
 	 * @param $type
 	 * @param Service $service
 	 */
@@ -67,6 +71,12 @@ abstract class BaseServiceHandler
 			if ($this->initiateMode == self::STREAM)
 			{
 				require($templatePath);
+
+				if ($this->service->getField('ENCODING') != '')
+				{
+					define("BX_SALE_ENCODING", $this->service->getField('ENCODING'));
+					AddEventHandler('main', 'OnEndBufferContent', array($this, 'OnEndBufferContent'));
+				}
 			}
 			elseif ($this->initiateMode == self::STRING)
 			{
@@ -74,8 +84,14 @@ abstract class BaseServiceHandler
 				$content = require($templatePath);
 
 				$buffer = ob_get_contents();
-				if (strlen($buffer) > 0)
+				if ($buffer <> '')
 					$content = $buffer;
+
+				if ($this->service->getField('ENCODING') != '')
+				{
+					$encoding = Context::getCurrent()->getCulture()->getCharset();
+					$content = Text\Encoding::convertEncoding($content, $encoding, $this->service->getField('ENCODING'));
+				}
 
 				$result->setTemplate($content);
 				ob_end_clean();
@@ -83,13 +99,7 @@ abstract class BaseServiceHandler
 		}
 		else
 		{
-			$result->addError(new Error('SALE_PS_BASE_SERVICE_TEMPLATE_ERROR'));
-		}
-
-		if ($this->service->getField('ENCODING') != '')
-		{
-			// define("BX_SALE_ENCODING", $this->service->getField('ENCODING'));
-			AddEventHandler('main', 'OnEndBufferContent', array($this, 'OnEndBufferContent'));
+			$result->addError(new Error(Loc::getMessage('SALE_PS_BASE_SERVICE_TEMPLATE_ERROR')));
 		}
 
 		return $result;
@@ -104,27 +114,36 @@ abstract class BaseServiceHandler
 		$documentRoot = Application::getDocumentRoot();
 		$siteTemplate = \CSite::GetCurTemplate();
 		$template = Manager::sanitize($template);
-		$handlerName = $this->getName();
+		$handlerName = static::getName();
 
 		$folders = array();
 
-		$folders[] = '/local/templates/'.$siteTemplate.'/payment/'.$handlerName.'/template';
+		$folders[] = '/local/templates/' . $siteTemplate . '/payment/' . $handlerName . '/template';
 		if ($siteTemplate !== '.default')
-			$folders[] = '/local/templates/.default/payment/'.$handlerName.'/template';
+		{
+			$folders[] = '/local/templates/.default/payment/' . $handlerName . '/template';
+		}
 
-		$folders[] = '/bitrix/templates/'.$siteTemplate.'/payment/'.$handlerName.'/template';
+		$folders[] = '/bitrix/templates/' . $siteTemplate . '/payment/' . $handlerName . '/template';
 		if ($siteTemplate !== '.default')
-			$folders[] = '/bitrix/templates/.default/payment/'.$handlerName.'/template';
+		{
+			$folders[] = '/bitrix/templates/.default/payment/' . $handlerName . '/template';
+		}
 
 		$baseFolders = Manager::getHandlerDirectories();
-		$folders[] = $baseFolders[$this->handlerType].$handlerName.'/template';
+		if (isset($baseFolders[$this->handlerType]))
+		{
+			$folders[] = $baseFolders[$this->handlerType] . $handlerName . '/template';
+		}
 
 		foreach ($folders as $folder)
 		{
-			$templatePath = $documentRoot.$folder.'/'.$template.'.php';
+			$templatePath = $documentRoot . $folder . '/' . $template . '.php';
 
 			if (IO\File::isFileExists($templatePath))
+			{
 				return $templatePath;
+			}
 		}
 
 		return '';
@@ -164,7 +183,13 @@ abstract class BaseServiceHandler
 	 */
 	protected function getBusinessValue(Payment $payment = null, $code)
 	{
-		return BusinessValue::getValueFromProvider($payment, $code, $this->service->getConsumerName());
+		$value = BusinessValue::get($code, $this->service->getConsumerName(), $payment);
+		if (is_string($value))
+		{
+			$value = trim($value);
+		}
+
+		return $value;
 	}
 
 	/**
@@ -172,16 +197,43 @@ abstract class BaseServiceHandler
 	 */
 	public function getDescription()
 	{
-		$data = array();
-		$documentRoot = Application::getDocumentRoot();
-		$dirs = Manager::getHandlerDirectories();
-		$handlerDir = $dirs[$this->handlerType];
-		$file = $documentRoot.$handlerDir.$this->getName().'/.description.php';
+		$description = $this->includeDescription();
 
-		if (IO\File::isFileExists($file))
-			require $file;
+		if (isset($description['CODES']) && is_array($description['CODES']))
+		{
+			$description['CODES'] = $this->filterDescriptionCodes($description['CODES']);
+		}
 
-		return $data;
+		return $description;
+	}
+
+	/**
+	 * @param $codes
+	 * @return array
+	 */
+	protected function filterDescriptionCodes($codes)
+	{
+		$psMode = $this->service->getField('PS_MODE');
+
+		return array_filter(
+			$codes,
+			static function ($code, $key) use ($psMode)
+			{
+				if (!isset($code['HANDLER_MODE']))
+				{
+					return true;
+				}
+
+				if (!is_array($code['HANDLER_MODE']))
+				{
+					trigger_error('HANDLER_MODE must be an array', E_USER_WARNING);
+					return false;
+				}
+
+				return in_array($psMode, $code['HANDLER_MODE'], true);
+			},
+			ARRAY_FILTER_USE_BOTH
+		);
 	}
 
 	/**
@@ -189,22 +241,23 @@ abstract class BaseServiceHandler
 	 */
 	protected function getBusinessCodes()
 	{
-		static $data = array();
-
-		if (!$data)
+		if (!$this->businessCodes)
 		{
-			$result = $this->getDescription();
-			if ($result['CODES'])
-				$data = array_keys($result['CODES']);
+			$description = $this->includeDescription();
+
+			if (isset($description['CODES']) && is_array($description['CODES']))
+			{
+				$this->businessCodes = array_keys($description['CODES']);
+			}
 		}
 
-		return $data;
+		return $this->businessCodes;
 	}
 
 	/**
 	 * @return array
 	 */
-	private function getExtraParams()
+	protected function getExtraParams()
 	{
 		return $this->extraParams;
 	}
@@ -223,10 +276,36 @@ abstract class BaseServiceHandler
 	public abstract function getCurrencyList();
 
 	/**
+	 * The type of client that the handler can work with
+	 *
+	 * If, depending on PS_MODE, the handler can work with different types of clients,
+	 * then you can implement validation in a similar way:
+	 *
+	 * ```php
+	 * 	public function getClientType($psMode)
+	 * 	{
+	 * 		if ($psMode === self::MODE_ALFABANK)
+	 *		{
+	 *			return ClientType::B2B;
+	 *		}
+	 *
+	 *		return ClientType::B2C;
+	 *	}
+	 * ```
+	 *
+	 * @param string $psMode pay system type
+	 * @return string
+	 */
+	public function getClientType($psMode)
+	{
+		return ClientType::DEFAULT;
+	}
+
+	/**
 	 * @param Payment $payment
 	 * @return ServiceResult
 	 */
-	static public function creditNoDemand(Payment $payment)
+	public function creditNoDemand(Payment $payment)
 	{
 		return new ServiceResult();
 	}
@@ -235,17 +314,9 @@ abstract class BaseServiceHandler
 	 * @param Payment $payment
 	 * @return ServiceResult
 	 */
-	static public function debitNoDemand(Payment $payment)
+	public function debitNoDemand(Payment $payment)
 	{
 		return new ServiceResult();
-	}
-
-	/**
-	 * @return bool
-	 */
-	static public function isAffordPdf()
-	{
-		return false;
 	}
 
 	/**
@@ -313,7 +384,7 @@ abstract class BaseServiceHandler
 	/**
 	 * @param \SplObjectStorage $cloneEntity
 	 *
-	 * @return Service
+	 * @return BaseServiceHandler
 	 */
 	public function createClone(\SplObjectStorage $cloneEntity)
 	{
@@ -360,11 +431,49 @@ abstract class BaseServiceHandler
 	/**
 	 * @param $content
 	 */
-	static public function OnEndBufferContent(&$content)
+	public function OnEndBufferContent(&$content)
 	{
-		global $APPLICATION;
-		header("Content-Type: text/html; charset=".BX_SALE_ENCODING);
-		$content = $APPLICATION->ConvertCharset($content, SITE_CHARSET, BX_SALE_ENCODING);
-		$content = str_replace("charset=".SITE_CHARSET, "charset=".BX_SALE_ENCODING, $content);
+		if (
+			strpos($content, 'charset=') !== false
+			&& strpos($content, "charset=".SITE_CHARSET) !== false
+		)
+		{
+			header("Content-Type: text/html; charset=".BX_SALE_ENCODING);
+			$content = Text\Encoding::convertEncoding($content, SITE_CHARSET, BX_SALE_ENCODING);
+			$content = str_replace("charset=".SITE_CHARSET, "charset=".BX_SALE_ENCODING, $content);
+		}
+	}
+
+	/**
+	 * @return array
+	 */
+	public function getDemoParams()
+	{
+		return array();
+	}
+
+	/**
+	 * @return bool
+	 */
+	public function isTuned()
+	{
+		return true;
+	}
+
+	protected function includeDescription(): array
+	{
+		$data = null;
+
+		$documentRoot = Application::getDocumentRoot();
+		$dirs = Manager::getHandlerDirectories();
+		$handlerDir = $dirs[$this->handlerType];
+		$file = $documentRoot . $handlerDir . static::getName() . '/.description.php';
+
+		if (IO\File::isFileExists($file))
+		{
+			require $file;
+		}
+
+		return (isset($data) && is_array($data)) ? $data : [];
 	}
 }

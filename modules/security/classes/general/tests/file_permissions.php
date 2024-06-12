@@ -59,7 +59,7 @@ class CSecurityFilePermissionsTest
 	 * @param array $params
 	 * @return array
 	 */
-	public function check($params = array())
+	public function check(array $params = array())
 	{
 		$this->initializeParams($params);
 		if(!self::isRunOnWin())
@@ -120,7 +120,7 @@ class CSecurityFilePermissionsTest
 	 */
 	protected static function isInterestingFile($pFileName)
 	{
-		return is_file($pFileName) && in_array(substr($pFileName, -4), self::$interestingFileExtentions, true);
+		return is_file($pFileName) && in_array(mb_substr($pFileName, -4), self::$interestingFileExtentions, true);
 	}
 
 	/**

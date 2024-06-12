@@ -1,56 +1,10 @@
 <?php
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * Класс поддержки правил сортировки.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/index.php
- * @author Bitrix
- */
 class CSearchCustomRank
 {
 	var $LAST_ERROR = "";
 
-	
-	/**
-	* <p>Получение списка правил сортировки по фильтру. Метод статический.</p>
-	*
-	*
-	* @param array $arrayaSort = array() Массив, содержащий признак сортировки в виде наборов "название
-	* поля"=&gt;"направление". <br><br> 		Название поля может принимать
-	* значение названия любого из полей <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/fields.php">объекта правила
-	* сортировки</a>. 		Не обязательный параметр. По умолчанию равен: 		<pre
-	* class="syntax"> 		array( 			"SITE_ID"=&gt;"ASC", 			"MODULE_ID"=&gt;"ASC", 			"PARAM1"=&gt;"DESC",
-	* 			"PARAM2"=&gt;"DESC", 			"ITEM_ID"=&gt;"DESC", 		) 		</pre>
-	*
-	* @param array $arrayaFilter = array() Массив, содержащий фильтр в виде наборов "название
-	* поля"=&gt;"значение фильтра". <br><br> 		Название поля может принимать
-	* значение названия любого из полей <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/fields.php">объекта правила
-	* сортировки</a>. 		Фильтрация осуществляется по точному совпадению
-	* значения фильтра и правила. 		Не обязательный параметр.
-	*
-	* @return CDBResult <p>Возвращается результат запроса типа <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>. 	При выборке из
-	* результата методами класса CDBResult становятся доступны поля <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/fields.php">объекта правила
-	* сортировки</a>.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/fields.php">Поля объекта
-	* правила сортировки</a></li> </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList($aSort = array(), $aFilter = array())
 	{
 		$DB = CDatabase::GetModuleConnection('search');
@@ -59,8 +13,8 @@ class CSearchCustomRank
 		foreach ($aFilter as $key => $val)
 		{
 			$val = $DB->ForSql($val);
-			$key = strtoupper($key);
-			if (strlen($val) <= 0)
+			$key = mb_strtoupper($key);
+			if ($val == '')
 				continue;
 			switch ($key)
 			{
@@ -79,8 +33,8 @@ class CSearchCustomRank
 		$arOrder = array();
 		foreach ($aSort as $key => $val)
 		{
-			$ord = (strtoupper($val) <> "ASC"? "DESC": "ASC");
-			$key = strtoupper($key);
+			$ord = (mb_strtoupper($val) <> "ASC"? "DESC": "ASC");
+			$key = mb_strtoupper($key);
 			switch ($key)
 			{
 			case "SITE_ID":
@@ -127,28 +81,6 @@ class CSearchCustomRank
 		return $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 	}
 
-	
-	/**
-	* <p>Получение правила сортировки по идентификатору. Метод статический.</p>
-	*
-	*
-	* @param mixed $intID  Идентификатор правила сортировки.
-	*
-	* @return CDBResult <p>Возвращается результат запроса типа <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>.  При выборке из
-	* результата методами класса CDBResult становятся доступны поля <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/fields.php">объекта правила
-	* сортировки</a>.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/fields.php">Поля объекта
-	* правила сортировки</a></li> </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
@@ -163,29 +95,6 @@ class CSearchCustomRank
 		return $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 	}
 
-	
-	/**
-	* <p>Удаление правила сортировки по идентификатору. Метод статический.</p> <p>После удаления всех требуемых правил необходимо пересчитать поисковый индекс методами <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/startupdate.php">CSearchCustomRank::StartUpdates</a> и <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/nextupdate.php">CSearchCustomRank::NextUpdate</a>.</p>
-	*
-	*
-	* @param mixed $intID  Идентификатор правила сортировки.
-	*
-	* @return CDBResult <p>Если правило успешно удалено, то возвращается результат
-	* запроса типа <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>, в
-	* противном случае метод вернет false.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/startupdate.php">CSearchCustomRank::StartUpdates</a></li>
-	* 	<li><a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/nextupdate.php">CSearchCustomRank::NextUpdate</a></li>
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
@@ -194,47 +103,22 @@ class CSearchCustomRank
 		return $DB->Query("DELETE FROM b_search_custom_rank WHERE ID=".$ID, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 	}
 
-	public function CheckFields($arFields)
+	function CheckFields($arFields)
 	{
 		$this->LAST_ERROR = "";
 
-		if (is_set($arFields, "SITE_ID") && strlen($arFields["SITE_ID"]) == 0)
+		if (is_set($arFields, "SITE_ID") && $arFields["SITE_ID"] == '')
 			$this->LAST_ERROR .= GetMessage("customrank_error_site")."<br>";
-		if (is_set($arFields, "MODULE_ID") && strlen($arFields["MODULE_ID"]) == 0)
+		if (is_set($arFields, "MODULE_ID") && $arFields["MODULE_ID"] == '')
 			$this->LAST_ERROR .= GetMessage("customrank_error_module")."<br>";
 
-		if (strlen($this->LAST_ERROR) > 0)
+		if ($this->LAST_ERROR <> '')
 			return false;
 		else
 			return true;
 	}
 
-	
-	/**
-	* <p>Метод добавляет новое правило. Нестатический метод.</p>   <p>После удаления всех требуемых правил необходимо пересчитать поисковый индекс методами <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/startupdate.php">CSearchCustomRank::StartUpdates</a> и <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/nextupdate.php">CSearchCustomRank::NextUpdate</a>.</p>
-	*
-	*
-	* @param array $arFields  Массив со значениями полей <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/fields.php">объекта правила
-	* сортировки</a>.
-	*
-	* @return int <p>В случае успешного добавления возвращается ID нового правила. В
-	* противном случае возвращается false.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/fields.php">Поля объекта
-	* правила сортировки</a></li>  	   <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/startupdate.php">CSearchCustomRank::StartUpdates</a></li>
-	*  	   <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/nextupdate.php">CSearchCustomRank::NextUpdate</a></li>
-	*  </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/add.php
-	* @author Bitrix
-	*/
-	public function Add($arFields)
+	function Add($arFields)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 
@@ -244,34 +128,7 @@ class CSearchCustomRank
 		return $DB->Add("b_search_custom_rank", $arFields);
 	}
 
-	
-	/**
-	* <p>Изменение правила сортировки. Нестатический метод.</p> <p>После удаления всех требуемых правил необходимо пересчитать поисковый индекс методами <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/startupdate.php">CSearchCustomRank::StartUpdate</a> и <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/nextupdate.php">CSearchCustomRank::NextUpdate</a>.</p>
-	*
-	*
-	* @param mixed $intID  Идентификатор правила.
-	*
-	* @param array $arFields  Массив со значениями полей <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/fields.php">объекта правила
-	* сортировки</a>.
-	*
-	* @return bool <p>В случае успешного добавления возвращается true. В противном
-	* случает возвращается false.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/fields.php">Поля объекта
-	* правила сортировки</a></li> 	<li><a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/startupdate.php">CSearchCustomRank::StartUpdate</a></li>
-	* 	<li><a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/nextupdate.php">CSearchCustomRank::NextUpdate</a></li>
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/update.php
-	* @author Bitrix
-	*/
-	public function Update($ID, $arFields)
+	function Update($ID, $arFields)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$ID = intval($ID);
@@ -292,30 +149,7 @@ class CSearchCustomRank
 		return true;
 	}
 
-	
-	/**
-	* <p>Подготовка к применению изменений в правилах. Нестатический метод.</p> <p>Данный метод начинает процедуру применения правил сортировки к поисковому  индексу. Применение правил требуется всякий раз когда происходят их изменения  (<a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/add.php">CSearchCustomRank::Add</a>, <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/update.php">CSearchCustomRank::Update</a> и <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/delete.php">CSearchCustomRank::Delete</a>). При индексации данных или  после переиндексации данная процедура не требуется, т.к. правила сортировки  учитываются в процессе построения поискового индекса.</p> <p>Фактически данный метод сбрасывает все весовые коэффициенты. А для собственно  применения правил необходимо воспользоваться пошаговой <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/nextupdate.php">CSearchCustomRank::NextUpdate</a>.</p>
-	*
-	*
-	* @return CDBResult <p>В случае успешного выполнения возвращается объект CDBResult. В
-	* противном  случае возвращается false.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/nextupdate.php">CSearchCustomRank::NextUpdate</a>
-	*  	</li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/add.php">CSearchCustomRank::Add</a>  	</li> <li>
-	* <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/update.php">CSearchCustomRank::Update</a> 
-	* 	</li> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/delete.php">CSearchCustomRank::Delete</a></li>
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/startupdate.php
-	* @author Bitrix
-	*/
-	public static function StartUpdate()
+	function StartUpdate()
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$strSql = "
@@ -335,33 +169,7 @@ class CSearchCustomRank
 		return $rs;
 	}
 
-	
-	/**
-	* <p>Шаг применения изменений правил сортировки. Нестатический метод.</p>   <p>Данный метод применяет следующее непримененное правило сортировки к поисковому индексу. Применение правил требуется всякий раз когда происходят их изменения (<a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/add.php">CSearchCustomRank::Add</a>, <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/update.php">CSearchCustomRank::Update</a> и <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/delete.php">CSearchCustomRank::Delete</a>). При индексации данных или после переиндексации данная процедура не требуется, т.к. правила сортировки учитываются в процессе построения поискового индекса.</p>   <p>Перед началом применения правил необходимо инициировать процесс вызвав <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/startupdate.php">CSearchCustomRank::StartUpdates</a>.</p>
-	*
-	*
-	* @return array <p>В случае успешного выполнения возвращается массив следующей
-	* структуры:</p><ul> <li> <b>DONE</b> - количество уже примененных правил; 	</li>  
-	* <li> <b>TODO</b> - сколько правил еще надо применить.</li>  </ul><p>В противном
-	* случае возвращается false и через LAST_ERROR экземпляра класса можно
-	* получить текст сообщения об ошибке.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/startupdate.php">CSearchCustomRank::StartUpdates</a>
-	* 	</li>   <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/add.php">CSearchCustomRank::Add</a></li>   <li>
-	* <a href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/update.php">CSearchCustomRank::Update</a>
-	* 	</li>   <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/delete.php">CSearchCustomRank::Delete</a></li> 
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/search/classes/csearchcustomrank/nextupdate.php
-	* @author Bitrix
-	*/
-	public function NextUpdate()
+	function NextUpdate()
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 
@@ -508,14 +316,14 @@ class CSearchCustomRank
 	public static function ModulesSelectBox($sFieldName, $sValue, $sDefaultValue = "", $sFuncName = "", $field = "class=\"typeselect\"")
 	{
 		$s = '<select name="'.$sFieldName.'" id="'.$sFieldName.'" '.$field;
-		if (strlen($sFuncName) > 0) $s .= ' OnChange="'.$sFuncName.'"';
+		if ($sFuncName <> '') $s .= ' OnChange="'.$sFuncName.'"';
 		$s .= '>'."\n";
 
 		$s1 = '<option value="main"'.($sValue == "main"? ' selected': '').'>'.GetMessage("customrank_files").'</option>'."\n";
 		foreach (CSearchParameters::GetModulesList() as $module_id => $module_name)
 			$s1 .= '<option value="'.$module_id.'"'.($sValue == $module_id? ' selected': '').'>'.htmlspecialcharsEx($module_name).'</option>'."\n";
 
-		if (strlen($sDefaultValue) > 0)
+		if ($sDefaultValue <> '')
 			$s .= "<option value='NOT_REF'>".htmlspecialcharsEx($sDefaultValue)."</option>";
 
 		return $s.$s1.'</select>';

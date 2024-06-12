@@ -8,10 +8,33 @@
 namespace Bitrix\Main\Authentication;
 
 use Bitrix\Main;
-use Bitrix\Main\Entity;
+use Bitrix\Main\ORM;
+use Bitrix\Main\ORM\Data;
+use Bitrix\Main\ORM\Fields;
 
-class ApplicationPasswordTable extends Entity\DataManager
+/**
+ * Class ApplicationPasswordTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_ApplicationPassword_Query query()
+ * @method static EO_ApplicationPassword_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_ApplicationPassword_Result getById($id)
+ * @method static EO_ApplicationPassword_Result getList(array $parameters = [])
+ * @method static EO_ApplicationPassword_Entity getEntity()
+ * @method static \Bitrix\Main\Authentication\EO_ApplicationPassword createObject($setDefaultValues = true)
+ * @method static \Bitrix\Main\Authentication\EO_ApplicationPassword_Collection createCollection()
+ * @method static \Bitrix\Main\Authentication\EO_ApplicationPassword wakeUpObject($row)
+ * @method static \Bitrix\Main\Authentication\EO_ApplicationPassword_Collection wakeUpCollection($rows)
+ */
+class ApplicationPasswordTable extends Data\DataManager
 {
+	use Data\Internal\DeleteByFilterTrait;
+
+	protected const PASSWORD_ALPHABET = "qwertyuiopasdfghjklzxcvbnm";
+	protected const PASSWORD_LENGTH = 16;
+
 	public static function getTableName()
 	{
 		return "b_app_password";
@@ -20,28 +43,28 @@ class ApplicationPasswordTable extends Entity\DataManager
 	public static function getMap()
 	{
 		return array(
-			new Entity\IntegerField('ID', array(
+			new Fields\IntegerField('ID', array(
 				'primary' => true,
 				'autocomplete' => true
 			)),
-			new Entity\IntegerField('USER_ID', array(
+			new Fields\IntegerField('USER_ID', array(
 				'required' => true,
 				'validation' => '\Bitrix\Main\Authentication\ApplicationPasswordTable::getUserValidators',
 			)),
-			new Entity\StringField('APPLICATION_ID', array(
+			new Fields\StringField('APPLICATION_ID', array(
 				'required' => true,
 			)),
-			new Entity\StringField('PASSWORD', array(
+			new Fields\StringField('PASSWORD', array(
 				'required' => true,
 			)),
-			new Entity\StringField('DIGEST_PASSWORD'),
-			new Entity\DatetimeField('DATE_CREATE'),
-			new Entity\DatetimeField('DATE_LOGIN'),
-			new Entity\StringField('LAST_IP'),
-			new Entity\StringField('COMMENT'),
-			new Entity\StringField('SYSCOMMENT'),
-			new Entity\StringField('CODE'),
-			new Entity\ReferenceField(
+			new Fields\StringField('DIGEST_PASSWORD'),
+			new Fields\DatetimeField('DATE_CREATE'),
+			new Fields\DatetimeField('DATE_LOGIN'),
+			new Fields\StringField('LAST_IP'),
+			new Fields\StringField('COMMENT'),
+			new Fields\StringField('SYSCOMMENT'),
+			new Fields\StringField('CODE'),
+			new Fields\Relations\Reference(
 				'USER',
 				'Bitrix\Main\User',
 				array('=this.USER_ID' => 'ref.ID'),
@@ -53,23 +76,20 @@ class ApplicationPasswordTable extends Entity\DataManager
 	public static function getUserValidators()
 	{
 		return array(
-			new Entity\Validator\Foreign(Main\UserTable::getEntity()->getField('ID')),
+			new Fields\Validators\ForeignValidator(Main\UserTable::getEntity()->getField('ID')),
 		);
 	}
 
-	public static function onBeforeAdd(Entity\Event $event)
+	public static function onBeforeAdd(ORM\Event $event)
 	{
-		$result = new Entity\EventResult;
+		$result = new ORM\EventResult;
 		$data = $event->getParameter("fields");
 
 		if(isset($data["USER_ID"]) && isset($data['PASSWORD']))
 		{
-			$salt = md5(\CMain::GetServerUniqID().uniqid());
-			$password = $salt.md5($salt.$data['PASSWORD']);
-
-			$modified = array(
-				'PASSWORD' => $password,
-			);
+			$modified = [
+				'PASSWORD' => Main\Security\Password::hash($data['PASSWORD']),
+			];
 
 			$user = Main\UserTable::getRowById($data["USER_ID"]);
 			if($user !== null)
@@ -84,24 +104,43 @@ class ApplicationPasswordTable extends Entity\DataManager
 		return $result;
 	}
 
+	public static function onDelete(ORM\Event $event)
+	{
+		$id = $event->getParameter("id");
+
+		$row = static::getRowById($id);
+		if($row)
+		{
+			Main\UserAuthActionTable::addLogoutAction($row["USER_ID"], $row["APPLICATION_ID"]);
+		}
+	}
+
 	/**
 	 * Generates a random password.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод создаёт случайный пароль.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/authentication/applicationpasswordtable/generatepassword.php
-	* @author Bitrix
-	*/
 	public static function generatePassword()
 	{
-		return \randString(16, "qwertyuiopasdfghjklzxcvbnm");
+		return Main\Security\Random::getStringByCharsets(static::PASSWORD_LENGTH, static::PASSWORD_ALPHABET);
+	}
+
+	/**
+	 * Checks if the string is similar to a password by its structure.
+	 * @param string $password
+	 * @return bool
+	 */
+	public static function isPassword($password)
+	{
+		if (is_string($password))
+		{
+			$password = str_replace(' ', '', $password);
+
+			if(strlen($password) === static::PASSWORD_LENGTH)
+			{
+				return (!preg_match("/[^".static::PASSWORD_ALPHABET."]/", $password));
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -112,27 +151,12 @@ class ApplicationPasswordTable extends Entity\DataManager
 	 * @param bool $passwordOriginal
 	 * @return array|false
 	 */
-	
-	/**
-	* <p>Статический метод находит приложение по паролю пользователя. Возвращает массив с данными, либо <i>false</i>, если приложение не найдено.</p>
-	*
-	*
-	* @param integer $userId  id пользователя
-	*
-	* @param string $password  пароль
-	*
-	* @param boolean $passwordOriginal = true 
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/authentication/applicationpasswordtable/findpassword.php
-	* @author Bitrix
-	*/
 	public static function findPassword($userId, $password, $passwordOriginal = true)
 	{
-		$encodedPassword = substr($password, 32);
-		$noSpacePassword = str_replace(' ', '', $password);
+		if($passwordOriginal)
+		{
+			$password = str_replace(' ', '', $password);
+		}
 
 		$appPasswords = static::getList(array(
 			'select' => array('ID', 'PASSWORD', 'APPLICATION_ID'),
@@ -140,19 +164,7 @@ class ApplicationPasswordTable extends Entity\DataManager
 		));
 		while(($appPassword = $appPasswords->fetch()))
 		{
-			$dbPassword = substr($appPassword["PASSWORD"], 32);
-
-			if($passwordOriginal)
-			{
-				$appSalt = substr($appPassword["PASSWORD"], 0, 32);
-				$userPassword =  md5($appSalt.$noSpacePassword);
-			}
-			else
-			{
-				$userPassword = $encodedPassword;
-			}
-
-			if($dbPassword === $userPassword)
+			if(Main\Security\Password::equals($appPassword["PASSWORD"], $password, $passwordOriginal))
 			{
 				//bingo, application password
 				return $appPassword;
@@ -168,21 +180,6 @@ class ApplicationPasswordTable extends Entity\DataManager
 	 * @param array $digest See CHTTP::ParseDigest() for the array structure.
 	 * @return array|false
 	 */
-	
-	/**
-	* <p>Статический метод определяет приложение по digest авторизации пользователя.</p>
-	*
-	*
-	* @param integer $userId  id пользователя
-	*
-	* @param array $digest  массив параметра идентичен массиву <i>CHTTP::ParseDigest</i>.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/authentication/applicationpasswordtable/finddigestpassword.php
-	* @author Bitrix
-	*/
 	public static function findDigestPassword($userId, array $digest)
 	{
 		$appPasswords = static::getList(array(

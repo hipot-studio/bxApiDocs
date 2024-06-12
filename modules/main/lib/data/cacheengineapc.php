@@ -1,340 +1,157 @@
 <?php
 namespace Bitrix\Main\Data;
 
-class CacheEngineApc
-	implements ICacheEngine, ICacheEngineStat
+class CacheEngineApc extends CacheEngine
 {
-	private $sid = "BX";
-	//cache stats
-	private $written = false;
-	private $read = false;
-
-	protected $useLock = true;
-	protected $ttlMultiplier = 2;
-	protected static $locks = array();
-
-	/**
-	 * Engine constructor.
-	 *
-	 */
-	public function __construct()
+	public function getConnectionName() : string
 	{
-		$cacheConfig = \Bitrix\Main\Config\Configuration::getValue("cache");
-
-		if ($cacheConfig && is_array($cacheConfig))
-		{
-			if (isset($cacheConfig["use_lock"]))
-			{
-				$this->useLock = (bool)$cacheConfig["use_lock"];
-			}
-
-			if (isset($cacheConfig["sid"]) && ($cacheConfig["sid"] != ""))
-			{
-				$this->sid = $cacheConfig["sid"];
-			}
-
-			if (isset($cacheConfig["ttl_multiplier"]) && $this->useLock)
-			{
-				$this->ttlMultiplier = (integer)$cacheConfig["ttl_multiplier"];
-			}
-		}
-
-		$this->sid .= !$this->useLock;
-
-		if (!$this->useLock)
-		{
-			$this->ttlMultiplier = 1;
-		}
+		return '';
 	}
 
-	/**
-	 * Returns number of bytes read from apc or false if there was no read operation.
-	 *
-	 * @return integer|false
-	 */
-	public function getReadBytes()
+	public static function getConnectionClass()
 	{
-		return $this->read;
+		return CacheEngineApc::class;
 	}
 
-	/**
-	 * Returns number of bytes written to apc or false if there was no write operation.
-	 *
-	 * @return integer|false
-	 */
-	public function getWrittenBytes()
+	protected function connect($config)
 	{
-		return $this->written;
+		self::$isConnected = function_exists('apcu_fetch');
 	}
 
-	/**
-	 * Returns physical file path after read or write operation.
-	 * Stub function always returns '' (empty string).
-	 *
-	 * @return string
-	 */
-	static public function getCachePath()
+	public function set($key, $ttl, $value)
 	{
-		return "";
+		return apcu_store($key, $value, $ttl);
 	}
 
-	/**
-	 * Returns true if cache can be read or written.
-	 *
-	 * @return bool
-	 */
-	static public function isAvailable()
+	public function get($key)
 	{
-		return function_exists('apc_fetch');
+		return apcu_fetch($key);
 	}
 
-	/**
-	 * Tries to put non blocking exclusive lock on the cache entry.
-	 * Returns true on success.
-	 *
-	 * @param string $baseDir Base cache directory (usually /bitrix/cache).
-	 * @param string $initDir Directory within base.
-	 * @param string $key Calculated cache key.
-	 * @param integer $TTL Expiration period in seconds.
-	 *
-	 * @return boolean
-	 */
-	protected function lock($baseDir, $initDir, $key, $TTL)
+	public function del($key)
 	{
-		if (
-			isset(self::$locks[$baseDir])
-			&& isset(self::$locks[$baseDir][$initDir])
-			&& isset(self::$locks[$baseDir][$initDir][$key])
-		)
+		apcu_delete($key);
+	}
+
+	public function setNotExists($key, $ttl, $value)
+	{
+		$ttl = (int) $ttl;
+		return apcu_add($key, $value, $ttl);
+	}
+
+	public function addToSet($key, $value)
+	{
+		$cacheKey = sha1($key . '|' . $value);
+		if (array_key_exists($cacheKey, self::$listKeys))
 		{
-			return true;
-		}
-		elseif (apc_fetch($key)) //another process has the lock
-		{
-			return false;
-		}
-		else
-		{
-			$lock = apc_add($key, 1, intval($TTL));
-			if ($lock) //we are lucky to be the first
-			{
-				self::$locks[$baseDir][$initDir][$key] = true;
-				return true;
-			}
-			//xcache_dec have to be never called due to concurrency with xcache_set($key."~", 1, intval($TTL));
+			return;
 		}
 
-		return false;
+		$iexKey = $key . '|iex|' . $cacheKey;
+		$itemExist = apcu_fetch($iexKey);
+		if ($itemExist == $cacheKey)
+		{
+			return;
+		}
+
+		$list = apcu_fetch($key);
+
+		if (!is_array($list))
+		{
+			$list = [];
+		}
+
+		if (!array_key_exists($value, $list))
+		{
+			$list[$value] = 1;
+
+			apcu_store($key, $list, 0);
+			self::$listKeys[$cacheKey] = 1;
+		}
+
+		$this->set($iexKey, 2591000, $cacheKey);
 	}
 
-	/**
-	 * Releases the lock obtained by lock method.
-	 *
-	 * @param string $baseDir Base cache directory (usually /bitrix/cache).
-	 * @param string $initDir Directory within base.
-	 * @param string $key Calculated cache key.
-	 * @param integer $TTL Expiration period in seconds.
-	 *
-	 * @return void
-	 */
-	protected function unlock($baseDir, $initDir = false, $key = false, $TTL = 0)
+	public function getSet($key) : array
 	{
-		if ($key !== false)
+		$list = apcu_fetch($key);
+		if (!is_array($list) || empty($list))
 		{
-			if ($TTL > 0)
-			{
-				apc_store($key, 1, intval($TTL));
-			}
-			else
-			{
-				apc_delete($key);
-			}
-
-			unset(self::$locks[$baseDir][$initDir][$key]);
+			return [];
 		}
-		elseif ($initDir !== false)
+
+		return array_keys($list);
+	}
+
+	public function deleteBySet($key, $prefix = '')
+	{
+		$list = apcu_fetch($key);
+		if (is_array($list) && !empty($list))
 		{
-			if (isset(self::$locks[$baseDir][$initDir]))
+			foreach ($list as $iKey => $value)
 			{
-				foreach (self::$locks[$baseDir][$initDir] as $subKey)
+				if ($prefix == '')
 				{
-					$this->unlock($baseDir, $initDir, $subKey, $TTL);
+					apcu_delete($iKey);
+
 				}
-				unset(self::$locks[$baseDir][$initDir]);
+				else
+				{
+					apcu_delete($prefix . $iKey);
+				}
+
+				$cacheKey = sha1($key . '|' . $iKey);
+				$iexKey = $key . '|iex|' . $cacheKey;
+				$this->del($iexKey);
 			}
 		}
-		elseif ($baseDir !== false)
+	}
+
+	public function delFromSet($key, $member)
+	{
+		$list = apcu_fetch($key);
+
+		if (is_array($list) && !empty($list))
 		{
-			if (isset(self::$locks[$baseDir]))
+			$rewrite = false;
+			if (is_array($member))
 			{
-				foreach (self::$locks[$baseDir] as $subInitDir)
+				foreach ($member as $keyID)
 				{
-					$this->unlock($baseDir, $subInitDir, false, $TTL);
+					if (array_key_exists($keyID, $list))
+					{
+						$rewrite = true;
+						$cacheKey = sha1($key . '|' . $keyID);
+						unset($list[$keyID]);
+						unset(self::$listKeys[$cacheKey]);
+
+						$iexKey = $key . '|iex|' . $cacheKey;
+						$this->del($iexKey);
+					}
+				}
+			}
+			elseif (array_key_exists($member, $list))
+			{
+				$rewrite = true;
+				$cacheKey = sha1($key . '|' . $member);
+				unset(self::$listKeys[$cacheKey]);
+				unset($list[$member]);
+
+				$iexKey = $key . '|iex|' . $cacheKey;
+				$this->del($iexKey);
+			}
+
+			if ($rewrite)
+			{
+				if (empty($list))
+				{
+					apcu_delete($key);
+				}
+				else
+				{
+					apcu_store($key, $list, 0);
 				}
 			}
 		}
-	}
-
-	/**
-	 * Cleans (removes) cache directory or file.
-	 *
-	 * @param string $baseDir Base cache directory (usually /bitrix/cache).
-	 * @param string $initDir Directory within base.
-	 * @param string $filename File name.
-	 *
-	 * @return void
-	 */
-	public function clean($baseDir, $initDir = false, $filename = false)
-	{
-		$key = false;
-		if (strlen($filename))
-		{
-			$baseDirVersion = apc_fetch($this->sid.$baseDir);
-			if ($baseDirVersion === false)
-				return;
-
-			if ($initDir !== false)
-			{
-				$initDirVersion = apc_fetch($baseDirVersion."|".$initDir);
-				if ($initDirVersion === false)
-					return;
-			}
-			else
-			{
-				$initDirVersion = "";
-			}
-
-			$key = $baseDirVersion."|".$initDirVersion."|".$filename;
-			apc_delete($key);
-		}
-		else
-		{
-			if (strlen($initDir))
-			{
-				$baseDirVersion = apc_fetch($this->sid.$baseDir);
-				if ($baseDirVersion === false)
-					return;
-
-				apc_delete($baseDirVersion."|".$initDir);
-			}
-			else
-			{
-				apc_delete($this->sid.$baseDir);
-			}
-		}
-		$this->unlock($baseDir, $initDir, $key."~");
-	}
-
-	/**
-	 * Reads cache from the apc. Returns true if key value exists, not expired, and successfully read.
-	 *
-	 * @param mixed &$arAllVars Cached result.
-	 * @param string $baseDir Base cache directory (usually /bitrix/cache).
-	 * @param string $initDir Directory within base.
-	 * @param string $filename File name.
-	 * @param integer $TTL Expiration period in seconds.
-	 *
-	 * @return boolean
-	 */
-	public function read(&$arAllVars, $baseDir, $initDir, $filename, $TTL)
-	{
-		$baseDirVersion = apc_fetch($this->sid.$baseDir);
-		if ($baseDirVersion === false)
-			return false;
-
-		if ($initDir !== false)
-		{
-			$initDirVersion = apc_fetch($baseDirVersion."|".$initDir);
-			if ($initDirVersion === false)
-				return false;
-		}
-		else
-		{
-			$initDirVersion = "";
-		}
-
-		$key = $baseDirVersion."|".$initDirVersion."|".$filename;
-		$arAllVars = apc_fetch($key);
-
-		if ($arAllVars === false)
-		{
-			return false;
-		}
-		else
-		{
-			if ($this->useLock)
-			{
-				if ($this->lock($baseDir, $initDir, $key."~", $TTL))
-				{
-					return false;
-				}
-			}
-
-			$this->read = strlen($arAllVars);
-			$arAllVars = unserialize($arAllVars);
-		}
-
-		return true;
-	}
-
-	/**
-	 * Puts cache into the apc.
-	 *
-	 * @param mixed $arAllVars Cached result.
-	 * @param string $baseDir Base cache directory (usually /bitrix/cache).
-	 * @param string $initDir Directory within base.
-	 * @param string $filename File name.
-	 * @param integer $TTL Expiration period in seconds.
-	 *
-	 * @return void
-	 */
-	public function write($arAllVars, $baseDir, $initDir, $filename, $TTL)
-	{
-		$baseDirVersion = apc_fetch($this->sid.$baseDir);
-		if ($baseDirVersion === false)
-		{
-			$baseDirVersion = md5(mt_rand());
-			if (!apc_store($this->sid.$baseDir, $baseDirVersion))
-				return;
-		}
-
-		if ($initDir !== false)
-		{
-			$initDirVersion = apc_fetch($baseDirVersion."|".$initDir);
-			if ($initDirVersion === false)
-			{
-				$initDirVersion = md5(mt_rand());
-				if (!apc_store($baseDirVersion."|".$initDir, $initDirVersion))
-					return;
-			}
-		}
-		else
-		{
-			$initDirVersion = "";
-		}
-
-		$arAllVars = serialize($arAllVars);
-		$this->written = strlen($arAllVars);
-
-		$key = $baseDirVersion."|".$initDirVersion."|".$filename;
-		apc_store($key, $arAllVars, intval($TTL) * $this->ttlMultiplier);
-
-		if ($this->useLock)
-		{
-			$this->unlock($baseDir, $initDir, $key."~", $TTL);
-		}
-	}
-
-	/**
-	 * Returns true if cache has been expired.
-	 * Stub function always returns true.
-	 *
-	 * @param string $path Absolute physical path.
-	 *
-	 * @return boolean
-	 */
-	static public function isCacheExpired($path)
-	{
-		return false;
 	}
 }

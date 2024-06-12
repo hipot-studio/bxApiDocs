@@ -1,5 +1,10 @@
 <?php
-if (!CModule::IncludeModule('iblock'))
+use Bitrix\Main\Loader;
+use Bitrix\Catalog;
+use Bitrix\Iblock;
+use Bitrix\Crm;
+
+if (!Loader::includeModule('iblock'))
 {
 	return;
 }
@@ -43,7 +48,7 @@ class CAllCrmCatalog
 		if (!($arIBlockType = $dbIBlockType->Fetch()))
 		{
 			$langTmp = "";
-			$dbSite = CSite::GetById($siteID);
+			$dbSite = CSite::GetByID($siteID);
 			if ($arSite = $dbSite->Fetch())
 				$langTmp = $arSite["LANGUAGE_ID"];
 
@@ -73,7 +78,8 @@ class CAllCrmCatalog
 				"WORKFLOW" => 'N',
 				"BIZPROC" => 'N',
 				"VERSION" => 1,
-				"GROUP_ID" => array(2 => "R"),
+				"GROUP_ID" => array(1 => "X", 2 => "R"),
+				"LIST_MODE" => 'S'
 			);
 
 			$iblockId = $ib->Add($arFields);
@@ -97,6 +103,7 @@ class CAllCrmCatalog
 			));
 			if (!$res)
 			{
+				/** @var $ex \CAdminException */
 				if (($ex = $GLOBALS["APPLICATION"]->GetException()) !== false)
 					self::RegisterError($ex->GetString());
 				else
@@ -109,6 +116,12 @@ class CAllCrmCatalog
 		}
 
 		return $catalogId;
+	}
+
+	public static function GetFieldCaption($fieldName)
+	{
+		$result = GetMessage("CRM_CATALOG_FIELD_{$fieldName}");
+		return is_string($result) ? $result : '';
 	}
 
 	public static function GetFieldsInfo()
@@ -125,16 +138,20 @@ class CAllCrmCatalog
 					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Immutable)
 				),
 				'ORIGINATOR_ID' => array('TYPE' => 'string'),
-				'ORIGIN_ID' => array('TYPE' => 'string')
+				'ORIGIN_ID' => array('TYPE' => 'string'),
+				'XML_ID' => array(
+					'TYPE' => 'string',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
+				)
 			);
 		}
 
 		return self::$FIELD_INFOS;
-		}
+	}
 
 	public static function Add($arFields)
 	{
-		if (!CModule::IncludeModule('catalog'))
+		if (!Loader::includeModule('catalog'))
 		{
 			return false;
 		}
@@ -150,7 +167,7 @@ class CAllCrmCatalog
 
 		$DB->Add($tableName, $arFields, array(), '', false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
 
-		if(strlen($DB->db_Error) > 0)
+		if($DB->db_Error <> '')
 		{
 			self::RegisterError($DB->db_Error);
 			return false;
@@ -159,22 +176,28 @@ class CAllCrmCatalog
 		// -------------- register in catalog module -------------->
 		$catalogId = $arFields['ID'];
 		$arFields = array(
-			'IBLOCK_ID' => $catalogId,
-			'CATALOG' => 'Y'
+			'IBLOCK_ID' => $catalogId
 		);
 
 		// get default vat
+		// TODO: replace this code to use preset vat id
 		$defCatVatId = 0;
-		$dbVat = CCatalogVat::GetList(array('SORT' => 'ASC'));
-		if ($arVat = $dbVat->Fetch())
+		$iterator = \Bitrix\Catalog\VatTable::getList([
+			'select' => ['ID', 'SORT'],
+			'order' => ['SORT' => 'ASC'],
+			'limit' => 1
+		]);
+		$vat = $iterator->fetch();
+		if (!empty($vat))
 		{
-			$defCatVatId = $arVat['ID'];
-			unset($arVat);
+			$defCatVatId = (int)$vat['ID'];
 		}
-		unset($dbVat);
-		$defCatVatId = intval($defCatVatId);
+		unset($vat, $iterator);
 		if ($defCatVatId > 0)
+		{
 			$arFields['VAT_ID'] = $defCatVatId;
+		}
+		unset($defCatVatId);
 
 		// add crm iblock to catalog
 		$CCatalog = new CCatalog();
@@ -223,7 +246,7 @@ class CAllCrmCatalog
 
 	public static function Delete($ID)
 	{
-		if (!CModule::IncludeModule('catalog'))
+		if (!Loader::includeModule('catalog'))
 		{
 			return false;
 		}
@@ -299,6 +322,17 @@ class CAllCrmCatalog
 		return $lb->Prepare($arOrder, $arFilter, $arGroupBy, $arNavStartParams, $arSelectFields, $arOptions);
 	}
 
+	public static function GetAllIDs()
+	{
+		$result = array();
+		$dbResult = self::GetList(array(), array(), false, false, array('ID'));
+		while($fields = $dbResult->Fetch())
+		{
+			$result[] = (int)$fields['ID'];
+		}
+		return $result;
+	}
+
 	// Service -->
 	public static function Exists($ID)
 	{
@@ -316,7 +350,8 @@ class CAllCrmCatalog
 				'ORIGINATOR_ID' => array('FIELD' => 'C.ORIGINATOR_ID', 'TYPE' => 'string'),
 				'ORIGIN_ID' => array('FIELD' => 'C.ORIGIN_ID', 'TYPE' => 'string'),
 				//'IBLOCK_TYPE_ID' => array('FIELD' => 'I.IBLOCK_TYPE_ID', 'TYPE' => 'int', 'FROM' => 'INNER JOIN b_iblock I ON C.ID = I.ID'),
-				'NAME' => array('FIELD' => 'I.NAME', 'TYPE' => 'string', 'FROM' => 'INNER JOIN b_iblock I ON C.ID = I.ID')
+				'NAME' => array('FIELD' => 'I.NAME', 'TYPE' => 'string', 'FROM' => 'INNER JOIN b_iblock I ON C.ID = I.ID'),
+				'XML_ID' => array('FIELD' => 'I.XML_ID', 'TYPE' => 'string', 'FROM' => 'INNER JOIN b_iblock I ON C.ID = I.ID')
 			);
 	}
 
@@ -388,21 +423,20 @@ class CAllCrmCatalog
 		return $arResult;
 	}
 
-	public static function GetDefaultID()
+	/**
+	 * @deprecated
+	 * @see Crm\Product\Catalog::getDefaultId
+	 *
+	 * @return int
+	 */
+	public static function GetDefaultID(): int
 	{
-		$ID = intval(COption::GetOptionString('crm', 'default_product_catalog_id', '0'));
-		// Check if IBlock exists
-		if($ID > 0 && intval(CIBlock::GetArrayByID($ID, 'ID')) !== $ID)
-		{
-			$ID = 0;
-		}
-
-		return $ID;
+		return (int)Crm\Product\Catalog::getDefaultId();
 	}
 
 	public static function EnsureDefaultExists()
 	{
-		$ID = self::GetDefaultID();
+		$ID = (int)Crm\Product\Catalog::getDefaultId();
 
 		// Create new IBlock
 		if($ID <= 0)
@@ -410,6 +444,7 @@ class CAllCrmCatalog
 			if(($ID = self::CreateCatalog()) > 0)
 			{
 				COption::SetOptionString('crm', 'default_product_catalog_id', $ID);
+				self::setCrmGroupRights($ID);
 			}
 		}
 		return $ID;
@@ -417,28 +452,27 @@ class CAllCrmCatalog
 
 	public static function GetDefaultCatalogXmlId()
 	{
-		static $bCheck = true;
-		$result = null;
-
-		if (self::$DEFAULT_CATALOG_XML_ID === null && $bCheck)
+		if (self::$DEFAULT_CATALOG_XML_ID === null)
 		{
-			$bCheck =false;
 			$catalogId = intval(self::EnsureDefaultExists());
 			if ($catalogId > 0)
 			{
 				$ib = new CIBlock();
 				$arIb = $ib->GetByID($catalogId)->Fetch();
-				if (is_array($arIb) && strlen($arIb['XML_ID']) > 0)
-					$result = self::$DEFAULT_CATALOG_XML_ID = $arIb['XML_ID'];
+				if (is_array($arIb) && isset($arIb['XML_ID']) && !empty($arIb['XML_ID']))
+					self::$DEFAULT_CATALOG_XML_ID = $arIb['XML_ID'];
 			}
+
+			if (self::$DEFAULT_CATALOG_XML_ID === null)
+				self::$DEFAULT_CATALOG_XML_ID = '';
 		}
 
-		return $result;
+		return self::$DEFAULT_CATALOG_XML_ID;
 	}
 
 	public static function CreateCatalog($originatorID = '', $name = '', $siteID = null)
 	{
-		if(!is_string($originatorID) || strlen($originatorID) == 0)
+		if(!is_string($originatorID) || $originatorID == '')
 		{
 			$originatorID = null;
 		}
@@ -455,7 +489,6 @@ class CAllCrmCatalog
 			$langID = $arSite['LANGUAGE_ID'];
 		}
 
-		$result = true;
 		//check type type
 		$typeID = self::GetCatalogTypeID();
 		//$rsIBlockTypes = CIBlockType::GetByID($typeID); // CIBlockType::GetByID() is unstable
@@ -487,20 +520,35 @@ class CAllCrmCatalog
 			}
 		}
 
-		//echo 'Error: '.$obBlocktype->LAST_ERROR.'<br/>';
+		$catalogTitle = ($name != '' ? $name : GetMessage('CRM_PRODUCT_CATALOG_TITLE'));
+		$offersTitle = GetMessage(
+			'CRM_PRODUCT_CATALOG_OFFERS_TITLE_FORMAT',
+			['#CATALOG#' => $catalogTitle]
+		);
 
-		$arSite = array();
-		$sites = CSite::GetList($by = 'sort', $order = 'desc', array('ACTIVE' => 'Y'));
-		while($site = $sites->Fetch())
-		{
-			$arSite[] = $site['LID'];
-		}
+		$fields = \CIBlock::GetFieldsDefaults();
+
+		$code = $fields['CODE'];
+		$code['DEFAULT_VALUE'] = unserialize($code['DEFAULT_VALUE'], ['allowed_classes' => false]);
+		$code['DEFAULT_VALUE']['TRANSLITERATION'] = 'Y';
+		$code['DEFAULT_VALUE']['USE_GOOGLE'] = 'N';
+		$code['DEFAULT_VALUE']['TRANS_LEN'] = 255;
+
+		$sectionCode = $fields['SECTION_CODE'];
+		$sectionCode['DEFAULT_VALUE'] = unserialize($sectionCode['DEFAULT_VALUE'], ['allowed_classes' => false]);
+		$sectionCode['DEFAULT_VALUE']['TRANSLITERATION'] = 'Y';
+		$sectionCode['DEFAULT_VALUE']['USE_GOOGLE'] = 'N';
+		$sectionCode['DEFAULT_VALUE']['TRANS_LEN'] = 255;
+
+		$fields['CODE'] = $code;
+		$fields['SECTION_CODE'] = $sectionCode;
+		unset($sectionCode, $code);
 
 		//creation of iblock
 		$iblock = new CIBlock();
 		$iblockID = $iblock->Add(
 			array(
-				'NAME' => isset($name[0]) ? $name : GetMessage('CRM_PRODUCT_CATALOG_TITLE'),
+				'NAME' => $catalogTitle,
 				'ACTIVE' => 'Y',
 				'IBLOCK_TYPE_ID' => $typeID,
 				'LID' => $siteID,
@@ -510,17 +558,19 @@ class CAllCrmCatalog
 				'WORKFLOW' => 'N',
 				'BIZPROC' => 'N',
 				'VERSION' => 1,
-				'GROUP_ID' => array(2 => 'R')
+				'GROUP_ID' => array(1 => 'X', 2 => 'R'),
+				'LIST_MODE' => Iblock\IblockTable::LIST_MODE_COMBINED,
+				'FIELDS' => $fields
 			)
 		);
-
 
 		if($iblockID === false)
 		{
 			self::RegisterError($iblock->LAST_ERROR);
 			return false;
 		}
-		//echo 'Error: '.$iblock->LAST_ERROR.'<br/>';
+
+		self::createMorePhoto($iblockID);
 
 		//creation of catalog
 		$result = CCrmCatalog::Add(
@@ -537,6 +587,69 @@ class CAllCrmCatalog
 			return false;
 		}
 
+		if (Loader::includeModule('catalog'))
+		{
+			$offersId = $iblock->Add(
+				[
+					'NAME' => $offersTitle,
+					'ACTIVE' => 'Y',
+					'IBLOCK_TYPE_ID' => $typeID,
+					'LID' => $siteID,
+					'SORT' => 200,
+					'XML_ID' => 'crm_external_offers_'.$originatorID,
+					'INDEX_ELEMENT' => 'N',
+					'WORKFLOW' => 'N',
+					'BIZPROC' => 'N',
+					'VERSION' => 1,
+					'GROUP_ID' => array(1 => 'X', 2 => 'R'),
+					'LIST_MODE' => 'S',
+					'FIELDS' => $fields
+				]
+			);
+			if ($offersId === false)
+			{
+				self::RegisterError($iblock->LAST_ERROR);
+				return false;
+			}
+
+			$propertyId = \CIBlockPropertyTools::createProperty(
+				$offersId,
+				\CIBlockPropertyTools::CODE_SKU_LINK,
+				['LINK_IBLOCK_ID' => $iblockID]
+			);
+			if (!$propertyId)
+			{
+				foreach (CIBlockPropertyTools::getErrors() as $propertyError)
+					self::RegisterError($propertyError);
+				return false;
+			}
+
+			self::createMorePhoto($offersId);
+
+			$offersFields = [
+				'IBLOCK_ID' => $offersId,
+				'PRODUCT_IBLOCK_ID' => $iblockID,
+				'SKU_PROPERTY_ID' => $propertyId
+			];
+			// get default vat
+			$iterator = Catalog\VatTable::getList([
+				'select' => ['ID', 'SORT'],
+				'order' => ['SORT' => 'ASC'],
+				'limit' => 1
+			]);
+			$row = $iterator->fetch();
+			unset($iterator);
+			if (!empty($row))
+				$offersFields['VAT_ID'] = (int)$row['ID'];
+			unset($row);
+
+			if (!\CCatalog::Add($offersFields))
+			{
+				self::RegisterError(GetMessage('CRM_ERR_REGISTER_OFFERS'));
+				return false;
+			}
+		}
+
 		return $iblockID;
 	}
 
@@ -551,4 +664,90 @@ class CAllCrmCatalog
 		return CCrmCatalog::Delete($ID);
 	}
 	// <-- Event handlers
+
+	/**
+	 * @param $iblockId
+	 * @return void
+	 *
+	 * @throws \Bitrix\Main\LoaderException
+	 */
+	protected static function setCrmGroupRights($iblockId)
+	{
+		$iblockTypeId = self::GetCatalogTypeID();
+		$crmAdminGroupId = \CCrmSaleHelper::getShopGroupIdByType('admin');
+		$crmManagerGroupId = \CCrmSaleHelper::getShopGroupIdByType('manager');
+		if (!empty($crmAdminGroupId))
+		{
+			\CIBlockRights::setGroupRight($crmAdminGroupId, $iblockTypeId, 'X', $iblockId);
+		}
+		if (!empty($crmManagerGroupId))
+		{
+			\CIBlockRights::setGroupRight($crmManagerGroupId, $iblockTypeId, 'W', $iblockId);
+		}
+		if (Loader::includeModule('catalog'))
+		{
+			$catalog = \CCatalogSku::GetInfoByProductIBlock($iblockId);
+			if (!empty($catalog))
+			{
+				if (!empty($crmAdminGroupId))
+				{
+					\CIBlockRights::setGroupRight($crmAdminGroupId, $iblockTypeId, 'X', $catalog['IBLOCK_ID']);
+				}
+				if (!empty($crmManagerGroupId))
+				{
+					\CIBlockRights::setGroupRight($crmManagerGroupId, $iblockTypeId, 'W', $catalog['IBLOCK_ID']);
+				}
+			}
+			unset($catalog);
+		}
+		unset($crmManagerGroupId, $crmAdminGroupId);
+		unset($iblockTypeId);
+	}
+
+	// TODO: remove after refactoring
+	private static function createMorePhoto(int $iblockId): void
+	{
+		if (!Loader::includeModule('iblock'))
+		{
+			return;
+		}
+
+		$propertyId = \CIBlockPropertyTools::createProperty(
+			$iblockId,
+			\CIBlockPropertyTools::CODE_MORE_PHOTO
+		);
+		if (empty($propertyId))
+		{
+			return;
+		}
+
+		$features = [];
+		$iterator = Iblock\PropertyFeatureTable::getList([
+			'select' => ['*'],
+			'filter' => ['=PROPERTY_ID' => $propertyId]
+		]);
+		while ($row = $iterator->fetch())
+		{
+			$features[] = [
+				'MODULE_ID' => $row['MODULE_ID'],
+				'FEATURE_ID' => $row['FEATURE_ID'],
+				'IS_ENABLED' => $row['IS_ENABLED']
+			];
+		}
+		unset($row, $iterator);
+		$features[] = [
+			'MODULE_ID' => 'iblock',
+			'FEATURE_ID' => Iblock\Model\PropertyFeature::FEATURE_ID_LIST_PAGE_SHOW,
+			'IS_ENABLED' => 'Y'
+		];
+		$features[] = [
+			'MODULE_ID' => 'iblock',
+			'FEATURE_ID' => Iblock\Model\PropertyFeature::FEATURE_ID_DETAIL_PAGE_SHOW,
+			'IS_ENABLED' => 'Y'
+		];
+
+		$internaResult = Iblock\Model\PropertyFeature::setFeatures($propertyId, $features);
+		$result = $internaResult->isSuccess();
+		unset($features, $internaResult);
+	}
 }

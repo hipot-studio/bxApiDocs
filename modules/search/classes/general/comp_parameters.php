@@ -7,7 +7,7 @@ class CSearchParameters
 	{
 		$exFILTER = array();
 
-		if (!is_array($arParams[$strFilterParamName]) && strlen($arParams[$strFilterParamName]) > 0)
+		if (!is_array($arParams[$strFilterParamName]) && $arParams[$strFilterParamName] <> '')
 			$arParams[$strFilterParamName] = array($arParams[$strFilterParamName]);
 
 		if (is_array($arParams[$strFilterParamName]))
@@ -17,14 +17,14 @@ class CSearchParameters
 				switch ($strFILTER)
 				{
 				case "main":
-					$exFILTER[] = CSearchParameters::_main($arParams[$strFilterParamName."_main"]);
+					$exFILTER[] = CSearchParameters::_main($arParams[$strFilterParamName."_main"] ?? null);
 					break;
 				case "forum":
 					if (IsModuleInstalled("forum"))
-						$exFILTER[] = CSearchParameters::_forum($arParams[$strFilterParamName."_forum"]);
+						$exFILTER[] = CSearchParameters::_forum($arParams[$strFilterParamName."_forum"] ?? null);
 					break;
 				case "blog":
-					$exFILTER[] = CSearchParameters::_blog($arParams[$strFilterParamName."_blog"]);
+					$exFILTER[] = CSearchParameters::_blog($arParams[$strFilterParamName."_blog"] ?? null);
 					break;
 				case "microblog":
 					$exFILTER[] = array(
@@ -33,10 +33,10 @@ class CSearchParameters
 					);
 					break;
 				case "socialnetwork":
-					$exFILTER[] = CSearchParameters::_socialnetwork($arParams[$strFilterParamName."_socialnetwork"]);
+					$exFILTER[] = CSearchParameters::_socialnetwork($arParams[$strFilterParamName."_socialnetwork"] ?? null);
 					break;
 				case "socialnetwork_user":
-					$exFILTER[] = CSearchParameters::_socialnetwork_user($arParams[$strFilterParamName."_socialnetwork_user"]);
+					$exFILTER[] = CSearchParameters::_socialnetwork_user($arParams[$strFilterParamName."_socialnetwork_user"] ?? null);
 					break;
 				case "intranet":
 					$exFILTER[] = array(
@@ -56,8 +56,8 @@ class CSearchParameters
 				case "no":
 					break;
 				default:
-					if (strpos($strFILTER, "iblock_") === 0)
-						$exFILTER[] = CSearchParameters::_iblock($arParams[$strFilterParamName."_".$strFILTER], $strFILTER);
+					if (mb_strpos($strFILTER, "iblock_") === 0)
+						$exFILTER[] = CSearchParameters::_iblock($arParams[$strFilterParamName."_".$strFILTER] ?? null, $strFILTER);
 					else
 						$exFILTER[] = array(
 							"=MODULE_ID" => $strFILTER,
@@ -160,7 +160,7 @@ class CSearchParameters
 			"REFRESH" => "Y",
 		);
 
-		if (!is_array($arCurrentValues[$name]) && strlen($arCurrentValues[$name]) > 0)
+		if (!is_array($arCurrentValues[$name]) && $arCurrentValues[$name] <> '')
 		{
 			$arCurrentValues[$name] = array($arCurrentValues[$name]);
 		}
@@ -201,13 +201,13 @@ class CSearchParameters
 						"DEFAULT" => "all",
 					);
 				}
-				elseif (strpos($strFILTER, "iblock_") === 0)
+				elseif (mb_strpos($strFILTER, "iblock_") === 0)
 				{
 					$arrFILTER = array();
 					if (CModule::IncludeModule("iblock"))
 					{
 						$arrFILTER["all"] = GetMessage("SEARCH_CP_ALL");
-						$rsIBlock = CIBlock::GetList(array("SORT" => "ASC"), array("TYPE" => substr($strFILTER, 7)));
+						$rsIBlock = CIBlock::GetList(array("SORT" => "ASC"), array("TYPE" => mb_substr($strFILTER, 7)));
 						while ($arIBlock = $rsIBlock->Fetch())
 							$arrFILTER[$arIBlock["ID"]] = $arIBlock["NAME"];
 					}
@@ -295,7 +295,7 @@ class CSearchParameters
 					"URL" => $arURL,
 				);
 		}
-		elseif (strlen($arParam))
+		elseif(mb_strlen($arParam))
 		{
 			return array(
 				"=MODULE_ID" => "main",
@@ -352,7 +352,7 @@ class CSearchParameters
 			{
 				return array(
 					"=MODULE_ID" => "iblock",
-					"PARAM1" => substr($strFILTER, 7),
+					"PARAM1" => mb_substr($strFILTER, 7),
 					"PARAM2" => $arIBlock,
 				);
 			}
@@ -361,14 +361,14 @@ class CSearchParameters
 		{
 			return array(
 				"=MODULE_ID" => "iblock",
-				"PARAM1" => substr($strFILTER, 7),
+				"PARAM1" => mb_substr($strFILTER, 7),
 				"PARAM2" => intval($arParam),
 			);
 		}
 
 		return array(
 			"=MODULE_ID" => "iblock",
-			"PARAM1" => substr($strFILTER, 7),
+			"PARAM1" => mb_substr($strFILTER, 7),
 		);
 	}
 

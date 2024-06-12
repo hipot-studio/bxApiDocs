@@ -1,24 +1,5 @@
 <?php
 
-
-/**
- * <br><br>
- *
- *
- * @return mixed 
- *
- * <h4>Example</h4> 
- * <pre bgcolor="#323232" style="padding:5px;">
- * // пример пересчета журнала
- * $gradebook = new CGradeBook; 
- * $gradebook-&gt;RecountAttempts($STUDENT_ID,$TEST_ID);
- * </pre>
- *
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/index.php
- * @author Bitrix
- */
 class CGradeBook extends CAllGradeBook
 {
 	/**
@@ -36,7 +17,7 @@ class CGradeBook extends CAllGradeBook
 			"LEFT JOIN b_learn_course C ON C.ID = T.COURSE_ID ".
 			"LEFT JOIN b_learn_lesson TUL ON TUL.ID = C.LINKED_LESSON_ID ".
 			"LEFT JOIN b_learn_test_mark TM ON G.TEST_ID = TM.TEST_ID ".
-			(strlen($SqlSearchLang) > 2 ? "LEFT JOIN b_learn_course_site CS ON C.ID = CS.COURSE_ID " : "")
+			(mb_strlen($SqlSearchLang) > 2 ? "LEFT JOIN b_learn_course_site CS ON C.ID = CS.COURSE_ID " : "")
 			. "WHERE
 				(TM.SCORE IS NULL
 				OR TM.SCORE =
@@ -47,7 +28,7 @@ class CGradeBook extends CAllGradeBook
 					LIMIT 1)
 				) ";
 
-		if (strlen($SqlSearchLang) > 2)
+		if (mb_strlen($SqlSearchLang) > 2)
 			$strSqlFrom .= " AND CS.SITE_ID IN (" . $SqlSearchLang . ")";
 
 		return ($strSqlFrom);

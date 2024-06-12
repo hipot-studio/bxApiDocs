@@ -3,9 +3,7 @@
 namespace Bitrix\Sale\Services\PaySystem\Restrictions;
 
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Sale\Internals\CollectableEntity;
-use Bitrix\Sale\Services\Base;
-use Bitrix\Sale\Payment;
+use Bitrix\Sale\PriceMaths;
 
 Loc::loadMessages(__FILE__);
 
@@ -21,25 +19,7 @@ class PercentPrice extends Price
 		$percent = (float)$paramValue / 100;
 		$price = (float)$entityParams['PRICE_ORDER'] * $percent;
 
-		return roundEx($price, SALE_VALUE_PRECISION);
-	}
-
-	/**
-	 * @param CollectableEntity $entity
-	 * @return array
-	 */
-	protected static function extractParams(CollectableEntity $entity)
-	{
-		/** @var \Bitrix\sale\PaymentCollection $collection */
-		$collection = $entity->getCollection();
-
-		/** @var \Bitrix\Sale\Order $order */
-		$order = $collection->getOrder();
-
-		return array(
-			'PRICE_PAYMENT' => $entity->getField('SUM'),
-			'PRICE_ORDER' => $order->getPrice() - $order->getSumPaid(),
-		);
+		return PriceMaths::roundPrecision($price);
 	}
 
 	/**
@@ -56,6 +36,11 @@ class PercentPrice extends Price
 	public static function getClassDescription()
 	{
 		return Loc::getMessage('SALE_PS_RESTRICTIONS_BY_PERCENT_PRICE_DESC');
+	}
+
+	public static function getOnApplyErrorMessage(): string
+	{
+		return Loc::getMessage('SALE_PS_RESTRICTIONS_BY_PERCENT_PRICE_ON_APPLY_ERROR_MSG');
 	}
 
 	/**

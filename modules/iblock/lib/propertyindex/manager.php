@@ -5,12 +5,22 @@
  * @subpackage iblock
  */
 namespace Bitrix\Iblock\PropertyIndex;
+
+use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-Loc::loadMessages(__FILE__);
+use Bitrix\Iblock;
 
 class Manager
 {
-	protected static $catalog = null;
+	private static $catalog = null;
+
+	private static $deferredIndexing = -1;
+
+	private static $elementQueue = array();
+
+	private static $indexerInstances = array();
+
 	/**
 	 * For offers iblock identifier returns it's products iblock.
 	 * Otherwise $iblockId returned.
@@ -19,24 +29,11 @@ class Manager
 	 *
 	 * @return integer
 	 */
-	
-	/**
-	* <p>Если передается идентификатор инфоблока торговых предложений, то метод вернет идентификатор соответствующего ему инфоблока товаров. В противном случае метод вернет искомый идентификатор <code>$iblockId</code>. Метод статический.</p>
-	*
-	*
-	* @param integer $iblockId  Идентификатор инфоблока.
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/manager/resolveiblock.php
-	* @author Bitrix
-	*/
 	public static function resolveIblock($iblockId)
 	{
 		if (self::$catalog === null)
 		{
-			self::$catalog = \Bitrix\Main\Loader::includeModule("catalog");
+			self::$catalog = Loader::includeModule("catalog");
 		}
 
 		if (self::$catalog)
@@ -60,26 +57,11 @@ class Manager
 	 *
 	 * @return integer
 	 */
-	
-	/**
-	* <p>Если передается идентификатор торгового предложения, то метод вернет идентификатор соответствующего ему товара. В противном случае метод вернет искомый идентификатор <code>$elementId</code>. Метод статический.</p>
-	*
-	*
-	* @param integer $iblockId  Идентификатор инфоблока.
-	*
-	* @param integer $elementId  Идентификатор элемента.
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/manager/resolveelement.php
-	* @author Bitrix
-	*/
 	public static function resolveElement($iblockId, $elementId)
 	{
 		if (self::$catalog === null)
 		{
-			self::$catalog = \Bitrix\Main\Loader::includeModule("catalog");
+			self::$catalog = Loader::includeModule("catalog");
 		}
 
 		if (self::$catalog)
@@ -100,21 +82,7 @@ class Manager
 	 * @param integer $iblockId Information block identifier.
 	 *
 	 * @return void
-	 * @throws \Bitrix\Main\Db\SqlQueryException
 	 */
-	
-	/**
-	* <p>Метод удаляет из базы данных все таблицы, связанные с индексом заданного инфоблока. Метод статический.</p>
-	*
-	*
-	* @param integer $iblockId  Идентификатор инфоблока.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/manager/dropifexists.php
-	* @author Bitrix
-	*/
 	public static function dropIfExists($iblockId)
 	{
 		$storage = new Storage($iblockId);
@@ -131,27 +99,20 @@ class Manager
 	 *
 	 * @param integer $iblockId Information block identifier.
 	 *
-	 * @return \Bitrix\Iblock\PropertyIndex\Indexer
-	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 * @return Iblock\PropertyIndex\Indexer
 	 */
-	
-	/**
-	* <p>Метод создает и инициализирует новый экземпляр класса <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/indexer/index.php">PropertyIndex\Indexer</a>. Метод статический.</p>
-	*
-	*
-	* @param integer $iblockId  Идентификатор инфоблока.
-	*
-	* @return \Bitrix\Iblock\PropertyIndex\Indexer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/manager/createindexer.php
-	* @author Bitrix
-	*/
 	public static function createIndexer($iblockId)
 	{
-		$indexer = new Indexer($iblockId);
-		$indexer->init();
-		return $indexer;
+		$iblockId = (int)$iblockId;
+		$productIblock = self::resolveIblock($iblockId);
+		if (!isset(self::$indexerInstances[$productIblock]))
+		{
+			$indexer = new Indexer($productIblock);
+			$indexer->init();
+			self::$indexerInstances[$productIblock] = $indexer;
+			unset($indexer);
+		}
+		return self::$indexerInstances[$productIblock];
 	}
 
 	/**
@@ -161,34 +122,43 @@ class Manager
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод проставляет отметку для инфоблока, что ему необходима переиндексация. Метод статический.</p>
-	*
-	*
-	* @param integer $iblockId  Идентификатор инфоблока.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/manager/markasinvalid.php
-	* @author Bitrix
-	*/
 	public static function markAsInvalid($iblockId)
 	{
-		\Bitrix\Iblock\IblockTable::update($iblockId, array(
+		Iblock\IblockTable::update($iblockId, array(
 			"PROPERTY_INDEX" => "I",
 		));
 
 		$productIblock = self::resolveIblock($iblockId);
 		if ($iblockId != $productIblock)
 		{
-			\Bitrix\Iblock\IblockTable::update($productIblock, array(
+			Iblock\IblockTable::update($productIblock, array(
 				"PROPERTY_INDEX" => "I",
 			));
 		}
 
 		self::checkAdminNotification(true);
+	}
+
+	/**
+	 * Marks iblock as one who needs index rebuild when it is needed.
+	 *
+	 * @param integer $iblockId Information block identifier.
+	 * @param array $propertyOld Previos property fields.
+	 * @param array $propertyNew New property fields.
+	 *
+	 * @return void
+	 */
+	public static function onPropertyUpdate($iblockId, $propertyOld, $propertyNew)
+	{
+		if (array_key_exists("USER_TYPE", $propertyNew))
+		{
+			$storageOld = Iblock\PropertyIndex\Indexer::getPropertyStorageType($propertyOld);
+			$storageNew = Iblock\PropertyIndex\Indexer::getPropertyStorageType($propertyNew);
+			if ($storageOld !== $storageNew)
+			{
+				self::markAsInvalid($iblockId);
+			}
+		}
 	}
 
 	/**
@@ -198,20 +168,6 @@ class Manager
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод добавляет уведомление пользователям группы <b>Администраторы</b> о необходимости пересоздания индекса. Метод статический.</p>
-	*
-	*
-	* @param boolean $force = false Параметр принимает значение <i>false</i>, если проверка на
-	* необходимость переиндексации не выполнялась.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/manager/checkadminnotification.php
-	* @author Bitrix
-	*/
 	public static function checkAdminNotification($force = false)
 	{
 		if ($force)
@@ -220,11 +176,16 @@ class Manager
 		}
 		else
 		{
-			$iblockList = \Bitrix\Iblock\IblockTable::getList(array(
+			$iblockList = Iblock\IblockTable::getList(array(
 				'select' => array('ID'),
 				'filter' => array('=PROPERTY_INDEX' => 'I'),
 			));
-			$add = ($iblockList->fetch()? true: false);
+			$add = (bool)$iblockList->fetch();
+		}
+
+		if (ModuleManager::isModuleInstalled('bitrix24'))
+		{
+			$add = false;
 		}
 
 		if ($add)
@@ -257,23 +218,10 @@ class Manager
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод удаляет индекс и проставляет отметку для инфоблока, что у него нет индекса. Метод статический.</p>
-	*
-	*
-	* @param integer $iblockId  Идентификатор инфоблока.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/manager/deleteindex.php
-	* @author Bitrix
-	*/
 	public static function deleteIndex($iblockId)
 	{
 		self::dropIfExists($iblockId);
-		\Bitrix\Iblock\IblockTable::update($iblockId, array(
+		Iblock\IblockTable::update($iblockId, array(
 			"PROPERTY_INDEX" => "N",
 		));
 	}
@@ -286,24 +234,9 @@ class Manager
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод удаляет всю связанную с элементом информацию, если индекс существует. Метод статический.</p>
-	*
-	*
-	* @param integer $iblockId  Идентификатор инфоблока.
-	*
-	* @param integer $elementId  Идентификатор элемента.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/manager/deleteelementindex.php
-	* @author Bitrix
-	*/
 	public static function deleteElementIndex($iblockId, $elementId)
 	{
-		$elementId = intval($elementId);
+		$elementId = (int)$elementId;
 		$productIblock = self::resolveIblock($iblockId);
 		$indexer = self::createIndexer($productIblock);
 
@@ -328,46 +261,103 @@ class Manager
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод обновляет всю связанную с элементом информацию, если индекс существует. Метод статический.</p>
-	*
-	*
-	* @param integer $iblockId  Идентификатор инфоблока.
-	*
-	* @param integer $elementId  Идентификатор элемента.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/manager/updateelementindex.php
-	* @author Bitrix
-	*/
 	public static function updateElementIndex($iblockId, $elementId)
 	{
-		$elementId = intval($elementId);
+		$elementId = (int)$elementId;
 		$productIblock = self::resolveIblock($iblockId);
+		if ($iblockId != $productIblock)
+			$elementId = self::resolveElement($iblockId, $elementId);
+		if (self::usedDeferredIndexing())
+		{
+			self::pushToQueue($productIblock, $elementId);
+		}
+		else
+		{
+			$indexer = self::createIndexer($productIblock);
+			if ($indexer->isExists())
+			{
+				self::elementIndexing($indexer, $elementId);
+			}
+			unset($indexer);
+		}
+	}
+
+	/**
+	 * Enable deferred indexing.
+	 *
+	 * @return void
+	 */
+	public static function enableDeferredIndexing()
+	{
+		self::$deferredIndexing++;
+	}
+
+	/**
+	 * Disable deferred indexing.
+	 *
+	 * @return void
+	 */
+	public static function disableDeferredIndexing()
+	{
+		self::$deferredIndexing--;
+	}
+
+	/**
+	 * Return true if allowed deferred indexing.
+	 *
+	 * @return bool
+	 */
+	public static function usedDeferredIndexing()
+	{
+		return (self::$deferredIndexing >= 0);
+	}
+
+	/**
+	 * Update iblock index if defered data exists.
+	 *
+	 * @param int $iblockId		Iblock.
+	 * @return void
+	 */
+	public static function runDeferredIndexing($iblockId)
+	{
+		$iblockId = (int)$iblockId;
+		$productIblock = self::resolveIblock($iblockId);
+		if (empty(self::$elementQueue[$productIblock]))
+			return;
 		$indexer = self::createIndexer($productIblock);
 		if ($indexer->isExists())
 		{
-			if ($iblockId != $productIblock)
-			{
-				$elementId = self::resolveElement($iblockId, $elementId);
-			}
+			sort(self::$elementQueue[$productIblock]);
 
-			$indexer->deleteElement($elementId);
-			$connection = \Bitrix\Main\Application::getConnection();
-			$elementCheck = $connection->query("
+			foreach (self::$elementQueue[$productIblock] as $elementId)
+				self::elementIndexing($indexer, $elementId);
+			unset($elementId);
+		}
+		unset($indexer);
+		unset(self::$elementQueue[$productIblock]);
+	}
+
+	private static function pushToQueue($iblockId, $elementId)
+	{
+		if (!isset(self::$elementQueue[$iblockId]))
+			self::$elementQueue[$iblockId] = [];
+		self::$elementQueue[$iblockId][$elementId] = $elementId;
+	}
+
+	private static function elementIndexing(Iblock\PropertyIndex\Indexer $indexer, $elementId)
+	{
+		$indexer->deleteElement($elementId);
+		$connection = \Bitrix\Main\Application::getConnection();
+		$elementCheck = $connection->query("
 				SELECT BE.ID
 				FROM b_iblock_element BE
-				WHERE BE.ACTIVE = 'Y'
-				".\CIBlockElement::wf_getSqlLimit("BE.", "N")."
-				AND BE.ID = ".intval($elementId)
-			);
-			if ($elementCheck->fetch())
-			{
-				$indexer->indexElement($elementId);
-			}
+				WHERE BE.ACTIVE = 'Y' AND BE.ID = ".$elementId.
+				\CIBlockElement::wf_getSqlLimit("BE.", "N")
+		);
+		if ($elementCheck->fetch())
+		{
+			$indexer->indexElement($elementId);
 		}
+		unset($elementCheck, $connection);
 	}
 }

@@ -9,13 +9,13 @@ class CCrmProductHelper
 	public static function PreparePopupItems($currencyID = '', $count = 50, $enableRawPrices = false)
 	{
 		$currencyID = strval($currencyID);
-		if(!isset($currencyID[0]))
+		if (!isset($currencyID[0]))
 		{
 			$currencyID = CCrmCurrency::GetBaseCurrencyID();
 		}
 
 		$count = intval($count);
-		if($count <= 0)
+		if ($count <= 0)
 		{
 			$count = 50;
 		}
@@ -57,14 +57,14 @@ class CCrmProductHelper
 		$result = array();
 		foreach ($arProducts as $productID => &$product)
 		{
-			if($currencyID != $product['CURRENCY_ID'])
+			if ($currencyID != $product['CURRENCY_ID'])
 			{
 				$product['PRICE'] = CCrmCurrency::ConvertMoney($product['PRICE'], $product['CURRENCY_ID'], $currencyID);
 				$product['CURRENCY_ID'] = $currencyID;
 			}
 
 			$customData = array('price' => $product['PRICE']);
-			if(isset($measureInfos[$productID]) && !empty($measureInfos[$productID]))
+			if (isset($measureInfos[$productID]) && !empty($measureInfos[$productID]))
 			{
 				$measureIfo = $measureInfos[$productID][0];
 				$customData['measure'] = array(
@@ -72,7 +72,7 @@ class CCrmProductHelper
 					'name' => $measureIfo['SYMBOL']
 				);
 			}
-			elseif($defaultMeasureInfo !== null)
+			elseif ($defaultMeasureInfo !== null)
 			{
 				$customData['measure'] = array(
 					'code' => $defaultMeasureInfo['CODE'],
@@ -80,7 +80,7 @@ class CCrmProductHelper
 				);
 			}
 
-			if(isset($productVatInfos[$productID]))
+			if (isset($productVatInfos[$productID]))
 			{
 				$productVatInfo = $productVatInfos[$productID];
 				$customData['tax'] = array(
@@ -94,7 +94,7 @@ class CCrmProductHelper
 				'desc' => CCrmProduct::FormatPrice($product),
 				'id' => $product['ID'],
 				'url' => '',
-				'type'  => 'product',
+				'type' => 'product',
 				'selected' => false,
 				'customData' => &$customData
 			);
@@ -110,7 +110,7 @@ class CCrmProductHelper
 		IncludeModuleLangFile(__FILE__);
 
 		$result = array();
-		if($addNotSelected)
+		if ($addNotSelected)
 		{
 			$result['0'] = GetMessage('CRM_PRODUCT_CATALOG_NOT_SELECTED');
 		}
@@ -134,7 +134,7 @@ class CCrmProductHelper
 		$catalogID = intval($catalogID);
 		$result = array();
 		$filter = array('ACTIVE' => 'Y');
-		if($catalogID > 0)
+		if ($catalogID > 0)
 		{
 			$filter['CATALOG_ID'] = $catalogID;
 		}
@@ -159,7 +159,7 @@ class CCrmProductHelper
 
 		$result = array();
 
-		if($addNotSelected)
+		if ($addNotSelected)
 		{
 			$result['0'] = GetMessage('CRM_PRODUCT_SECTION_NOT_SELECTED');
 		}
@@ -168,7 +168,7 @@ class CCrmProductHelper
 			array('left_margin' => 'asc'),
 			array(
 				'IBLOCK_ID' => $catalogID,
-				'GLOBAL_ACTIVE' => 'Y',
+				/*'GLOBAL_ACTIVE' => 'Y',*/
 				'CHECK_PERMISSIONS' => 'N'
 			),
 			false,
@@ -179,7 +179,7 @@ class CCrmProductHelper
 			)
 		);
 
-		while($ary = $rs->GetNext())
+		while ($ary = $rs->GetNext())
 		{
 			$result[$ary['ID']] = str_repeat(' . ', $ary['DEPTH_LEVEL']).$ary['~NAME'];
 		}
@@ -192,7 +192,7 @@ class CCrmProductHelper
 	 * @param array $visibleFields
 	 * @return bool
 	 */
-	public static function IsFieldVisible ($fieldName, $visibleFields)
+	public static function IsFieldVisible($fieldName, $visibleFields)
 	{
 		if (!is_string($fieldName) || empty($fieldName))
 			return false;
@@ -204,5 +204,56 @@ class CCrmProductHelper
 			return true;
 
 		return false;
+	}
+
+	public static function parseFloat($value, $precision = null, $defaultValue = 0.0)
+	{
+		$value = strval($value);
+
+		if (!is_double($defaultValue))
+		{
+			$defaultValue = doubleval($defaultValue);
+		}
+		if ($defaultValue === null)
+			$defaultValue = 0.0;
+
+		if (empty($value))
+		{
+			return $defaultValue;
+		}
+
+		$value = trim($value);
+		$dot = mb_strpos($value, '.');
+		$comma = mb_strpos($value, ',');
+		$isNegative = (mb_substr($value, 0, 1) === '-');
+
+		if ($dot === false && $comma !== false && $comma >= 0)
+		{
+			$s1 = mb_substr($value, 0, $comma);
+			$decimalLength = mb_strlen($value) - $comma - 1;
+			if ($decimalLength > 0)
+			{
+				$s1 .= '.'.mb_substr($value, $comma + 1, $decimalLength);
+			}
+			$value = $s1;
+		}
+		$value = preg_replace('/[^\d\.]+/', '', $value);
+		$value = doubleval($value);
+
+		if ($value === null)
+		{
+			$value = $defaultValue;
+		}
+		if ($isNegative)
+		{
+			$value = -$value;
+		}
+
+		if (is_int($precision) && $precision >= 0)
+		{
+			$value = round($value, $precision);
+		}
+
+		return $value;
 	}
 }

@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/photogallery/general/ratings_components.php");
 
 class CRatingsComponentsPhotogallery
@@ -14,5 +15,3 @@ class CRatingsComponentsPhotogallery
 		}
 	}
 }
-
-?>

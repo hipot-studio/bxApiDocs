@@ -37,15 +37,16 @@ class StyleInliner
 
 	/*
 	 * @param Element $node
+	 * @param bool $singleStyle
 	 * @return array
 	*/
-	public static function getStyle(Element $node)
+	public static function getStyle(Element $node, $singleStyle = true)
 	{
 		$styleList = array();
 		$style = $node->getAttribute("style");
 		if($style)
 		{
-			$styleList = CssParser::getDeclarationArray($style);
+			$styleList = CssParser::getDeclarationArray($style, $singleStyle);
 		}
 
 		return $styleList;
@@ -61,7 +62,7 @@ class StyleInliner
 	{
 		if($append)
 		{
-			if(count($styleList) <= 0)
+			if(empty($styleList))
 			{
 				return;
 			}
@@ -69,7 +70,7 @@ class StyleInliner
 			$result = static::getStyle($node);
 			foreach($styleList as $k => $v)
 			{
-				if("!important" !== substr(strtolower($styleList[$k]), -10))
+				if("!important" !== mb_substr(mb_strtolower($styleList[$k]), -10))
 				{
 					if(array_key_exists($k, $result))
 					{

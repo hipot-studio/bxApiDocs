@@ -7,17 +7,51 @@
  */
 namespace Bitrix\Crm;
 
-use Bitrix\Main\DB;
-use Bitrix\Main\Entity;
+use Bitrix\Crm\History\Entity\DealStageHistoryTable;
+use Bitrix\Crm\History\Entity\DealStageHistoryWithSupposedTable;
+use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Settings\DealSettings;
+use Bitrix\Main;
+use Bitrix\Main\Entity\IntegerField;
+use Bitrix\Main\Entity\ReferenceField;
+use Bitrix\Main\Entity\StringField;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Event;
+use Bitrix\Main\ORM\EventResult;
+use Bitrix\Main\ORM\Fields\BooleanField;
+use Bitrix\Main\ORM\Fields\DatetimeField;
+use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\Relations\CascadePolicy;
+use Bitrix\Main\ORM\Fields\Relations\OneToMany;
+use Bitrix\Main\ORM\Fields\TextField;
+use Bitrix\Main\ORM\Query\Join;
 
 Loc::loadMessages(__FILE__);
 
-class DealTable extends Entity\DataManager
+/**
+ * Class DealTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Deal_Query query()
+ * @method static EO_Deal_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Deal_Result getById($id)
+ * @method static EO_Deal_Result getList(array $parameters = [])
+ * @method static EO_Deal_Entity getEntity()
+ * @method static \Bitrix\Crm\EO_Deal createObject($setDefaultValues = true)
+ * @method static \Bitrix\Crm\EO_Deal_Collection createCollection()
+ * @method static \Bitrix\Crm\EO_Deal wakeUpObject($row)
+ * @method static \Bitrix\Crm\EO_Deal_Collection wakeUpCollection($rows)
+ */
+class DealTable extends Main\ORM\Data\DataManager
 {
-	private static $STATUS_INIT = false;
-	private static $WORK_STATUSES = array();
-	private static $LOSE_STATUSES = array();
+	protected static $isCheckUserFields = true;
+
+	public static function getTableName()
+	{
+		return 'b_crm_deal';
+	}
 
 	public static function getUfId()
 	{
@@ -26,231 +60,484 @@ class DealTable extends Entity\DataManager
 
 	public static function getMap()
 	{
-		return array(
-			'ID' => array(
-				'data_type' => 'integer',
-				'primary' => true
-			),
-			'TITLE' => array(
-				'data_type' => 'string'
-			),
-			'OPPORTUNITY' => array(
-				'data_type' => 'integer'
-			),
-			'CURRENCY_ID' => array(
-				'data_type' => 'string'
-			),
-//			'CURRENCY_BY' => array(
-//				'data_type' => 'CrmStatus',
-//				'reference' => array('CURRENCY_ID', 'STATUS_ID')
-//			),
-			'OPPORTUNITY_ACCOUNT' => array(
-				'data_type' => 'integer'
-			),
-			'ACCOUNT_CURRENCY_ID' => array(
-				'data_type' => 'string'
-			),
-			'EXCH_RATE' => array(
-				'data_type' => 'integer'
-			),
-			'PROBABILITY' => array(
-				'data_type' => 'integer'
-			),
-			'STAGE_ID' => array(
-				'data_type' => 'string'
-			),
-			'STAGE_BY' => array(
-				'data_type' => 'Status',
-				'reference' => array(
-					'=this.STAGE_ID' => 'ref.STATUS_ID',
-					'=ref.ENTITY_ID' => array('?', 'DEAL_STAGE')
-				)
-			),
-			'CLOSED' => array(
-				'data_type' => 'boolean',
-				'values' => array('N', 'Y')
-			),
-			'TYPE_ID' => array(
-				'data_type' => 'string'
-			),
-			'TYPE_BY' => array(
-				'data_type' => 'Status',
-				'reference' => array(
-					'=this.TYPE_ID' => 'ref.STATUS_ID',
-					'=ref.ENTITY_ID' => array('?', 'DEAL_TYPE')
-				)
-			),
-			'COMMENTS' => array(
-				'data_type' => 'string'
-			),
-			'BEGINDATE' => array(
-				'data_type' => 'datetime'
-			),
-			'CLOSEDATE' => array(
-				'data_type' => 'datetime'
-			),
-			'EVENT_DATE' => array(
-				'data_type' => 'datetime'
-			),
-			'EVENT_ID' => array(
-				'data_type' => 'string'
-			),
-			'EVENT_BY' => array(
-				'data_type' => 'Status',
-				'reference' => array(
-					'=this.EVENT_ID' => 'ref.STATUS_ID',
-					'=ref.ENTITY_ID' => array('?', 'EVENT_TYPE')
-				)
-			),
-			'EVENT_DESCRIPTION' => array(
-				'data_type' => 'string'
-			),
-			'DATE_CREATE' => array(
-				'data_type' => 'datetime'
-			),
-			'DATE_MODIFY' => array(
-				'data_type' => 'datetime'
-			),
-			'ASSIGNED_BY_ID' => array(
-				'data_type' => 'integer'
-			),
-			'ASSIGNED_BY' => array(
-				'data_type' => 'Bitrix\Main\User',
-				'reference' => array('=this.ASSIGNED_BY_ID' => 'ref.ID')
-			),
-			'CREATED_BY_ID' => array(
-				'data_type' => 'integer'
-			),
-			'CREATED_BY' => array(
-				'data_type' => 'Bitrix\Main\User',
-				'reference' => array('=this.CREATED_BY_ID' => 'ref.ID')
-			),
-			'MODIFY_BY_ID' => array(
-				'data_type' => 'integer'
-			),
-			'MODIFY_BY' => array(
-				'data_type' => 'Bitrix\Main\User',
-				'reference' => array('=this.MODIFY_BY_ID' => 'ref.ID')
-			),
-			'EVENT_RELATION' => array(
-				'data_type' => 'EventRelations',
-				'reference' => array('=this.ID' => 'ref.ENTITY_ID')
-			),
-			'LEAD_ID' => array(
-				'data_type' => 'integer'
-			),
-			'LEAD_BY' => array(
-				'data_type' => 'Lead',
-				'reference' => array('=this.LEAD_ID' => 'ref.ID')
-			),
-			'CONTACT_ID' => array(
-				'data_type' => 'integer'
-			),
-			'CONTACT_BY' => array(
-				'data_type' => 'Contact',
-				'reference' => array('=this.CONTACT_ID' => 'ref.ID')
-			),
-			'COMPANY_ID' => array(
-				'data_type' => 'integer'
-			),
-			'COMPANY_BY' => array(
-				'data_type' => 'Company',
-				'reference' => array('=this.COMPANY_ID' => 'ref.ID')
-			),
-			'IS_WON' => array(
-				'data_type' => 'boolean',
-				'expression' => array(
-					'CASE WHEN %s = \'WON\' THEN 1 ELSE 0 END',
-					'STAGE_ID'
-				),
-				'values' => array(0, 1)
-			),
-			'RECEIVED_AMOUNT' => array(
-				'data_type' => 'integer',
-				'expression' => array(
-					'CASE WHEN %s = \'WON\' THEN %s ELSE 0 END',
-					'STAGE_ID', 'OPPORTUNITY_ACCOUNT'
-				)
-			),
-			'LOST_AMOUNT' => array(
-				'data_type' => 'integer',
-				'expression' => array(
-					'CASE WHEN %s = \'LOSE\' THEN %s ELSE 0 END',
-					'STAGE_ID', 'OPPORTUNITY_ACCOUNT'
-				)
-			),
-			'HAS_PRODUCTS' => array(
-				'data_type' => 'boolean',
-				'expression' => array(
-					'CASE WHEN EXISTS (SELECT ID FROM b_crm_product_row WHERE OWNER_ID = %s AND OWNER_TYPE = \'D\') THEN 1 ELSE 0 END',
-					'ID'
-				),
-				'values' => array(0, 1)
-			),
-			'ORIGIN_ID' => array(
-				'data_type' => 'string'
-			),
-			'ORIGINATOR_ID' => array(
-				'data_type' => 'string'
-			),
-			'ORIGINATOR_BY' => array(
-				'data_type' => 'ExternalSale',
-				'reference' => array('=this.ORIGINATOR_ID' => 'ref.ID')
+		$fieldRepository = Main\DI\ServiceLocator::getInstance()->get('crm.model.fieldRepository');
+
+		$map = [
+			//fields here are sorted by b_crm_deal columns order in install.sql. Please, keep it that way
+
+			$fieldRepository->getId(),
+
+			$fieldRepository->getCreatedTime('DATE_CREATE', true),
+
+			$fieldRepository->getShortDate(
+				'DATE_CREATE_SHORT',
+				['DATE_CREATE'],
 			)
-		);
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_DATE_CREATE_SHORT_FIELD'))
+			,
+
+			$fieldRepository->getUpdatedTime('DATE_MODIFY', true),
+
+			$fieldRepository->getShortDate(
+				'DATE_MODIFY_SHORT',
+				['DATE_MODIFY'],
+			)
+				->configureTitle('CRM_DEAL_ENTITY_DATE_MODIFY_SHORT_FIELD')
+			,
+
+			$fieldRepository->getCreatedBy('CREATED_BY_ID', true),
+
+			(new ReferenceField(
+				'CREATED_BY',
+				Main\UserTable::class,
+				Join::on('this.CREATED_BY_ID', 'ref.ID'),
+			))
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_CREATED_BY_FIELD'))
+			,
+
+			$fieldRepository->getUpdatedBy('MODIFY_BY_ID', true),
+
+			(new ReferenceField(
+				'MODIFY_BY',
+				Main\UserTable::class,
+				Join::on('this.MODIFY_BY_ID', 'ref.ID'),
+			))
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_MODIFY_BY_FIELD'))
+			,
+
+			$fieldRepository->getAssigned(),
+
+			(new ReferenceField(
+				'ASSIGNED_BY',
+				Main\UserTable::class,
+				Join::on('this.ASSIGNED_BY_ID', 'ref.ID'),
+			))
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_ASSIGNED_BY_FIELD'))
+			,
+
+			$fieldRepository->getOpened()
+				->configureDefaultValue(static function () {
+					return DealSettings::getCurrent()->getOpenedFlag();
+				})
+			,
+
+			$fieldRepository->getLeadId(),
+
+			(new ReferenceField(
+				'LEAD_BY',
+				LeadTable::class,
+				Join::on('this.LEAD_ID', 'ref.ID'),
+			))
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_LEAD_BY_FIELD'))
+			,
+
+			$fieldRepository->getCompanyId(),
+
+			(new ReferenceField(
+				'COMPANY_BY',
+				CompanyTable::class,
+				Join::on('this.COMPANY_ID', 'ref.ID'),
+			))
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_COMPANY_BY_FIELD'))
+			,
+
+			$fieldRepository->getCompany(),
+
+			$fieldRepository->getContactId(),
+
+			(new ReferenceField(
+				'CONTACT_BY',
+				ContactTable::class,
+				Join::on('this.CONTACT_ID', 'ref.ID'),
+			))
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_CONTACT_BY_FIELD'))
+			,
+
+			(new ReferenceField(
+				'CONTACT',
+				ContactTable::class,
+				Join::on('this.CONTACT_ID', 'ref.ID'),
+			))
+				->configureTitle(\CCrmOwnerType::GetDescription(\CCrmOwnerType::Contact))
+			,
+
+			(new ReferenceField(
+				'BINDING_CONTACT',
+				Binding\DealContactTable::class,
+				Join::on('this.ID', 'ref.DEAL_ID'),
+			)),
+
+			(new OneToMany(
+				'CONTACT_BINDINGS',
+				Binding\DealContactTable::class,
+				'DEAL'
+			))
+				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW)
+			,
+
+			(new IntegerField('QUOTE_ID'))
+				->configureNullable()
+				->configureTitle(\CCrmOwnerType::GetAllDescriptions()[\CCrmOwnerType::Quote])
+			,
+
+			$fieldRepository->getTitle(),
+
+			/** @deprecated */
+			$fieldRepository->getProductId(),
+
+			$fieldRepository->getCategoryId(Item::FIELD_NAME_CATEGORY_ID, \CCrmOwnerType::Deal),
+
+			$fieldRepository->getStageId(Item::FIELD_NAME_STAGE_ID, \CCrmOwnerType::Deal),
+
+			(new ReferenceField(
+				'STAGE_BY',
+				StatusTable::class,
+				Join::on('this.STAGE_ID', 'ref.STATUS_ID')
+					->where('ref.ENTITY_ID', '=', 'DEAL_STAGE')
+				,
+			))
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_STAGE_BY_FIELD'))
+			,
+
+			$fieldRepository->getStageSemanticId(),
+
+			(new BooleanField('IS_NEW'))
+				->configureNullable()
+				->configureValues('N', 'Y')
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_IS_NEW_FIELD'))
+			,
+
+			(new BooleanField('IS_RECURRING'))
+				->configureRequired()
+				->configureStorageValues('N', 'Y')
+				->configureDefaultValue(false)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_IS_RECURRING_FIELD'))
+			,
+
+			(new ReferenceField(
+				'CRM_DEAL_RECURRING',
+				DealRecurTable::class,
+				Join::on('this.ID', 'ref.DEAL_ID'),
+			)),
+
+			$fieldRepository->getIsReturnCustomer()
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_IS_RETURN_CUSTOMER_FIELD'))
+			,
+
+			(new BooleanField('IS_REPEATED_APPROACH'))
+				->configureRequired()
+				->configureStorageValues('N', 'Y')
+				->configureDefaultValue(false)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_IS_REPEATED_APPROACH_FIELD'))
+			,
+
+			$fieldRepository->getClosed()
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_CLOSED_FIELD'))
+			,
+
+			$fieldRepository->getTypeId(Item::FIELD_NAME_TYPE_ID, StatusTable::ENTITY_ID_DEAL_TYPE)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_TYPE_ID_FIELD'))
+			,
+
+			(new ReferenceField(
+				'TYPE_BY',
+				StatusTable::class,
+				Join::on('this.TYPE_ID', 'ref.STATUS_ID')
+					->where('ref.ENTITY_ID', '=', StatusTable::ENTITY_ID_DEAL_TYPE)
+				,
+			))
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_TYPE_BY_FIELD'))
+			,
+
+			$fieldRepository->getOpportunity(),
+
+			$fieldRepository->getIsManualOpportunity(),
+
+			$fieldRepository->getTaxValue(),
+
+			$fieldRepository->getCurrencyId(),
+
+			$fieldRepository->getOpportunityAccount(),
+
+			$fieldRepository->getTaxValueAccount(),
+
+			$fieldRepository->getAccountCurrencyId(),
+
+			(new IntegerField('PROBABILITY'))
+				->configureNullable()
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_PROBABILITY_FIELD'))
+			,
+
+			$fieldRepository->getComments(),
+
+			$fieldRepository->getBeginDate(),
+
+			$fieldRepository->getShortDate(
+				'BEGINDATE_SHORT',
+				['BEGINDATE'],
+			)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_BEGINDATE_SHORT_FIELD'))
+			,
+
+			$fieldRepository->getCloseDate(),
+
+			$fieldRepository->getShortDate(
+				'CLOSEDATE_SHORT',
+				['CLOSEDATE'],
+			)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_CLOSEDATE_SHORT_FIELD'))
+			,
+
+			(new DatetimeField('EVENT_DATE'))
+				->configureNullable()
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_EVENT_DATE_FIELD'))
+			,
+
+			$fieldRepository->getShortDate(
+				'EVENT_DATE_SHORT',
+				['EVENT_DATE'],
+			)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_EVENT_DATE_SHORT_FIELD'))
+			,
+
+			(new StringField('EVENT_ID'))
+				->configureNullable()
+				->configureSize(50)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_EVENT_ID_FIELD'))
+			,
+
+			(new ReferenceField(
+				'EVENT_BY',
+				StatusTable::class,
+				Join::on('this.EVENT_ID', 'ref.STATUS_ID')
+					->where('ref.ENTITY_ID', '=', 'EVENT_TYPE')
+				,
+			))
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_EVENT_BY_FIELD'))
+			,
+
+			(new ReferenceField(
+				'EVENT_RELATION',
+				EventRelationsTable::class,
+				Join::on('this.ID', 'ref.ENTITY_ID'),
+			))
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_EVENT_RELATION_FIELD'))
+			,
+
+			(new TextField('EVENT_DESCRIPTION'))
+				->configureNullable()
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_EVENT_DESCRIPTION_FIELD'))
+			,
+
+			$fieldRepository->getExchRate(),
+
+			$fieldRepository->getLocationId(),
+
+			$fieldRepository->getWebformId(),
+
+			$fieldRepository->getSourceId()
+				->configureDefaultValue(null)
+			,
+
+			$fieldRepository->getSourceBy(),
+
+			$fieldRepository->getSourceDescription(),
+
+			$fieldRepository->getOriginatorId(),
+
+			(new ReferenceField(
+				'ORIGINATOR_BY',
+				ExternalSaleTable::class,
+				Join::on('this.ORIGINATOR_ID', 'ref.ID'),
+			))
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_ORIGINATOR_BY_FIELD'))
+			,
+
+			$fieldRepository->getOriginId(),
+
+			(new TextField('ADDITIONAL_INFO'))
+				->configureNullable()
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_ADDITIONAL_INFO_FIELD'))
+			,
+
+			$fieldRepository->getSearchContent(),
+
+			(new StringField('ORDER_STAGE'))
+				->configureNullable()
+				->configureSize(255)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_ORDER_STAGE_FIELD'))
+			,
+
+			$fieldRepository->getMovedBy('MOVED_BY_ID', true),
+
+			$fieldRepository->getMovedTime(),
+
+			$fieldRepository->getLastActivityBy(),
+
+			$fieldRepository->getLastActivityTime(),
+
+			(new ExpressionField(
+				'IS_WORK',
+				'CASE WHEN %s = \'P\' THEN 1 ELSE 0 END',
+				'STAGE_SEMANTIC_ID',
+				['values' => [0, 1]]
+			))
+				->configureValueType(BooleanField::class)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_IS_WORK_FIELD'))
+			,
+
+			(new ExpressionField(
+				'IS_WON',
+				'CASE WHEN %s = \'S\' THEN 1 ELSE 0 END',
+				'STAGE_SEMANTIC_ID',
+				['values' => [0, 1]]
+			))
+				->configureValueType(BooleanField::class)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_IS_WON_FIELD'))
+			,
+
+			(new ExpressionField(
+				'IS_LOSE',
+				'CASE WHEN %s = \'F\' THEN 1 ELSE 0 END',
+				'STAGE_SEMANTIC_ID',
+				['values' => [0, 1]]
+			))
+				->configureValueType(BooleanField::class)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_IS_LOSE_FIELD'))
+			,
+
+			(new ExpressionField(
+				'RECEIVED_AMOUNT',
+				'CASE WHEN %s = \'S\' THEN %s ELSE 0 END',
+				['STAGE_SEMANTIC_ID', 'OPPORTUNITY_ACCOUNT'],
+			))
+				->configureValueType(IntegerField::class)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_RECEIVED_AMOUNT_FIELD'))
+			,
+
+			(new ExpressionField(
+				'LOST_AMOUNT',
+				'CASE WHEN %s = \'F\' THEN %s ELSE 0 END',
+				['STAGE_SEMANTIC_ID', 'OPPORTUNITY_ACCOUNT'],
+			))
+				->configureValueType(IntegerField::class)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_LOST_AMOUNT_FIELD'))
+			,
+
+			$fieldRepository->getHasProducts(\CCrmOwnerType::Deal)
+				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_HAS_PRODUCTS_FIELD'))
+			,
+
+			(new ReferenceField(
+				'PRODUCT_ROW',
+				ProductRowTable::class,
+				Join::on('this.ID', 'ref.OWNER_ID')
+					->where('ref.OWNER_TYPE', \CCrmOwnerTypeAbbr::Deal)
+				,
+			)),
+
+			(new ReferenceField(
+				'HISTORY',
+				DealStageHistoryTable::class,
+				Join::on('this.ID', 'ref.OWNER_ID'),
+			))
+				->configureJoinType(Join::TYPE_INNER)
+			,
+
+			(new ReferenceField(
+				'FULL_HISTORY',
+				DealStageHistoryWithSupposedTable::class,
+				Join::on('this.ID', 'ref.OWNER_ID'),
+			))
+				->configureJoinType(Join::TYPE_INNER)
+			,
+
+			(new ReferenceField(
+				'ORDER_BINDING',
+				Binding\OrderEntityTable::class,
+				Join::on('this.ID', 'ref.OWNER_ID')
+					->where('ref.OWNER_TYPE_ID', \CCrmOwnerType::Deal)
+				,
+			)),
+
+			$fieldRepository->getProductRows('DEAL_OWNER'),
+
+			$fieldRepository->getObservers('DEAL', 'OBSERVER_IDS'),
+		];
+
+		return array_merge($map, $fieldRepository->getUtm(\CCrmOwnerType::Deal));
 	}
 
-	private static function ensureStatusesLoaded()
+	public static function disableUserFieldsCheck(): void
 	{
-		if(self::$STATUS_INIT)
+		static::$isCheckUserFields = false;
+	}
+
+	protected static function checkUfFields($object, $ufdata, $result)
+	{
+		if (!static::$isCheckUserFields)
 		{
+			static::$isCheckUserFields = true;
 			return;
 		}
 
-		global $DB;
-
-		$wonStatus = null;
-		$arStatuses = array();
-		$rsStatuses = $DB->Query('SELECT STATUS_ID, SORT FROM b_crm_status WHERE ENTITY_ID = \'DEAL_STAGE\'');
-		while($arStatus = $rsStatuses->Fetch())
-		{
-			if(!$wonStatus && strval($arStatus['STATUS_ID']) === 'WON')
-			{
-				$wonStatus = $arStatus;
-				continue;
-			}
-
-			$arStatuses[$arStatus['STATUS_ID']] = $arStatus;
-		}
-
-		self::$WORK_STATUSES = array();
-		self::$LOSE_STATUSES = array();
-
-		if($wonStatus)
-		{
-			$wonStatusSort = intval($wonStatus['SORT']);
-			foreach($arStatuses as $statusID => $arStatus)
-			{
-				$sort = intval($arStatus['SORT']);
-				if($sort < $wonStatusSort)
-				{
-					self::$WORK_STATUSES[] = '\''.$DB->ForSql($statusID).'\'';
-				}
-				elseif($sort > $wonStatusSort)
-				{
-					self::$LOSE_STATUSES[] = '\''.$DB->ForSql($statusID).'\'';
-				}
-			}
-		}
-
-		self::$STATUS_INIT = true;
+		parent::checkUfFields($object, $ufdata, $result);
 	}
 
-	public static function processQueryOptions(&$options)
+	protected static function getEntityTypeId(): int
 	{
-		$stub = '_BX_STATUS_STUB_';
-		self::ensureStatusesLoaded();
-		$options['WORK_STATUS_IDS'] = '('.(!empty(self::$WORK_STATUSES) ? implode(',', self::$WORK_STATUSES) : "'$stub'").')';
-		$options['LOSE_STATUS_IDS'] = '('.(!empty(self::$LOSE_STATUSES) ? implode(',', self::$LOSE_STATUSES) : "'$stub'").')';
+		return \CCrmOwnerType::Deal;
+	}
+
+	protected static function getEntityTypeName(): string
+	{
+		return \CCrmOwnerType::ResolveName(static::getEntityTypeId());
+	}
+
+	protected static function getFactory(): \Bitrix\Crm\Service\Factory
+	{
+		return Container::getInstance()->getFactory(static::getEntityTypeId());
+	}
+
+	//todo move common event handlers in some common place
+	public static function onBeforeAdd(Event $event): EventResult
+	{
+		$result = new EventResult();
+
+		/** @var EO_Deal $item */
+		$item = $event->getParameter('object');
+		$factory = static::getFactory();
+		if ($factory && $item && empty($item->getStageId()))
+		{
+			$categoryId = $item->getCategoryId();
+			if (!$factory->isCategoryExists($categoryId))
+			{
+				$categoryId = $factory->createDefaultCategoryIfNotExist()->getId();
+			}
+
+			$stage = $factory->getStages($categoryId)->getAll()[0];
+			$result->modifyFields(array_merge($result->getModified(), [
+				'STAGE_ID' => $stage->getStatusId(),
+			]));
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public static function onAfterUpdate(Event $event): EventResult
+	{
+		$item = $event->getParameter('object');
+		if (!$item)
+		{
+			return new EventResult();
+		}
+
+		$result = new EventResult();
+		ProductRowTable::handleOwnerUpdate($item, $result);
+
+		return $result;
 	}
 }

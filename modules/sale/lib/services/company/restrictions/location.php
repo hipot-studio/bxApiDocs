@@ -4,7 +4,9 @@ namespace Bitrix\Sale\Services\Company\Restrictions;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Internals\CollectableEntity;
 use Bitrix\Sale\Internals\CompanyLocationTable;
+use Bitrix\Sale\Internals\Entity;
 use Bitrix\Sale\Location\Tree\NodeNotFoundException;
+use Bitrix\Sale\Order;
 use Bitrix\Sale\Services\Base;
 
 Loc::loadMessages(__FILE__);
@@ -39,7 +41,7 @@ class Location extends Base\Restriction
 	 * @param int $serviceId
 	 * @return bool
 	 */
-	protected static function check($params, array $restrictionParams, $serviceId = 0)
+	public static function check($params, array $restrictionParams, $serviceId = 0)
 	{
 		if ((int)$serviceId <= 0)
 			return true;
@@ -64,13 +66,25 @@ class Location extends Base\Restriction
 	}
 
 	/**
-	 * @param CollectableEntity $entity
+	 * @param Entity $entity
+	 *
 	 * @return null|string
 	 */
-	protected static function extractParams(CollectableEntity $entity)
+	protected static function extractParams(Entity $entity)
 	{
-		/** @var \Bitrix\Sale\Order $order */
-		$order = $entity->getCollection()->getOrder();
+		if ($entity instanceof CollectableEntity)
+		{
+			/** @var \Bitrix\Sale\Order $order */
+			$order = $entity->getCollection()->getOrder();
+		}
+		elseif ($entity instanceof Order)
+		{
+			/** @var \Bitrix\Sale\Order $order */
+			$order = $entity;
+		}
+
+		if (!$order)
+			return '';
 
 		if(!$props = $order->getPropertyCollection())
 			return '';
@@ -97,11 +111,15 @@ class Location extends Base\Restriction
 
 			if(!!\CSaleLocation::isLocationProEnabled())
 			{
-				if(strlen($params["LOCATION"]['L']))
+				if($params["LOCATION"]['L'] <> '')
+				{
 					$LOCATION1 = explode(':', $params["LOCATION"]['L']);
+				}
 
-				if(strlen($params["LOCATION"]['G']))
+				if($params["LOCATION"]['G'] <> '')
+				{
 					$LOCATION2 = explode(':', $params["LOCATION"]['G']);
+				}
 			}
 
 			if (isset($LOCATION1) && is_array($LOCATION1) && count($LOCATION1) > 0)
@@ -110,8 +128,10 @@ class Location extends Base\Restriction
 				$locationCount = count($LOCATION1);
 
 				for ($i = 0; $i<$locationCount; $i++)
-					if (strlen($LOCATION1[$i]))
+					if($LOCATION1[$i] <> '')
+					{
 						$arLocation["L"][] = $LOCATION1[$i];
+					}
 			}
 
 			if (isset($LOCATION2) && is_array($LOCATION2) && count($LOCATION2) > 0)
@@ -120,8 +140,10 @@ class Location extends Base\Restriction
 				$locationCount = count($LOCATION2);
 
 				for ($i = 0; $i<$locationCount; $i++)
-					if (strlen($LOCATION2[$i]))
+					if($LOCATION2[$i] <> '')
+					{
 						$arLocation["G"][] = $LOCATION2[$i];
+					}
 
 			}
 

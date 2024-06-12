@@ -10,11 +10,6 @@ IncludeModuleLangFile(__FILE__);
 
 class CAllFavorites extends CDBResult
 {
-	public static function err_mess()
-	{
-		return "<br>Class: CFavorites<br>File: ".__FILE__;
-	}
-
 	public static function GetIDByUrl($url)
 	{
 		global $USER;
@@ -50,13 +45,12 @@ class CAllFavorites extends CDBResult
 		if($ID <= 0)
 			return false;
 
-		return ($DB->Query("
+		return $DB->Query("
 			SELECT F.*,
 				".$DB->DateToCharFunction("F.TIMESTAMP_X")." as TIMESTAMP_X,
 				".$DB->DateToCharFunction("F.DATE_CREATE")." as	DATE_CREATE
 			FROM b_favorite F
-			WHERE ID=".$ID,
-			false, "File: ".__FILE__."<br>Line: ".__LINE__)
+			WHERE ID=".$ID
 		);
 	}
 
@@ -200,7 +194,7 @@ class CAllFavorites extends CDBResult
 		while($arFav = $res->Fetch())
 			$codes->Delete($arFav["CODE_ID"]);
 
-		return ($DB->Query("DELETE FROM b_favorite WHERE ID='".intval($ID)."'", false, "File: ".__FILE__."<br>Line: ".__LINE__));
+		return $DB->Query("DELETE FROM b_favorite WHERE ID='".intval($ID)."'");
 	}
 
 	//*****************************
@@ -211,14 +205,14 @@ class CAllFavorites extends CDBResult
 	public static function OnUserDelete($user_id)
 	{
 		global $DB;
-		return ($DB->Query("DELETE FROM b_favorite WHERE USER_ID=". intval($user_id), false, "File: ".__FILE__."<br>Line: ".__LINE__));
+		return $DB->Query("DELETE FROM b_favorite WHERE USER_ID=". intval($user_id));
 	}
 
 	//interface language delete event
 	public static function OnLanguageDelete($language_id)
 	{
 		global $DB;
-		return ($DB->Query("DELETE FROM b_favorite WHERE LANGUAGE_ID='".$DB->ForSQL($language_id, 2)."'", false, "File: ".__FILE__."<br>Line: ".__LINE__));
+		return $DB->Query("DELETE FROM b_favorite WHERE LANGUAGE_ID='".$DB->ForSQL($language_id, 2)."'");
 	}
 }
 
@@ -317,22 +311,19 @@ class CBXFavAdmMenu
 				);
 			}
 
-			if(is_array($tmpMenu))
-			{
-				$tmpMenu["fav_id"] = $arItem["ID"];
-				$tmpMenu["parent_menu"] = "global_menu_desktop";
+			$tmpMenu["fav_id"] = $arItem["ID"];
+			$tmpMenu["parent_menu"] = "global_menu_desktop";
 
-				if (!isset($tmpMenu['icon']) || strlen($tmpMenu['icon']) <= 0)
-					$tmpMenu['icon'] = 'fav_menu_icon';
+			if (!isset($tmpMenu['icon']) || $tmpMenu['icon'] == '')
+				$tmpMenu['icon'] = 'fav_menu_icon';
 
-				if($this->CheckItemActivity($tmpMenu))
-					$tmpMenu["_active"] = true;
+			if($this->CheckItemActivity($tmpMenu))
+				$tmpMenu["_active"] = true;
 
-				if(($tmpMenu["_active"] || $this->CheckSubItemActivity($tmpMenu)) && $favOptions["stick"] == "Y")
-					$GLOBALS["BX_FAVORITE_MENU_ACTIVE_ID"] = true;
+			if((isset($tmpMenu["_active"]) && $tmpMenu["_active"] || $this->CheckSubItemActivity($tmpMenu)) && $favOptions["stick"] == "Y")
+				$GLOBALS["BX_FAVORITE_MENU_ACTIVE_ID"] = true;
 
-				$aMenu[] = $tmpMenu;
-			}
+			$aMenu[] = $tmpMenu;
 		}
 
 		return $aMenu;
@@ -345,7 +336,7 @@ class CBXFavAdmMenu
 
 		foreach ($arMenu["items"] as $menu)
 		{
-			if(isset($menu["_active"]) && isset($menu["_active"]) == true)
+			if(isset($menu["_active"]) && $menu["_active"] == true)
 				return true;
 
 			if($this->CheckSubItemActivity($menu))
@@ -357,7 +348,7 @@ class CBXFavAdmMenu
 
 	private function CheckItemActivity($arMenu)
 	{
-		if($arMenu["_active"] == true )
+		if(isset($arMenu["_active"]) && $arMenu["_active"])
 			return true;
 
 		global $adminMenu, $APPLICATION;
@@ -366,12 +357,12 @@ class CBXFavAdmMenu
 			return false;
 
 		$currentUrl = $APPLICATION->GetCurPageParam();
-		$menuUrl = htmlspecialcharsback($arMenu["url"]);
+		$menuUrl = htmlspecialcharsback($arMenu["url"] ?? '');
 
 		if(CBXFavUrls::Compare($menuUrl, $currentUrl))
 			return true;
 
-		$activeSectUrl = htmlspecialcharsback($adminMenu->aActiveSections["_active"]["url"]);
+		$activeSectUrl = htmlspecialcharsback($adminMenu->aActiveSections["_active"]["url"] ?? '');
 
 		if(CBXFavUrls::Compare($menuUrl, $activeSectUrl))
 			return true;
@@ -518,7 +509,7 @@ class CBXFavUrls
 		{
 			foreach ($arUrl1["ar_query"] as $valName => $value)
 			{
-				if($arUrl1["ar_query"][$valName] != $arUrl2["ar_query"][$valName])
+				if (!isset($arUrl2["ar_query"][$valName]) || $arUrl1["ar_query"][$valName] != $arUrl2["ar_query"][$valName])
 				{
 					if(!empty($arReqVals))
 					{

@@ -11,7 +11,7 @@ class CLearnParsePermissionsFromFilter
 	private static $availableLessons = array();
 
 
-	public function __construct ($arFilter)
+	function __construct ($arFilter)
 	{
 		$loggedUserId = false;
 

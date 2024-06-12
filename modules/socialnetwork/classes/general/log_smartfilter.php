@@ -1,4 +1,5 @@
-<?
+<?php
+
 class CAllSocNetLogSmartFilter
 {
 	public static function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
@@ -23,12 +24,12 @@ class CAllSocNetLogSmartFilter
 			"SELECT ".$arSqls["SELECT"]." ".
 			"FROM b_sonet_log_smartfilter SLSF ".
 			"	".$arSqls["FROM"]." ";
-		if (strlen($arSqls["WHERE"]) > 0)
+		if ($arSqls["WHERE"] <> '')
 			$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-		if (strlen($arSqls["ORDERBY"]) > 0)
+		if ($arSqls["ORDERBY"] <> '')
 			$strSql .= "ORDER BY ".$arSqls["ORDERBY"]." ";
 
-		$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbRes = $DB->Query($strSql);
 
 		return $dbRes;
 	}
@@ -45,18 +46,16 @@ class CAllSocNetLogSmartFilter
 		$strWhere = " USER_ID = ".$user_id;
 
 		$strSQL = "DELETE FROM b_sonet_log_smartfilter WHERE ".$strWhere;
-		if ($DB->Query($strSQL, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__))
+		if ($DB->Query($strSQL))
 			return true;
 		else
-			return false;		
+			return false;
 	}
 
 	public static function GetDefaultValue($user_id)
 	{
 		if (intval($user_id) <= 0)
 			return false;
-
-		global $CACHE_MANAGER;
 
 		if(defined("BX_COMP_MANAGED_CACHE"))
 			$ttl = 2592000;
@@ -106,4 +105,3 @@ class CAllSocNetLogSmartFilter
 		return $default_value;
 	}
 }
-?>

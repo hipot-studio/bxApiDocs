@@ -7,23 +7,42 @@
  */
 namespace Bitrix\Crm;
 
-if (!\CModule::IncludeModule('report'))
-	return;
-
 use Bitrix\Main\Entity;
+use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class InvoiceTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Invoice_Query query()
+ * @method static EO_Invoice_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Invoice_Result getById($id)
+ * @method static EO_Invoice_Result getList(array $parameters = [])
+ * @method static EO_Invoice_Entity getEntity()
+ * @method static \Bitrix\Crm\EO_Invoice createObject($setDefaultValues = true)
+ * @method static \Bitrix\Crm\EO_Invoice_Collection createCollection()
+ * @method static \Bitrix\Crm\EO_Invoice wakeUpObject($row)
+ * @method static \Bitrix\Crm\EO_Invoice_Collection wakeUpCollection($rows)
+ */
 class InvoiceTable extends Entity\DataManager
 {
 	private static $STATUS_INIT = false;
 	private static $WORK_STATUSES = array();
 	private static $CANCEL_STATUSES = array();
 
+	public static function getUfId()
+	{
+		return 'CRM_INVOICE';
+	}
+
 	public static function getTableName()
 	{
-		return 'b_sale_order';
+		return 'b_crm_invoice';
 	}
 
 	public static function getMap()
@@ -57,9 +76,9 @@ class InvoiceTable extends Entity\DataManager
 			'PRODUCTS_QUANT' => array(
 				'data_type' => 'float',
 				'expression' => array(
-					'(SELECT  SUM(b_sale_basket.QUANTITY)
-						FROM b_sale_basket
-						WHERE b_sale_basket.ORDER_ID = %s)', 'ID'
+					'(SELECT  SUM(b_crm_invoice_basket.QUANTITY)
+						FROM b_crm_invoice_basket
+						WHERE b_crm_invoice_basket.ORDER_ID = %s)', 'ID'
 				)
 			),
 			'PRICE' => array(
@@ -77,9 +96,10 @@ class InvoiceTable extends Entity\DataManager
 				'data_type' => 'string'
 			),
 			'STATUS_BY' => array(
-				'data_type' => 'InvoiceStatus',
+				'data_type' => 'Status',
 				'reference' => array(
-					'=this.STATUS_ID' => 'ref.ID'
+					'=this.STATUS_ID' => 'ref.STATUS_ID',
+					'=ref.ENTITY_ID' => array('?', 'INVOICE_STATUS'),
 				)
 			),
 			'PAY_SYSTEM_ID' => array(
@@ -109,6 +129,12 @@ class InvoiceTable extends Entity\DataManager
 			'LID' => array(
 				'data_type' => 'string'
 			),
+			'COMMENTS' => array(
+				'data_type' => 'string'
+			),
+			'USER_DESCRIPTION' => [
+				'data_type' => 'string'
+			],
 			'PERSON_TYPE_ID' => array(
 				'data_type' => 'string'
 			),
@@ -121,7 +147,7 @@ class InvoiceTable extends Entity\DataManager
 				'values' => array(0, 1)
 			),
 			'INVOICE_UTS' => array(
-				'data_type' => 'InvoiceUts',
+				'data_type' => 'InvoiceStUts',
 				'reference' => array(
 					'=this.ID' => 'ref.VALUE_ID'
 				)
@@ -178,6 +204,14 @@ class InvoiceTable extends Entity\DataManager
 					$DB->datetimeToDateFunction($DB->IsNull('%s', '%s')),
 					'DATE_BILL', 'DATE_INSERT'
 				)
+			),
+			'IS_RECURRING' =>array(
+				'data_type' => 'boolean',
+				'values' => array('N', 'Y'),
+				'default_value' => 'N'
+			),
+			'SEARCH_CONTENT' =>array(
+				'data_type' => 'text'
 			)
 		);
 	}
@@ -232,5 +266,40 @@ class InvoiceTable extends Entity\DataManager
 		self::ensureStatusesLoaded();
 		$options['WORK_STATUS_IDS'] = '('.(!empty(self::$WORK_STATUSES) ? implode(',', self::$WORK_STATUSES) : "'$stub'").')';
 		$options['CANCEL_STATUS_IDS'] = '('.(!empty(self::$CANCEL_STATUSES) ? implode(',', self::$CANCEL_STATUSES) : "'$stub'").')';
+	}
+
+	/**
+	 * OnSalePsServiceProcessRequestBeforePaid event handler.
+	 * Redetermine information about pay system in invoice
+	 *
+	 * @param \Bitrix\Main\Event $event Event object.
+	 * @return void
+	 */
+	public static function redeterminePaySystem(Event $event)
+	{
+		$parameters = $event->getParameters();
+
+		/** @var \Bitrix\Sale\Payment $payment*/
+		$payment = $parameters['payment'];
+		if ($payment::getRegistryType() !== REGISTRY_TYPE_CRM_INVOICE)
+		{
+			return;
+		}
+
+		$status = $parameters['status'];
+		$paySystemId = $parameters['pay_system_id'];
+
+		if ($status === 'Y')
+		{
+			$paysystem = \Bitrix\Sale\PaySystem\Manager::getById($paySystemId);
+			$payment->setField("PAY_SYSTEM_ID", $paySystemId);
+			$payment->setField("PAY_SYSTEM_NAME", $paysystem['NAME']);
+		}
+	}
+
+	public static function getFieldCaption($fieldName)
+	{
+		$result = Loc::getMessage("CRM_INVOICE_ENTITY_{$fieldName}_FIELD");
+		return is_string($result) ? $result : '';
 	}
 }

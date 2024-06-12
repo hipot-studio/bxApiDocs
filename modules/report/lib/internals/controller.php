@@ -8,7 +8,6 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Context;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Web\PostDecodeFilter;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Event;
 
@@ -79,13 +78,6 @@ abstract class Controller
 	{
 		try
 		{
-			//todo move in processBeforeAction()
-			if($this->request->isPost())
-			{
-				\CUtil::jSPostUnescape();
-				$this->request->addFilter(new PostDecodeFilter);
-			}
-
 			$this->resolveAction();
 			$this->checkAction();
 
@@ -143,7 +135,7 @@ abstract class Controller
 
 	/**
 	 * Gets current user.
-	 * @return array|bool|\CAllUser|\CUser
+	 * @return array|bool|\CUser
 	 */
 	protected function getUser()
 	{
@@ -162,7 +154,7 @@ abstract class Controller
 	{
 		if(!defined('PUBLIC_AJAX_MODE'))
 		{
-			// define('PUBLIC_AJAX_MODE', true);
+			define('PUBLIC_AJAX_MODE', true);
 		}
 
 		global $APPLICATION;
@@ -289,7 +281,7 @@ abstract class Controller
 	protected function resolveAction()
 	{
 		$listOfActions = $this->normalizeListOfAction($this->listActions());
-		$action = strtolower($this->action);
+		$action = mb_strtolower($this->action);
 
 		if(!isset($listOfActions[$action]))
 		{
@@ -570,7 +562,7 @@ abstract class Controller
 
 	/**
 	 * Get application instance.
-	 * @return Application|\Bitrix\Main\HttpApplication|\CAllMain|\CMain
+	 * @return Application|\Bitrix\Main\HttpApplication|\CMain
 	 */
 	protected function getApplication()
 	{
@@ -590,7 +582,7 @@ abstract class Controller
 		foreach ($required as $item)
 		{
 			if(!isset($inputParams[$item]) || (!$inputParams[$item] &&
-				!(is_string($inputParams[$item]) && strlen($inputParams[$item]))))
+				!(is_string($inputParams[$item]) && mb_strlen($inputParams[$item]))))
 			{
 				$this->errorCollection->add(array(new Error(
 					Loc::getMessage('REPORT_CONTROLLER_ERROR_REQUIRED_PARAMETER',

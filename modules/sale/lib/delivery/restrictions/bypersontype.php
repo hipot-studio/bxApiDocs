@@ -3,6 +3,7 @@
 namespace Bitrix\Sale\Delivery\Restrictions;
 
 use Bitrix\Sale\Internals\CollectableEntity;
+use Bitrix\Sale\Internals\Entity;
 use Bitrix\Sale\Internals\PersonTypeTable;
 use Bitrix\Sale\ShipmentCollection;
 use Bitrix\Main\Localization\Loc;
@@ -18,7 +19,7 @@ class ByPersonType extends Base
 	 * @param int $deliveryId
 	 * @return bool
 	 */
-	protected static function check($personTypeId, array $params, $deliveryId = 0)
+	public static function check($personTypeId, array $params, $deliveryId = 0)
 	{
 		if (is_array($params) && isset($params['PERSON_TYPE_ID']))
 		{
@@ -29,16 +30,27 @@ class ByPersonType extends Base
 	}
 
 	/**
-	 * @param CollectableEntity $entity
+	 * @param Entity $entity
 	 * @return int
 	 */
-	public static function extractParams(CollectableEntity $entity)
+	public static function extractParams(Entity $entity)
 	{
-		/** @var ShipmentCollection $collection */
-		$collection = $entity->getCollection();
+		if ($entity instanceof CollectableEntity)
+		{
+			/** @var \Bitrix\Sale\ShipmentCollection $collection */
+			$collection = $entity->getCollection();
 
-		/** @var Order $order */
-		$order = $collection->getOrder();
+			/** @var \Bitrix\Sale\Order $order */
+			$order = $collection->getOrder();
+		}
+		elseif ($entity instanceof Order)
+		{
+			/** @var \Bitrix\Sale\Order $order */
+			$order = $entity;
+		}
+
+		if (!$order)
+			return false;
 
 		$personTypeId = $order->getPersonTypeId();
 		return $personTypeId;
@@ -63,13 +75,12 @@ class ByPersonType extends Base
 	/**
 	 * @param $deliveryId
 	 * @return array
-	 * @throws \Bitrix\Main\ArgumentException
 	 */
 	public static function getParamsStructure($deliveryId = 0)
 	{
 		$personTypeList = array();
 
-		$dbRes = PersonTypeTable::getList();
+		$dbRes = \Bitrix\Sale\PersonType::getList();
 
 		while ($personType = $dbRes->fetch())
 			$personTypeList[$personType["ID"]] = $personType["NAME"]." (".$personType["ID"].")";
@@ -93,5 +104,3 @@ class ByPersonType extends Base
 		return Manager::SEVERITY_STRICT;
 	}
 }
-
-class_alias('Bitrix\Sale\Delivery\Restrictions\ByPersonType', 'Bitrix\Sale\Delivery\Restrictions\PersonType', true);

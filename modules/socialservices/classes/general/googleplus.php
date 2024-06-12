@@ -18,7 +18,7 @@ class CSocServGooglePlusOAuth extends CSocServGoogleOAuth
 		return parent::getEntityOAuth($code);
 	}
 
-	static public function GetSettings()
+	public function GetSettings()
 	{
 		return array(
 			array("note"=>GetMessage("socserv_googleplus_note")),
@@ -59,7 +59,7 @@ class CSocServGooglePlusOAuth extends CSocServGoogleOAuth
 		return false;
 	}
 
-	static public function getProfileUrl($uid)
+	public function getProfileUrl($uid)
 	{
 		return "https://plus.google.com/".$uid;
 	}
@@ -74,7 +74,7 @@ class CGooglePlusOAuthInterface extends CGoogleOAuthInterface
 
 	const FRIENDS_FIELDS = 'items(displayName,emails,gender,id,image,name,nickname),nextPageToken,title,totalItems';
 
-	protected $scope = array(
+	protected $standardScope = array(
 		'https://www.googleapis.com/auth/plus.login',
 		'https://www.googleapis.com/auth/plus.me',
 	);

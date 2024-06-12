@@ -4,7 +4,7 @@ namespace Bitrix\Main\IO;
 abstract class FileEntry
 	extends FileSystemEntry
 {
-	static public function __construct($path, $siteId = null)
+	public function __construct($path, $siteId = null)
 	{
 		parent::__construct($path, $siteId);
 	}
@@ -30,17 +30,17 @@ abstract class FileEntry
 		return $this->getSize();
 	}
 
-	static public function isDirectory()
+	public function isDirectory()
 	{
 		return false;
 	}
 
-	static public function isFile()
+	public function isFile()
 	{
 		return true;
 	}
 
-	static public function isLink()
+	public function isLink()
 	{
 		return false;
 	}

@@ -1,6 +1,6 @@
 <?
 
-// define('FPDF_FONTPATH', $_SERVER["DOCUMENT_ROOT"]."/bitrix/fonts/");
+define('FPDF_FONTPATH', $_SERVER["DOCUMENT_ROOT"]."/bitrix/fonts/");
 
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/tfpdf/tfpdf.php");
 
@@ -25,7 +25,7 @@ class CSaleTfpdf extends tFPDF
 		}
 	}
 
-	static public function Image($file, $x = null, $y = null, $w = 0, $h = 0, $type = '', $link = '')
+	public function Image($file, $x = null, $y = null, $w = 0, $h = 0, $type = '', $link = '')
 	{
 		try
 		{
@@ -80,7 +80,7 @@ class CSaleTfpdf extends tFPDF
 		return $this->h;
 	}
 
-	static public function Output($name = '', $dest = '')
+	public function Output($name = '', $dest = '', $utfName = '')
 	{
 		// invalid symbols: "%*:<>?| and \x00-\x1F\x7F and \x80-\xFF
 		$name = preg_replace('/[\x00-\x1F\x22\x25\x2A\x3A\x3C\x3E\x3F\x7C\x7F-\xFF]+/', '', $name);
@@ -89,10 +89,10 @@ class CSaleTfpdf extends tFPDF
 		if (in_array($dest, array('I', 'D')))
 			$name = basename($name);
 
-		return parent::Output($name, $dest);
+		return parent::Output($name, $dest, $utfName);
 	}
 
-	public function _parsebmp($file)
+	function _parsebmp($file)
 	{
 		// Extract info from a BMP file (via PNG conversion)
 		if(!function_exists('imagepng'))
@@ -129,6 +129,183 @@ class CSaleTfpdf extends tFPDF
 		return $info;
 	}
 
+	public function calculateRowsWidth($cols, $cells, $countItems, $docWidth, $margin = null)
+	{
+		$eps = 1E-05;
+		$arRowsWidth = array();
+		$arRowsContentWidth = array();
+
+		if ($margin === null || $margin < 0)
+		{
+			$margin = 5;
+		}
+		else
+		{
+			$margin = (int)$margin;
+		}
+
+		// last columns always digital
+		end($cols);
+		$lastColumn = key($cols);
+		$cols[$lastColumn]['IS_DIGIT'] = true;
+
+		$digitColumns = [];
+		$digitWidth = 0;
+		$digitColumnFullWidth = [];
+		foreach ($cols as $columnId => $column)
+		{
+			$max = $this->GetStringWidth($this->getMaximumWord($column['NAME']) . " ");
+			foreach ($cells as $i => $cell)
+			{
+				$maxLengthWord = $cell[$columnId];
+				if ($cols[$columnId]['IS_DIGIT'] !== true)
+				{
+					$maxLengthWord = $this->getMaximumWord($cell[$columnId]) . " ";
+				}
+
+				if ($i <= $countItems || $lastColumn === $columnId)
+				{
+					$max = max($max, $this->GetStringWidth($maxLengthWord));
+				}
+			}
+
+			$arRowsWidth[$columnId] = $max + $margin * 2;
+			$arRowsContentWidth[$columnId] = $max;
+
+			if ($cols[$columnId]['IS_DIGIT'] === true)
+			{
+				$digitWidth += $arRowsWidth[$columnId];
+				$digitColumns[] = $columnId;
+				$columnWith = $this->GetStringWidth($column['NAME']);
+				$digitColumnFullWidth[$columnId] = ($columnWith > $arRowsWidth[$columnId]) ? $columnWith : $arRowsWidth[$columnId];
+			}
+		}
+
+		$noDigitWidth = array_sum($arRowsWidth) - $digitWidth;
+		$requiredWidth = $docWidth - $digitWidth;
+		if ($noDigitWidth - $requiredWidth > $eps)
+		{
+			$colNameTitle = $this->GetStringWidth($cols['NAME']['NAME']);
+			if ($colNameTitle < $requiredWidth)
+			{
+				$arRowsWidth['NAME'] = $requiredWidth;
+				$arRowsContentWidth['NAME'] = $requiredWidth - $margin * 2;
+			}
+
+			$noDigitWidth = array_sum($arRowsWidth) - $digitWidth;
+			if ($noDigitWidth - $requiredWidth > $eps)
+			{
+				if (!in_array($lastColumn, $digitColumns))
+				{
+					$digitColumns[] = $lastColumn;
+				}
+
+				$digitWidth = 0;
+				foreach ($digitColumns as $columnId)
+				{
+					if (!isset($cols[$columnId]))
+						continue;
+
+					$max = $this->GetStringWidth($this->getMaximumWord($cols[$columnId]['NAME']) . " ");
+					foreach ($cells as $i => $cell)
+					{
+						if ($i <= $countItems || $lastColumn === $columnId)
+						{
+							$max = max($max, $this->GetStringWidth($cell[$columnId]));
+						}
+					}
+
+					$arRowsWidth[$columnId] = $max + $margin * 2;
+					$arRowsContentWidth[$columnId] = $max;
+					$digitWidth += $arRowsWidth[$columnId];
+				}
+
+				$requiredWidth = $docWidth - $digitWidth;
+			}
+		}
+
+		$additionalWidth = $requiredWidth / count($digitColumns);
+		reset($cols);
+		$firstColumnKey = key($cols);
+		$digitWidth = 0;
+		$onlyDigit = true;
+		foreach ($arRowsWidth as $columnId => $rowWidth)
+		{
+			if ($columnId === $firstColumnKey
+				&& $cols[$columnId]['IS_DIGIT']
+			)
+			{
+				$digitWidth += $arRowsWidth[$columnId];
+				continue;
+			}
+
+			if (isset($digitColumnFullWidth[$columnId]))
+			{
+				$width = $arRowsWidth[$columnId] + $additionalWidth;
+				if ($width > ($digitColumnFullWidth[$columnId] + $margin * 2))
+				{
+					$arRowsWidth[$columnId] = $digitColumnFullWidth[$columnId] + $margin * 2;
+				}
+				else
+				{
+					$arRowsWidth[$columnId] = $width + $margin * 2;
+				}
+			}
+
+			if ($cols[$columnId]['IS_DIGIT'] === true)
+			{
+				$digitWidth += $arRowsWidth[$columnId];
+			}
+			else
+			{
+				$onlyDigit = false;
+			}
+		}
+
+		$requiredWidth = $docWidth - $digitWidth;
+		if ($requiredWidth > 0)
+		{
+			foreach ($arRowsWidth as $columnId => $rowWidth)
+			{
+				if ($onlyDigit)
+				{
+					$arRowsWidth[$columnId] += $requiredWidth / count($digitColumns);
+					$arRowsContentWidth[$columnId] += $requiredWidth / count($digitColumns);
+				}
+				elseif ($cols[$columnId]['IS_DIGIT'] !== true)
+				{
+					$ratio = $requiredWidth / $noDigitWidth;
+					$arRowsWidth[$columnId] *= $ratio;
+					$arRowsContentWidth[$columnId] *= $ratio;
+				}
+			}
+		}
+
+		return array(
+			'ROWS_WIDTH' => $arRowsWidth,
+			'ROWS_CONTENT_WIDTH' => $arRowsContentWidth
+		);
+	}
+
+	/**
+	 * @param $str
+	 * @return mixed
+	 */
+	protected function getMaximumWord($str)
+	{
+		$wordList = explode(" ", $str);
+		$maxWord = "";
+
+		foreach ($wordList as $word)
+		{
+			if (mb_strlen($word, 'UTF-8') > mb_strlen($maxWord, 'UTF-8'))
+			{
+				$maxWord = $word;
+			}
+		}
+
+		return $maxWord;
+	}
 }
 
 class CSalePdf
@@ -158,7 +335,7 @@ class CSalePdf
 
 	public function splitString($text, $width)
 	{
-		if ($this->generator->GetStringWidth($text) <= $width)
+		if ($width <= 0 || $this->generator->GetStringWidth($text) <= $width)
 		{
 			return array($text, '');
 		}
@@ -173,9 +350,12 @@ class CSalePdf
 				$string = mb_substr($string, 0, $p, 'UTF-8');
 			}
 
+			if ($p == 0)
+				$p++;
+
 			return array(
 				$string,
-				mb_substr($text, $p+1, mb_strlen($text, 'UTF-8'), 'UTF-8')
+				trim(mb_substr($text, $p, mb_strlen($text, 'UTF-8'), 'UTF-8'))
 			);
 		}
 	}
@@ -218,15 +398,15 @@ class CSalePdf
 
 			if ($arFile)
 			{
-				$height = $arFile[0] * 0.75;
-				$width  = $arFile[1] * 0.75;
+				$height = $arFile[1] * 0.75;
+				$width  = $arFile[0] * 0.75;
 			}
 		}
 
 		return array(0 => $height, 1 => $width);
 	}
 
-	static public function GetImagePath($file)
+	public function GetImagePath($file)
 	{
 		$path = false;
 
@@ -239,7 +419,7 @@ class CSalePdf
 		}
 		elseif ($file)
 		{
-			$path = strpos($file, $_SERVER['DOCUMENT_ROOT']) === 0
+			$path = mb_strpos($file, $_SERVER['DOCUMENT_ROOT']) === 0
 				? $file
 				: $_SERVER['DOCUMENT_ROOT'] . $file;
 		}
@@ -252,4 +432,22 @@ class CSalePdf
 		return $this->generator->Image($this->GetImagePath($file), $x, $y, $w, $h, $type, $link);
 	}
 
+	public static function CheckImage(array $file)
+	{
+		$pdf = new \tFPDF();
+
+		$pos = mb_strrpos($file['name'],'.',0,'8bit');
+		$type = mb_substr($file['name'],$pos+1,mb_strlen($file['name'],'8bit'),'8bit');
+
+		try
+		{
+			$pdf->Image($file['tmp_name'], null, null, 0, 0, $type);
+		}
+		catch (Exception $e)
+		{
+			return $e->getMessage();
+		}
+
+		return null;
+	}
 }

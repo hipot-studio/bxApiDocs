@@ -44,7 +44,9 @@ class WebMoneyHandler extends PaySystem\ServiceHandler
 		$extraParams = array(
 			'URL' => $this->getUrl($payment, 'pay'),
 			'ENCODING' => $this->service->getField('ENCODING'),
-			'BX_PAYSYSTEM_CODE' => $payment->getPaymentSystemId()
+			'BX_PAYSYSTEM_CODE' => $this->service->getField('ID'),
+			'WEBMONEY_SUCCESS_URL' => $this->getSuccessUrl($payment),
+			'WEBMONEY_FAIL_URL' => $this->getFailUrl($payment),
 		);
 
 		$this->setExtraParams($extraParams);
@@ -142,7 +144,7 @@ class WebMoneyHandler extends PaySystem\ServiceHandler
 	 * @param Request $request
 	 * @return array
 	 */
-	static public function getPaymentIdFromRequest(Request $request)
+	public function getPaymentIdFromRequest(Request $request)
 	{
 		return $request->get('LMI_PAYMENT_NO');
 	}
@@ -175,8 +177,8 @@ class WebMoneyHandler extends PaySystem\ServiceHandler
 	 */
 	protected function checkSum(Payment $payment, Request $request)
 	{
-		$paymentShouldPay = PriceMaths::roundByFormatCurrency($this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY'), $payment->getField('CURRENCY'));
-		$lmiPaymentAmount = PriceMaths::roundByFormatCurrency($request->get('LMI_PAYMENT_AMOUNT'), $payment->getField('CURRENCY'));
+		$paymentShouldPay = round($this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY'), 2);
+		$lmiPaymentAmount = round($request->get('LMI_PAYMENT_AMOUNT'), 2);
 
 		return $paymentShouldPay == $lmiPaymentAmount;
 	}
@@ -194,13 +196,13 @@ class WebMoneyHandler extends PaySystem\ServiceHandler
 
 		$hash = hash($algorithm, $string);
 
-		return ToUpper($hash) == ToUpper($request->get('LMI_HASH'));
+		return mb_strtoupper($hash) == mb_strtoupper($request->get('LMI_HASH'));
 	}
 
 	/**
 	 * @return array
 	 */
-	static public function getCurrencyList()
+	public function getCurrencyList()
 	{
 		return array('RUB', 'USD', 'EUR', 'UAH');
 	}
@@ -210,7 +212,7 @@ class WebMoneyHandler extends PaySystem\ServiceHandler
 	 * @param Request $request
 	 * @return mixed
 	 */
-	static public function sendResponse(ServiceResult $result, Request $request)
+	public function sendResponse(ServiceResult $result, Request $request)
 	{
 		global $APPLICATION;
 
@@ -223,4 +225,21 @@ class WebMoneyHandler extends PaySystem\ServiceHandler
 		}
 	}
 
+	/**
+	 * @param Payment $payment
+	 * @return mixed|string
+	 */
+	private function getSuccessUrl(Payment $payment)
+	{
+		return $this->getBusinessValue($payment, 'WEBMONEY_SUCCESS_URL') ?: $this->service->getContext()->getUrl();
+	}
+
+	/**
+	 * @param Payment $payment
+	 * @return mixed|string
+	 */
+	private function getFailUrl(Payment $payment)
+	{
+		return $this->getBusinessValue($payment, 'WEBMONEY_FAIL_URL') ?: $this->service->getContext()->getUrl();
+	}
 }

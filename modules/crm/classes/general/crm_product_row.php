@@ -1,10 +1,15 @@
 <?php
+
 class CAllCrmProductRow
 {
 	const CACHE_NAME = 'CRM_PRODUCT_ROW_CACHE';
 	const TABLE_ALIAS = 'PR';
 	const TAX_MODE = 1;
 	const LD_TAX_MODE = 1;
+
+	public const PRODUCT_ORDER_DELIVERY = 'OrderDelivery';
+	public const PRODUCT_ORDER_DISCOUNT = 'OrderDiscount';
+
 	protected static $LAST_ERROR = '';
 	protected static $FIELD_INFOS = null;
 
@@ -12,10 +17,12 @@ class CAllCrmProductRow
 	{
 		return doubleval($exclusivePrice) * (1 + (doubleval($taxRate) / 100));
 	}
+
 	public static function CalculateExclusivePrice($inclusivePrice, $taxRate)
 	{
 		return doubleval($inclusivePrice) / (1 + (doubleval($taxRate) / 100));
 	}
+
 	// CRUD -->
 	public static function Add($arFields, $checkPerms = true, $regEvent = true)
 	{
@@ -131,9 +138,9 @@ class CAllCrmProductRow
 			}
 		}
 
-		$arFields['TAX_RATE'] = isset($arFields['TAX_RATE']) ? round(doubleval($arFields['TAX_RATE']), 2) : 0;
-		$arFields['TAX_INCLUDED'] = isset($arFields['TAX_INCLUDED']) && strtoupper($arFields['TAX_INCLUDED']) === 'Y' ? 'Y' : 'N';
-		$arFields['CUSTOMIZED'] = isset($arFields['CUSTOMIZED']) && strtoupper($arFields['CUSTOMIZED']) === 'Y' ? 'Y' : 'N';
+		$arFields['TAX_RATE'] = isset($arFields['TAX_RATE']) ? round(doubleval($arFields['TAX_RATE']), 2) : null;
+		$arFields['TAX_INCLUDED'] = isset($arFields['TAX_INCLUDED']) && mb_strtoupper($arFields['TAX_INCLUDED']) === 'Y' ? 'Y' : 'N';
+		$arFields['CUSTOMIZED'] = isset($arFields['CUSTOMIZED']) && mb_strtoupper($arFields['CUSTOMIZED']) === 'Y' ? 'Y' : 'N';
 
 		$ID = $DB->Add(CCrmProductRow::TABLE_NAME, $arFields);
 		if($ID === false)
@@ -158,6 +165,13 @@ class CAllCrmProductRow
 		return $ID;
 	}
 
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\ProductRowTable::update
+	 *
+	 * Careless usage of this method can cause awful data loss!
+	 *
+	 */
 	public static function Update($ID, $arFields, $checkPerms = true, $regEvent = true)
 	{
 		global $DB;
@@ -174,8 +188,8 @@ class CAllCrmProductRow
 			return false;
 		}
 
-		$ownerType = isset($arFields['OWNER_TYPE']) ? strval($arFields['OWNER_TYPE']) : isset($arParams['OWNER_TYPE']) ? strval($arParams['OWNER_TYPE']) : '';
-		$ownerID = isset($arFields['OWNER_ID']) ? intval($arFields['OWNER_ID']) : isset($arParams['OWNER_ID']) ? intval($arParams['OWNER_ID']) : 0;
+		$ownerType = (isset($arFields['OWNER_TYPE']) ? strval($arFields['OWNER_TYPE']) : (isset($arParams['OWNER_TYPE']) ? strval($arParams['OWNER_TYPE']) : ''));
+		$ownerID = (isset($arFields['OWNER_ID']) ? intval($arFields['OWNER_ID']) : (isset($arParams['OWNER_ID']) ? intval($arParams['OWNER_ID']) : 0));
 
 		if($ownerType !== '' && $ownerID > 0)
 		{
@@ -299,12 +313,12 @@ class CAllCrmProductRow
 
 		if($arFields['TAX_INCLUDED'])
 		{
-			$arFields['TAX_INCLUDED'] = strtoupper($arFields['TAX_INCLUDED']) === 'Y' ? 'Y' : 'N';
+			$arFields['TAX_INCLUDED'] = mb_strtoupper($arFields['TAX_INCLUDED']) === 'Y' ? 'Y' : 'N';
 		}
 
 		if($arFields['CUSTOMIZED'])
 		{
-			$arFields['CUSTOMIZED'] = strtoupper($arFields['CUSTOMIZED']) === 'Y' ? 'Y' : 'N';
+			$arFields['CUSTOMIZED'] = mb_strtoupper($arFields['CUSTOMIZED']) === 'Y' ? 'Y' : 'N';
 		}
 
 		$sUpdate = trim($DB->PrepareUpdate(CCrmProductRow::TABLE_NAME, $arFields));
@@ -349,6 +363,8 @@ class CAllCrmProductRow
 			return false;
 		}
 
+		\Bitrix\Crm\Reservation\Internals\ProductRowReservationTable::deleteByRowId($ID);
+
 		CCrmEntityHelper::RemoveCached(self::CACHE_NAME, $ID);
 		if(isset($arParams['OWNER_TYPE']) && isset($arParams['OWNER_ID']))
 		{
@@ -379,11 +395,11 @@ class CAllCrmProductRow
 				),
 				'OWNER_ID' => array(
 					'TYPE' => 'integer',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Required)
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Required, CCrmFieldInfoAttr::Immutable)
 				),
 				'OWNER_TYPE' => array(
 					'TYPE' => 'string',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Required)
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Required, CCrmFieldInfoAttr::Immutable)
 				),
 				'PRODUCT_ID' => array(
 					'TYPE' => 'integer',
@@ -391,6 +407,9 @@ class CAllCrmProductRow
 				),
 				'PRODUCT_NAME' => array('TYPE' => 'string'),
 				'PRICE' => array('TYPE' => 'double'),
+				'PRICE_EXCLUSIVE' => array('TYPE' => 'double'),
+				'PRICE_NETTO' => array('TYPE' => 'double'),
+				'PRICE_BRUTTO' => array('TYPE' => 'double'),
 				'QUANTITY' => array('TYPE' => 'double'),
 				'DISCOUNT_TYPE_ID' => array('TYPE' => 'integer'),
 				'DISCOUNT_RATE' => array('TYPE' => 'double'),
@@ -400,36 +419,76 @@ class CAllCrmProductRow
 				'CUSTOMIZED' => array('TYPE' => 'char'),
 				'MEASURE_CODE' => array('TYPE' => 'integer'),
 				'MEASURE_NAME' => array('TYPE' => 'string'),
-				'SORT' => array('TYPE' => 'integer')
+				'SORT' => array('TYPE' => 'integer'),
+				'TYPE' => array(
+					'TYPE' => 'integer',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
+				),
 			);
 		}
 
 		return self::$FIELD_INFOS;
 	}
 
+	public static function GetFieldCaption($fieldName)
+	{
+		$result = GetMessage("CRM_PRODUCT_ROW_FIELD_{$fieldName}");
+		return is_string($result) ? $result : '';
+	}
+
 	protected static function GetFields()
 	{
+		return [
+			'ID' => ['FIELD' => 'PR.ID', 'TYPE' => 'int'],
+			'OWNER_ID' => ['FIELD' => 'PR.OWNER_ID', 'TYPE' => 'int'],
+			'OWNER_TYPE' => ['FIELD' => 'PR.OWNER_TYPE', 'TYPE' => 'string'],
+			'PRODUCT_ID' => ['FIELD' => 'PR.PRODUCT_ID', 'TYPE' => 'int'],
+			'PRODUCT_NAME' => ['FIELD' => 'PR.PRODUCT_NAME', 'TYPE' => 'string'],
+			'ORIGINAL_PRODUCT_NAME' => ['FIELD' => 'E.NAME', 'TYPE' => 'string', 'FROM' => 'LEFT OUTER JOIN b_iblock_element E ON PR.PRODUCT_ID = E.ID'],
+			'PRODUCT_DESCRIPTION' => ['FIELD' => 'E.DETAIL_TEXT', 'TYPE' => 'string', 'FROM' => 'LEFT OUTER JOIN b_iblock_element E ON PR.PRODUCT_ID = E.ID'],
+			'PRICE' => ['FIELD' => 'PR.PRICE', 'TYPE' => 'double'],
+			'PRICE_EXCLUSIVE' => ['FIELD' => 'PR.PRICE_EXCLUSIVE', 'TYPE' => 'double'],
+			'PRICE_NETTO' => ['FIELD' => 'PR.PRICE_NETTO', 'TYPE' => 'double'],
+			'PRICE_BRUTTO' => ['FIELD' => 'PR.PRICE_BRUTTO', 'TYPE' => 'double'],
+			'PRICE_ACCOUNT' => ['FIELD' => 'PR.PRICE_ACCOUNT', 'TYPE' => 'double'],
+			'QUANTITY' => ['FIELD' => 'PR.QUANTITY', 'TYPE' => 'double'],
+			'DISCOUNT_TYPE_ID' => ['FIELD' => 'PR.DISCOUNT_TYPE_ID', 'TYPE' => 'int'],
+			'DISCOUNT_RATE' => ['FIELD' => 'PR.DISCOUNT_RATE', 'TYPE' => 'double'],
+			'DISCOUNT_SUM' => ['FIELD' => 'PR.DISCOUNT_SUM', 'TYPE' => 'double'],
+			'TAX_RATE' => ['FIELD' => 'PR.TAX_RATE', 'TYPE' => 'double'],
+			'TAX_INCLUDED' => ['FIELD' => 'PR.TAX_INCLUDED', 'TYPE' => 'char'],
+			'CUSTOMIZED' => ['FIELD' => 'PR.CUSTOMIZED', 'TYPE' => 'char'],
+			'MEASURE_CODE' => ['FIELD' => 'PR.MEASURE_CODE', 'TYPE' => 'int'],
+			'MEASURE_NAME' => ['FIELD' => 'PR.MEASURE_NAME', 'TYPE' => 'string'],
+			'SORT' => ['FIELD' => 'PR.SORT', 'TYPE' => 'int'],
+			'XML_ID' => ['FIELD' => 'PR.XML_ID', 'TYPE' => 'string'],
+			'TYPE' => ['FIELD' => 'PR.TYPE', 'TYPE' => 'int'],
+		];
+	}
+
+	protected static function GetExtendedFields()
+	{
 		return array(
-			'ID' => array('FIELD' => 'PR.ID', 'TYPE' => 'int'),
-			'OWNER_ID' => array('FIELD' => 'PR.OWNER_ID', 'TYPE' => 'int'),
-			'OWNER_TYPE' => array('FIELD' => 'PR.OWNER_TYPE', 'TYPE' => 'string'),
-			'PRODUCT_ID' => array('FIELD' => 'PR.PRODUCT_ID', 'TYPE' => 'int'),
-			'PRODUCT_NAME' => array('FIELD' => 'PR.PRODUCT_NAME', 'TYPE' => 'string'),
-			'ORIGINAL_PRODUCT_NAME' => array('FIELD' => 'E.NAME', 'TYPE' => 'string', 'FROM' => 'LEFT OUTER JOIN b_iblock_element E ON PR.PRODUCT_ID = E.ID'),
-			'PRODUCT_DESCRIPTION' => array('FIELD' => 'E.DETAIL_TEXT', 'TYPE' => 'string', 'FROM' => 'LEFT OUTER JOIN b_iblock_element E ON PR.PRODUCT_ID = E.ID'),
-			'PRICE' => array('FIELD' => 'PR.PRICE', 'TYPE' => 'double'),
-			'PRICE_ACCOUNT' => array('FIELD' => 'PR.PRICE_ACCOUNT', 'TYPE' => 'double'),
-			'QUANTITY' => array('FIELD' => 'PR.QUANTITY', 'TYPE' => 'double'),
-			'DISCOUNT_TYPE_ID' => array('FIELD' => 'PR.DISCOUNT_TYPE_ID', 'TYPE' => 'int'),
-			'DISCOUNT_RATE' => array('FIELD' => 'PR.DISCOUNT_RATE', 'TYPE' => 'double'),
-			'DISCOUNT_SUM' => array('FIELD' => 'PR.DISCOUNT_SUM', 'TYPE' => 'double'),
-			'TAX_RATE' => array('FIELD' => 'PR.TAX_RATE', 'TYPE' => 'double'),
-			'TAX_INCLUDED' => array('FIELD' => 'PR.TAX_INCLUDED', 'TYPE' => 'char'),
-			'CUSTOMIZED' => array('FIELD' => 'PR.CUSTOMIZED', 'TYPE' => 'char'),
-			'MEASURE_CODE' => array('FIELD' => 'PR.MEASURE_CODE', 'TYPE' => 'int'),
-			'MEASURE_NAME' => array('FIELD' => 'PR.MEASURE_NAME', 'TYPE' => 'string'),
-			'SORT' => array('FIELD' => 'PR.SORT', 'TYPE' => 'int')
+			'PRODUCT_NAME' => array(
+				'FIELD' => 'CASE WHEN PR.PRODUCT_NAME IS NOT NULL AND '.
+					'PR.PRODUCT_NAME != \'\' THEN PR.PRODUCT_NAME ELSE E.NAME END',
+				'TYPE' => 'string',
+				'FROM' => 'LEFT OUTER JOIN b_iblock_element E ON PR.PRODUCT_ID = E.ID'
+			)
 		);
+	}
+
+	public static function GetProductTypeName(string $type): ?string
+	{
+		if ($type == self::PRODUCT_ORDER_DISCOUNT)
+		{
+			return GetMessage('CRM_PRODUCT_ROW_DISCOUNT');
+		}
+		elseif ($type == self::PRODUCT_ORDER_DELIVERY)
+		{
+			return GetMessage('CRM_PRODUCT_ROW_DELIVERY');
+		}
+		return null;
 	}
 
 	//Check fields before ADD and UPDATE.
@@ -497,40 +556,59 @@ class CAllCrmProductRow
 		return true;
 	}
 
-
 	public static function ResolveOwnerTypeName($ownerType)
 	{
-		$ownerType = strtoupper(strval($ownerType));
+		if (!is_string($ownerType))
+		{
+			return '';
+		}
 
-		if($ownerType === 'D')
+		$ownerType = mb_strtoupper($ownerType);
+		$result = '';
+		switch ($ownerType)
 		{
-			return CCrmOwnerType::DealName;
+			case CCrmOwnerTypeAbbr::Deal:
+			case CCrmOwnerTypeAbbr::Order:
+			case CCrmOwnerTypeAbbr::Quote:
+			case CCrmOwnerTypeAbbr::Lead:
+			case CCrmOwnerTypeAbbr::Invoice:
+			case CCrmOwnerTypeAbbr::SmartInvoice:
+				$result = CCrmOwnerTypeAbbr::ResolveName($ownerType);
+				break;
 		}
-		elseif($ownerType === 'L')
+
+		if (empty($result) && \CCrmOwnerTypeAbbr::isDynamicTypeAbbreviation($ownerType))
 		{
-			return CCrmOwnerType::LeadName;
+			$result = \CCrmOwnerTypeAbbr::ResolveName($ownerType);
 		}
-		return '';
+
+		return $result;
 	}
 
+	/**
+	 * Synchronize owner fields if required.
+	 * For example, update Deal OPPORTUNITY field according to totals of the product rows.
+	 * @param string $ownerType Owner Type Character ('D' - Deal, 'L' - Lead, 'Q' - Quote).
+	 * @param int $ownerID Owner ID.
+	 * @param bool $checkPerms Check Permission Flag.
+	 * @param array $totalInfo Reserveds parameter.
+	 */
 	protected static function SynchronizeOwner($ownerType, $ownerID, $checkPerms = true, $totalInfo = array())
 	{
-		$ownerType = strtoupper(strval($ownerType));
+		$ownerType = mb_strtoupper(strval($ownerType));
 		$ownerID = intval($ownerID);
-		if (!is_array($totalInfo))
-			$totalInfo = array();
 
-		if($ownerType === 'D')
+		if($ownerType === CCrmOwnerTypeAbbr::Deal)
 		{
 			CCrmDeal::SynchronizeProductRows($ownerID, $checkPerms);
 		}
-		elseif($ownerType === CCrmQuote::OWNER_TYPE)
+		elseif($ownerType === CCrmOwnerTypeAbbr::Quote)
 		{
-			CCrmQuote::SynchronizeProductRows($ownerID, $checkPerms, $totalInfo);
+			CCrmQuote::SynchronizeProductRows($ownerID, $checkPerms);
 		}
-		elseif($ownerType === 'L')
+		elseif($ownerType === CCrmOwnerTypeAbbr::Lead)
 		{
-			CCrmLead::SynchronizeProductRows($ownerID);
+			CCrmLead::SynchronizeProductRows($ownerID, $checkPerms);
 		}
 	}
 
@@ -545,11 +623,19 @@ class CAllCrmProductRow
 	// Contract -->
 	public static function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array(), $arOptions = array())
 	{
+		$fields = self::GetFields();
+		if (is_array($arOptions) && isset($arOptions['EXTENDED_FIELDS']))
+		{
+			if ($arOptions['EXTENDED_FIELDS'] === 'Y' || $arOptions['EXTENDED_FIELDS'] === true)
+			{
+				$fields = array_replace($fields, self::GetExtendedFields());
+			}
+		}
 		$lb = new CCrmEntityListBuilder(
 			CCrmProductRow::DB_TYPE,
 			CCrmProductRow::TABLE_NAME,
 			self::TABLE_ALIAS,
-			self::GetFields(),
+			$fields,
 			'',
 			'',
 			array()
@@ -587,7 +673,7 @@ class CAllCrmProductRow
 		}
 		else
 		{
-			$ownerID = intval($ownerID);
+			$ownerID = (int)$ownerID;
 			if($ownerID > 0)
 			{
 				$filter['OWNER_ID'] = $ownerID;
@@ -601,21 +687,27 @@ class CAllCrmProductRow
 		{
 			$productID = $ary['PRODUCT_ID'] = isset($ary['PRODUCT_ID']) ? intval($ary['PRODUCT_ID']) : 0;
 
-			$ary['QUANTITY'] = isset($ary['QUANTITY']) ? round(doubleval($ary['QUANTITY']), 4) : 0.0;
-			$ary['PRICE'] = isset($ary['PRICE']) ? round(doubleval($ary['PRICE']), 2) : 0.0;
-			$ary['DISCOUNT_TYPE_ID'] = isset($ary['DISCOUNT_TYPE_ID'])
-				? intval($ary['DISCOUNT_TYPE_ID']) : \Bitrix\Crm\Discount::UNDEFINED;
-			$ary['DISCOUNT_RATE'] = isset($ary['DISCOUNT_RATE']) ? round(doubleval($ary['DISCOUNT_RATE']), 2) : 0.0;
-			$ary['DISCOUNT_SUM'] = isset($ary['DISCOUNT_SUM']) ? round(doubleval($ary['DISCOUNT_SUM']), 2) : 0.0;
+			$ary['QUANTITY'] = isset($ary['QUANTITY']) ? round((float)$ary['QUANTITY'], 4) : 0.0;
+			$ary['PRICE'] = isset($ary['PRICE']) ? round((float)$ary['PRICE'], 2) : 0.0;
+			$ary['PRICE_EXCLUSIVE'] = isset($ary['PRICE_EXCLUSIVE']) ? round((float)$ary['PRICE_EXCLUSIVE'], 2) : 0.0;
+			$ary['PRICE_NETTO'] = isset($ary['PRICE_NETTO']) ? round((float)$ary['PRICE_NETTO'], 2) : 0.0;
+			$ary['PRICE_BRUTTO'] = isset($ary['PRICE_BRUTTO']) ? round((float)$ary['PRICE_BRUTTO'], 2) : 0.0;
 
-			$ary['TAX_RATE'] = isset($ary['TAX_RATE']) ? round(doubleval($ary['TAX_RATE']), 2) : 0.0;
+			$ary['DISCOUNT_TYPE_ID'] = isset($ary['DISCOUNT_TYPE_ID'])
+				? (int)$ary['DISCOUNT_TYPE_ID'] : \Bitrix\Crm\Discount::UNDEFINED;
+			$ary['DISCOUNT_RATE'] = isset($ary['DISCOUNT_RATE']) ? round((float)$ary['DISCOUNT_RATE'], 2) : 0.0;
+			$ary['DISCOUNT_SUM'] = isset($ary['DISCOUNT_SUM']) ? round((float)$ary['DISCOUNT_SUM'], 2) : 0.0;
+
+			$ary['TAX_RATE'] = isset($ary['TAX_RATE']) ? round((float)$ary['TAX_RATE'], 2) : null;
 			$ary['TAX_INCLUDED'] = isset($ary['TAX_INCLUDED']) ? $ary['TAX_INCLUDED'] : 'N';
 			$ary['CUSTOMIZED'] = isset($ary['CUSTOMIZED']) ? $ary['CUSTOMIZED'] : 'N';
 
-			$ary['SORT'] = isset($ary['SORT']) ? intval($ary['SORT']) : 0;
+			$ary['SORT'] = isset($ary['SORT']) ? (int)$ary['SORT'] : 0;
 
-			$ary['MEASURE_CODE'] = isset($ary['MEASURE_CODE']) ? intval($ary['MEASURE_CODE']) : 0;
+			$ary['MEASURE_CODE'] = isset($ary['MEASURE_CODE']) ? (int)$ary['MEASURE_CODE'] : 0;
 			$ary['MEASURE_NAME'] = isset($ary['MEASURE_NAME']) ? $ary['MEASURE_NAME'] : '';
+
+			$ary['TYPE'] = isset($ary['TYPE']) ? (int)$ary['TYPE'] : \Bitrix\Crm\ProductType::TYPE_PRODUCT;
 
 			if($productID > 0 && $ary['MEASURE_CODE'] <= 0)
 			{
@@ -639,13 +731,15 @@ class CAllCrmProductRow
 
 			if($assoc)
 			{
-				$results[intval($ary['ID'])] = $ary;
+				$results[(int)$ary['ID']] = $ary;
 			}
 			else
 			{
 				$results[] = $ary;
 			}
 		}
+
+		$results = \Bitrix\Crm\Service\Sale\Reservation\ReservationService::getInstance()->fillCrmReserves($results);
 
 		if(!empty($measurelessProductIDs))
 		{
@@ -694,17 +788,47 @@ class CAllCrmProductRow
 		$owner = null;
 		if (!is_array($accountContext))
 		{
-			if($ownerType === 'D')
+			if($ownerType === CCrmOwnerTypeAbbr::Deal)
 			{
-				$owner = CCrmDeal::GetByID($ownerID, $checkPerms);
+				$dbResult = CCrmDeal::GetListEx(
+					array(),
+					array('=ID' => $ownerID, 'CHECK_PERMISSIONS' => 'N'),
+					false,
+					false,
+					array('ID', 'CURRENCY_ID', 'EXCH_RATE')
+				);
+				if(is_object($dbResult))
+				{
+					$owner = $dbResult->Fetch();
+				}
 			}
-			elseif($ownerType === CCrmQuote::OWNER_TYPE)
+			elseif($ownerType === CCrmOwnerTypeAbbr::Lead)
 			{
-				$owner = CCrmQuote::GetByID($ownerID);
+				$dbResult = CCrmLead::GetListEx(
+					array(),
+					array('=ID' => $ownerID, 'CHECK_PERMISSIONS' => 'N'),
+					false,
+					false,
+					array('ID', 'CURRENCY_ID', 'EXCH_RATE')
+				);
+				if(is_object($dbResult))
+				{
+					$owner = $dbResult->Fetch();
+				}
 			}
-			elseif($ownerType === 'L')
+			elseif($ownerType === CCrmOwnerTypeAbbr::Quote)
 			{
-				$owner = CCrmLead::GetByID($ownerID);
+				$dbResult = CCrmQuote::GetList(
+					array(),
+					array('=ID' => $ownerID, 'CHECK_PERMISSIONS' => 'N'),
+					false,
+					false,
+					array('ID', 'CURRENCY_ID', 'EXCH_RATE')
+				);
+				if(is_object($dbResult))
+				{
+					$owner = $dbResult->Fetch();
+				}
 			}
 		}
 
@@ -766,76 +890,18 @@ class CAllCrmProductRow
 		$arSafeRows = array();
 		foreach($arRows as &$arRow)
 		{
-			//$rowID = isset($arRow['ID']) ? intval($arRow['ID']) : 0;
-			$productID = $arRow['PRODUCT_ID'] = isset($arRow['PRODUCT_ID']) ? intval($arRow['PRODUCT_ID']) : 0;
+			$rowID = isset($arRow['ID']) ? (int)$arRow['ID'] : 0;
+			$productID = $arRow['PRODUCT_ID'] = isset($arRow['PRODUCT_ID']) ? (int)$arRow['PRODUCT_ID'] : 0;
 			$productName = $arRow['PRODUCT_NAME'] = isset($arRow['PRODUCT_NAME']) ? $arRow['PRODUCT_NAME'] : '';
-			$arRow['PRICE'] = isset($arRow['PRICE']) ? round(doubleval($arRow['PRICE']), 2) : 0.0;
-			$arRow['QUANTITY'] = isset($arRow['QUANTITY']) ? round(doubleval($arRow['QUANTITY']), 4) : 1;
-			$arRow['TAX_RATE'] = isset($arRow['TAX_RATE']) ? round(doubleval($arRow['TAX_RATE']), 2) : 0.0;
-			$arRow['TAX_INCLUDED'] = isset($arRow['TAX_INCLUDED']) ? ($arRow['TAX_INCLUDED'] === 'Y' ? 'Y' : 'N') : 'N';
-			$arRow['MEASURE_CODE'] = isset($arRow['MEASURE_CODE']) ? intval($arRow['MEASURE_CODE']) : 0;
+			$arRow['MEASURE_CODE'] = isset($arRow['MEASURE_CODE']) ? (int)$arRow['MEASURE_CODE'] : 0;
 			$arRow['MEASURE_NAME'] = isset($arRow['MEASURE_NAME']) ? $arRow['MEASURE_NAME'] : '';
-			$arRow['CUSTOMIZED'] = isset($arRow['CUSTOMIZED']) && strtoupper($arRow['CUSTOMIZED']) === 'Y' ? 'Y' : 'N';
-			$arRow['SORT'] = isset($arRow['SORT']) ? intval($arRow['SORT']) : 0;
+			$arRow['CUSTOMIZED'] = isset($arRow['CUSTOMIZED']) && mb_strtoupper($arRow['CUSTOMIZED']) === 'Y' ? 'Y' : 'N';
+			$arRow['SORT'] = isset($arRow['SORT']) ? (int)$arRow['SORT'] : 0;
 
-			if($productID > 0 && $productName !== '' && isset($products[$productID]))
+			$prices = static::preparePrices($arRow, $currencyID, $exchRate);
+			if (false === $prices)
 			{
-				//Skip save product name if it equal to original
-				$product = $products[$productID];
-				$originalProductName = isset($product['NAME']) ? trim($product['NAME']) : '';
-				if($productName === $originalProductName)
-				{
-					$productName = '';
-				}
-			}
-
-			$price = $arRow['PRICE'];
-
-			$arRow['DISCOUNT_TYPE_ID'] = isset($arRow['DISCOUNT_TYPE_ID']) ? intval($arRow['DISCOUNT_TYPE_ID']) : 0;
-			if(!\Bitrix\Crm\Discount::isDefined($arRow['DISCOUNT_TYPE_ID']))
-			{
-				$arRow['DISCOUNT_TYPE_ID'] = \Bitrix\Crm\Discount::PERCENTAGE;
-				$arRow['DISCOUNT_RATE'] = 0.0;
-			}
-			$discountTypeID = $arRow['DISCOUNT_TYPE_ID'];
-
-			if($discountTypeID === \Bitrix\Crm\Discount::PERCENTAGE)
-			{
-				if(!isset($arRow['DISCOUNT_RATE']))
-				{
-					self::RegisterError("Discount Rate (DISCOUNT_RATE) is required if Percentage Discount Type (DISCOUNT_TYPE_ID) is defined.");
-					return false;
-				}
-				$discountRate = round(doubleval($arRow['DISCOUNT_RATE']), 2);
-
-				if(isset($arRow['DISCOUNT_SUM']))
-				{
-					$discountSum = round(doubleval($arRow['DISCOUNT_SUM']), 2);
-				}
-				else
-				{
-					$exclusivePrice = self::CalculateExclusivePrice($price, $arRow['TAX_RATE']);
-					$discountSum = round(\Bitrix\Crm\Discount::calculateDiscountSum($exclusivePrice, $discountRate), 2);
-				}
-			}
-			else//if($discountTypeID === \Bitrix\Crm\Discount::MONETARY)
-			{
-				if(!isset($arRow['DISCOUNT_SUM']))
-				{
-					self::RegisterError("Discount Sum (DISCOUNT_SUM) is required if Monetary Discount Type (DISCOUNT_TYPE_ID) is defined.");
-					return false;
-				}
-				$discountSum = round(doubleval($arRow['DISCOUNT_SUM']), 2);
-
-				if(isset($arRow['DISCOUNT_RATE']))
-				{
-					$discountRate = round(doubleval($arRow['DISCOUNT_RATE']), 2);
-				}
-				else
-				{
-					$exclusivePrice = self::CalculateExclusivePrice($price, $arRow['TAX_RATE']);
-					$discountRate = \Bitrix\Crm\Discount::calculateDiscountRate(($exclusivePrice + $discountSum), $exclusivePrice);
-				}
+				return false;
 			}
 
 			$measureCode = $arRow['MEASURE_CODE'];
@@ -847,38 +913,43 @@ class CAllCrmProductRow
 				}
 			}
 
-			$safeRow = array(
-				//'ID' => $rowID,
+			$safeRow = [
+				'ID' => $rowID,
 				'OWNER_TYPE' => $ownerType,
 				'OWNER_ID' => $ownerID,
 				'PRODUCT_ID' => $productID,
 				'PRODUCT_NAME' => $productName,
-				'PRICE' => $price,
-				'QUANTITY'=> $arRow['QUANTITY'],
-				'DISCOUNT_TYPE_ID' => $discountTypeID,
-				'DISCOUNT_SUM' => $discountSum,
-				'DISCOUNT_RATE' => $discountRate,
-				'TAX_RATE' => $arRow['TAX_RATE'],
-				'TAX_INCLUDED' => isset($arRow['TAX_INCLUDED']) ? ($arRow['TAX_INCLUDED'] === 'Y' ? 'Y' : 'N') : 'N',
+
+				'PRICE' => $prices['PRICE'],
+				'PRICE_EXCLUSIVE' => $prices['PRICE_EXCLUSIVE'],
+				'PRICE_NETTO' => $prices['PRICE_NETTO'],
+				'PRICE_BRUTTO' => $prices['PRICE_BRUTTO'],
+				'QUANTITY'=> $prices['QUANTITY'],
+				'DISCOUNT_TYPE_ID' => $prices['DISCOUNT_TYPE_ID'],
+				'DISCOUNT_SUM' => $prices['DISCOUNT_SUM'],
+				'DISCOUNT_RATE' => $prices['DISCOUNT_RATE'],
+				'TAX_RATE' => $prices['TAX_RATE'],
+				'TAX_INCLUDED' => $prices['TAX_INCLUDED'],
+
 				'MEASURE_CODE' => $measureCode,
 				'MEASURE_NAME' => $arRow['MEASURE_NAME'],
 				'CUSTOMIZED' => 'Y', //Is always enabled for disable requests to product catalog
-				'SORT' => $arRow['SORT']
-			);
+				'SORT' => $arRow['SORT'],
 
-			$accData = CCrmAccountingHelper::PrepareAccountingData(
-				array(
-					'CURRENCY_ID' => $currencyID,
-					'SUM' => $safeRow['PRICE'],
-					'EXCH_RATE' => $exchRate
-				)
-			);
+				'TYPE' => (int)($arRow['TYPE'] ?? \Bitrix\Crm\ProductType::TYPE_PRODUCT),
+			];
 
-			if(is_array($accData))
+			if(isset($arRow['XML_ID']))
 			{
-				$safeRow['PRICE_ACCOUNT'] = $accData['ACCOUNT_SUM'];
+				$safeRow['XML_ID'] = $arRow['XML_ID'];
 			}
 
+			if(isset($prices['PRICE_ACCOUNT']))
+			{
+				$safeRow['PRICE_ACCOUNT'] = $prices['PRICE_ACCOUNT'];
+			}
+
+			$safeRow['ORIGINAL_ROW'] = $arRow;
 			$arSafeRows[] = &$safeRow;
 			unset($safeRow);
 		}
@@ -900,12 +971,17 @@ class CAllCrmProductRow
 				{
 					$measureInfo = $measureInfos[$productID][0];
 					$safeRow['MEASURE_CODE'] = $measureInfo['CODE'];
-					$safeRow['MEASURE_NAME'] = $measureInfo['SYMBOL'];
+					$safeRow['MEASURE_NAME'] = isset($measureInfo['SYMBOL']) ? $measureInfo['SYMBOL'] : '';
 				}
 				elseif($defaultMeasureInfo !== null)
 				{
 					$safeRow['MEASURE_CODE'] = $defaultMeasureInfo['CODE'];
-					$safeRow['MEASURE_NAME'] = $defaultMeasureInfo['SYMBOL'];
+					$safeRow['MEASURE_NAME'] = isset($defaultMeasureInfo['SYMBOL']) ? $defaultMeasureInfo['SYMBOL'] : '';
+				}
+
+				if(!isset($safeRow['MEASURE_NAME']) || $safeRow['MEASURE_NAME'] === '')
+				{
+					$safeRow['MEASURE_NAME'] = '-';
 				}
 			}
 			unset($safeRow);
@@ -967,10 +1043,166 @@ class CAllCrmProductRow
 		return $result;
 	}
 
+	protected static function preparePrices($product, $currencyID, $exchRate)
+	{
+		$result = [];
+
+		$result['PRICE'] = isset($product['PRICE']) ? round((float)$product['PRICE'], 2) : 0.0;
+		$result['PRICE_EXCLUSIVE'] = isset($product['PRICE_EXCLUSIVE']) ? round((float)$product['PRICE_EXCLUSIVE'], 2) : 0.0;
+		$result['QUANTITY'] = isset($product['QUANTITY']) ? round((float)$product['QUANTITY'], 4) : 1;
+		$result['TAX_RATE'] = (isset($product['TAX_RATE']) && $product['TAX_RATE'] !== false) ? round((float)$product['TAX_RATE'], 2) : null;
+		$result['TAX_INCLUDED'] = isset($product['TAX_INCLUDED']) ? ($product['TAX_INCLUDED'] === 'Y' ? 'Y' : 'N') : 'N';
+		$result['DISCOUNT_TYPE_ID'] = isset($product['DISCOUNT_TYPE_ID']) ? intval($product['DISCOUNT_TYPE_ID']) : 0;
+
+		$inclusivePrice = $result['PRICE'];
+		$exclusivePrice = $result['PRICE_EXCLUSIVE'];
+		if($exclusivePrice == 0.0 && $inclusivePrice != 0.0)
+		{
+			$exclusivePrice =  round(self::CalculateExclusivePrice($inclusivePrice, $result['TAX_RATE']), 2);
+		}
+
+		if(!\Bitrix\Crm\Discount::isDefined($result['DISCOUNT_TYPE_ID']))
+		{
+			$result['DISCOUNT_TYPE_ID'] = \Bitrix\Crm\Discount::PERCENTAGE;
+			$product['DISCOUNT_RATE'] = 0.0;
+		}
+		$discountTypeID = $result['DISCOUNT_TYPE_ID'];
+
+		if($discountTypeID === \Bitrix\Crm\Discount::PERCENTAGE)
+		{
+			if(!isset($product['DISCOUNT_RATE']))
+			{
+				self::RegisterError("Discount Rate (DISCOUNT_RATE) is required if Percentage Discount Type (DISCOUNT_TYPE_ID) is defined.");
+				return false;
+			}
+			$discountRate = round(doubleval($product['DISCOUNT_RATE']), 2);
+
+			if ($discountRate === 100.0)
+			{
+				if (!isset($product['DISCOUNT_SUM']) || empty($product['DISCOUNT_SUM']))
+				{
+					//impossible to calculate discount sum
+					self::RegisterError(
+						'Discount Sum (DISCOUNT_SUM) is required if Percentage Discount Type (DISCOUNT_TYPE_ID) '
+						. 'is defined and Discount Rate (DISCOUNT_RATE) is 100%'
+					);
+
+					return false;
+				}
+			}
+
+			if(isset($product['DISCOUNT_SUM']))
+			{
+				$discountSum = round(doubleval($product['DISCOUNT_SUM']), 2);
+			}
+			else
+			{
+				$discountSum = round(\Bitrix\Crm\Discount::calculateDiscountSum($exclusivePrice, $discountRate), 2);
+			}
+		}
+		else//if($discountTypeID === \Bitrix\Crm\Discount::MONETARY)
+		{
+			if(!isset($product['DISCOUNT_SUM']))
+			{
+				self::RegisterError("Discount Sum (DISCOUNT_SUM) is required if Monetary Discount Type (DISCOUNT_TYPE_ID) is defined.");
+				return false;
+			}
+			$discountSum = round(doubleval($product['DISCOUNT_SUM']), 2);
+
+			if(isset($product['DISCOUNT_RATE']))
+			{
+				$discountRate = round(doubleval($product['DISCOUNT_RATE']), 2);
+			}
+			else
+			{
+				$discountRate = \Bitrix\Crm\Discount::calculateDiscountRate(($exclusivePrice + $discountSum), $exclusivePrice);
+			}
+		}
+
+		if (isset($product['PRICE_NETTO']))
+		{
+			$priceNetto = $product['PRICE_NETTO'];
+		}
+		else
+		{
+			$priceNetto = $exclusivePrice + $discountSum;
+		}
+		$result['PRICE_NETTO'] = round((float)$priceNetto, 2);
+
+		if (isset($product['PRICE_BRUTTO']))
+		{
+			$result['PRICE_BRUTTO'] = round((float)$product['PRICE_BRUTTO'], 2);
+		}
+		else
+		{
+			$result['PRICE_BRUTTO'] = round(static::CalculateInclusivePrice($priceNetto, $result['TAX_RATE']), 2);
+		}
+
+		$result['PRICE'] = $inclusivePrice;
+		$result['PRICE_EXCLUSIVE'] = $exclusivePrice;
+		$result['DISCOUNT_TYPE_ID'] = $discountTypeID;
+		$result['DISCOUNT_SUM'] = $discountSum;
+		$result['DISCOUNT_RATE'] = $discountRate;
+
+		$accData = CCrmAccountingHelper::PrepareAccountingData(
+			array(
+				'CURRENCY_ID' => $currencyID,
+				'SUM' => $result['PRICE'],
+				'EXCH_RATE' => $exchRate
+			)
+		);
+
+		if(is_array($accData))
+		{
+			$result['PRICE_ACCOUNT'] = $accData['ACCOUNT_SUM'];
+		}
+
+		return $result;
+	}
+
+	protected static function NeedForUpdate(array $original, array $modified)
+	{
+		if (array_key_exists('TAX_RATE', $modified))
+		{
+			$originalTaxRate = $original['TAX_RATE'];
+			$modifiedTaxRate = $modified['TAX_RATE'];
+			if ($modifiedTaxRate !== null && $originalTaxRate !== null)
+			{
+				$modifiedTaxRate = (float)$modifiedTaxRate;
+				$originalTaxRate = (float)$originalTaxRate;
+			}
+
+			if ($modifiedTaxRate !== $originalTaxRate)
+			{
+				return true;
+			}
+		}
+
+		return(
+			isset($modified['PRODUCT_ID']) && $modified['PRODUCT_ID'] != $original['PRODUCT_ID'] ||
+			isset($modified['PRODUCT_NAME']) && $modified['PRODUCT_NAME'] != $original['PRODUCT_NAME'] ||
+			isset($modified['PRICE']) && $modified['PRICE'] != $original['PRICE'] ||
+			isset($modified['PRICE_ACCOUNT']) && $modified['PRICE_ACCOUNT'] != $original['PRICE_ACCOUNT'] ||
+			isset($modified['PRICE_EXCLUSIVE']) && $modified['PRICE_EXCLUSIVE'] != $original['PRICE_EXCLUSIVE'] ||
+			isset($modified['PRICE_NETTO']) && $modified['PRICE_NETTO'] != $original['PRICE_NETTO'] ||
+			isset($modified['PRICE_BRUTTO']) && $modified['PRICE_BRUTTO'] != $original['PRICE_BRUTTO'] ||
+			isset($modified['QUANTITY']) && $modified['QUANTITY'] != $original['QUANTITY'] ||
+			isset($modified['DISCOUNT_TYPE_ID']) && $modified['DISCOUNT_TYPE_ID'] != $original['DISCOUNT_TYPE_ID'] ||
+			isset($modified['DISCOUNT_RATE']) && $modified['DISCOUNT_RATE'] != $original['DISCOUNT_RATE'] ||
+			isset($modified['DISCOUNT_SUM']) && $modified['DISCOUNT_SUM'] != $original['DISCOUNT_SUM'] ||
+			isset($modified['TAX_INCLUDED']) && $modified['TAX_INCLUDED'] != $original['TAX_INCLUDED'] ||
+			isset($modified['CUSTOMIZED']) && $modified['CUSTOMIZED'] != $original['CUSTOMIZED'] ||
+			isset($modified['MEASURE_CODE']) && $modified['MEASURE_CODE'] != $original['MEASURE_CODE'] ||
+			isset($modified['MEASURE_NAME']) && $modified['MEASURE_NAME'] != $original['MEASURE_NAME'] ||
+			isset($modified['SORT']) && $modified['SORT'] != $original['SORT'] ||
+			isset($modified['XML_ID']) && $modified['XML_ID'] != $original['XML_ID']
+		);
+	}
+
 	protected static function UpdateTotalInfo($ownerType, $ownerID, $totalInfo = array())
 	{
 		$result = array();
-		
+
 		if (!is_array($totalInfo))
 			$totalInfo = array();
 
@@ -979,25 +1211,14 @@ class CAllCrmProductRow
 			$taxMode = CCrmTax::isVatMode() ? self::TAX_MODE : self::LD_TAX_MODE;
 
 		$taxList = null;
-		if (is_array($totalInfo['TAX_LIST']))
+		if (is_array(($totalInfo['TAX_LIST'] ?? null)))
 			$taxList = $totalInfo['TAX_LIST'];
 		else
 		{
 			$owner = null;
 			if (!isset($totalInfo['CURRENCY']) || !isset($totalInfo['PERSON_TYPE_ID']))
 			{
-				if($ownerType === 'D')
-				{
-					$owner = CCrmDeal::GetByID($ownerID, false);
-				}
-				elseif($ownerType === CCrmQuote::OWNER_TYPE)
-				{
-					$owner = CCrmQuote::GetByID($ownerID, false);
-				}
-				elseif($ownerType === 'L')
-				{
-					$owner = CCrmLead::GetByID($ownerID, false);
-				}
+				$owner = self::getOwnerData($ownerType, $ownerID);
 			}
 
 			// Determine person type
@@ -1032,15 +1253,15 @@ class CAllCrmProductRow
 
 			$locationID = 0;
 			if (isset($totalInfo['LOCATION_ID']))
-				$locationID = intval($totalInfo['LOCATION_ID']);
+				$locationID = $totalInfo['LOCATION_ID'];
 			else if (isset($owner['LOCATION_ID']))
-				$locationID = intval($owner['LOCATION_ID']);
+				$locationID = $owner['LOCATION_ID'];
 
 			$enableSaleDiscount = false;
 			$siteID = '';
 			if (!defined("SITE_ID"))
 			{
-				$obSite = CSite::GetList($by = "def", $order = "desc", array("ACTIVE" => "Y"));
+				$obSite = CSite::GetList("def", "desc", array("ACTIVE" => "Y"));
 				if ($obSite && $arSite = $obSite->Fetch())
 					$siteID= $arSite["LID"];
 				unset($obSite, $arSite);
@@ -1057,8 +1278,10 @@ class CAllCrmProductRow
 				$calculateOptions['LOCATION_ID'] = $locationID;
 			$arResult = CCrmSaleHelper::Calculate($arRows, $currencyID, $personTypeID, $enableSaleDiscount, $siteID, $calculateOptions);
 
-			if (is_array($arResult['TAX_LIST']))
+			if (is_array(($arResult['TAX_LIST'] ?? null)))
+			{
 				$taxList = $arResult['TAX_LIST'];
+			}
 		}
 
 		$settings = CCrmProductRow::LoadSettings($ownerType, $ownerID);
@@ -1072,9 +1295,12 @@ class CAllCrmProductRow
 
 	public static function LoadTotalInfo($ownerType, $ownerID)
 	{
-		$result = array();
+		return static::PrepareTotalInfoFromSettings(CCrmProductRow::LoadSettings($ownerType, $ownerID));
+	}
 
-		$settings = CCrmProductRow::LoadSettings($ownerType, $ownerID);
+	public static function PrepareTotalInfoFromSettings(array $settings): array
+	{
+		$result = array();
 
 		$taxMode = isset($settings['TAX_MODE']) ? intval($settings['TAX_MODE']) : 0;
 		if ($taxMode !== self::TAX_MODE && $taxMode !== self::LD_TAX_MODE)
@@ -1082,7 +1308,7 @@ class CAllCrmProductRow
 
 		$result['TAX_MODE'] = $taxMode;
 
-		if (is_array($settings['TAX_LIST']))
+		if (isset($settings['TAX_LIST']) && is_array($settings['TAX_LIST']))
 			$result['TAX_LIST'] = $settings['TAX_LIST'];
 
 		return $result;
@@ -1091,19 +1317,8 @@ class CAllCrmProductRow
 	protected static function PrepareAccountingContext($ownerType, $ownerID)
 	{
 		$result = array();
-		$owner = null;
-		if($ownerType === 'D')
-		{
-			$owner = CCrmDeal::GetByID($ownerID, false);
-		}
-		elseif($ownerType === CCrmQuote::OWNER_TYPE)
-		{
-			$owner = CCrmQuote::GetByID($ownerID, false);
-		}
-		elseif($ownerType === 'L')
-		{
-			$owner = CCrmLead::GetByID($ownerID, false);
-		}
+
+		$owner = self::getOwnerData($ownerType, $ownerID);
 
 		if(is_array($owner))
 		{
@@ -1202,7 +1417,9 @@ class CAllCrmProductRow
 				$productName = $arPresentRow['ORIGINAL_PRODUCT_NAME'];
 			}
 
-			if($arPresentRow['PRICE'] !== $arRow['PRICE'])
+			$price = round(doubleval($arRow['PRICE']), 2);
+			$presentPrice = round(doubleval($arPresentRow['PRICE']), 2);
+			if($presentPrice !== $price)
 			{
 				// Product price was changed
 				$arEvents[] = array(
@@ -1212,7 +1429,9 @@ class CAllCrmProductRow
 				);
 			}
 
-			if($arPresentRow['QUANTITY'] !== $arRow['QUANTITY'])
+			$quantity = round(doubleval($arRow['QUANTITY']), 4);
+			$presentQuantity = round(doubleval($arPresentRow['QUANTITY']), 4);
+			if($presentQuantity !== $quantity)
 			{
 				// Product  quantity was changed
 				$arEvents[] = array(
@@ -1235,7 +1454,18 @@ class CAllCrmProductRow
 			}
 			unset($discountSum, $presentDiscountSum);
 
-			if($arPresentRow['TAX_RATE'] !== $arRow['TAX_RATE'])
+			$taxRate =
+				isset($arRow['TAX_RATE'])
+					? round((float)($arRow['TAX_RATE']), 2)
+					: null
+			;
+
+			$presentTaxRate =
+				isset($arPresentRow['TAX_RATE'])
+					? round((float)($arPresentRow['TAX_RATE']), 2)
+					: null
+			;
+			if($presentTaxRate !== $taxRate)
 			{
 				// Product  tax was changed
 				$arEvents[] = array(
@@ -1300,7 +1530,7 @@ class CAllCrmProductRow
 		return true;
 	}
 
-	public static function GetByID($ID)
+	public static function GetByID($ID, $arOptions = array())
 	{
 		$ID = intval($ID);
 
@@ -1310,7 +1540,7 @@ class CAllCrmProductRow
 			return $arResult;
 		}
 
-		$dbRes = CCrmProductRow::GetList(array(), array('ID' => $ID));
+		$dbRes = CCrmProductRow::GetList(array(), array('ID' => $ID), false, false, array(), $arOptions);
 		$arResult = $dbRes->Fetch();
 
 		if(is_array($arResult))
@@ -1332,7 +1562,7 @@ class CAllCrmProductRow
 			$arResult['DISCOUNT_RATE'] = isset($arResult['DISCOUNT_RATE']) ? round(doubleval($arResult['DISCOUNT_RATE']), 2) : 0.0;
 			$arResult['DISCOUNT_SUM'] = isset($arResult['DISCOUNT_SUM']) ? round(doubleval($arResult['DISCOUNT_SUM']), 2) : 0.0;
 
-			$arResult['TAX_RATE'] = isset($arResult['TAX_RATE']) ? round(doubleval($arResult['TAX_RATE']), 2) : 0.0;
+			$arResult['TAX_RATE'] = isset($arResult['TAX_RATE']) ? round(doubleval($arResult['TAX_RATE']), 2) : null;
 			$arResult['TAX_INCLUDED'] = isset($arResult['TAX_INCLUDED']) ? $arResult['DISCOUNT_SUM'] : 'N';
 			$arResult['CUSTOMIZED'] = isset($arResult['CUSTOMIZED']) ? $arResult['CUSTOMIZED'] : 'N';
 
@@ -1391,18 +1621,7 @@ class CAllCrmProductRow
 			}
 			else
 			{
-				if ($ownerType === 'L')
-				{
-					$arParams = CCrmLead::GetByID($ownerID, $checkPerms);
-				}
-				elseif ($ownerType === 'D')
-				{
-					$arParams = CCrmDeal::GetByID($ownerID, $checkPerms);
-				}
-				elseif ($ownerType === CCrmQuote::OWNER_TYPE)
-				{
-					$arParams = CCrmQuote::GetByID($ownerID, $checkPerms);
-				}
+				$arParams = self::getOwnerData($ownerType, $ownerID, $checkPerms);
 			}
 
 			if(!is_array($arParams))
@@ -1454,7 +1673,7 @@ class CAllCrmProductRow
 			}
 			else
 			{
-				$obSite = CSite::GetList($by = 'def', $order = 'desc', array('ACTIVE' => 'Y'));
+				$obSite = CSite::GetList('def', 'desc', array('ACTIVE' => 'Y'));
 				if ($obSite && $arSite = $obSite->Fetch())
 					$siteID= $arSite["LID"];
 				unset($obSite, $arSite);
@@ -1463,12 +1682,12 @@ class CAllCrmProductRow
 			$calculateOptions = array();
 			if (CCrmTax::isTaxMode())
 			{
-				$calculateOptions['LOCATION_ID'] = isset($arParams['LOCATION_ID']) ? intval($arParams['LOCATION_ID']) : 0;
+				$calculateOptions['LOCATION_ID'] = isset($arParams['LOCATION_ID']) ? $arParams['LOCATION_ID'] : '';
 			}
 
 			$calculated = CCrmSaleHelper::Calculate($arRows, $currencyID, $personTypeId, $enableSaleDiscount, $siteID, $calculateOptions);
 			$result = array(
-				'OPPORTUNITY' => isset($calculated['PRICE']) ? round(doubleval($calculated['PRICE']), 2) : 1.0,
+				'OPPORTUNITY' => isset($calculated['PRICE']) ? round(doubleval($calculated['PRICE']), 2) : 0.0,
 				'TAX_VALUE' => isset($calculated['TAX_VALUE']) ? round(doubleval($calculated['TAX_VALUE']), 2) : 0.0
 			);
 		}
@@ -1571,5 +1790,221 @@ class CAllCrmProductRow
 		$DB->Query(
 			"DELETE FROM {$configTableName} WHERE OWNER_TYPE = '{$ownerType}' AND OWNER_ID = {$ownerID}", false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
 	}
+	public static function RebindSettings($oldOwnerType, $oldOwnerID, $newOwnerType, $newOwnerID)
+	{
+		if(!(is_string($oldOwnerType) && $oldOwnerType !== ''))
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be not empty string.', 'oldOwnerType');
+		}
+
+		if(!(is_string($newOwnerType) && $newOwnerType !== ''))
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be not empty string.', 'newOwnerType');
+		}
+
+		if(!is_int($oldOwnerID))
+		{
+			$oldOwnerID = (int)$oldOwnerID;
+		}
+
+		if($oldOwnerID <= 0)
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be greater than zero.', 'oldOwnerID');
+		}
+
+		if(!is_int($newOwnerID))
+		{
+			$newOwnerID = (int)$newOwnerID;
+		}
+
+		if($newOwnerID <= 0)
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be greater than zero.', 'newOwnerID');
+		}
+
+		$connection = \Bitrix\Main\Application::getInstance()->getConnection();
+
+		$helper = $connection->getSqlHelper();
+		$oldOwnerType = $helper->forSql($oldOwnerType);
+		$newOwnerType = $helper->forSql($newOwnerType);
+
+		$tableName = CCrmProductRow::CONFIG_TABLE_NAME;
+		$connection->queryExecute(
+			"DELETE FROM {$tableName} WHERE OWNER_TYPE = '{$newOwnerType}' AND OWNER_ID = {$newOwnerID}"
+		);
+		$connection->queryExecute(
+			"UPDATE {$tableName} SET OWNER_TYPE = '{$newOwnerType}', OWNER_ID = {$newOwnerID}
+					WHERE OWNER_TYPE = '{$oldOwnerType}' AND OWNER_ID = {$oldOwnerID}"
+		);
+	}
+	public static function AreEquals(array $leftRows, array $rightRows)
+	{
+		if(count($leftRows) !== count($rightRows))
+		{
+			return false;
+		}
+
+		$comparer = new \Bitrix\Crm\Comparer\ProductRowComparer();
+		for($i = 0, $length = count($leftRows); $i < $length; $i++)
+		{
+			if(!$comparer->areEquals($leftRows[$i], $rightRows[$i]))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * @param array[][] $from - array of arrays with product row arrays (3-dimensions deep)
+	 * @param array[][] $to - array of arrays with product row arrays (3-dimensions deep)
+	 * @return array[] - array of product row arrays (2-dimensions deep)
+	 */
+	public static function GetDiff(array $from, array $to)
+	{
+		$map = array();
+		foreach($from as $fromRows)
+		{
+			foreach($fromRows as $row)
+			{
+				unset($row['ID']);
+
+				$row['QUANTITY'] = isset($row['QUANTITY']) ? (float)$row['QUANTITY'] : 0.0;
+				if($row['QUANTITY'] <= 0.0)
+				{
+					continue;
+				}
+
+				$ID = isset($row['PRODUCT_ID']) ? $row['PRODUCT_ID'] : 0;
+				$name = isset($row['PRODUCT_NAME']) ? $row['PRODUCT_NAME'] : '';
+				$price = isset($row['PRICE']) ? number_format($row['PRICE'], 4) : '0';
+				$key = md5($ID > 0 ? "{$ID}_{$price}" : "{$name}_{$price}");
+
+				if(!isset($map[$key]))
+				{
+					$map[$key] = $row;
+				}
+				else
+				{
+					$map[$key]['QUANTITY'] += $row['QUANTITY'];
+				}
+			}
+		}
+
+		foreach($to as $toRows)
+		{
+			foreach($toRows as $row)
+			{
+				$quantity = isset($row['QUANTITY']) ? (float)$row['QUANTITY'] : 0.0;
+				if($quantity <= 0.0)
+				{
+					continue;
+				}
+
+				$ID = isset($row['PRODUCT_ID']) ? $row['PRODUCT_ID'] : 0;
+				$name = isset($row['PRODUCT_NAME']) ? $row['PRODUCT_NAME'] : '';
+				$price = isset($row['PRICE']) ? number_format($row['PRICE'], 4) : '0';
+				$key = md5($ID > 0 ? "{$ID}_{$price}" : "{$name}_{$price}");
+
+				if(!isset($map[$key]))
+				{
+					continue;
+				}
+
+				if($map[$key]['QUANTITY'] > $quantity)
+				{
+					$map[$key]['QUANTITY'] -= $quantity;
+				}
+				else
+				{
+					unset($map[$key]);
+				}
+			}
+		}
+		return array_values($map);
+	}
+	public static function Merge(array &$seedProductRows, array &$targProductRows)
+	{
+		$diffProductRows = self::GetDiff(array($seedProductRows), array($targProductRows));
+		if(!empty($diffProductRows))
+		{
+			$productRowMaxSort = 0;
+			$productRowCount = count($targProductRows);
+			if($productRowCount > 0 && isset($targProductRows[$productRowCount - 1]['SORT']))
+			{
+				$productRowMaxSort = (int)$targProductRows[$productRowCount - 1]['SORT'];
+			}
+
+			foreach($diffProductRows as $productRow)
+			{
+				$productRow['SORT'] = ($productRowMaxSort += 10);
+				$targProductRows[] = $productRow;
+			}
+		}
+	}
+	public static function Rebind($oldOwnerType, $oldOwnerID, $newOwnerType, $newOwnerID)
+	{
+		if(!(is_string($oldOwnerType) && $oldOwnerType !== ''))
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be not empty string.', 'oldOwnerType');
+		}
+
+		if(!(is_string($newOwnerType) && $newOwnerType !== ''))
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be not empty string.', 'newOwnerType');
+		}
+
+		if(!is_int($oldOwnerID))
+		{
+			$oldOwnerID = (int)$oldOwnerID;
+		}
+
+		if($oldOwnerID <= 0)
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be greater than zero.', 'oldOwnerID');
+		}
+
+		if(!is_int($newOwnerID))
+		{
+			$newOwnerID = (int)$newOwnerID;
+		}
+
+		if($newOwnerID <= 0)
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be greater than zero.', 'newOwnerID');
+		}
+
+		$connection = \Bitrix\Main\Application::getInstance()->getConnection();
+
+		$tableName = CCrmProductRow::TABLE_NAME;
+
+		$helper = $connection->getSqlHelper();
+		$oldOwnerType = $helper->forSql($oldOwnerType);
+		$newOwnerType = $helper->forSql($newOwnerType);
+		$connection->queryExecute("
+			UPDATE {$tableName} SET OWNER_TYPE = '{$newOwnerType}', OWNER_ID = {$newOwnerID}
+				WHERE OWNER_TYPE = '{$oldOwnerType}' AND OWNER_ID = {$oldOwnerID}
+		");
+	}
 	// <-- Contract
+
+	public static function getOwnerData(string $ownerType, $ownerID, $bCheckPerms = false): ?array
+	{
+		$owner = null;
+
+		if($ownerType === CCrmOwnerTypeAbbr::Deal)
+		{
+			$owner = CCrmDeal::GetByID($ownerID, $bCheckPerms);
+		}
+		elseif($ownerType === CCrmOwnerTypeAbbr::Quote)
+		{
+			$owner = CCrmQuote::GetByID($ownerID, $bCheckPerms);
+		}
+		elseif($ownerType === CCrmOwnerTypeAbbr::Lead)
+		{
+			$owner = CCrmLead::GetByID($ownerID, $bCheckPerms);
+		}
+
+		return is_array($owner) ? $owner : null;
+	}
 }

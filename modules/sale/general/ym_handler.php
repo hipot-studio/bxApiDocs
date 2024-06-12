@@ -1,8 +1,15 @@
-<?
+<?php
 
-use \Bitrix\Sale\DiscountCouponsManager;
-use \Bitrix\Sale\Compatible\DiscountCompatibility;
-use \Bitrix\Sale\TradingPlatform\YandexMarket;
+use Bitrix\Sale\TradingPlatform\YMarket;
+use Bitrix\Sale;
+use Bitrix\Sale\DiscountCouponsManager;
+use Bitrix\Main\Config\Option;
+use Bitrix\Sale\EntityMarker;
+use Bitrix\Main\EventResult;
+use Bitrix\Sale\Delivery;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Event;
+
 
 IncludeModuleLangFile(__FILE__);
 
@@ -39,6 +46,9 @@ class CSaleYMHandler
 	const LOG_LEVEL_INFO = 20;
 	const LOG_LEVEL_DEBUG = 30;
 
+	const NOT_ACCEPT_OLD_PRICE = 0;
+	const ACCEPT_OLD_PRICE = 1;
+
 	protected $logLevel = self::LOG_LEVEL_ERROR;
 
 	protected $oAuthToken = null;
@@ -65,9 +75,17 @@ class CSaleYMHandler
 
 	protected $locationMapper = null;
 	protected $active = true;
+	protected $isAcceptOldPrice = self::NOT_ACCEPT_OLD_PRICE;
+	protected $defaultDeliveryPeriodFrom = 7;  //days
+	protected $defaultDeliveryPeriodTo = 21;
+	protected $deliveryToPaysystem = array();
 
 	protected static $isYandexRequest = false;
 
+	/**
+	 * CSaleYMHandler constructor.
+	 * @param array $arParams
+	 */
 	public function __construct($arParams = array())
 	{
 		$this->siteId = $this->getSiteId($arParams);
@@ -116,18 +134,31 @@ class CSaleYMHandler
 		if(isset($settings["ORDER_PROPS"]) && is_array($settings["ORDER_PROPS"]))
 			$this->orderProps = $settings["ORDER_PROPS"];
 
+		if(isset($settings["IS_ACCEPT_OLD_PRICE"]))
+			$this->isAcceptOldPrice = $settings["IS_ACCEPT_OLD_PRICE"];
+
+		if(isset($settings["PERIOD_FROM"]))
+			$this->defaultDeliveryPeriodFrom = intval($settings["PERIOD_FROM"]);
+
+		if(isset($settings["PERIOD_TO"]))
+			$this->defaultDeliveryPeriodTo = intval($settings["PERIOD_TO"]);
+
+		if(isset($settings["DLV_PS"]))
+			$this->deliveryToPaysystem = $settings["DLV_PS"];
+
 		$this->active = static::isActive();
 		$this->locationMapper = new CSaleYMLocation;
 	}
 
 	public static function isActive()
 	{
-		return YandexMarket::getInstance()->isActive();
+		return YMarket\YandexMarket::getInstance()->isActive();
 	}
 
 	/**
-	 * @param bool $activity Set or unset activity
-	 * @return \Bitrix\Main\Entity\UpdateResult|bool
+	 * @param $activity
+	 * @return bool
+	 * @throws \Bitrix\Main\ArgumentException
 	 */
 	public static function setActivity($activity)
 	{
@@ -140,15 +171,15 @@ class CSaleYMHandler
 
 		if($activity && empty($settings) && static::install())
 		{
-				$settings = static::getSettings(false);
+			$settings = static::getSettings(false);
 		}
 
 		if(!empty($settings))
 		{
 			if($activity)
-				$result = YandexMarket::getInstance()->setActive();
+				$result = YMarket\YandexMarket::getInstance()->setActive();
 			else
-				$result = YandexMarket::getInstance()->unsetActive();
+				$result = YMarket\YandexMarket::getInstance()->unsetActive();
 		}
 		else
 		{
@@ -158,10 +189,14 @@ class CSaleYMHandler
 		return $result;
 	}
 
+	/**
+	 * @param string $siteId
+	 * @return bool
+	 */
 	protected function checkSiteId($siteId)
 	{
 		$result = false;
-		$rsSites = CSite::GetList($b = "", $o = "", Array(
+		$rsSites = CSite::GetList('', '', Array(
 			"LID" => $siteId,
 			"ACTIVE"=>"Y"
 		));
@@ -172,13 +207,17 @@ class CSaleYMHandler
 		return $result;
 	}
 
+	/**
+	 * @param array $arParams
+	 * @return mixed|string
+	 */
 	protected function getSiteId($arParams)
 	{
 		$result = "";
 
 		if(
 			isset($arParams["SITE_ID"])
-			&& strlen($arParams["SITE_ID"]) > 0
+			&& $arParams["SITE_ID"] <> ''
 			&& $this->checkSiteId($arParams["SITE_ID"])
 		)
 		{
@@ -190,7 +229,7 @@ class CSaleYMHandler
 		}
 		else
 		{
-			$rsSites = CSite::GetList($b = "", $o = "", Array(
+			$rsSites = CSite::GetList('', '', Array(
 				"ACTIVE"=> "Y",
 				"DEF" => "Y"
 			));
@@ -205,7 +244,8 @@ class CSaleYMHandler
 	/**
 	 * Returns Yandex-Market settings
 	 * @param bool $cached Return cached or ont value
-	 * @return array|bool
+	 * @return array
+	 * @throws \Bitrix\Main\ArgumentException
 	 */
 	public static function getSettings($cached = true)
 	{
@@ -219,7 +259,7 @@ class CSaleYMHandler
 
 			$settings = $settingsRes->fetch();
 
-			if(!$settings)
+			if(!$settings || !is_array($settings))
 				$settings = array();
 		}
 
@@ -248,6 +288,8 @@ class CSaleYMHandler
 		if(!is_array($arSettings))
 			return false;
 
+		$result = true;
+		
 		foreach ($arSettings as $siteId => $siteSett)
 		{
 			if(isset($siteSett["OUTLETS_IDS"]) && is_array($siteSett["OUTLETS_IDS"]))
@@ -255,10 +297,27 @@ class CSaleYMHandler
 				$newOutletsIds = array();
 
 				foreach ($siteSett["OUTLETS_IDS"] as $outletId)
-					if(strlen($outletId) > 0)
+					if($outletId <> '')
 						$newOutletsIds[] = $outletId;
 
 				$arSettings[$siteId]["OUTLETS_IDS"] = $newOutletsIds;
+			}
+
+			if(isset($arSettings[$siteId]["DELIVERIES"]) && is_array($arSettings[$siteId]["DELIVERIES"]))
+			{
+				foreach($arSettings[$siteId]["DELIVERIES"] as $id => $type)
+				{
+					if($type == '')
+					{
+						unset($arSettings[$siteId]["DELIVERIES"][$id]);
+						unset($arSettings[$siteId]["DLV_PS"][$id]);
+						continue;
+					}
+
+					foreach(self::getExistPaymentMethods() as $methodIdx => $method)
+						if(!isset($arSettings[$siteId]["DLV_PS"][$id][$methodIdx]) || $arSettings[$siteId]["DLV_PS"][$id][$methodIdx] != 'Y')
+							$arSettings[$siteId]["DLV_PS"][$id][$methodIdx] = 'N';
+				}
 			}
 		}
 
@@ -268,7 +327,7 @@ class CSaleYMHandler
 		{
 			if(is_array($settings))
 			$result = Bitrix\Sale\TradingPlatformTable::update(
-				YandexMarket::getInstance()->getId(),
+				YMarket\YandexMarket::getInstance()->getId(),
 				array("SETTINGS" => $arSettings)
 			);
 		}
@@ -280,86 +339,45 @@ class CSaleYMHandler
 		return $result;
 	}
 
-	protected function getProductById($productId, $quantity)
+	/**
+	 * @param int $period
+	 * @param string $type
+	 * @return DateInterval
+	 */
+	public function getTimeInterval($period, $type)
 	{
-		$arResult = array();
+		$interval = 'P';
 
-		if(CModule::IncludeModule('catalog'))
-		{
+		if($type == 'H' || $type == 'MIN')
+			$interval .= 'T';
 
-			if ($productProvider = CSaleBasket::GetProductProvider(array(
-					"MODULE" => "catalog",
-					"PRODUCT_PROVIDER_CLASS" => "CCatalogProductProvider"))
-			)
-			{
-				$arResult = $productProvider::GetProductData(array(
-					"PRODUCT_ID" => $productId,
-					"RENEWAL"    => "N",
-					"QUANTITY" => $quantity,
-					"SITE_ID"    => $this->siteId
-				));
-			}
-		}
-		else
-		{
-			$arResult = $this->processError(self::ERROR_STATUS_500, GetMessage("SALE_YMH_ERROR_CATALOG_NOT_INSTALLED"));
-		}
+		$interval .= strval(intval($period));
 
-		return $arResult;
+		if($type == 'MIN')
+			$type = 'M';
+
+		$interval .= $type;
+
+		return new DateInterval($interval);
 	}
 
-	protected function getItemCartInfo($arItem, $currency)
-	{
-		$arResult = array();
-		$arProduct = $this->getProductById($arItem["offerId"], $arItem["count"]);
-
-		if($arProduct["CURRENCY"] != $currency && \Bitrix\Main\Loader::includeModule('currency'))
-		{
-				$price = \CCurrencyRates::convertCurrency(
-					$arProduct["PRICE"],
-					$arProduct["CURRENCY"],
-					$currency
-				);
-		}
-		else
-		{
-			$price = $arProduct["PRICE"];
-		}
-
-		if(isset($arProduct["error"]))
-		{
-			$arResult = $arProduct;
-		}
-		elseif(!empty($arProduct))
-		{
-			$arResult = array(
-				"feedId" => $arItem["feedId"],
-				"offerId" => $arItem["offerId"],
-				"price" => round(floatval($price), 2),
-				"count" => $arProduct["QUANTITY"],
-				"weight" => $arProduct["WEIGHT"]
-			);
-		}
-
-		return $arResult;
-	}
-
-	protected function getTimeInterval($period, $type)
-	{
-		return new DateInterval(
-			'P'.
-			($type =='H' ? 'T' : '').
-			intval($period).
-			$type
-		);
-	}
-
+	/**
+	 * @param DateTime $today
+	 * @param DateTime $nextDate
+	 * @return bool
+	 */
 	protected function checkTimeInterval($today, $nextDate)
 	{
 		$interval = $today->diff($nextDate);
 		return (intval($interval->format('%a')) <= 92);
 	}
 
+	/**
+	 * @param int $from
+	 * @param int $to
+	 * @param string $type
+	 * @return array
+	 */
 	protected function getDeliveryDates($from, $to, $type)
 	{
 		$from = intval($from);
@@ -368,102 +386,41 @@ class CSaleYMHandler
 
 		if($from <= $to)
 		{
-			$today = new DateTime();
-
-			$dateFrom = new DateTime();
+			$today = new DateTime('now', new DateTimeZone('Europe/Moscow'));
+			$dateFrom = new DateTime('now', new DateTimeZone('Europe/Moscow'));
 			$dateFrom->add($this->getTimeInterval($from, $type));
 
 			if($this->checkTimeInterval($today, $dateFrom))
 			{
 				$arResult["fromDate"] = $dateFrom->format(self::DATE_FORMAT);
+				$dateTo = $today->add($this->getTimeInterval($to, $type));
 
-				if($to > 0 && $to != $from)
-				{
-					$dateTo = $today->add($this->getTimeInterval($to, $type));
-
-					if($this->checkTimeInterval($today, $dateTo))
-						$arResult["toDate"] = $dateTo->format(self::DATE_FORMAT);
-				}
-			}
-		}
-		return $arResult;
-	}
-
-	protected function getDeliveryOptions($delivery, $price, $weight = 0)
-	{
-		$arResult = array();
-
-		$locationId = $this->locationMapper->getLocationByCityName($delivery["region"]["name"]);
-
-		if($locationId > 0)
-		{
-			foreach ($this->mapDelivery as $deliveryId => $deliveryType)
-			{
-				if($deliveryType == "")
-					continue;
-
-				$filter = 	array(
-					"ID" => $deliveryId,
-					"LID" => $this->siteId,
-					"ACTIVE" => "Y",
-					"LOCATION" => $locationId,
-					"+<=ORDER_PRICE_FROM" => $price,
-					"+>=ORDER_PRICE_TO" => $price
-				);
-
-				if(intval($weight) > 0)
-				{
-					$filter["+<=WEIGHT_FROM"] = $weight;
-					$filter["+>=WEIGHT_TO"] = $weight;
-				}
-
-				$dbDelivery = CSaleDelivery::GetList(
-					array("SORT"=>"ASC", "NAME"=>"ASC"),
-					$filter
-				);
-
-				if($arDelivery = $dbDelivery->Fetch())
-				{
-					$arDates = $this->getDeliveryDates(
-						$arDelivery["PERIOD_FROM"],
-						$arDelivery["PERIOD_TO"],
-						$arDelivery["PERIOD_TYPE"]
-					);
-
-					if(!empty($arDates))
-					{
-						$arDeliveryTmp = array(
-							"id" => $arDelivery["ID"],
-							"type" =>$deliveryType,
-							"serviceName" => substr($arDelivery["NAME"], 0, 50),
-							"price" => round(floatval($arDelivery["PRICE"]), 2),
-							"dates" => $arDates
-						);
-
-						if($deliveryType == "PICKUP" && !empty($this->outlets))
-							foreach($this->outlets as $outlet)
-								$arDeliveryTmp["outlets"][] = array("id" => intval($outlet));
-
-						$arResult[] = $arDeliveryTmp;
-					}
-				}
+				if($this->checkTimeInterval($today, $dateTo))
+					$arResult["toDate"] = $dateTo->format(self::DATE_FORMAT);
 			}
 		}
 
 		return $arResult;
 	}
 
+	/**
+	 * @return array
+	 */
 	protected function getPaymentMethods()
 	{
-		$arResult = array();
+		$result = array();
 
 		foreach ($this->mapPaySystems as $psType => $psId)
 			if(isset($psId) && intval($psId) > 0)
-				$arResult[] = $psType;
+				$result[] = $psType;
 
-		return $arResult;
+		return $result;
 	}
 
+	/**
+	 * @param array $arPostData
+	 * @return bool
+	 */
 	protected function checkCartStructure($arPostData)
 	{
 		return	isset($arPostData["cart"])
@@ -474,73 +431,241 @@ class CSaleYMHandler
 			&& is_array($arPostData["cart"]["delivery"]);
 	}
 
-	/*
+	/**
 	 * POST /cart
-	 * max timeout 2s.
+	 * max timeout 5,5s.
+	 * @param array $arPostData
+	 * @return array
+	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
 	protected function processCartRequest($arPostData)
 	{
-		$arResult = array();
+		if(!$this->checkCartStructure($arPostData))
+			return $this->processError(self::ERROR_STATUS_400, GetMessage("SALE_YMH_ERROR_BAD_STRUCTURE"));
 
-		if( $this->checkCartStructure($arPostData))
-		{
-			$arResult["cart"] = array(
-				"items" => array()
-			);
-
-			$cartPrice = 0;
-			$cartWeight = 0;
-			$arResult["cart"] = array(
+		$result = array(
+			"cart" => array(
 				"items" => array(),
 				"paymentMethods" => array(),
 				"deliveryOptions" => array()
+			)
+		);
+
+		$locationId = 0;
+
+		if($this->orderProps["LOCATION"] <> '')
+		{
+			$locationId = $this->locationMapper->getLocationId($arPostData["cart"]["delivery"]["region"]);
+
+			if(intval($locationId) <= 0)
+			{
+				$this->log(
+					self::LOG_LEVEL_INFO,
+					"YMARKET_LOCATION_MAPPING",
+					$arPostData["cart"]["delivery"]["region"]["name"],
+					GetMessage("SALE_YMH_LOCATION_NOT_FOUND")
+				);
+
+				return $result;
+			}
+		}
+
+		$properties = $this->makeAdditionalOrderProps(
+			$arPostData["cart"]["delivery"]["address"],
+			array(),
+			'',
+			'',
+			$locationId
+		);
+
+		$res = \Bitrix\Sale\TradingPlatform\YMarket\Order::create(array(
+			'CURRENCY' => $arPostData['cart']['currency'],
+			'SITE_ID' => $this->siteId,
+			'PERSON_TYPE_ID' => $this->personTypeId,
+			'PROPERTIES' => $properties,
+			'CART_ITEMS' => $arPostData['cart']['items']
+		));
+		
+		if(!$res->isSuccess())
+		{
+			$this->log(
+				self::LOG_LEVEL_ERROR,
+				"YMARKET_ORDER_CREATE_ERROR",
+				'processCartRequest',
+				implode('; ',$res->getErrorMessages())
 			);
 
-			foreach ($arPostData["cart"]["items"] as $arItem)
-			{
-				$item = $this->getItemCartInfo($arItem, $arPostData["cart"]["currency"]);
-
-				if(isset($item["error"]))
-				{
-					return array($item["error"]);
-				}
-				elseif(!empty($item))
-				{
-					$cartPrice = $item["price"]*$item["count"];
-					$cartWeight = $item["weight"]*$item["count"];
-					unset($item["weight"]);
-
-					$arResult["cart"]["items"][] = $item;
-				}
-			}
-
-			if(!empty($arResult["cart"]["items"]))
-			{
-				$arResult["cart"]["deliveryOptions"] = $this->getDeliveryOptions($arPostData["cart"]["delivery"],$cartPrice, $cartWeight);
-
-				if(!empty($arResult["cart"]["deliveryOptions"]))
-				{
-					foreach($arResult["cart"]["items"] as $item)
-					{
-						$item["delivery"] = true;
-					}
-
-					$arResult["cart"]["paymentMethods"] = $this->getPaymentMethods($arResult["cart"]["deliveryOptions"]);
-				}
-				else
-				{
-					$arResult["cart"]["items"] = array();
-				}
-			}
+			return $result;
 		}
-		else
+
+		$data = $res->getData();
+		/** @var \Bitrix\Sale\Order $order */
+		$order = $data['ORDER'];
+		$basket = $order->getBasket();
+		$resultItems = array();
+		$items = $arPostData['cart']['items'];
+		$itemKeyToBasketCode = array_flip($data['ITEMS_MAP']);
+		/** @var \Bitrix\Sale\BasketItem $basketItem */
+		foreach($items as $itemKey => $item)
 		{
-			$arResult = $this->processError(self::ERROR_STATUS_400, GetMessage("SALE_YMH_ERROR_BAD_STRUCTURE"));
+			$price = 0;
+			$count = 0;
+
+			if(!empty($itemKeyToBasketCode[$itemKey]))
+			{
+				$basketCode = $itemKeyToBasketCode[$itemKey];
+				$basketItem = $basket->getItemByBasketCode($basketCode);
+				
+				if(!$basketItem)
+					continue;
+
+				$price = round(floatval($basketItem->getPrice()), 2);
+
+				if($price <= 0)
+					continue;
+
+				$count = $basketItem->getQuantity();
+			}
+
+			$resItem = array(
+				'feedId' => $item['feedId'],
+				'offerId' => $item['offerId'],				
+				'count' => $count,
+				'delivery' => $count > 0 ? TRUE : FALSE
+			);
+			
+			if($count > 0)
+				$resItem['price'] = $price;
+
+			$resultItems[] = $resItem;
 		}
 
-		return $arResult;
+		$shipment = YMarket\Order::createShipment($order);
+		YMarket\Order::createPayment($order);
+		$deliveryObjs = Delivery\Services\Manager::getRestrictedObjectsList(
+			$shipment,
+			Delivery\Restrictions\Manager::MODE_CLIENT
+		);
+
+		$deliveryOptions = array();
+
+		/** @var Delivery\Services\Base $delivery */
+		foreach($deliveryObjs as $delivery)
+		{
+			if(empty($this->mapDelivery[$delivery->getId()]))
+				continue;
+
+			$orderClone = $order->createClone();
+			$clonedShipment = null;
+			$orderClone->isStartField();
+
+			foreach ($orderClone->getShipmentCollection() as $shp)
+			{
+				if($shp->isSystem())
+					continue;
+
+				$clonedShipment = $shp;
+				break;
+			}
+
+			/** @var \Bitrix\Sale\Shipment $clonedShipment*/
+			$clonedShipment->setDeliveryService($delivery);
+			$deliveryCalcRes = $orderClone->getShipmentCollection()->calculateDelivery();
+
+			if(!$deliveryCalcRes->isSuccess())
+				continue;
+
+			$orderClone->doFinalAction(true);
+			$calcResult = $clonedShipment->calculateDelivery();
+
+			if(!$calcResult->isSuccess())
+				continue;
+
+			$dateFrom = $calcResult->getPeriodFrom();
+			$dateTo = $calcResult->getPeriodTo();
+
+			if($dateFrom === null)
+				$dateFrom = $this->defaultDeliveryPeriodFrom;
+
+			if($dateTo === null)
+				$dateTo = $this->defaultDeliveryPeriodTo;
+
+			$arDates = $this->getDeliveryDates($dateFrom, $dateTo, $calcResult->getPeriodType());
+
+			if(!empty($arDates))
+			{
+				$deliveryType = $this->mapDelivery[$delivery->getId()];
+
+				$arDeliveryTmp = array(
+					"id" => $delivery->getId(),
+					"type" => $deliveryType,
+					"serviceName" => mb_substr($delivery->getNameWithParent(), 0, 50),
+					"price" => round(floatval($orderClone->getDeliveryPrice()), 2),
+					"dates" => $arDates
+				);
+
+				$dlvToPs = array();
+				$payMethods = self::getExistPaymentMethods();
+
+				if(!empty($this->deliveryToPaysystem[$delivery->getId()]) && is_array($this->deliveryToPaysystem[$delivery->getId()]))
+					foreach($this->deliveryToPaysystem[$delivery->getId()] as $methodIdx => $value)
+						if($value == 'Y' && !empty($payMethods[$methodIdx]))
+							$dlvToPs[] = $payMethods[$methodIdx];
+
+				if(!empty($dlvToPs))
+					$arDeliveryTmp["paymentMethods"] = $dlvToPs;
+
+				if($deliveryType == "PICKUP" && !empty($this->outlets))
+					foreach($this->outlets as $outlet)
+						$arDeliveryTmp["outlets"][] = array("id" => intval($outlet));
+
+				$deliveryOptions[] = $arDeliveryTmp;
+			}
+		}
+
+		if(!empty($resultItems) && !empty($deliveryOptions))
+		{
+			$result['cart']['items'] = $resultItems;
+			$result['cart']['deliveryOptions'] = $deliveryOptions;
+			$result['cart']['paymentMethods'] = $this->getPaymentMethods();
+		}
+
+		return $result;
 	}
 
+	/**
+	 * @param string $eventName
+	 * @param array $params
+	 * @return mixed
+	 */
+	protected function processCustomEvents($eventName, array $params)
+	{
+		$event = new Event('sale', $eventName, $params);
+		$event->send();
+		$resultList = $event->getResults();
+		$result = $params["RESULT"];
+
+		if (is_array($resultList) && !empty($resultList))
+		{
+			foreach ($resultList as &$eventResult)
+			{
+				if ($eventResult->getType() != EventResult::SUCCESS)
+					continue;
+
+				$params = $eventResult->getParameters();
+
+				if(isset($params["RESULT"]))
+					$result = $params["RESULT"];
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param array $arPostData
+	 * @return bool
+	 */
 	protected function checkOrderAcceptStructure($arPostData)
 	{
 		return	isset($arPostData["order"])
@@ -551,7 +676,12 @@ class CSaleYMHandler
 			&& isset($arPostData["order"]["delivery"]) && is_array($arPostData["order"]["delivery"]);
 	}
 
-
+	/**
+	 * @param array $buyer
+	 * @param array $address
+	 * @param array $region
+	 * @return bool|int|string
+	 */
 	protected function createUser($buyer, $address, $region)
 	{
 		$userRegister = array(
@@ -559,13 +689,16 @@ class CSaleYMHandler
 			"PERSONAL_MOBILE" => $buyer["phone"]
 		);
 
-		if(isset($buyer["middleName"]))
-			$userRegister["LAST_NAME"] = $buyer["middleName"];
-
 		if(isset($buyer["lastName"]))
-			$userRegister["SECOND_NAME"] = $buyer["lastName"];
+			$userRegister["LAST_NAME"] = $buyer["lastName"];
 
-		$arPersonal = array("PERSONAL_MOBILE" => $buyer["phone"]);
+		if(isset($buyer["middleName"]))
+			$userRegister["SECOND_NAME"] = $buyer["middleName"];
+
+		$arPersonal = array();
+
+		if($buyer["phone"] <> '')
+			$arPersonal = array("PERSONAL_MOBILE" => $buyer["phone"]);
 
 		$arErrors = array();
 		$userId = CSaleUser::DoAutoRegisterUser(
@@ -585,10 +718,17 @@ class CSaleYMHandler
 		return $userId;
 	}
 
+	/**
+	 * @param array $address
+	 * @param array $buyer
+	 * @param int $psId
+	 * @param int $deliveryId
+	 * @param int $locationId
+	 * @return array
+	 */
 	protected function makeAdditionalOrderProps($address, $buyer, $psId, $deliveryId, $locationId)
 	{
 		$psId = intval($psId);
-
 		$arResult = array();
 
 		$arPropFilter = array(
@@ -602,7 +742,7 @@ class CSaleYMHandler
 			$arPropFilter["RELATED"]["TYPE"] = "WITH_NOT_RELATED";
 		}
 
-		if (strlen($deliveryId) > 0)
+		if ($deliveryId <> '')
 		{
 			$arPropFilter["RELATED"]["DELIVERY_ID"] = $deliveryId;
 			$arPropFilter["RELATED"]["TYPE"] = "WITH_NOT_RELATED";
@@ -618,7 +758,7 @@ class CSaleYMHandler
 
 		while ($arOrderProps = $dbOrderProps->Fetch())
 		{
-			if($arOrderProps["CODE"] == $this->orderProps["FIO"] && !empty($buyer))
+			if($this->orderProps["FIO"] <> '' && $arOrderProps["CODE"] == $this->orderProps["FIO"] && !empty($buyer))
 			{
 				$fio = $buyer["firstName"];
 
@@ -630,125 +770,123 @@ class CSaleYMHandler
 
 				$arResult[$arOrderProps["ID"]] = $fio;
 			}
-			elseif($arOrderProps["CODE"] == $this->orderProps["EMAIL"] && isset($buyer["email"]))
+			elseif($this->orderProps["EMAIL"] <> '' && $arOrderProps["CODE"] == $this->orderProps["EMAIL"] && isset($buyer["email"]))
 				$arResult[$arOrderProps["ID"]] = $buyer["email"];
-			elseif($arOrderProps["CODE"] == $this->orderProps["PHONE"] && isset($buyer["phone"]))
+			elseif($this->orderProps["PHONE"] <> '' && $arOrderProps["CODE"] == $this->orderProps["PHONE"] && isset($buyer["phone"]))
 				$arResult[$arOrderProps["ID"]] = $buyer["phone"];
-			elseif($arOrderProps["CODE"] == $this->orderProps["ZIP" ] && isset($address["postcode"]))
+			elseif($this->orderProps["ZIP"] <> '' && $arOrderProps["CODE"] == $this->orderProps["ZIP"] && isset($address["postcode"]))
 				$arResult[$arOrderProps["ID"]] = $address["postcode"];
-			elseif($arOrderProps["CODE"] == $this->orderProps["CITY"])
+			elseif($this->orderProps["CITY"] <> '' && $arOrderProps["CODE"] == $this->orderProps["CITY"])
 				$arResult[$arOrderProps["ID"]] = $address["city"];
-			elseif($arOrderProps["CODE"] == $this->orderProps["LOCATION"])
-				$arResult[$arOrderProps["ID"]] = $locationId;
-			elseif($arOrderProps["CODE"] == $this->orderProps["ADDRESS"])
+			elseif($this->orderProps["LOCATION"] <> '' && $arOrderProps["CODE"] == $this->orderProps["LOCATION"])
 			{
-				$strAddr = "";
+				if($locationId > 0)
+				{
+					$dbRes = \Bitrix\Sale\Location\LocationTable::getById($locationId);
 
-				if(isset($address["postcode"]))
-					$strAddr .= $address["postcode"].", ";
-
-				$strAddr .= $address["country"].", ".$address["city"].", ";
-
-				if(isset($address["street"]))
-					$strAddr .= GetMessage("SALE_YMH_ADDRESS_STREET")." ".$address["street"].", ";
-
-				if(isset($address["subway"]))
-					$strAddr .= GetMessage("SALE_YMH_ADDRESS_SUBWAY")." ".$address["subway"].", ";
-
-				$strAddr .= GetMessage("SALE_YMH_ADDRESS_HOUSE")." ".$address["house"];
-
-				if(isset($address["block"]))
-					$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_BLOCK")." ".$address["block"];
-
-				if(isset($address["entrance"]))
-					$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_ENTRANCE")." ".$address["entrance"];
-
-				if(isset($address["entryphone"]))
-					$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_ENTRYPHONE")." ".$address["entryphone"];
-
-				if(isset($address["floor"]))
-					$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_FLOOR")." ".$address["floor"];
-
-				if(isset($address["apartment"]))
-					$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_APARTMENT")." ".$address["apartment"];
-
-				if(isset($address["recipient"]))
-					$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_RECIPIENT")." ".$address["recipient"];
-
-				if(isset($address["phone"]))
-					$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_PHONE")." ".$address["phone"];
-
-				$arResult[$arOrderProps["ID"]] = $strAddr;
+					if($loc = $dbRes->fetch())
+						$arResult[$arOrderProps["ID"]] =  $loc['CODE'];
+				}
 			}
+			elseif($this->orderProps["ADDRESS"] <> '' && $arOrderProps["CODE"] == $this->orderProps["ADDRESS"])
+				$arResult[$arOrderProps["ID"]] = $this->createAddressString($address);
 		}
 
 		return $arResult;
 	}
 
-	/*
-	 *	POST /order/accept timeout 10s
+	protected function createAddressString($address)
+	{
+		$strAddr = "";
+
+		if(isset($address["postcode"]))
+			$strAddr .= $address["postcode"].", ";
+
+		$strAddr .= $address["country"].", ".$address["city"].", ";
+
+		if(isset($address["street"]))
+			$strAddr .= GetMessage("SALE_YMH_ADDRESS_STREET")." ".$address["street"].", ";
+
+		if(isset($address["subway"]))
+			$strAddr .= GetMessage("SALE_YMH_ADDRESS_SUBWAY")." ".$address["subway"].", ";
+
+		$strAddr .= GetMessage("SALE_YMH_ADDRESS_HOUSE")." ".$address["house"];
+
+		if(isset($address["block"]))
+			$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_BLOCK")." ".$address["block"];
+
+		if(isset($address["entrance"]))
+			$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_ENTRANCE")." ".$address["entrance"];
+
+		if(isset($address["entryphone"]))
+			$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_ENTRYPHONE")." ".$address["entryphone"];
+
+		if(isset($address["floor"]))
+			$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_FLOOR")." ".$address["floor"];
+
+		if(isset($address["apartment"]))
+			$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_APARTMENT")." ".$address["apartment"];
+
+		if(isset($address["recipient"]))
+			$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_RECIPIENT")." ".$address["recipient"];
+
+		if(isset($address["phone"]))
+			$strAddr .= ", ".GetMessage("SALE_YMH_ADDRESS_PHONE")." ".$address["phone"];
+
+		return $strAddr;
+	}
+
+	/**
+	 * POST /order/accept timeout 10s
+	 * @param array $arPostData
+	 * @return array
+	 * @throws Exception
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ArgumentNullException
+	 * @throws \Bitrix\Main\LoaderException
 	 */
 	protected function processOrderAcceptRequest($arPostData)
 	{
+		if(!$this->checkOrderAcceptStructure($arPostData))
+			return $this->processError(self::ERROR_STATUS_400, GetMessage("SALE_YMH_ERROR_BAD_STRUCTURE"));
 
-		$arResult = array();
+		$deliveryId = $arPostData["order"]["delivery"]["id"];
+		$paySystemId = $this->mapPaySystems[$arPostData["order"]["paymentMethod"]];
 
-		DiscountCompatibility::reInit(DiscountCompatibility::MODE_EXTERNAL, array('SITE_ID' => $this->siteId));
+			$result = array(
+			'order' => array(
+				'accepted' => false,
+				'reason' => 'OUT_OF_DATE'
+			)
+		);
 
-		if( $this->checkOrderAcceptStructure($arPostData))
+		if(!Loader::includeModule('iblock'))
+			return $result;
+
+		if(!Loader::includeModule('catalog'))
+			return $result;
+
+		$dbRes = \Bitrix\Sale\TradingPlatform\OrderTable::getList(array(
+			"filter" => array(
+				"TRADING_PLATFORM_ID" => YMarket\YandexMarket::getInstance()->getId(),
+				"EXTERNAL_ORDER_ID" => $arPostData["order"]["id"]
+			)
+		));
+
+		$orderId = 0;
+
+		if($orderCorrespondence = $dbRes->fetch())
+			$orderId = $orderCorrespondence["ORDER_ID"];
+
+		if($orderId <= 0)
 		{
+			$locationId = 0;
 
-			$dbRes = \Bitrix\Sale\TradingPlatform\OrderTable::getList(array(
-				"filter" => array(
-					"TRADING_PLATFORM_ID" => YandexMarket::getInstance()->getId(),
-					"EXTERNAL_ORDER_ID" => $arPostData["order"]["id"]
-				)
-			));
-
-			if(!$orderCorrespondence = $dbRes->fetch())
+			if($this->orderProps["LOCATION"] <> '')
 			{
+				$locationId = $this->locationMapper->getLocationId($arPostData["order"]["delivery"]["region"]);
 
-				require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/admin_tool.php");
-				$arProducts = array();
-
-				foreach ($arPostData["order"]["items"] as $arItem)
-				{
-					$arProduct = $this->getProductById($arItem["offerId"], $arItem["count"]);
-					$arProduct["PRODUCT_ID"] = $arItem["offerId"];
-					$arProduct["MODULE"] = "catalog";
-					$arProduct["PRODUCT_PROVIDER_CLASS"] = "CCatalogProductProvider";
-
-					$dbIblockElement = CIBlockElement::GetList(array(), array("ID" => $arItem["offerId"]), false, false, array('XML_ID', 'IBLOCK_EXTERNAL_ID'));
-					if($IblockElement = $dbIblockElement->Fetch())
-					{
-						if(strlen($IblockElement["XML_ID"]) > 0)
-							$arProduct["PRODUCT_XML_ID"] = $IblockElement["XML_ID"];
-
-						if(strlen($IblockElement["IBLOCK_EXTERNAL_ID"]) > 0)
-							$arProduct["CATALOG_XML_ID"] = $IblockElement["IBLOCK_EXTERNAL_ID"];
-					}
-
-					if($arProduct["CAN_BUY"] == "Y")
-						$arProducts[] = $arProduct;
-				}
-
-				$arOrderProductPrice = fGetUserShoppingCart($arProducts, $this->siteId, "N");
-
-				$arErrors = array();
-				$userId = intval(CSaleUser::GetAnonymousUserID());
-
-				$arShoppingCart = CSaleBasket::DoGetUserShoppingCart(
-					$this->siteId,
-					$userId,
-					$arOrderProductPrice,
-					$arErrors
-				);
-
-				$deliveryId = $arPostData["order"]["delivery"]["id"];
-				$paySystemId = $this->mapPaySystems[$arPostData["order"]["paymentMethod"]];
-				$locationId = $this->locationMapper->getLocationByCityName($arPostData["order"]["delivery"]["region"]["name"]);
-
-				if($locationId === false)
+				if(intval($locationId) <= 0)
 				{
 					$this->log(
 						self::LOG_LEVEL_INFO,
@@ -756,101 +894,229 @@ class CSaleYMHandler
 						$arPostData["order"]["delivery"]["region"]["name"],
 						GetMessage("SALE_YMH_LOCATION_NOT_FOUND")
 					);
-				}
 
-				$arErrors = $arWarnings = array();
-				$arOptions = array();
-				$arOrderPropsValues = $this->makeAdditionalOrderProps(
-					$arPostData["order"]["delivery"]["address"],
-					array(),
-					$this->mapPaySystems[$arPostData["order"]["paymentMethod"]],
-					$arPostData["order"]["delivery"]["id"],
-					$locationId
-				);
-
-				$CSaleOrder = new CSaleOrder();
-
-				$arOrder = $CSaleOrder->DoCalculateOrder(
-					$this->siteId,
-					$userId,
-					$arShoppingCart,
-					$this->personTypeId,
-					$arOrderPropsValues,
-					$deliveryId,
-					$paySystemId,
-					$arOptions,
-					$arErrors,
-					$arWarnings
-				);
-
-				$arErrors = array();
-				$arAdditionalFields = array(
-					"XML_ID" => self::XML_ID_PREFIX.$arPostData["order"]["id"],
-				);
-
-				$arOrder["LID"] = $this->siteId;
-
-				if(isset($arPostData["order"]["notes"]))
-					$arAdditionalFields["USER_DESCRIPTION"] = $arPostData["order"]["notes"];
-
-				$orderID = $CSaleOrder->DoSaveOrder($arOrder, $arAdditionalFields, 0, $arErrors);
-
-				$res = \Bitrix\Sale\TradingPlatform\OrderTable::add(array(
-					"ORDER_ID" => $orderID,
-					"TRADING_PLATFORM_ID" => YandexMarket::getInstance()->getId(),
-					"EXTERNAL_ORDER_ID" => $arPostData["order"]["id"]
-				));
-
-				if(!$res->isSuccess())
-				{
-					foreach($res->getErrors() as $error)
-					{
-						$this->log(
-							self::LOG_LEVEL_ERROR,
-							"YMARKET_PLATFORM_ORDER_ADD_ERROR",
-							$orderID,
-							$error
-						);
-					}
+					return $result;
 				}
 			}
-			else
-			{
-				$orderID = $orderCorrespondence["ORDER_ID"];
-			}
 
-			if(intval($orderID > 0))
+			$properties = $this->makeAdditionalOrderProps(
+				$arPostData["order"]["delivery"]["address"],
+				array(),
+				$paySystemId,
+				$deliveryId,
+				$locationId
+			);
+
+			$res = \Bitrix\Sale\TradingPlatform\YMarket\Order::create(array(
+				'CURRENCY' => $arPostData['order']['currency'],
+				'SITE_ID' => $this->siteId,
+				'PERSON_TYPE_ID' => $this->personTypeId,
+				'PROPERTIES' => $properties,
+				'CART_ITEMS' => $arPostData['order']['items'],
+				'IS_ACCEPT_OLD_PRICE' => $this->isAcceptOldPrice
+			));
+
+			if(!$res->isSuccess())
 			{
-				$arResult["order"]["accepted"] = true;
-				$arResult["order"]["id"] = strval($orderID);
-				$this->log(
-					self::LOG_LEVEL_INFO,
-					"YMARKET_ORDER_CREATE",
-					$arPostData["order"]["id"],
-					GetMessage("SALE_YMH_ORDER_CREATED")." ".$orderID
-				);
-			}
-			else
-			{
-				$arResult["order"]["accepted"] = false;
-				$arResult["order"]["reason"] = "OUT_OF_DATE";
 				$this->log(
 					self::LOG_LEVEL_ERROR,
-					"YMARKET_ORDER_CREATE",
-					$arPostData["order"]["id"],
-					print_r($arErrors, true)
+					"YMARKET_ORDER_CREATE_ERROR",
+					'processOrderAcceptRequest',
+					implode('; ',$res->getErrorMessages())
 				);
+
+				return $result;
+			}
+
+			$data = $res->getData();
+			/** @var \Bitrix\Sale\Order $order */
+			$order = $data['ORDER'];
+
+			if(!$this->checkBasketPrice($arPostData['order']['items'], $order))
+			{
+				if($this->isAcceptOldPrice == \CSaleYMHandler::ACCEPT_OLD_PRICE)
+				{
+					$this->setBasketOldPrice($arPostData['order']['items'], $order);
+					$order->setField(
+						"COMMENTS",
+						GetMessage('SALE_YMARKET_ORDER_PRICE_CHANGED')
+					);
+				}
+				else
+				{
+					return $result;
+				}
+			}
+
+			YMarket\Order::createShipment($order, $deliveryId, $arPostData["order"]["delivery"]["price"]);
+			YMarket\Order::createPayment($order, $paySystemId);
+			$order->setField("PRICE", $order->getPrice());
+			$order->setField("XML_ID", self::XML_ID_PREFIX.$arPostData["order"]["id"]);
+
+			/* PRODUCT_XML_ID CATALOG_XML_ID */
+			$xmls = array();
+			$productIds = array();
+
+			foreach ($arPostData["order"]["items"] as $item)
+				$productIds[] = $item['offerId'];
+
+			$dbRes = \Bitrix\Iblock\ElementTable::getList(array(
+				'filter' => array(
+					'=ID' => $productIds
+				),
+				'select' => array(
+					'ID', 'XML_ID',
+					'IBLOCK_EXTERNAL_ID' => 'IBLOCK.XML_ID',
+				)
+			));
+
+			$parentsIds = array();
+
+			while($iblockElement = $dbRes->fetch())
+			{
+				$xmls[$iblockElement['ID']] = array();
+
+				if($iblockElement["XML_ID"] <> '')
+					$xmls[$iblockElement['ID']]["PRODUCT_XML_ID"] = $iblockElement["XML_ID"];
+
+				if($iblockElement["IBLOCK_EXTERNAL_ID"] <> '')
+					$xmls[$iblockElement['ID']]["CATALOG_XML_ID"] = $iblockElement["IBLOCK_EXTERNAL_ID"];
+
+				if(mb_strpos($iblockElement["XML_ID"], '#') === false && $parent = \CCatalogSku::GetProductInfo($iblockElement['ID']))
+					$parentsIds[$iblockElement['ID']] = $parent['ID'];
+			}
+
+			if(!empty($parentsIds))
+			{
+				$dbRes = \Bitrix\Iblock\ElementTable::getList(array(
+					'filter' => array('=ID' => array_unique($parentsIds)),
+					'select' => array('ID', 'XML_ID')
+				));
+
+				while($parent = $dbRes->fetch())
+				{
+					if($parent['XML_ID'] == '')
+						continue;
+
+					foreach($parentsIds as $childId => $parentId)
+						if($parentId == $parent['ID'])
+							$xmls[$childId]["PRODUCT_XML_ID"] = $parent['XML_ID'].'#'.$xmls[$childId]["PRODUCT_XML_ID"];
+				}
+			}
+			/* */
+
+			$basket = $order->getBasket();
+			/** @var \Bitrix\Sale\BasketItem $basketItem */
+			foreach($basket->getBasketItems() as $basketItem)
+			{
+				$productId = $basketItem->getProductId();
+
+				if(!empty($xmls[$productId]['PRODUCT_XML_ID']))
+					$basketItem->setField("PRODUCT_XML_ID", $xmls[$productId]['PRODUCT_XML_ID']);
+
+				if(!empty($xmls[$productId]['CATALOG_XML_ID']))
+					$basketItem->setField("CATALOG_XML_ID", $xmls[$productId]['CATALOG_XML_ID']);
+			}
+
+			if(!empty($arPostData["order"]["notes"]))
+				$order->setField('USER_DESCRIPTION', $arPostData["order"]["notes"]);
+
+			//Let's mark order that we don't have info about buyer yet.
+			$r = new \Bitrix\Sale\Result();
+			$r->addWarning(new \Bitrix\Main\Error(GetMessage('SALE_YMH_MARK_BUYER_WAITING'), 'YMARKET_BUYER_INFO_WAITING'));
+			\Bitrix\Sale\EntityMarker::addMarker($order, $order, $r);
+			$order->setField('MARKED', 'Y');
+
+			$res = $order->save();
+
+			if(!$res->isSuccess())
+			{
+				$this->log(
+					self::LOG_LEVEL_ERROR,
+					"YMARKET_PLATFORM_ORDER_ADD_ERROR",
+					$arPostData["order"]["id"],
+					implode('; ', $res->getErrorMessages())
+				);
+
+				return $result;
+			}
+
+			if (\Bitrix\Sale\Integration\Numerator\NumeratorOrder::isUsedNumeratorForOrder())
+			{
+				$orderId = $order->getField('ACCOUNT_NUMBER');
+			}
+			else
+			{
+				$orderId = $order->getId();
+			}
+
+			$res = \Bitrix\Sale\TradingPlatform\OrderTable::add(array(
+				"ORDER_ID" => $res->getId(),
+				"TRADING_PLATFORM_ID" => YMarket\YandexMarket::getInstance()->getId(),
+				"EXTERNAL_ORDER_ID" => $arPostData["order"]["id"]
+			));
+
+			if(!$res->isSuccess())
+			{
+				$this->log(
+					self::LOG_LEVEL_ERROR,
+					"YMARKET_PLATFORM_ORDER_ADD_ERROR",
+					$arPostData["order"]["id"],
+					implode('; ', $res->getErrorMessages())
+				);
+
+				return $result;
 			}
 		}
-		else
-		{
-			$arResult = $this->processError(self::ERROR_STATUS_400, GetMessage("SALE_YMH_ERROR_BAD_STRUCTURE"));
-		}
 
-		return $arResult;
+		$result["order"]["accepted"] = TRUE;
+		$result["order"]["id"] = '"'.$orderId.'"';
+		unset($result["order"]["reason"]);
+
+		$this->log(
+			self::LOG_LEVEL_INFO,
+			"YMARKET_ORDER_CREATE",
+			$arPostData["order"]["id"],
+			GetMessage("SALE_YMH_ORDER_CREATED")." ".$orderId
+		);
+
+		return $result;
 	}
 
+	protected function checkBasketPrice(array $items, \Bitrix\Sale\Order $order)
+	{
+		$yandexBasketPrice = 0;
 
+		foreach($items as $item)
+			if(isset($item['price']))
+				$yandexBasketPrice += $item['price']*$item['count'];
+
+		return round($order->getBasket()->getPrice(), 2) == round($yandexBasketPrice, 2);
+	}
+
+	protected function setBasketOldPrice(array $items, \Bitrix\Sale\Order $order)
+	{
+		$basket = $order->getBasket();
+		
+		/** @var \Bitrix\Sale\BasketItem $basketItem */
+		foreach($basket->getBasketItems() as $basketItem)
+		{
+			foreach($items as $key => $item)
+			{
+				if($item['offerId'] != $basketItem->getProductId())
+					continue;
+
+				$basketItem->setField("CUSTOM_PRICE", 'Y');
+				$basketItem->setField("PRICE", $item['price']);
+				unset($items[$key]);
+			}
+		}
+	}
+
+	/**
+	 * @param array $arPostData
+	 * @return bool
+	 */
 	protected function checkOrderStatusRequest($arPostData)
 	{
 		return
@@ -867,27 +1133,39 @@ class CSaleYMHandler
 			&& isset($arPostData["order"]["delivery"]) && is_array($arPostData["order"]["delivery"])) || true;
 	}
 
-	/*
-	 *	POST /order/status timeout 10s
+	/**
+	 * POST /order/status timeout 10s
+	 *
+	 * @param array $arPostData
+	 * @return array
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ArgumentNullException
+	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
 	 */
 	protected function processOrderStatusRequest($arPostData)
 	{
 		$arResult = array();
 		if($this->checkOrderStatusRequest($arPostData))
 		{
-			$dbOrder = CSaleOrder::GetList(
-				array(),
-				array("XML_ID" => self::XML_ID_PREFIX.$arPostData["order"]["id"])
-			);
+			$registry = \Bitrix\Sale\Registry::getInstance(\Bitrix\Sale\Registry::REGISTRY_TYPE_ORDER);
 
-			if($arOrder = $dbOrder->Fetch())
+			/** @var \Bitrix\Sale\Order $orderClass */
+			$orderClass = $registry->getOrderClassName();
+
+			$dbOrder = $orderClass::getList(array(
+				'filter' => array("XML_ID" => self::XML_ID_PREFIX.$arPostData["order"]["id"]),
+				'select' => array('ID', 'LID', 'XML_ID')
+			));
+
+			if($arOrder = $dbOrder->fetch())
 			{
+				$order = $orderClass::load($arOrder['ID']);
 				$reason = "";
 
 				switch ($arPostData["order"]["status"])
 				{
 					case 'PROCESSING':
-						$locationId = $this->locationMapper->getLocationByCityName($arPostData["order"]["delivery"]["region"]["name"]);
+						$locationId = $this->locationMapper->getLocationId($arPostData["order"]["delivery"]["region"]);
 
 						if($locationId === false)
 						{
@@ -899,6 +1177,30 @@ class CSaleYMHandler
 							);
 						}
 
+						if(isset($arPostData["order"]["paymentMethod"]) && $arPostData["order"]["paymentMethod"] == "YANDEX")
+						{
+							$paymentCollection = $order->getPaymentCollection();
+
+							/** @var \Bitrix\Sale\Payment $payment */
+							if($paymentCollection->count() > 0)
+							{
+								foreach ($paymentCollection as $payment)
+								{
+									$res = $payment->setPaid("Y");
+
+									if(!$res->isSuccess())
+									{
+										$this->log(
+											self::LOG_LEVEL_INFO,
+											"YMARKET_INCOMING_ORDER_STATUS",
+											'Set order paid',
+											implode('; ',$res->getErrorMessages())
+										);
+									}
+								}
+							}
+						}
+
 						$arOrderPropsValues = $this->makeAdditionalOrderProps(
 							$arPostData["order"]["delivery"]["address"],
 							$arPostData["order"]["buyer"],
@@ -907,14 +1209,55 @@ class CSaleYMHandler
 							$locationId
 						);
 
-						$arErrors = array();
+						if(!empty($arOrderPropsValues))
+						{
+							$propCollection = $order->getPropertyCollection();
+							$res = $propCollection->setValuesFromPost(array('PROPERTIES' => $arOrderPropsValues), array());
 
-						CSaleOrderProps::DoSaveOrderProps(
-							$arOrder["ID"],
-							$this->personTypeId,
-							$arOrderPropsValues,
-							$arErrors
-						);
+							if(!$res->isSuccess())
+							{
+								$this->log(
+									self::LOG_LEVEL_INFO,
+									"YMARKET_INCOMING_ORDER_STATUS",
+									'Set order properties',
+									implode('; ',$res->getErrorMessages())
+								);
+							}
+						}
+
+						if($order->getUserId() == \CSaleUser::GetAnonymousUserID())
+						{
+							$userId = $this->createUser($arPostData["order"]["buyer"], null, null);
+
+							if(intval($userId) > 0)
+							{
+								$order->setFieldNoDemand("USER_ID", $userId);
+
+								EntityMarker::deleteByFilter(array(
+									'=ORDER_ID' => $order->getId(),
+									'=ENTITY_TYPE' => EntityMarker::ENTITY_TYPE_ORDER,
+									'=ENTITY_ID' => $order->getId(),
+									'=CODE' => 'YMARKET_BUYER_INFO_WAITING'
+								));
+
+								$order->setField('MARKED', 'N');
+							}
+						}
+
+						if(!empty($arPostData["order"]["notes"]) && $order->getField('USER_DESCRIPTION') != $arPostData["order"]["notes"])
+							$order->setField('USER_DESCRIPTION', $order->getField('USER_DESCRIPTION')."\n".$arPostData["order"]["notes"]);
+
+						$res = $order->save();
+
+						if(!$res->isSuccess())
+						{
+							$this->log(
+								self::LOG_LEVEL_INFO,
+								"YMARKET_INCOMING_ORDER_STATUS",
+								'Save order',
+								implode('; ',$res->getErrorMessages())
+							);
+						}
 
 						$this->sendEmailNewOrder($arOrder["ID"], $arPostData["order"]["buyer"]);
 
@@ -924,7 +1267,8 @@ class CSaleYMHandler
 								self::LOG_LEVEL_ERROR,
 								"YMARKET_INCOMING_ORDER_STATUS",
 								$arPostData["order"]["id"],
-								print_r($arErrors, true));
+								print_r($arErrors, true)
+							);
 						}
 						else
 						{
@@ -936,20 +1280,18 @@ class CSaleYMHandler
 							);
 						}
 
-						if(isset($arPostData["order"]["paymentMethod"]) && $arPostData["order"]["paymentMethod"] == "YANDEX")
-							CSaleOrder::PayOrder($arOrder["ID"], "Y");
-
 						break;
 
 					case 'UNPAID':
 					case 'DELIVERY':
 					case 'PICKUP':
 					case 'DELIVERED ':
+					case 'RESERVED ':
 						break;
 
 					case 'CANCELLED':
 						if(isset($arPostData["order"]["substatus"]))
-							$reason = GetMessage("SALE_YMH_SUBSTATUS_".$arPostData["order"]["substatus"]);
+							$reason = $arPostData["order"]["substatus"];
 						break;
 
 					default:
@@ -968,6 +1310,10 @@ class CSaleYMHandler
 		return $arResult;
 	}
 
+	/**
+	 * @param string $postData
+	 * @return array
+	 */
 	protected function extractPostData($postData)
 	{
 		global $APPLICATION;
@@ -978,18 +1324,22 @@ class CSaleYMHandler
 			$arResult = json_decode($postData, true);
 		}
 
-		if(strtolower(SITE_CHARSET) != 'utf-8')
+		if(mb_strtolower(SITE_CHARSET) != 'utf-8')
 			$arResult = $APPLICATION->ConvertCharsetArray($arResult, 'utf-8', SITE_CHARSET);
 
 		return $arResult;
 	}
 
+	/**
+	 * @param array $arData
+	 * @return string
+	 */
 	protected function prepareResult($arData)
 	{
 		global $APPLICATION;
 		$result = array();
 
-		if(strtolower(SITE_CHARSET) != 'utf-8')
+		if(mb_strtolower(SITE_CHARSET) != 'utf-8')
 			$arData = $APPLICATION->ConvertCharsetArray($arData, SITE_CHARSET, 'utf-8');
 
 		if($this->communicationFormat == self::JSON)
@@ -1012,16 +1362,16 @@ class CSaleYMHandler
 
 		if($this->authType == "HEADER")
 		{
-			if(isset($_SERVER["REMOTE_USER"]) && strlen($_SERVER["REMOTE_USER"]) > 0)
+			if(isset($_SERVER["REMOTE_USER"]) && $_SERVER["REMOTE_USER"] <> '')
 				$incomingToken = $_SERVER["REMOTE_USER"];
-			elseif(isset($_SERVER["REDIRECT_REMOTE_USER"]) && strlen($_SERVER["REDIRECT_REMOTE_USER"]) > 0)
+			elseif(isset($_SERVER["REDIRECT_REMOTE_USER"]) && $_SERVER["REDIRECT_REMOTE_USER"] <> '')
 				$incomingToken = $_SERVER["REDIRECT_REMOTE_USER"];
-			elseif(isset($_SERVER["HTTP_AUTHORIZATION"]) && strlen($_SERVER["HTTP_AUTHORIZATION"]) > 0)
+			elseif(isset($_SERVER["HTTP_AUTHORIZATION"]) && $_SERVER["HTTP_AUTHORIZATION"] <> '')
 				$incomingToken = $_SERVER["HTTP_AUTHORIZATION"];
 		}
 		elseif($this->authType == "URL")
 		{
-			if(isset($_REQUEST["auth-token"]) && strlen($_REQUEST["auth-token"]) > 0)
+			if(isset($_REQUEST["auth-token"]) && $_REQUEST["auth-token"] <> '')
 				$incomingToken = $_REQUEST["auth-token"];
 		}
 
@@ -1036,19 +1386,26 @@ class CSaleYMHandler
 			}
 		}
 
-		return strlen($incomingToken) > 0 && $incomingToken == $this->yandexToken;
+		return $incomingToken <> '' && $incomingToken == $this->yandexToken;
 	}
 
+	/**
+	 * @param string $reqObject
+	 * @param string $method
+	 * @param string $postData
+	 * @return string
+	 */
 	public function processRequest($reqObject, $method, $postData)
 	{
+		$arResult = array();
+		$arPostData = $this->extractPostData($postData);
+
 		$this->log(
 			self::LOG_LEVEL_DEBUG,
 			"YMARKET_INCOMING_REQUEST",
 			$reqObject.":".$method,
-			print_r($postData, true)
+			print_r($arPostData, true)
 		);
-
-		$arResult = array();
 
 		if(!$this->isActive())
 		{
@@ -1061,7 +1418,6 @@ class CSaleYMHandler
 		else
 		{
 			self::$isYandexRequest = true;
-			$arPostData = $this->extractPostData($postData);
 			DiscountCouponsManager::init(DiscountCouponsManager::MODE_EXTERNAL);
 
 			switch ($reqObject)
@@ -1091,11 +1447,23 @@ class CSaleYMHandler
 			print_r($arResult, true)
 		);
 
+		$arResult = $this->processCustomEvents(
+			'OnSaleYandexMarketRequest_'.$reqObject.$method,
+			array(
+				"POST_DATA" => $arPostData,
+				"RESULT" => $arResult
+		));
+
 		$arPreparedResult = $this->prepareResult($arResult);
 		return  $arPreparedResult;
 	}
 
 
+	/**
+	 * @param string $status
+	 * @param string $message
+	 * @return array
+	 */
 	protected function processError($status = "", $message = "")
 	{
 		if($status != "")
@@ -1111,18 +1479,24 @@ class CSaleYMHandler
 		return array("error" => $message);
 	}
 
+	/**
+	 * @param int $orderId
+	 * @param string $status
+	 * @param string $substatus
+	 * @return bool
+	 */
 	public function sendStatus($orderId, $status, $substatus = false)
 	{
 		global $APPLICATION;
 
 		if(
-			strlen($this->yandexApiUrl) <= 0
-			|| strlen($this->campaignId) <= 0
+			$this->yandexApiUrl == ''
+			|| $this->campaignId == ''
 			|| intval($orderId) <= 0
-			|| strlen($status) <=0
-			|| strlen($this->oAuthToken) <=0
-			|| strlen($this->oAuthClientId) <=0
-			|| strlen($this->oAuthLogin) <=0
+			|| $status == ''
+			|| $this->oAuthToken == ''
+			|| $this->oAuthClientId == ''
+			|| $this->oAuthLogin == ''
 		)
 			return false;
 
@@ -1146,7 +1520,7 @@ class CSaleYMHandler
 		if($substatus)
 			$arQuery["order"]["substatus"] = $substatus;
 
-		if(strtolower(SITE_CHARSET) != 'utf-8')
+		if(mb_strtolower(SITE_CHARSET) != 'utf-8')
 			$arQuery = $APPLICATION->ConvertCharsetArray($arQuery, SITE_CHARSET, 'utf-8');
 
 		$postData = '';
@@ -1177,6 +1551,10 @@ class CSaleYMHandler
 			if ($headerStatus == 200)
 			{
 				$message = GetMessage("SALE_YMH_STATUS").": ".$status;
+
+				if($substatus)
+					$message .= ' ['.$substatus.']';
+
 				$bResult = true;
 			}
 			else
@@ -1213,9 +1591,28 @@ class CSaleYMHandler
 			$message
 		);
 
+		if(!$bResult)
+		{
+			if($order = $this->loadOrderByYandexOrderId($orderId))
+			{				
+				$r = new \Bitrix\Sale\Result();
+				$r->addWarning(new \Bitrix\Main\Error($message, 'YMARKET_STATUS_CHANGE_ERROR'));
+				\Bitrix\Sale\EntityMarker::addMarker($order, $order, $r);
+				$order->setField('MARKED', 'Y');
+				$order->save();
+			}
+		}
+
 		return $bResult;
 	}
 
+	/**
+	 * @param string $yandexOrderId
+	 * @param string $yandexStatus
+	 * @param string $substatus
+	 * @param string $siteId
+	 * @return string
+	 */
 	public static function sendStatusAgent($yandexOrderId, $yandexStatus, $substatus, $siteId)
 	{
 		$YMHandler = new CSaleYMHandler(
@@ -1227,12 +1624,20 @@ class CSaleYMHandler
 		return '';
 	}
 
-	static public function getOrderInfo($orderId)
+	/**
+	 * @param int $orderId
+	 * @return array|false
+	 * @throws \Bitrix\Main\ArgumentException
+	 */
+	public static function getOrderInfo($orderId)
 	{
+		if(intval($orderId) <= 0)
+			return array();
+
 		$res = \Bitrix\Sale\Internals\OrderTable::getList(array(
 			'filter' => array(
 				'=ID' => $orderId,
-				'=SOURCE.TRADING_PLATFORM_ID' => YandexMarket::getInstance()->getId()
+				'=SOURCE.TRADING_PLATFORM_ID' => YMarket\YandexMarket::getInstance()->getId()
 			),
 			'select' => array("LID", "XML_ID", "YANDEX_ID" => "SOURCE.EXTERNAL_ORDER_ID"),
 			'runtime' => array(
@@ -1252,10 +1657,140 @@ class CSaleYMHandler
 		return array();
 	}
 
+	/**
+	 * @param int $orderId
+	 * @return bool
+	 */
 	public static function isOrderFromYandex($orderId)
 	{
 		$arOrder = self::getOrderInfo($orderId);
 		return !empty($arOrder["YANDEX_ID"]);
+	}
+
+	/**
+	 * @param \Bitrix\Main\Event $params
+	 */
+	public static function onSaleStatusOrderChange(Bitrix\Main\Event $params)
+	{
+		/** @var \Bitrix\Sale\Order $order */
+		$order = $params->getParameter("ENTITY");
+		$value = $params->getParameter("VALUE");
+		$oldValue = $params->getParameter("OLD_VALUE");
+
+		if (!static::isOrderEntity($order))
+		{
+			return;
+		}
+
+		if($value == $oldValue)
+			return;
+
+		if($order->getId() <= 0)
+			return;
+
+		self::onSaleStatusOrder($order->getId(), $value);
+	}
+
+	/**
+	 * @param \Bitrix\Main\Event $params
+	 */
+	public static function onSaleOrderCanceled(Bitrix\Main\Event $params)
+	{
+		global $USER;
+
+		/** @var \Bitrix\Sale\Order $order */
+		$order = $params->getParameter("ENTITY");
+
+		if (!static::isOrderEntity($order))
+		{
+			return;
+		}
+
+		if($order->getId() <= 0)
+			return;
+
+		if(!$order->isCanceled())
+			return;
+
+		$arSubstatuses = self::getOrderSubstatuses();
+		$description = $order->getField('REASON_CANCELED');
+
+		if($description == '' || !$USER->IsAdmin() || empty($arSubstatuses[$description]))
+			$description = "USER_CHANGED_MIND";
+
+		self::onSaleStatusOrder($order->getId(), "CANCELED", $description);
+	}
+
+	/**
+	 * @param \Bitrix\Main\Event $params
+	 */
+	public static function onSaleShipmentDelivery(Bitrix\Main\Event $params)
+	{
+		/** @var \Bitrix\Sale\Shipment $shipment */
+		$shipment = $params->getParameter("ENTITY");
+
+		if (!static::isOrderEntity($shipment))
+		{
+			return;
+		}
+
+		if($shipment->getId() <= 0)
+			return;
+
+		/** @var \Bitrix\Sale\ShipmentCollection $collection */
+		$collection = $shipment->getCollection();
+
+		if(!$collection->isAllowDelivery())
+			return;
+
+		self::onSaleStatusOrder($shipment->getField('ORDER_ID'), "ALLOW_DELIVERY");
+	}
+
+	/**
+	 * @param \Bitrix\Main\Event $params
+	 */
+	public static function onSaleOrderPaid(Bitrix\Main\Event $params)
+	{
+		/** @var \Bitrix\Sale\Order $order */
+		$order = $params->getParameter("ENTITY");
+
+		if (!static::isOrderEntity($order))
+		{
+			return;
+		}
+
+		if($order->getId() <= 0)
+			return;
+
+		if(!$order->isPaid())
+			return;
+
+		self::onSaleStatusOrder($order->getId(), "PAYED");
+	}
+
+	/**
+	 * @param \Bitrix\Main\Event $params
+	 */
+	public static function onShipmentDeducted(Bitrix\Main\Event $params)
+	{
+		/** @var \Bitrix\Sale\Shipment $shipment */
+		$shipment = $params->getParameter("ENTITY");
+
+		if (!static::isOrderEntity($shipment))
+		{
+			return;
+		}
+
+		if($shipment->getId() <= 0)
+			return;
+
+		/** @var \Bitrix\Sale\ShipmentCollection $collection */
+		$collection = $shipment->getCollection();
+
+		if(!$collection->isShipped())
+			return;
+
+		self::onSaleStatusOrder($shipment->getField('ORDER_ID'), "DEDUCTED");
 	}
 
 	/**
@@ -1266,8 +1801,14 @@ class CSaleYMHandler
 	 * @param string $substatus Substatus.
 	 * @return bool
 	 */
-	static public function onSaleStatusOrder($orderId, $status, $substatus = false)
+	public static function onSaleStatusOrder($orderId, $status, $substatus = false)
 	{
+		if(self::$isYandexRequest)
+			return false;
+
+		if(intval($orderId) <= 0)
+			return false;
+
 		$result = false;
 		$arOrder = self::getOrderInfo($orderId);
 
@@ -1279,7 +1820,7 @@ class CSaleYMHandler
 
 			$settings = $YMHandler->getSettingsBySiteId($arOrder["LID"]);
 
-			if(!isset($settings["STATUS_OUT"][$status]) || strlen($settings["STATUS_OUT"][$status]) <= 0)
+			if(!isset($settings["STATUS_OUT"][$status]) || $settings["STATUS_OUT"][$status] == '')
 				return false;
 
 			$yandexStatus = $settings["STATUS_OUT"][$status];
@@ -1290,47 +1831,6 @@ class CSaleYMHandler
 		return $result;
 	}
 
-	public static function onSaleCancelOrder($orderId, $value, $description)
-	{
-		if($value != "Y" || self::$isYandexRequest)
-			return false;
-
-		global $USER;
-
-		$arSubstatuses = self::getOrderSubstatuses();
-
-		if(strlen($description) <= 0 || !$USER->IsAdmin() || !in_array(trim($description), $arSubstatuses))
-			$description = "USER_CHANGED_MIND";
-		else
-			$description = array_search(trim($description), $arSubstatuses);
-
-		return self::onSaleStatusOrder($orderId, "CANCELED", $description);
-	}
-
-	public static function onSaleDeliveryOrder($orderId, $value)
-	{
-		if($value != "Y" || self::$isYandexRequest)
-			return false;
-
-		return self::onSaleStatusOrder($orderId, "ALLOW_DELIVERY");
-	}
-
-	public static function onSalePayOrder($orderId, $value)
-	{
-		if($value != "Y" || self::$isYandexRequest)
-			return false;
-
-		return self::onSaleStatusOrder($orderId, "PAYED");
-	}
-
-	public static function onSaleDeductOrder($orderId, $value)
-	{
-		if($value != "Y" || self::$isYandexRequest)
-			return false;
-
-		return self::onSaleStatusOrder($orderId, "DEDUCTED");
-	}
-
 	public static function getOrderSubstatuses()
 	{
 		return array(
@@ -1339,7 +1839,11 @@ class CSaleYMHandler
 			"USER_REFUSED_DELIVERY"=> GetMessage("SALE_YMH_SUBSTATUS_USER_REFUSED_DELIVERY"),
 			"USER_REFUSED_PRODUCT" => GetMessage("SALE_YMH_SUBSTATUS_USER_REFUSED_PRODUCT"),
 			"SHOP_FAILED" => GetMessage("SALE_YMH_SUBSTATUS_SHOP_FAILED"),
-			"REPLACING_ORDER" => GetMessage("SALE_YMH_SUBSTATUS_REPLACING_ORDER")
+			"REPLACING_ORDER" => GetMessage("SALE_YMH_SUBSTATUS_REPLACING_ORDER"),
+			"PROCESSING_EXPIRED" => GetMessage("SALE_YMH_SUBSTATUS_PROCESSING_EXPIRED"),
+			"RESERVATION_EXPIRED" => GetMessage("SALE_YMH_SUBSTATUS_RESERVATION_EXPIRED"),
+			"USER_NOT_PAID" => GetMessage("SALE_YMH_SUBSTATUS_USER_NOT_PAID"),
+			"USER_REFUSED_QUALITY" => GetMessage("SALE_YMH_SUBSTATUS_USER_REFUSED_QUALITY"),
 		);
 	}
 
@@ -1391,7 +1895,7 @@ class CSaleYMHandler
 		return $result;
 	}
 
-	static public function OnEventLogGetAuditTypes()
+	public static function OnEventLogGetAuditTypes()
 	{
 		return array(
 			"YMARKET_STATUS_CHANGE" => "[YMARKET_STATUS_CHANGE] ".GetMessage("SALE_YMH_LOG_TYPE_STATUS_CHANGE"),
@@ -1403,9 +1907,18 @@ class CSaleYMHandler
 			"YMARKET_INCOMING_REQUEST_RESULT" => "[YMARKET_INCOMING_REQUEST_RESULT] ".GetMessage("SALE_YMH_LOG_TYPE_INCOMING_REQUEST_RESULT"),
 			"YMARKET_LOCATION_MAPPING" => "[YMARKET_LOCATION_MAPPING] ".GetMessage("SALE_YMH_LOG_TYPE_YMARKET_LOCATION_MAPPING"),
 			"YMARKET_ORDER_STATUS_CHANGE" => "[YMARKET_ORDER_STATUS_CHANGE] ".GetMessage("SALE_YMH_LOG_TYPE_ORDER_STATUS_CHANGE"),
+			"YMARKET_ORDER_CREATE_ERROR" => "[YMARKET_ORDER_CREATE_ERROR] ".GetMessage("SALE_YMH_LOG_TYPE_ORDER_CREATE_ERROR"),
+
 		);
 	}
 
+	/**
+	 * @param int $level
+	 * @param string $type
+	 * @param string $itemId
+	 * @param string $description
+	 * @return bool
+	 */
 	protected function log($level, $type, $itemId, $description)
 	{
 		if($this->logLevel < $level)
@@ -1422,21 +1935,22 @@ class CSaleYMHandler
 		return true;
 	}
 
-	protected function getLocationByCityName($cityName)
-	{
-		return $this->locationMapper->getLocationByCityName($cityName);
-	}
-
+	/**
+	 * @param array $order
+	 * @param string $yandexStatus
+	 * @param string $cancelReason
+	 * @return bool|int
+	 */
 	protected function mapYandexStatusToOrder($order, $yandexStatus, $cancelReason="")
 	{
 		global $APPLICATION;
 
-		if(!is_array($order) || !isset($order["ID"]) || strlen($yandexStatus) <= 0)
+		if(!is_array($order) || !isset($order["ID"]) || $yandexStatus == '')
 			return false;
 
 		$settings = $this->getSettingsBySiteId($order["LID"]);
 
-		if(!isset($settings["STATUS_IN"][$yandexStatus]) || strlen($settings["STATUS_IN"][$yandexStatus]) <= 0)
+		if(!isset($settings["STATUS_IN"][$yandexStatus]) || $settings["STATUS_IN"][$yandexStatus] == '')
 			return false;
 
 		$result = false;
@@ -1448,7 +1962,7 @@ class CSaleYMHandler
 			case "CANCELED":
 
 				$errorMessageTmp = "";
-				$result = CSaleOrder::CancelOrder($order["ID"], "Y", $cancelReason);
+				$result = \CSaleOrder::CancelOrder($order["ID"], "Y", $cancelReason);
 
 				if (!$result)
 				{
@@ -1519,11 +2033,12 @@ class CSaleYMHandler
 	 */
 	public static function eventsStart()
 	{
-		RegisterModuleDependences("sale", "OnSaleStatusOrder", "sale", "CSaleYMHandler", "onSaleStatusOrder", 100);
-		RegisterModuleDependences("sale", "OnSaleCancelOrder", "sale", "CSaleYMHandler", "onSaleCancelOrder", 100);
-		RegisterModuleDependences("sale", "OnSalePayOrder", "sale", "CSaleYMHandler", "onSalePayOrder", 100);
-		RegisterModuleDependences("sale", "OnSaleDeliveryOrder", "sale", "CSaleYMHandler", "onSaleDeliveryOrder", 100);
-		RegisterModuleDependences("sale", "OnSaleDeductOrder", "sale", "CSaleYMHandler", "onSaleDeductOrder", 100);
+		$eventManager = \Bitrix\Main\EventManager::getInstance();
+		$eventManager->registerEventHandler('sale', 'OnSaleStatusOrderChange', 'sale', 'CSaleYMHandler', 'onSaleStatusOrderChange');
+		$eventManager->registerEventHandler('sale', 'OnSaleOrderCanceled', 'sale', 'CSaleYMHandler', 'onSaleOrderCanceled');
+		$eventManager->registerEventHandler('sale', 'OnSaleShipmentDelivery', 'sale', 'CSaleYMHandler', 'onSaleShipmentDelivery');
+		$eventManager->registerEventHandler('sale', 'OnSaleOrderPaid', 'sale', 'CSaleYMHandler', 'onSaleOrderPaid');
+		$eventManager->registerEventHandler('sale', 'OnShipmentDeducted', 'sale', 'CSaleYMHandler', 'onShipmentDeducted');
 
 		return true;
 	}
@@ -1534,11 +2049,12 @@ class CSaleYMHandler
 	 */
 	public static function eventsStop()
 	{
-		UnRegisterModuleDependences("sale", "OnSaleStatusOrder", "sale", "CSaleYMHandler", "onSaleStatusOrder");
-		UnRegisterModuleDependences("sale", "OnSaleCancelOrder", "sale", "CSaleYMHandler", "onSaleCancelOrder");
-		UnRegisterModuleDependences("sale", "OnSalePayOrder", "sale", "CSaleYMHandler", "onSalePayOrder");
-		UnRegisterModuleDependences("sale", "OnSaleDeliveryOrder", "sale", "CSaleYMHandler", "onSaleDeliveryOrder");
-		UnRegisterModuleDependences("sale", "OnSaleDeductOrder", "sale", "CSaleYMHandler", "onSaleDeductOrder");
+		$eventManager = \Bitrix\Main\EventManager::getInstance();
+		$eventManager->unRegisterEventHandler('sale', 'OnSaleStatusOrderChange', 'sale', 'CSaleYMHandler', 'onSaleStatusOrderChange');
+		$eventManager->unRegisterEventHandler('sale', 'OnSaleOrderCanceled', 'sale', 'CSaleYMHandler', 'onSaleOrderCanceled');
+		$eventManager->unRegisterEventHandler('sale', 'OnSaleShipmentDelivery', 'sale', 'CSaleYMHandler', 'onSaleShipmentDelivery');
+		$eventManager->unRegisterEventHandler('sale', 'OnSaleOrderPaid', 'sale', 'CSaleYMHandler', 'onSaleOrderPaid');
+		$eventManager->unRegisterEventHandler('sale', 'OnShipmentDeducted', 'sale', 'CSaleYMHandler', 'onShipmentDeducted');
 
 		return true;
 	}
@@ -1561,9 +2077,7 @@ class CSaleYMHandler
 				"SETTINGS" => "",
 			));
 
-			$b = "sort";
-			$o = "asc";
-			$dbSites = \CSite::GetList($b, $o, array("ACTIVE" => "Y"));
+			$dbSites = \CSite::GetList('', '', array("ACTIVE" => "Y"));
 
 			while ($site = $dbSites->Fetch())
 			{
@@ -1577,13 +2091,11 @@ class CSaleYMHandler
 					)
 				);
 			}
-		}
-		else
-		{
-			$res = true;
+
+			return $res->isSuccess();
 		}
 
-		return $res ? true : false;
+		return true;
 	}
 
 	/**
@@ -1613,73 +2125,15 @@ class CSaleYMHandler
 	}
 
 	/**
-	 * Moves settings from options to DB
+	 * @param int $newOrderId
+	 * @param $buyer
 	 */
-	public static function settingsConverter()
-	{
-		$settings = static::getSettings();
-
-		if(!empty($settings) && !empty($settings["SETTINGS"]))
-		{
-			return false;
-		}
-
-		if(!CSaleYMHandler::install())
-		{
-			return false;
-		}
-
-		$settings = array();
-
-		$rsSites = CSite::GetList($by = "sort", $order = "asc", Array());
-
-		while ($arSite = $rsSites->Fetch())
-		{
-			$serSiteSett = COption::GetOptionString("sale", "yandex_market_purchase_settings", "", $arSite["ID"], true);
-			$siteSett = unserialize($serSiteSett);
-
-			if(is_array($siteSett) && !empty($siteSett))
-				$settings[$arSite["ID"]] = $siteSett;
-		}
-
-		if(empty($settings))
-		{
-			$serSiteSett = COption::GetOptionString("sale", "yandex_market_purchase_settings", "");
-			$siteSett = unserialize($serSiteSett);
-
-			if(is_array($siteSett) && !empty($siteSett))
-				$settings[CSite::GetDefSite()] = $siteSett;
-		}
-
-		if(empty($settings))
-		{
-			return false;
-		}
-
-		if(!CSaleYMHandler::saveSettings($settings))
-		{
-			return false;
-		}
-
-		if(!CSaleYMHandler::setActivity(true))
-		{
-			return false;
-		}
-
-		if(!CSaleYMHandler::eventsStart())
-		{
-			return false;
-		}
-
-		return true;
-	}
-
 	protected function sendEmailNewOrder($newOrderId, $buyer)
 	{
 		global $DB;
 
 		$strOrderList = "";
-		$baseLangCurrency = CSaleLang::GetLangCurrency($this->siteId);
+		$baseLangCurrency = Bitrix\Sale\Internals\SiteCurrencyTable::getSiteCurrency($this->siteId);
 		$orderNew = CSaleOrder::GetByID($newOrderId);
 		$orderNew["BASKET_ITEMS"] = array();
 
@@ -1709,8 +2163,8 @@ class CSaleYMHandler
 				continue;
 
 			$measure = (isset($val["MEASURE_TEXT"])) ? $val["MEASURE_TEXT"] : GetMessage("SALE_YMH_SHT");
-			$strOrderList .= $val["NAME"]." - ".$val["QUANTITY"]." ".$measure.": ".SaleFormatCurrency($val["PRICE"], $baseLangCurrency);
-			$strOrderList .= "\n";
+			$strOrderList .= $val["NAME"]." - ".$val["QUANTITY"]." ".$measure." x ".SaleFormatCurrency($val["PRICE"], $baseLangCurrency);
+			$strOrderList .= "</br>";
 		}
 
 		//send mail
@@ -1742,14 +2196,19 @@ class CSaleYMHandler
 		CSaleMobileOrderPush::send("ORDER_CREATED", array("ORDER" => $orderNew));
 	}
 
+	/**
+	 * @param string $code
+	 * @return bool
+	 * @throws \Bitrix\Main\ArgumentNullException
+	 */
 	protected function notifyAdmin($code)
 	{
 		$tag = "YANDEX_MARKET_".$code;
-		$problemsCount = intval(\Bitrix\Main\Config\Option::get("sale", $tag, 0, $this->siteId));
+		$problemsCount = intval(Option::get("sale", $tag, 0, $this->siteId));
 
 		if($problemsCount < 3)
 		{
-			\Bitrix\Main\Config\Option::set("sale", $tag, $problemsCount+1, $this->siteId);
+			Option::set("sale", $tag, $problemsCount+1, $this->siteId);
 			return false;
 		}
 
@@ -1766,17 +2225,204 @@ class CSaleYMHandler
 			)
 		);
 
-		\Bitrix\Main\Config\Option::set("sale", $tag, 0, $this->siteId);
+		Option::set("sale", $tag, 0, $this->siteId);
 
 		return true;
 	}
 
-	/*
+	/**
+	 * @return array
+	 */
+	public static function getExistPaymentMethods()
+	{
+		return array('YANDEX', 'CASH_ON_DELIVERY', 'CARD_ON_DELIVERY');
+	}
+
+	/** @deprecated */
+	public static function onSaleCancelOrder($orderId, $value, $description)
+	{
+		if($value != "Y" || self::$isYandexRequest)
+			return false;
+
+		global $USER;
+
+		$arSubstatuses = self::getOrderSubstatuses();
+
+		if($description == '' || !$USER->IsAdmin() || empty($arSubstatuses[$description]))
+			$description = "USER_CHANGED_MIND";
+
+		return self::onSaleStatusOrder($orderId, "CANCELED", $description);
+	}
+
+	/** @deprecated */
+	public static function onSaleDeliveryOrder($orderId, $value)
+	{
+		if($value != "Y" || self::$isYandexRequest)
+			return false;
+
+		return self::onSaleStatusOrder($orderId, "ALLOW_DELIVERY");
+	}
+
+	/** @deprecated */
+	public static function onSalePayOrder($orderId, $value)
+	{
+		if($value != "Y" || self::$isYandexRequest)
+			return false;
+
+		return self::onSaleStatusOrder($orderId, "PAYED");
+	}
+
+	/** @deprecated */
+	public static function onSaleDeductOrder($orderId, $value)
+	{
+		if($value != "Y" || self::$isYandexRequest)
+			return false;
+
+		return self::onSaleStatusOrder($orderId, "DEDUCTED");
+	}
+
+	/** @deprecated */
+	protected function getDeliveryOptions($delivery, $price, $weight = 0)
+	{
+		$arResult = array();
+
+		$locationId = $this->locationMapper->getLocationId($delivery['region']);
+
+		if($locationId > 0)
+		{
+			foreach ($this->mapDelivery as $deliveryId => $deliveryType)
+			{
+				if($deliveryType == "")
+					continue;
+
+				$filter = 	array(
+					"ID" => $deliveryId,
+					"LID" => $this->siteId,
+					"ACTIVE" => "Y",
+					"LOCATION" => $locationId,
+					"+<=ORDER_PRICE_FROM" => $price,
+					"+>=ORDER_PRICE_TO" => $price
+				);
+
+				if(intval($weight) > 0)
+				{
+					$filter["+<=WEIGHT_FROM"] = $weight;
+					$filter["+>=WEIGHT_TO"] = $weight;
+				}
+
+				$dbDelivery = CSaleDelivery::GetList(
+					array("SORT"=>"ASC", "NAME"=>"ASC"),
+					$filter
+				);
+
+				if($arDelivery = $dbDelivery->Fetch())
+				{
+					$arDates = $this->getDeliveryDates(
+						$arDelivery["PERIOD_FROM"],
+						$arDelivery["PERIOD_TO"],
+						$arDelivery["PERIOD_TYPE"]
+					);
+
+					if(!empty($arDates))
+					{
+						$arDeliveryTmp = array(
+							"id" => $arDelivery["ID"],
+							"type" =>$deliveryType,
+							"serviceName" => mb_substr($arDelivery["NAME"], 0, 50),
+							"price" => round(floatval($arDelivery["PRICE"]), 2),
+							"dates" => $arDates
+						);
+
+						if($deliveryType == "PICKUP" && !empty($this->outlets))
+							foreach($this->outlets as $outlet)
+								$arDeliveryTmp["outlets"][] = array("id" => intval($outlet));
+
+						$arResult[] = $arDeliveryTmp;
+					}
+				}
+			}
+		}
+
+		return $arResult;
+	}
+
+	/** @deprecated */
+	protected function getLocationByCityName($cityName)
+	{
+		return $this->locationMapper->getLocationByCityName($cityName);
+	}
+
+	/**
+	 * Moves settings from options to DB
+	 * @deprecated
+	 */
+	public static function settingsConverter()
+	{
+		$settings = static::getSettings();
+
+		if(!empty($settings) && !empty($settings["SETTINGS"]))
+		{
+			return false;
+		}
+
+		if(!CSaleYMHandler::install())
+		{
+			return false;
+		}
+
+		$settings = array();
+
+		$rsSites = CSite::GetList();
+
+		while ($arSite = $rsSites->Fetch())
+		{
+			$serSiteSett = COption::GetOptionString("sale", "yandex_market_purchase_settings", "", $arSite["ID"], true);
+			$siteSett = unserialize($serSiteSett, ['allowed_classes' => false]);
+
+			if(is_array($siteSett) && !empty($siteSett))
+				$settings[$arSite["ID"]] = $siteSett;
+		}
+
+		if(empty($settings))
+		{
+			$serSiteSett = COption::GetOptionString("sale", "yandex_market_purchase_settings", "");
+			$siteSett = unserialize($serSiteSett, ['allowed_classes' => false]);
+
+			if(is_array($siteSett) && !empty($siteSett))
+				$settings[CSite::GetDefSite()] = $siteSett;
+		}
+
+		if(empty($settings))
+		{
+			return false;
+		}
+
+		if(!CSaleYMHandler::saveSettings($settings))
+		{
+			return false;
+		}
+
+		if(!CSaleYMHandler::setActivity(true))
+		{
+			return false;
+		}
+
+		if(!CSaleYMHandler::eventsStart())
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
 	 * Take out correnspondence to
+	 * @return string
+	 * @deprecated
 	 */
 	public static function takeOutOrdersToCorrespondentTable()
 	{
-		$platformId = \Bitrix\Sale\TradingPlatform\YandexMarket::getInstance()->getId();
+		$platformId = YMarket\YandexMarket::getInstance()->getId();
 
 		if(intval($platformId) <= 0)
 			return "";
@@ -1800,9 +2446,9 @@ class CSaleYMHandler
 			$lenOpName = "LENGTH";
 
 		if($conn->getType() == "oracle")
-			$right = 'SUBSTR(XML_ID, -('.$lenOpName.'(XML_ID)-'.strlen(self::XML_ID_PREFIX).'))';
+			$right = 'SUBSTR(XML_ID, -('.$lenOpName.'(XML_ID)-'.mb_strlen(self::XML_ID_PREFIX).'))';
 		else
-			$right = 'RIGHT(XML_ID, '.$lenOpName.'(XML_ID)-'.strlen(self::XML_ID_PREFIX).')';
+			$right = 'RIGHT(XML_ID, '.$lenOpName.'(XML_ID)-'.mb_strlen(self::XML_ID_PREFIX).')';
 
 		//take out correspondence to
 		$sql = 'INSERT INTO '.\Bitrix\Sale\TradingPlatform\OrderTable::getTableName().' (ORDER_ID, EXTERNAL_ORDER_ID, TRADING_PLATFORM_ID)
@@ -1826,5 +2472,125 @@ class CSaleYMHandler
 		}
 
 		return "";
+	}
+
+	/** @internal  */
+	public static function convertDeliveryAndPSIds()
+	{
+		if(\Bitrix\Main\Config\Option::get("sale", 'YANDEX_MARKET_DELIVERY_PS_IDS_CONVERTED', 'N') == 'Y')
+			return '';
+
+		$settings = \CSaleYMHandler::getSettings(false);
+
+		if(!empty($settings['SETTINGS']) && is_array($settings['SETTINGS']))
+		{
+			$message = '';
+
+			foreach($settings['SETTINGS'] as $siteId => $siteSettings)
+			{
+				if(!empty($siteSettings['DELIVERIES']) && is_array($siteSettings['DELIVERIES']))
+				{
+					$newDeliveries = array();
+					$message .= 'Deliveries ids converted: ';
+
+					foreach($siteSettings['DELIVERIES'] as $oldId => $type)
+					{
+						$newId = \Bitrix\Sale\Delivery\Services\Manager::getIdByCode($oldId);
+						$message .= $oldId.'->'.$newId.', ';
+
+						if(intval($newId) > 0)
+							$newDeliveries[$newId] = $type;
+					}
+
+					$settings['SETTINGS'][$siteId]['DELIVERIES'] = $newDeliveries;
+				}
+			}
+
+			if(!empty($message))
+			{
+				CEventLog::Add(array(
+					"SEVERITY" => "INFO",
+					"AUDIT_TYPE_ID" => "YANDEX_MARKET_DELIVERY_PS_IDS_CONVERTED",
+					"MODULE_ID" => "sale",
+					"ITEM_ID" => "YMARKET",
+					"DESCRIPTION" => $message,
+				));
+
+				$res = Bitrix\Sale\TradingPlatformTable::update(
+					YMarket\YandexMarket::getInstance()->getId(),
+					array("SETTINGS" => $settings['SETTINGS'])
+				);
+
+				if($res->isSuccess())
+					\Bitrix\Main\Config\Option::set("sale", 'YANDEX_MARKET_DELIVERY_PS_IDS_CONVERTED', 'Y');
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * @param string $yandexOrderId
+	 * @return \Bitrix\Sale\Order|null
+	 */
+	public function loadOrderByYandexOrderId($yandexOrderId)
+	{
+		if ($yandexOrderId == '')
+			return null;
+
+		$registry = \Bitrix\Sale\Registry::getInstance(\Bitrix\Sale\Registry::REGISTRY_TYPE_ORDER);
+
+		/** @var \Bitrix\Sale\Order $orderClass */
+		$orderClass = $registry->getOrderClassName();
+
+		$filter = array(
+			'filter' => array(
+				'=SOURCE.EXTERNAL_ORDER_ID' => $yandexOrderId,
+				'=SOURCE.TRADING_PLATFORM_ID' => YMarket\YandexMarket::getInstance()->getId()
+			),
+			'select' => array('*'),
+			'runtime' => array(
+				'SOURCE' => array(
+					'data_type' => '\Bitrix\Sale\TradingPlatform\OrderTable',
+					'reference' => array(
+						'ref.ORDER_ID' => 'this.ID',
+					),
+					'join_type' => 'left'
+				)
+			)
+		);
+
+		$list = $orderClass::loadByFilter($filter);
+
+		if (!empty($list) && is_array($list))
+			return reset($list);
+
+		return null;
+	}
+
+	/**
+	 * Returns true if it is yandex request
+	 * @return bool
+	 */
+	public static function isYandexRequest()
+	{
+		return self::$isYandexRequest;
+	}
+
+	/**
+	 * @param Sale\Internals\Entity $entity
+	 * @return bool
+	 */
+	protected static function isOrderEntity(Sale\Internals\Entity $entity)
+	{
+		if ($entity instanceof Sale\Order
+			|| $entity instanceof Sale\Shipment
+			|| $entity instanceof Sale\Payment
+		)
+		{
+			return $entity::getRegistryType() === Sale\Registry::REGISTRY_TYPE_ORDER;
+		}
+
+		return false;
 	}
 }

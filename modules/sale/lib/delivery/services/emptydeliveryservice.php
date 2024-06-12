@@ -16,6 +16,9 @@ Loc::loadMessages(__FILE__);
 
 class EmptyDeliveryService extends Configurable
 {
+	/** @var string */
+	protected $handlerCode = 'BITRIX_EMPTY';
+
 	const CACHE_ID = 'BITRIX_SALE_EMPTY_DELIVERY_SRV_ID';
 	const TTL = 31536000;
 
@@ -64,12 +67,11 @@ class EmptyDeliveryService extends Configurable
 				$cacheManager->set(self::CACHE_ID, $id);
 		}
 
-		return $id;
+		return (int)$id;
 	}
 
 	/**
 	 * @return int
-	 * @throws \Bitrix\Main\ArgumentException
 	 */
 	private static function create()
 	{
@@ -89,5 +91,10 @@ class EmptyDeliveryService extends Configurable
 		ServiceRestrictionTable::add(array('SORT' => 100, 'SERVICE_ID' => $res->getId(), 'PARAMS' => array('PUBLIC_SHOW' => 'N'), 'SERVICE_TYPE' => '0', 'CLASS_NAME' => '\Bitrix\Sale\Delivery\Restrictions\ByPublicMode'));
 
 		return $res->getId();
+	}
+
+	public static function isHandlerCompatible()
+	{
+		return true;
 	}
 }

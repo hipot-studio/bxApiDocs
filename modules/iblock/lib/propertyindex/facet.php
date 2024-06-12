@@ -62,17 +62,6 @@ class Facet
 	 *
 	 * @return boolean
 	 */
-	
-	/**
-	* <p>Метод возвращает <i>true</i>, если доступна перезапись фильтра. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/isvalid.php
-	* @author Bitrix
-	*/
 	public function isValid()
 	{
 		return $this->valid;
@@ -83,17 +72,6 @@ class Facet
 	 *
 	 * @return integer
 	 */
-	
-	/**
-	* <p>Метод возвращает идентификатор инфоблока. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/getiblockid.php
-	* @author Bitrix
-	*/
 	public function getIblockId()
 	{
 		return $this->iblockId;
@@ -104,17 +82,6 @@ class Facet
 	 *
 	 * @return integer
 	 */
-	
-	/**
-	* <p>Метод возвращает идентификатор инфоблока торговых предложений. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/getskuiblockid.php
-	* @author Bitrix
-	*/
 	public function getSkuIblockId()
 	{
 		return $this->skuIblockId;
@@ -125,17 +92,6 @@ class Facet
 	 *
 	 * @return integer
 	 */
-	
-	/**
-	* <p>Метод возвращает идентификатор свойства торгового предложения. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/getskupropertyid.php
-	* @author Bitrix
-	*/
 	public function getSkuPropertyId()
 	{
 		return $this->skuPropertyId;
@@ -146,17 +102,6 @@ class Facet
 	 *
 	 * @return \Bitrix\Iblock\PropertyIndex\Storage
 	 */
-	
-	/**
-	* <p>Возвращает объект хранилища фасетных индексов. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Iblock\PropertyIndex\Storage 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/getstorage.php
-	* @author Bitrix
-	*/
 	public function getStorage()
 	{
 		return $this->storage;
@@ -167,17 +112,6 @@ class Facet
 	 *
 	 * @return \Bitrix\Iblock\PropertyIndex\Dictionary
 	 */
-	
-	/**
-	* <p>Возвращает объект словаря фасетных индексов. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Iblock\PropertyIndex\Dictionary 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/getdictionary.php
-	* @author Bitrix
-	*/
 	public function getDictionary()
 	{
 		return $this->dictionary;
@@ -190,19 +124,6 @@ class Facet
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает строку по ее идентификатору в словаре. Нестатический метод.</p>
-	*
-	*
-	* @param integer $valueId  Идентификатор значения строкового свойства.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/lookupdictionaryvalue.php
-	* @author Bitrix
-	*/
 	public function lookupDictionaryValue($valueId)
 	{
 		return $this->dictionary->getStringById($valueId);
@@ -219,28 +140,8 @@ class Facet
 	 * @param array $facetTypes Which facet types will be used.
 	 * @param integer $facetId Which facet category filter should not be applied.
 	 *
-	 * @return \Bitrix\Main\DB\Result
+	 * @return \Bitrix\Main\DB\Result|false
 	 */
-	
-	/**
-	* <p>Метод возвращает соединение с таблицами индекса для фильтрации. Нестатический метод.</p>
-	*
-	*
-	* @param array $filter  Массив для фильтрации записей. Фильтруемые поля такие же, как и в
-	* методе <a href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockelement/getlist.php"
-	* >CIBlockElement::GetList</a>.
-	*
-	* @param array $facetTypes = array() Массив типов фасеты, которые будут использоваться. Позволяет
-	* получить только "галочки", "цены" и тому подобное.
-	*
-	* @param integer $facetId  Указывается какая фасетная категория не должна применяться.
-	*
-	* @return \Bitrix\Main\DB\Result 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/query.php
-	* @author Bitrix
-	*/
 	public function query(array $filter, array $facetTypes = array(), $facetId = 0)
 	{
 		$connection = \Bitrix\Main\Application::getConnection();
@@ -258,7 +159,7 @@ class Facet
 
 			$element = new \CIBlockElement;
 			$element->strField = "ID";
-			$element->getList(array(), $filter, false, false, array("ID"));
+			$element->prepareSql(array("ID"), $filter, false, false);
 			$elementFrom = $element->sFrom;
 			$elementWhere = $element->sWhere;
 		}
@@ -320,8 +221,8 @@ class Facet
 						,MIN(F.VALUE_NUM) MIN_VALUE_NUM
 						,MAX(F.VALUE_NUM) MAX_VALUE_NUM
 						".($connection instanceof \Bitrix\Main\DB\MysqlCommonConnection
-							?",MAX(case when LOCATE('.', F.VALUE_NUM) > 0 then LENGTH(SUBSTRING_INDEX(F.VALUE_NUM, '.', -1)) else 0 end)"
-							:",MAX(".$sqlHelper->getLengthFunction("ABS(F.VALUE_NUM) - FLOOR(ABS(F.VALUE_NUM))")."+1-".$sqlHelper->getLengthFunction("0.1").")"
+							? ",MAX(case when POSITION('.' IN F.VALUE_NUM) > 0 then LENGTH(SUBSTRING_INDEX(F.VALUE_NUM, '.', -1)) else 0 end)"
+							: ",MAX(".$sqlHelper->getLengthFunction("rtrim(cast((ABS(F.VALUE_NUM) - FLOOR(ABS(F.VALUE_NUM))) as text), '0')")."+1-".$sqlHelper->getLengthFunction("cast(0.1 as text)").")"
 						)." VALUE_FRAC_LEN
 						,COUNT(DISTINCT F.ELEMENT_ID) ELEMENT_COUNT
 					FROM
@@ -411,8 +312,8 @@ class Facet
 					,MIN(F.VALUE_NUM) MIN_VALUE_NUM
 					,MAX(F.VALUE_NUM) MAX_VALUE_NUM
 					".($connection instanceof \Bitrix\Main\DB\MysqlCommonConnection
-						?",MAX(case when LOCATE('.', F.VALUE_NUM) > 0 then LENGTH(SUBSTRING_INDEX(F.VALUE_NUM, '.', -1)) else 0 end)"
-						:",MAX(".$sqlHelper->getLengthFunction("ABS(F.VALUE_NUM) - FLOOR(ABS(F.VALUE_NUM))")."+1-".$sqlHelper->getLengthFunction("0.1").")"
+						? ",MAX(case when POSITION('.' IN F.VALUE_NUM) > 0 then LENGTH(SUBSTRING_INDEX(F.VALUE_NUM, '.', -1)) else 0 end)"
+						: ",MAX(".$sqlHelper->getLengthFunction("rtrim(cast((ABS(F.VALUE_NUM) - FLOOR(ABS(F.VALUE_NUM))) as text), '0')")."+1-".$sqlHelper->getLengthFunction("cast(0.1 as text)").")"
 					)." VALUE_FRAC_LEN
 					,COUNT(DISTINCT F.ELEMENT_ID) ELEMENT_COUNT
 				FROM
@@ -495,23 +396,6 @@ class Facet
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Преобразует структурированный массив <code>$where</code> в условие для SQL-запроса или в пустую строку. Нестатический метод.</p>
-	*
-	*
-	* @param array $where  Структурированный массив условия.
-	*
-	* @param string $tableAlias  Таблица псевдонимов для использования в SQL-запросе.
-	*
-	* @param string $subsectionsCondition = "" Если строка не пуста, то она будет добавлена.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/wheretosql.php
-	* @author Bitrix
-	*/
 	public function whereToSql(array $where, $tableAlias, $subsectionsCondition = "")
 	{
 		$sqlWhere = "";
@@ -685,19 +569,6 @@ class Facet
 	 *
 	 * @return \Bitrix\Iblock\PropertyIndex\Facet
 	 */
-	
-	/**
-	* <p>Метод устанавливает параметры секции для дальнейшей фильтрации. Возвращает экземпляр этого объекта для цепочки вызовов. Нестатический метод.</p>
-	*
-	*
-	* @param integer $sectionId  Идентификатор секции.
-	*
-	* @return \Bitrix\Iblock\PropertyIndex\Facet 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/setsectionid.php
-	* @author Bitrix
-	*/
 	public function setSectionId($sectionId)
 	{
 		$this->sectionId = intval($sectionId);
@@ -713,19 +584,6 @@ class Facet
 	 *
 	 * @return \Bitrix\Iblock\PropertyIndex\Facet
 	 */
-	
-	/**
-	* <p>Метод устанавливает цены для дальнейшей фильтрации. Возвращает экземпляр этого объекта для цепочки вызовов. Нестатический метод.</p>
-	*
-	*
-	* @param array $prices  Массив идентификаторов цен.
-	*
-	* @return \Bitrix\Iblock\PropertyIndex\Facet 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/setprices.php
-	* @author Bitrix
-	*/
 	public function setPrices(array $prices)
 	{
 		$this->priceFilter = array();
@@ -770,23 +628,6 @@ class Facet
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод добавляет условие по числовому свойству для дальнейшей фильтрации. Нестатический метод.</p>
-	*
-	*
-	* @param integer $propertyId  Идентификатор свойства инфоблока.
-	*
-	* @param string $operator  Оператор сравнения.
-	*
-	* @param float $value  Значение для сравнения.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/addnumericpropertyfilter.php
-	* @author Bitrix
-	*/
 	public function addNumericPropertyFilter($propertyId, $operator, $value)
 	{
 		$facetId = $this->storage->propertyIdToFacetId($propertyId);
@@ -824,23 +665,6 @@ class Facet
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод добавляет условие по цене для дальнейшей фильтрации. Нестатический метод.</p>
-	*
-	*
-	* @param integer $priceId  Идентификатор свойства инфоблока.
-	*
-	* @param string $operator  Оператор сравнения.
-	*
-	* @param float $value  Значение для сравнения.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/addpricefilter.php
-	* @author Bitrix
-	*/
 	public function addPriceFilter($priceId, $operator, $value)
 	{
 		$facetId = $this->storage->priceIdToFacetId($priceId);
@@ -878,23 +702,6 @@ class Facet
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод добавляет условие по строковому свойству для дальнейшей фильтрации. Нестатический метод.</p>
-	*
-	*
-	* @param integer $propertyId  Идентификатор свойства инфоблока.
-	*
-	* @param string $operator  Оператор сравнения.
-	*
-	* @param float $value  Значение свойства для сравнения.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/adddictionarypropertyfilter.php
-	* @author Bitrix
-	*/
 	public function addDictionaryPropertyFilter($propertyId, $operator, $value)
 	{
 		$facetId = $this->storage->propertyIdToFacetId($propertyId);
@@ -925,23 +732,6 @@ class Facet
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод добавляет условие по свойству типа <b>Дата/Время</b> для дальнейшей фильтрации. Нестатический метод.</p>
-	*
-	*
-	* @param integer $propertyId  Идентификатор свойства инфоблока.
-	*
-	* @param string $operator  Оператор сравнения.
-	*
-	* @param float $value  Время в unix-формате.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/adddatetimepropertyfilter.php
-	* @author Bitrix
-	*/
 	public function addDatetimePropertyFilter($propertyId, $operator, $value)
 	{
 		$facetId = $this->storage->propertyIdToFacetId($propertyId);
@@ -991,17 +781,6 @@ class Facet
 	 *
 	 * @return boolean
 	 */
-	
-	/**
-	* <p>Метод возвращает <i>true</i>, если фильтры не были применены. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/isemptywhere.php
-	* @author Bitrix
-	*/
 	public function isEmptyWhere()
 	{
 		return empty($this->where);
@@ -1016,22 +795,6 @@ class Facet
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>После вызова данного метода все последующие запросы будут использовать сконвертированную валюту для фильтрации. Нестатический метод.</p> <p>Метод работает только при установленном модуле <b>Валюты</b>.</p>
-	*
-	*
-	* @param string $toCurrencyId  Идентификатор валюты для значений цен, передаваемых в метод
-	* <i>addPriceFilter</i>.
-	*
-	* @param array $convertCurrencyId  Массив идентификаторов допустимых валют.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/facet/enablecurrencyconversion.php
-	* @author Bitrix
-	*/
 	public function enableCurrencyConversion($toCurrencyId, array $convertCurrencyId)
 	{
 		if (\Bitrix\Main\Loader::includeModule('currency'))

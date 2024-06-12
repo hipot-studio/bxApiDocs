@@ -17,7 +17,7 @@ class Lift extends Base
 		$this->params["TYPE"] = "STRING";
 	}
 
-	static public function getClassTitle()
+	public static function getClassTitle()
 	{
 		return Loc::getMessage('SALE_DLVRS_ADD_ESL_TITLE');
 	}
@@ -75,7 +75,7 @@ class Lift extends Base
 				Loc::getMessage('SALE_DLVRS_ADD_ESL_KG').
 				'&nbsp;-&nbsp;'.
 				'<input type="text" size="5" name="'.$name.'[PARAMS][PRICES]['.$i.'][P]" value="'.$price.'">'.
-				(strlen($currency) > 0 ? " (".htmlspecialcharsbx($currency).")" : "").'<br>';
+				($currency <> '' ? " (".htmlspecialcharsbx($currency).")" : "").'<br>';
 		}
 
 		return $result;
@@ -86,7 +86,7 @@ class Lift extends Base
 		return "BX.onCustomEvent('onDeliveryExtraServiceValueChange', [{'id' : '".$id."', 'value': this.value, 'price': '0'}]);";
 	}
 
-	public static function prepareParamsToSave($params)
+	public static function prepareParamsToSave(array $params)
 	{
 		if(!isset($params["PARAMS"]["PRICES"]) || !is_array($params["PARAMS"]["PRICES"]))
 			return $params;

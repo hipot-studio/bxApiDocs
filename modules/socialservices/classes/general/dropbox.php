@@ -29,7 +29,7 @@ class CSocServDropboxAuth extends CSocServAuth
 		return $this->entityOAuth;
 	}
 
-	static public function GetSettings()
+	public function GetSettings()
 	{
 		return array(
 			array("dropbox_appid", GetMessage("socserv_dropbox_client_id"), "", array("text", 40)),
@@ -38,7 +38,7 @@ class CSocServDropboxAuth extends CSocServAuth
 		);
 	}
 
-	static public function GetFormHtml($arParams)
+	public function GetFormHtml($arParams)
 	{
 		$url = static::getUrl('opener', null, $arParams);
 
@@ -54,7 +54,7 @@ class CSocServDropboxAuth extends CSocServAuth
 		}
 	}
 
-	static public function GetOnClickJs($arParams)
+	public function GetOnClickJs($arParams)
 	{
 		$url = static::getUrl('opener', null, $arParams);
 		return "BX.util.popup('".CUtil::JSEscape($url)."', 680, 600)";
@@ -66,17 +66,26 @@ class CSocServDropboxAuth extends CSocServAuth
 		global $APPLICATION;
 
 		$this->entityOAuth = $this->getEntityOAuth();
-		CSocServAuthManager::SetUniqueKey();
 		if(IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
 		{
 			$redirect_uri = static::CONTROLLER_URL."/redirect.php";
-			$state = CDropboxOAuthInterface::GetRedirectURI()."?check_key=".$_SESSION["UNIQUE_KEY"]."&state=";
+			$state = CDropboxOAuthInterface::GetRedirectURI()."?check_key=".\CSocServAuthManager::getUniqueKey()."&state=";
 			$backurl = $APPLICATION->GetCurPageParam('', array("logout", "auth_service_error", "auth_service_id", "backurl"));
-			$state .= urlencode("state=".urlencode("backurl=".urlencode($backurl).'&mode='.$location.(isset($arParams['BACKURL']) ? '&redirect_url='.urlencode($arParams['BACKURL']) : '')));
+
+			$stateIntoState = 'mode=' . $location;
+			if (isset($arParams['BACKURL']))
+			{
+				$stateIntoState .= '&redirect_url=' . urlencode($arParams['BACKURL']);
+			}
+			else
+			{
+				$stateIntoState .= "&backurl=" . urlencode($backurl);
+			}
+			$state .= urlencode("state=" . urlencode($stateIntoState));
 		}
 		else
 		{
-			$state = 'site_id='.SITE_ID.'&backurl='.urlencode($APPLICATION->GetCurPageParam('check_key='.$_SESSION["UNIQUE_KEY"], array("logout", "auth_service_error", "auth_service_id", "backurl"))).'&mode='.$location.(isset($arParams['BACKURL']) ? '&redirect_url='.urlencode($arParams['BACKURL']) : '');
+			$state = 'site_id='.SITE_ID.'&backurl='.urlencode($APPLICATION->GetCurPageParam('check_key='.\CSocServAuthManager::getUniqueKey(), array("logout", "auth_service_error", "auth_service_id", "backurl"))).'&mode='.$location.(isset($arParams['BACKURL']) ? '&redirect_url='.urlencode($arParams['BACKURL']) : '');
 			$redirect_uri = CDropboxOAuthInterface::GetRedirectURI();
 		}
 
@@ -89,8 +98,11 @@ class CSocServDropboxAuth extends CSocServAuth
 		$userId = intval($this->userId);
 		if($userId > 0)
 		{
-			$dbSocservUser = CSocServAuthDB::GetList(array(), array('USER_ID' => $userId, "EXTERNAL_AUTH_ID" => static::ID), false, false, array("OATOKEN", "REFRESH_TOKEN", "OATOKEN_EXPIRES"));
-			if($arOauth = $dbSocservUser->Fetch())
+			$dbSocservUser = \Bitrix\Socialservices\UserTable::getList([
+				'filter' => ['=USER_ID' => $userId, "=EXTERNAL_AUTH_ID" => static::ID],
+				'select' => ["OATOKEN", "REFRESH_TOKEN", "OATOKEN_EXPIRES"]
+			]);
+			if($arOauth = $dbSocservUser->fetch())
 			{
 				$accessToken = $arOauth["OATOKEN"];
 			}
@@ -103,10 +115,10 @@ class CSocServDropboxAuth extends CSocServAuth
 	{
 		$first_name = "";
 		$last_name = "";
-		if(is_array($arDropboxUser['name_details']))
+		if(is_array($arDropboxUser['name']))
 		{
-			$first_name = $arDropboxUser['name_details']['given_name'];
-			$last_name = $arDropboxUser['name_details']['surname'];
+			$first_name = $arDropboxUser['name']['given_name'];
+			$last_name = $arDropboxUser['name']['surname'];
 		}
 
 		$id = $arDropboxUser['uid'];
@@ -122,7 +134,7 @@ class CSocServDropboxAuth extends CSocServAuth
 			'OATOKEN_EXPIRES' => $this->entityOAuth->getAccessTokenExpires(),
 		);
 
-		if(strlen(SITE_ID) > 0)
+		if(SITE_ID <> '')
 		{
 			$arFields["SITE_ID"] = SITE_ID;
 		}
@@ -186,7 +198,7 @@ class CSocServDropboxAuth extends CSocServAuth
 			if(isset($arState['backurl']) || isset($arState['redirect_url']))
 			{
 				$url = !empty($arState['redirect_url']) ? $arState['redirect_url'] : $arState['backurl'];
-				if(substr($url, 0, 1) !== "#")
+				if(mb_substr($url, 0, 1) !== "#")
 				{
 					$parseUrl = parse_url($url);
 
@@ -197,7 +209,7 @@ class CSocServDropboxAuth extends CSocServAuth
 					{
 						foreach($aRemove as $param)
 						{
-							if(strpos($value, $param."=") === 0)
+							if(mb_strpos($value, $param."=") === 0)
 							{
 								unset($arUrlQuery[$key]);
 								break;
@@ -229,7 +241,7 @@ class CSocServDropboxAuth extends CSocServAuth
 			$url = (isset($urlPath)) ? $urlPath.'?auth_service_id='.static::ID.'&auth_service_error='.$authError : $APPLICATION->GetCurPageParam(('auth_service_id='.static::ID.'&auth_service_error='.$authError), $aRemove);
 		}
 
-		if($addParams && CModule::IncludeModule("socialnetwork") && strpos($url, "current_fieldset=") === false)
+		if($addParams && CModule::IncludeModule("socialnetwork") && mb_strpos($url, "current_fieldset=") === false)
 		{
 			$url = (preg_match("/\?/", $url)) ? $url."&current_fieldset=SOCSERV" : $url."?current_fieldset=SOCSERV";
 		}
@@ -254,7 +266,7 @@ class CSocServDropboxAuth extends CSocServAuth
 
 		echo $JSScript;
 
-		die();
+		CMain::FinalActions();
 	}
 }
 
@@ -262,14 +274,14 @@ class CDropboxOAuthInterface extends CSocServOAuthTransport
 {
 	const SERVICE_ID = "Dropbox";
 
-	const AUTH_URL = "https://www.dropbox.com/1/oauth2/authorize";
-	const TOKEN_URL = "https://www.dropbox.com/1/oauth2/token";
+	const AUTH_URL = "https://www.dropbox.com/oauth2/authorize";
+	const TOKEN_URL = "https://www.dropbox.com/oauth2/token";
 
-	const ACCOUNT_URL = "https://api.dropbox.com/1/account/info";
+	const ACCOUNT_URL = "https://api.dropboxapi.com/2/users/get_current_account";
 
 	protected $oauthResult;
 
-	static public function __construct($appID = false, $appSecret = false, $code = false)
+	public function __construct($appID = false, $appSecret = false, $code = false)
 	{
 		if($appID === false)
 		{
@@ -284,7 +296,7 @@ class CDropboxOAuthInterface extends CSocServOAuthTransport
 		parent::__construct($appID, $appSecret, $code);
 	}
 
-	static public function GetRedirectURI()
+	public static function GetRedirectURI()
 	{
 		return \CHTTP::URN2URI("/bitrix/tools/oauth/dropbox.php");
 	}
@@ -354,13 +366,15 @@ class CDropboxOAuthInterface extends CSocServOAuthTransport
 
 		$h = new \Bitrix\Main\Web\HttpClient();
 		$h->setHeader("Authorization", "Bearer ".$this->access_token);
+		$h->setHeader("Content-Type", ""); // !!! Dropbox doest not accept empty POST requests with application/json or application/x-www-form-urlencoded types
 
-		$result = $h->get(static::ACCOUNT_URL);
+		$result = $h->post(static::ACCOUNT_URL);
 
 		$result = \Bitrix\Main\Web\Json::decode($result);
 
 		if(is_array($result))
 		{
+			$result["uid"] = $this->oauthResult['uid'];
 			$result["access_token"] = $this->access_token;
 		}
 

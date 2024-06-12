@@ -5,7 +5,7 @@ else
 	require($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/interface/epilog_auth_admin.php");
 
 
-// define("START_EXEC_EPILOG_AFTER_1", microtime());
+define("START_EXEC_EPILOG_AFTER_1", microtime());
 $GLOBALS["BX_STATE"] = "EA";
 
 if(!isset($USER))		{global $USER;}
@@ -25,10 +25,10 @@ $db_events = GetModuleEvents("main", "OnAfterEpilog");
 while($arEvent = $db_events->Fetch())
 	$arAllEvents[] = $arEvent;
 
-// define("START_EXEC_EVENTS_1", microtime());
+define("START_EXEC_EVENTS_1", microtime());
 $GLOBALS["BX_STATE"] = "EV";
 CMain::EpilogActions();
-// define("START_EXEC_EVENTS_2", microtime());
+define("START_EXEC_EVENTS_2", microtime());
 $GLOBALS["BX_STATE"] = "EA";
 
 for($i=0; $i<count($arAllEvents); $i++)

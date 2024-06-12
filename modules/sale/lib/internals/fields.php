@@ -13,6 +13,9 @@ class Fields
 	/** @var  array */
 	private $originalValues = array();
 
+	/** @var  array */
+	private $customFields = array();
+
 	/** @var bool  */
 	protected $isClone = false;
 
@@ -24,6 +27,15 @@ class Fields
 	}
 
 	/**
+	 * @param $name
+	 * @return bool
+	 */
+	public function isChanged($name)
+	{
+		return isset($this->changedValues[$name]);
+	}
+
+	/**
 	 * Returns any variable by its name. Null if variable is not set.
 	 *
 	 * @param string $name
@@ -31,12 +43,42 @@ class Fields
 	 */
 	public function get($name)
 	{
-		// this condition a bit faster
-		// it is possible to omit array_key_exists here, but for uniformity...
-		if (isset($this->values[$name]) || array_key_exists($name, $this->values))
+		if (isset($this->values[$name]))
+		{
 			return $this->values[$name];
+		}
 
 		return null;
+	}
+
+	/**
+	 * @param string $field
+	 */
+	public function markCustom(string $field)
+	{
+		$this->customFields[$field] = true;
+	}
+
+	/**
+	 * @param string $field
+	 * @return bool
+	 */
+	public function isMarkedCustom(string $field) : bool
+	{
+		if (!isset($this->customFields[$field]))
+		{
+			return false;
+		}
+
+		return $this->customFields[$field];
+	}
+
+	/**
+	 * @param string $field
+	 */
+	public function unmarkCustom(string $field)
+	{
+		$this->customFields[$field] = false;
 	}
 
 	/**
@@ -124,11 +166,28 @@ class Fields
 	 */
 	protected function markChanged($name, $value)
 	{
+		$originalValuesIndex = array();
+		if (!empty($this->originalValues))
+		{
+			foreach(array_keys($this->originalValues) as $originalKey)
+			{
+				$originalValuesIndex[$originalKey] = true;
+			}
+		}
+
 		$oldValue = $this->get($name);
 		if ($oldValue != $value || ($oldValue === null && $value !== null))
 		{
-			if (!array_key_exists($name, $this->originalValues))
+			if (!isset($originalValuesIndex[$name]))
+			{
 				$this->originalValues[$name] = $this->get($name);
+			}
+			elseif ($this->originalValues[$name] == $value)
+			{
+				unset($this->changedValues[$name]);
+				unset($this->originalValues[$name]);
+				return true;
+			}
 
 			$this->changedValues[$name] = true;
 			return true;
@@ -162,6 +221,7 @@ class Fields
 	/**
 	 * Return the current element
 	 */
+	#[\ReturnTypeWillChange]
 	public function current()
 	{
 		return current($this->values);
@@ -170,14 +230,15 @@ class Fields
 	/**
 	 * Move forward to next element
 	 */
-	public function next()
+	public function next(): void
 	{
-		return next($this->values);
+		next($this->values);
 	}
 
 	/**
 	 * Return the key of the current element
 	 */
+	#[\ReturnTypeWillChange]
 	public function key()
 	{
 		return key($this->values);
@@ -186,7 +247,7 @@ class Fields
 	/**
 	 * Checks if current position is valid
 	 */
-	public function valid()
+	public function valid(): bool
 	{
 		$key = $this->key();
 		return ($key != null);
@@ -195,9 +256,9 @@ class Fields
 	/**
 	 * Rewind the Iterator to the first element
 	 */
-	public function rewind()
+	public function rewind(): void
 	{
-		return reset($this->values);
+		reset($this->values);
 	}
 
 	/**
@@ -207,7 +268,7 @@ class Fields
 	 *
 	 * @return bool
 	 */
-	public function offsetExists($offset)
+	public function offsetExists($offset): bool
 	{
 		return isset($this->values[$offset]) || array_key_exists($offset, $this->values);
 	}
@@ -219,6 +280,7 @@ class Fields
 	 *
 	 * @return null|string
 	 */
+	#[\ReturnTypeWillChange]
 	public function offsetGet($offset)
 	{
 		return $this->get($offset);
@@ -230,7 +292,7 @@ class Fields
 	 * @param mixed $offset
 	 * @param mixed $value
 	 */
-	public function offsetSet($offset, $value)
+	public function offsetSet($offset, $value): void
 	{
 		$this->set($offset, $value);
 	}
@@ -240,7 +302,7 @@ class Fields
 	 *
 	 * @param mixed $offset
 	 */
-	public function offsetUnset($offset)
+	public function offsetUnset($offset): void
 	{
 		unset($this->values[$offset]);
 		if (isset($this->changedValues[$offset]))
@@ -250,7 +312,7 @@ class Fields
 	/**
 	 * Count elements of an object
 	 */
-	public function count()
+	public function count(): int
 	{
 		return count($this->values);
 	}
@@ -261,7 +323,7 @@ class Fields
 	 *
 	 * @return Fields
 	 */
-	public function createClone(\SplObjectStorage $cloneEntity)
+	public function createClone(\SplObjectStorage $cloneEntity): Fields
 	{
 		if ($this->isClone() && $cloneEntity->contains($this))
 		{
@@ -275,7 +337,7 @@ class Fields
 		{
 			$cloneEntity[$this] = $fieldsClone;
 		}
-		
+
 		return $fieldsClone;
 	}
 

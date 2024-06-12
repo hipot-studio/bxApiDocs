@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CList
@@ -8,18 +9,18 @@ class CList
 	var $new_ids = array();
 	protected $iblock_id = 0;
 
-	public function __construct($iblock_id)
+	function __construct($iblock_id)
 	{
 		$this->iblock_id = intval($iblock_id);
 		$this->fields = new CListFieldList($iblock_id);
 	}
 
-	public static function is_field($type_id)
+	function is_field($type_id)
 	{
 		return CListFieldTypeList::IsField($type_id);
 	}
 
-	public function is_readonly($field_id)
+	function is_readonly($field_id)
 	{
 		$obField = $this->fields->GetByID($field_id);
 		if(is_object($obField))
@@ -28,7 +29,7 @@ class CList
 			return false;
 	}
 
-	public function GetFields()
+	function GetFields()
 	{
 		$arFields = array();
 
@@ -38,12 +39,12 @@ class CList
 		return $arFields;
 	}
 
-	public static function GetAllTypes()
+	function GetAllTypes()
 	{
 		return CListFieldTypeList::GetTypesNames();
 	}
 
-	public function GetAvailableTypes($ID = "")
+	function GetAvailableTypes($ID = "")
 	{
 		$arTypeNames = CListFieldTypeList::GetTypesNames();
 		foreach($this->fields->GetFields() as $FIELD_ID)
@@ -52,22 +53,22 @@ class CList
 		return $arTypeNames;
 	}
 
-	public function DeleteField($field_id)
+	function DeleteField($field_id)
 	{
 		return $this->fields->DeleteField($field_id);
 	}
 
-	public function AddField($arFields)
+	function AddField($arFields)
 	{
 		return $this->fields->AddField($arFields);
 	}
 
-	public function GetNewID($TEMP_ID)
+	function GetNewID($TEMP_ID)
 	{
 		return $this->new_ids[$TEMP_ID];
 	}
 
-	public function UpdateField($field_id, $arFields)
+	function UpdateField($field_id, $arFields)
 	{
 		$arFields["NAME"] = trim($arFields["NAME"], " \n\r\t");
 		$this->new_ids[$field_id] = $this->fields->UpdateField($field_id, $arFields);
@@ -80,43 +81,46 @@ class CList
 
 	public static function UpdatePropertyList($prop_id, $list)
 	{
-		foreach($list as $id => $arEnum)
+		foreach ($list as $id => $arEnum)
 		{
-			$value = trim($arEnum["VALUE"], " \t\n\r");
-			if(strlen($value))
+			if (is_array($arEnum))
 			{
-				$dbEnum = CIBlockPropertyEnum::GetByID($id);
-				if(is_array($dbEnum))
+				$value = trim($arEnum["VALUE"], " \t\n\r");
+				if ((string) $value <> '')
 				{
-					$def = isset($arEnum["DEF"])? $arEnum["DEF"]: $dbEnum["DEF"];
-					$sort = intval($arEnum["SORT"]);
-					if(
-						$dbEnum["VALUE"] != $value
-						|| $dbEnum["SORT"] != $sort
-						|| $dbEnum["DEF"] != $def
-					)
+					$dbEnum = CIBlockPropertyEnum::GetByID($id);
+					if(is_array($dbEnum))
 					{
-						$dbEnum["VALUE"] = $value;
-						$dbEnum["SORT"] = $sort;
-						$dbEnum["DEF"] = $def;
-						unset($dbEnum["ID"]);
-						CIBlockPropertyEnum::Update($id, $dbEnum);
+						$def = isset($arEnum["DEF"])? $arEnum["DEF"] : $dbEnum["DEF"];
+						$sort = intval($arEnum["SORT"]);
+						if(
+							$dbEnum["VALUE"] != $value
+							|| $dbEnum["SORT"] != $sort
+							|| $dbEnum["DEF"] != $def
+						)
+						{
+							$dbEnum["VALUE"] = $value;
+							$dbEnum["SORT"] = $sort;
+							$dbEnum["DEF"] = $def;
+							unset($dbEnum["ID"]);
+							CIBlockPropertyEnum::Update($id, $dbEnum);
+						}
+					}
+					else
+					{
+						$arEnum["PROPERTY_ID"] = $prop_id;
+						CIBlockPropertyEnum::Add($arEnum);
 					}
 				}
 				else
 				{
-					$arEnum["PROPERTY_ID"] = $prop_id;
-					CIBlockPropertyEnum::Add($arEnum);
+					CIBlockPropertyEnum::Delete($id);
 				}
-			}
-			else
-			{
-				CIBlockPropertyEnum::Delete($id);
 			}
 		}
 	}
 
-	public function ActualizeDocumentAdminPage($url)
+	function ActualizeDocumentAdminPage($url)
 	{
 		global $DB;
 		static $urlCache = array();
@@ -130,7 +134,9 @@ class CList
 		if($urlCache[$this->iblock_id])
 		{
 			if($urlCache[$this->iblock_id]["URL"] != $url)
+			{
 				$DB->Query("UPDATE b_lists_url SET URL = '".$DB->ForSQL($url)."' WHERE IBLOCK_ID = ".$this->iblock_id);
+			}
 		}
 		else
 		{
@@ -160,14 +166,14 @@ class CList
 		if (
 			$arFields["MODULE_ID"] === "iblock"
 			&& $arFields["ITEM_ID"] > 0
-			&& substr($arFields["URL"], 0, 1) === "="
+			&& mb_substr($arFields["URL"], 0, 1) === "="
 		)
 		{
 			$url = self::getUrlByIblockId($arFields["PARAM2"]);
 			if ($url != "")
 			{
 				$arElement = array();
-				parse_str(substr($arFields["URL"], 1), $arElement);
+				parse_str(mb_substr($arFields["URL"], 1), $arElement);
 
 				return str_replace(
 					array("#section_id#", "#element_id#"),
@@ -198,4 +204,3 @@ class CList
 			return "";
 	}
 }
-?>

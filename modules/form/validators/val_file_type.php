@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CFormValidatorFileType
 {
-	public static function GetDescription()
+	function GetDescription()
 	{
 		return array(
 			"NAME" => "file_type", // unique validator string ID
@@ -16,7 +16,7 @@ class CFormValidatorFileType
 		);
 	}
 
-	public static function GetSettings()
+	function GetSettings()
 	{
 		return array(
 			"EXT" => array(
@@ -39,17 +39,17 @@ class CFormValidatorFileType
 		);
 	}
 
-	public static function ToDB($arParams)
+	function ToDB($arParams)
 	{
 		return serialize($arParams);
 	}
 
-	public static function FromDB($strParams)
+	function FromDB($strParams)
 	{
 		return unserialize($strParams);
 	}
 
-	public static function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
+	function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
 	{
 		global $APPLICATION;
 

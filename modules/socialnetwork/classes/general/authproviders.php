@@ -1,4 +1,8 @@
-<?
+<?php
+
+use Bitrix\Main\Text\Emoji;
+use Bitrix\Main\Application;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterface
@@ -7,28 +11,34 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 	{
 		$this->id = 'socnetgroup';
 	}
-	
+
 	public function UpdateCodes($USER_ID)
 	{
 		global $DB;
+
 		$USER_ID = intval($USER_ID);
 
-		$DB->Query("
-			INSERT INTO b_user_access (USER_ID, PROVIDER_ID, ACCESS_CODE)
-			SELECT ".$USER_ID.", '".$DB->ForSQL($this->id)."', ".$DB->Concat("'SG'", ($DB->type == "MSSQL" ? "CAST(U2G.GROUP_ID as varchar(17))": "U2G.GROUP_ID"), "'_'", "U2G.ROLE")."
-			FROM b_sonet_user2group U2G
-			WHERE U2G.USER_ID=".$USER_ID." AND U2G.ROLE IN ('A','E','K')
-			UNION
-			SELECT ".$USER_ID.", '".$DB->ForSQL($this->id)."', ".$DB->Concat("'SG'", ($DB->type == "MSSQL" ? "CAST(U2G.GROUP_ID as varchar(17))": "U2G.GROUP_ID"), "'_K'")."
-			FROM b_sonet_user2group U2G
-			WHERE U2G.USER_ID=".$USER_ID." AND U2G.ROLE IN ('A','E')
-			UNION
-			SELECT ".$USER_ID.", '".$DB->ForSQL($this->id)."', ".$DB->Concat("'SG'", ($DB->type == "MSSQL" ? "CAST(U2G.GROUP_ID as varchar(17))": "U2G.GROUP_ID"), "'_E'")."
-			FROM b_sonet_user2group U2G
-			WHERE U2G.USER_ID=".$USER_ID." AND U2G.ROLE IN ('A')
-		");
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+
+		$sql = $helper->getInsertIgnore(
+			'b_user_access',
+			'(USER_ID, PROVIDER_ID, ACCESS_CODE)',
+			"SELECT ".$USER_ID.", '".$DB->ForSQL($this->id)."', ".$DB->Concat("'SG'", "U2G.GROUP_ID", "'_'", "U2G.ROLE")."
+				FROM b_sonet_user2group U2G
+				WHERE U2G.USER_ID=".$USER_ID." AND U2G.ROLE IN ('A','E','K')
+				UNION
+				SELECT ".$USER_ID.", '".$DB->ForSQL($this->id)."', ".$DB->Concat("'SG'", "U2G.GROUP_ID", "'_K'")."
+				FROM b_sonet_user2group U2G
+				WHERE U2G.USER_ID=".$USER_ID." AND U2G.ROLE IN ('A','E')
+				UNION
+				SELECT ".$USER_ID.", '".$DB->ForSQL($this->id)."', ".$DB->Concat("'SG'", "U2G.GROUP_ID", "'_E'")."
+				FROM b_sonet_user2group U2G
+				WHERE U2G.USER_ID=".$USER_ID." AND U2G.ROLE IN ('A')"
+		);
+		$DB->Query($sql);
 	}
-	
+
 	public function AjaxRequest($arParams=false)
 	{
 		global $USER;
@@ -46,7 +56,7 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 			$arFilter["SITE_ID"] = $arParams["SITE_ID"];
 		}
 
-		if (!CSocNetUser::IsCurrentUserModuleAdmin($arParams["SITE_ID"], ($arParams["SITE_ID"] <> '' ? true : false)))
+		if (!CSocNetUser::IsCurrentUserModuleAdmin($arParams["SITE_ID"], $arParams["SITE_ID"] <> ''))
 		{
 			$arFilter["CHECK_PERMISSIONS"] = $USER->GetID();
 		}
@@ -58,8 +68,8 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 			$arItem = Array(
 				"ID" => "SG".$arGroup['ID'],
 				"AVATAR" => '/bitrix/js/main/core/images/access/avatar-user-everyone.png',
-				"NAME" => $arGroup['NAME'],
-				"DESC" => $arGroup['DESCRIPTION'],
+				"NAME" => Emoji::decode($arGroup['NAME']),
+				"DESC" => Emoji::decode($arGroup['DESCRIPTION']),
 				"CHECKBOX" => array(
 					"#ID#_A" => GetMessage("authprov_sg_a"),
 					"#ID#_E" => GetMessage("authprov_sg_e"),
@@ -73,9 +83,7 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 				{
 					$arFileTmp = CFile::ResizeImageGet(
 						$imageFile,
-						array("width" => 30, "height" => 30),
-						BX_RESIZE_IMAGE_PROPORTIONAL,
-						false
+						array("width" => 30, "height" => 30)
 					);
 					$arItem["AVATAR"] = $arFileTmp["src"];
 				}
@@ -91,7 +99,7 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 		global $USER;
 
 		if (
-			is_array($arParams["socnetgroups"])
+			is_array($arParams["socnetgroups"] ?? null)
 			&& $arParams["socnetgroups"]["disabled"] == "true"
 		)
 		{
@@ -100,7 +108,7 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 
 		$currElements = '';
 		if (
-			is_array($arParams[$this->id])
+			is_array($arParams[$this->id] ?? null)
 			&& ($group_id = intval($arParams[$this->id]["group_id"])) > 0
 		)
 		{
@@ -124,8 +132,8 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 				$arItem = Array(
 					"ID" => "SG".$arGroup['ID'],
 					"AVATAR" => '/bitrix/js/main/core/images/access/avatar-user-everyone.png',
-					"NAME" => $arGroup['NAME'],
-					"DESC" => $arGroup['DESCRIPTION'],
+					"NAME" => Emoji::decode($arGroup['NAME']),
+					"DESC" => Emoji::decode($arGroup['DESCRIPTION']),
 					"OPEN" => "Y",
 					"CHECKBOX" => array(
 						"#ID#_A" => GetMessage("authprov_sg_a"),
@@ -140,9 +148,7 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 					{
 						$arFileTmp = CFile::ResizeImageGet(
 							$imageFile,
-							array("width" => 30, "height" => 30),
-							BX_RESIZE_IMAGE_PROPORTIONAL,
-							false
+							array("width" => 30, "height" => 30)
 						);
 						$arItem["AVATAR"] = $arFileTmp["src"];
 					}
@@ -161,15 +167,13 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 
 		if (!empty($arLRU))
 		{
-			$arLast = array();
 			$arLastID = array();
 			$arElements = array();
 
-			foreach($arLRU as $val) 
+			foreach($arLRU as $val)
 			{
 				if (preg_match('/^SG([0-9]+)_([A-Z])/', $val, $match))
 				{
-					$arLast[$match[2]][$match[1]] = $match[1];
 					$arLastID[$match[1]] = $match[1];
 				}
 			}
@@ -195,8 +199,8 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 					$arItem = Array(
 						"ID" => $arGroup['ID'],
 						"AVATAR" => '/bitrix/js/main/core/images/access/avatar-user-everyone.png',
-						"NAME" => $arGroup['NAME'],
-						"DESC" => $arGroup['DESCRIPTION'],
+						"NAME" => Emoji::decode($arGroup['NAME']),
+						"DESC" => Emoji::decode($arGroup['DESCRIPTION']),
 					);
 					if($arGroup["IMAGE_ID"])
 					{
@@ -205,9 +209,7 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 						{
 							$arFileTmp = CFile::ResizeImageGet(
 								$imageFile,
-								array("width" => 30, "height" => 30),
-								BX_RESIZE_IMAGE_PROPORTIONAL,
-								false
+								array("width" => 30, "height" => 30)
 							);
 							$arItem["AVATAR"] = $arFileTmp["src"];
 						}
@@ -215,7 +217,7 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 					$arElements[$arItem['ID']] = $arItem;
 				}
 
-				foreach($arLRU as $val) 
+				foreach($arLRU as $val)
 				{
 					if (preg_match('/^SG([0-9]+)_([A-Z])/', $val, $match))
 					{
@@ -288,16 +290,14 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 				{
 					$arFileTmp = CFile::ResizeImageGet(
 						$imageFile,
-						array("width" => 30, "height" => 30),
-						BX_RESIZE_IMAGE_PROPORTIONAL,
-						false
+						array("width" => 30, "height" => 30)
 					);
 					$arItem["AVATAR"] = $arFileTmp["src"];
 				}
 			}
 			$myElements .= CFinder::GetFinderItem($arFinderParams, $arItem);
 		}
-		
+
 		$arPanels = array();
 		if($currElements <> '')
 		{
@@ -324,7 +324,7 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 		return array("HTML"=>$html, "SELECTED"=>($currElements <> ''));
 	}
 
-	static public function GetNames($arCodes)
+	public function GetNames($arCodes)
 	{
 		$arID = array();
 		foreach ($arCodes as $code)
@@ -341,9 +341,9 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 			$rsGroups = CSocNetGroup::GetList(array(), array("ID"=>$arID));
 			while($arGroup = $rsGroups->Fetch())
 			{
-				$arResult["SG".$arGroup["ID"]."_A"] = array("provider" => GetMessage("authprov_sg_socnet_group"), "name"=>$arGroup["NAME"].": ".GetMessage("authprov_sg_a"));
-				$arResult["SG".$arGroup["ID"]."_E"] = array("provider" => GetMessage("authprov_sg_socnet_group"), "name"=>$arGroup["NAME"].": ".GetMessage("authprov_sg_e"));
-				$arResult["SG".$arGroup["ID"]."_K"] = array("provider" => GetMessage("authprov_sg_socnet_group"), "name"=>$arGroup["NAME"].": ".GetMessage("authprov_sg_k"));
+				$arResult["SG".$arGroup["ID"]."_A"] = array("provider" => GetMessage("authprov_sg_socnet_group"), "name"=> Emoji::decode($arGroup["NAME"]) .": ".GetMessage("authprov_sg_a"));
+				$arResult["SG".$arGroup["ID"]."_E"] = array("provider" => GetMessage("authprov_sg_socnet_group"), "name"=> Emoji::decode($arGroup["NAME"]) .": ".GetMessage("authprov_sg_e"));
+				$arResult["SG".$arGroup["ID"]."_K"] = array("provider" => GetMessage("authprov_sg_socnet_group"), "name"=> Emoji::decode($arGroup["NAME"]) .": ".GetMessage("authprov_sg_k"));
 			}
 			return $arResult;
 		}
@@ -356,7 +356,7 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 			array(
 				"ID" => "socnetgroup",
 				"NAME" => GetMessage("authprov_sg_name"),
-				"PROVIDER_NAME" => GetMessage("authprov_sg_socnet_group"), 
+				"PROVIDER_NAME" => GetMessage("authprov_sg_socnet_group"),
 				"SORT" => 400,
 				"CLASS" => "CSocNetGroupAuthProvider",
 			),
@@ -382,14 +382,21 @@ class CSocNetUserAuthProvider extends CAuthProvider
 		{
 			$USER_ID = intval($USER_ID);
 
+			$connection = Application::getConnection();
+			$helper = $connection->getSqlHelper();
+
 			$dbFriends = CSocNetUserRelations::GetRelatedUsers($USER_ID, SONET_RELATIONS_FRIEND);
 			while ($arFriends = $dbFriends->Fetch())
 			{
 				$friendID = (($USER_ID == $arFriends["FIRST_USER_ID"]) ? $arFriends["SECOND_USER_ID"] : $arFriends["FIRST_USER_ID"]);
-				$DB->Query("INSERT INTO b_user_access (USER_ID, PROVIDER_ID, ACCESS_CODE) VALUES 
-					(".$friendID.", '".$DB->ForSQL($this->id)."', 'SU".$USER_ID."_".SONET_RELATIONS_TYPE_FRIENDS."')");
+
+				$sql = $helper->getInsertIgnore(
+					'b_user_access',
+					'(USER_ID, PROVIDER_ID, ACCESS_CODE)',
+					"VALUES (".(int)$friendID.", '".$DB->ForSQL($this->id)."', 'SU".$USER_ID."_".SONET_RELATIONS_TYPE_FRIENDS."')"
+				);
+				$DB->Query($sql);
 			}
 		}
 	}
 }
-?>

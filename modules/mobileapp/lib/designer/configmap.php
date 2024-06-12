@@ -26,7 +26,7 @@ class ConfigMap
 	 * @return array|mixed
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function __construct()
+	function __construct()
 	{
 		$this->createMap();
 	}
@@ -61,7 +61,7 @@ class ConfigMap
 		}
 	}
 
-	static public function getMap()
+	public function getMap()
 	{
 
 		if (!self::$configMap)
@@ -97,18 +97,20 @@ class ConfigMap
 
 	public function getParamDescription($name, $type)
 	{
-		$desc = ParameterType::getDesc($type);
-		if ($type == ParameterType::VALUE_LIST)
+		if(is_array($type))
 		{
-			$desc["list"] = $this->getValueList($name);
+			$typeParam = ParameterType::getDesc($type["type"]);
+			$desc = array_merge($type,$typeParam);
+		}
+		else
+		{
+			$desc = ParameterType::getDesc($type);
 		}
 
 		if (!self::isGroup($name))
 		{
 			$desc["parent"] = $this->getGroupByParam($name);
 		}
-
-		$desc["limits"] = $this->getLimits($name);;
 
 		return $desc;
 	}
@@ -199,7 +201,7 @@ class ConfigMap
 		{
 			foreach ($groups as $group)
 			{
-				if (strpos($paramName, $group) === 0)
+				if (mb_strpos($paramName, $group) === 0)
 				{
 					return $group;
 				}
@@ -213,7 +215,7 @@ class ConfigMap
 	 * Gets lang messages
 	 * @return array
 	 */
-	static public function getLangMessages()
+	public function getLangMessages()
 	{
 		return Loc::loadLanguageFile(Path::normalize(__FILE__));
 	}
@@ -223,7 +225,7 @@ class ConfigMap
 	 * @param $paramName
 	 * @return bool
 	 */
-	static public function has($paramName)
+	public function has($paramName)
 	{
 		return array_key_exists($paramName, self::getDescriptionConfig());
 	}

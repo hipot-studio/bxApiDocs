@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Security\Mfa;
 
 use Bitrix\Main\Application;
@@ -10,8 +11,9 @@ use Bitrix\Main\Type;
 use Bitrix\Main\Security\Sign\BadSignatureException;
 use Bitrix\Main\Security\Sign\TimeSigner;
 use Bitrix\Main\Security\Random;
-use Bitrix\Security\Codec\Base32;
-
+use Bitrix\Main\Text\Base32;
+use Bitrix\Main\Security\Mfa\OtpAlgorithm;
+use Bitrix\Main\Authentication\Policy;
 
 Loc::loadMessages(__FILE__);
 
@@ -32,18 +34,21 @@ class Otp
 
 	protected static $availableTypes = array(self::TYPE_HOTP, self::TYPE_TOTP);
 	protected static $typeMap = array(
-		self::TYPE_HOTP => '\Bitrix\Security\Mfa\HotpAlgorithm',
-		self::TYPE_TOTP => '\Bitrix\Security\Mfa\TotpAlgorithm',
+		self::TYPE_HOTP => '\Bitrix\Main\Security\Mfa\HotpAlgorithm',
+		self::TYPE_TOTP => '\Bitrix\Main\Security\Mfa\TotpAlgorithm',
 	);
 	protected $algorithmClass = null;
+	protected array $initParams = [];
 	protected $regenerated = false;
 	/* @var \Bitrix\Main\Context $context */
 	protected $context = null;
 
 	protected $userId = null;
 	protected $userLogin = null;
-	protected $userGroupPolicy = array();
+	/* @var Policy\RulesCollection*/
+	protected $userGroupPolicy;
 	protected $active = null;
+	protected $userActive = null;
 	protected $secret = null;
 	protected $issuer = null;
 	protected $label = null;
@@ -79,19 +84,6 @@ class Otp
 	 * @throws ArgumentTypeException
 	 * @return static New instance, if user does not use OTP - returning NullObject (see Otp::isActivated).
 	 */
-	
-	/**
-	* <p>Статический метод возвращает новый экземпляр для пользователя по его ID.</p>
-	*
-	*
-	* @param integer $userId  ID пользователя.
-	*
-	* @return static 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getbyuser.php
-	* @author Bitrix
-	*/
 	public static function getByUser($userId)
 	{
 		$userId = (int) $userId;
@@ -101,7 +93,7 @@ class Otp
 
 		$userInfo = UserTable::getList(array(
 			'filter' => array('=USER_ID' => $userId),
-			'select' => array('ACTIVE', 'USER_ID', 'SECRET', 'PARAMS', 'TYPE', 'ATTEMPTS', 'INITIAL_DATE', 'SKIP_MANDATORY', 'DEACTIVATE_UNTIL')
+			'select' => array('ACTIVE', 'USER_ID', 'SECRET', 'INIT_PARAMS', 'PARAMS', 'TYPE', 'ATTEMPTS', 'INITIAL_DATE', 'SKIP_MANDATORY', 'DEACTIVATE_UNTIL', 'USER_ACTIVE' => 'USER.ACTIVE')
 		));
 
 		$userInfo = $userInfo->fetch();
@@ -115,9 +107,10 @@ class Otp
 		}
 		else
 		{
-			$type = $userInfo['TYPE']?: self::TYPE_DEFAULT;
+			$type = $userInfo['TYPE'] ?: self::TYPE_DEFAULT;
 			$userInfo['SECRET'] = pack('H*', $userInfo['SECRET']);
-			$userInfo['ACTIVE'] = $userInfo['ACTIVE'] === 'Y';
+			$userInfo['ACTIVE'] = ($userInfo['ACTIVE'] === 'Y');
+			$userInfo['USER_ACTIVE'] = ($userInfo['USER_ACTIVE'] === 'Y');
 			$userInfo['SKIP_MANDATORY'] = $userInfo['SKIP_MANDATORY'] === 'Y';
 
 			$instance = static::getByType($type);
@@ -131,24 +124,9 @@ class Otp
 	 * Return new instance with needed OtpAlgorithm type
 	 *
 	 * @param string $type Type of OtpAlgorithm (see getAvailableTypes).
-	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
+	 * @throws ArgumentOutOfRangeException
 	 * @return static New instance
 	 */
-	
-	/**
-	* <p>Статический метод возвращает новый экземпляр с необходимым алгоритмом OTP.</p>
-	*
-	*
-	* @param string $type  Тип OTP (см. <a
-	* href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getavailabletypes.php">getAvailableTypes</a> -
-	* <code>\Bitrix\Security\Mfa\Otp::getAvailableTypes</code>).
-	*
-	* @return static 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getbytype.php
-	* @author Bitrix
-	*/
 	public static function getByType($type)
 	{
 		if (!in_array($type, static::$availableTypes))
@@ -167,21 +145,6 @@ class Otp
 	 * @throws ArgumentOutOfRangeException
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает новый тип алгоритма OTP.</p>
-	*
-	*
-	* @param string $type  Тип алгоритма (см. <a
-	* href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getavailabletypes.php">getAvailableTypes</a> -
-	* <code>\Bitrix\Security\Mfa\Otp::getAvailableTypes</code>).
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/settype.php
-	* @author Bitrix
-	*/
 	public function setType($type)
 	{
 		if (!in_array($type, static::$availableTypes))
@@ -194,21 +157,32 @@ class Otp
 	}
 
 	/**
+	 * Sets initialization parameters for algorithms.
+	 *
+	 * @param array $params
+	 * @return $this
+	 */
+	public function setInitParams(array $params)
+	{
+		$this->initParams = $params;
+		return $this;
+	}
+
+	/**
+	 * Returns initialization parameters for algorithms.
+	 *
+	 * @return array
+	 */
+	public function getInitParams(): array
+	{
+		return $this->initParams;
+	}
+
+	/**
 	 * Return used OtpAlgorithm type
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает использованный тип алгоритма OTP.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/gettype.php
-	* @author Bitrix
-	*/
 	public function getType()
 	{
 		return $this->type;
@@ -219,22 +193,13 @@ class Otp
 	 *
 	 * @return OtpAlgorithm
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает инстанс использованного алгоритма OTP.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Security\Mfa\OtpAlgorithm 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getalgorithm.php
-	* @author Bitrix
-	*/
 	public function getAlgorithm()
 	{
 		/** @var OtpAlgorithm $algorithm */
-		$algorithm = new $this->algorithmClass;
-		return $algorithm->setSecret($this->getSecret());
+		$algorithm = new $this->algorithmClass($this->getInitParams());
+		$algorithm->setSecret($this->getSecret());
+
+		return $algorithm;
 	}
 
 	/**
@@ -244,19 +209,6 @@ class Otp
 	 * @param array $opts Additional URI parameters, e.g. ['image' => 'http://example.com/my_logo.png'] .
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает URI для подключения мобильного приложения в соответствии с <i>KeyUriFormat</i>.</p>
-	*
-	*
-	* @param array $arrayopts = array() Дополнительные параметры URI.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getprovisioninguri.php
-	* @author Bitrix
-	*/
 	public function getProvisioningUri(array $opts = array())
 	{
 		$issuer = $this->getIssuer();
@@ -276,19 +228,6 @@ class Otp
 	 * @param null $newSecret Using custom secret.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод заново инициализирует OTP (генерируется новый случайный токен (секрет), устанавливается стандартный алгоритм и т.д.). Должен быть вызван перед подключением нового устройства.</p>
-	*
-	*
-	* @param null $newSecret = null Используемый пользовательский секрет.
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/regenerate.php
-	* @author Bitrix
-	*/
 	public function regenerate($newSecret = null)
 	{
 		if (!$newSecret)
@@ -316,27 +255,9 @@ class Otp
 	 * @param bool $updateParams Update or not user parameters in DB (e.g. counter for HotpAlgorithm).
 	 * @return bool True if input is valid.
 	 */
-	
-	/**
-	* <p>Нестатический метод подтверждает введенные пользователем данные.</p>
-	*
-	*
-	* @param string $input  Введенные пользователем данные.
-	*
-	* @param boolean $updateParams = true Нужно ли обновлять параметры пользователя в базе данных
-	* (например счетчик для <a
-	* href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/hotpalgorithm/index.php">HotpAlgorithm</a> -
-	* <code>\Bitrix\Security\Mfa\HotpAlgorithm</code>).
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/verify.php
-	* @author Bitrix
-	*/
 	public function verify($input, $updateParams = true)
 	{
-		list($result, $newParams) = $this->getAlgorithm()->verify($input, $this->getParams());
+		[$result, $newParams] = $this->getAlgorithm()->verify($input, $this->getParams());
 
 		if (
 			$updateParams
@@ -358,22 +279,11 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод проверяет достигнуто ли количество попыток авторизации, разрешенное политикой безопасности. Может быть использовано, например, для показа Captcha.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/isattemptsreached.php
-	* @author Bitrix
-	*/
 	public function isAttemptsReached()
 	{
 		$attempts  = $this->getAttempts();
 		$maxAttempts = $this->getMaxLoginAttempts();
-		return (bool) (
+		return (
 			$maxAttempts > 0
 			&& $attempts >= $maxAttempts
 		);
@@ -384,23 +294,9 @@ class Otp
 	 *
 	 * @param string $inputA First code.
 	 * @param string $inputB Second code.
+	 * @throws \Bitrix\Main\Security\OtpException
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает синхронизированные параметры пользователя для предоставленного ввода.</p>
-	*
-	*
-	* @param string $inputA  Первый код.
-	*
-	* @param string $inputB  Второй код.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getsyncparameters.php
-	* @author Bitrix
-	*/
 	public function getSyncParameters($inputA, $inputB)
 	{
 		return $this->getAlgorithm()->getSyncParameters((string) $inputA, (string) $inputB);
@@ -416,23 +312,6 @@ class Otp
 	 * @throws OtpException
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод синхронизирует пользовательские параметры для предоставленного ввода. Может быть вызван после генерации и перед сохранением. Если что-то выполнено неправильно, выводится <code>OtpException</code>  с правильным описанием в сообщении.</p>
-	*
-	*
-	* @param string $inputA  Первый код.
-	*
-	* @param string $string  Второй код.
-	*
-	* @param null $inputB = null 
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/syncparameters.php
-	* @author Bitrix
-	*/
 	public function syncParameters($inputA, $inputB = null)
 	{
 		if (!$inputA)
@@ -452,7 +331,7 @@ class Otp
 		{
 			$params = $this->getSyncParameters($inputA, $inputB);
 		}
-		catch (OtpException $e)
+		catch (\Bitrix\Main\Security\OtpException)
 		{
 			throw new OtpException(Loc::getMessage('SECURITY_OTP_ERROR_SYNC_ERROR'));
 		}
@@ -468,22 +347,12 @@ class Otp
 	 * @throws OtpException
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод сохраняет все данные OTP в базу данных.</p> <p>Без параметров</p>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/save.php
-	* @author Bitrix
-	*/
 	public function save()
 	{
 		$fields = array(
 			'ACTIVE' => $this->isActivated()? 'Y': 'N',
 			'TYPE' => $this->getType(),
+			'INIT_PARAMS' => $this->getInitParams(),
 			'ATTEMPTS' => $this->getAttempts(),
 			'SECRET' => $this->getHexSecret(),
 			'INITIAL_DATE' => $this->getInitialDate()?: new Type\DateTime,
@@ -500,7 +369,6 @@ class Otp
 			// Clear recovery codes when we connect new device
 			RecoveryCodesTable::clearByUser($this->getUserId());
 		}
-
 
 		if ($this->isDbRecordExists())
 		{
@@ -524,17 +392,6 @@ class Otp
 	 *
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод удаляет записи OTP из базы данных.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/delete.php
-	* @author Bitrix
-	*/
 	public function delete()
 	{
 		UserTable::delete($this->getUserId());
@@ -543,23 +400,12 @@ class Otp
 	}
 
 	/**
-	 * Activate user OTP
-	 * OTP must be initialized (have secret, params, etc) before activate
+	 * Activates user's OTP.
+	 * OTP must be initialized (have secret, params, etc.) before activate
 	 *
 	 * @return $this
 	 * @throws OtpException
 	 */
-	
-	/**
-	* <p>Нестатический метод активирует OTP для пользователя. OTP должен быть инициализирован (секрет, параметры и т.д.) перед активацией.</p> <p>Без параметров</p>
-	*
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/activate.php
-	* @author Bitrix
-	*/
 	public function activate()
 	{
 		if (!$this->isInitialized())
@@ -580,26 +426,13 @@ class Otp
 	 * @return $this
 	 * @throws OtpException
 	 */
-	
-	/**
-	* <p>Нестатический метод деактивирует OTP для пользователя на необходимое количество дней или навсегда.</p>
-	*
-	*
-	* @param integer $days  Количество дней. 0 значит навсегда.
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/deactivate.php
-	* @author Bitrix
-	*/
 	public function deactivate($days = 0)
 	{
 		if (!$this->isActivated())
 			throw new OtpException('Otp not activated. Do your mean deffer?');
 
 		$this->setActive(false);
-		$this->setSkipMandatory(true);
+		$this->setSkipMandatory();
 
 		if ($days <= 0)
 		{
@@ -623,25 +456,12 @@ class Otp
 	 * @return $this
 	 * @throws OtpException
 	 */
-	
-	/**
-	* <p>Нестатический метод откладывает обязательное подключение OTP на необходимое количество дней или навсегда.</p>
-	*
-	*
-	* @param integer $days  Количество дней. 0 значит навсегда.
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/defer.php
-	* @author Bitrix
-	*/
 	public function defer($days = 0)
 	{
 		if ($this->isActivated())
 			throw new OtpException('Otp already activated. Do your mean deactivate?');
 
-		$this->setSkipMandatory(true);
+		$this->setSkipMandatory();
 		if ($days <= 0)
 		{
 			$this->setDeactivateUntil(null);
@@ -671,27 +491,18 @@ class Otp
 	 * @param array $userInfo See above.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает новую пользовательскую информацию. Наиболее часто используется для инициализации в базе данных. Поддерживаются:</p> <p>- <code>ACTIVE: bool</code>, статус активации (см. <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setactive.php">setActive</a> - <code>\Bitrix\Security\Mfa\Otp::setActive</code>);</p> <p>- <code>USER_ID: integer</code>, ID пользователя (см. <code>setUserId</code>);</p> <p>- <code>ATTEMPTS: integer</code>, счетчик попыток (см. <code>setAttempts</code>);</p> <p>- <code>SECRET: binary</code>, токен пользователя (см. <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setsecret.php">setSecret</a> - <code>\Bitrix\Security\Mfa\Otp::setSecret</code>);</p> <p>- <code>PARAMS: string</code>, параметры пользователя (см. <code>setParams</code> и <code>getSyncParameters</code>);</p> <p>- <code>INITIAL_DATE: Type\Date</code>, дата инициализации OTP (см. <code>setInitialDate</code>).</p>
-	*
-	*
-	* @param array $userInfo  Пользовательская информация.
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setuserinfo.php
-	* @author Bitrix
-	*/
 	public function setUserInfo(array $userInfo)
 	{
-		$this->setActive($userInfo['ACTIVE']);
-		$this->setUserId($userInfo['USER_ID']);
-		$this->setAttempts($userInfo['ATTEMPTS']);
-		$this->setSecret($userInfo['SECRET']);
-		$this->setParams($userInfo['PARAMS']);
-		$this->setSkipMandatory($userInfo['SKIP_MANDATORY']);
+		$this
+			->setActive($userInfo['ACTIVE'])
+			->setUserActive($userInfo['USER_ACTIVE'])
+			->setUserId($userInfo['USER_ID'])
+			->setAttempts($userInfo['ATTEMPTS'])
+			->setSecret($userInfo['SECRET'])
+			->setInitParams($userInfo['INIT_PARAMS'])
+			->setParams($userInfo['PARAMS'])
+			->setSkipMandatory($userInfo['SKIP_MANDATORY'])
+		;
 
 		// Old users haven't INITIAL_DATE and DEACTIVATE_UNTIL
 		// ToDo: maybe it's not the best approach, think about it later
@@ -722,17 +533,6 @@ class Otp
 	 *
 	 * @return Type\DateTime
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает дату инициализации OTP.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Main\Type\DateTime 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getinitialdate.php
-	* @author Bitrix
-	*/
 	public function getInitialDate()
 	{
 		return $this->initialDate;
@@ -777,17 +577,6 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает <code>true</code>, если обязательное использование OTP может быть пользователем пропущено.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/ismandatoryskipped.php
-	* @author Bitrix
-	*/
 	public function isMandatorySkipped()
 	{
 		return $this->skipMandatory;
@@ -825,17 +614,6 @@ class Otp
 	 *
 	 * @return int
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает ID пользователя, привязанного к инстансу OTP.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getuserid.php
-	* @author Bitrix
-	*/
 	public function getUserId()
 	{
 		return (int) $this->userId;
@@ -847,19 +625,6 @@ class Otp
 	 * @param bool $isActive Otp is activated or not.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает новый статус активации.</p>
-	*
-	*
-	* @param boolean $isActive  Активирован ли OTP.
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setactive.php
-	* @author Bitrix
-	*/
 	public function setActive($isActive)
 	{
 		$this->active = $isActive;
@@ -872,20 +637,21 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод определяет, активно OTP или нет.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/isactivated.php
-	* @author Bitrix
-	*/
 	public function isActivated()
 	{
 		return (bool) $this->active;
+	}
+
+	public function setUserActive($isActive)
+	{
+		$this->userActive = $isActive;
+
+		return $this;
+	}
+
+	public function isUserActive()
+	{
+		return (bool) $this->userActive;
 	}
 
 	/**
@@ -921,17 +687,6 @@ class Otp
 	 *
 	 * @return int
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает счетчик количества попыток подтверждения.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getattempts.php
-	* @author Bitrix
-	*/
 	public function getAttempts()
 	{
 		return (int) $this->attempts;
@@ -956,17 +711,6 @@ class Otp
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает пользовательские параметры (например счетчик для <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/hotpalgorithm/index.php">HotpAlgorithm</a> - <code>\Bitrix\Security\Mfa\HotpAlgorithm</code>).</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getparams.php
-	* @author Bitrix
-	*/
 	public function getParams()
 	{
 		return (string) $this->params;
@@ -977,17 +721,6 @@ class Otp
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает сгенерированный секрет.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getsecret.php
-	* @author Bitrix
-	*/
 	public function getSecret()
 	{
 		return $this->secret;
@@ -998,17 +731,6 @@ class Otp
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает секрет, перекодированный в шестнадцатеричную систему счисления.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/gethexsecret.php
-	* @author Bitrix
-	*/
 	public function getHexSecret()
 	{
 		$secret = $this->getSecret();
@@ -1021,17 +743,6 @@ class Otp
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает сгенерированный токен мобильного приложения, использующийся для ручной инициализации устройства.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getappsecret.php
-	* @author Bitrix
-	*/
 	public function getAppSecret()
 	{
 		$secret = $this->getSecret();
@@ -1046,19 +757,6 @@ class Otp
 	 * @param string $secret Binary secret.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает новый секрет.</p>
-	*
-	*
-	* @param string $secret  Двоичный секрет.
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setsecret.php
-	* @author Bitrix
-	*/
 	public function setSecret($secret)
 	{
 		$this->secret = $secret;
@@ -1071,19 +769,6 @@ class Otp
 	 * @param string $hexValue Hex-encoded secret.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает новый секрет в шестнадцатеричной системе счисления.</p>
-	*
-	*
-	* @param string $hexValue  Секрет в шестнадцатеричной системе счисления.
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/sethexsecret.php
-	* @author Bitrix
-	*/
 	public function setHexSecret($hexValue)
 	{
 		$secret = pack('H*', $hexValue);
@@ -1097,19 +782,6 @@ class Otp
 	 * @param string $value Secret.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает новый секрет мобильного приложения.</p>
-	*
-	*
-	* @param string $value  Секрет.
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setappsecret.php
-	* @author Bitrix
-	*/
 	public function setAppSecret($value)
 	{
 		$secret = Base32::decode($value);
@@ -1123,17 +795,6 @@ class Otp
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает параметр идентификации провайдера или сервиса. Если пользовательский параметр недоступен, то будет возвращен установленный по умолчанию (см. <code>getDefaultIssuer</code>).</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getissuer.php
-	* @author Bitrix
-	*/
 	public function getIssuer()
 	{
 		if ($this->issuer === null)
@@ -1148,19 +809,6 @@ class Otp
 	 * @param string $issuer Issuer.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает пользовательский параметр идентификации провайдера или сервиса.</p>
-	*
-	*
-	* @param string $issuer  Параметр.
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setissuer.php
-	* @author Bitrix
-	*/
 	public function setIssuer($issuer)
 	{
 		$this->issuer = $issuer;
@@ -1174,21 +822,6 @@ class Otp
 	 * @param string|null $issuer Issuer.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает метку для параметра идентификации провайдера или сервиса (если он доступен). Если пользовательская метка недоступна, то генерируется установленная по умолчанию (см. <code>generateLabel</code>).</p>
-	*
-	*
-	* @param mixed $string  Параметр.
-	*
-	* @param null $issuer = null 
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getlabel.php
-	* @author Bitrix
-	*/
 	public function getLabel($issuer = null)
 	{
 		if ($this->label === null)
@@ -1203,19 +836,6 @@ class Otp
 	 * @param string $label Label.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает пользовательскую метку.</p>
-	*
-	*
-	* @param string $label  Метка.
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setlabel.php
-	* @author Bitrix
-	*/
 	public function setLabel($label)
 	{
 		$this->label = $label;
@@ -1227,17 +847,6 @@ class Otp
 	 *
 	 * @return \Bitrix\Main\Context
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает контекст текущего запроса.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Main\Context 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getcontext.php
-	* @author Bitrix
-	*/
 	public function getContext()
 	{
 		if ($this->context === null)
@@ -1250,25 +859,8 @@ class Otp
 	 * Set context of the current request.
 	 *
 	 * @param \Bitrix\Main\Context $context Application context.
-	 * @return \Bitrix\Main\Context
+	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатичесский метод устанавливает контекст текущего запроса.</p>
-	*
-	*
-	* @param mixed $Bitrix  Контекст приложения.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Context $context  
-	*
-	* @return \Bitrix\Main\Context 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setcontext.php
-	* @author Bitrix
-	*/
 	public function setContext(\Bitrix\Main\Context $context)
 	{
 		$this->context = $context;
@@ -1281,19 +873,6 @@ class Otp
 	 * @param string $login Login.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает пользовательский логин.</p>
-	*
-	*
-	* @param string $login  Логин.
-	*
-	* @return \Bitrix\Security\Mfa\Otp 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setuserlogin.php
-	* @author Bitrix
-	*/
 	public function setUserLogin($login)
 	{
 		$this->userLogin = $login;
@@ -1307,17 +886,6 @@ class Otp
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает логин пользователя. Если он будет недоступен, то будет вызван из базы данных.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getuserlogin.php
-	* @author Bitrix
-	*/
 	public function getUserLogin()
 	{
 		if ($this->userLogin === null && $this->userId)
@@ -1376,7 +944,7 @@ class Otp
 		if (!$this->isActivated())
 			return 0;
 
-		return (int) $this->getPolicy('LOGIN_ATTEMPTS');
+		return (int) $this->getPolicy()->getLoginAttempts();
 	}
 
 	/**
@@ -1389,7 +957,7 @@ class Otp
 		if (!$this->isActivated())
 			return 0;
 
-		return ((int) $this->getPolicy('STORE_TIMEOUT')) * 60;
+		return ((int) $this->getPolicy()->getStoreTimeout()) * 60;
 	}
 
 	/**
@@ -1402,7 +970,7 @@ class Otp
 		if (!$this->isActivated())
 			return '255.255.255.255';
 
-		return $this->getPolicy('STORE_IP_MASK');
+		return $this->getPolicy()->getStoreIpMask();
 	}
 
 	/**
@@ -1415,17 +983,6 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод проверяет, может ли пользователь пропускать обязательность использования OTP. Обязательность может быть пропущена, если:</p> <p>-OTP уже активирован;</p> <p>-Пользователь никогда ранее не авторизовался;</p> <p>-Пользователю не назначено правами обязательное использование;</p> <p>-Для пользователя еще не наступила дата обязательного подключения.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/canskipmandatory.php
-	* @author Bitrix
-	*/
 	public function canSkipMandatory()
 	{
 		$result = $this->isMandatorySkipped();
@@ -1444,17 +1001,6 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод проверяет, обязывают ли права пользователя подключать OTP.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/canskipmandatorybyrights.php
-	* @author Bitrix
-	*/
 	public function canSkipMandatoryByRights()
 	{
 		$targetRights = static::getMandatoryRights();
@@ -1487,7 +1033,7 @@ class Otp
 				->setKey($this->getSecret())
 				->unsign($signedValue, 'MFA_SAVE');
 		}
-		catch (BadSignatureException $e)
+		catch (BadSignatureException)
 		{
 			return false;
 		}
@@ -1561,18 +1107,16 @@ class Otp
 	/**
 	 * Return needed group security policy
 	 *
-	 * @param string $name Name of policy.
-	 * @return null
+	 * @return Policy\RulesCollection
 	 */
-	protected function getPolicy($name)
+	protected function getPolicy()
 	{
 		if (!$this->userGroupPolicy)
-			$this->userGroupPolicy = \CUser::getGroupPolicy($this->getUserId());
+		{
+			$this->userGroupPolicy = \CUser::getPolicy($this->getUserId());
+		}
 
-		if (isset($this->userGroupPolicy[$name]))
-			return $this->userGroupPolicy[$name];
-		else
-			return null;
+		return $this->userGroupPolicy;
 	}
 
 	/**
@@ -1582,9 +1126,10 @@ class Otp
 	 */
 	protected function clearGlobalCache()
 	{
-		Application::getInstance()->getTaggedCache()->clearByTag(
-			sprintf(static::TAGGED_CACHE_TEMPLATE, (int) ($this->getUserId() / 100))
-		);
+		$cache_dir = '/otp/user_id/' . substr(md5($this->getUserId()), -2) . '/' . $this->getUserId() . '/';
+		$cache = new \CPHPCache;
+		$cache->CleanDir($cache_dir);
+
 		return $this;
 	}
 
@@ -1593,25 +1138,10 @@ class Otp
 	 * ToDo: describe after refactoring
 	 *
 	 * @param array $params Event parameters.
-	 * @throws ArgumentTypeException
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Ключевой метод, отвечает за комплексную проверку OTP. От него зависит исполнение всех остальных методов. Метод статический.</p>
-	*
-	*
-	* @param array $params  Параметры проверки.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/verifyuser.php
-	* @author Bitrix
-	*/
 	public static function verifyUser(array $params)
 	{
-		/** @global \CMain $APPLICATION */
 		global $APPLICATION;
 
 		if (!static::isOtpEnabled()) // OTP disabled in settings
@@ -1635,7 +1165,7 @@ class Otp
 				// Grace full period ends. We must reject authorization and defer reject reason
 				if (!$otp->isDbRecordExists() && static::getSkipMandatoryDays())
 				{
-					// If mandatory enabled and user never use OTP - let's deffer initialization
+					// If mandatory enabled and user never use OTP - let us deffer initialization
 					$otp->defer(static::getSkipMandatoryDays());
 
 					// We forgive the user for the first time
@@ -1643,12 +1173,21 @@ class Otp
 					return true;
 				}
 
-				// Save a flag which indicates that a OTP is required, but user doesn't use it :-(
+				// Save a flag which indicates that an OTP is required, but user doesn't use it :-(
 				$params[static::REJECTED_KEY] = static::REJECT_BY_MANDATORY;
 				static::setDeferredParams($params);
 				return false;
 			}
 		}
+		else
+		{
+			if (!$otp->isUserActive())
+			{
+				//non-active user can't log in by OTP
+				return false;
+			}
+		}
+
 
 		if (!$isSuccess)
 		{
@@ -1667,22 +1206,22 @@ class Otp
 				&& Option::get('security', 'otp_allow_remember') === 'Y'
 			);
 
-			if (!$isCaptchaChecked && !$_SESSION['BX_LOGIN_NEED_CAPTCHA'])
+			if (!$isCaptchaChecked && !$APPLICATION->NeedCAPTHA())
 			{
 				// Backward compatibility with old login page
-				$_SESSION['BX_LOGIN_NEED_CAPTCHA'] = true;
+				$APPLICATION->SetNeedCAPTHA(true);
 			}
 
 			$isOtpPassword = (bool) preg_match('/^\d{6}$/D', $params['OTP']);
 			$isRecoveryCode = (
 				static::isRecoveryCodesEnabled()
-				&& (bool) preg_match(RecoveryCodesTable::CODE_PATTERN, $params['OTP'])
+				&& preg_match(RecoveryCodesTable::CODE_PATTERN, $params['OTP'])
 			);
 
 			if ($isCaptchaChecked && ($isOtpPassword || $isRecoveryCode))
 			{
 				if ($isOtpPassword)
-					$isSuccess = $otp->verify($params['OTP'], true);
+					$isSuccess = $otp->verify($params['OTP']);
 				elseif ($isRecoveryCode)
 					$isSuccess = RecoveryCodesTable::useCode($otp->getUserId(), $params['OTP']);
 				else
@@ -1714,7 +1253,6 @@ class Otp
 			}
 		}
 
-
 		if ($isSuccess)
 		{
 			static::setDeferredParams(null);
@@ -1724,9 +1262,40 @@ class Otp
 			// Save a flag which indicates that a form for OTP is required
 			$params[static::REJECTED_KEY] = static::REJECT_BY_CODE;
 			static::setDeferredParams($params);
+
+			//the OTP form will be shown on the next hit, send the event
+			static::sendEvent($otp);
+
+			//write to the log ("on" by default)
+			if(Option::get("security", "otp_log") <> "N")
+			{
+				\CSecurityEvent::getInstance()->doLog("SECURITY", "SECURITY_OTP", $otp->getUserId(), "");
+			}
 		}
 
 		return $isSuccess;
+	}
+
+	protected static function sendEvent(Otp $otp)
+	{
+		$code = null;
+		$algo = $otp->getAlgorithm();
+
+		//code value only for TOTP
+		if($algo instanceof \Bitrix\Main\Security\Mfa\TotpAlgorithm)
+		{
+			//value based on the current time
+			$timeCode = $algo->timecode(time());
+			$code = $algo->generateOTP($timeCode);
+		}
+
+		$eventParams = [
+			"userId" => $otp->getUserId(),
+			"code" => $code,
+		];
+
+		$event = new \Bitrix\Main\Event("security", "onOtpRequired", $eventParams);
+		$event->send();
 	}
 
 	/**
@@ -1734,17 +1303,6 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Статический метод возвращает <code>true</code>, если пользователь должен проходить OTP со своего устройства.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/isotprequired.php
-	* @author Bitrix
-	*/
 	public static function isOtpRequired()
 	{
 		return static::getDeferredParams() !== null;
@@ -1755,17 +1313,6 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Статический метод возвращает <code>true</code>, если пользователь не использует OTP, но это необходимо и истекло количество дней до подключения.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/isotprequiredbymandatory.php
-	* @author Bitrix
-	*/
 	public static function isOtpRequiredByMandatory()
 	{
 		$params = static::getDeferredParams();
@@ -1785,17 +1332,6 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Статический метод определяет, должен ли пользователь заполнить код-captcha перед тем, как предоставить пароль OTP.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/iscaptcharequired.php
-	* @author Bitrix
-	*/
 	public static function isCaptchaRequired()
 	{
 		$params = static::getDeferredParams();
@@ -1812,22 +1348,12 @@ class Otp
 	 *
 	 * @return array|null
 	 */
-	
-	/**
-	* <p>Статический метод возвращает отложенные параметры (см. <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/verifyuser.php">verifyUser</a> - <code>\Bitrix\Security\Mfa\Otp::verifyUser</code>).</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getdeferredparams.php
-	* @author Bitrix
-	*/
 	public static function getDeferredParams()
 	{
-		if (isset($_SESSION['BX_SECURITY_OTP']) && is_array($_SESSION['BX_SECURITY_OTP']))
+		$kernelSession = Application::getInstance()->getKernelSession();
+		if (isset($kernelSession['BX_SECURITY_OTP']) && is_array($kernelSession['BX_SECURITY_OTP']))
 		{
-			return $_SESSION['BX_SECURITY_OTP'];
+			return $kernelSession['BX_SECURITY_OTP'];
 		}
 
 		return null;
@@ -1839,36 +1365,21 @@ class Otp
 	 * @param array|null $params Params, null means deleting params from storage.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Статический метод устанавливает или удаляет отложенные параметры (см. <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/verifyuser.php">verifyUser</a> - <code>\Bitrix\Security\Mfa\Otp::verifyUser</code>)</p>
-	*
-	*
-	* @param array $array  Параметры, пустое значение означает удаление параметров из
-	* хранилища.
-	*
-	* @param null $params  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setdeferredparams.php
-	* @author Bitrix
-	*/
 	public static function setDeferredParams($params)
 	{
+		$kernelSession = Application::getInstance()->getKernelSession();
 		if ($params === null)
 		{
-			unset($_SESSION['BX_SECURITY_OTP']);
+			unset($kernelSession['BX_SECURITY_OTP']);
 		}
 		else
 		{
-			// Probably we does not need save password in deferred params
+			// Probably we do not need saving password in deferred params
 			// Or need? I don't know right now...
 			if (isset($params['PASSWORD']))
 				unset($params['PASSWORD']);
 
-			$_SESSION['BX_SECURITY_OTP'] = $params;
+			$kernelSession['BX_SECURITY_OTP'] = $params;
 		}
 	}
 
@@ -1878,20 +1389,6 @@ class Otp
 	 * @param int $days Days of initialization window. "0" means immediately (on next user authorization).
 	 * @return void
 	 */
-	
-	/**
-	* <p>Статический метод определяет период (в днях) для установки обязательности использования OTP.</p>
-	*
-	*
-	* @param integer $days = 2 Количество дней в периоде. "0" означает немедленно (или при
-	* следующей авторизации пользователя).
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setskipmandatorydays.php
-	* @author Bitrix
-	*/
 	public static function setSkipMandatoryDays($days = 2)
 	{
 		Option::set('security', 'otp_mandatory_skip_days', (int) $days, null);
@@ -1902,17 +1399,6 @@ class Otp
 	 *
 	 * @return int
 	 */
-	
-	/**
-	* <p>Статический метод возвращает период (в днях) для установки обязательности использования OTP.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getskipmandatorydays.php
-	* @author Bitrix
-	*/
 	public static function getSkipMandatoryDays()
 	{
 		return (int) Option::get('security', 'otp_mandatory_skip_days');
@@ -1924,19 +1410,6 @@ class Otp
 	 * @param bool $isMandatory Active or not.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Статический метод служит для активации или деактивации использования OTP.</p>
-	*
-	*
-	* @param boolean $isMandatory = true Активно или нет.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setmandatoryusing.php
-	* @author Bitrix
-	*/
 	public static function setMandatoryUsing($isMandatory = true)
 	{
 		Option::set('security', 'otp_mandatory_using', $isMandatory? 'Y': 'N', null);
@@ -1947,20 +1420,9 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Статический метод определяет, активировано ли обязательно использование OTP.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/ismandatoryusing.php
-	* @author Bitrix
-	*/
 	public static function isMandatoryUsing()
 	{
-		return (bool) (Option::get('security', 'otp_mandatory_using') === 'Y');
+		return (Option::get('security', 'otp_mandatory_using') === 'Y');
 	}
 
 	/**
@@ -1969,19 +1431,6 @@ class Otp
 	 * @param array $rights Needed rights. E.g. ['G1'] for administrators.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Статический метод устанавливает для прав пользователя обязательное использование OTP.</p>
-	*
-	*
-	* @param array $rights  Необходимые права. Например, ['G1'] для администраторов.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setmandatoryrights.php
-	* @author Bitrix
-	*/
 	public static function setMandatoryRights(array $rights)
 	{
 		Option::set('security', 'otp_mandatory_rights', serialize($rights), null);
@@ -1992,21 +1441,10 @@ class Otp
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает набор прав пользователей, для которых использование OTP обязательно.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getmandatoryrights.php
-	* @author Bitrix
-	*/
 	public static function getMandatoryRights()
 	{
 		$targetRights = Option::get('security', 'otp_mandatory_rights');
-		$targetRights = unserialize($targetRights);
+		$targetRights = unserialize($targetRights, ['allowed_classes' => false]);
 		if (!is_array($targetRights))
 			$targetRights = array();
 
@@ -2020,21 +1458,6 @@ class Otp
 	 * @throws ArgumentOutOfRangeException
 	 * @return void
 	 */
-	
-	/**
-	* <p>Статический метод устанавливает по умолчанию тип алгоритма OTP.</p>
-	*
-	*
-	* @param string $value  Тип алгоритма OTP (см. <a
-	* href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getavailabletypes.php">getAvailableTypes</a> -
-	* <code>\Bitrix\Security\Mfa\Otp::getAvailableTypes</code>).
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/setdefaulttype.php
-	* @author Bitrix
-	*/
 	public static function setDefaultType($value)
 	{
 		if (!in_array($value, static::$availableTypes))
@@ -2049,17 +1472,6 @@ class Otp
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает тип алгоритма OTP, установленный по умолчанию.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getdefaulttype.php
-	* @author Bitrix
-	*/
 	public static function getDefaultType()
 	{
 		return Option::get('security', 'otp_default_algo');
@@ -2070,17 +1482,6 @@ class Otp
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает доступные типы алгоритма OTP.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/getavailabletypes.php
-	* @author Bitrix
-	*/
 	public static function getAvailableTypes()
 	{
 		return static::$availableTypes;
@@ -2091,26 +1492,20 @@ class Otp
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает описание доступных типов алгоритмов OTP.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/gettypesdescription.php
-	* @author Bitrix
-	*/
 	public static function getTypesDescription()
 	{
-		$result = array();
-		foreach(static::getAvailableTypes() as $type)
-		{
-			$result[$type] = call_user_func(array(static::$typeMap[$type], 'getDescription'));
-		}
-
-		return $result;
+		return array(
+			self::TYPE_HOTP => array(
+				'type' => self::TYPE_HOTP,
+				'title' => Loc::getMessage('SECURITY_HOTP_TITLE'),
+				'required_two_code' => true,
+			),
+			self::TYPE_TOTP => array(
+				'type' => self::TYPE_TOTP,
+				'title' => Loc::getMessage('SECURITY_TOTP_TITLE'),
+				'required_two_code' => false,
+			)
+		);
 	}
 
 	/**
@@ -2118,20 +1513,9 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Статический метод определяет, включен ли механизм OTP.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/isotpenabled.php
-	* @author Bitrix
-	*/
 	public static function isOtpEnabled()
 	{
-		return (bool) (Option::get('security', 'otp_enabled') === 'Y');
+		return (Option::get('security', 'otp_enabled') === 'Y');
 	}
 
 	/**
@@ -2139,19 +1523,8 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Статический метод определяет, включены ли резервные коды.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/otp/isrecoverycodesenabled.php
-	* @author Bitrix
-	*/
 	public static function isRecoveryCodesEnabled()
 	{
-		return (bool) (Option::get('security', 'otp_allow_recovery_codes') === 'Y');
+		return (Option::get('security', 'otp_allow_recovery_codes') === 'Y');
 	}
 }

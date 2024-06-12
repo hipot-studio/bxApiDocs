@@ -14,6 +14,22 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class GroupTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Group_Query query()
+ * @method static EO_Group_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Group_Result getById($id)
+ * @method static EO_Group_Result getList(array $parameters = [])
+ * @method static EO_Group_Entity getEntity()
+ * @method static \Bitrix\Sale\Location\Name\EO_Group createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Location\Name\EO_Group_Collection createCollection()
+ * @method static \Bitrix\Sale\Location\Name\EO_Group wakeUpObject($row)
+ * @method static \Bitrix\Sale\Location\Name\EO_Group_Collection wakeUpCollection($rows)
+ */
 class GroupTable extends NameEntity
 {
 	public static function getFilePath()
@@ -31,7 +47,7 @@ class GroupTable extends NameEntity
 		return 'LID';
 	}
 
-	static public function getReferenceFieldName()
+	public static function getReferenceFieldName()
 	{
 		return 'LOCATION_GROUP_ID';
 	}

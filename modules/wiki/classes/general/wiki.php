@@ -6,17 +6,6 @@ use Bitrix\Main\Localization\Loc;
 
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CWiki</b> - Класс для работы c Wiki.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/index.php
- * @author Bitrix
- */
 class CWiki
 {
 	/**
@@ -32,50 +21,13 @@ class CWiki
 	/** @var ErrorCollection */
 	protected $errorCollection;
 
-	public function __construct()
+	function __construct()
 	{
 		$this->cIB_E = new CIBlockElement();
 		$this->errorCollection = new ErrorCollection();
 	}
 
-	
-	/**
-	* <p>Метод добавляет новую Wiki-страницу. Нестатический метод.</p>
-	*
-	*
-	* @param array $arFields  <a href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblock/add.php">CIBlock::Add</a>
-	*
-	* @return int 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Добавим Wiki-страницу в инфо.блок с идентификатором 2
-	* 
-	* $arFields = array(
-	* 	'ACTIVE' =&gt; 'Y',
-	* 	'IBLOCK_ID' =&gt; 2,
-	* 	'DETAIL_TEXT_TYPE' =&gt; 'html',
-	* 	'DETAIL_TEXT' =&gt; '&lt;br/&gt;&lt;h2&gt;Тестовая страница&lt;/h2&gt;&lt;br/&gt;',
-	* 	'NAME' =&gt; 'Тестовая страница'
-	* );
-	* $CWiki = new CWiki();
-	* if (!($ID = $CWiki-&gt;Add($arFields)))
-	* 	echo 'Ошибка. Страница не создана.';
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/Update.php">CWiki::Update</a> </li>  </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/Add.php
-	* @author Bitrix
-	*/
-	public function Add($arFields)
+	function Add($arFields)
 	{
 		$arFields['XML_ID'] = $arFields['NAME'];
 
@@ -98,45 +50,7 @@ class CWiki
 		return $ID;
 	}
 
-	
-	/**
-	* <p>Метод изменяет Wiki-страницу, добавляет запись в историю и обслуживает привязки к категориям. Нестатический метод.</p>
-	*
-	*
-	* @param int $intID  Идентификатор Wiki-страницы
-	*
-	* @param array $arFields  <a href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblock/update.php">CIBlock::Update</a>
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Обновим Wiki-страницу с идентификатором 13 в инфо.блоке с идентификатором 2
-	* $ID = 13;
-	* $arFields = array(
-	* 	'IBLOCK_ID' =&gt; 2,
-	* 	'DETAIL_TEXT_TYPE' =&gt; 'html',
-	* 	'DETAIL_TEXT' =&gt; '&lt;br/&gt;&lt;h2&gt;Измененная тестовая страница&lt;/h2&gt;&lt;br/&gt;'	
-	* );
-	* $CWiki = new CWiki();
-	* if (!$CWiki-&gt;Update($ID, $arFields))
-	* 	echo 'Ошибка. Страница не изменена.';<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/Add.php">CWiki::Add</a> </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/UpdateCategory.php">CWiki::UpdateCategory</a> </li>     <li>
-	* <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/UpdateHistory.php">CWiki::UpdateHistory</a> </li>  </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/Update.php
-	* @author Bitrix
-	*/
-	public function Update($ID, $arFields)
+	function Update($ID, $arFields)
 	{
 		$arCats = array();
 		$CWikiParser = new CWikiParser();
@@ -157,43 +71,7 @@ class CWiki
 		return true;
 	}
 
-	
-	/**
-	* <p>Метод восстанавливает Wiki-страницу из истории. Нестатический метод.</p>
-	*
-	*
-	* @param int $HISTORY_ID  Идентификатор записи истории
-	*
-	* @param int $intID  Идентификатор Wiki-страницы
-	*
-	* @param int $IBLOCK_ID  Идентификатор Инфо.блока
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Восстановим страницу с идентификатором 13 из инфо.блока с идентификатором 2 по записи в истории 26
-	* $HISTORY_ID = 26;
-	* $ID = 13;
-	* $IBLOCK_ID = 2;
-	* 
-	* $CWiki = new CWiki();
-	* if (!$CWiki-&gt;Recover($HISTORY_ID, $ID, $IBLOCK_ID))
-	* 	echo 'Ошибка. Страница не восстановлена.';<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/UpdateHistory.php">CWiki::UpdateHistory</a> </li>
-	*  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/Recover.php
-	* @author Bitrix
-	*/
-	public function Recover($HISTORY_ID, $ID, $IBLOCK_ID)
+	function Recover($HISTORY_ID, $ID, $IBLOCK_ID)
 	{
 		$this->CleanCacheById($ID, $IBLOCK_ID);
 
@@ -218,42 +96,7 @@ class CWiki
 			return false;
 	}
 
-	
-	/**
-	* <p>Метод создает запись в истории на основе Wiki-страницы. Нестатический метод.</p>
-	*
-	*
-	* @param int $ID  Идентификатор Wiki-страницы
-	*
-	* @param $I $IBLOCK_ID  Идентификатор Инфоблока
-	*
-	* @param $IBLOCK_I $modifyComment = false Необязательный.
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Создадим новую запись в истории страницы с идентификатором 13 инфо.блока с идентификатором 2
-	* $ID = 13;
-	* $IBLOCK_ID = 2;
-	* 
-	* $CWiki = new CWiki();
-	* if (!$CWiki-&gt;UpdateHistory($ID, $IBLOCK_ID))
-	* 	echo 'Ошибка. Запись истории не создана.';<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/Recover.php">CWiki::Recover</a> </li>  </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/UpdateHistory.php
-	* @author Bitrix
-	*/
-	public static function UpdateHistory($ID, $IBLOCK_ID, $modifyComment=false)
+	function UpdateHistory($ID, $IBLOCK_ID, $modifyComment=false)
 	{
 		global $USER;
 
@@ -294,42 +137,7 @@ class CWiki
 		return false;
 	}
 
-	
-	/**
-	* <p>Метод обновляет привязки Wiki-страницы к категориям. Нестатический метод.</p>
-	*
-	*
-	* @param int $intID  Идентификатор Wiki-страницы
-	*
-	* @param int $IBLOCK_ID  Идентификатор Инфо.блока
-	*
-	* @param array $arCats  Массив наименований категорий страницы
-	*
-	* @return void 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Обновим категории страницы с идентификатором 13 из инфо.блока с идентификатором 2
-	* $arCats = array('Категория 1', 'Категория 2');
-	* $ID = 13;
-	* $IBLOCK_ID = 2;
-	* 
-	* $CWiki = new CWiki();
-	* $CWiki-&gt;UpdateCategory($ID, $IBLOCK_ID, $arCats);<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/GetCategory.php">CWiki::GetCategory</a> </li> 
-	* </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/UpdateCategory.php
-	* @author Bitrix
-	*/
-	public function UpdateCategory($ID, $IBLOCK_ID, $arCats)
+	function UpdateCategory($ID, $IBLOCK_ID, $arCats)
 	{
 
 		$this->CleanCacheById($ID, $IBLOCK_ID);
@@ -446,6 +254,7 @@ class CWiki
 					$arFilter['<RIGHT_BORDER'] = CWikiSocnet::$iCatRightBorder;
 				}
 				$rsCats = CIBlockSection::GetList(array(), $arFilter);
+				$arExiststInBlockCats = [];
 				while($arCat = $rsCats->GetNext())
 				{
 					$arExiststInBlockCats[] = $arCat['~NAME'];
@@ -503,28 +312,7 @@ class CWiki
 	}
 
 	//TODO: Delete (check) all comments
-	
-	/**
-	* <p>Метод удаляет Wiki-страницу. Нестатический метод.</p>
-	*
-	*
-	* @param int $intID  Идентификатор Wiki-страницы
-	*
-	* @param int $IBLOCK_ID  Идентификатор Инфо.блока. <br> До версии 10.0.0 назывался <b>BLOCK_ID</b>.
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>// Удалим Wiki-страницу с идентификатором 13 в инфо.блоке с идентификатором 2<br>$ID = 13;<br>$IBLOCK_ID = 2;<br><br>$CWiki = new CWiki();<br>if (!$CWiki-&gt;Delete($ID, $IBLOCK_ID))<br>	echo 'Ошибка. Страница не удалена.';<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/Delete.php
-	* @author Bitrix
-	*/
-	public function Delete($ID, $IBLOCK_ID)
+	function Delete($ID, $IBLOCK_ID)
 	{
 		$rIBlock = CIBlock::getList(Array(), array('ID' => $IBLOCK_ID, 'CHECK_PERMISSIONS' => 'N'));
 		$arIBlock = $rIBlock->GetNext();
@@ -544,44 +332,7 @@ class CWiki
 		return $bResult;
 	}
 
-	
-	/**
-	* <p>Метод привязывает изображение к Wiki-странице. Нестатический метод.</p>
-	*
-	*
-	* @param int $intID  Идентификатор Wiki-страницы. До версии 10.0.0 назывался <b>ELEMENT_ID</b>.
-	*
-	* @param int $IBLOCK_ID  Идентификатор Инфо.блока
-	*
-	* @param array $arImage  Массив свойств изображения
-	*
-	* @return int 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // привяжем изображение к странице с идентификатором 13 из инфо.блока с идентификатором 2
-	* $ID = 13;
-	* $IBLOCK_ID = 2;
-	* 
-	* if (CFile::IsImage($_FILES['FILE_ID']['name']))
-	* {
-	*     $CWiki = new CWiki();
-	*     $CWiki-&gt;AddImage($ID, $IBLOCK_ID, $_FILES['FILE_ID']);
-	* }<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/DeleteImage.php">CWiki::DeleteImage</a> </li> 
-	* </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/AddImage.php
-	* @author Bitrix
-	*/
-	public function AddImage($ID, $IBLOCK_ID, $arImage)
+	function AddImage($ID, $IBLOCK_ID, $arImage)
 	{
 		$arProperties = array();
 		$arCurImages = array();
@@ -643,46 +394,11 @@ class CWiki
 		}
 
 		$arAddImage = array_diff(array_keys($arCurImagesNew), array_keys($arCurImages));
-		list(, $imgId) = each($arAddImage);
+		$imgId = current($arAddImage);
 		return $imgId;
 	}
 
-	
-	/**
-	* <p>Удаляет изображение из Wiki-страницы. Нестатический метод.</p>
-	*
-	*
-	* @param int $IMAGE_ID  Идентификатор изображения.
-	*
-	* @param int $intID  Идентификатор Wiki-страницы. До версии 10.0.0 назывался <b>ELEMENT_ID</b>
-	*
-	* @param int $IBLOCK_ID  Идентификатор Инфоблока.
-	*
-	* @return void 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Удалим изображение с идентификатором 5 из страницы с идентификатором 13 из инфо.блока с идентификатором 2
-	* $IMAGE_ID = 5;
-	* $ID = 13;
-	* $IBLOCK_ID = 2;
-	* 
-	* $CWiki = new CWiki();
-	* $CWiki-&gt;DeleteImage($IMAGE_ID, $ID, $IBLOCK_ID);<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/AddImage.php">CWiki::AddImage</a> </li>  </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/DeleteImage.php
-	* @author Bitrix
-	*/
-	public function DeleteImage($IMAGE_ID, $ID, $IBLOCK_ID)
+	function DeleteImage($IMAGE_ID, $ID, $IBLOCK_ID)
 	{
 		$rsProperties = CIBlockElement::GetProperty($IBLOCK_ID, $ID, 'value_id', 'asc', array('ACTIVE' => 'Y', 'CODE' => 'IMAGES'));
 		$_iPropertyId = 0;
@@ -703,35 +419,7 @@ class CWiki
 		}
 	}
 
-	
-	/**
-	* <p>Метод изменяет Wiki-страницу, добавляет запись в историю и обслуживает привязки к категориям. Нестатический метод.</p>
-	*
-	*
-	* @param int $intID  Идентификатор Wiki-страницы
-	*
-	* @param array $arFields  <a href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblock/update.php">CIBlock::Update</a>
-	*
-	* @param  $bUpdateSearch = true Необязательный.
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br><br>// <span style='font-size: 10pt; line-height: 115%; font-family: "Courier New";'>Переименуем </span>Wiki-страницу с идентификатором 13 в инфо.блоке с идентификатором 2<br>$ID = 13;<br>$arFields = array(<br>	'IBLOCK_ID' =&gt; 2,<br>	'NAME' =&gt; 'Измененная тестовая страница'	<br>);<br>$CWiki = new CWiki();<br>if (!$CWiki-&gt;Rename($ID, $arFields))<br>	echo 'Ошибка. Страница не переименована.';<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/Update.php">CWiki::Update</a> </li>  </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/Rename.php
-	* @author Bitrix
-	*/
-	public function Rename($ID, $arFields, $bUpdateSearch=true)
+	function Rename($ID, $arFields, $bUpdateSearch=true)
 	{
 		$arFilter = array('IBLOCK_ID' => $arFields['IBLOCK_ID'], 'CHECK_PERMISSIONS' => 'N');
 
@@ -811,7 +499,7 @@ class CWiki
 	 *			will be changed.
 	 * @return int the amount of changed pages.
 	 */
-	public function RenameLinkOnPages($iBlockId, $oldName, $newName, $iBlockSectId = false)
+	function RenameLinkOnPages($iBlockId, $oldName, $newName, $iBlockSectId = false)
 	{
 		if(!$iBlockId || !$oldName || !$newName)
 			return false;
@@ -866,7 +554,7 @@ class CWiki
 
 			foreach ($arPatterns as $arPattern)
 			{
-				if(strpos($newText, $arPattern["search"]) !== false)
+				if(mb_strpos($newText, $arPattern["search"]) !== false)
 				{
 					$newText = preg_replace($arPattern["pattern"], $arPattern["replacement"], $newText);
 					$bChanged = true;
@@ -875,7 +563,7 @@ class CWiki
 
 
 			if ($isCategory)
-				if(strpos($newText, $catSearch) !== false)
+				if(mb_strpos($newText, $catSearch) !== false)
 				{
 					$newText = $this->RenameCategoryOnPage($newText, $sCatName, $newName);
 					$bChanged = true;
@@ -893,44 +581,12 @@ class CWiki
 		return $count;
 	}
 
-	public static function RenameCategoryOnPage($pageText, $oldCategoryName, $newCategoryName)
+	function RenameCategoryOnPage($pageText, $oldCategoryName, $newCategoryName)
 	{
 		$newCategoryName = preg_replace("/category:/isU", "", $newCategoryName);
 		return preg_replace("/\[\[".GetMessage('CATEGORY_NAME').":".$oldCategoryName."\]\]/isU", "[[".GetMessage('CATEGORY_NAME').":".$newCategoryName."]]", $pageText);
 	}
 
-	
-	/**
-	* <p>Метод устанавливает Wiki-страницу по-умолчанию. Нестатический метод.</p>
-	*
-	*
-	* @param int $IBLOCK_ID  Идентификатор Инфоблока. <br>До версии 10.0.0 назывался <b>BLOCK_ID</b>.
-	*
-	* @param string $NAME  Наименование страницы
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Установим страницу "Тестовая страница" страницей по-умолчанию инфо.блока с идентификатором 2
-	* $IBLOCK_ID = 2;
-	* $NAME = 'Тестовая страница';
-	* 
-	* if (!CWiki::SetDefaultPage($IBLOCK_ID, $NAME))
-	* 	echo 'Ошибка. Страница по-умолчанию не установлена.';<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/GetDefaultPage.php">CWiki::GetDefaultPage</a>
-	* </li>  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/SetDefaultPage.php
-	* @author Bitrix
-	*/
 	static function SetDefaultPage($IBLOCK_ID, $NAME)
 	{
 		if (CWikiSocnet::IsSocNet())
@@ -979,37 +635,6 @@ class CWiki
 		return false;
 	}
 
-	
-	/**
-	* <p>Метод возвращает Wiki-страницу по-умолчанию. Нестатический метод.</p>
-	*
-	*
-	* @param int $IBLOCK_ID  Идентификатор Инфоблока. <br> До версии 10.0.0 назвался <b>BLOCK_ID</b>.
-	*
-	* @return string 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Получим страницу по-умолчанию инфо.блока с идентификатором 2
-	* $IBLOCK_ID = 2;
-	* 
-	* $NAME = CWiki::GetDefaultPage($IBLOCK_ID);
-	* if (strlen($NAME) &lt;= 0)
-	* 	echo 'Ошибка. Страница по-умолчанию не установлена.';
-	* <br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/SetDefaultPage.php">CWiki::SetDefaultPage</a>
-	* </li>  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/GetDefaultPage.php
-	* @author Bitrix
-	*/
 	static function GetDefaultPage($IBLOCK_ID)
 	{
 		if (CWikiSocnet::IsSocNet())
@@ -1035,38 +660,6 @@ class CWiki
 		return isset($arElement['UF_WIKI_INDEX']['VALUE']) ? $arElement['UF_WIKI_INDEX']['VALUE'] : '';
 	}
 
-	
-	/**
-	* <p>Метод возвращает массив категорий Wiki-страницы. Нестатический метод.</p>
-	*
-	*
-	* @param string $NAME  Наименование Wiki-страницы. До версии 9.5.3 назывался <b>ID</b>.
-	*
-	* @param int $IBLOCK_ID  Идентификатор Инфоблока. До версии 10.0.0 назывался <b>BLOCK_ID</b>.
-	*
-	* @return array <p> Возвращается массив категорий, содержащих поля со значениями:
-	* </p><table width="100%" class="tnormal"><tbody> <tr> <th width="15%">Параметр</th> 		<th>Описание</th>
-	* 	</tr> <tr> <td>NAME</td> 		<td>наименование категории </td> 	</tr> <tr> <td>TITLE</td>
-	* 		<td>наименование категории для подсказки</td> 	</tr> <tr> <td>LINK</td>
-	* 		<td>ссылка на категорию</td> 	</tr> <tr> <td>IS_RED</td> 		<td>является ли ссылка
-	* красной (т.е. страница категории не создана)</td> 	</tr> </tbody></table><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Получим категории для страницы "Тестовая страница" инфо.блока с идентификатором 2
-	* $NAME = 'Тестовая страница';
-	* $IBLOCK_ID = 2;
-	* 
-	* $arCategory = CWiki::GetCategory($NAME, $IBLOCK_ID);<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/GetCategory.php
-	* @author Bitrix
-	*/
 	public static function GetCategory($NAME, $IBLOCK_ID)
 	{
 		global $arParams;
@@ -1170,52 +763,6 @@ class CWiki
 	 * @param int $ID
 	 * @return array
 	 */
-	
-	/**
-	* <p>Возвращает Wiki-страницу по фильтру arFilter. Статический метод.</p>
-	*
-	*
-	* @param int $intID  Идентификатор Wiki-страницы
-	*
-	* @param array $arFilter  <a href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblock/getlist.php">GetList</a>
-	*
-	* @return array <p>Возвращается массив, содержащий поля со значениями:    </p><table
-	* width="100%" class="tnormal"><tbody> <tr> <th width="15%">Параметр</th> 		<th>Описание</th> 	</tr> <tr>
-	* <td>NAME</td> 		<td>наименование страницы</td> </tr> <tr> <td>DETAIL_TEXT_TYPE</td> 		<td>тип
-	* содержимого страницы</td> </tr> <tr> <td>DETAIL_TEXT</td> 		<td>текст содержимого
-	* страницы</td> 	</tr> <tr> <td>IMAGES</td> 		<td>массив изображений страницы</td> </tr>
-	* <tr> <td>SECTIONS</td> 		<td>массив категорий страницы</td> </tr> <tr> <td>TAGS</td>
-	* 		<td>массив тэгов страницы</td> </tr> </tbody></table>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Получим Wiki-страницу с идентификатором 13 инфо.блока с идентификатором 2
-	* $ID = 13;
-	* $arFilter = array(
-	* 	'ACTIVE' =&gt; 'Y',
-	* 	'CHECK_PERMISSIONS' =&gt; 'N',
-	* 	'IBLOCK_ID' =&gt; 2
-	* );
-	* $arElement = CWiki::GetElementById($ID, $arFilter);
-	* if ($arElement == false)
-	* 	echo 'Страница не найдена.';
-	* <br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/GetElementByName.php">CWiki::GetElementByName</a>
-	* </li>     <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/GetCategory.php">CWiki::GetCategory</a>
-	* </li>     <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiparser/parse.php">CWikiParser::Parse</a>
-	* </li>     <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikisecurity/clear.php">CWikiSecurity::clear</a>
-	* </li>  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/GetElementById.php
-	* @author Bitrix
-	*/
 	public static function GetElementById($ID, $arFilter)
 	{
 		global $arParams;
@@ -1247,7 +794,7 @@ class CWiki
 					if (!empty($arParams['PATH_TO_SEARCH']))
 					{
 						$arP = $arParams['IN_COMPLEX'] == 'Y' && $arParams['SEF_MODE'] == 'N' ? array($arParams['OPER_VAR'] => 'search') : array();
-						$arP['tags'] = urlencode($sTag);
+						$arP['tags'] = rawurlencode($sTag);
 						$arTag['LINK'] = CHTTP::urlAddParams(
 									CComponentEngine::MakePathFromTemplate($arParams['PATH_TO_SEARCH'],
 										array(
@@ -1272,55 +819,6 @@ class CWiki
 	 *		  necessary for: building search tag links
 	 * @return array
 	 */
-	
-	/**
-	* <p>Возвращает Wiki-страницу по фильтру arFilter. Статический метод.</p>
-	*
-	*
-	* @param string $NAME  Название Wiki-страницы
-	*
-	* @param array $arFilter  <a href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblock/getlist.php">GetList</a>
-	*
-	* @param  $arComponentParams = array() Необязательный.
-	*
-	* @return result_type <p>Возвращается массив, содержащий поля со значениями:    </p><table
-	* width="100%" class="tnormal"><tbody> <tr> <th width="15%">Параметр</th> 		<th>Описание</th> 	</tr> <tr>
-	* <td>NAME</td> 		<td>наименование страницы</td> 	</tr> <tr> <td>DETAIL_TEXT_TYPE</td> 		<td>тип
-	* содержимого страницы</td> 	</tr> <tr> <td>DETAIL_TEXT</td> 		<td>текст содержимого
-	* страницыы</td> 	</tr> <tr> <td>IMAGES</td> 		<td>массив изображений страницы</td>
-	* 	</tr> <tr> <td>SECTIONS</td> 		<td>массив категорий страницы</td> 	</tr> <tr> <td>TAGS</td>
-	* 		<td>массив тэгов страницы</td> 	</tr> </tbody></table>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Получим Wiki-страницу с названием "Тестовая страница" инфо.блока с идентификатором 2
-	* 
-	* $NAME = 'Тестовая страница';
-	* $arFilter = array(
-	* 	'ACTIVE' =&gt; 'Y',
-	* 	'CHECK_PERMISSIONS' =&gt; 'N',
-	* 	'IBLOCK_ID' =&gt; 2
-	* );
-	* $arElement = CWiki::GetElementByName($NAME, $arFilter);
-	* if ($arElement == false)
-	* 	echo 'Страница не найдена.';
-	* <br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/GetElementById.php">CWiki::GetElementById</a>
-	* </li>     <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/GetCategory.php">CWiki::GetCategory</a>
-	* </li>     <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiparser/parse.php">CWikiParser::Parse</a>
-	* </li>     <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikisecurity/clear.php">CWikiSecurity::clear</a>
-	* </li>  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwiki/GetElementByName.php
-	* @author Bitrix
-	*/
 	public static function GetElementByName($NAME, $arFilter, $arComponentParams = array())
 	{
 		global $CACHE_MANAGER;
@@ -1390,19 +888,37 @@ class CWiki
 				{
 					$sTag = trim($sTag);
 					$arTag = array('NAME' => $sTag);
-					if (!empty($arComponentParams) && isset($arComponentParams['PATH_TO_SEARCH']))
+					if (
+						!empty($arComponentParams)
+						&& (
+							isset($arComponentParams['PATH_TO_SEARCH'])
+							|| isset($arComponentParams['~PATH_TO_TAG'])
+						)
+					)
 					{
-						$arP = $arComponentParams['IN_COMPLEX'] == 'Y' && $arComponentParams['SEF_MODE'] == 'N' ? array($arComponentParams['OPER_VAR'] => 'search') : array();
-						$arP['tags'] = urlencode($sTag);
-						$arTag['LINK'] = CHTTP::urlAddParams(
-									CComponentEngine::MakePathFromTemplate($arComponentParams['PATH_TO_SEARCH'],
-										array(
-											'wiki_name' => $arComponentParams['ELEMENT_NAME'],
-											'group_id' => CWikiSocnet::$iSocNetId
-										)
-									),
-									$arP
-								);
+						if (isset($arComponentParams['PATH_TO_TAG']))
+						{
+							$arTag['LINK'] = \CComponentEngine::MakePathFromTemplate($arComponentParams['~PATH_TO_TAG'],
+								[
+									'group_id' => CWikiSocnet::$iSocNetId,
+									'tag' => rawurlencode($sTag)
+								]
+							);
+						}
+						else
+						{
+							$arP = $arComponentParams['IN_COMPLEX'] == 'Y' && $arComponentParams['SEF_MODE'] == 'N' ? array($arComponentParams['OPER_VAR'] => 'search') : array();
+							$arP['tags'] = rawurlencode($sTag);
+							$arTag['LINK'] = CHTTP::urlAddParams(
+								CComponentEngine::MakePathFromTemplate($arComponentParams['PATH_TO_SEARCH'],
+									array(
+										'wiki_name' => $arComponentParams['ELEMENT_NAME'],
+										'group_id' => CWikiSocnet::$iSocNetId
+									)
+								),
+								$arP
+							);
+						}
 					}
 					$arResult['_TAGS'][] = $arTag;
 				}
@@ -1423,12 +939,12 @@ class CWiki
 		return $this->errorCollection;
 	}
 
-	private function CleanCacheById($ID, $iBlockId = false)
+	public function CleanCacheById($ID, $iBlockId = false)
 	{
 		return $this->CleanCache($ID, false, $iBlockId);
 	}
 
-	private function CleanCache($ID = false, $Name = false, $iBlockId = false)
+	public function CleanCache($ID = false, $Name = false, $iBlockId = false)
 	{
 		if($ID === false && !$Name)
 			return false;
@@ -1493,8 +1009,10 @@ class CWiki
 
 		$cacheId = self::GetCacheIdForPageUpdated($iBlockId, $iSocCatId, $name);
 
-		if($CACHE_MANAGER->Read($cacheTime, $cacheID))
+		if ($CACHE_MANAGER->Read($cacheTime, $cacheId))
+		{
 			return ($CACHE_MANAGER->Get($cacheId) == "Y");
+		}
 
 		return false;
 	}

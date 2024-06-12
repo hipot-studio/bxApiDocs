@@ -7,32 +7,23 @@
  */
 
 namespace Bitrix\Crm\Integration;
+use Bitrix\Crm\Integration\Disk\MailTemplateConnector;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\SystemUser;
 use Bitrix\Disk\Ui\Text;
+use Bitrix\Disk\ZipNginx\ArchiveEntry;
+use Bitrix\Main\Engine\Response\Zip;
 use Bitrix\Main\Loader;
+use Bitrix\Main\EventResult;
 
 class DiskManager
 {
-	private static $DEFAULT_SITE_ID = null;
 	private static function getDefaultSiteID()
 	{
-		if(self::$DEFAULT_SITE_ID !== null)
-		{
-			return self::$DEFAULT_SITE_ID;
-		}
-
-		$siteEntity = new \CSite();
-		$dbSites = $siteEntity->GetList($by = 'sort', $order = 'desc', array('DEFAULT' => 'Y', 'ACTIVE' => 'Y'));
-		$defaultSite = is_object($dbSites) ? $dbSites->Fetch() : null;
-		if(is_array($defaultSite))
-		{
-			return (self::$DEFAULT_SITE_ID = $defaultSite['LID']);
-		}
-
-		return (self::$DEFAULT_SITE_ID = 's1');
+		return \Bitrix\Crm\Integration\Main\Site::getPortalSiteId();
 	}
 	public static function checkFileReadPermission($fileID, $userID = 0)
 	{
@@ -77,7 +68,7 @@ class DiskManager
 		$file = File::loadById($fileID);
 		return $file ? $file->getName() : "[{$fileID}]";
 	}
-	public static function getFileInfo($fileID, $checkPermissions = true)
+	public static function getFileInfo($fileID, $checkPermissions = true, $options = null)
 	{
 		if(!Loader::includeModule('disk'))
 		{
@@ -97,18 +88,54 @@ class DiskManager
 			return null;
 		}
 
+		if(!is_array($options))
+		{
+			$options = array();
+		}
+
+		$ownerID = isset($options['OWNER_ID']) ? $options['OWNER_ID'] : 0;
+		$ownerTypeID = isset($options['OWNER_TYPE_ID']) ? $options['OWNER_TYPE_ID'] : \CCrmOwnerType::Undefined;
+
 		$canRead = true;
-		if($checkPermissions)
+		$viewUrl = '';
+		if($ownerID > 0 && \CCrmOwnerType::isDefined($ownerTypeID))
+		{
+			$viewUrlParams = array('fileId' => $fileID, 'ownerTypeId' => $ownerTypeID, 'ownerId' => $ownerID);
+			if(isset($options['VIEW_PARAMS']) && is_array($options['VIEW_PARAMS']))
+			{
+				$viewUrlParams = array_merge($viewUrlParams, $options['VIEW_PARAMS']);
+			}
+			$viewUrl = \CHTTP::urlAddParams('/bitrix/tools/crm_show_file.php', $viewUrlParams);
+			if(isset($options['USE_ABSOLUTE_PATH']) && $options['USE_ABSOLUTE_PATH'])
+			{
+				$viewUrl = \CCrmUrlUtil::ToAbsoluteUrl($viewUrl);
+			}
+		}
+		elseif($checkPermissions)
 		{
 			$canRead = $file->canRead($file->getStorage()->getSecurityContext(\CCrmSecurityHelper::getCurrentUserID()));
+			if($canRead)
+			{
+				$viewUrl = Driver::getInstance()->getUrlManager()->getUrlForDownloadFile($file);
+			}
+		}
+
+		$previewUrl = '';
+		if (!empty($viewUrl))
+		{
+			if (\Bitrix\Disk\TypeFile::isImage($file))
+				$previewUrl = \CHTTP::urlAddParams($viewUrl, array('preview' => 'Y'));
 		}
 
 		return array(
 			'ID' => $fileID,
+			'FILE_ID' => $file->getFileId(),
 			'NAME' => $file->getName(),
 			'SIZE' => \CFile::FormatSize($file->getSize()),
+			'BYTES' => $file->getSize(),
 			'CAN_READ' => $canRead,
-			'VIEW_URL' => $canRead ? Driver::getInstance()->getUrlManager()->getUrlForDownloadFile($file) : ''
+			'VIEW_URL' => $viewUrl,
+			'PREVIEW_URL' => $previewUrl,
 		);
 	}
 	public static function makeFileArray($fileID)
@@ -156,9 +183,10 @@ class DiskManager
 	/**
 	 * @param int $typeID
 	 * @param string $siteID
+	 * @param bool $useMonthFolders
 	 * @return \Bitrix\Disk\Folder|null
 	 */
-	public static function ensureFolderCreated($typeID, $siteID = '')
+	public static function ensureFolderCreated($typeID, $siteID = '', $useMonthFolders = false)
 	{
 		if(!Loader::includeModule('disk'))
 		{
@@ -184,37 +212,76 @@ class DiskManager
 			return null;
 		}
 
+		$folderModel = static::loadFolderModel($storage, $storage, $typeID, $xmlID, $name);
+		if ($folderModel && $useMonthFolders)
+		{
+			$subFolderName = date('Y-m');
+			$subFolderXmlID = $xmlID.'_'.$subFolderName;
+			return static::loadFolderModel($storage, $folderModel, $typeID, $subFolderXmlID, $subFolderName);
+		}
+
+		return $folderModel;
+	}
+	/**
+	 * @param \Bitrix\Disk\Storage $storage
+	 * @param \Bitrix\Disk\Storage|\Bitrix\Disk\Folder $parent
+	 * @param int $typeID
+	 * @param string $xmlID
+	 * @param string $name
+	 * @return Folder|null
+	 */
+	protected static function loadFolderModel($storage, $parent, $typeID, $xmlID, $name)
+	{
+		$parentIsStorage = ($parent === $storage);
 		$folderModel = Folder::load(
 			array(
 				'STORAGE_ID' => $storage->getId(),
-				'PARENT_ID' => $storage->getRootObjectId(),
+				'PARENT_ID' => $parentIsStorage ? $parent->getRootObjectId() : $parent->getId(),
+				'DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE,
 				'=XML_ID' => $xmlID,
 			)
 		);
 
-		if ($folderModel)
+		if (!$folderModel)
 		{
-			return $folderModel;
-		}
+			$rights = array();
+			if ($typeID === StorageFileType::EmailAttachment)
+			{
+				$specificRights = Driver::getInstance()->getRightsManager()->getSpecificRights($storage->getRootObject());
+				foreach ($specificRights as $right)
+				{
+					unset($right['ID'], $right['DOMAIN'], $right['OBJECT_ID']);
+					$right['NEGATIVE'] = true;
+					$rights[] = $right;
+				}
+			}
 
-		return $storage->addFolder(
-			array(
+			$data = array(
 				'NAME' => $name,
 				'XML_ID' => $xmlID,
 				'CREATED_BY' => SystemUser::SYSTEM_USER_ID
-			),
-			array(),
-			true
-		);
+			);
+			if ($parentIsStorage)
+			{
+				$folderModel = $parent->addFolder($data, $rights, true);
+			}
+			else
+			{
+				$folderModel = $parent->addSubFolder($data, $rights, true);
+			}
+		}
+
+		return $folderModel;
 	}
 	/**
 	 * @param array $fileData
 	 * @param string $siteID
 	 * @return int|false
 	 */
-	public static function saveEmailAttachment(array $fileData, $siteID = '')
+	public static function saveEmailAttachment(array $fileData, $siteID = '', $params = array())
 	{
-		return self::saveFile($fileData, $siteID, array('TYPE_ID' => StorageFileType::EmailAttachment));
+		$params['TYPE_ID'] = StorageFileType::EmailAttachment;
+		return self::saveFile($fileData, $siteID, $params);
 	}
 	/**
 	 * @param array $fileData
@@ -246,7 +313,8 @@ class DiskManager
 			$typeID = StorageFileType::EmailAttachment;
 		}
 
-		$folder = self::ensureFolderCreated($typeID, $siteID);
+		$useMonthFolders = isset($params['USE_MONTH_FOLDERS']) && (bool)$params['USE_MONTH_FOLDERS'];
+		$folder = self::ensureFolderCreated($typeID, $siteID, $useMonthFolders);
 		if(!$folder)
 		{
 			return false;
@@ -257,7 +325,7 @@ class DiskManager
 		{
 			$userID = \CCrmSecurityHelper::GetCurrentUserID();
 		}
-		else if($userID <= 0)
+		if($userID <= 0)
 		{
 			$userID = SystemUser::SYSTEM_USER_ID;
 		}
@@ -283,5 +351,101 @@ class DiskManager
 
 		\CCrmActivity::HandleStorageElementDeletion(StorageType::Disk, $objectID);
 		\CCrmQuote::HandleStorageElementDeletion(StorageType::Disk, $objectID);
+	}
+
+	/**
+	 * @param string $name
+	 * @param array  $fileIds
+	 * @return Zip\Archive|null
+	 * @throws \Bitrix\Main\LoaderException
+	 * @throws \Bitrix\Main\NotImplementedException
+	 */
+	public static function buildArchive(string $name, array $fileIds)
+	{
+		if (!Loader::includeModule('disk'))
+		{
+			return null;
+		}
+
+		$archive = new Zip\Archive($name);
+		foreach ($fileIds as $fileId)
+		{
+			$file = File::loadById($fileId);
+			if (!$file)
+			{
+				continue;
+			}
+
+			$archive->addEntry(ArchiveEntry::createFromFileModel($file));
+		}
+
+		return $archive;
+	}
+
+	public static function isModZipEnabled(): bool
+	{
+		if (!Loader::includeModule('disk'))
+		{
+			return false;
+		}
+
+		return \Bitrix\Disk\ZipNginx\Configuration::isEnabled();
+	}
+
+	public static function writeFileToResponse($fileID, $options = array())
+	{
+		if(!Loader::includeModule('disk'))
+		{
+			return;
+		}
+
+		$file = File::loadById($fileID);
+		if(!$file)
+		{
+			return;
+		}
+		$fileData = $file->getFile();
+		if(!$fileData)
+		{
+			return;
+		}
+
+		if (!empty($options['preview']))
+		{
+			$tmpFile = \CFile::resizeImageGet(
+				$fileData,
+				array('width' => 100, 'height' => 100),
+				BX_RESIZE_IMAGE_EXACT,
+				true, false, true
+			);
+
+			if ($tmpFile['src'] && $tmpFile['width'] > 0 && $tmpFile['height'] > 0)
+			{
+				$fileData['FILE_SIZE'] = $tmpFile['size'];
+				$fileData['SRC'] = $tmpFile['src'];
+			}
+		}
+
+		\CFile::viewByUser($fileData, array('force_download' => false, 'cache_time' => 0, 'attachment_name' => $file->getName()));
+	}
+
+	/**
+	 * Returns available entities for tasks module
+	 * @return EventResult
+	 */
+	public static function onBuildConnectorList()
+	{
+		return new EventResult(EventResult::SUCCESS, [
+			'TASK' => [
+				'ENTITY_TYPE' => 'crm_timeline', // should match entity type from user fields: CRM_TIMELINE
+				'MODULE_ID' => 'crm',
+				'CLASS' => Disk\CommentConnector::className()
+			],
+			'CRM_MAIL_TEMPLATE' => [
+				'ENTITY_TYPE' => 'crm_mail_template', // should match entity type from user fields: CRM_TIMELINE
+				'MODULE_ID' => 'crm',
+				'CLASS' => MailTemplateConnector::className()
+			],
+		]);
 	}
 }

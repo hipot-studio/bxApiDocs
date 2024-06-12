@@ -5,7 +5,7 @@ use Bitrix\Main\Localization\Loc;
 
 class Bitrix24Email
 {
-	private static $LANG_INCLUDED = false;
+	private static $langIncluded = false;
 	public static function isEnabled()
 	{
 		return ModuleManager::isModuleInstalled('bitrix24');
@@ -16,7 +16,7 @@ class Bitrix24Email
 	}
 	public static function isSignatureEnabled()
 	{
-		return strtoupper(\COption::GetOptionString('crm', 'enable_b24_email_sign', 'Y')) === 'Y';
+		return mb_strtoupper(\COption::GetOptionString('crm', 'enable_b24_email_sign', 'Y')) === 'Y';
 	}
 	public static function enableSignature($enable)
 	{
@@ -34,7 +34,7 @@ class Bitrix24Email
 	{
 		self::includeLangFile();
 		return self::isSignatureEnabled()
-			? GetMessage('CRM_B24_EMAIL_SIGNATURE_ENABLED')
+			? GetMessage('CRM_B24_EMAIL_SIGNATURE_ENABLED_2')
 			: GetMessage('CRM_B24_EMAIL_SIGNATURE_DISABLED');
 	}
 	public static function addSignature(&$message, $contentType = 0)
@@ -85,9 +85,9 @@ class Bitrix24Email
 	}
 	private static function includeLangFile()
 	{
-		if(!self::$LANG_INCLUDED)
+		if(!self::$langIncluded)
 		{
-			self::$LANG_INCLUDED = IncludeModuleLangFile(__FILE__);
+			self::$langIncluded = IncludeModuleLangFile(__FILE__);
 		}
 	}
 }

@@ -11,6 +11,7 @@ class Element
 	protected $iblockId = 0;
 	protected $elementId = 0;
 	protected static $catalog = null;
+	protected static $filterPropertyID = array();
 	protected $skuIblockId = 0;
 	protected $skuPropertyId = 0;
 	protected $elementPropertyValues = array();
@@ -50,17 +51,6 @@ class Element
 	 *
 	 * @return integer
 	 */
-	
-	/**
-	* <p>Метод возвращает идентификатор элемента. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/element/getid.php
-	* @author Bitrix
-	*/
 	public function getId()
 	{
 		return $this->elementId;
@@ -71,17 +61,6 @@ class Element
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод заполняет параметры элемента данными из базы данных. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/element/loadfromdatabase.php
-	* @author Bitrix
-	*/
 	public function loadFromDatabase()
 	{
 		$this->elementPropertyValues = array();
@@ -101,11 +80,8 @@ class Element
 		$this->elementPrices = array();
 		if (self::$catalog)
 		{
-			$elements = $this->elementPropertyValues["IBLOCK_ELEMENT_ID"];
-			if ($elements)
-			{
-				$this->loadElementPrices($elements);
-			}
+			$elements = $this->elementPropertyValues["IBLOCK_ELEMENT_ID"] ?? [$this->elementId];
+			$this->loadElementPrices($elements);
 		}
 
 		$this->elementSections = array();
@@ -115,14 +91,41 @@ class Element
 	/**
 	 * Fills member elementPropertyValues member with property values.
 	 *
-	 * @param integer $iblockId Information block identifier.
+	 * @param int $iblockId Information block identifier.
 	 * @param array[string]string $elementFilter Element property values criteria.
 	 *
 	 * @return void
 	 */
-	protected function loadElementProperties($iblockId, array $elementFilter)
+	protected function loadElementProperties(int $iblockId, array $elementFilter)
 	{
-		$elementList = \CIBlockElement::getPropertyValues($iblockId, $elementFilter);
+		if (!isset(self::$filterPropertyID[$iblockId]))
+		{
+			self::$filterPropertyID[$iblockId] = [];
+			$properties = \Bitrix\Iblock\SectionPropertyTable::getList(array(
+				"select" => array("PROPERTY_ID"),
+				"filter" => array(
+					"=IBLOCK_ID" => array($this->iblockId, $this->skuIblockId),
+					"=SMART_FILTER" => "Y",
+				),
+			));
+			while ($property = $properties->fetch())
+			{
+				self::$filterPropertyID[$iblockId][$property['PROPERTY_ID']] = $property['PROPERTY_ID'];
+			}
+			unset($property);
+			unset($properties);
+
+			self::$filterPropertyID[$iblockId] = array_values(self::$filterPropertyID[$iblockId]);
+			sort(self::$filterPropertyID[$iblockId]);
+		}
+
+		$elementList = \CIBlockElement::getPropertyValues(
+			$iblockId,
+			$elementFilter,
+			false,
+			array('ID' => self::$filterPropertyID[$iblockId])
+		);
+
 		while ($element = $elementList->fetch())
 		{
 			foreach ($element as $propertyId => $value)
@@ -204,25 +207,9 @@ class Element
 	 *
 	 * @return array[]mixed
 	 */
-	
-	/**
-	* <p>Метод возвращает полученные значения свойства. Нестатический метод.</p>
-	*
-	*
-	* @param integer $propertyId  Идентификатор свойства.
-	*
-	* @return \Bitrix\Iblock\PropertyIndex\array[]mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/element/getpropertyvalues.php
-	* @author Bitrix
-	*/
 	public function getPropertyValues($propertyId)
 	{
-		if (!$this->elementPropertyValues[$propertyId])
-			return array();
-		else
-			return $this->elementPropertyValues[$propertyId];
+		return $this->elementPropertyValues[$propertyId] ?? [];
 	}
 
 	/**
@@ -232,22 +219,9 @@ class Element
 	 *
 	 * @return mixed
 	 */
-	
-	/**
-	* <p>Метод возвращает полученные значения цены. Нестатический метод.</p>
-	*
-	*
-	* @param integer $priceId  Идентификатор цены.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/element/getpricevalues.php
-	* @author Bitrix
-	*/
 	public function getPriceValues($priceId)
 	{
-		return $this->elementPrices[$priceId];
+		return $this->elementPrices[$priceId] ?? [];
 	}
 
 	/**
@@ -257,19 +231,6 @@ class Element
 	 *
 	 * @return boolean
 	 */
-	
-	/**
-	* <p>Метод возвращает <i>true</i>, если элемент привязан к заданной секции. Нестатический элемент.</p>
-	*
-	*
-	* @param integer $sectionId  Идентификатор секции.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/element/iselementsection.php
-	* @author Bitrix
-	*/
 	public function isElementSection($sectionId)
 	{
 		return in_array($sectionId, $this->elementSections);
@@ -280,17 +241,6 @@ class Element
 	 *
 	 * @return integer[]
 	 */
-	
-	/**
-	* <p>Метод возвращает уникальный массив секций элемента. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/element/getsections.php
-	* @author Bitrix
-	*/
 	public function getSections()
 	{
 		return array_unique($this->elementSections, SORT_NUMERIC);
@@ -301,17 +251,6 @@ class Element
 	 *
 	 * @return integer[]
 	 */
-	
-	/**
-	* <p>Метод возвращает уникальный массив секций элемента со всеми их родителями. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/element/getparentsections.php
-	* @author Bitrix
-	*/
 	public function getParentSections()
 	{
 		$sections = array();
@@ -329,19 +268,6 @@ class Element
 	 *
 	 * @return mixed
 	 */
-	
-	/**
-	* <p>Метод возвращает все родительские разделы для секции. Нестатический метод.</p>
-	*
-	*
-	* @param integer $sectionId  Идентификатор секции.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/element/getsectionparents.php
-	* @author Bitrix
-	*/
 	public function getSectionParents($sectionId)
 	{
 		if (!isset(self::$sectionParents[$sectionId]))

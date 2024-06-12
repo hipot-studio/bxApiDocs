@@ -1,5 +1,6 @@
 <?
-use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Localization\Loc,
+	Bitrix\Catalog;
 
 Loc::loadMessages(__FILE__);
 
@@ -14,7 +15,7 @@ class CCatalogDiscountConvert
 	public static $arErrors = array();
 	public static $strSessID = '';
 
-	static public function __construct()
+	public function __construct()
 	{
 
 	}
@@ -55,7 +56,6 @@ class CCatalogDiscountConvert
 
 	public static function ConvertDiscount($intStep = 100, $intMaxExecutionTime = 15)
 	{
-		global $DBType;
 		global $DB;
 		global $APPLICATION;
 
@@ -71,24 +71,10 @@ class CCatalogDiscountConvert
 		$strQueryPriceTypes = '';
 		$strQueryUserGroups = '';
 		$strTableName = '';
-		switch (ToUpper($DBType))
-		{
-			case 'MYSQL':
-				$strQueryPriceTypes = 'select CATALOG_GROUP_ID from b_catalog_discount2cat where DISCOUNT_ID = #ID#';
-				$strQueryUserGroups = 'select GROUP_ID from b_catalog_discount2group where DISCOUNT_ID = #ID#';
-				$strTableName = 'b_catalog_discount';
-				break;
-			case 'MSSQL':
-				$strQueryPriceTypes = 'select CATALOG_GROUP_ID from B_CATALOG_DISCOUNT2CAT where DISCOUNT_ID = #ID#';
-				$strQueryUserGroups = 'select GROUP_ID from B_CATALOG_DISCOUNT2GROUP where DISCOUNT_ID = #ID#';
-				$strTableName = 'B_CATALOG_DISCOUNT';
-				break;
-			case 'ORACLE':
-				$strQueryPriceTypes = 'select CATALOG_GROUP_ID from B_CATALOG_DISCOUNT2CAT where DISCOUNT_ID = #ID#';
-				$strQueryUserGroups = 'select GROUP_ID from B_CATALOG_DISCOUNT2GROUP where DISCOUNT_ID = #ID#';
-				$strTableName = 'B_CATALOG_DISCOUNT';
-				break;
-		}
+
+		$strQueryPriceTypes = 'select CATALOG_GROUP_ID from b_catalog_discount2cat where DISCOUNT_ID = #ID#';
+		$strQueryUserGroups = 'select GROUP_ID from b_catalog_discount2group where DISCOUNT_ID = #ID#';
+		$strTableName = 'b_catalog_discount';
 
 		CTimeZone::Disable();
 
@@ -490,7 +476,6 @@ class CCatalogDiscountConvert
 
 	public static function ConvertFormatDiscount($intStep = 20, $intMaxExecutionTime = 15)
 	{
-		global $DBType;
 		global $DB;
 		global $APPLICATION;
 
@@ -503,19 +488,7 @@ class CCatalogDiscountConvert
 
 		$obDiscount = new CCatalogDiscount();
 
-		$strTableName = '';
-		switch (ToUpper($DBType))
-		{
-			case 'MYSQL':
-				$strTableName = 'b_catalog_discount';
-				break;
-			case 'MSSQL':
-				$strTableName = 'B_CATALOG_DISCOUNT';
-				break;
-			case 'ORACLE':
-				$strTableName = 'B_CATALOG_DISCOUNT';
-				break;
-		}
+		$strTableName = 'b_catalog_discount';
 
 		if (!CCatalogDiscountConvertTmp::CreateTable())
 		{
@@ -556,11 +529,21 @@ class CCatalogDiscountConvert
 				self::$intLastConvertID = $arDiscount['ID'];
 				continue;
 			}
+
+			$iterator = Catalog\DiscountCouponTable::getList(array(
+				'select' => array('DISCOUNT_ID'),
+				'filter' => array('=DISCOUNT_ID' => (int)$arDiscount['ID']),
+				'limit' => 1
+			));
+			$existRow = $iterator->fetch();
+			unset($iterator);
 			$arFields = array(
 				'MODIFIED_BY' => $arDiscount['MODIFIED_BY'],
 				'CONDITIONS' => $arDiscount['CONDITIONS'],
-				'ACTIVE' => $arDiscount['ACTIVE']
+				'ACTIVE' => $arDiscount['ACTIVE'],
+				'USE_COUPONS' => (!empty($existRow) ? 'Y' : 'N')
 			);
+			unset($existRow);
 
 			$mxRes = $obDiscount->Update($arDiscount['ID'], $arFields);
 			if (!$mxRes)
@@ -624,22 +607,10 @@ class CCatalogDiscountConvert
 
 	public static function GetCountOld()
 	{
-		global $DBType;
 		global $DB;
 
-		$strSql = '';
-		switch(ToUpper($DBType))
-		{
-			case 'MYSQL':
-				$strSql = "SELECT COUNT(*) CNT FROM b_catalog_discount WHERE TYPE=".CCatalogDiscount::ENTITY_ID." AND VERSION=".CCatalogDiscount::OLD_FORMAT;
-				break;
-			case 'MSSQL':
-				$strSql = "SELECT COUNT(*) CNT FROM B_CATALOG_DISCOUNT WHERE TYPE=".CCatalogDiscount::ENTITY_ID." AND VERSION=".CCatalogDiscount::OLD_FORMAT;
-				break;
-			case 'ORACLE':
-				$strSql = "SELECT COUNT(*) CNT FROM B_CATALOG_DISCOUNT WHERE TYPE=".CCatalogDiscount::ENTITY_ID." AND VERSION=".CCatalogDiscount::OLD_FORMAT;
-				break;
-		}
+		$strSql = "SELECT COUNT(*) CNT FROM b_catalog_discount WHERE TYPE=".CCatalogDiscount::ENTITY_ID." AND VERSION=".CCatalogDiscount::OLD_FORMAT;
+
 		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 		if (!$res)
 			return 0;
@@ -661,4 +632,3 @@ class CCatalogDiscountConvert
 		return CCatalogDiscountConvertTmp::DropTable();
 	}
 }
-?>

@@ -4,7 +4,9 @@ namespace Bitrix\Sale\Delivery\Restrictions;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Internals\CollectableEntity;
 use Bitrix\Sale\Internals\DeliveryPaySystemTable;
+use Bitrix\Sale\Internals\Entity;
 use Bitrix\Sale\Internals\PaySystemInner;
+use Bitrix\Sale\Order;
 use Bitrix\Sale\PaySystem;
 
 Loc::loadMessages(__FILE__);
@@ -46,15 +48,26 @@ class ByPaySystem extends Base
 		return empty($diff);
 	}
 
-	protected static function extractParams(CollectableEntity $shipment)
+	protected static function extractParams(Entity $entity)
 	{
 		$result = array();
 
-		/** @var \Bitrix\Sale\ShipmentCollection $collection */
-		$collection = $shipment->getCollection();
+		if ($entity instanceof CollectableEntity)
+		{
+			/** @var \Bitrix\Sale\ShipmentCollection $collection */
+			$collection = $entity->getCollection();
 
-		/** @var \Bitrix\Sale\Order $order */
-		$order = $collection->getOrder();
+			/** @var \Bitrix\Sale\Order $order */
+			$order = $collection->getOrder();
+		}
+		elseif ($entity instanceof Order)
+		{
+			/** @var \Bitrix\Sale\Order $order */
+			$order = $entity;
+		}
+
+		if (!$order)
+			return $result;
 
 		/** @var \Bitrix\Sale\Payment $payment */
 		foreach($order->getPaymentCollection() as $payment)
@@ -67,27 +80,31 @@ class ByPaySystem extends Base
 		return $result;
 	}
 
-	protected static function getPaySystemsList()
+	protected static function getPaySystemsList(): array
 	{
 		static $result = null;
 
-		if($result !== null)
-			return $result;
-
-		$result = array();
-
-		$dbResultList = \CSalePaySystem::GetList(
-			array("SORT"=>"ASC", "NAME"=>"ASC"),
-			array("ACTIVE" => "Y"),
-			false,
-			false,
-			array("ID", "NAME", "ACTIVE", "SORT", "LID")
-		);
-
-		while ($arPayType = $dbResultList->Fetch())
+		if ($result !== null)
 		{
-			$name = (strlen($arPayType["LID"]) > 0) ? htmlspecialcharsbx($arPayType["NAME"]). " (".$arPayType["LID"].")" : htmlspecialcharsbx($arPayType["NAME"]);
-			$result[$arPayType["ID"]] = $name;
+			return $result;
+		}
+
+		$result = [];
+
+		$iterator = PaySystem\Manager::getList([
+			'select' => [
+				'ID',
+				'NAME',
+				'SORT',
+			],
+			'filter' => [
+				'=ACTIVE' => 'Y',
+			],
+			'order' => ['SORT' => 'ASC', 'NAME' => 'ASC']
+		]);
+		while ($row = $iterator->fetch())
+		{
+			$result[$row['ID']] = htmlspecialcharsbx($row['NAME']);
 		}
 
 		return $result;
@@ -149,7 +166,12 @@ class ByPaySystem extends Base
 
 	public static function prepareParamsValues(array $paramsValues, $deliveryId = 0)
 	{
-		return array("PAY_SYSTEMS" =>  self::getPaySystemsByDeliveryId($deliveryId));
+		$result = array();
+
+		if(intval($deliveryId > 0))
+			$result = DeliveryPaySystemTable::getLinks($deliveryId, DeliveryPaySystemTable::ENTITY_TYPE_DELIVERY, array());
+
+		return array("PAY_SYSTEMS" =>  $result);
 	}
 
 	public static function delete($restrictionId, $deliveryId = 0)
@@ -171,4 +193,4 @@ class ByPaySystem extends Base
 
 		self::$preparedData = \Bitrix\Sale\Internals\DeliveryPaySystemTable::prepareData($deliveryIds, DeliveryPaySystemTable::ENTITY_TYPE_DELIVERY);
 	}
-} 
+}

@@ -2,20 +2,37 @@
 
 IncludeModuleLangFile(__FILE__);
 
+use Bitrix\Crm;
+use Bitrix\Crm\Security\EntityAuthorization;
+use Bitrix\Crm\Service\EventHistory;
+use Bitrix\Crm\Settings\HistorySettings;
+use Bitrix\Main\Entity\ReferenceField;
+use Bitrix\Main\ORM\Query\Join;
+
 class CCrmEvent
 {
 	protected $cdb = null;
 	protected $currentUserID = 0;
+
+	public const TYPE_USER = EventHistory::EVENT_TYPE_USER;
+	public const TYPE_CHANGE = EventHistory::EVENT_TYPE_UPDATE;
+	public const TYPE_EMAIL = EventHistory::EVENT_TYPE_EMAIL;
+	public const TYPE_VIEW = EventHistory::EVENT_TYPE_VIEW;
+	public const TYPE_EXPORT = EventHistory::EVENT_TYPE_EXPORT;
+	public const TYPE_DELETE = EventHistory::EVENT_TYPE_DELETE;
+	public const TYPE_MERGER = EventHistory::EVENT_TYPE_MERGER;
+	public const TYPE_LINK = EventHistory::EVENT_TYPE_LINK;
+	public const TYPE_UNLINK = EventHistory::EVENT_TYPE_UNLINK;
+
 	function __construct()
 	{
 		global $DB;
 		$this->cdb = $DB;
 
 		global $USER;
-		$currentUser = (isset($USER) && ((get_class($USER) === 'CUser') || ($USER instanceof CUser))) ? $USER : (new CUser());
+		$currentUser = (is_object($USER) && ((get_class($USER) === 'CUser') || ($USER instanceof CUser))) ? $USER : (new CUser());
 		$this->currentUserID = $currentUser->GetId();
 	}
-
 	public function Add($arFields, $bPermCheck = true)
 	{
 		$err_mess = (self::err_mess()).'<br />Function: Add<br />Line: ';
@@ -35,7 +52,8 @@ class CCrmEvent
 				array(
 					'ENTITY_TYPE' => $arFields['ENTITY_TYPE'],
 					'ENTITY_ID' => $arFields['ENTITY_ID'],
-					'ENTITY_FIELD' => isset($arFields['ENTITY_FIELD']) ? $arFields['ENTITY_FIELD'] : ''
+					'ENTITY_FIELD' => isset($arFields['ENTITY_FIELD']) ? $arFields['ENTITY_FIELD'] : '',
+					'USER_ID' => (int)(isset($arFields['USER_ID']) ? intval($arFields['USER_ID']) : $this->currentUserID)
 				)
 			);
 		}
@@ -91,28 +109,44 @@ class CCrmEvent
 			'EVENT_TYPE' 	=> intval($arFields['EVENT_TYPE']),
 			'EVENT_TEXT_1'  => isset($arFields['EVENT_TEXT_1'])? $arFields['EVENT_TEXT_1']: '',
 			'EVENT_TEXT_2'  => isset($arFields['EVENT_TEXT_2'])? $arFields['EVENT_TEXT_2']: '',
-			'FILES' 		=> serialize($arFiles),
+			'FILES' => null,
 		);
+		if (count($arFiles) > 0)
+		{
+			$arFields_i['FILES'] = serialize($arFiles);
+		}
 
-		if (isset($arFields['DATE_CREATE']) && !empty($arFields['DATE_CREATE']))
+		//Validate DATE_CREATE
+		if (isset($arFields['DATE_CREATE']))
+		{
+			$sqlTime = CDatabase::FormatDate($arFields['DATE_CREATE'], CLang::GetDateFormat('FULL', false), 'YYYY-MM-DD HH:MI:SS');
+			if (!(is_string($sqlTime) && $sqlTime !== ''))
+			{
+				unset($arFields['DATE_CREATE']);
+			}
+		}
+
+		if (isset($arFields['DATE_CREATE']))
+		{
 			$arFields_i['DATE_CREATE'] = $arFields['DATE_CREATE'];
+		}
 		else
+		{
 			$arFields_i['~DATE_CREATE'] = $this->cdb->GetNowFunction();
+		}
 
 		$EVENT_ID = $this->cdb->Add('b_crm_event', $arFields_i, array("FILES"), 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
-
 		$this->AddRelation($EVENT_ID, $arFields['ENTITY'], $bPermCheck);
 
 		$db_events = GetModuleEvents('crm', 'OnAfterCrmAddEvent');
 		while($arEvent = $db_events->Fetch())
-			$arFields = ExecuteModuleEventEx($arEvent, array($EVENT_ID, $arFields));
+			ExecuteModuleEventEx($arEvent, array($EVENT_ID, $arFields));
 
 		return $EVENT_ID;
 	}
-
 	public function Share($srcEntity, $dstEntities, $typeName)
 	{
-		$typeName = strtoupper(strval($typeName));
+		$typeName = mb_strtoupper(strval($typeName));
 		if($typeName === '')
 		{
 			return;
@@ -141,26 +175,28 @@ class CCrmEvent
 			}
 		}
 	}
-
 	public function AddRelation($EVENT_ID, $arFields, $bPermCheck = true)
 	{
+		$CCrmPerms = \CCrmAuthorizationHelper::GetUserPermissions();
 		$EVENT_ID = intval($EVENT_ID);
 		$REL_ID = 0;
 		foreach ($arFields as $arRel)
 		{
-			if ($bPermCheck)
+			$entityType = $arRel['ENTITY_TYPE'];
+			$entityTypeID = \CCrmOwnerType::ResolveID($entityType);
+			$entityID = (int)$arRel['ENTITY_ID'];
+
+			if($bPermCheck
+				&& \CCrmOwnerType::IsEntity($entityTypeID)
+				&& !EntityAuthorization::checkUpdatePermission($entityTypeID, $entityID, $CCrmPerms)
+			)
 			{
-				$CrmPerms = new CCrmPerms($this->currentUserID);
-				if ($CrmPerms->HavePerm($arRel['ENTITY_TYPE'], BX_CRM_PERM_NONE))
-					continue;
+				continue;
 			}
 
-			if (!in_array($arRel['ENTITY_TYPE'], Array('LEAD', 'CONTACT', 'COMPANY', 'DEAL', 'QUOTE')))
-				continue;
-
-			$arRel_i = Array(
-				'ENTITY_TYPE'	=> $arRel['ENTITY_TYPE'],
-				'ENTITY_ID'	 	=> intval($arRel['ENTITY_ID']),
+			$arRel_i = array(
+				'ENTITY_TYPE'	=> $entityType,
+				'ENTITY_ID'	 	=> $entityID,
 				'ENTITY_FIELD'  => isset($arRel['ENTITY_FIELD']) ? $arRel['ENTITY_FIELD'] : '',
 				'EVENT_ID' 		=> $EVENT_ID,
 				'ASSIGNED_BY_ID'=> isset($arRel['USER_ID']) ? intval($arRel['USER_ID']) : $this->currentUserID,
@@ -170,7 +206,6 @@ class CCrmEvent
 		}
 		return $REL_ID; //?
 	}
-
 	public function RemoveRelation($RELATION_ID, $ENTITY_TYPE, $bPermCheck = true)
 	{
 		$RELATION_ID = intval($RELATION_ID);
@@ -189,7 +224,6 @@ class CCrmEvent
 		$this->cdb->Query($sSql, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
 		return true;
 	}
-
 	public function CheckFields($arFields)
 	{
 		$aMsg = array();
@@ -216,42 +250,44 @@ class CCrmEvent
 
 	public static function GetFields()
 	{
-		$relationJoin = 'INNER JOIN b_crm_event_relations CER ON CE.ID = CER.EVENT_ID';
+		$relationJoin = 'INNER JOIN b_crm_event CE ON CE.ID = CER.EVENT_ID';
 		$createdByJoin = 'LEFT JOIN b_user U ON CE.CREATED_BY_ID = U.ID';
 
-		$result = array(
-			'ID' => array('FIELD' => 'CER.ID', 'TYPE' => 'int', 'FROM' => $relationJoin),
+		return [
+			'ID' => ['FIELD' => 'CER.ID', 'TYPE' => 'int'],
 
-			'ENTITY_TYPE' => array('FIELD' => 'CER.ENTITY_TYPE', 'TYPE' => 'string', 'FROM' => $relationJoin),
-			'ENTITY_ID' => array('FIELD' => 'CER.ENTITY_ID', 'TYPE' => 'int', 'FROM' => $relationJoin),
-			'ENTITY_FIELD' => array('FIELD' => 'CER.ENTITY_FIELD', 'TYPE' => 'string', 'FROM' => $relationJoin),
+			'ENTITY_TYPE' => ['FIELD' => 'CER.ENTITY_TYPE', 'TYPE' => 'string'],
+			'ENTITY_ID' => ['FIELD' => 'CER.ENTITY_ID', 'TYPE' => 'int'],
+			'ENTITY_FIELD' => ['FIELD' => 'CER.ENTITY_FIELD', 'TYPE' => 'string'],
 
-			'EVENT_REL_ID' => array('FIELD' => 'CER.EVENT_ID', 'TYPE' => 'string', 'FROM' => $relationJoin),
-			'EVENT_ID' => array('FIELD' => 'CE.EVENT_ID', 'TYPE' => 'string'),
-			'EVENT_TYPE' => array('FIELD' => 'CE.EVENT_TYPE', 'TYPE' => 'string'),
-			'EVENT_NAME' => array('FIELD' => 'CE.EVENT_NAME', 'TYPE' => 'string'),
-			'EVENT_TEXT_1' => array('FIELD' => 'CE.EVENT_TEXT_1', 'TYPE' => 'string'),
-			'EVENT_TEXT_2' => array('FIELD' => 'CE.EVENT_TEXT_2', 'TYPE' => 'string'),
-			'FILES' => array('FIELD' => 'CE.FILES', 'TYPE' => 'string'),
+			'EVENT_REL_ID' => ['FIELD' => 'CER.EVENT_ID', 'TYPE' => 'string'],
+			'EVENT_ID' => ['FIELD' => 'CE.EVENT_ID', 'TYPE' => 'string', 'FROM' => $relationJoin],
+			'EVENT_TYPE' => ['FIELD' => 'CE.EVENT_TYPE', 'TYPE' => 'string', 'FROM' => $relationJoin],
+			'EVENT_NAME' => ['FIELD' => 'CE.EVENT_NAME', 'TYPE' => 'string', 'FROM' => $relationJoin],
+			'EVENT_TEXT_1' => ['FIELD' => 'CE.EVENT_TEXT_1', 'TYPE' => 'string', 'FROM' => $relationJoin],
+			'EVENT_TEXT_2' => ['FIELD' => 'CE.EVENT_TEXT_2', 'TYPE' => 'string', 'FROM' => $relationJoin],
+			'FILES' => ['FIELD' => 'CE.FILES', 'TYPE' => 'string', 'FROM' => $relationJoin],
 
-			'CREATED_BY_ID' => array('FIELD' => 'CE.CREATED_BY_ID', 'TYPE' => 'int'),
-			'CREATED_BY_LOGIN' => array('FIELD' => 'U.LOGIN', 'TYPE' => 'string', 'FROM'=> $createdByJoin),
-			'CREATED_BY_NAME' => array('FIELD' => 'U.NAME', 'TYPE' => 'string', 'FROM'=> $createdByJoin),
-			'CREATED_BY_LAST_NAME' => array('FIELD' => 'U.LAST_NAME', 'TYPE' => 'string', 'FROM'=> $createdByJoin),
-			'CREATED_BY_SECOND_NAME' => array('FIELD' => 'U.SECOND_NAME', 'TYPE' => 'string', 'FROM'=> $createdByJoin),
+			'CREATED_BY_ID' => ['FIELD' => 'CE.CREATED_BY_ID', 'TYPE' => 'int', 'FROM' => $relationJoin],
+			'CREATED_BY_LOGIN' => ['FIELD' => 'U.LOGIN', 'TYPE' => 'string', 'FROM' => $createdByJoin],
+			'CREATED_BY_NAME' => ['FIELD' => 'U.NAME', 'TYPE' => 'string', 'FROM' => $createdByJoin],
+			'CREATED_BY_LAST_NAME' => ['FIELD' => 'U.LAST_NAME', 'TYPE' => 'string', 'FROM' => $createdByJoin],
+			'CREATED_BY_SECOND_NAME' => ['FIELD' => 'U.SECOND_NAME', 'TYPE' => 'string', 'FROM' => $createdByJoin],
+			'CREATED_BY_PERSONAL_PHOTO' => ['FIELD' => 'U.PERSONAL_PHOTO', 'TYPE' => 'int', 'FROM' => $createdByJoin],
 
-			'DATE_CREATE' => array('FIELD' => 'CE.DATE_CREATE', 'TYPE' => 'datetime'),
-			'ASSIGNED_BY_ID' => array('FIELD' => 'CER.ASSIGNED_BY_ID', 'TYPE' => 'int', 'FROM' => $relationJoin)
-		);
-		return $result;
+			'DATE_CREATE' => ['FIELD' => 'CE.DATE_CREATE', 'TYPE' => 'datetime', 'FROM' => $relationJoin],
+			'ASSIGNED_BY_ID' => ['FIELD' => 'CER.ASSIGNED_BY_ID', 'TYPE' => 'int'],
+		];
 	}
+
 	static public function BuildPermSql($aliasPrefix = 'CE', $permType = 'READ')
 	{
-		if(empty($arFilter['ENTITY_TYPE']))
+		if (empty($arFilter['ENTITY_TYPE']))
 		{
 			$arEntity = array(
 				CCrmOwnerType::LeadName,
 				CCrmOwnerType::DealName,
+				CCrmOwnerType::QuoteName,
 				CCrmOwnerType::ContactName,
 				CCrmOwnerType::CompanyName
 			);
@@ -276,6 +312,10 @@ class CCrmEvent
 			elseif($entityType === CCrmOwnerType::DealName)
 			{
 				$entitiesSql[CCrmOwnerType::DealName] = CCrmDeal::BuildPermSql('CER', $permType, $permOptions);
+			}
+			elseif($entityType === CCrmOwnerType::QuoteName)
+			{
+				$entitiesSql[CCrmOwnerType::QuoteName] = CCrmQuote::BuildPermSql('CER', $permType, $permOptions);
 			}
 			elseif($entityType === CCrmOwnerType::ContactName)
 			{
@@ -318,25 +358,21 @@ class CCrmEvent
 	// GetList with navigation support
 	public static function GetListEx($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array(), $arOptions = array())
 	{
-		if (isset($arFilter['ENTITY']))
+		$operationInfo = Crm\UI\Filter\EntityHandler::findFieldOperation('ENTITY', $arFilter);
+		if(is_array($operationInfo) && $operationInfo['OPERATION'] === '=')
 		{
-			if(is_string($arFilter['ENTITY']) && $arFilter['ENTITY'] !== '')
+			$ary = explode('_', $operationInfo['CONDITION']);
+			if(count($ary) === 2)
 			{
-				$ary = explode('_', $arFilter['ENTITY']);
-				if(count($ary) === 2)
-				{
-					$arFilter['ENTITY_TYPE'] = CUserTypeCrm::GetLongEntityType($ary[0]);
-					$arFilter['ENTITY_ID'] = intval($ary[1]);
-				}
+				$arFilter['ENTITY_TYPE'] = CUserTypeCrm::GetLongEntityType($ary[0]);
+				$arFilter['ENTITY_ID'] = intval($ary[1]);
 			}
-			unset($arFilter['ENTITY']);
 		}
 
-		global $DBType;
 		$lb = new CCrmEntityListBuilder(
-			$DBType,
-			'b_crm_event',
-			'CE',
+			'mysql',
+			'b_crm_event_relations',
+			'CER',
 			self::GetFields(),
 			'',
 			'',
@@ -435,25 +471,43 @@ class CCrmEvent
 		$sOrder = '';
 		foreach($arSort as $key => $val)
 		{
-			$ord = (strtoupper($val) <> 'ASC'? 'DESC':'ASC');
-			switch (strtoupper($key))
+			$ord = (mb_strtoupper($val) <> 'ASC'? 'DESC':'ASC');
+			switch(mb_strtoupper($key))
 			{
-				case 'ID':	$sOrder .= ', CER.ID '.$ord; break;
-				case 'CREATED_BY_ID':	$sOrder .= ', CE.CREATED_BY_ID '.$ord; break;
-				case 'EVENT_TYPE':	$sOrder .= ', CE.EVENT_TYPE '.$ord; break;
-				case 'ENTITY_TYPE':	$sOrder .= ', CER.ENTITY_TYPE '.$ord; break;
-				case 'ENTITY_ID':	$sOrder .= ', CER.ENTITY_ID '.$ord; break;
-				case 'EVENT_ID':	$sOrder .= ', CE.EVENT_ID '.$ord; break;
-				case 'DATE_CREATE':	$sOrder .= ', CE.DATE_CREATE '.$ord; break;
-				case 'EVENT_NAME':	$sOrder .= ', CE.EVENT_NAME 	 '.$ord; break;
-				case 'ENTITY_FIELD':	$sOrder .= ', CER.ENTITY_FIELD 	 '.$ord; break;
+				case 'ID':
+					$sOrder .= ', CER.ID '.$ord;
+					break;
+				case 'CREATED_BY_ID':
+					$sOrder .= ', CE.CREATED_BY_ID '.$ord;
+					break;
+				case 'EVENT_TYPE':
+					$sOrder .= ', CE.EVENT_TYPE '.$ord;
+					break;
+				case 'ENTITY_TYPE':
+					$sOrder .= ', CER.ENTITY_TYPE '.$ord;
+					break;
+				case 'ENTITY_ID':
+					$sOrder .= ', CER.ENTITY_ID '.$ord;
+					break;
+				case 'EVENT_ID':
+					$sOrder .= ', CE.EVENT_ID '.$ord;
+					break;
+				case 'DATE_CREATE':
+					$sOrder .= ', CE.DATE_CREATE '.$ord;
+					break;
+				case 'EVENT_NAME':
+					$sOrder .= ', CE.EVENT_NAME 	 '.$ord;
+					break;
+				case 'ENTITY_FIELD':
+					$sOrder .= ', CER.ENTITY_FIELD 	 '.$ord;
+					break;
 			}
 		}
 
-		if (strlen($sOrder)<=0)
+		if ($sOrder == '')
 			$sOrder = 'CER.ID DESC';
 
-		$strSqlOrder = ' ORDER BY '.TrimEx($sOrder,',');
+		$strSqlOrder = ' ORDER BY '.trim($sOrder, ', ');
 
 		// where
 		$arWhereFields = array(
@@ -572,63 +626,46 @@ class CCrmEvent
 		$res->SetUserFields(array('FILES' => array('MULTIPLE' => 'Y')));
 		return $res;
 	}
-
-	public function DeleteByElement($entityId, $elementId)
+	public function DeleteByElement($entityTypeName, $entityID)
 	{
-		$err_mess = (self::err_mess()).'<br>Function: DeleteByElement<br>Line: ';
+		$entityID = (int)$entityID;
 
-		$elementId = IntVal($elementId);
+		if ($entityTypeName == '' || $entityID == 0)
+		{
+			return false;
+		}
 
 		$db_events = GetModuleEvents('crm', 'OnBeforeCrmEventDeleteByElement');
 		while($arEvent = $db_events->Fetch())
-			ExecuteModuleEventEx($arEvent, array($entityId, $elementId));
+			ExecuteModuleEventEx($arEvent, array($entityTypeName, $entityID));
 
-		if ($entityId == '' || $elementId == 0)
-			return false;
+		Crm\EventRelationsTable::deleteByItem(\CCrmOwnerType::ResolveID($entityTypeName), $entityID);
 
-		// check unrelated events
-		$sql = "SELECT EVENT_ID, COUNT(ID) as CNT
-				FROM b_crm_event_relations
-				WHERE ENTITY_TYPE = '".$this->cdb->ForSql($entityId)."' AND ENTITY_ID = '$elementId'
-				GROUP BY EVENT_ID";
-		$res = $this->cdb->Query($sql, false, $err_mess.__LINE__);
-		if ($row = $res->Fetch())
-		{
-			// delete event
-			if ($row['CNT'] == 1)
-			{
-				$obRes = $this->cdb->Query("SELECT ID, FILES FROM b_crm_event WHERE ID = '$row[EVENT_ID]'", false, $err_mess.__LINE__);
-				if (($aRow = $obRes->Fetch()) !== false)
-				{
-					if (($arFiles = unserialize($aRow['FILES'])) !== false)
-					{
-						foreach ($arFiles as $iFileId)
-							CFile::Delete((int) $iFileId);
-					}
-					$this->cdb->Query("DELETE FROM b_crm_event WHERE ID = '$row[EVENT_ID]'", false, $err_mess.__LINE__);
-				}
-			}
-		}
-		// delete event relations
-		$res = $this->cdb->Query("DELETE FROM b_crm_event_relations WHERE ENTITY_TYPE = '".$this->cdb->ForSql($entityId)."' AND ENTITY_ID = '$elementId'", false, $err_mess.__LINE__);
-
-		return $res;
+		return new \CDBResult();
 	}
-
-	public function Delete($ID)
+	public function Delete($ID, $arOptions = array())
 	{
 		global $USER;
+
+		if(isset($arOptions['CURRENT_USER']))
+		{
+			$iUserId = intval($arOptions['CURRENT_USER']);
+		}
+		else
+		{
+			$iUserId = $USER->GetId();
+		}
+
 		$err_mess = (self::err_mess()).'<br>Function: Delete<br>Line: ';
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$db_events = GetModuleEvents('crm', 'OnBeforeCrmEventDelete');
 		while($arEvent = $db_events->Fetch())
 			ExecuteModuleEventEx($arEvent, array($ID));
 
-		$sqlWhere = '';
 		// if not admin - delete only self items
-		if (!CCrmPerms::IsAdmin())
+		if (!CCrmPerms::IsAdmin($iUserId))
 		{
 			$sql = "SELECT CER.ID
 					FROM
@@ -637,7 +674,7 @@ class CCrmEvent
 					WHERE
 						CE.ID = CER.EVENT_ID
 					AND CER.ID = '$ID'
-					AND CER.ASSIGNED_BY_ID = '".$USER->GetId()."' AND CE.EVENT_TYPE = 0";
+					AND CER.ASSIGNED_BY_ID = '".$iUserId."' AND CE.EVENT_TYPE = 0";
 			$res = $this->cdb->Query($sql, false, $err_mess.__LINE__);
 			if (!$res->Fetch())
 				return false;
@@ -657,7 +694,7 @@ class CCrmEvent
 				$obRes = $this->cdb->Query("SELECT ID, FILES FROM b_crm_event WHERE ID = '$row[EVENT_ID]'", false, $err_mess.__LINE__);
 				if (($aRow = $obRes->Fetch()) !== false)
 				{
-					if (($arFiles = unserialize($aRow['FILES'])) !== false)
+					if (($arFiles = unserialize($aRow['FILES'], ['allowed_classes' => false])) !== false)
 					{
 						foreach ($arFiles as $iFileId)
 							CFile::Delete((int) $iFileId);
@@ -671,15 +708,14 @@ class CCrmEvent
 
 		return $res;
 	}
-
 	static public function SetAssignedByElement($assignedId, $entityType, $entityId)
 	{
 		global $DB;
 
 		$err_mess = (self::err_mess()).'<br>Function: SetAssignedByElement<br>Line: ';
 
-		$assignedId = IntVal($assignedId);
-		$entityId = IntVal($entityId);
+		$assignedId = intval($assignedId);
+		$entityId = intval($entityId);
 
 		if ($entityType == '' || $entityId == 0)
 			return false;
@@ -688,7 +724,6 @@ class CCrmEvent
 
 		return $res;
 	}
-
 	static public function Rebind($entityTypeID, $srcEntityID, $dstEntityID)
 	{
 		$entityTypeName = CCrmOwnerType::ResolveName($entityTypeID);
@@ -696,10 +731,10 @@ class CCrmEvent
 		$dstEntityID = (int)$dstEntityID;
 
 		$sql = "SELECT R.EVENT_ID FROM b_crm_event_relations R
-		 INNER JOIN b_crm_event E ON R.EVENT_ID = E.ID
-		  AND R.ENTITY_TYPE = '{$entityTypeName}'
-		  AND R.ENTITY_ID = {$srcEntityID}
-		  AND E.EVENT_TYPE IN (0, 2)";
+		INNER JOIN b_crm_event E ON R.EVENT_ID = E.ID
+			AND R.ENTITY_TYPE = '{$entityTypeName}'
+			AND R.ENTITY_ID = {$srcEntityID}
+			AND E.EVENT_TYPE IN (0, 2)";
 
 		global $DB;
 		$err_mess = (self::err_mess()).'<br>Function: Rebind<br>Line: ';
@@ -724,7 +759,170 @@ class CCrmEvent
 			$DB->Query($sql, false, $err_mess.__LINE__);
 		}
 	}
+	/**
+	 * @return array
+	*/
+	static public function GetEventTypes()
+	{
+		return Crm\Service\Container::getInstance()->getEventHistory()->getAllEventTypeCaptions();
+	}
+	/**
+	 * @return string
+	*/
+	static public function GetEventTypeName($eventType)
+	{
+		$types = self::GetEventTypes();
+		return isset($types[$eventType]) ? $types[$eventType] : '';
+	}
+	static public function RegisterViewEvent($entityTypeID, $entityID, $userID = 0)
+	{
+		$entityTypeName = CCrmOwnerType::ResolveName($entityTypeID);
 
+		if(is_int($entityID))
+		{
+			$entityID = (int)$entityID;
+		}
+
+		if($userID <= 0)
+		{
+			$userID = CCrmSecurityHelper::GetCurrentUserID();
+		}
+
+		if($userID <= 0)
+		{
+			return false;
+		}
+		$user = \Bitrix\Main\UserTable::query()
+			->where('ID', $userID)
+			->setSelect(['IS_REAL_USER'])
+			->fetch();
+		if (!$user || $user['IS_REAL_USER'] !== 'Y')
+		{
+			return false;
+		}
+
+		$timestamp = time() + CTimeZone::GetOffset();
+		//Event grouping interval in seconds
+		$interval = HistorySettings::getCurrent()->getViewEventGroupingInterval() * 60;
+
+		$query = new Bitrix\Main\Entity\Query(Bitrix\Crm\EventTable::getEntity());
+		$query->setSelect(['ID']);
+		$query->addFilter('=EVENT_TYPE', CCrmEvent::TYPE_VIEW);
+		$query->addFilter('>=DATE_CREATE', ConvertTimeStamp(($timestamp - $interval), 'FULL'));
+		$query->addFilter('=CREATED_BY_ID', $userID);
+		$query->registerRuntimeField(
+			'',
+			new ReferenceField('RELATIONS',
+				Bitrix\Crm\EventRelationsTable::getEntity(),
+				[
+					'ref.EVENT_ID' => 'this.ID',
+					'ref.ENTITY_TYPE' => new \Bitrix\Main\DB\SqlExpression('?s', $entityTypeName),
+					'ref.ENTITY_ID' => new \Bitrix\Main\DB\SqlExpression('?i', $entityID),
+				],
+				['join_type' => Join::TYPE_INNER]
+			)
+		);
+		$query->setLimit(1);
+
+		$dbResult = $query->exec()->fetch();
+		if ($dbResult)
+		{
+			return false;
+		}
+
+		$entity = new CCrmEvent();
+		$entity->Add(
+			array(
+				'USER_ID' => $userID,
+				'ENTITY_ID' => $entityID,
+				'ENTITY_TYPE' => $entityTypeName,
+				'EVENT_TYPE' => CCrmEvent::TYPE_VIEW,
+				'EVENT_NAME' => CCrmEvent::GetEventTypeName(CCrmEvent::TYPE_VIEW),
+				'DATE_CREATE' => ConvertTimeStamp($timestamp, 'FULL', SITE_ID)
+			),
+			false
+		);
+		return true;
+	}
+	static public function RegisterExportEvent($entityTypeID, $entityID, $userID = 0)
+	{
+		if($userID <= 0)
+		{
+			$userID = CCrmSecurityHelper::GetCurrentUserID();
+			if($userID <= 0)
+			{
+				return false;
+			}
+		}
+
+		$eventType = CCrmEvent::TYPE_EXPORT;
+		$timestamp = time() + CTimeZone::GetOffset();
+		$entityTypeName = CCrmOwnerType::ResolveName($entityTypeID);
+
+		$entity = new CCrmEvent();
+		$entity->Add(
+			array(
+				'USER_ID' => $userID,
+				'ENTITY_ID' => $entityID,
+				'ENTITY_TYPE' => $entityTypeName,
+				'EVENT_TYPE' => $eventType,
+				'EVENT_NAME' => CCrmEvent::GetEventTypeName($eventType),
+				'DATE_CREATE' => ConvertTimeStamp($timestamp, 'FULL', SITE_ID)
+			),
+			false
+		);
+
+		return true;
+	}
+	static public function RegisterDeleteEvent($entityTypeID, $entityID, $userID = 0, array $options = null)
+	{
+		if($userID <= 0)
+		{
+			$userID = CCrmSecurityHelper::GetCurrentUserID();
+			if($userID <= 0)
+			{
+				return false;
+			}
+		}
+
+		$timestamp = time() + CTimeZone::GetOffset();
+		$entityTypeCaption = CCrmOwnerType::GetDescription($entityTypeID);
+		$caption = CCrmOwnerType::GetCaption($entityTypeID, $entityID, false, $options);
+
+		$entity = new CCrmEvent();
+		return (
+			$entity->Add(
+				array(
+					'USER_ID' => $userID,
+					'ENTITY_ID' => 0,
+					'ENTITY_TYPE' => CCrmOwnerType::SystemName,
+					'EVENT_TYPE' => CCrmEvent::TYPE_DELETE,
+					'EVENT_NAME' => CCrmEvent::GetEventTypeName(CCrmEvent::TYPE_DELETE),
+					'DATE_CREATE' => ConvertTimeStamp($timestamp, 'FULL', SITE_ID),
+					'EVENT_TEXT_1' => "{$entityTypeCaption}: [{$entityID}] {$caption}"
+				),
+				false
+			)
+		);
+	}
+	static public function GetEventType($ID)
+	{
+		$ID = (int)$ID;
+		if($ID <= 0)
+		{
+			return -1;
+		}
+
+		$dbResult = self::GetListEx(
+			array(),
+			array('=ID' => $ID, 'CHECK_PERMISSIONS' => 'N'),
+			false,
+			false,
+			array('EVENT_TYPE')
+		);
+		$arFields = is_object($dbResult) ? $dbResult->Fetch() : null;
+		return is_array($arFields) && isset($arFields['EVENT_TYPE']) ? (int)$arFields['EVENT_TYPE'] : CCrmEvent::TYPE_USER;
+	}
 	private static function err_mess()
 	{
 		return '<br />Class: CCrmEvent<br />File: '.__FILE__;

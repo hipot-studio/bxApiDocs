@@ -10,10 +10,13 @@ use Bitrix\Sale\PaySystem;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
-Loader::registerAutoLoadClasses('sale', array(PaySystem\Manager::getClassNameFromPath('WebMoney') => 'handlers/paysystem/webmoney/handler.php'));
-
+PaySystem\Manager::includeHandler('WebMoney');
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class PayMasterHandler
+ * @package Sale\Handlers\PaySystem
+ */
 class PayMasterHandler extends WebMoneyHandler
 {
 	/**
@@ -26,7 +29,9 @@ class PayMasterHandler extends WebMoneyHandler
 		$extraParams = array(
 			'PS_MODE' => $this->service->getField('PS_MODE'),
 			'URL' => $this->getUrl($payment, 'pay'),
-			'BX_PAYSYSTEM_CODE' => $payment->getPaymentSystemId()
+			'BX_PAYSYSTEM_CODE' => $this->service->getField('ID'),
+			'PAYMASTER_SUCCESS_URL' => $this->getSuccessUrl($payment),
+			'PAYMASTER_FAIL_URL' => $this->getFailUrl($payment),
 		);
 		$this->setExtraParams($extraParams);
 
@@ -60,10 +65,11 @@ class PayMasterHandler extends WebMoneyHandler
 			)
 			{
 				$serviceResult->addError(new Error(Loc::getMessage('SALE_HPS_PAYMASTER_ERROR_PARAMS_VALUE')));
-				return $serviceResult;
 			}
-
-			$serviceResult->setData(array('CODE' => 'YES'));
+			else
+			{
+				$serviceResult->setData(array('CODE' => 'YES'));
+			}
 		}
 		else
 		{
@@ -131,10 +137,8 @@ class PayMasterHandler extends WebMoneyHandler
 
 		if (!$serviceResult->isSuccess())
 		{
-			PaySystem\ErrorLog::add(array(
-				'ACTION' => 'processRequest',
-				'MESSAGE' => join(' ', $serviceResult->getErrorMessages())
-			));
+			$error = 'Paymaster: processRequest: '.join('\n', $serviceResult->getErrorMessages());
+			PaySystem\Logger::addError($error);
 		}
 
 		return $serviceResult;
@@ -166,7 +170,7 @@ class PayMasterHandler extends WebMoneyHandler
 
 		$hash = base64_encode(hash($algorithm, $string, true));
 
-		return ToUpper($hash) == ToUpper($request->get('LMI_HASH'));
+		return mb_strtoupper($hash) == mb_strtoupper($request->get('LMI_HASH'));
 	}
 
 	/**
@@ -174,7 +178,7 @@ class PayMasterHandler extends WebMoneyHandler
 	 * @param Request $request
 	 * @return mixed
 	 */
-	static public function sendResponse(PaySystem\ServiceResult $result, Request $request)
+	public function sendResponse(PaySystem\ServiceResult $result, Request $request)
 	{
 		global $APPLICATION;
 		$APPLICATION->RestartBuffer();
@@ -185,5 +189,23 @@ class PayMasterHandler extends WebMoneyHandler
 			echo $data['CODE'];
 			die();
 		}
+	}
+
+	/**
+	 * @param Payment $payment
+	 * @return mixed|string
+	 */
+	private function getSuccessUrl(Payment $payment)
+	{
+		return $this->getBusinessValue($payment, 'PAYMASTER_SUCCESS_URL') ?: $this->service->getContext()->getUrl();
+	}
+
+	/**
+	 * @param Payment $payment
+	 * @return mixed|string
+	 */
+	private function getFailUrl(Payment $payment)
+	{
+		return $this->getBusinessValue($payment, 'PAYMASTER_FAIL_URL') ?: $this->service->getContext()->getUrl();
 	}
 }

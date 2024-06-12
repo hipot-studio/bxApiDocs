@@ -24,7 +24,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Seo
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Autolog_Query query()
+ * @method static EO_Autolog_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Autolog_Result getById($id)
+ * @method static EO_Autolog_Result getList(array $parameters = array())
+ * @method static EO_Autolog_Entity getEntity()
+ * @method static \Bitrix\Seo\Adv\EO_Autolog createObject($setDefaultValues = true)
+ * @method static \Bitrix\Seo\Adv\EO_Autolog_Collection createCollection()
+ * @method static \Bitrix\Seo\Adv\EO_Autolog wakeUpObject($row)
+ * @method static \Bitrix\Seo\Adv\EO_Autolog_Collection wakeUpCollection($rows)
+ */
 
 class AutologTable extends Entity\DataManager
 {
@@ -39,17 +52,6 @@ class AutologTable extends Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы лога действий автоконтекста в базе данных. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/autologtable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_seo_adv_autolog';
@@ -60,17 +62,6 @@ class AutologTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы лога действий автоконтекста. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/autologtable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(

@@ -14,7 +14,7 @@ class CUserTypeWiki extends CUserTypeString
 		);
 	}
 
-	public static function CheckPermission()
+	function CheckPermission()
 	{
 		if (!CModule::IncludeModule('wiki') || !CWikiUtils::IsReadable())
 			return false;

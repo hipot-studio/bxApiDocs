@@ -17,7 +17,7 @@ class Insurance extends Base
 		$this->params["TYPE"] = "Y/N";
 	}
 
-	static public function getClassTitle()
+	public static function getClassTitle()
 	{
 		return Loc::getMessage('SALE_DLVRS_ADD_ESI_TITLE');
 	}
@@ -40,7 +40,7 @@ class Insurance extends Base
 			$basketItem = $shipmentItem->getBasketItem();
 
 			if($basketItem)
-				$result += $basketItem->getPrice();
+				$result += $basketItem->getPrice()*$basketItem->getQuantity();
 		}
 
 		return $result;
@@ -79,7 +79,6 @@ class Insurance extends Base
 			return 0;
 
 		$shipmentPrice = $this->getShipmentProductsPrice($shipment);
-		//$shipmentPrice = $sipment->getPrice();
 
 		return $this->convertToOperatingCurrency(
 				$shipmentPrice * floatval($this->params["FEE"]) / 100

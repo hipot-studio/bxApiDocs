@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/learning/general/ratings_components.php");
 
 // 2012-04-16 Checked/modified for compatibility with new data model

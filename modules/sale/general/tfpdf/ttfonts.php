@@ -23,15 +23,15 @@
 // 0x00010000 for Windows
 // Either seems to work for a font embedded in a PDF file
 // when read by Adobe Reader on a Windows PC(!)
-// define("_TTF_MAC_HEADER", false);
+define("_TTF_MAC_HEADER", false);
 
 
 // TrueType Font Glyph operators
-// define("GF_WORDS",(1 << 0));
-// define("GF_SCALE",(1 << 3));
-// define("GF_MORE",(1 << 5));
-// define("GF_XYSCALE",(1 << 6));
-// define("GF_TWOBYTWO",(1 << 7));
+define("GF_WORDS",(1 << 0));
+define("GF_SCALE",(1 << 3));
+define("GF_MORE",(1 << 5));
+define("GF_XYSCALE",(1 << 6));
+define("GF_TWOBYTWO",(1 << 7));
 
 
 
@@ -69,12 +69,12 @@ var $charWidths;
 var $defaultWidth;
 var $maxStrLenRead;
 
-	public function TTFontFile() {
+	public function __construct() {
 		$this->maxStrLenRead = 200000;	// Maximum size of glyf table to read in as string (otherwise reads each glyph from file)
 	}
 
 
-	public function getMetrics($file) {
+	function getMetrics($file) {
 		$this->filename = $file;
 		$this->fh = fopen($file,'rb') or die('Can\'t open file ' . $file);
 		$this->_pos = 0;
@@ -99,7 +99,7 @@ var $maxStrLenRead;
 	}
 
 
-	public function readTableDirectory() {
+	function readTableDirectory() {
 		$this->numTables = $this->read_ushort();
 		$this->searchRange = $this->read_ushort();
 		$this->entrySelector = $this->read_ushort();
@@ -116,7 +116,7 @@ var $maxStrLenRead;
 	}
 
 
-	public static function sub32($x, $y) {
+	function sub32($x, $y) {
 		$xlo = $x[1];
 		$xhi = $x[0];
 		$ylo = $y[1];
@@ -129,7 +129,7 @@ var $maxStrLenRead;
 		return array($reshi, $reslo);
 	}
 
-	public static function calcChecksum($data)  {
+	function calcChecksum($data)  {
 		if (mb_strlen($data,'8bit') % 4) { $data .= str_repeat("\0",(4-(mb_strlen($data,'8bit') % 4))); }
 		$hi=0x0000;
 		$lo=0x0000;
@@ -143,35 +143,35 @@ var $maxStrLenRead;
 		return array($hi, $lo);
 	}
 
-	public function get_table_pos($tag) {
+	function get_table_pos($tag) {
 		$offset = $this->tables[$tag]['offset'];
 		$length = $this->tables[$tag]['length'];
 		return array($offset, $length);
 	}
 
-	public function seek($pos) {
+	function seek($pos) {
 		$this->_pos = $pos;
 		fseek($this->fh,$this->_pos);
 	}
 
-	public function skip($delta) {
+	function skip($delta) {
 		$this->_pos = $this->_pos + $delta;
 		fseek($this->fh,$this->_pos);
 	}
 
-	public function seek_table($tag, $offset_in_table = 0) {
+	function seek_table($tag, $offset_in_table = 0) {
 		$tpos = $this->get_table_pos($tag);
 		$this->_pos = $tpos[0] + $offset_in_table;
 		fseek($this->fh, $this->_pos);
 		return $this->_pos;
 	}
 
-	public function read_tag() {
+	function read_tag() {
 		$this->_pos += 4;
 		return fread($this->fh,4);
 	}
 
-	public function read_short() {
+	function read_short() {
 		$this->_pos += 2;
 		$s = fread($this->fh,2);
 		$a = (ord($s[0])<<8) + ord($s[1]);
@@ -179,7 +179,7 @@ var $maxStrLenRead;
 		return $a;
 	}
 
-	public static function unpack_short($s) {
+	function unpack_short($s) {
 		$a = (ord($s[0])<<8) + ord($s[1]);
 		if ($a & (1 << 15) ) { 
 			$a = ($a - (1 << 16)); 
@@ -187,33 +187,33 @@ var $maxStrLenRead;
 		return $a;
 	}
 
-	public function read_ushort() {
+	function read_ushort() {
 		$this->_pos += 2;
 		$s = fread($this->fh,2);
 		return (ord($s[0])<<8) + ord($s[1]);
 	}
 
-	public function read_ulong() {
+	function read_ulong() {
 		$this->_pos += 4;
 		$s = fread($this->fh,4);
 		// if large uInt32 as an integer, PHP converts it to -ve
 		return (ord($s[0])*16777216) + (ord($s[1])<<16) + (ord($s[2])<<8) + ord($s[3]); // 	16777216  = 1<<24
 	}
 
-	public function get_ushort($pos) {
+	function get_ushort($pos) {
 		fseek($this->fh,$pos);
 		$s = fread($this->fh,2);
 		return (ord($s[0])<<8) + ord($s[1]);
 	}
 
-	public function get_ulong($pos) {
+	function get_ulong($pos) {
 		fseek($this->fh,$pos);
 		$s = fread($this->fh,4);
 		// iF large uInt32 as an integer, PHP converts it to -ve
 		return (ord($s[0])*16777216) + (ord($s[1])<<16) + (ord($s[2])<<8) + ord($s[3]); // 	16777216  = 1<<24
 	}
 
-	public static function pack_short($val) {
+	function pack_short($val) {
 		if ($val<0) { 
 			$val = abs($val);
 			$val = ~$val;
@@ -222,16 +222,16 @@ var $maxStrLenRead;
 		return pack("n",$val); 
 	}
 
-	public static function splice($stream, $offset, $value) {
+	function splice($stream, $offset, $value) {
 		return mb_substr($stream,0,$offset,'8bit') . $value . mb_substr($stream,$offset+mb_strlen($value,'8bit'),mb_strlen($stream,'8bit'),'8bit');
 	}
 
-	public function _set_ushort($stream, $offset, $value) {
+	function _set_ushort($stream, $offset, $value) {
 		$up = pack("n", $value);
 		return $this->splice($stream, $offset, $up);
 	}
 
-	public function _set_short($stream, $offset, $val) {
+	function _set_short($stream, $offset, $val) {
 		if ($val<0) { 
 			$val = abs($val);
 			$val = ~$val;
@@ -241,20 +241,20 @@ var $maxStrLenRead;
 		return $this->splice($stream, $offset, $up);
 	}
 
-	public function get_chunk($pos, $length) {
+	function get_chunk($pos, $length) {
 		fseek($this->fh,$pos);
 		if ($length <1) { return ''; }
 		return (fread($this->fh,$length));
 	}
 
-	public function get_table($tag) {
+	function get_table($tag) {
 		list($pos, $length) = $this->get_table_pos($tag);
 		if ($length == 0) { die('Truetype font ('.$this->filename.'): error reading table: '.$tag); }
 		fseek($this->fh,$pos);
 		return (fread($this->fh,$length));
 	}
 
-	public function add($tag, $data) {
+	function add($tag, $data) {
 		if ($tag == 'head') {
 			$data = $this->splice($data, 8, "\0\0\0\0");
 		}
@@ -268,7 +268,7 @@ var $maxStrLenRead;
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-	public function extractInfo() {
+	function extractInfo() {
 		///////////////////////////////////
 		// name - Naming table
 		///////////////////////////////////
@@ -491,7 +491,7 @@ var $maxStrLenRead;
 /////////////////////////////////////////////////////////////////////////////////////////
 
 
-	public function makeSubset($file, &$subset) {
+	function makeSubset($file, &$subset) {
 		$this->filename = $file;
 		$this->fh = fopen($file ,'rb') or die('Can\'t open file ' . $file);
 		$this->_pos = 0;
@@ -829,7 +829,7 @@ var $maxStrLenRead;
 
 	//////////////////////////////////////////////////////////////////////////////////
 	// Recursively get composite glyph data
-	public function getGlyphData($originalGlyphIdx, &$maxdepth, &$depth, &$points, &$contours) {
+	function getGlyphData($originalGlyphIdx, &$maxdepth, &$depth, &$points, &$contours) {
 		$depth++;
 		$maxdepth = max($maxdepth, $depth);
 		if (count($this->glyphdata[$originalGlyphIdx]['compGlyphs'])) {
@@ -847,7 +847,7 @@ var $maxStrLenRead;
 
 	//////////////////////////////////////////////////////////////////////////////////
 	// Recursively get composite glyphs
-	public function getGlyphs($originalGlyphIdx, &$start, &$glyphSet, &$subsetglyphs) {
+	function getGlyphs($originalGlyphIdx, &$start, &$glyphSet, &$subsetglyphs) {
 		$glyphPos = $this->glyphPos[$originalGlyphIdx];
 		$glyphLen = $this->glyphPos[$originalGlyphIdx + 1] - $glyphPos;
 		if (!$glyphLen) { 
@@ -884,7 +884,7 @@ var $maxStrLenRead;
 
 	//////////////////////////////////////////////////////////////////////////////////
 
-	public function getHMTX($numberOfHMetrics, $numGlyphs, &$glyphToChar, $scale) {
+	function getHMTX($numberOfHMetrics, $numGlyphs, &$glyphToChar, $scale) {
 		$start = $this->seek_table("hmtx");
 		$aw = 0;
 		$this->charWidths = str_pad('', 256*256*2, "\x00");
@@ -949,7 +949,7 @@ var $maxStrLenRead;
 		$this->charWidths[1] = chr($nCharWidths & 0xFF);
 	}
 
-	public function getHMetric($numberOfHMetrics, $gid) {
+	function getHMetric($numberOfHMetrics, $gid) {
 		$start = $this->seek_table("hmtx");
 		if ($gid < $numberOfHMetrics) {
 			$this->seek($start+($gid*4));
@@ -964,7 +964,7 @@ var $maxStrLenRead;
 		return $hm;
 	}
 
-	public function getLOCA($indexToLocFormat, $numGlyphs) {
+	function getLOCA($indexToLocFormat, $numGlyphs) {
 		$start = $this->seek_table('loca');
 		$this->glyphPos = array();
 		if ($indexToLocFormat == 0) {
@@ -987,7 +987,7 @@ var $maxStrLenRead;
 
 
 	// CMAP Format 4
-	public function getCMAP4($unicode_cmap_offset, &$glyphToChar, &$charToGlyph ) {
+	function getCMAP4($unicode_cmap_offset, &$glyphToChar, &$charToGlyph ) {
 		$this->maxUniChar = 0;
 		$this->seek($unicode_cmap_offset + 2);
 		$length = $this->read_ushort();
@@ -1032,7 +1032,7 @@ var $maxStrLenRead;
 
 
 		// Put the TTF file together
-	public function endTTFile(&$stm) {
+	function endTTFile(&$stm) {
 		$stm = '';
 		$numTables = count($this->otables);
 		$searchRange = 1;

@@ -1,15 +1,5 @@
-<?
+<?php
 
-/**
- * <b>CAdv</b> - класс для работы с <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv">рекламными кампаниями</a>.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cadv/index.php
- * @author Bitrix
- */
 class CAllAdv
 {
 	public static function SetByReferer($referer1, $referer2, &$arrADV, &$ref1, &$ref2)
@@ -19,9 +9,9 @@ class CAllAdv
 
 		// lookup campaign with referer1 and referer2
 		$referer1 = trim($referer1);
-		$referer1_sql = strlen($referer1)>0? "REFERER1='".$DB->ForSql($referer1, 255)."'": "(REFERER1 is null or ".$DB->Length("REFERER1")."=0)";
+		$referer1_sql = $referer1 <> ''? "REFERER1='".$DB->ForSql($referer1, 255)."'": "(REFERER1 is null or ".$DB->Length("REFERER1")."=0)";
 		$referer2 = trim($referer2);
-		$referer2_sql = strlen($referer2)>0? "REFERER2='".$DB->ForSql($referer2, 255)."'": "(REFERER2 is null or ".$DB->Length("REFERER2")."=0)";
+		$referer2_sql = $referer2 <> ''? "REFERER2='".$DB->ForSql($referer2, 255)."'": "(REFERER2 is null or ".$DB->Length("REFERER2")."=0)";
 
 		$strSql = "
 			SELECT
@@ -48,11 +38,12 @@ class CAllAdv
 
 		if(!$found)
 		{
+			$NA = "";
 			if(COption::GetOptionString("statistic", "ADV_NA") == "Y")
 			{
 				$NA_1 = COption::GetOptionString("statistic", "AVD_NA_REFERER1");
 				$NA_2 = COption::GetOptionString("statistic", "AVD_NA_REFERER2");
-				if ((strlen($NA_1)>0 || strlen($NA_2)>0) && $referer1==$NA_1 && $referer2==$NA_2)
+				if (($NA_1 <> '' || $NA_2 <> '') && $referer1==$NA_1 && $referer2==$NA_2)
 					$NA = "Y";
 			}
 
@@ -73,8 +64,8 @@ class CAllAdv
 				{
 					// add new advertising campaign
 					$arFields = Array(
-						"REFERER1" => strlen($referer1)>0 ? "'".$DB->ForSql($referer1, 255)."'" : "null",
-						"REFERER2" => strlen($referer2)>0 ? "'".$DB->ForSql($referer2, 255)."'" : "null",
+						"REFERER1" => $referer1 <> '' ? "'".$DB->ForSql($referer1, 255)."'" : "null",
+						"REFERER2" => $referer2 <> '' ? "'".$DB->ForSql($referer2, 255)."'" : "null",
 						"DATE_FIRST" => $DB->GetNowFunction(),
 						"DATE_LAST" => $DB->GetNowFunction(),
 					);
@@ -121,7 +112,6 @@ class CAllAdv
 		$DB = CDatabase::GetModuleConnection('statistic');
 
 		$arSqlSearch = Array();
-		$strSqlSearch = "";
 		switch ($DATA_TYPE)
 		{
 			case "SESSION_SUMMA":
@@ -157,7 +147,7 @@ class CAllAdv
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -206,7 +196,6 @@ class CAllAdv
 		$rsD = $DB->Query($strSql, false, $err_mess.__LINE__);
 		while ($arD = $rsD->Fetch())
 		{
-			$cnt = 0;
 			switch($DATA_TYPE)
 			{
 				default:				$cnt = intval($arD["SESSIONS"])+intval($arD["SESSIONS_BACK"]);			break;
@@ -244,11 +233,12 @@ class CAllAdv
 				$arrSum[$arD["ADV_ID"]] += $cnt;
 			}
 		}
-		reset($arrLegend);
+
+		$color = "";
 		$summa = 0;
 		$max = 0;
 		$total = sizeof($arrLegend);
-		while (list($key, $arr) = each($arrLegend))
+		foreach ($arrLegend as $key => $arr)
 		{
 			$color = GetNextRGB($color, $total);
 			$arr["CLR"] = $color;
@@ -258,42 +248,10 @@ class CAllAdv
 			if ($arrSum[$key]>$max) $max = $arrSum[$key];
 		}
 
-		reset($arrDays);
-		reset($arrLegend);
 		$is_filtered = (IsFiltered($strSqlSearch));
 		return $arrDays;
 	}
 
-	
-	/**
-	* <p>Удаляет <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv">рекламную кампанию</a>.</p>
-	*
-	*
-	* @param int $adv_id  ID рекламной кампании.
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $adv_id = 1;
-	* if (<b>CAdv::Delete</b>($adv_id)) 
-	*     echo "Рекламная кампания #".$adv_id." успешно удалена.";
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv">Термин "Рекламная
-	* кампания"</a> 	</li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cadv/reset.php">CAdv::Reset</a> </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cadv/delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
@@ -311,36 +269,6 @@ class CAllAdv
 		return false;
 	}
 
-	
-	/**
-	* <p>Обнуляет статистические данные <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv">рекламной кампании</a>.</p> <p><b>Примечание</b>. Метод использует внутреннюю транзакцию. Если у вас используется <b>MySQL</b> и <b>InnoDB</b>, и  ранее была открыта транзакция, то ее необходимо закрыть до подключения метода.</p>
-	*
-	*
-	* @param int $adv_id  ID рекламной кампании.
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $adv_id = 1;
-	* if (<b>CAdv::Reset</b>($adv_id)) 
-	*     echo "Данные по рекламной кампании #".$adv_id." успешно удалены.";
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv">Термин "Рекламная
-	* кампания"</a> 	</li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cadv/delete.php">CAdv::Delete</a> </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cadv/reset.php
-	* @author Bitrix
-	*/
 	public static function Reset($ID)
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
@@ -387,9 +315,9 @@ class CAllAdv
 	{
 		$arFilter = array("DATE1"=>$date1, "DATE2"=>$date2);
 		$d=0;
-		$z = CAdv::GetDynamicList($ADV_ID, $by, $order, $arMaxMin, $arFilter);
+		$arMaxMin=array();
+		$z = CAdv::GetDynamicList($ADV_ID, '', '', $arMaxMin, $arFilter);
 		while ($zr=$z->Fetch()) $d++;
 		return $d;
 	}
 }
-?>

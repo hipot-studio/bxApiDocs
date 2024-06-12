@@ -33,26 +33,6 @@ class HotpAlgorithm
 	 *  string newParams (Updated user params for this OtpAlgorithm)
 	 * ]
 	 */
-	
-	/**
-	* <p>Нестатический метод подтверждает введенную информацию.</p>
-	*
-	*
-	* @param string $input  Введенная пользователем информация.
-	*
-	* @param string $integer  Синхронизированные пользовательские параметры, сохраненные для
-	* алгоритма (см. <a
-	* href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/hotpalgorithm/getsyncparameters.php">getSyncParameters</a> -
-	* <code>\Bitrix\Security\Mfa\HotpAlgorithm::getSyncParameters</code>).
-	*
-	* @param string $params  
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/hotpalgorithm/verify.php
-	* @author Bitrix
-	*/
 	public function verify($input, $params = 0)
 	{
 		$input = (string) $input;
@@ -88,22 +68,7 @@ class HotpAlgorithm
 	 * @throws \Bitrix\Main\ArgumentTypeException
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод генерирует ссылку для подключения мобильного аппарата с OTP в соответствии с <i>KeyUriFormat</i>.</p>
-	*
-	*
-	* @param string $label  Пользовательская метка.
-	*
-	* @param array $opts = array() Дополнительные параметры URI.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/hotpalgorithm/generateuri.php
-	* @author Bitrix
-	*/
-	static public function generateUri($label, array $opts = array())
+	public function generateUri($label, array $opts = array())
 	{
 		$opts += array('counter' => 1);
 		return parent::generateUri($label, $opts);
@@ -118,21 +83,6 @@ class HotpAlgorithm
 	 * @throws ArgumentOutOfRangeException
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает синхронизированные пользовательские параметры предоставленных данных.</p>
-	*
-	*
-	* @param string $inputA  Первый код.
-	*
-	* @param string $inputB  Второй код.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/hotpalgorithm/getsyncparameters.php
-	* @author Bitrix
-	*/
 	public function getSyncParameters($inputA, $inputB)
 	{
 		$counter = 0;
@@ -163,17 +113,6 @@ class HotpAlgorithm
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает описание алгоритма: <code>string type</code>, <code>string title</code>, <code>bool required_two_code</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/hotpalgorithm/getdescription.php
-	* @author Bitrix
-	*/
 	public static function getDescription()
 	{
 		return array(

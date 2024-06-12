@@ -6,6 +6,8 @@ use Bitrix\Currency\CurrencyManager;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Internals\CollectableEntity;
+use Bitrix\Sale\Internals\Entity;
+use Bitrix\Sale\Order;
 use Bitrix\Sale\Payment;
 use Bitrix\Sale\PaySystem;
 use Bitrix\Sale\PaySystem\Service;
@@ -21,7 +23,7 @@ class Currency extends Base\Restriction
 	 * @param int $serviceId
 	 * @return bool
 	 */
-	protected static function check($params, array $restrictionParams, $serviceId = 0)
+	public static function check($params, array $restrictionParams, $serviceId = 0)
 	{
 		if (isset($restrictionParams) && is_array($restrictionParams['CURRENCY']))
 			return in_array($params, $restrictionParams['CURRENCY']);
@@ -30,11 +32,11 @@ class Currency extends Base\Restriction
 	}
 
 	/**
-	 * @param CollectableEntity $entity
+	 * @param Entity $entity
 	 * @return string
 	 * @throws ArgumentTypeException
 	 */
-	protected static function extractParams(CollectableEntity $entity)
+	protected static function extractParams(Entity $entity)
 	{
 		if ($entity instanceof Payment)
 		{
@@ -45,6 +47,10 @@ class Currency extends Base\Restriction
 			$order = $collection->getOrder();
 
 			return $order->getCurrency();
+		}
+		elseif ($entity instanceof Order)
+		{
+			return $entity->getCurrency();
 		}
 
 		throw new ArgumentTypeException('');
@@ -64,6 +70,11 @@ class Currency extends Base\Restriction
 	public static function getClassDescription()
 	{
 		return Loc::getMessage('SALE_PS_RESTRICTIONS_BY_CURRENCY_DESC');
+	}
+
+	public static function getOnApplyErrorMessage(): string
+	{
+		return Loc::getMessage('SALE_PS_RESTRICTIONS_BY_CURRENCY_ON_APPLY_ERROR_MSG');
 	}
 
 	public static function getParamsStructure($entityId = 0)

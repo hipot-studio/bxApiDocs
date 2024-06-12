@@ -1,10 +1,12 @@
-<?
+<?php
+
 ##############################################
 # Bitrix Site Manager Forum                  #
 # Copyright (c) 2002-2009 Bitrix             #
-# http://www.bitrixsoft.com                  #
+# https://www.bitrixsoft.com                 #
 # mailto:admin@bitrixsoft.com                #
 ##############################################
+
 IncludeModuleLangFile(__FILE__);
 
 class CForumEventLog
@@ -35,13 +37,13 @@ class CForumEventLog
 			"FORUM_FORUM_EDIT" => GetMessage("FORUM_FORUM_EDIT"),
 			"FORUM_FORUM_DELETE" => GetMessage("FORUM_FORUM_DELETE")
 		);
-		$object = strToUpper($object);
-		$action = strToUpper($action);
+		$object = mb_strtoupper($object);
+		$action = mb_strtoupper($action);
 		$type = "FORUM_".$object."_".$action;
 		$title = trim($title);
 		if (empty($title))
 		{
-			$title = $arTypesTitle[$type];
+			$title = isset($arTypesTitle[$type]) ? $arTypesTitle[$type] : '';
 		}
 		$description = trim($description);
 
@@ -110,19 +112,25 @@ class CEventForum
 	{
 		if (CModule::IncludeModule('forum'))
 		{
-			$DESCRIPTION = unserialize($row['DESCRIPTION']);
+			$DESCRIPTION = unserialize($row['DESCRIPTION'], ['allowed_classes' => false]);
 			$site_id = ($row['SITE_ID'] == "s1") ? "" : "site_".$row['SITE_ID']."/";
 	// messages
-			if (strpos($row['AUDIT_TYPE_ID'], "MESSAGE"))
+			if(mb_strpos($row['AUDIT_TYPE_ID'], "MESSAGE"))
 			{
 				$MID = $row['ITEM_ID'];
 				$TID = $DESCRIPTION['TOPIC_ID'];
 				$FID = $DESCRIPTION['FORUM_ID'];
-				if ($arMessage = CForumMessage::GetByID($MID))
+				if($arMessage = CForumMessage::GetByID($MID))
+				{
 					$sPath = SITE_DIR.CComponentEngine::MakePathFromTemplate($arParams['FORUM_MESSAGE_PATH'], array("FORUM_ID" => $FID, "TOPIC_ID" => $TID, "TITLE_SEO" => $TID, "MESSAGE_ID" => $MID, "SITE_ID" => $site_id));
+				}
 				else
-					if ($arTopic = CForumTopic::GetByID($TID))
+				{
+					if($arTopic = CForumTopic::GetByID($TID))
+					{
 						$sPath = SITE_DIR.CComponentEngine::MakePathFromTemplate($arParams['FORUM_TOPIC_PATH'], array("FORUM_ID" => $FID, "TOPIC_ID" => $TID, "TITLE_SEO" => $TID, "SITE_ID" => $site_id));
+					}
+				}
 
 				switch($row['AUDIT_TYPE_ID'])
 				{
@@ -144,12 +152,14 @@ class CEventForum
 				}
 			}
 			else
-	// topics
+				// topics
 			{
 				$TID = $row["ITEM_ID"];
 				$FID = $DESCRIPTION['FORUM_ID'];
-				if ($arTopic = CForumTopic::GetByID($TID))
+				if($arTopic = CForumTopic::GetByID($TID))
+				{
 					$sPath = SITE_DIR.CComponentEngine::MakePathFromTemplate($arParams['FORUM_TOPIC_PATH'], array("FORUM_ID" => $FID, "TOPIC_ID" => $TID, "TITLE_SEO" => $TID, "SITE_ID" => $site_id));
+				}
 
 				switch($row['AUDIT_TYPE_ID'])
 				{
@@ -208,4 +218,3 @@ class CEventForum
 		return $ar;
 	}
 }
-?>

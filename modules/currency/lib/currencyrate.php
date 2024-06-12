@@ -1,10 +1,8 @@
 <?php
 namespace Bitrix\Currency;
 
-use Bitrix\Main,
-	Bitrix\Main\Localization\Loc;
-
-Loc::loadMessages(__FILE__);
+use Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
 
 /**
  * Class CurrencyRateTable
@@ -25,7 +23,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Currency
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_CurrencyRate_Query query()
+ * @method static EO_CurrencyRate_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_CurrencyRate_Result getById($id)
+ * @method static EO_CurrencyRate_Result getList(array $parameters = [])
+ * @method static EO_CurrencyRate_Entity getEntity()
+ * @method static \Bitrix\Currency\EO_CurrencyRate createObject($setDefaultValues = true)
+ * @method static \Bitrix\Currency\EO_CurrencyRate_Collection createCollection()
+ * @method static \Bitrix\Currency\EO_CurrencyRate wakeUpObject($row)
+ * @method static \Bitrix\Currency\EO_CurrencyRate_Collection wakeUpCollection($rows)
+ */
 
 class CurrencyRateTable extends Main\Entity\DataManager
 {
@@ -34,18 +45,7 @@ class CurrencyRateTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы в базе данных для курсов валют. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencyratetable/gettablename.php
-	* @author Bitrix
-	*/
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_catalog_currency_rate';
 	}
@@ -55,18 +55,7 @@ class CurrencyRateTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы курсов валют. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencyratetable/getmap.php
-	* @author Bitrix
-	*/
-	public static function getMap()
+	public static function getMap(): array
 	{
 		return array(
 			'ID' => new Main\Entity\IntegerField('ID', array(
@@ -75,16 +64,13 @@ class CurrencyRateTable extends Main\Entity\DataManager
 				'title' => Loc::getMessage('CURRENCY_RATE_ENTITY_ID_FIELD')
 			)),
 			'CURRENCY' => new Main\Entity\StringField('CURRENCY', array(
-				'primary' => true,
 				'validation' => array(__CLASS__, 'validateCurrency'),
 				'title' => Loc::getMessage('CURRENCY_RATE_ENTITY_CURRENCY_FIELD')
 			)),
 			'BASE_CURRENCY' => new Main\Entity\StringField('BASE_CURRENCY', array(
-				'primary' => true,
 				'title' => Loc::getMessage('CURRENCY_RATE_ENTITY_BASE_CURRENCY_FIELD')
 			)),
 			'DATE_RATE' => new Main\Entity\DateField('DATE_RATE', array(
-				'primary' => true,
 				'title' => Loc::getMessage('CURRENCY_RATE_ENTITY_DATE_RATE_FIELD')
 			)),
 			'RATE_CNT' => new Main\Entity\IntegerField('RATE_CNT', array(
@@ -98,6 +84,7 @@ class CurrencyRateTable extends Main\Entity\DataManager
 				'title' => Loc::getMessage('CURRENCY_RATE_ENTITY_CREATED_BY_FIELD')
 			)),
 			'DATE_CREATE' => new Main\Entity\DatetimeField('DATE_CREATE', array(
+				'default_value' => function(){ return new Main\Type\DateTime(); },
 				'title' => Loc::getMessage('CURRENCY_RATE_ENTITY_DATE_CREATE_FIELD')
 			)),
 			'MODIFIED_BY' => new Main\Entity\IntegerField('MODIFIED_BY', array(
@@ -105,6 +92,7 @@ class CurrencyRateTable extends Main\Entity\DataManager
 			)),
 			'TIMESTAMP_X' => new Main\Entity\DatetimeField('TIMESTAMP_X', array(
 				'required' => true,
+				'default_value' => function(){ return new Main\Type\DateTime(); },
 				'title' => Loc::getMessage('CURRENCY_RATE_ENTITY_TIMESTAMP_X_FIELD')
 			)),
 			'CREATED_BY_USER' => new Main\Entity\ReferenceField(
@@ -127,21 +115,28 @@ class CurrencyRateTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>CURRENCY</code> (код валюты). Метод статический и используется для валидации новых значений полей при добавлении курса валюты или изменении параметров уже существующего.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencyratetable/validatecurrency.php
-	* @author Bitrix
-	*/
 	public static function validateCurrency()
 	{
 		return array(
 			new Main\Entity\Validator\Length(null, 3),
 		);
+	}
+
+	public static function deleteByCurrency(string $currency): void
+	{
+		$currency = trim($currency);
+		if ($currency === '')
+		{
+			return;
+		}
+		$conn = Main\Application::getConnection();
+		$helper = $conn->getSqlHelper();
+		$conn->queryExecute(
+			'delete from ' . $helper->quote(self::getTableName())
+			. ' where '.$helper->quote('CURRENCY').' = \''. $helper->forSql($currency) . '\''
+		);
+		unset($helper, $conn);
+
+		static::cleanCache();
 	}
 }

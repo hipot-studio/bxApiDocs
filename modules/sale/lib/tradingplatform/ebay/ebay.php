@@ -26,16 +26,16 @@ class Ebay extends Platform
 
 	public static function getSftpTokenUrl($accountName)
 	{
-		return "http://www.1c-bitrix.ru/buy_tmp/ebay/".
+		return "https://".self::getServiceHost()."/buy_tmp/ebay/".
 			"?action=OAUTH_AUTH".
 			"&LICENCE_HASH=".self::getLicenseHash().
-			"&BACK_URL=".urlencode((\CMain::IsHTTPS() ? "https://" : "http://").$_SERVER['HTTP_HOST']).
-			"&ACCOUNT_NAME=".$accountName;
+			"&ACCOUNT_NAME=".htmlspecialcharsbx($accountName).
+			"&BACK_URL=".urlencode((\CMain::IsHTTPS() ? "https://" : "http://").$_SERVER['HTTP_HOST']);
 	}
 
 	public static function getApiTokenUrl()
 	{
-		return "http://www.1c-bitrix.ru/buy_tmp/ebay/".
+		return "https://".self::getServiceHost()."/buy_tmp/ebay/".
 			"?action=GET_AUTH_URL&LICENCE_HASH=".self::getLicenseHash().
 			"&BACK_URL=".urlencode((\CMain::IsHTTPS() ? "https://" : "http://").$_SERVER['HTTP_HOST']);
 	}
@@ -45,22 +45,16 @@ class Ebay extends Platform
 		return md5(defined("LICENSE_KEY") ? LICENSE_KEY : "DEMO");
 	}
 
+	protected static function getServiceHost()
+	{
+		return defined('SALE_EBAY_SERVICE_HOST') ? SALE_EBAY_SERVICE_HOST : 'www.1c-bitrix.ru';
+	}
+
 	/**
 	 * Sets Ebay active.
 	 * @return bool
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	
-	/**
-	* <p>Устанавливает eBay активным. Метод нестатический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/ebay/ebay/setactive.php
-	* @author Bitrix
-	*/
 	public function setActive()
 	{
 		if($this->isActive())
@@ -74,17 +68,6 @@ class Ebay extends Platform
 	 * Sets Ebay inactive.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Устанавливает eBay неактивным. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/ebay/ebay/unsetactive.php
-	* @author Bitrix
-	*/
 	public function unsetActive()
 	{
 		if(!$this->isActive())
@@ -98,17 +81,6 @@ class Ebay extends Platform
 	 * Installs all necessary stuff for Ebay.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Устанавливает все необходимое для подключения eBay. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/ebay/ebay/install.php
-	* @author Bitrix
-	*/
 	public function install()
 	{
 		RegisterModuleDependences('main', 'OnEventLogGetAuditTypes', 'sale', '\Bitrix\Sale\TradingPlatform\Ebay\Helper', 'OnEventLogGetAuditTypes');
@@ -124,9 +96,9 @@ class Ebay extends Platform
 
 		$ebay = Ebay::getInstance();
 		$catMapEntRes = \Bitrix\Sale\TradingPlatform\MapEntityTable::add(array(
-			"TRADING_PLATFORM_ID" => $ebay->getId(),
-			"CODE" => "CATEGORY"
-		));
+		"TRADING_PLATFORM_ID" => $ebay->getId(),
+		"CODE" => "CATEGORY"
+	));
 
 		$eventRes = Helper::installEvents();
 		$fsRes = Helper::createFeedFileStructure();
@@ -144,26 +116,9 @@ class Ebay extends Platform
 	 * @param string $siteId Site id.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Отправляет описание ошибки на e-mail. Метод нестатический.</p>
-	*
-	*
-	* @param string $type  Тип ошибки.
-	*
-	* @param string $details  Детали ошибки.
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/ebay/ebay/senderrormail.php
-	* @author Bitrix
-	*/
 	public function sendErrorMail($type, $details, $siteId)
 	{
-		if(!isset($this->settings[$siteId]["EMAIL_ERRORS"]) || strlen($this->settings[$siteId]["EMAIL_ERRORS"]) <= 0)
+		if(!isset($this->settings[$siteId]["EMAIL_ERRORS"]) || $this->settings[$siteId]["EMAIL_ERRORS"] == '')
 			return false;
 
 		$loggerTypes = Helper::OnEventLogGetAuditTypes();
@@ -189,27 +144,6 @@ class Ebay extends Platform
 	 * @param string $siteId Site id.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Записывает события в системных лог и отправляет ошибку на e-mail. Метод статический.</p>
-	*
-	*
-	* @param integer $level  Уровень лога, на который будет записано событие.
-	*
-	* @param string $type  Тип события.
-	*
-	* @param string $itemId  Идентификатор элемента.
-	*
-	* @param string $description  Описание события.
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/ebay/ebay/log.php
-	* @author Bitrix
-	*/
 	public static function log($level, $type, $itemId, $description, $siteId)
 	{
 		static $ebay = null;
@@ -250,8 +184,8 @@ class Ebay extends Platform
 			{
 				$deliveryName = $map[$additional['DELIVERY_ID']];
 
-				if(substr($deliveryName,0,3) == "RU_")
-					$deliveryName = substr($deliveryName, 3);
+				if(mb_substr($deliveryName, 0, 3) == "RU_")
+					$deliveryName = mb_substr($deliveryName, 3);
 			}
 		}
 

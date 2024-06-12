@@ -90,7 +90,7 @@ class Assert
 	*/
 	public final static function expectStringNotNull($arg, $argName = '', $customMsg = '')
 	{
-		if(!strlen($arg))
+		if($arg == '')
 			throw new Main\ArgumentException(self::formMessage('SALE_LOCATION_ASSERT_STRING_NOTNULL_EXPECTED', $argName, $customMsg));
 
 		return (string) $arg;
@@ -185,7 +185,7 @@ class Assert
 		foreach($arg as $k => $v)
 		{
 			$v = (string) $v;
-			if(!strlen($v))
+			if($v == '')
 				throw new Main\ArgumentException(self::formMessage('SALE_LOCATION_ASSERT_ARRAY_OF_STRING_NOT_NULL_EXPECTED', $argName, $customMsg));
 
 			$arg[$k] = $v;
@@ -208,7 +208,7 @@ class Assert
 	*/
 	public final static function expectEnumerationMember($arg, $enum = array(), $argName = '', $customMsg = '')
 	{
-		if(!strlen($arg))
+		if($arg == '')
 			throw new Main\ArgumentException(Loc::getMessage('SALE_LOCATION_ASSERT_EMPTY_ARGUMENT'));
 
 		if(!is_array($enum) || empty($enum))
@@ -228,7 +228,7 @@ class Assert
 
 	public static function castTrimLC($value)
 	{
-		return ToLower(trim($value));
+		return mb_strtolower(trim($value));
 	}
 
 	// announcers
@@ -257,11 +257,13 @@ class Assert
 		throw new Main\NotSupportedException($msg);
 	}
 
-	private final static function formMessage($msgCode, $argName = '', $customMsg = '')
+	private static function formMessage($msgCode, $argName = '', $customMsg = '')
 	{
-		if(strlen($customMsg))
+		if($customMsg <> '')
+		{
 			return str_replace('#ARG_NAME#', $argName, $customMsg);
+		}
 
-		return Loc::getMessage($msgCode, array('#ARG_NAME#' => strlen($argName) ? ' "'.$argName.'" ' : ' '));
+		return Loc::getMessage($msgCode, array('#ARG_NAME#' => $argName <> ''? ' "'.$argName.'" ' : ' '));
 	}
 }

@@ -18,6 +18,8 @@ class CCrmExternalSaleImport
 	private $serverVersion = null;
 	private $serverSessionID = null;
 
+	/** @var array|null  */
+	private $params = array();
 
 	const SyncStatusFinished = 0;
 	const SyncStatusContinue = 1;
@@ -37,6 +39,25 @@ class CCrmExternalSaleImport
 			$this->AddError("PA1", sprintf("External site '%d' is not found", $this->externalSaleId));
 			$this->proxy = null;
 		}
+	}
+
+	/**
+	 * Add parameter
+	 * @param string $key Parameter key.
+	 * @param mixed $value Parameter value.
+	 */
+	public function AddParam($key, $value)
+	{
+		$this->params[$key] = $value;
+	}
+
+	/**
+	 * Remove parameter
+	 * @param string $key Parameter key.
+	 */
+	public function RemoveParam($key)
+	{
+		unset($this->params[$key]);
 	}
 
 	/**
@@ -187,6 +208,8 @@ class CCrmExternalSaleImport
 		$this->ClearErrors();
 		$this->arImportResult = new CCrmExternalSaleImportResult();
 
+		self::AddTrace("START: {$this->externalSaleId}");
+
 		@set_time_limit(0);
 		@ini_set("track_errors", "1");
 		@ignore_user_abort(true);
@@ -202,19 +225,17 @@ class CCrmExternalSaleImport
 
 		$sessid = $this->GetServerSessionID();
 		$serverVersion = $this->GetServerVersion();
+
+		self::AddTrace("VERSION: {$serverVersion}");
+
 		if($sessid !== "" && $serverVersion >= 2.09)
 		{
 			//Stepwise
-			$key = "SALE_SYNC_DATA_{$this->externalSaleId}";
-			if(isset($_SESSION[$key]))
-			{
-				$data = unserialize($_SESSION[$key]);
-			}
-			else
+			$data = $this->arExternalSale["SYNC_DATA"];
+
+			if(!is_array($data) || empty($data))
 			{
 				$data = array(
-					"ACTIVE_TIMESTAMP" => $modificationLabel,
-					"MAX_TIMESTAMP" => $modificationLabel,
 					"DEAL_CREATED" => 0,
 					"DEAL_UPDATED" => 0,
 					"CONTACT_CREATED" => 0,
@@ -225,14 +246,14 @@ class CCrmExternalSaleImport
 				);
 			}
 
-			$modificationLabelTmp = $data['ACTIVE_TIMESTAMP'];
+			$modificationLabelTmp = $modificationLabel;
 			if ($modificationLabelTmp <= 0)
 			{
 				$modificationLabelTmp = time() - $importPeriod * 86400;
-				$data["ACTIVE_TIMESTAMP"] = $data["MAX_TIMESTAMP"] = $modificationLabelTmp;
 			}
 
 			$request = array(
+				"LID" => LANGUAGE_ID,
 				"MODIFICATION_LABEL" => $modificationLabelTmp,
 				"ZZZ" => date("Z"),
 				"IMPORT_SIZE" => $importSize,
@@ -242,30 +263,49 @@ class CCrmExternalSaleImport
 				"sessid" => $sessid
 			);
 
+			self::AddTrace(array('QUERY_ORDER_DATA' => $request));
+
 			$orderData = $this->QueryOrderData($request, array("REQUEST_METHOD" => "GET"));
 			if ($orderData == null)
 			{
+				self::AddTrace('FINISH: NO SOURCE DATA');
+
 				$this->AddError("SD2", "Communication error");
-				unset($_SESSION[$key]);
+				CCrmExternalSale::Update($this->externalSaleId, array("SYNC_DATA" => array()));
 				return self::SyncStatusError;
 			}
 
 			$arErrors = array();
-			$arOrders = $this->ParseOrderData($orderData, $modificationLabel, $arErrors);
+			$arOrders = $this->ParseOrderData($orderData, $modificationLabelTmp, $arErrors);
+
+			if(is_array($arOrders))
+			{
+				self::AddTrace('DATA PARSING SUCCESSFUL');
+			}
+			else
+			{
+				self::AddTrace('DATA PARSING FAILED');
+			}
+
+			foreach ($arErrors as $error)
+			{
+				$this->AddError($error[0], $error[1]);
+			}
 
 			if (is_array($arOrders))
 			{
 				if (count($arOrders) <= 0)
 				{
-					$arFieldsTmp = array(
-						"~LAST_STATUS_DATE" => $GLOBALS["DB"]->CurrentTimeFunction()
+					CCrmExternalSale::Update(
+						$this->externalSaleId,
+						array(
+							"MODIFICATION_LABEL" => $modificationLabelTmp,
+							"LAST_STATUS" => $data["TOTAL"] > 0
+								? sprintf("Success: %d item(s)", $data["TOTAL"]) : "Success: 0 items",
+							"~LAST_STATUS_DATE" => $GLOBALS["DB"]->CurrentTimeFunction(),
+							"SYNC_DATA" => array()
+						)
 					);
-					$arFieldsTmp["LAST_STATUS"] = $data["TOTAL"] > 0
-						? sprintf("Success: %d item(s)", $data["TOTAL"]) : "Success: 0 items";
-					$arFieldsTmp["MODIFICATION_LABEL"] = $data["MAX_TIMESTAMP"] > 0
-						? $data["MAX_TIMESTAMP"] : time();
-
-					CCrmExternalSale::Update($this->externalSaleId, $arFieldsTmp);
 
 					if (!$bSkipNotify)
 					{
@@ -278,7 +318,15 @@ class CCrmExternalSaleImport
 						$this->arImportResult->numberOfCreatedCompanies = $data["COMPANY_CREATED"];
 						$this->arImportResult->numberOfUpdatedCompanies = $data["COMPANY_UPDATED"];
 
-						$this->Notify();
+						if($this->arImportResult->numberOfCreatedDeals > 0
+							|| $this->arImportResult->numberOfUpdatedDeals > 0
+							|| $this->arImportResult->numberOfCreatedContacts > 0
+							|| $this->arImportResult->numberOfUpdatedContacts > 0
+							|| $this->arImportResult->numberOfCreatedCompanies > 0
+							|| $this->arImportResult->numberOfUpdatedCompanies)
+						{
+							$this->Notify();
+						}
 
 						// Reset totals for keep actual iteration totals
 						$this->arImportResult->numberOfCreatedDeals = 0;
@@ -291,7 +339,8 @@ class CCrmExternalSaleImport
 						$this->arImportResult->numberOfUpdatedCompanies = 0;
 					}
 
-					unset($_SESSION[$key]);
+					self::AddTrace('FINISH: NO DATA TO SAVE');
+
 					return self::SyncStatusFinished;
 				}
 
@@ -300,32 +349,57 @@ class CCrmExternalSaleImport
 					$this->SaveOrderData($order, $bSkipBP);
 				}
 
-				$data["MAX_TIMESTAMP"] = $modificationLabel;
-				$data["DEAL_CREATED"] += $this->arImportResult->numberOfCreatedDeals;
-				$data["DEAL_UPDATED"] += $this->arImportResult->numberOfUpdatedDeals;
+				if(empty($this->arError))
+				{
+					$data["DEAL_CREATED"] += $this->arImportResult->numberOfCreatedDeals;
+					$data["DEAL_UPDATED"] += $this->arImportResult->numberOfUpdatedDeals;
 
-				$data["CONTACT_CREATED"] += $this->arImportResult->numberOfCreatedContacts;
-				$data["CONTACT_UPDATED"] += $this->arImportResult->numberOfUpdatedContacts;
+					$data["CONTACT_CREATED"] += $this->arImportResult->numberOfCreatedContacts;
+					$data["CONTACT_UPDATED"] += $this->arImportResult->numberOfUpdatedContacts;
 
-				$data["COMPANY_CREATED"] += $this->arImportResult->numberOfCreatedCompanies;
-				$data["COMPANY_UPDATED"] += $this->arImportResult->numberOfUpdatedCompanies;
+					$data["COMPANY_CREATED"] += $this->arImportResult->numberOfCreatedCompanies;
+					$data["COMPANY_UPDATED"] += $this->arImportResult->numberOfUpdatedCompanies;
 
-				$data["TOTAL"] += count($arOrders);
+					$data["TOTAL"] += count($arOrders);
 
-				$_SESSION[$key] = serialize($data);
-				return self::SyncStatusContinue;
+					$arFieldsTmp = array(
+						"MODIFICATION_LABEL" => $modificationLabelTmp,
+						"~LAST_STATUS_DATE" => $GLOBALS["DB"]->CurrentTimeFunction()
+					);
+					if (count($arOrders) > 0)
+					{
+						$arFieldsTmp["LAST_STATUS"] = sprintf("Success: %d item(s)", count($arOrders));
+					}
+
+					$arFieldsTmp["SYNC_DATA"] = $data;
+					CCrmExternalSale::Update($this->externalSaleId, $arFieldsTmp);
+					self::AddTrace('FINISH: CONTINUE');
+
+					if (!$bSkipNotify)
+					{
+						$this->Notify();
+					}
+
+					return self::SyncStatusContinue;
+				}
 			}
 
-			foreach ($arErrors as $error)
-				$this->AddError($error[0], $error[1]);
-
 			$ar = array();
-			foreach ($this->GetErrors() as $err)
+			foreach ($this->arError as $err)
 				$ar[] = sprintf("[%s] %s", $err[0], $err[1]);
 			$this->arExternalSale["ERRORS"] = $this->arExternalSale["ERRORS"] + 1;
 
-			CCrmExternalSale::Update($this->externalSaleId, array("LAST_STATUS" => implode(" ", $ar), "IMPORT_ERRORS" => $this->arExternalSale["ERRORS"], "~LAST_STATUS_DATE" => $GLOBALS["DB"]->CurrentTimeFunction()));
-			unset($_SESSION[$key]);
+			CCrmExternalSale::Update(
+				$this->externalSaleId,
+				array(
+					"LAST_STATUS" => implode(" ", $ar),
+					"IMPORT_ERRORS" => $this->arExternalSale["ERRORS"],
+					"~LAST_STATUS_DATE" => $GLOBALS["DB"]->CurrentTimeFunction(),
+					"SYNC_DATA" => array()
+				)
+			);
+
+			self::AddTrace('FINISH: ERROR');
 			return self::SyncStatusError;
 		}
 		else
@@ -338,6 +412,7 @@ class CCrmExternalSaleImport
 			//Simple
 
 			$request = array(
+				"LID" => LANGUAGE_ID,
 				"MODIFICATION_LABEL" => $modificationLabelTmp,
 				"ZZZ" => date("Z"),
 				"IMPORT_SIZE" => $importSize,
@@ -351,9 +426,13 @@ class CCrmExternalSaleImport
 				$request["sessid"] = $sessid;
 			}
 
+			self::AddTrace(array('QUERY_ORDER_DATA' => $request));
+
 			$orderData = $this->QueryOrderData($request, array("REQUEST_METHOD" => "POST"));
 			if ($orderData == null)
 			{
+				self::AddTrace('FINISH: NO SOURCE DATA');
+
 				$this->AddError("SD2", "Communication error");
 				return self::SyncStatusError;
 			}
@@ -361,14 +440,32 @@ class CCrmExternalSaleImport
 			$arErrors = array();
 			$arOrders = $this->ParseOrderData($orderData, $modificationLabel, $arErrors);
 
+			if(is_array($arOrders))
+			{
+				self::AddTrace('DATA PARSING SUCCESSFUL');
+			}
+			else
+			{
+				self::AddTrace('DATA PARSING FAILED');
+			}
+
+			foreach ($arErrors as $error)
+				$this->AddError($error[0], $error[1]);
+
 			if (is_array($arOrders))
 			{
 				if (count($arOrders) <= 0)
 				{
-					$arFieldsTmp = array("~LAST_STATUS_DATE" => $GLOBALS["DB"]->CurrentTimeFunction(), "LAST_STATUS" => "Success: 0 items");
+					$arFieldsTmp = array(
+						"~LAST_STATUS_DATE" => $GLOBALS["DB"]->CurrentTimeFunction(),
+						"LAST_STATUS" => "Success: 0 items",
+						"SYNC_DATA" => array()
+					);
 					if (empty($modificationLabel))
 						$arFieldsTmp["MODIFICATION_LABEL"] = time();
 					CCrmExternalSale::Update($this->externalSaleId, $arFieldsTmp);
+
+					self::AddTrace('FINISH: NO DATA TO SAVE');
 
 					return self::SyncStatusFinished;
 				}
@@ -376,25 +473,31 @@ class CCrmExternalSaleImport
 				foreach ($arOrders as $order)
 					$this->SaveOrderData($order, $bSkipBP);
 
-				$arFieldsTmp = array("MODIFICATION_LABEL" => $modificationLabel, "~LAST_STATUS_DATE" => $GLOBALS["DB"]->CurrentTimeFunction());
-				if (count($arOrders) > 0)
-					$arFieldsTmp["LAST_STATUS"] = sprintf("Success: %d item(s)", count($arOrders));
-				CCrmExternalSale::Update($this->externalSaleId, $arFieldsTmp);
+				if(empty($this->arError))
+				{
+					$arFieldsTmp = array("MODIFICATION_LABEL" => $modificationLabel, "~LAST_STATUS_DATE" => $GLOBALS["DB"]->CurrentTimeFunction());
+					if (count($arOrders) > 0)
+						$arFieldsTmp["LAST_STATUS"] = sprintf("Success: %d item(s)", count($arOrders));
+					CCrmExternalSale::Update($this->externalSaleId, $arFieldsTmp);
 
-				if (!$bSkipNotify)
-					$this->Notify();
+					if (!$bSkipNotify)
+					{
+						$this->Notify();
+					}
 
-				return self::SyncStatusContinue;
+					self::AddTrace('FINISH: CONTINUE');
+
+					return self::SyncStatusContinue;
+				}
 			}
 
-			foreach ($arErrors as $error)
-				$this->AddError($error[0], $error[1]);
-
 			$ar = array();
-			foreach ($this->GetErrors() as $err)
+			foreach ($this->arError as $err)
 				$ar[] = sprintf("[%s] %s", $err[0], $err[1]);
 			$this->arExternalSale["ERRORS"] = $this->arExternalSale["ERRORS"] + 1;
 			CCrmExternalSale::Update($this->externalSaleId, array("LAST_STATUS" => implode(" ", $ar), "IMPORT_ERRORS" => $this->arExternalSale["ERRORS"], "~LAST_STATUS_DATE" => $GLOBALS["DB"]->CurrentTimeFunction()));
+
+			self::AddTrace('FINISH: ERROR');
 
 			return self::SyncStatusError;
 		}
@@ -405,6 +508,8 @@ class CCrmExternalSaleImport
 		if (!isset($arOrder["CONTRACTOR"]) || !is_array($arOrder["CONTRACTOR"]))
 			return false;
 
+		self::AddTrace('SAVE_ORDER_CONTACT_DATA:START');
+
 		$contactId = 0;
 
 		$contactXmlId = $arOrder["CONTRACTOR"]["ID"];
@@ -413,7 +518,11 @@ class CCrmExternalSaleImport
 		if (isset($arOrder["CONTRACTOR"]["LAST_NAME"]) && $arOrder["CONTRACTOR"]["LAST_NAME"] != "")
 			$contactXmlId .= "|".$arOrder["CONTRACTOR"]["LAST_NAME"];
 
-		$dbContact = CCrmContact::GetList(array(), array("ORIGINATOR_ID" => $this->externalSaleId, "ORIGIN_ID" => $contactXmlId, "CHECK_PERMISSIONS" => "N"));
+		$dbContact = CCrmContact::GetListEx(
+			array(),
+			array("ORIGINATOR_ID" => $this->externalSaleId, "ORIGIN_ID" => $contactXmlId, "CHECK_PERMISSIONS" => "N")
+		);
+
 		if ($arContact = $dbContact->Fetch())
 			$contactId = $arContact["ID"];
 
@@ -421,9 +530,15 @@ class CCrmExternalSaleImport
 			'ORIGINATOR_ID' => $this->externalSaleId,
 			'ORIGIN_ID' => $contactXmlId,
 			'TYPE_ID' => 'CLIENT',
-			'OPENED' => 'Y',
-			'SOURCE_ID' => 'WEB',
+			'OPENED' => 'Y'
 		);
+
+		$sources = CCrmStatus::GetStatusList('SOURCE');
+		if(isset($sources['WEB']))
+		{
+			$arFields['SOURCE_ID'] = 'WEB';
+		}
+
 		if (isset($arOrder["CONTRACTOR"]["FIRST_NAME"]) && $arOrder["CONTRACTOR"]["FIRST_NAME"] != "")
 			$arFields['NAME'] = $arOrder["CONTRACTOR"]["FIRST_NAME"];
 		if (isset($arOrder["CONTRACTOR"]["LAST_NAME"]) && $arOrder["CONTRACTOR"]["LAST_NAME"] != "")
@@ -440,19 +555,26 @@ class CCrmExternalSaleImport
 
 		if (is_array($arOrder["CONTRACTOR"]["ADDRESS"]))
 		{
-			foreach ($arOrder["CONTRACTOR"]["ADDRESS"] as $key => $val)
-			{
-				if ($key == "VIEW")
-					continue;
-				if (!empty($arFields["ADDRESS"]))
-					$arFields["ADDRESS"] .= ", ";
-				$arFields["ADDRESS"] .= $val;
-			}
-			if (isset($arOrder["CONTRACTOR"]["ADDRESS"]["VIEW"]))
+			if (isset($arOrder["CONTRACTOR"]["ADDRESS"]["VIEW"]) && $arOrder["CONTRACTOR"]["ADDRESS"]["VIEW"] != '')
 			{
 				if (!empty($arFields["ADDRESS"]))
 					$arFields["ADDRESS"] .= "\n";
 				$arFields["ADDRESS"] .= $arOrder["CONTRACTOR"]["ADDRESS"]["VIEW"];
+			}
+			else
+			{
+				foreach ($arOrder["CONTRACTOR"]["ADDRESS"] as $key => $val)
+				{
+					if ($key == "VIEW")
+					{
+						continue;
+					}
+					if (!empty($arFields["ADDRESS"]))
+					{
+						$arFields["ADDRESS"] .= ", ";
+					}
+					$arFields["ADDRESS"] .= $val;
+				}
 			}
 		}
 		if (is_array($arOrder["CONTRACTOR"]["CONTACTS"]))
@@ -471,7 +593,7 @@ class CCrmExternalSaleImport
 			$arInc = array();
 			foreach ($arOrder["CONTRACTOR"]["CONTACTS"] as $val)
 			{
-				$t = strtoupper(preg_replace("/\s/", "", $val["TYPE"]));
+				$t = mb_strtoupper(preg_replace("/\s/", "", $val["TYPE"]));
 				if (!isset($arMapTmp[$t]))
 				{
 					continue;
@@ -508,23 +630,40 @@ class CCrmExternalSaleImport
 
 		$newContact = ($contactId == 0);
 
+		if ($this->arExternalSale == null)
+			$this->arExternalSale = CCrmExternalSale::GetDefaultSettings($this->externalSaleId);
+
 		$obj = new CCrmContact(false);
 		if ($contactId == 0)
 		{
 			if (
-				(!isset($arFields['NAME']) || (strlen($arFields['NAME']) <= 0))
-				&& (!isset($arFields['LAST_NAME']) || (strlen($arFields['LAST_NAME']) <= 0))
+				(!isset($arFields['NAME']) || ($arFields['NAME'] == ''))
+				&& (!isset($arFields['LAST_NAME']) || ($arFields['LAST_NAME'] == ''))
 			)
 				$arFields['LAST_NAME'] = $contactXmlId;
 
+			$assignedById = $this->arExternalSale["RESPONSIBLE"];
+			if ($assignedById > 0)
+				$arFields["ASSIGNED_BY_ID"] = $assignedById;
+
+			self::AddTrace(array('ADD CONTACT' => $arFields));
+
 			$res = $obj->Add($arFields, true, array('DISABLE_USER_FIELD_CHECK' => true));
-			$contactId = intval($res);
-			$this->arImportResult->numberOfCreatedContacts++;
+			if($res > 0)
+			{
+				$contactId = (int)$res;
+				$this->arImportResult->numberOfCreatedContacts++;
+			}
 		}
 		else
 		{
+			self::AddTrace(array("UPDATE CONTACT: {$contactId}" => $arFields));
+
 			$res = $obj->Update($contactId, $arFields, true, true, array('DISABLE_USER_FIELD_CHECK' => true));
-			$this->arImportResult->numberOfUpdatedContacts++;
+			if($res)
+			{
+				$this->arImportResult->numberOfUpdatedContacts++;
+			}
 		}
 
 		if (!$res)
@@ -537,9 +676,11 @@ class CCrmExternalSaleImport
 			if (!empty($obj->LAST_ERROR))
 				$this->AddError("CCA", $obj->LAST_ERROR);
 
+			self::AddTrace('SAVE_ORDER_CONTACT_DATA:FAILED');
 			return false;
 		}
 
+		self::AddTrace("SAVE_ORDER_CONTACT_DATA:FINISHED:{$contactId}");
 		return array($contactId, $newContact);
 	}
 
@@ -547,6 +688,8 @@ class CCrmExternalSaleImport
 	{
 		if (!isset($arOrder["CONTRACTOR"]) || !is_array($arOrder["CONTRACTOR"]))
 			return false;
+
+		self::AddTrace('SAVE_ORDER_COMPANY_DATA:START');
 
 		$companyId = 0;
 
@@ -619,7 +762,7 @@ class CCrmExternalSaleImport
 			$arInc = array();
 			foreach ($arOrder["CONTRACTOR"]["CONTACTS"] as $val)
 			{
-				$t = strtoupper(preg_replace("/\s/", "", $val["TYPE"]));
+				$t = mb_strtoupper(preg_replace("/\s/", "", $val["TYPE"]));
 				if (!isset($arMapTmp[$t]))
 				{
 					continue;
@@ -672,20 +815,37 @@ class CCrmExternalSaleImport
 
 		$newCompany = ($companyId == 0);
 
+		if ($this->arExternalSale == null)
+			$this->arExternalSale = CCrmExternalSale::GetDefaultSettings($this->externalSaleId);
+
 		$obj = new CCrmCompany(false);
 		if ($companyId == 0)
 		{
-			if (!isset($arFields['TITLE']) || (strlen($arFields['TITLE']) <= 0))
+			if (!isset($arFields['TITLE']) || ($arFields['TITLE'] == ''))
 				$arFields['TITLE'] = $companyXmlId;
 
+			$assignedById = $this->arExternalSale["RESPONSIBLE"];
+			if ($assignedById > 0)
+				$arFields["ASSIGNED_BY_ID"] = $assignedById;
+
+			self::AddTrace(array('ADD COMPANY' => $arFields));
+
 			$res = $obj->Add($arFields, true, array('DISABLE_USER_FIELD_CHECK' => true));
-			$companyId= intval($res);
-			$this->arImportResult->numberOfCreatedCompanies++;
+			if($res > 0)
+			{
+				$companyId = (int)$res;
+				$this->arImportResult->numberOfCreatedCompanies++;
+			}
 		}
 		else
 		{
+			self::AddTrace(array("UPDATE COMPANY: {$companyId}" => $arFields));
+
 			$res = $obj->Update($companyId, $arFields, true, true, array('DISABLE_USER_FIELD_CHECK' => true));
-			$this->arImportResult->numberOfUpdatedCompanies++;
+			if($res)
+			{
+				$this->arImportResult->numberOfUpdatedCompanies++;
+			}
 		}
 
 		if (!$res)
@@ -698,22 +858,41 @@ class CCrmExternalSaleImport
 			if (!empty($obj->LAST_ERROR))
 				$this->AddError("CCA", $obj->LAST_ERROR);
 
+			self::AddTrace('SAVE_ORDER_COMPANY_DATA:FAILED');
 			return false;
 		}
 
+		self::AddTrace("SAVE_ORDER_COMPANY_DATA:FINISHED:{$companyId}");
 		return array($companyId, $newCompany);
 	}
 
 	private function SaveOrderDataDeal($arOrder, $contactId = null, $companyId = null)
 	{
+		self::AddTrace('SAVE_ORDER_DEAL_DATA:START');
+
 		$dealId = 0;
 		$dealTitle = "";
+		$dealCategoryId = 0;
 
-		$dbDeal = CCrmDeal::GetList(array(), array("ORIGINATOR_ID" => $this->externalSaleId, "ORIGIN_ID" => $arOrder["ID"], "CHECK_PERMISSIONS" => "N"));
+		$dbDeal = CCrmDeal::GetListEx(
+			array(),
+			array(
+				"ORIGINATOR_ID" => $this->externalSaleId,
+				"ORIGIN_ID" => $arOrder["ID"],
+				"CHECK_PERMISSIONS" => "N"
+			)
+		);
 		if ($arDeal = $dbDeal->Fetch())
 		{
-			$dealId = $arDeal["ID"];
-			$dealTitle = $arDeal["TITLE"];
+			$dealId = (int)$arDeal["ID"];
+			if(isset($arDeal["TITLE"]))
+			{
+				$dealTitle = $arDeal["TITLE"];
+			}
+			if(isset($arDeal["CATEGORY_ID"]))
+			{
+				$dealCategoryId = (int)$arDeal["CATEGORY_ID"];
+			}
 		}
 
 		$newDeal = ($dealId == 0);
@@ -741,13 +920,15 @@ class CCrmExternalSaleImport
 		if ($companyId != null && intval($companyId) > 0)
 			$arFields["COMPANY_ID"] = $companyId;
 
-		static $arStageList = null;
-		if ($arStageList == null)
-			$arStageList = CCrmStatus::GetStatusList('DEAL_STAGE');
-
 		// Prevent reset stage for existed deals
-		if ($newDeal && array_key_exists("NEW", $arStageList))
-			$arFields["STAGE_ID"] = "NEW";
+		if ($newDeal)
+		{
+			$arStageList = Bitrix\Crm\Category\DealCategory::getStageList($dealCategoryId);
+			if(!empty($arStageList))
+			{
+				$arFields["STAGE_ID"] = current(array_keys($arStageList));
+			}
+		}
 
 		$arAdditionalInfo = array();
 		if ($contactId != null && intval($contactId) > 0)
@@ -765,52 +946,41 @@ class CCrmExternalSaleImport
 				$arAdditionalInfo['COMPANY_FULL_NAME'] = $arOrder["CONTRACTOR"]["NAME"];
 		}
 
+
 		if (is_array($arOrder["PROPERTIES"]))
 		{
 			foreach ($arOrder["PROPERTIES"] as $arProp)
 			{
 				if (!empty($arProp["VALUE"]))
 				{
-					$arAdditionalInfo[strtoupper($arProp["NAME"])] = $arProp["VALUE"];
-					if ($arAdditionalInfo[strtoupper($arProp["NAME"])] == "true")
-						$arAdditionalInfo[strtoupper($arProp["NAME"])] = true;
-					elseif ($arAdditionalInfo[strtoupper($arProp["NAME"])] == "false")
-						$arAdditionalInfo[strtoupper($arProp["NAME"])] = false;
+					$arAdditionalInfo[mb_strtoupper($arProp["NAME"])] = $arProp["VALUE"];
+					if ($arAdditionalInfo[mb_strtoupper($arProp["NAME"])] == "true")
+						$arAdditionalInfo[mb_strtoupper($arProp["NAME"])] = true;
+					elseif ($arAdditionalInfo[mb_strtoupper($arProp["NAME"])] == "false")
+						$arAdditionalInfo[mb_strtoupper($arProp["NAME"])] = false;
 				}
 
-				switch (strtoupper($arProp["NAME"]))
+				switch(mb_strtoupper($arProp["NAME"]))
 				{
-					case 'FINALSTATUS':
-						if ($arProp["VALUE"] == 'true')
-						{
-							$arFields["CLOSED"] = "Y";
-							//$arFields["CLOSEDATE"] = $arOrder["DATE_UPDATE"];
-						}
-						else
-						{
-							$arFields["CLOSED"] = "N";
-							//$arFields["CLOSEDATE"] = false;
-						}
-						break;
 					case 'CANCELED':
-						if ($arProp["VALUE"] == 'true')
+						if($arProp["VALUE"] == 'true')
 						{
-							if (array_key_exists("LOSE", $arStageList))
-								$arFields["STAGE_ID"] = "LOSE";
+							$arFields["STAGE_ID"] = \Bitrix\Crm\Category\DealCategory::prepareStageID(
+								$dealCategoryId,
+								"LOSE"
+							);
 							$arFields["PROBABILITY"] = 0;
 						}
 						break;
 					case 'ORDERPAID':
-						if ($arProp["VALUE"] == 'true')
+						if($arProp["VALUE"] == 'true')
 						{
-							if (array_key_exists("WON", $arStageList))
-								$arFields["STAGE_ID"] = "WON";
+							$arFields["STAGE_ID"] = \Bitrix\Crm\Category\DealCategory::prepareStageID(
+								$dealCategoryId,
+								"WON"
+							);
 							$arFields["PROBABILITY"] = 100;
 						}
-						break;
-					case 'ORDERSTATUS':
-						//$arFields["CLOSED"] = "Y";
-						//$arFields["CLOSEDATE"] = $arOrder["DATE_UPDATE"];
 						break;
 				}
 			}
@@ -821,6 +991,12 @@ class CCrmExternalSaleImport
 		$accountNumber = isset($arOrder["ACCOUNT_NUMBER"]) && $arOrder["ACCOUNT_NUMBER"] !== ''
 			? $arOrder["ACCOUNT_NUMBER"] : $arOrder["ID"];
 
+		$assignedById = isset($this->arExternalSale["RESPONSIBLE"]) ? (int)$this->arExternalSale["RESPONSIBLE"] : 0;
+		if ($assignedById <= 0)
+		{
+			$assignedById = 1;
+		}
+
 		$obj = new CCrmDeal(false);
 		if ($dealId == 0)
 		{
@@ -829,23 +1005,53 @@ class CCrmExternalSaleImport
 			$arFields["TYPE_ID"] = 'SALE';
 			$arFields["CLOSEDATE"] = ConvertTimeStamp(time() + CTimeZone::GetOffset() + 86400, "FULL");
 			if (!isset($arFields["PROBABILITY"]))
+			{
 				$arFields["PROBABILITY"] = $this->arExternalSale["PROBABILITY"];
-			$assignedById = $this->arExternalSale["RESPONSIBLE"];
-			if ($assignedById > 0)
-				$arFields["ASSIGNED_BY_ID"] = $assignedById;
+			}
+			$arFields["ASSIGNED_BY_ID"] = $assignedById;
 
-			$res = $obj->Add($arFields, true, array('DISABLE_USER_FIELD_CHECK' => true));
-			$dealId = intval($res);
-			$this->arImportResult->numberOfCreatedDeals++;
+			self::AddTrace(array('ADD DEAL' => $arFields));
+
+			$res = $obj->Add(
+				$arFields,
+				true,
+				array(
+					'DISABLE_USER_FIELD_CHECK' => true,
+					'CURRENT_USER' => $assignedById
+				)
+			);
+			if($res > 0)
+			{
+				$dealId = (int)$res;
+				$this->arImportResult->numberOfCreatedDeals++;
+			}
 		}
 		else
 		{
-			if ($dealTitle === 'Deal')
-				$arFields['TITLE'] = sprintf("%s #%s", $this->arExternalSale["PREFIX"], $accountNumber);
+			$defaultDealTitle = isset($this->params['DEFAULT_DEAL_TITLE'])
+				? $this->params['DEFAULT_DEAL_TITLE'] : 'Deal';
 
-			// Disable properties change events generation ($bCompare = false) and user fields check 'DISABLE_USER_FIELD_CHECK' = true.
-			$res = $obj->Update($dealId, $arFields, false, true, array('DISABLE_USER_FIELD_CHECK' => true));
-			$this->arImportResult->numberOfUpdatedDeals++;
+			if ($dealTitle === '' || $dealTitle === $defaultDealTitle)
+			{
+				$arFields['TITLE'] = sprintf("%s #%s", $this->arExternalSale["PREFIX"], $accountNumber);
+			}
+
+			self::AddTrace(array("UPDATE DEAL: {$dealId}" => $arFields));
+
+			$res = $obj->Update(
+				$dealId,
+				$arFields,
+				true,
+				true,
+				array(
+					'DISABLE_USER_FIELD_CHECK' => true,
+					'CURRENT_USER' => $assignedById
+				)
+			);
+			if($res)
+			{
+				$this->arImportResult->numberOfUpdatedDeals++;
+			}
 		}
 
 		if (!$res)
@@ -858,9 +1064,11 @@ class CCrmExternalSaleImport
 			if (!empty($obj->LAST_ERROR))
 				$this->AddError("CDA", $obj->LAST_ERROR);
 
+			self::AddTrace('SAVE_ORDER_DEAL_DATA:FAILED');
 			return false;
 		}
 
+		self::AddTrace("SAVE_ORDER_DEAL_DATA:FINISHED:{$dealId}");
 		return array($dealId, $newDeal);
 	}
 
@@ -868,6 +1076,8 @@ class CCrmExternalSaleImport
 	{
 		if (!isset($arOrder["ITEMS"]) || !is_array($arOrder["ITEMS"]))
 			return false;
+
+		self::AddTrace('SAVE_ORDER_PRODUCT_DATA:START');
 
 		if (!$this->catalogId)
 		{
@@ -882,6 +1092,7 @@ class CCrmExternalSaleImport
 				else
 					$this->AddError("CCA", "Catalog creation error");
 
+				self::AddTrace('SAVE_ORDER_PRODUCT_DATA:FAILED');
 				return false;
 			}
 		}
@@ -908,7 +1119,10 @@ class CCrmExternalSaleImport
 			if ($productId == 0)
 			{
 				$res = CCrmProduct::Add($arFields);
-				$productId = intval($res);
+				if($res > 0)
+				{
+					$productId = (int)$res;
+				}
 			}
 			else
 			{
@@ -1032,7 +1246,9 @@ class CCrmExternalSaleImport
 			}
 		}
 
+		self::AddTrace(array("SAVE DEAL PRODUCTS: {$dealId}" => $arProductRows));
 		CCrmProductRow::SaveRows("D", $dealId, $arProductRows, null, false, false);
+		self::AddTrace("SAVE_ORDER_PRODUCT_DATA:FINISHED");
 		return true;
 	}
 
@@ -1042,51 +1258,72 @@ class CCrmExternalSaleImport
 		if ($dealId <= 0)
 			return;
 
+		self::AddTrace('SAVE_ORDER_DEAL_BP:START');
+
 		static $isBPIncluded = null;
 		if ($isBPIncluded === null)
-			$isBPIncluded = CModule::IncludeModule("bizproc");
+			$isBPIncluded = CModule::IncludeModule("bizproc") && CBPRuntime::isFeatureEnabled();
 		if (!$isBPIncluded)
 			return;
 
-		static $arBPTemplates = null;
-		if ($arBPTemplates === null)
+		static $arBPTemplates = [];
+
+		$autoExecType = $isNewDeal ? CBPDocumentEventType::Create : CBPDocumentEventType::Edit;
+		if (!array_key_exists($autoExecType, $arBPTemplates))
 		{
-			$arBPTemplates = CBPWorkflowTemplateLoader::SearchTemplatesByDocumentType(
+			$arBPTemplates[$autoExecType] = CBPWorkflowTemplateLoader::SearchTemplatesByDocumentType(
 				array('crm', 'CCrmDocumentDeal', 'DEAL'),
-				$isNewDeal ? CBPDocumentEventType::Create : CBPDocumentEventType::Edit
+				$autoExecType
 			);
 		}
 
-		if (!is_array($arBPTemplates))
-			return;
-
-		if (!is_array($arParameters))
-			$arParameters = array($arParameters);
-		if (!array_key_exists("TargetUser", $arParameters))
+		if (is_array($arBPTemplates[$autoExecType]))
 		{
+			if (!is_array($arParameters))
+			{
+				$arParameters = array($arParameters);
+			}
+			if (!array_key_exists("TargetUser", $arParameters))
+			{
+				$assignedById = intval(COption::GetOptionString("crm", "sale_deal_assigned_by_id", "0"));
+				if ($assignedById > 0)
+				{
+					$arParameters["TargetUser"] = "user_" . $assignedById;
+				}
+			}
+
+			$runtime = CBPRuntime::GetRuntime();
+
+			foreach ($arBPTemplates[$autoExecType] as $wt)
+			{
+				try
+				{
+					$wi = $runtime->CreateWorkflow(
+						$wt["ID"],
+						array('crm', 'CCrmDocumentDeal', 'DEAL_' . $dealId),
+						$arParameters
+					);
+					$wi->Start();
+				}
+				catch (Exception $e)
+				{
+					$this->AddError($e->getCode(), $e->getMessage());
+				}
+			}
+		}
+		if($isNewDeal)
+		{
+			$starter = new \Bitrix\Crm\Automation\Starter(\CCrmOwnerType::Deal, $dealId);
 			$assignedById = intval(COption::GetOptionString("crm", "sale_deal_assigned_by_id", "0"));
 			if ($assignedById > 0)
-				$arParameters["TargetUser"] =  "user_".$assignedById;
+			{
+				$starter->setUserId($assignedById);
+			}
+
+			$starter->setContextToImport()->runOnAdd();
 		}
 
-		$runtime = CBPRuntime::GetRuntime();
-
-		foreach ($arBPTemplates as $wt)
-		{
-			try
-			{
-				$wi = $runtime->CreateWorkflow(
-					$wt["ID"],
-					array('crm', 'CCrmDocumentDeal', 'DEAL_'.$dealId),
-					$arParameters
-				);
-				$wi->Start();
-			}
-			catch (Exception $e)
-			{
-				$this->AddError($e->getCode(), $e->getMessage());
-			}
-		}
+		self::AddTrace('SAVE_ORDER_DEAL_BP:FINISED');
 	}
 
 	private function SaveOrderDataContactBP($contactId, $isNewContact, $arParameters = array())
@@ -1095,51 +1332,61 @@ class CCrmExternalSaleImport
 		if ($contactId <= 0)
 			return;
 
+		self::AddTrace('SAVE_ORDER_CONTACT_BP:START');
+
 		static $isBPIncluded = null;
 		if ($isBPIncluded === null)
-			$isBPIncluded = CModule::IncludeModule("bizproc");
+			$isBPIncluded = CModule::IncludeModule("bizproc") && CBPRuntime::isFeatureEnabled();
 		if (!$isBPIncluded)
 			return;
 
-		static $arBPTemplates = null;
-		if ($arBPTemplates === null)
+		static $arBPTemplates = [];
+
+		$autoExecType = $isNewContact ? CBPDocumentEventType::Create : CBPDocumentEventType::Edit;
+		if (!array_key_exists($autoExecType, $arBPTemplates))
 		{
-			$arBPTemplates = CBPWorkflowTemplateLoader::SearchTemplatesByDocumentType(
+			$arBPTemplates[$autoExecType] = CBPWorkflowTemplateLoader::SearchTemplatesByDocumentType(
 				array('crm', 'CCrmDocumentContact', 'CONTACT'),
-				$isNewContact ? CBPDocumentEventType::Create : CBPDocumentEventType::Edit
+				$autoExecType
 			);
 		}
 
-		if (!is_array($arBPTemplates))
-			return;
-
-		if (!is_array($arParameters))
-			$arParameters = array($arParameters);
-		if (!array_key_exists("TargetUser", $arParameters))
+		if (is_array($arBPTemplates[$autoExecType]))
 		{
-			$assignedById = intval(COption::GetOptionString("crm", "sale_deal_assigned_by_id", "0"));
-			if ($assignedById > 0)
-				$arParameters["TargetUser"] =  "user_".$assignedById;
+			if (!is_array($arParameters))
+			{
+				$arParameters = array($arParameters);
+			}
+			if (!array_key_exists("TargetUser", $arParameters))
+			{
+				$assignedById = intval(COption::GetOptionString("crm", "sale_deal_assigned_by_id", "0"));
+				if ($assignedById > 0)
+				{
+					$arParameters["TargetUser"] = "user_" . $assignedById;
+				}
+			}
+
+			$runtime = CBPRuntime::GetRuntime();
+
+			foreach ($arBPTemplates[$autoExecType] as $wt)
+			{
+				try
+				{
+					$wi = $runtime->CreateWorkflow(
+						$wt["ID"],
+						array('crm', 'CCrmDocumentContact', 'CONTACT_' . $contactId),
+						$arParameters
+					);
+					$wi->Start();
+				}
+				catch (Exception $e)
+				{
+					$this->AddError($e->getCode(), $e->getMessage());
+				}
+			}
 		}
 
-		$runtime = CBPRuntime::GetRuntime();
-
-		foreach ($arBPTemplates as $wt)
-		{
-			try
-			{
-				$wi = $runtime->CreateWorkflow(
-					$wt["ID"],
-					array('crm', 'CCrmDocumentContact', 'CONTACT_'.$contactId),
-					$arParameters
-				);
-				$wi->Start();
-			}
-			catch (Exception $e)
-			{
-				$this->AddError($e->getCode(), $e->getMessage());
-			}
-		}
+		self::AddTrace('SAVE_ORDER_CONTACT_BP:FINISED');
 	}
 
 	private function SaveOrderDataCompanyBP($companyId, $isNewCompany, $arParameters = array())
@@ -1148,55 +1395,66 @@ class CCrmExternalSaleImport
 		if ($companyId <= 0)
 			return;
 
+		self::AddTrace('SAVE_ORDER_COMPANY_BP:START');
+
 		static $isBPIncluded = null;
 		if ($isBPIncluded === null)
-			$isBPIncluded = CModule::IncludeModule("bizproc");
+			$isBPIncluded = CModule::IncludeModule("bizproc") && CBPRuntime::isFeatureEnabled();
 		if (!$isBPIncluded)
 			return;
 
-		static $arBPTemplates = null;
-		if ($arBPTemplates === null)
+		static $arBPTemplates = [];
+		$autoExecType = $isNewCompany ? CBPDocumentEventType::Create : CBPDocumentEventType::Edit;
+		if (!array_key_exists($autoExecType, $arBPTemplates))
 		{
-			$arBPTemplates = CBPWorkflowTemplateLoader::SearchTemplatesByDocumentType(
+			$arBPTemplates[$autoExecType] = CBPWorkflowTemplateLoader::SearchTemplatesByDocumentType(
 				array('crm', 'CCrmDocumentCompany', 'COMPANY'),
-				$isNewCompany ? CBPDocumentEventType::Create : CBPDocumentEventType::Edit
+				$autoExecType
 			);
 		}
 
-		if (!is_array($arBPTemplates))
-			return;
-
-		if (!is_array($arParameters))
-			$arParameters = array($arParameters);
-		if (!array_key_exists("TargetUser", $arParameters))
+		if (is_array($arBPTemplates[$autoExecType]))
 		{
-			$assignedById = intval(COption::GetOptionString("crm", "sale_deal_assigned_by_id", "0"));
-			if ($assignedById > 0)
-				$arParameters["TargetUser"] =  "user_".$assignedById;
+			if (!is_array($arParameters))
+			{
+				$arParameters = array($arParameters);
+			}
+			if (!array_key_exists("TargetUser", $arParameters))
+			{
+				$assignedById = intval(COption::GetOptionString("crm", "sale_deal_assigned_by_id", "0"));
+				if ($assignedById > 0)
+				{
+					$arParameters["TargetUser"] = "user_" . $assignedById;
+				}
+			}
+
+			$runtime = CBPRuntime::GetRuntime();
+
+			foreach ($arBPTemplates[$autoExecType] as $wt)
+			{
+				try
+				{
+					$wi = $runtime->CreateWorkflow(
+						$wt["ID"],
+						array('crm', 'CCrmDocumentCompany', 'COMPANY_' . $companyId),
+						$arParameters
+					);
+					$wi->Start();
+				}
+				catch (Exception $e)
+				{
+					$this->AddError($e->getCode(), $e->getMessage());
+				}
+			}
 		}
 
-		$runtime = CBPRuntime::GetRuntime();
-
-		foreach ($arBPTemplates as $wt)
-		{
-			try
-			{
-				$wi = $runtime->CreateWorkflow(
-					$wt["ID"],
-					array('crm', 'CCrmDocumentCompany', 'COMPANY_'.$companyId),
-					$arParameters
-				);
-				$wi->Start();
-			}
-			catch (Exception $e)
-			{
-				$this->AddError($e->getCode(), $e->getMessage());
-			}
-		}
+		self::AddTrace('SAVE_ORDER_COMPANY_BP:FINISHED');
 	}
 
 	private function SaveOrderData($arOrder, $skipBP = false)
 	{
+		self::AddTrace(array('SAVE_ORDER_DATA:START' => $arOrder));
+
 		$companyId = 0;
 		$contactId = 0;
 		if (isset($arOrder["CONTRACTOR"]["OFFICIAL_NAME"]))
@@ -1205,7 +1463,7 @@ class CCrmExternalSaleImport
 			if (!$result)
 				return false;
 
-			list($companyId, $isNewCompany) = $result;
+			[$companyId, $isNewCompany] = $result;
 			if (!$skipBP)
 				$this->SaveOrderDataCompanyBP($companyId, $isNewCompany);
 		}
@@ -1215,7 +1473,7 @@ class CCrmExternalSaleImport
 			if (!$result)
 				return false;
 
-			list($contactId, $isNewContact) = $result;
+			[$contactId, $isNewContact] = $result;
 			if (!$skipBP)
 				$this->SaveOrderDataContactBP($contactId, $isNewContact);
 		}
@@ -1224,13 +1482,14 @@ class CCrmExternalSaleImport
 		if (!$result)
 			return false;
 
-		list($dealId, $isNewDeal) = $result;
+		[$dealId, $isNewDeal] = $result;
 
 		$this->SaveOrderDataProducts($arOrder, $dealId);
 
 		if (!$skipBP)
 			$this->SaveOrderDataDealBP($dealId, $isNewDeal);
 
+		self::AddTrace('SAVE_ORDER_DATA:FINISED');
 		return true;
 	}
 
@@ -1250,7 +1509,7 @@ class CCrmExternalSaleImport
 
 		$ar = array("#NAME#" => $this->arExternalSale["NAME"]);
 		foreach ($this->arImportResult->ToArray() as $k => $v)
-			$ar["#".strtoupper($k)."#"] = $v;
+			$ar["#".mb_strtoupper($k)."#"] = $v;
 
 		$message = str_replace(
 			array("#DEAL_URL#", "#CONTACT_URL#", "#COMPANY_URL#"),
@@ -1269,7 +1528,7 @@ class CCrmExternalSaleImport
 			"TITLE" => GetMessage("CRM_GCES_NOTIFY_TITLE", array("#NAME#" => $this->arExternalSale["NAME"])),
 			"MESSAGE" => $message,
 			"TEXT_MESSAGE" => HTMLToTxt($message),
-			"MODULE_ID" => "crm",
+			"MODULE_ID" => "crm_shared",
 			"CALLBACK_FUNC" => false,
 			"SOURCE_ID" => false,
 			"ENABLE_COMMENTS" => "Y",
@@ -1291,7 +1550,10 @@ class CCrmExternalSaleImport
 
 			CSocNetLog::Update($logId, array("TMP_ID" => $logId));
 			CSocNetLogRights::Add($logId, $arPerms);
-			CSocNetLog::SendEvent($logId, "SONET_NEW_EVENT", $logId);
+			if (COption::GetOptionString('crm', 'enable_livefeed_merge', 'N') === 'Y')
+			{
+				CSocNetLog::SendEvent($logId, 'SONET_NEW_EVENT', $logId);
+			}
 
 			return $logId;
 		}
@@ -1332,7 +1594,7 @@ class CCrmExternalSaleImport
 			"TITLE" => GetMessage("CRM_GCES_NOTIFY_ERROR_TITLE", array("#NAME#" => $this->arExternalSale["NAME"])),
 			"MESSAGE" => $message,
 			"TEXT_MESSAGE" => HTMLToTxt($message),
-			"MODULE_ID" => "crm",
+			"MODULE_ID" => "crm_shared",
 			"CALLBACK_FUNC" => false,
 			"SOURCE_ID" => false,
 			"ENABLE_COMMENTS" => "Y",
@@ -1424,22 +1686,22 @@ class CCrmExternalSaleImport
 			return null;
 		}
 
-		if (substr(ltrim($orderData), 0, strlen('<?xml')) != '<?xml')
+		if (mb_substr(ltrim($orderData), 0, mb_strlen('<?xml')) != '<?xml')
 		{
 			$orderDataTmp = @gzuncompress($orderData);
-			if (substr(ltrim($orderDataTmp), 0, strlen('<?xml')) != '<?xml')
+			if (mb_substr(ltrim($orderDataTmp), 0, mb_strlen('<?xml')) != '<?xml')
 			{
-				if (strpos($orderDataTmp, "You haven't rights for exchange") !== false)
+				if (mb_strpos($orderDataTmp, "You haven't rights for exchange") !== false)
 					$arErrors[] = array("PD2", GetMessage("CRM_EXT_SALE_IMPORT_UNKNOWN_ANSW_PERMS"));
-				elseif (strpos($orderDataTmp, "failure") !== false)
+				elseif (mb_strpos($orderDataTmp, "failure") !== false)
 				{
 					$arErrors[] = array("PD2", GetMessage("CRM_EXT_SALE_IMPORT_UNKNOWN_ANSW_F"));
 					$arErrors[] = array("PD2", preg_replace("/\s*failure\n/", "", $orderDataTmp));
 				}
-				elseif (strpos($orderData, "Authorization") !== false || strpos($orderData, "Access denied") !== false)
+				elseif (mb_strpos($orderData, "Authorization") !== false || mb_strpos($orderData, "Access denied") !== false)
 					$arErrors[] = array("PD2", GetMessage("CRM_EXT_SALE_IMPORT_UNKNOWN_ANSW_PERMS1"));
 				else
-					$arErrors[] = array("PD2", GetMessage("CRM_EXT_SALE_IMPORT_UNKNOWN_ANSW").substr($orderData, 0, 100));
+					$arErrors[] = array("PD2", GetMessage("CRM_EXT_SALE_IMPORT_UNKNOWN_ANSW").mb_substr($orderData, 0, 100));
 				return null;
 			}
 			$orderData = $orderDataTmp;
@@ -1449,7 +1711,7 @@ class CCrmExternalSaleImport
 		$charset = "";
 		if (preg_match("/^<"."\?xml[^>]+?encoding=[\"']([^>\"']+)[\"'][^>]*\?".">/i", $orderData, $matches))
 			$charset = trim($matches[1]);
-		if (!empty($charset) && (strtoupper($charset) != strtoupper(SITE_CHARSET)))
+		if (!empty($charset) && (mb_strtoupper($charset) != mb_strtoupper(SITE_CHARSET)))
 			$orderData = CharsetConverter::ConvertCharset($orderData, $charset, SITE_CHARSET);
 
 		$objXML = new CDataXML();
@@ -1485,14 +1747,14 @@ class CCrmExternalSaleImport
 			$arSettings["QuantityFormat"]["CRD"] = '.';
 		if (!isset($arSettings["DateFormat"]["DF"]))
 			$arSettings["DateFormat"]["DF"] = 'yyyy-MM-dd';
-		$arSettings["DateFormat"]["DF"] = strtoupper($arSettings["DateFormat"]["DF"]);
+		$arSettings["DateFormat"]["DF"] = mb_strtoupper($arSettings["DateFormat"]["DF"]);
 		if (!isset($arSettings["TimeFormat"]["DF"]))
 			$arSettings["TimeFormat"]["DF"] = 'HH:MM:SS';
 		$arSettings["TimeFormat"]["DF"] = str_replace("MM", "MI", $arSettings["TimeFormat"]["DF"]);
 
 		$arOrders = array();
 
-		if (is_array($arOrderData["CommerceInformation"]["#"]["Document"]))
+		if (is_array($arOrderData["CommerceInformation"]["#"]) && is_array($arOrderData["CommerceInformation"]["#"]["Document"]))
 		{
 			foreach ($arOrderData["CommerceInformation"]["#"]["Document"] as $arDocument)
 			{
@@ -1524,7 +1786,7 @@ class CCrmExternalSaleImport
 		}
 
 		$requestMethod = isset($arOptions["REQUEST_METHOD"]) && is_string($arOptions["REQUEST_METHOD"])
-			? strtoupper($arOptions["REQUEST_METHOD"]) : "";
+			? mb_strtoupper($arOptions["REQUEST_METHOD"]) : "";
 		if($requestMethod === "")
 		{
 			$requestMethod = "GET";
@@ -1616,7 +1878,26 @@ class CCrmExternalSaleImport
 	private function AddError($code, $message)
 	{
 		$this->arError[] = array($code, $message);
+		AddMessage2Log($message, "CRM_EXTERNAL_SALE_IMPORT ERROR: {$code}");
 		$this->AddMessage2Log(sprintf("[%s] %s", $code, $message));
+	}
+
+	public static function IsTraceEnabled()
+	{
+		return \Bitrix\Main\Config\Option::get('crm', 'enable_sale_import_trace', 'N') === 'Y';
+	}
+
+	public static function EnableTrace($enable)
+	{
+		\Bitrix\Main\Config\Option::set('crm', 'enable_sale_import_trace', $enable ? 'Y' : 'N');
+	}
+
+	protected static function AddTrace($message)
+	{
+		if(self::IsTraceEnabled())
+		{
+			AddMessage2Log($message, "CRM_EXTERNAL_SALE_IMPORT", 1);
+		}
 	}
 
 	private function ClearErrors()
@@ -1970,7 +2251,7 @@ class CCrmExternalSaleImport
 						$arResultTmp["NAME"] = $value;
 						break;
 					case 'InPrice':
-						$arResultTmp["IN_PRICE"] = (strtolower($value) == 'true') ? true : false;
+						$arResultTmp["IN_PRICE"] = (mb_strtolower($value) == 'true') ? true : false;
 						break;
 					case 'Amount':
 						$arResultTmp["PRICE"] = str_replace($arSettings["SumFormat"]["CRD"], ".", $value);
@@ -1987,8 +2268,10 @@ class CCrmExternalSaleImport
 
 	private function ParseOrderDataOrderItems($document, $arSettings, &$arOrder)
 	{
-		if (!is_array($document["Item"]))
+		if(!(is_array($document) && is_array($document["Item"])))
+		{
 			return;
+		}
 
 		$arOrder["ITEMS"] = array();
 		foreach ($document["Item"] as $arItem)
@@ -2011,14 +2294,21 @@ class CCrmExternalSaleImport
 					case 'ItemPrice':
 						if (!isset($arResultTmp["PRICE"]))
 						{
-							$priceTotal = str_replace($arSettings["SumFormat"]["CRD"], ".", $arItem["Amount"][0]["#"]);
-							$priceUnit = str_replace($arSettings["SumFormat"]["CRD"], ".", $arItem["ItemPrice"][0]["#"]);
-							$quantity = str_replace($arSettings["QuantityFormat"]["CRD"], ".", $arItem["Quantity"][0]["#"]);
-							$price = $priceTotal / $quantity;
+							$priceTotal = (float)str_replace($arSettings["SumFormat"]["CRD"], ".", $arItem["Amount"][0]["#"]);
+							$priceUnit = (float)str_replace($arSettings["SumFormat"]["CRD"], ".", $arItem["ItemPrice"][0]["#"]);
+							$quantity = (float)str_replace($arSettings["QuantityFormat"]["CRD"], ".", $arItem["Quantity"][0]["#"]);
+
+							$price = $priceTotal;
+							if ($quantity > 0)
+							{
+								$price /= $quantity;
+							}
 
 							$discountPrice = 0;
 							if ($priceUnit != $price)
+							{
 								$discountPrice = $priceUnit - $price;
+							}
 
 							$arResultTmp["PRICE"] = $price;
 							$arResultTmp["DISCOUNT_PRICE"] = $discountPrice;
@@ -2069,7 +2359,7 @@ class CCrmExternalSaleImport
 						$arResultTmp["NAME"] = $value;
 						break;
 					case 'InPrice':
-						$arResultTmp["IN_PRICE"] = (strtolower($value) == 'true') ? true : false;
+						$arResultTmp["IN_PRICE"] = (mb_strtolower($value) == 'true') ? true : false;
 						break;
 					case 'Amount':
 						$arResultTmp["PRICE"] = str_replace($arSettings["SumFormat"]["CRD"], ".", $value);
@@ -2125,7 +2415,7 @@ class CCrmExternalSaleImport
 				do
 				{
 					$data = fread($fp, $readSize);
-					if (strlen($data) == 0)
+					if ($data == '')
 						break;
 
 					@fwrite($fp1, $data);
@@ -2160,6 +2450,11 @@ class CCrmExternalSaleImport
 		if(!(isset($USER) && ((get_class($USER) === 'CUser') || ($USER instanceof CUser))))
 		{
 			$USER = new CUser();
+		}
+
+		if (\Bitrix\Crm\Restriction\RestrictionManager::getIntegrationShopRestriction()->isExceeded())
+		{
+			return '';
 		}
 
 		$id = intval($id);

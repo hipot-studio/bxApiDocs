@@ -15,6 +15,22 @@ use Bitrix\Sale\Location\Util\Assert;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class ExternalTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_External_Query query()
+ * @method static EO_External_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_External_Result getById($id)
+ * @method static EO_External_Result getList(array $parameters = [])
+ * @method static EO_External_Entity getEntity()
+ * @method static \Bitrix\Sale\Location\EO_External createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Location\EO_External_Collection createCollection()
+ * @method static \Bitrix\Sale\Location\EO_External wakeUpObject($row)
+ * @method static \Bitrix\Sale\Location\EO_External_Collection wakeUpCollection($rows)
+ */
 class ExternalTable extends Entity\DataManager
 {
 	public static function getFilePath()
@@ -39,7 +55,7 @@ class ExternalTable extends Entity\DataManager
 		{
 			$serivceId = intval($data['SERVICE_ID']);
 
-			if($serivceId && strlen($data['XML_ID']))
+			if($serivceId && mb_strlen($data['XML_ID']))
 			{
 				$res = self::add(array(
 					'SERVICE_ID' => $serivceId,
@@ -68,38 +84,51 @@ class ExternalTable extends Entity\DataManager
 
 		foreach($external as $id => $data)
 		{
-			$serivceId = intval($data['SERVICE_ID']);
-			$id = intval($id);
+			$data['REMOVE'] ??= false;
+			$data['SERVICE_ID'] ??= 0;
+			$data['XML_ID'] = (string)($data['XML_ID'] ?? '');
 
-			if(isset($existed[$id]))
+			$serivceId = (int)$data['SERVICE_ID'];
+			$id = (int)$id;
+
+			if (isset($existed[$id]))
 			{
-				if(!strlen($data['XML_ID']) || !$serivceId || $data['REMOVE']) // field either empty or prepared to remove
+				if ($data['XML_ID'] === '' || !$serivceId || $data['REMOVE'])
+				{
+					// field either empty or prepared to remove
 					self::delete($id);
+				}
 				else
 				{
-					$res = self::update($id, array(
-						'SERVICE_ID' => $serivceId,
-						'XML_ID' => $data['XML_ID']
-					));
-					if(!$res->isSuccess())
+					$res = self::update(
+						$id,
+						[
+							'SERVICE_ID' => $serivceId,
+							'XML_ID' => $data['XML_ID'],
+						]
+					);
+					if (!$res->isSuccess())
+					{
 						throw new Main\SystemException(Loc::getMessage('SALE_LOCATION_EXTERNAL_ENTITY_CANNOT_UPDATE_DATA_EXCEPTION'));
+					}
 				}
 			}
 			else
 			{
-				if($serivceId && strlen($data['XML_ID']))
+				if ($serivceId && $data['XML_ID'] !== '')
 				{
-					$res = self::add(array(
+					$res = self::add([
 						'SERVICE_ID' => $serivceId,
 						'XML_ID' => $data['XML_ID'],
-						'LOCATION_ID' => $primaryOwner
-					));
-					if(!$res->isSuccess())
+						'LOCATION_ID' => $primaryOwner,
+					]);
+					if (!$res->isSuccess())
+					{
 						throw new Main\SystemException(Loc::getMessage('SALE_LOCATION_EXTERNAL_ENTITY_CANNOT_ADD_DATA_EXCEPTION'));
+					}
 				}
 			}
 		}
-	
 	}
 
 	public static function deleteMultipleForOwner($primaryOwner)
@@ -120,12 +149,12 @@ class ExternalTable extends Entity\DataManager
 
 	/**
 	 * This method is for internal use only. It may be changed without any notification further, or even mystically disappear.
-	 * 
+	 *
 	 * @access private
 	 */
 	public static function deleteMultipleByParentRangeSql($sql)
 	{
-		if(!strlen($sql))
+		if($sql == '')
 			throw new Main\SystemException('Range sql is empty');
 
 		$dbConnection = Main\HttpApplication::getConnection();

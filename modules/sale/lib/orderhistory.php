@@ -6,6 +6,7 @@ namespace Bitrix\Sale;
 
 use Bitrix\Main;
 use Bitrix\Sale\Internals\Entity;
+use Bitrix\Sale\Internals\OrderChangeTable;
 
 class OrderHistory
 {
@@ -23,6 +24,9 @@ class OrderHistory
 
 	const SALE_ORDER_HISTORY_LOG_LEVEL_0 = 0;
 	const SALE_ORDER_HISTORY_LOG_LEVEL_1 = 1;
+
+	const SALE_ORDER_HISTORY_ACTION_LOG_LEVEL_0 = 0;
+	const SALE_ORDER_HISTORY_ACTION_LOG_LEVEL_1 = 1;
 
 	protected function __construct()
 	{
@@ -85,9 +89,21 @@ class OrderHistory
 	 * @param null $id
 	 * @param null $entity
 	 * @param array $fields
+	 * @param null $level
+	 *
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ArgumentOutOfRangeException
 	 */
-	public static function addAction($entityName, $orderId, $type, $id = null, $entity = null, array $fields = array())
+	public static function addAction($entityName, $orderId, $type, $id = null, $entity = null, array $fields = array(), $level = null)
 	{
+		if ($level === null)
+		{
+			$level = static::SALE_ORDER_HISTORY_ACTION_LOG_LEVEL_0;
+		}
+
+		if (!static::checkActionLogLevel($level))
+			return;
+
 		static::$pool[$entityName][$orderId][$id][$type][] = array(
 			'RECORD_TYPE' => static::SALE_ORDER_HISTORY_RECORD_TYPE_ACTION,
 			'ENTITY_NAME' => $entityName,
@@ -145,7 +161,14 @@ class OrderHistory
 					if ($data['RECORD_TYPE'] == static::SALE_ORDER_HISTORY_RECORD_TYPE_ACTION
 						|| $data['RECORD_TYPE'] == static::SALE_ORDER_HISTORY_RECORD_TYPE_DEBUG)
 					{
-						static::addRecord($entityName, $orderId, $data['TYPE'], $data['ID'], $data['ENTITY'], $data['DATA']);
+						static::addRecord(
+							$entityName,
+							$orderId,
+							$data['TYPE'],
+							$data['ID'],
+							$data['ENTITY'],
+							static::prepareDataForAdd($entityName, $data['TYPE'], $data['ENTITY'], $data['DATA'])
+						);
 						unset(static::$pool[$entityName][$orderId][$data['ID']][$data['TYPE']][$key]);
 
 						if (empty(static::$pool[$entityName][$orderId][$data['ID']][$data['TYPE']]))
@@ -172,7 +195,7 @@ class OrderHistory
 					}
 
 					$dataType = static::FIELD_TYPE_TYPE;
-					if (isset($data['RECORD_TYPE']) == static::SALE_ORDER_HISTORY_RECORD_TYPE_FIELD)
+					if (isset($data['RECORD_TYPE']) && $data['RECORD_TYPE'] == static::SALE_ORDER_HISTORY_RECORD_TYPE_FIELD)
 					{
 						$dataType = static::FIELD_TYPE_NAME;
 					}
@@ -194,13 +217,53 @@ class OrderHistory
 
 			}
 
-			\CSaleOrderChange::AddRecordsByFields($orderId, $oldFields, $fields, array(), $entityName, $id, $entity, $dataFields);
+			if ($entityName === "") // for order
+			{
+				if (isset($fields["ID"]))
+					unset($fields["ID"]);
+			}
+
+			foreach ($fields as $key => $val)
+			{
+				if (is_array($val))
+				{
+					continue;
+				}
+
+				if (!array_key_exists($key, $oldFields)
+					|| (
+						array_key_exists($key, $oldFields)
+						&& $val <> '' && $val != $oldFields[$key]
+					)
+				)
+				{
+					$arRecord = \CSaleOrderChange::MakeRecordFromField($key, $dataFields, $entityName, $entity);
+					if ($arRecord)
+					{
+						$result = $arRecord["DATA"];
+						foreach ($arRecord["DATA"] as $fieldKey => $fieldValue)
+						{
+							if (!isset($result['OLD_'.$fieldKey]) && isset($dataFields['OLD_'.$fieldKey]))
+							{
+								$result['OLD_'.$fieldKey] = TruncateText($dataFields['OLD_'.$key], 128);
+							}
+						}
+
+						static::addRecord(
+							$entityName,
+							$orderId,
+							$arRecord["TYPE"],
+							$entityId,
+							$entity,
+							static::prepareDataForAdd($entityName, $arRecord["TYPE"], $entity, $result)
+						);
+					}
+				}
+			}
 
 			if (empty(static::$pool[$entityName][$orderId][$entityId]))
 				unset(static::$pool[$entityName][$orderId][$entityId]);
 		}
-
-
 
 		if (empty(static::$pool[$entityName][$orderId]))
 			unset(static::$pool[$entityName][$orderId]);
@@ -208,6 +271,7 @@ class OrderHistory
 		if (empty(static::$pool[$entityName]))
 			unset(static::$pool[$entityName]);
 
+		return true;
 	}
 
 	/**
@@ -229,17 +293,17 @@ class OrderHistory
 
 	/**
 	 * @param $entityName
-	 * @param $orderId
 	 * @param $type
-	 * @param null $id
-	 * @param null|Entity $entity
+	 * @param Entity $entity
 	 * @param array $data
+	 * @return array
 	 */
-	protected static function addRecord($entityName, $orderId, $type, $id = null, $entity = null, array $data = array())
+	protected static function prepareDataForAdd($entityName, $type, $entity = null, array $data = array())
 	{
 		if ($entity !== null
 			&& ($operationType = static::getOperationType($entityName, $type))
-			&& (!empty($operationType["DATA_FIELDS"]) && is_array($operationType["DATA_FIELDS"])))
+			&& (!empty($operationType["DATA_FIELDS"]) && is_array($operationType["DATA_FIELDS"]))
+		)
 		{
 			foreach ($operationType["DATA_FIELDS"] as $fieldName)
 			{
@@ -250,7 +314,42 @@ class OrderHistory
 			}
 		}
 
-		\CSaleOrderChange::AddRecord($orderId, $type, $data, $entityName, $id);
+		return $data;
+	}
+
+	/**
+	 * @param $entityName
+	 * @param $orderId
+	 * @param $type
+	 * @param null $id
+	 * @param null|Entity $entity
+	 * @param array $data
+	 */
+	protected static function addRecord($entityName, $orderId, $type, $id = null, $entity = null, array $data = array())
+	{
+		global $USER;
+		$userId = (is_object($USER)) ? intval($USER->GetID()) : 0;
+
+		$fields = array(
+			"ORDER_ID" => intval($orderId),
+			"TYPE" => $type,
+			"DATA" => (is_array($data) ? serialize($data) : $data),
+			"USER_ID" => $userId,
+			"ENTITY" => $entityName,
+			"ENTITY_ID" => $id,
+		);
+
+		static::addInternal($fields);
+	}
+
+	/**
+	 * @param $fields
+	 * @return Main\Entity\AddResult
+	 * @throws \Exception
+	 */
+	protected static function addInternal($fields)
+	{
+		return OrderChangeTable::add($fields);
 	}
 
 	/**
@@ -261,7 +360,9 @@ class OrderHistory
 	 */
 	protected static function getOperationType($entityName, $type)
 	{
-		if (!empty(\CSaleOrderChangeFormat::$operationTypes) && !empty(\CSaleOrderChangeFormat::$operationTypes[$type]))
+		if (!empty(\CSaleOrderChangeFormat::$operationTypes)
+			&& !empty(\CSaleOrderChangeFormat::$operationTypes[$type])
+		)
 		{
 			if (!empty(\CSaleOrderChangeFormat::$operationTypes[$type]['ENTITY'])
 				&& $entityName == \CSaleOrderChangeFormat::$operationTypes[$type]['ENTITY'])
@@ -299,15 +400,50 @@ class OrderHistory
 
 	/**
 	 * @param $id
-	 *
-	 * @return bool|\CDBResult
+	 * @return bool
+	 * @throws Main\ArgumentException
+	 * @throws Main\ObjectPropertyException
+	 * @throws Main\SystemException
+	 * @throws \Exception
 	 */
 	public static function deleteByOrderId($id)
 	{
 		if (intval($id) <= 0)
 			return false;
 
-		return \CSaleOrderChange::deleteByOrderId($id);
+		$dbRes = static::getList(array(
+			'select' => array('ID'),
+			'filter' => array('=ORDER_ID' => $id)
+		));
+
+		while ($data = $dbRes->fetch())
+		{
+			static::deleteInternal($data['ID']);
+		}
+
+		return true;
+	}
+
+	/**
+	 * @param array $parameters
+	 * @return Main\DB\Result
+	 * @throws Main\ArgumentException
+	 * @throws Main\ObjectPropertyException
+	 * @throws Main\SystemException
+	 */
+	protected static function getList(array $parameters = array())
+	{
+		return OrderChangeTable::getList($parameters);
+	}
+
+	/**
+	 * @param $primary
+	 * @return Main\Entity\DeleteResult
+	 * @throws \Exception
+	 */
+	protected static function deleteInternal($primary)
+	{
+		return OrderChangeTable::delete($primary);
 	}
 
 	/**
@@ -318,6 +454,9 @@ class OrderHistory
 	 * @param null $entity
 	 * @param array $fields
 	 * @param null $level
+	 *
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ArgumentOutOfRangeException
 	 */
 	public static function addLog($entityName, $orderId, $type, $id = null, $entity = null, array $fields = array(), $level = null)
 	{
@@ -356,6 +495,7 @@ class OrderHistory
 	 *
 	 * @return bool
 	 * @throws Main\ArgumentNullException
+	 * @throws Main\ArgumentOutOfRangeException
 	 */
 	public static function checkLogLevel($level)
 	{
@@ -368,11 +508,124 @@ class OrderHistory
 	}
 
 	/**
+	 * @param $level
+	 *
+	 * @return bool
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ArgumentOutOfRangeException
+	 */
+	public static function checkActionLogLevel($level)
+	{
+		$orderHistoryActionLogLevel = Main\Config\Option::get(
+			'sale',
+			'order_history_action_log_level',
+			static::SALE_ORDER_HISTORY_ACTION_LOG_LEVEL_0
+		);
+
+		if ($level > $orderHistoryActionLogLevel)
+			return false;
+
+		return true;
+	}
+
+	/**
+	 * @param $days
+	 * @param null $limit
+	 * @return bool
+	 * @throws Main\ArgumentException
+	 * @throws Main\ObjectException
+	 * @throws Main\ObjectPropertyException
+	 * @throws Main\SystemException
+	 * @throws \Exception
+	 */
+	protected static function deleteOldInternal($days, $limit = null)
+	{
+		$days = (int)($days);
+
+		if ($days <= 0)
+			return false;
+
+		$expired = new Main\Type\DateTime();
+		$expired->add('-'.$days.' days');
+
+		$parameters = array(
+			'filter' => array('<DATE_CREATE' => $expired->toString())
+		);
+
+		if ($limit > 0)
+		{
+			$parameters['limit'] = $limit;
+		}
+
+		$dbRes = static::getList($parameters);
+		while ($data = $dbRes->fetch())
+		{
+			static::deleteInternal($data['ID']);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Delete old records on an agent
+	 *
+	 * @param $days
+	 * @param null $hitLimit
+	 * @return string
+	 * @throws Main\ArgumentException
+	 * @throws Main\ObjectException
+	 * @throws Main\ObjectPropertyException
+	 * @throws Main\SystemException
+	 * @throws \Exception
+	 */
+	public static function deleteOldAgent($days, $hitLimit = null)
+	{
+		$calledClass = '\\'.static::class;
+
+		$days = (int)$days;
+
+		static::deleteOldInternal($days, $hitLimit);
+
+		if ($days)
+		{
+			$expired = new Main\Type\DateTime();
+			$expired->add("-$days days");
+			$dbRes = static::getList(array(
+				'filter' => array('<DATE_CREATE' => $expired->toString()),
+				'limit' => 1
+			));
+
+			if ($dbRes->fetch())
+			{
+				$interval = 60;
+			}
+			else
+			{
+				$interval = 24 * 60 * 60;
+			}
+
+			$agentsList = \CAgent::GetList(array("ID"=>"DESC"), array(
+				"MODULE_ID" => "sale",
+				"NAME" => $calledClass."::deleteOldAgent(%"
+			));
+			if ($agent = $agentsList->Fetch())
+			{
+				\CAgent::Update($agent['ID'], array("AGENT_INTERVAL" => $interval));
+			}
+		}
+
+		return $calledClass."::deleteOldAgent(\"$days\", \"$hitLimit\");";
+	}
+
+	/**
 	 * @return array
 	 */
 	public static function getManagerLogItems()
 	{
 		return array(
+			"ORDER_SYNCHRONIZATION_IMPORT",
+			"ORDER_SYNCHRONIZATION_EXPORT",
+			"ORDER_SYNCHRONIZATION_EXPORT_ERROR",
 			"ORDER_ADDED",
 			"ORDER_DEDUCTED",
 			"ORDER_MARKED",
@@ -431,7 +684,7 @@ class OrderHistory
 			"SHIPMENT_ITEM_STORE_ADD_ERROR",
 			"SHIPMENT_ITEM_STORE_UPDATE_ERROR",
 			"SHIPMENT_ITEM_BASKET_ITEM_EMPTY_ERROR",
-			
+
 		);
 	}
 

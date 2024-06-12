@@ -1,16 +1,5 @@
 <?php
 
-
-/**
- * Класс для работы со статистикой поиска.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/search/classes/csearchstatistic/index.php
- * @author Bitrix
- */
 class CSearchStatistic
 {
 	var $phrase_id = 0;
@@ -20,18 +9,18 @@ class CSearchStatistic
 	var $_session_id = "";
 	var $_stat_sess_id = false;
 
-	public function __construct($phrase = "", $tags = "")
+	function __construct($phrase = "", $tags = "")
 	{
 		$phrase = ToLower(trim($phrase, " \t\n\r"));
-		if ($l = strlen($phrase))
+		if ($l = mb_strlen($phrase))
 		{
 			if ($l > 250)
 			{
-				$p = strrpos($phrase, ' ');
+				$p = mb_strrpos($phrase, ' ');
 				if ($p === false)
-					$this->_phrase = substr($phrase, 0, 250);
+					$this->_phrase = mb_substr($phrase, 0, 250);
 				else
-					$this->_phrase = substr($phrase, 0, $p);
+					$this->_phrase = mb_substr($phrase, 0, $p);
 			}
 			else
 			{
@@ -60,9 +49,10 @@ class CSearchStatistic
 			$this->_stat_sess_id = intval($_SESSION["SESS_SESSION_ID"]);
 	}
 
-	public function PhraseStat($result_count = 0, $page_num = 0)
+	function PhraseStat($result_count = 0, $page_num = 0)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
+		$DB->StartUsingMasterOnly();
 
 		$result_count = intval($result_count);
 		$page_num = intval($page_num);
@@ -96,53 +86,9 @@ class CSearchStatistic
 				)
 			);
 		}
+		$DB->StopUsingMasterOnly();
 	}
 
-	
-	/**
-	* <p>Метод возвращает список поисковых фраз. Метод статический.</p>
-	*
-	*
-	* @param array $arOrder = false Массив, содержащий признак сортировки в виде наборов "название
-	* поля"=&gt;"направление". Название поля может принимать значение
-	* названия любого из полей <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchstatistic/fields.php">объекта поисковой
-	* статистики</a>. Необязательный параметр. 	<br><br> 	Значение по
-	* умолчанию - <i>false</i> - означает, что результат отсортирован не
-	* будет.
-	*
-	* @param array $arFilter = false Массив, содержащий поля для выборки. Можно указать только те поля,
-	* которые необходимы. Необязательный параметр. <br><br> 	Значение по
-	* умолчанию - <i>false</i> - означает, что будут возвращены все поля
-	* основной таблицы запроса.
-	*
-	* @param array $arSelect = false Массив, содержащий фильтр в виде наборов "название
-	* поля"=&gt;"значение фильтра". Название поля может принимать
-	* значение названия любого из полей <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchstatistic/fields.php">объекта поисковой
-	* статистики</a>. Необязательный параметр. 	<br><br> 	Значение по
-	* умолчанию - <i>false</i> - означает, что результат отфильтрован не
-	* будет.
-	*
-	* @param array $bGroup = false Массив полей, по которым группируются поисковые фразы. Массив
-	* имеет вид: 		<pre class="syntax">array("название_поля1", "название_поля2", . . .)</pre>
-	* 	В качестве "название_поля<i>N</i>" может стоять любое поле <a
-	* href="http://dev.1c-bitrix.ru/api_help/search/classes/csearchstatistic/fields.php">объекта поисковой
-	* статистики</a>. Необязательный параметр. <br> 	Если массив пустой, то
-	* метод вернет число записей, удовлетворяющих фильтру. При <i>bGroup =
-	* true</i> в <i>arOrder</i> можно передать <i>COUNT</i> для сортировки по
-	* количеству.<br><br> 	Значение по умолчанию - <i>false</i> - означает, что
-	* результат группироваться не будет.
-	*
-	* @return CDBResult <p>Возвращается результат запроса типа <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>. При выборке из
-	* результата методами класса CDBResult становятся доступными поля,
-	* перечисленные в параметре arSelect.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/search/classes/csearchstatistic/getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder = false, $arFilter = false, $arSelect = false, $bGroup = false)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
@@ -176,8 +122,8 @@ class CSearchStatistic
 		$arQueryOrder = array();
 		foreach ($arOrder as $strColumn => $strDirection)
 		{
-			$strColumn = strtoupper($strColumn);
-			$strDirection = strtoupper($strDirection) == "ASC"? "ASC": "DESC";
+			$strColumn = mb_strtoupper($strColumn);
+			$strDirection = mb_strtoupper($strDirection) == "ASC"? "ASC": "DESC";
 			if (in_array($strColumn, $arDefSelect))
 			{
 				$arSelect[] = $strColumn;
@@ -197,7 +143,7 @@ class CSearchStatistic
 		$arQuerySelect = array();
 		foreach ($arSelect as $strColumn)
 		{
-			$strColumn = strtoupper($strColumn);
+			$strColumn = mb_strtoupper($strColumn);
 			if (in_array($strColumn, $arDefSelect))
 			{
 				if ($strColumn == "TIMESTAMP_X")
@@ -368,7 +314,7 @@ class CSearchStatistic
 		$res .= $host;
 
 		$port = intval($_SERVER["SERVER_PORT"]);
-		if ($port > 0 && $port != 80 && $port != 443 && strpos($host, ":") === false)
+		if ($port > 0 && $port != 80 && $port != 443 && mb_strpos($host, ":") === false)
 			$res .= ":".$port;
 
 		$url = preg_replace("/\\?sphrase_id=\\d+&/", "?", $_SERVER["REQUEST_URI"]);
@@ -388,7 +334,7 @@ class CSearchStatistic
 			if ($phrase_id)
 			{
 				$DB = CDatabase::GetModuleConnection('search');
-
+				$DB->StartUsingMasterOnly();
 				$rs = $DB->Query("
 					SELECT *
 					FROM b_search_phrase
@@ -407,6 +353,7 @@ class CSearchStatistic
 						WHERE ID = ".$phrase_id."
 					");
 				}
+				$DB->StopUsingMasterOnly();
 			}
 		}
 	}

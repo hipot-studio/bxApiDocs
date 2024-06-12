@@ -16,11 +16,12 @@ class ManagedCache
 	 * @var Cache[]
 	 */
 	protected $cache = array();
+	protected $cache_init = array();
 	protected $cachePath = array();
 	protected $vars = array();
 	protected $ttl = array();
 
-	static public function __construct()
+	public function __construct()
 	{
 	}
 
@@ -29,8 +30,8 @@ class ManagedCache
 		static $type = null;
 		if ($type === null)
 		{
-			$cm = Main\Application::getInstance()->getConnectionPool();
-			$type = $cm->getDefaultConnectionType();
+			$type = Main\Application::getInstance()->getConnection()->getType();
+			$type = strtoupper($type);
 		}
 		return $type;
 	}
@@ -40,45 +41,55 @@ class ManagedCache
 	// otherwise returns false
 	public function read($ttl, $uniqueId, $tableId = false)
 	{
-		if (isset($this->cache[$uniqueId]))
-		{
-			return true;
-		}
-		else
+		if (!isset($this->cache_init[$uniqueId]))
 		{
 			$this->cache[$uniqueId] = Cache::createInstance();
 			$this->cachePath[$uniqueId] = static::getDbType().($tableId === false ? "" : "/".$tableId);
 			$this->ttl[$uniqueId] = $ttl;
-			return $this->cache[$uniqueId]->initCache($ttl, $uniqueId, $this->cachePath[$uniqueId], "managed_cache");
+			$this->cache_init[$uniqueId] = $this->cache[$uniqueId]->initCache($ttl, $uniqueId, $this->cachePath[$uniqueId], "managed_cache");
 		}
+		return $this->cache_init[$uniqueId] || array_key_exists($uniqueId, $this->vars);
 	}
 
-	static public function getImmediate($ttl, $uniqueId, $tableId = false)
+	public function getImmediate($ttl, $uniqueId, $tableId = false)
 	{
 		$cache = Cache::createInstance();
 		$cachePath = static::getDbType().($tableId === false ? "" : "/".$tableId);
 
-		if($cache->initCache($ttl, $uniqueId, $cachePath, "managed_cache"))
+		if ($cache->initCache($ttl, $uniqueId, $cachePath, "managed_cache"))
+		{
 			return $cache->getVars();
+		}
 		return false;
 	}
 
-	// This method is used to read the variable value
-	// from the cache after successfull Read
+	/**
+	 * This method is used to read the variable value
+	 * from the cache after successfull Read
+	 *
+	 * @param string $uniqueId
+	 * @return mixed
+	 */
 	public function get($uniqueId)
 	{
 		if (array_key_exists($uniqueId, $this->vars))
+		{
 			return $this->vars[$uniqueId];
-		elseif (isset($this->cache[$uniqueId]))
+		}
+		elseif (isset($this->cache_init[$uniqueId]) && $this->cache_init[$uniqueId])
+		{
 			return $this->cache[$uniqueId]->getVars();
+		}
 		else
+		{
 			return false;
+		}
 	}
 
 	// Sets new value to the variable
 	public function set($uniqueId, $val)
 	{
-		if(isset($this->cache[$uniqueId]))
+		if (isset($this->cache[$uniqueId]))
 		{
 			$this->vars[$uniqueId] = $val;
 		}
@@ -86,13 +97,15 @@ class ManagedCache
 
 	public function setImmediate($uniqueId, $val)
 	{
-		if(isset($this->cache[$uniqueId]))
+		if (isset($this->cache[$uniqueId]))
 		{
 			$obCache = Cache::createInstance();
+			$obCache->noOutput();
 			$obCache->startDataCache($this->ttl[$uniqueId], $uniqueId, $this->cachePath[$uniqueId], $val, "managed_cache");
 			$obCache->endDataCache();
 
 			unset($this->cache[$uniqueId]);
+			unset($this->cache_init[$uniqueId]);
 			unset($this->cachePath[$uniqueId]);
 			unset($this->vars[$uniqueId]);
 		}
@@ -107,9 +120,10 @@ class ManagedCache
 			static::getDbType().($tableId === false ? "" : "/".$tableId),
 			"managed_cache"
 		);
-		if(isset($this->cache[$uniqueId]))
+		if (isset($this->cache[$uniqueId]))
 		{
 			unset($this->cache[$uniqueId]);
+			unset($this->cache_init[$uniqueId]);
 			unset($this->cachePath[$uniqueId]);
 			unset($this->vars[$uniqueId]);
 		}
@@ -125,6 +139,7 @@ class ManagedCache
 			if ($Path == $strPath)
 			{
 				unset($this->cache[$uniqueId]);
+				unset($this->cache_init[$uniqueId]);
 				unset($this->cachePath[$uniqueId]);
 				unset($this->vars[$uniqueId]);
 			}
@@ -137,15 +152,13 @@ class ManagedCache
 	public function cleanAll()
 	{
 		$this->cache = array();
+		$this->cache_init = array();
 		$this->cachePath = array();
 		$this->vars = array();
 		$this->ttl = array();
 
 		$obCache = Cache::createInstance();
 		$obCache->cleanDir(false, "managed_cache");
-
-		$taggedCache = Main\Application::getInstance()->getTaggedCache();
-		$taggedCache->clearByTag(true);
 	}
 
 	// Use it to flush cache to the files.
@@ -164,7 +177,7 @@ class ManagedCache
 		}
 	}
 
-	static public function getCompCachePath($relativePath)
+	public function getCompCachePath($relativePath)
 	{
 		// TODO: global var!
 		global $BX_STATE;
@@ -175,7 +188,7 @@ class ManagedCache
 		}
 		else
 		{
-			$salt = "/".substr(md5($BX_STATE), 0, 3);
+			$salt = "/".mb_substr(md5($BX_STATE), 0, 3);
 		}
 
 		$path = "/".SITE_ID.$relativePath.$salt;

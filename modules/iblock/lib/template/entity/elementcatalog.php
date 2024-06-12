@@ -6,6 +6,8 @@
  */
 namespace Bitrix\Iblock\Template\Entity;
 
+use Bitrix\Catalog;
+
 class ElementCatalog extends Base
 {
 	protected $price = null;
@@ -30,21 +32,8 @@ class ElementCatalog extends Base
 	 *
 	 * @param string $entity What to find.
 	 *
-	 * @return \Bitrix\Iblock\Template\Entity\Base
+	 * @return Base
 	 */
-	
-	/**
-	* <p>Метод используется для поиска сущности для обработки шаблона. Нестатический метод.</p>
-	*
-	*
-	* @param string $entity  Сущность, которую необходимо найти.
-	*
-	* @return \Bitrix\Iblock\Template\Entity\Base 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/elementcatalog/resolve.php
-	* @author Bitrix
-	*/
 	public function resolve($entity)
 	{
 		if ($entity === "price")
@@ -87,19 +76,6 @@ class ElementCatalog extends Base
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Используется для инициализации полей сущности из некоторого внешнего источника. Нестатический метод.</p>
-	*
-	*
-	* @param array $fields  Массив полей сущности.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/elementcatalog/setfields.php
-	* @author Bitrix
-	*/
 	public function setFields(array $fields)
 	{
 		parent::setFields($fields);
@@ -122,19 +98,28 @@ class ElementCatalog extends Base
 	{
 		if (!isset($this->fields))
 		{
-			$this->fields =\CCatalogProduct::getByID($this->id);
+			$this->fields =Catalog\ProductTable::getRow([
+				'filter' => [
+					'=ID' => $this->id,
+				],
+			]);
 			if (is_array($this->fields))
 			{
-				if ($this->fields["MEASURE"] > 0)
-					$this->fields["MEASURE"] = new ElementCatalogMeasure($this->fields["MEASURE"]);
-				$this->fields["STORE"] = new ElementCatalogStoreList(0);
+				if ($this->fields['MEASURE'] > 0)
+				{
+					$this->fields['MEASURE'] = new ElementCatalogMeasure($this->fields['MEASURE']);
+				}
+				$this->fields['STORE'] = new ElementCatalogStoreList(0);
 			}
 			else
 			{
-				$this->fields["STORE"] = new ElementCatalogStoreList(0);
+				$this->fields = [
+					'STORE' => new ElementCatalogStoreList(0),
+				];
 			}
 		}
-		return is_array($this->fields);
+
+		return true;
 	}
 }
 

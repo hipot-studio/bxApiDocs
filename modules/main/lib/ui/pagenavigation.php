@@ -3,7 +3,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2015 Bitrix
+ * @copyright 2001-2020 Bitrix
  */
 namespace Bitrix\Main\UI;
 
@@ -44,17 +44,6 @@ class PageNavigation
 	/**
 	 * Initializes the navigation from URI.
 	 */
-	
-	/**
-	* <p>Нестатический метод инициализирует навигацию от URI.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/initfromuri.php
-	* @author Bitrix
-	*/
 	public function initFromUri()
 	{
 		$navParams = array();
@@ -74,7 +63,7 @@ class PageNavigation
 		{
 			//probably parametrs are in the SEF URI
 			$matches = array();
-			if(preg_match("'/".preg_quote($this->id, "'")."/page-([\\d]|all)+(/size-([\\d]+))?'", $request->getRequestUri(), $matches))
+			if(preg_match("'/".preg_quote($this->id, "'")."/page-([\\d]+|all)+(/size-([\\d]+))?'", $request->getRequestUri(), $matches))
 			{
 				$navParams["page"] = $matches[1];
 				if(isset($matches[3]))
@@ -124,24 +113,13 @@ class PageNavigation
 	 * Returns number of pages or 0 if recordCount is not set.
 	 * @return int
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает число страниц или 0 если не существует записи числа страниц.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/getpagecount.php
-	* @author Bitrix
-	*/
 	public function getPageCount()
 	{
 		if($this->allRecords)
 		{
 			return 1;
 		}
-		$maxPages = floor($this->recordCount/$this->pageSize);
+		$maxPages = (int)floor($this->recordCount/$this->pageSize);
 		if(($this->recordCount % $this->pageSize) > 0)
 		{
 			$maxPages++;
@@ -173,17 +151,6 @@ class PageNavigation
 	 * Returns the current page number.
 	 * @return int
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает номер текущей страницы.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/getcurrentpage.php
-	* @author Bitrix
-	*/
 	public function getCurrentPage()
 	{
 		if($this->currentPage !== null)
@@ -217,17 +184,6 @@ class PageNavigation
 	 * Returns number of records.
 	 * @return int|null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает число записей.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/getrecordcount.php
-	* @author Bitrix
-	*/
 	public function getRecordCount()
 	{
 		return $this->recordCount;
@@ -238,19 +194,6 @@ class PageNavigation
 	 * @param array $sizes Array of integers.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод контролирует размеры страниц доступных через пользовательский интерфейс.</p>
-	*
-	*
-	* @param array $sizes  Массив целых чисел.
-	*
-	* @return \Bitrix\Main\UI\PageNavigation 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/setpagesizes.php
-	* @author Bitrix
-	*/
 	public function setPageSizes(array $sizes)
 	{
 		$this->pageSizes = $sizes;
@@ -261,17 +204,6 @@ class PageNavigation
 	 * Returns allowed page sizes.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает разрешённые размеры страниц.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/getpagesizes.php
-	* @author Bitrix
-	*/
 	public function getPageSizes()
 	{
 		return $this->pageSizes;
@@ -281,17 +213,6 @@ class PageNavigation
 	 * Returns "formal" page size.
 	 * @return int
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает "формальный" размер страницы.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/getpagesize.php
-	* @author Bitrix
-	*/
 	public function getPageSize()
 	{
 		return $this->pageSize;
@@ -301,17 +222,6 @@ class PageNavigation
 	 * Returns navigation ID.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает ID навигации.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/getid.php
-	* @author Bitrix
-	*/
 	public function getId()
 	{
 		return $this->id;
@@ -321,17 +231,6 @@ class PageNavigation
 	 * Returns offset of the first record of the current page.
 	 * @return int
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает смещение первой записи для текущей страницы.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/getoffset.php
-	* @author Bitrix
-	*/
 	public function getOffset()
 	{
 		if($this->allRecords)
@@ -345,17 +244,6 @@ class PageNavigation
 	 * Returns the number of records in the current page.
 	 * @return int
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает число записей на текущей странице.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/getlimit.php
-	* @author Bitrix
-	*/
 	public function getLimit()
 	{
 		if($this->allRecords)
@@ -369,17 +257,6 @@ class PageNavigation
 	 * Returns true if all the records are shown in one page.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает <i>true</i> если показаны все записи на одной странице.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/allrecordsshown.php
-	* @author Bitrix
-	*/
 	public function allRecordsShown()
 	{
 		return $this->allRecords;
@@ -389,17 +266,6 @@ class PageNavigation
 	 * Returns true if showing all records is allowed.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает <i>true</i> если показаны все разрешённые записи.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/allrecordsallowed.php
-	* @author Bitrix
-	*/
 	public function allRecordsAllowed()
 	{
 		return $this->allowAll;
@@ -413,31 +279,6 @@ class PageNavigation
 	 * @param string $size Page size.
 	 * @return Web\Uri
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает URI с параметрами навигации совместимыми с <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/initfromuri.php">initFromUri</a>.</p>
-	*
-	*
-	* @param mixed $Bitrix  
-	*
-	* @param Bitri $Main  Режим SEF.
-	*
-	* @param Mai $Web  Номер страницы.
-	*
-	* @param Uri $uri  Размер страницы.
-	*
-	* @param boolean $sef  
-	*
-	* @param string $page  
-	*
-	* @param string $size = null 
-	*
-	* @return \Bitrix\Main\Web\Uri 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/addparams.php
-	* @author Bitrix
-	*/
 	public function addParams(Web\Uri $uri, $sef, $page, $size = null)
 	{
 		if($sef == true)
@@ -445,8 +286,8 @@ class PageNavigation
 			$this->clearParams($uri, $sef);
 
 			$path = $uri->getPath();
-			$pos = strrpos($path, "/");
-			$path = substr($path, 0, $pos+1).$this->id."/page-".$page."/".($size !== null? "size-".$size."/" : '').substr($path, $pos+1);
+			$pos = mb_strrpos($path, "/");
+			$path = mb_substr($path, 0, $pos + 1).$this->id."/page-".$page."/".($size !== null? "size-".$size."/" : '').mb_substr($path, $pos + 1);
 			$uri->setPath($path);
 		}
 		else
@@ -462,33 +303,12 @@ class PageNavigation
 	 * @param bool $sef SEF mode.
 	 * @return Web\Uri
 	 */
-	
-	/**
-	* <p>Нестатический метод сбрасывает URI из навигационных параметров и возвращает его.</p>
-	*
-	*
-	* @param mixed $Bitrix  
-	*
-	* @param Bitri $Main  Режим SEF.
-	*
-	* @param Mai $Web  
-	*
-	* @param Uri $uri  
-	*
-	* @param boolean $sef  
-	*
-	* @return \Bitrix\Main\Web\Uri 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/ui/pagenavigation/clearparams.php
-	* @author Bitrix
-	*/
 	public function clearParams(Web\Uri $uri, $sef)
 	{
 		if($sef == true)
 		{
 			$path = $uri->getPath();
-			$path = preg_replace("'/".preg_quote($this->id, "'")."/page-([\\d]|all)+(/size-([\\d]+))?'", "", $path);
+			$path = preg_replace("'/".preg_quote($this->id, "'")."/page-([\\d]+|all)+(/size-([\\d]+))?'", "", $path);
 			$uri->setPath($path);
 		}
 		else

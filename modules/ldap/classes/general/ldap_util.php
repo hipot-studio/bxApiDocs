@@ -4,7 +4,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CLdapUtil
 {
-	function GetSynFields()
+	public static function GetSynFields()
 	{
 		static $arSyncFields =	false;
 		if(!is_array($arSyncFields))
@@ -60,110 +60,36 @@ class CLdapUtil
 		return $arSyncFields;
 	}
 
-	public static function ConvertADDate($d)
-	{
-		if(preg_match('#(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.(\d)Z#', $d, $dt))
-			return gmmktime($dt[4], $dt[5], $dt[6], $dt[2], $dt[3], $dt[1]);
-		return false;
-	}
-
-	public static function ByteXOR($a,$b,$l)
-	{
-		$c="";
-		for($i=0; $i<$l; $i++)
-
-			$c .= $a[$i]^$b[$i];
-		return($c);
-	}
-
-	public static function BinMD5($val)
-	{
-		return(pack("H*",md5($val)));
-	}
-
-	public static function Decrypt($str, $key=false)
-	{
-		if($key===false)
-
-		$key = COption::GetOptionString("main", "pwdhashadd", "ldap");
-		$key1 = CLdapUtil::BinMD5($key);
-		$str = base64_decode($str);
-		$res = '';
-		while($str)
-		{
-			if (function_exists('mb_substr'))
-			{
-				$m = mb_substr($str, 0, 16, "ASCII");
-				$str = mb_substr($str, 16, mb_strlen($str,"ASCII")-16, "ASCII");
-			}
-			else
-			{
-				$m = substr($str, 0, 16);
-				$str = substr($str, 16);
-			}
-
-			$m = CLdapUtil::ByteXOR($m, $key1, 16);
-			$res .= $m;
-			$key1 = CLdapUtil::BinMD5($key.$key1.$m);
-		}
-		return $res;
-	}
-
-	public static function Crypt($str, $key=false)
-	{
-		if($key===false)
-			$key = COption::GetOptionString("main", "pwdhashadd", "ldap");
-		$key1 = CLdapUtil::BinMD5($key);
-		$res = '';
-		while($str)
-		{
-			if (function_exists('mb_substr'))
-			{
-				$m = mb_substr($str, 0, 16, "ASCII");
-				$str = mb_substr($str, 16, mb_strlen($str,"ASCII")-16, "ASCII");
-			}
-			else
-			{
-				$m = substr($str, 0, 16);
-				$str = substr($str, 16);
-			}
-
-			$res .= CLdapUtil::ByteXOR($m, $key1, 16);
-			$key1 = CLdapUtil::BinMD5($key.$key1.$m);
-		}
-		return(base64_encode($res));
-	}
-
 	public static function MkOperationFilter($key)
 	{
-		if(substr($key, 0, 1)=="!")
+		if(mb_substr($key, 0, 1) == "!")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$cOperationType = "N";
 		}
-		elseif(substr($key, 0, 1)=="?")
+		elseif(mb_substr($key, 0, 1) == "?")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$cOperationType = "?";
 		}
-		elseif(substr($key, 0, 2)==">=")
+		elseif(mb_substr($key, 0, 2) == ">=")
 		{
-			$key = substr($key, 2);
+			$key = mb_substr($key, 2);
 			$cOperationType = "GE";
 		}
-		elseif(substr($key, 0, 1)==">")
+		elseif(mb_substr($key, 0, 1) == ">")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$cOperationType = "G";
 		}
-		elseif(substr($key, 0, 2)=="<=")
+		elseif(mb_substr($key, 0, 2) == "<=")
 		{
-			$key = substr($key, 2);
+			$key = mb_substr($key, 2);
 			$cOperationType = "LE";
 		}
-		elseif(substr($key, 0, 1)=="<")
+		elseif(mb_substr($key, 0, 1) == "<")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$cOperationType = "L";
 		}
 		else
@@ -208,22 +134,22 @@ class CLdapUtil
 		$bWasLeftJoin = false;
 
 		$res = Array();
-		for($i=0; $i<count($vals); $i++)
+		for($i=0, $c=count($vals); $i < $c; $i++)
 		{
 			$val = $vals[$i];
-			if(!$bSkipEmpty || strlen($val)>0 || (is_bool($val) && $val===false))
+			if(!$bSkipEmpty || $val <> '' || (is_bool($val) && $val===false))
 			{
 				switch ($type)
 				{
 				case "string_equal":
 					if($cOperationType=="?")
 					{
-						if(strlen($val)>0)
+						if($val <> '')
 							$res[] = GetFilterQuery($fname, $val, "N");
 					}
 					else
 					{
-						if(strlen($val)<=0)
+						if($val == '')
 							$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL OR ".$DB->Length($fname)."<=0)";
 						else
 							$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".CLdapUtil::_Upper($fname).$strOperation.CLdapUtil::_Upper("'".$DB->ForSql($val)."'").")";
@@ -232,7 +158,7 @@ class CLdapUtil
 				case "string":
 					if($cOperationType=="?")
 					{
-						if(strlen($val)>0)
+						if($val <> '')
 						{
 							$sr = GetFilterQuery($fname, $val, "Y", array(), "N");
 							if($sr != "0")
@@ -241,17 +167,17 @@ class CLdapUtil
 					}
 					else
 					{
-						if(strlen($val)<=0)
+						if($val == '')
 							$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL OR ".$DB->Length($fname)."<=0)";
 						else
 							if($strOperation=="=")
-								$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".($DB->type=="ORACLE"?CLdapUtil::_Upper($fname)." LIKE ".CLdapUtil::_Upper("'".$DB->ForSqlLike($val)."'")." ESCAPE '\\'" : $fname." ".($strOperation=="="?"LIKE":$strOperation)." '".$DB->ForSqlLike($val)."'").")";
+								$res[] = ($cOperationType == "N" ? " " . $fname . " IS NULL OR NOT " : "") . "(" . $fname . " LIKE '" . $DB->ForSqlLike($val) . "')";
 							else
-								$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".($DB->type=="ORACLE"?CLdapUtil::_Upper($fname)." ".$strOperation." ".CLdapUtil::_Upper("'".$DB->ForSql($val)."'")." " : $fname." ".$strOperation." '".$DB->ForSql($val)."'").")";
+								$res[] = ($cOperationType == "N" ? " " . $fname . " IS NULL OR NOT " : "") . "(" . $fname . " " . $strOperation . " '" . $DB->ForSql($val) . "')";
 					}
 					break;
 				case "date":
-					if(strlen($val)<=0)
+					if($val == '')
 						$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL)";
 					else
 						$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".$fname." ".$strOperation." ".$DB->CharToDateFunction($DB->ForSql($val), "FULL").")";
@@ -259,18 +185,20 @@ class CLdapUtil
 				case "number":
 					if($cOperationType=="?")
 					{
-						$res[] = GetFilterQuery($fname, $val);
+						$sqlHelper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
+
+						$res[] = "(" . $sqlHelper->castToChar($fname) . " LIKE '%" . $DB->ForSqlLike(trim($val)) . "%' AND " . $fname . " IS NOT NULL)";
 					}
 					else
 					{
-						if(strlen($val)<=0)
+						if($val == '')
 							$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL)";
 						else
 							$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".$fname." ".$strOperation." '".DoubleVal($val)."')";
 					}
 					break;
 				case "number_above":
-					if(strlen($val)<=0)
+					if($val == '')
 						$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL)";
 					else
 						$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".$fname." ".$strOperation." '".$DB->ForSql($val)."')";
@@ -278,7 +206,7 @@ class CLdapUtil
 				}
 
 				// we need this conditions to do INNER JOIN
-				if(strlen($val)>0 && $cOperationType!="N")
+				if($val <> '' && $cOperationType!="N")
 					$bFullJoin = true;
 				else
 					$bWasLeftJoin = true;
@@ -286,7 +214,7 @@ class CLdapUtil
 		}
 
 		$strResult = "";
-		for($i=0; $i<count($res); $i++)
+		for($i=0, $c=count($res); $i < $c; $i++)
 		{
 			if($i>0)
 				$strResult .= ($cOperationType=="N"?" AND ":" OR ");
@@ -304,13 +232,14 @@ class CLdapUtil
 	public static function _Upper($str)
 	{
 		global $DB;
-		return ($DB->type=="ORACLE"?"UPPER(".$str.")":$str);
+		return ($DB->type === 'PGSQL' ? 'UPPER(' . $str . ')' : $str);
 	}
 
 	// gets department list from system (iblock) for displaying in select box
 	public static function getDepartmentListFromSystem($arFilter = Array())
 	{
-		if (!IsModuleInstalled('intranet')) {
+		if (!IsModuleInstalled('intranet'))
+		{
 			return false;
 		}
 
@@ -409,7 +338,7 @@ class CLdapUtil
 				if(self::IsIpFromNet($_SERVER['REMOTE_ADDR'],$authNet)===false)
 					return false;
 
-			$backUrl=strlen($APPLICATION->GetCurPage())>1 ? "?back_url=".rawurlencode($APPLICATION->GetCurUri()) : "";
+			$backUrl= mb_strlen($APPLICATION->GetCurPage()) > 1 ? "?back_url=".rawurlencode($APPLICATION->GetCurUri()) : "";
 
 			if ($_SERVER['SERVER_PORT'] == '80')
 				LocalRedirect('http://'.$_SERVER["SERVER_NAME"].':8890/'.$backUrl, true);
@@ -450,17 +379,23 @@ class CLdapUtil
 
 	/**
 	 * decides if ip address is from given network/mask;network1/mask1;network2/mask2;...
-	 * @param str $ip - valid ip address  - xxx.xxx.xxx.xxx
-	 * @param str @netAndMask - valid mask/network - xxx.xxx.xxx.xxx/xxx.xxx.xxx.xxx;xxx.xxx.xxx.xxx/xxx.xxx.xxx.xxx;... or xxx.xxx.xxx.xxx/xx;xxx.xxx.xxx.xxx/xx;...
+	 * @param string $ip - valid ip address  - xxx.xxx.xxx.xxx
+	 * @param string $netsAndMasks - valid mask/network - xxx.xxx.xxx.xxx/xxx.xxx.xxx.xxx;xxx.xxx.xxx.xxx/xxx.xxx.xxx.xxx;... or xxx.xxx.xxx.xxx/xx;xxx.xxx.xxx.xxx/xx;...
 	 * @return bool true - if in, bool false - not in, or bad params
 	 */
-	public static function IsIpFromNet($ip,$netsAndMasks)
+	public static function IsIpFromNet($ip, $netsAndMasks)
 	{
-
-		$arNetsMasks = explode(";",$netsAndMasks);
-
-		if(!is_array($arNetsMasks) || empty($arNetsMasks))
+		if((string)$ip === "")
+		{
 			return false;
+		}
+
+		if((string)$netsAndMasks === "")
+		{
+			return false;
+		}
+
+		$arNetsMasks = explode(";", $netsAndMasks);
 
 		foreach ($arNetsMasks as $netAndMask)
 		{
@@ -476,7 +411,7 @@ class CLdapUtil
 
 			$net = $arNetAndMask[0];
 
-			if(strpos($arNetAndMask[1],".") !== false) 										//xxx.xxx.xxx.xxx/xxx.xxx.xxx.xxx
+			if(mb_strpos($arNetAndMask[1], ".") !== false) 										//xxx.xxx.xxx.xxx/xxx.xxx.xxx.xxx
 				$mask = $arNetAndMask[1];
 			else 																			//xxx.xxx.xxx.xxx/xx -> xxx.xxx.xxx.xxx/xxx.xxx.xxx.xxx
 				$mask=long2ip('11111111111111111111111111111111'<<(32-$arNetAndMask[1]));
@@ -502,7 +437,7 @@ class CLdapUtil
 		if($signature == "")
 			return false;
 
-		$signature = substr($signature,0,12);
+		$signature = mb_substr($signature, 0, 12);
 
 		$arSigs = array(
 			"GIF" => "gif",
@@ -527,9 +462,9 @@ class CLdapUtil
 		return false;
 	}
 
-	public static function isLdapPaginationAviable()
+	public static function isLdapPaginationAviable(): bool
 	{
-		return function_exists("ldap_control_paged_result");
+		return true;
 	}
 
 	/**
@@ -540,7 +475,7 @@ class CLdapUtil
 	public static function isNtlmRedirectNetRangeDefined()
 	{
 		$authNet = COption::GetOptionString("ldap", 'bitrixvm_auth_net', '');
-		return strlen(trim($authNet)) > 0;
+		return trim($authNet) <> '';
 	}
 
 	/**
@@ -566,4 +501,3 @@ class CLdapUtil
 		return $result;
 	}
 }
-?>

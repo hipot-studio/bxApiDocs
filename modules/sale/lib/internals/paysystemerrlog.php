@@ -12,6 +12,22 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class PaySystemErrLogTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_PaySystemErrLog_Query query()
+ * @method static EO_PaySystemErrLog_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_PaySystemErrLog_Result getById($id)
+ * @method static EO_PaySystemErrLog_Result getList(array $parameters = [])
+ * @method static EO_PaySystemErrLog_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_PaySystemErrLog createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_PaySystemErrLog_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_PaySystemErrLog wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_PaySystemErrLog_Collection wakeUpCollection($rows)
+ */
 class PaySystemErrLogTable extends Main\Entity\DataManager
 {
 	public static function getFilePath()
@@ -39,20 +55,9 @@ class PaySystemErrLogTable extends Main\Entity\DataManager
 			),
 			'MESSAGE' => array(
 				'data_type' => 'string',
-				'validation' => array(__CLASS__, 'validateMessage'),
 				'title' => Loc::getMessage('PAY_SYSTEM_ENTITY_LID_FIELD'),
-			),
-			'ACTION' => array(
-				'data_type' => 'string',
-				'title' => Loc::getMessage('PAY_SYSTEM_ENTITY_CURRENCY_FIELD'),
+				'required' => true
 			)
-		);
-	}
-
-	public static function validateMessage()
-	{
-		return array(
-			new Main\Entity\Validator\Length(null, 2000),
 		);
 	}
 }

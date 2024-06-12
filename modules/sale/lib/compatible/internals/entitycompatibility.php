@@ -8,6 +8,8 @@ use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\NotImplementedException;
+use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
@@ -54,6 +56,16 @@ abstract class EntityCompatibility
 		throw new SystemException('not set construct');
 	}
 
+	protected static function getRegistryType()
+	{
+		throw new NotImplementedException();
+	}
+
+	protected static function getEntity()
+	{
+		throw new NotImplementedException();
+	}
+
 	/**
 	 * @internal
 	 * @return array
@@ -93,7 +105,6 @@ abstract class EntityCompatibility
 	 */
 	public static function getList($sort = array(), $filter = array(), $group = null, $nav = array(), $select = array(), $callback = false)
 	{
-		/** @var EntityCompatibility $compatibility */
 		$compatibility = new static();
 		return static::setGetListParameters($compatibility, $sort, $filter, $group, $nav, $select, $callback);
 	}
@@ -168,7 +179,7 @@ abstract class EntityCompatibility
 		$aliasFields = static::getAliasFields();
 		foreach($filter as $fieldName => $fieldValue)
 		{
-			$fieldName = ToUpper($fieldName);
+			$fieldName = mb_strtoupper($fieldName);
 			$filterMatch = $this->query->explodeFilterKey($fieldName);
 			$fieldClearName = $filterMatch['alias'];
 
@@ -187,16 +198,19 @@ abstract class EntityCompatibility
 			else
 			{
 				if (!$this->checkWhiteListFields($fieldClearName))
+				{
 					continue;
+				}
 
-				if (!is_array($aliasFields[$fieldClearName]))
+				$aliasFieldsValue = $aliasFields[$fieldClearName] ?? null;
+				if (!is_array($aliasFieldsValue))
 				{
 					$this->addFilter($fieldName, $fieldValue);
 				}
 				else
 				{
-					$this->addFilterForAlias($aliasFields[$fieldClearName], $fieldName, $fieldValue);
-					$this->addSelectForAlias($aliasFields[$fieldClearName]);
+					$this->addFilterForAlias($aliasFieldsValue, $fieldName, $fieldValue);
+					$this->addSelectForAlias($aliasFieldsValue);
 				}
 			}
 		}
@@ -227,7 +241,7 @@ abstract class EntityCompatibility
 
 		foreach($select as $fieldName)
 		{
-			$fieldName = ToUpper($fieldName);
+			$fieldName = mb_strtoupper($fieldName);
 			if (!in_array($fieldName, $this->getQueryAliasList()))
 			{
 				if (isset($aliasFields[$fieldName]))
@@ -242,13 +256,14 @@ abstract class EntityCompatibility
 			}
 			else
 			{
-				if (!is_array($aliasFields[$fieldName]))
+				$aliasFieldsValue = $aliasFields[$fieldName] ?? null;
+				if (!is_array($aliasFieldsValue))
 				{
 					$this->addSelect($fieldName);
 				}
 				else
 				{
-					$this->addSelectForAlias($aliasFields[$fieldName]);
+					$this->addSelectForAlias($aliasFieldsValue);
 				}
 			}
 		}
@@ -259,7 +274,7 @@ abstract class EntityCompatibility
 	 *
 	 * @return null|string
 	 */
-	static public function parseField($key)
+	public function parseField($key)
 	{
 		return null;
 	}
@@ -300,7 +315,7 @@ abstract class EntityCompatibility
 	{
 		foreach($sort as $fieldName => $fieldValue)
 		{
-			$fieldName = strtoupper($fieldName);
+			$fieldName = mb_strtoupper($fieldName);
 			if ($propKey = $this->parseField($fieldName))
 			{
 				$this->sort[$propKey] = $fieldValue;
@@ -325,14 +340,14 @@ abstract class EntityCompatibility
 	 */
 	public function setCallback(array $callback)
 	{
-
 		if (($sql = call_user_func_array($callback, array())) && strval(trim($sql)) != '')
 		{
-			$this->query->registerRuntimeField('',
-										 new Entity\ExpressionField(
-											 '__CALLBACK',
-											 '(CASE WHEN ('.$sql.') THEN 1 ELSE 0 END)'
-										 )
+			$this->query->registerRuntimeField(
+				'',
+				new Entity\ExpressionField(
+					'__CALLBACK',
+					'(CASE WHEN ('.$sql.') THEN 1 ELSE 0 END)'
+				)
 			);
 			$this->query->addFilter('=__CALLBACK', 1);
 		}
@@ -566,9 +581,9 @@ abstract class EntityCompatibility
 	protected static function convertDateField($name, $value, array $dateFields = array())
 	{
 		$key = $name;
-		if (substr($key,0,1) == '=')
+		if (mb_substr($key, 0, 1) == '=')
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 		}
 
 		if (!array_key_exists($key, $dateFields))
@@ -590,16 +605,16 @@ abstract class EntityCompatibility
 
 			$setValue = null;
 
-			if (ToLower($value) != ToLower($nowDate))
+			if (mb_strtolower($value) != mb_strtolower($nowDate))
 			{
 				$setValue = $value;
 			}
 
-			if (ToUpper($dateFields[$key]) == "DATE")
+			if (mb_strtoupper($dateFields[$key]) == "DATE")
 			{
 				$value = new Date($setValue);
 			}
-			elseif (ToUpper($dateFields[$key]) == "DATETIME")
+			elseif (mb_strtoupper($dateFields[$key]) == "DATETIME")
 			{
 				$value = new DateTime($setValue);
 			}
@@ -737,7 +752,7 @@ abstract class EntityCompatibility
 
 		foreach ($fields as $name => $value)
 		{
-			$firstLetter = substr($name, 0, 1);
+			$firstLetter = mb_substr($name, 0, 1);
 			if ($firstLetter == "~" || $firstLetter == "=")
 			{
 				$fieldName = ltrim($name, '=');
@@ -813,13 +828,13 @@ abstract class EntityCompatibility
 
 		foreach ($this->rawFields[$entityName] as $key => $value)
 		{
-			if (substr($key, 0, 1) != "=")
+			if (mb_substr($key, 0, 1) != "=")
 				continue;
 
 			if (strval($queryValue) != '')
 				$queryValue .= ", ";
 
-			$queryValue .= substr($key, 1)."=".$value." ";
+			$queryValue .= mb_substr($key, 1)."=".$value." ";
 		}
 
 		$sql =
@@ -881,7 +896,7 @@ abstract class EntityCompatibility
 			if (in_array($fieldName, $fields))
 				return true;
 
-			if (strpos($fieldName, 'UF_') === 0)
+			if (mb_strpos($fieldName, 'UF_') === 0)
 				return true;
 		}
 

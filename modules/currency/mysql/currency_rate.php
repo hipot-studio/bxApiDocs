@@ -3,17 +3,6 @@ use Bitrix\Currency;
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/currency/general/currency_rate.php");
 
-
-/**
- * <b>CCurrencyRates</b> - класс для работы с курсами валют: сохранение, конвертация и пр.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/currency/developer/ccurrencyrates/index.php
- * @author Bitrix
- */
 class CCurrencyRates extends CAllCurrencyRates
 {
 	public static function _get_last_rates($valDate, $cur)

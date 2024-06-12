@@ -1,17 +1,7 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CSocNetGroupSubject</b> - класс для работы с темами рабочих групп социальной сети.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetgroupsubject/index.php
- * @author Bitrix
- */
 class CAllSocNetGroupSubject
 {
 	/***************************************/
@@ -21,7 +11,7 @@ class CAllSocNetGroupSubject
 	{
 		global $APPLICATION;
 
-		if ($ACTION != "ADD" && IntVal($ID) <= 0)
+		if ($ACTION != "ADD" && intval($ID) <= 0)
 		{
 			$APPLICATION->ThrowException("System error 870164", "ERROR");
 			return false;
@@ -31,7 +21,7 @@ class CAllSocNetGroupSubject
 			&& (
 				(is_array($arFields["SITE_ID"]) && count($arFields["SITE_ID"]) <= 0)
 				||
-				(!is_array($arFields["SITE_ID"]) && strlen($arFields["SITE_ID"]) <= 0)
+				(!is_array($arFields["SITE_ID"]) && $arFields["SITE_ID"] == '')
 			)
 		)
 		{
@@ -54,31 +44,18 @@ class CAllSocNetGroupSubject
 			}
 		}
 
-		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && strlen($arFields["NAME"]) <= 0)
+		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && $arFields["NAME"] == '')
 		{
 			$APPLICATION->ThrowException(GetMessage("SONET_GS_EMPTY_NAME"), "EMPTY_NAME");
 			return false;
 		}
 
 		if (is_set($arFields, "SORT") || $ACTION=="ADD")
-			$arFields["SORT"] = (intVal($arFields["SORT"]) > 0 ? intVal($arFields["SORT"]) : 100);
+			$arFields["SORT"] = (intval($arFields["SORT"]) > 0 ? intval($arFields["SORT"]) : 100);
 		
 		return True;
 	}
 
-	
-	/**
-	* <p>Метод удаляет тему рабочих групп. Если есть группы с этой темой, то тема удалена не будет. Метод нестатический.</p>
-	*
-	*
-	* @param int $intid  Код темы.
-	*
-	* @return bool <p>True в случае успешного удаления и false - в противном случае.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetgroupsubject/delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		global $DB, $CACHE_MANAGER, $APPLICATION;
@@ -86,8 +63,7 @@ class CAllSocNetGroupSubject
 		if (!CSocNetGroup::__ValidateID($ID))
 			return false;
 
-		$ID = IntVal($ID);
-		$bSuccess = True;
+		$ID = intval($ID);
 
 		$bCanDelete = true;
 		$dbResult = CSocNetGroup::GetList(
@@ -103,6 +79,12 @@ class CAllSocNetGroupSubject
 			return false;
 		}
 
+		$events = GetModuleEvents("socialnetwork", "OnSocNetGroupSubjectDelete");
+		while ($arEvent = $events->Fetch())
+		{
+			ExecuteModuleEventEx($arEvent, array($ID));
+		}
+
 		$bSuccess = $DB->Query("DELETE FROM b_sonet_group_subject_site WHERE SUBJECT_ID = ".$ID."", true);
 
 		if ($bSuccess)
@@ -113,24 +95,7 @@ class CAllSocNetGroupSubject
 
 		return $bSuccess;
 	}
-	
-	
-	/**
-	* <p>Изменяет параметры темы. Метод нестатический.</p>
-	*
-	*
-	* @param int $intid  Код темы.
-	*
-	* @param array $arFields  Массив новых параметров темы. Ключами массива являются названия
-	* полей темы, а значениями - их значения. Допустимые ключи: <b>SITE_ID</b> -
-	* код сайта, <b>NAME</b> - название.
-	*
-	* @return int <p>Возвращается код измененной темы или false в случае ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetgroupsubject/update.php
-	* @author Bitrix
-	*/
+
 	public static function Update($ID, $arFields)
 	{
 		global $DB, $CACHE_MANAGER;
@@ -138,17 +103,9 @@ class CAllSocNetGroupSubject
 		if (!CSocNetGroup::__ValidateID($ID))
 			return false;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
-		$arFields1 = array();
-		foreach ($arFields as $key => $value)
-		{
-			if (substr($key, 0, 1) == "=")
-			{
-				$arFields1[substr($key, 1)] = $value;
-				unset($arFields[$key]);
-			}
-		}
+		$arFields1 = \Bitrix\Socialnetwork\Util::getEqualityFields($arFields);
 
 		if (!CSocNetGroupSubject::CheckFields("UPDATE", $arFields, $ID))
 			return false;
@@ -173,33 +130,33 @@ class CAllSocNetGroupSubject
 		}
 
 		$strUpdate = $DB->PrepareUpdate("b_sonet_group_subject", $arFields);
+		\Bitrix\Socialnetwork\Util::processEqualityFieldsToUpdate($arFields1, $strUpdate);
 
-		foreach ($arFields1 as $key => $value)
-		{
-			if (strlen($strUpdate) > 0)
-				$strUpdate .= ", ";
-			$strUpdate .= $key."=".$value." ";
-		}
-
-		if (strlen($strUpdate) > 0)
+		if ($strUpdate <> '')
 		{
 			$strSql =
 				"UPDATE b_sonet_group_subject SET ".
 				"	".$strUpdate." ".
 				"WHERE ID = ".$ID." ";
-			$DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			if(count($arSiteID)>0)
 			{
 				$strSql = "DELETE FROM b_sonet_group_subject_site WHERE SUBJECT_ID=".$ID;
-				$DB->Query($strSql, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+				$DB->Query($strSql);
 
 				$strSql =
 					"INSERT INTO b_sonet_group_subject_site(SUBJECT_ID, SITE_ID) ".
 					"SELECT ".$ID.", LID ".
 					"FROM b_lang ".
 					"WHERE LID IN (".$str_SiteID.") ";
-				$DB->Query($strSql, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+				$DB->Query($strSql);
+			}
+
+			$events = GetModuleEvents("socialnetwork", "OnSocNetGroupSubjectUpdate");
+			while ($arEvent = $events->Fetch())
+			{
+				ExecuteModuleEventEx($arEvent, array($ID, &$arFields));
 			}
 
 			if (CACHED_b_sonet_group_subjects != false)
@@ -214,26 +171,12 @@ class CAllSocNetGroupSubject
 	/***************************************/
 	/**********  DATA SELECTION  ***********/
 	/***************************************/
-	
-	/**
-	* <p>Возвращает параметры темы. Не порождает запросов к базе данных. Метод статический.</p>
-	*
-	*
-	* @param int $intid  Код темы.
-	*
-	* @return array <p>Массив параметров темы. Массив имеет ключи:<br><b>ID</b> - код
-	* темы,<br><b>SITE_ID</b> - код сайта,<br><b>NAME</b> - название. </p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetgroupsubject/GetByID.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		if (!CSocNetGroup::__ValidateID($ID))
 			return false;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$dbResult = CSocNetGroupSubject::GetList(Array(), Array("ID" => $ID));
 		if ($arResult = $dbResult->GetNext())
@@ -245,8 +188,7 @@ class CAllSocNetGroupSubject
 	public static function GetSite($subject_id)
 	{
 		global $DB;
-		$strSql = "SELECT L.*, SGSS.* FROM b_sonet_group_subject_site SGSS, b_lang L WHERE L.LID=SGSS.SITE_ID AND SGSS.SUBJECT_ID=".IntVal($subject_id);
+		$strSql = "SELECT L.*, SGSS.* FROM b_sonet_group_subject_site SGSS, b_lang L WHERE L.LID=SGSS.SITE_ID AND SGSS.SUBJECT_ID=".intval($subject_id);
 		return $DB->Query($strSql);
 	}
 }
-?>

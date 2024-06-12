@@ -1,10 +1,12 @@
 <?php
 IncludeModuleLangFile(__FILE__);
+
 abstract class CBitrixCloudWebService
 {
 	private $debug = false;
 	private $timeout = 0;
-	private $server = /*.(CHTTP).*/ null;
+	private $server = /*.(Bitrix\Main\Web\HttpClient).*/ null;
+
 	/**
 	 * Returns URL to update policy
 	 *
@@ -12,7 +14,8 @@ abstract class CBitrixCloudWebService
 	 * @return string
 	 *
 	 */
-	protected abstract function getActionURL($arParams = /*.(array[string]string).*/ array());
+	protected abstract function getActionURL($arParams = /*.(array[string]string).*/ []);
+
 	/**
 	 * Returns action response XML
 	 *
@@ -22,48 +25,49 @@ abstract class CBitrixCloudWebService
 	 */
 	protected function action($action)
 	{
-		/* @var CMain $APPLICATION */
-		global $APPLICATION;
+		$url = $this->getActionURL([
+			'action' => $action,
+			'debug' => ($this->debug ? 'y' : 'n'),
+		]);
 
-		$url = $this->getActionURL(array(
-			"action" => $action,
-			"debug" => ($this->debug? "y": "n"),
-		));
-
-		$this->server = new CHTTP;
+		$this->server = new Bitrix\Main\Web\HttpClient([
+			'redirect' => true,
+		]);
 		if ($this->timeout > 0)
-			$this->server->http_timeout = $this->timeout;
+		{
+			$this->server->setTimeout($this->timeout);
+		}
 
-		$strXML = $this->server->Get($url);
-		if ($strXML === false)
+		$strXML = $this->server->get($url);
+		if ($strXML === false || !$this->server->getStatus())
 		{
-			$e = $APPLICATION->GetException();
-			if (is_object($e))
-				throw new CBitrixCloudException($e->GetString(), "");
-			else
-				throw new CBitrixCloudException(GetMessage("BCL_CDN_WS_SERVER", array(
-					"#STATUS#" => "-1",
-				)), "");
+			$errors = $this->server->getError();
+			throw new CBitrixCloudException(GetMessage('BCL_CDN_WS_SERVER', [
+				'#STATUS#' => $errors ? implode(' ', $errors) : '-1',
+			]), '');
 		}
-		if ($this->server->status != 200)
+
+		if ($this->server->getStatus() != 200)
 		{
-			throw new CBitrixCloudException(GetMessage("BCL_CDN_WS_SERVER", array(
-				"#STATUS#" => (string)$this->server->status,
-			)), "");
+			throw new CBitrixCloudException(GetMessage('BCL_CDN_WS_SERVER', [
+				'#STATUS#' => (string)$this->server->getStatus(),
+			]), '');
 		}
+
 		$obXML = new CDataXML;
 		if (!$obXML->LoadString($strXML))
 		{
-			throw new CBitrixCloudException(GetMessage("BCL_CDN_WS_XML_PARSE", array(
-				"#CODE#" => "1",
-			)), "");
+			throw new CBitrixCloudException(GetMessage('BCL_CDN_WS_XML_PARSE', [
+				'#CODE#' => '1',
+			]), '');
 		}
 
-		$node = $obXML->SelectNodes("/error/code");
+		/* @var CDataXMLNode $node */
+		$node = $obXML->SelectNodes('/error/code');
 		if (is_object($node))
 		{
 			$error_code = $node->textContent();
-			$message_id = "BCL_CDN_WS_".$error_code;
+			$message_id = 'BCL_CDN_WS_' . $error_code;
 			/*
 			GetMessage("BCL_CDN_WS_LICENSE_EXPIRE");
 			GetMessage("BCL_CDN_WS_LICENSE_NOT_FOUND");
@@ -76,20 +80,28 @@ abstract class CBitrixCloudWebService
 			GetMessage("BCL_CDN_WS_WRONG_DOMAIN_SPECIFIED");
 			*/
 
-			$debug_content = "";
-			$node = $obXML->SelectNodes("/error/debug");
-			if(is_object($node))
+			$debug_content = '';
+			$node = $obXML->SelectNodes('/error/debug');
+			if (is_object($node))
+			{
 				$debug_content = $node->textContent();
+			}
 
 			if (HasMessage($message_id))
+			{
 				throw new CBitrixCloudException(GetMessage($message_id), $error_code, $debug_content);
+			}
 			else
-				throw new CBitrixCloudException(GetMessage("BCL_CDN_WS_SERVER", array(
-					"#STATUS#" => $error_code,
-				)), $error_code, $debug_content);
+			{
+				throw new CBitrixCloudException(GetMessage('BCL_CDN_WS_SERVER', [
+					'#STATUS#' => $error_code,
+				]), $error_code, $debug_content);
+			}
 		}
+
 		return $obXML;
 	}
+
 	/**
 	 * Sets debug mode for remote service.
 	 * Returns previous mode value.
@@ -104,6 +116,7 @@ abstract class CBitrixCloudWebService
 		$this->debug = ($bActive === true);
 		return $result;
 	}
+
 	/**
 	 *
 	 * @param int $timeout
@@ -112,9 +125,10 @@ abstract class CBitrixCloudWebService
 	 */
 	public function setTimeout($timeout)
 	{
-		$this->timeout = $timeout > 0? intval($timeout): 0;
+		$this->timeout = $timeout > 0 ? intval($timeout) : 0;
 		return $this->timeout;
 	}
+
 	/**
 	 * Returns remote server status.
 	 * Return null if no action was performed.
@@ -124,11 +138,9 @@ abstract class CBitrixCloudWebService
 	 */
 	public function getServerStatus()
 	{
-		if (is_object($this->server))
-			return $this->server->status;
-		else
-			return null;
+		return isset($this->server) ? $this->server->getStatus() : null;
 	}
+
 	/**
 	 * Returns remote server response body.
 	 * Return null if no action was performed.
@@ -138,9 +150,6 @@ abstract class CBitrixCloudWebService
 	 */
 	public function getServerResult()
 	{
-		if (is_object($this->server))
-			return $this->server->result;
-		else
-			return null;
+		return isset($this->server) ? $this->server->getResult() : null;
 	}
 }

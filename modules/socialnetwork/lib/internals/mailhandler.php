@@ -37,7 +37,7 @@ final class MailHandler
 		$commentId = false;
 
 		if (
-			strlen($message) <= 0
+			$message == ''
 			&& count($attachments) > 0
 		)
 		{
@@ -47,7 +47,7 @@ final class MailHandler
 		if (
 			$logEntryId <= 0
 			|| $userId <= 0
-			|| strlen($message) <= 0
+			|| $message == ''
 		)
 		{
 			return false;
@@ -69,7 +69,7 @@ final class MailHandler
 		}
 
 		$siteId = \Bitrix\Socialnetwork\Util::getSiteIdByLogId($logEntry["ID"]);
-		$res = \CSite::GetByID($siteId);
+		$res = \CSite::getByID($siteId);
 		$site = $res->fetch();
 
 		$pathToUser = Config\Option::get("main", "TOOLTIP_PATH_TO_USER", false, $siteId);
@@ -89,7 +89,8 @@ final class MailHandler
 					"TEXT_MESSAGE" => $message,
 					"MODULE_ID" => false,
 					"LOG_ID" => $logEntry["ID"],
-					"USER_ID" => $userId
+					"USER_ID" => $userId,
+					"CURRENT_USER_ID" => $userId
 				);
 
 				$ufCode = (
@@ -114,7 +115,7 @@ final class MailHandler
 				}
 
 				$fields["MESSAGE"] = preg_replace_callback(
-					"/\[ATTACHMENT\s*=\s*([^\]]*)\]/is".BX_UTF_PCRE_MODIFIER,
+					"/\[ATTACHMENT\s*=\s*([^\]]*)\]/isu",
 					function ($matches) use ($attachmentRelations)
 					{
 						if (isset($attachmentRelations[$matches[1]]))
@@ -125,60 +126,70 @@ final class MailHandler
 					$fields["MESSAGE"]
 				);
 
+				if (Loader::includeModule('disk'))
+				{
+					\Bitrix\Disk\Uf\FileUserType::setValueForAllowEdit("SONET_COMMENT", true);
+				}
+
 				$commentId = \CSocNetLogComments::add($fields, true, false);
 
-				if ($commentId)
+				if (
+					is_array($commentId)
+					|| !$commentId
+				)
 				{
-					foreach (EventManager::getInstance()->findEventHandlers('socialnetwork', 'OnAfterSocNetLogEntryCommentAdd') as $handler)
-					{
-						ExecuteModuleEventEx($handler, array($logEntry, array(
-							"SITE_ID" => $siteId,
-							"COMMENT_ID" => $commentId
-						)));
-					}
+					return false;
+				}
 
-					$skipCounterIncrement = false;
-					foreach (EventManager::getInstance()->findEventHandlers('socialnetwork', 'OnBeforeSocNetLogCommentCounterIncrement') as $handler)
-					{
-						if (ExecuteModuleEventEx($handler, array($logEntry)) === false)
-						{
-							$skipCounterIncrement = true;
-							break;
-						}
-					}
+				foreach (EventManager::getInstance()->findEventHandlers('socialnetwork', 'OnAfterSocNetLogEntryCommentAdd') as $handler)
+				{
+					ExecuteModuleEventEx($handler, array($logEntry, array(
+						"SITE_ID" => $siteId,
+						"COMMENT_ID" => $commentId
+					)));
+				}
 
-					if (!$skipCounterIncrement)
+				$skipCounterIncrement = false;
+				foreach (EventManager::getInstance()->findEventHandlers('socialnetwork', 'OnBeforeSocNetLogCommentCounterIncrement') as $handler)
+				{
+					if (ExecuteModuleEventEx($handler, array($logEntry)) === false)
 					{
-						\CSocNetLog::counterIncrement(
-							$commentId,
-							false,
-							false,
-							"LC",
-							\CSocNetLogRights::checkForUserAll($logEntry["ID"])
-						);
+						$skipCounterIncrement = true;
+						break;
 					}
+				}
 
-					if ($comment = \CSocNetLogComments::getByID($commentId))
-					{
-						\Bitrix\Socialnetwork\ComponentHelper::addLiveComment(
-							$comment,
-							$logEntry,
-							$commentEvent,
-							array(
-								"ACTION" => 'ADD',
-								"SOURCE_ID" => 0,
-								"TIME_FORMAT" => \CSite::getTimeFormat(),
-								"PATH_TO_USER" => $pathToUser,
-								"NAME_TEMPLATE" => \CSite::getNameFormat(null, $site["ID"]),
-								"SHOW_LOGIN" => "N",
-								"AVATAR_SIZE" => 39,
-								"PATH_TO_SMILE" => $pathToSmile,
-								"LANGUAGE_ID" => $site["LANGUAGE_ID"],
-								"SITE_ID" => $site["ID"],
-								"PULL" => "Y"
-							)
-						);
-					}
+				if (!$skipCounterIncrement)
+				{
+					\CSocNetLog::counterIncrement(
+						$commentId,
+						false,
+						false,
+						"LC",
+						\CSocNetLogRights::checkForUserAll($logEntry["ID"])
+					);
+				}
+
+				if ($comment = \CSocNetLogComments::getByID($commentId))
+				{
+					\Bitrix\Socialnetwork\ComponentHelper::addLiveComment(
+						$comment,
+						$logEntry,
+						$commentEvent,
+						array(
+							"ACTION" => 'ADD',
+							"SOURCE_ID" => 0,
+							"TIME_FORMAT" => \CSite::getTimeFormat(),
+							"PATH_TO_USER" => $pathToUser,
+							"NAME_TEMPLATE" => \CSite::getNameFormat(null, $site["ID"]),
+							"SHOW_LOGIN" => "N",
+							"AVATAR_SIZE" => 100,
+							"PATH_TO_SMILE" => $pathToSmile,
+							"LANGUAGE_ID" => $site["LANGUAGE_ID"],
+							"SITE_ID" => $site["ID"],
+							"PULL" => "Y"
+						)
+					);
 				}
 			}
 		}

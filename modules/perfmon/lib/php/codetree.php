@@ -3,38 +3,29 @@ namespace Bitrix\Perfmon\Php;
 
 class CodeTree
 {
-	protected $statements = array();
-	protected $tree = array();
+	protected $statements = [];
+	protected $tree = [];
 
 	/**
 	 * @param array $statements Sequence of updater statements.
 	 */
 	public function __construct(array $statements)
 	{
-		$this->statements = $statements;
-		$this->tree = array();
+		$this->statements = [];
+		foreach ($statements as $i => $statement)
+		{
+			$this->statements[$i] = clone $statement;
+		}
+		$this->tree = [];
 	}
 
 	/**
 	 * Returns php code.
 	 *
-	 * @param integer $level Alignment level.
+	 * @param int $level Alignment level.
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает php-код.</p>
-	*
-	*
-	* @param integer $level  Уровень выравнивания.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/php/codetree/getcode.php
-	* @author Bitrix
-	*/
 	public function getCode($level)
 	{
 		$tree = $this->getCodeTree();
@@ -43,7 +34,7 @@ class CodeTree
 
 	/**
 	 * @param array $result Nested arrays of structured code.
-	 * @param integer $level Alignment level.
+	 * @param int $level Alignment level.
 	 *
 	 * @return string
 	 */
@@ -52,18 +43,18 @@ class CodeTree
 		$code = '';
 		foreach ($result as $stmt)
 		{
-			if (is_array($stmt) && isset($stmt["if"]))
+			if (is_array($stmt) && isset($stmt['if']))
 			{
-				$code .= str_repeat("\t", $level)."if(".implode(" && ", $stmt["if"]).")\n";
-				$code .= str_repeat("\t", $level)."{\n";
-				$code .= $this->formatCodeTree($stmt["body"], $level+1);
-				$code .= str_repeat("\t", $level)."}\n";
+				$code .= str_repeat("\t", $level) . 'if (' . implode(' && ', $stmt['if']) . ")\n";
+				$code .= str_repeat("\t", $level) . "{\n";
+				$code .= $this->formatCodeTree($stmt['body'], $level + 1);
+				$code .= str_repeat("\t", $level) . "}\n";
 			}
 			else
 			{
 				$stmt = trim($stmt, "\n\t");
-				$stmt = preg_replace("/\\n[\\t]+/", "\n", $stmt);
-				$code .= str_repeat("\t", $level).str_replace("\n\$", "\n".str_repeat("\t", $level)."\$", $stmt)."\n";
+				$stmt = preg_replace("/\\n\\t+/", "\n", $stmt);
+				$code .= str_repeat("\t", $level) . str_replace("\n\$", "\n" . str_repeat("\t", $level) . '$', $stmt) . "\n";
 			}
 		}
 		return $code;
@@ -80,12 +71,12 @@ class CodeTree
 		}
 		return $this->tree;
 	}
-	
+
 	/**
 	 * Adds one more line to the body.
 	 *
 	 * @param Statement[] $updaterSteps Plain array of updater steps.
-	 * @param array &$result Nested arrays of structured code.
+	 * @param array $result Nested arrays of structured code.
 	 *
 	 * @return void
 	 */
@@ -102,42 +93,44 @@ class CodeTree
 
 		while ($updaterSteps)
 		{
-			$byPredicates = array();
+			$byPredicates = [];
 			foreach ($updaterSteps as $i => $statement)
 			{
 				/**
-				 * @var Condition $condition
-				 */
+				* @var Condition $condition
+				*/
 				foreach ($statement->conditions as $condition)
 				{
 					$predicate = $condition->getPredicate();
 					if (!isset($byPredicates[$predicate]))
 					{
-						$byPredicates[$predicate] = array(
-							"predicate" => $predicate,
-							"sort" => $this->getPredicateSort($predicate),
-							"count" => 1,
-						);
+						$byPredicates[$predicate] = [
+							'predicate' => $predicate,
+							'dep' => $statement->dependOn,
+							'sort' => $this->getPredicateSort($predicate),
+							'count' => 1,
+						];
 					}
 					else
 					{
-						$byPredicates[$predicate]["count"]++;
+						$byPredicates[$predicate]['count']++;
 					}
 				}
 			}
 
 			if ($byPredicates)
 			{
-				sortByColumn($byPredicates, array(
-					"count" => SORT_DESC,
-					"sort" => SORT_ASC,
-				));
+				sortByColumn($byPredicates, [
+					'dep' => SORT_ASC,
+					'count' => SORT_DESC,
+					'sort' => SORT_ASC,
+				]);
 				$mostPopular = key($byPredicates);
-				$subSteps = array();
-				$ifStatement = array(
-					"if" => array($mostPopular),
-					"body" => array(),
-				);
+				$subSteps = [];
+				$ifStatement = [
+					'if' => [$mostPopular],
+					'body' => [],
+				];
 				foreach ($updaterSteps as $i => $statement)
 				{
 					foreach ($statement->conditions as $j => $condition)
@@ -150,18 +143,18 @@ class CodeTree
 						}
 					}
 				}
-				$this->makeCodeTree($subSteps, $ifStatement["body"]);
+				$this->makeCodeTree($subSteps, $ifStatement['body']);
 				if (
-					is_array($ifStatement["body"])
-					&& count($ifStatement["body"]) == 1
-					&& is_array($ifStatement["body"][0])
-					&& isset($ifStatement["body"][0]["if"])
-					&& isset($ifStatement["body"][0]["body"])
-					&& strlen(implode(' && ', array_merge($ifStatement["if"], $ifStatement["body"][0]["if"]))) < 100
+					is_array($ifStatement['body'])
+					&& count($ifStatement['body']) == 1
+					&& is_array($ifStatement['body'][0])
+					&& isset($ifStatement['body'][0]['if'])
+					&& isset($ifStatement['body'][0]['body'])
+					&& mb_strlen(implode(' && ', array_merge($ifStatement['if'], $ifStatement['body'][0]['if']))) < 100
 				)
 				{
-					$ifStatement["if"] = array_merge($ifStatement["if"], $ifStatement["body"][0]["if"]);
-					$ifStatement["body"] = $ifStatement["body"][0]["body"];
+					$ifStatement['if'] = array_merge($ifStatement['if'], $ifStatement['body'][0]['if']);
+					$ifStatement['body'] = $ifStatement['body'][0]['body'];
 				}
 				$result[] = $ifStatement;
 			}
@@ -171,17 +164,29 @@ class CodeTree
 	/**
 	 * @param array $predicate Array describing predicate.
 	 *
-	 * @return integer
+	 * @return int
 	 */
 	protected function getPredicateSort($predicate)
 	{
-		if (strpos($predicate, "CanUpdateDatabase"))
+		if (mb_strpos($predicate, 'CanUpdateDatabase'))
+		{
 			return 10;
-		elseif (strpos($predicate, "->type"))
+		}
+		elseif (mb_strpos($predicate, '->type'))
+		{
 			return 20;
-		elseif (strpos($predicate, "TableExists"))
+		}
+		elseif (mb_strpos($predicate, 'TableExists'))
+		{
 			return 30;
+		}
+		elseif (mb_strpos($predicate, 'IndexExists'))
+		{
+			return 60;
+		}
 		else
+		{
 			return 50;
+		}
 	}
 }

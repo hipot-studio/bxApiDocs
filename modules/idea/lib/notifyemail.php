@@ -6,6 +6,22 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class NotifyEmailTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_NotifyEmail_Query query()
+ * @method static EO_NotifyEmail_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_NotifyEmail_Result getById($id)
+ * @method static EO_NotifyEmail_Result getList(array $parameters = array())
+ * @method static EO_NotifyEmail_Entity getEntity()
+ * @method static \Bitrix\Idea\EO_NotifyEmail createObject($setDefaultValues = true)
+ * @method static \Bitrix\Idea\EO_NotifyEmail_Collection createCollection()
+ * @method static \Bitrix\Idea\EO_NotifyEmail wakeUpObject($row)
+ * @method static \Bitrix\Idea\EO_NotifyEmail_Collection wakeUpCollection($rows)
+ */
 class NotifyEmailTable extends Entity\DataManager
 {
 	const SUBSCRIBE_TYPE_ALL = 'ALL';
@@ -17,17 +33,6 @@ class NotifyEmailTable extends Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает путь к файлу, содержащему определение класса. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/idea/notifyemailtable/getfilepath.php
-	* @author Bitrix
-	*/
 	public static function getFilePath()
 	{
 		return __FILE__;
@@ -38,17 +43,6 @@ class NotifyEmailTable extends Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы адресов уведомлений в базе данных. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/idea/notifyemailtable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_idea_email_subscribe';
@@ -59,17 +53,6 @@ class NotifyEmailTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы адресов уведомлений. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/idea/notifyemailtable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -119,7 +102,7 @@ class NotifyEmail
 	protected $IblockID = null;
 	protected $userID = null;
 
-	public function __construct($IblockID = null)
+	function __construct($IblockID = null)
 	{
 		if ($IblockID > 0)
 		{
@@ -265,7 +248,7 @@ class NotifyEmail
 			}
 			else if (is_string($category) && ($categories = \CIdeaManagment::getInstance()->idea()->getCategoryList()) && !empty($categories))
 			{
-				$category = ToUpper($category);
+				$category = mb_strtoupper($category);
 				if (array_key_exists($category, $categories))
 				{
 					$return = array();

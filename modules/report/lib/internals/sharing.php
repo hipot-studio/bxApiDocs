@@ -6,23 +6,28 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class SharingTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Sharing_Query query()
+ * @method static EO_Sharing_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Sharing_Result getById($id)
+ * @method static EO_Sharing_Result getList(array $parameters = array())
+ * @method static EO_Sharing_Entity getEntity()
+ * @method static \Bitrix\Report\Internals\EO_Sharing createObject($setDefaultValues = true)
+ * @method static \Bitrix\Report\Internals\EO_Sharing_Collection createCollection()
+ * @method static \Bitrix\Report\Internals\EO_Sharing wakeUpObject($row)
+ * @method static \Bitrix\Report\Internals\EO_Sharing_Collection wakeUpCollection($rows)
+ */
 class SharingTable extends Entity\DataManager
 {
 	/**
 	 * Returns DB table name for entity.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает имя таблицы базы данных, соответствующей данной сущности.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/report/internals/sharingtable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_report_sharing';
@@ -32,17 +37,6 @@ class SharingTable extends Entity\DataManager
 	 * Returns entity map definition.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает список полей с типами.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/report/internals/sharingtable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		$fieldsMap = array(

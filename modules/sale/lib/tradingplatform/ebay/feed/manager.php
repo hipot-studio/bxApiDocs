@@ -66,7 +66,8 @@ class Manager
 	{
 		$timer = new Timer($timeLimit);
 		$feepParams = array(
-			"TIMER" => new $timer
+			"TIMER" => new $timer,
+			"SITE_ID" => $siteId
 		);
 
 		switch($feedType)
@@ -79,7 +80,7 @@ class Manager
 
 			case 'INVENTORY':
 				$feepParams["DATA_SOURCE"] =  new Data\Sources\Product(array("SITE_ID" => $siteId));
-				$feepParams["DATA_CONVERTER"] = new Data\Converters\Inventory;
+				$feepParams["DATA_CONVERTER"] = new Data\Converters\Inventory(array("SITE_ID" => $siteId));
 				$feepParams["DATA_PROCESSOR"] = self::createSftpQueue($feedType, $siteId, $timer);
 				break;
 

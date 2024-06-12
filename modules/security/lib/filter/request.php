@@ -3,12 +3,13 @@
 * Bitrix Security Module
 * @package Bitrix
 * @subpackage Security
-* @copyright 2001-2013 Bitrix
+* @copyright 2001-2023 Bitrix
 * @since File available since 14.0.0
 */
 namespace Bitrix\Security\Filter;
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Config\Ini;
 use Bitrix\Main\Type\IRequestFilter;
 
 /**
@@ -17,38 +18,43 @@ use Bitrix\Main\Type\IRequestFilter;
  * @package Bitrix\Security\Filter
  * @since 14.0.0
  */
-class Request
-	implements IRequestFilter
+class Request implements IRequestFilter
 {
 	const ACTION_NONE = 'none';
 	const ACTION_CLEAR = 'clear';
 	const ACTION_FILTER = 'filter';
 
 	/** @var Auditor\Base[] */
-	protected $auditors = array();
-	protected $changedContext = array();
+	protected $auditors = [];
+	protected $changedContext = [];
 
 	private $action = 'filter';
 	private $doLog = false;
-	private $changedVars = array();
+	private $changedVars = [];
 	private $isAuditorsTriggered = false;
-	private $filteringMap = array(
-		'get' => array(
+	private $filteringMap = [
+		'get' => [
 			'Name' => '$_GET',
-		),
-		'post' => array(
+		],
+		'post' => [
 			'Name' => '$_POST',
-			'SkipRegExp' => '#^File\d+_\d+$#'
-		),
-		'cookie' => array(
-			'Name' => '$_COOKIE'
-		)
-	);
-	private static $validActions = array(
+			'SkipRegExp' => '#^File\d+_\d+$#',
+		],
+		'cookie' => [
+			'Name' => '$_COOKIE',
+		],
+		'json' => [
+			'Name' => 'JSON',
+		],
+		'data' => [
+			'Name' => 'data',
+		]
+	];
+	private static $validActions = [
 		self::ACTION_NONE,
 		self::ACTION_CLEAR,
 		self::ACTION_FILTER,
-	);
+	];
 
 	public function __construct($customOptions = array())
 	{
@@ -77,19 +83,6 @@ class Request
 	 * @param Auditor\Base[] $auditors
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод назначает аудиторов для использования в фильтрации.</p>
-	*
-	*
-	* @param array $arrayauditors  Аудиторы.
-	*
-	* @return \Bitrix\Security\Filter\Request 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/filter/request/setauditors.php
-	* @author Bitrix
-	*/
 	public function setAuditors(array $auditors)
 	{
 		$this->auditors = $auditors;
@@ -101,17 +94,6 @@ class Request
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает все измененные переменные. Может быть полезно для логирования.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/filter/request/getchangedvars.php
-	* @author Bitrix
-	*/
 	public function getChangedVars()
 	{
 		return $this->changedVars;
@@ -150,49 +132,6 @@ class Request
 	 * @param bool $isReturnChangedOnly if true - return values only if it changed by some auditors
 	 * @return array
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает массив отфильтрованных значений.</p>
-	*
-	*
-	* @param array $values  Значения. Массив типа: <code>array("get" =&gt; $_GET, "post" =&gt; $_POST, "files" =&gt; $_FILES,
-	* "cookie" =&gt; $_COOKIE)</code>.
-	*
-	* @param boolean $isReturnChangedOnly = true Если значение <code>true</code>, то возвращаются значения, если они были
-	* изменены некоторым аудитором.
-	*
-	* @return array 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* $ob = new Request();
-	* $ob-&gt;setAuditors([
-	*  'SQL' =&gt; new Auditor\Sql()
-	* ]);
-	* print_r(
-	*  $ob-&gt;filter([
-	*      'get' =&gt; ['safe bar'],
-	*      'post' =&gt; ['select * from foo']
-	*  ])
-	* );
-	* //output: Array ( [post] =&gt; Array ( [0] =&gt; sel ect * fr om foo ) )
-	* 
-	* print_r(
-	*  $ob-&gt;filter([
-	*          'get' =&gt; ['safe bar'],
-	*          'post' =&gt; ['select * from foo']
-	*      ],
-	*      false
-	*  )
-	* );
-	* //output: Array ( [get] =&gt; Array ( [0] =&gt; safe bar ) [post] =&gt; Array ( [0] =&gt; sel ect * fr om foo ) )
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/filter/request/filter.php
-	* @author Bitrix
-	*/
 	public function filter(array $values, $isReturnChangedOnly = true)
 	{
 		$this->onFilterStarted();
@@ -200,13 +139,20 @@ class Request
 		foreach ($values as $key => &$val)
 		{
 			if (!isset($this->filteringMap[$key]))
+			{
 				continue;
+			}
+
+			if (!is_array($val))
+			{
+				continue;
+			}
 
 			$val = $this->filterArray(
 				$key,
 				$val,
 				$this->filteringMap[$key]['Name'],
-				isset($this->filteringMap[$key]['SkipRegExp'])? $this->filteringMap[$key]['SkipRegExp']: ''
+				$this->filteringMap[$key]['SkipRegExp'] ?? ''
 			);
 		}
 		unset($val);
@@ -214,9 +160,10 @@ class Request
 		$this->onFilterFinished();
 
 		if ($isReturnChangedOnly)
+		{
 			return array_intersect_key($values, $this->changedContext);
-		else
-			return $values;
+		}
+		return $values;
 	}
 
 
@@ -238,7 +185,6 @@ class Request
 
 	protected function onFilterFinished()
 	{
-
 	}
 
 	/**
@@ -249,11 +195,11 @@ class Request
 	 */
 	protected function filterVar($context, $value, $name)
 	{
-		if (preg_match('#^[A-Za-z0-9_.,-]*$#D', $value))
+		if (!is_string($value) || preg_match('#^[A-Za-z0-9_.,-]*$#D', $value))
 			return $value;
 
-		self::adjustPcreBacktrackLimit($value);
 		$filteredValue = \CSecurityHtmlEntity::decodeString($value);
+		self::adjustPcreBacktrackLimit($filteredValue);
 
 		$isValueChanged = false;
 		foreach($this->auditors as $auditName => $auditor)
@@ -294,15 +240,17 @@ class Request
 
 	/**
 	 * @param string $context
-	 * @param array $array
+	 * @param array | null $array
 	 * @param string $name
 	 * @param string $skipKeyPreg
 	 * @return array
 	 */
-	protected function filterArray($context, array $array, $name, $skipKeyPreg = '')
+	protected function filterArray($context, ?array $array, $name, $skipKeyPreg = '')
 	{
 		if (!is_array($array))
-			return $array;
+		{
+			return null;
+		}
 
 		foreach($array as $key => $value)
 		{
@@ -320,9 +268,13 @@ class Request
 			{
 				$array[$key] = $this->filterArray($context, $value, "{$name}['{$key}']", $skipKeyPreg);
 			}
-			else
+			elseif (is_string($value))
 			{
 				$array[$key] = $this->filterVar($context, $value, "{$name}['{$key}']");
+			}
+			else
+			{
+				$array[$key] = $value;
 			}
 		}
 		return $array;
@@ -357,8 +309,8 @@ class Request
 		if (!is_string($string))
 			return false;
 
-		$strlen = \CUtil::binStrlen($string) * 2;
-		\CUtil::adjustPcreBacktrackLimit($strlen);
+		$strlen = strlen($string) * 2;
+		Ini::adjustPcreBacktrackLimit($strlen);
 		return true;
 	}
 

@@ -5,6 +5,8 @@ use Bitrix\Crm;
 //IncludeModuleLangFile(__FILE__);
 class LeadDuplicateChecker extends DuplicateChecker
 {
+	protected $useStrictComparison = false;
+
 	public function __construct()
 	{
 		parent::__construct(\CCrmOwnerType::Lead);
@@ -22,7 +24,7 @@ class LeadDuplicateChecker extends DuplicateChecker
 			$secondName = ($processAllFields || in_array('SECOND_NAME', $fieldNames, true)) ? $adapter->getFieldValue('SECOND_NAME', '') : '';
 
 			$criterion = new DuplicatePersonCriterion($lastName, $name, $secondName);
-			$duplicate = $criterion->find(\CCrmOwnerType::Undefined, 20);
+			$duplicate = $criterion->find($params->getEntityTypeId() ?? \CCrmOwnerType::Undefined, 20);
 
 			if($duplicate !== null)
 			{
@@ -34,7 +36,9 @@ class LeadDuplicateChecker extends DuplicateChecker
 		if($companyTitle !== '')
 		{
 			$criterion = new DuplicateOrganizationCriterion($companyTitle);
-			$duplicate = $criterion->find();
+			$criterion->setStrictComparison($this->useStrictComparison);
+
+			$duplicate = $criterion->find($params->getEntityTypeId() ?? \CCrmOwnerType::Undefined);
 			if($duplicate !== null)
 			{
 				$result[] = $duplicate;
@@ -58,5 +62,18 @@ class LeadDuplicateChecker extends DuplicateChecker
 			}
 		}
 		return $result;
+	}
+	public function isStrictComparison()
+	{
+		return $this->useStrictComparison;
+	}
+	public function setStrictComparison($useStrictComparison)
+	{
+		if(!is_bool($useStrictComparison))
+		{
+			throw new Main\ArgumentTypeException('useStrictComparison', 'boolean');
+		}
+
+		$this->useStrictComparison = $useStrictComparison;
 	}
 }

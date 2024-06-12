@@ -19,7 +19,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Catalog
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_DiscountRestriction_Query query()
+ * @method static EO_DiscountRestriction_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_DiscountRestriction_Result getById($id)
+ * @method static EO_DiscountRestriction_Result getList(array $parameters = [])
+ * @method static EO_DiscountRestriction_Entity getEntity()
+ * @method static \Bitrix\Catalog\EO_DiscountRestriction createObject($setDefaultValues = true)
+ * @method static \Bitrix\Catalog\EO_DiscountRestriction_Collection createCollection()
+ * @method static \Bitrix\Catalog\EO_DiscountRestriction wakeUpObject($row)
+ * @method static \Bitrix\Catalog\EO_DiscountRestriction_Collection wakeUpCollection($rows)
+ */
 
 class DiscountRestrictionTable extends Main\Entity\DataManager
 {
@@ -28,17 +41,6 @@ class DiscountRestrictionTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы ограничений на применение скидок. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discountrestrictiontable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_catalog_discount_cond';
@@ -49,17 +51,6 @@ class DiscountRestrictionTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы ограничений на применение скидок. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/discountrestrictiontable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -86,9 +77,51 @@ class DiscountRestrictionTable extends Main\Entity\DataManager
 			)),
 			'DISCOUNT' => new Main\Entity\ReferenceField(
 				'DISCOUNT',
-				'Bitrix\Catalog\Discount',
+				'\Bitrix\Catalog\Discount',
 				array('=this.DISCOUNT_ID' => 'ref.ID')
 			)
 		);
+	}
+
+	/**
+	 * Change active flag in table by discount.
+	 *
+	 * @param int $discount			Discount id.
+	 * @param string $active		Discount active flag.
+	 * @return void
+	 */
+	public static function changeActiveByDiscount($discount, $active)
+	{
+		$discount = (int)$discount;
+		$active = (string)$active;
+		if ($discount <= 0 || ($active != 'Y' && $active != 'N'))
+			return;
+		$conn = Main\Application::getConnection();
+		$helper = $conn->getSqlHelper();
+		$conn->queryExecute(
+			'update '.$helper->quote(self::getTableName()).
+			' set '.$helper->quote('ACTIVE').' = \''.$active.'\' where '.
+			$helper->quote('DISCOUNT_ID').' = '.$discount
+		);
+		unset($helper, $conn);
+	}
+
+	/**
+	 * Delete restriction list by discount.
+	 *
+	 * @param int $discount			Discount id.
+	 * @return void
+	 */
+	public static function deleteByDiscount($discount)
+	{
+		$discount = (int)$discount;
+		if ($discount <= 0)
+			return;
+		$conn = Main\Application::getConnection();
+		$helper = $conn->getSqlHelper();
+		$conn->queryExecute(
+			'delete from '.$helper->quote(self::getTableName()).' where '.$helper->quote('DISCOUNT_ID').' = '.$discount
+		);
+		unset($helper, $conn);
 	}
 }

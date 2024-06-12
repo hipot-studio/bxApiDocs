@@ -2,15 +2,44 @@
 
 namespace Bitrix\Sale\Helpers\Admin\Blocks;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sale\Helpers\Admin\OrderEdit;
+use Bitrix\Sale\Services\Company\Manager;
 
 Loc::loadMessages(__FILE__);
 
 class OrderAdditional
 {
-	public static function getEdit($collection, $formName, $formPrefix)
+	public static function getEdit($collection, $formName, $formPrefix, array $post = array())
 	{
+		global $APPLICATION, $USER;
+
+		$saleModulePermissions = $APPLICATION->GetGroupRight("sale");
+
+		$userCompanyId = null;
+
+		if($saleModulePermissions == "P")
+		{
+			$userCompanyList = Manager::getUserCompanyList($USER->GetID());
+			if (!empty($userCompanyList) && is_array($userCompanyList) && count($userCompanyList) == 1)
+			{
+				$userCompanyId = reset($userCompanyList);
+			}
+			if ($collection->getId() == 0)
+			{
+				if (intval($userCompanyId) > 0)
+				{
+					$collection->setField('COMPANY_ID', $userCompanyId);
+				}
+
+				$collection->setField('RESPONSIBLE_ID', $USER->GetID());
+			}
+		}
+
 		$data = self::prepareData($collection);
+
+		$lang = Application::getInstance()->getContext()->getLanguage();
 
 		if(get_class($collection) == 'Bitrix\Sale\Order')
 			$orderLocked = \Bitrix\Sale\Order::isLocked($collection->getId());
@@ -45,6 +74,85 @@ class OrderAdditional
 			</table>';
 		}
 
+		$data['COMPANIES'] = Manager::getListWithRestrictions($collection, \Bitrix\Sale\Services\Company\Restrictions\Manager::MODE_MANAGER);
+
+		if (!empty($data['COMPANIES']))
+		{
+			$companies = null;
+			if ($saleModulePermissions == "P")
+			{
+				//&& !empty($data['COMPANIES'][$userCompanyId])
+				if (count($userCompanyList) == 1)
+				{
+					$companyName = $data['COMPANIES'][$userCompanyId]["NAME"]." [".$data['COMPANIES'][$userCompanyId]["ID"]."]";
+					$companies = htmlspecialcharsbx($companyName);
+				}
+				else
+				{
+					foreach ($data['COMPANIES'] as $companyId => $companyData)
+					{
+						$foundCompany = false;
+						foreach ($userCompanyList as $userCompanyId)
+						{
+							if ($userCompanyId == $companyId)
+							{
+								$foundCompany = true;
+								break;
+							}
+						}
+
+						if (!$foundCompany)
+						{
+							unset($data['COMPANIES'][$companyId]);
+						}
+					}
+
+
+					if (count($data['COMPANIES']) == 1)
+					{
+						$company = reset($data['COMPANIES']);// [$userCompanyId]["NAME"]." [".$data['COMPANIES'][$userCompanyId]["ID"]."]";
+						$companies = htmlspecialcharsbx($company["NAME"]." [".$company["ID"]."]");
+					}
+				}
+			}
+
+
+			if (empty($companies) && $formPrefix === 'ORDER')
+			{
+				$companies = OrderEdit::makeSelectHtmlWithRestricted(
+					$formPrefix.'[COMPANY_ID]',
+					$data['COMPANIES'],
+					isset($post["COMPANY_ID"]) ? $post["COMPANY_ID"] : $data["COMPANY_ID"],
+					true,
+					array(
+						"class" => "adm-bus-select",
+						"id" => $formPrefix."_COMPANY_ID"
+					)
+				);
+			}
+		}
+		else
+		{
+			if ($saleModulePermissions >= "W")
+			{
+				$companies = str_replace("#URL#", "/bitrix/admin/sale_company_edit.php?lang=".$lang, Loc::getMessage('SALE_ORDER_SHIPMENT_ADD_COMPANY'));
+			}
+		}
+
+		if (!empty($companies))
+		{
+			$additionalInfo .= '
+			<table border="0" cellspacing="0" cellpadding="0" width="100%" class="adm-detail-content-table edit-table ">
+				<tbody>
+					<tr>
+						<td class="adm-detail-content-cell-l" width="40%">'.Loc::getMessage('SALE_ORDER_ADDITIONAL_INFO_COMPANY').':</td>
+						<td class="adm-detail-content-cell-r">'.$companies.'</td>
+					</tr>
+				</tbody>
+			</table>';
+		}
+
+
 		return '
 		<input type="hidden" name="'.$formPrefix.'[RESPONSIBLE_ID]" id="RESPONSIBLE_ID" value="'.$data['RESPONSIBLE_ID'].'" onChange="BX.Sale.Admin.OrderAdditionalInfo.changePerson();">
 		<div class="adm-bus-moreInfo_part1">
@@ -53,10 +161,8 @@ class OrderAdditional
 					<tr>
 						<td class="adm-detail-content-cell-l vat" width="40%">'.Loc::getMessage('SALE_ORDER_ADDITIONAL_INFO_RESPONSIBLE').':</td>
 						<td class="adm-detail-content-cell-r">
-							<div class="adm-s-order-person-choose">
-								<a href="/bitrix/admin/user_edit.php?lang='.LANGUAGE_ID.'&ID='. $data["RESPONSIBLE_ID"].'" id="order_additional_info_responsible">'.
-									htmlspecialcharsbx($data['RESPONSIBLE']).'
-								</a>&nbsp;
+							<div class="adm-s-order-person-choose">'.static::renderResponsibleLink($data).'
+								&nbsp;
 								<a class="adm-s-bus-morelinkqhsw" onclick="BX.Sale.Admin.OrderAdditionalInfo.choosePerson(\''.$formName.'\', \''.LANGUAGE_ID.'\');" href="javascript:void(0);">
 									'.Loc::getMessage('SALE_ORDER_ADDITIONAL_INFO_CHANGE').'
 								</a>
@@ -100,6 +206,9 @@ class OrderAdditional
 		else
 			$orderLocked = false;
 
+		if ($formName == "archive")
+			$orderLocked = true;
+
 		if (isset($data['EMP_RESPONSIBLE']) && !empty($data['EMP_RESPONSIBLE']))
 		{
 			$blockEmpResponsible = '
@@ -127,17 +236,28 @@ class OrderAdditional
 			</table>';
 		}
 
+		if (isset($data['COMPANY_ID']) && !empty($data['COMPANY_ID']))
+		{
+			$companyList = OrderEdit::getCompanyList();
+
+			$additionalInfo .= '
+			<table class="adm-detail-content-table edit-table" border="0" width="100%" cellpadding="0" cellspacing="0">
+				<tbody>
+					<tr>
+						<td class="adm-detail-content-cell-l vat" width="40%">'.Loc::getMessage('SALE_ORDER_ADDITIONAL_INFO_COMPANY').':</td>
+						<td class="adm-detail-content-cell-r">'.htmlspecialcharsbx($companyList[$data['COMPANY_ID']]).'</td>
+					</tr>
+				</tbody>
+			</table>';
+		}
+
 		return '
 			<table class="adm-detail-content-table edit-table" border="0" width="100%" cellpadding="0" cellspacing="0">
 				<tbody>
 					<tr>
 						<td class="adm-detail-content-cell-l vat" width="40%">'.Loc::getMessage('SALE_ORDER_ADDITIONAL_INFO_RESPONSIBLE').':</td>
 						<td class="adm-detail-content-cell-r">
-							<div>
-								<a href="/bitrix/admin/user_edit.php?lang='.LANGUAGE_ID.'&ID='. $data["RESPONSIBLE_ID"].'" id="order_additional_info_responsible">'.
-									htmlspecialcharsbx($data['RESPONSIBLE']).'
-								</a>
-							</div>
+							<div>'.static::renderResponsibleLink($data).'</div>
 						</td>
 					</tr>
 					'.$blockEmpResponsible.'
@@ -149,17 +269,25 @@ class OrderAdditional
 					<tr>
 						<td class="adm-detail-content-cell-l'.($orderLocked ? '' : ' vat').'" width="40%">'.Loc::getMessage('SALE_ORDER_ADDITIONAL_INFO_MANAGER_COMMENT').':</td>
 						<td class="adm-detail-content-cell-r">'.($orderLocked ? '' : '<a href="javascript:void(0);" style="text-decoration: none; border-bottom: 1px dashed" onClick="BX.Sale.Admin.OrderAdditionalInfo.showCommentsDialog(\''.$collection->getField('ID').'\', BX(\'sale-adm-comments-view\'))">'.Loc::getMessage('SALE_ORDER_ADDITIONAL_INFO_COMMENT_TITLE').'</a>').
-							'<pre id="sale-adm-comments-view" style="color:gray; max-width:800px; overflow:auto;">'.(strlen($data['COMMENTS']) ? htmlspecialcharsbx($data['COMMENTS']) : '').'</pre>
+							'<p id="sale-adm-comments-view" style="color:gray; max-width:800px; overflow:auto;">'.($data['COMMENTS'] <> '' ? nl2br(htmlspecialcharsbx($data['COMMENTS'])) : '').'</p>
 						</td>
 					</tr>
 				</tbody>
 			</table>';
 	}
 
+	protected static function renderResponsibleLink($data)
+	{
+		$responsible = $data['RESPONSIBLE'] ?? '';
+		$responsibleId = $data['RESPONSIBLE_ID'] ?? 0;
+
+		return '<a href="/bitrix/admin/user_edit.php?lang='.LANGUAGE_ID.'&ID=' . $responsibleId . '" id="order_additional_info_responsible">' . htmlspecialcharsbx($responsible) . '</a>';
+	}
+
 	public static function getScripts()
 	{
 		\Bitrix\Main\Page\Asset::getInstance()->addJs("/bitrix/js/sale/admin/order_additional_info.js");
-		return '<script type="text/javascript">'.
+		return '<script>'.
 			'BX.message({
 				SALE_ORDER_ADDITIONAL_INFO_COMMENT_EDIT: "'.\CUtil::jsEscape(Loc::getMessage("SALE_ORDER_ADDITIONAL_INFO_COMMENT_EDIT")).'",
 				SALE_ORDER_ADDITIONAL_INFO_COMMENT_SAVE: "'.\CUtil::jsEscape(Loc::getMessage("SALE_ORDER_ADDITIONAL_INFO_COMMENT_SAVE")).'",
@@ -196,14 +324,22 @@ class OrderAdditional
 		}
 		else
 		{
-			$data['RESPONSIBLE_ID'] = 0;
+			$data['RESPONSIBLE_ID'] = '';
 		}
 
 
 		if(in_array("ADDITIONAL_INFO", $collection->getAvailableFields()))
-			if(strlen($collection->getField("ADDITIONAL_INFO")) > 0)
+			if($collection->getField("ADDITIONAL_INFO") <> '')
 				$data["ADDITIONAL_INFO"] = $collection->getField("ADDITIONAL_INFO");
-		
+
+		if(in_array("COMPANY_ID", $collection->getAvailableFields()))
+		{
+			if(strval($collection->getField("COMPANY_ID")) != '')
+			{
+				$data["COMPANY_ID"] = $collection->getField("COMPANY_ID");
+			}
+		}
+
 		return $data;
 	}
 }

@@ -21,9 +21,10 @@ class CompanyDuplicateChecker extends DuplicateChecker
 		if($title !== '')
 		{
 			$criterion = new DuplicateOrganizationCriterion($title);
+			$criterion->setCategoryId($params->getCategoryId());
 			$criterion->setStrictComparison($this->useStrictComparison);
 
-			$duplicate = $criterion->find();
+			$duplicate = $criterion->find($params->getEntityTypeId() ?? \CCrmOwnerType::Undefined);
 			if($duplicate !== null)
 			{
 				$result[] = $duplicate;
@@ -46,6 +47,19 @@ class CompanyDuplicateChecker extends DuplicateChecker
 				$result = array_merge($result, $email);
 			}
 		}
+
+		$requisites = $this->findRequisiteDuplicates($adapter, $params);
+		if (!empty($requisites))
+		{
+			$result = array_merge($result, $requisites);
+		}
+
+		$bankDetails = $this->findBankDetailDuplicates($adapter, $params);
+		if (!empty($bankDetails))
+		{
+			$result = array_merge($result, $bankDetails);
+		}
+
 		return $result;
 	}
 	public function isStrictComparison()

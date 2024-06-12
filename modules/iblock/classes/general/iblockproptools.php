@@ -1,4 +1,6 @@
-<?
+<?php
+
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Iblock;
 
@@ -6,31 +8,41 @@ Loc::loadMessages(__FILE__);
 
 class CIBlockPropertyTools
 {
-	const CODE_MORE_PHOTO = 'MORE_PHOTO';
-	const CODE_SKU_LINK = 'CML2_LINK';
-	const CODE_BLOG_POST = 'BLOG_POST_ID';
-	const CODE_BLOG_COMMENTS_COUNT = 'BLOG_COMMENTS_CNT';
-	const CODE_FORUM_TOPIC = 'FORUM_TOPIC_ID';
-	const CODE_FORUM_MESSAGES_COUNT = 'FORUM_MESSAGE_CNT';
-	const CODE_VOTE_COUNT = 'VOTE_COUNT';
-	const CODE_VOTE_COUNT_OLD = 'vote_count';
-	const CODE_VOTE_SUMM = 'VOTE_SUM';
-	const CODE_VOTE_SUMM_OLD = 'vote_sum';
-	const CODE_VOTE_RATING = 'RATING';
-	const CODE_VOTE_RATING_OLD = 'rating';
+	public const CODE_MORE_PHOTO = 'MORE_PHOTO';
+	public const CODE_SKU_LINK = 'CML2_LINK';
+	public const CODE_BLOG_POST = 'BLOG_POST_ID';
+	public const CODE_BLOG_COMMENTS_COUNT = 'BLOG_COMMENTS_CNT';
+	public const CODE_FORUM_TOPIC = 'FORUM_TOPIC_ID';
+	public const CODE_FORUM_MESSAGES_COUNT = 'FORUM_MESSAGE_CNT';
+	public const CODE_VOTE_COUNT = 'VOTE_COUNT';
+	public const CODE_VOTE_COUNT_OLD = 'vote_count';
+	public const CODE_VOTE_SUMM = 'VOTE_SUM';
+	public const CODE_VOTE_SUMM_OLD = 'vote_sum';
+	public const CODE_VOTE_RATING = 'RATING';
+	public const CODE_VOTE_RATING_OLD = 'rating';
+	public const CODE_ARTNUMBER = 'ARTNUMBER';
+	public const CODE_BACKGROUND_IMAGE = 'BACKGROUND_IMAGE';
+	public const CODE_BRAND_FOR_FACEBOOK = 'BRAND_FOR_FACEBOOK';
 
-	const XML_SKU_LINK = 'CML2_LINK';
+	public const XML_MORE_PHOTO = 'CML2_PICTURES';
+	public const XML_SKU_LINK = 'CML2_LINK';
+	public const XML_BLOG_POST = 'BLOG_POST_ID';
+	public const XML_BLOG_COMMENTS_COUNT = 'BLOG_COMMENTS_CNT';
+	public const XML_ARTNUMBER = 'CML2_ARTICLE';
+	public const XML_BACKGROUND_IMAGE = 'BACKGROUND_IMAGE';
+	public const XML_BRAND_FOR_FACEBOOK = 'BRAND_FOR_FACEBOOK';
 
-	const USER_TYPE_SKU_LINK = 'SKU';
+	/** @deprecated use CIBlockPropertySKU::USER_TYPE */
+	public const USER_TYPE_SKU_LINK = CIBlockPropertySKU::USER_TYPE;
 
-	protected static $errors = array();
+	protected static $errors = [];
 
 	/**
 	 * Return error list.
 	 *
 	 * @return array
 	 */
-	public static function getErrors()
+	public static function getErrors(): array
 	{
 		return self::$errors;
 	}
@@ -42,67 +54,86 @@ class CIBlockPropertyTools
 	 */
 	public static function clearErrors()
 	{
-		self::$errors = array();
+		self::$errors = [];
 	}
 
 	/**
 	 * Create property.
 	 *
-	 * @param int $iblockID					Iblock id.
-	 * @param string $propertyCode			Property code.
-	 * @param array $propertyParams			Property params.
+	 * @param int $iblockId Iblock id.
+	 * @param string $propertyCode Property code.
+	 * @param array $propertyParams Property params.
 	 * @return bool|int
 	 */
-	public static function createProperty($iblockID, $propertyCode, $propertyParams = array())
+	public static function createProperty(int $iblockId, string $propertyCode, array $propertyParams = [])
 	{
-		self::$errors = array();
-		$iblockID = (int)$iblockID;
-		$propertyCode = (string)$propertyCode;
-		if ($iblockID <= 0 || $propertyCode === '')
-			return false;
+		static::clearErrors();
 
-		$iblockIterator = Iblock\IblockTable::getList(array(
-			'select' => array('ID'),
-			'filter' => array('=ID' => $iblockID)
-		));
-		if (!($iblock = $iblockIterator->fetch()))
+		if ($iblockId <= 0 || $propertyCode === '')
+		{
 			return false;
+		}
 
-		unset($iblock, $iblockIterator);
+		$iblock = Iblock\IblockTable::getList([
+			'select' => ['ID'],
+			'filter' => ['=ID' => $iblockId],
+		])->fetch();
+		if (empty($iblock))
+		{
+			return false;
+		}
+
+		$propertyParams['IBLOCK_ID'] = $iblockId;
 		$propertyDescription = static::getPropertyDescription($propertyCode, $propertyParams);
 		if ($propertyDescription === false)
+		{
 			return false;
+		}
 
-		$propertyDescription['IBLOCK_ID'] = $iblockID;
+		$propertyDescription['IBLOCK_ID'] = $iblockId;
 		if (!static::validatePropertyDescription($propertyDescription))
+		{
 			return false;
+		}
 
 		$propertyId = 0;
-		$getListParams = array(
-			'select' => array('ID'),
-			'filter' => array('=IBLOCK_ID' => $iblockID, '=CODE' => $propertyCode, '=ACTIVE' => 'Y')
-		);
+		$getListParams = [
+			'select' => ['ID'],
+			'filter' => [
+				'=IBLOCK_ID' => $iblockId,
+				'=CODE' => $propertyCode,
+				'=ACTIVE' => 'Y'
+			],
+		];
 		static::modifyGetListParams($getListParams, $propertyCode, $propertyDescription);
 		$property = Iblock\PropertyTable::getList($getListParams)->fetch();
 		if (!empty($property))
 		{
 			if (static::validateExistProperty($propertyCode, $property))
+			{
 				$propertyId = (int)$property['ID'];
+			}
 		}
 		unset($property);
 		if (!empty(self::$errors))
-			return false;
-		if ($propertyId > 0)
-			return $propertyId;
-		unset($propertyId);
-		$propertyResult = Iblock\PropertyTable::add($propertyDescription);
-		if ($propertyResult->isSuccess())
 		{
-			return $propertyResult->getId();
+			return false;
+		}
+		if ($propertyId > 0)
+		{
+			return $propertyId;
+		}
+
+		$propertyObject = new \CIBlockProperty();
+		$propertyId = (int)$propertyObject->Add($propertyDescription);
+		if ($propertyId > 0)
+		{
+			return $propertyId;
 		}
 		else
 		{
-			self::$errors = $propertyResult->getErrorMessages();
+			self::$errors[] = $propertyObject->LAST_ERROR;
+
 			return false;
 		}
 	}
@@ -110,91 +141,133 @@ class CIBlockPropertyTools
 	/**
 	 * Return filled property description.
 	 *
-	 * @param string $propertyCode			Property code.
-	 * @param array $propertyParams			Property params.
-	 * @return array|bool
+	 * @param string $code Property symbolic code.
+	 * @param array $fields Property fields.
+	 * @return array|null
 	 */
-	public static function getPropertyDescription($propertyCode, $propertyParams = array())
+	public static function getPropertyDescription(
+		string $code,
+		array $fields = []
+	): ?array
 	{
-		$propertyCode = (string)$propertyCode;
-		if ($propertyCode === '')
-			return false;
-		if (!is_array($propertyParams))
-			$propertyParams = array();
-		switch($propertyCode)
+		switch($code)
 		{
 			case self::CODE_MORE_PHOTO:
-				$propertyDescription = array(
+				$name = Loc::getMessage('IBPT_PROP_TITLE_MORE_PHOTO');
+				if (isset($fields['IBLOCK_ID']))
+				{
+					if (Loader::includeModule('catalog'))
+					{
+						$catalog = CCatalogSku::GetInfoByIBlock($fields['IBLOCK_ID']);
+						if (!empty($catalog))
+						{
+							$name =
+								$catalog['CATALOG_TYPE'] === CCatalogSku::TYPE_OFFERS
+								? Loc::getMessage('IBPT_PROP_TITLE_PRODUCT_VARIATION_MORE_PHOTO')
+								: Loc::getMessage('IBPT_PROP_TITLE_PRODUCT_MORE_PHOTO')
+							;
+						}
+					}
+				}
+				$property = [
 					'PROPERTY_TYPE' => Iblock\PropertyTable::TYPE_FILE,
-					'USER_TYPE' => null,
-					'NAME' => Loc::getMessage('IBPT_PROP_TITLE_MORE_PHOTO'),
+					'NAME' => $name,
 					'CODE' => self::CODE_MORE_PHOTO,
+					'XML_ID' => self::XML_MORE_PHOTO,
 					'MULTIPLE' => 'Y',
-					'FILE_TYPE' => 'jpg, gif, bmp, png, jpeg',
-					'ACTIVE' => 'Y',
-				);
+					'MULTIPLE_CNT' => 1,
+					'FILE_TYPE' => 'jpg, gif, bmp, png, jpeg, webp',
+					'WITH_DESCRIPTION' => 'Y',
+				];
 				break;
 			case self::CODE_SKU_LINK:
-				$propertyDescription = array(
+				$property = [
 					'PROPERTY_TYPE' => Iblock\PropertyTable::TYPE_ELEMENT,
-					'USER_TYPE' => self::USER_TYPE_SKU_LINK,
+					'USER_TYPE' => CIBlockPropertySKU::USER_TYPE,
 					'NAME' => Loc::getMessage('IBPT_PROP_TITLE_SKU_LINK'),
 					'CODE' => self::CODE_SKU_LINK,
 					'XML_ID' => self::XML_SKU_LINK,
-					'MULTIPLE' => 'N',
-					'ACTIVE' => 'Y',
-				);
-				if (isset($propertyParams['LINK_IBLOCK_ID']))
-					$propertyDescription['LINK_IBLOCK_ID'] = (int)$propertyParams['LINK_IBLOCK_ID'];
-				if (isset($propertyParams['USER_TYPE_SETTINGS']))
-					$propertyDescription['USER_TYPE_SETTINGS'] = $propertyParams['USER_TYPE_SETTINGS'];
+					'FILTRABLE' => 'Y',
+				];
 				break;
 			case self::CODE_BLOG_POST:
-				$propertyDescription = array(
+				$property = [
 					'PROPERTY_TYPE' => Iblock\PropertyTable::TYPE_NUMBER,
-					'USER_TYPE' => null,
 					'NAME' => Loc::getMessage('IBPT_PROP_TITLE_BLOG_POST'),
 					'CODE' => self::CODE_BLOG_POST,
-					'MULTIPLE' => 'N',
-					'ACTIVE' => 'Y',
-				);
+					'XML_ID' => self::XML_BLOG_POST,
+				];
 				break;
 			case self::CODE_BLOG_COMMENTS_COUNT:
-				$propertyDescription = array(
+				$property = [
 					'PROPERTY_TYPE' => Iblock\PropertyTable::TYPE_NUMBER,
-					'USER_TYPE' => null,
 					'NAME' => Loc::getMessage('IBPT_PROP_TITLE_BLOG_COMMENTS_COUNT'),
 					'CODE' => self::CODE_BLOG_COMMENTS_COUNT,
-					'MULTIPLE' => 'N',
-					'ACTIVE' => 'Y',
-				);
+					'XML_ID' => self::XML_BLOG_COMMENTS_COUNT,
+				];
+				break;
+			case self::CODE_ARTNUMBER:
+				$property = [
+					'PROPERTY_TYPE' => Iblock\PropertyTable::TYPE_STRING,
+					'NAME' => Loc::getMessage('IBPT_PROP_TITLE_ARTNUMBER'),
+					'CODE' => self::CODE_ARTNUMBER,
+					'XML_ID' => self::XML_ARTNUMBER,
+				];
+				break;
+			case self::CODE_BACKGROUND_IMAGE:
+				$property = [
+					'PROPERTY_TYPE' => Iblock\PropertyTable::TYPE_STRING,
+					'NAME' => Loc::getMessage('IBPT_PROP_TITLE_BACKGROUND_IMAGE'),
+					'CODE' => self::CODE_BACKGROUND_IMAGE,
+					'XML_ID' => self::XML_BACKGROUND_IMAGE,
+				];
+				break;
+			case self::CODE_BRAND_FOR_FACEBOOK:
+				$property = [
+					'PROPERTY_TYPE' => Iblock\PropertyTable::TYPE_STRING,
+					'NAME' => Loc::getMessage('IBPT_PROP_TITLE_BRAND_FOR_FACEBOOK'),
+					'CODE' => self::CODE_BRAND_FOR_FACEBOOK,
+					'XML_ID' => self::XML_BRAND_FOR_FACEBOOK,
+					'MULTIPLE' => 'Y',
+					'USER_TYPE' => 'directory',
+					'USER_TYPE_SETTINGS' => [
+						'TABLE_NAME' => 'b_catalog_facebook_brand_reference',
+					],
+				];
 				break;
 			default:
-				$propertyDescription = false;
+				$property = null;
 				break;
 		}
-		if ($propertyDescription !== false)
+		if ($property !== null)
 		{
-			if (isset($propertyParams['NAME']))
-				$propertyDescription['NAME'] = $propertyParams['NAME'];
-			if (isset($propertyParams['SORT']))
-				$propertyDescription['SORT'] = $propertyParams['SORT'];
-			if (isset($propertyParams['XML_ID']) && !isset($propertyDescription['XML_ID']))
-				$propertyDescription['XML_ID'] = $propertyParams['XML_ID'];
+			$property += [
+				'ACTIVE' => 'Y',
+				'SORT' => 500,
+				'MULTIPLE' => 'N',
+				'USER_TYPE' => null,
+			];
+			if (!empty($fields))
+			{
+				$property = $fields + $property;
+			}
 		}
-		return $propertyDescription;
+
+		return $property;
 	}
 
 	/**
 	 * Check property description before create.
 	 *
-	 * @param array $propertyDescription		Property description.
+	 * @param array $propertyDescription Property description.
 	 * @return bool
 	 */
-	public static function validatePropertyDescription($propertyDescription)
+	public static function validatePropertyDescription(array $propertyDescription): bool
 	{
 		if (empty($propertyDescription) || !isset($propertyDescription['CODE']))
+		{
 			return false;
+		}
 		$checkResult = true;
 
 		switch ($propertyDescription['CODE'])
@@ -210,17 +283,20 @@ class CIBlockPropertyTools
 				}
 				if ($checkResult)
 				{
-					$iblockIterator = Iblock\IblockTable::getList(array(
-						'select' => array('ID'),
-						'filter' => array('=ID' => $propertyDescription['LINK_IBLOCK_ID'])
-					));
+					$iblockIterator = Iblock\IblockTable::getList([
+						'select' => ['ID'],
+						'filter' => ['=ID' => $propertyDescription['LINK_IBLOCK_ID']]
+					]);
 					if (!($iblock = $iblockIterator->fetch()))
+					{
 						$checkResult = false;
+					}
 				}
 				break;
 			case self::CODE_MORE_PHOTO:
 			case self::CODE_BLOG_POST:
 			case self::CODE_BLOG_COMMENTS_COUNT:
+			case self::CODE_BRAND_FOR_FACEBOOK:
 				$checkResult = true;
 				break;
 			default:
@@ -233,17 +309,19 @@ class CIBlockPropertyTools
 	/**
 	 * Returns the list of infoblock properties, values for which need to be emptied when copying infoblock element.
 	 *
-	 * @param int $iblockID						Iblock id.
-	 * @param array $propertyCodes			Property codes.
+	 * @param int $iblockId Iblock id.
+	 * @param array $propertyCodes Property codes.
 	 * @return array
 	 */
-	public static function getClearedPropertiesID($iblockID, $propertyCodes = array())
+	public static function getClearedPropertiesID(int $iblockId, array $propertyCodes = []): array
 	{
-		$iblockID = (int)$iblockID;
-		if ($iblockID <= 0)
-			return array();
+		if ($iblockId <= 0)
+		{
+			return [];
+		}
 		if (empty($propertyCodes) || !is_array($propertyCodes))
-			$propertyCodes = array(
+		{
+			$propertyCodes = [
 				self::CODE_BLOG_POST,
 				self::CODE_BLOG_COMMENTS_COUNT,
 				self::CODE_FORUM_TOPIC,
@@ -253,43 +331,56 @@ class CIBlockPropertyTools
 				self::CODE_VOTE_SUMM,
 				self::CODE_VOTE_SUMM_OLD,
 				self::CODE_VOTE_RATING,
-				self::CODE_VOTE_RATING_OLD
-			);
-		$result = array();
-		$propertyIterator = Iblock\PropertyTable::getList(array(
-			'select' => array('ID'),
-			'filter' => array('=IBLOCK_ID' => $iblockID, '@CODE' => $propertyCodes)
-		));
+				self::CODE_VOTE_RATING_OLD,
+			];
+		}
+		$result = [];
+		$propertyIterator = Iblock\PropertyTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=IBLOCK_ID' => $iblockId,
+				'@CODE' => $propertyCodes
+			]
+		]);
 		while ($property = $propertyIterator->fetch())
 		{
 			$result[] = (int)$property['ID'];
 		}
+
 		return $result;
 	}
 
 	/**
 	 * Return exist property list.
 	 *
-	 * @param int $iblockID							Iblock id.
-	 * @param array|string $propertyCodes			Property codes.
-	 * @param bool $indexCode						Return codes as key.
+	 * @param int $iblockId Iblock id.
+	 * @param array|string $propertyCodes Property codes.
+	 * @param bool $indexCode Return codes as key.
 	 * @return array|bool
 	 */
-	public static function getExistProperty($iblockID, $propertyCodes, $indexCode = true)
+	public static function getExistProperty(int $iblockId, $propertyCodes, bool $indexCode = true)
 	{
-		$indexCode = ($indexCode === true);
-		$iblockID = (int)$iblockID;
-		if ($iblockID <= 0)
+		if ($iblockId <= 0)
+		{
 			return false;
+		}
 		$propertyCodes = static::clearPropertyList($propertyCodes);
 		if (empty($propertyCodes))
+		{
 			return false;
+		}
 
-		$result = array();
-		$propertyIterator = Iblock\PropertyTable::getList(array(
-			'select' => array('ID', 'CODE'),
-			'filter' => array('=IBLOCK_ID' => $iblockID, '@CODE' => $propertyCodes)
-		));
+		$result = [];
+		$propertyIterator = Iblock\PropertyTable::getList([
+			'select' => [
+				'ID',
+				'CODE'
+			],
+			'filter' => [
+				'=IBLOCK_ID' => $iblockId,
+				'@CODE' => $propertyCodes
+			]
+		]);
 		if ($indexCode)
 		{
 			while ($property = $propertyIterator->fetch())
@@ -302,7 +393,11 @@ class CIBlockPropertyTools
 				else
 				{
 					if (!is_array($result[$property['CODE']]))
-						$result[$property['CODE']] = array($result[$property['CODE']]);
+					{
+						$result[$property['CODE']] = [
+							$result[$property['CODE']]
+						];
+					}
 					$result[$property['CODE']][] = $property['ID'];
 				}
 			}
@@ -323,13 +418,12 @@ class CIBlockPropertyTools
 	/**
 	 * Return property symbolic codes.
 	 *
-	 * @param bool $extendedMode		Get codes as keys.
+	 * @param bool $extendedMode Get codes as keys.
 	 * @return array
 	 */
-	public static function getPropertyCodes($extendedMode = false)
+	public static function getPropertyCodes(bool $extendedMode = false): array
 	{
-		$extendedMode = ($extendedMode === true);
-		$result = array(
+		$result = [
 			self::CODE_MORE_PHOTO,
 			self::CODE_SKU_LINK,
 			self::CODE_BLOG_POST,
@@ -342,7 +436,7 @@ class CIBlockPropertyTools
 			self::CODE_VOTE_SUMM_OLD,
 			self::CODE_VOTE_RATING,
 			self::CODE_VOTE_RATING_OLD
-		);
+		];
 		return (
 			$extendedMode
 			? array_fill_keys($result, true)
@@ -358,18 +452,24 @@ class CIBlockPropertyTools
 	 */
 	public static function clearPropertyList($propertyCodes)
 	{
-		$result = array();
+		$result = [];
 		if (!is_array($propertyCodes))
-			$propertyCodes = array((string)$propertyCodes);
+		{
+			$propertyCodes = [(string)$propertyCodes];
+		}
 		if (empty($propertyCodes))
+		{
 			return $result;
+		}
 
 		$currentList = static::getPropertyCodes(true);
-		foreach ($propertyCodes as &$code)
+		foreach ($propertyCodes as $code)
 		{
 			$code = (string)$code;
 			if (isset($currentList[$code]))
-				$result = $code;
+			{
+				$result[] = $code;
+			}
 		}
 		unset($code);
 
@@ -379,12 +479,16 @@ class CIBlockPropertyTools
 	/**
 	 * Modify getList params for property search.
 	 *
-	 * @param array &$getListParams			\Bitrix\Main\Entity\DataManager::getList params.
-	 * @param string $propertyCode			Property code.
-	 * @param array $propertyDescription	Property description.
+	 * @param array &$getListParams \Bitrix\Main\Entity\DataManager::getList params.
+	 * @param string $propertyCode Property code.
+	 * @param array $propertyDescription Property description.
 	 * @return void
 	 */
-	protected static function modifyGetListParams(&$getListParams, $propertyCode, $propertyDescription)
+	protected static function modifyGetListParams(
+		array &$getListParams,
+		string $propertyCode,
+		array$propertyDescription
+	): void
 	{
 		switch ($propertyCode)
 		{
@@ -403,22 +507,25 @@ class CIBlockPropertyTools
 	/**
 	 * Validate and modify exist property.
 	 *
-	 * @param string $propertyCode			Property code.
-	 * @param array $property				Current property data.
+	 * @param string $propertyCode Property code.
+	 * @param array $property Current property data.
 	 * @return bool
-	 * @throws Exception
 	 */
-	protected static function validateExistProperty($propertyCode, $property)
+	protected static function validateExistProperty(string $propertyCode, array $property): bool
 	{
 		$result = true;
 		switch ($propertyCode)
 		{
 			case self::CODE_SKU_LINK:
-				$fields = array();
-				if ($property['USER_TYPE'] != self::USER_TYPE_SKU_LINK)
-					$fields['USER_TYPE'] = self::USER_TYPE_SKU_LINK;
+				$fields = [];
+				if ($property['USER_TYPE'] != CIBlockPropertySKU::USER_TYPE)
+				{
+					$fields['USER_TYPE'] = CIBlockPropertySKU::USER_TYPE;
+				}
 				if ($property['XML_ID'] != self::XML_SKU_LINK)
+				{
 					$fields['XML_ID'] = self::XML_SKU_LINK;
+				}
 				if (!empty($fields))
 				{
 					$propertyResult = Iblock\PropertyTable::update($property['ID'], $fields);

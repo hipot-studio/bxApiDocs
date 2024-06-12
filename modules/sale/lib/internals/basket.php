@@ -8,10 +8,29 @@
 namespace Bitrix\Sale\Internals;
 
 use Bitrix\Main;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sale\Reservation\BasketReservationService;
+use Bitrix\Sale\Reservation\Internals\BasketReservationTable;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class BasketTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Basket_Query query()
+ * @method static EO_Basket_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Basket_Result getById($id)
+ * @method static EO_Basket_Result getList(array $parameters = [])
+ * @method static EO_Basket_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_Basket createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_Basket_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_Basket wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_Basket_Collection wakeUpCollection($rows)
+ */
 class BasketTable extends Main\Entity\DataManager
 {
 
@@ -50,26 +69,44 @@ class BasketTable extends Main\Entity\DataManager
 	{
 		$id = intval($id);
 		if ($id <= 0)
+		{
 			throw new Main\ArgumentNullException("id");
+		}
 
-		$itemsList = BasketPropertyTable::getList(
-			array(
-				"filter" => array("BASKET_ID" => $id),
-				"select" => array("ID")
-			)
-		);
-		while ($item = $itemsList->fetch())
+		$dbRes = BasketPropertyTable::getList([
+			"select" => ["ID"],
+			"filter" => ["BASKET_ID" => $id],
+		]);
+		while ($item = $dbRes->fetch())
+		{
 			BasketPropertyTable::delete($item["ID"]);
+		}
+
+		/** @var BasketReservationService */
+		$service = ServiceLocator::getInstance()->get('sale.basketReservation');
+		$dbRes = BasketReservationTable::getList([
+			"select" => ["ID"],
+			"filter" => ["BASKET_ID" => $id],
+		]);
+		while ($item = $dbRes->fetch())
+		{
+			$service->delete($item["ID"]);
+		}
 
 		return BasketTable::delete($id);
 	}
 
-
+	/**
+	 * @return string
+	 */
 	public static function getTableName()
 	{
 		return 'b_sale_basket';
 	}
 
+	/**
+	 * @return array
+	 */
 	public static function getMap()
 	{
 		global $DB;
@@ -129,6 +166,9 @@ class BasketTable extends Main\Entity\DataManager
 			'PRODUCT_PRICE_ID' => array(
 				'data_type' => 'integer'
 			),
+			'PRICE_TYPE_ID' => array(
+				'data_type' => 'integer'
+			),
 			'NAME' => array(
 				'data_type' => 'string'
 			),
@@ -139,8 +179,8 @@ class BasketTable extends Main\Entity\DataManager
 				array('NAME', 'PRODUCT_ID')
 			),
 
-			'PRICE' => array(
-				'data_type' => 'float',
+			new Main\Entity\FloatField(
+				'PRICE'
 			),
 
 			'CURRENCY' => array(
@@ -149,8 +189,8 @@ class BasketTable extends Main\Entity\DataManager
 				'validation' => array(__CLASS__, 'validateCurrency'),
 			),
 
-			'BASE_PRICE' => array(
-				'data_type' => 'float',
+			new Main\Entity\FloatField(
+				'BASE_PRICE'
 			),
 
 			'VAT_INCLUDED' => array(
@@ -167,10 +207,10 @@ class BasketTable extends Main\Entity\DataManager
 					array('DATE_INSERT'),
 					array('data_type' => 'datetime')
 			),
+
 			'DATE_UPDATE' => array(
 				'data_type' => 'datetime'
 			),
-
 			new Main\Entity\ExpressionField(
 					'DATE_UPD',
 					$DB->datetimeToDateFunction('%s'),
@@ -178,14 +218,25 @@ class BasketTable extends Main\Entity\DataManager
 					array('data_type' => 'datetime')
 			),
 
-
-			'WEIGHT' => array(
-				'data_type' => 'float'
+			'DATE_REFRESH' => array(
+				'data_type' => 'datetime'
+			),
+			new Main\Entity\ExpressionField(
+					'DATE_REF',
+					$DB->datetimeToDateFunction('%s'),
+					array('DATE_REFRESH'),
+					array('data_type' => 'datetime')
 			),
 
-			'QUANTITY' => array(
-				'data_type' => 'float',
-				'required' => true,
+			new Main\Entity\FloatField(
+				'WEIGHT'
+			),
+
+			new Main\Entity\FloatField(
+				'QUANTITY',
+				array(
+					'required' => true
+				)
 			),
 
 			'DELAY' => array(
@@ -203,6 +254,10 @@ class BasketTable extends Main\Entity\DataManager
 			'CAN_BUY' => array(
 				'data_type' => 'boolean',
 				'values' => array('N','Y')
+			),
+
+			'MARKING_CODE_GROUP' => array(
+				'data_type' => 'string',
 			),
 
 			'MODULE' => array(
@@ -251,8 +306,8 @@ class BasketTable extends Main\Entity\DataManager
 				'validation' => array(__CLASS__, 'validateDiscountCoupon'),
 			),
 
-			'VAT_RATE' => array(
-				'data_type' => 'float'
+			new Main\Entity\FloatField(
+				'VAT_RATE'
 			),
 
 			new Main\Entity\ExpressionField(
@@ -277,10 +332,9 @@ class BasketTable extends Main\Entity\DataManager
 				'values' => array('N', 'Y'),
 			),
 
-			'RESERVE_QUANTITY' => array(
-				'data_type' => 'float',
+			new Main\Entity\FloatField(
+				'RESERVE_QUANTITY'
 			),
-
 
 			'BARCODE_MULTI' => array(
 				'data_type' => 'boolean',
@@ -297,16 +351,14 @@ class BasketTable extends Main\Entity\DataManager
 				'data_type' => 'string'
 			),
 
-			'TYPE' => array(
-				'data_type' => 'integer'
+			new Main\Entity\IntegerField(
+				'TYPE'
 			),
-
-			'SET_PARENT_ID' => array(
-				'data_type' => 'integer'
+			new Main\Entity\IntegerField(
+				'SET_PARENT_ID'
 			),
-
-			'MEASURE_CODE' => array(
-				'data_type' => 'integer'
+			new Main\Entity\IntegerField(
+				'MEASURE_CODE'
 			),
 
 			'MEASURE_NAME' => array(
@@ -387,6 +439,10 @@ class BasketTable extends Main\Entity\DataManager
 					'default' => '100'
 				)
 			),
+
+			'XML_ID' => array(
+				'data_type' => 'string'
+			),
 		);
 	}
 
@@ -395,17 +451,6 @@ class BasketTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>CURRENCY</code> (код валюты). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/baskettable/validatecurrency.php
-	* @author Bitrix
-	*/
 	public static function validateCurrency()
 	{
 		return array(
@@ -418,17 +463,6 @@ class BasketTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>LID</code> (идентификатор сайта). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/baskettable/validatelid.php
-	* @author Bitrix
-	*/
 	public static function validateLid()
 	{
 		return array(
@@ -441,17 +475,6 @@ class BasketTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>DISCOUNT_NAME</code> (название скидки). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/baskettable/validatediscountname.php
-	* @author Bitrix
-	*/
 	public static function validateDiscountName()
 	{
 		return array(
@@ -464,17 +487,6 @@ class BasketTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>DISCOUNT_VALUE</code> (величина скидки). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/baskettable/validatediscountvalue.php
-	* @author Bitrix
-	*/
 	public static function validateDiscountValue()
 	{
 		return array(
@@ -487,17 +499,6 @@ class BasketTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>DISCOUNT_COUPON</code> (код купона). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/baskettable/validatediscountcoupon.php
-	* @author Bitrix
-	*/
 	public static function validateDiscountCoupon()
 	{
 		return array(

@@ -1,11 +1,12 @@
-<?
-IncludeModuleLangFile(__FILE__);
+<?php
+
+use Bitrix\Main\ArgumentException;
 
 class CBPViewHelper
 {
 	private static $cachedTasks = array();
 
-	public static function RenderUserSearch($ID, $searchInputID, $dataInputID, $componentName, $siteID = '', $nameFormat = '', $delay = 0)
+	public static function renderUserSearch($ID, $searchInputID, $dataInputID, $componentName, $siteID = '', $nameFormat = '', $delay = 0)
 	{
 		$ID = strval($ID);
 		$searchInputID = strval($searchInputID);
@@ -33,7 +34,7 @@ class CBPViewHelper
 		echo '<input type="text" id="', htmlspecialcharsbx($searchInputID) ,'" style="width:200px;"   >',
 		'<input type="hidden" id="', htmlspecialcharsbx($dataInputID),'" name="', htmlspecialcharsbx($dataInputID),'" value="">';
 
-		echo '<script type="text/javascript">',
+		echo '<script>',
 		'BX.ready(function(){',
 		'BX.CrmUserSearchPopup.deletePopup("', $ID, '");',
 		'BX.CrmUserSearchPopup.create("', $ID, '", { searchInput: BX("', CUtil::JSEscape($searchInputID), '"), dataInput: BX("', CUtil::JSEscape($dataInputID),'"), componentName: "', CUtil::JSEscape($componentName),'", user: {} }, ', $delay,');',
@@ -61,16 +62,32 @@ class CBPViewHelper
 		$withUsers = $withUsers ? 1 : 0;
 		$extendUserInfo = $extendUserInfo ? 1 : 0;
 
+		if (!$workflowId)
+		{
+			return ['COMPLETED' => [], 'RUNNING' => []];
+		}
+
 		if (!isset(self::$cachedTasks[$workflowId][$withUsers][$extendUserInfo]))
 		{
 			$tasks = array('COMPLETED' => array(), 'RUNNING' => array());
 			$ids = array();
 			$taskIterator = CBPTaskService::GetList(
-				array('MODIFIED' => 'DESC'),
-				array('WORKFLOW_ID' => $workflowId),
+				['ID' => 'DESC'],
+				['WORKFLOW_ID' => $workflowId],
 				false,
-				false,
-				array('ID', 'MODIFIED', 'NAME', 'DESCRIPTION', 'PARAMETERS', 'STATUS', 'IS_INLINE', 'ACTIVITY')
+				['nTopCount' => 50],
+				[
+					'ID',
+					'MODIFIED',
+					'NAME',
+					'DESCRIPTION',
+					'PARAMETERS',
+					'STATUS',
+					'IS_INLINE',
+					'ACTIVITY',
+					'ACTIVITY_NAME',
+					'CREATED_DATE',
+				],
 			);
 			while ($task = $taskIterator->getNext())
 			{
@@ -144,9 +161,11 @@ class CBPViewHelper
 		$fieldName = htmlspecialcharsbx($fieldName);
 
 		if (is_array($content) && isset($content['TEXT']))
+		{
 			$content = $content['TEXT'];
+		}
 
-		$result = '<textarea rows="5" cols="40" id="'.$id.'" name="'.$fieldName.'">'.htmlspecialcharsbx((string)$content).'</textarea>';
+		$result = '<textarea rows="5" cols="40" id="'.$id.'" name="'.$fieldName.'">'.htmlspecialcharsbx(\CBPHelper::stringify($content)).'</textarea>';
 
 		if (CModule::includeModule("fileman"))
 		{
@@ -208,5 +227,140 @@ class CBPViewHelper
 		}
 
 		return $result;
+	}
+
+	public static function prepareTaskDescription($description)
+	{
+		$description = self::replaceFileLinks($description);
+
+		if (\Bitrix\Main\Loader::includeModule('disk'))
+		{
+			$description = self::replaceDiskLinks($description);
+		}
+
+		return nl2br($description);
+	}
+
+	public static function prepareMobileTaskDescription($description)
+	{
+		$description = self::replaceFileLinks($description, true);
+
+		if (\Bitrix\Main\Loader::includeModule('disk'))
+		{
+			$description = self::replaceDiskLinks($description, true);
+		}
+
+		return nl2br($description);
+	}
+
+	private static function replaceFileLinks(string $description, $isMobile = false)
+	{
+		$callback = $isMobile ? self::getMobileFileLinksReplaceCallback() : self::getFileLinksReplaceCallback();
+
+		return preg_replace_callback(
+			'|<a href="(/bitrix/tools/bizproc_show_file.php\?)([^"]+)"[^>]*>|',
+			$callback,
+			$description
+		);
+	}
+
+	private static function getFileLinksReplaceCallback()
+	{
+		return function($matches)
+		{
+			$matches[2] = htmlspecialcharsback($matches[2]);
+			parse_str($matches[2], $query);
+			if (isset($query['i']))
+			{
+				try
+				{
+					$attributes = \Bitrix\Main\UI\Viewer\ItemAttributes::tryBuildByFileId(
+						$query['i'],
+						$matches[1].$matches[2]
+					);
+					return "<a href=\"".$matches[1].$matches[2]."\" ".$attributes.">";
+				}
+				catch (ArgumentException $e) {}
+			}
+
+			return $matches[0];
+		};
+	}
+
+	private static function getMobileFileLinksReplaceCallback()
+	{
+		return function ($matches)
+		{
+			$matches[2] = htmlspecialcharsback($matches[2]);
+			parse_str($matches[2], $query);
+			$filename = '';
+			if (isset($query['f']))
+			{
+				$query['hash'] = md5($query['f']);
+				$filename = $query['f'];
+				unset($query['f']);
+			}
+			$query['mobile_action'] = 'bp_show_file';
+			$query['filename'] = $filename;
+
+			return '<a href="#" data-url="' . SITE_DIR . 'mobile/ajax.php?' . http_build_query($query)
+				. '" data-name="' . htmlspecialcharsbx($filename)
+				. '" onclick="BXMobileApp.UI.Document.open({url: this.getAttribute(\'data-url\'), '
+				. 'filename: this.getAttribute(\'data-name\')}); return false;">'
+			;
+		};
+	}
+
+	private static function replaceDiskLinks(string $description, $isMobile = false)
+	{
+		$callback = $isMobile ? self::getMobileDiskLinksReplaceCallback() : self::getDiskLinksReplaceCallback();
+
+		return preg_replace_callback(
+			'|<a href="(/bitrix/tools/disk/uf.php\?)([^"]+)"[^>]*>([^<]+)|',
+			$callback,
+			$description
+		);
+	}
+
+	private static function getDiskLinksReplaceCallback()
+	{
+		return function($matches)
+		{
+			$matches[2] = htmlspecialcharsback($matches[2]);
+			parse_str($matches[2], $query);
+			if (isset($query['attachedId']))
+			{
+				$attach = \Bitrix\Disk\AttachedObject::loadById($query['attachedId']);
+				if ($attach)
+				{
+					try
+					{
+						$attributes = \Bitrix\Main\UI\Viewer\ItemAttributes::tryBuildByFileId(
+							$attach->getFileId(),
+							$matches[1].$matches[2]
+						);
+						return "<a href=\"".$matches[1].$matches[2]."\" ".$attributes.">".$matches[3];
+					}
+					catch (ArgumentException $e) {}
+				}
+			}
+
+			return $matches[0];
+		};
+	}
+
+	private static function getMobileDiskLinksReplaceCallback()
+	{
+		return function($matches)
+		{
+			$matches[2] = htmlspecialcharsback($matches[2]);
+			parse_str($matches[2], $query);
+			$filename = htmlspecialcharsback($matches[3]);
+			$query['mobile_action'] = 'disk_uf_view';
+			$query['filename'] = $filename;
+
+			return '<a href="#" data-url="'.SITE_DIR.'mobile/ajax.php?'.http_build_query($query)
+				.'" data-name="'.htmlspecialcharsbx($filename).'" onclick="BXMobileApp.UI.Document.open({url: this.getAttribute(\'data-url\'), filename: this.getAttribute(\'data-name\')}); return false;">'.$matches[3];
+		};
 	}
 }

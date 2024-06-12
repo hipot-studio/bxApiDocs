@@ -8,17 +8,23 @@ use Bitrix\Lists\Internals\Error\IErrorable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Context;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Web\PostDecodeFilter;
 use Bitrix\Main\Web\Json;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class Controller
+ * @package Bitrix\Lists\Internals
+ * @deprecated
+ */
 abstract class Controller implements IErrorable
 {
 	const ERROR_REQUIRED_PARAMETER = 'LISTS_CONTROLLER_22001';
 	const ERROR_UNKNOWN_ACTION     = 'LISTS_CONTROLLER_22002';
 
 	const STATUS_SUCCESS      = 'success';
+	const STATUS_PROCESSING      = 'processing';
+	const STATUS_COMPLETED      = 'completed';
 	const STATUS_DENIED       = 'denied';
 	const STATUS_ERROR        = 'error';
 	const STATUS_NEED_AUTH    = 'need_auth';
@@ -51,13 +57,7 @@ abstract class Controller implements IErrorable
 	{
 		try
 		{
-			if($this->request->isPost())
-			{
-				\CUtil::jSPostUnescape();
-				$this->request->addFilter(new PostDecodeFilter);
-			}
-
-			$this->resolveAction();			
+			$this->resolveAction();
 			$this->checkAction();
 
 			$this->checkRequiredModules();
@@ -80,7 +80,7 @@ abstract class Controller implements IErrorable
 	}
 
 	/**
-	 * @return array|bool|\CAllUser|\CUser
+	 * @return array|bool|\CUser|\CUser
 	 */
 	protected function getUser()
 	{
@@ -92,7 +92,7 @@ abstract class Controller implements IErrorable
 	{
 		if(!defined('PUBLIC_AJAX_MODE'))
 		{
-			// define('PUBLIC_AJAX_MODE', true);
+			define('PUBLIC_AJAX_MODE', true);
 		}
 
 		global $APPLICATION;
@@ -153,6 +153,18 @@ abstract class Controller implements IErrorable
 		$this->sendJsonResponse($response);
 	}
 
+	protected function sendJsonProcessingResponse(array $response = array())
+	{
+		$response['status'] = self::STATUS_PROCESSING;
+		$this->sendJsonResponse($response);
+	}
+
+	protected function sendJsonCompletedResponse(array $response = array())
+	{
+		$response['status'] = self::STATUS_COMPLETED;
+		$this->sendJsonResponse($response);
+	}
+
 	protected function sendResponse($response)
 	{
 		global $APPLICATION;
@@ -190,7 +202,7 @@ abstract class Controller implements IErrorable
 	protected function resolveAction()
 	{
 		$listOfActions = $this->normalizeListOfAction($this->listOfActions());
-		$action = strtolower($this->action);
+		$action = mb_strtolower($this->action);
 
 		if(!isset($listOfActions[$action]))
 		{
@@ -275,7 +287,7 @@ abstract class Controller implements IErrorable
 		}
 
 		//if does not exist check_csrf_token we have to check csrf for only POST method.
-		if($description['check_csrf_token'] === true || ($this->request->isPost() && !isset($description['check_csrf_token'])))
+		if(($description['check_csrf_token'] ?? false) === true || ($this->request->isPost() && !isset($description['check_csrf_token'])))
 		{
 			//in BDisk we have token_sid
 			if(!check_bitrix_sessid() && !check_bitrix_sessid('token_sid'))
@@ -383,7 +395,7 @@ abstract class Controller implements IErrorable
 	}
 
 	/**
-	 * @return Application|\Bitrix\Main\HttpApplication|\CAllMain|\CMain
+	 * @return Application|\Bitrix\Main\HttpApplication|\CMain
 	 */
 	protected function getApplication()
 	{
@@ -400,7 +412,7 @@ abstract class Controller implements IErrorable
 	{
 		foreach ($required as $item)
 		{
-			if(!isset($inputParams[$item]) || (!$inputParams[$item] && !(is_string($inputParams[$item]) && strlen($inputParams[$item]))))
+			if(!isset($inputParams[$item]) || (!$inputParams[$item] && !(is_string($inputParams[$item]) && mb_strlen($inputParams[$item]))))
 			{
 				$this->errorCollection->add(array(new Error(Loc::getMessage('LISTS_CONTROLLER_ERROR_REQUIRED_PARAMETER', array('#PARAM#' => $item)), self::ERROR_REQUIRED_PARAMETER)));
 				return false;

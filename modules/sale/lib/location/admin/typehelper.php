@@ -21,7 +21,7 @@ class TypeHelper extends NameHelper
 	* Function returns class name for an attached entity
 	* @return string Entity class name
 	*/
-	static public function getEntityRoadMap()
+	public static function getEntityRoadMap()
 	{
 		return array(
 			'main' => array(
@@ -74,7 +74,7 @@ class TypeHelper extends NameHelper
 
 		$result = array();
 
-		$lang = ToLower($params['LANGUAGE_ID']);
+		$lang = mb_strtolower($params['LANGUAGE_ID']);
 		$langMapped = static::mapLanguage($lang);
 
 		$res = \Bitrix\Sale\Location\TypeTable::getList(array(

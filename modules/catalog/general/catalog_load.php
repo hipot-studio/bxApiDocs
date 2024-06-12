@@ -1,7 +1,7 @@
 <?
 class CAllCatalogLoad
 {
-	public static function GetList($arOrder=Array("LAST_USED"=>"DESC"), $arFilter=Array())
+	function GetList($arOrder=Array("LAST_USED"=>"DESC"), $arFilter=Array())
 	{
 		global $DB;
 		$arSqlSearch = Array();
@@ -14,25 +14,25 @@ class CAllCatalogLoad
 		for($i=0; $i<count($filter_keys); $i++)
 		{
 			$val = $DB->ForSql($arFilter[$filter_keys[$i]]);
-			if (strlen($val)<=0) continue;
+			if ($val == '') continue;
 
 			$key = $filter_keys[$i];
 			if ($key[0]=="!")
 			{
-				$key = substr($key, 1);
+				$key = mb_substr($key, 1);
 				$bInvert = true;
 			}
 			else
 				$bInvert = false;
 
-			switch(strtoupper($key))
+			switch(mb_strtoupper($key))
 			{
-			case "NAME":
-				$arSqlSearch[] = "CL.NAME ".($bInvert?"<>":"=")." '".$val."'";
-				break;
-			case "TYPE":
-				$arSqlSearch[] = "CL.TYPE ".($bInvert?"<>":"=")." '".$val."'";
-				break;
+				case "NAME":
+					$arSqlSearch[] = "CL.NAME ".($bInvert? "<>" : "=")." '".$val."'";
+					break;
+				case "TYPE":
+					$arSqlSearch[] = "CL.TYPE ".($bInvert? "<>" : "=")." '".$val."'";
+					break;
 			}
 		}
 
@@ -52,8 +52,8 @@ class CAllCatalogLoad
 		$arSqlOrder = Array();
 		foreach ($arOrder as $by=>$order)
 		{
-			$by = strtoupper($by);
-			$order = strtoupper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			if ($order!="ASC") $order = "DESC";
 
 			if ($by == "NAME") $arSqlOrder[] = " CL.NAME ".$order." ";
@@ -82,7 +82,7 @@ class CAllCatalogLoad
 		return $db_res;
 	}
 
-	public static function Add($arFields)
+	function Add($arFields)
 	{
 		global $DB;
 
@@ -98,13 +98,13 @@ class CAllCatalogLoad
 		return true;
 	}
 
-	public static function Delete($ID)
+	function Delete($ID)
 	{
 		global $DB;
 		return $DB->Query("DELETE FROM b_catalog_load WHERE NAME = '".intval($ID)."' ", true);
 	}
 
-	public static function SetLastUsed($NAME, $TYPE)
+	function SetLastUsed($NAME, $TYPE)
 	{
 		global $DB;
 

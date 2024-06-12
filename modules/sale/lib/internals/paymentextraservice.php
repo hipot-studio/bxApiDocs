@@ -57,7 +57,7 @@ class PaymentExtraServiceTable extends Main\Entity\DataManager
 		{
 			$con = Main\Application::getConnection();
 			$sqlHelper = $con->getSqlHelper();
-			$strSql = "DELETE FROM ".self::getTableName()." WHERE PAYMENT_ID=".$sqlHelper->forSql($paymentId);
+			$strSql = "DELETE FROM ".self::getTableName()." WHERE PAYMENT_ID=".(int)($paymentId);
 			$con->queryExecute($strSql);
 		}
 	}

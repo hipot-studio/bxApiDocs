@@ -137,13 +137,6 @@ class CCatalogCSVSettings
 						'important'=>'N',
 						'name' => Loc::getMessage('CATI_FI_CAN_BUY_ZERO').' (B_CATALOG_PRODUCT.CAN_BUY_ZERO)'
 					),
-					'CP_NEGATIVE_AMOUNT_TRACE' => array(
-						'value' => 'CP_NEGATIVE_AMOUNT_TRACE',
-						'field' => 'NEGATIVE_AMOUNT_TRACE',
-						'field_orig' => 'NEGATIVE_AMOUNT_ORIG',
-						'important' => 'N',
-						'name' => Loc::getMessage('CATI_FI_NEGATIVE_AMOUNT_TRACE').' (B_CATALOG_PRODUCT.NEGATIVE_AMOUNT_TRACE)'
-					),
 					'CP_WEIGHT' => array(
 						'value' => 'CP_WEIGHT',
 						'field' => 'WEIGHT',

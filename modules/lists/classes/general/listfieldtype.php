@@ -14,7 +14,7 @@ class CListFieldType
 	private $is_field;
 	private $is_readonly;
 
-	public function __construct($id, $name, $is_field, $is_readonly)
+	function __construct($id, $name, $is_field, $is_readonly)
 	{
 		$this->id = (string)$id;
 		$this->name = (string)$name;
@@ -22,22 +22,22 @@ class CListFieldType
 		$this->is_readonly = $is_readonly == CListFieldType::IS_READONLY;
 	}
 
-	public function IsField()
+	function IsField()
 	{
 		return $this->is_field;
 	}
 
-	public function IsReadonly()
+	function IsReadonly()
 	{
 		return $this->is_readonly;
 	}
 
-	public function GetName()
+	function GetName()
 	{
 		return $this->name;
 	}
 
-	public function GetID()
+	function GetID()
 	{
 		return $this->id;
 	}

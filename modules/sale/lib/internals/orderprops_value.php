@@ -9,7 +9,25 @@ namespace Bitrix\Sale\Internals;
 
 use	Bitrix\Main\Entity\DataManager,
 	Bitrix\Main\Entity\Validator;
+use Bitrix\Main\ORM\Fields\Validators\EnumValidator;
+use Bitrix\Sale\Registry;
 
+/**
+ * Class OrderPropsValueTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_OrderPropsValue_Query query()
+ * @method static EO_OrderPropsValue_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_OrderPropsValue_Result getById($id)
+ * @method static EO_OrderPropsValue_Result getList(array $parameters = [])
+ * @method static EO_OrderPropsValue_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_OrderPropsValue createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_OrderPropsValue_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_OrderPropsValue wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_OrderPropsValue_Collection wakeUpCollection($rows)
+ */
 class OrderPropsValueTable extends DataManager
 {
 	public static function getFilePath()
@@ -60,7 +78,35 @@ class OrderPropsValueTable extends DataManager
 				'reference' => array('=this.ORDER_PROPS_ID' => 'ref.ID'),
 				'join_type' => 'LEFT',
 			),
+			'XML_ID' => array(
+				'data_type' => 'string',
+			),
+			'ENTITY_ID' => array(
+				'data_type' => 'integer',
+				'format' => '/^[0-9]{1,11}$/',
+			),
+			'ENTITY_TYPE' => array(
+				'data_type' => 'enum',
+				'required' => true,
+				'validation' => array(__CLASS__, 'validateEntityType'),
+				'values' => static::getEntityTypes()
+			),
 		);
+	}
+
+	public static function getEntityTypes()
+	{
+		return [
+			Registry::ENTITY_ORDER,
+			Registry::ENTITY_SHIPMENT,
+		];
+	}
+
+	public static function validateEntityType()
+	{
+		return [
+			new EnumValidator(),
+		];
 	}
 
 	public static function getNameValidators()

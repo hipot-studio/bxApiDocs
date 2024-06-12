@@ -23,7 +23,7 @@ class SqlExpression
 	/** @var array */
 	protected $args = array();
 
-	protected $pattern = '/([^\\\\]|^)(\?[#sif]?)/';
+	protected $pattern = '/([^\\\\]|^)(\?[#sifv]?)/';
 
 	protected $i;
 
@@ -58,17 +58,6 @@ class SqlExpression
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает переменную <code>$expression</code> с перемещёнными плейсхолдерами.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/sqlexpression/compile.php
-	* @author Bitrix
-	*/
 	public function compile()
 	{
 		$this->i = -1;
@@ -93,7 +82,7 @@ class SqlExpression
 
 			$parts = str_replace('\\?', '?', $parts);
 
-			return implode('\\', $parts);
+			return implode('\\\\', $parts);
 		}
 	}
 
@@ -113,17 +102,25 @@ class SqlExpression
 		$pre = $matches[1];
 		$ph = $matches[2];
 
-		if (isset($this->args[$this->i]))
+		if (array_key_exists($this->i, $this->args))
 		{
 			$value = $this->args[$this->i];
 
-			if ($ph == '?' || $ph == '?s')
+			if ($value === null && $ph !== '?#')
+			{
+				$value = 'NULL';
+			}
+			elseif ($ph == '?' || $ph == '?s')
 			{
 				$value = "'" . $sqlHelper->forSql($value) . "'";
 			}
 			elseif ($ph == '?#')
 			{
 				$value = $sqlHelper->quote($value);
+			}
+			elseif ($ph == '?v')
+			{
+				$value = $sqlHelper->values($value);
 			}
 			elseif ($ph == '?i')
 			{

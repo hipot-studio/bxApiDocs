@@ -17,7 +17,7 @@ class CWizardUtil
 	public static function CheckName($wizardName)
 	{
 		return (
-			strlen($wizardName) > 0
+			$wizardName <> ''
 			&& preg_match("#^([A-Za-z0-9_.-]+:)?([A-Za-z0-9_-]+\\.)*([A-Za-z0-9_-]+)$#i", $wizardName)
 		);
 	}
@@ -39,7 +39,7 @@ class CWizardUtil
 				if (file_exists($wizardPath."/".$dirName."/.description.php"))
 				{
 					//Skip component without namespace
-					if ($filterNamespace !== false && strlen($filterNamespace) > 0)
+					if ($filterNamespace !== false && $filterNamespace <> '')
 						continue;
 
 					if (LANGUAGE_ID != "en" && LANGUAGE_ID != "ru")
@@ -58,7 +58,7 @@ class CWizardUtil
 				}
 				else
 				{
-					if ($filterNamespace !== false && (strlen($filterNamespace) <= 0 || $filterNamespace != $dirName))
+					if ($filterNamespace !== false && ($filterNamespace == '' || $filterNamespace != $dirName))
 							continue;
 
 					if ($nspaceHandle = @opendir($wizardPath."/".$dirName))
@@ -116,7 +116,7 @@ class CWizardUtil
 							if ($dirName == "." || $dirName == ".." || !is_dir($modulesPath."/".$moduleName."/install/wizards/".$dirName))
 								continue;
 
-							if ($filterNamespace !== false && (strlen($filterNamespace) <= 0 || $filterNamespace != $dirName))
+							if ($filterNamespace !== false && ($filterNamespace == '' || $filterNamespace != $dirName))
 								continue;
 
 							if ($handle2 = @opendir($modulesPath."/".$moduleName."/install/wizards/".$dirName))
@@ -266,11 +266,14 @@ class CWizardUtil
 		if ((!is_dir($filePath) && !is_file($filePath)) || !is_array($arReplace))
 			return;
 
+		$root = (defined("WIZARD_SITE_ROOT_PATH")? WIZARD_SITE_ROOT_PATH : $_SERVER["DOCUMENT_ROOT"]);
+		$root = trim($root, "/");
+
 		if ($handle = @opendir($filePath))
 		{
 			while (($file = readdir($handle)) !== false)
 			{
-				if ($file == "." || $file == ".." || (trim($filePath, "/") == trim($_SERVER["DOCUMENT_ROOT"], "/") && ($file == "bitrix" || $file == "upload"))) 
+				if ($file == "." || $file == ".." || (trim($filePath, "/") == $root && ($file == "bitrix" || $file == "upload")))
 					continue;
 					
 				if (is_dir($filePath."/".$file))
@@ -285,12 +288,19 @@ class CWizardUtil
 					if (!is_writable($filePath."/".$file))
 						continue;
 
+					$size = filesize($filePath."/".$file);
+
+					if($size == 0)
+					{
+						continue;
+					}
+
 					@chmod($filePath."/".$file, BX_FILE_PERMISSIONS);
 
 					if (!$handleFile = @fopen($filePath."/".$file, "rb"))
 						continue;
 
-					$content = @fread($handleFile, filesize($filePath."/".$file));
+					$content = @fread($handleFile, $size);
 					@fclose($handleFile);
 
 					if (!($handleFile = @fopen($filePath."/".$file, "wb")))
@@ -427,7 +437,7 @@ class CWizardUtil
 		if (function_exists("gd_info"))
 		{
 			$arGDInfo = gd_info();
-			$bGD2 = ((strpos($arGDInfo['GD Version'], "2.") !== false) ? true : false);
+			$bGD2 = strpos($arGDInfo['GD Version'], "2.") !== false;
 		}
 
 		//Create Preview

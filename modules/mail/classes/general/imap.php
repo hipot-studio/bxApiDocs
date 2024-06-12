@@ -14,8 +14,6 @@ class CMailImap
 
 	public function connect($host, $port, $timeout = 1, $skip_cert = false)
 	{
-		$skip_cert = PHP_VERSION_ID < 50600 ? true : $skip_cert;
-
 		$imap_stream = @stream_socket_client(
 			sprintf('%s:%s', $host, $port), $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT,
 			stream_context_create(array('ssl' => array('verify_peer' => !$skip_cert, 'verify_peer_name' => !$skip_cert)))
@@ -32,7 +30,7 @@ class CMailImap
 		if ($prompt === false)
 			throw new Exception(GetMessage('MAIL_IMAP_ERR_COMMUNICATE'));
 
-		if (strpos($prompt, '* OK') !== 0)
+		if (mb_strpos($prompt, '* OK') !== 0)
 		{
 			$this->imap_stream = null;
 
@@ -54,9 +52,9 @@ class CMailImap
 		$tag = $this->sendCommand("AUTHENTICATE PLAIN\r\n");
 
 		$prompt = $this->readLine();
-		if (strpos($prompt, '+') !== 0)
+		if (mb_strpos($prompt, '+') !== 0)
 		{
-			if (strpos($prompt, $tag.' NO') === 0 || strpos($prompt, $tag.' BAD') === 0)
+			if (mb_strpos($prompt, $tag.' NO') === 0 || mb_strpos($prompt, $tag.' BAD') === 0)
 				throw new Exception(GetMessage('MAIL_IMAP_ERR_AUTH_MECH'));
 			else
 				throw new Exception(GetMessage('MAIL_IMAP_ERR_AUTH').': '.GetMessage('MAIL_IMAP_ERR_BAD_SERVER'));
@@ -66,9 +64,9 @@ class CMailImap
 
 		$response = $this->readResponse($tag);
 
-		if (strpos($response, $tag.' OK') === false)
+		if (mb_strpos($response, $tag.' OK') === false)
 		{
-			if (strpos($response, $tag.' NO') === 0 || strpos($response, $tag.' BAD') === 0)
+			if (mb_strpos($response, $tag.' NO') === 0 || mb_strpos($response, $tag.' BAD') === 0)
 				throw new Exception(GetMessage('MAIL_IMAP_ERR_AUTH'));
 			else
 				throw new Exception(GetMessage('MAIL_IMAP_ERR_AUTH').': '.GetMessage('MAIL_IMAP_ERR_BAD_SERVER'));
@@ -82,13 +80,13 @@ class CMailImap
 		$tag = $this->sendCommand("SELECT \"INBOX\"\r\n");
 		$response = $this->readResponse($tag);
 
-		if (strpos($response, $tag.' OK') === false)
+		if (mb_strpos($response, $tag.' OK') === false)
 			throw new Exception(GetMessage('MAIL_IMAP_ERR_BAD_SERVER'));
 
 		$tag = $this->sendCommand("SEARCH UNSEEN\r\n");
 		$response = $this->readResponse($tag);
 
-		if (strpos($response, $tag.' OK') === false)
+		if (mb_strpos($response, $tag.' OK') === false)
 			throw new Exception(GetMessage('MAIL_IMAP_ERR_BAD_SERVER'));
 
 		if (preg_match('/\* SEARCH( [0-9 ]*)?/i', $response, $matches))
@@ -109,7 +107,7 @@ class CMailImap
 		$command = sprintf('%s %s', $tag, $command);
 		$bytes = fputs($this->imap_stream, $command);
 
-		if ($bytes < strlen($command))
+		if ($bytes < mb_strlen($command))
 			throw new Exception(GetMessage('MAIL_IMAP_ERR_COMMUNICATE'));
 
 		return $tag;
@@ -128,7 +126,7 @@ class CMailImap
 
 			$line .= $buffer;
 		}
-		while (strpos($buffer, "\r\n") === false);
+		while (mb_strpos($buffer, "\r\n") === false);
 
 		return $line;
 	}
@@ -139,14 +137,14 @@ class CMailImap
 
 		do
 		{
-			$line = $this->readLine($this->imap_stream);
+			$line = $this->readLine();
 
 			if ($line === false)
 				return false;
 
 			$response .= $line;
 		}
-		while (strpos($line, $tag) !== 0);
+		while (mb_strpos($line, $tag) !== 0);
 
 		return $response;
 	}

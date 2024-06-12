@@ -1,33 +1,21 @@
 <?php
+
 namespace Bitrix\Main;
 
 use Bitrix\Main\Type\ParameterDictionary;
+use Bitrix\Main\Text\Encoding;
 
 /**
  * Represents server.
  */
-class Server
-	extends ParameterDictionary
+class Server extends ParameterDictionary
 {
 	/**
 	 * Creates server object.
 	 *
 	 * @param array $arServer
 	 */
-	
-	/**
-	* <p>Нестатический метод вызывается при создании экземпляра класса и позволяет в нем произвести при создании объекта какие-то действия.</p>
-	*
-	*
-	* @param array $arServer  
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/server/__construct.php
-	* @author Bitrix
-	*/
-	static public function __construct(array $arServer)
+	public function __construct(array $arServer)
 	{
 		if (isset($arServer["DOCUMENT_ROOT"]))
 			$arServer["DOCUMENT_ROOT"] = rtrim($arServer["DOCUMENT_ROOT"], "/\\");
@@ -48,17 +36,6 @@ class Server
 	 *
 	 * @return string | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DOCUMENT_ROOT сервера.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/server/getdocumentroot.php
-	* @author Bitrix
-	*/
 	public function getDocumentRoot()
 	{
 		return $this->get("DOCUMENT_ROOT");
@@ -70,17 +47,6 @@ class Server
 	 *
 	 * @return string | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает установленную папку <code>root</code>. Используется серверная переменнтая BX_PERSONAL_ROOT. Если переменная пустая - возвращается <code>/bitrix</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/server/getpersonalroot.php
-	* @author Bitrix
-	*/
 	public function getPersonalRoot()
 	{
 		$r = $this->get("BX_PERSONAL_ROOT");
@@ -95,17 +61,6 @@ class Server
 	 *
 	 * @return string | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает http хост сервера.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/server/gethttphost.php
-	* @author Bitrix
-	*/
 	public function getHttpHost()
 	{
 		return $this->get("HTTP_HOST");
@@ -116,17 +71,6 @@ class Server
 	 *
 	 * @return string | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает имя сервера.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/server/getservername.php
-	* @author Bitrix
-	*/
 	public function getServerName()
 	{
 		return $this->get("SERVER_NAME");
@@ -137,20 +81,27 @@ class Server
 	 *
 	 * @return string | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает адрес сервера.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/server/getserveraddr.php
-	* @author Bitrix
-	*/
 	public function getServerAddr()
 	{
 		return $this->get("SERVER_ADDR");
+	}
+
+	/**
+	 * Returns remote address.
+	 * @return string|null
+	 */
+	public function getRemoteAddr()
+	{
+		return $this->get("REMOTE_ADDR");
+	}
+
+	/**
+	 * Returns user agent.
+	 * @return string|null
+	 */
+	public function getUserAgent()
+	{
+		return $this->get("HTTP_USER_AGENT");
 	}
 
 	/**
@@ -158,20 +109,14 @@ class Server
 	 *
 	 * @return string | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает порт сервера.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/server/getserverport.php
-	* @author Bitrix
-	*/
 	public function getServerPort()
 	{
 		return $this->get("SERVER_PORT");
+	}
+
+	public function getRequestScheme()
+	{
+		return $this->get("REQUEST_SCHEME");
 	}
 
 	/**
@@ -180,17 +125,6 @@ class Server
 	 *
 	 * @return string | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает запрошенный uri вида: <code>/index.php/test1/test2?login=yes&amp;back_url_admin=/</code></p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/server/getrequesturi.php
-	* @author Bitrix
-	*/
 	public function getRequestUri()
 	{
 		return $this->get("REQUEST_URI");
@@ -201,17 +135,6 @@ class Server
 	 *
 	 * @return string | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает запрошенный метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/server/getrequestmethod.php
-	* @author Bitrix
-	*/
 	public function getRequestMethod()
 	{
 		return $this->get("REQUEST_METHOD");
@@ -223,17 +146,6 @@ class Server
 	 *
 	 * @return string | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает PHP_SELF вида <code>/index.php/test1/test2</code></p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/server/getphpself.php
-	* @author Bitrix
-	*/
 	public function getPhpSelf()
 	{
 		return $this->get("PHP_SELF");
@@ -245,17 +157,6 @@ class Server
 	 *
 	 * @return string | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает SCRIPT_NAME вида <code>/index.php</code></p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/server/getscriptname.php
-	* @author Bitrix
-	*/
 	public function getScriptName()
 	{
 		return $this->get("SCRIPT_NAME");
@@ -280,5 +181,92 @@ class Server
 				$this->values["QUERY_STRING"] .= "&";
 			$this->values["QUERY_STRING"] .= $queryString;
 		}
+	}
+
+	/**
+	 * @return array|false
+	 */
+	public function parseAuthRequest()
+	{
+		$digest = '';
+
+		if ($this['PHP_AUTH_USER'] != '')
+		{
+			// Basic Authorization PHP module
+			return [
+				'basic' => [
+					'username' => Encoding::convertEncodingToCurrent($this['PHP_AUTH_USER']),
+					'password' => Encoding::convertEncodingToCurrent($this['PHP_AUTH_PW']),
+				]
+			];
+		}
+		elseif ($this['PHP_AUTH_DIGEST'] != '')
+		{
+			// Digest Authorization PHP module
+			$digest = $this['PHP_AUTH_DIGEST'];
+		}
+		else
+		{
+			if ($this['REDIRECT_REMOTE_USER'] !== null || $this['REMOTE_USER'] !== null)
+			{
+				$res = $this['REDIRECT_REMOTE_USER'] ?? $this['REMOTE_USER'];
+				if ($res != '')
+				{
+					if(preg_match('/^\x20*Basic\x20+([a-zA-Z0-9+\/=]+)\s*$/D', $res, $matches))
+					{
+						// Basic Authorization PHP FastCGI (CGI)
+						$res = trim($matches[1]);
+						$res = base64_decode($res);
+						$res = Encoding::convertEncodingToCurrent($res);
+						[$user, $pass] = explode(':', $res, 2);
+						if (mb_strpos($user, $this['HTTP_HOST']."\\") === 0)
+						{
+							$user = str_replace($this['HTTP_HOST']."\\", "", $user);
+						}
+						elseif (mb_strpos($user, $this['SERVER_NAME']."\\") === 0)
+						{
+							$user = str_replace($this['SERVER_NAME']."\\", "", $user);
+						}
+
+						return [
+							'basic' => [
+								'username' => $user,
+								'password' => $pass,
+							]
+						];
+					}
+					elseif (preg_match('/^\x20*Digest\x20+(.*)$/sD', $res, $matches))
+					{
+						// Digest Authorization PHP FastCGI (CGI)
+						$digest = trim($matches[1]);
+					}
+				}
+			}
+		}
+
+		if($digest <> '' && ($data = static::parseDigest($digest)))
+		{
+			return ['digest' => $data];
+		}
+
+		return false;
+	}
+
+	protected static function parseDigest($digest)
+	{
+		$data = [];
+		$parts = ['nonce' => 1, 'username' => 1, 'uri' => 1, 'response' => 1];
+		$keys = implode('|', array_keys($parts));
+
+		//from php help
+		preg_match_all('@('.$keys.')=(?:([\'"])([^\2]+?)\2|([^\s,]+))@', $digest, $matches, PREG_SET_ORDER);
+
+		foreach ($matches as $m)
+		{
+			$data[$m[1]] = ($m[3] ?: $m[4]);
+			unset($parts[$m[1]]);
+		}
+
+		return ($parts? false : $data);
 	}
 }

@@ -17,6 +17,7 @@ abstract class CAllCrmSonetSubscription
 		return self::$CURRENT;
 	}
 
+	abstract protected function GetTableName();
 	abstract public function Register($entityTypeID, $entityID, $typeID, $userID);
 	abstract public function UpdateByEntity($entityTypeID, $entityID, $typeID, $userID);
 	abstract public function UnRegister($entityTypeID, $entityID, $typeID, $userID, $options = array());
@@ -61,7 +62,7 @@ abstract class CAllCrmSonetSubscription
 		}
 
 		$reset = (bool)$reset;
-		$optionName = strtolower(CCrmOwnerType::ResolveName($entityTypeID)).'_sl_subscr_import';
+		$optionName = mb_strtolower(CCrmOwnerType::ResolveName($entityTypeID)).'_sl_subscr_import';
 		if($reset || CUserOptions::GetOption('crm', $optionName, 'N', $userID) !== 'Y')
 		{
 			self::GetCurrent()->ImportResponsibility($entityTypeID, $userID, 5000);
@@ -205,6 +206,100 @@ abstract class CAllCrmSonetSubscription
 			);
 		}
 		return self::$FIELDS;
+	}
+
+	public static function TransferSubscriptionOwnership($oldEntityTypeID, $oldEntityID, $newEntityTypeID, $newEntityID)
+	{
+		self::GetCurrent()->TransferOwnership($oldEntityTypeID, $oldEntityID, $newEntityTypeID, $newEntityID);
+	}
+	public function TransferOwnership($oldEntityTypeID, $oldEntityID, $newEntityTypeID, $newEntityID)
+	{
+		if(!is_int($oldEntityTypeID))
+		{
+			$oldEntityTypeID = (int)$oldEntityTypeID;
+		}
+
+		if($oldEntityTypeID <= 0)
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be greater than zero.', 'oldEntityTypeID');
+		}
+
+		if(!is_int($oldEntityID))
+		{
+			$oldEntityID = (int)$oldEntityID;
+		}
+
+		if($oldEntityID <= 0)
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be greater than zero.', 'oldEntityID');
+		}
+
+		if(!is_int($newEntityTypeID))
+		{
+			$newEntityTypeID = (int)$newEntityTypeID;
+		}
+
+		if($newEntityTypeID <= 0)
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be greater than zero.', 'newEntityTypeID');
+		}
+
+		if(!is_int($newEntityID))
+		{
+			$newEntityID = (int)$newEntityID;
+		}
+
+		if($newEntityID <= 0)
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be greater than zero.', 'newEntityID');
+		}
+
+		$data = array();
+		$tableName = $this->GetTableName();
+		$connection = \Bitrix\Main\Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+
+		$oldSlEntityType = CCrmLiveFeedEntity::GetByEntityTypeID($oldEntityTypeID);
+		$newSlEntityType = CCrmLiveFeedEntity::GetByEntityTypeID($newEntityTypeID);
+		$oldSlEntityTypeSql = $sqlHelper->forSql($oldSlEntityType);
+
+		$dbResult = $connection->query(
+			"SELECT USER_ID, TYPE_ID FROM {$tableName} WHERE SL_ENTITY_TYPE = '{$oldSlEntityTypeSql}' AND ENTITY_ID = {$oldEntityID}"
+		);
+
+		while($fields = $dbResult->fetch())
+		{
+			$data[] = $fields;
+		}
+
+		if(empty($data))
+		{
+			return;
+		}
+
+		foreach($data as $item)
+		{
+			$queries = $connection->getSqlHelper()->prepareMerge(
+				$tableName,
+				array('USER_ID', 'SL_ENTITY_TYPE', 'ENTITY_ID', 'TYPE_ID'),
+				array(
+					'USER_ID' => $item['USER_ID'],
+					'TYPE_ID' => $item['TYPE_ID'],
+					'SL_ENTITY_TYPE' => $newSlEntityType,
+					'ENTITY_ID' => $newEntityID
+				),
+				array('SL_ENTITY_TYPE' => $newSlEntityType, 'ENTITY_ID' => $newEntityID)
+			);
+
+			foreach($queries as $query)
+			{
+				$connection->queryExecute($query);
+			}
+		}
+
+		$connection->queryExecute(
+			"DELETE FROM {$tableName} WHERE SL_ENTITY_TYPE = '{$oldSlEntityTypeSql}' AND ENTITY_ID = {$oldEntityID}"
+		);
 	}
 }
 

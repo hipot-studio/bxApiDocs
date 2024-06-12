@@ -1,20 +1,25 @@
 <?php
 namespace Bitrix\Perfmon\Sql;
+
 use Bitrix\Main\NotSupportedException;
 
 class Index extends BaseObject
 {
 	public $unique = false;
-	public $columns = array();
+	public $fulltext = false;
+	public $using = '';
+	public $columns = [];
 
 	/**
 	 * @param string $name Index name.
-	 * @param boolean $unique Uniqueness flag.
+	 * @param bool $unique Uniqueness flag.
+	 * @param bool $fulltext Fulltext flag.
 	 */
-	public function __construct($name = '', $unique)
+	public function __construct($name = '', $unique, $fulltext=false)
 	{
 		parent::__construct($name);
 		$this->unique = (bool)$unique;
+		$this->fulltext = (bool)$fulltext;
 	}
 
 	/**
@@ -24,23 +29,10 @@ class Index extends BaseObject
 	 *
 	 * @return Index
 	 */
-	
-	/**
-	* <p>Нестатический метод добавляет колонку таблицы к описанию индекса.</p>
-	*
-	*
-	* @param string $name  Название колонки.
-	*
-	* @return \Bitrix\Perfmon\Sql\Index 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/index/addcolumn.php
-	* @author Bitrix
-	*/
 	public function addColumn($name)
 	{
 		$this->columns[] = trim($name);
-		$this->setBody(implode(", ", $this->columns));
+		$this->setBody(implode(', ', $this->columns));
 		return $this;
 	}
 
@@ -50,36 +42,14 @@ class Index extends BaseObject
 	 * If parameter $indexName is not passed then current position should point to the name of the index.
 	 *
 	 * @param Tokenizer $tokenizer Tokens collection.
-	 * @param boolean $unique Uniqueness flag.
+	 * @param bool $unique Uniqueness flag.
+	 * @param bool $fulltext Fulltext flag.
 	 * @param string $indexName Optional name of the index.
 	 *
 	 * @return Index
 	 * @throws NotSupportedException
 	 */
-	
-	/**
-	* <p>Статический метод создает объект индексов из токенов.</p> <p></p> <p> Если параметр <code>$indexName</code> не пропущен, то текущая позиция должна быть установлена по названию индекса.</p>
-	*
-	*
-	* @param mixed $Bitrix  Набор токенов.
-	*
-	* @param Bitri $Perfmon  Уникальный флаг.
-	*
-	* @param Perfmo $Sql  Необязательный параметр: название индекса.
-	*
-	* @param Tokenizer $tokenizer  
-	*
-	* @param boolean $unique = false 
-	*
-	* @param string $indexName = '' 
-	*
-	* @return \Bitrix\Perfmon\Sql\Index 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/index/create.php
-	* @author Bitrix
-	*/
-	public static function create(Tokenizer $tokenizer, $unique = false, $indexName = '')
+	public static function create(Tokenizer $tokenizer, $unique = false, $fulltext = false, $indexName = '')
 	{
 		if (!$indexName)
 		{
@@ -94,13 +64,24 @@ class Index extends BaseObject
 		if ($tokenizer->testUpperText('ON'))
 		{
 			$tokenizer->skipWhiteSpace();
-			/** @noinspection PhpUnusedLocalVariableInspection */
-			$tableName = $tokenizer->getCurrentToken()->text;
 			$tokenizer->nextToken();
 			$tokenizer->skipWhiteSpace();
 		}
 
-		$index = new self($indexName, $unique);
+		if ($tokenizer->testUpperText('USING'))
+		{
+			$tokenizer->skipWhiteSpace();
+			$indexType = $tokenizer->getCurrentToken()->text;
+			if (strtoupper($indexType) !== 'GIN')
+			{
+				throw new NotSupportedException("'GIN' expected. line:" . $tokenizer->getCurrentToken()->line);
+			}
+			$fulltext = true;
+			$tokenizer->nextToken();
+			$tokenizer->skipWhiteSpace();
+		}
+
+		$index = new self($indexName, $unique, $fulltext);
 
 		if ($tokenizer->testText('('))
 		{
@@ -129,11 +110,22 @@ class Index extends BaseObject
 			}
 
 			if (!$tokenizer->testText(')'))
-				throw new NotSupportedException("')' expected. line:".$tokenizer->getCurrentToken()->line);
+			{
+				throw new NotSupportedException("')' expected. line:" . $tokenizer->getCurrentToken()->line);
+			}
+
+			//USING BTREE
+			$tokenizer->skipWhiteSpace();
+			if ($tokenizer->testText('USING'))
+			{
+				$tokenizer->skipWhiteSpace();
+				$token = $tokenizer->nextToken();
+				$index->using = $token->text;
+			}
 		}
 		else
 		{
-			throw new NotSupportedException("'(' expected. line:".$tokenizer->getCurrentToken()->line);
+			throw new NotSupportedException("'(' expected. line:" . $tokenizer->getCurrentToken()->line);
 		}
 
 		return $index;
@@ -149,25 +141,6 @@ class Index extends BaseObject
 	 * @return void
 	 * @throws NotSupportedException
 	 */
-	
-	/**
-	* <p>Статический метод проверяет набор на токенов на наличие ключевого слова <code>'ON'</code>. Передвигает текущую позицию к следующему токену, пропуская пробелы.</p> <br>
-	*
-	*
-	* @param mixed $Bitrix  Набор токенов.
-	*
-	* @param Bitri $Perfmon  
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param Tokenizer $tokenizer  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/index/searchtablename.php
-	* @author Bitrix
-	*/
 	public static function searchTableName(Tokenizer $tokenizer)
 	{
 		$lineToken = $tokenizer->getCurrentToken();
@@ -181,7 +154,7 @@ class Index extends BaseObject
 			}
 			$tokenizer->nextToken();
 		}
-		throw new NotSupportedException('Index: table name not found. line: '.$lineToken->line);
+		throw new NotSupportedException('Index: table name not found. line: ' . $lineToken->line);
 	}
 
 	/**
@@ -191,22 +164,17 @@ class Index extends BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL для создания индекса.</p>
-	*
-	*
-	* @param string $dbType = '' Тип базы данных (<i>MYSQL</i>, <i>ORACLE</i> или <i>MSSQL</i>).
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/index/getcreateddl.php
-	* @author Bitrix
-	*/
 	public function getCreateDdl($dbType = '')
 	{
-		return "CREATE ".($this->unique? "UNIQUE ": "")."INDEX ".$this->name." ON ".$this->parent->name."(".$this->body.")";
+		switch ($dbType)
+		{
+		case 'MYSQL':
+			return 'CREATE ' . ($this->fulltext ? 'FULLTEXT ' : '') . ($this->unique ? 'UNIQUE ' : '') . 'INDEX ' . $this->name . ' ON ' . $this->parent->name . '(' . $this->body . ')';
+		case 'PGSQL':
+			return 'CREATE ' . ($this->unique ? 'UNIQUE ' : '') . 'INDEX ' . $this->name . ' ON ' . $this->parent->name . ($this->fulltext ? ' USING GIN (' . $this->body . ')' : '(' . $this->body . ')');
+		default:
+			return '// ' . get_class($this) . ':getDropDdl for database type [' . $dbType . '] not implemented';
+		}
 	}
 
 	/**
@@ -216,31 +184,18 @@ class Index extends BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL для удаления индекса.</p>
-	*
-	*
-	* @param string $dbType = '' Тип базы данных (<i>MYSQL</i>, <i>ORACLE</i> или <i>MSSQL</i>).
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/index/getdropddl.php
-	* @author Bitrix
-	*/
 	public function getDropDdl($dbType = '')
 	{
 		switch ($dbType)
 		{
-		case "MYSQL":
-			return "DROP INDEX ".$this->name." ON ".$this->parent->name;
-		case "MSSQL":
-			return "DROP INDEX ".$this->name." ON ".$this->parent->name;
-		case "ORACLE":
-			return "DROP INDEX ".$this->name;
+		case 'MYSQL':
+		case 'MSSQL':
+			return 'DROP INDEX ' . $this->name . ' ON ' . $this->parent->name;
+		case 'ORACLE':
+		case 'PGSQL':
+			return 'DROP INDEX ' . $this->name;
 		default:
-			return "// ".get_class($this).":getDropDdl for database type [".$dbType."] not implemented";
+			return '// ' . get_class($this) . ':getDropDdl for database type [' . $dbType . '] not implemented';
 		}
 	}
 
@@ -252,32 +207,11 @@ class Index extends BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL для модификации индекса.</p>
-	*
-	*
-	* @param mixed $Bitrix  Целевой объект.
-	*
-	* @param Bitri $Perfmon  Тип базы данных (<i>MYSQL</i>, <i>ORACLE</i> или <i>MSSQL</i>).
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param BaseObject $target  
-	*
-	* @param string $dbType = '' 
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/index/getmodifyddl.php
-	* @author Bitrix
-	*/
 	public function getModifyDdl(BaseObject $target, $dbType = '')
 	{
-		return array(
+		return [
 			$this->getDropDdl($dbType),
 			$target->getCreateDdl($dbType),
-		);
+		];
 	}
 }

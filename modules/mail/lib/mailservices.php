@@ -4,9 +4,26 @@ namespace Bitrix\Mail;
 
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization;
+use Bitrix\Main\ORM;
 
 Localization\Loc::loadMessages(__FILE__);
 
+/**
+ * Class MailServicesTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_MailServices_Query query()
+ * @method static EO_MailServices_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_MailServices_Result getById($id)
+ * @method static EO_MailServices_Result getList(array $parameters = array())
+ * @method static EO_MailServices_Entity getEntity()
+ * @method static \Bitrix\Mail\EO_MailServices createObject($setDefaultValues = true)
+ * @method static \Bitrix\Mail\EO_MailServices_Collection createCollection()
+ * @method static \Bitrix\Mail\EO_MailServices wakeUpObject($row)
+ * @method static \Bitrix\Mail\EO_MailServices_Collection wakeUpCollection($rows)
+ */
 class MailServicesTable extends Entity\DataManager
 {
 
@@ -70,12 +87,19 @@ class MailServicesTable extends Entity\DataManager
 		return parent::add($data);
 	}
 
-	public static function update($primary, array $data)
+	public static function update($primary, array $data): Entity\UpdateResult
 	{
 		if (empty($data))
 			return new Entity\UpdateResult();
 
-		$serviceForUpdate = static::getByPrimary($primary)->fetch();
+		$serviceForUpdate = static::getByPrimary(
+			$primary,
+			array(
+				'select' => array(
+					'ID', 'SITE_ID', 'ACTIVE', 'SERVICE_TYPE',
+				),
+			)
+		)->fetch();
 		if (!$serviceForUpdate)
 		{
 			$updateResult = new Entity\UpdateResult();
@@ -106,22 +130,24 @@ class MailServicesTable extends Entity\DataManager
 			if (($isSiteChanged || $isDeactivated) && $serviceForUpdate['SERVICE_TYPE'] == 'imap')
 			{
 				$emptyService = static::getList(array(
+					'select' => array('ID'),
 					'filter' => array(
-						'=SITE_ID'    => $serviceForUpdate['SITE_ID'],
-						'ACTIVE'      => 'Y',
-						'=SERVER'     => '',
-						'=PORT'       => '',
+						'=SITE_ID' => $serviceForUpdate['SITE_ID'],
+						'ACTIVE' => 'Y',
+						'=SERVICE_TYPE' => 'imap',
+						'=SERVER' => '',
+						'=PORT' => '',
 						'=ENCRYPTION' => '',
-						'=LINK'       => ''
+						'=LINK' => '',
 					),
-					'limit' => 1
+					'limit' => 1,
 				))->fetch();
 			}
 
 			if ($isSiteChanged || $isDeactivated && $emptyService)
 			{
 				$mbData = $emptyService
-					? array('SERVICE_ID' => $emptyService['ID'], 'NAME' => $emptyService['NAME'])
+					? array('SERVICE_ID' => $emptyService['ID'])
 					: array('ACTIVE' => 'N', 'SERVICE_ID' => 0);
 			}
 			else
@@ -167,18 +193,19 @@ class MailServicesTable extends Entity\DataManager
 		else
 		{
 			$icons = array(
-				'bitrix24'    => '/bitrix/images/mail/mailservice-icon/' . Localization\Loc::getMessage('mail_mailservice_bitrix24_icon'),
-				'gmail'       => '/bitrix/images/mail/mailservice-icon/post-gmail-icon.png',
-				'icloud'      => '/bitrix/images/mail/mailservice-icon/post-icloud-icon.png',
-				'outlook.com' => '/bitrix/images/mail/mailservice-icon/post-outlook-icon.png',
-				'office365'   => '/bitrix/images/mail/mailservice-icon/post-office360-icon.png',
-				'yahoo'       => '/bitrix/images/mail/mailservice-icon/post-yahoo-icon.png',
-				'aol'         => '/bitrix/images/mail/mailservice-icon/post-aol-icon.png',
-				'yandex'      => '/bitrix/images/mail/mailservice-icon/post-yandex-icon.png',
-				'mail.ru'     => '/bitrix/images/mail/mailservice-icon/post-mail-icon.png',
-				'ukr.net'     => '/bitrix/images/mail/mailservice-icon/post-ukrnet-icon.png',
-				'exchange'    => '/bitrix/images/mail/mailservice-icon/post-exchange-icon.png',
-				'other'       => '/bitrix/images/mail/mailservice-icon/post-imap-icon.png',
+				'bitrix24'	=> '/bitrix/images/mail/mailservice-icon/' . Localization\Loc::getMessage('mail_mailservice_bitrix24_icon'),
+				'gmail'	=> '/bitrix/images/mail/mailservice-icon/post-gmail-icon.svg',
+				'icloud'	=> '/bitrix/images/mail/mailservice-icon/post-icloud-icon.svg',
+				'outlook.com'	=> '/bitrix/images/mail/mailservice-icon/post-outlook-icon.svg',
+				'office365'	=> '/bitrix/images/mail/mailservice-icon/post-office360-icon.svg',
+				'yahoo'	=> '/bitrix/images/mail/mailservice-icon/post-yahoo-icon.svg',
+				'aol'	=> '/bitrix/images/mail/mailservice-icon/post-aol-icon.svg',
+				'yandex'	=> '/bitrix/images/mail/mailservice-icon/post-yandex-icon.svg',
+				'mail.ru'	=> '/bitrix/images/mail/mailservice-icon/post-mail-icon.svg',
+				'ukr.net'	=> '/bitrix/images/mail/mailservice-icon/post-ukrnet-icon.png',
+				'exchange'	=> '/bitrix/images/mail/mailservice-icon/post-imap-icon.svg',
+				'exchangeOnline'	=> '/bitrix/images/mail/mailservice-icon/post-exchange-icon.svg',
+				'other'	=> '/bitrix/images/mail/mailservice-icon/post-imap-icon.svg',
 			);
 
 			if ($icons[$serviceName])
@@ -186,7 +213,24 @@ class MailServicesTable extends Entity\DataManager
 		}
 	}
 
-	public static function delete($primary)
+	public static function getOAuthHelper($data)
+	{
+		switch ($data['NAME'])
+		{
+			case 'gmail':
+				return Helper\OAuth\Google::getInstance();
+			case 'yandex':
+				return Helper\OAuth\Yandex::getInstance();
+			case 'mail.ru':
+				return Helper\OAuth\Mailru::getInstance();
+			case 'office365':
+			case 'outlook.com':
+			case 'exchangeOnline':
+				return Helper\OAuth\Office365::getInstance();
+		}
+	}
+
+	public static function delete($primary): Entity\DeleteResult
 	{
 		$serviceForDelete = static::getByPrimary($primary)->fetch();
 		if (!$serviceForDelete)
@@ -203,7 +247,7 @@ class MailServicesTable extends Entity\DataManager
 		{
 			$serviceId = is_array($primary) ? $primary['ID'] : $primary;
 
-			if (in_array($serviceForDelete['SERVICE_TYPE'], array('controller', 'domain')))
+			if (in_array($serviceForDelete['SERVICE_TYPE'], array('controller', 'domain', 'crdomain')))
 			{
 				$mbData = array('ACTIVE' => 'N', 'SERVICE_ID' => 0);
 			}
@@ -271,6 +315,24 @@ class MailServicesTable extends Entity\DataManager
 			'SERVER' => array(
 				'data_type' => 'string',
 				'title'     => Localization\Loc::getMessage('mail_mailservice_entity_server_field'),
+				'save_data_modification' => function()
+				{
+					return array(
+						function ($value)
+						{
+							return mb_strtolower($value);
+						}
+					);
+				},
+				'fetch_data_modification' => function()
+				{
+					return array(
+						function ($value)
+						{
+							return mb_strtolower($value);
+						}
+					);
+				},
 			),
 			'PORT' => array(
 				'data_type' => 'integer',
@@ -300,6 +362,28 @@ class MailServicesTable extends Entity\DataManager
 			'SITE' => array(
 				'data_type' => 'Bitrix\Main\Site',
 				'reference' => array('=this.SITE_ID' => 'ref.LID'),
+			),
+			new Entity\StringField('SMTP_SERVER'),
+			new Entity\IntegerField('SMTP_PORT'),
+			new Entity\BooleanField('SMTP_LOGIN_AS_IMAP', [
+				'values' => array('N', 'Y'),
+				'default_value' => 'N',
+			]),
+			new Entity\BooleanField('SMTP_PASSWORD_AS_IMAP', [
+				'values' => array('N', 'Y'),
+				'default_value' => 'N',
+			]),
+			new ORM\Fields\BooleanField(
+				'SMTP_ENCRYPTION',
+				array(
+					'values' => array('N', 'Y'),
+				)
+			),
+			new ORM\Fields\BooleanField(
+				'UPLOAD_OUTGOING',
+				array(
+					'values' => array('N', 'Y'),
+				)
 			),
 		);
 	}

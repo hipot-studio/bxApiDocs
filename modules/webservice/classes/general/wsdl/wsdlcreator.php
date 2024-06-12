@@ -25,13 +25,13 @@ class CWSDLCreator
 	var $targetNamespace;
 	var $classes = array();
 
-	public function CWSDLCreator($serviceName, $serviceUrl = "", $targetNamespace = "")
+	public function __construct($serviceName, $serviceUrl = "", $targetNamespace = "")
 	{
 		global $APPLICATION;
 
 		$serviceName = str_replace(" ", "_", $serviceName);
-		if (!$serviceUrl) $serviceUrl = ($APPLICATION->IsHTTPS() ? "https" : "https")."://".$_SERVER["HTTP_HOST"].$APPLICATION->GetCurPage();
-		if (!$targetNamespace) $targetNamespace = ($APPLICATION->IsHTTPS() ? "https" : "https")."://".$_SERVER["HTTP_HOST"]."/";
+		if (!$serviceUrl) $serviceUrl = ($APPLICATION->IsHTTPS() ? "https" : "http")."://".$_SERVER["HTTP_HOST"].$APPLICATION->GetCurPage();
+		if (!$targetNamespace) $targetNamespace = ($APPLICATION->IsHTTPS() ? "https" : "http")."://".$_SERVER["HTTP_HOST"]."/";
 
 		$this->WSDLXML = new CXMLCreator("wsdl:definitions");
 		$this->WSDLXML->setAttribute("name", $serviceName);
@@ -51,12 +51,12 @@ class CWSDLCreator
 		$this->targetNamespace = $targetNamespace;
 	}
 
-	public function setClasses($classes)
+	function setClasses($classes)
 	{
 		$this->classes = $classes;
 	}
 
-	public function AddComplexDataType($name, $vars)
+	function AddComplexDataType($name, $vars)
 	{
 		global $xsd_simple_type;
 		if (isset($this->typensVars[$name]))
@@ -83,7 +83,7 @@ class CWSDLCreator
 		return true;
 	}
 
-	public function AddArrayType($pname, $param)
+	function AddArrayType($pname, $param)
 	{
 		if (isset($param["varType"])
 			and isset($this->typensVars[$param["varType"]]))
@@ -115,7 +115,7 @@ class CWSDLCreator
 		return false;
 	}
 
-	public function __createMessage ($name, $returnType = false, $params = array())
+	function __createMessage ($name, $returnType = false, $params = array())
 	{
 		global $xsd_simple_type;
 		$insoap = array();
@@ -184,7 +184,7 @@ class CWSDLCreator
 		$this->typensVars[$name."Response"] = $outsoap;
 	}
 
-	public function __createPortType ($portTypes)
+	function __createPortType ($portTypes)
 	{
 		if (is_array($portTypes)) {
 			foreach ($portTypes as $class=>$methods) {
@@ -215,7 +215,7 @@ class CWSDLCreator
 		}
 	}
 
-	public function __createBinding ($bindings)
+	function __createBinding ($bindings)
 	{
 		if (is_array($bindings)) {
 			$b = new CXMLCreator("wsdl:binding");
@@ -250,7 +250,7 @@ class CWSDLCreator
 		}
 	}
 
-	public function __createService ($services)
+	function __createService ($services)
 	{
 		if (is_array($services)) {
 			foreach ($services as $class=>$methods) {
@@ -265,7 +265,7 @@ class CWSDLCreator
 		}
 	}
 
-	public function createWSDL ()
+	function createWSDL ()
 	{
 		global $xsd_simple_type;
 		if (!$this->classes or !count($this->classes)) return 0;
@@ -396,17 +396,17 @@ class CWSDLCreator
 
 	}
 
-	public function getWSDL()
+	function getWSDL()
 	{
 		return $this->WSDL;
 	}
 
-	public function printWSDL()
+	function printWSDL()
 	{
 		print $this->WSDL;
 	}
 
-	public function saveWSDL ($targetFile, $overwrite = true)
+	function saveWSDL ($targetFile, $overwrite = true)
 	{
 		if (file_exists($targetFile) && $overwrite == false) {
 			$this->downloadWSDL();
@@ -417,13 +417,13 @@ class CWSDLCreator
 		}
 	}
 
-	public function downloadWSDL ()
+	function downloadWSDL ()
 	{
 		session_cache_limiter();
 		header("Content-Type: application/force-download");
 		header("Content-Disposition: attachment; filename=".$this->name.".wsdl");
 		header("Accept-Ranges: bytes");
-		header("Content-Length: " . (defined('BX_UTF') && BX_UTF == 1 && function_exists('mb_strlen') ? mb_strlen($this->WSDL, 'latin1') : strlen($this->WSDL)) );
+		header("Content-Length: " . (defined('BX_UTF') && BX_UTF == 1 && function_exists('mb_strlen')? mb_strlen($this->WSDL, 'latin1') : mb_strlen($this->WSDL)) );
 		$this->printWSDL();
 		die();
 	}

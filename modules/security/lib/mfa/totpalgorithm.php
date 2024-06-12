@@ -38,28 +38,6 @@ class TotpAlgorithm
 	 *  string newParams (Updated user params for this OtpAlgorithm)
 	 * ]
 	 */
-	
-	/**
-	* <p>Нестатический метод подтверждает введенные пользователем данные.</p>
-	*
-	*
-	* @param string $input  Введенные пользователем данные.
-	*
-	* @param string $params = '0:0' Синхронизированные пользовательские данные, сохраненные для
-	* алгоритма (см. <a
-	* href="http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/totpalgorithm/getsyncparameters.php">getSyncParameters</a> -
-	* <code>\Bitrix\Security\Mfa\TotpAlgorithm::getSyncParameters</code>).
-	*
-	* @param mixed $integer  Корректированное системное время.
-	*
-	* @param null $time = null 
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/totpalgorithm/verify.php
-	* @author Bitrix
-	*/
 	public function verify($input, $params = '0:0', $time = null)
 	{
 		$input = (string) $input;
@@ -129,21 +107,6 @@ class TotpAlgorithm
 	 * @throws \Bitrix\Main\ArgumentTypeException
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод генерирует URI для подключения мобильного аппарата с OTP на основании <i>KeyUriFormat</i>.</p>
-	*
-	*
-	* @param string $label  Пользовательская метка.
-	*
-	* @param array $opts = array() Дополнительные параметры URI .
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/totpalgorithm/generateuri.php
-	* @author Bitrix
-	*/
 	public function generateUri($label, array $opts = array())
 	{
 		$opts += array('period' => $this->getInterval());
@@ -180,21 +143,6 @@ class TotpAlgorithm
 	 * @throws ArgumentOutOfRangeException
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает синхронизированные пользовательские параметры для предоставленного ввода.</p>
-	*
-	*
-	* @param string $inputA  Первый код.
-	*
-	* @param null $inputB  Второй код, не использующийся для TOTP синхронизации.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/totpalgorithm/getsyncparameters.php
-	* @author Bitrix
-	*/
 	public function getSyncParameters($inputA, $inputB)
 	{
 		$offset = 0;
@@ -237,17 +185,6 @@ class TotpAlgorithm
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает описание алгоритма:<code>string type</code>, <code>string title</code>, <code>bool required_two_code</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/totpalgorithm/getdescription.php
-	* @author Bitrix
-	*/
 	public static function getDescription()
 	{
 		return array(

@@ -79,7 +79,7 @@ class CSecurityPhpConfigurationTest
 		),
 	);
 
-	static public function __construct()
+	public function __construct()
 	{
 		IncludeModuleLangFile(__FILE__);
 	}
@@ -90,12 +90,7 @@ class CSecurityPhpConfigurationTest
 	 */
 	protected function checkPhpEntropy()
 	{
-		if(self::isRunOnWin() && version_compare(phpversion(),"5.3.3","<"))
-		{
-			$this->addUnformattedDetailError("SECURITY_SITE_CHECKER_LOW_PHP_VERSION_ENTROPY", CSecurityCriticalLevel::MIDDLE);
-			return self::STATUS_FAILED;
-		}
-		elseif(!self::checkPhpEntropyConfigs())
+		if(!self::checkPhpEntropyConfigs())
 		{
 			$this->addUnformattedDetailError("SECURITY_SITE_CHECKER_PHP_ENTROPY", CSecurityCriticalLevel::MIDDLE);
 			return self::STATUS_FAILED;
@@ -152,7 +147,7 @@ class CSecurityPhpConfigurationTest
 	 */
 	protected function checkMbstringSubstitute()
 	{
-		if (extension_loaded('mbstring') && $this->isPhpConfVarEquals('mbstring.substitute_character', 'none'))
+		if ($this->isPhpConfVarEquals('mbstring.substitute_character', 'none'))
 			return self::STATUS_FAILED;
 
 		return self::STATUS_PASSED;
@@ -164,7 +159,7 @@ class CSecurityPhpConfigurationTest
 	 */
 	protected function isPhpConfVarOff($name)
 	{
-		return (intval(ini_get($name)) == 0 || strtolower(trim(ini_get($name))) == "off");
+		return (intval(ini_get($name)) == 0 || mb_strtolower(trim(ini_get($name))) == "off");
 	}
 
 	/**
@@ -174,7 +169,7 @@ class CSecurityPhpConfigurationTest
 	 */
 	protected function isPhpConfVarOn($name)
 	{
-		return (intval(ini_get($name)) == 1 || strtolower(trim(ini_get($name))) == "on");
+		return (intval(ini_get($name)) == 1 || mb_strtolower(trim(ini_get($name))) == "on");
 	}
 
 	/**

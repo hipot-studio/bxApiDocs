@@ -1,43 +1,22 @@
 <?
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Catalog;
 
 Loc::loadMessages(__FILE__);
 
-class CCatalogActionCtrlBasketProductFields extends CGlobalCondCtrlComplex
+class CCatalogActionCtrlBasketProductFields extends CCatalogCondCtrlIBlockFields
 {
+	public static function GetControlDescr()
+	{
+		$description = parent::GetControlDescr();
+		$description['SORT'] = 200;
+		return $description;
+	}
+
 	public static function GetControlShow($arParams)
 	{
-		$arControls = static::GetControls();
-		$arResult = array(
-			'controlgroup' => true,
-			'group' =>  false,
-			'label' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_CONTROLGROUP_LABEL'),
-			'showIn' => static::GetShowIn($arParams['SHOW_IN_GROUPS']),
-			'children' => array()
-		);
-		foreach ($arControls as &$arOneControl)
-		{
-			$arResult['children'][] = array(
-				'controlId' => $arOneControl['ID'],
-				'group' => false,
-				'label' => $arOneControl['LABEL'],
-				'showIn' => static::GetShowIn($arParams['SHOW_IN_GROUPS']),
-				'control' => array(
-					array(
-						'id' => 'prefix',
-						'type' => 'prefix',
-						'text' => $arOneControl['PREFIX'],
-					),
-					static::GetLogicAtom($arOneControl['LOGIC']),
-					static::GetValueAtom($arOneControl['JS_VALUE'])
-				),
-			);
-		}
-		if (isset($arOneControl))
-			unset($arOneControl);
-
-		return $arResult;
+		$result = parent::GetControlShow($arParams);
+		$result['label'] = Loc::getMessage('BT_MOD_SALE_ACT_IBLOCK_CONTROLGROUP_LABEL');
+		return $result;
 	}
 
 	public static function Generate($arOneCondition, $arParams, $arControl, $arSubs = false)
@@ -53,6 +32,7 @@ class CCatalogActionCtrlBasketProductFields extends CGlobalCondCtrlComplex
 		}
 		$boolError = !is_array($arControl);
 
+		$arValues = array();
 		if (!$boolError)
 		{
 			$arValues = static::Check($arOneCondition, $arOneCondition, $arControl, false);
@@ -163,13 +143,11 @@ class CCatalogActionCtrlBasketProductFields extends CGlobalCondCtrlComplex
 						}
 						break;
 				}
-				$existBasket = 'isset('.$arParams['BASKET_ROW'].'[\'CATALOG\'])';
+
 				$strResult = 'isset('.$strField.') && '.$strResult;
 				if ($useParent)
-				{
-					$strResult = '(isset('.$strParent.') ? (('.$strResult.')'.$arLogic['PARENT'].$strParentResult.') : ('.$strResult.'))';
-				}
-				$strResult = '('.$existBasket.' && '.$strResult.')';
+					$strResult = 'isset('.$strParent.') ? (('.$strResult.')'.$arLogic['PARENT'].$strParentResult.') : ('.$strResult.')';
+				$strResult = '('.$strResult.')';
 			}
 		}
 
@@ -193,403 +171,70 @@ class CCatalogActionCtrlBasketProductFields extends CGlobalCondCtrlComplex
 	 */
 	public static function GetControls($strControlID = false)
 	{
-		$vatList = array();
-		$vatIterator = Catalog\VatTable::getList(array('select' => array('ID', 'NAME', 'SORT'), 'order' => array('SORT' => 'ASC')));
-		while ($vat = $vatIterator->fetch())
+		$priceTypeList = array();
+		foreach (\CCatalogGroup::GetListArray() as $priceType)
 		{
-			$vat['ID'] = (int)$vat['ID'];
-			$vatList[$vat['ID']] = $vat['NAME'];
+			$priceType['ID'] = (int)$priceType['ID'];
+			$priceType['NAME_LANG'] = (string)$priceType['NAME_LANG'];
+			$priceTypeList[$priceType['ID']] = $priceType['NAME'].($priceType['NAME_LANG'] != '' ? ' ('.$priceType['NAME_LANG'].')' : '');
 		}
-		unset($vat, $vatIterator);
+		unset($priceType);
 
-		$arControlList = array(
-			'CondIBElement' => array(
-				'ID' => 'CondIBElement',
-				'FIELD' => 'ID',
-				'FIELD_TYPE' => 'int',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_ELEMENT_ID_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_ELEMENT_ID_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ)),
-				'JS_VALUE' => array(
-					'type' => 'multiDialog',
-					'popup_url' =>  '/bitrix/admin/cat_product_search_dialog.php',
-					'popup_params' => array(
-						'lang' => LANGUAGE_ID,
-						'caller' => 'discount_rules',
-						'allow_select_parent' => 'Y'
-					),
-					'param_id' => 'n',
-					'show_value' => 'Y'
-				),
-				'PHP_VALUE' => array(
-					'VALIDATE' => 'element'
-				)
+		$priceTypeLogic = array(
+			BT_COND_LOGIC_EQ => Loc::getMessage('BT_MOD_SALE_ACT_CATALOG_PRICE_TYPE_LOGIC_EQ_LABEL'),
+			BT_COND_LOGIC_NOT_EQ => Loc::getMessage('BT_MOD_SALE_ACT_CATALOG_PRICE_TYPE_LOGIC_NOT_EQ_LABEL'),
+		);
+
+		$controls = parent::GetControls(false);
+
+		$controls['CondCatalogPriceType'] = array(
+			'ID' => 'CondCatalogPriceType',
+			'PARENT' => false,
+			'EXECUTE_MODULE' => 'catalog',
+			'EXIST_HANDLER' => 'Y',
+			'MODULE_ID' => 'catalog',
+			'MODULE_ENTITY' => 'catalog',
+			'ENTITY' => 'PRICE',
+			'FIELD' => 'CATALOG_GROUP_ID',
+			'FIELD_TABLE' => 'CATALOG_GROUP_ID',
+			'FIELD_TYPE' => 'int',
+			'MULTIPLE' => 'N',
+			'GROUP' => 'N',
+			'LABEL' => Loc::getMessage('BT_MOD_SALE_ACT_CATALOG_PRICE_TYPE_LABEL'),
+			'PREFIX' => Loc::getMessage('BT_MOD_SALE_ACT_CATALOG_PRICE_TYPE_PREFIX'),
+			'LOGIC' => static::GetLogicEx(array_keys($priceTypeLogic), $priceTypeLogic),
+			'JS_VALUE' => array(
+				'type' => 'select',
+				'values' => $priceTypeList,
+				'multiple' => 'Y',
+				'show_value' => 'Y',
 			),
-			'CondIBIBlock' => array(
-				'ID' => 'CondIBIBlock',
-				'FIELD' => 'IBLOCK_ID',
-				'FIELD_TYPE' => 'int',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_IBLOCK_ID_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_IBLOCK_ID_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ)),
-				'JS_VALUE' => array(
-					'type' => 'popup',
-					'popup_url' =>  '/bitrix/admin/cat_iblock_search.php',
-					'popup_params' => array(
-						'lang' => LANGUAGE_ID,
-						'discount' => 'Y'
-					),
-					'param_id' => 'n',
-					'show_value' => 'Y',
-				),
-				'PHP_VALUE' => array(
-					'VALIDATE' => 'iblock'
-				),
-			),
-			'CondIBSection' => array(
-				'ID' => 'CondIBSection',
-				'PARENT' => false,
-				'FIELD' => 'SECTION_ID',
-				'FIELD_TYPE' => 'int',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_SECTION_ID_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_SECTION_ID_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ)),
-				'JS_VALUE' => array(
-					'type' => 'popup',
-					'popup_url' =>  '/bitrix/admin/cat_section_search.php',
-					'popup_params' => array(
-						'lang' => LANGUAGE_ID,
-						'discount' => 'Y'
-					),
-					'param_id' => 'n',
-					'show_value' => 'Y',
-				),
-				'PHP_VALUE' => array(
-					'VALIDATE' => 'section'
-				),
-			),
-			'CondIBCode' => array(
-				'ID' => 'CondIBCode',
-				'FIELD' => 'CODE',
-				'FIELD_TYPE' => 'string',
-				'FIELD_LENGTH' => 255,
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_CODE_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_CODE_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_CONT, BT_COND_LOGIC_NOT_CONT)),
-				'JS_VALUE' => array(
-					'type' => 'input',
-				),
-				'PHP_VALUE' => '',
-			),
-			'CondIBXmlID' => array(
-				'ID' => 'CondIBXmlID',
-				'FIELD' => 'XML_ID',
-				'FIELD_TYPE' => 'string',
-				'FIELD_LENGTH' => 255,
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_XML_ID_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_XML_ID_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_CONT, BT_COND_LOGIC_NOT_CONT)),
-				'JS_VALUE' => array(
-					'type' => 'input',
-				),
-				'PHP_VALUE' => '',
-			),
-			'CondIBName' => array(
-				'ID' => 'CondIBName',
-				'FIELD' => 'NAME',
-				'FIELD_TYPE' => 'string',
-				'FIELD_LENGTH' => 255,
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_NAME_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_NAME_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_CONT, BT_COND_LOGIC_NOT_CONT)),
-				'JS_VALUE' => array(
-					'type' => 'input'
-				),
-				'PHP_VALUE' => ''
-			),
-			'CondIBDateActiveFrom' => array(
-				'ID' => 'CondIBDateActiveFrom',
-				'FIELD' => 'DATE_ACTIVE_FROM',
-				'FIELD_TYPE' => 'datetime',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_DATE_ACTIVE_FROM_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_DATE_ACTIVE_FROM_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_GR, BT_COND_LOGIC_LS, BT_COND_LOGIC_EGR, BT_COND_LOGIC_ELS)),
-				'JS_VALUE' => array(
-					'type' => 'datetime',
-					'format' => 'datetime'
-				),
-				'PHP_VALUE' => ''
-			),
-			'CondIBDateActiveTo' => array(
-				'ID' => 'CondIBDateActiveTo',
-				'FIELD' => 'DATE_ACTIVE_TO',
-				'FIELD_TYPE' => 'datetime',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_DATE_ACTIVE_TO_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_DATE_ACTIVE_TO_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_GR, BT_COND_LOGIC_LS, BT_COND_LOGIC_EGR, BT_COND_LOGIC_ELS)),
-				'JS_VALUE' => array(
-					'type' => 'datetime',
-					'format' => 'datetime'
-				),
-				'PHP_VALUE' => ''
-			),
-			'CondIBSort' => array(
-				'ID' => 'CondIBSort',
-				'FIELD' => 'SORT',
-				'FIELD_TYPE' => 'int',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_SORT_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_SORT_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_GR, BT_COND_LOGIC_LS, BT_COND_LOGIC_EGR, BT_COND_LOGIC_ELS)),
-				'JS_VALUE' => array(
-					'type' => 'input'
-				),
-				'PHP_VALUE' => ''
-			),
-			'CondIBPreviewText' => array(
-				'ID' => 'CondIBPreviewText',
-				'FIELD' => 'PREVIEW_TEXT',
-				'FIELD_TYPE' => 'text',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_PREVIEW_TEXT_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_PREVIEW_TEXT_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_CONT, BT_COND_LOGIC_NOT_CONT)),
-				'JS_VALUE' => array(
-					'type' => 'input'
-				),
-				'PHP_VALUE' => ''
-			),
-			'CondIBDetailText' => array(
-				'ID' => 'CondIBDetailText',
-				'FIELD' => 'DETAIL_TEXT',
-				'FIELD_TYPE' => 'text',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_DETAIL_TEXT_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_DETAIL_TEXT_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_CONT, BT_COND_LOGIC_NOT_CONT)),
-				'JS_VALUE' => array(
-					'type' => 'input'
-				),
-				'PHP_VALUE' => ''
-			),
-			'CondIBDateCreate' => array(
-				'ID' => 'CondIBDateCreate',
-				'FIELD' => 'DATE_CREATE',
-				'FIELD_TYPE' => 'datetime',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_DATE_CREATE_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_DATE_CREATE_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_GR, BT_COND_LOGIC_LS, BT_COND_LOGIC_EGR, BT_COND_LOGIC_ELS)),
-				'JS_VALUE' => array(
-					'type' => 'datetime',
-					'format' => 'datetime'
-				),
-				'PHP_VALUE' => ''
-			),
-			'CondIBCreatedBy' => array(
-				'ID' => 'CondIBCreatedBy',
-				'FIELD' => 'CREATED_BY',
-				'FIELD_TYPE' => 'int',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_CREATED_BY_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_CREATED_BY_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ)),
-				'JS_VALUE' => array(
-					'type' => 'input'
-				),
-				'PHP_VALUE' => array(
-					'VALIDATE' => 'user'
-				)
-			),
-			'CondIBTimestampX' => array(
-				'ID' => 'CondIBTimestampX',
-				'FIELD' => 'TIMESTAMP_X',
-				'FIELD_TYPE' => 'datetime',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_TIMESTAMP_X_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_TIMESTAMP_X_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_GR, BT_COND_LOGIC_LS, BT_COND_LOGIC_EGR, BT_COND_LOGIC_ELS)),
-				'JS_VALUE' => array(
-					'type' => 'datetime',
-					'format' => 'datetime'
-				),
-				'PHP_VALUE' => ''
-			),
-			'CondIBModifiedBy' => array(
-				'ID' => 'CondIBModifiedBy',
-				'FIELD' => 'MODIFIED_BY',
-				'FIELD_TYPE' => 'int',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_MODIFIED_BY_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_MODIFIED_BY_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ)),
-				'JS_VALUE' => array(
-					'type' => 'input'
-				),
-				'PHP_VALUE' => array(
-					'VALIDATE' => 'user'
-				)
-			),
-			'CondIBTags' => array(
-				'ID' => 'CondIBTags',
-				'FIELD' => 'TAGS',
-				'FIELD_TYPE' => 'string',
-				'FIELD_LENGTH' => 255,
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_TAGS_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_TAGS_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_CONT, BT_COND_LOGIC_NOT_CONT)),
-				'JS_VALUE' => array(
-					'type' => 'input',
-				),
-				'PHP_VALUE' => '',
-			),
-			'CondCatQuantity' => array(
-				'ID' => 'CondCatQuantity',
-				'PARENT' => false,
-				'MODULE_ENTITY' => 'catalog',
-				'ENTITY' => 'PRODUCT',
-				'FIELD' => 'CATALOG_QUANTITY',
-				'FIELD_TABLE' => 'QUANTITY',
-				'FIELD_TYPE' => 'double',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_QUANTITY_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_QUANTITY_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_GR, BT_COND_LOGIC_LS, BT_COND_LOGIC_EGR, BT_COND_LOGIC_ELS)),
-				'JS_VALUE' => array(
-					'type' => 'input',
-				),
-			),
-			'CondCatWeight' => array(
-				'ID' => 'CondCatWeight',
-				'PARENT' => false,
-				'MODULE_ENTITY' => 'catalog',
-				'ENTITY' => 'PRODUCT',
-				'FIELD' => 'CATALOG_WEIGHT',
-				'FIELD_TABLE' => 'WEIGHT',
-				'FIELD_TYPE' => 'double',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_WEIGHT_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_WEIGHT_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_GR, BT_COND_LOGIC_LS, BT_COND_LOGIC_EGR, BT_COND_LOGIC_ELS)),
-				'JS_VALUE' => array(
-					'type' => 'input'
-				),
-				'PHP_VALUE' => ''
-			),
-			'CondCatVatID' => array(
-				'ID' => 'CondCatVatID',
-				'PARENT' => false,
-				'MODULE_ENTITY' => 'catalog',
-				'ENTITY' => 'PRODUCT',
-				'FIELD' => 'CATALOG_VAT_ID',
-				'FIELD_TABLE' => 'VAT_ID',
-				'FIELD_TYPE' => 'int',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_VAT_ID_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_VAT_ID_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ)),
-				'JS_VALUE' => array(
-					'type' => 'select',
-					'values' => $vatList
-				),
-				'PHP_VALUE' => array(
-					'VALIDATE' => 'list'
-				)
-			),
-			'CondCatVatIncluded' => array(
-				'ID' => 'CondCatVatIncluded',
-				'PARENT' => false,
-				'MODULE_ENTITY' => 'catalog',
-				'ENTITY' => 'PRODUCT',
-				'FIELD' => 'CATALOG_VAT_INCLUDED',
-				'FIELD_TABLE' => 'VAT_INCLUDED',
-				'FIELD_TYPE' => 'char',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_VAT_INCLUDED_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_VAT_INCLUDED_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ)),
-				'JS_VALUE' => array(
-					'type' => 'select',
-					'values' => array(
-						'Y' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_VAT_INCLUDED_VALUE_YES'),
-						'N' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_VAT_INCLUDED_VALUE_NO')
-					)
-				),
-				'PHP_VALUE' => array(
-					'VALIDATE' => 'list'
-				)
+			'PHP_VALUE' => array(
+				'VALIDATE' => 'list'
 			)
 		);
-		if (empty($vatList))
-		{
-			unset($arControlList['CondCatVatID']);
-			unset($arControlList['CondCatVatIncluded']);
-		}
-		foreach ($arControlList as &$control)
-		{
-			if (!isset($control['PARENT']))
-				$control['PARENT'] = true;
-			$control['EXIST_HANDLER'] = 'Y';
-			$control['MODULE_ID'] = 'catalog';
-			if (!isset($control['MODULE_ENTITY']))
-				$control['MODULE_ENTITY'] = 'iblock';
-			if (!isset($control['ENTITY']))
-				$control['ENTITY'] = 'ELEMENT';
-			if (!isset($control['FIELD_TABLE']))
-				$control['FIELD_TABLE'] = false;
-			$control['MULTIPLE'] = 'N';
-			$control['GROUP'] = 'N';
-		}
-		unset($control);
-		$arControlList['CondIBSection']['MULTIPLE'] = 'Y';
 
-		if ($strControlID === false)
-		{
-			return $arControlList;
-		}
-		elseif (isset($arControlList[$strControlID]))
-		{
-			return $arControlList[$strControlID];
-		}
-		else
-		{
-			return false;
-		}
+		return static::searchControl($controls, $strControlID);
+	}
+
+	/**
+	 * @return string|array
+	 */
+	public static function GetControlID()
+	{
+		$result = parent::GetControlID();
+		$result[] = 'CondCatalogPriceType';
+		return $result;
 	}
 }
 
-class CCatalogActionCtrlBasketProductProps extends CGlobalCondCtrlComplex
+class CCatalogActionCtrlBasketProductProps extends CCatalogCondCtrlIBlockProps
 {
-	public static function GetControlShow($arParams)
+	public static function GetControlDescr()
 	{
-		$arControls = static::GetControls();
-		$arResult = array();
-		$intCount = -1;
-		foreach ($arControls as &$arOneControl)
-		{
-			if (isset($arOneControl['SEP']) && 'Y' == $arOneControl['SEP'])
-			{
-				$intCount++;
-				$arResult[$intCount] = array(
-					'controlgroup' => true,
-					'group' =>  false,
-					'label' => $arOneControl['SEP_LABEL'],
-					'showIn' => static::GetShowIn($arParams['SHOW_IN_GROUPS']),
-					'children' => array()
-				);
-			}
-			$arLogic = static::GetLogicAtom($arOneControl['LOGIC']);
-			$arValue = static::GetValueAtom($arOneControl['JS_VALUE']);
-
-			$arResult[$intCount]['children'][] = array(
-				'controlId' => $arOneControl['ID'],
-				'group' => false,
-				'label' => $arOneControl['LABEL'],
-				'showIn' => static::GetShowIn($arParams['SHOW_IN_GROUPS']),
-				'control' => array(
-					array(
-						'id' => 'prefix',
-						'type' => 'prefix',
-						'text' => $arOneControl['PREFIX'],
-					),
-					$arLogic,
-					$arValue,
-				),
-			);
-		}
-		if (isset($arOneControl))
-			unset($arOneControl);
-
-		return $arResult;
+		$description = parent::GetControlDescr();
+		$description['SORT'] = 300;
+		return $description;
 	}
 
 	public static function Generate($arOneCondition, $arParams, $arControl, $arSubs = false)
@@ -686,7 +331,7 @@ class CCatalogActionCtrlBasketProductProps extends CGlobalCondCtrlComplex
 						}
 						break;
 				}
-				$strResult = '(isset('.$arParams['BASKET_ROW'].'[\'CATALOG\']) && isset('.$strField.') && '.$strResult.')';
+				$strResult = '(isset('.$strField.') && '.$strResult.')';
 			}
 		}
 
@@ -704,189 +349,6 @@ class CCatalogActionCtrlBasketProductProps extends CGlobalCondCtrlComplex
 		return $arControls;
 	}
 
-	/**
-	 * @param bool|string $strControlID
-	 * @return bool|array
-	 */
-	public static function GetControls($strControlID = false)
-	{
-		$arControlList = array();
-		$arIBlockList = array();
-		$rsIBlocks = CCatalog::GetList(array(), array(), false, false, array('IBLOCK_ID', 'PRODUCT_IBLOCK_ID'));
-		while ($arIBlock = $rsIBlocks->Fetch())
-		{
-			$arIBlock['IBLOCK_ID'] = (int)$arIBlock['IBLOCK_ID'];
-			$arIBlock['PRODUCT_IBLOCK_ID'] = (int)$arIBlock['PRODUCT_IBLOCK_ID'];
-			if ($arIBlock['IBLOCK_ID'] > 0)
-				$arIBlockList[$arIBlock['IBLOCK_ID']] = true;
-			if ($arIBlock['PRODUCT_IBLOCK_ID'] > 0)
-				$arIBlockList[$arIBlock['PRODUCT_IBLOCK_ID']] = true;
-		}
-		unset($arIBlock, $rsIBlocks);
-		if (!empty($arIBlockList))
-		{
-			$arIBlockList = array_keys($arIBlockList);
-			sort($arIBlockList);
-			foreach ($arIBlockList as &$intIBlockID)
-			{
-				$strName = CIBlock::GetArrayByID($intIBlockID, 'NAME');
-				if (false !== $strName)
-				{
-					$boolSep = true;
-					$rsProps = CIBlockProperty::GetList(array('SORT' => 'ASC', 'NAME' => 'ASC'), array('IBLOCK_ID' => $intIBlockID));
-					while ($arProp = $rsProps->Fetch())
-					{
-						if ('CML2_LINK' == $arProp['XML_ID'] || 'F' == $arProp['PROPERTY_TYPE'])
-							continue;
-						if ('L' == $arProp['PROPERTY_TYPE'])
-						{
-							$arProp['VALUES'] = array();
-							$rsPropEnums = CIBlockPropertyEnum::GetList(array('DEF' => 'DESC', 'SORT' => 'ASC'), array('PROPERTY_ID' => $arProp['ID']));
-							while ($arPropEnum = $rsPropEnums->Fetch())
-							{
-								$arProp['VALUES'][] = $arPropEnum;
-							}
-							if (empty($arProp['VALUES']))
-								continue;
-						}
-
-						$strFieldType = '';
-						$arLogic = array();
-						$arValue = array();
-						$arPhpValue = '';
-
-						$boolUserType = false;
-						if (isset($arProp['USER_TYPE']) && !empty($arProp['USER_TYPE']))
-						{
-							switch ($arProp['USER_TYPE'])
-							{
-								case 'DateTime':
-									$strFieldType = 'datetime';
-									$arLogic = static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_GR, BT_COND_LOGIC_LS, BT_COND_LOGIC_EGR, BT_COND_LOGIC_ELS));
-									$arValue = array(
-										'type' => 'datetime',
-										'format' => 'datetime'
-									);
-									$boolUserType = true;
-									break;
-								case 'Date':
-									$strFieldType = 'date';
-									$arLogic = static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_GR, BT_COND_LOGIC_LS, BT_COND_LOGIC_EGR, BT_COND_LOGIC_ELS));
-									$arValue = array(
-										'type' => 'datetime',
-										'format' => 'date'
-									);
-									$boolUserType = true;
-									break;
-								default:
-									$boolUserType = false;
-									break;
-							}
-						}
-
-						if (!$boolUserType)
-						{
-							switch ($arProp['PROPERTY_TYPE'])
-							{
-								case 'N':
-									$strFieldType = 'double';
-									$arLogic = static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_GR, BT_COND_LOGIC_LS, BT_COND_LOGIC_EGR, BT_COND_LOGIC_ELS));
-									$arValue = array('type' => 'input');
-									break;
-								case 'S':
-									$strFieldType = 'text';
-									$arLogic = static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ, BT_COND_LOGIC_CONT, BT_COND_LOGIC_NOT_CONT));
-									$arValue = array('type' => 'input');
-									break;
-								case 'L':
-									$strFieldType = 'int';
-									$arLogic = static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ));
-									$arValue = array(
-										'type' => 'select',
-										'values' => array(),
-									);
-									foreach ($arProp['VALUES'] as &$arOnePropValue)
-									{
-										$arValue['values'][$arOnePropValue['ID']] = $arOnePropValue['VALUE'];
-									}
-									if (isset($arOnePropValue))
-										unset($arOnePropValue);
-									$arPhpValue = array('VALIDATE' => 'list');
-									break;
-								case 'E':
-									$strFieldType = 'int';
-									$arLogic = static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ));
-									$arValue = array(
-										'type' => 'popup',
-										'popup_url' =>  '/bitrix/admin/iblock_element_search.php',
-										'popup_params' => array(
-											'lang' => LANGUAGE_ID,
-											'IBLOCK_ID' => $arProp['LINK_IBLOCK_ID'],
-											'discount' => 'Y'
-										),
-										'param_id' => 'n',
-									);
-									$arPhpValue = array('VALIDATE' => 'element');
-									break;
-								case 'G':
-									$strFieldType = 'int';
-									$arLogic = static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ));
-									$arValue = array(
-										'type' => 'popup',
-										'popup_url' =>  '/bitrix/admin/cat_section_search.php',
-										'popup_params' => array(
-											'lang' => LANGUAGE_ID,
-											'IBLOCK_ID' => $arProp['LINK_IBLOCK_ID'],
-											'discount' => 'Y'
-										),
-										'param_id' => 'n',
-									);
-									$arPhpValue = array('VALIDATE' => 'section');
-									break;
-							}
-						}
-						$arControlList['CondIBProp:'.$intIBlockID.':'.$arProp['ID']] = array(
-							'ID' => 'CondIBProp:'.$intIBlockID.':'.$arProp['ID'],
-							'PARENT' => false,
-							'EXIST_HANDLER' => 'Y',
-							'MODULE_ID' => 'catalog',
-							'MODULE_ENTITY' => 'iblock',
-							'ENTITY' => 'ELEMENT_PROPERTY',
-							'IBLOCK_ID' => $intIBlockID,
-							'FIELD' => 'PROPERTY_'.$arProp['ID'].'_VALUE',
-							'FIELD_TABLE' => $intIBlockID.':'.$arProp['ID'],
-							'FIELD_TYPE' => $strFieldType,
-							'MULTIPLE' => 'Y',
-							'GROUP' => 'N',
-							'SEP' => ($boolSep ? 'Y' : 'N'),
-							'SEP_LABEL' => ($boolSep ? str_replace(array('#ID#', '#NAME#'), array($intIBlockID, $strName), Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_PROP_LABEL')) : ''),
-							'LABEL' => $arProp['NAME'],
-							'PREFIX' => str_replace(array('#NAME#', '#IBLOCK_ID#', '#IBLOCK_NAME#'), array($arProp['NAME'], $intIBlockID, $strName), Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_ONE_PROP_PREFIX')),
-							'LOGIC' => $arLogic,
-							'JS_VALUE' => $arValue,
-							'PHP_VALUE' => $arPhpValue,
-						);
-
-						$boolSep = false;
-					}
-				}
-			}
-			unset($intIBlockID);
-		}
-
-		if ($strControlID === false)
-		{
-			return $arControlList;
-		}
-		elseif (isset($arControlList[$strControlID]))
-		{
-			return $arControlList[$strControlID];
-		}
-		else
-		{
-			return false;
-		}
-	}
 }
 
 class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
@@ -898,42 +360,42 @@ class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
 
 	public static function Generate($arOneCondition, $arParams, $arControl, $arSubs = false)
 	{
-		$mxResult = '';
+		$result = '';
 		if (is_string($arControl))
-		{
 			$arControl = static::GetControls($arControl);
-		}
 		$boolError = !is_array($arControl);
 
 		if (!$boolError)
 		{
 			$arControl['ATOMS'] = static::GetAtomsEx($arControl['ID'], true);
-			$arValues = static::CheckAtoms($arOneCondition, $arOneCondition, $arControl, true);
+			$arValues = static::CheckAtoms($arOneCondition, $arOneCondition, $arControl, false);
 			$boolError = ($arValues === false);
 		}
 
 		if (!$boolError)
 		{
-			$stringDataArray = 'array(' . implode(',', array_map('intval', (array)$arOneCondition['Value'])) . ')';
+			if (!is_array($arOneCondition['Value']))
+				$arOneCondition['Value'] = array($arOneCondition['Value']);
+			$stringDataArray = 'array('.implode(',', $arOneCondition['Value']).')';
 			$type = $arOneCondition['Type'];
 
-			$mxResult = static::GetClassName() . "::GenerateApplyCallableFilter('{$arControl['ID']}', {$stringDataArray}, '{$type}')";
+			$result = static::GetClassName() . "::GenerateApplyCallableFilter('{$arControl['ID']}', {$stringDataArray}, '{$type}')";
 		}
 
-		return $mxResult;
+		return $result;
 	}
 
 	public static function GetControls($strControlID = false)
 	{
-		$arAtoms = static::GetAtomsEx();
+		$arAtoms = static::GetAtomsEx(false, false);
 		$arControlList = array(
 			'GifterCondIBElement' => array(
 				'ID' => 'GifterCondIBElement',
 				'PARENT' => true,
 				'FIELD' => 'ID',
 				'FIELD_TYPE' => 'int',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_ELEMENT_ID_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_ELEMENT_ID_LABEL'),
+				'LABEL' => Loc::getMessage('BT_MOD_SALE_ACT_IBLOCK_ELEMENT_ID_LABEL'),
+				'PREFIX' => Loc::getMessage('BT_MOD_SALE_ACT_IBLOCK_ELEMENT_ID_LABEL'),
 				'ATOMS' => $arAtoms['GifterCondIBElement'],
 			),
 			'GifterCondIBSection' => array(
@@ -941,8 +403,8 @@ class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
 				'PARENT' => false,
 				'FIELD' => 'SECTION_ID',
 				'FIELD_TYPE' => 'int',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_SECTION_ID_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_SECTION_ID_LABEL'),
+				'LABEL' => Loc::getMessage('BT_MOD_SALE_ACT_IBLOCK_SECTION_ID_LABEL'),
+				'PREFIX' => Loc::getMessage('BT_MOD_SALE_ACT_IBLOCK_SECTION_ID_LABEL'),
 				'ATOMS' => $arAtoms['GifterCondIBSection'],
 			),
 		);
@@ -972,13 +434,12 @@ class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
 
 	public static function GetAtomsEx($strControlID = false, $boolEx = false)
 	{
-		$boolEx = (true === $boolEx ? true : false);
 		$atomList = array(
 			'GifterCondIBElement' => array(
 				'Type' => array(
 					'JS' => array(
 						'id' => 'Type',
-						'name' => 'logic',
+						'name' => 'Type',
 						'type' => 'select',
 						'values' => array(
 							CSaleDiscountActionApply::GIFT_SELECT_TYPE_ONE => Loc::getMessage('BT_SALE_ACT_GIFT_SELECT_TYPE_SELECT_ONE'),
@@ -1001,7 +462,7 @@ class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
 						'id' => 'Value',
 						'name' => 'Value',
 						'type' => 'multiDialog',
-						'popup_url' => '/bitrix/admin/cat_product_search_dialog.php',
+						'popup_url' => self::getAdminSection().'cat_product_search_dialog.php',
 						'popup_params' => array(
 							'lang' => LANGUAGE_ID,
 							'caller' => 'discount_rules',
@@ -1022,7 +483,7 @@ class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
 				'Type' => array(
 					'JS' => array(
 						'id' => 'Type',
-						'name' => 'logic',
+						'name' => 'Type',
 						'type' => 'select',
 						'values' => array(
 							CSaleDiscountActionApply::GIFT_SELECT_TYPE_ONE => Loc::getMessage('BT_SALE_ACT_GIFT_SELECT_TYPE_SELECT_ONE'),
@@ -1045,10 +506,11 @@ class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
 						'id' => 'Value',
 						'name' => 'Value',
 						'type' => 'popup',
-						'popup_url' => '/bitrix/admin/cat_section_search.php',
+						'popup_url' => self::getAdminSection().'iblock_section_search.php',
 						'popup_params' => array(
 							'lang' => LANGUAGE_ID,
-							'discount' => 'Y'
+							'discount' => 'Y',
+							'simplename' => 'Y'
 						),
 						'param_id' => 'n',
 						'show_value' => 'Y',
@@ -1063,37 +525,13 @@ class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
 			)
 		);
 
-		if(!$boolEx)
-		{
-			foreach($atomList as &$arOneAtom)
-			{
-				foreach ($arOneAtom as &$one)
-				{
-					$one = $one['JS'];
-				}
-				unset($one);
-			}
-			if(isset($arOneAtom))
-			{
-				unset($arOneAtom);
-			}
-		}
-		if ($strControlID === false)
-		{
-			return $atomList;
-		}
-		elseif (isset($atomList[$strControlID]))
-		{
-			return $atomList[$strControlID];
-		}
-
-		return false;
+		return static::searchControlAtoms($atomList, $strControlID, $boolEx);
 	}
 
 	public static function GenerateApplyCallableFilter($controlId, array $gifts, $type)
 	{
 		$gifts = array_combine($gifts, $gifts);
-		return function(&$row) use($controlId, $gifts, $type)
+		return function($row) use($controlId, $gifts, $type)
 		{
 			static $isApplied = false;
 			if($isApplied && $type === CSaleDiscountActionApply::GIFT_SELECT_TYPE_ONE)
@@ -1106,10 +544,10 @@ class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
 				case 'GifterCondIBElement':
 					$right =
 						(
-							(isset($row['CATALOG']['PARENT_ID']) && isset($gifts[$row['CATALOG']['PARENT_ID']])) ||
+							(isset($row['CATALOG']['PARENT_ID']) && array_intersect($gifts, (array)$row['CATALOG']['PARENT_ID'])) ||
 							(isset($row['CATALOG']['ID']) && isset($gifts[$row['CATALOG']['ID']]))
 						) &&
-						isset($row['QUANTITY']) && $row['QUANTITY'] == 1
+						isset($row['QUANTITY']) && $row['QUANTITY'] == \CCatalogGifterProduct::getRatio($row['CATALOG']['ID'])
 						&& isset($row['PRICE']) && $row['PRICE'] > 0
 					;
 					break;
@@ -1119,7 +557,7 @@ class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
 						(
 							isset($row['CATALOG']['SECTION_ID']) && array_intersect($gifts, (array)$row['CATALOG']['SECTION_ID'])
 						) &&
-						isset($row['QUANTITY']) && $row['QUANTITY'] == 1
+						isset($row['QUANTITY']) && $row['QUANTITY'] == \CCatalogGifterProduct::getRatio($row['CATALOG']['ID'])
 						&& isset($row['PRICE']) && $row['PRICE'] > 0
 					;
 
@@ -1133,6 +571,23 @@ class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
 
 			return $right;
 		};
+	}
+
+	public static function getRatio($productId)
+	{
+		if (!\Bitrix\Main\Loader::includeModule('catalog'))
+		{
+			return 1;
+		}
+
+		$ratio = \Bitrix\Catalog\MeasureRatioTable::getList(
+			array(
+				'select' => array('RATIO'),
+				'filter' => array('PRODUCT_ID' => $productId, '=IS_DEFAULT' => 'Y')
+			)
+		)->fetch();
+
+		return empty($ratio['RATIO'])? 1 : $ratio['RATIO'];
 	}
 
 	public static function ProvideGiftData(array $actionData)
@@ -1191,5 +646,14 @@ class CCatalogGifterProduct extends CGlobalCondCtrlAtoms
 		unset($product);
 
 		return $giftedProductIds;
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function getAdminSection()
+	{
+		//TODO: need use \CAdminPage::getSelfFolderUrl, but in general it is impossible now
+		return (defined('SELF_FOLDER_URL') ? SELF_FOLDER_URL : '/bitrix/admin/');
 	}
 }

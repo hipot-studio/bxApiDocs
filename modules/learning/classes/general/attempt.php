@@ -1,24 +1,13 @@
-<?
+<?php
+
 /**
  * @global $USER_FIELD_MANAGER CUserTypeManager
  */
 global $USER_FIELD_MANAGER;
 
-
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/index.php
- * @author Bitrix
- */
 abstract class CAllTestAttempt
 {
-	public static function CheckFields(&$arFields, $ID = false, $bCheckRights = true)
+	public function CheckFields(&$arFields, $ID = false, $bCheckRights = true)
 	{
 		global $DB, $APPLICATION;
 
@@ -70,7 +59,7 @@ abstract class CAllTestAttempt
 			return false;
 		}
 
-		if (is_set($arFields, "DATE_END") && strlen($arFields["DATE_END"])>0 && (!$DB->IsDate($arFields["DATE_END"], false, LANG, "FULL")))
+		if (is_set($arFields, "DATE_END") && $arFields["DATE_END"] <> '' && (!$DB->IsDate($arFields["DATE_END"], false, LANG, "FULL")))
 		{
 			$APPLICATION->ThrowException(GetMessage("LEARNING_BAD_DATE_END"), "ERROR_DATE_END");
 			return false;
@@ -87,64 +76,7 @@ abstract class CAllTestAttempt
 	}
 
 
-	
-	/**
-	* <p>Метод добавляет новую попытку. Метод нестатический.</p>
-	*
-	*
-	* @param array $arFields  Массив <b>Array("поле"=&gt;"значение", ...)</b>. Содержит        значения <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#attempt">всех полей</a> попытки.       
-	* Обязательные поля должны быть заполнены. <br>
-	*
-	* @return int <p>Метод возвращает идентификатор добавленной попытки, если
-	* добавление прошло  успешно. При возникновении ошибки метод
-	* вернёт <i>false</i>, а в исключениях  будут содержаться ошибки.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $TEST_ID = 32;
-	*     $STUDENT_ID = 3;
-	* 
-	*     $arFields = Array(
-	*         "TEST_ID" =&gt; $TEST_ID,
-	*         "STUDENT_ID" =&gt; $STUDENT_ID,
-	*         "STATUS" =&gt; "B"
-	*     );
-	* 
-	*     $attempt = new CTestAttempt;
-	*     $ID = $attempt-&gt;Add($arFields);
-	*     $success = ($ID&gt;0);
-	* 
-	*     if($success)
-	*     {
-	*         echo "Ok!";
-	*     }
-	*     else
-	*     {
-	*         if($e = $APPLICATION-&gt;GetException())
-	*             echo "Error: ".$e-&gt;GetString();
-	*     }
-	* 
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/index.php">CTestAttempt</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/update.php">Update</a> </li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#attempt">Поля попытки</a> </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/add.php
-	* @author Bitrix
-	*/
-	public static function Add($arFields)
+	public function Add($arFields)
 	{
 		global $DB, $USER_FIELD_MANAGER;
 
@@ -172,62 +104,6 @@ abstract class CAllTestAttempt
 	}
 
 
-	
-	/**
-	* <p>Метод изменяет параметры попытки с идентификатором ID. Метод нестатический.</p>
-	*
-	*
-	* @param int $intID  Идентификатор попытки
-	*
-	* @param array $arFields  Массив Array("поле"=&gt;"значение", ...). Содержит значения <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#attempt">всех полей</a> попытки.
-	* Обязательные        поля должны быть заполнены. <br>
-	*
-	* @return bool <p>Метод возвращает <i>true</i>, если изменение прошло успешно, при 
-	* возникновении ошибки метод вернёт <i>false</i>. При возникновении
-	* ошибки в  исключениях будет содержаться текст ошибки.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $ATTEMPT_ID = 596;
-	* 
-	*     $arFields = Array(
-	*         "STATUS" =&gt; "F",
-	*         "DATE_END" =&gt; ConvertTimeStamp(false,"FULL")
-	*     );
-	* 
-	*     $attempt = new CTestAttempt;
-	*     $ID = $attempt-&gt;Update($ATTEMPT_ID, $arFields);
-	*     $success = ($ID&gt;0);
-	* 
-	*     if($success)
-	*     {
-	*         echo "Ok!";
-	*     }
-	*     else
-	*     {
-	*         if($e = $APPLICATION-&gt;GetException())
-	*             echo "Error: ".$e-&gt;GetString();
-	*     }
-	* 
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#attempt">Поля попытки</a>  </li> <li>
-	* <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/index.php">CTestAttempt</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/add.php">Add</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/update.php
-	* @author Bitrix
-	*/
 	public function Update($ID, $arFields, $arParams = array())
 	{
 		global $DB, $USER_FIELD_MANAGER;
@@ -261,45 +137,6 @@ abstract class CAllTestAttempt
 	}
 
 
-	
-	/**
-	* <p>Метод удаляет попытку с идентификатором ID. Метод нестатический.</p>
-	*
-	*
-	* @param int $intID  Идентификатор попытки.
-	*
-	* @return bool <p>Метод возвращает <i>true</i> в случае успешного удаления попытки, в
-	* противном  случае возвращает <i>false</i>.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $COURSE_ID = 83;
-	*     $ATTEMPT_ID = 596;
-	* 
-	*     if (CCourse::GetPermission($COURSE_ID) &gt;= 'W')
-	*     {
-	*         @set_time_limit(0);
-	*         $DB-&gt;StartTransaction();
-	*         if (!CTestAttempt::Delete($ATTEMPT_ID))
-	*         {
-	*             echo "Error!";
-	*             $DB-&gt;Rollback();
-	*         }
-	*         else
-	*             $DB-&gt;Commit();
-	*     }
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		global $DB, $USER_FIELD_MANAGER;
@@ -337,7 +174,7 @@ abstract class CAllTestAttempt
 			$key = $res["FIELD"];
 			$cOperationType = $res["OPERATION"];
 
-			$key = strtoupper($key);
+			$key = mb_strtoupper($key);
 
 			switch ($key)
 			{
@@ -367,6 +204,18 @@ abstract class CAllTestAttempt
 				case "USER":
 					$arSqlSearch[] = GetFilterQuery("U.ID, U.LOGIN, U.NAME, U.LAST_NAME",$val);
 					break;
+
+				case "USER_LOGIN":
+					$arSqlSearch[] = CLearnHelper::FilterCreate("U.LOGIN", $val, "string_equal", $bFullJoin, $cOperationType);
+					break;
+
+				case "USER_NAME":
+					$arSqlSearch[] = CLearnHelper::FilterCreate("U.NAME", $val, "string_equal", $bFullJoin, $cOperationType);
+					break;
+
+				case "USER_LAST_NAME":
+					$arSqlSearch[] = CLearnHelper::FilterCreate("U.LAST_NAME", $val, "string_equal", $bFullJoin, $cOperationType);
+					break;
 			}
 		}
 
@@ -374,25 +223,6 @@ abstract class CAllTestAttempt
 	}
 
 
-	
-	/**
-	* <p>Возвращает попытку по идентификатору ID. Учитываются права доступа текущего  пользователя. Метод нестатический.</p>
-	*
-	*
-	* @param int $intID  Идентификатор попытки.
-	*
-	* @return CDBResult <p>Возвращается объект <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>.</p>
-	*
-	* <h4>See Also</h4> 
-	* <li> <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>  </li><li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#attempt">Поля попытки</a>  </li>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		if ((int) $ID > 0)
@@ -402,21 +232,6 @@ abstract class CAllTestAttempt
 	}
 
 
-	
-	/**
-	* <p>Возвращает количество попыток студента для указанного теста. Метод нестатический.</p>
-	*
-	*
-	* @param int $TEST_ID  Идентификатор теста.
-	*
-	* @param int $STUDENT_ID  Идентификатор студента.
-	*
-	* @return int <p>Число - количество попыток.</p>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/getcount.php
-	* @author Bitrix
-	*/
 	public static function GetCount($TEST_ID, $STUDENT_ID)
 	{
 		global $DB;
@@ -433,44 +248,6 @@ abstract class CAllTestAttempt
 	}
 
 
-	
-	/**
-	* <p>Проверяет, пройден ли тест. Метод нестатический.</p>
-	*
-	*
-	* @param int $ATTEMPT_ID  Идентификатор попытки.
-	*
-	* @param int $PERCENT  Количество процентов, необходимых для прохождения  теста.
-	*
-	* @return bool <p>Метод возвращает <i>true</i>, если тест пройден, иначе - <i>false</i>.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $ATTEMPT_ID = 563;
-	*     $PERCENT = 30;
-	* 
-	*     $complete = CTestAttempt::IsTestCompleted($ATTEMPT_ID, $PERCENT);
-	* 
-	*     if ($complete)
-	*         echo "Test has been completed";
-	*     else
-	*         echo "Try again";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/istestcompleted.php
-	* @author Bitrix
-	*/
 	public static function IsTestCompleted($ATTEMPT_ID, $PERCENT)
 	{
 		global $DB;
@@ -600,41 +377,6 @@ abstract class CAllTestAttempt
 	}
 
 
-	
-	/**
-	* <p>Переводит попытку в статус "Закончена" и пересчитывает набранные баллы. Метод нестатический.</p>
-	*
-	*
-	* @param int $ATTEMPT_ID  Идентификатор попытки.
-	*
-	* @return bool <p>Метод возвращает <i>true</i>, если операция выполнилась успешно,
-	* иначе  <i>false</i>.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $ATTEMPT_ID = 23;
-	*     $oTestAttempt = new CTestAttempt;
-	*     $success = $oTestAttempt-&gt;AttemptFinished($ATTEMPT_ID);
-	*     if ($success)
-	*         echo "Attempt has been finished";
-	*     else
-	*         echo "Error!";
-	* }
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul><li> <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/index.php">CTestAttempt</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/update.php">Update</a> </li></ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/attemptfinished.php
-	* @author Bitrix
-	*/
 	public function AttemptFinished($ATTEMPT_ID)
 	{
 		global $DB;
@@ -756,111 +498,6 @@ abstract class CAllTestAttempt
 	}
 
 
-	
-	/**
-	* <p>Возвращает список попыток по фильтру <b>arFilter</b>,  отсортированный в порядке <b>arOrder</b>. Учитываются права доступа  текущего пользователя. Метод статический.</p>
-	*
-	*
-	* @param array $arrayarOrder = Array("ID"=>"DESC") Массив для сортировки результата. Массив вида <i>array("поле       
-	* сортировки"=&gt;"направление сортировки" [, ...])</i>.<br>Поле для       
-	* сортировки может принимать значения:  			<ul> <li> <b>ID</b> -
-	* идентификатор попытки;  				</li> <li> <b>TEST_ID</b> - идентификатор теста; 
-	* 				</li> <li> <b>STUDENT_ID</b> - идентификатор студента ;  				</li> <li> <b>DATE_START</b> -
-	* дата начала попытки;  				</li> <li> <b>DATE_END</b> - дата окончания попытки; 
-	* 				</li> <li> <b>STATUS</b> - статус попытки;  				</li> <li> <b>SCORE</b> - количество
-	* баллов;  				</li> <li> <b>MAX_SCORE</b> - максимальное количество баллов;  				</li>
-	* <li> <b>COMPLETED</b> - тест пройден;  				</li> <li> <b>QUESTIONS</b> - количество
-	* вопросов;  				</li> <li> <b>USER_NAME</b> - имя студента ;  				</li> <li> <b>TEST_NAME</b> -
-	* название теста. </li> </ul>Направление сортировки        может принимать
-	* значения:  			<ul> <li> <b>asc</b> - по возрастанию;  				</li> <li> <b>desc</b> - по
-	* убыванию; </li> </ul>Необязательный. По умолчанию        сортируется по
-	* убыванию идентификатора попытки.
-	*
-	* @param array $arrayarFilter = Array() Массив вида <i>array("фильтруемое поле"=&gt;"значение фильтра" [,       
-	* ...])</i>. Фильтруемое поле может принимать значения:  			<ul> <li> <b>ID</b> -
-	* идентификатор попытки;  				</li> <li> <b>TEST_ID</b> - идентификатор теста; 
-	* 				</li> <li> <b>STUDENT_ID</b> - идентификатор студента;  				</li> <li> <b>SCORE</b> -
-	* количество баллов;  				</li> <li> <b>MAX_SCORE</b> - максимальное количество
-	* баллов;  				</li> <li> <b>QUESTIONS</b> - количество вопросов;  				</li> <li> <b>STATUS</b> -
-	* статус попытки (B - тестирование началось, D - тест          прерван, F -
-	* тест закончен.);  				</li> <li> <b>COMPLETED</b> - тест пройден (Y|N);  				</li> <li>
-	* <b>DATE_START</b> - дата начала попытки;  				</li> <li> <b>DATE_END</b> - дата окончания
-	* попытки;  				</li> <li> <b>USER</b> - пользователь (возможны сложные условия
-	* по полям          пользователя ID, LOGIN, NAME, LAST_NAME);  				</li> <li> <b>MIN_PERMISSION</b> -
-	* минимальный уровень доcтупа. По умолчанию          "R". Список прав
-	* доступа см. в <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccourse/setpermission.php">CCourse::SetPermission</a>. 
-	* 				</li> <li> <b>CHECK_PERMISSIONS</b> - проверять уровень доступа. Если         
-	* установлено значение "N" - права доступа не проверяются. </li>
-	* </ul>Перед        названием фильтруемого поля может указать тип
-	* фильтрации:  			<ul> <li>"!" - не равно  				</li> <li>"&lt;" - меньше  				</li> <li>"&lt;=" -
-	* меньше либо равно  				</li> <li>"&gt;" - больше  				</li> <li>"&gt;=" - больше либо
-	* равно </li> </ul> <br>"<i>значения фильтра</i>" -        одиночное значение или
-	* массив.<br><br>Необязательный. По умолчанию записи        не
-	* фильтруются.
-	*
-	* @param array $arrayarSelect = Array() Массив полей записей, которые будут возвращены методом.<br><br>
-	* Значение по умолчанию - пустой массив array() - означает, что будут
-	* возвращены все поля основной таблицы запроса.
-	*
-	* @param array $arrayarNavParams = Array() Массив настроек постраничной навигации.
-	*
-	* @return CDBResult <p>Возвращается объект <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $TEST_ID = 45;
-	*     $res = CTestAttempt::GetList(
-	*         Array("ID" =&gt; "ASC"), 
-	*         Array("TEST_ID" =&gt; $TEST_ID)
-	*     );
-	* 
-	*     while ($arAttempt = $res-&gt;GetNext())
-	*     {
-	*         echo "Attempt ID:".$arAttempt["ID"]."; Date start: ".$arAttempt["DATE_START"]."; Test name: ".$arAttempt["TEST_NAME"]."&lt;br&gt;";
-	*     }
-	* }
-	* 
-	* ?&gt;
-	* 
-	* &lt;?
-	* 
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $TEST_ID = 45;
-	*     $STUDENT_ID = 3;
-	* 
-	*     $res = CTestAttempt::GetList(
-	*         Array("SCORE" =&gt; "DESC"), 
-	*         Array("CHECK_PERMISSIONS" =&gt; "N", "TEST_ID" =&gt; $TEST_ID, "STUDENT_ID" =&gt; $STUDENT_ID)
-	*     );
-	* 
-	*     while ($arAttempt = $res-&gt;GetNext())
-	*     {
-	*         echo "Attempt ID:".$arAttempt["ID"]."; Date start: ".$arAttempt["DATE_START"]."; Test name: ".$arAttempt["TEST_NAME"]."&lt;br&gt;";
-	*     }
-	* }
-	* 
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>  </li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/index.php">CTestAttempt</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/getbyid.php">GetByID</a>  </li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#attempt">Поля попытки</a> </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder=array(), $arFilter=array(), $arSelect = array(), $arNavParams = array())
 	{
 		global $DB, $USER, $USER_FIELD_MANAGER;
@@ -899,7 +536,7 @@ abstract class CAllTestAttempt
 		$arSqlSelect = array();
 		foreach($arSelect as $field)
 		{
-			$field = strtoupper($field);
+			$field = mb_strtoupper($field);
 			if(array_key_exists($field, $arFields))
 				$arSqlSelect[$field] = $arFields[$field]." AS ".$field;
 		}
@@ -914,11 +551,11 @@ abstract class CAllTestAttempt
 		$strSqlSearch = "";
 		$arSqlSearchCnt = count($arSqlSearch);
 		for($i=0; $i<$arSqlSearchCnt; $i++)
-			if(strlen($arSqlSearch[$i])>0)
+			if($arSqlSearch[$i] <> '')
 				$strSqlSearch .= " AND ".$arSqlSearch[$i]." ";
 
 		$r = $obUserFieldsSql->GetFilter();
-		if(strlen($r)>0)
+		if($r <> '')
 			$strSqlSearch .= " AND (".$r.") ";
 
 		$bCheckPerm = 'ORPHANED VAR';
@@ -929,10 +566,11 @@ abstract class CAllTestAttempt
 		if (!is_array($arOrder))
 			$arOrder = Array();
 
+		$arSqlOrder = [];
 		foreach($arOrder as $by=>$order)
 		{
-			$by = strtolower($by);
-			$order = strtolower($order);
+			$by = mb_strtolower($by);
+			$order = mb_strtolower($order);
 			if ($order!="asc")
 				$order = "desc";
 
@@ -1031,57 +669,13 @@ abstract class CAllTestAttempt
 		}
 		else
 		{
-			return "(unix_timestamp(A.DATE_END)-unix_timestamp(A.DATE_START)) / A.QUESTIONS";
+			return "round((unix_timestamp(IFNULL(A.DATE_END, A.DATE_START))-unix_timestamp(A.DATE_START)) / A.QUESTIONS)";
 		}
 	}
 
-	
-	/**
-	* <p>Создаёт план вопросов для указанной попытки. Метод статический.</p>
-	*
-	*
-	* @param int $ATTEMPT_ID  Идентификатор попытки.
-	*
-	* @return bool <p>Метод возвращает <i>true</i>, если создание плана вопросов прошло
-	* успешно.  При возникновении ошибки метод вернёт <i>false</i>, а в
-	* исключениях будут  содержаться ошибки.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $ATTEMPT_ID = 563;
-	* 
-	*     $success = CTestAttempt::CreateAttemptQuestions($ATTEMPT_ID);
-	* 
-	*     if($success)
-	*     {
-	*         echo "Questions have been created.";
-	*     }
-	*     else
-	*     {
-	*         if($ex = $APPLICATION-&gt;GetException())
-	*             echo "Error: ".$ex-&gt;GetString();
-	*     }
-	* 
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul><li> <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/ctestresult/index.php">CTestResult</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ctestresult/add.php">Add</a> </li></ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ctestattempt/createattemptquestions.php
-	* @author Bitrix
-	*/
 	public static function CreateAttemptQuestions($ATTEMPT_ID)
 	{
-		global $APPLICATION, $DB, $DBType;
+		global $APPLICATION, $DB;
 
 		$ATTEMPT_ID = intval($ATTEMPT_ID);
 
@@ -1250,26 +844,12 @@ abstract class CAllTestAttempt
 			$strSql = '';
 			if ($rsQuestions)
 			{
-				if ($DBType === 'oracle')
-				{
-					while ($arQuestion = $rsQuestions->fetch())
-					{
-						$strSql .= " \nINTO b_learn_test_result (ATTEMPT_ID, QUESTION_ID) "
-							. "VALUES (" . $ATTEMPT_ID . ", " . (int) $arQuestion['QUESTION_ID'] . ")";
-					}
+				$arSqlSubstrings = array();
+				while ($arQuestion = $rsQuestions->fetch())
+					$arSqlSubstrings[] = "(" . $ATTEMPT_ID . ", " . $arQuestion['QUESTION_ID'] . ")";
 
-					if ($strSql !== '')
-						$strSql = "INSERT ALL " . $strSql . " \nSELECT 1 FROM DUAL";
-				}
-				else
-				{
-					$arSqlSubstrings = array();
-					while ($arQuestion = $rsQuestions->fetch())
-						$arSqlSubstrings[] = "(" . $ATTEMPT_ID . ", " . $arQuestion['QUESTION_ID'] . ")";
-
-					if ( ! empty($arSqlSubstrings) )
-						$strSql = "INSERT INTO b_learn_test_result (ATTEMPT_ID, QUESTION_ID) VALUES " . implode(",\n", $arSqlSubstrings);
-				}
+				if ( ! empty($arSqlSubstrings) )
+					$strSql = "INSERT INTO b_learn_test_result (ATTEMPT_ID, QUESTION_ID) VALUES " . implode(",\n", $arSqlSubstrings);
 
 				if ($strSql !== '')
 				{
@@ -1297,42 +877,16 @@ abstract class CAllTestAttempt
 
 			$clauseAllChildsLessons = CLearnHelper::SQLClauseForAllSubLessons ($courseLessonId);
 
-			if ($DBType === 'mysql')
-			{
-				$strSql =
-				"SELECT Q.ID AS QUESTION_ID
-				FROM b_learn_lesson L
-				INNER JOIN b_learn_question Q ON L.ID = Q.LESSON_ID
-				WHERE (L.ID IN (" . $clauseAllChildsLessons . ") OR (L.ID = " . ($courseLessonId + 0) . ") )
-				AND Q.ACTIVE = 'Y' "
-				. ($arTest["INCLUDE_SELF_TEST"] != "Y" ? "AND Q.SELF = 'N' " : "").
-				"ORDER BY " . ($arTest["RANDOM_QUESTIONS"] == "Y" ? CTest::GetRandFunction() : "L.SORT, Q.SORT, L.ID ").
-				($arTest["QUESTIONS_AMOUNT"] > 0 ? "LIMIT " . ($arTest["QUESTIONS_AMOUNT"] + 0) : "");
+			$strSql =
+			"SELECT Q.ID AS QUESTION_ID
+			FROM b_learn_lesson L
+			INNER JOIN b_learn_question Q ON L.ID = Q.LESSON_ID
+			WHERE (L.ID IN (" . $clauseAllChildsLessons . ") OR (L.ID = " . ($courseLessonId + 0) . ") )
+			AND Q.ACTIVE = 'Y' "
+			. ($arTest["INCLUDE_SELF_TEST"] != "Y" ? "AND Q.SELF = 'N' " : "").
+			"ORDER BY " . ($arTest["RANDOM_QUESTIONS"] == "Y" ? CTest::GetRandFunction() : "L.SORT, Q.SORT, L.ID ").
+			($arTest["QUESTIONS_AMOUNT"] > 0 ? "LIMIT " . ($arTest["QUESTIONS_AMOUNT"] + 0) : "");
 
-			}
-			elseif ($DBType === 'mssql')
-			{
-				$strSql =
-				"SELECT " . ($arTest["QUESTIONS_AMOUNT"] > 0 ? "TOP " . ($arTest["QUESTIONS_AMOUNT"] + 0) . " " :"") . " Q.ID AS QUESTION_ID
-				FROM b_learn_lesson L
-				INNER JOIN b_learn_question Q ON L.ID = Q.LESSON_ID
-				WHERE (L.ID IN (" . $clauseAllChildsLessons . ") OR (L.ID = " . ($courseLessonId + 0) . ") )
-				AND Q.ACTIVE = 'Y' "
-				. ($arTest["INCLUDE_SELF_TEST"] != "Y" ? "AND Q.SELF = 'N' " : "").
-				"ORDER BY ".($arTest["RANDOM_QUESTIONS"] == "Y" ? CTest::GetRandFunction() : "L.SORT, Q.SORT, L.ID");
-			}
-			else	// oracle
-			{
-				$strSql =
-				"SELECT Q.ID AS QUESTION_ID
-				FROM b_learn_lesson L
-				INNER JOIN b_learn_question Q ON L.ID = Q.LESSON_ID
-				WHERE (L.ID IN (" . $clauseAllChildsLessons . ") OR (L.ID = " . ($courseLessonId + 0) . ") )
-				AND Q.ACTIVE = 'Y' "
-				. ($arTest["QUESTIONS_AMOUNT"] > 0 ? "AND ROWNUM <= ".$arTest["QUESTIONS_AMOUNT"]." " :"").
-				($arTest["INCLUDE_SELF_TEST"] != "Y" ? "AND Q.SELF = 'N' " : "").
-				"ORDER BY ".($arTest["RANDOM_QUESTIONS"] == "Y" ? CTest::GetRandFunction() : "L.SORT, Q.SORT, L.ID");
-			}
 
 			$success = false;
 			$rsQuestions = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
@@ -1340,26 +894,12 @@ abstract class CAllTestAttempt
 			$strSql = '';
 			if ($rsQuestions)
 			{
-				if ($DBType === 'oracle')
-				{
-					while ($arQuestion = $rsQuestions->fetch())
-					{
-						$strSql .= " \nINTO b_learn_test_result (ATTEMPT_ID, QUESTION_ID) "
-							. "VALUES (" . $ATTEMPT_ID . ", " . (int) $arQuestion['QUESTION_ID'] . ")";
-					}
+				$arSqlSubstrings = array();
+				while ($arQuestion = $rsQuestions->fetch())
+					$arSqlSubstrings[] = "(" . $ATTEMPT_ID . ", " . $arQuestion['QUESTION_ID'] . ")";
 
-					if ($strSql !== '')
-						$strSql = "INSERT ALL " . $strSql . " \nSELECT 1 FROM DUAL";
-				}
-				else
-				{
-					$arSqlSubstrings = array();
-					while ($arQuestion = $rsQuestions->fetch())
-						$arSqlSubstrings[] = "(" . $ATTEMPT_ID . ", " . $arQuestion['QUESTION_ID'] . ")";
-
-					if ( ! empty($arSqlSubstrings) )
-						$strSql = "INSERT INTO b_learn_test_result (ATTEMPT_ID, QUESTION_ID) VALUES " . implode(",\n", $arSqlSubstrings);
-				}
+				if ( ! empty($arSqlSubstrings) )
+					$strSql = "INSERT INTO b_learn_test_result (ATTEMPT_ID, QUESTION_ID) VALUES " . implode(",\n", $arSqlSubstrings);
 
 				if ($strSql !== '')
 				{

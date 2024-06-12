@@ -50,7 +50,7 @@ class EbayXMLer
 		return $dom->saveXML($productNode);
 	}
 
-	static public function isChildExist(\DOMNode $node, $childName)
+	public function isChildExist(\DOMNode $node, $childName)
 	{
 		$result = false;
 		$children = $node->childNodes;

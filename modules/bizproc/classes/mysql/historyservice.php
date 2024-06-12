@@ -4,12 +4,12 @@ include_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/bizproc/classes/general/
 class CBPHistoryService
 	extends CBPAllHistoryService
 {
-	static public function __construct()
+	public function __construct()
 	{
 		parent::__construct();
 	}
 
-	static public function AddHistory($arFields)
+	public function AddHistory($arFields)
 	{
 		global $DB;
 
@@ -34,7 +34,7 @@ class CBPHistoryService
 		return $ID;
 	}
 
-	static public function UpdateHistory($id, $arFields)
+	public function UpdateHistory($id, $arFields)
 	{
 		global $DB;
 

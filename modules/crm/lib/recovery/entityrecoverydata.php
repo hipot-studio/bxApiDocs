@@ -13,7 +13,7 @@ class EntityRecoveryData
 	protected $title = '';
 	protected $data = null;
 
-	protected static $ENABLE_COMPRESSION = null;
+	protected static $enableCompression = null;
 
 	const CONTEXT_UNDEFINED = 0;
 	const CONTEXT_DEDUPLICATION = 1;
@@ -168,7 +168,7 @@ class EntityRecoveryData
 	{
 		if($this->ID <= 0)
 		{
-			throw new Main\InvalidOperationException("Could not delete EntityRecoveryData. The entity ID is not fond.");
+			throw new Main\InvalidOperationException("Could not delete EntityRecoveryData. The entity ID is not found.");
 		}
 		self::deleteByID($this->ID);
 	}
@@ -204,15 +204,15 @@ class EntityRecoveryData
 				}
 			}
 		}
-		$this->data = $data !== '' ? unserialize($data) : array();
+		$this->data = $data !== '' ? unserialize($data, ['allowed_classes' => false]) : array();
 	}
 	protected static function isCompressionEnabled()
 	{
-		if(self::$ENABLE_COMPRESSION === null)
+		if(self::$enableCompression === null)
 		{
-			self::$ENABLE_COMPRESSION = function_exists('gzcompress') && function_exists('gzuncompress');
+			self::$enableCompression = function_exists('gzcompress') && function_exists('gzuncompress');
 		}
 
-		return self::$ENABLE_COMPRESSION;
+		return self::$enableCompression;
 	}
 }

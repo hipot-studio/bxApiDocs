@@ -2,6 +2,8 @@
 
 namespace Bitrix\Main\UrlPreview\Parser;
 
+use Bitrix\Main\Context;
+use Bitrix\Main\Text\Encoding;
 use Bitrix\Main\UrlPreview\HtmlDocument;
 use Bitrix\Main\UrlPreview\Parser;
 
@@ -13,32 +15,16 @@ class SchemaOrg extends Parser
 	/** @var  array */
 	protected $schemaMetadata = array();
 
+	protected $documentEncoding;
+
 	/**
 	 * Parses HTML document's Schema.org metadata.
 	 *
 	 * @param HtmlDocument $document
 	 */
-	
-	/**
-	* <p>Нестатический метод парсит метаданные HTML документа по стандарту <b>Schema.org</b>.</p>
-	*
-	*
-	* @param mixed $Bitrix  
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $UrlPreview  
-	*
-	* @param HtmlDocument $document  
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/urlpreview/parser/schemaorg/handle.php
-	* @author Bitrix
-	*/
 	public function handle(HtmlDocument $document)
 	{
+		$this->documentEncoding = $document->getEncoding();
 		if(strpos($document->getHtml(), 'itemscope') === false)
 			return null;
 
@@ -48,17 +34,17 @@ class SchemaOrg extends Parser
 		if(!$this->getSchemaMetadata())
 			return null;
 
-		if(strlen($document->getTitle()) == 0 && isset($this->schemaMetadata['name']))
+		if($document->getTitle() == '' && isset($this->schemaMetadata['name']))
 		{
 			$document->setTitle($this->schemaMetadata['name']);
 		}
 
-		if(strlen($document->getDescription()) == 0 && isset($this->schemaMetadata['description']))
+		if($document->getDescription() == '' && isset($this->schemaMetadata['description']))
 		{
 			$document->setDescription($this->schemaMetadata['description']);
 		}
 
-		if(strlen($document->getImage()) == 0 && isset($this->schemaMetadata['image']))
+		if($document->getImage() == '' && isset($this->schemaMetadata['image']))
 		{
 			$document->setImage($this->schemaMetadata['image']);
 		}
@@ -141,8 +127,10 @@ class SchemaOrg extends Parser
 				break;
 		}
 
+		// dom extension's internal encoding is always utf-8
+		$result = Encoding::convertEncoding($result, 'utf-8', $this->documentEncoding);
 		$result = trim($result);
-		return (strlen($result) > 0 ? $result : null);
+		return ($result <> '' ? $result : null);
 	}
 
 	/**
@@ -152,7 +140,7 @@ class SchemaOrg extends Parser
 	{
 		if($node->hasAttribute('itemprop') && !$node->hasAttribute('itemscope'))
 		{
-			$propertyName = strtolower($node->getAttribute('itemprop'));
+			$propertyName = mb_strtolower($node->getAttribute('itemprop'));
 			$propertyValue = $this->getSchemaPropertyValue($node);
 			$this->schemaMetadata[$propertyName] = $propertyValue;
 		}
@@ -189,7 +177,7 @@ class SchemaOrg extends Parser
 		$this->dom = new \DOMDocument();
 		// Prevents parsing errors bubbling
 		libxml_use_internal_errors(true);
-		$result = $this->dom->loadHTML('<?xml encoding="'.$document->getEncoding().'">'.$document->getHtml());
+		$result = $this->dom->loadHTML('<?xml encoding="'.$document->getEncoding().'">'.$document->getHtml(), LIBXML_COMPACT);
 
 		return $result;
 	}

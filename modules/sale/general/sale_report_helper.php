@@ -35,6 +35,84 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 	protected static $reportCurrencyId = null;
 	protected static $siteCurrencyId = '';
 
+	private static function localUpdate_17_5_0()
+	{
+		$res = \Bitrix\Report\ReportTable::getList(
+			array(
+				'select' => array('ID', 'TITLE', 'SETTINGS'),
+				'filter' => array(
+					'=OWNER_ID' => 'sale_SaleProduct',
+					'=CREATED_BY' => $GLOBALS['USER']->GetID(),
+					'=MARK_DEFAULT' => 7
+				)
+			)
+		);
+		while ($row = $res->fetch())
+		{
+			$id = (int)$row['ID'];
+			$title = $row['TITLE'];
+			if (is_string($title) && $title <> '')
+			{
+				$titleMsg = GetMessage('SALE_REPORT_DEFAULT_MOST_EXPECTED_GOODS');
+				if ($title === $titleMsg && is_string($row['SETTINGS']) && $row['SETTINGS'] <> '')
+				{
+					$settings = unserialize($row['SETTINGS'], ['allowed_classes' => false]);
+					if (is_array($settings))
+					{
+						$needUpdate = false;
+						$aliasMap = array(0 => 0, 1 => 1, 2 => 5, 3 => 8);
+						foreach ($aliasMap as $aliasNum => $msgNum)
+						{
+							if (isset($settings['select'][$aliasNum]['alias'])
+								&& is_string($settings['select'][$aliasNum]['alias'])
+								&& $settings['select'][$aliasNum]['alias'] <> '')
+							{
+								$alias = $settings['select'][$aliasNum]['alias'];
+								$aliasMsg = GetMessage('SALE_REPORT_DEFAULT_MOST_EXPECTED_GOODS_ALIAS_'.$msgNum);
+								if (is_string($aliasMsg) && $aliasMsg <> '' && $alias !== $aliasMsg)
+								{
+									$settings['select'][$aliasNum]['alias'] = $aliasMsg;
+									$needUpdate = true;
+								}
+							}
+						}
+						if ($needUpdate)
+						{
+							Bitrix\Report\ReportTable::update($id, array('SETTINGS' => serialize($settings)));
+						}
+					}
+				}
+			}
+		}
+
+		CUserOptions::DeleteOption('sale', '~SALE_REPORT_NEED_UPDATE_17_5_0');
+	}
+
+	private static function localUpdate()
+	{
+		$updateCodes = array('~SALE_REPORT_NEED_UPDATE_17_5_0');
+
+		$needUpdate = array();
+		foreach ($updateCodes as $updateCode)
+		{
+			if (\Bitrix\Main\Config\Option::get('sale', $updateCode, 'N') === 'Y'
+				|| CUserOptions::GetOption('sale', $updateCode) === 'Y')
+			{
+				$needUpdate[] = $updateCode;
+			}
+		}
+
+		foreach ($needUpdate as $updateCode)
+		{
+			switch ($updateCode)
+			{
+				case '~SALE_REPORT_NEED_UPDATE_17_5_0';
+					self::localUpdate_17_5_0();
+					break;
+			}
+		}
+	}
+
 	public static function init()
 	{
 		IncludeModuleLangFile(__FILE__);
@@ -42,6 +120,8 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 		if (!self::$fInit)
 		{
 			self::$fInit = true;
+
+			self::localUpdate();
 
 			self::$siteCookieId = md5('SALE_REPORT_SITE_ID');
 
@@ -116,13 +196,13 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 			unset($row, $result);
 
 			// Initializing list of pay systems of orders.
-			$result = Bitrix\Sale\PaySystemTable::getList(array(
-				'select' => array('ID', 'LID', 'NAME')/*,
+			$result = \Bitrix\Sale\PaySystem\Manager::getList(array(
+				'select' => array('ID', 'NAME')/*,
 				'filter' => array('=ACTIVE', 'Y')*/
 			));
 			while ($row = $result->fetch())
 			{
-				self::$paySystemList[$row['ID']] = array('value' => $row['NAME'], 'site_id' => $row['LID']);
+				self::$paySystemList[$row['ID']] = array('value' => $row['NAME'], 'site_id' => '');
 			}
 			unset($row, $result);
 
@@ -152,7 +232,7 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 				self::$catalogs[] = $ibRow;
 				$path = array();
 				$curLevel = $prevLevel = 0;
-				$sections = CIBlockSection::GetTreeList(array('=IBLOCK_ID'=>$ibRow['IBLOCK_ID']));
+				$sections = CIBlockSection::GetTreeList(array('=IBLOCK_ID'=>$ibRow['IBLOCK_ID']), array('ID', 'IBLOCK_ID', 'NAME', 'DEPTH_LEVEL', 'LEFT_MARGIN'));
 				$row = null;
 				while($row = $sections->GetNext())
 				{
@@ -184,15 +264,14 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 
 			// Getting currencies
 			$obj = new CCurrency();
-			$by = ''; $order = '';
-			$result = $obj->GetList($by, $order, LANGUAGE_ID);
+			$result = $obj->GetList('', '', LANGUAGE_ID);
 			while($row = $result->Fetch())
 			{
 				self::$currencies[$row['CURRENCY']] = array(
 					'name' => $row['FULL_NAME']
 				);
 			}
-			unset($row, $result, $obj, $by, $order);
+			unset($row, $result, $obj);
 
 			// Getting types of prices
 			$obj = new CCatalogGroup();
@@ -380,7 +459,7 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 
 	public static function getHelperByOwner($ownerId)
 	{
-		return 'CSaleReport'.substr($ownerId,strlen(SALE_REPORT_OWNER_ID)+1).'Helper';
+		return 'CSaleReport'.mb_substr($ownerId, mb_strlen(SALE_REPORT_OWNER_ID) + 1).'Helper';
 	}
 
 	public static function getDefaultReports()
@@ -528,27 +607,28 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 					)
 				),
 				array(
-					'owner' => 'sale_SaleBasket',
+					'owner' => 'sale_SaleProduct',
 					'title' => GetMessage('SALE_REPORT_DEFAULT_MOST_EXPECTED_GOODS'),
 					'description' => GetMessage('SALE_REPORT_DEFAULT_MOST_EXPECTED_GOODS_DESCR'),
 					'mark_default' => 7,
-					'settings' => unserialize('a:7:{s:6:"entity";s:10:"SaleBasket";s:6:"period";a:2:{s:4:"type";'.
-						's:5:"month";s:5:"value";N;}s:6:"select";a:4:{i:1;a:1:{s:4:"name";s:10:"PRODUCT_ID";}i:2;'.
-						'a:1:{s:4:"name";s:4:"NAME";}i:5;a:3:{s:4:"name";s:11:"N_SUBSCRIBE";s:5:"alias";'.
-						's:15:"xxxxxxxxxxxxxxx";s:4:"aggr";s:3:"SUM";}i:8;a:3:{s:4:"name";s:5:"PRICE";s:5:"alias";'.
-						's:15:"xxxxxxxxxxxxxxx";s:4:"aggr";s:3:"SUM";}}s:6:"filter";a:1:{i:0;a:8:{i:0;a:5:{s:4:"type";'.
-						's:5:"field";s:4:"name";s:9:"SUBSCRIBE";s:7:"compare";s:5:"EQUAL";s:5:"value";s:4:"true";'.
+					'settings' => unserialize('a:10:{s:6:"entity";s:29:"Bitrix\\Sale\\Internals\\Product";'.
+						's:6:"period";a:2:{s:4:"type";s:5:"month";s:5:"value";N;}s:6:"select";a:4:{i:0;a:2:{'.
+						's:4:"name";s:2:"ID";s:5:"alias";s:9:"xxxxxxxxx";}i:1;a:2:{s:4:"name";s:4:"NAME";s:5:"alias";'.
+						's:19:"xxxxxxxxxxxxxxxxxxx";}i:2;a:3:{s:4:"name";s:31:"SUBSCRIPTIONS_IN_PERIOD_BY_SHOP";'.
+						's:5:"alias";s:15:"xxxxxxxxxxxxxxx";s:4:"aggr";s:3:"SUM";}i:3;a:3:{s:4:"name";'.
+						's:22:"PRICE_IN_SITE_CURRENCY";s:5:"alias";s:15:"xxxxxxxxxxxxxxx";s:4:"aggr";s:3:"SUM";}}'.
+						's:6:"filter";a:1:{i:0;a:6:{i:0;a:5:{s:4:"type";s:5:"field";s:4:"name";'.
+						's:31:"SUBSCRIPTIONS_IN_PERIOD_BY_SHOP";s:7:"compare";s:7:"GREATER";s:5:"value";s:1:"0";'.
 						's:10:"changeable";s:1:"0";}i:1;a:5:{s:4:"type";s:5:"field";s:4:"name";s:4:"NAME";'.
-						's:7:"compare";s:8:"CONTAINS";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}i:2;'.
-						'a:5:{s:4:"type";s:5:"field";s:4:"name";s:33:"PRODUCT.GoodsSection:PRODUCT.SECT";'.
-						's:7:"compare";s:5:"EQUAL";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}i:3;a:5:{s:4:"type";'.
-						's:5:"field";s:4:"name";s:8:"DATE_UPD";s:7:"compare";s:16:"GREATER_OR_EQUAL";s:5:"value";'.
-						's:0:"";s:10:"changeable";s:1:"1";}i:4;a:5:{s:4:"type";s:5:"field";s:4:"name";s:8:"DATE_UPD";'.
-						's:7:"compare";s:13:"LESS_OR_EQUAL";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}i:5;'.
-						'a:5:{s:4:"type";s:5:"field";s:4:"name";s:5:"PRICE";s:7:"compare";s:16:"GREATER_OR_EQUAL";'.
-						's:5:"value";s:0:"";s:10:"changeable";s:1:"1";}i:6;a:5:{s:4:"type";s:5:"field";s:4:"name";'.
-						's:5:"PRICE";s:7:"compare";s:13:"LESS_OR_EQUAL";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";'.
-						'}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";i:5;s:9:"sort_type";s:4:"DESC";s:5:"limit";N;}'
+						's:7:"compare";s:8:"CONTAINS";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}i:2;a:5:{'.
+						's:4:"type";s:5:"field";s:4:"name";s:51:"IBLOCK.SectionElement:IBLOCK_ELEMENT.IBLOCK_SECTION";'.
+						's:7:"compare";s:5:"EQUAL";s:5:"value";a:1:{i:0;s:0:"";}s:10:"changeable";s:1:"1";}i:3;a:5:{'.
+						's:4:"type";s:5:"field";s:4:"name";s:22:"PRICE_IN_SITE_CURRENCY";s:7:"compare";'.
+						's:16:"GREATER_OR_EQUAL";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}i:4;a:5:{s:4:"type";'.
+						's:5:"field";s:4:"name";s:22:"PRICE_IN_SITE_CURRENCY";s:7:"compare";s:13:"LESS_OR_EQUAL";'.
+						's:5:"value";s:0:"";s:10:"changeable";s:1:"1";}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";i:0;'.
+						's:9:"sort_type";s:3:"ASC";s:5:"limit";N;s:12:"red_neg_vals";b:0;s:13:"grouping_mode";b:0;'.
+						's:5:"chart";N;}'
 					)
 				),
 				array(
@@ -590,7 +670,7 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:5:"alias";s:9:"xxxxxxxxx";s:4:"aggr";s:12:"GROUP_CONCAT";s:8:"grouping";'.
 						'b:1;}i:8;a:2:{s:4:"name";s:15:"NAME_WITH_IDENT";s:8:"grouping";b:1;}i:12;'.
 						'a:3:{s:4:"name";s:34:"ARRIVED_PRODUCTS_IN_PERIOD_BY_SHOP";s:5:"alias";s:6:"xxxxxx";'.
-						's:17:"grouping_subtotal";b:1;}i:6;a:3:{s:4:"name";s:32:"SALED_PRODUCTS_IN_PERIOD_BY_SHOP";'.
+						's:17:"grouping_subtotal";b:1;}i:6;a:3:{s:4:"name";s:35:"CONSUMED_PRODUCTS_IN_PERIOD_BY_SHOP";'.
 						's:5:"alias";s:6:"xxxxxx";s:17:"grouping_subtotal";b:1;}i:3;a:3:{s:4:"name";'.
 						's:8:"QUANTITY";s:5:"alias";s:16:"xxxxxxxx xxxxxxx";s:17:"grouping_subtotal";'.
 						'b:1;}i:11;a:1:{s:4:"name";s:22:"PRICE_IN_SITE_CURRENCY";}}s:6:"filter";'.
@@ -800,8 +880,10 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 				}
 				if ($version === '12.0.0' && $report['mark_default'] === 7)
 				{
-					$report['settings']['select'][5]['alias'] = GetMessage('SALE_REPORT_DEFAULT_MOST_EXPECTED_GOODS_ALIAS_5');
-					$report['settings']['select'][8]['alias'] = GetMessage('SALE_REPORT_DEFAULT_MOST_EXPECTED_GOODS_ALIAS_8');
+					$report['settings']['select'][0]['alias'] = GetMessage('SALE_REPORT_DEFAULT_MOST_EXPECTED_GOODS_ALIAS_0');
+					$report['settings']['select'][1]['alias'] = GetMessage('SALE_REPORT_DEFAULT_MOST_EXPECTED_GOODS_ALIAS_1');
+					$report['settings']['select'][2]['alias'] = GetMessage('SALE_REPORT_DEFAULT_MOST_EXPECTED_GOODS_ALIAS_5');
+					$report['settings']['select'][3]['alias'] = GetMessage('SALE_REPORT_DEFAULT_MOST_EXPECTED_GOODS_ALIAS_8');
 				}
 				if ($version === '12.0.0' && $report['mark_default'] === 8)
 				{
@@ -854,26 +936,8 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 					$report['settings']['select'][26]['alias'] = GetMessage('SALE_REPORT_DEFAULT_GOODS_INVENTORIES_BY_STORE__12_5_1_ALIAS_26');
 				}
 
-				// remove reports, which not work in MSSQL
-				global $DBType;
-				if (ToUpper($DBType) === 'MSSQL')
-				{
-					if (
-						($version === '12.0.0' && in_array($report['mark_default'], array(4, 5, 6, 7, 11, 12)))
-						||
-						($version === '12.5.0' && in_array($report['mark_default'], array(11, 12)))
-					)
-					{
-						unset($vreports[$num]);
-					}
-				}
-
 				// remove old reports
-				if (
-					(ToUpper($DBType) !== 'MSSQL' && $version === '12.0.0' && in_array($report['mark_default'], array(2, 3)))
-					||
-					(ToUpper($DBType) === 'MSSQL' && $version === '12.0.0' && in_array($report['mark_default'], array(3)))
-				)
+				if ($version === '12.0.0' && in_array($report['mark_default'], array(2, 3)))
 				{
 					unset($vreports[$num]);
 				}
@@ -998,7 +1062,7 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 		}
 		return $html;
 	}
-	
+
 	public static function calculateInReportCurrency($value)
 	{
 		$res = $value;
@@ -1524,7 +1588,7 @@ class CSaleReportSaleOrderHelper extends CBaseSaleReportHelper
 							),
 							true))
 				{
-					$userDef = substr($elem['name'], 0, -11);
+					$userDef = mb_substr($elem['name'], 0, -11);
 					$href = array('pattern' => '/bitrix/admin/sale_buyers_profile.php?USER_ID=#'.$userDef.'.ID#&lang='.LANG);
 				}
 			}
@@ -1820,7 +1884,7 @@ class CSaleReportUserHelper extends CBaseSaleReportHelper
 		{
 			if ($k === 'LOGIC') continue;
 			if (is_array($v)) return(self::fieldInFilter($v, $fieldPathStr));
-			else if (strpos($k, $fieldPathStr) !== false) return true;
+			else if (mb_strpos($k, $fieldPathStr) !== false) return true;
 		}
 		return false;
 	}
@@ -1831,7 +1895,7 @@ class CSaleReportUserHelper extends CBaseSaleReportHelper
 		$bResult = false;
 		foreach (array_keys($select) as $k)
 		{
-			if (strpos($k, '_SALE_ORDER_USER_') !== false)
+			if (mb_strpos($k, '_SALE_ORDER_USER_') !== false)
 			{
 				$bResult = true;
 				break;
@@ -2441,7 +2505,7 @@ class CSaleReportSaleBasketHelper extends CBaseSaleReportHelper
 							{
 								if (is_string($filterValue) && $filterValue[0] == 'c')
 								{
-									$iblockFilterValue[] = intval(substr($filterValue, 1));
+									$iblockFilterValue[] = intval(mb_substr($filterValue, 1));
 									// The filter on a section is deleted if the filter only according
 									// to the catalog is necessary
 									unset($arFilterValues[$l]);
@@ -2596,10 +2660,6 @@ class CSaleReportSaleBasketHelper extends CBaseSaleReportHelper
 		else if ($k === 'SALE_BASKET_FUSER_USER_EMAIL')
 		{
 			if (is_null($v) || empty($v) || $v == '&nbsp;') unset($row['__HREF_'.$k]);
-		}
-		else if ($k === 'SALE_BASKET_ORDER_PERSON_TYPE_ID')
-		{
-			$v = self::$personTypes[$v]['NAME'];
 		}
 
 
@@ -2769,7 +2829,7 @@ class CSaleReportSaleBasketHelper extends CBaseSaleReportHelper
 					),
 					true))
 				{
-					$userDef = substr($elem['name'], 0, -11);
+					$userDef = mb_substr($elem['name'], 0, -11);
 					$href = array('pattern' => '/bitrix/admin/sale_buyers_profile.php?USER_ID=#'.$userDef.'.ID#&lang='.LANG);
 				}
 			}
@@ -2836,6 +2896,7 @@ class CSaleReportSaleProductHelper extends CBaseSaleReportHelper
 	private static $goodsQuantityFields = array(
 		'QUANTITY',
 		'SALED_PRODUCTS_IN_PERIOD_BY_SHOP',
+		'CONSUMED_PRODUCTS_IN_PERIOD_BY_SHOP',
 		'ARRIVED_PRODUCTS_IN_PERIOD_BY_SHOP',
 		'ARRIVED_PRODUCTS_IN_PERIOD_BY_STORE',
 		'EXPENSE_PRODUCTS_IN_PERIOD_BY_STORE',
@@ -2892,9 +2953,11 @@ class CSaleReportSaleProductHelper extends CBaseSaleReportHelper
 			'PURCHASING_PRICE_IN_SITE_CURRENCY',
 			'SUMMARY_PRICE_IN_SITE_CURRENCY',
 			'VIEWS_IN_PERIOD_BY_SHOP',
+			'SUBSCRIPTIONS_IN_PERIOD_BY_SHOP',
 			'ORDERS_IN_PERIOD_BY_SHOP',
 			'CONVERSION',
 			'SALED_PRODUCTS_IN_PERIOD_BY_SHOP',
+			'CONSUMED_PRODUCTS_IN_PERIOD_BY_SHOP',
 			'ARRIVED_PRODUCTS_IN_PERIOD_BY_SHOP',
 			'ARRIVED_PRODUCTS_IN_PERIOD_BY_STORE',
 			'EXPENSE_PRODUCTS_IN_PERIOD_BY_STORE',
@@ -2921,11 +2984,20 @@ class CSaleReportSaleProductHelper extends CBaseSaleReportHelper
 		$entity->addField(array(
 			'data_type' => 'integer',
 			'expression' => array(
-				'(SELECT  SUM(1) FROM b_catalog_product, b_sale_viewed_product WHERE %s = b_sale_viewed_product.PRODUCT_ID
-				AND b_catalog_product.ID = b_sale_viewed_product.PRODUCT_ID
-				AND b_sale_viewed_product.DATE_VISIT '.$sqlTimeInterval.' AND b_sale_viewed_product.LID = \''.$DB->ForSql(self::getDefaultSiteId()).'\')', 'ID'
+				'(SELECT  SUM(b_catalog_viewed_product.VIEW_COUNT) FROM b_catalog_product, b_catalog_viewed_product WHERE %s = b_catalog_viewed_product.ELEMENT_ID
+				AND b_catalog_product.ID = b_catalog_viewed_product.ELEMENT_ID
+				AND b_catalog_viewed_product.DATE_VISIT '.$sqlTimeInterval.' AND b_catalog_viewed_product.SITE_ID = \''.$DB->ForSql(self::getDefaultSiteId()).'\')', 'ID'
 			)
 		), 'VIEWS_IN_PERIOD_BY_SHOP');
+
+		$entity->addField(array(
+			'data_type' => 'integer',
+			'expression' => array(
+				'(SELECT  SUM(1) FROM b_catalog_subscribe WHERE b_catalog_subscribe.ITEM_ID = %s
+				AND b_catalog_subscribe.DATE_FROM '.$sqlTimeInterval.'
+				AND b_catalog_subscribe.SITE_ID = \''.$DB->ForSql(self::getDefaultSiteId()).'\')', 'ID'
+			)
+		), 'SUBSCRIPTIONS_IN_PERIOD_BY_SHOP');
 
 		$entity->addField(array(
 			'data_type' => 'integer',
@@ -2952,6 +3024,21 @@ class CSaleReportSaleProductHelper extends CBaseSaleReportHelper
 								AND b_sale_order.PAYED = \'Y\'
 								AND b_sale_order.DEDUCTED = \'Y\'
 								AND b_sale_order.DATE_INSERT '.$sqlTimeInterval.'
+								AND b_sale_basket.LID = \''.$DB->ForSql(self::getDefaultSiteId()).'\')', 0),
+				'ID'
+			)
+		), 'SALED_PRODUCTS_IN_PERIOD_BY_SHOP');
+
+		$entity->addField(array(
+			'data_type' => 'integer',
+			'expression' => array(
+				$DB->isNull('(SELECT  SUM(b_sale_basket.QUANTITY)
+							FROM b_sale_basket
+								INNER JOIN b_sale_order ON b_sale_basket.ORDER_ID = b_sale_order.ID
+							WHERE b_sale_basket.PRODUCT_ID = %s
+								AND b_sale_order.PAYED = \'Y\'
+								AND b_sale_order.DEDUCTED = \'Y\'
+								AND b_sale_order.DATE_INSERT '.$sqlTimeInterval.'
 								AND b_sale_basket.LID = \''.$DB->ForSql(self::getDefaultSiteId()).'\')', 0).'+'.
 				$DB->isNull('(SELECT  SUM(b_catalog_docs_element.AMOUNT)
 							FROM b_catalog_store_docs
@@ -2962,7 +3049,7 @@ class CSaleReportSaleProductHelper extends CBaseSaleReportHelper
 								AND b_catalog_docs_element.ELEMENT_ID = %s)', 0),
 				'ID', 'ID'
 			)
-		), 'SALED_PRODUCTS_IN_PERIOD_BY_SHOP');
+		), 'CONSUMED_PRODUCTS_IN_PERIOD_BY_SHOP');
 
 		$entity->addField(array(
 			'data_type' => 'float',
@@ -3159,7 +3246,7 @@ class CSaleReportSaleProductHelper extends CBaseSaleReportHelper
 							{
 								if (is_string($filterValue) && $filterValue[0] == 'c')
 								{
-									$iblockFilterValue[] = intval(substr($filterValue, 1));
+									$iblockFilterValue[] = intval(mb_substr($filterValue, 1));
 									// The filter on a section is deleted if the filter only according
 									// to the catalog is necessary
 									unset($arFilterValues[$l]);
@@ -3210,7 +3297,7 @@ class CSaleReportSaleProductHelper extends CBaseSaleReportHelper
 
 	public static function beforeViewDataQuery(&$select, &$filter, &$group, &$order, &$limit, &$options, &$runtime = null)
 	{
-		global $DB, $DBType;
+		global $DB;
 
 		if (function_exists('___dbCastIntToChar') !== true)
 		{
@@ -3238,13 +3325,13 @@ class CSaleReportSaleProductHelper extends CBaseSaleReportHelper
 					$runtime[$fieldName] = array(
 						'data_type' => 'string',
 						'expression' => array('
-				(SELECT '.$DB->Concat(___dbCastIntToChar($DBType,'b_catalog_price.PRICE'), '\' \'', 'b_catalog_price.CURRENCY').'
+				(SELECT '.$DB->Concat(___dbCastIntToChar('mysql','b_catalog_price.PRICE'), '\' \'', 'b_catalog_price.CURRENCY').'
 				FROM b_catalog_price
 					LEFT JOIN b_catalog_group ON b_catalog_group.ID = b_catalog_price.CATALOG_GROUP_ID
 				WHERE   b_catalog_price.PRODUCT_ID = %s
 					AND b_catalog_group.ID = '.$id.'
 					AND ( b_catalog_price.quantity_from <= 1 OR b_catalog_price.quantity_from IS NULL )
-					AND ( b_catalog_price.quantity_to >= 1 OR b_catalog_price.quantity_to IS NULL ))',
+					AND ( b_catalog_price.quantity_to >= 1 OR b_catalog_price.quantity_to IS NULL ) LIMIT 1)',
 							'ID'
 						),
 						'view_column' => array(
@@ -3371,15 +3458,15 @@ class CSaleReportSaleProductHelper extends CBaseSaleReportHelper
 		// runtime fields which align right
 		if (self::$bUsePriceTypesColumns)
 		{
-			if (strpos($k, 'PRICE_TYPE_') === 0 && is_numeric(substr($k, 11))) $cInfo['align'] = 'right';
+			if (mb_strpos($k, 'PRICE_TYPE_') === 0 && is_numeric(mb_substr($k, 11))) $cInfo['align'] = 'right';
 		}
 
 		// Formatting fields of price types
 		if (preg_match('/[A-Za-z_]*PRICE_TYPE_[0-9]+$/', $k) && !empty($v) && $v !== '&nbsp;')
 		{
 			$v = trim($v);
-			$spacePos = strpos(trim($v), ' ');
-			$v = number_format(doubleval(substr($v, 0, $spacePos)), 2, '.', ' ').substr($v, $spacePos);
+			$spacePos = mb_strpos(trim($v), ' ');
+			$v = number_format(doubleval(mb_substr($v, 0, $spacePos)), 2, '.', ' ').mb_substr($v, $spacePos);
 		}
 	}
 
@@ -3438,8 +3525,8 @@ class CSaleReportSaleProductHelper extends CBaseSaleReportHelper
 				if (preg_match('/[A-Za-z_]*PRICE_TYPE_[0-9]+$/', $k) && !empty($v) && $v !== '&nbsp;')
 				{
 					$v = trim($v);
-					$spacePos = strpos($v, ' ');
-					$v = number_format(doubleval(substr($v, 0, $spacePos)), 2, '.', ' ').substr($v, $spacePos);
+					$spacePos = mb_strpos($v, ' ');
+					$v = number_format(doubleval(mb_substr($v, 0, $spacePos)), 2, '.', ' ').mb_substr($v, $spacePos);
 				}
 			}
 		}

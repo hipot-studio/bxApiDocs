@@ -3,18 +3,24 @@
 namespace Bitrix\Sale\Sender;
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Loader;
+
+if (!Loader::includeModule('sender'))
+{
+	return;
+}
 
 Loc::loadMessages(__FILE__);
 
 class TriggerBasketForgotten extends \Bitrix\Sender\TriggerConnectorClosed
 {
 
-	static public function getName()
+	public function getName()
 	{
 		return Loc::getMessage('sender_trigger_basket_forgotten_name');
 	}
 
-	static public function getCode()
+	public function getCode()
 	{
 		return "basket_forgotten";
 	}
@@ -102,7 +108,7 @@ class TriggerBasketForgotten extends \Bitrix\Sender\TriggerConnectorClosed
 		return $this->recipient;
 	}
 
-	static public function getFetchDataModifier($fields)
+	public function getFetchDataModifier($fields)
 	{
 		if(isset($fields['FUSER_USER_NAME']))
 		{

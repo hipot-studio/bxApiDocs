@@ -1,4 +1,4 @@
-<?
+<?php
 IncludeModuleLangFile(__FILE__);
 
 class CRatingsComponentsWiki
@@ -34,4 +34,3 @@ class CRatingsComponentsWiki
 		}
 	}
 }
-?>

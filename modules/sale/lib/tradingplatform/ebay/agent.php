@@ -27,27 +27,6 @@ class Agent
 	 * @throws ArgumentOutOfRangeException
 	 */
 
-	
-	/**
-	* <p>Начинает обмен данными. Метод статический.</p>
-	*
-	*
-	* @param mixed $feedType  Тип обмена информацией.
-	*
-	* @param $feedTyp $siteId  Идентификатор сайта.
-	*
-	* @param string $startPosition = "" Позиция, с которой будет начат обмен.
-	*
-	* @param mixed $boolean  Запускать агент один раз или постоянно.
-	*
-	* @param false $once = false 
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/ebay/agent/start.php
-	* @author Bitrix
-	*/
 	public static function start($feedType, $siteId, $startPosition="", $once = false)
 	{
 		if(empty($siteId))
@@ -85,7 +64,7 @@ class Agent
 			Ebay::log(Logger::LOG_LEVEL_ERROR, "EBAY_FEED_ERROR", $feedType, $e->getMessage(), $siteId);
 		}
 
-		if(strlen($result) <=0 && !$once)
+		if($result == '' && !$once)
 			$result = 'Bitrix\Sale\TradingPlatform\Ebay\Agent::start("'.$feedType.'","'.$siteId.'");';
 
 		return $result;
@@ -149,21 +128,6 @@ class Agent
 	 * @param array $feedSettings Feed settings.
 	 * @return array Feed settings with renew agents ids.
 	 */
-	
-	/**
-	* <p>Метод обновляет параметры агента. Метод статический</p>
-	*
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @param array $feedSettings  Настройки обмена информации.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/ebay/agent/update.php
-	* @author Bitrix
-	*/
 	public static function update($siteId, array $feedSettings)
 	{
 		foreach($feedSettings as $feedType => $feedParams)

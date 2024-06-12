@@ -14,7 +14,7 @@ class CListFileControl
 	 * @param $obFile CListFile File to display.
 	 * @param $input_name string Input control name.
 	 */
-	public function __construct($obFile, $input_name)
+	function __construct($obFile, $input_name)
 	{
 		$this->_ob_file = $obFile;
 		$this->_input_name = $input_name;
@@ -33,7 +33,7 @@ class CListFileControl
 	 * 	</ul>
 	 * @return string Html to display.
 	 */
-	public function GetHTML($params)
+	function GetHTML($params)
 	{
 		$html = '';
 
@@ -41,6 +41,7 @@ class CListFileControl
 		$max_width = 150;
 		$max_height = 150;
 		$url_template = '';
+		$download_url = '';
 		$show_input = true;
 		$show_info = true;
 
@@ -54,11 +55,16 @@ class CListFileControl
 				$max_height = intval($params['max_height']);
 			if(isset($params['url_template']))
 				$url_template = $params['url_template'];
+			if(isset($params['download_url']))
+				$download_url = $params['download_url'];
 			if(isset($params['show_input']))
 				$show_input = (bool)$params['show_input'];
 			if(isset($params['show_info']))
 				$show_info = (bool)$params['show_info'];
 		}
+
+		if ($download_url)
+			$url_template = $download_url;
 
 		if($show_input)
 		{
@@ -75,10 +81,11 @@ class CListFileControl
 			));
 		}
 
-		if($this->_ob_file->IsImage() && $this->_ob_file->GetSize() < $max_size)
+		CUtil::InitJSCore(array("ui.viewer"));
+
+		if ($this->_ob_file->IsImage() && $this->_ob_file->GetSize() < $max_size)
 		{
 			$img_src = $this->_ob_file->GetImgSrc(array('url_template'=>$url_template));
-			CUtil::InitJSCore(array("viewer"));
 			self::$_counter++;
 			$divId = 'lists-image-' . self::$_counter;
 
@@ -92,7 +99,7 @@ class CListFileControl
 					'data-bx-image' => $img_src,
 				),
 			));
-			$html .= '</div><script>BX.ready(function(){BX.viewElementBind("'.$divId.'");});</script>';
+			$html .= '</div>';
 		}
 
 		$html .= $this->_ob_file->GetLinkHtml(array(

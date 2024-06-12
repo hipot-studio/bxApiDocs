@@ -1,20 +1,18 @@
 <?php
-/**
- * Bitrix Framework
- * @package bitrix
- * @subpackage sale
- * @copyright 2001-2012 Bitrix
- */
+
 namespace Bitrix\Sale;
 
 use Bitrix\Main\ArgumentException;
-use Bitrix\Sale\Internals\CollectionBase;
-use Bitrix\Sale\Internals\PersonTypeTable;
+use Bitrix\Sale\Internals;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class PersonType
+ * @package Bitrix\Sale
+ */
 class PersonType
 {
 	/** @var int */
@@ -23,10 +21,29 @@ class PersonType
 	/** @var array  */
 	private $personTypeList = array();
 
+	/**
+	 * PersonType constructor.
+	 */
+	protected function __construct() {}
 
-	protected function __construct()
+	/**
+	 * @return string
+	 */
+	public static function getRegistryType()
 	{
+		return Registry::REGISTRY_TYPE_ORDER;
+	}
 
+	/**
+	 * @return mixed
+	 * @throws ArgumentException
+	 */
+	private static function createPersonTypeObject()
+	{
+		$registry = Registry::getInstance(static::getRegistryType());
+		$personTypeClassName = $registry->getPersonTypeClassName();
+
+		return new $personTypeClassName();
 	}
 
 	/**
@@ -34,6 +51,8 @@ class PersonType
 	 * @param null $id
 	 * @return mixed
 	 * @throws ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
 	 */
 	public static function load($siteId = null, $id = null)
 	{
@@ -42,7 +61,7 @@ class PersonType
 			throw new ArgumentException();
 		}
 
-		$personType = new static();
+		$personType = static::createPersonTypeObject();
 		$personType->siteId = $siteId;
 
 		$filter = array("=ACTIVE" => "Y");
@@ -57,10 +76,10 @@ class PersonType
 			$filter['ID'] = $id;
 		}
 
-		if ($personTypeList = static::loadFromDb(array(
-			                          'order' => array("SORT" => "ASC", "NAME" => "ASC"),
-			                          'filter' => $filter,
-		                          )))
+		$personTypeList = static::getList(['order'=>["SORT" => "ASC", "ID"=>"ASC"], 'filter' => $filter])
+			->fetchAll();
+
+		if ($personTypeList)
 		{
 			foreach($personTypeList as $personTypeData)
 			{
@@ -68,46 +87,34 @@ class PersonType
 			}
 		}
 
-
 		return $personType->personTypeList;
 	}
 
 	/**
-	 * @param array $filter
-	 * @return array
-	 * @throws \Bitrix\Main\ArgumentException
+	 * @param array $parameters
+	 * @return \Bitrix\Main\ORM\Query\Result
+	 * @throws ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
 	 */
-	protected static function loadFromDb(array $filter)
+	public static function getList(array $parameters = [])
 	{
-		$res = PersonTypeTable::getList($filter)->fetchAll();
-		return $res;
-	}
+		if (!isset($parameters['filter']))
+		{
+			$parameters['filter'] = [];
+		}
 
-	/**
-	 * @param $personTypeId
-	 * @param $siteId
-	 * @return bool
-	 */
-	public static function checkCorrect($personTypeId, $siteId)
-	{
-		if (static::getList(array(
-			'filter' => array(
-				"ID" => $personTypeId,
-				"LID" => $siteId,
-				"ACTIVE" => "Y"
-			)))->fetch())
-		{
-			return true;
-		}
-		else
-		{
-			return false;
-		}
+		$parameters['filter']['=ENTITY_REGISTRY_TYPE'] = static::getRegistryType();
+
+		return Internals\PersonTypeTable::getList($parameters);
 	}
 
 	/**
 	 * @param OrderBase $order
-	 * @return Entity\Result
+	 * @return Result
+	 * @throws ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
 	 */
 	public static function doCalculate(OrderBase $order)
 	{
@@ -136,7 +143,43 @@ class PersonType
 		return $result;
 	}
 
+	/**
+	 * @return array
+	 */
+	public static function generateXmlId()
+	{
+		return uniqid('bx_');
+	}
 
-	// TODO: checkFields, update, delete, onBeforeLangDelete, selectBox
-
+	/**
+	 * Person type is an individual
+	 *
+	 * @param int $personTypeId
+	 * @return bool
+	 */
+	public static function isIndividual($personTypeId)
+	{
+		$row = BusinessValue::getPersonTypes()[$personTypeId] ?? null;
+		if ($row)
+		{
+			return $row['DOMAIN'] === BusinessValue::INDIVIDUAL_DOMAIN;
+		}
+		return false;
+	}
+	
+	/**
+	 * Person type is legal entity
+	 *
+	 * @param int $personTypeId
+	 * @return bool
+	 */
+	public static function isEntity($personTypeId)
+	{
+		$row = BusinessValue::getPersonTypes()[$personTypeId] ?? null;
+		if ($row)
+		{
+			return $row['DOMAIN'] === BusinessValue::ENTITY_DOMAIN;
+		}
+		return false;
+	}
 }

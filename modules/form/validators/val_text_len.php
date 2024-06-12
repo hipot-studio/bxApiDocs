@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CFormValidatorTextLen
 {
-	public static function GetDescription()
+	function GetDescription()
 	{
 		return array(
 			"NAME" => "text_len", // unique validator string ID
@@ -16,7 +16,7 @@ class CFormValidatorTextLen
 		);
 	}
 
-	public static function GetSettings()
+	function GetSettings()
 	{
 		return array(
 			"LENGTH_FROM" => array(
@@ -33,7 +33,7 @@ class CFormValidatorTextLen
 		);
 	}
 
-	public static function ToDB($arParams)
+	function ToDB($arParams)
 	{
 		$arParams["LENGTH_FROM"] = intval($arParams["LENGTH_FROM"]);
 		$arParams["LENGTH_TO"] = intval($arParams["LENGTH_TO"]);
@@ -48,12 +48,12 @@ class CFormValidatorTextLen
 		return serialize($arParams);
 	}
 
-	public static function FromDB($strParams)
+	function FromDB($strParams)
 	{
 		return unserialize($strParams);
 	}
 
-	public static function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
+	function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
 	{
 		global $APPLICATION;
 

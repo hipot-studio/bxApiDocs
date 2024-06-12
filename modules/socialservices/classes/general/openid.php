@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CSocServOpenID
 {
-	static public function Authorize($identity=false, $var=false)
+	public function Authorize($identity=false, $var=false)
 	{
 		if($var === false)
 			$var = 'OPENID_IDENTITY_OPENID';
@@ -24,8 +24,7 @@ class CSocServOpenID
 					$identity = $_REQUEST[$var];
 				}
 
-				CSocServAuthManager::SetUniqueKey();
-				$return_to = CSocServUtil::GetCurUrl("auth_service_id=".urlencode($_REQUEST["auth_service_id"])."&check_key=".$_SESSION["UNIQUE_KEY"], array("SEF_APPLICATION_CUR_PAGE_URL", "auth_service_error", "auth_service_id", "login"));
+				$return_to = CSocServUtil::GetCurUrl("auth_service_id=".urlencode($_REQUEST["auth_service_id"])."&check_key=".\CSocServAuthManager::getUniqueKey(), array("SEF_APPLICATION_CUR_PAGE_URL", "auth_service_error", "auth_service_id", "login"));
 
 				if($url = $obOpenID->GetRedirectUrl($identity, $return_to))
 					LocalRedirect($url, true);
@@ -37,7 +36,7 @@ class CSocServOpenID
 		return false;
 	}
 
-	static public function GetFormHtml($arParams)
+	public function GetFormHtml($arParams)
 	{
 		return '
 <span class="bx-ss-icon openid"></span>
@@ -52,7 +51,7 @@ class CSocServOpenID
 
 class CSocServYandex extends CSocServOpenID
 {
-	static public function Authorize($identity=false, $var=false)
+	public function Authorize($identity=false, $var=false)
 	{
 		if($identity === false || is_array($identity))
 			$identity = "http://openid.yandex.ru/".$_REQUEST['OPENID_IDENTITY_YANDEX'];
@@ -60,7 +59,7 @@ class CSocServYandex extends CSocServOpenID
 		return parent::Authorize($identity, 'OPENID_IDENTITY_YANDEX');
 	}
 
-	static public function GetFormHtml($arParams)
+	public function GetFormHtml($arParams)
 	{
 		$login = '';
 		$matches = array();
@@ -79,7 +78,7 @@ class CSocServYandex extends CSocServOpenID
 
 class CSocServMailRu extends CSocServOpenID
 {
-	static public function Authorize($identity=false, $var=false)
+	public function Authorize($identity=false, $var=false)
 	{
 		if($identity === false || is_array($identity))
 			$identity = "http://openid.mail.ru/mail/".$_REQUEST['OPENID_IDENTITY_MAILRU'];
@@ -87,7 +86,7 @@ class CSocServMailRu extends CSocServOpenID
 		return parent::Authorize($identity, 'OPENID_IDENTITY_MAILRU');
 	}
 
-	static public function GetFormHtml($arParams)
+	public function GetFormHtml($arParams)
 	{
 		$login = '';
 		$matches = array();
@@ -107,7 +106,7 @@ class CSocServMailRu extends CSocServOpenID
 
 class CSocServLivejournal extends CSocServOpenID
 {
-	static public function Authorize($identity=false, $var=false)
+	public function Authorize($identity=false, $var=false)
 	{
 		if($identity === false || is_array($identity))
 			$identity = $_REQUEST['OPENID_IDENTITY_LIVEJOURNAL'].".livejournal.com";
@@ -115,7 +114,7 @@ class CSocServLivejournal extends CSocServOpenID
 		return parent::Authorize($identity, 'OPENID_IDENTITY_LIVEJOURNAL');
 	}
 
-	static public function GetFormHtml($arParams)
+	public function GetFormHtml($arParams)
 	{
 		$login = '';
 		$matches = array();
@@ -134,7 +133,7 @@ class CSocServLivejournal extends CSocServOpenID
 
 class CSocServLiveinternet extends CSocServOpenID
 {
-	static public function Authorize($identity=false, $var=false)
+	public function Authorize($identity=false, $var=false)
 	{
 		if($identity === false || is_array($identity))
 			$identity = "http://www.liveinternet.ru/users/".$_REQUEST['OPENID_IDENTITY_LIVEINTERNET']."/";
@@ -142,7 +141,7 @@ class CSocServLiveinternet extends CSocServOpenID
 		return parent::Authorize($identity, 'OPENID_IDENTITY_LIVEINTERNET');
 	}
 
-	static public function GetFormHtml($arParams)
+	public function GetFormHtml($arParams)
 	{
 		$login = '';
 		$matches = array();
@@ -161,7 +160,7 @@ class CSocServLiveinternet extends CSocServOpenID
 
 class CSocServBlogger extends CSocServOpenID
 {
-	static public function Authorize($identity=false, $var=false)
+	public function Authorize($identity=false, $var=false)
 	{
 		if($identity === false || is_array($identity))
 			$identity = "http://".$_REQUEST['OPENID_IDENTITY_BLOGGER'].".blogspot.com/";
@@ -169,7 +168,7 @@ class CSocServBlogger extends CSocServOpenID
 		return parent::Authorize($identity, 'OPENID_IDENTITY_BLOGGER');
 	}
 
-	static public function GetFormHtml($arParams)
+	public function GetFormHtml($arParams)
 	{
 		$login = '';
 		$matches = array();
@@ -188,7 +187,7 @@ class CSocServBlogger extends CSocServOpenID
 
 class CSocServRambler extends CSocServOpenID
 {
-	static public function Authorize($identity=false, $var=false)
+	public function Authorize($identity=false, $var=false)
 	{
 		if($identity === false || is_array($identity))
 			$identity = "http://id.rambler.ru/users/".$_REQUEST['OPENID_IDENTITY_RAMBLER'];
@@ -196,7 +195,7 @@ class CSocServRambler extends CSocServOpenID
 		return parent::Authorize($identity, 'OPENID_IDENTITY_RAMBLER');
 	}
 
-	static public function GetFormHtml($arParams)
+	public function GetFormHtml($arParams)
 	{
 		$login = '';
 		$matches = array();

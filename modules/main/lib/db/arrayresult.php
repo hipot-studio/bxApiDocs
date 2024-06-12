@@ -14,7 +14,7 @@ class ArrayResult extends Result
 	/**
 	 * @param array $result Array of arrays.
 	 */
-	static public function __construct($result)
+	public function __construct($result)
 	{
 		parent::__construct($result);
 	}
@@ -24,17 +24,6 @@ class ArrayResult extends Result
 	 *
 	 * @return integer
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает число строк в результате запроса.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/arrayresult/getselectedrowscount.php
-	* @author Bitrix
-	*/
 	public function getSelectedRowsCount()
 	{
 		return count($this->resource);
@@ -45,18 +34,7 @@ class ArrayResult extends Result
 	 *
 	 * @return null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает null так как нет ни какого способа узнать поля.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return null 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/arrayresult/getfields.php
-	* @author Bitrix
-	*/
-	static public function getFields()
+	public function getFields()
 	{
 		return null;
 	}

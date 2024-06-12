@@ -2,6 +2,7 @@
 namespace Bitrix\Sale\Services\Company\Restrictions;
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sale\Order;
 use Bitrix\Sale\Payment;
 use Bitrix\Sale\PaymentCollection;
 use Bitrix\Sale\Services\Base\Restriction;
@@ -17,6 +18,7 @@ class EntityType extends Restriction
 	const ENTITY_NONE = 'N';
 	const ENTITY_PAYMENT = 'P';
 	const ENTITY_SHIPMENT = 'S';
+	const ENTITY_ORDER = 'O';
 
 	/**
 	 * @return string
@@ -48,7 +50,8 @@ class EntityType extends Restriction
 				"OPTIONS" => array(
 					self::ENTITY_NONE => Loc::getMessage('SALE_COMPANY_RULES_BY_ENTITY_NONE'),
 					self::ENTITY_PAYMENT => Loc::getMessage('SALE_COMPANY_RULES_BY_ENTITY_PAYMENT'),
-					self::ENTITY_SHIPMENT => Loc::getMessage('SALE_COMPANY_RULES_BY_ENTITY_SHIPMENT')
+					self::ENTITY_SHIPMENT => Loc::getMessage('SALE_COMPANY_RULES_BY_ENTITY_SHIPMENT'),
+					self::ENTITY_ORDER => Loc::getMessage('SALE_COMPANY_RULES_BY_ENTITY_ORDER'),
 				)
 			)
 		);
@@ -56,10 +59,10 @@ class EntityType extends Restriction
 
 
 	/**
-	 * @param Internals\CollectableEntity $entity
+	 * @param Internals\Entity $entity
 	 * @return string
 	 */
-	protected static function extractParams(Internals\CollectableEntity $entity)
+	protected static function extractParams(Internals\Entity $entity)
 	{
 		/** @var PaymentCollection|ShipmentCollection $collection */
 		if ($entity instanceof Payment)
@@ -67,6 +70,9 @@ class EntityType extends Restriction
 
 		if ($entity instanceof Shipment)
 			return self::ENTITY_SHIPMENT;
+
+		if ($entity instanceof Order)
+			return self::ENTITY_ORDER;
 
 		return self::ENTITY_NONE;
 	}
@@ -77,7 +83,7 @@ class EntityType extends Restriction
 	 * @param int $serviceId
 	 * @return bool
 	 */
-	protected static function check($params, array $restrictionParams, $serviceId = 0)
+	public static function check($params, array $restrictionParams, $serviceId = 0)
 	{
 		return $params == $restrictionParams['ENTITY_TYPE'];
 	}

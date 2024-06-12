@@ -2,6 +2,8 @@
 
 namespace Bitrix\Sale\Delivery\ExtraServices;
 
+use Bitrix\Main\ArgumentNullException;
+use Bitrix\Main\Error;
 use Bitrix\Sale\Internals\Input;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Result;
@@ -17,7 +19,7 @@ class Store extends Base
 
 		$filter = array("ACTIVE" => "Y", "ISSUING_CENTER" => "Y");
 
-		if(strlen($siteId) > 0)
+		if($siteId <> '')
 			$filter["+SITE_ID"] = $siteId;
 
 		$result = array();
@@ -32,7 +34,7 @@ class Store extends Base
 		while ($store = $dbList->Fetch())
 		{
 			if($nameOnly)
-				$result[$store["ID"]] = $store["TITLE"].(strlen($store["SITE_ID"]) > 0 ? " [".$store["SITE_ID"]."]" : "");
+				$result[$store["ID"]] = $store["TITLE"].($store["SITE_ID"] <> '' ? " [".$store["SITE_ID"]."]" : "");
 			else
 				$result[$store["ID"]] = $store;
 		}
@@ -40,12 +42,12 @@ class Store extends Base
 		return $result;
 	}
 
-	static public function getClassTitle()
+	public static function getClassTitle()
 	{
 		return Loc::getMessage("DELIVERY_EXTRA_SERVICE_STORE_TITLE");
 	}
 
-	static public function getCost()
+	public function getCost()
 	{
 		return false;
 	}
@@ -59,17 +61,20 @@ class Store extends Base
 	{
 		return 	Input\Manager::getEditHtml(
 			$name."[PARAMS][STORES]",
-			array(
+			[
 				"TYPE" => "ENUM",
 				"MULTIPLE" => "Y",
-				"OPTIONS" => self::getStoresList()
-			),
-			$params["PARAMS"]["STORES"]
+				"OPTIONS" => self::getStoresList(),
+			],
+			$params["PARAMS"]["STORES"] ?? null
 		);
 	}
 
-	static public function getAdminDefaultControl($name, $value = false)
+	public function getAdminDefaultControl($name = "", $value = false)
 	{
+		if($name == '')
+			throw new ArgumentNullException(new Error('name'));
+
 		return Input\Manager::getEditHtml(
 			$name,
 			array(
@@ -88,7 +93,7 @@ class Store extends Base
 			$value = $this->value;
 
 		$result = '<div class="view_map">';
-		$siteId = strlen(SITE_ID) > 0 ? SITE_ID : "";
+		$siteId = SITE_ID <> '' ? SITE_ID : "";
 
 		ob_start();
 		$APPLICATION->IncludeComponent(
@@ -113,7 +118,7 @@ class Store extends Base
 		return Input\Manager::getViewHtml(
 			array(
 				"TYPE" => "ENUM",
-				"OPTIONS" => self::getStoresList(true, strlen(SITE_ID) > 0 ? SITE_ID : "")
+				"OPTIONS" => self::getStoresList(true, SITE_ID <> '' ? SITE_ID : "")
 			),
 			$this->value
 		);

@@ -19,7 +19,7 @@ class CashOnDeliveryCalcHandler extends PaySystem\BaseServiceHandler implements 
 	 * @param Request|null $request
 	 * @return PaySystem\ServiceResult
 	 */
-	static public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, Request $request = null)
 	{
 		return new PaySystem\ServiceResult();
 	}
@@ -27,7 +27,7 @@ class CashOnDeliveryCalcHandler extends PaySystem\BaseServiceHandler implements 
 	/**
 	 * @return array
 	 */
-	static public function getCurrencyList()
+	public function getCurrencyList()
 	{
 		return array('RUB');
 	}
@@ -83,7 +83,7 @@ class CashOnDeliveryCalcHandler extends PaySystem\BaseServiceHandler implements 
 			$result = floatval($tarifs["TARIFS"][$tariffNum]["FIX"]) + $percent;
 		}
 
-		return roundEx($result, SALE_VALUE_PRECISION);
+		return round($result, 2);
 	}
 
 	/**
@@ -93,7 +93,7 @@ class CashOnDeliveryCalcHandler extends PaySystem\BaseServiceHandler implements 
 	private static function extractFromField($params)
 	{
 		$result = array();
-		$tarifs = unserialize($params);
+		$tarifs = unserialize($params, ['allowed_classes' => false]);
 
 		if (!is_array($tarifs))
 			$tarifs = array();
@@ -170,11 +170,11 @@ class CashOnDeliveryCalcHandler extends PaySystem\BaseServiceHandler implements 
 	 * @param $tariff
 	 * @return string
 	 */
-	static public function prepareToField($tariff)
+	public static function prepareToField($tariff)
 	{
 		$arResult = array();
 
-		if(is_array($tariff))
+		if (is_array($tariff))
 		{
 			foreach ($tariff as $id => $value)
 			{
@@ -189,10 +189,12 @@ class CashOnDeliveryCalcHandler extends PaySystem\BaseServiceHandler implements 
 				}
 				$tariffIds = explode('_', $id);
 
-				if(isset($tariffIds[2]))
+				if (isset($tariffIds[2]))
+				{
 					$regionId = $tariffIds[2];
 
-				$arResult[$regionId][] = $value;
+					$arResult[$regionId][] = $value;
+				}
 			}
 		}
 		return serialize($arResult);
@@ -267,9 +269,9 @@ class CashOnDeliveryCalcHandler extends PaySystem\BaseServiceHandler implements 
 	 * @param $regionNameLang
 	 * @return array|bool
 	 */
-	static public function getCMTarifsByRegionFromCsv($regionNameLang)
+	public function getCMTarifsByRegionFromCsv($regionNameLang)
 	{
-		if(strlen(trim($regionNameLang)) <= 0)
+		if(trim($regionNameLang) == '')
 			return false;
 
 		$csvFile = \CSaleHelper::getCsvObject(__DIR__.'/lang/ru/cm_tarif.csv');
@@ -279,7 +281,7 @@ class CashOnDeliveryCalcHandler extends PaySystem\BaseServiceHandler implements 
 
 		while ($arRes = $csvFile->Fetch())
 		{
-			if(strtoupper(trim($regionNameLang)) === $arRes[$COL_REG_NAME])
+			if(mb_strtoupper(trim($regionNameLang)) === $arRes[$COL_REG_NAME])
 			{
 				$arTarifs = $arRes;
 				break;

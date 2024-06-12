@@ -7,6 +7,22 @@
  */
 namespace Bitrix\Sale\Location;
 
+/**
+ * Class GroupLocationTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_GroupLocation_Query query()
+ * @method static EO_GroupLocation_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_GroupLocation_Result getById($id)
+ * @method static EO_GroupLocation_Result getList(array $parameters = [])
+ * @method static EO_GroupLocation_Entity getEntity()
+ * @method static \Bitrix\Sale\Location\EO_GroupLocation createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Location\EO_GroupLocation_Collection createCollection()
+ * @method static \Bitrix\Sale\Location\EO_GroupLocation wakeUpObject($row)
+ * @method static \Bitrix\Sale\Location\EO_GroupLocation_Collection wakeUpCollection($rows)
+ */
 class GroupLocationTable extends Connector
 {
 	public static function getFilePath()
@@ -19,12 +35,17 @@ class GroupLocationTable extends Connector
 		return 'b_sale_location2location_group';
 	}
 
-	static public function getLinkField()
+	public static function getTypeField()
+	{
+		return '';
+	}
+
+	public static function getLinkField()
 	{
 		return 'LOCATION_GROUP_ID';
 	}
 
-	static public function getTargetEntityName()
+	public static function getTargetEntityName()
 	{
 		return 'Bitrix\Sale\Location\Group';
 	}
@@ -75,5 +96,14 @@ class GroupLocationTable extends Connector
 				)
 			),
 		);
+	}
+
+	public static function deleteByGroupId($groupId)
+	{
+		if(intval($groupId) <= 0)
+			return;
+
+		$con = \Bitrix\Main\Application::getConnection();
+		$con->queryExecute("DELETE FROM ".self::getTableName()." WHERE LOCATION_GROUP_ID=".intval($groupId));
 	}
 }

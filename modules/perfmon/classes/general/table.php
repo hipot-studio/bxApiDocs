@@ -2,175 +2,122 @@
 
 class CAllPerfomanceTable
 {
-	public $TABLE_NAME = "";
+	public $TABLE_NAME = '';
 
-	public function GetList($arSelect, $arFilter, $arOrder = array(), $arNavParams = false)
+	public function GetList($arSelect, $arFilter, $arOrder = [], $arNavParams = false)
 	{
 		global $DB;
 
 		$arFields = $this->GetTableFields();
 
 		if (!is_array($arSelect))
-			$arSelect = array();
+		{
+			$arSelect = [];
+		}
 		if (count($arSelect) < 1)
+		{
 			$arSelect = array_keys($arFields);
+		}
 
 		if (!is_array($arOrder))
-			$arOrder = array();
+		{
+			$arOrder = [];
+		}
 
-		$arQueryOrder = array();
+		$arQueryOrder = [];
 		foreach ($arOrder as $strColumn => $strDirection)
 		{
-			$strDirection = strtoupper($strDirection) == "ASC"? "ASC": "DESC";
+			$strDirection = mb_strtoupper($strDirection) === 'ASC' ? 'ASC' : 'DESC';
 			if (array_key_exists($strColumn, $arFields))
 			{
 				$arSelect[] = $strColumn;
-				if ($arFields[$strColumn] == "datetime" || $arFields[$strColumn] == "date")
-					$arQueryOrder[$strColumn] = $this->escapeColumn("TMP_".$strColumn)." ".$strDirection;
+				if ($arFields[$strColumn] === 'datetime' || $arFields[$strColumn] === 'date')
+				{
+					$arQueryOrder[$strColumn] = static::escapeColumn('TMP_' . $strColumn) . ' ' . $strDirection;
+				}
 				else
-					$arQueryOrder[$strColumn] = $this->escapeColumn($strColumn)." ".$strDirection;
+				{
+					$arQueryOrder[$strColumn] = static::escapeColumn($strColumn) . ' ' . $strDirection;
+				}
 			}
 		}
 
-		$arQuerySelect = array();
+		$arQuerySelect = [];
 		foreach ($arSelect as $strColumn)
 		{
 			if (array_key_exists($strColumn, $arFields))
 			{
-				if ($arFields[$strColumn] == "datetime" || $arFields[$strColumn] == "date")
+				if ($arFields[$strColumn] === 'datetime' || $arFields[$strColumn] === 'date')
 				{
-					$arQuerySelect["TMP_".$strColumn] = "t.".$this->escapeColumn($strColumn)." TMP_".$strColumn;
-					$arQuerySelect[$strColumn] = $DB->DateToCharFunction("t.".$this->escapeColumn($strColumn), "SHORT")." ".$this->escapeColumn($strColumn);
-					$arQuerySelect["FULL_".$strColumn] = $DB->DateToCharFunction("t.".$this->escapeColumn($strColumn), "FULL")." FULL_".$strColumn;
-					$arQuerySelect["SHORT_".$strColumn] = $DB->DateToCharFunction("t.".$this->escapeColumn($strColumn), "SHORT")." SHORT_".$strColumn;
+					$arQuerySelect['TMP_' . $strColumn] = 't.' . static::escapeColumn($strColumn) . ' TMP_' . $strColumn;
+					$arQuerySelect[$strColumn] = $DB->DateToCharFunction('t.' . static::escapeColumn($strColumn), 'SHORT') . ' ' . static::escapeColumn($strColumn);
+					$arQuerySelect['FULL_' . $strColumn] = $DB->DateToCharFunction('t.' . static::escapeColumn($strColumn), 'FULL') . ' FULL_' . $strColumn;
+					$arQuerySelect['SHORT_' . $strColumn] = $DB->DateToCharFunction('t.' . static::escapeColumn($strColumn), 'SHORT') . ' SHORT_' . $strColumn;
 				}
 				else
 				{
-					$arQuerySelect[$strColumn] = "t.".$this->escapeColumn($strColumn);
+					$arQuerySelect[$strColumn] = 't.' . static::escapeColumn($strColumn);
 				}
 			}
 		}
 
 		foreach ($arFields as $FIELD_NAME => $FIELD_TYPE)
 		{
-			$arFields[$FIELD_NAME] = array(
-				"TABLE_ALIAS" => "t",
-				"FIELD_NAME" => "t.".$this->escapeColumn($FIELD_NAME),
-				"FIELD_TYPE" => $FIELD_TYPE,
-				"JOIN" => false,
+			$arFields[$FIELD_NAME] = [
+				'TABLE_ALIAS' => 't',
+				'FIELD_NAME' => 't.' . static::escapeColumn($FIELD_NAME),
+				'FIELD_TYPE' => $FIELD_TYPE,
+				'JOIN' => false,
 				//"LEFT_JOIN" => "lt",
-			);
+			];
 		}
 		$obQueryWhere = new CSQLWhere;
 		$obQueryWhere->SetFields($arFields);
 
 		if (count($arQuerySelect) < 1)
-			$arQuerySelect = array("*" => "t.*");
-
-		if (is_array($arNavParams))
 		{
-			return $this->NavQuery($arNavParams, $arQuerySelect, $this->TABLE_NAME, $obQueryWhere->GetQuery($arFilter), $arQueryOrder);
+			$arQuerySelect = ['*' => 't.*'];
+		}
+
+		$strSelect = 'SELECT ' . implode(', ', $arQuerySelect) . "\n";
+
+		$strSql = 'FROM ' . static::escapeTable($this->TABLE_NAME) . " t\n";
+		$strQueryWhere = $obQueryWhere->GetQuery($arFilter);
+		if ($strQueryWhere)
+		{
+			$strSql .= 'WHERE ' . $strQueryWhere . "\n";
+		}
+		$strOrder = $arQueryOrder ? 'ORDER BY ' . implode(', ', $arQueryOrder) : '';
+
+		if (!is_array($arNavParams))
+		{
+			$dbr = $DB->Query($strSelect . $strSql . $strOrder, false, 'File: ' . __FILE__ . '<br>Line: ' . __LINE__);
+		}
+		elseif ($arNavParams['nTopCount'] > 0)
+		{
+			$strSql = $strSelect . $strSql . $strOrder . "\nLIMIT " . intval($arNavParams['nTopCount']);
+			if ($arNavParams['nOffset'] > 0)
+			{
+				$strSql .= ' OFFSET ' . intval($arNavParams['nOffset']);
+			}
+			$dbr = $DB->Query($strSql, false, 'File: ' . __FILE__ . '<br>Line: ' . __LINE__);
 		}
 		else
 		{
-			$strSql = "
-				SELECT
-				".implode(", ", $arQuerySelect)."
-				FROM
-					".$this->escapeTable($this->TABLE_NAME)." t
-			";
-			if ($strQueryWhere = $obQueryWhere->GetQuery($arFilter))
+			$res_cnt = $DB->Query("SELECT count('x') CNT " . $strSql);
+			$ar_cnt = $res_cnt->Fetch();
+			if (isset($arNavParams['bOnlyCount']) && $arNavParams['bOnlyCount'] === true)
 			{
-				$strSql .= "
-					WHERE
-					".$strQueryWhere."
-				";
-			}
-			if (count($arQueryOrder) > 0)
-			{
-				$strSql .= "
-					ORDER BY
-					".implode(", ", $arQueryOrder)."
-				";
+				return $ar_cnt['CNT'];
 			}
 
-			return $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbr = new CDBResult();
+			$dbr->NavQuery($strSelect . $strSql . $strOrder, $ar_cnt['CNT'], $arNavParams);
 		}
-	}
 
-	public function NavQuery($arNavParams, $arQuerySelect, $strTableName, $strQueryWhere, $arQueryOrder)
-	{
-		global $DB;
-		if (intval($arNavParams["nTopCount"]) <= 0)
-		{
-			$strSql = "
-				SELECT
-					count(1) C
-				FROM
-					".$this->escapeTable($strTableName)." t
-			";
-			if ($strQueryWhere)
-			{
-				$strSql .= "
-					WHERE
-					".$strQueryWhere."
-				";
-			}
-			$res_cnt = $DB->Query($strSql);
-			$res_cnt = $res_cnt->Fetch();
-			$cnt = $res_cnt["C"];
+		$dbr->is_filtered = ($strQueryWhere !== '');
 
-			$strSql = "
-				SELECT
-				".implode(", ", $arQuerySelect)."
-				FROM
-					".$this->escapeTable($strTableName)." t
-			";
-			if ($strQueryWhere)
-			{
-				$strSql .= "
-					WHERE
-					".$strQueryWhere."
-				";
-			}
-			if (count($arQueryOrder) > 0)
-			{
-				$strSql .= "
-					ORDER BY
-					".implode(", ", $arQueryOrder)."
-				";
-			}
-
-			$res = new CDBResult();
-			$res->NavQuery($strSql, $cnt, $arNavParams);
-
-			return $res;
-		}
-		else
-		{
-			$strSql = "
-				SELECT
-				".implode(", ", $arQuerySelect)."
-				FROM
-					".$this->escapeTable($strTableName)." t
-			";
-			if ($strQueryWhere)
-			{
-				$strSql .= "
-					WHERE
-					".$strQueryWhere."
-				";
-			}
-			if (count($arQueryOrder) > 0)
-			{
-				$strSql .= "
-					ORDER BY
-					".implode(", ", $arQueryOrder)."
-				";
-			}
-
-			return $DB->Query($DB->TopSql($strSql, intval($arNavParams["nTopCount"])));
-		}
+		return $dbr;
 	}
 
 	public static function escapeColumn($column)
@@ -183,16 +130,18 @@ class CAllPerfomanceTable
 		return $tableName;
 	}
 
-	public static function GetTableFields($TABLE_NAME = false, $bExtended = false)
+	public function GetTableFields($TABLE_NAME = false, $bExtended = false)
 	{
 		if ($TABLE_NAME && $bExtended)
-			return array();
-		else
-			return array();
+		{
+			return [];
+		}
+
+		return [];
 	}
 
-	public static function getCreateIndexDDL($TABLE_NAME, $INDEX_NAME, $INDEX_COLUMNS)
+	public function getCreateIndexDDL($TABLE_NAME, $INDEX_NAME, $INDEX_COLUMNS)
 	{
-		return "CREATE INDEX ".$INDEX_NAME." ON ".$TABLE_NAME." (".implode(", ", $INDEX_COLUMNS).")";
+		return 'CREATE INDEX ' . $INDEX_NAME . ' ON ' . $TABLE_NAME . ' (' . implode(', ', $INDEX_COLUMNS) . ')';
 	}
 }

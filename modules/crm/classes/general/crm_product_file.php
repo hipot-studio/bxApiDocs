@@ -129,9 +129,9 @@ class CCrmProductFile
 					));
 			}
 
-			$p = strpos($input_name, "[");
+			$p = mb_strpos($input_name, "[");
 			if($p > 0)
-				$del_name = substr($input_name, 0, $p)."_del".substr($input_name, $p);
+				$del_name = mb_substr($input_name, 0, $p)."_del".mb_substr($input_name, $p);
 			else
 				$del_name = $input_name."_del";
 
@@ -144,7 +144,7 @@ class CCrmProductFile
 
 	function GetImgSrc($params = array())
 	{
-		if(is_array($params) && isset($params['url_template']) && (strlen($params['url_template']) > 0))
+		if(is_array($params) && isset($params['url_template']) && ($params['url_template'] <> ''))
 			return str_replace(
 				array('#product_id#', '#field_id#', '#file_id#'),
 				array($this->_element_id, $this->_field_id, $this->_file_id),
@@ -204,6 +204,37 @@ class CCrmProductFile
 		{
 			return '';
 		}
+	}
+	function GetPublicLink($params = array())
+	{
+		$result = $this->GetImgSrc($params);
+
+		if (is_array($params['url_params']))
+		{
+			$result = CHTTP::urlAddParams($result, $params['url_params']);
+		}
+
+		if(!preg_match("/^[a-z]+:\\/\\//", $result))
+		{
+			$context = Bitrix\Main\Application::getInstance()->getContext();
+			$scheme = $context->getRequest()->isHttps() ? 'https' : 'http';
+			$server = $context->getServer();
+			$domain = $server->getServerName() ?: \COption::getOptionString('main', 'server_name', '');
+			if (preg_match('/^(?<domain>.+):(?<port>\d+)$/', $domain, $matches))
+			{
+				$domain = $matches['domain'];
+				$port   = $matches['port'];
+			}
+			else
+			{
+				$port = $server->getServerPort();
+			}
+			$port = in_array($port, array(80, 443)) ? '' : ':'.$port;
+
+			$result = $scheme.'://'.$domain.$port.$result;
+		}
+
+		return $result;
 	}
 
 	function GetLinkHtml($params = array())
@@ -341,7 +372,10 @@ class CCrmProductFileControl
 
 		if($this->_ob_file->IsImage() && $this->_ob_file->GetSize()/* < $max_size*/)
 		{
-			$img_src = $this->_ob_file->GetImgSrc(array('url_template'=>$url_template));
+			$img_src = CHTTP::urlAddParams(
+				$this->_ob_file->GetImgSrc(array('url_template'=>$url_template)),
+				array('ncc' => '1')
+			);
 			CUtil::InitJSCore(array("viewer"));
 			self::$_counter++;
 			$divId = 'lists-image-' . self::$_counter;

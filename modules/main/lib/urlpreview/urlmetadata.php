@@ -3,11 +3,26 @@
 namespace Bitrix\Main\UrlPreview;
 
 use Bitrix\Main;
-use Bitrix\Main\Application;
 use Bitrix\Main\Entity;
-use Bitrix\Main\Entity\AddResult;
-use Bitrix\Main\Entity\ScalarField;
+use Bitrix\Main\Text\Emoji;
+use Bitrix\Main\ORM\Event;
 
+/**
+ * Class UrlMetadataTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_UrlMetadata_Query query()
+ * @method static EO_UrlMetadata_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_UrlMetadata_Result getById($id)
+ * @method static EO_UrlMetadata_Result getList(array $parameters = [])
+ * @method static EO_UrlMetadata_Entity getEntity()
+ * @method static \Bitrix\Main\UrlPreview\EO_UrlMetadata createObject($setDefaultValues = true)
+ * @method static \Bitrix\Main\UrlPreview\EO_UrlMetadata_Collection createCollection()
+ * @method static \Bitrix\Main\UrlPreview\EO_UrlMetadata wakeUpObject($row)
+ * @method static \Bitrix\Main\UrlPreview\EO_UrlMetadata_Collection wakeUpCollection($rows)
+ */
 class UrlMetadataTable extends Entity\DataManager
 {
 	const TYPE_STATIC = 'S';
@@ -20,17 +35,6 @@ class UrlMetadataTable extends Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает имя таблицы БД для сущности.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/urlpreview/urlmetadatatable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_urlpreview_metadata';
@@ -41,17 +45,6 @@ class UrlMetadataTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает описание карты сущностей.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/urlpreview/urlmetadatatable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -65,11 +58,20 @@ class UrlMetadataTable extends Entity\DataManager
 			'TYPE' => new Entity\StringField('TYPE', array(
 				'required' => true,
 			)),
-			'TITLE' => new Entity\StringField('TITLE'),
-			'DESCRIPTION' => new Entity\TextField('DESCRIPTION'),
+			'TITLE' => new Entity\StringField('TITLE', [
+				'save_data_modification' => [Emoji::class, 'getSaveModificator'],
+				'fetch_data_modification' => [Emoji::class, 'getFetchModificator'],
+			]),
+			'DESCRIPTION' => new Entity\TextField('DESCRIPTION', [
+				'save_data_modification' => [Emoji::class, 'getSaveModificator'],
+				'fetch_data_modification' => [Emoji::class, 'getFetchModificator'],
+			]),
 			'IMAGE_ID' => new Entity\IntegerField('IMAGE_ID'),
 			'IMAGE' => new Entity\StringField('IMAGE'),
-			'EMBED' => new Entity\TextField('EMBED'),
+			'EMBED' => new Entity\TextField('EMBED', [
+				'save_data_modification' => [Emoji::class, 'getSaveModificator'],
+				'fetch_data_modification' => [Emoji::class, 'getFetchModificator'],
+			]),
 			'EXTRA' => new Entity\TextField('EXTRA', array(
 				'serialized' => true,
 			)),
@@ -81,34 +83,61 @@ class UrlMetadataTable extends Entity\DataManager
 	}
 
 	/**
-	 * Returns first record filtered by $url value
+	 * Returns last record filtered by $url value
 	 *
 	 * @param string $url Url of the page with metadata.
 	 * @return array|false
 	 * @throws Main\ArgumentException
 	 */
-	
-	/**
-	* <p>Статический метод возвращает первую запись, отфильтрованную по значению переменной <code>$url</code>.</p>
-	*
-	*
-	* @param string $url  Url страницы с матаданными.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/urlpreview/urlmetadatatable/getbyurl.php
-	* @author Bitrix
-	*/
 	public static function getByUrl($url)
 	{
-		$parameters = array(
-			'select' => array('*'),
-			'filter' => array(
+		$parameters = [
+			'select' => ['*'],
+			'filter' => [
 				'=URL' => $url,
-			)
-		);
+			],
+			'order' => [
+				'ID' => 'desc'
+			],
+			'limit' => 1
+		];
 
 		return static::getList($parameters)->fetch();
+	}
+
+	public static function onUpdate(Event $event)
+	{
+		$parameters = $event->getParameters();
+
+		if (!empty($parameters['fields']))
+		{
+			if (array_key_exists('IMAGE_ID', $parameters['fields']))
+			{
+				$currentValues = static::getList([
+					'select' => ['IMAGE_ID'],
+					'filter' => ['=ID' => $parameters['id']],
+				])->fetch();
+
+				if ($currentValues['IMAGE_ID'] > 0 && $currentValues['IMAGE_ID'] != $parameters['fields']['IMAGE_ID'])
+				{
+					\CFile::Delete($currentValues['IMAGE_ID']);
+				}
+			}
+		}
+	}
+
+	public static function onDelete(Event $event)
+	{
+		$parameters = $event->getParameters();
+
+		$currentValues = static::getList([
+			'select' => ['IMAGE_ID'],
+			'filter' => ['=ID' => $parameters['id']],
+		])->fetch();
+
+		if ($currentValues['IMAGE_ID'] > 0)
+		{
+			\CFile::Delete($currentValues['IMAGE_ID']);
+		}
 	}
 }

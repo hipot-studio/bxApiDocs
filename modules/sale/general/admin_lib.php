@@ -1,7 +1,7 @@
 <?
 class CAdminSaleList extends CAdminList
 {
-	public function AddAdminContextMenu($aContext=array(), $bShowExcel=true, $bShowSettings=true)
+	public function AddAdminContextMenu($aContext=array(), $bShowExcel=true, $bShowSettings=true, $additionalMenu=array())
 	{
 		/** @global CMain $APPLICATION */
 		global $APPLICATION;
@@ -31,6 +31,11 @@ class CAdminSaleList extends CAdminList
 				"ONCLICK"=>"javascript:exportData('excel');",
 				"GLOBAL_ICON"=>"adm-menu-excel",
 			);
+		}
+
+		if(!empty($additionalMenu))
+		{
+			$aAdditionalMenu = array_merge($aAdditionalMenu, $additionalMenu);
 		}
 
 		if(count($aContext)>0 || count($aAdditionalMenu) > 0)

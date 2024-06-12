@@ -1,26 +1,22 @@
-<?
-IncludeModuleLangFile(__FILE__);
+<?php
+
+use Bitrix\Main;
+use Bitrix\Bizproc;
 
 /**
  * Bizproc API Helper for external usage.
- */
-
-/**
- * <p>Или можно использовать метод:</p> <pre class="syntax">string CBPDocument::StartWorkflow($workflowTemplateId, $documentId, $arParameters, &amp;$arErrors)</pre> который кроме того обработает исключения, собрав их в массив <b>$arErrors</b>, и вернет идентификатор бизнес-процесса.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/index.php
- * @author Bitrix
  */
 class CBPDocument
 {
 	const PARAM_TAGRET_USER = 'TargetUser';
 	const PARAM_MODIFIED_DOCUMENT_FIELDS = 'ModifiedDocumentField';
+	const PARAM_USE_FORCED_TRACKING = 'UseForcedTracking';
+	const PARAM_IGNORE_SIMULTANEOUS_PROCESSES_LIMIT = 'IgnoreSimultaneousProcessesLimit';
+	const PARAM_DOCUMENT_EVENT_TYPE = 'DocumentEventType';
+	const PARAM_DOCUMENT_TYPE = '__DocumentType';
+	const PARAM_PRE_GENERATED_WORKFLOW_ID = 'PreGeneratedWorkflowId';
 
-	public static function MigrateDocumentType($oldType, $newType)
+	public static function migrateDocumentType($oldType, $newType)
 	{
 		$templateIds = array();
 		$db = CBPWorkflowTemplateLoader::GetList(array(), array("DOCUMENT_TYPE" => $oldType), false, false, array("ID"));
@@ -34,6 +30,7 @@ class CBPDocument
 		{
 			CBPHistoryService::MigrateDocumentType($oldType, $newType, $templateIds);
 			CBPStateService::MigrateDocumentType($oldType, $newType, $templateIds);
+			Bizproc\Workflow\Entity\WorkflowInstanceTable::migrateDocumentType($oldType, $newType, $templateIds);
 		}
 	}
 
@@ -103,58 +100,7 @@ class CBPDocument
 	 * @param null|array $documentId - Document id array(MODULE_ID, ENTITY, DOCUMENT_ID).
 	 * @return array - Workflow states and templates.
 	 */
-	
-	/**
-	* <p>Метод возвращает массив всех рабочих потоков и их состояний для данного документа. Если задан код документа, то метод возвращает массив всех запущенных для данного документа рабочих потоков (в том числе и завершенные), а так же шаблонов рабочих потоков, настроенных на автозапуск при изменении документа. Если код документа не задан, то метод возвращает массив шаблонов рабочих потоков, настроенных на автозапуск при создании документа.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param array $documentType  Тип документа в виде массива <i>array(модуль, класс_документа,
-	* тип_документа_в_модуле)</i>
-	*
-	* @param array $documentId = null Код документа в виде массива <i>array(модуль, класс_документа,
-	* код_документа_в_модуле)</i>. Если новый документ, то null
-	*
-	* @return array <p>Массив имеет вид: </p><pre bgcolor="#323232" style="padding:5px;">array(<br>   код_рабочего_потока_или_шаблона
-	* =&gt; array(<br>      "ID" =&gt; код_рабочего_потока,<br>      "TEMPLATE_ID" =&gt;
-	* код_шаблона_рабочего_потока,<br>      "TEMPLATE_NAME" =&gt;
-	* название_шаблона_рабочего_потока,<br>      "TEMPLATE_DESCRIPTION" =&gt;
-	* описание_шаблона_рабочего_потока,<br>      "TEMPLATE_PARAMETERS" =&gt;
-	* массив_параметров_запуска_рабочего_потока_из_шаблона,<br>     
-	* "STATE_NAME" =&gt; текущее_состояние_рабочего_потока,<br>      "STATE_TITLE" =&gt;
-	* название_текущего_состояния_рабочего_потока,<br>      "STATE_MODIFIED" =&gt;
-	* дата_изменения_статуса_рабочего_потока,<br>      "STATE_PARAMETERS" =&gt;
-	* массив_событий_принимаемых_потоком_в_данном_состоянии,<br>     
-	* "STATE_PERMISSIONS" =&gt;
-	* права_на_операции_над_документом_в_данном_состоянии,<br>     
-	* "WORKFLOW_STATUS" =&gt; статус_рабочего_потока,<br>   ),<br>   . .
-	* .<br>)<br></pre><br><pre bgcolor="#323232" style="padding:5px;">array(<br>   "param1" =&gt; array(<br>      "Name" =&gt; "Параметр 1",<br>     
-	* "Description" =&gt; "",<br>      "Type" =&gt; "int",<br>      "Required" =&gt; true,<br>      "Multiple" =&gt;
-	* false,<br>      "Default" =&gt; 8,<br>      "Options" =&gt; null,<br>   ),<br>   "param2" =&gt; array(<br>      "Name"
-	* =&gt; "Параметр 2",<br>      "Description" =&gt; "",<br>      "Type" =&gt; "select",<br>      "Required" =&gt;
-	* false,<br>      "Multiple" =&gt; true,<br>      "Default" =&gt; "v2",<br>      "Options" =&gt; array(<br>         "v1"
-	* =&gt; "V 1",<br>         "v2" =&gt; "V 2",<br>         "v3" =&gt; "V 3",<br>         . . .<br>      ),<br>   ),<br>   .
-	* . .<br>)<br></pre><br><pre bgcolor="#323232" style="padding:5px;">array(<br>   array(<br>      "NAME" =&gt; принимаемое_событие,<br>     
-	* "TITLE" =&gt; название_принимаемого_события,<br>      "PERMISSION" =&gt;
-	* массив_групп_пользователей_могущих_отправить_событие<br>   ),<br>   . .
-	* .<br>)<br></pre><pre bgcolor="#323232" style="padding:5px;">array(<br>   операция =&gt;
-	* массив_групп_пользователей_могущих_осуществлять_операцию,<br>   . .
-	* .<br>)<br></pre><p></p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$documentType = array("bizproc", "CBPVirtualDocument", "type_".$blockId);<br>$documentId = array("bizproc", "CBPVirtualDocument", $id);
-	* 
-	* $arDocumentStates = CBPDocument::GetDocumentStates($documentType, $documentId);
-	* 
-	* foreach ($arDocumentStates as $arDocumentState)<br>{<br>   $arDocumentStateTasks = CBPDocument::GetUserTasksForWorkflow($GLOBALS["USER"]-&gt;GetID(), $arDocumentState["ID"]);<br>   print_r($arDocumentStateTasks);<br>}<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/GetDocumentStates.php
-	* @author Bitrix
-	*/
-	public static function GetDocumentStates($documentType, $documentId = null)
+	public static function getDocumentStates($documentType, $documentId = null)
 	{
 		$arDocumentStates = array();
 
@@ -169,6 +115,24 @@ class CBPDocument
 		return ($arDocumentStates + $arTemplateStates);
 	}
 
+	public static function getActiveStates(array $documentId, $limit = 0)
+	{
+		$documentId = CBPHelper::ParseDocumentId($documentId);
+		$workflowIds = Bizproc\Workflow\Entity\WorkflowInstanceTable::getIdsByDocument($documentId);
+
+		if (!$workflowIds)
+		{
+			return [];
+		}
+
+		if ($limit > 0 && count($workflowIds) > $limit)
+		{
+			$workflowIds = array_slice($workflowIds, 0, $limit);
+		}
+
+		return CBPStateService::GetDocumentStates($documentId, $workflowIds);
+	}
+
 	/**
 	 * Method returns workflow state for specified document.
 	 *
@@ -176,38 +140,16 @@ class CBPDocument
 	 * @param string $workflowId - Workflow id.
 	 * @return array - Workflow state array.
 	 */
-	
-	/**
-	* <p>Метод для данного документа возвращает состояние указанного рабочего потока.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param array $documentId  Идентификатор документа в виде массива <i>array(модуль,
-	* класс_документа, код_документа_в_модуле)</i>
-	*
-	* @param string $workflowId  Идентификатор рабочего потока
-	*
-	* @return array <p>Результирующий массив аналогичен массиву метода <a
-	* href="http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/GetDocumentStates.php">CBPDocument::GetDocumentStates</a>.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/GetDocumentStates.php">CBPDocument::GetDocumentStates</a>
-	* </li>  </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/GetDocumentState.php
-	* @author Bitrix
-	*/
-	public static function GetDocumentState($documentId, $workflowId)
+	public static function getDocumentState($documentId, $workflowId)
 	{
 		$arDocumentState = CBPStateService::GetDocumentStates($documentId, $workflowId);
 		return $arDocumentState;
 	}
 
-	public static function MergeDocuments($firstDocumentId, $secondDocumentId)
+	public static function mergeDocuments($firstDocumentId, $secondDocumentId)
 	{
 		CBPStateService::MergeStates($firstDocumentId, $secondDocumentId);
+		Bizproc\Workflow\Entity\WorkflowInstanceTable::mergeByDocument($firstDocumentId, $secondDocumentId);
 		CBPHistoryService::MergeHistory($firstDocumentId, $secondDocumentId);
 	}
 
@@ -221,32 +163,7 @@ class CBPDocument
 	 * @return array - Events array array(array("NAME" => event_name, "TITLE" => event_title), ...).
 	 * @throws Exception
 	 */
-	
-	/**
-	* <p>Метод возвращает массив событий, которые указанный пользователь может отправить рабочему потоку в указанном состоянии.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param int $userId  Код пользователя
-	*
-	* @param array $arGroups  Массив групп пользователя
-	*
-	* @param array $arState  Состояние рабочего потока
-	*
-	* @return array <p>Возвращается массив событий вида </p><pre bgcolor="#323232" style="padding:5px;">array(<br>   array(<br>      "NAME" =&gt;
-	* событие,<br>      "TITLE" =&gt; название_события<br>   ),<br>   ...<br>)<br></pre><p></p><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$documentType = array("bizproc", "CBPVirtualDocument", "type_".$blockId);<br>$documentId = array("bizproc", "CBPVirtualDocument", $id);<br><br>$arCurrentUserGroups = $GLOBALS["USER"]-&gt;GetUserGroupArray();<br>if ($GLOBALS["USER"]-&gt;GetID() == $authorId)<br>   $arCurrentUserGroups[] = "Author";<br><br>$arDocumentStates = CBPDocument::GetDocumentStates($documentType, $documentId);<br><br>foreach ($arDocumentStates as $arDocumentState)<br>{<br>   $arDocumentStateEvents = CBPDocument::GetAllowableEvents($GLOBALS["USER"]-&gt;GetID(), $arCurrentUserGroups, $arDocumentState);<br>   print_r($arDocumentStateEvents);<br>}<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/GetAllowableEvents.php
-	* @author Bitrix
-	*/
-	public static function GetAllowableEvents($userId, $arGroups, $arState, $appendExtendedGroups = false)
+	public static function getAllowableEvents($userId, $arGroups, $arState, $appendExtendedGroups = false)
 	{
 		if (!is_array($arState))
 			throw new Exception("arState");
@@ -274,7 +191,7 @@ class CBPDocument
 				{
 					$arResult[] = array(
 						"NAME" => $arStateParameter["NAME"],
-						"TITLE" => ((strlen($arStateParameter["TITLE"]) > 0) ? $arStateParameter["TITLE"] : $arStateParameter["NAME"]),
+						"TITLE" => (($arStateParameter["TITLE"] <> '') ? $arStateParameter["TITLE"] : $arStateParameter["NAME"]),
 					);
 				}
 			}
@@ -283,30 +200,11 @@ class CBPDocument
 		return $arResult;
 	}
 
-	
-	/**
-	* <p>Метод добавляет текущую версию документа в историю.</p>   <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param array $documentId  Идентификатор документа, заданный в виде массива <i>array(код_модуля,
-	* класс_документа, идентификатор_документа_в_модуле)</i>
-	*
-	* @param string $name  Название записи в истории
-	*
-	* @param integer $userId  Идентификатор пользователя, от имени которого заносится запись
-	*
-	* @return integer <p>Возвращается идентификатор записи в истории или false в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/AddDocumentToHistory.php
-	* @author Bitrix
-	*/
-	public static function AddDocumentToHistory($parameterDocumentId, $name, $userId)
+	public static function addDocumentToHistory($parameterDocumentId, $name, $userId)
 	{
-		list($moduleId, $entity, $documentType) = CBPHelper::ParseDocumentId($parameterDocumentId);
+		[$moduleId, $entity, $documentType] = CBPHelper::ParseDocumentId($parameterDocumentId);
 
-		if (strlen($moduleId) > 0)
+		if ($moduleId <> '')
 			CModule::IncludeModule($moduleId);
 
 		if (!class_exists($entity))
@@ -357,28 +255,7 @@ class CBPDocument
 	 * @return array|null - Allowable operations.
 	 * @throws Exception
 	 */
-	
-	/**
-	* <p>Метод возвращает массив операций, которые указанный пользователь может совершить, если документ находится в указанных состояниях.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param integer $userId  Идентификатор пользователя
-	*
-	* @param array $arGroups  Массив групп пользователя
-	*
-	* @param array $arStates  Массив состояний рабочих потоков документа
-	*
-	* @return array <p>Если среди состояний нет ни одного рабочего потока типа
-	* конечных автоматов, то возвращается null. Если пользователь не
-	* может выполнить ни одной операции, то возвращается array(). Иначе
-	* возвращается массив доступных для пользователя операций в виде
-	* </p><pre bgcolor="#323232" style="padding:5px;">array(<br>   операция,<br>   ...<br>)<br></pre><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/GetAllowableOperations.php
-	* @author Bitrix
-	*/
-	public static function GetAllowableOperations($userId, $arGroups, $arStates, $appendExtendedGroups = false)
+	public static function getAllowableOperations($userId, $arGroups, $arStates, $appendExtendedGroups = false)
 	{
 		if (!is_array($arStates))
 			throw new Exception("arStates");
@@ -407,7 +284,7 @@ class CBPDocument
 					$arOperationGroups = CBPHelper::convertToExtendedGroups($arOperationGroups);
 
 					if (count(array_intersect($arGroups, $arOperationGroups)) > 0)
-						$result[] = strtolower($operation);
+						$result[] = mb_strtolower($operation);
 				}
 			}
 		}
@@ -428,32 +305,10 @@ class CBPDocument
 	 * @return bool
 	 * @throws Exception
 	 */
-	
-	/**
-	* <p>Метод проверяет, может ли указанный пользователь совершить указанную операцию, если документ находится в указанных состояниях.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param string $operation  Код операции
-	*
-	* @param integer $userId  Идентификатор пользователя
-	*
-	* @param array $arGroups  Массив групп пользователя
-	*
-	* @param array $arStates  Массив состояний рабочих потоков документа
-	*
-	* @return boolean <p>Если среди состояний нет ни одного рабочего потока типа
-	* конечных автоматов, то возвращается true. Если пользователь не
-	* может выполнить операцию, то возвращается false. Иначе возвращается
-	* true.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/CanOperate.php
-	* @author Bitrix
-	*/
-	public static function CanOperate($operation, $userId, $arGroups, $arStates)
+	public static function canOperate($operation, $userId, $arGroups, $arStates)
 	{
 		$operation = trim($operation);
-		if (strlen($operation) <= 0)
+		if ($operation == '')
 			throw new Exception("operation");
 
 		$operations = self::GetAllowableOperations($userId, $arGroups, $arStates);
@@ -468,72 +323,27 @@ class CBPDocument
 	 *
 	 * @param int $workflowTemplateId - Template id.
 	 * @param array $documentId - Document id array(MODULE_ID, ENTITY, DOCUMENT_ID).
-	 * @param array $arParameters - Workflow parameters.
-	 * @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
+	 * @param array $parameters - Workflow parameters.
+	 * @param array $errors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	 * @param array|null $parentWorkflow - Parent workflow information.
 	 * @return string - Workflow id.
 	 */
-	
-	/**
-	* <p>Метод запускает рабочий поток по коду его шаблона. Это рекомендуемый метод для запуска бизнес-процессов.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param integer $workflowTemplateId  Код шаблона рабочего потока.
-	*
-	* @param array $documentId  Код документа в виде массива array(модуль, класс_документа,
-	* код_документа_в_модуле).
-	*
-	* @param array $arParameters  Массив параметров запуска рабочего потока. <p></p> <div class="note">
-	* <b>Примечание</b>: если процесс запускается из другого процесса
-	* через API, и при этом передается значение множественного
-	* параметра, то оно должно передаваться в виде массива.</div>
-	*
-	* @param array &$arErrors  Массив ошибок, которые произошли при запуске рабочего потока в
-	* виде          <pre bgcolor="#323232" style="padding:5px;">array(<br>   array(<br>      "code" =&gt; код_ошибки,<br>      "message" =&gt;
-	* сообщение,<br>      "file" =&gt; путь_к_файлу<br>   ),<br>   ...<br>).<br></pre>
-	*
-	* @return string <p>Возвращается идентификатор запущенного бизнес-процесса. В
-	* случае ошибки заполняется массив ошибок.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br><br>// Запустим бизнес-процесс по шаблону $workflowTemplateId с входящими параметрами $arWorkflowParameters<br>// для документа array("bizproc", "CBPVirtualDocument", $documentId)<br><br>$arErrorsTmp = array();<br><br>$wfId = CBPDocument::StartWorkflow(<br>   $workflowTemplateId,<br>   array("bizproc", "CBPVirtualDocument", $documentId),<br>   array_merge($arWorkflowParameters, array("TargetUser" =&gt; "user_".intval($GLOBALS["USER"]-&gt;GetID()))),<br>   $arErrorsTmp<br>);<br><br>if (count($arErrorsTmp) &gt; 0)<br>{<br>   foreach ($arErrorsTmp as $e)<br>      $errorMessage .= "[".$e["code"]."] ".$e["message"]."<br>";<br>}<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPRuntime/CreateWorkflow.php">CBPRuntime::CreateWorkflow</a>
-	* </li>  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/StartWorkflow.php
-	* @author Bitrix
-	*/
-	public static function StartWorkflow($workflowTemplateId, $documentId, $arParameters, &$arErrors, $parentWorkflow = null)
+	public static function startWorkflow($workflowTemplateId, $documentId, $parameters, &$errors, $parentWorkflow = null)
 	{
-		$arErrors = array();
-
+		$errors = [];
 		$runtime = CBPRuntime::GetRuntime();
 
-		if (!is_array($arParameters))
-			$arParameters = array($arParameters);
-		if (!isset($arParameters[static::PARAM_TAGRET_USER]))
-			$arParameters[static::PARAM_TAGRET_USER] = is_object($GLOBALS["USER"]) ? "user_".intval($GLOBALS["USER"]->GetID()) : null;
-
-		if (!isset($arParameters[static::PARAM_MODIFIED_DOCUMENT_FIELDS]))
-			$arParameters[static::PARAM_MODIFIED_DOCUMENT_FIELDS] = false;
+		$parameters = static::prepareWorkflowParameters($parameters);
 
 		try
 		{
-			$wi = $runtime->CreateWorkflow($workflowTemplateId, $documentId, $arParameters, $parentWorkflow);
+			$wi = $runtime->CreateWorkflow($workflowTemplateId, $documentId, $parameters, $parentWorkflow);
 			$wi->Start();
 			return $wi->GetInstanceId();
 		}
 		catch (Exception $e)
 		{
-			$arErrors[] = array(
+			$errors[] = array(
 				"code" => $e->getCode(),
 				"message" => $e->getMessage(),
 				"file" => $e->getFile()." [".$e->getLine()."]"
@@ -541,6 +351,63 @@ class CBPDocument
 		}
 
 		return null;
+	}
+
+	public static function startDebugWorkflow($workflowTemplateId, $documentId, $parameters, &$errors): ?string
+	{
+		$errors = [];
+		$runtime = CBPRuntime::GetRuntime(true);
+
+		$parameters = static::prepareWorkflowParameters($parameters);
+
+		try
+		{
+			$workflow = $runtime->createDebugWorkflow($workflowTemplateId, $documentId, $parameters);
+			$workflow->Start();
+
+			return $workflow->getInstanceId();
+		}
+		catch (Exception $e)
+		{
+			$errors[] = array(
+				"code" => $e->getCode(),
+				"message" => $e->getMessage(),
+				"file" => $e->getFile()." [".$e->getLine()."]"
+			);
+		}
+
+		return null;
+	}
+
+	private static function prepareWorkflowParameters($parameters): array
+	{
+		if (!is_array($parameters))
+		{
+			$parameters = [$parameters];
+		}
+
+		if (!array_key_exists(static::PARAM_TAGRET_USER, $parameters))
+		{
+			$currentUserId = Main\Engine\CurrentUser::get()->getId();
+			$parameters[static::PARAM_TAGRET_USER] = isset($currentUserId) ? "user_{$currentUserId}" : null;
+		}
+
+		if (!isset($parameters[static::PARAM_MODIFIED_DOCUMENT_FIELDS]))
+		{
+			$parameters[static::PARAM_MODIFIED_DOCUMENT_FIELDS] = false;
+		}
+
+		if (!isset($parameters[static::PARAM_DOCUMENT_EVENT_TYPE]))
+		{
+			$parameters[static::PARAM_DOCUMENT_EVENT_TYPE] = CBPDocumentEventType::None;
+		}
+
+		if (!isset($parameters[static::PARAM_PRE_GENERATED_WORKFLOW_ID]))
+		{
+			$parameters[static::PARAM_PRE_GENERATED_WORKFLOW_ID] = CBPRuntime::generateWorkflowId();
+		}
+
+		return $parameters;
 	}
 
 	/**
@@ -552,39 +419,7 @@ class CBPDocument
 	* @param array $arParameters - Workflow parameters.
 	* @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	*/
-	
-	/**
-	* <p>Метод запускает рабочие потоки, настроенные на автозапуск.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param array $documentType  Код типа документа в виде массива <i>array(модуль, класс_документа,
-	* код_типа_документа_в_модуле)</i>
-	*
-	* @param integer $autoExecute  Флаг <b>CBPDocumentEventType</b> типа автозапуска (1 = CBPDocumentEventType::Create, 2 =
-	* CBPDocumentEventType::Edit)
-	*
-	* @param array $documentId  Код документа в виде массива <i>array(модуль, класс_документа,
-	* код_документа_в_модуле)</i>
-	*
-	* @param array $arParameters  Массив параметров запуска рабочего потока
-	*
-	* @param array &$arErrors  Массив ошибок, которые произошли при запуске рабочего потока в
-	* виде          <pre bgcolor="#323232" style="padding:5px;">array(<br>   array(<br>      "code" =&gt; код_ошибки,<br>      "message" =&gt;
-	* сообщение,<br>      "file" =&gt; путь_к_файлу<br>   ),<br>   ...<br>)<br></pre>
-	*
-	* @return void 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/StartWorkflow.php">CBPDocument::StartWorkflow</a></li>
-	*  </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/AutoStartWorkflows.php
-	* @author Bitrix
-	*/
-	public static function AutoStartWorkflows($documentType, $autoExecute, $documentId, $arParameters, &$arErrors)
+	public static function autoStartWorkflows($documentType, $autoExecute, $documentId, $arParameters, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -598,6 +433,8 @@ class CBPDocument
 
 		if (!isset($arParameters[static::PARAM_MODIFIED_DOCUMENT_FIELDS]))
 			$arParameters[static::PARAM_MODIFIED_DOCUMENT_FIELDS] = false;
+
+		$arParameters[static::PARAM_DOCUMENT_EVENT_TYPE] = $autoExecute;
 
 		$arWT = CBPWorkflowTemplateLoader::SearchTemplatesByDocumentType($documentType, $autoExecute);
 		foreach ($arWT as $wt)
@@ -626,40 +463,7 @@ class CBPDocument
 	* @param array $arParameters - Event parameters.
 	* @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	*/
-	
-	/**
-	* <p>Метод отправляет внешнее событие рабочему потоку.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param string $workflowId  Код рабочего потока
-	*
-	* @param string $workflowEvent  Название события
-	*
-	* @param array $arParameters  Параметры события
-	*
-	* @param array &$arErrors  Массив ошибок, которые произошли при отправке события в виде         
-	* <pre bgcolor="#323232" style="padding:5px;">array(<br>   array(<br>      "code" =&gt; код_ошибки,<br>      "message" =&gt; сообщение,<br>    
-	*  "file" =&gt; путь_к_файлу<br>   ),<br>   ...<br>)<br></pre>
-	*
-	* @return void 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$arCurrentUserGroups = $GLOBALS["USER"]-&gt;GetUserGroupArray();<br>if ($GLOBALS["USER"]-&gt;GetID() == $createdBy)<br>   $arCurrentUserGroups[] = "Author";<br><br>$arErrorTmp = array();<br><br>CBPDocument::SendExternalEvent(<br>   $bizprocId,<br>   $bizprocEvent,<br>   array("Groups" =&gt; $arCurrentUserGroups, "User" =&gt; $GLOBALS["USER"]-&gt;GetID()),<br>   $arErrorTmp<br>);<br><br>if (count($arErrorsTmp) &gt; 0)<br>{<br>   foreach ($arErrorsTmp as $e)<br>      $fatalErrorMessage .= $e["message"].". ";<br>}<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPRuntime/SendExternalEvent.php">CBPRuntime::SendExternalEvent</a></li>
-	*  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/SendExternalEvent.php
-	* @author Bitrix
-	*/
-	public static function SendExternalEvent($workflowId, $workflowEvent, $arParameters, &$arErrors)
+	public static function sendExternalEvent($workflowId, $workflowEvent, $arParameters, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -685,33 +489,7 @@ class CBPDocument
 	* @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	* @param string $stateTitle - State title (workflow status).
 	*/
-	
-	/**
-	* <p>Метод останавливает выполнение рабочего потока.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param string $workflowId  Код рабочего потока
-	*
-	* @param array $documentId  Код документа в виде массива <i>array(модуль, класс_документа,
-	* код_документа_в_модуле)</i>
-	*
-	* @param array &$arErrors  Массив ошибок, которые произошли при остановке рабочего потока в
-	* виде          <pre bgcolor="#323232" style="padding:5px;">array(<br>   array(<br>      "code" =&gt; код_ошибки,<br>      "message" =&gt;
-	* сообщение,<br>      "file" =&gt; путь_к_файлу<br>   ),<br>   ...<br>)<br></pre>
-	*
-	* @return void 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$arState = CBPStateService::GetWorkflowState($stopWorkflowId);<br>if (count($arState) &gt; 0)<br>{<br>   CBPDocument::TerminateWorkflow(<br>      $stopWorkflowId,<br>      $arState["DOCUMENT_ID"],<br>      $arErrorsTmp<br>   );<br><br>   if (count($arErrorsTmp) &gt; 0)<br>   {<br>      foreach ($arErrorsTmp as $e)<br>         $errorMessage .= $e["message"].". ";<br>   }<br>}<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/TerminateWorkflow.php
-	* @author Bitrix
-	*/
-	public static function TerminateWorkflow($workflowId, $documentId, &$arErrors, $stateTitle = '')
+	public static function terminateWorkflow($workflowId, $documentId, &$arErrors, $stateTitle = '')
 	{
 		$arErrors = array();
 
@@ -723,8 +501,8 @@ class CBPDocument
 			if ($documentId)
 			{
 				$d = $workflow->GetDocumentId();
-				if ($d[0] != $documentId[0] || $d[1] != $documentId[1] || $d[2] != $documentId[2])
-					throw new Exception(GetMessage("BPCGDOC_INVALID_WF"));
+				if ($d[0] != $documentId[0] || $d[1] != $documentId[1] || mb_strtolower($d[2]) !== mb_strtolower($documentId[2]))
+					throw new Exception(GetMessage("BPCGDOC_INVALID_WF_MSGVER_1"));
 			}
 			$workflow->Terminate(null, $stateTitle);
 		}
@@ -735,7 +513,9 @@ class CBPDocument
 				"message" => $e->getMessage(),
 				"file" => $e->getFile()." [".$e->getLine()."]"
 			);
+			return false;
 		}
+		return true;
 	}
 
 	public static function killWorkflow($workflowId, $terminate = true, $documentId = null)
@@ -743,61 +523,52 @@ class CBPDocument
 		$errors = array();
 		if ($terminate)
 			static::TerminateWorkflow($workflowId, $documentId, $errors);
-		\Bitrix\Bizproc\WorkflowInstanceTable::delete($workflowId);
-		CBPTaskService::DeleteByWorkflow($workflowId);
-		CBPTrackingService::DeleteByWorkflow($workflowId);
-		CBPStateService::DeleteWorkflow($workflowId);
+
+		if (!$errors)
+		{
+			Bizproc\Workflow\Entity\WorkflowInstanceTable::delete($workflowId);
+			CBPTaskService::DeleteByWorkflow($workflowId);
+			CBPStateService::DeleteWorkflow($workflowId);
+			Bizproc\Workflow\Entity\WorkflowMetadataTable::deleteByWorkflowId($workflowId);
+
+			if (!Bizproc\Debugger\Session\Manager::isDebugWorkflow($workflowId))
+			{
+				CBPTrackingService::DeleteByWorkflow($workflowId);
+			}
+		}
+
 		return $errors;
 	}
 
 	/**
 	 * Method removes all related document data.
 	 * @param array $documentId - Document id array(MODULE_ID, ENTITY, DOCUMENT_ID).
-	 * @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
+	 * @param array $errors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	 */
-	
-	/**
-	* <p>Метод удаляет все связанные с документом записи модуля бизнес-процессов.</p>
-	*
-	*
-	* @param array $documentId  Код документа в виде массива <i>array(модуль, класс_документа,
-	* код_документа_в_модуле)</i>
-	*
-	* @param array &$arErrors  Массив ошибок, которые произошли при удалении в виде         
-	* <pre bgcolor="#323232" style="padding:5px;">array(<br>   array(<br>      "code" =&gt; код_ошибки,<br>      "message" =&gt; сообщение,<br>    
-	*  "file" =&gt; путь_к_файлу<br>   ),<br>   ...<br>)</pre>
-	*
-	* @return void 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$arState = CBPStateService::GetWorkflowState($deleteWorkflowId);<br>if (count($arState) &gt; 0)<br>{<br>   $arErrorsTmp = array();<br>   CBPDocument::OnDocumentDelete($arState["DOCUMENT_ID"], $arErrorsTmp);<br>   if (count($arErrorsTmp) &gt; 0)<br>   {<br>      foreach ($arErrorsTmp as $e)<br>         $errorMessage .= $e["message"].". ";<br>   }<br>}<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/OnDocumentDelete.php
-	* @author Bitrix
-	*/
-	public static function OnDocumentDelete($documentId, &$arErrors)
+	public static function onDocumentDelete($documentId, &$errors)
 	{
-		$arErrors = array();
+		$errors = [];
 
-		$arStates = CBPStateService::GetDocumentStates($documentId);
-		foreach ($arStates as $workflowId => $arState)
+		$instanceIds = Bizproc\Workflow\Entity\WorkflowInstanceTable::getIdsByDocument($documentId);
+		foreach ($instanceIds as $instanceId)
 		{
-			$terminate = strlen($arState["ID"]) > 0 && strlen($arState["WORKFLOW_STATUS"]) > 0;
-			$errors = static::killWorkflow($workflowId, $terminate, $documentId);
-			if ($errors)
-				foreach ($errors as $e)
-					$arErrors[] = $e;
+			static::TerminateWorkflow($instanceId, $documentId, $errors);
 		}
 
-		CBPStateService::DeleteByDocument($documentId);
-		CBPHistoryService::DeleteByDocument($documentId);
+		$debugSession = Bizproc\Debugger\Session\Manager::getActiveSession();
+		if ($debugSession && $debugSession->isFixedDocument($documentId))
+		{
+			Bizproc\Debugger\Listener::getInstance()->onDocumentDeleted();
+		}
+
+		//Deferred deletion
+		Bizproc\Worker\Document\DeleteStepper::bindDocument($documentId);
+
+		//touch runtime
+		CBPRuntime::getRuntime()->onDocumentDelete($documentId);
 	}
 
-	public static function PostTaskForm($arTask, $userId, $arRequest, &$arErrors, $userName = "")
+	public static function postTaskForm($arTask, $userId, $arRequest, &$arErrors, $userName = "")
 	{
 		$originalUserId = CBPTaskService::getOriginalTaskUserId($arTask['ID'], $userId);
 
@@ -815,7 +586,7 @@ class CBPDocument
 		);
 	}
 
-	public static function ShowTaskForm($arTask, $userId, $userName = "", $arRequest = null)
+	public static function showTaskForm($arTask, $userId, $userName = "", $arRequest = null)
 	{
 		return CBPActivity::CallStaticMethod(
 			$arTask["ACTIVITY"],
@@ -863,10 +634,10 @@ class CBPDocument
 				self::PostTaskForm($task, $userId, array('INLINE_USER_STATUS' => $status), $taskErrors);
 				if (!empty($taskErrors))
 					foreach ($taskErrors as $error)
-						$errors[] = GetMessage('BPCGDOC_ERROR_ACTION', array('#NAME#' => $task['NAME'], '#ERROR#' => $error['message']));
+						$errors[] = GetMessage('BPCGDOC_ERROR_ACTION_MSGVER_1', array('#NAME#' => $task['NAME'], '#ERROR#' => $error['message']));
 			}
 			else
-				$errors[] = GetMessage('BPCGDOC_ERROR_TASK_IS_NOT_INLINE', array('#NAME#' => $task['NAME']));
+				$errors[] = GetMessage('BPCGDOC_ERROR_TASK_IS_NOT_INLINE_MSGVER_1', array('#NAME#' => $task['NAME']));
 
 		}
 		return true;
@@ -877,9 +648,10 @@ class CBPDocument
 	 * @param int $toUserId Task target user.
 	 * @param array|int $ids Task ids.
 	 * @param array $errors Error collection.
+	 * @param null | array $allowedDelegationType
 	 * @return bool
 	 */
-	public static function delegateTasks($fromUserId, $toUserId, $ids = array(), &$errors = array())
+	public static function delegateTasks($fromUserId, $toUserId, $ids = array(), &$errors = array(), $allowedDelegationType = null)
 	{
 		$filter = array(
 			'USER_ID' => $fromUserId,
@@ -894,25 +666,44 @@ class CBPDocument
 				$filter['ID'] = $ids;
 		}
 
-		$iterator = CBPTaskService::GetList(array('ID'=>'ASC'), $filter, false, false, array('ID', 'NAME', 'WORKFLOW_ID', 'ACTIVITY_NAME'));
+		$isSinglePostfix = count($ids) === 1 ? '_SINGLE_MSGVER_1' : '_MSGVER_1';
+
+		$iterator = CBPTaskService::GetList(
+				array('ID'=>'ASC'),
+				$filter,
+				false,
+				false,
+				array('ID', 'NAME', 'WORKFLOW_ID', 'ACTIVITY_NAME', 'DELEGATION_TYPE')
+		);
 		$found = false;
 		$trackingService = null;
+		$sendImNotify = (CModule::IncludeModule("im"));
+		$workflowIdsToSync = [];
+
 		while ($task = $iterator->fetch())
 		{
-			if (!$found)
+			if ($allowedDelegationType && !in_array((int)$task['DELEGATION_TYPE'], $allowedDelegationType, true))
 			{
-				$runtime = CBPRuntime::GetRuntime();
-				$runtime->StartRuntime();
-				/** @var CBPTrackingService $trackingService */
-				$trackingService = $runtime->GetService('TrackingService');
+				$errors[] = GetMessage(
+					'BPCGDOC_ERROR_DELEGATE_' . $task['DELEGATION_TYPE'] . $isSinglePostfix,
+					['#NAME#' => $task['NAME']],
+				);
 			}
-			$found = true;
-			if (!CBPTaskService::delegateTask($task['ID'], $fromUserId, $toUserId))
+			elseif (!CBPTaskService::delegateTask($task['ID'], $fromUserId, $toUserId))
 			{
-				$errors[] = GetMessage('BPCGDOC_ERROR_DELEGATE', array('#NAME#' => $task['NAME']));
+				$errors[] = GetMessage('BPCGDOC_ERROR_DELEGATE' . $isSinglePostfix, ['#NAME#' => $task['NAME']]);
 			}
 			else
 			{
+				if (!$found)
+				{
+					$runtime = CBPRuntime::GetRuntime();
+					$runtime->StartRuntime();
+					/** @var CBPTrackingService $trackingService */
+					$trackingService = $runtime->GetService('TrackingService');
+				}
+				$found = true;
+
 				$trackingService->Write(
 					$task['WORKFLOW_ID'],
 					CBPTrackingType::Custom,
@@ -920,14 +711,41 @@ class CBPDocument
 					CBPActivityExecutionStatus::Executing,
 					CBPActivityExecutionResult::None,
 					GetMessage('BPCGDOC_DELEGATE_LOG_TITLE'),
-					GetMessage('BPCGDOC_DELEGATE_LOG', array(
+					GetMessage('BPCGDOC_DELEGATE_LOG_MSGVER_1', array(
 						'#NAME#' => $task['NAME'],
 						'#FROM#' => '{=user:user_'.$fromUserId.'}',
 						'#TO#' => '{=user:user_'.$toUserId.'}'
 					))
 				);
+				$workflowIdsToSync[$task['WORKFLOW_ID']] = true;
+
+				if ($sendImNotify)
+				{
+					CIMNotify::Add(array(
+						"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
+						'FROM_USER_ID' => $fromUserId,
+						'TO_USER_ID' => $toUserId,
+						"NOTIFY_TYPE" => IM_NOTIFY_FROM,
+						"NOTIFY_MODULE" => "bizproc",
+						"NOTIFY_EVENT" => "delegate_task",
+						"NOTIFY_TAG" => "BIZPROC|TASK|".$task['ID'],
+						'MESSAGE' => GetMessage('BPCGDOC_DELEGATE_NOTIFY_TEXT_MSGVER_1', array(
+							'#TASK_URL#' => '/company/personal/bizproc/'.(int)$task['ID'].'/',
+							'#TASK_NAME#' => $task['NAME']
+						))
+					));
+				}
 			}
 		}
+
+		if ($workflowIdsToSync)
+		{
+			foreach (array_keys($workflowIdsToSync) as $workflowId)
+			{
+				Bizproc\Workflow\Entity\WorkflowUserTable::syncOnTaskUpdated($workflowId);
+			}
+		}
+
 		return $found;
 	}
 
@@ -951,7 +769,7 @@ class CBPDocument
 	 * @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	 * @return array - Valid Parameters values.
 	 */
-	public static function StartWorkflowParametersValidate($templateId, $arWorkflowParameters, $documentType, &$arErrors)
+	public static function startWorkflowParametersValidate($templateId, $arWorkflowParameters, $documentType, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -960,7 +778,7 @@ class CBPDocument
 		{
 			$arErrors[] = array(
 				"code" => "",
-				"message" => GetMessage("BPCGDOC_EMPTY_WD_ID"),
+				"message" => GetMessage("BPCGDOC_EMPTY_WD_ID_MSGVER_1"),
 			);
 			return array();
 		}
@@ -1000,7 +818,10 @@ class CBPDocument
 			$ar = array();
 
 			foreach ($arWorkflowParameters as $parameterKey => $arParameter)
-				$ar[$parameterKey] = $arRequest["bizproc".$templateId."_".$parameterKey];
+			{
+				$key = "bizproc" . $templateId . "_" . $parameterKey;
+				$ar[$parameterKey] = $arRequest[$key] ?? null;
+			}
 
 			$arWorkflowParametersValues = CBPWorkflowTemplateLoader::CheckWorkflowParameters(
 				$arWorkflowParameters,
@@ -1022,7 +843,7 @@ class CBPDocument
 	 * @param bool $bVarsFromForm - false on first form open, else - true.
 	 * @param null|array $documentType Document type array(MODULE_ID, ENTITY, DOCUMENT_TYPE).
 	 */
-	public static function StartWorkflowParametersShow($templateId, $arWorkflowParameters, $formName, $bVarsFromForm, $documentType = null)
+	public static function startWorkflowParametersShow($templateId, $arWorkflowParameters, $formName, $bVarsFromForm, $documentType = null)
 	{
 		$templateId = intval($templateId);
 		if ($templateId <= 0)
@@ -1031,7 +852,7 @@ class CBPDocument
 		if (!isset($arWorkflowParameters) || !is_array($arWorkflowParameters))
 			$arWorkflowParameters = array();
 
-		if (strlen($formName) <= 0)
+		if ($formName == '')
 			$formName = "start_workflow_form1";
 
 		if ($documentType == null)
@@ -1066,7 +887,7 @@ class CBPDocument
 		{
 			$parameterKeyExt = "bizproc".$templateId."_".$parameterKey;
 			?><tr>
-				<td align="right" width="40%" valign="top" class="field-name"><?= $arParameter["Required"] ? "<span class=\"required\">*</span> " : ""?><?= htmlspecialcharsbx($arParameter["Name"]) ?>:<?if (strlen($arParameter["Description"]) > 0) echo "<br /><small>".htmlspecialcharsbx($arParameter["Description"])."</small><br />";?></td>
+				<td align="right" width="40%" valign="top" class="field-name"><?= $arParameter["Required"] ? "<span class=\"required\">*</span> " : ""?><?= htmlspecialcharsbx($arParameter["Name"]) ?>:<?if ($arParameter["Description"] <> '') echo "<br /><small>".htmlspecialcharsbx($arParameter["Description"])."</small><br />";?></td>
 				<td width="60%" valign="top"><?
 			echo $documentService->GetFieldInputControl(
 				$documentType,
@@ -1080,14 +901,16 @@ class CBPDocument
 		}
 	}
 
-	public static function AddShowParameterInit($module, $type, $document_type, $entity = "", $document_id = '')
+	public static function addShowParameterInit($module, $type, $document_type, $entity = "", $document_id = '')
 	{
 		$GLOBALS["BP_AddShowParameterInit_".$module."_".$entity."_".$document_type] = 1;
 		CUtil::InitJSCore(array("window", "ajax"));
+
+		$dts = \CBPDocument::signDocumentType([$module, $entity, $document_type]);
 ?>
 <script src="/bitrix/js/bizproc/bizproc.js"></script>
 <script>
-	function BPAShowSelector(id, type, mode, arCurValues, arDocumentType)
+	function BPAShowSelector(id, type, mode, arCurValues)
 	{
 		<?if($type=="only_users"):?>
 		var def_mode = "only_users";
@@ -1102,23 +925,17 @@ class CBPDocument
 		var documentType = '<?=CUtil::JSEscape($document_type)?>';
 		var documentId = '<?=CUtil::JSEscape($document_id)?>';
 
-		/*if (arDocumentType && arDocumentType.length == 3)
-		{
-			module = arDocumentType[0];
-			entity = arDocumentType[1];
-			documentType = arDocumentType[2];
-		}*/
-
 		var loadAccessLib = (typeof BX.Access === 'undefined');
+
+		var contentUrl = '/bitrix/tools/bizproc/compatible_selector.php?mode=public&bxpublic=Y&lang=<?=LANGUAGE_ID?>'
+ 			+'&dts=<?=CUtil::JSEscape($dts)?>'
+			+(loadAccessLib? '&load_access_lib=Y':'');
 
 		if (mode == "only_users")
 		{
 			BX.WindowManager.setStartZIndex(1150);
 			(new BX.CDialog({
-				'content_url': '/bitrix/admin/'+module
-					+'_bizproc_selector.php?mode=public&bxpublic=Y&lang=<?=LANGUAGE_ID?>&entity='
-					+entity
-					+(loadAccessLib? '&load_access_lib=Y':''),
+				'content_url': contentUrl,
 				'content_post': {
 					'document_type': documentType,
 					'document_id': documentId,
@@ -1180,10 +997,7 @@ class CBPDocument
 			JSToPHPHidd(p, arWorkflowTemplateCur, 'arWorkflowTemplate');
 
 			(new BX.CDialog({
-				'content_url': '/bitrix/admin/'
-					+module+'_bizproc_selector.php?mode=public&bxpublic=Y&lang=<?=LANGUAGE_ID?>&entity='
-					+entity
-					+(loadAccessLib? '&load_access_lib=Y':''),
+				'content_url': contentUrl,
 				'content_post': p,
 				'height': 425,
 				'width': 485
@@ -1194,64 +1008,75 @@ class CBPDocument
 <?
 	}
 
-	public static function ShowParameterField($type, $name, $values, $arParams = Array())
+	public static function showParameterField($type, $name, $values, $arParams = Array())
 	{
-		if(strlen($arParams['id'])>0)
-			$id = $arParams['id'];
-		else
-			$id = md5(uniqid());
+		$id = !empty($arParams['id']) ? $arParams['id'] : md5(uniqid());
 
-		if($type == "text")
+		$cols = !empty($arParams['size']) ? intval($arParams['size']) : 70;
+		$defaultRows = $type == "user" ? 3 : 1;
+		$rows = max((isset($arParams['rows']) && $arParams['rows']>0?intval($arParams['rows']):$defaultRows), min(5, ceil(mb_strlen((string)$values) / $cols)));
+
+		if($type == "user")
 		{
-			$s = '<table cellpadding="0" cellspacing="0" border="0"><tr><td valign="top"><textarea ';
-			$s .= 'rows="'.($arParams['rows']>0?intval($arParams['rows']):5).'" ';
-			$s .= 'cols="'.($arParams['cols']>0?intval($arParams['cols']):50).'" ';
+			$s = '<table cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td valign="top">';
+			$s .= '<textarea onkeydown="i' . 'f(event.keyCode==45)BPAShowSelector(\''.Cutil::JSEscape(htmlspecialcharsbx($id)).'\', \''.Cutil::JSEscape($type).'\');" ';
+			$s .= 'rows="'.$rows.'" ';
+			$s .= 'cols="'.$cols.'" ';
 			$s .= 'name="'.htmlspecialcharsbx($name).'" ';
 			$s .= 'id="'.htmlspecialcharsbx($id).'" ';
-			$s .= '>'.htmlspecialcharsbx($values);
-			$s .= '</textarea></td>';
-			$s .= '<td valign="top" style="padding-left:4px">';
-			$s .= CBPHelper::renderControlSelectorButton($id, $type);
-			$s .= '</td></tr></table>';
-		}
-		elseif($type == "user")
-		{
-			$s = '<table cellpadding="0" cellspacing="0" border="0"><tr><td valign="top"><textarea onkeydown="if(event.keyCode==45)BPAShowSelector(\''.Cutil::JSEscape(htmlspecialcharsbx($id)).'\', \''.Cutil::JSEscape($type).'\');" ';
-			$s .= 'rows="'.($arParams['rows']>0?intval($arParams['rows']):3).'" ';
-			$s .= 'cols="'.($arParams['cols']>0?intval($arParams['cols']):45).'" ';
-			$s .= 'name="'.htmlspecialcharsbx($name).'" ';
-			$s .= 'id="'.htmlspecialcharsbx($id).'">'.htmlspecialcharsbx($values).'</textarea>';
-			$s .= '</td><td valign="top" style="padding-left:4px">';
+			$s .= 'style="width: 100%"';
+			$s .= '>'.htmlspecialcharsbx($values).'</textarea>';
+			$s .= '</td><td valign="top" style="padding-left:4px" width="30">';
 			$s .= CBPHelper::renderControlSelectorButton($id, $type, array('title' => GetMessage("BIZPROC_AS_SEL_FIELD_BUTTON").' (Insert)'));
 			$s .= '</td></tr></table>';
 		}
 		elseif($type == "bool")
 		{
-			$s = '<select name="'.htmlspecialcharsbx($name).'"><option value=""></option><option value="Y"'.($values=='Y'?' selected':'').'>'.GetMessage('MAIN_YES').'</option><option value="N"'.($values=='N'?' selected':'').'>'.GetMessage('MAIN_NO').'</option>';
-			$s .= '<input type="text" ';
-			$s .= 'size="20" ';
+			$s = '<table cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td valign="top" width="30">';
+			$s .= '<select name="'.htmlspecialcharsbx($name).'"><option value=""></option><option value="Y"'.($values=='Y'?' selected':'').'>'.GetMessage('MAIN_YES').'</option><option value="N"'.($values=='N'?' selected':'').'>'.GetMessage('MAIN_NO').'</option>';
+			$s .= '</td><td style="padding-left:4px"><textarea ';
+			$s .= 'rows="'.$rows.'" ';
+			$s .= 'cols="'.$cols.'" ';
 			$s .= 'name="'.htmlspecialcharsbx($name).'_X" ';
 			$s .= 'id="'.htmlspecialcharsbx($id).'" ';
-			$s .= 'value="'.($values=="Y" || $values=="N"?"":htmlspecialcharsbx($values)).'"> ';
+			$s .= 'style="width: 100%"';
+			$s .= '>'.($values=="Y" || $values=="N"?"":htmlspecialcharsbx($values));
+			$s .= '</textarea></td>';
+			$s .= '<td valign="top" style="padding-left:4px" width="30">';
 			$s .= CBPHelper::renderControlSelectorButton($id, $type);
+			$s .= '</td></tr></table>';
 		}
 		elseif ($type == 'datetime')
 		{
-			$s = '<span style="white-space:nowrap;"><input type="text" ';
-			$s .= 'size="'.($arParams['size']>0?intval($arParams['size']):30).'" ';
+			$s = '<table cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td valign="top"><textarea ';
+			$s .= 'rows="'.$rows.'" ';
+			$s .= 'cols="'.$cols.'" ';
 			$s .= 'name="'.htmlspecialcharsbx($name).'" ';
 			$s .= 'id="'.htmlspecialcharsbx($id).'" ';
-			$s .= 'value="'.htmlspecialcharsbx($values).'">'.CAdminCalendar::Calendar(htmlspecialcharsbx($name), "", "", true).'</span> ';
+			$s .= 'style="width: 100%"';
+			$s .= '>'.htmlspecialcharsbx($values);
+			$s .= '</textarea></td><td valign="top" style="padding-left:4px" width="20">'.CAdminCalendar::Calendar(htmlspecialcharsbx($name), "", "", true).'</td>';
+			$s .= '<td valign="top" style="padding-left:4px" width="30">';
 			$s .= CBPHelper::renderControlSelectorButton($id, $type);
+			$s .= '</td></tr></table>';
 		}
 		else
 		{
-			$s = '<input type="text" ';
-			$s .= 'size="'.($arParams['size']>0?intval($arParams['size']):70).'" ';
+			$s = '<table cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td valign="top"><textarea ';
+			$s .= 'rows="'.$rows.'" ';
+			$s .= 'cols="'.$cols.'" ';
+			if (!empty($arParams['maxlength']))
+			{
+				$s .= 'maxlength="'.intval($arParams['maxlength']).'" ';
+			}
 			$s .= 'name="'.htmlspecialcharsbx($name).'" ';
 			$s .= 'id="'.htmlspecialcharsbx($id).'" ';
-			$s .= 'value="'.htmlspecialcharsbx($values).'"> ';
+			$s .= 'style="width: 100%"';
+			$s .= '>'.htmlspecialcharsbx($values);
+			$s .= '</textarea></td>';
+			$s .= '<td valign="top" style="padding-left:4px" width="30">';
 			$s .= CBPHelper::renderControlSelectorButton($id, $type);
+			$s .= '</td></tr></table>';
 		}
 
 		return $s;
@@ -1269,7 +1094,7 @@ class CBPDocument
 			);
 	}
 
-	public static function AddDefaultWorkflowTemplates($documentType, $additionalModuleId = null)
+	public static function addDefaultWorkflowTemplates($documentType, $additionalModuleId = null)
 	{
 		if (!empty($additionalModuleId))
 		{
@@ -1330,37 +1155,48 @@ class CBPDocument
 	/**
 	 * Method returns array of workflow templates for specified document type.
 	 * Return array example:
-	 *	array(
-	 *		array(
-	 *			"ID" => workflow_id,
-	 *			"NAME" => template_name,
-	 *			"DESCRIPTION" => template_description,
-	 *			"MODIFIED" => modified datetime,
-	 *			"USER_ID" => modified by user id,
-	 *			"USER_NAME" => modified by user name,
-	 *			"AUTO_EXECUTE" => flag CBPDocumentEventType,
-	 *			"AUTO_EXECUTE_TEXT" => auto_execute_text,
-	 *		),
-	 *		. . .
-	 *	)
+	 *    array(
+	 *        array(
+	 *            "ID" => workflow_id,
+	 *            "NAME" => template_name,
+	 *            "DESCRIPTION" => template_description,
+	 *            "MODIFIED" => modified datetime,
+	 *            "USER_ID" => modified by user id,
+	 *            "USER_NAME" => modified by user name,
+	 *            "AUTO_EXECUTE" => flag CBPDocumentEventType,
+	 *            "AUTO_EXECUTE_TEXT" => auto_execute_text,
+	 *        ),
+	 *        . . .
+	 *    )
 	 *
 	 * @param array $documentType - Document type array(MODULE_ID, ENTITY, DOCUMENT_TYPE).
+	 * @param bool $showSystemTemplates Shows system templates.
 	 * @return array - Templates array.
 	 */
-	public static function GetWorkflowTemplatesForDocumentType($documentType)
+	public static function getWorkflowTemplatesForDocumentType($documentType, $showSystemTemplates = true)
 	{
-		$arResult = array();
+		$arResult = [];
+		$filter = [
+			"DOCUMENT_TYPE" => $documentType,
+			"ACTIVE" => "Y",
+			'<AUTO_EXECUTE' => CBPDocumentEventType::Automation
+		];
+
+		if (!$showSystemTemplates)
+		{
+			$filter['IS_SYSTEM'] = 'N';
+		}
 
 		$dbWorkflowTemplate = CBPWorkflowTemplateLoader::GetList(
-			array(),
-			array("DOCUMENT_TYPE" => $documentType, "ACTIVE"=>"Y"),
+			['SORT'=>'ASC','NAME'=>'ASC'],
+			$filter,
 			false,
 			false,
-			array("ID", "NAME", "DESCRIPTION", "MODIFIED", "USER_ID", "AUTO_EXECUTE", "USER_NAME", "USER_LAST_NAME", "USER_LOGIN", "USER_SECOND_NAME")
+			array("ID", "NAME", "DESCRIPTION", "MODIFIED", "USER_ID", "AUTO_EXECUTE", "USER_NAME", "USER_LAST_NAME", "USER_LOGIN", "USER_SECOND_NAME", 'PARAMETERS')
 		);
 		while ($arWorkflowTemplate = $dbWorkflowTemplate->GetNext())
 		{
-			$arWorkflowTemplate["USER"] = "(".$arWorkflowTemplate["USER_LOGIN"].")".((strlen($arWorkflowTemplate["USER_NAME"]) > 0 || strlen($arWorkflowTemplate["USER_LAST_NAME"]) > 0) ? " " : "").CUser::FormatName(COption::GetOptionString("bizproc", "name_template", CSite::GetNameFormat(false), SITE_ID), array("NAME" => $arWorkflowTemplate["USER_NAME"], "LAST_NAME" => $arWorkflowTemplate["USER_LAST_NAME"], "SECOND_NAME" => $arWorkflowTemplate["USER_SECOND_NAME"]), false, false);
+			$arWorkflowTemplate["USER"] = "(".$arWorkflowTemplate["USER_LOGIN"].")".(($arWorkflowTemplate["USER_NAME"] <> '' || $arWorkflowTemplate["USER_LAST_NAME"] <> '') ? " " : "").CUser::FormatName(COption::GetOptionString("bizproc", "name_template", CSite::GetNameFormat(false), SITE_ID), array("NAME" => $arWorkflowTemplate["USER_NAME"], "LAST_NAME" => $arWorkflowTemplate["USER_LAST_NAME"], "SECOND_NAME" => $arWorkflowTemplate["USER_SECOND_NAME"]), false, false);
 
 			$arWorkflowTemplate["AUTO_EXECUTE_TEXT"] = "";
 
@@ -1369,24 +1205,26 @@ class CBPDocument
 
 			if (($arWorkflowTemplate["AUTO_EXECUTE"] & CBPDocumentEventType::Create) != 0)
 			{
-				if (strlen($arWorkflowTemplate["AUTO_EXECUTE_TEXT"]) > 0)
+				if ($arWorkflowTemplate["AUTO_EXECUTE_TEXT"] <> '')
 					$arWorkflowTemplate["AUTO_EXECUTE_TEXT"] .= ", ";
 				$arWorkflowTemplate["AUTO_EXECUTE_TEXT"] .= GetMessage("BPCGDOC_AUTO_EXECUTE_CREATE");
 			}
 
 			if (($arWorkflowTemplate["AUTO_EXECUTE"] & CBPDocumentEventType::Edit) != 0)
 			{
-				if (strlen($arWorkflowTemplate["AUTO_EXECUTE_TEXT"]) > 0)
+				if ($arWorkflowTemplate["AUTO_EXECUTE_TEXT"] <> '')
 					$arWorkflowTemplate["AUTO_EXECUTE_TEXT"] .= ", ";
 				$arWorkflowTemplate["AUTO_EXECUTE_TEXT"] .= GetMessage("BPCGDOC_AUTO_EXECUTE_EDIT");
 			}
 
 			if (($arWorkflowTemplate["AUTO_EXECUTE"] & CBPDocumentEventType::Delete) != 0)
 			{
-				if (strlen($arWorkflowTemplate["AUTO_EXECUTE_TEXT"]) > 0)
+				if ($arWorkflowTemplate["AUTO_EXECUTE_TEXT"] <> '')
 					$arWorkflowTemplate["AUTO_EXECUTE_TEXT"] .= ", ";
 				$arWorkflowTemplate["AUTO_EXECUTE_TEXT"] .= GetMessage("BPCGDOC_AUTO_EXECUTE_DELETE");
 			}
+
+			$arWorkflowTemplate['HAS_PARAMETERS'] = count($arWorkflowTemplate['PARAMETERS']) > 0;
 
 			$arResult[] = $arWorkflowTemplate;
 		}
@@ -1394,7 +1232,7 @@ class CBPDocument
 		return $arResult;
 	}
 
-	public static function GetNumberOfWorkflowTemplatesForDocumentType($documentType)
+	public static function getNumberOfWorkflowTemplatesForDocumentType($documentType)
 	{
 		$n = CBPWorkflowTemplateLoader::GetList(
 			array(),
@@ -1411,33 +1249,7 @@ class CBPDocument
 	 * @param array $documentType - Document type array(MODULE_ID, ENTITY, DOCUMENT_TYPE).
 	 * @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	 */
-	
-	/**
-	* <p>Метод удаляет шаблон бизнес-процесса.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param int $intid  Код шаблона бизнес-процесса
-	*
-	* @param array $documentType  Код типа документа в виде массива <i>array(модуль, класс_документа,
-	* код_типа_документа_в_модуле)</i>
-	*
-	* @param array &$arErrors  массив ошибок, которые произошли при выполнении в виде          <pre
-	* class="syntax" id="xmpE7D24E70">array(<br>  array(<br>    "code" =&gt; код_ошибки,<br>    "message" =&gt;
-	* сообщение,<br>    "file" =&gt; путь_к_файлу<br>  ),<br>  ...<br>)</pre>
-	*
-	* @return void 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>// Удалим шаблон бизнес-процесса с кодом 132 для инфоблока 18<br>CBPDocument::DeleteWorkflowTemplate(<br>  132,<br>  array("iblock", "CIBlockDocument", "iblock_18"),<br>  $arErrorTmp<br>);<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/DeleteWorkflowTemplate.php
-	* @author Bitrix
-	*/
-	public static function DeleteWorkflowTemplate($id, $documentType, &$arErrors)
+	public static function deleteWorkflowTemplate($id, $documentType, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -1453,7 +1265,7 @@ class CBPDocument
 		{
 			$arErrors[] = array(
 				"code" => 0,
-				"message" => str_replace("#ID#", $id, GetMessage("BPCGDOC_INVALID_WF_ID")),
+				"message" => str_replace("#ID#", $id, GetMessage("BPCGDOC_INVALID_WF_ID_MSGVER_1")),
 				"file" => ""
 			);
 			return;
@@ -1481,35 +1293,7 @@ class CBPDocument
 	 * @param array $arFields - Data for update.
 	 * @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	 */
-	
-	/**
-	* <p>Метод изменяет параметры шаблона бизнес-процесса.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статичный.</div>
-	*
-	*
-	* @param int $intid  Код шаблона бизнес-процесса
-	*
-	* @param array $documentType  Код типа документа в виде массива <i>array(модуль, класс_документа,
-	* код_типа_документа_в_модуле)</i>
-	*
-	* @param array $arFields  Массив новых значений параметров шаблона бизнес-процесса
-	*
-	* @param array& $arErrors  массив ошибок, которые произошли при выполнении в виде          <pre
-	* class="syntax" id="xmpE7D24E70">array(<br>  array(<br>    "code" =&gt; код_ошибки,<br>    "message" =&gt;
-	* сообщение,<br>    "file" =&gt; путь_к_файлу<br>  ),<br>  ...<br>)</pre>
-	*
-	* @return void 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>// изменим флаг автозапуска шаблона бизнес-процесса с кодом 132 для инфоблока с кодом 32<br>CBPDocument::UpdateWorkflowTemplate(<br>	132,<br>	array("iblock", "CIBlockDocument", "iblock_32"),<br>	array(<br>		"AUTO_EXECUTE" =&gt; CBPDocumentEventType::Create<br>	),<br>	$arErrorsTmp<br>);<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/UpdateWorkflowTemplate.php
-	* @author Bitrix
-	*/
-	public static function UpdateWorkflowTemplate($id, $documentType, $arFields, &$arErrors)
+	public static function updateWorkflowTemplate($id, $documentType, $arFields, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -1525,7 +1309,7 @@ class CBPDocument
 		{
 			$arErrors[] = array(
 				"code" => 0,
-				"message" => str_replace("#ID#", $id, GetMessage("BPCGDOC_INVALID_WF_ID")),
+				"message" => str_replace("#ID#", $id, GetMessage("BPCGDOC_INVALID_WF_ID_MSGVER_1")),
 				"file" => ""
 			);
 			return;
@@ -1554,51 +1338,11 @@ class CBPDocument
 	 * @param array $arParameters - Additional parameters.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод проверяет путем обращения к сущности документа, может ли пользователь совершать указанную операцию с документом.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param int $operation  Операция из <b>CBPCanUserOperateOperation</b>
-	*
-	* @param int $userId  Код пользователя
-	*
-	* @param array $documentId  Код документа в виде массива <i>array(модуль, класс_документа,
-	* код_документа_в_модуле)</i>
-	*
-	* @param array $arParameters = array() Ассоциативный массив вспомогательных параметров. Используется
-	* для того, чтобы не рассчитывать заново те вычисляемые значения,
-	* которые уже известны на момент вызова метода. Стандартными
-	* являются ключи массива <b>DocumentStates</b> - массив состояний рабочих
-	* потоков данного документа, <b>UserGroups</b> - группы пользователя,
-	* <b>WorkflowId</b> - код рабочего потока (если требуется проверить
-	* операцию на одном рабочем потоке). Массив может быть дополнен
-	* другими произвольными ключами
-	*
-	* @return bool <p>Возвращается true, если пользователь имеет право на выполнение
-	* указанной операции. Иначе возвращается false.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$bCanAccess = CBPDocument::CanUserOperateDocument(<br>	CBPCanUserOperateOperation::CreateWorkflow,<br>	$GLOBALS["USER"]-&gt;GetID(),<br>	$documentId,<br>	array("UserGroups" =&gt; $arUserGroups)<br>);<br>if (!$bCanAccess)<br>   die("Access denied");<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/CanUserOperateDocumentType.php">CBPDocument::CanUserOperateDocumentType</a></li>
-	*  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/CanUserOperateDocument.php
-	* @author Bitrix
-	*/
-	public static function CanUserOperateDocument($operation, $userId, $parameterDocumentId, $arParameters = array())
+	public static function canUserOperateDocument($operation, $userId, $parameterDocumentId, $arParameters = array())
 	{
-		list($moduleId, $entity, $documentId) = CBPHelper::ParseDocumentId($parameterDocumentId);
+		[$moduleId, $entity, $documentId] = CBPHelper::ParseDocumentId($parameterDocumentId);
 
-		if (strlen($moduleId) > 0)
+		if ($moduleId <> '')
 			CModule::IncludeModule($moduleId);
 
 		if (class_exists($entity))
@@ -1616,50 +1360,11 @@ class CBPDocument
 	 * @param array $arParameters - Additional parameters.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод проверяет путем обращения к сущности типа документа, может ли пользователь совершать указанную операцию с документами данного типа.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param int $operation  Операция из <b>CBPCanUserOperateOperation</b>
-	*
-	* @param int $userId  Код пользователя
-	*
-	* @param array $documentType  Код типа документа в виде массива <i>array(модуль, класс_документа,
-	* код_типа_документа_в_модуле)</i>
-	*
-	* @param array $arParameters = array() Ассоциативный массив вспомогательных параметров. Используется
-	* для того, чтобы не рассчитывать заново те вычисляемые значения,
-	* которые уже известны на момент вызова метода. Стандартными
-	* являются ключи массива <b>DocumentStates</b> - массив состояний рабочих
-	* потоков данного документа, <b>WorkflowId</b> - код рабочего потока (если
-	* требуется проверить операцию на одном рабочем потоке). Массив
-	* может быть дополнен другими произвольными ключами.
-	*
-	* @return bool <p>Возвращается true, если пользователь имеет право на выполнение
-	* указанной операции. Иначе возвращается false.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$bCanAccess = CBPDocument::CanUserOperateDocumentType(<br>	CBPCanUserOperateOperation::CreateWorkflow,<br>	$GLOBALS["USER"]-&gt;GetID(),<br>	$documentType,<br>	array("UserGroups" =&gt; $arUserGroups)<br>);<br>if (!$bCanAccess)<br>   die("Access denied");<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/CanUserOperateDocument.php">CBPDocument::CanUserOperateDocument</a></li>
-	*  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/CanUserOperateDocumentType.php
-	* @author Bitrix
-	*/
-	public static function CanUserOperateDocumentType($operation, $userId, $parameterDocumentType, $arParameters = array())
+	public static function canUserOperateDocumentType($operation, $userId, $parameterDocumentType, $arParameters = array())
 	{
-		list($moduleId, $entity, $documentType) = CBPHelper::ParseDocumentId($parameterDocumentType);
+		[$moduleId, $entity, $documentType] = CBPHelper::ParseDocumentId($parameterDocumentType);
 
-		if (strlen($moduleId) > 0)
+		if ($moduleId <> '')
 			CModule::IncludeModule($moduleId);
 
 		if (class_exists($entity))
@@ -1674,11 +1379,11 @@ class CBPDocument
 	 * @param array $parameterDocumentId - Document id array(MODULE_ID, ENTITY, DOCUMENT_ID).
 	 * @return string - URL.
 	 */
-	public static function GetDocumentAdminPage($parameterDocumentId)
+	public static function getDocumentAdminPage($parameterDocumentId)
 	{
-		list($moduleId, $entity, $documentId) = CBPHelper::ParseDocumentId($parameterDocumentId);
+		[$moduleId, $entity, $documentId] = CBPHelper::ParseDocumentId($parameterDocumentId);
 
-		if (strlen($moduleId) > 0)
+		if ($moduleId <> '')
 			CModule::IncludeModule($moduleId);
 
 		if (class_exists($entity))
@@ -1694,9 +1399,9 @@ class CBPDocument
 	 */
 	public static function getDocumentName($parameterDocumentId)
 	{
-		list($moduleId, $entity, $documentId) = CBPHelper::ParseDocumentId($parameterDocumentId);
+		[$moduleId, $entity, $documentId] = CBPHelper::ParseDocumentId($parameterDocumentId);
 
-		if (strlen($moduleId) > 0)
+		if ($moduleId <> '')
 			CModule::IncludeModule($moduleId);
 
 		if (class_exists($entity) && method_exists($entity, 'getDocumentName'))
@@ -1721,37 +1426,14 @@ class CBPDocument
 	 * @param string $workflowId - Workflow id.
 	 * @return array - Tasks.
 	 */
-	
-	/**
-	* <p>Метод возвращает массив заданий для данного пользователя в данном рабочем потоке.</p>  <p></p> <div class="note"> <b>Примечание:</b> Метод принимает массив конфигурационных параметров и генерирует скрипты, необходимые для показа файлового диалога. Метод статический.</div>
-	*
-	*
-	* @param integer $userId  Код пользователя
-	*
-	* @param string $workflowId  Код бизнес-процесса
-	*
-	* @return array <p>Возвращаемый массив имеет вид: </p><pre bgcolor="#323232" style="padding:5px;">array(<br>   array(<br>      "ID" =&gt;
-	* код_задания,<br>      "NAME" =&gt; название_задания,<br>      "DESCRIPTION" =&gt;
-	* описание_задания,<br>   ),<br>   . . .<br>)<br></pre><p></p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$documentType = array("bizproc", "CBPVirtualDocument", "type_".$iblockId);<br>$documentId = array("bizproc", "CBPVirtualDocument", $id);<br><br>$arDocumentStates = CBPDocument::GetDocumentStates($documentType, $documentId);<br><br>foreach ($arDocumentStates as $arDocumentState)<br>{<br>   $ar = CBPDocument::GetUserTasksForWorkflow($GLOBALS["USER"]-&gt;GetID(), $arDocumentState["ID"]);<br>   print_r($ar);<br>}<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/bizproc/bizproc_classes/CBPDocument/GetUserTasksForWorkflow.php
-	* @author Bitrix
-	*/
-	public static function GetUserTasksForWorkflow($userId, $workflowId)
+	public static function getUserTasksForWorkflow($userId, $workflowId)
 	{
 		$userId = intval($userId);
 		if ($userId <= 0)
 			return array();
 
 		$workflowId = trim($workflowId);
-		if (strlen($workflowId) <= 0)
+		if ($workflowId == '')
 			return array();
 
 		$arResult = array();
@@ -1769,18 +1451,18 @@ class CBPDocument
 		return $arResult;
 	}
 
-	public static function PrepareFileForHistory($documentId, $fileId, $historyIndex)
+	public static function prepareFileForHistory($documentId, $fileId, $historyIndex)
 	{
 		return CBPHistoryService::PrepareFileForHistory($documentId, $fileId, $historyIndex);
 	}
 
-	public static function IsAdmin()
+	public static function isAdmin()
 	{
 		global $APPLICATION;
 		return ($APPLICATION->GetGroupRight("bizproc") >= "W");
 	}
 
-	public static function GetDocumentFromHistory($historyId, &$arErrors)
+	public static function getDocumentFromHistory($historyId, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -1803,11 +1485,11 @@ class CBPDocument
 		return null;
 	}
 
-	public static function GetAllowableUserGroups($parameterDocumentType)
+	public static function getAllowableUserGroups($parameterDocumentType)
 	{
-		list($moduleId, $entity, $documentType) = CBPHelper::ParseDocumentId($parameterDocumentType);
+		[$moduleId, $entity, $documentType] = CBPHelper::ParseDocumentId($parameterDocumentType);
 
-		if (strlen($moduleId) > 0)
+		if ($moduleId <> '')
 			CModule::IncludeModule($moduleId);
 
 		if (class_exists($entity))
@@ -1815,7 +1497,7 @@ class CBPDocument
 			$result = call_user_func_array(array($entity, "GetAllowableUserGroups"), array($documentType));
 			$result1 = array();
 			foreach ($result as $key => $value)
-				$result1[strtolower($key)] = $value;
+				$result1[mb_strtolower($key)] = $value;
 			return $result1;
 		}
 
@@ -1824,26 +1506,28 @@ class CBPDocument
 
 	public static function onAfterTMDayStart($data)
 	{
-		global $DB;
-
 		if (!CModule::IncludeModule("im"))
 			return;
 
 		$userId = (int) $data['USER_ID'];
 
-		$iterator = \Bitrix\Bizproc\WorkflowInstanceTable::getList(
-			array(
-				'select' => array(new \Bitrix\Main\Entity\ExpressionField('CNT', 'COUNT(\'x\')')),
-				'filter' => array(
-					'=STATE.STARTED_BY' => $userId,
-					'<OWNED_UNTIL' => date($DB->DateFormatToPHP(FORMAT_DATETIME),
-						time() - \Bitrix\Bizproc\WorkflowInstanceTable::LOCKED_TIME_INTERVAL)
-				),
-			)
+		$iterator = Bizproc\Workflow\Entity\WorkflowInstanceTable::getList(
+			[
+				'select' => [new \Bitrix\Main\Entity\ExpressionField('CNT', 'COUNT(\'x\')')],
+				'filter' => [
+					'=STARTED_BY' => $userId,
+					'<OWNED_UNTIL' => Main\Type\DateTime::createFromTimestamp(
+						time() - Bizproc\Workflow\Entity\WorkflowInstanceTable::LOCKED_TIME_INTERVAL
+					),
+				],
+			]
 		);
 		$row = $iterator->fetch();
 		if (!empty($row['CNT']))
 		{
+			$path = IsModuleInstalled('bitrix24') ? '/bizproc/bizproc/?type=is_locked'
+				: Main\Config\Option::get("bizproc", "locked_wi_path", '/services/bp/instances.php?type=is_locked');
+
 			CIMNotify::Add(array(
 				'FROM_USER_ID' => 0,
 				'TO_USER_ID' => $userId,
@@ -1852,11 +1536,22 @@ class CBPDocument
 				"NOTIFY_EVENT" => "wi_locked",
 				'TITLE' => GetMessage('BPCGDOC_WI_LOCKED_NOTICE_TITLE'),
 				'MESSAGE' => 	GetMessage('BPCGDOC_WI_LOCKED_NOTICE_MESSAGE', array(
-					'#PATH#' => \Bitrix\Main\Config\Option::get("bizproc", "locked_wi_path", "/services/bp/instances.php?type=is_locked"),
+					'#PATH#' => $path,
 					'#CNT#' => $row['CNT']
 				))
 			));
 		}
+	}
+
+	/**
+	 * @deprecated
+	 * Temporary notification for B24 portal Admins
+	 * Ex: CAgent::AddAgent("\CBPDocument::sendB24LimitsNotifyToAdmins();", "bizproc", "N", 43200);
+	 * @return string
+	 */
+	public static function sendB24LimitsNotifyToAdmins()
+	{
+		return '';
 	}
 
 	/**
@@ -1867,9 +1562,11 @@ class CBPDocument
 	public static function getDocumentFieldsAliasesMap($fields)
 	{
 		if (empty($fields) || !is_array($fields))
-			return array();
+		{
+			return [];
+		}
 
-		$aliases = array();
+		$aliases = [];
 		foreach ($fields as $key => $property)
 		{
 			if (isset($property['Alias']))
@@ -1886,10 +1583,135 @@ class CBPDocument
 	 * @param $value
 	 * @return bool
 	 */
-	public static function IsExpression($value)
+	public static function isExpression($value)
 	{
 		//go to internal alias
 		return CBPActivity::isExpression($value);
 	}
+
+	public static function parseExpression($expression)
+	{
+		$matches = null;
+		if (is_string($expression) && preg_match(CBPActivity::ValuePattern, $expression, $matches))
+		{
+			$result = array(
+				'object' => $matches['object'],
+				'field' => $matches['field'],
+				'modifiers' => array()
+			);
+			if (!empty($matches['mod1']))
+				$result['modifiers'][] = $matches['mod1'];
+			if (!empty($matches['mod2']))
+				$result['modifiers'][] = $matches['mod2'];
+
+			return $result;
+		}
+		return false;
+	}
+
+	public static function signParameters(array $parameters)
+	{
+		return self::signArray($parameters, 'bizproc_wf_params');
+	}
+
+	/**
+	 * @param string $unsignedData
+	 * @return array
+	 */
+	public static function unSignParameters($unsignedData)
+	{
+		return self::unSignArray($unsignedData, 'bizproc_wf_params');
+	}
+
+	public static function signDocumentType(array $documentType)
+	{
+		return self::signArray($documentType, 'bizproc_document_type');
+	}
+
+	/**
+	 * @param string $unsignedData
+	 * @return array|null Document type.
+	 */
+	public static function unSignDocumentType($unsignedData): ?array
+	{
+		$dt =  self::unSignArray($unsignedData, 'bizproc_document_type');
+		return $dt ?: null;
+	}
+
+	private static function signArray(array $source, $salt)
+	{
+		$signer = new Main\Security\Sign\Signer;
+		$jsonData = Main\Web\Json::encode($source);
+
+		return $signer->sign($jsonData, $salt);
+	}
+
+	private static function unSignArray(string $unsignedSource, $salt)
+	{
+		$signer = new Main\Security\Sign\Signer;
+
+		try
+		{
+			$unsigned = $signer->unsign($unsignedSource, $salt);
+			$result = Main\Web\Json::decode($unsigned);
+		}
+		catch (\Exception $e)
+		{
+			$result = [];
+		}
+
+		return $result;
+	}
+
+	public static function getTemplatesForStart($userId, $documentType, $documentId = null, array $parameters = array())
+	{
+		if (!isset($parameters['UserGroups']))
+		{
+			$parameters['UserGroups'] = CUser::GetUserGroup($userId);
+		}
+		if (!isset($parameters['DocumentStates']))
+		{
+			$parameters['DocumentStates'] = static::GetDocumentStates($documentType, $documentId);
+		}
+		$op = CBPCanUserOperateOperation::StartWorkflow;
+
+		$templates = array();
+		$dbWorkflowTemplate = CBPWorkflowTemplateLoader::GetList(
+			array('SORT' => 'ASC', 'NAME' => 'ASC'),
+			array(
+				"DOCUMENT_TYPE" => $documentType,
+				"ACTIVE" => "Y",
+				"IS_SYSTEM" => "N",
+				'<AUTO_EXECUTE' => CBPDocumentEventType::Automation
+			),
+			false,
+			false,
+			array("ID", "NAME", "DESCRIPTION", "PARAMETERS")
+		);
+		while ($arWorkflowTemplate = $dbWorkflowTemplate->fetch())
+		{
+			$parameters['WorkflowTemplateId'] = $arWorkflowTemplate['ID'];
+			if ($documentId)
+			{
+				if (!CBPDocument::CanUserOperateDocument($op, $userId, $documentId, $parameters))
+				{
+					continue;
+				}
+			}
+			elseif (!CBPDocument::CanUserOperateDocumentType($op, $userId, $documentType, $parameters))
+			{
+				continue;
+			}
+
+			$templates[] = array(
+				'id' => $arWorkflowTemplate['ID'],
+				'name' => $arWorkflowTemplate['NAME'],
+				'description' => $arWorkflowTemplate['DESCRIPTION'],
+				'hasParameters' => count($arWorkflowTemplate['PARAMETERS']) > 0,
+				'isConstantsTuned' => CBPWorkflowTemplateLoader::isConstantsTuned($arWorkflowTemplate["ID"])
+			);
+		}
+
+		return $templates;
+	}
 }
-?>

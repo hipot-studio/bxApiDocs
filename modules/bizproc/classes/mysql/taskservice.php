@@ -4,7 +4,7 @@ include_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/bizproc/classes/general/
 class CBPTaskService
 	extends CBPAllTaskService
 {
-	static public function CreateTask($arFields)
+	public function CreateTask($arFields)
 	{
 		return self::Add($arFields);
 	}
@@ -153,6 +153,7 @@ class CBPTaskService
 			"DESCRIPTION" => Array("FIELD" => "T.DESCRIPTION", "TYPE" => "string"),
 			"PARAMETERS" => Array("FIELD" => "T.PARAMETERS", "TYPE" => "string"),
 			"IS_INLINE" => Array("FIELD" => "T.IS_INLINE", "TYPE" => "string"),
+			"DELEGATION_TYPE" => Array("FIELD" => "T.DELEGATION_TYPE", "TYPE" => "int"),
 			"STATUS" => Array("FIELD" => "T.STATUS", "TYPE" => "int"),
 			'DOCUMENT_NAME' => Array("FIELD" => "T.DOCUMENT_NAME", "TYPE" => "string"),
 			"USER_ID" => Array("FIELD" => "TU.USER_ID", "TYPE" => "int", "FROM" => "INNER JOIN b_bp_task_user TU ON (T.ID = TU.TASK_ID)"),
@@ -164,9 +165,8 @@ class CBPTaskService
 			"WORKFLOW_TEMPLATE_NAME" => Array("FIELD" => "WT.NAME", "TYPE" => "string",
 											"FROM" => array("INNER JOIN b_bp_workflow_state WS ON (T.WORKFLOW_ID = WS.ID)",
 												"INNER JOIN b_bp_workflow_template WT ON (WS.WORKFLOW_TEMPLATE_ID = WT.ID)")),
-			"WORKFLOW_TEMPLATE_TEMPLATE_ID" => Array("FIELD" => "WT.ID", "TYPE" => "int",
-													"FROM" => array("INNER JOIN b_bp_workflow_state WS ON (T.WORKFLOW_ID = WS.ID)",
-														"INNER JOIN b_bp_workflow_template WT ON (WS.WORKFLOW_TEMPLATE_ID = WT.ID)")),
+			"WORKFLOW_TEMPLATE_TEMPLATE_ID" => Array("FIELD" => "WS.WORKFLOW_TEMPLATE_ID", "TYPE" => "int",
+													"FROM" => array("INNER JOIN b_bp_workflow_state WS ON (T.WORKFLOW_ID = WS.ID)")),
 			'WORKFLOW_STATE' => array("FIELD" => "WS.STATE_TITLE", "TYPE" => "string", "FROM" => "INNER JOIN b_bp_workflow_state WS ON (T.WORKFLOW_ID = WS.ID)"),
 			'WORKFLOW_STARTED' => array("FIELD" => "WS.STARTED", "TYPE" => "datetime", "FROM" => "INNER JOIN b_bp_workflow_state WS ON (T.WORKFLOW_ID = WS.ID)"),
 			'WORKFLOW_STARTED_BY' => array("FIELD" => "WS.STARTED_BY", "TYPE" => "int", "FROM" => "INNER JOIN b_bp_workflow_state WS ON (T.WORKFLOW_ID = WS.ID)"),

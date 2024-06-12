@@ -1,106 +1,13 @@
 <?php
 
-
-/**
- * <br><br>
- *
- *
- * @return mixed 
- *
- * <h4>Example</h4> 
- * <pre bgcolor="#323232" style="padding:5px;">
- * <buttononclick>
- * class CMSSOAPResearch extends CSOAPServerResponser
- * {
- *     var $provider_id;    
- *     var $service_id;
- *     var $add_tittle;
- *     var $query_path;
- *     var $registration_path;
- * 
- *     function OnBeforeRequest(&amp;$cserver) 
- *     {
- *         AddMessage2Log(mydump($cserver-&gt;GetRequestData()));    
- *     }
- * 
- *     function ProcessRequestBody(&amp;$cserver, $body) 
- *     {
- *         $functionName = $body-&gt;name();
- *         $namespaceURI = $body-&gt;namespaceURI();
- *         $requestNode = $body;
- *         
- *         if ($functionName == "Registration")
- *         {
- *             $root = new CXMLCreator("RegistrationResponse");
- *             $root-&gt;setAttribute("xmlns", "urn:Microsoft.Search");
- *             
- *             $regres = new CXMLCreator("RegistrationResult");
- *             $root-&gt;addChild($regres);
- *                         
- *             $prup = new CXMLCreator("ProviderUpdate");
- *             $prup-&gt;setAttribute("xmlns", "urn:Microsoft.Search.Registration.Response");
- *             $prup-&gt;setAttribute("revision", "1");             
- *             $prup-&gt;setAttribute("build", "1");
- *             $regres-&gt;addChild($prup);    
- *             
- *             $stat = new CXMLCreator("Status");
- *             $stat-&gt;setData("SUCCESS");
- *             $prup-&gt;addChild($stat);
- *                         
- *             $providers = array(
- *                 
- *                 "Provider" =&gt; array (
- *                     "Message" =&gt; "Тестовая служба.",
- *                     "Id" =&gt; "{$this-&gt;provider_id}",
- *                     "Name" =&gt; "Тестовая служба. {$this-&gt;add_tittle}",
- *                     "QueryPath" =&gt; $this-&gt;query_path,
- *                     "RegistrationPath" =&gt; $this-&gt;registration_path,
- *                     "AboutPath" =&gt; "http://www.bitrix.ru/",
- *                     "Type" =&gt; "SOAP",
- *                     "Revision" =&gt; "1",
- *                     "Services" =&gt; array(
- *                         "Service" =&gt; array(
- *                             "Id" =&gt; "{$this-&gt;service_id}",
- *                             "Name" =&gt; "Тестовая служба. {$this-&gt;add_tittle}",
- *                             "Description" =&gt; "Тестовая служба для тестирования soap сервера.",
- *                             "Copyright" =&gt; "(c) Bitrix.",
- *                             "Display" =&gt; "On",
- *                             "Category" =&gt; "ECOMMERCE_GENERAL",
- *                             "Parental" =&gt; "Unsupported",
- *                         )
- *                     )                        
- *                 )                        
- *             
- *             );
- * 
- *             $providersEncoded = CXMLCreator::encodeValueLight("Providers", $providers);
- *             $prup-&gt;addChild($providersEncoded);        
- *             
- *             $cserver-&gt;ShowRawResponse($root, true);
- *             
- *             AddMessage2Log($cserver-&gt;GetResponseData());
- *             
- *             return true;
- *         }
- *         
- *         return false;
- *     }
- * }</buttononclick>
- * </pre>
- *
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/webservice/classes/csoapserverresponser/index.php
- * @author Bitrix
- */
 class CSOAPServerResponser
 {
-	public static function OnBeforeRequest(&$cserver)
+	function OnBeforeRequest(&$cserver)
 	{
 	}
 
 	/* $cserver->RawPostData */
-	public static function OnAfterResponse(&$cserver)
+	function OnAfterResponse(&$cserver)
 	{
 	}
 
@@ -110,12 +17,12 @@ class CSOAPServerResponser
 	 * If returns false, then next item in a chain will be called.
 	 * Result Value must be set to $cserver->ResponseValue 
 	 */
-	public static function ProcessRequestHeader(&$cserver, $header)
+	function ProcessRequestHeader(&$cserver, $header)
 	{
 	}
 
 	/* stub, never used */
-	public static function ProcessRequestBody(&$cserver, $body)
+	function ProcessRequestBody(&$cserver, $body)
 	{
 	}
 }
@@ -137,7 +44,7 @@ class CWSSOAPResponser extends CSOAPServerResponser
 	/// Contains a list over registered functions
 	var $FunctionList;
 
-	public function RegisterFunction($name, $params = array())
+	function RegisterFunction($name, $params = array())
 	{
 		$this->FunctionList[] = $name;
 		$this->TypensVars[$name] = $params;
@@ -149,7 +56,7 @@ class CWSSOAPResponser extends CSOAPServerResponser
 	/*
 	 * $complex = array( "typename" => array( paraname => array(type desc, valType)))
 	 */
-	public function RegisterComplexType($complex)
+	function RegisterComplexType($complex)
 	{
 		foreach ($complex as $complexTypeName => $declaration)
 		{
@@ -157,7 +64,7 @@ class CWSSOAPResponser extends CSOAPServerResponser
 		}
 	}
 
-	public function ProcessRequestBody(&$cserver, $body)
+	function ProcessRequestBody(&$cserver, $body)
 	{
 		$functionName = $body->name();
 		$namespaceURI = $body->namespaceURI();
@@ -236,7 +143,7 @@ class CWSSOAPResponser extends CSOAPServerResponser
 				or (isset($param["strict"]) and $param["strict"] == "strict"))
 			)
 			{
-				CSOAPServer::ShowSOAPFault("Request has no enought params of strict type to be decoded. ");
+				CSOAPServer::ShowSOAPFault("Request has not enough params of strict type to be decoded. ");
 				return true;
 			}
 			$params[] = $decoded;
@@ -283,7 +190,7 @@ class CWSSOAPResponser extends CSOAPServerResponser
 		return true;
 	}
 
-	public function ShowResponse(&$cserver, $functionName, $namespaceURI, &$value)
+	function ShowResponse(&$cserver, $functionName, $namespaceURI, &$value)
 	{
 		global $APPLICATION;
 		// Convert input data to XML
@@ -297,7 +204,7 @@ class CWSSOAPResponser extends CSOAPServerResponser
 
 		header("SOAPServer: BITRIX SOAP");
 		header("Content-Type: text/xml; charset=\"UTF-8\"");
-		Header("Content-Length: ".(defined('BX_UTF') && BX_UTF == 1 && function_exists('mb_strlen')? mb_strlen($payload, 'latin1'): strlen($payload)));
+		Header("Content-Length: ".(defined('BX_UTF') && BX_UTF == 1 && function_exists('mb_strlen')? mb_strlen($payload, 'latin1') : mb_strlen($payload)));
 
 		$APPLICATION->RestartBuffer();
 		$cserver->RawPayloadData = $payload;
@@ -305,52 +212,6 @@ class CWSSOAPResponser extends CSOAPServerResponser
 	}
 }
 
-
-/**
- * <br><br>
- *
- *
- * @return mixed 
- *
- * <h4>Example</h4> 
- * <pre bgcolor="#323232" style="padding:5px;">
- * В этом примере в <b>$arParams["SOAPSERVER_RESPONSER"]</b> содержаться объекты 
- * обработчики SOAP. Обычно SOAP-обработчик создаётся в компоненте, сохраняется в массив в 
- * <b>$arParams["SOAPSERVER_RESPONSER"]</b> и далее, когда включается компонент 
- * webservice.server, выполняется следующий код. 
- * // В компоненте обработчика
- * 
- * // Создаем экземпляр обработчика
- * $research =&amp; new CMSSOAPResearch();
- * 
- * // Конфигурируем обработчик
- * $research-&gt;provider_id = '{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}';
- * $research-&gt;service_id = '{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}';
- * $research-&gt;add_tittle = "";
- * $research-&gt;query_path = "http://{$_SERVER[HTTP_HOST]}/ws/wscauth.php";
- * $research-&gt;registration_path = "http://{$_SERVER[HTTP_HOST]}/ws/wscauth.php";
- * 
- * // Сохраняем для передачи в webservice.server
- * $arParams["SOAPSERVER_RESPONSER"] = array( &amp;$research );
- * 
- * .........
- * 
- * // В компоненте webservice.server
- * $server = new CSOAPServer();
- * 
- * for ($i = 0; $i&lt;count($arParams["SOAPSERVER_RESPONSER"]); $i++)
- * {
- *     $server-&gt;AddServerResponser($arParams["SOAPSERVER_RESPONSER"][$i]);
- * }
- * 
- * $result = $server-&gt;ProcessRequest();
- * </pre>
- *
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/webservice/classes/csoapserver/index.php
- * @author Bitrix
- */
 class CSOAPServer
 {
 	/// Contains the RAW HTTP post data information
@@ -360,22 +221,22 @@ class CSOAPServer
 	/// Consists of instances of CSOAPServerResponser
 	var $OnRequestEvent = array();
 
-	public function CSOAPServer()
+	public function __construct()
 	{
 		$this->RawPostData = file_get_contents("php://input");
 	}
 
-	public function GetRequestData()
+	function GetRequestData()
 	{
 		return $this->RawPostData;
 	}
 
-	public function GetResponseData()
+	function GetResponseData()
 	{
 		return $this->RawPayloadData;
 	}
 
-	public function AddServerResponser(&$respobject)
+	function AddServerResponser(&$respobject)
 	{
 		if (is_subclass_of($respobject, "CSOAPServerResponser"))
 		{
@@ -387,7 +248,7 @@ class CSOAPServer
 	}
 
 	// $valueEncoded type of CXMLCreator
-	public function ShowRawResponse($valueEncoded, $wrapEnvelope = false)
+	function ShowRawResponse($valueEncoded, $wrapEnvelope = false)
 	{
 		global $APPLICATION;
 
@@ -411,7 +272,7 @@ class CSOAPServer
 
 		header("SOAPServer: BITRIX SOAP");
 		header("Content-Type: text/xml; charset=\"UTF-8\"");
-		Header("Content-Length: ".(defined('BX_UTF') && BX_UTF == 1 && function_exists('mb_strlen')? mb_strlen($payload, 'latin1'): strlen($payload)));
+		Header("Content-Length: ".(defined('BX_UTF') && BX_UTF == 1 && function_exists('mb_strlen')? mb_strlen($payload, 'latin1') : mb_strlen($payload)));
 
 		$APPLICATION->RestartBuffer();
 		$this->RawPayloadData = $payload;
@@ -419,7 +280,7 @@ class CSOAPServer
 		echo $payload;
 	}
 
-	public function ShowResponse($functionName, $namespaceURI, $valueName, &$value)
+	function ShowResponse($functionName, $namespaceURI, $valueName, &$value)
 	{
 		global $APPLICATION;
 		// Convert input data to XML
@@ -432,7 +293,7 @@ class CSOAPServer
 
 		header("SOAPServer: BITRIX SOAP");
 		header("Content-Type: text/xml; charset=\"UTF-8\"");
-		Header("Content-Length: ".(defined('BX_UTF') && BX_UTF == 1 && function_exists('mb_strlen')? mb_strlen($payload, 'latin1'): strlen($payload)));
+		Header("Content-Length: ".(defined('BX_UTF') && BX_UTF == 1 && function_exists('mb_strlen')? mb_strlen($payload, 'latin1') : mb_strlen($payload)));
 
 		$APPLICATION->RestartBuffer();
 
@@ -440,7 +301,6 @@ class CSOAPServer
 		echo $payload;
 	}
 
-	/* static */
 	public static function ShowSOAPFault($errorString)
 	{
 		global $APPLICATION;
@@ -454,7 +314,7 @@ class CSOAPServer
 
 		header("SOAPServer: BITRIX SOAP");
 		header("Content-Type: text/xml; charset=\"UTF-8\"");
-		Header("Content-Length: ".(defined('BX_UTF') && BX_UTF == 1 && function_exists('mb_strlen')? mb_strlen($payload, 'latin1'): strlen($payload)));
+		Header("Content-Length: ".(defined('BX_UTF') && BX_UTF == 1 && function_exists('mb_strlen')? mb_strlen($payload, 'latin1') : mb_strlen($payload)));
 
 		$APPLICATION->RestartBuffer();
 		echo $payload;
@@ -466,7 +326,7 @@ class CSOAPServer
 		Processes the SOAP request and prints out the
 		propper response.
 	*/
-	public function ProcessRequest()
+	function ProcessRequest()
 	{
 		global $APPLICATION;
 
@@ -507,47 +367,58 @@ class CSOAPServer
 		// get the SOAP body
 		$body = $dom->elementsByName("Body");
 
-		$children = $body[0]->children();
-
-		if (count($children) == 1)
+		if(count($body) <= 0)
 		{
-			$requestNode = $children[0];
-			$requestParsed = false;
-
-			// get target namespace for request
-			// it often function request message. in wsdl gen. = function+"request"
-			$functionName = $requestNode->name();
-			$namespaceURI = $requestNode->namespaceURI();
-
-			for ($i = 0; $i < count($this->OnRequestEvent); $i++)
-			{
-				if ($this->OnRequestEvent[$i]->ProcessRequestBody($this, $requestNode))
-				{
-					$requestParsed = true;
-					break;
-				}
-			}
-
-			for ($i = 0; $i < count($this->OnRequestEvent); $i++)
-				$this->OnRequestEvent[$i]->OnAfterResponse($this);
-
-			if (!$requestParsed)
-				$this->ShowSOAPFault('Unknown operation requested.');
-
-			return $requestParsed;
+			$this->ShowSOAPFault('No "Body" element in the request');
 		}
 		else
 		{
-			$this->ShowSOAPFault('"Body" element in the request has wrong number of children');
+			$children = $body[0]->children();
+
+			if(count($children) == 1)
+			{
+				$requestNode = $children[0];
+				$requestParsed = false;
+
+				// get target namespace for request
+				// it often function request message. in wsdl gen. = function+"request"
+				$functionName = $requestNode->name();
+				$namespaceURI = $requestNode->namespaceURI();
+
+				for($i = 0; $i < count($this->OnRequestEvent); $i++)
+				{
+					if($this->OnRequestEvent[$i]->ProcessRequestBody($this, $requestNode))
+					{
+						$requestParsed = true;
+						break;
+					}
+				}
+
+				for($i = 0; $i < count($this->OnRequestEvent); $i++)
+				{
+					$this->OnRequestEvent[$i]->OnAfterResponse($this);
+				}
+
+				if(!$requestParsed)
+				{
+					$this->ShowSOAPFault('Unknown operation requested.');
+				}
+
+				return $requestParsed;
+			}
+			else
+			{
+				$this->ShowSOAPFault('"Body" element in the request has wrong number of children');
+			}
 		}
 
 		return false;
 	}
 
-	public static function stripHTTPHeader($data)
+	function stripHTTPHeader($data)
 	{
 		//$start = strpos( $data, "<"."?xml" );
-		$start = strpos($data, "\r\n\r\n");
-		return substr($data, $start, strlen($data) - $start);
+		$start = mb_strpos($data, "\r\n\r\n");
+		return mb_substr($data, $start, mb_strlen($data) - $start);
 	}
 }

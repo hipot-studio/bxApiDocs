@@ -1,7 +1,7 @@
 <?php
 namespace Bitrix\Catalog;
 
-use Bitrix\Main,
+use Bitrix\Main\ORM,
 	Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 
@@ -18,9 +18,22 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Catalog
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_GroupAccess_Query query()
+ * @method static EO_GroupAccess_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_GroupAccess_Result getById($id)
+ * @method static EO_GroupAccess_Result getList(array $parameters = [])
+ * @method static EO_GroupAccess_Entity getEntity()
+ * @method static \Bitrix\Catalog\EO_GroupAccess createObject($setDefaultValues = true)
+ * @method static \Bitrix\Catalog\EO_GroupAccess_Collection createCollection()
+ * @method static \Bitrix\Catalog\EO_GroupAccess wakeUpObject($row)
+ * @method static \Bitrix\Catalog\EO_GroupAccess_Collection wakeUpCollection($rows)
+ */
 
-class GroupAccessTable extends Main\Entity\DataManager
+class GroupAccessTable extends ORM\Data\DataManager
 {
 	const ACCESS_BUY = 'Y';
 	const ACCESS_VIEW = 'N';
@@ -29,17 +42,6 @@ class GroupAccessTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы прав доступа групп пользователей на просмотр и покупку товаров по имеющимся в системе типам цен. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/groupaccesstable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_catalog_group2group';
@@ -50,41 +52,30 @@ class GroupAccessTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы прав доступа групп пользователей на просмотр и покупку товаров по имеющимся в системе типам цен. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/groupaccesstable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
-			'ID' => new Main\Entity\IntegerField('ID', array(
+			'ID' => new ORM\Fields\IntegerField('ID', array(
 				'primary' => true,
 				'autocomplete' => true,
 				'title' => Loc::getMessage('GROUP_ACCESS_ENTITY_ID_FIELD')
 			)),
-			'CATALOG_GROUP_ID' => new Main\Entity\IntegerField('CATALOG_GROUP_ID', array(
+			'CATALOG_GROUP_ID' => new ORM\Fields\IntegerField('CATALOG_GROUP_ID', array(
 				'required' => true,
 				'title' => Loc::getMessage('GROUP_ACCESS_ENTITY_CATALOG_GROUP_ID_FIELD')
 			)),
-			'GROUP_ID' => new Main\Entity\IntegerField('GROUP_ID', array(
+			'GROUP_ID' => new ORM\Fields\IntegerField('GROUP_ID', array(
 				'required' => true,
 				'title' => Loc::getMessage('GROUP_ACCESS_ENTITY_GROUP_ID_FIELD')
 			)),
-			'ACCESS' => new Main\Entity\BooleanField('ACCESS', array(
+			'ACCESS' => new ORM\Fields\BooleanField('ACCESS', array(
 				'column_name' => 'BUY',
 				'values' => array(self::ACCESS_VIEW, self::ACCESS_BUY),
 				'title' => Loc::getMessage('GROUP_ACCESS_ENTITY_ACCESS_FIELD')
 			)),
-			'CATALOG_GROUP' => new Main\Entity\ReferenceField(
+			'CATALOG_GROUP' => new ORM\Fields\Relations\Reference(
 				'CATALOG_GROUP',
-				'Bitrix\Catalog\Group',
+				'\Bitrix\Catalog\Group',
 				array('=this.CATALOG_GROUP_ID' => 'ref.ID')
 			)
 		);

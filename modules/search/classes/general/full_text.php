@@ -16,13 +16,19 @@ class CSearchFullText
 	{
 		if (!isset(static::$instance))
 		{
-			if (COption::GetOptionString("search", "full_text_engine") === "sphinx")
+			$full_text_engine = COption::GetOptionString("search", "full_text_engine");
+			if ($full_text_engine === "sphinx")
 			{
 				self::$instance = new CSearchSphinx;
 				self::$instance->connect(
 					COption::GetOptionString("search", "sphinx_connection"),
 					COption::GetOptionString("search", "sphinx_index_name")
 				);
+			}
+			elseif ($full_text_engine === "mysql")
+			{
+				self::$instance = new CSearchMysql;
+				self::$instance->connect();
 			}
 			else
 			{
@@ -32,12 +38,12 @@ class CSearchFullText
 		return static::$instance;
 	}
 
-	static public function connect($connectionString)
+	public function connect($connectionString)
 	{
 		return true;
 	}
 
-	static public function truncate()
+	public function truncate()
 	{
 	}
 
@@ -45,36 +51,44 @@ class CSearchFullText
 	{
 	}
 
-	static public function replace($ID, $arFields)
+	public function replace($ID, $arFields)
 	{
 	}
 
-	static public function update($ID, $arFields)
+	public function update($ID, $arFields)
 	{
 	}
 
-	static public function search($arParams, $aSort, $aParamsEx, $bTagsCloud)
-	{
-		return false;
-	}
-
-	public static function searchTitle($phrase = "", $arPhrase = array(), $nTopCount = 5, $arParams = array(), $bNotFilter = false, $order = "")
+	public function search($arParams, $aSort, $aParamsEx, $bTagsCloud)
 	{
 		return false;
 	}
 
-	static public function getErrorText()
+	function searchTitle($phrase = "", $arPhrase = array(), $nTopCount = 5, $arParams = array(), $bNotFilter = false, $order = "")
+	{
+		return false;
+	}
+
+	public function getErrorText()
 	{
 		return "";
 	}
 
-	static public function getErrorNumber()
+	public function getErrorNumber()
 	{
 		return 0;
 	}
 
-	public static function getRowFormatter()
+	function getRowFormatter()
 	{
 		return null;
+	}
+}
+
+class CSearchFormatter
+{
+	function format($r)
+	{
+		return $r;
 	}
 }

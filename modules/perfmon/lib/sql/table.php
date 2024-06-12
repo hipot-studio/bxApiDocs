@@ -1,5 +1,6 @@
 <?php
 namespace Bitrix\Perfmon\Sql;
+
 use Bitrix\Main\NotSupportedException;
 
 class Table extends BaseObject
@@ -35,30 +36,6 @@ class Table extends BaseObject
 	 * @return Table
 	 * @see Constraint::create
 	 */
-	
-	/**
-	* <p>Нестатический метод создает объект триггера из токенов. Также регистрирует триггер в таблице регистрации триггеров.</p>
-	*
-	*
-	* @param mixed $Bitrix  Поток токенов.
-	*
-	* @param Bitri $Perfmon  
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param Tokenizer $tokenizer  
-	*
-	* @return \Bitrix\Perfmon\Sql\Table 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/constraint/create.php">Constraint::create</a>
-	* (<code>\Bitrix\Perfmon\Sql\Constraint::create</code>)</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/table/createtrigger.php
-	* @author Bitrix
-	*/
 	public function createTrigger(Tokenizer $tokenizer)
 	{
 		$trigger = Trigger::create($tokenizer);
@@ -78,32 +55,6 @@ class Table extends BaseObject
 	 * @return Table
 	 * @see Constraint::create
 	 */
-	
-	/**
-	* <p>Нестатический метод создает объект ограничения из токенов. Также регистрирует ограничение в таблице регистрации ограничений.</p> <br>
-	*
-	*
-	* @param mixed $Bitrix  Поток токенов.
-	*
-	* @param Bitri $Perfmon  Имя ограничения.
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param Tokenizer $tokenizer  
-	*
-	* @param string $constraintName = '' 
-	*
-	* @return \Bitrix\Perfmon\Sql\Table 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/constraint/create.php">Constraint::create</a>
-	* (<code>\Bitrix\Perfmon\Sql\Constraint::create</code>)</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/table/createconstraint.php
-	* @author Bitrix
-	*/
 	public function createConstraint(Tokenizer $tokenizer, $constraintName = '')
 	{
 		$constraint = Constraint::create($tokenizer, $constraintName);
@@ -118,43 +69,16 @@ class Table extends BaseObject
 	 * And registers index in the table index registry.
 	 *
 	 * @param Tokenizer $tokenizer Tokens collection.
-	 * @param boolean $unique Uniqueness flag.
+	 * @param bool $unique Uniqueness flag.
+	 * @param bool $fulltext Fulltext flag.
 	 * @param string $indexName Optional name of the index.
 	 *
 	 * @return Table
 	 * @see Index::create
 	 */
-	
-	/**
-	* <p>Нестатический момент создает объект индекса из токенов. Также регистрирует индекс в таблице регистраций индексов.</p> <br>
-	*
-	*
-	* @param mixed $Bitrix  Поток токенов.
-	*
-	* @param Bitri $Perfmon  Флаг уникальности.
-	*
-	* @param Perfmo $Sql  Имя индекса.
-	*
-	* @param Tokenizer $tokenizer  
-	*
-	* @param boolean $unique = false 
-	*
-	* @param string $indexName = '' 
-	*
-	* @return \Bitrix\Perfmon\Sql\Table 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/index/create.php">Index::create</a>
-	* (<code>\Bitrix\Perfmon\Sql\Index::create</code>)</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/table/createindex.php
-	* @author Bitrix
-	*/
-	public function createIndex(Tokenizer $tokenizer, $unique = false, $indexName = '')
+	public function createIndex(Tokenizer $tokenizer, $unique = false, $fulltext = false, $indexName = '')
 	{
-		$index = Index::create($tokenizer, $unique, $indexName);
+		$index = Index::create($tokenizer, $unique, $fulltext, $indexName);
 		$index->setParent($this);
 		$this->indexes->add($index);
 		return $this;
@@ -170,35 +94,32 @@ class Table extends BaseObject
 	 * @return Table
 	 * @see Column::create
 	 */
-	
-	/**
-	* <p>Нестатический метод создает колонку таблицы из токенов. Также регистрирует колонку в таблице регистрации колонок.</p> <br>
-	*
-	*
-	* @param mixed $Bitrix  Поток токенов.
-	*
-	* @param Bitri $Perfmon  
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param Tokenizer $tokenizer  
-	*
-	* @return \Bitrix\Perfmon\Sql\Table 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/column/create.php">Column::create</a>
-	* (<code>\Bitrix\Perfmon\Sql\Column::create</code>)</li> </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/table/createcolumn.php
-	* @author Bitrix
-	*/
 	public function createColumn(Tokenizer $tokenizer)
 	{
 		$column = Column::create($tokenizer);
 		$column->setParent($this);
 		$this->columns->add($column);
+		return $this;
+	}
+
+	/**
+	 * Alters column object from tokens.
+	 *
+	 * @param Tokenizer $tokenizer Tokens collection.
+	 *
+	 * @return Table
+	 * @see Column::create
+	 */
+	public function modifyColumn(Tokenizer $tokenizer)
+	{
+		$column = Column::create($tokenizer);
+		$column->setParent($this);
+		$columnIndex = $this->columns->searchIndex($column->name);
+		if ($columnIndex === null)
+		{
+			throw new NotSupportedException('Column ' . $this->name . '.' . $column->name . ' not found line:' . $tokenizer->getCurrentToken()->line);
+		}
+		$this->columns->set($columnIndex, $column);
 		return $this;
 	}
 
@@ -212,25 +133,6 @@ class Table extends BaseObject
 	 * @return Table
 	 * @throws NotSupportedException
 	 */
-	
-	/**
-	* <p>Статический метод создает объект таблица из токенов. Текущая позиция должна указывать на название последовательности или на условие <code>'if not exists'</code>.</p> <br>
-	*
-	*
-	* @param mixed $Bitrix  Поток токенов.
-	*
-	* @param Bitri $Perfmon  
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param Tokenizer $tokenizer  
-	*
-	* @return \Bitrix\Perfmon\Sql\Table 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/table/create.php
-	* @author Bitrix
-	*/
 	public static function create(Tokenizer $tokenizer)
 	{
 		$tokenizer->skipWhiteSpace();
@@ -240,10 +142,14 @@ class Table extends BaseObject
 			$tokenizer->skipWhiteSpace();
 
 			if ($tokenizer->testUpperText('NOT'))
+			{
 				$tokenizer->skipWhiteSpace();
+			}
 
 			if ($tokenizer->testUpperText('EXISTS'))
+			{
 				$tokenizer->skipWhiteSpace();
+			}
 		}
 
 		$table = new Table($tokenizer->getCurrentToken()->text);
@@ -271,16 +177,35 @@ class Table extends BaseObject
 				{
 					$tokenizer->skipWhiteSpace();
 					if ($tokenizer->testUpperText('KEY'))
+					{
 						$tokenizer->skipWhiteSpace();
+					}
 					elseif ($tokenizer->testUpperText('INDEX'))
+					{
 						$tokenizer->skipWhiteSpace();
+					}
 					$table->createIndex($tokenizer, true);
+				}
+				elseif ($tokenizer->testUpperText('FULLTEXT'))
+				{
+					$tokenizer->skipWhiteSpace();
+					if ($tokenizer->testUpperText('KEY'))
+					{
+						$tokenizer->skipWhiteSpace();
+					}
+					elseif ($tokenizer->testUpperText('INDEX'))
+					{
+						$tokenizer->skipWhiteSpace();
+					}
+					$table->createIndex($tokenizer, false, true);
 				}
 				elseif ($tokenizer->testUpperText('PRIMARY'))
 				{
 					$tokenizer->skipWhiteSpace();
 					if (!$tokenizer->testUpperText('KEY'))
-						throw new NotSupportedException("'KEY' expected. line:".$tokenizer->getCurrentToken()->line);
+					{
+						throw new NotSupportedException("'KEY' expected. line:" . $tokenizer->getCurrentToken()->line);
+					}
 
 					$tokenizer->putBack(); //KEY
 					$tokenizer->putBack(); //WS
@@ -307,7 +232,7 @@ class Table extends BaseObject
 					}
 					else
 					{
-						throw new NotSupportedException("'PRIMARY KEY' expected. line:".$tokenizer->getCurrentToken()->line);
+						throw new NotSupportedException("'PRIMARY KEY' expected. line:" . $tokenizer->getCurrentToken()->line);
 					}
 				}
 				elseif ($tokenizer->testUpperText(')'))
@@ -323,18 +248,18 @@ class Table extends BaseObject
 
 				$token = $tokenizer->getCurrentToken();
 
-				if ($token->level == $level && $token->text == ',')
+				if ($token->level == $level && $token->text === ',')
 				{
 					$token = $tokenizer->nextToken();
 				}
-				elseif ($token->level < $level && $token->text == ')')
+				elseif ($token->level < $level && $token->text === ')')
 				{
 					$tokenizer->nextToken();
 					break;
 				}
 				else
 				{
-					throw new NotSupportedException("',' or ')' expected. line:".$token->line);
+					throw new NotSupportedException("',' or ')' expected got (" . $token->text . '). line:' . $token->line);
 				}
 
 				$tokenizer->skipWhiteSpace();
@@ -348,11 +273,13 @@ class Table extends BaseObject
 				$tokenizer->nextToken();
 			}
 			if ($suffix)
+			{
 				$table->setBody($suffix);
+			}
 		}
 		else
 		{
-			throw new NotSupportedException("'(' expected. line:".$tokenizer->getCurrentToken()->line);
+			throw new NotSupportedException("'(' expected. line:" . $tokenizer->getCurrentToken()->line);
 		}
 
 		return $table;
@@ -365,48 +292,46 @@ class Table extends BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL для создания таблицы.</p>
-	*
-	*
-	* @param string $dbType = '' Тип базы данных (<i>MYSQL</i>, <i>ORACLE</i> или <i>MSSQL</i>).
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/table/getcreateddl.php
-	* @author Bitrix
-	*/
 	public function getCreateDdl($dbType = '')
 	{
-		$result = array();
+		$result = [];
 
-		$items = array();
+		$items = [];
 		/** @var Column $column */
 		foreach ($this->columns->getList() as $column)
 		{
-			$items[] = $column->name." ".$column->body;
+			$items[] = $column->name . ' ' . $column->body;
 		}
-		if ($dbType !== 'MSSQL')
+
+		if ($dbType === 'MYSQL')
 		{
-			/** @var Constraint $constraint */
-			foreach ($this->constraints->getList() as $constraint)
+			/** @var Index $index */
+			foreach ($this->indexes->getList() as $index)
 			{
-				if ($constraint->name === '')
-					$items[] = $constraint->body;
-				else
-					$items[] = "CONSTRAINT ".$constraint->name." ".$constraint->body;
+				$items[] = ($index->fulltext ? 'FULLTEXT ' : '') . ($index->unique ? 'UNIQUE ' : '') . 'KEY ' . $index->name . ' (' . $index->body . ')';
 			}
 		}
-		$result[] = "CREATE TABLE ".$this->name."(\n\t".implode(",\n\t", $items)."\n)".$this->body;
 
-		if ($dbType === 'MSSQL')
+		/** @var Constraint $constraint */
+		foreach ($this->constraints->getList() as $constraint)
 		{
-			/** @var Constraint $constraint */
-			foreach ($this->constraints->getList() as $constraint)
+			if ($constraint->name === '')
 			{
-				$result[] = $constraint->getCreateDdl($dbType);
+				$items[] = $constraint->body;
+			}
+			else
+			{
+				$items[] = 'CONSTRAINT ' . $constraint->name . ' ' . $constraint->body;
+			}
+		}
+
+		$result[] = 'CREATE TABLE ' . $this->name . "(\n\t" . implode(",\n\t", $items) . "\n)" . $this->body;
+
+		if ($dbType !== 'MYSQL')
+		{
+			foreach ($this->indexes->getList() as $index)
+			{
+				$result[] = $index->getCreateDdl($dbType);
 			}
 		}
 
@@ -420,21 +345,8 @@ class Table extends BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL для удаления таблицы.</p>
-	*
-	*
-	* @param string $dbType = '' Тип базы данных (<i>MYSQL</i>, <i>ORACLE</i> или <i>MSSQL</i>).
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/table/getdropddl.php
-	* @author Bitrix
-	*/
 	public function getDropDdl($dbType = '')
 	{
-		return "DROP TABLE ".$this->name;
+		return 'DROP TABLE ' . $this->name;
 	}
 }

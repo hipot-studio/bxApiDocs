@@ -3,7 +3,7 @@ namespace Bitrix\Crm\Integrity;
 use Bitrix\Main;
 class DuplicateControl
 {
-	private static $CURRENT_SETTINGS = null;
+	private static $currentSettings = null;
 	protected $settings = array();
 
 	protected function __construct(array $settings = null)
@@ -22,7 +22,7 @@ class DuplicateControl
 
 		if(!\CCrmOwnerType::IsDefined($entityTypeID))
 		{
-			throw new Main\NotSupportedException("Entity ID: '{$entityTypeID}' is not supported in current context");
+			throw new Main\NotSupportedException("Entity type ID: '{$entityTypeID}' is not supported in current context");
 		}
 		$entityTypeName = \CCrmOwnerType::ResolveName($entityTypeID);
 
@@ -66,7 +66,7 @@ class DuplicateControl
 			}
 			elseif(is_string($enable))
 			{
-				$enable = strtoupper($enable) === 'Y';
+				$enable = mb_strtoupper($enable) === 'Y';
 			}
 			else
 			{
@@ -81,32 +81,33 @@ class DuplicateControl
 	}
 	public function save()
 	{
-		self::$CURRENT_SETTINGS = $this->settings;
-		\Bitrix\Main\Config\Option::set('crm', 'dup_ctrl', serialize(self::$CURRENT_SETTINGS));
+		self::$currentSettings = $this->settings;
+		\Bitrix\Main\Config\Option::delete('crm', array('name'=>'dup_ctrl'));
+		\Bitrix\Main\Config\Option::set('crm', 'dup_ctrl', serialize(self::$currentSettings));
 	}
-	private static function loadCurrentSettings()
+	public static function loadCurrentSettings(): array
 	{
-		if(self::$CURRENT_SETTINGS === null)
+		if(self::$currentSettings === null)
 		{
-			$s = \Bitrix\Main\Config\Option::getRealValue('crm', 'dup_ctrl');
+			$s = \Bitrix\Main\Config\Option::get('crm', 'dup_ctrl');
 			if(is_string($s) && $s !== '')
 			{
-				$ary = unserialize($s);
+				$ary = unserialize($s, ['allowed_classes' => false]);
 				if(is_array($ary))
 				{
-					self::$CURRENT_SETTINGS = &$ary;
+					self::$currentSettings = &$ary;
 					unset($ary);
 				}
 			}
-			if(!is_array(self::$CURRENT_SETTINGS))
+			if(!is_array(self::$currentSettings))
 			{
-				self::$CURRENT_SETTINGS = array();
+				self::$currentSettings = array();
 			}
-			if(!isset(self::$CURRENT_SETTINGS['enableFor']))
+			if(!isset(self::$currentSettings['enableFor']))
 			{
-				self::$CURRENT_SETTINGS['enableFor'] = array();
+				self::$currentSettings['enableFor'] = array();
 			}
 		}
-		return self::$CURRENT_SETTINGS;
+		return self::$currentSettings;
 	}
 }

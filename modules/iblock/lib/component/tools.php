@@ -1,6 +1,11 @@
 <?php
 
 namespace Bitrix\Iblock\Component;
+
+use Bitrix\Main;
+use Bitrix\Iblock\PropertyEnumerationTable;
+use Bitrix\Iblock\PropertyTable;
+
 /**
  * Class Tools
  * Provides various useful methods.
@@ -9,8 +14,15 @@ namespace Bitrix\Iblock\Component;
  */
 class Tools
 {
-	const IPROPERTY_ENTITY_ELEMENT = 'ELEMENT';
-	const IPROPERTY_ENTITY_SECTION = 'SECTION';
+	public const IPROPERTY_ENTITY_ELEMENT = 'ELEMENT';
+	public const IPROPERTY_ENTITY_SECTION = 'SECTION';
+
+	public const CHECKBOX_VALUE_YES = 'Y';
+
+	protected const WEB_PROTOCOL_MASK = '/^(ftp|ftps|http|https):\/\//';
+
+	private static array $checkboxPropertyCache = [];
+
 	/**
 	 * Performs actions enabled by its parameters.
 	 *
@@ -22,70 +34,56 @@ class Tools
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод выполняет действия согласно передаваемым в него параметрам. Метод статический.</p>
-	*
-	*
-	* @param string $message = "" Сообщение, которое будет отображено компонентом
-	* <b>bitrix:system.show_message</b>.
-	*
-	* @param boolean $defineConstant = true Если параметр принимает значение <i>true</i>, то константа
-	* <code>ERROR_404</code> примет значение <code>Y</code>.
-	*
-	* @param boolean $setStatus = true Если параметр принимает значение <i>true</i>, то будет установлен
-	* статус <code>404 Not Found</code>.
-	*
-	* @param boolean $showPage = false Если параметр принимает значение <i>true</i>, то рабочая область будет
-	* очищена и будет показано содержимое файла <b>/404.php</b>.
-	*
-	* @param string $pageFile = "" Файл, который должен быть показан вместо <b>/404.php</b>.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/component/tools/process404.php
-	* @author Bitrix
-	*/
 	public static function process404($message = "", $defineConstant = true, $setStatus = true, $showPage = false, $pageFile = "")
 	{
 		/** @global \CMain $APPLICATION */
 		global $APPLICATION;
 
-		if($message <> "")
+		$message = (string)$message;
+		$pageFile = (string)$pageFile;
+		if ($message !== '')
 		{
 			$APPLICATION->includeComponent(
-				"bitrix:system.show_message",
-				".default",
-				array(
-					"MESSAGE"=> $message,
-					"STYLE" => "errortext",
-				),
+				'bitrix:system.show_message',
+				'.default',
+				[
+					'MESSAGE' => $message,
+					'STYLE' => 'errortext',
+				],
 				null,
-				array(
-					"HIDE_ICONS" => "Y",
-				)
+				[
+					'HIDE_ICONS' => 'Y',
+				]
 			);
 		}
 
-		if ($defineConstant && !defined("ERROR_404"))
+		if ($defineConstant && !defined('ERROR_404'))
 		{
-			// define("ERROR_404", "Y");
+			define('ERROR_404', 'Y');
 		}
 
 		if ($setStatus)
 		{
-			\CHTTP::setStatus("404 Not Found");
+			\CHTTP::setStatus('404 Not Found');
 		}
 
 		if ($showPage)
 		{
 			if ($APPLICATION->RestartWorkarea())
 			{
-				if ($pageFile)
-					require(\Bitrix\Main\Application::getDocumentRoot().rel2abs("/", "/".$pageFile));
+				if (!defined('BX_URLREWRITE'))
+				{
+					define('BX_URLREWRITE', true);
+				}
+				Main\Composite\Engine::setEnable(false);
+				if ($pageFile !== '')
+				{
+					require Main\Application::getDocumentRoot() . rel2abs('/', '/' . $pageFile);
+				}
 				else
-					require(\Bitrix\Main\Application::getDocumentRoot()."/404.php");
+				{
+					require Main\Application::getDocumentRoot() . '/404.php';
+				}
 				die();
 			}
 		}
@@ -110,7 +108,7 @@ class Tools
 		$ipropertyKey = (string)$ipropertyKey;
 		foreach ($keys as $fieldName)
 		{
-			if (!isset($item[$fieldName]) || is_array($item[$fieldName]))
+			if (!array_key_exists($fieldName, $item) || is_array($item[$fieldName]))
 				continue;
 			$imageData = false;
 			$imageId = (int)$item[$fieldName];
@@ -126,8 +124,12 @@ class Tools
 				}
 				else
 				{
-					$imageData['UNSAFE_SRC'] = $imageData['SRC'];
-					$imageData['SRC'] = \CHTTP::urnEncode($imageData['SRC'], 'UTF-8');
+					if (!preg_match(self::WEB_PROTOCOL_MASK, $imageData['SRC']))
+					{
+						$imageData['UNSAFE_SRC'] = $imageData['SRC'];
+						$imageData['SAFE_SRC'] = Main\Web\Uri::urnEncode($imageData['SRC'], 'UTF-8');
+						$imageData['SRC'] = $imageData['SAFE_SRC'];
+					}
 				}
 				$imageData['ALT'] = '';
 				$imageData['TITLE'] = '';
@@ -136,8 +138,8 @@ class Tools
 					$entityPrefix = $entity.'_'.$fieldName;
 					if (isset($item[$ipropertyKey][$entityPrefix.'_FILE_ALT']))
 						$imageData['ALT'] = $item[$ipropertyKey][$entityPrefix.'_FILE_ALT'];
-					if (isset($item[$ipropertyKey][$entityPrefix.'_FILE_ALT']))
-						$imageData['ALT'] = $item[$ipropertyKey][$entityPrefix.'_FILE_TITLE'];
+					if (isset($item[$ipropertyKey][$entityPrefix.'_FILE_TITLE']))
+						$imageData['TITLE'] = $item[$ipropertyKey][$entityPrefix.'_FILE_TITLE'];
 					unset($entityPrefix);
 				}
 				if ($imageData['ALT'] == '' && isset($item['NAME']))
@@ -162,14 +164,94 @@ class Tools
 	{
 		$result = '';
 		if (empty($image) || !isset($image['SRC']))
+		{
 			return $result;
+		}
 		$safe = ($safe === true);
 
 		if ($safe)
-			$result = (isset($image['SAFE_SRC']) ? $image['SAFE_SRC'] : \CHTTP::urnEncode($image['SRC'], 'UTF-8'));
+		{
+			if (isset($image['SAFE_SRC']))
+			{
+				$result = $image['SAFE_SRC'];
+			}
+			elseif (preg_match(self::WEB_PROTOCOL_MASK, $image['SRC']))
+			{
+				$result = $image['SRC'];
+			}
+			else
+			{
+				$result = Main\Web\Uri::urnEncode($image['SRC'], 'UTF-8');
+			}
+		}
 		else
-			$result = (isset($image['UNSAFE_SRC']) ? $image['UNSAFE_SRC'] : $image['SRC']);
+		{
+			$result = ($image['UNSAFE_SRC'] ?? $image['SRC']);
+		}
 
 		return $result;
+	}
+
+	/**
+	 * Check if the property is checkbox:
+	 * - PROPERTY_TYPE === 'L';
+	 * - MULTIPLE === 'N';
+	 * - LIST_TYPE === 'C';
+	 * - Variants amount === 1;
+	 * - Value of the variant === 'Y'.
+	 *
+	 * @param array $property Property settings.
+	 *
+	 * @return bool
+	 */
+	public static function isCheckboxProperty(array $property): bool
+	{
+		$propertyId = (int)($property['ID'] ?? 0);
+		if ($propertyId <= 0)
+		{
+			return false;
+		}
+		if (!isset(self::$checkboxPropertyCache[$propertyId]))
+		{
+			$result = false;
+			if (
+				($property['PROPERTY_TYPE'] ?? '') === PropertyTable::TYPE_LIST
+				&& ($property['MULTIPLE'] ?? '') === 'N'
+				&& (string)($property['USER_TYPE'] ?? '') === ''
+				&& ($property['LIST_TYPE'] ?? '') === PropertyTable::CHECKBOX
+			)
+			{
+				$filter = [
+					'=PROPERTY_ID' => $propertyId,
+				];
+				$cache = [
+					'ttl' => 86400,
+				];
+				if (PropertyEnumerationTable::getCount($filter, $cache) === 1)
+				{
+					$variant = PropertyEnumerationTable::getRow([
+						'select' => [
+							'ID',
+							'PROPERTY_ID',
+							'VALUE',
+						],
+						'filter' => $filter,
+						'cache' => $cache,
+					]);
+					if (($variant['VALUE'] ?? '') === self::CHECKBOX_VALUE_YES)
+					{
+						$result = true;
+					}
+				}
+			}
+			self::$checkboxPropertyCache[$propertyId] = $result;
+		}
+
+		return self::$checkboxPropertyCache[$propertyId];
+	}
+
+	public static function clearCache(): void
+	{
+		self::$checkboxPropertyCache = [];
 	}
 }

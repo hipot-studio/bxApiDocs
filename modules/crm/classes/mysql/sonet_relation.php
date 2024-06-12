@@ -141,7 +141,7 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 		foreach($items as &$item)
 		{
 			$data = $DB->PrepareInsert(self::TABLE_NAME, $item);
-			if(strlen($bulkColumns) == 0)
+			if($bulkColumns == '')
 			{
 				$bulkColumns = $data[0];
 			}
@@ -167,7 +167,7 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 			$query .= "($value)";
 		}
 
-		if(strlen($query) == 0)
+		if($query == '')
 		{
 			return;
 		}
@@ -287,10 +287,18 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 			return;
 		}
 
-		global $DB;
-		$tableName = self::TABLE_NAME;
-		$sql = "UPDATE {$tableName} R INNER JOIN b_sonet_log L ON R.SL_ID = L.ID SET R.SL_LAST_UPDATED = L.LOG_UPDATE WHERE R.SL_ID = {$logEntityID}";
-		$DB->Query($sql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+		$connection = \Bitrix\Main\Application::getConnection();
+		$sql = $connection->getSqlHelper()->prepareCorrelatedUpdate(
+			self::TABLE_NAME,
+			'R',
+			[
+				'SL_LAST_UPDATED' => 'L.LOG_UPDATE',
+			],
+			' b_sonet_log L ',
+			'R.SL_ID = L.ID AND R.SL_ID = '.$logEntityID
+		);
+
+		$connection->query($sql);
 	}
 	public function Rebind($entityTypeID, $srcEntityID, $dstEntityID)
 	{
@@ -311,6 +319,36 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 
 		$updateSql = "UPDATE {$tableName} SET PARENT_ENTITY_ID = {$dstEntityID}
 			WHERE SL_PARENT_ENTITY_TYPE = '{$slEntityType}' AND PARENT_ENTITY_ID = {$srcEntityID}";
+		$dbResult = $DB->Query($updateSql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+
+		if(is_object($dbResult))
+		{
+			$rowCount += $dbResult->AffectedRowsCount();
+		}
+
+		return $rowCount > 0;
+	}
+	public function TransferOwnership($srcEntityTypeID, $srcEntityID, $dstEntityTypeID, $dstEntityID)
+	{
+		global $DB;
+		$tableName = self::TABLE_NAME;
+
+		$srcSonetEntityType = $DB->ForSql(CCrmLiveFeedEntity::GetByEntityTypeID($srcEntityTypeID));
+		$dstSonetEntityType = $DB->ForSql(CCrmLiveFeedEntity::GetByEntityTypeID($dstEntityTypeID));
+
+		$rowCount = 0;
+
+		$updateSql = "UPDATE {$tableName} SET SL_ENTITY_TYPE = '{$dstSonetEntityType}', ENTITY_ID = {$dstEntityID}
+			WHERE SL_ENTITY_TYPE = '{$srcSonetEntityType}' AND ENTITY_ID = {$srcEntityID}";
+		$dbResult = $DB->Query($updateSql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+
+		if(is_object($dbResult))
+		{
+			$rowCount += $dbResult->AffectedRowsCount();
+		}
+
+		$updateSql = "UPDATE {$tableName} SET SL_PARENT_ENTITY_TYPE = '{$dstSonetEntityType}', PARENT_ENTITY_ID = {$dstEntityID}
+			WHERE SL_PARENT_ENTITY_TYPE = '{$srcSonetEntityType}' AND PARENT_ENTITY_ID = {$srcEntityID}";
 		$dbResult = $DB->Query($updateSql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
 
 		if(is_object($dbResult))

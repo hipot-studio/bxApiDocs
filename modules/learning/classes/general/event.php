@@ -1,11 +1,11 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage learning
  * @copyright 2001-2013 Bitrix
  */
-
 
 IncludeModuleLangFile(__FILE__);
 
@@ -17,24 +17,21 @@ class CLearningEvent
 		return $obj;
 	}
 
-
-	static public function GetFilter()
+	public static function GetFilter()
 	{
 		$arFilter = array();
 
 		return  $arFilter;
 	}
 
-
-	static public function GetAuditTypes()
+	public static function GetAuditTypes()
 	{
 		return array(
 			'LEARNING_REMOVE_ITEM' => '[LEARNING_REMOVE_ITEM] ' . GetMessage('LEARNING_LOG_REMOVE_ITEM')
 		);
 	}
 
-
-	static public function GetEventInfo($row, $arParams)
+	public static function GetEventInfo($row, $arParams)
 	{
 		$EventPrint = '???';
 		switch($row['AUDIT_TYPE_ID'])
@@ -51,8 +48,7 @@ class CLearningEvent
 		);
 	}
 
-
-	static public function GetFilterSQL($var)
+	public static function GetFilterSQL($var)
 	{
 		$ar = array();
 

@@ -17,15 +17,22 @@ class Product extends DataConverter
 
 	public function __construct($params)
 	{
-		if(!isset($params["SITE_ID"]) || strlen($params["SITE_ID"]) <= 0)
+		if(!isset($params["SITE_ID"]) || $params["SITE_ID"] == '')
 			throw new ArgumentNullException("SITE_ID");
 
 		$this->siteId = $params["SITE_ID"];
+
+		if(!\Bitrix\Main\Loader::includeModule('iblock'))
+			throw new SystemException("Can't include module \"iblock\"!");
 	}
 
 	public function convert($data)
 	{
 		$this->ebayCategories = $this->bitrixToEbayCategories($data["IBLOCK_ID"], $data["CATEGORIES"]);
+
+		if(empty($this->ebayCategories))
+			throw new SystemException('Can\'t recieve categories for ebay. Product id: '.$data["ID"].', product categories ids: '.implode(', '.$data["CATEGORIES"]));
+
 		$this->attributesList = $this->getAttributesList($data["IBLOCK_ID"], $this->ebayCategories);
 		$this->attributesItem = $this->getAttributesItem($this->attributesList, $data);
 		$this->bitrixCategories = $data["CATEGORIES"];
@@ -59,15 +66,15 @@ class Product extends DataConverter
 			$result .= "\t\t\t<Attributes>\n";
 
 			foreach($attributies as $attrName => $attrValue)
-				$result .= "\t\t\t\t<Attribute Name=\"".$attrName."\">".htmlspecialcharsbx($attrValue)."</Attribute>\n";
+				$result .= "\t\t\t\t<Attribute Name=\"".\CDataXML::xmlspecialchars($attrName)."\">".\CDataXML::xmlspecialchars($attrValue)."</Attribute>\n";
 
 			$result .= "\t\t\t</Attributes>\n";
 		}
 
-		if(strlen($data["DETAIL_PICTURE_URL"]) > 0 || strlen($data["PREVIEW_PICTURE_URL"]) > 0)
+		if($data["DETAIL_PICTURE_URL"] <> '' || $data["PREVIEW_PICTURE_URL"] <> '')
 		{
 			$result .= "\t\t\t<PictureUrls>\n";
-			$result .= "\t\t\t\t<PictureUrl>".(strlen($data["DETAIL_PICTURE_URL"]) > 0 ? $data["DETAIL_PICTURE_URL"] : $data["PREVIEW_PICTURE_URL"] )."</PictureUrl>\n";
+			$result .= "\t\t\t\t<PictureUrl>".($data["DETAIL_PICTURE_URL"] <> '' ? $data["DETAIL_PICTURE_URL"] : $data["PREVIEW_PICTURE_URL"] )."</PictureUrl>\n";
 			$result .= "\t\t\t</PictureUrls>\n";
 		}
 
@@ -91,7 +98,7 @@ class Product extends DataConverter
 			$result .= "\t\t\t<VariationVector>\n";
 
 			foreach($this->variationsVector as $ebayAttributeName => $bitrixPropId)
-				$result .= "\t\t\t\t<Name>".$ebayAttributeName."</Name>\n";
+				$result .= "\t\t\t\t<Name>".\CDataXML::xmlspecialchars($ebayAttributeName)."</Name>\n";
 
 			$result .= "\t\t\t</VariationVector>\n";
 		}
@@ -103,11 +110,11 @@ class Product extends DataConverter
 
 		$result .= "\t\t\t</Categories>\n";
 		$result .= "\t\t\t<SharedProductInformation>\n";
-		$result .= "\t\t\t<Title>".$data["NAME"]."</Title>\n";
+		$result .= "\t\t\t<Title>".\CDataXML::xmlspecialchars($data["NAME"])."</Title>\n";
 		$result .= "\t\t\t<Description>\n";
 		$result .= "\t\t\t\t<ProductDescription>\n";
 		$result .= "<![CDATA[\n";
-		$result .= strlen($data["~PREVIEW_TEXT"]) > 0 ? $data["~PREVIEW_TEXT"] : $data["~DETAIL_TEXT"]."\n";
+		$result .= $data["~PREVIEW_TEXT"] <> '' ? $data["~PREVIEW_TEXT"] : $data["~DETAIL_TEXT"]."\n";
 		$result .= "]]>\n";
 		$result .= "</ProductDescription>\n";
 		$result .= "\t\t\t</Description>\n";
@@ -117,13 +124,20 @@ class Product extends DataConverter
 			$result .= "\t\t\t<Attributes>\n";
 
 			foreach($this->attributesItem as $attrName => $attrValue)
-				$result .= "\t\t\t\t<Attribute Name=\"".$attrName."\">".htmlspecialcharsbx($attrValue)."</Attribute>\n";
+			{
+				if(is_array($attrValue))
+				{
+					$attrValue = current($attrValue);
+				}
+
+				$result .= "\t\t\t\t<Attribute Name=\"".\CDataXML::xmlspecialchars($attrName)."\">".\CDataXML::xmlspecialchars($attrValue)."</Attribute>\n";
+			}
 
 			$result .= "\t\t\t</Attributes>\n";
 		}
 
 		$result .= "\t\t\t<PictureUrls>\n";
-		$result .= "\t\t\t\t<PictureUrl>".(strlen($data["DETAIL_PICTURE_URL"]) > 0 ? $data["DETAIL_PICTURE_URL"] : $data["PREVIEW_PICTURE_URL"] )."</PictureUrl>\n";
+		$result .= "\t\t\t\t<PictureUrl>".($data["DETAIL_PICTURE_URL"] <> '' ? $data["DETAIL_PICTURE_URL"] : $data["PREVIEW_PICTURE_URL"] )."</PictureUrl>\n";
 		$result .= "\t\t\t</PictureUrls>\n";
 		$result .= "<ConditionInfo>
 						<Condition>NEW</Condition>
@@ -174,11 +188,11 @@ class Product extends DataConverter
 		$result .= "\t\t\t<SKU>".$data["IBLOCK_ID"]."_".$data["ID"]."</SKU>\n";
 		$result .= "\t\t\t<ProductInformation>\n";
 		$result .= "\t\t\t\t<Country>RU</Country>\n";
-		$result .= "\t\t\t\t<Title>".$data["NAME"]."</Title>\n";
+		$result .= "\t\t\t\t<Title>".\CDataXML::xmlspecialchars($data["NAME"])."</Title>\n";
 		$result .= "\t\t\t\t<Description>\n";
 		$result .= "\t\t\t\t\t<ProductDescription>\n";
 		$result .= "<![CDATA[\n";
-		$result .= strlen($data["~PREVIEW_TEXT"]) > 0 ? $data["~PREVIEW_TEXT"] : $data["~DETAIL_TEXT"]."\n";
+		$result .= $data["~PREVIEW_TEXT"] <> '' ? $data["~PREVIEW_TEXT"] : $data["~DETAIL_TEXT"]."\n";
 		$result .= "]]>\n";
 		$result .= "</ProductDescription>\n";
 		$result .= "\t\t\t\t</Description>\n";
@@ -191,13 +205,20 @@ class Product extends DataConverter
 			$result .= "\t\t\t\t<Attributes>\n";
 
 			foreach($this->attributesItem as $attrName => $attrValue)
-				$result .= "\t\t\t\t\t<Attribute Name=\"".$attrName."\">".$attrValue."</Attribute>\n";
+			{
+				if(is_array($attrValue))
+				{
+					$attrValue = current($attrValue);
+				}
+
+				$result .= "\t\t\t\t\t<Attribute Name=\"".\CDataXML::xmlspecialchars($attrName)."\">".\CDataXML::xmlspecialchars($attrValue)."</Attribute>\n";
+			}
 
 			$result .= "\t\t\t\t</Attributes>\n";
 		}
 
 		$result .= "\t\t\t\t<PictureUrls>\n";
-		$result .= "\t\t\t\t\t<PictureUrl>".(strlen($data["DETAIL_PICTURE_URL"]) > 0 ? $data["DETAIL_PICTURE_URL"] : $data["PREVIEW_PICTURE_URL"] )."</PictureUrl>\n";
+		$result .= "\t\t\t\t\t<PictureUrl>".($data["DETAIL_PICTURE_URL"] <> '' ? $data["DETAIL_PICTURE_URL"] : $data["PREVIEW_PICTURE_URL"] )."</PictureUrl>\n";
 		$result .= "\t\t\t\t</PictureUrls>\n";
 		$result .= "\t\t\t\t<Categories>\n";
 
@@ -219,13 +240,13 @@ class Product extends DataConverter
 		$result = "\t\t<ListingDetails>\n";
 
 		if(!empty($policy["RETURN"]))
-			$result .= "\t\t\t<ReturnPolicy>".$policy["RETURN"]."</ReturnPolicy>\n";
+			$result .= "\t\t\t<ReturnPolicy>".\CDataXML::xmlspecialchars($policy["RETURN"])."</ReturnPolicy>\n";
 
 		if(!empty($policy["SHIPPING"]))
-			$result .= "\t\t\t<ShippingPolicy>".$policy["SHIPPING"]."</ShippingPolicy>\n";
+			$result .= "\t\t\t<ShippingPolicy>".\CDataXML::xmlspecialchars($policy["SHIPPING"])."</ShippingPolicy>\n";
 
 		if(!empty($policy["PAYMENT"]))
-			$result .= "\t\t\t<PaymentPolicy>".$policy["PAYMENT"]."</PaymentPolicy>\n";
+			$result .= "\t\t\t<PaymentPolicy>".\CDataXML::xmlspecialchars($policy["PAYMENT"])."</PaymentPolicy>\n";
 
 		$result .= "\t\t</ListingDetails>\n";
 		return $result;
@@ -263,8 +284,6 @@ class Product extends DataConverter
 
 			while($arMapRes = $catMapVarRes->fetch())
 				$result[$arMapRes["VALUE_EXTERNAL"]] = $arMapRes["VALUE_INTERNAL"];
-
-
 		}
 
 		return $result;
@@ -282,43 +301,67 @@ class Product extends DataConverter
 		return $result;
 	}
 
-	protected static function getEbayCategoriesParams($iblockId, array $bitrixCategories = array())
+	protected static function getEbayCategoriesParams($iblockId, array $bitrixCategories = [])
 	{
-		static $entitiesIds = array();
+		static $entitiesIds = [];
 
-		if(empty($entitiesIds[$iblockId]))
+		if (empty($entitiesIds[$iblockId]))
 		{
 			$res = \Bitrix\Sale\TradingPlatform\Ebay\MapHelper::getCategoryEntityId($iblockId);
 
-			if(!$res)
-				return array();
+			if (!$res)
+			{
+				return [];
+			}
 
 			$entitiesIds[$iblockId] = $res;
 		}
 
-		static $params  = array();
+		static $params = array();
 
-		if(!isset($params[$iblockId]))
+		if (!isset($params[$iblockId]))
 		{
-			$params[$iblockId] = array();
+			$params[$iblockId] = [];
 
-			$catRes = \Bitrix\Sale\TradingPlatform\MapTable::getList(array(
-				'filter' => array(
+			$catRes = \Bitrix\Sale\TradingPlatform\MapTable::getList([
+				'filter' => [
 					'=ENTITY_ID' => $entitiesIds[$iblockId],
-				),
-			));
+				],
+			]);
 
 			while($category = $catRes->fetch())
-				$params[$iblockId][$category["VALUE_INTERNAL"]] = $category;
+			{
+				if ((int)$category["VALUE_INTERNAL"] > 0)
+				{
+					$params[$iblockId][$category["VALUE_INTERNAL"]] = $category;
+				}
+			}
+			unset($catRes);
 		}
 
 		$result = array();
 
-		if(!empty($bitrixCategories))
+		if (!empty($bitrixCategories))
 		{
-			foreach($bitrixCategories as $catId)
-				if(isset($params[$iblockId][$catId]) && is_array($params[$iblockId][$catId]))
+			foreach ($bitrixCategories as $catId)
+			{
+				if (isset($params[$iblockId][$catId]) && is_array($params[$iblockId][$catId]))
+				{
 					$result[] = $params[$iblockId][$catId];
+				}
+				else
+				{
+					$res = \CIBlockSection::GetNavChain($iblockId, $catId, ['ID'], true);
+					foreach ($res as $row)
+					{
+						$id = (int)$row['ID'];
+						if (isset($params[$iblockId][$id]) && is_array($params[$iblockId][$id]))
+						{
+							$result[] = $params[$iblockId][$id];
+						}
+					}
+				}
+			}
 		}
 		else
 		{
@@ -359,13 +402,13 @@ class Product extends DataConverter
 						$policyPaymentId = $categoryParams["PARAMS"]["POLICY"]["PAYMENT"];
 				}
 
-				if(strlen($policyReturnId) <= 0 && !empty($siteSettings["POLICY"]["RETURN"]["DEFAULT"]))
+				if($policyReturnId == '' && !empty($siteSettings["POLICY"]["RETURN"]["DEFAULT"]))
 					$policyReturnId = $siteSettings["POLICY"]["RETURN"]["DEFAULT"];
 
-				if(strlen($policyShippingId) <= 0 && !empty($siteSettings["POLICY"]["SHIPPING"]["DEFAULT"]))
+				if($policyShippingId == '' && !empty($siteSettings["POLICY"]["SHIPPING"]["DEFAULT"]))
 					$policyShippingId = $siteSettings["POLICY"]["SHIPPING"]["DEFAULT"];
 
-				if(strlen($policyPaymentId) <= 0 && !empty($siteSettings["POLICY"]["PAYMENT"]["DEFAULT"]))
+				if($policyPaymentId == '' && !empty($siteSettings["POLICY"]["PAYMENT"]["DEFAULT"]))
 					$policyPaymentId = $siteSettings["POLICY"]["PAYMENT"]["DEFAULT"];
 
 				if($policyReturnId != "" && !empty($siteSettings["POLICY"]["RETURN"]["LIST"][$policyReturnId]))
@@ -383,4 +426,4 @@ class Product extends DataConverter
 
 		return $result[$ebayCategory];
 	}
-} 
+}

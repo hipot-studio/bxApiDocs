@@ -8,7 +8,7 @@ class CSocServOdnoklassniki extends CSocServAuth
 
 	protected $entityOAuth = null;
 
-	static public function GetSettings()
+	public function GetSettings()
 	{
 		return array(
 			array("odnoklassniki_appid", GetMessage("socserv_odnoklassniki_client_id"), "", Array("text", 40)),
@@ -50,13 +50,13 @@ class CSocServOdnoklassniki extends CSocServAuth
 		{
 			$redirect_uri = self::CONTROLLER_URL."/redirect.php";
 			$state = \CHTTP::URN2URI("/bitrix/tools/oauth/odnoklassniki.php")."?state=";
-			$backurl = urlencode($GLOBALS["APPLICATION"]->GetCurPageParam('check_key='.$_SESSION["UNIQUE_KEY"], array("logout", "auth_service_error", "auth_service_id", "backurl"))).'&mode='.$location;
+			$backurl = urlencode($GLOBALS["APPLICATION"]->GetCurPageParam('check_key='.\CSocServAuthManager::getUniqueKey(), array("logout", "auth_service_error", "auth_service_id", "backurl"))).'&mode='.$location;
 			$state .= urlencode(urlencode("backurl=".$backurl));
 		}
 		else
 		{
 			$backurl = $APPLICATION->GetCurPageParam(
-				'check_key='.$_SESSION["UNIQUE_KEY"],
+				'check_key='.\CSocServAuthManager::getUniqueKey(),
 				array("logout", "auth_service_error", "auth_service_id", "backurl")
 			);
 			$redirect_uri = \CHTTP::URN2URI("/bitrix/tools/oauth/odnoklassniki.php");
@@ -121,11 +121,17 @@ class CSocServOdnoklassniki extends CSocServAuth
 						if($date = MakeTimeStamp($arOdnoklUser['birthday'], "YYYY-MM-DD"))
 							$arFields["PERSONAL_BIRTHDAY"] = ConvertTimeStamp($date);
 					if(isset($arOdnoklUser['pic_2']) && self::CheckPhotoURI($arOdnoklUser['pic_2']))
-						if ($arPic = CFile::MakeFileArray($arOdnoklUser['pic_2'].'&name=/'.md5($arOdnoklUser['pic_2']).'.jpg'))
+					{
+						if($arPic = CFile::MakeFileArray($arOdnoklUser['pic_2']))
+						{
+							$arPic['name'] = md5($arOdnoklUser['pic_2']).'.jpg';
 							$arFields["PERSONAL_PHOTO"] = $arPic;
+						}
+					}
 					$arFields["PERSONAL_WWW"] = "http://odnoklassniki.ru/profile/".$uid;
-					if(strlen(SITE_ID) > 0)
+					if(SITE_ID <> '')
 						$arFields["SITE_ID"] = SITE_ID;
+
 					$bSuccess = $this->AuthorizeUser($arFields);
 				}
 			}
@@ -154,7 +160,7 @@ class CSocServOdnoklassniki extends CSocServAuth
 				{
 					foreach($aRemove as $param)
 					{
-						if(strpos($value, $param."=") === 0)
+						if(mb_strpos($value, $param."=") === 0)
 						{
 							unset($arUrlQuery[$key]);
 							break;
@@ -183,7 +189,7 @@ class CSocServOdnoklassniki extends CSocServAuth
 				: $APPLICATION->GetCurPageParam(('auth_service_id='.self::ID.'&auth_service_error='.$bSuccess), $aRemove);
 		}
 
-		if(CModule::IncludeModule("socialnetwork") && strpos($url, "current_fieldset=") === false)
+		if(CModule::IncludeModule("socialnetwork") && mb_strpos($url, "current_fieldset=") === false)
 			$url = (preg_match("/\?/", $url)) ? $url."&current_fieldset=SOCSERV" : $url."?current_fieldset=SOCSERV";
 
 		$url = CUtil::JSEscape($url);
@@ -197,7 +203,7 @@ class CSocServOdnoklassniki extends CSocServAuth
 
 		echo $JSScript;
 
-		die();
+		CMain::FinalActions();
 	}
 
 	public static function SendUserFeed($userId, $message)
@@ -214,9 +220,9 @@ class CSocServOdnoklassniki extends CSocServAuth
 
 class COdnoklassnikiInterface
 {
-	const AUTH_URL = "http://www.odnoklassniki.ru/oauth/authorize";
-	const TOKEN_URL = "http://api.odnoklassniki.ru/oauth/token.do";
-	const CONTACTS_URL = "http://api.odnoklassniki.ru/fb.do";
+	const AUTH_URL = "https://www.odnoklassniki.ru/oauth/authorize";
+	const TOKEN_URL = "https://api.odnoklassniki.ru/oauth/token.do";
+	const CONTACTS_URL = "https://api.odnoklassniki.ru/fb.do";
 
 	protected $appID;
 	protected $appSecret;
@@ -289,7 +295,7 @@ class COdnoklassnikiInterface
 			$arguments["application_key"] = $this->appKey;
 			$arguments['method'] = 'users.getCurrentUser';
 			ksort($arguments);
-			$this->sign = strtolower(md5('application_key='.$arguments["application_key"].'method='.$arguments['method'].md5($this->access_token.$this->appSecret)));
+			$this->sign = mb_strtolower(md5('application_key='.$arguments["application_key"].'method='.$arguments['method'].md5($this->access_token.$this->appSecret)));
 			return true;
 		}
 		return false;
@@ -313,7 +319,7 @@ class COdnoklassnikiInterface
 			self::SetOauthKeys($socServUserId);
 		if(!defined("BX_UTF"))
 			$message = CharsetConverter::ConvertCharset($message, LANG_CHARSET, "utf-8");
-		$this->sign = strtolower(md5('application_key='.$this->appKey.'method=users.setStatusstatus='.$message.md5($this->access_token.$this->appSecret)));
+		$this->sign = mb_strtolower(md5('application_key='.$this->appKey.'method=users.setStatusstatus='.$message.md5($this->access_token.$this->appSecret)));
 		$result = CHTTP::sGetHeader(self::CONTACTS_URL."?method=users.setStatus&application_key=".$this->appKey."&access_token=".$this->access_token."&sig=".$this->sign."&status=".urlencode($message), array(), $this->httpTimeout);
 
 		if(!defined("BX_UTF"))
@@ -332,8 +338,11 @@ class COdnoklassnikiInterface
 
 	private function SetOauthKeys($socServUserId)
 	{
-		$dbSocservUser = CSocServAuthDB::GetList(array(), array('ID' => $socServUserId), false, false, array("OATOKEN", "XML_ID", "REFRESH_TOKEN"));
-		while($arOauth = $dbSocservUser->Fetch())
+		$dbSocservUser = \Bitrix\Socialservices\UserTable::getList([
+			'filter' => ['=ID' => $socServUserId],
+			'select' => ["OATOKEN", "XML_ID", "REFRESH_TOKEN"]
+		]);
+		while($arOauth = $dbSocservUser->fetch())
 		{
 			$this->access_token = $arOauth["OATOKEN"];
 			$this->userId = preg_replace("|\D|", '', $arOauth["XML_ID"]);
@@ -354,7 +363,7 @@ class COdnoklassnikiInterface
 		if(isset($arResult["access_token"]) && $arResult["access_token"] <> '')
 		{
 			$this->access_token = $arResult["access_token"];
-			CSocServAuthDB::Update($socServUserId, array("OATOKEN" => $arResult["access_token"]));
+			\Bitrix\Socialservices\UserTable::update($socServUserId, array("OATOKEN" => $arResult["access_token"]));
 			return true;
 		}
 		return false;

@@ -3,6 +3,7 @@
 namespace Bitrix\Mail;
 
 use Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
 
 Main\Localization\Loc::loadMessages(__FILE__);
 
@@ -15,19 +16,6 @@ class User
 	 * @param array $fields User fields.
 	 * @return int|false
 	 */
-	
-	/**
-	* <p>Метод создает пользователя почты. Метод статический.</p>
-	*
-	*
-	* @param array $fields  Массив полей пользователя.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/mail/user/create.php
-	* @author Bitrix
-	*/
 	public static function create($fields)
 	{
 		$user = new \CUser;
@@ -40,6 +28,12 @@ class User
 			'PERSONAL_PHOTO'   => (!empty($fields["PERSONAL_PHOTO_ID"]) ? \CFile::makeFileArray($fields['PERSONAL_PHOTO_ID']) : false),
 			'EXTERNAL_AUTH_ID' => 'email',
 		);
+
+		if (Main\ModuleManager::isModuleInstalled('intranet'))
+		{
+			$userFields['UF_DEPARTMENT'] = array();
+		}
+
 		if (
 			isset($fields['UF'])
 			&& is_array($fields['UF'])
@@ -59,6 +53,7 @@ class User
 		{
 			$userFields["GROUP_ID"] = $mailGroup;
 		}
+
 		$result = $user->add($userFields);
 
 		return $result;
@@ -69,17 +64,6 @@ class User
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод запускает логин пользователя. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/mail/user/login.php
-	* @author Bitrix
-	*/
 	public static function login()
 	{
 		$eventManager = Main\EventManager::getInstance();
@@ -97,19 +81,6 @@ class User
 	 * @param array &$params Auth params.
 	 * @return int|false
 	 */
-	
-	/**
-	* <p>Метод возвращает идентификатор пользователя почты. Метод статический.</p>
-	*
-	*
-	* @param array $array  Параметры аутентификации.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/mail/user/onloginexternal.php
-	* @author Bitrix
-	*/
 	public static function onLoginExternal(&$params)
 	{
 		$context = Main\Application::getInstance()->getContext();
@@ -148,29 +119,6 @@ class User
 	 * @param string $backurl Back URL.
 	 * @return array|false
 	 */
-	
-	/**
-	* <p>Метод возвращает уникальный email связки Пользователь-Сущность и URL точки входа. Метод статический.</p>
-	*
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @param integer $userId  Идентификатор пользователя.
-	*
-	* @param string $entityType  Идентификатор типа сущности.
-	*
-	* @param integer $entityId  Идентификатор сущности.
-	*
-	* @param string $entityLink = null URL сущности.
-	*
-	* @param string $backurl = null Предыдущий URL.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/mail/user/getreplyto.php
-	* @author Bitrix
-	*/
 	public static function getReplyTo($siteId, $userId, $entityType, $entityId, $entityLink = null, $backurl = null)
 	{
 		$filter = array(
@@ -239,28 +187,14 @@ class User
 	 * @param string $entityType Entity type ID.
 	 * @return array|false
 	 */
-	
-	/**
-	* <p>Метод возвращает уникальный email для связки Сайт-Пользователь-Сущность. Метод статический.</p>
-	*
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @param integer $userId  Идентификатор пользователя.
-	*
-	* @param string $entityType  Идентификатор типа сущности.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/mail/user/getforwardto.php
-	* @author Bitrix
-	*/
 	public static function getForwardTo($siteId, $userId, $entityType)
 	{
 		$cache = new \CPHPCache();
 
-		if ($cache->initCache(365*24*3600, sprintf('forward_%s_%s_%s', $siteId, $userId, $entityType), '/mail'))
+		$cacheKey = sprintf('%s_%s', $userId, $entityType);
+		$cacheDir = sprintf('/mail/user/forward/%s', bin2hex($siteId));
+
+		if ($cache->initCache(365*24*3600, $cacheKey, $cacheDir))
 		{
 			$forwardTo = $cache->getVars();
 		}
@@ -307,6 +241,32 @@ class User
 		return array($forwardTo);
 	}
 
+	public static function parseEmailRecipient($to)
+	{
+		if (!preg_match('/^(?<type>rpl|fwd)(?<token>[a-z0-9]+)@(?<domain>.+)/i', $to, $matches))
+		{
+			return false;
+		}
+		return $matches;
+	}
+
+	public static function getUserRelation($token)
+	{
+		$userRelation = UserRelationsTable::getList(array(
+			'filter' => array(
+				'=TOKEN'      => $token,
+				'USER.ACTIVE' => 'Y'
+			)
+		))->fetch();
+
+		if (!$userRelation)
+		{
+			return false;
+		}
+
+		return $userRelation;
+	}
+
 	/**
 	 * Sends email related events
 	 *
@@ -315,50 +275,19 @@ class User
 	 * @param string &$error Error.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод посылает события, связанные с электронной почтой. Метод статический.</p>
-	*
-	*
-	* @param string $to  Email получателя.
-	*
-	* @param array $message  Сообщение.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/mail/user/onemailreceived.php
-	* @author Bitrix
-	*/
-	public static function onEmailReceived($to, $message, &$error)
+	public static function onEmailReceived($to, $message, $recipient, $userRelation, &$error)
 	{
-		if (!preg_match('/^(?<type>rpl|fwd)(?<token>[a-z0-9]+)@(?<domain>.+)/i', $to, $matches))
-		{
-			$error = sprintf('Invalid recipient (%s)', $to);
-			return false;
-		}
-
-		$type  = $matches['type'];
-		$token = $matches['token'];
-
-		$userRelation = UserRelationsTable::getByPrimary($token)->fetch();
-
-		if (!$userRelation)
-		{
-			$error = sprintf('Unknown recipient (%s)', $to);
-			return false;
-		}
+		$type  = $recipient['type'];
+		$token = $recipient['token'];
 
 		$message['secret'] = $token;
 
 		switch ($type)
 		{
 			case 'rpl':
-				$eventId = sprintf('onReplyReceived%s', $userRelation['ENTITY_TYPE']);
 				$content = Message::parseReply($message);
 				break;
 			case 'fwd':
-				$eventId = sprintf('onForwardReceived%s', $userRelation['ENTITY_TYPE']);
 				$content = Message::parseForward($message);
 				break;
 		}
@@ -369,20 +298,149 @@ class User
 			return false;
 		}
 
-		$event = new Main\Event(
-			'mail', $eventId,
-			array(
-				'site_id'     => $userRelation['SITE_ID'],
-				'entity_id'   => $userRelation['ENTITY_ID'],
-				'from'        => $userRelation['USER_ID'],
-				'subject'     => $message['subject'],
-				'content'     => $content,
-				'attachments' => $message['files']
+		$attachments = array_filter(
+			array_combine(
+				array_column((array) $message['files'], 'name'),
+				array_column((array) $message['files'], 'tmp_name')
 			)
 		);
-		$event->send();
 
-		return $event->getResults();
+		$addResult = User\MessageTable::add(array(
+			'TYPE' => $type,
+			'SITE_ID' => $userRelation['SITE_ID'],
+			'ENTITY_TYPE' => $userRelation['ENTITY_TYPE'],
+			'ENTITY_ID' => $userRelation['ENTITY_ID'],
+			'USER_ID' => $userRelation['USER_ID'],
+			'SUBJECT' => $message['subject'],
+			'CONTENT' => $content,
+			'ATTACHMENTS' => serialize($attachments),
+		));
+
+		if ($addResult->isSuccess())
+		{
+			\CAgent::addAgent(
+				"\\Bitrix\\Mail\\User::sendEventAgent(".$addResult->getId().");",
+				"mail", //module
+				"N", //period
+				10 //interval
+			);
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Agent method, retrieves stored user message and sends an event
+	 */
+	public static function sendEventAgent($messageId = 0, $cnt = 0)
+	{
+		$messageId = intval($messageId);
+		if ($messageId <= 0)
+		{
+			return;
+		}
+
+		$res = User\MessageTable::getList(array(
+			'filter' => array(
+				'=ID' => $messageId
+			)
+		));
+		if ($messageFields = $res->fetch())
+		{
+			if (intval($cnt) > 10)
+			{
+				if (Main\Loader::includeModule('im'))
+				{
+					$title = trim($messageFields['SUBJECT']);
+					if ($title == '')
+					{
+						$title = trim($messageFields['CONTENT']);
+						$title = preg_replace("/\[ATTACHMENT\s*=\s*[^\]]*\]/is".BX_UTF_PCRE_MODIFIER, "", $title);
+
+						$CBXSanitizer = new \CBXSanitizer;
+						$CBXSanitizer->delAllTags();
+						$title = $CBXSanitizer->sanitizeHtml($title);
+					}
+
+					\CIMNotify::add(array(
+						"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
+						"NOTIFY_TYPE" => IM_NOTIFY_SYSTEM,
+						"NOTIFY_MODULE" => "mail",
+						"NOTIFY_EVENT" => "user_message_failed",
+						"TO_USER_ID" => $messageFields['USER_ID'],
+						"NOTIFY_MESSAGE" => Loc::getMessage("MAIL_USER_MESSAGE_FAILED", array(
+							"#TITLE#" => $title
+						))
+					));
+				}
+				User\MessageTable::delete($messageId);
+				return;
+			}
+
+			switch ($messageFields['TYPE'])
+			{
+				case 'rpl':
+					$eventId = sprintf('onReplyReceived%s', $messageFields['ENTITY_TYPE']);
+					break;
+				case 'fwd':
+					$eventId = sprintf('onForwardReceived%s', $messageFields['ENTITY_TYPE']);
+					break;
+			}
+
+			if (!empty($eventId))
+			{
+				$attachments = array();
+				if (!empty($messageFields['ATTACHMENTS']))
+				{
+					$tmpAttachments = unserialize($messageFields['ATTACHMENTS'], ['allowed_classes' => false]);
+					if (is_array($tmpAttachments))
+					{
+						foreach($tmpAttachments as $key => $uploadFile)
+						{
+							$file = \CFile::makeFileArray($uploadFile);
+							if (
+								is_array($file)
+								&& !empty($file)
+							)
+							{
+								$file['name'] = $key;
+								$attachments[$key] = $file;
+							}
+						}
+					}
+				}
+
+				$event = new Main\Event(
+					'mail', $eventId,
+					array(
+						'site_id'     => $messageFields['SITE_ID'],
+						'entity_id'   => $messageFields['ENTITY_ID'],
+						'from'        => $messageFields['USER_ID'],
+						'subject'     => $messageFields['SUBJECT'],
+						'content'     => $messageFields['CONTENT'],
+						'attachments' => $attachments
+					)
+				);
+				$event->send();
+
+				foreach ($event->getResults() as $eventResult)
+				{
+					if ($eventResult->getType() == \Bitrix\Main\EventResult::ERROR)
+					{
+						$cnt++;
+
+						global $pPERIOD;
+						$pPERIOD = 10 + (60 * $cnt);
+						return "\\Bitrix\\Mail\\User::sendEventAgent(".$messageId.", ".$cnt.");";
+					}
+				}
+
+				User\MessageTable::delete($messageId);
+			}
+		}
+
+		return;
 	}
 
 	/**
@@ -390,17 +448,6 @@ class User
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает группу пользователей электронной почты. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/mail/user/getmailusergroup.php
-	* @author Bitrix
-	*/
 	public static function getMailUserGroup()
 	{
 		$res = array();
@@ -414,7 +461,7 @@ class User
 
 	public static function getDefaultEmailFrom($serverName = false)
 	{
-		if (defined("BX24_HOST_NAME"))
+		if (Main\ModuleManager::isModuleInstalled('bitrix24') && defined("BX24_HOST_NAME"))
 		{
 			if(preg_match("/\\.bitrix24\\.([a-z]+|com\\.br)$/i", BX24_HOST_NAME))
 			{
@@ -424,14 +471,17 @@ class User
 			{
 				$domain = str_replace(".", "-", BX24_HOST_NAME).".bitrix24.com";
 			}
+
+			$defaultEmailFrom = "info@".$domain;
 		}
 		else
 		{
-			$domain = Main\Config\Option::get('main', 'server_name', $GLOBALS["SERVER_NAME"]);
-			$domain = ($serverName ?: $domain);
+			$defaultEmailFrom = Main\Config\Option::get('main', 'email_from', '');
+			if ($defaultEmailFrom == '')
+			{
+				$defaultEmailFrom = "info@".($serverName ?: Main\Config\Option::get('main', 'server_name', $GLOBALS["SERVER_NAME"]));
+			}
 		}
-
-		$defaultEmailFrom = "info@".$domain;
 
 		return $defaultEmailFrom;
 	}
@@ -483,4 +533,24 @@ class User
 
 		return $result;
 	}
+
+	public static function handleSiteUpdate($fields)
+	{
+		if (array_key_exists('SERVER_NAME', $fields))
+		{
+			static::clearTokensCache();
+		}
+	}
+
+	public static function handleServerNameUpdate()
+	{
+		static::clearTokensCache();
+	}
+
+	public static function clearTokensCache()
+	{
+		$cache = new \CPHPCache();
+		$cache->cleanDir('/mail/user/forward');
+	}
+
 }

@@ -48,15 +48,17 @@ class CHotKeysCode
 
 	protected function CleanUrl($url)
 	{
+		$url = (string)$url;
+
 		//removes host & proto from url
-		if(($hostPos = strpos($url, $_SERVER["HTTP_HOST"])))
-			$cleanUrl = substr($url, $hostPos+strlen($_SERVER["HTTP_HOST"]));
+		if(($hostPos = mb_strpos($url, $_SERVER["HTTP_HOST"])))
+			$cleanUrl = mb_substr($url, $hostPos + mb_strlen($_SERVER["HTTP_HOST"]));
 		else
 			$cleanUrl = $url;
 
 		//removes all after "?"
-		if(($qMarkPos = strpos($cleanUrl, "?")))
-			$cleanUrl = substr($cleanUrl, 0, $qMarkPos);
+		if(($qMarkPos = mb_strpos($cleanUrl, "?")))
+			$cleanUrl = mb_substr($cleanUrl, 0, $qMarkPos);
 
 		return $cleanUrl;
 	}
@@ -75,7 +77,7 @@ class CHotKeysCode
 		{
 			$codeUrl = $this->CleanUrl($arCode["URL"]);
 
-			if(($codeUrl == substr($url, 0, strlen($codeUrl)) && $codeUrl) || (!$arCode["CLASS_NAME"] && (!$arCode["URL"] || $arCode["URL"] == "*")))
+			if(($codeUrl == mb_substr($url, 0, mb_strlen($codeUrl)) && $codeUrl) || (!$arCode["CLASS_NAME"] && (!$arCode["URL"] || $arCode["URL"] == "*")))
 				$arRet[] = $arCode;
 		}
 
@@ -222,11 +224,6 @@ class CHotKeysCode
 
 	}
 
-	protected function ErrOrig()
-	{
-		return "<br>Class: CHotKeysCode File: ".__FILE__."<br>";
-	}
-
 	public function Delete($ID)
 	{
 		global $DB;
@@ -234,14 +231,14 @@ class CHotKeysCode
 		$this->CleanCache();
 
 		$strSql = "SELECT ID FROM b_hot_keys WHERE CODE_ID=".intval($ID);
-		$res = $DB->Query($strSql, false, $this->ErrOrig()." Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 
 		while($arHK = $res->Fetch())
 			CHotKeys::GetInstance()->Delete($arHK["ID"]);
 
 		$sql = "DELETE FROM b_hot_keys_code WHERE ID=".intval($ID);
 
-		return $DB->Query($sql, false, $this->ErrOrig()." Line: ".__LINE__);
+		return $DB->Query($sql);
 	}
 
 	public function Update($ID, $arFields)
@@ -284,9 +281,9 @@ class CHotKeysCode
 		{
 			foreach ($arFilter as $key => $val)
 			{
-				if (strlen($val) <= 0 || $val == "NOT_REF")
+				if ((string)$val == '' || $val == "NOT_REF")
 					continue;
-				$key = strtoupper($key);
+				$key = mb_strtoupper($key);
 				switch($key)
 				{
 					case "ID":
@@ -311,20 +308,36 @@ class CHotKeysCode
 		$sOrder = "";
 		foreach($aSort as $key => $val)
 		{
-			$ord = (strtoupper($val) <> "ASC"? "DESC":"ASC");
-			switch (strtoupper($key))
+			$ord = (mb_strtoupper($val) <> "ASC"? "DESC":"ASC");
+			switch(mb_strtoupper($key))
 			{
-				case "ID":	$sOrder .= ", C.ID ".$ord; break;
-				case "CLASS_NAME": $sOrder .= ", C.CLASS_NAME ".$ord; break;
-				case "CODE": $sOrder .= ", C.CODE ".$ord; break;
-				case "NAME": $sOrder .= ", C.NAME ".$ord; break;
-				case "COMMENTS": $sOrder .= ", C.COMMENTS ".$ord; break;
-				case "TITLE_OBJ": $sOrder .= ", C.TITLE_OBJ ".$ord; break;
-				case "URL": $sOrder .= ", C.URL ".$ord; break;
-				case "IS_CUSTOM": $sOrder .= ", C.IS_CUSTOM ".$ord; break;
+				case "ID":
+					$sOrder .= ", C.ID ".$ord;
+					break;
+				case "CLASS_NAME":
+					$sOrder .= ", C.CLASS_NAME ".$ord;
+					break;
+				case "CODE":
+					$sOrder .= ", C.CODE ".$ord;
+					break;
+				case "NAME":
+					$sOrder .= ", C.NAME ".$ord;
+					break;
+				case "COMMENTS":
+					$sOrder .= ", C.COMMENTS ".$ord;
+					break;
+				case "TITLE_OBJ":
+					$sOrder .= ", C.TITLE_OBJ ".$ord;
+					break;
+				case "URL":
+					$sOrder .= ", C.URL ".$ord;
+					break;
+				case "IS_CUSTOM":
+					$sOrder .= ", C.IS_CUSTOM ".$ord;
+					break;
 			}
 		}
-		if (strlen($sOrder) <= 0)
+		if ($sOrder == '')
 			$sOrder = "NAME ASC";
 
 		$strSqlOrder = " ORDER BY ".TrimEx($sOrder, ",");
@@ -338,7 +351,7 @@ class CHotKeysCode
 			".$strSqlSearch."
 			".$strSqlOrder;
 
-		$res = $DB->Query($strSql, false, $this->ErrOrig()." Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 		return $res;
 	}
 }
@@ -430,7 +443,7 @@ class CHotKeys
 			self::$instance = new $c;
 			self::$codes = new CHotKeysCode;
 			self::$optUse = COption::GetOptionString('main', "use_hot_keys", "Y") == "Y";
-			self::$ExpImpFileName = "hk_export_".$_SERVER['HTTP_HOST'].".srl";
+			self::$ExpImpFileName = "hk_export_" . ($_SERVER['HTTP_HOST'] ?? 'CLI') . ".srl";
 			self::$cacheId = "b_hot_keys".$USER->GetID().LANGUAGE_ID;
 			if(self::$optUse)
 			{
@@ -441,11 +454,6 @@ class CHotKeys
 		return self::$instance;
 	}
 
-	protected function ErrOrig()
-	{
-		return "<br>Class: CHotKeys File: ".__FILE__."<br>";
-	}
-
 	protected function LoadToCache()
 	{
 		global $USER, $CACHE_MANAGER;
@@ -453,7 +461,7 @@ class CHotKeys
 		if(is_array($this->arList) || !self::$optUse)
 			return false;
 
-		if(isset($_SESSION["hasHotKeys"]) && $_SESSION["hasHotKeys"] == false)
+		if(isset(\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"]) && \Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"] == false)
 			return false;
 
 		$uid = $USER->GetID();
@@ -475,13 +483,13 @@ class CHotKeys
 		if(is_array($this->arList))
 		{
 			$CACHE_MANAGER->Set(self::$cacheId, $this->arList);
-			$_SESSION["hasHotKeys"] = true;
+			\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"] = true;
 		}
 		else  //for the first user's login let's try to set default keys
 		{
 			if(!$this->IsDefaultOpt())
 			{
-				$_SESSION["hasHotKeys"] = false;
+				\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"] = false;
 				return false;
 			}
 
@@ -490,7 +498,7 @@ class CHotKeys
 
 			if(!$setDef || !$setNoDef)
 			{
-				$_SESSION["hasHotKeys"] = false;
+				\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"] = false;
 				return false;
 			}
 
@@ -655,7 +663,7 @@ class CHotKeys
 		return $retHtml;
 	}
 
-	static public function PrintJSExecs($execs, $controlName = "", $scriptTags = true, $checkHK = false)
+	public function PrintJSExecs($execs, $controlName = "", $scriptTags = true, $checkHK = false)
 	{
 		$retStr = "";
 
@@ -740,9 +748,9 @@ class CHotKeys
 		{
 			foreach ($arFilter as $key => $val)
 			{
-				if (strlen($val) <=0 || $val == "NOT_REF")
+				if ((string)$val == '' || $val == "NOT_REF")
 					continue;
-				$key = strtoupper($key);
+				$key = mb_strtoupper($key);
 				switch($key)
 				{
 					case "ID":
@@ -760,17 +768,25 @@ class CHotKeys
 		$sOrder = "";
 		foreach($aSort as $key => $val)
 		{
-			$ord = (strtoupper($val) <> "ASC"? "DESC":"ASC");
-			switch (strtoupper($key))
+			$ord = (mb_strtoupper($val) <> "ASC"? "DESC":"ASC");
+			switch(mb_strtoupper($key))
 			{
-				case "ID":	$sOrder .= ", ID ".$ord; break;
-				case "KEYS_STRING":	$sOrder .= ", KEYS_STRING ".$ord; break;
-				case "CODE_ID":	$sOrder .= ", CODE_ID ".$ord; break;
-				case "USER_ID":	$sOrder .= ", USER_ID ".$ord; break;
+				case "ID":
+					$sOrder .= ", ID ".$ord;
+					break;
+				case "KEYS_STRING":
+					$sOrder .= ", KEYS_STRING ".$ord;
+					break;
+				case "CODE_ID":
+					$sOrder .= ", CODE_ID ".$ord;
+					break;
+				case "USER_ID":
+					$sOrder .= ", USER_ID ".$ord;
+					break;
 			}
 		}
 
-		if (strlen($sOrder) > 0)
+		if ($sOrder <> '')
 			$strSqlOrder = " ORDER BY ".TrimEx($sOrder, ",");
 		else
 			$strSqlOrder = "";
@@ -784,7 +800,7 @@ class CHotKeys
 			WHERE
 			".$strSqlSearch."
 			".$strSqlOrder;
-		$res = $DB->Query($strSql, false, $this->ErrOrig()." Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 		return $res;
 	}
 
@@ -795,7 +811,7 @@ class CHotKeys
 
 		global $DB;
 
-		unset($_SESSION["hasHotKeys"]);
+		unset(\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"]);
 		$this->CleanCache();
 
 		$arPrepFields = array(
@@ -814,7 +830,7 @@ class CHotKeys
 
 		global $DB;
 
-		unset($_SESSION["hasHotKeys"]);
+		unset(\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"]);
 		$this->CleanCache();
 
 		$strUpdate = $DB->PrepareUpdate("b_hot_keys", $arFields);
@@ -832,13 +848,59 @@ class CHotKeys
 	{
 		global $DB;
 
-		unset($_SESSION["hasHotKeys"]);
+		unset(\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"]);
 		$this->CleanCache();
 
 		$sql = "DELETE FROM b_hot_keys WHERE ID=".intval($ID);
-		$res = $DB->Query($sql, false, $this->ErrOrig()." Line: ".__LINE__);
+		$res = $DB->Query($sql);
 
 		return $res->AffectedRowsCount();
+	}
+
+	public function DeleteByUser($USER_ID)
+	{
+		global $DB;
+
+		$this->CleanCache();
+
+		$sql = 'DELETE FROM b_hot_keys WHERE USER_ID = ' . intval($USER_ID);
+		$res = $DB->Query($sql);
+
+		return $res->AffectedRowsCount();
+	}
+
+	public static function CleanUp($USER_ID = 0)
+	{
+		global $DB;
+
+		$etime = microtime(1) + 1; //1 sec
+		do
+		{
+			$res = $DB->Query('SELECT MIN(USER_ID) MIN_USER_ID FROM b_hot_keys WHERE USER_ID > ' . intval($USER_ID));
+			$next_user = $res->Fetch();
+			if (!$next_user || !$next_user['MIN_USER_ID'])
+			{
+				return '';
+			}
+
+			$res = \Bitrix\Main\UserTable::getList(
+				[
+					'filter' => [
+						'=ID' => $next_user['MIN_USER_ID'],
+					],
+					'select' => ['ID']
+				]
+			);
+			if (!$res->fetch())
+			{
+				$DB->Query('DELETE FROM b_hot_keys WHERE USER_ID = ' . $next_user['MIN_USER_ID']);
+			}
+		}
+		while (microtime(1) < $etime);
+
+		CHotKeys::GetInstance()->CleanCache();
+
+		return 'CHotKeys::CleanUp(' . $next_user['MIN_USER_ID'] . ');';
 	}
 
 	//sets (copy) keys_strings from user with id=0 to userID
@@ -848,10 +910,10 @@ class CHotKeys
 
 		$uid = intval($userID);
 
-		unset($_SESSION["hasHotKeys"]);
+		unset(\Bitrix\Main\Application::getInstance()->getSession()["hasHotKeys"]);
 
 		$sql = "DELETE FROM b_hot_keys WHERE USER_ID=".$uid;
-		$delRes = $DB->Query($sql, false, $this->ErrOrig()." Line: ".__LINE__);
+		$delRes = $DB->Query($sql);
 
 		$listRes = $this->GetList(array(), array("USER_ID"=>"0"));
 
@@ -878,14 +940,14 @@ class CHotKeys
 		if(!$this->CheckKeysString($hotKeysString))
 			return GetMessage("HK_WRONG_KS");
 
-		$lastPlusPos = strrpos($hotKeysString, "+");
+		$lastPlusPos = mb_strrpos($hotKeysString, "+");
 
 		if($lastPlusPos)
 		{
-			$charCode = substr($hotKeysString, $lastPlusPos+1, strlen($hotKeysString));
-			$preChar = substr($hotKeysString, 0, $lastPlusPos+1);
+			$charCode = mb_substr($hotKeysString, $lastPlusPos + 1, mb_strlen($hotKeysString));
+			$preChar = mb_substr($hotKeysString, 0, $lastPlusPos + 1);
 			if($charCode == 16 || $charCode == 17 || $charCode == 18)
-				return substr($preChar, 0, strlen($preChar)-1);
+				return mb_substr($preChar, 0, mb_strlen($preChar) - 1);
 		}
 		else
 		{
@@ -895,7 +957,7 @@ class CHotKeys
 
 		if(intval($charCode)<256)
 		{
-			if(!($codeSymb = $this->arServSymb[intval($charCode)]))
+			if(!($codeSymb = ($this->arServSymb[intval($charCode)] ?? 0)))
 				$codeSymb = chr($charCode);
 		}
 		else
@@ -908,11 +970,11 @@ class CHotKeys
 
 	protected function CheckKeysString($keysString)
 	{
-		$keyCode = str_replace(array("ctrl", "alt", "shift", "+"), "", strtolower($keysString));
+		$keyCode = str_replace(array("ctrl", "alt", "shift", "+"), "", mb_strtolower($keysString));
 		return !(strcmp(intval($keyCode), $keyCode));
 	}
 
-	static public function PrintPhpToJSVars()
+	public function PrintPhpToJSVars()
 	{
 		if(!self::$optUse)
 			return false;
@@ -944,7 +1006,7 @@ class CHotKeys
 		return $htmlOut;
 	}
 
-	static public function IsActive()
+	public function IsActive()
 	{
 		return self::$optUse;
 	}
@@ -974,11 +1036,14 @@ class CHotKeys
 		{
 			$name = str_replace(array("#BR#", "&nbsp;"), array(" ", ""), $arPanelButton["TEXT"]);
 
-			if($parent != "")
+			if ($parent != "")
+			{
 				$name = $parent.$name;
-			else
-				if($arPanelButton["MENU"])
-					$name = "<b>".$name."</b>";
+			}
+			elseif (isset($arPanelButton["MENU"]) && $arPanelButton["MENU"])
+			{
+				$name = "<b>".$name."</b>";
+			}
 
 			$Execs = $this->GetCodeByClassName($arPanelButton["HK_ID"], $name, $hkCode);
 			$retJS .= $this->PrintJSExecs($Execs);
@@ -1016,7 +1081,7 @@ class CHotKeys
 			return false;
 
 		$strSql = "SELECT ID FROM b_hot_keys WHERE USER_ID=0 AND ( CODE_ID=87 OR CODE_ID=88 OR CODE_ID=89)";
-		$res = $DB->Query($strSql, false, $this->ErrOrig()." Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 
 		if(!$res->Fetch())
 		{
@@ -1080,7 +1145,7 @@ class CHotKeys
 
 		//all users wich using hot-keys
 		$strSql = "SELECT DISTINCT USER_ID FROM b_hot_keys";
-		$res = $DB->Query($strSql, false, $this->ErrOrig()." Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 
 		$added = 0;
 
@@ -1160,7 +1225,7 @@ class CHotKeys
 
 		$arInput = null;
 		if(CheckSerializedData($fileContent))
-			$arInput = unserialize($fileContent);
+			$arInput = unserialize($fileContent, ['allowed_classes' => false]);
 
 		if(!is_array($arInput) || empty($arInput))
 			return false;
@@ -1179,33 +1244,26 @@ class CHotKeys
 					continue;
 
 				$resCodes = self::$codes->GetList(array(), array(
-					'CLASS_NAME' => isset($arHotKey['CLASS_NAME']) ? $arHotKey['CLASS_NAME'] : '',
+					'CLASS_NAME' => $arHotKey['CLASS_NAME'] ?? '',
 					'NAME' => $arHotKey['NAME'],
 					'CODE' => $arHotKey['CODE'],
 				));
 				$arCode = $resCodes->Fetch();
 				//if same code alredy exist
-				if(isset($arCode['ID']))
-				{
-					$codeID = $arCode['ID'];
-				}
-				else
-				{
-					$codeID = self::$codes->Add( array(
-						'CLASS_NAME' => isset($arHotKey['CLASS_NAME']) ? $arHotKey['CLASS_NAME'] : "",
-						'CODE' => $arHotKey['CODE'],
-						'NAME' => $arHotKey['NAME'],
-						'COMMENTS' => isset($arHotKey['COMMENTS']) ? $arHotKey['COMMENTS'] : "",
-						'TITLE_OBJ' => isset($arHotKey['TITLE_OBJ']) ? $arHotKey['TITLE_OBJ'] : "",
-						'URL' => isset($arHotKey['URL']) ? $arHotKey['URL'] : "",
-						'IS_CUSTOM' => $arHotKey['IS_CUSTOM']
-					));
-				}
+				$codeID = $arCode['ID'] ?? self::$codes->Add(array(
+					'CLASS_NAME' => $arHotKey['CLASS_NAME'] ?? "",
+					'CODE' => $arHotKey['CODE'],
+					'NAME' => $arHotKey['NAME'],
+					'COMMENTS' => $arHotKey['COMMENTS'] ?? "",
+					'TITLE_OBJ' => $arHotKey['TITLE_OBJ'] ?? "",
+					'URL' => $arHotKey['URL'] ?? "",
+					'IS_CUSTOM' => $arHotKey['IS_CUSTOM']
+				));
 			}
 			else //if system code
 			{
 				$resCodes = self::$codes->GetList(array(), array(
-					'CLASS_NAME' => isset($arHotKey['CLASS_NAME']) ? $arHotKey['CLASS_NAME'] : '',
+					'CLASS_NAME' => $arHotKey['CLASS_NAME'] ?? '',
 					'NAME' => $arHotKey['NAME']
 				));
 				$arCode = $resCodes->Fetch();

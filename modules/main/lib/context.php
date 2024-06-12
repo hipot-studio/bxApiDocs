@@ -1,11 +1,15 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2012 Bitrix
+ * @copyright 2001-2022 Bitrix
  */
+
 namespace Bitrix\Main;
+
+use Bitrix\Main\Localization;
 
 /**
  * Context of current request.
@@ -24,16 +28,16 @@ class Context
 	/** @var Server */
 	protected $server;
 
-	/** @var string */
-	private $language;
+	/** @var Localization\EO_Language */
+	protected $language;
 
-	/** @var string */
-	private $site;
+	/** @var EO_Site */
+	protected $site;
 
 	/** @var Environment */
 	protected $env;
 
-	/** @var \Bitrix\Main\Context\Culture */
+	/** @var Context\Culture */
 	protected $culture;
 
 	/** @var array */
@@ -44,23 +48,6 @@ class Context
 	 *
 	 * @param Application $application
 	 */
-	
-	/**
-	* <p>Нестатический метод вызывается при создании экземпляра класса и позволяет в нем произвести какие-то действия, при создании объекта.</p>
-	*
-	*
-	* @param mixed $Bitrix  Приложение
-	*
-	* @param Bitri $Main  
-	*
-	* @param Application $application  
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/__construct.php
-	* @author Bitrix
-	*/
 	public function __construct(Application $application)
 	{
 		$this->application = $application;
@@ -72,44 +59,9 @@ class Context
 	 * @param Request $request
 	 * @param Response $response
 	 * @param Server $server
-	 * @param Environment $env
+	 * @param array $params
 	 */
-	
-	/**
-	* <p>Нестатический метод инициализирует контекст по запросу и отклику объекта.</p>
-	*
-	*
-	* @param mixed $Bitrix  
-	*
-	* @param Bitri $Main  
-	*
-	* @param Request $request  
-	*
-	* @param Request $Bitrix  
-	*
-	* @param Bitri $Main  
-	*
-	* @param Response $response = null 
-	*
-	* @param mixed $Bitrix  
-	*
-	* @param Bitri $Main  
-	*
-	* @param Server $server  
-	*
-	* @param Server $Bitrix  
-	*
-	* @param Bitri $Main  
-	*
-	* @param Environment $env  
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/initialize.php
-	* @author Bitrix
-	*/
-	public function initialize(Request $request, Response $response = null, Server $server, array $params = array())
+	public function initialize(Request $request, Response $response, Server $server, array $params = [])
 	{
 		$this->request = $request;
 		$this->response = $response;
@@ -120,26 +72,17 @@ class Context
 	public function getEnvironment()
 	{
 		if ($this->env === null)
-			$this->env = new Environment($this->params["env"]);
+		{
+			$this->env = new Environment($this->params['env']);
+		}
 		return $this->env;
 	}
 
 	/**
 	 * Returns response object of the context.
 	 *
-	 * @return HttpResponse
+	 * @return Response | HttpResponse
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает объект отклика контекста.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Main\HttpResponse 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/getresponse.php
-	* @author Bitrix
-	*/
 	public function getResponse()
 	{
 		return $this->response;
@@ -149,46 +92,19 @@ class Context
 	 * Sets response of the context.
 	 *
 	 * @param Response $response Response.
-	 * @return void
+	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает ответ контента.</p>
-	*
-	*
-	* @param mixed $Bitrix  Отклик.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Response $response  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/setresponse.php
-	* @author Bitrix
-	*/
 	public function setResponse(Response $response)
 	{
 		$this->response = $response;
+		return $this;
 	}
 
 	/**
 	 * Returns request object of the context.
 	 *
-	 * @return HttpRequest
+	 * @return Request | HttpRequest
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает запрошенный объект контекста.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Main\HttpRequest 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/getrequest.php
-	* @author Bitrix
-	*/
 	public function getRequest()
 	{
 		return $this->request;
@@ -199,17 +115,6 @@ class Context
 	 *
 	 * @return Server
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает серверный объект контекста.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Main\Server 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/getserver.php
-	* @author Bitrix
-	*/
 	public function getServer()
 	{
 		return $this->server;
@@ -220,17 +125,6 @@ class Context
 	 *
 	 * @return Application
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает обратную ссылку на приложение.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Main\Application 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/getapplication.php
-	* @author Bitrix
-	*/
 	public function getApplication()
 	{
 		return $this->application;
@@ -239,43 +133,29 @@ class Context
 	/**
 	 * Returns culture of the context.
 	 *
-	 * @return \Bitrix\Main\Context\Culture
+	 * @return Context\Culture | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает региональные культурные настройки для контекста.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Main\Context\Culture 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/getculture.php
-	* @author Bitrix
-	*/
 	public function getCulture()
 	{
-		if ($this->culture === null)
-			$this->culture = new Context\Culture();
 		return $this->culture;
 	}
 
 	/**
-	 * Returns current language (en, ru)
+	 * Returns current language ID (en, ru).
 	 *
-	 * @return string
+	 * @return string | null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает текущую языковую раскладку (en, ru).</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/getlanguage.php
-	* @author Bitrix
-	*/
 	public function getLanguage()
+	{
+		return $this->language ? $this->language->getLid() : null;
+	}
+
+	/**
+	 * Returns current language object.
+	 *
+	 * @return Localization\EO_Language | null
+	 */
+	public function getLanguageObject(): ?Localization\EO_Language
 	{
 		return $this->language;
 	}
@@ -285,18 +165,17 @@ class Context
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает текущий сайт.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/getsite.php
-	* @author Bitrix
-	*/
 	public function getSite()
+	{
+		return $this->site ? $this->site->getLid() : null;
+	}
+
+	/**
+	 * Returns current language object.
+	 *
+	 * @return EO_Site | null
+	 */
+	public function getSiteObject(): ?EO_Site
 	{
 		return $this->site;
 	}
@@ -305,75 +184,52 @@ class Context
 	 * Sets culture of the context.
 	 *
 	 * @param \Bitrix\Main\Context\Culture $culture
+	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает региональные культурные настройки для контекста.</p>
-	*
-	*
-	* @param mixed $Bitrix  Региональные настройки
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $Context  
-	*
-	* @param Culture $culture  
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/setculture.php
-	* @author Bitrix
-	*/
 	public function setCulture(Context\Culture $culture)
 	{
 		$this->culture = $culture;
+		return $this;
 	}
 
 	/**
 	 * Sets language of the context.
 	 *
-	 * @param string $language
+	 * @param string | Localization\EO_Language $language
+	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает язык контекста.</p>
-	*
-	*
-	* @param string $language  Язык контекста
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/setlanguage.php
-	* @author Bitrix
-	*/
 	public function setLanguage($language)
 	{
-		$this->language = $language;
+		if ($language instanceof Localization\EO_Language)
+		{
+			$this->language = $language;
+		}
+		else
+		{
+			$this->language = Localization\LanguageTable::wakeUpObject($language);
+			$this->language->fill(ORM\Fields\FieldTypeMask::SCALAR | ORM\Fields\FieldTypeMask::EXPRESSION);
+		}
+		return $this;
 	}
 
 	/**
 	 * Sets site of the context.
 	 *
-	 * @param string $site
+	 * @param string | EO_Site $site
+	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает сайт для контекста.</p>
-	*
-	*
-	* @param string $site  Сайт
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/setsite.php
-	* @author Bitrix
-	*/
 	public function setSite($site)
 	{
-		$this->site = $site;
+		if ($site instanceof EO_Site)
+		{
+			$this->site = $site;
+		}
+		else
+		{
+			$this->site = SiteTable::wakeUpObject($site);
+			$this->site->fill(ORM\Fields\FieldTypeMask::SCALAR | ORM\Fields\FieldTypeMask::EXPRESSION);
+		}
+		return $this;
 	}
 
 	/**
@@ -382,20 +238,14 @@ class Context
 	 * @static
 	 * @return Context
 	 */
-	
-	/**
-	* <p>Статический метод возвращает текущий экземпляр контекста.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Main\Context 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/context/getcurrent.php
-	* @author Bitrix
-	*/
 	public static function getCurrent()
 	{
-		$application = Application::getInstance();
-		return $application->getContext();
+		if (Application::hasInstance())
+		{
+			$application = Application::getInstance();
+			return $application->getContext();
+		}
+
+		return null;
 	}
 }

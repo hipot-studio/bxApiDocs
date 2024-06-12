@@ -1,11 +1,7 @@
-# editors:
+.git
 .idea
-.vscode
-
-# files:
 *.rar
 *.zip
-
-# dir:
 /vendor/
 modules_*
+_tests

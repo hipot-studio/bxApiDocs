@@ -13,23 +13,28 @@ use Bitrix\Main\Type\DateTime;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class ReportTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Report_Query query()
+ * @method static EO_Report_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Report_Result getById($id)
+ * @method static EO_Report_Result getList(array $parameters = array())
+ * @method static EO_Report_Entity getEntity()
+ * @method static \Bitrix\Report\EO_Report createObject($setDefaultValues = true)
+ * @method static \Bitrix\Report\EO_Report_Collection createCollection()
+ * @method static \Bitrix\Report\EO_Report wakeUpObject($row)
+ * @method static \Bitrix\Report\EO_Report_Collection wakeUpCollection($rows)
+ */
 class ReportTable extends Entity\DataManager
 {
 	/**
 	 * Returns entity map definition.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает список полей с типами.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/report/reporttable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		$fieldsMap = array(

@@ -16,7 +16,6 @@ class CAllCrmMailTemplate
 		if(!isset(self::$FIELDS))
 		{
 			$ownerJoin = 'LEFT JOIN b_user U1 ON T.OWNER_ID = U1.ID';
-
 			self::$FIELDS = array(
 				'ID' => array('FIELD' => 'T.ID', 'TYPE' => 'int'),
 				'OWNER_ID' => array('FIELD' => 'T.OWNER_ID', 'TYPE' => 'int'),
@@ -30,6 +29,7 @@ class CAllCrmMailTemplate
 				'TITLE' => array('FIELD' => 'T.TITLE', 'TYPE' => 'string'),
 				'EMAIL_FROM' => array('FIELD' => 'T.EMAIL_FROM', 'TYPE' => 'string'),
 				'SUBJECT' => array('FIELD' => 'T.SUBJECT', 'TYPE' => 'string'),
+				'BODY_TYPE' => array('FIELD' => 'T.BODY_TYPE', 'TYPE' => 'int'),
 				'BODY' => array('FIELD' => 'T.BODY', 'TYPE' => 'string'),
 				'SING_REQUIRED' => array('FIELD' => 'T.SING_REQUIRED', 'TYPE' => 'char'),
 				'SORT' => array('FIELD' => 'T.SORT', 'TYPE' => 'int'),
@@ -94,6 +94,12 @@ class CAllCrmMailTemplate
 			$arFields['SUBJECT'] = '';
 		}
 
+		if (!isset($arFields['ENTITY_TYPE_ID']))
+			$arFields['ENTITY_TYPE_ID'] = 0;
+
+		if (!isset($arFields['BODY_TYPE']))
+			$arFields['BODY_TYPE'] = \CCrmContentType::BBCode;
+
 		if(!isset($arFields['BODY']))
 		{
 			$arFields['BODY'] = '';
@@ -132,7 +138,15 @@ class CAllCrmMailTemplate
 			return false;
 		}
 
+		if($arFields['ACCESS'])
+		{
+			\Bitrix\Crm\MailTemplate\MailTemplateAccess::setLimitedAccessToTemplate($ID, $arFields['ACCESS']);
+		}
+
 		$arFields['ID'] = $ID = intval($ID);
+
+		self::updateUserFields($ID, $arFields);
+
 		$rsEvents = GetModuleEvents('crm', 'OnMailTemplateAdd');
 		while ($arEvent = $rsEvents->Fetch())
 		{
@@ -141,6 +155,10 @@ class CAllCrmMailTemplate
 
 		return $ID;
 	}
+
+	/**
+	 * @throws Exception
+	 */
 	public static function Update($ID, &$arFields, $options = null)
 	{
 		global $DB;
@@ -151,6 +169,9 @@ class CAllCrmMailTemplate
 		{
 			$options = array();
 		}
+		$ID = (int)$ID;
+
+		self::prepareAttachmentsForOldTemplate($ID);
 
 		if (!self::CheckFields('UPDATE', $arFields, $ID))
 		{
@@ -203,6 +224,15 @@ class CAllCrmMailTemplate
 			$DB->Query($sql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
 		}
 
+		self::updateUserFields($ID, $arFields);
+
+		$curAccessRelation = \Bitrix\Crm\MailTemplate\MailTemplateAccess::getAccessDataByTemplateID($ID);
+
+		if($arFields['ACCESS'])
+		{
+			\Bitrix\Crm\MailTemplate\MailTemplateAccess::setLimitedAccessToTemplate($ID, $arFields['ACCESS'], $curAccessRelation);
+		}
+
 		$rsEvents = GetModuleEvents('crm', 'OnMailTemplateUpdate');
 		while ($arEvent = $rsEvents->Fetch())
 		{
@@ -211,6 +241,42 @@ class CAllCrmMailTemplate
 
 		return true;
 	}
+
+	public static function updateUserFields($id, &$fields)
+	{
+		global $USER_FIELD_MANAGER;
+
+		$USER_FIELD_MANAGER->update('CRM_MAIL_TEMPLATE', $id, $fields);
+
+		if (!empty($fields['UF_ATTACHMENT']) && \CModule::includeModule('disk'))
+		{
+			$files = $USER_FIELD_MANAGER->getUserFieldValue('CRM_MAIL_TEMPLATE', 'UF_ATTACHMENT', $id);
+			$files = !empty($files) && is_array($files) ? $files : array();
+
+			$diskUfManager = \Bitrix\Disk\Driver::getInstance()->getUserFieldManager();
+			$diskUfManager->loadBatchAttachedObject($files);
+			foreach ($files as $attachedId)
+			{
+				if ($attachedObject = $diskUfManager->getAttachedObjectById($attachedId))
+				{
+					$fields['BODY'] = preg_replace(
+						sprintf('/bxacid:n%u/', $attachedObject->getObjectId()),
+						sprintf('bxacid:%u', $attachedId),
+						$fields['BODY'], -1, $count
+					);
+					if ($count > 0)
+						$bodyUpdated = true;
+				}
+			}
+
+			if (!empty($bodyUpdated))
+			{
+				$bodyFields = array('BODY' => $fields['BODY']);
+				\CCrmMailTemplate::update($id, $bodyFields);
+			}
+		}
+	}
+
 	public static function Delete($ID, $options = null)
 	{
 		global $DB;
@@ -250,6 +316,7 @@ class CAllCrmMailTemplate
 			{
 				ExecuteModuleEventEx($arEvent, array($ID));
 			}
+			\Bitrix\Crm\MailTemplate\MailTemplateAccess::deleteAccessRelationsByTemplateID((int)$ID);
 		}
 
 		return $result;
@@ -269,12 +336,19 @@ class CAllCrmMailTemplate
 	}
 	public static function CheckFields($action, &$arFields, $ID)
 	{
+		global $USER_FIELD_MANAGER;
+
 		self::ClearErrors();
 
 		//global $DB;
 		if(!(is_array($arFields) && count($arFields) > 0))
 		{
 			self::RegisterError(array('text' => 'Fields is not specified.'));
+			return false;
+		}
+
+		if (!$USER_FIELD_MANAGER->checkFields('CRM_MAIL_TEMPLATE', $ID, $arFields))
+		{
 			return false;
 		}
 
@@ -289,16 +363,7 @@ class CAllCrmMailTemplate
 				);
 			}
 
-			if(!(isset($arFields['ENTITY_TYPE_ID']) && $arFields['ENTITY_TYPE_ID'] > 0))
-			{
-				self::RegisterError(
-					new CCrmMailTemplateError(
-						CCrmMailTemplateError::FieldNotSpecified, array('FIEILD_ID' => 'ENTITY_TYPE_ID')
-					)
-				);
-			}
-
-			if(!(isset($arFields['TITLE']) && $arFields['TITLE'] !== ''))
+			if (!isset($arFields['TITLE']) || trim($arFields['TITLE']) === '')
 			{
 				self::RegisterError(
 					new CCrmMailTemplateError(
@@ -318,7 +383,7 @@ class CAllCrmMailTemplate
 				);
 			}
 
-			if(isset($arFields['TITLE']) && $arFields['TITLE'] === '')
+			if (isset($arFields['TITLE']) && trim($arFields['TITLE']) === '')
 			{
 				self::RegisterError(
 					new CCrmMailTemplateError(
@@ -395,6 +460,40 @@ class CAllCrmMailTemplate
 		$dbRes = self::GetList(array(), array('ID'=> $ID), false, false, array('ID'));
 		return is_array($dbRes->Fetch());
 	}
+
+	public static function getUserAvailableTemplatesList(int $ownerTypeId, int $userId = 0)
+	{
+		if($userId <= 0)
+		{
+			$userId = \Bitrix\Crm\Service\Container::getInstance()->getContext()->getUserId();
+		}
+
+		$typeIds = [$ownerTypeId, 0];
+		return \CCrmMailTemplate::getList(
+			[
+				'SORT' => 'ASC',
+				'ID'=> 'DESC',
+			],
+			[
+				'IS_ACTIVE' => 'Y',
+				'@ENTITY_TYPE_ID' => $typeIds,
+				'__INNER_FILTER_SCOPE' => [
+					'LOGIC' => 'OR',
+					'__INNER_FILTER_PERSONAL' => ['OWNER_ID' => $userId],
+					'__INNER_FILTER_COMMON' => ['SCOPE' => \CCrmMailTemplateScope::Common],
+					'__INNER_FILTER_LIMITED' => ['@ID' => \Bitrix\Crm\MailTemplate\MailTemplateAccess::getAllAvailableSharedTemplatesId($userId)],
+				],
+			],
+			false,
+			false,
+			[
+				'TITLE',
+				'SCOPE',
+				'ENTITY_TYPE_ID',
+				'BODY_TYPE',
+			]
+		);
+	}
 	public static function GetLastUsedTemplateID($entityTypeID, $userID = 0)
 	{
 		$entityTypeID = intval($entityTypeID);
@@ -403,33 +502,32 @@ class CAllCrmMailTemplate
 			return 0;
 		}
 
-		$entityTypeName = strtolower(CCrmOwnerType::ResolveName($entityTypeID));
+		$entityTypeName = mb_strtolower(CCrmOwnerType::ResolveName($entityTypeID));
 		$userID = intval($userID);
 		if($userID <= 0)
 		{
 			$userID = CCrmSecurityHelper::GetCurrentUserID();
 		}
-
 		return intval(CUserOptions::GetOption('crm', "last_used_email_template_{$entityTypeName}", 0, $userID));
 	}
 	public static function SetLastUsedTemplateID($templateID, $entityTypeID, $userID = 0)
 	{
 		$templateID = intval($templateID);
 		$entityTypeID = intval($entityTypeID);
-		$entityTypeName = strtolower(CCrmOwnerType::ResolveName($entityTypeID));
+		$entityTypeName = mb_strtolower(CCrmOwnerType::ResolveName($entityTypeID));
 		$userID = intval($userID);
-		if($userID <= 0)
+		if ($userID <= 0)
 		{
 			$userID = CCrmSecurityHelper::GetCurrentUserID();
 		}
 
 		$key = "last_used_email_template_{$entityTypeName}";
-		if($templateID <= 0)
+		if ($templateID <= 0)
 		{
 			CUserOptions::DeleteOption('crm', $key, false, $userID);
 		}
 
-		if($templateID !== intval(CUserOptions::GetOption('crm', $key, 0, $userID)))
+		if ($templateID !== intval(CUserOptions::GetOption('crm', $key, $entityTypeID, $userID)))
 		{
 			CUserOptions::SetOption('crm', $key, $templateID, false, $userID);
 		}
@@ -451,9 +549,9 @@ class CAllCrmMailTemplate
 
 		$html = $parser->convertText($html);
 		$html = htmlspecialcharsback($html);
-		$html = preg_replace("/\<br\s*\/*\>/i".BX_UTF_PCRE_MODIFIER, "\n", $html);
-		$html = preg_replace("/&nbsp;/i".BX_UTF_PCRE_MODIFIER, ' ', $html);
-		$html = preg_replace("/\<[^>]+>/".BX_UTF_PCRE_MODIFIER, '', $html);
+		$html = preg_replace("/\<br\s*\/*\>/iu", "\n", $html);
+		$html = preg_replace("/&nbsp;/iu", ' ', $html);
+		$html = preg_replace("/\<[^>]+>/u", '', $html);
 		$html = htmlspecialcharsbx($html);
 
 		RemoveEventHandler('main', 'TextParserBeforeTags', $eventID);
@@ -462,13 +560,27 @@ class CAllCrmMailTemplate
 
 	public static function __ConvertHtmlToBbCode(&$text, &$parser)
 	{
-		$text = preg_replace(array("/\</".BX_UTF_PCRE_MODIFIER, "/\>/".BX_UTF_PCRE_MODIFIER), array('<', '>'), $text);
-		$text = preg_replace("/\<br\s*\/*\>/i".BX_UTF_PCRE_MODIFIER, "", $text);
-		$text = preg_replace("/\<(\w+)[^>]*\>(.+?)\<\/\\1[^>]*\>/is".BX_UTF_PCRE_MODIFIER, "\\2", $text);
-		$text = preg_replace("/\<*\/li\>/i".BX_UTF_PCRE_MODIFIER, "", $text);
+		$text = preg_replace(array("/\</u", "/\>/u"), array('<', '>'), $text);
+		$text = preg_replace("/\<br\s*\/*\>/iu", "", $text);
+		$text = preg_replace("/\<(\w+)[^>]*\>(.+?)\<\/\\1[^>]*\>/isu", "\\2", $text);
+		$text = preg_replace("/\<*\/li\>/iu", "", $text);
 		$text = str_replace(array("<", ">"),array("<", ">"), $text);
 		$parser->allow = array();
 		return true;
+	}
+
+	private static function prepareAttachmentsForOldTemplate(int $id)
+	{
+		global $USER_FIELD_MANAGER;
+		global $DB;
+
+		$files = $USER_FIELD_MANAGER->getUserFieldValue('CRM_MAIL_TEMPLATE', 'UF_ATTACHMENT', $id);
+		$files = !empty($files) && is_array($files) ? $files : [];
+
+		foreach ($files as $file)
+		{
+			$DB->Query("UPDATE b_disk_attached_object SET MODULE_ID = 'crm', ENTITY_TYPE = 'Bitrix\\\\Crm\\\\Integration\\\\Disk\\\\MailTemplateConnector' WHERE ID = " . (int)$file);
+		}
 	}
 }
 class CCrmMailTemplateError
@@ -513,15 +625,17 @@ class CCrmMailTemplateError
 }
 class CCrmMailTemplateScope
 {
-	const Undefined = 0;
-	const Personal = 1;
-	const Common = 2;
+	public const Undefined = 0;
+	public const Personal = 1;
+	public const Common = 2;
+	public const Limited = 3;
+
 	private static $ALL_DESCRIPTIONS = array();
 
 	public static function IsDefined($scope)
 	{
-		$scope = intval($scope);
-		return $scope >= self::Undefined && $scope <= self::Common;
+		$scope = (int)$scope;
+		return $scope >= self::Undefined && $scope <= self::Limited;
 	}
 
 	public static function GetAllDescriptions()
@@ -531,8 +645,9 @@ class CCrmMailTemplateScope
 			IncludeModuleLangFile(__FILE__);
 			self::$ALL_DESCRIPTIONS[LANGUAGE_ID] = array(
 				//self::Undefined => '',
-				self::Personal => GetMessage('CRM_MAIL_TEMPLATE_SCOPE_PERSONAL'),
-				self::Common => GetMessage('CRM_MAIL_TEMPLATE_SCOPE_COMMON')
+				self::Personal => GetMessage('CRM_MAIL_TEMPLATE_SCOPE_PERSONAL_MSGVER_1'),
+				self::Common => GetMessage('CRM_MAIL_TEMPLATE_SCOPE_COMMON_MSGVER_1'),
+				self::Limited => GetMessage('CRM_MAIL_TEMPLATE_SCOPE_LIMITED_MSGVER_1'),
 			);
 		}
 
@@ -544,5 +659,24 @@ class CCrmMailTemplateScope
 		$scope = intval($scope);
 		$all = self::GetAllDescriptions();
 		return isset($all[$scope]) ? $all[$scope] : '';
+	}
+
+	public static function setTemplateScope(array $accessEntities): int
+	{
+		if(!empty($accessEntities))
+		{
+			if (in_array(\Bitrix\Crm\MailTemplate\MailTemplateAccess::ALL_USERS_ENTITY, $accessEntities, true))
+			{
+				return self::Common;
+			}
+			else
+			{
+				return self::Limited;
+			}
+		}
+		else
+		{
+			return self::Personal;
+		}
 	}
 }

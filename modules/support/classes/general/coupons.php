@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CSupportSuperCoupon
@@ -11,7 +12,7 @@ class CSupportSuperCoupon
 			$arParams = array();
 		}
 
-		if(array_key_exists('KEY_FORMAT', $arParams) && strlen($arParams['KEY_FORMAT']) > 0)
+		if(array_key_exists('KEY_FORMAT', $arParams) && $arParams['KEY_FORMAT'] <> '')
 		{
 			$couponFormat = $arParams['KEY_FORMAT'];
 		}
@@ -33,7 +34,6 @@ class CSupportSuperCoupon
 			$slaID = false;
 		}
 		
-		$coupon = false;
 		$DB->StartTransaction();
 		for ($i = 0; $i < 100; ++$i)
 		{
@@ -60,21 +60,19 @@ class CSupportSuperCoupon
 				'ACTIVE' => $arParams['ACTIVE'],
 			);
 
-			$ID = CSupportSuperCoupon::Add($arFields);
-			if ($ID === false)
+			if (CSupportSuperCoupon::Add($arFields) === false)
 			{	
 				$DB->Rollback();
-				return $ID;
+				return false;
 			}
-
+			$DB->Commit();
 		}
 		else 
 		{
 			$DB->Rollback();
 			$APPLICATION->ThrowException(GetMessage('SUP_ST_ERROR_NO_NEW_COUPON'));
 		}
-		$DB->Commit();
-		
+
 		return $coupon;
 	}
 	
@@ -121,7 +119,7 @@ class CSupportSuperCoupon
 		}
 		
 		$strUpdate = $DB->PrepareUpdate('b_ticket_supercoupons', $arFields);
-		if (strlen($strUpdate) > 0)
+		if ($strUpdate <> '')
 		{
 			$strSql = "UPDATE b_ticket_supercoupons SET $strUpdate WHERE ID=$ID";
 			$q = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
@@ -344,12 +342,12 @@ class CSupportSuperCoupon
 			{
 				if (array_key_exists($k, $arFields))
 				{
-					$v = strtoupper($v);
+					$v = mb_strtoupper($v);
 					if($v != 'DESC')
 					{
 						$v  ='ASC';
 					}
-					if (strlen($order) > 0)
+					if ($order <> '')
 					{
 						$order .= ', ';
 					}
@@ -372,12 +370,12 @@ class CSupportSuperCoupon
 		LEFT JOIN b_ticket_sla S ON (C.SLA_ID IS NOT NULL AND C.SLA_ID = S.ID)
 		';
 		
-		if (strlen($where) > 0)
+		if ($where <> '')
 		{
 			$strQuery .= ' WHERE ' . $where;
 		}
 		
-		if (strlen($order) > 0)
+		if ($order <> '')
 		{
 			$strQuery .= ' ORDER BY ' . $order;
 		}
@@ -446,12 +444,12 @@ class CSupportSuperCoupon
 			{
 				if (array_key_exists($k, $arFields))
 				{
-					$v = strtoupper($v);
+					$v = mb_strtoupper($v);
 					if($v != 'DESC')
 					{
 						$v  ='ASC';
 					}
-					if (strlen($order) > 0)
+					if ($order <> '')
 					{
 						$order .= ', ';
 					}
@@ -469,12 +467,12 @@ class CSupportSuperCoupon
 		LEFT JOIN b_ticket_supercoupons C ON (L.COUPON_ID = C.ID)
 		LEFT JOIN b_user U ON (L.USER_ID IS NOT NULL AND L.USER_ID = U.ID)";
 		
-		if (strlen($where) > 0)
+		if ($where <> '')
 		{
 			$strQuery .= ' WHERE ' . $where;
 		}
 		
-		if (strlen($order) > 0)
+		if ($order <> '')
 		{
 			$strQuery .= ' ORDER BY ' . $order;
 		}
@@ -510,7 +508,7 @@ class CSupportSuperCoupon
 			$aMsg[] = array("id"=>"ACTIVE", "text"=>GetMessage("SUP_ST_ERR_ACTIVE"));
 		}
 				
-		if(is_set($arFields, "SLA_ID") && IntVal($arFields['SLA_ID']) == 0)
+		if(is_set($arFields, "SLA_ID") && intval($arFields['SLA_ID']) == 0)
 		{
 			$aMsg[] = array("id"=>"SLA_ID", "text"=>GetMessage("SUP_ST_ERR_SLA_ID"));
 		}
@@ -525,4 +523,3 @@ class CSupportSuperCoupon
 		return true;
 	}
 }
-?>

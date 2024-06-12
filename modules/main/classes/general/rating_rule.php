@@ -1,4 +1,4 @@
-<?
+<?php
 
 IncludeModuleLangFile($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/classes/general/rating_rule.php");
 
@@ -10,7 +10,6 @@ class CRatingRule
 		global $DB;
 
 		$ID = intval($ID);
-		$err_mess = (CRatingRule::err_mess())."<br>Function: GetByID<br>Line: ";
 
 		if($ID<=0)
 			return false;
@@ -23,8 +22,8 @@ class CRatingRule
 			FROM
 				b_rating_rule PR
 			WHERE
-				ID=".$ID,
-			false, $err_mess.__LINE__));
+				ID=".$ID
+		));
 	}
 
 	// get rating rule list
@@ -33,31 +32,32 @@ class CRatingRule
 		global $DB;
 
 		$arSqlSearch = Array();
-		$strSqlSearch = "";
-		$err_mess = (CRatingRule::err_mess())."<br>Function: GetList<br>Line: ";
 
 		if (is_array($arFilter))
 		{
-			$filter_keys = array_keys($arFilter);
-			for ($i=0; $i<count($filter_keys); $i++)
+			foreach ($arFilter as $key => $val)
 			{
-				$val = $arFilter[$filter_keys[$i]];
-				if (strlen($val)<=0 || $val=="NOT_REF") continue;
-				switch(strtoupper($filter_keys[$i]))
+				if ((string)$val == '' || $val == "NOT_REF")
+				{
+					continue;
+				}
+				switch (strtoupper($key))
 				{
 					case "ID":
-						$arSqlSearch[] = GetFilterQuery("PR.ID",$val,"N");
-					break;
+						$arSqlSearch[] = GetFilterQuery("PR.ID", $val, "N");
+						break;
 					case "ACTIVE":
-						if (in_array($val, Array('Y','N')))
+						if(in_array($val, Array('Y', 'N')))
+						{
 							$arSqlSearch[] = "PR.ACTIVE = '".$val."'";
-					break;
+						}
+						break;
 					case "NAME":
 						$arSqlSearch[] = GetFilterQuery("PR.NAME", $val);
-					break;
+						break;
 					case "ENTITY_ID":
 						$arSqlSearch[] = GetFilterQuery("PR.ENTITY_ID", $val);
-					break;
+						break;
 				}
 			}
 		}
@@ -65,21 +65,37 @@ class CRatingRule
 		$sOrder = "";
 		foreach($aSort as $key=>$val)
 		{
-			$ord = (strtoupper($val) <> "ASC"? "DESC":"ASC");
-			switch (strtoupper($key))
+			$ord = (mb_strtoupper($val) <> "ASC"? "DESC":"ASC");
+			switch(mb_strtoupper($key))
 			{
-				case "ID":		$sOrder .= ", PR.ID ".$ord; break;
-				case "NAME":	$sOrder .= ", PR.NAME ".$ord; break;
-				case "CREATED":	$sOrder .= ", PR.CREATED ".$ord; break;
-				case "LAST_MODIFIED":	$sOrder .= ", PR.LAST_MODIFIED ".$ord; break;
-				case "LAST_APPLIED":	$sOrder .= ", PR.LAST_APPLIED ".$ord; break;
-				case "ACTIVE":	$sOrder .= ", PR.ACTIVE ".$ord; break;
-				case "CALCULATION_METHOD":	$sOrder .= ", PR.CALCULATION_METHOD ".$ord; break;
-				case "ENTITY_TYPE_ID":	$sOrder .= ", PR.ENTITY_TYPE_ID ".$ord; break;
+				case "ID":
+					$sOrder .= ", PR.ID ".$ord;
+					break;
+				case "NAME":
+					$sOrder .= ", PR.NAME ".$ord;
+					break;
+				case "CREATED":
+					$sOrder .= ", PR.CREATED ".$ord;
+					break;
+				case "LAST_MODIFIED":
+					$sOrder .= ", PR.LAST_MODIFIED ".$ord;
+					break;
+				case "LAST_APPLIED":
+					$sOrder .= ", PR.LAST_APPLIED ".$ord;
+					break;
+				case "ACTIVE":
+					$sOrder .= ", PR.ACTIVE ".$ord;
+					break;
+				case "CALCULATION_METHOD":
+					$sOrder .= ", PR.CALCULATION_METHOD ".$ord;
+					break;
+				case "ENTITY_TYPE_ID":
+					$sOrder .= ", PR.ENTITY_TYPE_ID ".$ord;
+					break;
 			}
 		}
 
-		if (strlen($sOrder)<=0)
+		if ($sOrder == '')
 			$sOrder = "PR.ID DESC";
 
 		$strSqlOrder = " ORDER BY ".TrimEx($sOrder,",");
@@ -96,7 +112,7 @@ class CRatingRule
 			WHERE
 			".$strSqlSearch."
 			".$strSqlOrder;
-		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$res = $DB->Query($strSql);
 
 		return $res;
 	}
@@ -106,13 +122,11 @@ class CRatingRule
 	{
 		global $DB;
 
-		$err_mess = (CRatingRule::err_mess())."<br>Function: Add<br>Line: ";
-
 		// check only general field
 		if(!CRatingRule::__CheckFields($arFields))
 			return false;
 
-		if (!(isset($arFields['ENTITY_TYPE_ID']) && strlen($arFields['ENTITY_TYPE_ID']) > 0))
+		if (!(isset($arFields['ENTITY_TYPE_ID']) && $arFields['ENTITY_TYPE_ID'] <> ''))
 			return false;
 
 		$arRatingRuleConfigs = CRatingRule::GetRatingRuleConfigs($arFields["ENTITY_TYPE_ID"]);
@@ -126,7 +140,7 @@ class CRatingRule
 			"NAME"					=> $arFields["NAME"],
 			"ENTITY_TYPE_ID"		=> $arFields["ENTITY_TYPE_ID"],
 			"CONDITION_NAME"		=> $arFields["CONDITION_NAME"],
-			"CONDITION_MODULE"	=> strlen($conditionModuleId)>0? $conditionModuleId: 'main',
+			"CONDITION_MODULE"	=> $conditionModuleId <> ''? $conditionModuleId: 'main',
 			"CONDITION_CLASS"		=> $arRatingRuleConfigs['CONDITION_CONFIG'][$arFields["CONDITION_NAME"]]['CLASS'],
 			"CONDITION_METHOD"	=> $arRatingRuleConfigs['CONDITION_CONFIG'][$arFields["CONDITION_NAME"]]['METHOD'],
 			"ACTION_NAME"			=> $bHideAction? 'empty': $arFields["ACTION_NAME"],			
@@ -161,13 +175,12 @@ class CRatingRule
 		global $DB;
 
 		$ID = intval($ID);
-		$err_mess = (CRatingRule::err_mess())."<br>Function: Update<br>Line: ";
 
 		// check only general field
 		if(!CRatingRule::__CheckFields($arFields))
 			return false;
 
-		if (isset($arFields["ENTITY_TYPE_ID"]) && strlen($arFields['ENTITY_TYPE_ID']) > 0)
+		if (isset($arFields["ENTITY_TYPE_ID"]) && $arFields['ENTITY_TYPE_ID'] <> '')
 		{
 			$arRatingRuleConfigs = CRatingRule::GetRatingRuleConfigs($arFields["ENTITY_TYPE_ID"]);
 			
@@ -180,7 +193,7 @@ class CRatingRule
 				"NAME"					=> $arFields["NAME"],
 				"ENTITY_TYPE_ID"		=> $arFields["ENTITY_TYPE_ID"],
 				"CONDITION_NAME"		=> $arFields["CONDITION_NAME"],
-				"CONDITION_MODULE"	=> strlen($conditionModuleId)>0? $conditionModuleId: 'main',
+				"CONDITION_MODULE"	=> $conditionModuleId <> ''? $conditionModuleId: 'main',
 				"CONDITION_CLASS"		=> $arRatingRuleConfigs['CONDITION_CONFIG'][$arFields["CONDITION_NAME"]]['CLASS'],
 				"CONDITION_METHOD"	=> $arRatingRuleConfigs['CONDITION_CONFIG'][$arFields["CONDITION_NAME"]]['METHOD'],
 				"ACTION_NAME"			=> $bHideAction? 'empty': $arFields["ACTION_NAME"],				
@@ -205,7 +218,7 @@ class CRatingRule
 		if($strUpdate!="")
 		{
 			$strSql = "UPDATE b_rating_rule SET ".$strUpdate." WHERE ID=".$ID;
-			if(!$DB->Query($strSql, false, $err_mess.__LINE__))
+			if(!$DB->Query($strSql))
 				return false;
 		}
 
@@ -235,14 +248,13 @@ class CRatingRule
 		global $DB;
 
 		$ID = intval($ID);
-		$err_mess = (CRatingRule::err_mess())."<br>Function: Delete<br>Line: ";
 
 		$db_events = GetModuleEvents("main", "OnBeforeDeleteRatingRule");
 		while($arEvent = $db_events->Fetch())
 			ExecuteModuleEventEx($arEvent, array($ID));
 
-		$DB->Query("DELETE FROM b_rating_rule WHERE ID=$ID", false, $err_mess.__LINE__);
-		$DB->Query("DELETE FROM b_rating_rule_vetting WHERE RULE_ID=$ID", false, $err_mess.__LINE__);
+		$DB->Query("DELETE FROM b_rating_rule WHERE ID=$ID");
+		$DB->Query("DELETE FROM b_rating_rule_vetting WHERE RULE_ID=$ID");
 
 		CAgent::RemoveAgent("CRatingRule::Apply($ID);", "main");
 		
@@ -255,26 +267,25 @@ class CRatingRule
 		global $DB;
 
 		$ID = intval($ID);
-		$err_mess = (CRatingRule::err_mess())."<br>Function: Apply<br>Line: ";
 
 		$ratingRule = CRatingRule::GetByID($ID);
 		$arConfigs = $ratingRule->Fetch();
 		if ($arConfigs['ACTIVE'] == 'Y')
 		{
-			$arConfigs['CONDITION_CONFIG'] = unserialize(htmlspecialcharsback($arConfigs['CONDITION_CONFIG']));
-			$arConfigs['ACTION_CONFIG']	 = unserialize(htmlspecialcharsback($arConfigs['ACTION_CONFIG']));
+			$arConfigs['CONDITION_CONFIG'] = unserialize(htmlspecialcharsback($arConfigs['CONDITION_CONFIG']), ['allowed_classes' => false]);
+			$arConfigs['ACTION_CONFIG']	 = unserialize(htmlspecialcharsback($arConfigs['ACTION_CONFIG']), ['allowed_classes' => false]);
 			
-			$arConfigs['CONDITION_MODULE'] = isset($arConfigs['CONDITION_MODULE']) && strlen($arConfigs['CONDITION_MODULE'])> 0? $arConfigs['CONDITION_MODULE']: 'main';
-			if(CModule::IncludeModule(strtolower($arConfigs['CONDITION_MODULE']))) {
+			$arConfigs['CONDITION_MODULE'] = isset($arConfigs['CONDITION_MODULE']) && $arConfigs['CONDITION_MODULE'] <> ''? $arConfigs['CONDITION_MODULE']: 'main';
+			if(CModule::IncludeModule(mb_strtolower($arConfigs['CONDITION_MODULE']))) {
 				if (method_exists($arConfigs['CONDITION_CLASS'],  $arConfigs['CONDITION_METHOD']))
 					call_user_func(array($arConfigs['CONDITION_CLASS'], $arConfigs['CONDITION_METHOD']), $arConfigs);
 
-				$DB->Query("DELETE FROM b_rating_rule_vetting WHERE RULE_ID = $ID AND APPLIED = 'Y'", false, $err_mess.__LINE__);
+				$DB->Query("DELETE FROM b_rating_rule_vetting WHERE RULE_ID = $ID AND APPLIED = 'Y'");
 			}
 			if (method_exists($arConfigs['ACTIVATE_CLASS'],  $arConfigs['ACTIVATE_METHOD']))
 				call_user_func(array($arConfigs['ACTIVATE_CLASS'], $arConfigs['ACTIVATE_METHOD']), $arConfigs);
 
-			$DB->Query("UPDATE b_rating_rule SET LAST_APPLIED = ".$DB->GetNowFunction()." WHERE ID = $ID", false, $err_mess.__LINE__);	
+			$DB->Query("UPDATE b_rating_rule SET LAST_APPLIED = ".$DB->GetNowFunction()." WHERE ID = $ID");
 		}
 		return "CRatingRule::Apply($ID);";
 	}
@@ -283,31 +294,33 @@ class CRatingRule
 	public static function GetVetting($arFilter, $arSort)
 	{
 		global $DB;
-		$err_mess = (CRatingRule::err_mess())."<br>Function: GetVetting<br>Line: ";
 
 		$arSqlSearch = array();
 		if (is_array($arFilter))
 		{
-			$filter_keys = array_keys($arFilter);
-			for ($i=0; $i<count($filter_keys); $i++)
+			foreach ($arFilter as $key => $val)
 			{
-				$val = $arFilter[$filter_keys[$i]];
-				if (strlen($val)<=0 || $val=="NOT_REF") continue;
-				switch(strtoupper($filter_keys[$i]))
+				if ((string)$val == '' || $val=="NOT_REF")
+				{
+					continue;
+				}
+				switch (strtoupper($key))
 				{
 					case "RULE_ID":
-						$arSqlSearch[] = GetFilterQuery("RULE_ID",$val,"N");
-					break;
+						$arSqlSearch[] = GetFilterQuery("RULE_ID", $val, "N");
+						break;
 					case "ENTITY_TYPE_ID":
-						$arSqlSearch[] = GetFilterQuery("ENTITY_TYPE_ID",$val,"N");
-					break;
+						$arSqlSearch[] = GetFilterQuery("ENTITY_TYPE_ID", $val, "N");
+						break;
 					case "ENTITY_ID":
-						$arSqlSearch[] = GetFilterQuery("ENTITY_ID",$val,"N");
-					break;
+						$arSqlSearch[] = GetFilterQuery("ENTITY_ID", $val, "N");
+						break;
 					case "APPLIED":
-						if (in_array($val, Array('Y','N')))
+						if(in_array($val, Array('Y', 'N')))
+						{
 							$arSqlSearch[] = "APPLIED = '".$val."'";
-					break;
+						}
+						break;
 				}
 			}
 		}
@@ -316,23 +329,33 @@ class CRatingRule
 		$sOrder = "";
 		foreach($arSort as $key=>$val)
 		{
-			$ord = (strtoupper($val) <> "ASC"? "DESC":"ASC");
-			switch (strtoupper($key))
+			$ord = (mb_strtoupper($val) <> "ASC"? "DESC":"ASC");
+			switch(mb_strtoupper($key))
 			{
-				case "ID": $sOrder .= ", ID ".$ord; break;
-				case "RULE_ID":	$sOrder .= ", RULE_ID ".$ord; break;
-				case "ENTITY_TYPE_ID": $sOrder .= ", ENTITY_TYPE_ID ".$ord; break;
-				case "ENTITY_ID": $sOrder .= ", ENTITY_ID ".$ord; break;
-				case "APPLIED":	$sOrder .= ", APPLIED ".$ord; break;
+				case "ID":
+					$sOrder .= ", ID ".$ord;
+					break;
+				case "RULE_ID":
+					$sOrder .= ", RULE_ID ".$ord;
+					break;
+				case "ENTITY_TYPE_ID":
+					$sOrder .= ", ENTITY_TYPE_ID ".$ord;
+					break;
+				case "ENTITY_ID":
+					$sOrder .= ", ENTITY_ID ".$ord;
+					break;
+				case "APPLIED":
+					$sOrder .= ", APPLIED ".$ord;
+					break;
 			}
 		}
 
-		if (strlen($sOrder)<=0)
+		if ($sOrder == '')
 			$sOrder = "ID ASC";
 		$strSqlOrder = " ORDER BY ".TrimEx($sOrder,",");
 
 		$strSql = "SELECT * FROM b_rating_rule_vetting WHERE $strSqlSearch $strSqlOrder";
-		return  $DB->Query($strSql, false, $err_mess.__LINE__);
+		return  $DB->Query($strSql);
 	}
 
 	// apply vetting list
@@ -340,12 +363,10 @@ class CRatingRule
 	{
 		global $DB;
 
-		$err_mess = (CRatingRule::err_mess())."<br>Function: ApplyVetting<br>Line: ";
-
-		$ruleId = IntVal($arConfigs['ID']);
+		$ruleId = intval($arConfigs['ID']);
 
 		// put a check that they are counted
-		$DB->Query("UPDATE b_rating_rule_vetting SET APPLIED = 'Y' WHERE RULE_ID = $ruleId", false, $err_mess.__LINE__);
+		$DB->Query("UPDATE b_rating_rule_vetting SET APPLIED = 'Y' WHERE RULE_ID = $ruleId");
 
 		return true;
 	}
@@ -428,10 +449,5 @@ class CRatingRule
 		}
 
 		return true;
-	}
-
-	public static function err_mess()
-	{
-		return "<br>Class: CRatingRule<br>File: ".__FILE__;
 	}
 }

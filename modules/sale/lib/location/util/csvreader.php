@@ -4,7 +4,7 @@
  * It can be changed at any time without notification.
  *
  * The class is used when reading csv files doing location import.
- * 
+ *
  * @access private
  */
 
@@ -100,15 +100,18 @@ final class CSVReader extends \CCSVData
 			$prev = trim($line[$k]);
 
 			// keep for charset conversion
-			if(strpos($fld, 'NAME') !== false)
+			if(mb_strpos($fld, 'NAME') !== false)
 				$langFields[] = &$prev;
 
 			$result = array_merge_recursive($result, $resLine);
 		}
 
-		if(is_callable($this->callbacks['AFTER_ASSOC_LINE_READ']))
+		if (is_callable($this->callbacks['AFTER_ASSOC_LINE_READ'] ?? ''))
 		{
-			call_user_func_array($this->callbacks['AFTER_ASSOC_LINE_READ'], array(&$result));
+			call_user_func_array(
+				$this->callbacks['AFTER_ASSOC_LINE_READ'],
+				[&$result]
+			);
 		}
 
 		// character conversion
@@ -116,7 +119,7 @@ final class CSVReader extends \CCSVData
 		{
 			foreach($langFields as &$value)
 			{
-				$value = \CharsetConverter::ConvertCharset($value, self::FILE_ENCODING, SITE_CHARSET);
+				$value = \Bitrix\Main\Text\Encoding::convertEncoding($value, self::FILE_ENCODING, SITE_CHARSET);
 			}
 		}
 
@@ -165,7 +168,7 @@ final class CSVReader extends \CCSVData
 
 	public function ReadBlock($file, &$bytesRead = false, $lineLimit = false)
 	{
-		if(strpos($file, $_SERVER['DOCUMENT_ROOT']) != 0) // not found or somwhere else
+		if(mb_strpos($file, $_SERVER['DOCUMENT_ROOT']) != 0) // not found or somwhere else
 			$file = $_SERVER['DOCUMENT_ROOT'].$file;
 
 		if(!file_exists($file) || !is_readable($file))

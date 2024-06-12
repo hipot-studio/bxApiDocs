@@ -8,6 +8,62 @@ class CCrmGridOptions extends CGridOptions
 	{
 		parent::__construct($grid_id, $filterPresets);
 	}
+	/**
+	 * @deprecated Use \Bitrix\Crm\Component\EntityList\GridId::getValue
+	 * @see \Bitrix\Crm\Component\EntityList\GridId::getValue
+	 */
+	static public function GetDefaultGrigID($entityTypeID)
+	{
+		$entityTypeID = (int)$entityTypeID;
+
+		return  (new \Bitrix\Crm\Component\EntityList\GridId($entityTypeID))
+			->getValue()
+		;
+	}
+
+	static public function AddVisibleColumn($gridID, $columnName)
+	{
+		if($gridID == '' || $columnName == '')
+		{
+			return false;
+		}
+
+		$item = new CCrmGridOptions($gridID);
+		$columns = $item->GetVisibleColumns();
+		if(empty($columns) || in_array($columnName, $columns, true))
+		{
+			return false;
+		}
+
+		$columns[] = $columnName;
+		$item->SetVisibleColumns($columns);
+		return true;
+	}
+
+	static public function RemoveVisibleColumn($gridID, $columnName)
+	{
+		if($gridID == '' || $columnName == '')
+		{
+			return false;
+		}
+
+		$item = new CCrmGridOptions($gridID);
+		$columns = $item->GetVisibleColumns();
+		if(empty($columns))
+		{
+			return false;
+		}
+
+		$index = array_search($columnName, $columns, true);
+		if($index === false)
+		{
+			return false;
+		}
+
+		array_splice($columns, $index, 1);
+		$item->SetVisibleColumns($columns);
+		return true;
+	}
 
 	public function SetVisibleColumns($arColumns)
 	{

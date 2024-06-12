@@ -5,10 +5,27 @@ use Bitrix\Main,
 	Bitrix\Main\Application,
 	Bitrix\Main\Config\Option,
 	Bitrix\Main\Localization\Loc,
-	Bitrix\Iblock;
+	Bitrix\Iblock,
+	Bitrix\Catalog;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class CatalogViewedProductTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_CatalogViewedProduct_Query query()
+ * @method static EO_CatalogViewedProduct_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_CatalogViewedProduct_Result getById($id)
+ * @method static EO_CatalogViewedProduct_Result getList(array $parameters = [])
+ * @method static EO_CatalogViewedProduct_Entity getEntity()
+ * @method static \Bitrix\Catalog\EO_CatalogViewedProduct createObject($setDefaultValues = true)
+ * @method static \Bitrix\Catalog\EO_CatalogViewedProduct_Collection createCollection()
+ * @method static \Bitrix\Catalog\EO_CatalogViewedProduct wakeUpObject($row)
+ * @method static \Bitrix\Catalog\EO_CatalogViewedProduct_Collection wakeUpCollection($rows)
+ */
 class CatalogViewedProductTable extends Main\Entity\DataManager
 {
 	/**
@@ -38,7 +55,7 @@ class CatalogViewedProductTable extends Main\Entity\DataManager
 				'title' => Loc::getMessage('VIEWED_PRODUCT_ENTITY_FUSER_ID_FIELD')
 			)),
 			'DATE_VISIT' => new Main\Entity\DatetimeField('DATE_VISIT', array(
-				'default_value' => new Main\Type\DateTime(),
+				'default_value' => function(){ return new Main\Type\DateTime(); },
 				'title' => Loc::getMessage('VIEWED_PRODUCT_ENTITY_DATE_VISIT_FIELD')
 			)),
 			'PRODUCT_ID' => new Main\Entity\IntegerField('PRODUCT_ID', array(
@@ -60,25 +77,25 @@ class CatalogViewedProductTable extends Main\Entity\DataManager
 			)),
 			'ELEMENT' => new Main\Entity\ReferenceField(
 				'ELEMENT',
-				'Bitrix\Iblock\ElementTable',
+				'\Bitrix\Iblock\Element',
 				array('=this.PRODUCT_ID' => 'ref.ID'),
 				array('join_type' => 'INNER')
 			),
 			'PRODUCT' => new Main\Entity\ReferenceField(
 				'PRODUCT',
-				'Bitrix\Sale\Internals\ProductTable',
+				'\Bitrix\Sale\Internals\Product',
 				array('=this.PRODUCT_ID' => 'ref.ID'),
 				array('join_type' => 'INNER')
 			),
 			'PARENT_ELEMENT' => new Main\Entity\ReferenceField(
 				'PARENT_ELEMENT',
-				'Bitrix\Iblock\ElementTable',
+				'\Bitrix\Iblock\Element',
 				array('=this.ELEMENT_ID' => 'ref.ID'),
 				array('join_type' => 'INNER')
 			),
 			'FUSER' => new Main\Entity\ReferenceField(
 				'FUSER',
-				'Bitrix\Sale\Internals\FuserTable',
+				'\Bitrix\Sale\Internals\Fuser',
 				array('=this.FUSER_ID' => 'ref.ID'),
 				array('join_type' => 'LEFT')
 			)
@@ -120,39 +137,25 @@ class CatalogViewedProductTable extends Main\Entity\DataManager
 	 *
 	 * @return int
 	 */
-	
-	/**
-	* <p>Общий метод для изменения или вставки записи о просмотренном товаре в таблицу. Метод статический.</p>
-	*
-	*
-	* @param integer $productId  Идентификатор товара.
-	*
-	* @param integer $fuserId  Идентификатор владельца корзины.
-	*
-	* @param string $siteId = SITE_ID Идентификатор сайта.
-	*
-	* @param integer $elementId  Идентификатор родительского элемента.
-	*
-	* @param string $recommendationId = '' Идентификатор персональной рекомендации.
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/catalogviewedproducttable/refresh.php
-	* @author Bitrix
-	*/
 	public static function refresh($productId, $fuserId, $siteId = SITE_ID, $elementId = 0, $recommendationId = '')
 	{
+		$rowId = -1;
+
+		if (Option::get('catalog', 'enable_viewed_products') !== 'Y')
+		{
+			return $rowId;
+		}
+
 		$productId = (int)$productId;
 		$fuserId = (int)$fuserId;
 		$siteId = (string)$siteId;
 		$elementId = (int)$elementId;
 		$recommendationId = (string)$recommendationId;
 		if ($productId <= 0 || $fuserId <= 0 || $siteId == '')
-			return -1;
+			return $rowId;
 
-		if (Main\Loader::includeModule('statistic') && isset($_SESSION['SESS_SEARCHER_ID']) && (int)$_SESSION['SESS_SEARCHER_ID'] > 0)
-			return -1;
+		if (!Catalog\Product\Basket::isNotCrawler())
+			return $rowId;
 
 		$filter = array('=FUSER_ID' => $fuserId, '=SITE_ID' => $siteId);
 
@@ -237,7 +240,6 @@ class CatalogViewedProductTable extends Main\Entity\DataManager
 				$update["RECOMMENDATION"] = $recommendationId;
 
 			$result = static::update($row['ID'], $update);
-			return ($result->isSuccess(true) ? $row['ID'] : -1);
 		}
 		else
 		{
@@ -250,8 +252,15 @@ class CatalogViewedProductTable extends Main\Entity\DataManager
 				"VIEW_COUNT" => 1,
 				"RECOMMENDATION" => $recommendationId
 			));
-			return ($result->isSuccess(true) ? $result->getId() : -1);
 		}
+
+		if ($result->isSuccess(true))
+		{
+			$rowId = $result->getId();
+			self::truncateUserViewedProducts($fuserId, $siteId);
+		}
+
+		return $rowId;
 	}
 
 	/**
@@ -260,19 +269,6 @@ class CatalogViewedProductTable extends Main\Entity\DataManager
 	 * @param array $originalIds			Input products ids.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список идентификаторов товаров в следующем формате: ключ - код торгового предложения, значение - код товара. Метод статический.</p>
-	*
-	*
-	* @param array $arrayoriginalIds = array() Массив введенных идентификаторов товаров.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/catalogviewedproducttable/getproductsmap.php
-	* @author Bitrix
-	*/
 	public static function getProductsMap(array $originalIds = array())
 	{
 		if (empty($originalIds) && !is_array($originalIds))
@@ -300,33 +296,6 @@ class CatalogViewedProductTable extends Main\Entity\DataManager
 	 * @param string|null $siteId			Site identifier.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает карту вида: товар - торговое предложение. Метод статический.</p>
-	*
-	*
-	* @param integer $iblockId  Идентификатор инфоблока.
-	*
-	* @param integer $sectionId  Идентификатор раздела.
-	*
-	* @param integer $fuserId  Идентификатор покупателя.
-	*
-	* @param integer $excludeProductId  Идентификатор товара, который надо исключить из выборки.
-	*
-	* @param integer $limit  Максимальное количество.
-	*
-	* @param integer $depth  Глубина вложенности.
-	*
-	* @param integer $string  Идентификатор сайта.
-	*
-	* @param null $siteId = null 
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/catalogviewedproducttable/getproductskumap.php
-	* @author Bitrix
-	*/
 	public static function getProductSkuMap($iblockId, $sectionId, $fuserId, $excludeProductId, $limit, $depth = 0, $siteId = null)
 	{
 		$map = array();
@@ -467,35 +436,26 @@ class CatalogViewedProductTable extends Main\Entity\DataManager
 	}
 
 	/**
-	 * Clear table b_catalog_viewed_product.
+	 * Clear old records.
 	 *
-	 * @param int $liveTime			Live time.
+	 * @param int $liveTime			Live time (in days).
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод очищает устаревшие данные из таблицы просмотренных на сайте товаров. Метод статический.</p>
-	*
-	*
-	* @param integer $liveTime = 10 Период времени (в днях), через который данные считаются
-	* устаревшими.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/catalogviewedproducttable/clear.php
-	* @author Bitrix
-	*/
 	public static function clear($liveTime = 10)
 	{
+		$liveTime = (int)$liveTime;
+		if ($liveTime <= 0)
+			return;
+
 		$connection = Application::getConnection();
 		$helper = $connection->getSqlHelper();
-		$liveTime = (int)$liveTime;
-		$liveTo = $helper->addSecondsToDateTime($liveTime * 24 * 3600, "DATE_VISIT");
-		$now = $helper->getCurrentDateTimeFunction();
+		$liveTo = $helper->addSecondsToDateTime($liveTime * 86400, $helper->quote('DATE_VISIT'));
 
-		$deleteSql = "delete from b_catalog_viewed_product where ".$now." > ".$liveTo;
-		$connection->query($deleteSql);
+		$connection->query(
+			'delete from '.$helper->quote(self::getTableName()).
+			' where '.$liveTo.' < '.$helper->getCurrentDateTimeFunction()
+		);
+		unset($liveTo, $helper, $connection);
 	}
 
 	/**
@@ -503,20 +463,49 @@ class CatalogViewedProductTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Агент для очистки устаревших данных из таблицы просмотренных на сайте товаров. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/catalogviewedproducttable/clearagent.php
-	* @author Bitrix
-	*/
-	public static function clearAgent()
+	public static function clearAgent(): string
 	{
+		if (Option::get('catalog', 'enable_viewed_products') !== 'Y')
+		{
+			return '';
+		}
 		self::clear((int)Option::get('catalog', 'viewed_time'));
 		return '\Bitrix\Catalog\CatalogViewedProductTable::clearAgent();';
+	}
+
+	private static function truncateUserViewedProducts($fuserId, $siteId)
+	{
+		$fuserId = (int)$fuserId;
+		$siteId = (string)$siteId;
+
+		if ($fuserId <= 0 || $siteId == '')
+			return;
+
+		$maxCount = (int)Main\Config\Option::get('catalog', 'viewed_count');
+		if ($maxCount <= 0)
+			return;
+
+		$iterator = self::getList(array(
+			'select' => array('DATE_VISIT', 'FUSER_ID', 'SITE_ID'),
+			'filter' => array('=FUSER_ID' => $fuserId, '=SITE_ID' => $siteId),
+			'order' => array('FUSER_ID' => 'ASC', 'SITE_ID' => 'ASC', 'DATE_VISIT' => 'DESC'),
+			'limit' => 1,
+			'offset' => $maxCount
+		));
+		$row = $iterator->fetch();
+		unset($iterator);
+		if (!empty($row) && $row['DATE_VISIT'] instanceof Main\Type\DateTime)
+		{
+			$connection = Application::getConnection();
+			$helper = $connection->getSqlHelper();
+
+			$query = 'delete from '.$helper->quote(self::getTableName()).
+				' where '.$helper->quote('FUSER_ID').' = '.$fuserId.
+				' and '.$helper->quote('SITE_ID').' = \''.$helper->forSql($siteId).'\''.
+				' and '.$helper->quote('DATE_VISIT').' <= '.$helper->convertToDbDateTime($row['DATE_VISIT']);
+			$connection->query($query);
+			unset($query, $helper, $connection);
+		}
+		unset($row);
 	}
 }

@@ -3,6 +3,8 @@
 namespace Bitrix\Sale\Services\Base;
 
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Sale\Result;
 use Bitrix\Main\Context;
 use Bitrix\Main\Web\Json;
@@ -10,7 +12,6 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Text\Encoding;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Sale\Location\Exception;
 use Bitrix\Sale\ResultSerializable;
 
 Loc::loadMessages(__FILE__);
@@ -31,9 +32,13 @@ class RestClient
 	const UNSUCCESSFUL_CALL_TRYINGS = 3; //times
 	const UNSUCCESSFUL_CALL_WAIT_INTERVAL = 300; //sec
 
-	protected $httpTimeout = 10;
+	protected $httpTimeout = 5;
+	protected $streamTimeout = 10;
 	protected $accessSettings = null;
 	protected $serviceHost = 'https://saleservices.bitrix.info';
+
+	protected $version = 5;
+
 	/**
 	 * Performs call to the REST method and returns decoded results of the call.
 	 * define SALE_SRVS_RESTCLIENT_DISABLE_SRV_ALIVE_CHECK to disable server alive checking.
@@ -49,35 +54,50 @@ class RestClient
 
 		if(!self::isServerAlive() && !defined('SALE_SRVS_RESTCLIENT_DISABLE_SRV_ALIVE_CHECK'))
 		{
-			$result->addError(new Error('Can\'t receive information'));
+			$result->addError(
+				new Error(
+					Loc::getMessage('SALE_SRV_BASE_REST_CONNECT_ERROR').' '.$this->getServiceHost(),
+					self::ERROR_SERVICE_UNAVAILABLE
+				)
+			);
 			return $result;
 		}
 
 		if ($clearAccessSettings)
+		{
 			$this->clearAccessSettings();
+			$this->accessSettings = null;
+		}
 
 		if (is_null($this->accessSettings))
+		{
 			$this->accessSettings = $this->getAccessSettings();
+		}
 
 		if (!$this->accessSettings)
 		{
-			$result->addError(new Error('Error access settings'));
+			$result->addError(new Error(Loc::getMessage('SALE_SRV_BASE_REST_ACCESS_SETTINGS_ERROR')));
 			return $result;
 		}
 
 		if (!is_array($additionalParams))
 			$additionalParams = array();
-		else
-			$additionalParams = Encoding::convertEncodingArray($additionalParams, LANG_CHARSET, "utf-8");
 
+		$additionalParams['version'] = $this->version;
 		$additionalParams['client_id'] = $this->accessSettings['client_id'];
 		$additionalParams['client_secret'] = $this->accessSettings['client_secret'];
+		$additionalParams['lang'] = LANGUAGE_ID;
 
 		if ($licenseCheck)
-			$additionalParams['key'] = static::getLicenseHash();
+		{
+			$additionalParams = static::signLicenseRequest($additionalParams, static::getLicense());
+		}
 
 		$host = $this->getServiceHost();
-		$http = new HttpClient(array('socketTimeout' => $this->httpTimeout));
+		$http = new HttpClient([
+			'socketTimeout' => $this->httpTimeout,
+			'streamTimeout' => $this->streamTimeout,
+		]);
 		$postResult = @$http->post(
 			$host.static::REST_URI.$methodName,
 			$additionalParams
@@ -92,9 +112,9 @@ class RestClient
 			$answer = false;
 		}
 
-		if (!is_array($answer) || count($answer) == 0)
+		if (!is_array($answer))
 		{
-			$result->addError(new Error('Malformed answer from service. Status: "'.$http->getStatus().'". Result: "'.$postResult.'"', static::ERROR_SERVICE_UNAVAILABLE));
+			$result->addError(new Error(Loc::getMessage('SALE_SRV_BASE_REST_ANSWER_ERROR').' '.$this->getServiceHost().'. (Status: "'.$http->getStatus().'", Result: "'.$postResult.'")', static::ERROR_SERVICE_UNAVAILABLE));
 			$this->setLastUnSuccessCallInfo();
 			return $result;
 		}
@@ -116,7 +136,7 @@ class RestClient
 					return $this->call($methodName, $additionalParams, true);
 				}
 			}
-			else if (($answer['error'] === 'ACCESS_DENIED' || $answer['error'] === 'Invalid client' || $answer['error'] == 'NO_AUTH_FOUND')
+			else if (($answer['error'] === 'ACCESS_DENIED' || $answer['error'] === 'Invalid client' || $answer['error'] === 'NO_AUTH_FOUND')
 				&& !$clearAccessSettings)
 			{
 				return $this->call($methodName, $additionalParams, true, true);
@@ -161,7 +181,7 @@ class RestClient
 
 	/**
 	 * Registers client on the properties service.
-	 * @return array|false Access credentials if registration was successful or false otherwise.
+	 * @return Result
 	 */
 	protected function register()
 	{
@@ -169,11 +189,11 @@ class RestClient
 		$httpClient = new HttpClient();
 
 		$queryParams = array(
-			"key" => static::getLicenseHash(),
 			"scope" => static::SCOPE,
 			"redirect_uri" => static::getRedirectUri(),
 		);
 
+		$queryParams = static::signLicenseRequest($queryParams, static::getLicense());
 		$host = $this->getServiceHost();
 		$postResult = $httpClient->post($host.static::REGISTER_URI, $queryParams);
 
@@ -187,18 +207,40 @@ class RestClient
 		{
 			$jsonResult = Json::decode($postResult);
 		}
-		catch(Exception $e)
+		catch(\Exception $e)
 		{
 			$result->addError(new Error($e->getMessage()));
 			return $result;
 		}
 
-		if($jsonResult["error"])
+		if (!empty($jsonResult["error"]))
+		{
 			$result->addError(new Error($jsonResult["error"], static::ERROR_WRONG_LICENSE));
+		}
 		else
+		{
 			$result->addData($jsonResult);
+		}
 
 		return $result;
+	}
+
+	public static function signLicenseRequest(array $request, $licenseKey)
+	{
+		if(Loader::includeModule('bitrix24'))
+		{
+			$request['BX_TYPE'] = 'B24';
+			$request['BX_LICENCE'] = BX24_HOST_NAME;
+			$request['BX_HASH'] = \CBitrix24::RequestSign(md5(implode("|", $request)));
+		}
+		else
+		{
+			$request['BX_TYPE'] = ModuleManager::isModuleInstalled('intranet') ? 'CP' : 'BSM';
+			$request['BX_LICENCE'] = md5("BITRIX".$licenseKey."LICENCE");
+			$request['BX_HASH'] = md5(md5(implode("|", $request)).md5($licenseKey));
+		}
+
+		return $request;
 	}
 
 	/**
@@ -219,24 +261,28 @@ class RestClient
 	{
 		$accessSettings = Option::get('sale', static::SERVICE_ACCESS_OPTION);
 
-		if ($accessSettings != '')
+		if($accessSettings != '')
 		{
-			return unserialize($accessSettings);
+			$accessSettings =  unserialize($accessSettings, ['allowed_classes' => false]);
+
+			if($accessSettings)
+				return $accessSettings;
+			else
+				$this->clearAccessSettings();
+		}
+
+		/** @var Result $result */
+		$result = $this->register();
+
+		if($result->isSuccess())
+		{
+			$accessSettings = $result->getData();
+			$this->setAccessSettings($accessSettings);
+			return $accessSettings;
 		}
 		else
 		{
-			/** @var Result $result */
-			$result = $this->register();
-			if ($result->isSuccess())
-			{
-				$accessSettings = $result->getData();
-				$this->setAccessSettings($accessSettings);
-				return $accessSettings;
-			}
-			else
-			{
-				return array();
-			}
+			return array();
 		}
 	}
 
@@ -244,7 +290,7 @@ class RestClient
 	 * Drops current stored access credentials.
 	 * @return void
 	 */
-	static public function clearAccessSettings()
+	public function clearAccessSettings()
 	{
 		Option::set('sale', static::SERVICE_ACCESS_OPTION, null);
 	}
@@ -269,15 +315,20 @@ class RestClient
 	 */
 	protected static function getLicenseHash()
 	{
-		return md5(LICENSE_KEY);
+		return md5(static::getLicense());
+	}
+
+	protected static function getLicense()
+	{
+		return LICENSE_KEY;
 	}
 
 	protected static function getLastUnSuccessCallInfo()
 	{
 		$result = Option::get('sale', static::UNSUCCESSFUL_CALL_OPTION, "");
 
-		if(strlen($result) > 0)
-			$result = unserialize($result);
+		if($result <> '')
+			$result = unserialize($result, ['allowed_classes' => false]);
 
 		return is_array($result) ? $result : array();
 	}
@@ -294,15 +345,17 @@ class RestClient
 
 		$data = "";
 
-		if(!$reset)
+		if (!$reset)
 		{
 			$alreadySetted = true;
 			$last = static::getLastUnSuccessCallInfo();
 
-			$data = serialize(array(
-					'COUNT' => intval($last['COUNT']) > 0 ? intval($last['COUNT'])+1 : 1,
-					'TIMESTAMP' => time()
-			));
+			$lastCount = (int)($last['COUNT'] ?? 0);
+
+			$data = serialize([
+				'COUNT' => $lastCount > 0 ? $lastCount + 1 : 1,
+				'TIMESTAMP' => time()
+			]);
 		}
 
 		Option::set('sale', static::UNSUCCESSFUL_CALL_OPTION, $data);
@@ -335,6 +388,8 @@ class RestClient
 	protected function getLastUnSuccessCount()
 	{
 		$last = static::getLastUnSuccessCallInfo();
-		return intval($last['COUNT']) > 0 ? intval($last['COUNT']) : 0;
+		$count = (int)($last['COUNT'] ?? 0);
+
+		return max(0, $count);
 	}
 }

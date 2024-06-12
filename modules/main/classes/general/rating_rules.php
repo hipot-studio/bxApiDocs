@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/classes/general/rating_rules.php");
 
 class CAllRatingRulesMain
@@ -245,19 +246,18 @@ class CAllRatingRulesMain
 	public static function ratingCheck($arConfigs)
 	{
 		global $DB;
-		$err_mess = "File: ".__FILE__."<br>Function: ratingCheck<br>Line: ";
 
-		$ruleId = IntVal($arConfigs['ID']);
+		$ruleId = intval($arConfigs['ID']);
 		if (isset($arConfigs['CONDITION_CONFIG']['RATING']))
 		{
-			$ratingValue = IntVal($arConfigs['CONDITION_CONFIG']['RATING']['RATING_VALUE']);
+			$ratingValue = intval($arConfigs['CONDITION_CONFIG']['RATING']['RATING_VALUE']);
 			$ratingCondition = ($arConfigs['CONDITION_CONFIG']['RATING']['RATING_CONDITION'] == 1 ? '>=' : '<');
-			$ratingId = IntVal($arConfigs['CONDITION_CONFIG']['RATING']['RATING_ID']);
+			$ratingId = intval($arConfigs['CONDITION_CONFIG']['RATING']['RATING_ID']);
 		}
 		else
 		{
 			$ratingVoteWeight = COption::GetOptionString("main", "rating_vote_weight", 1);
-			$ratingValue = IntVal($arConfigs['CONDITION_CONFIG']['AUTHORITY']['RATING_VALUE'])*$ratingVoteWeight;
+			$ratingValue = intval($arConfigs['CONDITION_CONFIG']['AUTHORITY']['RATING_VALUE'])*$ratingVoteWeight;
 			$ratingCondition = ($arConfigs['CONDITION_CONFIG']['AUTHORITY']['RATING_CONDITION'] == 1 ? '>=' : '<');
 			$ratingId = CRatings::GetAuthorityRating();
 		}
@@ -271,7 +271,7 @@ class CAllRatingRulesMain
 					WHERE rr.RATING_ID = $ratingId
 					  AND rr.CURRENT_VALUE $ratingCondition $ratingValue";
 
-		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$res = $DB->Query($strSql);
 
 		return true;
 	}
@@ -279,20 +279,19 @@ class CAllRatingRulesMain
 	public static function ratingCheckInterval($arConfigs)
 	{
 		global $DB;
-		$err_mess = "File: ".__FILE__."<br>Function: ratingCheckInterval<br>Line: ";
 
-		$ruleId = IntVal($arConfigs['ID']);	
+		$ruleId = intval($arConfigs['ID']);
 		if (isset($arConfigs['CONDITION_CONFIG']['RATING_INTERVAL']))
 		{
-			$ratingValueFrom = IntVal($arConfigs['CONDITION_CONFIG']['RATING_INTERVAL']['RATING_VALUE_FROM']);
-			$ratingValueTo = IntVal($arConfigs['CONDITION_CONFIG']['RATING_INTERVAL']['RATING_VALUE_TO']);
-			$ratingId = IntVal($arConfigs['CONDITION_CONFIG']['RATING_INTERVAL']['RATING_ID']);
+			$ratingValueFrom = intval($arConfigs['CONDITION_CONFIG']['RATING_INTERVAL']['RATING_VALUE_FROM']);
+			$ratingValueTo = intval($arConfigs['CONDITION_CONFIG']['RATING_INTERVAL']['RATING_VALUE_TO']);
+			$ratingId = intval($arConfigs['CONDITION_CONFIG']['RATING_INTERVAL']['RATING_ID']);
 		}
 		else
 		{
 			$ratingVoteWeight = COption::GetOptionString("main", "rating_vote_weight", 1);
-			$ratingValueFrom = IntVal($arConfigs['CONDITION_CONFIG']['AUTHORITY_INTERVAL']['RATING_VALUE_FROM'])*$ratingVoteWeight;
-			$ratingValueTo = IntVal($arConfigs['CONDITION_CONFIG']['AUTHORITY_INTERVAL']['RATING_VALUE_TO'])*$ratingVoteWeight;
+			$ratingValueFrom = intval($arConfigs['CONDITION_CONFIG']['AUTHORITY_INTERVAL']['RATING_VALUE_FROM'])*$ratingVoteWeight;
+			$ratingValueTo = intval($arConfigs['CONDITION_CONFIG']['AUTHORITY_INTERVAL']['RATING_VALUE_TO'])*$ratingVoteWeight;
 			$ratingId = CRatings::GetAuthorityRating();
 		}	
 			
@@ -305,7 +304,7 @@ class CAllRatingRulesMain
 					FROM b_rating_results rr
 					WHERE rr.RATING_ID = $ratingId
 					  AND rr.CURRENT_VALUE BETWEEN $ratingValueFrom AND $ratingValueTo";
-		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 
 		return true;
 	}
@@ -313,10 +312,9 @@ class CAllRatingRulesMain
 	public static function addToGroup($arConfigs)
 	{
 		global $DB;
-		$err_mess = "File: ".__FILE__."<br>Function: addToGroup<br>Line: ";
 
-		$ruleId = IntVal(IntVal($arConfigs['ID']));
-		$groupId = IntVal($arConfigs['ACTION_CONFIG']['ADD_TO_GROUP']['GROUP_ID']);
+		$ruleId = intval(IntVal($arConfigs['ID']));
+		$groupId = intval($arConfigs['ACTION_CONFIG']['ADD_TO_GROUP']['GROUP_ID']);
 		$entityTypeId = $DB->ForSql($arConfigs['ENTITY_TYPE_ID']);
 
 		// add a group to all users who do not, but you need to add it
@@ -332,7 +330,7 @@ class CAllRatingRulesMain
 					AND prv.APPLIED = 'N'
 					GROUP BY prv.ENTITY_ID";
 
-		$DB->Query($strSql, false, $err_mess.__LINE__);
+		$DB->Query($strSql);
 
 		CRatingRule::ApplyVetting($arConfigs);
 
@@ -342,10 +340,9 @@ class CAllRatingRulesMain
 	public static function removeFromGroup($arConfigs)
 	{
 		global $DB;
-		$err_mess = "File: ".__FILE__."<br>Function: addToGroup<br>Line: ";
 
-		$ruleId = IntVal(IntVal($arConfigs['ID']));
-		$groupId = IntVal($arConfigs['ACTION_CONFIG']['REMOVE_FROM_GROUP']['GROUP_ID']);
+		$ruleId = intval(IntVal($arConfigs['ID']));
+		$groupId = intval($arConfigs['ACTION_CONFIG']['REMOVE_FROM_GROUP']['GROUP_ID']);
 		$entityTypeId = $DB->ForSql($arConfigs['ENTITY_TYPE_ID']);
 
 		// remove the group from all users who it is, but you need to remove it
@@ -358,14 +355,14 @@ class CAllRatingRulesMain
 					   SELECT ug.USER_ID FROM b_user_group ug WHERE ug.GROUP_ID = $groupId
 					)
 					and prv.APPLIED = 'N'";
-		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$res = $DB->Query($strSql);
 		$arDelete = array();
 		while($row = $res->Fetch())
 			$arDelete[] = $row['ENTITY_ID'];
 		if (!empty($arDelete))
 		{
 			$strSql = "DELETE FROM b_user_group WHERE GROUP_ID = $groupId and USER_ID IN (".implode(',', $arDelete).")";
-			$DB->Query($strSql, false, $err_mess.__LINE__);
+			$DB->Query($strSql);
 		}
 
 		CRatingRule::ApplyVetting($arConfigs);
@@ -389,9 +386,8 @@ class CAllRatingRulesMain
 	public static function changeUF($arConfigs)
 	{
 		global $DB;
-		$err_mess = "File: ".__FILE__."<br>Function: changeUF<br>Line: ";
 
-		$ruleId = IntVal(IntVal($arConfigs['ID']));
+		$ruleId = intval(IntVal($arConfigs['ID']));
 		$entityTypeId = $DB->ForSql($arConfigs['ENTITY_TYPE_ID']);
 		$userFieldId = $DB->ForSql($arConfigs['ACTION_CONFIG']['CHANGE_UF']['UF_ID']);
 		$userFieldValue = $DB->ForSql($arConfigs['ACTION_CONFIG']['CHANGE_UF']['UF_VALUE']);
@@ -406,7 +402,7 @@ class CAllRatingRulesMain
 							AND prv.ENTITY_TYPE_ID = '$entityTypeId'
 							AND prv.APPLIED = 'N'
 						)";
-			$DB->Query($strSql, false, $err_mess.__LINE__);
+			$DB->Query($strSql);
 
 			$strSql = "INSERT INTO b_uts_user (VALUE_ID, $userFieldId)
 						SELECT prv.ENTITY_ID, '$userFieldValue' as UF_VALUE
@@ -420,7 +416,7 @@ class CAllRatingRulesMain
 						and prv.APPLIED = 'N'
 						GROUP BY ENTITY_ID
 						";
-			$DB->Query($strSql, false, $err_mess.__LINE__);
+			$DB->Query($strSql);
 		}
 
 		CRatingRule::ApplyVetting($arConfigs);
@@ -555,5 +551,3 @@ class CAllRatingRulesMain
 		return $arConfigs;
 	}
 }
-
-?>

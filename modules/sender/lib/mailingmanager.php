@@ -7,11 +7,14 @@
  */
 namespace Bitrix\Sender;
 
-use Bitrix\Main\Application;
+use Bitrix\Main;
 use Bitrix\Main\DB\Exception;
-use Bitrix\Sender;
-use \Bitrix\Main\Type;
-use \Bitrix\Main\Config\Option;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
+use Bitrix\Main\Type;
+use Bitrix\Sender\Dispatch\MethodSchedule;
+use Bitrix\Sender\Entity;
+use Bitrix\Sender\Internals\Model;
 
 class MailingManager
 {
@@ -28,158 +31,194 @@ class MailingManager
 
 	/**
 	 * @return string
+	 * @deprecated
 	 */
 	public static function getAgentNamePeriod()
 	{
-		return '\Bitrix\Sender\MailingManager::checkPeriod();';
+		return Runtime\ReiteratedJob::getAgentName();
 	}
 
 	/**
 	 * @param $mailingChainId
 	 * @return string
+	 * @deprecated
 	 */
 	public static function getAgentName($mailingChainId)
 	{
-		return '\Bitrix\Sender\MailingManager::chainSend('.intval($mailingChainId).');';
+		return Runtime\SenderJob::getAgentName($mailingChainId);
 	}
 
 	/**
 	 * @param null $mailingId
 	 * @param null $mailingChainId
 	 * @throws \Bitrix\Main\ArgumentException
+	 * @deprecated
 	 */
 	public static function actualizeAgent($mailingId = null, $mailingChainId = null)
 	{
-		$agent = new \CAgent();
+		(new Runtime\SenderJob())
+			->withCampaignId($mailingId)
+			->withLetterId($mailingChainId)
+			->actualize();
 
-		$isSendByTimeMethodCron = \Bitrix\Main\Config\Option::get("sender", "auto_method") === 'cron';
-
-		$arFilter = array();
-		if ($mailingId)
-			$arFilter['=MAILING_ID'] = $mailingId;
-		if ($mailingChainId)
-			$arFilter['=ID'] = $mailingChainId;
-
-		$mailingChainDb = MailingChainTable::getList(array(
-			'select' => array('ID', 'STATUS', 'AUTO_SEND_TIME', 'MAILING_ACTIVE' => 'MAILING.ACTIVE'),
-			'filter' => $arFilter
-		));
-		while ($mailingChain = $mailingChainDb->fetch())
-		{
-			$agentName = static::getAgentName($mailingChain['ID']);
-			$rsAgents = $agent->GetList(array("ID" => "DESC"), array(
-				"MODULE_ID" => "sender",
-				"NAME" => $agentName,
-			));
-			while ($arAgent = $rsAgents->Fetch())
-				$agent->Delete($arAgent["ID"]);
-
-			if($isSendByTimeMethodCron || empty($mailingChain['AUTO_SEND_TIME']))
-				continue;
-
-			if ($mailingChain['MAILING_ACTIVE'] == 'Y' && $mailingChain['STATUS'] == MailingChainTable::STATUS_SEND)
-			{
-				if(!empty($mailingChain['AUTO_SEND_TIME']))
-					$dateExecute = $mailingChain['AUTO_SEND_TIME'];
-				else
-					$dateExecute = "";
-
-				$interval = \Bitrix\Main\Config\Option::get('sender', 'auto_agent_interval', "0");
-				$agent->AddAgent($agentName, "sender", "N", intval($interval), null, "Y", $dateExecute);
-			}
-		}
+		(new Runtime\ReiteratedJob())->actualize();
 	}
 
+	protected static function checkOnBeforeChainSend($letterId)
+	{
+		$event = new Main\Event('sender', 'onBeforeChainSend', ['LETTER_ID' => $letterId]);
+		$event->send();
+		foreach ($event->getResults() as $eventResult)
+		{
+			if (
+				$eventResult->getType() === Main\EventResult::ERROR
+				|| $eventResult->getParameters()
+				&& isset($eventResult->getParameters()['ALLOW_SEND'])
+				&& $eventResult->getParameters()['ALLOW_SEND'] === false
+			)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
 	/**
-	 * @param $mailingChainId
+	 * Send letter.
+	 *
+	 * @param integer $letterId Letter ID.
+	 *
 	 * @return string
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
 	 */
-	public static function chainSend($mailingChainId)
+	public static function chainSend($letterId)
 	{
 		static::$error = null;
 
-		$mailingChainPrimary = array('ID' => $mailingChainId);
-		$mailingChainDb = MailingChainTable::getById($mailingChainPrimary);
-		$mailingChain = $mailingChainDb->fetch();
-		if($mailingChain && $mailingChain['STATUS'] == MailingChainTable::STATUS_SEND)
+		$letter = Model\LetterTable::getRowById($letterId);
+		if($letter && $letter['STATUS'] === Model\LetterTable::STATUS_PLAN)
 		{
-			if(\COption::GetOptionString("sender", "auto_method") === 'cron')
+			$updateResult = Model\LetterTable::update($letterId, array('STATUS' => Model\LetterTable::STATUS_SEND));
+			if ($updateResult->isSuccess())
 			{
-				$maxMailCount = intval(Option::get('sender', 'max_emails_per_cron'));
-				$timeout = 0;
-			}
-			else
-			{
-				$maxMailCount = intval(Option::get('sender', 'max_emails_per_hit'));
-				$timeout = intval(Option::get('sender', 'interval'));
-			}
-
-			$postingSendStatus = '';
-			if(!empty($mailingChain['POSTING_ID']))
-			{
-				try
-				{
-					$postingSendStatus = PostingManager::send($mailingChain['POSTING_ID'], $timeout, $maxMailCount);
-				} catch (Exception $e)
-				{
-					static::$error = $e;
-					$postingSendStatus = PostingManager::SEND_RESULT_ERROR;
-				}
-			}
-
-			if(empty(static::$error) && $postingSendStatus !== PostingManager::SEND_RESULT_CONTINUE)
-			{
-				if ($mailingChain['REITERATE'] == 'Y')
-				{
-					$mailingChainFields = array(
-						'STATUS' => MailingChainTable::STATUS_WAIT,
-						'AUTO_SEND_TIME' => null,
-						'POSTING_ID' => null
-					);
-
-					if($mailingChain['IS_TRIGGER'] == 'Y')
-					{
-						$postingDb = PostingTable::getList(array(
-							'select' => array('ID', 'DATE_CREATE'),
-							'filter' => array(
-								'STATUS' => PostingTable::STATUS_NEW,
-								'MAILING_CHAIN_ID' => $mailingChain['ID']
-							),
-							'order' => array('DATE_CREATE' => 'ASC'),
-							'limit' => 1
-						));
-						if($posting = $postingDb->fetch())
-						{
-							$mailingChainFields['AUTO_SEND_TIME'] = $posting['DATE_CREATE']->add($mailingChain['TIME_SHIFT'].' minutes');
-							$mailingChainFields['STATUS'] = MailingChainTable::STATUS_SEND;
-							$mailingChainFields['POSTING_ID'] = $posting['ID'];
-						}
-					}
-
-					MailingChainTable::update($mailingChainPrimary, $mailingChainFields);
-
-					$eventData = array(
-						'MAILING_CHAIN' => $mailingChain
-					);
-					$event = new \Bitrix\Main\Event('sender', 'OnAfterMailingChainSend', array($eventData));
-					$event->send();
-				}
-				else
-				{
-					MailingChainTable::update($mailingChainPrimary, array('STATUS' => MailingChainTable::STATUS_END));
-				}
-			}
-			else
-			{
-				return static::getAgentName($mailingChainId);
+				$letter = Model\LetterTable::getRowById($letterId);
 			}
 		}
+		if(!$letter || !in_array($letter['STATUS'], [
+			Model\LetterTable::STATUS_SEND
+			]))
+		{
+			return "";
+		}
+
+		if(!static::checkOnBeforeChainSend($letterId))
+		{
+			return Runtime\SenderJob::getAgentName($letterId);
+		}
+
+		$postingSendStatus = '';
+		if(!empty($letter['POSTING_ID']))
+		{
+			try
+			{
+				$postingSendStatus = PostingManager::send(
+					$letter['POSTING_ID'],
+					Runtime\Env::getJobExecutionTimeout(),
+					Runtime\Env::getJobExecutionItemLimit()
+				);
+			}
+			catch (\Throwable $e)
+			{
+				static::$error = $e;
+				AddMessage2Log(
+					'Exception in mailing send. PostingId: '. $letter['POSTING_ID'],
+					'sender with error ' . $e->getMessage()
+					. ' and trace '
+					. $e->getTraceAsString()
+				);
+
+				$postingSendStatus = PostingManager::SEND_RESULT_ERROR;
+			}
+		}
+
+		if(
+			in_array($postingSendStatus, [PostingManager::SEND_RESULT_CONTINUE, PostingManager::SEND_RESULT_ERROR], true)
+		)
+		{
+			return Runtime\SenderJob::getAgentName($letterId);
+		}
+
+
+		if ($postingSendStatus === PostingManager::SEND_RESULT_WAIT)
+		{
+			Model\LetterTable::update($letterId, array('STATUS' => Model\LetterTable::STATUS_WAIT));
+			return "";
+		}
+
+
+		if (
+			$postingSendStatus === PostingManager::SEND_RESULT_WAITING_RECIPIENT
+			|| \Bitrix\Sender\PostingRecipientTable::hasUnprocessed($letter['POSTING_ID'])
+		)
+		{
+			return Runtime\SenderJob::getAgentName($letterId);
+		}
+
+		if ($letter['REITERATE'] !== 'Y')
+		{
+			Model\LetterTable::update($letterId, array('STATUS' => Model\LetterTable::STATUS_END));
+			return "";
+		}
+
+		$isNeedUpdate = true;
+		if($letter['IS_TRIGGER'] == 'Y')
+		{
+			$postingDb = PostingTable::getList(array(
+				'select' => array('ID', 'DATE_CREATE'),
+				'filter' => array(
+					'STATUS' => PostingTable::STATUS_NEW,
+					'MAILING_CHAIN_ID' => $letter['ID']
+				),
+				'order' => array('DATE_CREATE' => 'ASC'),
+				'limit' => 1
+			));
+			if($posting = $postingDb->fetch())
+			{
+				$dateCreate = $posting['DATE_CREATE'];
+				/** @var Type\DateTime $dateCreate|null */
+				$updateFields = [
+					'STATUS' => Model\LetterTable::STATUS_SEND,
+					'AUTO_SEND_TIME' => $dateCreate ? $dateCreate->add($letter['TIME_SHIFT'].' minutes') : null,
+					'POSTING_ID' => $posting['ID']
+				];
+				Model\LetterTable::update($letterId, $updateFields);
+				$isNeedUpdate = false;
+			}
+		}
+
+		if ($isNeedUpdate)
+		{
+			$letterInstance = new Entity\Letter();
+			$letterInstance->loadByArray($letter);
+			$letterInstance->wait();
+		}
+
+		$eventData = array(
+			'MAILING_CHAIN' => $letter
+		);
+		$event = new \Bitrix\Main\Event('sender', 'OnAfterMailingChainSend', array($eventData));
+		$event->send();
 
 		return "";
 	}
 
 	/**
+	 *
 	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
 	 */
 	public static function checkSend()
 	{
@@ -189,24 +228,43 @@ class MailingManager
 		$mailingChainDb = MailingChainTable::getList(array(
 			'select' => array('ID'),
 			'filter' => array(
-				'STATUS' => MailingChainTable::STATUS_SEND,
-				'MAILING.ACTIVE' => 'Y',
+				'=STATUS' => array(
+					MailingChainTable::STATUS_SEND,
+					MailingChainTable::STATUS_PLAN,
+					),
+				'=MAILING.ACTIVE' => 'Y',
 				'<=AUTO_SEND_TIME' => new Type\DateTime(),
 			)
 		));
+
 		while ($mailingChain = $mailingChainDb->fetch())
 		{
+			$event = new Event('sender', 'onBeforeMailingChainSend', [
+				'chain' => $mailingChain,
+			]);
+			$event->send();
+			foreach ($event->getResults() as $eventResult)
+			{
+				if ($eventResult->getType() === EventResult::ERROR)
+				{
+					continue 2;
+				}
+			}
+
 			static::chainSend($mailingChain['ID']);
 		}
 	}
 
 	/**
+	 * Check period letters.
+	 *
+	 * @param bool $isAgentExec Is agent exec.
 	 * @return string
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
 	public static function checkPeriod($isAgentExec = true)
 	{
-		$isAgentExecInSetting = \COption::GetOptionString("sender", "reiterate_method") !== 'cron';
+		$isAgentExecInSetting = !Runtime\Env::isReiteratedJobCron();
 		if(($isAgentExec && !$isAgentExecInSetting) || (!$isAgentExec && $isAgentExecInSetting))
 		{
 				return "";
@@ -223,7 +281,7 @@ class MailingManager
 		$chainDb = MailingChainTable::getList(array(
 			'select' => array(
 				'ID', 'LAST_EXECUTED', 'POSTING_ID',
-				'DAYS_OF_MONTH', 'DAYS_OF_WEEK', 'TIMES_OF_DAY'
+				'MONTHS_OF_YEAR', 'DAYS_OF_MONTH', 'DAYS_OF_WEEK', 'TIMES_OF_DAY'
 			),
 			'filter' => array(
 				'=REITERATE' => 'Y',
@@ -242,12 +300,24 @@ class MailingManager
 				continue;
 			}
 
+			$event = new Event('sender', 'onBeforeMailingPeriodChainSend', [
+				'chain' => $arMailingChain,
+			]);
+			$event->send();
+			foreach ($event->getResults() as $eventResult)
+			{
+				if ($eventResult->getType() === EventResult::ERROR)
+				{
+					continue 2;
+				}
+			}
 
 			$timeOfExecute = static::getDateExecute(
 				$dateTodayPhp,
 				$arMailingChain["DAYS_OF_MONTH"],
 				$arMailingChain["DAYS_OF_WEEK"],
-				$arMailingChain["TIMES_OF_DAY"]
+				$arMailingChain["TIMES_OF_DAY"],
+				$arMailingChain["MONTHS_OF_YEAR"]
 			);
 
 			if($timeOfExecute)
@@ -279,141 +349,51 @@ class MailingManager
 					$arUpdateMailChain['AUTO_SEND_TIME'] = Type\DateTime::createFromPhp($timeOfExecute);
 				}
 
-
-				MailingChainTable::update(array('ID' => $arMailingChain['ID']), $arUpdateMailChain);
+				$result = Model\LetterTable::update($arMailingChain['ID'], $arUpdateMailChain);
+				if (!$result->isSuccess())
+				{
+					return "";
+				}
 			}
 		}
 
-
-		return static::getAgentNamePeriod();
+		(new Runtime\ReiteratedJob())->actualize();
+		return '';
 	}
 
 	/**
 	 * @param \DateTime $date
-	 * @param $daysOfMonth
-	 * @param $dayOfWeek
-	 * @param $timesOfDay
+	 * @param string|null $daysOfMonth
+	 * @param string|null $dayOfWeek
+	 * @param string|null $timesOfDay
+	 * @param string|null $monthsOfYear
 	 * @return \DateTime|null
 	 */
-	protected static function getDateExecute(\DateTime $date, $daysOfMonth, $dayOfWeek, $timesOfDay)
+	protected static function getDateExecute(
+		\DateTime $date,
+		?string $daysOfMonth = '',
+		?string $dayOfWeek = '',
+		?string $timesOfDay = '',
+		?string $monthsOfYear = ''
+	)
 	{
 		$timeOfExecute = null;
 
-		$arDay = static::parseDaysOfMonth($daysOfMonth);
-		$arWeek = static::parseDaysOfWeek($dayOfWeek);
-		$arTime = static::parseTimesOfDay($timesOfDay);
+		$months = MethodSchedule::parseMonthsOfYear($monthsOfYear);
+		$arDay = MethodSchedule::parseDaysOfMonth($daysOfMonth);
+		$arWeek = MethodSchedule::parseDaysOfWeek($dayOfWeek);
+		$arTime = MethodSchedule::parseTimesOfDay($timesOfDay);
+
 		if(!$arTime)
 			$arTime = array(0,0);
 
 		$day = $date->format('j');
 		$week = $date->format('N');
+		$month = $date->format('n');
 
-		if( (!$arDay || in_array($day, $arDay)) && (!$arWeek || in_array($week, $arWeek)) )
+		if( (!$arDay || in_array($day, $arDay)) && (!$arWeek || in_array($week, $arWeek)) && (!$months || in_array($month, $months)) )
 			$timeOfExecute = $date->setTime($arTime[0], $arTime[1]);
 
 		return $timeOfExecute;
-	}
-
-	/**
-	 * @param $strDaysOfMonth
-	 * @return array|null
-	 */
-	protected static function parseDaysOfMonth($strDaysOfMonth)
-	{
-		$arResult = array();
-		if (strlen($strDaysOfMonth) > 0)
-		{
-			$arDoM = explode(",", $strDaysOfMonth);
-			$arFound = array();
-			foreach ($arDoM as $strDoM)
-			{
-				if (preg_match("/^(\d{1,2})$/", trim($strDoM), $arFound))
-				{
-					if (intval($arFound[1]) < 1 || intval($arFound[1]) > 31)
-						return null;
-					else
-						$arResult[] = intval($arFound[1]);
-				}
-				elseif (preg_match("/^(\d{1,2})-(\d{1,2})$/", trim($strDoM), $arFound))
-				{
-					if (intval($arFound[1]) < 1 || intval($arFound[1]) > 31 || intval($arFound[2]) < 1 || intval($arFound[2]) > 31 || intval($arFound[1]) >= intval($arFound[2]))
-						return null;
-					else
-						for ($i = intval($arFound[1]); $i <= intval($arFound[2]); $i++)
-							$arResult[] = intval($i);
-				} else
-					return null;
-			}
-		}
-		else
-			return null;
-
-
-		return $arResult;
-	}
-
-	/**
-	 * @param $strDaysOfWeek
-	 * @return array|null
-	 */
-	protected static function parseDaysOfWeek($strDaysOfWeek)
-	{
-		if(strlen($strDaysOfWeek) <= 0)
-			return null;
-
-		$arResult = array();
-
-		$arDoW = explode(",", $strDaysOfWeek);
-		foreach($arDoW as $strDoW)
-		{
-			$arFound = array();
-			if(
-				preg_match("/^(\d)$/", trim($strDoW), $arFound)
-				&& $arFound[1] >= 1
-				&& $arFound[1] <= 7
-			)
-			{
-				$arResult[]=intval($arFound[1]);
-			}
-			else
-			{
-				return null;
-			}
-		}
-
-
-		return $arResult;
-	}
-
-	/**
-	 * @param $strTimesOfDay
-	 * @return array|null
-	 */
-	protected static function parseTimesOfDay($strTimesOfDay)
-	{
-		if(strlen($strTimesOfDay) <= 0)
-			return null;
-
-		$result = null;
-
-		$arToD = explode(",", $strTimesOfDay);
-		foreach($arToD as $strToD)
-		{
-			$arFound = array();
-			if(
-				preg_match("/^(\d{1,2}):(\d{1,2})$/", trim($strToD), $arFound)
-				&& $arFound[1] <= 23
-				&& $arFound[2] <= 59
-			)
-			{
-				$result = array($arFound[1], $arFound[2]);
-			}
-			else
-			{
-				return null;
-			}
-		}
-
-		return $result;
 	}
 }

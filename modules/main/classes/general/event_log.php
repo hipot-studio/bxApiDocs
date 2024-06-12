@@ -8,52 +8,18 @@
 
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * Класс для работы с логом.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/main/reference/ceventlog/index.php
- * @author Bitrix
- */
 class CEventLog
 {
-	const SEVERITY_SECURITY = 1;
-	const SEVERITY_ERROR = 2;
-	const SEVERITY_WARNING = 3;
-	const SEVERITY_INFO = 4;
-	const SEVERITY_DEBUG = 5;
+	public const SEVERITY_SECURITY = 'SECURITY';
+	public const SEVERITY_EMERGENCY = 'EMERGENCY';
+	public const SEVERITY_ALERT = 'ALERT';
+	public const SEVERITY_CRITICAL = 'CRITICAL';
+	public const SEVERITY_ERROR = 'ERROR';
+	public const SEVERITY_WARNING = 'WARNING';
+	public const SEVERITY_NOTICE = 'NOTICE';
+	public const SEVERITY_INFO = 'INFO';
+	public const SEVERITY_DEBUG = 'DEBUG';
 
-	
-	/**
-	* <p>Метод добавляет запись в лог. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $SEVERITY  Степень важности записи. Доступны значения: SECURITY, SECURITY, ERROR, WARNING,
-	* INFO, DEBUG для иного система установит UNKNOWN.
-	*
-	* @param SEVERIT $AUDIT_TYPE_ID  Идентификатор события, к которому относится запись.
-	*
-	* @param AUDIT_TYPE_I $MODULE_ID  Модуль, к которому относится запись
-	*
-	* @param MODULE_I $ITEM_ID  ID объекта, в связи с которым происходит добавление (пользователь,
-	* элемент ИБ, ID сообщения).
-	*
-	* @param ITEM_I $DESCRIPTION = false Описание записи лога, или техническая информация.
-	* Необязательный. По умолчанию - <i>false</i>.
-	*
-	* @param mixed $SITE_ID = false Идентификатор сайта, к которому относится запись в логе.
-	* Необязательный. По умолчанию - <i>false</i>.
-	*
-	* @return int 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/main/reference/ceventlog/log.php
-	* @author Bitrix
-	*/
 	public static function Log($SEVERITY, $AUDIT_TYPE_ID, $MODULE_ID, $ITEM_ID, $DESCRIPTION = false, $SITE_ID = false)
 	{
 		return CEventLog::Add(array(
@@ -66,70 +32,38 @@ class CEventLog
 		));
 	}
 
-	
-	/**
-	* <p>Метод добавляет событие для записи в логе событий. Нестатический метод.</p>
-	*
-	*
-	* @param array $fields  Поля добавляемого события. Значения: <ul> <li> <b>SEVERITY</b> - степень
-	* важности записи. Доступны значения: SECURITY или WARNING, для иного
-	* система установит UNKNOWN.</li> <li> <b>AUDIT_TYPE_ID</b> - собственный ID типа
-	* события.</li>  <li> <b>MODULE_ID</b> - модуль, с которого происходит запись в
-	* лог.</li>  <li> <b>ITEM_ID</b> - ID объекта, в связи с которым происходит
-	* добавление (пользователь, элемент ИБ, ID сообщения, ...)</li> <li>
-	* <b>REMOTE_ADDR</b> - IP, с которого обратились.</li>  <li> <b>USER_AGENT</b> - браузер.</li>
-	* <li> <b>REQUEST_URI</b> - URL страницы.</li> <li> <b>SITE_ID</b> - ID сайта, к которому
-	* относится добавляемое событие.</li>  <li> <b>USER_ID</b> - ID пользователя.</li>
-	* <li> <b>GUEST_ID</b> - ID пользователя из модуля статистики</li> <li> <b>DESCRIPTION</b> -
-	* собственно описание записи лога, или техническая информация.</li>  
-	* </ul>
-	*
-	* @return int 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* CEventLog::Add(array(
-	*          "SEVERITY" =&gt; "SECURITY",
-	*          "AUDIT_TYPE_ID" =&gt; "MY_OWN_TYPE",
-	*          "MODULE_ID" =&gt; "main",
-	*          "ITEM_ID" =&gt; 123,
-	*          "DESCRIPTION" =&gt; "Какое-то описание",
-	*       ));
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/main/reference/ceventlog/add.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		global $USER, $DB;
-		static $arSeverity = array(
-			"SECURITY" => self::SEVERITY_SECURITY,
-			"ERROR" => self::SEVERITY_ERROR,
-			"WARNING" => self::SEVERITY_WARNING,
-			"INFO" => self::SEVERITY_INFO,
-			"DEBUG" => self::SEVERITY_DEBUG,
-		);
+		static $arSeverity = [
+			self::SEVERITY_SECURITY => 1,
+			self::SEVERITY_EMERGENCY => 1,
+			self::SEVERITY_ALERT => 1,
+			self::SEVERITY_CRITICAL => 1,
+			self::SEVERITY_ERROR => 1,
+			self::SEVERITY_WARNING => 1,
+			self::SEVERITY_NOTICE => 1,
+			self::SEVERITY_INFO => 1,
+			self::SEVERITY_DEBUG => 1,
+		];
 
 		$url = preg_replace("/(&?sessid=[0-9a-z]+)/", "", $_SERVER["REQUEST_URI"]);
 		$SITE_ID = defined("ADMIN_SECTION") && ADMIN_SECTION==true ? false : SITE_ID;
+		$session = \Bitrix\Main\Application::getInstance()->getSession();
 
 		$arFields = array(
-			"SEVERITY" => array_key_exists($arFields["SEVERITY"], $arSeverity)? $arFields["SEVERITY"]: "UNKNOWN",
-			"AUDIT_TYPE_ID" => strlen($arFields["AUDIT_TYPE_ID"]) <= 0? "UNKNOWN": $arFields["AUDIT_TYPE_ID"],
-			"MODULE_ID" => strlen($arFields["MODULE_ID"]) <= 0? "UNKNOWN": $arFields["MODULE_ID"],
-			"ITEM_ID" => strlen($arFields["ITEM_ID"]) <= 0? "UNKNOWN": $arFields["ITEM_ID"],
+			"SEVERITY" => isset($arSeverity[$arFields["SEVERITY"]]) ? $arFields["SEVERITY"] : "UNKNOWN",
+			"AUDIT_TYPE_ID" => $arFields["AUDIT_TYPE_ID"] == ''? "UNKNOWN": $arFields["AUDIT_TYPE_ID"],
+			"MODULE_ID" => $arFields["MODULE_ID"] == ''? "UNKNOWN": $arFields["MODULE_ID"],
+			"ITEM_ID" => $arFields["ITEM_ID"] == ''? "UNKNOWN": $arFields["ITEM_ID"],
 			"REMOTE_ADDR" => $_SERVER["REMOTE_ADDR"],
 			"USER_AGENT" => $_SERVER["HTTP_USER_AGENT"],
 			"REQUEST_URI" => $url,
-			"SITE_ID" => strlen($arFields["SITE_ID"]) <= 0 ? $SITE_ID : $arFields["SITE_ID"],
+			"SITE_ID" => empty($arFields["SITE_ID"]) ? $SITE_ID : $arFields["SITE_ID"],
 			"USER_ID" => is_object($USER) && ($USER->GetID() > 0)? $USER->GetID(): false,
-			"GUEST_ID" => (isset($_SESSION) && array_key_exists("SESS_GUEST_ID", $_SESSION) && $_SESSION["SESS_GUEST_ID"] > 0? $_SESSION["SESS_GUEST_ID"]: false),
+			"GUEST_ID" => ($session->isStarted() && $session->has("SESS_GUEST_ID") && $session["SESS_GUEST_ID"] > 0? $session["SESS_GUEST_ID"]: false),
 			"DESCRIPTION" => $arFields["DESCRIPTION"],
+			"~TIMESTAMP_X" => $DB->GetNowFunction(),
 		);
 
 		return $DB->Add("b_event_log", $arFields, array("DESCRIPTION"), "", false, "", array("ignore_dml"=>true));
@@ -139,6 +73,7 @@ class CEventLog
 	public static function CleanUpAgent()
 	{
 		global $DB;
+
 		$cleanup_days = COption::GetOptionInt("main", "event_log_cleanup_days", 7);
 		if($cleanup_days > 0)
 		{
@@ -146,59 +81,13 @@ class CEventLog
 			$date = mktime(0, 0, 0, $arDate[4]+1, $arDate[3]-$cleanup_days, 1900+$arDate[5]);
 			$DB->Query("DELETE FROM b_event_log WHERE TIMESTAMP_X <= ".$DB->CharToDateFunction(ConvertTimeStamp($date, "FULL")));
 		}
+
 		return "CEventLog::CleanUpAgent();";
 	}
 
-	
-	/**
-	* <p>Метод возвращает отфильтрованный и отсортированный список записей в логе. Нестатический метод.</p>
-	*
-	*
-	* @param array $arOrder = Array Массив для сортировки результата. Массив вида array("поле
-	* сортировки"=&gt;"направление сортировки" [, ...]). Поле для сортировки
-	* может принимать значения:  <ul> <li> <b>ID</b> - идентификатор записи;</li>
-	* <li> <b>TIMESTAMP_X</b> - Время в Unix-формате.</li>   </ul> Направление сортировки
-	* может принимать значения: <ul> <li> <b>asc</b> - по возрастанию;</li> <li>
-	* <b>desc</b> - по убыванию.</li>   </ul>
-	*
-	* @param mixed $intID  Массив вида array("фильтруемое поле"=&gt;"значение" [, ...]), может
-	* принимать значения: <ul> <li> <b>SEVERITY</b> - степень важности записи.
-	* Доступны значения: SECURITY или WARNING, для иного система установит
-	* UNKNOWN.</li> <li> <b>AUDIT_TYPE_ID</b> - собственный ID типа события.</li>  <li> <b>MODULE_ID</b>
-	* - модуль, с которого происходит запись в лог.</li>  <li> <b>ITEM_ID</b> - ID
-	* объекта, в связи с которым происходит добавление (пользователь,
-	* элемент ИБ, ID сообщения)</li> <li> <b>REMOTE_ADDR</b> - IP, с которого
-	* обратились.</li>  <li> <b>USER_AGENT</b> - браузер.</li> <li> <b>REQUEST_URI</b> - URL
-	* страницы.</li> <li> <b>SITE_ID</b> - ID сайта, к которому относится
-	* добавляемое событие.</li>  <li> <b>USER_ID</b> - ID пользователя.</li> <li>
-	* <b>GUEST_ID</b> - ID пользователя из модуля статистики.</li> <li> <b>DESCRIPTION</b> -
-	* собственно описание записи лога, или техническая информация.</li>  
-	* </ul>
-	*
-	* @param I $DESC  Массив настроек постраничной навигации.
-	*
-	* @param  $arFilter = array() 
-	*
-	* @param array $arNavParams = false 
-	*
-	* @return int 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* 
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/main/reference/ceventlog/getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder = Array("ID" => "DESC"), $arFilter = array(), $arNavParams = false)
 	{
 		global $DB;
-		$err_mess = "FILE: ".__FILE__."<br>LINE: ";
 
 		$arSqlSearch = array();
 		$arSqlOrder = array();
@@ -213,18 +102,18 @@ class CEventLog
 		{
 			if(is_array($val))
 			{
-				if(count($val) <= 0)
+				if(empty($val))
 					continue;
 			}
-			elseif(strlen($val) <= 0)
+			elseif((string)$val == '')
 			{
 				continue;
 			}
-			$key = strtoupper($key);
+			$key = mb_strtoupper($key);
 			switch($key)
 			{
 				case "ID":
-					$arSqlSearch[] = "L.ID=".IntVal($val);
+					$arSqlSearch[] = "L.ID=".intval($val);
 					break;
 				case "TIMESTAMP_X_1":
 					$arSqlSearch[] = "L.TIMESTAMP_X >= ".$DB->CharToDateFunction($DB->ForSql($val), "FULL");
@@ -239,15 +128,19 @@ class CEventLog
 						foreach($val as $value)
 						{
 							$value = trim($value);
-							if(strlen($value))
+							if($value <> '')
+							{
 								$arValues[$value] = $DB->ForSQL($value);
+							}
 						}
 					}
 					elseif(is_string($val))
 					{
 						$value = trim($val);
-						if(strlen($value))
+						if($value <> '')
+						{
 							$arValues[$value] = $DB->ForSQL($value);
+						}
 					}
 					if(!empty($arValues))
 						$arSqlSearch[] = "L.AUDIT_TYPE_ID in ('".implode("', '", $arValues)."')";
@@ -264,10 +157,10 @@ class CEventLog
 								if (in_array($item2, $arFields))
 									$arSqlSearchTmp[] = "L.".$item2." = '".$DB->ForSQL($value2)."'";
 							}
-							if(count($arSqlSearchTmp) > 0)
+							if(!empty($arSqlSearchTmp))
 								$arSqlSearch2[] = implode(" AND ", $arSqlSearchTmp);
 						}
-						if(count($arSqlSearch2) > 0)
+						if(!empty($arSqlSearch2))
 							$arSqlSearch[] = "(".implode(" OR ", $arSqlSearch2).")";
 					}
 					break;
@@ -290,14 +183,14 @@ class CEventLog
 
 		foreach($arOrder as $by => $order)
 		{
-			$by = strtoupper($by);
-			$order = strtoupper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			if (array_key_exists($by, $arOFields))
 			{
 				if ($order != "ASC")
-					$order = "DESC".($DB->type=="ORACLE" ? " NULLS LAST" : "");
-				else
-					$order = "ASC".($DB->type=="ORACLE" ? " NULLS FIRST" : "");
+				{
+					$order = "DESC";
+				}
 				$arSqlOrder[$by] = $arOFields[$by]." ".$order;
 			}
 		}
@@ -344,8 +237,45 @@ class CEventLog
 			if(!empty($arSqlOrder))
 				$strSql .=  " ORDER BY ".implode(", ", $arSqlOrder);
 
-			return $DB->Query("SELECT L.*, ".$DB->DateToCharFunction("L.TIMESTAMP_X")." as TIMESTAMP_X".$strSql, false, $err_mess.__LINE__);
+			return $DB->Query("SELECT L.*, ".$DB->DateToCharFunction("L.TIMESTAMP_X")." as TIMESTAMP_X".$strSql);
 		}
+	}
+
+	public static function GetEventTypes()
+	{
+		$arAuditTypes = array(
+			"USER_AUTHORIZE" => "[USER_AUTHORIZE] ".GetMessage("MAIN_EVENTLOG_USER_AUTHORIZE"),
+			"USER_DELETE" => "[USER_DELETE] ".GetMessage("MAIN_EVENTLOG_USER_DELETE"),
+			"USER_INFO" => "[USER_INFO] ".GetMessage("MAIN_EVENTLOG_USER_INFO"),
+			"USER_LOGIN" => "[USER_LOGIN] ".GetMessage("MAIN_EVENTLOG_USER_LOGIN"),
+			"USER_LOGINBYHASH" => "[USER_LOGINBYHASH] ".GetMessage("MAIN_EVENTLOG_USER_LOGINBYHASH_FAILED"),
+			"USER_LOGOUT" => "[USER_LOGOUT] ".GetMessage("MAIN_EVENTLOG_USER_LOGOUT"),
+			"USER_PASSWORD_CHANGED" => "[USER_PASSWORD_CHANGED] ".GetMessage("MAIN_EVENTLOG_USER_PASSWORD_CHANGED"),
+			"USER_BLOCKED" => "[USER_BLOCKED] ".GetMessage("MAIN_EVENTLOG_USER_BLOCKED"),
+			"USER_PERMISSIONS_FAIL" => "[USER_PERMISSIONS_FAIL] ".GetMessage("MAIN_EVENTLOG_USER_PERMISSIONS_FAIL"),
+			"USER_REGISTER" => "[USER_REGISTER] ".GetMessage("MAIN_EVENTLOG_USER_REGISTER"),
+			"USER_REGISTER_FAIL" => "[USER_REGISTER_FAIL] ".GetMessage("MAIN_EVENTLOG_USER_REGISTER_FAIL"),
+			"USER_GROUP_CHANGED" => "[USER_GROUP_CHANGED] ".GetMessage("MAIN_EVENTLOG_GROUP"),
+			"GROUP_POLICY_CHANGED" => "[GROUP_POLICY_CHANGED] ".GetMessage("MAIN_EVENTLOG_GROUP_POLICY"),
+			"MODULE_RIGHTS_CHANGED" => "[MODULE_RIGHTS_CHANGED] ".GetMessage("MAIN_EVENTLOG_MODULE"),
+			"FILE_PERMISSION_CHANGED" => "[FILE_PERMISSION_CHANGED] ".GetMessage("MAIN_EVENTLOG_FILE"),
+			"TASK_CHANGED" => "[TASK_CHANGED] ".GetMessage("MAIN_EVENTLOG_TASK"),
+			"MP_MODULE_INSTALLED" => "[MP_MODULE_INSTALLED] ".GetMessage("MAIN_EVENTLOG_MP_MODULE_INSTALLED"),
+			"MP_MODULE_UNINSTALLED" => "[MP_MODULE_UNINSTALLED] ".GetMessage("MAIN_EVENTLOG_MP_MODULE_UNINSTALLED"),
+			"MP_MODULE_DELETED" => "[MP_MODULE_DELETED] ".GetMessage("MAIN_EVENTLOG_MP_MODULE_DELETED"),
+			"MP_MODULE_DOWNLOADED" => "[MP_MODULE_DOWNLOADED] ".GetMessage("MAIN_EVENTLOG_MP_MODULE_DOWNLOADED"),
+		);
+
+		foreach(GetModuleEvents("main", "OnEventLogGetAuditTypes", true) as $arEvent)
+		{
+			$ar = ExecuteModuleEventEx($arEvent);
+			if(is_array($ar))
+				$arAuditTypes = array_merge($ar, $arAuditTypes);
+		}
+
+		ksort($arAuditTypes);
+
+		return $arAuditTypes;
 	}
 }
 
@@ -383,12 +313,12 @@ class CEventMain
 
 	public static function GetEventInfo($row, $arParams)
 	{
-		$DESCRIPTION = unserialize($row["DESCRIPTION"]);
+		$DESCRIPTION = unserialize($row["DESCRIPTION"], ['allowed_classes' => false]);
 		$userURL = $EventPrint = "";
 		$rsUser = CUser::GetByID($row['ITEM_ID']);
 		if($arUser = $rsUser->GetNext())
 			$userURL = SITE_DIR.CComponentEngine::MakePathFromTemplate($arParams['USER_PATH'], array("user_id" => $row['ITEM_ID'], "SITE_ID" => ""));
-		$EventName = $DESCRIPTION["user"];
+		$EventName = is_array($DESCRIPTION) ? $DESCRIPTION["user"] : null;
 		switch($row['AUDIT_TYPE_ID'])
 		{
 			case "USER_REGISTER":

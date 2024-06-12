@@ -10,10 +10,11 @@ class StorageManager
 	}
 	/**
 	 * @param array $fileData
+	 * @param int $storageTypeID
 	 * @param string $siteID
 	 * @return array|null
 	 */
-	public static function getFileInfo($fileID, $storageTypeID = 0, $checkPermissions = true)
+	public static function getFileInfo($fileID, $storageTypeID = 0, $checkPermissions = true, $options = null)
 	{
 		if(!is_integer($storageTypeID))
 		{
@@ -27,7 +28,7 @@ class StorageManager
 
 		if($storageTypeID === StorageType::Disk)
 		{
-			return DiskManager::getFileInfo($fileID, $checkPermissions);
+			return DiskManager::getFileInfo($fileID, $checkPermissions, $options);
 		}
 		elseif($storageTypeID === StorageType::WebDav)
 		{
@@ -56,7 +57,7 @@ class StorageManager
 	 * @param string $siteID
 	 * @return int|false
 	 */
-	public static function saveEmailAttachment(array $fileData, $storageTypeID = 0, $siteID = '')
+	public static function saveEmailAttachment(array $fileData, $storageTypeID = 0, $siteID = '', $params = array())
 	{
 		if(!is_integer($storageTypeID))
 		{
@@ -70,11 +71,12 @@ class StorageManager
 
 		if($storageTypeID === StorageType::Disk)
 		{
-			return DiskManager::saveEmailAttachment($fileData, $siteID);
+			$params['USE_MONTH_FOLDERS'] = true;
+			return DiskManager::saveEmailAttachment($fileData, $siteID, $params);
 		}
 		elseif($storageTypeID === StorageType::WebDav)
 		{
-			return \CCrmWebDavHelper::saveEmailAttachment($fileData, $siteID);
+			return \CCrmWebDavHelper::saveEmailAttachment($fileData, $siteID, $params);
 		}
 
 		throw new Main\NotSupportedException("Storage type: '{$storageTypeID}' is not supported in current context");
@@ -108,6 +110,40 @@ class StorageManager
 
 		throw new Main\NotSupportedException("Storage type: '{$storageTypeID}' is not supported in current context");
 	}
+
+	public static function deleteFile($fileID, $storageTypeID = 0)
+	{
+		if($storageTypeID === StorageType::File)
+		{
+			\CFile::Delete($fileID);
+		}
+		elseif($storageTypeID === StorageType::Disk)
+		{
+			Main\Loader::includeModule('disk');
+
+			$codeMap = array(
+				StorageFileType::getFolderXmlID(StorageFileType::EmailAttachment) => true,
+				StorageFileType::getFolderXmlID(StorageFileType::CallRecord) => true,
+				StorageFileType::getFolderXmlID(StorageFileType::Rest) => true
+			);
+
+			$file = \Bitrix\Disk\File::loadById($fileID);
+			if($file !== null)
+			{
+				$folder = $file->getParent();
+				if($folder !== null)
+				{
+					if((isset($codeMap[$folder->getXmlId()]) || $folder->getCode() === \Bitrix\Disk\SpecificFolder::CODE_FOR_UPLOADED_FILES)
+						&& $file->countAttachedObjects() == 0
+					)
+					{
+						$file->delete(\Bitrix\Disk\SystemUser::SYSTEM_USER_ID);
+					}
+				}
+			}
+		}
+	}
+
 	/**
 	 * @param int|array $fileID
 	 * @param int $storageTypeID
@@ -243,6 +279,39 @@ class StorageManager
 
 		throw new Main\NotSupportedException("Storage type: '{$storageTypeID}' is not supported in current context");
 	}
+
+	public static function registerInterRequestFile($fileID, $storageTypeID)
+	{
+		if($storageTypeID === StorageType::WebDav)
+		{
+			if (!isset($_SESSION['crm_saved_dav_files']))
+			{
+				$_SESSION['crm_saved_dav_files'] = array();
+			}
+			$_SESSION['crm_saved_dav_files'][] = $fileID;
+		}
+		elseif($storageTypeID === StorageType::Disk)
+		{
+			if (!isset($_SESSION['crm_saved_disk_files']))
+			{
+				$_SESSION['crm_saved_disk_files'] = array();
+			}
+			$_SESSION['crm_saved_disk_files'][] = $fileID;
+		}
+	}
+	public static function getInterRequestFiles($storageTypeID)
+	{
+		if($storageTypeID === StorageType::WebDav)
+		{
+			return isset($_SESSION['crm_saved_dav_files']) ? $_SESSION['crm_saved_dav_files'] : array();
+		}
+		elseif($storageTypeID === StorageType::Disk)
+		{
+			return isset($_SESSION['crm_saved_disk_files']) ? $_SESSION['crm_saved_disk_files'] : array();
+		}
+		return array();
+	}
+
 	public static function filterFiles(array $fileIDs, $storageTypeID, $userID = 0)
 	{
 		if(!is_integer($storageTypeID))
@@ -250,12 +319,13 @@ class StorageManager
 			$storageTypeID = (int)$storageTypeID;
 		}
 
+		$savedFiles = self::getInterRequestFiles($storageTypeID);
 		$result = array();
 		if($storageTypeID === StorageType::WebDav)
 		{
 			foreach($fileIDs as $fileID)
 			{
-				if(\CCrmWebDavHelper::CheckElementReadPermission($fileID, $userID))
+				if(in_array($fileID, $savedFiles) || \CCrmWebDavHelper::CheckElementReadPermission($fileID, $userID))
 				{
 					$result[] = $fileID;
 				}
@@ -263,11 +333,11 @@ class StorageManager
 		}
 		elseif($storageTypeID === StorageType::Disk)
 		{
-			foreach($fileIDs as $fielID)
+			foreach($fileIDs as $fileID)
 			{
-				if(DiskManager::checkFileReadPermission($fielID, $userID))
+				if(in_array($fileID, $savedFiles) || DiskManager::checkFileReadPermission($fileID, $userID))
 				{
-					$result[] = $fielID;
+					$result[] = $fileID;
 				}
 			}
 		}

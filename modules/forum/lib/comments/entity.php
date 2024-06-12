@@ -2,39 +2,43 @@
 
 namespace Bitrix\Forum\Comments;
 
+use Bitrix\Forum\ForumTable;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Event;
+use Bitrix\Main\SystemException;
+
 class Entity
 {
+	const ENTITY_TYPE = 'default';
+	const MODULE_ID = 'forum';
+	const XML_ID_PREFIX = 'TOPIC_';
+
 	/** @var array */
 	protected $entity;
-	/** @var \Bitrix\Forum\Comments\BaseObject */
-	protected $caller;
 	/** @var array */
 	protected $forum;
 	/** @var array  */
-	static $permissions = array();
-	/** @var string */
-	private $permission = "A";
+	protected static $permissions = array();
 	/** @var bool */
 	private $editOwn = false;
-	/** @var array */
-	private $rights = array();
 	protected static $pathToUser  = '/company/personal/user/#user_id#/';
 	protected static $pathToGroup = '/workgroups/group/#group_id#/';
 
+	/** @var array */
+	protected static $entities;
+
 	/**
 	 * @param array $entity
-	 * @param BaseObject $caller
+	 * @param array $storage
 	 */
-	public function __construct(array $entity, BaseObject $caller)
+	public function __construct(array $entity, array $storage)
 	{
 		$this->entity = array(
 			"type" => $entity["type"],
 			"id" => $entity["id"],
 			"xml_id" => $entity["xml_id"]
 		);
-		$this->caller = $caller;
-		$this->forum = $caller->getForum();
-		$this->initPermission();
+		$this->forum = $storage;
 		$this->editOwn = (\COption::GetOptionString("forum", "USER_EDIT_OWN_POST", "Y") == "Y");
 	}
 
@@ -52,7 +56,7 @@ class Entity
 	{
 		if (!empty($this->entity["xml_id"]))
 			return $this->entity["xml_id"];
-		return strtoupper($this->entity["type"]."_".$this->entity["id"]);
+		return mb_strtoupper($this->entity["type"]."_".$this->entity["id"]);
 	}
 
 	/**
@@ -68,72 +72,77 @@ class Entity
 		return get_called_class();
 	}
 
-	/**
-	 * @param $userId
-	 * @return bool
-	 */
-	public function canRead()
+	public static function getModule()
 	{
-		return ($this->permission >= "E");
+		return static::MODULE_ID;
 	}
-	/**
-	 * @return bool
-	 */
-	public function canAdd()
+
+	public static function getEntityType()
 	{
-		if (!array_key_exists("add", $this->rights))
-		{
-			$this->rights["add"] = ($this->permission >= "I");
-		}
-		return $this->rights["add"];
+		return static::ENTITY_TYPE;
+	}
+
+	public static function getXmlIdPrefix()
+	{
+		return static::XML_ID_PREFIX;
 	}
 
 	/**
+	 * @param integer $userId User id.
 	 * @return bool
 	 */
-	public function canEdit()
+	public function canRead($userId)
 	{
-		if (!array_key_exists("edit", $this->rights))
-		{
-			$this->rights["edit"] = ($this->permission >= "U");
-		}
-		return $this->rights["edit"];
+		return $this->getPermission($userId) >= "E";
 	}
 	/**
+	 * @param integer $userId User id.
 	 * @return bool
 	 */
-	public function canEditOwn()
+	public function canAdd($userId)
 	{
-		if (!array_key_exists("editOwn", $this->rights))
-		{
-			$this->rights["editOwn"] = ($this->canEdit() || $this->permission >= "I" && $this->editOwn);
-		}
-		return $this->rights["editOwn"];
-	}
-	/**
-	 * @return bool
-	 */
-	public function canModerate()
-	{
-		if (!array_key_exists("moderate", $this->rights))
-		{
-			$this->rights["moderate"] = ($this->permission >= "Q");
-		}
-		return $this->rights["moderate"];
+		return $this->getPermission($userId) >= "I";
 	}
 
 	/**
+	 * @param integer $userId User id.
+	 * @return bool
+	 */
+	public function canEdit($userId)
+	{
+		return $this->getPermission($userId) >= "U";
+	}
+	/**
+	 * @param integer $userId User id.
+	 * @return bool
+	 */
+	public function canEditOwn($userId)
+	{
+		return $this->canEdit($userId) || $this->getPermission($userId) >= "I" && $this->editOwn;
+	}
+	/**
+	 * @param integer $userId User id.
+	 * @return bool
+	 */
+	public function canModerate($userId)
+	{
+		return $this->getPermission($userId) >= "Q";
+	}
+
+	/**
+	 * @param integer $userId User id.
 	 * @param string $permission A < E < I < M < Q < U < Y
 	// A - NO ACCESS		E - READ			I - ANSWER
-	// M - NEW TOPIC		Q - MODERATE	U - EDIT			Y - FULL_ACCESS
+	// M - NEW TOPIC		Q - MODERATE	U - EDIT			Y - FULL_ACCESS.
 	 * @return $this
 	 */
-	public function setPermission($permission)
+	public function setPermission($userId, $permission)
 	{
 		if (is_string($permission))
 		{
-			$this->permission = strtoupper($permission);
-			$this->rights = array();
+			if (!isset(self::$permissions[$userId]))
+				self::$permissions[$userId] = [];
+			self::$permissions[$userId][$this->forum["ID"]] = $permission;
 		}
 		return $this;
 	}
@@ -145,37 +154,181 @@ class Entity
 	public function setEditOwn($permission)
 	{
 		$this->editOwn = $permission;
-		unset($this->rights["editOwn"]);
 		return $this;
 	}
 
-	public function initPermission()
+	/**
+	 * @param integer $userId User id.
+	 * @return $this
+	 */
+	public function getPermission($userId)
 	{
-		if (!array_key_exists($this->forum["ID"], self::$permissions))
+		if (!array_key_exists($userId, self::$permissions))
 		{
-			if (\CForumUser::IsAdmin($this->getUser()->getGroups()))
-				$result = "Y";
-			else if ($this->forum["ACTIVE"] != "Y")
-				$result = "A";
-			else if (\CForumUser::IsLocked($this->getUser()->getId()))
-				$result = \CForumNew::GetPermissionUserDefault($this->forum["ID"]);
-			else
-				$result = \CForumNew::GetUserPermission($this->forum["ID"], $GLOBALS["USER"]->GetUserGroupArray());
+			self::$permissions[$userId] = [];
+			if (!array_key_exists($this->forum["ID"], self::$permissions[$userId]))
+			{
+				if (\CForumUser::IsAdmin($userId))
+					$result = "Y";
+				else if ($this->forum["ACTIVE"] != "Y")
+					$result = "A";
+				else if (\CForumUser::IsLocked($userId))
+					$result = \CForumNew::GetPermissionUserDefault($this->forum["ID"]);
+				else
+				{
+					if (in_array($this->getType(), array('PH', 'TR', 'TM', 'IBLOCK')))
+					{
+						$result = 'Y';
+					}
+					else
+					{
+						$res = ForumTable::getList(array(
+							'filter' => array(
+								'=ID' => $this->forum["ID"],
+								'@XML_ID' => array(
+									'USERS_AND_GROUPS'
+								)
+							),
+							'select' => array('ID')
+						));
+						if ($forumFields = $res->fetch())
+						{
+							$result = 'Y';
+						}
+						else
+						{
+							$result = \CForumNew::GetUserPermission($this->forum["ID"], $userId);
+						}
+					}
+				}
 
-			self::$permissions [$this->forum["ID"]] = $result;
+				self::$permissions[$userId][$this->forum["ID"]] = $result;
+			}
 		}
-		$this->permission = self::$permissions[$this->forum["ID"]];
-		$this->rights = array();
-		return $this;
+		return self::$permissions[$userId][$this->forum["ID"]];
+	}
+	/**
+	 * @param string $type Type entity.
+	 * @return array|null
+	 */
+	public static function getEntityByType($type = "")
+	{
+		$type = mb_strtolower($type);
+		$entities = self::getEntities();
+		return (array_key_exists($type, $entities) ? $entities[$type] : null);
 	}
 
-	public function getPermission()
+	/**
+	 * @param string $xmlId Type entity.
+	 * @return array|null
+	 */
+	public static function getEntityByXmlId($xmlId = "")
 	{
-		return $this->permission;
+		$xmlId = mb_strtoupper($xmlId);
+		$entities = self::getEntities();
+		$result = null;
+		foreach ($entities as $entity)
+		{
+			if (preg_match("/^".$entity["xmlIdPrefix"]."(\\d+)/", $xmlId))
+			{
+				$result = $entity;
+				break;
+			}
+		}
+		return $result;
 	}
 
-	public function getUser()
+	private static function getEntities()
 	{
-		return $this->caller->getUser();
+		if (!is_array(self::$entities))
+		{
+			self::$entities = array(
+				"tk" => array(
+					"entityType" => "tk",
+					"className" => TaskEntity::className(),
+					"moduleId" => "tasks",
+					"xmlIdPrefix" => TaskEntity::getXmlIdPrefix()),
+				"wf" => array(
+					"entityType" => "wf",
+					"className" => WorkflowEntity::className(),
+					"moduleId" => "lists",
+					"xmlIdPrefix" => WorkflowEntity::getXmlIdPrefix()),
+				"ev" => array(
+					"entityType" => "ev",
+					"className" => CalendarEntity::className(),
+					"moduleId" => "calendar",
+					"xmlIdPrefix" => CalendarEntity::getXmlIdPrefix()),
+				"tm" => array(
+					"entityType" => "tm",
+					"className" => Entity::className(),
+					"moduleId" => "timeman",
+					"xmlIdPrefix" => 'TIMEMAN_ENTRY_'
+				),
+				"tr" => array(
+					"entityType" => "tr",
+					"className" => Entity::className(),
+					"moduleId" => "timeman",
+					"xmlIdPrefix" => 'TIMEMAN_REPORT_'
+				),
+				"default" => array(
+					"entityType" => "default",
+					"className" => Entity::className(),
+					"moduleId" => "forum",
+					"xmlIdPrefix" => Entity::getXmlIdPrefix()
+				)
+			);
+
+			$event = new Event("forum", "onBuildAdditionalEntitiesList");
+			$event->send();
+
+			foreach ($event->getResults() as $evenResult)
+			{
+				$result = $evenResult->getParameters();
+				if (!is_array($result))
+				{
+					throw new SystemException('Event onBuildAdditionalEntitiesList: result must be an array.');
+				}
+
+				foreach ($result as $connector)
+				{
+					if (empty($connector['ENTITY_TYPE']))
+					{
+						throw new SystemException('Event onBuildAdditionalEntitiesList: key ENTITY_TYPE is not found.');
+					}
+
+					if (empty($connector['MODULE_ID']))
+					{
+						throw new SystemException('Event onBuildAdditionalEntitiesList: key MODULE_ID is not found.');
+					}
+
+					if (empty($connector['CLASS']))
+					{
+						throw new SystemException('Event onBuildAdditionalEntitiesList: key CLASS is not found.');
+					}
+
+					if (is_string($connector['CLASS']) && class_exists($connector['CLASS']))
+					{
+						self::$entities[mb_strtolower($connector['ENTITY_TYPE'])] = array(
+							"id" => mb_strtolower($connector['ENTITY_TYPE']),
+							"className" => str_replace('\\\\', '\\', $connector['CLASS']),
+							"moduleId" => $connector['MODULE_ID'],
+							"xmlIdPrefix" => mb_strtoupper($connector['ENTITY_TYPE'])."_"
+						);
+					}
+				}
+			}
+		}
+		return self::$entities;
+	}
+	/**
+	 * Event before indexing message.
+	 * @param integer $id Message ID.
+	 * @param array $message Message data.
+	 * @param array &$index Search index array.
+	 * @return boolean
+	 */
+	public static function onMessageIsIndexed($id, array $message, array &$index)
+	{
+		return (empty($message["PARAM1"]) && empty($message["PARAM2"]));
 	}
 }

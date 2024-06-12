@@ -43,7 +43,8 @@ class OrderDiscountTable extends Main\Entity\DataManager
 		'USE_COUPONS',
 		'SORT',
 		'PRIORITY',
-		'LAST_DISCOUNT'
+		'LAST_DISCOUNT',
+		'ACTIONS_DESCR'
 	);
 	protected static $replaceFields = array(
 		'DISCOUNT_ID' => 'ID',
@@ -53,7 +54,7 @@ class OrderDiscountTable extends Main\Entity\DataManager
 	);
 	protected static $revertFields = array(
 		'CONDITIONS' => 'CONDITIONS_LIST',
-		'ACTIONS' => 'ACTIONS_LIST',
+		'ACTIONS' => 'ACTIONS_LIST'
 	);
 
 	/**
@@ -61,17 +62,6 @@ class OrderDiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы применившихся к заказу скидок и правил работы с корзиной. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscounttable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_sale_order_discount';
@@ -82,17 +72,6 @@ class OrderDiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы применившихся к заказу скидок и правил работы с корзиной. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscounttable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -158,17 +137,6 @@ class OrderDiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>MODULE_ID</code> (идентификатор модуля). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscounttable/validatemoduleid.php
-	* @author Bitrix
-	*/
 	public static function validateModuleId()
 	{
 		return array(
@@ -180,17 +148,6 @@ class OrderDiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>NAME</code> (название скидки или правила корзины). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscounttable/validatename.php
-	* @author Bitrix
-	*/
 	public static function validateName()
 	{
 		return array(
@@ -202,17 +159,6 @@ class OrderDiscountTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>DISCOUNT_HASH</code> (хеш-сумма правила/скидки). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscounttable/validatediscounthash.php
-	* @author Bitrix
-	*/
 	public static function validateDiscountHash()
 	{
 		return array(
@@ -226,19 +172,6 @@ class OrderDiscountTable extends Main\Entity\DataManager
 	 * @param string $hash				Discount hash.
 	 * @return int|bool
 	 */
-	
-	/**
-	* <p>Метод возвращает идентификатор скидки/правила по ее/его хеш-сумме. Метод статический.</p>
-	*
-	*
-	* @param string $hash  Хеш-сумма скидки/правила.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscounttable/getdiscountbyhash.php
-	* @author Bitrix
-	*/
 	public static function getDiscountByHash($hash)
 	{
 		$hash = (string)$hash;
@@ -261,19 +194,6 @@ class OrderDiscountTable extends Main\Entity\DataManager
 	 * @param array $discount			Discount data.
 	 * @return bool|string
 	 */
-	
-	/**
-	* <p>Метод вычисляет хеш-сумму для скидки/правила. Метод статический.</p>
-	*
-	*
-	* @param array $discount  Массив параметров скидки/правила.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscounttable/calculatehash.php
-	* @author Bitrix
-	*/
 	public static function calculateHash($discount)
 	{
 		$hash = false;
@@ -302,19 +222,6 @@ class OrderDiscountTable extends Main\Entity\DataManager
 	 * @param array $discount			Discount data.
 	 * @return bool|string
 	 */
-	
-	/**
-	* <p>Метод вычисляет хеш-сумму для полей <code>CONDITIONS</code> и <code>ACTIONS</code>. Метод статический.</p>
-	*
-	*
-	* @param array $discount  Массив параметров скидки/правила.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscounttable/calculaterulehash.php
-	* @author Bitrix
-	*/
 	public static function calculateRuleHash($discount)
 	{
 		$hash = false;
@@ -341,19 +248,6 @@ class OrderDiscountTable extends Main\Entity\DataManager
 	 * @param array $discount			Discount data.
 	 * @return array|bool
 	 */
-	
-	/**
-	* <p>Метод подготавливает данные скидки или правила для сохранения. Метод статический.</p>
-	*
-	*
-	* @param array $discount  Массив с параметрами скидки или правила.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscounttable/preparediscountdata.php
-	* @author Bitrix
-	*/
 	public static function prepareDiscountData($discount)
 	{
 		$fields = false;
@@ -410,23 +304,11 @@ class OrderDiscountTable extends Main\Entity\DataManager
 
 	/**
 	 * Return discount modules list.
+	 * @deprecated
 	 *
 	 * @param array $discount			Discount data.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список модулей, необходимых для работы перечисленных в массиве <code>$discount</code> скидок и правил. Метод статический.</p>
-	*
-	*
-	* @param array $discount  Массив скидок и правил.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscounttable/getdiscountmodules.php
-	* @author Bitrix
-	*/
 	public static function getDiscountModules($discount)
 	{
 		$result = array();
@@ -444,7 +326,7 @@ class OrderDiscountTable extends Main\Entity\DataManager
 			if (!empty($discount['HANDLERS']['MODULES']))
 			{
 				$needDiscountModules = (
-				!is_array($discount['HANDLERS']['MODULES'])
+					!is_array($discount['HANDLERS']['MODULES'])
 					? array($discount['HANDLERS']['MODULES'])
 					: $discount['HANDLERS']['MODULES']
 				);
@@ -469,21 +351,6 @@ class OrderDiscountTable extends Main\Entity\DataManager
 	 * @param array|int $discount			Order discount list.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод удаляет записи из таблицы применившихся к заказу скидок и правил соответствии с массивом <code>$discount</code>. Метод статический.</p>
-	*
-	*
-	* @param array $array  Массив идентификаторов скидок и правил.
-	*
-	* @param integer $discount  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscounttable/clearlist.php
-	* @author Bitrix
-	*/
 	public static function clearList($discount)
 	{
 		if (!is_array($discount))
@@ -527,17 +394,6 @@ class OrderCouponsTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы купонов заказа базе данных. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordercouponstable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_sale_order_coupons';
@@ -548,17 +404,6 @@ class OrderCouponsTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы купонов заказа. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordercouponstable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -608,17 +453,6 @@ class OrderCouponsTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>COUPON</code> (код купона). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordercouponstable/validatecoupon.php
-	* @author Bitrix
-	*/
 	public static function validateCoupon()
 	{
 		return array(
@@ -631,17 +465,6 @@ class OrderCouponsTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>TYPE</code> (тип купона). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordercouponstable/validatetype.php
-	* @author Bitrix
-	*/
 	public static function validateType()
 	{
 		return array(
@@ -658,33 +481,6 @@ class OrderCouponsTable extends Main\Entity\DataManager
 	 * @param Main\Entity\Field $field		Field object.
 	 * @return bool|string
 	 */
-	
-	/**
-	* <p>Метод проверяет тип купона. Метод статический.</p>
-	*
-	*
-	* @param integer $value  Тип купона.
-	*
-	* @param integer $array  Первичный ключ.
-	*
-	* @param integer $primary  Массив текущих параметров купона.
-	*
-	* @param array $row  Поле объекта.
-	*
-	* @param array $Bitrix  
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $Entity  
-	*
-	* @param Field $field  
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordercouponstable/checktype.php
-	* @author Bitrix
-	*/
 	public static function checkType($value, $primary, array $row, Main\Entity\Field $field)
 	{
 		if (Internals\DiscountCouponTable::isValidCouponType($value) || $value == Internals\DiscountCouponTable::TYPE_ARCHIVED)
@@ -699,19 +495,6 @@ class OrderCouponsTable extends Main\Entity\DataManager
 	 * @param int $order			Order id.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод удаляет записи из таблицы, относящиеся к заказу с кодом <code>$order</code>. Метод статический.</p>
-	*
-	*
-	* @param integer $order  Идентификатор заказа.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordercouponstable/clearbyorder.php
-	* @author Bitrix
-	*/
 	public static function clearByOrder($order)
 	{
 		$order = (int)$order;
@@ -730,21 +513,6 @@ class OrderCouponsTable extends Main\Entity\DataManager
 	 * @param array|int $coupon			Order coupon list.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод удаляет записи из таблицы в соответствии с массивом <code>$coupon</code>. Метод статический.</p>
-	*
-	*
-	* @param array $array  Массив купонов заказа.
-	*
-	* @param integer $coupon  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordercouponstable/clearlist.php
-	* @author Bitrix
-	*/
 	public static function clearList($coupon)
 	{
 		if (!is_array($coupon))
@@ -811,17 +579,6 @@ class OrderModulesTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы с модулями, необходимыми для работы правил корзины, применившихся к заказу. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordermodulestable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_sale_order_modules';
@@ -832,17 +589,6 @@ class OrderModulesTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы модулей, необходимых для работы правил корзины, применившихся к заказу. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordermodulestable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -867,17 +613,6 @@ class OrderModulesTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>MODULE_ID</code> (идентификатор модуля). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordermodulestable/validatemoduleid.php
-	* @author Bitrix
-	*/
 	public static function validateModuleId()
 	{
 		return array(
@@ -892,21 +627,6 @@ class OrderModulesTable extends Main\Entity\DataManager
 	 * @param array $moduleList			Module list.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод записывает модули, требуемые для правила корзины. Метод статический.</p>
-	*
-	*
-	* @param integer $discountId  Идентификатор правила в заказе.
-	*
-	* @param array $moduleList  Список модулей.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordermodulestable/saveorderdiscountmodules.php
-	* @author Bitrix
-	*/
 	public static function saveOrderDiscountModules($discountId, $moduleList)
 	{
 		$discountId = (int)$discountId;
@@ -951,22 +671,6 @@ class OrderModulesTable extends Main\Entity\DataManager
 	 * @param array|int $discount			Discount list.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод удаляет записи из таблицы модулей в соответствии с массивом <code>$discount</code>. Метод статический.</p>
-	*
-	*
-	* @param array $array  Массив идентификаторов правил работы с корзиной или просто
-	* идентификатор правила.
-	*
-	* @param integer $discount  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordermodulestable/clearbydiscount.php
-	* @author Bitrix
-	*/
 	public static function clearByDiscount($discount)
 	{
 		if (!is_array($discount))
@@ -1004,28 +708,21 @@ class OrderModulesTable extends Main\Entity\DataManager
 
 class OrderDiscountDataTable extends Main\Entity\DataManager
 {
-	const ENTITY_TYPE_BASKET = 0x0001;
+	const ENTITY_TYPE_BASKET_ITEM = 0x0001;
+	/** @deprecated */
+	const ENTITY_TYPE_BASKET = self::ENTITY_TYPE_BASKET_ITEM;
 	const ENTITY_TYPE_DELIVERY = 0x0002;
 	const ENTITY_TYPE_SHIPMENT = 0x0004;
 	const ENTITY_TYPE_DISCOUNT = 0x0008;
 	const ENTITY_TYPE_ORDER = 0x0010;
+	const ENTITY_TYPE_ROUND = 0x0020;
+	const ENTITY_TYPE_DISCOUNT_STORED_DATA = 0x0040;
 
 	/**
 	 * Returns DB table name for entity.
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы, с которой работает данный класс. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscountdatatable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_sale_order_discount_data';
@@ -1036,17 +733,6 @@ class OrderDiscountDataTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы со служебной информацией, относящейся к заказу в разрезе примененных скидок и правил корзины. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscountdatatable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -1062,11 +748,13 @@ class OrderDiscountDataTable extends Main\Entity\DataManager
 			'ENTITY_TYPE' => new Main\Entity\EnumField('ENTITY_TYPE', array(
 				'required' => true,
 				'values' => array(
-					self::ENTITY_TYPE_BASKET,
+					self::ENTITY_TYPE_BASKET_ITEM,
 					self::ENTITY_TYPE_DELIVERY,
 					self::ENTITY_TYPE_SHIPMENT,
 					self::ENTITY_TYPE_DISCOUNT,
-					self::ENTITY_TYPE_ORDER
+					self::ENTITY_TYPE_ORDER,
+					self::ENTITY_TYPE_ROUND,
+					self::ENTITY_TYPE_DISCOUNT_STORED_DATA
 				),
 				'title' => Loc::getMessage('ORDER_DISCOUNT_DATA_ENTITY_ENTITY_TYPE_FIELD')
 			)),
@@ -1090,17 +778,6 @@ class OrderDiscountDataTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>ENTITY_VALUE</code> (значение сущности). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscountdatatable/validateentityvalue.php
-	* @author Bitrix
-	*/
 	public static function validateEntityValue()
 	{
 		return array(
@@ -1130,7 +807,7 @@ class OrderDiscountDataTable extends Main\Entity\DataManager
 		);
 		$dataIterator = self::getList(array(
 			'select' => array('ID', 'ENTITY_DATA'),
-			'filter' => array('=ORDER_ID' => $order, '=ENTITY_TYPE' => self::ENTITY_TYPE_BASKET, '=ENTITY_ID' => $basket)
+			'filter' => array('=ORDER_ID' => $order, '=ENTITY_TYPE' => self::ENTITY_TYPE_BASKET_ITEM, '=ENTITY_ID' => $basket)
 		));
 		if ($oldData = $dataIterator->fetch())
 		{
@@ -1146,7 +823,7 @@ class OrderDiscountDataTable extends Main\Entity\DataManager
 		else
 		{
 			$fields['ORDER_ID'] = $order;
-			$fields['ENTITY_TYPE'] = self::ENTITY_TYPE_BASKET;
+			$fields['ENTITY_TYPE'] = self::ENTITY_TYPE_BASKET_ITEM;
 			$fields['ENTITY_ID'] = $basket;
 			$fields['ENTITY_VALUE'] = $basket;
 			$result = self::add($fields);
@@ -1163,19 +840,6 @@ class OrderDiscountDataTable extends Main\Entity\DataManager
 	 * @param int $basket			Basket id.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод удаляет записи из таблицы в соответствии с кодом элемента корзины <code>$basket</code>. Метод статический.</p>
-	*
-	*
-	* @param integer $basket  Идентификатор элемента корзины.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscountdatatable/clearbybasketitem.php
-	* @author Bitrix
-	*/
 	public static function clearByBasketItem($basket)
 	{
 		$basket = (int)$basket;
@@ -1186,7 +850,7 @@ class OrderDiscountDataTable extends Main\Entity\DataManager
 		$helper = $conn->getSqlHelper();
 		$conn->queryExecute(
 			'delete from '.$helper->quote(self::getTableName()).
-			' where '.$helper->quote('ENTITY_TYPE').' = '.self::ENTITY_TYPE_BASKET.
+			' where '.$helper->quote('ENTITY_TYPE').' = '.self::ENTITY_TYPE_BASKET_ITEM.
 			' and '.$helper->quote('ENTITY_ID').' = '.$basket
 		);
 		unset($helper, $conn);
@@ -1199,19 +863,6 @@ class OrderDiscountDataTable extends Main\Entity\DataManager
 	 * @param int $order		Order id.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод удаляет записи из таблицы, относящиеся к заказу с кодом <code>$order</code>. Метод статический.</p>
-	*
-	*
-	* @param integer $order  Идентификатор заказа.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscountdatatable/clearbyorder.php
-	* @author Bitrix
-	*/
 	public static function clearByOrder($order)
 	{
 		$order = (int)$order;
@@ -1232,21 +883,6 @@ class OrderDiscountDataTable extends Main\Entity\DataManager
 	 * @param array|int $discountList			Discount ids list.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод удаляет записи из таблицы в соответствии с массивом <i>$discountList</i>. Метод статический.</p>
-	*
-	*
-	* @param array $array  Массив идентификаторов скидок/правил.
-	*
-	* @param integer $discountList  
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderdiscountdatatable/clearbydiscount.php
-	* @author Bitrix
-	*/
 	public static function clearByDiscount($discountList)
 	{
 		if (!is_array($discountList))
@@ -1292,7 +928,9 @@ class OrderDiscountDataTable extends Main\Entity\DataManager
 
 class OrderRulesTable extends Main\Entity\DataManager
 {
-	const ENTITY_TYPE_BASKET = 0x0001;
+	const ENTITY_TYPE_BASKET_ITEM = 0x0001;
+	/** @deprecated */
+	const ENTITY_TYPE_BASKET = self::ENTITY_TYPE_BASKET_ITEM;
 	const ENTITY_TYPE_DELIVERY = 0x0002;
 
 	/**
@@ -1300,17 +938,6 @@ class OrderRulesTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы примененных скидок и правил к сущностям заказа. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderrulestable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_sale_order_rules';
@@ -1321,17 +948,6 @@ class OrderRulesTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы примененных скидок и правил к сущностям заказа. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderrulestable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -1355,7 +971,7 @@ class OrderRulesTable extends Main\Entity\DataManager
 			)),
 			'ENTITY_TYPE' => new Main\Entity\EnumField('ENTITY_TYPE', array(
 				'required' => true,
-				'values' => array(self::ENTITY_TYPE_BASKET, self::ENTITY_TYPE_DELIVERY),
+				'values' => array(self::ENTITY_TYPE_BASKET_ITEM, self::ENTITY_TYPE_DELIVERY),
 				'title' => Loc::getMessage('ORDER_RULES_ENTITY_ENTITY_TYPE_FIELD')
 			)),
 			'ENTITY_ID' => new Main\Entity\IntegerField('ENTITY_ID', array(
@@ -1400,17 +1016,6 @@ class OrderRulesTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>MODULE_ID</code> (идентификатор модуля). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderrulestable/validatemoduleid.php
-	* @author Bitrix
-	*/
 	public static function validateModuleId()
 	{
 		return array(
@@ -1422,17 +1027,6 @@ class OrderRulesTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>ENTITY_VALUE</code> (значение сущности). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderrulestable/validateentityvalue.php
-	* @author Bitrix
-	*/
 	public static function validateEntityValue()
 	{
 		return array(
@@ -1446,26 +1040,13 @@ class OrderRulesTable extends Main\Entity\DataManager
 	 * @param int $basket			Basket id.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод очищает правила и скидки, примененные к элементу корзины с кодом <code>$basket</code>. Метод статический.</p>
-	*
-	*
-	* @param integer $basket  Идентификатор элемента корзины.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderrulestable/clearbybasketitem.php
-	* @author Bitrix
-	*/
 	public static function clearByBasketItem($basket)
 	{
 		$basket = (int)$basket;
 		if ($basket <= 0)
 			return;
 
-		self::clear(array('=ENTITY_TYPE' => self::ENTITY_TYPE_BASKET, '=ENTITY_ID' => $basket, '=ORDER_ID' => 0));
+		self::clear(array('=ENTITY_TYPE' => self::ENTITY_TYPE_BASKET_ITEM, '=ENTITY_ID' => $basket, '=ORDER_ID' => 0));
 	}
 
 	/**
@@ -1474,20 +1055,6 @@ class OrderRulesTable extends Main\Entity\DataManager
 	 * @param array $basketList				Basket id.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод очищает правила работы с корзиной. Метод статический.</p>
-	*
-	*
-	* @param array $basketList  Массив идентификаторов элементов корзины, не привязанных к
-	* заказу.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderrulestable/clearbasketsalediscount.php
-	* @author Bitrix
-	*/
 	public static function clearBasketSaleDiscount($basketList)
 	{
 		if (empty($basketList) || !is_array($basketList))
@@ -1496,7 +1063,7 @@ class OrderRulesTable extends Main\Entity\DataManager
 		if (empty($basketList))
 			return;
 
-		self::clear(array('=MODULE_ID' => 'sale', '=ENTITY_TYPE' => self::ENTITY_TYPE_BASKET, '@ENTITY_ID' => $basketList, '=ORDER_ID' => 0));
+		self::clear(array('=MODULE_ID' => 'sale', '=ENTITY_TYPE' => self::ENTITY_TYPE_BASKET_ITEM, '@ENTITY_ID' => $basketList, '=ORDER_ID' => 0));
 	}
 
 	/**
@@ -1505,19 +1072,6 @@ class OrderRulesTable extends Main\Entity\DataManager
 	 * @param int $order				Order id.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод очищает правила работы с корзиной, примененные в заказе с кодом <code>$order</code>. Метод статический.</p>
-	*
-	*
-	* @param integer $order  Идентификатор заказа.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderrulestable/clearbyorder.php
-	* @author Bitrix
-	*/
 	public static function clearByOrder($order)
 	{
 		$order = (int)$order;
@@ -1650,7 +1204,20 @@ class OrderRulesTable extends Main\Entity\DataManager
  * </ul>
  *
  * @package Bitrix\Sale\Internals
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_OrderRulesDescr_Query query()
+ * @method static EO_OrderRulesDescr_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_OrderRulesDescr_Result getById($id)
+ * @method static EO_OrderRulesDescr_Result getList(array $parameters = [])
+ * @method static EO_OrderRulesDescr_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_OrderRulesDescr createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_OrderRulesDescr_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_OrderRulesDescr wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_OrderRulesDescr_Collection wakeUpCollection($rows)
+ */
 
 class OrderRulesDescrTable extends Main\Entity\DataManager
 {
@@ -1659,17 +1226,6 @@ class OrderRulesDescrTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы с описанием применившихся скидок к конкретному товару или доставке. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderrulesdescrtable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_sale_order_rules_descr';
@@ -1680,17 +1236,6 @@ class OrderRulesDescrTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы с описанием применившихся скидок к конкретному товару или доставке. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderrulesdescrtable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -1729,17 +1274,6 @@ class OrderRulesDescrTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>MODULE_ID</code> (идентификатор модуля). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/orderrulesdescrtable/validatemoduleid.php
-	* @author Bitrix
-	*/
 	public static function validateModuleId()
 	{
 		return array(

@@ -55,11 +55,19 @@ class CSaleHelper
 		}
 	}
 
+	/**
+	 * @param $fieldId
+	 * @param $arField
+	 * @param $fieldName
+	 * @param $formName
+	 * @return string
+	 * @deprecated
+	 */
 	public static function getAdminHtml($fieldId, $arField, $fieldName, $formName)
 	{
 		$arField["VALUE"] = CSaleDeliveryHelper::getConfValue($arField);
 		$resultHtml = '';
-		$name = htmlspecialcharsbx($fieldName.(strlen($fieldId) > 0 ? '['.$fieldId.']' : ''));
+		$name = htmlspecialcharsbx($fieldName.($fieldId <> '' ? '['.$fieldId.']' : ''));
 
 		if(isset($arField['PRE_TEXT']))
 			$resultHtml = $arField['PRE_TEXT'].' ';
@@ -110,12 +118,12 @@ class CSaleHelper
 				foreach ($arField["VALUES"] as $value => $title)
 				{
 					$resultHtml .= '<input type="radio"
-										id="hc_'.htmlspecialcharsbx($fieldId).'_'.htmlspecialcharsEx($value).'"'.
+										id="hc_'.htmlspecialcharsbx($fieldId).'_'.htmlspecialcharsbx($value).'"'.
 										'name="'.$name.'" '.
-										'value="'.htmlspecialcharsEx($value).'"'.
+										'value="'.htmlspecialcharsbx($value).'"'.
 										($value == $arField["VALUE"] ? " checked=\"checked\"" : "").' />'.
-										'<label for="hc_'.htmlspecialcharsbx($fieldId).'_'.htmlspecialcharsEx($value).'">'.
-										htmlspecialcharsEx($title).'</label><br />';
+										'<label for="hc_'.htmlspecialcharsbx($fieldId).'_'.htmlspecialcharsbx($value).'">'.
+										htmlspecialcharsbx($title).'</label><br />';
 				}
 
 			break;
@@ -141,9 +149,9 @@ class CSaleHelper
 				foreach ($arField["VALUES"] as $value => $title)
 				{
 					$resultHtml .= '<option '.
-										'value="'.htmlspecialcharsEx($value).'"'.
+										'value="'.htmlspecialcharsbx($value).'"'.
 										($value == $arField["VALUE"] ? " selected=\"selected\"" : "").'>'.
-										htmlspecialcharsEx($title).
+										htmlspecialcharsbx($title).
 									'</option>';
 				}
 
@@ -156,9 +164,9 @@ class CSaleHelper
 
 				foreach ($arField["VALUES"] as $value => $title)
 					$resultHtml .= '<option '.
-										'value="'.htmlspecialcharsEx($value).'"'.
+										'value="'.htmlspecialcharsbx($value).'"'.
 										(in_array($value, $arField["VALUE"]) ? " selected=\"selected\"" : "").'>'.
-										htmlspecialcharsEx($title).
+										htmlspecialcharsbx($title).
 									'</option>';
 
 				$resultHtml .= '</select>';
@@ -254,10 +262,10 @@ class CSaleHelper
 	{
 		$arResult = array();
 
-		if(strlen(trim($optName)) >= 0)
+		if(trim($optName) !== '')
 		{
 			$optValue = COption::GetOptionString('sale', $optName, '', $siteId);
-			$arOptValue = unserialize($optValue);
+			$arOptValue = unserialize($optValue, ['allowed_classes' => false]);
 
 			if(empty($arOptValue))
 			{
@@ -276,7 +284,7 @@ class CSaleHelper
 		return $arResult;
 	}
 
-	private static function getShopLocationParams($siteId = false)
+	private static function getShopLocationParams($siteId = false): array
 	{
 		$loc_diff = COption::GetOptionString('sale', 'ADDRESS_different_set', 'N');
 
@@ -293,7 +301,7 @@ class CSaleHelper
 			$locId = COption::GetOptionString('sale', 'location', '');
 			$locZip = COption::GetOptionString('sale', 'location_zip', '');
 
-			if(strlen($locId) <= 0)
+			if($locId == '')
 			{
 				static $defSite = null;
 				if (!isset($defSite))
@@ -307,18 +315,20 @@ class CSaleHelper
 			}
 		}
 
-		if((string) $locId != '')
+		if((string)$locId !== '')
 		{
 			$location = self::getLocationByIdHitCached($locId);
 
-			if(intval($location['ID']))
+			if (is_array($location) && (int)$location['ID'])
+			{
 				$locId = $location['ID'];
+			}
 		}
 
-		return array(
+		return [
 			'ID' => $locId,
-			'ZIP' => $locZip
-		);
+			'ZIP' => $locZip,
+		];
 	}
 
 	public static function getShopLocationId($siteId)
@@ -329,22 +339,22 @@ class CSaleHelper
 		{
 			$locParams = self::getShopLocationParams($siteId);
 
-			if(isset($locParams['ID']) && strlen($locParams['ID']) > 0)
+			if(isset($locParams['ID']) && $locParams['ID'] <> '')
 				$shopLocationId[$siteId] = $locParams['ID'];
 		}
 
-		return $shopLocationId[$siteId];
+		return $shopLocationId[$siteId] ?? '';
 	}
 
 	public static function getShopLocationZIP()
 	{
 		static $shopLocationZip = '';
 
-		if(strlen($shopLocationZip) <= 0)
+		if($shopLocationZip == '')
 		{
 			$locParams = self::getShopLocationParams();
 
-			if(isset($locParams['ZIP']) && strlen($locParams['ZIP']) > 0)
+			if(isset($locParams['ZIP']) && $locParams['ZIP'] <> '')
 				$shopLocationZip = strval($locParams['ZIP']);
 		}
 
@@ -409,7 +419,7 @@ class CSaleHelper
 			$arVal = array();
 			if (!is_array($value))
 			{
-				if (strpos($value, ",") !== false)
+				if (mb_strpos($value, ",") !== false)
 					$arVal = explode(",", $value);
 				else
 					$arVal[] = $value;
@@ -423,14 +433,14 @@ class CSaleHelper
 				{
 					if ($propData["PROPERTY_TYPE"] == "F")
 					{
-						if (strlen($res) > 0)
+						if ($res <> '')
 							$res .= "<br/> ".CSaleHelper::getFileInfo(trim($val), $arSize);
 						else
 							$res = CSaleHelper::getFileInfo(trim($val), $arSize);
 					}
 					else
 					{
-						if (strlen($res) > 0)
+						if ($res <> '')
 							$res .= ", ".$val;
 						else
 							$res = $val;

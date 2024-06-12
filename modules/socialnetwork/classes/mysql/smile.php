@@ -1,39 +1,9 @@
-<?
+<?php
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/socialnetwork/classes/general/smile.php");
 
-
-/**
- * <b>CSocNetSmile</b> - класс для работы со смайлами социальной сети.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetsmile/index.php
- * @author Bitrix
- */
 class CSocNetSmile extends CAllSocNetSmile
 {
-	
-	/**
-	* <p>Метод добавляет новый смайл. Метод нестатический.</p>
-	*
-	*
-	* @param array $arFields  Массив значений параметров смайла. Может содержать
-	* ключи:<br><b>SORT</b> - индекс сортировки,<br><b>SMILE_TYPE</b> - тип
-	* смайла,<br><b>TYPING</b> - написание,<br><b>IMAGE</b> - изображение,<br><b>IMAGE_WIDTH</b> -
-	* ширина изображения,<br><b>IMAGE_HEIGHT</b> - высота изображения,<br><b>DESCRIPTION</b>
-	* - описание.<br> Кроме того массив может содержать ключ LANG с
-	* языкозависимыми параметрами смайла. В этом ключе содержатся
-	* массивы с ключами LID - язык и NAME - название.
-	*
-	* @return int <p>Возвращается код измененной записи или false в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetsmile/add.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		global $DB, $CACHE_MANAGER;
@@ -46,49 +16,27 @@ class CSocNetSmile extends CAllSocNetSmile
 		$strSql =
 			"INSERT INTO b_sonet_smile(".$arInsert[0].") ".
 			"VALUES(".$arInsert[1].")";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-		$ID = IntVal($DB->LastID());
+		$DB->Query($strSql);
+		$ID = intval($DB->LastID());
 
-		for ($i = 0; $i<count($arFields["LANG"]); $i++)
+		$cnt = count($arFields["LANG"]);
+		for ($i = 0; $i<$cnt; $i++)
 		{
 			$arInsert = $DB->PrepareInsert("b_sonet_smile_lang", $arFields["LANG"][$i]);
 			$strSql =
 				"INSERT INTO b_sonet_smile_lang(SMILE_ID, ".$arInsert[0].") ".
 				"VALUES(".$ID.", ".$arInsert[1].")";
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 		}
 		$CACHE_MANAGER->Clean("b_sonet_smile");
 
 		return $ID;
 	}
 
-	
-	/**
-	* <p>Изменяет параметры смайла. Метод нестатический.</p>
-	*
-	*
-	* @param int $intid  Код смайла.
-	*
-	* @param array $arFields  Массив новых значений параметров смайла. Может содержать
-	* ключи:<br><b>SORT</b> - индекс сортировки,<br><b>SMILE_TYPE</b> - тип
-	* смайла,<br><b>TYPING</b> - написание,<br><b>IMAGE</b> - изображение,<br><b>IMAGE_WIDTH</b> -
-	* ширина изображения,<br> I<b>MAGE_HEIGHT</b> - высота
-	* изображения,<br><b>DESCRIPTION</b> - описание.<br> Кроме того массив может
-	* содержать ключ LANG с языкозависимыми параметрами смайла. В этом
-	* ключе содержатся массивы с ключами LID - язык и NAME - название. Если
-	* ключ LANG задан, то все старые языкозависимые параметры удаляются.
-	*
-	* @return int <p>Возвращается код измененной записи или false в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetsmile/Update.php
-	* @author Bitrix
-	*/
 	public static function Update($ID, $arFields)
 	{
 		global $DB, $CACHE_MANAGER;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID<=0) return False;
 
 		if (!CSocNetSmile::CheckFields("UPDATE", $arFields))
@@ -96,19 +44,20 @@ class CSocNetSmile extends CAllSocNetSmile
 
 		$strUpdate = $DB->PrepareUpdate("b_sonet_smile", $arFields);
 		$strSql = "UPDATE b_sonet_smile SET ".$strUpdate." WHERE ID = ".$ID;
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		if (is_set($arFields, "LANG"))
 		{
 			$DB->Query("DELETE FROM b_sonet_smile_lang WHERE SMILE_ID = ".$ID."");
 
-			for ($i = 0; $i<count($arFields["LANG"]); $i++)
+			$cnt = count($arFields["LANG"]);
+			for ($i = 0; $i<$cnt; $i++)
 			{
 				$arInsert = $DB->PrepareInsert("b_sonet_smile_lang", $arFields["LANG"][$i]);
 				$strSql =
 					"INSERT INTO b_sonet_smile_lang(SMILE_ID, ".$arInsert[0].") ".
 					"VALUES(".$ID.", ".$arInsert[1].")";
-				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql);
 			}
 		}
 		$CACHE_MANAGER->Clean("b_sonet_smile");
@@ -116,44 +65,6 @@ class CSocNetSmile extends CAllSocNetSmile
 		return $ID;
 	}
 
-	
-	/**
-	* <p>Возвращает список смайлов в соответствии с фильтром. Метод нестатический.</p>
-	*
-	*
-	* @param array $arOrder = array("ID" Порядок сортировки возвращаемого списка, заданный в виде
-	* массива. Ключами в массиве являются поля для сортировки, а
-	* значениями - ASC/DESC - порядок сортировки.
-	*
-	* @param mixed $DESC  Массив, задающий фильтр на возвращаемый список. Ключами в массиве
-	* являются названия полей, а значениями - их значения.
-	*
-	* @param array $arFilter = array() Массив, задающий группировку результирующего списка. Если
-	* параметр содержит массив названий полей, то по этим полям будет
-	* произведена группировка. Если параметр содержит пустой массив,
-	* то метод вернет количество записей, удовлетворяющих фильтру. По
-	* умолчанию параметр равен false - не группировать.
-	*
-	* @param array $arGroupBy = false Массив, задающий условия выбора для организации постраничной
-	* навигации.
-	*
-	* @param array $arNavStartParams = false Массив, задающий выбираемые поля. Содержит список полей, которые
-	* должны быть возвращены методом.
-	*
-	* @param array $arSelectFields = array() 
-	*
-	* @return CDBResult <p>Метод возвращает объект типа CDBResult, содержащий записи,
-	* удовлетворяющие условию выборки.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a> </li>
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetsmile/getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder = Array("ID" => "DESC"), $arFilter = Array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		global $DB;
@@ -173,10 +84,10 @@ class CSocNetSmile extends CAllSocNetSmile
 				"IMAGE_WIDTH" => array("FIELD" => "B.IMAGE_WIDTH", "TYPE" => "int"),
 				"IMAGE_HEIGHT" => array("FIELD" => "B.IMAGE_HEIGHT", "TYPE" => "int"),
 
-				"LANG_ID" => array("FIELD" => "BL.ID", "TYPE" => "int", "FROM" => "LEFT JOIN b_sonet_smile_lang BL ON (B.ID = BL.SMILE_ID".((isset($arFilter["LANG_LID"]) && strlen($arFilter["LANG_LID"]) > 0) ? " AND BL.LID = '".$arFilter["LANG_LID"]."'" : "").")"),
-				"LANG_SMILE_ID" => array("FIELD" => "BL.SMILE_ID", "TYPE" => "int", "FROM" => "LEFT JOIN b_sonet_smile_lang BL ON (B.ID = BL.SMILE_ID".((isset($arFilter["LANG_LID"]) && strlen($arFilter["LANG_LID"]) > 0) ? " AND BL.LID = '".$arFilter["LANG_LID"]."'" : "").")"),
-				"LANG_LID" => array("FIELD" => "BL.LID", "TYPE" => "string", "FROM" => "LEFT JOIN b_sonet_smile_lang BL ON (B.ID = BL.SMILE_ID".((isset($arFilter["LANG_LID"]) && strlen($arFilter["LANG_LID"]) > 0) ? " AND BL.LID = '".$arFilter["LANG_LID"]."'" : "").")"),
-				"LANG_NAME" => array("FIELD" => "BL.NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sonet_smile_lang BL ON (B.ID = BL.SMILE_ID".((isset($arFilter["LANG_LID"]) && strlen($arFilter["LANG_LID"]) > 0) ? " AND BL.LID = '".$arFilter["LANG_LID"]."'" : "").")"),
+				"LANG_ID" => array("FIELD" => "BL.ID", "TYPE" => "int", "FROM" => "LEFT JOIN b_sonet_smile_lang BL ON (B.ID = BL.SMILE_ID".((isset($arFilter["LANG_LID"]) && $arFilter["LANG_LID"] <> '') ? " AND BL.LID = '".$arFilter["LANG_LID"]."'" : "").")"),
+				"LANG_SMILE_ID" => array("FIELD" => "BL.SMILE_ID", "TYPE" => "int", "FROM" => "LEFT JOIN b_sonet_smile_lang BL ON (B.ID = BL.SMILE_ID".((isset($arFilter["LANG_LID"]) && $arFilter["LANG_LID"] <> '') ? " AND BL.LID = '".$arFilter["LANG_LID"]."'" : "").")"),
+				"LANG_LID" => array("FIELD" => "BL.LID", "TYPE" => "string", "FROM" => "LEFT JOIN b_sonet_smile_lang BL ON (B.ID = BL.SMILE_ID".((isset($arFilter["LANG_LID"]) && $arFilter["LANG_LID"] <> '') ? " AND BL.LID = '".$arFilter["LANG_LID"]."'" : "").")"),
+				"LANG_NAME" => array("FIELD" => "BL.NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sonet_smile_lang BL ON (B.ID = BL.SMILE_ID".((isset($arFilter["LANG_LID"]) && $arFilter["LANG_LID"] <> '') ? " AND BL.LID = '".$arFilter["LANG_LID"]."'" : "").")"),
 			);
 		// <-- FIELDS
 
@@ -190,14 +101,14 @@ class CSocNetSmile extends CAllSocNetSmile
 				"SELECT ".$arSqls["SELECT"]." ".
 				"FROM b_sonet_smile B ".
 				"	".$arSqls["FROM"]." ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
 			//echo "!1!=".htmlspecialcharsbx($strSql)."<br>";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			if ($arRes = $dbRes->Fetch())
 				return $arRes["CNT"];
 			else
@@ -208,36 +119,36 @@ class CSocNetSmile extends CAllSocNetSmile
 			"SELECT ".$arSqls["SELECT"]." ".
 			"FROM b_sonet_smile B ".
 			"	".$arSqls["FROM"]." ";
-		if (strlen($arSqls["WHERE"]) > 0)
+		if ($arSqls["WHERE"] <> '')
 			$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-		if (strlen($arSqls["GROUPBY"]) > 0)
+		if ($arSqls["GROUPBY"] <> '')
 			$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
-		if (strlen($arSqls["ORDERBY"]) > 0)
+		if ($arSqls["ORDERBY"] <> '')
 			$strSql .= "ORDER BY ".$arSqls["ORDERBY"]." ";
 
-		if (is_array($arNavStartParams) && IntVal($arNavStartParams["nTopCount"])<=0)
+		if (is_array($arNavStartParams) && intval($arNavStartParams["nTopCount"])<=0)
 		{
 			$strSql_tmp =
 				"SELECT COUNT('x') as CNT ".
 				"FROM b_sonet_smile B ".
 				"	".$arSqls["FROM"]." ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql_tmp .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql_tmp .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
 			//echo "!2.1!=".htmlspecialcharsbx($strSql_tmp)."<br>";
 
-			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql_tmp);
 			$cnt = 0;
-			if (strlen($arSqls["GROUPBY"]) <= 0)
+			if ($arSqls["GROUPBY"] == '')
 			{
 				if ($arRes = $dbRes->Fetch())
 					$cnt = $arRes["CNT"];
 			}
 			else
 			{
-				// ТОЛЬКО ДЛЯ MYSQL!!! ДЛЯ ORACLE ДРУГОЙ КОД
+				// MYSQL only, ORACLE has another code
 				$cnt = $dbRes->SelectedRowsCount();
 			}
 
@@ -249,15 +160,14 @@ class CSocNetSmile extends CAllSocNetSmile
 		}
 		else
 		{
-			if (is_array($arNavStartParams) && IntVal($arNavStartParams["nTopCount"]) > 0)
-				$strSql .= "LIMIT ".IntVal($arNavStartParams["nTopCount"]);
+			if (is_array($arNavStartParams) && intval($arNavStartParams["nTopCount"]) > 0)
+				$strSql .= "LIMIT ".intval($arNavStartParams["nTopCount"]);
 
 			//echo "!3!=".htmlspecialcharsbx($strSql)."<br>";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 		}
 
 		return $dbRes;
 	}
 }
-?>

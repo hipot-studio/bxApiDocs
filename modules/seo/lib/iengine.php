@@ -11,9 +11,9 @@ interface IEngine
 {
 	public function getCode();
 
-	static public function getInterface();
+	public function getInterface();
 
 	public function getAuthSettings();
 
-	static public function setAuthSettings($settings);
+	public function setAuthSettings($settings);
 }

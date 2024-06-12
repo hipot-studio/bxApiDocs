@@ -2,6 +2,7 @@
 
 namespace Bitrix\ABTest;
 
+use Bitrix\Main;
 use Bitrix\Main\Type;
 
 class Helper
@@ -12,17 +13,6 @@ class Helper
 	 *
 	 * @return array|null
 	 */
-	
-	/**
-	* <p>Статический метод возвращает текущее A/B-тестирование.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/abtest/helper/getactivetest.php
-	* @author Bitrix
-	*/
 	public static function getActiveTest()
 	{
 		static $abtest;
@@ -35,7 +25,7 @@ class Helper
 		{
 			$cache = new \CPHPCache();
 
-			if ($cache->initCache(30*24*3600, 'abtest_active_'.SITE_ID, '/abtest'))
+			if ($cache->initCache(30*24*3600, 'abtest_active_'.SITE_ID, 'abtest/'))
 			{
 				$abtest = $cache->getVars();
 			}
@@ -44,11 +34,12 @@ class Helper
 				$abtest = ABTestTable::getList(array(
 					'order' => array('SORT' => 'ASC'),
 					'filter' => array(
-						'SITE_ID'      => SITE_ID,
-						'ACTIVE'       => 'Y',
+						'=SITE_ID'      => SITE_ID,
+						'=ACTIVE'       => 'Y',
 						'<=START_DATE' => new Type\DateTime()
-					)
-				))->fetch() ?: null;
+					),
+					'limit' => 1
+				))->fetch() ?: [];
 
 				$cache->startDataCache();
 				$cache->endDataCache($abtest);
@@ -122,17 +113,6 @@ class Helper
 	 *
 	 * @return array|null
 	 */
-	
-	/**
-	* <p>Статический метод возвращает контекст текущего А/В-тестирования.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/abtest/helper/getcontext.php
-	* @author Bitrix
-	*/
 	public static function getContext()
 	{
 		global $USER, $APPLICATION;
@@ -146,7 +126,8 @@ class Helper
 		{
 			$activeTest = Helper::getActiveTest();
 
-			if ($USER->canDoOperation('view_other_settings') && !empty($_SESSION['ABTEST_MODE']))
+			$isAbtestAdmin = is_object($USER) && $USER->canDoOperation('view_other_settings');
+			if ($isAbtestAdmin && !empty($_SESSION['ABTEST_MODE']))
 			{
 				if ($_SESSION['ABTEST_MODE'] == 'reset')
 				{
@@ -175,13 +156,15 @@ class Helper
 				}
 			}
 
+			$cookieValue = $APPLICATION->get_cookie('ABTEST_'.SITE_ID);
+
 			if (empty($context) && !empty($activeTest))
 			{
 				$abtest = $activeTest;
 
-				if ($cookie = $APPLICATION->get_cookie('ABTEST_'.SITE_ID))
+				if (!empty($cookieValue))
 				{
-					if (preg_match('/^'.intval($abtest['ID']).'\|(A|B|N)$/i', $cookie, $matches))
+					if (preg_match('/^'.intval($abtest['ID']).'\|(A|B|N)$/i', $cookieValue, $matches))
 						$section = $matches[1];
 				}
 
@@ -200,10 +183,16 @@ class Helper
 				$context = Helper::context($abtest, $section);
 			}
 
-			if (empty($activeTest))
-				$APPLICATION->set_cookie('ABTEST_'.SITE_ID, null);
-			else if ($activeTest['ID'] == $context['abtest'])
-				$APPLICATION->set_cookie('ABTEST_'.SITE_ID, intval($context['abtest']).'|'.$context['section']);
+			if (empty($activeTest) || $activeTest['ID'] == $context['abtest'])
+			{
+				$newValue = empty($activeTest) ? null : sprintf('%u|%s', $context['abtest'], $context['section']);
+				if (!(empty($cookieValue) && empty($newValue)) && $cookieValue !== $newValue)
+				{
+					$cookie = new Main\Web\Cookie(sprintf('ABTEST_%s', SITE_ID), $newValue);
+
+					Main\Context::getCurrent()->getResponse()->addCookie($cookie);
+				}
+			}
 		}
 
 		return $context;
@@ -216,21 +205,6 @@ class Helper
 	 * @param string $value Test original value.
 	 * @return string|null
 	 */
-	
-	/**
-	* <p>Статический метод возвращает значения альтернативного варианта для текущего контекста A/B-тестирования.</p>
-	*
-	*
-	* @param string $type  Тип тестирования.
-	*
-	* @param string $value  Значение оригинального варианта.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/abtest/helper/getalternative.php
-	* @author Bitrix
-	*/
 	public static function getAlternative($type, $value)
 	{
 		$result = null;
@@ -256,19 +230,6 @@ class Helper
 	 * @param int $id A/B-test ID.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Статический метод запускает A/B-тестирование.</p>
-	*
-	*
-	* @param integer $id  Идентификатор A/B-теста.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/abtest/helper/starttest.php
-	* @author Bitrix
-	*/
 	public static function startTest($id)
 	{
 		global $USER;
@@ -309,21 +270,6 @@ class Helper
 	 * @param bool $auto Auto-stop flag.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Статический метод останавливает A/B-тестирование.</p>
-	*
-	*
-	* @param integer $id  Идентификатор A/B-теста.
-	*
-	* @param boolean $auto = false Флаг авто-остановки.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/abtest/helper/stoptest.php
-	* @author Bitrix
-	*/
 	public static function stopTest($id, $auto = false)
 	{
 		global $USER;
@@ -357,19 +303,6 @@ class Helper
 	 * @param int $id A/B-test ID.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Статический метод удаляет A/B-тестирование.</p>
-	*
-	*
-	* @param integer $id  Идентификатор A/B-теста.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/abtest/helper/deletetest.php
-	* @author Bitrix
-	*/
 	public static function deleteTest($id)
 	{
 		if ($abtest = ABTestTable::getById($id)->fetch())
@@ -394,19 +327,6 @@ class Helper
 	 * @param int $siteId Site ID.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Статический метод очищает кеш активного A/B-теста.</p>
-	*
-	*
-	* @param integer $siteId  Идентификатор сайта.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/abtest/helper/clearcache.php
-	* @author Bitrix
-	*/
 	public static function clearCache($siteId)
 	{
 		$cache = new \CPHPCache();

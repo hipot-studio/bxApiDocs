@@ -1,17 +1,7 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CSocNetMessages</b> - класс для работы с сообщениями социальной сети.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/index.php
- * @author Bitrix
- */
 class CAllSocNetMessages
 {
 	/***************************************/
@@ -21,13 +11,13 @@ class CAllSocNetMessages
 	{
 		global $DB;
 
-		if ($ACTION != "ADD" && IntVal($ID) <= 0)
+		if ($ACTION != "ADD" && intval($ID) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException("System error 870164", "ERROR");
 			return false;
 		}
 
-		if ((is_set($arFields, "FROM_USER_ID") || $ACTION=="ADD") && IntVal($arFields["FROM_USER_ID"]) <= 0)
+		if ((is_set($arFields, "FROM_USER_ID") || $ACTION=="ADD") && intval($arFields["FROM_USER_ID"]) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_M_EMPTY_FROM_USER_ID"), "EMPTY_FROM_USER_ID");
 			return false;
@@ -42,7 +32,7 @@ class CAllSocNetMessages
 			}
 		}
 
-		if ((is_set($arFields, "TO_USER_ID") || $ACTION=="ADD") && IntVal($arFields["TO_USER_ID"]) <= 0)
+		if ((is_set($arFields, "TO_USER_ID") || $ACTION=="ADD") && intval($arFields["TO_USER_ID"]) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_M_EMPTY_TO_USER_ID"), "EMPTY_TO_USER_ID");
 			return false;
@@ -87,19 +77,6 @@ class CAllSocNetMessages
 		return True;
 	}
 
-	
-	/**
-	* <p>Метод удаляет сообщение из базы данных. Используется для физического удаления записи. Для логического удаления согласно алгоритму работы модуля социальной сети следует использовать метод <a href="http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/deleteMessage.php">CSocNetMessages::DeleteMessage</a>. Метод нестатический.</p> <p></p> <div class="note"> <b>Примечание</b>: при удалении записи вызываются события <a href="http://dev.1c-bitrix.ru/api_help/socialnetwork/events/OnBeforeSocNetMessagesDelete.php">OnBeforeSocNetMessagesDelete</a> и <a href="http://dev.1c-bitrix.ru/api_help/socialnetwork/events/OnSocNetMessagesDelete.php">OnSocNetMessagesDelete</a>.</div>
-	*
-	*
-	* @param int $intid  Код сообщения
-	*
-	* @return bool <p>True в случае успешного удаления и false - в случае ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		global $DB;
@@ -107,7 +84,7 @@ class CAllSocNetMessages
 		if (!CSocNetGroup::__ValidateID($ID))
 			return false;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$bSuccess = True;
 
 		$db_events = GetModuleEvents("socialnetwork", "OnBeforeSocNetMessagesDelete");
@@ -125,36 +102,18 @@ class CAllSocNetMessages
 		return $bSuccess;
 	}
 
-	
-	/**
-	* <p>Метод для логического удаления сообщения. Метод принимает на вход код пользователя - отправителя или получателя сообщения. Сообщение помечается как удаленное для этого пользователя. Для второго пользователя это сообщение не является удаленным и доступно как обычно. Физическое удаление сообщения происходит после логического удаления сообщения вторым пользователем. Метод нестатический.</p> <p></p> <div class="note"> <b>Примечание</b>: при физическом удалении используется метод <a href="http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/delete.php">CSocNetMessages::Delete</a>.</div>
-	*
-	*
-	* @param int $intid  Код сообщения.
-	*
-	* @param int $userId  Код пользователя - отправителя или получателя сообщения, который
-	* удаляет сообщение.
-	*
-	* @param bool $bCheckMessages = true Необязательный параметр. По умолчанию равен true.
-	*
-	* @return bool <p>True в случае успешного удаления и false - в случае ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/deleteMessage.php
-	* @author Bitrix
-	*/
 	public static function DeleteMessage($ID, $userID, $bCheckMessages = true)
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UR_EMPTY_MESSAGE_ID"), "ERROR_MESSAGE_ID");
 			return false;
 		}
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		if ($userID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UR_EMPTY_SENDER_USER_ID"), "ERROR_SENDER_USER_ID");
@@ -175,7 +134,7 @@ class CAllSocNetMessages
 				$errorMessage = "";
 				if ($e = $GLOBALS["APPLICATION"]->GetException())
 					$errorMessage = $e->GetString();
-				if (StrLen($errorMessage) <= 0)
+				if ($errorMessage == '')
 					$errorMessage = GetMessage("SONET_M_ERROR_DELETE_MESSAGE");
 					$GLOBALS["APPLICATION"]->ThrowException($errorMessage, "ERROR_DELETE_MESSAGE");
 				return false;
@@ -190,7 +149,7 @@ class CAllSocNetMessages
 					$errorMessage = "";
 					if ($e = $GLOBALS["APPLICATION"]->GetException())
 						$errorMessage = $e->GetString();
-					if (StrLen($errorMessage) <= 0)
+					if ($errorMessage == '')
 						$errorMessage = GetMessage("SONET_M_ERROR_DELETE_MESSAGE");
 
 					$GLOBALS["APPLICATION"]->ThrowException($errorMessage, "ERROR_DELETE_MESSAGE");
@@ -204,7 +163,7 @@ class CAllSocNetMessages
 					$errorMessage = "";
 					if ($e = $GLOBALS["APPLICATION"]->GetException())
 						$errorMessage = $e->GetString();
-					if (StrLen($errorMessage) <= 0)
+					if ($errorMessage == '')
 						$errorMessage = GetMessage("SONET_UR_ERROR_UPDATE_MESSAGE");
 
 					$GLOBALS["APPLICATION"]->ThrowException($errorMessage, "ERROR_UPDATE_MESSAGE");
@@ -221,7 +180,7 @@ class CAllSocNetMessages
 					$errorMessage = "";
 					if ($e = $GLOBALS["APPLICATION"]->GetException())
 						$errorMessage = $e->GetString();
-					if (StrLen($errorMessage) <= 0)
+					if ($errorMessage == '')
 						$errorMessage = GetMessage("SONET_M_ERROR_DELETE_MESSAGE");
 
 					$GLOBALS["APPLICATION"]->ThrowException($errorMessage, "ERROR_DELETE_MESSAGE");
@@ -235,7 +194,7 @@ class CAllSocNetMessages
 					$errorMessage = "";
 					if ($e = $GLOBALS["APPLICATION"]->GetException())
 						$errorMessage = $e->GetString();
-					if (StrLen($errorMessage) <= 0)
+					if ($errorMessage == '')
 						$errorMessage = GetMessage("SONET_UR_ERROR_UPDATE_MESSAGE");
 
 					$GLOBALS["APPLICATION"]->ThrowException($errorMessage, "ERROR_UPDATE_MESSAGE");
@@ -262,7 +221,7 @@ class CAllSocNetMessages
 		if (!CSocNetGroup::__ValidateID($userID))
 			return false;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		$bSuccess = True;
 
 		if ($bSuccess)
@@ -276,33 +235,6 @@ class CAllSocNetMessages
 	/***************************************/
 	/**********  DATA SELECTION  ***********/
 	/***************************************/
-	
-	/**
-	* <p>Метод возвращает массив с параметрами сообщения. Метод нестатический.</p>
-	*
-	*
-	* @param int $intid  Код сообщения.
-	*
-	* @return array <p>Возвращается массив с ключами:<br><b>ID</b> - идентификатор
-	* сообщения,<br><b>FROM_USER_ID</b> - код пользователя - отправителя
-	* сообщения,<br><b>TO_USER_ID</b> - код пользователя - получателя
-	* сообщения,<br><b>MESSAGE</b> - сообщение,<br><b>DATE_CREATE</b> - дата создания
-	* сообщения,<br><b>DATE_VIEW</b> - дата прочтения,<br><b>MESSAGE_TYPE</b> - тип
-	* сообщения: SONET_MESSAGE_SYSTEM - системное, SONET_MESSAGE_PRIVATE -
-	* пользовательское,<br><b>FROM_DELETED</b> - флаг (Y/N) удаления сообщения
-	* отправителем,<br><b>TO_DELETED</b> - флаг (Y/N) удаления сообщения
-	* получателем.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/GetList.php">CSocNetMessages::GetList</a></li>
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		global $DB;
@@ -310,7 +242,7 @@ class CAllSocNetMessages
 		if (!CSocNetGroup::__ValidateID($ID))
 			return false;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$dbResult = CSocNetMessages::GetList(Array(), Array("ID" => $ID, "IS_LOG_ALL" => "Y"));
 		if ($arResult = $dbResult->GetNext())
@@ -326,7 +258,7 @@ class CAllSocNetMessages
 	/***************************************/
 	public static function SendEvent($messageID, $mailTemplate = "SONET_NEW_MESSAGE")
 	{
-		$messageID = IntVal($messageID);
+		$messageID = intval($messageID);
 		if ($messageID <= 0)
 			return false;
 
@@ -344,7 +276,7 @@ class CAllSocNetMessages
 		$defSiteID = (Defined("SITE_ID") ? SITE_ID : $arMessage["TO_USER_LID"]);
 
 		$siteID = CSocNetUserEvents::GetEventSite($arMessage["TO_USER_ID"], $mailTemplate, $defSiteID);
-		if ($siteID == false || StrLen($siteID) <= 0)
+		if ($siteID == false || $siteID == '')
 			return false;
 
 		$arFields = array(
@@ -366,40 +298,21 @@ class CAllSocNetMessages
 		return true;
 	}
 
-
 	/***************************************/
 	/************  ACTIONS  ****************/
 	/***************************************/
-	
-	/**
-	* <p>Метод отмечает сообщение как прочтенное. Метод нестатический.</p>
-	*
-	*
-	* @param int $senderUserID  Код пользователя-получателя сообщения.
-	*
-	* @param int $messageID  Код пользователя-отправителя сообщения.
-	*
-	* @param bool $bRead = true Код сообщения.
-	*
-	* @return bool <p>True в случае успешного выполнения и false - в противном
-	* случае.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/markmessageread.php
-	* @author Bitrix
-	*/
 	public static function MarkMessageRead($senderUserID, $messageID, $bRead = true)
 	{
 		global $APPLICATION;
 
-		$senderUserID = IntVal($senderUserID);
+		$senderUserID = intval($senderUserID);
 		if ($senderUserID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UR_EMPTY_SENDER_USER_ID"), "ERROR_SENDER_USER_ID");
 			return false;
 		}
 
-		$messageID = IntVal($messageID);
+		$messageID = intval($messageID);
 		if ($messageID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UR_EMPTY_MESSAGE_ID"), "ERROR_MESSAGE_ID");
@@ -434,7 +347,7 @@ class CAllSocNetMessages
 				$errorMessage = "";
 				if ($e = $GLOBALS["APPLICATION"]->GetException())
 					$errorMessage = $e->GetString();
-				if (StrLen($errorMessage) <= 0)
+				if ($errorMessage == '')
 					$errorMessage = GetMessage("SONET_UR_ERROR_UPDATE_MESSAGE");
 
 				$GLOBALS["APPLICATION"]->ThrowException($errorMessage, "ERROR_UPDATE_MESSAGE");
@@ -454,54 +367,18 @@ class CAllSocNetMessages
 		return true;
 	}
 
-	
-	/**
-	* <p>Вспомогательный метод для отправки персонального сообщения от одного пользователя социальной сети другому. Метод нестатический.</p> <p></p> <div class="note"> <b>Примечание</b>: для отправки системного сообщения используется метод <a href="http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/Add.php">CSocNetMessages::Add</a>.<br> При работе метода вызываются события: <a href="http://dev.1c-bitrix.ru/api_help/socialnetwork/events/OnBeforeSocNetMessagesAdd.php">OnBeforeSocNetMessagesAdd</a> и <a href="http://dev.1c-bitrix.ru/api_help/socialnetwork/events/OnSocNetMessagesAdd.php">OnSocNetMessagesAdd</a>.</div>
-	*
-	*
-	* @param int $senderUserId  Код пользователя-отправителя сообщения.
-	*
-	* @param int $targetUserID  Код пользователя-получателя сообщения.
-	*
-	* @param string $message  Текст сообщения.
-	*
-	* @return bool <p>Метод возвращает true в случае успешного сохранения сообщения и
-	* false в противном случае.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (!CSocNetMessages::CreateMessage($GLOBALS["USER"]-&gt;GetID(), $userId, $message))
-	* {
-	* 	if ($e = $GLOBALS["APPLICATION"]-&gt;GetException())
-	* 		$errorMessage .= $e-&gt;GetString();
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/Add.php">CSocNetMessages::Add</a></li>
-	* </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/CreateMessage.php
-	* @author Bitrix
-	*/
 	public static function CreateMessage($senderUserID, $targetUserID, $message, $title = false)
 	{
 		global $APPLICATION;
 
-		$senderUserID = IntVal($senderUserID);
+		$senderUserID = intval($senderUserID);
 		if ($senderUserID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UR_EMPTY_SENDER_USER_ID"), "ERROR_SENDER_USER_ID");
 			return false;
 		}
 
-		$targetUserID = IntVal($targetUserID);
+		$targetUserID = intval($targetUserID);
 		if ($targetUserID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UR_EMPTY_TARGET_USER_ID"), "ERROR_TARGET_USER_ID");
@@ -509,7 +386,7 @@ class CAllSocNetMessages
 		}
 
 		$message = Trim($message);
-		if (StrLen($message) <= 0)
+		if ($message == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UR_EMPTY_MESSAGE"), "ERROR_MESSAGE");
 			return false;
@@ -532,7 +409,7 @@ class CAllSocNetMessages
 			$errorMessage = "";
 			if ($e = $GLOBALS["APPLICATION"]->GetException())
 				$errorMessage = $e->GetString();
-			if (StrLen($errorMessage) <= 0)
+			if ($errorMessage == '')
 				$errorMessage = GetMessage("SONET_UR_ERROR_CREATE_MESSAGE");
 
 			$GLOBALS["APPLICATION"]->ThrowException($errorMessage, "ERROR_CREATE_MESSAGE");
@@ -544,27 +421,11 @@ class CAllSocNetMessages
 		return true;
 	}
 
-	
-	/**
-	* <p>Отмечает набор сообщений как прочтенные. Метод нестатический.</p>
-	*
-	*
-	* @param int $userID  Код пользователя, являющегося получателем сообщений.
-	*
-	* @param array $arIDs  Массив идентификаторов сообщений.
-	*
-	* @return bool <p>True в случае успешного выполнения и false - в противном
-	* случае.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/MarkMessageReadMultiple.php
-	* @author Bitrix
-	*/
 	public static function MarkMessageReadMultiple($userID, $arIDs)
 	{
 		global $APPLICATION, $DB;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		if ($userID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UR_EMPTY_SENDER_USER_ID"), "ERROR_USER_ID");
@@ -580,27 +441,11 @@ class CAllSocNetMessages
 		return true;
 	}
 
-	
-	/**
-	* <p>Удаляет набор сообщений. Метод нестатический.</p>
-	*
-	*
-	* @param int $userId  Пользователь, удаляющий сообщения. Пользователь должен быть
-	* автором или получателем сообщений.
-	*
-	* @param array $arIDs  Массив идентификаторов сообщений.
-	*
-	* @return bool <p>True в случае успешного удаления и false - в противном случае.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/DeleteMessageMultiple.php
-	* @author Bitrix
-	*/
 	public static function DeleteMessageMultiple($userID, $arIDs)
 	{
 		global $APPLICATION, $DB;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		if ($userID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UR_EMPTY_SENDER_USER_ID"), "ERROR_USER_ID");
@@ -620,8 +465,8 @@ class CAllSocNetMessages
 	{
 		global $APPLICATION, $DB;
 
-		$CurrentUserID = IntVal($CurrentUserID);
-		$PartnerUserID = IntVal($PartnerUserID);
+		$CurrentUserID = intval($CurrentUserID);
+		$PartnerUserID = intval($PartnerUserID);
 		
 		if ($CurrentUserID <= 0)
 		{
@@ -648,7 +493,7 @@ class CAllSocNetMessages
 
 	public static function __SpeedFileCheckMessages($userID)
 	{
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		if ($userID <= 0)
 			return;
 
@@ -661,7 +506,7 @@ class CAllSocNetMessages
 			"	AND TO_DELETED = 'N' "
 		);
 		if ($arResult = $dbResult->Fetch())
-			$cnt = IntVal($arResult["CNT"]);
+			$cnt = intval($arResult["CNT"]);
 
 		if ($cnt > 0)
 			CSocNetMessages::__SpeedFileCreate($userID);
@@ -673,7 +518,7 @@ class CAllSocNetMessages
 	{
 		global $CACHE_MANAGER;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		if ($userID <= 0)
 			return;
 
@@ -697,7 +542,7 @@ class CAllSocNetMessages
 	{
 		global $CACHE_MANAGER;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		if ($userID <= 0)
 			return;
 
@@ -710,24 +555,11 @@ class CAllSocNetMessages
 */
 	}
 
-	
-	/**
-	* <p>Проверяет, есть ли новые сообщения для пользователя. Проверка осуществляется эффективно, без обращения к базе данных. Метод нестатический.</p>
-	*
-	*
-	* @param int $userID  Код пользователя.
-	*
-	* @return bool <p>True, если есть новые сообщения. Иначе - false.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetmessages/speedfileexists.php
-	* @author Bitrix
-	*/
 	public static function SpeedFileExists($userID)
 	{
 		global $CACHE_MANAGER;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		if ($userID <= 0)
 			return;
 
@@ -760,17 +592,17 @@ class CAllSocNetMessages
 
 		while ($arMessage = $dbMessage->Fetch())
 		{
-			if (isset($arMessage["EMAIL_TEMPLATE"]) && strlen($arMessage["EMAIL_TEMPLATE"]) > 0)
+			if (isset($arMessage["EMAIL_TEMPLATE"]) && $arMessage["EMAIL_TEMPLATE"] <> '')
 				$mailTemplate = $arMessage["EMAIL_TEMPLATE"];
 			else
 				$mailTemplate = "SONET_NEW_MESSAGE";
 		
 			$defSiteID = $arMessage["TO_USER_LID"];
 			$siteID = CSocNetUserEvents::GetEventSite($arMessage["TO_USER_ID"], $mailTemplate, $defSiteID);
-			if ($siteID == false || StrLen($siteID) <= 0)
+			if ($siteID == false || $siteID == '')
 				$siteID = CSite::GetDefSite();
 
-			if ($siteID == false || StrLen($siteID) <= 0)
+			if ($siteID == false || $siteID == '')
 				continue;
 				
 			$arFields = array(
@@ -795,4 +627,3 @@ class CAllSocNetMessages
 		return "CSocNetMessages::SendEventAgent();";
 	}
 }
-?>

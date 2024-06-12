@@ -1,11 +1,14 @@
 <?php
+
 namespace Bitrix\Main;
+
+use Bitrix\Main\DI\ServiceLocator;
 
 /**
  * Class Loader loads required files, classes and modules. It is the only class which is included directly.
  * @package Bitrix\Main
  */
-final class Loader
+class Loader
 {
 	/**
 	 * Can be used to prevent loading all modules except main and fileman
@@ -15,12 +18,17 @@ final class Loader
 	const BITRIX_HOLDER = "bitrix";
 	const LOCAL_HOLDER = "local";
 
-	private static $safeModeModules = array("main", "fileman");
+	protected static $safeModeModules = ["main" => true, "fileman" => true];
+	protected static $loadedModules = ["main" => true];
+	protected static $semiloadedModules = [];
+	protected static $modulesHolders = ["main" => self::BITRIX_HOLDER];
+	protected static $sharewareModules = [];
 
-	private static $arLoadedModules = array("main" => true);
-	private static $arSemiloadedModules = array();
-	private static $arLoadedModulesHolders = array("main" => self::BITRIX_HOLDER);
-	private static $arSharewareModules = array();
+	/**
+	 * Custom autoload paths.
+	 * @var array [namespace => [ [path1, depth1], [path2, depth2] ]
+	 */
+	protected static $namespaces = [];
 
 	/**
 	 * Returned by includeSharewareModule() if module is not found
@@ -39,80 +47,140 @@ final class Loader
 	 */
 	const MODULE_DEMO_EXPIRED = 3;
 
-	private static $arAutoLoadClasses = array();
+	protected static $autoLoadClasses = [];
 
-	private static $isAutoLoadOn = true;
+	/**
+	 * @var bool Controls throwing exception by requireModule method
+	 */
+	protected static $requireThrowException = true;
 
+	/** @deprecated   */
 	const ALPHA_LOWER = "qwertyuioplkjhgfdsazxcvbnm";
+	/** @deprecated   */
 	const ALPHA_UPPER = "QWERTYUIOPLKJHGFDSAZXCVBNM";
 
 	/**
-	 * Includes module by its name
+	 * Includes a module by its name.
 	 *
 	 * @param string $moduleName Name of the included module
 	 * @return bool Returns true if module was included successfully, otherwise returns false
 	 * @throws LoaderException
 	 */
-	
-	/**
-	* <p>Статический метод подключает модуль по его имени. Возвращает <i>true</i> если подключение успешно и <i>false</i> в обратном случае.</p> <p>Аналог метода <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cmodule/includemodule.php" >CModule::IncludeModule</a> в старом ядре.</p>
-	*
-	*
-	* @param string $moduleName  Имя подключаемого модуля.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/loader/includemodule.php
-	* @author Bitrix
-	*/
 	public static function includeModule($moduleName)
 	{
 		if (!is_string($moduleName) || $moduleName == "")
+		{
 			throw new LoaderException("Empty module name");
+		}
 		if (preg_match("#[^a-zA-Z0-9._]#", $moduleName))
+		{
 			throw new LoaderException(sprintf("Module name '%s' is not correct", $moduleName));
+		}
 
-		$moduleName = strtr($moduleName, static::ALPHA_UPPER, static::ALPHA_LOWER);
+		$moduleName = strtolower($moduleName);
 
 		if (self::SAFE_MODE)
 		{
-			if (!in_array($moduleName, self::$safeModeModules))
+			if (!isset(self::$safeModeModules[$moduleName]))
+			{
 				return false;
+			}
 		}
 
-		if (isset(self::$arLoadedModules[$moduleName]))
-			return self::$arLoadedModules[$moduleName];
+		if (isset(self::$loadedModules[$moduleName]))
+		{
+			return self::$loadedModules[$moduleName];
+		}
 
-		if (isset(self::$arSemiloadedModules[$moduleName]))
+		if (isset(self::$semiloadedModules[$moduleName]))
+		{
 			trigger_error("Module '".$moduleName."' is in loading progress", E_USER_WARNING);
+		}
 
 		$arInstalledModules = ModuleManager::getInstalledModules();
 		if (!isset($arInstalledModules[$moduleName]))
-			return self::$arLoadedModules[$moduleName] = false;
+		{
+			return (self::$loadedModules[$moduleName] = false);
+		}
 
-		$documentRoot = static::getDocumentRoot();
+		$documentRoot = self::getDocumentRoot();
 
 		$moduleHolder = self::LOCAL_HOLDER;
-		$pathToInclude = $documentRoot."/".$moduleHolder."/modules/".$moduleName."/include.php";
+		$pathToInclude = $documentRoot."/".$moduleHolder."/modules/".$moduleName;
 		if (!file_exists($pathToInclude))
 		{
 			$moduleHolder = self::BITRIX_HOLDER;
-			$pathToInclude = $documentRoot."/".$moduleHolder."/modules/".$moduleName."/include.php";
+			$pathToInclude = $documentRoot."/".$moduleHolder."/modules/".$moduleName;
 			if (!file_exists($pathToInclude))
-				return self::$arLoadedModules[$moduleName] = false;
+			{
+				return (self::$loadedModules[$moduleName] = false);
+			}
 		}
 
-		self::$arLoadedModulesHolders[$moduleName] = $moduleHolder;
-		self::$arSemiloadedModules[$moduleName] = true;
+		//register a PSR-4 base folder for the module
+		if (strpos($moduleName, ".") !== false)
+		{
+			//partner's module
+			$baseName = str_replace(".", "\\", ucwords($moduleName, "."));
+		}
+		else
+		{
+			//bitrix's module
+			$baseName = "Bitrix\\".ucfirst($moduleName);
+		}
+		self::registerNamespace($baseName, $documentRoot."/".$moduleHolder."/modules/".$moduleName."/lib");
 
-		$res = self::includeModuleInternal($pathToInclude);
+		self::$modulesHolders[$moduleName] = $moduleHolder;
 
-		unset(self::$arSemiloadedModules[$moduleName]);
-		if ($res === false)
-			return self::$arLoadedModules[$moduleName] = false;
+		if (class_exists('\Dev\Main\Migrator\ModuleUpdater'))
+		{
+			\Dev\Main\Migrator\ModuleUpdater::checkUpdates($moduleName, $pathToInclude);
+		}
 
-		return self::$arLoadedModules[$moduleName] = true;
+		$res = true;
+		if (file_exists($pathToInclude."/include.php"))
+		{
+			//recursion control
+			self::$semiloadedModules[$moduleName] = true;
+
+			$res = self::includeModuleInternal($pathToInclude."/include.php");
+
+			unset(self::$semiloadedModules[$moduleName]);
+		}
+
+		self::$loadedModules[$moduleName] = ($res !== false);
+
+		if (!self::$loadedModules[$moduleName])
+		{
+			//unregister the namespace if "include" fails
+			self::unregisterNamespace($baseName);
+		}
+		else
+		{
+			ServiceLocator::getInstance()->registerByModuleSettings($moduleName);
+		}
+
+		return self::$loadedModules[$moduleName];
+	}
+
+	/**
+	 * Includes module by its name, throws an exception in case of failure
+	 *
+	 * @param string $moduleName
+	 *
+	 * @return bool
+	 * @throws LoaderException
+	 */
+	public static function requireModule($moduleName)
+	{
+		$included = self::includeModule($moduleName);
+
+		if (!$included && self::$requireThrowException)
+		{
+			throw new LoaderException("Required module `{$moduleName}` was not found");
+		}
+
+		return $included;
 	}
 
 	private static function includeModuleInternal($path)
@@ -126,60 +194,56 @@ final class Loader
 	 * Includes shareware module by its name.
 	 * Module must initialize constant <module name>_DEMO = Y in include.php to define demo mode.
 	 * include.php must return false to define trial period expiration.
-	 * Constants is used because it is easy to obfuscate them.
+	 * Constants are used because it is easy to obfuscate them.
 	 *
 	 * @param string $moduleName Name of the included module
 	 * @return int One of the following constant: Loader::MODULE_NOT_FOUND, Loader::MODULE_INSTALLED, Loader::MODULE_DEMO, Loader::MODULE_DEMO_EXPIRED
 	 */
-	
-	/**
-	* <p>Статический метод подключает партнёрский модуль по его имени.</p> <p>Модуль должен инициировать константу <code>&lt;module name&gt;_DEMO = Y</code> в файле <b>include.php</b> для определения деморежима. Файл <b>include.php</b> должен возвращать <i>false</i> для опредения истёкшего триал-периода.</p> <p>Возвращает одну из следующих констант:<br><code>Loader::MODULE_NOT_FOUND</code>, <br><code>Loader::MODULE_INSTALLED</code>, <br><code>Loader::MODULE_DEMO</code>, <br><code>Loader::MODULE_DEMO_EXPIRED</code>.</p> <p>Константы используются в силу того, что их легче подвергать обфускации.</p> <p>Аналог метода <b>CModule::IncludeModuleEx</b> в старом ядре.</p>
-	*
-	*
-	* @param string $moduleName  Имя подключаемого модуля.
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/loader/includesharewaremodule.php
-	* @author Bitrix
-	*/
 	public static function includeSharewareModule($moduleName)
 	{
-		if (isset(self::$arSharewareModules[$moduleName]))
-			return self::$arSharewareModules[$moduleName];
+		if (isset(self::$sharewareModules[$moduleName]))
+		{
+			return self::$sharewareModules[$moduleName];
+		}
 
-		$moduleNameTmp = str_replace(".", "_", $moduleName);
+		$module = str_replace(".", "_", $moduleName);
 
 		if (self::includeModule($moduleName))
 		{
-			if (defined($moduleNameTmp."_DEMO") && constant($moduleNameTmp."_DEMO") == "Y")
-				self::$arSharewareModules[$moduleName] = self::MODULE_DEMO;
+			if (defined($module."_DEMO") && constant($module."_DEMO") == "Y")
+			{
+				self::$sharewareModules[$moduleName] = self::MODULE_DEMO;
+			}
 			else
-				self::$arSharewareModules[$moduleName] = self::MODULE_INSTALLED;
+			{
+				self::$sharewareModules[$moduleName] = self::MODULE_INSTALLED;
+			}
 
-			return self::$arSharewareModules[$moduleName];
+			return self::$sharewareModules[$moduleName];
 		}
 
-		if (defined($moduleNameTmp."_DEMO") && constant($moduleNameTmp."_DEMO") == "Y")
-			return self::$arSharewareModules[$moduleName] = self::MODULE_DEMO_EXPIRED;
+		if (defined($module."_DEMO") && constant($module."_DEMO") == "Y")
+		{
+			return (self::$sharewareModules[$moduleName] = self::MODULE_DEMO_EXPIRED);
+		}
 
-		return self::$arSharewareModules[$moduleName] = self::MODULE_NOT_FOUND;
+		return (self::$sharewareModules[$moduleName] = self::MODULE_NOT_FOUND);
 	}
 
 	public static function clearModuleCache($moduleName)
 	{
 		if (!is_string($moduleName) || $moduleName == "")
-			throw new LoaderException("Empty module name");
-
-		if($moduleName !== "main")
 		{
-			unset(static::$arLoadedModules[$moduleName]);
-			unset(static::$arLoadedModulesHolders[$moduleName]);
+			throw new LoaderException("Empty module name");
 		}
 
-		if (isset(static::$arSharewareModules[$moduleName]))
-			unset(static::$arSharewareModules[$moduleName]);
+		if ($moduleName !== "main")
+		{
+			unset(self::$loadedModules[$moduleName]);
+			unset(self::$modulesHolders[$moduleName]);
+		}
+
+		unset(self::$sharewareModules[$moduleName]);
 	}
 
 	/**
@@ -187,152 +251,125 @@ final class Loader
 	 *
 	 * @return string Document root
 	 */
-	
-	/**
-	* <p>Статический метод возвращает <i>document root</i>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/loader/getdocumentroot.php
-	* @author Bitrix
-	*/
 	public static function getDocumentRoot()
 	{
 		static $documentRoot = null;
 		if ($documentRoot === null)
+		{
 			$documentRoot = rtrim($_SERVER["DOCUMENT_ROOT"], "/\\");
+		}
 		return $documentRoot;
 	}
 
-	public static function switchAutoLoad($value = true)
-	{
-		static::$isAutoLoadOn = $value;
-	}
-
 	/**
-	 * Registers classes for auto loading.
-	 * All the frequently used classes should be registered for auto loading (performance).
+	 * Registers classes for auto-loading.
+	 * All the frequently used classes should be registered for auto-loading (performance).
 	 * It is not necessary to register rarely used classes. They can be found and loaded dynamically.
 	 *
 	 * @param string $moduleName Name of the module. Can be null if classes are not part of any module
-	 * @param array $arClasses Array of classes with class names as keys and paths as values.
+	 * @param array $classes Array of classes with class names as keys and paths as values.
 	 * @throws LoaderException
 	 */
-	
-	/**
-	* <p>Статический метод регистрирует классы для автозагрузки.</p> <p>Все часто используемые классы должны быть зарегистрированы для автозагрузки. Для редкоиспользуемых классов можно регистрацией пренебречь, они должны быть найдены и подключены динамически.</p>
-	*
-	*
-	* @param string $moduleName  Имя модуля. Может быть <i>null</i> если классы не являются часть
-	* какого-либо модуля.
-	*
-	* @param array $arClasses  Массив классов с именами классов как ключами и пути как значения
-	* ключей.
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/loader/registerautoloadclasses.php
-	* @author Bitrix
-	*/
-	public static function registerAutoLoadClasses($moduleName, array $arClasses)
+	public static function registerAutoLoadClasses($moduleName, array $classes)
 	{
-		if (empty($arClasses))
+		if (empty($classes))
+		{
 			return;
-
+		}
 		if (($moduleName !== null) && empty($moduleName))
 		{
 			throw new LoaderException(sprintf("Module name '%s' is not correct", $moduleName));
 		}
 
-		if (!static::$isAutoLoadOn)
+		foreach ($classes as $class => $file)
 		{
-			if (!is_null($moduleName) && !isset(static::$arLoadedModulesHolders[$moduleName]))
-				throw new LoaderException(sprintf("Holder of module '%s' is not found", $moduleName));
+			$class = ltrim($class, "\\");
+			$class = strtolower($class);
 
-			$documentRoot = static::getDocumentRoot();
-
-			if (!is_null($moduleName))
-			{
-				foreach ($arClasses as $value)
-				{
-					if (file_exists($documentRoot."/".self::$arLoadedModulesHolders[$moduleName]."/modules/".$moduleName."/".$value))
-						require_once($documentRoot."/".self::$arLoadedModulesHolders[$moduleName]."/modules/".$moduleName."/".$value);
-				}
-			}
-			else
-			{
-				foreach ($arClasses as $value)
-				{
-					if (($includePath = self::getLocal($value, $documentRoot)) !== false)
-						require_once($includePath);
-				}
-			}
+			self::$autoLoadClasses[$class] = [
+				"module" => $moduleName,
+				"file" => $file,
+			];
 		}
-		else
-		{
-			foreach ($arClasses as $key => $value)
-			{
-				$class = ltrim($key, "\\");
-				self::$arAutoLoadClasses[strtr($class, static::ALPHA_UPPER, static::ALPHA_LOWER)] = array(
-					"module" => $moduleName,
-					"file" => $value
-				);
-			}
-		}
-	}
-
-	public static function isAutoLoadClassRegistered($className)
-	{
-		$className = trim(ltrim($className, "\\"));
-		if ($className == '')
-			return false;
-
-		$className = strtr($className, static::ALPHA_UPPER, static::ALPHA_LOWER);
-
-		return isset(self::$arAutoLoadClasses[$className]);
 	}
 
 	/**
-	 * \Bitrix\Main\IO\File -> /main/lib/io/file.php
-	 * \Bitrix\IBlock\Type -> /iblock/lib/type.php
-	 * \Bitrix\IBlock\Section\Type -> /iblock/lib/section/type.php
-	 * \QSoft\Catalog\Tools\File -> /qsoft.catalog/lib/tools/file.php
+	 * Registers namespaces with custom paths.
+	 * e.g. ('Bitrix\Main\Dev', '/home/bitrix/web/site/bitrix/modules/main/dev/lib')
 	 *
-	 * @param $className
+	 * @param string $namespace A namespace prefix.
+	 * @param string $path An absolute path.
 	 */
-	
+	public static function registerNamespace($namespace, $path)
+	{
+		$namespace = trim($namespace, "\\")."\\";
+		$namespace = strtolower($namespace);
+
+		$path = rtrim($path, "/\\");
+		$depth = substr_count(rtrim($namespace, "\\"), "\\");
+
+		self::$namespaces[$namespace][] = [
+			"path" => $path,
+			"depth" => $depth,
+		];
+	}
+
 	/**
-	* <p>Статический метод производит загрузку зарегистрированных для автозагрузки методов из следующих файлов:</p> <p><code>\Bitrix\Main\IO\File</code> - файл <b>/main/lib/io/file.php</b>,<br><code>\Bitrix\IBlock\Type</code> - файл <b>/iblock/lib/type.php</b>,<br><code>\Bitrix\IBlock\Section\Type</code> - файл <b>/iblock/lib/section/type.php</b>,<br><code>\QSoft\Catalog\Tools\File</code> - файл <b>/qsoft.catalog/lib/tools/file.php</b>.</p>
-	*
-	*
-	* @param mixed $className  Имя класса для загрузки.
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/loader/autoload.php
-	* @author Bitrix
-	*/
+	 * Unregisters a namespace.
+	 * @param string $namespace
+	 */
+	public static function unregisterNamespace($namespace)
+	{
+		$namespace = trim($namespace, "\\")."\\";
+		$namespace = strtolower($namespace);
+
+		unset(self::$namespaces[$namespace]);
+	}
+
+	/**
+	 * Registers an additional autoload handler.
+	 * @param callable $handler
+	 */
+	public static function registerHandler(callable $handler)
+	{
+		\spl_autoload_register($handler);
+	}
+
+	/**
+	 * PSR-4 compatible autoloader.
+	 * https://www.php-fig.org/psr/psr-4/
+	 *
+	 * @param string $className
+	 */
 	public static function autoLoad($className)
 	{
-		$file = ltrim($className, "\\");    // fix web env
-		$file = strtr($file, static::ALPHA_UPPER, static::ALPHA_LOWER);
+		// fix web env
+		$className = ltrim($className, "\\");
+
+		$classLower = strtolower($className);
 
 		static $documentRoot = null;
 		if ($documentRoot === null)
-			$documentRoot = static::getDocumentRoot();
-
-		if (isset(self::$arAutoLoadClasses[$file]))
 		{
-			$pathInfo = self::$arAutoLoadClasses[$file];
+			$documentRoot = self::getDocumentRoot();
+		}
+
+		//optimization via direct paths
+		if (isset(self::$autoLoadClasses[$classLower]))
+		{
+			$pathInfo = self::$autoLoadClasses[$classLower];
 			if ($pathInfo["module"] != "")
 			{
-				$m = $pathInfo["module"];
-				$h = isset(self::$arLoadedModulesHolders[$m]) ? self::$arLoadedModulesHolders[$m] : 'bitrix';
-				include_once($documentRoot."/".$h."/modules/".$m."/" .$pathInfo["file"]);
+				$module = $pathInfo["module"];
+				$holder = (self::$modulesHolders[$module] ?? self::BITRIX_HOLDER);
+
+				$filePath = (defined('REPOSITORY_ROOT') && $holder === self::BITRIX_HOLDER)
+					? REPOSITORY_ROOT
+					: "{$documentRoot}/{$holder}/modules";
+
+				$filePath .= '/'.$module."/".$pathInfo["file"];
+
+				require_once($filePath);
 			}
 			else
 			{
@@ -341,78 +378,173 @@ final class Loader
 			return;
 		}
 
+		if (preg_match("#[^\\\\/a-zA-Z0-9_]#", $className))
+		{
+			return;
+		}
+
+		$tryFiles = [[
+			"real" => $className,
+			"lower" => $classLower,
+		]];
+
+		if (substr($classLower, -5) == "table")
+		{
+			// old *Table stored in reserved files
+			$tryFiles[] = [
+				"real" => substr($className, 0, -5),
+				"lower" => substr($classLower, 0, -5),
+			];
+		}
+
+		foreach ($tryFiles as $classInfo)
+		{
+			$classParts = explode("\\", $classInfo["lower"]);
+
+			//remove class name
+			array_pop($classParts);
+
+			while (!empty($classParts))
+			{
+				//go from the end
+				$namespace = implode("\\", $classParts)."\\";
+
+				if (isset(self::$namespaces[$namespace]))
+				{
+					//found
+					foreach (self::$namespaces[$namespace] as $namespaceLocation)
+					{
+						$depth = $namespaceLocation["depth"];
+						$path = $namespaceLocation["path"];
+
+						$fileParts = explode("\\", $classInfo["real"]);
+
+						for ($i=0; $i <= $depth; $i++)
+						{
+							array_shift($fileParts);
+						}
+
+						$classPath = implode("/", $fileParts);
+
+						$classPathLower = strtolower($classPath);
+
+						// final path lower case
+						$filePath = $path.'/'.$classPathLower.".php";
+
+						if (file_exists($filePath))
+						{
+							require_once($filePath);
+							break 3;
+						}
+
+						// final path original case
+						$filePath = $path.'/'.$classPath.".php";
+
+						if (file_exists($filePath))
+						{
+							require_once($filePath);
+							break 3;
+						}
+					}
+				}
+
+				//try the shorter namespace
+				array_pop($classParts);
+			}
+		}
+	}
+
+	/**
+	 * @param string $className
+	 *
+	 * @throws LoaderException
+	 */
+	public static function requireClass($className)
+	{
+		$file = ltrim($className, "\\");    // fix web env
+		$file = strtolower($file);
+
 		if (preg_match("#[^\\\\/a-zA-Z0-9_]#", $file))
 			return;
 
+		$tryFiles = [$file];
+
 		if (substr($file, -5) == "table")
-			$file = substr($file, 0, -5);
-
-		$file = str_replace('\\', '/', $file);
-		$arFile = explode("/", $file);
-
-		if ($arFile[0] === "bitrix")
 		{
-			array_shift($arFile);
-
-			if (empty($arFile))
-				return;
-
-			$module = array_shift($arFile);
-			if ($module == null || empty($arFile))
-				return;
-		}
-		else
-		{
-			$module1 = array_shift($arFile);
-			$module2 = array_shift($arFile);
-			if ($module1 == null || $module2 == null || empty($arFile))
-				return;
-
-			$module = $module1.".".$module2;
+			// old *Table stored in reserved files
+			$tryFiles[] = substr($file, 0, -5);
 		}
 
-		if (!isset(self::$arLoadedModulesHolders[$module]))
-			return;
+		foreach ($tryFiles as $file)
+		{
+			$file = str_replace('\\', '/', $file);
+			$arFile = explode("/", $file);
 
-		$filePath = $documentRoot."/".self::$arLoadedModulesHolders[$module]."/modules/".$module."/lib/".implode("/", $arFile).".php";
+			if ($arFile[0] === "bitrix")
+			{
+				array_shift($arFile);
 
-		if (file_exists($filePath))
-			require_once($filePath);
+				if (empty($arFile))
+				{
+					break;
+				}
+
+				$module = array_shift($arFile);
+				if ($module == null || empty($arFile))
+				{
+					break;
+				}
+			}
+			else
+			{
+				$module1 = array_shift($arFile);
+				$module2 = array_shift($arFile);
+
+				if ($module1 == null || $module2 == null || empty($arFile))
+				{
+					break;
+				}
+
+				$module = $module1.".".$module2;
+			}
+
+			if (!self::includeModule($module))
+			{
+				throw new LoaderException(sprintf(
+					"There is no `%s` class, module `%s` is unavailable", $className, $module
+				));
+			}
+		}
+
+		self::autoLoad($className);
 	}
 
 	/**
 	 * Checks if file exists in /local or /bitrix directories
 	 *
 	 * @param string $path File path relative to /local/ or /bitrix/
-	 * @param string $root Server document root, default static::getDocumentRoot()
+	 * @param string|null $root Server document root, default self::getDocumentRoot()
 	 * @return string|bool Returns combined path or false if the file does not exist in both dirs
 	 */
-	
-	/**
-	* <p>Статический метод проверяет существование файла в <code>/local</code> или <code>/bitrix</code> директориях.</p>
-	*
-	*
-	* @param string $path  Путь к файлу относительно <code>/local/</code> или <code>/bitrix/</code>
-	*
-	* @param string $root = null Document root сервера, по умолчанию: static::getDocumentRoot()
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/loader/getlocal.php
-	* @author Bitrix
-	*/
 	public static function getLocal($path, $root = null)
 	{
 		if ($root === null)
-			$root = static::getDocumentRoot();
+		{
+			$root = self::getDocumentRoot();
+		}
 
 		if (file_exists($root."/local/".$path))
+		{
 			return $root."/local/".$path;
+		}
 		elseif (file_exists($root."/bitrix/".$path))
+		{
 			return $root."/bitrix/".$path;
+		}
 		else
+		{
 			return false;
+		}
 	}
 
 	/**
@@ -422,56 +554,34 @@ final class Loader
 	 * @param string $path File path relative to personal directory
 	 * @return string|bool Returns combined path or false if the file does not exist
 	 */
-	
-	/**
-	* <p>Статический метод проверяет существование файла в персональной директории.</p> <p>Если <code>$_SERVER["BX_PERSONAL_ROOT"]</code> не установлена как персональная директория, то переменная равна <code>/bitrix/</code>.</p>
-	*
-	*
-	* @param string $path  Путь к файлу относительно персональной директории.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/loader/getpersonal.php
-	* @author Bitrix
-	*/
 	public static function getPersonal($path)
 	{
-		$root = static::getDocumentRoot();
-		$personal = isset($_SERVER["BX_PERSONAL_ROOT"]) ? $_SERVER["BX_PERSONAL_ROOT"] : "";
+		$root = self::getDocumentRoot();
+		$personal = ($_SERVER["BX_PERSONAL_ROOT"] ?? "");
 
-		if (!empty($personal) && file_exists($root.$personal."/".$path))
+		if ($personal <> '' && file_exists($root.$personal."/".$path))
+		{
 			return $root.$personal."/".$path;
+		}
 
 		return self::getLocal($path, $root);
+	}
+
+	/**
+	 * Changes requireModule behavior
+	 *
+	 * @param bool $requireThrowException
+	 */
+	public static function setRequireThrowException($requireThrowException)
+	{
+		self::$requireThrowException = (bool) $requireThrowException;
 	}
 }
 
 class LoaderException extends \Exception
 {
-	static public function __construct($message = "", $code = 0, \Exception $previous = null)
+	public function __construct($message = "", $code = 0, \Exception $previous = null)
 	{
 		parent::__construct($message, $code, $previous);
 	}
-}
-
-if (!function_exists("__autoload"))
-{
-	if (function_exists('spl_autoload_register'))
-	{
-		\spl_autoload_register('\Bitrix\Main\Loader::autoLoad');
-	}
-	else
-	{
-		function __autoload($className)
-		{
-			Loader::autoLoad($className);
-		}
-	}
-
-	Loader::switchAutoLoad(true);
-}
-else
-{
-	Loader::switchAutoLoad(false);
 }

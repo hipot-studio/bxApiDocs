@@ -3,27 +3,34 @@
 namespace Bitrix\Sale\Sender;
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Loader;
+use Bitrix\Sale;
+
+if (!Loader::includeModule('sender'))
+{
+	return;
+}
 
 Loc::loadMessages(__FILE__);
 
 class TriggerOrderCancel extends \Bitrix\Sender\TriggerConnector
 {
-	static public function getName()
+	public function getName()
 	{
 		return Loc::getMessage('sender_trigger_order_cancel_name');
 	}
 
-	static public function getCode()
+	public function getCode()
 	{
 		return "order_cancel";
 	}
 
-	static public function getEventModuleId()
+	public function getEventModuleId()
 	{
 		return 'sale';
 	}
 
-	static public function getEventType()
+	public function getEventType()
 	{
 		return "OnSaleCancelOrder";
 	}
@@ -43,7 +50,7 @@ class TriggerOrderCancel extends \Bitrix\Sender\TriggerConnector
 			return $this->filterConnectorData();
 	}
 
-	static public function getConnector()
+	public function getConnector()
 	{
 		$connector = new \Bitrix\Sale\Sender\ConnectorOrder;
 		$connector->setModuleId('sale');
@@ -70,13 +77,28 @@ class TriggerOrderCancel extends \Bitrix\Sender\TriggerConnector
 
 	/**
 	 * @return array
+	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
 	public function getPersonalizeFields()
 	{
 		$eventData = $this->getParam('EVENT');
-		return array(
-			'ORDER_ID' => $eventData[0]
-		);
+		$result = ['ORDER_ID' => $eventData[0]];
+		if ((int)$eventData[0] <= 0)
+			return $result;
+
+		$registry = Sale\Registry::getInstance(Sale\Registry::REGISTRY_TYPE_ORDER);
+		/** @var Sale\Order $orderClass */
+		$orderClass = $registry->getOrderClassName();
+
+		$order = $orderClass::load($eventData[0]);
+		if ($order)
+		{
+			$result = [
+				'ORDER_ID' => $order->getField('ACCOUNT_NUMBER'),
+				'ORDER_REAL_ID' => $order->getId()
+			];
+		}
+		return $result;
 	}
 
 	/**

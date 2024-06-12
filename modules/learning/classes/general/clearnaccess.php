@@ -15,7 +15,7 @@ interface ILearnAccessInterface
 	 * // Selects only lessons, which are accessible by user with id = $someUserId
 	 * $rc = $DB->Query ("SELECT NAME FROM b_learn_lesson WHERE ACTIVE = 'Y' AND ID IN (" . $sql . ")");
 	 */
-	static public function SQLClauseForAccessibleLessons ($in_bitmaskOperations, $isUseCache = false, $lessonId = 0, $in_prfx = 'DEFPRFX');
+	public function SQLClauseForAccessibleLessons ($in_bitmaskOperations, $isUseCache = false, $lessonId = 0, $in_prfx = 'DEFPRFX');
 
 
 	public static function GetNameForTask ($taskId);
@@ -41,7 +41,7 @@ interface ILearnAccessInterface
 	 * 
 	 * @return bool true - if there is access to given operations
 	 */
-	static public function IsBaseAccessForCR ($in_bitmaskRequested, $isUseCache = false);
+	public function IsBaseAccessForCR ($in_bitmaskRequested, $isUseCache = false);
 
 
 	/**
@@ -51,14 +51,14 @@ interface ILearnAccessInterface
 	 * 
 	 * @return bool true - if there is access to given operations
 	 */
-	static public function IsBaseAccess ($in_bitmaskRequested, $isUseCache = false, $checkForAuthor = false);
+	public function IsBaseAccess ($in_bitmaskRequested, $isUseCache = false, $checkForAuthor = false);
 
 
 	/**
 	 * @param array $arPermPairs, for example: array ('CR' => 4, 'U2' => '1', ...).
 	 * All unlisted access symbols ("subjects") will be removed.
 	 */
-	static public function SetBasePermissions ($in_arPermPairs);
+	public function SetBasePermissions ($in_arPermPairs);
 
 
 	/**
@@ -71,7 +71,7 @@ interface ILearnAccessInterface
 	 * $arPermPairs now contains
 	 * array ('AU' => 1, 'U12' => '3', 'CR' => 2, ...)
 	 */
-	static public function GetBasePermissions ();
+	public function GetBasePermissions ();
 
 
 	/**
@@ -84,7 +84,7 @@ interface ILearnAccessInterface
 	 * $arPermPairs now contains
 	 * array ('AU' => 1, 'U12' => '3', 'CR' => 2, ...)
 	 */
-	static public function GetLessonPermissions ($in_lessonId);
+	public function GetLessonPermissions ($in_lessonId);
 
 
 	/**
@@ -100,7 +100,7 @@ interface ILearnAccessInterface
 	 * $oAccess->SetLessonsPermissions ($arPermissions);
 	 * 
 	 */
-	static public function SetLessonsPermissions ($in_arPermissions);
+	public function SetLessonsPermissions ($in_arPermissions);
 
 
 	/**
@@ -109,10 +109,10 @@ interface ILearnAccessInterface
 	 * 
 	 * @return bool true - if lesson is accessible by given user for given operations.
 	 */
-	static public function IsLessonAccessible ($in_lessonId, $in_bitmaskOperations, $isUseCache = false);
+	public function IsLessonAccessible ($in_lessonId, $in_bitmaskOperations, $isUseCache = false);
 
 
-	static public function GetAccessibleLessonsList($in_bitmaskOperations, $isUseCache = false);
+	public function GetAccessibleLessonsList($in_bitmaskOperations, $isUseCache = false);
 
 
 	/**
@@ -162,18 +162,6 @@ class CLearnAccess implements ILearnAccessInterface
 	private function __construct($in_userId)
 	{
 		$this->userId = self::StrictlyCastToInteger ($in_userId);
-	}
-
-
-	// prevent clone of object
-	private function __clone()
-	{
-	}
-
-
-	// prevent wakeup
-	private function __wakeup()
-	{
 	}
 
 	/**
@@ -235,7 +223,7 @@ class CLearnAccess implements ILearnAccessInterface
 				LearnException::EXC_ERR_ALL_LOGIC);
 		}
 
-		$nameUpperCase = strtoupper($row['NAME']);
+		$nameUpperCase = mb_strtoupper($row['NAME']);
 
 		return CTask::GetLangTitle($nameUpperCase, "learning");
 	}
@@ -267,7 +255,7 @@ class CLearnAccess implements ILearnAccessInterface
 		$arPossibleRights = array();
 		while ($row = $rc->Fetch())
 		{
-			$nameUpperCase = strtoupper($row['NAME']);
+			$nameUpperCase = mb_strtoupper($row['NAME']);
 
 			$arPossibleRights[$row['ID']] = array(
 				'name'              => $row['NAME'],
@@ -489,7 +477,7 @@ class CLearnAccess implements ILearnAccessInterface
 	 * $arPermPairs now contains
 	 * array ('AU' => 1, 'U12' => '3', 'CR' => 2, ...)
 	 */
-	static public function GetBasePermissions ()
+	public function GetBasePermissions ()
 	{
 		global $DB;
 
@@ -523,7 +511,7 @@ class CLearnAccess implements ILearnAccessInterface
 	 * $arPermPairs now contains
 	 * array ('AU' => 1, 'U12' => '3', 'CR' => 2, ...)
 	 */
-	static public function GetLessonPermissions ($in_lessonId)
+	public function GetLessonPermissions ($in_lessonId)
 	{
 		global $DB;
 
@@ -705,6 +693,7 @@ class CLearnAccess implements ILearnAccessInterface
 	 */
 	public function SQLClauseForAccessibleLessons ($in_bitmaskOperations, $isUseCache = false, $lessonId = 0, $in_prfx = 'DEFPRFX')
 	{
+		global $DB;
 		if ( ! (is_int($in_bitmaskOperations) && ($in_bitmaskOperations > 0)) )
 		{
 			throw new LearnException ('bitmask must be an integer > 0', 
@@ -712,7 +701,7 @@ class CLearnAccess implements ILearnAccessInterface
 				| LearnException::EXC_ERR_ALL_PARAMS);
 		}
 
-		$prfx   = CDatabase::ForSQL ($in_prfx);
+		$prfx   = $DB->ForSQL ($in_prfx);
 		$userId = (int) $this->userId;
 
 		// access codes for user $this->userId
@@ -791,7 +780,7 @@ class CLearnAccess implements ILearnAccessInterface
 
 		$userAccessSymbols = $this->GetAccessCodesForSQL ($isUseCache);
 		$sqlOperations     = $this->ParseOperationsForSQL ($in_bitmaskOperations);
-		$prfx   = CDatabase::ForSQL ($in_prfx);
+		$prfx   = $DB->ForSQL ($in_prfx);
 		$userId = $this->userId;
 
 		$sql = "
@@ -1010,7 +999,8 @@ class CLearnAccess implements ILearnAccessInterface
 
 	protected static function EscapeAndAddLateralQuotes ($txt)
 	{
-		return ("'" . CDatabase::ForSQL($txt) . "'");
+		global $DB;
+		return ("'" . $DB->ForSQL($txt) . "'");
 	}
 
 

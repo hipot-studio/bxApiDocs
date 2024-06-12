@@ -19,16 +19,27 @@ Loc::loadMessages(__FILE__);
 class Currency extends Base\Restriction
 {
 	/**
-	 * @param Internals\CollectableEntity $entity
+	 * @param Internals\Entity $entity
 	 * @return string
 	 */
-	protected static function extractParams(Internals\CollectableEntity $entity)
+	protected static function extractParams(Internals\Entity $entity)
 	{
-		/** @var PaymentCollection|ShipmentCollection $collection */
-		$collection = $entity->getCollection();
+		if ($entity instanceof Internals\CollectableEntity)
+		{
+			/** @var \Bitrix\Sale\ShipmentCollection $collection */
+			$collection = $entity->getCollection();
 
-		/** @var \Bitrix\Sale\Order $order */
-		$order = $collection->getOrder();
+			/** @var \Bitrix\Sale\Order $order */
+			$order = $collection->getOrder();
+		}
+		elseif ($entity instanceof Sale\Order)
+		{
+			/** @var \Bitrix\Sale\Order $order */
+			$order = $entity;
+		}
+
+		if (!$order)
+			return false;
 
 		return $order->getCurrency();
 	}
@@ -71,7 +82,7 @@ class Currency extends Base\Restriction
 	 * @param int $serviceId
 	 * @return bool
 	 */
-	protected static function check($params, array $restrictionParams, $serviceId = 0)
+	public static function check($params, array $restrictionParams, $serviceId = 0)
 	{
 		if (isset($restrictionParams) && is_array($restrictionParams['CURRENCY']))
 			return in_array($params, $restrictionParams['CURRENCY']);

@@ -5,7 +5,7 @@ class CIMConvert
 	public static $nextConvertPerStep = 0;
 	public static $converted = 0;
 
-	static public function __construct()
+	public function __construct()
 	{
 	}
 
@@ -56,7 +56,7 @@ class CIMConvert
 				if (!empty($arUsers))
 				{
 					$strSql = "SELECT ITEM_ID FROM b_im_recent WHERE USER_ID = ".$USER->GetId()." AND ITEM_TYPE = '".IM_MESSAGE_PRIVATE."' AND ITEM_ID IN (".implode(',', $arUsers).")";
-					$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+					$dbRes = $DB->Query($strSql);
 					while ($arRes = $dbRes->Fetch())
 						unset($arInsert[$arRes['ITEM_ID']]);
 				}
@@ -64,7 +64,14 @@ class CIMConvert
 				foreach ($arInsert as $arAdd)
 					$DB->Add('b_im_recent', $arAdd);
 			}
-			if (isset($arRecent[IM_MESSAGE_CHAT]) && !empty($arRecent[IM_MESSAGE_CHAT]))
+
+			$massageType = null;
+			if(isset($arRecent[IM_MESSAGE_CHAT]) && !empty($arRecent[IM_MESSAGE_CHAT]))
+				$massageType = IM_MESSAGE_CHAT;
+			elseif(isset($arRecent[IM_MESSAGE_OPEN_LINE]) && !empty($arRecent[IM_MESSAGE_OPEN_LINE]))
+				$massageType = IM_MESSAGE_OPEN_LINE;
+
+			if (!empty($massageType))
 			{
 				$arChats = Array();
 				$arInsert = Array();
@@ -73,7 +80,7 @@ class CIMConvert
 					'HIDE_LINK' => 'Y'
 				));
 				$arMessagesGroup = $CIMChat->GetLastSendMessage(Array(
-					'ID' => array_keys($arRecent[IM_MESSAGE_CHAT]),
+					'ID' => array_keys($arRecent[$massageType]),
 					'ORDER' => 'ASC',
 					'LIMIT' => 30,
 					'USE_TIME_ZONE' => 'N'
@@ -83,7 +90,7 @@ class CIMConvert
 					$arChats[] = $chatId;
 					$arInsert[$chatId] = Array(
 						'USER_ID' => $USER->GetId(),
-						'ITEM_TYPE' => IM_MESSAGE_CHAT,
+						'ITEM_TYPE' => $massageType,
 						'ITEM_ID' => $chatId,
 						'ITEM_MID' => $arMessage['id'],
 					);
@@ -98,10 +105,10 @@ class CIMConvert
 							b_im_recent
 						WHERE
 							USER_ID = ".$USER->GetId()."
-							AND ITEM_TYPE = '".IM_MESSAGE_CHAT."'
+							AND ITEM_TYPE = '".$massageType."'
 							AND ITEM_ID IN (".implode(',', $arChats).")
 					";
-					$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+					$dbRes = $DB->Query($strSql);
 					while ($arRes = $dbRes->Fetch())
 						unset($arInsert[$arRes['ITEM_ID']]);
 				}
@@ -125,7 +132,7 @@ class CIMConvert
 			return false;
 
 		$step = intval($step)>0? intval($step): 100;
-		$startConvertTime = getmicrotime();
+		$startConvertTime = microtime(true);
 
 		$step = intval($step);
 		$dbMessage = CSocNetMessages::GetList(
@@ -156,13 +163,15 @@ class CIMConvert
 			self::$converted++;
 			self::$convertPerStep++;
 
-			if($maxExecutionTime > 0 && (getmicrotime() - $startConvertTime > $maxExecutionTime))
+			if($maxExecutionTime > 0 && (microtime(true) - $startConvertTime > $maxExecutionTime))
 				break;
 		}
-		if ($maxExecutionTime > (2*(getmicrotime() - $startConvertTime)))
+		if ($maxExecutionTime > (2*(microtime(true) - $startConvertTime)))
 			self::$nextConvertPerStep = $step*2;
 		else
 			self::$nextConvertPerStep = $step;
+
+		return true;
 	}
 
 	public static function UndeliveredMessageAgent()
@@ -203,13 +212,20 @@ class CIMConvert
 	{
 		global $DB;
 
-		$strSql = "SELECT COUNT(*) CNT FROM b_sonet_messages WHERE DATE_VIEW IS NOT NULL AND TO_DELETED = 'N' AND MESSAGE_TYPE = 'P'";
-		$res = $DB->Query($strSql, true);
-		if (!$res)
+		if (!$DB->TableExists('b_sonet_messages'))
+		{
 			return 0;
+		}
+
+		$strSql = "SELECT COUNT('x') CNT FROM b_sonet_messages WHERE DATE_VIEW IS NOT NULL AND TO_DELETED = 'N' AND MESSAGE_TYPE = '".IM_MESSAGE_PRIVATE."'";
+		$res = $DB->Query($strSql);
 
 		if ($row = $res->Fetch())
+		{
 			return intval($row['CNT']);
+		}
+
+		return 0;
 	}
 }
 

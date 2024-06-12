@@ -2,8 +2,12 @@
 
 namespace Bitrix\Sale\TradingPlatform\Ebay\Feed;
 
+use Bitrix\Main\ArgumentNullException;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\ArgumentException;
 use \Bitrix\Sale\TradingPlatform\Timer;
+use \Bitrix\Sale\TradingPlatform\Logger;
+use \Bitrix\Sale\TradingPlatform\Ebay\Ebay;
 use \Bitrix\Sale\TradingPlatform\TimeIsOverException;
 
 class Feed
@@ -17,6 +21,7 @@ class Feed
 
 	/** @var \Bitrix\Sale\TradingPlatform\Timer|null $timer */
 	protected $timer = null;
+	protected $siteId = "";
 
 	public function __construct($params)
 	{
@@ -32,24 +37,49 @@ class Feed
 		if(!isset($params["DATA_PROCESSOR"]) || (!($params["DATA_PROCESSOR"] instanceof Data\Processors\DataProcessor)))
 			throw new ArgumentException("DATA_PROCESSOR must be instanceof DataProcessor!", "DATA_PROCESSOR");
 
+		if(empty($params["SITE_ID"]))
+			throw new ArgumentNullException("params[\"SITE_ID\"]");
+
 		$this->sourceDataIterator = $params["DATA_SOURCE"];
 		$this->dataConvertor = $params["DATA_CONVERTER"];
 		$this->dataProcessor = $params["DATA_PROCESSOR"];
+		$this->site = $params["SITE_ID"];
 	}
 
 	public function processData($startPosition = "")
 	{
 		$this->sourceDataIterator->setStartPosition($startPosition);
+		$errorsMsgs = '';
 
 		foreach($this->sourceDataIterator as $position => $data)
 		{
-			$convertedData = $this->dataConvertor->convert($data);
-
-			$this->dataProcessor->process($convertedData);
+			try
+			{
+				$convertedData = $this->dataConvertor->convert($data);
+				$this->dataProcessor->process($convertedData);
+			}
+			catch(SystemException $e)
+			{
+				$errorsMsgs .= $e->getMessage().'\n';
+			}
 
 			if ($this->timer !== null && !$this->timer->check())
+			{
+				if(!empty($errorsMsgs))
+					$_SESSION['SALE_EBAY_FEED_PROCESSDATA_ERRORS'] .= $errorsMsgs;
+
 				throw new TimeIsOverException("Timelimit is over", $position);
+			}
 		}
+
+		if(!empty($_SESSION['SALE_EBAY_FEED_PROCESSDATA_ERRORS']))
+		{
+			$errorsMsgs = $_SESSION['SALE_EBAY_FEED_PROCESSDATA_ERRORS'].$errorsMsgs;
+			unset($_SESSION['SALE_EBAY_FEED_PROCESSDATA_ERRORS']);
+		}
+
+		if(!empty($errorsMsgs))
+			Ebay::log(Logger::LOG_LEVEL_ERROR, "EBAY_FEED_PROCESS_DATA_ERRORS", '', $errorsMsgs, $this->site);
 	}
 
 	public function setSourceData($data)

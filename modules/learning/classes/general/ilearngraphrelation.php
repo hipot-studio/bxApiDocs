@@ -46,8 +46,8 @@ interface ILearnGraphRelation
 	 * WARNING: this method terminates (by die()/exit()) current execution flow
 	 * when SQL server error occured. It's due to bug in CDatabase::Update() in main
 	 * module (version info:
-	 *    // define("SM_VERSION","11.0.12");
-	 *    // define("SM_VERSION_DATE","2012-02-21 17:00:00"); // YYYY-MM-DD HH:MI:SS
+	 *    define("SM_VERSION","11.0.12");
+	 *    define("SM_VERSION_DATE","2012-02-21 17:00:00"); // YYYY-MM-DD HH:MI:SS
 	 * )
 	 *
 	 * @param int $parentNodeId
@@ -168,7 +168,7 @@ final class CLearnGraphRelation implements ILearnGraphRelation
 		return (self::_ListImmediateNeighbours ($nodeId, self::NBRS_IMDT_PARENTS | self::NBRS_IMDT_CHILDS));
 	}
 
-	protected function _ListImmediateNeighbours ($nodeId, $bitmaskSearchMode)
+	protected static function _ListImmediateNeighbours ($nodeId, $bitmaskSearchMode)
 	{
 		global $DB;
 
@@ -185,7 +185,7 @@ final class CLearnGraphRelation implements ILearnGraphRelation
 		// Prepare string for query
 		$sqlWhere = implode (' OR ', $arWhere);
 
-		if (strlen($sqlWhere) == 0)
+		if ($sqlWhere == '')
 		{
 			throw new LearnException ('EA_PARAMS: nothing to search (check search mode bitmask);',
 				LearnException::EXC_ERR_GR_GET_NEIGHBOURS | LearnException::EXC_ERR_ALL_LOGIC);

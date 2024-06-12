@@ -1,13 +1,19 @@
 <?
 namespace Sale\Handlers\Delivery;
 
+use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
+use Bitrix\Sale\Delivery\Requests\Result;
+use Bitrix\Sale\Order;
 use Bitrix\Sale\Shipment;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Sale\Delivery\Services\Manager;
 use Bitrix\Sale\Delivery\CalculationResult;
+use Bitrix\Sale\ShipmentCollection;
 use Sale\Handlers\Delivery\Additional\RestClient;
+use Sale\Handlers\Delivery\Additional\RusPost\Helper;
 
 Loc::loadMessages(__FILE__);
 
@@ -17,6 +23,8 @@ class AdditionalProfile extends \Bitrix\Sale\Delivery\Services\Base
 	protected $additionalHandler = null;
 	/** @var string Service type */
 	protected $profileType = "";
+	protected $trackingTitle = "";
+	protected $trackingDescription = "";
 
 	protected static $whetherAdminExtraServicesShow = true;
 	/** @var bool This handler is profile */
@@ -38,16 +46,16 @@ class AdditionalProfile extends \Bitrix\Sale\Delivery\Services\Base
 		if(!($this->additionalHandler instanceof AdditionalHandler))
 			throw new ArgumentNullException('this->additionalHandler is not instance of AdditionalHandler');
 
-		if(isset($initParams['PROFILE_ID']) && strlen($initParams['PROFILE_ID']) > 0)
+		if(isset($initParams['PROFILE_ID']) && $initParams['PROFILE_ID'] <> '')
 			$this->profileType = $initParams['PROFILE_ID'];
-		elseif(isset($this->config['MAIN']['PROFILE_TYPE']) && strlen($this->config['MAIN']['PROFILE_TYPE']) > 0)
+		elseif(isset($this->config['MAIN']['PROFILE_TYPE']) && $this->config['MAIN']['PROFILE_TYPE'] <> '')
 			$this->profileType = $this->config['MAIN']['PROFILE_TYPE'];
 
-		if(strlen($this->profileType) > 0)
+		if($this->profileType <> '')
 		{
 			$profileParams = $this->getProfileParams();
 
-			if(!empty($profileParams))
+			if(!empty($profileParams) && $this->id <= 0)
 			{
 				$this->name = $profileParams['NAME'];
 				$this->description = $profileParams['DESCRIPTION'];
@@ -55,9 +63,38 @@ class AdditionalProfile extends \Bitrix\Sale\Delivery\Services\Base
 				if(!empty($profileParams['LOGOTIP']))
 					$this->logotip = $profileParams['LOGOTIP'];
 			}
+
+			if($this->isRusPost())
+			{
+				if(empty($this->config['MAIN']['IS_OTPRAVKA_SUPPORTED']))
+				{
+					if(isset($profileParams['IS_OTPRAVKA_SUPPORTED']) && $profileParams['IS_OTPRAVKA_SUPPORTED'] == 'Y')
+					{
+						$this->config['MAIN']['IS_OTPRAVKA_SUPPORTED'] = 'Y';
+					}
+					else
+					{
+						$this->config['MAIN']['IS_OTPRAVKA_SUPPORTED'] = 'N';
+					}
+				}
+			}
 		}
 
 		$this->inheritParams();
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	protected function getProfileType(): string
+	{
+		return (string)$this->profileType;
+	}
+
+	protected function isRusPost()
+	{
+		$parentConfig = $this->additionalHandler->getConfigValues();
+		return $parentConfig['MAIN']['SERVICE_TYPE'] == "RUSPOST";
 	}
 
 	/**
@@ -97,11 +134,19 @@ class AdditionalProfile extends \Bitrix\Sale\Delivery\Services\Base
 	 */
 	protected function 	inheritParams()
 	{
-		if(strlen($this->name) <= 0) $this->name = $this->additionalHandler->getName();
+		if($this->name == '') $this->name = $this->additionalHandler->getName();
 		if(intval($this->logotip) <= 0) $this->logotip = $this->additionalHandler->getLogotip();
-		if(strlen($this->description) <= 0) $this->description = $this->additionalHandler->getDescription();
-		if(empty($this->trackingParams)) $this->trackingParams = $this->additionalHandler->getTrackingParams();
-		if(strlen($this->trackingClass) <= 0) $this->trackingClass = $this->additionalHandler->getTrackingClass();
+		if($this->description == '') $this->description = $this->additionalHandler->getDescription();
+
+		$this->trackingParams = $this->additionalHandler->getTrackingParams();
+		$this->trackingClass = $this->additionalHandler->getTrackingClass();
+		$this->trackingTitle = $this->additionalHandler->getTrackingClassTitle();
+		$this->trackingDescription = $this->additionalHandler->getTrackingClassDescription();
+
+		if(!$this->isRusPost() || $this->config['MAIN']['IS_OTPRAVKA_SUPPORTED'] == 'Y')
+		{
+			$this->deliveryRequestHandler = $this->additionalHandler->getDeliveryRequestHandler();
+		}
 
 		$parentES = \Bitrix\Sale\Delivery\ExtraServices\Manager::getExtraServicesList($this->parentId);
 
@@ -110,8 +155,8 @@ class AdditionalProfile extends \Bitrix\Sale\Delivery\Services\Base
 			foreach($parentES as $esFields)
 			{
 				if(
-					(strlen($esFields['CODE']) > 0 && !$this->extraServices->getItemByCode($esFields['CODE']))
-					|| strlen($esFields['CODE']) <= 0
+					($esFields['CODE'] <> '' && !$this->extraServices->getItemByCode($esFields['CODE']))
+					|| $esFields['CODE'] == ''
 				)
 				{
 					$this->extraServices->addItem($esFields, $this->currency);
@@ -124,26 +169,57 @@ class AdditionalProfile extends \Bitrix\Sale\Delivery\Services\Base
 	 * Calculates price
 	 * @param Shipment $shipment
 	 * @return CalculationResult
+	 * @throws SystemException
 	 * todo: Send default values if some params added to config, but not saved yet.
 	 */
 	protected function calculateConcrete(Shipment $shipment)
 	{
 		$client = new \Sale\Handlers\Delivery\Additional\RestClient();
 
-		return $client->getDeliveryPrice(
-			$this->additionalHandler->getServiceType(),
-			$this->profileType,
-			self::extractConfigValues($this->additionalHandler->getConfig()),
-			self::extractConfigValues($this->getConfig()),
-			$shipment
-		);
+		try
+		{
+			$result =  $client->getDeliveryPrice(
+				$this->additionalHandler->getServiceType(),
+				$this->profileType,
+				self::extractConfigValues($this->additionalHandler->getConfig()),
+				self::extractConfigValues($this->getConfig()),
+				$shipment
+			);
+		}
+		catch(SystemException $e)
+		{
+			$result = new CalculationResult();
+			$result->addError(new Error($e->getMessage()));
+		}
+
+		/** @var ShipmentCollection $shipmentCollection */
+		$shipmentCollection = $shipment->getCollection();
+		/** @var Order $order */
+		$order = $shipmentCollection->getOrder();
+		$shipmentCurrency = $order->getCurrency();
+
+		if ($result->isSuccess() && $this->currency != $shipmentCurrency)
+		{
+			if(!Loader::includeModule('currency'))
+				throw new SystemException("Can't include module \"Currency\"");
+
+			$result->setDeliveryPrice(
+				\CCurrencyRates::convertCurrency(
+					$result->getPrice(),
+					$this->currency,
+					$shipmentCurrency
+			));
+		}
+
+		return $result;
 	}
+
 
 	/**
 	 * @param array $config
 	 * @return array
 	 */
-	protected static function extractConfigValues(array $config)
+	public static function extractConfigValues(array $config)
 	{
 		if(!is_array($config) || empty($config))
 			return array();
@@ -195,7 +271,7 @@ class AdditionalProfile extends \Bitrix\Sale\Delivery\Services\Base
 		);
 
 		if(!$res->isSuccess())
-			throw new SystemException(Loc::getMessage('SALE_DLVRS_ADD_PCONFIG_RECEIVE_ERROR'));
+			array();
 
 		return $res->getData();
 	}
@@ -271,10 +347,66 @@ class AdditionalProfile extends \Bitrix\Sale\Delivery\Services\Base
 		{
 			$result = array();
 			$client = new RestClient();
-			$res = $client->getProfileExtraServices($this->additionalHandler->getServiceType(), $this->profileType);
+			$res = $client->getProfileExtraServices(
+				$this->additionalHandler->getServiceType(),
+				$this->profileType,
+				self::extractConfigValues($this->getConfig())
+			);
 
 			if($res->isSuccess())
 				$result = $res->getData();
+		}
+
+		return $result;
+	}
+
+	public function getTrackingClassTitle()
+	{
+		return !empty($this->config['MAIN']['TRACKING_TITLE']) ? $this->config['MAIN']['TRACKING_TITLE'] : '';
+	}
+
+	public function getTrackingClassDescription()
+	{
+		return !empty($this->config['MAIN']['TRACKING_DESCRIPTION']) ? $this->config['MAIN']['TRACKING_DESCRIPTION'] : '';
+	}
+
+	/**
+	 * @return bool
+	 */
+	public function isTrackingInherited()
+	{
+		return true;
+	}
+
+	public function execAdminAction()
+	{
+		$result = new \Bitrix\Sale\Result();
+
+		if($this->isRusPost() && !empty($this->config['MAIN']['OTPRAVKA_RPO']))
+		{
+			$parentConfig = $this->getParentService()->getConfigValues();
+
+			if(empty($parentConfig['MAIN']['SHIPPING_POINT']['VALUE']))
+			{
+				return $result;
+			}
+
+			$selectedShippingPoint = $parentConfig['MAIN']['SHIPPING_POINT']['VALUE'];
+			$shippingPoints = Helper::getEnabledShippingPointsList($this->id);
+
+			if(isset($shippingPoints[$selectedShippingPoint]))
+			{
+				if(in_array($this->config['MAIN']['OTPRAVKA_RPO'], $shippingPoints[$selectedShippingPoint]['available-mail-types']))
+				{
+					$this->config['MAIN']['IS_OTPRAVKA_SUPPORTED'] = 'Y';
+					$this->config['MAIN']['IS_OTPRAVKA_SUPPORTED_LABEL'] = Loc::getMessage('SALE_DLVRS_ADDP_Y');
+				}
+				else
+				{
+					$this->config['MAIN']['IS_OTPRAVKA_SUPPORTED'] = 'N';
+					$this->config['MAIN']['IS_OTPRAVKA_SUPPORTED_LABEL'] = Loc::getMessage('SALE_DLVRS_ADDP_N');
+				}
+			}
 		}
 
 		return $result;

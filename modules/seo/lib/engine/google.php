@@ -155,7 +155,7 @@ class Google extends Engine implements IEngine
 				return false;
 			}
 
-			if($queryResult->getStatus() == self::HTTP_STATUS_OK && strlen($queryResult->getResult()) > 0)
+			if($queryResult->getStatus() == self::HTTP_STATUS_OK && $queryResult->getResult() <> '')
 			{
 				$res = Json::decode($queryResult->getResult());
 				if(is_array($res))
@@ -178,11 +178,11 @@ class Google extends Engine implements IEngine
 	public function getFeeds()
 	{
 		$queryResult = $this->queryJson(self::QUERY_BASE.self::SCOPE_FEED_SITES);
-		if($queryResult->getStatus() == self::HTTP_STATUS_OK && strlen($queryResult->getResult()) > 0)
+		if($queryResult->getStatus() == self::HTTP_STATUS_OK && $queryResult->getResult() <> '')
 		{
 			$result = Json::decode($queryResult->getResult());
 			$response = array();
-			if(is_array($result))
+			if(is_array($result) && is_array($result['siteEntry']))
 			{
 				foreach($result['siteEntry'] as $key => $siteInfo)
 				{
@@ -253,7 +253,7 @@ class Google extends Engine implements IEngine
 			return false;
 		}
 
-		if($queryResult->getStatus() == self::HTTP_STATUS_OK && strlen($queryResult->getResult()) > 0)
+		if($queryResult->getStatus() == self::HTTP_STATUS_OK && $queryResult->getResult() <> '')
 		{
 			$result = Json::decode($queryResult->getResult());
 			return $result["token"];
@@ -284,7 +284,7 @@ class Google extends Engine implements IEngine
 			return false;
 		}
 
-		if($queryResult->getStatus() == self::HTTP_STATUS_OK && strlen($queryResult->getResult()) > 0)
+		if($queryResult->getStatus() == self::HTTP_STATUS_OK && $queryResult->getResult() <> '')
 		{
 			return true;
 		}

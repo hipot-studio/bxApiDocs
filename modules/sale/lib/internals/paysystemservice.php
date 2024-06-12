@@ -12,6 +12,22 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class PaySystemServiceTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_PaySystemService_Query query()
+ * @method static EO_PaySystemService_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_PaySystemService_Result getById($id)
+ * @method static EO_PaySystemService_Result getList(array $parameters = [])
+ * @method static EO_PaySystemService_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_PaySystemService createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_PaySystemService_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_PaySystemService wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_PaySystemService_Collection wakeUpCollection($rows)
+ */
 class PaySystemServiceTable extends Main\Entity\DataManager
 {
 	public static function getTableName()
@@ -75,17 +91,6 @@ class PaySystemServiceTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>LID</code> (идентификатор сайта). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/paysystemservicetable/validatelid.php
-	* @author Bitrix
-	*/
 	public static function validateLid()
 	{
 		return array(
@@ -97,17 +102,6 @@ class PaySystemServiceTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>CURRENCY</code> (код валюты). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/paysystemservicetable/validatecurrency.php
-	* @author Bitrix
-	*/
 	public static function validateCurrency()
 	{
 		return array(
@@ -119,17 +113,6 @@ class PaySystemServiceTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>NAME</code> (название платежной системы). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/paysystemservicetable/validatename.php
-	* @author Bitrix
-	*/
 	public static function validateName()
 	{
 		return array(
@@ -141,17 +124,6 @@ class PaySystemServiceTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>DESCRIPTION</code> (описание платежной системы). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/paysystemservicetable/validatedescription.php
-	* @author Bitrix
-	*/
 	public static function validateDescription()
 	{
 		return array(

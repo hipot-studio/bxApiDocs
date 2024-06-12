@@ -17,7 +17,7 @@ class Quantity extends Base
 		$this->params["TYPE"] = "STRING";
 	}
 
-	static public function getClassTitle()
+	public static function getClassTitle()
 	{
 		return Loc::getMessage("DELIVERY_EXTRA_SERVICE_QUANTITY_TITLE");
 	}
@@ -44,7 +44,7 @@ class Quantity extends Base
 		else
 			$price = 0;
 
-		return '<input type="text" name="'.$name.'[PARAMS][PRICE]" value="'.$price.'">'.(strlen($currency) > 0 ? " (".htmlspecialcharsbx($currency).")" : "");
+		return '<input type="text" name="'.$name.'[PARAMS][PRICE]" value="'.$price.'">'.($currency <> '' ? " (".htmlspecialcharsbx($currency).")" : "");
 	}
 
 	public function setOperatingCurrency($currency)

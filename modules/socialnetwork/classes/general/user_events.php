@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CAllSocNetUserEvents
@@ -10,13 +11,13 @@ class CAllSocNetUserEvents
 	{
 		global $DB, $arSocNetUserEvents;
 
-		if ($ACTION != "ADD" && IntVal($ID) <= 0)
+		if ($ACTION != "ADD" && intval($ID) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException("System error 870164", "ERROR");
 			return false;
 		}
 
-		if ((is_set($arFields, "USER_ID") || $ACTION=="ADD") && IntVal($arFields["USER_ID"]) <= 0)
+		if ((is_set($arFields, "USER_ID") || $ACTION=="ADD") && intval($arFields["USER_ID"]) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UE_EMPTY_USER_ID"), "EMPTY_USER_ID");
 			return false;
@@ -31,7 +32,7 @@ class CAllSocNetUserEvents
 			}
 		}
 
-		if ((is_set($arFields, "EVENT_ID") || $ACTION=="ADD") && strlen($arFields["EVENT_ID"]) <= 0)
+		if ((is_set($arFields, "EVENT_ID") || $ACTION=="ADD") && $arFields["EVENT_ID"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UE_EMPTY_EVENT_ID"), "EMPTY_EVENT_ID");
 			return false;
@@ -42,7 +43,7 @@ class CAllSocNetUserEvents
 			return false;
 		}
 
-		if ((is_set($arFields, "SITE_ID") || $ACTION=="ADD") && strlen($arFields["SITE_ID"]) <= 0)
+		if ((is_set($arFields, "SITE_ID") || $ACTION=="ADD") && $arFields["SITE_ID"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SONET_UE_EMPTY_SITE_ID"), "EMPTY_SITE_ID");
 			return false;
@@ -70,7 +71,7 @@ class CAllSocNetUserEvents
 		if (!CSocNetGroup::__ValidateID($ID))
 			return false;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$bSuccess = True;
 
 		if ($bSuccess)
@@ -86,7 +87,7 @@ class CAllSocNetUserEvents
 		if (!CSocNetGroup::__ValidateID($userID))
 			return false;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		$bSuccess = True;
 
 		if ($bSuccess)
@@ -102,37 +103,23 @@ class CAllSocNetUserEvents
 		if (!CSocNetGroup::__ValidateID($ID))
 			return false;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
-		$arFields1 = array();
-		foreach ($arFields as $key => $value)
-		{
-			if (substr($key, 0, 1) == "=")
-			{
-				$arFields1[substr($key, 1)] = $value;
-				unset($arFields[$key]);
-			}
-		}
+		$arFields1 = \Bitrix\Socialnetwork\Util::getEqualityFields($arFields);
 
 		if (!CSocNetUserEvents::CheckFields("UPDATE", $arFields, $ID))
 			return false;
 
 		$strUpdate = $DB->PrepareUpdate("b_sonet_user_events", $arFields);
+		\Bitrix\Socialnetwork\Util::processEqualityFieldsToUpdate($arFields1, $strUpdate);
 
-		foreach ($arFields1 as $key => $value)
-		{
-			if (strlen($strUpdate) > 0)
-				$strUpdate .= ", ";
-			$strUpdate .= $key."=".$value." ";
-		}
-
-		if (strlen($strUpdate) > 0)
+		if ($strUpdate <> '')
 		{
 			$strSql =
 				"UPDATE b_sonet_user_events SET ".
 				"	".$strUpdate." ".
 				"WHERE ID = ".$ID." ";
-			$DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 		}
 		else
 		{
@@ -152,7 +139,7 @@ class CAllSocNetUserEvents
 		if (!CSocNetGroup::__ValidateID($ID))
 			return false;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$dbResult = CSocNetUserEvents::GetList(Array(), Array("ID" => $ID));
 		if ($arResult = $dbResult->GetNext())
@@ -170,10 +157,10 @@ class CAllSocNetUserEvents
 	{
 		global $arSocNetUserEvents;
 
-		$userID = IntVal($userID);
+		$userID = intval($userID);
 		if ($userID <= 0)
 			return false;
-		$event = StrToUpper(Trim($event));
+		$event = mb_strtoupper(Trim($event));
 		if (!in_array($event, $arSocNetUserEvents))
 			return false;
 
@@ -196,4 +183,3 @@ class CAllSocNetUserEvents
 		return $arUserEvents[$event];
 	}
 }
-?>

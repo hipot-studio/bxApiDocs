@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CSupportUserGroup
@@ -47,12 +48,12 @@ class CSupportUserGroup
 			{
 				if (array_key_exists($k, $arFields))
 				{
-					$v = strtoupper($v);
+					$v = mb_strtoupper($v);
 					if($v != 'DESC')
 					{
 						$v  ='ASC';
 					}
-					if (strlen($strOrder) > 0)
+					if ($strOrder <> '')
 					{
 						$strOrder .= ', ';
 					}
@@ -68,33 +69,33 @@ class CSupportUserGroup
 
 		$strQuery = 'SELECT G.* FROM b_ticket_ugroups G';
 
-		if (strlen($where) > 0)
+		if ($where <> '')
 		{
 			$strQuery .= ' WHERE ' . $where;
 		}
 
-		if (strlen($strOrder) > 0)
+		if ($strOrder <> '')
 		{
 			$strQuery .= ' ORDER BY ' . $strOrder;
 		}
 		return $DB->Query($strQuery, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 	}
 
-	public function Add($arFields)
+	public static function Add($arFields)
 	{
 		global $DB, $APPLICATION;
-		if ($this->CheckFields($arFields))
+		if (static::CheckFields($arFields))
 		{
 			return $DB->Add('b_ticket_ugroups', $arFields);
 		}
 		return false;
 	}
 
-	public function Update($ID, $arFields)
+	public static function Update($ID, $arFields)
 	{
 		global $DB, $APPLICATION;
 		$ID = intval($ID);
-		if ($this->CheckFields($arFields, $ID))
+		if (static::CheckFields($arFields, $ID))
 		{
 			$strUpdate = $DB->PrepareUpdate('b_ticket_ugroups', $arFields);
 			$DB->Query("UPDATE b_ticket_ugroups SET $strUpdate WHERE ID=$ID");
@@ -168,5 +169,3 @@ class CSupportUserGroup
 		return CSupportUser2UserGroup::Delete($groupID, $userID);
 	}
 }
-
-?>

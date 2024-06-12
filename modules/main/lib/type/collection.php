@@ -1,11 +1,15 @@
 <?php
 namespace Bitrix\Main\Type;
 
+use Bitrix\Main\ArgumentException;
+
 class Collection
 {
 	/**
 	 * Sorting array by column.
 	 * You can use short mode: Collection::sortByColumn($arr, 'value'); This is equal Collection::sortByColumn($arr, array('value' => SORT_ASC))
+	 *
+	 * Pay attention: if two members compare as equal, their relative order in the sorted array is undefined. The sorting is not stable.
 	 *
 	 * More example:
 	 * Collection::sortByColumn($arr, array('value' => array(SORT_NUMERIC, SORT_ASC), 'attr' => SORT_DESC), array('attr' => 'strlen'), 'www');
@@ -17,72 +21,6 @@ class Collection
 	 * @param bool         $preserveKeys If false numeric keys will be re-indexed. If true - preserve.
 	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
 	 */
-	
-	/**
-	* <p>Статический метод сортирует массив по колонкам.</p> <p>Можно использовать короткий вид записи. Например, запись <code>Collection::sortByColumn($arr, 'value');</code> эквивалентна записи <code>Collection::sortByColumn($arr, array('value' =&gt; SORT_ASC))</code></p> <p><b>Пример</b>:</p> <pre class="syntax">Collection::sortByColumn($arr, array('value' =&gt; array(SORT_NUMERIC, SORT_ASC), 'attr' =&gt; SORT_DESC), array('attr' =&gt; 'strlen'), 'www');</pre>
-	*
-	*
-	* @param array $array  
-	*
-	* @param array $string  
-	*
-	* @param array $columns  
-	*
-	* @param array $string  Если значение не установлено, используется <code>$defaultValueIfNotSetValue (any
-	* cols)</code>
-	*
-	* @param array $callbacks = '' Если <i>false</i> числовые ключи переиндексируются. Если <i>true</i> -
-	* значения будут сохранены.
-	*
-	* @param null $defaultValueIfNotSetValue = null 
-	*
-	* @param boolean $preserveKeys = false 
-	*
-	* @return public 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* Collection::sortByColumn($arr, array('value' =&gt; array(SORT_NUMERIC, SORT_ASC), 'attr' =&gt; SORT_DESC), array('attr' =&gt; 'strlen'), 'www');Параметры<tbody>
-	* <tr>
-	* <th width="15%">Параметр</th>
-	* <th>Описание</th>
-	* <th width="10%">Версия</th>
-	* </tr>
-	* <tr>
-	* <td>$array</td>
-	* <td></td>
-	* <td></td>
-	* </tr>
-	* <tr>
-	* <td>$columns</td>
-	* <td></td>
-	* <td></td>
-	* </tr>
-	* <tr>
-	* <td>$callbacks</td>
-	* <td></td>
-	* <td></td>
-	* </tr>
-	* <tr>
-	* <td>$defaultValueIfNotSetValue</td>
-	* <td>Если значение не установлено, используется <code>$defaultValueIfNotSetValue (any cols)</code>
-	* </td>
-	* <td></td>
-	* </tr>
-	* <tr>
-	* <td>$preserveKeys</td>
-	* <td>Если <i>false</i> числовые ключи переиндексируются. Если <i>true</i> - значения будут сохранены.</td>
-	* <td></td>
-	* </tr>
-	* </tbody>Исключения
-	* <li><a href="/api_d7/bitrix/main/argumentoutofrangeexception/index.php">\Bitrix\Main\ArgumentOutOfRangeException</a></li>
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/type/collection/sortbycolumn.php
-	* @author Bitrix
-	*/
 	public static function sortByColumn(array &$array, $columns, $callbacks = '', $defaultValueIfNotSetValue = null, $preserveKeys = false)
 	{
 		//by default: sort by ASC
@@ -119,7 +57,7 @@ class Collection
 			$valueColumn[$column] = array();
 			foreach ($array as $index => $row)
 			{
-				$value = isset($row[$column]) ? $row[$column] : $defaultValueIfNotSetValue;
+				$value = $row[$column] ?? $defaultValueIfNotSetValue;
 				if ($callback)
 				{
 					$value = call_user_func_array($callback, array($value));
@@ -167,25 +105,6 @@ class Collection
 	 * @param mixed $a,... unlimited array/key pairs to go through
 	 * @return mixed|string
 	 */
-	
-	/**
-	* <p>Статический метод размещает все аргументы и ключи по парам.</p> <p>Нечетные аргументы - массивы, четные - ключи, по которым искать в массивах.</p> <p>Ключи могут быть массивами. В этом случае поиск происходит во вложенных массивах. Возвращает первый не пустой элемент пары аргумент/ключ.</p>
-	*
-	*
-	* @param array $arraya  массив для анализа
-	*
-	* @param array $string  Ключи поиска
-	*
-	* @param strin $integerk  Неограниченные последовательно проверяемые пары массив\ключ
-	*
-	* @param integer $mixeda  
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/type/collection/firstnotempty.php
-	* @author Bitrix
-	*/
 	public static function firstNotEmpty()
 	{
 		$argCount = func_num_args();
@@ -222,27 +141,12 @@ class Collection
 	}
 
 	/**
-	 * convert array values to int, return unique values > 0. optionally sorted array
+	 * Convert array values to int, return unique values > 0. Optionally sorted array.
 	 *
-	 * @param array $map - array for normalize
-	 * @param bool $sorted - if sorted true, result array will be sorted
-	 * @return null
+	 * @param array &$map	Array for normalize.
+	 * @param bool $sorted	If sorted true, result array will be sorted.
+	 * @return void
 	 */
-	
-	/**
-	* <p>Статический метод конвертирует значения массива в целые числа, возвращает уникальные значения &gt; 0. Дополнительно: сортирует массив.</p>
-	*
-	*
-	* @param array $map  массив для нормализации
-	*
-	* @param boolean $sorted = true Если <i>true</i>, результат будет отсортирован
-	*
-	* @return null 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/type/collection/normalizearrayvaluesbyint.php
-	* @author Bitrix
-	*/
 	public static function normalizeArrayValuesByInt(&$map, $sorted = true)
 	{
 		if (empty($map) || !is_array($map))
@@ -270,23 +174,139 @@ class Collection
 	 * @param $array - Array for check.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Статический метод проверяет является ли массив ассоциативным.</p>
-	*
-	*
-	* @param array $array  Массив для проверки
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/type/collection/isassociative.php
-	* @author Bitrix
-	*/
 	public static function isAssociative(array $array)
 	{
 		$array = array_keys($array);
 
 		return ($array !== array_keys($array));
+	}
+
+	/**
+	 * Clone array recursively. Keys are preserved
+	 *
+	 * @param array $originalArray - array to clone
+	 *
+	 * @return array
+	 */
+	public static function clone(array $originalArray): array
+	{
+		$clonedArray = [];
+		foreach ($originalArray as $index => $value)
+		{
+			if (is_array($value))
+			{
+				$value = static::clone($value);
+			}
+			elseif (is_object($value))
+			{
+				$value = clone $value;
+			}
+
+			$clonedArray[$index] = $value;
+		}
+
+		return $clonedArray;
+	}
+
+	/**
+	 * Returns $array[p1][p2][p3] with $key = [p1, p2, p3]
+	 *
+	 * @param array $array
+	 * @param array $key
+	 * @return mixed
+	 */
+	public static function getByNestedKey(array $array, array $key)
+	{
+		if (empty($key))
+		{
+			return null;
+		}
+
+		$value = $array;
+
+		while (!empty($key))
+		{
+			$subKey = array_shift($key);
+
+			if (array_key_exists($subKey, $value))
+			{
+				$value = $value[$subKey];
+			}
+			else
+			{
+				return null;
+			}
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Sets value $array[p1][p2][p3] = $value with $key = [p1, p2, p3]
+	 *
+	 * @param array $array
+	 * @param array $key
+	 * @param $value
+	 * @return void
+	 * @throws ArgumentException
+	 */
+	public static function setByNestedKey(array &$array, array $key, $value): void
+	{
+		if (empty($key))
+		{
+			throw new ArgumentException('Empty key to set');
+		}
+
+		$reference =& $array;
+		while (!empty($key))
+		{
+			$subKey = array_shift($key);
+
+			if (!array_key_exists($subKey, $reference))
+			{
+				$reference[$subKey] = [];
+			}
+			$reference = &$reference[$subKey];
+		}
+
+		$reference = $value;
+		unset($reference);
+	}
+
+	/**
+	 * Unsets last key in array $array[p1][p2][p3] with $key = [p1, p2, p3]
+	 *
+	 * @param array $array
+	 * @param array $key
+	 * @return void
+	 * @throws ArgumentException
+	 */
+	public static function unsetByNestedKey(array &$array, array $key): void
+	{
+		if (empty($key))
+		{
+			throw new ArgumentException('Empty key to unset');
+		}
+
+		$reference =& $array;
+		while (!empty($key))
+		{
+			$subKey = array_shift($key);
+
+			if (!array_key_exists($subKey, $reference))
+			{
+				break;
+			}
+
+			if (empty($key))
+			{
+				// last element
+				unset($reference[$subKey]);
+			}
+			else
+			{
+				$reference = &$reference[$subKey];
+			}
+		}
 	}
 }

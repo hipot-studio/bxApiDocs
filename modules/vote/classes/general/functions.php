@@ -2,7 +2,7 @@
 #############################################
 # Bitrix Site Manager Forum					#
 # Copyright (c) 2002-2007 Bitrix			#
-# http://www.bitrixsoft.com					#
+# https://www.bitrixsoft.com					#
 # mailto:admin@bitrixsoft.com				#
 #############################################
 class CVoteCacheManager
@@ -16,14 +16,16 @@ class CVoteCacheManager
 
 	public static $cacheKey = "/#SITE_ID#/voting.cache/";
 
-	static public function cachePath($site_id)
+	public function cachePath($site_id)
 	{
 		$site_id = (!empty($site_id) ? $site_id : "bx");
 		return str_replace("#SITE_ID#", $site_id, self::$cacheKey);
 	}
 
-	public static function __construct()
+	function __construct()
 	{
+		$eventManager = \Bitrix\Main\EventManager::getInstance();
+
 		AddEventHandler("vote", "onAfterVoteChannelAdd", Array(&$this, "OnAfterVoteChannelChange"));
 		AddEventHandler("vote", "onAfterVoteChannelUpdate", Array(&$this, "OnAfterVoteChannelChange"));
 		AddEventHandler("vote", "onAfterChannelDelete", Array(&$this, "OnAfterVoteChannelChange"));
@@ -31,10 +33,13 @@ class CVoteCacheManager
 		AddEventHandler("vote", "onAfterVoteAdd", array(&$this, "OnAfterVoteChange"));
 		AddEventHandler("vote", "onAfterVoteUpdate", array(&$this, "OnAfterVoteChange"));
 		AddEventHandler("vote", "onAfterVoteDelete", array(&$this, "OnAfterVoteChange"));
+
+		$eventManager->addEventHandler("vote", "\\Bitrix\\Vote\\Vote::OnAfterAdd", array($this, "OnVoteChange"));
+		$eventManager->addEventHandler("vote", "\\Bitrix\\Vote\\Vote::OnAfterUpdate", array($this, "OnVoteChange"));
+		$eventManager->addEventHandler("vote", "\\Bitrix\\Vote\\Vote::OnAfterDelete", array($this, "OnVoteChange"));
+
 		AddEventHandler("vote", "onVoteReset", array(&$this, "OnAfterVoteChange"));
 		AddEventHandler("vote", "onAfterVoting", array(&$this, "OnAfterVoteChange"));
-
-
 
 		if(defined("BX_COMP_MANAGED_CACHE"))
 		{
@@ -50,7 +55,7 @@ class CVoteCacheManager
 		}
 	}
 
-	static public function SetTag($path, $tag, $ID = 0)
+	public static function SetTag($path, $tag, $ID = 0)
 	{
 		global $CACHE_MANAGER;
 		if (! defined("BX_COMP_MANAGED_CACHE"))
@@ -86,7 +91,7 @@ class CVoteCacheManager
 		return true;
 	}
 
-	public static function OnAfterVoteChannelChange($ID, $arFields = array())
+	function OnAfterVoteChannelChange($ID, $arFields = array())
 	{
 		self::ClearTag("C", $ID);
 		// drop permissions
@@ -100,22 +105,27 @@ class CVoteCacheManager
 			$CACHE_MANAGER->CleanDir("b_vote");
 		endif;
 	}
-
-	public static function OnAfterVoteChange($ID)
+	function OnVoteChange(\Bitrix\Main\Entity\Event $event)
+	{
+		$data = $event->getParameter("primary");
+		$this->OnAfterVoteChange($data["ID"]);
+	}
+	function OnAfterVoteChange($ID)
 	{
 		self::ClearTag("V", $ID);
 		if (VOTE_CACHE_TIME !== false):
 			global $CACHE_MANAGER;
 			$CACHE_MANAGER->CleanDir("b_vote");
+			unset($GLOBALS["VOTE_CACHE"]["VOTE"][$ID]);
 		endif;
 	}
 
-	public static function OnAfterVoteQuestionAdd($ID, $arFields)
+	function OnAfterVoteQuestionAdd($ID, $arFields)
 	{
 		self::ClearTag("V", $arFields['VOTE_ID']);
 	}
 
-	public static function OnBeforeVoteQuestionUpdate(&$ID, &$arFields)
+	function OnBeforeVoteQuestionUpdate(&$ID, &$arFields)
 	{
 		if (array_key_exists("VOTE_ID", $arFields))
 		{
@@ -125,7 +135,7 @@ class CVoteCacheManager
 		}
 	}
 
-	public static function OnAfterVoteQuestionUpdate($ID, $arFields)
+	function OnAfterVoteQuestionUpdate($ID, $arFields)
 	{
 		if (array_key_exists("VOTE_ID", $arFields))
 		{
@@ -140,17 +150,17 @@ class CVoteCacheManager
 		self::ClearTag("Q", $ID);
 	}
 
-	public static function OnAfterVoteQuestionDelete($ID, $VOTE_ID)
+	function OnAfterVoteQuestionDelete($ID, $VOTE_ID)
 	{
 		self::ClearTag("V", $VOTE_ID);
 	}
 
-	public static function OnAfterVoteAnswerAdd($ID, $arFields)
+	function OnAfterVoteAnswerAdd($ID, $arFields)
 	{
 		self::ClearTag("Q", $arFields["QUESTION_ID"]);
 	}
 
-	public static function OnBeforeVoteAnswerUpdate($ID, $arFields)
+	function OnBeforeVoteAnswerUpdate($ID, $arFields)
 	{
 		if (array_key_exists("QUESTION_ID", $arFields))
 		{
@@ -161,7 +171,7 @@ class CVoteCacheManager
 		}
 	}
 
-	public static function OnAfterVoteAnswerUpdate($ID, $arFields)
+	function OnAfterVoteAnswerUpdate($ID, $arFields)
 	{
 		if (array_key_exists("QUESTION_ID", $arFields))
 		{
@@ -176,7 +186,7 @@ class CVoteCacheManager
 		}
 	}
 
-	public static function OnAfterVoteAnswerDelete($ID, $QUESTION_ID, $VOTE_ID)
+	function OnAfterVoteAnswerDelete($ID, $QUESTION_ID, $VOTE_ID)
 	{
 		if ($QUESTION_ID != false)
 			self::ClearTag("Q", $QUESTION_ID);
@@ -184,7 +194,7 @@ class CVoteCacheManager
 			self::ClearTag("V", $VOTE_ID);
 	}
 
-	public static function onAfterVoting($VOTE_ID, $EVENT_ID)
+	function onAfterVoting($VOTE_ID, $EVENT_ID)
 	{
 		unset($GLOBALS["VOTE_CACHE_VOTING"][$VOTE_ID]);
 		unset($GLOBALS["VOTE_CACHE"]["VOTE"][$VOTE_ID]);

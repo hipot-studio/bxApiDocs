@@ -68,6 +68,8 @@ class CCrmExternalSale
 			$result["PERIOD"] = 7;
 		$result["ERRORS"] = intval($id["IMPORT_ERRORS"]);
 
+		$result["SYNC_DATA"] = isset($id["SYNC_DATA"]) && $id["SYNC_DATA"] !== "" ? unserialize($id["SYNC_DATA"], ['allowed_classes' => false]) : array();
+
 		return $result;
 	}
 
@@ -99,12 +101,12 @@ class CCrmExternalSale
 		if ((is_set($arFields, "ACTIVE") || ($id <= 0)) && ($arFields["ACTIVE"] != "Y" && $arFields["ACTIVE"] != "N"))
 			$arFields["ACTIVE"] = "Y";
 
-		if ((is_set($arFields, "LOGIN") || ($id <= 0)) && strlen($arFields["LOGIN"]) <= 0)
+		if ((is_set($arFields, "LOGIN") || ($id <= 0)) && $arFields["LOGIN"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("CES_LOGIN_EMPTY"), "EMPTY_LOGIN");
 			return false;
 		}
-		if ((is_set($arFields, "PASSWORD") || ($id <= 0)) && strlen($arFields["PASSWORD"]) <= 0)
+		if ((is_set($arFields, "PASSWORD") || ($id <= 0)) && $arFields["PASSWORD"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("CES_PASSWORD_EMPTY"), "EMPTY_PASSWORD");
 			return false;
@@ -114,7 +116,7 @@ class CCrmExternalSale
 			$arFields["SCHEME"] = "http";
 		if ((is_set($arFields, "PORT") || ($id <= 0)) && intval($arFields["PORT"]) <= 0)
 			$arFields["PORT"] = 80;
-		if ((is_set($arFields, "SERVER") || ($id <= 0)) && strlen($arFields["SERVER"]) <= 0)
+		if ((is_set($arFields, "SERVER") || ($id <= 0)) && $arFields["SERVER"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("CES_SERVER_EMPTY"), "EMPTY_SERVER");
 			return false;
@@ -141,6 +143,12 @@ class CCrmExternalSale
 		if (!self::CheckFields($arFields, $ID))
 			return false;
 
+		if (is_set($arFields, "SYNC_DATA"))
+		{
+			$arFields["SYNC_DATA"] = is_array($arFields["SYNC_DATA"]) && !empty($arFields["SYNC_DATA"])
+				? serialize($arFields["SYNC_DATA"]) : "";
+		}
+
 		$strSql = $DB->PrepareUpdate('b_crm_external_sale', $arFields, "crm");
 
 		$arBinds = array();
@@ -148,6 +156,10 @@ class CCrmExternalSale
 			$arBinds["COOKIE"] = $arFields["COOKIE"];
 		if (is_set($arFields, "LAST_STATUS"))
 			$arBinds["LAST_STATUS"] = $arFields["LAST_STATUS"];
+		if (is_set($arFields, "SYNC_DATA"))
+		{
+			$arBinds["SYNC_DATA"] = $arFields["SYNC_DATA"];
+		}
 
 		$DB->QueryBind(
 			"UPDATE b_crm_external_sale SET ".$strSql." WHERE ID = ".$ID,
@@ -181,7 +193,7 @@ class CCrmExternalSale
 	{
 		global $DB;
 
-		$arSelectFields = array('ID', 'ACTIVE', 'DATE_CREATE', 'DATE_UPDATE', 'NAME', 'SCHEME', 'SERVER', 'PORT', 'LOGIN', 'PASSWORD', 'MODIFICATION_LABEL', 'IMPORT_SIZE', 'COOKIE', 'LAST_STATUS', 'IMPORT_PERIOD', "IMPORT_PROBABILITY", "IMPORT_RESPONSIBLE", "IMPORT_PUBLIC", "IMPORT_PREFIX", "IMPORT_ERRORS", 'IMPORT_GROUP_ID', 'LAST_STATUS_DATE');
+		$arSelectFields = array('ID', 'ACTIVE', 'DATE_CREATE', 'DATE_UPDATE', 'NAME', 'SCHEME', 'SERVER', 'PORT', 'LOGIN', 'PASSWORD', 'MODIFICATION_LABEL', 'IMPORT_SIZE', 'COOKIE', 'LAST_STATUS', 'IMPORT_PERIOD', "IMPORT_PROBABILITY", "IMPORT_RESPONSIBLE", "IMPORT_PUBLIC", "IMPORT_PREFIX", "IMPORT_ERRORS", 'IMPORT_GROUP_ID', 'LAST_STATUS_DATE', 'SYNC_DATA');
 
 		static $arFields = array(
 			"ID" => array("FIELD" => "E.ID", "TYPE" => "int"),
@@ -206,6 +218,7 @@ class CCrmExternalSale
 			"IMPORT_ERRORS" => array("FIELD" => "E.IMPORT_ERRORS", "TYPE" => "int"),
 			"IMPORT_GROUP_ID" => array("FIELD" => "E.IMPORT_GROUP_ID", "TYPE" => "int"),
 			"LAST_STATUS_DATE" => array("FIELD" => "E.LAST_STATUS_DATE", "TYPE" => "datetime"),
+			"SYNC_DATA" => array("FIELD" => "E.SYNC_DATA", "TYPE" => "string"),
 		);
 
 		$arSqls = self::PrepareSql($arFields, $arOrder, $arFilter, $arSelectFields);
@@ -216,9 +229,9 @@ class CCrmExternalSale
 			"SELECT ".$arSqls["SELECT"]." ".
 			"FROM b_crm_external_sale E ".
 			"	".$arSqls["FROM"]." ";
-		if (strlen($arSqls["WHERE"]) > 0)
+		if ($arSqls["WHERE"] <> '')
 			$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-		if (strlen($arSqls["ORDERBY"]) > 0)
+		if ($arSqls["ORDERBY"] <> '')
 			$strSql .= "ORDER BY ".$arSqls["ORDERBY"]." ";
 
 		$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
@@ -229,52 +242,52 @@ class CCrmExternalSale
 	private static function GetFilterOperation($key)
 	{
 		$strNegative = "N";
-		if (substr($key, 0, 1)=="!")
+		if (mb_substr($key, 0, 1) == "!")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strNegative = "Y";
 		}
 
 		$strOrNull = "N";
-		if (substr($key, 0, 1)=="+")
+		if (mb_substr($key, 0, 1) == "+")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOrNull = "Y";
 		}
 
-		if (substr($key, 0, 2)==">=")
+		if (mb_substr($key, 0, 2) == ">=")
 		{
-			$key = substr($key, 2);
+			$key = mb_substr($key, 2);
 			$strOperation = ">=";
 		}
-		elseif (substr($key, 0, 1)==">")
+		elseif (mb_substr($key, 0, 1) == ">")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = ">";
 		}
-		elseif (substr($key, 0, 2)=="<=")
+		elseif (mb_substr($key, 0, 2) == "<=")
 		{
-			$key = substr($key, 2);
+			$key = mb_substr($key, 2);
 			$strOperation = "<=";
 		}
-		elseif (substr($key, 0, 1)=="<")
+		elseif (mb_substr($key, 0, 1) == "<")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "<";
 		}
-		elseif (substr($key, 0, 1)=="@")
+		elseif (mb_substr($key, 0, 1) == "@")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "IN";
 		}
-		elseif (substr($key, 0, 1)=="~")
+		elseif (mb_substr($key, 0, 1) == "~")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "LIKE";
 		}
-		elseif (substr($key, 0, 1)=="%")
+		elseif (mb_substr($key, 0, 1) == "%")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "QUERY";
 		}
 		else
@@ -299,7 +312,7 @@ class CCrmExternalSale
 		// SELECT -->
 		$arFieldsKeys = array_keys($arFields);
 
-		if (isset($arSelectFields) && !is_array($arSelectFields) && is_string($arSelectFields) && strlen($arSelectFields)>0 && array_key_exists($arSelectFields, $arFields))
+		if (isset($arSelectFields) && !is_array($arSelectFields) && is_string($arSelectFields) && $arSelectFields <> '' && array_key_exists($arSelectFields, $arFields))
 			$arSelectFields = array($arSelectFields);
 
 		if (!isset($arSelectFields)
@@ -315,7 +328,7 @@ class CCrmExternalSale
 					continue;
 				}
 
-				if (strlen($strSqlSelect) > 0)
+				if ($strSqlSelect <> '')
 					$strSqlSelect .= ", ";
 
 				if ($arFields[$arFieldsKeys[$i]]["TYPE"] == "datetime")
@@ -336,10 +349,10 @@ class CCrmExternalSale
 					$strSqlSelect .= $arFields[$arFieldsKeys[$i]]["FIELD"]." as ".$arFieldsKeys[$i];
 
 				if (isset($arFields[$arFieldsKeys[$i]]["FROM"])
-					&& strlen($arFields[$arFieldsKeys[$i]]["FROM"]) > 0
+					&& $arFields[$arFieldsKeys[$i]]["FROM"] <> ''
 					&& !in_array($arFields[$arFieldsKeys[$i]]["FROM"], $arAlreadyJoined))
 				{
-					if (strlen($strSqlFrom) > 0)
+					if ($strSqlFrom <> '')
 						$strSqlFrom .= " ";
 					$strSqlFrom .= $arFields[$arFieldsKeys[$i]]["FROM"];
 					$arAlreadyJoined[] = $arFields[$arFieldsKeys[$i]]["FROM"];
@@ -350,11 +363,11 @@ class CCrmExternalSale
 		{
 			foreach ($arSelectFields as $key => $val)
 			{
-				$val = strtoupper($val);
-				$key = strtoupper($key);
+				$val = mb_strtoupper($val);
+				$key = mb_strtoupper($key);
 				if (array_key_exists($val, $arFields))
 				{
-					if (strlen($strSqlSelect) > 0)
+					if ($strSqlSelect <> '')
 						$strSqlSelect .= ", ";
 
 					if ($arFields[$val]["TYPE"] == "datetime")
@@ -375,10 +388,10 @@ class CCrmExternalSale
 						$strSqlSelect .= $arFields[$val]["FIELD"]." as ".$val;
 
 					if (isset($arFields[$val]["FROM"])
-						&& strlen($arFields[$val]["FROM"]) > 0
+						&& $arFields[$val]["FROM"] <> ''
 						&& !in_array($arFields[$val]["FROM"], $arAlreadyJoined))
 					{
-						if (strlen($strSqlFrom) > 0)
+						if ($strSqlFrom <> '')
 							$strSqlFrom .= " ";
 						$strSqlFrom .= $arFields[$val]["FROM"];
 						$arAlreadyJoined[] = $arFields[$val]["FROM"];
@@ -431,16 +444,16 @@ class CCrmExternalSale
 					{
 						if ($arFields[$key]["TYPE"] == "int")
 						{
-							if ((IntVal($val) == 0) && (strpos($strOperation, "=") !== False))
+							if ((intval($val) == 0) && (mb_strpos($strOperation, "=") !== False))
 								$arSqlSearch_tmp[] = "(".$arFields[$key]["FIELD"]." IS ".(($strNegative == "Y") ? "NOT " : "")."NULL) ".(($strNegative == "Y") ? "AND" : "OR")." ".(($strNegative == "Y") ? "NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." 0)";
 							else
-								$arSqlSearch_tmp[] = (($strNegative == "Y") ? " ".$arFields[$key]["FIELD"]." IS NULL OR NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." ".IntVal($val)." )";
+								$arSqlSearch_tmp[] = (($strNegative == "Y") ? " ".$arFields[$key]["FIELD"]." IS NULL OR NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." ".intval($val)." )";
 						}
 						elseif ($arFields[$key]["TYPE"] == "double")
 						{
 							$val = str_replace(",", ".", $val);
 
-							if ((DoubleVal($val) == 0) && (strpos($strOperation, "=") !== False))
+							if ((DoubleVal($val) == 0) && (mb_strpos($strOperation, "=") !== False))
 								$arSqlSearch_tmp[] = "(".$arFields[$key]["FIELD"]." IS ".(($strNegative == "Y") ? "NOT " : "")."NULL) ".(($strNegative == "Y") ? "AND" : "OR")." ".(($strNegative == "Y") ? "NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." 0)";
 							else
 								$arSqlSearch_tmp[] = (($strNegative == "Y") ? " ".$arFields[$key]["FIELD"]." IS NULL OR NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." ".DoubleVal($val)." )";
@@ -453,7 +466,7 @@ class CCrmExternalSale
 							}
 							else
 							{
-								if ((strlen($val) == 0) && (strpos($strOperation, "=") !== False))
+								if (($val == '') && (mb_strpos($strOperation, "=") !== False))
 									$arSqlSearch_tmp[] = "(".$arFields[$key]["FIELD"]." IS ".(($strNegative == "Y") ? "NOT " : "")."NULL) ".(($strNegative == "Y") ? "AND NOT" : "OR")." (".$DB->Length($arFields[$key]["FIELD"])." <= 0) ".(($strNegative == "Y") ? "AND NOT" : "OR")." (".$arFields[$key]["FIELD"]." ".$strOperation." '".$DB->ForSql($val)."' )";
 								else
 									$arSqlSearch_tmp[] = (($strNegative == "Y") ? " ".$arFields[$key]["FIELD"]." IS NULL OR NOT " : "")."(".$arFields[$key]["FIELD"]." ".$strOperation." '".$DB->ForSql($val)."' )";
@@ -461,14 +474,14 @@ class CCrmExternalSale
 						}
 						elseif ($arFields[$key]["TYPE"] == "datetime")
 						{
-							if (strlen($val) <= 0)
+							if ($val == '')
 								$arSqlSearch_tmp[] = ($strNegative=="Y"?"NOT":"")."(".$arFields[$key]["FIELD"]." IS NULL)";
 							else
 								$arSqlSearch_tmp[] = ($strNegative=="Y"?" ".$arFields[$key]["FIELD"]." IS NULL OR NOT ":"")."(".$arFields[$key]["FIELD"]." ".$strOperation." ".$DB->CharToDateFunction($DB->ForSql($val), "FULL").")";
 						}
 						elseif ($arFields[$key]["TYPE"] == "date")
 						{
-							if (strlen($val) <= 0)
+							if ($val == '')
 								$arSqlSearch_tmp[] = ($strNegative=="Y"?"NOT":"")."(".$arFields[$key]["FIELD"]." IS NULL)";
 							else
 								$arSqlSearch_tmp[] = ($strNegative=="Y"?" ".$arFields[$key]["FIELD"]." IS NULL OR NOT ":"")."(".$arFields[$key]["FIELD"]." ".$strOperation." ".$DB->CharToDateFunction($DB->ForSql($val), "SHORT").")";
@@ -477,10 +490,10 @@ class CCrmExternalSale
 				}
 
 				if (isset($arFields[$key]["FROM"])
-					&& strlen($arFields[$key]["FROM"]) > 0
+					&& $arFields[$key]["FROM"] <> ''
 					&& !in_array($arFields[$key]["FROM"], $arAlreadyJoined))
 				{
-					if (strlen($strSqlFrom) > 0)
+					if ($strSqlFrom <> '')
 						$strSqlFrom .= " ";
 					$strSqlFrom .= $arFields[$key]["FROM"];
 					$arAlreadyJoined[] = $arFields[$key]["FROM"];
@@ -495,11 +508,11 @@ class CCrmExternalSale
 				}
 				if ($strOrNull == "Y")
 				{
-					if (strlen($strSqlSearch_tmp) > 0)
+					if ($strSqlSearch_tmp <> '')
 						$strSqlSearch_tmp .= ($strNegative=="Y" ? " AND " : " OR ");
 					$strSqlSearch_tmp .= "(".$arFields[$key]["FIELD"]." IS ".($strNegative=="Y" ? "NOT " : "")."NULL)";
 
-					if (strlen($strSqlSearch_tmp) > 0)
+					if ($strSqlSearch_tmp <> '')
 						$strSqlSearch_tmp .= ($strNegative=="Y" ? " AND " : " OR ");
 					if ($arFields[$key]["TYPE"] == "int" || $arFields[$key]["TYPE"] == "double")
 						$strSqlSearch_tmp .= "(".$arFields[$key]["FIELD"]." ".($strNegative=="Y" ? "<>" : "=")." 0)";
@@ -514,7 +527,7 @@ class CCrmExternalSale
 
 		for ($i = 0; $i < count($arSqlSearch); $i++)
 		{
-			if (strlen($strSqlWhere) > 0)
+			if ($strSqlWhere <> '')
 				$strSqlWhere .= " AND ";
 			$strSqlWhere .= "(".$arSqlSearch[$i].")";
 		}
@@ -524,8 +537,8 @@ class CCrmExternalSale
 		$arSqlOrder = Array();
 		foreach ($arOrder as $by => $order)
 		{
-			$by = strtoupper($by);
-			$order = strtoupper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 
 			if ($order != "ASC")
 				$order = "DESC";
@@ -540,10 +553,10 @@ class CCrmExternalSale
 					$arSqlOrder[] = " ".$arFields[$by]["FIELD"]." ".$order." ";
 
 				if (isset($arFields[$by]["FROM"])
-					&& strlen($arFields[$by]["FROM"]) > 0
+					&& $arFields[$by]["FROM"] <> ''
 					&& !in_array($arFields[$by]["FROM"], $arAlreadyJoined))
 				{
-					if (strlen($strSqlFrom) > 0)
+					if ($strSqlFrom <> '')
 						$strSqlFrom .= " ";
 					$strSqlFrom .= $arFields[$by]["FROM"];
 					$arAlreadyJoined[] = $arFields[$by]["FROM"];
@@ -555,18 +568,10 @@ class CCrmExternalSale
 		DelDuplicateSort($arSqlOrder);
 		for ($i=0; $i<count($arSqlOrder); $i++)
 		{
-			if (strlen($strSqlOrderBy) > 0)
+			if ($strSqlOrderBy <> '')
 				$strSqlOrderBy .= ", ";
 
-			if(strtoupper($DB->type)=="ORACLE")
-			{
-				if(substr($arSqlOrder[$i], -3)=="ASC")
-					$strSqlOrderBy .= $arSqlOrder[$i]." NULLS FIRST";
-				else
-					$strSqlOrderBy .= $arSqlOrder[$i]." NULLS LAST";
-			}
-			else
-				$strSqlOrderBy .= $arSqlOrder[$i];
+			$strSqlOrderBy .= $arSqlOrder[$i];
 		}
 		// <-- ORDER BY
 

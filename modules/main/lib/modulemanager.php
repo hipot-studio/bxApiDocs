@@ -1,26 +1,32 @@
 <?php
 namespace Bitrix\Main;
 
-final class ModuleManager
+class ModuleManager
 {
-	private static $installedModules = array();
+	protected const CACHE_ID = 'b_module';
+
+	protected static $installedModules = [];
 
 	public static function getInstalledModules()
 	{
 		if (empty(self::$installedModules))
 		{
 			$cacheManager = Application::getInstance()->getManagedCache();
-			if ($cacheManager->read(3600, "b_module"))
-				self::$installedModules = $cacheManager->get("b_module");
+			if ($cacheManager->read(3600, self::CACHE_ID))
+			{
+				self::$installedModules = $cacheManager->get(self::CACHE_ID);
+			}
 
 			if (empty(self::$installedModules))
 			{
-				self::$installedModules = array();
+				self::$installedModules = [];
 				$con = Application::getConnection();
 				$rs = $con->query("SELECT ID FROM b_module ORDER BY ID");
 				while ($ar = $rs->fetch())
+				{
 					self::$installedModules[$ar['ID']] = $ar;
-				$cacheManager->set("b_module", self::$installedModules);
+				}
+				$cacheManager->set(self::CACHE_ID, self::$installedModules);
 			}
 		}
 
@@ -36,8 +42,6 @@ final class ModuleManager
 		if (!self::isModuleInstalled($moduleName))
 			return false;
 
-		$version = false;
-
 		if ($moduleName == 'main')
 		{
 			if (!defined("SM_VERSION"))
@@ -52,8 +56,9 @@ final class ModuleManager
 			if ($modulePath === false)
 				return false;
 
+			$arModuleVersion = [];
 			include($_SERVER["DOCUMENT_ROOT"].$modulePath);
-			$version = array_key_exists("VERSION", $arModuleVersion)? $arModuleVersion["VERSION"]: false;
+			$version = (array_key_exists("VERSION", $arModuleVersion)? $arModuleVersion["VERSION"] : false);
 		}
 
 		return $version;
@@ -68,25 +73,23 @@ final class ModuleManager
 	public static function delete($moduleName)
 	{
 		$con = Application::getConnection();
-		$con->queryExecute("DELETE FROM b_module WHERE ID = '".$con->getSqlHelper()->forSql($moduleName)."'");
+		$module = $con->getSqlHelper()->forSql($moduleName);
 
-		self::$installedModules = array();
-		Loader::clearModuleCache($moduleName);
+		$con->queryExecute("DELETE FROM b_module WHERE ID = '" . $module . "'");
+		$con->queryExecute("UPDATE b_agent SET ACTIVE = 'N' WHERE MODULE_ID = '" . $module . "' AND ACTIVE = 'Y'");
 
-		$cacheManager = Application::getInstance()->getManagedCache();
-		$cacheManager->clean("b_module");
+		static::clearCache($moduleName);
 	}
 
 	public static function add($moduleName)
 	{
 		$con = Application::getConnection();
-		$con->queryExecute("INSERT INTO b_module(ID) VALUES('".$con->getSqlHelper()->forSql($moduleName)."')");
+		$module = $con->getSqlHelper()->forSql($moduleName);
 
-		self::$installedModules = array();
-		Loader::clearModuleCache($moduleName);
+		$con->queryExecute("INSERT INTO b_module(ID) VALUES('" . $module . "')");
+		$con->queryExecute("UPDATE b_agent SET ACTIVE = 'Y' WHERE MODULE_ID = '" . $module . "' AND ACTIVE = 'N'");
 
-		$cacheManager = Application::getInstance()->getManagedCache();
-		$cacheManager->clean("b_module");
+		static::clearCache($moduleName);
 	}
 
 	public static function registerModule($moduleName)
@@ -108,5 +111,22 @@ final class ModuleManager
 
 		$event = new Event("main", "OnAfterUnRegisterModule", array($moduleName));
 		$event->send();
+	}
+
+	protected static function clearCache($moduleName)
+	{
+		self::$installedModules = [];
+		Application::getInstance()->getManagedCache()->clean(self::CACHE_ID);
+
+		Loader::clearModuleCache($moduleName);
+		EventManager::getInstance()->clearLoadedHandlers();
+	}
+
+	public static function isValidModule(string $moduleName): bool
+	{
+		$originalModuleName = $moduleName;
+		$moduleName = preg_replace("/[^a-zA-Z0-9_.]+/i", "", trim($moduleName));
+
+		return $moduleName === $originalModuleName;
 	}
 }

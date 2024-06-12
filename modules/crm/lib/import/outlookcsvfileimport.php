@@ -9,10 +9,10 @@ class OutlookCsvFileImport extends CsvFileImport
 	protected $headerAliases = null;
 	protected $enableCompatibilityMode = false;
 
-	protected static $PHONE_TYPES = array('Business', 'Home');
-	protected static $ADDRESS_TYPES = array('Business', 'Home', 'Other');
-	protected static $FIELDS = null;
-	protected static $FIELD_MATCH_CODES = null;
+	protected static $phoneTypes = array('Business', 'Home');
+	protected static $addressTypes = array('Business', 'Home', 'Other');
+	protected static $fields = null;
+	protected static $fieldMatchCodes = null;
 
 	public function __construct()
 	{
@@ -43,7 +43,7 @@ class OutlookCsvFileImport extends CsvFileImport
 		$result = array();
 		foreach($headerMap as $k => $v)
 		{
-			$code = strtoupper(str_replace(' ', '', $k));
+			$code = mb_strtoupper(str_replace(' ', '', $k));
 			$result[$code] = $v;
 		}
 		return $result;
@@ -54,7 +54,7 @@ class OutlookCsvFileImport extends CsvFileImport
 	}
 	public function setHeaderLanguage($langID)
 	{
-		$this->headerLanguage = strtolower($langID);
+		$this->headerLanguage = mb_strtolower($langID);
 	}
 	public function isCompatibilityModeEnabled()
 	{
@@ -79,14 +79,17 @@ class OutlookCsvFileImport extends CsvFileImport
 			$this->headerMap = $this->originalHeaderMap;
 		}
 	}
+
 	public function getDefaultEncoding()
-		{
-			return $this->headerLanguage === 'ru' ? 'Windows-1251' : 'Windows-1252';
-		}
-		public function getDefaultSeparator()
-		{
-			return ',';
-		}
+	{
+		return 'UTF-8';
+	}
+
+	public function getDefaultSeparator()
+	{
+		return ',';
+	}
+
 	public function checkHeaders(array &$messages)
 	{
 		IncludeModuleLangFile(__FILE__);
@@ -131,13 +134,7 @@ class OutlookCsvFileImport extends CsvFileImport
 
 		if(!$hasName && !$hasEmail && !$hasPhone)
 		{
-			$messages[] = GetMessage(
-				'CRM_IMPORT_OUTLOOK_REQUIREMENTS',
-				array(
-					'#FILE_ENCODING#' => $this->getDefaultEncoding(),
-					'#FILE_LANG#' => $this->headerLanguage
-				)
-			);
+			$messages[] = GetMessage('CRM_IMPORT_OUTLOOK_REQUIREMENTS_NEW', ['#FILE_LANG#' => $this->headerLanguage]);
 		}
 
 		return $hasName || $hasEmail || $hasPhone;
@@ -169,7 +166,7 @@ class OutlookCsvFileImport extends CsvFileImport
 		$phoneInfos = $this->getPhones($data);
 		foreach($phoneInfos as &$phoneInfo)
 		{
-			$valueType = strtoupper($phoneInfo['VALUE_TYPE']);
+			$valueType = mb_strtoupper($phoneInfo['VALUE_TYPE']);
 			if($valueType === 'BUSINESS')
 			{
 				$valueType = 'WORK';
@@ -273,9 +270,9 @@ class OutlookCsvFileImport extends CsvFileImport
 			);
 		}
 
-		foreach(self::$PHONE_TYPES as $type)
+		foreach(self::$phoneTypes as $type)
 		{
-			$typeUC = strtoupper($type);
+			$typeUC = mb_strtoupper($type);
 
 			$keys = array("{$typeUC}_PHONE", "{$typeUC}_PHONE_2");
 			foreach($keys as $key)
@@ -345,9 +342,9 @@ class OutlookCsvFileImport extends CsvFileImport
 		}
 
 		$result = array();
-		foreach(self::$ADDRESS_TYPES as $type)
+		foreach(self::$addressTypes as $type)
 		{
-			$typeUC = strtoupper($type);
+			$typeUC = mb_strtoupper($type);
 
 			$info = $this->getAddress(
 				$data,
@@ -385,9 +382,9 @@ class OutlookCsvFileImport extends CsvFileImport
 	}
 	protected static function getFields()
 	{
-		if(self::$FIELDS === null)
+		if(self::$fields === null)
 		{
-			self::$FIELDS = array(
+			self::$fields = array(
 				'FIRST_NAME' => array('NAME' => 'First Name'),
 				'MIDDLE_NAME' => array('NAME' => 'Middle Name'),
 				'LAST_NAME' => array('NAME' => 'Last Name'),
@@ -436,7 +433,7 @@ class OutlookCsvFileImport extends CsvFileImport
 				'WEB_PAGE' => array('NAME' => 'Web Page')
 			);
 		}
-		return self::$FIELDS;
+		return self::$fields;
 	}
 	protected static function getFieldName($fieldID)
 	{
@@ -445,20 +442,20 @@ class OutlookCsvFileImport extends CsvFileImport
 	}
 	protected static function getFieldMatchCode($fieldID)
 	{
-		if(self::$FIELD_MATCH_CODES !== null && isset(self::$FIELD_MATCH_CODES[$fieldID]))
+		if(self::$fieldMatchCodes !== null && isset(self::$fieldMatchCodes[$fieldID]))
 		{
-			return self::$FIELD_MATCH_CODES[$fieldID];
+			return self::$fieldMatchCodes[$fieldID];
 		}
 
 		$fields = self::getFields();
 		$fieldName = isset($fields[$fieldID]) ? $fields[$fieldID]['NAME'] : $fieldID;
 
-		if(self::$FIELD_MATCH_CODES === null)
+		if(self::$fieldMatchCodes === null)
 		{
-			self::$FIELD_MATCH_CODES = array();
+			self::$fieldMatchCodes = array();
 		}
 
-		return (self::$FIELD_MATCH_CODES[$fieldID] = strtoupper(str_replace(' ', '', $fieldName)));
+		return (self::$fieldMatchCodes[$fieldID] = mb_strtoupper(str_replace(' ', '', $fieldName)));
 	}
 	protected static function getHeaderAliases($langID, $enableCompatibilityMode = false)
 	{
@@ -472,7 +469,7 @@ class OutlookCsvFileImport extends CsvFileImport
 				$result[$fieldID] = $field['NAME'];
 				if($enableCompatibilityMode)
 				{
-					$result[$fieldID] = strtoupper(str_replace(' ', '', $result[$fieldID]));
+					$result[$fieldID] = mb_strtoupper(str_replace(' ', '', $result[$fieldID]));
 				}
 			}
 			unset($field);
@@ -491,7 +488,7 @@ class OutlookCsvFileImport extends CsvFileImport
 				$result[$fieldID] = isset($messages[$key]) ? $messages[$key] : $field['NAME'];
 				if($enableCompatibilityMode)
 				{
-					$result[$fieldID] = strtoupper(str_replace(' ', '', $result[$fieldID]));
+					$result[$fieldID] = mb_strtoupper(str_replace(' ', '', $result[$fieldID]));
 				}
 			}
 			unset($field);

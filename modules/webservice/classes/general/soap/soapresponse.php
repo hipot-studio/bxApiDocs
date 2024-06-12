@@ -23,17 +23,17 @@ class CSOAPResponse extends CSOAPEnvelope
 	/// Contains the DOM document for the current SOAP response
 	var $DOMDocument = false;
 
-	public function CSOAPResponse( $name="", $namespace="" )
+	public function __construct( $name="", $namespace="" )
 	{
 		$this->Name = $name;
 		$this->Namespace = $namespace;
 
 		// call the parents constructor
-		$this->CSOAPEnvelope();
+		parent::__construct();
 	}
 
 	//	Decodes the SOAP response stream
-	public function decodeStream( $request, $stream )
+	function decodeStream( $request, $stream )
 	{
 		global $APPLICATION;
 
@@ -128,20 +128,22 @@ class CSOAPResponse extends CSOAPEnvelope
 	}
 
 	// Decodes a DOM node and returns the PHP datatype instance of it.
-	public function decodeDataTypes( $node, $complexDataTypeName = "" )
+	function decodeDataTypes( $node, $complexDataTypeName = "" )
 	{
 		global $xsd_simple_type;
 		$returnValue = false;
 
 		$attr = $node->getAttribute("type");
-		if ($attr and strlen($attr))
+		if ($attr and mb_strlen($attr))
 		{
 			return new CSOAPFault("Server Error", "Server supports only document/literal binding.");
 		}
 
 		$rootDataName = $this->Name;
-		if (strlen(trim($complexDataTypeName)))
+		if(trim($complexDataTypeName) <> '')
+		{
 			$rootDataName = trim($complexDataTypeName);
+		}
 
 		if (!$rootDataName or !isset($this->typensVars[$rootDataName]))
 		{
@@ -308,7 +310,7 @@ class CSOAPResponse extends CSOAPEnvelope
 						if (!$decoded and (!isset($param["strict"]) or
 							(isset($param["strict"]) and $param["strict"] == "strict") ))
 						{
-							return new CSOAPFault("Server Error", "Request has no enought params of strict type to be decoded. " );
+							return new CSOAPFault("Server Error", "Request has not enough params of strict type to be decoded. " );
 						}
 
 						$params[$pname] = $decoded;
@@ -352,7 +354,7 @@ class CSOAPResponse extends CSOAPEnvelope
 	}
 
 	//	  Returns the XML payload for the response.
-	public function payload( )
+	function payload( )
 	{
 		$root = new CXMLCreator("soap:Envelope");
 		$root->setAttribute("xmlns:soap", BX_SOAP_ENV);
@@ -438,47 +440,47 @@ class CSOAPResponse extends CSOAPEnvelope
 	}
 
 	//	 Strips the header information from the HTTP raw response.
-	public static function stripHTTPHeader( $data )
+	function stripHTTPHeader( $data )
 	{
 		$missingxml = false;
 		//$start = strpos( $data, "<"."?xml" );
-		$start = strpos( $data, "\r\n\r\n" );
+		$start = mb_strpos($data, "\r\n\r\n");
 		if ($start === false) return null;
-		$data = substr( $data, $start, strlen( $data ) - $start );
+		$data = mb_substr($data, $start, mb_strlen($data) - $start);
 		return $data;
 	}
 
-	public function value()
+	function value()
 	{
 		return $this->Value;
 	}
 
-	public function setValue( $value )
+	function setValue( $value )
 	{
 		$this->Value = $value;
 	}
 
-	public function setValueName ( $valname )
+	function setValueName ( $valname )
 	{
 		$this->ValueName = $valname;
 	}
 
-	public function isFault()
+	function isFault()
 	{
 		return $this->IsFault;
 	}
 
-	public function faultCode()
+	function faultCode()
 	{
 		return $this->FaultCode;
 	}
 
-	public function faultString()
+	function faultString()
 	{
 		return $this->FaultString;
 	}
 
-	public function setTypensVars($vars)
+	function setTypensVars($vars)
 	{
 		$this->typensVars = $vars;
 	}

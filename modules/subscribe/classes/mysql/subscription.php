@@ -1,58 +1,9 @@
 <?
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/subscribe/classes/general/subscription.php");
 
-
-/**
- * <b>CSubscription</b> - класс для работы с подписками на рассылки.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/subscribe/classes/csubscription/index.php
- * @author Bitrix
- */
 class CSubscription extends CSubscriptionGeneral
 {
 	//get by e-mail
-	
-	/**
-	* <p>Метод выбирает подписку по уникальному Email. Метод статический.</p>
-	*
-	*
-	* @param string $email  Уникальный Email подписчика.
-	*
-	* @return CDBResult <p>Возвращается результат запроса типа <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>. При выборке из
-	* результата методами класса CDBResult становятся доступны <a
-	* href="http://dev.1c-bitrix.ru/api_help/subscribe/classes/csubscriptiongeneral/csubscriptiongeneralfields.php">поля
-	* объекта "Подписка"</a>.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* //new or existing subscription?
-	* //ID==0 indicates new subscription
-	* if(strlen($sf_EMAIL) &gt; 0 || $ID &gt; 0)
-	* {
-	*     if($ID &gt; 0)
-	*         $subscription = CSubscription::GetByID($ID);
-	*     else
-	*         $subscription = <b>CSubscription::GetByEmail</b>($sf_EMAIL);
-	* 
-	*     if($subscription-&gt;ExtractFields("str_"))
-	*         $ID = (integer)$str_ID;
-	*     else
-	*         $ID=0;
-	* }
-	* else
-	*     $ID = 0;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/subscribe/classes/csubscription/csubscriptiongetbyemail.php
-	* @author Bitrix
-	*/
 	public static function GetByEmail($email, $user_id = false)
 	{
 		global $DB;

@@ -2,6 +2,8 @@
 use Bitrix\Main\Loader;
 use Bitrix\Iblock;
 use Bitrix\Catalog;
+use Bitrix\Sale;
+use Bitrix\Main;
 // some of this functions should probably migrate to CSaleHelper
 
 /*
@@ -63,7 +65,6 @@ function fGetFormatedProductData($USER_ID, $LID, $arData, $CNT, $currency, $type
 		$arSkuParentChildren = array();
 		$arSkuParentId = array();
 		$arSkuParent = array();
-		$arSet = array();
 
 		foreach ($arData as $item)
 		{
@@ -160,22 +161,22 @@ function fGetFormatedProductData($USER_ID, $LID, $arData, $CNT, $currency, $type
 					));
 				}
 
-				$arProduct["NAME"] = htmlspecialcharsex($arProduct["NAME"]);
-				$arProduct["DETAIL_PAGE_URL"] = htmlspecialcharsex($arProduct["DETAIL_PAGE_URL"]);
-				$arProduct["CURRENCY"] = htmlspecialcharsex($arProduct["CURRENCY"]);
+				$arProduct["NAME"] = htmlspecialcharsEx($arProduct["NAME"]);
+				$arProduct["DETAIL_PAGE_URL"] = htmlspecialcharsEx($arProduct["DETAIL_PAGE_URL"]);
+				$arProduct["CURRENCY"] = htmlspecialcharsEx($arProduct["CURRENCY"]);
 
 				if ($arProduct["PREVIEW_PICTURE"] > 0)
 					$imgCode = $arProduct["PREVIEW_PICTURE"];
 				elseif ($arProduct["DETAIL_PICTURE"] > 0)
 					$imgCode = $arProduct["DETAIL_PICTURE"];
 
+				$imgProduct = '';
 				if ($imgCode > 0)
 				{
 					$arFile = CFile::GetFileArray($imgCode);
 					$arImgProduct = CFile::ResizeImageGet($arFile, array('width'=>80, 'height'=>80), BX_RESIZE_IMAGE_PROPORTIONAL, false, false);
 					if (is_array($arImgProduct))
 					{
-						$imgUrl = $arImgProduct["src"];
 						$imgProduct = '<a href="'.$arProduct["EDIT_PAGE_URL"].'" target="_blank"><img src="'.$arImgProduct["src"].'" alt="" title="'.$arProduct["NAME"].'" ></a>';
 					}
 				}
@@ -212,7 +213,7 @@ function fGetFormatedProductData($USER_ID, $LID, $arData, $CNT, $currency, $type
 				{
 					if (!empty($arResult["SKU_ELEMENTS"]))
 					{
-						$result .= '<a href="javascript:void(0);" class="get_new_order" onclick="fAddToBasketMoreProductSku('.CUtil::PhpToJsObject($arResult['SKU_ELEMENTS']).', '.CUtil::PhpToJsObject($arResult['SKU_PROPERTIES']).', \'\', '.CUtil::PhpToJsObject($arResult["POPUP_MESSAGE"]).');"><span></span>'.GetMessage('SOD_SUBTAB_ADD_ORDER').'</a>';
+						$result .= '<a href="javascript:void(0);" class="get_new_order" onclick="fAddToBasketMoreProductSku('.CUtil::PhpToJSObject($arResult['SKU_ELEMENTS']).', '.CUtil::PhpToJSObject($arResult['SKU_PROPERTIES']).', \'\', '.CUtil::PhpToJSObject($arResult["POPUP_MESSAGE"]).');"><span></span>'.GetMessage('SOD_SUBTAB_ADD_ORDER').'</a>';
 					}
 					else
 					{
@@ -239,13 +240,13 @@ function fGetFormatedProductData($USER_ID, $LID, $arData, $CNT, $currency, $type
 						elseif ($set["DETAIL_PICTURE"] > 0)
 							$imgCode = $set["DETAIL_PICTURE"];
 
+						$img = '';
 						if ($imgCode > 0)
 						{
 							$arFile = CFile::GetFileArray($imgCode);
 							$arImgProduct = CFile::ResizeImageGet($arFile, array('width'=>80, 'height'=>80), BX_RESIZE_IMAGE_PROPORTIONAL, false, false);
 							if (is_array($arImgProduct))
 							{
-								$imgUrl = $arImgProduct["src"];
 								$img = '<a href="'.$editUrl.'" target="_blank"><img src="'.$arImgProduct["src"].'" alt="" title="'.$set["NAME"].'" ></a>';
 							}
 						}
@@ -285,7 +286,7 @@ function fChangeOrderStatus($ID, $STATUS_ID)
 	$errorMessageTmp = "";
 
 	$STATUS_ID = trim($STATUS_ID);
-	if (strlen($STATUS_ID) <= 0)
+	if ($STATUS_ID == '')
 		$errorMessageTmp .= GetMessage("ERROR_NO_STATUS").". ";
 
 	if ('' == $errorMessageTmp)
@@ -323,7 +324,7 @@ function fChangeOrderStatus($ID, $STATUS_ID)
 	if ($arOrder = $dbOrder->Fetch())
 	{
 		$arResult["DATE_STATUS"] = $arOrder["DATE_STATUS"];
-		if (!$crmMode && IntVal($arOrder["EMP_STATUS_ID"]) > 0)
+		if (!$crmMode && (int)$arOrder["EMP_STATUS_ID"] > 0)
 			$arResult["EMP_STATUS_ID"] = GetFormatedUserName($arOrder["EMP_STATUS_ID"], false);
 
 		$arResult["STATUS_ID"] = $arOrder["STATUS_ID"];
@@ -470,7 +471,6 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 	$resultHtml = "<script>locationZipID = 0;locationID = 0;</script><table width=\"100%\" id=\"order_type_props\" class=\"edit-table\">";
 
 	//select person type
-	$arPersonTypeList = array();
 	$personTypeSelect = "<select name='buyer_type_id' id='buyer_type_id' OnChange='fBuyerChangeType(this);' >";
 	$dbPersonType = CSalePersonType::GetList(array("SORT" => "ASC", "NAME" => "ASC"), array("ACTIVE" => "Y"));
 	while ($arPersonType = $dbPersonType->GetNext())
@@ -584,15 +584,15 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 		$locationIndexForm = "";
 		foreach ($_POST as $key => $value)
 		{
-			if (substr($key, 0, strlen("CITY_ORDER_PROP_")) == "CITY_ORDER_PROP_")
+			if (mb_substr($key, 0, mb_strlen("CITY_ORDER_PROP_")) == "CITY_ORDER_PROP_")
 			{
-				$arPropValues[intval(substr($key, strlen("CITY_ORDER_PROP_")))] = htmlspecialcharsbx($value);
-				$locationIndexForm = intval(substr($key, strlen("CITY_ORDER_PROP_")));
+				$arPropValues[intval(mb_substr($key, mb_strlen("CITY_ORDER_PROP_")))] = htmlspecialcharsbx($value);
+				$locationIndexForm = intval(mb_substr($key, mb_strlen("CITY_ORDER_PROP_")));
 			}
-			if (substr($key, 0, strlen("ORDER_PROP_")) == "ORDER_PROP_")
+			if (mb_substr($key, 0, mb_strlen("ORDER_PROP_")) == "ORDER_PROP_")
 			{
-				if ($locationIndexForm != intval(substr($key, strlen("ORDER_PROP_"))) && !is_array($value))
-					$arPropValues[intval(substr($key, strlen("ORDER_PROP_")))] = htmlspecialcharsbx($value);
+				if ($locationIndexForm != intval(mb_substr($key, mb_strlen("ORDER_PROP_"))) && !is_array($value))
+					$arPropValues[intval(mb_substr($key, mb_strlen("ORDER_PROP_")))] = htmlspecialcharsbx($value);
 			}
 		}
 		$userComment = $_POST["USER_DESCRIPTION"];
@@ -600,7 +600,6 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 	elseif ($ORDER_ID == "" AND $USER_ID != "") // from profile
 	{
 		//profile
-		$userProfile = array();
 		$userProfile = CSaleOrderUserProps::DoLoadProfiles($USER_ID, $PERSON_TYPE_ID);
 		$arPropValues = $userProfile[$PERSON_TYPE_ID]["VALUES"];
 	}
@@ -635,7 +634,6 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 	}
 
 	//show town if location is another
-	$arEnableTownProps = array();
 	if ($ORDER_ID > 0)
 	{
 		$dbOrderProps = CSaleOrderPropsValue::GetOrderProps($ORDER_ID);
@@ -703,7 +701,7 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 
 		if($arProperties["IS_EMAIL"] == "Y" || $arProperties["IS_PAYER"] == "Y")
 		{
-			if(strlen($arProperties["DEFAULT_VALUE"]) <= 0 && intval($USER_ID) > 0)
+			if($arProperties["DEFAULT_VALUE"] == '' && intval($USER_ID) > 0)
 			{
 				$rsUser = CUser::GetByID($USER_ID);
 				if ($arUser = $rsUser->Fetch())
@@ -712,11 +710,11 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 						$arProperties["DEFAULT_VALUE"] = $arUser["EMAIL"];
 					else
 					{
-						if (strlen($arUser["LAST_NAME"]) > 0)
+						if ($arUser["LAST_NAME"] <> '')
 							$arProperties["DEFAULT_VALUE"] .= $arUser["LAST_NAME"];
-						if (strlen($arUser["NAME"]) > 0)
+						if ($arUser["NAME"] <> '')
 							$arProperties["DEFAULT_VALUE"] .= " ".$arUser["NAME"];
-						if (strlen($arUser["SECOND_NAME"]) > 0 AND strlen($arUser["NAME"]) > 0)
+						if ($arUser["SECOND_NAME"] <> '' AND $arUser["NAME"] <> '')
 							$arProperties["DEFAULT_VALUE"] .= " ".$arUser["SECOND_NAME"];
 					}
 				}
@@ -741,7 +739,7 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 			{
 				$DELIVERY_LOCATION_ZIP = $curVal;
 				$resultHtml .= '<script> locationZipID = \''.$arProperties["ID"].'\';</script>';
-				$locationZipID = ((isset($curVal)) ? htmlspecialcharsEx($curVal) : htmlspecialcharsex($arProperties["DEFAULT_VALUE"]));
+				$locationZipID = ((isset($curVal)) ? htmlspecialcharsEx($curVal) : htmlspecialcharsEx($arProperties["DEFAULT_VALUE"]));
 			}
 
 			if ($arProperties["IS_PAYER"] == "Y" && intval($USER_ID) <= 0)
@@ -752,22 +750,39 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 				$resultHtml .= '>';
 
 				$BREAK_LAST_NAME_TMP = GetMessage('NEWO_BREAK_LAST_NAME');
-				if (isset($_REQUEST["BREAK_LAST_NAME"]) && strlen($_REQUEST["BREAK_LAST_NAME"]) > 0)
+				if (isset($_REQUEST["BREAK_LAST_NAME"]) && $_REQUEST["BREAK_LAST_NAME"] <> '')
 					$BREAK_LAST_NAME_TMP = htmlspecialcharsbx(trim($_REQUEST["BREAK_LAST_NAME"]));
 
 				$NEWO_BREAK_NAME_TMP = GetMessage('NEWO_BREAK_NAME');
-				if (isset($_REQUEST["BREAK_NAME"]) && strlen($_REQUEST["BREAK_NAME"]) > 0)
+				if (isset($_REQUEST["BREAK_NAME"]) && $_REQUEST["BREAK_NAME"] <> '')
 					$NEWO_BREAK_NAME_TMP = htmlspecialcharsbx(trim($_REQUEST["BREAK_NAME"]));
 
 				$BREAK_SECOND_NAME_TMP = GetMessage('NEWO_BREAK_SECOND_NAME');
-				if (isset($_REQUEST["BREAK_SECOND_NAME"]) && strlen($_REQUEST["BREAK_SECOND_NAME"]) > 0)
+				if (isset($_REQUEST["BREAK_SECOND_NAME"]) && $_REQUEST["BREAK_SECOND_NAME"] <> '')
 					$BREAK_SECOND_NAME_TMP = htmlspecialcharsbx(trim($_REQUEST["BREAK_SECOND_NAME"]));
 
-				$resultHtml .= "<div class=\"fio newo_break_active\"><input onblur=\"if (this.value==''){this.value='".CUtil::JSEscape(GetMessage('NEWO_BREAK_LAST_NAME'))."';BX.addClass(this.parentNode,'newo_break_active');}\" onfocus=\"if (this.value=='".CUtil::JSEscape(GetMessage('NEWO_BREAK_LAST_NAME'))."') {this.value='';BX.removeClass(this.parentNode,'newo_break_active');}\" type=\"text\" name=\"BREAK_LAST_NAME\" id=\"BREAK_LAST_NAME\" size=\"30\" value=\"".$BREAK_LAST_NAME_TMP."\" /></div>";
-				$resultHtml .= "<div class=\"fio newo_break_active\"><input onblur=\"if (this.value==''){this.value='".CUtil::JSEscape(GetMessage('NEWO_BREAK_NAME'))."';BX.addClass(this.parentNode,'newo_break_active');}\" onfocus=\"if (this.value=='".CUtil::JSEscape(GetMessage('NEWO_BREAK_NAME'))."') {this.value='';BX.removeClass(this.parentNode,'newo_break_active');}\" type=\"text\" name=\"BREAK_NAME\" id=\"BREAK_NAME_BUYER\" size=\"30\" value=\"".$NEWO_BREAK_NAME_TMP."\" /></div>";
-				$resultHtml .= "<div class=\"fio newo_break_active\"><input onblur=\"if (this.value==''){this.value='".CUtil::JSEscape(GetMessage('NEWO_BREAK_SECOND_NAME'))."';BX.addClass(this.parentNode,'newo_break_active');}\" onfocus=\"if (this.value=='".CUtil::JSEscape(GetMessage('NEWO_BREAK_SECOND_NAME'))."') {this.value='';BX.removeClass(this.parentNode,'newo_break_active');}\" type=\"text\" name=\"BREAK_SECOND_NAME\" id=\"BREAK_SECOND_NAME\" size=\"30\" value=\"".$BREAK_SECOND_NAME_TMP."\" /></div>";
+				$resultHtml .= '<div class="fio newo_break_active">'.
+					'<input type="text" name="BREAK_LAST_NAME" id="BREAK_LAST_NAME" size="30" '.
+					'value="'.$BREAK_LAST_NAME_TMP.'" placeholder="'.htmlspecialcharsbx(GetMessage('NEWO_BREAK_LAST_NAME')).'" '.
+					'onblur="if (this.value==\'\'){ BX.addClass(this.parentNode, \'newo_break_active\'); }" '.
+					'onfocus="if (this.value==\'\') { BX.removeClass(this.parentNode, \'newo_break_active\'); }">'.
+					'</div>';
+
+				$resultHtml .= '<div class="fio newo_break_active">'.
+					'<input type="text" name="BREAK_NAME" id="BREAK_NAME_BUYER" size="30" '.
+					'value="'.$NEWO_BREAK_NAME_TMP.'" placeholder="'.htmlspecialcharsbx(GetMessage('NEWO_BREAK_NAME')).'" '.
+					'onblur="if (this.value==\'\'){ BX.addClass(this.parentNode, \'newo_break_active\'); }" '.
+					'onfocus="if (this.value==\'\') { BX.removeClass(this.parentNode, \'newo_break_active\'); }">'.
+					'</div>';
+				$resultHtml .= '<div class="fio newo_break_active">'.
+					'<input type="text" name="BREAK_SECOND_NAME" id="BREAK_SECOND_NAME" size="30" '.
+					'value="'.$BREAK_SECOND_NAME_TMP.'" placeholder="'.htmlspecialcharsbx(GetMessage('NEWO_BREAK_SECOND_NAME')).'" '.
+					'onblur="if (this.value==\'\'){BX.addClass(this.parentNode, \'newo_break_active\'); }" '.
+					'onfocus="if (this.value==\'\') {BX.removeClass(this.parentNode, \'newo_break_active\'); }">'.
+					'</div>';
 				$resultHtml .= '</div>';
 
+				$tmpNone = '';
 				$resultHtml .= '<div id="NO_BREAK_NAME"';
 				if ($ORDER_ID <= 0)
 					$tmpNone = ' style="display:none"';
@@ -803,7 +818,7 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 			);
 			while ($arVariants = $dbVariants->Fetch())
 			{
-				$resultHtml .= '<option value="'.htmlspecialcharsex($arVariants["VALUE"]).'"';
+				$resultHtml .= '<option value="'.htmlspecialcharsEx($arVariants["VALUE"]).'"';
 				if ($arVariants["VALUE"] == $curVal || !isset($curVal) && $arVariants["VALUE"] == $arProperties["DEFAULT_VALUE"])
 					$resultHtml .= " selected";
 				$resultHtml .= '>'.htmlspecialcharsEx($arVariants["NAME"]).'</option>';
@@ -821,7 +836,7 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 
 			if (!is_array($curVal))
 			{
-				if (strlen($curVal) > 0 OR $ORDER_ID != "")
+				if ($curVal <> '' OR $ORDER_ID != "")
 					$curVal = explode(",", $curVal);
 				else
 					$curVal = explode(",", $arProperties["DEFAULT_VALUE"]);
@@ -829,7 +844,7 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 				$arCurVal = array();
 				$countCurVal = count($curVal);
 				for ($i = 0; $i < $countCurVal; $i++)
-					$arCurVal[$i] = Trim($curVal[$i]);
+					$arCurVal[$i] = trim($curVal[$i]);
 			}
 			else
 				$arCurVal = $curVal;
@@ -843,7 +858,7 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 			);
 			while ($arVariants = $dbVariants->Fetch())
 			{
-				$resultHtml .= '<option value="'.htmlspecialcharsex($arVariants["VALUE"]).'"';
+				$resultHtml .= '<option value="'.htmlspecialcharsEx($arVariants["VALUE"]).'"';
 				if (in_array($arVariants["VALUE"], $arCurVal))
 					$resultHtml .= " selected";
 				$resultHtml .= '>'.htmlspecialcharsEx($arVariants["NAME"]).'</option>';
@@ -862,14 +877,10 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 		}
 		elseif ($arProperties["TYPE"] == "LOCATION")
 		{
-			$countryID = "";
-			$cityID = "";
-			$cityList = "";
 			$DELIVERY_LOCATION = $arPropValues[intval($arProperties["ID"])];
 
 			$locationID = $curVal;
 
-			$tmpLocation = '';
 			ob_start();
 			?>
 
@@ -900,7 +911,7 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 					"ALLOW_EMPTY_CITY" => "Y",
 					"LOCATION_VALUE" => $curVal,
 					"COUNTRY" => "",
-					"ONCITYCHANGE" => "fChangeLocationCity();",
+					"ONCITYCHANGE" => "fChangeLocationCity",
 					"PUBLIC" => "N",
 				),
 				array(
@@ -938,7 +949,7 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 			{
 				$resultHtml .= '<input type="radio" class="inputradio" ';
 				$resultHtml .= 'name="ORDER_PROP_'.$arProperties["ID"].'" ';
-				$resultHtml .= 'value="'.htmlspecialcharsex($arVariants["VALUE"]).'"';
+				$resultHtml .= 'value="'.htmlspecialcharsEx($arVariants["VALUE"]).'"';
 				if ($arVariants["VALUE"] == $curVal || !isset($curVal) && $arVariants["VALUE"] == $arProperties["DEFAULT_VALUE"])
 					$resultHtml .= " checked";
 				$resultHtml .= '>'.htmlspecialcharsEx($arVariants["NAME"]).'<br>';
@@ -959,7 +970,7 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
 			$resultHtml .= fShowFilePropertyField("ORDER_PROP_".$arProperties["ID"], $arProperties, $arValues, $arProperties["SIZE1"], $formVarsSubmit);
 		}
 
-		if (strlen($arProperties["DESCRIPTION"]) > 0)
+		if ($arProperties["DESCRIPTION"] <> '')
 		{
 			$resultHtml .= "<br><small>".htmlspecialcharsEx($arProperties["DESCRIPTION"])."</small>";
 		}
@@ -983,7 +994,7 @@ function fGetBuyerType($PERSON_TYPE_ID, $LID, $USER_ID = '', $ORDER_ID = 0, $for
  *
  * Currently is used to show order properties related to payment/delivery systems in the order_new form
  */
-function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $USER_ID = '', $ORDER_ID = 0, $formVarsSubmit = false)
+function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID = '', $USER_ID = '', $ORDER_ID = 0, $formVarsSubmit = false)
 {
 	$propertyGroupID = -1;
 	$arDisableFieldForLocation = array();
@@ -995,24 +1006,24 @@ function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $U
 		$locationIndexForm = "";
 		foreach ($_POST as $key => $value)
 		{
-			if (substr($key, 0, strlen("CITY_ORDER_PROP_")) == "CITY_ORDER_PROP_")
+			if (mb_substr($key, 0, mb_strlen("CITY_ORDER_PROP_")) == "CITY_ORDER_PROP_")
 			{
-				$arPropValues[intval(substr($key, strlen("CITY_ORDER_PROP_")))] = htmlspecialcharsbx($value);
-				$locationIndexForm = intval(substr($key, strlen("CITY_ORDER_PROP_")));
+				$arPropValues[intval(mb_substr($key, mb_strlen("CITY_ORDER_PROP_")))] = htmlspecialcharsbx($value);
+				$locationIndexForm = intval(mb_substr($key, mb_strlen("CITY_ORDER_PROP_")));
 			}
-			if (substr($key, 0, strlen("ORDER_PROP_")) == "ORDER_PROP_")
+			if (mb_substr($key, 0, mb_strlen("ORDER_PROP_")) == "ORDER_PROP_")
 			{
-				if ($locationIndexForm != intval(substr($key, strlen("ORDER_PROP_"))))
+				if ($locationIndexForm != intval(mb_substr($key, mb_strlen("ORDER_PROP_"))))
 				{
 					if (!is_array($value))
-						$arPropValues[intval(substr($key, strlen("ORDER_PROP_")))] = htmlspecialcharsbx($value);
+						$arPropValues[intval(mb_substr($key, mb_strlen("ORDER_PROP_")))] = htmlspecialcharsbx($value);
 					else
 					{
 						$arValues = array();
 						foreach ($value as $k => $v)
 							$arValues[$key] = htmlspecialcharsbx($v);
 
-						$arPropValues[intval(substr($key, strlen("ORDER_PROP_")))] = $arValues;
+						$arPropValues[intval(mb_substr($key, mb_strlen("ORDER_PROP_")))] = $arValues;
 					}
 				}
 			}
@@ -1058,7 +1069,7 @@ function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $U
 
 			if($arProperties["IS_EMAIL"] == "Y" || $arProperties["IS_PAYER"] == "Y")
 			{
-				if(strlen($arProperties["DEFAULT_VALUE"]) <= 0 && intval($USER_ID) > 0)
+				if($arProperties["DEFAULT_VALUE"] == '' && intval($USER_ID) > 0)
 				{
 					$rsUser = CUser::GetByID($USER_ID);
 					if ($arUser = $rsUser->Fetch())
@@ -1067,11 +1078,11 @@ function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $U
 							$arProperties["DEFAULT_VALUE"] = $arUser["EMAIL"];
 						else
 						{
-							if (strlen($arUser["LAST_NAME"]) > 0)
+							if ($arUser["LAST_NAME"] <> '')
 								$arProperties["DEFAULT_VALUE"] .= $arUser["LAST_NAME"];
-							if (strlen($arUser["NAME"]) > 0)
+							if ($arUser["NAME"] <> '')
 								$arProperties["DEFAULT_VALUE"] .= " ".$arUser["NAME"];
-							if (strlen($arUser["SECOND_NAME"]) > 0 AND strlen($arUser["NAME"]) > 0)
+							if ($arUser["SECOND_NAME"] <> '' AND $arUser["NAME"] <> '')
 								$arProperties["DEFAULT_VALUE"] .= " ".$arUser["SECOND_NAME"];
 						}
 					}
@@ -1096,7 +1107,7 @@ function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $U
 				{
 					$DELIVERY_LOCATION_ZIP = $curVal;
 					$resultHtml .= '<script> locationZipID = \''.$arProperties["ID"].'\';</script>';
-					$locationZipID = ((isset($curVal)) ? htmlspecialcharsEx($curVal) : htmlspecialcharsex($arProperties["DEFAULT_VALUE"]));
+					$locationZipID = ((isset($curVal)) ? htmlspecialcharsEx($curVal) : htmlspecialcharsEx($arProperties["DEFAULT_VALUE"]));
 				}
 
 				if ($arProperties["IS_PAYER"] == "Y" && intval($USER_ID) <= 0)
@@ -1107,22 +1118,38 @@ function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $U
 					$resultHtml .= '>';
 
 					$BREAK_LAST_NAME_TMP = GetMessage('NEWO_BREAK_LAST_NAME');
-					if (isset($_REQUEST["BREAK_LAST_NAME"]) && strlen($_REQUEST["BREAK_LAST_NAME"]) > 0)
+					if (isset($_REQUEST["BREAK_LAST_NAME"]) && $_REQUEST["BREAK_LAST_NAME"] <> '')
 						$BREAK_LAST_NAME_TMP = htmlspecialcharsbx(trim($_REQUEST["BREAK_LAST_NAME"]));
 
 					$NEWO_BREAK_NAME_TMP = GetMessage('NEWO_BREAK_NAME');
-					if (isset($_REQUEST["BREAK_NAME"]) && strlen($_REQUEST["BREAK_NAME"]) > 0)
+					if (isset($_REQUEST["BREAK_NAME"]) && $_REQUEST["BREAK_NAME"] <> '')
 						$NEWO_BREAK_NAME_TMP = htmlspecialcharsbx(trim($_REQUEST["BREAK_NAME"]));
 
 					$BREAK_SECOND_NAME_TMP = GetMessage('NEWO_BREAK_SECOND_NAME');
-					if (isset($_REQUEST["BREAK_SECOND_NAME"]) && strlen($_REQUEST["BREAK_SECOND_NAME"]) > 0)
+					if (isset($_REQUEST["BREAK_SECOND_NAME"]) && $_REQUEST["BREAK_SECOND_NAME"] <> '')
 						$BREAK_SECOND_NAME_TMP = htmlspecialcharsbx(trim($_REQUEST["BREAK_SECOND_NAME"]));
 
-					$resultHtml .= "<div class=\"fio newo_break_active\"><input onblur=\"if (this.value==''){this.value='".CUtil::JSEscape(GetMessage('NEWO_BREAK_LAST_NAME'))."';BX.addClass(this.parentNode,'newo_break_active');}\" onfocus=\"if (this.value=='".CUtil::JSEscape(GetMessage('NEWO_BREAK_LAST_NAME'))."') {this.value='';BX.removeClass(this.parentNode,'newo_break_active');}\" type=\"text\" name=\"BREAK_LAST_NAME\" id=\"BREAK_LAST_NAME\" size=\"30\" value=\"".$BREAK_LAST_NAME_TMP."\" /></div>";
-					$resultHtml .= "<div class=\"fio newo_break_active\"><input onblur=\"if (this.value==''){this.value='".CUtil::JSEscape(GetMessage('NEWO_BREAK_NAME'))."';BX.addClass(this.parentNode,'newo_break_active');}\" onfocus=\"if (this.value=='".CUtil::JSEscape(GetMessage('NEWO_BREAK_NAME'))."') {this.value='';BX.removeClass(this.parentNode,'newo_break_active');}\" type=\"text\" name=\"BREAK_NAME\" id=\"BREAK_NAME_BUYER\" size=\"30\" value=\"".$NEWO_BREAK_NAME_TMP."\" /></div>";
-					$resultHtml .= "<div class=\"fio newo_break_active\"><input onblur=\"if (this.value==''){this.value='".CUtil::JSEscape(GetMessage('NEWO_BREAK_SECOND_NAME'))."';BX.addClass(this.parentNode,'newo_break_active');}\" onfocus=\"if (this.value=='".CUtil::JSEscape(GetMessage('NEWO_BREAK_SECOND_NAME'))."') {this.value='';BX.removeClass(this.parentNode,'newo_break_active');}\" type=\"text\" name=\"BREAK_SECOND_NAME\" id=\"BREAK_SECOND_NAME\" size=\"30\" value=\"".$BREAK_SECOND_NAME_TMP."\" /></div>";
+					$resultHtml .= '<div class="fio newo_break_active">'.
+						'<input type="text" name="BREAK_LAST_NAME" id="BREAK_LAST_NAME" size="30" '.
+						'value="'.$BREAK_LAST_NAME_TMP.'" placeholder="'.htmlspecialcharsbx(GetMessage('NEWO_BREAK_LAST_NAME')).'" '.
+						'onblur="if (this.value==\'\'){ BX.addClass(this.parentNode, \'newo_break_active\'); }" '.
+						'onfocus="if (this.value==\'\') { BX.removeClass(this.parentNode, \'newo_break_active\'); }">'.
+						'</div>';
+					$resultHtml .= '<div class="fio newo_break_active">'.
+						'<input type="text" name="BREAK_NAME" id="BREAK_NAME_BUYER" size="30" '.
+						'value="'.$NEWO_BREAK_NAME_TMP.'" placeholder="'.htmlspecialcharsbx(GetMessage('NEWO_BREAK_NAME')).'" '.
+						'onblur="if (this.value==\'\'){ BX.addClass(this.parentNode, \'newo_break_active\'); }" '.
+						'onfocus="if (this.value==\'\') { BX.removeClass(this.parentNode, \'newo_break_active\'); }">'.
+						'</div>';
+					$resultHtml .= '<div class="fio newo_break_active">'.
+						'<input type="text" name="BREAK_SECOND_NAME" id="BREAK_SECOND_NAME" size="30" '.
+						'value="'.$BREAK_SECOND_NAME_TMP.'" placeholder="'.htmlspecialcharsbx(GetMessage('NEWO_BREAK_SECOND_NAME')).'" '.
+						'onblur="if (this.value==\'\'){ BX.addClass(this.parentNode, \'newo_break_active\'); }" '.
+						'onfocus="if (this.value==\'\') { BX.removeClass(this.parentNode, \'newo_break_active\'); }">'.
+						'</div>';
 					$resultHtml .= '</div>';
 
+					$tmpNone = '';
 					$resultHtml .= '<div id="NO_BREAK_NAME"';
 					if ($ORDER_ID <= 0)
 						$tmpNone = ' style="display:none"';
@@ -1157,7 +1184,7 @@ function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $U
 				);
 				while ($arVariants = $dbVariants->Fetch())
 				{
-					$resultHtml .= '<option value="'.htmlspecialcharsex($arVariants["VALUE"]).'"';
+					$resultHtml .= '<option value="'.htmlspecialcharsEx($arVariants["VALUE"]).'"';
 					if ($arVariants["VALUE"] == $curVal || !isset($curVal) && $arVariants["VALUE"] == $arProperties["DEFAULT_VALUE"])
 						$resultHtml .= " selected";
 					$resultHtml .= '>'.htmlspecialcharsEx($arVariants["NAME"]).'</option>';
@@ -1175,7 +1202,7 @@ function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $U
 
 				if (!is_array($curVal))
 				{
-					if (strlen($curVal) > 0 OR $ORDER_ID != "")
+					if ($curVal <> '' OR $ORDER_ID != "")
 						$curVal = explode(",", $curVal);
 					else
 						$curVal = explode(",", $arProperties["DEFAULT_VALUE"]);
@@ -1183,7 +1210,7 @@ function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $U
 					$arCurVal = array();
 					$countCurVal = count($curVal);
 					for ($i = 0; $i < $countCurVal; $i++)
-						$arCurVal[$i] = Trim($curVal[$i]);
+						$arCurVal[$i] = trim($curVal[$i]);
 				}
 				else
 					$arCurVal = $curVal;
@@ -1197,7 +1224,7 @@ function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $U
 				);
 				while ($arVariants = $dbVariants->Fetch())
 				{
-					$resultHtml .= '<option value="'.htmlspecialcharsex($arVariants["VALUE"]).'"';
+					$resultHtml .= '<option value="'.htmlspecialcharsEx($arVariants["VALUE"]).'"';
 					if (in_array($arVariants["VALUE"], $arCurVal))
 						$resultHtml .= " selected";
 					$resultHtml .= '>'.htmlspecialcharsEx($arVariants["NAME"]).'</option>';
@@ -1266,7 +1293,7 @@ function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $U
 				{
 					$resultHtml .= '<input type="radio" class="inputradio" ';
 					$resultHtml .= 'name="ORDER_PROP_'.$arProperties["ID"].'" ';
-					$resultHtml .= 'value="'.htmlspecialcharsex($arVariants["VALUE"]).'"';
+					$resultHtml .= 'value="'.htmlspecialcharsEx($arVariants["VALUE"]).'"';
 					if ($arVariants["VALUE"] == $curVal || !isset($curVal) && $arVariants["VALUE"] == $arProperties["DEFAULT_VALUE"])
 						$resultHtml .= " checked";
 					$resultHtml .= '>'.htmlspecialcharsEx($arVariants["NAME"]).'<br>';
@@ -1287,7 +1314,7 @@ function getOrderPropertiesHTML($arOrderProps, $arPropValues = array(), $LID, $U
 				$resultHtml .= fShowFilePropertyField("ORDER_PROP_".$arProperties["ID"], $arProperties, $arValues, $arProperties["SIZE1"], $formVarsSubmit);
 			}
 
-			if (strlen($arProperties["DESCRIPTION"]) > 0)
+			if ($arProperties["DESCRIPTION"] <> '')
 			{
 				$resultHtml .= "<br><small>".htmlspecialcharsEx($arProperties["DESCRIPTION"])."</small>";
 			}
@@ -1371,7 +1398,7 @@ function fGetPayFromAccount($USER_ID, $CURRENCY)
 	);
 	if ($arUserAccount = $dbUserAccount->GetNext())
 	{
-		if (DoubleVal($arUserAccount["CURRENT_BUDGET"]) > 0)
+		if ((float)$arUserAccount["CURRENT_BUDGET"] > 0)
 		{
 			$arResult["PAY_BUDGET"] = SaleFormatCurrency($arUserAccount["CURRENT_BUDGET"], $CURRENCY);
 			$arResult["PAY_MESSAGE"] = str_replace("#MONEY#", $arResult["PAY_BUDGET"], GetMessage("NEWO_PAY_FROM_ACCOUNT_YES"));
@@ -1394,6 +1421,10 @@ function fGetDeliverySystemsHTML($location, $locationZip, $weight, $price, $curr
 	$setDeliveryPrice = false;
 
 	$arDelivery = CSaleDelivery::DoLoadDelivery($location, $locationZip, $weight, $price, $currency, $siteId, $arShoppingCart);
+	if (empty($arDelivery) || !is_array($arDelivery))
+	{
+		$arDelivery = [];
+	}
 
 	$deliveryHTML = "<select name=\"DELIVERY_ID\" id=\"DELIVERY_ID\" onchange=\"fChangeDelivery();\">";
 	$deliveryHTML .= "<option value=\"\">".GetMessage('NEWO_DELIVERY_NO')."</option>";
@@ -1929,6 +1960,7 @@ function fDeleteDoubleProduct($arShoppingCart = array(), $arDelete = array(), $s
 		{
 			$i = 0;
 
+			$arSection = array();
 			$res = CIBlockElement::GetList(array(), array("ID" => $arProductId), false, false, array('ID', 'IBLOCK_ID', 'IBLOCK_SECTION_ID', 'IBLOCK_TYPE_ID'));
 			while ($arSectionTmp = $res->Fetch())
 				$arSection[$arSectionTmp["ID"]] = $arSectionTmp;
@@ -2068,7 +2100,7 @@ function convertHistoryToNewFormat($arFields)
 {
 	foreach ($arFields as $fieldname => $fieldvalue)
 	{
-		if (strlen($fieldvalue) > 0)
+		if ($fieldvalue <> '')
 		{
 			foreach (CSaleOrderChangeFormat::$operationTypes as $code => $arInfo)
 			{
@@ -2124,7 +2156,7 @@ function getIblockPropInfo($value, $propData, $arSize = array("WIDTH" => 90, "HE
 		$arVal = array();
 		if (!is_array($value))
 		{
-			if (strpos($value, ",") !== false)
+			if (mb_strpos($value, ",") !== false)
 				$arVal = explode(",", $value);
 			else
 				$arVal[] = $value;
@@ -2138,14 +2170,14 @@ function getIblockPropInfo($value, $propData, $arSize = array("WIDTH" => 90, "HE
 			{
 				if ($propData["PROPERTY_TYPE"] == "F")
 				{
-					if (strlen($res) > 0)
+					if ($res <> '')
 						$res .= "<br/> ".showImageOrDownloadLink(trim($val), $orderId, $arSize);
 					else
 						$res = showImageOrDownloadLink(trim($val), $orderId, $arSize);
 				}
 				else
 				{
-					if (strlen($res) > 0)
+					if ($res <> '')
 						$res .= ", ".$val;
 					else
 						$res = $val;
@@ -2161,7 +2193,7 @@ function getIblockPropInfo($value, $propData, $arSize = array("WIDTH" => 90, "HE
 			$res = $value;
 	}
 
-	if (strlen($res) == 0)
+	if ($res == '')
 		$res = "&nbsp";
 
 	return $res;
@@ -2339,8 +2371,8 @@ function getProductDataToFillBasket($productId, $quantity, $userId, $LID, $userC
 		}
 		else
 		{
-			$column = strtoupper($column);
-			$propertyCode = substr($column, 9);
+			$column = mb_strtoupper($column);
+			$propertyCode = mb_substr($column, 9);
 			if ($propertyCode == '')
 			{
 				unset($arUserColumns[$key]);
@@ -2390,7 +2422,7 @@ function getProductDataToFillBasket($productId, $quantity, $userId, $LID, $userC
 		{
 			foreach ($arElement as $key => $value)
 			{
-				if (strncmp($key, 'PROPERTY_', 9) == 0 && substr($key, -6) == "_VALUE")
+				if (strncmp($key, 'PROPERTY_', 9) == 0 && mb_substr($key, -6) == "_VALUE")
 				{
 					$columnCode = str_replace("_VALUE", "", $key);
 					if (!isset($arPropertyInfo[$columnCode]))
@@ -2418,13 +2450,13 @@ function getProductDataToFillBasket($productId, $quantity, $userId, $LID, $userC
 				$fieldVal = $field."_VALUE";
 				$parentId = $arSku2Parent[$productId];
 
-				if ((!isset($arElementInfo[$fieldVal]) || (isset($arElementInfo[$fieldVal]) && strlen($arElementInfo[$fieldVal]) == 0))
+				if ((!isset($arElementInfo[$fieldVal]) || (isset($arElementInfo[$fieldVal]) && $arElementInfo[$fieldVal] == ''))
 					&& (isset($arProductData[$parentId][$fieldVal]) && !empty($arProductData[$parentId][$fieldVal]))) // can be array or string
 				{
 					$arElementInfo[$fieldVal] = $arProductData[$parentId][$fieldVal];
 				}
 			}
-			if (strpos($arElementInfo["~XML_ID"], '#') === false)
+			if (mb_strpos($arElementInfo["~XML_ID"], '#') === false)
 			{
 				$arElementInfo["~XML_ID"] = $arParent['~XML_ID'].'#'.$arElementInfo["~XML_ID"];
 			}
@@ -2446,16 +2478,15 @@ function getProductDataToFillBasket($productId, $quantity, $userId, $LID, $userC
 		$arBuyerGroups = CUser::GetUserGroup($userId);
 
 		// price
-		$currentVatMode = CCatalogProduct::getPriceVatIncludeMode();
-		$currentUseDiscount = CCatalogProduct::getUseDiscount();
-		CCatalogProduct::setUseDiscount(true);
-		CCatalogProduct::setPriceVatIncludeMode(true);
-		CCatalogProduct::setUsedCurrency(CSaleLang::GetLangCurrency($LID));
+		Catalog\Product\Price\Calculation::pushConfig();
+		Catalog\Product\Price\Calculation::setConfig(array(
+			'CURRENCY' => Sale\Internals\SiteCurrencyTable::getSiteCurrency($LID),
+			'PRECISION' => (int)Main\Config\Option::get('sale', 'value_precision'),
+			'USE_DISCOUNTS' => true,
+			'RESULT_WITH_VAT' => true
+		));
 		$arPrice = CCatalogProduct::GetOptimalPrice($arElementInfo["ID"], 1, $arBuyerGroups, "N", array(), $LID);
-		CCatalogProduct::clearUsedCurrency();
-		CCatalogProduct::setPriceVatIncludeMode($currentVatMode);
-		CCatalogProduct::setUseDiscount($currentUseDiscount);
-		unset($currentUseDiscount, $currentVatMode);
+		Catalog\Product\Price\Calculation::popConfig();
 
 		$currentPrice = $arPrice['RESULT_PRICE']['DISCOUNT_PRICE'];
 		$arElementInfo['PRICE'] = $currentPrice;
@@ -2463,10 +2494,6 @@ function getProductDataToFillBasket($productId, $quantity, $userId, $LID, $userC
 		$arElementInfo['DISCOUNT_PRICE'] = $arPrice['RESULT_PRICE']['DISCOUNT'];
 		$currentTotalPrice = $arPrice['RESULT_PRICE']['BASE_PRICE'];
 		$discountPercent = (int)$arPrice['RESULT_PRICE']['PERCENT'];
-
-
-
-
 
 		$arProduct = array();
 
@@ -2572,7 +2599,6 @@ function getProductDataToFillBasket($productId, $quantity, $userId, $LID, $userC
 			$arElementInfo["MEASURE_TEXT"] = ($defaultMeasure["SYMBOL_RUS"] != '' ? $defaultMeasure["SYMBOL_RUS"] : $defaultMeasure["SYMBOL_INTL"]);
 		}
 
-
 		// ratio
 		$arElementInfo["RATIO"] = 1;
 
@@ -2582,8 +2608,11 @@ function getProductDataToFillBasket($productId, $quantity, $userId, $LID, $userC
 		}
 		else
 		{
-			$dbratio = CCatalogMeasureRatio::GetList(array(), array("PRODUCT_ID" => $productId));
-			if ($arRatio = $dbratio->Fetch())
+			$dbratio = Catalog\MeasureRatioTable::getList(array(
+				'select' => array('*'),
+				'filter' => array('=PRODUCT_ID' => $productId, '=IS_DEFAULT' => 'Y')
+			));
+			if ($arRatio = $dbratio->fetch())
 			{
 				$proxyCatalogMeasureRatio[$productId] = $arRatio;
 			}

@@ -6,7 +6,7 @@ use Bitrix\Main\ArgumentNullException;
 
 class ProcessResult extends DataProcessor
 {
-	static public function process($data)
+	public function process($data)
 	{
 		if(!isset($data["RESULT_ID"]))
 			throw new ArgumentNullException("data[\"RESULT_ID\"]");

@@ -1,24 +1,14 @@
-<?
+<?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2013 Bitrix
+ * @copyright 2001-2022 Bitrix
  */
 
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CMenu</b> - класс для работы с меню.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/main/reference/cmenu/index.php
- * @author Bitrix
- */
 class CMenu
 {
 	var $type = "left";
@@ -37,89 +27,20 @@ class CMenu
 		$this->type = $type;
 	}
 
-	public function disableDebug()
+	function disableDebug()
 	{
 		$this->debug = false;
 	}
 
-	
-	/**
-	* <p>Инициализирует (заполняет пунктами) объект класса CMenu. Возвращает "true" если в каталоге сайта найден файл меню <nobr><b>.</b><i>тип меню</i><b>.menu.php</b></nobr> (поиск идет вверх по иерархии начиная с каталога <i>dir</i>), и "false" в противном случае. Нестатический метод.</p>
-	*
-	*
-	* @param string $InitDir  Папка, начиная с которой, объект будет искать файл <nobr><b>.</b><i>тип
-	* меню</i><b>.menu.php</b></nobr> (файл с параметрами и пунктами меню).
-	*
-	* @param bool $MenuExt = false Если значение - "true", то для формирования массива меню, помимо
-	* файлов <nobr><b>.</b><i>тип меню</i><b>.menu.php</b></nobr> будут также подключаться
-	* файлы с именами вида <nobr><b>.</b><i>тип меню</i><b>.menu_ext.php</b></nobr>. В которых
-	* вы можете манипулировать массивом меню <b>$aMenuLinks</b> произвольно, по
-	* вашему усмотрению (например, дополнять пункты меню значениями из
-	* инфо-блоков).<br>Необязателен. По умолчанию - "false".
-	*
-	* @param string $template = false Шаблон для вывода меню. <br>Необязателен. По умолчанию - "false", что
-	* означает искать шаблон меню сначала в файле <nobr><b>/bitrix/templates/</b><i>ID
-	* текущего шаблона сайта</i><b>/</b><i>тип меню</i><b>.menu_template.php</b></nobr>, затем
-	* если шаблон не будет найден, то искать в файле
-	* <nobr><b>/bitrix/templates/.default/</b><i>тип меню</i><b>.menu_template.php</b></nobr>. В самом
-	* шаблоне меню вам будут доступны следующие предустановленные
-	* переменные: 	<ul> <li> <b>$arMENU</b> - копия массива меню 		</li> <li> <b>$arMENU_LINK</b> -
-	* ссылка на текущий массив меню 		</li> <li> <b>$TEXT</b> - текст текущего
-	* пункта меню 		</li> <li> <b>$LINK</b> - ссылка текущего пункта меню 		</li> <li>
-	* <b>$SELECTED</b> - выбран ли пункт меню в данный момент 		</li> <li> <b>$PERMISSION</b> -
-	* доступ на страницу указанную в $LINK, возможны следующие значения:
-	* 			<ul> <li> <b>D</b> - доступ запрещён 				</li> <li> <b>R</b> - чтение (право
-	* просмотра содержимого файла) 				</li> <li> <b>U</b> - документооборот
-	* (право на редактирование файла в режиме документооборота) 				</li>
-	* <li> <b>W</b> - запись (право на прямое редактирование) 				</li> <li> <b>X</b> -
-	* полный доступ (право на прямое редактирование файла и право на
-	* изменение прав доступа на данных файл) 			</li> </ul> </li> <li>
-	* <b>$ADDITIONAL_LINKS</b> - дополнительные ссылки для подсветки меню 		</li> <li>
-	* <b>$ITEM_TYPE</b> - "D" - директория (если $LINK заканчивается на "/"), иначе "P" -
-	* страница 		</li> <li> <b>$ITEM_INDEX</b> - порядковый номер пункта меню 		</li> <li>
-	* <b>$PARAMS</b> - параметры пунктов меню 	</li> </ul> 	При этом в шаблоне для
-	* построения меню необходимо будет инициализировать следующие
-	* перменные: 	<ul> <li> <b>$sMenuProlog</b> - HTML который будет добавлен перед
-	* пунктами меню 		</li> <li> <b>$sMenuEpilog</b> - HTML который будет добавлен после
-	* пунктов меню 		</li> <li> <b>$sMenuBody</b> - HTML представляющий из себя один
-	* пункт меню 		</li> <li> <b>$sMenu</b> - HTML представляющий из себя все меню
-	* целиком (только для метода GetMenuHtmlEx) 	</li> </ul>
-	*
-	* @param mixed $onlyCurrentDir = false Если значение - "true", то отключается поиск файла меню в
-	* родительских каталогах.
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $lm = new CMenu("left");
-	* <b>$lm-&gt;Init</b>($APPLICATION-&gt;GetCurDir(), true);
-	* $lm-&gt;template = "/bitrix/templates/demo/left.menu_template.php";
-	* echo $lm-&gt;GetMenuHtml();
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="https://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;CHAPTER_ID=04708"
-	* >Меню</a></li> <li> <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cmain/getmenu.php">CMain::GetMenu</a>
-	* </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/main/reference/cmenu/init.php
-	* @author Bitrix
-	*/
-	public function Init($InitDir, $bMenuExt=false, $template=false, $onlyCurrentDir=false)
+	function Init($InitDir, $bMenuExt=false, $template=false, $onlyCurrentDir=false)
 	{
 		global $USER;
 		if(
 			$this->debug !== false
-			&& $_SESSION["SESS_SHOW_INCLUDE_TIME_EXEC"] == "Y"
+			&& \Bitrix\Main\Application::getInstance()->getKernelSession()["SESS_SHOW_INCLUDE_TIME_EXEC"] == "Y"
 			&& (
 				$USER->IsAdmin()
-				|| $_SESSION["SHOW_SQL_STAT"]=="Y"
+				|| \Bitrix\Main\Application::getInstance()->getKernelSession()["SHOW_SQL_STAT"]=="Y"
 			)
 		)
 		{
@@ -153,7 +74,7 @@ class CMenu
 
 		while($Dir <> '')
 		{
-			if($site_dir !== false && (strlen(trim($Dir, "/")) < strlen(trim($site_dir, "/"))))
+			if($site_dir !== false && (mb_strlen(trim($Dir, "/")) < mb_strlen(trim($site_dir, "/"))))
 				break;
 
 			$Dir = rtrim($Dir, "/");
@@ -172,11 +93,11 @@ class CMenu
 			if($Dir == "")
 				break;
 
-			$pos = strrpos($Dir, "/");
+			$pos = bxstrrpos($Dir, "/");
 			if($pos===false || $onlyCurrentDir == true)
 				break;
 
-			$Dir = substr($Dir, 0, $pos+1);
+			$Dir = mb_substr($Dir, 0, $pos + 1);
 		}
 
 		if($bMenuExt)
@@ -184,7 +105,7 @@ class CMenu
 			$Dir = $InitDir;
 			while($Dir <> '')
 			{
-				if($site_dir !== false && (strlen(trim($Dir, "/")) < strlen(trim($site_dir, "/"))))
+				if($site_dir !== false && (mb_strlen(trim($Dir, "/")) < mb_strlen(trim($site_dir, "/"))))
 					break;
 
 				$Dir = rtrim($Dir, "/");
@@ -206,24 +127,24 @@ class CMenu
 				if($Dir == "")
 					break;
 
-				$pos = strrpos($Dir, "/");
+				$pos = bxstrrpos($Dir, "/");
 				if($pos===false || $onlyCurrentDir == true)
 					break;
 
-				$Dir = substr($Dir, 0, $pos+1);
+				$Dir = mb_substr($Dir, 0, $pos + 1);
 			}
 		}
 
 		return $bFounded;
 	}
 
-	public function RecalcMenu($bMultiSelect = false, $bCheckSelected = true)
+	function RecalcMenu($bMultiSelect = false, $bCheckSelected = true)
 	{
 		if($this->bMenuCalc !== false)
 			return true;
 
 		/**
-		 * @global CAllMain $APPLICATION
+		 * @global CMain $APPLICATION
 		 * @global CCacheManager $CACHE_MANAGER
 		 * @noinspection PhpUnusedLocalVariableInspection
 		 */
@@ -238,7 +159,7 @@ class CMenu
 
 		$this->bMenuCalc = true;
 
-		if(strlen($this->template)>0 && file_exists($_SERVER["DOCUMENT_ROOT"].$this->template))
+		if($this->template <> '' && file_exists($_SERVER["DOCUMENT_ROOT"].$this->template))
 		{
 			$this->MenuTemplate = $_SERVER["DOCUMENT_ROOT"].$this->template;
 		}
@@ -267,7 +188,7 @@ class CMenu
 			return false;
 		}
 
-		$arMenuCache = false;
+		$arMenuCache = [];
 		$bCached = false;
 		$bCacheIsAllowed = CACHED_menu!==false && !$USER->IsAuthorized() && $this->MenuExtDir == '';
 		if($bCacheIsAllowed)
@@ -311,8 +232,8 @@ class CMenu
 			}
 
 			$bSkipMenuItem = false;
-			$ADDITIONAL_LINKS = $MenuItem[2];
-			$PARAMS = $MenuItem[3];
+			$ADDITIONAL_LINKS = $MenuItem[2] ?? [];
+			$PARAMS = $MenuItem[3] ?? [];
 
 			//Calculate menu items stack for iblock items only
 			if($this->MenuExtDir <> '' && is_array($PARAMS) && isset($PARAMS["FROM_IBLOCK"]))
@@ -330,7 +251,7 @@ class CMenu
 				{
 					//Unwind parents stack
 					while(
-						count($arParents) > 0
+						!empty($arParents)
 						&& $arParents[count($arParents)-1]["DEPTH_LEVEL"] > $PARAMS["DEPTH_LEVEL"]
 					)
 					{
@@ -357,9 +278,9 @@ class CMenu
 			if(!$bSkipMenuItem)
 				$ITEM_INDEX++;
 
-			if(($pos = strpos($LINK, "?"))!==false)
+			if(($pos = mb_strpos($LINK, "?"))!==false)
 				$ITEM_TYPE = "U";
-			elseif(substr($LINK, -1)=="/")
+			elseif(mb_substr($LINK, -1) == "/")
 				$ITEM_TYPE = "D";
 			else
 				$ITEM_TYPE = "P";
@@ -380,7 +301,7 @@ class CMenu
 					foreach($ADDITIONAL_LINKS as $link)
 					{
 						$tested_link = trim(Rel2Abs($this->MenuDir, $link));
-						if(strlen($tested_link)>0)
+						if($tested_link <> '')
 							$all_links[] = $tested_link;
 					}
 				}
@@ -416,7 +337,7 @@ class CMenu
 			if($SELECTED && !$bMultiSelect)
 			{
 				/** @noinspection PhpUndefinedVariableInspection */
-				$new_len = strlen($tested_link);
+				$new_len = mb_strlen($tested_link);
 				if($new_len > $cur_selected_len)
 				{
 					if($cur_selected !== -1)
@@ -483,18 +404,18 @@ class CMenu
 		//"/admin/"
 		//"/admin/index.php"
 		//"/admin/index.php?module=mail"
-		if(strpos($cur_page, $tested_link) === 0 || strpos($cur_page_no_index, $tested_link) === 0)
+		if(mb_strpos($cur_page, $tested_link) === 0 || mb_strpos($cur_page_no_index, $tested_link) === 0)
 			return true;
 
-		if(($pos = strpos($tested_link, "?")) !== false)
+		if(($pos = mb_strpos($tested_link, "?")) !== false)
 		{
-			if(($s = substr($tested_link, 0, $pos)) == $cur_page || $s == $cur_page_no_index)
+			if(($s = mb_substr($tested_link, 0, $pos)) == $cur_page || $s == $cur_page_no_index)
 			{
-				$params = explode("&", substr($tested_link, $pos+1));
+				$params = explode("&", mb_substr($tested_link, $pos + 1));
 				$bOK = true;
 				foreach($params as $param)
 				{
-					$eqpos = strpos($param, "=");
+					$eqpos = mb_strpos($param, "=");
 					$varvalue = "";
 					if($eqpos === false)
 					{
@@ -506,11 +427,11 @@ class CMenu
 					}
 					else
 					{
-						$varname = substr($param, 0, $eqpos);
-						$varvalue = urldecode(substr($param, $eqpos+1));
+						$varname = mb_substr($param, 0, $eqpos);
+						$varvalue = urldecode(mb_substr($param, $eqpos + 1));
 					}
 
-					$globvarvalue = (isset($GLOBALS[$varname])? $GLOBALS[$varname] : "");
+					$globvarvalue = ($GLOBALS[$varname] ?? "");
 					if($globvarvalue != $varvalue)
 					{
 						$bOK = false;
@@ -525,40 +446,10 @@ class CMenu
 		return false;
 	}
 
-	
-	/**
-	* <p>Возвращает HTML представляющий из себя меню. В отличие от метода <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cmenu/getmenuhtml.php">CMenu::GetMenuHtml</a> шаблон меню будет подключаться только один раз. Нестатический метод.</p> <p class="note"><b>Примечание</b>. В шаблоне меню, используемом методом, в обязательном порядке необходимо инициализировать переменную <b>$sMenu</b>, в которой должен храниться HTML представляющий из себя все меню целиком.</p>
-	*
-	*
-	* @return string 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $lm = new CMenu("left");
-	* $lm-&gt;Init($APPLICATION-&gt;GetCurDir(), true);
-	* $lm-&gt;template = "/bitrix/templates/demo/left.menu_template.php";
-	* echo <b>$lm-&gt;GetMenuHtmlEx</b>();
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="https://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;CHAPTER_ID=04708" >Меню</a>
-	* </li> <li> <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cmenu/getmenuhtml.php">CMenu::GetMenuHtml</a> </li>
-	* <li> <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cmain/getmenuhtml.php">CMain::GetMenuHtml</a> </li> <li>
-	* <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cmain/getmenuhtmlex.php">CMain::GetMenuHtmlEx</a> </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/main/reference/cmenu/getmenuhtmlex.php
-	* @author Bitrix
-	*/
-	public function GetMenuHtmlEx()
+	function GetMenuHtmlEx()
 	{
 		/**
-		 * @global CAllMain $APPLICATION
+		 * @global CMain $APPLICATION
 		 * @noinspection PhpUnusedLocalVariableInspection
 		 */
 		global $USER, $DB, $APPLICATION; // must be!
@@ -601,7 +492,7 @@ class CMenu
 					"TITLE"=>GetMessage("MAIN_MENU_TEMPLATE_EDIT")
 				);
 			}
-			if(count($arIcons) > 0)
+			if(!empty($arIcons))
 			{
 				$result = $APPLICATION->IncludeStringBefore().$result;
 				$bShowButtons = true;
@@ -618,41 +509,10 @@ class CMenu
 	}
 
 
-	
-	/**
-	* <p>Возвращает HTML представляющий из себя меню. Нестатический метод.</p>
-	*
-	*
-	* @return string 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $lm = new CMenu("left");
-	* $lm-&gt;Init($APPLICATION-&gt;GetCurDir(), true);
-	* $lm-&gt;template = "/bitrix/templates/demo/left.menu_template.php";
-	* echo <b>$lm-&gt;GetMenuHtml</b>();
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="https://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;CHAPTER_ID=04708"
-	* >Меню</a></li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cmenu/getmenuhtmlex.php">CMenu::GetMenuHtmlEx</a> </li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cmain/getmenuhtml.php">CMain::GetMenuHtml</a> </li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cmain/getmenuhtmlex.php">CMain::GetMenuHtmlEx</a> </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/main/reference/cmenu/getmenuhtml.php
-	* @author Bitrix
-	*/
-	public function GetMenuHtml()
+	function GetMenuHtml()
 	{
 		/**
-		 * @global CAllMain $APPLICATION
+		 * @global CMain $APPLICATION
 		 * @noinspection PhpUnusedLocalVariableInspection
 		 */
 		global $USER, $DB, $APPLICATION; // must be!
@@ -723,7 +583,7 @@ class CMenu
 				);
 			}
 
-			if(count($arIcons) > 0)
+			if(!empty($arIcons))
 			{
 				$result = $APPLICATION->IncludeStringBefore().$result;
 				$bShowButtons = true;
@@ -739,54 +599,3 @@ class CMenu
 		return $result;
 	}
 }
-
-class CMenuCustom
-{
-	var $arItems = array();
-
-	public function AddItem($type="left", $arItem=array())
-	{
-		if (count($arItem) <= 0)
-			return;
-
-		if (!array_key_exists("TEXT", $arItem) || strlen(trim($arItem["TEXT"])) <= 0)
-			return;
-
-		if (!array_key_exists("LINK", $arItem) || strlen(trim($arItem["LINK"])) <= 0)
-			$arItem["LINK"] = "";
-
-		if (!array_key_exists("SELECTED", $arItem))
-			$arItem["SELECTED"] = false;
-
-		if (!array_key_exists("PERMISSION", $arItem))
-			$arItem["PERMISSION"] = "R";
-
-		if (!array_key_exists("DEPTH_LEVEL", $arItem))
-			$arItem["DEPTH_LEVEL"] = 1;
-
-		if (!array_key_exists("IS_PARENT", $arItem))
-			$arItem["IS_PARENT"] = false;
-
-		$this->arItems[$type][] = array(
-						"TEXT" => $arItem["TEXT"],
-						"LINK" => $arItem["LINK"],
-						"SELECTED" => $arItem["SELECTED"],
-						"PERMISSION" => $arItem["PERMISSION"],
-						"DEPTH_LEVEL" => $arItem["DEPTH_LEVEL"],
-						"IS_PARENT" => $arItem["IS_PARENT"],
-					);
-	}
-
-
-	public function GetItems($type="left")
-	{
-		if (array_key_exists($type, $this->arItems))
-			return $this->arItems[$type];
-		else
-			return false;
-	}
-
-}
-
-global $BX_MENU_CUSTOM;
-$BX_MENU_CUSTOM = new CMenuCustom;

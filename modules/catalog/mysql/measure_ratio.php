@@ -15,12 +15,18 @@ class CCatalogMeasureRatio extends CCatalogMeasureRatioAll
 	{
 		global $DB;
 		if (empty($arSelectFields))
-			$arSelectFields = array("ID", "PRODUCT_ID", "RATIO");
+			$arSelectFields = array("ID", "PRODUCT_ID", "RATIO", "IS_DEFAULT");
 		$arFields = array(
 			"ID" => array("FIELD" => "MR.ID", "TYPE" => "int"),
 			"PRODUCT_ID" => array("FIELD" => "MR.PRODUCT_ID", "TYPE" => "int"),
 			"RATIO" => array("FIELD" => "MR.RATIO", "TYPE" => "double"),
+			"IS_DEFAULT" => array("FIELD" => "MR.IS_DEFAULT", "TYPE" => "char")
 		);
+		if (isset($arFilter['IS_DEFAULT']) && $arFilter['IS_DEFAULT'] == '')
+			unset($arFilter['IS_DEFAULT']);
+		elseif (!isset($arFilter['IS_DEFAULT']))
+			$arFilter['IS_DEFAULT'] = 'Y';
+
 		$arSqls = CCatalog::PrepareSql($arFields, $arOrder, $arFilter, $arGroupBy, $arSelectFields);
 		$arSqls["SELECT"] = str_replace("%%_DISTINCT_%%", "", $arSqls["SELECT"]);
 
@@ -51,7 +57,7 @@ class CCatalogMeasureRatio extends CCatalogMeasureRatioAll
 		$boolNavStartParams = (!empty($arNavStartParams) && is_array($arNavStartParams));
 		if ($boolNavStartParams && isset($arNavStartParams['nTopCount']))
 			$intTopCount = (int)$arNavStartParams['nTopCount'];
-		
+
 		if ($boolNavStartParams && $intTopCount <= 0)
 		{
 			$strSql_tmp = "select COUNT('x') as CNT FROM b_catalog_measure_ratio MR ".$arSqls["FROM"];

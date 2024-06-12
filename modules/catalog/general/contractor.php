@@ -1,10 +1,13 @@
 <?php
+
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Catalog\v2\Contractor;
+
 Loc::loadMessages(__FILE__);
 
 class CAllCatalogContractor
 {
-	protected function checkFields($action, &$arFields)
+	protected static function checkFields($action, &$arFields)
 	{
 		$personType = intval($arFields["PERSON_TYPE"]);
 
@@ -13,7 +16,7 @@ class CAllCatalogContractor
 			$GLOBALS["APPLICATION"]->ThrowException(Loc::getMessage("CC_EMPTY_COMPANY"));
 			return false;
 		}
-		if (((($action == 'ADD' || is_set($arFields, "PERSON_NAME")) && strlen($arFields["PERSON_NAME"]) <= 0) && $personType == CONTRACTOR_INDIVIDUAL))
+		if (((($action == 'ADD' || is_set($arFields, "PERSON_NAME")) && $arFields["PERSON_NAME"] == '') && $personType == CONTRACTOR_INDIVIDUAL))
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(Loc::getMessage("CC_WRONG_PERSON_LASTNAME"));
 			return false;
@@ -24,9 +27,16 @@ class CAllCatalogContractor
 		return true;
 	}
 
-	static function update($id, $arFields)
+	public static function update($id, $arFields)
 	{
-		global $DB;
+		global $DB, $APPLICATION;
+
+		if (Contractor\Provider\Manager::getActiveProvider())
+		{
+			$APPLICATION->throwException('This API has been deprecated and is no longer available');
+			return false;
+		}
+
 		$id = intval($id);
 
 		if(array_key_exists('DATE_CREATE', $arFields))
@@ -50,16 +60,23 @@ class CAllCatalogContractor
 		return $id;
 	}
 
-	static function delete($id)
+	public static function delete($id)
 	{
-		global $DB;
+		global $DB, $APPLICATION;
+
+		if (Contractor\Provider\Manager::getActiveProvider())
+		{
+			$APPLICATION->throwException('This API has been deprecated and is no longer available');
+			return false;
+		}
+
 		$id = intval($id);
 		if($id > 0)
 		{
 			$dbDocument = CCatalogDocs::getList(array(), array("CONTRACTOR_ID" => $id));
 			if($arDocument = $dbDocument->Fetch())
 			{
-				$GLOBALS["APPLICATION"]->ThrowException(Loc::getMessage("CC_CONTRACTOR_HAVE_DOCS"));
+				$GLOBALS["APPLICATION"]->ThrowException(Loc::getMessage("CC_CONTRACTOR_HAVE_DOCS_EXT"));
 				return false;
 			}
 

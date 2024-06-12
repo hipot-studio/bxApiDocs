@@ -18,12 +18,12 @@ class JsExpression
 	/** @var string */
 	protected $expression;
 
-	public function __construct($expression)
+	function __construct($expression)
 	{
 		$this->expression = $expression;
 	}
 
-	public function __toString()
+	function __toString()
 	{
 		return $this->expression;
 	}

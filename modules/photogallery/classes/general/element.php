@@ -1,5 +1,7 @@
-<?
+<?php
+
 $GLOBALS["UF_GALLERY_SIZE"] = array(); 
+
 if (!is_array($GLOBALS["PHOTOGALLERY_VARS"]))
 {
 	$GLOBALS["PHOTOGALLERY_VARS"] = array(
@@ -111,11 +113,11 @@ class CPhotogalleryElement
 			if ($db_res && $res = $db_res->Fetch())
 			{
 				$GLOBALS["PHOTOGALLERY_VARS"]["arGalleries"][$res["ID"]] = $res; 
-				$iGalleryID = $GLOBALS["PHOTOGALLERY_VARS"]["arGalleriesID"][$arSection["ID"]] = intVal($res["ID"]); 
+				$iGalleryID = $GLOBALS["PHOTOGALLERY_VARS"]["arGalleriesID"][$arSection["ID"]] = intval($res["ID"]);
 			}
 		}
 		$arGallery = array(); 
-		$iGalleryID = intVal($iGalleryID); 
+		$iGalleryID = intval($iGalleryID);
 		if ($iGalleryID > 0)
 		{
 			if (empty($GLOBALS["PHOTOGALLERY_VARS"]["arGalleries"][$iGalleryID]))
@@ -196,11 +198,9 @@ class CPhotogalleryElement
 		}
 	}
 
-	
-	
 	public static function OnAfterIBlockElementAdd($res)
 	{
-		$ID = doubleval($res["ID"]); 
+		$ID = doubleval($res["ID"] ?? null);
 		if (CPhotogalleryElement::CheckElement($ID, $arElement, $arSection, $arGallery))
 		{
 			$GLOBALS["UF_GALLERY_SIZE"] = $GLOBALS["PHOTOGALLERY_VARS"]["arGalleries"][$arGallery["ID"]]["UF_GALLERY_SIZE"] = (doubleval($arGallery["UF_GALLERY_SIZE"]) + $arElement["FILE"]["FILE_SIZE"]); 
@@ -214,4 +214,3 @@ class CPhotogalleryElement
 		return true;
 	}
 }
-?>

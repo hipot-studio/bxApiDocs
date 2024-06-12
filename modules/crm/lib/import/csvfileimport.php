@@ -3,7 +3,7 @@ namespace Bitrix\Crm\Import;
 use Bitrix\Main;
 abstract class CsvFileImport
 {
-	protected static $ADDRESS_FIELD_NAMES = array(
+	protected static $addressFieldNames = array(
 		'STREET',
 		'CITY',
 		'STATE',
@@ -74,7 +74,7 @@ abstract class CsvFileImport
 	{
 		$result = array();
 
-		foreach(self::$ADDRESS_FIELD_NAMES as $name)
+		foreach(self::$addressFieldNames as $name)
 		{
 			$this->tryToMapField((isset($aliasMap[$name]) ? $aliasMap[$name] : $name), $name, $data, $result, $headerMap, true);
 		}

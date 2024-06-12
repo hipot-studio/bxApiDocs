@@ -48,17 +48,6 @@ class HostRestriction
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Обработчик событий для системного события <i>OnPageStart</i>. Ничего не делает в режиме командной строки. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/hostrestriction/onpagestart.php
-	* @author Bitrix
-	*/
 	public static function onPageStart()
 	{
 		if (\CSecuritySystemInformation::isCliMode())
@@ -73,7 +62,7 @@ class HostRestriction
 	{
 		$this->hosts = Config\Option::get('security', $this->optionPrefix.'hosts', '');
 		$this->action = Config\Option::get('security', $this->optionPrefix.'action', '');
-		$this->actionOptions = unserialize(Config\Option::get('security', $this->optionPrefix.'action_options', '{}'));
+		$this->actionOptions = unserialize(Config\Option::get('security', $this->optionPrefix.'action_options', '{}'), ['allowed_classes' => false]);
 		$this->isLogNeeded = Config\Option::get('security', $this->optionPrefix.'logging', false);
 	}
 
@@ -83,19 +72,6 @@ class HostRestriction
 	 * @param string $host Requested host for checking.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Главный метод, который проверяет текущий хост, логирует и выполняет действия. Метод нестатический.</p>
-	*
-	*
-	* @param string $host = null Проверяемый хост.
-	*
-	* @return \Bitrix\Security\HostRestriction 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/hostrestriction/process.php
-	* @author Bitrix
-	*/
 	public function process($host = null)
 	{
 		if (is_null($host))
@@ -119,26 +95,19 @@ class HostRestriction
 	 * @return bool Return true for valid (allowed) host.
 	 * @throws \Bitrix\Main\ArgumentTypeException
 	 */
-	
-	/**
-	* <p>Нестатический метод проверяет доменное имя согласно политике ограничения доменных имен.</p>
-	*
-	*
-	* @param string $host  Проверяемый хост.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/hostrestriction/isvalidhost.php
-	* @author Bitrix
-	*/
 	public function isValidHost($host)
 	{
-		return (bool) (
-			is_string($host)
-			&& $host !== ''
-			&& preg_match($this->getValidationRegExp(), $host) > 0
-		);
+		if (is_string($host) && $host !== '')
+		{
+			$count = 0;
+			preg_replace($this->getValidationRegExp(), '', $host, 1, $count);
+			//var_dump($count);
+			if ($count)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -171,19 +140,6 @@ class HostRestriction
 	 * @throws LogicException
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод определяет различные настройки для проверки доменных имен. Сейчас поддерживаются:</p> <p>- <code>hosts</code>: строка с разрешенными доменными именами (маски поддерживаются, например: *.example.com);</p> <p>- <code>action</code>: строка с действиями для неразрешенных доменных имен;</p> <p>- <code>action_options</code>: массив с настройками действий;</p> <p>- <code>logging</code>: <code>bool</code>, если установлено <code>true</code>, то необходима запись в лог неразрешенных хостов;</p> <p>- <code>active</code>: <code>bool</code>, если установлено <code>true</code>, то необходима проверка по каждому запросу.</p>
-	*
-	*
-	* @param array $properties  Настройки.
-	*
-	* @return \Bitrix\Security\HostRestriction 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/hostrestriction/setproperties.php
-	* @author Bitrix
-	*/
 	public function setProperties(array $properties)
 	{
 		if (isset($properties['hosts']))
@@ -243,22 +199,6 @@ class HostRestriction
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
 	 */
-	
-	/**
-	* <p>Нестатический метод определяет действия, выполняемые во время проверки .</p>
-	*
-	*
-	* @param string $action  Действия. Поддерживаются перенаправление и запрет доступа.
-	*
-	* @param array $options = array() Настройки действий, пока что поддерживаются только адрес
-	* перенаправления для перенаправления.
-	*
-	* @return \Bitrix\Security\HostRestriction 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/hostrestriction/setaction.php
-	* @author Bitrix
-	*/
 	public function setAction($action, array $options = array())
 	{
 		if (!$action)
@@ -301,19 +241,6 @@ class HostRestriction
 	 * @return $this
 	 * @throws \Bitrix\Main\ArgumentTypeException
 	 */
-	
-	/**
-	* <p>Нестатический метод активирует или деактивирует запись в лог запросов неразрешенных хостов.</p>
-	*
-	*
-	* @param boolean $isLogNeeded = true Устанавливает <code>true</code>, если необходимо вести запись в лог.
-	*
-	* @return \Bitrix\Security\HostRestriction 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/hostrestriction/setlogging.php
-	* @author Bitrix
-	*/
 	public function setLogging($isLogNeeded = true)
 	{
 		if (!is_bool($isLogNeeded))
@@ -342,19 +269,6 @@ class HostRestriction
 	 * @throws \Bitrix\Main\ArgumentTypeException
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод активирует или деактивирует автоматическую проверку.</p>
-	*
-	*
-	* @param boolean $isActive = false При установке <code>true</code> будет включена проверка на каждый запрос.
-	*
-	* @return \Bitrix\Security\HostRestriction 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/hostrestriction/setactive.php
-	* @author Bitrix
-	*/
 	public function setActive($isActive = false)
 	{
 		if (!is_bool($isActive))
@@ -382,22 +296,6 @@ class HostRestriction
 	 * @throws LogicException
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод сохраняет разрешенные хосты.</p>
-	*
-	*
-	* @param string $hosts  Разрешенные хосты (маски поддерживаются, например *.example.com).
-	*
-	* @param boolean $ignoreChecking = false При установке <code>false</code> будет отключена проверка хоста перед
-	* установкой.
-	*
-	* @return \Bitrix\Security\HostRestriction 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/hostrestriction/sethosts.php
-	* @author Bitrix
-	*/
 	public function setHosts($hosts, $ignoreChecking = false)
 	{
 		if (!is_string($hosts))
@@ -417,32 +315,21 @@ class HostRestriction
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает регулярные выражения (основанные на доменных именах) для проверки.</p> <p></p> <div class="note"> <b>Примечание:</b> регулярные выражения кешируются для повышения производительности и автоматически удаляются после сохранения.</div> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/hostrestriction/getvalidationregexp.php
-	* @author Bitrix
-	*/
 	public function getValidationRegExp()
 	{
-		if ($this->validationRegExp)
-			return $this->validationRegExp;
-
-		$cache = Data\Cache::createInstance();
-		if($cache->initCache($this->cacheTtl, $this->cacheId, $this->cacheInitPath) )
+		if ($this->validationRegExp === null)
 		{
-			$this->validationRegExp = $cache->getVars();
-		}
-		else
-		{
-			$this->validationRegExp = $this->genValidationRegExp($this->hosts);
-			$cache->startDataCache();
-			$cache->endDataCache($this->validationRegExp);
+			$cache = Data\Cache::createInstance();
+			if($cache->initCache($this->cacheTtl, $this->cacheId, $this->cacheInitPath) )
+			{
+				$this->validationRegExp = $cache->getVars();
+			}
+			else
+			{
+				$this->validationRegExp = $this->genValidationRegExp($this->hosts);
+				$cache->startDataCache();
+				$cache->endDataCache($this->validationRegExp);
+			}
 		}
 
 		return $this->validationRegExp;
@@ -453,17 +340,6 @@ class HostRestriction
 	 *
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод сохраняет все свойства, включает автоматическую проверку и очищает кеш, если необходимо.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Security\HostRestriction 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/hostrestriction/save.php
-	* @author Bitrix
-	*/
 	public function save()
 	{
 		Config\Option::set('security', $this->optionPrefix.'hosts', $this->hosts, '');
@@ -564,15 +440,17 @@ class HostRestriction
 	 */
 	protected function genValidationRegExp($hosts)
 	{
-		$hosts = trim($hosts);
+		$hosts = preg_replace('/#.*/', '', $hosts);
+		$hosts = trim($hosts, " \t\n\r");
 		$hosts = preg_quote($hosts);
-		$hosts = preg_replace(
-			array('~\#.*~', '~\\\\\*~', '~\s+~s'),
-			array('',       '.*',       '|'),
-			$hosts
-		);
+		$hosts = preg_replace('~\\\\\*~', '.*', $hosts);
+		$hosts = preg_split('~\s+~s', $hosts);
 
-		return "#^\s*($hosts)(:\d+)?\s*$#iD";
+		foreach ($hosts as $i => $host)
+		{
+			$hosts[$i] = "#^\s*($host)(:\d+)?\s*$#iD";
+		}
+		return $hosts;
 	}
 
 	/**
@@ -586,10 +464,14 @@ class HostRestriction
 	{
 		$this->validationRegExp = $this->genValidationRegExp($hosts);
 
-		if (!preg_match($this->validationRegExp, $this->getTargetHost()))
+		$count = 0;
+		preg_replace($this->validationRegExp, '', $this->getTargetHost(), 1, $count);
+		if (!$count)
 			throw new LogicException('Current host blocked', 'SECURITY_HOSTS_SELF_BLOCK');
 
-		if (preg_match($this->validationRegExp, 'some-invalid-host.com'))
+		$count = 0;
+		preg_replace($this->validationRegExp, '', 'some-invalid-host.com', 1, $count);
+		if ($count)
 			throw new LogicException('Any host passed restrictions', 'SECURITY_HOSTS_ANY_HOST');
 
 		return $this;

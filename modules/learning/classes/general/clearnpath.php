@@ -7,61 +7,61 @@ interface ILearnPath
 	 * allowed many params. First param - is the id of top, etc.
 	 * if array => than it must be one argument and it will be parsed as path in format for self::SetPathFromArray()
 	 */
-	static public function __construct();
+	public function __construct();
 
 	/**
 	 * @param integer/string (if string must be strictly castable to integer).
 	 * allowed many params. First param - is the id of top, etc.
 	 */
-	static public function SetPath();
+	public function SetPath();
 
 	/**
 	 * @param array of lessons' ids
 	 */
-	static public function SetPathFromArray($arPath);
+	public function SetPathFromArray($arPath);
 
 	/**
 	 * @param string urlencoded path, which can produced by exportUrlencoded()
 	 */
-	static public function ImportUrlencoded($str);
+	public function ImportUrlencoded($str);
 
 	/**
 	 * @return string urlencoded path, which can be used for importUrlencoded()
 	 */
-	static public function ExportUrlencoded();
+	public function ExportUrlencoded();
 
 	/**
 	 * @return array of lessons' ids in current path (from top to bottom)
 	 */
-	static public function GetPathAsArray();
+	public function GetPathAsArray();
 
 	/**
 	 * @return integer/bool id of top (left) element in path. If path is empty - returns FALSE
 	 */
-	static public function GetTop();
+	public function GetTop();
 
 	/**
 	 * @return integer/bool id of bottom (right) element in path. If path is empty - returns FALSE
 	 */
-	static public function GetBottom();
+	public function GetBottom();
 
 	/**
 	 * Removes last element (if exists) from path
 	 * @return integer/bool id of bottom (right) element in path. If path is empty - returns FALSE
 	 */
-	static public function PopBottom();
+	public function PopBottom();
 
 	/**
 	 * Removes first element (if exists) from path
 	 * @return integer/bool id of first (left) element in path. If path is empty - returns FALSE
 	 */
-	static public function ShiftTop();
+	public function ShiftTop();
 
 
 	/**
 	 * @return integer count of elements in path
 	 */
-	static public function Count();
+	public function Count();
 
 
 	/**
@@ -72,7 +72,7 @@ interface ILearnPath
 	 * 
 	 * @return string such as "Course bla bla bla / chapter XXX / lesson XXX"
 	 */
-	static public function GetPathAsHumanReadableString($delimiter = ' / ', $pattern = '#NAME#');
+	public function GetPathAsHumanReadableString($delimiter = ' / ', $pattern = '#NAME#');
 }
 
 class CLearnPath implements ILearnPath
@@ -126,7 +126,7 @@ class CLearnPath implements ILearnPath
 	{
 		$tmp = urldecode($str);
 
-		if (strpos($tmp, self::DELIMITER) !== false)
+		if (mb_strpos($tmp, self::DELIMITER) !== false)
 			return (true);
 		else
 			return (false);
@@ -138,7 +138,7 @@ class CLearnPath implements ILearnPath
 		$this->arPath = array();
 
 		$tmp = urldecode($str);
-		if (strlen($tmp) == 0)
+		if ($tmp == '')
 		{
 			return;
 		}

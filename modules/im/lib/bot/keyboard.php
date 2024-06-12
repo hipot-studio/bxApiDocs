@@ -15,7 +15,7 @@ class Keyboard
 	private $buttons = Array();
 	private $voteMode = false;
 
-	public function __construct($botId, array $colors = Array(), $voteMode = false)
+	function __construct($botId = 0, array $colors = Array(), $voteMode = false)
 	{
 		$this->botId = intval($botId);
 		$this->voteMode = $voteMode? true: false;
@@ -48,43 +48,98 @@ class Keyboard
 
 	public function addButton($params)
 	{
-		if ($this->botId <= 0)
-			return false;
-
-		$button = Array();
+		$button = [];
 		$button['BOT_ID'] = $this->botId;
 		$button['TYPE'] = 'BUTTON';
 
-		if (!isset($params['TEXT']) || strlen(trim($params['TEXT'])) <= 0)
+		if (
+			empty($params['TEXT'])
+			|| !is_string($params['TEXT'])
+			|| trim($params['TEXT']) == ''
+		)
+		{
 			return false;
+		}
 
-		if (isset($params['LINK']) && preg_match('#^(?:/|https?://)#', $params['LINK']))
+		if (
+			!empty($params['LINK'])
+			&& is_string($params['LINK'])
+			&& preg_match('#^(?:/|https?://)#', $params['LINK'])
+		)
 		{
 			$button['LINK'] = htmlspecialcharsbx($params['LINK']);
 		}
-		else if (isset($params['COMMAND']) && strlen(trim($params['COMMAND'])) > 0)
+		elseif (
+			!empty($params['FUNCTION'])
+			&& is_string($params['FUNCTION'])
+		)
 		{
-			$button['COMMAND'] = substr($params['COMMAND'], 0, 1) == '/'? substr($params['COMMAND'], 1): $params['COMMAND'];
-			$button['COMMAND_PARAMS'] = isset($params['COMMAND_PARAMS']) && strlen(trim($params['COMMAND_PARAMS'])) > 0? $params['COMMAND_PARAMS']: '';
+			$button['FUNCTION'] = htmlspecialcharsbx($params['FUNCTION']);
+		}
+		elseif (!empty($params['APP_ID']))
+		{
+			$button['APP_ID'] = (int)$params['APP_ID'];
+			if (
+				isset($params['APP_PARAMS'])
+				&& is_string($params['APP_PARAMS'])
+				&& trim($params['APP_PARAMS']) <> ''
+			)
+			{
+				$button['APP_PARAMS'] = $params['APP_PARAMS'];
+			}
+		}
+		elseif (
+			!empty($params['ACTION'])
+			&& is_string($params['ACTION'])
+			&& in_array($params['ACTION'], ['PUT', 'SEND', 'COPY', 'CALL', 'DIALOG', 'LIVECHAT', 'HELP'], true)
+			&& trim($params['ACTION_VALUE']) <> ''
+		)
+		{
+			$button['ACTION'] = $params['ACTION'];
+			$button['ACTION_VALUE'] = $params['ACTION_VALUE'];
+		}
+		elseif (
+			$this->botId > 0
+			&& !empty($params['COMMAND'])
+			&& is_string($params['COMMAND'])
+			&& trim($params['COMMAND']) <> ''
+		)
+		{
+			$button['COMMAND'] = mb_substr($params['COMMAND'], 0, 1) == '/' ? mb_substr($params['COMMAND'], 1) : $params['COMMAND'];
+			$button['COMMAND_PARAMS'] = '';
+			if (
+				!empty($params['COMMAND_PARAMS'])
+				&& is_string($params['COMMAND_PARAMS'])
+				&& trim($params['COMMAND_PARAMS']) <> ''
+			)
+			{
+				$button['COMMAND_PARAMS'] = $params['COMMAND_PARAMS'];
+			}
 		}
 		else
 		{
 			return false;
 		}
 
-		$button['TEXT'] = htmlspecialcharsbx(trim($params['TEXT']));
+		$button['TEXT'] = trim($params['TEXT'] ?? '');
 
-		$button['VOTE'] = $this->voteMode? 'Y': 'N';
+		$button['VOTE'] = $this->voteMode ? 'Y': 'N';
 
-		$button['BLOCK'] = $params['BLOCK'] == 'Y'? 'Y': 'N';
+		$blockParam = $params['BLOCK'] ?? null;
+		$button['BLOCK'] = $blockParam === 'Y'? 'Y': 'N';
 
-		$button['DISABLED'] = $params['DISABLED'] == 'Y'? 'Y': 'N';
+		$button['WAIT'] = 'N';
 
-		$button['DISPLAY'] = in_array($params['DISPLAY'], Array('BLOCK', 'LINE'))? $params['DISPLAY']: 'BLOCK';
+		$button['CONTEXT'] = in_array(($params['CONTEXT'] ?? null), ['MOBILE', 'DESKTOP']) ? $params['CONTEXT']: 'ALL';
 
-		if (isset($params['WIDTH']) && intval($params['WIDTH']) > 0)
+		$disabledParam = $params['DISABLED'] ?? null;
+		$button['DISABLED'] = $disabledParam === 'Y'? 'Y': 'N';
+
+		$button['DISPLAY'] = in_array(($params['DISPLAY'] ?? null), ['BLOCK', 'LINE'])? $params['DISPLAY']: 'BLOCK';
+
+		if (isset($params['WIDTH']) && (int)$params['WIDTH'] > 0)
 		{
-			$button['WIDTH'] = intval($params['WIDTH']);
+			$button['WIDTH'] = (int)$params['WIDTH'];
 		}
 
 		if (isset($params['BG_COLOR']) && preg_match('/^#([a-fA-F0-9]){3}(([a-fA-F0-9]){3})?\b$/D', $params['BG_COLOR']))
@@ -134,10 +189,16 @@ class Keyboard
 		$this->buttons[] = $button;
 	}
 
-	public static function getKeyboardByJson($params, $textReplace = array())
+	public static function getKeyboardByJson($params, $textReplace = array(), $options = Array())
 	{
-		if (!is_array($params) || intval($params['BOT_ID']) <= 0)
+		if (is_string($params))
+		{
+			$params = \CUtil::JsObjectToPhp($params);
+		}
+		if (!is_array($params))
+		{
 			return null;
+		}
 
 		$colors = is_array($params['COLORS'])? $params['COLORS']: Array();
 		$voteMode = isset($params['VOTE']) && $params['VOTE'] == 'Y';
@@ -148,6 +209,9 @@ class Keyboard
 			if (isset($button['TYPE']) && $button['TYPE'] == 'NEWLINE')
 			{
 				$keyboard->addNewLine();
+			}
+			elseif (isset($button['FUNCTION']) && $options['ENABLE_FUNCTIONS'] != 'Y')
+			{
 			}
 			else
 			{
@@ -182,7 +246,7 @@ class Keyboard
 
 	public function getJson()
 	{
-		$result = \Bitrix\Main\Web\Json::encode($this->buttons);
-		return strlen($result) < 60000? $result: "";
+		$result = \Bitrix\Im\Common::jsonEncode($this->buttons);
+		return mb_strlen($result) < 60000? $result: "";
 	}
 }

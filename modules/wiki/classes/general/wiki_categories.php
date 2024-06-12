@@ -6,7 +6,7 @@ class CWikiCategories
 
 	public function addItem($catParams)
 	{
-		$this->arItems[strtolower($catParams->sName)] = array(
+		$this->arItems[mb_strtolower($catParams->sName)] = array(
 			'TITLE' => $catParams->sTitle,
 			'NAME' => $catParams->sName,
 			'CNT' => $catParams->iItemsCount,
@@ -55,7 +55,7 @@ class CWikiCategoryParams
 
 		$this->sLink = CComponentEngine::MakePathFromTemplate($sTemplate != "" ? $sTemplate : $this->sPathTemplate,
 						array(
-						'wiki_name' => urlencode('Category:'.$this->sName),
+						'wiki_name' => rawurlencode('Category:'.$this->sName),
 						'group_id' => CWikiSocnet::$iSocNetId
 						));
 		return true;

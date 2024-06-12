@@ -1,18 +1,9 @@
-<?
+<?php
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/statistic/classes/general/keepstatistic.php");
+
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CStatistics</b> - класс содержащий общие методы работы с модулем "Статистика".
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cstatistics/index.php
- * @author Bitrix
- */
 class CAllStatistics extends CKeepStatistics
 {
 	public static function GetAdvGuestHost($ADV_ID, $GUEST_ID, $IP_NUMBER, $BACK="")
@@ -53,80 +44,65 @@ class CAllStatistics extends CKeepStatistics
 
 	public static function StartBuffer()
 	{
-		$err_mess = "File: ".__FILE__."<br>Line: ";
+		/** CMain $APPLICATION */
+		/** CUser $USER */
 		global $APPLICATION, $USER;
+
 		if (defined("ADMIN_SECTION") && (ADMIN_SECTION === true))
+		{
 			return;
+		}
+
 		if(!(($USER->IsAuthorized() || $APPLICATION->ShowPanel===true) && $APPLICATION->ShowPanel!==false))
+		{
 			return;
-		//if($APPLICATION->GetPublicShowMode() !== "view")
-		//	return;
+		}
 
-		if ($_GET["show_link_stat"]=="Y") $_SESSION["SHOW_LINK_STAT"] = "Y";
-		elseif ($_GET["show_link_stat"]=="N") $_SESSION["SHOW_LINK_STAT"] = "N";
+		if (isset($_GET["show_link_stat"]))
+		{
+			if ($_GET["show_link_stat"]=="Y")
+			{
+				$_SESSION["SHOW_LINK_STAT"] = "Y";
+			}
+			elseif ($_GET["show_link_stat"]=="N")
+			{
+				$_SESSION["SHOW_LINK_STAT"] = "N";
+			}
+		}
 
-		$arButtons = array();
 		$STAT_RIGHT = $APPLICATION->GetGroupRight("statistic");
-		if ($STAT_RIGHT>="R")
+		if ($STAT_RIGHT < "R")
 		{
-			$width = 650;
-			$height = 650;
-			$CURRENT_PAGE = __GetFullRequestUri(__GetFullCurPage());
-
-			$arButtons[] = array(
-				"TEXT" => GetMessage("STAT_PAGE_GRAPH_PANEL_BUTTON"),
-				"TITLE" => GetMessage("STAT_PAGE_GRAPH_PANEL_BUTTON"),
-				"IMAGE" => "/bitrix/images/statistic/page_traffic.gif",
-				"ACTION" => "javascript:window.open('/bitrix/admin/section_graph_list.php?lang=". LANGUAGE_ID."&public=Y&width=".$width."&height=".$height."&section=".urlencode($CURRENT_PAGE)."&set_default=Y','','target=_blank,scrollbars=yes,resizable=yes,width=".$width. ",height=".$height.",left='+Math.floor((screen.width - ".$width.")/2)+',top='+Math.floor((screen.height- ".$height.")/2))",
-			);
-
-			if ($_SESSION["SHOW_LINK_STAT"]=="Y")
-			{
-				$add = "show_link_stat=N";
-				$alt = GetMessage("STAT_LINK_STAT_HIDE_PANEL_BUTTON");
-
-				$arButtons[] = array(
-					"TEXT" => GetMessage("STAT_LINK_STAT_PANEL_BUTTON"),
-					"TITLE" => GetMessage("STAT_LINK_STAT_PANEL_BUTTON"),
-					"IMAGE" => "/bitrix/images/statistic/link_stat_panel.gif",
-					"ACTION" => "javascript:ShowStatLinkPage()",
-				);
-
-				ob_start();
-				// define("BX_STATISTIC_BUFFER_USED", true);
-
-			}
-			else
-			{
-				$add = "show_link_stat=Y";
-				$alt = GetMessage("STAT_LINK_STAT_SHOW_PANEL_BUTTON");
-			}
-
-			$arButtons[] = array(
-				"TEXT" => $alt,
-				"TITLE" => $alt,
-				"IMAGE" => "/bitrix/images/statistic/link_stat_show.gif",
-				"ACTION" => "jsUtils.Redirect([], '".CUtil::JSEscape($APPLICATION->GetCurPageParam($add, array("show_link_stat")))."')",
-			);
+			return;
 		}
-		if(count($arButtons) > 0)
-		{
-			$APPLICATION->AddPanelButton(array(
-				"ICON" => "bx-panel-statistics-icon",
-				"ALT" => GetMessage("STAT_PANEL_BUTTON"),
-				"TEXT" => GetMessage("STAT_PANEL_BUTTON"),
-				"MAIN_SORT" => 1000,
-				"MENU" => $arButtons,
-				"MODE" => "view",
-				"HINT" => array(
-					"TITLE" => GetMessage("STAT_PANEL_BUTTON"),
-					"TEXT" => GetMessage("STAT_PANEL_BUTTON_HINT"),
-				)
-			));
-		}
+
+		$width = 650;
+		$height = 650;
+		$CURRENT_PAGE = __GetFullRequestUri(__GetFullCurPage());
+		$arButtons = array();
+
+		$arButtons[] = array(
+			"TEXT" => GetMessage("STAT_PAGE_GRAPH_PANEL_BUTTON"),
+			"TITLE" => GetMessage("STAT_PAGE_GRAPH_PANEL_BUTTON"),
+			"IMAGE" => "/bitrix/images/statistic/page_traffic.gif",
+			"ACTION" => "javascript:window.open('/bitrix/admin/section_graph_list.php?lang=". LANGUAGE_ID."&public=Y&width=".$width."&height=".$height."&section=".urlencode($CURRENT_PAGE)."&set_default=Y','','target=_blank,scrollbars=yes,resizable=yes,width=".$width. ",height=".$height.",left='+Math.floor((screen.width - ".$width.")/2)+',top='+Math.floor((screen.height- ".$height.")/2))",
+		);
+
+		$APPLICATION->AddPanelButton(array(
+			"ICON" => "bx-panel-statistics-icon",
+			"ALT" => GetMessage("STAT_PANEL_BUTTON"),
+			"TEXT" => GetMessage("STAT_PANEL_BUTTON"),
+			"MAIN_SORT" => 1000,
+			"MENU" => $arButtons,
+			"MODE" => "view",
+			"HINT" => array(
+				"TITLE" => GetMessage("STAT_PANEL_BUTTON"),
+				"TEXT" => GetMessage("STAT_PANEL_BUTTON_HINT"),
+			)
+		));
 	}
 
-	public static function EndBuffer()
+	public static function EndBuffer(&$content)
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		global $APPLICATION, $arHashLink;
@@ -134,9 +110,6 @@ class CAllStatistics extends CKeepStatistics
 		if (defined("ADMIN_SECTION") && ADMIN_SECTION===true) return;
 		if (defined("BX_STATISTIC_BUFFER_USED") && BX_STATISTIC_BUFFER_USED===true)
 		{
-			$content = ob_get_contents();
-			ob_end_clean();
-
 			// this JS will open new windows with statistics data
 			ob_start();
 			?>
@@ -169,7 +142,7 @@ class CAllStatistics extends CKeepStatistics
 					{
 						// relative URL found
 						$link = __GetFullRequestUri(__GetFullCurPage($link));
-						if (strpos($link, $_SERVER["HTTP_HOST"])!==false)
+						if (mb_strpos($link, $_SERVER["HTTP_HOST"]) !== false)
 						{
 							$arUniqLink[crc32ex($link)] = $link;
 						}
@@ -177,6 +150,7 @@ class CAllStatistics extends CKeepStatistics
 				}
 			}
 
+			$js = '';
 			// we found some links
 			if (count($arUniqLink)>0)
 			{
@@ -234,7 +208,7 @@ class CAllStatistics extends CKeepStatistics
 
 					// парсим контент и добавляем к тэгам <a> желтую табличку с процентом переходов
 					$pcre_backtrack_limit = intval(ini_get("pcre.backtrack_limit"));
-					$content_len = function_exists('mb_strlen')? mb_strlen($content, 'latin1'): strlen($content);
+					$content_len = strlen($content);
 					$content_len++;
 					if($pcre_backtrack_limit < $content_len)
 						@ini_set("pcre.backtrack_limit", $content_len);
@@ -254,7 +228,7 @@ class CAllStatistics extends CKeepStatistics
 					</style>
 					<div class="stat_pages">
 					<h2><?=GetMessage("STAT_LINK_STAT")?></h2>
-					<p><?=$CURRENT_PAGE?></p>
+					<p><?=htmlspecialcharsEx($CURRENT_PAGE)?></p>
 					<table border="0" cellspacing="0" cellpadding="0" width="100%">
 						<tr>
 							<td class="head" align="center">#</td>
@@ -296,9 +270,10 @@ class CAllStatistics extends CKeepStatistics
 					{
 						var top=0, left=0;
 						var width=800, height=600;
-						if(width > screen.width-10 || height > screen.height-28) scroll = "yes";
-						if(height < screen.height-28) top = Math.floor((screen.height - height)/2-14);
-						if(width < screen.width-10) left = Math.floor((screen.width - width)/2-5);
+						if(height < screen.height-28)
+							top = Math.floor((screen.height - height)/2-14);
+						if(width < screen.width-10)
+							left = Math.floor((screen.width - width)/2-5);
 						width = Math.min(width, screen.width-10);
 						height = Math.min(height, screen.height-28);
 						var wnd = window.open("","","scrollbars=yes,resizable=yes,width="+width+",height="+height+",left="+left+",top="+top);
@@ -328,7 +303,7 @@ class CAllStatistics extends CKeepStatistics
 
 				}
 			}
-			echo $content.$js;
+			$content .= $js;
 		}
 
 	}
@@ -340,7 +315,7 @@ class CAllStatistics extends CKeepStatistics
 		{
 			$date = $DB->CurrentDateFunction();
 		}
-		elseif(($DATE_FORMAT == "SHORT") && (strtolower($DB->type) == "mysql"))
+		elseif(($DATE_FORMAT == "SHORT") && ($DB->type == "MYSQL"))
 		{
 			$date = "cast(".$DB->CharToDateFunction($DATE, $DATE_FORMAT)." as date)";
 		}
@@ -354,7 +329,7 @@ class CAllStatistics extends CKeepStatistics
 	public static function CleanUpStatistics_1()
 	{
 		__SetNoKeepStatistics();
-		if ($_SESSION["SESS_NO_AGENT_STATISTIC"]!="Y" && !defined("NO_AGENT_STATISTIC"))
+		if ((!isset($_SESSION["SESS_NO_AGENT_STATISTIC"]) || $_SESSION["SESS_NO_AGENT_STATISTIC"] != "Y") && !defined("NO_AGENT_STATISTIC"))
 		{
 			CStatistics::CleanUpVisits();
 			CStatistics::CleanUpEvents();
@@ -378,7 +353,7 @@ class CAllStatistics extends CKeepStatistics
 	public static function CleanUpStatistics_2()
 	{
 		__SetNoKeepStatistics();
-		if ($_SESSION["SESS_NO_AGENT_STATISTIC"]!="Y" && !defined("NO_AGENT_STATISTIC"))
+		if ((!isset($_SESSION["SESS_NO_AGENT_STATISTIC"]) || $_SESSION["SESS_NO_AGENT_STATISTIC"] != "Y") && !defined("NO_AGENT_STATISTIC"))
 		{
 			CStatistics::CleanUpSessions();
 			CStatistics::CleanUpHits();
@@ -393,13 +368,14 @@ class CAllStatistics extends CKeepStatistics
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
 		if(intval($_SESSION["SESS_SEARCHER_ID"]) > 0)
-			return;
+			return "";
+
 		if(COption::GetOptionString("statistic", "SAVE_REFERERS") != "N")
 		{
 			if(!array_key_exists("SESS_PHRASE_ID", $_SESSION))
 				$_SESSION["SESS_PHRASE_ID"] = array();
-			$search_phrase = substr(trim($search_phrase), 0, 255);
-			if(strlen($search_phrase))
+			$search_phrase = mb_substr(trim($search_phrase), 0, 255);
+			if($search_phrase <> '')
 			{
 				// check if search of this phrase already occured in this session
 				if(array_key_exists($search_phrase, $_SESSION["SESS_PHRASE_ID"]))
@@ -409,12 +385,18 @@ class CAllStatistics extends CKeepStatistics
 				}
 				else
 				{
-					if(defined("ADMIN_SECTION") && ADMIN_SECTION===true)
+					if(defined("ADMIN_SECTION") && ADMIN_SECTION === true)
+					{
 						$sql_site = "'ad'";
+					}
 					elseif(defined("SITE_ID"))
+					{
 						$sql_site = "'".$DB->ForSql(SITE_ID, 2)."'";
+					}
 					else
+					{
 						$sql_site = "null";
+					}
 
 					// otherwise add it
 					$arFields = Array(
@@ -427,7 +409,9 @@ class CAllStatistics extends CKeepStatistics
 					$_SESSION["SESS_PHRASE_ID"][$search_phrase] = $phrase_id = $DB->Insert("b_stat_phrase_list", $arFields, "File: ".__FILE__."<br>Line: ".__LINE__);
 					// let's use lru to control session data volume
 					while(count($_SESSION["SESS_PHRASE_ID"]) > 10)
+					{
 						array_shift($_SESSION["SESS_PHRASE_ID"]);
+					}
 
 					stat_session_register("SESS_FROM_SEARCHERS");
 
@@ -435,13 +419,14 @@ class CAllStatistics extends CKeepStatistics
 					$arFields = Array(
 						"PHRASES" => "PHRASES + 1",
 					);
-					$rows = $DB->Update("b_stat_searcher", $arFields, "WHERE ID=1", "File: ".__FILE__."<br>Line: ".__LINE__);
+					$DB->Update("b_stat_searcher", $arFields, "WHERE ID=1", "File: ".__FILE__."<br>Line: ".__LINE__);
 					$_SESSION["SESS_FROM_SEARCHERS"][] = 1;
 
 					return "phrase_id=".$phrase_id;
 				}
 			}
 		}
+		return "";
 	}
 
 	///////////////////////////////////////////////////////////////////
@@ -463,12 +448,16 @@ class CAllStatistics extends CKeepStatistics
 				$_SESSION["SESS_ADV_ID"],
 				$_SESSION["SESS_GUEST_ID"],
 				$REMOTE_ADDR_NUMBER);
+			$MAX_DATE_GUEST_HIT = "";
+			$MAX_DATE_HOST_HIT = "";
 			$guest_counter = 0;
 			$host_counter = 0;
 			while ($tr = $t->Fetch())
 			{
-				if ($guest_counter!=1) $guest_counter = (intval($tr["ADV_GUESTS"])>0) ? 0 : 1;
-				if ($host_counter!=1) $host_counter = (intval($tr["ADV_HOSTS"])>0) ? 0 : 1;
+				if ($guest_counter != 1)
+					$guest_counter = (intval($tr["ADV_GUESTS"])>0) ? 0 : 1;
+				if ($host_counter != 1)
+					$host_counter = (intval($tr["ADV_HOSTS"])>0) ? 0 : 1;
 
 				// дата прямого захода посетителя
 				$MAX_DATE_GUEST_HIT = $tr["MAX_DATE_GUEST_HIT"];
@@ -521,7 +510,7 @@ class CAllStatistics extends CKeepStatistics
 					"C_HOSTS_DAY" => 1,
 					"SESSIONS" => 1
 					);
-				$DB->Insert("b_stat_adv_day",$arFields_i, $err_mess.__LINE__, $DEBUG);
+				$DB->Insert("b_stat_adv_day",$arFields_i, $err_mess.__LINE__);
 			}
 			elseif ($rows>1) // если обновили более одного дня то
 			{
@@ -554,17 +543,17 @@ class CAllStatistics extends CKeepStatistics
 					"IP" => "'".$DB->ForSql($_SERVER["REMOTE_ADDR"],15)."'",
 					"BACK" => "'N'"
 					);
-				$DB->Insert("b_stat_adv_guest",$arFields, $err_mess.__LINE__, $DEBUG);
+				$DB->Insert("b_stat_adv_guest",$arFields, $err_mess.__LINE__);
 			}
 			else // иначе
 			{
 				// обновляем дату прямого захода посетителя
 				$arFields = Array("DATE_GUEST_HIT" => $DB->GetNowFunction());
-				$DB->Update("b_stat_adv_guest", $arFields, "WHERE ADV_ID=".intval($_SESSION["SESS_ADV_ID"])." and GUEST_ID=".intval($_SESSION["SESS_GUEST_ID"])." and BACK='N'", $err_mess.__LINE__, $DEBUG);
+				$DB->Update("b_stat_adv_guest", $arFields, "WHERE ADV_ID=".intval($_SESSION["SESS_ADV_ID"])." and GUEST_ID=".intval($_SESSION["SESS_GUEST_ID"])." and BACK='N'", $err_mess.__LINE__);
 
 				// обновляем дату прямого захода с хоста
 				$arFields = Array("DATE_HOST_HIT" => $DB->GetNowFunction());
-				$DB->Update("b_stat_adv_guest", $arFields, "WHERE ADV_ID=".intval($_SESSION["SESS_ADV_ID"])." and IP_NUMBER='".$DB->ForSql($REMOTE_ADDR_NUMBER)."' and BACK='N'", $err_mess.__LINE__, $DEBUG);
+				$DB->Update("b_stat_adv_guest", $arFields, "WHERE ADV_ID=".intval($_SESSION["SESS_ADV_ID"])." and IP_NUMBER='".$DB->ForSql($REMOTE_ADDR_NUMBER)."' and BACK='N'", $err_mess.__LINE__);
 			}
 			// записываем прямую рекламную кампанию в cookie
 			$GLOBALS["APPLICATION"]->set_cookie("LAST_ADV", $_SESSION["SESS_ADV_ID"]."_Y");
@@ -578,6 +567,8 @@ class CAllStatistics extends CKeepStatistics
 				$_SESSION["SESS_GUEST_ID"],
 				$REMOTE_ADDR_NUMBER,
 				"and BACK='Y'");
+			$MAX_DATE_GUEST_HIT = "";
+			$MAX_DATE_HOST_HIT = "";
 			$guest_back_counter = 0;
 			$host_back_counter = 0;
 			while ($tr = $t->Fetch())
@@ -635,7 +626,7 @@ class CAllStatistics extends CKeepStatistics
 					"HOSTS_DAY_BACK" => 1,
 					"SESSIONS_BACK" => 1
 					);
-				$DB->Insert("b_stat_adv_day", $arFields, $err_mess.__LINE__, $DEBUG);
+				$DB->Insert("b_stat_adv_day", $arFields, $err_mess.__LINE__);
 			}
 			elseif ($rows>1) // если обновили более одного дня то
 			{
@@ -669,17 +660,17 @@ class CAllStatistics extends CKeepStatistics
 					"IP" => "'".$DB->ForSql($_SERVER["REMOTE_ADDR"],15)."'",
 					"BACK" => "'Y'"
 					);
-				$DB->Insert("b_stat_adv_guest",$arFields, $err_mess.__LINE__, $DEBUG);
+				$DB->Insert("b_stat_adv_guest",$arFields, $err_mess.__LINE__);
 			}
 			else // иначе
 			{
 				// обновляем дату последнего возврата посетителя
 				$arFields = Array("DATE_GUEST_HIT" => $DB->GetNowFunction());
-				$DB->Update("b_stat_adv_guest",$arFields,"WHERE ADV_ID=".intval($_SESSION["SESS_LAST_ADV_ID"])." and GUEST_ID=".intval($_SESSION["SESS_GUEST_ID"])." and BACK='Y'",$err_mess.__LINE__, $DEBUG);
+				$DB->Update("b_stat_adv_guest",$arFields,"WHERE ADV_ID=".intval($_SESSION["SESS_LAST_ADV_ID"])." and GUEST_ID=".intval($_SESSION["SESS_GUEST_ID"])." and BACK='Y'",$err_mess.__LINE__);
 
 				// обновляем дату последнего возврата с хоста
 				$arFields = Array("DATE_HOST_HIT" => $DB->GetNowFunction());
-				$DB->Update("b_stat_adv_guest",$arFields,"WHERE ADV_ID=".intval($_SESSION["SESS_LAST_ADV_ID"])." and IP_NUMBER='".$DB->ForSql($REMOTE_ADDR_NUMBER)."' and BACK='Y'",$err_mess.__LINE__, $DEBUG);
+				$DB->Update("b_stat_adv_guest",$arFields,"WHERE ADV_ID=".intval($_SESSION["SESS_LAST_ADV_ID"])." and IP_NUMBER='".$DB->ForSql($REMOTE_ADDR_NUMBER)."' and BACK='Y'",$err_mess.__LINE__);
 			}
 			// записываем возврат по рекламной кампании в cookie
 			$GLOBALS["APPLICATION"]->set_cookie("LAST_ADV", $_SESSION["SESS_LAST_ADV_ID"]);
@@ -696,7 +687,10 @@ class CAllStatistics extends CKeepStatistics
 		$DB = CDatabase::GetModuleConnection('statistic');
 
 		// если это начало сессии
-		if (intval($_SESSION["SESS_SESSION_ID"])<=0 && intval($_SESSION["SESS_ADV_ID"])<=0)
+		if (
+			(!isset($_SESSION["SESS_SESSION_ID"]) || intval($_SESSION["SESS_SESSION_ID"])<=0)
+			&& (!isset($_SESSION["SESS_ADV_ID"]) || intval($_SESSION["SESS_ADV_ID"])<=0)
+		)
 		{
 			$arrADV = array(); // массив рекламных кампаний
 
@@ -738,15 +732,15 @@ class CAllStatistics extends CKeepStatistics
 			}
 
 			// если гость пришел с referer1, либо referer2 то
-			if (strlen($_SESSION["referer1"])>0 || strlen($_SESSION["referer2"])>0)
+			if ($_SESSION["referer1"] <> '' || $_SESSION["referer2"] <> '')
 			{
 				CAdv::SetByReferer(trim($_SESSION["referer1"]), trim($_SESSION["referer2"]), $arrADV, $ref1, $ref2);
 			}
 			//Handle Openstat if enabled
-			if(COption::GetOptionString("statistic", "OPENSTAT_ACTIVE") === "Y" && strlen($_REQUEST["_openstat"])>0)
+			if(COption::GetOptionString("statistic", "OPENSTAT_ACTIVE") === "Y" && $_REQUEST["_openstat"] <> '')
 			{
 				$openstat = $_REQUEST["_openstat"];
-				if(strpos($openstat, ";")===false)
+				if(mb_strpos($openstat, ";") === false)
 					$openstat = base64_decode($openstat);
 				$openstat = explode(";", $openstat);
 				CAdv::SetByReferer(
@@ -779,14 +773,14 @@ class CAllStatistics extends CKeepStatistics
 			}
 			else
 			{
-				list(,$value) = each($arrADV);
+				$value = reset($arrADV);
 				$_SESSION["SESS_ADV_ID"] = intval($value);
 				$_SESSION["referer1"] = $ref1;
 				$_SESSION["referer2"] = $ref2;
 			}
 		}
 		if (intval($_SESSION["SESS_ADV_ID"])>0) $_SESSION["SESS_LAST_ADV_ID"] = $_SESSION["SESS_ADV_ID"];
-		$_SESSION["SESS_LAST_ADV_ID"] = intval($_SESSION["SESS_LAST_ADV_ID"]);
+		$_SESSION["SESS_LAST_ADV_ID"] = intval($_SESSION["SESS_LAST_ADV_ID"] ?? 0);
 	}
 
 	///////////////////////////////////////////////////////////////////
@@ -814,13 +808,14 @@ class CAllStatistics extends CKeepStatistics
 		$ERROR_404 = (defined("ERROR_404") && ERROR_404=="Y") ? "Y" : "N";
 		$REPAIR_COOKIE_GUEST = "N";
 		if (!isset($_SESSION["SESS_GUEST_NEW"])) $_SESSION["SESS_GUEST_NEW"] = "N";
-		$_SESSION["SESS_GUEST_ID"] = intval($_SESSION["SESS_GUEST_ID"]);
+		$_SESSION["SESS_GUEST_ID"] = intval($_SESSION["SESS_GUEST_ID"] ?? 0);
 
+		$COOKIE_ADV = "";
 		$COOKIE_GUEST_ID = intval($APPLICATION->get_cookie("GUEST_ID"));
 		if($COOKIE_GUEST_ID==0) $COOKIE_GUEST_ID = intval($_SESSION["SESS_GUEST_ID"]);
 
 		// если сессия только открылась
-		if (intval($_SESSION["SESS_SESSION_ID"])<=0)
+		if (!isset($_SESSION["SESS_SESSION_ID"]) || intval($_SESSION["SESS_SESSION_ID"])<=0)
 		{
 			// выбираем из базы параметры гостя
 			$q = CGuest::GetLastByID($COOKIE_GUEST_ID);
@@ -891,7 +886,7 @@ class CAllStatistics extends CKeepStatistics
 			// вставляем гостя в базу
 			$arFields = Array(
 				"FIRST_DATE"		=> $DB->GetNowFunction(),
-				"FIRST_URL_FROM"	=> "'".$DB->ForSql($_SERVER["HTTP_REFERER"],2000)."'",
+				"FIRST_URL_FROM"	=> "'".$DB->ForSql($_SERVER["HTTP_REFERER"] ?? '', 2000)."'",
 				"FIRST_URL_TO"		=> "'".$DB->ForSql(__GetFullRequestUri(),2000)."'",
 				"FIRST_URL_TO_404"	=> "'".$DB->ForSql($ERROR_404)."'",
 				"FIRST_SITE_ID"		=> $sql_site,
@@ -944,8 +939,10 @@ class CAllStatistics extends CKeepStatistics
 			// запоминаем кто он
 			$_SESSION["SESS_LAST_USER_ID"] = intval($USER->GetID());
 		}
-		if (intval($_SESSION["SESS_LAST_USER_ID"])<=0) $_SESSION["SESS_LAST_USER_ID"] = "";
-
+		if (intval($_SESSION["SESS_LAST_USER_ID"] ?? 0) <= 0)
+		{
+			$_SESSION["SESS_LAST_USER_ID"] = "";
+		}
 
 		if ($_SESSION["SESS_GUEST_ID"]>0)
 		{
@@ -974,7 +971,7 @@ class CAllStatistics extends CKeepStatistics
 			return false;
 		if(COption::GetOptionString("statistic", "DEFENCE_ON")=="Y")
 		{
-			$_SESSION["SESS_SEARCHER_CHECK_ACTIVITY"] = ($_SESSION["SESS_SEARCHER_CHECK_ACTIVITY"]=="N") ? "N" : "Y";
+			$_SESSION["SESS_SEARCHER_CHECK_ACTIVITY"] = (isset($_SESSION["SESS_SEARCHER_CHECK_ACTIVITY"]) && $_SESSION["SESS_SEARCHER_CHECK_ACTIVITY"]=="N") ? "N" : "Y";
 			// если это не поисковик или поисковик, но с установленным флагом "проверять лимит активности"
 			if (
 				intval($_SESSION["SESS_SEARCHER_ID"]) <= 0
@@ -988,7 +985,7 @@ class CAllStatistics extends CKeepStatistics
 				if (intval($STACK_TIME)>0)
 				{
 					// если лимит активности уже превышался то
-					if (strlen($_SESSION["SESS_GRABBER_STOP_TIME"])>0)
+					if (!empty($_SESSION["SESS_GRABBER_STOP_TIME"]))
 					{
 						// если время задержки еще не истекло то
 						if ((time()-$_SESSION["SESS_GRABBER_STOP_TIME"])<=$DEFENCE_DELAY)
@@ -1032,17 +1029,26 @@ class CAllStatistics extends CKeepStatistics
 						// если в этой сессии письмо еще не отсылали то
 						if ($_SESSION["ACTIVITY_EXCEEDING_NOTIFIED"]!="Y")
 						{
-							if (intval($_SESSION["SESS_SESSION_ID"])>0)
-								$SESSION_LINK = "/bitrix/admin/session_list.php?lang=". $arSite["LANGUAGE_ID"]."&find_id=".$_SESSION["SESS_SESSION_ID"]."&find_id_exact_match=Y&set_filter=Y";
+							if (defined("SITE_ID") && SITE_ID <> '')
+							{
+								$rsSite = CSite::GetByID(SITE_ID);
+								$arSite = $rsSite->Fetch();
+								$site_id = SITE_ID;
+							}
+							else
+							{
+								$rsSite = CSite::GetDefList();
+								$arSite = $rsSite->Fetch();
+								$site_id = $arSite["ID"];
+							}
 
-							if (intval($_SESSION["SESS_GUEST_ID"])>0)
-								$VISITOR_LINK = "/bitrix/admin/guest_list.php?lang=". $arSite["LANGUAGE_ID"]."&find_id=".$_SESSION["SESS_GUEST_ID"]."&find_id_exact_match=Y&set_filter=Y";
+							$SESSION_LINK = intval($_SESSION["SESS_SESSION_ID"])>0? "/bitrix/admin/session_list.php?lang=". $arSite["LANGUAGE_ID"]."&find_id=".$_SESSION["SESS_SESSION_ID"]."&find_id_exact_match=Y&set_filter=Y": "";
+							$VISITOR_LINK = intval($_SESSION["SESS_GUEST_ID"])>0? "/bitrix/admin/guest_list.php?lang=". $arSite["LANGUAGE_ID"]."&find_id=".$_SESSION["SESS_GUEST_ID"]."&find_id_exact_match=Y&set_filter=Y": "";
 
 							$arr = explode(".",$_SERVER["REMOTE_ADDR"]);
 							$STOPLIST_LINK = "/bitrix/admin/stoplist_edit.php?lang=". $arSite["LANGUAGE_ID"]."&net1=".intval($arr[0])."&net2=".intval($arr[1])."&net3=". intval($arr[2])."&net4=".intval($arr[3])."&user_agent=".urlencode($_SERVER["HTTP_USER_AGENT"]);
 
-							if (intval($_SESSION["SESS_SEARCHER_ID"])>0)
-								$SEARCHER_LINK = "/bitrix/admin/hit_searcher_list.php?lang=". $arSite["LANGUAGE_ID"]."&find_searcher_id=".$_SESSION["SESS_SEARCHER_ID"]."&set_filter=Y";
+							$SEARCHER_LINK = intval($_SESSION["SESS_SEARCHER_ID"])>0? "/bitrix/admin/hit_searcher_list.php?lang=". $arSite["LANGUAGE_ID"]."&find_searcher_id=".$_SESSION["SESS_SEARCHER_ID"]."&set_filter=Y": "";
 
 							$arEventFields = array(
 								"ACTIVITY_TIME_LIMIT"	=> intval($STACK_TIME),
@@ -1062,13 +1068,7 @@ class CAllStatistics extends CKeepStatistics
 								"STOPLIST_LINK"			=> $STOPLIST_LINK,
 								"EMAIL_TO"			=> COption::GetOptionString("main", "email_from", ""),
 							);
-							if (defined("SITE_ID") && strlen(SITE_ID)>0) $site_id = SITE_ID;
-							else
-							{
-								$rsSite = CSite::GetDefList();
-								$arSite = $rsSite->Fetch();
-								$site_id = $arSite["ID"];
-							}
+
 							CEvent::Send("STATISTIC_ACTIVITY_EXCEEDING", $site_id, $arEventFields);
 
 							$_SESSION["ACTIVITY_EXCEEDING_NOTIFIED"] = "Y";
@@ -1094,7 +1094,7 @@ class CAllStatistics extends CKeepStatistics
 
 		if($table !== false)
 		{
-			if(strlen($table) > 0 && strlen($where) > 0 && is_array($arrUpdate))
+			if($table <> '' && $where <> '' && is_array($arrUpdate))
 			{
 				foreach($arrUpdate as $field => $value)
 				{
@@ -1123,58 +1123,19 @@ class CAllStatistics extends CKeepStatistics
 	///////////////////////////////////////////////////////////////////
 	// очистка статистики до определенной даты
 	///////////////////////////////////////////////////////////////////
-	
-	/**
-	* <p>Очищает собранные статистические данные.</p>
-	*
-	*
-	* @param string $date = "" Дата в <a href="http://dev.1c-bitrix.ru/api_help/main/general/constants.php#format_date">формате
-	* текущего сайта</a> (или языка) до которой (включительно) необходимо
-	* очистить статистику. Если в данном параметре не указать дату, то
-	* будут очищены все накопленные данные статистики.
-	*
-	* @param array &$errors  Если параметр <i>date</i> не содержит даты, то в данном параметре будут
-	* возвращены возможные ошибки которые могут возникнуть в процессе
-	* полной очистки данных статистики.
-	*
-	* @return bool <p>Метод возвращает "true", в случае успешного выполнения и "false" - в
-	* противном случае.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // дата в формате текущего сайта или языка
-	* // до которой включительно будет очищена вся собранная статистика
-	* $date = "31.12.2007";
-	* 
-	* // очищаем
-	* <b>CStatistics::CleanUp</b>($date);
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://www.1c-bitrix.ru/user_help/statistic/settings.php">Настройки модуля
-	* "Статистика"</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cstatistics/cleanup.php
-	* @author Bitrix
-	*/
 	public static function CleanUp($cleanup_date="", &$arErrors)
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
-		if (strlen($cleanup_date)<=0)
+		if ($cleanup_date == '')
 		{
-			$fname = $_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/statistic/install/db/".strtolower($DB->type)."/clean_up.sql";
+			$fname = $_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/statistic/install/db/".mb_strtolower($DB->type)."/clean_up.sql";
 			if (file_exists($fname))
 			{
 				$arErrors = $DB->RunSQLBatch($fname);
 				if (!$arErrors)
 				{
-					$fname = $_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/statistic/install/db/".strtolower($DB->type)."/adv.sql";
+					$fname = $_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/statistic/install/db/".mb_strtolower($DB->type)."/adv.sql";
 					$arErrors2 = $DB->RunSQLBatch($fname);
 					if (!$arErrors2) return true; else
 					{
@@ -1191,7 +1152,6 @@ class CAllStatistics extends CKeepStatistics
 			if ($stmp)
 			{
 				$arrTables = array(
-					"b_stat_adv_guest"		=> "DATE_GUEST_HIT",
 					"b_stat_adv_guest"		=> "DATE_HOST_HIT",
 					"b_stat_adv_day"		=> "DATE_STAT",
 					"b_stat_adv_event_day"	=> "DATE_STAT",
@@ -1210,9 +1170,9 @@ class CAllStatistics extends CKeepStatistics
 					"b_stat_page"			=> "DATE_STAT",
 					"b_stat_country_day"	=> "DATE_STAT",
 					"b_stat_path"			=> "DATE_STAT"
-					);
-				reset($arrTables);
-				while (list($table_name, $date_name) = each($arrTables))
+				);
+
+				foreach ($arrTables as $table_name => $date_name)
 				{
 					CStatistics::CleanUpTableByDate($cleanup_date, $table_name, $date_name);
 				}
@@ -1229,7 +1189,7 @@ class CAllStatistics extends CKeepStatistics
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
 		$base_currency = GetStatisticBaseCurrency();
-		if ($base_currency!="xxx" && strlen($base_currency)>0)
+		if ($base_currency!="xxx" && $base_currency <> '')
 		{
 			if (CModule::IncludeModule("currency"))
 			{
@@ -1269,8 +1229,16 @@ class CAllStatistics extends CKeepStatistics
 	}
 
 	// функции для совместимости
-	public static function GetEventParam($site_id=false) { return CStatEvent::GetGID($site_id); }
-	public static function Set_Event($event1, $event2="", $event3="", $goto="", $money="", $currency="", $chargeback="N", $site_id=false) { return CStatEvent::AddCurrent($event1, $event2, $event3, $money, $currency, $goto, $chargeback, $site_id); }
+	public static function GetEventParam($site_id = false)
+	{
+		return CStatEvent::GetGID($site_id);
+	}
+
+	public static function Set_Event($event1, $event2 = "", $event3 = "", $goto = "", $money = "", $currency = "", $chargeback = "N", $site_id = false)
+	{
+		return CStatEvent::AddCurrent($event1, $event2, $event3, $money, $currency, $goto, $chargeback, $site_id);
+	}
+
 	public static function CheckForDDL()
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -1285,6 +1253,7 @@ class CAllStatistics extends CKeepStatistics
 		}
 		return false;
 	}
+
 	public static function GetDDL()
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -1297,6 +1266,7 @@ class CAllStatistics extends CKeepStatistics
 		}
 		return $result;
 	}
+
 	public static function ExecuteDDL($ID)
 	{
 		$ID = intval($ID);
@@ -1304,6 +1274,7 @@ class CAllStatistics extends CKeepStatistics
 		$rs=$DB->Query("select * from b_stat_ddl where ID=".$ID, true);
 		if($rs)
 		{
+			$bSuccess = false;
 			if($ar=$rs->Fetch())
 			{
 				if($DB->Query($ar["SQL_TEXT"], true))
@@ -1312,15 +1283,14 @@ class CAllStatistics extends CKeepStatistics
 				}
 				else
 				{
-					$bSuccess = false;
-					if(strpos($DB->db_Error,"Duplicate key name")===0) $bSuccess=true;
-					if(strpos($DB->db_Error,"Can't DROP")===0) $bSuccess=true;
+					if(mb_strpos($DB->db_Error, "Duplicate key name") === 0) $bSuccess=true;
+					if(mb_strpos($DB->db_Error, "Can't DROP") === 0) $bSuccess=true;
 
-					if(strpos($DB->db_Error,"ORA-00955")===0) $bSuccess=true;
-					if(strpos($DB->db_Error,"ORA-01418")===0) $bSuccess=true;
+					if(mb_strpos($DB->db_Error, "ORA-00955") === 0) $bSuccess=true;
+					if(mb_strpos($DB->db_Error, "ORA-01418") === 0) $bSuccess=true;
 
-					if(strpos($DB->db_Error,"#S0011")===0) $bSuccess=true;
-					if(strpos($DB->db_Error,"#S0002")===0) $bSuccess=true;
+					if(mb_strpos($DB->db_Error, "#S0011") === 0) $bSuccess=true;
+					if(mb_strpos($DB->db_Error, "#S0002") === 0) $bSuccess=true;
 				}
 			}
 			if($bSuccess)
@@ -1333,5 +1303,3 @@ class CAllStatistics extends CKeepStatistics
 		return false;
 	}
 }
-
-?>

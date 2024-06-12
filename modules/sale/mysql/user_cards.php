@@ -1,56 +1,14 @@
-<?
+<?php
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/user_cards.php");
 
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleusercards/index.php
- * @author Bitrix
- */
 class CSaleUserCards extends CAllSaleUserCards
 {
-	
-	/**
-	* <p>Метод возвращает параметры пластиковой карты с кодом ID. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код пластиковой карты.
-	*
-	* @return array <p>Метод возвращает ассоциативный массив параметров пластиковой
-	* карты с ключами:</p><ul> <li> <b>ID</b> - код пластиковой карты;</li> 	<li>
-	* <b>USER_ID</b> - код пользователя;</li> 	<li> <b>SORT</b> - индекс сортировки;</li> 	<li>
-	* <b>PAY_SYSTEM_ACTION_ID</b> - код обработчика платежной системы;</li> 	<li>
-	* <b>CURRENCY</b> - валюта, которую можно снимать с карты;</li> 	<li> <b>CARD_CODE</b> -
-	* CVC2;</li> 	<li> <b>CARD_TYPE</b> - тип карты;</li> 	<li> <b>CARD_NUM</b> - номер карты;</li> 	<li>
-	* <b>CARD_EXP_MONTH</b> - месяц окончания действия карты;</li> 	<li> <b>CARD_EXP_YEAR</b> -
-	* год окончания действия карты;</li> 	<li> <b>DESCRIPTION</b> - краткое
-	* описание;</li> 	<li> <b>SUM_MIN</b> - минимальная сумма, которую можно снять с
-	* карты за раз;</li> 	<li> <b>SUM_MAX</b> - максимальная сумма, которую можно
-	* снять с карты за раз;</li> 	<li> <b>SUM_CURRENCY</b> - валюта минимальной и
-	* максимальной сумм;</li> 	<li> <b>LAST_STATUS</b> - статус последнего
-	* использования карты;</li> 	<li> <b>LAST_STATUS_CODE</b> - код статуса последнего
-	* использования карты;</li> 	<li> <b>LAST_STATUS_DESCRIPTION</b> - описание статуса
-	* последнего использования карты;</li> 	<li> <b>LAST_STATUS_MESSAGE</b> - сообщение
-	* платежной системы;</li> 	<li> <b>LAST_SUM</b> - последняя снятая с карты
-	* сумма;</li> 	<li> <b>LAST_CURRENCY</b> - валюта последней снятой с карты
-	* суммы;</li> 	<li> <b>ACTIVE</b> - флаг активности;</li> 	<li> <b>TIMESTAMP_X</b> - дата
-	* изменения;</li> 	<li> <b>LAST_DATE</b> - дата последнего использования
-	* карты.</li> </ul><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleusercards/csaleusercards.getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 			return false;
 
@@ -72,101 +30,6 @@ class CSaleUserCards extends CAllSaleUserCards
 		return false;
 	}
 
-	
-	/**
-	* <p>Метод возвращает результат выборки записей пластиковых карт в соответствии со своими параметрами. Нестатический метод.</p>
-	*
-	*
-	* @param array $arOrder = array() Массив, в соответствии с которым сортируются результирующие
-	* записи. Массив имеет вид: 		<pre class="syntax">array( "название_поля1" =&gt;
-	* "направление_сортировки1", "название_поля2" =&gt;
-	* "направление_сортировки2", . . . )</pre> 		В качестве "название_поля<i>N</i>"
-	* может стоять любое поле 		карт, а в качестве
-	* "направление_сортировки<i>X</i>" могут быть значения "<i>ASC</i>" (по
-	* возрастанию) и "<i>DESC</i>" (по убыванию).<br><br> 		Если массив сортировки
-	* имеет несколько элементов, то 		результирующий набор сортируется
-	* последовательно по каждому элементу (т.е. сначала сортируется по
-	* первому элементу, потом результат сортируется по второму и
-	* т.д.). <br><br>  Значение по умолчанию - пустой массив array() - означает,
-	* что результат отсортирован не будет.
-	*
-	* @param array $arFilter = array() Массив, в соответствии с которым фильтруются 		записи карт. Массив
-	* имеет вид: 		<pre class="syntax">array( "[модификатор1][оператор1]название_поля1"
-	* =&gt; "значение1", "[модификатор2][оператор2]название_поля2" =&gt;
-	* "значение2", . . . )</pre> Удовлетворяющие фильтру записи возвращаются
-	* в результате, а записи, которые не удовлетворяют условиям
-	* фильтра, отбрасываются.<br><br> 	Допустимыми являются следующие
-	* модификаторы: 		<ul> <li> <b> 	!</b>  - отрицание;</li> 			<li> <b> 	+</b>  - значения
-	* null, 0 и пустая строка так же удовлетворяют условиям фильтра.</li>
-	* 		</ul> 	Допустимыми являются следующие операторы: 	<ul> <li> <b>&gt;=</b> -
-	* значение поля больше или равно передаваемой в фильтр величины;</li>
-	* 			<li> <b>&gt;</b>  - значение поля строго больше передаваемой в фильтр
-	* величины;</li> 			<li> <b>&gt;=</b> - значение поля меньше или равно
-	* передаваемой в фильтр величины;</li> 			<li> <b>&gt;=</b> - значение поля
-	* строго меньше передаваемой в фильтр величины;</li> 			<li> <b>@</b>  -
-	* значение поля находится в передаваемом в фильтр разделенном
-	* запятой списке значений;</li> 			<li> <b>~</b>  - значение поля проверяется
-	* на соответствие передаваемому в фильтр шаблону;</li> 			<li> <b>%</b>  -
-	* значение поля проверяется на соответствие передаваемой в фильтр
-	* строке в соответствии с языком запросов.</li> 	</ul> В качестве
-	* "название_поляX" может стоять любое поле 		карт.<br><br> 		Пример
-	* фильтра: 		<pre class="syntax">array("USER_ID" =&gt; 150)</pre> 		Этот фильтр означает
-	* "выбрать все записи, в которых значение в поле USER_ID (код
-	* пользователя) равно 150".<br><br> 	Значение по умолчанию - пустой массив
-	* array() - означает, что результат отфильтрован не будет.
-	*
-	* @param array $arGroupBy = false Массив полей, по которым группируются записи 		карт. Массив имеет
-	* вид: 		<pre class="syntax">array("название_поля1",        "группирующая_функция2"
-	* =&gt; "название_поля2", . . .)</pre> 	В качестве "название_поля<i>N</i>" может
-	* стоять любое поле 		карт. В качестве группирующей функции могут
-	* стоять: 		<ul> <li> 	<b> 	COUNT</b> - подсчет количества;</li> 			<li> <b>AVG</b> -
-	* вычисление среднего значения;</li> 			<li> <b>MIN</b> - вычисление
-	* минимального значения;</li> 			<li> 	<b> 	MAX</b> - вычисление максимального
-	* значения;</li> 			<li> <b>SUM</b> - вычисление суммы.</li> 		</ul> 	Если массив
-	* пустой, то метод вернет число записей, удовлетворяющих
-	* фильтру.<br><br> 		Значение по умолчанию - <i>false</i> - означает, что
-	* результат группироваться не будет.
-	*
-	* @param array $arNavStartParams = false Массив параметров выборки. Может содержать следующие ключи: 		<ul>
-	* <li>"<b>nTopCount</b>" - количество возвращаемых методом записей будет
-	* ограничено сверху значением этого ключа;</li> 			<li> 	любой ключ,
-	* принимаемый методом <b> CDBResult::NavQuery</b> 				в качестве третьего
-	* параметра.</li> 		</ul> Значение по умолчанию - <i>false</i> - означает, что
-	* параметров выборки нет.
-	*
-	* @param array $arSelectFields = array() Массив полей записей, которые будут возвращены методом. Можно
-	* указать только те поля, которые необходимы. Если в массиве
-	* присутствует значение 		"*", то будут возвращены все доступные
-	* поля.<br><br> 		Значение по умолчанию - пустой массив 		array() - означает,
-	* что будут возвращены все поля основной таблицы запроса.
-	*
-	* @return CDBResult <p>Возвращается объект класса CDBResult, содержащий набор
-	* ассоциативных массивов параметров карт.</p><ul> <li> <b>ID</b> - код
-	* пластиковой карты;</li> 	<li> <b>USER_ID</b> - код пользователя;</li> 	<li> <b>SORT</b> -
-	* индекс сортировки;</li> 	<li> <b>PAY_SYSTEM_ACTION_ID</b> - код обработчика
-	* платежной системы;</li> 	<li> <b>CURRENCY</b> - валюта, которую можно снимать
-	* с карты;</li> 	<li> <b>CARD_CODE</b> - CVC2;</li> 	<li> <b>CARD_TYPE</b> - тип карты;</li> 	<li>
-	* <b>CARD_NUM</b> - номер карты;</li> 	<li> <b>CARD_EXP_MONTH</b> - месяц окончания
-	* действия карты;</li> 	<li> <b>CARD_EXP_YEAR</b> - год окончания действия
-	* карты;</li> 	<li> <b>DESCRIPTION</b> - краткое описание;</li> 	<li> <b>SUM_MIN</b> -
-	* минимальная сумма, которую можно снять с карты за раз;</li> 	<li>
-	* <b>SUM_MAX</b> - максимальная сумма, которую можно снять с карты за
-	* раз;</li> 	<li> <b>SUM_CURRENCY</b> - валюта минимальной и максимальной сумм;</li>
-	* 	<li> <b>LAST_STATUS</b> - статус последнего использования карты;</li> 	<li>
-	* <b>LAST_STATUS_CODE</b> - код статуса последнего использования карты;</li> 	<li>
-	* <b>LAST_STATUS_DESCRIPTION</b> - описание статуса последнего использования
-	* карты;</li> 	<li> <b>LAST_STATUS_MESSAGE</b> - сообщение платежной системы;</li> 	<li>
-	* <b>LAST_SUM</b> - последняя снятая с карты сумма;</li> 	<li> <b>LAST_CURRENCY</b> -
-	* валюта последней снятой с карты суммы;</li> 	<li> <b>ACTIVE</b> - флаг
-	* активности;</li> 	<li> <b>TIMESTAMP_X</b> - дата изменения;</li> 	<li> <b>LAST_DATE</b> -
-	* дата последнего использования карты.</li> </ul><p>Если в качестве
-	* параметра arGroupBy передается пустой массив, то метод вернет число
-	* записей, удовлетворяющих фильтру.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleusercards/csaleusercards.getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		global $DB;
@@ -218,9 +81,9 @@ class CSaleUserCards extends CAllSaleUserCards
 				"SELECT ".$arSqls["SELECT"]." ".
 				"FROM b_sale_user_cards UC ".
 				"	".$arSqls["FROM"]." ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
 			//echo "!1!=".htmlspecialcharsbx($strSql)."<br>";
@@ -236,29 +99,29 @@ class CSaleUserCards extends CAllSaleUserCards
 			"SELECT ".$arSqls["SELECT"]." ".
 			"FROM b_sale_user_cards UC ".
 			"	".$arSqls["FROM"]." ";
-		if (strlen($arSqls["WHERE"]) > 0)
+		if ($arSqls["WHERE"] <> '')
 			$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-		if (strlen($arSqls["GROUPBY"]) > 0)
+		if ($arSqls["GROUPBY"] <> '')
 			$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
-		if (strlen($arSqls["ORDERBY"]) > 0)
+		if ($arSqls["ORDERBY"] <> '')
 			$strSql .= "ORDER BY ".$arSqls["ORDERBY"]." ";
 
-		if (is_array($arNavStartParams) && IntVal($arNavStartParams["nTopCount"])<=0)
+		if (is_array($arNavStartParams) && intval($arNavStartParams["nTopCount"])<=0)
 		{
 			$strSql_tmp =
 				"SELECT COUNT('x') as CNT ".
 				"FROM b_sale_user_cards UC ".
 				"	".$arSqls["FROM"]." ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql_tmp .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql_tmp .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
 			//echo "!2.1!=".htmlspecialcharsbx($strSql_tmp)."<br>";
 
 			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 			$cnt = 0;
-			if (strlen($arSqls["GROUPBY"]) <= 0)
+			if ($arSqls["GROUPBY"] == '')
 			{
 				if ($arRes = $dbRes->Fetch())
 					$cnt = $arRes["CNT"];
@@ -277,8 +140,8 @@ class CSaleUserCards extends CAllSaleUserCards
 		}
 		else
 		{
-			if (is_array($arNavStartParams) && IntVal($arNavStartParams["nTopCount"])>0)
-				$strSql .= "LIMIT ".IntVal($arNavStartParams["nTopCount"]);
+			if (is_array($arNavStartParams) && intval($arNavStartParams["nTopCount"])>0)
+				$strSql .= "LIMIT ".intval($arNavStartParams["nTopCount"]);
 
 			//echo "!3!=".htmlspecialcharsbx($strSql)."<br>";
 
@@ -288,72 +151,6 @@ class CSaleUserCards extends CAllSaleUserCards
 		return $dbRes;
 	}
 
-	
-	/**
-	* <p>Метод сохраняет информацию о новой пластиковой карте пользователя. Нестатический метод.</p>
-	*
-	*
-	* @param array $arFields  Ассоциативный массив параметров пластиковой карты с ключами: <ul>
-	* <li> <b>USER_ID</b> - код пользователя;</li> 	<li> <b>SORT</b> - индекс сортировки;</li>
-	* 	<li> <b>PAY_SYSTEM_ACTION_ID</b> - код обработчика платежной системы;</li> 	<li>
-	* <b>CURRENCY</b> - валюта, которую можно снимать с карты;</li> 	<li> <b>CARD_CODE</b> -
-	* CVC2;</li> 	<li> <b>CARD_TYPE</b> - тип карты;</li> 	<li> <b>CARD_NUM</b> - номер карты;</li> 	<li>
-	* <b>CARD_EXP_MONTH</b> - месяц окончания действия карты;</li> 	<li> <b>CARD_EXP_YEAR</b> -
-	* год окончания действия карты;</li> 	<li> <b>DESCRIPTION</b> - краткое
-	* описание;</li> 	<li> <b>SUM_MIN</b> - минимальная сумма, которую можно снять с
-	* карты за раз;</li> 	<li> <b>SUM_MAX</b> - максимальная сумма, которую можно
-	* снять с карты за раз;</li> 	<li> <b>SUM_CURRENCY</b> - валюта минимальной и
-	* максимальной сумм;</li> 	<li> <b>LAST_STATUS</b> - статус последнего
-	* использования карты;</li> 	<li> <b>LAST_STATUS_CODE</b> - код статуса последнего
-	* использования карты;</li> 	<li> <b>LAST_STATUS_DESCRIPTION</b> - описание статуса
-	* последнего использования карты;</li> 	<li> <b>LAST_STATUS_MESSAGE</b> - сообщение
-	* платежной системы;</li> 	<li> <b>LAST_SUM</b> - последняя снятая с карты
-	* сумма;</li> 	<li> <b>LAST_CURRENCY</b> - валюта последней снятой с карты
-	* суммы;</li> 	<li> <b>ACTIVE</b> - флаг активности;</li> 	<li> <b>LAST_DATE</b> - дата
-	* последнего использования карты.</li> </ul> <p></p> <div class="note">
-	* <b>Замечание:</b> перед добавлением записи номер карты должен быть
-	* зашифрован методом 		<a
-	* href="http://dev.1c-bitrix.ru/api_help/sale/classes/csaleusercards/csaleusercards.cryptdata.php">CSaleUserCards::CryptData</a>.</div>
-	*
-	* @return int <p>Метод возвращает код добавленной записи или <i>false</i> в случае
-	* ошибки.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // Сохраним новую карту текущего пользователя
-	* 
-	* if (CSaleUserCards::CheckPassword())
-	* {
-	*     $arFields = array(
-	*             "USER_ID" =&gt; $USER-&gt;GetID(),
-	*             "ACTIVE" =&gt; "Y",
-	*             "SORT" =&gt; "100",
-	*             "PAY_SYSTEM_ACTION_ID" =&gt; 11,
-	*             "CURRENCY" =&gt; "USD",
-	*             "CARD_TYPE" =&gt; 
-	*                 CSaleUserCards::IdentifyCardType("4111111111111"),
-	*             "CARD_NUM" =&gt; 
-	*                 CSaleUserCards::CryptData("4111111111111", "E"),
-	*             "CARD_EXP_MONTH" =&gt; 11,
-	*             "CARD_EXP_YEAR" =&gt; 2007,
-	*             "DESCRIPTION" =&gt; <i>false</i>,
-	*             "CARD_CODE" =&gt; "123",
-	*             "SUM_MIN" =&gt; False,
-	*             "SUM_MAX" =&gt; False,
-	*             "SUM_CURRENCY" =&gt; False
-	*         );
-	* 
-	*     $UserCardID = CSaleUserCards::Add($arFields);
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleusercards/csaleusercards.add.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		global $DB;
@@ -368,52 +165,16 @@ class CSaleUserCards extends CAllSaleUserCards
 			"VALUES(".$arInsert[1].")";
 		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 
-		$ID = IntVal($DB->LastID());
+		$ID = intval($DB->LastID());
 
 		return $ID;
 	}
 
-	
-	/**
-	* <p>Метод изменяет информацию о новой пластиковой карте пользователя. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код изменяемой записи.
-	*
-	* @param array $arFields  Ассоциативный массив новых параметров пластиковой карты с
-	* ключами: <ul> <li> <b>USER_ID</b> - код пользователя;</li> 	<li> <b>SORT</b> - индекс
-	* сортировки;</li> 	<li> <b>PAY_SYSTEM_ACTION_ID</b> - код обработчика платежной
-	* системы;</li> 	<li> <b>CURRENCY</b> - валюта, которую можно снимать с карты;</li>
-	* 	<li> <b>CARD_CODE</b> - CVC2;</li> 	<li> <b>CARD_TYPE</b> - тип карты;</li> 	<li> <b>CARD_NUM</b> - номер
-	* карты;</li> 	<li> <b>CARD_EXP_MONTH</b> - месяц окончания действия карты;</li> 	<li>
-	* <b>CARD_EXP_YEAR</b> - год окончания действия карты;</li> 	<li> <b>DESCRIPTION</b> -
-	* краткое описание;</li> 	<li> <b>SUM_MIN</b> - минимальная сумма, которую
-	* можно снять с карты за раз;</li> 	<li> <b>SUM_MAX</b> - максимальная сумма,
-	* которую можно снять с карты за раз;</li> 	<li> <b>SUM_CURRENCY</b> - валюта
-	* минимальной и максимальной сумм;</li> 	<li> <b>LAST_STATUS</b> - статус
-	* последнего использования карты;</li> 	<li> <b>LAST_STATUS_CODE</b> - код статуса
-	* последнего использования карты;</li> 	<li> <b>LAST_STATUS_DESCRIPTION</b> - описание
-	* статуса последнего использования карты;</li> 	<li> <b>LAST_STATUS_MESSAGE</b> -
-	* сообщение платежной системы;</li> 	<li> <b>LAST_SUM</b> - последняя снятая с
-	* карты сумма;</li> 	<li> <b>LAST_CURRENCY</b> - валюта последней снятой с карты
-	* суммы;</li> 	<li> <b>ACTIVE</b> - флаг активности;</li> 	<li> <b>LAST_DATE</b> - дата
-	* последнего использования карты.</li> </ul> <p></p> <div class="note">
-	* <b>Замечание:</b> если меняется номер карты, то перед добавлением
-	* записи этот номер должен быть зашифрован методом <a
-	* href="http://dev.1c-bitrix.ru/api_help/sale/classes/csaleusercards/csaleusercards.cryptdata.php">CSaleUserCards::CryptData</a>.</div>
-	*
-	* @return int <p>Метод возвращает код обновленной записи или <i>false</i> в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleusercards/csaleusercards.update.php
-	* @author Bitrix
-	*/
 	public static function Update($ID, $arFields)
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 			return False;
 
@@ -427,4 +188,3 @@ class CSaleUserCards extends CAllSaleUserCards
 		return $ID;
 	}
 }
-?>

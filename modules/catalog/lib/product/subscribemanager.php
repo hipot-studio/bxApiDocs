@@ -49,6 +49,7 @@ class SubscribeManager
 		'ITEM_ID',
 		'NEED_SENDING',
 		'SITE_ID',
+		'LANDING_SITE_ID'
 	);
 
 	public function __construct()
@@ -58,13 +59,13 @@ class SubscribeManager
 		$this->contactTypes = SubscribeTable::getContactTypes();
 
 		global $USER;
-		if(is_object($USER) && $USER->isAuthorized())
+		if (is_object($USER) && $USER->isAuthorized())
 		{
-			$this->isAdmin = $USER->isAdmin();
+			$this->isAdmin = ($USER->isAdmin() || $USER->canDoOperation('bitrix24_config'));
 			$this->userId = $USER->getId();
 		}
 	}
-	
+
 	/**
 	 * @return array An array containing Error objects.
 	 */
@@ -171,10 +172,7 @@ class SubscribeManager
 			}
 		}
 
-		if(!empty($_SESSION['SUBSCRIBE_PRODUCT']['LIST_PRODUCT_ID'][$itemId]))
-		{
-			unset($_SESSION['SUBSCRIBE_PRODUCT']['LIST_PRODUCT_ID'][$itemId]);
-		}
+		$this->deleteSessionOfSibscribedProducts($itemId);
 
 		return true;
 	}
@@ -274,7 +272,7 @@ class SubscribeManager
 					'TOKEN' => $token
 				));
 			}
-			if(!$result)
+			if(!$result->isSuccess())
 			{
 				$this->errorCollection->add(array(new Error(
 					Loc::getMessage('ERROR_SUBSCRIBE_ENTRY_CONFIRMATION_CODE'), self::ERROR_SUBSCRIBER_IDENTIFICATION)));
@@ -379,7 +377,7 @@ class SubscribeManager
 
 	/**
 	 * Method unsubscribe subscribers with fixed input data.
-	 * 
+	 *
 	 * @param array $data Input data.
 	 * @return bool
 	 * @throws \Bitrix\Main\ArgumentException
@@ -393,11 +391,13 @@ class SubscribeManager
 			return false;
 		}
 
+		$itemId = intval($data['productId']);
+
 		$subscribe = SubscribeTable::getList(array(
 			'select' => array('CNT'),
 			'filter' => array(
 				'=ID' => intval($data['subscribeId']),
-				'=ITEM_ID' => intval($data['productId']),
+				'=ITEM_ID' => $itemId,
 				'=USER_CONTACT' => $data['userContact'],
 			),
 			'runtime' => array(new Entity\ExpressionField('CNT', 'COUNT(*)'))
@@ -412,6 +412,8 @@ class SubscribeManager
 				Loc::getMessage('ERROR_UNSUBSCRIBE_ALREADY_UNSUBSCRIBE'), self::ERROR_UNSUBSCRIBE)));
 			return false;
 		}
+
+		$this->deleteSessionOfSibscribedProducts($itemId);
 
 		return true;
 	}
@@ -478,7 +480,7 @@ class SubscribeManager
 	 * @param mixed $dateTo An empty value or an instance DateTime.
 	 * @return bool
 	 */
-	static public function checkSubscriptionActivity($dateTo)
+	public function checkSubscriptionActivity($dateTo)
 	{
 		if($dateTo)
 		{
@@ -500,7 +502,7 @@ class SubscribeManager
 	 * @param integer $itemId Product id.
 	 * @return void
 	 */
-	static public function setSessionOfSibscribedProducts($itemId)
+	public function setSessionOfSibscribedProducts($itemId)
 	{
 		$itemId = intval($itemId);
 		if(!empty($_SESSION['SUBSCRIBE_PRODUCT']['LIST_PRODUCT_ID'])
@@ -515,6 +517,14 @@ class SubscribeManager
 
 			$_SESSION['SUBSCRIBE_PRODUCT']['LIST_PRODUCT_ID'] = array();
 			$_SESSION['SUBSCRIBE_PRODUCT']['LIST_PRODUCT_ID'][$itemId] = true;
+		}
+	}
+
+	private function deleteSessionOfSibscribedProducts($itemId = 0)
+	{
+		if(!empty($_SESSION['SUBSCRIBE_PRODUCT']['LIST_PRODUCT_ID'][$itemId]))
+		{
+			unset($_SESSION['SUBSCRIBE_PRODUCT']['LIST_PRODUCT_ID'][$itemId]);
 		}
 	}
 
@@ -580,7 +590,7 @@ class SubscribeManager
 		foreach ($requiredParams as $param)
 		{
 			if(!isset($inputParams[$param]) || (!$inputParams[$param] &&
-				!(is_string($inputParams[$param]) && strlen($inputParams[$param]))))
+				!(is_string($inputParams[$param]) && mb_strlen($inputParams[$param]))))
 			{
 				$this->errorCollection->add(array(new Error(Loc::getMessage('ERROR_REQUIRED_PARAMATERS',
 					array('#PARAM#' => $param)), self::ERROR_REQUIRED_PARAMATERS)));

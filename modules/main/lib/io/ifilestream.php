@@ -3,7 +3,7 @@ namespace Bitrix\Main\IO;
 
 interface IFileStream
 {
-	static public function open($mode);
+	public function open($mode);
 }
 
 class FileStreamOpenMode

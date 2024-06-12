@@ -9,36 +9,61 @@ class CCrmBizProc
 	protected $sDocument = 'CCrmDocumentLead';
 	public $arCurrentUserGroups = array();
 	public $arDocumentStates = array();
+	public $arParams = array();
 	public $LAST_ERROR = '';
 
-	public function __construct($ENTITY_TYPE = 'LEAD')
+	public function __construct($entityType = 'LEAD')
 	{
 		global $USER;
-		$this->sEntityType = strtoupper($ENTITY_TYPE);
-		switch($this->sEntityType)
+
+		$this->sEntityType = mb_strtoupper($entityType);
+		$this->sDocument = CCrmBizProcHelper::ResolveDocumentName(CCrmOwnerType::ResolveID($this->sEntityType));
+
+		if ($this->sDocument === '')
 		{
-			case 'DEAL':
-				$this->sDocument = 'CCrmDocumentDeal';
-				break;
-			case 'CONTACT':
-				$this->sDocument = 'CCrmDocumentContact';
-				break;
-			case 'COMPANY':
-				$this->sDocument = 'CCrmDocumentCompany';
-				break;
-			case 'LEAD':
-			default:
-				$this->sDocument = 'CCrmDocumentLead';
-				$this->sEntityType = 'LEAD';
-				break;
+			$this->sEntityType = CCrmOwnerType::LeadName;
+			$this->sDocument = CCrmBizProcHelper::ResolveDocumentId(CCrmOwnerType::Lead);
 		}
+		
 		if (is_object($USER))
+		{
 			$this->arCurrentUserGroups = $USER->GetUserGroupArray();
+		}
+	}
+
+	public function SetParams(array $params)
+	{
+		$this->arParams = $params;
+	}
+
+	public function GetParams()
+	{
+		return $this->arParams;
+	}
+
+	public function AddParam($name, $value)
+	{
+		$this->arParams[$name] = $value;
+	}
+
+	public function HasParam($name)
+	{
+		return isset($this->arParams[$name]);
+	}
+
+	public function GetParam($name, $default = null)
+	{
+		return isset($this->arParams[$name]) ? $this->arParams[$name] : $default;
+	}
+
+	public function RemoveParam($name)
+	{
+		unset($this->arParams[$name]);
 	}
 
 	public function StartWorkflow($ID, $arBizProcParametersValues = false)
 	{
-		if(!CModule::IncludeModule('bizproc'))
+		if(!CModule::IncludeModule('bizproc') || !CBPRuntime::isFeatureEnabled())
 			return true;
 
 		global $USER;
@@ -46,7 +71,7 @@ class CCrmBizProc
 		$bresult = true;
 		foreach ($this->arDocumentStates as $arDocumentState)
 		{
-			if (strlen($arDocumentState['ID']) <= 0)
+			if ($arDocumentState['ID'] == '')
 			{
 				$arErrorsTmp = array();
 
@@ -69,7 +94,7 @@ class CCrmBizProc
 
 		if ($bresult)
 		{
-			$bizprocIndex = (int) $_REQUEST['bizproc_index'];
+			$bizprocIndex = (int)($_REQUEST['bizproc_index'] ?? null);
 			if ($bizprocIndex > 0)
 			{
 				for ($i = 1; $i <= $bizprocIndex; $i++)
@@ -78,9 +103,9 @@ class CCrmBizProc
 					$bpTemplateId = intval($_REQUEST['bizproc_template_id_'.$i]);
 					$bpEvent = trim($_REQUEST['bizproc_event_'.$i]);
 
-					if (strlen($bpEvent) > 0)
+					if ($bpEvent <> '')
 					{
-						if (strlen($bpId) > 0)
+						if ($bpId <> '')
 						{
 							if (!array_key_exists($bpId, $this->arDocumentStates))
 								continue;
@@ -114,9 +139,9 @@ class CCrmBizProc
 		return $bresult;
 	}
 
-	public function Delete($ID, $arEntityAttr)
+	public function Delete($ID, $arEntityAttr = null, array $arParameters = array())
 	{
-		if(!CModule::IncludeModule('bizproc'))
+		if(!CModule::IncludeModule('bizproc') || !CBPRuntime::isFeatureEnabled())
 			return true;
 
 		$userID = CCrmSecurityHelper::GetCurrentUserID();
@@ -124,23 +149,40 @@ class CCrmBizProc
 			CBPCanUserOperateOperation::WriteDocument,
 			$userID,
 			array('crm', $this->sDocument, $this->sEntityType.'_'.$ID),
-			array(
-				'UserGroups' => $this->arCurrentUserGroups,
-				'UserIsAdmin' => CCrmPerms::IsAdmin($userID),
-				'CRMEntityAttr' => $arEntityAttr
+			array_merge(
+				array(
+					'UserGroups' => $this->arCurrentUserGroups,
+					'UserIsAdmin' => CCrmPerms::IsAdmin($userID),
+					'CRMEntityAttr' => $arEntityAttr
+				),
+				$arParameters
 			)
 		);
 		if (!$bDeleteError)
 		{
-			$arErrorsTmp = array();
-			CBPDocument::OnDocumentDelete(array('crm', $this->sDocument, $this->sEntityType.'_'.$ID), $arErrorsTmp);
-			if (count($arErrorsTmp) > 0)
-			{
-				$this->LAST_ERROR = '';
-				foreach ($arErrorsTmp as $e)
-					$this->LAST_ERROR .= $e['message'].'<br />';
-				return false;
-			}
+			return $this->ProcessDeletion($ID);
+		}
+		return true;
+	}
+
+	public function ProcessDeletion($ID)
+	{
+		if(!CModule::IncludeModule('bizproc') || !CBPRuntime::isFeatureEnabled())
+			return true;
+
+		$arErrorsTmp = array();
+		CBPDocument::OnDocumentDelete(array('crm', $this->sDocument, $this->sEntityType.'_'.$ID), $arErrorsTmp);
+		\Bitrix\Crm\Automation\QR\QrTable::deleteByEntity(
+			CCrmOwnerType::ResolveID($this->sEntityType),
+			$ID
+		);
+
+		if ($arErrorsTmp)
+		{
+			$this->LAST_ERROR = '';
+			foreach ($arErrorsTmp as $e)
+				$this->LAST_ERROR .= $e['message'].'<br />';
+			return false;
 		}
 		return true;
 	}
@@ -151,7 +193,7 @@ class CCrmBizProc
 
 		$this->LAST_ERROR = '';
 
-		if(!CModule::IncludeModule('bizproc'))
+		if(!CModule::IncludeModule('bizproc') || !CBPRuntime::isFeatureEnabled())
 			return true;
 
 		$this->arDocumentStates = CBPDocument::GetDocumentStates(
@@ -163,18 +205,26 @@ class CCrmBizProc
 
 		if (is_object($USER))
 		{
+			$params = array(
+				'UserIsAdmin' => $USER->IsAdmin(),
+				'DocumentStates' => $this->arDocumentStates
+			);
+
 			if ($ID == false)
 			{
 				$arCurrentUserGroups[] = 'Author';
+				$params['AllUserGroups'] = $arCurrentUserGroups;
+
+				if($this->sEntityType === CCrmOwnerType::DealName && $this->HasParam('DealCategoryId'))
+				{
+					$params['DealCategoryId'] = $this->GetParam('DealCategoryId');
+				}
+
 				$bCanWrite = CBPDocument::CanUserOperateDocumentType(
 					CBPCanUserOperateOperation::WriteDocument,
 					$USER->GetID(),
 					array('crm', $this->sDocument, $this->sEntityType),
-					array(
-						'AllUserGroups' => $arCurrentUserGroups,
-						'DocumentStates' => $this->arDocumentStates,
-						'UserIsAdmin' => $USER->IsAdmin()
-					)
+					$params
 				);
 			}
 			else
@@ -182,17 +232,15 @@ class CCrmBizProc
 				if ($USER->GetID() == $CreatedBy)
 					$arCurrentUserGroups[] = 'Author';
 
+				$params['AllUserGroups'] = $arCurrentUserGroups;
+				$params['CreatedBy'] = $CreatedBy != 0 ? $CreatedBy : 0;
+				$params['CRMEntityAttr'] = $arEntityAttr;
+
 				$bCanWrite = CBPDocument::CanUserOperateDocument(
 					CBPCanUserOperateOperation::WriteDocument,
 					$USER->GetID(),
 					array('crm', $this->sDocument, $this->sEntityType.'_'.$ID),
-					array(
-						'AllUserGroups' => $arCurrentUserGroups,
-						'DocumentStates' =>  $this->arDocumentStates,
-						'CreatedBy' => $CreatedBy != 0 ? $CreatedBy : 0,
-						'UserIsAdmin' => $USER->IsAdmin(),
-						'CRMEntityAttr' => $arEntityAttr
-					)
+					$params
 				);
 			}
 		}
@@ -210,13 +258,13 @@ class CCrmBizProc
 		$arBizProcParametersValues = array();
 		foreach ($this->arDocumentStates as $arDocumentState)
 		{
-			if (strlen($arDocumentState['ID']) <= 0)
+			if ($arDocumentState['ID'] == '')
 			{
 				if ($bAutoExec)
 				{
 					foreach ($arDocumentState['TEMPLATE_PARAMETERS'] as $parameterKey => $arParam)
 					{
-						if ($arParam['Required'] && !isset($_REQUEST['bizproc'.$arDocumentState['TEMPLATE_ID'].'_'.$parameterKey]) && strlen($arParam['Default']) > 0)
+						if ($arParam['Required'] && !isset($_REQUEST['bizproc'.$arDocumentState['TEMPLATE_ID'].'_'.$parameterKey]) && $arParam['Default'] <> '')
 							$_REQUEST['bizproc'.$arDocumentState['TEMPLATE_ID'].'_'.$parameterKey] = $arParam['Default'];
 					}
 				}

@@ -5,5 +5,5 @@ namespace Bitrix\Sale;
 interface IBusinessValueProvider
 {
 	public function getPersonTypeId();
-	static public function getBusinessValueProviderInstance($mapping);
+	public function getBusinessValueProviderInstance($mapping);
 }

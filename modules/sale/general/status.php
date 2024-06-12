@@ -4,6 +4,7 @@ use	Bitrix\Sale\Internals\StatusTable,
 	Bitrix\Sale\Internals\StatusLangTable,
 	Bitrix\Sale\Internals\StatusGroupTaskTable,
 	Bitrix\Sale\Internals\OrderTable,
+	Bitrix\Sale\Internals\OrderArchiveTable,
 	Bitrix\Sale\Compatible,
 	Bitrix\Main\TaskTable,
 	Bitrix\Main\OperationTable,
@@ -17,54 +18,8 @@ use	Bitrix\Sale\Internals\StatusTable,
 Loc::loadMessages(__FILE__);
 
 /** @deprecated */
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalestatus/index.php
- * @author Bitrix
- * @deprecated
- */
 class CSaleStatus
 {
-	
-	/**
-	* <p>Метод возвращает параметры статуса с кодом ID, включая языкозависимые параметры для языка strLang. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $stringID  Код статуса заказа.
-	*
-	* @param string $strLang = LANGUAGE_ID Язык, для которого возвращаются языкозависимые параметры. По
-	* умолчанию используется текущий язык.
-	*
-	* @return array <p>Возвращается ассоциативный массив параметров статуса с
-	* ключами:</p><table class="tnormal" width="100%"> <tr> <th width="15%">Ключ</th>     <th>Описание</th>
-	*   </tr> <tr> <td>ID</td>     <td>Код статуса заказа.</td> </tr> <tr> <td>SORT</td>     <td>Индекс
-	* сортировки.</td> </tr> <tr> <td>LID</td>     <td>Язык.</td> </tr> <tr> <td>NAME</td>    
-	* <td>Название статуса.</td> </tr> <tr> <td>DESCRIPTION</td>     <td>Описание статуса.</td>
-	* </tr> </table><p>  </p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if ($arStatus = CSaleStatus::GetByID($STATUS_ID))
-	* {
-	*    echo "&lt;pre&gt;";
-	*    print_r($arStatus);
-	*    echo "&lt;/pre&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalestatus/csalestatus__getbyid.bfbe15e3.php
-	* @author Bitrix
-	*/
 	public static function GetByID($statusId, $languageId = LANGUAGE_ID, $type = null)
 	{
 		$allowTypes = array(
@@ -97,7 +52,7 @@ class CSaleStatus
 		return StatusTable::getList($filter)->fetch();
 	}
 
-	static function GetLangByID($statusId, $languageId = LANGUAGE_ID)
+	public static function GetLangByID($statusId, $languageId = LANGUAGE_ID)
 	{
 		return StatusLangTable::getList(array(
 			'select' => array('*'),
@@ -114,90 +69,7 @@ class CSaleStatus
 	 * @param array $arSelectFields
 	 * @return CDBResult|int
 	 */
-	
-	/**
-	* <p>Метод возвращает результат выборки записей из статусов в соответствии со своими параметрами. Нестатический метод.</p>
-	*
-	*
-	* @param array $arOrder = array() Массив, в соответствии с которым сортируются результирующие
-	* записи. Массив имеет вид: 		<pre class="syntax">array( "название_поля1" =&gt;
-	* "направление_сортировки1", "название_поля2" =&gt;
-	* "направление_сортировки2", . . . )</pre> 		В качестве "название_поля<i>N</i>"
-	* может стоять любое 		поле статусов, а в качестве
-	* "направление_сортировки<i>X</i>" могут быть значения "<i>ASC</i>" (по
-	* возрастанию) и "<i>DESC</i>" (по убыванию).<br><br> 		Если массив сортировки
-	* имеет несколько элементов, то 		результирующий набор сортируется
-	* последовательно по каждому элементу (т.е. сначала сортируется по
-	* первому элементу, потом результат сортируется по второму и
-	* т.д.). <br><br>  Значение по умолчанию - пустой массив array() - означает,
-	* что результат отсортирован не будет.
-	*
-	* @param array $arFilter = array() Массив, в соответствии с которым фильтруются 		записи статусов.
-	* Массив имеет вид: 		<pre class="syntax">array(
-	* "[модификатор1][оператор1]название_поля1" =&gt; "значение1",
-	* "[модификатор2][оператор2]название_поля2" =&gt; "значение2", . . . )</pre>
-	* Удовлетворяющие фильтру записи возвращаются в результате, а
-	* записи, которые не удовлетворяют условиям фильтра,
-	* отбрасываются.<br><br> 	Допустимыми являются следующие
-	* модификаторы: 		<ul> <li> <b> 	!</b>  - отрицание;</li> 			<li> <b> 	+</b>  - значения
-	* null, 0 и пустая строка так же удовлетворяют условиям фильтра.</li>
-	* 		</ul> 	Допустимыми являются следующие операторы: 	<ul> <li> <b>&gt;=</b> -
-	* значение поля больше или равно передаваемой в фильтр величины;</li>
-	* 			<li> <b>&gt;</b>  - значение поля строго больше передаваемой в фильтр
-	* величины;</li> 			<li> <b>&lt;=</b> - значение поля меньше или равно
-	* передаваемой в фильтр величины;</li> 			<li> <b>&lt;</b> - значение поля
-	* строго меньше передаваемой в фильтр величины;</li> 			<li> <b>@</b>  -
-	* значение поля находится в передаваемом в фильтр разделенном
-	* запятой списке значений;</li> 			<li> <b>~</b>  - значение поля проверяется
-	* на соответствие передаваемому в фильтр шаблону;</li> 			<li> <b>%</b>  -
-	* значение поля проверяется на соответствие передаваемой в фильтр
-	* строке в соответствии с языком запросов.</li> 	</ul> В качестве
-	* "название_поляX" может стоять любое поле 		типов плательщика.<br><br>
-	* 		Пример фильтра: 		<pre class="syntax">array("LID" =&gt; "en")</pre> 		Этот фильтр
-	* означает "выбрать все записи, в которых значение в поле LID (код
-	* сайта) равно en".<br><br> 	Значение по умолчанию - пустой массив array() -
-	* означает, что результат отфильтрован не будет.
-	*
-	* @param array $arGroupBy = false Массив полей, по которым группируются записи 		статусов. Массив
-	* имеет вид: 		<pre class="syntax">array("название_поля1",      
-	* "группирующая_функция2" =&gt; "название_поля2", ...)</pre> 	В качестве
-	* "название_поля<i>N</i>" может стоять любое поле 		статусов. В качестве
-	* группирующей функции могут стоять: 		<ul> <li> 	<b> 	COUNT</b> - подсчет
-	* количества;</li> 			<li> <b>AVG</b> - вычисление среднего значения;</li> 			<li>
-	* <b>MIN</b> - вычисление минимального значения;</li> 			<li> 	<b> 	MAX</b> -
-	* вычисление максимального значения;</li> 			<li> <b>SUM</b> - вычисление
-	* суммы.</li> 		</ul> 		Этот фильтр означает "выбрать все записи, в которых
-	* значение в поле LID (сайт системы) не равно en".<br><br> 		Значение по
-	* умолчанию - <i>false</i> - означает, что результат группироваться не
-	* будет.
-	*
-	* @param array $arNavStartParams = false Массив параметров выборки. Может содержать следующие ключи: 		<ul>
-	* <li>"<b>nTopCount</b>" - количество возвращаемых методом записей будет
-	* ограничено сверху значением этого ключа;</li> 			<li> 	любой ключ,
-	* принимаемый методом <b> CDBResult::NavQuery</b> 				в качестве третьего
-	* параметра.</li> 		</ul> Значение по умолчанию - <i>false</i> - означает, что
-	* параметров выборки нет.
-	*
-	* @param array $arSelectFields = array() Массив полей записей, которые будут возвращены методом. Можно
-	* указать только те поля, которые необходимы. Если в массиве
-	* присутствует значение 		"*", то будут возвращены все доступные
-	* поля.<br><br> 		Значение по умолчанию - пустой массив 		array() - означает,
-	* что будут возвращены все поля основной таблицы запроса.
-	*
-	* @return CDBResult <p>Возвращается объект класса CDBResult, содержащий ассоциативные
-	* массивы параметров статусов с ключами:</p><table class="tnormal" width="100%"> <tr> <th
-	* width="15%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>ID</td>     <td>Код статуса
-	* заказа.</td> </tr> <tr> <td>SORT</td>     <td>Индекс сортировки.</td> </tr> <tr> <td>LID</td>    
-	* <td>Язык.</td> </tr> <tr> <td>NAME</td>     <td>Название статуса.</td> </tr> <tr>
-	* <td>DESCRIPTION</td>     <td>Описание статуса.</td> </tr> </table><p> Если в качестве
-	* параметра arGroupBy передается пустой массив, то метод вернет число
-	* записей, удовлетворяющих фильтру.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalestatus/csalestatus__getlist.bbf47ed5.php
-	* @author Bitrix
-	*/
-	static function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
+	public static function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		if (!is_array($arOrder) && !is_array($arFilter))
 		{
@@ -252,7 +124,7 @@ class CSaleStatus
 	/*
 	 * For modern api see: Bitrix\Sale\OrderStatus and Bitrix\Sale\DeliveryStatus
 	 */
-	static function GetPermissionsList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
+	public static function GetPermissionsList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		$query = new Compatible\OrderQuery(StatusGroupTaskTable::getEntity());
 
@@ -268,7 +140,6 @@ class CSaleStatus
 		else
 		{
 			$result = new Compatible\CDBResult();
-			CSaleStatusAdapter::adaptResult($result, $query, $taskIdName);
 			return $query->compatibleExec($result, $arNavStartParams);
 		}
 	}
@@ -277,16 +148,16 @@ class CSaleStatus
 
 	public static function CheckFields($ACTION, &$arFields, $statusId = '')
 	{
-		if ((is_set($arFields, "SORT") || $ACTION=="ADD") && IntVal($arFields["SORT"])<= 0)
+		if ((is_set($arFields, "SORT") || $ACTION=="ADD") && intval($arFields["SORT"])<= 0)
 			$arFields["SORT"] = 100;
 
-		if ((is_set($arFields, "ID") || $ACTION=="ADD") && strlen($arFields["ID"])<=0)
+		if ((is_set($arFields, "ID") || $ACTION=="ADD") && $arFields["ID"] == '')
 			return false;
 
-		if (is_set($arFields, "ID") && strlen($statusId)>0 && $statusId!=$arFields["ID"])
+		if (is_set($arFields, "ID") && $statusId <> '' && $statusId!=$arFields["ID"])
 			return false;
 
-		if((is_set($arFields, "ID") && !preg_match("#[A-Za-z]#i", $arFields["ID"])) || (strlen($statusId)>0 && !preg_match("#[A-Za-z]#i", $statusId)))
+		if((is_set($arFields, "ID") && !preg_match("#[A-Za-z]#i", $arFields["ID"])) || ($statusId <> '' && !preg_match("#[A-Za-z]#i", $statusId)))
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(Loc::getMessage("SKGS_ID_NOT_SYMBOL"), "ERROR_ID_NOT_SYMBOL");
 			return false;
@@ -354,32 +225,6 @@ class CSaleStatus
 				) + array_intersect_key($row, self::$taskFields));
 	}
 
-	
-	/**
-	* <p>Метод добавляет новый статус заказа с параметрами из массива arFields. Нестатический метод.</p>
-	*
-	*
-	* @param array $arFields  Ассоциативный массив параметров нового статуса. Ключами в
-	* массиве являются названия параметров статуса, а значениями -
-	* соответствующие значения.<br> 	  Допустимые ключи: 	  <ul> <li> <b>ID</b> - код
-	* статуса (обязательный), состоит из одной буквы;</li> 	<li> <b>SORT</b> -
-	* индекс сортировки;</li> 	<li> <b>LANG</b> - массив ассоциативных массивов
-	* языкозависимых параметров статуса с ключами: 	<ul> <li> <b>LID</b> -
-	* язык;</li> 		<li> <b>NAME</b> - название статуса на этом языке;</li> 		<li>
-	* <b>DESCRIPTION</b> - описание статуса;</li> 	</ul> </li> 	<li> <b>PERMS</b> - массив
-	* ассоциативных массивов прав на доступ к изменению заказа в
-	* данном статусе с ключами: 	<ul> <li> <b>GROUP_ID</b> - группа
-	* пользователей;</li> 		<li> <b>PERM_TYPE</b> - тип доступа (S - разрешен перевод
-	* заказа в данный статус, M - разрешено изменение заказа в данном
-	* статусе).</li> 	</ul> </li> </ul>
-	*
-	* @return string <p>Возвращается код добавленного статуса или <i>false</i> в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalestatus/csalestatus__add.c7ce74b1.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		if (! self::CheckFields('ADD', $arFields))
@@ -399,39 +244,15 @@ class CSaleStatus
 		if (isset($arFields['PERMS']) && is_array($arFields['PERMS']) && ! empty($arFields['PERMS']))
 			self::addTasksBy($statusId, $arFields['PERMS']);
 
-		foreach (GetModuleEvents("sale", "OnStatusAdd", true) as $arEvent)
-			ExecuteModuleEventEx($arEvent, array($statusId, $arFields));
+		if (\Bitrix\Main\Config\Option::get('sale', 'expiration_processing_events', 'N') === 'N')
+		{
+			foreach (GetModuleEvents("sale", "OnStatusAdd", true) as $arEvent)
+				ExecuteModuleEventEx($arEvent, array($statusId, $arFields));
+		}
 
 		return $statusId;
 	}
 
-	
-	/**
-	* <p>Метод изменяет параметры статуса заказа с кодом ID. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $stringID  Код статуса.
-	*
-	* @param array $arFields  Ассоциативный массив новых параметров статуса. Ключами в массиве
-	* являются названия параметров статуса, а значениями -
-	* соответствующие значения.<br>  Допустимые ключи: 	  <ul> <li> <b>ID</b> - код
-	* статуса (обязательный);</li>  	<li> <b>SORT</b> - индекс сортировки;</li>  	<li>
-	* <b>LANG</b> - массив ассоциативных массивов языкозависимых параметров
-	* статуса с ключами: 	<ul> <li> <b>LID</b> - язык;</li>  		<li> <b>NAME</b> - название
-	* статуса на этом языке;</li>  		<li> <b>DESCRIPTION</b> - описание статуса;</li>  	</ul>
-	* </li>  	<li> <b>PERMS</b> - массив ассоциативных массивов прав на доступ к
-	* изменению заказа в данном статусе с ключами: 	<ul> <li> <b>GROUP_ID</b> -
-	* группа пользователей;</li>  		<li> <b>PERM_TYPE</b> - тип доступа (S - разрешен
-	* перевод заказа в данный статус, M - разрешено изменение заказа в
-	* данном статусе).</li>  	</ul> </li>  </ul>
-	*
-	* @return string <p>Возвращается код добавленного статуса или <i>false</i> в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalestatus/csalestatus__update.145077bd.php
-	* @author Bitrix
-	*/
 	public static function Update($statusId, $arFields)
 	{
 		if (! self::CheckFields('UPDATE', $arFields, $statusId))
@@ -455,26 +276,15 @@ class CSaleStatus
 			self::addTasksBy($statusId, $arFields['PERMS']);
 		}
 
-		foreach (GetModuleEvents("sale", "OnStatusUpdate", true) as $arEvent)
-			ExecuteModuleEventEx($arEvent, array($statusId, $arFields));
+		if (\Bitrix\Main\Config\Option::get('sale', 'expiration_processing_events', 'N') === 'N')
+		{
+			foreach (GetModuleEvents("sale", "OnStatusUpdate", true) as $arEvent)
+				ExecuteModuleEventEx($arEvent, array($statusId, $arFields));
+		}
 
 		return $statusId;
 	}
 
-	
-	/**
-	* <p>Метод удаляет статус заказа с кодом ID. Если в базе есть заказы, находящиеся в этом статусе, то этот статус удалить нельзя. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $stringID  Код статуса заказа.
-	*
-	* @return bool <p>Возвращается <i>true</i> в случае успешного удаления и <i>false</i> - в
-	* противном случае.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalestatus/csalestatus__delete.11104aab.php
-	* @author Bitrix
-	*/
 	public static function Delete($statusId)
 	{
 		if (! $statusId)
@@ -489,6 +299,15 @@ class CSaleStatus
 		))->fetch())
 		{
 			$APPLICATION->ThrowException(Loc::getMessage("SKGS_ERROR_DELETE"), "ERROR_DELETE_STATUS_TO_ORDER");
+			return false;
+		}
+
+		if (OrderArchiveTable::getList(array(
+			'filter' => array('=STATUS_ID' => $statusId),
+			'limit' => 1
+		))->fetch())
+		{
+			$APPLICATION->ThrowException(Loc::getMessage("SKGS_ERROR_ARCHIVED_DELETE"), "ERROR_DELETE_STATUS_TO_ARCHIVED_ORDER");
 			return false;
 		}
 
@@ -518,11 +337,8 @@ class CSaleStatus
 		{
 			$eventType->Delete("SALE_STATUS_CHANGED_".$ID);
 		}
-		
-		$b = '';
-		$o = '';
 
-		$dbSiteList = CSite::GetList($b, $o);
+		$dbSiteList = CSite::GetList();
 		while ($arSiteList = $dbSiteList->Fetch())
 		{
 			\Bitrix\Main\Localization\Loc::loadLanguageFile($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/status.php", $arSiteList["LANGUAGE_ID"]);
@@ -556,6 +372,7 @@ class CSaleStatus
 				$str .= "#ORDER_DESCRIPTION# - ".Loc::getMessage("SKGS_STATUS_DESCR", null, $arSiteList["LANGUAGE_ID"])."\n";
 				$str .= "#TEXT# - ".Loc::getMessage("SKGS_STATUS_TEXT", null, $arSiteList["LANGUAGE_ID"])."\n";
 				$str .= "#SALE_EMAIL# - ".Loc::getMessage("SKGS_SALE_EMAIL", null, $arSiteList["LANGUAGE_ID"])."\n";
+				$str .= "#ORDER_PUBLIC_URL# - ".Loc::getMessage("SKGS_ORDER_PUBLIC_LINK", null, $arSiteList["LANGUAGE_ID"])."\n";
 
 				$eventTypeID = $eventType->Add(
 					array(
@@ -568,8 +385,8 @@ class CSaleStatus
 			}
 
 			$dbEventMessage = $eventMessage->GetList(
-				$b,
-				$o,
+				'',
+				'',
 				array(
 					"EVENT_NAME" => "SALE_STATUS_CHANGED_".$ID,
 					"SITE_ID" => $arSiteList["LID"]
@@ -840,10 +657,14 @@ final class CSaleStatusAdapter implements Compatible\FetchAdapter
 
 		while ($row = $result->fetch())
 		{
-			if (! $tasks[$row['TASK']])
-				$tasks[$row['TASK']] = array();
+			if (!isset($tasks[$row['TASK']]))
+			{
+				$tasks[$row['TASK']] = [];
+			}
 			if ($row['OPERATION'])
+			{
 				$tasks[$row['TASK']][] = $row['OPERATION'];
+			}
 		}
 
 		return $tasks;

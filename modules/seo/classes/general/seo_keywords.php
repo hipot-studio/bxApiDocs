@@ -1,4 +1,5 @@
-<?
+<?php
+
 class CSeoKeywords
 { 
 	public static function GetList($arOrder, $arFilter)
@@ -84,7 +85,7 @@ class CSeoKeywords
 			foreach ($arKeywords as $key => $value) 
 			{
 				$arKeywords[$key] = trim($value);
-				if (strlen($arKeywords[$key]) <= 0) 
+				if ($arKeywords[$key] == '')
 					unset($arKeywords[$key]);
 			}
 			
@@ -158,7 +159,10 @@ class CSeoKeywords
 			}
 		}
 		
-		$cnt = $DB->Update('b_seo_keywords', $arUpdate, $strUpdateBy == 'ID' ? 'WHERE ID=\''.$ID.'\'' : 'WHERE URL=\''.$URL.'\'');
+		$condition = $strUpdateBy == 'ID' ? 'WHERE ID=\''.$ID.'\'' : 'WHERE URL=\''.$URL.'\'';
+		if($siteId = $DB->ForSql($arFields['SITE_ID']))
+			$condition .= ' AND SITE_ID=\''.$siteId.'\'';
+		$cnt = $DB->Update('b_seo_keywords', $arUpdate, $condition);
 		
 		if ($cnt <= 0 && $strUpdateBy == 'URL')
 		{
@@ -190,4 +194,3 @@ class CSeoKeywords
 		return $arKeywords;
 	}
 }
-?>

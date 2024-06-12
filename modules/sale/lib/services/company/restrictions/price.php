@@ -3,6 +3,8 @@
 namespace Bitrix\Sale\Services\Company\Restrictions;
 
 use Bitrix\Sale\Internals\CollectableEntity;
+use Bitrix\Sale\Internals\Entity;
+use Bitrix\Sale\Order;
 use Bitrix\Sale\Payment;
 use Bitrix\Sale\Services\PaySystem\Restrictions;
 use Bitrix\Sale\Shipment;
@@ -10,10 +12,11 @@ use Bitrix\Sale\Shipment;
 class Price extends Restrictions\Price
 {
 	/**
-	 * @param CollectableEntity $entity
+	 * @param Entity $entity
+	 *
 	 * @return array
 	 */
-	protected static function extractParams(CollectableEntity $entity)
+	protected static function extractParams(Entity $entity)
 	{
 		/** @var \Bitrix\Sale\PaymentCollection|\Bitrix\Sale\ShipmentCollection|null $collection */
 		$collection = null;
@@ -22,6 +25,10 @@ class Price extends Restrictions\Price
 			$collection = $entity->getCollection();
 		elseif ($entity instanceof Shipment)
 			$collection = $entity->getCollection();
+		elseif ($entity instanceof Order)
+		{
+			return array('PRICE_PAYMENT' => $entity->getPrice());
+		}
 
 		if ($collection)
 		{

@@ -1,23 +1,12 @@
 <?php
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/search/classes/general/search.php");
 
-
-/**
- * Класс для индексирования сайта и осуществления поиска по индексу
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/search/classes/csearch/index.php
- * @author Bitrix
- */
 class CSearch extends CAllSearch
 {
 	/*
 	var $arForumTopics = array();
 
-	public function DBNavStart()
+	function DBNavStart()
 	{
 		//total rows count
 		$this->NavRecordCount = mysql_num_rows($this->result);
@@ -127,7 +116,8 @@ class CSearch extends CAllSearch
 		$this->arResult = $temp_arrray;
 	}
 	*/
-	public function MakeSQL($query, $strSqlWhere, $strSort, $bIncSites, $bStem)
+
+	function MakeSQL($query, $strSqlWhere, $strSort, $bIncSites, $bStem)
 	{
 		global $USER;
 		$DB = CDatabase::GetModuleConnection('search');
@@ -139,7 +129,6 @@ class CSearch extends CAllSearch
 			"ITEM_ID" => "sc.ITEM_ID",
 			"TITLE" => "sc.TITLE",
 			"TAGS" => "sc.TAGS",
-			"BODY" => "sc.BODY",
 			"PARAM1" => "sc.PARAM1",
 			"PARAM2" => "sc.PARAM2",
 			"UPD" => "sc.UPD",
@@ -162,14 +151,14 @@ class CSearch extends CAllSearch
 			$arSelect["SEARCHABLE_CONTENT"] = "sc.SEARCHABLE_CONTENT";
 		}
 
-		if (strpos($strSort, "TITLE_RANK") !== false)
+		if (mb_strpos($strSort, "TITLE_RANK") !== false)
 		{
 			$strSelect = "";
 			if ($bStem)
 			{
 				foreach ($this->Query->m_stemmed_words as $stem)
 				{
-					if (strlen($strSelect) > 0)
+					if ($strSelect <> '')
 						$strSelect .= " + ";
 					$strSelect .= "if(locate('".$stem."', upper(sc.TITLE)) > 0, 1, 0)";
 				}
@@ -179,7 +168,7 @@ class CSearch extends CAllSearch
 			{
 				foreach ($this->Query->m_words as $word)
 				{
-					if (strlen($strSelect) > 0)
+					if ($strSelect <> '')
 						$strSelect .= " + ";
 					$strSelect .= "if(locate('".$DB->ForSql(ToUpper($word))."', upper(sc.TITLE)) > 0, 1, 0)";
 				}
@@ -208,9 +197,9 @@ class CSearch extends CAllSearch
 				$strSqlWhere = preg_replace('#AND\\(st.TF >= [0-9\.,]+\\)#i', "", $strSqlWhere);
 
 				if (count($this->Query->m_stemmed_words) > 1)
-					$arSelect["RANK"] = "stt.RANK as RANK";
+					$arSelect["RANK"] = "stt.RANK as `RANK`";
 				else
-					$arSelect["RANK"] = "stt.TF as RANK";
+					$arSelect["RANK"] = "stt.TF as `RANK`";
 
 				$strSql = "
 				FROM b_search_content sc
@@ -218,14 +207,14 @@ class CSearch extends CAllSearch
 					INNER JOIN b_search_content_site scsite ON sc.ID=scsite.SEARCH_CONTENT_ID
 					".(count($this->Query->m_stemmed_words) > 1?
 						"INNER JOIN  (
-							select search_content_id, max(st.TF) TF, ".($bWordPos? "if(STDDEV(st.PS)-".$this->normdev(count($this->Query->m_stemmed_words))." between -0.000001 and 1, 1/STDDEV(st.PS), 0) + ": "")."sum(st.TF/sf.FREQ) as RANK
+							select search_content_id, max(st.TF) TF, ".($bWordPos? "if(STDDEV(st.PS)-".$this->normdev(count($this->Query->m_stemmed_words))." between -0.000001 and 1, 1/STDDEV(st.PS), 0) + ": "")."sum(st.TF/sf.FREQ) as `RANK`
 							from b_search_content_stem st, b_search_content_freq sf
 							where st.language_id = '".$this->Query->m_lang."'
 							and st.stem = sf.stem
 							and sf.language_id = st.language_id
 							and st.stem in (".$strStemList.")
 							".($this->tf_hwm > 0? "and st.TF >= ".number_format($this->tf_hwm, 2, ".", ""): "")."
-							".(strlen($this->tf_hwm_site_id) > 0? "and sf.SITE_ID = '".$DB->ForSQL($this->tf_hwm_site_id, 2)."'": "and sf.SITE_ID IS NULL")."
+							".($this->tf_hwm_site_id <> ''? "and sf.SITE_ID = '".$DB->ForSQL($this->tf_hwm_site_id, 2)."'": "and sf.SITE_ID IS NULL")."
 							group by st.search_content_id
 							having (".$query.")
 						) stt ON sc.id = stt.search_content_id"
@@ -245,13 +234,13 @@ class CSearch extends CAllSearch
 				if (count($this->Query->m_stemmed_words) > 1)
 				{
 					if ($bWordPos)
-						$arSelect["RANK"] = "if(STDDEV(st.PS)-".$this->normdev(count($this->Query->m_stemmed_words))." between -0.000001 and 1, 1/STDDEV(st.PS), 0) + sum(st.TF/sf.FREQ) as RANK";
+						$arSelect["RANK"] = "if(STDDEV(st.PS)-".$this->normdev(count($this->Query->m_stemmed_words))." between -0.000001 and 1, 1/STDDEV(st.PS), 0) + sum(st.TF/sf.FREQ) as `RANK`";
 					else
-						$arSelect["RANK"] = "sum(st.TF/sf.FREQ) as RANK";
+						$arSelect["RANK"] = "sum(st.TF/sf.FREQ) as `RANK`";
 				}
 				else
 				{
-					$arSelect["RANK"] = "st.TF as RANK";
+					$arSelect["RANK"] = "st.TF as `RANK`";
 				}
 
 				$strSql = "
@@ -263,7 +252,7 @@ class CSearch extends CAllSearch
 						"INNER JOIN b_search_content_freq sf ON
 							st.language_id = sf.language_id
 							and st.stem=sf.stem
-							".(strlen($this->tf_hwm_site_id) > 0?
+							".($this->tf_hwm_site_id <> ''?
 							"and sf.SITE_ID = '".$DB->ForSQL($this->tf_hwm_site_id, 2)."'":
 							"and sf.SITE_ID IS NULL"
 						):
@@ -290,7 +279,7 @@ class CSearch extends CAllSearch
 
 			$arSelect["SITE_URL"] = "scsite.URL as SITE_URL";
 			$arSelect["SITE_ID"] = "scsite.SITE_ID";
-			$arSelect["RANK"] = "1 as RANK";
+			$arSelect["RANK"] = "1 as `RANK`";
 
 			if ($this->Query->bTagsSearch)
 			{
@@ -338,13 +327,13 @@ class CSearch extends CAllSearch
 			if (count($this->Query->m_stemmed_words) > 1)
 			{
 				if ($bWordPos)
-					$arSelect["RANK"] = "if(STDDEV(st.PS)-".$this->normdev(count($this->Query->m_stemmed_words))." between -0.000001 and 1, 1/STDDEV(st.PS), 0) + sum(st.TF/sf.FREQ) as RANK";
+					$arSelect["RANK"] = "if(STDDEV(st.PS)-".$this->normdev(count($this->Query->m_stemmed_words))." between -0.000001 and 1, 1/STDDEV(st.PS), 0) + sum(st.TF/sf.FREQ) as `RANK`";
 				else
-					$arSelect["RANK"] = "sum(st.TF/sf.FREQ) as RANK";
+					$arSelect["RANK"] = "sum(st.TF/sf.FREQ) as `RANK`";
 			}
 			else
 			{
-				$arSelect["RANK"] = "st.TF as RANK";
+				$arSelect["RANK"] = "st.TF as `RANK`";
 			}
 
 			$strSql = "
@@ -355,7 +344,7 @@ class CSearch extends CAllSearch
 					"INNER JOIN b_search_content_freq sf ON
 						st.language_id = sf.language_id
 						and st.stem=sf.stem
-						".(strlen($this->tf_hwm_site_id) > 0?
+						".($this->tf_hwm_site_id <> ''?
 						"and sf.SITE_ID = '".$DB->ForSQL($this->tf_hwm_site_id, 2)."'":
 						"and sf.SITE_ID IS NULL"
 					):
@@ -380,7 +369,7 @@ class CSearch extends CAllSearch
 
 			if (BX_SEARCH_VERSION <= 1)
 				$arSelect["SITE_ID"] = "sc.LID as SITE_ID";
-			$arSelect["RANK"] = "1 as RANK";
+			$arSelect["RANK"] = "1 as `RANK`";
 
 			$strSql = "
 			FROM b_search_content sc
@@ -441,7 +430,8 @@ class CSearch extends CAllSearch
 				);
 				foreach ($arSelectOuterFields as $outerField)
 				{
-					$arSelectOuter[$outerField] = $arSelect[$outerField];
+					if (isset($arSelect[$outerField]))
+						$arSelectOuter[$outerField] = $arSelect[$outerField];
 					unset($arSelect[$outerField]);
 				}
 
@@ -449,7 +439,7 @@ class CSearch extends CAllSearch
 				$strSelectInner = "SELECT ".($bDistinct? "DISTINCT": "")."\n".implode("\n,", $arSelect);
 
 				return "
-					".$strSelectOuter.", sc0.RANK +
+					".$strSelectOuter.", sc0.`RANK` +
 						if(rv.TOTAL_VALUE > 0, ".($RATING_MAX > 0? "rv.TOTAL_VALUE/".$RATING_MAX: "0").",
 						if(rv.TOTAL_VALUE < 0, ".($RATING_MIN < 0? "rv.TOTAL_VALUE/".abs($RATING_MIN): "0").",
 						0
@@ -468,7 +458,7 @@ class CSearch extends CAllSearch
 					INNER JOIN b_search_content sc ON sc.ID = sc0.ID
 					LEFT JOIN b_rating_voting rv ON rv.ENTITY_TYPE_ID = sc.ENTITY_TYPE_ID AND rv.ENTITY_ID = sc.ENTITY_ID
 					LEFT JOIN b_rating_vote rvv ON rvv.ENTITY_TYPE_ID = sc.ENTITY_TYPE_ID AND rvv.ENTITY_ID = sc.ENTITY_ID AND rvv.USER_ID = ".intval($USER->GetId())."
-				".str_replace(" RANK", " SRANK", $strSort);
+				".str_replace(" `RANK`", " SRANK", $strSort);
 			}
 		}
 
@@ -477,10 +467,10 @@ class CSearch extends CAllSearch
 		return $strSelect."\n".$strSql.$strSort."\nLIMIT ".$limit;
 	}
 
-	public function tagsMakeSQL($query, $strSqlWhere, $strSort, $bIncSites, $bStem, $limit = 100)
+	function tagsMakeSQL($query, $strSqlWhere, $strSort, $bIncSites, $bStem, $limit = 100)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
-		$limit = intVal($limit);
+		$limit = intval($limit);
 		if ($bStem && count($this->Query->m_stemmed_words) > 1)
 		{//We have to make some magic in case quotes was used in query
 			//We have to move (sc.searchable_content LIKE '%".ToUpper($word)."%') from $query to $strSqlWhere
@@ -509,7 +499,7 @@ class CSearch extends CAllSearch
 					,MAX(sc.DATE_CHANGE) DC_TMP
 					,".$DB->DateToCharFunction("MAX(sc.DATE_CHANGE)")." as FULL_DATE_CHANGE
 					,".$DB->DateToCharFunction("MAX(sc.DATE_CHANGE)", "SHORT")." as DATE_CHANGE
-					".(count($this->Query->m_stemmed_words) > 1 && strpos($query, "searchable_content") !== false
+					".(count($this->Query->m_stemmed_words) > 1 && mb_strpos($query, "searchable_content") !== false
 					? (BX_SEARCH_VERSION > 1? ",sct.SEARCHABLE_CONTENT": ",sc.SEARCHABLE_CONTENT")
 					: ""
 				)."
@@ -522,7 +512,7 @@ class CSearch extends CAllSearch
 					"INNER JOIN b_search_content_freq sf ON
 							st.language_id = sf.language_id
 							and st.stem=sf.stem
-							".(strlen($this->tf_hwm_site_id) > 0?
+							".($this->tf_hwm_site_id <> ''?
 						"and sf.SITE_ID = '".$DB->ForSQL($this->tf_hwm_site_id, 2)."'":
 						"and sf.SITE_ID IS NULL"
 					):
@@ -547,10 +537,9 @@ class CSearch extends CAllSearch
 			//Copy first exists into inner join in hopeless try to defeat MySQL optimizer
 			$strSqlJoin2 = "";
 			$match = array();
-			if ($strSqlWhere && preg_match('#\\s*EXISTS (\\(SELECT \\* FROM b_search_content_param WHERE SEARCH_CONTENT_ID = sc\\.ID AND PARAM_NAME = \'[^\']+\' AND PARAM_VALUE(\\s*= \'[^\']+\'|\\s+in \\(\'[^\']+\'\\))\\))#', $strSqlWhere, $match))
+			if ($strSqlWhere && preg_match('#\\s*EXISTS \\(SELECT \\* FROM b_search_content_param WHERE (SEARCH_CONTENT_ID = sc\\.ID AND PARAM_NAME = \'[^\']+\' AND PARAM_VALUE(\\s*= \'[^\']+\'|\\s+in \\(\'[^\']+\'\\)))\\)#', $strSqlWhere, $match))
 			{
-				$subTable = str_replace("SEARCH_CONTENT_ID = sc.ID AND", "", $match[1]);
-				$strSqlJoin2 = "INNER JOIN ".$subTable." p1 ON p1.SEARCH_CONTENT_ID = sc.ID";
+				$strSqlJoin2 = "INNER JOIN b_search_content_param scp ON scp.$match[1]";
 			}
 
 			if ($query == "1=1")
@@ -620,7 +609,7 @@ class CSearch extends CAllSearch
 					,MAX(sc.DATE_CHANGE) DC_TMP
 					, ".$DB->DateToCharFunction("MAX(sc.DATE_CHANGE)")." as FULL_DATE_CHANGE
 					, ".$DB->DateToCharFunction("MAX(sc.DATE_CHANGE)", "SHORT")." as DATE_CHANGE
-					".(count($this->Query->m_stemmed_words) > 1 && strpos($query, "searchable_content") !== false
+					".(count($this->Query->m_stemmed_words) > 1 && mb_strpos($query, "searchable_content") !== false
 					? (BX_SEARCH_VERSION > 1? ",sct.SEARCHABLE_CONTENT": ",sc.SEARCHABLE_CONTENT")
 					: ""
 				)."
@@ -632,7 +621,7 @@ class CSearch extends CAllSearch
 					"INNER JOIN b_search_content_freq sf ON
 							st.language_id = sf.language_id
 							and st.stem=sf.stem
-							".(strlen($this->tf_hwm_site_id) > 0?
+							".($this->tf_hwm_site_id <> ''?
 						"and sf.SITE_ID = '".$DB->ForSQL($this->tf_hwm_site_id, 2)."'":
 						"and sf.SITE_ID IS NULL"
 					):
@@ -759,6 +748,13 @@ class CSearch extends CAllSearch
 			{
 				$lang = $CACHE_SITE_LANGS[$site]["LANGUAGE_ID"];
 
+				$dbTitle = [];
+				$rs = $DB->Query("select WORD, POS from b_search_content_title where SEARCH_CONTENT_ID = ".$ID." and SITE_ID='".$sql_site."'");
+				while ($ar = $rs->Fetch())
+				{
+					$dbTitle[$ar["WORD"]] = intval($ar["POS"]);
+				}
+
 				$arTitle = stemming_split($sTitle, $lang);
 				if (!empty($arTitle))
 				{
@@ -772,17 +768,35 @@ class CSearch extends CAllSearch
 					$strSqlSuffix = "";
 					foreach ($arTitle as $word => $pos)
 					{
-						$strSqlValues .= ",\n(".$ID.", '".$sql_site."', '".$DB->ForSql($word)."', ".$pos.")";
-						if (strlen($strSqlValues) > $maxValuesLen)
+						if (isset($dbTitle[$word]) && $dbTitle[$word] === $pos)
 						{
-							$DB->Query($strSqlPrefix.substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
-							$strSqlValues = "";
+							//Already in the db
+							unset($dbTitle[$word]);
+						}
+						else
+						{
+							//New value
+							$strSqlValues .= ",\n(".$ID.", '".$sql_site."', '".$DB->ForSql($word)."', ".$pos.")";
+							if (mb_strlen($strSqlValues) > $maxValuesLen)
+							{
+								$DB->Query($strSqlPrefix.mb_substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
+								$strSqlValues = "";
+							}
 						}
 					}
-					if (strlen($strSqlValues) > 0)
+					if ($strSqlValues <> '')
 					{
-						$DB->Query($strSqlPrefix.substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
+						$DB->Query($strSqlPrefix.mb_substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
 						$strSqlValues = "";
+					}
+					//Delete obsolete db values
+					foreach ($dbTitle as $word => $pos)
+					{
+						$DB->Query("
+							delete from b_search_content_title
+							where SEARCH_CONTENT_ID = ".$ID." and SITE_ID='".$sql_site."'
+							and WORD = '".$DB->ForSql($word)."' and POS = ".$pos."
+						");
 					}
 				}
 			}
@@ -791,7 +805,7 @@ class CSearch extends CAllSearch
 
 	public static function RegisterStem($stem)
 	{
-		global $DB;
+		$DB = CDatabase::GetModuleConnection('search');
 		static $cache = array();
 
 		if (is_array($stem)) //This is batch check of the already exist stems
@@ -808,9 +822,9 @@ class CSearch extends CAllSearch
 				$strSqlValues .= ",'".$DB->ForSQL($word)."'";
 				$i++;
 
-				if (strlen($strSqlValues) > $maxValuesLen || $i > $maxValuesCnt)
+				if (mb_strlen($strSqlValues) > $maxValuesLen || $i > $maxValuesCnt)
 				{
-					$rs = $DB->Query($strSqlPrefix.substr($strSqlValues, 1).")", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+					$rs = $DB->Query($strSqlPrefix.mb_substr($strSqlValues, 1).")", false, "File: ".__FILE__."<br>Line: ".__LINE__);
 					while ($ar = $rs->Fetch())
 						$cache[$ar["STEM"]] = $ar["ID"];
 
@@ -819,9 +833,9 @@ class CSearch extends CAllSearch
 				}
 			}
 
-			if (strlen($strSqlValues) > 0)
+			if ($strSqlValues <> '')
 			{
-				$rs = $DB->Query($strSqlPrefix.substr($strSqlValues, 1).")", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$rs = $DB->Query($strSqlPrefix.mb_substr($strSqlValues, 1).")", false, "File: ".__FILE__."<br>Line: ".__LINE__);
 				while ($ar = $rs->Fetch())
 					$cache[$ar["STEM"]] = $ar["ID"];
 			}
@@ -917,9 +931,9 @@ class CSearch extends CAllSearch
 								.", ".number_format($arPos[$word] / $count, 4, ".", "")
 								.")";
 
-						if (strlen($strSqlValues) > $maxValuesLen)
+						if (mb_strlen($strSqlValues) > $maxValuesLen)
 						{
-							$DB->Query($strSqlPrefix.substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
+							$DB->Query($strSqlPrefix.mb_substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
 							$strSqlValues = "";
 						}
 					}
@@ -935,17 +949,17 @@ class CSearch extends CAllSearch
 							.", ".number_format(log($count + 1) / $logDocLength, 4, ".", "")
 							.")";
 
-						if (strlen($strSqlValues) > $maxValuesLen)
+						if (mb_strlen($strSqlValues) > $maxValuesLen)
 						{
-							$DB->Query($strSqlPrefix.substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
+							$DB->Query($strSqlPrefix.mb_substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
 							$strSqlValues = "";
 						}
 					}
 				}
 
-				if (strlen($strSqlValues) > 0)
+				if ($strSqlValues <> '')
 				{
-					$DB->Query($strSqlPrefix.substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
+					$DB->Query($strSqlPrefix.mb_substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
 					$strSqlValues = "";
 				}
 			}
@@ -979,15 +993,15 @@ class CSearch extends CAllSearch
 				foreach ($arTags as $tag)
 				{
 					$strSqlValues .= ",\n(".$ID.", '".$sql_site_id."', '".$DB->ForSql($tag, 255)."')";
-					if (strlen($strSqlValues) > $maxValuesLen)
+					if (mb_strlen($strSqlValues) > $maxValuesLen)
 					{
-						$DB->Query($strSqlPrefix.substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
+						$DB->Query($strSqlPrefix.mb_substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
 						$strSqlValues = "";
 					}
 				}
-				if (strlen($strSqlValues) > 0)
+				if ($strSqlValues <> '')
 				{
-					$DB->Query($strSqlPrefix.substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
+					$DB->Query($strSqlPrefix.mb_substr($strSqlValues, 2), false, "File: ".__FILE__."<br>Line: ".__LINE__);
 					$strSqlValues = "";
 				}
 			}
@@ -1052,7 +1066,7 @@ class CSearchQuery extends CAllSearchQuery
 {
 	var $cnt = 0;
 
-	public function BuildWhereClause($word)
+	function BuildWhereClause($word)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 
@@ -1074,7 +1088,7 @@ class CSearchQuery extends CAllSearchQuery
 
 		if ($this->bTagsSearch)
 		{
-			if (strpos($word, "%") === false)
+			if (mb_strpos($word, "%") === false)
 			{
 				//We can optimize query by doing range scan
 				if (is_array($this->m_tags_words))

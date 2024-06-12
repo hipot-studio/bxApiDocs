@@ -1,17 +1,12 @@
-<?
+<?php
 class CStatResult extends CDBResult
 {
-	public static function CStatResult($res)
-	{
-		parent::CDBResult($res);
-	}
-
-	public static function Fetch()
+	function Fetch()
 	{
 		global $DB;
 		$res = parent::Fetch();
 
-		if(!is_object($this))
+		if(!isset($this) || !is_object($this))
 			return $res;
 
 		if($res)
@@ -45,4 +40,3 @@ class CStatResult extends CDBResult
 		return $res;
 	}
 }
-?>

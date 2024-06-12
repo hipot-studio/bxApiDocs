@@ -19,7 +19,7 @@ class RusPost extends Base
 	/**
 	 * @return string
 	 */
-	static public function getClassTitle()
+	public function getClassTitle()
 	{
 		return Loc::getMessage("SALE_DELIVERY_TRACKING_RUS_POST_TITLE");
 	}
@@ -27,7 +27,7 @@ class RusPost extends Base
 	/**
 	 * @return string
 	 */
-	static public function getClassDescription()
+	public function getClassDescription()
 	{
 		return Loc::getMessage(
 			"SALE_DELIVERY_TRACKING_RUS_POST_DESCRIPTION",
@@ -45,9 +45,10 @@ class RusPost extends Base
 	 */
 	public function getStatus($trackingNumber)
 	{
+		$trackingNumber = trim($trackingNumber);
 		$result = new StatusResult();
 
-		if(!$this->checkTracknumberFormat($trackingNumber))
+		if(!$this->checkTrackNumberFormat($trackingNumber))
 			$result->addError(new Error(Loc::getMessage('SALE_DELIVERY_TRACKING_RUS_POST_ERROR_TRNUM_FORMAT')));
 
 		if(empty($this->params['LOGIN']))
@@ -87,7 +88,7 @@ class RusPost extends Base
 	/**
 	 * @return array
 	 */
-	static public function getParamsStructure()
+	public function getParamsStructure()
 	{
 		return array(
 			"LOGIN" => array(
@@ -110,9 +111,9 @@ class RusPost extends Base
 	 */
 	protected function checkTrackNumberFormat($trackNumber)
 	{
-		if(strlen($trackNumber) == 13)
+		if(mb_strlen($trackNumber) == 13)
 			return preg_match('/^[A-Z]{2}?\d{9}?[A-Z]{2}$/i', $trackNumber) == 1;
-		elseif(strlen($trackNumber) == 14)
+		elseif(mb_strlen($trackNumber) == 14)
 			return preg_match('/^\d{14}?$/', $trackNumber) == 1;
 		else
 			return false;
@@ -122,9 +123,9 @@ class RusPost extends Base
 	 * @param string $trackingNumber
 	 * @return string Url were we can see tracking information
 	 */
-	static public function getTrackingUrl($trackingNumber = '')
+	public function getTrackingUrl($trackingNumber = '')
 	{
-		return 'https://pochta.ru/tracking'.(strlen($trackingNumber) > 0 ? '#'.$trackingNumber : '');
+		return 'https://pochta.ru/tracking'.($trackingNumber <> '' ? '#'.$trackingNumber : '');
 	}
 }
 
@@ -169,9 +170,6 @@ class RusPostSingle
 	{
 		$result = new Result();
 
-		if(strtolower(SITE_CHARSET) != 'utf-8')
-			$requestData = Encoding::convertEncoding($requestData, SITE_CHARSET, 'UTF-8');
-
 		$httpRes = $this->httpClient->post(self::$url, $requestData);
 		$errors = $this->httpClient->getError();
 
@@ -187,9 +185,6 @@ class RusPostSingle
 		else
 		{
 			$status = $this->httpClient->getStatus();
-
-			if(strtolower(SITE_CHARSET) != 'utf-8')
-				$httpRes = Encoding::convertEncoding($httpRes, 'UTF-8', SITE_CHARSET);
 
 			$objXML = new \CDataXML();
 			$objXML->LoadString($httpRes);
@@ -297,7 +292,7 @@ class RusPostSingle
 	}
 
 	/**
-	 * @param $lastOperation
+	 * @param string $trackingNumber
 	 * @return string
 	 */
 	protected function createDescription($trackingNumber)
@@ -332,7 +327,7 @@ class RusPostSingle
 	 */
 	protected function mapStatus($oper, $attr)
 	{
-		if(strlen($oper) <= 0)
+		if($oper == '')
 			return Statuses::UNKNOWN;
 
 		/*
@@ -351,7 +346,20 @@ class RusPostSingle
 		 */
 		$rusPostStatuses = array(
 			1 => Statuses::WAITING_SHIPMENT,
-			2 => Statuses::HANDED,
+			2 => array(
+				1 => Statuses::HANDED,
+				2 => Statuses::RETURNED,
+				3 => Statuses::HANDED,
+				4 => Statuses::RETURNED,
+				5 => Statuses::HANDED,
+				6 => Statuses::HANDED,
+				7 => Statuses::RETURNED,
+				8 => Statuses::HANDED,
+				9 => Statuses::RETURNED,
+				10 => Statuses::HANDED,
+				11 => Statuses::HANDED,
+				12 => Statuses::HANDED,
+			),
 			3 => Statuses::PROBLEM,
 			4 => Statuses::ON_THE_WAY,
 			5 => array(
@@ -395,7 +403,36 @@ class RusPostSingle
 			9 => Statuses::ON_THE_WAY,
 			10 => Statuses::ON_THE_WAY,
 			11 => Statuses::ON_THE_WAY,
-			12 => Statuses::PROBLEM,
+			12 => array(
+				1 => Statuses::ARRIVED,
+				2 => Statuses::ARRIVED,
+				3 => Statuses::PROBLEM,
+				4 => Statuses::PROBLEM,
+				5 => Statuses::PROBLEM,
+				6 => Statuses::PROBLEM,
+				7 => Statuses::PROBLEM,
+				8 => Statuses::PROBLEM,
+				9 => Statuses::ARRIVED,
+				10 => Statuses::PROBLEM,
+				11 => Statuses::ARRIVED,
+				12 => Statuses::PROBLEM,
+				13 => Statuses::PROBLEM,
+				14 => Statuses::PROBLEM,
+				15 => Statuses::ARRIVED,
+				16 => Statuses::PROBLEM,
+				17 => Statuses::ARRIVED,
+				18 => Statuses::ARRIVED,
+				19 => Statuses::PROBLEM,
+				20 => Statuses::PROBLEM,
+				21 => Statuses::PROBLEM,
+				22 => Statuses::ARRIVED,
+				23 => Statuses::PROBLEM,
+				24 => Statuses::PROBLEM,
+				25 => Statuses::ARRIVED,
+				26 => Statuses::PROBLEM,
+				27 => Statuses::ARRIVED,
+				28 => Statuses::PROBLEM,
+			),
 			13 => Statuses::ON_THE_WAY,
 			14 => Statuses::ON_THE_WAY,
 			15 => Statuses::ARRIVED,
@@ -405,7 +442,18 @@ class RusPostSingle
 			19 => Statuses::ON_THE_WAY,
 			20 => Statuses::ON_THE_WAY,
 			21 => Statuses::ON_THE_WAY,
-			22 => Statuses::PROBLEM
+			22 => Statuses::PROBLEM,
+			23 => Statuses::ON_THE_WAY,
+			24 => Statuses::PROBLEM,
+			25 => Statuses::ON_THE_WAY,
+			26 => Statuses::PROBLEM,
+			27 => Statuses::ON_THE_WAY,
+			28 => Statuses::NO_INFORMATION,
+			29 => Statuses::ON_THE_WAY,
+			30 => Statuses::ON_THE_WAY,
+			31 => Statuses::ON_THE_WAY,
+			32 => Statuses::ON_THE_WAY,
+			33 => Statuses::ON_THE_WAY,
 		);
 
 		if(!isset($rusPostStatuses[$oper]))
@@ -414,7 +462,7 @@ class RusPostSingle
 		if(!is_array($rusPostStatuses[$oper]))
 			return $rusPostStatuses[$oper];
 
-		if(strlen($attr) <= 0)
+		if($attr == '')
 			return Statuses::UNKNOWN;
 
 		if(!isset($rusPostStatuses[$oper][$attr]))

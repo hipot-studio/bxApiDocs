@@ -21,7 +21,7 @@ class SberbankHandler extends PaySystem\BaseServiceHandler
 	/**
 	 * @return array
 	 */
-	static public function getCurrencyList()
+	public function getCurrencyList()
 	{
 		return array('RUB');
 	}

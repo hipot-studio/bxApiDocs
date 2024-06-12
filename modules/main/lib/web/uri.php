@@ -1,53 +1,52 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2014 Bitrix
+ * @copyright 2001-2023 Bitrix
  */
+
 namespace Bitrix\Main\Web;
 
-class Uri
+use Bitrix\Main;
+use Bitrix\Main\Text\Encoding;
+use Psr\Http\Message\UriInterface;
+
+class Uri implements \JsonSerializable, UriInterface
 {
-	protected $scheme;
-	protected $host;
-	protected $port;
-	protected $user;
-	protected $pass;
-	protected $path;
-	protected $query;
-	protected $fragment;
+	protected $scheme = '';
+	protected $host = '';
+	protected $port = null;
+	protected $user = '';
+	protected $pass = '';
+	protected $path = '';
+	protected $query = '';
+	protected $fragment = '';
 
 	/**
 	 * @param string $url
 	 */
 	public function __construct($url)
 	{
-		if(strpos($url, "/") === 0)
+		if (str_starts_with($url, '/'))
 		{
 			//we don't support "current scheme" e.g. "//host/path"
-			$url = "/".ltrim($url, "/");
+			$url = '/' . ltrim($url, '/');
 		}
 
 		$parsedUrl = parse_url($url);
 
-		if($parsedUrl !== false)
+		if ($parsedUrl !== false)
 		{
-			$this->scheme = (isset($parsedUrl["scheme"])? strtolower($parsedUrl["scheme"]) : "http");
-			$this->host = $parsedUrl["host"];
-			if(isset($parsedUrl["port"]))
-			{
-				$this->port = $parsedUrl["port"];
-			}
-			else
-			{
-				$this->port = ($this->scheme == "https"? 443 : 80);
-			}
-			$this->user = $parsedUrl["user"];
-			$this->pass = $parsedUrl["pass"];
-			$this->path = ((isset($parsedUrl["path"])? $parsedUrl["path"] : "/"));
-			$this->query = $parsedUrl["query"];
-			$this->fragment = $parsedUrl["fragment"];
+			$this->scheme = strtolower($parsedUrl['scheme'] ?? '');
+			$this->host = strtolower($parsedUrl['host'] ?? '');
+			$this->port = $parsedUrl['port'] ?? null;
+			$this->user = $parsedUrl['user'] ?? '';
+			$this->pass = $parsedUrl['pass'] ?? '';
+			$this->path = $parsedUrl['path'] ?? '';
+			$this->query = $parsedUrl['query'] ?? '';
+			$this->fragment = $parsedUrl['fragment'] ?? '';
 		}
 	}
 
@@ -63,98 +62,56 @@ class Uri
 	 * Return the URI without a fragment.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает URI без фрагмента.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/getlocator.php
-	* @author Bitrix
-	*/
 	public function getLocator()
 	{
-		$url = "";
-		if($this->host <> '')
-		{
-			$url .= $this->scheme."://".$this->host;
+		$uri = '';
 
-			if(($this->scheme == "http" && $this->port <> 80) || ($this->scheme == "https" && $this->port <> 443))
-			{
-				$url .= ":".$this->port;
-			}
+		$scheme = $this->getScheme();
+		if ($scheme != '')
+		{
+			$uri .= $scheme . ':';
 		}
 
-		$url .= $this->getPathQuery();
+		$authority = $this->getAuthority();
+		if ($authority != '')
+		{
+			$uri .= '//' . $authority;
+		}
 
-		return $url;
+		$uri .= $this->getPathQuery();
+
+		return $uri;
 	}
 
 	/**
 	 * Return the URI with a fragment, if any.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает URI с фрагментом, если он имеется.</p> <p>Выполняет функции методов <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cmain/getcurpageparam.php" >CMain::GetCurPageParam</a> и <a href="http://dev.1c-bitrix.ru/api_help/main/functions/other/deleteparam.ph" >DeleteParam</a> в старом ядре.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/geturi.php
-	* @author Bitrix
-	*/
 	public function getUri()
 	{
 		$url = $this->getLocator();
+		$fragment = $this->getFragment();
 
-		if($this->fragment <> '')
+		if ($fragment != '')
 		{
-			$url .= "#".$this->fragment;
+			$url .= '#' . $fragment;
 		}
 
 		return $url;
 	}
 
 	/**
-	 * Returns the fragment.
-	 * @return string
+	 * @inheritdoc
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает фрагмент.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/getfragment.php
-	* @author Bitrix
-	*/
-	public function getFragment()
+	public function getFragment(): string
 	{
 		return $this->fragment;
 	}
 
 	/**
-	 * Returns the host.
-	 * @return string
+	 * @inheritdoc
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает хост.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/gethost.php
-	* @author Bitrix
-	*/
-	public function getHost()
+	public function getHost(): string
 	{
 		return $this->host;
 	}
@@ -164,22 +121,9 @@ class Uri
 	 * @param string $host Host name.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает хост.</p>
-	*
-	*
-	* @param string $host  Host name.
-	*
-	* @return \Bitrix\Main\Web\Uri 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/sethost.php
-	* @author Bitrix
-	*/
 	public function setHost($host)
 	{
-		$this->host = $host;
+		$this->host = strtolower($host);
 		return $this;
 	}
 
@@ -187,39 +131,28 @@ class Uri
 	 * Returns the password.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает пароль.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/getpass.php
-	* @author Bitrix
-	*/
 	public function getPass()
 	{
 		return $this->pass;
 	}
 
 	/**
-	 * Returns the path.
-	 * @return string
+	 * Sets the password.
+	 * @param string $pass Password,
+	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает путь.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/getpath.php
-	* @author Bitrix
-	*/
-	public function getPath()
+	public function setPass($pass)
 	{
+		$this->pass = $pass;
+		return $this;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function getPath(): string
+	{
+		// TODO: make it work as described
 		return $this->path;
 	}
 
@@ -228,19 +161,6 @@ class Uri
 	 * @param string $path
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает путь.</p>
-	*
-	*
-	* @param string $path  
-	*
-	* @return \Bitrix\Main\Web\Uri 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/setpath.php
-	* @author Bitrix
-	*/
 	public function setPath($path)
 	{
 		$this->path = $path;
@@ -251,83 +171,57 @@ class Uri
 	 * Returns the path with the query.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает путь с запросом.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/getpathquery.php
-	* @author Bitrix
-	*/
 	public function getPathQuery()
 	{
-		$pathQuery = $this->path;
-		if($this->query <> "")
+		$pathQuery = $this->getPath();
+
+		if ($pathQuery == '')
 		{
-			$pathQuery .= '?'.$this->query;
+			$pathQuery = '/';
 		}
+
+		$query = $this->getQuery();
+
+		if ($query != '')
+		{
+			$pathQuery .= '?' . $query;
+		}
+
 		return $pathQuery;
 	}
 
 	/**
-	 * Returns the port number.
-	 * @return string
+	 * @inheritdoc
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает номер порта.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/getport.php
-	* @author Bitrix
-	*/
-	public function getPort()
+	public function getPort(): ?int
 	{
-		return $this->port;
+		if ($this->port === null)
+		{
+			switch ($this->getScheme())
+			{
+				case 'https':
+					return 443;
+				case 'http':
+					return 80;
+				default:
+					return null;
+			}
+		}
+		return (int)$this->port;
 	}
 
 	/**
-	 * Returns the query.
-	 * @return string
+	 * @inheritdoc
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает запрос.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/getquery.php
-	* @author Bitrix
-	*/
-	public function getQuery()
+	public function getQuery(): string
 	{
 		return $this->query;
 	}
 
 	/**
-	 * Returns the scheme.
-	 * @return string
+	 * @inheritdoc
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает схему.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/getscheme.php
-	* @author Bitrix
-	*/
-	public function getScheme()
+	public function getScheme(): string
 	{
 		return $this->scheme;
 	}
@@ -336,53 +230,70 @@ class Uri
 	 * Returns the user.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает пользователя.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/getuser.php
-	* @author Bitrix
-	*/
 	public function getUser()
 	{
 		return $this->user;
 	}
 
 	/**
-	 * Deletes parameters from the query.
-	 * @param array $params Parameters to delete.
+	 * Sets the user.
+	 * @param string $user User.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод удаляет параметры из запроса.</p> <p>Выполняет функции методов <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cmain/getcurpageparam.php" >CMain::GetCurPageParam </a> и <a href="http://dev.1c-bitrix.ru/api_help/main/functions/other/deleteparam.ph" >DeleteParam</a> в старом ядре.</p>
-	*
-	*
-	* @param array $params  Удаляемые параметры.
-	*
-	* @return \Bitrix\Main\Web\Uri 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/deleteparams.php
-	* @author Bitrix
-	*/
-	public function deleteParams(array $params)
+	public function setUser($user)
 	{
-		if($this->query <> '')
+		$this->user = $user;
+		return $this;
+	}
+
+	/**
+	 * Extended parsing to allow dots and spaces in parameters names.
+	 * @param string $params
+	 * @return array
+	 */
+	protected static function parseParams($params)
+	{
+		$data = preg_replace_callback(
+			'/(?:^|(?<=&))[^=[]+/',
+			function($match)
+			{
+				return bin2hex(urldecode($match[0]));
+			},
+			$params
+		);
+
+		parse_str($data, $values);
+
+		return array_combine(array_map('hex2bin', array_keys($values)), $values);
+	}
+
+	/**
+	 * Deletes parameters from the query.
+	 * @param array $params Parameters to delete.
+	 * @param bool $preserveDots Special treatment of dots and spaces in the parameters names.
+	 * @return $this
+	 */
+	public function deleteParams(array $params, $preserveDots = false)
+	{
+		$query = $this->getQuery();
+		if ($query != '')
 		{
-			$currentParams = array();
-			parse_str($this->query, $currentParams);
+			if ($preserveDots)
+			{
+				$currentParams = static::parseParams($query);
+			}
+			else
+			{
+				$currentParams = [];
+				parse_str($query, $currentParams);
+			}
 
 			foreach($params as $param)
 			{
 				unset($currentParams[$param]);
 			}
 
-			$this->query = http_build_query($currentParams, "", "&");
+			$this->query = http_build_query($currentParams, '', '&', PHP_QUERY_RFC3986);
 		}
 		return $this;
 	}
@@ -390,33 +301,286 @@ class Uri
 	/**
 	 * Adds parameters to query or replaces existing ones.
 	 * @param array $params Parameters to add.
+	 * @param bool $preserveDots Special treatment of dots and spaces in the parameters names.
 	 * @return $this
 	 */
-	
-	/**
-	* <p>Нестатический метод добавляет параметры в запрос или заменяет существующие параметры.</p> <p>Выполняет функции метода <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cmain/getcurpageparam.php" >CMain::GetCurPageParam </a> в старом ядре.</p>
-	*
-	*
-	* @param array $params  Параметры для добавления.
-	*
-	* @return \Bitrix\Main\Web\Uri 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/web/uri/addparams.php
-	* @author Bitrix
-	*/
-	public function addParams(array $params)
+	public function addParams(array $params, $preserveDots = false)
 	{
-		$currentParams = array();
-		if($this->query <> '')
+		$currentParams = [];
+		$query = $this->getQuery();
+
+		if ($query != '')
 		{
-			parse_str($this->query, $currentParams);
+			if ($preserveDots)
+			{
+				$currentParams = static::parseParams($query);
+			}
+			else
+			{
+				parse_str($query, $currentParams);
+			}
 		}
 
 		$currentParams = array_replace($currentParams, $params);
 
-		$this->query = http_build_query($currentParams, "", "&");
+		$this->query = http_build_query($currentParams, '', '&', PHP_QUERY_RFC3986);
 
 		return $this;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function __toString(): string
+	{
+		return $this->getUri();
+	}
+
+	/**
+	 * Specify data which should be serialized to JSON
+	 * @link http://php.net/manual/en/jsonserializable.jsonserialize.php
+	 * @return string data which can be serialized by <b>json_encode</b>,
+	 * which is a value of any type other than a resource.
+	 * @since 5.4.0
+	 */
+	public function jsonSerialize(): string
+	{
+		return $this->getUri();
+	}
+
+	/**
+	 * Converts the host to punycode.
+	 * @return string|\Bitrix\Main\Error
+	 */
+	public function convertToPunycode()
+	{
+		$host = \CBXPunycode::ToASCII($this->getHost(), $encodingErrors);
+
+		if (!empty($encodingErrors))
+		{
+			return new \Bitrix\Main\Error(implode("\n", $encodingErrors));
+		}
+
+		$this->setHost($host);
+
+		return $host;
+	}
+
+	/**
+	 * Searches for /../ and ulrencoded /../
+	 */
+	public function isPathTraversal(): bool
+	{
+		return (bool)preg_match("#(?:/|2f|^|\\\\|5c)(?:(?:%0*(25)*2e)|\\.){2,}(?:/|%0*(25)*2f|\\\\|%0*(25)*5c|$)#i", $this->getPath());
+	}
+
+	/**
+	 * Encodes the URI string without parsing it.
+	 * @param $str
+	 * @param $charset
+	 * @return string
+	 */
+	public static function urnEncode($str, $charset = 'UTF-8')
+	{
+		$result = '';
+		$arParts = preg_split("#(://|:\\d+/|/|\\?|=|&)#", $str, -1, PREG_SPLIT_DELIM_CAPTURE);
+
+		if ($charset === false)
+		{
+			foreach ($arParts as $i => $part)
+			{
+				$result .= ($i % 2) ? $part : rawurlencode($part);
+			}
+		}
+		else
+		{
+			$currentCharset = Main\Context::getCurrent()->getCulture()->getCharset();
+			foreach ($arParts as $i => $part)
+			{
+				$result .= ($i % 2)	? $part	: rawurlencode(Encoding::convertEncoding($part, $currentCharset, $charset));
+			}
+		}
+		return $result;
+	}
+
+	/**
+	 * Decodes the URI string without parsing it.
+	 * @param $str
+	 * @param $charset
+	 * @return string
+	 */
+	public static function urnDecode($str, $charset = false)
+	{
+		$result = '';
+		$arParts = preg_split("#(://|:\\d+/|/|\\?|=|&)#", $str, -1, PREG_SPLIT_DELIM_CAPTURE);
+
+		if ($charset === false)
+		{
+			foreach ($arParts as $i => $part)
+			{
+				$result .= ($i % 2) ? $part : rawurldecode($part);
+			}
+		}
+		else
+		{
+			$currentCharset = Main\Context::getCurrent()->getCulture()->getCharset();
+			foreach ($arParts as $i => $part)
+			{
+				$result .= ($i % 2) ? $part : rawurldecode(Encoding::convertEncoding($part, $charset, $currentCharset));
+			}
+		}
+		return $result;
+	}
+
+	/**
+	 * Converts a relative uri to the absolute one using given host name or the host from the current context server object.
+	 * @param string | null $host
+	 * @return $this
+	 */
+	public function toAbsolute(string $host = null): Uri
+	{
+		if ($this->host == '')
+		{
+			$request = Main\HttpContext::getCurrent()->getRequest();
+
+			$this->scheme = $request->isHttps() ? 'https' : 'http';
+
+			if ($host !== null)
+			{
+				$this->host = preg_replace('/:(443|80)$/', '', $host);
+			}
+			else
+			{
+				$this->host = $request->getHttpHost();
+			}
+		}
+		return $this;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function getAuthority(): string
+	{
+		$authority = '';
+
+		$userInfo = $this->getUserInfo();
+		if ($userInfo != '')
+		{
+			$authority = $userInfo . '@';
+		}
+
+		$host = $this->getHost();
+		if ($host != '')
+		{
+			$authority .= $host;
+			$port = $this->getPort();
+
+			if ($port !== null)
+			{
+				if (($this->scheme == 'http' && $port != 80) || ($this->scheme == 'https' && $port != 443))
+				{
+					$authority .= ':' . $port;
+				}
+			}
+		}
+
+		return $authority;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function getUserInfo(): string
+	{
+		$user = $this->getUser();
+
+		if ($user != '')
+		{
+			$password = $this->getPass();
+			return $user . ($password != '' ? ':' . $password : '');
+		}
+
+		return '';
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function withScheme(string $scheme): UriInterface
+	{
+		$new = clone $this;
+		$new->scheme = $scheme;
+
+		return $new;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function withUserInfo(string $user, ?string $password = null): UriInterface
+	{
+		$new = clone $this;
+		$new
+			->setUser($user)
+			->setPass((string)$password)
+		;
+
+		return $new;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function withHost(string $host): UriInterface
+	{
+		$new = clone $this;
+		$new->setHost($host);
+
+		return $new;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function withPort(?int $port): UriInterface
+	{
+		$new = clone $this;
+		$new->port = $port;
+
+		return $new;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function withPath(string $path): UriInterface
+	{
+		$new = clone $this;
+		$new->setPath($path);
+
+		return $new;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function withQuery(string $query): UriInterface
+	{
+		$new = clone $this;
+		$new->query = $query;
+
+		return $new;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function withFragment(string $fragment): UriInterface
+	{
+		$new = clone $this;
+		$new->fragment = $fragment;
+
+		return $new;
 	}
 }

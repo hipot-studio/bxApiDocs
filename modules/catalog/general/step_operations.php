@@ -2,13 +2,15 @@
 use Bitrix\Main\localization\Loc,
 	Bitrix\Main,
 	Bitrix\Iblock,
-	Bitrix\Catalog;
+	Bitrix\Catalog,
+	Bitrix\Currency;
 
 Loc::loadMessages(__FILE__);
 
 class CCatalogStepOperations
 {
 	const DEFAULT_SESSION_PREFIX = 'CC';
+
 	protected $sessID = '';
 	protected $errorCounter = 0;
 	protected $errors = array();
@@ -92,17 +94,7 @@ class CCatalogStepOperations
 			$_SESSION[$this->sessID]['ERRORS_COUNTER'] = $this->errorCounter;
 		}
 
-		if (!$this->finishOperation)
-		{
-			$period = time() - $this->startOperationTime;
-			if ($this->maxExecutionTime > 2*$period)
-				$this->maxOperationCounter = $this->maxOperationCounter*2;
-			elseif ($period >= $this->maxExecutionTime)
-				$this->maxOperationCounter = (int)(($this->maxOperationCounter*2)/3);
-			unset($period);
-			if ($this->maxOperationCounter < 10)
-				$this->maxOperationCounter = 10;
-		}
+		$this->calculateNextOperationCounter();
 
 		return array(
 			'sessID' => $this->sessID,
@@ -120,7 +112,7 @@ class CCatalogStepOperations
 		);
 	}
 
-	static public function startOperation()
+	public function startOperation()
 	{
 
 	}
@@ -130,7 +122,7 @@ class CCatalogStepOperations
 
 	}
 
-	static public function runOperation()
+	public function runOperation()
 	{
 
 	}
@@ -191,13 +183,37 @@ class CCatalogStepOperations
 	{
 		$this->finishOperation = ($finish === true);
 	}
+
+	protected function calculateNextOperationCounter()
+	{
+		if (!$this->finishOperation)
+		{
+			$period = time() - $this->startOperationTime;
+			if ($this->maxExecutionTime > 2*$period)
+				$this->maxOperationCounter = $this->maxOperationCounter*2;
+			elseif ($period >= $this->maxExecutionTime)
+				$this->maxOperationCounter = (int)(($this->maxOperationCounter*2)/3);
+			unset($period);
+			if ($this->maxOperationCounter < 10)
+				$this->maxOperationCounter = 10;
+		}
+	}
+
+	protected function addError($error)
+	{
+		$error = (string)$error;
+		if ($error === '')
+			return;
+		$this->stepErrors[] = $error;
+		$this->errorCounter++;
+	}
 }
 
 class CCatalogProductSetAvailable extends CCatalogStepOperations
 {
 	const SESSION_PREFIX = 'PSA';
 
-	static public function __construct($sessID, $maxExecutionTime, $maxOperationCounter)
+	public function __construct($sessID, $maxExecutionTime, $maxOperationCounter)
 	{
 		$sessID = (string)$sessID;
 		if ($sessID == '')
@@ -247,7 +263,7 @@ class CCatalogProductSetAvailable extends CCatalogStepOperations
 			CCatalogProductSet::recalculateSet($productSet['ID'], $productSet['ITEM_ID']);
 			$arTimeFields = array(
 				'~TIMESTAMP_X' => $DB->CharToDateFunction($productSet['TIMESTAMP_X'], "FULL"),
-				'~MODIFIED_BY' => $productSet['MODIFIED_BY']
+				'MODIFIED_BY' => $productSet['MODIFIED_BY']
 			);
 			$strUpdate = $DB->PrepareUpdate($tableName, $arTimeFields);
 			if (!empty($strUpdate))
@@ -277,10 +293,33 @@ class CCatalogProductAvailable extends CCatalogStepOperations
 {
 	const SESSION_PREFIX = 'PA';
 
+	protected $config = array();
+
+	protected $preloadTooLong = false;
+
 	protected $iblockData = null;
 	protected $productList = array();
+	protected $currentList = array();
+	protected $currentIdsList = array();
+	private $offersMap = array();
+	private $offersIds = array();
+	private $prices = array();
+	private $calculatePrices = array();
+	private $existPriceIds = array();
+	private $existIdsByType = array();
+	private $measureRatios = array();
+	private $currencyReference = array();
+	private $measureIds = [
+		'DEFAULT' => null,
+		'BASE' => null
+	];
+
+	/** @deprecated  */
 	protected $useSets = false;
+	/** @deprecated  */
 	protected $separateSkuMode = false;
+	/** @deprecated  */
+	protected $extendedMode = false;
 
 	public function __construct($sessID, $maxExecutionTime, $maxOperationCounter)
 	{
@@ -288,18 +327,20 @@ class CCatalogProductAvailable extends CCatalogStepOperations
 		if ($sessID == '')
 			$sessID = self::SESSION_PREFIX.time();
 		parent::__construct($sessID, $maxExecutionTime, $maxOperationCounter);
-		$this->useSets = CBXFeatures::IsFeatureEnabled('CatCompleteSet');
-		$this->separateSkuMode = (string)Main\Config\Option::get('catalog', 'show_catalog_tab_with_offers') == 'Y';
+		$this->preloadTooLong = false;
+		$this->initConfig();
+		$this->setOldConfig();
+		$this->initReferences();
 	}
 
 	public function isUseSets()
 	{
-		return $this->useSets;
+		return $this->config['CHECK_SETS'];
 	}
 
 	public function isSeparateSkuMode()
 	{
-		return $this->separateSkuMode;
+		return $this->config['SEPARATE_SKU_MODE'];
 	}
 
 	public function runOperation()
@@ -309,27 +350,49 @@ class CCatalogProductAvailable extends CCatalogStepOperations
 		$this->params['IBLOCK_ID'] = (int)$this->params['IBLOCK_ID'];
 		if ($this->params['IBLOCK_ID'] <= 0)
 			return;
-		$this->iblockData = CCatalogSKU::GetInfoByIBlock($this->params['IBLOCK_ID']);
+		$this->iblockData = CCatalogSku::GetInfoByIBlock($this->params['IBLOCK_ID']);
 		if (empty($this->iblockData))
 			return;
 
-		Catalog\Product\Sku::disableUpdateAvailable();
-		switch ($this->iblockData['CATALOG_TYPE'])
+		$this->currentList = array();
+		$this->currentIdsList = array();
+		$productIterator = $this->getProductIterator(array(), array());
+		while ($product = $productIterator->fetch())
 		{
-			case CCatalogSKU::TYPE_CATALOG:
-				$this->runOperationCatalog();
-				break;
-			case CCatalogSKU::TYPE_OFFERS:
-				$this->runOperationOfferIblock();
-				break;
-			case CCatalogSKU::TYPE_FULL:
-				$this->runOperationFullCatalog();
-				break;
-			case CCatalogSKU::TYPE_PRODUCT:
-				$this->runOperationProductIblock();
-				break;
+			$product['PRODUCT_ID'] = (int)$product['PRODUCT_ID'];
+			$product['PRODUCT_EXISTS'] = $product['PRODUCT_ID'] > 0;
+			$this->currentList[$product['ID']] = $product;
+			$this->currentIdsList[] = $product['ID'];
 		}
-		Catalog\Product\Sku::enableUpdateAvailable();
+		unset($product, $productIterator);
+
+		if (!empty($this->currentList))
+		{
+			switch ($this->iblockData['CATALOG_TYPE'])
+			{
+				case CCatalogSku::TYPE_CATALOG:
+					$this->loadProductPrices();
+					break;
+				case CCatalogSku::TYPE_OFFERS:
+					$this->loadOffersData();
+					$this->loadProductPrices();
+					break;
+				case CCatalogSku::TYPE_FULL:
+				case CCatalogSku::TYPE_PRODUCT:
+					$this->loadSkuData();
+					$this->loadProductPrices();
+					$this->loadSkuPrices();
+					break;
+			}
+			$this->loadProductSets();
+			$this->loadMeasureRatios();
+			if ($this->checkPreloadTime())
+				$this->updateProductData();
+		}
+
+		$this->setFinishOperation(empty($this->currentIdsList));
+		$this->currentList = array();
+		$this->currentIdsList = array();
 	}
 
 	public function getMessage()
@@ -341,31 +404,31 @@ class CCatalogProductAvailable extends CCatalogStepOperations
 
 		switch ($this->iblockData['CATALOG_TYPE'])
 		{
-			case CCatalogSKU::TYPE_CATALOG:
+			case CCatalogSku::TYPE_CATALOG:
 				$title = Loc::getMessage(
 					'BX_STEP_OPERATION_CATALOG_TITLE',
 					array(
 						'#ID#' => $this->iblockData['IBLOCK_ID'],
-						'#NAME#' => CIBlock::GetArrayByID($this->iblockData['IBLOCK_ID'], 'NAME')
+						'#NAME#' => htmlspecialcharsbx(CIBlock::GetArrayByID($this->iblockData['IBLOCK_ID'], 'NAME'))
 					)
 				);
 				break;
-			case CCatalogSKU::TYPE_OFFERS:
+			case CCatalogSku::TYPE_OFFERS:
 				$title = Loc::getMessage(
 					'BX_STEP_OPERATION_OFFERS_TITLE',
 					array(
 						'#ID#' => $this->iblockData['PRODUCT_IBLOCK_ID'],
-						'#NAME#' => CIBlock::GetArrayByID($this->iblockData['PRODUCT_IBLOCK_ID'], 'NAME')
+						'#NAME#' => htmlspecialcharsbx(CIBlock::GetArrayByID($this->iblockData['PRODUCT_IBLOCK_ID'], 'NAME'))
 					)
 				);
 				break;
-			case CCatalogSKU::TYPE_PRODUCT:
-			case CCatalogSKU::TYPE_FULL:
+			case CCatalogSku::TYPE_PRODUCT:
+			case CCatalogSku::TYPE_FULL:
 				$title = Loc::getMessage(
 					'BX_STEP_OPERATION_CATALOG_TITLE',
 					array(
 						'#ID#' => $this->iblockData['PRODUCT_IBLOCK_ID'],
-						'#NAME#' => CIBlock::GetArrayByID($this->iblockData['PRODUCT_IBLOCK_ID'], 'NAME')
+						'#NAME#' => htmlspecialcharsbx(CIBlock::GetArrayByID($this->iblockData['PRODUCT_IBLOCK_ID'], 'NAME'))
 					)
 				);
 				break;
@@ -390,13 +453,13 @@ class CCatalogProductAvailable extends CCatalogStepOperations
 		if ($iblockId <= 0)
 			return $result;
 
-		$iblockData = CCatalogSKU::GetInfoByIBlock($iblockId);
+		$iblockData = CCatalogSku::GetInfoByIBlock($iblockId);
 		if (empty($iblockData))
 			return $result;
 
 		switch ($iblockData['CATALOG_TYPE'])
 		{
-			case CCatalogSKU::TYPE_CATALOG:
+			case CCatalogSku::TYPE_CATALOG:
 				$iblockName = CIBlock::GetArrayByID($iblockData['IBLOCK_ID'], 'NAME');
 				$result[] = array(
 					'ID' => $iblockData['IBLOCK_ID'],
@@ -412,7 +475,7 @@ class CCatalogProductAvailable extends CCatalogStepOperations
 				);
 				unset($iblockName);
 				break;
-			case CCatalogSKU::TYPE_OFFERS:
+			case CCatalogSku::TYPE_OFFERS:
 				$result[] = array(
 					'ID' => $iblockData['IBLOCK_ID'],
 					'NAME' => CIBlock::GetArrayByID($iblockData['IBLOCK_ID'], 'NAME'),
@@ -426,8 +489,8 @@ class CCatalogProductAvailable extends CCatalogStepOperations
 					'COUNT' => static::getIblockCounter($iblockData['IBLOCK_ID'])
 				);
 				break;
-			case CCatalogSKU::TYPE_PRODUCT:
-			case CCatalogSKU::TYPE_FULL:
+			case CCatalogSku::TYPE_PRODUCT:
+			case CCatalogSku::TYPE_FULL:
 				$iblockName = CIBlock::GetArrayByID($iblockData['PRODUCT_IBLOCK_ID'], 'NAME');
 				$result[] = array(
 					'ID' => $iblockData['IBLOCK_ID'],
@@ -461,274 +524,137 @@ class CCatalogProductAvailable extends CCatalogStepOperations
 		return $result;
 	}
 
-	protected function runOperationFullCatalog()
+	protected function checkPreloadTime()
 	{
-		$emptyList = true;
-		$productIterator = $this->getProductIterator(array(), array());
-		while ($product = $productIterator->fetch())
-		{
-			$emptyList = false;
-			$product['PRODUCT_ID'] = (int)$product['PRODUCT_ID'];
-
-			$offerState = Catalog\Product\Sku::getOfferState($product['ID'], $this->iblockData['PRODUCT_IBLOCK_ID']);
-			switch ($offerState)
-			{
-				case Catalog\Product\Sku::OFFERS_AVAILABLE:
-				case Catalog\Product\Sku::OFFERS_NOT_AVAILABLE:
-					if ($this->isSeparateSkuMode())
-					{
-						$fields = array(
-							'AVAILABLE' => Catalog\ProductTable::calculateAvailable($product),
-							'TYPE' => Catalog\ProductTable::TYPE_SKU,
-						);
-					}
-					else
-					{
-						$fields = Catalog\Product\Sku::getDefaultParentSettings($offerState);
-					}
-					break;
-				case Catalog\Product\Sku::OFFERS_NOT_EXIST:
-					switch ($product['TYPE'])
-					{
-						case Catalog\ProductTable::TYPE_SKU:
-							$fields = Catalog\Product\Sku::getDefaultParentSettings($offerState);
-							break;
-						case Catalog\ProductTable::TYPE_PRODUCT:
-							$fields['AVAILABLE'] = Catalog\ProductTable::calculateAvailable($product);
-							break;
-						case Catalog\ProductTable::TYPE_SET:
-							$fields['AVAILABLE'] = Catalog\ProductTable::calculateAvailable($product);
-							break;
-						default:
-							$fields = Catalog\ProductTable::getDefaultAvailableSettings();
-							$fields['TYPE'] = Catalog\ProductTable::TYPE_PRODUCT;
-							if ($this->isUseSets() && $product['PRODUCT_ID'] > 0)
-							{
-								if (CCatalogProductSet::isProductHaveSet($product['PRODUCT_ID'], CCatalogProductSet::TYPE_SET))
-									$fields['TYPE'] = Catalog\ProductTable::TYPE_SET;
-								$fields['BUNDLE'] = (
-									CCatalogProductSet::isProductHaveSet($product['PRODUCT_ID'], CCatalogProductSet::TYPE_GROUP)
-									? Catalog\ProductTable::STATUS_YES
-									: Catalog\ProductTable::STATUS_NO
-								);
-							}
-							break;
-					}
-					break;
-			}
-			if (!empty($fields))
-			{
-				if ($product['PRODUCT_ID'] == 0)
-				{
-					$fields['ID'] = $product['ID'];
-					$result = Catalog\ProductTable::add($fields);
-				}
-				else
-				{
-					$result = Catalog\ProductTable::update($product['ID'], $fields);
-				}
-				if (!$result->isSuccess())
-				{
-
-				}
-				unset($result);
-			}
-			unset($fields);
-
-			$this->setLastId($product['ID']);
-			if ($this->isStopOperation())
-				break;
-		}
-		unset($product, $productIterator, $select, $filter);
-		$this->setFinishOperation($emptyList);
+		$this->preloadTooLong = ($this->maxExecutionTime > 0 && (time() - $this->startOperationTime > ($this->maxExecutionTime/2)));
+		return !$this->preloadTooLong;
 	}
 
-	protected function runOperationProductIblock()
+	protected function calculateNextOperationCounter()
 	{
-		$emptyList = true;
-		$productIterator = $this->getProductIterator(array(), array());
-		while ($product = $productIterator->fetch())
+		if (!$this->finishOperation)
 		{
-			$emptyList = false;
-			$product['PRODUCT_ID'] = (int)$product['PRODUCT_ID'];
-			if ($this->isSeparateSkuMode())
+			if ($this->preloadTooLong)
 			{
-				$fields = array(
-					'AVAILABLE' => Catalog\ProductTable::calculateAvailable($product),
-					'TYPE' => Catalog\ProductTable::TYPE_SKU,
-				);
+				$this->maxOperationCounter = (int)(($this->maxOperationCounter*2)/3);
+				return;
 			}
-			else
-			{
-				$fields = Catalog\Product\Sku::getDefaultParentSettings(Catalog\Product\Sku::getOfferState(
-					$product['ID'],
-					$this->iblockData['PRODUCT_IBLOCK_ID']
-				));
-			}
-			if ($this->isUseSets())
-			{
-				$fields['BUNDLE'] = (
-					CCatalogProductSet::isProductHaveSet($product['ID'], CCatalogProductSet::TYPE_GROUP)
-					? Catalog\ProductTable::STATUS_YES
-					: Catalog\ProductTable::STATUS_NO
-				);
-			}
-			if ($product['PRODUCT_ID'] == 0)
-			{
-				$fields['ID'] = $product['ID'];
-				$result = Catalog\ProductTable::add($fields);
-			}
-			else
-			{
-				$result = Catalog\ProductTable::update($product['ID'], $fields);
-			}
-			if (!$result->isSuccess())
-			{
-
-			}
-			unset($result);
-
-			$this->setLastId($product['ID']);
-			if ($this->isStopOperation())
-				break;
+			$period = time() - $this->startOperationTime;
+			if ($this->maxExecutionTime > 2*$period)
+				$this->maxOperationCounter = $this->maxOperationCounter*2;
+			elseif ($period >= $this->maxExecutionTime)
+				$this->maxOperationCounter = (int)(($this->maxOperationCounter*2)/3);
+			unset($period);
+			if ($this->maxOperationCounter < 10)
+				$this->maxOperationCounter = 10;
+			elseif($this->maxOperationCounter > 500)
+				$this->maxOperationCounter = 500;
 		}
-		unset($product, $productIterator, $select, $filter);
-		$this->setFinishOperation($emptyList);
 	}
 
-	protected function runOperationCatalog()
+	protected function initConfig()
 	{
-		$emptyList = true;
-		$productIterator = $this->getProductIterator(array(), array());
-		while ($product = $productIterator->fetch())
-		{
-			$emptyList = false;
-			$product['PRODUCT_ID'] = (int)$product['PRODUCT_ID'];
-			if ($product['PRODUCT_ID'] == 0)
-			{
-				$fields = Catalog\ProductTable::getDefaultAvailableSettings();
-				$fields['TYPE'] = Catalog\ProductTable::TYPE_PRODUCT;
-				$fields['ID'] = $product['ID'];
-				$result = Catalog\ProductTable::add($fields);
-			}
-			else
-			{
-				$fields = array(
-					'AVAILABLE' => Catalog\ProductTable::calculateAvailable($product),
-					'TYPE' => Catalog\ProductTable::TYPE_PRODUCT,
-				);
-				if ($this->isUseSets())
-				{
-					if (CCatalogProductSet::isProductHaveSet($product['PRODUCT_ID'], CCatalogProductSet::TYPE_SET))
-						$fields['TYPE'] = Catalog\ProductTable::TYPE_SET;
-					$fields['BUNDLE'] = (
-						CCatalogProductSet::isProductHaveSet($product['PRODUCT_ID'], CCatalogProductSet::TYPE_GROUP)
-						? Catalog\ProductTable::STATUS_YES
-						: Catalog\ProductTable::STATUS_NO
-					);
-				}
-				$result = Catalog\ProductTable::update($product['ID'], $fields);
-			}
-			if (!$result->isSuccess())
-			{
-
-			}
-			unset($result);
-
-			$this->setLastId($product['ID']);
-			if ($this->isStopOperation())
-				break;
-		}
-		unset($product, $productIterator, $select, $filter);
-		$this->setFinishOperation($emptyList);
+		$this->config = array(
+			'SEPARATE_SKU_MODE' => (string)Main\Config\Option::get('catalog', 'show_catalog_tab_with_offers') == 'Y',
+			'CHECK_AVAILABLE' => true,
+			'CHECK_SKU_PRICES' => true,
+			'CHECK_PRICES' => false,
+			'CHECK_SETS' => Catalog\Config\Feature::isProductSetsEnabled(),
+			'CHECK_MEASURE_RATIO' => false,
+			'CHECK_MEASURE' => false,
+			'UPDATE_ONLY' => false
+		);
 	}
 
-	protected function runOperationOfferIblock()
+	protected function setOldConfig()
 	{
-		$emptyList = true;
-		$productIterator = $this->getProductIterator(array(), array());
-		while ($product = $productIterator->fetch())
-		{
-			$emptyList = false;
-
-			$parent = CIBlockElement::GetPropertyValues(
-				$this->iblockData['IBLOCK_ID'],
-				array('ID' => $product['ID']),
-				false,
-				array('ID' => $this->iblockData['SKU_PROPERTY_ID'])
-			)->Fetch();
-			$parentId = (!empty($parent) ? (int)$parent[$this->iblockData['SKU_PROPERTY_ID']] : 0);
-			if (!isset($this->productList[$parentId]))
-			{
-				$this->productList[$parentId] = false;
-				if ($parentId > 0)
-				{
-					$existParent = Iblock\ElementTable::getList(array(
-						'select' => array('ID'),
-						'filter' => array('=ID' => $parentId, '=IBLOCK_ID' => $this->iblockData['PRODUCT_IBLOCK_ID'])
-					))->fetch();
-					if (!empty($existParent))
-						$this->productList[$parentId] = true;
-					unset($existParent);
-				}
-			}
-			$type = ($this->productList[$parentId] ? Catalog\ProductTable::TYPE_OFFER : Catalog\ProductTable::TYPE_FREE_OFFER);
-
-			$product['PRODUCT_ID'] = (int)$product['PRODUCT_ID'];
-			if ($product['PRODUCT_ID'] == 0)
-			{
-				$fields = Catalog\ProductTable::getDefaultAvailableSettings();
-				$fields['TYPE'] = $type;
-				$fields['ID'] = $product['ID'];
-				$result = Catalog\ProductTable::add($fields);
-			}
-			else
-			{
-				$fields = array(
-					'AVAILABLE' => Catalog\ProductTable::calculateAvailable($product),
-					'TYPE' => $type,
-				);
-				if ($this->isUseSets())
-				{
-					$fields['BUNDLE'] = (
-						CCatalogProductSet::isProductHaveSet($product['PRODUCT_ID'], CCatalogProductSet::TYPE_GROUP)
-						? Catalog\ProductTable::STATUS_YES
-						: Catalog\ProductTable::STATUS_NO
-					);
-				}
-				$result = Catalog\ProductTable::update($product['ID'], $fields);
-			}
-			if (!$result->isSuccess())
-			{
-
-			}
-			unset($result);
-
-			$this->setLastId($product['ID']);
-			if ($this->isStopOperation())
-				break;
-		}
-		unset($product, $productIterator, $select, $filter);
-		$this->setFinishOperation($emptyList);
+		$this->useSets = $this->config['CHECK_SETS'];
+		$this->separateSkuMode = $this->config['SEPARATE_SKU_MODE'];
+		$this->extendedMode = false;
 	}
+
+	protected function initReferences()
+	{
+		$this->initCurrencyReference();
+		$this->initMeasures();
+	}
+
+	private function initCurrencyReference()
+	{
+		$this->currencyReference = [];
+		if (!$this->config['CHECK_PRICES'])
+			return;
+		$iterator = Currency\CurrencyTable::getList([
+			'select' => ['CURRENCY', 'CURRENT_BASE_RATE']
+		]);
+		while ($row = $iterator->fetch())
+			$this->currencyReference[$row['CURRENCY']] = (float)$row['CURRENT_BASE_RATE'];
+		unset($row, $iterator);
+	}
+
+	private function initMeasures()
+	{
+		$measure = CCatalogMeasure::getDefaultMeasure();
+		if (!empty($measure))
+		{
+			if ($measure['ID'] > 0)
+				$this->measureIds['DEFAULT'] = $measure['ID'];
+		}
+		$iterator = CCatalogMeasure::getList(
+			array(),
+			array('=CODE' => CCatalogMeasure::DEFAULT_MEASURE_CODE),
+			false,
+			false,
+			array('ID', 'CODE')
+		);
+		$measure = $iterator->Fetch();
+		unset($iterator);
+		if (!empty($measure))
+		{
+			$this->measureIds['BASE'] = $measure['ID'];
+		}
+		unset($measure);
+	}
+
+	/** @deprecated */
+	protected function runOperationFullCatalog(){}
+
+	/** @deprecated */
+	protected function runOperationProductIblock(){}
+
+	/** @deprected */
+	protected function runOperationCatalog(){}
+
+	/** @deprected */
+	protected function runOperationOfferIblock(){}
+
+	/**
+	 * @deprecated deprecated since catalog 17.6.0
+	 *
+	 * @param array $product
+	 * @return void
+	 */
+	protected function runExtendedOperation(array $product){}
 
 	protected function getProductIterator($filter, $select)
 	{
 		$select[] = 'ID';
 		$select[] = 'IBLOCK_ID';
 		$select[] = 'ACTIVE';
+		$select[] = 'NAME';
 		$select['PRODUCT_ID'] = 'PRODUCT.ID';
 		$select['QUANTITY'] = 'PRODUCT.QUANTITY';
 		$select['QUANTITY_TRACE'] = 'PRODUCT.QUANTITY_TRACE';
 		$select['CAN_BUY_ZERO'] = 'PRODUCT.CAN_BUY_ZERO';
 		$select['TYPE'] = 'PRODUCT.TYPE';
-		if ($this->isUseSets())
-			$select['BUNDLE'] = 'PRODUCT.BUNDLE';
+		$select['MEASURE'] = 'PRODUCT.MEASURE';
 
 		if ($this->lastID > 0)
 			$filter['>ID'] = $this->lastID;
 		$filter['=IBLOCK_ID'] = $this->params['IBLOCK_ID'];
 		$filter['=WF_PARENT_ELEMENT_ID'] = null;
+		if ($this->config['UPDATE_ONLY'])
+			$filter['!==PRODUCT.ID'] = null;
 
 		$getListParams = array(
 			'select' => $select,
@@ -759,6 +685,777 @@ class CCatalogProductAvailable extends CCatalogStepOperations
 			'=WF_PARENT_ELEMENT_ID' => null
 		));
 	}
+
+	private function loadSkuData()
+	{
+		if (empty($this->currentList))
+			return;
+		$offers = \CCatalogSku::getOffersList(
+			$this->currentIdsList,
+			$this->params['IBLOCK_ID'],
+			array(),
+			array('ID', 'ACTIVE', 'AVAILABLE')
+		);
+		foreach ($this->currentIdsList as $id)
+		{
+			$this->currentList[$id]['SKU_STATE'] = Catalog\Product\Sku::OFFERS_NOT_EXIST;
+			$this->currentList[$id]['SET_EXISTS'] = false;
+			$this->currentList[$id]['BUNDLE_EXISTS'] = false;
+			if (empty($offers[$id]))
+				continue;
+
+			$this->currentList[$id]['SKU_STATE'] = Catalog\Product\Sku::OFFERS_NOT_AVAILABLE;
+			$allOffers = array();
+			$availableOffers = array();
+			foreach ($offers[$id] as $offerId => $row)
+			{
+				$allOffers[] = $offerId;
+				if ($row['ACTIVE'] != 'Y' || $row['AVAILABLE'] != 'Y')
+					continue;
+				$this->currentList[$id]['SKU_STATE'] = Catalog\Product\Sku::OFFERS_AVAILABLE;
+				$availableOffers[] = $offerId;
+			}
+
+			$this->calculatePrices[$id] = [];
+			if ($this->config['CHECK_SKU_PRICES'] && !$this->config['SEPARATE_SKU_MODE'])
+			{
+				if ($this->currentList[$id]['SKU_STATE'] == Catalog\Product\Sku::OFFERS_AVAILABLE)
+				{
+					foreach ($availableOffers as $offerId)
+					{
+						$this->offersMap[$offerId] = $id;
+						$this->offersIds[] = $offerId;
+					}
+				}
+				else
+				{
+					foreach ($allOffers as $offerId)
+					{
+						$this->offersMap[$offerId] = $id;
+						$this->offersIds[] = $offerId;
+					}
+				}
+			}
+		}
+		unset($offerId, $availableOffers, $allOffers, $id);
+	}
+
+	private function loadProductPrices()
+	{
+		if (empty($this->currentList))
+			return;
+
+		$this->prices = [];
+		$this->existPriceIds = [];
+		$this->existIdsByType = [];
+
+		if (!$this->config['CHECK_PRICES'] && !$this->config['CHECK_SKU_PRICES'])
+			return;
+
+		foreach (array_chunk($this->currentIdsList, 500) as $pageIds)
+		{
+			$iterator = Catalog\PriceTable::getList([
+				'select' => ['ID', 'PRODUCT_ID', 'CATALOG_GROUP_ID', 'PRICE', 'CURRENCY', 'PRICE_SCALE'],
+				'filter' => ['@PRODUCT_ID' => $pageIds],
+				'order' => ['PRODUCT_ID' => 'ASC', 'CATALOG_GROUP_ID' => 'ASC']
+			]);
+			while ($row = $iterator->fetch())
+			{
+				$id = (int)$row['ID'];
+				$row['PRICE'] = (float)$row['PRICE'];
+				$row['PRICE_SCALE'] = (float)$row['PRICE_SCALE'];
+				$productId = (int)$row['PRODUCT_ID'];
+				$priceTypeId = (int)$row['CATALOG_GROUP_ID'];
+
+				if (!isset($this->prices[$productId]))
+					$this->prices[$productId] = [];
+				$this->prices[$productId][$id] = $row;
+
+				if (!isset($this->existPriceIds[$productId]))
+					$this->existPriceIds[$productId] = [];
+				$this->existPriceIds[$productId][$id] = $id;
+
+				if (!isset($this->existIdsByType[$productId]))
+					$this->existIdsByType[$productId] = [];
+				if (!isset($this->existIdsByType[$productId][$priceTypeId]))
+					$this->existIdsByType[$productId][$priceTypeId] = [];
+				$this->existIdsByType[$productId][$priceTypeId][] = $id;
+			}
+			unset($priceTypeId, $productId, $id, $row, $iterator);
+		}
+		unset($pageIds);
+	}
+
+	private function loadSkuPrices()
+	{
+		if (empty($this->currentList))
+			return;
+
+/*		$this->existPriceIds = array();
+		$this->existIdsByType = array(); */
+
+		if (!$this->config['CHECK_SKU_PRICES'] || $this->config['SEPARATE_SKU_MODE'])
+			return;
+
+/*		foreach (array_chunk($this->currentIdsList, 500) as $pageIds)
+		{
+			$iterator = Catalog\PriceTable::getList(array(
+				'select' => array('ID', 'CATALOG_GROUP_ID', 'PRODUCT_ID'),
+				'filter' => array('@PRODUCT_ID' => $pageIds),
+				'order' => array('ID' => 'ASC')
+			));
+			while ($row = $iterator->fetch())
+			{
+				$row['ID'] = (int)$row['ID'];
+				$priceTypeId = (int)$row['CATALOG_GROUP_ID'];
+				$productId = (int)$row['PRODUCT_ID'];
+				if (!isset($this->existPriceIds[$productId]))
+					$this->existPriceIds[$productId] = array();
+				$this->existPriceIds[$productId][$row['ID']] = $row['ID'];
+				if (!isset($this->existIdsByType[$productId]))
+					$this->existIdsByType[$productId] = array();
+				if (!isset($this->existIdsByType[$productId][$priceTypeId]))
+					$this->existIdsByType[$productId][$priceTypeId] = array();
+				$this->existIdsByType[$productId][$priceTypeId][] = $row['ID'];
+			}
+			unset($row, $iterator);
+		}
+		unset($pageIds); */
+
+		if (empty($this->offersIds))
+			return;
+
+		sort($this->offersIds);
+		foreach (array_chunk($this->offersIds, 500) as $pageOfferIds)
+		{
+			$filter = Main\Entity\Query::filter();
+			$filter->whereIn('PRODUCT_ID', $pageOfferIds);
+			$filter->where(Main\Entity\Query::filter()->logic('or')->where('QUANTITY_FROM', '<=', 1)->whereNull('QUANTITY_FROM'));
+			$filter->where(Main\Entity\Query::filter()->logic('or')->where('QUANTITY_TO', '>=', 1)->whereNull('QUANTITY_TO'));
+
+			$iterator = Catalog\PriceTable::getList(array(
+				'select' => array(
+					'PRODUCT_ID', 'CATALOG_GROUP_ID', 'PRICE', 'CURRENCY',
+					'PRICE_SCALE', 'TMP_ID'
+				),
+				'filter' => $filter,
+				'order' => array('PRODUCT_ID' => 'ASC', 'CATALOG_GROUP_ID' => 'ASC')
+			));
+			while ($row = $iterator->fetch())
+			{
+				$typeId = (int)$row['CATALOG_GROUP_ID'];
+				$offerId = (int)$row['PRODUCT_ID'];
+				$productId = $this->offersMap[$offerId];
+				unset($row['PRODUCT_ID']);
+
+				if (!isset($this->calculatePrices[$productId][$typeId]))
+					$this->calculatePrices[$productId][$typeId] = $row;
+				elseif ($this->calculatePrices[$productId][$typeId]['PRICE_SCALE'] > $row['PRICE_SCALE'])
+					$this->calculatePrices[$productId][$typeId] = $row;
+			}
+			unset($row, $iterator);
+			unset($filter);
+		}
+	}
+
+	private function loadOffersData()
+	{
+		if (empty($this->currentList))
+			return;
+
+		$productList = \CCatalogSku::getProductList(
+			$this->currentIdsList,
+			$this->params['IBLOCK_ID']
+		);
+		if (!is_array($productList))
+			$productList = array();
+
+		foreach ($this->currentIdsList as $id)
+			$this->currentList[$id]['PARENT_EXISTS'] = isset($productList[$id]);
+		unset($id, $productList);
+	}
+
+	private function loadProductSets()
+	{
+		if (!$this->config['CHECK_SETS'])
+			return;
+		if (empty($this->currentIdsList))
+			return;
+
+		foreach ($this->currentIdsList as $id)
+		{
+			$this->currentList[$id]['SET_EXISTS'] = false;
+			$this->currentList[$id]['BUNDLE_EXISTS'] = false;
+		}
+		unset($id);
+
+		//TODO: replace sql to api
+		$conn = Main\Application::getConnection();
+		$helper = $conn->getSqlHelper();
+		$tableName = $helper->quote('b_catalog_product_sets');
+		$iterator = $conn->query(
+			'select '.$helper->quote('OWNER_ID').', '.$helper->quote('TYPE').' from '.$tableName.
+			' where '.$helper->quote('OWNER_ID').' in ('.implode(',', $this->currentIdsList).') and '.
+			$helper->quote('OWNER_ID').' = '.$helper->quote('ITEM_ID')
+		);
+		while ($row = $iterator->fetch())
+		{
+			$id = (int)$row['OWNER_ID'];
+			if ($row['TYPE'] == \CCatalogProductSet::TYPE_SET)
+				$this->currentList[$id]['SET_EXISTS'] = true;
+			if ($row['TYPE'] == \CCatalogProductSet::TYPE_GROUP)
+				$this->currentList[$id]['BUNDLE_EXISTS'] = true;
+		}
+		unset($row, $iterator);
+		unset($tableName, $helper, $conn);
+	}
+
+	private function loadMeasureRatios()
+	{
+		$this->measureRatios = array();
+		if (!$this->config['CHECK_MEASURE_RATIO'])
+			return;
+		if (empty($this->currentIdsList))
+			return;
+
+		$this->measureRatios = array_fill_keys(
+			$this->currentIdsList,
+			array(
+				'RATIOS' => array(),
+				'DEFAULT_EXISTS' => false,
+				'DEFAULT_RATIO_ID' => null,
+				'DOUBLES' => array()
+			)
+		);
+		foreach (array_chunk($this->currentIdsList, 500) as $pageIds)
+		{
+			$iterator = Catalog\MeasureRatioTable::getList(array(
+				'select' => array('*'),
+				'filter' => array('@PRODUCT_ID' => $pageIds),
+				'order' => array('PRODUCT_ID' => 'ASC', 'RATIO' => 'ASC')
+			));
+			while ($row = $iterator->fetch())
+			{
+				$productId = (int)$row['PRODUCT_ID'];
+				$this->measureRatios[$productId]['RATIOS'][$row['ID']] = $row;
+				if ($row['IS_DEFAULT'] == 'Y')
+				{
+					if ($this->measureRatios[$productId]['DEFAULT_EXISTS'])
+					{
+						$this->measureRatios[$productId]['DOUBLES'][] = $row['ID'];
+					}
+					else
+					{
+						$this->measureRatios[$productId]['DEFAULT_EXISTS'] = true;
+						$this->measureRatios[$productId]['DEFAULT_RATIO_ID'] = $row['ID'];
+					}
+				}
+			}
+		}
+		unset($productId, $row, $iterator, $pageIds);
+	}
+
+	private function updateProductData()
+	{
+		if (empty($this->currentIdsList))
+			return;
+
+		$checkMeasure = (
+			$this->config['CHECK_MEASURE']
+			&& $this->iblockData['CATALOG_TYPE'] != CCatalogSku::TYPE_PRODUCT
+			&& (isset($this->iblockData['SUBSCRIPTION']) && $this->iblockData['SUBSCRIPTION'] != 'Y')
+		);
+
+		foreach ($this->currentIdsList as $id)
+		{
+			$product = $this->currentList[$id];
+			$product['SUCCESS'] = true;
+			if ($this->config['CHECK_AVAILABLE'])
+			{
+				switch ($this->iblockData['CATALOG_TYPE'])
+				{
+					case CCatalogSku::TYPE_CATALOG:
+						$fields = $this->getCatalogItem($product);
+						break;
+					case CCatalogSku::TYPE_OFFERS:
+						$fields = $this->getOfferIblockItem($product);
+						break;
+					case CCatalogSku::TYPE_FULL:
+						$fields = $this->getFullCatalogItem($product);
+						break;
+					case CCatalogSku::TYPE_PRODUCT:
+						$fields = $this->getProductIblockItem($product);
+						break;
+					default:
+						$fields = array();
+						break;
+				}
+
+				if ($this->config['CHECK_SETS'])
+				{
+					$fields['BUNDLE'] = ($product['BUNDLE_EXISTS']
+						? Catalog\ProductTable::STATUS_YES
+						: Catalog\ProductTable::STATUS_NO
+					);
+				}
+				if ($checkMeasure)
+				{
+					if ($fields['TYPE'] == Catalog\ProductTable::TYPE_SET)
+					{
+						if ($this->measureIds['BASE'] !== null)
+						{
+							$fields['MEASURE'] = $this->measureIds['BASE'];
+						}
+					}
+					else
+					{
+						if ((int)$product['MEASURE'] <= 0 && $this->measureIds['DEFAULT'] !== null)
+						{
+							$fields['MEASURE'] = $this->measureIds['DEFAULT'];
+						}
+					}
+				}
+
+				if ($product['PRODUCT_EXISTS'])
+				{
+					$productResult = Catalog\ProductTable::update($product['ID'], $fields);
+				}
+				else
+				{
+					$fields['ID'] = $product['ID'];
+					$productResult = Catalog\ProductTable::add($fields);
+					$fields['PRODUCT_ID'] = $fields['ID'];
+					unset($fields['ID']);
+				}
+
+				if ($productResult->isSuccess())
+				{
+					$product = array_merge($product, $fields);
+				}
+				else
+				{
+					$product['SUCCESS'] = false;
+					$errorId = 'BX_CATALOG_REINDEX_ERR_PRODUCT_UPDATE_FAIL_EXT';
+					if (
+						$product['TYPE'] == Catalog\ProductTable::TYPE_OFFER
+						|| $product['TYPE'] == Catalog\ProductTable::TYPE_FREE_OFFER
+					)
+						$errorId = 'BX_CATALOG_REINDEX_ERR_OFFER_UPDATE_FAIL_EXT';
+					$this->addError(Loc::getMessage(
+						$errorId,
+						[
+							'#ID#' => $id,
+							'#NAME#' => $product['NAME'],
+							'#ERROR#' => implode('; ', $productResult->getErrorMessages())
+						]
+					));
+					unset($errorId);
+				}
+				unset($productResult, $fields);
+			}
+
+			if ($product['SUCCESS'])
+			{
+				if ($this->config['CHECK_PRICES'])
+					$this->updateProductPrices($id, $product);
+				if ($this->config['CHECK_SKU_PRICES'])
+				{
+					$this->updateSkuPrices($id, $product);
+					if ($product['TYPE'] == Catalog\ProductTable::TYPE_SKU)
+						Iblock\PropertyIndex\Manager::updateElementIndex($this->params['IBLOCK_ID'], $id);
+				}
+				if ($this->config['CHECK_MEASURE_RATIO'])
+					$this->updateMeasureRatios($id, $product);
+			}
+
+			unset($product);
+			$this->setLastId($id);
+			if ($this->isStopOperation())
+				break;
+		}
+		unset($id);
+	}
+
+	private function updateProductPrices($id, array $product)
+	{
+		if (!$this->config['CHECK_PRICES'])
+			return;
+
+		if ($product['TYPE'] == Catalog\ProductTable::TYPE_SKU && !$this->config['SEPARATE_SKU_MODE'])
+			return;
+
+		if (empty($this->prices[$id]))
+			return;
+
+		if ($product['TYPE'] == Catalog\ProductTable::TYPE_EMPTY_SKU)
+		{
+			unset($this->prices[$id]);
+			unset($this->existIdsByType[$id]);
+			unset($this->existPriceIds[$id]);
+
+			$conn = Main\Application::getConnection();
+			$helper = $conn->getSqlHelper();
+			$conn->queryExecute(
+				'delete from '.$helper->quote(Catalog\PriceTable::getTableName()).
+				' where '.$helper->quote('PRODUCT_ID').' = '.$id
+			);
+			unset($helper, $conn);
+			return;
+		}
+
+		$success = true;
+		$errorMessage = [];
+		foreach (array_keys($this->prices[$id]) as $rowId)
+		{
+			$row = $this->prices[$id][$rowId];
+			if (
+				!isset($this->currencyReference[$row['CURRENCY']])
+				|| $this->currencyReference[$row['CURRENCY']] == 0
+			)
+				continue;
+			$baseRate = $this->currencyReference[$row['CURRENCY']];
+			$newScale = $row['PRICE'] * $baseRate;
+			if ($newScale == $row['PRICE_SCALE'])
+				continue;
+			$rowResult = Catalog\PriceTable::update($rowId, ['PRICE_SCALE' => $newScale]);
+			if (!$rowResult->isSuccess())
+			{
+				$success = false;
+				$errorMessage = $rowResult->getErrorMessages();
+				break;
+			}
+		}
+		unset($rowResult, $newScale, $baseRate, $row, $rowId);
+
+		unset($this->prices[$id]);
+
+		if (!$success)
+		{
+			$errorId = 'BX_CATALOG_REINDEX_ERR_PRODUCT_PRICE_UPDATE_FAIL_EXT';
+			if (
+				$product['TYPE'] == Catalog\ProductTable::TYPE_OFFER
+				|| $product['TYPE'] == Catalog\ProductTable::TYPE_FREE_OFFER
+			)
+				$errorId = 'BX_CATALOG_REINDEX_ERR_OFFER_PRICE_UPDATE_FAIL_EXT';
+			$this->addError(Loc::getMessage(
+				$errorId,
+				[
+					'#ID#' => $id,
+					'#NAME#' => $product['NAME'],
+					'#ERROR#' => implode('; ', $errorMessage)
+				]
+			));
+			unset($errorId);
+		}
+		unset($errorMessage, $success);
+	}
+
+	private function updateSkuPrices($id, array $product)
+	{
+		if ($product['TYPE'] != Catalog\ProductTable::TYPE_SKU)
+			return;
+		if (!$this->config['CHECK_SKU_PRICES'] || $this->config['SEPARATE_SKU_MODE'])
+			return;
+
+		$success = true;
+		$errorMessage = [];
+		if (!empty($this->calculatePrices[$id]))
+		{
+			foreach (array_keys($this->calculatePrices[$id]) as $resultPriceType)
+			{
+				$rowId = null;
+				$row = $this->calculatePrices[$id][$resultPriceType];
+				if (!empty($this->existIdsByType[$id][$resultPriceType]))
+				{
+					$rowId = array_shift($this->existIdsByType[$id][$resultPriceType]);
+					unset($this->existPriceIds[$id][$rowId]);
+					unset($this->prices[$id][$rowId]);
+				}
+				if ($rowId === null)
+				{
+					$row['PRODUCT_ID'] = $id;
+					$row['CATALOG_GROUP_ID'] = $resultPriceType;
+					$rowResult = Catalog\PriceTable::add($row);
+				}
+				else
+				{
+					$rowResult = Catalog\PriceTable::update($rowId, $row);
+				}
+				if (!$rowResult->isSuccess())
+				{
+					$success = false;
+					$errorMessage = $rowResult->getErrorMessages();
+					break;
+				}
+			}
+		}
+		unset($this->calculatePrices[$id]);
+
+		if ($success && !empty($this->existPriceIds[$id]))
+		{
+			$conn = Main\Application::getConnection();
+			$helper = $conn->getSqlHelper();
+			$conn->queryExecute(
+				'delete from '.$helper->quote(Catalog\PriceTable::getTableName()).
+				' where '.$helper->quote('ID').' in ('.implode(',', $this->existPriceIds[$id]).')'
+			);
+			unset($helper, $conn);
+		}
+
+		if (isset($this->existPriceIds[$id]))
+			unset($this->existPriceIds[$id]);
+
+		if (!$success)
+		{
+			$this->addError(Loc::getMessage(
+				'BX_CATALOG_REINDEX_ERR_PRODUCT_UPDATE_FAIL_EXT',
+				[
+					'#ID#' => $id,
+					'#NAME#' => $product['NAME'],
+					'#ERROR#' => implode('; ', $errorMessage)
+				]
+			));
+		}
+		unset($errorMessage, $success);
+	}
+
+	private function updateMeasureRatios($id, array $product)
+	{
+		if (!$this->config['CHECK_MEASURE_RATIO'])
+			return;
+
+		if (!isset($this->measureRatios[$id]))
+			return;
+
+		$action = '';
+		if (isset($this->iblockData['SUBSCRIPTION']) && $this->iblockData['SUBSCRIPTION'] == 'Y')
+		{
+			if (!empty($this->measureRatios[$id]['RATIOS']))
+				$action = 'set';
+			else
+				$action = 'create';
+		}
+		elseif (
+			$product['TYPE'] == Catalog\ProductTable::TYPE_PRODUCT
+			|| $product['TYPE'] == Catalog\ProductTable::TYPE_OFFER
+			|| $product['TYPE'] == Catalog\ProductTable::TYPE_FREE_OFFER
+		)
+		{
+			if (!empty($this->measureRatios[$id]['RATIOS']))
+				$action = 'check';
+			else
+				$action = 'create';
+		}
+		elseif ($product['TYPE'] == Catalog\ProductTable::TYPE_SET)
+		{
+			if (!empty($this->measureRatios[$id]['RATIOS']))
+				$action = 'set';
+			else
+				$action = 'create';
+		}
+		elseif ($product['TYPE'] == Catalog\ProductTable::TYPE_EMPTY_SKU)
+		{
+			if (!empty($this->measureRatios[$id]['RATIOS']))
+				$action = 'remove';
+		}
+		elseif ($product['TYPE'] == Catalog\ProductTable::TYPE_SKU)
+		{
+			if ($this->config['SEPARATE_SKU_MODE'])
+			{
+				if (!empty($this->measureRatios[$id]['RATIOS']))
+					$action = 'check';
+				else
+					$action = 'create';
+			}
+			else
+			{
+				if (!empty($this->measureRatios[$id]['RATIOS']))
+					$action = 'remove';
+			}
+		}
+
+		switch ($action)
+		{
+			case 'create':
+				$ratioResult = Catalog\MeasureRatioTable::add(array(
+					'PRODUCT_ID' => $id,
+					'RATIO' => 1,
+					'IS_DEFAULT' => 'Y'
+				));
+				unset($ratioResult);
+				break;
+			case 'check':
+				if (!$this->measureRatios[$id]['DEFAULT_EXISTS'])
+				{
+					$firstRatio = reset($this->measureRatios[$id]['RATIOS']);
+					$ratioResult = Catalog\MeasureRatioTable::update($firstRatio['ID'], array('IS_DEFAULT' => 'Y'));
+					unset($ratioResult, $firstRatio);
+				}
+				if (!empty($this->measureRatios[$id]['DOUBLES']))
+				{
+					foreach ($this->measureRatios[$id]['DOUBLES'] as $ratioId)
+					{
+						$ratioResult = Catalog\MeasureRatioTable::update($ratioId, array('IS_DEFAULT' => 'N'));
+					}
+					unset($ratioResult, $ratioId);
+				}
+				break;
+			case 'set':
+				$ratioId = null;
+				foreach ($this->measureRatios[$id]['RATIOS'] as $row)
+				{
+					if ($row['RATIO'] == 1)
+					{
+						$ratioId = $row['ID'];
+						break;
+					}
+				}
+				unset($row);
+				if ($ratioId === null && $this->measureRatios[$id]['DEFAULT_RATIO_ID'] !== null)
+					$ratioId = $this->measureRatios[$id]['DEFAULT_RATIO_ID'];
+				if ($ratioId === null)
+				{
+					$firstRatio = reset($this->measureRatios[$id]['RATIOS']);
+					$ratioId = $firstRatio['ID'];
+					unset($firstRatio);
+				}
+				foreach ($this->measureRatios[$id]['RATIOS'] as $row)
+				{
+					if ($row['ID'] == $ratioId)
+					{
+						$ratioResult = Catalog\MeasureRatioTable::update(
+							$row['ID'],
+							array('RATIO' => 1, 'IS_DEFAULT' => 'Y')
+						);
+					}
+					else
+					{
+						$ratioResult = Catalog\MeasureRatioTable::delete($row['ID']);
+					}
+				}
+				unset($ratioResult, $row, $ratioId);
+
+				break;
+			case 'remove':
+				Catalog\MeasureRatioTable::deleteByProduct($id);
+				break;
+			default:
+				break;
+		}
+
+		unset($action);
+		unset($this->measureRatios[$id]);
+	}
+
+	private function getFullCatalogItem(array $product): array
+	{
+		$fields = []; // only for phpDoc
+		switch ($product['SKU_STATE'])
+		{
+			case Catalog\Product\Sku::OFFERS_AVAILABLE:
+			case Catalog\Product\Sku::OFFERS_NOT_AVAILABLE:
+				if ($this->config['SEPARATE_SKU_MODE'])
+				{
+					$fields = [
+						'AVAILABLE' => Catalog\ProductTable::calculateAvailable($product),
+						'TYPE' => Catalog\ProductTable::TYPE_SKU,
+					];
+				}
+				else
+				{
+					$fields = Catalog\Product\Sku::getDefaultParentSettings($product['SKU_STATE']);
+				}
+				break;
+			case Catalog\Product\Sku::OFFERS_NOT_EXIST:
+				switch ($product['TYPE'])
+				{
+					case Catalog\ProductTable::TYPE_SKU:
+					case Catalog\ProductTable::TYPE_EMPTY_SKU:
+						$fields = Catalog\Product\Sku::getDefaultParentSettings($product['SKU_STATE']);
+						break;
+					case Catalog\ProductTable::TYPE_PRODUCT:
+					case Catalog\ProductTable::TYPE_SET:
+						$fields['AVAILABLE'] = Catalog\ProductTable::calculateAvailable($product);
+						$fields['TYPE'] = (int)$product['TYPE'];
+						break;
+					case Catalog\ProductTable::TYPE_SERVICE:
+						$fields['TYPE'] = (int)$product['TYPE'];
+						break;
+					default:
+						$fields = Catalog\ProductTable::getDefaultAvailableSettings();
+						$fields['TYPE'] = Catalog\ProductTable::TYPE_PRODUCT;
+						break;
+				}
+				break;
+		}
+
+		return $this->prepareSetState($fields, $product);
+	}
+
+	private function getProductIblockItem(array $product): array
+	{
+		return Catalog\Product\Sku::getParentProductFieldsByState(
+			$product['SKU_STATE']
+		);
+	}
+
+	private function getCatalogItem(array $product): array
+	{
+		if ($product['PRODUCT_EXISTS'])
+		{
+			switch ($product['TYPE'])
+			{
+				case Catalog\ProductTable::TYPE_PRODUCT:
+				case Catalog\ProductTable::TYPE_SET:
+					$fields['AVAILABLE'] = Catalog\ProductTable::calculateAvailable($product);
+					$fields['TYPE'] = (int)$product['TYPE'];
+					break;
+				case Catalog\ProductTable::TYPE_SERVICE:
+					$fields['TYPE'] = (int)$product['TYPE'];
+					break;
+				default:
+					$fields = array(
+						'AVAILABLE' => Catalog\ProductTable::calculateAvailable($product),
+						'TYPE' => Catalog\ProductTable::TYPE_PRODUCT,
+					);
+					break;
+			}
+		}
+		else
+		{
+			$fields = Catalog\ProductTable::getDefaultAvailableSettings();
+			$fields['TYPE'] = Catalog\ProductTable::TYPE_PRODUCT;
+		}
+
+		return $this->prepareSetState($fields, $product);
+	}
+
+	private function getOfferIblockItem(array $product): array
+	{
+		return array(
+			'AVAILABLE' => Catalog\ProductTable::calculateAvailable($product),
+			'TYPE' => ($product['PARENT_EXISTS'] ? Catalog\ProductTable::TYPE_OFFER : Catalog\ProductTable::TYPE_FREE_OFFER)
+		);
+	}
+
+	private function prepareSetState(array $fields, array $product): array
+	{
+		if (!$this->config['CHECK_SETS'])
+		{
+			return $fields;
+		}
+
+		if ($fields['TYPE'] == Catalog\ProductTable::TYPE_SET && !$product['SET_EXISTS'])
+		{
+			$fields['TYPE'] = Catalog\ProductTable::TYPE_PRODUCT;
+		}
+		elseif ($fields['TYPE'] == Catalog\ProductTable::TYPE_PRODUCT && $product['SET_EXISTS'])
+		{
+			$fields['TYPE'] = Catalog\ProductTable::TYPE_SET;
+		}
+
+		return $fields;
+	}
 }
 
 class CCatalogProductSettings extends CCatalogProductAvailable
@@ -766,7 +1463,7 @@ class CCatalogProductSettings extends CCatalogProductAvailable
 	const SESSION_PREFIX = 'PS';
 	const SETS_ID = 'SETS';
 
-	static public function __construct($sessID, $maxExecutionTime, $maxOperationCounter)
+	public function __construct($sessID, $maxExecutionTime, $maxOperationCounter)
 	{
 		$sessID = (string)$sessID;
 		if ($sessID == '')
@@ -856,176 +1553,16 @@ class CCatalogProductSettings extends CCatalogProductAvailable
 		}
 		unset($catalogId);
 
-		if (CBXFeatures::IsFeatureEnabled('CatCompleteSet'))
+		if (Catalog\Config\Feature::isProductSetsEnabled())
 			static::addSetDescription($result);
 
 		return $result;
 	}
 
-	protected function runOperationFullCatalog()
+	protected function initConfig()
 	{
-		$emptyList = true;
-		$productIterator = $this->getProductIterator(array(), array());
-		while ($product = $productIterator->fetch())
-		{
-			$emptyList = false;
-			$product['PRODUCT_ID'] = (int)$product['PRODUCT_ID'];
-			if ($product['PRODUCT_ID'] > 0)
-			{
-				$fields = array();
-				switch ($product['TYPE'])
-				{
-					case Catalog\ProductTable::TYPE_PRODUCT:
-						$fields = array(
-							'AVAILABLE' => Catalog\ProductTable::calculateAvailable($product),
-						);
-						break;
-					case Catalog\ProductTable::TYPE_SKU:
-						if ($this->isSeparateSkuMode())
-						{
-							$fields = array(
-								'AVAILABLE' => Catalog\ProductTable::calculateAvailable($product),
-							);
-						}
-						else
-						{
-							$offerState = Catalog\Product\Sku::getOfferState($product['ID'], $this->iblockData['PRODUCT_IBLOCK_ID']);
-							switch ($offerState)
-							{
-								case Catalog\Product\Sku::OFFERS_AVAILABLE:
-								case Catalog\Product\Sku::OFFERS_NOT_AVAILABLE:
-									$fields = Catalog\Product\Sku::getDefaultParentSettings($offerState);
-									if (!empty($fields))
-										unset($fields['TYPE']);
-									break;
-								default:
-									break;
-							}
-						}
-						break;
-					default:
-						break;
-				}
-				if (!empty($fields))
-				{
-					$result = Catalog\ProductTable::update($product['ID'], $fields);
-					if (!$result->isSuccess())
-					{
-
-					}
-					unset($result);
-				}
-			}
-
-			$this->setLastId($product['ID']);
-			if ($this->isStopOperation())
-				break;
-		}
-		unset($product, $productIterator, $select, $filter);
-		$this->setFinishOperation($emptyList);
-	}
-
-	protected function runOperationProductIblock()
-	{
-		$emptyList = true;
-		if ($this->isSeparateSkuMode())
-			$productIterator = $this->getProductIterator(array(static::getProductFilter(true)), array());
-		else
-			$productIterator = $this->getProductIterator(array(), array());
-		while ($product = $productIterator->fetch())
-		{
-			$emptyList = false;
-			$product['PRODUCT_ID'] = (int)$product['PRODUCT_ID'];
-			if ($product['PRODUCT_ID'] > 0)
-			{
-				if ($this->isSeparateSkuMode())
-				{
-					$fields = array(
-						'AVAILABLE' => Catalog\ProductTable::calculateAvailable($product),
-					);
-				}
-				else
-				{
-					$fields = Catalog\Product\Sku::getDefaultParentSettings(Catalog\Product\Sku::getOfferState(
-						$product['ID'],
-						$this->iblockData['PRODUCT_IBLOCK_ID']
-					));
-					if (!empty($fields))
-						unset($fields['TYPE']);
-				}
-				if (!empty($fields))
-				{
-					$result = Catalog\ProductTable::update($product['ID'], $fields);
-					if (!$result->isSuccess())
-					{
-
-					}
-					unset($result);
-				}
-			}
-			$this->setLastId($product['ID']);
-			if ($this->isStopOperation())
-				break;
-		}
-		unset($product, $productIterator, $select, $filter);
-		$this->setFinishOperation($emptyList);
-	}
-
-	protected function runOperationCatalog()
-	{
-		$emptyList = true;
-		$productIterator = $this->getProductIterator(array(static::getProductFilter(true)), array());
-		while ($product = $productIterator->fetch())
-		{
-			$emptyList = false;
-			$product['PRODUCT_ID'] = (int)$product['PRODUCT_ID'];
-			if ($product['PRODUCT_ID'] > 0)
-			{
-				$result = Catalog\ProductTable::update(
-					$product['ID'],
-					array('AVAILABLE' => Catalog\ProductTable::calculateAvailable($product))
-				);
-				if (!$result->isSuccess())
-				{
-
-				}
-				unset($result);
-			}
-			$this->setLastId($product['ID']);
-			if ($this->isStopOperation())
-				break;
-		}
-		unset($product, $productIterator, $select, $filter);
-		$this->setFinishOperation($emptyList);
-	}
-
-	protected function runOperationOfferIblock()
-	{
-		$emptyList = true;
-		$productIterator = $this->getProductIterator(array(static::getProductFilter(true)), array());
-		while ($product = $productIterator->fetch())
-		{
-			$emptyList = false;
-			$product['PRODUCT_ID'] = (int)$product['PRODUCT_ID'];
-			if ($product['PRODUCT_ID'] > 0)
-			{
-				$result = Catalog\ProductTable::update(
-					$product['ID'],
-					array('AVAILABLE' => Catalog\ProductTable::calculateAvailable($product))
-				);
-				if (!$result->isSuccess())
-				{
-
-				}
-				unset($result);
-			}
-
-			$this->setLastId($product['ID']);
-			if ($this->isStopOperation())
-				break;
-		}
-		unset($product, $productIterator, $select, $filter);
-		$this->setFinishOperation($emptyList);
+		parent::initConfig();
+		$this->config['UPDATE_ONLY'] = true;
 	}
 
 	protected function runOperationSets()
@@ -1120,5 +1657,177 @@ class CCatalogProductSettings extends CCatalogProductAvailable
 			'=QUANTITY_TRACE_ORIG' => Catalog\ProductTable::STATUS_DEFAULT,
 			'=CAN_BUY_ZERO_ORIG' => Catalog\ProductTable::STATUS_DEFAULT
 		);
+	}
+}
+
+class CCatalogIblockReindex extends CCatalogProductAvailable
+{
+	const NOTIFY_ID = 'CATALOG_REINDEX';
+
+	public function __construct($sessID, $maxExecutionTime, $maxOperationCounter)
+	{
+		parent::__construct($sessID, $maxExecutionTime, $maxOperationCounter);
+	}
+
+	public static function removeNotify()
+	{
+		// old message from 16.0
+		$iterator = \CAdminNotify::GetList([], ['MODULE_ID' => 'catalog', 'TAG' => 'CATALOG_16']);
+		while ($row = $iterator->Fetch())
+		{
+			\CAdminNotify::Delete($row['ID']);
+		}
+
+		$iterator = \CAdminNotify::GetList([], ['MODULE_ID' => 'catalog', 'TAG' => self::NOTIFY_ID]);
+		while ($row = $iterator->Fetch())
+		{
+			\CAdminNotify::Delete($row['ID']);
+		}
+		unset($row, $iterator);
+	}
+
+	public static function showNotify()
+	{
+		self::removeNotify();
+
+		$catalogData = Catalog\CatalogIblockTable::getList([
+			'select' => ['CNT'],
+			'runtime' => [
+				new Main\Entity\ExpressionField('CNT', 'COUNT(*)')
+			]
+		])->fetch();
+		$catalogCount = (isset($catalogData['CNT']) ? (int)$catalogData['CNT'] : 0);
+		unset($catalogData);
+		if ($catalogCount == 0)
+			return;
+
+		$defaultLang = '';
+		$messages = [];
+		$iterator = Main\Localization\LanguageTable::getList([
+			'select' => ['ID', 'DEF'],
+			'filter' => ['=ACTIVE' => 'Y']
+		]);
+		while ($row = $iterator->fetch())
+		{
+			if ($defaultLang == '')
+				$defaultLang = $row['ID'];
+			if ($row['DEF'] == 'Y')
+				$defaultLang = $row['ID'];
+			$languageId = $row['ID'];
+			Loc::loadLanguageFile(
+				__FILE__,
+				$languageId
+			);
+			$messages[$languageId] = Loc::getMessage(
+				'BX_CATALOG_REINDEX_NOTIFY',
+				['#LINK#' => '/bitrix/admin/settings.php?lang='.$languageId.'&mid=catalog&mid_menu=1'],
+				$languageId
+			);
+		}
+		unset($languageId, $row, $iterator);
+
+		if (empty($messages))
+			return;
+
+		\CAdminNotify::Add([
+			'MODULE_ID' => 'catalog',
+			'TAG' => self::NOTIFY_ID,
+			'ENABLE_CLOSE' => 'Y',
+			'NOTIFY_TYPE' => \CAdminNotify::TYPE_NORMAL,
+			'MESSAGE' => $messages[$defaultLang],
+			'LANG' => $messages
+		]);
+	}
+
+	public static function execAgent()
+	{
+		self::showNotify();
+
+		return '';
+	}
+
+	protected function initConfig()
+	{
+		parent::initConfig();
+		$this->config['CHECK_MEASURE_RATIO'] = true;
+		$this->config['CHECK_MEASURE'] = true;
+		$this->config['CHECK_PRICES'] = true;
+	}
+
+	protected function setOldConfig()
+	{
+		parent::setOldConfig();
+		$this->extendedMode = true;
+	}
+
+	/**
+	 * @deprecated deprecated since catalog 17.6.0
+	 *
+	 * @param array $product
+	 * @return void
+	 * @throws Exception
+	 * @throws Main\ArgumentException
+	 */
+	protected function runExtendedOperation(array $product)
+	{
+		if (!isset($product['TYPE']))
+			return;
+		if (
+			$product['TYPE'] == Catalog\ProductTable::TYPE_EMPTY_SKU
+			|| ($product['TYPE'] == Catalog\ProductTable::TYPE_SKU && !$this->isSeparateSkuMode())
+		)
+			return;
+
+		$ratios = array();
+		$defaultExist = false;
+		$defaultDoubles = array();
+		$iterator = Catalog\MeasureRatioTable::getList(array(
+			'select' => array('*'),
+			'filter' => array('=PRODUCT_ID' => $product['PRODUCT_ID']),
+			'order' => array('RATIO' => 'ASC')
+		));
+		while ($row = $iterator->fetch())
+		{
+			if ($row['IS_DEFAULT'] == 'Y')
+			{
+				if (!$defaultExist)
+					$defaultExist = true;
+				else
+					$defaultDoubles[] = $row['ID'];
+			}
+			$ratios[$row['ID']] = $row;
+		}
+		unset($row, $iterator);
+
+		if (empty($ratios))
+		{
+			$ratioResult = Catalog\MeasureRatioTable::add(array(
+				'PRODUCT_ID' => $product['PRODUCT_ID'],
+				'RATIO' => 1,
+				'IS_DEFAULT' => 'Y'
+			));
+			unset($ratioResult);
+		}
+		else
+		{
+			if (!$defaultExist)
+			{
+				reset($ratios);
+				$firstRatio = current($ratios);
+				$ratioResult = Catalog\MeasureRatioTable::update($firstRatio['ID'], array('IS_DEFAULT' => 'Y'));
+				unset($ratioResult);
+				unset($firstRatio);
+			}
+			if (!empty($defaultDoubles))
+			{
+				foreach ($defaultDoubles as $ratioId)
+				{
+					$ratioResult = Catalog\MeasureRatioTable::update($ratioId, array('IS_DEFAULT' => 'N'));
+					unset($ratioResult);
+				}
+				unset($ratioId);
+			}
+		}
+		unset($defaultDoubles, $defaultExist, $ratios);
 	}
 }

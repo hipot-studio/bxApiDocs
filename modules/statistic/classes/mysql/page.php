@@ -1,100 +1,8 @@
-<?
+<?php
 
-/**
- * <b>CPage</b> - класс для получения данных о посещенных страницах сайта.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cpage/index.php
- * @author Bitrix
- */
 class CPage
 {
-	
-	/**
-	* <p>Возвращает данные по посещаемости указанной страницы (каталогу) в разрезе по дням.</p>
-	*
-	*
-	* @param string $url  Полный путь к странице (каталогу) по которой необходимо получить
-	* данные.
-	*
-	* @param string &$by = "s_date" Порядок сортировки. Возможные значения:          <ul> <li> <b>s_date</b> - дата.
-	* </li>          </ul>
-	*
-	* @param string &$order = "desc" Порядок сортировки. Возможные значения:          <ul> <li> <b>asc</b> - по
-	* возрастанию; </li>                     <li> <b>desc</b> - по убыванию. </li>          </ul>
-	*
-	* @param array $filter = array() Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи:          <ul> <li> <b>DATE1</b> - начальное значение
-	* интервала даты; </li>                     <li> <b>DATE2</b> - конечное значение
-	* интервала даты; </li>                     <li> <b>ADV</b>* - ID <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv">рекламной кампании</a> (РК),
-	* данное поле позволяет отфильтровать только те страницы
-	* (каталоги) которые были открыты только посетителями по данной РК
-	* и соответственно получить данные по посещаемости страницы
-	* (каталога) <i>url</i> только этих посетителей; </li>                     <li>
-	* <b>ADV_EXACT_MATCH</b> - если значение равно "N", то при фильтрации по <b>ADV</b>
-	* будет искаться вхождение; </li>                     <li> <b>ADV_DATA_TYPE</b> - флаг "<a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv_back">возврат</a> или <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv_first">прямой заход</a> по
-	* рекламной кампании" (используется только если указано
-	* <i>filter</i>["<b>ADV</b>"]), возможные значения:              <ul> <li> <b>B</b> -
-	* показывать данные по посетителям только на возврате по РК; </li>       
-	*                      <li> <b>P</b> - показывать данные по посетителям только на
-	* прямом заходе по РК. </li>              </ul> </li> <li> <b>IS_DIR</b> - показывать
-	* данные по разделам или страницам. Для фильтрации разделов
-	* требуется указать значение Y. Для страниц - N; </li>             <br>           
-	* Если не указать ни одно из вышеперечисленных значений, то данные
-	* будут показываться в сумме как по прямому заходу так и по
-	* возврату.              <br> </ul>        * - допускается <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/general/filter.php">сложная логика</a>
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $url = "http://www.bitrixsoft.ru/about/index.php";
-	* 
-	* // установим фильтр на декабрь 2007 года 
-	* // по прямым заходам с рекламной кампании 1 либо 2
-	* $arFilter = array(
-	*     "DATE1" =&gt; "01.12.2007",
-	*     "DATE2" =&gt; "31.12.2007",
-	*     "ADV"   =&gt; "1 | 2",
-	*     "ADV_DATA_TYPE" =&gt; "P"
-	*     );
-	* 
-	* // получим набор записей
-	* $rs = <b>CPage::GetDynamicList</b>(
-	*     $url, 
-	*     ($by="s_date"), 
-	*     ($order="desc"), 
-	*     $arFilter, 
-	*     );
-	* 
-	* // выведем все записи
-	* while ($ar = $rs-&gt;Fetch())
-	* {
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";    
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#enter">Термин "Точка входа"</a>
-	* </li>     <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#exit">Термин "Точка
-	* выхода"</a> </li>  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cpage/getdynamiclist.php
-	* @author Bitrix
-	*/
-	public static function GetDynamicList($URL, &$by, &$order, $arFilter=Array())
+	public static function GetDynamicList($URL, $by = 's_date', $order = 'desc', $arFilter = [])
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -106,7 +14,7 @@ class CPage
 		$exit_counter = "SUM(if(D.EXIT_COUNTER>0,D.EXIT_COUNTER,0))";
 		if (is_array($arFilter))
 		{
-			if (strlen($arFilter["ADV"])>0)
+			if ($arFilter["ADV"] <> '')
 			{
 				$from_adv = " , b_stat_page_adv A ";
 				$where_adv = "and A.PAGE_ID = D.ID";
@@ -140,7 +48,7 @@ class CPage
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -170,14 +78,12 @@ class CPage
 			$strSqlOrder = "ORDER BY D.DATE_STAT";
 		else
 		{
-			$by = "s_date";
 			$strSqlOrder = "ORDER BY D.DATE_STAT";
 		}
 
 		if ($order != "asc")
 		{
 			$strSqlOrder .= " desc ";
-			$order = "desc";
 		}
 
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
@@ -204,103 +110,7 @@ class CPage
 		return $res;
 	}
 
-	
-	/**
-	* <p>Возвращает список посещенных на сайте страниц (каталогов) и данные по их посещаемости.</p>
-	*
-	*
-	* @param string $counter_type = "" Тип счетчика. Возможные значения:          <ul> <li> <b>ENTER_COUNTER</b> - кол-во
-	* раз когда данная страница (каталог) была <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#enter">точкой входа</a>; </li>                   
-	* <li> <b>EXIT_COUNTER</b> - кол-во раз когда данная страница (каталог) была <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#exit">точкой выхода</a>. </li>         </ul>     
-	*  По умолчанию в счетчике хранится общее число хитов по странице
-	* (каталогу) (включая и точки входа и точки выхода).
-	*
-	* @param string &$by = "s_last_date" Порядок сортировки. Возможные значения:          <ul> <li> <b>s_url</b> -
-	* страница (каталог); </li>                    <li> <b>s_counter</b> - счетчик. </li>         </ul>
-	*
-	* @param string &$order = "desc" Порядок сортировки. Возможные значения:          <ul> <li> <b>asc</b> - по
-	* возрастанию; </li>                    <li> <b>desc</b> - по убыванию. </li>         </ul>
-	*
-	* @param array $filter = array() Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи:          <ul> <li> <b>DATE1</b> - начальное значение
-	* для интервала даты за которую необходимо получить данные; </li>        
-	*            <li> <b>DATE2</b> - конечное значение для интервала даты за которую
-	* необходимо получить данные; </li>                    <li> <b>DIR</b> - флаг
-	* "показывать только каталоги или только страницы", возможные
-	* значения:              <ul> <li> <b>Y</b> - в результирующем списке должны быть
-	* только каталоги; </li>                            <li> <b>N</b> - в результирующем
-	* списке должны быть только страницы. </li>             </ul> </li>                    <li>
-	* <b>URL</b>* - Полный путь к странице (каталогу) для которой необходимо
-	* вывести данные; </li>                    <li> <b>URL_EXACT_MATCH</b> - если значение равно
-	* "Y", то при фильтрации по <b>URL</b> будет искаться точное совпадение;
-	* </li>                    <li> <b>URL_404</b> - была ли <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#404">404 ошибка</a> на странице,
-	* возможные значения:              <ul> <li> <b>Y</b> - была; </li>                            <li>
-	* <b>N</b> - не было. </li>             </ul>           Для фильтрации каталогов данное
-	* поле не может использоваться. </li>                    <li> <b>ADV</b>* - ID <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv">рекламной кампании</a> (РК),
-	* данное поле позволяет отфильтровать только те страницы
-	* (каталоги) которые были открыты только посетителями по данной РК
-	* и соответственно получить данные по посещаемости страницы
-	* (каталога) <i>url</i> только этих посетителей; </li>                    <li>
-	* <b>ADV_EXACT_MATCH</b> - если значение равно "N", то при фильтрации по <b>ADV</b>
-	* будет искаться вхождение; </li>                    <li> <b>ADV_DATA_TYPE</b> - флаг типа
-	* данных для рекламной кампании, возможные значения:              <ul> <li>
-	* <b>P</b> - только по <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv_first">прямым
-	* заходам</a> по рекламной кампании; </li>                            <li> <b>B</b> -
-	* только по <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv_back">возвратам</a> по
-	* рекламной кампании; </li>                            <li> <b>S</b> - сумма по прямым
-	* заходам и возвратам. </li>             </ul> </li>                    <li> <b>SITE_ID</b>* - ID
-	* сайта; </li>                    <li> <b>SITE_ID_EXACT_MATCH</b> - если значение равно "N", то
-	* при фильтрации по <b>SITE_ID</b> будет искаться вхождение. </li>         </ul>     
-	*  * - допускается <a href="http://dev.1c-bitrix.ru/api_help/main/general/filter.php">сложная
-	* логика</a>
-	*
-	* @param bool &$is_filtered  Флаг отфильтрованности списка страниц (каталогов). Если значение
-	* равно "true", то список был отфильтрован.
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // получим данные по заданной странице
-	* $arFilter = array(
-	*     "URL" =&gt; "http://www.bitrixsoft.ru/about/index.php",
-	*     "URL_EXACT_MATCH" =&gt; "Y"
-	*     );
-	* 
-	* // получим список записей
-	* $rs = <b>CPage::GetList</b>(
-	*     "",
-	*     ($by = "s_last_date"), 
-	*     ($order = "desc"), 
-	*     $arFilter, 
-	*     $is_filtered
-	*     );
-	* 
-	* // выведем все записи
-	* while ($ar = $rs-&gt;Fetch())
-	* {
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";    
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#enter">Термин "Точка входа"</a>
-	* </li>   <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#exit">Термин "Точка
-	* выхода"</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cpage/getlist.php
-	* @author Bitrix
-	*/
-	public static function GetList($COUNTER_TYPE, &$by, &$order, $arFilter=Array(), &$is_filtered)
+	public static function GetList($COUNTER_TYPE, $by = 's_counter', $order = 'desc', $arFilter = [])
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -315,7 +125,7 @@ class CPage
 		$where_adv = "";
 		if (is_array($arFilter))
 		{
-			if (strlen($arFilter["ADV"])>0)
+			if ($arFilter["ADV"] <> '')
 			{
 				$from_adv = " , b_stat_page_adv A ";
 				$where_adv = "and A.PAGE_ID = V.ID";
@@ -346,7 +156,7 @@ class CPage
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -401,14 +211,12 @@ class CPage
 			$strSqlOrder = "ORDER BY COUNTER";
 		else
 		{
-			$by = "s_counter";
 			$strSqlOrder = "ORDER BY COUNTER desc, V.URL";
 		}
 
 		if ($order!="asc")
 		{
 			$strSqlOrder .= " desc ";
-			$order="desc";
 		}
 
 		$strSql = "
@@ -434,8 +242,7 @@ class CPage
 			";
 
 		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
-		$is_filtered = (IsFiltered($strSqlSearch) || strlen($strSqlSearch_h)>0);
+
 		return $res;
 	}
 }
-?>

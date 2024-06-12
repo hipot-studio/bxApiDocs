@@ -32,7 +32,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Seo
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_YandexRegion_Query query()
+ * @method static EO_YandexRegion_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_YandexRegion_Result getById($id)
+ * @method static EO_YandexRegion_Result getList(array $parameters = array())
+ * @method static EO_YandexRegion_Entity getEntity()
+ * @method static \Bitrix\Seo\Adv\EO_YandexRegion createObject($setDefaultValues = true)
+ * @method static \Bitrix\Seo\Adv\EO_YandexRegion_Collection createCollection()
+ * @method static \Bitrix\Seo\Adv\EO_YandexRegion wakeUpObject($row)
+ * @method static \Bitrix\Seo\Adv\EO_YandexRegion_Collection wakeUpCollection($rows)
+ */
 
 class YandexRegionTable extends AdvEntity
 {
@@ -78,14 +91,14 @@ class YandexRegionTable extends AdvEntity
 		return self::$engine;
 	}
 
-	public static function getList($params)
+	public static function getList(array $parameters = array())
 	{
-		if(static::needDatabaseUpdate())
+		if (static::needDatabaseUpdate())
 		{
 			static::updateDatabase();
 		}
 
-		return parent::getList($params);
+		return parent::getList($parameters);
 	}
 
 	public static function updateDatabase()

@@ -28,25 +28,6 @@ class BoolType extends Base
 	 * @param mixed $value Field value.
 	 * @return mixed Normalized value
 	 */
-	
-	/**
-	* <p>Статический метод нормализует одиночное значение.</p>
-	*
-	*
-	* @param mixed $Bitrix  Тип поля документа.
-	*
-	* @param Bitri $Bizproc  Значение поля.
-	*
-	* @param FieldType $fieldType  
-	*
-	* @param mixed $value  
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/basetype/booltype/tosinglevalue.php
-	* @author Bitrix
-	*/
 	public static function toSingleValue(FieldType $fieldType, $value)
 	{
 		if (is_array($value))
@@ -64,7 +45,7 @@ class BoolType extends Base
 	 */
 	protected static function formatValuePrintable(FieldType $fieldType, $value)
 	{
-		return strtoupper($value) != 'N' && !empty($value)
+		return mb_strtoupper($value) != 'N' && !empty($value)
 			? Loc::getMessage('BPDT_BOOL_YES')
 			: Loc::getMessage('BPDT_BOOL_NO');
 	}
@@ -83,11 +64,20 @@ class BoolType extends Base
 		{
 			case FieldType::DOUBLE:
 			case FieldType::INT:
-				$value = (int) ($value == 'Y');
+				$value = (int)($value == 'Y');
 				break;
 			case FieldType::BOOL:
 			case FieldType::STRING:
 			case FieldType::TEXT:
+				if (in_array(mb_strtolower($value), ['y', 'yes', 'true', '1'], true))
+				{
+					$value = 'Y';
+				}
+				elseif (in_array(mb_strtolower($value), ['n', 'no', 'false', '0'], true))
+				{
+					$value = 'N';
+				}
+
 				$value = $value == 'Y' ? 'Y' : 'N';
 				break;
 			default:
@@ -101,17 +91,6 @@ class BoolType extends Base
 	 * Return conversion map for current type.
 	 * @return array Map.
 	 */
-	
-	/**
-	* <p>Статический метод возвращает таблицу преобразования для текущего типа.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/basetype/booltype/getconversionmap.php
-	* @author Bitrix
-	*/
 	public static function getConversionMap()
 	{
 		return array(
@@ -135,17 +114,52 @@ class BoolType extends Base
 	 */
 	protected static function renderControl(FieldType $fieldType, array $field, $value, $allowSelection, $renderMode)
 	{
-		$renderResult = '<select id="'.htmlspecialcharsbx(static::generateControlId($field))
-				.'" name="'.htmlspecialcharsbx(static::generateControlName($field)).'">';
+		$isPublicControl = $renderMode & FieldType::RENDER_MODE_PUBLIC;
+		$className = $isPublicControl ? static::generateControlClassName($fieldType, $field) : '';
+
+		$renderResult = sprintf(
+			'<select id="%s" name="%s" class="%s">',
+			htmlspecialcharsbx(static::generateControlId($field)),
+			htmlspecialcharsbx(static::generateControlName($field)),
+			htmlspecialcharsbx($className)
+		);
 
 		if (!$fieldType->isRequired())
+		{
 			$renderResult .= '<option value="">['.Loc::getMessage("BPDT_BOOL_NOT_SET").']</option>';
+		}
 
-		$renderResult .= '<option value="Y"'.($value == "Y" ? ' selected' : '').'>'.Loc::getMessage("BPDT_BOOL_YES").'</option>
-				<option value="N"'.($value == "N" ? ' selected' : '').'>'.Loc::getMessage("BPDT_BOOL_NO").'</option>
-			</select>';
+		$renderResult .= sprintf(
+			'<option value="Y"%s>%s</option>
+				<option value="N"%s>%s</option>
+			</select>',
+			$value === 'Y' ? ' selected' : '',
+			Loc::getMessage('BPDT_BOOL_YES'),
+			$value === 'N' ? ' selected' : '',
+			Loc::getMessage('BPDT_BOOL_NO')
+		);
 
 		return $renderResult;
+	}
+
+	public static function renderControlSingle(FieldType $fieldType, array $field, $value, $allowSelection, $renderMode)
+	{
+		if ($renderMode & FieldType::RENDER_MODE_PUBLIC)
+		{
+			$allowSelection = false;
+		}
+
+		return parent::renderControlSingle($fieldType, $field, $value, $allowSelection, $renderMode);
+	}
+
+	public static function renderControlMultiple(FieldType $fieldType, array $field, $value, $allowSelection, $renderMode)
+	{
+		if ($renderMode & FieldType::RENDER_MODE_PUBLIC)
+		{
+			$allowSelection = false;
+		}
+
+		return parent::renderControlMultiple($fieldType, $field, $value, $allowSelection, $renderMode);
 	}
 
 	/**
@@ -173,9 +187,9 @@ class BoolType extends Base
 			{
 				$value = $value ? 'Y' : 'N';
 			}
-			elseif (is_string($value) && strlen($value) > 0)
+			elseif (is_string($value) && $value <> '')
 			{
-				$value = strtolower($value);
+				$value = mb_strtolower($value);
 				if (in_array($value, array('y', 'yes', 'true', '1')))
 				{
 					$value = 'Y';
@@ -201,5 +215,24 @@ class BoolType extends Base
 		}
 
 		return $value;
+	}
+
+	public static function externalizeValue(FieldType $fieldType, $context, $value)
+	{
+		$map = $fieldType->getSettings()['ExternalValues'] ?? null;
+		if ($map && isset($map[$value]))
+		{
+			return $map[$value];
+		}
+
+		return parent::externalizeValue($fieldType, $context, $value);
+	}
+
+	public static function compareValues($valueA, $valueB)
+	{
+		$valueA = \CBPHelper::getBool($valueA);
+		$valueB = \CBPHelper::getBool($valueB);
+
+		return parent::compareValues($valueA, $valueB);
 	}
 }

@@ -5,7 +5,7 @@ IncludeModuleLangFile(__FILE__);
 class CMailYandex
 {
 
-	static public function __construct()
+	public function __construct()
 	{
 	}
 
@@ -226,7 +226,7 @@ class CMailYandex
 		$data .= '--' . $boundary . "--\r\n";
 
 		$http->setHeader('Content-type', 'multipart/form-data; boundary='.$boundary);
-		$http->setHeader('Content-length', CUtil::binStrlen($data));
+		$http->setHeader('Content-length', strlen($data));
 
 		$response = $http->post('https://pddimp.yandex.ru/api/add_logo.xml', $data);
 

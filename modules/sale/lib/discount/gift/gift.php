@@ -25,7 +25,7 @@ class Gift
 		return $this->productId;
 	}
 
-	static public function getProduct()
+	public function getProduct()
 	{
 		//lazy load data from CCatalog
 	}

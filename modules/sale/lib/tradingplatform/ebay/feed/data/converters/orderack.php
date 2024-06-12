@@ -7,7 +7,7 @@ use Bitrix\Main\SystemException;
 
 class OrderAck extends DataConverter
 {
-	static public function convert($data)
+	public function convert($data)
 	{
 		if(!is_array($data))
 			throw new ArgumentTypeException("data", "array");

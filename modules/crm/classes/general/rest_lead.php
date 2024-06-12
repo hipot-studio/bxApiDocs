@@ -5,10 +5,11 @@ class CCRMLeadRest
 {
 	private static $bReturnObject = false;
 	private static $authHash = null;
+	private static $sources = null;
 
 	/* public section */
 
-	public static function CreateAuthHash($arData)
+	public static function CreateAuthHash()
 	{
 		global $USER, $APPLICATION;
 		self::$authHash = $USER->AddHitAuthHash($APPLICATION->GetCurPage());
@@ -18,26 +19,36 @@ class CCRMLeadRest
 	{
 		global $USER;
 
-		if (strlen($arData['AUTH']) > 0)
+		if ($arData['AUTH'] <> '')
 		{
-			$_REQUEST['bx_hit_hash'] = $arData['AUTH'];
-			return $USER->LoginHitByHash();
+			return $USER->LoginHitByHash($arData['AUTH']);
 		}
 
 		return false;
+	}
+
+	protected static function ResolveStatusID(array $statuses, $name)
+	{
+		foreach($statuses as $ID => $fields)
+		{
+			if(isset($fields['NAME']) && $name === $fields['NAME'])
+			{
+				return $ID;
+			}
+		}
+
+		return '';
 	}
 
 	public static function AddLead($arData, $CCrmLead)
 	{
 		global $DB, $USER_FIELD_MANAGER;
 
-		$CCrmBizProc = new CCrmBizProc('LEAD');
-
 		$arData['CURRENCY_ID'] = trim($arData['CURRENCY_ID']);
-		if (strlen($arData['CURRENCY_ID']) <= 0)
+		if ($arData['CURRENCY_ID'] == '')
 			$arData['CURRENCY_ID'] = CCrmCurrency::GetBaseCurrencyID();
 
-		$arFields = array(
+		$arFields = [
 			'TITLE' => trim($arData['TITLE']),
 			'COMPANY_TITLE' => trim($arData['COMPANY_TITLE']),
 			'NAME' => trim($arData['NAME']),
@@ -51,21 +62,54 @@ class CCRMLeadRest
 			'OPPORTUNITY' => trim($arData['OPPORTUNITY']),
 			'CURRENCY_ID' => trim($arData['CURRENCY_ID']),
 			'ASSIGNED_BY_ID' => (int)(is_array($arData['ASSIGNED_BY_ID']) ? $arData['ASSIGNED_BY_ID'][0] : $arData['ASSIGNED_BY_ID']),
-			'OPENED' => 'Y',
-		);
+			'OPENED' => \Bitrix\Crm\Settings\LeadSettings::getCurrent()->getOpenedFlag() ? 'Y' : 'N',
+		];
+
+		if (isset($arData['BIRTHDATE']))
+		{
+			$date = ConvertTimeStamp(MakeTimeStamp(trim($arData['BIRTHDATE'])), 'SHORT', SITE_ID);
+			if($date !== false)
+			{
+				$arFields['BIRTHDATE'] = $date;
+			}
+		}
 
 		$arData['SOURCE_ID'] = trim($arData['SOURCE_ID']);
 		$arData['STATUS_ID'] = trim($arData['STATUS_ID']);
 
-		if (strlen($arData['STATUS_ID']) > 0)
+		if ($arData['STATUS_ID'] <> '')
 			$arFields['STATUS_ID'] = $arData['STATUS_ID'];
-		if (strlen($arData['SOURCE_ID']) > 0)
+		if ($arData['SOURCE_ID'] <> '')
 			$arFields['SOURCE_ID'] = $arData['SOURCE_ID'];
 
-		$USER_FIELD_MANAGER->EditFormAddFields(CCrmLead::$sUFEntityID, $arFields);
-		$CCrmUserType = new CCrmUserType($USER_FIELD_MANAGER, CCrmLead::$sUFEntityID);
-		$CCrmUserType->PrepareImport($arFields, ',');
+		if(isset($arFields['SOURCE_ID']))
+		{
+			if(self::$sources === null)
+			{
+				self::$sources = CCrmStatus::GetStatus('SOURCE');
+			}
 
+			if(!isset(self::$sources[$arFields['SOURCE_ID']]))
+			{
+				//Crutch: Try to fix form bug. If we get source name instead of spurce ID.
+				$sourceID = self::ResolveStatusID(self::$sources, $arFields['SOURCE_ID']);
+				if($sourceID !== '')
+				{
+					$arFields['SOURCE_ID'] = $sourceID;
+				}
+				else
+				{
+					unset($arFields['SOURCE_ID']);
+				}
+			}
+		}
+
+		$CCrmUserType = new CCrmUserType($USER_FIELD_MANAGER, CCrmLead::$sUFEntityID);
+		$arFields = array_merge($arFields, $CCrmUserType->PrepareExternalFormFields($arData, ','));
+		global $USER_FIELD_MANAGER;
+		$USER_FIELD_MANAGER->EditFormAddFields(CCrmLead::USER_FIELD_ENTITY_ID, $arFields, [
+			'FORM' => $arFields
+		]);
 		$arFields['FM'] = CCrmFieldMulti::PrepareFields($arData);
 
 		$DB->StartTransaction();
@@ -97,6 +141,11 @@ class CCRMLeadRest
 					CCrmBizProcEventType::Create,
 					$arErrors
 				);
+
+				//Region automation
+				$starter = new \Bitrix\Crm\Automation\Starter(\CCrmOwnerType::Lead, $ID);
+				$starter->setContextToRest()->runOnAdd();
+				//End region
 			}
 			catch(Exception $e)
 			{
@@ -151,6 +200,7 @@ class CCRMLeadRest
 		$fields[] = array('ID' => 'OPPORTUNITY', 'NAME' => GetMessage('CRM_FIELD_OPPORTUNITY'), 'TYPE' => 'double', 'REQUIRED' => false);
 		$fields[] = array('ID' => 'STATUS_DESCRIPTION', 'NAME' => GetMessage('CRM_FIELD_STATUS_DESCRIPTION'), 'TYPE' => 'string', 'REQUIRED' => false);
 		$fields[] = array('ID' => 'SOURCE_DESCRIPTION', 'NAME' => GetMessage('CRM_FIELD_SOURCE_DESCRIPTION'), 'TYPE' => 'string', 'REQUIRED' => false);
+		$fields[] = array('ID' => 'BIRTHDATE', 'NAME' => GetMessage('CRM_FIELD_BIRTHDATE'), 'TYPE' => 'date', 'REQUIRED' => false);
 
 		$CCrmUserType = new CCrmUserType($GLOBALS['USER_FIELD_MANAGER'], CCrmLead::$sUFEntityID);
 		$CCrmUserType->AddRestServiceFields($fields);

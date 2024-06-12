@@ -10,5 +10,5 @@ interface ICheckable
 	 * @param Payment $payment
 	 * @return ServiceResult
 	 */
-	static public function check(Payment $payment);
+	public function check(Payment $payment);
 }

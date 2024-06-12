@@ -42,7 +42,7 @@ class Element extends Node
 		$this->init();
 
 		$this->nodeType = self::ELEMENT_NODE;
-		$this->nodeName = strtoupper($name);
+		$this->nodeName = mb_strtoupper($name);
 		$this->tagName = $this->nodeName;
 
 		if(self::$isNodeListAsArray)
@@ -105,9 +105,9 @@ class Element extends Node
 		return explode(' ', $this->getClassName());
 	}
 
-	static public function setClassList(array $classList)
+	public function setClassList(array $classList)
 	{
-		return implode(' ', $classList);
+		$this->setAttribute('class', implode(' ', $classList));
 	}
 
 	public function getParentElement()
@@ -170,7 +170,7 @@ class Element extends Node
 		{
 			if(self::$isNodeListAsArray)
 			{
-				$result = $this->attributes[$name];
+				$result = $this->attributes[$name] ?? null;
 			}
 			else
 			{

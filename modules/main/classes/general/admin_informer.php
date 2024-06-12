@@ -1,4 +1,8 @@
 <?
+
+use Bitrix\Main\Composite\Engine;
+use Bitrix\Main\Composite\Helper;
+
 IncludeModuleLangFile(__FILE__);
 
 class CAdminInformer
@@ -31,10 +35,10 @@ class CAdminInformer
 		$item = array(
 			"TITLE" => $arParams["TITLE"],
 			"HTML" => $arParams["HTML"],
-			"FOOTER" => isset($arParams["FOOTER"]) ? $arParams["FOOTER"] : false,
-			"LINK" => isset($arParams["LINK"]) ? $arParams["LINK"] : false,
-			"ALERT" => isset($arParams["ALERT"]) ? $arParams["ALERT"] : false,
-			"COLOR" => isset($arParams["COLOR"]) ? $arParams["COLOR"] : "green",
+			"FOOTER" => $arParams["FOOTER"] ?? false,
+			"LINK" => $arParams["LINK"] ?? false,
+			"ALERT" => $arParams["ALERT"] ?? false,
+			"COLOR" => $arParams["COLOR"] ?? "green",
 		);
 		if($arParams["ALERT"])
 		{
@@ -42,7 +46,7 @@ class CAdminInformer
 			self::$alertCounter++;
 		}
 		else
-			$item["SORT"] = isset($arParams["SORT"]) ? $arParams["SORT"] : 20;
+			$item["SORT"] = $arParams["SORT"] ?? 20;
 
 		self::$items[] = $item;
 
@@ -130,7 +134,7 @@ class CAdminInformer
 
 	private static function IsUpdateSystemNeedUpdate($sError)
 	{
-		return strpos($sError, 'NEW_UPDATE_SYSTEM');
+		return mb_strpos($sError, 'NEW_UPDATE_SYSTEM');
 	}
 
 	public static function InsertMainItems()
@@ -143,7 +147,7 @@ class CAdminInformer
 		if(!$USER->IsAuthorized())
 			return false;
 
-		if ($USER->CanDoOperation("cache_control") && !CHTMLPagesCache::isOn())
+		if ($USER->CanDoOperation("cache_control") && !Helper::isOn() && !Engine::isSelfHostedPortal())
 		{
 			self::AddItem(array(
 				"TITLE" => GetMessage("top_panel_ai_composite_title"),
@@ -184,8 +188,6 @@ class CAdminInformer
 			{
 				//last update date time
 				$updateDate = COption::GetOptionString("main", "update_system_update", false);
-				// remove seconds
-				$updateDate = $updateDate ? CDatabase::FormatDate($updateDate, "DD.MM.YYYY HH:MI:SS", "DD.MM.YYYY HH:MI") : false;
 
 				$updAIParams["HTML"] = '<span class="adm-informer-strong-text">'.GetMessage("top_panel_ai_sys_ver").' '.SM_VERSION."</span><br>";
 				$updAIParams["HTML"] .= $updateDate ? GetMessage("top_panel_ai_upd_last").'<br>'.$updateDate : GetMessage("top_panel_ai_upd_never");
@@ -197,7 +199,7 @@ class CAdminInformer
 		}
 
 		//Disk space (quota)
-		$maxQuota = COption::GetOptionInt("main", "disk_space", 0)*1048576;
+		$maxQuota = (int)COption::GetOptionInt("main", "disk_space", 0)*1048576;
 		if ($maxQuota > 0)
 		{
 			$quota = new CDiskQuota();
@@ -229,8 +231,10 @@ class CAdminInformer
 		{
 			$cModules = COption::GetOptionString("main", "mp_modules_date", "");
 			$arModules = array();
-			if(strlen($cModules) > 0)
-				$arModules = unserialize($cModules);
+			if ($cModules <> '')
+			{
+				$arModules = unserialize($cModules, ['allowed_classes' => false]) ?: [];
+			}
 
 			$mCnt = count($arModules);
 			if($mCnt > 0)

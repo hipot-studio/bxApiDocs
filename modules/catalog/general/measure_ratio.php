@@ -7,14 +7,14 @@ Loc::loadMessages(__FILE__);
 
 class CCatalogMeasureRatioAll
 {
-	protected static $whiteList = array('ID', 'PRODUCT_ID', 'RATIO');
+	protected static $whiteList = array('ID', 'PRODUCT_ID', 'RATIO', 'IS_DEFAULT');
 
 	protected static function checkFields($action, &$arFields)
 	{
 		/** @global CMain $APPLICATION */
 		global $APPLICATION;
 
-		$action = strtoupper($action);
+		$action = mb_strtoupper($action);
 		if ($action != 'UPDATE' && $action != 'ADD')
 		{
 			$APPLICATION->ThrowException(Loc::getMessage('CATALOG_MEASURE_RATIO_BAD_ACTION'));
@@ -44,6 +44,19 @@ class CCatalogMeasureRatioAll
 			}
 			if (!isset($clearFields['RATIO']))
 				$clearFields['RATIO'] = 1;
+			if (!isset($clearFields['IS_DEFAULT']))
+			{
+				$row = null;
+				if ((int)$clearFields['PRODUCT_ID'] > 0)
+				{
+					$row = Catalog\MeasureRatioTable::getList(array(
+						'select' => array('ID'),
+						'filter' => array('=PRODUCT_ID' => $clearFields['PRODUCT_ID'], '=IS_DEFAULT' => 'Y')
+					))->fetch();
+				}
+				$clearFields['IS_DEFAULT'] = (!empty($row) ? 'N' : 'Y');
+				unset($row);
+			}
 		}
 		if (isset($clearFields['PRODUCT_ID']))
 		{
@@ -62,6 +75,8 @@ class CCatalogMeasureRatioAll
 			if ($clearFields['RATIO'] <= CATALOG_VALUE_EPSILON)
 				$clearFields['RATIO'] = 1;
 		}
+		if (isset($clearFields['IS_DEFAULT']))
+			$clearFields['IS_DEFAULT'] = ($clearFields['IS_DEFAULT'] == 'Y' ? 'Y' : 'N');
 		$arFields = $clearFields;
 		unset($clearFields);
 

@@ -9,6 +9,22 @@ namespace Bitrix\Sale\Tax;
 
 use Bitrix\Sale;
 
+/**
+ * Class RateLocationTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_RateLocation_Query query()
+ * @method static EO_RateLocation_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_RateLocation_Result getById($id)
+ * @method static EO_RateLocation_Result getList(array $parameters = [])
+ * @method static EO_RateLocation_Entity getEntity()
+ * @method static \Bitrix\Sale\Tax\EO_RateLocation createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Tax\EO_RateLocation_Collection createCollection()
+ * @method static \Bitrix\Sale\Tax\EO_RateLocation wakeUpObject($row)
+ * @method static \Bitrix\Sale\Tax\EO_RateLocation_Collection wakeUpCollection($rows)
+ */
 final class RateLocationTable extends Sale\Location\Connector
 {
 	public static function getFilePath()
@@ -21,12 +37,12 @@ final class RateLocationTable extends Sale\Location\Connector
 		return 'b_sale_tax2location';
 	}
 
-	static public function getLinkField()
+	public static function getLinkField()
 	{
 		return 'TAX_RATE_ID';
 	}
 
-	static public function getTargetEntityName()
+	public static function getTargetEntityName()
 	{
 		return 'Bitrix\Sale\Tax\Rate';
 	}
@@ -52,7 +68,7 @@ final class RateLocationTable extends Sale\Location\Connector
 			),
 			'LOCATION_TYPE' => array(
 				'data_type' => 'string',
-				'default' => self::DB_LOCATION_FLAG,
+				'default_value' => self::DB_LOCATION_FLAG,
 				'required' => true,
 				'primary' => true
 			),

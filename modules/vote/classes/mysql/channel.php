@@ -1,10 +1,12 @@
-<?
+<?php
+
 ##############################################
 # Bitrix Site Manager Forum                  #
 # Copyright (c) 2002-2009 Bitrix             #
-# http://www.bitrixsoft.com                  #
+# https://www.bitrixsoft.com                 #
 # mailto:admin@bitrixsoft.com                #
 ##############################################
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/vote/classes/general/channel.php");
 
 class CVoteChannel extends CAllVoteChannel
@@ -18,11 +20,12 @@ class CVoteChannel extends CAllVoteChannel
 	public static function GetDropDownList()
 	{
 		global $DB;
+		$sqlHelper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
 		$err_mess = (CVoteChannel::err_mess())."<br>Function: GetDropDownList<br>Line: ";
 		$strSql = "
 			SELECT
 				ID as REFERENCE_ID,
-				concat('[',ID,'] ',TITLE) as REFERENCE
+				" . $sqlHelper->getConcatFunction("'['", "ID", "']'", "TITLE" ) . " as REFERENCE
 			FROM b_vote_channel
 			ORDER BY C_SORT
 			";
@@ -30,4 +33,3 @@ class CVoteChannel extends CAllVoteChannel
 		return $res;
 	}
 }
-?>

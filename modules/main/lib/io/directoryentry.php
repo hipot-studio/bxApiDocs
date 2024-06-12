@@ -4,7 +4,7 @@ namespace Bitrix\Main\IO;
 abstract class DirectoryEntry
 	extends FileSystemEntry
 {
-	static public function __construct($path, $siteId = null)
+	public function __construct($path, $siteId = null)
 	{
 		parent::__construct($path, $siteId);
 	}
@@ -38,17 +38,17 @@ abstract class DirectoryEntry
 	 */
 	abstract public function createSubdirectory($name);
 
-	static public function isDirectory()
+	public function isDirectory()
 	{
 		return true;
 	}
 
-	static public function isFile()
+	public function isFile()
 	{
 		return false;
 	}
 
-	static public function isLink()
+	public function isLink()
 	{
 		return false;
 	}

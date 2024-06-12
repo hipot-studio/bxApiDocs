@@ -1,5 +1,14 @@
 <?php
 
+use Bitrix\Crm\Format\PhoneNumberParser;
+use Bitrix\Crm\Integration\UI\EntitySelector\CountryProvider;
+use Bitrix\Crm\Integrity\DuplicateCommunicationCriterion;
+use Bitrix\Crm\Integrity\DuplicateVolatileCriterion;
+use Bitrix\Crm\Integrity\Volatile\FieldCategory;
+use Bitrix\Crm\Model\FieldMultiPhoneCountryTable;
+use Bitrix\Crm\Multifield;
+use Bitrix\Main;
+
 if (!defined('CACHED_b_field_multi')) define('CACHED_b_field_multi', 360000);
 
 IncludeModuleLangFile(__FILE__);
@@ -12,10 +21,13 @@ class CCrmFieldMulti
 	private static $ENTITY_TYPES = null;
 	private static $ENTITY_TYPE_INFOS = null;
 
-	const PHONE = 'PHONE';
-	const EMAIL = 'EMAIL';
-	const WEB = 'WEB';
-	const IM = 'IM';
+	private static $allowedCountryCodes = null;
+
+	const PHONE = Multifield\Type\Phone::ID;
+	const EMAIL = Multifield\Type\Email::ID;
+	const WEB = Multifield\Type\Web::ID;
+	const IM = Multifield\Type\Im::ID;
+	const LINK = Multifield\Type\Link::ID;
 
 	function __construct()
 	{
@@ -24,60 +36,272 @@ class CCrmFieldMulti
 		$this->cdb = $DB;
 	}
 
+	public static function IsSupportedType($typeID)
+	{
+		return $typeID === self::PHONE
+			|| $typeID === self::EMAIL
+			|| $typeID === self::WEB
+			|| $typeID === self::IM;
+	}
+
+	public static function PrepareFieldsInfo(array &$fieldsInfo)
+	{
+		$typeInfos = self::GetEntityTypeInfos();
+		foreach($typeInfos as $typeID => $typeInfo)
+		{
+			$fieldsInfo[$typeID] = array(
+				'TYPE' => 'crm_multifield',
+				'ATTRIBUTES' => array(CCrmFieldInfoAttr::Multiple)
+			);
+		}
+	}
+
 	public static function GetEntityTypeInfos()
 	{
 		if(self::$ENTITY_TYPE_INFOS === null)
 		{
-			self::$ENTITY_TYPE_INFOS = array(
-				'PHONE' => array('NAME' => GetMessage('CRM_FM_ENTITY_PHONE')),
-				'EMAIL' => array('NAME' => GetMessage('CRM_FM_ENTITY_EMAIL')),
-				'WEB' => array('NAME' => GetMessage('CRM_FM_ENTITY_WEB')),
-				'IM' => array('NAME' => GetMessage('CRM_FM_ENTITY_IM'))
-			);
+			self::$ENTITY_TYPE_INFOS = [
+				'PHONE' => ['NAME' => GetMessage('CRM_FM_ENTITY_PHONE')],
+				'EMAIL' => ['NAME' => GetMessage('CRM_FM_ENTITY_EMAIL')],
+				'WEB' => ['NAME' => GetMessage('CRM_FM_ENTITY_WEB')],
+				'IM' => ['NAME' => GetMessage('CRM_FM_ENTITY_IM')],
+				'LINK' => ['NAME' => GetMessage('CRM_FM_ENTITY_LINK')],
+			];
 		}
 		return self::$ENTITY_TYPE_INFOS;
+	}
+	public static function GetEntityTypeCaption($typeID)
+	{
+		$infos = self::GetEntityTypeInfos();
+		return isset($infos[$typeID]['NAME']) ? $infos[$typeID]['NAME'] : $typeID;
 	}
 	public static function GetEntityTypes()
 	{
 		if(self::$ENTITY_TYPES === null)
 		{
 			self::$ENTITY_TYPES = Array(
-				'PHONE' => Array(
-					'WORK'  => Array('FULL' => GetMessage('CRM_FM_ENTITY_PHONE_WORK'), 	'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_WORK_SHORT'), 'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_WORK_ABBR'), 'TEMPLATE' => '<a href="'.CCrmCallToUrl::Format('#VALUE#').'">#VALUE_HTML#</a>'),
-					'MOBILE'=> Array('FULL' => GetMessage('CRM_FM_ENTITY_PHONE_MOBILE'), 'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_MOBILE_SHORT'), 'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_MOBILE_ABBR'), 'TEMPLATE' => '<a href="'.CCrmCallToUrl::Format('#VALUE#').'">#VALUE_HTML#</a>'),
-					'FAX' 	=> Array('FULL' => GetMessage('CRM_FM_ENTITY_PHONE_FAX'), 'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_FAX_SHORT'), 'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_FAX_ABBR'), 'TEMPLATE' => '<a href="'.CCrmCallToUrl::Format('#VALUE#').'">#VALUE_HTML#</a>'),
-					'HOME' 	=> Array('FULL' => GetMessage('CRM_FM_ENTITY_PHONE_HOME'), 'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_HOME_SHORT'), 'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_HOME_ABBR'), 'TEMPLATE' => '<a href="'.CCrmCallToUrl::Format('#VALUE#').'">#VALUE_HTML#</a>'),
-					'PAGER' => Array('FULL' => GetMessage('CRM_FM_ENTITY_PHONE_PAGER'), 'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_PAGER_SHORT'), 'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_PAGER_ABBR'), 'TEMPLATE' => '<a href="'.CCrmCallToUrl::Format('#VALUE#').'">#VALUE_HTML#</a>'),
-					'OTHER' => Array('FULL' => GetMessage('CRM_FM_ENTITY_PHONE_OTHER'), 'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_OTHER_SHORT'), 'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_OTHER_ABBR'), 'TEMPLATE' => '<a href="'.CCrmCallToUrl::Format('#VALUE#').'">#VALUE_HTML#</a>'),
-				),
-				'WEB' => Array(
-					'WORK' 		=> Array('FULL' => GetMessage('CRM_FM_ENTITY_WEB_WORK'), 'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_WORK_SHORT'), 'TEMPLATE' => '<a href="http://#VALUE_URL#" target="_blank">#VALUE_HTML#</a>'),
-					'HOME' 		=> Array('FULL' => GetMessage('CRM_FM_ENTITY_WEB_HOME'), 'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_HOME_SHORT'), 'TEMPLATE' => '<a href="http://#VALUE_URL#" target="_blank">#VALUE_HTML#</a>'),
-					'FACEBOOK' 	=> Array('FULL' =>  GetMessage('CRM_FM_ENTITY_WEB_FACEBOOK'), 'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_FACEBOOK_SHORT'), 'TEMPLATE' => '<a href="http://www.facebook.com/#VALUE_URL#/" target="_blank">#VALUE_HTML#</a>'),
-					'LIVEJOURNAL' => Array('FULL' =>  GetMessage('CRM_FM_ENTITY_WEB_LIVEJOURNAL'), 'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_LIVEJOURNAL_SHORT'), 'TEMPLATE' => '<a href="http://#VALUE_URL#.livejournal.com/" target="_blank">#VALUE_HTML#</a>'),
-					'TWITTER' 	=> Array('FULL' =>  GetMessage('CRM_FM_ENTITY_WEB_TWITTER'), 'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_TWITTER_SHORT'), 'TEMPLATE' => '<a href="http://twitter.com/#VALUE_URL#/" target="_blank">#VALUE_HTML#</a>'),
-					'OTHER' 	=> Array('FULL' =>  GetMessage('CRM_FM_ENTITY_WEB_OTHER'), 'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_OTHER_SHORT'), 'TEMPLATE' => '<a href="http://#VALUE_URL#" target="_blank">#VALUE_HTML#</a>'),
-				),
-				'EMAIL' => Array(
-					'WORK'  => Array('FULL' => GetMessage('CRM_FM_ENTITY_EMAIL_WORK'), 'SHORT' => GetMessage('CRM_FM_ENTITY_EMAIL_WORK_SHORT'), 'ABBR' => GetMessage('CRM_FM_ENTITY_EMAIL_WORK_ABBR'), 'TEMPLATE' => '<a href="mailto:#VALUE_URL#">#VALUE_HTML#</a>'),
-					'HOME' 	=> Array('FULL' => GetMessage('CRM_FM_ENTITY_EMAIL_HOME'), 'SHORT' => GetMessage('CRM_FM_ENTITY_EMAIL_HOME_SHORT'), 'ABBR' => GetMessage('CRM_FM_ENTITY_EMAIL_HOME_ABBR'), 'TEMPLATE' => '<a href="mailto:#VALUE_URL#">#VALUE_HTML#</a>'),
-					'OTHER' => Array('FULL' =>  GetMessage('CRM_FM_ENTITY_EMAIL_OTHER'), 'SHORT' => GetMessage('CRM_FM_ENTITY_EMAIL_OTHER_SHORT'), 'ABBR' => GetMessage('CRM_FM_ENTITY_EMAIL_OTHER_ABBR'), 'TEMPLATE' => '<a href="mailto:#VALUE_URL#">#VALUE_HTML#</a>'),
-				),
-				'IM' => Array(
-					'SKYPE'	=> Array('FULL' => GetMessage('CRM_FM_ENTITY_IM_SKYPE'), 'SHORT' => GetMessage('CRM_FM_ENTITY_IM_SKYPE_SHORT'), 'TEMPLATE' => '<a href="skype:#VALUE_URL#?chat">#VALUE_HTML#</a>'),
-					'ICQ'	=> Array('FULL' => GetMessage('CRM_FM_ENTITY_IM_ICQ'), 'SHORT' => GetMessage('CRM_FM_ENTITY_IM_ICQ_SHORT'), 'TEMPLATE' => '<a href="http://www.icq.com/people/#VALUE_URL#/" target="_blank">#VALUE_HTML#</a>'),
-					'MSN'	=> Array('FULL' => GetMessage('CRM_FM_ENTITY_IM_MSN'), 'SHORT' => GetMessage('CRM_FM_ENTITY_IM_MSN_SHORT'), 'TEMPLATE' => '<a href="msn:#VALUE_URL#">#VALUE_HTML#</a>'),
-					'JABBER'=> Array('FULL' => GetMessage('CRM_FM_ENTITY_IM_JABBER'), 'SHORT' => GetMessage('CRM_FM_ENTITY_IM_JABBER_SHORT'), 'TEMPLATE' => '#VALUE_HTML#'),
-					'OTHER' => Array('FULL' => GetMessage('CRM_FM_ENTITY_IM_OTHER'), 'SHORT' => GetMessage('CRM_FM_ENTITY_IM_OTHER_SHORT'), 'TEMPLATE' => '#VALUE_HTML#'),
-				),
+				Multifield\Type\Phone::ID => [
+					Multifield\Type\Phone::VALUE_TYPE_WORK => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_PHONE_WORK'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_WORK_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_WORK_ABBR'),
+						'TEMPLATE' => '<a href="' . CCrmCallToUrl::Format('#VALUE#') . '">#VALUE_HTML#</a>',
+					],
+					Multifield\Type\Phone::VALUE_TYPE_MOBILE => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_PHONE_MOBILE'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_MOBILE_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_MOBILE_ABBR'),
+						'TEMPLATE' => '<a href="' . CCrmCallToUrl::Format('#VALUE#') . '">#VALUE_HTML#</a>',
+					],
+					Multifield\Type\Phone::VALUE_TYPE_FAX => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_PHONE_FAX'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_FAX_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_FAX_ABBR'),
+						'TEMPLATE' => '<a href="' . CCrmCallToUrl::Format('#VALUE#') . '">#VALUE_HTML#</a>',
+					],
+					Multifield\Type\Phone::VALUE_TYPE_HOME => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_PHONE_HOME'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_HOME_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_HOME_ABBR'),
+						'TEMPLATE' => '<a href="' . CCrmCallToUrl::Format('#VALUE#') . '">#VALUE_HTML#</a>',
+					],
+					Multifield\Type\Phone::VALUE_TYPE_PAGER => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_PHONE_PAGER'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_PAGER_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_PAGER_ABBR'),
+						'TEMPLATE' => '<a href="' . CCrmCallToUrl::Format('#VALUE#') . '">#VALUE_HTML#</a>',
+					],
+					Multifield\Type\Phone::VALUE_TYPE_MAILING => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_PHONE_MAILING'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_MAILING_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_MAILING_ABBR'),
+						'TEMPLATE' => '<a href="' . CCrmCallToUrl::Format('#VALUE#') . '">#VALUE_HTML#</a>',
+					],
+					Multifield\Type\Phone::VALUE_TYPE_OTHER => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_PHONE_OTHER'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_PHONE_OTHER_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_PHONE_OTHER_ABBR'),
+						'TEMPLATE' => '<a href="' . CCrmCallToUrl::Format('#VALUE#') . '">#VALUE_HTML#</a>',
+					],
+				],
+				Multifield\Type\Web::ID => [
+					Multifield\Type\Web::VALUE_TYPE_WORK => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_WEB_WORK'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_WORK_SHORT'),
+						'TEMPLATE' => '<a href="https://#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://#VALUE_URL#',
+					],
+					Multifield\Type\Web::VALUE_TYPE_HOME => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_WEB_HOME'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_HOME_SHORT'),
+						'TEMPLATE' => '<a href="https://#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://#VALUE_URL#',
+					],
+					Multifield\Type\Web::VALUE_TYPE_FACEBOOK => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_WEB_FACEBOOK'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_FACEBOOK_SHORT'),
+						'TEMPLATE' => '<a href="https://www.facebook.com/#VALUE_URL#/" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://www.facebook.com/#VALUE_URL#/',
+					],
+					Multifield\Type\Web::VALUE_TYPE_VK => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_WEB_VK'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_VK_SHORT'),
+						'TEMPLATE' => '<a href="https://vk.com/#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://vk.com/#VALUE_URL#',
+					],
+					Multifield\Type\Web::VALUE_TYPE_LIVEJOURNAL => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_WEB_LIVEJOURNAL'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_LIVEJOURNAL_SHORT'),
+						'TEMPLATE' => '<a href="https://#VALUE_URL#.livejournal.com/" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://#VALUE_URL#.livejournal.com/',
+					],
+					Multifield\Type\Web::VALUE_TYPE_TWITTER => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_WEB_TWITTER'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_TWITTER_SHORT'),
+						'TEMPLATE' => '<a href="https://twitter.com/#VALUE_URL#/" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://twitter.com/#VALUE_URL#/',
+					],
+					Multifield\Type\Web::VALUE_TYPE_OTHER => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_WEB_OTHER'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_WEB_OTHER_SHORT'),
+						'TEMPLATE' => '<a href="https://#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://#VALUE_URL#',
+					],
+				],
+				Multifield\Type\Email::ID => [
+					Multifield\Type\Email::VALUE_TYPE_WORK => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_EMAIL_WORK'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_EMAIL_WORK_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_EMAIL_WORK_ABBR'),
+						'TEMPLATE' => '<a href="mailto:#VALUE_URL#">#VALUE_HTML#</a>',
+					],
+					Multifield\Type\Email::VALUE_TYPE_HOME => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_EMAIL_HOME'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_EMAIL_HOME_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_EMAIL_HOME_ABBR'),
+						'TEMPLATE' => '<a href="mailto:#VALUE_URL#">#VALUE_HTML#</a>',
+					],
+					Multifield\Type\Email::VALUE_TYPE_MAILING => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_EMAIL_MAILING1'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_EMAIL_MAILING_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_EMAIL_MAILING_ABBR'),
+						'TEMPLATE' => '<a href="mailto:#VALUE_URL#">#VALUE_HTML#</a>',
+					],
+					Multifield\Type\Email::VALUE_TYPE_OTHER => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_EMAIL_OTHER'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_EMAIL_OTHER_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_EMAIL_OTHER_ABBR'),
+						'TEMPLATE' => '<a href="mailto:#VALUE_URL#">#VALUE_HTML#</a>',
+					],
+				],
+				Multifield\Type\Im::ID => [
+					Multifield\Type\Im::VALUE_TYPE_FACEBOOK => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_FACEBOOK'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_FACEBOOK_SHORT'),
+						'TEMPLATE' => '<a href="https://m.me/#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://m.me/#VALUE_URL#',
+					],
+					Multifield\Type\Im::VALUE_TYPE_TELEGRAM => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_TELEGRAM'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_TELEGRAM_SHORT'),
+						'TEMPLATE' => '<a href="https://t.me/#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://t.me/#VALUE_URL#',
+					],
+					Multifield\Type\Im::VALUE_TYPE_VK => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_VK'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_VK_SHORT'),
+						'TEMPLATE' => '<a href="https://vk.com/#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://vk.com/#VALUE_URL#',
+					],
+					Multifield\Type\Im::VALUE_TYPE_SKYPE => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_SKYPE'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_SKYPE_SHORT'),
+						'TEMPLATE' => '<a href="skype:#VALUE_URL#?chat">#VALUE_HTML#</a>',
+						'LINK' => 'skype:#VALUE_URL#?chat',
+					],
+					Multifield\Type\Im::VALUE_TYPE_VIBER => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_VIBER'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_VIBER_SHORT'),
+						'TEMPLATE' => '<a href="viber://chat?number=#VALUE_URL#" target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'viber://chat?number=#VALUE_URL#',
+					],
+					Multifield\Type\Im::VALUE_TYPE_INSTAGRAM => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_INSTAGRAM'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_INSTAGRAM_SHORT'),
+						'TEMPLATE' => '<a href="https://www.instagram.com/#VALUE_URL#"'
+							. ' target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://www.instagram.com/#VALUE_URL#',
+					],
+					Multifield\Type\Im::VALUE_TYPE_BITRIX24 => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_BITRIX24_MSGVER_1'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_BITRIX24_SHORT_MSGVER_1'),
+						'TEMPLATE' => '#VALUE_HTML#',
+						'LINK' => '#VALUE_URL#',
+					],
+					Multifield\Type\Im::VALUE_TYPE_OPENLINE => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_WIDGET'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_WIDGET'),
+						'TEMPLATE' => '#VALUE_HTML#',
+						'LINK' => '#VALUE_URL#',
+					],
+					Multifield\Type\Im::VALUE_TYPE_IMOL => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_OPENLINE'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_OPENLINE_SHORT'),
+						'TEMPLATE' => '#VALUE_HTML#',
+						'LINK' => '#VALUE_URL#',
+					],
+					Multifield\Type\Im::VALUE_TYPE_ICQ => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_ICQ'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_ICQ_SHORT'),
+						'TEMPLATE' => '<a href="https://www.icq.com/people/#VALUE_URL#/"'
+							. ' target="_blank">#VALUE_HTML#</a>',
+						'LINK' => 'https://www.icq.com/people/#VALUE_URL#/',
+					],
+					Multifield\Type\Im::VALUE_TYPE_MSN => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_MSN'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_MSN_SHORT'),
+						'TEMPLATE' => '<a href="msn:#VALUE_URL#">#VALUE_HTML#</a>',
+						'LINK' => 'msn:#VALUE_URL#',
+					],
+					Multifield\Type\Im::VALUE_TYPE_JABBER => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_JABBER'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_JABBER_SHORT'),
+						'TEMPLATE' => '#VALUE_HTML#',
+						'LINK' => '#VALUE_URL#',
+					],
+					Multifield\Type\Im::VALUE_TYPE_OTHER => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_IM_OTHER'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_IM_OTHER_SHORT'),
+						'TEMPLATE' => '#VALUE_HTML#',
+						'LINK' => '#VALUE_URL#',
+					],
+				],
+				Multifield\Type\Link::ID => [
+					Multifield\Type\Link::VALUE_TYPE_USER => [
+						'FULL' => GetMessage('CRM_FM_ENTITY_LINK_USER'),
+						'SHORT' => GetMessage('CRM_FM_ENTITY_LINK_USER_SHORT'),
+						'ABBR' => GetMessage('CRM_FM_ENTITY_LINK_USER_ABBR'),
+						'TEMPLATE' => '#VALUE_HTML#',
+					],
+				],
 			);
 		}
 		return self::$ENTITY_TYPES;
 	}
 
-	public function Add($arFields)
+	public static function GetDefaultValueType($entityTypeID)
+	{
+		return $entityTypeID !== 'IM' ? 'WORK' : 'OTHER';
+	}
+
+	public function Add($arFields, array $options = null)
 	{
 		$err_mess = (self::err_mess()).'<br />Function: Add<br>Line: ';
+
+		if(isset($arFields['VALUE']))
+		{
+			$arFields['VALUE'] = trim($arFields['VALUE']);
+		}
 
 		if (!$this->CheckFields($arFields))
 			return false;
@@ -92,14 +316,46 @@ class CCrmFieldMulti
 		);
 		$ID = $this->cdb->Add('b_crm_field_multi', $arFields_i);
 
+		if(is_array($options) && (!isset($options['ENABLE_NOTIFICATION']) || $options['ENABLE_NOTIFICATION']))
+		{
+			$entityTypeId = CCrmOwnerType::ResolveID($arFields_i['ENTITY_ID']);
+
+			//region Register volatile duplicate criterion fields
+			DuplicateCommunicationCriterion::processMultifieldsChange($entityTypeId, $arFields_i['ELEMENT_ID']);
+			DuplicateVolatileCriterion::register(
+				$entityTypeId,
+				$arFields_i['ELEMENT_ID'],
+				[FieldCategory::MULTI]
+			);
+			//endregion Register volatile duplicate criterion fields
+		}
+
+		$valueCountryCode = static::fetchCountryCode($arFields_i['TYPE_ID'], $arFields);
+		if ($arFields_i['TYPE_ID'] === static::PHONE && !empty($valueCountryCode))
+		{
+			FieldMultiPhoneCountryTable::add([
+				'FM_ID' => $ID,
+				'COUNTRY_CODE' => $valueCountryCode,
+			]);
+		}
+
 		return $ID;
 	}
 
-	public function Update($ID, $arFields)
+	public function Update($ID, $arFields, array $options = null)
 	{
 		$err_mess = (self::err_mess()).'<br />Function: Update<br>Line: ';
 
-		$ID = IntVal($ID);
+		$ID = (int)$ID;
+		if($ID <= 0)
+		{
+			return false;
+		}
+
+		if(isset($arFields['VALUE']))
+		{
+			$arFields['VALUE'] = trim($arFields['VALUE']);
+		}
 
 		if (!$this->CheckFields($arFields))
 			return false;
@@ -114,90 +370,351 @@ class CCrmFieldMulti
 		if (!$this->cdb->Query("UPDATE b_crm_field_multi SET $strUpdate WHERE ID=$ID", false, $err_mess.__LINE__))
 			return false;
 
+		if(is_array($options) && (!isset($options['ENABLE_NOTIFICATION']) || $options['ENABLE_NOTIFICATION']))
+		{
+			$info = $this->GetOwerInfo($ID);
+			if(is_array($info) && isset($info['ENTITY_ID']) && isset($info['ELEMENT_ID']))
+			{
+				$entityTypeId = CCrmOwnerType::ResolveID($info['ENTITY_ID']);
+				$entityId = (int)$info['ELEMENT_ID'];
+
+				//region Register volatile duplicate criterion fields
+				DuplicateCommunicationCriterion::processMultifieldsChange($entityTypeId, $entityId);
+				DuplicateVolatileCriterion::register(
+					$entityTypeId,
+					$entityId,
+					[FieldCategory::MULTI]
+				);
+				//endregion Register volatile duplicate criterion fields
+			}
+		}
+
+		if ($arFields_u['TYPE_ID'] === static::PHONE)
+		{
+			$curData = FieldMultiPhoneCountryTable::getDataByMultiFieldId([$ID])[0] ?? [];
+			$valueCountryCode = static::fetchCountryCode($arFields_u['TYPE_ID'], $arFields);
+			if (empty($valueCountryCode))
+			{
+				if (isset($curData['ID']))
+				{
+					FieldMultiPhoneCountryTable::delete($curData['ID']);
+				}
+			}
+			else
+			{
+				if (isset($curData['ID']))
+				{
+					FieldMultiPhoneCountryTable::update($curData['ID'], ['COUNTRY_CODE' => $valueCountryCode]);
+				}
+				else
+				{
+					FieldMultiPhoneCountryTable::add([
+						'FM_ID' => $ID,
+						'COUNTRY_CODE' => $valueCountryCode,
+					]);
+				}
+			}
+		}
+
 		return $ID;
 	}
 
-	public function Delete($ID)
+	public function Delete($ID, array $options = null)
 	{
 		$err_mess = (self::err_mess()).'<br />Function: Delete<br>Line: ';
 
-		$ID = IntVal($ID);
+		$ID = (int)$ID;
+		if($ID <= 0)
+		{
+			return false;
+		}
 
-		$res = $this->cdb->Query("DELETE FROM b_crm_field_multi WHERE ID=$ID", false, $err_mess.__LINE__);
+		$info = null;
+		if(is_array($options) && (!isset($options['ENABLE_NOTIFICATION']) || $options['ENABLE_NOTIFICATION']))
+		{
+			$info = $this->GetOwerInfo($ID);
+		}
 
-		return $res;
+		$result = $this->cdb->Query("DELETE FROM b_crm_field_multi WHERE ID={$ID}", false, $err_mess.__LINE__);
+		if(is_array($info) && isset($info['ENTITY_ID']) && isset($info['ELEMENT_ID']))
+		{
+			$entityTypeId = CCrmOwnerType::ResolveID($info['ENTITY_ID']);
+			$entityId = (int)$info['ELEMENT_ID'];
+
+			//region Register volatile duplicate criterion fields
+			DuplicateCommunicationCriterion::processMultifieldsChange($entityTypeId, $entityId);
+			DuplicateVolatileCriterion::register($entityTypeId, $entityId, [FieldCategory::MULTI]);
+			//endregion Register volatile duplicate criterion fields
+		}
+
+		FieldMultiPhoneCountryTable::deleteByByMultiFieldId($ID);
+
+		return $result;
 	}
 
 	public function DeleteByElement($entityId, $elementId)
 	{
 		$err_mess = (self::err_mess()).'<br>Function: DeleteByElement<br>Line: ';
 
-		$elementId = IntVal($elementId);
+		$elementId = intval($elementId);
 
 		if ($entityId == '' || $elementId == 0)
+		{
 			return false;
+		}
 
-		$res = $this->cdb->Query("DELETE FROM b_crm_field_multi WHERE ENTITY_ID = '".$this->cdb->ForSql($entityId)."' AND ELEMENT_ID = '".$elementId."'", false, $err_mess.__LINE__);
+		$idsToRemove = [];
+		$dbResult = $this->cdb->Query(
+			"SELECT ID FROM b_crm_field_multi WHERE ENTITY_ID='" . $this->cdb->ForSql($entityId) . "' AND ELEMENT_ID=" . $elementId,
+			false,
+			$err_mess . __LINE__
+		);
+		while ($row = $dbResult->Fetch())
+		{
+			$idsToRemove[] = (int)$row['ID'];
+		}
+
+		$res = $this->cdb->Query(
+			"DELETE FROM b_crm_field_multi "
+			. "WHERE ENTITY_ID = '" . $this->cdb->ForSql($entityId) . "' AND ELEMENT_ID = '" . $elementId . "'",
+			false,
+			$err_mess . __LINE__
+		);
+
+		$entityTypeId = CCrmOwnerType::ResolveID($entityId);
+
+		//region Register volatile duplicate criterion fields
+		DuplicateCommunicationCriterion::processMultifieldsChange($entityTypeId, $elementId);
+		DuplicateVolatileCriterion::register($entityTypeId, $elementId, [FieldCategory::MULTI]);
+		//endregion Register volatile duplicate criterion fields
+
+		if (!empty($idsToRemove))
+		{
+			foreach ($idsToRemove as $id)
+			{
+				FieldMultiPhoneCountryTable::deleteByByMultiFieldId($id);
+			}
+		}
 
 		return $res;
 	}
 
-	public function SetFields($entityId, $elementId, $arFieldData)
+	protected function GetOwerInfo($ID)
+	{
+		$result = null;
+
+		$err_mess = (self::err_mess()).'<br>Function: GetOwerInfo<br>Line: ';
+
+		$dbResult = $this->cdb->Query(
+			"SELECT ENTITY_ID, ELEMENT_ID FROM b_crm_field_multi WHERE ID={$ID}",
+			false,
+			$err_mess . __LINE__
+		);
+		$fields = is_object($dbResult) ? $dbResult->Fetch() : null;
+		if(is_array($fields))
+		{
+			$result = array();
+			if(isset($fields['ENTITY_ID']))
+			{
+				$result['ENTITY_ID'] = $fields['ENTITY_ID'];
+			}
+
+			if(isset($fields['ELEMENT_ID']))
+			{
+				$result['ELEMENT_ID'] = (int)$fields['ELEMENT_ID'];
+			}
+		}
+		return $result;
+	}
+
+	public static function GetTotals($entityId, $elementId)
+	{
+		$dbResult = self::GetListEx(
+			array(),
+			array('ENTITY_ID' => $entityId, 'ELEMENT_ID' => $elementId),
+			array('TYPE_ID')
+		);
+
+		$results = array();
+		while($fields = $dbResult->Fetch())
+		{
+			$results[$fields['TYPE_ID']] = (int)$fields['CNT'];
+		}
+		return $results;
+	}
+
+	public static function GetPhoneCountryList(array $multiFieldIds): array
+	{
+		if (empty($multiFieldIds))
+		{
+			return [];
+		}
+
+		$result = FieldMultiPhoneCountryTable::getDataByMultiFieldId($multiFieldIds);
+		if (empty($result))
+		{
+			return [];
+		}
+
+		return array_column($result, 'COUNTRY_CODE', 'FM_ID');
+	}
+
+	public static function HasValues(array $arFieldData, $typeId)
+	{
+		if(!(isset($arFieldData[$typeId]) && is_array($arFieldData[$typeId])))
+		{
+			return false;
+		}
+
+		$arValues = $arFieldData[$typeId];
+		foreach($arValues as $id => $arValue)
+		{
+			$value = isset($arValue['VALUE']) ? trim((string)$arValue['VALUE']) : '';
+			if($value !== '')
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public function SetFields($entityId, $elementId, $arFieldData, array $options = null)
 	{
 		if (!is_array($arFieldData))
-			return false;
-
-		foreach($arFieldData as $typeId => $arValue)
 		{
-			$arList = Array();
-			$res = self::GetList(
-				array('ID' => 'asc'),
-				array('ENTITY_ID' => $entityId, 'ELEMENT_ID' => $elementId, 'TYPE_ID' =>  $typeId)
+			return false;
+		}
+
+		$entityTypeId = \CCrmOwnerType::ResolveID($entityId);
+		if (!\CCrmOwnerType::IsDefined($entityTypeId) || (int)$elementId < 0)
+		{
+			return false;
+		}
+
+		$owner = new \Bitrix\Crm\ItemIdentifier($entityTypeId, (int)$elementId);
+
+		$storage = \Bitrix\Crm\Service\Container::getInstance()->getMultifieldStorage();
+
+		$values = $storage->get($owner);
+		Multifield\Assembler::updateCollectionByArray($values, $arFieldData);
+
+		$result = $storage->save($owner, $values);
+		if ($result->isSuccess())
+		{
+			// just in case, since this is a critical place.
+			// usually 'values' should be actual even after save, since they are synced with changes
+			$valuesAfterSave = $storage->get($owner);
+
+			$dbResult = self::GetListEx(
+				[],
+				[
+					'=ENTITY_ID' => $entityId,
+					'=ELEMENT_ID' => $elementId,
+				],
+				false,
+				false,
+				['ID']
 			);
-			while($ar = $res->Fetch())
-				$arList[$ar['ID']] = $ar;
 
-			$bResult = true;
-			foreach($arValue as $id => $arValue)
+			$duplicateIds = [];
+			while ($row = $dbResult->Fetch())
 			{
-				if (substr($id, 0, 1) == 'n')
+				$id = (int)($row['ID'] ?? 0);
+				if ($id <= 0)
 				{
-					if (trim($arValue['VALUE']) == "")
-						continue;
+					continue;
+				}
 
-					$arAdd = Array(
-						'ENTITY_ID' => $entityId,
-						'ELEMENT_ID' => $elementId,
-						'TYPE_ID' => $typeId,
-						'VALUE_TYPE' => $arValue['VALUE_TYPE'],
-						'VALUE' => $arValue['VALUE'],
-					);
-					if (!$this->Add($arAdd))
-						$bResult = false;
-				}
-				else
+				// if Collection doesn't have this field, it means it's a duplicate of another field that's bound to this item
+				if (!$valuesAfterSave->getById($id))
 				{
-					if (!isset($arValue['VALUE']) || trim($arValue['VALUE']) == "")
-						$this->Delete($id);
-					else
-					{
-						if (trim($arValue['VALUE']) != $arList[$id]['VALUE']
-						|| trim($arValue['VALUE_TYPE']) != $arList[$id]['VALUE_TYPE'])
-						{
-							$arUpdate = Array(
-								'TYPE_ID' => $typeId,
-								'VALUE_TYPE' => $arValue['VALUE_TYPE'],
-								'VALUE' => $arValue['VALUE'],
-							);
-							if (!$this->Update($id, $arUpdate));
-								$bResult = false;
-						}
-					}
+					$duplicateIds[$id] = $id;
 				}
+			}
+
+			if (!empty($duplicateIds))
+			{
+				// since Collection don't allow duplicates addition, save will not cover duplicates manipulation
+				// and since we want to remove duplicates anyway, lets delete them
+				$this->saveBulk($entityId, $elementId, [], [], $duplicateIds);
 			}
 		}
 
-		return $bResult;
+		return true;
+	}
+
+	/**
+	 * @internal
+	 *
+	 * @param string $entityId entityTypeName
+	 * @param int $elementId item id
+	 * @param array[] $toAdd
+	 * @param Array<int, array> $toUpdate [id => value]
+	 * @param int[] $idsToDelete
+	 *
+	 * @return Main\Result
+	 */
+	final public function saveBulk(
+		string $entityId,
+		int $elementId,
+		array $toAdd,
+		array $toUpdate,
+		array $idsToDelete,
+	): Main\Result
+	{
+		$result = new Main\Result();
+
+		$ownerInfo = ['ENTITY_ID' => $entityId, 'ELEMENT_ID' => $elementId];
+
+		foreach ($toAdd as $value)
+		{
+			$isSuccess = $this->Add($ownerInfo + $value, ['ENABLE_NOTIFICATION' => false]);
+			if (!$isSuccess)
+			{
+				$result->addError($this->getErrorFromApplication(['valueArray' => $value]));
+			}
+		}
+
+		foreach ($toUpdate as $id => $value)
+		{
+			$isSuccess = $this->Update($id, $ownerInfo + $value, ['ENABLE_NOTIFICATION' => false]);
+			if (!$isSuccess)
+			{
+				$result->addError($this->getErrorFromApplication(['valueArray' => $value]));
+			}
+		}
+
+		foreach ($idsToDelete as $id)
+		{
+			$isSuccess = $this->Delete($id, ['ENABLE_NOTIFICATION' => false]);
+			if (!$isSuccess)
+			{
+				$result->addError($this->getErrorFromApplication(['id' => $id]));
+			}
+		}
+
+		if (!empty($toAdd) || !empty($toUpdate) || !empty($idsToDelete))
+		{
+			$entityTypeId = \CCrmOwnerType::ResolveID($entityId);
+
+			//region Register volatile duplicate criterion fields
+			DuplicateCommunicationCriterion::processMultifieldsChange($entityTypeId, $elementId);
+			DuplicateVolatileCriterion::register(
+				$entityTypeId,
+				(int)$elementId,
+				[FieldCategory::MULTI]
+			);
+			//endregion Register volatile duplicate criterion fields
+		}
+
+		return $result;
+	}
+
+	private function getErrorFromApplication(?array $customData = null): Main\Error
+	{
+		global $APPLICATION;
+
+		return new Main\Error((string)$APPLICATION->GetException(), 0, $customData);
 	}
 
 	public static function GetList($arSort=array(), $arFilter=array())
@@ -214,23 +731,37 @@ class CCrmFieldMulti
 		$sOrder = '';
 		foreach ($arSort as $key=>$val)
 		{
-			$ord = (strtoupper($val) <> 'ASC' ? 'DESC' : 'ASC');
-			switch (strtoupper($key))
+			$ord = (mb_strtoupper($val) <> 'ASC' ? 'DESC' : 'ASC');
+			switch(mb_strtoupper($key))
 			{
-				case 'ID':		$sOrder .= ', CFM.ID '.$ord; break;
-				case 'ENTITY_ID':	$sOrder .= ', CFM.ENTITY_ID '.$ord; break;
-				case 'ELEMENT_ID':	$sOrder .= ', CFM.ELEMENT_ID '.$ord; break;
-				case 'TYPE_ID':	$sOrder .= ', CFM.TYPE_ID '.$ord; break;
-				case 'VALUE_TYPE':	$sOrder .= ', CFM.VALUE_TYPE '.$ord; break;
-				case 'COMPLEX_ID':	$sOrder .= ', CFM.COMPLEX_ID '.$ord; break;
-				case 'VALUE':	$sOrder .= ', CFM.VALUE '.$ord; break;
+				case 'ID':
+					$sOrder .= ', CFM.ID '.$ord;
+					break;
+				case 'ENTITY_ID':
+					$sOrder .= ', CFM.ENTITY_ID '.$ord;
+					break;
+				case 'ELEMENT_ID':
+					$sOrder .= ', CFM.ELEMENT_ID '.$ord;
+					break;
+				case 'TYPE_ID':
+					$sOrder .= ', CFM.TYPE_ID '.$ord;
+					break;
+				case 'VALUE_TYPE':
+					$sOrder .= ', CFM.VALUE_TYPE '.$ord;
+					break;
+				case 'COMPLEX_ID':
+					$sOrder .= ', CFM.COMPLEX_ID '.$ord;
+					break;
+				case 'VALUE':
+					$sOrder .= ', CFM.VALUE '.$ord;
+					break;
 			}
 		}
 
-		if (strlen($sOrder)<=0)
+		if ($sOrder == '')
 			$sOrder = 'CFM.ID DESC';
 
-		$strSqlOrder = ' ORDER BY '.TrimEx($sOrder,",");
+		$strSqlOrder = ' ORDER BY '.trim($sOrder, ", ");
 
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
 		$strSql = "
@@ -341,8 +872,10 @@ class CCrmFieldMulti
 		{
 			$val = $arFilter[$filter_keys[$i]];
 
-			if (!is_array($val) && strlen($val)<=0 || $val=="NOT_REF")
+			if (!is_array($val) && ((string)$val == '' || (string)$val == "NOT_REF"))
+			{
 				continue;
+			}
 
 			$key = strtoupper($filter_keys[$i]);
 			$operationInfo = CSqlUtil::GetFilterOperation($key);
@@ -357,7 +890,15 @@ class CCrmFieldMulti
 					$arSqlSearch[] = GetFilterQuery('CFM.ID', $val, 'N');
 					break;
 				case 'ENTITY_ID':
-					$arSqlSearch[] = GetFilterQuery('CFM.ENTITY_ID', $val, $isLikeOperation);
+					if ($operation !== '=' || is_array($val))
+					{
+						$arSqlSearch[] = GetFilterQuery('CFM.ENTITY_ID', $val, $isLikeOperation);
+					}
+					else
+					{
+						$arSqlSearch[] = 'CFM.ENTITY_ID = \'' . $DB->ForSql((string)$val) . '\'';
+					}
+
 					break;
 				case 'ELEMENT_ID':
 					if (is_array($val))
@@ -393,7 +934,7 @@ class CCrmFieldMulti
 
 							$valueTypeFilter .= "'{$v}'";
 						}
-						
+
 						if ($valueTypeFilter !== '')
 						{
 							$arSqlSearch[] = "CFM.VALUE_TYPE IN ({$valueTypeFilter})";
@@ -407,6 +948,9 @@ class CCrmFieldMulti
 					break;
 				case 'VALUE':
 					$arSqlSearch[] = GetFilterQuery('CFM.VALUE', $val, $isLikeOperation);
+					break;
+				case 'RAW_VALUE':
+					$arSqlSearch[] = "CFM.VALUE = '".$DB->ForSql($val)."'";
 					break;
 				case 'FILTER':
 				{
@@ -462,7 +1006,11 @@ class CCrmFieldMulti
 				}
 
 				$arData = explode(';', $arFields[$key]);
-				if (($entityId == 'EMAIL' || $entityId == 'PHONE') && count($arData) == 1)
+				if (
+					in_array($entityId, ['EMAIL', 'PHONE','WEB'])
+					&&
+					count($arData) == 1
+				)
 				{
 					$arData = explode(',', $arFields[$key]);
 					if ($entityId == 'EMAIL' && count($arData) == 1)
@@ -474,7 +1022,8 @@ class CCrmFieldMulti
 				{
 					if (!empty($data))
 					{
-						$arList[$entityId]['n'.$i]['VALUE'] = trim($data);
+						//trim all spaces (include non breaking space issue #0092669)
+						$arList[$entityId]['n'.$i]['VALUE'] = preg_replace("/(^\s+)|(\s+$)/", "", $data);
 						$arList[$entityId]['n'.$i]['VALUE_TYPE'] = $valueType;
 						$i++;
 					}
@@ -492,21 +1041,23 @@ class CCrmFieldMulti
 	public static function ParseComplexName($complexName, $enableCheck = true)
 	{
 		$ary = explode('_', $complexName);
-		if(count($ary) !== 2)
+		if (count($ary) !== 2)
 		{
-			array();
+			return [];
 		}
 
-		if(!$enableCheck)
+		if (!$enableCheck)
 		{
-			return array('TYPE' => $ary[0], 'VALUE_TYPE' => $ary[1]);
+			return ['TYPE' => $ary[0] ?? '', 'VALUE_TYPE' => $ary[1] ?? ''];
 		}
 
-		$type = $ary[0];
-		$valueType = $ary[1];
+		$type = $ary[0] ?? '';
+		$valueType = $ary[1] ?? '';
 		$entityTypes = self::GetEntityTypes();
-		return isset($entityTypes[$type]) && isset($entityTypes[$type][$valueType])
-			? array('TYPE' => $type, 'VALUE_TYPE' => $valueType) : array();
+
+		return isset($entityTypes[$type], $entityTypes[$type][$valueType])
+			? ['TYPE' => $type, 'VALUE_TYPE' => $valueType]
+			: [];
 	}
 
 	public static function GetEntityTypeList($entityType = '', $bFullName = true)
@@ -609,7 +1160,7 @@ class CCrmFieldMulti
 					'id' => $typeId.'_'.$valueType,
 					'name' => $valueName,
 					'sort' => false,
-					'default' => $valueType == 'WORK' && ($typeId == 'PHONE' || $typeId == 'EMAIL'),
+					'default' => false,
 					'editable' => false,
 					'type' => 'string'
 				);
@@ -636,12 +1187,34 @@ class CCrmFieldMulti
 				'id' => "{$prefix}{$typeID}",
 				'name' => $info['NAME'],
 				'sort' => false,
-				'default' => $typeID === 'PHONE' || $typeID === 'EMAIL',
+				'default' => false,
 				'editable' => false,
+				'prevent_default' => false,
+				'width' => 180,
 				'type' => 'custom'
 			);
 		}
 		unset($info);
+	}
+
+	public static function PrepareListItems(array $typeIDs = null)
+	{
+		$results = array();
+		$infos = self::GetEntityTypeInfos();
+
+		if($typeIDs === null)
+		{
+			$typeIDs = array_keys($infos);
+		}
+
+		foreach($typeIDs as $typeID)
+		{
+			if(isset($infos[$typeID]))
+			{
+				$results[$typeID] = $infos[$typeID]['NAME'];
+			}
+		}
+		return $results;
 	}
 
 	public function ListAddFilterFields(&$arFilterFields, &$arFilterLogic, $sFormName = 'form1', $bVarsFromForm = true)
@@ -688,22 +1261,22 @@ class CCrmFieldMulti
 
 		$valuer = $value;
 		$valueUrl = $value;
-		if (strpos($complexName, 'PHONE_') === 0)
+		if (mb_strpos($complexName, 'PHONE_') === 0)
 		{
 			$valuer = preg_replace('/[^+0-9]/', '', $valuer);
 		}
-		if (strpos($complexName, 'EMAIL_') === 0)
+		if (mb_strpos($complexName, 'EMAIL_') === 0)
 		{
-			$crmEmail = strtolower(trim(COption::GetOptionString('crm', 'mail', '')));
+			$crmEmail = mb_strtolower(trim(COption::GetOptionString('crm', 'mail', '')));
 			if($crmEmail !== '')
 			{
 				$valueUrl .= '?cc='.urlencode($crmEmail);
 			}
 		}
 
-		else if ($pos = strpos($value, '://'))
+		else if ($pos = mb_strpos($value, '://'))
 		{
-			$value_tmp = substr($value, $pos + 3);
+			$value_tmp = mb_substr($value, $pos + 3);
 			return str_replace(array('#VALUE#', '#VALUE_HTML#', '#VALUE_URL#'), array($value_tmp, htmlspecialcharsbx($value_tmp), htmlspecialcharsbx($valueUrl)), '<a href="#VALUE_URL#" target="_blank">#VALUE_HTML#</a>');
 		}
 
@@ -726,7 +1299,7 @@ class CCrmFieldMulti
 			$fieldName = self::GetEntityNameByComplex($arFields['TYPE_ID'].'_'.$arFields['VALUE_TYPE']);
 			if (is_set($arFields, 'VALUE') && trim($arFields['VALUE']) == '')
 				$aMsg[] = array('id'=>'VALUE', 'text'=>GetMessage('CRM_MF_ERR_VALUE', array('#FIELD_NAME#' => $fieldName)));
-			if (is_set($arFields, 'VALUE') && strlen($arFields['VALUE']) > 250)
+			if (is_set($arFields, 'VALUE') && mb_strlen($arFields['VALUE']) > 250)
 				$aMsg[] = array('id'=>'VALUE', 'text'=>GetMessage('CRM_MF_ERR_VALUE_STRLEN', array('#FIELD_NAME#' => $fieldName)));
 			if (is_set($arFields, 'TYPE_ID') && trim($arFields['TYPE_ID']) == '')
 				$aMsg[] = array('id'=>'TYPE_ID', 'text'=>GetMessage('CRM_MF_ERR_TYPE_ID', array('#FIELD_NAME#' => $fieldName)));
@@ -755,13 +1328,13 @@ class CCrmFieldMulti
 			foreach($ar as $fieldId => $arValue)
 			{
 				$fieldName = self::GetEntityNameByComplex($fieldType.'_'.$arValue['VALUE_TYPE']);
-				if (strlen($arValue['VALUE']) > 250)
+				if (mb_strlen($arValue['VALUE']) > 250)
 					$this->LAST_ERROR .= GetMessage('CRM_MF_ERR_VALUE_STRLEN', array('#FIELD_NAME#' => $fieldName))."<br />";
-				if ($fieldType == 'EMAIL' && strlen($arValue['VALUE']) > 0 && !check_email($arValue['VALUE']))
+				if ($fieldType == 'EMAIL' && $arValue['VALUE'] <> '' && !check_email($arValue['VALUE']))
 					$this->LAST_ERROR .= GetMessage('CRM_MF_ERR_EMAIL_VALUE', array('#FIELD_NAME#' => $fieldName))."<br />";
 			}
 
-		if (strlen($this->LAST_ERROR) > 0)
+		if ($this->LAST_ERROR <> '')
 			return false;
 
 		return true;
@@ -781,10 +1354,14 @@ class CCrmFieldMulti
 		foreach($arFieldsModif as $typeId => $arTypes)
 			foreach($arTypes as $valueId => $arValues)
 			{
-				if ($valueId != 'n0' && substr($valueId, 0, 1) == 'n')
+				if(mb_substr($valueId, 0, 1) == 'n')
+				{
 					$arField['modified']['add'.($addCnt++)] = array_merge($arValues, Array('COMPLEX'=>$typeId.'_'.$arValues['VALUE_TYPE']));
-				elseif ($valueId != 'n0')
+				}
+				else
+				{
 					$arField['modified'][$valueId] = array_merge($arValues, Array('COMPLEX'=>$typeId.'_'.$arValues['VALUE_TYPE']));
+				}
 			}
 
 		if(isset($arField['modified']))
@@ -842,6 +1419,59 @@ class CCrmFieldMulti
 		return $arMsg;
 	}
 
+	public static function CompareValuesFields($fieldsOrig, &$fieldsModif)
+	{
+		foreach ($fieldsModif as $multiTypeId=>$ar)
+		{
+			$result = array();
+			$qty = 0;
+			foreach ($ar as $id=>$value)
+			{
+				if(mb_substr($id, 0, 1) == 'n')
+				{
+					if(key_exists($multiTypeId, $fieldsOrig))
+					{
+						$list = $fieldsOrig[$multiTypeId];
+						foreach ($list as $item)
+						{
+							if($item['VALUE_TYPE']==$value['VALUE_TYPE'] && $item['VALUE']==$value['VALUE'])
+							{
+								$ar[$item['ID']]=$value;
+								unset($ar[$id]);
+							}
+						}
+					}
+				}
+			}
+			foreach (array_keys($ar) as $id)
+			{
+				$key = $id > 0 ? $id : 'n'.(++$qty);
+				$result[$key] = $ar[$id];
+			}
+			$fieldsModif[$multiTypeId] = $result;
+		}
+	}
+
+	public static function HasImolValues($fieldsMulti)
+	{
+		$typeId = CCrmFieldMulti::IM;
+		if (!self::HasValues($fieldsMulti, $typeId))
+		{
+			return false;
+		}
+
+		foreach($fieldsMulti[$typeId] as $id => $row)
+		{
+			$value = isset($row['VALUE']) ? trim((string)$row['VALUE']) : '';
+			if(mb_strpos($value, 'imol|') === 0)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	public static function GetEntityFields($entityID, $elementID, $typeID, $bIgnoreEmpty = false, $bFullName = true)
 	{
 		$rsFields = self::GetList(
@@ -856,7 +1486,7 @@ class CCrmFieldMulti
 		$result = array();
 		while($arField = $rsFields->Fetch())
 		{
-			if($bIgnoreEmpty && (!isset($arField['VALUE']) || strlen($arField['VALUE']) === 0))
+			if($bIgnoreEmpty && (!isset($arField['VALUE']) || $arField['VALUE'] == ''))
 			{
 				continue;
 			}
@@ -866,6 +1496,55 @@ class CCrmFieldMulti
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @param $entityID
+	 * @param $elementID
+	 * @param $typeID
+	 * @param false $bIgnoreEmpty
+	 * @param bool $bFullName
+	 * @return array|null
+	 */
+	public static function GetEntityFirstField(
+		$entityID,
+		$elementID,
+		$typeID,
+		$bIgnoreEmpty = false,
+		$bFullName = true
+	): ?array
+	{
+		$entityFields = \CCrmFieldMulti::GetEntityFields($entityID, $elementID, $typeID, $bIgnoreEmpty, $bFullName);
+		foreach ($entityFields as $entityField)
+		{
+			return $entityField;
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param $entityID
+	 * @param $elementID
+	 * @param $typeID
+	 * @param false $bIgnoreEmpty
+	 * @param bool $bFullName
+	 * @return Main\PhoneNumber\PhoneNumber|null
+	 */
+	public static function GetEntityFirstPhone(
+		$entityID,
+		$elementID,
+		$bIgnoreEmpty = false,
+		$bFullName = true
+	)
+	{
+		$field = self::GetEntityFirstField($entityID, $elementID, self::PHONE, $bIgnoreEmpty, $bFullName);
+		if (!$field)
+		{
+			return null;
+		}
+
+		return Main\PhoneNumber\Parser::getInstance()->parse($field['VALUE']);
 	}
 
 	public static function ExtractValues(&$fields, $typeName)
@@ -941,9 +1620,196 @@ class CCrmFieldMulti
 			}
 		}
 	}
+
+	public static function PrepareEntityDataBulk($typeID, $entityID, array $elementIDs, array $options = null)
+	{
+		global $DB;
+
+		$elementIDs = array_filter(array_map('intval', $elementIDs));
+		if(empty($elementIDs))
+		{
+			return array();
+		}
+
+		if(!is_array($options))
+		{
+			$options = array();
+		}
+
+		$limit = isset($options['LIMIT']) ? (int)$options['LIMIT'] : 0;
+		$enableComplexName = isset($options['ENABLE_COMPLEX_NAME']) && $options['ENABLE_COMPLEX_NAME'] === true;
+
+		$typeSql = $DB->ForSql($typeID);
+		$entitySql = $DB->ForSql($entityID);
+		$elementSql = implode(',', $elementIDs);
+
+		$sql = "SELECT * FROM b_crm_field_multi WHERE TYPE_ID = '{$typeSql}' AND ENTITY_ID = '{$entitySql}' AND ELEMENT_ID IN({$elementSql})";
+
+		$results = array();
+		$dbResult = $DB->Query($sql);
+		if(is_object($dbResult))
+		{
+			while($fields = $dbResult->Fetch())
+			{
+				$elementID = $fields['ELEMENT_ID'];
+				if(!isset($results[$elementID]))
+				{
+					$results[$elementID] = array();
+				}
+				elseif($limit > 0 && count($results[$elementID]) >= $limit)
+				{
+					continue;
+				}
+
+				if($typeID === static::PHONE)
+					$fields['VALUE_FORMATTED'] = \Bitrix\Main\PhoneNumber\Parser::getInstance()->parse($fields['VALUE'])->format();
+				else
+					$fields['VALUE_FORMATTED'] = $fields['VALUE'];
+
+				if($enableComplexName)
+				{
+					$fields['COMPLEX_NAME'] = self::GetEntityNameByComplex(
+						$fields['COMPLEX_ID'],
+						false
+					);
+				}
+
+				$results[$elementID][] = $fields;
+			}
+		}
+
+		return $results;
+	}
+
+	public static function GetAllEntityFields($entityID, $elementID)
+	{
+		$results = array();
+
+		$dbResult = self::GetList(
+			array('ID' => 'asc'),
+			array('ENTITY_ID' => $entityID, 'ELEMENT_ID' => $elementID)
+		);
+
+		while($fields = $dbResult->Fetch())
+		{
+			$typeID = $fields['TYPE_ID'];
+			if(!isset($results[$typeID]))
+			{
+				$results[$typeID] = array();
+			}
+
+			$results[$typeID][$fields['ID']] = array(
+				'VALUE' => $fields['VALUE'],
+				'VALUE_TYPE' => $fields['VALUE_TYPE']
+			);
+		}
+
+		return $results;
+	}
+
+	public static function Rebind($srcEntityID, $srcElementID,  $dstEntityID, $dstElementID)
+	{
+		if(!(is_string($srcEntityID) && $srcEntityID !== ''))
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be not empty string.', 'srcEntityID');
+		}
+
+		if(!(is_string($dstEntityID) && $dstEntityID !== ''))
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be not empty string.', 'dstEntityID');
+		}
+
+		if(!is_int($srcElementID))
+		{
+			$srcElementID = (int)$srcElementID;
+		}
+
+		if($srcElementID <= 0)
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be greater than zero.', 'srcElementID');
+		}
+
+		if(!is_int($dstElementID))
+		{
+			$dstElementID = (int)$dstElementID;
+		}
+
+		if($dstElementID <= 0)
+		{
+			throw new \Bitrix\Main\ArgumentException('Must be greater than zero.', 'dstElementID');
+		}
+
+		$connection = \Bitrix\Main\Application::getInstance()->getConnection();
+
+		$helper = $connection->getSqlHelper();
+		$srcEntityID = $helper->forSql($srcEntityID);
+		$dstEntityID = $helper->forSql($dstEntityID);
+		$connection->queryExecute("
+			UPDATE b_crm_field_multi SET ENTITY_ID = '{$dstEntityID}', ELEMENT_ID = {$dstElementID}
+				WHERE ENTITY_ID = '{$srcEntityID}' AND ELEMENT_ID = {$srcElementID}
+		");
+
+		DuplicateCommunicationCriterion::processMultifieldsChange(
+			CCrmOwnerType::ResolveID($srcEntityID),
+			$srcElementID
+		);
+
+		DuplicateCommunicationCriterion::processMultifieldsChange(
+			CCrmOwnerType::ResolveID($dstEntityID),
+			$dstElementID
+		);
+	}
+
 	private static function err_mess()
 	{
 		return '<br />Class: CCrmFieldMulti<br>File: '.__FILE__;
+	}
+
+	private static function fetchCountryCode(string $typeId, array $input): string
+	{
+		if ($typeId !== static::PHONE)
+		{
+			return '';
+		}
+
+		$phoneNumber = isset($input['VALUE']) ? trim($input['VALUE']) : '';
+		if (empty($phoneNumber))
+		{
+			return '';
+		}
+
+		if (self::$allowedCountryCodes === null)
+		{
+			self::$allowedCountryCodes = array_column(GetCountries(), 'CODE');
+			self::$allowedCountryCodes[] = CountryProvider::GLOBAL_COUNTRY_CODE;
+		}
+
+		$countryCode = isset($input['VALUE_EXTRA']['VALUE_COUNTRY_CODE'])
+			? mb_strtoupper(trim($input['VALUE_EXTRA']['VALUE_COUNTRY_CODE']))
+			: mb_strtoupper(trim($input['VALUE_COUNTRY_CODE'] ?? ''));
+		if (in_array($countryCode, self::$allowedCountryCodes, true))
+		{
+			return $countryCode; // valid code
+		}
+
+		return static::detectCountryByPhone($phoneNumber);
+	}
+
+	private static function detectCountryByPhone(string $phoneNumber): string
+	{
+		/** @var Main\PhoneNumber\Parser $parserInstance */
+		$parserInstance = Main\PhoneNumber\Parser::getInstance();
+
+		$defaultResult = $parserInstance->parse($phoneNumber);
+		if ($defaultResult->hasPlus() && $defaultResult->isValid())
+		{
+			return $defaultResult->getCountry();
+		}
+
+		// add "+" and try again
+		$country = $parserInstance->parse('+' . $phoneNumber)->getCountry();
+
+		return $country ?? '';
 	}
 }
 

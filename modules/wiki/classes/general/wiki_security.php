@@ -2,22 +2,11 @@
 
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CWikiSecurity</b> - Класс защищающий вики-страницу от потенциально опасных элементов. Динамичный метод.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikisecurity/index.php
- * @author Bitrix
- */
 class CWikiSecurity
 {
 	var $_filters = false;
 
-	public function __construct($char = false)
+	function __construct($char = false)
 	{
 		if($char === false)
 			$char = " ";
@@ -269,43 +258,7 @@ class CWikiSecurity
 		}
 	}
 
-	
-	/**
-	* <p>Метод обрабатывает содержимое Wiki-страницы.</p>
-	*
-	*
-	* @param string &$str  Содержимое Wiki-страницы
-	*
-	* @return string 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* $IBLOCK_ID = 2;
-	* $NAME = 'Тестовая страница';
-	* $arFilter = array(
-	* 	'ACTIVE' =&gt; 'Y',
-	* 	'CHECK_PERMISSIONS' =&gt; 'N',
-	* 	'IBLOCK_ID' =&gt; $IBLOCK_ID
-	* );
-	* $arElement = CWiki::GetElementByName($NAME, $arFilter);
-	* 
-	* $CWikiSecurity = new CWikiSecurity ();
-	* $CWikiSecurity-&gt;clear($arElement['~DETAIL_TEXT']);
-	* echo $arElement['~DETAIL_TEXT'];<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiparser/parse.php">CWikiParser::Parse</a> </li> 
-	* </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikisecurity/clear.php
-	* @author Bitrix
-	*/
-	public function clear(&$str)
+	function clear(&$str)
 	{
 	    return $this->_dostr($str);
 	}
@@ -334,7 +287,7 @@ class CWikiSecurity
 		{
 			foreach($this->_filters as $ch => $filters)
 			{
-				if($ch == '' || strpos($str2, $ch) !== false)
+				if($ch == '' || mb_strpos($str2, $ch) !== false)
 				{
 					$str2 = $strX;
 					$strX = preg_replace($filters[1], $filters[0], $str2);
@@ -354,7 +307,7 @@ class CWikiSecurity
 	/*
 	Function is used in regular expressions in order to decode characters presented as &#123;
 	*/
-	public static function _decode_cb($in)
+	function _decode_cb($in)
 	{
 		$ad = $in[2];
 		if($ad == ';')
@@ -366,7 +319,7 @@ class CWikiSecurity
 	/*
 	Function is used in regular expressions in order to decode characters presented as  &#xAB;
 	*/
-	public static function _decode_cb_hex($in)
+	function _decode_cb_hex($in)
 	{
 		$ad = $in[2];
 		if($ad==';')
@@ -380,7 +333,7 @@ class CWikiSecurity
 	One pass!
 	-- Decode only a-zA-Z:().=, because only theese are used in filters
 	*/
-	public static function _decode($str)
+	function _decode($str)
 	{
 		$str = preg_replace_callback("/\&\#(\d+)([^\d])/is", array("CWikiSecurity", "_decode_cb"), $str);
 		$str = preg_replace_callback("/\&\#x([\da-f]+)([^\da-f])/is", array("CWikiSecurity", "_decode_cb_hex"), $str);

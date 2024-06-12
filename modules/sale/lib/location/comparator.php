@@ -1,9 +1,9 @@
 <?
 namespace Bitrix\Sale\Location;
 
-use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Loader;
 use Bitrix\Sale\Location\Comparator\Replacement;
+use Bitrix\Main\ArgumentOutOfRangeException;
 
 Loader::registerAutoLoadClasses(
 	'sale',
@@ -20,6 +20,7 @@ class Comparator
 	const COUNTRY = 3;
 
 	public static $variants = null;
+	public static $replacement = null;
 
 	public static function isLocationsEqual($location1, $location2)
 	{
@@ -28,7 +29,7 @@ class Comparator
 			if(empty($location2[$type]))
 				continue;
 
-			if(strlen($location1[$type]) > 0 && strlen($location2[$type]) > 0)
+			if($location1[$type] <> '' && $location2[$type] <> '')
 			{
 				/** @var Comparator  $comparator */
 				$comparator = self::getConcreteComparatorClassaName($type);
@@ -41,9 +42,25 @@ class Comparator
 		return true;
 	}
 
+	public static function getReplacement()
+	{
+		if(self::$replacement === null)
+			self::setReplacement();
+
+		return self::$replacement;
+	}
+
+	public static function setReplacement(Replacement $replacement = null)
+	{
+		if($replacement === null)
+			self::$replacement = new Replacement;
+		else
+			self::$replacement = $replacement;
+	}
+
 	public static function isCountryRussia($countryName)
 	{
-		return Replacement::isCountryRussia($countryName);
+		return self::getReplacement()->isCountryRussia($countryName);
 	}
 
 	/**
@@ -69,7 +86,7 @@ class Comparator
 
 	public static function isEntityEqual($entity1, $entity2, $type = '')
 	{
-		if(strlen($type) > 0)
+		if($type <> '')
 		{
 			/** @var Comparator  $comparator */
 			$comparator = self::getConcreteComparatorClassaName($type);
@@ -96,11 +113,11 @@ class Comparator
 			$entity2N = static::normalize($entity2);
 		}
 
-		if(strlen($entity1N['NAME']) > 0 && strlen($entity2N['NAME']) > 0)
+		if($entity1N['NAME'] <> '' && $entity2N['NAME'] <> '')
 			if($entity1N['NAME'] != $entity2N['NAME'])
 				return false;
 
-		if(strlen($entity1N['TYPE']) > 0 && strlen($entity2N['TYPE']) > 0)
+		if($entity1N['TYPE'] <> '' && $entity2N['TYPE'] <> '')
 			if($entity1N['TYPE'] != $entity2N['TYPE'])
 				return false;
 
@@ -141,11 +158,11 @@ class Comparator
 
 	public static function flatten($value)
 	{
-		$result = preg_replace('/\s*(\(.*\))/i'.BX_UTF_PCRE_MODIFIER, ' ', $value);
-		$result = preg_replace('/[~\'\"\`\!\@\#\$\%\^\&\*\+\=\\\.\,\?\:\;\{\}\[\]\-]/i'.BX_UTF_PCRE_MODIFIER, ' ', $result);
-		$result = preg_replace('/\s{2,}/i'.BX_UTF_PCRE_MODIFIER, ' ', $result);
-		$result = str_replace('Ё', 'Е', $result);
-		$result = ToUpper($result);
+		$result = preg_replace('/\s*(\(.*\))/iu', ' ', $value);
+		$result = preg_replace('/[~\'\"\`\!\@\#\$\%\^\&\*\+\=\\\.\,\?\:\;\{\}\[\]\-]/iu', ' ', $result);
+		$result = preg_replace('/\s{2,}/iu', ' ', $result);
+		$result = mb_strtoupper($result);
+		$result = self::getReplacement()->changeYoE($result);
 		$result = trim($result);
 
 		return $result;
@@ -173,7 +190,7 @@ class Comparator
 	{
 		$name = self::flatten($name);
 
-		if(strlen($name) <= 0)
+		if($name == '')
 			return array('NAME' => '', 'TYPE' => '');
 
 		$matches = array();
@@ -202,12 +219,12 @@ class Comparator
 				$regexp = '';
 				$s = self::flatten($s);
 
-				if(strpos($name, $s.' ') !== false)
-					$regexp = '/^'.$s.'\s+(.*)$/i'.BX_UTF_PCRE_MODIFIER;
-				elseif(strpos($name, ' '.$s) !== false)
-					$regexp = '/^(.*)\s+'.$s.'$/i'.BX_UTF_PCRE_MODIFIER;
+				if(mb_strpos($name, $s.' ') !== false)
+					$regexp = '/^'.$s.'\s+(.*)$/iu';
+				elseif(mb_strpos($name, ' '.$s) !== false)
+					$regexp = '/^(.*)\s+'.$s.'$/iu';
 
-				if(strlen($regexp) > 0 && preg_match($regexp, $name, $matches))
+				if($regexp <> '' && preg_match($regexp, $name, $matches))
 				{
 					$name = $matches[1];
 					$resultType = $type;
@@ -224,23 +241,23 @@ class Comparator
 
 	public static function getLocalityNamesArray($name, $type)
 	{
-		if(strlen($name) <= 0)
+		if($name == '')
 			return array();
 
 		$result = array();
-		$types = Replacement::getLocalityTypes();
+		$types = self::getReplacement()->getLocalityTypes();
 
-		if(strlen($type) > 0)
+		if($type <> '')
 		{
-			$result[] = ToUpper($type.' '.$name);
-			$result[] = ToUpper($name.' '.$type);
+			$result[] = mb_strtoupper($type.' '.$name);
+			$result[] = mb_strtoupper($name.' '.$type);
 
 			if(is_array($types[$type]) && !empty($types[$type]))
 			{
 				foreach($types[$type] as $t)
 				{
-					$result[] = ToUpper($t.' '.$name);
-					$result[] = ToUpper($name.' '.$t);
+					$result[] = mb_strtoupper($t.' '.$name);
+					$result[] = mb_strtoupper($name.' '.$t);
 				}
 			}
 		}
@@ -248,15 +265,15 @@ class Comparator
 		{
 			foreach($types as $k => $v)
 			{
-				$result[] = ToUpper($k.' '.$name);
-				$result[] = ToUpper($name.' '.$k);
+				$result[] = mb_strtoupper($k.' '.$name);
+				$result[] = mb_strtoupper($name.' '.$k);
 
 				if(is_array($v) && !empty($v))
 				{
 					foreach($v as $vv)
 					{
-						$result[] = ToUpper($vv.' '.$name);
-						$result[] = ToUpper($name.' '.$vv);
+						$result[] = mb_strtoupper($vv.' '.$name);
+						$result[] = mb_strtoupper($name.' '.$vv);
 					}
 				}
 			}
@@ -272,7 +289,7 @@ class ComparatorLocality extends Comparator
 
 	protected static function getTypes()
 	{
-		return Replacement::getLocalityTypes();
+		return self::getReplacement()->getLocalityTypes();
 	}
 }
 
@@ -282,7 +299,7 @@ class ComparatorDistrict extends Comparator
 
 	protected static function getTypes()
 	{
-		return Replacement::getDistrictTypes();
+		return self::getReplacement()->getDistrictTypes();
 	}
 }
 
@@ -292,14 +309,14 @@ class ComparatorRegion extends Comparator
 
 	protected static function getTypes()
 	{
-		return Replacement::getRegionTypes();
+		return self::getReplacement()->getRegionTypes();
 	}
 
 	public static function setVariantsValues(array $variants = array())
 	{
 		static::$variants = static::normalizeVariants(
 			array_merge(
-				Replacement::getRegionVariants(),
+				self::getReplacement()->getRegionVariants(),
 				$variants
 			)
 		);
@@ -314,7 +331,7 @@ class ComparatorCountry extends Comparator
 	{
 		static::$variants = static::normalizeVariants(
 			array_merge(
-				Replacement::getCountryVariants(),
+				self::getReplacement()->getCountryVariants(),
 				$variants
 			)
 		);

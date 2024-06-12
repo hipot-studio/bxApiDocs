@@ -7,6 +7,22 @@ use Bitrix\Main\Localization;
 
 Localization\Loc::loadMessages(__FILE__);
 
+/**
+ * Class ABTestTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_ABTest_Query query()
+ * @method static EO_ABTest_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_ABTest_Result getById($id)
+ * @method static EO_ABTest_Result getList(array $parameters = array())
+ * @method static EO_ABTest_Entity getEntity()
+ * @method static \Bitrix\ABTest\EO_ABTest createObject($setDefaultValues = true)
+ * @method static \Bitrix\ABTest\EO_ABTest_Collection createCollection()
+ * @method static \Bitrix\ABTest\EO_ABTest wakeUpObject($row)
+ * @method static \Bitrix\ABTest\EO_ABTest_Collection wakeUpCollection($rows)
+ */
 class ABTestTable extends Entity\DataManager
 {
 
@@ -15,17 +31,6 @@ class ABTestTable extends Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает имя таблицы базы данных, соответствующей данной сущности.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/abtest/abtesttable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_abtest';
@@ -36,17 +41,6 @@ class ABTestTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает список полей с типами.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/abtest/abtesttable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(

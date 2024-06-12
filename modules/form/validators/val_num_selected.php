@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CFormValidatorNumSelected
 {
-	public static function GetDescription()
+	function GetDescription()
 	{
 		return array(
 			"NAME" => "num_selected", // unique validator string ID
@@ -16,7 +16,7 @@ class CFormValidatorNumSelected
 		);
 	}
 
-	public static function GetSettings()
+	function GetSettings()
 	{
 		return array(
 			"NUMBER_FROM" => array(
@@ -33,7 +33,7 @@ class CFormValidatorNumSelected
 		);
 	}
 
-	public static function ToDB($arParams)
+	function ToDB($arParams)
 	{
 		$arParams["NUMBER_FROM"] = intval($arParams["NUMBER_FROM"]);
 		$arParams["NUMBER_TO"] = intval($arParams["NUMBER_TO"]);
@@ -51,12 +51,12 @@ class CFormValidatorNumSelected
 		return serialize($arParams);
 	}
 
-	public static function FromDB($strParams)
+	function FromDB($strParams)
 	{
 		return unserialize($strParams);
 	}
 
-	public static function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
+	function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
 	{
 		global $APPLICATION;
 

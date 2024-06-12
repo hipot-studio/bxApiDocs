@@ -1,6 +1,8 @@
 <?php
 namespace Bitrix\Sale;
 
+use Bitrix\Sale\Internals\CollectableEntity;
+
 class EventActions
 {
 	const ADD = "ADD";
@@ -9,7 +11,6 @@ class EventActions
 
 	// Events new kernel
 	const EVENT_ON_ORDER_PAID = "OnSaleOrderPaid";
-	const EVENT_ON_PAYMENT_PAID = "OnSalePaymentPaid";
 	const EVENT_ON_BEFORE_ORDER_DELETE = "OnSaleBeforeOrderDelete";
 	const EVENT_ON_ORDER_DELETED = "OnSaleOrderDeleted";
 	const EVENT_ON_ORDER_BEFORE_SAVED = "OnSaleOrderBeforeSaved";
@@ -31,6 +32,11 @@ class EventActions
 	const EVENT_ON_SHIPMENT_ALLOW_DELIVERY = "OnShipmentAllowDelivery";
 	const EVENT_ON_SHIPMENT_DEDUCTED = "OnShipmentDeducted";
 
+	const EVENT_ON_BEFORE_SHIPMENT_RESERVE = "OnSaleBeforeShipmentReserve";
+	const EVENT_ON_SHIPMENT_RESERVED = "OnSaleShipmentReserved";
+
+	const EVENT_ON_PAYMENT_PAID = "OnPaymentPaid";
+
 	const EVENT_ON_BEFORE_ORDER_STATUS_CHANGE = "OnSaleBeforeStatusOrderChange";
 	const EVENT_ON_ORDER_STATUS_CHANGE = "OnSaleStatusOrderChange";
 	const EVENT_ON_ORDER_STATUS_CHANGE_SEND_MAIL = "OnSaleOrderStatusChangeSendEmail";
@@ -38,48 +44,94 @@ class EventActions
 	const EVENT_ON_BEFORE_SHIPMENT_STATUS_CHANGE = "OnSaleBeforeStatusShipmentChange";
 	const EVENT_ON_SHIPMENT_STATUS_CHANGE = "OnSaleStatusShipmentChange";
 	const EVENT_ON_SHIPMENT_STATUS_CHANGE_SEND_MAIL = "OnSaleShipmentStatusChangeSendEmail";
-	
+
+	const EVENT_ON_ORDER_STATUS_ALLOW_PAY_CHANGE = "OnSaleStatusAllowPayChange";
+	const EVENT_ON_ORDER_STATUS_ALLOW_PAY_CHANGE_SEND_MAIL = "onSaleOrderStatusAllowPaySendEmail";
+
 	const EVENT_ON_ADMIN_ORDER_LIST = "OnSaleAdminOrderList";
 
 	const EVENT_ON_BASKET_ITEM_REFRESH_DATA = "OnSaleBasketItemRefreshData";
 
-	const ENTITY_ORDER = '\Bitrix\Sale\Order';
-	const ENTITY_SHIPMENT = '\Bitrix\Sale\Shipment';
+	const EVENT_ON_CHECK_PRINT = "OnSalePaymentCheckPrint";
+
+	const EVENT_ON_CHECK_PRINT_ERROR = "OnSalePaymentCheckPrintError";
+
+	const EVENT_ON_CHECK_VALIDATION_ERROR = "OnSalePaymentCheckValidationError";
+
+	const EVENT_ON_TAX_GET_LIST = "OnSaleTaxGetList";
+
+	const ENTITY_COLLECTABLE_ENTITY = CollectableEntity::class;
+
+	const EVENT_ON_ORDER_BEFORE_ARCHIVED = "OnSaleOrderBeforeArchived";
+
+	const EVENT_ON_NEED_DELIVERY_RECIPIENT_CONTACT = "OnNeedDeliveryRecipientContact";
 
 	/**
 	 * @return array
+	 * @throws \Bitrix\Main\ArgumentException
 	 */
 	public static function getEventNotifyMap()
 	{
+		$registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
+
+		/** @var Order $orderEntity */
+		$orderEntity = $registry->getOrderClassName();
+
+		/** @var Shipment $shipmentEntity */
+		$shipmentEntity = $registry->getShipmentClassName();
+
+		/** @var Notify $notifyEntity */
+		$notifyEntity = $registry->getNotifyClassName();
+
 		return array(
 			static::EVENT_ON_ORDER_SAVED => array(
-				"ENTITY" => static::ENTITY_ORDER,
-				"METHOD" => array('\Bitrix\Sale\Notify', "sendOrderNew"),
+				"ENTITY" => $orderEntity,
+				"METHOD" => array($notifyEntity, "sendOrderNew"),
 			),
 			static::EVENT_ON_ORDER_CANCELED => array(
-				"ENTITY" => static::ENTITY_ORDER,
-				"METHOD" => array('\Bitrix\Sale\Notify', "sendOrderCancel"),
+				"ENTITY" => $orderEntity,
+				"METHOD" => array($notifyEntity, "sendOrderCancel"),
 			),
 			static::EVENT_ON_ORDER_PAID => array(
-				"ENTITY" => static::ENTITY_ORDER,
-				"METHOD" => array('\Bitrix\Sale\Notify', "sendOrderPaid"),
+				"ENTITY" => $orderEntity,
+				"METHOD" => array($notifyEntity, "sendOrderPaid"),
 			),
 
 			static::EVENT_ON_ORDER_STATUS_CHANGE => array(
-				"ENTITY" => static::ENTITY_ORDER,
-				"METHOD" => array('\Bitrix\Sale\Notify', "sendOrderStatusChange"),
+				"ENTITY" => $orderEntity,
+				"METHOD" => array($notifyEntity, "sendOrderStatusChange"),
 			),
 			static::EVENT_ON_SHIPMENT_TRACKING_NUMBER_CHANGE => array(
-				"ENTITY" => static::ENTITY_SHIPMENT,
-				"METHOD" => array('\Bitrix\Sale\Notify', "sendShipmentTrackingNumberChange"),
+				"ENTITY" => $shipmentEntity,
+				"METHOD" => array($notifyEntity, "sendShipmentTrackingNumberChange"),
 			),
 			static::EVENT_ON_SHIPMENT_ALLOW_DELIVERY => array(
-				"ENTITY" => static::ENTITY_SHIPMENT,
-				"METHOD" => array('\Bitrix\Sale\Notify', "sendShipmentAllowDelivery"),
+				"ENTITY" => $shipmentEntity,
+				"METHOD" => array($notifyEntity, "sendShipmentAllowDelivery"),
 			),
 			static::EVENT_ON_SHIPMENT_STATUS_CHANGE => array(
-				"ENTITY" => static::ENTITY_SHIPMENT,
-				"METHOD" => array('\Bitrix\Sale\Notify', "sendShipmentStatusChange"),
+				"ENTITY" => $shipmentEntity,
+				"METHOD" => array($notifyEntity, "sendShipmentStatusChange"),
+			),
+
+			static::EVENT_ON_ORDER_STATUS_ALLOW_PAY_CHANGE => array(
+				"ENTITY" => $orderEntity,
+				"METHOD" => array($notifyEntity, "sendOrderAllowPayStatusChange"),
+			),
+
+			static::EVENT_ON_CHECK_PRINT => array(
+				"ENTITY" => static::ENTITY_COLLECTABLE_ENTITY,
+				"METHOD" => array($notifyEntity, "sendPrintableCheck"),
+			),
+
+			static::EVENT_ON_CHECK_PRINT_ERROR => array(
+				"ENTITY" => static::ENTITY_COLLECTABLE_ENTITY,
+				"METHOD" => array($notifyEntity, "sendCheckError"),
+			),
+
+			static::EVENT_ON_CHECK_VALIDATION_ERROR => array(
+				"ENTITY" => $orderEntity,
+				"METHOD" => array($notifyEntity, "sendCheckValidationError"),
 			),
 
 		);

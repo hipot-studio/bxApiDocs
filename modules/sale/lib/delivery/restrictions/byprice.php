@@ -4,7 +4,9 @@ namespace Bitrix\Sale\Delivery\Restrictions;
 use \Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Delivery\Restrictions\Base;
 use Bitrix\Sale\Internals\CollectableEntity;
+use Bitrix\Sale\Internals\Entity;
 use Bitrix\Sale\Services\Base\RestrictionManager;
+use Bitrix\Sale\Shipment;
 
 Loc::loadMessages(__FILE__);
 
@@ -46,7 +48,7 @@ class ByPrice extends Base
 	}
 
 
-	public static function checkByEntity(CollectableEntity $shipment, array $restrictionParams, $mode, $deliveryId = 0)
+	public static function checkByEntity(Entity $shipment, array $restrictionParams, $mode, $deliveryId = 0)
 	{
 		$severity = self::getSeverity($mode);
 
@@ -69,10 +71,17 @@ class ByPrice extends Base
 		return $res ? RestrictionManager::SEVERITY_NONE : $severity;
 	}
 
-	protected static function extractParams(CollectableEntity $shipment)
+	protected static function extractParams(Entity $entity)
 	{
-		if(!$itemCollection = $shipment->getShipmentItemCollection())
+		if ($entity instanceof Shipment)
+		{
+			if(!$itemCollection = $entity->getShipmentItemCollection())
+				return -1;
+		}
+		else
+		{
 			return -1;
+		}
 
 		return $itemCollection->getPrice();
 	}

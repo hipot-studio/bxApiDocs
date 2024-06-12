@@ -1,11 +1,50 @@
 <?php
 namespace Bitrix\Crm;
-use Bitrix\Main;
+use Bitrix\Main,
+	Bitrix\Main\Localization\Loc;
+
+Loc::loadMessages(__FILE__);
+
 class Measure
 {
-	private static $DEFAULT_MEASURE = null;
-	private static $IS_DEFAULT_MEASURE_LOADED = false;
+	private static $defaultMeasure = null;
+	private static $isDefaultMeasureLoaded = false;
+	private static $fieldInfos = null;
 
+	public static function getFieldsInfo()
+	{
+		if(!self::$fieldInfos)
+		{
+			self::$fieldInfos = array(
+				'ID' => array(
+					'TYPE' => 'integer',
+					'ATTRIBUTES' => array(\CCrmFieldInfoAttr::ReadOnly)
+				),
+				'CODE' => array(
+					'TYPE' => 'integer',
+					'ATTRIBUTES' => array(\CCrmFieldInfoAttr::Required)
+				),
+				'MEASURE_TITLE' => array(
+					'TYPE' => 'string',
+					'ATTRIBUTES' => array(\CCrmFieldInfoAttr::Required)
+				),
+				'SYMBOL_RUS' => array(
+					'TYPE' => 'string'
+				),
+				'SYMBOL_INTL' => array(
+					'TYPE' => 'string'
+				),
+				'SYMBOL_LETTER_INTL' => array(
+					'TYPE' => 'string'
+				),
+				'IS_DEFAULT' => array(
+					'TYPE' => 'char'
+				)
+			);
+		}
+
+		return self::$fieldInfos;
+	}
 	public static function getProductMeasures($productID)
 	{
 		if (!Main\Loader::includeModule('catalog'))
@@ -30,7 +69,7 @@ class Measure
 						continue;
 					}
 
-					if(isset($measure2product[$measureID]))
+					if(!isset($measure2product[$measureID]))
 					{
 						$measure2product[$measureID] = array();
 					}
@@ -76,9 +115,9 @@ class Measure
 	}
 	public static function getDefaultMeasure()
 	{
-		if(self::$IS_DEFAULT_MEASURE_LOADED)
+		if(self::$isDefaultMeasureLoaded)
 		{
-			return self::$DEFAULT_MEASURE;
+			return self::$defaultMeasure;
 		}
 
 		if (!Main\Loader::includeModule('catalog'))
@@ -86,7 +125,7 @@ class Measure
 			throw new Main\SystemException("Could not load 'catalog' module.");
 		}
 
-		self::$IS_DEFAULT_MEASURE_LOADED = true;
+		self::$isDefaultMeasureLoaded = true;
 
 		$measureFields = \CCatalogMeasure::getDefaultMeasure(true, false);
 		if(!is_array($measureFields))
@@ -95,7 +134,7 @@ class Measure
 		}
 
 		return (
-			self::$DEFAULT_MEASURE = array(
+			self::$defaultMeasure = array(
 				'ID' => intval($measureFields['ID']),
 				'CODE' => intval($measureFields['CODE']),
 				'IS_DEFAULT' => isset($measureFields['IS_DEFAULT']) && $measureFields['IS_DEFAULT'] === 'Y',
@@ -166,5 +205,53 @@ class Measure
 			'SYMBOL' => isset($measureFields['SYMBOL_RUS'])
 				? $measureFields['SYMBOL_RUS'] : $measureFields['SYMBOL_INTL']
 		);
+	}
+
+	/**
+	 * @param int $measureId
+	 * @return array|null
+	 * @throws Main\LoaderException
+	 * @throws Main\SystemException
+	 */
+	public static function getMeasureById(int $measureId): ?array
+	{
+		if (!Main\Loader::includeModule('catalog'))
+		{
+			throw new Main\SystemException("Could not load 'catalog' module.");
+		}
+		if ($measureId <= 0)
+		{
+			return null;
+		}
+
+		$dbMeasureResult = \CCatalogMeasure::getList(
+			[],
+			['=ID' => $measureId],
+			false,
+			false,
+			['ID', 'CODE', 'SYMBOL_RUS', 'SYMBOL_INTL', 'IS_DEFAULT']
+		);
+
+		$measureFields = is_object($dbMeasureResult) ? $dbMeasureResult->Fetch() : null;
+		if(!is_array($measureFields))
+		{
+			return null;
+		}
+
+		return [
+			'ID' => (int)$measureFields['ID'],
+			'CODE' => (int)$measureFields['CODE'],
+			'IS_DEFAULT' => isset($measureFields['IS_DEFAULT']) && $measureFields['IS_DEFAULT'] === 'Y',
+			'SYMBOL' => (isset($measureFields['SYMBOL_RUS'])
+				? $measureFields['SYMBOL_RUS']
+				: $measureFields['SYMBOL_INTL']
+			)
+		];
+	}
+
+	public static function getFieldCaption($fieldName)
+	{
+		$result = Loc::getMessage("CRM_MEASURE_FIELD_{$fieldName}");
+		return is_string($result) ? $result : '';
 	}
 }

@@ -24,26 +24,28 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Catalog
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Price_Query query()
+ * @method static EO_Price_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Price_Result getById($id)
+ * @method static EO_Price_Result getList(array $parameters = [])
+ * @method static EO_Price_Entity getEntity()
+ * @method static \Bitrix\Catalog\EO_Price createObject($setDefaultValues = true)
+ * @method static \Bitrix\Catalog\EO_Price_Collection createCollection()
+ * @method static \Bitrix\Catalog\EO_Price wakeUpObject($row)
+ * @method static \Bitrix\Catalog\EO_Price_Collection wakeUpCollection($rows)
+ */
 
-class PriceTable extends Main\Entity\DataManager
+class PriceTable extends Main\ORM\Data\DataManager
 {
 	/**
 	 * Returns DB table name for entity.
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы ценовых предложений товаров. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/pricetable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_catalog_price';
@@ -54,17 +56,6 @@ class PriceTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы ценовых предложений товаров. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/pricetable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -94,7 +85,7 @@ class PriceTable extends Main\Entity\DataManager
 				'title' => Loc::getMessage('PRICE_ENTITY_CURRENCY_FIELD')
 			)),
 			'TIMESTAMP_X' => new Main\Entity\DatetimeField('TIMESTAMP_X', array(
-				'default_value' => new Main\Type\DateTime(),
+				'default_value' => function(){ return new Main\Type\DateTime(); },
 				'title' => Loc::getMessage('PRICE_ENTITY_TIMESTAMP_X_FIELD')
 			)),
 			'QUANTITY_FROM' => new Main\Entity\IntegerField('QUANTITY_FROM', array(
@@ -113,18 +104,18 @@ class PriceTable extends Main\Entity\DataManager
 			)),
 			'CATALOG_GROUP' => new Main\Entity\ReferenceField(
 				'CATALOG_GROUP',
-				'Bitrix\Catalog\Group',
+				'\Bitrix\Catalog\Group',
 				array('=this.CATALOG_GROUP_ID' => 'ref.ID')
 			),
 			'ELEMENT' => new Main\Entity\ReferenceField(
 				'ELEMENT',
-				'Bitrix\Iblock\ElementTable',
+				'\Bitrix\Iblock\Element',
 				array('=this.PRODUCT_ID' => 'ref.ID'),
 				array('join_type' => 'LEFT')
 			),
 			'PRODUCT' => new Main\Entity\ReferenceField(
 				'PRODUCT',
-				'Bitrix\Catalog\ProductTable',
+				'\Bitrix\Catalog\Product',
 				array('=this.PRODUCT_ID' => 'ref.ID'),
 				array('join_type' => 'LEFT')
 			),
@@ -135,17 +126,6 @@ class PriceTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>CURRENCY</code> (код валюты). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/pricetable/validatecurrency.php
-	* @author Bitrix
-	*/
 	public static function validateCurrency()
 	{
 		return array(
@@ -157,21 +137,31 @@ class PriceTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>TMP_ID</code> (временный символьный идентификатор, используемый для служебных целей). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/pricetable/validatetmpid.php
-	* @author Bitrix
-	*/
 	public static function validateTmpId()
 	{
 		return array(
 			new Main\Entity\Validator\Length(null, 40),
 		);
+	}
+
+	/**
+	 * Delete all rows for product.
+	 * @internal
+	 *
+	 * @param int $id       Product id.
+	 * @return void
+	 */
+	public static function deleteByProduct($id)
+	{
+		$id = (int)$id;
+		if ($id <= 0)
+			return;
+
+		$conn = Main\Application::getConnection();
+		$helper = $conn->getSqlHelper();
+		$conn->queryExecute(
+			'delete from '.$helper->quote(self::getTableName()).' where '.$helper->quote('PRODUCT_ID').' = '.$id
+		);
+		unset($helper, $conn);
 	}
 }

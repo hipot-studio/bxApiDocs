@@ -14,6 +14,7 @@ class CComponentParamsManager
 	{
 		global $APPLICATION;
 
+		\Bitrix\Main\UI\Extension::load(['ui.design-tokens']);
 		$APPLICATION->AddHeadScript('/bitrix/js/fileman/comp_params_manager/component_params_manager.js');
 		$APPLICATION->SetAdditionalCss('/bitrix/js/fileman/comp_params_manager/component_params_manager.css');
 
@@ -24,14 +25,22 @@ class CComponentParamsManager
 
 		if (!isset($config['id']))
 		{
-			$config['id'] = 'bx_comp_params_manager_'.substr(uniqid(mt_rand(), true), 0, 4);
+			$config['id'] = 'bx_comp_params_manager_'.mb_substr(uniqid(mt_rand(), true), 0, 4);
 		}
 
 		$mess_lang = self::GetLangMessages();
 		?>
 		<script type="text/javascript">
 			BX.message(<?=CUtil::PhpToJSObject($mess_lang, false);?>);
-			top.oBXComponentParamsManager = window.oBXComponentParamsManager = new BXComponentParamsManager(<?=CUtil::PhpToJSObject($config)?>);
+			if (window.BXComponentParamsManager)
+			{
+				window.oBXComponentParamsManager = new BXComponentParamsManager(<?=CUtil::PhpToJSObject($config)?>);
+			}
+			else
+			{
+				window.oBXComponentParamsManager = new top.BXComponentParamsManager(<?=CUtil::PhpToJSObject($config)?>);
+			}
+			top.oBXComponentParamsManager = window.oBXComponentParamsManager;
 		</script>
 		<?
 
@@ -48,14 +57,43 @@ class CComponentParamsManager
 	{
 		if (isset($_REQUEST['component_params_manager']))
 		{
-			$reqId = intVal($_REQUEST['component_params_manager']);
+			$reqId = intval($_REQUEST['component_params_manager']);
+			$requestData = [
+				'component_name' => $_REQUEST['component_name'] ?? null,
+				'component_template' => $_REQUEST['component_template'] ?? null,
+				'site_template' => $_REQUEST['site_template'] ?? null,
+				'current_values' => $_REQUEST['current_values'] ?? null,
+			];
 			$result = self::GetComponentProperties(
-				$_REQUEST['component_name'],
-				$_REQUEST['component_template'],
-				$_REQUEST['site_template'],
-				$_REQUEST['current_values']
+				$requestData['component_name'],
+				$requestData['component_template'],
+				$requestData['site_template'],
+				$requestData['current_values']
 			);
-			$result['description'] = CComponentUtil::GetComponentDescr($_REQUEST['component_name']);
+
+			$templateMatch = false;
+			for ($i = 0, $l = count($result['templates']); $i < $l; $i++)
+			{
+				if (
+					$result['templates'][$i]['NAME'] == $requestData['component_template']
+					|| ($requestData['component_template'] == '' && $result['templates'][$i]['NAME'] == '.default')
+				)
+				{
+					$templateMatch = true;
+					break;
+				}
+			}
+			if (!$templateMatch && $l > 0)
+			{
+				$result = self::GetComponentProperties(
+					$requestData['component_name'],
+					$result['templates'][0]['NAME'],
+					$requestData['site_template'],
+					$requestData['current_values']
+				);
+			}
+
+			$result['description'] = CComponentUtil::GetComponentDescr($requestData['component_name']);
 			?>
 			<script>
 				window.__bxResult['<?= $reqId?>'] = <?=CUtil::PhpToJSObject($result)?>;
@@ -132,7 +170,7 @@ class CComponentParamsManager
 			}
 			$result['parameters'][] = $arParam;
 
-			if ($arParam['TYPE'] == 'FILE')
+			if (($arParam['TYPE'] ?? null) == 'FILE')
 			{
 				self::$fileDialogs[] = array(
 					'NAME' => $arParam['ID'],
@@ -208,7 +246,7 @@ class CComponentParamsManager
 						'mode' => $fd['ONLY_ML'] ? 'medialib' : 'select',
 						'value' => '...',
 						'event' => "BX_FD_".$fd['NAME'],
-						'id' => "bx_fd_input_".strtolower($fd['NAME']),
+						'id' => "bx_fd_input_".mb_strtolower($fd['NAME']),
 						'MedialibConfig' => array(
 							"event" => "bx_ml_event_".$fd['NAME'],
 							"arResultDest" => Array("FUNCTION_NAME" => "BX_FD_ONRESULT_".$fd['NAME']),
@@ -217,7 +255,7 @@ class CComponentParamsManager
 						'bReturnResult' => true
 					)
 				);
-				?><script>window._bxMlBrowseButton_<?= strtolower($fd['NAME'])?> = '<?= CUtil::JSEscape($MLRes)?>';</script><?
+				?><script>window._bxMlBrowseButton_<?= mb_strtolower($fd['NAME'])?> = '<?= CUtil::JSEscape($MLRes)?>';</script><?
 			}
 
 			CAdminFileDialog::ShowScript(Array

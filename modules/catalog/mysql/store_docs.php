@@ -1,67 +1,124 @@
 <?php
+
+use Bitrix\Catalog\Integration\PullManager;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Localization\Loc;
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/catalog/general/store_docs.php");
 
-class CCatalogDocs
-	extends CAllCatalogDocs
+class CCatalogDocs extends CAllCatalogDocs
 {
 	/**
 	* @static
 	* @param $arFields
 	* @return bool|int
 	*/
-	static function add($arFields)
+	public static function add($arFields)
 	{
 		global $DB;
 
-		foreach(GetModuleEvents("catalog", "OnBeforeDocumentAdd", true) as $arEvent)
-			if(ExecuteModuleEventEx($arEvent, array(&$arFields)) === false)
+		foreach (GetModuleEvents("catalog", "OnBeforeDocumentAdd", true) as $arEvent)
+		{
+			if (ExecuteModuleEventEx($arEvent, [&$arFields]) === false)
+			{
 				return false;
+			}
+		}
 
-		if(array_key_exists('DATE_CREATE', $arFields))
+		if (array_key_exists('DATE_CREATE', $arFields))
+		{
 			unset($arFields['DATE_CREATE']);
-		if(array_key_exists('DATE_MODIFY', $arFields))
+		}
+		if (array_key_exists('DATE_MODIFY', $arFields))
+		{
 			unset($arFields['DATE_MODIFY']);
+		}
 
 		$arFields['~DATE_MODIFY'] = $DB->GetNowFunction();
 		$arFields['~DATE_CREATE'] = $DB->GetNowFunction();
 
-		if(!self::checkFields('ADD', $arFields))
+		$arFields['WAS_CANCELLED'] = 'N';
+
+		if (!self::checkFields('ADD', $arFields))
+		{
 			return false;
+		}
+
+		self::increaseDocumentTypeNumber($arFields['DOC_TYPE']);
+		if (empty($arFields['TITLE']))
+		{
+			$arFields['TITLE'] = self::getCurrentDocumentNameByNumber($arFields['DOC_TYPE']);
+		}
 
 		$arInsert = $DB->PrepareInsert("b_catalog_store_docs", $arFields);
 
 		$strSql = "INSERT INTO b_catalog_store_docs (".$arInsert[0].") VALUES(".$arInsert[1].")";
 
-		$res = $DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
-		if(!$res)
-			return false;
-		$lastId = intval($DB->LastID());
-		if(isset($arFields["ELEMENT"]) && is_array($arFields["ELEMENT"]))
+		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		if (!$res)
 		{
-			foreach($arFields["ELEMENT"] as $arElement)
-			{
-				$lastDocElementId = 0;
-				if(isset($arElement["ID"]))
-					unset($arElement["ID"]);
-				$arElement["DOC_ID"] = $lastId;
-				if(is_array($arElement))
-					$lastDocElementId = CCatalogStoreDocsElement::add($arElement);
-				if(isset($arElement["BARCODE"]) && $lastDocElementId)
-				{
-					if(is_array($arElement["BARCODE"]))
-						foreach($arElement["BARCODE"] as $barcode)
-							CCatalogStoreDocsBarcode::add(array("DOC_ELEMENT_ID" => $lastDocElementId, "BARCODE" => $barcode));
-				}
-			}
+			return false;
+		}
+		$lastId = (int)$DB->LastID();
+
+		$item = [
+			'id' => $lastId,
+			'data' => [
+				'fields' => $arFields,
+			],
+		];
+
+		PullManager::getInstance()->sendDocumentAddedEvent([
+			$item
+		]);
+
+		if (isset($arFields["ELEMENT"]) && is_array($arFields["ELEMENT"]))
+		{
+			self::saveElements($lastId, $arFields['ELEMENT']);
 		}
 
-		foreach(GetModuleEvents("catalog", "OnDocumentAdd", true) as $arEvent)
-			ExecuteModuleEventEx($arEvent, array($lastId, $arFields));
+		if (isset($arFields["DOCUMENT_FILES"]) && is_array($arFields["DOCUMENT_FILES"]))
+		{
+			static::saveFiles($lastId, $arFields['DOCUMENT_FILES']);
+		}
+
+		foreach (GetModuleEvents("catalog", "OnDocumentAdd", true) as $arEvent)
+		{
+			ExecuteModuleEventEx($arEvent, [$lastId, $arFields]);
+		}
 
 		return $lastId;
 	}
 
-	static function getList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
+	private static function saveElements($documentID, $elements)
+	{
+		foreach($elements as $arElement)
+		{
+			$lastDocElementId = 0;
+			if(isset($arElement['ID']))
+			{
+				unset($arElement['ID']);
+			}
+			$arElement['DOC_ID'] = $documentID;
+			if (is_array($arElement))
+			{
+				$lastDocElementId = CCatalogStoreDocsElement::add($arElement);
+			}
+			if(isset($arElement['BARCODE']) && $lastDocElementId && is_array($arElement['BARCODE']))
+			{
+				foreach($arElement['BARCODE'] as $barcode)
+				{
+					CCatalogStoreDocsBarcode::add([
+						'DOC_ID' => $documentID,
+						'DOC_ELEMENT_ID' => $lastDocElementId,
+						'BARCODE' => $barcode,
+					]);
+				}
+			}
+		}
+	}
+
+	public static function getList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		global $DB;
 		if (empty($arSelectFields))
@@ -79,10 +136,16 @@ class CCatalogDocs
 			"DATE_STATUS" => array("FIELD" => "CD.DATE_STATUS", "TYPE" => "datetime"),
 			"CREATED_BY" => array("FIELD" => "CD.CREATED_BY", "TYPE" => "int"),
 			"MODIFIED_BY" => array("FIELD" => "CD.MODIFIED_BY", "TYPE" => "int"),
+			"RESPONSIBLE_ID" => array("FIELD" => "CD.RESPONSIBLE_ID", "TYPE" => "int"),
 			"STATUS_BY" => array("FIELD" => "CD.STATUS_BY", "TYPE" => "int"),
-			"STATUS" => array("FIELD" => "CD.STATUS", "TYPE" => "string"),
+			"STATUS" => array("FIELD" => "CD.STATUS", "TYPE" => "char"),
 			"TOTAL" => array("FIELD" => "CD.TOTAL", "TYPE" => "double"),
 			"COMMENTARY" => array("FIELD" => "CD.COMMENTARY", "TYPE" => "string"),
+			'TITLE' => ['FIELD' => 'CD.TITLE', 'TYPE' => 'string'],
+			'ITEMS_ORDER_DATE' => ['FIELD' => 'CD.ITEMS_ORDER_DATE', 'TYPE' => 'datetime'],
+			'ITEMS_RECEIVED_DATE' => ['FIELD' => 'CD.ITEMS_RECEIVED_DATE', 'TYPE' => 'datetime'],
+			'DOC_NUMBER' => ['FIELD' => 'CD.DOC_NUMBER', 'TYPE' => 'string'],
+			'WAS_CANCELLED' => ['FIELD' => 'CD.WAS_CANCELLED', 'TYPE' => 'char'],
 
 			"PRODUCTS_ID" => array("FIELD" => "DE.ID", "TYPE" => "int", "FROM" => "INNER JOIN b_catalog_docs_element DE ON (CD.ID = DE.DOC_ID)"),
 			"PRODUCTS_DOC_ID" => array("FIELD" => "DE.DOC_ID", "TYPE" => "int", "FROM" => "INNER JOIN b_catalog_docs_element DE ON (CD.ID = DE.DOC_ID)"),
@@ -160,15 +223,64 @@ class CCatalogDocs
 		return $dbRes;
 	}
 
-	public static function synchronizeStockQuantity($storeId)
+	public static function synchronizeStockQuantity($storeId, $iblockId = 0)
 	{
 		global $DB;
-		$storeId = intval($storeId);
-		if($storeId > 0)
-		{
-			$strSql = "INSERT INTO b_catalog_store_product (AMOUNT, PRODUCT_ID, STORE_ID) (SELECT cp.QUANTITY + CASE WHEN cp.QUANTITY_RESERVED IS NULL THEN 0 ELSE cp.QUANTITY_RESERVED END, cp.ID, ".$storeId." FROM b_catalog_product cp WHERE 1 = 1)";
-			return $DB->Query($strSql, true, "File: ".__FILE__."<br>Line: ".__LINE__);
-		}
-		return false;
+		$storeId = (int)$storeId;
+		if ($storeId <= 0)
+			return false;
+
+		$internalSql = 'select CP.QUANTITY + IFNULL(CP.QUANTITY_RESERVED, 0), CP.ID, '.$storeId.' ';
+		$iblockId = (int)$iblockId;
+		if ($iblockId <= 0)
+			$internalSql .= 'from b_catalog_product CP where 1 = 1';
+		else
+			$internalSql .= 'from b_catalog_product CP inner join b_iblock_element IE on (CP.ID = IE.ID) where IE.IBLOCK_ID = '.$iblockId;
+
+		return $DB->Query(
+			"insert into b_catalog_store_product (AMOUNT, PRODUCT_ID, STORE_ID) (".$internalSql.")",
+			true,
+			"File: ".__FILE__."<br>Line: ".__LINE__
+		);
+	}
+
+	private static function increaseDocumentTypeNumber(string $type): void
+	{
+		$name = self::getDocumentTypeNumberName($type);
+		$value = (int)Option::get('catalog', $name) + 1;
+		Option::set('catalog', $name, $value);
+	}
+
+	public static function getCurrentDocumentNameByNumber(string $type): string
+	{
+		$value = Option::get(
+			'catalog',
+			self::getDocumentTypeNumberName($type)
+		);
+		return Loc::getMessage(
+			'CATALOG_STORE_DOCUMENT_TITLE_DEFAULT_NAME_' . $type,
+			[
+				'%DOCUMENT_NUMBER%' => $value,
+			]
+		);
+	}
+
+	public static function getNextDocumentNameByNumber(string $type): string
+	{
+		$value = (int)Option::get(
+			'catalog',
+			self::getDocumentTypeNumberName($type)
+		) + 1;
+		return Loc::getMessage(
+			'CATALOG_STORE_DOCUMENT_TITLE_DEFAULT_NAME_' . $type,
+			[
+				'%DOCUMENT_NUMBER%' => $value,
+			]
+		);
+	}
+
+	private static function getDocumentTypeNumberName(string $type): string
+	{
+		return 'store_document_numbers_' . $type;
 	}
 }

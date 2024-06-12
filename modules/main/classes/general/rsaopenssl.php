@@ -10,16 +10,16 @@ class CRsaOpensslProvider extends CRsaProvider
 		$this->_PRIV = $arKeys["PRIV"];
 	}
 
-	static public function LoadKeys()
+	public function LoadKeys()
 	{
-		$arKeys = unserialize(COption::GetOptionString("main", "~rsa_keys_openssl", ""));
+		$arKeys = unserialize(COption::GetOptionString("main", "~rsa_keys_openssl", ""), ['allowed_classes' => false]);
 		if(!is_array($arKeys))
 			return false;
 		$arKeys["PRIV"] = COption::GetOptionString("main", "~rsa_key_pem", "");
 		return $arKeys;
 	}
 
-	static public function SaveKeys($arKeys)
+	public function SaveKeys($arKeys)
 	{
 		$privKey = $arKeys["PRIV"];
 		unset($arKeys["PRIV"]);
@@ -45,7 +45,7 @@ class CRsaOpensslProvider extends CRsaProvider
 		return $out;
 	}
 
-	static public function Keygen($keylen=false)
+	public function Keygen($keylen=false)
 	{
 		if($keylen === false)
 			$keylen = 1024;

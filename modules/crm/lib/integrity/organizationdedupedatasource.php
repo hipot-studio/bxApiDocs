@@ -9,17 +9,17 @@ class OrganizationDedupeDataSource extends MatchHashDedupeDataSource
 		parent::__construct(DuplicateIndexType::ORGANIZATION, $params);
 	}
 	/**
-	* @return Array
-	*/
+	 * @return Array
+	 */
 	protected function getEntityMatchesByHash($entityTypeID, $entityID, $matchHash)
 	{
 		$matches = DuplicateOrganizationCriterion::loadEntityMatches($entityTypeID, $entityID);
-		return DuplicateOrganizationCriterion::prepareMatchHash($matches) === $matchHash
+		return (is_array($matches) && DuplicateOrganizationCriterion::prepareMatchHash($matches) === $matchHash)
 			? $matches : null;
 	}
 	/**
-	* @return DuplicateCriterion
-	*/
+	 * @return DuplicateCriterion
+	 */
 	protected function createCriterionFromMatches(array $matches)
 	{
 		return DuplicateOrganizationCriterion::createFromMatches($matches);
@@ -29,6 +29,7 @@ class OrganizationDedupeDataSource extends MatchHashDedupeDataSource
 		$entityTypeID = $this->getEntityTypeID();
 		foreach($map as $matchHash => &$entry)
 		{
+			$isValidEntry = false;
 			$primaryQty = isset($entry['PRIMARY']) ? count($entry['PRIMARY']) : 0;
 			if($primaryQty > 1)
 			{
@@ -42,7 +43,12 @@ class OrganizationDedupeDataSource extends MatchHashDedupeDataSource
 						$dup->addEntity(new DuplicateEntity($entityTypeID, $entityID));
 					}
 					$result->addItem($matchHash, $dup);
+					$isValidEntry = true;
 				}
+			}
+			if (!$isValidEntry)
+			{
+				$result->addInvalidItem((string)$matchHash);
 			}
 		}
 		unset($entry);
@@ -93,6 +99,8 @@ class OrganizationDedupeDataSource extends MatchHashDedupeDataSource
 				DuplicateIndexMismatch::prepareQueryField($criterion, $entityTypeID, $rootEntityID, $userID)
 			);
 		}
+
+		$query = DedupeDataSource::registerRuntimeFieldsByParams($query, $this->getParams());
 
 		$limit = 0;
 		if(is_array($options) && isset($options['LIMIT']))

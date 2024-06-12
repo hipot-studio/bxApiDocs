@@ -17,7 +17,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Sale\Internals
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_ShipmentExtraService_Query query()
+ * @method static EO_ShipmentExtraService_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_ShipmentExtraService_Result getById($id)
+ * @method static EO_ShipmentExtraService_Result getList(array $parameters = [])
+ * @method static EO_ShipmentExtraService_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentExtraService createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentExtraService_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentExtraService wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_ShipmentExtraService_Collection wakeUpCollection($rows)
+ */
 
 class ShipmentExtraServiceTable extends Main\Entity\DataManager
 {
@@ -54,6 +67,10 @@ class ShipmentExtraServiceTable extends Main\Entity\DataManager
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateValue'),
 				'title' => Loc::getMessage('ORDER_DELIVERY_EXTRA_SERVICES_ENTITY_VALUE_FIELD'),
+			),
+			'EXTRA_SERVICE' => array(
+				'data_type' => '\Bitrix\Sale\Delivery\ExtraServices\Table',
+				'reference' => array('=this.EXTRA_SERVICE_ID' => 'ref.ID'),
 			),
 		);
 	}

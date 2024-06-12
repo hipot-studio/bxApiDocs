@@ -12,25 +12,6 @@ class Sequence extends BaseObject
 	 *
 	 * @return Sequence
 	 */
-	
-	/**
-	* <p>Статический метод создает объект последовательности из токенов. Текущая позиция должна указывать на название последовательности.</p> <br>
-	*
-	*
-	* @param mixed $Bitrix  Набор токенов.
-	*
-	* @param Bitri $Perfmon  
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param Tokenizer $tokenizer  
-	*
-	* @return \Bitrix\Perfmon\Sql\Sequence 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/sequence/create.php
-	* @author Bitrix
-	*/
 	public static function create(Tokenizer $tokenizer)
 	{
 		$name = $tokenizer->getCurrentToken()->text;
@@ -56,27 +37,15 @@ class Sequence extends BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL для создания последовательности.</p>
-	*
-	*
-	* @param string $dbType = '' Тип базы данных (только <i>ORACLE</i>).
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/sequence/getcreateddl.php
-	* @author Bitrix
-	*/
 	public function getCreateDdl($dbType = '')
 	{
-		switch ($dbType)
+		if ($dbType === 'ORACLE')
 		{
-		case "ORACLE":
 			return $this->body;
-		default:
-			return "// ".get_class($this).":getDropDdl for database type [".$dbType."] not implemented";
+		}
+		else
+		{
+			return '// ' . get_class($this) . ':getDropDdl for database type [' . $dbType . '] not implemented';
 		}
 	}
 
@@ -87,27 +56,15 @@ class Sequence extends BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL для удаления последовательности.</p>
-	*
-	*
-	* @param string $dbType = '' Тип базы данных (только <i>ORACLE</i>).
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/sequence/getdropddl.php
-	* @author Bitrix
-	*/
 	public function getDropDdl($dbType = '')
 	{
-		switch ($dbType)
+		if ($dbType === 'ORACLE')
 		{
-		case "ORACLE":
-			return "DROP SEQUENCE ".$this->name;
-		default:
-			return "// ".get_class($this).":getDropDdl for database type [".$dbType."] not implemented";
+			return 'DROP SEQUENCE ' . $this->name;
+		}
+		else
+		{
+			return '// ' . get_class($this) . ':getDropDdl for database type [' . $dbType . '] not implemented';
 		}
 	}
 
@@ -119,38 +76,18 @@ class Sequence extends BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL для модификации последовательности (сначала удаляется старая и затем создается новая версия).</p>
-	*
-	*
-	* @param mixed $Bitrix  Целевой объект.
-	*
-	* @param Bitri $Perfmon  Тип базы данных (только <i>ORACLE</i>).
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param BaseObject $target  
-	*
-	* @param string $dbType = '' 
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/sequence/getmodifyddl.php
-	* @author Bitrix
-	*/
 	public function getModifyDdl(BaseObject $target, $dbType = '')
 	{
-		switch ($dbType)
+		if ($dbType === 'ORACLE')
 		{
-		case "ORACLE":
-			return array(
+			return [
 				$this->getDropDdl($dbType),
 				$target->getCreateDdl($dbType),
-			);
-		default:
-			return "// ".get_class($this).":getDropDdl for database type [".$dbType."] not implemented";
+			];
+		}
+		else
+		{
+			return '// ' . get_class($this) . ':getDropDdl for database type [' . $dbType . '] not implemented';
 		}
 	}
 }

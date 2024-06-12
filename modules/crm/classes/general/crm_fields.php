@@ -1,5 +1,11 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
+
+use	Bitrix\Main;
+use	Bitrix\Main\Loader;
+use Bitrix\Crm\UserField\UserFieldHistory;
+use Bitrix\Main\Localization\Loc;
 
 class CCrmFields
 {
@@ -38,14 +44,45 @@ class CCrmFields
 
 		$this->arFieldType = self::GetFieldTypes();
 
-		$this->arUFList = $this->cUFM->GetUserFields($sUFEntityID, 0, LANGUAGE_ID);
+		$this->arUFList = $this->GetUserFields($sUFEntityID, 0, LANGUAGE_ID);
 
 		$this->cdb = $DB;
+	}
+
+	protected function GetUserFields($entity_id, $value_id = 0, $LANG = false, $user_id = false)
+	{
+		$result = $this->cUFM->GetUserFields($entity_id, $value_id, $LANG, $user_id);
+
+		// remove invoice reserved fields
+		if ($entity_id === CCrmInvoice::GetUserFieldEntityID())
+			foreach (CCrmInvoice::GetUserFieldsReserved() as $ufId)
+				if (isset($result[$ufId]))
+					unset($result[$ufId]);
+
+		return $result;
 	}
 
 	public function GetFields()
 	{
 		return $this->arUFList;
+	}
+
+	public function GetByID($ID)
+	{
+		foreach($this->arUFList as $field)
+		{
+			if(isset($field['ID']) && $field['ID'] == $ID)
+			{
+				return $field;
+			}
+		}
+
+		return false;
+	}
+
+	public function GetByName($ID)
+	{
+		return isset($this->arUFList[$ID]) ? $this->arUFList[$ID] : false;
 	}
 
 	public function GetFieldById($ID)
@@ -58,19 +95,26 @@ class CCrmFields
 
 	public static function GetFieldTypes()
 	{
+		//'Disk File' is disabled due to GUI issues (see CCrmDocument::GetDocumentFieldTypes)
 		$arFieldType = Array(
-			'string' 	=> array( 'ID' =>'string', 'NAME' => GetMessage('CRM_FIELDS_TYPE_S')),
-			'integer'	=> array( 'ID' =>'integer', 'NAME' => GetMessage('CRM_FIELDS_TYPE_I')),
-			'double'	=> array( 'ID' =>'double', 'NAME' => GetMessage('CRM_FIELDS_TYPE_D')),
-			'boolean'	=> array( 'ID' =>'boolean', 'NAME' => GetMessage('CRM_FIELDS_TYPE_B')),
-			'enumeration' => array( 'ID' =>'enumeration', 'NAME' => GetMessage('CRM_FIELDS_TYPE_E')),
-			'datetime'	=> array( 'ID' =>'datetime', 'NAME' => GetMessage('CRM_FIELDS_TYPE_DT')),
-			'file'		=> array( 'ID' =>'file', 'NAME' => GetMessage('CRM_FIELDS_TYPE_F')),
-			'employee'	=> array( 'ID' =>'employee', 'NAME' => GetMessage('CRM_FIELDS_TYPE_EM')),
-			'crm_status'=> array( 'ID' =>'crm_status', 'NAME' => GetMessage('CRM_FIELDS_TYPE_CRM_STATUS')),
+			'string' 		=> array( 'ID' =>'string', 'NAME' => GetMessage('CRM_FIELDS_TYPE_S')),
+			'integer'		=> array( 'ID' =>'integer', 'NAME' => GetMessage('CRM_FIELDS_TYPE_I')),
+			'double'		=> array( 'ID' =>'double', 'NAME' => GetMessage('CRM_FIELDS_TYPE_D')),
+			'boolean'		=> array( 'ID' =>'boolean', 'NAME' => GetMessage('CRM_FIELDS_TYPE_B')),
+			'datetime'		=> array( 'ID' =>'datetime', 'NAME' => GetMessage('CRM_FIELDS_TYPE_DT')),
+			'date'			=> array( 'ID' =>'date', 'NAME' => GetMessage('CRM_FIELDS_TYPE_DATE')),
+			'money' 		=> array( 'ID' =>'money', 'NAME' => GetMessage('CRM_FIELDS_TYPE_MONEY')),
+			'url' 			=> array( 'ID' =>'url', 'NAME' => GetMessage('CRM_FIELDS_TYPE_URL')),
+			'address'		=> array( 'ID' =>'address', 'NAME' => GetMessage('CRM_FIELDS_TYPE_ADDRESS_2')),
+			'resourcebooking' => array( 'ID' =>'resourcebooking', 'NAME' => GetMessage('CRM_FIELDS_TYPE_RESOURCEBOOKING')),
+			'enumeration' 	=> array( 'ID' =>'enumeration', 'NAME' => GetMessage('CRM_FIELDS_TYPE_E')),
+			'file'			=> array( 'ID' =>'file', 'NAME' => GetMessage('CRM_FIELDS_TYPE_F')),
+			'employee'		=> array( 'ID' =>'employee', 'NAME' => GetMessage('CRM_FIELDS_TYPE_EM')),
+			'crm_status'	=> array( 'ID' =>'crm_status', 'NAME' => GetMessage('CRM_FIELDS_TYPE_CRM_STATUS')),
 			'iblock_section'=> array( 'ID' =>'iblock_section', 'NAME' => GetMessage('CRM_FIELDS_TYPE_IBLOCK_SECTION')),
 			'iblock_element'=> array( 'ID' =>'iblock_element', 'NAME' => GetMessage('CRM_FIELDS_TYPE_IBLOCK_ELEMENT')),
-			'crm'		=> array( 'ID' =>'crm', 'NAME' => GetMessage('CRM_FIELDS_TYPE_CRM_ELEMENT')),
+			'crm'			=> array( 'ID' =>'crm', 'NAME' => GetMessage('CRM_FIELDS_TYPE_CRM_ELEMENT'))
+			//'disk_file'	=> array( 'ID' =>'disk_file', 'NAME' => GetMessage('CRM_FIELDS_TYPE_DISK_FILE')),
 		);
 		return $arFieldType;
 	}
@@ -100,18 +144,58 @@ class CCrmFields
 			),
 			'CRM_QUOTE'=> array(
 				'ID' =>'CRM_QUOTE',
-				'NAME' => GetMessage('CRM_FIELDS_QUOTE'),
-				'DESC' => GetMessage('CRM_FIELDS_QUOTE_DESC')
+				'NAME' => GetMessage('CRM_FIELDS_QUOTE_MSGVER_1'),
+				'DESC' => GetMessage('CRM_FIELDS_QUOTE_DESC_MSGVER_1')
+			),
+			'CRM_INVOICE'=> array(
+				'ID' =>'CRM_INVOICE',
+				'NAME' => \CCrmOwnerType::GetDescription(\CCrmOwnerType::Invoice),
+				'DESC' => GetMessage('CRM_FIELDS_INVOICE_DESC')
+			),
+			'ORDER' => array(
+				'ID' => \Bitrix\Crm\Order\Manager::getUfId(),
+				'NAME' => GetMessage('CRM_FIELDS_ORDER'),
+				'DESC' => GetMessage('CRM_FIELDS_ORDER_DESC')
 			)
 		);
+
+		if (\Bitrix\Crm\Settings\InvoiceSettings::getCurrent()->isSmartInvoiceEnabled())
+		{
+			$localization = \Bitrix\Crm\Service\Container::getInstance()->getLocalization();
+			$arEntityType['CRM_INVOICE']['DESC'] = $localization->appendOldVersionSuffix($arEntityType['CRM_INVOICE']['DESC']);
+		}
+
+		//DEFERRED: CustomType
+		//return array_merge($arEntityType, \Bitrix\Crm\Activity\CustomType::getUserFieldTypes());
 		return $arEntityType;
 	}
 
 	public static function GetAdditionalFields($entityType, $fieldValue = Array())
 	{
+		global $APPLICATION;
+
 		$arFields = Array();
-		switch ($entityType) {
+		switch ($entityType)
+		{
 			case 'string':
+				$arFields[] = array(
+					'id' => 'ROWS',
+					'name' => GetMessage('CRM_FIELDS_TEXT_ROW_COUNT'),
+					'type' => 'text',
+				);
+				$arFields[] = array(
+					'id' => 'DEFAULT_VALUE',
+					'name' => GetMessage('CRM_FIELDS_DEFAULT_VALUE'),
+					'type' => 'text',
+				);
+				break;
+			case 'url':
+				$arFields[] = array(
+					'id' => 'DEFAULT_VALUE',
+					'name' => GetMessage('CRM_FIELDS_DEFAULT_VALUE'),
+					'type' => 'text',
+				);
+				break;
 			case 'integer':
 			case 'double':
 				$arFields[] = array(
@@ -119,7 +203,7 @@ class CCrmFields
 					'name' => GetMessage('CRM_FIELDS_DEFAULT_VALUE'),
 					'type' => 'text',
 				);
-			break;
+				break;
 
 			case 'boolean':
 				$arFields[] = array(
@@ -136,54 +220,111 @@ class CCrmFields
 					'name' => GetMessage('CRM_FIELDS_TYPE_B_DISPLAY'),
 					'type' => 'list',
 					'items' => array(
-						'CHECKBOX' 	=> GetMessage('CRM_FIELDS_TYPE_B_DISPLAY_CHECKBOX'),
-						'RADIO'		=> GetMessage('CRM_FIELDS_TYPE_B_DISPLAY_RADIO'),
-						'DROPDOWN' 	=> GetMessage('CRM_FIELDS_TYPE_B_DISPLAY_DROPDOWN'),
+						'CHECKBOX' => GetMessage('CRM_FIELDS_TYPE_B_DISPLAY_CHECKBOX'),
+						'RADIO' => GetMessage('CRM_FIELDS_TYPE_B_DISPLAY_RADIO'),
+						'DROPDOWN' => GetMessage('CRM_FIELDS_TYPE_B_DISPLAY_DROPDOWN'),
 					),
 				);
-			break;
+				break;
 
 			case 'datetime':
-				$arFields[] = array(
-					'id' => 'DT_TYPE',
-					'name' => GetMessage('CRM_FIELDS_TYPE_DT_TYPE'),
-					'type' => 'list',
-					'items' => array(
-						'NONE' 	=> GetMessage('CRM_FIELDS_TYPE_DT_TYPE_NONE'),
-						'NOW'	=> GetMessage('CRM_FIELDS_TYPE_DT_TYPE_NOW'),
-						'FIXED' => GetMessage('CRM_FIELDS_TYPE_DT_TYPE_FIXED'),
-					),
-				);
-				$arFields[] = array(
-					'id' => 'DT_DEFAULT_VALUE',
-					'name' => GetMessage('CRM_FIELDS_TYPE_DT_FIXED'),
-					'type' => 'date',
-					'params' => array(
-						'size' => 25
-					)
-				);
-			break;
+			case 'date':
+				{
+					$arFields[] = array(
+						'id' => 'DT_TYPE',
+						'name' => GetMessage('CRM_FIELDS_TYPE_DT_TYPE'),
+						'type' => 'list',
+						'items' => array(
+							'NONE' => GetMessage('CRM_FIELDS_TYPE_DT_TYPE_NONE'),
+							'NOW' => GetMessage($entityType === 'datetime'
+								? 'CRM_FIELDS_TYPE_DT_TYPE_NOW' : 'CRM_FIELDS_TYPE_DATE_TYPE_NOW'),
+							'FIXED' => GetMessage('CRM_FIELDS_TYPE_DT_TYPE_FIXED'),
+						),
+					);
+
+					if ($entityType === 'datetime')
+					{
+						$arFields[] = array(
+							'id' => 'DT_DEFAULT_VALUE',
+							'name' => GetMessage('CRM_FIELDS_TYPE_DT_FIXED'),
+							'type' => 'date',
+							'params' => array('size' => 25)
+						);
+					}
+					else
+					{
+						$arFields[] = [
+							'id' => 'DT_DEFAULT_VALUE',
+							'name' => Loc::getMessage('CRM_FIELDS_TYPE_DT_FIXED'),
+							'type' => 'date_short',
+							'params' => [
+								'size' => 10,
+							],
+						];
+					}
+				}
+				break;
 
 			case 'enumeration':
-				$arFields[] = array(
+				$arFields[] = [
 					'id' => 'E_DISPLAY',
-					'name' => GetMessage('CRM_FIELDS_TYPE_E_DISPLAY'),
+					'name' => Loc::getMessage('CRM_FIELDS_TYPE_E_DISPLAY'),
 					'type' => 'list',
-					'items' => array(
-						'LIST'		=> GetMessage('CRM_FIELDS_TYPE_E_DISPLAY_LIST'),
-						'CHECKBOX' 	=> GetMessage('CRM_FIELDS_TYPE_E_DISPLAY_CHECKBOX'),
-					),
-				);
-				$arFields[] = array(
+					'items' => [
+						'LIST' => Loc::getMessage('CRM_FIELDS_TYPE_E_DISPLAY_LIST'),
+						'UI' => Loc::getMessage('CRM_FIELDS_TYPE_E_DISPLAY_UI'),
+						'CHECKBOX' => Loc::getMessage('CRM_FIELDS_TYPE_E_DISPLAY_CHECKBOX'),
+						'DIALOG' => Loc::getMessage('CRM_FIELDS_TYPE_E_DISPLAY_DIALOG'),
+					],
+				];
+				$arFields[] = [
 					'id' => 'E_LIST_HEIGHT',
-					'name' => GetMessage('CRM_FIELDS_TYPE_E_LIST_HEIGHT'),
+					'name' => Loc::getMessage('CRM_FIELDS_TYPE_E_LIST_HEIGHT'),
 					'type' => 'text',
-				);
-			break;
-
+				];
+				$arFields[] = [
+					'id' => 'E_CAPTION_NO_VALUE',
+					'name' => Loc::getMessage('CRM_FIELDS_TYPE_E_CAPTION_NO_VALUE'),
+					'type' => 'text',
+				];
+				break;
+			case 'money':
+				if (Loader::includeModule('currency'))
+				{
+					ob_start();
+					$APPLICATION->IncludeComponent(
+						'bitrix:currency.money.input',
+						'',
+						array(
+							'CONTROL_ID' => 'DEFAULT_VALUE_'.Main\Security\Random::getString(5),
+							'FIELD_NAME' => 'DEFAULT_VALUE',
+							'VALUE' => (isset($fieldValue['DEFAULT_VALUE']) ? $fieldValue['DEFAULT_VALUE'] : ''),
+							'EXTENDED_CURRENCY_SELECTOR' => 'N'
+						),
+						null,
+						array('HIDE_ICONS' => 'Y')
+					);
+					$moneyContent = ob_get_contents();
+					ob_end_clean();
+					$arFields[] = array(
+						'id' => 'DEFAULT_VALUE',
+						'name' => GetMessage('CRM_FIELDS_DEFAULT_VALUE'),
+						'type' => 'custom',
+						'value' => $moneyContent
+					);
+				}
+				else
+				{
+					$arFields[] = array(
+						'id' => 'DEFAULT_VALUE',
+						'name' => GetMessage('CRM_FIELDS_DEFAULT_VALUE'),
+						'type' => 'text',
+					);
+				}
+				break;
 			case 'iblock_section':
-				$id = isset($fieldValue['IB_IBLOCK_ID'])? $fieldValue['IB_IBLOCK_ID']: 0;
-				$bActiveFilter = isset($fieldValue['IB_ACTIVE_FILTER']) && $fieldValue['IB_ACTIVE_FILTER'] == 'Y'? 'Y': 'N';
+				$id = isset($fieldValue['IB_IBLOCK_ID']) ? (int)$fieldValue['IB_IBLOCK_ID'] : 0;
+				$bActiveFilter = isset($fieldValue['IB_ACTIVE_FILTER']) && $fieldValue['IB_ACTIVE_FILTER'] == 'Y' ? 'Y' : 'N';
 
 				$arFields[] = array(
 					'id' => 'IB_IBLOCK_TYPE_ID',
@@ -192,33 +333,47 @@ class CCrmFields
 					'value' => GetIBlockDropDownList($id, 'IB_IBLOCK_TYPE_ID', 'IB_IBLOCK_ID')
 				);
 
-				$arFilter = Array("IBLOCK_ID"=>$id);
-				if($bActiveFilter === "Y")
-					$arFilter["GLOBAL_ACTIVE"] = "Y";
+				$arDefault = Array('' => GetMessage('CRM_FIELDS_TYPE_IB_DEFAULT_VALUE_ANY'));
+				$found = false;
+				if ($id > 0)
+				{
+					$arFilter = Array("IBLOCK_ID" => $id);
+					if ($bActiveFilter === "Y")
+						$arFilter["GLOBAL_ACTIVE"] = "Y";
 
-				$rs = CIBlockElement::GetList(
-					array("SORT" => "DESC", "NAME"=>"ASC"),
-					$arFilter,
-					false,
-					false,
-					array("ID", "NAME")
-				);
-				$rsSections = CIBlockSection::GetList(
-					Array("left_margin"=>"asc"),
-					$arFilter,
-					false,
-					array("ID", "DEPTH_LEVEL", "NAME")
-				);
-				$arDefault = Array(''=>GetMessage('CRM_FIELDS_TYPE_IB_DEFAULT_VALUE_ANY'));
-				while($arSection = $rsSections->GetNext())
-					$arDefaul[$arSection["ID"]] = str_repeat("&nbsp;.&nbsp;", $arSection["DEPTH_LEVEL"]).$arSection["NAME"];
+					$rsSections = CIBlockSection::GetList(
+						Array("LEFT_MARGIN" => "ASC"),
+						$arFilter,
+						false,
+						array("ID", "DEPTH_LEVEL", "NAME", "LEFT_MARGIN")
+					);
 
-				$arFields[] = array(
-					'id' => 'IB_DEFAULT_VALUE',
-					'name' => GetMessage('CRM_FIELDS_TYPE_IB_DEFAULT_VALUE'),
-					'items' => $arDefault,
-					'type' => 'list',
-				);
+					while ($arSection = $rsSections->Fetch())
+					{
+						$arDefault[$arSection["ID"]] = str_repeat(". ", $arSection["DEPTH_LEVEL"] - 1).$arSection["NAME"];
+						$found = true;
+					}
+					unset($arSection, $rsSections);
+				}
+
+				if ($found)
+				{
+					$arFields[] = array(
+						'id' => 'IB_DEFAULT_VALUE',
+						'name' => GetMessage('CRM_FIELDS_TYPE_IB_DEFAULT_VALUE'),
+						'items' => $arDefault,
+						'type' => 'list',
+					);
+				}
+				else
+				{
+					$arFields[] = array(
+						'id' => 'IB_DEFAULT_VALUE',
+						'name' => GetMessage('CRM_FIELDS_TYPE_IB_DEFAULT_VALUE'),
+						'type' => 'text',
+					);
+				}
+				unset($arDefault);
 
 				$arFields[] = array(
 					'id' => 'IB_DISPLAY',
@@ -243,7 +398,7 @@ class CCrmFields
 
 
 			case 'iblock_element':
-				$id = isset($fieldValue['IB_IBLOCK_ID'])? $fieldValue['IB_IBLOCK_ID']: 0;
+				$id = isset($fieldValue['IB_IBLOCK_ID'])? (int)$fieldValue['IB_IBLOCK_ID']: 0;
 				$bActiveFilter = isset($fieldValue['IB_ACTIVE_FILTER']) && $fieldValue['IB_ACTIVE_FILTER'] == 'Y'? 'Y': 'N';
 
 				$arFields[] = array(
@@ -253,28 +408,48 @@ class CCrmFields
 					'value' => GetIBlockDropDownList($id, 'IB_IBLOCK_TYPE_ID', 'IB_IBLOCK_ID')
 				);
 
-				$arFilter = Array("IBLOCK_ID"=>$id);
-				if($bActiveFilter === "Y")
-					$arFilter["ACTIVE"] = "Y";
-
-				$rs = CIBlockElement::GetList(
-					array("SORT" => "DESC", "NAME"=>"ASC"),
-					$arFilter,
-					false,
-					false,
-					array("ID", "NAME")
-				);
-
 				$arDefault = Array(''=>GetMessage('CRM_FIELDS_TYPE_IB_DEFAULT_VALUE_ANY'));
-				while($ar = $rs->GetNext())
-					$arDefault[$ar["ID"]] = $ar["NAME"];
+				$found = false;
+				if ($id > 0)
+				{
+					$arFilter = Array("IBLOCK_ID" => $id);
+					if ($bActiveFilter === "Y")
+						$arFilter["ACTIVE"] = "Y";
 
-				$arFields[] = array(
-					'id' => 'IB_DEFAULT_VALUE',
-					'name' => GetMessage('CRM_FIELDS_TYPE_IB_DEFAULT_VALUE'),
-					'items' => $arDefault,
-					'type' => 'list',
-				);
+					$rs = CIBlockElement::GetList(
+						array("SORT" => "DESC", "NAME" => "ASC"),
+						$arFilter,
+						false,
+						false,
+						array("ID", "NAME", "SORT")
+					);
+
+					while ($ar = $rs->Fetch())
+					{
+						$found = true;
+						$arDefault[$ar["ID"]] = $ar["NAME"];
+					}
+					unset($sr, $rs);
+				}
+
+				if ($found)
+				{
+					$arFields[] = array(
+						'id' => 'IB_DEFAULT_VALUE',
+						'name' => GetMessage('CRM_FIELDS_TYPE_IB_DEFAULT_VALUE'),
+						'items' => $arDefault,
+						'type' => 'list',
+					);
+				}
+				else
+				{
+					$arFields[] = array(
+						'id' => 'IB_DEFAULT_VALUE',
+						'name' => GetMessage('CRM_FIELDS_TYPE_IB_DEFAULT_VALUE'),
+						'type' => 'text',
+					);
+				}
+				unset($arDefault);
 
 				$arFields[] = array(
 					'id' => 'IB_DISPLAY',
@@ -314,17 +489,33 @@ class CCrmFields
 			break;
 
 			case 'crm':
-				$entityTypeLead = isset($fieldValue['ENTITY_TYPE_LEAD']) && $fieldValue['ENTITY_TYPE_LEAD'] == 'Y'? 'Y': 'N';
-				$entityTypeContact = isset($fieldValue['ENTITY_TYPE_CONTACT']) && $fieldValue['ENTITY_TYPE_CONTACT'] == 'Y'? 'Y': 'N';
-				$entityTypeCompany = isset($fieldValue['ENTITY_TYPE_COMPANY']) && $fieldValue['ENTITY_TYPE_COMPANY'] == 'Y'? 'Y': 'N';
-				$entityTypeDeal = isset($fieldValue['ENTITY_TYPE_DEAL']) && $fieldValue['ENTITY_TYPE_DEAL'] == 'Y'? 'Y': 'N';
+				$settings = $fieldValue['SETTINGS'] ?? [];
+
+				$entityTypeLead = isset($settings['LEAD']) && $settings['LEAD'] === 'Y'? 'Y': 'N';
+				$entityTypeContact = isset($settings['CONTACT']) && $settings['CONTACT'] === 'Y'? 'Y': 'N';
+				$entityTypeCompany = isset($settings['COMPANY']) && $settings['COMPANY'] === 'Y'? 'Y': 'N';
+				$entityTypeDeal = isset($settings['DEAL']) && $settings['DEAL'] === 'Y'? 'Y': 'N';
+				$entityTypeQuote = isset($settings['QUOTE']) && $settings['QUOTE'] === 'Y'? 'Y': 'N';
 
 				$sVal = '
-					<input type="checkbox" name="ENTITY_TYPE_LEAD" value="Y" '.($entityTypeLead=="Y"? 'checked="checked"': '').'> '.GetMessage('USER_TYPE_CRM_ENTITY_TYPE_LEAD').' <br/>
-					<input type="checkbox" name="ENTITY_TYPE_CONTACT" value="Y" '.($entityTypeContact=="Y"? 'checked="checked"': '').'> '.GetMessage('USER_TYPE_CRM_ENTITY_TYPE_CONTACT').'<br/>
-					<input type="checkbox" name="ENTITY_TYPE_COMPANY" value="Y" '.($entityTypeCompany=="Y"? 'checked="checked"': '').'> '.GetMessage('USER_TYPE_CRM_ENTITY_TYPE_COMPANY').'<br/>
-					<input type="checkbox" name="ENTITY_TYPE_DEAL" value="Y" '.($entityTypeDeal=="Y"? 'checked="checked"': '').'> '.GetMessage('USER_TYPE_CRM_ENTITY_TYPE_DEAL').'<br/>
+					<input type="checkbox" name="ENTITY_TYPE[LEAD]" value="Y" '.($entityTypeLead==="Y"? 'checked="checked"': '').'> '.GetMessage('USER_TYPE_CRM_ENTITY_TYPE_LEAD').' <br/>
+					<input type="checkbox" name="ENTITY_TYPE[CONTACT]" value="Y" '.($entityTypeContact==="Y"? 'checked="checked"': '').'> '.GetMessage('USER_TYPE_CRM_ENTITY_TYPE_CONTACT').'<br/>
+					<input type="checkbox" name="ENTITY_TYPE[COMPANY]" value="Y" '.($entityTypeCompany==="Y"? 'checked="checked"': '').'> '.GetMessage('USER_TYPE_CRM_ENTITY_TYPE_COMPANY').'<br/>
+					<input type="checkbox" name="ENTITY_TYPE[DEAL]" value="Y" '.($entityTypeDeal==="Y"? 'checked="checked"': '').'> '.GetMessage('USER_TYPE_CRM_ENTITY_TYPE_DEAL').'<br/>
+					<input type="checkbox" name="ENTITY_TYPE[QUOTE]" value="Y" '.($entityTypeQuote==="Y"? 'checked="checked"': '').'> '.GetMessage('USER_TYPE_CRM_ENTITY_TYPE_QUOTE_MSGVER_1').'<br/>
 				';
+
+				$dynamicTypes = \Bitrix\Crm\UserField\Types\ElementType::getUseInUserfieldTypes();
+				foreach ($dynamicTypes as $dynamicId => $dynamicTitle)
+				{
+					$dynamicTypeName = \CCrmOwnerType::ResolveName($dynamicId);
+					$sVal .= '<input type="checkbox" name="ENTITY_TYPE['.$dynamicTypeName.']" '.((isset($settings[$dynamicTypeName]) && $settings[$dynamicTypeName] === 'Y')  ? "checked": "").' value="Y"> '.Main\Text\HtmlFilter::encode($dynamicTitle).'<br/>';
+				}
+
+				if (\Bitrix\Crm\Settings\InvoiceSettings::getCurrent()->isSmartInvoiceEnabled())
+				{
+					$sVal .= '<input type="checkbox" name="ENTITY_TYPE[' . \CCrmOwnerType::SmartInvoiceName . ']" '.((isset($settings[\CCrmOwnerType::SmartInvoiceName]) && $settings[\CCrmOwnerType::SmartInvoiceName] === 'Y')  ? "checked": "").' value="Y"> '.Main\Text\HtmlFilter::encode(\CCrmOwnerType::GetCategoryCaption(\CCrmOwnerType::SmartInvoice)).'<br/>';
+				}
 
 				$arFields[] = array(
 					'id' => 'ENTITY_TYPE',
@@ -352,7 +543,9 @@ class CCrmFields
 		}
 		$this->cdb->Commit();
 
-		$this->arUFList = $this->cUFM->GetUserFields($this->sUFEntityID, 0, LANGUAGE_ID);
+		UserFieldHistory::processRemoval(CCrmOwnerType::ResolveIDByUFEntityID($this->sUFEntityID), $ID);
+
+		$this->arUFList = $this->GetUserFields($this->sUFEntityID, 0, LANGUAGE_ID);
 
 		return true;
 	}
@@ -361,7 +554,7 @@ class CCrmFields
 	{
 		$obUserField = new CUserTypeEntity();
 		$ID = $obUserField->Add($arField);
-		$res = ($ID>0);
+		$res = $ID > 0;
 
 		if ($res)
 		{
@@ -377,14 +570,15 @@ class CCrmFields
 			}
 
 			$this->cUFM->CleanCache();
-			$this->arUFList = $this->cUFM->GetUserFields($this->sUFEntityID, 0, LANGUAGE_ID);
+			$this->arUFList = $this->GetUserFields($this->sUFEntityID, 0, LANGUAGE_ID);
+
+			UserFieldHistory::processCreation(CCrmOwnerType::ResolveIDByUFEntityID($this->sUFEntityID), $ID);
 		}
 		else
 		{
 			$ex = $GLOBALS["APPLICATION"]->GetException();
 
 		}
-
 
 		return $res;
 	}
@@ -394,18 +588,28 @@ class CCrmFields
 		$obUserField  = new CUserTypeEntity();
 		$res = $obUserField->Update($ID, $arField);
 
+		if($res)
+		{
+			UserFieldHistory::processModification(CCrmOwnerType::ResolveIDByUFEntityID($this->sUFEntityID), $ID);
+		}
+
 		if ($res && $arField['USER_TYPE_ID'] == 'enumeration' && is_array($arField['LIST']))
 		{
 			$obEnum = new CUserFieldEnum();
 			$res = $obEnum->SetEnumValues($ID, $arField['LIST']);
 		}
 
-		$this->arUFList = $this->cUFM->GetUserFields($this->sUFEntityID, 0, LANGUAGE_ID);
+		$this->arUFList = $this->GetUserFields($this->sUFEntityID, 0, LANGUAGE_ID);
 
 		return $res;
 	}
 
 	public function GetNextFieldId()
+	{
+		return self::GenerateFieldName();
+	}
+
+	public static function GenerateFieldName()
 	{
 		return 'UF_CRM_'.time();
 	}

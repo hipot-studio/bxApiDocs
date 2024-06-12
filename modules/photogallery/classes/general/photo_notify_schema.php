@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CPhotogalleryNotifySchema
 {
-	static public function __construct()
+	public function __construct()
 	{
 	}
 

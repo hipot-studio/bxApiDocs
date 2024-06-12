@@ -12,7 +12,7 @@ class CIMCall
 		global $DB, $USER;
 
 		$arConfig['RECIPIENT_ID'] = intval($arParams['RECIPIENT_ID']);
-		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): IntVal($USER->GetID());
+		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): intval($USER->GetID());
 		$arConfig['VIDEO'] = isset($arParams['VIDEO']) && $arParams['VIDEO'] == 'N'? 'N': 'Y';
 		$arConfig['MOBILE'] = isset($arParams['MOBILE']) && $arParams['MOBILE'] == 'Y'? 'Y': 'N';
 
@@ -20,7 +20,7 @@ class CIMCall
 		if (empty($arChat['chat']))
 			return false;
 
-		$arConfig['CALL_TO_GROUP'] = $arChat['chat'][$arConfig['CHAT_ID']]['messageType'] == IM_MESSAGE_CHAT;
+		$arConfig['CALL_TO_GROUP'] = $arChat['chat'][$arConfig['CHAT_ID']]['message_type'] != IM_MESSAGE_PRIVATE;
 		$arConfig['STATUS_TYPE'] = intval($arChat['chat'][$arConfig['CHAT_ID']]['call']);
 
 		if (!$arConfig['CALL_TO_GROUP'] && !IsModuleInstalled('intranet') && CIMSettings::GetPrivacy(CIMSettings::PRIVACY_CALL, $arConfig['RECIPIENT_ID']) == CIMSettings::PRIVACY_RESULT_CONTACT
@@ -36,7 +36,7 @@ class CIMCall
 				self::MessageToChat($arConfig['CHAT_ID'], "IM_CALL_CHAT_START_", $arConfig['USER_ID'], true);
 
 			$strSql = "UPDATE b_im_relation SET CALL_STATUS = ".IM_CALL_STATUS_ANSWER." WHERE CHAT_ID = ".$arConfig['CHAT_ID']." AND USER_ID = ".$arConfig['USER_ID'];
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			$arUserData = CIMContactList::GetUserData(Array('ID' => $arChat['userInChat'][$arConfig['CHAT_ID']], 'DEPARTMENT' => 'N', 'HR_PHOTO' => 'Y'));
 			$arConfig['USER_DATA']['USERS'] = $arUserData['users'];
@@ -74,10 +74,10 @@ class CIMCall
 				self::MessageToChat($arConfig['CHAT_ID'], "IM_CALL_CHAT_INIT_", $arConfig['USER_ID'], true);
 
 			$strSql = "UPDATE b_im_chat SET CALL_TYPE = ".($arConfig['VIDEO'] == 'Y'? IM_CALL_VIDEO: IM_CALL_AUDIO)." WHERE ID = ".$arConfig['CHAT_ID'];
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			$strSql = "UPDATE b_im_relation SET CALL_STATUS = ".IM_CALL_STATUS_ANSWER." WHERE CHAT_ID = ".$arConfig['CHAT_ID']." AND USER_ID = ".$arConfig['USER_ID'];
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			$arUserToConnect = Array();
 			foreach ($arChat['userCallStatus'][$arConfig['CHAT_ID']] as $userId => $callStatus)
@@ -107,10 +107,10 @@ class CIMCall
 			if (!$arConfig['CALL_TO_GROUP'] && CModule::IncludeModule('pull') && CPullOptions::GetPushStatus())
 			{
 				$arSelect = Array("ID", "LAST_NAME", "NAME", "LOGIN", "SECOND_NAME");
-				$dbUsers = CUser::GetList(($sort_by = false), ($dummy=''), array('ID' => $USER->GetID()), array('FIELDS' => $arSelect));
+				$dbUsers = CUser::GetList('', '', array('ID_EQUAL_EXACT' => $USER->GetID()), array('FIELDS' => $arSelect));
 				if ($arUser = $dbUsers->GetNext(true, false))
 				{
-					$sName = CUser::FormatName(CSite::GetNameFormat(false), $arUser, true, false);
+					$sName = \Bitrix\Im\User::formatFullNameFromDatabase($arUser);
 					$pushText = GetMessage('IM_CALL_INVITE', Array('#USER_NAME#' => $sName));
 				}
 				else
@@ -118,25 +118,30 @@ class CIMCall
 					$pushText = GetMessage('IM_CALL_INVITE', Array('#USER_NAME#' => GetMessage('IM_CALL_INVITE_NA')));
 				}
 
-				$CPushManager = new CPushManager();
-				foreach ($arUserToConnect as $sendTouserId => $callStatus)
-				{
-					$CPushManager->AddQueue(Array(
-						'USER_ID' => $sendTouserId,
-						'MESSAGE' => $pushText,
-						'EXPIRY' => 0,
-						'PARAMS' => 'IMINV_'. $USER->GetID()."_".time(),
-						'ADVANCED_PARAMS' => Array(
-							"id" => 'IM_CALL_'.$USER->GetID(),
-							"notificationsToCancel" => array('IM_CALL_'.$USER->GetID()),
-							"androidHighPriority" => true,
-							"useVibration"=>true
+				$pushParams = $arSend;
+				$pushParams['senderId'] = (int)$USER->GetID();
+				$pushParams['chatId'] = $arConfig['CHAT_ID'];
+
+				\Bitrix\Pull\Push::add(array_keys($arUserToConnect), Array(
+					'module_id' => 'im',
+					'push' => Array(
+						'message' => $pushText,
+						'expiry' => 0,
+						'params' => array(
+							'ACTION' => 'IMINV_'. $USER->GetID()."_".time()."_".$arConfig['VIDEO'],
+							'PARAMS' => $pushParams
 						),
-						'APP_ID' => 'Bitrix24',
-						'SOUND'=>'call.aif',
-						'SEND_IMMEDIATELY' => 'Y'
-					));
-				}
+						'advanced_params' => Array(
+							'id' => 'IM_CALL_'.$USER->GetID(),
+							'notificationsToCancel' => array('IM_CALL_'.$USER->GetID()),
+							'androidHighPriority' => true,
+							'useVibration'=>true
+						),
+						'app_id' => 'Bitrix24',
+						'sound'=>'call.aif',
+						'send_immediately' => 'Y'
+					)
+				));
 			}
 		}
 		foreach(GetModuleEvents("im", "OnCallStart", true) as $arEvent)
@@ -172,13 +177,13 @@ class CIMCall
 
 		$arConfig['CALL_TYPE'] = intval($arChat['chat'][$arConfig['CHAT_ID']]['call']);
 		$arConfig['LAST_CHAT_ID'] = $arConfig['CHAT_ID'];
-		if ($arChat['chat'][$arConfig['CHAT_ID']]['messageType'] == IM_MESSAGE_PRIVATE)
+		if ($arChat['chat'][$arConfig['CHAT_ID']]['message_type'] == IM_MESSAGE_PRIVATE)
 		{
 			$strSql = "UPDATE b_im_chat SET CALL_TYPE = ".IM_CALL_NONE." WHERE ID = ".$arConfig['CHAT_ID'];
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			$strSql = "UPDATE b_im_relation SET CALL_STATUS = ".IM_CALL_STATUS_NONE." WHERE CHAT_ID = ".$arConfig['CHAT_ID'];
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			$arUserToConnect = Array();
 			$arUser = Array();
@@ -201,18 +206,18 @@ class CIMCall
 			$arConfig['CHAT_ID'] = $chatId;
 
 			$strSql = "UPDATE b_im_chat SET CALL_TYPE = ".$arConfig['CALL_TYPE']." WHERE ID = ".$arConfig['CHAT_ID'];
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			$strSql = "UPDATE b_im_relation SET CALL_STATUS = ".IM_CALL_STATUS_WAIT." WHERE CHAT_ID = ".$arConfig['CHAT_ID'];
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			foreach ($arUserToConnect as $userId => $callStatus)
 			{
 				$strSql = "UPDATE b_im_relation SET CALL_STATUS = ".$callStatus." WHERE CHAT_ID = ".$arConfig['CHAT_ID']." AND USER_ID = ".$userId;
-				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql);
 			}
 		}
-		else if ($arChat['chat'][$arConfig['CHAT_ID']]['messageType'] == IM_MESSAGE_CHAT)
+		else
 		{
 			$CIMChat = new CIMChat();
 			$result = $CIMChat->AddUser($arConfig['CHAT_ID'], $arConfig['USERS']);
@@ -220,7 +225,7 @@ class CIMCall
 				return false;
 
 			$strSql = "UPDATE b_im_relation SET CALL_STATUS = ".IM_CALL_STATUS_WAIT." WHERE CHAT_ID = ".$arConfig['CHAT_ID']." AND USER_ID IN (".implode(',', $arConfig['USERS']).")";
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			$arUserToConnect = Array();
 			$arUser = Array();
@@ -261,10 +266,10 @@ class CIMCall
 			return false;
 
 		global $DB, $USER;
-		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): IntVal($USER->GetID());
+		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): intval($USER->GetID());
 
 		$strSql = "UPDATE b_im_relation SET CALL_STATUS = ".IM_CALL_STATUS_ANSWER." WHERE CHAT_ID = ".$arConfig['CHAT_ID']." AND USER_ID = ".$arConfig['USER_ID'];
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		if ($arParams['CALL_TO_GROUP'])
 			self::MessageToChat($arConfig['CHAT_ID'], "IM_CALL_CHAT_START_", $arConfig['USER_ID'], true);
@@ -282,7 +287,7 @@ class CIMCall
 		$arChat = CIMChat::GetChatData(Array('ID' => $arConfig['CHAT_ID'], 'USER_ID' => $arConfig['USER_ID']));
 		if (empty($arChat['chat']))
 			return false;
-		
+
 		foreach ($arChat['userInChat'][$arConfig['CHAT_ID']] as $value)
 		{
 			if ($arConfig['USER_ID'] != $value)
@@ -294,24 +299,25 @@ class CIMCall
 
 		if (!$arParams['CALL_TO_GROUP'] && CModule::IncludeModule('pull') && CPullOptions::GetPushStatus())
 		{
-			$CPushManager = new CPushManager();
-			$CPushManager->AddQueue(Array(
-				'USER_ID' => $arConfig['USER_ID'],
-				'EXPIRY' => 0,
-				'ADVANCED_PARAMS' => Array(
-					"notificationsToCancel" => array('IM_CALL_'. $arConfig['RECIPIENT_ID']),
-				),
-				'APP_ID' => 'Bitrix24',
-				'SEND_IMMEDIATELY' => 'Y'
+			\Bitrix\Pull\Push::add($arConfig['USER_ID'], Array(
+				'module_id' => 'im',
+				'push' => Array(
+					'expiry' => 0,
+					'advanced_params' => Array(
+						'notificationsToCancel' => array('IM_CALL_'. $arConfig['RECIPIENT_ID']),
+					),
+					'send_immediately' => 'Y'
+				)
 			));
-			$CPushManager->AddQueue(Array(
-				'USER_ID' => $arConfig['RECIPIENT_ID'],
-				'EXPIRY' => 0,
-				'ADVANCED_PARAMS' => Array(
-					"notificationsToCancel" => array('IM_CALL_'. $arConfig['USER_ID']),
-				),
-				'APP_ID' => 'Bitrix24',
-				'SEND_IMMEDIATELY' => 'Y'
+			\Bitrix\Pull\Push::add($arConfig['RECIPIENT_ID'], Array(
+				'module_id' => 'im',
+				'push' => Array(
+					'expiry' => 0,
+					'advanced_params' => Array(
+						'notificationsToCancel' => array('IM_CALL_'. $arConfig['USER_ID']),
+					),
+					'send_immediately' => 'Y'
+				)
 			));
 		}
 
@@ -325,10 +331,10 @@ class CIMCall
 			return false;
 
 		global $DB, $USER;
-		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): IntVal($USER->GetID());
+		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): intval($USER->GetID());
 
 		$strSql = "UPDATE b_im_relation SET CALL_STATUS = ".IM_CALL_STATUS_WAIT." WHERE CHAT_ID = ".$arConfig['CHAT_ID']." AND USER_ID = ".$arConfig['USER_ID'];
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		CIMCall::Signaling(Array(
 			'CHAT_ID' => $arConfig['CHAT_ID'],
@@ -346,7 +352,7 @@ class CIMCall
 			return false;
 
 		global $USER;
-		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): IntVal($USER->GetID());
+		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): intval($USER->GetID());
 
 		if (!$arParams['CALL_TO_GROUP'])
 			self::MessageToPrivate($arConfig['USER_ID'], $arParams['RECIPIENT_ID'], "IM_CALL_CHAT_START");
@@ -367,7 +373,7 @@ class CIMCall
 			return false;
 
 		global $DB, $USER;
-		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): IntVal($USER->GetID());
+		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): intval($USER->GetID());
 		$arConfig['RECIPIENT_ID'] = intval($arParams['RECIPIENT_ID']);
 
 		$arChat = CIMChat::GetChatData(Array('ID' => $arConfig['CHAT_ID'], 'USER_ID' => $USER->GetId()));
@@ -392,20 +398,20 @@ class CIMCall
 			$arConfig['CLOSE_CONNECT'] = true;
 
 			$strSql = "UPDATE b_im_chat SET CALL_TYPE = ".IM_CALL_NONE." WHERE ID = ".$arConfig['CHAT_ID'];
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			$strSql = "UPDATE b_im_relation SET CALL_STATUS = ".IM_CALL_STATUS_NONE." WHERE CHAT_ID = ".$arConfig['CHAT_ID'];
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 		}
 		else
 		{
 			$arConfig['CLOSE_CONNECT'] = false;
 
 			$strSql = "UPDATE b_im_relation SET CALL_STATUS = ".IM_CALL_STATUS_DECLINE." WHERE CHAT_ID = ".$arConfig['CHAT_ID']." AND USER_ID = ".$arConfig['USER_ID'];
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 		}
 
-		$arConfig['CALL_TO_GROUP'] = $arChat['chat'][$arConfig['CHAT_ID']]['messageType'] == IM_MESSAGE_CHAT;
+		$arConfig['CALL_TO_GROUP'] = $arChat['chat'][$arConfig['CHAT_ID']]['message_type'] != IM_MESSAGE_PRIVATE;
 		if ($arParams['REASON'] == 'decline')
 		{
 			if ($arConfig['CALL_TO_GROUP'])
@@ -495,24 +501,25 @@ class CIMCall
 		}
 		if (!$arConfig['CALL_TO_GROUP'] && CModule::IncludeModule('pull') && CPullOptions::GetPushStatus())
 		{
-			$CPushManager = new CPushManager();
-			$CPushManager->AddQueue(Array(
-				'USER_ID' => $arConfig['USER_ID'],
-				'EXPIRY' => 0,
-				'ADVANCED_PARAMS' => Array(
-					"notificationsToCancel" => array('IM_CALL_'. $arConfig['RECIPIENT_ID']),
-				),
-				'APP_ID' => 'Bitrix24',
-				'SEND_IMMEDIATELY' => 'Y'
+			\Bitrix\Pull\Push::add($arConfig['USER_ID'], Array(
+				'module_id' => 'im',
+				'push' => Array(
+					'expiry' => 0,
+					'advanced_params' => Array(
+						'notificationsToCancel' => array('IM_CALL_'. $arConfig['RECIPIENT_ID']),
+					),
+					'send_immediately' => 'Y'
+				)
 			));
-			$CPushManager->AddQueue(Array(
-				'USER_ID' => $arConfig['RECIPIENT_ID'],
-				'EXPIRY' => 0,
-				'ADVANCED_PARAMS' => Array(
-					"notificationsToCancel" => array('IM_CALL_'. $arConfig['USER_ID']),
-				),
-				'APP_ID' => 'Bitrix24',
-				'SEND_IMMEDIATELY' => 'Y'
+			\Bitrix\Pull\Push::add($arConfig['RECIPIENT_ID'], Array(
+				'module_id' => 'im',
+				'push' => Array(
+					'expiry' => 0,
+					'advanced_params' => Array(
+						'notificationsToCancel' => array('IM_CALL_'. $arConfig['USER_ID']),
+					),
+					'send_immediately' => 'Y'
+				)
 			));
 		}
 
@@ -526,7 +533,7 @@ class CIMCall
 			return false;
 
 		global $DB, $USER;
-		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): IntVal($USER->GetID());
+		$arConfig['USER_ID'] = intval($arParams['USER_ID']) > 0? intval($arParams['USER_ID']): intval($USER->GetID());
 
 		$arConfig['COMMAND'] = isset($arParams['COMMAND'])? $arParams['COMMAND']: 'signaling';
 		$arConfig['PARAMS'] = isset($arParams['PARAMS'])? $arParams['PARAMS']: Array();
@@ -559,10 +566,12 @@ class CIMCall
 		$params['chatId'] = $chatId;
 		$params['command'] = $command;
 
-		CPullStack::AddByUser($recipientId, Array(
+		\Bitrix\Pull\Event::add($recipientId, Array(
 			'module_id' => 'im',
 			'command' => 'call',
+			'expiry' => 600,
 			'params' => $params,
+			'extra' => \Bitrix\Im\Common::getPullExtra()
 		));
 
 		return true;
@@ -571,7 +580,7 @@ class CIMCall
 	public static function MessageToChat($chatId, $messageId, $userId = 0, $getUserData = false, $addGenderToMessageId = true)
 	{
 		$chatId = intval($chatId);
-		if ($chatId <= 0 || strlen($messageId) <= 0)
+		if ($chatId <= 0 || $messageId == '')
 			return false;
 
 		$userId = intval($userId);
@@ -580,9 +589,9 @@ class CIMCall
 		if ($userId > 0 && $getUserData)
 		{
 			$arSelect = Array("ID", "LAST_NAME", "NAME", "LOGIN", "SECOND_NAME", "PERSONAL_GENDER");
-			$dbUsers = CUser::GetList(($sort_by = false), ($dummy=''), array('ID' => $userId), array('FIELDS' => $arSelect));
+			$dbUsers = CUser::GetList('', '', array('ID_EQUAL_EXACT' => $userId), array('FIELDS' => $arSelect));
 			if ($arUser = $dbUsers->Fetch())
-				$message = GetMessage($messageId.($addGenderToMessageId? ($arUser["PERSONAL_GENDER"] == 'F'? 'F': 'M'): ''), Array('#USER_NAME#' => CUser::FormatName(CSite::GetNameFormat(false), $arUser, true, false)));
+				$message = GetMessage($messageId.($addGenderToMessageId? ($arUser["PERSONAL_GENDER"] == 'F'? 'F': 'M'): ''), Array('#USER_NAME#' => \Bitrix\Im\User::formatFullNameFromDatabase($arUser)));
 		}
 		else
 		{
@@ -614,9 +623,9 @@ class CIMCall
 				$userSelectId = intval($getUserData);
 
 			$arSelect = Array("ID", "LAST_NAME", "NAME", "LOGIN", "SECOND_NAME", "PERSONAL_GENDER");
-			$dbUsers = CUser::GetList(($sort_by = false), ($dummy=''), array('ID' => $userSelectId), array('FIELDS' => $arSelect));
+			$dbUsers = CUser::GetList('', '', array('ID_EQUAL_EXACT' => $userSelectId), array('FIELDS' => $arSelect));
 			if ($arUser = $dbUsers->Fetch())
-				$message = GetMessage($messageId.($addGenderToMessageId? ($arUser["PERSONAL_GENDER"] == 'F'? 'F': 'M'): ''), Array('#USER_NAME#' => CUser::FormatName(CSite::GetNameFormat(false), $arUser, true, false)));
+				$message = GetMessage($messageId.($addGenderToMessageId? ($arUser["PERSONAL_GENDER"] == 'F'? 'F': 'M'): ''), Array('#USER_NAME#' => \Bitrix\Im\User::formatFullNameFromDatabase($arUser)));
 		}
 		else
 		{

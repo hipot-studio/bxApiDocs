@@ -2,17 +2,22 @@
 namespace Bitrix\Sale;
 
 use Bitrix\Main\Localization\Loc,
-	Bitrix\Main\Config;
+	Bitrix\Main\Loader,
+	Bitrix\Catalog;
+use Bitrix\Sale\Reservation\Configuration\ReservationSettings;
+use Bitrix\Sale\Reservation\Configuration\ReservationSettingsService;
+use Bitrix\Sale\Reservation\Configuration\ReserveCondition;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class Configuration
+ * @package Bitrix\Sale
+ */
 class Configuration
 {
-	const RESERVE_ON_CREATE = 'O';
-	const RESERVE_ON_PAY = 'R';
-	const RESERVE_ON_FULL_PAY = 'P';
-	const RESERVE_ON_ALLOW_DELIVERY = 'D';
-	const RESERVE_ON_SHIP = 'S';
+	private static bool $enableAutomaticReservation;
+
 	const ALLOW_DELIVERY_ON_PAY = 'R';
 	const ALLOW_DELIVERY_ON_FULL_PAY = 'P';
 	const STATUS_ON_PAY = 'R';
@@ -24,39 +29,43 @@ class Configuration
 	 * @param bool $extendedMode			Format mode.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список правил резервирования и списания товаров. Метод статический.</p>
-	*
-	*
-	* @param boolean $extendedMode = false Формат вывода списка: в кратком или расширенном режиме.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/configuration/getreservationconditionlist.php
-	* @author Bitrix
-	*/
 	public static function getReservationConditionList($extendedMode = false)
 	{
 		$extendedMode = ($extendedMode === true);
 		if ($extendedMode)
 		{
 			return array(
-				self::RESERVE_ON_CREATE => Loc::getMessage('SALE_CONFIGURATION_RESERVE_ON_CREATE'),
-				self::RESERVE_ON_FULL_PAY => Loc::getMessage('SALE_CONFIGURATION_RESERVE_ON_FULL_PAY'),
-				self::RESERVE_ON_PAY => Loc::getMessage('SALE_CONFIGURATION_RESERVE_ON_PAY'),
-				self::RESERVE_ON_ALLOW_DELIVERY => Loc::getMessage('SALE_CONFIGURATION_RESERVE_ON_ALLOW_DELIVERY'),
-				self::RESERVE_ON_SHIP => Loc::getMessage('SALE_CONFIGURATION_RESERVE_ON_SHIP')
+				ReserveCondition::ON_CREATE => Loc::getMessage('SALE_CONFIGURATION_RESERVE_ON_CREATE'),
+				ReserveCondition::ON_FULL_PAY => Loc::getMessage('SALE_CONFIGURATION_RESERVE_ON_FULL_PAY'),
+				ReserveCondition::ON_PAY => Loc::getMessage('SALE_CONFIGURATION_RESERVE_ON_PAY'),
+				ReserveCondition::ON_ALLOW_DELIVERY => Loc::getMessage('SALE_CONFIGURATION_RESERVE_ON_ALLOW_DELIVERY'),
+				ReserveCondition::ON_SHIP => Loc::getMessage('SALE_CONFIGURATION_RESERVE_ON_SHIP')
 			);
 		}
 		return array(
-			self::RESERVE_ON_CREATE,
-			self::RESERVE_ON_FULL_PAY,
-			self::RESERVE_ON_PAY,
-			self::RESERVE_ON_ALLOW_DELIVERY,
-			self::RESERVE_ON_SHIP
+			ReserveCondition::ON_CREATE,
+			ReserveCondition::ON_FULL_PAY,
+			ReserveCondition::ON_PAY,
+			ReserveCondition::ON_ALLOW_DELIVERY,
+			ReserveCondition::ON_SHIP
 		);
+	}
+
+	/**
+	 * Reservation settings.
+	 *
+	 * @return ReservationSettings
+	 */
+	private static function getReservationSettings(): ReservationSettings
+	{
+		static $settings;
+
+		if (!isset($settings))
+		{
+			$settings = ReservationSettingsService::getInstance()->get();
+		}
+
+		return $settings;
 	}
 
 	/**
@@ -65,20 +74,31 @@ class Configuration
 	 * @return string
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Возвращает текущее состояние резервирования. Метод статический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/configuration/getproductreservationcondition.php
-	* @author Bitrix
-	*/
 	public static function getProductReservationCondition()
 	{
-		return Config\Option::get('sale', 'product_reserve_condition');
+		return self::getReservationSettings()->getReserveCondition();
+	}
+
+	/**
+	 * @return bool
+	 */
+	public static function isEnableAutomaticReservation() : bool
+	{
+		if (!isset(self::$enableAutomaticReservation))
+		{
+			self::$enableAutomaticReservation = self::getReservationSettings()->isEnableAutomaticReservation();
+		}
+		return self::$enableAutomaticReservation;
+	}
+
+	public static function enableAutomaticReservation()
+	{
+		self::$enableAutomaticReservation = true;
+	}
+
+	public static function disableAutomaticReservation()
+	{
+		self::$enableAutomaticReservation = false;
 	}
 
 	/**
@@ -87,20 +107,9 @@ class Configuration
 	 * @return int
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Метод возвращает количество дней, через которое надо снимать резервацию у неоплаченного товара. Метод статический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/configuration/getproductreserveclearperiod.php
-	* @author Bitrix
-	*/
 	public static function getProductReserveClearPeriod()
 	{
-		return (int)Config\Option::get('sale', 'product_reserve_clear_period');
+		return self::getReservationSettings()->getClearPeriod();
 	}
 
 	/**
@@ -108,21 +117,70 @@ class Configuration
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод проверяет резервируется ли товар при отгрузке или разрешении отгрузки. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/configuration/isreservationdependsonshipment.php
-	* @author Bitrix
-	*/
 	public static function isReservationDependsOnShipment()
 	{
 		$condition = static::getProductReservationCondition();
-		return in_array($condition, array(static::RESERVE_ON_SHIP, static::RESERVE_ON_ALLOW_DELIVERY));
+		return in_array($condition, array(ReserveCondition::ON_SHIP, ReserveCondition::ON_ALLOW_DELIVERY));
+	}
+
+	/**
+	 * Returns true if can use 1C services.
+	 *
+	 * @return bool
+	 */
+	public static function isCanUse1c(): bool
+	{
+		$lang = LANGUAGE_ID;
+		if (Loader::includeModule('bitrix24'))
+		{
+			$lang = \CBitrix24::getLicensePrefix();
+		}
+		elseif (Loader::includeModule('intranet'))
+		{
+			$lang = \CIntranetUtils::getPortalZone();
+		}
+
+		return in_array($lang, ['ru', 'ua', 'by', 'kz'], true);
+	}
+
+	/**
+	 * Returns true if import of orders from Bitrix24 is available.
+	 *
+	 * @return bool
+	 */
+	public static function isAvailableOrdersImportFromB24(): bool
+	{
+		$lang = LANGUAGE_ID;
+		if (Loader::includeModule('bitrix24'))
+		{
+			$lang = \CBitrix24::getLicensePrefix();
+		}
+		elseif (Loader::includeModule('intranet'))
+		{
+			$lang = \CIntranetUtils::getPortalZone();
+		}
+
+		return in_array($lang, ['ru', 'ua', 'by', 'kz'], true);
+	}
+
+	/**
+	 * Returns true if can use big data personalization.
+	 *
+	 * @return bool
+	 */
+	public static function isCanUsePersonalization(): bool
+	{
+		$lang = LANGUAGE_ID;
+		if (Loader::includeModule('bitrix24'))
+		{
+			$lang = \CBitrix24::getLicensePrefix();
+		}
+		elseif (Loader::includeModule('intranet'))
+		{
+			$lang = \CIntranetUtils::getPortalZone();
+		}
+
+		return in_array($lang, ['ru', 'ua', 'by', 'kz'], true);
 	}
 
 	/**
@@ -131,20 +189,12 @@ class Configuration
 	 * @return bool
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Метод возвращает <i>true</i>, если разрешена отгрузка при разрешении доставки. Метод статический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/configuration/needshiponallowdelivery.php
-	* @author Bitrix
-	*/
 	public static function needShipOnAllowDelivery()
 	{
-		return ((string)Config\Option::get('sale', 'allow_deduction_on_delivery') == 'Y');
+		$registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
+		$optionClassName = $registry->get(Registry::ENTITY_OPTIONS);
+
+		return ((string)$optionClassName::get('sale', 'allow_deduction_on_delivery') === 'Y');
 	}
 
 	/**
@@ -153,21 +203,10 @@ class Configuration
 	 * @return bool
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Метод возвращает флаг разрешения доставки при оплате заказа. Метод статический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/configuration/needallowdeliveryonpay.php
-	* @author Bitrix
-	*/
 	public static function needAllowDeliveryOnPay()
 	{
 		$condition = static::getAllowDeliveryOnPayCondition();
-		return in_array($condition, array(static::ALLOW_DELIVERY_ON_PAY, static::RESERVE_ON_ALLOW_DELIVERY));
+		return in_array($condition, array(static::ALLOW_DELIVERY_ON_PAY, ReserveCondition::ON_ALLOW_DELIVERY));
 	}
 
 	/**
@@ -176,7 +215,10 @@ class Configuration
 	 */
 	public static function getAllowDeliveryOnPayCondition()
 	{
-		return Config\Option::get('sale', 'status_on_change_allow_delivery_after_paid');
+		$registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
+		$optionClassName = $registry->get(Registry::ENTITY_OPTIONS);
+
+		return $optionClassName::get('sale', 'status_on_change_allow_delivery_after_paid');
 	}
 
 	/**
@@ -199,36 +241,56 @@ class Configuration
 		);
 	}
 
+	/**
+	 * @return mixed
+	 */
 	public static function getStatusPaidCondition()
 	{
-		return Config\Option::get('sale', 'status_on_paid_condition');
+		$registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
+		$optionClassName = $registry->get(Registry::ENTITY_OPTIONS);
+
+		return $optionClassName::get('sale', 'status_on_paid_condition');
 	}
 
+	/**
+	 * @return mixed
+	 */
 	public static function getStatusAllowDeliveryCondition()
 	{
-		return Config\Option::get('sale', 'status_on_paid_condition');
+		$registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
+		$optionClassName = $registry->get(Registry::ENTITY_OPTIONS);
+
+		return $optionClassName::get('sale', 'status_on_paid_condition');
 	}
 
 	/**
 	 * Returns flag enable use stores.
 	 *
 	 * @return bool
-	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Метод возвращает флаг использования складского учета. Метод статический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/configuration/usestorecontrol.php
-	* @author Bitrix
-	*/
 	public static function useStoreControl()
 	{
-		return ((string)Config\Option::get('catalog', 'default_use_store_control') == 'Y');
+		if (!Loader::includeModule('catalog'))
+			return false;
+
+		return Catalog\Config\State::isUsedInventoryManagement();
+	}
+
+	/**
+	 * @return int|null
+	 * @throws \Bitrix\Main\LoaderException
+	 */
+	public static function getDefaultStoreId()
+	{
+		if (
+			!Loader::includeModule('catalog')
+			|| !self::useStoreControl()
+		)
+		{
+			return 0;
+		}
+
+		return (int)Catalog\StoreTable::getDefaultStoreId();
 	}
 
 	/**
@@ -237,19 +299,23 @@ class Configuration
 	 * @return bool
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Метод возвращает флаг использования механизма резервирования товаров. Метод статический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/configuration/isenabledreservation.php
-	* @author Bitrix
-	*/
 	public static function isEnabledReservation()
 	{
-		return ((string)Config\Option::get('catalog', 'enable_reservation') == 'Y');
+		$registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
+		$optionClassName = $registry->get(Registry::ENTITY_OPTIONS);
+
+		return ((string)$optionClassName::get('catalog', 'enable_reservation') === 'Y');
+	}
+
+	/**
+	 * Tells if allowed to calculate discount on basket separately.
+	 * @return bool
+	 */
+	public static function isAllowedSeparatelyDiscountCalculation()
+	{
+		$registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
+		$optionClassName = $registry->get(Registry::ENTITY_OPTIONS);
+
+		return $optionClassName::get('sale', 'discount_separately_calculation') === 'Y';
 	}
 }

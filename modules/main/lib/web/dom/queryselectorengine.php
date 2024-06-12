@@ -15,7 +15,7 @@ class QuerySelectorEngine extends QueryEngine
 	{
 		//TODO: use children property
 		$instructionList = $this->parseQueryString($queryString);
-		if(count($instructionList) <= 0)
+		if(empty($instructionList))
 		{
 			return array();
 		}
@@ -79,7 +79,7 @@ class QuerySelectorEngine extends QueryEngine
 
 		}
 
-		if(count($filter) <= 0)
+		if(empty($filter))
 		{
 			return $resultList;
 		}
@@ -114,7 +114,7 @@ class QuerySelectorEngine extends QueryEngine
 			}
 		}
 
-		if(count($findNodeList) <= 0)
+		if(empty($findNodeList))
 		{
 			return $resultList;
 		}
@@ -126,7 +126,7 @@ class QuerySelectorEngine extends QueryEngine
 			$childInstructionList[] = $instruction = $instructionList[$i];
 		}
 
-		if(count($childInstructionList) <= 0)
+		if(empty($childInstructionList))
 		{
 			return $resultList;
 		}
@@ -143,12 +143,12 @@ class QuerySelectorEngine extends QueryEngine
 		return $resultList;
 	}
 
-	static public function parseQueryStringPseudo($string)
+	public function parseQueryStringPseudo($string)
 	{
 		return '';
 	}
 
-	static public function parseQueryStringAttr($string)
+	public function parseQueryStringAttr($string)
 	{
 		static $operations = array('~', '|', '^', '$', '*', '=', '!');
 
@@ -157,10 +157,10 @@ class QuerySelectorEngine extends QueryEngine
 
 		if(isset($list[1]))
 		{
-			$operation = substr($list[0], -1);
+			$operation = mb_substr($list[0], -1);
 			if(in_array($operation, $operations))
 			{
-				$result['name'] = trim(substr($list[0], 0, -1));
+				$result['name'] = trim(mb_substr($list[0], 0, -1));
 				$result['operation'] = $operation;
 			}
 			else
@@ -179,35 +179,29 @@ class QuerySelectorEngine extends QueryEngine
 		return $result;
 	}
 
+	/**
+	 * @param string $string
+	 * @return array
+	 */
 	public function parseQueryString($string)
 	{
 		static $dividers = array('*', '#', '.', ' ', '>', '<', '[', ':');
 		$path = array();
 
 		$string = trim($string);
-		$length = strlen($string);
+		$length = mb_strlen($string);
 
 		$i = 0;
 		while($i < $length)
 		{
-			$buffer = '';
 			$operator = '';
 
-			$char = substr($string, $i, 1);
+			$char = mb_substr($string, $i, 1);
 			switch($char)
 			{
 				case '#':
 					$operator = self::PATH_CODE_ATTR;
-					while(++$i < $length)
-					{
-						$char = substr($string, $i, 1);
-						if(in_array($char, $dividers))
-						{
-							break;
-						}
-
-						$buffer .= $char;
-					}
+					$buffer = $this->writeToBuffer($string, $length, $i, $dividers);
 					$path[] = array(
 						'code' => $operator,
 						'value' => array(
@@ -220,16 +214,7 @@ class QuerySelectorEngine extends QueryEngine
 
 				case '.':
 					$operator = self::PATH_CODE_CLASS;
-					while(++$i < $length)
-					{
-						$char = substr($string, $i, 1);
-						if(in_array($char, $dividers))
-						{
-							break;
-						}
-
-						$buffer .= $char;
-					}
+					$buffer = $this->writeToBuffer($string, $length, $i, $dividers);
 					$path[] = array('code' => $operator, 'value' => $buffer);
 					break;
 
@@ -252,31 +237,13 @@ class QuerySelectorEngine extends QueryEngine
 
 				case ':':
 					$operator = self::PATH_CODE_PSEUDO;
-					while(++$i < $length)
-					{
-						$char = substr($string, $i, 1);
-						if(in_array($char, $dividers))
-						{
-							break;
-						}
-
-						$buffer .= $char;
-					}
+					$buffer = $this->writeToBuffer($string, $length, $i, $dividers);
 					$path[] = array('code' => $operator, 'value' => $this->parseQueryStringPseudo($buffer));
 					break;
 
 				case '[':
 					$operator = self::PATH_CODE_ATTR;
-					while(++$i < $length)
-					{
-						$char = substr($string, $i, 1);
-						if(in_array($char, array(']')))
-						{
-							break;
-						}
-
-						$buffer .= $char;
-					}
+					$buffer = $this->writeToBuffer($string, $length, $i, [']']);
 					$path[] = array('code' => $operator, 'value' => $this->parseQueryStringAttr($buffer));
 					++$i;
 					break;
@@ -285,20 +252,61 @@ class QuerySelectorEngine extends QueryEngine
 					//throw new DomException('Wrong QuerySelector string');
 					$operator = self::PATH_CODE_NAME;
 					$buffer = $char;
-					while(++$i < $length)
-					{
-						$char = substr($string, $i, 1);
-						if(in_array($char, $dividers))
-						{
-							break;
-						}
-
-						$buffer .= $char;
-					}
+					$buffer .= $this->writeToBuffer($string, $length, $i, $dividers);
 					$path[] = array('code' => $operator, 'value' => $buffer);
 			}
 		}
 
 		return $path;
+	}
+
+	/**
+	 * @param string $string
+	 * @param int $length
+	 * @param int $i
+	 * @param array $dividers
+	 * @return string
+	 */
+	protected function writeToBuffer($string, $length, &$i, array $dividers)
+	{
+		$buffer = '';
+		$escapeNext = false;
+
+		while(++$i < $length)
+		{
+			$char = mb_substr($string, $i, 1);
+			if($char === '\\')
+			{
+				if($escapeNext)
+				{
+					$buffer = mb_substr($buffer, 0, -1);
+					$escapeNext = false;
+				}
+				else
+				{
+					$escapeNext = true;
+				}
+			}
+			elseif(in_array($char, $dividers))
+			{
+				if($escapeNext)
+				{
+					$buffer = mb_substr($buffer, 0, -1);
+					$escapeNext = false;
+				}
+				else
+				{
+					break;
+				}
+			}
+			else
+			{
+				$escapeNext = false;
+			}
+
+			$buffer .= $char;
+		}
+
+		return $buffer;
 	}
 }

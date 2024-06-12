@@ -20,13 +20,13 @@ class CForumPrivateMessage extends CAllForumPrivateMessage
 		$arAddParams = (is_array($arAddParams) ? $arAddParams : array($arAddParams));
 		if (is_set($arAddParams, "nameTemplate"))
 			$arAddParams["sNameTemplate"] = $arAddParams["nameTemplate"];
-		$arAddParams["bCount"] = (!!$bCount || !!$arAddParams["bCount"]);
-		$arAddParams["nTopCount"] = ($iNum > 0 ? $iNum : ($arAddParams["nTopCount"] > 0 ? $arAddParams["nTopCount"] : 0));
+		$arAddParams["bCount"] = (!!$bCount || (isset($arAddParams["bCount"]) && !!$arAddParams["bCount"]));
+		$arAddParams["nTopCount"] = ($iNum > 0 ? $iNum : (isset($arAddParams["nTopCount"]) && $arAddParams["nTopCount"] > 0 ? $arAddParams["nTopCount"] : 0));
 
 		foreach ($arFilter as $key => $val)
 		{
 			$key_res = CForumNew::GetFilterOperation($key);
-			$key = strtoupper($key_res["FIELD"]);
+			$key = mb_strtoupper($key_res["FIELD"]);
 			$strNegative = $key_res["NEGATIVE"];
 			$strOperation = $key_res["OPERATION"];
 
@@ -37,43 +37,43 @@ class CForumPrivateMessage extends CAllForumPrivateMessage
 				case "AUTHOR_ID":
 				case "RECIPIENT_ID":
 				case "USER_ID":
-					if (IntVal($val)<=0)
+					if (intval($val)<=0)
 						$arSqlSearch[] = ($strNegative=="Y"?"NOT":"")."(PM.".$key." IS NULL OR PM.".$key."<=0)";
-					elseif (strToUpper($strOperation) == "IN")
-						$arSqlSearch[] = ($strNegative=="Y"?" PM.".$key." IS NULL OR NOT ":"")."(PM.".$key." ".$strOperation." (".IntVal($val).") )";
+					elseif (mb_strtoupper($strOperation) == "IN")
+						$arSqlSearch[] = ($strNegative=="Y"?" PM.".$key." IS NULL OR NOT ":"")."(PM.".$key." ".$strOperation." (".intval($val).") )";
 					else
-						$arSqlSearch[] = ($strNegative=="Y"?" PM.".$key." IS NULL OR NOT ":"")."(PM.".$key." ".$strOperation." ".IntVal($val)." )";
+						$arSqlSearch[] = ($strNegative=="Y"?" PM.".$key." IS NULL OR NOT ":"")."(PM.".$key." ".$strOperation." ".intval($val)." )";
 					break;
 				case "OWNER_ID":
 					if (COption::GetOptionString("forum", "UsePMVersion", "2") == 2)
 					{
 						$user_id = 0;
-						if (is_array($val) && intVal($val["USER_ID"]) > 0)
-							$user_id = intVal($val["USER_ID"]);
+						if (is_array($val) && intval($val["USER_ID"]) > 0)
+							$user_id = intval($val["USER_ID"]);
 						else
-							$user_id = intVal($val);
-						$arSqlSearch[] = 
+							$user_id = intval($val);
+						$arSqlSearch[] =
 							"(PM.USER_ID=".$user_id." AND ((PM.FOLDER_ID=2) OR (PM.FOLDER_ID=3)))";
 					}
-					else 
+					else
 					{
-						$arSqlSearch[] = 
-							"((PM.AUTHOR_ID=".intVal($val).") AND (PM.IS_READ='N')) OR (PM.USER_ID=".intVal($val)." AND (PM.FOLDER_ID=2))";
+						$arSqlSearch[] =
+							"((PM.AUTHOR_ID=".intval($val).") AND (PM.IS_READ='N')) OR (PM.USER_ID=".intval($val)." AND (PM.FOLDER_ID=2))";
 					}
 					break;
 				case "POST_SUBJ":
 				case "POST_MESSAGE":
 				case "USE_SMILES":
 				case "IS_READ":
-					if (strlen($val)<=0)
+					if ($val == '')
 						$arSqlSearch[] = ($strNegative=="Y"?"NOT":"")."(PM.".$key." IS NULL OR LENGTH(PM.".$key.")<=0)";
-					elseif (strToUpper($strOperation) == "IN")
+					elseif (mb_strtoupper($strOperation) == "IN")
 						$arSqlSearch[] = ($strNegative=="Y"?" PM.".$key." IS NULL OR NOT ":"")."(PM.".$key." ".$strOperation." ('".$DB->ForSql($val)."') )";
 					else
 						$arSqlSearch[] = ($strNegative=="Y"?" PM.".$key." IS NULL OR NOT ":"")."(PM.".$key." ".$strOperation." '".$DB->ForSql($val)."' )";
 				break;
 				case "POST_DATE":
-					if (strlen($val)<=0)
+					if ($val == '')
 						$arSqlSearch[] = ($strNegative=="Y"?"NOT":"")."(PM.".$key." IS NULL OR LENGTH(PM.".$key.")<=0)";
 					else
 						$arSqlSearch[] = ($strNegative=="Y"?" PM.".$key." IS NULL OR NOT ":"")."(PM.".$key." ".$strOperation." ".$DB->CharToDateFunction($DB->ForSql($val), "FULL")." )";
@@ -87,7 +87,7 @@ class CForumPrivateMessage extends CAllForumPrivateMessage
 		if ($arAddParams["bCount"] || is_set($arAddParams, "bDescPageNumbering"))
 		{
 			$strSql = "SELECT COUNT(PM.ID) AS CNT FROM b_forum_private_message PM WHERE (1=1) ".$strSqlSearch;
-			$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$db_res = $DB->Query($strSql);
 			$iCnt = ($db_res && ($res = $db_res->Fetch()) ? intval($res["CNT"]) : 0);
 			if ($arAddParams["bCount"])
 				return $iCnt;
@@ -95,9 +95,10 @@ class CForumPrivateMessage extends CAllForumPrivateMessage
 
 		foreach ($arOrder as $by=>$order)
 		{
-			$by = strtoupper($by); $order = strtoupper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			if ($order!="ASC") $order = "DESC";
-			
+
 			if ($by == "AUTHOR_NAME") $arSqlOrder[] = " AUTHOR_NAME ".$order." ";
 			elseif ($by == "RECIPIENT_NAME") $arSqlOrder[] = " RECIPIENT_NAME ".$order." ";
 			elseif ($by == "AUTHOR_ID") $arSqlOrder[] = " PM.AUTHOR_ID ".$order." ";
@@ -113,11 +114,11 @@ class CForumPrivateMessage extends CAllForumPrivateMessage
 				$by = "POST_DATE";
 			}
 		}
-		DelDuplicateSort($arSqlOrder); 
+		DelDuplicateSort($arSqlOrder);
 		if(!empty($arSqlOrder))
 			$strSqlOrder = " ORDER BY ".implode(", ", $arSqlOrder);
 
-		$strSql = 
+		$strSql =
 			"SELECT 
 				PM.ID, PM.POST_SUBJ, PM.POST_MESSAGE, PM.FOLDER_ID, PM.IS_READ, PM.USE_SMILES, PM.REQUEST_IS_READ, 
 				".$DB->DateToCharFunction("PM.POST_DATE", "FULL")." as POST_DATE, 
@@ -125,14 +126,14 @@ class CForumPrivateMessage extends CAllForumPrivateMessage
 				
 				PM.AUTHOR_ID, U.EMAIL AS AUTHOR_EMAIL, U.LOGIN AS AUTHOR_LOGIN, 
 				CASE
-					WHEN ((FU.SHOW_NAME='Y') AND (LENGTH(TRIM(CONCAT_WS('',".CForumUser::GetNameFieldsForQuery($arAddParams["sNameTemplate"]).")))>0))
-						THEN TRIM(REPLACE(CONCAT_WS(' ',".CForumUser::GetNameFieldsForQuery($arAddParams["sNameTemplate"])."), '  ', ' '))
+					WHEN ((FU.SHOW_NAME='Y') AND (LENGTH(TRIM(CONCAT_WS('',".CForumUser::GetNameFieldsForQuery($arAddParams["sNameTemplate"] ?? null).")))>0))
+						THEN TRIM(REPLACE(CONCAT_WS(' ',".CForumUser::GetNameFieldsForQuery($arAddParams["sNameTemplate"] ?? null)."), '  ', ' '))
 						ELSE U.LOGIN
 					END AS AUTHOR_NAME, 
 				PM.RECIPIENT_ID, UU.EMAIL AS RECIPIENT_EMAIL, UU.LOGIN AS RECIPIENT_LOGIN,
 				CASE
-					WHEN ((FUU.SHOW_NAME='Y') AND (LENGTH(TRIM(CONCAT_WS('',".CForumUser::GetNameFieldsForQuery($arAddParams["sNameTemplate"],"UU.").")))>0))
-					THEN TRIM(REPLACE(CONCAT_WS(' ',".CForumUser::GetNameFieldsForQuery($arAddParams["sNameTemplate"],"UU.")."), '  ', ' '))
+					WHEN ((FUU.SHOW_NAME='Y') AND (LENGTH(TRIM(CONCAT_WS('',".CForumUser::GetNameFieldsForQuery($arAddParams["sNameTemplate"] ?? null,"UU.").")))>0))
+					THEN TRIM(REPLACE(CONCAT_WS(' ',".CForumUser::GetNameFieldsForQuery($arAddParams["sNameTemplate"] ?? null,"UU.")."), '  ', ' '))
 					ELSE UU.LOGIN
 				END AS RECIPIENT_NAME
 			FROM b_forum_private_message PM
@@ -149,7 +150,7 @@ class CForumPrivateMessage extends CAllForumPrivateMessage
 		} else {
 			if ($arAddParams["nTopCount"] > 0)
 				$strSql .= " LIMIT 0,".$arAddParams["nTopCount"];
-			$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$db_res = $DB->Query($strSql);
 		}
 		return $db_res;
 	}
@@ -157,5 +158,5 @@ class CForumPrivateMessage extends CAllForumPrivateMessage
 
 class CForumPMFolder extends CAllForumPMFolder
 {
-	// 
+	//
 }

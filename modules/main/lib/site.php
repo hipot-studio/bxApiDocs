@@ -1,35 +1,59 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2012 Bitrix
+ * @copyright 2001-2022 Bitrix
  */
+
 namespace Bitrix\Main;
 
-use Bitrix\Main\Entity;
 use Bitrix\Main\IO;
+use Bitrix\Main\ORM\Fields;
 
-class SiteTable extends Entity\DataManager
+/**
+ * Class SiteTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Site_Query query()
+ * @method static EO_Site_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Site_Result getById($id)
+ * @method static EO_Site_Result getList(array $parameters = [])
+ * @method static EO_Site_Entity getEntity()
+ * @method static \Bitrix\Main\EO_Site createObject($setDefaultValues = true)
+ * @method static \Bitrix\Main\EO_Site_Collection createCollection()
+ * @method static \Bitrix\Main\EO_Site wakeUpObject($row)
+ * @method static \Bitrix\Main\EO_Site_Collection wakeUpCollection($rows)
+ */
+class SiteTable extends ORM\Data\DataManager
 {
-	private static $documentRootCache = array();
+	protected const CACHE_TTL = 86400;
+
+	protected static $documentRootCache = [];
 
 	public static function getDocumentRoot($siteId = null)
 	{
 		if ($siteId === null)
 		{
-			$context = Application::getInstance()->getContext();
-			$siteId = $context->getSite();
+			$siteId = Application::getInstance()->getContext()->getSite();
 		}
 
 		if (!isset(self::$documentRootCache[$siteId]))
 		{
-			$ar = SiteTable::getRow(array("filter" => array("LID" => $siteId)));
-			if ($ar && ($docRoot = $ar["DOC_ROOT"]) && (strlen($docRoot) > 0))
+			$site = static::getRow([
+				"filter" => ["=LID" => $siteId],
+				"cache" => ["ttl" => static::CACHE_TTL],
+			]);
+
+			if ($site && ($docRoot = $site["DOC_ROOT"]) && ($docRoot <> ''))
 			{
 				if (!IO\Path::isAbsolute($docRoot))
+				{
 					$docRoot = IO\Path::combine(Application::getDocumentRoot(), $docRoot);
-
+				}
 				self::$documentRootCache[$siteId] = $docRoot;
 			}
 			else
@@ -41,12 +65,6 @@ class SiteTable extends Entity\DataManager
 		return self::$documentRootCache[$siteId];
 	}
 
-
-	public static function getFilePath()
-	{
-		return __FILE__;
-	}
-
 	public static function getTableName()
 	{
 		return 'b_lang';
@@ -54,10 +72,17 @@ class SiteTable extends Entity\DataManager
 
 	public static function getMap()
 	{
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+
 		return array(
 			'LID' => array(
 				'data_type' => 'string',
 				'primary' => true
+			),
+			'ID' => array(
+				'data_type' => 'string',
+				'expression' => array('%s', 'LID'),
 			),
 			'SORT' => array(
 				'data_type' => 'integer',
@@ -101,7 +126,145 @@ class SiteTable extends Entity\DataManager
 			'CULTURE' => array(
 				'data_type' => 'Bitrix\Main\Localization\Culture',
 				'reference' => array('=this.CULTURE_ID' => 'ref.ID'),
+				'join_type' => 'INNER',
 			),
+			'LANGUAGE' => array(
+				'data_type' => 'Bitrix\Main\Localization\Language',
+				'reference' => array('=this.LANGUAGE_ID' => 'ref.ID'),
+				'join_type' => 'INNER',
+			),
+			(new Fields\ExpressionField('DIR_LENGTH', $helper->getLengthFunction('%s'), 'DIR')),
+			(new Fields\ExpressionField('DOC_ROOT_LENGTH', $helper->getIsNullFunction($helper->getLengthFunction('%s'), '0'), 'DOC_ROOT')),
 		);
+	}
+
+	public static function getByDomain(string $host, string $directory)
+	{
+		$site = null;
+
+		$sites = static::getList([
+			'select' => ['*'],
+			'filter' => ['=ACTIVE' => 'Y'],
+			'order' => [
+				'DIR_LENGTH' => 'DESC',
+				'DOMAIN_LIMITED' => 'DESC',
+				'SORT' => 'ASC',
+			],
+			'cache' => ['ttl' => static::CACHE_TTL],
+		])->fetchAll();
+
+		$result = SiteDomainTable::getList([
+			'select' => ['LD_LID' => 'LID', 'LD_DOMAIN' => 'DOMAIN'],
+			'order' => ['DOMAIN_LENGTH' => 'DESC'],
+			'cache' => ['ttl' => static::CACHE_TTL],
+		]);
+
+		$domains = [];
+		while ($row = $result->fetch())
+		{
+			$domains[$row['LD_LID']][] = $row;
+		}
+
+		$join = [];
+		foreach ($sites as $row)
+		{
+			//LEFT JOIN
+			$left = true;
+			//LEFT JOIN b_lang_domain LD ON L.LID=LD.LID
+			if (array_key_exists($row['LID'], $domains))
+			{
+				foreach ($domains[$row['LID']] as $dom)
+				{
+					//AND '".$DB->ForSql($CURR_DOMAIN, 255)."' LIKE CONCAT('%', LD.DOMAIN)
+					if (strcasecmp(mb_substr(".".$host, -mb_strlen("." . $dom['LD_DOMAIN'])), "." . $dom['LD_DOMAIN']) == 0)
+					{
+						$join[] = $row + $dom;
+						$left = false;
+					}
+				}
+			}
+			if ($left)
+			{
+				$join[] = $row + ['LD_LID' => '', 'LD_DOMAIN' => ''];
+			}
+		}
+
+		$rows = [];
+		foreach ($join as $row)
+		{
+			//WHERE ('".$DB->ForSql($cur_dir)."' LIKE CONCAT(L.DIR, '%') OR LD.LID IS NOT NULL)
+			if ($row['LD_LID'] != '' || strcasecmp(mb_substr($directory, 0, mb_strlen($row['DIR'])), $row['DIR']) == 0)
+			{
+				$rows[] = $row;
+			}
+		}
+
+		foreach ($rows as $row)
+		{
+			if (
+				(strcasecmp(mb_substr($directory, 0, mb_strlen($row['DIR'])), $row['DIR']) == 0)
+				&& (($row['DOMAIN_LIMITED'] == 'Y' && $row['LD_LID'] != '') || $row['DOMAIN_LIMITED'] != 'Y')
+			)
+			{
+				$site = $row;
+				break;
+			}
+		}
+
+		if ($site === null)
+		{
+			foreach ($rows as $row)
+			{
+				if (strncasecmp($directory, $row['DIR'], mb_strlen($directory)) == 0)
+				{
+					$site = $row;
+					break;
+				}
+			}
+		}
+
+		if($site === null)
+		{
+			foreach ($rows as $row)
+			{
+				if (($row['DOMAIN_LIMITED'] == 'Y' && $row['LD_LID'] != '') || $row['DOMAIN_LIMITED'] != 'Y')
+				{
+					$site = $row;
+					break;
+				}
+			}
+		}
+
+		if ($site === null && !empty($rows))
+		{
+			$site = $rows[0];
+		}
+
+		if ($site === null)
+		{
+			$site = static::getList([
+				'select' => ['*'],
+				'filter' => ['=ACTIVE' => 'Y'],
+				'order' => [
+					'DEF' => 'DESC',
+					'SORT' => 'ASC',
+				],
+				'cache' => ['ttl' => static::CACHE_TTL],
+			])->fetch();
+		}
+
+		if ($site)
+		{
+	  		// unset fields added from left join
+			unset($site['LD_LID'], $site['LD_DOMAIN']);
+		}
+
+		return $site;
+	}
+
+	public static function cleanCache(): void
+	{
+		parent::cleanCache();
+		self::$documentRootCache = [];
 	}
 }

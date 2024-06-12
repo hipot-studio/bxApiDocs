@@ -57,7 +57,7 @@ class CBPStateService
 		}
 	}
 
-	static public function SetStateParameters($workflowId, $arStateParameters = array())
+	public function SetStateParameters($workflowId, $arStateParameters = array())
 	{
 		global $DB;
 
@@ -77,7 +77,7 @@ class CBPStateService
 		);
 	}
 
-	static public function AddStateParameter($workflowId, $arStateParameter)
+	public function AddStateParameter($workflowId, $arStateParameter)
 	{
 		global $DB;
 
@@ -110,7 +110,7 @@ class CBPStateService
 		}
 	}
 
-	static public function DeleteStateParameter($workflowId, $name)
+	public function DeleteStateParameter($workflowId, $name)
 	{
 		global $DB;
 

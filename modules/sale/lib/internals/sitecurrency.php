@@ -10,6 +10,22 @@ namespace Bitrix\Sale\Internals;
 use	Bitrix\Main,
 	Bitrix\Main\Application;
 
+/**
+ * Class SiteCurrencyTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_SiteCurrency_Query query()
+ * @method static EO_SiteCurrency_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_SiteCurrency_Result getById($id)
+ * @method static EO_SiteCurrency_Result getList(array $parameters = [])
+ * @method static EO_SiteCurrency_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_SiteCurrency createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_SiteCurrency_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_SiteCurrency wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_SiteCurrency_Collection wakeUpCollection($rows)
+ */
 class SiteCurrencyTable extends Main\Entity\DataManager
 {
 	private static $cache = array();
@@ -45,19 +61,6 @@ class SiteCurrencyTable extends Main\Entity\DataManager
 	 * @param string $siteId		Site id.
 	 * @return bool|array
 	 */
-	
-	/**
-	* <p>Метод возвращает параметры валюты сайта. Метод статический.</p>
-	*
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/sitecurrencytable/getcurrency.php
-	* @author Bitrix
-	*/
 	public static function getCurrency($siteId)
 	{
 		$siteId = (string)$siteId;
@@ -88,21 +91,8 @@ class SiteCurrencyTable extends Main\Entity\DataManager
 	 * Returns site currency.
 	 *
 	 * @param string $siteId				Site id.
-	 * @return bool|string
+	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает код валюты сайта. Метод статический.</p>
-	*
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/sitecurrencytable/getsitecurrency.php
-	* @author Bitrix
-	*/
 	public static function getSiteCurrency($siteId)
 	{
 		$siteData = self::getCurrency($siteId);

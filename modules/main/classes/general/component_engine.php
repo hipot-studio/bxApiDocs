@@ -6,19 +6,10 @@
  * @copyright 2001-2013 Bitrix
  */
 
-
-/**
- * Класс <b> CComponentEngine </b>инкапсулирует вспомогательные методы, полезные при разработке компонентов.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/main/reference/ccomponentengine/index.php
- * @author Bitrix
- */
 class CComponentEngine
 {
+	public $cacheSalt = '';
+
 	private $component = null;
 	private $greedyParts = array();
 	private $resolveCallback = false;
@@ -28,7 +19,7 @@ class CComponentEngine
 	 * <p>Takes component as parameter and initializing the object.</p>
 	 * @param CBitrixComponent $component
 	 */
-	public function __construct($component = null)
+	function __construct($component = null)
 	{
 		if ($component instanceof CBitrixComponent)
 			$this->component = $component;
@@ -101,7 +92,7 @@ class CComponentEngine
 	 * @return bool
 	 *
 	 */
-	static public function hasNoVariables($pageTemplate)
+	public function hasNoVariables($pageTemplate)
 	{
 		return strpos($pageTemplate, "#") === false;
 	}
@@ -139,9 +130,9 @@ class CComponentEngine
 
 		foreach ($arUrlTemplates as $pageID => $pageTemplate)
 		{
-			$pos = strpos($pageTemplate, "?");
+			$pos = mb_strpos($pageTemplate, "?");
 			if ($pos !== false)
-				$pageTemplate = substr($pageTemplate, 0, $pos);
+				$pageTemplate = mb_substr($pageTemplate, 0, $pos);
 
 			if ($this->hasNoVariables($pageTemplate))
 				$resultNoHash[$pageID] = $pageTemplate;
@@ -175,7 +166,7 @@ class CComponentEngine
 			$pageTemplateReg = preg_replace("'#[^#]+?#'", "([^/]+?)", $pageTemplate);
 		}
 
-		if (substr($pageTemplateReg, -1, 1) == "/")
+		if (mb_substr($pageTemplateReg, -1, 1) == "/")
 			$pageTemplateReg .= "index\\.php";
 
 		$arValues = array();
@@ -231,10 +222,11 @@ class CComponentEngine
 			$folder404 = "/".trim($folder404, "/ \t\n\r\0\x0B")."/";
 
 		//SEF base URL must match curent URL (several components on the same page)
-		if(strpos($requestURL, $folder404) !== 0)
+		if(mb_strpos($requestURL, $folder404) !== 0)
 			return false;
 
-		$currentPageUrl = substr($requestURL, strlen($folder404));
+		$currentPageUrl = mb_substr($requestURL, mb_strlen($folder404));
+		$this->cacheSalt = md5($currentPageUrl);
 
 		$pageCandidates = array();
 		$arUrlTemplates = $this->sortUrlTemplates($arUrlTemplates, $bHasGreedyPartsInTemplates);
@@ -310,12 +302,17 @@ class CComponentEngine
 						$arVariables[$variableName] = $_REQUEST[$aliasName];
 		}
 
-		for ($i = 0, $cnt = count($arComponentVariables); $i < $cnt; $i++)
-			if (!array_key_exists($arComponentVariables[$i], $arVariables)
-				&& array_key_exists($arComponentVariables[$i], $_REQUEST))
+		if ($arComponentVariables && is_array($arComponentVariables))
+		{
+			for ($i = 0, $cnt = count($arComponentVariables); $i < $cnt; $i++)
 			{
-				$arVariables[$arComponentVariables[$i]] = $_REQUEST[$arComponentVariables[$i]];
+				if (!array_key_exists($arComponentVariables[$i], $arVariables)
+					&& array_key_exists($arComponentVariables[$i], $_REQUEST))
+				{
+					$arVariables[$arComponentVariables[$i]] = $_REQUEST[$arComponentVariables[$i]];
+				}
 			}
+		}
 	}
 	/**
 	 * Prepares templates based on default and provided.

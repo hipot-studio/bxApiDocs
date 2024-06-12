@@ -1,17 +1,7 @@
-<?
+<?php
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/socialnetwork/classes/general/user.php");
 
-
-/**
- * <b>CSocNetUser</b> - класс, содержащий вспомогательные методы для работы с пользователями социальной сети.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/socialnetwork/classes/csocnetuser/index.php
- * @author Bitrix
- */
 class CSocNetUser extends CAllSocNetUser
 {
 	public static function SearchUsers($searchString, $groupId = 0, $numberOfUsers = 10)
@@ -19,11 +9,9 @@ class CSocNetUser extends CAllSocNetUser
 		global $DB;
 
 		$searchString = Trim($searchString);
-		//if (StrLen($searchString) <= 0)
-		//	return false;
 
-		$groupId = IntVal($groupId);
-		$numberOfUsers = IntVal($numberOfUsers);
+		$groupId = intval($groupId);
+		$numberOfUsers = intval($numberOfUsers);
 		if ($numberOfUsers <= 0)
 			$numberOfUsers = 10;
 
@@ -48,6 +36,6 @@ class CSocNetUser extends CAllSocNetUser
 			"ORDER BY U.LAST_NAME ASC, U.NAME ASC, U.SECOND_NAME ASC ".
 			"LIMIT 0, ".$numberOfUsers."";
 
-		return $DB->Query($strSql, false, "Function CSocNetUser::SearchUsers: ".__LINE__);
+		return $DB->Query($strSql);
 	}
 }

@@ -4,7 +4,7 @@
  * @package Bitrix\Sale\Location
  * @subpackage sale
  * @copyright 2001-2015 Bitrix
- * 
+ *
  * This class is for internal use only, not a part of public API.
  * It can be changed at any time without notification.
  *
@@ -35,7 +35,8 @@ abstract class CommonHelper
 	{
 		$map = array();
 
-		$dbHelper = Main\HttpApplication::getConnection()->getSqlHelper();
+		$dbConnection = Main\HttpApplication::getConnection();
+		$dbHelper = $dbConnection->getSqlHelper();
 
 		if(is_array($fields))
 		{
@@ -43,12 +44,14 @@ abstract class CommonHelper
 				$map[] = $dbHelper->forSql($fld);
 		}
 
-		return 'insert into '.$dbHelper->forSql($tableName).' ('.implode(',', $map).') values ';
+		return 'INSERT ' . ($dbConnection->getType() === 'pgsql' ? '' : 'IGNORE ') . 'INTO '.$dbHelper->forSql($tableName).' ('.implode(',', $map).') values ';
 	}
 
 	public static function getBatchInsertTail()
 	{
-		return '';
+		$dbConnection = Main\HttpApplication::getConnection();
+
+		return $dbConnection->getType() === 'pgsql' ? ' ON CONFLICT DO NOTHING' : '';
 	}
 
 	public static function getBatchInsertSeparator()
@@ -68,22 +71,35 @@ abstract class CommonHelper
 
 	protected static function prepareSql($row, $fields, $map)
 	{
-		if(!is_array($row) || empty($row) || !is_array($fields) || empty($fields) || !is_array($map) || empty($map))
+		if (!is_array($row) || empty($row) || !is_array($fields) || empty($fields) || !is_array($map) || empty($map))
+		{
 			return '';
+		}
 
-		$sql = array();
-		foreach($fields as $fld => $none)
+		$connection = Main\HttpApplication::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		unset($connection);
+
+		$sql = [];
+		foreach ($fields as $fld => $none)
 		{
 			$val = $row[$fld];
 
 			// only numeric and literal fields supported at the moment
-			if($map[$fld]['data_type'] == 'integer')
-				$sql[] = intval($val);
+			if (
+				isset($map[$fld]['data_type'])
+				&& $map[$fld]['data_type'] == 'integer'
+			)
+			{
+				$sql[] = (int)$val;
+			}
 			else
-				$sql[] = "'".Main\HttpApplication::getConnection()->getSqlHelper()->forSql($val)."'";
+			{
+				$sql[] = "'" . $sqlHelper->forSql($val) . "'";
+			}
 		}
 
-		return '('.implode(',', $sql).')';
+		return '(' . implode(',', $sql) . ')';
 	}
 
 	// makes sense only for mssql
@@ -136,7 +152,7 @@ abstract class CommonHelper
 
 	public static function createIndex($tableName, $ixNamePostfix, $columns = array(), $unique = false)
 	{
-		if(!strlen($tableName) || !strlen($ixNamePostfix) || !is_array($columns) || empty($columns))
+		if(!mb_strlen($tableName) || !mb_strlen($ixNamePostfix) || !is_array($columns) || empty($columns))
 			return false;
 
 		$dbConnection = Main\HttpApplication::getConnection();
@@ -148,7 +164,7 @@ abstract class CommonHelper
 
 		$ixName = static::getIndexName($tableName, $ixNamePostfix, $columns);
 
-		if(strlen($ixName) > 30)
+		if(mb_strlen($ixName) > 30)
 			return false;
 
 		if(!static::checkIndexNameExists($ixName, $tableName))
@@ -162,7 +178,7 @@ abstract class CommonHelper
 
 	protected static function getIndexName($tableName, $ixNamePostfix, $columns = array())
 	{
-		return 'IX_'.preg_replace('#^B_#', '', ToUpper($tableName))."_".ToUpper($ixNamePostfix);
+		return 'IX_'.preg_replace('#^B_#', '', mb_strtoupper($tableName))."_".mb_strtoupper($ixNamePostfix);
 	}
 
 	protected static function escapeArray($columns)
@@ -204,6 +220,6 @@ abstract class CommonHelper
 
 	public static function needSelectFieldsInOrderByWhenDistinct()
 	{
-		return false;
+		return true;
 	}
 }

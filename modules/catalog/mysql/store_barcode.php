@@ -4,12 +4,7 @@ require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/catalog/general/store_ba
 class CCatalogStoreBarCode
 	extends CAllCatalogStoreBarCode
 {
-	/** Add new store in table b_catalog_store_barcode,
-	 * @static
-	 * @param $arFields
-	 * @return bool|int
-	 */
-	static function add($arFields)
+	public static function add($arFields)
 	{
 		global $DB;
 
@@ -43,7 +38,15 @@ class CCatalogStoreBarCode
 		return $lastId;
 	}
 
-	static function getList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
+	/**
+	 * @param array $arOrder
+	 * @param array $arFilter
+	 * @param bool|array $arGroupBy
+	 * @param bool|array $arNavStartParams
+	 * @param array $arSelectFields
+	 * @return bool|CDBResult
+	 */
+	public static function getList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		global $DB;
 		if (empty($arSelectFields))

@@ -3,7 +3,7 @@ require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/search/classes/general/t
 
 class CSearchTitle extends CAllSearchTitle
 {
-	public function searchTitle($phrase = "", $nTopCount = 5, $arParams = array(), $bNotFilter = false, $order = "")
+	function searchTitle($phrase = "", $nTopCount = 5, $arParams = array(), $bNotFilter = false, $order = "")
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$bOrderByRank = ($order == "rank");
@@ -18,7 +18,7 @@ class CSearchTitle extends CAllSearchTitle
 				if ($last && !preg_match("/[\\n\\r \\t]$/", $phrase))
 				{
 					$last = false;
-					if (strlen($word) >= $this->minLength)
+					if (mb_strlen($word) >= $this->minLength)
 						$s = $sqlWords[] = "ct.WORD like '".$DB->ForSQL($word)."%'";
 					else
 						$s = "";
@@ -54,8 +54,6 @@ class CSearchTitle extends CAllSearchTitle
 					,sc.PARAM1
 					,sc.PARAM2
 					,sc.DATE_CHANGE
-					,L.DIR
-					,L.SERVER_NAME
 					,sc.URL as URL
 					,scsite.URL as SITE_URL
 					,scsite.SITE_ID
@@ -64,7 +62,6 @@ class CSearchTitle extends CAllSearchTitle
 					,min(ct.POS) RANK3
 				FROM
 					b_search_content_title ct
-					INNER JOIN b_lang L ON ct.SITE_ID = L.LID
 					inner join b_search_content sc on sc.ID = ct.SEARCH_CONTENT_ID
 					INNER JOIN b_search_content_site scsite ON sc.ID = scsite.SEARCH_CONTENT_ID and ct.SITE_ID = scsite.SITE_ID
 				WHERE
@@ -73,7 +70,7 @@ class CSearchTitle extends CAllSearchTitle
 					AND (".implode(" OR ", $sqlWords).")
 					".(!empty($strSqlWhere)? "AND ".$strSqlWhere: "")."
 				GROUP BY
-					ID, MODULE_ID, ITEM_ID, TITLE, PARAM1, PARAM2, DATE_CHANGE, DIR, SERVER_NAME, URL, SITE_URL, SITE_ID
+					ID, MODULE_ID, ITEM_ID, TITLE, PARAM1, PARAM2, DATE_CHANGE, URL, SITE_URL, SITE_ID
 				".(count($sqlHaving) > 1? "HAVING ".implode(" AND ", $sqlHaving): "")."
 				ORDER BY ".(
 				$bOrderByRank?
@@ -84,7 +81,7 @@ class CSearchTitle extends CAllSearchTitle
 			";
 
 			$r = $DB->Query($strSql);
-			parent::CDBResult($r);
+			parent::__construct($r);
 			return true;
 		}
 		else
@@ -93,13 +90,13 @@ class CSearchTitle extends CAllSearchTitle
 		}
 	}
 
-	public static function getRankFunction($phrase)
+	function getRankFunction($phrase)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		return "if(locate('".$DB->ForSQL(ToUpper($phrase))."', upper(sc.TITLE)) > 0, 1, 0)";
 	}
 
-	public static function getSqlOrder($bOrderByRank)
+	function getSqlOrder($bOrderByRank)
 	{
 		if ($bOrderByRank)
 			return "RANK1 DESC, TITLE";

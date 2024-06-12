@@ -20,7 +20,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Sale\Delivery\Restrictions
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_ServiceRestriction_Query query()
+ * @method static EO_ServiceRestriction_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_ServiceRestriction_Result getById($id)
+ * @method static EO_ServiceRestriction_Result getList(array $parameters = [])
+ * @method static EO_ServiceRestriction_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_ServiceRestriction createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_ServiceRestriction_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_ServiceRestriction wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_ServiceRestriction_Collection wakeUpCollection($rows)
+ */
 
 class ServiceRestrictionTable extends Main\Entity\DataManager
 {
@@ -55,7 +68,7 @@ class ServiceRestrictionTable extends Main\Entity\DataManager
 			),
 			'SORT' => array(
 				'data_type' => 'integer',
-				'default' => 100,
+				'default_value' => 100,
 				'title' => Loc::getMessage('DELIVERY_RESTRICTION_ENTITY_SORT_FIELD'),
 			),
 			'CLASS_NAME' => array(

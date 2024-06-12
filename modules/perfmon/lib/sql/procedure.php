@@ -26,25 +26,6 @@ class Procedure extends BaseObject
 	 *
 	 * @return Procedure
 	 */
-	
-	/**
-	* <p>Статический метод создает хранящуюся процедуру из токенов.</p> <p></p> <p> Текущая позиция должна указывать на тип хранящейся процедуры (<code>PROCEDURE</code>, <code>FUNCTION</code> или <code>TYPE</code>). Имя может состоять из двух частей, разделенных с помощью '.'.</p>
-	*
-	*
-	* @param mixed $Bitrix  Набор токенов.
-	*
-	* @param Bitri $Perfmon  
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param Tokenizer $tokenizer  
-	*
-	* @return \Bitrix\Perfmon\Sql\Procedure 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/procedure/create.php
-	* @author Bitrix
-	*/
 	public static function create(Tokenizer $tokenizer)
 	{
 		$type = $tokenizer->getCurrentToken()->text;
@@ -56,7 +37,7 @@ class Procedure extends BaseObject
 		if ($token->text === '.')
 		{
 			$token = $tokenizer->nextToken();
-			$name .= '.'.$token->text;
+			$name .= '.' . $token->text;
 		}
 		$procedure = new self($name, $type);
 
@@ -80,19 +61,6 @@ class Procedure extends BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL для создания процедуры.</p>
-	*
-	*
-	* @param string $dbType = '' Тип базы данных (<i>MYSQL</i>, <i>ORACLE</i> или <i>MSSQL</i>).
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/procedure/getcreateddl.php
-	* @author Bitrix
-	*/
 	public function getCreateDdl($dbType = '')
 	{
 		return $this->body;
@@ -105,22 +73,9 @@ class Procedure extends BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL для удаления процедуры.</p>
-	*
-	*
-	* @param string $dbType = '' Тип базы данных (<i>MYSQL</i>, <i>ORACLE</i> или <i>MSSQL</i>).
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/procedure/getdropddl.php
-	* @author Bitrix
-	*/
 	public function getDropDdl($dbType = '')
 	{
-		return "DROP ".$this->type." ".$this->name;
+		return 'DROP ' . $this->type . ' ' . $this->name;
 	}
 
 	/**
@@ -131,32 +86,11 @@ class Procedure extends BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает  DDL для модификации процедуры.</p>
-	*
-	*
-	* @param mixed $Bitrix  Целевой объект.
-	*
-	* @param Bitri $Perfmon  Тип базы данных (<i>MYSQL</i>, <i>ORACLE</i> или <i>MSSQL</i>).
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param BaseObject $target  
-	*
-	* @param string $dbType = '' 
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/procedure/getmodifyddl.php
-	* @author Bitrix
-	*/
 	public function getModifyDdl(BaseObject $target, $dbType = '')
 	{
-		return array(
+		return [
 			$this->getDropDdl($dbType),
 			$target->getCreateDdl($dbType),
-		);
+		];
 	}
 }

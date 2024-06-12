@@ -1,9 +1,9 @@
 <?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CSupportTimetable
 {
-
 	static $fieldsTypes = array(
 		"ID" =>					array("TYPE" => CSupportTableFields::VT_NUMBER,	"DEF_VAL" => 0,		"AUTO_CALCULATED" => true),
 		"NAME" =>				array("TYPE" => CSupportTableFields::VT_STRING,	"DEF_VAL" => "", 	"MAX_STR_LEN" => 255),
@@ -22,8 +22,7 @@ class CSupportTimetable
 	const TABLE = "b_ticket_timetable";
 	const TABLE_SHEDULE = "b_ticket_sla_shedule";
 	
-	
-	static function err_mess()
+	public static function err_mess()
 	{
 		$module_id = "support";
 		@include($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/" . $module_id . "/install/version.php");
@@ -69,7 +68,7 @@ class CSupportTimetable
 		$id = $f->ID;
 		$isNew = ($f->ID <= 0);
 		
-		if(strlen($f->NAME) <= 0)
+		if($f->NAME == '')
 		{
 				$APPLICATION->ThrowException(GetMessage('SUP_ERROR_EMPTY_NAME'));
 				return false;
@@ -159,11 +158,11 @@ class CSupportTimetable
 		}
 		foreach($arFilter as $key => $val)
 		{
-			if((is_array($val) && count($val) <= 0) || (!is_array($val) && (strlen($val) <= 0 || $val === 'NOT_REF')))
+			if((is_array($val) && count($val) <= 0) || (!is_array($val) && ((string) $val == '' || $val === 'NOT_REF')))
 			{
 				continue;
 			}
-			$key = strtoupper($key);
+			$key = mb_strtoupper($key);
 			if (is_array($val))
 			{
 				$val = implode(" | ",$val);
@@ -200,7 +199,7 @@ class CSupportTimetable
 		}
 		foreach($arSort as $by => $order)
 		{
-			if(strtoupper($order) != "DESC")
+			if(mb_strtoupper($order) != "DESC")
 			{
 				$order="ASC";
 			}
@@ -299,7 +298,4 @@ class CSupportTimetable
 		
 		return false;
 	}
-
-
 }
-?>

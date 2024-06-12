@@ -54,10 +54,11 @@ class PaySystem extends Base\Restriction
 	}
 
 	/**
-	 * @param CollectableEntity $entity
+	 * @param Sale\Internals\Entity $entity
+	 *
 	 * @return array
 	 */
-	protected static function extractParams(CollectableEntity $entity)
+	protected static function extractParams(Sale\Internals\Entity $entity)
 	{
 		$result = array();
 
@@ -79,6 +80,10 @@ class PaySystem extends Base\Restriction
 				if ($order)
 					$paymentCollection = $order->getPaymentCollection();
 			}
+		}
+		elseif ($entity instanceOf Sale\Order)
+		{
+			$paymentCollection = $entity->getPaymentCollection();
 		}
 
 		if ($paymentCollection !== null)

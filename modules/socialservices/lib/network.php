@@ -40,17 +40,31 @@ class Network
 
 	protected static $lastUserStatus = null;
 
-	public function __construct()
+	function __construct()
 	{
 		$this->errorCollection = new ErrorCollection();
 	}
 
 	/**
-	 * @return boolean
+	 * Returns if option is turned on
+	 *
+	 * @return bool
+	 * @deprecated
 	 */
-	static public function isEnabled()
+	public function isOptionEnabled()
 	{
-		return Option::get('socialservices', 'network_enable', 'N') == 'Y';
+		return false;
+	}
+
+	/**
+	 * Returns if network communication is avalable for current user
+	 *
+	 * @return boolean
+	 * @deprecated
+	 */
+	public function isEnabled()
+	{
+		return false;
 	}
 
 	/**
@@ -62,27 +76,15 @@ class Network
 	 */
 	public function setEnable($enable = true)
 	{
-		if ($this->isEnabled() && $enable)
+		if ($this->isOptionEnabled() && $enable)
 			return true;
 
-		if (!$this->isEnabled() && !$enable)
+		if (!$this->isOptionEnabled() && !$enable)
 			return true;
 
-		$query = \CBitrix24NetPortalTransport::init();
-		if (!$query)
-		{
-			$this->errorCollection[] = new Error(Loc::getMessage('B24NET_SOCSERV_TRANSPORT_ERROR'), self::ERROR_SOCSERV_TRANSPORT);
-			return false;
-		}
+		$this->errorCollection[] = new Error(Loc::getMessage('B24NET_NETWORK_IN_NOT_ENABLED_MSGVER_1'), self::ERROR_NETWORK_IN_NOT_ENABLED);
 
-		$queryResult = $query->call('feature.enable', array(
-			'FEATURE' => 'replica',
-			'STATUS' => (bool)$enable,
-		));
-
-		Option::set('socialservices', 'network_enable', $enable? 'Y': 'N');
-
-		return true;
+		return false;
 	}
 
 	/**
@@ -92,44 +94,12 @@ class Network
 	 *
 	 * @param string $search Search query string.
 	 * @return array|null
+	 * @deprecated
 	 */
 	public function searchUser($search)
 	{
-		if (!$this->isEnabled())
-		{
-			$this->errorCollection[] = new Error(Loc::getMessage('B24NET_NETWORK_IN_NOT_ENABLED'), self::ERROR_NETWORK_IN_NOT_ENABLED);
-			return null;
-		}
-
-		$search = trim($search);
-		if (strlen($search) < 3)
-		{
-			$this->errorCollection[] = new Error(Loc::getMessage('B24NET_SEARCH_STRING_TO_SHORT'), self::ERROR_SEARCH_STRING_TO_SHORT);
-			return null;
-		}
-
-		$query = \CBitrix24NetPortalTransport::init();
-		if (!$query)
-		{
-			$this->errorCollection[] = new Error(Loc::getMessage('B24NET_SOCSERV_TRANSPORT_ERROR'), self::ERROR_SOCSERV_TRANSPORT);
-			return null;
-		}
-
-		$queryResult = $query->call('profile.search', array(
-			'QUERY' => $search
-		));
-
-		$result = Array();
-		foreach ($queryResult['result'] as $user)
-		{
-			if (!$user = self::formatUserParam($user))
-			{
-				continue;
-			}
-			$result[] = $user;
-		}
-
-		return $result;
+		$this->errorCollection[] = new Error(Loc::getMessage('B24NET_NETWORK_IN_NOT_ENABLED_MSGVER_1'), self::ERROR_NETWORK_IN_NOT_ENABLED);
+		return null;
 	}
 
 	/**
@@ -155,14 +125,14 @@ class Network
 	{
 		if (!$this->isEnabled())
 		{
-			$this->errorCollection[] = new Error(Loc::getMessage('B24NET_NETWORK_IN_NOT_ENABLED'), self::ERROR_NETWORK_IN_NOT_ENABLED);
+			$this->errorCollection[] = new Error(Loc::getMessage('B24NET_NETWORK_IN_NOT_ENABLED_MSGVER_1'), self::ERROR_NETWORK_IN_NOT_ENABLED);
 			return null;
 		}
 
 		$query = \CBitrix24NetPortalTransport::init();
 		if (!$query)
 		{
-			$this->errorCollection[] = new Error(Loc::getMessage('B24NET_SOCSERV_TRANSPORT_ERROR'), self::ERROR_SOCSERV_TRANSPORT);
+			$this->errorCollection[] = new Error(Loc::getMessage('B24NET_SOCSERV_TRANSPORT_ERROR_MSGVER_1'), self::ERROR_SOCSERV_TRANSPORT);
 			return null;
 		}
 
@@ -176,7 +146,7 @@ class Network
 			'ID' => array_values($networkIds),
 			'QUERY' => trim($lastSearch)
 		));
-		
+
 		$result = null;
 		foreach ($queryResult['result'] as $user)
 		{
@@ -269,12 +239,6 @@ class Network
 	 */
 	public function addUser($params)
 	{
-		if (!$this->isEnabled())
-		{
-			$this->errorCollection[] = new Error(Loc::getMessage('B24NET_NETWORK_IN_NOT_ENABLED'), self::ERROR_NETWORK_IN_NOT_ENABLED);
-			return false;
-		}
-
 		$password = md5($params['XML_ID'].'|'.$params['CLIENT_DOMAIN'].'|'.rand(1000,9999).'|'.time().'|'.uniqid());
 		$photo = \CFile::MakeFileArray($params['PERSONAL_PHOTO_ORIGINAL']);
 		$groups = Array();
@@ -363,7 +327,7 @@ class Network
 		$searchArray = Array();
 		foreach ($networkIds as $networkId)
 		{
-			$searchArray[] = substr($networkId, 0, 1).intval(substr($networkId, 1))."|%";
+			$searchArray[] = mb_substr($networkId, 0, 1).intval(mb_substr($networkId, 1))."|%";
 		}
 
 		$result = \Bitrix\Main\UserTable::getList(Array(
@@ -587,42 +551,6 @@ class Network
 				"REGISTER_SECRET" => $options["REGISTER_SECRET"],
 			)));
 		}
-	}
-
-	public static function getLastBroadcastCheck()
-	{
-		return Option::get("socialservices", "network_last_update_check", 0);
-	}
-
-	public static function setLastBroadcastCheck()
-	{
-		Option::set("socialservices", "network_last_update_check", time());
-	}
-
-	public static function checkBroadcastData()
-	{
-		$query = \CBitrix24NetPortalTransport::init();
-		if ($query)
-		{
-			$query->call(
-				"broadcast.check",
-				array(
-					"broadcast_last_check" => static::getLastBroadcastCheck()
-				)
-			);
-		}
-	}
-
-	public static function processBroadcastData($data)
-	{
-		ContactTable::onNetworkBroadcast($data);
-
-		foreach(GetModuleEvents("socialservices", "OnNetworkBroadcast", true) as $eventHandler)
-		{
-			ExecuteModuleEventEx($eventHandler, array($data));
-		}
-
-		static::setLastBroadcastCheck();
 	}
 
 	public static function setLastUserStatus($status)

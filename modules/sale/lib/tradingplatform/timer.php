@@ -15,20 +15,7 @@ class Timer
 	 * Constructor.
 	 * @param int $newTimeLimit Timelimit seconds.
 	 */
-	
-	/**
-	* <p>Создает объект данного типа. Метод нестатический.</p>
-	*
-	*
-	* @param integer $newTimeLimit  Временной лимит (в секундах).
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/timer/__construct.php
-	* @author Bitrix
-	*/
-	public function __construct($newTimeLimit = 0)
+	public function __construct($newTimeLimit = 0, $increaseTimeLimit = true)
 	{
 		$startTime = (int)time();
 		$currentTimeLimit = ini_get('max_execution_time');
@@ -39,8 +26,14 @@ class Timer
 			$timeLimit = $currentTimeLimit;
 
 		$this->timeLimit = $timeLimit;
-		$this->finishTime =  $startTime + (int)($timeLimit);
-		@set_time_limit($timeLimit);
+		if($increaseTimeLimit) {
+			$this->finishTime =  $startTime + (int)($timeLimit);
+			@set_time_limit($timeLimit);
+		}
+		else {
+			$this->finishTime =  $startTime + (int)($newTimeLimit);
+		}
+
 	}
 
 	/**
@@ -48,19 +41,6 @@ class Timer
 	 * @param int $reserveTime Insurance time.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод проверяет, истекло ли время. Метод нестатический.</p>
-	*
-	*
-	* @param integer $reserveTime  Время проверки.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/timer/check.php
-	* @author Bitrix
-	*/
 	public function check($reserveTime = 0)
 	{
 		if($this->timeLimit == 0)

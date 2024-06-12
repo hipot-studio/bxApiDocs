@@ -5,7 +5,8 @@ use Bitrix\Main;
 
 class DuplicateIndexMismatch
 {
-	public static function register($entityTypeID, $leftEntityID, $rightEntityID, $typeID, $matchHash, $userID)
+	public static function register($entityTypeID, $leftEntityID, $rightEntityID, $typeID, $matchHash, $userID,
+									$scope = DuplicateIndexType::DEFAULT_SCOPE)
 	{
 		Entity\DuplicateIndexMismatchTable::upsert(
 			array(
@@ -14,23 +15,28 @@ class DuplicateIndexMismatch
 				'TYPE_ID' => $typeID,
 				'MATCH_HASH' => $matchHash,
 				'L_ENTITY_ID' => $leftEntityID,
-				'R_ENTITY_ID' => $rightEntityID
+				'R_ENTITY_ID' => $rightEntityID,
+				'SCOPE' => $scope
 			)
 		);
 
 	}
-	public static function unregister($entityTypeID, $leftEntityID, $rightEntityID, $typeID, $matchHash, $userID)
+	public static function unregister($entityTypeID, $leftEntityID, $rightEntityID, $typeID, $matchHash, $userID,
+										$scope = null)
 	{
-		Entity\DuplicateIndexMismatchTable::delete(
-			array(
-				'USER_ID'=> $userID,
-				'ENTITY_TYPE_ID' => $entityTypeID,
-				'TYPE_ID' => $typeID,
-				'MATCH_HASH' => $matchHash,
-				'L_ENTITY_ID' => $leftEntityID,
-				'R_ENTITY_ID' => $rightEntityID
-			)
+		$params = array(
+			'USER_ID'=> $userID,
+			'ENTITY_TYPE_ID' => $entityTypeID,
+			'TYPE_ID' => $typeID,
+			'MATCH_HASH' => $matchHash,
+			'L_ENTITY_ID' => $leftEntityID,
+			'R_ENTITY_ID' => $rightEntityID
 		);
+
+		if ($scope !== null)
+			$params['SCOPE'] = $scope;
+
+		Entity\DuplicateIndexMismatchTable::delete($params);
 	}
 	public static function unregisterEntity($entityTypeID, $entityID)
 	{
@@ -90,7 +96,7 @@ class DuplicateIndexMismatch
 		$dbResult = $query->exec();
 		while($fields = $dbResult->fetch())
 		{
-			$results[] = (int)$fields['ENTITY_ID'];
+			$results[(int)$fields['ENTITY_ID']] = true;
 		}
 
 		$query = new Main\Entity\Query(Entity\DuplicateIndexMismatchTable::getEntity());
@@ -110,9 +116,9 @@ class DuplicateIndexMismatch
 		$dbResult = $query->exec();
 		while($fields = $dbResult->fetch())
 		{
-			$results[] = (int)$fields['ENTITY_ID'];
+			$results[(int)$fields['ENTITY_ID']] = true;
 		}
 
-		return $results;
+		return array_keys($results);
 	}
 }

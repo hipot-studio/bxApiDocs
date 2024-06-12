@@ -1,10 +1,16 @@
 <?php
 namespace Bitrix\Crm\Integration;
+use Bitrix\Main;
+use Bitrix\Sale;;
+use Bitrix\Crm;
+use Bitrix\Crm\EntityPreset;
+use Bitrix\Crm\EntityRequisite;
+use Bitrix\Crm\RequisiteAddress;
+
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
-//use Bitrix\Main;
 class SaleManager
 {
 	public static function ensureQuotePaySystemsCreated()
@@ -17,7 +23,7 @@ class SaleManager
 		$siteID = '';
 		$languageID = '';
 
-		$dbSites = \CSite::GetList($by = 'sort', $order = 'desc', array('DEFAULT' => 'Y', 'ACTIVE' => 'Y'));
+		$dbSites = \CSite::GetList('sort', 'desc', array('DEFAULT' => 'Y', 'ACTIVE' => 'Y'));
 		$defaultSite = is_object($dbSites) ? $dbSites->Fetch() : null;
 		if(is_array($defaultSite))
 		{
@@ -38,6 +44,18 @@ class SaleManager
 		$paySysName = "quote_{$languageID}";
 		$paySystems = array();
 
+		$newPSContactParams = $newPSCompanyParams = false;
+		if (EntityPreset::isUTFMode())
+			$rqCountryId = \CCrmPaySystem::getPresetCountryIdByPS('quote', $languageID);
+		else
+			$rqCountryId = EntityPreset::getCurrentCountryId();
+		if ($rqCountryId > 0 && in_array($rqCountryId, EntityRequisite::getAllowedRqFieldCountries(), true))
+		{
+			/*$newPSContactParams = (Main\Config\Option::get('crm', '~CRM_TRANSFER_REQUISITES_TO_CONTACT', 'N') !== 'Y');
+			$newPSCompanyParams = (Main\Config\Option::get('crm', '~CRM_TRANSFER_REQUISITES_TO_COMPANY', 'N') !== 'Y');*/
+			$newPSContactParams = $newPSCompanyParams = true;
+		}
+
 		$customPaySystemPath = \COption::GetOptionString('sale', 'path2user_ps_files', '');
 		if($customPaySystemPath === '')
 		{
@@ -47,11 +65,47 @@ class SaleManager
 		$personTypeIDs = \CCrmPaySystem::getPersonTypeIDs();
 		if(isset($personTypeIDs['COMPANY']))
 		{
+			$psParams = array(
+				'DATE_INSERT' => array('TYPE' => 'ORDER', 'VALUE' => 'DATE_BILL_DATE'),
+				'DATE_PAY_BEFORE' => array('TYPE' => 'ORDER', 'VALUE' => 'DATE_PAY_BEFORE'),
+				'BUYER_NAME' => array(
+					'TYPE' => $newPSCompanyParams ? 'REQUISITE' : 'PROPERTY',
+					'VALUE' => $newPSCompanyParams ? 'RQ_COMPANY_NAME|'.$rqCountryId : 'COMPANY'
+				),
+				'BUYER_INN' => array(
+					'TYPE' => $newPSCompanyParams ? 'REQUISITE' : 'PROPERTY',
+					'VALUE' => $newPSCompanyParams ? 'RQ_INN|'.$rqCountryId : 'INN'
+				),
+				'BUYER_ADDRESS' => array(
+					'TYPE' => $newPSCompanyParams ? 'REQUISITE' : 'PROPERTY',
+					'VALUE' => $newPSCompanyParams ?
+						'RQ_ADDR_'.RequisiteAddress::Registered.'|'.$rqCountryId : 'COMPANY_ADR'
+				),
+				'BUYER_PHONE' => array(
+					'TYPE' => $newPSCompanyParams ? 'REQUISITE' : 'PROPERTY',
+					'VALUE' => $newPSCompanyParams ? 'RQ_PHONE|'.$rqCountryId : 'PHONE'
+				),
+				'BUYER_FAX' => array(
+					'TYPE' => $newPSCompanyParams ? 'REQUISITE' : 'PROPERTY',
+					'VALUE' => $newPSCompanyParams ? 'RQ_FAX|'.$rqCountryId : 'FAX'
+				),
+				'BUYER_PAYER_NAME' => array(
+					'TYPE' => $newPSCompanyParams ? 'REQUISITE' : 'PROPERTY',
+					'VALUE' => $newPSCompanyParams ? 'RQ_CONTACT|'.$rqCountryId : 'CONTACT_PERSON'
+				)
+			);
+			foreach (\CCrmPaySystem::getDefaultBuyerParams('CRM_COMPANY', 'quote', $rqCountryId)
+						as $paramName => $paramValue)
+			{
+				$psParams[$paramName] = $paramValue;
+			}
+			foreach (\CCrmPaySystem::getDefaultMyCompanyParams('quote', $rqCountryId) as $paramName => $paramValue)
+				$psParams[$paramName] = $paramValue;
+			$psParams['COMMENT1'] = array('TYPE' => 'ORDER', 'VALUE' => 'USER_DESCRIPTION');
 			$paySystems[] = array(
 				'NAME' => Loc::getMessage('CRM_PS_QUOTE_COMPANY', null, $languageID),
 				'SORT' => 200,
 				'DESCRIPTION' => '',
-				'CODE_TEMP' => $paySysName,
 				'ACTION' => array(
 					array(
 						'PERSON_TYPE_ID' => $personTypeIDs['COMPANY'],
@@ -59,20 +113,7 @@ class SaleManager
 						'ACTION_FILE' => "$customPaySystemPath{$paySysName}",
 						'RESULT_FILE' => '',
 						'NEW_WINDOW' => 'Y',
-						'PARAMS' =>
-							serialize(
-								array(
-									'DATE_INSERT' => array('TYPE' => 'ORDER', 'VALUE' => 'DATE_BILL_DATE'),
-									'DATE_PAY_BEFORE' => array('TYPE' => 'ORDER', 'VALUE' => 'DATE_PAY_BEFORE'),
-									'BUYER_NAME' => array('TYPE' => 'PROPERTY', 'VALUE' => 'COMPANY'),
-									'BUYER_INN' => array('TYPE' => 'PROPERTY', 'VALUE' => 'INN'),
-									'BUYER_ADDRESS' => array('TYPE' => 'PROPERTY', 'VALUE' => 'COMPANY_ADR'),
-									'BUYER_PHONE' => array('TYPE' => 'PROPERTY', 'VALUE' => 'PHONE'),
-									'BUYER_FAX' => array('TYPE' => 'PROPERTY', 'VALUE' => 'FAX'),
-									'BUYER_PAYER_NAME' => array('TYPE' => 'PROPERTY', 'VALUE' => 'CONTACT_PERSON'),
-									'COMMENT1' => array('TYPE' => 'ORDER', 'VALUE' => 'USER_DESCRIPTION')
-								)
-							),
+						'PARAMS' => serialize($psParams),
 						'HAVE_PAYMENT' => 'Y',
 						'HAVE_ACTION' => 'N',
 						'HAVE_RESULT' => 'N',
@@ -85,11 +126,43 @@ class SaleManager
 
 		if(isset($personTypeIDs['CONTACT']))
 		{
+			$psParams = array(
+				'DATE_INSERT' => array('TYPE' => 'ORDER', 'VALUE' => 'DATE_BILL_DATE'),
+				'DATE_PAY_BEFORE' => array('TYPE' => 'ORDER', 'VALUE' => 'DATE_PAY_BEFORE'),
+				'BUYER_NAME' => array(
+					'TYPE' => $newPSContactParams ? 'REQUISITE' : 'PROPERTY',
+					'VALUE' => $newPSContactParams ? 'RQ_NAME|'.$rqCountryId : 'FIO'
+				),
+				'BUYER_INN' => array(
+					'TYPE' => $newPSContactParams ? 'REQUISITE' : 'PROPERTY',
+					'VALUE' => $newPSContactParams ? 'RQ_INN|'.$rqCountryId : 'INN'
+				),
+				'BUYER_ADDRESS' => array(
+					'TYPE' => $newPSContactParams ? 'REQUISITE' : 'PROPERTY',
+					'VALUE' => $newPSContactParams ?
+						'RQ_ADDR_'.RequisiteAddress::Primary.'|'.$rqCountryId : 'ADDRESS'
+				),
+				'BUYER_PHONE' => array(
+					'TYPE' => $newPSContactParams ? 'REQUISITE' : 'PROPERTY',
+					'VALUE' => $newPSContactParams ? 'RQ_PHONE|'.$rqCountryId : 'PHONE'
+				),
+				'BUYER_FAX' => array('TYPE' => '', 'VALUE' => ''),
+				'BUYER_PAYER_NAME' => array('TYPE' => '', 'VALUE' => '')
+			);
+			foreach (
+				\CCrmPaySystem::getDefaultBuyerParams('CRM_CONTACT', 'quote', $rqCountryId)
+				as $paramName => $paramValue
+			)
+			{
+				$psParams[$paramName] = $paramValue;
+			}
+			foreach (\CCrmPaySystem::getDefaultMyCompanyParams('quote', $rqCountryId) as $paramName => $paramValue)
+				$psParams[$paramName] = $paramValue;
+			$psParams['COMMENT1'] = array('TYPE' => 'ORDER', 'VALUE' => 'USER_DESCRIPTION');
 			$paySystems[] = array(
 				'NAME' => Loc::getMessage('CRM_PS_QUOTE_CONTACT', null, $languageID),
 				'SORT' => 300,
 				'DESCRIPTION' => '',
-				'CODE_TEMP' => $paySysName,
 				'ACTION' => array(
 					array(
 						'PERSON_TYPE_ID' => $personTypeIDs['CONTACT'],
@@ -97,19 +170,7 @@ class SaleManager
 						'ACTION_FILE' => "$customPaySystemPath{$paySysName}",
 						'RESULT_FILE' => '',
 						'NEW_WINDOW' => 'Y',
-						'PARAMS' => serialize(
-							array(
-								'DATE_INSERT' => array('TYPE' => 'ORDER', 'VALUE' => 'DATE_BILL_DATE'),
-								'DATE_PAY_BEFORE' => array('TYPE' => 'ORDER', 'VALUE' => 'DATE_PAY_BEFORE'),
-								'BUYER_NAME' => array('TYPE' => 'PROPERTY', 'VALUE' => 'FIO'),
-								'BUYER_INN' => array('TYPE' => 'PROPERTY', 'VALUE' => 'INN'),
-								'BUYER_ADDRESS' => array('TYPE' => 'PROPERTY', 'VALUE' => 'ADDRESS'),
-								'BUYER_PHONE' => array('TYPE' => 'PROPERTY', 'VALUE' => 'PHONE'),
-								'BUYER_FAX' => array('TYPE' => '', 'VALUE' => ''),
-								'BUYER_PAYER_NAME' => array('TYPE' => 'PROPERTY', 'VALUE' => 'FIO'),
-								'COMMENT1' => array('TYPE' => 'ORDER', 'VALUE' => 'USER_DESCRIPTION')
-							)
-						),
+						'PARAMS' => serialize($psParams),
 						'HAVE_PAYMENT' => 'Y',
 						'HAVE_ACTION' => 'N',
 						'HAVE_RESULT' => 'N',
@@ -169,7 +230,7 @@ class SaleManager
 		$siteID = '';
 		$languageID = '';
 
-		$dbSites = \CSite::GetList($by = 'sort', $order = 'desc', array('DEFAULT' => 'Y', 'ACTIVE' => 'Y'));
+		$dbSites = \CSite::GetList('sort', 'desc', array('DEFAULT' => 'Y', 'ACTIVE' => 'Y'));
 		$defaultSite = is_object($dbSites) ? $dbSites->Fetch() : null;
 		if(is_array($defaultSite))
 		{

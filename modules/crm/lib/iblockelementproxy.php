@@ -24,7 +24,8 @@ class IBlockElementProxyTable extends Entity\DataManager
 		return array(
 			'ID' => array(
 				'data_type' => 'integer',
-				'primary' => true
+				'primary' => true,
+				'autocomplete' => true,
 			),
 			'IBLOCK_ID' => array(
 				'data_type' => 'integer'
@@ -36,7 +37,23 @@ class IBlockElementProxyTable extends Entity\DataManager
 	}
 }
 
-// Greated only for groupping deal products in report (please see CCrmReportHelper::getGrcColumns)
+/**
+ * Class IBlockElementGrcProxyTable
+ * Created only for grouping deal products in report (please see CCrmReportHelper::getGrcColumns)
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_IBlockElementGrcProxy_Query query()
+ * @method static EO_IBlockElementGrcProxy_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_IBlockElementGrcProxy_Result getById($id)
+ * @method static EO_IBlockElementGrcProxy_Result getList(array $parameters = [])
+ * @method static EO_IBlockElementGrcProxy_Entity getEntity()
+ * @method static \Bitrix\Crm\EO_IBlockElementGrcProxy createObject($setDefaultValues = true)
+ * @method static \Bitrix\Crm\EO_IBlockElementGrcProxy_Collection createCollection()
+ * @method static \Bitrix\Crm\EO_IBlockElementGrcProxy wakeUpObject($row)
+ * @method static \Bitrix\Crm\EO_IBlockElementGrcProxy_Collection wakeUpCollection($rows)
+ */
 class IBlockElementGrcProxyTable extends Entity\DataManager
 {
 	public static function getTableName()
@@ -49,7 +66,8 @@ class IBlockElementGrcProxyTable extends Entity\DataManager
 		return array(
 			'ID' => array(
 				'data_type' => 'integer',
-				'primary' => true
+				'primary' => true,
+				'autocomplete' => true,
 			),
 			'NAME' => array(
 				'data_type' => 'string'

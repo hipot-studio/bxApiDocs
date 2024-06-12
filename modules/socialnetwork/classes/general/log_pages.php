@@ -1,4 +1,5 @@
-<?
+<?php
+
 class CSocNetLogPages
 {
 	public static function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
@@ -39,16 +40,16 @@ class CSocNetLogPages
 			"SELECT ".$arSqls["SELECT"]." ".
 			"FROM b_sonet_log_page SLP ".
 			"	".$arSqls["FROM"]." ";
-		if (strlen($arSqls["WHERE"]) > 0)
+		if ($arSqls["WHERE"] <> '')
 		{
 			$strSql .= "WHERE ".$arSqls["WHERE"]." ";
 		}
-		if (strlen($arSqls["ORDERBY"]) > 0)
+		if ($arSqls["ORDERBY"] <> '')
 		{
 			$strSql .= "ORDER BY ".$arSqls["ORDERBY"]." ";
 		}
 
-		$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbRes = $DB->Query($strSql);
 
 		return $dbRes;
 	}
@@ -66,7 +67,7 @@ class CSocNetLogPages
 
 		$strWhere = " USER_ID = ".$user_id;
 		if (
-			strlen($site_id) > 0
+			$site_id <> ''
 			&& $site_id != "**"
 		)
 		{
@@ -74,7 +75,7 @@ class CSocNetLogPages
 		}
 
 		if (
-			strlen($group_code) > 0
+			$group_code <> ''
 			&& $group_code != "**"
 		)
 		{
@@ -87,7 +88,7 @@ class CSocNetLogPages
 		}
 
 		$strSQL = "DELETE FROM b_sonet_log_page WHERE ".$strWhere;
-		if ($DB->Query($strSQL, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__))
+		if ($DB->Query($strSQL))
 		{
 			return true;
 		}
@@ -110,7 +111,7 @@ class CSocNetLogPages
 		if (
 			$user_id <= 0
 			|| $page_size <= 0
-			|| strlen($page_last_date) <= 0
+			|| $page_last_date == ''
 		)
 		{
 			return false;
@@ -158,4 +159,3 @@ class CSocNetLogPages
 		}
 	}
 }
-?>

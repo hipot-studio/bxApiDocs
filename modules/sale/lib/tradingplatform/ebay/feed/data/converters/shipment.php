@@ -8,7 +8,7 @@ use Bitrix\Main\SystemException;
 class Shipment extends DataConverter
 {
 	//todo: multiply track numbers
-	static public function convert($data)
+	public function convert($data)
 	{
 		$result = "";
 

@@ -13,17 +13,6 @@ IncludeModuleLangFile(__FILE__);
  * <li> SORT int optional default 500
  * </ul>
  */
-
-/**
- * CIBlockType - класс для работы с типами информационных блоков.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/index.php
- * @author Bitrix
- */
 class CIBlockType
 {
 	/**
@@ -58,43 +47,6 @@ class CIBlockType
 	 * 	values with zero string length are ignored.
 	 * @return CDBResult
 	 */
-	
-	/**
-	* <p>Возвращает список типов информационных блоков по фильтру <i>arFilter</i> с сортировкой <i>arOrder</i>. Метод статический.</p>
-	*
-	*
-	* @param array $arrayarOrder = Array("SORT"=>"ASC") Массив полей для сортировки, содержащий пары "поле
-	* сортировки"=&gt;"направление сортировки".         <br>       		Поля
-	* сортировки могут принимать значения:         <br>    <i>id</i> - код типа;    
-	*     <br>    <i>sort</i> - индекс сортировки;         <br>    <i>NAME</i> - название
-	* типа.         <br>
-	*
-	* @param array $arrayarFilter = Array() Массив вида array("фильтруемое поле"=&gt;"значение" [, ...])         <br>      
-	* 		может принимать значения:         <br>    <i>ID</i> - регистронезависимый
-	* по подстроке в коде типа;         <br>    <i>=ID</i> - точное совпадение с
-	* кодом типа;         <br>    <i>NAME</i> - регистронезависимый по подстроке в
-	* названии типа (для всех языков);         <br>       		 	 Необязательное. По
-	* умолчанию записи не фильтруются.	  <br>    <i>LANGUAGE_ID</i> - код языка.       
-	*  <br>
-	*
-	* @return CDBResult <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$db_iblock_type = CIBlockType::GetList();<br>while($ar_iblock_type = $db_iblock_type-&gt;Fetch())<br>{<br>   if($arIBType = CIBlockType::GetByIDLang($ar_iblock_type["ID"], LANG))<br>   {<br>      echo htmlspecialcharsEx($arIBType["NAME"])."&lt;br&gt;";<br>   }   <br>}<br>?&gt;<br>
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a> </li>   <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblocktype">Поля CIBlockType</a> </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder = array("SORT" => "ASC"), $arFilter = array())
 	{
 		/** @global CDatabase $DB */
@@ -107,45 +59,45 @@ class CIBlockType
 
 		foreach ($arFilter as $key => $val)
 		{
-			if (!is_array($val) && strlen($val) <= 0)
+			if (!is_array($val) && $val == '')
 				continue;
 
-			switch (strtoupper($key))
+			switch(mb_strtoupper($key))
 			{
-			case "ID":
-				$strSqlSearch .= "AND UPPER(T.ID) LIKE UPPER('".$DB->ForSql($val)."')\n";
-				break;
+				case "ID":
+					$strSqlSearch .= "AND UPPER(T.ID) LIKE UPPER('".$DB->ForSql($val)."')\n";
+					break;
 
-			case "=ID":
-				if (is_array($val))
-				{
-					if (!empty($val))
+				case "=ID":
+					if(is_array($val))
 					{
-						$sqlVal = array_map(array($DB, 'ForSQL'), $val);
-						$strSqlSearch .= "AND T.ID in ('".implode("', '", $sqlVal)."')\n";
+						if(!empty($val))
+						{
+							$sqlVal = array_map(array($DB, 'ForSQL'), $val);
+							$strSqlSearch .= "AND T.ID in ('".implode("', '", $sqlVal)."')\n";
+						}
 					}
-				}
-				else
-				{
-					$strSqlSearch .= "AND T.ID = '".$DB->ForSql($val)."'\n";
-				}
-				break;
+					else
+					{
+						$strSqlSearch .= "AND T.ID = '".$DB->ForSql($val)."'\n";
+					}
+					break;
 
-			case "NAME":
-				$strSqlSearch .= "AND UPPER(TL.NAME) LIKE UPPER('%".$DB->ForSql($val)."%')\n";
-				$bLang = true;
-				break;
-			case "LANGUAGE_ID":
-				$strSqlSearch .= "AND TL.LID = '".$DB->ForSql($val)."'\n";
-				$bLang = true;
-				break;
+				case "NAME":
+					$strSqlSearch .= "AND UPPER(TL.NAME) LIKE UPPER('%".$DB->ForSql($val)."%')\n";
+					$bLang = true;
+					break;
+				case "LANGUAGE_ID":
+					$strSqlSearch .= "AND TL.LID = '".$DB->ForSql($val)."'\n";
+					$bLang = true;
+					break;
 			}
 		}
 
 		$strSqlOrder = '';
 		foreach ($arOrder as $by => $order)
 		{
-			$by = strtoupper($by);
+			$by = mb_strtoupper($by);
 			if ($by == "ID")
 				$by = "T.ID";
 			elseif ($by == "NAME")
@@ -157,7 +109,7 @@ class CIBlockType
 			else
 				$by = "T.SORT";
 
-			$order = strtolower($order);
+			$order = mb_strtolower($order);
 			if ($order != "desc")
 				$order = "asc";
 
@@ -259,24 +211,6 @@ class CIBlockType
 	 * @param string $ID iblock type ID
 	 * @return CDBResult
 	 */
-	
-	/**
-	* <p>Возвращает тип информационных блоков по его коду <i>ID</i>. Метод статический.</p>
-	*
-	*
-	* @param string $stringID  Код типа.
-	*
-	* @return CDBResult <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a></li>  	    <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/index.php">CIBlockType</a></li>  </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		if (CACHED_b_iblock_type === false)
@@ -327,37 +261,6 @@ class CIBlockType
 	 * @param bool $bFindAny Forces strict search
 	 * @return array|bool
 	 */
-	
-	/**
-	* <p>Метод возвращает языковые настройки типа информационных блоков по его коду <i>ID</i>, для языка <i>LANGUAGE_ID</i>. Если <span class="syntax">для языка <i>LANGUAGE_ID</i> нет настроек и параметр <i>bFindAny</i> установлен в true, метод вернет настройки типа для языка по умолчанию.</span> Метод статический.</p>
-	*
-	*
-	* @param string $stringID  Код типа.
-	*
-	* @param string $LANGUAGE_ID  Код языка.
-	*
-	* @param bool $bFindAny = true Возвращать настройки для языка по умолчинию или нет.
-	* Необязательный. По умолчанию - возвращать.
-	*
-	* @return mixed <a href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblocktype">полей</a><a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblocktypelang">параметров</a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$db_iblock_type = CIBlockType::GetList();<br>while($ar_iblock_type = $db_iblock_type-&gt;Fetch())<br>{<br>   if($arIBType = CIBlockType::GetByIDLang($ar_iblock_type["ID"], LANG))<br>   {<br>      echo htmlspecialcharsex($arIBType["NAME"])."&lt;br&gt;";<br>   }   <br>}<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblocktype">Поля CIBlockType</a> </li>    
-	* <li> <a href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblocktypelang">Языкозависимые поля
-	* CIBlockType</a> </li>  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/getbyidlang.php
-	* @author Bitrix
-	*/
 	public static function GetByIDLang($ID, $LID, $bFindAny = true)
 	{
 		/** @global CDatabase $DB */
@@ -413,30 +316,6 @@ class CIBlockType
 	 * @param string $ID iblock type ID.
 	 * @return bool|CDBResult
 	 */
-	
-	/**
-	* <p>Метод удаляет тип информационных блоков по его коду <i>ID</i>. Также удаляются все информационные блоки указанного типа. Метод статический.   <br></p>
-	*
-	*
-	* @param mixed $stringID  Код типа.
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$DB-&gt;StartTransaction();<br>if(!CIBlockType::Delete('catalog'))<br>{<br>    $DB-&gt;Rollback();<br>    echo 'Delete error!';<br>}<br>$DB-&gt;Commit();<br>?&gt;<br>
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblock/delete.php">CIBlock::Delete</a></li>  </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		/** @global CDatabase $DB */
@@ -483,7 +362,7 @@ class CIBlockType
 
 		if ($ID === false)
 		{
-			if (!isset($arFields["ID"]) || strlen($arFields["ID"]) <= 0)
+			if (!isset($arFields["ID"]) || $arFields["ID"] == '')
 			{
 				$this->LAST_ERROR .= GetMessage("IBLOCK_TYPE_BAD_ID")."<br>";
 			}
@@ -511,7 +390,7 @@ class CIBlockType
 		{
 			foreach ($arFields["LANG"] as $lid => $arFieldsLang)
 			{
-				if (strlen($arFieldsLang["NAME"]) <= 0)
+				if ($arFieldsLang["NAME"] == '')
 				{
 					$this->LAST_ERROR .= GetMessage("IBLOCK_TYPE_BAD_NAME")." ".$lid.".<br>";
 				}
@@ -544,37 +423,6 @@ class CIBlockType
 	 * @param array $arFields
 	 * @return bool
 	 */
-	
-	/**
-	* <p> Метод добавляет новый тип информационных блоков. В случае ошибки в свойстве объекта LAST_ERROR будет содержаться текст ошибки. Нестатический метод.</p> <p></p> <div class="note"> <b>Примечание:</b> вызов метода без ключа <b>LANG</b> (или с пустым ключом) вызывает ошибку.</div>
-	*
-	*
-	* @param array $arFields  Массив поле=&gt;значение... 	Содержит значения <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblocktype">полей типа информационных
-	* блоков</a>. 	В элементе массива arFields["LANG"] должен содержаться
-	* ассоциативный массив <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblocktypelang">языковых свойств</a>
-	* типа.Ключами этого массива служат идентификаторы языков.         <br>
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$arFields = Array(<br>	'ID'=&gt;'catalog',<br>	'SECTIONS'=&gt;'Y',<br>	'IN_RSS'=&gt;'N',<br>	'SORT'=&gt;100,<br>	'LANG'=&gt;Array(<br>		'en'=&gt;Array(<br>			'NAME'=&gt;'Catalog',<br>			'SECTION_NAME'=&gt;'Sections',<br>			'ELEMENT_NAME'=&gt;'Products'<br>			)<br>		)<br>	);<br><br>$obBlocktype = new CIBlockType;<br>$DB-&gt;StartTransaction();<br>$res = $obBlocktype-&gt;Add($arFields);<br>if(!$res)<br>{<br>   $DB-&gt;Rollback();<br>   echo 'Error: '.$obBlocktype-&gt;LAST_ERROR.'&lt;br&gt;';<br>}<br>else<br>   $DB-&gt;Commit();<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/index.php">CIBlockType</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/update.php">Update()</a> </li>   <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblocktype">Поля типа информационных
-	* блоков</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/add.php
-	* @author Bitrix
-	*/
 	public function Add($arFields)
 	{
 		/** @global CDatabase $DB */
@@ -613,40 +461,6 @@ class CIBlockType
 	 * @param array $arFields
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод изменяет параметры типа информационных блоков с кодом <i>ID</i>. Нестатический метод.</p>
-	*
-	*
-	* @param string $stringID  Код изменяемой записи.
-	*
-	* @param array $arFields  Массив поле=&gt;значение... 	 	Содержит значения <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblocktype">полей типа информационных
-	* блоков</a>. В элементе массива arFields["LANG"] должен содержаться
-	* ассоциативный массив <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblocktypelang">языковых свойств</a> типа.
-	* Ключами этого массива служат идентификаторы языков.
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$arFields = Array(<br>	'SECTIONS'=&gt;'Y',<br>	'IN_RSS'=&gt;'N',<br>	'SORT'=&gt;100,<br>	'LANG'=&gt;Array(<br>		'en'=&gt;Array(<br>			'NAME'=&gt;'Catalog',<br>			'SECTION_NAME'=&gt;'Sections',<br>			'ELEMENT_NAME'=&gt;'Products'<br>			)<br>		)<br>	);<br>
-	* $obBlocktype = new CIBlockType;<br>$DB-&gt;StartTransaction();<br>$res = $obBlocktype-&gt;Update('catalog', $arFields);<br>if(!$res)<br>{<br>   $DB-&gt;Rollback();<br>   echo 'Error: '.$obBlocktype-&gt;LAST_ERROR.'&lt;br&gt;';<br>}<br>else<br>   $DB-&gt;Commit();<br>?&gt;<br>
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/index.php">CIBlockType</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/add.php">Add()</a> </li>   <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblocktype">Поля типа информационных
-	* блоков</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblocktype/update.php
-	* @author Bitrix
-	*/
 	public function Update($ID, $arFields)
 	{
 		/** @global CDatabase $DB */
@@ -690,16 +504,19 @@ class CIBlockType
 			$DB->Query("DELETE FROM b_iblock_type_lang WHERE IBLOCK_TYPE_ID='".$DB->ForSQL($ID)."'");
 			foreach ($arLang as $lid => $arFieldsLang)
 			{
-				if (strlen($arFieldsLang["NAME"]) > 0 || strlen($arFieldsLang["ELEMENT_NAME"]) > 0)
+				$name = (string)($arFieldsLang['NAME'] ?? '');
+				$elementName = (string)($arFieldsLang['ELEMENT_NAME'] ?? '');
+				$sectionName = (string)($arFieldsLang['SECTION_NAME'] ?? '');
+				if ($name !== '' || $elementName !== '')
 				{
 					$DB->Query("
 						INSERT INTO b_iblock_type_lang(IBLOCK_TYPE_ID, LID, NAME, SECTION_NAME, ELEMENT_NAME)
 						SELECT
 							BT.ID,
 							L.LID,
-							'".$DB->ForSql($arFieldsLang["NAME"], 100)."',
-							'".$DB->ForSql($arFieldsLang["SECTION_NAME"], 100)."',
-							'".$DB->ForSql($arFieldsLang["ELEMENT_NAME"], 100)."'
+							'".$DB->ForSql($name, 100)."',
+							'".$DB->ForSql($sectionName, 100)."',
+							'".$DB->ForSql($elementName, 100)."'
 						FROM
 							b_iblock_type BT,
 							b_language L

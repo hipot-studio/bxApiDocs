@@ -1,15 +1,28 @@
 <?php
 namespace Bitrix\Crm\Merger;
 use Bitrix\Main;
-use Bitrix\Crm;
 
 class EntityMergerFactory
 {
-	/** Create new entity merger by specified entity type ID
+	final public static function isEntityTypeSupported(int $entityTypeId): bool
+	{
+		try
+		{
+			self::create($entityTypeId, 0);
+
+			return true;
+		}
+		catch (Main\NotSupportedException)
+		{
+			return false;
+		}
+	}
+
+	/** Create new entity merger by specified entity type ID.
 	 * @static
-	 * @param int $entityTypeID
-	 * @param int $currentUserID
-	 * @param bool $enablePermissionCheck
+	 * @param int $entityTypeID Entity type ID.
+	 * @param int $currentUserID Current user ID.
+	 * @param bool $enablePermissionCheck Permission check flag.
 	 * @return EntityMerger
 	 */
 	public static function create($entityTypeID, $currentUserID, $enablePermissionCheck = false)
@@ -27,6 +40,10 @@ class EntityMergerFactory
 		if($entityTypeID === \CCrmOwnerType::Lead)
 		{
 			return new LeadMerger($currentUserID, $enablePermissionCheck);
+		}
+		elseif($entityTypeID === \CCrmOwnerType::Deal)
+		{
+			return new DealMerger($currentUserID, $enablePermissionCheck);
 		}
 		elseif($entityTypeID === \CCrmOwnerType::Contact)
 		{

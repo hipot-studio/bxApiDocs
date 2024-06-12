@@ -4,8 +4,8 @@ use Bitrix\Main;
 class LiveMailCsvFileImport extends CsvFileImport
 {
 	protected $headerMap = null;
-	protected static $WEB_SITE_TYPES = array('Personal', 'Business');
-	protected static $ADDRESS_TYPES = array('Business', 'Home');
+	protected static $webSiteTypes = array('Personal', 'Business');
+	protected static $addressTypes = array('Business', 'Home');
 
 	public function __construct()
 	{
@@ -97,7 +97,7 @@ class LiveMailCsvFileImport extends CsvFileImport
 		$websiteInfos = $this->getWebsites($data);
 		foreach($websiteInfos as &$websiteInfo)
 		{
-			$valueType = strtoupper($websiteInfo['VALUE_TYPE']);
+			$valueType = mb_strtoupper($websiteInfo['VALUE_TYPE']);
 			if($valueType === 'PERSONAL')
 			{
 				$valueType = 'HOME';
@@ -198,7 +198,7 @@ class LiveMailCsvFileImport extends CsvFileImport
 		$result = array();
 
 		$value = '';
-		foreach(self::$WEB_SITE_TYPES as $type)
+		foreach(self::$webSiteTypes as $type)
 		{
 			if($this->tryToGetValue("{$type} Web Page", $data, $value, $map, true) && $value !== '')
 			{
@@ -219,7 +219,7 @@ class LiveMailCsvFileImport extends CsvFileImport
 		}
 
 		$result = array();
-		foreach(self::$ADDRESS_TYPES as $type)
+		foreach(self::$addressTypes as $type)
 		{
 			$info = $this->getAddress(
 				$data,

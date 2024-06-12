@@ -1,9 +1,7 @@
 <?php
 namespace Bitrix\Im\Model;
 
-use Bitrix\Main,
-	Bitrix\Main\Localization\Loc;
-Loc::loadMessages(__FILE__);
+use Bitrix\Main;
 
 /**
  * Class BotChatTable
@@ -16,7 +14,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Im
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_BotChat_Query query()
+ * @method static EO_BotChat_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_BotChat_Result getById($id)
+ * @method static EO_BotChat_Result getList(array $parameters = array())
+ * @method static EO_BotChat_Entity getEntity()
+ * @method static \Bitrix\Im\Model\EO_BotChat createObject($setDefaultValues = true)
+ * @method static \Bitrix\Im\Model\EO_BotChat_Collection createCollection()
+ * @method static \Bitrix\Im\Model\EO_BotChat wakeUpObject($row)
+ * @method static \Bitrix\Im\Model\EO_BotChat_Collection wakeUpCollection($rows)
+ */
 
 class BotChatTable extends Main\Entity\DataManager
 {
@@ -42,20 +53,18 @@ class BotChatTable extends Main\Entity\DataManager
 				'data_type' => 'integer',
 				'primary' => true,
 				'autocomplete' => true,
-				'title' => Loc::getMessage('BOT_CHAT_ENTITY_ID_FIELD'),
+				//'title' => Loc::getMessage('BOT_CHAT_ENTITY_ID_FIELD'),
 			),
 			'BOT_ID' => array(
 				'data_type' => 'integer',
 				'required' => true,
-				'title' => Loc::getMessage('BOT_CHAT_ENTITY_BOT_ID_FIELD'),
+				//'title' => Loc::getMessage('BOT_CHAT_ENTITY_BOT_ID_FIELD'),
 			),
 			'CHAT_ID' => array(
 				'data_type' => 'integer',
 				'required' => true,
-				'title' => Loc::getMessage('BOT_CHAT_ENTITY_CHAT_ID_FIELD'),
+				//'title' => Loc::getMessage('BOT_CHAT_ENTITY_CHAT_ID_FIELD'),
 			),
 		);
 	}
 }
-
-class_alias("Bitrix\\Im\\Model\\BotChatTable", "Bitrix\\Im\\BotChatTable", false);

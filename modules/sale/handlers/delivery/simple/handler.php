@@ -15,6 +15,9 @@ Loc::loadMessages(__FILE__);
  */
 class SimpleHandler extends \Bitrix\Sale\Delivery\Services\Base
 {
+	/** @var string */
+	protected $handlerCode = 'BITRIX_SIMPLE';
+
 	protected static $isCalculatePriceImmediately = true;
 	protected  static $whetherAdminExtraServicesShow = true;
 
@@ -36,7 +39,7 @@ class SimpleHandler extends \Bitrix\Sale\Delivery\Services\Base
 	 */
 	public static function getClassTitle()
 	{
-		return Loc::getMessage("SALE_DLVR_HANDL_SMPL_TITLE");
+		return Loc::getMessage("SALE_DLVR_HANDL_SMPL_TITLE2");
 	}
 
 	/**
@@ -178,7 +181,7 @@ class SimpleHandler extends \Bitrix\Sale\Delivery\Services\Base
 		return $result;
 	}
 
-	static public function isCalculatePriceImmediately()
+	public function isCalculatePriceImmediately()
 	{
 		return self::$isCalculatePriceImmediately;
 	}

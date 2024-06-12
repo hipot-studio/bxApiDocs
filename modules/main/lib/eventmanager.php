@@ -1,26 +1,26 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2014 Bitrix
+ * @copyright 2001-2023 Bitrix
  */
+
 namespace Bitrix\Main;
 
-use Bitrix\Main\Diag;
-use Bitrix\Main\IO;
+use Bitrix\Main\Type\Collection;
 
 class EventManager
 {
+	protected const CACHE_ID = 'b_module_to_module';
+
 	/**
 	 * @var EventManager
 	 */
 	protected static $instance;
-
-	protected $handlers = array();
+	protected $handlers = [];
 	protected $isHandlersLoaded = false;
-
-	protected static $cacheKey = "b_module_to_module";
 
 	protected function __construct()
 	{
@@ -41,41 +41,54 @@ class EventManager
 		return self::$instance;
 	}
 
+	/**
+	 * @static
+	 * @param EventManager $instance
+	 */
+	public static function setInstance($instance)
+	{
+		$c = __CLASS__;
+		if ($instance instanceof $c)
+		{
+			self::$instance = $instance;
+		}
+	}
+
 	protected function addEventHandlerInternal($fromModuleId, $eventType, $callback, $includeFile, $sort, $version)
 	{
-		$arEvent = array(
-			"FROM_MODULE_ID" => $fromModuleId,
-			"MESSAGE_ID" => $eventType,
-			"CALLBACK" => $callback,
-			"SORT" => $sort,
-			"FULL_PATH" => $includeFile,
-			"VERSION" => $version,
-			"TO_NAME" => $this->formatEventName(array("CALLBACK" => $callback)),
-		);
+		$arEvent = [
+			'FROM_MODULE_ID' => $fromModuleId,
+			'MESSAGE_ID' => $eventType,
+			'CALLBACK' => $callback,
+			'SORT' => (int)$sort,
+			'FULL_PATH' => $includeFile,
+			'VERSION' => $version,
+			'TO_NAME' => $this->formatEventName(['CALLBACK' => $callback]),
+		];
 
 		$fromModuleId = strtoupper($fromModuleId);
 		$eventType = strtoupper($eventType);
 
 		if (!isset($this->handlers[$fromModuleId]) || !is_array($this->handlers[$fromModuleId]))
 		{
-			$this->handlers[$fromModuleId] = array();
+			$this->handlers[$fromModuleId] = [];
 		}
 
 		$arEvents = &$this->handlers[$fromModuleId];
 
-		if (!isset($arEvents[$eventType]) || !is_array($arEvents[$eventType]) || empty($arEvents[$eventType]))
+		if (empty($arEvents[$eventType]) || !is_array($arEvents[$eventType]))
 		{
-			$arEvents[$eventType] = array($arEvent);
+			$arEvents[$eventType] = [$arEvent];
 			$iEventHandlerKey = 0;
 		}
 		else
 		{
-			$newEvents = array();
+			$newEvents = [];
 			$iEventHandlerKey = max(array_keys($arEvents[$eventType])) + 1;
-			//$iEventHandlerKey = count($arEvents[$eventType]);
+
 			foreach ($arEvents[$eventType] as $key => $value)
 			{
-				if ($value["SORT"] > $arEvent["SORT"])
+				if ($value['SORT'] > $arEvent['SORT'])
 				{
 					$newEvents[$iEventHandlerKey] = $arEvent;
 				}
@@ -112,58 +125,58 @@ class EventManager
 		$fromModuleId = strtoupper($fromModuleId);
 		$eventType = strtoupper($eventType);
 
-		if (is_array($this->handlers[$fromModuleId][$eventType]))
+		if (isset($this->handlers[$fromModuleId][$eventType][$iEventHandlerKey]))
 		{
-			if (isset($this->handlers[$fromModuleId][$eventType][$iEventHandlerKey]))
-			{
-				unset($this->handlers[$fromModuleId][$eventType][$iEventHandlerKey]);
-				return true;
-			}
+			unset($this->handlers[$fromModuleId][$eventType][$iEventHandlerKey]);
+			return true;
 		}
 
 		return false;
 	}
 
-	public function unRegisterEventHandler($fromModuleId, $eventType, $toModuleId, $toClass = "", $toMethod = "", $toPath = "", $toMethodArg = array())
+	public function unRegisterEventHandler($fromModuleId, $eventType, $toModuleId, $toClass = '', $toMethod = '', $toPath = '', $toMethodArg = [])
 	{
-		$toMethodArg = ((!is_array($toMethodArg) || is_array($toMethodArg) && empty($toMethodArg)) ? "" : serialize($toMethodArg));
+		$toMethodArg = (!is_array($toMethodArg) || empty($toMethodArg) ? '' : serialize($toMethodArg));
 
 		$con = Application::getConnection();
 		$sqlHelper = $con->getSqlHelper();
 
 		$strSql =
-			"DELETE FROM b_module_to_module ".
-			"WHERE FROM_MODULE_ID='".$sqlHelper->forSql($fromModuleId)."'".
-			"	AND MESSAGE_ID='".$sqlHelper->forSql($eventType)."' ".
-			"	AND TO_MODULE_ID='".$sqlHelper->forSql($toModuleId)."' ".
-			(($toClass != "") ? " AND TO_CLASS='".$sqlHelper->forSql($toClass)."' " : " AND (TO_CLASS='' OR TO_CLASS IS NULL) ").
-			(($toMethod != "") ? " AND TO_METHOD='".$sqlHelper->forSql($toMethod)."'": " AND (TO_METHOD='' OR TO_METHOD IS NULL) ").
-			(($toPath != "" && $toPath !== 1/*controller disconnect correction*/) ? " AND TO_PATH='".$sqlHelper->forSql($toPath)."'" : " AND (TO_PATH='' OR TO_PATH IS NULL) ").
-			(($toMethodArg != "") ? " AND TO_METHOD_ARG='".$sqlHelper->forSql($toMethodArg)."'" : " AND (TO_METHOD_ARG='' OR TO_METHOD_ARG IS NULL) ");
+			"DELETE FROM b_module_to_module " .
+			"WHERE FROM_MODULE_ID='" . $sqlHelper->forSql($fromModuleId) . "'" .
+			"	AND MESSAGE_ID='" . $sqlHelper->forSql($eventType) . "' " .
+			"	AND TO_MODULE_ID='" . $sqlHelper->forSql($toModuleId) . "' " .
+			(($toClass != '') ? " AND TO_CLASS='" . $sqlHelper->forSql($toClass) . "' " : " AND (TO_CLASS='' OR TO_CLASS IS NULL) ") .
+			(($toMethod != '') ? " AND TO_METHOD='" . $sqlHelper->forSql($toMethod) . "'" : " AND (TO_METHOD='' OR TO_METHOD IS NULL) ") .
+			(($toPath != '' && $toPath !== 1/*controller disconnect correction*/) ? " AND TO_PATH='" . $sqlHelper->forSql($toPath) . "'" : " AND (TO_PATH='' OR TO_PATH IS NULL) ") .
+			(($toMethodArg != '') ? " AND TO_METHOD_ARG='" . $sqlHelper->forSql($toMethodArg) . "'" : " AND (TO_METHOD_ARG='' OR TO_METHOD_ARG IS NULL) ");
 
 		$con->queryExecute($strSql);
 
 		$this->clearLoadedHandlers();
 	}
 
-	public function registerEventHandler($fromModuleId, $eventType, $toModuleId, $toClass = "", $toMethod = "", $sort = 100, $toPath = "", $toMethodArg = array())
+	public function registerEventHandler($fromModuleId, $eventType, $toModuleId, $toClass = '', $toMethod = '', $sort = 100, $toPath = '', $toMethodArg = [])
 	{
 		$this->registerEventHandlerInternal($fromModuleId, $eventType, $toModuleId, $toClass, $toMethod, $sort, $toPath, $toMethodArg, 2);
 	}
 
-	public function registerEventHandlerCompatible($fromModuleId, $eventType, $toModuleId, $toClass = "", $toMethod = "", $sort = 100, $toPath = "", $toMethodArg = array())
+	public function registerEventHandlerCompatible($fromModuleId, $eventType, $toModuleId, $toClass = '', $toMethod = '', $sort = 100, $toPath = '', $toMethodArg = [])
 	{
 		$this->registerEventHandlerInternal($fromModuleId, $eventType, $toModuleId, $toClass, $toMethod, $sort, $toPath, $toMethodArg, 1);
 	}
 
 	protected function registerEventHandlerInternal($fromModuleId, $eventType, $toModuleId, $toClass, $toMethod, $sort, $toPath, $toMethodArg, $version)
 	{
-		$toMethodArg = ((!is_array($toMethodArg) || is_array($toMethodArg) && empty($toMethodArg)) ? "" : serialize($toMethodArg));
-
-		$con = Application::getConnection();
-		$sqlHelper = $con->getSqlHelper();
-
+		$toMethodArg = (!is_array($toMethodArg) || empty($toMethodArg) ? '' : serialize($toMethodArg));
 		$sort = intval($sort);
+		$version = intval($version);
+
+		$uniqueID = md5(mb_strtolower($fromModuleId . '.' . $eventType . '.' . $toModuleId . '.' . $toPath . '.' . $toClass . '.' . $toMethod . '.' . $toMethodArg . '.' . $version));
+
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+
 		$fromModuleId = $sqlHelper->forSql($fromModuleId);
 		$eventType = $sqlHelper->forSql($eventType);
 		$toModuleId = $sqlHelper->forSql($toModuleId);
@@ -171,58 +184,40 @@ class EventManager
 		$toMethod = $sqlHelper->forSql($toMethod);
 		$toPath = $sqlHelper->forSql($toPath);
 		$toMethodArg = $sqlHelper->forSql($toMethodArg);
-		$version = intval($version);
 
-		$res = $con->query(
-			"SELECT 'x' ".
-			"FROM b_module_to_module ".
-			"WHERE FROM_MODULE_ID='".$fromModuleId."'".
-			"	AND MESSAGE_ID='".$eventType."' ".
-			"	AND TO_MODULE_ID='".$toModuleId."' ".
-			"	AND TO_CLASS='".$toClass."' ".
-			"	AND TO_METHOD='".$toMethod."'".
-			(($toPath == "") ? " AND (TO_PATH='' OR TO_PATH IS NULL)" : " AND TO_PATH='".$toPath."'").
-			(($toMethodArg == "") ? " AND (TO_METHOD_ARG='' OR TO_METHOD_ARG IS NULL)" : " AND TO_METHOD_ARG='".$toMethodArg."'")
-		);
+		$fields = '(SORT, FROM_MODULE_ID, MESSAGE_ID, TO_MODULE_ID, TO_CLASS, TO_METHOD, TO_PATH, TO_METHOD_ARG, VERSION, UNIQUE_ID)';
+		$values = "(" . $sort . ", '" . $fromModuleId . "', '" . $eventType . "', '" . $toModuleId . "', " . "   '" . $toClass . "', '" . $toMethod . "', '" . $toPath . "', '" . $toMethodArg . "', " . $version . ", '" . $uniqueID . "')";
+		$sql = $sqlHelper->getInsertIgnore('b_module_to_module', $fields, 'VALUES ' . $values);
+		$connection->queryExecute($sql);
 
-		if (!$res->fetch())
-		{
-			$con->queryExecute(
-				"INSERT INTO b_module_to_module (SORT, FROM_MODULE_ID, MESSAGE_ID, TO_MODULE_ID, ".
-				"	TO_CLASS, TO_METHOD, TO_PATH, TO_METHOD_ARG, VERSION) ".
-				"VALUES (".$sort.", '".$fromModuleId."', '".$eventType."', '".$toModuleId."', ".
-				"   '".$toClass."', '".$toMethod."', '".$toPath."', '".$toMethodArg."', ".$version.")"
-			);
-
-			$this->clearLoadedHandlers();
-		}
+		$this->clearLoadedHandlers();
 	}
 
 	protected function formatEventName($arEvent)
 	{
 		$strName = '';
-		if (isset($arEvent["CALLBACK"]))
+		if (isset($arEvent['CALLBACK']))
 		{
-			if (is_array($arEvent["CALLBACK"]))
+			if (is_array($arEvent['CALLBACK']))
 			{
-				$strName .= (is_object($arEvent["CALLBACK"][0]) ? get_class($arEvent["CALLBACK"][0]) : $arEvent["CALLBACK"][0]).'::'.$arEvent["CALLBACK"][1];
+				$strName .= (is_object($arEvent['CALLBACK'][0]) ? get_class($arEvent['CALLBACK'][0]) : $arEvent['CALLBACK'][0]) . '::' . $arEvent['CALLBACK'][1];
 			}
-			elseif (is_callable($arEvent["CALLBACK"]))
+			elseif (is_callable($arEvent['CALLBACK']))
 			{
-				$strName .= "callable";
+				$strName .= 'callable';
 			}
 			else
 			{
-				$strName .= $arEvent["CALLBACK"];
+				$strName .= $arEvent['CALLBACK'];
 			}
 		}
 		else
 		{
-			$strName .= $arEvent["TO_CLASS"].'::'.$arEvent["TO_METHOD"];
+			$strName .= $arEvent['TO_CLASS'] . '::' . $arEvent['TO_METHOD'];
 		}
-		if (isset($arEvent['TO_MODULE_ID']) && !empty($arEvent['TO_MODULE_ID']))
+		if (!empty($arEvent['TO_MODULE_ID']))
 		{
-			$strName .= ' ('.$arEvent['TO_MODULE_ID'].')';
+			$strName .= ' (' . $arEvent['TO_MODULE_ID'] . ')';
 		}
 		return $strName;
 	}
@@ -230,15 +225,20 @@ class EventManager
 	protected function loadEventHandlers()
 	{
 		$cache = Application::getInstance()->getManagedCache();
-		if ($cache->read(3600, self::$cacheKey))
+
+		if ($cache->read(3600, self::CACHE_ID, self::CACHE_ID))
 		{
-			$arEvents = $cache->get(self::$cacheKey);
+			$rawEvents = $cache->get(self::CACHE_ID);
+
+			if (!is_array($rawEvents))
+			{
+				$rawEvents = [];
+			}
 		}
 		else
 		{
-			$arEvents = array();
-
 			$con = Application::getConnection();
+
 			$rs = $con->query("
 				SELECT FROM_MODULE_ID, MESSAGE_ID, SORT, TO_MODULE_ID, TO_PATH,
 					TO_CLASS, TO_METHOD, TO_METHOD_ARG, VERSION
@@ -246,65 +246,60 @@ class EventManager
 					INNER JOIN b_module m ON (m2m.TO_MODULE_ID = m.ID)
 				ORDER BY SORT
 			");
-			while ($ar = $rs->fetch())
-			{
-				$ar['TO_NAME'] = $this->formatEventName(
-					array(
-						"TO_MODULE_ID" => $ar["TO_MODULE_ID"],
-						"TO_CLASS" => $ar["TO_CLASS"],
-						"TO_METHOD" => $ar["TO_METHOD"]
-					)
-				);
-				$ar["~FROM_MODULE_ID"] = strtoupper($ar["FROM_MODULE_ID"]);
-				$ar["~MESSAGE_ID"] = strtoupper($ar["MESSAGE_ID"]);
-				if (strlen($ar["TO_METHOD_ARG"]) > 0)
-				{
-					$ar["TO_METHOD_ARG"] = unserialize($ar["TO_METHOD_ARG"]);
-				}
-				else
-				{
-					$ar["TO_METHOD_ARG"] = array();
-				}
 
-				$arEvents[] = $ar;
-			}
+			$rawEvents = $rs->fetchAll();
 
-			$cache->set(self::$cacheKey, $arEvents);
-		}
-
-		if (!is_array($arEvents))
-		{
-			$arEvents = array();
+			$cache->set(self::CACHE_ID, $rawEvents);
 		}
 
 		$handlers = $this->handlers;
 		$hasHandlers = !empty($this->handlers);
 
-		// compatibility with former event manager
-		foreach ($arEvents as $ar)
+		foreach ($rawEvents as $ar)
 		{
-			$this->handlers[$ar["~FROM_MODULE_ID"]][$ar["~MESSAGE_ID"]][] = array(
-				"SORT" => $ar["SORT"],
-				"TO_MODULE_ID" => $ar["TO_MODULE_ID"],
-				"TO_PATH" => $ar["TO_PATH"],
-				"TO_CLASS" => $ar["TO_CLASS"],
-				"TO_METHOD" => $ar["TO_METHOD"],
-				"TO_METHOD_ARG" => $ar["TO_METHOD_ARG"],
-				"VERSION" => $ar["VERSION"],
-				"TO_NAME" => $ar["TO_NAME"],
-				"FROM_DB" => true,
-			);
+			$ar['TO_NAME'] = $this->formatEventName([
+				'TO_MODULE_ID' => $ar['TO_MODULE_ID'],
+				'TO_CLASS' => $ar['TO_CLASS'],
+				'TO_METHOD' => $ar['TO_METHOD'],
+			]);
+			$ar['FROM_MODULE_ID'] = strtoupper($ar['FROM_MODULE_ID']);
+			$ar['MESSAGE_ID'] = strtoupper($ar['MESSAGE_ID']);
+			if ($ar['TO_METHOD_ARG'] != '')
+			{
+				$ar['TO_METHOD_ARG'] = unserialize($ar['TO_METHOD_ARG'], ['allowed_classes' => false]);
+			}
+			else
+			{
+				$ar['TO_METHOD_ARG'] = [];
+			}
+
+			$this->handlers[$ar['FROM_MODULE_ID']][$ar['MESSAGE_ID']][] = [
+				'SORT' => (int)$ar['SORT'],
+				'TO_MODULE_ID' => $ar['TO_MODULE_ID'],
+				'TO_PATH' => $ar['TO_PATH'],
+				'TO_CLASS' => $ar['TO_CLASS'],
+				'TO_METHOD' => $ar['TO_METHOD'],
+				'TO_METHOD_ARG' => $ar['TO_METHOD_ARG'],
+				'VERSION' => $ar['VERSION'],
+				'TO_NAME' => $ar['TO_NAME'],
+				'FROM_DB' => true,
+			];
 		}
 
 		if ($hasHandlers)
 		{
 			// need to re-sort because of AddEventHandler() calls (before loadEventHandlers)
-			$funcSort = create_function('$a, $b', 'if ($a["SORT"] == $b["SORT"]) return 0; return ($a["SORT"] < $b["SORT"]) ? -1 : 1;');
 			foreach (array_keys($handlers) as $moduleId)
 			{
 				foreach (array_keys($handlers[$moduleId]) as $event)
 				{
-					uasort($this->handlers[$moduleId][$event], $funcSort);
+					Collection::sortByColumn(
+						$this->handlers[$moduleId][$event],
+						['SORT' => SORT_ASC],
+						'',
+						null,
+						true
+					);
 				}
 			}
 		}
@@ -312,18 +307,18 @@ class EventManager
 		$this->isHandlersLoaded = true;
 	}
 
-	protected function clearLoadedHandlers()
+	public function clearLoadedHandlers()
 	{
 		$managedCache = Application::getInstance()->getManagedCache();
-		$managedCache->clean(self::$cacheKey);
+		$managedCache->clean(self::CACHE_ID, self::CACHE_ID);
 
-		foreach($this->handlers as $module=>$types)
+		foreach ($this->handlers as $module => $types)
 		{
-			foreach($types as $type=>$events)
+			foreach ($types as $type => $events)
 			{
-				foreach($events as $i => $event)
+				foreach ($events as $i => $event)
 				{
-					if($event["FROM_DB"] == true)
+					if (isset($event['FROM_DB']) && $event['FROM_DB'])
 					{
 						unset($this->handlers[$module][$type][$i]);
 					}
@@ -345,22 +340,22 @@ class EventManager
 
 		if (!isset($this->handlers[$eventModuleId]) || !isset($this->handlers[$eventModuleId][$eventType]))
 		{
-			return array();
+			return [];
 		}
 
 		$handlers = $this->handlers[$eventModuleId][$eventType];
 		if (!is_array($handlers))
 		{
-			return array();
+			return [];
 		}
 
 		if (is_array($filter) && !empty($filter))
 		{
 			$handlersTmp = $handlers;
-			$handlers = array();
+			$handlers = [];
 			foreach ($handlersTmp as $handler)
 			{
-				if (in_array($handler["TO_MODULE_ID"], $filter))
+				if (isset($handler['TO_MODULE_ID']) && in_array($handler['TO_MODULE_ID'], $filter))
 				{
 					$handlers[] = $handler;
 				}
@@ -388,37 +383,37 @@ class EventManager
 
 			$event->addDebugInfo($handler);
 
-			if (isset($handler["TO_MODULE_ID"]) && !empty($handler["TO_MODULE_ID"]) && ($handler["TO_MODULE_ID"] != 'main'))
+			if (!empty($handler['TO_MODULE_ID']) && ($handler['TO_MODULE_ID'] != 'main'))
 			{
-				$result = Loader::includeModule($handler["TO_MODULE_ID"]);
+				$result = Loader::includeModule($handler['TO_MODULE_ID']);
 			}
-			elseif (isset($handler["TO_PATH"]) && !empty($handler["TO_PATH"]))
+			elseif (!empty($handler['TO_PATH']))
 			{
-				$path = ltrim($handler["TO_PATH"], "/");
+				$path = ltrim($handler['TO_PATH'], '/');
 				if (($path = Loader::getLocal($path)) !== false)
 				{
 					$includeResult = include_once($path);
 				}
 			}
-			elseif (isset($handler["FULL_PATH"]) && !empty($handler["FULL_PATH"]) && IO\File::isFileExists($handler["FULL_PATH"]))
+			elseif (!empty($handler['FULL_PATH']) && IO\File::isFileExists($handler['FULL_PATH']))
 			{
-				$includeResult = include_once($handler["FULL_PATH"]);
+				$includeResult = include_once($handler['FULL_PATH']);
 			}
 
 			$event->addDebugInfo($result);
 
 			if ($result)
 			{
-				if (isset($handler["TO_METHOD_ARG"]) && is_array($handler["TO_METHOD_ARG"]) && !empty($handler["TO_METHOD_ARG"]))
+				if (!empty($handler['TO_METHOD_ARG']) && is_array($handler['TO_METHOD_ARG']))
 				{
-					$args = $handler["TO_METHOD_ARG"];
+					$args = $handler['TO_METHOD_ARG'];
 				}
 				else
 				{
-					$args = array();
+					$args = [];
 				}
 
-				if ($handler["VERSION"] > 1)
+				if ($handler['VERSION'] > 1)
 				{
 					$args[] = $event;
 				}
@@ -428,13 +423,13 @@ class EventManager
 				}
 
 				$callback = null;
-				if (isset($handler["CALLBACK"]))
+				if (isset($handler['CALLBACK']))
 				{
-					$callback = $handler["CALLBACK"];
+					$callback = $handler['CALLBACK'];
 				}
-				elseif (!empty($handler["TO_CLASS"]) && !empty($handler["TO_METHOD"]) && class_exists($handler["TO_CLASS"]))
+				elseif (!empty($handler['TO_CLASS']) && !empty($handler['TO_METHOD']) && class_exists($handler['TO_CLASS']))
 				{
-					$callback = array($handler["TO_CLASS"], $handler["TO_METHOD"]);
+					$callback = [$handler['TO_CLASS'], $handler['TO_METHOD']];
 				}
 
 				if ($callback != null)
@@ -448,7 +443,7 @@ class EventManager
 
 				if (($result != null) && !($result instanceof EventResult))
 				{
-					$result = new EventResult(EventResult::UNDEFINED, $result, $handler["TO_MODULE_ID"]);
+					$result = new EventResult(EventResult::UNDEFINED, $result, $handler['TO_MODULE_ID'] ?? null);
 				}
 
 				$event->addDebugInfo($result);

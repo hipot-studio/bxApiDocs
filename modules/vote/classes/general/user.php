@@ -1,8 +1,9 @@
-<?
+<?php
+
 ##############################################
 # Bitrix Site Manager Forum                  #
 # Copyright (c) 2002-2009 Bitrix             #
-# http://www.bitrixsoft.com                  #
+# https://www.bitrixsoft.com                 #
 # mailto:admin@bitrixsoft.com                #
 ##############################################
 
@@ -30,19 +31,18 @@ class CAllVoteUser
 		return $res;
 	}
 
-	public static function GetList(&$by, &$order, $arFilter=Array(), &$is_filtered)
+	public static function GetList($by = 's_id', $order = 'desc', $arFilter = [])
 	{
 		$err_mess = (CAllVoteUser::err_mess())."<br>Function: GetList<br>Line: ";
 		global $DB;
 		$arSqlSearch = Array();
-		$strSqlSearch = "";
+		$str_table = "";
+		$left_join = "";
 		if (is_array($arFilter))
 		{
 			$filter_keys = array_keys($arFilter);
-			for ($i=0; $i<count($filter_keys); $i++)
+			foreach ($arFilter as $key => $val)
 			{
-				$key = $filter_keys[$i];
-				$val = $arFilter[$filter_keys[$i]];
 				if(is_array($val))
 				{
 					if(count($val) <= 0)
@@ -50,7 +50,7 @@ class CAllVoteUser
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = (in_array($key."_EXACT_MATCH", $filter_keys)) ? true : false;
@@ -117,37 +117,37 @@ class CAllVoteUser
 		elseif ($by == "s_date_end")		$strSqlOrder = "ORDER BY U.DATE_LAST";
 		elseif ($by == "s_counter")			$strSqlOrder = "ORDER BY U.COUNTER";
 		elseif ($by == "s_user")			$strSqlOrder = "ORDER BY U.AUTH_USER_ID";
+		elseif ($by == "s_stat_guest_id")			$strSqlOrder = "ORDER BY U.STAT_GUEST_ID";
 		elseif ($by == "s_ip")				$strSqlOrder = "ORDER BY U.LAST_IP";
 		else 
 		{
-			$by = "s_id";
 			$strSqlOrder = "ORDER BY U.ID";
 		}
-		if ($order!="asc")
+
+		if ($order != "asc")
 		{
 			$strSqlOrder .= " desc ";
-			$order="desc";
 		}
 
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
 		$strSql = "
-			SELECT 
-				U.ID, U.STAT_GUEST_ID, U.AUTH_USER_ID, U.COUNTER, U.LAST_IP,
-				".$DB->DateToCharFunction("U.DATE_FIRST")."	DATE_FIRST,
-				".$DB->DateToCharFunction("U.DATE_LAST")."	DATE_LAST
-			FROM
-				b_vote_user U
+		SELECT VU.ID, U.STAT_GUEST_ID, U.AUTH_USER_ID, U.COUNTER, U.LAST_IP,
+			".$DB->DateToCharFunction("U.DATE_FIRST")."	DATE_FIRST,
+			".$DB->DateToCharFunction("U.DATE_LAST")."	DATE_LAST,
+			BUSER.LOGIN, BUSER.NAME, BUSER.LAST_NAME, BUSER.SECOND_NAME, BUSER.PERSONAL_PHOTO
+		FROM (
+			SELECT U.ID
+			FROM b_vote_user U
 				$str_table
 				$left_join
-			WHERE
-			$strSqlSearch
-			GROUP BY 
-				U.ID, U.STAT_GUEST_ID, U.AUTH_USER_ID, U.COUNTER, U.LAST_IP, U.DATE_FIRST, U.DATE_LAST
-			$strSqlOrder
-			";
+			WHERE $strSqlSearch
+			GROUP BY U.ID
+		) VU
+		LEFT JOIN b_vote_user U ON (VU.ID = U.ID)
+		LEFT JOIN b_user BUSER ON (U.AUTH_USER_ID = BUSER.ID)
+		".$strSqlOrder;
 		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
-		$is_filtered = (IsFiltered($strSqlSearch));
+
 		return $res;
 	}
 }
-?>

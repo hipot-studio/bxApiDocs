@@ -1,4 +1,8 @@
 <?php
+
+/**
+ * @deprecated
+ */
 class CCrmActivityConverter
 {
 	public static function IsCalEventConvertigRequired()
@@ -8,32 +12,39 @@ class CCrmActivityConverter
 			return false;
 		}
 
+		$flag = COption::GetOptionString('crm', '~CRM_REQUIRE_CONVERT_CALENDAR_EVENTS', '');
+		if($flag !== '')
+		{
+			return $flag === 'Y';
+		}
+
 		//TODO: Waiting for implementation of COUNT in CCalendarEvent::GetList
+		$cacheTime = \CCalendar::CacheTime(0);
 		$arEvents = CCalendarEvent::GetList(
 			array(
 				'arFilter' => array(
 					'!UF_CRM_CAL_EVENT' => null,
 					'DELETED' => 'N'
 				),
+				'setDefaultLimit' => true,
 				'getUserfields' => true
 			)
 		);
+		\CCalendar::CacheTime($cacheTime);
 
+		$result = false;
 		foreach($arEvents as $arEvent)
 		{
-			$count = CCrmActivity::GetCount(
-				array(
-					'@TYPE_ID' =>  array(CCrmActivityType::Call, CCrmActivityType::Meeting),
-					'=ASSOCIATED_ENTITY_ID' => $arEvent['ID']
-				)
-			);
-
+			$count = CCrmActivity::GetCount(array('=CALENDAR_EVENT_ID' => $arEvent['ID']));
 			if($count === 0)
 			{
-				return true;
+				$result = true;
+				break;
 			}
 		}
-		return false;
+
+		COption::SetOptionString('crm', '~CRM_REQUIRE_CONVERT_CALENDAR_EVENTS', $result ? 'Y' : 'N');
+		return $result;
 	}
 	public static function ConvertCalEvents($checkPerms = true, $regEvent = true)
 	{
@@ -56,12 +67,7 @@ class CCrmActivityConverter
 		foreach($arEvents as $arEvent)
 		{
 			$eventID = $arEvent['ID'];
-			$count = CCrmActivity::GetCount(
-				array(
-					'@TYPE_ID' =>  array(CCrmActivityType::Call, CCrmActivityType::Meeting),
-					'=ASSOCIATED_ENTITY_ID' => $eventID
-				)
-			);
+			$count = CCrmActivity::GetCount(array('=CALENDAR_EVENT_ID' => $eventID));
 
 			if($count === 0
 				&& CCrmActivity::CreateFromCalendarEvent($eventID, $arEvent, $checkPerms, $regEvent) > 0)

@@ -25,17 +25,6 @@ class Dictionary
 	 *
 	 * @return integer
 	 */
-	
-	/**
-	* <p>Метод возвращает идентификатор информационного блока. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/dictionary/getiblockid.php
-	* @author Bitrix
-	*/
 	public function getIblockId()
 	{
 		return $this->iblockId;
@@ -46,17 +35,6 @@ class Dictionary
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы базы данных для хранения значений свойств. Нестатический внутренний метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/dictionary/gettablename.php
-	* @author Bitrix
-	*/
 	public function getTableName()
 	{
 		return "b_iblock_".$this->iblockId."_index_val";
@@ -68,17 +46,6 @@ class Dictionary
 	 *
 	 * @return boolean
 	 */
-	
-	/**
-	* <p>Метод проверяет наличие словаря в базе данных и возвращает <i>true</i> в случае успеха. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/dictionary/isexists.php
-	* @author Bitrix
-	*/
 	public function isExists()
 	{
 		if (!isset(self::$exists[$this->iblockId]))
@@ -96,17 +63,6 @@ class Dictionary
 	 *
 	 * @return array[]\Bitrix\Main\Entity\Validator\Base
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>VALUE</code> (значение свойства). Является внутренним статическим методом для совместимости с eAccelerator.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Iblock\PropertyIndex\array[]\Bitrix\Main\Entity\Validator\Base 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/dictionary/validatevalue.php
-	* @author Bitrix
-	*/
 	public static function validateValue()
 	{
 		return array(
@@ -120,17 +76,6 @@ class Dictionary
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод создает новый словарь для информационного блока. Перед использованием метода следует убедиться, что словаря для данного инфоблока не существует. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/dictionary/create.php
-	* @author Bitrix
-	*/
 	public function create()
 	{
 		$connection = \Bitrix\Main\Application::getConnection();
@@ -159,17 +104,6 @@ class Dictionary
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод удаляет существующий в базе данных словарь. Перед вызовом метода необходимо проверить, что словарь существует. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/dictionary/drop.php
-	* @author Bitrix
-	*/
 	public function drop()
 	{
 		$connection = \Bitrix\Main\Application::getConnection();
@@ -188,22 +122,6 @@ class Dictionary
 	 *
 	 * @return int
 	 */
-	
-	/**
-	* <p>Возвращает уникальный номер представления строки. Нестатический метод.</p>
-	*
-	*
-	* @param string $value  Значение для поиска в словаре.
-	*
-	* @param boolean $addWhenNotFound = true Если параметр принимает значение <i>true</i> и ничего не найдено, то
-	* будет добавлено новое значение в словарь.
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/dictionary/getstringid.php
-	* @author Bitrix
-	*/
 	public function getStringId($value, $addWhenNotFound = true)
 	{
 		if (!isset($this->cache[$value]))
@@ -239,27 +157,43 @@ class Dictionary
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает строковое значение свойства по его идентификатору в словаре. Нестатический метод.</p>
-	*
-	*
-	* @param integer $valueId  Идентификатор значения в словаре.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyindex/dictionary/getstringbyid.php
-	* @author Bitrix
-	*/
 	public function getStringById($valueId)
 	{
-		$connection  = \Bitrix\Main\Application::getConnection();
-		$stringValue = $connection->queryScalar("SELECT VALUE FROM ".$this->getTableName()." WHERE ID = ".intval($valueId));
-		if ($stringValue === null)
-		{
+		$valueId = (int)$valueId;
+		if ($valueId <= 0)
 			return "";
+
+		$connection  = \Bitrix\Main\Application::getConnection();
+		$stringValue = $connection->queryScalar("SELECT VALUE FROM ".$this->getTableName()." WHERE ID = ".$valueId);
+		return ($stringValue === null ? "" : $stringValue);
+	}
+
+	/**
+	 * Returns array of string by its identifier in the dictionary.
+	 *
+	 * @param array $valueIDs Value identifier for dictionary lookup.
+	 *
+	 * @return array
+	 */
+	public function getStringByIds($valueIDs)
+	{
+		$result = [];
+		if (empty($valueIDs) || !is_array($valueIDs))
+			return $result;
+		\Bitrix\Main\Type\Collection::normalizeArrayValuesByInt($valueIDs, true);
+		if (empty($valueIDs))
+			return $result;
+
+		$connection  = \Bitrix\Main\Application::getConnection();
+
+		$result = array_fill_keys($valueIDs, '');
+
+		$rs = $connection->query("SELECT ID, VALUE FROM ".$this->getTableName()." WHERE ID IN(".implode(',',$valueIDs).")");
+		while ($row = $rs->fetch())
+		{
+			$result[$row['ID']] = $row['VALUE'];
 		}
-		return $stringValue;
+
+		return $result;
 	}
 }

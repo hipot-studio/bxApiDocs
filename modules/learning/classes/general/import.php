@@ -1,17 +1,6 @@
 <?php
 
 // 2012-04-19 Checked/modified for compatibility with new data model
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/learning/classes/ccourseimport/index.php
- * @author Bitrix
- */
 class CCourseImport
 {
 	var $package_dir;
@@ -43,8 +32,8 @@ class CCourseImport
 	public function __construct($PACKAGE_DIR, $arSITE_ID)
 	{
 		//Cut last slash
-		if (substr($PACKAGE_DIR,-1, 1) == "/")
-			$PACKAGE_DIR = substr($PACKAGE_DIR, 0, -1);
+		if (mb_substr($PACKAGE_DIR, -1, 1) == "/")
+			$PACKAGE_DIR = mb_substr($PACKAGE_DIR, 0, -1);
 
 		$this->package_dir = $_SERVER["DOCUMENT_ROOT"].$PACKAGE_DIR;
 
@@ -89,7 +78,7 @@ class CCourseImport
 	{
 		global $APPLICATION;
 
-		if (strlen($this->LAST_ERROR)>0)
+		if ($this->LAST_ERROR <> '')
 			return false;
 
 		if (!$title = $this->objXML->SelectNodes("/manifest/organizations/organization/item/title"))
@@ -146,7 +135,7 @@ class CCourseImport
 	// 2012-04-19 Checked/modified for compatibility with new data model
 	protected function CreateContent($arItems = Array(), $PARENT_ID = 0)
 	{
-		if (strlen($this->LAST_ERROR)>0)
+		if ($this->LAST_ERROR <> '')
 			return false;
 
 		if (empty($arItems))
@@ -160,7 +149,7 @@ class CCourseImport
 
 		foreach ($arItems as $ar)
 		{
-			$type =  substr($ar["@"]["identifier"], 0, 3);
+			$type = mb_substr($ar["@"]["identifier"], 0, 3);
 			$res_id = $ar["@"]["identifierref"];
 			$title = $ar["#"]["title"][0]["#"];
 
@@ -229,7 +218,7 @@ class CCourseImport
 
 
 		$r = new CDataXML();
-		if (!$r->Load($this->package_dir."/".strtolower($RES_ID).".xml"))
+		if (!$r->Load($this->package_dir."/".mb_strtolower($RES_ID).".xml"))
 			$r = false;
 
 		if ($r !== false)
@@ -413,7 +402,7 @@ class CCourseImport
 			$arFieldsNames = array_keys($arUnilessonFields);
 			foreach ($arFieldsNames as $fieldName)
 			{
-				if ( ! in_array(strtoupper($fieldName), $this->arLessonWritableFields) )
+				if ( ! in_array(mb_strtoupper($fieldName), $this->arLessonWritableFields) )
 					unset ($arUnilessonFields[$fieldName]);
 			}
 
@@ -460,7 +449,7 @@ class CCourseImport
 			{
 				if (is_set($arValue[0]["#"], "cdata-section"))
 				{
-					$arRes[strtoupper($field)] = preg_replace(
+					$arRes[mb_strtoupper($field)] = preg_replace(
 						"~([\"'])(cid:resources/(.+?))(\\1)~is", 
 						"\\1/".$upload_dir."/learning/".$this->COURSE_ID."/\\3\\1",
 						$arValue[0]["#"]["cdata-section"][0]["#"]);
@@ -468,7 +457,7 @@ class CCourseImport
 				}
 				elseif (isset($arValue[0]["#"]))
 				{
-					$arRes[strtoupper($field)] = preg_replace(
+					$arRes[mb_strtoupper($field)] = preg_replace(
 						"~([\"'])(cid:resources/(.+?))(\\1)~is", 
 						"\\1/".$upload_dir."/learning/".$this->COURSE_ID."/\\3\\1",
 						$arValue[0]["#"]);
@@ -476,10 +465,10 @@ class CCourseImport
 				}
 			}
 
-			if (in_array($field, $this->arDate) && strlen($arValue[0]["#"]) > 0)
+			if (in_array($field, $this->arDate) && $arValue[0]["#"] <> '')
 			{
 				$time = date("His", $arValue[0]["#"]);
-				$arRes[strtoupper($field)] = ConvertTimeStamp($arValue[0]["#"], $time == "000000" ? "SHORT" : "FULL");
+				$arRes[mb_strtoupper($field)] = ConvertTimeStamp($arValue[0]["#"], $time == "000000" ? "SHORT" : "FULL");
 				continue;
 			}
 
@@ -501,7 +490,7 @@ class CCourseImport
 				else
 					$image_type_to_mime_type = self::ImageTypeToMimeTypeByFileName($file);
 
-				$arRes[strtoupper($field)] = array(
+				$arRes[mb_strtoupper($field)] = array(
 					"MODULE_ID" => "learning",
 					"name" =>$arValue[0]["#"],
 					"tmp_name" => $file,
@@ -511,14 +500,14 @@ class CCourseImport
 
 				if (isset($arFields["#"][$field . '_description'][0]['#']))
 				{
-					$arRes[strtoupper($field)]['description'] = $arFields["#"][$field . '_description'][0]['#'];
+					$arRes[mb_strtoupper($field)]['description'] = $arFields["#"][$field . '_description'][0]['#'];
 					$arStopList[] = $field . '_description';
 				}
 
 				continue;
 			}
 
-			$arRes[strtoupper($field)] = $arValue[0]["#"];
+			$arRes[mb_strtoupper($field)] = $arValue[0]["#"];
 		}
 		unset($arFields);
 		return $arRes;
@@ -526,54 +515,6 @@ class CCourseImport
 
 
 	// 2012-04-18 Checked/modified for compatibility with new data model
-	
-	/**
-	* <p>Метод импортирует курс. Метод нестатический.</p>
-	*
-	*
-	* @return bool <p>Метод возвращает <i>true</i>, если создание курса прошло успешно. При
-	*  возникновении ошибки метод вернёт <i>false</i>, а в свойстве объекта
-	* LAST_ERROR  будет содержаться текст ошибки.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     if ($USER-&gt;IsAdmin())
-	*     {
-	*         @set_time_limit(0);
-	*         $package = new CCourseImport($PACKAGE_DIR = "/upload/mypackage/", Array("ru", "en"));
-	* 
-	*         if (strlen($package-&gt;LAST_ERROR) &gt; 0)
-	*         {
-	*             echo "Error: ".$package-&gt;LAST_ERROR;
-	*         }
-	*         else
-	*         {
-	*             $success = $package-&gt;ImportPackage();
-	* 
-	*             if (!$success)
-	*                 echo "Error: ".$package-&gt;LAST_ERROR;
-	*             else
-	*                 echo "Ok!";
-	*         }
-	*     }
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul><li> <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccourseimport/index.php">CCourseImport</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccourseimport/ccourseimport.php">CCourseImport</a> </li></ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ccourseimport/importpackage.php
-	* @author Bitrix
-	*/
 	public function ImportPackage()
 	{
 		if (!$this->CreateCourse())
@@ -593,7 +534,7 @@ class CCourseImport
 
 	protected static function ImageTypeToMimeTypeByFileName ($file)
 	{
-		$ext = strtolower(pathinfo ($file, PATHINFO_EXTENSION));
+		$ext = mb_strtolower(pathinfo($file, PATHINFO_EXTENSION));
 
 		switch ($ext)
 		{

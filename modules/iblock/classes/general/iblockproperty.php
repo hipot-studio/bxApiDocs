@@ -1,97 +1,16 @@
-<?
+<?php
+
+use Bitrix\Main;
+use Bitrix\Iblock;
+
 global $IBLOCK_CACHE_PROPERTY;
-$IBLOCK_CACHE_PROPERTY = Array();
+$IBLOCK_CACHE_PROPERTY = [];
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CIBlockProperty</b> - класс для работы со свойствами информационных разделов.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/index.php
- * @author Bitrix
- */
 class CAllIBlockProperty
 {
 	public $LAST_ERROR = "";
 
-	
-	/**
-	* <p>Возвращает список свойств по фильтру <i>arFilter</i> отсортированные в порядке <i>arOrder</i>. Метод статический.</p>
-	*
-	*
-	* @param array $arrayarOrder = Array() Массив для сортировки, имеющий вид <i>by1=&gt;order1[,by2=&gt;order2 [, ..]]</i>,
-	* где:<i> by</i> - поле сортировки, может принимать значения:		          <ul> <li>
-	* <b>id</b> - код;</li>          	            <li> <b>block_id</b> - код информационного блока,
-	* которому принадлежит свойство;		<b>name</b> - название;</li>          	           
-	* <li> <b>name</b> - название;</li>                     <li> <b>active</b> - активность;</li>          	
-	*            <li> <b>sort</b> - индекс сортировки;</li>          	            <li> <b>timestamp_x</b> -
-	* дата последнего изменения</li>          	            <li> <b>searchable</b> - по
-	* признаку участия значения свойства в поиске;		</li>          	            <li>
-	* <b>filtrable</b> - по признаку участия свойства в фильре на странице
-	* списка элементов;		</li>          	            <li> <b>order</b> - порядок сортировки,
-	* может принимать значения:              <ul> <li> <b>asc</b> - по возрастанию;</li>   
-	*           	                <li> <b>desc</b> - по убыванию;</li>              </ul> </li>          </ul>
-	*
-	* @param array $arrayarFilter = Array() Массив вида <i> array("фильтруемое поле"=&gt;"значение" [, ...])</i>. Ни один
-	* параметр фильтра не принимает массивы. <i>Фильтруемое поле</i>
-	* может принимать значения:          <ul> <li> <b>ACTIVE</b> - фильтр по
-	* активности (Y|N);</li>           <li> <b>ID</b> - по ID свойства, только число;</li>     
-	*     	            <li> <b>CODE</b> - по символьному коду (по шаблону [%_]), только
-	* строка;</li>          	            <li> <b>NAME</b> - по названию свойства (по шаблону
-	* [%_]);</li>          	            <li> <b>EXTERNAL_ID</b> или <b>XML_ID </b>- по внешнему коду(по
-	* шаблону 		[%_]). Возможно использование отрицания, указав
-	* <i>!EXTERNAL_ID</i>;</li>          	            <li> <b>PROPERTY_TYPE</b> - по типу свойства: <ul> <li>
-	* <b>S</b> - строка</li> <li> <b>N</b> - число</li>  <li> <b>L</b> - список</li>  <li> <b>F</b> -
-	* файл</li> <li> <b>G</b> - привязка к разделу</li>  <li> <b>E</b> - привязка к
-	* элементу</li>  </ul> </li>                     <li> <b>USER_TYPE</b> - по пользовательскому
-	* типу свойства;	 <ul> <li> <b>UserID</b> - Привязка к пользователю</li>  <li>
-	* <b>DateTime</b> - Дата/Время</li>  <li> <b>EList</b> - Привязка к элементам в виде
-	* списка</li> <li> <b>FileMan</b> - Привязка к файлу (на сервере)</li>  <li>
-	* <b>map_yandex</b> - Привязка к Яndex.Карте</li>  <li> <b>HTML</b> - HTML/текст</li> <li>
-	* <b>map_google</b> - Привязка к карте Google Maps</li>  <li> <b>ElementXmlID</b> - Привязка к
-	* элементам по XML_ID</li> <li> <b>Sequence</b> - Счетчик</li> <li> <b>EAutocomplete</b>  -
-	* Привязка к элементам с автозаполнением</li>  <li> <b>SKU</b> -  Привязка к
-	* товарам (SKU)</li>  <li> <b>video</b> -  Видео</li>  <li> <b>TopicID</b> -  Привязка к теме
-	* форума</li>   </ul> Кроме того, можно использовать идентификаторы
-	* пользовательских типов свойств инфоблока, добавленных
-	* сторонними модулями. </li>          	            <li> <b>SEARCHABLE</b> - по признаку
-	* участия значения свойства в поиске (Y|N);		</li>          	            <li>
-	* <b>FILTRABLE</b> - по признаку участия свойства в фильре на странице
-	* списка элементов (Y|N);</li>                     <li> <b>VERSION</b> - по флагу хранения
-	* значений свойств элементов инфоблока;</li>                     <li>
-	* <b>MIN_PERMISSION</b> - фильтр по правам доступа, по умолчанию принимает
-	* <i>R</i> (уровень доступа <i>Чтение</i>);</li>                    <li> <b>CHECK_PERMISSIONS</b> -
-	* если установлено значение "N", то проверки прав не происходит;         
-	*    <br> </li>          	            <li> <b>IBLOCK_ID</b> - по коду информационного блока,
-	* которому принадлежит свойство;</li>                     <li> <b>IBLOCK_CODE</b> - по
-	* символьному коду информационного блока, которому принадлежит
-	* свойство;</li>                     <li> <b>LINK_IBLOCK_ID</b> - по коду связанного
-	* информационного блока (может быть указан для свойств типа "E" и
-	* "G");</li> <li> <b>MULTIPLE</b> -  Проверка на множественность. по умолчанию N.</li>
-	*           </ul>        Необязательное. По умолчанию записи не фильтруются.
-	*
-	* @return CDBResult <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$IBLOCK_ID = 11;<br>$properties = CIBlockProperty::GetList(Array("sort"=&gt;"asc", "name"=&gt;"asc"), Array("ACTIVE"=&gt;"Y", "IBLOCK_ID"=&gt;$IBLOCK_ID));<br>while ($prop_fields = $properties-&gt;GetNext())<br>{<br>  echo $prop_fields["ID"]." - ".$prop_fields["NAME"]."&lt;br&gt;";<br>}<br>?&gt;<br>
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a> </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fproperty">Поля свойства</a> </li>  </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder=Array(), $arFilter=Array())
 	{
 		global $DB;
@@ -102,11 +21,11 @@ class CAllIBlockProperty
 		";
 
 		$bJoinIBlock = false;
-		$arSqlSearch = "";
+		$arSqlSearch = array();
 		foreach($arFilter as $key => $val)
 		{
 			$val = $DB->ForSql($val);
-			$key = strtoupper($key);
+			$key = mb_strtoupper($key);
 
 			switch($key)
 			{
@@ -120,7 +39,7 @@ class CAllIBlockProperty
 				break;
 			case "?CODE":
 			case "?NAME":
-				$arSqlSearch[] = CIBlock::FilterCreate("BP.".substr($key, 1), $val, "string", "E");
+				$arSqlSearch[] = CIBlock::FilterCreate("BP.".mb_substr($key, 1), $val, "string", "E");
 				break;
 			case "CODE":
 			case "NAME":
@@ -175,27 +94,29 @@ class CAllIBlockProperty
 				WHERE ".implode("\n\t\t\t\tAND ", $arSqlSearch)."
 			";
 
+		$allowKeys = array(
+			"ID" => true,
+			"IBLOCK_ID" => true,
+			"NAME" => true,
+			"ACTIVE" => true,
+			"SORT" => true,
+			"FILTRABLE" => true,
+			"SEARCHABLE" => true
+		);
+		$orderKeys = array();
 		$arSqlOrder = array();
 		foreach($arOrder as $by => $order)
 		{
-			$by = strtoupper($by);
-			$order = strtoupper($order) == "ASC"? "ASC": "DESC";
+			$by = mb_strtoupper($by);
+			if (!isset($allowKeys[$by]))
+				$by = "TIMESTAMP_X";
+			if (isset($orderKeys[$by]))
+				continue;
+			$orderKeys[$by] = true;
+			$order = mb_strtoupper($order) == "ASC"? "ASC": "DESC";
 
-			if(
-				$by === "ID"
-				|| $by === "IBLOCK_ID"
-				|| $by === "NAME"
-				|| $by === "ACTIVE"
-				|| $by === "SORT"
-				|| $by === "FILTRABLE"
-				|| $by === "SEARCHABLE"
-			)
-				$arSqlOrder[] = " BP.".$by." ".$order;
-			else
-				$arSqlOrder[] = " BP.TIMESTAMP_X ".$order;
+			$arSqlOrder[] = "BP.".$by." ".$order;
 		}
-
-		DelDuplicateSort($arSqlOrder);
 
 		if(!empty($arSqlOrder))
 			$strSql .= "
@@ -203,41 +124,36 @@ class CAllIBlockProperty
 			";
 
 		$res = $DB->Query($strSql, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
-		$res = new CIBlockPropertyResult($res);
-		return $res;
+
+		return new CIBlockPropertyResult($res);
 	}
 
 	///////////////////////////////////////////////////////////////////
 	// Delete by property ID
 	///////////////////////////////////////////////////////////////////
-	
-	/**
-	* <p>Метод удаляет свойство и все его значения. Метод статический.</p>
-	*
-	*
-	* @param int $intID  Код свойства.
-	*
-	* @return bool <p>В случае успешного удаления возвращается true, иначе - false. </p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
-		/** @var CMain $APPLICATION */
 		global $DB, $APPLICATION;
 		$ID = (int)$ID;
+		if ($ID <= 0)
+		{
+			return false;
+		}
 
 		$APPLICATION->ResetException();
 		foreach (GetModuleEvents("iblock", "OnBeforeIBlockPropertyDelete", true) as $arEvent)
 		{
 			if(ExecuteModuleEventEx($arEvent, array($ID))===false)
 			{
-				$err = GetMessage("MAIN_BEFORE_DEL_ERR").' '.$arEvent['TO_NAME'];
 				if($ex = $APPLICATION->GetException())
-					$err .= ': '.$ex->GetString();
-				$APPLICATION->ThrowException($err);
+				{
+					$APPLICATION->ThrowException($ex->GetString());
+				}
+				else
+				{
+					$APPLICATION->ThrowException(GetMessage("MAIN_BEFORE_DEL_ERR1"));
+				}
+
 				return false;
 			}
 		}
@@ -249,6 +165,7 @@ class CAllIBlockProperty
 			return false;
 
 		CIBlockSectionPropertyLink::DeleteByProperty($ID);
+		Iblock\PropertyFeatureTable::deleteByProperty($ID);
 
 		$rsProperty = CIBlockProperty::GetByID($ID);
 		$arProperty = $rsProperty->Fetch();
@@ -306,6 +223,10 @@ class CAllIBlockProperty
 		$seq = new CIBlockSequence($arProperty["IBLOCK_ID"], $ID);
 		$seq->Drop();
 
+		CIBlock::clearIblockTagCache($arProperty["IBLOCK_ID"]);
+
+		Iblock\PropertyTable::cleanCache();
+
 		$res = $DB->Query("DELETE FROM b_iblock_property WHERE ID=".$ID, true);
 
 		foreach (GetModuleEvents("iblock", "OnAfterIBlockPropertyDelete", true) as $arEvent)
@@ -314,98 +235,8 @@ class CAllIBlockProperty
 		return $res;
 	}
 	///////////////////////////////////////////////////////////////////
-	// Update
+	// Add
 	///////////////////////////////////////////////////////////////////
-	
-	/**
-	* <p>Метод добавляет новое свойство. Отменить добавление или изменить поля свойства можно в обработчике события <a href="http://dev.1c-bitrix.ru/api_help/iblock/events/onbeforeiblockpropertyadd.php">OnBeforeIBlockPropertyAdd</a>. После добавления нового свойства вызываются обработчики события <a href="http://dev.1c-bitrix.ru/api_help/iblock/events/onafteriblockpropertyadd.php">OnAfterIBlockPropertyAdd</a>. Нестатический метод.</p>
-	*
-	*
-	* @param array $arFields  Массив Array("поле"=&gt;"значение", ...).	Содержит значения <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fproperty">всех полей</a> свойства. Кроме
-	* того, с помощью поля "VALUES", значением которого должен быть массив
-	* структуры array(array("VALUE"=&gt;"значение", "DEF"=&gt;"по умолчанию (Y/N)",
-	* "SORT"=&gt;"индекс сортировки"),...), можно установить варианты выбора
-	* для свойств типа "список" (подробнее смотрите метод <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/index.php">CIBlockProperty</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/updateenum.php">UpdateEnum()</a>).
-	*
-	* @return int 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$arFields = Array(<br>  "NAME" =&gt; "Цвет",<br>  "ACTIVE" =&gt; "Y",<br>  "SORT" =&gt; "100",<br>  "CODE" =&gt; "color",<br>  "PROPERTY_TYPE" =&gt; "L",<br>  "IBLOCK_ID" =&gt; 11<br>  );<br><br>$arFields["VALUES"][0] = Array(<br>  "VALUE" =&gt; "Красный",<br>  "DEF" =&gt; "N",<br>  "SORT" =&gt; "100"<br>);<br><br>$arFields["VALUES"][1] = Array(<br>  "VALUE" =&gt; "Желтый",<br>  "DEF" =&gt; "N",<br>  "SORT" =&gt; "200"<br>);<br><br>$arFields["VALUES"][2] = Array(<br>  "VALUE" =&gt; "Зеленый",<br>  "DEF" =&gt; "Y",<br>  "SORT" =&gt; "300"<br>);<br><br>$ibp = new CIBlockProperty;<br>$PropID = $ibp-&gt;Add($arFields);<br>?&gt;<br>
-	* 
-	* //добавление свойства типа "HTML"
-	*  $arFields = Array(
-	*         "NAME" =&gt; "Итог",
-	*         "ACTIVE" =&gt; "Y",
-	*         "SORT" =&gt; "600",
-	*         "CODE" =&gt; "ITOG",
-	*         "PROPERTY_TYPE" =&gt; "S",
-	*         "USER_TYPE" =&gt; "HTML" 
-	*         "IBLOCK_ID" =&gt; $arParams["IBLOCK_ID"],
-	*         );
-	*       
-	*       $ibp = new CIBlockProperty;
-	*       $PropID = $ibp-&gt;Add($arFields);
-	* 
-	* 
-	* //для добавления свойства типа "Видео" в массиве arFields должно быть указано:
-	* "PROPERTY_TYPE" =&gt; "S",
-	* "USER_TYPE" =&gt; "video",
-	* 
-	* //установка параметра "Выводить поле для описания значения" для свойства инфоблока ("WITH_DESCRIPTION" =&gt; "Y") - доступно только для типов свойств:  S - строка, N - число и F - файл
-	*   $arFields = Array(
-	*       "NAME" =&gt; "Прочее",
-	*       "ACTIVE" =&gt; "Y",
-	*       "SORT" =&gt; "1700",
-	*       "CODE" =&gt; "F_OTHER",
-	*       "PROPERTY_TYPE" =&gt; "S",
-	*       "IBLOCK_ID" =&gt; $IBLOCK_ID,
-	*       "WITH_DESCRIPTION" =&gt; "Y",
-	*       );
-	* 
-	*    $iblockproperty = new CIBlockProperty;
-	*    $PropertyID = $iblockproperty-&gt;Add($arFields);
-	* 
-	* //добавление к инфоблоку свойства типа "Справочник"
-	*  $arFields = Array(
-	*    "NAME" =&gt; "Производитель",
-	*    "ACTIVE" =&gt; "Y",
-	*    "SORT" =&gt; "50",
-	*    "CODE" =&gt; "PROIZVODITEL",
-	*    "PROPERTY_TYPE" =&gt; "S",
-	*    "USER_TYPE" =&gt; "directory",
-	*    "IBLOCK_ID" =&gt; 888888888888888,//номер вашего инфоблока
-	*    "LIST_TYPE" =&gt; "L",
-	*    "MULTIPLE" =&gt; "N",
-	*    "USER_TYPE_SETTINGS" =&gt; array("size"=&gt;"1", "width"=&gt;"0", "group"=&gt;"N", "multiple"=&gt;"N", "TABLE_NAME"=&gt;"b_producers")
-	* );
-	* 
-	* $ibp = new CIBlockProperty;
-	* $PropID = $ibp-&gt;Add($arFields);
-	* 
-	* 
-	* //затем следует в значение свойства вставить значение поля  UF_XML_ID от вашего справочника
-	* CIBlockElement::SetPropertyValuesEx(123188, 888888888888888, array('PROIZVODITEL'=&gt;'000000701'));
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/update.php">CIBlockProperty::Update</a> </li>    
-	* <li><a href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fproperty">Поля свойства</a></li>     <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/events/onbeforeiblockpropertyadd.php">OnBeforeIBlockPropertyAdd</a></li>  
-	*   <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/events/onafteriblockpropertyadd.php">OnAfterIBlockPropertyAdd</a></li> 
-	* </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/add.php
-	* @author Bitrix
-	*/
 	public function Add($arFields)
 	{
 		global $DB;
@@ -440,7 +271,7 @@ class CAllIBlockProperty
 						"DEFAULT_VALUE" => true
 					);
 					$arValue = call_user_func_array($arUserType["ConvertToDB"], array($arFields, $arValue));
-					if(is_array($arValue) && isset($arValue["VALUE"]) && strlen($arValue["VALUE"]))
+					if(is_array($arValue) && isset($arValue["VALUE"]) && mb_strlen($arValue["VALUE"]))
 						$arFields["DEFAULT_VALUE"] = $arValue["VALUE"];
 					else
 						$arFields["DEFAULT_VALUE"] = false;
@@ -467,6 +298,13 @@ class CAllIBlockProperty
 			{
 				$arFields["USER_TYPE_SETTINGS"] = false;
 			}
+
+			unset($arFields['TIMESTAMP_X']);
+			$connection = Main\Application::getConnection();
+			$helper = $connection->getSqlHelper();
+			$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+			unset($helper, $connection);
+
 			$ID = $DB->Add("b_iblock_property", $arFields, array('USER_TYPE_SETTINGS'), "iblock");
 
 			if($arFields["VERSION"]==2)
@@ -506,7 +344,7 @@ class CAllIBlockProperty
 					)
 					{
 						$arLink = array(
-							"SMART_FILTER" => $arFields["SMART_FILTER"],
+							"SMART_FILTER" => $arFields["SMART_FILTER"] ?? null,
 						);
 						if (array_key_exists("DISPLAY_TYPE", $arFields))
 							$arLink["DISPLAY_TYPE"] = $arFields["DISPLAY_TYPE"];
@@ -517,12 +355,27 @@ class CAllIBlockProperty
 						CIBlockSectionPropertyLink::Add(0, $ID, $arLink);
 					}
 				}
+
+				if (!empty($arFields['FEATURES']) && is_array($arFields['FEATURES']))
+				{
+					$featureResult = Iblock\Model\PropertyFeature::addFeatures(
+						$ID,
+						$arFields['FEATURES']
+					);
+					//TODO: add error handling
+					unset($featureResult);
+				}
+
+				Iblock\PropertyTable::cleanCache();
 			}
 		}
 
 		global $BX_IBLOCK_PROP_CACHE;
-		if(array_key_exists("IBLOCK_ID", $arFields))
+		if (isset($arFields["IBLOCK_ID"]))
+		{
 			unset($BX_IBLOCK_PROP_CACHE[$arFields["IBLOCK_ID"]]);
+			CIBlock::clearIblockTagCache($arFields["IBLOCK_ID"]);
+		}
 
 		$arFields["RESULT"] = &$Result;
 
@@ -536,21 +389,20 @@ class CAllIBlockProperty
 	///////////////////////////////////////////////////////////////////
 	public function CheckFields(&$arFields, $ID=false, $bFormValidate=false)
 	{
-		/** @var CMain $APPLICATION */
 		global $APPLICATION;
 		$this->LAST_ERROR = "";
 		if ($ID===false || array_key_exists("NAME", $arFields))
 		{
-			if (strlen($arFields["NAME"]) <= 0)
+			if ($arFields["NAME"] == '')
 				$this->LAST_ERROR .= GetMessage("IBLOCK_PROPERTY_BAD_NAME")."<br>";
 		}
 
-		if(array_key_exists("CODE", $arFields) && strlen($arFields["CODE"]))
+		if(array_key_exists("CODE", $arFields) && mb_strlen($arFields["CODE"]))
 		{
-			if(strpos("0123456789", substr($arFields["CODE"], 0, 1))!==false)
-				$this->LAST_ERROR .= GetMessage("IBLOCK_PROPERTY_CODE_FIRST_LETTER")."<br>";
+			if(mb_strpos("0123456789", mb_substr($arFields["CODE"], 0, 1)) !== false)
+				$this->LAST_ERROR .= GetMessage("IBLOCK_PROPERTY_CODE_FIRST_LETTER").": ".htmlspecialcharsbx($arFields["CODE"])."<br>";
 			if(preg_match("/[^A-Za-z0-9_]/",  $arFields["CODE"]))
-				$this->LAST_ERROR .= GetMessage("IBLOCK_PROPERTY_WRONG_CODE")."<br>";
+				$this->LAST_ERROR .= GetMessage("IBLOCK_PROPERTY_WRONG_CODE").": ".htmlspecialcharsbx($arFields["CODE"])."<br>";
 		}
 
 		if(!$bFormValidate)
@@ -611,103 +463,12 @@ class CAllIBlockProperty
 			}
 		}
 
-		if(strlen($this->LAST_ERROR)>0)
-			return false;
-
-		return true;
+		return $this->LAST_ERROR === '';
 	}
 
 	///////////////////////////////////////////////////////////////////
 	// Update method
 	///////////////////////////////////////////////////////////////////
-	
-	/**
-	* <p>Метод изменяет параметры свойства с кодом <i>ID</i>. Перед изменением параметров вызываются обработчики события <a href="http://dev.1c-bitrix.ru/api_help/iblock/events/onbeforeiblockpropertyupdate.php">OnBeforeIBlockPropertyUpdate</a> из которых можно отменить изменения или переопределить поля. А после изменения параметром вызывается событие <a href="http://dev.1c-bitrix.ru/api_help/iblock/events/onafteriblockpropertyupdate.php">OnAfterIBlockPropertyUpdate</a>. Нестатический метод.</p>
-	*
-	*
-	* @param int $intID  ID изменяемой записи.
-	*
-	* @param array $arFields  Массив Array("поле"=&gt;"значение", ...). Содержит значения <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fproperty">всех полей</a> изменяемого
-	* свойства. Кроме того, с помощью поля "VALUES", значением которого
-	* должен быть массив вида Array(Array("VALUE"=&gt;"значение", "DEF"=&gt;"по
-	* умолчанию (Y/N)", "SORT"=&gt;"индекс сортировки"),...), можно установить
-	* варианты выбора для свойств типа "список" (подробнее смотрите
-	* метод <a href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/index.php">CIBlockProperty</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/updateenum.php">UpdateEnum()</a>).
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$arFields = Array(<br>  "NAME" =&gt; "Цвет",<br>  "ACTIVE" =&gt; "Y",<br>  "SORT" =&gt; "100",<br>  "CODE" =&gt; "color",<br>  "PROPERTY_TYPE" =&gt; "L",<br>  "IBLOCK_ID" =&gt; 11<br>  );<br><br>$arFields["VALUES"][0] = Array(<br>  "VALUE" =&gt; "Красный",<br>  "DEF" =&gt; "N",<br>  "SORT" =&gt; "100"<br>}<br><br>$arFields["VALUES"][1] = Array(<br>  "VALUE" =&gt; "Желтый",<br>  "DEF" =&gt; "N",<br>  "SORT" =&gt; "200"<br>}<br><br>$arFields["VALUES"][2] = Array(<br>  "VALUE" =&gt; "Зеленый",<br>  "DEF" =&gt; "Y",<br>  "SORT" =&gt; "300"<br>}<br><br>$ibp = new CIBlockProperty;<br>if(!$ibp-&gt;Update($ID, $arFields))<br>	echo $ibp-&gt;LAST_ERROR;<br>?В случае обновления информации в пользовательском типе свойства для сохранения ключа USER_TYPE_SETTINGS необходимо указать еще ключ USER_TYPE с реальным значением. В противном случае ключ USER_TYPE_SETTINGS не обновится. Неверными будут следующие варианты:
-	* $arFields = array(
-	*    'PROPERTY_TYPE' =&gt; 'E',
-	*    'USER_TYPE_SETTINGS' =&gt; array(
-	*       'WIDTH' =&gt; '10',
-	*       'HEIGHT' =&gt; '10',
-	*    ),
-	* );
-	* $ibp = new CIBlockProperty();
-	* $ibp-&gt;Update($ID, $arFields));
-	* 
-	* $arFields = array(
-	*    'PROPERTY_TYPE' =&gt; 'E',
-	*    'USER_TYPE_SETTINGS' =&gt; array(
-	*       'WIDTH' =&gt; '10',
-	*       'HEIGHT' =&gt; '10',
-	*    ),
-	*    'USER_TYPE' =&gt; '',
-	* );
-	* $ibp = new CIBlockProperty();
-	* $ibp-&gt;Update($ID, $arFields));
-	* 
-	* $arFields = array(
-	*    'PROPERTY_TYPE' =&gt; 'E',
-	*    'USER_TYPE_SETTINGS' =&gt; array(
-	*       'WIDTH' =&gt; '10',
-	*       'HEIGHT' =&gt; '10',
-	*    ),
-	*    'USER_TYPE' =&gt; 'xxx'
-	* );
-	* $ibp = new CIBlockProperty();
-	* $ibp-&gt;Update($ID, $arFields));
-	* 
-	* //включить индексацию свойства для поиска
-	*  $arFields = Array(
-	*      'SEARCHABLE'=&gt;'Y'
-	* );
-	* $ibp = new CIBlockProperty;
-	* if(!$ibp-&gt;Update($prop['ID'], $arFields))
-	*      echo $ibp-&gt;LAST_ERROR;
-	* 
-	* // добавление свойства в умный фильтр: 
-	* $arFields = Array('SMART_FILTER' =&gt; 'Y', 'IBLOCK_ID' =&gt; 123);
-	* $ibp = new CIBlockProperty();
-	* if(!$ibp-&gt;Update($prop['ID'], $arFields))
-	* echo $ibp-&gt;LAST_ERROR; 
-	* 
-	* //IBLOCK_ID в arFields указывать обязательно, иначе свойство не будет включено в умный фильтр, и при этом не выдаст ошибки.
-	* //Чтобы исключить свойство из умного фильтра в arFileds заменить:  'SMART_FILTER'=&gt;'N'
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/add.php">CIBlockProperty::Add</a>
-	* </li>   <li><a href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fproperty">Поля свойства</a></li>  
-	* <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/events/onbeforeiblockpropertyupdate.php">OnBeforeIBlockPropertyUpdate</a></li>
-	*   <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/events/onafteriblockpropertyupdate.php">OnAfterIBlockPropertyUpdate</a></li>
-	* </ul><br><p><b>Примечание:</b> если используются <b>Инфоблоки 2.0</b> и
-	* изменяется базовый тип свойства, то  все текущие значения свойств
-	* у существующих элементов очищаются.</p><br><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/update.php
-	* @author Bitrix
-	*/
 	public function Update($ID, $arFields, $bCheckDescription = false)
 	{
 		global $DB;
@@ -736,9 +497,14 @@ class CAllIBlockProperty
 		}
 		else
 		{
-			if(isset($arFields["USER_TYPE"]))
+			$arUserType = [];
+			$userTypeId = (string)($arFields['USER_TYPE'] ?? '');
+			if ($userTypeId !== '')
 			{
-				$arUserType = CIBlockProperty::GetUserType($arFields["USER_TYPE"]);
+				$arUserType = CIBlockProperty::GetUserType($userTypeId);
+			}
+			if (!empty($arUserType))
+			{
 				if(array_key_exists("ConvertToDB", $arUserType))
 				{
 					$arValue = array(
@@ -746,7 +512,7 @@ class CAllIBlockProperty
 						"DEFAULT_VALUE" => true
 					);
 					$arValue = call_user_func_array($arUserType["ConvertToDB"], array($arFields, $arValue));
-					if(is_array($arValue) && isset($arValue["VALUE"]) && strlen($arValue["VALUE"]))
+					if(is_array($arValue) && isset($arValue["VALUE"]) && mb_strlen($arValue["VALUE"]))
 						$arFields["DEFAULT_VALUE"] = $arValue["VALUE"];
 					else
 						$arFields["DEFAULT_VALUE"] = false;
@@ -756,7 +522,7 @@ class CAllIBlockProperty
 				{
 					if (!isset($arFields["USER_TYPE_SETTINGS"]))
 					{
-						$oldData = \Bitrix\Iblock\PropertyTable::getList(array(
+						$oldData = Iblock\PropertyTable::getList(array(
 							'select' => array('ID', 'PROPERTY_TYPE', 'USER_TYPE', 'USER_TYPE_SETTINGS'),
 							'filter' => array('=ID' => $ID)
 						))->fetch();
@@ -766,8 +532,8 @@ class CAllIBlockProperty
 							{
 								$arFields["USER_TYPE_SETTINGS"] = (
 									is_array($oldData["USER_TYPE_SETTINGS"])
-									? $oldData["USER_TYPE_SETTINGS"]
-									: unserialize($oldData["USER_TYPE_SETTINGS"])
+										? $oldData["USER_TYPE_SETTINGS"]
+										: unserialize($oldData["USER_TYPE_SETTINGS"], ['allowed_classes' => false])
 								);
 							}
 						}
@@ -783,22 +549,51 @@ class CAllIBlockProperty
 					{
 						$arFields["USER_TYPE_SETTINGS"] = serialize($arFieldsResult);
 					}
+					unset($arFieldsResult);
 				}
 				else
 				{
 					$arFields["USER_TYPE_SETTINGS"] = false;
 				}
 			}
+			else
+			{
+				if (isset($arFields['DEFAULT_VALUE']) && !is_scalar($arFields['DEFAULT_VALUE']))
+				{
+					$arFields['DEFAULT_VALUE'] = false;
+				}
+				if (isset($arFields["USER_TYPE_SETTINGS"]))
+				{
+					if (is_array($arFields["USER_TYPE_SETTINGS"]))
+					{
+						$arFields["USER_TYPE_SETTINGS"] = serialize($arFields["USER_TYPE_SETTINGS"]);
+					}
+					if (!is_scalar($arFields["USER_TYPE_SETTINGS"]))
+					{
+						$arFields["USER_TYPE_SETTINGS"] = false;
+					}
+				}
+			}
+			unset($arUserType);
 
 			unset($arFields["ID"]);
 			unset($arFields["VERSION"]);
 			unset($arFields["TIMESTAMP_X"]);
+			$connection = Main\Application::getConnection();
+			$helper = $connection->getSqlHelper();
+			$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+			unset($helper, $connection);
 
 			$strUpdate = $DB->PrepareUpdate("b_iblock_property", $arFields);
-			if(strlen($strUpdate) > 0)
+			if($strUpdate <> '')
 			{
 				$strSql = "UPDATE b_iblock_property SET ".$strUpdate." WHERE ID=".$ID;
-				$DB->QueryBind($strSql, array("USER_TYPE_SETTINGS"=>$arFields["USER_TYPE_SETTINGS"]));
+				$bindList = [];
+				if (isset($arFields['USER_TYPE_SETTINGS']))
+				{
+					$bindList['USER_TYPE_SETTINGS'] = $arFields['USER_TYPE_SETTINGS'];
+				}
+				$DB->QueryBind($strSql, $bindList);
 			}
 
 			if(is_set($arFields, "VALUES"))
@@ -814,9 +609,11 @@ class CAllIBlockProperty
 					|| $arFields["SECTION_PROPERTY"] !== "N"
 				)
 				{
-					$arLink = array(
-						"SMART_FILTER" => $arFields["SMART_FILTER"],
-					);
+					$arLink = [];
+					if (array_key_exists("SMART_FILTER", $arFields))
+					{
+						$arLink["SMART_FILTER"] = $arFields["SMART_FILTER"];
+					}
 					if (array_key_exists("DISPLAY_TYPE", $arFields))
 						$arLink["DISPLAY_TYPE"] = $arFields["DISPLAY_TYPE"];
 					if (array_key_exists("DISPLAY_EXPANDED", $arFields))
@@ -831,9 +628,24 @@ class CAllIBlockProperty
 				}
 			}
 
+			if (!empty($arFields['FEATURES']) && is_array($arFields['FEATURES']))
+			{
+				$featureResult = Iblock\Model\PropertyFeature::setFeatures(
+					$ID,
+					$arFields['FEATURES']
+				);
+				//TODO: add error handling
+				unset($featureResult);
+			}
+
+			Iblock\PropertyTable::cleanCache();
+
 			global $BX_IBLOCK_PROP_CACHE;
-			if(array_key_exists("IBLOCK_ID", $arFields))
+			if (isset($arFields["IBLOCK_ID"]))
+			{
 				unset($BX_IBLOCK_PROP_CACHE[$arFields["IBLOCK_ID"]]);
+				CIBlock::clearIblockTagCache($arFields["IBLOCK_ID"]);
+			}
 
 			$Result = true;
 		}
@@ -847,224 +659,312 @@ class CAllIBlockProperty
 		return $Result;
 	}
 
-
 	///////////////////////////////////////////////////////////////////
 	// Get property information by ID
 	///////////////////////////////////////////////////////////////////
-	
-	/**
-	* <p>Возвращает свойство по его коду <i>ID</i>. Метод статический.</p>
-	*
-	*
-	* @param mixed $mixedID  Числовой или символьный код свойства.
-	*
-	* @param int $IBLOCK_ID = false Код информационного блока. Используется для уточнения свойства,
-	* если его <i>ID</i> задано символьным кодом и с таким символьным кодом
-	* свойства присутствует в нескольких информационных блоках.
-	*
-	* @param string $IBLOCK_CODE = false Символьный код информационного блока. Используется для
-	* уточнения свойства, если его <i>ID</i> задано Символьным кодом и с
-	* таким символьным кодом свойства присутствует в нескольких
-	* информационных блоках.
-	*
-	* @return CDBResult <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a><p></p><div class="note">
-	* <b>Примечание:</b> если заданы оба значения <i>IBLOCK_ID</i> и <i>IBLOCK_CODE</i>, то
-	* будет производиться попытка найти свойство  в одном из них
-	* (логика "или").</div>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $res = CIBlockProperty::GetByID("SRC", false, "company_news");<br>if($ar_res = $res-&gt;GetNext())
-	*   echo $ar_res['NAME'];
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a> </li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fproperty">Поля свойства</a> </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID, $IBLOCK_ID=false, $IBLOCK_CODE=false)
 	{
-		global $DB;
-		$cond = "";
-		if($IBLOCK_CODE && $IBLOCK_ID)
-			$cond = " AND (B.ID = ".(int)$IBLOCK_ID." OR B.CODE = '".$DB->ForSql($IBLOCK_CODE)."') ";
-		elseif($IBLOCK_CODE)
-			$cond = " AND B.CODE = '".$DB->ForSql($IBLOCK_CODE)."' ";
-		elseif($IBLOCK_ID)
-			$cond = " AND B.ID = ".(int)$IBLOCK_ID." ";
+		$iblockId = null;
+		$iblockCode = null;
+		if (is_numeric($IBLOCK_ID))
+		{
+			$IBLOCK_ID = (int)$IBLOCK_ID;
+			if ($IBLOCK_ID > 0)
+			{
+				$iblockId = $IBLOCK_ID;
+			}
+		}
+		if (is_string($IBLOCK_CODE))
+		{
+			$IBLOCK_CODE = trim($IBLOCK_CODE);
+			if ($IBLOCK_CODE !== '')
+			{
+				$iblockCode = $IBLOCK_CODE;
+			}
+		}
+
+		$runtime = [];
+		$filter = [];
+		if ($iblockCode && $iblockId)
+		{
+			$filter[] = [
+				'LOGIC' => 'OR',
+				'=IBLOCK.ID' => $iblockId,
+				'=IBLOCK.CODE' => $iblockCode,
+			];
+		}
+		elseif ($iblockCode)
+		{
+			$filter['=IBLOCK.CODE'] = $iblockCode;
+		}
+		elseif ($iblockId)
+		{
+			$filter['=IBLOCK.ID'] = $iblockId;
+		}
+		if (!is_int($ID))
+		{
+			$ID = (string)$ID;
+			if (is_numeric($ID))
+			{
+				$ID = (int)$ID;
+			}
+		}
+		if (is_int($ID))
+		{
+			$filter['=ID'] = $ID;
+		}
 		else
-			$cond = "";
+		{
+			$ID = mb_strtoupper($ID);
+			$connection = Main\Application::getConnection();
+			if ($connection instanceof Main\DB\MysqlCommonConnection)
+			{
+				$filter['=CODE'] = $ID;
+			}
+			else
+			{
+				$filter['=UPPER_PROPERTY_CODE'] = $ID;
+				$runtime[] = self::getUpperExpressionFields();
+			}
+			unset($connection);
+		}
 
-		$strSql =
-			"SELECT BP.* ".
-			"FROM b_iblock_property BP, b_iblock B ".
-			"WHERE BP.IBLOCK_ID=B.ID ".
-			$cond.
-			(is_numeric(substr($ID, 0, 1))
-			?
-				"	AND BP.ID=".(int)$ID
-			:
-				"	AND UPPER(BP.CODE)=UPPER('".$DB->ForSql($ID)."') "
-			);
+		$params = [
+			'select' => ['*'],
+			'filter' => $filter,
+			'limit' => 1,
+		];
+		if (!empty($runtime))
+		{
+			$params['runtime'] = $runtime;
+		}
 
-		$res = new CIBlockPropertyResult($DB->Query($strSql));
-		return $res;
+		return new CIBlockPropertyResult(Iblock\PropertyTable::getList($params));
 	}
 
 	public static function GetPropertyArray($ID, $IBLOCK_ID, $bCached=true)
 	{
-		global $DB;
-
-		$block_id = false;
-		$block_code = false;
-		if(is_array($IBLOCK_ID))
+		if (!is_int($ID) && !is_string($ID))
 		{
-			foreach($IBLOCK_ID as $k=>$v)
+			return false;
+		}
+
+		$iblockIdList = [];
+		$iblockCodeList = [];
+
+		if (is_array($IBLOCK_ID))
+		{
+			foreach ($IBLOCK_ID as $value)
 			{
-				if(is_numeric($v))
+				if (is_numeric($value))
 				{
-					if($block_id)
-						$block_id .= ", ";
-					else
-						$block_id = "";
-
-					$block_id .= IntVal($v);
+					$value = (int)$value;
+					if ($value > 0)
+					{
+						$iblockIdList[$value] = $value;
+					}
 				}
-				elseif(strlen($v)>0)
+				elseif (is_string($value))
 				{
-					if($block_code)
-						$block_code .= ", ";
-					else
-						$block_code = "";
-
-					$block_code .= "'".$DB->ForSQL($v, 200)."'";
+					$value = trim($value);
+					if ($value !== '')
+					{
+						$iblockCodeList[$value] = $value;
+					}
 				}
 			}
 		}
-		elseif(is_numeric($IBLOCK_ID))
-			$block_id = IntVal($IBLOCK_ID);
-		elseif(strlen($IBLOCK_ID)>0)
-			$block_code = "'".$DB->ForSQL($IBLOCK_ID, 200)."'";
+		elseif (is_numeric($IBLOCK_ID))
+		{
+			$iblockId = (int)$IBLOCK_ID;
+			if ($iblockId > 0)
+			{
+				$iblockIdList[$iblockId] = $iblockId;
+			}
+			unset($iblockId);
+		}
+		elseif (is_string($IBLOCK_ID))
+		{
+			$iblockCode = trim($IBLOCK_ID);
+			if ($iblockCode !== '')
+			{
+				$iblockCodeList[$iblockCode] = $iblockCode;
+			}
+			unset($iblockCode);
+		}
+		$iblockIdList = array_values($iblockIdList);
+		$iblockCodeList = array_values($iblockCodeList);
+
+		$cacheId = $ID . '|' . implode(', ', $iblockIdList) . '|' . implode(', ', $iblockCodeList);
 
 		global $IBLOCK_CACHE_PROPERTY;
-		if($bCached && is_set($IBLOCK_CACHE_PROPERTY, $ID."|".$block_id."|".$block_code))
-			return $IBLOCK_CACHE_PROPERTY[$ID."|".$block_id."|".$block_code];
-
-		if($block_code && $block_id)
-			$cond = " AND (B.ID IN (".$block_id.") OR B.CODE IN (".$block_code.")) ";
-		elseif($block_code)
-			$cond = " AND B.CODE IN (".$block_code.") ";
-		elseif($block_id)
-			$cond = " AND B.ID IN (".$block_id.") ";
-		else
-			$cond = "";
-
-		$upperID = strtoupper($ID);
-
-		$strSql = "
-			SELECT BP.*
-			FROM
-				b_iblock_property BP
-				,b_iblock B
-			WHERE BP.IBLOCK_ID=B.ID
-			".$cond."
-			".(substr($upperID, -6)=='_VALUE'?
-				(is_numeric(substr($ID, 0, 1))?
-					"AND BP.ID=".IntVal($ID)
-				:
-					"AND ((UPPER(BP.CODE)='".$DB->ForSql($upperID)."' AND BP.PROPERTY_TYPE!='L') OR (UPPER(BP.CODE)='".$DB->ForSql(substr($upperID, 0, -6))."' AND BP.PROPERTY_TYPE='L'))"
-				)
-			:
-				(is_numeric(substr($ID, 0, 1))?
-					"AND BP.ID=".IntVal($ID)
-				:
-					"AND UPPER(BP.CODE)='".$DB->ForSql($upperID)."'"
-				)
-			);
-
-		$res = $DB->Query($strSql);
-		if($arr = $res->Fetch())
+		if ($bCached && isset($IBLOCK_CACHE_PROPERTY[$cacheId]))
 		{
-			$arr["ORIG_ID"] = $arr["ID"];    //it saves original (digital) id
-			$arr["IS_CODE_UNIQUE"] = true;   //boolean check for global code uniquess
-			$arr["IS_VERSION_MIXED"] = false;//boolean check if varios versions of ibformation block properties
-			while($arr2 = $res->Fetch())
-			{
-				$arr["IS_CODE_UNIQUE"] = false;
-				if($arr["VERSION"] != $arr2["VERSION"])
-					$arr["IS_VERSION_MIXED"] = true;
-			}
-
-			if(
-				substr($upperID, -6) == '_VALUE'
-				&& $arr["PROPERTY_TYPE"] == "L"
-				&& strtoupper($arr["CODE"]) == substr($upperID, 0, -6)
-			)
-				$arr["ID"] = substr($ID, 0, -6);
-			else
-				$arr["ID"] = $ID;
+			return $IBLOCK_CACHE_PROPERTY[$cacheId];
 		}
 
-		$IBLOCK_CACHE_PROPERTY[$ID."|".$block_id."|".$block_code] = $arr;
-		return $arr;
+		$runtime = [];
+		$filter = [];
+		if (!empty($iblockIdList) && !empty($iblockCode))
+		{
+			$filter[] = [
+				'LOGIC' => 'OR',
+				'@IBLOCK.ID' => $iblockIdList,
+				'@IBLOCK.CODE' => $iblockCodeList
+			];
+		}
+		elseif (!empty($iblockIdList))
+		{
+			$filter['@IBLOCK.ID'] = $iblockIdList;
+		}
+		elseif (!empty($iblockCodeList))
+		{
+			$filter['@IBLOCK.CODE'] = $iblockCodeList;
+		}
+
+		$propertyId = null;
+		$propertyCode = null;
+		$propertyFullCode = null;
+		$existsValuePostfix = false;
+		if (is_int($ID))
+		{
+			$propertyId = $ID;
+		}
+		else
+		{
+			$upperId = mb_strtoupper($ID);
+			$preparedId = [];
+			if (preg_match('/^([A-Za-z0-9_]+)(_VALUE)$/', $upperId, $preparedId))
+			{
+				$existsValuePostfix = true;
+				$value = (int)$preparedId[1];
+				if ($value > 0)
+				{
+					$propertyId = $value;
+				}
+				else
+				{
+					$propertyCode = $preparedId[1];
+					$propertyFullCode = $preparedId[0];
+				}
+			}
+			else
+			{
+				$value = (int)$upperId;
+				if ($value > 0)
+				{
+					$propertyId = $value;
+				}
+				else
+				{
+					$propertyCode = $upperId;
+				}
+			}
+			unset($value);
+			unset($preparedId);
+			unset($upperId);
+		}
+
+		if ($propertyId !== null)
+		{
+			$filter['=ID'] = $propertyId;
+		}
+		else
+		{
+			$connection = Main\Application::getConnection();
+			if ($connection instanceof Main\DB\MysqlCommonConnection)
+			{
+				$fieldName = '=CODE';
+			}
+			else
+			{
+				$fieldName = '=UPPER_PROPERTY_CODE';
+				$runtime[] = self::getUpperExpressionFields();
+			}
+			if ($existsValuePostfix)
+			{
+				$filter[] = [
+					'LOGIC' => 'OR',
+					[
+						$fieldName => $propertyFullCode,
+						'!=PROPERTY_TYPE' => Iblock\PropertyTable::TYPE_LIST,
+					],
+					[
+						$fieldName => $propertyCode,
+						'=PROPERTY_TYPE' => Iblock\PropertyTable::TYPE_LIST,
+					]
+				];
+			}
+			else
+			{
+				$filter[$fieldName] = $propertyCode;
+			}
+		}
+
+		$params = [
+			'select' => ['*'],
+			'filter' => $filter,
+			'cache' => [
+				'ttl' => 86400,
+			],
+		];
+		if (!empty($runtime))
+		{
+			$params['runtime'] = $runtime;
+		}
+
+		$iterator = Iblock\PropertyTable::getList($params);
+		$propertyRow = $iterator->fetch();
+		if (!empty($propertyRow))
+		{
+			unset($propertyRow['USER_TYPE_SETTINGS_LIST']);
+			if ($propertyRow['TIMESTAMP_X'] instanceof Main\Type\DateTime)
+			{
+				$propertyRow['TIMESTAMP_X'] = $propertyRow['TIMESTAMP_X']->format('Y-m-d H:i:s');
+			}
+			$propertyRow['ORIG_ID'] = $propertyRow['ID']; //it saves original (digital) id
+			$propertyRow['IS_CODE_UNIQUE'] = true; //boolean check for global code uniquess
+			$propertyRow['IS_VERSION_MIXED'] = false; //boolean check if varios versions of ibformation block properties
+
+			while ($row = $iterator->fetch())
+			{
+				$propertyRow['IS_CODE_UNIQUE'] = false;
+				if ($propertyRow['VERSION'] !== $row['VERSION'])
+				{
+					$propertyRow['IS_VERSION_MIXED'] = true;
+				}
+			}
+			unset($row);
+
+			if (
+				$existsValuePostfix
+				&& $propertyRow['PROPERTY_TYPE'] === Iblock\PropertyTable::TYPE_LIST
+				&& mb_strtoupper((string)$propertyRow['CODE']) === $propertyCode
+			)
+			{
+				$propertyRow['ID'] = mb_substr($ID, 0, -6);
+			}
+			else
+			{
+				$propertyRow['ID'] = $ID;
+			}
+		}
+		unset($iterator);
+
+		$IBLOCK_CACHE_PROPERTY[$cacheId] = $propertyRow;
+
+		return $propertyRow;
 	}
 
-	
-	/**
-	* <p>Возвращает варианты для значения свойства <i>PROP_ID </i>типа "список" отсортированные в порядке <i>arOrder</i> и отфильтрованные по <i>arFilter</i>. Метод статический.</p>
-	*
-	*
-	* @param mixed $PROP_ID  Числовой или символьный код свойства.
-	*
-	* @param array $arOrder = Array("SORT"=>"asc") Массив для сортировки, имеющий вид <i>by1</i>=&gt;<i>order1</i>[,
-	* <i>by2</i>=&gt;<i>order2</i> [, ..]], где <i>           <br>          by</i> - поле сортировки,
-	* может принимать значения:         <br>            <i>id</i> - код;         <br>      
-	*     <i>value</i> - значение,         <br>           <i>sort</i> - поле сортировки<i>,     
-	*       <br></i>    <i>external_id</i> - внешний код,         <br><i>order</i> - порядок
-	* сортировки, может принимать значения:         <br>            <i>asc</i> - по
-	* возрастанию;         <br>            <i>desc</i> - по убыванию;
-	*
-	* @param array $arFilter = Array() Массив вида array("фильтруемое поле"=&gt;"значение" [, ...])         <br>       
-	* "фильтруемое поле" может принимать значения:         <br>       
-	*     <i>VALUE</i> - по значению варианта свойства (можно искать по
-	* шаблону [%_]);         <br>            <i>EXTERNAL_ID</i> - по значению внешнего кода
-	* варианта свойства (можно искать по шаблону [%_]);         <br>           
-	* <i>IBLOCK_ID</i> - по коду информационного блока, которому принадлежит
-	* свойство;         <br>            <i>ID</i> - по коду значения варианта
-	* свойства;         <br>        Необязательное. По умолчанию записи не
-	* фильтруются.
-	*
-	* @return CDBResult <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a><a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblockpropertyenum">полей вариантов
-	* свойства</a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$db_enum_list = CIBlockProperty::GetPropertyEnum("IMPORTANT_NEWS", Array(), Array("IBLOCK_ID"=&gt;$BID, "VALUE"=&gt;"Yes"));<br>if($ar_enum_list = $db_enum_list-&gt;GetNext())<br>{<br>  $db_important_news = CIBlockElement::GetList(Array(), Array("IBLOCK_ID"=&gt;$BID, "PROPERTY"=&gt;array("IMPORTANT_NEWS"=&gt;$ar_enum_list["ID"])));<br>}<br>?&gt;<br>
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblockpropertyenum">Поля вариантов
-	* свойства</a> </li>   <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockpropertyenum/index.php">CIBlockPropertyEnum</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockpropertyenum/getlist.php">GetList() </a> </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/getpropertyenum.php
-	* @author Bitrix
-	*/
+	private static function getUpperExpressionFields(): Main\ORM\Fields\ExpressionField
+	{
+		return new Main\ORM\Fields\ExpressionField(
+			'UPPER_PROPERTY_CODE',
+			'UPPER(%s)',
+			'CODE'
+		);
+	}
+
 	public static function GetPropertyEnum($PROP_ID, $arOrder = array("SORT"=>"asc"), $arFilter = array())
 	{
 		global $DB;
@@ -1074,7 +974,7 @@ class CAllIBlockProperty
 		{
 			foreach($arFilter as $key => $val)
 			{
-				$key = strtoupper($key);
+				$key = mb_strtoupper($key);
 				switch($key)
 				{
 				case "ID":
@@ -1099,8 +999,8 @@ class CAllIBlockProperty
 		{
 			foreach($arOrder as $by => $order)
 			{
-				$by = strtolower($by);
-				$order = strtolower($order);
+				$by = mb_strtolower($by);
+				$order = mb_strtolower($order);
 				if ($order!="asc")
 					$order = "desc";
 
@@ -1122,71 +1022,26 @@ class CAllIBlockProperty
 		else
 			$strSqlOrder = " ORDER BY ".implode(", ", $arSqlOrder);
 
-		$res = $DB->Query($s = "
+		return $DB->Query("
 			SELECT BPE.*, BPE.XML_ID as EXTERNAL_ID
 			FROM
 				b_iblock_property_enum BPE
 				INNER JOIN b_iblock_property BP ON BP.ID = BPE.PROPERTY_ID
 			WHERE
 			".(
-				is_numeric(substr($PROP_ID, 0, 1))?
-				"BP.ID = ".intval($PROP_ID):
+				is_numeric(mb_substr($PROP_ID, 0, 1))?
+				"BP.ID = ".(int)$PROP_ID:
 				"BP.CODE = '".$DB->ForSql($PROP_ID)."'"
 			)."
 			".$strSqlSearch."
 			".$strSqlOrder."
 		");
-
-		return $res;
 	}
 
-	
-	/**
-	* <p>Метод устанавливает значения перечислений свойства типа "список". Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код свойства.
-	*
-	* @param array $arVALUES  Массив всех значений в формате Array("код существующего
-	* значения"=&gt;"массив полей значения", ..., "массив полей нового
-	* значения", ...). Где массив полей имеет вид: Array("VALUE"=&gt;"значение"[,
-	* "SORT"=&gt;"порядок сортировки"][, "DEF"=&gt;"является значением по
-	* умолчанию (Y|N)"][, "XML_ID"=&gt;"внешний код"]).
-	*
-	* @param bool $bForceDelete = true Если принимает значение <i>true</i>, то удаляются варианты значений, у
-	* которых <i>VALUE</i> пустой. Значение <i>false</i> позволяет сохранить
-	* значения, использованные хотя бы у одного элемента.
-	* Необязательный параметр.
-	*
-	* @return mixed 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $cnt = 0;<br>$ar_all_values = Array();<br>$db_enum_list = CIBlockProperty::GetPropertyEnum($PROP_ID, Array('SORT'=&gt;'ASC'));<br>while($ar_enum = $db_enum_list-&gt;Fetch())<br>{<br>	$cnt++;<br>	$ar_all_values[$ar_enum['ID']] = Array('SORT'=&gt;$cnt, 'VALUE'=&gt;$ar_enum['VALUE']);<br>}<br>$CIBlockProp = new CIBlockProperty;
-	* $CIBlockProp-&gt;UpdateEnum($PROP_ID, $ar_all_values); ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fiblockpropertyenum">Поля значений
-	* свойства типа "список</a><a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/ceventmessage/index.php#flds">" </a> </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockpropertyenum/index.php">CIBlockPropetyEnum</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockpropertyenum/update.php">Update()</a> </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockpropertyenum/index.php">CIBlockPropetyEnum</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockpropertyenum/add.php">Add()</a> </li>  </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/updateenum.php
-	* @author Bitrix
-	*/
-	public function UpdateEnum($ID, $arVALUES, $bForceDelete = true)
+	function UpdateEnum($ID, $arVALUES, $bForceDelete = true)
 	{
 		global $DB, $CACHE_MANAGER;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		if(!is_array($arVALUES) || (empty($arVALUES) && $bForceDelete))
 		{
@@ -1237,7 +1092,7 @@ class CAllIBlockProperty
 			$VAL = is_array($VALUE)? $VALUE["VALUE"]: $VALUE;
 			UnSet($arVALUES[$res["ID"]]);
 
-			if(strlen($VAL)<=0)
+			if((string)$VAL == '')
 			{
 				unset($ar_XML_ID[rtrim($res["XML_ID"], " ")]);
 
@@ -1264,18 +1119,18 @@ class CAllIBlockProperty
 					if($SORT < 0)
 						$SORT = 0;
 
-					if(array_key_exists("XML_ID", $VALUE) && strlen($VALUE["XML_ID"]))
-						$XML_ID = substr(rtrim($VALUE["XML_ID"], " "), 0, 200);
-					elseif(array_key_exists("EXTERNAL_ID", $VALUE) && strlen($VALUE["EXTERNAL_ID"]))
-						$XML_ID = substr(rtrim($VALUE["EXTERNAL_ID"], " "), 0, 200);
+					if(array_key_exists("XML_ID", $VALUE) && mb_strlen($VALUE["XML_ID"]))
+						$XML_ID = mb_substr(rtrim($VALUE["XML_ID"], " "), 0, 200);
+					elseif(array_key_exists("EXTERNAL_ID", $VALUE) && mb_strlen($VALUE["EXTERNAL_ID"]))
+						$XML_ID = mb_substr(rtrim($VALUE["EXTERNAL_ID"], " "), 0, 200);
 				}
 
 				if($XML_ID)
 				{
-					unset($ar_XML_ID[rtrim($res["XML_ID"], " ")]);
-					if(array_key_exists($XML_ID, $ar_XML_ID))
+					unset($ar_XML_ID[mb_strtolower(rtrim($res["XML_ID"], " "))]);
+					if (isset($ar_XML_ID[mb_strtolower($XML_ID)]))
 						$XML_ID = md5(uniqid(""));
-					$ar_XML_ID[$XML_ID] = $res["ID"];
+					$ar_XML_ID[mb_strtolower($XML_ID)] = $res["ID"];
 				}
 
 				$strSql = "
@@ -1296,7 +1151,7 @@ class CAllIBlockProperty
 		foreach($arVALUES as $id => $VALUE)
 		{
 			$VAL = is_array($VALUE)? $VALUE["VALUE"]: $VALUE;
-			if(strlen($id) > 0 && strlen($VAL) > 0)
+			if((string)$id <> '' && (string)$VAL <> '')
 			{
 				$DEF = "";
 				$SORT = 0;
@@ -1311,23 +1166,22 @@ class CAllIBlockProperty
 					if($SORT < 0)
 						$SORT = 0;
 
-					if(array_key_exists("XML_ID", $VALUE) && strlen($VALUE["XML_ID"]))
-						$XML_ID = substr(rtrim($VALUE["XML_ID"], " "), 0, 200);
-					elseif(array_key_exists("EXTERNAL_ID", $VALUE) && strlen($VALUE["EXTERNAL_ID"]))
-						$XML_ID = substr(rtrim($VALUE["EXTERNAL_ID"], " "), 0, 200);
+					if(array_key_exists("XML_ID", $VALUE) && mb_strlen($VALUE["XML_ID"]))
+						$XML_ID = mb_substr(rtrim($VALUE["XML_ID"], " "), 0, 200);
+					elseif(array_key_exists("EXTERNAL_ID", $VALUE) && mb_strlen($VALUE["EXTERNAL_ID"]))
+						$XML_ID = mb_substr(rtrim($VALUE["EXTERNAL_ID"], " "), 0, 200);
 				}
 
 				if($XML_ID)
 				{
-					if(array_key_exists($XML_ID, $ar_XML_ID))
+					if (isset($ar_XML_ID[mb_strtolower($XML_ID)]))
 						$XML_ID = md5(uniqid("", true));
-					$ar_XML_ID[$XML_ID] = 0;
 				}
 				else
 				{
 					$XML_ID = md5(uniqid("", true));
-					$ar_XML_ID[$XML_ID] = 0;
 				}
+				$ar_XML_ID[mb_strtolower($XML_ID)] = 0;
 
 				$strSql = "
 					INSERT INTO b_iblock_property_enum
@@ -1358,27 +1212,6 @@ class CAllIBlockProperty
 		return true;
 	}
 
-	
-	/**
-	* <p>Метод возвращает описание пользовательского типа. Метод статический.   <br></p>   <p></p> <div class="note"> <b>Примечание</b>: если параметр USER_TYPE не задан, то метод вернет массив всех пользовательских типов свойств модуля инфоблоков.</div>
-	*
-	*
-	* @param string $USER_TYPE = false Идентификатор пользовательского типа          <br>
-	*
-	* @return array <p>Массив описывающий пользовательский тип.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/user_properties/index.php">Пользовательские
-	* свойства</a></li>   <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/user_properties/GetUserTypeDescription.php">GetUserTypeDescription</a></li>
-	*  </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/GetUserType.php
-	* @author Bitrix
-	*/
 	public static function GetUserType($USER_TYPE = false)
 	{
 		static $CACHE = null;
@@ -1409,191 +1242,127 @@ class CAllIBlockProperty
 		}
 	}
 
-	public static function FormatUpdateError($ID, $CODE)
+	function FormatUpdateError($ID, $CODE)
 	{
 		return GetMessage("IBLOCK_PROPERTY_CHANGE_ERROR",array("#ID#"=>$ID,"#CODE#"=>$CODE));
 	}
 
-	public static function FormatNotFoundError($ID)
+	function FormatNotFoundError($ID)
 	{
 		return GetMessage("IBLOCK_PROPERTY_NOT_FOUND",array("#ID#"=>$ID));
 	}
 
+	/**
+	 * @deprecated deprecated since iblock 17.0.9
+	 * @see \CIBlockPropertyDateTime::GetUserTypeDescription()
+	 *
+	 * @return array
+	 */
 	public static function _DateTime_GetUserTypeDescription()
 	{
-		return array(
-			"PROPERTY_TYPE" => "S",
-			"USER_TYPE" => "DateTime",
-			"DESCRIPTION" => GetMessage("IBLOCK_PROP_DATETIME_DESC"),
-			//optional handlers
-			"GetPublicViewHTML" => array("CIBlockPropertyDateTime","GetPublicViewHTML"),
-			"GetPublicEditHTML" => array("CIBlockPropertyDateTime","GetPublicEditHTML"),
-			"GetAdminListViewHTML" => array("CIBlockPropertyDateTime","GetAdminListViewHTML"),
-			"GetPropertyFieldHtml" => array("CIBlockPropertyDateTime","GetPropertyFieldHtml"),
-			"CheckFields" => array("CIBlockPropertyDateTime","CheckFields"),
-			"ConvertToDB" => array("CIBlockPropertyDateTime","ConvertToDB"),
-			"ConvertFromDB" => array("CIBlockPropertyDateTime","ConvertFromDB"),
-			"GetSettingsHTML" => array("CIBlockPropertyDateTime","GetSettingsHTML"),
-			"GetAdminFilterHTML" => array("CIBlockPropertyDateTime","GetAdminFilterHTML"),
-			"GetPublicFilterHTML" => array("CIBlockPropertyDateTime","GetPublicFilterHTML"),
-			"AddFilterFields" => array("CIBlockPropertyDateTime","AddFilterFields"),
-		);
+		return CIBlockPropertyDateTime::GetUserTypeDescription();
 	}
 
+	/**
+	 * @deprecated deprecated since iblock 17.0.9
+	 * @see \CIBlockPropertyDate::GetUserTypeDescription()
+	 *
+	 * @return array
+	 */
 	public static function _Date_GetUserTypeDescription()
 	{
-		return array(
-			"PROPERTY_TYPE" => "S",
-			"USER_TYPE" => "Date",
-			"DESCRIPTION" => GetMessage("IBLOCK_PROP_DATE_DESC"),
-			//optional handlers
-			"GetPublicViewHTML" => array("CIBlockPropertyDate","GetPublicViewHTML"),
-			"GetPublicEditHTML" => array("CIBlockPropertyDate","GetPublicEditHTML"),
-			"GetAdminListViewHTML" => array("CIBlockPropertyDate","GetAdminListViewHTML"),
-			"GetPropertyFieldHtml" => array("CIBlockPropertyDate","GetPropertyFieldHtml"),
-			"CheckFields" => array("CIBlockPropertyDate","CheckFields"),
-			"ConvertToDB" => array("CIBlockPropertyDate","ConvertToDB"),
-			"ConvertFromDB" => array("CIBlockPropertyDate","ConvertFromDB"),
-			"GetSettingsHTML" => array("CIBlockPropertyDate","GetSettingsHTML"),
-			"GetAdminFilterHTML" => array("CIBlockPropertyDate","GetAdminFilterHTML"),
-			"GetPublicFilterHTML" => array("CIBlockPropertyDate","GetPublicFilterHTML"),
-			"AddFilterFields" => array("CIBlockPropertyDate","AddFilterFields"),
-		);
+		return CIBlockPropertyDate::GetUserTypeDescription();
 	}
 
+	/**
+	 * @deprecated deprecated since iblock 17.0.9
+	 * @see \CIBlockPropertyXmlID::GetUserTypeDescription()
+	 *
+	 * @return array
+	 */
 	public static function _XmlID_GetUserTypeDescription()
 	{
-		return array(
-			"PROPERTY_TYPE"		=>"S",
-			"USER_TYPE"		=>"ElementXmlID",
-			"DESCRIPTION"		=>GetMessage("IBLOCK_PROP_XMLID_DESC"),
-			"GetPublicViewHTML"	=>array("CIBlockPropertyXmlID","GetPublicViewHTML"),
-			"GetAdminListViewHTML"	=>array("CIBlockPropertyXmlID","GetAdminListViewHTML"),
-			"GetPropertyFieldHtml"	=>array("CIBlockPropertyXmlID","GetPropertyFieldHtml"),
-			"GetSettingsHTML"	=>array("CIBlockPropertyXmlID","GetSettingsHTML"),
-		);
+		return CIBlockPropertyXmlID::GetUserTypeDescription();
 	}
 
+	/**
+	 * @deprecated deprecated since iblock 17.0.9
+	 * @see \CIBlockPropertyFileMan::GetUserTypeDescription()
+	 *
+	 * @return array
+	 */
 	public static function _FileMan_GetUserTypeDescription()
 	{
-		return array(
-			"PROPERTY_TYPE"		=>"S",
-			"USER_TYPE"		=>"FileMan",
-			"DESCRIPTION"		=>GetMessage("IBLOCK_PROP_FILEMAN_DESC"),
-			"GetPropertyFieldHtml"	=>array("CIBlockPropertyFileMan","GetPropertyFieldHtml"),
-			"GetPropertyFieldHtmlMulty" => array('CIBlockPropertyFileMan','GetPropertyFieldHtmlMulty'),
-			"ConvertToDB"		=>array("CIBlockPropertyFileMan","ConvertToDB"),
-			"ConvertFromDB"		=>array("CIBlockPropertyFileMan","ConvertFromDB"),
-			"GetSettingsHTML" => array("CIBlockPropertyFileMan","GetSettingsHTML"),
-		);
+		return CIBlockPropertyFileMan::GetUserTypeDescription();
 	}
 
+	/**
+	 * @deprecated deprecated since iblock 17.0.9
+	 * @see \CIBlockPropertyHTML::GetUserTypeDescription()
+	 *
+	 * @return array
+	 */
 	public static function _HTML_GetUserTypeDescription()
 	{
-		return array(
-			"PROPERTY_TYPE" => "S",
-			"USER_TYPE" => "HTML",
-			"DESCRIPTION" => GetMessage("IBLOCK_PROP_HTML_DESC"),
-			"GetPublicViewHTML" => array("CIBlockPropertyHTML","GetPublicViewHTML"),
-			"GetPublicEditHTML" => array("CIBlockPropertyHTML","GetPublicEditHTML"),
-			"GetAdminListViewHTML" => array("CIBlockPropertyHTML","GetAdminListViewHTML"),
-			"GetPropertyFieldHtml" => array("CIBlockPropertyHTML","GetPropertyFieldHtml"),
-			"ConvertToDB" => array("CIBlockPropertyHTML","ConvertToDB"),
-			"ConvertFromDB" => array("CIBlockPropertyHTML","ConvertFromDB"),
-			"GetLength" =>array("CIBlockPropertyHTML","GetLength"),
-			"PrepareSettings" =>array("CIBlockPropertyHTML","PrepareSettings"),
-			"GetSettingsHTML" =>array("CIBlockPropertyHTML","GetSettingsHTML"),
-		);
+		return CIBlockPropertyHTML::GetUserTypeDescription();
 	}
 
+	/**
+	 * @deprecated deprecated since iblock 17.0.9
+	 * @see \CIBlockPropertyElementList::GetUserTypeDescription()
+	 *
+	 * @return array
+	 */
 	public static function _ElementList_GetUserTypeDescription()
 	{
-		return array(
-			"PROPERTY_TYPE" => "E",
-			"USER_TYPE" => "EList",
-			"DESCRIPTION" => GetMessage("IBLOCK_PROP_ELIST_DESC"),
-			"GetPropertyFieldHtml" => array("CIBlockPropertyElementList","GetPropertyFieldHtml"),
-			"GetPropertyFieldHtmlMulty" => array("CIBlockPropertyElementList","GetPropertyFieldHtmlMulty"),
-			"GetPublicEditHTML" => array("CIBlockPropertyElementList","GetPropertyFieldHtml"),
-			"GetPublicEditHTMLMulty" => array("CIBlockPropertyElementList","GetPropertyFieldHtmlMulty"),
-			"GetPublicViewHTML" => array("CIBlockPropertyElementList", "GetPublicViewHTML"),
-			"GetAdminFilterHTML" => array("CIBlockPropertyElementList","GetAdminFilterHTML"),
-			"PrepareSettings" =>array("CIBlockPropertyElementList","PrepareSettings"),
-			"GetSettingsHTML" =>array("CIBlockPropertyElementList","GetSettingsHTML"),
-		);
+		return CIBlockPropertyElementList::GetUserTypeDescription();
 	}
 
+	/**
+	 * @deprecated deprecated since iblock 17.0.9
+	 * @see \CIBlockPropertySequence::GetUserTypeDescription()
+	 *
+	 * @return array
+	 */
 	public static function _Sequence_GetUserTypeDescription()
 	{
-		return array(
-			"PROPERTY_TYPE" => "N",
-			"USER_TYPE" => "Sequence",
-			"DESCRIPTION" => GetMessage("IBLOCK_PROP_SEQUENCE_DESC"),
-			"GetPropertyFieldHtml" => array("CIBlockPropertySequence","GetPropertyFieldHtml"),
-			"GetPublicEditHTML" => array("CIBlockPropertySequence","GetPropertyFieldHtml"),
-			"PrepareSettings" =>array("CIBlockPropertySequence","PrepareSettings"),
-			"GetSettingsHTML" =>array("CIBlockPropertySequence","GetSettingsHTML"),
-			"GetAdminFilterHTML" => array("CIBlockPropertySequence","GetPublicFilterHTML"),
-			"GetPublicFilterHTML" => array("CIBlockPropertySequence","GetPublicFilterHTML"),
-			"AddFilterFields" => array("CIBlockPropertySequence","AddFilterFields"),
-		);
+		return CIBlockPropertySequence::GetUserTypeDescription();
 	}
 
+	/**
+	 * @deprecated deprecated since iblock 17.0.9
+	 * @see \CIBlockPropertyElementAutoComplete::GetUserTypeDescription()
+	 *
+	 * @return array
+	 */
 	public static function _ElementAutoComplete_GetUserTypeDescription()
 	{
-		return array(
-			"PROPERTY_TYPE" => "E",
-			"USER_TYPE" => "EAutocomplete",
-			"DESCRIPTION" => GetMessage("IBLOCK_PROP_EAUTOCOMPLETE_DESC"),
-			"GetPropertyFieldHtml" => array("CIBlockPropertyElementAutoComplete", "GetPropertyFieldHtml"),
-			"GetPropertyFieldHtmlMulty" => array('CIBlockPropertyElementAutoComplete','GetPropertyFieldHtmlMulty'),
-			"GetAdminListViewHTML" => array("CIBlockPropertyElementAutoComplete","GetAdminListViewHTML"),
-			"GetPublicViewHTML" => array("CIBlockPropertyElementAutoComplete", "GetPublicViewHTML"),
-			"GetPublicEditHTML" => array("CIBlockPropertyElementAutoComplete", "GetPublicEditHTML"),
-			"GetAdminFilterHTML" => array('CIBlockPropertyElementAutoComplete','GetAdminFilterHTML'),
-			"GetSettingsHTML" => array('CIBlockPropertyElementAutoComplete','GetSettingsHTML'),
-			"PrepareSettings" => array('CIBlockPropertyElementAutoComplete','PrepareSettings'),
-			"AddFilterFields" => array('CIBlockPropertyElementAutoComplete','AddFilterFields'),
-		);
+		return CIBlockPropertyElementAutoComplete::GetUserTypeDescription();
 	}
 
+	/**
+	 * @deprecated deprecated since iblock 17.0.9
+	 * @see \CIBlockPropertySKU::GetUserTypeDescription()
+	 *
+	 * @return array
+	 */
 	public static function _SKU_GetUserTypeDescription()
 	{
-		return array(
-			"PROPERTY_TYPE" => "E",
-			"USER_TYPE" =>"SKU",
-			"DESCRIPTION" => GetMessage('IBLOCK_PROP_SKU_DESC'),
-			"GetPropertyFieldHtml" => array("CIBlockPropertySKU", "GetPropertyFieldHtml"),
-			"GetPropertyFieldHtmlMulty" => array("CIBlockPropertySKU", "GetPropertyFieldHtml"),
-			"GetPublicViewHTML" => array("CIBlockPropertySKU", "GetPublicViewHTML"),
-			"GetPublicEditHTML" => array("CIBlockPropertySKU", "GetPublicEditHTML"),
-			"GetAdminListViewHTML" => array("CIBlockPropertySKU","GetAdminListViewHTML"),
-			"GetAdminFilterHTML" => array('CIBlockPropertySKU','GetAdminFilterHTML'),
-			"GetSettingsHTML" => array('CIBlockPropertySKU','GetSettingsHTML'),
-			"PrepareSettings" => array('CIBlockPropertySKU','PrepareSettings'),
-			"AddFilterFields" => array('CIBlockPropertySKU','AddFilterFields'),
-		);
+		return CIBlockPropertySKU::GetUserTypeDescription();
 	}
 
+	/**
+	 * @deprecated deprecated since iblock 17.0.9
+	 * @see \CIBlockPropertySectionAutoComplete::GetUserTypeDescription()
+	 *
+	 * @return array
+	 */
 	public static function _SectionAutoComplete_GetUserTypeDescription()
 	{
-		return array(
-			"PROPERTY_TYPE" => "G",
-			"USER_TYPE" => "SectionAuto",
-			"DESCRIPTION" => GetMessage("IBLOCK_PROP_SAUTOCOMPLETE_DESC"),
-			"GetPropertyFieldHtml" => array("CIBlockPropertySectionAutoComplete", "GetPropertyFieldHtml"),
-			"GetPropertyFieldHtmlMulty" => array('CIBlockPropertySectionAutoComplete','GetPropertyFieldHtmlMulty'),
-			"GetAdminListViewHTML" => array("CIBlockPropertySectionAutoComplete","GetAdminListViewHTML"),
-			"GetPublicViewHTML" => array("CIBlockPropertySectionAutoComplete", "GetPublicViewHTML"),
-			"GetPublicEditHTML" => array("CIBlockPropertySectionAutoComplete", "GetPublicEditHTML"),
-			"GetAdminFilterHTML" => array('CIBlockPropertySectionAutoComplete','GetAdminFilterHTML'),
-			"GetSettingsHTML" => array('CIBlockPropertySectionAutoComplete','GetSettingsHTML'),
-			"PrepareSettings" => array('CIBlockPropertySectionAutoComplete','PrepareSettings'),
-			"AddFilterFields" => array('CIBlockPropertySectionAutoComplete','AddFilterFields'),
-		);
+		return CIBlockPropertySectionAutoComplete::GetUserTypeDescription();
 	}
 
-	public static function _Update($ID, $arFields, $bCheckDescription = false)
+	function _Update($ID, $arFields, $bCheckDescription = false)
 	{
 		return false;
 	}
@@ -1603,7 +1372,7 @@ class CAllIBlockProperty
 		return array();
 	}
 
-	public static function _Add($ID, $arFields)
+	function _Add($ID, $arFields)
 	{
 		return false;
 	}

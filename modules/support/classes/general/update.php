@@ -4,30 +4,30 @@ IncludeModuleLangFile(__FILE__);
 class CAllSupportUpdate
 {
 
-	public static function err_mess()
+	function err_mess()
 	{
 		$module_id = "support";
 		@include($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/".$module_id."/install/version.php");
 		return "<br>Module: ".$module_id." (".$arModuleVersion["VERSION"].")<br>Class: CAllSupportUpdate<br>File: ".__FILE__;
 	}
 	
-	public static function GetUpdateVersion()
+	function GetUpdateVersion()
 	{
 		return 12000004;
 	}
 	
-	public static function CurrentVersionLowerThanUpdateVersion()
+	function CurrentVersionLowerThanUpdateVersion()
 	{
 		$supUpdVer = intval(COption::GetOptionString("support", "SUPPORT_UPDATE_VERSION"));
 		return ($supUpdVer < CSupportUpdate::GetUpdateVersion());
 	}
 	
-	public static function ChangeCurrentVersion()
+	function ChangeCurrentVersion()
 	{
 		COption::SetOptionString("support", "SUPPORT_UPDATE_VERSION", CSupportUpdate::GetUpdateVersion());
 	}
 	
-	public static function Update()
+	function Update()
 	{
 		if(CSupportUpdate::CurrentVersionLowerThanUpdateVersion())
 		{
@@ -53,7 +53,7 @@ class CAllSupportUpdate
 		}
 	}
 		
-	public static function AlterTables($dbType)
+	function AlterTables($dbType)
 	{
 		
 		global $DB;
@@ -335,7 +335,7 @@ GO
 		return true;			
 	}
 	
-	public static function SeparateSLAandTimeTable($dbType)
+	function SeparateSLAandTimeTable($dbType)
 	{
 		global $DB;
 		$err_mess = (CAllSupportUpdate::err_mess())."<br>Function: SeparateSLAandTimeTable<br>Line: ";
@@ -544,7 +544,7 @@ GO
 		return true;		
 	}
 
-	public static function SetHotKeys()
+	function SetHotKeys()
 	{
 		$arHK = array(
 			"B" => "Alt+66",

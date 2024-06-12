@@ -2,17 +2,6 @@
 
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CWikiUtils</b> - Класс дополнительных функций.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/index.php
- * @author Bitrix
- */
 class CWikiUtils
 {
 	static function getRightsLinks($arPage)
@@ -23,7 +12,7 @@ class CWikiUtils
 
 		$arLinks = array();
 		$arParams['ELEMENT_NAME'] = htmlspecialcharsback($arParams['ELEMENT_NAME']);
-		$arParams['ELEMENT_NAME'] = urlencode($arParams['ELEMENT_NAME']);
+		$arParams['ELEMENT_NAME'] = rawurlencode($arParams['ELEMENT_NAME']);
 
 		if (in_array('categories', $arPage))
 			return array();
@@ -138,7 +127,7 @@ class CWikiUtils
 						'URL' => CHTTP::urlAddParams(
 							CComponentEngine::MakePathFromTemplate($arParams['PATH_TO_POST_EDIT'],
 								array(
-									'wiki_name' => urlencode($arParams['ELEMENT_NAME']),
+									'wiki_name' => rawurlencode($arParams['ELEMENT_NAME']),
 									'group_id' => CWikiSocnet::$iSocNetId
 								)
 							),
@@ -217,53 +206,11 @@ class CWikiUtils
 		return $arLinks;
 	}
 
-	
-	/**
-	* <p>Метод проверяет доступ пользователя на чтение. Статический метод.</p>
-	*
-	*
-	* @return bool 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsWriteable.php">CWikiUtils::isWriteable</a>
-	* </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsDeleteable.php">CWikiUtils::isDeleteable</a> </li>    
-	* <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsAllowHTML.php">CWikiUtils::isAllowHTML</a>
-	* </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/CheckAccess.php">CWikiUtils::CheckAccess</a> </li> 
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsReadable.php
-	* @author Bitrix
-	*/
 	static function IsReadable()
 	{
 		return self::CheckAccess('view');
 	}
 
-	
-	/**
-	* <p>Метод проверяет доступ пользователя на запись. Статический метод.</p>
-	*
-	*
-	* @return bool 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsReadable.php">CWikiUtils::isReadable</a>
-	* </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsDeleteable.php">CWikiUtils::isDeleteable</a> </li>    
-	* <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsAllowHTML.php">CWikiUtils::isAllowHTML</a>
-	* </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/CheckAccess.php">CWikiUtils::CheckAccess</a> </li> 
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsWriteable.php
-	* @author Bitrix
-	*/
 	static function IsWriteable()
 	{
 		return self::CheckAccess('write');
@@ -280,55 +227,11 @@ class CWikiUtils
 		return true;
 	}
 
-	
-	/**
-	* <p>Метод проверяет доступ пользователя на удаление. Статический метод.</p>
-	*
-	*
-	* @return bool 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsReadable.php">CWikiUtils::isReadable</a>
-	* </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsWriteable.php">CWikiUtils::isWriteable</a> </li>    
-	* <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsAllowHTML.php">CWikiUtils::isAllowHTML</a>
-	* </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/CheckAccess.php">CWikiUtils::CheckAccess</a> </li> 
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsDeleteable.php
-	* @author Bitrix
-	*/
 	static function IsDeleteable()
 	{
 		return self::CheckAccess('delete');
 	}
 
-	
-	/**
-	* <p>Метод проверяет доступ пользователя. Статический метод.</p>
-	*
-	*
-	* @param string $access  Тип проверяемого доступа (view, write, delete)
-	*
-	* @return bool 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsReadable.php">CWikiUtils::isReadable</a>
-	* </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsWriteable.php">CWikiUtils::isWriteable</a> </li>    
-	* <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsDeleteable.php">CWikiUtils::IsDeleteable</a>
-	* </li>     <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsAllowHTML.php">CWikiUtils::isAllowHTML</a> </li> 
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/CheckAccess.php
-	* @author Bitrix
-	*/
 	static function CheckAccess($access = 'view')
 	{
 		global $APPLICATION, $USER, $arParams;
@@ -364,27 +267,6 @@ class CWikiUtils
 		}
 	}
 
-	
-	/**
-	* <p>Метод проверяет, является ли запрашиваемая страница сервисной. Статический метод.</p>
-	*
-	*
-	* @param string $NAME  Наименование страницы. До версии 10.0.0 назывался <b>ELEMENT_NAME</b>
-	*
-	* @param string &$SERVICE_NAME  Наименование сервисной страницы
-	*
-	* @return string 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsCategoryPage.php">CWikiUtils::IsCategoryPage</a> </li> 
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/CheckServicePage.php
-	* @author Bitrix
-	*/
 	static function CheckServicePage($NAME, &$SERVICE_NAME)
 	{
 		$arStream = array('category', ToLower(GetMessage('CATEGORY_NAME')));
@@ -406,27 +288,6 @@ class CWikiUtils
 			return '';
 	}
 
-	
-	/**
-	* <p>Метод проверяет, является ли запрашиваемая страница страницей категории. Статический метод.</p>
-	*
-	*
-	* @param string $NAME  Наименование страницы. До версии 10.0.0 назывался <b>ELEMENT_NAME</b>.
-	*
-	* @param string &$CATEGORY_NAME  Наименование категории
-	*
-	* @return bool 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/CheckServicePage.php">CWikiUtils::CheckServicePage</a>
-	* </li>  </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiutils/IsCategoryPage.php
-	* @author Bitrix
-	*/
 	static function IsCategoryPage($NAME, &$CATEGORY_NAME)
 	{
 		$sServiceName = self::CheckServicePage($NAME, $CATEGORY_NAME);
@@ -435,13 +296,75 @@ class CWikiUtils
 
 	static function OnBeforeIndex($arFields)
 	{
+		static $groupSiteList = array();
+
 		$arFields['NAME'] = preg_replace('/^category:/i'.BX_UTF_PCRE_MODIFIER, GetMessage('CATEGORY_NAME').':', $arFields['NAME']);
 		$CWikiParser = new CWikiParser();
 		$arFields['BODY'] = $CWikiParser->parseForSearch($arFields['BODY']);
 
-		if(SITE_DIR != "/") //http://www.jabber.bx/view.php?id=29053
-			if(preg_match("#^".SITE_DIR."#",$arFields['SITE_ID'][SITE_ID]) !== false)
-				$arFields['SITE_ID'][SITE_ID] = preg_replace("#^".SITE_DIR."#","/",$arFields['SITE_ID'][SITE_ID]);
+		if (
+			isset($arFields['MODULE_ID'])
+			&& $arFields['MODULE_ID'] == 'socialnetwork'
+			&& isset($arFields['PARAMS'])
+			&& isset($arFields['PARAMS']['socnet_group'])
+			&& intval($arFields['PARAMS']['socnet_group']) > 0
+			&& \Bitrix\Main\ModuleManager::isModuleInstalled('extranet')
+		)
+		{
+			$url = false;
+			if (
+				is_array($arFields['SITE_ID'])
+				&& count($arFields['SITE_ID']) == 1
+			)
+			{
+				$siteId = key($arFields['SITE_ID']);
+				$url =  $arFields['SITE_ID'][$siteId];
+
+				if (!empty($url))
+				{
+					$url = str_replace(COption::getOptionString("socialnetwork", "workgroups_page", "/workgroups/", $siteId), "#GROUPS_PATH#", $url);
+				}
+			}
+
+			if (!empty($url))
+			{
+				$sonetGroupId = intval($arFields['PARAMS']['socnet_group']);
+
+				$siteIdList = array();
+
+				if (
+					!isset($groupSiteList[$sonetGroupId])
+					&& \Bitrix\Main\Loader::includeModule('socialnetwork')
+				)
+				{
+					$groupSiteList[$sonetGroupId] = array();
+					$res = CSocNetGroup::getSite($sonetGroupId);
+					while ($site = $res->fetch())
+					{
+						$groupSiteList[$sonetGroupId][] = $site['SITE_ID'];
+					}
+				}
+
+				if (isset($groupSiteList[$sonetGroupId]))
+				{
+					$siteIdList = $groupSiteList[$sonetGroupId];
+				}
+
+				$extranetGroup = (
+					!empty($siteIdList)
+					&& \Bitrix\Main\Loader::includeModule('extranet')
+					&& in_array(CExtranet::getExtranetSiteId(), $siteIdList)
+				);
+
+				if ($extranetGroup)
+				{
+					foreach($siteIdList as $siteId)
+					{
+						$arFields['SITE_ID'][$siteId] = str_replace("#GROUPS_PATH#", COption::getOptionString("socialnetwork", "workgroups_page", "/workgroups/", $siteId), $url);
+					}
+				}
+			}
+		}
 
 		return $arFields;
 	}
@@ -476,7 +399,7 @@ class CWikiUtils
 	static function htmlspecialcharsback($str, $end = true)
 	{
 		$str = rawurldecode($str);
-		while(strpos($str, '&amp;') !== false)
+		while(mb_strpos($str, '&amp;') !== false)
 			$str = self::htmlspecialchars_decode($str);
 		if($end)
 			$str = self::htmlspecialchars_decode($str);

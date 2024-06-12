@@ -1,10 +1,5 @@
 <?php
-/**
- * Bitrix Framework
- * @package bitrix
- * @subpackage sale
- * @copyright 2001-2012 Bitrix
- */
+
 namespace Bitrix\Sale;
 
 use Bitrix\Main;
@@ -12,17 +7,19 @@ use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Delivery;
 use Bitrix\Sale\Internals;
+use Bitrix\Sale\Reservation\Configuration\ReserveCondition;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class ShipmentCollection
+ * @package Bitrix\Sale
+ */
 class ShipmentCollection
 	extends Internals\EntityCollection
 {
-	/** @var OrderBase */
+	/** @var Order */
 	protected $order;
-
-	/** @var array */
-	private $errors = array();
 
 	/**
 	 * Getting the parent entity
@@ -45,18 +42,6 @@ class ShipmentCollection
 	 */
 	public function resetCollection()
 	{
-		/** @var Order $order */
-		if (!$order = $this->getOrder())
-		{
-			throw new Main\ObjectNotFoundException('Entity "Order" not found');
-		}
-
-		/** @var Basket $basket */
-		if (!$basket = $order->getBasket())
-		{
-			throw new Main\ObjectNotFoundException('Entity "Basket" not found');
-		}
-
 		$result = new Result();
 
 		$deliveryInfo = array();
@@ -81,18 +66,13 @@ class ShipmentCollection
 			}
 		}
 
-		/** @var Shipment $systemShipment */
-		if (!$systemShipment = $this->getSystemShipment())
-		{
-			throw new Main\ObjectNotFoundException('Entity "Shipment" not found');
-		}
+		$systemShipment = $this->getSystemShipment();
 
 		/** @var ShipmentItemCollection $systemShipmentItemCollection */
-		if (!$systemShipmentItemCollection = $systemShipment->getShipmentItemCollection())
-		{
-			throw new Main\ObjectNotFoundException('Entity "ShipmentItemCollection" not found');
-		}
+		$systemShipmentItemCollection = $systemShipment->getShipmentItemCollection();
 
+		/** @var Basket $basket */
+		$basket = $this->getOrder()->getBasket();
 		$systemShipmentItemCollection->resetCollection($basket);
 
 		if (!empty($deliveryInfo))
@@ -100,9 +80,11 @@ class ShipmentCollection
 			$systemShipment->setFieldsNoDemand($deliveryInfo);
 		}
 
-		if (Configuration::getProductReservationCondition() == Configuration::RESERVE_ON_CREATE)
+		if (
+			Configuration::isEnableAutomaticReservation()
+			&& Configuration::getProductReservationCondition() == ReserveCondition::ON_CREATE
+		)
 		{
-			/** @var Result $r */
 			$r = $this->tryReserve();
 			if (!$r->isSuccess())
 			{
@@ -114,35 +96,26 @@ class ShipmentCollection
 	}
 
 	/**
-	 * Creates new shipment
-	 *
-	 * @param Delivery\Services\Base $delivery
-	 * @return Shipment
+	 * @return array|Internals\CollectionFilterIterator
 	 */
-	
+	protected function getDeletableItems()
+	{
+		return $this->getNotSystemItems();
+	}
+
 	/**
-	* <p>Метод создает новую отгрузку. Метод нестатический.</p>
-	*
-	*
-	* @param mixed $Bitrix  Сущность службы доставки.
-	*
-	* @param Bitri $Sale  
-	*
-	* @param Sal $Delivery  
-	*
-	* @param Deliver $Services  
-	*
-	* @param Base $delivery = null 
-	*
-	* @return \Bitrix\Sale\Shipment 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/createitem.php
-	* @author Bitrix
-	*/
+	 * Create new shipment
+	 *
+	 * @param Delivery\Services\Base|null $delivery
+	 * @return mixed
+	 * @throws Main\ArgumentException
+	 * @throws Main\ObjectNotFoundException
+	 */
 	public function createItem(Delivery\Services\Base $delivery = null)
 	{
-		$shipment = Shipment::create($this, $delivery);
+		/** @var Shipment $shipmentClassName */
+		$shipmentClassName = static::getItemCollectionClassName();
+		$shipment = $shipmentClassName::create($this, $delivery);
 		$this->addItem($shipment);
 
 		return $shipment;
@@ -152,7 +125,8 @@ class ShipmentCollection
 	 * Adding shipping to the collection
 	 *
 	 * @param Internals\CollectableEntity $shipment
-	 * @return Internals\CollectableEntity|void
+	 * @return Internals\CollectableEntity|Shipment
+	 * @throws Main\ObjectNotFoundException
 	 */
 	protected function addItem(Internals\CollectableEntity $shipment)
 	{
@@ -205,35 +179,25 @@ class ShipmentCollection
 	 * @param null $oldValue
 	 * @param null $value
 	 * @return Result
+	 * @throws Main\ArgumentException
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ArgumentOutOfRangeException
+	 * @throws Main\NotImplementedException
+	 * @throws Main\NotSupportedException
+	 * @throws Main\ObjectException
+	 * @throws Main\ObjectNotFoundException
 	 */
-	
-	/**
-	* <p>Обработчик событий, вызываемый при изменении значений полей отгрузки. Метод нестатический.</p>
-	*
-	*
-	* @param mixed $Bitrix  Объект отгрузки.
-	*
-	* @param Bitri $Sale  Имя параметра.
-	*
-	* @param Shipment $item  Старое значение.
-	*
-	* @param null $name = null Новое значение.
-	*
-	* @param null $oldValue = null 
-	*
-	* @param null $value = null 
-	*
-	* @return \Bitrix\Sale\Result 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/onitemmodify.php
-	* @author Bitrix
-	*/
 	public function onItemModify(Internals\CollectableEntity $item, $name = null, $oldValue = null, $value = null)
 	{
 		/** @var Order $order */
 		$order = $this->getOrder();
-		return $order->onShipmentCollectionModify(EventActions::UPDATE, $item, $name, $oldValue, $value);
+
+		if ($item instanceof Shipment)
+		{
+			return $order->onShipmentCollectionModify(EventActions::UPDATE, $item, $name, $oldValue, $value);
+		}
+
+		return new Result();
 	}
 
 	/**
@@ -241,17 +205,6 @@ class ShipmentCollection
 	 *
 	 * @return Order
 	 */
-	
-	/**
-	* <p>Метод получает сущность заказа. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Sale\Order 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/getorder.php
-	* @author Bitrix
-	*/
 	public function getOrder()
 	{
 		return $this->order;
@@ -260,74 +213,72 @@ class ShipmentCollection
 	/**
 	 * Loaded from the database collection shipments Order
 	 *
-	 * @param OrderBase $order
+	 * @param Order $order
 	 * @return ShipmentCollection
-	 * @throws Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Получает из базы данные по отгрузке заказа и помещает в коллекцию. Метод статический.</p>
-	*
-	*
-	* @param mixed $Bitrix  Объект заказа.
-	*
-	* @param Bitri $Sale  
-	*
-	* @param OrderBase $order  
-	*
-	* @return \Bitrix\Sale\ShipmentCollection 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/load.php
-	* @author Bitrix
-	*/
-	public static function load(OrderBase $order)
+	public static function load(Order $order)
 	{
 		/** @var ShipmentCollection $shipmentCollection */
-		$shipmentCollection = new static();
+		$shipmentCollection = static::createShipmentCollectionObject();
 		$shipmentCollection->setOrder($order);
 
 		if ($order->getId() > 0)
 		{
-			$shipmentList = Shipment::loadForOrder($order->getId());
+			/** @var Shipment $shipmentClassName */
+			$shipmentClassName = static::getItemCollectionClassName();
+			$shipmentList = $shipmentClassName::loadForOrder($order->getId());
 			/** @var Shipment $shipment */
 			foreach ($shipmentList as $shipment)
 			{
 				$shipment->setCollection($shipmentCollection);
-				$shipmentCollection->addItem($shipment);
+				$shipmentCollection->bindItem($shipment);
 			}
+
+			$controller = Internals\CustomFieldsController::getInstance();
+			$controller->initializeCollection($shipmentCollection);
 		}
 
 		return $shipmentCollection;
 	}
 
+	/**
+	 * @return ShipmentCollection
+	 */
+	private static function createShipmentCollectionObject()
+	{
+		$registry = Registry::getInstance(static::getRegistryType());
+		$className = $registry->getShipmentCollectionClassName();
+
+		return new $className();
+	}
+
+	/**
+	 * @return string
+	 */
+	public static function getRegistryType()
+	{
+		return Registry::REGISTRY_TYPE_ORDER;
+	}
 
 	/**
 	 * Getting the system shipment
 	 *
 	 * @return Shipment
 	 */
-	
-	/**
-	* <p>Метод получает системную отгрузку. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Sale\Shipment 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/getsystemshipment.php
-	* @author Bitrix
-	*/
 	public function getSystemShipment()
 	{
 		/** @var Shipment $shipment */
 		foreach ($this->collection as $shipment)
 		{
 			if ($shipment->isSystem())
+			{
 				return $shipment;
+			}
 		}
 
-		$shipment = Shipment::createSystem($this);
+		/** @var Shipment $shipmentClassName */
+		$shipmentClassName = static::getItemCollectionClassName();
+		$shipment = $shipmentClassName::createSystem($this);
 		$this->addItem($shipment);
 
 		return $shipment;
@@ -338,17 +289,6 @@ class ShipmentCollection
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Проверяет, существует ли системная отгрузка в коллекции. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/isexistssystemshipment.php
-	* @author Bitrix
-	*/
 	public function isExistsSystemShipment()
 	{
 		/** @var Shipment $shipment */
@@ -369,17 +309,6 @@ class ShipmentCollection
 	 * @throws Main\ArgumentNullException
 	 * @throws Main\ObjectNotFoundException
 	 */
-	
-	/**
-	* <p>Сохраняет данные коллекции. Метод нестатический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return \Bitrix\Main\Entity\Result 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/save.php
-	* @author Bitrix
-	*/
 	public function save()
 	{
 		$result = new Entity\Result();
@@ -393,7 +322,7 @@ class ShipmentCollection
 		$itemsFromDb = array();
 		if ($order->getId() > 0)
 		{
-			$itemsFromDbList = Internals\ShipmentTable::getList(
+			$itemsFromDbList = static::getList(
 				array(
 					"filter" => array("ORDER_ID" => $order->getId()),
 					"select" => array("ID" , "DELIVERY_NAME", "DELIVERY_ID")
@@ -475,14 +404,28 @@ class ShipmentCollection
 				{
 					if ($isChanged)
 					{
-						OrderHistory::addLog('SHIPMENT', $order->getId(), $isNew ? 'SHIPMENT_ADD' : 'SHIPMENT_UPDATE', $shipment->getId(), $shipment, $logFields , OrderHistory::SALE_ORDER_HISTORY_LOG_LEVEL_1);
-						
-						OrderHistory::addAction(
+						$registry = Registry::getInstance(static::getRegistryType());
+
+						/** @var OrderHistory $orderHistory */
+						$orderHistory = $registry->getOrderHistoryClassName();
+						$orderHistory::addLog(
+							'SHIPMENT',
+							$order->getId(),
+							$isNew ? 'SHIPMENT_ADD' : 'SHIPMENT_UPDATE',
+							$shipment->getId(),
+							$shipment,
+							$logFields,
+							$orderHistory::SALE_ORDER_HISTORY_LOG_LEVEL_1
+						);
+
+						$orderHistory::addAction(
 							'SHIPMENT',
 							$order->getId(),
 							"SHIPMENT_SAVED",
 							$shipment->getId(),
-							$shipment
+							$shipment,
+							array(),
+							OrderHistory::SALE_ORDER_HISTORY_ACTION_LOG_LEVEL_1
 						);
 					}
 				}
@@ -497,27 +440,32 @@ class ShipmentCollection
 				unset($itemsFromDb[$shipment->getId()]);
 		}
 
-		$itemEventName = Shipment::getEntityEventName();
-
 		foreach ($itemsFromDb as $k => $v)
 		{
+			$v['ENTITY_REGISTRY_TYPE'] = static::getRegistryType();
+
 			/** @var Main\Event $event */
-			$event = new Main\Event('sale', "OnBefore".$itemEventName."Deleted", array(
+			$event = new Main\Event('sale', "OnBeforeSaleShipmentDeleted", array(
 					'VALUES' => $v,
 			));
 			$event->send();
 
-			Internals\ShipmentTable::deleteWithItems($k);
+			$this->deleteInternal($k);
+			$this->deleteExtraServiceInternal($k);
 
 			/** @var Main\Event $event */
-			$event = new Main\Event('sale', "On".$itemEventName."Deleted", array(
+			$event = new Main\Event('sale', "OnSaleShipmentDeleted", array(
 					'VALUES' => $v,
 			));
 			$event->send();
 
 			if ($order->getId() > 0)
 			{
-				OrderHistory::addAction(
+				$registry = Registry::getInstance(static::getRegistryType());
+
+				/** @var OrderHistory $orderHistory */
+				$orderHistory = $registry->getOrderHistoryClassName();
+				$orderHistory::addAction(
 					'SHIPMENT',
 					$order->getId(),
 					'SHIPMENT_REMOVED',
@@ -529,13 +477,27 @@ class ShipmentCollection
 						'DELIVERY_ID' => $v['DELIVERY_ID'],
 					)
 				);
+
+				$registry = Registry::getInstance(static::getRegistryType());
+
+				/** @var EntityMarker $entityMarker */
+				$entityMarker = $registry->getEntityMarkerClassName();
+				$entityMarker::deleteByFilter(array(
+					'=ORDER_ID' => $order->getId(),
+					'=ENTITY_TYPE' => $entityMarker::ENTITY_TYPE_SHIPMENT,
+					'=ENTITY_ID' => $k,
+				));
 			}
 
 		}
 
 		if ($order->getId() > 0)
 		{
-			OrderHistory::collectEntityFields('SHIPMENT', $order->getId());
+			$registry = Registry::getInstance(static::getRegistryType());
+
+			/** @var OrderHistory $orderHistory */
+			$orderHistory = $registry->getOrderHistoryClassName();
+			$orderHistory::collectEntityFields('SHIPMENT', $order->getId());
 		}
 
 		return $result;
@@ -546,24 +508,7 @@ class ShipmentCollection
 	 *
 	 * @param OrderBase $order
 	 */
-	
-	/**
-	* <p>Связывает заказ с коллекцией отгрузок. Метод нестатический.</p>
-	*
-	*
-	* @param mixed $Bitrix  Объект заказа.
-	*
-	* @param Bitri $Sale  
-	*
-	* @param OrderBase $order  
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/setorder.php
-	* @author Bitrix
-	*/
-	public function setOrder(OrderBase $order)
+	public function setOrder(Order $order)
 	{
 		$this->order = $order;
 	}
@@ -575,7 +520,7 @@ class ShipmentCollection
 	 * @return Result
 	 * @throws Main\ArgumentOutOfRangeException
 	 */
-	static public function cloneShipment(Shipment $parentShipment, Shipment $childShipment)
+	public function cloneShipment(Shipment $parentShipment, Shipment $childShipment)
 	{
 		foreach (static::getClonedFields() as $fieldName)
 		{
@@ -608,40 +553,30 @@ class ShipmentCollection
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Проверяет, отгружены ли все отгрузки коллекции. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/isshipped.php
-	* @author Bitrix
-	*/
 	public function isShipped()
 	{
-		$emptyShipment = true;
 		if (!empty($this->collection) && is_array($this->collection))
 		{
 			/** @var Shipment $shipment */
 			foreach ($this->collection as $shipment)
 			{
 				if ($shipment->isSystem())
+				{
+					if (!$shipment->isEmpty())
+					{
+						return false;
+					}
+
 					continue;
+				}
 
 				if (!$shipment->isShipped() && !$shipment->isEmpty())
+				{
 					return false;
-
-				if (!$shipment->isEmpty())
-					$emptyShipment = false;
+				}
 			}
 
-			if ($this->isExistsSystemShipment() && $this->isEmptySystemShipment())
-				return true;
-
-			if ($emptyShipment)
-				return false;
+			return true;
 		}
 
 		return false;
@@ -654,27 +589,21 @@ class ShipmentCollection
 	 */
 	public function hasShipped()
 	{
-		$emptyShipment = true;
 		if (!empty($this->collection) && is_array($this->collection))
 		{
 			/** @var Shipment $shipment */
 			foreach ($this->collection as $shipment)
 			{
 				if ($shipment->isSystem())
+				{
 					continue;
+				}
 
 				if ($shipment->isShipped() && !$shipment->isEmpty())
+				{
 					return true;
-
-				if (!$shipment->isEmpty())
-					$emptyShipment = false;
+				}
 			}
-
-			if ($this->isExistsSystemShipment() && $this->isEmptySystemShipment())
-				return true;
-
-			if ($emptyShipment)
-				return false;
 		}
 
 		return false;
@@ -685,17 +614,6 @@ class ShipmentCollection
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Проверяет, есть ли в коллекции помеченная отгрузка. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/ismarked.php
-	* @author Bitrix
-	*/
 	public function isMarked()
 	{
 		if (!empty($this->collection) && is_array($this->collection))
@@ -719,17 +637,6 @@ class ShipmentCollection
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод проверяет, зарезервированы ли все отгрузки коллекции. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/isreserved.php
-	* @author Bitrix
-	*/
 	public function isReserved()
 	{
 		if (!empty($this->collection) && is_array($this->collection))
@@ -755,24 +662,11 @@ class ShipmentCollection
 		return false;
 	}
 
-
-
 	/**
 	 * Is the entire collection allowed for shipment
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод проверяет, разрешена ли отгрузка для всей коллекции. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/isallowdelivery.php
-	* @author Bitrix
-	*/
 	public function isAllowDelivery()
 	{
 		if (!empty($this->collection) && is_array($this->collection))
@@ -781,10 +675,19 @@ class ShipmentCollection
 			foreach ($this->collection as $shipment)
 			{
 				if ($shipment->isSystem())
-					continue;
+				{
+					if (!$shipment->isEmpty())
+					{
+						return false;
+					}
 
-				if (!$shipment->isAllowDelivery())
+					continue;
+				}
+
+				if (!$shipment->isAllowDelivery() && !$shipment->isEmpty())
+				{
 					return false;
+				}
 			}
 
 			return true;
@@ -798,16 +701,14 @@ class ShipmentCollection
 	 */
 	public function hasAllowDelivery()
 	{
-		if (!empty($this->collection) && is_array($this->collection))
+		$collection = $this->getNotSystemItems();
+
+		/** @var Shipment $shipment */
+		foreach ($collection as $shipment)
 		{
-			/** @var Shipment $shipment */
-			foreach ($this->collection as $shipment)
+			if ($shipment->isAllowDelivery())
 			{
-				if ($shipment->isSystem())
-					continue;
-				
-				if ($shipment->isAllowDelivery())
-					return true;
+				return true;
 			}
 		}
 
@@ -819,29 +720,9 @@ class ShipmentCollection
 	 *
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Проверяет, пуста ли системная отгрузка. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/isemptysystemshipment.php
-	* @author Bitrix
-	*/
 	public function isEmptySystemShipment()
 	{
-		/** @var Shipment $item */
-		foreach ($this->collection as $item)
-		{
-			if ($item->isSystem())
-			{
-				return $item->isEmpty();
-			}
-		}
-
-		return true;
+		return $this->getSystemShipment()->isEmpty();
 	}
 
 	/**
@@ -849,26 +730,15 @@ class ShipmentCollection
 	 *
 	 * @return Result
 	 */
-	
-	/**
-	* <p>Метод выставляет разрешение на отгрузку всем частичным отгрузкам коллекции. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Sale\Result 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/allowdelivery.php
-	* @author Bitrix
-	*/
 	public function allowDelivery()
 	{
 		$result = new Result();
-		/** @var Shipment $shipment */
-		foreach($this->collection as $shipment)
-		{
-			if ($shipment->isSystem())
-				continue;
 
+		$collection = $this->getNotSystemItems();
+
+		/** @var Shipment $shipment */
+		foreach ($collection as $shipment)
+		{
 			$r = $shipment->allowDelivery();
 			if (!$r->isSuccess())
 			{
@@ -882,26 +752,15 @@ class ShipmentCollection
 	 * Prohibition upon shipment to shipment collection
 	 * @return Result
 	 */
-	
-	/**
-	* <p>Метод выставляет запрет на отгрузку всем частичным отгрузкам коллекции. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Sale\Result 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/disallowdelivery.php
-	* @author Bitrix
-	*/
 	public function disallowDelivery()
 	{
 		$result = new Result();
-		/** @var Shipment $shipment */
-		foreach($this->collection as $shipment)
-		{
-			if ($shipment->isSystem())
-				continue;
 
+		$collection = $this->getNotSystemItems();
+
+		/** @var Shipment $shipment */
+		foreach ($collection as $shipment)
+		{
 			$r = $shipment->disallowDelivery();
 			if (!$r->isSuccess())
 			{
@@ -914,23 +773,12 @@ class ShipmentCollection
 
 	/**
 	 * Trying to reserve the contents of the shipment collection
-	 *
 	 * @return Result
 	 */
-	
-	/**
-	* <p>Пробует, можно ли зарезервировать товар из коллекции отгрузок. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Sale\Result 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/tryreserve.php
-	* @author Bitrix
-	*/
 	public function tryReserve()
 	{
 		$result = new Result();
+
 		/** @var Shipment $shipment */
 		foreach ($this->collection as $shipment)
 		{
@@ -942,36 +790,109 @@ class ShipmentCollection
 			{
 				$result->addErrors($r->getErrors());
 			}
+			elseif ($r->hasWarnings())
+			{
+				$result->addWarnings($r->getWarnings());
+
+				$registry = Registry::getInstance(static::getRegistryType());
+				/** @var EntityMarker $entityMarker */
+				$entityMarker = $registry->getEntityMarkerClassName();
+				$entityMarker::addMarker($this->getOrder(), $shipment, $r);
+				if (!$shipment->isSystem())
+				{
+					$shipment->setField('MARKED', 'Y');
+				}
+			}
+		}
+		return $result;
+	}
+
+	/**
+	 * Trying to reserve the contents of the shipment collection
+	 *
+	 * @return Result
+	 * @throws Main\ArgumentException
+	 * @throws Main\ArgumentOutOfRangeException
+	 * @throws Main\NotSupportedException
+	 * @throws Main\ObjectNotFoundException
+	 */
+	public function tryUnreserve()
+	{
+		$result = new Result();
+
+		if (!$order = $this->getOrder())
+		{
+			throw new Main\ObjectNotFoundException('Entity "Order" not found');
+		}
+		/** @var Shipment $shipment */
+		foreach ($this->collection as $shipment)
+		{
+			if ($shipment->isShipped())
+			{
+				if ($order &&
+					!Internals\ActionEntity::isTypeExists(
+						$order->getInternalId(),
+						Internals\ActionEntity::ACTION_ENTITY_SHIPMENT_RESERVED_QUANTITY
+					)
+				)
+				{
+					Internals\ActionEntity::add(
+						$order->getInternalId(),
+						Internals\ActionEntity::ACTION_ENTITY_SHIPMENT_RESERVED_QUANTITY,
+						array(
+							'METHOD' => 'Bitrix\Sale\Shipment::updateReservedFlag',
+							'PARAMS' => array($shipment)
+						)
+					);
+				}
+
+				continue;
+			}
+
+			$r = $shipment->tryUnreserve();
+			if (!$r->isSuccess())
+			{
+				if (!$shipment->isSystem())
+				{
+					$registry = Registry::getInstance(static::getRegistryType());
+
+					/** @var EntityMarker $entityMarker */
+					$entityMarker = $registry->getEntityMarkerClassName();
+					$entityMarker::addMarker($order, $shipment, $r);
+
+					$shipment->setField('MARKED', 'Y');
+				}
+				$result->addErrors($r->getErrors());
+			}
+			elseif ($r->hasWarnings())
+			{
+				$result->addWarnings($r->getWarnings());
+			}
 		}
 
 		return $result;
 	}
 
 	/**
-	 * Trying to reserve the contents of the shipment collection
+	 * @internal
+	 *
+	 * @param BasketItem $basketItem
 	 * @return Result
+	 * @throws Main\ArgumentException
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ArgumentOutOfRangeException
+	 * @throws Main\NotSupportedException
+	 * @throws Main\ObjectNotFoundException
+	 * @throws Main\SystemException
 	 */
-	
-	/**
-	* <p>Метод пытается разрезервировать товар из коллекции отгрузок. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Sale\Result 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/shipmentcollection/tryunreserve.php
-	* @author Bitrix
-	*/
-	public function tryUnreserve()
+	public function onBeforeBasketItemDelete(BasketItem $basketItem)
 	{
 		$result = new Result();
+
 		/** @var Shipment $shipment */
 		foreach ($this->collection as $shipment)
 		{
-			if ($shipment->isShipped())
-				continue;
-
-			$r = $shipment->tryUnreserve();
+			$r = $shipment->onBeforeBasketItemDelete($basketItem);
 			if (!$r->isSuccess())
 			{
 				$result->addErrors($r->getErrors());
@@ -981,198 +902,188 @@ class ShipmentCollection
 		return $result;
 	}
 
-
 	/**
 	 * @param $action
-	 * @param BasketItem $basketItem
+	 * @param BasketItemBase $basketItem
 	 * @param null $name
 	 * @param null $oldValue
 	 * @param null $value
 	 * @return Result
-	 * @throws Main\NotImplementedException
+	 * @throws Main\ArgumentException
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ArgumentOutOfRangeException
 	 * @throws Main\NotSupportedException
 	 * @throws Main\ObjectNotFoundException
+	 * @throws Main\SystemException
 	 */
-	public function onBasketModify($action, BasketItem $basketItem, $name = null, $oldValue = null, $value = null)
+	public function onBasketModify($action, BasketItemBase $basketItem, $name = null, $oldValue = null, $value = null) : Result
 	{
-		if ($action != EventActions::UPDATE)
-			throw new Main\NotImplementedException();
-
-		/** @var Shipment $systemShipment */
-		if (!$systemShipment = $this->getSystemShipment())
-		{
-			throw new Main\ObjectNotFoundException('Entity "Shipment" not found');
-		}
-
 		$result = new Result();
 
-		$currentShipment = null;
-		$allowQuantityChange = false;
-
-		if ($name == 'QUANTITY')
+		if (!($basketItem instanceof BasketItem))
 		{
-			$deltaQuantity = $value - $oldValue;
-
-			if ($value == 0)
-			{
-
-				/** @var Shipment $shipment */
-				foreach ($this->collection as $shipment)
-				{
-
-					/** @var ShipmentItemCollection $shipmentItemCollection */
-					if (!$shipmentItemCollection = $shipment->getShipmentItemCollection())
-					{
-						throw new Main\ObjectNotFoundException('Entity "ShipmentItemCollection" not found');
-					}
-
-					$r = $shipmentItemCollection->deleteByBasketItem($basketItem);
-					if (!$r->isSuccess())
-					{
-						$result->addErrors($r->getErrors());
-					}
-				}
-
-			}
-			elseif ($deltaQuantity != 0)
-			{
-				if (count($this->collection) == 1 || (count($this->collection) == 2) && $this->isExistsSystemShipment())
-				{
-					/** @var Shipment $shipment */
-					foreach ($this->collection as $shipment)
-					{
-						if ($shipment->isSystem())
-						{
-							if ($shipment->isExistBasketItem($basketItem))
-							{
-								$allowQuantityChange = false;
-								$currentShipment = null;
-								break;
-							}
-						}
-						elseif ($shipment->isExistBasketItem($basketItem))
-						{
-							$allowQuantityChange = true;
-							$currentShipment = $shipment;
-						}
-						elseif ($basketItem->getId() == 0)
-						{
-							$allowQuantityChange = true;
-							$currentShipment = $shipment;
-							break;
-						}
-					}
-				}
-
-				if ($allowQuantityChange && $currentShipment)
-				{
-					$allowQuantityChange = (bool)(!$currentShipment->isAllowDelivery() && !$currentShipment->isCanceled() && !$currentShipment->isShipped());
-
-					if ($allowQuantityChange)
-					{
-						/** @var DeliveryService $deliveryService */
-						if ($deliveryService = $currentShipment->getDelivery())
-						{
-							$allowQuantityChange = $deliveryService->isAllowEditShipment();
-						}
-					}
-				}
-
-				if (!$allowQuantityChange && $deltaQuantity < 0)
-				{
-					$basketItemQuantity = $this->getBasketItemQuantity($basketItem);
-					if ($basketItemQuantity > $value)
-					{
-						if (!$basketItem->isBundleChild() && !isset($this->errors[$basketItem->getBasketCode()]['SALE_ORDER_SYSTEM_SHIPMENT_LESS_QUANTITY']))
-						{
-							$result->addError(new ResultError(
-												Loc::getMessage('SALE_ORDER_SYSTEM_SHIPMENT_LESS_QUANTITY',
-																array(
-																		'#PRODUCT_NAME#' => $basketItem->getField("NAME"),
-																		'#BASKET_ITEM_QUANTITY#' => ($basketItemQuantity),
-																		'#BASKET_ITEM_MEASURE#' => $basketItem->getField("MEASURE_NAME"),
-																		'#QUANTITY#' => ($basketItemQuantity - $value)
-																)
-													),
-												'SALE_ORDER_SYSTEM_SHIPMENT_LESS_QUANTITY'));
-
-							$this->errors[$basketItem->getBasketCode()]['SALE_ORDER_SYSTEM_SHIPMENT_LESS_QUANTITY'] = $basketItemQuantity - $value;
-						}
-
-						return $result;
-					}
-				}
-			}
-
+			return $result;
 		}
 
-		if(!$result->isSuccess())
-			return $result;
-
-		$r = $systemShipment->onBasketModify($action, $basketItem, $name, $oldValue, $value);
-		if (!$r->isSuccess())
+		if ($action === EventActions::DELETE)
 		{
-			$result->addErrors($r->getErrors());
+			$order = $this->getOrder();
+			if ($order->getId() == 0 && !$order->isMathActionOnly())
+			{
+				$this->refreshData();
+			}
+
+			return $result;
+		}
+		elseif ($action === EventActions::ADD)
+		{
+			return $this->getSystemShipment()->onBasketModify($action, $basketItem, $name, $oldValue, $value);
+		}
+		elseif ($action !== EventActions::UPDATE)
+		{
 			return $result;
 		}
 
 		if ($name == 'QUANTITY')
 		{
-			if ($allowQuantityChange)
+			if (!$this->isAllowAutoEdit($basketItem))
 			{
-				if ($currentShipment)
+				$result = $this->checkDistributedQuantity($basketItem, $value);
+				if (!$result->isSuccess())
 				{
-					/** @var ShipmentItemCollection $shipmentItemCollection */
-					if (!$shipmentItemCollection = $currentShipment->getShipmentItemCollection())
+					return $result;
+				}
+			}
+
+			$shipment = $this->getItemForAutoEdit($basketItem);
+
+			if ($value - $oldValue > 0)
+			{
+				$r = $this->getSystemShipment()->onBasketModify($action, $basketItem, $name, $oldValue, $value);
+				if (!$r->isSuccess())
+				{
+					return $result->addErrors($r->getErrors());
+				}
+			}
+
+			if ($shipment)
+			{
+				$r = $shipment->onBasketModify($action, $basketItem, $name, $oldValue, $value);
+				if (!$r->isSuccess())
+				{
+					$result->addErrors($r->getErrors());
+					return $result;
+				}
+			}
+
+			if ($value - $oldValue < 0)
+			{
+				$r = $this->getSystemShipment()->onBasketModify($action, $basketItem, $name, $oldValue, $value);
+				if (!$r->isSuccess())
+				{
+					return $result->addErrors($r->getErrors());
+				}
+			}
+		}
+		elseif (in_array($name, ['WEIGHT', 'PRICE']))
+		{
+			/** @var Shipment $shipment */
+			foreach ($this->getNotSystemItems() as $shipment)
+			{
+				$shipment->onBasketModify($action, $basketItem, $name, $value, $oldValue);
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param BasketItem $basketItem
+	 * @return Shipment|null
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ObjectNotFoundException
+	 */
+	private function getItemForAutoEdit(BasketItem $basketItem)
+	{
+		if ($this->isAllowAutoEdit($basketItem))
+		{
+			/** @var Shipment $shipment */
+			foreach ($this->getNotSystemItems() as $shipment)
+			{
+				return $shipment;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param BasketItem $basketItem
+	 * @return bool
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ObjectNotFoundException
+	 */
+	protected function isAllowAutoEdit(BasketItem $basketItem)
+	{
+		if ($this->count() === 1
+			||
+			(
+				$this->count() === 2
+				&&
+				$this->isExistsSystemShipment()
+			)
+		)
+		{
+			if (!$this->getSystemShipment()->isExistBasketItem($basketItem)
+				|| (int)$basketItem->getId() === 0
+			)
+			{
+				foreach ($this->getNotSystemItems() as $shipment)
+				{
+					if (!$shipment->isAllowDelivery()
+						&& !$shipment->isCanceled()
+						&& !$shipment->isShipped()
+					)
 					{
-						throw new Main\ObjectNotFoundException('Entity "ShipmentItemCollection" not found');
-					}
-
-					if ($shipmentItem = $shipmentItemCollection->getItemByBasketCode($basketItem->getBasketCode()))
-					{
-						$r = $shipmentItem->setField(
-								"QUANTITY",
-								$shipmentItem->getField("QUANTITY") + $deltaQuantity
-						);
-
-						if ($r->isSuccess())
+						/** @var Delivery\Services\Base $deliveryService */
+						if ($deliveryService = $shipment->getDelivery())
 						{
-							if ($deltaQuantity < 0)
-							{
-								$r = $systemShipment->onBasketModify($action, $basketItem, $name, $oldValue, $value);
-								if (!$r->isSuccess())
-								{
-									$result->addErrors($r->getErrors());
-									return $result;
-								}
-							}
-
-							/** @var Delivery\CalculationResult $deliveryCalculate */
-							$deliveryCalculate = $currentShipment->calculateDelivery();
-							if (!$deliveryCalculate->isSuccess())
-							{
-								$result->addErrors($deliveryCalculate->getErrors());
-							}
-
-							if ($deliveryCalculate->getPrice() > 0)
-							{
-								$currentShipment->setField('BASE_PRICE_DELIVERY', $deliveryCalculate->getPrice());
-							}
-						}
-						else
-						{
-							$result->addErrors($r->getErrors());
-						}
-					}
-					else
-					{
-						if ($shipmentItem = $shipmentItemCollection->createItem($basketItem))
-						{
-							$shipmentItem->setField("QUANTITY", $basketItem->getQuantity());
+							return $deliveryService->isAllowEditShipment();
 						}
 					}
 				}
 			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * @param BasketItem $basketItem
+	 * @param $value
+	 * @return Result
+	 * @throws Main\ArgumentException
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ObjectNotFoundException
+	 */
+	private function checkDistributedQuantity(BasketItem $basketItem, $value)
+	{
+		$result = new Result();
+
+		$basketItemQuantity = $this->getBasketItemDistributedQuantity($basketItem);
+		if ($basketItemQuantity > $value)
+		{
+			$result->addError(new ResultError(
+				Loc::getMessage('SALE_ORDER_SYSTEM_SHIPMENT_LESS_QUANTITY',
+					array(
+						'#PRODUCT_NAME#' => $basketItem->getField("NAME"),
+						'#BASKET_ITEM_QUANTITY#' => $basketItemQuantity,
+						'#BASKET_ITEM_MEASURE#' => $basketItem->getField("MEASURE_NAME"),
+						'#QUANTITY#' => $basketItemQuantity - $value
+					)
+				),
+				'SALE_ORDER_SYSTEM_SHIPMENT_LESS_QUANTITY')
+			);
 		}
 
 		return $result;
@@ -1183,6 +1094,11 @@ class ShipmentCollection
 	 * @param $oldValue
 	 * @param $value
 	 * @return Result
+	 * @throws Main\ArgumentException
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ArgumentOutOfRangeException
+	 * @throws Main\NotSupportedException
+	 * @throws Main\ObjectNotFoundException
 	 */
 	public function onOrderModify($name, $oldValue, $value)
 	{
@@ -1193,7 +1109,6 @@ class ShipmentCollection
 			case "CANCELED":
 				if ($value == "Y")
 				{
-
 					$isShipped = false;
 					/** @var Shipment $shipment */
 					foreach ($this->collection as $shipment)
@@ -1207,13 +1122,19 @@ class ShipmentCollection
 
 					if ($isShipped)
 					{
-						$result->addError(new ResultError(Loc::getMessage('SALE_ORDER_CANCEL_SHIPMENT_EXIST_SHIPPED'), 'SALE_ORDER_CANCEL_SHIPMENT_EXIST_SHIPPED'));
+						$result->addError(
+							new ResultError(
+								Loc::getMessage('SALE_ORDER_CANCEL_SHIPMENT_EXIST_SHIPPED_MSGVER_1'),
+								'SALE_ORDER_CANCEL_SHIPMENT_EXIST_SHIPPED'
+							)
+						);
+
 						return $result;
 					}
 
 					$this->tryUnreserve();
 				}
-				else
+				else if (Configuration::isEnableAutomaticReservation())
 				{
 					/** @var Shipment $shipment */
 					foreach ($this->collection as $shipment)
@@ -1224,17 +1145,14 @@ class ShipmentCollection
 							$r = $shipment->tryReserve();
 							if (!$r->isSuccess())
 							{
-								$shipment->setField('MARKED', 'Y');
+								$registry = Registry::getInstance(static::getRegistryType());
 
-								if (is_array($r->getErrorMessages()))
+								/** @var EntityMarker $entityMarker */
+								$entityMarker = $registry->getEntityMarkerClassName();
+								$entityMarker::addMarker($this->getOrder(), $shipment, $r);
+								if (!$shipment->isSystem())
 								{
-									$oldErrorText = $shipment->getField('REASON_MARKED');
-									foreach($r->getErrorMessages() as $error)
-									{
-										$oldErrorText .= (strval($oldErrorText) != '' ? "\n" : ""). $error;
-									}
-
-									$shipment->setField('REASON_MARKED', $oldErrorText);
+									$shipment->setField('MARKED', 'Y');
 								}
 
 								$result->addErrors($r->getErrors());
@@ -1282,7 +1200,6 @@ class ShipmentCollection
 		return $result;
 	}
 
-
 	/**
 	 * @return Result
 	 */
@@ -1291,53 +1208,62 @@ class ShipmentCollection
 		/** @var Result $result */
 		$result = new Result();
 
+		$calculatedDeliveries = [];
+
+		$collection = $this->getNotSystemItems();
+
 		/** @var Shipment $shipment */
-		foreach ($this->collection as $shipment)
+		foreach ($collection as $shipment)
 		{
-			if ($shipment->isSystem() || $shipment->getDeliveryId() == 0)
+			if ($shipment->getDeliveryId() == 0)
 				continue;
 
 			if ($shipment->isCustomPrice())
 			{
 				$priceDelivery = $shipment->getPrice();
-				$shipment->setField('BASE_PRICE_DELIVERY', $priceDelivery);
+
+				$calcResult = new Delivery\CalculationResult();
+				$calcResult->setDeliveryPrice($priceDelivery);
 			}
 			else
 			{
-				$deliveryCalculate = $shipment->calculateDelivery();
-				if (!$deliveryCalculate->isSuccess())
+				/** @var Delivery\CalculationResult $calcResult */
+				$calcResult = $shipment->calculateDelivery();
+				if (!$calcResult->isSuccess())
 				{
-					$result->addErrors($deliveryCalculate->getErrors());
+					$result->addErrors($calcResult->getErrors());
 					continue;
 				}
 
-				if ($deliveryCalculate->getPrice() < 0)
+				$priceDelivery = $calcResult->getPrice();
+				if ($priceDelivery < 0)
 				{
 					$result->addError(new ResultError(Loc::getMessage('SALE_ORDER_SHIPMENT_WRONG_DELIVERY_PRICE'), 'WRONG_DELIVERY_PRICE'));
 					continue;
 				}
-
-				$shipment->setField('BASE_PRICE_DELIVERY', $deliveryCalculate->getPrice());
-
 			}
 
+			$priceDelivery = PriceMaths::roundPrecision($priceDelivery);
+			$shipment->setField('BASE_PRICE_DELIVERY', $priceDelivery);
+
+			$calculatedDeliveries[] = $calcResult;
 		}
+
+		$result->setData(['CALCULATED_DELIVERIES' => $calculatedDeliveries]);
 
 		return $result;
 	}
-
 
 	/**
 	 *
 	 */
 	public function resetData()
 	{
-		/** @var Shipment $shipment */
-		foreach ($this->collection as $shipment)
-		{
-			if ($shipment->isSystem())
-				continue;
+		$collection = $this->getNotSystemItems();
 
+		/** @var Shipment $shipment */
+		foreach ($collection as $shipment)
+		{
 			$shipment->resetData();
 		}
 	}
@@ -1345,21 +1271,46 @@ class ShipmentCollection
 	/**
 	 * @param BasketItem $basketItem
 	 * @return float|int
+	 * @throws Main\ArgumentException
+	 * @throws Main\ArgumentNullException
 	 * @throws Main\ObjectNotFoundException
 	 */
-	public function getBasketItemQuantity(BasketItem $basketItem)
+	public function getBasketItemDistributedQuantity(BasketItem $basketItem)
 	{
-		$allQuantity = 0;
-		/** @var Shipment $shipment */
-		foreach ($this->collection as $shipment)
-		{
-			if ($shipment->isSystem())
-				continue;
+		$collection = $this->getNotSystemItems();
 
+		$allQuantity = 0;
+
+		/** @var Shipment $shipment */
+		foreach ($collection as $shipment)
+		{
 			$allQuantity += $shipment->getBasketItemQuantity($basketItem);
 		}
 
 		return $allQuantity;
+	}
+
+	/**
+	 * @param BasketItem $basketItem
+	 * @return float|int
+	 * @throws Main\ArgumentException
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ObjectNotFoundException
+	 */
+	public function getBasketItemShippedQuantity(BasketItem $basketItem)
+	{
+		$quantity = 0;
+
+		/** @var Shipment $shipment */
+		foreach ($this->collection as $shipment)
+		{
+			if ($shipment->isShipped())
+			{
+				$quantity += $shipment->getShipmentItemCollection()->getBasketItemQuantity($basketItem);
+			}
+		}
+
+		return $quantity;
 	}
 
 	/**
@@ -1375,7 +1326,9 @@ class ShipmentCollection
 		foreach ($this->collection as $shipment)
 		{
 			if (!$includeSystemShipment && $shipment->isSystem())
+			{
 				continue;
+			}
 
 			return $shipment->isExistBasketItem($basketItem);
 		}
@@ -1387,16 +1340,14 @@ class ShipmentCollection
 	 */
 	public function getBasePriceDelivery()
 	{
+		$collection = $this->getNotSystemItems();
+
 		$sum = 0;
 		/** @var Shipment $shipment */
-		foreach ($this->collection as $shipment)
+		foreach ($collection as $shipment)
 		{
-			if ($shipment->isSystem())
-				continue;
-
 			$sum += $shipment->getField('BASE_PRICE_DELIVERY');
 		}
-
 
 		return $sum;
 	}
@@ -1406,13 +1357,12 @@ class ShipmentCollection
 	 */
 	public function getPriceDelivery()
 	{
+		$collection = $this->getNotSystemItems();
+
 		$sum = 0;
 		/** @var Shipment $shipment */
-		foreach ($this->collection as $shipment)
+		foreach ($collection as $shipment)
 		{
-			if ($shipment->isSystem())
-				continue;
-
 			$sum += $shipment->getPrice();
 		}
 
@@ -1439,26 +1389,12 @@ class ShipmentCollection
 	}
 
 	/**
-	 * @return int
-	 */
-	public function getWeight()
-	{
-		$weight = 0;
-		/** @var Shipment $shipment */
-		foreach ($this->collection as $shipment)
-		{
-			if ($shipment->isSystem())
-				continue;
-
-			$weight += $shipment->getWeight();
-
-		}
-
-		return $weight;
-	}
-
-	/**
 	 * @return Result
+	 * @throws Main\ArgumentException
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ArgumentOutOfRangeException
+	 * @throws Main\NotSupportedException
+	 * @throws Main\ObjectNotFoundException
 	 */
 	public function verify()
 	{
@@ -1467,22 +1403,28 @@ class ShipmentCollection
 		/** @var Shipment $shipment */
 		foreach ($this->collection as $shipment)
 		{
+			if ($shipment->isSystem())
+			{
+				continue;
+			}
+
 			$r = $shipment->verify();
 			if (!$r->isSuccess())
 			{
-				if ($shipment->isSystem())
-				{
-					$result->addNotices($r->getErrors());
-				}
-				else
-				{
-					$result->addErrors($r->getErrors());
-				}
+				$result->addErrors($r->getErrors());
+
+				$registry = Registry::getInstance(static::getRegistryType());
+
+				/** @var EntityMarker $entityMarker */
+				$entityMarker = $registry->getEntityMarkerClassName();
+				$entityMarker::addMarker($this->getOrder(), $shipment, $r);
+
+				$shipment->setField('MARKED', 'Y');
 			}
 		}
+
 		return $result;
 	}
-
 
 	/**
 	 * @internal
@@ -1496,9 +1438,9 @@ class ShipmentCollection
 		{
 			return $cloneEntity[$this];
 		}
-		
-		$shipmentCollectionClone = clone $this;
-		$shipmentCollectionClone->isClone = true;
+
+		/** @var ShipmentCollection $shipmentCollectionClone */
+		$shipmentCollectionClone = parent::createClone($cloneEntity);
 
 		if ($this->order)
 		{
@@ -1508,26 +1450,124 @@ class ShipmentCollection
 			}
 		}
 
-		if (!$cloneEntity->contains($this))
+		return $shipmentCollectionClone;
+	}
+
+	/**
+	 * @param $value
+	 *
+	 * @return string
+	 */
+	public function getErrorEntity($value)
+	{
+		$className = null;
+		/** @var Shipment $shipment */
+		foreach ($this->collection as $shipment)
 		{
-			$cloneEntity[$this] = $shipmentCollectionClone;
+			if ($className = $shipment->getErrorEntity($value))
+			{
+				break;
+			}
 		}
 
-		/**
-		 * @var int key
-		 * @var Shipment $shipment
-		 */
-		foreach ($shipmentCollectionClone->collection as $key => $shipment)
+		return $className;
+	}
+
+	/**
+	 * @param $value
+	 *
+	 * @return string
+	 */
+	public function canAutoFixError($value)
+	{
+		$autoFix = false;
+
+		/** @var Shipment $shipment */
+		foreach ($this->collection as $shipment)
 		{
-			if (!$cloneEntity->contains($shipment))
+			if ($autoFix = $shipment->canAutoFixError($value))
 			{
-				$cloneEntity[$shipment] = $shipment->createClone($cloneEntity);
+				break;
+			}
+		}
+		return $autoFix;
+	}
+
+	/**
+	 * @param ShipmentCollection $collection
+	 *
+	 * @return Result
+	 */
+	public static function updateReservedFlag(ShipmentCollection $collection)
+	{
+		$result = new Result();
+		/** @var Shipment $shipment */
+		foreach ($collection as $shipment)
+		{
+			/** @var Shipment $shipmentClassName */
+			$shipmentClassName = static::getItemCollectionClassName();
+			$r = $shipmentClassName::updateReservedFlag($shipment);
+			if (!$r->isSuccess())
+			{
+				$result->addErrors($r->getErrors());
 			}
 
-			$shipmentCollectionClone->collection[$key] = $cloneEntity[$shipment];
+			if ($r->hasWarnings())
+			{
+				$result->addWarnings($r->getWarnings());
+			}
 		}
 
-		return $shipmentCollectionClone;
+		return $result;
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function getItemCollectionClassName()
+	{
+		$registry = Registry::getInstance(static::getRegistryType());
+		return $registry->getShipmentClassName();
+	}
+
+	/**
+	 * @param array $parameters
+	 * @return Main\DB\Result
+	 */
+	public static function getList(array $parameters = array())
+	{
+		return Internals\ShipmentTable::getList($parameters);
+	}
+
+	/**
+	 * @param $primary
+	 * @return Entity\DeleteResult
+	 */
+	protected function deleteInternal($primary)
+	{
+		return Internals\ShipmentTable::deleteWithItems($primary);
+	}
+
+	/**
+	 * @param $shipmentId
+	 */
+	protected function deleteExtraServiceInternal($shipmentId)
+	{
+		Internals\ShipmentExtraServiceTable::deleteByShipmentId($shipmentId);
+	}
+
+
+	/**
+	 * @return Internals\CollectionFilterIterator
+	 */
+	public function getNotSystemItems()
+	{
+		$callback = function (Shipment $shipment)
+		{
+			return !$shipment->isSystem();
+		};
+
+		return new Internals\CollectionFilterIterator($this->getIterator(), $callback);
 	}
 
 }

@@ -28,18 +28,18 @@ class ExportTreeUkrainTable extends ExportTreeTable
 	protected $types = false;
 
 	protected $typeMap = array(
-		1 => 'CITY', 		//| РјС–СЃС‚Рѕ              | РіРѕСЂРѕРґ                  |
-		2 => 'VILLAGE', 	//| СЃРјС‚                | РїРіС‚                    |
-		3 => 'VILLAGE', 	//| СЃРµР»РёС‰Рµ             | РїРѕСЃРµР»РѕРє                |
-		4 => 'VILLAGE', 	//| СЃРµР»Рѕ               | СЃРµР»Рѕ                   |
-		5 => 'VILLAGE', 	//| С…СѓС‚С–СЂ              | С…СѓС‚РѕСЂ                  |
-		6 => 'VILLAGE', 	//| СЃС‚.                | СЃС‚.                    |
-		7 => 'VILLAGE', 	//| СЃР°РЅР°С‚.             | СЃР°РЅР°С‚.                 |
-		8 => 'VILLAGE', 	//| СЂР°РґРіРѕСЃРї            | СЃРѕРІС…РѕР·                 |
-		9 => 'VILLAGE', 	//| РІРѕРєР·Р°Р»             | РІРѕРєР·Р°Р»                 |
-		10 => 'VILLAGE', 	//| Р»С–СЃРЅРёС†С‚РІРѕ          | Р»РµСЃРЅРёС‡РµСЃС‚РІРѕ            |
-		11 => 'VILLAGE', 	//| РґРѕРє                | РґРѕРє                    |
-		12 => 'VILLAGE', 	//| РїРѕСЃРµР»РµРЅРЅСЏ          | РїРѕСЃРµР»РµРЅРёРµ              |
+		1 => 'CITY', 		//| місто              | город                  |
+		2 => 'VILLAGE', 	//| смт                | пгт                    |
+		3 => 'VILLAGE', 	//| селище             | поселок                |
+		4 => 'VILLAGE', 	//| село               | село                   |
+		5 => 'VILLAGE', 	//| хутір              | хутор                  |
+		6 => 'VILLAGE', 	//| ст.                | ст.                    |
+		7 => 'VILLAGE', 	//| санат.             | санат.                 |
+		8 => 'VILLAGE', 	//| радгосп            | совхоз                 |
+		9 => 'VILLAGE', 	//| вокзал             | вокзал                 |
+		10 => 'VILLAGE', 	//| лісництво          | лесничество            |
+		11 => 'VILLAGE', 	//| док                | док                    |
+		12 => 'VILLAGE', 	//| поселення          | поселение              |
 	);
 
 	public function getMappedType($typeId)
@@ -113,7 +113,7 @@ class ExportTreeUkrainTable extends ExportTreeTable
 		));
 	}
 
-	static public function getNames($id, $type)
+	public function getNames($id, $type)
 	{
 		$dbConnection = Main\HttpApplication::getConnection();
 
@@ -135,8 +135,8 @@ class ExportTreeUkrainTable extends ExportTreeTable
 
 		$item = $dbConnection->query("select NAME, NAME_RU from ".$table." where ID = '".intval($id)."'")->fetch();
 
-		$replaceFrom = 	array('РѕР±Р».', 'СЂ-РЅ');
-		$replaceTo = 	array('РѕР±Р»Р°СЃС‚СЊ', 'СЂР°Р№РѕРЅ');
+		$replaceFrom = 	array('обл.', 'р-н');
+		$replaceTo = 	array('область', 'район');
 
 		return array(
 			'ua' => array('NAME' => str_replace($replaceFrom, $replaceTo, $item['NAME'])),

@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CListsParameters
@@ -68,5 +69,3 @@ class CListsParameters
 			);
 	}
 }
-
-?>

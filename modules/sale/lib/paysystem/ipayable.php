@@ -6,5 +6,5 @@ use Bitrix\Sale\Payment;
 
 interface IPayable
 {
-	static public function getPrice(Payment $payment);
+	public function getPrice(Payment $payment);
 }

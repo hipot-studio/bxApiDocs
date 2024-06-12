@@ -1,5 +1,9 @@
-<?
+<?php
+
 IncludeModuleLangFile($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/classes/general/ratings_components.php");
+
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Config\Option;
 
 class CAllRatingsComponentsMain
 {
@@ -47,7 +51,6 @@ class CAllRatingsComponentsMain
 		);
 		return $arConfigs;
 	}
-
 
 	// return support object
 	public static function OnGetRatingObject()
@@ -127,7 +130,7 @@ class CAllRatingsComponentsMain
 	{
 		if ($arParams['ENTITY_TYPE_ID'] == 'USER')
 		{
-			return IntVal($arParams['ENTITY_ID']);
+			return intval($arParams['ENTITY_ID']);
 		}
 		return false;
 	}
@@ -141,5 +144,20 @@ class CAllRatingsComponentsMain
 			$arParams['SHOW_RATING'] = COption::GetOptionString('main', 'rating_vote_show', 'N');
 
 		return $arParams['SHOW_RATING'];
+	}
+
+	public static function getRatingLikeMessage($emotion, $safe = true)
+	{
+		Loc::loadLanguageFile($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/install/js/main/rating/config.php');
+
+		$emotion = mb_strtoupper($emotion);
+
+		if (empty($emotion) || $emotion == 'LIKE')
+		{
+			$text = Option::get("main", "rating_text_like_y", Loc::getMessage('RATING_LIKE_EMOTION_LIKE'));
+			return $safe? htmlspecialcharsEx($text): $text;
+		}
+
+		return Loc::getMessage('RATING_LIKE_EMOTION_'.$emotion);
 	}
 }

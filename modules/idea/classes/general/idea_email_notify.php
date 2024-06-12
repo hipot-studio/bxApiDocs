@@ -35,9 +35,9 @@ Class CIdeaManagmentEmailNotify
 		$notifyEmail = new \Bitrix\Idea\NotifyEmail();
 		if ($Entity == 'AI' || $Entity == 'A')
 			$notifyEmail->deleteCategory('');
-		else if (substr($Entity, 0, strlen(self::SUBSCRIBE_IDEA_COMMENT)) == self::SUBSCRIBE_IDEA_COMMENT)
-			$notifyEmail->deleteIdea(substr($Entity, strlen(self::SUBSCRIBE_IDEA_COMMENT)));
-		else if (strlen(intval($Entity)) == strlen($Entity))
+		else if (mb_substr($Entity, 0, mb_strlen(self::SUBSCRIBE_IDEA_COMMENT)) == self::SUBSCRIBE_IDEA_COMMENT)
+			$notifyEmail->deleteIdea(mb_substr($Entity, mb_strlen(self::SUBSCRIBE_IDEA_COMMENT)));
+		else if (mb_strlen(intval($Entity)) == mb_strlen($Entity))
 			$notifyEmail->deleteIdea($Entity);
 		return true;
 	}
@@ -63,7 +63,7 @@ Class CIdeaManagmentEmailNotify
 						{
 							$res[] = array("=SUBSCRIBE_TYPE" => \Bitrix\Idea\NotifyEmailTable::SUBSCRIBE_TYPE_ALL);
 						}
-						else if (strpos($v, self::SUBSCRIBE_IDEA_COMMENT) === 0)
+						else if (mb_strpos($v, self::SUBSCRIBE_IDEA_COMMENT) === 0)
 						{
 							$res[] = array(
 								"=ENTITY_TYPE" => \Bitrix\Idea\NotifyEmailTable::ENTITY_TYPE_IDEA,
@@ -123,7 +123,7 @@ Class CIdeaManagmentEmailNotify
 		//No need to send about updates;
 		if($arNotification["ACTION"] == "UPDATE")
 			return 0;
-		$category = ToUpper($arNotification["CATEGORY"]);
+		$category = mb_strtoupper($arNotification["CATEGORY"]);
 		$arEmailSubscribe = array();
 		if (!array_key_exists("CATEGORIES", $arNotification))
 			$arNotification["CATEGORIES"] = \CIdeaManagment::getInstance()->Idea()->GetCategoryList();
@@ -207,12 +207,12 @@ Class CIdeaManagmentEmailNotify
 		return count($arEmailSubscribe) > 0;
 	}
 
-	static public function Disable()
+	public function Disable()
 	{
 		self::$Enable = false;
 	}
 
-	static public function Enable()
+	public function Enable()
 	{
 		self::$Enable = true;
 	}

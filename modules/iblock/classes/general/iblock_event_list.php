@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CEventIBlock
@@ -40,23 +41,25 @@ class CEventIBlock
 
 		return  $arFilter;
 	}
+
 	public static function GetAuditTypes()
 	{
-		AddEventHandler("main", "GetAuditTypesIblock", array("CAllIBlock", "GetAuditTypes"));
-		$db_events = GetModuleEvents("main", "GetAuditTypesIblock");
-		while($arEvent = $db_events->Fetch())
+		$AuditTypes = [];
+		AddEventHandler('main', 'GetAuditTypesIblock', ['CIBlock', 'GetAuditTypes']);
+		foreach (GetModuleEvents('main', 'GetAuditTypesIblock', true) as $arEvent)
 		{
 			$AuditTypes = ExecuteModuleEventEx($arEvent);
 		}
+
 		return $AuditTypes;
 	}
 
 	public static function GetEventInfo($row, $arParams, $arUser, $arResult)
 	{
-		$DESCRIPTION = unserialize($row['DESCRIPTION']);
+		$DESCRIPTION = unserialize($row['DESCRIPTION'], ['allowed_classes' => false]);
 
 		$IblockURL = "";
-		if (strpos($row['AUDIT_TYPE_ID'], "SECTION") !== false)
+		if (mb_strpos($row['AUDIT_TYPE_ID'], "SECTION") !== false)
 		{
 			if (isset($DESCRIPTION["ID"]))
 			{
@@ -65,7 +68,7 @@ class CEventIBlock
 					$IblockURL = $arSection["SECTION_PAGE_URL"];
 			}
 		}
-		elseif (strpos($row['AUDIT_TYPE_ID'], "ELEMENT") !== false)
+		elseif (mb_strpos($row['AUDIT_TYPE_ID'], "ELEMENT") !== false)
 		{
 			if (isset($DESCRIPTION["ID"]))
 			{
@@ -162,5 +165,3 @@ class CEventIBlock
 		return $ar;
 	}
 }
-
-?>

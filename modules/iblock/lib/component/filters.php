@@ -16,20 +16,6 @@ class Filters
 	 * @param array $filter				CIBlockElement::getList filter.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает массив идентификаторов торговых предложений в соответствии с указанным фильтром <i>$filter</i>. Метод статический.</p>
-	*
-	*
-	* @param array $filter  Фильтр метода <a href="https://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockelement/getlist.php"
-	* >CIBlockElement::getList</a>.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/component/filters/getfilteredoffersid.php
-	* @author Bitrix
-	*/
 	public static function getFilteredOffersId(array $filter)
 	{
 		$result = array();
@@ -55,24 +41,6 @@ class Filters
 	 * @param array $filter				CIBlockElement::getList filter.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Возвращает массив идентификаторов торговых предложений в соответствии с заданным фильтром <i>$filter</i> и сгруппированных по коду товара. Метод статический.</p>
-	*
-	*
-	* @param integer $iblockId  Идентификатор инфоблока торговых предложений.
-	*
-	* @param integer $propertyId  Идентификатор свойства предложения.
-	*
-	* @param array $filter  Фильтр метода <a href="https://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockelement/getlist.php"
-	* >CIBlockElement::getList</a>.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/component/filters/getfilteredoffersbyproduct.php
-	* @author Bitrix
-	*/
 	public static function getFilteredOffersByProduct($iblockId, $propertyId, array $filter)
 	{
 		$result = array();

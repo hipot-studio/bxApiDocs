@@ -91,10 +91,10 @@ class CCrmContactWS extends IWebService
 		if (null === $datetime)
 			return time();
 
-		if (intval(substr($datetime, 0, 4)) >= 2037)
-			$datetime = '2037'.substr($datetime, 4);
+		if (intval(mb_substr($datetime, 0, 4)) >= 2037)
+			$datetime = '2037'.mb_substr($datetime, 4);
 
-		return MakeTimeStamp(substr($datetime, 0, 10).' '.substr($datetime, 11, -1), 'YYYY-MM-DD HH:MI:SS');
+		return MakeTimeStamp(mb_substr($datetime, 0, 10).' '.mb_substr($datetime, 11, -1), 'YYYY-MM-DD HH:MI:SS');
 	}
 
 	public function GetList($listName)
@@ -109,7 +109,7 @@ class CCrmContactWS extends IWebService
 			);
 		}
 
-		$listName = ToUpper(self::makeGUID($listName_original));
+		$listName = mb_strtoupper(self::makeGUID($listName_original));
 
 
 		//$dbAuthor = CUser::GetByID($arSection['CREATED_BY']);
@@ -139,12 +139,13 @@ class CCrmContactWS extends IWebService
 
 		$data->addChild($obNode = new CXMLCreator('RegionalSettings'));
 
-		//$obNode->addChild(CXMLCreator::createTagAttributed('Language', '1033'));
-		//$obNode->addChild(CXMLCreator::createTagAttributed('Locale', '1033'));
+		$obNode->addChild(CXMLCreator::createTagAttributed('Language', '1049'));
+		$obNode->addChild(CXMLCreator::createTagAttributed('Locale', '1049'));
+		$obNode->addChild(CXMLCreator::createTagAttributed('SortOrder', '1026'));
+		$obNode->addChild(CXMLCreator::createTagAttributed('TimeZone', \CIntranetUtils::getOutlookTimeZone()));
 		$obNode->addChild(CXMLCreator::createTagAttributed('AdvanceHijri', '0'));
-		$obNode->addChild(CXMLCreator::createTagAttributed('CalendarType', '0'));
+		$obNode->addChild(CXMLCreator::createTagAttributed('CalendarType', '1'));
 		$obNode->addChild(CXMLCreator::createTagAttributed('Time24', 'True'));
-		//$obNode->addChild(CXMLCreator::createTagAttributed('TimeZone', '59'));
 		$obNode->addChild(CXMLCreator::createTagAttributed('Presence', 'True'));
 
 		$data->addChild($obNode = new CXMLCreator('ServerSettings'));
@@ -170,7 +171,7 @@ class CCrmContactWS extends IWebService
 
 		$version = $arRes['VERSION'] ? $arRes['VERSION'] : 1;
 
-		if (strlen($arRes['PHOTO']) > 0)
+		if ($arRes['PHOTO'] <> '')
 		{
 			$arImage = self::InitImage($arRes['PHOTO'], 100, 100);
 			$obRow->setAttribute('ows_Attachments', ';#'.CHTTP::URN2URI($arImage['CACHE']['src']).';#'.self::makeGUID(md5($arRes['PHOTO'])).',1;#');
@@ -247,17 +248,20 @@ class CCrmContactWS extends IWebService
 			return new CSoapFault('Data error', 'Wrong GUID - '.$listName);
 		}
 
-		$listName = ToUpper(self::makeGUID($listName_original));
+		$listName = mb_strtoupper(self::makeGUID($listName_original));
 
-		$arFilter = array('EXPORT' => 'Y');
+		$arFilter = [
+			'EXPORT' => 'Y',
+			'@CATEGORY_ID' => 0,
+		];
 
 		$page = 1;
 		$bUpdateFields = false;
 
 		$tsLastFieldsChange = COption::GetOptionString('crm', 'ws_contacts_last_fields_change', false);
-		if (strlen($changeToken) > 0)
+		if ($changeToken <> '')
 		{
-			if ($pos = strpos($changeToken, ';'))
+			if ($pos = mb_strpos($changeToken, ';'))
 			{
 				list($newChangeToken, $page, $last_change) = explode(';', $changeToken);
 
@@ -343,7 +347,7 @@ class CCrmContactWS extends IWebService
 					$arContacts[$ar['ELEMENT_ID']][$fieldName] = $ar['VALUE'];
 			}
 		}
-		
+
 		foreach ($arContacts as $arContact)
 			$obData->addChild($this->__getRow($arContact, $listName, $last_change));
 
@@ -385,13 +389,11 @@ class CCrmContactWS extends IWebService
 			return new CSoapFault('Data error', 'Wrong GUID - '.$listName);
 		}
 
-		$listName = ToUpper(self::makeGUID($listName_original));
+		$listName = mb_strtoupper(self::makeGUID($listName_original));
 		$listItemID = intval($listItemID);
 
-		$dbRes = CCrmContact::GetList(array(), array('ID' => $listItemID), array('PHOTO'));
-
 		$obData = new CXMLCreator('Attachments');
-
+		$dbRes = CCrmContact::GetListEx(array(), array('ID' => $listItemID), false, false, array('PHOTO'));
 		if (($arContact = $dbRes->Fetch()) && $arContact['PHOTO'])
 		{
 			$arImage = self::InitImage($arContact['PHOTO'], 100, 100);
@@ -589,7 +591,7 @@ class CCrmContactWS extends IWebService
 		return array('GetFieldsListResult' => $fields);
 	}
 
-	public function GetWebServiceDesc()
+	public static function GetWebServiceDesc()
 	{
 		$wsdesc = new CWebServiceDesc();
 		$wsdesc->wsname = "bitrix.crm.contact.webservice";
@@ -682,17 +684,17 @@ class CCrmContactWS extends IWebService
 
 	public static function makeGUID($data)
 	{
-		if (strlen($data) !== 32) return false;
+		if (mb_strlen($data) !== 32) return false;
 		else return
 			'{'.
-				substr($data, 0, 8).'-'.substr($data, 8, 4).'-'.substr($data, 12, 4).'-'.substr($data, 16, 4).'-'.substr($data, 20).
+			mb_substr($data, 0, 8).'-'.mb_substr($data, 8, 4).'-'.mb_substr($data, 12, 4).'-'.mb_substr($data, 16, 4).'-'.mb_substr($data, 20).
 			'}';
 	}
 
 	protected static function checkGUID($data)
 	{
 		$data = str_replace(array('{', '-', '}'), '', $data);
-		if (strlen($data) !== 32 || preg_match('/[^a-z0-9]/i', $data)) return false;
+		if (mb_strlen($data) !== 32 || preg_match('/[^a-z0-9]/i', $data)) return false;
 		else return $data;
 	}
 

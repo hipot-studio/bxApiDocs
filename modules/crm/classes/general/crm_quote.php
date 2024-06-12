@@ -1,10 +1,35 @@
 <?php
 IncludeModuleLangFile(__FILE__);
+
+use Bitrix\Crm;
+use Bitrix\Crm\Binding\QuoteContactTable;
+use Bitrix\Crm\CompanyAddress;
+use Bitrix\Crm\ContactAddress;
+use Bitrix\Crm\Entity\Traits\EntityFieldsNormalizer;
+use Bitrix\Crm\EntityAddressType;
+use Bitrix\Crm\FieldContext\EntityFactory;
+use Bitrix\Crm\FieldContext\ValueFiller;
+use Bitrix\Crm\Format\AddressFormatter;
+use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Integration\StorageManager;
 use Bitrix\Crm\Integration\StorageType;
+use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
+use Bitrix\Crm\Tracking;
+use Bitrix\Crm\UtmTable;
+
 class CAllCrmQuote
 {
+	use EntityFieldsNormalizer;
+
 	public static $sUFEntityID = 'CRM_QUOTE';
+
+	const USER_FIELD_ENTITY_ID = 'CRM_QUOTE';
+	const SUSPENDED_USER_FIELD_ENTITY_ID = 'CRM_QUOTE_SPD';
+	const TOTAL_COUNT_CACHE_ID = 'crm_quote_total_count';
+	const CACHE_TTL = 3600;
+
+	protected const TABLE_NAME = 'b_crm_quote';
+
 	protected static $TYPE_NAME = 'QUOTE';
 	private static $QUOTE_STATUSES = null;
 	private static $STORAGE_TYPE_ID = CCrmQuoteStorageType::Undefined;
@@ -15,9 +40,109 @@ class CAllCrmQuote
 	public $LAST_ERROR = '';
 	public $cPerms = null;
 	protected $bCheckPermission = true;
+	protected $lastErrors;
+
+	private static ?Crm\Entity\Compatibility\Adapter $lastActivityAdapter = null;
+	private static ?Crm\Entity\Compatibility\Adapter $commentsAdapter = null;
+
+	/** @var \Bitrix\Crm\Entity\Compatibility\Adapter */
+	private $compatibiltyAdapter;
 
 	const TABLE_ALIAS = 'Q';
 	const OWNER_TYPE = self::TABLE_ALIAS;
+	private static $FIELD_INFOS = null;
+
+	/**
+	 * Returns true if this class should invoke Service\Operation instead old API.
+	 * For a start it will return false by default. Please use this period to test your customization on compatibility with new API.
+	 * Later it will return true by default.
+	 * In several months this class will be declared as deprecated and old code will be deleted completely.
+	 *
+	 * @return bool
+	 * @throws \Bitrix\Main\ArgumentNullException
+	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
+	 */
+	public function isUseOperation(): bool
+	{
+		return static::isFactoryEnabled();
+	}
+
+	private static function isFactoryEnabled(): bool
+	{
+		return Crm\Settings\QuoteSettings::getCurrent()->isFactoryEnabled();
+	}
+
+	private function getCompatibilityAdapter(): Crm\Entity\Compatibility\Adapter
+	{
+		if (!$this->compatibiltyAdapter)
+		{
+			$this->compatibiltyAdapter = static::createCompatibilityAdapter();
+
+			if ($this->compatibiltyAdapter instanceof Crm\Entity\Compatibility\Adapter\Operation)
+			{
+				$this->compatibiltyAdapter
+					///bind newly created adapter to this instance
+					->setCheckPermissions((bool)$this->bCheckPermission)
+					->setErrorMessageContainer($this->LAST_ERROR)
+					->setErrorCollectionContainer($this->lastErrors)
+				;
+			}
+		}
+
+		return $this->compatibiltyAdapter;
+	}
+
+	private static function createCompatibilityAdapter(): Crm\Entity\Compatibility\Adapter
+	{
+		$factory = Crm\Service\Container::getInstance()->getFactory(\CCrmOwnerType::Quote);
+		if (!$factory)
+		{
+			throw new Error('No factory for quote');
+		}
+
+		return
+			(new Crm\Entity\Compatibility\Adapter\Operation($factory))
+				->setAlwaysExposedFields([
+					'MODIFY_BY_ID',
+					'PERSON_TYPE_ID',
+					'STORAGE_TYPE_ID',
+					'STORAGE_ELEMENT_IDS',
+					'ID',
+				])
+				->setExposedOnlyAfterAddFields([
+					'CREATED_BY_ID',
+					'ASSIGNED_BY_ID',
+					'STATUS_ID',
+					'CLOSED',
+					'BEGINDATE',
+				])
+				->setExposedOnlyAfterUpdateFields([
+					'QUOTE_NUMBER',
+				])
+		;
+	}
+
+	private static function getLastActivityAdapter(): Crm\Entity\Compatibility\Adapter
+	{
+		if (!self::$lastActivityAdapter)
+		{
+			$factory = Crm\Service\Container::getInstance()->getFactory(\CCrmOwnerType::Quote);
+			self::$lastActivityAdapter = new Crm\Entity\Compatibility\Adapter\LastActivity($factory);
+			self::$lastActivityAdapter->setTableAlias(self::TABLE_ALIAS);
+		}
+
+		return self::$lastActivityAdapter;
+	}
+
+	private static function getCommentsAdapter(): Crm\Entity\Compatibility\Adapter\Comments
+	{
+		if (!self::$commentsAdapter)
+		{
+			self::$commentsAdapter = new Crm\Entity\Compatibility\Adapter\Comments(\CCrmOwnerType::Quote);
+		}
+
+		return self::$commentsAdapter;
+	}
 
 	public function __construct($bCheckPermission = true)
 	{
@@ -27,15 +152,28 @@ class CAllCrmQuote
 
 	public function Add(&$arFields, $bUpdateSearch = true, $options = array())
 	{
-		global $DB;
+		$this->lastErrors = null;
+
+		if (!is_array($arFields))
+		{
+			$arFields = (array)$arFields;
+		}
 
 		if(!is_array($options))
 		{
 			$options = array();
 		}
 
+		if($this->isUseOperation())
+		{
+			return $this->getCompatibilityAdapter()->performAdd($arFields, $options);
+		}
+
+		global $DB;
+
 		$this->LAST_ERROR = '';
-		$iUserId = CCrmSecurityHelper::GetCurrentUserID();
+		$iUserId = isset($options['CURRENT_USER'])
+			? (int)$options['CURRENT_USER'] : CCrmSecurityHelper::GetCurrentUserID();
 
 		if (isset($arFields['ID']))
 			unset($arFields['ID']);
@@ -57,6 +195,10 @@ class CAllCrmQuote
 
 		if (!isset($arFields['ASSIGNED_BY_ID']) || (int)$arFields['ASSIGNED_BY_ID'] <= 0)
 			$arFields['ASSIGNED_BY_ID'] = $iUserId;
+
+		$arFields['CREATED_BY_ID'] = (int)($arFields['CREATED_BY_ID'] ?? 0);
+		$arFields['MODIFY_BY_ID'] = (int)($arFields['MODIFY_BY_ID'] ?? 0);
+		$arFields['ASSIGNED_BY_ID'] = (int)($arFields['ASSIGNED_BY_ID'] ?? 0);
 
 		// person type
 		if (!isset($arFields['PERSON_TYPE_ID']) || intval($arFields['PERSON_TYPE_ID']) <= 0)
@@ -117,7 +259,7 @@ class CAllCrmQuote
 			{
 				$arEntityAttr = self::BuildEntityAttr($iUserId, $arAttr);
 				$userPerms =  $iUserId == CCrmPerms::GetCurrentUserID() ? $this->cPerms : CCrmPerms::GetUserPermissions($iUserId);
-				$sEntityPerm = $userPerms->GetPermType('QUOTE', $sPermission, $arEntityAttr);
+				$sEntityPerm = $userPerms->GetPermType(self::$TYPE_NAME, $sPermission, $arEntityAttr);
 				if ($sEntityPerm == BX_CRM_PERM_NONE)
 				{
 					$this->LAST_ERROR = GetMessage('CRM_PERMISSION_DENIED');
@@ -139,34 +281,10 @@ class CAllCrmQuote
 			$assignedByID = intval($arFields['ASSIGNED_BY_ID']);
 			$arEntityAttr = self::BuildEntityAttr($assignedByID, $arAttr);
 			$userPerms =  $assignedByID == CCrmPerms::GetCurrentUserID() ? $this->cPerms : CCrmPerms::GetUserPermissions($assignedByID);
-			$sEntityPerm = $userPerms->GetPermType('QUOTE', $sPermission, $arEntityAttr);
+			$sEntityPerm = $userPerms->GetPermType(self::$TYPE_NAME, $sPermission, $arEntityAttr);
 			$this->PrepareEntityAttrs($arEntityAttr, $sEntityPerm);
 
-			// Calculation of Account Data
-			$accData = CCrmAccountingHelper::PrepareAccountingData(
-				array(
-					'CURRENCY_ID' => isset($arFields['CURRENCY_ID']) ? $arFields['CURRENCY_ID'] : null,
-					'SUM' => isset($arFields['OPPORTUNITY']) ? $arFields['OPPORTUNITY'] : null,
-					'EXCH_RATE' => isset($arFields['EXCH_RATE']) ? $arFields['EXCH_RATE'] : null
-				)
-			);
-
-			if(is_array($accData))
-			{
-				$arFields['ACCOUNT_CURRENCY_ID'] = $accData['ACCOUNT_CURRENCY_ID'];
-				$arFields['OPPORTUNITY_ACCOUNT'] = $accData['ACCOUNT_SUM'];
-			}
-
-			$accData = CCrmAccountingHelper::PrepareAccountingData(
-				array(
-					'CURRENCY_ID' => isset($arFields['CURRENCY_ID']) ? $arFields['CURRENCY_ID'] : null,
-					'SUM' => isset($arFields['TAX_VALUE']) ? $arFields['TAX_VALUE'] : null,
-					'EXCH_RATE' => isset($arFields['EXCH_RATE']) ? $arFields['EXCH_RATE'] : null
-				)
-			);
-
-			if(is_array($accData))
-				$arFields['TAX_VALUE_ACCOUNT'] = $accData['ACCOUNT_SUM'];
+			$arFields = array_merge($arFields, \CCrmAccountingHelper::calculateAccountingData($arFields, [], true));
 
 			$arFields['CLOSED'] = self::GetStatusSemantics($arFields['STATUS_ID']) === 'process' ? 'N' : 'Y';
 
@@ -182,6 +300,45 @@ class CAllCrmQuote
 				$arFields['CLOSEDATE'] = $now;
 			}
 
+			//region Preparation of contacts
+			$contactBindings = isset($arFields['CONTACT_BINDINGS']) && is_array($arFields['CONTACT_BINDINGS'])
+				? $arFields['CONTACT_BINDINGS'] : null;
+			$contactIDs = isset($arFields['CONTACT_IDS']) && is_array($arFields['CONTACT_IDS'])
+				? $arFields['CONTACT_IDS'] : null;
+			unset($arFields['CONTACT_IDS']);
+			//For backward compatibility only
+			$contactID = isset($arFields['CONTACT_ID']) ? max((int)$arFields['CONTACT_ID'], 0) : null;
+			if($contactID !== null && $contactIDs === null && $contactBindings === null)
+			{
+				$contactIDs = array();
+				if($contactID > 0)
+				{
+					$contactIDs[] = $contactID;
+				}
+			}
+
+			if(is_array($contactBindings))
+			{
+				$contactIDs = \Bitrix\Crm\Binding\EntityBinding::prepareEntityIDs(
+					CCrmOwnerType::Contact,
+					$contactBindings
+				);
+			}
+			elseif(is_array($contactIDs))
+			{
+				$contactBindings = \Bitrix\Crm\Binding\EntityBinding::prepareEntityBindings(
+					\CCrmOwnerType::Contact,
+					$contactIDs
+				);
+
+				\Bitrix\Crm\Binding\EntityBinding::markFirstAsPrimary($contactBindings);
+			}
+			//endregion
+
+			self::getLastActivityAdapter()->performAdd($arFields, $options);
+			self::getCommentsAdapter()->normalizeFields(null, $arFields);
+
+			//region Rise BeforeAdd event
 			foreach (GetModuleEvents('crm', 'OnBeforeCrmQuoteAdd', true) as $arEvent)
 			{
 				if(ExecuteModuleEventEx($arEvent, array(&$arFields)) === false)
@@ -192,12 +349,13 @@ class CAllCrmQuote
 					}
 					else
 					{
-						$this->LAST_ERROR = GetMessage('CRM_QUOTE_CREATION_CANCELED', array('#NAME#' => $arEvent['TO_NAME']));
+						$this->LAST_ERROR = GetMessage('CRM_QUOTE_CREATION_CANCELED_MSGVER_1', ['#NAME#' => $arEvent['TO_NAME']]);
 						$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
 					}
 					return false;
 				}
 			}
+			//endregion
 
 			$clobFieldNames = array('COMMENTS', 'CONTENT', 'STORAGE_ELEMENT_IDS');
 			$clobFields = array();
@@ -207,24 +365,39 @@ class CAllCrmQuote
 					$clobFields[] = $fieldName;
 			}
 
-			$ID = intval($DB->Add('b_crm_quote', $arFields, $clobFields, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__));
+			$this->normalizeEntityFields($arFields);
+			$ID = (int) $DB->Add(self::TABLE_NAME, $arFields, $clobFields, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+
+			if(defined('BX_COMP_MANAGED_CACHE'))
+			{
+				$GLOBALS['CACHE_MANAGER']->CleanDir('b_crm_quote');
+			}
 
 			if (!self::SetQuoteNumber($ID))
 			{
-				$this->LAST_ERROR = GetMessage('CRM_ERROR_QUOTE_NUMBER_IS_NOT_SET');
+				$this->LAST_ERROR = GetMessage('CRM_ERROR_QUOTE_NUMBER_IS_NOT_SET_MSGVER_1');
 				$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
 				return false;
 			}
 
 			CCrmEntityHelper::NormalizeUserFields($arFields, self::$sUFEntityID, $GLOBALS['USER_FIELD_MANAGER'], array('IS_NEW' => true));
 			$GLOBALS['USER_FIELD_MANAGER']->Update(self::$sUFEntityID, $ID, $arFields);
-			CCrmPerms::UpdateEntityAttr('QUOTE', $ID, $arEntityAttr);
+
+			$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
+				->setEntityAttributes($arEntityAttr)
+			;
+			Crm\Security\Manager::getEntityController(CCrmOwnerType::Quote)
+				->register(self::$TYPE_NAME, $ID, $securityRegisterOptions)
+			;
 
 			if(is_array($storageElementIDs))
 			{
 				CCrmQuote::DoSaveElementIDs($ID, $storageTypeID, $storageElementIDs);
 			}
 			unset($storageTypeID, $storageElementIDs);
+
+			// tracking of entity
+			Tracking\Entity::onAfterAdd(CCrmOwnerType::Quote, $ID, $arFields);
 
 			if($bUpdateSearch)
 			{
@@ -238,113 +411,34 @@ class CAllCrmQuote
 
 			if (isset($GLOBALS["USER"]) && isset($arFields['COMPANY_ID']) && intval($arFields['COMPANY_ID']) > 0)
 			{
-				if (!class_exists('CUserOptions'))
-					include_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/classes/'.$GLOBALS['DBType'].'/favorites.php');
-
 				CUserOptions::SetOption('crm', 'crm_company_search', array('last_selected' => $arFields['COMPANY_ID']));
 			}
 
-			if (isset($GLOBALS["USER"]) && isset($arFields['CONTACT_ID']) && intval($arFields['CONTACT_ID']) > 0)
+			//region Save contacts
+			if(!empty($contactBindings))
 			{
-				if (!class_exists('CUserOptions'))
-					include_once($_SERVER['DOCUMENT_ROOT']."/bitrix/modules/main/classes/".$GLOBALS['DBType']."/favorites.php");
-
-				CUserOptions::SetOption("crm", "crm_contact_search", array('last_selected' => $arFields['CONTACT_ID']));
-			}
-
-			if (isset($arFields['FM']) && is_array($arFields['FM']))
-			{
-				$CCrmFieldMulti = new CCrmFieldMulti();
-				$CCrmFieldMulti->SetFields('QUOTE', $ID, $arFields['FM']);
-			}
-
-			if(isset($options['REGISTER_SONET_EVENT']) && $options['REGISTER_SONET_EVENT'] === true)
-			{
-				$opportunity = round((isset($arFields['OPPORTUNITY']) ? doubleval($arFields['OPPORTUNITY']) : 0.0), 2);
-				$currencyID = isset($arFields['CURRENCY_ID']) ? $arFields['CURRENCY_ID'] : '';
-				if($currencyID === '')
+				QuoteContactTable::bindContacts($ID, $contactBindings);
+				if (isset($GLOBALS['USER']))
 				{
-					$currencyID = CCrmCurrency::GetBaseCurrencyID();
-				}
-				$assignedByID = intval($arFields['ASSIGNED_BY_ID']);
-				$createdByID = intval($arFields['CREATED_BY_ID']);
-
-				$liveFeedFields = array(
-					'USER_ID' => $createdByID,
-					'ENTITY_TYPE_ID' => CCrmOwnerType::Quote,
-					'ENTITY_ID' => $ID,
-					'TITLE' => GetMessage('CRM_QUOTE_EVENT_ADD'),
-					'MESSAGE' => '',
-					'PARAMS' => array(
-						'TITLE' => isset($arFields['TITLE']) ? $arFields['TITLE'] : '',
-						'STATUS_ID' => isset($arFields['STATUS_ID']) ? $arFields['STATUS_ID'] : '',
-						'OPPORTUNITY' => strval($opportunity),
-						'CURRENCY_ID' => $currencyID,
-						'COMPANY_ID' => isset($arFields['COMPANY_ID']) ? intval($arFields['COMPANY_ID']) : 0,
-						'CONTACT_ID' => isset($arFields['CONTACT_ID']) ? intval($arFields['CONTACT_ID']) : 0,
-						'AUTHOR_ID' => intval($arFields['CREATED_BY_ID']),
-						'RESPONSIBLE_ID' => $assignedByID
-					)
-				);
-
-				//Register contact & company relations
-				$contactID = isset($arFields['CONTACT_ID']) ? intval($arFields['CONTACT_ID']) : 0;
-				$companyID = isset($arFields['COMPANY_ID']) ? intval($arFields['COMPANY_ID']) : 0;
-				if($contactID > 0 || $companyID > 0)
-				{
-					$liveFeedFields['PARENTS'] = array();
-					if($contactID > 0)
-					{
-						$liveFeedFields['PARENTS'][] = array(
-							'ENTITY_TYPE_ID' => CCrmOwnerType::Contact,
-							'ENTITY_ID' => $contactID
-						);
-					}
-
-					if($companyID > 0)
-					{
-						$liveFeedFields['PARENTS'][] = array(
-							'ENTITY_TYPE_ID' => CCrmOwnerType::Company,
-							'ENTITY_ID' => $companyID
-						);
-					}
-				}
-
-				CCrmSonetSubscription::RegisterSubscription(
-					CCrmOwnerType::Quote,
-					$ID,
-					CCrmSonetSubscriptionType::Responsibility,
-					$assignedByID
-				);
-				$logEventID = CCrmLiveFeed::CreateLogEvent($liveFeedFields, CCrmLiveFeedEvent::Add);
-
-				if (
-					$logEventID
-					&& $assignedByID != $createdByID
-					&& CModule::IncludeModule("im")
-				)
-				{
-					$url = CCrmOwnerType::GetShowUrl(CCrmOwnerType::Quote, $ID);
-					$serverName = (CMain::IsHTTPS() ? "https" : "http")."://".((defined("SITE_SERVER_NAME") && strlen(SITE_SERVER_NAME) > 0) ? SITE_SERVER_NAME : COption::GetOptionString("main", "server_name", ""));
-
-					$arMessageFields = array(
-						"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
-						"TO_USER_ID" => $assignedByID,
-						"FROM_USER_ID" => $createdByID,
-						"NOTIFY_TYPE" => IM_NOTIFY_FROM,
-						"NOTIFY_MODULE" => "crm",
-						"LOG_ID" => $logEventID,
-						"NOTIFY_EVENT" => "quote_add",
-						"NOTIFY_TAG" => "CRM|QUOTE_RESPONSIBLE|".$ID,
-						"NOTIFY_MESSAGE" => GetMessage("CRM_QUOTE_RESPONSIBLE_IM_NOTIFY", Array("#title#" => "<a href=\"".$url."\" class=\"bx-notifier-item-action\">".htmlspecialcharsbx($arFields['TITLE'])."</a>")),
-						"NOTIFY_MESSAGE_OUT" => GetMessage("CRM_QUOTE_RESPONSIBLE_IM_NOTIFY", Array("#title#" => htmlspecialcharsbx($arFields['TITLE'])))." (".$serverName.$url.")"
+					CUserOptions::SetOption(
+						'crm',
+						'crm_contact_search',
+						array('last_selected' => $contactIDs[count($contactIDs) - 1])
 					);
-					CIMNotify::Add($arMessageFields);
 				}
 			}
+			//endregion
 
+			//region Search content index
+			Bitrix\Crm\Search\SearchContentBuilderFactory::create(CCrmOwnerType::Quote)->build($ID);
+			//endregion
+
+			self::getCommentsAdapter()->performAdd($arFields, $options);
+
+			//region Rise AfterAdd event
 			foreach (GetModuleEvents('crm', 'OnAfterCrmQuoteAdd', true) as $arEvent)
 				ExecuteModuleEventEx($arEvent, array(&$arFields));
+			//endregion
 		}
 
 		return $result;
@@ -357,7 +451,7 @@ class CAllCrmQuote
 
 		/*if (($ID == false || isset($arFields['TITLE'])) && empty($arFields['TITLE']))
 			$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_IS_MISSING', array('%FIELD_NAME%' => GetMessage('CRM_QUOTE_FIELD_TITLE')))."<br />\n";*/
-		if (isset($arFields['TITLE']) && strlen($arFields['TITLE']) > 255)
+		if (isset($arFields['TITLE']) && mb_strlen($arFields['TITLE']) > 255)
 		{
 			$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_INCORRECT', array('%FIELD_NAME%' => GetMessage('CRM_QUOTE_FIELD_TITLE')))."<br />\n";
 		}
@@ -366,11 +460,11 @@ class CAllCrmQuote
 		{
 			/*if (strlen($arFields['QUOTE_NUMBER']) <= 0)
 			{
-				$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_IS_MISSING', array('%FIELD_NAME%' => GetMessage('CRM_QUOTE_FIELD_QUOTE_NUMBER')))."<br />\n";
+				$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_IS_MISSING', array('%FIELD_NAME%' => GetMessage('CRM_QUOTE_FIELD_QUOTE_NUMBER_MSGVER_1')))."<br />\n";
 			}
-			else*/ if (strlen($arFields['QUOTE_NUMBER']) > 100)
+			else*/ if (mb_strlen($arFields['QUOTE_NUMBER']) > 100)
 			{
-				$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_INCORRECT', array('%FIELD_NAME%' => GetMessage('CRM_QUOTE_FIELD_QUOTE_NUMBER')))."<br />\n";
+				$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_INCORRECT', array('%FIELD_NAME%' => GetMessage('CRM_QUOTE_FIELD_QUOTE_NUMBER_MSGVER_1')))."<br />\n";
 			}
 			else
 			{
@@ -379,7 +473,7 @@ class CAllCrmQuote
 				{
 					if (is_array($arRes) && $arRes["ID"] != $ID)
 					{
-						$this->LAST_ERROR .= GetMessage('CRM_ERROR_QUOTE_NUMBER_EXISTS')."<br />\n";
+						$this->LAST_ERROR .= GetMessage('CRM_ERROR_QUOTE_NUMBER_EXISTS_MSGVER_1')."<br />\n";
 					}
 				}
 				unset($arRes, $dbres);
@@ -392,14 +486,11 @@ class CAllCrmQuote
 		if (!empty($arFields['CLOSEDATE']) && !CheckDateTime($arFields['CLOSEDATE']))
 			$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_INCORRECT', array('%FIELD_NAME%' => GetMessage('CRM_QUOTE_FIELD_CLOSEDATE')))."<br />\n";
 
-		/*if (!empty($arFields['EVENT_DATE']) && !CheckDateTime($arFields['EVENT_DATE']))
-			$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_INCORRECT', array('%FIELD_NAME%' => GetMessage('CRM_QUOTE_FIELD_EVENT_DATE')))."<br />\n";*/
-
 		if(is_string($arFields['OPPORTUNITY']) && $arFields['OPPORTUNITY'] !== '')
 		{
 			$arFields['OPPORTUNITY'] = str_replace(array(',', ' '), array('.', ''), $arFields['OPPORTUNITY']);
 			//HACK: MSSQL returns '.00' for zero value
-			if(strpos($arFields['OPPORTUNITY'], '.') === 0)
+			if(mb_strpos($arFields['OPPORTUNITY'], '.') === 0)
 			{
 				$arFields['OPPORTUNITY'] = '0'.$arFields['OPPORTUNITY'];
 			}
@@ -420,17 +511,10 @@ class CAllCrmQuote
 
 		foreach (self::$clientFields as $fieldName)
 		{
-			if (isset($arFields[$fieldName]) && strlen($arFields[$fieldName]) > 255)
-				$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_INCORRECT', array('%FIELD_NAME%' => GetMessage('CRM_QUOTE_FIELD_'.$fieldName)))."<br />\n";
+			if (isset($arFields[$fieldName]) && mb_strlen($arFields[$fieldName]) > 255)
+				$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_INCORRECT', ['%FIELD_NAME%' => self::GetFieldCaption($fieldName)])."<br />\n";
 		}
 		unset($fieldName);
-
-		/*if (!empty($arFields['PROBABILITY']))
-		{
-			$arFields['PROBABILITY'] = intval($arFields['PROBABILITY']);
-			if ($arFields['PROBABILITY'] > 100)
-				$arFields['PROBABILITY'] = 100;
-		}*/
 
 		// check person type
 		$personTypeId = 0;
@@ -446,19 +530,30 @@ class CAllCrmQuote
 			$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_INCORRECT', array('%FIELD_NAME%' => GetMessage('CRM_QUOTE_FIELD_PERSON_TYPE_ID')))."<br />\n";
 		unset($personTypeId, $arPersonTypes, $arPersonTypeEnum);
 
-		$enableUserFildCheck = !(is_array($options) && isset($options['DISABLE_USER_FIELD_CHECK']) && $options['DISABLE_USER_FIELD_CHECK'] === true);
-		if ($enableUserFildCheck)
+		if(!is_array($options))
+		{
+			$options = array();
+		}
+
+		$enableUserFieldCheck = !(isset($options['DISABLE_USER_FIELD_CHECK'])
+			&& $options['DISABLE_USER_FIELD_CHECK'] === true);
+
+		if ($enableUserFieldCheck)
 		{
 			// We have to prepare field data before check (issue #22966)
 			CCrmEntityHelper::NormalizeUserFields($arFields, self::$sUFEntityID, $USER_FIELD_MANAGER, array('IS_NEW' => ($ID == false)));
-			if(!$USER_FIELD_MANAGER->CheckFields(self::$sUFEntityID, $ID, $arFields))
+
+			$enableRequiredUserFieldCheck = !(isset($options['DISABLE_REQUIRED_USER_FIELD_CHECK'])
+				&& $options['DISABLE_REQUIRED_USER_FIELD_CHECK'] === true);
+
+			if(!$USER_FIELD_MANAGER->CheckFields(self::$sUFEntityID, $ID, $arFields, false, $enableRequiredUserFieldCheck))
 			{
 				$e = $APPLICATION->GetException();
 				$this->LAST_ERROR .= $e->GetString();
 			}
 		}
 
-		if (strlen($this->LAST_ERROR) > 0)
+		if ($this->LAST_ERROR <> '')
 			return false;
 
 		return true;
@@ -479,7 +574,12 @@ class CAllCrmQuote
 			$arResult[] = "STATUS_ID{$statusID}";
 		}
 
-		$arUserAttr = CCrmPerms::BuildUserEntityAttr($userID);
+		$arUserAttr = Bitrix\Crm\Service\Container::getInstance()
+			->getUserPermissions($userID)
+			->getAttributesProvider()
+			->getEntityAttributes()
+		;
+
 		return array_merge($arResult, $arUserAttr['INTRANET']);
 	}
 	static public function RebuildEntityAccessAttrs($IDs)
@@ -511,7 +611,7 @@ class CAllCrmQuote
 				continue;
 			}
 
-			$attrs = array();
+			$attrs = [];
 			if(isset($fields['OPENED']))
 			{
 				$attrs['OPENED'] = $fields['OPENED'];
@@ -523,7 +623,13 @@ class CAllCrmQuote
 			}
 
 			$entityAttrs = self::BuildEntityAttr($assignedByID, $attrs);
-			CCrmPerms::UpdateEntityAttr('QUOTE', $ID, $entityAttrs);
+			$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
+				->setEntityAttributes($arEntityAttr)
+				->setEntityFields($fields)
+			;
+			Crm\Security\Manager::getEntityController(CCrmOwnerType::Quote)
+				->register(self::$TYPE_NAME, $ID, $securityRegisterOptions)
+			;
 		}
 	}
 	private function PrepareEntityAttrs(&$arEntityAttr, $entityPermType)
@@ -537,33 +643,47 @@ class CAllCrmQuote
 
 	public function Update($ID, &$arFields, $bCompare = true, $bUpdateSearch = true, $options = array())
 	{
-		global $DB;
-
-		$this->LAST_ERROR = '';
 		$ID = (int) $ID;
+		if (!is_array($arFields))
+		{
+			$arFields = (array)$arFields;
+		}
 		if(!is_array($options))
 		{
 			$options = array();
 		}
 
+		$this->lastErrors = null;
+		if($this->isUseOperation())
+		{
+			return $this->getCompatibilityAdapter()->performUpdate($ID, $arFields, $options);
+		}
+
+		global $DB;
+
+		$this->LAST_ERROR = '';
+
 		$arFilterTmp = array('ID' => $ID);
 		if (!$this->bCheckPermission)
 			$arFilterTmp['CHECK_PERMISSIONS'] = 'N';
 
-		$obRes = self::GetList(array(), $arFilterTmp);
+		$obRes = self::GetList([], $arFilterTmp, false, false, ['*', 'UF_*']);
 		if (!($arRow = $obRes->Fetch()))
 			return false;
+
+		$currentFields = $arRow;
 
 		$iUserId = CCrmSecurityHelper::GetCurrentUserID();
 
 		if (isset($arFields['DATE_CREATE']))
 			unset($arFields['DATE_CREATE']);
+
 		if (isset($arFields['DATE_MODIFY']))
 			unset($arFields['DATE_MODIFY']);
 		$arFields['~DATE_MODIFY'] = $DB->CurrentTimeFunction();
 
-		if (!isset($arFields['MODIFY_BY_ID']) || $arFields['MODIFY_BY_ID'] <= 0)
-			$arFields['MODIFY_BY_ID'] = $iUserId;
+		$arFields['MODIFY_BY_ID'] = $iUserId;
+
 		if (isset($arFields['ASSIGNED_BY_ID']) && $arFields['ASSIGNED_BY_ID'] <= 0)
 			unset($arFields['ASSIGNED_BY_ID']);
 
@@ -635,21 +755,105 @@ class CAllCrmQuote
 			$arAttr['STATUS_ID'] = !empty($arFields['STATUS_ID']) ? $arFields['STATUS_ID'] : $arRow['STATUS_ID'];
 			$arAttr['OPENED'] = !empty($arFields['OPENED']) ? $arFields['OPENED'] : $arRow['OPENED'];
 			$arEntityAttr = self::BuildEntityAttr($assignedByID, $arAttr);
-			$sEntityPerm = $this->cPerms->GetPermType('QUOTE', 'WRITE', $arEntityAttr);
-			$this->PrepareEntityAttrs($arEntityAttr, $sEntityPerm);
-			//Prevent 'OPENED' field change by user restricted by BX_CRM_PERM_OPEN permission
-			if($sEntityPerm === BX_CRM_PERM_OPEN && isset($arFields['OPENED']) && $arFields['OPENED'] !== 'Y' && $assignedByID !== $iUserId)
+			if($this->bCheckPermission)
 			{
-				$arFields['OPENED'] = 'Y';
+				$sEntityPerm = $this->cPerms->GetPermType(self::$TYPE_NAME, 'WRITE', $arEntityAttr);
+				//HACK: Ensure that entity accessible for user restricted by BX_CRM_PERM_OPEN
+				$this->PrepareEntityAttrs($arEntityAttr, $sEntityPerm);
+				//HACK: Prevent 'OPENED' field change by user restricted by BX_CRM_PERM_OPEN permission
+				if($sEntityPerm === BX_CRM_PERM_OPEN && isset($arFields['OPENED']) && $arFields['OPENED'] !== 'Y' && $assignedByID !== $iUserId)
+				{
+					$arFields['OPENED'] = 'Y';
+				}
 			}
 
 			if (isset($arFields['ASSIGNED_BY_ID']) && $arRow['ASSIGNED_BY_ID'] != $arFields['ASSIGNED_BY_ID'])
 				CCrmEvent::SetAssignedByElement($arFields['ASSIGNED_BY_ID'], 'QUOTE', $ID);
 
-			$sonetEventData = array();
+			//region Preparation of contacts
+			$originalContactBindings = QuoteContactTable::getQuoteBindings($ID);
+			$originalContactIDs = \Bitrix\Crm\Binding\EntityBinding::prepareEntityIDs(CCrmOwnerType::Contact, $originalContactBindings);
+			$contactBindings = isset($arFields['CONTACT_BINDINGS']) && is_array($arFields['CONTACT_BINDINGS'])
+				? $arFields['CONTACT_BINDINGS'] : null;
+			$contactIDs = isset($arFields['CONTACT_IDS']) && is_array($arFields['CONTACT_IDS'])
+				? $arFields['CONTACT_IDS'] : null;
+			unset($arFields['CONTACT_IDS']);
+
+			//region Backward compatibility
+			$contactID = isset($arFields['CONTACT_ID']) ? max((int)$arFields['CONTACT_ID'], 0) : null;
+			if($contactBindings === null &&
+				$contactIDs === null &&
+				$contactID !== null &&
+				!in_array($contactID, $originalContactIDs, true))
+			{
+				//Compatibility mode. Trying to simulate single binding mode If contact is not found in bindings.
+				$contactIDs = array();
+				if($contactID > 0)
+				{
+					$contactIDs[] = $contactID;
+				}
+			}
+			unset($arFields['CONTACT_ID']);
+			//endregion
+
+			$addedContactIDs = null;
+			$removedContactIDs = null;
+
+			$addedContactBindings = null;
+			$removedContactBindings = null;
+
+			if(is_array($contactIDs) && !is_array($contactBindings))
+			{
+				$contactBindings = \Bitrix\Crm\Binding\EntityBinding::prepareEntityBindings(
+					\CCrmOwnerType::Contact,
+					$contactIDs
+				);
+
+				\Bitrix\Crm\Binding\EntityBinding::markFirstAsPrimary($contactBindings);
+			}
+			/* Please uncomment if required
+			elseif(is_array($contactBindings) && !is_array($contactIDs))
+			{
+				$contactIDs = \Bitrix\Crm\Binding\EntityBinding::prepareEntityIDs(
+					CCrmOwnerType::Contact,
+					$contactBindings
+				);
+			}
+			*/
+
+			if(is_array($contactBindings))
+			{
+				$removedContactBindings = array();
+				$addedContactBindings = array();
+
+				\Bitrix\Crm\Binding\EntityBinding::prepareBindingChanges(
+					CCrmOwnerType::Contact,
+					QuoteContactTable::getQuoteBindings($ID),
+					$contactBindings,
+					$addedContactBindings,
+					$removedContactBindings
+				);
+
+				$addedContactIDs = \Bitrix\Crm\Binding\EntityBinding::prepareEntityIDs(
+					CCrmOwnerType::Contact,
+					$addedContactBindings
+				);
+
+				$removedContactIDs = \Bitrix\Crm\Binding\EntityBinding::prepareEntityIDs(
+					CCrmOwnerType::Contact,
+					$removedContactBindings
+				);
+			}
+			//endregion
+
 			if ($bCompare)
 			{
-				$arEvents = self::CompareFields($arRow, $arFields, $this->bCheckPermission);
+				$compareOptions = array();
+				if(!empty($addedContactIDs) || !empty($removedContactIDs))
+				{
+					$compareOptions['CONTACTS'] = array('ADDED' => $addedContactIDs, 'REMOVED' => $removedContactIDs);
+				}
+				$arEvents = self::CompareFields($arRow, $arFields, $this->bCheckPermission, $compareOptions);
 				foreach($arEvents as $arEvent)
 				{
 					$arEvent['ENTITY_TYPE'] = 'QUOTE';
@@ -658,146 +862,21 @@ class CAllCrmQuote
 					if (!isset($arEvent['USER_ID']))
 						$arEvent['USER_ID'] = $iUserId;
 
-					$CCrmEvent = new CCrmEvent();
-					$eventID = $CCrmEvent->Add($arEvent, $this->bCheckPermission);
-					if(is_int($eventID) && $eventID > 0)
+					$isRelationEvent = in_array(
+						$arEvent['ENTITY_FIELD'],
+						['DEAL_ID', 'COMPANY_ID', 'CONTACT_ID', 'MYCOMPANY_ID', 'LEAD_ID'],
+						true,
+					);
+
+					if (!$isRelationEvent)
 					{
-						$fieldID = isset($arEvent['ENTITY_FIELD']) ? $arEvent['ENTITY_FIELD'] : '';
-						if($fieldID === '')
-						{
-							continue;
-						}
-
-						switch($fieldID)
-						{
-							case 'STATUS_ID':
-							{
-								$sonetEventData[CCrmLiveFeedEvent::Progress] = array(
-									'TYPE' => CCrmLiveFeedEvent::Progress,
-									'FIELDS' => array(
-										//'EVENT_ID' => $eventID,
-										'TITLE' => GetMessage('CRM_QUOTE_EVENT_UPDATE_STATUS'),
-										'MESSAGE' => '',
-										'PARAMS' => array(
-											'START_STATUS_ID' => $arRow['STATUS_ID'],
-											'FINAL_STATUS_ID' => $arFields['STATUS_ID']
-										)
-									)
-								);
-							}
-								break;
-							case 'ASSIGNED_BY_ID':
-							{
-								$sonetEventData[CCrmLiveFeedEvent::Responsible] = array(
-									'TYPE' => CCrmLiveFeedEvent::Responsible,
-									'FIELDS' => array(
-										//'EVENT_ID' => $eventID,
-										'TITLE' => GetMessage('CRM_QUOTE_EVENT_UPDATE_ASSIGNED_BY'),
-										'MESSAGE' => '',
-										'PARAMS' => array(
-											'START_RESPONSIBLE_ID' => $arRow['ASSIGNED_BY_ID'],
-											'FINAL_RESPONSIBLE_ID' => $arFields['ASSIGNED_BY_ID']
-										)
-									)
-								);
-							}
-								break;
-							case 'CONTACT_ID':
-							case 'COMPANY_ID':
-							{
-								if(!isset($sonetEventData[CCrmLiveFeedEvent::Client]))
-								{
-									$oldContactID = isset($arRow['CONTACT_ID']) ? intval($arRow['CONTACT_ID']) : 0;
-									$oldCompanyID = isset($arRow['COMPANY_ID']) ? intval($arRow['COMPANY_ID']) : 0;
-
-									$sonetEventData[CCrmLiveFeedEvent::Client] = array(
-										'CODE'=> 'CLIENT',
-										'TYPE' => CCrmLiveFeedEvent::Client,
-										'FIELDS' => array(
-											//'EVENT_ID' => $eventID,
-											'TITLE' => GetMessage('CRM_QUOTE_EVENT_UPDATE_CLIENT'),
-											'MESSAGE' => '',
-											'PARAMS' => array(
-												'START_CLIENT_CONTACT_ID' => $oldContactID,
-												'FINAL_CLIENT_CONTACT_ID' => isset($arFields['CONTACT_ID']) ? intval($arFields['CONTACT_ID']) : $oldContactID,
-												'START_CLIENT_COMPANY_ID' => $oldCompanyID,
-												'FINAL_CLIENT_COMPANY_ID' => isset($arFields['COMPANY_ID']) ? intval($arFields['COMPANY_ID']) : $oldCompanyID
-											)
-										)
-									);
-								}
-							}
-								break;
-							case 'TITLE':
-							{
-								$sonetEventData[CCrmLiveFeedEvent::Denomination] = array(
-									'TYPE' => CCrmLiveFeedEvent::Denomination,
-									'FIELDS' => array(
-										//'EVENT_ID' => $eventID,
-										'TITLE' => GetMessage('CRM_QUOTE_EVENT_UPDATE_TITLE'),
-										'MESSAGE' => '',
-										'PARAMS' => array(
-											'START_TITLE' => $arRow['TITLE'],
-											'FINAL_TITLE' => $arFields['TITLE']
-										)
-									)
-								);
-							}
-								break;
-						}
+						$CCrmEvent = new CCrmEvent();
+						$CCrmEvent->Add($arEvent, $this->bCheckPermission);
 					}
 				}
-
-				// CHECK IF COMPANY/CONTACT WAS ADDED/REMOVED
-				if(!isset($sonetEventData[CCrmLiveFeedEvent::Client])
-					&& ((!isset($arRow['COMPANY_ID']) && isset($arFields['COMPANY_ID']))
-						|| (isset($arRow['COMPANY_ID']) && !isset($arFields['COMPANY_ID']))
-						|| (!isset($arRow['CONTACT_ID']) && isset($arFields['CONTACT_ID']))
-						|| (isset($arRow['CONTACT_ID']) && !isset($arFields['CONTACT_ID']))))
-				{
-					$sonetEventData[CCrmLiveFeedEvent::Client] = array(
-						'CODE'=> 'CLIENT',
-						'TYPE' => CCrmLiveFeedEvent::Client,
-						'FIELDS' => array(
-							//'EVENT_ID' => $eventID,
-							'TITLE' => GetMessage('CRM_QUOTE_EVENT_UPDATE_CLIENT'),
-							'MESSAGE' => '',
-							'PARAMS' => array(
-								'START_CLIENT_CONTACT_ID' => isset($arRow['CONTACT_ID']) ? intval($arRow['CONTACT_ID']) : 0,
-								'FINAL_CLIENT_CONTACT_ID' => isset($arFields['CONTACT_ID']) ? intval($arFields['CONTACT_ID']) : 0,
-								'START_CLIENT_COMPANY_ID' => isset($arRow['COMPANY_ID']) ? intval($arRow['COMPANY_ID']) : 0,
-								'FINAL_CLIENT_COMPANY_ID' => isset($arFields['COMPANY_ID']) ? intval($arFields['COMPANY_ID']) : 0
-							)
-						)
-					);
-				}
 			}
 
-			// Calculation of Account Data
-			$accData = CCrmAccountingHelper::PrepareAccountingData(
-				array(
-					'CURRENCY_ID' => isset($arFields['CURRENCY_ID']) ? $arFields['CURRENCY_ID'] : (isset($arRow['CURRENCY_ID']) ? $arRow['CURRENCY_ID'] : null),
-					'SUM' => isset($arFields['OPPORTUNITY']) ? $arFields['OPPORTUNITY'] : (isset($arRow['OPPORTUNITY']) ? $arRow['OPPORTUNITY'] : null),
-					'EXCH_RATE' => isset($arFields['EXCH_RATE']) ? $arFields['EXCH_RATE'] : (isset($arRow['EXCH_RATE']) ? $arRow['EXCH_RATE'] : null)
-				)
-			);
-
-			if(is_array($accData))
-			{
-				$arFields['ACCOUNT_CURRENCY_ID'] = $accData['ACCOUNT_CURRENCY_ID'];
-				$arFields['OPPORTUNITY_ACCOUNT'] = $accData['ACCOUNT_SUM'];
-			}
-
-			$accData = CCrmAccountingHelper::PrepareAccountingData(
-				array(
-					'CURRENCY_ID' => isset($arFields['CURRENCY_ID']) ? $arFields['CURRENCY_ID'] : (isset($arRow['CURRENCY_ID']) ? $arRow['CURRENCY_ID'] : null),
-					'SUM' => isset($arFields['TAX_VALUE']) ? $arFields['TAX_VALUE'] : (isset($arRow['TAX_VALUE']) ? $arRow['TAX_VALUE'] : null),
-					'EXCH_RATE' => isset($arFields['EXCH_RATE']) ? $arFields['EXCH_RATE'] : (isset($arRow['EXCH_RATE']) ? $arRow['EXCH_RATE'] : null)
-				)
-			);
-
-			if(is_array($accData))
-				$arFields['TAX_VALUE_ACCOUNT'] = $accData['ACCOUNT_SUM'];
+			$arFields = array_merge($arFields, \CCrmAccountingHelper::calculateAccountingData($arFields, $arRow, true));
 
 			if(isset($arFields['STATUS_ID']))
 			{
@@ -817,7 +896,17 @@ class CAllCrmQuote
 				$arFields['CLOSEDATE'] = ConvertTimeStamp(time() + CTimeZone::GetOffset(), 'FULL', SITE_ID);
 			}
 
-			unset($arFields['ID']);
+
+			if(!isset($arFields['ID']))
+			{
+				$arFields['ID'] = $ID;
+			}
+
+			self::getLastActivityAdapter()->performUpdate((int)$ID, $arFields, $options);
+			self::getCommentsAdapter()
+				->setPreviousFields((int)$ID, $arRow)
+				->normalizeFields((int)$ID, $arFields)
+			;
 
 			foreach (GetModuleEvents('crm', 'OnBeforeCrmQuoteUpdate', true) as $arEvent)
 			{
@@ -829,16 +918,19 @@ class CAllCrmQuote
 					}
 					else
 					{
-						$this->LAST_ERROR = GetMessage('CRM_QUOTE_UPDATE_CANCELED', array('#NAME#' => $arEvent['TO_NAME']));
+						$this->LAST_ERROR = GetMessage('CRM_QUOTE_UPDATE_CANCELED_MSGVER_1', ['#NAME#' => $arEvent['TO_NAME']]);
 						$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
 					}
 					return false;
 				}
 			}
 
-			$sUpdate = $DB->PrepareUpdate('b_crm_quote', $arFields);
+			unset($arFields['ID']);
 
-			if (strlen($sUpdate) > 0)
+			$this->normalizeEntityFields($arFields);
+			$sUpdate = $DB->PrepareUpdate(self::TABLE_NAME, $arFields);
+
+			if ($sUpdate <> '')
 			{
 				$clobFieldNames = array('COMMENTS', 'CONTENT', 'STORAGE_ELEMENT_IDS');
 				$arBinds = array();
@@ -879,7 +971,24 @@ class CAllCrmQuote
 				}
 			}
 
-			CCrmPerms::UpdateEntityAttr('QUOTE', $ID, $arEntityAttr);
+			$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
+				->setEntityAttributes($arEntityAttr)
+			;
+			Crm\Security\Manager::getEntityController(CCrmOwnerType::Quote)
+				->register(self::$TYPE_NAME, $ID, $securityRegisterOptions)
+			;
+
+			//region Save contacts
+			if(!empty($removedContactBindings))
+			{
+				QuoteContactTable::unbindContacts($ID, $removedContactBindings);
+			}
+
+			if(!empty($addedContactBindings))
+			{
+				QuoteContactTable::bindContacts($ID, $addedContactBindings);
+			}
+			//endregion
 
 			CCrmEntityHelper::NormalizeUserFields($arFields, self::$sUFEntityID, $GLOBALS['USER_FIELD_MANAGER'], array('IS_NEW' => false));
 			$GLOBALS['USER_FIELD_MANAGER']->Update(self::$sUFEntityID, $ID, $arFields);
@@ -890,6 +999,8 @@ class CAllCrmQuote
 			}
 			unset($storageTypeID, $storageElementIDs);
 
+			// update utm fields
+			UtmTable::updateEntityUtmFromFields(CCrmOwnerType::Quote, $ID, $arFields);
 
 			if($bUpdateSearch)
 			{
@@ -898,6 +1009,10 @@ class CAllCrmQuote
 					$arFilterTmp["CHECK_PERMISSIONS"] = "N";
 				CCrmSearch::UpdateSearch($arFilterTmp, 'QUOTE', true);
 			}
+
+			//region Search content index
+			Bitrix\Crm\Search\SearchContentBuilderFactory::create(CCrmOwnerType::Quote)->build($ID);
+			//endregion
 
 			$arFields['ID'] = $ID;
 
@@ -910,230 +1025,70 @@ class CAllCrmQuote
 			// Responsible user sync
 			//CCrmActivity::Synchronize(CCrmOwnerType::Quote, $ID);
 
-			$registerSonetEvent = isset($options['REGISTER_SONET_EVENT']) && $options['REGISTER_SONET_EVENT'] === true;
-
-			if($bResult && isset($arFields['ASSIGNED_BY_ID']))
-			{
-				CCrmSonetSubscription::ReplaceSubscriptionByEntity(
-					CCrmOwnerType::Quote,
-					$ID,
-					CCrmSonetSubscriptionType::Responsibility,
-					$arFields['ASSIGNED_BY_ID'],
-					$arRow['ASSIGNED_BY_ID'],
-					$registerSonetEvent
-				);
-			}
-
-			if($bResult && $bCompare && $registerSonetEvent && !empty($sonetEventData))
-			{
-				//CONTACT
-				$newContactID = isset($arFields['CONTACT_ID']) ? intval($arFields['CONTACT_ID']) : 0;
-				$oldContactID = isset($arRow['CONTACT_ID']) ? intval($arRow['CONTACT_ID']) : 0;
-				$contactID = $newContactID > 0 ? $newContactID : $oldContactID;
-
-				//COMPANY
-				$newCompanyID = isset($arFields['COMPANY_ID']) ? intval($arFields['COMPANY_ID']) : 0;
-				$oldCompanyID = isset($arRow['COMPANY_ID']) ? intval($arRow['COMPANY_ID']) : 0;
-				$companyID = $newCompanyID > 0 ? $newCompanyID : $oldCompanyID;
-
-				$modifiedByID = intval($arFields['MODIFY_BY_ID']);
-				foreach($sonetEventData as &$sonetEvent)
-				{
-					$sonetEventType = $sonetEvent['TYPE'];
-					$sonetEventCode = isset($sonetEvent['CODE']) ? $sonetEvent['CODE'] : '';
-
-					$sonetEventFields = &$sonetEvent['FIELDS'];
-					$sonetEventFields['ENTITY_TYPE_ID'] = CCrmOwnerType::Quote;
-					$sonetEventFields['ENTITY_ID'] = $ID;
-					$sonetEventFields['USER_ID'] = $modifiedByID;
-
-					//Register contact & company relations
-					if($sonetEventCode === 'CLIENT')
-					{
-						$sonetEventFields['PARENTS'] = array();
-						//If contact changed bind events to old and new contacts
-						if($oldContactID !== $newContactID)
-						{
-							if($oldContactID > 0)
-							{
-								$sonetEventFields['PARENTS'][] = array(
-									'ENTITY_TYPE_ID' => CCrmOwnerType::Contact,
-									'ENTITY_ID' => $oldContactID
-								);
-							}
-
-							if($newContactID > 0)
-							{
-								$sonetEventFields['PARENTS'][] = array(
-									'ENTITY_TYPE_ID' => CCrmOwnerType::Contact,
-									'ENTITY_ID' => $newContactID
-								);
-							}
-						}
-
-						//If company changed bind events to old and new companies
-						if($oldCompanyID !== $newCompanyID)
-						{
-							if($oldCompanyID > 0)
-							{
-								$sonetEventFields['PARENTS'][] = array(
-									'ENTITY_TYPE_ID' => CCrmOwnerType::Company,
-									'ENTITY_ID' => $oldCompanyID
-								);
-							}
-
-							if($newCompanyID > 0)
-							{
-								$sonetEventFields['PARENTS'][] = array(
-									'ENTITY_TYPE_ID' => CCrmOwnerType::Company,
-									'ENTITY_ID' => $newCompanyID
-								);
-							}
-						}
-					}
-					elseif($contactID > 0 || $companyID > 0)
-					{
-						$sonetEventFields['PARENTS'] = array();
-						if($contactID > 0)
-						{
-							$sonetEventFields['PARENTS'][] = array(
-								'ENTITY_TYPE_ID' => CCrmOwnerType::Contact,
-								'ENTITY_ID' => $contactID
-							);
-						}
-
-						if($companyID > 0)
-						{
-							$sonetEventFields['PARENTS'][] = array(
-								'ENTITY_TYPE_ID' => CCrmOwnerType::Company,
-								'ENTITY_ID' => $companyID
-							);
-						}
-					}
-
-					$logEventID = CCrmLiveFeed::CreateLogEvent($sonetEventFields, $sonetEventType);
-
-					if (
-						$logEventID
-						&& CModule::IncludeModule("im")
-					)
-					{
-						$url = CCrmOwnerType::GetShowUrl(CCrmOwnerType::Quote, $ID);
-						$serverName = (CMain::IsHTTPS() ? "https" : "http")."://".((defined("SITE_SERVER_NAME") && strlen(SITE_SERVER_NAME) > 0) ? SITE_SERVER_NAME : COption::GetOptionString("main", "server_name", ""));
-
-						if (
-							$sonetEvent['TYPE'] == CCrmLiveFeedEvent::Responsible
-							&& $sonetEventFields['PARAMS']['FINAL_RESPONSIBLE_ID'] != $modifiedByID
-						)
-						{
-							$arMessageFields = array(
-								"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
-								"TO_USER_ID" => $sonetEventFields['PARAMS']['FINAL_RESPONSIBLE_ID'],
-								"FROM_USER_ID" => $modifiedByID,
-								"NOTIFY_TYPE" => IM_NOTIFY_FROM,
-								"NOTIFY_MODULE" => "crm",
-								"LOG_ID" => $logEventID,
-								"NOTIFY_EVENT" => "quote_update",
-								"NOTIFY_TAG" => "CRM|QUOTE_RESPONSIBLE|".$ID,
-								"NOTIFY_MESSAGE" => GetMessage("CRM_QUOTE_RESPONSIBLE_IM_NOTIFY", Array("#title#" => "<a href=\"".$url."\" class=\"bx-notifier-item-action\">".htmlspecialcharsbx($arFields['TITLE'])."</a>")),
-								"NOTIFY_MESSAGE_OUT" => GetMessage("CRM_QUOTE_RESPONSIBLE_IM_NOTIFY", Array("#title#" => htmlspecialcharsbx($arFields['TITLE'])))." (".$serverName.$url.")"
-							);
-
-							CIMNotify::Add($arMessageFields);
-						}
-
-						if (
-							$sonetEvent['TYPE'] == CCrmLiveFeedEvent::Responsible
-							&& $sonetEventFields['PARAMS']['START_RESPONSIBLE_ID'] != $modifiedByID
-						)
-						{
-							$arMessageFields = array(
-								"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
-								"TO_USER_ID" => $sonetEventFields['PARAMS']['START_RESPONSIBLE_ID'],
-								"FROM_USER_ID" => $modifiedByID,
-								"NOTIFY_TYPE" => IM_NOTIFY_FROM,
-								"NOTIFY_MODULE" => "crm",
-								"LOG_ID" => $logEventID,
-								"NOTIFY_EVENT" => "quote_update",
-								"NOTIFY_TAG" => "CRM|QUOTE_RESPONSIBLE|".$ID,
-								"NOTIFY_MESSAGE" => GetMessage("CRM_QUOTE_NOT_RESPONSIBLE_IM_NOTIFY", Array("#title#" => "<a href=\"".$url."\" class=\"bx-notifier-item-action\">".htmlspecialcharsbx($arFields['TITLE'])."</a>")),
-								"NOTIFY_MESSAGE_OUT" => GetMessage("CRM_QUOTE_NOT_RESPONSIBLE_IM_NOTIFY", Array("#title#" => htmlspecialcharsbx($arFields['TITLE'])))." (".$serverName.$url.")"
-							);
-
-							CIMNotify::Add($arMessageFields);
-						}
-
-						if (
-							$sonetEvent['TYPE'] == CCrmLiveFeedEvent::Progress
-							&& $sonetEventFields['PARAMS']['START_STATUS_ID']
-							&& $sonetEventFields['PARAMS']['FINAL_STATUS_ID']
-
-						)
-						{
-							$assignedByID = (isset($arFields['ASSIGNED_BY_ID']) ? $arFields['ASSIGNED_BY_ID'] : $arRow['ASSIGNED_BY_ID']);
-							$infos = CCrmStatus::GetStatus('QUOTE_STATUS');
-
-							if (
-								$assignedByID != $modifiedByID
-								&& array_key_exists($sonetEventFields['PARAMS']['START_STATUS_ID'], $infos)
-								&& array_key_exists($sonetEventFields['PARAMS']['FINAL_STATUS_ID'], $infos)
-							)
-							{
-								$arMessageFields = array(
-									"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
-									"TO_USER_ID" => $assignedByID,
-									"FROM_USER_ID" => $modifiedByID,
-									"NOTIFY_TYPE" => IM_NOTIFY_FROM,
-									"NOTIFY_MODULE" => "crm",
-									"LOG_ID" => $logEventID,
-									"NOTIFY_EVENT" => "quote_update",
-									"NOTIFY_TAG" => "CRM|QUOTE_PROGRESS|".$ID,
-									"NOTIFY_MESSAGE" => GetMessage("CRM_QUOTE_PROGRESS_IM_NOTIFY", Array(
-										"#title#" => "<a href=\"".$url."\" class=\"bx-notifier-item-action\">".htmlspecialcharsbx($arFields['TITLE'])."</a>",
-										"#start_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['START_STATUS_ID']]['NAME']),
-										"#final_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['FINAL_STATUS_ID']]['NAME'])
-									)),
-									"NOTIFY_MESSAGE_OUT" => GetMessage("CRM_QUOTE_PROGRESS_IM_NOTIFY", Array(
-											"#title#" => htmlspecialcharsbx($arFields['TITLE']),
-											"#start_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['START_STATUS_ID']]['NAME']),
-											"#final_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['FINAL_STATUS_ID']]['NAME'])
-										))." (".$serverName.$url.")"
-								);
-
-								CIMNotify::Add($arMessageFields);
-							}
-						}
-
-					}
-
-					unset($sonetEventFields);
-				}
-				unset($sonetEvent);
-			}
+			self::getCommentsAdapter()
+				->setPreviousFields((int)$ID, $arRow)
+				->performUpdate((int)$ID, $arFields, $options)
+			;
 
 			if($bResult)
 			{
 				foreach (GetModuleEvents('crm', 'OnAfterCrmQuoteUpdate', true) as $arEvent)
 					ExecuteModuleEventEx($arEvent, array(&$arFields));
-			}
 
-			self::PullChange('UPDATE', array('ID' => $ID));
+				$scope = \Bitrix\Crm\Service\Container::getInstance()->getContext()->getScope();
+				$filler = new ValueFiller(CCrmOwnerType::Quote, $ID, $scope);
+				$filler->fill($currentFields, $arFields);
+			}
 		}
 		return $bResult;
 	}
 
 	public function Delete($ID, $options = array())
 	{
+		$this->lastErrors = null;
+
+		$ID = (int)$ID;
+
+		if(!is_array($options))
+		{
+			$options = array();
+		}
+
+		if($this->isUseOperation())
+		{
+			return $this->getCompatibilityAdapter()->performDelete($ID, $options);
+		}
+
 		global $DB, $APPLICATION;
 
-		$ID = intval($ID);
-		$iUserId = CCrmSecurityHelper::GetCurrentUserID();
+		if(isset($options['CURRENT_USER']))
+		{
+			$iUserId = intval($options['CURRENT_USER']);
+		}
+		else
+		{
+			$iUserId = CCrmSecurityHelper::GetCurrentUserID();
+		}
+
+		$dbResult = CCrmQuote::GetList(
+			array(),
+			array('=ID' => $ID, 'CHECK_PERMISSIONS' => 'N'),
+			false,
+			false,
+			array('QUOTE_NUMBER', 'TITLE')
+		);
+
+		$arFields = is_object($dbResult) ? $dbResult->Fetch() : null;
+		if(!is_array($arFields))
+		{
+			return false;
+		}
 
 		$sWherePerm = '';
 		if ($this->bCheckPermission)
 		{
-			$arEntityAttr = $this->cPerms->GetEntityAttr('QUOTE', $ID);
-			$sEntityPerm = $this->cPerms->GetPermType('QUOTE', 'DELETE', $arEntityAttr[$ID]);
+			$arEntityAttr = $this->cPerms->GetEntityAttr(self::$TYPE_NAME, $ID);
+			$sEntityPerm = $this->cPerms->GetPermType(self::$TYPE_NAME, 'DELETE', $arEntityAttr[$ID]);
 			if ($sEntityPerm == BX_CRM_PERM_NONE)
 				return false;
 			else if ($sEntityPerm == BX_CRM_PERM_SELF)
@@ -1164,7 +1119,7 @@ class CAllCrmQuote
 				'DELETE FROM '.CCrmQuote::ELEMENT_TABLE_NAME.' WHERE QUOTE_ID = '.$ID,
 				false, 'File: '.__FILE__.'<br/>Line: '.__LINE__))
 			{
-				$APPLICATION->throwException(GetMessage('CRM_QUOTE_ERR_DELETE_STORAGE_ELEMENTS_QUERY'));
+				$APPLICATION->throwException(GetMessage('CRM_QUOTE_ERR_DELETE_STORAGE_ELEMENTS_QUERY_MSGVER_1'));
 				return false;
 			}
 		}
@@ -1172,7 +1127,14 @@ class CAllCrmQuote
 		$dbRes = $DB->Query("DELETE FROM b_crm_quote WHERE ID = {$ID}{$sWherePerm}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
 		if (is_object($dbRes) && $dbRes->AffectedRowsCount() > 0)
 		{
-			$DB->Query("DELETE FROM b_crm_entity_perms WHERE ENTITY='QUOTE' AND ENTITY_ID = $ID", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+			Bitrix\Crm\Kanban\SortTable::clearEntity($ID, \CCrmOwnerType::QuoteName);
+
+			Crm\Security\Manager::getEntityController(CCrmOwnerType::Quote)
+				->unregister(self::$TYPE_NAME, $ID)
+			;
+
+			QuoteContactTable::unbindAllContacts($ID);
+
 			$GLOBALS['USER_FIELD_MANAGER']->Delete(self::$sUFEntityID, $ID);
 			$CCrmFieldMulti = new CCrmFieldMulti();
 			$CCrmFieldMulti->DeleteByElement('QUOTE', $ID);
@@ -1185,20 +1147,35 @@ class CAllCrmQuote
 			CCrmProductRow::DeleteByOwner(self::OWNER_TYPE, $ID);
 			CCrmProductRow::DeleteSettings(self::OWNER_TYPE, $ID);
 			/*CCrmActivity::DeleteByOwner(CCrmOwnerType::Quote, $ID);*/
+			\Bitrix\Crm\Requisite\EntityLink::unregister(CCrmOwnerType::Quote, $ID);
 
-			CCrmSonetSubscription::UnRegisterSubscriptionByEntity(CCrmOwnerType::Quote, $ID);
-			CCrmLiveFeed::DeleteLogEvents(
-				array(
-					'ENTITY_TYPE_ID' => CCrmOwnerType::Quote,
-					'ENTITY_ID' => $ID
-				)
-			);
+			self::getCommentsAdapter()->performDelete((int)$ID, $options);
 
-			self::PullChange('DELETE', array('ID' => $ID));
+			// delete utm fields
+			UtmTable::deleteEntityUtm(CCrmOwnerType::Quote, $ID);
+			Tracking\Entity::deleteTrace(CCrmOwnerType::Quote, $ID);
+
+			if(Bitrix\Crm\Settings\HistorySettings::getCurrent()->isQuoteDeletionEventEnabled())
+			{
+				CCrmEvent::RegisterDeleteEvent(CCrmOwnerType::Quote, $ID, $iUserId, array('FIELDS' => $arFields));
+			}
 
 			if(defined("BX_COMP_MANAGED_CACHE"))
 			{
+				$GLOBALS['CACHE_MANAGER']->CleanDir('b_crm_quote');
 				$GLOBALS["CACHE_MANAGER"]->ClearByTag("crm_entity_name_".CCrmOwnerType::Quote."_".$ID);
+			}
+
+			$afterEvents = GetModuleEvents('crm', 'OnAfterCrmQuoteDelete');
+			while ($arEvent = $afterEvents->Fetch())
+			{
+				ExecuteModuleEventEx($arEvent, array($ID));
+			}
+
+			$fieldsContextEntity = EntityFactory::getInstance()->getEntity(CCrmOwnerType::Quote);
+			if ($fieldsContextEntity)
+			{
+				$fieldsContextEntity::deleteByItemId($ID);
 			}
 		}
 		return true;
@@ -1225,23 +1202,12 @@ class CAllCrmQuote
 				$maxLastID = 0;
 				$strSql = '';
 
-				switch(strtolower($DB->type))
-				{
-					case "mysql":
-						$strSql = "SELECT ID, QUOTE_NUMBER FROM b_crm_quote WHERE QUOTE_NUMBER IS NOT NULL ORDER BY ID DESC LIMIT 1";
-						break;
-					case "oracle":
-						$strSql = "SELECT ID, QUOTE_NUMBER FROM b_crm_quote WHERE QUOTE_NUMBER IS NOT NULL AND ROWNUM <= 1 ORDER BY ID DESC";
-						break;
-					case "mssql":
-						$strSql = "SELECT TOP 1 ID, QUOTE_NUMBER FROM b_crm_quote WHERE QUOTE_NUMBER IS NOT NULL ORDER BY ID DESC";
-						break;
-				}
+				$strSql = "SELECT ID, QUOTE_NUMBER FROM b_crm_quote WHERE QUOTE_NUMBER IS NOT NULL ORDER BY ID DESC LIMIT 1";
 
 				$dbres = $DB->Query($strSql, true);
 				if ($arRes = $dbres->GetNext())
 				{
-					if (strlen($arRes["QUOTE_NUMBER"]) === strlen(intval($arRes["QUOTE_NUMBER"])))
+					if (mb_strlen($arRes["QUOTE_NUMBER"]) === mb_strlen(intval($arRes["QUOTE_NUMBER"])))
 						$maxLastID = intval($arRes["QUOTE_NUMBER"]);
 				}
 
@@ -1267,20 +1233,8 @@ class CAllCrmQuote
 				if ($arRes = $dbres->GetNext())
 				{
 					$userID = intval($arRes["ASSIGNED_BY_ID"]);
-					$strSql = '';
 
-					switch (strtolower($DB->type))
-					{
-						case "mysql":
-							$strSql = "SELECT MAX(CAST(SUBSTRING(QUOTE_NUMBER, LENGTH('".$userID."_') + 1) as UNSIGNED)) as NUM_ID FROM b_crm_quote WHERE QUOTE_NUMBER LIKE '".$userID."\_%'";
-							break;
-						case "oracle":
-							$strSql = "SELECT MAX(CAST(SUBSTR(QUOTE_NUMBER, LENGTH('".$userID."_') + 1) as NUMBER)) as NUM_ID FROM b_crm_quote WHERE QUOTE_NUMBER LIKE '".$userID."_%'";
-							break;
-						case "mssql":
-							$strSql = "SELECT MAX(CAST(SUBSTRING(QUOTE_NUMBER, LEN('".$userID."_') + 1, LEN(QUOTE_NUMBER)) as INT)) as NUM_ID FROM b_crm_quote WHERE QUOTE_NUMBER LIKE '".$userID."_%'";
-							break;
-					}
+					$strSql = "SELECT MAX(" . $DB->toNumber("SUBSTRING(QUOTE_NUMBER, LENGTH('".$userID."_') + 1)") . ") as NUM_ID FROM b_crm_quote WHERE QUOTE_NUMBER LIKE '".$userID."\_%'";
 
 					$dbres = $DB->Query($strSql, true);
 					if ($arRes = $dbres->GetNext())
@@ -1314,19 +1268,7 @@ class CAllCrmQuote
 						break;
 				}
 
-				$strSql = '';
-				switch (strtolower($DB->type))
-				{
-					case "mysql":
-						$strSql = "SELECT MAX(CAST(SUBSTRING(QUOTE_NUMBER, LENGTH('".$date." / ') + 1) as UNSIGNED)) as NUM_ID FROM b_crm_quote WHERE QUOTE_NUMBER LIKE '".$date." / %'";
-						break;
-					case "oracle":
-						$strSql = "SELECT MAX(CAST(SUBSTR(QUOTE_NUMBER, LENGTH('".$date." / ') + 1) as NUMBER)) as NUM_ID FROM b_crm_quote WHERE QUOTE_NUMBER LIKE '".$date." / %'";
-						break;
-					case "mssql":
-						$strSql = "SELECT MAX(CAST(SUBSTRING(QUOTE_NUMBER, LEN('".$date." / ') + 1, LEN(QUOTE_NUMBER)) as INT)) as NUM_ID FROM b_crm_quote WHERE QUOTE_NUMBER LIKE '".$date." / %'";
-						break;
-				}
+				$strSql = "SELECT MAX(" . $DB->ToNumber("SUBSTRING(QUOTE_NUMBER, LENGTH('".$date." / ') + 1)") . ") as NUM_ID FROM b_crm_quote WHERE QUOTE_NUMBER LIKE '".$date." / %'";
 
 				$dbres = $DB->Query($strSql, true);
 				if ($arRes = $dbres->GetNext())
@@ -1365,7 +1307,7 @@ class CAllCrmQuote
 			return false;
 
 		$type = COption::GetOptionString("crm", "quote_number_template", "");
-		$param = COption::GetOptionString("crm", "quote_number_data", "");
+		$numeratorSettings = \Bitrix\Main\Numerator\Numerator::getOneByType(REGISTRY_TYPE_CRM_QUOTE);
 
 		$bCustomAlgorithm = false;
 		$value = $ID;
@@ -1389,11 +1331,16 @@ class CAllCrmQuote
 		else
 		{
 			$res = false;
-			if ($type != "") // if special template is selected
+			if ($numeratorSettings) // if special template (numerator) is selected
 			{
 				for ($i = 0; $i < 10; $i++)
 				{
-					$value = CCrmQuote::GetNextQuoteNumber($ID, $type, $param);
+					$value = false;
+					$numerator = \Bitrix\Main\Numerator\Numerator::load($numeratorSettings['id'], ['QUOTE_ID' => $ID]);
+					if ($numerator)
+					{
+						$value = $numerator->getNext();
+					}
 
 					if ($value !== false)
 					{
@@ -1402,25 +1349,84 @@ class CAllCrmQuote
 						$sql = "UPDATE b_crm_quote SET $sUpdate WHERE ID = $ID";
 						$res = $DB->Query($sql, true);
 						if ($res)
+						{
 							break;
+						}
 					}
 				}
 			}
 		}
 
-		if ($type == "" || !$res) // if no special template is used or error occured
+		if (!$numeratorSettings || !$res) // if no special template is used or error occured
 		{
-			$arFields = array("QUOTE_NUMBER" => $ID);
-			$sUpdate = $DB->PrepareUpdate('b_crm_quote', $arFields);
-			$sql = "UPDATE b_crm_quote SET $sUpdate WHERE ID = $ID";
-			$res = $DB->Query($sql, true);
+			if ($type !== 'NUMBER')
+			{
+				$arFields = array('QUOTE_NUMBER' => $ID);
+				$sUpdate = $DB->PrepareUpdate('b_crm_quote', $arFields);
+				$sql = "UPDATE b_crm_quote SET $sUpdate WHERE ID = $ID";
+				$res = $DB->Query($sql, true);
+			}
+			if (!$res && (!$numeratorSettings || $type === 'NUMBER'))    // try set max number + 1
+			{
+				$maxLastId = $ID;
+				$maxLastIdIsSet = false;
+				for ($i = 0; $i < 10; $i++)
+				{
+					$sql = 'SELECT MAX(' . $DB->ToNumber('QUOTE_NUMBER') . ') AS LAST_NUMBER FROM b_crm_quote';
+					$resLastId = $DB->Query($sql, true);
+					if ($row = $resLastId->fetch())
+					{
+						if (strval($row['LAST_NUMBER']) <> '')
+						{
+							$maxLastId = $row['LAST_NUMBER'];
+							$maxLastIdIsSet = true;
+						}
+					}
+					if ($maxLastIdIsSet)
+					{
+						$arFields = array('~QUOTE_NUMBER' => "($maxLastId + 1)");
+						$sUpdate = $DB->PrepareUpdate('b_crm_quote', $arFields);
+						$sql = "UPDATE b_crm_quote SET $sUpdate WHERE ID = $ID";
+						$res = $DB->Query($sql, true);
+						if ($res)
+						{
+							COption::SetOptionString("crm", "quote_number_template", "NUMBER");
+							COption::SetOptionString("crm", "quote_number_data", $maxLastId);
+							if (!$numeratorSettings)
+							{
+								$numeratorForQuotes = \Bitrix\Main\Numerator\Numerator::create();
+								$numeratorForQuotes->setConfig([
+									\Bitrix\Main\Numerator\Numerator::getType() =>
+										[
+											'name'     => 'numerator for quote',
+											'template' => '{NUMBER}',
+											'type'     => 'QUOTE',
+										],
+									\Bitrix\Main\Numerator\Generator\SequentNumberGenerator::getType() =>
+										[
+											'start'              => $maxLastId,
+											'isDirectNumeration' => true,
+										],
+								]);
+								$numeratorForQuotes->save();
+							}
+							break;
+						}
+					}
+				}
+			}
 		}
 
 		return $res;
 	}
 
-	public static function CompareFields($arFieldsOrig, $arFieldsModif, $bCheckPerms = true)
+	public static function CompareFields($arFieldsOrig, $arFieldsModif, $bCheckPerms = true, $arOptions = null)
 	{
+		if(!is_array($arOptions))
+		{
+			$arOptions = array();
+		}
+
 		$arMsg = Array();
 
 		if (array_key_exists('QUOTE_NUMBER', $arFieldsModif))
@@ -1449,6 +1455,36 @@ class CAllCrmQuote
 					'EVENT_TEXT_2' => !empty($modifTitle) ? $modifTitle : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY')
 				);
 			unset($origTitle, $modifTitle);
+		}
+
+		if (array_key_exists('LEAD_ID', $arFieldsModif))
+		{
+			$origLeadId = isset($arFieldsOrig['LEAD_ID']) ? intval($arFieldsOrig['LEAD_ID']) : 0;
+			$modifLeadId = isset($arFieldsModif['LEAD_ID']) ? intval($arFieldsModif['LEAD_ID']) : 0;
+			if ($origLeadId != $modifLeadId)
+			{
+				$arLead = Array();
+
+				$arFilterTmp = array('@ID' => array($origLeadId, $modifLeadId));
+				if (!$bCheckPerms)
+				{
+					$arFilterTmp["CHECK_PERMISSIONS"] = "N";
+				}
+
+				$dbRes = CCrmLead::GetListEx(array('TITLE'=>'ASC'), $arFilterTmp);
+				while ($arRes = $dbRes->Fetch())
+				{
+					$arLead[$arRes['ID']] = $arRes['TITLE'];
+				}
+
+				$arMsg[] = Array(
+					'ENTITY_FIELD' => 'LEAD_ID',
+					'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_LEAD_ID'),
+					'EVENT_TEXT_1' => CrmCompareFieldsList($arLead, $origLeadId),
+					'EVENT_TEXT_2' => CrmCompareFieldsList($arLead, $modifLeadId)
+				);
+			}
+			unset($origLeadId, $modifLeadId);
 		}
 
 		if (array_key_exists('DEAL_ID', $arFieldsModif))
@@ -1503,30 +1539,116 @@ class CAllCrmQuote
 			unset($origCompanyId, $modifCompanyId);
 		}
 
-		if (array_key_exists('CONTACT_ID', $arFieldsModif))
+		if(isset($arOptions['CONTACTS']) && is_array($arOptions['CONTACTS']))
 		{
-			$origContactId = isset($arFieldsOrig['CONTACT_ID']) ? intval($arFieldsOrig['CONTACT_ID']) : 0;
-			$modifContactId = isset($arFieldsModif['CONTACT_ID']) ? intval($arFieldsModif['CONTACT_ID']) : 0;
-			if ($origContactId != $modifContactId)
-			{
-				$arContact = Array();
+			$addedContactIDs = isset($arOptions['CONTACTS']['ADDED']) && is_array($arOptions['CONTACTS']['ADDED'])
+				? $arOptions['CONTACTS']['ADDED'] : array();
 
-				$arFilterTmp = array('ID' => array($origContactId, $modifContactId));
+			$removedContactIDs = isset($arOptions['CONTACTS']['REMOVED']) && is_array($arOptions['CONTACTS']['REMOVED'])
+				? $arOptions['CONTACTS']['REMOVED'] : array();
+
+			if(!empty($addedContactIDs) || !empty($removedContactIDs))
+			{
+				//region Preparation of contact names
+				$dbResult = CCrmContact::GetListEx(
+					array(),
+					array(
+						'CHECK_PERMISSIONS' => 'N',
+						'@ID' => array_merge($addedContactIDs, $removedContactIDs)
+					),
+					false,
+					false,
+					array('ID', 'HONORIFIC', 'NAME', 'SECOND_NAME', 'LAST_NAME')
+				);
+
+				$contactNames = array();
+				while ($ary = $dbResult->Fetch())
+				{
+					$contactNames[$ary['ID']] = CCrmContact::PrepareFormattedName($ary);
+				}
+				//endregion
+				if(count($addedContactIDs) <= 1 && count($removedContactIDs) <= 1)
+				{
+					//region Single binding mode
+					$arMsg[] = Array(
+						'ENTITY_FIELD' => 'CONTACT_ID',
+						'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_CONTACT_ID'),
+						'EVENT_TEXT_1' => CrmCompareFieldsList(
+							$contactNames,
+							isset($removedContactIDs[0]) ? $removedContactIDs[0] : 0
+						),
+						'EVENT_TEXT_2' => CrmCompareFieldsList(
+							$contactNames,
+							isset($addedContactIDs[0]) ? $addedContactIDs[0] : 0
+						)
+					);
+					//endregion
+				}
+				else
+				{
+					//region Multiple binding mode
+					//region Add contacts event
+					$texts = array();
+					foreach($addedContactIDs as $contactID)
+					{
+						if(isset($contactNames[$contactID]))
+						{
+							$texts[] = $contactNames[$contactID];
+						}
+					}
+
+					$arMsg[] = Array(
+						'ENTITY_FIELD' => 'CONTACT_ID',
+						'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_CONTACTS_ADDED'),
+						'EVENT_TEXT_1' => implode(', ', $texts),
+					);
+					//endregion
+					//region Remove companies event
+					$texts = array();
+					foreach($removedContactIDs as $contactID)
+					{
+						if(isset($contactNames[$contactID]))
+						{
+							$texts[] = $contactNames[$contactID];
+						}
+					}
+
+					$arMsg[] = Array(
+						'ENTITY_FIELD' => 'CONTACT_ID',
+						'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_CONTACTS_REMOVED'),
+						'EVENT_TEXT_1' => implode(', ', $texts),
+					);
+					//endregion
+					//endregion
+				}
+			}
+		}
+
+		if (array_key_exists('MYCOMPANY_ID', $arFieldsModif))
+		{
+			$origMyCompanyId = isset($arFieldsOrig['MYCOMPANY_ID']) ? intval($arFieldsOrig['MYCOMPANY_ID']) : 0;
+			$modifMyCompanyId = isset($arFieldsModif['MYCOMPANY_ID']) ? intval($arFieldsModif['MYCOMPANY_ID']) : 0;
+			if ($origMyCompanyId != $modifMyCompanyId)
+			{
+				$arMyCompany = array();
+
+				$arFilterTmp = array('ID' => array($origMyCompanyId, $modifMyCompanyId));
 				if (!$bCheckPerms)
 					$arFilterTmp["CHECK_PERMISSIONS"] = "N";
 
-				$dbRes = CCrmContact::GetList(Array('LAST_NAME'=>'ASC', 'NAME' => 'ASC'), $arFilterTmp);
+				$dbRes = CCrmCompany::GetList(array('TITLE'=>'ASC'), $arFilterTmp);
 				while ($arRes = $dbRes->Fetch())
-					$arContact[$arRes['ID']] = $arRes['LAST_NAME'].' '.$arRes['NAME'];
+					$arMyCompany[$arRes['ID']] = $arRes['TITLE'];
 
-				$arMsg[] = Array(
-					'ENTITY_FIELD' => 'CONTACT_ID',
-					'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_CONTACT_ID'),
-					'EVENT_TEXT_1' => CrmCompareFieldsList($arContact, $origContactId),
-					'EVENT_TEXT_2' => CrmCompareFieldsList($arContact, $modifContactId)
+				$arMsg[] = array(
+					'ENTITY_FIELD' => 'MYCOMPANY_ID',
+					'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_MYCOMPANY_ID1'),
+					'EVENT_TEXT_1' => CrmCompareFieldsList($arMyCompany, $origMyCompanyId),
+					'EVENT_TEXT_2' => CrmCompareFieldsList($arMyCompany, $modifMyCompanyId)
 				);
+				unset($arMyCompany, $arFilterTmp, $dbRes, $arRes);
 			}
-			unset($origContactId, $modifContactId);
+			unset($origMyCompanyId, $modifMyCompanyId);
 		}
 
 		if (array_key_exists('ASSIGNED_BY_ID', $arFieldsModif))
@@ -1537,9 +1659,9 @@ class CAllCrmQuote
 			{
 				$arUser = Array();
 				$dbUsers = CUser::GetList(
-					($sort_by = 'last_name'), ($sort_dir = 'asc'),
+					'last_name', 'asc',
 					array('ID' => implode('|', array(intval($origAssignedById), intval($modifAssignedById)))),
-					array('SELECT' => array('NAME', 'SECOND_NAME', 'LAST_NAME', 'LOGIN', 'EMAIL'))
+					array('FIELDS' => array('ID', 'NAME', 'SECOND_NAME', 'LAST_NAME', 'LOGIN', 'TITLE', 'EMAIL'))
 				);
 				while ($arRes = $dbUsers->Fetch())
 					$arUser[$arRes['ID']] = CUser::FormatName(CSite::GetNameFormat(false), $arRes);
@@ -1563,7 +1685,7 @@ class CAllCrmQuote
 				$arStatus = CCrmStatus::GetStatusList('QUOTE_STATUS');
 				$arMsg[] = Array(
 					'ENTITY_FIELD' => 'STATUS_ID',
-					'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_STATUS_ID'),
+					'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_STATUS_ID_MSGVER_1'),
 					'EVENT_TEXT_1' => htmlspecialcharsbx(CrmCompareFieldsList($arStatus, $origStatusId)),
 					'EVENT_TEXT_2' => htmlspecialcharsbx(CrmCompareFieldsList($arStatus, $modifStatusId))
 				);
@@ -1579,8 +1701,8 @@ class CAllCrmQuote
 				$arMsg[] = Array(
 					'ENTITY_FIELD' => 'COMMENTS',
 					'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_COMMENTS'),
-					'EVENT_TEXT_1' => !empty($origComments) ? $origComments : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY'),
-					'EVENT_TEXT_2' => !empty($modifComments) ? $modifComments : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY')
+					'EVENT_TEXT_1' => !empty($origComments) ? TextHelper::convertBbCodeToHtml($origComments) : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY'),
+					'EVENT_TEXT_2' => !empty($modifComments) ? TextHelper::convertBbCodeToHtml($modifComments) : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY')
 				);
 			unset($origComments, $modifComments);
 		}
@@ -1593,8 +1715,8 @@ class CAllCrmQuote
 				$arMsg[] = Array(
 					'ENTITY_FIELD' => 'CONTENT',
 					'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_CONTENT'),
-					'EVENT_TEXT_1' => !empty($origContent)? $origContent : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY'),
-					'EVENT_TEXT_2' => !empty($modifContent)? $modifContent : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY')
+					'EVENT_TEXT_1' => !empty($origContent)? TextHelper::convertBbCodeToHtml($origContent) : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY'),
+					'EVENT_TEXT_2' => !empty($modifContent)? TextHelper::convertBbCodeToHtml($modifContent) : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY')
 				);
 			unset($origContent, $modifContent);
 		}
@@ -1607,8 +1729,8 @@ class CAllCrmQuote
 				$arMsg[] = Array(
 					'ENTITY_FIELD' => 'TERMS',
 					'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_TERMS'),
-					'EVENT_TEXT_1' => !empty($origTerms)? $origTerms : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY'),
-					'EVENT_TEXT_2' => !empty($modifTerms)? $modifTerms : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY'),
+					'EVENT_TEXT_1' => !empty($origTerms)? TextHelper::convertBbCodeToHtml($origTerms) : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY'),
+					'EVENT_TEXT_2' => !empty($modifTerms)? TextHelper::convertBbCodeToHtml($modifTerms) : GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY'),
 				);
 			unset($origTerms, $modifTerms);
 		}
@@ -1715,8 +1837,8 @@ class CAllCrmQuote
 
 		if (array_key_exists('LOCATION_ID', $arFieldsModif))
 		{
-			$origLocationId = isset($arFieldsOrig['LOCATION_ID']) ? intval($arFieldsOrig['LOCATION_ID']) : 0;
-			$modifLocationId = isset($arFieldsModif['LOCATION_ID']) ? intval($arFieldsModif['LOCATION_ID']) : 0;
+			$origLocationId = isset($arFieldsOrig['LOCATION_ID']) ? $arFieldsOrig['LOCATION_ID'] : '';
+			$modifLocationId = isset($arFieldsModif['LOCATION_ID']) ? $arFieldsModif['LOCATION_ID'] : '';
 			if ($origLocationId != $modifLocationId)
 			{
 				$origLocationString = $modifLocationString = '';
@@ -1751,7 +1873,7 @@ class CAllCrmQuote
 				if ($origClientFieldValue != $modifClientFieldValue)
 					$arMsg[] = Array(
 						'ENTITY_FIELD' => $fieldName,
-						'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_'.$fieldName),
+						'EVENT_NAME' => GetMessage('CRM_QUOTE_FIELD_COMPARE_'.$fieldName.($fieldName === 'MYCOMPANY_ID' ? '1' : '')),
 						'EVENT_TEXT_1' => !empty($origClientFieldValue)? $origClientFieldValue: GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY'),
 						'EVENT_TEXT_2' => !empty($modifClientFieldValue)? $modifClientFieldValue: GetMessage('CRM_QUOTE_FIELD_COMPARE_EMPTY'),
 					);
@@ -1761,7 +1883,7 @@ class CAllCrmQuote
 
 		// Processing of the files
 		if (array_key_exists('STORAGE_TYPE_ID', $arFieldsModif)
-			&& array_key_exists('STORAGE_ELEMENT_IDS', $arFieldsModif) && strlen($arFieldsModif['STORAGE_ELEMENT_IDS']) > 0)
+			&& array_key_exists('STORAGE_ELEMENT_IDS', $arFieldsModif) && $arFieldsModif['STORAGE_ELEMENT_IDS'] <> '')
 		{
 			$newStorageTypeID = isset($arFieldsModif['STORAGE_TYPE_ID']) ? intval($arFieldsModif['STORAGE_TYPE_ID']) : CCrmQuoteStorageType::Undefined;
 			$oldStorageTypeID = isset($arFieldsOrig['STORAGE_TYPE_ID']) ? intval($arFieldsOrig['STORAGE_TYPE_ID']) : CCrmQuoteStorageType::Undefined;
@@ -1820,24 +1942,196 @@ class CAllCrmQuote
 	public static function GetFieldCaption($fieldName)
 	{
 		$result = GetMessage("CRM_QUOTE_FIELD_{$fieldName}");
+
+		if ($fieldName === 'MYCOMPANY_ID')
+		{
+			$result = GetMessage("CRM_QUOTE_FIELD_{$fieldName}1");
+		}
+		if (!(is_string($result) && $result !== ''))
+		{
+			$result = GetMessage("CRM_QUOTE_FIELD_{$fieldName}_MSGVER_1");
+		}
+		if (!(is_string($result) && $result !== ''))
+		{
+			$result = GetMessage("CRM_QUOTE_FIELD_{$fieldName}_MSGVER_2");
+		}
+
+		if (
+			!(is_string($result) && $result !== '')
+			&& Crm\Service\ParentFieldManager::isParentFieldName($fieldName)
+		)
+		{
+			$entityTypeId = Crm\Service\ParentFieldManager::getEntityTypeIdFromFieldName($fieldName);
+			$result = \CCrmOwnerType::GetDescription($entityTypeId);
+		}
+
 		return is_string($result) ? $result : '';
 	}
 	// Get Fields Metadata
+	public static function GetFieldsInfo()
+	{
+		if(!self::$FIELD_INFOS)
+		{
+			self::$FIELD_INFOS = array(
+				'ID' => array(
+					'TYPE' => 'integer',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
+				),
+				'QUOTE_NUMBER' => array(
+					'TYPE' => 'string',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
+				),
+				'TITLE' => array(
+					'TYPE' => 'string',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Required)
+				),
+				'STATUS_ID' => array(
+					'TYPE' => 'crm_status',
+					'CRM_STATUS_TYPE' => 'QUOTE_STATUS'
+				),
+				'CURRENCY_ID' => array(
+					'TYPE' => 'crm_currency'
+				),
+				'OPPORTUNITY' => array(
+					'TYPE' => 'double'
+				),
+				'TAX_VALUE' => array(
+					'TYPE' => 'double'
+				),
+				'EXCH_RATE' => array(
+					'TYPE' => 'double',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Hidden)
+				),
+				'ACCOUNT_CURRENCY_ID' => array(
+					'TYPE' => 'string',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Hidden)
+				),
+				'OPPORTUNITY_ACCOUNT' => array(
+					'TYPE' => 'double',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Hidden)
+				),
+				'TAX_VALUE_ACCOUNT' => array(
+					'TYPE' => 'double',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Hidden)
+				),
+				'COMPANY_ID' => array(
+					'TYPE' => 'crm_company'
+				),
+				'MYCOMPANY_ID' => array(
+					'TYPE' => 'crm_company'
+				),
+				'CONTACT_ID' => array(
+					'TYPE' => 'crm_contact',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Deprecated)
+				),
+				'CONTACT_IDS' => array(
+					'TYPE' => 'crm_contact',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Multiple)
+				),
+				'BEGINDATE' => array(
+					'TYPE' => 'date'
+				),
+				'CLOSEDATE' => array(
+					'TYPE' => 'date'
+				),
+				'ACTUAL_DATE' => array(
+					'TYPE' => 'date'
+				),
+				'OPENED' => array(
+					'TYPE' => 'char'
+				),
+				'CLOSED' => array(
+					'TYPE' => 'char'
+				),
+				'COMMENTS' => array(
+					'TYPE' => 'string',
+					'VALUE_TYPE' => 'html',
+				),
+				'CONTENT' => array(
+					'TYPE' => 'string'
+				),
+				'TERMS' => array(
+					'TYPE' => 'string'
+				),
+				'CLIENT_TITLE' => array(
+					'TYPE' => 'string'
+				),
+				'CLIENT_ADDR' => array(
+					'TYPE' => 'string'
+				),
+				'CLIENT_CONTACT' => array(
+					'TYPE' => 'string'
+				),
+				'CLIENT_EMAIL' => array(
+					'TYPE' => 'string'
+				),
+				'CLIENT_PHONE' => array(
+					'TYPE' => 'string'
+				),
+				'CLIENT_TP_ID' => array(
+					'TYPE' => 'string'
+				),
+				'CLIENT_TPA_ID' => array(
+					'TYPE' => 'string'
+				),
+				'ASSIGNED_BY_ID' => array(
+					'TYPE' => 'user'
+				),
+				'CREATED_BY_ID' => array(
+					'TYPE' => 'user',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
+				),
+				'MODIFY_BY_ID' => array(
+					'TYPE' => 'user',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
+				),
+				'DATE_CREATE' => array(
+					'TYPE' => 'datetime',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
+				),
+				'DATE_MODIFY' => array(
+					'TYPE' => 'datetime',
+					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
+				),
+				'LEAD_ID' => array(
+					'TYPE' => 'crm_lead'
+				),
+				'DEAL_ID' => array(
+					'TYPE' => 'crm_deal'
+				),
+				'PERSON_TYPE_ID' => array(
+					'TYPE' => 'integer'
+				),
+				'LOCATION_ID' => array(
+					'TYPE' => 'location'
+				)
+			);
+
+			// add utm fields
+			self::$FIELD_INFOS = self::$FIELD_INFOS + UtmTable::getUtmFieldsInfo();
+
+			self::$FIELD_INFOS += Crm\Service\Container::getInstance()->getParentFieldManager()->getParentFieldsInfo(\CCrmOwnerType::Quote);
+			self::$FIELD_INFOS += self::getLastActivityAdapter()->getFieldsInfo();
+		}
+
+		return self::$FIELD_INFOS;
+	}
+
 	public static function GetFields($arOptions = null)
 	{
+		$leadJoin = 'LEFT JOIN b_crm_lead L ON '.self::TABLE_ALIAS.'.LEAD_ID = L.ID';
 		$dealJoin = 'LEFT JOIN b_crm_deal D ON '.self::TABLE_ALIAS.'.DEAL_ID = D.ID';
 		$companyJoin = 'LEFT JOIN b_crm_company CO ON '.self::TABLE_ALIAS.'.COMPANY_ID = CO.ID';
 		$contactJoin = 'LEFT JOIN b_crm_contact C ON '.self::TABLE_ALIAS.'.CONTACT_ID = C.ID';
 		$assignedByJoin = 'LEFT JOIN b_user U ON '.self::TABLE_ALIAS.'.ASSIGNED_BY_ID = U.ID';
 		$createdByJoin = 'LEFT JOIN b_user U2 ON '.self::TABLE_ALIAS.'.CREATED_BY_ID = U2.ID';
 		$modifyByJoin = 'LEFT JOIN b_user U3 ON '.self::TABLE_ALIAS.'.MODIFY_BY_ID = U3.ID';
+		$myCompanyJoin = 'LEFT JOIN b_crm_company MC ON '.self::TABLE_ALIAS.'.MYCOMPANY_ID = MC.ID';
 
 		$result = array(
 			'ID' => array('FIELD' => self::TABLE_ALIAS.'.ID', 'TYPE' => 'int'),
 			'TITLE' => array('FIELD' => self::TABLE_ALIAS.'.TITLE', 'TYPE' => 'string'),
-			/*'TYPE_ID' => array('FIELD' => self::TABLE_ALIAS.'.TYPE_ID', 'TYPE' => 'string'),*/
 			'STATUS_ID' => array('FIELD' => self::TABLE_ALIAS.'.STATUS_ID', 'TYPE' => 'string'),
-			/*'PROBABILITY' => array('FIELD' => self::TABLE_ALIAS.'.PROBABILITY', 'TYPE' => 'int'),*/
 			'CURRENCY_ID' => array('FIELD' => self::TABLE_ALIAS.'.CURRENCY_ID', 'TYPE' => 'string'),
 			'EXCH_RATE' => array('FIELD' => self::TABLE_ALIAS.'.EXCH_RATE', 'TYPE' => 'double'),
 			'OPPORTUNITY' => array('FIELD' => self::TABLE_ALIAS.'.OPPORTUNITY', 'TYPE' => 'double'),
@@ -1846,7 +2140,6 @@ class CAllCrmQuote
 			'OPPORTUNITY_ACCOUNT' => array('FIELD' => self::TABLE_ALIAS.'.OPPORTUNITY_ACCOUNT', 'TYPE' => 'double'),
 			'TAX_VALUE_ACCOUNT' => array('FIELD' => self::TABLE_ALIAS.'.TAX_VALUE_ACCOUNT', 'TYPE' => 'double'),
 
-			/*'LEAD_ID' => array('FIELD' => self::TABLE_ALIAS.'.LEAD_ID', 'TYPE' => 'int'),*/
 			'COMPANY_ID' => array('FIELD' => self::TABLE_ALIAS.'.COMPANY_ID', 'TYPE' => 'int'),
 			'COMPANY_TITLE' => array('FIELD' => 'CO.TITLE', 'TYPE' => 'string', 'FROM' => $companyJoin),
 			'COMPANY_INDUSTRY' => array('FIELD' => 'CO.INDUSTRY', 'TYPE' => 'string', 'FROM' => $companyJoin),
@@ -1861,6 +2154,7 @@ class CAllCrmQuote
 
 			'CONTACT_ID' => array('FIELD' => self::TABLE_ALIAS.'.CONTACT_ID', 'TYPE' => 'int'),
 			'CONTACT_TYPE_ID' => array('FIELD' => 'C.TYPE_ID', 'TYPE' => 'string', 'FROM' => $contactJoin),
+			'CONTACT_HONORIFIC' => array('FIELD' => 'C.HONORIFIC', 'TYPE' => 'string', 'FROM' => $contactJoin),
 			'CONTACT_NAME' => array('FIELD' => 'C.NAME', 'TYPE' => 'string', 'FROM' => $contactJoin),
 			'CONTACT_SECOND_NAME' => array('FIELD' => 'C.SECOND_NAME', 'TYPE' => 'string', 'FROM' => $contactJoin),
 			'CONTACT_LAST_NAME' => array('FIELD' => 'C.LAST_NAME', 'TYPE' => 'string', 'FROM' => $contactJoin),
@@ -1871,8 +2165,12 @@ class CAllCrmQuote
 			'CONTACT_SOURCE_ID' => array('FIELD' => 'C.SOURCE_ID', 'TYPE' => 'string', 'FROM' => $contactJoin),
 			'CONTACT_PHOTO' => array('FIELD' => 'C.PHOTO', 'TYPE' => 'string', 'FROM' => $contactJoin),
 
-			'BEGINDATE' => array('FIELD' => self::TABLE_ALIAS.'.BEGINDATE', 'TYPE' => 'datetime'),
-			'CLOSEDATE' => array('FIELD' => self::TABLE_ALIAS.'.CLOSEDATE', 'TYPE' => 'datetime'),
+			'MYCOMPANY_ID' => array('FIELD' => self::TABLE_ALIAS.'.MYCOMPANY_ID', 'TYPE' => 'int'),
+			'MYCOMPANY_TITLE' => array('FIELD' => 'MC.TITLE', 'TYPE' => 'string', 'FROM' => $myCompanyJoin),
+
+			'BEGINDATE' => array('FIELD' => self::TABLE_ALIAS.'.BEGINDATE', 'TYPE' => 'date'),
+			'CLOSEDATE' => array('FIELD' => self::TABLE_ALIAS.'.CLOSEDATE', 'TYPE' => 'date'),
+			'ACTUAL_DATE' => array('FIELD' => self::TABLE_ALIAS.'.ACTUAL_DATE', 'TYPE' => 'date'),
 
 			'ASSIGNED_BY_ID' => array('FIELD' => self::TABLE_ALIAS.'.ASSIGNED_BY_ID', 'TYPE' => 'int'),
 			'ASSIGNED_BY_LOGIN' => array('FIELD' => 'U.LOGIN', 'TYPE' => 'string', 'FROM' => $assignedByJoin),
@@ -1901,18 +2199,10 @@ class CAllCrmQuote
 			'CLOSED' => array('FIELD' => self::TABLE_ALIAS.'.CLOSED', 'TYPE' => 'char'),
 			'COMMENTS' => array('FIELD' => self::TABLE_ALIAS.'.COMMENTS', 'TYPE' => 'string'),
 			'COMMENTS_TYPE' => array('FIELD' => self::TABLE_ALIAS.'.COMMENTS_TYPE', 'TYPE' => 'int'),
-			/*'ADDITIONAL_INFO' => array('FIELD' => self::TABLE_ALIAS.'.ADDITIONAL_INFO', 'TYPE' => 'string'),*/
 
-			/*'ORIGINATOR_ID' => array('FIELD' => self::TABLE_ALIAS.'.ORIGINATOR_ID', 'TYPE' => 'string'),*/ //EXTERNAL SYSTEM THAT OWNS THIS ITEM
-			/*'ORIGIN_ID' => array('FIELD' => self::TABLE_ALIAS.'.ORIGIN_ID', 'TYPE' => 'string'),*/ //ITEM ID IN EXTERNAL SYSTEM
-
-			// For compatibility only
-			/*'PRODUCT_ID' => array('FIELD' => self::TABLE_ALIAS.'.PRODUCT_ID', 'TYPE' => 'string'),*/
-			// Obsolete
-			/*'EVENT_ID' => array('FIELD' => self::TABLE_ALIAS.'.EVENT_ID', 'TYPE' => 'string'),*/
-			/*'EVENT_DATE' => array('FIELD' => self::TABLE_ALIAS.'.EVENT_DATE', 'TYPE' => 'datetime'),*/
-			/*'EVENT_DESCRIPTION' => array('FIELD' => self::TABLE_ALIAS.'.EVENT_DESCRIPTION', 'TYPE' => 'string'),*/
-
+			'WEBFORM_ID' => array('FIELD' => self::TABLE_ALIAS.'.WEBFORM_ID', 'TYPE' => 'int'),
+			'LEAD_ID' => array('FIELD' => self::TABLE_ALIAS.'.LEAD_ID', 'TYPE' => 'int'),
+			'LEAD_TITLE' => array('FIELD' => 'L.TITLE', 'TYPE' => 'string', 'FROM' => $leadJoin),
 			'DEAL_ID' => array('FIELD' => self::TABLE_ALIAS.'.DEAL_ID', 'TYPE' => 'int'),
 			'DEAL_TITLE' => array('FIELD' => 'D.TITLE', 'TYPE' => 'string', 'FROM' => $dealJoin),
 			'QUOTE_NUMBER' => array('FIELD' => self::TABLE_ALIAS.'.QUOTE_NUMBER', 'TYPE' => 'string'),
@@ -1923,7 +2213,7 @@ class CAllCrmQuote
 			'STORAGE_TYPE_ID' => array('FIELD' => self::TABLE_ALIAS.'.STORAGE_TYPE_ID', 'TYPE' => 'int'),
 			'STORAGE_ELEMENT_IDS' => array('FIELD' => self::TABLE_ALIAS.'.STORAGE_ELEMENT_IDS', 'TYPE' => 'string'),
 			'PERSON_TYPE_ID' => array('FIELD' => self::TABLE_ALIAS.'.PERSON_TYPE_ID', 'TYPE' => 'int'),
-			'LOCATION_ID' => array('FIELD' => self::TABLE_ALIAS.'.LOCATION_ID', 'TYPE' => 'int'),
+			'LOCATION_ID' => array('FIELD' => self::TABLE_ALIAS.'.LOCATION_ID', 'TYPE' => 'string'),
 			'CLIENT_TITLE' => array('FIELD' => self::TABLE_ALIAS.'.CLIENT_TITLE', 'TYPE' => 'string'),
 			'CLIENT_ADDR' => array('FIELD' => self::TABLE_ALIAS.'.CLIENT_ADDR', 'TYPE' => 'string'),
 			'CLIENT_CONTACT' => array('FIELD' => self::TABLE_ALIAS.'.CLIENT_CONTACT', 'TYPE' => 'string'),
@@ -1948,48 +2238,120 @@ class CAllCrmQuote
 				$statusJoin = "LEFT JOIN b_crm_status ST ON ST.ENTITY_ID = 'QUOTE_STATUS' AND ".self::TABLE_ALIAS.".STATUS_ID = ST.STATUS_ID";
 				$result['STATUS_SORT'] = array('FIELD' => 'ST.SORT', 'TYPE' => 'int', 'FROM' => $statusJoin);
 			}
-
-			/*if(in_array('ACTIVITY', $additionalFields, true))
-			{
-				$commonActivityJoin = CCrmActivity::PrepareJoin(0, CCrmOwnerType::Quote, self::TABLE_ALIAS, 'AC', 'UAC', 'ACUSR');
-
-				$result['C_ACTIVITY_ID'] = array('FIELD' => 'UAC.ACTIVITY_ID', 'TYPE' => 'int', 'FROM' => $commonActivityJoin);
-				$result['C_ACTIVITY_TIME'] = array('FIELD' => 'UAC.ACTIVITY_TIME', 'TYPE' => 'datetime', 'FROM' => $commonActivityJoin);
-				$result['C_ACTIVITY_SUBJECT'] = array('FIELD' => 'AC.SUBJECT', 'TYPE' => 'string', 'FROM' => $commonActivityJoin);
-				$result['C_ACTIVITY_RESP_ID'] = array('FIELD' => 'AC.RESPONSIBLE_ID', 'TYPE' => 'int', 'FROM' => $commonActivityJoin);
-				$result['C_ACTIVITY_RESP_LOGIN'] = array('FIELD' => 'ACUSR.LOGIN', 'TYPE' => 'string', 'FROM' => $commonActivityJoin);
-				$result['C_ACTIVITY_RESP_NAME'] = array('FIELD' => 'ACUSR.NAME', 'TYPE' => 'string', 'FROM' => $commonActivityJoin);
-				$result['C_ACTIVITY_RESP_LAST_NAME'] = array('FIELD' => 'ACUSR.LAST_NAME', 'TYPE' => 'string', 'FROM' => $commonActivityJoin);
-				$result['C_ACTIVITY_RESP_SECOND_NAME'] = array('FIELD' => 'ACUSR.SECOND_NAME', 'TYPE' => 'string', 'FROM' => $commonActivityJoin);
-
-				$userID = CCrmPerms::GetCurrentUserID();
-				if($userID > 0)
-				{
-					$activityJoin = CCrmActivity::PrepareJoin($userID, CCrmOwnerType::Quote, self::TABLE_ALIAS, 'A', 'UA', '');
-
-					$result['ACTIVITY_ID'] = array('FIELD' => 'UA.ACTIVITY_ID', 'TYPE' => 'int', 'FROM' => $activityJoin);
-					$result['ACTIVITY_TIME'] = array('FIELD' => 'UA.ACTIVITY_TIME', 'TYPE' => 'datetime', 'FROM' => $activityJoin);
-					$result['ACTIVITY_SUBJECT'] = array('FIELD' => 'A.SUBJECT', 'TYPE' => 'string', 'FROM' => $activityJoin);
-				}
-			}*/
 		}
+
+		// add utm fields
+		$result = array_merge($result, UtmTable::getFieldsDescriptionByEntityTypeId(CCrmOwnerType::Quote, self::TABLE_ALIAS));
+
+		$result = array_merge(
+			$result,
+			Crm\Service\Container::getInstance()->getParentFieldManager()->getParentFieldsSqlInfo(
+				CCrmOwnerType::Quote,
+				static::TABLE_ALIAS
+			)
+		);
+
+		$result += self::getLastActivityAdapter()->getFields();
 
 		return $result;
 	}
 
+	public static function CheckStorageElementExists($quoteID, $storageTypeID, $elementID)
+	{
+		global $DB;
+		$quoteID = (int)$quoteID;
+		$storageTypeID = (int)$storageTypeID;
+		$elementID = (int)$elementID;
+
+		$dbResult = $DB->Query(
+			'SELECT 1 FROM '.CCrmQuote::ELEMENT_TABLE_NAME.' WHERE QUOTE_ID = '.$quoteID.' AND STORAGE_TYPE_ID = '.$storageTypeID.' AND ELEMENT_ID = '.$elementID,
+			false,
+			'File: '.__FILE__.'<br/>Line: '.__LINE__
+		);
+		return is_array($dbResult->Fetch());
+	}
+
 	public static function __AfterPrepareSql(/*CCrmEntityListBuilder*/ $sender, $arOrder, $arFilter, $arGroupBy, $arSelectFields)
 	{
-		// Applying filter by PRODUCT_ID
-		$prodID = isset($arFilter['PRODUCT_ROW_PRODUCT_ID']) ? intval($arFilter['PRODUCT_ROW_PRODUCT_ID']) : 0;
-		if($prodID <= 0)
+		$sqlData = array('FROM' => array(), 'WHERE' => array());
+		if(isset($arFilter['SEARCH_CONTENT']) && $arFilter['SEARCH_CONTENT'] !== '')
 		{
-			return false;
+			$tableAlias = $sender->GetTableAlias();
+			$queryWhere = new CSQLWhere();
+			$queryWhere->SetFields(
+				array(
+					'SEARCH_CONTENT' => array(
+						'FIELD_NAME' => "{$tableAlias}.SEARCH_CONTENT",
+						'FIELD_TYPE' => 'string',
+						'JOIN' => false
+					)
+				)
+			);
+			$options = [];
+			if (isset($arFilter['__ENABLE_SEARCH_CONTENT_PHONE_DETECTION']))
+			{
+				$options['ENABLE_PHONE_DETECTION'] = $arFilter['__ENABLE_SEARCH_CONTENT_PHONE_DETECTION'];
+				unset($arFilter['__ENABLE_SEARCH_CONTENT_PHONE_DETECTION']);
+			}
+			$query = $queryWhere->GetQuery(
+				Crm\Search\SearchEnvironment::prepareEntityFilter(
+					CCrmOwnerType::Quote,
+					array(
+						'SEARCH_CONTENT' => Crm\Search\SearchEnvironment::prepareSearchContent($arFilter['SEARCH_CONTENT'], $options)
+					)
+				)
+			);
+			if($query !== '')
+			{
+				$sqlData['WHERE'][] = $query;
+			}
 		}
 
-		$a = $sender->GetTableAlias();
-		return array(
-			'WHERE' => "$a.ID IN (SELECT DP.OWNER_ID from b_crm_product_row DP where DP.OWNER_TYPE = 'Q' and DP.OWNER_ID = $a.ID and DP.PRODUCT_ID = $prodID)"
+		// Applying filter by PRODUCT_ID
+
+		// Applying filter by PRODUCT_ID
+		$operationInfo = Crm\UI\Filter\EntityHandler::findFieldOperation('PRODUCT_ROW_PRODUCT_ID', $arFilter);
+		if(is_array($operationInfo))
+		{
+			$prodID = (int)$operationInfo['CONDITION'];
+			if($prodID > 0 && $operationInfo['OPERATION'] === '=')
+			{
+				$tableAlias = $sender->GetTableAlias();
+				$sqlData['WHERE'][] = "{$tableAlias}.ID IN (SELECT DP.OWNER_ID from b_crm_product_row DP where DP.OWNER_TYPE = 'Q' and DP.OWNER_ID = {$tableAlias}.ID and DP.PRODUCT_ID = {$prodID})";
+			}
+		}
+
+		$operationInfo = Crm\UI\Filter\EntityHandler::findFieldOperation('ASSOCIATED_CONTACT_ID', $arFilter);
+		if(is_array($operationInfo))
+		{
+			if($operationInfo['OPERATION'] === '=')
+			{
+				$sqlData['FROM'][] = QuoteContactTable::prepareFilterJoinSql(
+					CCrmOwnerType::Contact,
+					$operationInfo['CONDITION'],
+					$sender->GetTableAlias()
+				);
+			}
+		}
+
+		Tracking\UI\Filter::buildFilterAfterPrepareSql(
+			$sqlData,
+			$arFilter,
+			\CCrmOwnerType::Quote,
+			$sender->GetTableAlias()
 		);
+
+		$result = array();
+		if(!empty($sqlData['FROM']))
+		{
+			$result['FROM'] = implode(' ', $sqlData['FROM']);
+		}
+		if(!empty($sqlData['WHERE']))
+		{
+			$result['WHERE'] = implode(' AND ', $sqlData['WHERE']);
+		}
+
+		return !empty($result) ? $result : false;
 	}
 	// <-- Service
 
@@ -2008,6 +2370,94 @@ class CAllCrmQuote
 
 		$dbRes = CCrmQuote::GetList(array(), $arFilter);
 		return $dbRes->Fetch();
+	}
+
+	public static function Exists($ID)
+	{
+		$ID = intval($ID);
+		if($ID <= 0)
+		{
+			return false;
+		}
+
+		$dbRes = self::GetList(
+			array(),
+			array('=ID' => $ID, 'CHECK_PERMISSIONS' => 'N'),
+			false,
+			false,
+			array('ID')
+		);
+
+		return is_array($dbRes->Fetch());
+	}
+
+	public static function GetTopIDs($top, $sortType = 'ASC', $userPermissions = null)
+	{
+		$top = (int) $top;
+		if ($top <= 0)
+		{
+			return [];
+		}
+
+		$sortType = mb_strtoupper($sortType) !== 'DESC' ? 'ASC' : 'DESC';
+
+		$permissionSql = '';
+		if (!CCrmPerms::IsAdmin())
+		{
+			if (!$userPermissions)
+			{
+				$userPermissions = CCrmPerms::GetCurrentUserPermissions();
+			}
+
+			$permissionSql = self::BuildPermSql('L', 'READ', ['PERMS' => $userPermissions]);
+		}
+
+		if ($permissionSql === false)
+		{
+			return [];
+		}
+
+		$query = new Bitrix\Main\Entity\Query(Crm\QuoteTable::getEntity());
+		$query->addSelect('ID');
+		$query->addOrder('ID', $sortType);
+		$query->setLimit($top);
+
+		if ($permissionSql !== '')
+		{
+			$permissionSql = mb_substr($permissionSql, 7);
+			$query->where('ID', 'in', new Bitrix\Main\DB\SqlExpression($permissionSql));
+		}
+
+		$rs = $query->exec();
+		$results = [];
+		while ($field = $rs->fetch())
+		{
+			$results[] = (int) $field['ID'];
+		}
+		return $results;
+	}
+
+	public static function GetTotalCount()
+	{
+		if(defined('BX_COMP_MANAGED_CACHE') && $GLOBALS['CACHE_MANAGER']->Read(self::CACHE_TTL, self::TOTAL_COUNT_CACHE_ID, 'b_crm_quote'))
+		{
+			return $GLOBALS['CACHE_MANAGER']->Get(self::TOTAL_COUNT_CACHE_ID);
+		}
+
+		$result = (int)self::GetList(
+			array(),
+			array('CHECK_PERMISSIONS' => 'N'),
+			array(),
+			false,
+			array(),
+			array('ENABLE_ROW_COUNT_THRESHOLD' => false)
+		);
+
+		if(defined('BX_COMP_MANAGED_CACHE'))
+		{
+			$GLOBALS['CACHE_MANAGER']->Set(self::TOTAL_COUNT_CACHE_ID, $result);
+		}
+		return $result;
 	}
 
 	// GetList with navigation support
@@ -2038,9 +2488,26 @@ class CAllCrmQuote
 		return $lb->Prepare($arOrder, $arFilter, $arGroupBy, $arNavStartParams, $arSelectFields, $arOptions);
 	}
 
-	static public function BuildPermSql($sAliasPrefix = self::TABLE_ALIAS, $mPermType = 'READ', $arOptions = array())
+	static public function BuildPermSql($sAliasPrefix = self::TABLE_ALIAS, $mPermType = 'READ', $arOptions = [])
 	{
-		return CCrmPerms::BuildSql('QUOTE', $sAliasPrefix, $mPermType, $arOptions);
+		$userId = null;
+		if (isset($arOptions['PERMS']) && is_object($arOptions['PERMS']))
+		{
+			/** @var \CCrmPerms $arOptions['PERMS'] */
+			$userId = $arOptions['PERMS']->GetUserID();
+		}
+		$builderOptions = OptionsBuilder::makeFromArray((array)$arOptions)
+			->setOperations((array)$mPermType)
+			->setAliasPrefix((string)$sAliasPrefix)
+			->build()
+		;
+
+		$queryBuilder = Crm\Service\Container::getInstance()
+			->getUserPermissions($userId)
+			->createListQueryBuilder(self::$TYPE_NAME, $builderOptions)
+		;
+
+		return $queryBuilder->buildCompatible();
 	}
 
 	public static function LocalComponentCausedUpdater()
@@ -2049,6 +2516,7 @@ class CAllCrmQuote
 
 		$bResult = true;
 		$errMsg = array();
+		$bError = false;
 
 		// at first, check last update version
 		if (COption::GetOptionString('crm', '~CRM_QUOTE_14_1_11', 'N') === 'Y')
@@ -2064,7 +2532,7 @@ class CAllCrmQuote
 			{
 				$arPerms = $CCrmRole->GetRolePerms($arRole['ID']);
 
-				if(!isset($arPerms['QUOTE']) && is_array($arPerms['DEAL']))
+				if(!isset($arPerms['QUOTE']) && is_array($arPerms['DEAL'] ?? null))
 				{
 					foreach ($arPerms['DEAL'] as $key => $value)
 					{
@@ -2083,57 +2551,17 @@ class CAllCrmQuote
 			$arStatus = CCrmStatus::GetStatus('QUOTE_STATUS');
 			if (empty($arStatus))
 			{
-				$CCrmStatus = new CCrmStatus('QUOTE_STATUS');
-				$arAdd = Array(
-					Array(
-						'NAME' => GetMessage('CRM_QUOTE_STATUS_DRAFT'),
-						'STATUS_ID' => 'DRAFT',
-						'SORT' => 10,
-						'SYSTEM' => 'Y'
-					),
-					Array(
-						'NAME' => GetMessage('CRM_QUOTE_STATUS_SENT'),
-						'STATUS_ID' => 'SENT',
-						'SORT' => 20,
-						'SYSTEM' => 'N'
-					),
-					Array(
-						'NAME' => GetMessage('CRM_QUOTE_STATUS_RECEIVED'),
-						'STATUS_ID' => 'RECEIVED',
-						'SORT' => 30,
-						'SYSTEM' => 'N'
-					),
-					Array(
-						'NAME' => GetMessage('CRM_QUOTE_STATUS_APPROVED'),
-						'STATUS_ID' => 'APPROVED',
-						'SORT' => 40,
-						'SYSTEM' => 'Y'
-					),
-					Array(
-						'NAME' => GetMessage('CRM_QUOTE_STATUS_UNANSWERED'),
-						'STATUS_ID' => 'UNANSWERED',
-						'SORT' => 50,
-						'SYSTEM' => 'N'
-					),
-					Array(
-						'NAME' => GetMessage('CRM_QUOTE_STATUS_DECLAINED'),
-						'STATUS_ID' => 'DECLAINED',
-						'SORT' => 60,
-						'SYSTEM' => 'Y'
-					)
-				);
-				foreach($arAdd as $ar)
-					$CCrmStatus->Add($ar);
-				$stackCacheManager->Clear('b_crm_status', 'QUOTE_STATUS');
+				CCrmStatus::InstallDefault('QUOTE_STATUS');
 			}
 			unset($arStatus);
 		}
 		catch (Exception $e)
 		{
 			$errMsg[] = $e->getMessage();
+			$bError = true;
 		}
 
-		if (empty($errMsg))
+		if (!$bError)
 		{
 			COption::SetOptionString('crm', '~CRM_QUOTE_14_1_11', 'Y');
 		}
@@ -2154,28 +2582,20 @@ class CAllCrmQuote
 
 	public static function SaveProductRows($ID, $arRows, $checkPerms = true, $regEvent = true, $syncOwner = true)
 	{
-		$context = array();
-		$arParams = self::GetByID($ID);
-		if(is_array($arParams))
+		$result = CCrmProductRow::SaveRows(self::OWNER_TYPE, $ID, $arRows, null, $checkPerms, $regEvent, $syncOwner);
+		if($result)
 		{
-			if(isset($arParams['CURRENCY_ID']))
-			{
-				$context['CURRENCY_ID'] = $arParams['CURRENCY_ID'];
-			}
-
-			if(isset($arParams['EXCH_RATE']))
-			{
-				$context['EXCH_RATE'] = $arParams['EXCH_RATE'];
-			}
+			$events = GetModuleEvents('crm', 'OnAfterCrmQuoteProductRowsSave');
+			while ($event = $events->Fetch())
+				ExecuteModuleEventEx($event, array($ID, $arRows));
 		}
-
-		return CCrmProductRow::SaveRows(self::OWNER_TYPE, $ID, $arRows, $context, $checkPerms, $regEvent, $syncOwner);
+		return $result;
 	}
 
-	public function SynchronizeProductRows($ID)
+	public static function SynchronizeProductRows($ID, $checkPerms = true)
 	{
 
-		$arTotalInfo = CCrmProductRow::CalculateTotalInfo(CCrmQuote::OWNER_TYPE, $ID);
+		$arTotalInfo = CCrmProductRow::CalculateTotalInfo(CCrmQuote::OWNER_TYPE, $ID, $checkPerms);
 
 		if (is_array($arTotalInfo))
 		{
@@ -2184,7 +2604,7 @@ class CAllCrmQuote
 				'TAX_VALUE' => isset($arTotalInfo['TAX_VALUE']) ? $arTotalInfo['TAX_VALUE'] : 0.0
 			);
 
-			$entity = new CCrmQuote();
+			$entity = new CCrmQuote($checkPerms);
 			$entity->Update($ID, $arFields);
 		}
 	}
@@ -2212,6 +2632,24 @@ class CAllCrmQuote
 		return $result;
 	}
 
+	public static function IsAccessEnabled(CCrmPerms $userPermissions = null)
+	{
+		return self::CheckReadPermission(0, $userPermissions);
+	}
+
+	public static function CheckStatusPermission($statusID, $permissionTypeID, CCrmPerms $userPermissions = null)
+	{
+		if($userPermissions === null)
+		{
+			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
+		}
+
+		$permissionName = \Bitrix\Crm\Security\EntityPermissionType::resolveName($permissionTypeID);
+		$entityAttrs = array("STATUS_ID{$statusID}");
+		return $permissionName !== '' &&
+			($userPermissions->GetPermType(self::$TYPE_NAME, $permissionName, $entityAttrs) > BX_CRM_PERM_NONE);
+	}
+
 	public static function CheckCreatePermission($userPermissions = null)
 	{
 		return CCrmAuthorizationHelper::CheckCreatePermission(self::$TYPE_NAME, $userPermissions);
@@ -2232,6 +2670,52 @@ class CAllCrmQuote
 		return CCrmAuthorizationHelper::CheckReadPermission(self::$TYPE_NAME, $ID, $userPermissions);
 	}
 
+	public static function CheckConvertPermission($ID = 0, $entityTypeID = 0, $userPermissions = null)
+	{
+		if(!$userPermissions)
+		{
+			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
+		}
+
+		if($entityTypeID === CCrmOwnerType::Deal)
+		{
+			return CCrmDeal::CheckCreatePermission($userPermissions);
+		}
+		elseif($entityTypeID === CCrmOwnerType::Invoice)
+		{
+			return CCrmInvoice::CheckCreatePermission($userPermissions);
+		}
+
+		return (CCrmDeal::CheckCreatePermission($userPermissions)
+			|| CCrmInvoice::CheckCreatePermission($userPermissions));
+	}
+
+	public static function PrepareConversionPermissionFlags($ID, array &$params, $userPermissions = null)
+	{
+		if(!$userPermissions)
+		{
+			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
+		}
+
+		$canCreateDeal = CCrmDeal::CheckCreatePermission($userPermissions);
+		$canCreateInvoice = IsModuleInstalled('sale') && CCrmInvoice::CheckCreatePermission($userPermissions);
+
+		$params['CAN_CONVERT_TO_DEAL'] = $canCreateDeal;
+		$params['CAN_CONVERT_TO_INVOICE'] = $canCreateInvoice;
+		$params['CAN_CONVERT'] = $params['CONVERT'] = ($canCreateInvoice || $canCreateDeal);
+
+		$restriction = \Bitrix\Crm\Restriction\RestrictionManager::getConversionRestriction();
+		if($restriction->hasPermission())
+		{
+			$params['CONVERSION_PERMITTED'] = true;
+		}
+		else
+		{
+			$params['CONVERSION_PERMITTED'] = false;
+			$params['CONVERSION_LOCK_SCRIPT'] = $restriction->prepareInfoHelperScript();
+		}
+	}
+
 	public static function GetFinalStatusSort()
 	{
 		return self::GetStatusSort('APPROVED');
@@ -2246,12 +2730,8 @@ class CAllCrmQuote
 			return -1;
 		}
 
-		if(!self::$QUOTE_STATUSES)
-		{
-			self::$QUOTE_STATUSES = CCrmStatus::GetStatus('QUOTE_STATUS');
-		}
-
-		$info = isset(self::$QUOTE_STATUSES[$statusID]) ? self::$QUOTE_STATUSES[$statusID] : null;
+		$statuses = self::GetStatuses();
+		$info = isset($statuses[$statusID]) ? $statuses[$statusID] : null;
 		return is_array($info) && isset($info['SORT']) ? intval($info['SORT']) : -1;
 	}
 
@@ -2270,6 +2750,32 @@ class CAllCrmQuote
 		return (self::GetStatusSort($statusID) > self::GetFinalStatusSort()) ? 'apology' : 'process';
 	}
 
+	public static function GetSemanticID($statusID)
+	{
+		if($statusID === 'APPROVED')
+		{
+			return Bitrix\Crm\PhaseSemantics::SUCCESS;
+		}
+
+		if($statusID === 'DECLAINED')
+		{
+			return Bitrix\Crm\PhaseSemantics::FAILURE;
+		}
+
+		return (self::GetStatusSort($statusID) > self::GetFinalStatusSort())
+			? Bitrix\Crm\PhaseSemantics::FAILURE : Bitrix\Crm\PhaseSemantics::PROCESS;
+	}
+
+	public static function GetStatuses()
+	{
+		if(!self::$QUOTE_STATUSES)
+		{
+			self::$QUOTE_STATUSES = CCrmStatus::GetStatus('QUOTE_STATUS');
+		}
+
+		return self::$QUOTE_STATUSES;
+	}
+
 	public static function PullChange($type, $arParams)
 	{
 		if(!CModule::IncludeModule('pull'))
@@ -2284,7 +2790,7 @@ class CAllCrmQuote
 		}
 		else
 		{
-			$type = strtolower($type);
+			$type = mb_strtolower($type);
 		}
 
 		CPullWatch::AddToStack(
@@ -2300,7 +2806,7 @@ class CAllCrmQuote
 	public static function GetCount($arFilter)
 	{
 		$fields = self::GetFields();
-		return CSqlUtil::GetCount(CCrmDeal::TABLE_NAME, self::TABLE_ALIAS, $fields, $arFilter);
+		return CSqlUtil::GetCount(CCrmQuote::TABLE_NAME, self::TABLE_ALIAS, $fields, $arFilter);
 	}
 
 	public static function GetClientFields()
@@ -2308,13 +2814,54 @@ class CAllCrmQuote
 		return self::$clientFields;
 	}
 
+	public static function ResolvePersonType(array $arFields, array $types = null)
+	{
+		if($types === null)
+		{
+			$types = CCrmPaySystem::getPersonTypeIDs();
+		}
+
+		if(!(isset($types['COMPANY']) && isset($types['CONTACT'])))
+		{
+			return 0;
+		}
+
+		$companyId = isset($arFields['COMPANY_ID']) ? (int)$arFields['COMPANY_ID'] : 0;
+		if($companyId > 0)
+		{
+			return $types['COMPANY'];
+		}
+
+		$contactBindings = isset($arFields['CONTACT_BINDINGS']) && is_array($arFields['CONTACT_BINDINGS'])
+			? $arFields['CONTACT_BINDINGS'] : array();
+		$contactId = \Bitrix\Crm\Binding\EntityBinding::getPrimaryEntityID(CCrmOwnerType::Contact, $contactBindings);
+		if($contactId === 0 && isset($arFields['CONTACT_ID']))
+		{
+			$contactId = (int)$arFields['CONTACT_ID'];
+		}
+		return $contactId > 0 ? $types['CONTACT'] : 0;
+	}
+
 	public static function RewriteClientFields(&$arFields, $bDualFields = true)
 	{
 		$arCompany = $companyEMail = $companyPhone = null;
 		$arContact = $contactEMail = $contactPhone = null;
 
-		$companyId = isset($arFields['COMPANY_ID']) ? intval($arFields['COMPANY_ID']) : 0;
-		$contactId = isset($arFields['CONTACT_ID']) ? intval($arFields['CONTACT_ID']) : 0;
+		$companyId = isset($arFields['COMPANY_ID']) ? (int)$arFields['COMPANY_ID'] : 0;
+		$contactBindings = isset($arFields['CONTACT_BINDINGS']) && is_array($arFields['CONTACT_BINDINGS'])
+			? $arFields['CONTACT_BINDINGS'] : array();
+		$contactId = \Bitrix\Crm\Binding\EntityBinding::getPrimaryEntityID(CCrmOwnerType::Contact, $contactBindings);
+		if($contactId === 0 && isset($arFields['CONTACT_ID']))
+		{
+			$contactId = (int)$arFields['CONTACT_ID'];
+		}
+
+		foreach(self::GetClientFields() as $fieldName)
+		{
+			$arFields[$fieldName] = '';
+			if ($bDualFields)
+				$arFields["~$fieldName"] = '';
+		}
 
 		if ($companyId > 0)
 		{
@@ -2363,8 +2910,12 @@ class CAllCrmQuote
 					}
 					elseif ($k === 'CLIENT_ADDR')
 					{
-						if (isset($arCompany['ADDRESS_LEGAL']))
-							$v = $arCompany['ADDRESS_LEGAL'];
+						$v = AddressFormatter::getSingleInstance()->formatTextComma(
+							CompanyAddress::mapEntityFields(
+								$arCompany,
+								['TYPE_ID' => EntityAddressType::Registered]
+							)
+						);
 					}
 					elseif ($k === 'CLIENT_EMAIL')
 					{
@@ -2398,8 +2949,9 @@ class CAllCrmQuote
 					}
 					elseif ($k === 'CLIENT_ADDR')
 					{
-						if (isset($arContact['ADDRESS']))
-							$v = $arContact['ADDRESS'];
+						$v = AddressFormatter::getSingleInstance()->formatTextComma(
+							ContactAddress::mapEntityFields($arContact)
+						);
 					}
 					elseif ($k === 'CLIENT_EMAIL')
 					{
@@ -2417,6 +2969,153 @@ class CAllCrmQuote
 		}
 	}
 
+	public static function rewriteClientFieldsFromRequisite(&$fields, $requisiteId, $dualFields = true)
+	{
+		$companyId = isset($fields['COMPANY_ID']) ? intval($fields['COMPANY_ID']) : 0;
+		$contactId = isset($fields['CONTACT_ID']) ? intval($fields['CONTACT_ID']) : 0;
+
+		$personTypeContact = 1;
+		$personTypeCompany = 2;
+
+		$personTypeId = 0;
+		if ($companyId > 0)
+			$personTypeId = $personTypeCompany;
+		else if ($contactId > 0)
+			$personTypeId = $personTypeContact;
+
+		$requisiteId = (int)$requisiteId;
+
+		if ($requisiteId > 0 && ($personTypeId == $personTypeContact || $personTypeId == $personTypeCompany))
+		{
+			// requisite values
+			$requisiteValues = array();
+			$requisite = new \Bitrix\Crm\EntityRequisite();
+			$preset = new \Bitrix\Crm\EntityPreset();
+			$row = $requisite->getById($requisiteId);
+			if (is_array($row))
+			{
+				if (isset($row['PRESET_ID']) && $row['PRESET_ID'] > 0)
+				{
+					$presetFields = array();
+					$res = $preset->getList(array(
+						'order' => array('SORT' => 'ASC', 'ID' => 'ASC'),
+						'filter' => array(
+							'=ENTITY_TYPE_ID' => \Bitrix\Crm\EntityPreset::Requisite,
+							'=ID' => (int)$row['PRESET_ID']
+						),
+						'select' => array('ID', 'COUNTRY_ID', 'SETTINGS'),
+						'limit' => 1
+					));
+					if ($presetData = $res->fetch())
+					{
+						if (is_array($presetData['SETTINGS']))
+						{
+							$presetFieldsInfo = $preset->settingsGetFields($presetData['SETTINGS']);
+							foreach ($presetFieldsInfo as $fieldInfo)
+							{
+								if (isset($fieldInfo['FIELD_NAME']))
+									$presetFields[$fieldInfo['FIELD_NAME']] = true;
+							}
+							unset($presetFieldsInfo, $fieldInfo);
+						}
+					}
+					unset($res, $presetData);
+
+					foreach ($row as $fieldName => $fieldValue)
+					{
+						if (isset($presetFields[$fieldName]))
+						{
+							$requisiteValues[$fieldName] = $fieldValue;
+						}
+					}
+					unset($fieldName, $fieldValue, $valueKey);
+
+					// addresses
+					foreach ($requisite->getAddresses($requisiteId) as $addrTypeId => $addrFields)
+					{
+						$valueKey = Bitrix\Crm\EntityRequisite::ADDRESS.'_'.$addrTypeId;
+						$requisiteValues[$valueKey] =
+							AddressFormatter::getSingleInstance()->formatTextComma($addrFields);
+					}
+				}
+			}
+
+			// full name
+			$fullName = isset($requisiteValues['RQ_NAME']) ?
+				trim(strval($requisiteValues['RQ_NAME'])) : '';
+			if (empty($fullName))
+			{
+				$firstName = isset($requisiteValues['RQ_FIRST_NAME'])
+					? trim(strval($requisiteValues['RQ_FIRST_NAME'])) : '';
+				$lastName = isset($requisiteValues['RQ_LAST_NAME']) ?
+					trim(strval($requisiteValues['RQ_LAST_NAME'])) : '';
+				$secondName = isset($requisiteValues['RQ_SECOND_NAME']) ?
+					trim(strval($requisiteValues['RQ_SECOND_NAME'])) : '';
+				if (!empty($firstName) || !empty($lastName) || !empty($secondName))
+				{
+					$fullName = CUser::FormatName(
+						\Bitrix\Crm\Format\PersonNameFormatter::getFormat(),
+						array(
+							'LOGIN' => '[]',
+							'NAME' => $firstName,
+							'LAST_NAME' => $lastName,
+							'SECOND_NAME' => $secondName
+						),
+						true, false
+					);
+					if (!empty($fullName) && $fullName !== '[]')
+					{
+						$requisiteValues['RQ_NAME'] = $fullName;
+					}
+				}
+			}
+
+			$requisiteToClientFieldsMap = array(
+				$personTypeCompany => array(
+					'RQ_COMPANY_NAME' => 'CLIENT_TITLE',
+					'RQ_ADDR_'.EntityAddressType::Registered => 'CLIENT_ADDR',
+					'RQ_INN' => 'CLIENT_TP_ID',
+					'RQ_KPP' => 'CLIENT_TPA_ID',
+					'RQ_CONTACT' => 'CLIENT_CONTACT',
+					'RQ_EMAIL' => 'CLIENT_EMAIL',
+					'RQ_PHONE' => 'CLIENT_PHONE'
+				),
+				$personTypeContact => array(
+					'RQ_NAME' => 'CLIENT_TITLE',
+					'RQ_EMAIL' => 'CLIENT_EMAIL',
+					'RQ_PHONE' => 'CLIENT_PHONE',
+					'RQ_ADDR_'.EntityAddressType::Primary => 'CLIENT_ADDR'
+				),
+			);
+
+			if (is_array($requisiteValues) && !empty($requisiteValues))
+			{
+				foreach ($requisiteToClientFieldsMap[$personTypeId] as $rqIndex => $clientFields)
+				{
+					if (isset($requisiteValues[$rqIndex])
+						&& !empty($requisiteValues[$rqIndex])
+					)
+					{
+						if (!is_array($clientFields))
+							$clientFields = array($clientFields);
+						foreach ($clientFields as $clientFieldName)
+						{
+							if ($dualFields)
+							{
+								$fields['~'.$clientFieldName] = $requisiteValues[$rqIndex];
+								$fields[$clientFieldName] = htmlspecialcharsbx($requisiteValues[$rqIndex]);
+							}
+							else
+							{
+								$fields[$clientFieldName] = $requisiteValues[$rqIndex];
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	public static function MakeClientInfoString($arQuote, $bDualFields = true)
 	{
 		$strClientInfo = '';
@@ -2425,7 +3124,7 @@ class CAllCrmQuote
 		foreach (self::$clientFields as $k)
 		{
 			$index = $bDualFields === true ? '~'.$k : $k;
-			if (isset($arQuote[$index]) && strlen(trim($arQuote[$index])) > 0)
+			if (isset($arQuote[$index]) && trim($arQuote[$index]) <> '')
 				$strClientInfo .= (($i++ > 0) ? ', ' : '').$arQuote[$index];
 		}
 
@@ -2441,7 +3140,7 @@ class CAllCrmQuote
 		$sNumber = 'QUOTE_NUMBER';
 		$arSearchableFields = array(
 			'DATE_CREATE' => GetMessage('CRM_QUOTE_SEARCH_FIELD_DATE_CREATE'),
-			'STATUS_ID' => GetMessage('CRM_QUOTE_SEARCH_FIELD_STATUS_ID'),
+			'STATUS_ID' => GetMessage('CRM_QUOTE_SEARCH_FIELD_STATUS_ID_MSGVER_1'),
 			'BEGINDATE' => GetMessage('CRM_QUOTE_SEARCH_FIELD_BEGINDATE'),
 			'CLOSEDATE' => GetMessage('CRM_QUOTE_SEARCH_FIELD_CLOSEDATE'),
 			'OPPORTUNITY' => GetMessage('CRM_QUOTE_SEARCH_FIELD_OPPORTUNITY'),
@@ -2510,7 +3209,7 @@ class CAllCrmQuote
 			|| (isset($arQuote['ASSIGNED_BY_SECOND_NAME']) && !empty($arQuote['ASSIGNED_BY_SECOND_NAME'])))
 		{
 			$responsibleInfo = CUser::FormatName(
-				$site->GetNameFormat(null, $arQuote['LID']),
+				$site->GetNameFormat(null, $arQuote['LID'] ?? null),
 				array(
 					'LOGIN' => '',
 					'NAME' => isset($arQuote['ASSIGNED_BY_NAME']) ? $arQuote['ASSIGNED_BY_NAME'] : '',
@@ -2527,19 +3226,19 @@ class CAllCrmQuote
 				$sBody .= GetMessage('CRM_QUOTE_SEARCH_FIELD_ASSIGNED_BY_INFO').": $responsibleInfo\n";
 		}
 
-		$sDetailURL = CComponentEngine::MakePathFromTemplate(COption::GetOptionString('crm', 'path_to_'.strtolower($sEntityType).'_show'),
+		$sDetailURL = CComponentEngine::MakePathFromTemplate(COption::GetOptionString('crm', 'path_to_'.mb_strtolower($sEntityType).'_show'),
 			array(
-				strtolower($sEntityType).'_id' => $arQuote['ID']
+				mb_strtolower($sEntityType).'_id' => $arQuote['ID']
 			)
 		);
 
-		$_arAttr = CCrmPerms::GetEntityAttr($sEntityType, $arQuote['ID']);
+		$_arAttr = \Bitrix\Crm\Security\Manager::resolveController($sEntityType)
+			->getPermissionAttributes($sEntityType, [$arQuote['ID']])
+		;
 
 		if (empty($arSite))
 		{
-			$by="sort";
-			$order="asc";
-			$rsSite = $site->GetList($by, $order);
+			$rsSite = $site->GetList();
 			while ($_arSite = $rsSite->Fetch())
 				$arSite[] = $_arSite['ID'];
 		}
@@ -2600,7 +3299,7 @@ class CAllCrmQuote
 			'SITE_ID' => $arSitePath,
 			'PERMISSIONS' => $arAttr,
 			'BODY' => $sBody,
-			'TAGS' => 'crm,'.strtolower($sEntityType).','.GetMessage('CRM_'.$sEntityType)
+			'TAGS' => 'crm,'.mb_strtolower($sEntityType).','.GetMessage('CRM_'.$sEntityType)
 		);
 
 		if ($bReindex)
@@ -2675,7 +3374,7 @@ class CAllCrmQuote
 		}
 		elseif(is_string($field) && $field !== '')
 		{
-			$result = unserialize($field);
+			$result = unserialize($field, ['allowed_classes' => false]);
 		}
 		else
 		{
@@ -2701,7 +3400,7 @@ class CAllCrmQuote
 	{
 		$storageTypeID = intval($storageTypeID);
 		$elementID = intval($elementID);
-		$action = strtoupper(strval($action));
+		$action = mb_strtoupper(strval($action));
 
 		$name = isset($arRow['SUBJECT']) ? strval($arRow['SUBJECT']) : '';
 		if($name === '')
@@ -2731,6 +3430,43 @@ class CAllCrmQuote
 	private static function ResolveStorageElementName($storageTypeID, $elementID)
 	{
 		return \Bitrix\Crm\Integration\StorageManager::getFileName($elementID, $storageTypeID);
+	}
+
+	public static function isActiveQuotePaymentMethodExists()
+	{
+		$result = false;
+
+		$arPersonTypes = CCrmPaySystem::getPersonTypeIDs();
+		foreach ($arPersonTypes as $personTypeName => $personTypeId)
+		{
+			if ($personTypeName === 'COMPANY' || $personTypeName === 'CONTACT' && $personTypeId > 0)
+			{
+				$paySystems = CCrmPaySystem::GetPaySystems($personTypeId);
+				if(is_array($paySystems))
+				{
+					foreach($paySystems as &$paySystem)
+					{
+						$file = isset($paySystem['~PSA_ACTION_FILE']) ? $paySystem['~PSA_ACTION_FILE'] : '';
+						if(preg_match('/quote(_\w+)*$/iu', $file))
+						{
+							$result = true;
+							break;
+						}
+					}
+				}
+			}
+			if ($result)
+			{
+				break;
+			}
+		}
+
+		return $result;
+	}
+
+	public static function isPrintingViaPaymentMethodSupported()
+	{
+		return self::isActiveQuotePaymentMethodExists();
 	}
 
 	public static function HandleStorageElementDeletion($storageTypeID, $elementID)
@@ -2781,16 +3517,16 @@ class CAllCrmQuote
 		$ID = intval($ID);
 		if($ID <= 0)
 		{
-			$APPLICATION->throwException(GetMessage('CRM_QUOTE_ERR_INCORRECT_QUOTE_ID'));
+			$APPLICATION->throwException(GetMessage('CRM_QUOTE_ERR_INCORRECT_QUOTE_ID_MSGVER_1'));
 			return false;
 		}
 
-		$dbRes = self::GetList(array(), array('=ID' => $ID), false, array('nTopCount' => 1), array('STORAGE_TYPE_ID', 'STORAGE_ELEMENT_IDS'));
+		$dbRes = self::GetList(array(), array('=ID' => $ID, 'CHECK_PERMISSIONS' => 'N'), false, array('nTopCount' => 1), array('STORAGE_TYPE_ID', 'STORAGE_ELEMENT_IDS'));
 
 		$arRes = $dbRes->Fetch();
 		if(!is_array($arRes))
 		{
-			$APPLICATION->throwException(GetMessage('CRM_QUOTE_ERR_QUOTE_NOT_FOUND', array('#QUOTE_ID#' => $ID)));
+			$APPLICATION->throwException(GetMessage('CRM_QUOTE_ERR_QUOTE_NOT_FOUND_MSGVER_1', ['#QUOTE_ID#' => $ID]));
 			return false;
 		}
 
@@ -2834,9 +3570,11 @@ class CAllCrmQuote
 	{
 		return array(
 			'COMPANY' => 'CLIENT_TITLE',
+			'COMPANY_NAME' => 'CLIENT_TITLE',
 			'COMPANY_ADR' => 'CLIENT_ADDR',
 			'CONTACT_PERSON' => 'CLIENT_CONTACT',
 			'EMAIL' => 'CLIENT_EMAIL',
+			'INN' => 'CLIENT_TP_ID',
 			'PHONE' => 'CLIENT_PHONE'
 		);
 	}
@@ -2856,6 +3594,17 @@ class CAllCrmQuote
 			return null;
 		}
 
+		CCrmQuote::RewriteClientFields($arQuote, false);
+
+		if (isset($arQuote['TERMS']) && !empty($arQuote['TERMS']))
+		{
+			$arQuote['TERMS'] = TextHelper::convertBbCodeToHtml($arQuote['TERMS']);
+		}
+		if (isset($arQuote['CONTENT']) && !empty($arQuote['CONTENT']))
+		{
+			$arQuote['CONTENT'] = TextHelper::convertBbCodeToHtml($arQuote['CONTENT']);
+		}
+
 		$fieldMap = self::GetSaleOrderMap();
 		$order = array();
 		foreach($fieldMap as $orderFileldID => $fileldID)
@@ -2863,6 +3612,8 @@ class CAllCrmQuote
 			if(!is_array($fileldID))
 			{
 				$order[$orderFileldID] = isset($arQuote[$fileldID]) ? $arQuote[$fileldID] : '';
+				if ($fileldID === 'CURRENCY_ID' && empty($order[$orderFileldID]))
+					$order[$orderFileldID] = CCrmCurrency::GetBaseCurrencyID();
 			}
 			else
 			{
@@ -2913,12 +3664,12 @@ class CAllCrmQuote
 			{
 				$fieldValue = GetMessage(intval($fieldValue) > 0 ? 'MAIN_YES' : 'MAIN_NO');
 			}
-			$properties[$name] = $userField['EDIT_FORM_LABEL'].': '.$fieldValue;
+			$properties[$name] = $fieldValue;
 		}
 		unset($userField);
 
 		$productRows = self::LoadProductRows($ID);
-		$currencyID = isset($arQuote['CURRENCY_ID']) ? $arQuote['CURRENCY_ID'] : '';
+		$currencyID = isset($arQuote['CURRENCY_ID']) ? $arQuote['CURRENCY_ID'] : CCrmCurrency::GetBaseCurrencyID();
 
 		$calculatedOrder = CCrmSaleHelper::Calculate(
 			$productRows,
@@ -2926,7 +3677,7 @@ class CAllCrmQuote
 			$personTypeID,
 			false,
 			SITE_ID,
-			array('LOCATION_ID' => isset($arQuote['LOCATION_ID']) ? intval($arQuote['LOCATION_ID']) : 0)
+			array('LOCATION_ID' => isset($arQuote['LOCATION_ID']) ? $arQuote['LOCATION_ID'] : '')
 		);
 
 		$taxList = isset($calculatedOrder['TAX_LIST']) ? $calculatedOrder['TAX_LIST'] : array();
@@ -2936,11 +3687,620 @@ class CAllCrmQuote
 		}
 		unset($taxInfo);
 
+		if (CModule::IncludeModule('iblock'))
+		{
+			if (isset($calculatedOrder['BASKET_ITEMS']) && $calculatedOrder['BASKET_ITEMS'])
+			{
+				$productProps = array();
+				$productIds = array();
+				foreach ($calculatedOrder['BASKET_ITEMS'] as $i => $row)
+				{
+					$productIds[] = $row['PRODUCT_ID'];
+					$productProps[$row['PRODUCT_ID']] = array();
+				}
+
+				if ($productIds)
+				{
+					$productIdsByCatalogMap = array();
+					$dbRes = \CCrmProduct::GetList(array(), array('ID' => $productIds), array('ID', 'CATALOG_ID'));
+					while ($data = $dbRes->Fetch())
+					{
+						$catalogId = isset($data['CATALOG_ID']) ? intval($data['CATALOG_ID']) : \CCrmCatalog::EnsureDefaultExists();
+						if (!isset($productIdsByCatalogMap[$catalogId]))
+							$productIdsByCatalogMap[$catalogId] = array();
+
+						$productIdsByCatalogMap[$catalogId][] = $data['ID'];
+					}
+
+					if ($productIdsByCatalogMap)
+					{
+						foreach ($productIdsByCatalogMap as $catalogId => $ids)
+							CIBlockElement::GetPropertyValuesArray($productProps, $catalogId, array('ID' => $ids));
+					}
+				}
+
+				foreach ($calculatedOrder['BASKET_ITEMS'] as $i => $row)
+				{
+					foreach ($productProps[$row['PRODUCT_ID']] as $property)
+						$calculatedOrder['BASKET_ITEMS'][$i]['PROPERTY_'.$property['ID']] = $property['VALUE'];
+				}
+			}
+		}
+
+		$requisiteUserFieldsInfo = null;
+
+		// requisite identifiers
+		$requisiteId = 0;
+		$bankDetailId = 0;
+		$mcRequisiteId = 0;
+		$mcBankDetailId = 0;
+		if ($row = \Bitrix\Crm\Requisite\EntityLink::getList(
+			array(
+				'filter' => array(
+					'=ENTITY_TYPE_ID' => CCrmOwnerType::Quote,
+					'=ENTITY_ID' => $ID
+				),
+				'select' => array('REQUISITE_ID', 'BANK_DETAIL_ID', 'MC_REQUISITE_ID', 'MC_BANK_DETAIL_ID'),
+				'limit' => 1
+			)
+		)->fetch())
+		{
+			if (isset($row['REQUISITE_ID']) && $row['REQUISITE_ID'] > 0)
+				$requisiteId = (int)$row['REQUISITE_ID'];
+			if (isset($row['BANK_DETAIL_ID']) && $row['BANK_DETAIL_ID'] > 0)
+				$bankDetailId = (int)$row['BANK_DETAIL_ID'];
+			if (isset($row['MC_REQUISITE_ID']) && $row['MC_REQUISITE_ID'] > 0)
+				$mcRequisiteId = (int)$row['MC_REQUISITE_ID'];
+			if (isset($row['MC_BANK_DETAIL_ID']) && $row['MC_BANK_DETAIL_ID'] > 0)
+				$mcBankDetailId = (int)$row['MC_BANK_DETAIL_ID'];
+		}
+
+		if (!isset($arQuote['MYCOMPANY_ID']) || $arQuote['MYCOMPANY_ID'] <= 0)
+		{
+			$defLink = Bitrix\Crm\Requisite\EntityLink::getDefaultMyCompanyRequisiteLink();
+			if (is_array($defLink))
+			{
+				$arQuote['MYCOMPANY_ID'] = isset($defLink['MYCOMPANY_ID']) ? (int)$defLink['MYCOMPANY_ID'] : 0;
+				$mcRequisiteId = isset($defLink['MC_REQUISITE_ID']) ? (int)$defLink['MC_REQUISITE_ID'] : 0;
+				$mcBankDetailId = isset($defLink['MC_BANK_DETAIL_ID']) ? (int)$defLink['MC_BANK_DETAIL_ID'] : 0;
+			}
+			unset($defLink);
+		}
+
+		// requisite values
+		$requisiteValues = array();
+		$presetCountryId = 0;
+		if ($requisiteId > 0)
+		{
+			$requisite = new \Bitrix\Crm\EntityRequisite();
+			$preset = new \Bitrix\Crm\EntityPreset();
+			if ($requisiteUserFieldsInfo === null)
+				$requisiteUserFieldsInfo = $requisite->getFormUserFieldsInfo();
+			$row = $requisite->getList(
+				array('select' => array('*', 'UF_*'), 'filter' => array('=ID' => $requisiteId), 'limit' => 1)
+			)->fetch();
+			if (is_array($row))
+			{
+				if (isset($row['PRESET_ID']) && $row['PRESET_ID'] > 0)
+				{
+					$presetFields = array();
+					$res = $preset->getList(array(
+						'order' => array('SORT' => 'ASC', 'ID' => 'ASC'),
+						'filter' => array(
+							'=ENTITY_TYPE_ID' => \Bitrix\Crm\EntityPreset::Requisite,
+							'=ID' => (int)$row['PRESET_ID']
+						),
+						'select' => array('ID', 'COUNTRY_ID', 'SETTINGS'),
+						'limit' => 1
+					));
+					if ($presetData = $res->fetch())
+					{
+						if (is_array($presetData['SETTINGS']))
+						{
+							$presetFieldsInfo = $preset->settingsGetFields($presetData['SETTINGS']);
+							foreach ($presetFieldsInfo as $fieldInfo)
+							{
+								if (isset($fieldInfo['FIELD_NAME']))
+									$presetFields[$fieldInfo['FIELD_NAME']] = true;
+							}
+							unset($presetFieldsInfo, $fieldInfo);
+						}
+
+						$presetCountryId = (int)$presetData['COUNTRY_ID'];
+					}
+					unset($res, $presetData);
+
+					if ($presetCountryId > 0)
+					{
+						foreach ($row as $fieldName => $fieldValue)
+						{
+							if (isset($presetFields[$fieldName]))
+							{
+								if (is_array($requisiteUserFieldsInfo[$fieldName])
+									&& $requisiteUserFieldsInfo[$fieldName]['type'] === 'boolean')
+								{
+									$requisiteValues[$fieldName.'|'.$presetCountryId] = $fieldValue ?
+										GetMessage('MAIN_YES') : GetMessage('MAIN_NO');
+								}
+								elseif ($requisite->isRqListField($fieldName))
+								{
+									$requisiteValues[$fieldName.'|'.$presetCountryId] =
+										$requisite->getRqListFieldValueTitle(
+											$fieldName,
+											$presetCountryId,
+											(string)$fieldValue
+										)
+									;
+								}
+								else
+								{
+									$requisiteValues[$fieldName.'|'.$presetCountryId] = $fieldValue;
+								}
+							}
+						}
+						unset($fieldName, $fieldValue, $valueKey);
+
+						// addresses
+						foreach ($requisite->getAddresses($requisiteId) as $addrTypeId => $addrFields)
+						{
+							$valueKey = Bitrix\Crm\EntityRequisite::ADDRESS.'_'.$addrTypeId.'|'.$presetCountryId;
+							$addressLines = explode(
+								"\n",
+								str_replace(
+									["\r\n", "\n", "\r"], "\n",
+									AddressFormatter::getSingleInstance()->formatTextMultiline($addrFields)
+								)
+							);
+							$requisiteValues[$valueKey] = is_array($addressLines) ? $addressLines : [];
+							unset($valueKey, $addressLines);
+						}
+					}
+				}
+			}
+		}
+
+		// full name
+		if ($presetCountryId > 0)
+		{
+			$fullName = isset($requisiteValues['RQ_NAME|'.$presetCountryId]) ?
+				trim(strval($requisiteValues['RQ_NAME|'.$presetCountryId])) : '';
+			if (empty($fullName))
+			{
+				$firstName = isset($requisiteValues['RQ_FIRST_NAME|'.$presetCountryId])
+					? trim(strval($requisiteValues['RQ_FIRST_NAME|'.$presetCountryId])) : '';
+				$lastName = isset($requisiteValues['RQ_LAST_NAME|'.$presetCountryId]) ?
+					trim(strval($requisiteValues['RQ_LAST_NAME|'.$presetCountryId])) : '';
+				$secondName = isset($requisiteValues['RQ_SECOND_NAME|'.$presetCountryId]) ?
+					trim(strval($requisiteValues['RQ_SECOND_NAME|'.$presetCountryId])) : '';
+				if (!empty($firstName) || !empty($lastName) || !empty($secondName))
+				{
+					$fullName = CUser::FormatName(
+						\Bitrix\Crm\Format\PersonNameFormatter::getFormat(),
+						array(
+							'LOGIN' => '[]',
+							'NAME' => $firstName,
+							'LAST_NAME' => $lastName,
+							'SECOND_NAME' => $secondName
+						),
+						true, false
+					);
+					if (!empty($fullName) && $fullName !== '[]')
+					{
+						$requisiteValues['RQ_NAME|'.$presetCountryId] = $fullName;
+					}
+				}
+			}
+		}
+
+		// bank detail values
+		$bankDetailValues = array();
+		if ($bankDetailId > 0)
+		{
+			$bankDetail = new \Bitrix\Crm\EntityBankDetail();
+			$row = $bankDetail->getById($bankDetailId);
+			if (is_array($row))
+			{
+				$countryId = isset($row['COUNTRY_ID']) ? (int)$row['COUNTRY_ID'] : 0;
+				if ($countryId > 0)
+				{
+					foreach ($row as $fieldName => $fieldValue)
+					{
+						$bankDetailValues[$fieldName.'|'.$countryId] = $fieldValue;
+					}
+					unset($fieldName, $fieldValue, $valueKey);
+				}
+			}
+		}
+
+		// company values
+		$companyValues = array();
+		$companyId = isset($arQuote['COMPANY_ID']) ? intval($arQuote['COMPANY_ID']) : 0;
+		if ($companyId > 0)
+		{
+			$res = CCrmCompany::GetListEx(
+				array(),
+				array('ID' => $companyId),
+				false,
+				array('nTopCount' => 1),
+				array('ID', 'TITLE')
+			);
+			$row = $res->Fetch();
+			if (is_array($row))
+			{
+				$companyValues = $row;
+				$res = CCrmFieldMulti::GetList(
+					array('ID' => 'asc'),
+					array('ENTITY_ID' => 'COMPANY', 'ELEMENT_ID' => $companyId)
+				);
+				$skip = array();
+				while($row = $res->Fetch())
+				{
+					if (($row['TYPE_ID'] === 'PHONE' || $row['TYPE_ID'] === 'EMAIL')
+						&& !isset($skip[$row['COMPLEX_ID']]))
+					{
+						$companyValues[$row['COMPLEX_ID']] = $row['VALUE'];
+						$skip[$row['COMPLEX_ID']] = true;
+					}
+				}
+			}
+		}
+
+		// contact values
+		$contactValues = array();
+		$contactId = isset($arQuote['CONTACT_ID']) ? intval($arQuote['CONTACT_ID']) : 0;
+		if ($contactId > 0)
+		{
+			$res = CCrmContact::GetListEx(
+				array(),
+				array('ID' => $contactId),
+				false,
+				array('nTopCount' => 1),
+				array('ID', 'NAME', 'SECOND_NAME', 'LAST_NAME', 'HONORIFIC')
+			);
+			$row = $res->Fetch();
+			if (is_array($row))
+			{
+				$contactValues['ID'] = $row['ID'];
+				$contactValues['FULL_NAME'] = CCrmContact::PrepareFormattedName($row);
+				$res = CCrmFieldMulti::GetList(
+					array('ID' => 'asc'),
+					array('ENTITY_ID' => 'CONTACT', 'ELEMENT_ID' => $contactId)
+				);
+				$skip = array();
+				while($row = $res->Fetch())
+				{
+					if (($row['TYPE_ID'] === 'PHONE' || $row['TYPE_ID'] === 'EMAIL')
+						&& !isset($skip[$row['COMPLEX_ID']]))
+					{
+						$contactValues[$row['COMPLEX_ID']] = $row['VALUE'];
+						$skip[$row['COMPLEX_ID']] = true;
+					}
+				}
+			}
+		}
+
+		// backward compatibility
+		$countryIds = array();
+		if ($presetCountryId > 0)
+			$countryIds[] = $presetCountryId;
+		else
+			$countryIds = \Bitrix\Crm\EntityRequisite::getAllowedRqFieldCountries();
+		$personTypeCode = '';
+		$arPersonTypes = CCrmPaySystem::getPersonTypeIDs();
+		if ($arPersonTypes['COMPANY'] != "" && $arPersonTypes['CONTACT'] != "")
+		{
+			$personTypeCompany = $arPersonTypes['COMPANY'];
+			$personTypeContact = $arPersonTypes['CONTACT'];
+
+			$personTypeId = $personTypeContact;
+			$personTypeCode = 'CONTACT';
+			if ($companyId > 0)
+			{
+				$personTypeId = $personTypeCompany;
+				$personTypeCode = 'COMPANY';
+			}
+			$requisiteConverted = (COption::GetOptionString('crm', '~CRM_TRANSFER_REQUISITES_TO_'.$personTypeCode, 'N') !== 'Y');
+			if ($requisiteConverted)
+			{
+				$propsToRequisiteMap = array(
+					$personTypeCompany => array(
+						'COMPANY_NAME' => 'RQ_COMPANY_NAME',
+						'COMPANY' => 'RQ_COMPANY_NAME',
+						'COMPANY_ADR' => 'RQ_ADDR_'.EntityAddressType::Registered,
+						'INN' => 'RQ_INN',
+						'KPP' => 'RQ_KPP',
+						'CONTACT_PERSON' => 'RQ_CONTACT',
+						'EMAIL' => 'RQ_EMAIL',
+						'PHONE' => 'RQ_PHONE'
+					),
+					$personTypeContact => array(
+						'FIO' => 'RQ_NAME',
+						'EMAIL' => 'RQ_EMAIL',
+						'PHONE' => 'RQ_PHONE',
+						'ADDRESS' => 'RQ_ADDR_'.EntityAddressType::Primary,
+					),
+				);
+
+				if (is_array($properties) && !empty($properties))
+				{
+					foreach ($countryIds as $countryId)
+					{
+						foreach ($propsToRequisiteMap[$personTypeId] as $propertyCode => $rqIndex)
+						{
+							$rqIndex .= '|'.$countryId;
+							if (isset($properties[$propertyCode])
+								&& !empty($properties[$propertyCode])
+								&& !isset($requisiteValues[$rqIndex]))
+							{
+								$requisiteValues[$rqIndex] = $properties[$propertyCode];
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// company full name
+		$companyFullName = '';
+		if ($presetCountryId > 0)
+		{
+			$companyFullName = isset($requisiteValues['RQ_COMPANY_FULL_NAME|'.$presetCountryId]) ?
+				trim(strval($requisiteValues['RQ_COMPANY_FULL_NAME|'.$presetCountryId])) : '';
+
+			if (empty($companyFullName))
+			{
+				$companyShortName = isset($requisiteValues['RQ_COMPANY_NAME|'.$presetCountryId]) ?
+					trim(strval($requisiteValues['RQ_COMPANY_NAME|'.$presetCountryId])) : '';
+
+				if (!empty($companyShortName))
+				{
+					$companyFullName = $companyShortName;
+				}
+			}
+		}
+		if (empty($companyFullName))
+		{
+			$companyName = isset($companyValues['TITLE']) ? trim(strval($companyValues['TITLE'])) : '';
+
+			if (!empty($companyName))
+				$companyFullName = $companyName;
+		}
+		if (!empty($companyFullName))
+		{
+			foreach ($countryIds as $countryId)
+				$requisiteValues['RQ_COMPANY_FULL_NAME|'.$countryId] = $companyFullName;
+		}
+		unset($companyFullName, $companyShortName, $companyName);
+
+		// my company requisite values
+		$mcRequisiteValues = array();
+		$mcPresetCountryId = 0;
+		if ($mcRequisiteId > 0)
+		{
+			$requisite = new \Bitrix\Crm\EntityRequisite();
+			$preset = new \Bitrix\Crm\EntityPreset();
+			if ($requisiteUserFieldsInfo === null)
+				$requisiteUserFieldsInfo = $requisite->getFormUserFieldsInfo();
+			$row = $requisite->getList(
+				array('select' => array('*', 'UF_*'), 'filter' => array('=ID' => $mcRequisiteId), 'limit' => 1)
+			)->fetch();
+			if (is_array($row))
+			{
+				if (isset($row['PRESET_ID']) && $row['PRESET_ID'] > 0)
+				{
+					$presetFields = array();
+					$res = $preset->getList(array(
+						'order' => array('SORT' => 'ASC', 'ID' => 'ASC'),
+						'filter' => array(
+							'=ENTITY_TYPE_ID' => \Bitrix\Crm\EntityPreset::Requisite,
+							'=ID' => (int)$row['PRESET_ID']
+						),
+						'select' => array('ID', 'COUNTRY_ID', 'SETTINGS'),
+						'limit' => 1
+					));
+					if ($presetData = $res->fetch())
+					{
+						if (is_array($presetData['SETTINGS']))
+						{
+							$presetFieldsInfo = $preset->settingsGetFields($presetData['SETTINGS']);
+							foreach ($presetFieldsInfo as $fieldInfo)
+							{
+								if (isset($fieldInfo['FIELD_NAME']))
+									$presetFields[$fieldInfo['FIELD_NAME']] = true;
+							}
+							unset($presetFieldsInfo, $fieldInfo);
+						}
+
+						$mcPresetCountryId = (int)$presetData['COUNTRY_ID'];
+					}
+					unset($res, $presetData);
+
+					if ($mcPresetCountryId > 0)
+					{
+						foreach ($row as $fieldName => $fieldValue)
+						{
+							if (isset($presetFields[$fieldName]))
+							{
+								if (is_array($requisiteUserFieldsInfo[$fieldName])
+									&& $requisiteUserFieldsInfo[$fieldName]['type'] === 'boolean')
+								{
+									$mcRequisiteValues[$fieldName.'|'.$mcPresetCountryId] = $fieldValue ?
+										GetMessage('MAIN_YES') : GetMessage('MAIN_NO');
+								}
+								elseif ($requisite->isRqListField($fieldName))
+								{
+									$mcRequisiteValues[$fieldName.'|'.$mcPresetCountryId] =
+										$requisite->getRqListFieldValueTitle(
+											$fieldName,
+											$mcPresetCountryId,
+											(string)$fieldValue
+										)
+									;
+								}
+								else
+								{
+									$mcRequisiteValues[$fieldName.'|'.$mcPresetCountryId] = $fieldValue;
+								}
+							}
+						}
+						unset($fieldName, $fieldValue, $valueKey);
+
+						// addresses
+						foreach ($requisite->getAddresses($mcRequisiteId) as $addrTypeId => $addrFields)
+						{
+							$valueKey = Bitrix\Crm\EntityRequisite::ADDRESS.'_'.$addrTypeId.'|'.$mcPresetCountryId;
+							$addressLines = explode(
+								"\n",
+								str_replace(
+									["\r\n", "\n", "\r"], "\n",
+									AddressFormatter::getSingleInstance()->formatTextMultiline($addrFields)
+								)
+							);
+							$mcRequisiteValues[$valueKey] = is_array($addressLines) ? $addressLines : [];
+							unset($valueKey, $addressLines);
+						}
+					}
+				}
+			}
+		}
+
+		// full name
+		if ($mcPresetCountryId > 0)
+		{
+			$fullName = isset($mcRequisiteValues['RQ_NAME|'.$mcPresetCountryId]) ?
+				trim(strval($mcRequisiteValues['RQ_NAME|'.$mcPresetCountryId])) : '';
+			if (empty($fullName))
+			{
+				$firstName = isset($mcRequisiteValues['RQ_FIRST_NAME|'.$mcPresetCountryId])
+					? trim(strval($mcRequisiteValues['RQ_FIRST_NAME|'.$mcPresetCountryId])) : '';
+				$lastName = isset($mcRequisiteValues['RQ_LAST_NAME|'.$mcPresetCountryId]) ?
+					trim(strval($mcRequisiteValues['RQ_LAST_NAME|'.$mcPresetCountryId])) : '';
+				$secondName = isset($mcRequisiteValues['RQ_SECOND_NAME|'.$mcPresetCountryId]) ?
+					trim(strval($mcRequisiteValues['RQ_SECOND_NAME|'.$mcPresetCountryId])) : '';
+				if (!empty($firstName) || !empty($lastName) || !empty($secondName))
+				{
+					$fullName = CUser::FormatName(
+						\Bitrix\Crm\Format\PersonNameFormatter::getFormat(),
+						array(
+							'LOGIN' => '[]',
+							'NAME' => $firstName,
+							'LAST_NAME' => $lastName,
+							'SECOND_NAME' => $secondName
+						),
+						true, false
+					);
+					if (!empty($fullName) && $fullName !== '[]')
+					{
+						$mcRequisiteValues['RQ_NAME|'.$mcPresetCountryId] = $fullName;
+					}
+				}
+			}
+		}
+
+		// my company bank detail values
+		$mcBankDetailValues = array();
+		if ($mcBankDetailId > 0)
+		{
+			$bankDetail = new \Bitrix\Crm\EntityBankDetail();
+			$row = $bankDetail->getById($mcBankDetailId);
+			if (is_array($row))
+			{
+				$countryId = isset($row['COUNTRY_ID']) ? (int)$row['COUNTRY_ID'] : 0;
+				if ($countryId > 0)
+				{
+					foreach ($row as $fieldName => $fieldValue)
+					{
+						$mcBankDetailValues[$fieldName.'|'.$countryId] = $fieldValue;
+					}
+					unset($fieldName, $fieldValue, $valueKey);
+				}
+			}
+		}
+
+		// my company values
+		$myCompanyValues = array();
+		$myCompanyId = isset($arQuote['MYCOMPANY_ID']) ? intval($arQuote['MYCOMPANY_ID']) : 0;
+		if ($myCompanyId > 0)
+		{
+			$res = CCrmCompany::GetListEx(
+				array(),
+				array('ID' => $myCompanyId),
+				false,
+				array('nTopCount' => 1),
+				array('ID', 'TITLE')
+			);
+			$row = $res->Fetch();
+			if (is_array($row))
+			{
+				$myCompanyValues = $row;
+				$res = CCrmFieldMulti::GetList(
+					array('ID' => 'asc'),
+					array('ENTITY_ID' => 'COMPANY', 'ELEMENT_ID' => $myCompanyId)
+				);
+				$skip = array();
+				while($row = $res->Fetch())
+				{
+					if (($row['TYPE_ID'] === 'PHONE' || $row['TYPE_ID'] === 'EMAIL')
+						&& !isset($skip[$row['COMPLEX_ID']]))
+					{
+						$myCompanyValues[$row['COMPLEX_ID']] = $row['VALUE'];
+						$skip[$row['COMPLEX_ID']] = true;
+					}
+				}
+			}
+		}
+
+		// my company full name
+		$myCompanyFullName = '';
+		if ($mcPresetCountryId > 0)
+		{
+			$myCompanyFullName = isset($mcRequisiteValues['RQ_COMPANY_FULL_NAME|'.$mcPresetCountryId]) ?
+				trim(strval($mcRequisiteValues['RQ_COMPANY_FULL_NAME|'.$mcPresetCountryId])) : '';
+
+			if (empty($myCompanyFullName))
+			{
+				$myCompanyShortName = isset($mcRequisiteValues['RQ_COMPANY_NAME|'.$mcPresetCountryId]) ?
+					trim(strval($mcRequisiteValues['RQ_COMPANY_NAME|'.$mcPresetCountryId])) : '';
+
+				if (!empty($myCompanyShortName))
+				{
+					$myCompanyFullName = $myCompanyShortName;
+				}
+			}
+		}
+		if (empty($myCompanyFullName))
+		{
+			$myCompanyName = isset($myCompanyValues['TITLE']) ? trim(strval($myCompanyValues['TITLE'])) : '';
+			if (!empty($myCompanyName))
+				$myCompanyFullName = $myCompanyName;
+		}
+		if (!empty($myCompanyFullName))
+		{
+			foreach ($countryIds as $countryId)
+				$mcRequisiteValues['RQ_COMPANY_FULL_NAME|'.$countryId] = $myCompanyFullName;
+		}
+		unset($myCompanyFullName, $myCompanyShortName, $myCompanyName);
+
 		return array(
 			'ORDER' => $order,
 			'PROPERTIES' => $properties,
-			'CART_ITEMS' => $calculatedOrder['BASKET_ITEMS'],
-			'TAX_LIST' => $taxList
+			'CART_ITEMS' => $calculatedOrder['BASKET_ITEMS'] ?? null,
+			'TAX_LIST' => $taxList,
+			'REQUISITE' => $requisiteValues,
+			'BANK_DETAIL' => $bankDetailValues,
+			'CRM_COMPANY' => $companyValues,
+			'CRM_CONTACT' => $contactValues,
+			'MC_REQUISITE' => $mcRequisiteValues,
+			'MC_BANK_DETAIL' => $mcBankDetailValues,
+			'CRM_MYCOMPANY' => $myCompanyValues,
+			'PAYMENT' => array(
+				'ID' => 0,
+				'PAY_SYSTEM_ID' => 0,
+				'SUM' => isset($order['SHOULD_PAY']) ? $order['SHOULD_PAY'] : 0.0,
+				'PAID' => '',
+				'DATE_BILL' => isset($order['DATE_BILL']) ? $order['DATE_BILL'] : null
+			),
+			'SHIPMENT' => array('DELIVERY_ID' => 0)
 		);
 	}
 	public static function Rebind($ownerTypeID, $oldID, $newID)
@@ -2952,7 +4312,15 @@ class CAllCrmQuote
 		$newID = intval($newID);
 		$tableName = CCrmQuote::TABLE_NAME;
 
-		if($ownerTypeID === CCrmOwnerType::Contact)
+		if($ownerTypeID === CCrmOwnerType::Lead)
+		{
+			$DB->Query(
+				"UPDATE {$tableName} SET LEAD_ID = {$newID} WHERE LEAD_ID = {$oldID}",
+				false,
+				'File: '.__FILE__.'<br>Line: '.__LINE__
+			);
+		}
+		elseif($ownerTypeID === CCrmOwnerType::Contact)
 		{
 			$DB->Query(
 				"UPDATE {$tableName} SET CONTACT_ID = {$newID} WHERE CONTACT_ID = {$oldID}",
@@ -3002,11 +4370,272 @@ class CAllCrmQuote
 			$infos = array();
 			foreach($storageElementIDs as $elementID)
 			{
-				$infos[] = StorageManager::getFileInfo($elementID, $storageTypeID);
+				$id = (isset($arFields['ID']) && $arFields['ID'] > 0) ? (int)$arFields['ID'] : 0;
+				$infos[] = StorageManager::getFileInfo(
+					$elementID, $storageTypeID, false,
+					array('OWNER_TYPE_ID' => \CCrmOwnerType::Quote, 'OWNER_ID' => $id)
+				);
 			}
 			$arFields[$storageTypeID === StorageType::Disk ? 'DISK_FILES' : 'WEBDAV_ELEMENTS'] = &$infos;
 			unset($infos);
 		}
+	}
+
+	public static function PrepareFilter(&$arFilter, $arFilter2Logic = null)
+	{
+		//shameless copy-paste from the crm.quote.list component
+		if(!is_array($arFilter))
+			return;
+
+		if(!is_array($arFilter2Logic))
+			$arFilter2Logic = array();
+
+		static $arImmutableFilters = array(
+			'FM', 'ID', 'ASSIGNED_BY_ID', 'CURRENCY_ID',
+			'CONTACT_ID', 'CONTACT_ID_value', 'ASSOCIATED_CONTACT_ID',
+			'COMPANY_ID', 'COMPANY_ID_value',
+			'LEAD_ID', 'LEAD_ID_value',
+			'DEAL_ID', 'DEAL_ID_value',
+			'MYCOMPANY_ID', 'MYCOMPANY_ID_value',
+			'CREATED_BY_ID', 'MODIFY_BY_ID', 'PRODUCT_ROW_PRODUCT_ID',
+			'WEBFORM_ID',
+			'SEARCH_CONTENT',
+			'FILTER_ID', 'FILTER_APPLIED', 'PRESET_ID'
+		);
+		foreach ($arFilter as $k => $v)
+		{
+			if(in_array($k, $arImmutableFilters, true))
+			{
+				continue;
+			}
+
+			$arMatch = array();
+
+			if(
+			in_array(
+				$k, array(
+					'PRODUCT_ID', /*'TYPE_ID', */'STATUS_ID',
+					'COMPANY_ID', 'LEAD_ID', 'DEAL_ID', 'CONTACT_ID', 'MYCOMPANY_ID'
+				)
+			))
+			{
+				// Bugfix #23121 - to suppress comparison by LIKE
+				$arFilter['='.$k] = $v;
+				unset($arFilter[$k]);
+			}
+			elseif ($k === 'ENTITIES_LINKS')
+			{
+				$ownerData =explode('_', $v);
+				if(count($ownerData) > 1)
+				{
+					$ownerTypeName = CCrmOwnerType::ResolveName(CCrmOwnerType::ResolveID($ownerData[0]));
+					$ownerID = intval($ownerData[1]);
+					if(!empty($ownerTypeName) && $ownerID > 0)
+						$arFilter[$ownerTypeName.'_ID'] = $ownerID;
+				}
+				unset($arFilter[$k]);
+			}
+			elseif (preg_match('/(.*)_from$/iu', $k, $arMatch))
+			{
+				if($v <> '')
+				{
+					$arFilter['>='.$arMatch[1]] = $v;
+				}
+				unset($arFilter[$k]);
+			}
+			elseif (preg_match('/(.*)_to$/iu', $k, $arMatch))
+			{
+				if($v <> '')
+				{
+					if (($arMatch[1] == 'DATE_CREATE' || $arMatch[1] == 'DATE_MODIFY') && !preg_match('/\d{1,2}:\d{1,2}(:\d{1,2})?$/u', $v))
+					{
+						$v = CCrmDateTimeHelper::SetMaxDayTime($v);
+					}
+					$arFilter['<='.$arMatch[1]] = $v;
+				}
+				unset($arFilter[$k]);
+			}
+			elseif (in_array($k, $arFilter2Logic))
+			{
+				// Bugfix #26956 - skip empty values in logical filter
+				$v = trim($v);
+				if($v !== '')
+				{
+					$arFilter['?'.$k] = $v;
+				}
+				unset($arFilter[$k]);
+			}
+			elseif (mb_strpos($k, 'UF_') !== 0 && $k != 'LOGIC' && preg_match('/^[^\=\%\?\>\<]{1}/', $k) === 1)
+			{
+				$arFilter['%'.$k] = $v;
+				unset($arFilter[$k]);
+			}
+		}
+	}
+
+
+	public static function savePdf($quote_id, $pay_system_id, &$error = null)
+	{
+		$error = false;
+
+		if (!\CModule::includeModule('sale'))
+		{
+			$error = 'MODULE SALE NOT INCLUDED!';
+			return false;
+		}
+
+		$quote_id = (int) $quote_id;
+		if ($quote_id <= 0)
+		{
+			$error = 'QUOTE_ID IS NOT FOUND!';
+			return false;
+		}
+
+		if (!\CCrmQuote::checkReadPermission($quote_id))
+		{
+			$error = 'PERMISSION DENIED!';
+			return false;
+		}
+
+		$pay_system_id = (int) $pay_system_id;
+		if ($pay_system_id <= 0)
+		{
+			$error = 'PAY_SYSTEM_ID ID NOT FOUND!';
+			return false;
+		}
+
+		$dbResult = \CCrmQuote::getList(
+			array(),
+			array(
+				'ID' => $quote_id,
+				'CHECK_PERMISSIONS' => 'N',
+			),
+			false,
+			false,
+			array('*', 'UF_*')
+		);
+		$quoteFields = is_object($dbResult) ? $dbResult->fetch() : null;
+		if (!is_array($quoteFields))
+		{
+			$error = 'QUOTE IS NOT FOUND!';
+			return false;
+		}
+
+		$paymentData = \CCrmQuote::prepareSalePaymentData($quoteFields);
+		if (!is_array($paymentData))
+		{
+			$error = 'COULD NOT PREPARE PAYMENT DATA!';
+			return false;
+		}
+
+		$dbPaySysAction = \CSalePaySystemAction::getList(
+			array(),
+			array(
+				'PAY_SYSTEM_ID'  => $pay_system_id,
+				'PERSON_TYPE_ID' => $quoteFields['PERSON_TYPE_ID'],
+			),
+			false,
+			false,
+			array('ACTION_FILE', 'PARAMS', 'ENCODING')
+		);
+
+		$paySysActionFields = $dbPaySysAction->fetch();
+		if (!is_array($paySysActionFields))
+		{
+			$error = 'COULD NOT FIND PAYMENT SYSTEM ACTION!';
+			return false;
+		}
+
+		$actionFilePath = isset($paySysActionFields['ACTION_FILE']) ? $paySysActionFields['ACTION_FILE'] : '';
+		if (!is_string($actionFilePath) || $actionFilePath === '')
+		{
+			$error = 'COULD NOT FIND PAYMENT SYSTEM ACTION FILE!';
+			return false;
+		}
+
+		$actionFilePath = $_SERVER['DOCUMENT_ROOT'].$actionFilePath;
+		$actionFilePath = str_replace('\\', '/', $actionFilePath);
+		while (mb_substr($actionFilePath, mb_strlen($actionFilePath) - 1, 1) == '/')
+			$actionFilePath = mb_substr($actionFilePath, 0, mb_strlen($actionFilePath) - 1);
+
+		if (!file_exists($actionFilePath))
+		{
+			$error = 'COULD NOT FIND PAYMENT SYSTEM ACTION FILE!';
+			return false;
+		}
+		else if (is_dir($actionFilePath))
+		{
+			$actionFilePath = $actionFilePath.'/payment.php';
+			if (!file_exists($actionFilePath))
+			{
+				$error = 'COULD NOT FIND PAYMENT SYSTEM ACTION FILE!';
+				return false;
+			}
+		}
+
+		\CSalePaySystemAction::initParamArrays(
+			$paymentData['ORDER'],
+			0,
+			$paySysActionFields['PARAMS'],
+			array(
+				"PROPERTIES"     => $paymentData['PROPERTIES'],
+				"BASKET_ITEMS"   => $paymentData['CART_ITEMS'],
+				'TAX_LIST'       => $paymentData['TAX_LIST'],
+				'REQUISITE'      => $paymentData['REQUISITE'],
+				'BANK_DETAIL'    => $paymentData['BANK_DETAIL'],
+				'CRM_COMPANY'    => $paymentData['CRM_COMPANY'],
+				'CRM_CONTACT'    => $paymentData['CRM_CONTACT'],
+				'MC_REQUISITE'   => $paymentData['MC_REQUISITE'],
+				'MC_BANK_DETAIL' => $paymentData['MC_BANK_DETAIL'],
+				'CRM_MYCOMPANY'  => $paymentData['CRM_MYCOMPANY']
+			),
+			$paymentData['PAYMENT'],
+			$paymentData['SHIPMENT']
+		);
+
+		$origRequest = $_REQUEST;
+		$_REQUEST['pdf'] = true;
+		$_REQUEST['GET_CONTENT'] = 'Y';
+
+		$pdfContent = include($actionFilePath);
+
+		$_REQUEST['pdf'] = $origRequest['pdf'] ?? false;
+		$_REQUEST['GET_CONTENT'] = $origRequest['GET_CONTENT'] ?? 'N';
+
+		$fileName = "quote_{$quote_id}.pdf";
+		$fileData = array(
+			'name' => $fileName,
+			'type' => 'application/pdf',
+			'content' => $pdfContent,
+			'MODULE_ID' => 'crm'
+		);
+
+		$fileID = \CFile::saveFile($fileData, 'crm');
+		if ($fileID <= 0)
+		{
+			$error = 'COULD NOT SAVE FILE!';
+			return false;
+		}
+
+		return $fileID;
+	}
+
+	public static function existsEntityWithStatus($statusId)
+	{
+		$queryObject = self::getList(
+			['ID' => 'DESC'],
+			['STATUS_ID' => $statusId, 'CHECK_PERMISSIONS' => 'N'],
+			false,
+			false,
+			['ID']
+		);
+
+		return (bool) $queryObject->fetch();
+	}
+
+	public function getLastErrors(): ?\Bitrix\Main\ErrorCollection
+	{
+		return $this->lastErrors;
 	}
 }
 

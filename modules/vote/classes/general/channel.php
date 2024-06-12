@@ -2,7 +2,7 @@
 #############################################
 # Bitrix Site Manager Forum					#
 # Copyright (c) 2002-2009 Bitrix			#
-# http://www.bitrixsoft.com					#
+# https://www.bitrixsoft.com					#
 # mailto:admin@bitrixsoft.com				#
 #############################################
 IncludeModuleLangFile(__FILE__); 
@@ -19,7 +19,7 @@ class CAllVoteChannel
 	{
 		global $DB, $APPLICATION;
 		$aMsg = array();
-		$ID = intVal($ID);
+		$ID = intval($ID);
 
 		foreach(array("TITLE", "SYMBOLIC_NAME") as $key)
 		{
@@ -63,7 +63,7 @@ class CAllVoteChannel
 					"ACTIVE" => "Y",
 					"SID" => $arFields["SYMBOLIC_NAME"],
 					"SID_EXACT_MATCH" => "Y");
-				$db_res = CVoteChannel::GetList($v1, $v2, $arFilter, $v3);
+				$db_res = CVoteChannel::GetList('', '', $arFilter);
 				if ($db_res && ($res = $db_res->Fetch()))
 				{
 					$aMsg[] = array(
@@ -74,7 +74,7 @@ class CAllVoteChannel
 				}
 			}
 			if (empty($aMsg))
-				$arFields["SYMBOLIC_NAME"] = strtoupper($arFields["SYMBOLIC_NAME"]);
+				$arFields["SYMBOLIC_NAME"] = mb_strtoupper($arFields["SYMBOLIC_NAME"]);
 		}
 
 		unset($arFields["TIMESTAMP_X"]);
@@ -180,13 +180,13 @@ class CAllVoteChannel
 	public static function SetAccessPermissions($ID, $arGroups)
 	{
 		global $DB;
-		$ID = intVal($ID);
+		$ID = intval($ID);
 		$arGroups = (is_array($arGroups) ? $arGroups : array());
 		$arMainGroups = array();
 		if ($ID <= 0 || empty($arGroups))
 			return false;
 
-		$db_res = CGroup::GetList($by = "ID", $order = "ASC");
+		$db_res = CGroup::GetList("ID", "ASC");
 		if ($db_res && $res = $db_res->Fetch())
 		{
 			do
@@ -214,7 +214,7 @@ class CAllVoteChannel
 		return true;
 	}
 
-	public static function GetList(&$by, &$order, $arFilter=Array(), &$is_filtered)
+	public static function GetList($by = 's_id', $order = 'desc', $arFilter = [])
 	{
 		$err_mess = (CVoteChannel::err_mess())."<br>Function: GetList<br>Line: ";
 		global $DB;
@@ -231,7 +231,7 @@ class CAllVoteChannel
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -245,7 +245,7 @@ class CAllVoteChannel
 					case "SITE_ID":
 					case "SITE":
 						if (is_array($val)) $val = implode(" | ", $val);
-						$match = ($arFilter[$key."_EXACT_MATCH"]=="N" && $match_value_set) ? "Y" : "N";
+						$match = (isset($arFilter[$key."_EXACT_MATCH"]) && $arFilter[$key."_EXACT_MATCH"]==="N" && $match_value_set) ? "Y" : "N";
 						$arSqlSearch[] = GetFilterQuery("CS.SITE_ID", $val, $match);
 						$left_join = "LEFT JOIN b_vote_channel_2_site CS ON (C.ID = CS.CHANNEL_ID)";
 						break;
@@ -281,13 +281,12 @@ class CAllVoteChannel
 		elseif ($by == "s_votes")			$strSqlOrder = "ORDER BY VOTES";
 		else
 		{
-			$by = "s_id";
 			$strSqlOrder = "ORDER BY C.ID";
 		}
-		if ($order!="asc")
+
+		if ($order != "asc")
 		{
 			$strSqlOrder .= " desc ";
-			$order="desc";
 		}
 
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
@@ -304,9 +303,7 @@ class CAllVoteChannel
 		INNER JOIN b_vote_channel C ON (C.ID = CC.ID)
 		".$strSqlOrder;
 
-		$is_filtered = IsFiltered($strSqlSearch);
-
-		if (VOTE_CACHE_TIME===false || strpos($_SERVER['REQUEST_URI'], '/bitrix/admin/')!==false)
+		if (VOTE_CACHE_TIME===false || mb_strpos($_SERVER['REQUEST_URI'], '/bitrix/admin/') !== false)
 		{
 			$res = $DB->Query($strSql, false, $err_mess.__LINE__);
 			return $res;
@@ -408,7 +405,7 @@ class CAllVoteChannel
 		$ID = intval($ID);
 		if ($ID <= 0)
 			return false;
-		$res = CVoteChannel::GetList($by, $order, array("ID" => $ID), $is_filtered);
+		$res = CVoteChannel::GetList('', '', array("ID" => $ID));
 		return $res;
 	}
 
@@ -443,7 +440,7 @@ class CAllVoteChannel
 		$cache = array(
 			"channel_id" => $channel_id,
 			"groups" => $arGroups,
-			"get_from_database" => $params["get_from_database"]);
+			"get_from_database" => $params["get_from_database"] ?? null);
 		$cache_id = "b_vote_perm_".md5(serialize($cache));
 		$permission = 0;
 
@@ -453,7 +450,7 @@ class CAllVoteChannel
 		}
 		else
 		{
-			if ($params["get_from_database"] != "Y")
+			if ($params["get_from_database"] ?? null != "Y")
 				$permission = ((in_array(1, $USER->GetUserGroupArray()) || $APPLICATION->GetGroupRight("vote") >= "W") ? 4 : $permission);
 
 			if ($permission <= 0 && !empty($groups))
@@ -462,7 +459,7 @@ class CAllVoteChannel
 					"SELECT BVC2G.CHANNEL_ID, BVC.SYMBOLIC_NAME CHANNEL_SID, MAX(BVC2G.PERMISSION) as PERMISSION
 				FROM b_vote_channel_2_group BVC2G
 				INNER JOIN b_vote_channel BVC ON (BVC2G.CHANNEL_ID = BVC.ID)
-				WHERE ".($params["CHANNEL_SID"] != "Y" ? "BVC2G.CHANNEL_ID" : "BVC.SYMBOLIC_NAME").
+				WHERE ".((!isset($params["CHANNEL_SID"]) || $params["CHANNEL_SID"] !== "Y") ? "BVC2G.CHANNEL_ID" : "BVC.SYMBOLIC_NAME").
 						"='".$DB->ForSql($channel_id)."' and GROUP_ID in ($groups)
 				GROUP BY BVC2G.CHANNEL_ID, BVC.SYMBOLIC_NAME";
 				$db_res = $DB->Query($strSql, false, $err_mess.__LINE__);
@@ -492,14 +489,8 @@ class CVoteDiagramType
 {
 	var $arType = Array();
 
-	public function CVoteDiagramType($directCall=true)
+	public function __construct()
 	{
-		if ($directCall)
-		{
-			trigger_error("CVoteDiagramType is singleton!", E_USER_ERROR);
-			return;
-		}
-
 		$this->arType = Array(
 			VOTE_DEFAULT_DIAGRAM_TYPE => GetMessage("VOTE_DIAGRAM_TYPE_HISTOGRAM"),
 			"circle" => GetMessage("VOTE_DIAGRAM_TYPE_CIRCLE")
@@ -510,7 +501,7 @@ class CVoteDiagramType
 	{
 		static $instance;
 		if (!is_object($instance))
-			$instance = new CVoteDiagramType(false);
+			$instance = new CVoteDiagramType();
 
 		return $instance;
 	}
@@ -520,40 +511,40 @@ class CVoteDiagramType
 function VoteGetFilterOperation($key)
 {
 	$strNegative = "N";
-	if (substr($key, 0, 1)=="!")
+	if (mb_substr($key, 0, 1) == "!")
 	{
-		$key = substr($key, 1);
+		$key = mb_substr($key, 1);
 		$strNegative = "Y";
 	}
 
-	if (substr($key, 0, 2)==">=")
+	if (mb_substr($key, 0, 2) == ">=")
 	{
-		$key = substr($key, 2);
+		$key = mb_substr($key, 2);
 		$strOperation = ">=";
 	}
-	elseif (substr($key, 0, 1)==">")
+	elseif (mb_substr($key, 0, 1) == ">")
 	{
-		$key = substr($key, 1);
+		$key = mb_substr($key, 1);
 		$strOperation = ">";
 	}
-	elseif (substr($key, 0, 2)=="<=")
+	elseif (mb_substr($key, 0, 2) == "<=")
 	{
-		$key = substr($key, 2);
+		$key = mb_substr($key, 2);
 		$strOperation = "<=";
 	}
-	elseif (substr($key, 0, 1)=="<")
+	elseif (mb_substr($key, 0, 1) == "<")
 	{
-		$key = substr($key, 1);
+		$key = mb_substr($key, 1);
 		$strOperation = "<";
 	}
-	elseif (substr($key, 0, 1)=="@")
+	elseif (mb_substr($key, 0, 1) == "@")
 	{
-		$key = substr($key, 1);
+		$key = mb_substr($key, 1);
 		$strOperation = "IN";
 	}
-	elseif (substr($key, 0, 1)=="%")
+	elseif (mb_substr($key, 0, 1) == "%")
 	{
-		$key = substr($key, 1);
+		$key = mb_substr($key, 1);
 		$strOperation = "LIKE";
 	}
 	else

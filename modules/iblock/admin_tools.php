@@ -1,11 +1,15 @@
-<?
+<?php
 use Bitrix\Main;
+use Bitrix\Main\Loader;
+use Bitrix\Iblock;
 
 IncludeModuleLangFile(__FILE__);
 
 function _ShowStringPropertyField($name, $property_fields, $values, $bInitDef = false, $bVarsFromForm = false)
 {
 	global $bCopy;
+
+	$name = htmlspecialcharsbx($name);
 
 	$rows = $property_fields["ROW_COUNT"];
 	$cols = $property_fields["COL_COUNT"];
@@ -14,7 +18,7 @@ function _ShowStringPropertyField($name, $property_fields, $values, $bInitDef = 
 	if ($MULTIPLE_CNT <= 0 || $MULTIPLE_CNT > 30)
 		$MULTIPLE_CNT = 5;
 
-	$bInitDef = $bInitDef && (strlen($property_fields["DEFAULT_VALUE"]) > 0);
+	$bInitDef = $bInitDef && ($property_fields["DEFAULT_VALUE"] <> '');
 
 	$cnt = ($property_fields["MULTIPLE"] == "Y"? $MULTIPLE_CNT + ($bInitDef? 1: 0) : 1);
 
@@ -45,17 +49,17 @@ function _ShowStringPropertyField($name, $property_fields, $values, $bInitDef = 
 		$val_description = "";
 		if (is_array($val) && array_key_exists("VALUE", $val))
 		{
-			$val_description = $val["DESCRIPTION"];
+			$val_description = $val["DESCRIPTION"] ?? '';
 			$val = $val["VALUE"];
 		}
 
 		if ($rows > 1)
-			echo '<textarea name="'.$name.'['.$key.']'.$strAddDesc.'" cols="'.$cols.'" rows="'.$rows.'">'.htmlspecialcharsex($val).'</textarea>';
+			echo '<textarea name="'.$name.'['.$key.']'.$strAddDesc.'" cols="'.$cols.'" rows="'.$rows.'">'.htmlspecialcharsEx($val).'</textarea>';
 		else
-			echo '<input name="'.$name.'['.$key.']'.$strAddDesc.'" value="'.htmlspecialcharsex($val).'" size="'.$cols.'" type="text">';
+			echo '<input name="'.$name.'['.$key.']'.$strAddDesc.'" value="'.htmlspecialcharsbx($val).'" size="'.$cols.'" type="text">';
 
 		if ($property_fields["WITH_DESCRIPTION"] == "Y")
-			echo ' <span title="'.GetMessage("IBLOCK_AT_PROP_DESC").'">'.GetMessage("IBLOCK_AT_PROP_DESC_1").'<input name="'.$name.'['.$key.'][DESCRIPTION]" value="'.htmlspecialcharsex($val_description).'" size="18" type="text" id="'.$name.'['.$key.'][DESCRIPTION]"></span>';
+			echo ' <span title="'.GetMessage("IBLOCK_AT_PROP_DESC").'">'.GetMessage("IBLOCK_AT_PROP_DESC_1").'<input name="'.$name.'['.$key.'][DESCRIPTION]" value="'.htmlspecialcharsbx($val_description).'" size="18" type="text" id="'.$name.'['.$key.'][DESCRIPTION]"></span>';
 
 		echo "<br>";
 		echo "</td></tr>";
@@ -78,9 +82,9 @@ function _ShowStringPropertyField($name, $property_fields, $values, $bInitDef = 
 				$val = "";
 
 			if ($rows > 1)
-				echo '<textarea name="'.$name.'[n'.($start + $i).']'.$strAddDesc.'" cols="'.$cols.'" rows="'.$rows.'">'.htmlspecialcharsex($val).'</textarea>';
+				echo '<textarea name="'.$name.'[n'.($start + $i).']'.$strAddDesc.'" cols="'.$cols.'" rows="'.$rows.'">'.htmlspecialcharsEx($val).'</textarea>';
 			else
-				echo '<input name="'.$name.'[n'.($start + $i).']'.$strAddDesc.'" value="'.htmlspecialcharsex($val).'" size="'.$cols.'" type="text">';
+				echo '<input name="'.$name.'[n'.($start + $i).']'.$strAddDesc.'" value="'.htmlspecialcharsbx($val).'" size="'.$cols.'" type="text">';
 
 			if ($property_fields["WITH_DESCRIPTION"] == "Y")
 				echo ' <span title="'.GetMessage("IBLOCK_AT_PROP_DESC").'">'.GetMessage("IBLOCK_AT_PROP_DESC_1").'<input name="'.$name.'[n'.($start + $i).'][DESCRIPTION]" value="" size="18" type="text"></span>';
@@ -92,15 +96,17 @@ function _ShowStringPropertyField($name, $property_fields, $values, $bInitDef = 
 
 	if ($property_fields["MULTIPLE"] == "Y")
 	{
-		echo '<tr><td><input type="button" value="'.GetMessage("IBLOCK_AT_PROP_ADD").'" onClick="addNewRow(\'tb'.md5($name).'\')"></td></tr>';
-		echo "<script type=\"text/javascript\">BX.addCustomEvent('onAutoSaveRestore', function(ob, data) {for (var i in data){if (i.substring(0,".(strlen($name)+1).")=='".CUtil::JSEscape($name)."['){addNewRow('tb".md5($name)."')}}})</script>";
+		echo '<tr><td><input type="button" value="'.GetMessage("IBLOCK_AT_PROP_ADD").'" onClick="BX.IBlock.Tools.addNewRow(\'tb'.md5($name).'\')"></td></tr>';
+		echo "<script type=\"text/javascript\">BX.addCustomEvent('onAutoSaveRestore', function(ob, data) {for (var i in data){if (i.substring(0,".(mb_strlen($name) + 1).")=='".CUtil::JSEscape($name)."['){BX.IBlock.Tools.addNewRow('tb".md5($name)."')}}})</script>";
 	}
 
 	echo "</table>";
 }
 
-function _ShowGroupPropertyField($name, $property_fields, $values)
+function _ShowGroupPropertyField($name, $property_fields, $values, $bVarsFromForm = false)
 {
+	$name = htmlspecialcharsbx($name);
+
 	if (!is_array($values))
 		$values = array();
 
@@ -113,22 +119,35 @@ function _ShowGroupPropertyField($name, $property_fields, $values)
 	$res = "";
 	$bWas = false;
 	$sections = CIBlockSection::GetList(
-		array("left_margin"=>"asc"),
-		array("IBLOCK_ID"=>$property_fields["LINK_IBLOCK_ID"]),
+		[
+			'LEFT_MARGIN' => 'ASC',
+		],
+		[
+			'IBLOCK_ID' => $property_fields['LINK_IBLOCK_ID']
+		],
 		false,
-		array("ID", "DEPTH_LEVEL", "NAME")
+		[
+			'ID',
+			'IBLOCK_ID',
+			'DEPTH_LEVEL',
+			'NAME',
+			'LEFT_MARGIN',
+		]
 	);
 	while ($ar = $sections->GetNext())
 	{
-		$res .= '<option value="'.$ar["ID"].'"';
-		if(in_array($ar["ID"], $values))
+		$margin = max((int)$ar['DEPTH_LEVEL'], 1) - 1;
+		$res .= '<option value="' . $ar['ID'] . '"';
+		if (in_array($ar['ID'], $values))
 		{
 			$bWas = true;
 			$res .= ' selected';
 		}
-		$res .= '>'.str_repeat(" . ", $ar["DEPTH_LEVEL"]-1).$ar["NAME"].'</option>';
+		$res .= '>' . str_repeat(' . ', $margin) .$ar['NAME'] . '</option>';
 	}
+	unset($ar, $sections);
 
+	echo '<input type="hidden" name="'.$name.'[]" value="">';
 	echo '<select name="'.$name.'[]" size="'.$property_fields["MULTIPLE_CNT"].'" '.($property_fields["MULTIPLE"]=="Y"?"multiple":"").'>';
 	echo '<option value=""'.(!$bWas?' selected':'').'>'.GetMessage("IBLOCK_AT_NOT_SET").'</option>';
 	echo $res;
@@ -138,8 +157,12 @@ function _ShowGroupPropertyField($name, $property_fields, $values)
 function _ShowElementPropertyField($name, $property_fields, $values, $bVarsFromForm = false)
 {
 	global $bCopy;
+
+	$name = htmlspecialcharsbx($name);
+
 	$index = 0;
 	$show = true;
+	$selfFolderUrl = (defined("SELF_FOLDER_URL") ? SELF_FOLDER_URL : "/bitrix/admin/");
 
 	$MULTIPLE_CNT = intval($property_fields["MULTIPLE_CNT"]);
 	if ($MULTIPLE_CNT <= 0 || $MULTIPLE_CNT > 30)
@@ -151,8 +174,10 @@ function _ShowElementPropertyField($name, $property_fields, $values, $bVarsFromF
 		$values = array();
 
 	$fixIBlock = $property_fields["LINK_IBLOCK_ID"] > 0;
+	$windowTableId = 'iblockprop-'.Iblock\PropertyTable::TYPE_ELEMENT.'-'.$property_fields['ID'].'-'.$property_fields['LINK_IBLOCK_ID'];
 
 	echo '<table cellpadding="0" cellspacing="0" border="0" class="nopadding" width="100%" id="tb'.md5($name).'">';
+	$key = '';
 	foreach ($values as $key=>$val)
 	{
 		$show = false;
@@ -168,9 +193,9 @@ function _ShowElementPropertyField($name, $property_fields, $values, $bVarsFromF
 		$db_res = CIBlockElement::GetByID($val);
 		$ar_res = $db_res->GetNext();
 		echo '<tr><td>'.
-		'<input name="'.$name.'['.$key.']" id="'.$name.'['.$key.']" value="'.htmlspecialcharsex($val).'" size="5" type="text">'.
-		'<input type="button" value="..." onClick="jsUtils.OpenWindow(\'/bitrix/admin/iblock_element_search.php?lang='.LANGUAGE_ID.'&amp;IBLOCK_ID='.$property_fields["LINK_IBLOCK_ID"].'&amp;n='.$name.'&amp;k='.$key.($fixIBlock ? '&amp;iblockfix=y' : '').'\', 900, 700);">'.
-		'&nbsp;<span id="sp_'.md5($name).'_'.$key.'" >'.$ar_res['NAME'].'</span>'.
+		'<input name="'.$name.'['.$key.']" id="'.$name.'['.$key.']" value="'.htmlspecialcharsbx($val).'" size="5" type="text">'.
+		'<input type="button" value="..." onClick="jsUtils.OpenWindow(\''.$selfFolderUrl.'iblock_element_search.php?lang='.LANGUAGE_ID.'&amp;IBLOCK_ID='.$property_fields["LINK_IBLOCK_ID"].'&amp;n='.$name.'&amp;k='.$key.($fixIBlock ? '&amp;iblockfix=y' : '').'&amp;tableId='.$windowTableId.'\', 900, 700);">'.
+		'&nbsp;<span id="sp_'.md5($name).'_'.$key.'" >' . ($ar_res['NAME'] ?? '') . '</span>'.
 		'</td></tr>';
 
 		if ($property_fields["MULTIPLE"] != "Y")
@@ -189,8 +214,8 @@ function _ShowElementPropertyField($name, $property_fields, $values, $bVarsFromF
 			$index++;
 
 			echo '<tr><td>'.
-			'<input name="'.$name.'['.$key.']" id="'.$name.'['.$key.']" value="'.htmlspecialcharsex($val).'" size="5" type="text">'.
-			'<input type="button" value="..." onClick="jsUtils.OpenWindow(\'/bitrix/admin/iblock_element_search.php?lang='.LANGUAGE_ID.'&amp;IBLOCK_ID='.$property_fields["LINK_IBLOCK_ID"].'&amp;n='.$name.'&amp;k='.$key.($fixIBlock ? '&amp;iblockfix=y' : '').'\', 900, 700);">'.
+			'<input name="'.$name.'['.$key.']" id="'.$name.'['.$key.']" value="'.htmlspecialcharsbx($val).'" size="5" type="text">'.
+			'<input type="button" value="..." onClick="jsUtils.OpenWindow(\''.$selfFolderUrl.'iblock_element_search.php?lang='.LANGUAGE_ID.'&amp;IBLOCK_ID='.$property_fields["LINK_IBLOCK_ID"].'&amp;n='.$name.'&amp;k='.$key.($fixIBlock ? '&amp;iblockfix=y' : '').'&amp;tableId='.$windowTableId.'\', 900, 700);">'.
 			'&nbsp;<span id="sp_'.md5($name).'_'.$key.'"></span>'.
 			'</td></tr>';
 		}
@@ -199,7 +224,7 @@ function _ShowElementPropertyField($name, $property_fields, $values, $bVarsFromF
 	if($property_fields["MULTIPLE"]=="Y")
 	{
 		echo '<tr><td>'.
-			'<input type="button" value="'.GetMessage("IBLOCK_AT_PROP_ADD").'..." onClick="jsUtils.OpenWindow(\'/bitrix/admin/iblock_element_search.php?lang='.LANGUAGE_ID.'&amp;IBLOCK_ID='.$property_fields["LINK_IBLOCK_ID"].'&amp;n='.$name.'&amp;m=y&amp;k='.$key.($fixIBlock ? '&amp;iblockfix=y' : '').'\', 900, 700);">'.
+			'<input type="button" value="'.GetMessage("IBLOCK_AT_PROP_ADD").'..." onClick="jsUtils.OpenWindow(\''.$selfFolderUrl.'iblock_element_search.php?lang='.LANGUAGE_ID.'&amp;IBLOCK_ID='.$property_fields["LINK_IBLOCK_ID"].'&amp;n='.$name.'&amp;m=y&amp;k='.$key.($fixIBlock ? '&amp;iblockfix=y' : '').'&amp;tableId='.$windowTableId.'\', 900, 700);">'.
 			'<span id="sp_'.md5($name).'_'.$key.'" ></span>'.
 			'</td></tr>';
 	}
@@ -214,9 +239,9 @@ function _ShowElementPropertyField($name, $property_fields, $values, $bVarsFromF
 	echo "	oCell.innerHTML=".
 		"'<input name=\"".$name."[n'+MV_".md5($name)."+']\" value=\"'+id+'\" id=\"".$name."[n'+MV_".md5($name)."+']\" size=\"5\" type=\"text\">'+\r\n".
 		"'<input type=\"button\" value=\"...\" '+\r\n".
-		"'onClick=\"jsUtils.OpenWindow(\'/bitrix/admin/iblock_element_search.php?lang=".LANGUAGE_ID."&amp;IBLOCK_ID=".$property_fields["LINK_IBLOCK_ID"]."&amp;n=".$name."&amp;k=n'+MV_".md5($name)."+'".($fixIBlock ? '&amp;iblockfix=y' : '')."\', '+\r\n".
+		"'onClick=\"jsUtils.OpenWindow(\'".$selfFolderUrl."iblock_element_search.php?lang=".LANGUAGE_ID."&amp;IBLOCK_ID=".$property_fields["LINK_IBLOCK_ID"]."&amp;n=".$name."&amp;k=n'+MV_".md5($name)."+'".($fixIBlock ? '&amp;iblockfix=y' : '')."&amp;tableId=".$windowTableId."\', '+\r\n".
 		"' 900, 700);\">'+".
-		"'&nbsp;<span id=\"sp_".md5($name)."_'+MV_".md5($name)."+'\" >'+name+'</span>".
+		"'&nbsp;<span id=\"sp_".md5($name)."_n'+MV_".md5($name)."+'\" >'+name+'</span>".
 		"';";
 	echo 'MV_'.md5($name).'++;';
 	echo '}';
@@ -226,6 +251,8 @@ function _ShowElementPropertyField($name, $property_fields, $values, $bVarsFromF
 function _ShowFilePropertyField($name, $property_fields, $values, $max_file_size_show=50000, $bVarsFromForm = false)
 {
 	global $bCopy, $historyId;
+
+	$name = htmlspecialcharsbx($name);
 
 	static $maxSize = array();
 	if (empty($maxSize))
@@ -239,12 +266,28 @@ function _ShowFilePropertyField($name, $property_fields, $values, $max_file_size
 	}
 
 	CModule::IncludeModule('fileman');
-	$bVarsFromForm = false;
 
 	if (empty($values) || $bCopy || !is_array($values))
 	{
 		$values = array(
 			"n0" => 0,
+		);
+	}
+
+	if ($historyId > 0)
+	{
+		$newUploaderParams = array(
+			'delete' => false,
+			'edit' => false
+		);
+	}
+	else
+	{
+		$newUploaderParams = array(
+			"upload" => true,
+			"medialib" => true,
+			"fileDialog" => true,
+			"cloud" => true
 		);
 	}
 
@@ -257,31 +300,36 @@ function _ShowFilePropertyField($name, $property_fields, $values, $max_file_size
 			else
 				$file_id = $val;
 
-			if($historyId > 0)
-				echo CFileInput::Show($name."[".$key."]", $file_id, array(
-					"IMAGE" => "Y",
-					"PATH" => "Y",
-					"FILE_SIZE" => "Y",
-					"DIMENSIONS" => "Y",
-					"IMAGE_POPUP" => "Y",
-					"MAX_SIZE" => $maxSize,
-				));
-			else
-				echo CFileInput::Show($name."[".$key."]", $file_id, array(
-					"IMAGE" => "Y",
-					"PATH" => "Y",
-					"FILE_SIZE" => "Y",
-					"DIMENSIONS" => "Y",
-					"IMAGE_POPUP" => "Y",
-					"MAX_SIZE" => $maxSize,
-				), array(
-					'upload' => true,
-					'medialib' => true,
-					'file_dialog' => true,
-					'cloud' => true,
-					'del' => true,
-					'description' => $property_fields["WITH_DESCRIPTION"]=="Y",
-				));
+			if ($bVarsFromForm)
+			{
+				$request = \Bitrix\Main\Context::getCurrent()->getRequest();
+				$number = 0;
+				if (preg_match("/PROP\\[(\d+)\\]/i", $name, $matches))
+				{
+					$number = $matches[1];
+				}
+				$prop = $request->isPost() ? $request->getPost("PROP") : $request->getQuery("PROP");
+				if ($number > 0 && is_array($prop) && array_key_exists($number, $prop))
+				{
+					$prop = $prop[$number];
+					if (!empty($prop) && is_array($prop))
+					{
+						if (!array_key_exists('tmp_name', $prop))
+							$prop = current($prop);
+						$file_id = $prop;
+					}
+				}
+			}
+			echo \Bitrix\Main\UI\FileInput::createInstance(
+				array(
+					"name" => $name."[".$key."]",
+					"id" => $name."[".$key."]_".mt_rand(1, 1000000),
+					"description" => $property_fields["WITH_DESCRIPTION"]=="Y",
+					"allowUpload" => "F",
+					"allowUploadExt" => $property_fields["FILE_TYPE"],
+					"maxCount" => 1
+				) + $newUploaderParams
+			)->show($file_id, $bVarsFromForm);
 			break;
 		}
 	}
@@ -290,62 +338,61 @@ function _ShowFilePropertyField($name, $property_fields, $values, $max_file_size
 		$inputName = array();
 		foreach($values as $key=>$val)
 		{
-			if(is_array($val))
-				$inputName[$name."[".$key."]"] = $val["VALUE"];
-			else
-				$inputName[$name."[".$key."]"] = $val;
+			$inputName[$name."[".$key."]"] = (is_array($val) && array_key_exists("VALUE", $val) ? $val["VALUE"] : $val);
 		}
 
-		if (class_exists('\Bitrix\Main\UI\FileInput', true))
+		if ($bVarsFromForm)
 		{
-			echo \Bitrix\Main\UI\FileInput::createInstance((
-				array(
-					"name" => $name."[n#IND#]",
-					"id" => $name."[n#IND#]_".mt_rand(1, 1000000),
-					"description" => $property_fields["WITH_DESCRIPTION"]=="Y",
-					"allowUpload" => "F",
-					"allowUploadExt" => $property_fields["FILE_TYPE"]
-				) + ($historyId > 0 ? array(
-					"delete" => false,
-					"edit" => false
-				) : array(
-					"upload" => true,
-					"medialib" => true,
-					"fileDialog" => true,
-					"cloud" => true
-				))
-			))->show($inputName);
+			$request = \Bitrix\Main\Context::getCurrent()->getRequest();
+			$number = 0;
+			if (preg_match("/PROP\\[(\d+)\\]/i", $name, $matches))
+			{
+				$number = $matches[1];
+			}
+			$prop = $request->isPost() ? $request->getPost("PROP") : $request->getQuery("PROP");
+			if ($number > 0 && is_array($prop) && array_key_exists($number, $prop))
+			{
+				$prop = $prop[$number];
+				if (!empty($prop) && is_array($prop))
+				{
+					$clearProp = array();
+					foreach ($prop as $valueRowId => $valueRow)
+					{
+						$correct = true;
+						if (preg_match('/^n\d+$/', $valueRowId) && is_string($valueRow))
+						{
+							if (!preg_match('/^\d+$/', $valueRow))
+								$correct = false;
+						}
+						if ($correct)
+							$clearProp[$valueRowId] = $valueRow;
+					}
+					$values = $clearProp;
+				}
+			}
+
+			$inputName = array();
+			foreach($values as $key=>$val)
+			{
+				$inputName[$name."[".$key."]"] = $val;
+			}
 		}
-		else if($historyId > 0)
-			echo CFileInput::ShowMultiple($inputName, $name."[n#IND#]", array(
-				"IMAGE" => "Y",
-				"PATH" => "Y",
-				"FILE_SIZE" => "Y",
-				"DIMENSIONS" => "Y",
-				"IMAGE_POPUP" => "Y",
-				"MAX_SIZE" => $maxSize,
-			), false);
-		else
-			echo CFileInput::ShowMultiple($inputName, $name."[n#IND#]", array(
-				"IMAGE" => "Y",
-				"PATH" => "Y",
-				"FILE_SIZE" => "Y",
-				"DIMENSIONS" => "Y",
-				"IMAGE_POPUP" => "Y",
-				"MAX_SIZE" => $maxSize,
-			), false, array(
-				'upload' => true,
-				'medialib' => true,
-				'file_dialog' => true,
-				'cloud' => true,
-				'del' => true,
-				'description' => $property_fields["WITH_DESCRIPTION"]=="Y",
-			));
+		echo \Bitrix\Main\UI\FileInput::createInstance(
+			array(
+				"name" => $name."[n#IND#]",
+				"id" => $name."[n#IND#]_".mt_rand(1, 1000000),
+				"description" => $property_fields["WITH_DESCRIPTION"]=="Y",
+				"allowUpload" => "F",
+				"allowUploadExt" => $property_fields["FILE_TYPE"]
+			) + $newUploaderParams
+		)->show($inputName, $bVarsFromForm);
 	}
 }
 
 function _ShowListPropertyField($name, $property_fields, $values, $bInitDef = false, $def_text = false)
 {
+	$name = htmlspecialcharsbx($name);
+
 	if (!is_array($values))
 		$values = array();
 
@@ -358,11 +405,12 @@ function _ShowListPropertyField($name, $property_fields, $values, $bInitDef = fa
 	$id = $property_fields["ID"];
 	$multiple = $property_fields["MULTIPLE"];
 	$res = "";
+	$prop_enums = CIBlockProperty::GetPropertyEnum($id, ['SORT' => 'ASC', 'VALUE' => 'ASC', 'ID' => 'ASC']);
 	if($property_fields["LIST_TYPE"]=="C") //list property as checkboxes
 	{
 		$cnt = 0;
 		$wSel = false;
-		$prop_enums = CIBlockProperty::GetPropertyEnum($id);
+		$res_tmp = '';
 		while($ar_enum = $prop_enums->Fetch())
 		{
 			$cnt++;
@@ -388,16 +436,15 @@ function _ShowListPropertyField($name, $property_fields, $values, $bInitDef = fa
 
 		if($cnt==1)
 			$res = $res_tmp;
-		elseif($multiple!="Y")
+		elseif($multiple!="Y" && $property_fields['IS_REQUIRED'] != 'Y')
 			$res = '<input type="radio" name="'.$name.'[]" value=""'.(!$wSel?" checked":"").' id="'.$uniq.'"><label for="'.$uniq.'">'.htmlspecialcharsex(($def_text ? $def_text : GetMessage("IBLOCK_AT_PROP_NO") )).'</label><br>'.$res;
 
-		if($multiple=="Y" || $cnt==1)
+		if($multiple=="Y" || $cnt==1 || $property_fields['IS_REQUIRED'] == 'Y')
 			$res = '<input type="hidden" name="'.$name.'" value="">'.$res;
 	}
 	else //list property as list
 	{
 		$bNoValue = true;
-		$prop_enums = CIBlockProperty::GetPropertyEnum($id);
 		while($ar_enum = $prop_enums->Fetch())
 		{
 			if($bInitDef)
@@ -409,7 +456,7 @@ function _ShowListPropertyField($name, $property_fields, $values, $bInitDef = fa
 			$res .= '<option value="'.htmlspecialcharsbx($ar_enum["ID"]).'"'.($sel?" selected":"").'>'.htmlspecialcharsex($ar_enum["VALUE"]).'</option>';
 		}
 
-		if($property_fields["MULTIPLE"]=="Y" && IntVal($property_fields["ROW_COUNT"])<2)
+		if($property_fields["MULTIPLE"]=="Y" && (int)$property_fields["ROW_COUNT"]<2)
 			$property_fields["ROW_COUNT"] = 5;
 		if($property_fields["MULTIPLE"]=="Y")
 			$property_fields["ROW_COUNT"]++;
@@ -424,6 +471,9 @@ function _ShowListPropertyField($name, $property_fields, $values, $bInitDef = fa
 function _ShowUserPropertyField($name, $property_fields, $values, $bInitDef = false, $bVarsFromForm = false, $max_file_size_show=50000, $form_name = "form_element", $bCopy = false)
 {
 	global $bCopy;
+
+	$name = htmlspecialcharsbx($name);
+
 	$start = 0;
 
 	if(!is_array($property_fields["~VALUE"]))
@@ -488,8 +538,8 @@ function _ShowUserPropertyField($name, $property_fields, $values, $bInitDef = fa
 					$html .= '&nbsp;';
 				$html .= '</td></tr>';
 
-				if(substr($key, -1, 1)=='n' && $max_val < intval(substr($key, 1)))
-					$max_val = intval(substr($key, 1));
+				if(mb_substr($key, -1, 1) == 'n' && $max_val < intval(mb_substr($key, 1)))
+					$max_val = intval(mb_substr($key, 1));
 				if($property_fields["MULTIPLE"] != "Y")
 				{
 					$bVarsFromForm = true;
@@ -504,7 +554,7 @@ function _ShowUserPropertyField($name, $property_fields, $values, $bInitDef = fa
 		|| ($bVarsFromForm && !$bMultiple && count($values) == 0) //Was not displayed
 	)
 	{
-		$bDefaultValue = is_array($property_fields["DEFAULT_VALUE"]) || strlen($property_fields["DEFAULT_VALUE"]);
+		$bDefaultValue = is_array($property_fields["DEFAULT_VALUE"]) || (string)$property_fields["DEFAULT_VALUE"] !== '';
 
 		if($property_fields["MULTIPLE"]=="Y")
 		{
@@ -562,32 +612,63 @@ function _ShowUserPropertyField($name, $property_fields, $values, $bInitDef = fa
 		&& !$bMultiple
 	)
 	{
-		$html .= '<tr><td><input type="button" value="'.GetMessage("IBLOCK_AT_PROP_ADD").'" onClick="addNewRow(\'tb'.md5($name).'\')"></td></tr>';
+		$html .= '<tr><td><input type="button" value="'.GetMessage("IBLOCK_AT_PROP_ADD").'" onClick="BX.IBlock.Tools.addNewRow(\'tb'.md5($name).'\')"></td></tr>';
 	}
 	$html .= '</table>';
 	echo $html;
 }
 
-function _ShowPropertyField($name, $property_fields, $values, $bInitDef = false, $bVarsFromForm = false, $max_file_size_show = 50000, $form_name = "form_element", $bCopy = false)
+function _ShowPropertyField(
+	$name,
+	$property_fields,
+	$values,
+	$bInitDef = false,
+	$bVarsFromForm = false,
+	$max_file_size_show = 50000,
+	$form_name = "form_element",
+	$bCopy = false
+)
 {
 	$type = $property_fields["PROPERTY_TYPE"];
-	if($property_fields["USER_TYPE"]!="")
-		_ShowUserPropertyField($name, $property_fields, $values, $bInitDef, $bVarsFromForm, $max_file_size_show, $form_name, $bCopy);
-	elseif($type=="L") //list property
-		_ShowListPropertyField($name, $property_fields, $values, $bInitDef);
-	elseif($type=="F") //file property
-		_ShowFilePropertyField($name, $property_fields, $values, $max_file_size_show, $bVarsFromForm);
-	elseif($type=="G") //section link
+	$userType = (string)$property_fields["USER_TYPE"] ?? '';
+	$foundUserType = false;
+	if ($userType !== '')
 	{
-		if(function_exists("_ShowGroupPropertyField_custom"))
-			_ShowGroupPropertyField_custom($name, $property_fields, $values, $bVarsFromForm);
-		else
-			_ShowGroupPropertyField($name, $property_fields, $values, $bVarsFromForm);
+		$userTypeDescription = CIBlockProperty::GetUserType($userType);
+		if (!empty($userTypeDescription))
+		{
+			$foundUserType = true;
+			_ShowUserPropertyField($name, $property_fields, $values, $bInitDef, $bVarsFromForm, $max_file_size_show, $form_name, $bCopy);
+		}
 	}
-	elseif($type=="E") //element link
-		_ShowElementPropertyField($name, $property_fields, $values, $bVarsFromForm);
-	else
-		_ShowStringPropertyField($name, $property_fields, $values, $bInitDef, $bVarsFromForm);
+	if (!$foundUserType)
+	{
+		switch ($type)
+		{
+			case Iblock\PropertyTable::TYPE_LIST:
+				_ShowListPropertyField($name, $property_fields, $values, $bInitDef);
+				break;
+			case Iblock\PropertyTable::TYPE_FILE:
+				_ShowFilePropertyField($name, $property_fields, $values, $max_file_size_show, $bVarsFromForm);
+				break;
+			case Iblock\PropertyTable::TYPE_SECTION:
+				if (function_exists("_ShowGroupPropertyField_custom"))
+				{
+					_ShowGroupPropertyField_custom($name, $property_fields, $values, $bVarsFromForm);
+				}
+				else
+				{
+					_ShowGroupPropertyField($name, $property_fields, $values, $bVarsFromForm);
+				}
+				break;
+			case Iblock\PropertyTable::TYPE_ELEMENT:
+				_ShowElementPropertyField($name, $property_fields, $values, $bVarsFromForm);
+				break;
+			default:
+				_ShowStringPropertyField($name, $property_fields, $values, $bInitDef, $bVarsFromForm);
+				break;
+		}
+	}
 }
 
 function _ShowHiddenValue($name, $value)
@@ -611,7 +692,7 @@ class _CIBlockError
 {
 	var $err_type, $err_text, $err_level;
 
-	public function _CIBlockError($err_level = false, $err_type = "", $err_text = "")
+	public function __construct($err_level = false, $err_type = "", $err_text = "")
 	{
 		$this->err_type = $err_type;
 		$this->err_text = preg_replace("#<br>$#i", "", $err_text);
@@ -744,13 +825,14 @@ function IBlockShowRights($entity_type, $iblock_id, $id, $section_title, $variab
 
 			foreach($arActualRights as $RIGHT_ID => $arRightSet)
 			{
-				if($bForceInherited || $arRightSet["IS_INHERITED"] == "Y")
+				if($bForceInherited || $arRightSet["IS_INHERITED"] === "Y")
 				{
+					$arRightSet["IS_OVERWRITED"] ??= null;
 					?>
-					<tr class="<?echo $html_var_name?>_row_for_<?echo htmlspecialcharsbx($arRightSet["GROUP_CODE"])?><?if($arRightSet["IS_OVERWRITED"] == "Y") echo " iblock-strike-out";?>">
+					<tr class="<?echo $html_var_name?>_row_for_<?echo htmlspecialcharsbx($arRightSet["GROUP_CODE"])?><?if($arRightSet["IS_OVERWRITED"] === "Y") echo " iblock-strike-out";?>">
 						<td style="width:40%!important; text-align:right"><?echo htmlspecialcharsex($arNames[$arRightSet["GROUP_CODE"]]["provider"]." ".$arNames[$arRightSet["GROUP_CODE"]]["name"])?>:</td>
 						<td align="left">
-							<?if($arRightSet["IS_OVERWRITED"] != "Y"):?>
+							<?if($arRightSet["IS_OVERWRITED"] !== "Y"):?>
 							<input type="hidden" name="<?echo $html_var_name?>[][RIGHT_ID]" value="<?echo htmlspecialcharsbx($RIGHT_ID)?>">
 							<input type="hidden" name="<?echo $html_var_name?>[][GROUP_CODE]" value="<?echo htmlspecialcharsbx($arRightSet["GROUP_CODE"])?>">
 							<input type="hidden" name="<?echo $html_var_name?>[][TASK_ID]" value="<?echo htmlspecialcharsbx($arRightSet["TASK_ID"])?>">
@@ -782,8 +864,9 @@ function IBlockShowRights($entity_type, $iblock_id, $id, $section_title, $variab
 							<a href="javascript:void(0);" onclick="JCIBlockAccess.DeleteRow(this, '<?=htmlspecialcharsbx(CUtil::addslashes($arRightSet["GROUP_CODE"]))?>', '<?=CUtil::JSEscape($variable_name)?>')" class="access-delete"></a>
 							<?if($bDefault):?>
 								<span title="<?echo GetMessage("IBLOCK_AT_OVERWRITE_TIP")?>"><?
-								if(
-									is_array($arRightSet["OVERWRITED"])
+								$existsOverwrited = !empty($arRightSet['OVERWRITED']) && is_array($arRightSet['OVERWRITED']);
+								if (
+									$existsOverwrited
 									&& $arRightSet["OVERWRITED"][0] > 0
 									&& $arRightSet["OVERWRITED"][1] > 0
 								)
@@ -793,7 +876,7 @@ function IBlockShowRights($entity_type, $iblock_id, $id, $section_title, $variab
 									<?
 								}
 								elseif(
-									is_array($arRightSet["OVERWRITED"])
+									$existsOverwrited
 									&& $arRightSet["OVERWRITED"][0] > 0
 								)
 								{
@@ -802,7 +885,7 @@ function IBlockShowRights($entity_type, $iblock_id, $id, $section_title, $variab
 									<?
 								}
 								elseif(
-									is_array($arRightSet["OVERWRITED"])
+									$existsOverwrited
 									&& $arRightSet["OVERWRITED"][1] > 0
 								)
 								{
@@ -844,7 +927,20 @@ function GetUserProfileLink($user_id, $title)
 		}
 
 		if($arUsersCache[$user_id])
-			return '[<a href="user_edit.php?lang='.LANGUAGE_ID.'&ID='.$user_id.'" title="'.$title.'">'.$user_id."</a>]&nbsp;(".htmlspecialcharsex($arUsersCache[$user_id]["LOGIN"]).") ".htmlspecialcharsex($arUsersCache[$user_id]["NAME"]." ".$arUsersCache[$user_id]["LAST_NAME"]);
+		{
+			$urlToUser = "user_edit.php?lang='.LANGUAGE_ID.'&ID='.$user_id.'";
+			if (defined("PUBLIC_MODE") && PUBLIC_MODE == 1)
+			{
+				return "(".htmlspecialcharsex($arUsersCache[$user_id]["LOGIN"]).") ".
+					htmlspecialcharsex($arUsersCache[$user_id]["NAME"]." ".$arUsersCache[$user_id]["LAST_NAME"]);
+			}
+			else
+			{
+				return '[<a href="'.$urlToUser.'" title="'.$title.'">'.$user_id.
+					"</a>]&nbsp;(".htmlspecialcharsex($arUsersCache[$user_id]["LOGIN"]).") ".
+					htmlspecialcharsex($arUsersCache[$user_id]["NAME"]." ".$arUsersCache[$user_id]["LAST_NAME"]);
+			}
+		}
 	}
 	return '';
 }
@@ -888,9 +984,10 @@ function IBlockGetWatermarkPositions()
 	return $rs;
 }
 
-function IBlockInheritedPropertyInput($iblock_id, $id, $data, $type, $checkboxLabel = "")
+function IBlockInheritedPropertyInput($iblock_id, $id, $data, $type, $checkboxLabel = ""): string
 {
-	$inherited = ($data[$id]["INHERITED"] !== "N") && ($checkboxLabel !== "");
+	$inheritedValue = (string)($data[$id]["INHERITED"] ?? 'Y');
+	$inherited = ($inheritedValue !== "N") && ($checkboxLabel !== "");
 	$inputId = "IPROPERTY_TEMPLATES_".$id;
 	$inputName = "IPROPERTY_TEMPLATES[".$id."][TEMPLATE]";
 	$menuId = "mnu_IPROPERTY_TEMPLATES_".$id;
@@ -902,6 +999,7 @@ function IBlockInheritedPropertyInput($iblock_id, $id, $data, $type, $checkboxLa
 	else
 		$menuItems= CIBlockParameters::GetInheritedPropertyTemplateElementMenuItems($iblock_id, "InheritedPropertiesTemplates.insertIntoInheritedPropertiesTemplate", $menuId, $inputId);
 
+	$templateValue = (string)($data[$id]["TEMPLATE"] ?? '');
 	$u = new CAdminPopupEx($menuId, $menuItems, array("zIndex" => 2000));
 	$result = $u->Show(true)
 		.'<script>
@@ -912,9 +1010,9 @@ function IBlockInheritedPropertyInput($iblock_id, $id, $data, $type, $checkboxLa
 			"TEMPLATE": ""
 			};
 		</script>'
-		.'<input type="hidden" name="'.$inputName.'" value="'.htmlspecialcharsbx($data[$id]["TEMPLATE"]).'" />'
+		.'<input type="hidden" name="'.$inputName.'" value="'.htmlspecialcharsbx($templateValue).'" />'
 		.'<textarea onclick="InheritedPropertiesTemplates.enableTextArea(\''.$inputId.'\')" name="'.$inputName.'" id="'.$inputId.'" '.($inherited? 'readonly="readonly"': '').' cols="55" rows="1" style="width:90%">'
-		.htmlspecialcharsbx($data[$id]["TEMPLATE"])
+		.htmlspecialcharsbx($templateValue)
 		.'</textarea>'
 		.'<input style="float:right" type="button" id="'.$menuId.'" '.($inherited? 'disabled="disabled"': '').' value="...">'
 		.'<br>'
@@ -931,15 +1029,15 @@ function IBlockInheritedPropertyInput($iblock_id, $id, $data, $type, $checkboxLa
 	{
 		$result .= '<input type="hidden" name="IPROPERTY_TEMPLATES['.$id.'][LOWER]" value="N">'
 			.'<input type="checkbox" name="IPROPERTY_TEMPLATES['.$id.'][LOWER]" id="lower_'.$id.'" value="Y" '
-			.'onclick="InheritedPropertiesTemplates.enableTextArea(\''.$inputId.'\');InheritedPropertiesTemplates.updateInheritedPropertiesValues(false, true)" '.($data[$id]["LOWER"] !== "Y"? '': 'checked="checked"').'>'
+			.'onclick="InheritedPropertiesTemplates.enableTextArea(\''.$inputId.'\');InheritedPropertiesTemplates.updateInheritedPropertiesValues(false, true)" '.(($data[$id]["LOWER"] ?? 'N') !== "Y"? '': 'checked="checked"').'>'
 			.'<label for="lower_'.$id.'">'.GetMessage("IBLOCK_AT_FILE_NAME_LOWER").'</label><br>'
 		;
 		$result .= '<input type="hidden" name="IPROPERTY_TEMPLATES['.$id.'][TRANSLIT]" value="N">'
 			.'<input type="checkbox" name="IPROPERTY_TEMPLATES['.$id.'][TRANSLIT]" id="translit_'.$id.'" value="Y" '
-			.'onclick="InheritedPropertiesTemplates.enableTextArea(\''.$inputId.'\');InheritedPropertiesTemplates.updateInheritedPropertiesValues(false, true)" '.($data[$id]["TRANSLIT"] !== "Y"? '': 'checked="checked"').'>'
+			.'onclick="InheritedPropertiesTemplates.enableTextArea(\''.$inputId.'\');InheritedPropertiesTemplates.updateInheritedPropertiesValues(false, true)" '.(($data[$id]["TRANSLIT"] ?? 'N') !== "Y"? '': 'checked="checked"').'>'
 			.'<label for="translit_'.$id.'">'.GetMessage("IBLOCK_AT_FILE_NAME_TRANSLIT").'</label><br>'
 		;
-		$result .= '<input size="2" maxlength="1" type="text" name="IPROPERTY_TEMPLATES['.$id.'][SPACE]" id="space_'.$id.'" value="'.htmlspecialcharsbx($data[$id]["SPACE"]).'" '
+		$result .= '<input size="2" maxlength="1" type="text" name="IPROPERTY_TEMPLATES['.$id.'][SPACE]" id="space_'.$id.'" value="'.htmlspecialcharsbx((string)($data[$id]["SPACE"] ?? '')).'" '
 			.'onchange="InheritedPropertiesTemplates.updateInheritedPropertiesValues(false, true)">'.GetMessage("IBLOCK_AT_FILE_NAME_SPACE").'<br>'
 		;
 	}
@@ -948,16 +1046,18 @@ function IBlockInheritedPropertyInput($iblock_id, $id, $data, $type, $checkboxLa
 	return $result;
 }
 
-function IBlockInheritedPropertyHidden($iblock_id, $id, $data, $type, $checkboxLabel = "")
+function IBlockInheritedPropertyHidden($iblock_id, $id, $data, $type, $checkboxLabel = ""): string
 {
-	$inherited = ($data[$id]["INHERITED"] !== "N") && ($checkboxLabel !== "");
+	$inheritedValue = (string)($data[$id]["INHERITED"] ?? 'Y');
+	$inherited = ($inheritedValue !== "N") && ($checkboxLabel !== "");
 	$inputId = "IPROPERTY_TEMPLATES_".$id;
 	$inputName = "IPROPERTY_TEMPLATES[".$id."][TEMPLATE]";
 	$menuId = "mnu_IPROPERTY_TEMPLATES_".$id;
 	$resultId = "result_IPROPERTY_TEMPLATES_".$id;
 	$checkboxId = "ck_IPROPERTY_TEMPLATES_".$id;
 
-	$result = '<input type="hidden" name="'.$inputName.'" value="'.htmlspecialcharsbx($data[$id]["TEMPLATE"]).'" />';
+	$templateValue = (string)($data[$id]["TEMPLATE"] ?? '');
+	$result = '<input type="hidden" name="'.$inputName.'" value="'.htmlspecialcharsbx($templateValue).'" />';
 
 	if ($checkboxLabel != "")
 	{
@@ -979,52 +1079,66 @@ class CEditorPopupControl
 	protected $width;
 	protected $height;
 	protected $initHtml = false;
+	/** @var bool  */
+	protected $filemanIncluded = null;
 
-	public function __construct($width = 420, $height = 200)
+	public function __construct(int $width = 420, int $height = 200)
 	{
-		$this->width = intval($width);
-		$this->height = intval($height);
+		$this->width = $width;
+		$this->height = $height;
+		$this->filemanIncluded = Loader::includeModule('fileman');
 	}
 
-	public function getControlHtml($name, $value, $maxLength = 255)
+	public function getEditorHtml(): string
 	{
 		$result = '';
-		if (!$this->initHtml)
+		if (!$this->filemanIncluded || $this->initHtml)
 		{
-			$this->initHtml = true;
+			return $result;
+		}
+		$this->initHtml = true;
+		Main\Page\Asset::getInstance()->addJs('/bitrix/js/iblock/iblock_edit.js');
 
-			Main\Page\Asset::getInstance()->addJs('/bitrix/js/iblock/iblock_edit.js');
-
-			$result .= '<div id="popup_editor_start" style="display: none">';
-			ob_start();
-			$LHE = new CLightHTMLEditor;
-			$LHE->Show(array(
-				'height' => $height - 40,
-				'width' => '100%',
-				'content' => '',
-				'bResizable' => true,
-				'bUseFileDialogs' => false,
-				'bFloatingToolbar' => false,
-				'bArisingToolbar' => true,
-				'bAutoResize' => true,
-				'bSaveOnBlur' => true,
-				'bInitByJS' => true,
-				'jsObjName' => 'popup_editor',
-				'toolbarConfig' => array(
-					'Bold', 'Italic', 'Underline', 'Strike',
-					'CreateLink', 'DeleteLink',
-					'Source', 'BackColor', 'ForeColor',
-				),
-				'id' => 'popup_editor_id',
-			));
-			$result .= ob_get_contents();
-			ob_end_clean();
-			$result .= '</div>';
-			$result .= '<script>
+		$result .= '<div id="popup_editor_start" style="display: none">';
+		ob_start();
+		$LHE = new CLightHTMLEditor;
+		$LHE->Show(array(
+			'height' => $this->height - 40,
+			'width' => '100%',
+			'content' => '',
+			'bResizable' => true,
+			'bUseFileDialogs' => false,
+			'bFloatingToolbar' => false,
+			'bArisingToolbar' => true,
+			'bAutoResize' => true,
+			'bSaveOnBlur' => true,
+			'bInitByJS' => true,
+			'jsObjName' => 'popup_editor',
+			'toolbarConfig' => array(
+				'Bold', 'Italic', 'Underline', 'Strike',
+				'CreateLink', 'DeleteLink',
+				'Source', 'BackColor', 'ForeColor',
+			),
+			'id' => 'popup_editor_id',
+		));
+		$result .= ob_get_contents();
+		ob_end_clean();
+		$result .= '</div>';
+		$result .= '<script>
 				var popup_editor_dialog;
 				var popup_editor_manager = new JCPopupEditor('.$this->width.', '.$this->height.');
 			</script>';
-		}
+		return $result;
+	}
+
+	public function getControlHtml(string $name, string $value, $maxLength = 255): string
+	{
+		$result = '';
+		if (!$this->filemanIncluded)
+			return $result;
+
+		if (!$this->initHtml)
+			$result = $this->getEditorHtml();
 
 		$value = trim($value);
 		if ($value)

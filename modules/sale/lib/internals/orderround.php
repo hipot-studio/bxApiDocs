@@ -22,11 +22,26 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Sale
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_OrderRound_Query query()
+ * @method static EO_OrderRound_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_OrderRound_Result getById($id)
+ * @method static EO_OrderRound_Result getList(array $parameters = [])
+ * @method static EO_OrderRound_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_OrderRound createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_OrderRound_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_OrderRound wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_OrderRound_Collection wakeUpCollection($rows)
+ */
 
 class OrderRoundTable extends Main\Entity\DataManager
 {
-	const ENTITY_TYPE_BASKET = 0x0001;
+	const ENTITY_TYPE_BASKET_ITEM = 0x0001;
+	/** @deprecated */
+	const ENTITY_TYPE_BASKET = self::ENTITY_TYPE_BASKET_ITEM;
 
 	/**
 	 * Returns DB table name for entity.
@@ -66,7 +81,7 @@ class OrderRoundTable extends Main\Entity\DataManager
 			)),
 			'ENTITY_TYPE' => new Main\Entity\EnumField('ENTITY_TYPE', array(
 				'required' => true,
-				'values' => array(self::ENTITY_TYPE_BASKET),
+				'values' => array(self::ENTITY_TYPE_BASKET_ITEM),
 				'title' => Loc::getMessage('ORDER_ROUND_ENTITY_ENTITY_TYPE_FIELD')
 			)),
 			'ENTITY_ID' => new Main\Entity\IntegerField('ENTITY_ID', array(
@@ -99,5 +114,25 @@ class OrderRoundTable extends Main\Entity\DataManager
 		return array(
 			new Main\Entity\Validator\Length(null, 255),
 		);
+	}
+
+	/**
+	 * Delete data by order.
+	 *
+	 * @param int $order		Order id.
+	 * @return bool
+	 */
+	public static function clearByOrder($order)
+	{
+		$order = (int)$order;
+		if ($order <= 0)
+			return false;
+
+		$conn = Main\Application::getConnection();
+		$helper = $conn->getSqlHelper();
+		$conn->queryExecute('delete from '.$helper->quote(self::getTableName()).' where '.$helper->quote('ORDER_ID').' = '.$order);
+		unset($helper, $conn);
+
+		return true;
 	}
 }

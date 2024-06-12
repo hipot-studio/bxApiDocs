@@ -123,6 +123,7 @@ class CCatalogDiscountSave extends CAllCatalogDiscountSave
 			"MODIFIED_BY" => array("FIELD" => "DS.MODIFIED_BY", "TYPE" => "int"),
 			"DATE_CREATE" => array("FIELD" => "DS.DATE_CREATE", "TYPE" => "datetime"),
 			"CREATED_BY" => array("FIELD" => "DS.CREATED_BY", "TYPE" => "int"),
+			"SALE_ID" => array("FIELD" => "DS.SALE_ID", "TYPE" => "int"),
 
 			"RANGE_FROM" => array("FIELD" => "DSR.RANGE_FROM", "TYPE" => "double", "FROM" => "LEFT JOIN b_catalog_disc_save_range DSR ON (DS.ID = DSR.DISCOUNT_ID)"),
 			"VALUE" => array("FIELD" => "DSR.VALUE", "TYPE" => "double", "FROM" => "LEFT JOIN b_catalog_disc_save_range DSR ON (DS.ID = DSR.DISCOUNT_ID)"),

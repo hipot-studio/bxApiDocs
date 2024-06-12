@@ -16,12 +16,12 @@ class BitrixEngine extends Engine
 {
 	protected $engineId = 'bitrix_generic';
 
-	static public function __construct()
+	public function __construct()
 	{
 		parent::__construct();
 	}
 
-	static public function getProxy()
+	public function getProxy()
 	{
 		return Service::getEngine();
 	}

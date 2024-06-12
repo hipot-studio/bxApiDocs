@@ -3,6 +3,7 @@
 namespace Bitrix\Sale\Delivery\Tracking;
 
 use \Bitrix\Sale\Delivery\Services;
+use Bitrix\Sale\Result;
 
 /**
  * Class Base
@@ -31,63 +32,55 @@ abstract class Base
 	 * Returns class name for administration interface
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название класса для административного интерфейса. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/delivery/tracking/base/getclasstitle.php
-	* @author Bitrix
-	*/
 	abstract public function getClassTitle();
 
 	/**
 	 * Returns class description for administration interface
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает описание класса для административного интерфейса. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/delivery/tracking/base/getclassdescription.php
-	* @author Bitrix
-	*/
 	abstract public function getClassDescription();
 
 	/**
 	 * @param $trackingNumber
 	 * @return \Bitrix\Sale\Delivery\Tracking\StatusResult.
 	 */
-	abstract public function getStatus($trackingNumber);
+	public function getStatus($trackingNumber)
+	{
+		return new StatusResult();
+	}
+
+	/**
+	 * @param array $shipmentData
+	 * @return StatusResult
+	 */
+	public function getStatusShipment($shipmentData)
+	{
+		return $this->getStatus($shipmentData['TRACKING_NUMBER']);
+	}
 
 	/**
 	 * @param string[] $trackingNumbers
 	 * @return \Bitrix\Sale\Result.
 	 */
-	abstract public function getStatuses(array $trackingNumbers);
+	public function getStatuses(array $trackingNumbers)
+	{
+		return new Result();
+	}
+
+	/**
+	 * @param array $shipmentsData
+	 * @return \Bitrix\Sale\Result
+	 */
+	public function getStatusesShipment(array $shipmentsData)
+	{
+		$trackingNumbers = array_keys($shipmentsData);
+		return $this->getStatuses($trackingNumbers);
+	}
 
 	/**
 	 * Returns params structure
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает массив параметров. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/delivery/tracking/base/getparamsstructure.php
-	* @author Bitrix
-	*/
 	abstract public function getParamsStructure();
 
 	/**
@@ -103,7 +96,7 @@ abstract class Base
 		return \Bitrix\Sale\Internals\Input\Manager::getEditHtml(
 			$inputName,
 			$paramsStructure[$paramKey],
-			$this->params[$paramKey]
+			$this->params[$paramKey] ?? null
 		);
 	}
 
@@ -111,7 +104,7 @@ abstract class Base
 	 * @param string $trackingNumber
 	 * @return string Url were we can see tracking information
 	 */
-	static public function getTrackingUrl($trackingNumber = '')
+	public function getTrackingUrl($trackingNumber = '')
 	{
 		return '';
 	}

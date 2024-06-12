@@ -5,7 +5,7 @@ IncludeModuleLangFile(__FILE__);
 class CMailRegru
 {
 
-	static public function __construct()
+	public function __construct()
 	{
 	}
 

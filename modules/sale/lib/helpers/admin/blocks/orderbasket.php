@@ -12,10 +12,12 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\DiscountCouponsManager;
 use Bitrix\Sale\Helpers\Admin\OrderEdit;
+use Bitrix\Iblock,
+	Bitrix\Catalog;
 
 Loc::loadMessages(__FILE__);
 
-require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/admin_tool.php");
+require_once __DIR__.'/../../../../general/admin_tool.php';
 
 class OrderBasket
 {
@@ -57,10 +59,14 @@ class OrderBasket
 		$this->createProductBasement = $createProductBasement;
 		$this->mode = $mode;
 		$this->weightUnit = htmlspecialcharsbx(Option::get('sale', 'weight_unit', "", $this->order->getSiteId()));
-		$this->weightKoef = htmlspecialcharsbx(Option::get('sale', 'weight_koef', 1, $this->order->getSiteId()));
+		$this->weightKoef = floatval(Option::get('sale', 'weight_koef', 1, $this->order->getSiteId()));
+
+		if($this->weightKoef <= 0)
+			$this->weightKoef = 1;
+
 		$this->isShowXmlId = Option::get("sale", "show_order_product_xml_id", "N") == "Y";
 
-		if(strlen($jsObjName)>0 && strlen($idPrefix)>0)
+		if($jsObjName <> '' && $idPrefix <> '')
 		{
 			$this->jsObjName = $jsObjName;
 
@@ -77,6 +83,11 @@ class OrderBasket
 		}
 	}
 
+	public function setSettingsShowPropsVisible(bool $isVisible): void
+	{
+		$this->settingsDialog->setShowPropsVisible($isVisible);
+	}
+
 	/**
 	 * @param bool|false $defTails
 	 * @return string
@@ -86,6 +97,10 @@ class OrderBasket
 	public function getEdit($defTails = false)
 	{
 		$productAddBool = Option::get('sale', 'SALE_ADMIN_NEW_PRODUCT', 'N');
+		$siteId = htmlspecialcharsbx(
+			\CUtil::JSEscape(
+				$this->order->getSiteId()
+		));
 
 		$result = '
 			<div class="adm-s-gray-title" style="padding-right: 2px;">
@@ -93,7 +108,7 @@ class OrderBasket
 				<div class="adm-s-gray-title-btn-container">
 					<span
 						class="adm-btn adm-btn-green adm-btn-add"
-						onClick="'.$this->jsObjName.'.addProductSearch({lang: \''.LANGUAGE_ID.'\', siteId: \''.$this->order->getSiteId().'\', orderId: '.intval($this->order->getId()).'});"
+						onClick="'.$this->jsObjName.'.addProductSearch({lang: \''.LANGUAGE_ID.'\', siteId: \''.$siteId.'\', orderId: '.intval($this->order->getId()).'});"
 						>'.
 							Loc::getMessage("SALE_ORDER_BASKET_PRODUCT_ADD").
 					'</span>
@@ -106,7 +121,7 @@ class OrderBasket
 				<table class="adm-s-order-table-ddi-table" style="width: 100%;" id="'.$this->idPrefix.'sale_order_edit_product_table">
 					<thead style="text-align: left;">
 					<tr>
-						<td>
+						<td class="adm-s-order-table-context-menu-column">
 							<span class="adm-s-order-table-title-icon"
 								title="'.Loc::getMessage("SALE_ORDER_BASKET_SETTINGS_BUTTON_TITLE").'"
 								onclick="'.$this->jsObjName.'.onHeadMenu(this);"
@@ -163,7 +178,7 @@ class OrderBasket
 
 		$result .= '<span
 						class="adm-btn adm-btn-green adm-btn-add"
-						onClick="'.$this->jsObjName.'.addProductSearch({lang: \''.LANGUAGE_ID.'\', siteId: \''.$this->order->getSiteId().'\', index: 1, orderId: '.intval($this->order->getId()).'});"
+						onClick="'.$this->jsObjName.'.addProductSearch({lang: \''.LANGUAGE_ID.'\', siteId: \''.$siteId.'\', index: 1, orderId: '.intval($this->order->getId()).'});"
 						>'.
 						Loc::getMessage("SALE_ORDER_BASKET_PRODUCT_ADD").
 					'</span>
@@ -191,6 +206,17 @@ class OrderBasket
 		$currency = $this->order->getCurrency();
 		$basket = $this->order->getBasket();
 		$totalPrices = OrderEdit::getTotalPrices($this->order, $this, $needRecalculate);
+
+		$orderDiscount = '';
+		if ((float)$totalPrices['ORDER_DISCOUNT_VALUE'] > 0)
+		{
+			$orderDiscount = '<tr>
+				<td>'.Loc::getMessage("SALE_ORDER_DEPRECATED_DISCOUNT_VALUE").'</td>
+				<td id="'.$this->idPrefix.'sale_order_edit_basket_order_discount">'.
+				\CCurrencyLang::currencyFormat(floatval($totalPrices["ORDER_DISCOUNT_VALUE"]), $currency, true).
+				'</td>
+			</tr>';
+		}
 
 		if($basket)
 			$weight = $basket->getWeight();
@@ -223,7 +249,8 @@ class OrderBasket
 						<td id="'.$this->idPrefix.'sale_order_edit_basket_price_delivery_discount">'.
 							\CCurrencyLang::currencyFormat(floatval($totalPrices["PRICE_DELIVERY_DISCOUNTED"]), $currency, true).
 						'</td>
-					</tr>
+					</tr>'.
+					$orderDiscount.'
 					<tr>
 						<td>'.Loc::getMessage("SALE_ORDER_BASKET_TAX").'</td>
 						<td id="'.$this->idPrefix.'sale_order_edit_basket_tax">'.
@@ -275,8 +302,8 @@ class OrderBasket
 		if($showBlock)
 		{
 			$couponMessage = '';
-			if ($this->order->getId() > 0)
-				$couponMessage = '<div class="bx-adm-pc-section">'.Loc::getMessage('SALE_ORDER_BASKET_COUPONS_NOTE').'</div>';
+			if ($this->order->getId() > 0 && !($this->order instanceof Sale\Archive\Order))
+				$couponMessage = '<br><div class="bx-adm-pc-section" style="font-size: smaller;">'.Loc::getMessage('SALE_ORDER_BASKET_COUPONS_NOTE').'</div>';
 
 			$result =  '
 				<div class="adm-s-result-container-promo">
@@ -287,12 +314,12 @@ class OrderBasket
 								'<div class="bx-adm-pc-inputs-container">
 									<input type="text" class="bx-adm-pc-inout-text" id="sale-admin-order-coupons">
 									<input  type="submit" class="bx-adm-pc-input-submit" value='.Loc::getMessage("SALE_ORDER_BASKET_ADD").' onclick="BX.Sale.Admin.OrderBasketCoupons.onAddCoupons(); return false;">
-								</div>' : '').
+								</div>'.$couponMessage : '').
 						'</div>
 						<div class="bx-adm-pc-section">
 							<ul class="bx-adm-pc-sale-list" id="sale-admin-order-coupons-container">
 							</ul>
-						</div>'.$couponMessage.'						
+						</div>
 					</div>
 				</div>';
 			unset($couponMessage);
@@ -371,9 +398,10 @@ class OrderBasket
 			"SALE_ORDER_BASKET_PROD_MENU_EDIT", "SALE_ORDER_BASKET_PROD_MENU_DELETE", "SALE_ORDER_BASKET_BASE_CATALOG_PRICE",
 			"SALE_ORDER_BASKET_PROD_EDIT_ITEM_SAVE", "SALE_ORDER_BASKET_KG", "SALE_ORDER_BASKET_COUPON",
 			"SALE_ORDER_BASKET_COUPON_STATUS", "SALE_ORDER_BASKET_COUPON_APPLY", "SALE_ORDER_BASKET_COUPON_DELETE",
-			"SALE_ORDER_BASKET_POSITION_EXISTS", "SALE_ORDER_BASKET_ADD_COUPON_ERROR"
+			"SALE_ORDER_BASKET_POSITION_EXISTS", "SALE_ORDER_BASKET_ADD_COUPON_ERROR", "SALE_ORDER_BASKET_NO_NAME",
+			"SALE_ORDER_BASKET_PRODUCT_UNAVAILABLE"
 		);
-		$result = '<script type="text/javascript">';
+		$result = '<script>';
 
 		foreach($langPhrases as $phrase)
 			$result .= ' BX.message({'.$phrase.': "'.\CUtil::jsEscape(Loc::getMessage($phrase)).'"});';
@@ -382,9 +410,11 @@ class OrderBasket
 			$data = static::prepareData();
 
 		$totalPrices = OrderEdit::getTotalPrices($this->order, $this, false);
+		$weight = $this->order->getBasket() ? $this->order->getBasket()->getWeight() : 0;
 
 		if($this->mode == self::EDIT_MODE)
 		{
+
 			$result .= '
 				BX.ready(function(){
 					var obParams = {
@@ -401,16 +431,16 @@ class OrderBasket
 						unRemovableFields: ["PRICE", "QUANTITY"],
 						formatQuantity: "'.Option::get('sale', 'format_quantity', 'AUTO').'",
 						weightUnit: "'.$this->weightUnit.'",
-						'.$this->getTotalBlockFieldsJs($totalPrices, $data).'
+						'.$this->getTotalBlockFieldsJs($totalPrices, array("WEIGHT" => $weight)).'
 					};';
 
 			if(!$defTails)
 			{
 				$result .= '
-					obParams.productsOrder = '.\CUtil::phpToJSObject($data["ITEMS_ORDER"]).';
-					obParams.products = '.\CUtil::phpToJSObject($data["ITEMS"]).';
-					obParams.iblocksSkuParams = '.\CUtil::phpToJSObject($data["IBLOCKS_SKU_PARAMS"]).';
-					obParams.iblocksSkuParamsOrder = '.\CUtil::phpToJSObject($data["IBLOCKS_SKU_PARAMS_ORDER"]).';';
+					obParams.productsOrder = '.\CUtil::phpToJSObject($data["ITEMS_ORDER"] ?? []).';
+					obParams.products = '.\CUtil::phpToJSObject($data["ITEMS"] ?? []).';
+					obParams.iblocksSkuParams = '.\CUtil::phpToJSObject($data["IBLOCKS_SKU_PARAMS"] ?? []).';
+					obParams.iblocksSkuParamsOrder = '.\CUtil::phpToJSObject($data["IBLOCKS_SKU_PARAMS_ORDER"] ?? []).';';
 			}
 
 			$result .=
@@ -429,6 +459,8 @@ class OrderBasket
 		}
 		else
 		{
+			$showProps = OrderBasketSettings::loadIsShowPropsVisible();
+
 			$result .= '
 				BX.ready(function(){
 					var obParams = {
@@ -442,9 +474,10 @@ class OrderBasket
 						discounts: '.\CUtil::phpToJSObject(OrderEdit::getOrderedDiscounts($this->order, false)).',
 						createBasketBottom: true,
 						mode: "view",
+						showProps: '.($showProps ? 'true' : 'false').',
 						formatQuantity: "'.Option::get('sale', 'format_quantity', 'AUTO').'",
 						weightUnit: "'.$this->weightUnit.'",
-						'.$this->getTotalBlockFieldsJs($totalPrices, array("WEIGHT" => $this->order->getBasket()->getWeight())).'
+						'.$this->getTotalBlockFieldsJs($totalPrices, array("WEIGHT" => $weight)).'
 					};';
 
 			if(!$defTails)
@@ -532,19 +565,29 @@ class OrderBasket
 		$result = array();
 
 		foreach($products as $product)
+		{
 			if($product['PRODUCT_ID'] == $productId && intval($product['OFFER_ID']) > 0)
+			{
 				$result[] = $product['OFFER_ID'];
+			}
+		}
 
 		return $result;
+	}
+
+	public function getOffersSkuParams(array $productsParams, array $visibleColumns = array())
+	{
+		return static::getOffersSkuParamsMode($productsParams, $visibleColumns, $this->mode);
 	}
 
 	/**
 	 * @param array $productsParams
 	 * @param array $visibleColumns
+	 * @param int $mode
 	 * @return array
 	 * @throws Main\LoaderException
 	 */
-	public function getOffersSkuParams(array $productsParams, array $visibleColumns = array())
+	public static function getOffersSkuParamsMode(array $productsParams, array $visibleColumns = array(), $mode = 0)
 	{
 		if(!empty($productsParams["ITEMS"]) && is_array($productsParams["ITEMS"]))
 		{
@@ -567,18 +610,26 @@ class OrderBasket
 
 				$productIds[] = $params['PRODUCT_ID'];
 
-				if($this->mode == self::VIEW_MODE)
-					$skuFilter['ID'] = array_merge($skuFilter['ID'], $this->getOffersIds($params["PRODUCT_ID"], $productsParams["ITEMS"]));
+				if ($mode == self::VIEW_MODE)
+				{
+					if ((int)$params['OFFER_ID'] > 0)
+					{
+						$skuFilter['ID'][] = $params['OFFER_ID'];
+					}
+				}
 
-				if(!in_array($params["IBLOCK_ID"], $ibs))
+				if (!isset($ibs[$params["IBLOCK_ID"]]))
 				{
 					$props = static::getSkuProps(true, $params["IBLOCK_ID"]);
-
-					if($props)
+					if (!empty($props))
+					{
 						foreach($props as $prop)
+						{
 							$propFilter['ID'][] = $prop['ID'];
+						}
+					}
 
-					$ibs[] = $params["IBLOCK_ID"];
+					$ibs[$params["IBLOCK_ID"]] = true;
 				}
 
 				if($params["PRODUCT_ID"] != $params["OFFER_ID"])
@@ -609,7 +660,7 @@ class OrderBasket
 				if($params['MODULE'] != 'catalog')
 					continue;
 
-				if(!isset(self::$productsOffersSkuParams[$params["PRODUCT_ID"]]) || !isset(self::$productsOffersSkuParams[$params["PRODUCT_ID"]]))
+				if (!isset(self::$productsOffersSkuParams[$params["PRODUCT_ID"]]))
 				{
 					if(isset($tmpPropsOff[$params["PRODUCT_ID"]]))
 					{
@@ -640,39 +691,6 @@ class OrderBasket
 							}
 						}
 					}
-					else
-					{
-						$res = \CIBlockElement::GetPropertyValues($params["IBLOCK_ID"], array('ID' => $params['PRODUCT_ID']));
-						$tmpProps = $res->Fetch();
-
-						if(is_array($tmpProps))
-						{
-							foreach($tmpProps as $id => $val)
-							{
-								if(!empty($val))
-								{
-									if(!isset($iblockPropsUsed[$id]))
-										$iblockPropsUsed[$id] = array();
-
-									if(is_array($val))
-									{
-										$iblockPropsUsed[$id] = array_merge(
-											$iblockPropsUsed[$id],
-											array_diff(
-												$val,
-												$iblockPropsUsed[$id]
-											)
-										);
-									}
-									else
-									{
-										if(!in_array($val, $iblockPropsUsed[$id]))
-											$iblockPropsUsed[$id][] = $val;
-									}
-								}
-							}
-						}
-					}
 				}
 			}
 
@@ -695,19 +713,15 @@ class OrderBasket
 					);
 				}
 
-				if(intval($params["IBLOCK_ID"]) > 0 && !isset(self::$iblockPropsParams[$params["IBLOCK_ID"]]))
+				if (!empty(self::$productsOffersSkuParams[$params["PRODUCT_ID"]][$params["OFFER_ID"]]))
 				{
-					self::$iblockPropsParams[$params["IBLOCK_ID"]] = static::getPropsParams(
-						$params["IBLOCK_ID"],
-						$visibleColumns,
-						$iblockPropsUsed
-					);
+					$params["SKU_PROPS"] = self::$productsOffersSkuParams[$params["PRODUCT_ID"]][$params["OFFER_ID"]];
 				}
 
-				if(self::$productsOffersSkuParams[$params["PRODUCT_ID"]][$params["OFFER_ID"]])
-					$params["SKU_PROPS"] = self::$productsOffersSkuParams[$params["PRODUCT_ID"]][$params["OFFER_ID"]];
-
-				if (is_array($params["SKU_PROPS"]))
+				if (
+					isset($params["SKU_PROPS"])
+					&& is_array($params["SKU_PROPS"])
+				)
 				{
 					foreach ($params["SKU_PROPS"] as $id => $skuProps)
 					{
@@ -729,7 +743,7 @@ class OrderBasket
 					}
 				}
 
-				if($this->mode == self::EDIT_MODE && $params['PRODUCT_ID'] != $params['OFFER_ID'])
+				if($mode == self::EDIT_MODE && $params['PRODUCT_ID'] != $params['OFFER_ID'])
 				{
 					if(is_array(self::$iblockPropsParams[$params["OFFERS_IBLOCK_ID"]]))
 						$skuOrder = array_keys(self::$iblockPropsParams[$params["OFFERS_IBLOCK_ID"]]);
@@ -747,7 +761,7 @@ class OrderBasket
 
 			unset($params, $iblockPropsUsed);
 
-			if($this->mode == self::EDIT_MODE && !empty($possibleSkuParams))
+			if($mode == self::EDIT_MODE && !empty($possibleSkuParams))
 			{
 				$possibleSkuProps = Sale\Helpers\Admin\SkuProps::getPossibleSkuPropsValues($possibleSkuParams);
 
@@ -758,7 +772,7 @@ class OrderBasket
 						if($params['MODULE'] != 'catalog')
 							continue;
 
-						$productsParams["ITEMS"][$key]["SKU_PROPS_POSSIBLE_VALUES"] = $possibleSkuProps[$params['OFFER_ID']];
+						$productsParams["ITEMS"][$key]["SKU_PROPS_POSSIBLE_VALUES"] = $possibleSkuProps[$params['OFFER_ID']] ?? [];
 					}
 
 					unset($possibleSkuParams);
@@ -803,23 +817,6 @@ class OrderBasket
 
 			$result = self::getProductDataToFillBasket($productId, $quantity, $userId, $siteId, implode(",",array_keys($columns)));
 
-			if (!empty($result) && is_array($result))
-			{
-				if (isset($result['DISCOUNT_PRICE']))
-				{
-					$result['DISCOUNT_PRICE'] = Sale\PriceMaths::roundByFormatCurrency($result['DISCOUNT_PRICE'], $result['CURRENCY']);
-				}
-
-				if (isset($result['PRICE']))
-				{
-					$result['PRICE'] = Sale\PriceMaths::roundByFormatCurrency($result['PRICE'], $result['CURRENCY']);
-				}
-
-				if (isset($result['PRICE_BASE']))
-				{
-					$result['PRICE_BASE'] = Sale\PriceMaths::roundByFormatCurrency($result['PRICE_BASE'], $result['CURRENCY']);
-				}
-			}
 			static $proxyProductData = array();
 
 			if (!empty($proxyProductData[$productId]) && is_array($proxyProductData[$productId]))
@@ -852,17 +849,24 @@ class OrderBasket
 		return $result;
 	}
 
-	public static function getProductsData(array $productsIds, $siteId, array $fields = array())
+	/**
+	 * @param int[] $productsIds
+	 * @param string $siteId
+	 * @param array $fields
+	 * @param int $userId
+	 * @return array
+	 * @throws Main\ArgumentNullException
+	 */
+	public static function getProductsData(array $productsIds, $siteId, array $fields = array(), $userId = 0)
 	{
 		if(empty($productsIds))
 			return array();
 
-		global $USER;
 		$result = array();
 
 		foreach($productsIds as  $id)
 		{
-			$details = OrderEdit::getProductDetails($id, $USER->GetID(), $siteId);
+			$details = OrderEdit::getProductDetails($id, $userId, $siteId);
 
 			if($details !== false)
 				$result[$id] = $details;
@@ -877,7 +881,7 @@ class OrderBasket
 			foreach($noCachedData as $productId => $productData)
 			{
 				$result[$productId] = $productData;
-				OrderEdit::setProductDetails($productId, $USER->GetID(), $siteId, $result[$productId]);
+				OrderEdit::setProductDetails($productId, $userId, $siteId, $result[$productId]);
 			}
 
 			$emptyData = array_diff($productsIds, array_keys($result));
@@ -910,11 +914,11 @@ class OrderBasket
 
 			foreach ($visibleColumns as $id => $name)
 			{
-				if (substr($id, 0, 9) == "PROPERTY_")
+				if (mb_substr($id, 0, 9) == "PROPERTY_")
 				{
-					$iblockPropCode = substr($id, 9);
+					$iblockPropCode = mb_substr($id, 9);
 
-					if(strlen($iblockPropCode) > 0)
+					if($iblockPropCode <> '')
 					{
 						$iBlockProps[] = $iblockPropCode;
 
@@ -939,8 +943,8 @@ class OrderBasket
 		}
 
 		$rsProps = \Bitrix\Iblock\PropertyTable::getList(array(
-				'filter' => $filter,
-				'order' => array('SORT' => 'ASC', 'ID' => 'ASC'),
+			'filter' => $filter,
+			'order' => array('SORT' => 'ASC', 'ID' => 'ASC'),
 		));
 
 		while ($arProp = $rsProps->fetch())
@@ -948,7 +952,11 @@ class OrderBasket
 			if(!empty($iblockPropsUsed) && !array_key_exists($arProp['ID'], $iblockPropsUsed))
 				continue;
 
-			if ($arProp['PROPERTY_TYPE'] == 'L' || $arProp['PROPERTY_TYPE'] == 'E' || ($arProp['PROPERTY_TYPE'] == 'S' && $arProp['USER_TYPE'] == 'directory'))
+			if (
+				$arProp['PROPERTY_TYPE'] == 'L'
+				|| $arProp['PROPERTY_TYPE'] == 'E'
+				|| ($arProp['PROPERTY_TYPE'] == 'S' && $arProp['USER_TYPE'] == 'directory')
+			)
 			{
 				if ($arProp['XML_ID'] == 'CML2_LINK')
 					continue;
@@ -974,6 +982,8 @@ class OrderBasket
 
 					if(!empty($iblockPropsUsed[$arProp['ID']]))
 						$eFilter['ID'] = $iblockPropsUsed[$arProp['ID']];
+					else
+						continue;
 
 					$rsPropEnums = \CIBlockElement::getList(
 						array('SORT' => 'ASC'),
@@ -1011,14 +1021,14 @@ class OrderBasket
 					if ($bUseHLIblock)
 					{
 						if(!is_array($arProp["USER_TYPE_SETTINGS"]))
-							$arProp["USER_TYPE_SETTINGS"] = unserialize($arProp["USER_TYPE_SETTINGS"]);
+							$arProp["USER_TYPE_SETTINGS"] = unserialize($arProp["USER_TYPE_SETTINGS"], ['allowed_classes' => false]);
 
 						$hlblock = HL\HighloadBlockTable::getList(array("filter" => array("TABLE_NAME" => $arProp["USER_TYPE_SETTINGS"]["TABLE_NAME"])))->fetch();
 						if ($hlblock)
 						{
 							$entity = HL\HighloadBlockTable::compileEntity($hlblock);
-							$entity_data_class = $entity->getDataClass();
-							$rsData = $entity_data_class::getList();
+							$entityDataClass = $entity->getDataClass();
+							$rsData = $entityDataClass::getList();
 
 							while ($arData = $rsData->fetch())
 							{
@@ -1036,8 +1046,12 @@ class OrderBasket
 					}
 				}
 
-
-				if (is_array($iblockPropsUsed[$arProp['ID']]) && !empty($arValues) && is_array($arValues))
+				if (
+					isset($iblockPropsUsed[$arProp['ID']])
+					&& is_array($iblockPropsUsed[$arProp['ID']])
+					&& !empty($arValues)
+					&& is_array($arValues)
+				)
 				{
 					//if property value deleted or inactive
 					$notFound = array_diff($iblockPropsUsed[$arProp['ID']], array_keys($arValues));
@@ -1063,13 +1077,30 @@ class OrderBasket
 				}
 			}
 
-			if ($arProp['PROPERTY_TYPE'] == "S" && is_array($arRes[$arProp['ID']]['VALUES']))
+			if (
+				$arProp['PROPERTY_TYPE'] == "S"
+				&& $arProp['USER_TYPE'] == 'directory'
+				&& isset($arRes[$arProp['ID']]['VALUES'])
+				&& is_array($arRes[$arProp['ID']]['VALUES'])
+			)
 			{
 				foreach($arRes[$arProp['ID']]['VALUES'] as $id => $value)
 				{
-					$arTmpFile = \CFile::getFileArray($value["FILE"]);
-					$tmpImg = \CFile::resizeImageGet($arTmpFile, array('width'=>20, 'height'=>20), BX_RESIZE_IMAGE_PROPORTIONAL, false, false);
-					$arRes[$arProp['ID']]['VALUES'][$id]['PICT'] = $tmpImg['src'];
+					if (isset($value["FILE"]))
+					{
+						$arTmpFile = \CFile::getFileArray($value["FILE"]);
+						$tmpImg = \CFile::resizeImageGet(
+							$arTmpFile,
+							[
+								'width' => 20,
+								'height' => 20,
+							],
+							BX_RESIZE_IMAGE_PROPORTIONAL,
+							false,
+							false
+						);
+						$arRes[$arProp['ID']]['VALUES'][$id]['PICT'] = $tmpImg['src'];
+					}
 				}
 			}
 		}
@@ -1118,7 +1149,7 @@ class OrderBasket
 						if(!in_array($propParams["ID"], $allProps))
 							$allProps[] = $propParams["ID"];
 
-						if(strlen($propParams["~VALUE"]) > 0)
+						if($propParams["~VALUE"] <> '')
 						{
 							$props[$id][$offerId][$propParams["ID"]] = $propParams["~VALUE"];
 
@@ -1153,10 +1184,9 @@ class OrderBasket
 		return $props;
 	}
 
-
-	protected static function getSkuProps($flagAll = false, $iblockId)
+	protected static function getSkuProps($flagAll, $iblockId)
 	{
-		if (static::$arSkuProps[$iblockId] === null)
+		if (!isset(static::$arSkuProps[$iblockId]))
 		{
 			$arCatalog = static::getOffersCatalog($iblockId);
 			static::$arSkuProps[$iblockId] = $arCatalog? static::getPropsList($arCatalog["IBLOCK_ID"], $arCatalog['SKU_PROPERTY_ID']) : array();
@@ -1164,7 +1194,7 @@ class OrderBasket
 		return $flagAll? static::$arSkuProps[$iblockId] : static::filterProps(static::$arSkuProps[$iblockId]);
 	}
 
-	protected function getOffersCatalog($iblockId)
+	protected static function getOffersCatalog($iblockId)
 	{
 		if (self::$catalogIncluded === null)
 			self::$catalogIncluded = Main\Loader::includeModule('catalog');
@@ -1177,32 +1207,45 @@ class OrderBasket
 		return static::$offersCatalog[$iblockId];
 	}
 
-	protected function getPropsList($iblockId, $skuPropertyId = 0)
+	protected static function getPropsList($iblockId, $skuPropertyId = 0)
 	{
-		$arResult = array();
-		$dbrFProps = \CIBlockProperty::getList(
-			array(
-				"SORT" => "ASC",
-				"NAME" => "ASC"
-			),
-			array(
-				"IBLOCK_ID" => $iblockId,
-				"ACTIVE" => "Y",
-				"!XML_ID" => "CML2_LINK",
-				"CHECK_PERMISSIONS" => "N",
-			)
+		if (self::$catalogIncluded === null)
+			self::$catalogIncluded = Main\Loader::includeModule('catalog');
+		if (!self::$catalogIncluded)
+			return [];
+
+		$propertyIds = Catalog\Product\PropertyCatalogFeature::getOfferTreePropertyCodes($iblockId);
+		if ($propertyIds === null)
+			return [];
+		$arResult = [];
+		$filter = array(
+			'@ID' => $propertyIds,
+			'=IBLOCK_ID' => $iblockId,
 		);
-		while ($arProp = $dbrFProps->getNext())
+		if ($skuPropertyId > 0)
+			$filter['!=ID'] = $skuPropertyId;
+		$iterator = Iblock\PropertyTable::getList(array(
+			'select' => array('*'),
+			'filter' => $filter,
+			'order' => array(
+				'SORT' => 'ASC',
+				'NAME' => 'ASC'
+			)
+		));
+		while ($row = $iterator->fetch())
 		{
-			if ($skuPropertyId == $arProp['ID'])
-				continue;
-			$arProp["PROPERTY_USER_TYPE"] = (!empty($arProp["USER_TYPE"]) ? \CIBlockProperty::getUserType($arProp["USER_TYPE"]) : array());
-			$arResult[] = $arProp;
+			$row['USER_TYPE'] = (string)$row['USER_TYPE'];
+			$row['~NAME'] = $row['NAME'];
+			$row['NAME'] = htmlspecialcharsEx($row['NAME']);
+			$row['PROPERTY_USER_TYPE'] = ($row['USER_TYPE'] != '' ? \CIBlockProperty::getUserType($row['USER_TYPE']) : array());
+			$arResult[] = $row;
 		}
+		unset($row, $iterator);
+
 		return $arResult;
 	}
 
-	protected function filterProps(&$props)
+	protected static function filterProps(&$props)
 	{
 		$result = array();
 		if ($props)
@@ -1250,7 +1293,7 @@ class OrderBasket
 		$arTmpColumns = array();
 		$arColumnsOptions = static::loadVisibleColumns($idPrefix);
 
-		if (is_array($arColumnsOptions) && isset($arColumnsOptions["columns"]) && strlen($arColumnsOptions["columns"]) > 0)
+		if (is_array($arColumnsOptions) && isset($arColumnsOptions["columns"]) && $arColumnsOptions["columns"] <> '')
 			$arTmpColumns = explode(",", $arColumnsOptions["columns"]);
 
 		if(is_array($arTmpColumns) && !empty($arTmpColumns))
@@ -1260,11 +1303,11 @@ class OrderBasket
 
 			foreach ($arTmpColumns as $id => $columnCode)
 			{
-				if (substr($columnCode, 0, 9) == "PROPERTY_")
+				if (mb_substr($columnCode, 0, 9) == "PROPERTY_")
 				{
-					$iblockPropCode = substr($columnCode, 9);
+					$iblockPropCode = mb_substr($columnCode, 9);
 
-					if(strlen($iblockPropCode) > 0)
+					if($iblockPropCode <> '')
 					{
 						$iBlockProps[] = $iblockPropCode;
 
@@ -1293,7 +1336,7 @@ class OrderBasket
 
 				while($arPropData = $dbRes->fetch())
 				{
-					if(strlen($arPropData['CODE']) > 0)
+					if($arPropData['CODE'] <> '')
 						$result["PROPERTY_".$arPropData['CODE']] = $arPropData["NAME"];
 					else
 						$result["PROPERTY_".$arPropData['ID']] = $arPropData["NAME"];
@@ -1313,6 +1356,7 @@ class OrderBasket
 		return '
 			<input id="FORM_BASKET_PRODUCT_ID" name="BASKET_PRODUCT_ID" value="" type="hidden">
 			<input id="FORM_PROD_BASKET_CUSTOM_PRICE" name="BASKET_CUSTOM_PRICE" value="Y" type="hidden">
+			<input id="FORM_PROD_BASKET_BASKET_CODE" name="FORM_PROD_BASKET_BASKET_CODE" value="" type="hidden">
 			<table class="edit-table">
 				<tr>
 					<td width="40%">&nbsp;</td>
@@ -1410,26 +1454,7 @@ class OrderBasket
 
 	public static function getCatalogMeasures()
 	{
-		static $result = null;
-
-		if(!is_array($result))
-		{
-			$result = array();
-
-			if (self::$catalogIncluded === null)
-				self::$catalogIncluded = Main\Loader::includeModule('catalog');
-			if (self::$catalogIncluded)
-			{
-				$dbList = \CCatalogMeasure::getList();
-				while($arList = $dbList->Fetch())
-					$result[$arList["CODE"]] = ($arList["SYMBOL_RUS"] != '' ? $arList["SYMBOL_RUS"] : $arList["SYMBOL_INTL"]);
-			}
-
-			if (empty($result))
-				$result[796] = GetMessage("SALE_ORDER_BASKET_SHTUKA");
-		}
-
-		return $result;
+		return \Bitrix\Sale\Helpers\Order\Builder\BasketBuilder::getCatalogMeasures();
 	}
 
 	public static function getDefaultMeasures()
@@ -1519,14 +1544,14 @@ class OrderBasket
 		$arUserColumns = ($userColumns != '') ? explode(",", $userColumns) : array();
 		foreach ($arUserColumns as $key => $column)
 		{
-			$column = strtoupper($column);
+			$column = mb_strtoupper($column);
 			if (strncmp($column, 'PROPERTY_', 9) != 0)
 			{
 				unset($arUserColumns[$key]);
 			}
 			else
 			{
-				$propertyCode = substr($column, 9);
+				$propertyCode = mb_substr($column, 9);
 				if ($propertyCode == '')
 				{
 					unset($arUserColumns[$key]);
@@ -1551,8 +1576,18 @@ class OrderBasket
 		}
 
 		$arSelect = array_merge(
-				array("ID", "NAME", "IBLOCK_ID", "IBLOCK_SECTION_ID", "DETAIL_PICTURE", "PREVIEW_PICTURE", "XML_ID", "IBLOCK_EXTERNAL_ID"),
-				$arUserColumns
+			[
+				"ID",
+				"NAME",
+				"IBLOCK_ID",
+				"IBLOCK_SECTION_ID",
+				"DETAIL_PICTURE",
+				"PREVIEW_PICTURE",
+				"XML_ID",
+				"IBLOCK_EXTERNAL_ID",
+				"DETAIL_PAGE_URL",
+			],
+			$arUserColumns
 		);
 
 		$proxyProductDataKey = md5(join('|', $arElementId)."_".join('|', $arSelect));
@@ -1575,7 +1610,7 @@ class OrderBasket
 			{
 				foreach ($arElement as $key => $value)
 				{
-					if (strncmp($key, 'PROPERTY_', 9) == 0 && substr($key, -6) == "_VALUE")
+					if (strncmp($key, 'PROPERTY_', 9) == 0 && mb_substr($key, -6) == "_VALUE")
 					{
 						$columnCode = str_replace("_VALUE", "", $key);
 						if (!isset($arPropertyInfo[$columnCode]))
@@ -1603,13 +1638,13 @@ class OrderBasket
 					$fieldVal = $field."_VALUE";
 					$parentId = $arSku2Parent[$productId];
 
-					if ((!isset($arElementInfo[$fieldVal]) || (isset($arElementInfo[$fieldVal]) && strlen($arElementInfo[$fieldVal]) == 0))
+					if ((!isset($arElementInfo[$fieldVal]) || (isset($arElementInfo[$fieldVal]) && $arElementInfo[$fieldVal] == ''))
 							&& (isset($arProductData[$parentId][$fieldVal]) && !empty($arProductData[$parentId][$fieldVal]))) // can be array or string
 					{
 						$arElementInfo[$fieldVal] = $arProductData[$parentId][$fieldVal];
 					}
 				}
-				if (strpos($arElementInfo["~XML_ID"], '#') === false)
+				if (mb_strpos($arElementInfo["~XML_ID"], '#') === false)
 				{
 					$arElementInfo["~XML_ID"] = $arParent['~XML_ID'].'#'.$arElementInfo["~XML_ID"];
 				}
@@ -1635,24 +1670,21 @@ class OrderBasket
 			$arBuyerGroups = $buyersGroups[$userId];
 
 			// price
-			$currentVatMode = \CCatalogProduct::getPriceVatIncludeMode();
-			$currentUseDiscount = \CCatalogProduct::getUseDiscount();
-			\CCatalogProduct::setUseDiscount(!$isSetItem);
-			\CCatalogProduct::setPriceVatIncludeMode(true);
-			\CCatalogProduct::setUsedCurrency(Sale\Internals\SiteCurrencyTable::getSiteCurrency($LID));
+			Catalog\Product\Price\Calculation::pushConfig();
+			Catalog\Product\Price\Calculation::setConfig(array(
+				'CURRENCY' => Sale\Internals\SiteCurrencyTable::getSiteCurrency($LID),
+				'PRECISION' => (int)Main\Config\Option::get('sale', 'value_precision'),
+				'USE_DISCOUNTS' => !$isSetItem,
+				'RESULT_WITH_VAT' => true
+			));
 			$arPrice = \CCatalogProduct::getOptimalPrice($arElementInfo["ID"], 1, $arBuyerGroups, "N", array(), $LID);
-			\CCatalogProduct::clearUsedCurrency();
-			\CCatalogProduct::setPriceVatIncludeMode($currentVatMode);
-			\CCatalogProduct::setUseDiscount($currentUseDiscount);
+			Catalog\Product\Price\Calculation::popConfig();
 			$priceType = GetCatalogGroup($arPrice["PRICE"]["CATALOG_GROUP_ID"]);
-			unset($currentUseDiscount, $currentVatMode);
 
 			$currentPrice = $arPrice['RESULT_PRICE']['DISCOUNT_PRICE'];
 			$arElementInfo['PRICE'] = $currentPrice;
 			$arElementInfo['CURRENCY'] = $arPrice['RESULT_PRICE']['CURRENCY'];
 			$currentTotalPrice = $arPrice['RESULT_PRICE']['BASE_PRICE'];
-
-			$arProduct = array();
 
 			if (!empty($proxyCatalogProduct[$productId]) && is_array($proxyCatalogProduct[$productId]))
 			{
@@ -1660,17 +1692,15 @@ class OrderBasket
 			}
 			else
 			{
-				$rsProducts = \CCatalogProduct::getList(
-						array(),
-						array('ID' => $productId),
-						false,
-						false,
-						array('ID', 'QUANTITY', 'WEIGHT', 'MEASURE', 'TYPE', 'BARCODE_MULTI', 'WIDTH', 'LENGTH', 'HEIGHT')
-				);
-				if ($arProduct = $rsProducts->Fetch())
+				$rsProducts = Catalog\ProductTable::getList([
+					'select' => ['ID', 'QUANTITY', 'WEIGHT', 'MEASURE', 'TYPE', 'BARCODE_MULTI', 'WIDTH', 'LENGTH', 'HEIGHT'],
+					'filter' => ['=ID' => $productId]
+				]);
+				if ($arProduct = $rsProducts->fetch())
 				{
 					$proxyCatalogProduct[$productId] = $arProduct;
 				}
+				unset($rsProducts);
 			}
 
 			if (empty($arProduct) || !is_array($arProduct))
@@ -1708,7 +1738,7 @@ class OrderBasket
 				unset($val);
 			}
 
-			if(strlen($arElementInfo["~IBLOCK_EXTERNAL_ID"]) > 0)
+			if($arElementInfo["~IBLOCK_EXTERNAL_ID"] <> '')
 			{
 				$arSkuData[] = array(
 						"NAME" => "Catalog XML_ID",
@@ -1717,7 +1747,7 @@ class OrderBasket
 				);
 			}
 
-			if(strlen($arElementInfo["~XML_ID"]) > 0)
+			if($arElementInfo["~XML_ID"] <> '')
 			{
 				$arSkuData[] = array(
 						"NAME" => "Product XML_ID",
@@ -1772,8 +1802,11 @@ class OrderBasket
 			}
 			else
 			{
-				$dbratio = \CCatalogMeasureRatio::GetList(array(), array("PRODUCT_ID" => $productId));
-				if ($arRatio = $dbratio->Fetch())
+				$dbratio = Catalog\MeasureRatioTable::getList(array(
+					'select' => array('*'),
+					'filter' => array('=PRODUCT_ID' => $productId, '=IS_DEFAULT' => 'Y')
+				));
+				if ($arRatio = $dbratio->fetch())
 				{
 					$proxyCatalogMeasureRatio[$productId] = $arRatio;
 				}
@@ -1791,7 +1824,7 @@ class OrderBasket
 			elseif ($arElementInfo["DETAIL_PICTURE"] > 0)
 				$imgCode = $arElementInfo["DETAIL_PICTURE"];
 
-			if ($imgCode == "" && count($arParent) > 0)
+			if ($imgCode == "" && !empty($arParent) && is_array($arParent))
 			{
 				if ($arParent["PREVIEW_PICTURE"] > 0)
 					$imgCode = $arParent["PREVIEW_PICTURE"];
@@ -1810,7 +1843,7 @@ class OrderBasket
 			$arSetInfo = array();
 			$arStores = array();
 
-			/** @var $productProvider IBXSaleProductProvider */
+			/** @var $productProvider \IBXSaleProductProvider */
 			if ($productProvider = \CSaleBasket::GetProductProvider(array("MODULE" => $arElementInfo["MODULE"], "PRODUCT_PROVIDER_CLASS" => $arElementInfo["PRODUCT_PROVIDER_CLASS"])))
 			{
 				// get set items if it is set
@@ -1915,6 +1948,9 @@ class OrderBasket
 	{
 		if($this->data === null)
 		{
+			$inParams['ADDED_PRODUCTS'] ??= null;
+			$isArrayAddedProducts = is_array($inParams['ADDED_PRODUCTS']);
+
 			$result = array(
 				"ITEMS" => array(),
 				"WEIGHT" => 0
@@ -1947,7 +1983,7 @@ class OrderBasket
 				if($item->getField('MODULE') == 'catalog')
 					$catalogProductIds[] = $item->getProductId();
 
-			$catalogPreparedData = static::getProductsData($catalogProductIds, $this->order->getSiteId(), $this->visibleColumns);
+			$catalogPreparedData = static::getProductsData($catalogProductIds, $this->order->getSiteId(), $this->visibleColumns, $this->order->getUserId());
 			$providerData = Provider::getProductData($basket, array("PRICE"));
 
 			/** @var \Bitrix\Sale\BasketItem $item */
@@ -1959,6 +1995,20 @@ class OrderBasket
 				$params["BASKET_CODE"] = $basketCode = $item->getBasketCode();
 				$params["QUANTITY"] = Sale\BasketItem::formatQuantity($item->getField('QUANTITY'));
 				$params["NOTES"] = $item->getField("NOTES");
+				$params["MODULE"] = $item->getField("MODULE");
+				$params['TYPE'] = (int)$item->getField('TYPE');
+
+				if($params["MODULE"] == 'catalog')
+				{
+					if(!empty($catalogPreparedData[$productId]['OFFERS_IBLOCK_ID']))
+						$params["OFFERS_IBLOCK_ID"] = $catalogPreparedData[$productId]['OFFERS_IBLOCK_ID'];
+
+					if(!empty($catalogPreparedData[$productId]['IBLOCK_ID']))
+						$params["IBLOCK_ID"] = $catalogPreparedData[$productId]['IBLOCK_ID'];
+
+					if(!empty($catalogPreparedData[$productId]['PRODUCT_ID']))
+						$params["PRODUCT_ID"] = $catalogPreparedData[$productId]['PRODUCT_ID'];
+				}
 
 				if(!isset($params["OFFER_ID"]))
 					$params["OFFER_ID"] = $productId;
@@ -1968,77 +2018,85 @@ class OrderBasket
 						$params["DISCOUNTS"][$discount["DISCOUNT_ID"]] = $discount;
 
 				if(isset($discounts["PRICES"]["BASKET"][$basketCode]))
-				{
-					$params["PRICE_BASE"] = Sale\PriceMaths::roundByFormatCurrency($discounts["PRICES"]["BASKET"][$basketCode]["BASE_PRICE"], $this->order->getCurrency());
-					$params["PRICE"] = Sale\PriceMaths::roundByFormatCurrency($discounts["PRICES"]["BASKET"][$basketCode]["PRICE"], $this->order->getCurrency());
-				}
+					$params["PRICE"] = $discounts["PRICES"]["BASKET"][$basketCode]["PRICE"];
+				else
+					$params["PRICE"] = $item->getPrice();
 
+				//alias for backward compatibility.
+				$params["PRICE_BASE"] = $params["BASE_PRICE"] = $item->getField("BASE_PRICE");
 				$params["CUSTOM_PRICE"] = $item->isCustomPrice() ? "Y" : "N";
 
-				if(
-					!is_array($inParams["ADDED_PRODUCTS"])
+				if (
+					!$isArrayAddedProducts
 					||
 					(
 						!empty($inParams["ADDED_PRODUCTS"])
-						&& is_array($inParams["ADDED_PRODUCTS"])
 						&& in_array($productId, $inParams["ADDED_PRODUCTS"])
 					)
 				)
 				{
 					$params = $params + self::getPropsForBasketItem($item, $catalogPreparedData);
 
-					if(is_array($inParams["ADDED_PRODUCTS"]) && in_array($productId, $inParams["ADDED_PRODUCTS"]))
+					if ($isArrayAddedProducts && in_array($productId, $inParams["ADDED_PRODUCTS"]))
 					{
 						$result["ADDED_PRODUCTS"][] = $basketCode;
 					}
+				}
 
-					//Let's cache provider product data into form field
-					if(!Provider::isExistsTrustData($this->order->getSiteId(), 'sale', $item->getProductId()))
+				//Let's cache provider product data into form field
+				if(!Provider::isExistsTrustData($this->order->getSiteId(), 'sale', $item->getProductId()))
+				{
+					$basketItem = $basket->getItemByBasketCode($basketCode);
+					if($basketItem)
 					{
-						if(isset($providerData[$basketCode]))
-							$data = $providerData[$basketCode];
-						else
-							$data = Provider::getProductData($basket, array("PRICE"), $item);
-
-						if(is_array($data[$basketCode]) && !empty($data[$basketCode]))
+						if (!empty($providerData[$basketCode]))
 						{
-							\Bitrix\Sale\Helpers\Admin\OrderEdit::setProviderTrustData($item, $this->order, $data[$basketCode]);
-							$params["PROVIDER_DATA"] = serialize($data[$basketCode]);
+							\Bitrix\Sale\Helpers\Admin\OrderEdit::setProviderTrustData($item, $this->order, $providerData[$basketCode]);
+							$params["PROVIDER_DATA"] = serialize($providerData[$basketCode]);
 						}
 					}
-					else
-					{
-						$providerData = Provider::getTrustData($this->order->getSiteId(), 'sale', $item->getProductId());
+				}
+				else
+				{
+					$providerData = Provider::getTrustData($this->order->getSiteId(), 'sale', $item->getProductId());
 
-						if(is_array($providerData) && !empty($providerData))
-							$params["PROVIDER_DATA"] = serialize($providerData);
+					if(is_array($providerData) && !empty($providerData))
+					{
+						$params["PROVIDER_DATA"] = serialize($providerData);
 					}
 				}
 
-				if(is_array($params["SET_ITEMS"]) && !empty($params["SET_ITEMS"]))
+				if (!empty($params["SET_ITEMS"]) && is_array($params["SET_ITEMS"]))
 				{
 					$offerToIdx = array();
 
 					foreach($params["SET_ITEMS"] as $idx => $childFields)
 						$offerToIdx[$childFields["OFFER_ID"]] = $idx;
 
+					$setItems = [];
+
 					if($children = $item->getBundleCollection())
 					{
-						foreach($children->getBasketItems() as $child)
+						/** @var Sale\BasketItemBase $child */
+						foreach($children->getBasketItems() as $idx => $child)
 						{
 							$fields = $child->getFieldValues();
 
 							if(isset($offerToIdx[$fields['PRODUCT_ID']]))
 							{
-								$params["SET_ITEMS"][$offerToIdx[$fields['PRODUCT_ID']]] = $fields + $params["SET_ITEMS"][$offerToIdx[$fields['PRODUCT_ID']]];
+								$fields = $fields + $params["SET_ITEMS"][$offerToIdx[$fields['PRODUCT_ID']]];
 							}
 							else
 							{
 								$fields["OFFER_ID"] = $fields["PRODUCT_ID"];
-								//unset($fields["PRODUCT_ID"]);
-								$params["SET_ITEMS"][] = $fields;
 							}
+
+							$fields["IS_ENABLED"] = ($fields['CAN_BUY'] === 'N') ? 'N' : 'Y';
+
+							$setItems[$idx] = $fields;
 						}
+
+						$params["SET_ITEMS"] = $setItems;
 					}
 
 					$params["SET_ITEMS_DATA"] = serialize($params["SET_ITEMS"]);
@@ -2056,6 +2114,7 @@ class OrderBasket
 							$childFields["OFFER_ID"] = $child->getProductId();
 							$childFields["IS_SET_ITEM"] = "Y";
 							$childFields["IS_SET_PARENT"] = "N";
+							$childFields["IS_ENABLED"] = ($childFields['CAN_BUY'] === 'N') ? 'N' : 'Y';
 							$params["SET_ITEMS"][] = $childFields;
 						}
 					}
@@ -2066,6 +2125,8 @@ class OrderBasket
 					}
 				}
 
+				$params["IS_ENABLED"] = (($params['CAN_BUY'] ?? null) === 'N') ? 'N' : 'Y';
+
 				$result["ITEMS"][$basketCode] = $params;
 			}
 
@@ -2075,7 +2136,7 @@ class OrderBasket
 
 			$result["ITEMS_ORDER"] = array_keys($result["ITEMS"]);
 
-			if(!$inParams["SKIP_SKU_INFO"])
+			if (empty($inParams["SKIP_SKU_INFO"]))
 			{
 				$result = $this->getOffersSkuParams($result, $this->visibleColumns);
 			}
@@ -2093,40 +2154,24 @@ class OrderBasket
 		if($result === null)
 		{
 			$basketPrice = 0;
-			$basketDiscount = 0;
 			$basketPriceBase = 0;
 			$basket = $this->order->getBasket();
 
 			if($basket)
 			{
-				$items = $basket->getBasketItems();
-
 				if (!$discounts)
 					$discounts = OrderEdit::getDiscountsApplyResult($this->order, true);
 
-				/** @var \Bitrix\Sale\BasketItem $item */
-				foreach($items as $item)
-				{
-					$basketCode = $item->getBasketCode();
-
-					if(isset($discounts["PRICES"]["BASKET"][$basketCode]))
-					{
-						$priceBase = Sale\PriceMaths::roundByFormatCurrency($discounts["PRICES"]["BASKET"][$basketCode]["BASE_PRICE"], $this->order->getCurrency());
-						$price = Sale\PriceMaths::roundByFormatCurrency($discounts["PRICES"]["BASKET"][$basketCode]["PRICE"], $this->order->getCurrency());
-						$basketPriceBase += $priceBase * $item->getQuantity();
-						$basketPrice += $price * $item->getQuantity();
-
-						if (!$item->isCustomPrice())
-							$basketDiscount += $discounts["PRICES"]["BASKET"][$basketCode]["DISCOUNT"] * $item->getQuantity();
-					}
-				}
+				$basketPriceBase = $basket->getBasePrice();
+				$basketPrice = $basket->getPrice();
 			}
 
 			$result = array(
-				"BASKET_PRICE_BASE" => Sale\PriceMaths::roundByFormatCurrency($basketPriceBase, $this->order->getCurrency()),
-				"BASKET_PRICE" => Sale\PriceMaths::roundByFormatCurrency($basketPrice, $this->order->getCurrency()),
-				"DISCOUNT_VALUE" => Sale\PriceMaths::roundByFormatCurrency($basketDiscount, $this->order->getCurrency())
+				"BASKET_PRICE_BASE" => $basketPriceBase,
+				"BASKET_PRICE" => $basketPrice,
 			);
+
+			$result["DISCOUNT_VALUE"] = $result["BASKET_PRICE_BASE"] - $result["BASKET_PRICE"];
 		}
 
 		return $result;
@@ -2150,7 +2195,7 @@ class OrderBasket
 			}
 			else
 			{
-				$res = static::getProductsData(array($productId),$this->order->getSiteId(), $this->visibleColumns);
+				$res = static::getProductsData(array($productId), $this->order->getSiteId(), $this->visibleColumns, $this->order->getUserId());
 				$params = $res[$productId];
 			}
 		}
@@ -2160,7 +2205,7 @@ class OrderBasket
 		elseif(!isset($params["MEASURE_CODE"]))
 			$params["MEASURE_CODE"] = 0;
 
-		if(strlen($item->getField("MEASURE_NAME")) > 0)
+		if($item->getField("MEASURE_NAME") <> '')
 			$params["MEASURE_TEXT"] = $item->getField("MEASURE_NAME");
 		elseif(!isset($params["MEASURE_TEXT"]))
 			$params["MEASURE_TEXT"] = "";
@@ -2169,13 +2214,28 @@ class OrderBasket
 			$params["OFFER_ID"] = $productId;
 
 		$params["PRODUCT_PROVIDER_CLASS"] = $item->getProvider();
-		$id = $params["PRODUCT_ID"];
+		$id = $params["PRODUCT_ID"] ?? 0;
 		$params = array_merge($params, $item->getFieldValues(), array("PRODUCT_ID" => $id));
+
+		//If product became bundle, but in saved order it is a simple product.
+		if($item->getBasketCode() == intval($item->getBasketCode()) && !$item->isBundleParent() && !empty($params['SET_ITEMS']))
+		{
+			unset($params['SET_ITEMS'], $params['OLD_PARENT_ID']);
+			$params['IS_SET_PARENT'] = 'N';
+		}
+
 		$params["PROPS"] = array();
 
 		/** @var \Bitrix\Sale\BasketPropertyItem $property */
 		foreach($item->getPropertyCollection() as  $property)
 		{
+			$propKey = 'PROPERTY_'.$property->getField("CODE").'_VALUE';
+
+			if(isset($params['PRODUCT_PROPS_VALUES'][$propKey]))
+			{
+				$params['PRODUCT_PROPS_VALUES'][$propKey] = $property->getField("VALUE");
+			}
+
 			$params["PROPS"][] = array(
 				"VALUE" => $property->getField("VALUE"),
 				"NAME" => $property->getField("NAME"),
@@ -2194,33 +2254,44 @@ class OrderBasket
 				$params["PROVIDER_DATA"] = serialize($providerData);
 		}
 
-		if(is_array($params["SET_ITEMS"]) && !empty($params["SET_ITEMS"]))
+		if (!empty($params["SET_ITEMS"]) && is_array($params["SET_ITEMS"]))
 		{
 			$offerToIdx = array();
+			$items = [];
 
 			foreach($params["SET_ITEMS"] as $idx => $childFields)
 				$offerToIdx[$childFields["OFFER_ID"]] = $idx;
 
 			if($children = $item->getBundleCollection())
 			{
-				foreach($children->getBasketItems() as $child)
+				/** @var Sale\BasketItemBase $child */
+				foreach($children->getBasketItems() as $idx => $child)
 				{
 					$fields = $child->getFieldValues();
 
 					if(isset($offerToIdx[$fields['PRODUCT_ID']]))
 					{
-						$params["SET_ITEMS"][$offerToIdx[$fields['PRODUCT_ID']]] = $fields + $params["SET_ITEMS"][$offerToIdx[$fields['PRODUCT_ID']]];
+						$items[$idx] = $fields + $params["SET_ITEMS"][$offerToIdx[$fields['PRODUCT_ID']]];
 					}
-					else
+					else //Child have been deleted from bundle after order been created
 					{
+						$res = static::getProductsData(array($fields["PRODUCT_ID"]), $this->order->getSiteId(), $this->visibleColumns, $this->order->getUserId());
+
+						if(!empty($res[$fields["PRODUCT_ID"]]))
+						{
+							$fields = array_merge($res[$fields["PRODUCT_ID"]], $fields);
+						}
+
 						$fields["OFFER_ID"] = $fields["PRODUCT_ID"];
 						$fields["IS_SET_ITEM"] = "Y";
 						$fields["IS_SET_PARENT"] = "N";
 						$fields["OLD_PARENT_ID"] = $params["OLD_PARENT_ID"];
-						//unset($fields["PRODUCT_ID"]);
-						$params["SET_ITEMS"][] = $fields;
+						$items[$idx] = $fields;
 					}
 				}
+
+				sortByColumn($items, array("SORT" => SORT_DESC), '');
+				$params["SET_ITEMS"] = $items;
 			}
 
 			$params["SET_ITEMS_DATA"] = serialize($params["SET_ITEMS"]);

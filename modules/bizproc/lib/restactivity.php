@@ -2,6 +2,7 @@
 namespace Bitrix\Bizproc;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Fields\Field;
 
 /**
  * Class RestActivityTable
@@ -22,9 +23,23 @@ use Bitrix\Main\Entity;
  * <li> RETURN_PROPERTIES text optional
  * <li> DOCUMENT_TYPE text optional
  * <li> FILTER text optional
+ * <li> IS_ROBOT bool optional default 'N'
  * </ul>
  *
  * @package Bitrix\Bizproc
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_RestActivity_Query query()
+ * @method static EO_RestActivity_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_RestActivity_Result getById($id)
+ * @method static EO_RestActivity_Result getList(array $parameters = [])
+ * @method static EO_RestActivity_Entity getEntity()
+ * @method static \Bitrix\Bizproc\EO_RestActivity createObject($setDefaultValues = true)
+ * @method static \Bitrix\Bizproc\EO_RestActivity_Collection createCollection()
+ * @method static \Bitrix\Bizproc\EO_RestActivity wakeUpObject($row)
+ * @method static \Bitrix\Bizproc\EO_RestActivity_Collection wakeUpCollection($rows)
  */
 class RestActivityTable extends Entity\DataManager
 {
@@ -33,17 +48,6 @@ class RestActivityTable extends Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает путь к файлу, содержащий описание класса.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/restactivitytable/getfilepath.php
-	* @author Bitrix
-	*/
 	public static function getFilePath()
 	{
 		return __FILE__;
@@ -54,17 +58,6 @@ class RestActivityTable extends Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает имя таблицы базы данных, соответствующей данной сущности.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/restactivitytable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_bp_rest_activity';
@@ -75,17 +68,6 @@ class RestActivityTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает список полей с типами.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/restactivitytable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -126,6 +108,10 @@ class RestActivityTable extends Entity\DataManager
 			'USE_SUBSCRIPTION' => array(
 				'data_type' => 'string'
 			),
+			'USE_PLACEMENT' => array(
+				'data_type' => 'boolean',
+				'values' => ['N', 'Y']
+			),
 			'NAME' => array(
 				'data_type' => 'text',
 				'required' => true,
@@ -140,10 +126,12 @@ class RestActivityTable extends Entity\DataManager
 			'PROPERTIES' => array(
 				'data_type' => 'text',
 				'serialized' => true,
+				'validation' => array(__CLASS__, 'validateProperties'),
 			),
 			'RETURN_PROPERTIES' => array(
 				'data_type' => 'text',
 				'serialized' => true,
+				'validation' => array(__CLASS__, 'validateProperties'),
 			),
 			'DOCUMENT_TYPE' => array(
 				'data_type' => 'text',
@@ -153,6 +141,10 @@ class RestActivityTable extends Entity\DataManager
 				'data_type' => 'text',
 				'serialized' => true,
 			),
+			'IS_ROBOT' => array(
+				'data_type' => 'boolean',
+				'values' => ['N', 'Y']
+			),
 		);
 	}
 
@@ -161,17 +153,6 @@ class RestActivityTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает валидаторы поля <code>APP_ID</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/restactivitytable/validateappid.php
-	* @author Bitrix
-	*/
 	public static function validateAppId()
 	{
 		return array(
@@ -184,17 +165,6 @@ class RestActivityTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает валидаторы поля <code>CODE</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/restactivitytable/validatecode.php
-	* @author Bitrix
-	*/
 	public static function validateCode()
 	{
 		return array(
@@ -207,17 +177,6 @@ class RestActivityTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает валидаторы для поля <code>HANDLER</code>.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/restactivitytable/validatehandler.php
-	* @author Bitrix
-	*/
 	public static function validateHandler()
 	{
 		return array(
@@ -231,6 +190,21 @@ class RestActivityTable extends Entity\DataManager
 	public static function getLocalizationSaveModifiers()
 	{
 		return array(array(__CLASS__, 'prepareLocalization'));
+	}
+
+	/**
+	 * Returns validators for PROPERTIES and RETURN_PROPERTIES fields
+	 *
+	 * @return array
+	 */
+	public static function validateProperties()
+	{
+		return array(
+			function($value, $primary, $row, Field $field) {
+				$errorMsg = GetMessage("BPRAT_PROPERTIES_LENGTH_ERROR", array("#FIELD_TITLE#" => $field->getTitle()));
+				return strlen(serialize($value)) < 65535 ? true : $errorMsg;
+			}
+		);
 	}
 
 	/**
@@ -252,7 +226,7 @@ class RestActivityTable extends Entity\DataManager
 	public static function getLocalization($field, $langId)
 	{
 		$result = '';
-		$langId = strtoupper($langId);
+		$langId = mb_strtoupper($langId);
 		if (is_string($field))
 			$result = $field;
 		elseif (!empty($field[$langId]))

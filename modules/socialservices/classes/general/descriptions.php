@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CSocServDescription
 {
-	static public function GetDescription()
+	public static function GetDescription()
 	{
 		$tw_disabled = !function_exists("hash_hmac");
 
@@ -25,6 +25,12 @@ class CSocServDescription
 				"CLASS" => "CSocServYandexAuth",
 				"NAME" => GetMessage("socserv_openid_yandex"),
 				"ICON" => "yandex",
+			),
+			array(
+				"ID" => "MailRu2",
+				"CLASS" => "CSocServMailRu2",
+				"NAME" => GetMessage("socserv_mailru2_name"),
+				"ICON" => "mailru2",
 			),
 			array(
 				"ID" => "MyMailRu",
@@ -49,7 +55,7 @@ class CSocServDescription
 			array(
 				"ID" => "MailRuOpenID",
 				"CLASS" => "CSocServMailRu",
-				"NAME" => "Mail.Ru",
+				"NAME" => GetMessage("socserv_mailru_openid_name"),
 				"ICON" => "openid-mail-ru",
 			),
 			array(
@@ -89,12 +95,12 @@ class CSocServDescription
 				"NAME" => "Google",
 				"ICON" => "google",
 			),
-			array(
+/*			array(
 				"ID" => "GooglePlusOAuth",
 				"CLASS" => "CSocServGooglePlusOAuth",
 				"NAME" => "Google+",
 				"ICON" => "google-plus",
-			),
+			), */
 			array(
 				"ID" => "LiveIDOAuth",
 				"CLASS" => "CSocServLiveIDOAuth",
@@ -125,9 +131,20 @@ class CSocServDescription
 				"NAME" => "Box.com",
 				"ICON" => "box",
 			),
+			array(
+				"ID" => "apple",
+				"CLASS" => "CSocServApple",
+				"NAME" => "Apple Sign In",
+				"ICON" => "apple",
+			),
+			array(
+				"ID" => "zoom",
+				"CLASS" => "CSocServZoom",
+				"NAME" => "Zoom",
+				"ICON" => "zoom",
+			),
 		);
 	}
 }
 
 AddEventHandler("socialservices", "OnAuthServicesBuildList", array("CSocServDescription", "GetDescription"));
-?>

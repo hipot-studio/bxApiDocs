@@ -1,181 +1,11 @@
-<?
-
-/**
- * <b>CGuest</b> - класс для получения данных по <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">посетителям</a> сайта.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cguest/index.php
- * @author Bitrix
- */
+<?php
 class CAllGuest
 {
-	
-	/**
-	* <p>Возвращает список <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">посетителей</a>.</p>
-	*
-	*
-	* @param string &$by = "s_last_date" Поле для сортировки. Возможные значения: 			<ul> <li> <b>s_id</b> - ID
-	* посетителя; 				</li> <li> <b>s_events</b> - суммарное кол-во <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event">событий</a> сгенерированных
-	* посетителем; 				</li> <li> <b>s_sessions</b> - суммарное кол-во <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#session">сессий</a> посетителя; 				</li>
-	* <li> <b>s_hits</b> - суммарное кол-во <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#hit">хитов</a> посетителя; 				</li> <li>
-	* <b>s_first_site_id</b> - ID сайта на который впервые пришел посетитель; 				</li>
-	* <li> <b>s_first_date</b> - время первого захода на сайт; 				</li> <li> <b>s_first_url_from</b>
-	* - страница с которой впервые пришел посетитель; 				</li> <li>
-	* <b>s_first_url_to</b> - страница куда впервые пришел посетитель; 				</li> <li>
-	* <b>s_first_adv_id</b> - ID <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv">рекламной
-	* кампании</a> первого захода; 				</li> <li> <b>s_last_site_id</b> - ID сайта
-	* последнего захода посетителя; 				</li> <li> <b>s_last_date</b> - время
-	* последнего захода поестителя; 				</li> <li> <b>s_last_user_id</b> - ID
-	* пользователя; 				</li> <li> <b>s_last_url_last</b> - последняя страница на
-	* которую заходил посетитель; 				</li> <li> <b>s_last_user_agent</b> - <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#user_agent">UserAgent</a> посетителя на
-	* последнем заходе; 				</li> <li> <b>s_last_ip</b> - <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#ip">IP адрес</a> посетителя на
-	* последнем заходе; 				</li> <li> <b>s_last_adv_id</b> - ID рекламной кампании на
-	* последнем заходе; 				</li> <li> <b>s_last_country_id</b> - ID страны посетителя на
-	* последнем заходе. 			</li> </ul>
-	*
-	* @param string &$order = "desc" Порядок сортировки. Возможные значения: 			<ul> <li> <b>asc</b> - по
-	* возрастанию; 				</li> <li> <b>desc</b> - по убыванию. 			</li> </ul>
-	*
-	* @param array $filter = array() Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи: 			<ul> <li> <b>ID</b>* - ID посетителя; 				</li> <li>
-	* <b>ID_EXACT_MATCH</b> - если значение равно "N", то при фильтрации по <b>ID</b>
-	* будет искаться вхождение; 				</li> <li> <b>REGISTERED</b> - был ли посетитель
-	* когда либо авторизован на сайте, возможные значения: 					<ul> <li> <b>Y</b>
-	* - был; 						</li> <li> <b>N</b> - не был. 					</li> </ul> </li> <li> <b>FIRST_DATE1</b> - начальное
-	* значение интервала для поля "дата первого захода на сайт"; 				</li> <li>
-	* <b>FIRST_DATE2</b> - конечное значение интервала для поля "дата первого
-	* захода на сайт"; 				</li> <li> <b>LAST_DATE1</b> - начальное значение интервала
-	* для поля "дата последнего захода на сайт"; 				</li> <li> <b>LAST_DATE2</b> -
-	* конечное значение интервала для поля "дата первого захода на
-	* сайт"; 				</li> <li> <b>PERIOD_DATE1</b> - начальное значение интервала для даты
-	* посещения посетителем сайта; 				</li> <li> <b>PERIOD_DATE2</b> - конечно
-	* значение интервала для даты посещения посетителем сайта; 				</li> <li>
-	* <b>SITE_ID</b>* - ID сайта первого либо последнего захода; 				</li> <li>
-	* <b>SITE_ID_EXACT_MATCH</b> - если значение равно "N", то при фильтрации по
-	* <b>SITE_ID</b> будет искаться вхождение; 				</li> <li> <b>FIRST_SITE_ID</b>* - ID сайта
-	* первого захода; 				</li> <li> <b>FIRST_SITE_ID_EXACT_MATCH</b> - если значение равно "N",
-	* то при фильтрации по <b>FIRST_SITE_ID</b> будет искаться вхождение; 				</li>
-	* <li> <b>LAST_SITE_ID</b>* - ID сайта последнего захода; 				</li> <li>
-	* <b>LAST_SITE_ID_EXACT_MATCH</b> - если значение равно "N", то при фильтрации по
-	* <b>LAST_SITE_ID</b> будет искаться вхождение; 				</li> <li> <b>URL</b>* - страница
-	* откуда впервые пришел посетитель, страница на которую впервые
-	* пришел посетитель и последняя страница просмотренная
-	* посетителем; 				</li> <li> <b>URL_EXACT_MATCH</b> - если значение равно "Y", то при
-	* фильтрации по <b>URL</b> будет искаться точное совпадение; 				</li> <li>
-	* <b>URL_404</b> - была ли <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#404">404 ошибка</a>
-	* на первой странице или на последней странице посещенной
-	* посетителем, возможные значения: 					<ul> <li> <b>Y</b> - была; 						</li> <li>
-	* <b>N</b> - не было. 					</li> </ul> </li> <li> <b>USER_AGENT</b>* - UserAgent посетителя на
-	* последнем заходе; 				</li> <li> <b>USER_AGENT_EXACT_MATCH</b> - если значение равно
-	* "Y", то при фильтрации по <b>USER_AGENT</b> будет искаться точное
-	* совпадение; 				</li> <li> <b>ADV</b> - флаг "приходил ли посетитель когда
-	* либо по рекламной кампании (не равной NA/NA)", возможные значения:
-	* 					<ul> <li> <b>Y</b> - посетитель приходил по какой либо рекламной
-	* кампании (не равной NA/NA); 						</li> <li> <b>N</b> - не приходил никогда ни по
-	* одной рекламной кампании (не равной NA/NA). 					</li> </ul> </li> <li> <b>ADV_ID</b> - ID
-	* рекламной кампании первого либо последнего захода посетителя
-	* (при этом это мог быть как <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv_first">прямой заход</a> так и <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv_back">возврат</a> по рекламной
-	* кампании); 				</li> <li> <b>REFERER1</b>* - <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv_id">идентификатор</a> referer1
-	* рекламной кампании первого либо последнего захода посетителя;
-	* 				</li> <li> <b>REFERER1_EXACT_MATCH</b> - если значение равно "Y", то при фильтрации
-	* по <b>REFERER1</b> будет искаться точное совпадение; 				</li> <li> <b>REFERER2</b>* -
-	* идентификатор referer2 рекламной кампании первого либо последнего
-	* захода посетителя; 				</li> <li> <b>REFERER2_EXACT_MATCH</b> - если значение равно
-	* "Y", то при фильтрации по <b>REFERER2</b> будет искаться точное
-	* совпадение; 				</li> <li> <b>REFERER3</b>* - <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#adv_referer3">дополнительный
-	* параметр</a> referer3 рекламной кампании первого либо последнего
-	* захода посетителя; 				</li> <li> <b>REFERER3_EXACT_MATCH</b> - если значение равно
-	* "Y", то при фильтрации по <b>REFERER3</b> будет искаться точное
-	* совпадение; 				</li> <li> <b>EVENTS1</b> - начальное значение для интервала
-	* кол-ва событий сгенерированных посетителем; 				</li> <li> <b>EVENTS2</b> -
-	* конечное значение для интервала кол-ва событий сгенерированных
-	* посетителем; 				</li> <li> <b>SESS1</b> - начальное значение для интервала
-	* кол-ва сессий сгенерированных посетителем; 				</li> <li> <b>SESS2</b> -
-	* конечное значение для интервала кол-ва сессий сгенерированных
-	* посетителем; 				</li> <li> <b>HITS1</b> - начальное значение для интервала
-	* кол-ва хитов сгенерированных посетителем; 				</li> <li> <b>HITS2</b> -
-	* конечное значение для интервала кол-ва хитов сгенерированных
-	* посетителем; 				</li> <li> <b>FAVORITES</b> - флаг "добавлял ли посетитель сайт
-	* в "<a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#favorites">Избранное</a>"",
-	* возможные значения: 					<ul> <li> <b>Y</b> - добавлял; 						</li> <li> <b>N</b> - не
-	* добавлял. 					</li> </ul> </li> <li> <b>IP</b> - IP адрес посетителя сайта в
-	* последнем заходе; 				</li> <li> <b>LANG</b> - <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#browser_lang">языки установленные в
-	* настройках браузера</a> посетителя в последнем заходе; 				</li> <li>
-	* <b>COUNTRY_ID</b>* - ID страны (двухсимвольный идентификатор) посетителя в
-	* последнем заходе; 				</li> <li> <b>COUNTRY_ID_EXACT_MATCH</b> - если значение равно
-	* "Y", то при фильтрации по <b>COUNTRY_ID</b> будет искаться точное
-	* совпадение; 				</li> <li> <b>COUNTRY</b>* - название страны; 				</li> <li>
-	* <b>COUNTRY_EXACT_MATCH</b> - если значение равно "Y", то при фильтрации по
-	* <b>COUNTRY</b> будет искаться точное совпадение; 				</li> <li> <b>USER</b>* - ID,
-	* логин, имя, фамилия <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#user">пользователя</a>, под которыми
-	* посетитель последний раз  				был авторизован; 				</li> <li>
-	* <b>USER_EXACT_MATCH</b> - если значение равно "Y", то при фильтрации по <b>USER</b>
-	* будет искаться точное совпадение; 				</li> <li> <b>USER_ID</b>* - ID
-	* пользователя, под которым посетитель последний раз  				был
-	* авторизован; 				</li> <li> <b>USER_ID_EXACT_MATCH</b> - если значение равно "Y", то
-	* при фильтрации по <b>USER_ID</b> будет искаться точное совпадение. 			</li>
-	* </ul> <br> 			* - допускается <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/general/filter.php">сложная логика</a>
-	*
-	* @param bool &$is_filtered  Флаг отфильтрованности списка посетителей. Если значение равно
-	* "true", то список был отфильтрован.
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // выберем только тех посетителей UserAgent которых содержит "Opera"
-	* $arFilter = array(
-	*     "USER_AGENT" =&gt; "Opera"
-	*     );
-	* 
-	* // получим список записей
-	* $rs = <b>CGuest::GetList</b>(
-	*     ($by = "s_id"), 
-	*     ($order = "desc"), 
-	*     $arFilter, 
-	*     $is_filtered
-	*     );
-	* 
-	* // выведем все записи
-	* while ($ar = $rs-&gt;Fetch())
-	* {
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";    
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul><li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">Термин "Посетитель"</a>
-	* </li></ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cguest/getlist.php
-	* @author Bitrix
-	*/
-	public static function GetList(&$by, &$order, $arFilter=Array(), &$is_filtered)
+	public static function GetList($by = 's_last_date', $order = 'desc', $arFilter = [])
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
 		$arSqlSearch = Array();
-		$strSqlSearch = "";
 
 		$bGroup = false;
 		$arrGroup = array(
@@ -214,6 +44,8 @@ class CAllGuest
 			"CITY.REGION" => true,
 			"CITY.NAME" => true,
 		);
+		$from0 = $from1 = $from2 = "";
+		$select0 = $select1 = "";
 
 		if (is_array($arFilter))
 		{
@@ -226,7 +58,7 @@ class CAllGuest
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -403,7 +235,7 @@ class CAllGuest
 						$arSqlSearch[] = GetFilterQuery("CITY.NAME", $val, $match);
 						break;
 					case "USER":
-						if(COption::GetOptionString("statistic", "dbnode_id") <= 0)
+						if(COption::GetOptionInt("statistic", "dbnode_id") <= 0)
 						{
 							$match = ($arFilter[$key."_EXACT_MATCH"]=="Y" && $match_value_set) ? "N" : "Y";
 							$arSqlSearch[] = $DB->IsNull("G.LAST_USER_ID","0").">0";
@@ -417,7 +249,7 @@ class CAllGuest
 						}
 						break;
 					case "USER_ID":
-						if(COption::GetOptionString("statistic", "dbnode_id") <= 0)
+						if(COption::GetOptionInt("statistic", "dbnode_id") <= 0)
 						{
 							$match = ($arFilter[$key."_EXACT_MATCH"]=="Y" && $match_value_set) ? "N" : "Y";
 							$arSqlSearch[] = $DB->IsNull("G.LAST_USER_ID","0").">0";
@@ -433,6 +265,7 @@ class CAllGuest
 				}
 			}
 		}
+
 		if ($by == "s_id")					$strSqlOrder = "ORDER BY G.ID";
 		elseif ($by == "s_first_site_id")	$strSqlOrder = "ORDER BY G.FIRST_SITE_ID";
 		elseif ($by == "s_last_site_id")	$strSqlOrder = "ORDER BY G.LAST_SITE_ID";
@@ -454,19 +287,15 @@ class CAllGuest
 		elseif ($by == "s_last_city_id")	$strSqlOrder = "ORDER BY G.LAST_CITY_ID";
 		else
 		{
-			$by = "s_last_date";
 			$strSqlOrder = "ORDER BY ".CStatistics::DBFirstDate("G.LAST_DATE");
 		}
+
 		if ($order!="asc")
 		{
 			$strSqlOrder .= " desc ";
-			$order="desc";
 		}
 
-		if($bGroup)
-		{
-			$strSqlGroup = "GROUP BY ".implode(", ", array_keys($arrGroup));
-		}
+		$strSqlGroup = $bGroup? "GROUP BY ".implode(", ", array_keys($arrGroup)): "";
 
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
 		$strSql = "
@@ -498,42 +327,10 @@ class CAllGuest
 		";
 
 		$res = $DB->Query(CStatistics::DBTopSql($strSql), false, $err_mess.__LINE__);
-		$is_filtered = (IsFiltered($strSqlSearch));
+
 		return $res;
 	}
 
-	
-	/**
-	* <p>Возвращает данные по указанному <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">посетителю</a>.</p>
-	*
-	*
-	* @param int $guest_id  ID посетителя.
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $guest_id = 1;
-	* if ($rs = <b>CGuest::GetByID</b>($guest_id))
-	* {
-	*     $ar = $rs-&gt;Fetch();
-	*     // выведем параметры посетителя
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul><li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#guest">Термин "Посетитель"</a>
-	* </li></ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cguest/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -566,4 +363,3 @@ class CAllGuest
 		return $res;
 	}
 }
-?>

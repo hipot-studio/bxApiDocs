@@ -18,25 +18,57 @@ use Bitrix\Sale\Location\DB\Helper;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class WordTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Word_Query query()
+ * @method static EO_Word_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Word_Result getById($id)
+ * @method static EO_Word_Result getList(array $parameters = [])
+ * @method static EO_Word_Entity getEntity()
+ * @method static \Bitrix\Sale\Location\Search\EO_Word createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Location\Search\EO_Word_Collection createCollection()
+ * @method static \Bitrix\Sale\Location\Search\EO_Word wakeUpObject($row)
+ * @method static \Bitrix\Sale\Location\Search\EO_Word_Collection wakeUpCollection($rows)
+ */
 final class WordTable extends Entity\DataManager implements \Serializable
 {
 	protected $procData = 		array();
-	protected $word2LocationInserter = 	null;
-	protected $dictionaryInserter = 	null;
+	protected BlockInserter $word2LocationInserter;
+	protected BlockInserter $dictionaryInserter;
+	protected BlockInserter $dictionaryResorter;
 
 	protected $dictionaryIndex = 		array();
 
 	const STEP_SIZE = 					10000;
 	const MTU = 						9999;
 
-	public function serialize()
+	public function serialize(): ?string
 	{
 		return serialize($this->procData);
 	}
-	public function unserialize($data)
+
+	public function unserialize($data): void
 	{
-		$this->procData = unserialize($data);
+		$this->procData = unserialize($data, ['allowed_classes' => false]);
 		$this->initInsertHandles();
+	}
+
+	public function __serialize()
+	{
+		return $this->procData;
+	}
+
+	public function __unserialize($data): void
+	{
+		if (is_array($data))
+		{
+			$this->procData = $data;
+			$this->initInsertHandles();
+		}
 	}
 
 	public static function getFilePath()
@@ -135,17 +167,16 @@ final class WordTable extends Entity\DataManager implements \Serializable
 
 		Helper::dropTable(static::getTableName());
 
-		$binary = ToLower($dbConnection->getType()) == 'mysql' ? 'binary' : ''; // http://bugs.mysql.com/bug.php?id=34096
+		$binary = mb_strtolower($dbConnection->getType()) == 'mysql' ? 'binary' : ''; // http://bugs.mysql.com/bug.php?id=34096
 
 		// ORACE: OK, MSSQL: OK
 		Main\HttpApplication::getConnection()->query("create table ".static::getTableName()." (
 
-			ID ".Helper::getSqlForDataType('int')." not null ".Helper::getSqlForAutoIncrement()." primary key,
+			ID ".Helper::getSqlForDataType('int')." not null ".Helper::getSqlForAutoIncrement().",
 			WORD ".Helper::getSqlForDataType('varchar', 50)." ".$binary." not null,
-			POSITION ".Helper::getSqlForDataType('int')." default '0'
+			POSITION ".Helper::getSqlForDataType('int')." default '0',
+			primary key (ID)
 		)");
-
-		Helper::addAutoIncrement(static::getTableName()); // only for ORACLE
 
 		Helper::createIndex(static::getTableName(), 'TMP', array('WORD'), true);
 		Helper::dropTable(static::getTableNameWord2Location());
@@ -178,10 +209,10 @@ final class WordTable extends Entity\DataManager implements \Serializable
 		$result = array();
 		foreach($words as $k => &$word)
 		{
-			$word = ToUpper(trim($word));
+			$word = mb_strtoupper(trim($word));
 			$word = str_replace('%', '', $word);
 
-			if(!strlen($word))
+			if($word == '')
 				continue;
 
 			$result[] = $word;
@@ -194,7 +225,7 @@ final class WordTable extends Entity\DataManager implements \Serializable
 
 	public static function parseString($query)
 	{
-		$query = ToUpper(Trim($query));
+		$query = mb_strtoupper(Trim($query));
 
 		//$query = str_replace(array_keys(static::$blackList), static::$blackList, ' '.$query.' ');
 		$query = str_replace(array(')', '(', '%', '_'), array('', '', '', ''), $query);
@@ -253,7 +284,7 @@ final class WordTable extends Entity\DataManager implements \Serializable
 				'LOCATION_ID'
 			),
 			'filter' => static::getFilterForInitData(array(
-				'TYPES' => $this->procData['ALLOWED_TYPES'], 
+				'TYPES' => $this->procData['ALLOWED_TYPES'],
 				'LANGS' => $this->procData['ALLOWED_LANGS']
 			)),
 			'order' => array('LOCATION_ID' => 'asc'), // need to make same location ids stay together
@@ -264,10 +295,12 @@ final class WordTable extends Entity\DataManager implements \Serializable
 		$cnt = 0;
 		while($item = $res->fetch())
 		{
-			if(strlen($item['NAME']))
+			if($item['NAME'] <> '')
 			{
 				if($this->procData['CURRENT_LOCATION'] != $item['LOCATION_ID'])
+				{
 					$this->procData['CURRENT_LOCATION_WORDS'] = array();
+				}
 
 				$this->procData['CURRENT_LOCATION'] = $item['LOCATION_ID'];
 
@@ -358,14 +391,22 @@ final class WordTable extends Entity\DataManager implements \Serializable
 
 	public static function getIdByWord($word)
 	{
-		if(!strlen($word))
+		$word = trim((string)$word);
+		if ($word === '')
+		{
 			return false;
+		}
 
 		$dbConnection = Main\HttpApplication::getConnection();
 
-		$item = $dbConnection->query("select ID from ".static::getTableName()." where WORD = '".$dbConnection->getSqlHelper()->forSql($word)."'")->fetch();
+		$item = $dbConnection->query(
+			"select ID from " . static::getTableName()
+			. " where WORD = '" . $dbConnection->getSqlHelper()->forSql($word) . "'"
+		)->fetch();
 
-		return intval($item['ID']) ? intval($item['ID']) : false;
+		$id = (int)($item['ID'] ?? 0);
+
+		return $id ?: false;
 	}
 
 	public static function getBoundsByWord($word)
@@ -373,7 +414,7 @@ final class WordTable extends Entity\DataManager implements \Serializable
 		$word = trim($word);
 
 		$dbConnection = Main\HttpApplication::getConnection();
-		$sql = "select MIN(POSITION) as INF, MAX(POSITION) as SUP from ".static::getTableName()." where WORD like '".ToUpper($dbConnection->getSqlHelper()->forSql($word))."%'";
+		$sql = "select MIN(POSITION) as INF, MAX(POSITION) as SUP from ".static::getTableName()." where WORD like '".mb_strtoupper($dbConnection->getSqlHelper()->forSql($word))."%'";
 
 		return $dbConnection->query($sql)->fetch();
 	}
@@ -433,7 +474,8 @@ final class WordTable extends Entity\DataManager implements \Serializable
 
 			'ID' => array(
 				'data_type' => 'integer',
-				'primary' => true
+				'primary' => true,
+				'autocomplete' => true,
 			),
 			'WORD' => array(
 				'data_type' => 'string',

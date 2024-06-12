@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class COpenIDClient
@@ -18,13 +19,13 @@ class COpenIDClient
 
 		$arUrl = CHTTP::ParseURL($url);
 		foreach ($this->_trust_providers as $p)
-			if (strpos($arUrl['host'], $p) !== false)
+			if (mb_strpos($arUrl['host'], $p) !== false)
 				return true;
 
 		return false;
 	}
 
-	public static function GetOpenIDServerTags($url)
+	public function GetOpenIDServerTags($url)
 	{
 		if ($str = @CHTTP::sGet($url, true))
 		{
@@ -39,7 +40,7 @@ class COpenIDClient
 				if (preg_match('/href=["\']([^"|\']+)["\']/i', $arLinks[0], $arHref))
 					$delegate = $arHref[1];
 
-			if (strlen($server) <= 0)
+			if ($server == '')
 			{
 				$GLOBALS['APPLICATION']->ThrowException(GetMessage('OPENID_CLIENT_NO_OPENID_SERVER_TAG'));
 				return false;
@@ -52,16 +53,16 @@ class COpenIDClient
 
 	public function GetRedirectUrl($identity, $return_to=false)
 	{
-		if (strlen($identity) <= 0)
+		if ($identity == '')
 		{
 			$GLOBALS['APPLICATION']->ThrowException(GetMessage('OPENID_CLIENT_EMPTY_IDENTITY'));
 			return false;
 		}
 
-		if (strlen($identity) > 1024)
-			$identity = substr($identity, 0, 1024); // may be 256 ????
+		if (mb_strlen($identity) > 1024)
+			$identity = mb_substr($identity, 0, 1024); // may be 256 ????
 
-		if (strpos(strtolower($identity), 'http://') === false && strpos(strtolower($identity), 'https://') === false)
+		if (mb_strpos(mb_strtolower($identity), 'http://') === false && mb_strpos(mb_strtolower($identity), 'https://') === false)
 			$identity = 'http://' . $identity;
 
 		$_SESSION['BX_OPENID_IDENTITY'] = $identity;
@@ -83,12 +84,12 @@ class COpenIDClient
 
 			$return_to = preg_replace("|amp%3B|", '', $return_to);
 
-			if (strlen($arOpenidServerTags['delegate']) > 0)
+			if ($arOpenidServerTags['delegate'] <> '')
 				$identity = $arOpenidServerTags['delegate'];
 
 			$trust_root = $server_name.'/';
 
-			$url = $arOpenidServerTags['server'] . (strpos($arOpenidServerTags['server'], '?')!==false ? '&' : '?').
+			$url = $arOpenidServerTags['server'] . (mb_strpos($arOpenidServerTags['server'], '?') !== false ? '&' : '?').
 				'openid.mode=checkid_setup'.
 				'&openid.return_to='.urlencode($return_to).
 				'&openid.identity='.urlencode($identity).
@@ -147,7 +148,7 @@ class COpenIDClient
 	{
 		$arKillParams = array("check_key");
 		foreach (array_keys($_GET) as $k)
-			if (strpos($k, 'openid_') === 0)
+			if (mb_strpos($k, 'openid_') === 0)
 				$arKillParams[] = $k;
 		if ($state == 'ERROR')
 			$GLOBALS['APPLICATION']->ThrowException(GetMessage('OPENID_CLIENT_ERROR_AUTH'));
@@ -179,10 +180,10 @@ class COpenIDClient
 			{
 				$fullname = (defined("BX_UTF")? $_GET['openid_sreg_fullname'] : CharsetConverter::ConvertCharset($_GET['openid_sreg_fullname'], 'UTF-8', LANG_CHARSET));
 				$fullname = trim($fullname);
-				if (($pos = strpos($fullname, ' ')) !== false)
+				if (($pos = mb_strpos($fullname, ' ')) !== false)
 				{
-					$arFields['NAME'] = substr($fullname, 0, $pos);
-					$arFields['LAST_NAME'] = substr($fullname, $pos + 1);
+					$arFields['NAME'] = mb_substr($fullname, 0, $pos);
+					$arFields['LAST_NAME'] = mb_substr($fullname, $pos + 1);
 				}
 				else
 				{
@@ -216,7 +217,7 @@ class COpenIDClient
 				if(!CSocServAuth::isSplitDenied())
 				{
 					$arFields['USER_ID'] = $GLOBALS["USER"]->GetID();
-					CSocServAuthDB::Add($arFields);
+					\Bitrix\Socialservices\UserTable::add($arFields);
 					self::CleanParam();
 				}
 				else
@@ -228,8 +229,14 @@ class COpenIDClient
 			{
 				$dbUsersOld = $GLOBALS["USER"]->GetList($by, $ord, array('XML_ID'=>$arFields['XML_ID'], 'EXTERNAL_AUTH_ID'=>$arFields['EXTERNAL_AUTH_ID'], 'ACTIVE'=>'Y'), array('NAV_PARAMS'=>array("nTopCount"=>"1")));
 				$dbUsersNew = $GLOBALS["USER"]->GetList($by, $ord, array('XML_ID'=>$arFields['XML_ID'], 'EXTERNAL_AUTH_ID'=>'socservices', 'ACTIVE'=>'Y'),  array('NAV_PARAMS'=>array("nTopCount"=>"1")));
-				$dbSocUser = CSocServAuthDB::GetList(array(),array('XML_ID'=>$arFields['XML_ID'], 'EXTERNAL_AUTH_ID'=>$arFields['EXTERNAL_AUTH_ID']),false,false,array("USER_ID", "ACTIVE", "XML_ID"));
-				if($arUser = $dbSocUser->Fetch())
+				$dbSocUser = \Bitrix\Socialservices\UserTable::getList([
+					'filter' => [
+						'=XML_ID'=>$arFields['XML_ID'],
+						'=EXTERNAL_AUTH_ID'=>$arFields['EXTERNAL_AUTH_ID']
+					],
+					'select' => ["USER_ID", "ACTIVE" => "USER.ACTIVE", "XML_ID"]
+				]);
+				if($arUser = $dbSocUser->fetch())
 				{
 					if($arUser["ACTIVE"] === 'Y')
 						$USER_ID = $arUser["USER_ID"];
@@ -263,7 +270,7 @@ class COpenIDClient
 							return false;
 						$arFields['CAN_DELETE'] = 'N';
 						$arFields['USER_ID'] = $USER_ID;
-						CSocServAuthDB::Add($arFields);
+						\Bitrix\Socialservices\UserTable::add($arFields);
 						unset($arFields['CAN_DELETE']);
 					}
 				}
@@ -291,7 +298,7 @@ class COpenIDClient
 
 						$arKillParams = array("auth_service_id", "check_key");
 						foreach (array_keys($_GET) as $k)
-							if (strpos($k, 'openid_') === 0)
+							if (mb_strpos($k, 'openid_') === 0)
 								$arKillParams[] = $k;
 
 						$redirect_url = $APPLICATION->GetCurPageParam('', $arKillParams, false);
@@ -309,21 +316,19 @@ class COpenIDClient
 		}
 		$arKillParams = array("check_key");
 		foreach (array_keys($_GET) as $k)
-			if (strpos($k, 'openid') === 0)
+			if (mb_strpos($k, 'openid') === 0)
 				$arKillParams[] = $k;
 		$redirect_url = $APPLICATION->GetCurPageParam('auth_service_error='.$errorCode, $arKillParams, false);
 		LocalRedirect($redirect_url, true);
 		return false;
 	}
 
-	/*public static*/
 	public static function GetOpenIDAuthStep($request_var='OPENID_IDENTITY')
 	{
 		if (array_key_exists('openid_mode', $_GET) && $_GET['openid_mode'] == 'id_res')
 			return 2;
-		elseif ($_SERVER['REQUEST_METHOD'] == 'POST' && array_key_exists($request_var, $_REQUEST) && strlen($_REQUEST[$request_var]))
+		elseif ($_SERVER['REQUEST_METHOD'] == 'POST' && array_key_exists($request_var, $_REQUEST) && mb_strlen($_REQUEST[$request_var]))
 			return 1;
 		return 0;
 	}
 }
-?>

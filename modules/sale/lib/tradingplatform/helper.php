@@ -27,29 +27,15 @@ class Helper
 	 * @return array.
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	
-	/**
-	* <p>Метод возвращает информацию о товаре из каталога. Метод статический.</p>
-	*
-	*
-	* @param integer $productId  Идентификатор товара.
-	*
-	* @param integer $quantity  Количество товара.
-	*
-	* @param string $siteId  Идентификатор сайта.
-	*
-	* @return \Bitrix\Sale\TradingPlatform\array. 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/helper/getproductbyid.php
-	* @author Bitrix
-	*/
+	static $arIBlockIDs;
+
 	public static function getProductById($productId, $quantity, $siteId)
 	{
 		$result = array();
 
 		if(\CModule::IncludeModule('catalog'))
 		{
+			//TODO: change to new provider
 			if ($productProvider = \CSaleBasket::GetProductProvider(array(
 				"MODULE" => "catalog",
 				"PRODUCT_PROVIDER_CLASS" => "CCatalogProductProvider"))
@@ -82,10 +68,10 @@ class Helper
 
 				if($IblockElement = $dbIblockElement->Fetch())
 				{
-					if(strlen($IblockElement["XML_ID"]) > 0)
+					if($IblockElement["XML_ID"] <> '')
 						$result["PRODUCT_XML_ID"] = $IblockElement["XML_ID"];
 
-					if(strlen($IblockElement["IBLOCK_EXTERNAL_ID"]) > 0)
+					if($IblockElement["IBLOCK_EXTERNAL_ID"] <> '')
 						$result["CATALOG_XML_ID"] = $IblockElement["IBLOCK_EXTERNAL_ID"];
 				}
 
@@ -253,7 +239,7 @@ class Helper
 			$result .= '<option value="">'.GetMessage("SALE_YM_NOT_USE").'</option>';
 
 		foreach($data as $value => $title)
-			$result .= '<option value="'.$value.'"'.($selected == $value ? " selected" : "").'>'.$title.'</option>';
+			$result .= '<option value="'.htmlspecialcharsbx($value).'"'.($selected == $value ? " selected" : "").'>'.htmlspecialcharsbx($title).'</option>';
 
 		$result .= '</select>';
 
@@ -281,7 +267,7 @@ class Helper
 			$arPropFilter["RELATED"]["TYPE"] = "WITH_NOT_RELATED";
 		}
 
-		if (strlen($params["DELIVERY"]) > 0)
+		if ($params["DELIVERY"] <> '')
 		{
 			$arPropFilter["RELATED"]["DELIVERY_ID"] = $params["DELIVERY"];
 			$arPropFilter["RELATED"]["TYPE"] = "WITH_NOT_RELATED";
@@ -293,13 +279,13 @@ class Helper
 			false,
 			false,
 			array("ID", "CODE")
-		);		
+		);
 
 		while ($arOrderProps = $dbOrderProps->Fetch())
 		{
-			foreach(self::getOrderProps() as $prop)
+			foreach (self::getOrderProps() as $prop)
 			{
-				if($arOrderProps["CODE"] == $params["ORDER_PROPS_MAP"][$prop] && isset($params[$prop]))
+				if ($arOrderProps["CODE"] == $params["ORDER_PROPS_MAP"][$prop] && isset($params[$prop]))
 					$result[$arOrderProps["ID"]] = $params[$prop];
 			}
 		}
@@ -319,37 +305,37 @@ class Helper
 			"DEDUCTED" => Loc::getMessage("SALE_EBAY_HLP_FLAG_DEDUCTED"),
 		);
 
-		if(strlen($siteId) <= 0)
+		if ($siteId == '')
 			throw new ArgumentNullException("siteId");
 
 		$dbRes = SiteTable::getList(array(
 			'filter' => array(
-				'LID' => $siteId
+				'LID' => $siteId,
 			),
-			'select' => array("LANGUAGE_ID")
+			'select' => array("LANGUAGE_ID"),
 		));
 
-		if($site = $dbRes->fetch())
+		if ($site = $dbRes->fetch())
 			$langId = $site["LANGUAGE_ID"];
 		else
-			throw new SystemException("Site with id: \"".$siteId."\" not found!");
+			throw new SystemException("Site with id: \"" . $siteId . "\" not found!");
 
 		$dbRes = StatusLangTable::getList(array(
 			'filter' => array(
 				'LID' => $langId,
-				'STATUS.TYPE' => 'O'
+				'STATUS.TYPE' => 'O',
 			),
 			'order' => array(
 				"STATUS.SORT" => "ASC",
-				"NAME" => "ASC"
+				"NAME" => "ASC",
 			),
 			'select' => array(
-				"ID" => "STATUS.ID", "NAME"
-			)
+				"ID" => "STATUS.ID", "NAME",
+			),
 		));
 
 		while ($row = $dbRes->fetch())
-			$result[$row['ID']] = Loc::getMessage("SALE_EBAY_HLP_STATUS")." ".$row['NAME']. ' ['.$row['ID'].']';
+			$result[$row['ID']] = Loc::getMessage("SALE_EBAY_HLP_STATUS") . " " . $row['NAME'] . ' [' . $row['ID'] . ']';
 
 		return $result;
 	}
@@ -366,31 +352,31 @@ class Helper
 		$catProps = self::getPropertiesList($iblockId, $bitrixCategoryId);
 
 		$resultHtml =
-			'	<select name="'.$selectName.'">
+			'	<select name="' . $selectName . '">
 			<option value=""></option>
 			<option value="">------------------</option>
-			<option value="">'.Loc::getMessage("SALE_EBAY_HLP_CATEGORY_PROPS").'</option>
+			<option value="">' . Loc::getMessage("SALE_EBAY_HLP_CATEGORY_PROPS") . '</option>
 			<option value="">------------------</option>';
 
 		foreach ($catProps as $propId => $prop)
-			$resultHtml .= '<option value="'.$propId.'"'.($value == $propId ? ' selected' : '').'>'.$prop["NAME"].'</option>';
+			$resultHtml .= '<option value="' . $propId . '"' . ($value == $propId ? ' selected' : '') . '>' . htmlspecialcharsbx($prop["NAME"]) . '</option>';
 
 		$arOffers = \CCatalogSKU::GetInfoByProductIBlock($iblockId);
-		if($arOffers)
+		if ($arOffers)
 		{
 			$catProps2 = self::getPropertiesList($arOffers["IBLOCK_ID"], $bitrixCategoryId);
 
 			$resultHtml .= '
 				<option value="">------------------</option>
-				<option value="">'.Loc::getMessage("SALE_EBAY_HLP_OFFERS_PROPS").'</option>
+				<option value="">' . Loc::getMessage("SALE_EBAY_HLP_OFFERS_PROPS") . '</option>
 				<option value="">------------------</option>
 			';
 
-			foreach ($catProps2 as  $propId => $prop)
-				$resultHtml .= '<option value="'.$propId.'"'.($value == $propId ? ' selected' : '').'>'.$prop["NAME"].'</option>';
+			foreach ($catProps2 as $propId => $prop)
+				$resultHtml .= '<option value="' . $propId . '"' . ($value == $propId ? ' selected' : '') . '>' . htmlspecialcharsbx($prop["NAME"]) . '</option>';
 		}
 
-		$resultHtml .='	</select>';
+		$resultHtml .= '	</select>';
 
 		return $resultHtml;
 	}
@@ -404,29 +390,29 @@ class Helper
 	{
 		$result = \CIBlockSectionPropertyLink::GetArray($iblockId, $sectionId);
 
-		$rsProps =  \CIBlockProperty::GetList(array(
-			"SORT"=>"ASC",
+		$rsProps = \CIBlockProperty::GetList(array(
+			"SORT" => "ASC",
 			'ID' => 'ASC',
 		), array(
 			"IBLOCK_ID" => $iblockId,
 			"CHECK_PERMISSIONS" => "N",
-			"ACTIVE"=>"Y",
+			"ACTIVE" => "Y",
 		));
 
 		while ($arProp = $rsProps->Fetch())
-			if(isset($result[$arProp["ID"]]))
+			if (isset($result[$arProp["ID"]]))
 				$result[$arProp["ID"]]["NAME"] = $arProp["NAME"];
 
 		return $result;
 	}
 
 
-	static public function notifyNewOrder($newOrderId, $siteId, $buyerEmail = "", $buyerFio = "")
+	public function notifyNewOrder($newOrderId, $siteId, $buyerEmail = "", $buyerFio = "")
 	{
-		if(strlen($newOrderId) <= 0)
+		if ($newOrderId == '')
 			throw new ArgumentNullException("newOrderId");
 
-		if(strlen($siteId) <= 0)
+		if ($siteId == '')
 			throw new ArgumentNullException("siteId");
 
 		global $DB;
@@ -442,7 +428,7 @@ class Helper
 			false,
 			false,
 			array(
-				"ID","PRICE", "QUANTITY", "NAME"
+				"ID", "PRICE", "QUANTITY", "NAME",
 			)
 		);
 
@@ -457,8 +443,8 @@ class Helper
 				continue;
 
 			$measure = (isset($val["MEASURE_TEXT"])) ? $val["MEASURE_TEXT"] : GetMessage("SALE_YMH_SHT");
-			$strOrderList .= $val["NAME"]." - ".$val["QUANTITY"]." ".$measure.": ".SaleFormatCurrency($val["PRICE"], $baseLangCurrency);
-			$strOrderList .= "\n";
+			$strOrderList .= $val["NAME"] . " - " . $val["QUANTITY"] . " " . $measure . " x " . SaleFormatCurrency($val["PRICE"], $baseLangCurrency);
+			$strOrderList .= "</br>";
 		}
 
 		//send mail
@@ -467,10 +453,10 @@ class Helper
 			"ORDER_DATE" => Date($DB->DateFormatToPHP(\CLang::GetDateFormat("SHORT", $siteId))),
 			"ORDER_USER" => $buyerFio,
 			"PRICE" => SaleFormatCurrency($orderNew["PRICE"], $baseLangCurrency),
-			"BCC" => \COption::GetOptionString("sale", "order_email", "order@".$_SERVER['SERVER_NAME']),
-			"EMAIL_TO" => array("PAYER_NAME" => $buyerFio , "USER_EMAIL" => $buyerEmail),
+			"BCC" => \COption::GetOptionString("sale", "order_email", "order@" . $_SERVER['SERVER_NAME']),
+			"EMAIL_TO" => array("PAYER_NAME" => $buyerFio, "USER_EMAIL" => $buyerEmail),
 			"ORDER_LIST" => $strOrderList,
-			"SALE_EMAIL" => \COption::GetOptionString("sale", "order_email", "order@".$_SERVER['SERVER_NAME']),
+			"SALE_EMAIL" => \COption::GetOptionString("sale", "order_email", "order@" . $_SERVER['SERVER_NAME']),
 			"DELIVERY_PRICE" => $orderNew["DELIVERY_PRICE"],
 		);
 
@@ -478,13 +464,13 @@ class Helper
 
 		$bSend = true;
 
-		foreach(GetModuleEvents("sale", "OnOrderNewSendEmail", true) as $arEvent)
-			if (ExecuteModuleEventEx($arEvent, array($newOrderId, &$eventName, &$arFields))===false)
+		foreach (GetModuleEvents("sale", "OnOrderNewSendEmail", true) as $arEvent)
+			if (ExecuteModuleEventEx($arEvent, array($newOrderId, &$eventName, &$arFields)) === false)
 				$bSend = false;
 
 		$emailSendRes = false;
 
-		if($bSend)
+		if ($bSend)
 		{
 			$event = new \CEvent;
 			$emailSendRes = $event->Send($eventName, $siteId, $arFields, "N");
@@ -500,7 +486,7 @@ class Helper
 		$result = new EventResult();
 		$data = $event->getParameter('fields');
 
-		if(!isset($data["TRACKING_NUMBER"]) && !isset($data["DELIVERY_NAME"]))
+		if (!isset($data["TRACKING_NUMBER"]) && !isset($data["DELIVERY_NAME"]))
 			return $result;
 
 		$primary = $event->getParameter('id');
@@ -513,26 +499,26 @@ class Helper
 				'TRADING_PLATFORM_CLASS' => 'TRADING_PLATFORM.CLASS',
 				'DELIVERY_NAME' => 'SHIPMENT.DELIVERY.NAME',
 				'DELIVERY_ID' => 'SHIPMENT.DELIVERY_ID',
-				'TRACKING_NUMBER' => 'SHIPMENT.TRACKING_NUMBER'
+				'TRACKING_NUMBER' => 'SHIPMENT.TRACKING_NUMBER',
 			),
 			'filter' => array(
-				'=SHIPMENT.ID' => $primary['ID']
+				'=SHIPMENT.ID' => $primary['ID'],
 			),
 			'runtime' => array(
 				'SHIPMENT' => array(
 					'data_type' => 'Bitrix\Sale\Internals\ShipmentTable',
 					'reference' => array(
-						'=this.ORDER_ID' => 'ref.ORDER_ID'
-					)
-				)
-			)
+						'=this.ORDER_ID' => 'ref.ORDER_ID',
+					),
+				),
+			),
 		));
 
-		if($platformOrder = $dbRes->fetch())
+		if ($platformOrder = $dbRes->fetch())
 		{
-			if(class_exists($platformOrder['TRADING_PLATFORM_CLASS']) && is_subclass_of($platformOrder['TRADING_PLATFORM_CLASS'], '\Bitrix\Sale\TradingPlatform\Platform'))
+			if (class_exists($platformOrder['TRADING_PLATFORM_CLASS']) && is_subclass_of($platformOrder['TRADING_PLATFORM_CLASS'], '\Bitrix\Sale\TradingPlatform\Platform'))
 			{
-				if($platform = call_user_func($platformOrder['TRADING_PLATFORM_CLASS'].'::getInstance'))
+				if ($platform = call_user_func($platformOrder['TRADING_PLATFORM_CLASS'] . '::getInstance'))
 				{
 					$result = $platform->onAfterUpdateShipment(
 						$event,
@@ -541,7 +527,7 @@ class Helper
 							array(
 								'TRACKING_NUMBER' => isset($data["TRACKING_NUMBER"]) ? $data["TRACKING_NUMBER"] : $platformOrder["TRACKING_NUMBER"],
 								'DELIVERY_NAME' => isset($data["DELIVERY_NAME"]) ? $data["DELIVERY_NAME"] : $platformOrder["DELIVERY_NAME"],
-								'DELIVERY_ID' => isset($data["DELIVERY_ID"]) ? $data["DELIVERY_ID"] : $platformOrder["DELIVERY_ID"]
+								'DELIVERY_ID' => isset($data["DELIVERY_ID"]) ? $data["DELIVERY_ID"] : $platformOrder["DELIVERY_ID"],
 							)
 						)
 					);
@@ -552,53 +538,83 @@ class Helper
 		return $result;
 	}
 
-	public static function getIblocksIds()
+	public static function getIblocksIds($withSku = false)
 	{
-		if(!\Bitrix\Main\Loader::includeModule('catalog'))
+		if (!\Bitrix\Main\Loader::includeModule('catalog'))
 			throw new SystemException('Module catalog is not installed');
 
-		$arIBlockIDs = array();
-		$rsCatalogs = \CCatalog::GetList(
-			array(),
-			array('!PRODUCT_IBLOCK_ID' => 0),
-			false,
-			false,
-			array('PRODUCT_IBLOCK_ID')
-		);
-		while ($arCatalog = $rsCatalogs->Fetch())
+//		save result in STATIC - for multiple used
+		if (!isset(self::$arIBlockIDs))
 		{
-			$arCatalog['PRODUCT_IBLOCK_ID'] = intval($arCatalog['PRODUCT_IBLOCK_ID']);
-			if (0 < $arCatalog['PRODUCT_IBLOCK_ID'])
-				$arIBlockIDs[$arCatalog['PRODUCT_IBLOCK_ID']] = true;
-		}
-		$rsCatalogs = \CCatalog::GetList(
-			array(),
-			array('PRODUCT_IBLOCK_ID' => 0),
-			false,
-			false,
-			array('IBLOCK_ID')
-		);
-		while ($arCatalog = $rsCatalogs->Fetch())
-		{
-			$arCatalog['IBLOCK_ID'] = intval($arCatalog['IBLOCK_ID']);
-			if (0 < $arCatalog['IBLOCK_ID'])
-				$arIBlockIDs[$arCatalog['IBLOCK_ID']] = true;
-		}
-		if (empty($arIBlockIDs))
-			$arIBlockIDs[-1] = true;
+			self::$arIBlockIDs = array();
 
-		return $arIBlockIDs;
+//			get CATALOG IBLOCKS from SKU iblocks
+			$rsCatalogs = \CCatalog::GetList(
+				array(),
+				array('!PRODUCT_IBLOCK_ID' => 0),
+				false,
+				false,
+				array('IBLOCK_ID', 'PRODUCT_IBLOCK_ID', 'NAME')
+			);
+			while ($arCatalog = $rsCatalogs->Fetch())
+			{
+				$arCatalog['PRODUCT_IBLOCK_ID'] = intval($arCatalog['PRODUCT_IBLOCK_ID']);
+				if (0 < $arCatalog['PRODUCT_IBLOCK_ID'])
+					self::$arIBlockIDs[$arCatalog['PRODUCT_IBLOCK_ID']] = array(
+						"IBLOCK_ID" => $arCatalog['PRODUCT_IBLOCK_ID'],
+						"NAME" => '',
+					);
+
+//				get SKU IBLOCKS if needed
+				if ($withSku)
+				{
+					$arCatalog['IBLOCK_ID'] = intval($arCatalog['IBLOCK_ID']);
+					if (0 < $arCatalog['IBLOCK_ID'])
+						self::$arIBlockIDs[$arCatalog['IBLOCK_ID']] = array(
+							"IBLOCK_ID" => $arCatalog['IBLOCK_ID'],
+							"NAME" => $arCatalog['NAME'],
+						);
+				}
+			}
+
+//			get CATALOG IBLOCKS
+			$rsCatalogs = \CCatalog::GetList(
+				array(),
+				array('PRODUCT_IBLOCK_ID' => 0),
+				false,
+				false,
+				array('IBLOCK_ID', 'NAME')
+			);
+			while ($arCatalog = $rsCatalogs->Fetch())
+			{
+				$arCatalog['IBLOCK_ID'] = intval($arCatalog['IBLOCK_ID']);
+				if (0 < $arCatalog['IBLOCK_ID'])
+					self::$arIBlockIDs[$arCatalog['IBLOCK_ID']] = array(
+						"IBLOCK_ID" => $arCatalog['IBLOCK_ID'],
+						"NAME" => $arCatalog['NAME'],
+					);
+			}
+
+			if (empty(self::$arIBlockIDs))
+				self::$arIBlockIDs[-1] = true;
+		}
+
+		return self::$arIBlockIDs;
 	}
 
 	public static function getDefaultFeedIntervals()
 	{
+
 		return array(
-			"PRODUCT" => 30,
-			"INVENTORY" => 30,
-			"IMAGE" => 30,
-			"ORDER" => 30,
-			"ORDER_ACK" => 15,
-			"SHIPMENT" => 30
+			"PRODUCT" => 30,    //in MINUTES
+			"INVENTORY" => 30,    //in MINUTES
+			"IMAGE" => 30,        //in MINUTES
+			"ORDER" => 30,        //in MINUTES
+			"ORDER_ACK" => 15,    //in MINUTES
+			"SHIPMENT" => 30,    //in MINUTES
+			"PRODUCTS" => 24,    //in HOURS
+			"ALBUMS" => 24,        //in HOURS
+			"ALL" => 24        //in HOURS
 		);
 	}
 }

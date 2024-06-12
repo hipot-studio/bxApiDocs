@@ -40,7 +40,7 @@ class CCrmInvoiceEvent extends CSaleOrderChange
 		return self::$eventTypes[$typeCode];
 	}
 
-	public function GetRecordDescription($type, $data)
+	public static function GetRecordDescription($type, $data)
 	{
 		foreach (CCrmInvoiceEventFormat::$arOperationTypes as $typeCode => $arInfo)
 		{
@@ -48,7 +48,10 @@ class CCrmInvoiceEvent extends CSaleOrderChange
 			{
 				if (isset($arInfo["FUNCTION"]) && is_callable(array("CCrmInvoiceEventFormat", $arInfo["FUNCTION"])))
 				{
-					$arResult = call_user_func_array(array("CCrmInvoiceEventFormat", $arInfo["FUNCTION"]), array(unserialize($data)));
+					$arResult = call_user_func_array(
+						["CCrmInvoiceEventFormat", $arInfo["FUNCTION"]],
+						[unserialize($data, ['allowed_classes' => ['Bitrix\Main\Type\Date', 'Bitrix\Main\Type\DateTime', 'DateTime']])]
+					);
 					$arResult["NAME"] = self::getName($type);
 					return $arResult;
 				}
@@ -56,6 +59,11 @@ class CCrmInvoiceEvent extends CSaleOrderChange
 		}
 
 		return false;
+	}
+
+	protected static function getEntity()
+	{
+		return \Bitrix\Crm\Invoice\Internals\InvoiceChangeTable::getEntity();
 	}
 }
 
@@ -133,8 +141,11 @@ class CCrmInvoiceEventFormat extends CSaleOrderChangeFormat
 	{
 
 		$info = GetMessage("CRM_INVOICE_EVENT_INFO_COMMENTED");
-		foreach ($arData as $param => $value)
-			$info = str_replace("#".$param."#", $value, $info);
+		if (is_array($arData))
+		{
+			foreach ($arData as $param => $value)
+				$info = str_replace("#".$param."#", $value, $info);
+		}
 
 		return array(
 			"INFO" => $info
@@ -144,15 +155,18 @@ class CCrmInvoiceEventFormat extends CSaleOrderChangeFormat
 	public static function FormatInvoiceStatusChanged($arData)
 	{
 		$info = GetMessage("CRM_INVOICE_EVENT_INFO_STATUS_CHANGED");
-		foreach ($arData as $param => $value)
+		if (is_array($arData))
 		{
-			if ($param == "STATUS_ID")
+			foreach ($arData as $param => $value)
 			{
-				$res = CCrmStatusInvoice::getByID($value);
-				$value = "\"".$res["NAME"]."\"";
-			}
+				if ($param == "STATUS_ID")
+				{
+					$res = CCrmStatusInvoice::getByID($value);
+					$value = "\"".$res["NAME"]."\"";
+				}
 
-			$info = str_replace("#".$param."#", $value, $info);
+				$info = str_replace("#".$param."#", $value, $info);
+			}
 		}
 
 		return array(
@@ -163,15 +177,18 @@ class CCrmInvoiceEventFormat extends CSaleOrderChangeFormat
 	public static function FormatInvoicePaymentSystemChanged($arData)
 	{
 		$info = GetMessage("CRM_INVOICE_EVENT_INFO_PAYMENT_SYSTEM_CHANGED");
-		foreach ($arData as $param => $value)
+		if (is_array($arData))
 		{
-			if ($param == "PAY_SYSTEM_ID")
+			foreach ($arData as $param => $value)
 			{
-				$res = CSalePaySystem::GetByID($value);
-				$value = "\"".$res["NAME"]."\"";
-			}
+				if ($param == "PAY_SYSTEM_ID")
+				{
+					$res = CSalePaySystem::GetByID($value);
+					$value = "\"".$res["NAME"]."\"";
+				}
 
-			$info = str_replace("#".$param."#", $value, $info);
+				$info = str_replace("#".$param."#", $value, $info);
+			}
 		}
 
 		return array(
@@ -184,19 +201,27 @@ class CCrmInvoiceEventFormat extends CSaleOrderChangeFormat
 	public static function FormatInvoicePersonTypeChanged($arData)
 	{
 		$info = GetMessage("CRM_INVOICE_EVENT_INFO_PERSON_TYPE_CHANGED");
-		foreach ($arData as $param => $value)
+		if (is_array($arData))
 		{
-			if ($param == "PERSON_TYPE_ID")
+			foreach ($arData as $param => $value)
 			{
-				$res = CSalePersonType::GetByID($value);
-				$value = "\"".$res["NAME"]."\"";
-				if ($res["NAME"] === 'CRM_CONTACT')
-					$value = '"'.GetMessage('CRM_PERSON_TYPE_CONTACT').'"';
-				else if ($res["NAME"] === 'CRM_COMPANY')
-					$value = '"'.GetMessage('CRM_PERSON_TYPE_COMPANY').'"';
-			}
+				if ($param == "PERSON_TYPE_ID")
+				{
+					$dbRes = \Bitrix\Crm\Invoice\PersonType::getList([
+						'filter' => [
+							'=ID' => $value
+						]
+					]);
+					$res = $dbRes->fetch();
+					$value = "\"".$res["NAME"]."\"";
+					if ($res["CODE"] === 'CRM_CONTACT')
+						$value = '"'.GetMessage('CRM_PERSON_TYPE_CONTACT').'"';
+					else if ($res["CODE"] === 'CRM_COMPANY')
+						$value = '"'.GetMessage('CRM_PERSON_TYPE_COMPANY').'"';
+				}
 
-			$info = str_replace("#".$param."#", $value, $info);
+				$info = str_replace("#".$param."#", $value, $info);
+			}
 		}
 
 		return array(
@@ -208,8 +233,11 @@ class CCrmInvoiceEventFormat extends CSaleOrderChangeFormat
 	{
 		$info = GetMessage("CRM_INVOICE_EVENT_INFO_USER_DESCRIPTION_CHANGED");
 
-		foreach ($arData as $param => $value)
-			$info = str_replace("#".$param."#", $value, $info);
+		if (is_array($arData))
+		{
+			foreach ($arData as $param => $value)
+				$info = str_replace("#".$param."#", $value, $info);
+		}
 
 		return array(
 			"INFO" => $info

@@ -1,21 +1,67 @@
-<?
-abstract class CBPCompositeActivity
-	extends CBPActivity
+<?php
+
+abstract class CBPCompositeActivity extends CBPActivity
 {
 	protected $arActivities = array();
+	protected $readOnlyData = [];
 
-	public function SetWorkflow(CBPWorkflow $workflow)
+	public function setWorkflow(CBPWorkflow $workflow)
 	{
 		parent::SetWorkflow($workflow);
 		foreach ($this->arActivities as $activity)
 		{
 			if (!method_exists($activity, 'SetWorkflow'))
+			{
 				throw new Exception('ActivitySetWorkflow');
+			}
 			$activity->SetWorkflow($workflow);
 		}
 	}
 
-	protected function ReInitialize()
+	public function unsetWorkflow()
+	{
+		parent::unsetWorkflow();
+		foreach ($this->arActivities as $activity)
+		{
+			if (method_exists($activity, 'SetWorkflow'))
+			{
+				$activity->unsetWorkflow();
+			}
+		}
+	}
+
+	public function setReadOnlyData(array $data)
+	{
+		$this->readOnlyData = $data;
+	}
+
+	public function getReadOnlyData(): array
+	{
+		return $this->readOnlyData;
+	}
+
+	public function pullReadOnlyData()
+	{
+		$data = $this->readOnlyData;
+		$this->readOnlyData = [];
+
+		return $data;
+	}
+
+	public function pullProperties(): array
+	{
+		$result = parent::pullProperties();
+
+		/** @var CBPActivity $activity */
+		foreach ($this->arActivities as $activity)
+		{
+			$result = array_merge($result, $activity->pullProperties());
+		}
+
+		return $result;
+	}
+
+	protected function reInitialize()
 	{
 		parent::ReInitialize();
 		/** @var CBPActivity $activity */
@@ -23,12 +69,12 @@ abstract class CBPCompositeActivity
 			$activity->ReInitialize();
 	}
 
-	public function CollectNestedActivities()
+	public function collectNestedActivities()
 	{
 		return $this->arActivities;
 	}
 
-	public function FixUpParentChildRelationship(CBPActivity $nestedActivity)
+	public function fixUpParentChildRelationship(CBPActivity $nestedActivity)
 	{
 		parent::FixUpParentChildRelationship($nestedActivity);
 
@@ -38,32 +84,25 @@ abstract class CBPCompositeActivity
 		$this->arActivities[] = $nestedActivity;
 	}
 
-	protected function ClearNestedActivities()
+	protected function clearNestedActivities()
 	{
 		$this->arActivities = array();
 	}
 
-	public function Initialize()
+	public function initialize()
 	{
 		foreach ($this->arActivities as $activity)
 			$this->workflow->InitializeActivity($activity);
 	}
-	
-	public function HandleFault(Exception $exception)
+
+	public function finalize()
 	{
-		if (!$exception)
-			throw new Exception("exception");
-
-		$status = $this->Cancel();
-		if ($status == CBPActivityExecutionStatus::Canceling)
-			return CBPActivityExecutionStatus::Faulting;
-
-		return $status;
+		foreach ($this->arActivities as $activity)
+			$this->workflow->FinalizeActivity($activity);
 	}
 
-	public static function ValidateProperties($arTestProperties = array(), CBPWorkflowTemplateUser $user = null)
+	public static function validateProperties($arTestProperties = array(), CBPWorkflowTemplateUser $user = null)
 	{
 		return parent::ValidateProperties($arTestProperties, $user);
 	}
 }
-?>

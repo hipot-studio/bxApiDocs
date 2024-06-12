@@ -1,8 +1,8 @@
-<?
+<?php
 
 class CPullTableSchema
 {
-	static public function __construct()
+	public function __construct()
 	{
 	}
 
@@ -36,4 +36,3 @@ class CPullTableSchema
 	}
 }
 
-?>

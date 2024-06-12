@@ -1,4 +1,10 @@
 <?
+
+/**
+ * Class CSecuritySessionMC
+ * @deprecated
+ * @see \Bitrix\Main\Session\Handlers\MemcacheSessionHandler
+ */
 class CSecuritySessionMC
 {
 	/** @var Memcache $connection*/
@@ -6,7 +12,7 @@ class CSecuritySessionMC
 	protected static $sessionId = null;
 	protected static $isReadOnly = false;
 	protected static $isSessionReady = false;
-
+	protected static $hasFailedRead = false;
 	/**
 	 * @return bool
 	 */
@@ -43,7 +49,7 @@ class CSecuritySessionMC
 			if(isSessionExpired())
 				self::destroy(self::$sessionId);
 
-			self::$connection->delete(self::getPrefix().self::$sessionId.".lock");
+			self::$connection->replace(self::getPrefix().self::$sessionId.".lock", 0, 0, 1);
 		}
 
 		self::$sessionId = null;
@@ -75,6 +81,11 @@ class CSecuritySessionMC
 
 			while(!self::$connection->add($sid.$id.".lock", $lock, 0, $lockTimeout))
 			{
+				if(self::$connection->increment($sid.$id.".lock", 1) === 1)
+				{
+					self::$connection->replace($sid.$id.".lock", $lock, 0, $lockTimeout);
+					break;
+				}
 				usleep($waitStep);
 				$lockWait -= $waitStep;
 				if($lockWait < 0)
@@ -84,7 +95,7 @@ class CSecuritySessionMC
 					{
 						$lockedUri = self::$connection->get($sid.$id.".lock");
 						if ($lockedUri && $lockedUri != 1)
-							$errorText .= sprintf(' Locked by "%s".', self::$connection->get($sid.$id.".lock"));
+							$errorText .= sprintf(' Locked by "%s".', $lockedUri);
 					}
 
 					CSecuritySession::triggerFatalError($errorText);
@@ -99,7 +110,14 @@ class CSecuritySessionMC
 		self::$isSessionReady = true;
 		$res = self::$connection->get($sid.$id);
 		if($res === false)
+		{
+			if (!self::$hasFailedRead)
+			{
+				AddEventHandler("main", "OnPageStart", array("CSecuritySession", "UpdateSessID"));
+				self::$hasFailedRead = true;
+			}
 			$res = "";
+		}
 
 		return $res;
 	}
@@ -131,7 +149,7 @@ class CSecuritySessionMC
 		if(CSecuritySession::isOldSessionIdExist())
 		{
 			$oldSessionId = CSecuritySession::getOldSessionId(true);
-			self::$connection->delete($sid.$oldSessionId);
+			self::$connection->replace($sid.$oldSessionId, "", 0, 1);
 		}
 
 		self::$connection->set($sid.$id, $sessionData, 0, $maxLifetime);
@@ -162,10 +180,10 @@ class CSecuritySessionMC
 			return false;
 
 		$sid = self::getPrefix();
-		self::$connection->delete($sid.$id);
+		self::$connection->replace($sid.$id, "", 0, 1);
 
 		if(CSecuritySession::isOldSessionIdExist())
-			self::$connection->delete($sid.CSecuritySession::getOldSessionId(true));
+			self::$connection->replace($sid.CSecuritySession::getOldSessionId(true), "", 0, 1);
 
 		if($isConnectionRestored)
 			self::closeConnection();
@@ -246,7 +264,7 @@ class CSecuritySessionMC
 		{
 			$port = defined("BX_SECURITY_SESSION_MEMCACHE_PORT")? intval(BX_SECURITY_SESSION_MEMCACHE_PORT): 11211;
 			self::$connection = new Memcache;
-			$result = self::$connection->connect(BX_SECURITY_SESSION_MEMCACHE_HOST, $port);
+			$result = self::$connection->pconnect(BX_SECURITY_SESSION_MEMCACHE_HOST, $port);
 			if (!$result)
 			{
 				$error = error_get_last();

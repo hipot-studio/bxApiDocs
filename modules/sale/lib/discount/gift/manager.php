@@ -9,7 +9,9 @@ use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\SystemException;
 use Bitrix\Sale\Basket;
 use Bitrix\Sale\BasketItem;
+use Bitrix\Sale\Discount\Analyzer;
 use Bitrix\Sale\Order;
+use Bitrix\Sale\Registry;
 use CCatalogSKU;
 use CSaleDiscountActionApply;
 use SplObjectStorage;
@@ -84,17 +86,6 @@ final class Manager
 	 * Returns Singleton of Manager
 	 * @return Manager
 	 */
-	
-	/**
-	* <p>Метод возвращает объект (Singleton) менеджера подарков. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Sale\Discount\Gift\Manager 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/discount/gift/manager/getinstance.php
-	* @author Bitrix
-	*/
 	public static function getInstance()
 	{
 		if (!isset(self::$instance))
@@ -114,31 +105,6 @@ final class Manager
 	 * @param array|null $appliedDiscounts List of all discounts for basket, which already applied to basket.
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список коллекций подарков к корзине. Нестатический метод.</p> <p>Для повышения производительности вы можете указать аргументы <code>$discounts</code> и <code>$appliedDiscounts</code>, которые передаются корзине.</p>
-	*
-	*
-	* @param mixed $Bitrix  Корзина.
-	*
-	* @param Bitri $Sale  Список скидок, подходящих для применения к корзине.
-	*
-	* @param Basket $basket  Список скидок, успешно применившихся к корзине.
-	*
-	* @param Basket $array  
-	*
-	* @param null $discounts = null 
-	*
-	* @param array $array  
-	*
-	* @param null $appliedDiscounts = null 
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/discount/gift/manager/getcollectionsbybasket.php
-	* @author Bitrix
-	*/
 	public function getCollectionsByBasket(Basket $basket, array $discounts = null, array $appliedDiscounts = null)
 	{
 		$this->errorCollection->clear();
@@ -315,25 +281,6 @@ final class Manager
 	 * @param array $product Array which describes product (@see isValidProduct()).
 	 * @return array|null
 	 */
-	
-	/**
-	* <p>Метод возвращает список коллекций подарков к товару в корзине. Нестатический метод.</p> <p>Если корзина пуста, то сначала вычисляются подарки без товара. Затем после добавления товара в корзину рассчитываются подарки и проводится сравнение с предыдущим набором подарков. Если в результате сравнения имеется разница, то метод возвращает массив подарков к товару, а в противном случае - пустой массив.</p>
-	*
-	*
-	* @param mixed $Bitrix  Корзина.
-	*
-	* @param Bitri $Sale  Массив параметров товара.
-	*
-	* @param Basket $basket  
-	*
-	* @param array $product  
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/discount/gift/manager/getcollectionsbyproduct.php
-	* @author Bitrix
-	*/
 	public function getCollectionsByProduct(Basket $basket, array $product)
 	{
 		$this->errorCollection->clear();
@@ -352,7 +299,7 @@ final class Manager
 		$checkProductInBasket = $this->checkProductInBasket($product, $pseudoBasket);
 		if($checkProductInBasket)
 		{
-			$this->deleteProductFromBasket($pseudoBasket, $product);
+			$this->deleteProductFromBasket($pseudoBasket, $product, false);
 		}
 		else
 		{
@@ -488,12 +435,19 @@ final class Manager
 			throw new SystemException('Could not get discounts by basket which has order.');
 		}
 
-		$order = Order::create($basket->getSiteId(), $this->userId);
+		$registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
+		/** @var Order $orderClass */
+		$orderClass = $registry->getOrderClassName();
+
+		$order = $orderClass::create($basket->getSiteId(), $this->userId);
 		if(!$order->setBasket($basket)->isSuccess())
 		{
 			return null;
 		}
-		$calcResults = $order->getDiscount()->getApplyResult(true);
+		$discount = $order->getDiscount();
+		$discount->calculate();
+		$calcResults = $discount->getApplyResult(true);
+		unset($discount);
 
 		$appliedDiscounts = array();
 		foreach($calcResults['DISCOUNT_LIST'] as $discountData)
@@ -522,19 +476,24 @@ final class Manager
 
 	private function checkProductInBasket(array $product, Basket $basket)
 	{
+		return (bool)$this->getItemFromBasket($product, $basket);
+	}
+
+	private function getItemFromBasket(array $product, Basket $basket)
+	{
 		foreach($basket as $item)
 		{
 			/** @var BasketItem $item */
 			if(
-					$item->getProductId() == $product['ID'] &&
-					$item->getField('MODULE') == $product['MODULE']
+				$item->getProductId() == $product['ID'] &&
+				$item->getField('MODULE') === $product['MODULE']
 			)
 			{
-				return true;
+				return $item;
 			}
 		}
 
-		return false;
+		return null;
 	}
 
 	private function addProductToBasket(Basket $basket, array $product)
@@ -558,11 +517,10 @@ final class Manager
 		}
 	}
 
-	private function deleteProductFromBasket(Basket $basket, array $product)
+	private function deleteProductFromBasket(Basket $basket, array $product, bool $checkQuantity = true)
 	{
-		//todo Ilya's error. He said, that features was not necessary.
-		$item = $basket->getExistsItem($product['MODULE'], $product['ID']);
-		if($item && $item->getQuantity() == $product['QUANTITY'])
+		$item = $this->getItemFromBasket($product, $basket);
+		if($item && (!$checkQuantity || $item->getQuantity() == $product['QUANTITY']))
 		{
 			$item->delete();
 		}
@@ -588,25 +546,6 @@ final class Manager
 	 * @param array  $product Array which describes product (@see isValidProduct()).
 	 * @return bool|null
 	 */
-	
-	/**
-	* <p>Метод возвращает <i>true</i>, если товар является подарком к корзине покупателя. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $Bitrix  Корзина.
-	*
-	* @param Bitri $Sale  Массив параметров товара.
-	*
-	* @param Basket $basket  
-	*
-	* @param array $product  
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/discount/gift/manager/isgift.php
-	* @author Bitrix
-	*/
 	public function isGift(Basket $basket, array $product)
 	{
 		$this->errorCollection->clear();
@@ -637,38 +576,9 @@ final class Manager
 	 * @param array $discount Discount.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Метод возвращает <i>true</i>, если правило работы с корзиной содержит действие с подарком. Нестатический метод.</p>
-	*
-	*
-	* @param array $discount  Массив параметров правила.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/discount/gift/manager/iscontaingiftaction.php
-	* @author Bitrix
-	*/
-	static public function isContainGiftAction(array $discount)
+	public function isContainGiftAction(array $discount)
 	{
-		if(isset($discount['ACTIONS']) && is_string($discount['ACTIONS']))
-		{
-			return strpos($discount['ACTIONS'], \CSaleActionGiftCtrlGroup::getControlID()) !== false;
-		}
-		elseif(isset($discount['ACTIONS_LIST']['CHILDREN']) && is_array($discount['ACTIONS_LIST']['CHILDREN']))
-		{
-			foreach($discount['ACTIONS_LIST']['CHILDREN'] as $child)
-			{
-				if(isset($child['CLASS_ID']) && isset($child['DATA']) && $child['CLASS_ID'] === \CSaleActionGiftCtrlGroup::getControlID())
-				{
-					return true;
-				}
-			}
-			unset($child);
-		}
-
-		return false;
+		return Analyzer::getInstance()->isContainGiftAction($discount);
 	}
 
 	/**
@@ -676,18 +586,7 @@ final class Manager
 	 * @return bool
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Метод возвращает <i>true</i>, если существуют правила работы с корзиной, по которым предоставляется подарок. Нестатический метод.</p> <p>Без параметров</p>
-	*
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/discount/gift/manager/existsdiscountswithgift.php
-	* @author Bitrix
-	*/
-	static public function existsDiscountsWithGift()
+	public function existsDiscountsWithGift()
 	{
 		return Option::get('sale', 'exists_discounts_with_gift', 'N') === 'Y';
 	}
@@ -696,16 +595,16 @@ final class Manager
 	 * Disables existence discount with gift.
 	 * @return void
 	 */
-	static public function disableExistenceDiscountsWithGift()
+	public function disableExistenceDiscountsWithGift()
 	{
-		Option::set('sale', 'exists_discounts_with_gift', 'Y');
+		Option::set('sale', 'exists_discounts_with_gift', 'N');
 	}
 
 	/**
 	 * Enables existence discount with gift.
 	 * @return void
 	 */
-	static public function enableExistenceDiscountsWithGift()
+	public function enableExistenceDiscountsWithGift()
 	{
 		Option::set('sale', 'exists_discounts_with_gift', 'Y');
 	}

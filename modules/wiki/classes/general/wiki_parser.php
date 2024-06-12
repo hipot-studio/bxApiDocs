@@ -2,17 +2,6 @@
 
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CWikiParser</b> - Класс обрабатывающий вики-разметку в странице.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiparser/index.php
- * @author Bitrix
- */
 class CWikiParser
 {
 	public $arNowiki = array();
@@ -25,54 +14,12 @@ class CWikiParser
 	private $postUrl = "";
 	private $textType = "";
 
-	public static function __construct()
+	function __construct()
 	{
 
 	}
 
-	
-	/**
-	* <p>Метод обрабатывает содержимое Wiki-страницы. Нестатический метод.</p>
-	*
-	*
-	* @param string $text  Содержимое Wiki-страницы
-	*
-	* @param  $type = 'text' Тип содержимого Wiki-страницы (html|text). Необязательный.
-	*
-	* @param  $arFile = array() Массив изображений. Необязательный.
-	*
-	* @param  $arParams = array() Путь до папки. Необязательный.
-	*
-	* @return string <p>Возвращает обработанную Wiki-страницу, без Wiki-разметки.    <br></p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>
-	* // Обработаем содержимое страницы "Тестовая страница" инфо.блока с идентификатором 2
-	* $IBLOCK_ID = 2;
-	* $NAME = 'Тестовая страница';
-	* $arFilter = array(
-	* 	'ACTIVE' =&gt; 'Y',
-	* 	'CHECK_PERMISSIONS' =&gt; 'N',
-	* 	'IBLOCK_ID' =&gt; $IBLOCK_ID
-	* );
-	* $arElement = CWiki::GetElementByName($NAME, $arFilter);
-	* 
-	* $CWikiParser = new CWikiParser();
-	* echo $CWikiParser-&gt;Parse($arElement['~DETAIL_TEXT'], $arElement['DETAIL_TEXT_TYPE'], $arElement['IMAGES']);<br>?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikisecurity/clear.php">CWikiSecurity::clear</a> </li>
-	*  </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiparser/parse.php
-	* @author Bitrix
-	*/
-	public function Parse($text, $type = 'text', $arFile = array(), $arParams = array())
+	function Parse($text, $type = 'text', $arFile = array(), $arParams = array())
 	{
 		$type = $this->textType = ($type == 'html' ? 'html' : 'text');
 		$this->arNowiki = array();
@@ -183,7 +130,7 @@ class CWikiParser
 		return $ret;
 	}
 
-	public static function Clear($text)
+	static function Clear($text)
 	{
 		$arWhiteTags = array(
 			'a'			=> array('href', 'title','name','style','id','class','shape','coords','alt','target'),
@@ -248,7 +195,7 @@ class CWikiParser
 		return $text;
 	}
 
-	public function _processFileCallback($matches)
+	function _processFileCallback($matches)
 	{
 		static $sImageAlign = '';
 		$bLink = false;
@@ -269,9 +216,9 @@ class CWikiParser
 				$sFileName = $arFile['ORIGINAL_NAME'];
 			}
 		}
-		else if (isset($this->arVersionFile[strtolower($sFile)]))
+		else if (isset($this->arVersionFile[mb_strtolower($sFile)]))
 		{
-			$sPath = $this->arVersionFile[strtolower($sFile)];
+			$sPath = $this->arVersionFile[mb_strtolower($sFile)];
 			$sFileName = $sFile;
 		}
 		else if (!empty($this->arFile))
@@ -327,7 +274,7 @@ class CWikiParser
 					$sReturn = '<img src="'.htmlspecialcharsbx($sPath).'" alt="'.htmlspecialcharsbx($sFileName).'"/>';
 			}
 		}
-		else if (strpos($sPath, 'http://') === 0)
+		else if (mb_strpos($sPath, 'http://') === 0)
 			$sReturn = ' [ <a href="'.htmlspecialcharsbx($sFile).'" title="'.GetMessage('FILE_FILE_DOWNLOAD').'">'.GetMessage('FILE_DOWNLOAD').'</a> ] ';
 		// otherwise the file
 		else
@@ -336,7 +283,7 @@ class CWikiParser
 		return $sReturn;
 	}
 
-	public static function _processExternalLinkCallback($matches)
+	function _processExternalLinkCallback($matches)
 	{
 		$sLink = trim($matches[1]);
 		$sName = $sTitle = $sLink;
@@ -350,7 +297,7 @@ class CWikiParser
 		return $sReturn;
 	}
 
-	public function processInternalLink($text)
+	function processInternalLink($text)
 	{
 		global $APPLICATION, $arParams;
 		$text = preg_replace_callback('/\[\[(.+)(\|(.*))?\]\]/iU'.BX_UTF_PCRE_MODIFIER, array(&$this, '_processInternalLinkPrepareCallback'), $text);
@@ -359,7 +306,7 @@ class CWikiParser
 		if (!empty($this->arLink))
 		{
 			$arFilter = array();
-			$arFilter['NAME'] = $this->arLink;
+			$arFilter['=NAME'] = $this->arLink;
 			$arFilter['IBLOCK_ID'] = $arParams['IBLOCK_ID'];
 			$arFilter['ACTIVE'] = 'Y';
 			$arFilter['CHECK_PERMISSIONS'] = 'N';
@@ -369,7 +316,7 @@ class CWikiParser
 			while($obElement = $rsElement->GetNextElement())
 			{
 				$arFields = $obElement->GetFields();
-				$this->arLinkExists[] = strtolower(CWikiUtils::htmlspecialcharsback($arFields['NAME'], true));
+				$this->arLinkExists[] = mb_strtolower(CWikiUtils::htmlspecialcharsback($arFields['NAME'], true));
 			}
 		}
 
@@ -378,7 +325,7 @@ class CWikiParser
 		return $text;
 	}
 
-	public function _processInternalLinkPrepareCallback($matches)
+	function _processInternalLinkPrepareCallback($matches)
 	{
 		$sLink = trim($matches[1]);
 		$sName = $sTitle = $sLink;
@@ -400,16 +347,16 @@ class CWikiParser
 		return $sReturn;
 	}
 
-	public function _processInternalLinkCallback($matches)
+	function _processInternalLinkCallback($matches)
 	{
 		global $arParams;
 
 		$sReturn = '';
-		if (in_array(strtolower($this->arLink[$matches[2]]), $this->arLinkExists))
+		if (in_array(mb_strtolower($this->arLink[$matches[2]]), $this->arLinkExists))
 		{
 			$sURL = CComponentEngine::MakePathFromTemplate($arParams['PATH_TO_POST'],
 				array(
-					'wiki_name' => urlencode($this->arLink[$matches[2]]),
+					'wiki_name' => rawurlencode($this->arLink[$matches[2]]),
 					'group_id' => CWikiSocnet::$iSocNetId
 				)
 			);
@@ -421,7 +368,7 @@ class CWikiParser
 				CComponentEngine::MakePathFromTemplate(
 					$arParams['PATH_TO_POST_EDIT'],
 					array(
-						'wiki_name' => urlencode($this->arLink[$matches[2]]),
+						'wiki_name' => rawurlencode($this->arLink[$matches[2]]),
 						'group_id' => CWikiSocnet::$iSocNetId
 					)
 				),
@@ -434,7 +381,7 @@ class CWikiParser
 		return $sReturn;
 	}
 
-	public function processToc($text)
+	function processToc($text)
 	{
 		$matches = array();
 		$sToc = '';
@@ -512,7 +459,7 @@ class CWikiParser
 					$iPrevItemTocLevel = $iItemTocLevel;
 					$bfirst = false;
 					$sNumToc = implode('.', $aNumToc);
-					$sItemTocId = str_replace(array('%', '+', '.F2', '..'), array('.', '.', '_', '.'), urlencode($sItemToc.$sNumToc));
+					$sItemTocId = str_replace(array('%', '+', '.F2', '..'), array('.', '.', '_', '.'), rawurlencode($sItemToc.$sNumToc));
 					$sToc .= '<li><a href="';
 
 					if($this->postUrl) //http://jabber.bx/view.php?id=28203
@@ -542,7 +489,7 @@ class CWikiParser
 		return $text;
 	}
 
-	public function _codeCallback($matches)
+	function _codeCallback($matches)
 	{
 		$codeText = "";
 		$i = count($this->arCode);
@@ -556,7 +503,7 @@ class CWikiParser
 		return '##CODE'.$i.'##';
 	}
 
-	public function _noWikiCallback($matches)
+	function _noWikiCallback($matches)
 	{
 		$i = count($this->arNowiki);
 		$this->arNowiki[] = $matches[2];
@@ -564,44 +511,23 @@ class CWikiParser
 		return '##NOWIKI'.$i.'##';
 	}
 
-	public function _codeReturnCallback($matches)
+	function _codeReturnCallback($matches)
 	{
 		return '<pre><code>'.$this->arCode[$matches[2]].'</code></pre>';
 	}
 
-	public function _noWikiReturnCallback($matches)
+	function _noWikiReturnCallback($matches)
 	{
 		return $this->arNowiki[$matches[2]];
 	}
 
-	public function _noWikiReturn2Callback($matches)
+	function _noWikiReturn2Callback($matches)
 	{
 		return '<nowiki>'.htmlspecialcharsbx($this->arNowiki[$matches[2]]).'</nowiki>';
 
 	}
 
-	
-	/**
-	* <p>Метод обрабатывает содержимое Wiki-страницы перед сохранением.  Нестатический метод.</p>
-	*
-	*
-	* @param string $text  Содержимое Wiki-страницы
-	*
-	* @param array &$arCat  Массив будет заполнен категориями, указанными в тексте страницы
-	*
-	* @return string 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br><br>$IBLOCK_ID = 2;<br>$NAME = 'Тестовая страница';<br>$arFilter = array(<br>	'ACTIVE' =&gt; 'Y',<br>	'CHECK_PERMISSIONS' =&gt; 'N',<br>	'IBLOCK_ID' =&gt; $IBLOCK_ID<br>);<br>$arElement = CWiki::GetElementByName($NAME, $arFilter);<br>$arCat = array();<br><br>$CWikiParser = new CWikiParser();<br>echo $CWikiParser-&gt;parseBeforeSave($arElement['~DETAIL_TEXT'], $arCat);<br><br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiparser/parsebeforesave.php
-	* @author Bitrix
-	*/
-	public static function parseBeforeSave($text, &$arCat = array(), $nameTemplate = "")
+	function parseBeforeSave($text, &$arCat = array(), $nameTemplate = "")
 	{
 		$userLogin = CWikiUtils::GetUserLogin(array(), $nameTemplate);
 
@@ -621,20 +547,7 @@ class CWikiParser
 		return $text;
 	}
 
-	
-	/**
-	* <p>Метод обрабатывает содержимое Wiki-страницы перед сохранением.  Нестатический метод.</p>
-	*
-	*
-	* @param string $text  Содержимое Wiki-страницы
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/wiki/classes/cwikiparser/parseForSearch.php
-	* @author Bitrix
-	*/
-	public static function parseForSearch($text)
+	function parseForSearch($text)
 	{
 		// delete Category
 		$text = preg_replace('/\[\[(Category|'.GetMessage('CATEGORY_NAME').'):(.+)\]\]/iU'.BX_UTF_PCRE_MODIFIER, '', $text);

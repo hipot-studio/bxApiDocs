@@ -9,5 +9,5 @@
 interface IPaymentOrder
 {
 	public function getPaymentCollection();
-	static public function loadPaymentCollection();
+	public function loadPaymentCollection();
 }

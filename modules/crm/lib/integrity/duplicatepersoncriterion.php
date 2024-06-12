@@ -2,15 +2,18 @@
 namespace Bitrix\Crm\Integrity;
 use Bitrix\Main;
 use Bitrix\Crm;
+
 class DuplicatePersonCriterion extends DuplicateCriterion
 {
-	private static $LANG_INCLUDED = false;
+	private static $langIncluded = false;
 	protected $name = '';
 	protected $secondName = '';
 	protected $lastName = '';
 
 	public function __construct($lastName, $name = '', $secondName = '')
 	{
+		parent::__construct();
+
 		$this->setLastName($lastName);
 		$this->setName($name);
 		$this->setSecondName($secondName);
@@ -64,7 +67,8 @@ class DuplicatePersonCriterion extends DuplicateCriterion
 			return '';
 		}
 
-		return strtolower(trim($name));
+		return preg_replace('/[ ]+/u', ' ',
+				mb_strtolower(rtrim(trim($name), '.')));
 	}
 	public static function register($entityTypeID, $entityID, $lastName, $name, $secondName, $isRaw = true)
 	{
@@ -223,7 +227,7 @@ class DuplicatePersonCriterion extends DuplicateCriterion
 		}
 		return $results;
 	}
-	public static function prepareSortParams($entityTypeID, array &$entityIDs)
+	public static function prepareSortParams($entityTypeID, array $entityIDs)
 	{
 		if(empty($entityIDs))
 		{
@@ -278,14 +282,28 @@ class DuplicatePersonCriterion extends DuplicateCriterion
 		}
 		$userID = isset($params['USER_ID']) ? intval($params['USER_ID']) : 0;
 
+		$scope = null;
+		if (isset($params['SCOPE']))
+		{
+			$scope = $params['SCOPE'];
+			if (!DuplicateIndexType::checkScopeValue($scope))
+			{
+				throw new Main\ArgumentException("Parameter has invalid value", 'SCOPE');
+			}
+		}
+
+		$filter = array(
+			'=USER_ID' => $userID,
+			'=ENTITY_TYPE_ID' => $entityTypeID,
+			'=TYPE_ID' => DuplicateIndexType::PERSON
+		);
+		if ($scope !== null)
+			$filter['=SCOPE'] = $scope;
+
 		$listParams = array(
 			'select' => array('USER_ID', 'TYPE_ID', 'ENTITY_TYPE_ID'),
 			'order' => array('USER_ID'=>'ASC', 'TYPE_ID'=>'ASC', 'ENTITY_TYPE_ID'=>'ASC'),
-			'filter' => array(
-				'=USER_ID' => $userID,
-				'=ENTITY_TYPE_ID' => $entityTypeID,
-				'=TYPE_ID' => DuplicateIndexType::PERSON
-			),
+			'filter' => $filter,
 			'limit' => 1
 		);
 
@@ -310,9 +328,97 @@ class DuplicatePersonCriterion extends DuplicateCriterion
 		$query->addFilter('=NAME', isset($matches['NAME']) ? $matches['NAME'] : '');
 		$query->addFilter('=SECOND_NAME', isset($matches['SECOND_NAME']) ? $matches['SECOND_NAME'] : '');
 	}
-	public function find($entityTypeID = \CCrmOwnerType::Undefined, $limit = 50)
+	/**
+	 * Prepare duplicate search query
+	 * @param \CCrmOwnerType $entityTypeID Target Entity Type ID
+	 * @param int $limit Limit of result query
+	 * @return Main\Entity\Query
+	 * @throws Main\ArgumentTypeException
+	 * @throws Main\InvalidOperationException
+	 */
+	public function prepareSearchQuery($entityTypeID = \CCrmOwnerType::Undefined, array $select = null, array $order = null, $limit = 0)
 	{
 		if($this->lastName === '')
+		{
+			throw new Main\InvalidOperationException('The field "title" is not assigned.');
+		}
+
+		if(!is_int($entityTypeID))
+		{
+			throw new Main\ArgumentTypeException('entityTypeID', 'integer');
+		}
+
+		$query = new Main\Entity\Query(DuplicatePersonMatchCodeTable::getEntity());
+		if(!is_array($select))
+		{
+			$select = array();
+		}
+		if(empty($select))
+		{
+			$select = array('ENTITY_TYPE_ID', 'ENTITY_ID');
+		}
+		$query->setSelect($select);
+
+		if(is_array($order) && !empty($order))
+		{
+			$query->setOrder($order);
+		}
+
+		$filter = array();
+		if($this->useStrictComparison)
+		{
+			$filter['=LAST_NAME'] = self::prepareCode($this->lastName);
+		}
+		else
+		{
+			$filter['%LAST_NAME'] = new Main\DB\SqlExpression('?s', self::prepareCode($this->lastName).'%');
+		}
+
+		if($this->name !== '')
+		{
+			if($this->useStrictComparison)
+			{
+				$filter['=NAME'] = self::prepareCode($this->name);
+			}
+			else
+			{
+				$filter['%NAME'] = new Main\DB\SqlExpression('?s', self::prepareCode($this->name).'%');
+			}
+		}
+
+		if($this->secondName !== '')
+		{
+			if($this->useStrictComparison)
+			{
+				$filter['=SECOND_NAME'] = self::prepareCode($this->secondName);
+			}
+			else
+			{
+				$filter['%SECOND_NAME'] = new Main\DB\SqlExpression('?s', self::prepareCode($this->secondName).'%');
+			}
+		}
+
+		if(\CCrmOwnerType::IsDefined($entityTypeID))
+		{
+			$filter['ENTITY_TYPE_ID'] = $entityTypeID;
+		}
+
+		$query->setFilter($filter);
+
+		if($limit > 0)
+		{
+			$query->setLimit($limit);
+		}
+
+		return $query;
+	}
+	public function find($entityTypeID = \CCrmOwnerType::Undefined, $limit = 50)
+	{
+		$lastName = static::prepareCode($this->lastName);
+		$name = static::prepareCode($this->name);
+		$secondName = static::prepareCode($this->secondName);
+
+		if($lastName === '')
 		{
 			//Invalid Operation?
 			return null;
@@ -330,8 +436,11 @@ class DuplicatePersonCriterion extends DuplicateCriterion
 
 		$listParams = array(
 			'select' =>array('ENTITY_TYPE_ID', 'ENTITY_ID'),
-			'order' => array('ENTITY_TYPE_ID' => 'ASC', 'ENTITY_ID' => 'ASC'),
-			'filter' => array('LAST_NAME' => $this->lastName)
+			'order' => array(
+				'ENTITY_TYPE_ID' => $this->sortDescendingByEntityTypeId ? 'DESC' : 'ASC',
+				'ENTITY_ID' => 'ASC'
+			),
+			'filter' => array('=LAST_NAME' => $lastName)
 		);
 
 		if(\CCrmOwnerType::IsDefined($entityTypeID))
@@ -339,20 +448,22 @@ class DuplicatePersonCriterion extends DuplicateCriterion
 			$listParams['filter']['ENTITY_TYPE_ID'] = $entityTypeID;
 		}
 
-		if($this->name !== '')
+		if($name !== '')
 		{
-			$listParams['filter']['NAME'] = $this->name;
+			$listParams['filter']['=NAME'] = $name;
 		}
 
-		if($this->secondName !== '')
+		if($secondName !== '')
 		{
-			$listParams['filter']['SECOND_NAME'] = $this->secondName;
+			$listParams['filter']['=SECOND_NAME'] = $secondName;
 		}
 
 		if($limit > 0)
 		{
 			$listParams['limit'] = $limit;
 		}
+
+		$listParams = $this->applyEntityCategoryFilter($entityTypeID, $listParams);
 
 		$dbResult = DuplicatePersonMatchCodeTable::getList($listParams);
 		$entities = array();
@@ -511,6 +622,15 @@ class DuplicatePersonCriterion extends DuplicateCriterion
 			false
 		);
 	}
+	public function getSummary()
+	{
+		self::includeLangFile();
+
+		return GetMessage(
+			'CRM_DUP_CRITERION_PERS_SUMMARY',
+			array('#DESCR#'=> $this->getMatchDescription())
+		);
+	}
 	public function getTextTotals($count, $limit = 0)
 	{
 		self::includeLangFile();
@@ -539,11 +659,19 @@ class DuplicatePersonCriterion extends DuplicateCriterion
 			)
 		);
 	}
+	/**
+	 * Get types supported by deduplication system.
+	 * @return array
+	 */
+	public static function getSupportedDedupeTypes()
+	{
+		return array(DuplicateIndexType::PERSON);
+	}
 	private static function includeLangFile()
 	{
-		if(!self::$LANG_INCLUDED)
+		if(!self::$langIncluded)
 		{
-			self::$LANG_INCLUDED = IncludeModuleLangFile(__FILE__);
+			self::$langIncluded = IncludeModuleLangFile(__FILE__);
 		}
 	}
 	protected function onAfterDuplicateCreated(Duplicate $dup, $entityTypeID, $userID, $enablePermissionCheck, $enableRanking, array &$rankings)

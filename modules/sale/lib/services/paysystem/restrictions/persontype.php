@@ -2,12 +2,16 @@
 
 namespace Bitrix\Sale\Services\PaySystem\Restrictions;
 
-use Bitrix\Main\Application;
+use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Sale\Internals\CollectableEntity;
-use Bitrix\Sale\Internals\PersonTypeTable;
+use Bitrix\Sale\Internals\Entity;
 use Bitrix\Sale\Order;
 use Bitrix\Sale\PaymentCollection;
+use Bitrix\Sale\PaySystem\ClientType;
+use Bitrix\Sale\PaySystem\Service;
+use Bitrix\Sale\Registry;
 use Bitrix\Sale\Services\Base;
 
 Loc::loadMessages(__FILE__);
@@ -20,7 +24,7 @@ class PersonType extends Base\Restriction
 	 * @param int $serviceId
 	 * @return bool
 	 */
-	protected static function check($params, array $restrictionParams, $serviceId = 0)
+	public static function check($params, array $restrictionParams, $serviceId = 0)
 	{
 		if (is_array($restrictionParams) && isset($restrictionParams['PERSON_TYPE_ID']))
 		{
@@ -31,16 +35,26 @@ class PersonType extends Base\Restriction
 	}
 
 	/**
-	 * @param CollectableEntity $entity
+	 * @param Entity $entity
 	 * @return int
 	 */
-	public static function extractParams(CollectableEntity $entity)
+	public static function extractParams(Entity $entity)
 	{
-		/** @var PaymentCollection $collection */
-		$collection = $entity->getCollection();
+		if ($entity instanceof CollectableEntity)
+		{
+			/** @var PaymentCollection $collection */
+			$collection = $entity->getCollection();
 
-		/** @var Order $order */
-		$order = $collection->getOrder();
+			/** @var Order $order */
+			$order = $collection->getOrder();
+		}
+		elseif ($entity instanceof Order)
+		{
+			$order = $entity;
+		}
+
+		if (!$order)
+			return false;
 
 		$personTypeId = $order->getPersonTypeId();
 		return $personTypeId;
@@ -62,6 +76,11 @@ class PersonType extends Base\Restriction
 		return Loc::getMessage('SALE_PS_RESTRICTIONS_BY_PERSON_TYPE_DESC');
 	}
 
+	public static function getOnApplyErrorMessage(): string
+	{
+		return Loc::getMessage('SALE_PS_RESTRICTIONS_BY_PERSON_TYPE_ON_APPLY_ERROR_MSG');
+	}
+
 	/**
 	 * @param $entityId
 	 * @return array
@@ -71,7 +90,7 @@ class PersonType extends Base\Restriction
 	{
 		$personTypeList = array();
 
-		$dbRes = PersonTypeTable::getList();
+		$dbRes = \Bitrix\Sale\PersonType::getList();
 
 		while ($personType = $dbRes->fetch())
 			$personTypeList[$personType["ID"]] = $personType["NAME"]." (".$personType["ID"].")";

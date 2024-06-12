@@ -7,7 +7,8 @@ class CommunicationDedupeDataSource extends MatchHashDedupeDataSource
 	public function __construct($typeID, DedupeParams $params)
 	{
 		if($typeID !== DuplicateIndexType::COMMUNICATION_PHONE
-			&& $typeID !== DuplicateIndexType::COMMUNICATION_EMAIL)
+			&& $typeID !== DuplicateIndexType::COMMUNICATION_EMAIL
+			&& $typeID !== DuplicateIndexType::COMMUNICATION_SLUSER)
 		{
 			throw new Main\NotSupportedException("Type(s): '".DuplicateIndexType::resolveName($typeID)."' is not supported in current context");
 		}
@@ -16,11 +17,26 @@ class CommunicationDedupeDataSource extends MatchHashDedupeDataSource
 	}
 	protected function getCommunicationType()
 	{
-		return $this->typeID === DuplicateIndexType::COMMUNICATION_EMAIL ? 'EMAIL' : 'PHONE';
+		$result = 'PHONE';
+
+		if ($this->typeID === DuplicateIndexType::COMMUNICATION_EMAIL)
+		{
+			$result = 'EMAIL';
+		}
+		elseif ($this->typeID === DuplicateIndexType::COMMUNICATION_PHONE)
+		{
+			$result = 'PHONE';
+		}
+		elseif ($this->typeID === DuplicateIndexType::COMMUNICATION_SLUSER)
+		{
+			$result = 'SLUSER';
+		}
+
+		return $result;
 	}
 	/**
-	* @return Array
-	*/
+	 * @return Array
+	 */
 	protected function getEntityMatchesByHash($entityTypeID, $entityID, $matchHash)
 	{
 		$allMatches = DuplicateCommunicationCriterion::loadEntityMatches($entityTypeID, $entityID, $this->getCommunicationType());
@@ -34,21 +50,18 @@ class CommunicationDedupeDataSource extends MatchHashDedupeDataSource
 		return null;
 	}
 	/**
-	* @return DuplicateCriterion
-	*/
+	 * @return DuplicateCriterion
+	 */
 	protected function createCriterionFromMatches(array $matches)
 	{
 		return DuplicateCommunicationCriterion::createFromMatches($matches);
-	}
-	protected function findEntityMatches($entityTypeID, $entityID, $matchHash)
-	{
-		return DuplicateCommunicationCriterion::loadEntityMatches($entityTypeID, $entityID, $this->getCommunicationType());
 	}
 	protected function prepareResult(array &$map, DedupeDataSourceResult $result)
 	{
 		$entityTypeID = $this->getEntityTypeID();
 		foreach($map as $matchHash => &$entry)
 		{
+			$isValidEntry = false;
 			$primaryQty = isset($entry['PRIMARY']) ? count($entry['PRIMARY']) : 0;
 			if($primaryQty > 1)
 			{
@@ -62,7 +75,12 @@ class CommunicationDedupeDataSource extends MatchHashDedupeDataSource
 						$dup->addEntity(new DuplicateEntity($entityTypeID, $entityID));
 					}
 					$result->addItem($matchHash, $dup);
+					$isValidEntry = true;
 				}
+			}
+			if (!$isValidEntry)
+			{
+				$result->addInvalidItem((string)$matchHash);
 			}
 		}
 		unset($entry);
@@ -100,7 +118,7 @@ class CommunicationDedupeDataSource extends MatchHashDedupeDataSource
 		}
 
 		$value = isset($matches['VALUE']) ? $matches['VALUE'] : '';
-		if($type === '')
+		if($value === '')
 		{
 			throw new Main\ArgumentException("Parameter 'VALUE' is required.", 'matches');
 		}
@@ -121,6 +139,8 @@ class CommunicationDedupeDataSource extends MatchHashDedupeDataSource
 				DuplicateIndexMismatch::prepareQueryField($criterion, $entityTypeID, $rootEntityID, $userID)
 			);
 		}
+
+		$query = DedupeDataSource::registerRuntimeFieldsByParams($query, $this->getParams());
 
 		$limit = 0;
 		if(is_array($options) && isset($options['LIMIT']))

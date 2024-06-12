@@ -23,7 +23,20 @@ use Bitrix\Seo\Engine;
  * </ul>
  *
  * @package Bitrix\Seo
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Log_Query query()
+ * @method static EO_Log_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Log_Result getById($id)
+ * @method static EO_Log_Result getList(array $parameters = array())
+ * @method static EO_Log_Entity getEntity()
+ * @method static \Bitrix\Seo\Adv\EO_Log createObject($setDefaultValues = true)
+ * @method static \Bitrix\Seo\Adv\EO_Log_Collection createCollection()
+ * @method static \Bitrix\Seo\Adv\EO_Log wakeUpObject($row)
+ * @method static \Bitrix\Seo\Adv\EO_Log_Collection wakeUpCollection($rows)
+ */
 
 class LogTable extends Entity\DataManager
 {
@@ -34,17 +47,6 @@ class LogTable extends Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы лога обращений к Яндекс.Директу. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/logtable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_seo_adv_log';
@@ -55,17 +57,6 @@ class LogTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей таблицы лога обращений к Яндекс.Директу. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/logtable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(

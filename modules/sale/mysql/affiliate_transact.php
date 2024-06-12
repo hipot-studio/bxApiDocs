@@ -1,4 +1,5 @@
-<?
+<?php
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/affiliate_transact.php");
 
 class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
@@ -7,8 +8,20 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 	{
 		global $DB;
 
-		if (count($arSelectFields) <= 0)
-			$arSelectFields = array("ID", "AFFILIATE_ID", "TIMESTAMP_X", "TRANSACT_DATE", "AMOUNT", "CURRENCY", "DEBIT", "DESCRIPTION", "EMPLOYEE_ID");
+		if (empty($arSelectFields))
+		{
+			$arSelectFields = [
+				'ID',
+				'AFFILIATE_ID',
+				'TIMESTAMP_X',
+				'TRANSACT_DATE',
+				'AMOUNT',
+				'CURRENCY',
+				'DEBIT',
+				'DESCRIPTION',
+				'EMPLOYEE_ID',
+			];
+		}
 
 		// FIELDS -->
 		$arFields = array(
@@ -40,18 +53,16 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 
 		$arSqls["SELECT"] = str_replace("%%_DISTINCT_%%", "", $arSqls["SELECT"]);
 
-		if (is_array($arGroupBy) && count($arGroupBy)==0)
+		if (empty($arGroupBy) && is_array($arGroupBy))
 		{
 			$strSql =
 				"SELECT ".$arSqls["SELECT"]." ".
 				"FROM b_sale_affiliate_transact AT ".
 				"	".$arSqls["FROM"]." ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
-
-			//echo "!1!=".htmlspecialcharsbx($strSql)."<br>";
 
 			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 			if ($arRes = $dbRes->Fetch())
@@ -60,33 +71,38 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 				return False;
 		}
 
-		$strSql = 
+		$strSql =
 			"SELECT ".$arSqls["SELECT"]." ".
 			"FROM b_sale_affiliate_transact AT ".
 			"	".$arSqls["FROM"]." ";
-		if (strlen($arSqls["WHERE"]) > 0)
+		if ($arSqls["WHERE"] <> '')
 			$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-		if (strlen($arSqls["GROUPBY"]) > 0)
+		if ($arSqls["GROUPBY"] <> '')
 			$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
-		if (strlen($arSqls["ORDERBY"]) > 0)
+		if ($arSqls["ORDERBY"] <> '')
 			$strSql .= "ORDER BY ".$arSqls["ORDERBY"]." ";
 
-		if (is_array($arNavStartParams) && IntVal($arNavStartParams["nTopCount"])<=0)
+		$topCount = 0;
+		$useNavParams = is_array($arNavStartParams);
+		if ($useNavParams && isset($arNavStartParams['nTopCount']))
+		{
+			$topCount = (int)$arNavStartParams['nTopCount'];
+		}
+
+		if ($useNavParams && $topCount <= 0)
 		{
 			$strSql_tmp =
 				"SELECT COUNT('x') as CNT ".
 				"FROM b_sale_affiliate_transact AT ".
 				"	".$arSqls["FROM"]." ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql_tmp .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql_tmp .= "GROUP BY ".$arSqls["GROUPBY"]." ";
-
-			//echo "!2.1!=".htmlspecialcharsbx($strSql_tmp)."<br>";
 
 			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 			$cnt = 0;
-			if (strlen($arSqls["GROUPBY"]) <= 0)
+			if ($arSqls["GROUPBY"] == '')
 			{
 				if ($arRes = $dbRes->Fetch())
 					$cnt = $arRes["CNT"];
@@ -99,16 +115,14 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 
 			$dbRes = new CDBResult();
 
-			//echo "!2.2!=".htmlspecialcharsbx($strSql)."<br>";
-
 			$dbRes->NavQuery($strSql, $cnt, $arNavStartParams);
 		}
 		else
 		{
-			if (is_array($arNavStartParams) && IntVal($arNavStartParams["nTopCount"])>0)
-				$strSql .= "LIMIT ".IntVal($arNavStartParams["nTopCount"]);
-
-			//echo "!3!=".htmlspecialcharsbx($strSql)."<br>";
+			if ($useNavParams && $topCount > 0)
+			{
+				$strSql .= 'LIMIT ' . $topCount;
+			}
 
 			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 		}
@@ -123,9 +137,9 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 		$arFields1 = array();
 		foreach ($arFields as $key => $value)
 		{
-			if (substr($key, 0, 1)=="=")
+			if (mb_substr($key, 0, 1) == "=")
 			{
-				$arFields1[substr($key, 1)] = $value;
+				$arFields1[mb_substr($key, 1)] = $value;
 				unset($arFields[$key]);
 			}
 		}
@@ -137,9 +151,9 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 
 		foreach ($arFields1 as $key => $value)
 		{
-			if (strlen($arInsert[0])>0) $arInsert[0] .= ", ";
+			if ($arInsert[0] <> '') $arInsert[0] .= ", ";
 			$arInsert[0] .= $key;
-			if (strlen($arInsert[1])>0) $arInsert[1] .= ", ";
+			if ($arInsert[1] <> '') $arInsert[1] .= ", ";
 			$arInsert[1] .= $value;
 		}
 
@@ -148,9 +162,8 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 			"VALUES(".$arInsert[1].")";
 		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 
-		$ID = IntVal($DB->LastID());
+		$ID = intval($DB->LastID());
 
 		return $ID;
 	}
 }
-?>

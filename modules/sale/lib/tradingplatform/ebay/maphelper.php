@@ -116,7 +116,7 @@ class MapHelper
 	 * @param string $siteId Site id.
 	 * @return array Bitrix delivery ids.
 	 */
-	static public function getBitrixDeliveryIds(array $ebayDelivery, $siteId)
+	public function getBitrixDeliveryIds(array $ebayDelivery, $siteId)
 	{
 		$result = array();
 		$deliveryEntId = self::getDeliveryEntityId($siteId);

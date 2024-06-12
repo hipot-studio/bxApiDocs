@@ -9,5 +9,5 @@ interface IRequestFilter
 	 * @param array $values
 	 * @return array
 	 */
-	public static function filter(array $values);
+	function filter(array $values);
 }

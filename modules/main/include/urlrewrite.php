@@ -29,13 +29,13 @@ foreach($aProtocols as $prot)
 }
 
 if (!defined("AUTH_404"))
-	// define("AUTH_404", "Y");
+	define("AUTH_404", "Y");
 
 require_once($_SERVER["DOCUMENT_ROOT"].BX_PERSONAL_ROOT."/php_interface/dbconn.php");
 
 if (defined("BX_URLREWRITE"))
 	return;
-// define("BX_URLREWRITE", true);
+define("BX_URLREWRITE", true);
 
 $foundQMark = strpos($_SERVER["REQUEST_URI"], "?");
 $requestUriWithoutParams = ($foundQMark !== false? substr($_SERVER["REQUEST_URI"], 0, $foundQMark) : $_SERVER["REQUEST_URI"]);
@@ -108,7 +108,7 @@ if((isset($_SERVER['REDIRECT_STATUS']) && $_SERVER['REDIRECT_STATUS'] == '404') 
 	$HTTP_GET_VARS = $_GET;
 
 	$uriPath = GetRequestUri();
-	// define("POST_FORM_ACTION_URI", htmlspecialcharsbx("/bitrix/urlrewrite.php?SEF_APPLICATION_CUR_PAGE_URL=".urlencode($uriPath)));
+	define("POST_FORM_ACTION_URI", htmlspecialcharsbx("/bitrix/urlrewrite.php?SEF_APPLICATION_CUR_PAGE_URL=".urlencode($uriPath)));
 }
 
 if (!CHTTP::isPathTraversalUri($_SERVER["REQUEST_URI"]))
@@ -170,4 +170,4 @@ if(strpos($requestUri, "/bitrix/admin/") === 0)
 	die();
 }
 
-// define("BX_CHECK_SHORT_URI", true);
+define("BX_CHECK_SHORT_URI", true);

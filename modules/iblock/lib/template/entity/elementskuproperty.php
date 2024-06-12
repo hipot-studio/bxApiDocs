@@ -28,19 +28,6 @@ class ElementSkuProperty extends Base
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Метод устанавливает информационный блок элементов. Нестатический метод.</p>
-	*
-	*
-	* @param integer $iblockId  Идентификатор инфоблока.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/elementskuproperty/setiblockid.php
-	* @author Bitrix
-	*/
 	public function setIblockId($iblockId)
 	{
 		$this->iblockId = intval($iblockId);
@@ -83,7 +70,7 @@ class ElementSkuProperty extends Base
 						}
 						else
 						{
-							if(strlen($property["USER_TYPE"]))
+							if($property["USER_TYPE"] <> '')
 							{
 								$value = new ElementPropertyUserField($property["VALUE"], $property);
 							}
@@ -96,7 +83,7 @@ class ElementSkuProperty extends Base
 						$this->fields[$property["ID"]][] = $value;
 						$this->fieldMap[$property["ID"]] = $property["ID"];
 						if ($property["CODE"] != "")
-							$this->fieldMap[strtolower($property["CODE"])] = $property["ID"];
+							$this->fieldMap[mb_strtolower($property["CODE"])] = $property["ID"];
 					}
 				}
 			}

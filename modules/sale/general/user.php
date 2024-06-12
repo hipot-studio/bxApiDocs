@@ -1,26 +1,16 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
-// define("SALE_TIME_LOCK_USER", 600);
+define("SALE_TIME_LOCK_USER", 600);
 $GLOBALS["SALE_USER_ACCOUNT"] = array();
 
 /***********************************************************************/
 /***********  CSaleUserAccount  ****************************************/
 /***********************************************************************/
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleuseraccount/index.php
- * @author Bitrix
- */
 class CAllSaleUserAccount
 {
-	static function DoPayOrderFromAccount($userId, $currency, $orderId, $orderSum, $arOptions, &$arErrors)
+	public static function DoPayOrderFromAccount($userId, $currency, $orderId, $orderSum, $arOptions, &$arErrors)
 	{
 		if (!array_key_exists("ONLY_FULL_PAY_FROM_ACCOUNT", $arOptions))
 			$arOptions["ONLY_FULL_PAY_FROM_ACCOUNT"] = COption::GetOptionString("sale", "ONLY_FULL_PAY_FROM_ACCOUNT", "N");
@@ -73,7 +63,7 @@ class CAllSaleUserAccount
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGU_EMPTY_USER_ID"), "EMPTY_USER_ID");
 			return false;
 		}
-		if ((is_set($arFields, "CURRENCY") || $ACTION=="ADD") && strlen($arFields["CURRENCY"]) <= 0)
+		if ((is_set($arFields, "CURRENCY") || $ACTION=="ADD") && $arFields["CURRENCY"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGU_EMPTY_CURRENCY"), "EMPTY_CURRENCY");
 			return false;
@@ -101,20 +91,6 @@ class CAllSaleUserAccount
 		return true;
 	}
 
-	
-	/**
-	* <p>Метод удаляет внутренний счет пользователя. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код удаляемого счета.
-	*
-	* @return bool <p>Метод возвращает <i>true</i> в случае успешного удаления и <i>false</i> в
-	* случае ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleuseraccount/csaleuseraccount.delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		global $DB;
@@ -145,7 +121,7 @@ class CAllSaleUserAccount
 			CSaleUserTransact::Delete($arTrans["ID"]);
 
 		unset($GLOBALS["SALE_USER_ACCOUNT"]["SALE_USER_ACCOUNT_CACHE_".$ID]);
-		unset($GLOBALS["SALE_USER_ACCOUNT"]["SALE_USER_ACCOUNT_CACHE1_".$arOldUserAccount["USER_ID"]."_".$arOldUserAccount["CURRENCY"]]);
+		unset($GLOBALS["SALE_USER_ACCOUNT"]["SALE_USER_ACCOUNT_CACHE_".$arOldUserAccount["USER_ID"]."_".$arOldUserAccount["CURRENCY"]]);
 
 		$res = $DB->Query("DELETE FROM b_sale_user_account WHERE ID = ".$ID." ", true);
 
@@ -157,7 +133,6 @@ class CAllSaleUserAccount
 
 		return $res;
 	}
-
 
 	//********** LOCK **************//
 	public static function Lock($userID, $payCurrency)
@@ -220,6 +195,7 @@ class CAllSaleUserAccount
 					"CURRENT_BUDGET" => 0.0,
 					"CURRENCY" => $payCurrency,
 					"LOCKED" => "Y",
+					"=TIMESTAMP_X" => $DB->GetNowFunction(),
 					"=DATE_LOCKED" => $DB->GetNowFunction()
 				);
 			if (CSaleUserAccount::Add($arFields))
@@ -328,52 +304,6 @@ class CAllSaleUserAccount
 	// $orderID - ID of order (if known)
 	// $useCC - increase the local user account from credit card if necessary (default - True)
 	// Return True if the necessary sum withdraw from an account or False in other way
-	
-	/**
-	* <p>Метод снимает указанную сумму с внутреннего счета пользователя. Если на внутреннем счете не достаточно средств, то делается попытка снять дополнительные средства с пластиковой карточки пользователя. Нестатический метод.</p>
-	*
-	*
-	* @param int $userID  Код пользователя.
-	*
-	* @param double $paySum  Снимаемая сумма.
-	*
-	* @param string $payCurrency  Валюта снимаемой суммы.
-	*
-	* @param int $orderID = 0[ Код заказа, если снятие денег относится к заказу.
-	*
-	* @param bool $useCC = True]] Если <i>true</i>, то система пробует снять деньги с пластиковой карты
-	* пользователя при недостаточности средств на внутреннем счете.
-	* Если 		<i>false</i>, то пластиковая карта пользователя не
-	* задействуется.
-	*
-	* @return bool <p>Метод возвращает <i>true</i> в случае успешного снятия денег с
-	* внутреннего счета пользователя и <i>false</i> в случае невозможности
-	* снять указанную сумму.</p><p></p><div class="note"> <b>Примечание</b>: деньги
-	* снимаются только со счета той же валюты, которая передается
-	* параметром в метод. Счета пользователя в другой валюте не
-	* затрагиваются.</div><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // Снимем с рублевого счета текущего пользователя 3 рубля в счет оплаты заказа номер 21
-	* $bSuccessPayment = CSaleUserAccount::Pay(
-	*         $USER-&gt;GetID(),
-	*         3,
-	*         "RUR",
-	*         21,
-	*         False
-	*     );
-	* if ($bSuccessPayment)
-	*     echo "Сумма для оплаты счета успешно снята";
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleuseraccount/csaleuseraccount.pay.php
-	* @author Bitrix
-	*/
 	public static function Pay($userID, $paySum, $payCurrency, $orderID = 0, $useCC = true, $paymentId = null)
 	{
 		global $DB, $APPLICATION, $USER;
@@ -463,6 +393,7 @@ class CAllSaleUserAccount
 			{
 				$arFields = array(
 						"USER_ID" => $userID,
+						"=TIMESTAMP_X" => $DB->GetNowFunction(),
 						"TRANSACT_DATE" => date($DB->DateFormatToPHP(CSite::GetDateFormat("FULL", SITE_ID))),
 						"AMOUNT" => $withdrawSum,
 						"CURRENCY" => $payCurrency,
@@ -516,6 +447,7 @@ class CAllSaleUserAccount
 
 			$arFields = array(
 					"USER_ID" => $userID,
+					"=TIMESTAMP_X" => $DB->GetNowFunction(),
 					"TRANSACT_DATE" => date($DB->DateFormatToPHP(CSite::GetDateFormat("FULL", SITE_ID))),
 					"AMOUNT" => $paySum,
 					"CURRENCY" => $payCurrency,
@@ -546,58 +478,6 @@ class CAllSaleUserAccount
 	// $payCurrency - currency
 	// $orderID - ID of order (if known)
 	// Return withdrawn sum or False
-	
-	/**
-	* <p>Метод снимает указанную сумму с внутреннего счета пользователя. Если на внутреннем счете не достаточно средств, то снимается максимально доступная сумма (т.е. все доступные средства). Нестатический метод.</p>
-	*
-	*
-	* @param int $userID  Код пользователя.
-	*
-	* @param double $paySum  Снимаемая сумма.
-	*
-	* @param string $payCurrency  Валюта снимаемой суммы.
-	*
-	* @param int $orderID = 0] Код заказа, если снятие денег относится к заказу.
-	*
-	* @return double <p>Метод возвращает реально снятую со счета сумму или <i>false</i> в
-	* случае ошибки.</p><p></p><div class="note"> <b>Замечание:</b> деньги снимаются
-	* только со счета той же валюты, которая передается параметром в
-	* метод. Счета пользователя в другой валюте не затрагиваются.</div><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // Оплатим полностью или хотя бы частично заказ номер 21 со счета пользователя
-	* 
-	* $arOrder = CSaleOrder::GetByID(21);
-	* 
-	* $withdrawSum = CSaleUserAccount::Withdraw(
-	*         $arOrder["USER_ID"],
-	*         $arOrder["PRICE"],
-	*         $arOrder["CURRENCY"],
-	*         $arOrder["ID"]
-	*     );
-	* 
-	* if ($withdrawSum &gt; 0)
-	* {
-	*     $arFields = array(
-	*             "SUM_PAID" =&gt; $withdrawSum,
-	*             "USER_ID" =&gt; $arOrder["USER_ID"]
-	*         );
-	*     CSaleOrder::Update($arOrder["ID"], $arFields);
-	* 
-	*     if ($withdrawSum == $arOrder["PRICE"])
-	*         CSaleOrder::PayOrder($arOrder["ID"], "Y", False, False);
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleuseraccount/csaleuseraccount.withdraw.php
-	* @author Bitrix
-	*/
 	public static function Withdraw($userID, $paySum, $payCurrency, $orderID = 0)
 	{
 		global $DB, $APPLICATION, $USER;
@@ -647,8 +527,13 @@ class CAllSaleUserAccount
 
 			if ($orderID > 0)
 			{
+				$registry = \Bitrix\Sale\Registry::getInstance(\Bitrix\Sale\Registry::REGISTRY_TYPE_ORDER);
+
+				/** @var \Bitrix\Sale\Order $orderClass */
+				$orderClass = $registry->getOrderClassName();
+
 				/** @var \Bitrix\Sale\Order $order */
-				if ($order = \Bitrix\Sale\Order::load($orderID))
+				if ($order = $orderClass::load($orderID))
 				{
 					/** @var \Bitrix\Sale\PaymentCollection $paymentCollection */
 					if (($paymentCollection = $order->getPaymentCollection()) && $paymentCollection->isExistsInnerPayment())
@@ -675,6 +560,7 @@ class CAllSaleUserAccount
 
 				$arFields = array(
 						"USER_ID" => $userID,
+						"=TIMESTAMP_X" => $DB->GetNowFunction(),
 						"TRANSACT_DATE" => date($DB->DateFormatToPHP(CSite::GetDateFormat("FULL", SITE_ID))),
 						"AMOUNT" => $withdrawSum,
 						"CURRENCY" => $payCurrency,
@@ -702,75 +588,6 @@ class CAllSaleUserAccount
 	// $currency - currency
 	// $description - reason of modification
 	// Return True on success or False in other way
-	
-	/**
-	* <p>Метод изменяет сумму на счете пользователя с кодом userID. Метод статический.</p>
-	*
-	*
-	* @param int $userID  Код пользователя.
-	*
-	* @param double $sum  Величина изменения суммы на счете. Для увеличения суммы на счете
-	* величина должна быть со знаком 		"+" или без знака, а для уменьшения
-	* - со знаком "-". 
-	*
-	* @param string $currency  Валюта суммы.
-	*
-	* @param string $description = ""[ Описание причины изменения суммы.
-	*
-	* @param int $orderID = 0[ Код заказа, если изменение суммы относится к заказу.
-	*
-	* @param string $notes = ""]]] Произвольное текстовое описание.
-	*
-	* @return int <p>Метод возвращает код пользовательского счета или <i>false</i> в
-	* случае ошибки.</p><p></p><div class="note"> <b>Замечания:</b> <ul> <li>Деньги
-	* снимаются только со счета той же валюты, которая передается
-	* параметром в метод. Счета пользователя в другой валюте не
-	* затрагиваются.</li> <li>Если счета в данной валюте раньше у
-	* пользователя не было, то он автоматически создастся (и будет
-	* возвращен код созданного счета).</li> </ul> </div><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // Напишем функцию обратного вызова, которая будет вызываться при изменении
-	* // флага "Доставка разрешена" заказа и добавлять (или снимать) 100 USD на счет
-	* 
-	* function MyDeliveryOrderCallback($productID, $userID, $bPaid, $orderID)
-	* {
-	*     global $DB;
-	* 
-	*     // Обработаем входные параметры
-	*     $productID = IntVal($productID);    // Код заказанного товара
-	*     $userID = IntVal($userID);  // Код пользователя-покупателя
-	*     $bPaid = ($bPaid ? True : False);   // Устанавливается или снимается флаг доставки
-	*     $orderID = IntVal($orderID);    // Код заказа
-	* 
-	*     if ($userID &lt;= 0)
-	*         return False;
-	* 
-	*     if ($orderID &lt;= 0)
-	*         return False;
-	* 
-	*     // Внесем (снимем) деньги на счет
-	*     if (!CSaleUserAccount::UpdateAccount(
-	*             $userID,
-	*             ($bPaid ? 100 : -100),
-	*             "USD",
-	*             "MANUAL",
-	*             $orderID
-	*         ))
-	*         return False;
-	* 
-	*     return True;
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleuseraccount/csaleuseraccount.updateaccount.php
-	* @author Bitrix
-	*/
 	public static function UpdateAccount($userID, $sum, $currency, $description = "", $orderID = 0, $notes = "", $paymentId = null)
 	{
 		global $DB, $APPLICATION, $USER;
@@ -817,8 +634,15 @@ class CAllSaleUserAccount
 		{
 			$currentBudget = floatval($arUserAccount["CURRENT_BUDGET"]);
 			$arFields = array(
+					"=TIMESTAMP_X" => $DB->GetNowFunction(),
 					"CURRENT_BUDGET" => $arUserAccount["CURRENT_BUDGET"] + $sum
 				);
+
+			if (!empty($notes))
+			{
+				$arFields['CHANGE_REASON'] = $notes;
+			}
+
 			$result = CSaleUserAccount::Update($arUserAccount["ID"], $arFields);
 		}
 		else
@@ -829,8 +653,14 @@ class CAllSaleUserAccount
 					"CURRENT_BUDGET" => $sum,
 					"CURRENCY" => $currency,
 					"LOCKED" => "Y",
+					"=TIMESTAMP_X" => $DB->GetNowFunction(),
 					"=DATE_LOCKED" => $DB->GetNowFunction()
 				);
+
+			if (!empty($notes))
+			{
+				$arFields['CHANGE_REASON'] = $notes;
+			}
 			$result = CSaleUserAccount::Add($arFields);
 		}
 
@@ -841,6 +671,7 @@ class CAllSaleUserAccount
 
 			$arFields = array(
 					"USER_ID" => $userID,
+					"=TIMESTAMP_X" => $DB->GetNowFunction(),
 					"TRANSACT_DATE" => date($DB->DateFormatToPHP(CSite::GetDateFormat("FULL", SITE_ID))),
 					"CURRENT_BUDGET" => $currentBudget,
 					"AMOUNT" => ($sum > 0 ? $sum : -$sum),
@@ -848,8 +679,8 @@ class CAllSaleUserAccount
 					"DEBIT" => ($sum > 0 ? "Y" : "N"),
 					"ORDER_ID" => ($orderID > 0 ? $orderID : false),
 					"PAYMENT_ID" => ($paymentId > 0 ? $paymentId : false),
-					"DESCRIPTION" => ((strlen($description) > 0) ? $description : null),
-					"NOTES" => ((strlen($notes) > 0) ? $notes : False),
+					"DESCRIPTION" => (($description <> '') ? $description : null),
+					"NOTES" => (($notes <> '') ? $notes : False),
 					"EMPLOYEE_ID" => ($USER->IsAuthorized() ? $USER->GetID() : false)
 				);
 			CTimeZone::Disable();
@@ -864,8 +695,9 @@ class CAllSaleUserAccount
 	//********** EVENTS **************//
 	public static function OnBeforeCurrencyDelete($Currency)
 	{
-		if (strlen($Currency)<=0)
-			return false;
+		$Currency = (string)$Currency;
+		if ($Currency === '')
+			return true;
 
 		$cnt = CSaleUserAccount::GetList(array(), array("CURRENCY" => $Currency), array());
 		if ($cnt > 0)

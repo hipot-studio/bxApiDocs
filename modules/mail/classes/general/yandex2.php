@@ -5,7 +5,7 @@ IncludeModuleLangFile(__FILE__);
 class CMailYandex2
 {
 
-	static public function __construct()
+	public function __construct()
 	{
 	}
 
@@ -115,7 +115,7 @@ class CMailYandex2
 	 */
 	public static function deleteDomain($token, $domain, &$error)
 	{
-		$result = self::post('https://pddimp.yandex.ru/api2/domain/delete', array(
+		$result = self::post('https://pddimp.yandex.ru/api2/admin/domain/delete', array(
 			'token'  => $token,
 			'domain' => $domain
 		));
@@ -144,7 +144,7 @@ class CMailYandex2
 	 */
 	public static function checkUser($token, $domain, $login, &$error)
 	{
-		if (in_array(strtolower($login), array('abuse', 'postmaster')))
+		if (in_array(mb_strtolower($login), array('abuse', 'postmaster')))
 			return 'exists';
 
 		$result = self::get('https://pddimp.yandex.ru/api2/admin/email/details', array(
@@ -428,7 +428,7 @@ class CMailYandex2
 		$data .= '--' . $boundary . "--\r\n";
 
 		$http->setHeader('Content-type', 'multipart/form-data; boundary='.$boundary);
-		$http->setHeader('Content-length', CUtil::binStrlen($data));
+		$http->setHeader('Content-length', strlen($data));
 
 		$response = $http->post('https://pddimp.yandex.ru/api2/admin/domain/logo/set', $data);
 		$result   = json_decode($response, true);
@@ -459,6 +459,11 @@ class CMailYandex2
 	{
 		$http = new \Bitrix\Main\Web\HttpClient();
 
+		if (!empty($data['token']))
+		{
+			$http->setHeader('PddToken', $data['token']);
+		}
+
 		$response = $http->post($url, $data);
 		$result   = json_decode($response, true);
 
@@ -468,6 +473,11 @@ class CMailYandex2
 	private static function get($url, $data)
 	{
 		$http = new \Bitrix\Main\Web\HttpClient();
+
+		if (!empty($data['token']))
+		{
+			$http->setHeader('PddToken', $data['token']);
+		}
 
 		$response = $http->get($url.'?'.http_build_query($data));
 		$result   = json_decode($response, true);

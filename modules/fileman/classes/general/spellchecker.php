@@ -64,12 +64,12 @@ class CSpellchecker
 		return $custom_path;
 	}
 
-	public function codeLetter($letter)
+	function codeLetter($letter)
 	{
 		return (in_array($letter, $this->letters) && $letter != 'ы' && $letter != 'ь' && $letter != 'ъ') ? ord($letter) : 'def';
 	}
 
-	public function loadDic($letter)
+	function loadDic($letter)
 	{
 		$path = $this->custom_dics_path.$letter.'.dic';
 		if (is_readable($path))
@@ -77,14 +77,14 @@ class CSpellchecker
 			$dic = file($path);
 			foreach ($dic as $dict_word)
 			{
-				$this->dic[$letter][strtolower(trim($dict_word))] = $dict_word;
+				$this->dic[$letter][mb_strtolower(trim($dict_word))] = $dict_word;
 			}
 		}
 		else
 			$this->dic[$letter] = array();
 	}
 
-	public function checkWord($word)
+	function checkWord($word)
 	{
 		//pspell
 		if ($this->pspell)
@@ -120,7 +120,7 @@ class CSpellchecker
 	}
 
 
-	public function checkWords($words)
+	function checkWords($words)
 	{
 		$this->wrongWords = array();
 
@@ -138,7 +138,7 @@ class CSpellchecker
 		return $this->wrongWords;
 	}
 
-	public function suggest($word)
+	function suggest($word)
 	{
 		$suggestions = array();
 		//pspell
@@ -204,7 +204,7 @@ class CSpellchecker
 		return array_unique($suggestions);
 	}
 
-	public function addWord($word = '')
+	function addWord($word = '')
 	{
 		//pspell
 		if ($this->pspell)

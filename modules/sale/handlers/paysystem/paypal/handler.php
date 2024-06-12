@@ -11,11 +11,20 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Sale\PriceMaths;
+use Bitrix\Sale\Registry;
 
 Loc::loadMessages(__FILE__);
 
-class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePayable
+/**
+ * Class PayPalHandler
+ * @package Sale\Handlers\PaySystem
+ */
+class PayPalHandler
+	extends PaySystem\ServiceHandler
+	implements PaySystem\IPrePayable
 {
+	const DELIMITER_PAYMENT_ID = ':';
+
 	private $prePaymentSetting = array();
 
 	/**
@@ -23,7 +32,49 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 	 */
 	static public function getIndicativeFields()
 	{
-		return array('custom', 'mc_gross', 'mc_currency');
+		return array('mc_gross', 'mc_currency');
+	}
+
+	/**
+	 * @param Request $request
+	 * @param $paySystemId
+	 * @return bool
+	 */
+	protected static function isMyResponseExtended(Request $request, $paySystemId)
+	{
+		$data = PaySystem\Manager::getById($paySystemId);
+		if ($data)
+		{
+			return self::getRegistryType($request) === $data['ENTITY_REGISTRY_TYPE'];
+		}
+
+		return false;
+	}
+
+	/**
+	 * @param Request $request
+	 * @return mixed
+	 */
+	private static function getRegistryType(Request $request)
+	{
+		$paymentId = null;
+		if ($request->get('custom') !== null)
+		{
+			$paymentId = $request->get('custom');
+		}
+
+		if ($paymentId === null)
+		{
+			$paymentId = $request->get('cm');
+		}
+
+		$pos = mb_strpos($paymentId, static::DELIMITER_PAYMENT_ID);
+		if ($pos !== false)
+		{
+			return mb_substr($paymentId, 0, $pos);
+		}
+
+		return Registry::REGISTRY_TYPE_ORDER;
 	}
 
 	/**
@@ -54,23 +105,31 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 		{
 			$domain = '';
 			if ($this->isTestMode($payment))
+			{
 				$domain = "sandbox.";
+			}
 			$host = "www.".$domain."paypal.com";
 
 			$header = "POST /cgi-bin/webscr HTTP/1.1\r\n";
 			$header .= "Host: ".$host."\r\n";
 			$header .= "Content-Type: application/x-www-form-urlencoded\r\n";
-			$header .= "Content-Length: ".strlen($req)."\r\n";
+			$header .= "Content-Length: ".mb_strlen($req)."\r\n";
 			$header .= "User-Agent: 1C-Bitrix\r\n";
 			$header .= "Connection: Close\r\n\r\n";
 
-			if ($this->getBusinessValue($payment, "SSL_ENABLE") == "Y")
+			if ($this->getBusinessValue($payment, "PAYPAL_SSL_ENABLE") == "Y")
+			{
 				$fp = fsockopen("ssl://".$host, 443, $errNo, $errStr, 30);
+			}
 			else
+			{
 				$fp = fsockopen($host, 80, $errNo, $errStr, 30);
+			}
 
 			if ($fp)
 			{
+				PaySystem\Logger::addDebugInfo('PayPal: request: '.$header.$req);
+
 				fputs ($fp, $header.$req);
 				$response = '';
 				$headerDone = false;
@@ -78,19 +137,25 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 				{
 					$line = fgets ($fp, 1024);
 					if (strcmp($line, "\r\n") == 0)
+					{
 						$headerDone = true;
+					}
 					elseif ($headerDone)
+					{
 						$response .= $line;
+					}
 				}
 
-				// parse the data
-				$lines = explode('\n', $response);
+				PaySystem\Logger::addDebugInfo('PayPal: response: '.$response);
 
-				if (strcmp($lines[0], "SUCCESS") == 0)
+				// parse the data
+				$lines = explode("\n", $response);
+
+				if (strcmp($lines[1], "SUCCESS") == 0)
 				{
 					return $this->processSuccessAction($payment, $request, $lines);
 				}
-				elseif (strpos($response, "VERIFIED") !== false)
+				elseif (mb_strpos($response, "VERIFIED") !== false)
 				{
 					return $this->processVerifiedAction($payment, $request);
 				}
@@ -150,15 +215,19 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 
 		$serviceResult->setPsData($fields);
 
-		$paymentSum = PriceMaths::roundByFormatCurrency($this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY'), $payment->getField('CURRENCY'));
+		$paymentSum = PriceMaths::roundPrecision($this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY'));
 
 		$payPalSum = (float)$keys["mc_gross"];
 		if ($keys["tax"])
+		{
 			$payPalSum -= (float)$keys["tax"];
-		$payPalSum = PriceMaths::roundByFormatCurrency($payPalSum, $payment->getField('CURRENCY'));
+		}
+		$payPalSum = PriceMaths::roundPrecision($payPalSum);
+
+		PaySystem\Logger::addDebugInfo('PayPal: payPalSum='.$payPalSum."; paymentSum=".$paymentSum);
 
 		if ($paymentSum == $payPalSum
-			&& ToLower($keys["receiver_email"]) == ToLower($this->getBusinessValue($payment, "PAYPAL_BUSINESS"))
+			&& mb_strtolower($keys["receiver_email"]) == mb_strtolower($this->getBusinessValue($payment, "PAYPAL_BUSINESS"))
 			&& $keys["payment_status"] == "Completed"
 		)
 		{
@@ -166,10 +235,10 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 		}
 
 		$response = '<p><h3>'.Loc::getMessage('SALE_HPS_PAYPAL_T1').'</h3></p>';
-		$response .= '<b>'.Loc::getMessage('SALE_HPS_PAYPAL_T2').'</b><br>\n';
-		$response .= '<li>'.Loc::getMessage('SALE_HPS_PAYPAL_T3').': '.$keys['first_name'].' '.$keys['last_name'].'</li>\n';
-		$response .= '<li>'.Loc::getMessage('SALE_HPS_PAYPAL_T4').': '.$keys['item_name'].'</li>\n';
-		$response .= '<li>'.Loc::getMessage('SALE_HPS_PAYPAL_T5').': '.$keys['mc_gross'].'</li>\n';
+		$response .= '<b>'.Loc::getMessage('SALE_HPS_PAYPAL_T2').'</b><br>';
+		$response .= '<li>'.Loc::getMessage('SALE_HPS_PAYPAL_T3').': '.$keys['first_name'].' '.$keys['last_name'].'</li>';
+		$response .= '<li>'.Loc::getMessage('SALE_HPS_PAYPAL_T4').': '.$keys['item_name'].'</li>';
+		$response .= '<li>'.Loc::getMessage('SALE_HPS_PAYPAL_T5').': '.$keys['mc_gross'].'</li>';
 
 		$serviceResult->setData(array('MESSAGE' => $response));
 
@@ -207,18 +276,22 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 
 		$serviceResult->setPsData($fields);
 
-		$paymentSum = PriceMaths::roundByFormatCurrency($this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY'), $payment->getField('CURRENCY'));
+		$paymentSum = PriceMaths::roundPrecision($this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY'));
 
 		$payPalSum = (float)$request->get("mc_gross");
 		if ($request->get('tax'))
+		{
 			$payPalSum -= (float)$request->get('tax');
-		$payPalSum = PriceMaths::roundByFormatCurrency($payPalSum, $payment->getField('CURRENCY'));
+		}
+		$payPalSum = PriceMaths::roundPrecision($payPalSum);
+
+		PaySystem\Logger::addDebugInfo('PayPal: payPalSum='.$payPalSum."; paymentSum=".$paymentSum);
 
 		if ($paymentSum == $payPalSum
-			&& ToLower($request->get("receiver_email")) == ToLower($this->getBusinessValue($payment, "PAYPAL_BUSINESS"))
+			&& mb_strtolower($request->get("receiver_email")) == mb_strtolower($this->getBusinessValue($payment, "PAYPAL_BUSINESS"))
 			&& $request->get("payment_status") == "Completed"
 			&& $payment->getField("PAY_VOUCHER_NUM") != $request->get('txn_id')
-			)
+		)
 		{
 			$serviceResult->setOperationType(PaySystem\ServiceResult::MONEY_COMING);
 		}
@@ -237,7 +310,7 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 		if ($request->get('tx'))
 		{
 			$req = 'cmd=_notify-synch';
-			$req .= "&tx=".$request->get('tx')."&at=".$this->getBusinessValue($payment, "IDENTITY_TOKEN");
+			$req .= "&tx=".$request->get('tx')."&at=".$this->getBusinessValue($payment, "PAYPAL_IDENTITY_TOKEN");
 		}
 
 		return $req;
@@ -252,7 +325,9 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 		$req = 'cmd=_notify-validate';
 
 		foreach ($_POST as $key => $value)
+		{
 			$req .= '&'.$key.'='.urlencode(stripslashes($value));
+		}
 
 		return $req;
 	}
@@ -277,26 +352,65 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 	 */
 	public function initiatePay(Payment $payment, Request $request = null)
 	{
-		$this->setExtraParams(array('URL' => $this->getUrl($payment, 'pay')));
+		$this->setExtraParams([
+			'URL' => $this->getUrl($payment, 'pay'),
+			'PAYPAL_RETURN' => $this->getReturnUrl($payment),
+			'PAYED' => $payment->isPaid() ? 'Y' : 'N',
+		]);
 
 		return $this->showTemplate($payment, 'template');
 	}
 
 	/**
+	 * @param Payment $payment
 	 * @return array
 	 */
-	static public function getCurrencyList()
+	public function getParamsBusValue(Payment $payment = null)
 	{
-		return array('RUB');
+		$params = parent::getParamsBusValue($payment);
+
+		if ($payment)
+		{
+			$registryType = $payment::getRegistryType();
+			$params['PAYMENT_ID'] = $registryType.static::DELIMITER_PAYMENT_ID.$params['PAYMENT_ID'];
+		}
+
+
+		return $params;
+	}
+
+	/**
+	 * @return array
+	 */
+	public function getCurrencyList()
+	{
+		return array('RUB', 'EUR', 'USD');
 	}
 
 	/**
 	 * @param Request $request
 	 * @return mixed
 	 */
-	static public function getPaymentIdFromRequest(Request $request)
+	public function getPaymentIdFromRequest(Request $request)
 	{
-		return $request->get('custom');
+		$paymentId = null;
+		if ($request->get('custom') !== null)
+		{
+			$paymentId = $request->get('custom');
+		}
+
+		if ($paymentId === null)
+		{
+			$paymentId = $request->get('cm');
+		}
+
+		$pos = mb_strpos($paymentId, static::DELIMITER_PAYMENT_ID);
+		if ($pos !== false)
+		{
+			return mb_substr($paymentId, $pos + 1);
+		}
+
+		return $paymentId;
 	}
 
 	/**
@@ -313,12 +427,16 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 	 * @param Request $request
 	 * @return mixed
 	 */
-	static public function sendResponse(PaySystem\ServiceResult $result, Request $request)
+	public function sendResponse(PaySystem\ServiceResult $result, Request $request)
 	{
 		$data = $result->getData();
 
 		if (isset($data['MESSAGE']))
+		{
 			echo $data['MESSAGE'];
+		}
+
+		return '';
 	}
 
 	/**
@@ -339,13 +457,24 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 		);
 
 		if (!$this->prePaymentSetting['CURRENCY'])
+		{
 			$this->prePaymentSetting['CURRENCY'] = \CSaleLang::GetLangCurrency(SITE_ID);
+		}
+
 		if ($this->prePaymentSetting['TEST'])
+		{
 			$this->prePaymentSetting['DOMAIN'] = "sandbox.";
+		}
+
 		if ($request->get("token"))
+		{
 			$this->prePaymentSetting['TOKEN'] = $request->get("token");
+		}
+
 		if ($request->get("PayerID"))
+		{
 			$this->prePaymentSetting['PayerID'] = $request->get("PayerID");
+		}
 
 		$this->prePaymentSetting['VERSION'] = "98.0";
 
@@ -355,10 +484,14 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 		$this->prePaymentSetting['SERVER_NAME'] = $arSite["SERVER_NAME"];
 		if ($this->prePaymentSetting['SERVER_NAME'])
 		{
-			if (defined("SITE_SERVER_NAME") && strlen(SITE_SERVER_NAME) > 0)
+			if (defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> '')
+			{
 				$this->prePaymentSetting['SERVER_NAME'] = SITE_SERVER_NAME;
+			}
 			else
+			{
 				$this->prePaymentSetting['SERVER_NAME'] = \COption::GetOptionString("main", "server_name", "www.bitrixsoft.com");
+			}
 		}
 
 		$this->prePaymentSetting['SERVER_NAME'] = (\CMain::IsHTTPS() ? "https" : "http")."://".$this->prePaymentSetting['SERVER_NAME'];
@@ -387,7 +520,9 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 			list($key, $val) = explode("=", $res2);
 			$keyArray[urldecode($key)] = urldecode($val);
 			if ($this->prePaymentSetting['ENCODING'])
-				$keyArray[urldecode($key)] = $APPLICATION->ConvertCharset($keyArray[urldecode($key)], $this->prePaymentSetting['ENCODING'], SITE_CHARSET);
+			{
+				$keyArray[urldecode($key)] = \Bitrix\Main\Text\Encoding::convertEncoding($keyArray[urldecode($key)], $this->prePaymentSetting['ENCODING'], SITE_CHARSET);
+			}
 		}
 
 		return $keyArray;
@@ -448,7 +583,6 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 
 		if($this->prePaymentSetting['TOKEN'])
 		{
-			global $APPLICATION;
 			$url = "https://api-3t.".$this->prePaymentSetting['DOMAIN']."paypal.com/nvp";
 			$arFields = array(
 					"METHOD" => "GetExpressCheckoutDetails",
@@ -483,13 +617,13 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 
 					if(!empty($orderProps))
 					{
-						$arFields["PAYMENTREQUEST_0_SHIPTONAME"] = $APPLICATION->ConvertCharset($orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTONAME"], SITE_CHARSET, "utf-8");
-						$arFields["PAYMENTREQUEST_0_SHIPTOSTREET"] = $APPLICATION->ConvertCharset($orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTOSTREET"], SITE_CHARSET, "utf-8");
-						$arFields["PAYMENTREQUEST_0_SHIPTOSTREET2"] = $APPLICATION->ConvertCharset($orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTOSTREET2"], SITE_CHARSET, "utf-8");
-						$arFields["PAYMENTREQUEST_0_SHIPTOCITY"] = $APPLICATION->ConvertCharset($orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTOCITY"], SITE_CHARSET, "utf-8");
-						$arFields["PAYMENTREQUEST_0_SHIPTOSTATE"] = $APPLICATION->ConvertCharset($orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTOSTATE"], SITE_CHARSET, "utf-8");
+						$arFields["PAYMENTREQUEST_0_SHIPTONAME"] = $orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTONAME"];
+						$arFields["PAYMENTREQUEST_0_SHIPTOSTREET"] = $orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTOSTREET"];
+						$arFields["PAYMENTREQUEST_0_SHIPTOSTREET2"] = $orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTOSTREET2"];
+						$arFields["PAYMENTREQUEST_0_SHIPTOCITY"] = $orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTOCITY"];
+						$arFields["PAYMENTREQUEST_0_SHIPTOSTATE"] = $orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTOSTATE"];
 						$arFields["PAYMENTREQUEST_0_SHIPTOZIP"] = $orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTOZIP"];
-						$arFields["PAYMENTREQUEST_0_SHIPTOCOUNTRYCODE"] = $APPLICATION->ConvertCharset($orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTOCOUNTRYCODE"], SITE_CHARSET, "utf-8");
+						$arFields["PAYMENTREQUEST_0_SHIPTOCOUNTRYCODE"] = $orderProps["PP_SOURCE"]["PAYMENTREQUEST_0_SHIPTOCOUNTRYCODE"];
 					}
 
 					if(!empty($orderData["BASKET_ITEMS"]))
@@ -497,15 +631,17 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 						$arFields["PAYMENTREQUEST_0_ITEMAMT"] = number_format($this->prePaymentSetting['ORDER_PRICE']-$this->prePaymentSetting['DELIVERY_PRICE'], 2, ".", "");
 						foreach($orderData["BASKET_ITEMS"] as $i => $val)
 						{
-							$arFields["L_PAYMENTREQUEST_0_NAME".$i] = $APPLICATION->ConvertCharset($val["NAME"], SITE_CHARSET, "utf-8");
+							$arFields["L_PAYMENTREQUEST_0_NAME".$i] = $val["NAME"];
 							$arFields["L_PAYMENTREQUEST_0_AMT".$i] = number_format($val["PRICE"], 2, ".", "");
 							$arFields["L_PAYMENTREQUEST_0_QTY".$i] = $val["QUANTITY"];
 							$arFields["L_PAYMENTREQUEST_0_NUMBER".$i] = $val["PRODUCT_ID"];
 						}
 					}
 
-					if(strlen($this->prePaymentSetting['DELIVERY_PRICE']) > 0)
+					if($this->prePaymentSetting['DELIVERY_PRICE'] <> '')
+					{
 						$arFields["PAYMENTREQUEST_0_NOTIFYURL"] = $this->prePaymentSetting['NOTIFY_URL'];
+					}
 
 					if($postResult = $ht->Post($url, $arFields))
 					{
@@ -583,7 +719,7 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 					"CANCELURL" => $this->prePaymentSetting['SERVER_NAME'].$APPLICATION->GetCurPageParam("paypal=Y&paypal_error=Y", array("paypal", "paypal_error")),
 					"PAYMENTREQUEST_0_PAYMENTACTION" => "Authorization",
 					"PAYMENTREQUEST_0_DESC" => "Order payment for ".$this->prePaymentSetting['SERVER_NAME'],
-					"LOCALECODE" => ToUpper(LANGUAGE_ID),
+					"LOCALECODE" => mb_strtoupper(LANGUAGE_ID),
 					"buttonsource" => "Bitrix_Cart",
 				);
 
@@ -592,13 +728,13 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 				$arFields["PAYMENTREQUEST_0_ITEMAMT"] = number_format($orderData["AMOUNT"], 2, ".", "");
 				foreach($orderData["BASKET_ITEMS"] as $k => $val)
 				{
-					$arFields["L_PAYMENTREQUEST_0_NAME".$k] = $APPLICATION->ConvertCharset($val["NAME"], SITE_CHARSET, "utf-8");
+					$arFields["L_PAYMENTREQUEST_0_NAME".$k] = $val["NAME"];
 					$arFields["L_PAYMENTREQUEST_0_AMT".$k] = number_format($val["PRICE"], 2, ".", "");
 					$arFields["L_PAYMENTREQUEST_0_QTY".$k] = $val["QUANTITY"];
 				}
 			}
 
-			$arFields["RETURNURL"] .= ((strpos($arFields["RETURNURL"], "?") === false) ? "?" : "&")."paypal=Y";
+			$arFields["RETURNURL"] .= ((mb_strpos($arFields["RETURNURL"], "?") === false) ? "?" : "&")."paypal=Y";
 
 			$ht = new \Bitrix\Main\Web\HttpClient(array("version" => "1.1"));
 			if($res = $ht->post($url, $arFields))
@@ -609,7 +745,9 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 				{
 					$url = "https://www.".$this->prePaymentSetting['DOMAIN']."paypal.com/webscr?cmd=_express-checkout&token=".$result["TOKEN"];
 					if($orderData["ORDER_REQUEST"] == "Y")
+					{
 						return $url;
+					}
 					LocalRedirect($url);
 				}
 				else
@@ -634,6 +772,17 @@ class PayPalHandler extends PaySystem\ServiceHandler implements PaySystem\IPrePa
 	public function setOrderConfig($orderData = array())
 	{
 		if ($orderData)
+		{
 			$this->prePaymentSetting = array_merge($this->prePaymentSetting, $orderData);
+		}
+	}
+
+	/**
+	 * @param Payment $payment
+	 * @return mixed|string
+	 */
+	private function getReturnUrl(Payment $payment)
+	{
+		return $this->getBusinessValue($payment, 'PAYPAL_RETURN') ?: $this->service->getContext()->getUrl();
 	}
 }

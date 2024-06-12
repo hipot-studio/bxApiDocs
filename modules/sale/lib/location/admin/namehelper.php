@@ -49,8 +49,8 @@ abstract class NameHelper extends Helper
 				{
 					$tmpCol = $column;
 
-					$tmpCol['title'] = $tmpCol['title'].'&nbsp;('.$lang.')';
-					$flds[$code.'_'.ToUpper($lang)] = $tmpCol;
+					$tmpCol['title'] = $tmpCol['title'].' ('.$lang.')';
+					$flds[$code.'_'.mb_strtoupper($lang)] = $tmpCol;
 				}
 			}
 		}
@@ -76,13 +76,13 @@ abstract class NameHelper extends Helper
 		// select all names
 		foreach($languages as $lang)
 		{
-			$lang = ToUpper($lang);
+			$lang = mb_strtoupper($lang);
 
 			$parameters['runtime']['NAME__'.$lang] = array(
 				'data_type' => $road,
 				'reference' => array(
 					'=this.ID' => 'ref.'.$class::getReferenceFieldName(),
-					'=ref.'. $class::getLanguageFieldName() => array('?', ToLower($lang)) // oracle is case-sensitive
+					'=ref.'. $class::getLanguageFieldName() => array('?', mb_strtolower($lang)) // oracle is case-sensitive
 				),
 				'join_type' => 'left'
 			);
@@ -98,7 +98,7 @@ abstract class NameHelper extends Helper
 		{
 			foreach($languages as $lang)
 			{
-				$lang = ToUpper($lang);
+				$lang = mb_strtoupper($lang);
 
 				foreach($fldSubMap as $code => $fld)
 				{
@@ -167,13 +167,13 @@ abstract class NameHelper extends Helper
 
 		foreach($languages as $lang)
 		{
-			$lang = ToUpper($lang);
+			$lang = mb_strtoupper($lang);
 
 			$parameters['runtime']['NAME__'.$lang] = array(
 				'data_type' => $road,
 				'reference' => array(
 					'=this.ID' => 'ref.'.$class::getReferenceFieldName(),
-					'=ref.'. $class::getLanguageFieldName() => array('?', ToLower($lang)) // oracle is case-sensitive
+					'=ref.'. $class::getLanguageFieldName() => array('?', mb_strtolower($lang)) // oracle is case-sensitive
 				),
 				'join_type' => 'left'
 			);
@@ -189,14 +189,16 @@ abstract class NameHelper extends Helper
 		{
 			foreach($languages as $lang)
 			{
-				$lang = ToUpper($lang);
+				$lang = mb_strtoupper($lang);
 
 				foreach($fldSubMap as $code => $fld)
 				{
 					$key = 'find_'.$code.'_'.$lang;
 
-					if(strlen($GLOBALS[$key]))
+					if($GLOBALS[$key] <> '')
+					{
 						$parameters['filter'][static::getFilterModifier($fld['data_type']).'NAME__'.$lang.'.'.$code] = $GLOBALS[$key];
+					}
 				}
 			}
 		}
@@ -229,11 +231,8 @@ abstract class NameHelper extends Helper
 
 		if($languages == null)
 		{
-			$by = 'sort';
-			$order = 'asc';
-
 			$lang = new \CLanguage();
-			$res = $lang->GetList($by, $order, array());
+			$res = $lang->GetList();
 			$languages = array();
 			while($item = $res->Fetch())
 				$languages[$item['LANGUAGE_ID']] = $item['LANGUAGE_ID'];
@@ -255,8 +254,8 @@ abstract class NameHelper extends Helper
 		if(is_array($names[$languageIdMapped]) && (string) $names[$languageIdMapped]['NAME'] != '')
 			return $names[$languageIdMapped];
 
-		$languageId = 		ToUpper($languageId);
-		$languageIdMapped = ToUpper($languageIdMapped);
+		$languageId = 		mb_strtoupper($languageId);
+		$languageIdMapped = mb_strtoupper($languageIdMapped);
 
 		if(is_array($names[$languageId]) && (string) $names[$languageId]['NAME'] != '')
 			return $names[$languageId];
@@ -281,7 +280,7 @@ abstract class NameHelper extends Helper
 		{
 			foreach($fldSubMap as $code => $fld)
 			{
-				$langU = ToUpper($lang);
+				$langU = mb_strtoupper($lang);
 
 				$key = $code.'_'.$langU;
 				if(isset($data[$key]))
@@ -305,7 +304,7 @@ abstract class NameHelper extends Helper
 		$map = static::readMap('name', 'detail');
 
 		// actually, NAME is not required when adding through LocationTable::add(), unless SHORT_NAME is set
-		unset($map['NAME']['required']);
+		// unset($map['NAME']['required']);
 
 		return $map;
 	}

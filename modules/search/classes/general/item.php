@@ -2,7 +2,7 @@
 
 class CSearchItem extends CDBResult
 {
-	public static function GetList($arOrder = array(), $arFilter = array(), $arSelect = array())
+	function GetList($arOrder = array(), $arFilter = array(), $arSelect = array())
 	{
 		global $DB;
 
@@ -18,8 +18,8 @@ class CSearchItem extends CDBResult
 		{
 			foreach ($arOrder as $key => $ord)
 			{
-				$ord = strtoupper($ord) <> "ASC"? "DESC": "ASC";
-				$key = strtoupper($key);
+				$ord = mb_strtoupper($ord) <> "ASC"? "DESC": "ASC";
+				$key = mb_strtoupper($key);
 				switch ($key)
 				{
 				case "ID":
@@ -39,7 +39,7 @@ class CSearchItem extends CDBResult
 
 		foreach ($arSelect as $field)
 		{
-			$field = strtoupper($field);
+			$field = mb_strtoupper($field);
 			switch ($field)
 			{
 			case "ID":
@@ -175,19 +175,25 @@ class CSearchItem extends CDBResult
 			$site_id = $r["SITE_ID"];
 			if (!isset($arSite[$site_id]))
 			{
-				$rsSite = CSite::GetList($b, $o, array("ID" => $site_id));
+				$rsSite = CSite::GetList('', '', array("ID" => $site_id));
 				$arSite[$site_id] = $rsSite->Fetch();
 			}
 			$r["DIR"] = $arSite[$site_id]["DIR"];
 			$r["SERVER_NAME"] = $arSite[$site_id]["SERVER_NAME"];
 
-			if (strlen($r["SITE_URL"]) > 0)
+			if ($r["SITE_URL"] <> '')
 				$r["URL"] = $r["SITE_URL"];
 
-			if (substr($r["URL"], 0, 1) == "=")
+			if (mb_substr($r["URL"], 0, 1) == "=")
 			{
 				foreach (GetModuleEvents("search", "OnSearchGetURL", true) as $arEvent)
-					$r["URL"] = ExecuteModuleEventEx($arEvent, array($r));
+				{
+					$newUrl = ExecuteModuleEventEx($arEvent, array($r));
+					if (isset($newUrl))
+					{
+						$r["URL"] = $newUrl;
+					}
+				}
 			}
 
 			$r["URL"] = str_replace(

@@ -1,24 +1,44 @@
-<?
+<?php
+
+use Bitrix\Crm;
+
 if (!CModule::IncludeModule('bizproc'))
 	return;
 
-IncludeModuleLangFile(dirname(__FILE__)."/crm_document.php");
+IncludeModuleLangFile(__DIR__."/crm_document.php");
 
-class CCrmDocumentContact extends CCrmDocument
-	implements IBPWorkflowDocument
+class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 {
-	static public function GetDocumentFields($documentType)
+	public static function GetDocumentFields($documentType)
 	{
 		$arDocumentID = self::GetDocumentInfo($documentType.'_0');
 		if (empty($arDocumentID))
 			throw new CBPArgumentNullException('documentId');
 
-		__IncludeLang($_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/components/bitrix/crm.'.strtolower($arDocumentID['TYPE']).'.edit/lang/'.LANGUAGE_ID.'/component.php');
+		$arResult = self::getEntityFields($arDocumentID['TYPE']);
 
+		return $arResult;
+	}
+
+	public static function GetDocument($documentId)
+	{
+		$documentInfo = static::GetDocumentInfo($documentId);
+
+		return new Crm\Integration\BizProc\Document\ValueCollection\Contact(
+			CCrmOwnerType::Contact,
+			$documentInfo['ID']
+		);
+	}
+
+	public static function getEntityFields($entityType)
+	{
+		\Bitrix\Main\Localization\Loc::loadMessages($_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/components/bitrix/crm.'.
+			mb_strtolower($entityType).'.edit/component.php');
+
+		$addressLabels = Bitrix\Crm\EntityAddress::getShortLabels();
 		$printableFieldNameSuffix = ' ('.GetMessage('CRM_FIELD_BP_TEXT').')';
-		$emailFieldNameSuffix = ' ('.GetMessage('CRM_FIELD_BP_EMAIL').')';
 
-		$arResult = array(
+		$arResult = static::getVirtualFields() + array(
 			'ID' => array(
 				'Name' => GetMessage('CRM_FIELD_ID'),
 				'Type' => 'int',
@@ -27,7 +47,7 @@ class CCrmDocumentContact extends CCrmDocument
 				'Required' => false,
 			),
 			'NAME' => array(
-				'Name' => GetMessage('CRM_FIELD_NAME'),
+				'Name' => GetMessage('CRM_FIELD_FIRST_NAME'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
@@ -47,9 +67,16 @@ class CCrmDocumentContact extends CCrmDocument
 				'Editable' => true,
 				'Required' => false,
 			),
+			'HONORIFIC' => array(
+				'Name' => GetMessage('CRM_FIELD_HONORIFIC'),
+				'Type' => 'select',
+				'Options' => CCrmStatus::GetStatusListEx('HONORIFIC'),
+				'Editable' => true,
+				'Required' => false,
+			),
 			'BIRTHDATE' => array(
 				'Name' => GetMessage('CRM_FIELD_BIRTHDATE'),
-				'Type' => 'datetime',
+				'Type' => 'date',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
@@ -96,8 +123,57 @@ class CCrmDocumentContact extends CCrmDocument
 				'Editable' => true,
 				'Required' => false,
 			),
-			'ADDRESS' => array(
+			'FULL_ADDRESS' => array(
 				'Name' => GetMessage('CRM_FIELD_ADDRESS'),
+				'Type' => 'text',
+				'Filterable' => true,
+				'Editable' => true,
+				'Required' => false,
+			),
+			'ADDRESS' => array(
+				'Name' => $addressLabels['ADDRESS'],
+				'Type' => 'text',
+				'Filterable' => true,
+				'Editable' => true,
+				'Required' => false,
+			),
+			'ADDRESS_2' => array(
+				'Name' => $addressLabels['ADDRESS_2'],
+				'Type' => 'text',
+				'Filterable' => true,
+				'Editable' => true,
+				'Required' => false,
+			),
+			'ADDRESS_CITY' => array(
+				'Name' => $addressLabels['CITY'],
+				'Type' => 'text',
+				'Filterable' => true,
+				'Editable' => true,
+				'Required' => false,
+			),
+			'ADDRESS_POSTAL_CODE' => array(
+				'Name' => $addressLabels['POSTAL_CODE'],
+				'Type' => 'text',
+				'Filterable' => true,
+				'Editable' => true,
+				'Required' => false,
+			),
+			'ADDRESS_REGION' => array(
+				'Name' => $addressLabels['REGION'],
+				'Type' => 'text',
+				'Filterable' => true,
+				'Editable' => true,
+				'Required' => false,
+			),
+			'ADDRESS_PROVINCE' => array(
+				'Name' => $addressLabels['PROVINCE'],
+				'Type' => 'text',
+				'Filterable' => true,
+				'Editable' => true,
+				'Required' => false,
+			),
+			'ADDRESS_COUNTRY' => array(
+				'Name' => $addressLabels['COUNTRY'],
 				'Type' => 'text',
 				'Filterable' => true,
 				'Editable' => true,
@@ -106,6 +182,7 @@ class CCrmDocumentContact extends CCrmDocument
 			'COMMENTS' => array(
 				'Name' => GetMessage('CRM_FIELD_COMMENTS'),
 				'Type' => 'text',
+				'ValueContentType' => 'bb',
 				'Filterable' => false,
 				'Editable' => true,
 				'Required' => false,
@@ -125,71 +202,116 @@ class CCrmDocumentContact extends CCrmDocument
 				'Editable' => true,
 				'Required' => false,
 			),
-			'ASSIGNED_BY_PRINTABLE' => array(
-				'Name' => GetMessage('CRM_FIELD_ASSIGNED_BY_ID').$printableFieldNameSuffix,
-				'Type' => 'string',
-				'Filterable' => false,
-				'Editable' => false,
-				'Required' => false,
-			),
-			'ASSIGNED_BY_EMAIL' => array(
-				'Name' => GetMessage('CRM_FIELD_ASSIGNED_BY_ID').$emailFieldNameSuffix,
-				'Type' => 'string',
-				'Filterable' => false,
-				'Editable' => false,
-				'Required' => false,
-			),
-			'SOURCE_ID' => array(
+		);
+
+		$arResult += parent::getAssignedByFields();
+		$arResult += array(
+			'CREATED_BY_ID' => [
+				'Name' => GetMessage('CRM_DOCUMENT_FIELD_CREATED_BY_ID_CONTACT'),
+				'Type' => 'user',
+			],
+			'MODIFY_BY_ID' => [
+				'Name' => GetMessage('CRM_DOCUMENT_FIELD_MODIFY_BY_ID'),
+				'Type' => 'user',
+			],
+			'SOURCE_ID' => [
 				'Name' => GetMessage('CRM_FIELD_SOURCE_ID'),
 				'Type' => 'select',
 				'Options' => CCrmStatus::GetStatusListEx('SOURCE'),
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
-			),
-			'SOURCE_DESCRIPTION' => array(
+			],
+			'SOURCE_DESCRIPTION' => [
 				'Name' => GetMessage('CRM_FIELD_SOURCE_DESCRIPTION'),
 				'Type' => 'text',
 				'Filterable' => false,
 				'Editable' => true,
 				'Required' => false,
-			),
-			"OPENED" => array(
+			],
+			"OPENED" => [
 				"Name" => GetMessage("CRM_FIELD_OPENED"),
 				"Type" => "bool",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
-			),
-			"COMPANY_ID" => array(
+			],
+			"EXPORT" => [
+				"Name" => GetMessage("CRM_FIELD_EXPORT"),
+				"Type" => "bool",
+				"Filterable" => true,
+				"Editable" => true,
+				"Required" => false,
+			],
+			"COMPANY_ID" => [
 				"Name" => GetMessage("CRM_FIELD_COMPANY_ID"),
 				"Type" => "string",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
-			),
-			"LEAD_ID" => array(
+			],
+			"COMPANY_IDS" => [
+				"Name" => GetMessage("CRM_FIELD_COMPANY_IDS"),
+				"Type" => "string",
+				"Filterable" => true,
+				"Editable" => true,
+				"Required" => false,
+				"Multiple" => true
+			],
+			"LEAD_ID" => [
 				"Name" => GetMessage("CRM_FIELD_LEAD_ID"),
 				"Type" => "int",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
-			),
-			"ORIGINATOR_ID" => array(
+			],
+			"ORIGINATOR_ID" => [
 				"Name" => GetMessage("CRM_FIELD_ORIGINATOR_ID"),
 				"Type" => "string",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
-			),
-			"ORIGIN_ID" => array(
+			],
+			"ORIGIN_ID" => [
 				"Name" => GetMessage("CRM_FIELD_ORIGIN_ID"),
 				"Type" => "string",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
-			),
+			],
+			"DATE_CREATE" => [
+				"Name" => GetMessage("CRM_CONTACT_EDIT_FIELD_DATE_CREATE"),
+				"Type" => "datetime",
+				"Filterable" => true,
+				"Editable" => false,
+				"Required" => false,
+			],
+			"DATE_MODIFY" => [
+				"Name" => GetMessage("CRM_CONTACT_EDIT_FIELD_DATE_MODIFY"),
+				"Type" => "datetime",
+				"Filterable" => true,
+				"Editable" => false,
+				"Required" => false,
+			],
+			'WEBFORM_ID' => [
+				'Name' => GetMessage('CRM_DOCUMENT_WEBFORM_ID'),
+				'Type' => 'select',
+				'Options' => static::getWebFormSelectOptions(),
+				'Filterable' => false,
+				'Editable' => false,
+				'Required' => false,
+			],
+			'TRACKING_SOURCE_ID' => [
+				'Name' => GetMessage('CRM_DOCUMENT_FIELD_TRACKING_SOURCE_ID'),
+				'Type' => 'select',
+				'Options' => array_column(Crm\Tracking\Provider::getActualSources(), 'NAME','ID'),
+				'Filterable' => true,
+				'Editable' => true,
+				'Required' => false,
+			],
 		);
+
+		$arResult += static::getCommunicationFields();
 
 		$ar =  CCrmFieldMulti::GetEntityTypeList();
 
@@ -225,11 +347,30 @@ class CCrmDocumentContact extends CCrmDocument
 		$CCrmUserType = new CCrmUserType($USER_FIELD_MANAGER, 'CRM_CONTACT');
 		$CCrmUserType->AddBPFields($arResult, array('PRINTABLE_SUFFIX' => GetMessage("CRM_FIELD_BP_TEXT")));
 
+		//append UTM fields
+		$arResult += parent::getUtmFields();
+
+		//append FORM fields
+		$arResult += parent::getSiteFormFields(CCrmOwnerType::Contact);
+
 		return $arResult;
 	}
 
-	static public function CreateDocument($parentDocumentId, $arFields)
+	/**
+	 * @deprecated
+	 * @see Crm\Integration\BizProc\Document\ValueCollection\Deal
+	 */
+	public static function PrepareDocument(array &$arFields)
 	{
+	}
+
+	public static function CreateDocument($parentDocumentId, $arFields)
+	{
+		if(!is_array($arFields))
+		{
+			throw new Exception("Entity fields must be array");
+		}
+
 		global $DB;
 		$arDocumentID = self::GetDocumentInfo($parentDocumentId);
 		if ($arDocumentID == false)
@@ -250,47 +391,18 @@ class CCrmDocumentContact extends CCrmDocument
 			$fieldType = $arDocumentFields[$key]["Type"];
 			if (in_array($fieldType, array("phone", "email", "im", "web"), true))
 			{
-				CCrmDocument::PrepareEntityMultiFields($arFields, strtoupper($fieldType));
+				CCrmDocument::PrepareEntityMultiFields($arFields, mb_strtoupper($fieldType));
 				continue;
 			}
 
 			$arFields[$key] = (is_array($arFields[$key]) && !CBPHelper::IsAssociativeArray($arFields[$key])) ? $arFields[$key] : array($arFields[$key]);
 			if ($arDocumentFields[$key]["Type"] == "user")
 			{
-				$ar = array();
-				foreach ($arFields[$key] as $v1)
-				{
-					if (substr($v1, 0, strlen("user_")) == "user_")
-					{
-						$ar[] = substr($v1, strlen("user_"));
-					}
-					else
-					{
-						$a1 = self::GetUsersFromUserGroup($v1, "CONTACT_0");
-						foreach ($a1 as $a11)
-							$ar[] = $a11;
-					}
-				}
-
-				$arFields[$key] = $ar;
+				$arFields[$key] = \CBPHelper::extractUsers($arFields[$key], $arDocumentID['DOCUMENT_TYPE']);
 			}
-			elseif ($fieldType == "select" && substr($key, 0, 3) == "UF_")
+			elseif ($fieldType == "select" && mb_substr($key, 0, 3) == "UF_")
 			{
-				$db = CUserTypeEntity::GetList(array(), array("ENTITY_ID" => "CRM_CONTACT", "FIELD_NAME" => $key));
-				if ($ar = $db->Fetch())
-				{
-					$arV = array();
-					$db = CUserTypeEnum::GetList($ar);
-					while ($ar = $db->GetNext())
-						$arV[$ar["XML_ID"]] = $ar["ID"];
-
-					foreach ($arFields[$key] as &$value)
-					{
-						if (array_key_exists($value, $arV))
-							$value = $arV[$value];
-					}
-					unset($value);
-				}
+				self::InternalizeEnumerationField('CRM_CONTACT', $arFields, $key);
 			}
 			elseif ($fieldType == "file")
 			{
@@ -327,54 +439,100 @@ class CCrmDocumentContact extends CCrmDocument
 			}
 		}
 
-		$DB->StartTransaction();
+		if(isset($arFields['COMMENTS']))
+		{
+			$arFields['COMMENTS'] = static::sanitizeCommentsValue($arFields['COMMENTS']);
+		}
+
+		$useTransaction = static::shouldUseTransaction();
+
+		if ($useTransaction)
+		{
+			$DB->StartTransaction();
+		}
 
 		$CCrmEntity = new CCrmContact(false);
-		$id = $CCrmEntity->Add($arFields);
+		$ID = $CCrmEntity->Add(
+			$arFields,
+			true,
+			[
+				'DISABLE_USER_FIELD_CHECK' => true,
+				'REGISTER_SONET_EVENT' => true,
+				'CURRENT_USER' => static::getSystemUserId(),
+			]
+		);
 
-		if (!$id || $id <= 0)
+		if ($ID <= 0)
 		{
-			$DB->Rollback();
+			if ($useTransaction)
+			{
+				$DB->Rollback();
+			}
 			throw new Exception($CCrmEntity->LAST_ERROR);
 		}
 
+		//region Try to create requisite
+		if((isset($arFields['ADDRESS']) && $arFields['ADDRESS'] !== '') ||
+			(isset($arFields['ADDRESS_2']) && $arFields['ADDRESS_2'] !== '') ||
+			(isset($arFields['ADDRESS_CITY']) && $arFields['ADDRESS_CITY'] !== ''))
+		{
+			$presetID = \Bitrix\Crm\EntityRequisite::getDefaultPresetId(CCrmOwnerType::Contact);
+			if($presetID > 0)
+			{
+				$converter = new \Bitrix\Crm\Requisite\AddressRequisiteConverter(CCrmOwnerType::Contact, $presetID, false);
+				$converter->processEntity($ID);
+			}
+		}
+		//endregion
+
 		if (COption::GetOptionString("crm", "start_bp_within_bp", "N") == "Y")
 		{
-			$CCrmBizProc = new CCrmBizProc('CONTACT');
+			$CCrmBizProc = new CCrmBizProc(CCrmOwnerType::ContactName);
 			if (false === $CCrmBizProc->CheckFields(false, true))
 				throw new Exception($CCrmBizProc->LAST_ERROR);
 
-			if ($id && $id > 0 && !$CCrmBizProc->StartWorkflow($id))
+			if (!$CCrmBizProc->StartWorkflow($ID))
 			{
-				$DB->Rollback();
+				if ($useTransaction)
+				{
+					$DB->Rollback();
+				}
 				throw new Exception($CCrmBizProc->LAST_ERROR);
-				$id = false;
 			}
 		}
 
-		if ($id && $id > 0)
-			$DB->Commit();
+		if (isset($arFields['TRACKING_SOURCE_ID']))
+		{
+			Crm\Tracking\UI\Details::saveEntityData(\CCrmOwnerType::Contact, $ID, $arFields);
+		}
 
-		return $id;
+		if ($useTransaction)
+		{
+			$DB->Commit();
+		}
+
+		return $ID;
 	}
 
-	static public function UpdateDocument($documentId, $arFields)
+	public static function UpdateDocument($documentId, $arFields, $modifiedById = null)
 	{
 		global $DB;
+
+		if(empty($arFields))
+		{
+			return;
+		}
 
 		$arDocumentID = self::GetDocumentInfo($documentId);
 		if (empty($arDocumentID))
 			throw new CBPArgumentNullException('documentId');
 
-		$dbDocumentList = CCrmContact::GetList(
-			array(),
-			array('ID' => $arDocumentID['ID'], "CHECK_PERMISSIONS" => "N"),
-			array('ID')
-		);
+		$complexDocumentId = [$arDocumentID['DOCUMENT_TYPE'][0], $arDocumentID['DOCUMENT_TYPE'][1], $documentId];
 
-		$arResult = $dbDocumentList->Fetch();
-		if (!$arResult)
+		if(!CCrmContact::Exists($arDocumentID['ID']))
+		{
 			throw new Exception(GetMessage('CRM_DOCUMENT_ELEMENT_IS_NOT_FOUND'));
+		}
 
 		$arDocumentFields = self::GetDocumentFields($arDocumentID['TYPE']);
 		$arKeys = array_keys($arFields);
@@ -390,59 +548,27 @@ class CCrmDocumentContact extends CCrmDocument
 			$fieldType = $arDocumentFields[$key]["Type"];
 			if (in_array($fieldType, array("phone", "email", "im", "web"), true))
 			{
-				CCrmDocument::PrepareEntityMultiFields($arFields, strtoupper($fieldType));
+				CCrmDocument::PrepareEntityMultiFields($arFields, mb_strtoupper($fieldType));
 				continue;
 			}
 
 			$arFields[$key] = (is_array($arFields[$key]) && !CBPHelper::IsAssociativeArray($arFields[$key])) ? $arFields[$key] : array($arFields[$key]);
 			if ($fieldType == "user")
 			{
-				$ar = array();
-				foreach ($arFields[$key] as $v1)
-				{
-					if (substr($v1, 0, strlen("user_")) == "user_")
-					{
-						$ar[] = substr($v1, strlen("user_"));
-					}
-					else
-					{
-						$a1 = self::GetUsersFromUserGroup($v1, $documentId);
-						foreach ($a1 as $a11)
-							$ar[] = $a11;
-					}
-				}
-
-				$arFields[$key] = $ar;
+				$arFields[$key] = \CBPHelper::extractUsers($arFields[$key], $complexDocumentId);
 			}
-			elseif ($fieldType == "select" && substr($key, 0, 3) == "UF_")
+			elseif ($fieldType == "select" && mb_substr($key, 0, 3) == "UF_")
 			{
-				$db = CUserTypeEntity::GetList(array(), array("ENTITY_ID" => "CRM_CONTACT", "FIELD_NAME" => $key));
-				if ($ar = $db->Fetch())
-				{
-					$arV = array();
-					$db = CUserTypeEnum::GetList($ar);
-					while ($ar = $db->GetNext())
-						$arV[$ar["XML_ID"]] = $ar["ID"];
-
-					foreach ($arFields[$key] as &$value)
-					{
-						if (array_key_exists($value, $arV))
-							$value = $arV[$value];
-					}
-					unset($value);
-				}
+				self::InternalizeEnumerationField('CRM_CONTACT', $arFields, $key);
 			}
 			elseif ($fieldType == "file")
 			{
-				$arFileOptions = array('ENABLE_ID' => true);
-				foreach ($arFields[$key] as &$value)
-				{
-					//Issue #40380. Secure URLs and file IDs are allowed.
-					$file = false;
-					CCrmFileProxy::TryResolveFile($value, $file, $arFileOptions);
-					$value = $file;
-				}
-				unset($value);
+				$arFields[$key] = static::castFileFieldValues(
+					$arDocumentID['ID'],
+					\CCrmOwnerType::Contact,
+					$key,
+					$arFields[$key],
+				);
 			}
 			elseif ($fieldType == "S:HTML")
 			{
@@ -469,17 +595,40 @@ class CCrmDocumentContact extends CCrmDocument
 
 		if(isset($arFields['COMMENTS']) && $arFields['COMMENTS'] !== '')
 		{
-			$arFields['COMMENTS'] = preg_replace("/[\r\n]+/".BX_UTF_PCRE_MODIFIER, "<br/>", $arFields['COMMENTS']);
+			$arFields['COMMENTS'] = static::sanitizeCommentsValue($arFields['COMMENTS']);
 		}
 
-		$DB->StartTransaction();
+		$useTransaction = static::shouldUseTransaction();
+
+		if ($useTransaction)
+		{
+			$DB->StartTransaction();
+		}
+
+		if ($modifiedById > 0)
+		{
+			$arFields['MODIFY_BY_ID'] = $modifiedById;
+		}
 
 		$CCrmEntity = new CCrmContact(false);
-		$res = $CCrmEntity->Update($arDocumentID['ID'], $arFields);
+		$res = $CCrmEntity->Update(
+			$arDocumentID['ID'],
+			$arFields,
+			true,
+			true,
+			[
+				'DISABLE_USER_FIELD_CHECK' => true,
+				'REGISTER_SONET_EVENT' => true,
+				'CURRENT_USER' => $modifiedById ?? static::getSystemUserId()
+			]
+		);
 
 		if (!$res)
 		{
-			$DB->Rollback();
+			if ($useTransaction)
+			{
+				$DB->Rollback();
+			}
 			throw new Exception($CCrmEntity->LAST_ERROR);
 		}
 
@@ -491,12 +640,64 @@ class CCrmDocumentContact extends CCrmDocument
 
 			if ($res && !$CCrmBizProc->StartWorkflow($arDocumentID['ID']))
 			{
-				$DB->Rollback();
+				if ($useTransaction)
+				{
+					$DB->Rollback();
+				}
 				throw new Exception($CCrmBizProc->LAST_ERROR);
 			}
 		}
 
-		if ($res)
+		if (isset($arFields['TRACKING_SOURCE_ID']))
+		{
+			Crm\Tracking\UI\Details::saveEntityData(
+				\CCrmOwnerType::Contact,
+				$arDocumentID['ID'],
+				$arFields
+			);
+		}
+
+		if ($res && $useTransaction)
+		{
 			$DB->Commit();
+		}
+	}
+
+	public static function getDocumentName($documentId)
+	{
+		$arDocumentID = self::GetDocumentInfo($documentId);
+		$caption = '';
+
+		$dbRes = CCrmContact::GetListEx(array(), array('=ID' => $arDocumentID['ID'], 'CHECK_PERMISSIONS' => 'N'),
+			false, false,
+			['HONORIFIC', 'NAME', 'SECOND_NAME', 'LAST_NAME']
+		);
+		$arRes = $dbRes ? $dbRes->Fetch() : null;
+
+		if($arRes)
+		{
+			$caption = CCrmContact::PrepareFormattedName([
+				'HONORIFIC' => isset($arRes['HONORIFIC']) ? $arRes['HONORIFIC'] : '',
+				'NAME' => isset($arRes['NAME']) ? $arRes['NAME'] : '',
+				'SECOND_NAME' => isset($arRes['SECOND_NAME']) ? $arRes['SECOND_NAME'] : '',
+				'LAST_NAME' => isset($arRes['LAST_NAME']) ? $arRes['LAST_NAME'] : ''
+			]);
+		}
+
+		return $caption;
+	}
+
+	public static function normalizeDocumentId($documentId)
+	{
+		return parent::normalizeDocumentIdInternal(
+			$documentId,
+			CCrmOwnerType::ContactName,
+			CCrmOwnerTypeAbbr::Contact
+		);
+	}
+
+	public static function createAutomationTarget($documentType)
+	{
+		return Crm\Automation\Factory::createTarget(\CCrmOwnerType::Contact);
 	}
 }

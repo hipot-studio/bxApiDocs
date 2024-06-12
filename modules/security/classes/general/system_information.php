@@ -28,7 +28,8 @@ class CSecuritySystemInformation
 	{
 		$additionalInformation = array(
 			'pulling' => static::getPullingInfo(),
-			'sites' => static::getSites()
+			'sites' => static::getSites(),
+			'modules' => static::getModulesInfo()
 		);
 		return $additionalInformation;
 	}
@@ -63,7 +64,7 @@ class CSecuritySystemInformation
 	 */
 	public static function isRunOnWin()
 	{
-		return (strtoupper(substr(PHP_OS, 0, 3)) === "WIN");
+		return (mb_strtoupper(mb_substr(PHP_OS, 0, 3)) === "WIN");
 	}
 
 	/**
@@ -137,22 +138,78 @@ class CSecuritySystemInformation
 	 */
 	protected static function getSites()
 	{
+		$converter = CBXPunycode::GetConverter();
 		$result = array();
-		$dbSites = CSite::GetList($b = 'sort', $o = 'asc', array('ACTIVE' => 'Y'));
+		$dbSites = CSite::GetList('sort', 'asc', array('ACTIVE' => 'Y'));
 		while ($arSite = $dbSites->Fetch())
 		{
-			$domains = explode("\n", str_replace("\r", "\n", $arSite["DOMAINS"]));
-			$domains = array_filter($domains);
 			$result[] = array(
 				'ID' => $arSite['ID'],
-				'DOMAINS' => $domains
+				'DOMAINS' => array(),
 			);
-		}
 
+			$domains = explode("\n", $arSite["DOMAINS"]);
+			foreach($domains as $domainName)
+			{
+				$domainName = trim($domainName, "\r\t ");
+				if ($domainName != "")
+				{
+					$punyName = $converter->Encode($domainName);
+					if ($punyName !== false)
+						$result[count($result) - 1]['DOMAINS'][] = $punyName;
+				}
+			}
+		}
 		return $result;
 	}
+	/**
+	 * Return information about installed modules and versions
+	 *
+	 * @return array
+	 */
+	protected static function getModulesInfo()
+	{
+		$modules = ['main' => SM_VERSION];
 
+		$folders = array(
+			"/local/modules",
+			"/bitrix/modules",
+		);
 
+		foreach ($folders as $folder)
+		{
+			if (!file_exists($_SERVER["DOCUMENT_ROOT"].$folder))
+			{
+				continue;
+			}
+
+			$handle = @opendir($_SERVER["DOCUMENT_ROOT"].$folder);
+			if ($handle)
+			{
+				while (false !== ($dir = readdir($handle)))
+				{
+					if (
+						!isset($modules[$dir])
+						&& is_dir($_SERVER["DOCUMENT_ROOT"] . $folder . "/" . $dir)
+						&& !in_array($dir, ['.', '..', 'main'], true)
+						&& strpos($dir, ".") === false
+					)
+					{
+						if ($info = CModule::CreateModuleObject($dir))
+						{
+							if ($info->IsInstalled())
+							{
+								$modules[$dir] = $info->MODULE_VERSION;
+							}
+						}
+					}
+				}
+				closedir($handle);
+			}
+		}
+
+		return $modules;
+	}
 	/**
 	 * Return some information about P&P, such as publish url
 	 *

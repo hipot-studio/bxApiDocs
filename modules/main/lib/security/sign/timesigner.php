@@ -19,27 +19,6 @@ class TimeSigner
 	 *
 	 * @param SigningAlgorithm $algorithm Custom signing algorithm.
 	 */
-	
-	/**
-	* <p>Нестатический метод вызывается при создании экземпляра класса и позволяет в нем произвести при создании объекта какие-то действия. Если необходимо использовать новый алгоритм подписывания - сделайте это с помощью нового объекта.</p>
-	*
-	*
-	* @param mixed $Bitrix  Пользовательский алгоритм подписания.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $Security  
-	*
-	* @param Securit $Sign  
-	*
-	* @param SigningAlgorithm $algorithm = null 
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/sign/timesigner/__construct.php
-	* @author Bitrix
-	*/
 	public function __construct(SigningAlgorithm $algorithm = null)
 	{
 		$this->signer = new Signer($algorithm);
@@ -52,19 +31,6 @@ class TimeSigner
 	 * @return $this
 	 * @throws \Bitrix\Main\ArgumentTypeException
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает ключ для подписи.</p>
-	*
-	*
-	* @param string $value  Ключ.
-	*
-	* @return \Bitrix\Main\Security\Sign\TimeSigner 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/sign/timesigner/setkey.php
-	* @author Bitrix
-	*/
 	public function setKey($value)
 	{
 		$this->signer->setKey($value);
@@ -76,17 +42,6 @@ class TimeSigner
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает сепаратор, используемый для упаковки/распаковки.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/sign/timesigner/getseparator.php
-	* @author Bitrix
-	*/
 	public function getSeparator()
 	{
 		return $this->signer->getSeparator();
@@ -99,19 +54,6 @@ class TimeSigner
 	 * @return $this
 	 * @throws \Bitrix\Main\ArgumentTypeException
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает сепаратор для упаковки/распаковки.</p>
-	*
-	*
-	* @param string $value  Сепаратор
-	*
-	* @return \Bitrix\Main\Security\Sign\TimeSigner 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/sign/timesigner/setseparator.php
-	* @author Bitrix
-	*/
 	public function setSeparator($value)
 	{
 		$this->signer->setSeparator($value);
@@ -136,36 +78,6 @@ class TimeSigner
 	 * @param string|null $salt Salt, if needed.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод подписывает сообщение с истекшим временем, возвращает строку в формате: <code> {message}{separator}{expired timestamp}{separator}{signature}</code>.</p>
-	*
-	*
-	* @param string $value  Сообщение для подписи
-	*
-	* @param string $time  Метка времени или дата описания (представлено в формате
-	* аналогичном <a href="http://php.net/manual/en/function.strtotime.php" >strtotime</a>).
-	*
-	* @param string $string  Соль, если необходимо.
-	*
-	* @param null $salt = null 
-	*
-	* @return string 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* // If salt needed
-	*  $foo = (new TimeSigner)-&gt;sign('test', '+1 hour', 'my_salt');
-	* 
-	*  // Otherwise
-	*  $bar = (new TimeSigner)-&gt;sign('test', '+1 day');
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/sign/timesigner/sign.php
-	* @author Bitrix
-	*/
 	public function sign($value, $time, $salt = null)
 	{
 		$timestamp = $this->getTimeStamp($time);
@@ -212,29 +124,11 @@ class TimeSigner
 	 * @return string
 	 * @throws BadSignatureException
 	 */
-	
-	/**
-	* <p>Нестатический метод проверяет подпись и время жизни сообщения. Если оба параметра - OK, то возвращает оригинальное сообщение.</p>
-	*
-	*
-	* @param string $signedValue  Подписанное значение, должно быть в формате: <code>{message}{separator}{expired
-	* timestamp}{separator}{signature}</code>.
-	*
-	* @param string $string  Соль, если необходимо.
-	*
-	* @param null $salt = null 
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/sign/timesigner/unsign.php
-	* @author Bitrix
-	*/
 	public function unsign($signedValue, $salt = null)
 	{
 		$timedValue = $this->signer->unsign($signedValue, $salt);
 
-		if (strpos($signedValue, $timedValue) === false)
+		if (mb_strpos($signedValue, $timedValue) === false)
 			throw new BadSignatureException('Timestamp missing');
 
 		list($value, $time) = $this->unpack($timedValue);
@@ -258,23 +152,6 @@ class TimeSigner
 	 * @return string
 	 * @throws ArgumentTypeException
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает подпись сообщения.</p>
-	*
-	*
-	* @param string $value  Сообщение.
-	*
-	* @param integer $timestamp  Истечение метки времени.
-	*
-	* @param null $salt = null Соль, если необходимо.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/sign/timesigner/getsignature.php
-	* @author Bitrix
-	*/
 	public function getSignature($value, $timestamp, $salt = null)
 	{
 		if (!is_string($value))
@@ -293,27 +170,6 @@ class TimeSigner
 	 * @param string|null $salt Salt, if used while signing.
 	 * @return bool True if OK, otherwise - false.
 	 */
-	
-	/**
-	* <p>Нестатический метод выполняет простую валидацию подписи сообщения.</p>
-	*
-	*
-	* @param string $value  Сообщение.
-	*
-	* @param integer $timestamp  Время истечения.
-	*
-	* @param string $signature  Подпись.
-	*
-	* @param string $string  Соль, если используется.
-	*
-	* @param null $salt = null 
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/sign/timesigner/validate.php
-	* @author Bitrix
-	*/
 	public function validate($value, $timestamp, $signature, $salt = null)
 	{
 		try
@@ -365,19 +221,6 @@ class TimeSigner
 	 * @param array $values Values for packing.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод упаковывает массив значений в простую строку вида: <code>pack(['test', 'all', 'values']) -&gt; 'test.all.values'</code></p>
-	*
-	*
-	* @param array $values  Значения для упаковки
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/sign/timesigner/pack.php
-	* @author Bitrix
-	*/
 	public function pack(array $values)
 	{
 		return $this->signer->pack($values);
@@ -402,36 +245,6 @@ class TimeSigner
 	 * @return array
 	 * @throws BadSignatureException
 	 */
-	
-	/**
-	* <p>Нестатический метод распаковывает значения из строки (подобно <b>rsplit</b>).</p>
-	*
-	*
-	* @param string $value  Строка для распаковки.
-	*
-	* @param integer $limit = 2 Если <code>$limit === 0</code> - распаковывает все значения, по умолчанию - 2.
-	*
-	* @return array 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* Простые примеры для разделителя ".":
-	* 
-	*  // Unpack all values:
-	*  unpack('test.all.values', 0) -&gt; ['test', 'all', 'values']
-	* 
-	*  // Unpack 2 values (by default). First element containing the rest of string.
-	*  unpack('test.all.values') -&gt; ['test.all', 'values']
-	* 
-	*  // Exception if separator is missing
-	*  unpack('test.all values', 3) -&gt; throws BadSignatureException
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/sign/timesigner/unpack.php
-	* @author Bitrix
-	*/
 	public function unpack($value, $limit = 2)
 	{
 		return $this->signer->unpack($value, $limit);

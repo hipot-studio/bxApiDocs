@@ -1,18 +1,27 @@
-<?
+<?php
+IncludeModuleLangFile(__FILE__);
+
 abstract class CCloudStorageService
 {
+	protected $verb = '';
+	protected $host = '';
+	protected $url = '';
+
+	protected $errno = 0;
+	protected $errstr = '';
+
+	protected $status = 0;
+	protected $headers =/*.(array[string]string).*/array();
+	protected $result = '';
+
+	public $tokenHasExpired = false;
+	protected $streamTimeout = 0;
+
 	/**
 	 * @return CCloudStorageService
 	 * @deprecated
 	*/
 	abstract public function GetObject();
-	/**
-	 * @return CCloudStorageService
-	*/
-	public static function GetObjectInstance()
-	{
-		return new static;
-	}
 	/**
 	 * @return string
 	*/
@@ -35,7 +44,7 @@ abstract class CCloudStorageService
 	abstract public function GetSettingsHTML($arBucket, $bServiceSet, $cur_SERVICE_ID, $bVarsFromForm);
 	/**
 	 * @param array[string]string $arBucket
-	 * @param array[string]string $arSettings
+	 * @param array[string]string & $arSettings
 	 * @return bool
 	*/
 	abstract public function CheckSettings($arBucket, &$arSettings);
@@ -57,9 +66,13 @@ abstract class CCloudStorageService
 	/**
 	 * @param array[string]string $arBucket
 	 * @param mixed $arFile
+	 * @param boolean $encoded
 	 * @return string
 	*/
-	abstract public function GetFileSRC($arBucket, $arFile);
+	public function GetFileSRC($arBucket, $arFile, $encoded = true)
+	{
+		return '';
+	}
 	/**
 	 * @param array[string]string $arBucket
 	 * @param string $filePath
@@ -73,6 +86,54 @@ abstract class CCloudStorageService
 	 * @return bool
 	*/
 	abstract public function FileCopy($arBucket, $arFile, $filePath);
+	/**
+	 * @param array[string]string $arBucket
+	 * @param mixed $arFile
+	 * @param string $filePath
+	 * @return bool
+	*/
+	function DownloadToFile($arBucket, $arFile, $filePath)
+	{
+		$url = $this->GetFileSRC($arBucket, $arFile);
+		$request = new Bitrix\Main\Web\HttpClient(array(
+			"streamTimeout" => $this->streamTimeout,
+		));
+		$result = $request->download($url, $filePath);
+		if ($request->getStatus() == 404 || $request->getStatus() == 403)
+		{
+			return false;
+		}
+		return $result;
+	}
+	/**
+	 * @param array[string]string $arBucket
+	 * @param string $filePath
+	 * @return bool
+	*/
+	abstract public function DeleteFile($arBucket, $filePath);
+	/**
+	 * @param array[string]string $arBucket
+	 * @param string $filePath
+	 * @param mixed $arFile
+	 * @return bool
+	*/
+	abstract public function SaveFile($arBucket, $filePath, $arFile);
+	/**
+	 * @param array[string]string $arBucket
+	 * @param string $filePath
+	 * @param bool $bRecursive
+	 * @return array[string][int]string
+	*/
+	abstract public function ListFiles($arBucket, $filePath, $bRecursive = false);
+	/**
+	 * @param array[string]string $arBucket
+	 * @param string $filePath
+	 * @return null|false|array
+	*/
+	public function GetFileInfo($arBucket, $filePath)
+	{
+		return null; // not implemented
+	}
 	/**
 	 * @param array[string]string $arBucket
 	 * @param string $sourcePath
@@ -105,7 +166,7 @@ abstract class CCloudStorageService
 		}
 
 		$arFile = array(
-			"SUBDIR" => 0,
+			"SUBDIR" => '',
 			"FILE_NAME" => ltrim($sourcePath, "/"),
 			"CONTENT_TYPE" => $contentType,
 		);
@@ -124,34 +185,7 @@ abstract class CCloudStorageService
 	}
 	/**
 	 * @param array[string]string $arBucket
-	 * @param mixed $arFile
-	 * @param string $filePath
-	 * @return bool
-	*/
-	abstract public function DownloadToFile($arBucket, $arFile, $filePath);
-	/**
-	 * @param array[string]string $arBucket
-	 * @param string $filePath
-	 * @return bool
-	*/
-	abstract public function DeleteFile($arBucket, $filePath);
-	/**
-	 * @param array[string]string $arBucket
-	 * @param string $filePath
-	 * @param mixed $arFile
-	 * @return bool
-	*/
-	abstract public function SaveFile($arBucket, $filePath, $arFile);
-	/**
-	 * @param array[string]string $arBucket
-	 * @param string $filePath
-	 * @param bool $bRecursive
-	 * @return array[string][int]string
-	*/
-	abstract public function ListFiles($arBucket, $filePath, $bRecursive = false);
-	/**
-	 * @param array[string]string $arBucket
-	 * @param mixed $NS
+	 * @param mixed & $NS
 	 * @param string $filePath
 	 * @param float $fileSize
 	 * @param string $ContentType
@@ -164,38 +198,94 @@ abstract class CCloudStorageService
 	abstract public function GetMinUploadPartSize();
 	/**
 	 * @param array[string]string $arBucket
-	 * @param mixed $NS
+	 * @param mixed & $NS
 	 * @param string $data
 	 * @return bool
 	*/
 	abstract public function UploadPart($arBucket, &$NS, $data);
 	/**
 	 * @param array[string]string $arBucket
-	 * @param mixed $NS
+	 * @param mixed & $NS
 	 * @return bool
 	*/
 	abstract public function CompleteMultipartUpload($arBucket, &$NS);
+	/**
+	 * @param array[string]string $arBucket
+	 * @param mixed & $NS
+	 * @return bool
+	*/
+	public function CancelMultipartUpload($arBucket, &$NS)
+	{
+	}
 	/**
 	 * @param string $name
 	 * @param string $value
 	 * @return void
 	*/
-	static public function SetHeader($name, $value)
+	public function SetHeader($name, $value)
 	{
 	}
 	/**
 	 * @param string $name
 	 * @return void
 	 */
-	static public function UnsetHeader($name)
+	public function UnsetHeader($name)
 	{
 	}
 	/**
-	 * @param bool $public
+	 * @param bool $state
 	 * @return void
 	 */
-	static public function SetPublic($public)
+	public function SetPublic($state = true)
 	{
 	}
+	/**
+	 * @return array[string]string
+	*/
+	function getHeaders()
+	{
+		return $this->headers;
+	}
+	/**
+	 * @return int
+	*/
+	function GetLastRequestStatus()
+	{
+		return $this->status;
+	}
+	/**
+	 * @param string $headerName
+	 * @return string
+	*/
+	function GetLastRequestHeader($headerName)
+	{
+		$loweredName = mb_strtolower($headerName);
+		foreach ($this->headers as $name => $value)
+		{
+			if (mb_strtolower($name) === $loweredName)
+				return $value;
+		}
+		return null;
+	}
+	/**
+	 * @return CCloudStorageService
+	*/
+	public static function GetObjectInstance()
+	{
+		return new static();
+	}
+
+	public function formatError()
+	{
+		if ($this->errno > 0)
+		{
+			return GetMessage('CLO_STORAGE_HTTP_ERROR', [
+				'#verb#' => $this->verb,
+				'#url#' => $this->url,
+				'#errno#' => $this->errno,
+				'#errstr#' => $this->errstr,
+			]);
+		}
+		return '';
+	}
 }
-?>

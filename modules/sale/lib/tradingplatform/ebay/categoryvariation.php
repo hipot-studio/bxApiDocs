@@ -19,14 +19,25 @@ Loc::loadMessages(__FILE__);
  * <li> MAX_VALUES int mandatory
  * <li> SELECTION_MODE string(255) mandatory
  * <li> ALLOWED_AS_VARIATION string(1) optional
- * <li> DEPENDENCY_NAME string(255) optional
- * <li> DEPENDENCY_VALUE string(255) optional
  * <li> HELP_URL string(255) optional
  * <li> VALUE text optional
  * </ul>
  *
  * @package Bitrix\Sale\TradingPlatform\Ebay
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_CategoryVariation_Query query()
+ * @method static EO_CategoryVariation_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_CategoryVariation_Result getById($id)
+ * @method static EO_CategoryVariation_Result getList(array $parameters = [])
+ * @method static EO_CategoryVariation_Entity getEntity()
+ * @method static \Bitrix\Sale\TradingPlatform\Ebay\EO_CategoryVariation createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\TradingPlatform\Ebay\EO_CategoryVariation_Collection createCollection()
+ * @method static \Bitrix\Sale\TradingPlatform\Ebay\EO_CategoryVariation wakeUpObject($row)
+ * @method static \Bitrix\Sale\TradingPlatform\Ebay\EO_CategoryVariation_Collection wakeUpCollection($rows)
+ */
 
 class CategoryVariationTable extends Entity\DataManager
 {
@@ -62,18 +73,18 @@ class CategoryVariationTable extends Entity\DataManager
 			),
 			'REQUIRED' => array(
 				'data_type' => 'string',
-				'default' => 'N',
+				'default_value' => 'N',
 				'validation' => array(__CLASS__, 'validateRequired'),
 				'title' => Loc::getMessage('TRADING_PLATFORM_EBAY_VARIATION_METADATA_ENTITY_REQUIRED_FIELD'),
 			),
 			'MIN_VALUES' => array(
 				'data_type' => 'integer',
-				'default' => 0,
+				'default_value' => 0,
 				'title' => Loc::getMessage('TRADING_PLATFORM_EBAY_VARIATION_METADATA_ENTITY_MIN_VALUES_FIELD'),
 			),
 			'MAX_VALUES' => array(
 				'data_type' => 'integer',
-				'default' => 1,
+				'default_value' => 1,
 				'title' => Loc::getMessage('TRADING_PLATFORM_EBAY_VARIATION_METADATA_ENTITY_MAX_VALUES_FIELD'),
 			),
 			'SELECTION_MODE' => array(
@@ -86,16 +97,6 @@ class CategoryVariationTable extends Entity\DataManager
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateAllowedAsVariation'),
 				'title' => Loc::getMessage('TRADING_PLATFORM_EBAY_VARIATION_METADATA_ENTITY_ALLOWED_AS_VARIATION_FIELD'),
-			),
-			'DEPENDENCY_NAME' => array(
-				'data_type' => 'string',
-				'validation' => array(__CLASS__, 'validateDependencyName'),
-				'title' => Loc::getMessage('TRADING_PLATFORM_EBAY_VARIATION_METADATA_ENTITY_DEPENDENCY_NAME_FIELD'),
-			),
-			'DEPENDENCY_VALUE' => array(
-				'data_type' => 'string',
-				'validation' => array(__CLASS__, 'validateDependencyValue'),
-				'title' => Loc::getMessage('TRADING_PLATFORM_EBAY_VARIATION_METADATA_ENTITY_DEPENDENCY_VALUE_FIELD'),
 			),
 			'HELP_URL' => array(
 				'data_type' => 'string',
@@ -137,18 +138,6 @@ class CategoryVariationTable extends Entity\DataManager
 	{
 		return array(
 			new Entity\Validator\Length(null, 1),
-		);
-	}
-	public static function validateDependencyName()
-	{
-		return array(
-			new Entity\Validator\Length(null, 255),
-		);
-	}
-	public static function validateDependencyValue()
-	{
-		return array(
-			new Entity\Validator\Length(null, 255),
 		);
 	}
 	public static function validateHelpUrl()

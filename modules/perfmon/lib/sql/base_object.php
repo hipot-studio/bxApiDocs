@@ -20,7 +20,7 @@ abstract class BaseObject
 	public function __construct($name = '')
 	{
 		$this->name = (string)$name;
-		$this->ciName = $this->getCompareName($this->name);
+		$this->ciName = static::getCompareName($this->name);
 	}
 
 	/**
@@ -30,19 +30,6 @@ abstract class BaseObject
 	 *
 	 * @return BaseObject
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает исходный код для объекта.</p>
-	*
-	*
-	* @param string $body  Код для <code>body</code>.
-	*
-	* @return \Bitrix\Perfmon\Sql\BaseObject 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/baseobject/setbody.php
-	* @author Bitrix
-	*/
 	public function setBody($body)
 	{
 		$this->body = trim($body);
@@ -58,29 +45,45 @@ abstract class BaseObject
 	 *
 	 * @return BaseObject
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает "родителя" для объекта. Например: таблицу или колонку таблицы.</p> <br>
-	*
-	*
-	* @param mixed $Bitrix  Родительский объект.
-	*
-	* @param Bitri $Perfmon  
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param BaseObject $parent = null 
-	*
-	* @return \Bitrix\Perfmon\Sql\BaseObject 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/baseobject/setparent.php
-	* @author Bitrix
-	*/
 	public function setParent(BaseObject $parent = null)
 	{
 		$this->parent = $parent;
 		return $this;
+	}
+
+	/**
+	 * Returns "unquoted" name of the object.
+	 *
+	 * @param array|string $name Name or array of names to unquote.
+	 *
+	 * @return array|string
+	 */
+	final public function getUnquotedName($name = null)
+	{
+		if ($name === null && $this->name)
+		{
+			return $this->getUnquotedName($this->name);
+		}
+		elseif (is_array($name))
+		{
+			foreach ($name as $key => $value)
+			{
+				$name[$key] = $this->getUnquotedName($value);
+			}
+		}
+		elseif ($name[0] == '`')
+		{
+			$name = trim($name, '`');
+		}
+		elseif ($name[0] == '"')
+		{
+			$name = trim($name, '"');
+		}
+		elseif ($name[0] == '[')
+		{
+			$name = trim($name, '[]');
+		}
+		return $name;
 	}
 
 	/**
@@ -93,13 +96,21 @@ abstract class BaseObject
 	final public function getLowercasedName()
 	{
 		if ($this->name[0] == '`')
+		{
 			return $this->name;
+		}
 		elseif ($this->name[0] == '"')
+		{
 			return $this->name;
+		}
 		elseif ($this->name[0] == '[')
+		{
 			return $this->name;
+		}
 		else
-			return strtolower($this->name);
+		{
+			return mb_strtolower($this->name);
+		}
 	}
 
 	/**
@@ -110,29 +121,31 @@ abstract class BaseObject
 	 * @param string $name Table name.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает "нормализованное" название таблицы. Если название не в кавычках, то оно будет передано в верхнем регистре.</p> <br>
-	*
-	*
-	* @param string $name  Название таблицы.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/baseobject/getcomparename.php
-	* @author Bitrix
-	*/
 	final public static function getCompareName($name)
 	{
-		if ($name[0] == '`')
-			return $name;
-		elseif ($name[0] == '"')
-			return $name;
-		elseif ($name[0] == '[')
-			return $name;
+		if ($name)
+		{
+			if ($name[0] == '`')
+			{
+				return substr($name, 1, -1);
+			}
+			elseif ($name[0] == '"')
+			{
+				return substr($name, 1, -1);
+			}
+			elseif ($name[0] == '[')
+			{
+				return substr($name, 1, -1);
+			}
+			else
+			{
+				return mb_strtoupper($name);
+			}
+		}
 		else
-			return strtoupper($name);
+		{
+			return $name;
+		}
 	}
 
 	/**
@@ -144,22 +157,9 @@ abstract class BaseObject
 	 * @return int
 	 * @see strcmp
 	 */
-	
-	/**
-	* <p>Нестатический метод сравнивает имя таблицы с данным. Если название не взято в кавычки, то регистр не учитывается.</p> <br>
-	*
-	*
-	* @param string $name  Имя сравниваемой таблицы.
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/baseobject/comparename.php
-	* @author Bitrix
-	*/
 	final public function compareName($name)
 	{
-		return strcmp($this->ciName, $this->getCompareName($name));
+		return strcmp($this->ciName, static::getCompareName($name));
 	}
 
 	/**
@@ -169,22 +169,9 @@ abstract class BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL или комментарий для создания объекта.</p>
-	*
-	*
-	* @param string $dbType = '' Тип базы данных.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/baseobject/getcreateddl.php
-	* @author Bitrix
-	*/
-	static public function getCreateDdl($dbType = '')
+	public function getCreateDdl($dbType = '')
 	{
-		return "// ".get_class($this).":getCreateDdl not implemented";
+		return '// ' . get_class($this) . ':getCreateDdl not implemented';
 	}
 
 	/**
@@ -194,22 +181,9 @@ abstract class BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL или комментарий для удаления объекта.</p>
-	*
-	*
-	* @param string $dbType = '' Тип базы данных.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/baseobject/getdropddl.php
-	* @author Bitrix
-	*/
-	static public function getDropDdl($dbType = '')
+	public function getDropDdl($dbType = '')
 	{
-		return "// ".get_class($this).":getDropDdl not implemented";
+		return '// ' . get_class($this) . ':getDropDdl not implemented';
 	}
 
 	/**
@@ -220,29 +194,8 @@ abstract class BaseObject
 	 *
 	 * @return array|string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает DDL или комментарий для изменения объекта.</p>
-	*
-	*
-	* @param mixed $Bitrix  Целевой объект.
-	*
-	* @param Bitri $Perfmon  Тип базы данных.
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param BaseObject $target  
-	*
-	* @param string $dbType = '' 
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/baseobject/getmodifyddl.php
-	* @author Bitrix
-	*/
-	static public function getModifyDdl(BaseObject $target, $dbType = '')
+	public function getModifyDdl(BaseObject $target, $dbType = '')
 	{
-		return "// ".get_class($this).":getModifyDdl not implemented";
+		return '// ' . get_class($this) . ':getModifyDdl not implemented';
 	}
 }

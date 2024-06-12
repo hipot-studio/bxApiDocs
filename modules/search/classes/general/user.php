@@ -4,7 +4,7 @@ class CSearchUser
 {
 	protected $_user_id;
 
-	public function __construct($user_id)
+	function __construct($user_id)
 	{
 		$this->_user_id = intval($user_id);
 	}
@@ -51,7 +51,7 @@ class CSearchUser
 		}
 	}
 
-	public function IsGroupsExists()
+	function IsGroupsExists()
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$rs = $DB->Query($DB->TopSql("
@@ -61,7 +61,7 @@ class CSearchUser
 		return is_array($rs->Fetch());
 	}
 
-	public function DeleteGroups()
+	function DeleteGroups()
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$DB->Query("
@@ -70,7 +70,7 @@ class CSearchUser
 		", false, "File: ".__FILE__."<br>Line: ".__LINE__);
 	}
 
-	public function AddGroups($arGroups)
+	function AddGroups($arGroups)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 
@@ -92,7 +92,7 @@ class CSearchUser
 		}
 	}
 
-	public function SetGroups($arGroups)
+	function SetGroups($arGroups)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$dbCodes = $DB->Query("

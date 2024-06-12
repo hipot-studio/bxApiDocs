@@ -215,8 +215,8 @@ class CIBlockParameters
 					"ONCLICK" => "$action_function('#IBLOCK_CODE#', '$menuID', '$inputID')",
 				),
 				array(
-					"TEXT" => Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID"),
-					"TITLE" => "#IBLOCK_EXTERNAL_ID# - ".Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID"),
+					"TEXT" => Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID_MSGVER_1"),
+					"TITLE" => "#IBLOCK_EXTERNAL_ID# - ".Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID_MSGVER_1"),
 					"ONCLICK" => "$action_function('#IBLOCK_EXTERNAL_ID#', '$menuID', '$inputID')",
 				),
 				array("SEPARATOR" => true),
@@ -257,8 +257,8 @@ class CIBlockParameters
 					"ONCLICK" => "$action_function('#ELEMENT_CODE#', '$menuID', '$inputID')",
 				),
 				array(
-					"TEXT" => Loc::getMessage("IB_COMPLIB_POPUP_ELEMENT_EXTERNAL_ID"),
-					"TITLE" => "#EXTERNAL_ID# - ".Loc::getMessage("IB_COMPLIB_POPUP_ELEMENT_EXTERNAL_ID"),
+					"TEXT" => Loc::getMessage("IB_COMPLIB_POPUP_ELEMENT_EXTERNAL_ID_MSGVER_1"),
+					"TITLE" => "#EXTERNAL_ID# - ".Loc::getMessage("IB_COMPLIB_POPUP_ELEMENT_EXTERNAL_ID_MSGVER_1"),
 					"ONCLICK" => "$action_function('#EXTERNAL_ID#', '$menuID', '$inputID')",
 				),
 			);
@@ -291,8 +291,8 @@ class CIBlockParameters
 					"ONCLICK" => "$action_function('#IBLOCK_CODE#', '$menuID', '$inputID')",
 				),
 				array(
-					"TEXT" => Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID"),
-					"TITLE" => "#IBLOCK_EXTERNAL_ID# - ".Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID"),
+					"TEXT" => Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID_MSGVER_1"),
+					"TITLE" => "#IBLOCK_EXTERNAL_ID# - ".Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID_MSGVER_1"),
 					"ONCLICK" => "$action_function('#IBLOCK_EXTERNAL_ID#', '$menuID', '$inputID')",
 				),
 				array("SEPARATOR" => true),
@@ -322,8 +322,8 @@ class CIBlockParameters
 					"ONCLICK" => "$action_function('#SECTION_CODE_PATH#', '$menuID', '$inputID')",
 				),
 				array(
-					"TEXT" => Loc::getMessage("IB_COMPLIB_POPUP_SECTION_EXTERNAL_ID"),
-					"TITLE"=>"#EXTERNAL_ID# - ".Loc::getMessage("IB_COMPLIB_POPUP_SECTION_EXTERNAL_ID"),
+					"TEXT" => Loc::getMessage("IB_COMPLIB_POPUP_SECTION_EXTERNAL_ID_MSGVER_1"),
+					"TITLE"=>"#EXTERNAL_ID# - ".Loc::getMessage("IB_COMPLIB_POPUP_SECTION_EXTERNAL_ID_MSGVER_1"),
 					"ONCLICK" => "$action_function('#EXTERNAL_ID#', '$menuID', '$inputID')",
 				),
 			);
@@ -356,8 +356,8 @@ class CIBlockParameters
 					"ONCLICK" => "$action_function('#IBLOCK_CODE#', '$menuID', '$inputID')",
 				),
 				array(
-					"TEXT" => Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID"),
-					"TITLE" => "#IBLOCK_EXTERNAL_ID# - ".Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID"),
+					"TEXT" => Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID_MSGVER_1"),
+					"TITLE" => "#IBLOCK_EXTERNAL_ID# - ".Loc::getMessage("IB_COMPLIB_POPUP_IBLOCK_EXTERNAL_ID_MSGVER_1"),
 					"ONCLICK" => "$action_function('#IBLOCK_EXTERNAL_ID#', '$menuID', '$inputID')",
 				),
 			);
@@ -399,11 +399,11 @@ class CIBlockParameters
 			$arProperty = $USER_FIELD_MANAGER->GetUserFields("IBLOCK_".$iblock_id."_SECTION");
 			foreach($arProperty as $property)
 			{
-				if ($property["PROPERTY_TYPE"] != "F")
+				if (isset($property['USER_TYPE']['BASE_TYPE']) && $property['USER_TYPE']['BASE_TYPE'] !== \Bitrix\Main\UserField\Types\FileType::USER_TYPE_ID)
 				{
 					$result["properties"]["MENU"][] = array(
 						"TEXT" => $property["FIELD_NAME"],
-						"ONCLICK" => "$action_function('{=this.property.".strtolower(substr($property["FIELD_NAME"], 3))."}', '$menuID', '$inputID')",
+						"ONCLICK" => "$action_function('{=this.property.".mb_strtolower(mb_substr($property["FIELD_NAME"], 3))."}', '$menuID', '$inputID')",
 					);
 				}
 			}
@@ -902,7 +902,7 @@ class CIBlockParameters
 			);
 		}
 
-		if ($arCurrentValues["SHOW_404"] === "Y")
+		if (isset($arCurrentValues["SHOW_404"]) && $arCurrentValues["SHOW_404"] === "Y")
 		{
 			if ($bPage)
 			{
@@ -1014,27 +1014,6 @@ class CIBlockParameters
 		return $arResult;
 	}
 
-	
-	/**
-	* <p>Проверяет значение параметра. Метод статический.</p>
-	*
-	*
-	* @param  $value  Проверяемое значение
-	*
-	* @return mixed <p>Возвращает <i>true</i>, если значение не может быть приведено к
-	* <i>false</i>.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* $arCodes = array('', 0, 'ARTICUL');
-	* $arCodes = array_filter($arCodes, 'CIBlockParameters::checkParamValues');После этого в $arCodes будет выглядеть так:$arCodes = array(2 =&gt; 'ARTICUL');
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockparameters/checkparamvalues.php
-	* @author Bitrix
-	*/
 	public static function checkParamValues($value)
 	{
 		return ($value !== null && $value !== '' && $value !== false);

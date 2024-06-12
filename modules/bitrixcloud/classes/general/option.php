@@ -1,8 +1,9 @@
 <?php
-abstract class CAllBitrixCloudOption
+class CBitrixCloudOption
 {
-	private $name = "";
+	private $name = '';
 	private $value = /*.(array[string]string).*/ null;
+
 	/**
 	 *
 	 * @param string $name
@@ -13,6 +14,20 @@ abstract class CAllBitrixCloudOption
 	{
 		$this->name = $name;
 	}
+
+	/**
+	 * Fabric method
+	 *
+	 * @param string $name
+	 * @return CBitrixCloudOption
+	 *
+	 */
+	public static function getOption($name)
+	{
+		$ob = new CBitrixCloudOption($name);
+		return $ob;
+	}
+
 	/**
 	 *
 	 * @return array[string]string
@@ -21,20 +36,21 @@ abstract class CAllBitrixCloudOption
 	private function _read_db()
 	{
 		global $DB;
-		$result = /*.(array[string]string).*/ array();
+		$result = /*.(array[string]string).*/ [];
 		$rs = $DB->Query("
 			select PARAM_KEY, PARAM_VALUE
 			from b_bitrixcloud_option
-			where NAME = '".$DB->ForSQL($this->name)."'
+			where NAME = '" . $DB->ForSQL($this->name) . "'
 			order by SORT
 		");
 		while (is_array($ar = $rs->Fetch()))
 		{
-			$key = $ar["PARAM_KEY"];
-			$result[$key] = $ar["PARAM_VALUE"];
+			$key = $ar['PARAM_KEY'];
+			$result[$key] = $ar['PARAM_VALUE'];
 		}
 		return $result;
 	}
+
 	/**
 	 *
 	 * @return array[string][string]string
@@ -43,20 +59,21 @@ abstract class CAllBitrixCloudOption
 	private function _read_all_db()
 	{
 		global $DB;
-		$result = /*.(array[string][string]string).*/ array();
-		$rs = $DB->Query("
+		$result = /*.(array[string][string]string).*/ [];
+		$rs = $DB->Query('
 			select NAME, PARAM_KEY, PARAM_VALUE
 			from b_bitrixcloud_option
 			order by NAME, SORT
-		");
+		');
 		while (is_array($ar = $rs->Fetch()))
 		{
-			$name = $ar["NAME"];
-			$key = $ar["PARAM_KEY"];
-			$result[$name][$key] = $ar["PARAM_VALUE"];
+			$name = $ar['NAME'];
+			$key = $ar['PARAM_KEY'];
+			$result[$name][$key] = $ar['PARAM_VALUE'];
 		}
 		return $result;
 	}
+
 	/**
 	 *
 	 * @return void
@@ -68,9 +85,10 @@ abstract class CAllBitrixCloudOption
 		$DB->Query("
 			delete
 			from b_bitrixcloud_option
-			where NAME = '".$DB->ForSQL($this->name)."'
+			where NAME = '" . $DB->ForSQL($this->name) . "'
 		");
 	}
+
 	/**
 	 *
 	 * @param array[string]string $value
@@ -85,16 +103,17 @@ abstract class CAllBitrixCloudOption
 			$sort = 0;
 			foreach ($value as $key => $val)
 			{
-				$DB->Add("b_bitrixcloud_option", array(
-					"NAME" => $this->name,
-					"SORT" => (string)$sort,
-					"PARAM_KEY" => $key,
-					"PARAM_VALUE" => $val,
-				));
+				$DB->Add('b_bitrixcloud_option', [
+					'NAME' => $this->name,
+					'SORT' => (string)$sort,
+					'PARAM_KEY' => $key,
+					'PARAM_VALUE' => $val,
+				]);
 				$sort++;
 			}
 		}
 	}
+
 	/**
 	 *
 	 * @param array[string]string $value
@@ -105,44 +124,46 @@ abstract class CAllBitrixCloudOption
 	{
 		global $DB;
 		if (!is_array($value))
-			$value = array();
+		{
+			$value = [];
+		}
 
 		reset($value);
 		$rs = $DB->Query("
 			select ID, SORT, PARAM_KEY, PARAM_VALUE
 			from b_bitrixcloud_option
-			where NAME = '".$DB->ForSQL($this->name)."'
+			where NAME = '" . $DB->ForSQL($this->name) . "'
 			order by ID
 		");
 
 		$sort = 0;
-		while (list($key, $val) = each($value))
+		foreach ($value as $key => $val)
 		{
 			if ($db_row = $rs->fetch())
 			{
 				if (
-					"".$db_row["PARAM_VALUE"]."" !== "".$val.""
-					|| "".$db_row["PARAM_KEY"]."" !== "".$key.""
-					|| "".$db_row["SORT"]."" !== "".$sort.""
+					(string)$db_row['PARAM_VALUE'] !== (string)$val
+					|| (string)$db_row['PARAM_KEY'] !== (string)$key
+					|| (string)$db_row['SORT'] !== (string)$sort
 				)
 				{
 					$DB->Query("
 						UPDATE b_bitrixcloud_option SET
-							PARAM_KEY = '".$DB->ForSql($key, 50)."'
-							,PARAM_VALUE = '".$DB->ForSql($val, 200)."'
-							,SORT = ".$sort."
-						WHERE ID = ".$db_row["ID"]."
-					");
+							PARAM_KEY = '" . $DB->ForSql($key, 50) . "'
+							,PARAM_VALUE = '" . $DB->ForSql($val, 200) . "'
+							,SORT = " . $sort . '
+						WHERE ID = ' . $db_row['ID'] . '
+					');
 				}
 			}
 			else
 			{
-				$DB->Add("b_bitrixcloud_option", array(
-					"NAME" => $this->name,
-					"SORT" => (string)$sort,
-					"PARAM_KEY" => $key,
-					"PARAM_VALUE" => $val,
-				));
+				$DB->Add('b_bitrixcloud_option', [
+					'NAME' => $this->name,
+					'SORT' => (string)$sort,
+					'PARAM_KEY' => $key,
+					'PARAM_VALUE' => $val,
+				]);
 			}
 			$sort++;
 		}
@@ -151,11 +172,22 @@ abstract class CAllBitrixCloudOption
 		{
 			$DB->Query("
 				DELETE FROM b_bitrixcloud_option
-				WHERE NAME = '".$DB->ForSql($this->name, 50)."'
-				AND ID >= ".$db_row["ID"]."
-			");
+				WHERE NAME = '" . $DB->ForSql($this->name, 50) . "'
+				AND ID >= " . $db_row['ID'] . '
+			');
 		}
 	}
+
+	/**
+	 *
+	 * @return bool
+	 *
+	 */
+	public function isExists()
+	{
+		return (count($this->_read_db()) > 0);
+	}
+
 	/**
 	 *
 	 * @return array[string]string
@@ -164,8 +196,10 @@ abstract class CAllBitrixCloudOption
 	public function getArrayValue()
 	{
 		global $CACHE_MANAGER;
-		if (strlen($this->name) <= 0)
-			return /*.(array[string]string).*/ array();
+		if ($this->name === '')
+		{
+			return /*.(array[string]string).*/ [];
+		}
 
 		if (!isset($this->value))
 		{
@@ -175,23 +209,28 @@ abstract class CAllBitrixCloudOption
 			}
 			else
 			{
-				if (!$CACHE_MANAGER->Read(CACHED_b_bitrixcloud_option, "b_bitrixcloud_option"))
+				if (!$CACHE_MANAGER->Read(CACHED_b_bitrixcloud_option, 'b_bitrixcloud_option'))
 				{
 					$arOptions = $this->_read_all_db();
-					$CACHE_MANAGER->Set("b_bitrixcloud_option", $arOptions);
+					$CACHE_MANAGER->Set('b_bitrixcloud_option', $arOptions);
 				}
 				else
 				{
-					$arOptions = $CACHE_MANAGER->Get("b_bitrixcloud_option");
+					$arOptions = $CACHE_MANAGER->Get('b_bitrixcloud_option');
 				}
 				if (array_key_exists($this->name, $arOptions))
+				{
 					$this->value = $arOptions[$this->name];
+				}
 				else
-					$this->value = /*.(array[string]string).*/ array();
+				{
+					$this->value = /*.(array[string]string).*/ [];
+				}
 			}
 		}
 		return $this->value;
 	}
+
 	/**
 	 *
 	 * @return string
@@ -202,6 +241,7 @@ abstract class CAllBitrixCloudOption
 		$value = $this->getArrayValue();
 		return (string)current($value);
 	}
+
 	/**
 	 *
 	 * @return int
@@ -212,6 +252,7 @@ abstract class CAllBitrixCloudOption
 		$value = $this->getArrayValue();
 		return (integer)current($value);
 	}
+
 	/**
 	 * @param array[string]string $value
 	 * @return void
@@ -220,7 +261,7 @@ abstract class CAllBitrixCloudOption
 	public function setArrayValue($value)
 	{
 		global $CACHE_MANAGER;
-		if (strlen($this->name) > 0)
+		if ($this->name !== '')
 		{
 			$stored = $this->getArrayValue();
 			if ($stored !== $value)
@@ -228,10 +269,13 @@ abstract class CAllBitrixCloudOption
 				$this->value = null;
 				$this->_update_db($value);
 				if (CACHED_b_bitrixcloud_option !== false)
-					$CACHE_MANAGER->Clean("b_bitrixcloud_option");
+				{
+					$CACHE_MANAGER->Clean('b_bitrixcloud_option');
+				}
 			}
 		}
 	}
+
 	/**
 	 * @param string $value
 	 * @return void
@@ -239,16 +283,17 @@ abstract class CAllBitrixCloudOption
 	 */
 	public function setStringValue($value)
 	{
-		$this->setArrayValue(array(
-			"0" => $value,
-		));
+		$this->setArrayValue([
+			'0' => $value,
+		]);
 	}
+
 	/**
 	 * @return void
 	 *
 	 */
 	public function delete()
 	{
-		$this->setArrayValue(/*.(array[string]string).*/ array());
+		$this->setArrayValue(/*.(array[string]string).*/ []);
 	}
 }

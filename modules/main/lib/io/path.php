@@ -15,6 +15,9 @@ class Path
 
 	const INVALID_FILENAME_CHARS = "\\/:*?\"'<>|~#&;";
 
+	//the pattern should be quoted, "|" is allowed below as a delimiter
+	const INVALID_FILENAME_BYTES = "\xE2\x80\xAE"; //Right-to-Left Override Unicode Character
+
 	protected static $physicalEncoding = "";
 	protected static $logicalEncoding = "";
 
@@ -71,7 +74,7 @@ class Path
 
 		$pathTmp = rtrim($pathTmp, $tailPattern);
 
-		if (substr($path, 0, 1) === "/" && substr($pathTmp, 0, 1) !== "/")
+		if (mb_substr($path, 0, 1) === "/" && mb_substr($pathTmp, 0, 1) !== "/")
 			$pathTmp = "/".$pathTmp;
 
 		if ($pathTmp === '')
@@ -80,19 +83,6 @@ class Path
 		return $pathTmp;
 	}
 
-	
-	/**
-	* <p>Статический метод принимает путь и возвращает расширение файла.</p>
-	*
-	*
-	* @param string $path  Путь к файлу
-	*
-	* @return resource 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/io/path/getextension.php
-	* @author Bitrix
-	*/
 	public static function getExtension($path)
 	{
 		$path = self::getName($path);
@@ -100,51 +90,25 @@ class Path
 		{
 			$pos = Text\UtfSafeString::getLastPosition($path, '.');
 			if ($pos !== false)
-				return substr($path, $pos + 1);
+				return mb_substr($path, $pos + 1);
 		}
 		return '';
 	}
 
-	
-	/**
-	* <p>Статический метод принимает путь и возвращает имя файла, включая расширение.</p>
-	*
-	*
-	* @param string $path  Путь к файлу
-	*
-	* @return resource 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/io/path/getname.php
-	* @author Bitrix
-	*/
 	public static function getName($path)
 	{
 		//$path = self::normalize($path);
 
 		$p = Text\UtfSafeString::getLastPosition($path, self::DIRECTORY_SEPARATOR);
 		if ($p !== false)
-			return substr($path, $p + 1);
+			return mb_substr($path, $p + 1);
 
 		return $path;
 	}
 
-	
-	/**
-	* <p>Статический метод принимает путь и возвращает путь без имени файла.</p>
-	*
-	*
-	* @param string $path  Путь к файлу
-	*
-	* @return resource 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/io/path/getdirectory.php
-	* @author Bitrix
-	*/
 	public static function getDirectory($path)
 	{
-		return substr($path, 0, -strlen(self::getName($path)) - 1);
+		return mb_substr($path, 0, -mb_strlen(self::getName($path)) - 1);
 	}
 
 	public static function convertLogicalToPhysical($path)
@@ -209,20 +173,36 @@ class Path
 		return implode('/', array_map("rawurlencode", explode('/', $path)));
 	}
 
+	public static function convertUriToPhysical($path)
+	{
+		if (self::$physicalEncoding == "")
+			self::$physicalEncoding = self::getPhysicalEncoding();
+
+		if (self::$directoryIndex == null)
+			self::$directoryIndex = self::getDirectoryIndexArray();
+
+		$path = implode('/', array_map("rawurldecode", explode('/', $path)));
+
+		if ('utf-8' !== self::$physicalEncoding)
+			$path = Text\Encoding::convertEncoding($path, 'utf-8', self::$physicalEncoding);
+
+		return $path;
+	}
+
 	protected static function getLogicalEncoding()
 	{
 		if (defined('BX_UTF'))
 			$logicalEncoding = "utf-8";
-		elseif (defined("SITE_CHARSET") && (strlen(SITE_CHARSET) > 0))
+		elseif (defined("SITE_CHARSET") && (SITE_CHARSET <> ''))
 			$logicalEncoding = SITE_CHARSET;
-		elseif (defined("LANG_CHARSET") && (strlen(LANG_CHARSET) > 0))
+		elseif (defined("LANG_CHARSET") && (LANG_CHARSET <> ''))
 			$logicalEncoding = LANG_CHARSET;
 		elseif (defined("BX_DEFAULT_CHARSET"))
 			$logicalEncoding = BX_DEFAULT_CHARSET;
 		else
 			$logicalEncoding = "windows-1251";
 
-		return strtolower($logicalEncoding);
+		return mb_strtolower($logicalEncoding);
 	}
 
 	protected static function getPhysicalEncoding()
@@ -230,12 +210,12 @@ class Path
 		$physicalEncoding = defined("BX_FILE_SYSTEM_ENCODING") ? BX_FILE_SYSTEM_ENCODING : "";
 		if ($physicalEncoding == "")
 		{
-			if (strtoupper(substr(PHP_OS, 0, 3)) === "WIN")
+			if (mb_strtoupper(mb_substr(PHP_OS, 0, 3)) === "WIN")
 				$physicalEncoding = "windows-1251";
 			else
 				$physicalEncoding = "utf-8";
 		}
-		return strtolower($physicalEncoding);
+		return mb_strtolower($physicalEncoding);
 	}
 
 	public static function combine()
@@ -302,75 +282,82 @@ class Path
 		return self::combine($basePath, $relativePath);
 	}
 
-	
-	/**
-	* <p>Статический метод проверяет валиден ли путь.</p>
-	*
-	*
-	* @param string $path  Путь к файлу
-	*
-	* @return resource 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/io/path/validate.php
-	* @author Bitrix
-	*/
-	public static function validate($path)
+	protected static function validateCommon($path)
 	{
 		if (!is_string($path))
+		{
 			return false;
+		}
 
-		$p = trim($path);
-		if ($p == "")
+		if (trim($path) == "")
+		{
 			return false;
+		}
 
 		if (strpos($path, "\0") !== false)
+		{
 			return false;
+		}
+
+		if(preg_match("#(".self::INVALID_FILENAME_BYTES.")#", $path))
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	public static function validate($path)
+	{
+		if(!static::validateCommon($path))
+		{
+			return false;
+		}
 
 		return (preg_match("#^([a-z]:)?/([^\x01-\x1F".preg_quote(self::INVALID_FILENAME_CHARS, "#")."]+/?)*$#isD", $path) > 0);
 	}
 
-	
-	/**
-	* <p>Статический метод проверяет правильно ли имя файла.</p>
-	*
-	*
-	* @param string $filename  Имя файла.
-	*
-	* @return resource 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/io/path/validatefilename.php
-	* @author Bitrix
-	*/
 	public static function validateFilename($filename)
 	{
-		if (!is_string($filename))
+		if(!static::validateCommon($filename))
+		{
 			return false;
-
-		$fn = trim($filename);
-		if ($fn == "")
-			return false;
-
-		if (strpos($filename, "\0") !== false)
-			return false;
+		}
 
 		return (preg_match("#^[^\x01-\x1F".preg_quote(self::INVALID_FILENAME_CHARS, "#")."]+$#isD", $filename) > 0);
 	}
 
-	public static function randomizeInvalidFilename($filename)
+	/**
+	 * @param string $filename
+	 * @param callable $callback
+	 * @return string
+	 */
+	public static function replaceInvalidFilename($filename, $callback)
 	{
-		return preg_replace_callback("#([\x01-\x1F".preg_quote(self::INVALID_FILENAME_CHARS, "#")."])#", '\Bitrix\Main\IO\Path::getRandomChar', $filename);
+		return preg_replace_callback(
+			"#([\x01-\x1F".preg_quote(self::INVALID_FILENAME_CHARS, "#")."]|".self::INVALID_FILENAME_BYTES.")#",
+			$callback,
+			$filename
+		);
 	}
 
-	public static function getRandomChar()
+	/**
+	 * @param string $filename
+	 * @return string
+	 */
+	public static function randomizeInvalidFilename($filename)
 	{
-		return chr(rand(97, 122));
+		return static::replaceInvalidFilename($filename,
+			function()
+			{
+				return chr(rand(97, 122));
+			}
+		);
 	}
 
 	public static function isAbsolute($path)
 	{
-		return (substr($path, 0, 1) === "/") || preg_match("#^[a-z]:/#i", $path);
+		return (mb_substr($path, 0, 1) === "/") || preg_match("#^[a-z]:/#i", $path);
 	}
 
 	protected static function getDirectoryIndexArray()

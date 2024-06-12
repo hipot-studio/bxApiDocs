@@ -1,4 +1,5 @@
-<?
+<?php
+
 class CAllPullWatch
 {
 	const bucket_size = 100;
@@ -11,7 +12,7 @@ class CAllPullWatch
 		global $DB, $CACHE_MANAGER;
 
 		$userId = intval($userId);
-		if ($userId == 0 || strlen($tag) <= 0)
+		if ($userId == 0 || $tag == '')
 			return false;
 
 		$arResult = $CACHE_MANAGER->Read(3600, $cache_id="b_pw_".$userId, "b_pull_watch");
@@ -22,12 +23,12 @@ class CAllPullWatch
 		{
 			CTimeZone::Disable();
 			$strSql = "
-					SELECT ID, USER_ID, TAG, ".$DB->DatetimeToTimestampFunction("DATE_CREATE")." DATE_CREATE
+					SELECT ID, USER_ID, TAG, ".$DB->DatetimeToTimestampFunction("DATE_CREATE")." AS DATE_CREATE
 					FROM b_pull_watch
 					WHERE USER_ID = ".intval($userId)."
 			";
 			CTimeZone::Enable();
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			while ($arRes = $dbRes->Fetch())
 				$arResult[$arRes["TAG"]] = $arRes;
 
@@ -50,7 +51,7 @@ class CAllPullWatch
 
 		self::$arInsert[trim($tag)] = trim($tag);
 
-		if ($immediate)
+		if ($immediate || defined('BX_CHECK_AGENT_START') && !defined('BX_WITH_ON_AFTER_EPILOG'))
 		{
 			self::DeferredSql($userId);
 		}
@@ -64,23 +65,32 @@ class CAllPullWatch
 		if (empty(self::$arUpdate) && empty(self::$arInsert))
 			return false;
 
-		if (defined('PULL_USER_ID'))
+		$userId = intval($userId);
+		if (!$userId)
 		{
-			$userId = PULL_USER_ID;
+			if (defined('PULL_USER_ID'))
+			{
+				$userId = PULL_USER_ID;
+			}
+			else if (is_object($GLOBALS['USER']) && $GLOBALS['USER']->GetID() > 0)
+			{
+				$userId = $GLOBALS['USER']->GetId();
+			}
+			else if (intval($_SESSION["SESS_SEARCHER_ID"]) <= 0 && intval($_SESSION["SESS_GUEST_ID"]) > 0 && \CPullOptions::GetGuestStatus())
+			{
+				$userId = intval($_SESSION["SESS_GUEST_ID"])*-1;
+			}
 		}
-		else if ($GLOBALS['USER'] && $GLOBALS['USER']->GetID() > 0)
+		if ($userId === 0)
 		{
-			$userId = $GLOBALS['USER']->GetId();
-		}
-		else if (IsModuleInstalled('statistic') && intval($_SESSION["SESS_SEARCHER_ID"]) <= 0 && intval($_SESSION["SESS_GUEST_ID"]) > 0 && COption::GetOptionString("pull", "guest") == 'Y')
-		{
-			$userId = intval($_SESSION["SESS_GUEST_ID"])*-1;
+			return false;
 		}
 
-		if ($userId === 0)
-			return false;
-		
 		$arChannel = CPullChannel::Get($userId);
+		if (!$arChannel)
+		{
+			return false;
+		}
 		if (!empty(self::$arUpdate))
 		{
 			$DB->Query("
@@ -90,8 +100,7 @@ class CAllPullWatch
 			");
 		}
 
-		$dbType = strtolower($DB->type);
-		if ($dbType == "mysql")
+		if ($DB->type == "MYSQL")
 		{
 			if (!empty(self::$arInsert))
 			{
@@ -102,15 +111,15 @@ class CAllPullWatch
 				foreach(self::$arInsert as $tag)
 				{
 					$strSqlValues .= ",\n(".intval($userId).", '".$DB->ForSql($arChannel['CHANNEL_ID'])."', '".$DB->ForSql($tag)."', ".$DB->CurrentTimeFunction().")";
-					if(strlen($strSqlValues) > $maxValuesLen)
+					if(mb_strlen($strSqlValues) > $maxValuesLen)
 					{
-						$DB->Query($strSqlPrefix.substr($strSqlValues, 2));
+						$DB->Query($strSqlPrefix.mb_substr($strSqlValues, 2));
 						$strSqlValues = "";
 					}
 				}
-				if(strlen($strSqlValues) > 0)
+				if($strSqlValues <> '')
 				{
-					$DB->Query($strSqlPrefix.substr($strSqlValues, 2));
+					$DB->Query($strSqlPrefix.mb_substr($strSqlValues, 2));
 				}
 			}
 		}
@@ -133,85 +142,105 @@ class CAllPullWatch
 		global $DB, $CACHE_MANAGER;
 
 		$strSql = "DELETE FROM b_pull_watch WHERE USER_ID = ".intval($userId).(!is_null($tag)? " AND TAG = '".$DB->ForSQL($tag)."'": "");
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$CACHE_MANAGER->Clean("b_pw_".$userId, "b_pull_watch");
 
 		return true;
 	}
 
-	public static function Extend($userId, $tag)
+	public static function Extend($userId, $tags)
 	{
 		global $DB, $CACHE_MANAGER;
 
-		if (intval($userId) == 0 || strlen($tag) <= 0)
+		if (intval($userId) == 0)
+		{
 			return false;
-
-		$result = false;
-		$strSql = "SELECT ID FROM b_pull_watch WHERE USER_ID = ".intval($userId)." AND TAG = '".$DB->ForSQL($tag)."'";
-		$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-		if ($arRes = $dbRes->Fetch())
-		{
-			$ID = $arRes['ID'];
-			$arChannel = CPullChannel::Get($userId);
-			$DB->Query("UPDATE b_pull_watch SET DATE_CREATE = ".$DB->CurrentTimeFunction().", CHANNEL_ID = '".$DB->ForSQL($arChannel['CHANNEL_ID'])."' WHERE ID = ".$ID);
-			$CACHE_MANAGER->Clean("b_pw_".$userId, "b_pull_watch");
-			$result = true;
-		}
-		return $result;
-
-	}
-
-	public static function AddToStack($tag, $arMessage)
-	{
-		global $DB;
-
-		$arPush = Array();
-		if (isset($arMessage['push']))
-		{
-			$arPush = $arMessage['push'];
-			unset($arMessage['push']);
 		}
 
-		$channels = Array();
-		$strSql = "
-				SELECT pc.CHANNEL_ID, pc.USER_ID
-				FROM b_pull_watch pw
-				LEFT JOIN b_pull_channel pc ON pw.USER_ID = pc.USER_ID
-				WHERE pw.TAG = '".$DB->ForSQL($tag)."'
-		";
-		$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		if (is_array($tags))
+		{
+			$isMulti = true;
+			$searchTag = '';
+			if (empty($tags))
+			{
+				return false;
+			}
+		}
+		else
+		{
+			$isMulti = false;
+			$searchTag = trim($tags);
+			if ($searchTag == '')
+			{
+				return false;
+			}
+			else
+			{
+				$tags = Array($searchTag);
+			}
+		}
+
+		$result = Array();
+		foreach ($tags as $id => $tag)
+		{
+			$result[$tag] = false;
+			$tags[$id] = $DB->ForSQL($tag);
+		}
+
+		$updateIds = Array();
+		$strSql = "SELECT ID, TAG FROM b_pull_watch WHERE USER_ID = ".intval($userId)." AND TAG IN ('".implode("', '", $tags)."')";
+		$dbRes = $DB->Query($strSql);
 		while ($arRes = $dbRes->Fetch())
 		{
-			$channels[$arRes['USER_ID']] = $arRes['CHANNEL_ID'];
+			$updateIds[] = $arRes['ID'];
+			$result[$arRes['TAG']] = true;
 		}
 
-		$result = CPullStack::AddByChannel($channels, $arMessage);
-		if ($result && !empty($arPush) && (isset($arPush['advanced_params']) || isset($arPush['message']) && strlen($arPush['message']) > 0))
+		if ($updateIds)
 		{
-			$CPushManager = new CPushManager();
+			$DB->Query("UPDATE b_pull_watch SET DATE_CREATE = ".$DB->CurrentTimeFunction()." WHERE ID IN (".implode(', ', $updateIds).")");
+			$CACHE_MANAGER->Clean("b_pw_".$userId, "b_pull_watch");
+		}
 
-			$pushUsers = Array();
-			foreach ($channels as $userId => $channelId)
-			{
-				if (isset($arPush['skip_users']) && in_array($userId, $arPush['skip_users']))
-					continue;
+		return $isMulti? $result: $result[$searchTag];
+	}
 
-				$pushUsers[] = $userId;
-			}
+	/**
+	 * Sends a message to users, who have subscribed to the tag(s).
+	 *
+	 * @param string|string[] $tag Tag, or array of tags.
+	 * @param array $parameters Message parameters.
+	 * @param string $channelType Type of the channel: \CPullChannel::TYPE_PRIVATE | \CPullChannel::TYPE_SHARED .
+	 * @return bool
+	 */
+	public static function AddToStack($tag, $parameters, $channelType = \CPullChannel::TYPE_PRIVATE)
+	{
+		if (empty($tag))
+		{
+			return false;
+		}
 
-			$CPushManager->AddQueue(Array(
-				'USER_ID' => $pushUsers,
-				'MESSAGE' => str_replace("\n", " ", $arPush['message']),
-				'PARAMS' => $arPush['params'],
-				'ADVANCED_PARAMS' => isset($arPush['advanced_params'])? $arPush['advanced_params']: Array(),
-				'BADGE' => isset($arPush['badge'])? intval($arPush['badge']): '',
-				'SOUND' => isset($arPush['sound'])? $arPush['sound']: '',
-				'TAG' => isset($arPush['tag'])? $arPush['tag']: '',
-				'SUB_TAG' => isset($arPush['sub_tag'])? $arPush['sub_tag']: '',
-				'APP_ID' => isset($arPush['app_id'])? $arPush['app_id']: '',
-				'SEND_IMMEDIATELY' => isset($arPush['send_immediately']) && $arPush['send_immediately'] == 'Y'? 'Y': 'N',
-			));
+		$query = \Bitrix\Pull\Model\WatchTable::query();
+		$query->addSelect('USER_ID');
+		if (is_array($tag))
+		{
+			$query->whereIn('TAG', $tag);
+		}
+		else
+		{
+			$query->where('TAG', $tag);
+		}
+
+		if (isset($parameters['skip_users']) && !empty($parameters['skip_users']) && is_array($parameters['skip_users']))
+		{
+			$query->whereNotIn('USER_ID', $parameters['skip_users']);
+		}
+		$users = array_column($query->fetchAll(), 'USER_ID');
+
+		if (!empty($users))
+		{
+			\Bitrix\Pull\Event::add($users, $parameters, $channelType);
 		}
 
 		return true;
@@ -223,11 +252,10 @@ class CAllPullWatch
 
 		$arUsers = Array();
 		$strSql = "SELECT USER_ID FROM b_pull_watch WHERE TAG = '".$DB->ForSQL($tag)."'";
-		$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbRes = $DB->Query($strSql);
 		while ($arRes = $dbRes->Fetch())
 			$arUsers[$arRes['USER_ID']] = $arRes['USER_ID'];
 
 		return $arUsers;
 	}
 }
-?>

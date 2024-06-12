@@ -6,7 +6,7 @@ use Bitrix\Sale\Payment;
 
 interface IHold
 {
-	static public function cancel(Payment $payment);
+	public function cancel(Payment $payment);
 
-	static public function confirm(Payment $payment);
+	public function confirm(Payment $payment);
 }

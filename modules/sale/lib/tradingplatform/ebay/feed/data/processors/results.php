@@ -12,7 +12,7 @@ class Results extends DataProcessor
 
 	public function __construct($params)
 	{
-		if(!isset($params["SITE_ID"]) || strlen($params["SITE_ID"]) <= 0)
+		if(!isset($params["SITE_ID"]) || $params["SITE_ID"] == '')
 			throw new ArgumentNullException("SITE_ID");
 
 		$this->siteId = $params["SITE_ID"];
@@ -40,7 +40,7 @@ class Results extends DataProcessor
 		if(isset($data["ARRAY"]["ProductResult"]))
 			$message .= $this->getProductsString($data["ARRAY"]["ProductResult"]);
 
-		if(strlen($message) > 0)
+		if($message <> '')
 		{
 			$message = "RequestId: ".$data["ARRAY"]["RequestDetails"]["RequestID"]."\n".
 			"StartTime: ".$data["ARRAY"]["RequestDetails"]["StartTime"]."\n".

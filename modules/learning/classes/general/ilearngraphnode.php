@@ -15,8 +15,8 @@ interface ILearnGraphNode
 	 * WARNING: this method terminates (by die()/exit()) current execution flow
 	 * when SQL server error occured. It's due to bug in CDatabase::Insert() in main
 	 * module (version info:
-	 *    // define("SM_VERSION","11.0.12");
-	 *    // define("SM_VERSION_DATE","2012-02-21 17:00:00"); // YYYY-MM-DD HH:MI:SS
+	 *    define("SM_VERSION","11.0.12");
+	 *    define("SM_VERSION_DATE","2012-02-21 17:00:00"); // YYYY-MM-DD HH:MI:SS
 	 * )
 	 *
 	 * @param array of pairs field => value for new GraphNode. Allowed fields are:
@@ -163,7 +163,7 @@ abstract class CLearnGraphNode implements ILearnGraphNode
 
 			$cacheFieldsToSelect = implode (',', $arFieldsToSelect);
 
-			if ( ! (strlen($cacheFieldsToSelect) > 0) )
+			if ( ! ($cacheFieldsToSelect <> '') )
 				$cacheFieldsToSelect = false;
 		}
 
@@ -201,13 +201,11 @@ abstract class CLearnGraphNode implements ILearnGraphNode
 
 	protected static function _InsertOrUpdate ($arInFields, $mode, $id = false)
 	{
-		global $DB, $USER, $DBType;
+		global $DB, $USER;
 
 		$createdBy = 1;
 		if (is_object($USER) && method_exists($USER, 'getId'))
 			$createdBy = (int) $USER->getId();
-
-		$dbtype = strtolower($DBType);
 
 		switch ($mode)
 		{
@@ -252,45 +250,17 @@ abstract class CLearnGraphNode implements ILearnGraphNode
 		{
 			$arInsert = $DB->PrepareInsert('b_learn_lesson', $arFieldsToDb);
 
-			if ($dbtype === 'oracle')
-			{
-				$newLessonId = intval($DB->NextID('sq_b_learn_lesson'));
+			$strSql =
+				"INSERT INTO b_learn_lesson 
+					(" . $arInsert[0] . ", 
+					TIMESTAMP_X, DATE_CREATE, CREATED_BY) " .
+				"VALUES 
+					(" . $arInsert[1] . ", "
+					. $DB->GetNowFunction() . ", " . $DB->GetNowFunction() . ", " . $createdBy . ")";
 
-				$strSql =
-					"INSERT INTO b_learn_lesson 
-						(ID, " . $arInsert[0] . ", 
-						TIMESTAMP_X, DATE_CREATE, CREATED_BY) " .
-					"VALUES 
-						(" . $newLessonId . ", " . $arInsert[1] . ", " 
-						. $DB->GetNowFunction() . ", " . $DB->GetNowFunction() . ", " . $createdBy . ")";
+			$rc = $DB->Query($strSql, true);
 
-				$arBinds = array();
-
-				if (array_key_exists('PREVIEW_TEXT', $arFieldsToDb))
-					$arBinds['PREVIEW_TEXT'] = $arFieldsToDb['PREVIEW_TEXT'];
-
-				if (array_key_exists('DETAIL_TEXT', $arFieldsToDb))
-					$arBinds['DETAIL_TEXT'] = $arFieldsToDb['DETAIL_TEXT'];
-
-				if (array_key_exists('KEYWORDS', $arFieldsToDb))
-					$arBinds['KEYWORDS'] = $arFieldsToDb['KEYWORDS'];
-
-				$rc = $DB->QueryBind($strSql, $arBinds, true);
-			}
-			elseif (($dbtype === 'mssql') || ($dbtype === 'mysql'))
-			{
-				$strSql =
-					"INSERT INTO b_learn_lesson 
-						(" . $arInsert[0] . ", 
-						TIMESTAMP_X, DATE_CREATE, CREATED_BY) " .
-					"VALUES 
-						(" . $arInsert[1] . ", " 
-						. $DB->GetNowFunction() . ", " . $DB->GetNowFunction() . ", " . $createdBy . ")";
-
-				$rc = $DB->Query($strSql, true);
-
-				$newLessonId = intval($DB->LastID());
-			}
+			$newLessonId = intval($DB->LastID());
 		}
 		else	// update
 		{
@@ -303,25 +273,7 @@ abstract class CLearnGraphNode implements ILearnGraphNode
 					TIMESTAMP_X = " . $DB->GetNowFunction()
 				. " WHERE ID = " . ($id + 0);
 
-			if ($dbtype === 'oracle')
-			{
-				$arBinds = array();
-
-				if (array_key_exists('PREVIEW_TEXT', $arFieldsToDb))
-					$arBinds['PREVIEW_TEXT'] = $arFieldsToDb['PREVIEW_TEXT'];
-
-				if (array_key_exists('DETAIL_TEXT', $arFieldsToDb))
-					$arBinds['DETAIL_TEXT'] = $arFieldsToDb['DETAIL_TEXT'];
-
-				if (array_key_exists('KEYWORDS', $arFieldsToDb))
-					$arBinds['KEYWORDS'] = $arFieldsToDb['KEYWORDS'];
-
-				$rc = $DB->QueryBind($strSql, $arBinds);
-			}
-			elseif (($dbtype === 'mssql') || ($dbtype === 'mysql'))
-			{
-				$rc = $DB->Query($strSql, $bIgnoreErrors = true);
-			}
+			$rc = $DB->Query($strSql, $bIgnoreErrors = true);
 
 			// TIMESTAMP_X - date when data last changed, so update it
 			$arFieldsToDb['TIMESTAMP_X'] = $DB->GetNowFunction();
@@ -367,7 +319,7 @@ abstract class CLearnGraphNode implements ILearnGraphNode
 			)
 			{
 				$error = CFile::CheckImageFile($value);
-				if (strlen($error) > 0)
+				if ($error <> '')
 				{
 					throw new LearnException (
 						'EA_PARAMS: ' . $error, 
@@ -450,7 +402,7 @@ abstract class CLearnGraphNode implements ILearnGraphNode
 		if ($arFileData[$fieldNameInDB] === false)
 			$fileId = NULL;
 		else
-			$fileId = intval ($arFileData[$fieldNameInDB]);
+			$fileId = intval($arFileData[$fieldNameInDB]);
 
 		return ($fileId);
 	}
@@ -471,7 +423,7 @@ abstract class CLearnGraphNode implements ILearnGraphNode
 		foreach ($arFieldsNames as $fieldName)
 		{
 			// Skip checking user fields
-			if (substr($fieldName, 0, 3) === 'UF_')
+			if (mb_substr($fieldName, 0, 3) === 'UF_')
 				continue;
 
 			// Is field exists in DB?
@@ -568,11 +520,11 @@ abstract class CLearnGraphNode implements ILearnGraphNode
 				unset($arFields['PREVIEW_PICTURE']);
 			}
 			else if (
-				(!array_key_exists('name', $arFields['PREVIEW_PICTURE']) || strlen($arFields['PREVIEW_PICTURE']['name']) == 0)
+				(!array_key_exists('name', $arFields['PREVIEW_PICTURE']) || $arFields['PREVIEW_PICTURE']['name'] == '')
 				&&
-				(!array_key_exists('del', $arFields['PREVIEW_PICTURE']) || strlen($arFields['PREVIEW_PICTURE']['del']) == 0)
+				(!array_key_exists('del', $arFields['PREVIEW_PICTURE']) || $arFields['PREVIEW_PICTURE']['del'] == '')
 				&&
-				(!isset($arFields['PREVIEW_PICTURE']['description']) || strlen($arFields['PREVIEW_PICTURE']['description']) == 0)
+				(!isset($arFields['PREVIEW_PICTURE']['description']) || $arFields['PREVIEW_PICTURE']['description'] == '')
 			)
 			{
 				unset($arFields['PREVIEW_PICTURE']);
@@ -610,11 +562,11 @@ abstract class CLearnGraphNode implements ILearnGraphNode
 				unset($arFields['DETAIL_PICTURE']);
 			}
 			elseif (
-				(!array_key_exists('name', $arFields['DETAIL_PICTURE']) || strlen($arFields['DETAIL_PICTURE']['name']) == 0)
+				(!array_key_exists('name', $arFields['DETAIL_PICTURE']) || $arFields['DETAIL_PICTURE']['name'] == '')
 				&&
-				(!array_key_exists('del', $arFields['DETAIL_PICTURE']) || strlen($arFields['DETAIL_PICTURE']['del']) == 0)
+				(!array_key_exists('del', $arFields['DETAIL_PICTURE']) || $arFields['DETAIL_PICTURE']['del'] == '')
 				&&
-				(!isset($arFields['DETAIL_PICTURE']['description']) || strlen($arFields['DETAIL_PICTURE']['description']) == 0)
+				(!isset($arFields['DETAIL_PICTURE']['description']) || $arFields['DETAIL_PICTURE']['description'] == '')
 			)
 			{
 				unset($arFields['DETAIL_PICTURE']);

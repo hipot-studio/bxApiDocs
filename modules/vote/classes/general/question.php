@@ -1,10 +1,14 @@
-<?
+<?php
+
 #############################################
 # Bitrix Site Manager Forum					#
 # Copyright (c) 2002-2009 Bitrix			#
-# http://www.bitrixsoft.com					#
+# https://www.bitrixsoft.com					#
 # mailto:admin@bitrixsoft.com				#
 #############################################
+
+use Bitrix\Vote;
+
 IncludeModuleLangFile(__FILE__);
 
 class CAllVoteQuestion
@@ -18,7 +22,7 @@ class CAllVoteQuestion
 	public static function CheckFields($ACTION, &$arFields, $ID = 0)
 	{
 		$aMsg = array();
-		$ID = intVal($ID);
+		$ID = intval($ID);
 		$ACTION = ($ACTION == "UPDATE" ? "UPDATE" : "ADD");
 		$arQuestion = array();
 		if ($ID > 0 && $ACTION == "UPDATE"):
@@ -33,23 +37,30 @@ class CAllVoteQuestion
 		unset($arFields["ID"]);
 		if (is_set($arFields, "VOTE_ID") || $ACTION == "ADD")
 		{
-			$arFields["VOTE_ID"] = intVal($arFields["VOTE_ID"]);
+			$arFields["VOTE_ID"] = intval($arFields["VOTE_ID"]);
 			if ($arFields["VOTE_ID"] <= 0):
 				$aMsg[] = array(
 					"id" => "VOTE_ID",
 					"text" => GetMessage("VOTE_FORGOT_VOTE_ID"));
 			endif;
 		}
-		if (is_set($arFields, "QUESTION") || $ACTION == "ADD")
+
+		if (isset($arFields["QUESTION"]) || $ACTION == "ADD")
 		{
 			$arFields["QUESTION"] = trim($arFields["QUESTION"]);
-			if (empty($arFields["QUESTION"])):
-				$aMsg[] = array(
-					"id" => "QUESTION",
-					"text" => GetMessage("VOTE_FORGOT_QUESTION"));
-			endif;
+
+			global $USER;
+			if (!$USER || $USER->CanDoOperation('edit_php') !== true)
+			{
+				$arFields["QUESTION"] = Vote\Inner\Sanitizer::cleanText($arFields["QUESTION"]);
+			}
+			if ($arFields["QUESTION"] === "")
+			{
+				$aMsg[] = ["id" => "QUESTION", "text" => GetMessage("VOTE_FORGOT_QUESTION")];
+			}
 		}
-		if (is_set($arFields, "IMAGE_ID") && strLen($arFields["IMAGE_ID"]["name"]) <= 0 && strLen($arFields["IMAGE_ID"]["del"]) <= 0)
+
+		if (is_set($arFields, "IMAGE_ID") && $arFields["IMAGE_ID"]["name"] == '' && $arFields["IMAGE_ID"]["del"] == '')
 		{
 			unset($arFields["IMAGE_ID"]);
 		}
@@ -67,20 +78,21 @@ class CAllVoteQuestion
 			endif;
 		}
 
-		if (is_set($arFields, "ACTIVE") || $ACTION == "ADD") $arFields["ACTIVE"] = ($arFields["ACTIVE"] == "N" ? "N" : "Y");
-		unset($arFields["TIMESTAMP_X"]);
-		if (is_set($arFields, "C_SORT") || $ACTION == "ADD") $arFields["C_SORT"] = (intVal($arFields["C_SORT"]) > 0 ? intVal($arFields["C_SORT"]) : 100);
-		if (is_set($arFields, "COUNTER") || $ACTION == "ADD") $arFields["COUNTER"] = intVal($arFields["COUNTER"]);
-		if (is_set($arFields, "QUESTION_TYPE") || $ACTION == "ADD") $arFields["QUESTION_TYPE"] = ($arFields["QUESTION_TYPE"] == "html" ? "html" : "text");
-		if (is_set($arFields, "DIAGRAM") || $ACTION == "ADD") $arFields["DIAGRAM"] = ($arFields["DIAGRAM"] == "N" ? "N" : "Y");
-		if (is_set($arFields, "DIAGRAM_TYPE") && (empty($arFields["DIAGRAM_TYPE"]) || in_array($arFields["DIAGRAM_TYPE"], GetVoteDiagramArray()))):
-			$arFields["DIAGRAM_TYPE"] = VOTE_DEFAULT_DIAGRAM_TYPE;
+		if (isset($arFields['ACTIVE']) || $ACTION == 'ADD') $arFields['ACTIVE'] = ($arFields['ACTIVE'] ?? 'Y') === 'N' ? 'N' : 'Y';
+		if (isset($arFields['FIELD_TYPE']) || $ACTION == 'ADD') $arFields['FIELD_TYPE'] = intval($arFields['FIELD_TYPE'] ?? 0);
+		unset($arFields['TIMESTAMP_X']);
+		if (isset($arFields['C_SORT']) || $ACTION == 'ADD') $arFields['C_SORT'] = intval($arFields['C_SORT'] ?? 100);
+		if (isset($arFields['COUNTER']) || $ACTION == 'ADD') $arFields['COUNTER'] = intval($arFields['COUNTER'] ?? 0);
+		if (isset($arFields['QUESTION_TYPE']) || $ACTION == 'ADD') $arFields['QUESTION_TYPE'] = (($arFields['QUESTION_TYPE'] ?? 'text') == 'html' ? 'html' : 'text');
+		if (isset($arFields['DIAGRAM']) || $ACTION == 'ADD') $arFields['DIAGRAM'] = (($arFields['DIAGRAM'] ?? 'Y') === 'N' ? 'N' : 'Y');
+		if (isset($arFields['DIAGRAM_TYPE']) && (empty($arFields['DIAGRAM_TYPE']) || in_array($arFields['DIAGRAM_TYPE'], GetVoteDiagramArray()))):
+			$arFields['DIAGRAM_TYPE'] = VOTE_DEFAULT_DIAGRAM_TYPE;
 		endif;
-		if (is_set($arFields, "TEMPLATE")) $arFields["TEMPLATE"] = substr(trim($arFields["TEMPLATE"]), 0, 255);
-		if (is_set($arFields, "TEMPLATE_NEW")) $arFields["TEMPLATE_NEW"] = substr(trim($arFields["TEMPLATE_NEW"]), 0, 255);
+		if (isset($arFields['TEMPLATE'])) $arFields['TEMPLATE'] = mb_substr(trim($arFields['TEMPLATE']), 0, 255);
+		if (isset($arFields['TEMPLATE_NEW'])) $arFields['TEMPLATE_NEW'] = mb_substr(trim($arFields['TEMPLATE_NEW']), 0, 255);
 
-		if ((is_set($arFields, "TEMPLATE") ||is_set($arFields, "TEMPLATE_NEW")) &&
-			COption::GetOptionString("vote", "VOTE_COMPATIBLE_OLD_TEMPLATE", "Y") == "Y")
+		if ((isset($arFields['TEMPLATE']) || isset($arFields['TEMPLATE_NEW']))
+			&& COption::GetOptionString("vote", "VOTE_COMPATIBLE_OLD_TEMPLATE", "N") == "Y")
 		{
 			$old_module_version = CVote::IsOldVersion();
 			if ($old_module_version != "Y")
@@ -119,7 +131,7 @@ class CAllVoteQuestion
 			&& is_array($arFields["IMAGE_ID"])
 			&& (
 				!array_key_exists("MODULE_ID", $arFields["IMAGE_ID"])
-				|| strlen($arFields["IMAGE_ID"]["MODULE_ID"]) <= 0
+				|| $arFields["IMAGE_ID"]["MODULE_ID"] == ''
 			)
 		)
 			$arFields["IMAGE_ID"]["MODULE_ID"] = "vote";
@@ -148,7 +160,7 @@ class CAllVoteQuestion
 		$err_mess = (CAllVoteQuestion::err_mess())."<br>Function: Update<br>Line: ";
 		$strUploadDir = ($strUploadDir === false ? "vote" : $strUploadDir);
 
-		$ID = intVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0 || !CVoteQuestion::CheckFields("UPDATE", $arFields, $ID))
 			return false;
 /***************** Event onBeforeVoteQuestionUpdate ****************/
@@ -164,7 +176,7 @@ class CAllVoteQuestion
 			&& is_array($arFields["IMAGE_ID"])
 			&& (
 				!array_key_exists("MODULE_ID", $arFields["IMAGE_ID"])
-				|| strlen($arFields["IMAGE_ID"]["MODULE_ID"]) <= 0
+				|| $arFields["IMAGE_ID"]["MODULE_ID"] == ''
 			)
 		)
 			$arFields["IMAGE_ID"]["MODULE_ID"] = "vote";
@@ -189,10 +201,10 @@ class CAllVoteQuestion
 
 	public static function Copy($ID, $newVoteID)
 	{
-		$ID = intVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 			return false;
-		$newVoteID = intVal($newVoteID);
+		$newVoteID = intval($newVoteID);
 		if ($newVoteID <= 0)
 			return false;
 		$res = CVoteQuestion::GetByID($ID);
@@ -240,7 +252,7 @@ class CAllVoteQuestion
 
 		if (!array_key_exists($ID, $GLOBALS["VOTE_CACHE"]["QUESTION"]))
 		{
-			$db_res = CVoteQuestion::GetList(0, $by, $order, array("ID" => $ID), $is_filtered);
+			$db_res = CVoteQuestion::GetList(0, '', '', array("ID" => $ID));
 			if ($db_res) $res = $db_res->Fetch();
 			$GLOBALS["VOTE_CACHE"]["QUESTION"][$ID] = $res;
 		}
@@ -249,66 +261,64 @@ class CAllVoteQuestion
 		return $db_res;
 	}
 
-	public static function GetList($VOTE_ID, &$by, &$order, $arFilter=Array(), &$is_filtered)
+	public static function GetList($VOTE_ID, $by = 's_c_sort', $order = 'asc', $arFilter = [])
 	{
 		global $DB;
-		$err_mess = (CAllVoteQuestion::err_mess())."<br>Function: GetList<br>Line: ";
+		$err_mess = (CAllVoteQuestion::err_mess()).'<br>Function: GetList<br>Line: ';
 
-		$VOTE_ID = intval($VOTE_ID);
-		$arSqlSearch = array();
-		$arFilter = (is_array($arFilter) ? $arFilter : array($arFilter));
+		$VOTE_ID = (int) $VOTE_ID;
+		$arSqlSearch = [];
+		$arFilter = (is_array($arFilter) ? $arFilter : []);
 
 		foreach ($arFilter as $key => $val)
 		{
-			if (empty($key) || empty($val) || $val === "NOT_REF"):
+			if (empty($key) || empty($val) || $val === 'NOT_REF')
+			{
 				continue;
-			endif;
+			}
+
 			$key_res = VoteGetFilterOperation($key);
-			$strNegative = $key_res["NEGATIVE"];
-			$strOperation = $key_res["OPERATION"];
-			$key = strtoupper($key_res["FIELD"]);
+			$strNegative = $key_res['NEGATIVE'];
+			$strOperation = $key_res['OPERATION'];
+			$key = strtoupper($key_res['FIELD']);
 
 			switch($key)
 			{
-				case "ID":
-					$match = ($arFilter[$key."_EXACT_MATCH"] == "N" ? "Y" : "N"); //turn off
-					$arSqlSearch[] = GetFilterQuery("Q.ID", $val, $match);
+				case 'ID':
+					$match = (($arFilter[$key . '_EXACT_MATCH'] ?? 'Y') === 'N' ? 'Y' : 'N'); //turn off
+					$arSqlSearch[] = GetFilterQuery('Q.ID', $val, $match);
 					break;
-				case "DIAGRAM":
-				case "ACTIVE":
-				case "REQUIRED":
-						$arSqlSearch[] = ($strNegative=="Y"?" Q.".$key." IS NULL OR NOT ":"")." (Q.".$key." ".$strOperation." '".$DB->ForSql($val)."')";
+				case 'DIAGRAM':
+				case 'ACTIVE':
+				case 'REQUIRED':
+					$arSqlSearch[] = ($strNegative === 'Y' ? ' Q.' . $key . ' IS NULL OR NOT ' : '')
+						. ' (Q.' . $key . ' ' . $strOperation . ' \'' . $DB->ForSql($val) . '\')';
 					break;
-				case "QUESTION":
-					$match = ($arFilter[$key."_EXACT_MATCH"] != "N" ? "Y" : "N"); //turn on
-					$arSqlSearch[] = GetFilterQuery("Q.QUESTION", $val, $match);
+				case 'QUESTION':
+					$match = (($arFilter[$key . '_EXACT_MATCH'] ?? 'Y') !== 'N' ? 'Y' : 'N'); //turn on
+					$arSqlSearch[] = GetFilterQuery('Q.QUESTION', $val, $match);
 					break;
 			}
 		}
 		if ($VOTE_ID > 0)
-			$arSqlSearch[] = "Q.VOTE_ID = ".$VOTE_ID;
+			$arSqlSearch[] = 'Q.VOTE_ID = ' . $VOTE_ID;
 
 		// Order
-		$by1 = strtoupper(strpos($by, "s_") === 0 ? substr($by, 2) : $by);
-		$order = ($order != "desc" ? "asc" : "desc");
-		$order1 = strtoupper($order);
-		if (in_array($by1, array("ID", "TIMESTAMP_X", "ACTIVE", "DIAGRAM", "C_SORT", "REQUIRED"))):
-			$strSqlOrder = "Q.".$by1." ".$order1;
-		else:
-			$by = "s_c_sort";
-			$strSqlOrder = "Q.C_SORT ".$order1;
-		endif;
+		$by = strtoupper(strpos($by, 's_') === 0 ? substr($by, 2) : $by);
+		$by = in_array($by, ['ID', 'TIMESTAMP_X', 'ACTIVE', 'DIAGRAM', 'C_SORT', 'REQUIRED']) ? $by : 'C_SORT';
+		$order = ($order !== 'desc' ? 'asc' : 'desc');
+		$strSqlOrder = 'Q.' . $by . ' ' . $order;
 
 		// Sql
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
-		$strSql = "
+		$strSql = '
 			SELECT Q.*,
-				".$DB->DateToCharFunction("Q.TIMESTAMP_X","SHORT")." TIMESTAMP_X
+				' . $DB->DateToCharFunction('Q.TIMESTAMP_X','SHORT') . ' TIMESTAMP_X
 			FROM b_vote_question Q
-			WHERE ".$strSqlSearch."
-			ORDER BY ".$strSqlOrder;
-		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
-		$is_filtered = (IsFiltered($strSqlSearch));
+			WHERE ' . $strSqlSearch . '
+			ORDER BY ' . $strSqlOrder;
+		$res = $DB->Query($strSql, false, $err_mess . __LINE__);
+
 		return $res;
 	}
 
@@ -329,7 +339,7 @@ class CAllVoteQuestion
 			$key_res = VoteGetFilterOperation($key);
 			$strNegative = $key_res["NEGATIVE"];
 			$strOperation = $key_res["OPERATION"];
-			$key = strtoupper($key_res["FIELD"]);
+			$key = mb_strtoupper($key_res["FIELD"]);
 
 			switch($key)
 			{
@@ -338,7 +348,7 @@ class CAllVoteQuestion
 					$str = ($strNegative=="Y"?"NOT":"")."(VQ.".$key." IS NULL OR VQ.".$key."<=0)";
 					if (!empty($val))
 					{
-						$str = ($strNegative=="Y"?" VQ.".$key." IS NULL OR NOT ":"")."(VQ.".$key." ".$strOperation." ".intVal($val).")";
+						$str = ($strNegative=="Y"?" VQ.".$key." IS NULL OR NOT ":"")."(VQ.".$key." ".$strOperation." ".intval($val).")";
 						if ($strOperation == "IN")
 						{
 							$val = array_unique(array_map("intval", (is_array($val) ? $val : explode(",", $val))), SORT_NUMERIC);
@@ -351,10 +361,10 @@ class CAllVoteQuestion
 					$arSqlSearch[] = $str;
 					break;
 				case "CHANNEL_ID":
-					if (strlen($val)<=0)
+					if ($val == '')
 						$arSqlSearch[] = ($strNegative=="Y"?"NOT":"")."(V.".$key." IS NULL OR V.".$key."<=0)";
 					else
-						$arSqlSearch[] = ($strNegative=="Y"?" V.".$key." IS NULL OR NOT ":"")."(V.".$key." ".$strOperation." ".intVal($val).")";
+						$arSqlSearch[] = ($strNegative=="Y"?" V.".$key." IS NULL OR NOT ":"")."(V.".$key." ".$strOperation." ".intval($val).")";
 					break;
 				case "ACTIVE":
 					if (empty($val))
@@ -369,7 +379,8 @@ class CAllVoteQuestion
 
 		foreach ($arOrder as $by => $order)
 		{
-			$by = strtoupper($by); $order = strtoupper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			$by = ($by == "ACTIVE" ? $by : "ID");
 			if ($order!="ASC") $order = "DESC";
 			if ($by == "ACTIVE") $arSqlOrder[] = " VQ.ACTIVE ".$order." ";
@@ -401,8 +412,8 @@ class CAllVoteQuestion
 		if (!CVoteAnswer::Delete(false, $ID, $VOTE_ID))
 			return false;
 
-		$ID = (intVal($ID) > 0 ? intVal($ID) : false);
-		$VOTE_ID = (intVal($VOTE_ID) > 0 ? intVal($VOTE_ID) : false);
+		$ID = (intval($ID) > 0 ? intval($ID) : false);
+		$VOTE_ID = (intval($VOTE_ID) > 0 ? intval($VOTE_ID) : false);
 		if ($ID === false && $VOTE_ID === false):
 			return false;
 		elseif ($ID === false):
@@ -453,8 +464,8 @@ class CAllVoteQuestion
 	{
 		global $DB;
 		$err_mess = (CVoteQuestion::err_mess())."<br>Function: Reset<br>Line: ";
-		$ID = (intVal($ID) > 0 ? intVal($ID) : false);
-		$VOTE_ID = (intVal($VOTE_ID) > 0 ? intVal($VOTE_ID) : false);
+		$ID = (intval($ID) > 0 ? intval($ID) : false);
+		$VOTE_ID = (intval($VOTE_ID) > 0 ? intval($VOTE_ID) : false);
 
 		if ($ID > 0):
 			$strSqlID = "".$ID."";
@@ -510,4 +521,3 @@ class CAllVoteQuestion
 		return $ID;
 	}
 }
-?>

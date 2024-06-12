@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Scale;
 
+use Bitrix\Main\IO\File;
 use \Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 
@@ -14,6 +15,8 @@ class Action
 	protected $userParams = array();
 	protected $freeParams = array();
 	protected $actionParams = array();
+	protected $serverHostname = "";
+
 	protected $shellAdapter = null;
 	protected $result = array();
 	protected $logLevel = Logger::LOG_LEVEL_INFO;
@@ -30,13 +33,13 @@ class Action
 	 */
 	public function __construct($actionId, $actionParams, $serverHostname="", $userParams = array(), $freeParams = array())
 	{
-		if(strlen($actionId) <= 0)
+		if($actionId == '')
 			throw new \Bitrix\Main\ArgumentNullException("actionId");
 
 		if(!is_array($actionParams) || empty($actionParams))
 			throw new \Exception("Params of action ".$actionId." are not defined correctly!");
 
-		if(!isset($actionParams["START_COMMAND_TEMPLATE"]) || strlen($actionParams["START_COMMAND_TEMPLATE"]) <= 0)
+		if(!isset($actionParams["START_COMMAND_TEMPLATE"]) || $actionParams["START_COMMAND_TEMPLATE"] == '')
 			throw new \Exception("Required param START_COMMAND_TEMPLATE of action ".$actionId." are not defined!");
 
 		if(!is_array($userParams))
@@ -75,16 +78,40 @@ class Action
 		$retStr = $this->actionParams["START_COMMAND_TEMPLATE"];
 
 		foreach ($this->userParams as $key => $paramValue)
-			$retStr = str_replace('##USER_PARAMS:'.$key.'##', $paramValue, $retStr);
+		{
+			if($this->actionParams['USER_PARAMS'][$key]['THROUGH_FILE'] == 'Y')
+			{
+				if($paramValue <> '')
+				{
+					$tmpDir = Helper::getTmpDir();
+					$tmpFile = $tmpDir.'/.'.randString();
+					$res = File::putFileContents($tmpFile, $paramValue);
 
-		if(strlen($this->serverHostname) > 0 && $this->serverHostname != "global")
+					if($res === false)
+						return '';
+
+					$paramValue = $tmpFile;
+				}
+			}
+
+			$retStr = str_replace('##USER_PARAMS:'.$key.'##', $paramValue, $retStr);
+		}
+
+		if($this->serverHostname <> '' && $this->serverHostname != "global")
 		{
 			$serverParams = $this->getServerParams();
 			$serverParams["hostname"] = $this->serverHostname;
 
 			if(is_array($serverParams))
+			{
 				foreach ($serverParams as $key => $paramValue)
-					$retStr = str_replace('##SERVER_PARAMS:'.$key.'##', $paramValue, $retStr);
+				{
+					if(is_string($paramValue))
+					{
+						$retStr = str_replace('##SERVER_PARAMS:' . $key . '##', $paramValue, $retStr);
+					}
+				}
+			}
 		}
 
 		if(!empty($inputParams))
@@ -95,13 +122,8 @@ class Action
 		{
 			foreach($this->actionParams["CODE_PARAMS"] as $paramId => $paramCode)
 			{
-				$func = create_function("", $paramCode);
-
-				if(is_callable($func))
-				{
-					$res = $func();
-					$retStr = str_replace('##CODE_PARAMS:'.$paramId.'##', $res, $retStr);
-				}
+				$res = eval($paramCode);
+				$retStr = str_replace('##CODE_PARAMS:'.$paramId.'##', $res, $retStr);
 			}
 		}
 
@@ -118,23 +140,6 @@ class Action
 	 * @throws \Bitrix\Main\ArgumentTypeException
 	 * @throws \Exception
 	 */
-	
-	/**
-	* <p>Возвращает результат запуска задания <i>BitrixVM</i>. Метод нестатический.</p>
-	*
-	*
-	* @param array $arrayinputParams = array() Массив параметров предыдущих запусков. Ключи массива: <ul> <li>
-	* <b>NAME</b> - название задания; </li> <li> <b>RESULT</b> - статус: <code>OK</code> или
-	* <code>ERROR</code>,</li> <li> <b>OUTPUT</b> -  результат на выходе задания:  <ul> <li>
-	* <b>TEXT</b> - текст задания, </li> <li> <b>DATA</b> - данные задания.</li> </ul> </li> <li>
-	* <b>ERROR</b> - ошибка.</li> </ul>
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/scale/action/start.php
-	* @author Bitrix
-	*/
 	public function start(array $inputParams = array())
 	{
 		if(!is_array($inputParams))
@@ -150,7 +155,7 @@ class Action
 				{
 					try
 					{
-						$this->actionParams = call_user_func($modifyerFunction, $this->id, $this->actionParams, $this->serverHostname);
+						$this->actionParams = call_user_func($modifyerFunction, $this->id, $this->actionParams, $this->serverHostname, $this->userParams);
 					}
 					catch(NeedMoreUserInfoException $e)
 					{
@@ -165,27 +170,38 @@ class Action
 		}
 
 		$result = null;
-		$command = $this->makeStartCommand($inputParams);
-		$result =  $this->shellAdapter->syncExec($command);
-		$output = $this->shellAdapter->getLastOutput();
+		$output = '';
 		$arOutput = array();
+		$command = $this->makeStartCommand($inputParams);
 
-		if(strlen($output) > 0)
+		if($command <> '')
 		{
-			$arOut = json_decode($output, true);
+			$result =  $this->shellAdapter->syncExec($command);
+			$output = $this->shellAdapter->getLastOutput();
+			$arOutput = array();
 
-			if(is_array($arOut) && !empty($arOut))
-				$arOutput = $arOut;
+			if($output <> '')
+			{
+				$arOut = json_decode($output, true);
+
+				if(is_array($arOut) && !empty($arOut))
+					$arOutput = $arOut;
+			}
+
+			//error returned by shell
+			$error = $this->shellAdapter->getLastError();
+
+			//error returned by bitrix-env
+			if(isset($arOutput["error"]) && intval($arOutput["error"]) > 0 && isset($arOutput["message"]) && $arOutput["message"] <> '')
+				$error .= " ".$arOutput["message"];
+
+			$this->makeLogRecords($command, $result, $output, $error);
 		}
-
-		//error returned by shell
-		$error = $this->shellAdapter->getLastError();
-
-		//error returned by bitrix-env
-		if(isset($arOutput["error"]) && intval($arOutput["error"]) > 0 && isset($arOutput["message"]) && strlen($arOutput["message"]) > 0)
-			$error .= " ".$arOutput["message"];
-
-		$this->makeLogRecords($command, $result, $output, $error);
+		else //$command == ''
+		{
+			$result = false;
+			$error = 'Cant\'t create command for action execution';
+		}
 
 		$this->result = array(
 			$this->id => array(
@@ -212,7 +228,7 @@ class Action
 
 	protected function makeLogRecords($command = "", $result = null, $output = "", $error = "")
 	{
-		if(strlen($command) > 0)
+		if($command <> '')
 		{
 			//cut password data from log records
 			$preg = "/(-p.*\s+|--mysql_password=.*\s+|--cluster_password=.*\s+|--replica_password=.*\s+|--password=.*\s+)/is";
@@ -236,7 +252,7 @@ class Action
 			);
 		}
 
-		if(strlen($output) > 0)
+		if($output <> '')
 		{
 			$this->log(
 				Logger::LOG_LEVEL_DEBUG,
@@ -246,7 +262,7 @@ class Action
 			);
 		}
 
-		if(strlen($error) > 0)
+		if($error <> '')
 		{
 			$this->log(
 				Logger::LOG_LEVEL_ERROR,

@@ -1,23 +1,14 @@
-<?
+<?php
+
 ##############################################
 # Bitrix Site Manager Forum                  #
 # Copyright (c) 2002-2009 Bitrix             #
-# http://www.bitrixsoft.com                  #
+# https://www.bitrixsoft.com                 #
 # mailto:admin@bitrixsoft.com                #
 ##############################################
+
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * <b>CFilterDictionary</b> - класс для работы cо словарями нецензурных слов.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/forum/developer/cfilterdictionary/index.php
- * @author Bitrix
- */
 class CAllFilterDictionary
 {
 	public static function CheckFields($arFields = array(), $ACTION = "ADD")
@@ -25,87 +16,28 @@ class CAllFilterDictionary
 		global $APPLICATION, $DB;
 		$strError = "";
 
-		if ((!is_set($arFields, "TITLE")) || (strlen(trim($arFields["TITLE"]))<=0))
+		if ((!is_set($arFields, "TITLE")) || (trim($arFields["TITLE"]) == ''))
 			$strError .= GetMessage("FLT_ERR_TITLE_MISSED");
 		if ($ACTION != "UPDATE" && empty($arFields["TYPE"]))
 			$strError .= GetMessage("FLT_ERR_TYPE_MISSED");
-		if (strlen($strError) <= 0)
+		if ($strError == '')
 			return true;
 		$APPLICATION->ThrowException($strError);
 		return false;
 	}
-	
-	/**
-	* <p>Создает новый словарь с параметрами, указанными в массиве <i>arFields</i>. Возвращает код созданного словаря. Метод нестатический.</p>
-	*
-	*
-	* @param array $arFields  Массив вида Array(<i>field1</i>=&gt;<i>value1</i>[, <i>field2</i>=&gt;<i>value2</i> [, ..]]), где         
-	* <br><br><i>field</i> - название поля;          <br><i>value</i> - значение поля.         
-	* <br><br>       Поля перечислены в списке полей таблицы <a
-	* href="http://dev.1c-bitrix.ru/api_help/forum/fields.php#cfilterdictionary">"Словарь"</a>.
-	* Обязательные поля должны быть заполнены.
-	*
-	* @return int <p>Возвращает код созданного словаря. В случае ошибки добавления
-	* возвращает False.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $arFields = Array(
-	* 	TITLE        - &gt; $TITLE,
-	* 	TYPE      - &gt; $TYPE,     
-	* );
-	* $ID = CFilterDictionary::Add($arFields);
-	* if (IntVal($ID)&lt;=0)
-	*   echo "Error!";
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li>поля таблицы <a
-	* href="http://dev.1c-bitrix.ru/api_help/forum/fields.php#cfilterdictionary">"Словарь"</a>. </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/forum/developer/cfilterdictionary/add.php
-	* @author Bitrix
-	*/
+
 	public static function Add($arFields)
 	{
 		global $DB;
 		$arFields["TITLE"] = trim($arFields["TITLE"]);
-		$arFields["TYPE"] = strtoupper(trim($arFields["TYPE"]));
+		$arFields["TYPE"] = mb_strtoupper(trim($arFields["TYPE"]));
 		if ($arFields["TYPE"] != "T")
 			$arFields["TYPE"] = "W";
 		if(CFilterDictionary::CheckFields($arFields))
 			return $DB->Add("b_forum_dictionary", $arFields);
 		return false;
 	}
-	
-	/**
-	* <p>Изменяет параметры существующего словаря с кодом <i>ID</i> на параметры, указанные в массиве <i>arFields</i>. Возвращает код изменяемого словаря. Метод нестатический.</p>
-	*
-	*
-	* @param int $intID  Код записи, параметры которой необходимо изменить.
-	*
-	* @param array $arFields  Массив вида Array(<i>field1</i>=&gt;<i>value1</i>[, <i>field2</i>=&gt;<i>value2</i> [, ..]]), где         
-	* <br><br><i>field</i> - название поля;          <br><i>value</i> - значение поля.         
-	* <br><br>       Поля перечислены в списке полей таблицы <a
-	* href="http://dev.1c-bitrix.ru/api_help/forum/fields.php#cfilterdictionary">"Словарь"</a>.
-	*
-	* @return int 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li>поля таблицы <a
-	* href="http://dev.1c-bitrix.ru/api_help/forum/fields.php#cfilterdictionary">"Словарь"</a> </li> </ul><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/forum/developer/cfilterdictionary/update.php
-	* @author Bitrix
-	*/
+
 	public static function Update($ID, $arFields)
 	{
 		global $DB;
@@ -114,7 +46,7 @@ class CAllFilterDictionary
 			$arFields["TITLE"]=trim($arFields["TITLE"]);
 		if(is_set($arFields, "TYPE"))
 		{
-			$arFields["TYPE"] = strtoupper(trim($arFields["TYPE"]));
+			$arFields["TYPE"] = mb_strtoupper(trim($arFields["TYPE"]));
 			if ($arFields["TYPE"] != "T")
 				$arFields["TYPE"] = "W";
 		}
@@ -126,80 +58,75 @@ class CAllFilterDictionary
 		}
 		return false;
 	}
-	
-	/**
-	* <p>Удаляет папку с кодом <i>ID</i>. Метод нестатический.</p>
-	*
-	*
-	* @param int $intID  Код записи, которую необходимо удалить.
-	*
-	* @return bool <p>Возвращает True в случае успешного удаления, в противном случае
-	* возвращает False. </p><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/forum/developer/cfilterdictionary/delete.php
-	* @author Bitrix
-	*/
+
 	public static function Delete($ID)
 	{
 		global $DB, $USER;
 
-		$ID = IntVal($ID);
-		$Dictionary = "";
+		$ID = intval($ID);
 		$Dictionary = CFilterDictionary::GetList(array(), array("ID"=>$ID));
 		$Dictionary = $Dictionary->Fetch();
-		$res = false;
 		$DB->StartTransaction();
-			if ($Dictionary["TYPE"] == "T")
-				$res = $DB->Query("DELETE FROM b_forum_letter WHERE DICTIONARY_ID=".$ID);
-			else
-				$res = $DB->Query("DELETE FROM b_forum_filter WHERE DICTIONARY_ID=".$ID);
-			if ($res)
-				$res = $DB->Query("DELETE FROM b_forum_dictionary WHERE ID=".$ID);
-		if ($res)
-			$DB->Commit();
+		if ($Dictionary["TYPE"] == "T")
+		{
+			$res = $DB->Query("DELETE FROM b_forum_letter WHERE DICTIONARY_ID=".$ID);
+		}
 		else
+		{
+			$res = $DB->Query("DELETE FROM b_forum_filter WHERE DICTIONARY_ID=".$ID);
+		}
+		if ($res)
+		{
+			$res = $DB->Query("DELETE FROM b_forum_dictionary WHERE ID=".$ID);
+		}
+		if ($res)
+		{
+			$DB->Commit();
+		}
+		else
+		{
 			$DB->Rollback();
+		}
 		return $res;
 	}
 
 	public static function GetFilterOperation($key)
 	{
 		$strNegative = "N";
-		if (substr($key, 0, 1)=="!")
+		if (mb_substr($key, 0, 1) == "!")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strNegative = "Y";
 		}
 
-		if (substr($key, 0, 2)==">=")
+		if (mb_substr($key, 0, 2) == ">=")
 		{
-			$key = substr($key, 2);
+			$key = mb_substr($key, 2);
 			$strOperation = ">=";
 		}
-		elseif (substr($key, 0, 1)==">")
+		elseif (mb_substr($key, 0, 1) == ">")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = ">";
 		}
-		elseif (substr($key, 0, 2)=="<=")
+		elseif (mb_substr($key, 0, 2) == "<=")
 		{
-			$key = substr($key, 2);
+			$key = mb_substr($key, 2);
 			$strOperation = "<=";
 		}
-		elseif (substr($key, 0, 1)=="<")
+		elseif (mb_substr($key, 0, 1) == "<")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "<";
 		}
-		elseif (substr($key, 0, 1)=="@")
+		elseif (mb_substr($key, 0, 1) == "@")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "IN";
 		}
-		elseif (substr($key, 0, 1)=="%")
+		elseif (mb_substr($key, 0, 1) == "%")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "LIKE";
 		}
 		else
@@ -210,17 +137,6 @@ class CAllFilterDictionary
 	}
 }
 
-
-/**
- * <b>CFilterLetter</b> - класс для работы cо словарями букв.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/forum/developer/cfilterletter/index.php
- * @author Bitrix
- */
 class CAllFilterLetter
 {
 	public static function CheckFields($arFields = array())
@@ -228,47 +144,25 @@ class CAllFilterLetter
 		global $APPLICATION, $DB;
 		$strError = "";
 
-		if ((!is_set($arFields, "LETTER")) || (strlen(trim($arFields["LETTER"]))<=0))
+		if ((!is_set($arFields, "LETTER")) || (trim($arFields["LETTER"]) == ''))
 			$strError .= GetMessage("FLT_ERR_SIMBOL_MISSED");
-		if ((!is_set($arFields, "DICTIONARY_ID")) || (intVal(trim($arFields["DICTIONARY_ID"]))<=0))
+		if ((!is_set($arFields, "DICTIONARY_ID")) || (intval(trim($arFields["DICTIONARY_ID"]))<=0))
 			$strError .= GetMessage("FLT_ERR_DICTIONARY_MISSED");
-		if (strlen($strError) <= 0)
+		if ($strError == '')
 			return true;
 		$APPLICATION->ThrowException($strError);
 		return false;
 	}
 
-	
-	/**
-	* <p>Создает новую запись с параметрами, указанными в массиве <i>arFields</i>. Возвращает код созданной записи. Метод нестатический.</p>
-	*
-	*
-	* @param array $arFields  Массив вида Array(<i>field1</i>=&gt;<i>value1</i>[, <i>field2</i>=&gt;<i>value2</i> [, ..]]), где         
-	* <br><br><i>field</i> - название поля;          <br><i>value</i> - значение поля.         
-	* <br><br>       Поля перечислены в списке полей таблицы <a
-	* href="http://dev.1c-bitrix.ru/api_help/forum/fields.php#cfilterletter">"Словарь транслита"</a>.
-	* Обязательные поля должны быть заполнены.
-	*
-	* @return int 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li>таблица <a href="http://dev.1c-bitrix.ru/api_help/forum/fields.php#cfilterletter">"Словарь
-	* транслита"</a> </li> </ul><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/forum/developer/cfilterletter/add.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		global $DB, $APPLICATION;
 		$arFields["LETTER"] = trim($arFields["LETTER"]);
 		$arFields["REPLACEMENT"] = trim($arFields["REPLACEMENT"]);
-		$arFields["DICTIONARY_ID"] = intVal($arFields["DICTIONARY_ID"]);
+		$arFields["DICTIONARY_ID"] = intval($arFields["DICTIONARY_ID"]);
 		$db_res = CFilterLetter::GetList(array(), array("DICTIONARY_ID"=>$arFields["DICTIONARY_ID"], "LETTER"=>trim($arFields["LETTER"])));
 		$db_res = $db_res->Fetch();
-		if ($db_res["ID"]<=0)
+		if (!$db_res || $db_res["ID"]<=0)
 		{
 			if(CFilterLetter::CheckFields($arFields))
 				return $DB->Add("b_forum_letter", $arFields);
@@ -278,29 +172,6 @@ class CAllFilterLetter
 		return false;
 	}
 
-	
-	/**
-	* <p>Изменяет параметры существующей записи с кодом <i>ID</i> на параметры, указанные в массиве <i>arFields</i>. Возвращает код изменяемой записи. Метод нестатический.</p>
-	*
-	*
-	* @param int $intID  Код записи, параметры которой необходимо изменить.
-	*
-	* @param array $arFields  Массив вида Array(<i>field1</i>=&gt;<i>value1</i>[, <i>field2</i>=&gt;<i>value2</i> [, ..]]), где         
-	* <br><br><i>field</i> - название поля;          <br><i>value</i> - значение поля.         
-	* <br><br>       Поля перечислены в списке полей таблицы <a
-	* href="http://dev.1c-bitrix.ru/api_help/forum/fields.php#cfilterletter">"Словарь транслита"</a>.
-	*
-	* @return int 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li>таблица <a href="http://dev.1c-bitrix.ru/api_help/forum/fields.php#cfilterletter">"Словарь
-	* транслита"</a> </li> </ul><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/forum/developer/cfilterletter/update.php
-	* @author Bitrix
-	*/
 	public static function Update($ID, $arFields)
 	{
 		global $DB, $APPLICATION;
@@ -315,7 +186,7 @@ class CAllFilterLetter
 			$arFields["REPLACEMENT"] = trim($arFields["REPLACEMENT"]);
 		if (is_set($arFields, "DICTIONARY_ID"))
 		{
-			$arFields["DICTIONARY_ID"] = intVal($arFields["DICTIONARY_ID"]);
+			$arFields["DICTIONARY_ID"] = intval($arFields["DICTIONARY_ID"]);
 			$dictionary_id = true;
 		}
 
@@ -331,7 +202,7 @@ class CAllFilterLetter
 				$request = array("DICTIONARY_ID"=>$arFields["DICTIONARY_ID"], "LETTER"=>$arFields["LETTER"]);
 			$db_res = CFilterLetter::GetList(array(), $request);
 			$db_res = $db_res->Fetch();
-			if ((intVal($db_res["ID"])<=0) || (intVal($db_res["ID"]) == $ID))
+			if ($db_res === false || isset($db_res["ID"]) && ((intval($db_res["ID"])<=0) || (intval($db_res["ID"]) == $ID)))
 				$update = true;
 		}
 		if (!$update)
@@ -345,23 +216,10 @@ class CAllFilterLetter
 		return false;
 	}
 
-	
-	/**
-	* <p>Удаляет запись с кодом <i>ID</i>. Метод нестатический.</p>
-	*
-	*
-	* @param int $intID  Код записи, которую необходимо удалить.
-	*
-	* @return bool <br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/forum/developer/cfilterletter/delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		global $DB, $USER;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		return $DB->Query("DELETE FROM b_forum_letter WHERE ID=".$ID);
 	}
 
@@ -376,30 +234,19 @@ class CAllFilterLetter
 	}
 }
 
-
-/**
- * <b>CFilterUnquotableWords</b> - класс для работы cо словарями слов.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/forum/developer/cfilterunquotablewords/index.php
- * @author Bitrix
- */
 class CAllFilterUnquotableWords
 {
 	public static function CheckPattern($sPattern, &$sError)
 	{
 		$arError = array();
-		$sDelimiter = substr($sPattern, 0, 1);
+		$sDelimiter = mb_substr($sPattern, 0, 1);
 		if ($sDelimiter !== '/') // security restriction
 			$arError[] = array(
 				"code" => "bad_delimiter",
 				"title" => GetMessage("FLT_ERR_BAD_DELIMITER"));
 		// Check Modificators
-		$sModificators = strrchr(substr($sPattern, 1), $sDelimiter);
-		if ($sModificators && strpos($sModificators, "e") !== false)
+		$sModificators = strrchr(mb_substr($sPattern, 1), $sDelimiter);
+		if ($sModificators && mb_strpos($sModificators, "e") !== false)
 			$arError[] = array(
 				"code" => "bad_modificator",
 				"title" => GetMessage("FLT_ERR_BAD_MODIFICATOR"));
@@ -424,15 +271,15 @@ class CAllFilterUnquotableWords
 		global $APPLICATION, $DB;
 		$arError = array();
 		$sError = '';
-		$ID = intVal($ID);
+		$ID = intval($ID);
 
 		if ($action == "INSERT")
 		{
-			if ($action == "INSERT" && strlen(trim($arFields["WORDS"])) <= 0 && strlen(trim($arFields["PATTERN"])) <= 0)
+			if ($action == "INSERT" && trim($arFields["WORDS"]) == '' && trim($arFields["PATTERN"]) == '')
 				$arError[] = array(
 					"code" => "empty_data",
 					"title" => GetMessage("FLT_ERR_DICT_PATT_MISSED"));
-			if (intVal($arFields["DICTIONARY_ID"]) <= 0)
+			if (intval($arFields["DICTIONARY_ID"]) <= 0)
 				$arError[] = array(
 					"code" => "bad_dictionary_id",
 					"title" => GetMessage("FLT_ERR_DICTIONARY_MISSED"));
@@ -443,7 +290,7 @@ class CAllFilterUnquotableWords
 				$arError = array(
 					"code" => "empty_id",
 					"title" => GetMessage("FLT_ERR_ID_NOT_ENTER"));
-			if (is_set($arFields, "DICTIONARY_ID") && intVal($arFields["DICTIONARY_ID"]) <= 0)
+			if (is_set($arFields, "DICTIONARY_ID") && intval($arFields["DICTIONARY_ID"]) <= 0)
 				$arError[] = array(
 					"code" => "bad_dictionary_id",
 					"title" => GetMessage("FLT_ERR_DICTIONARY_MISSED"));
@@ -452,12 +299,12 @@ class CAllFilterUnquotableWords
 			$arError[] = array(
 				"code" => "bad_pattern",
 				"title" => $sError);
-		if (strlen(trim($arFields["WORDS"])) > 0)
+		if (trim($arFields["WORDS"]) <> '')
 		{
 			$db_res = CFilterUnquotableWords::GetList(array(), array("WORDS" => trim($arFields["WORDS"])));
 			if ($db_res && $res = $db_res->Fetch())
 			{
-				if ($action == "INSERT" || ($action=="UPDATE" && intVal($res["ID"]) != $ID))
+				if ($action == "INSERT" || ($action=="UPDATE" && intval($res["ID"]) != $ID))
 				{
 					$arError[] = array(
 						"code" => "already_exists",
@@ -471,41 +318,18 @@ class CAllFilterUnquotableWords
 		return false;
 	}
 
-	
-	/**
-	* <p>Создает новую запись с параметрами, указанными в массиве <i>arFields</i>. Возвращает код созданной записи. Метод нестатический.</p>
-	*
-	*
-	* @param array $arFields  Массив вида Array(<i>field1</i>=&gt;<i>value1</i>[, <i>field2</i>=&gt;<i>value2</i> [, ..]]), где         
-	* <br><br><i>field</i> - название поля;          <br><i>value</i> - значение поля.         
-	* <br><br>       Поля перечислены в списке полей таблицы <a
-	* href="http://dev.1c-bitrix.ru/api_help/forum/fields.php#cfilterunquotablewords">"Словарь слов"</a>.
-	* Обязательные поля должны быть заполнены.
-	*
-	* @return int 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li>таблица <a
-	* href="http://dev.1c-bitrix.ru/api_help/forum/fields.php#cfilterunquotablewords">"Словарь слов"</a> </li>
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/forum/developer/cfilterunquotablewords/add.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		global $DB;
 		if(CACHED_b_forum_filter !== false)
 			$GLOBALS["CACHE_MANAGER"]->CleanDir("b_forum_filter");
-		$arFields["DICTIONARY_ID"] = intVal($arFields["DICTIONARY_ID"]);
-		$arFields["PATTERN_CREATE"] = strToUpper(trim($arFields["PATTERN_CREATE"]));
+		$arFields["DICTIONARY_ID"] = intval($arFields["DICTIONARY_ID"]);
+		$arFields["PATTERN_CREATE"] = mb_strtoupper(trim($arFields["PATTERN_CREATE"]));
 		$arFields["PATTERN_CREATE"] = in_array($arFields["PATTERN_CREATE"], array("WORDS", "PTTRN", "TRNSL")) ? $arFields["PATTERN_CREATE"] : false;
 		if (!$arFields["PATTERN_CREATE"])
 			$arFields["PATTERN_CREATE"] = ($arFields["WORDS"] ? "TRNSL" : "PTTRN");
 
-		$arFields["WORDS"] = trim($arFields["PATTERN_CREATE"] == "TRNSL" ? strToLower($arFields["WORDS"]) : $arFields["WORDS"]);
+		$arFields["WORDS"] = trim($arFields["PATTERN_CREATE"] == "TRNSL"? mb_strtolower($arFields["WORDS"]) : $arFields["WORDS"]);
 		$arFields["PATTERN"] = trim($arFields["PATTERN"]);
 		$arFields["REPLACEMENT"] = trim($arFields["REPLACEMENT"]);
 		$arFields["DESCRIPTION"] = trim($arFields["DESCRIPTION"]);
@@ -522,11 +346,11 @@ class CAllFilterUnquotableWords
 		if(CACHED_b_forum_filter !== false)
 			$GLOBALS["CACHE_MANAGER"]->CleanDir("b_forum_filter");
 		if(is_set($arFields, "DICTIONARY_ID"))
-			$arFields["DICTIONARY_ID"] = intVal($arFields["DICTIONARY_ID"]);
+			$arFields["DICTIONARY_ID"] = intval($arFields["DICTIONARY_ID"]);
 		if(is_set($arFields, "PATTERN_CREATE"))
 		{
-			$arFields["PATTERN_CREATE"] = strToUpper(trim($arFields["PATTERN_CREATE"]));
-			if (strLen($arFields["PATTERN_CREATE"])<=0)
+			$arFields["PATTERN_CREATE"] = mb_strtoupper(trim($arFields["PATTERN_CREATE"]));
+			if ($arFields["PATTERN_CREATE"] == '')
 			{
 				if ($arFields["WORDS"])
 					$arFields["PATTERN_CREATE"] = "TRNSL";
@@ -538,7 +362,7 @@ class CAllFilterUnquotableWords
 		{
 			$arFields["WORDS"] = trim($arFields["WORDS"]);
 			if ($arFields["PATTERN_CREATE"] == "TRNSL")
-				$arFields["WORDS"] = strToLower($arFields["WORDS"]);
+				$arFields["WORDS"] = mb_strtolower($arFields["WORDS"]);
 		}
 
 		if(is_set($arFields, "PATTERN"))
@@ -554,7 +378,7 @@ class CAllFilterUnquotableWords
 		{
 			$strUpdate = $DB->PrepareUpdate("b_forum_filter", $arFields);
 			$strSql = "UPDATE b_forum_filter SET ".$strUpdate." WHERE ID=".$ID;
-			$res = $DB->QueryBind($strSql, Array("PATTERN"=>$arFields["PATTERN"], "DESCRIPTION"=>$arFields["DESCRIPTION"]), false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+			$res = $DB->QueryBind($strSql, Array("PATTERN"=>$arFields["PATTERN"], "DESCRIPTION"=>$arFields["DESCRIPTION"]));
 			return $res;
 		}
 		return false;
@@ -563,7 +387,7 @@ class CAllFilterUnquotableWords
 	public static function Delete($ID)
 	{
 		global $DB, $USER;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if(CACHED_b_forum_filter !== false)
 			$GLOBALS["CACHE_MANAGER"]->CleanDir("b_forum_filter");
 		return $DB->Query("DELETE FROM b_forum_filter WHERE ID=".$ID);
@@ -579,40 +403,40 @@ class CAllFilterUnquotableWords
 	public static function GetFilterOperation($key)
 	{
 		$strNegative = "N";
-		if (substr($key, 0, 1)=="!")
+		if (mb_substr($key, 0, 1) == "!")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strNegative = "Y";
 		}
 
-		if (substr($key, 0, 2)==">=")
+		if (mb_substr($key, 0, 2) == ">=")
 		{
-			$key = substr($key, 2);
+			$key = mb_substr($key, 2);
 			$strOperation = ">=";
 		}
-		elseif (substr($key, 0, 1)==">")
+		elseif (mb_substr($key, 0, 1) == ">")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = ">";
 		}
-		elseif (substr($key, 0, 2)=="<=")
+		elseif (mb_substr($key, 0, 2) == "<=")
 		{
-			$key = substr($key, 2);
+			$key = mb_substr($key, 2);
 			$strOperation = "<=";
 		}
-		elseif (substr($key, 0, 1)=="<")
+		elseif (mb_substr($key, 0, 1) == "<")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "<";
 		}
-		elseif (substr($key, 0, 1)=="@")
+		elseif (mb_substr($key, 0, 1) == "@")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "IN";
 		}
-		elseif (substr($key, 0, 1)=="%")
+		elseif (mb_substr($key, 0, 1) == "%")
 		{
-			$key = substr($key, 1);
+			$key = mb_substr($key, 1);
 			$strOperation = "LIKE";
 		}
 		else
@@ -624,13 +448,13 @@ class CAllFilterUnquotableWords
 
 	public static function GenPattern($ID=false, $DICTIONARY_ID_T=0)
 	{
-		$DICTIONARY_ID_T = intVal($DICTIONARY_ID_T);
+		$DICTIONARY_ID_T = intval($DICTIONARY_ID_T);
 		if (!$DICTIONARY_ID_T)
 			$DICTIONARY_ID_T = (COption::GetOptionString("forum", "FILTER_DICT_T", '', LANGUAGE_ID));
-		$ID = intVal($ID);
+		$ID = intval($ID);
 		if ($ID):
 			$res = CFilterUnquotableWords::GetByID($ID);
-			if ((strlen(trim($res["WORDS"]))>0) && ($res["PATTERN_CREATE"] == "TRNSL")):
+			if ((trim($res["WORDS"]) <> '') && ($res["PATTERN_CREATE"] == "TRNSL")):
 				$pattern = CFilterUnquotableWords::CreatePattern(trim($res["WORDS"]), $DICTIONARY_ID_T);
 				if ($pattern && CFilterUnquotableWords::Update($ID, array("PATTERN"=>$pattern)))
 					return true;
@@ -641,8 +465,8 @@ class CAllFilterUnquotableWords
 
 	public static function GenPatternAll($DICTIONARY_ID_W=0, $DICTIONARY_ID_T=0)
 	{
-		$DICTIONARY_ID_W = intVal($DICTIONARY_ID_W);
-		$DICTIONARY_ID_T = intVal($DICTIONARY_ID_T);
+		$DICTIONARY_ID_W = intval($DICTIONARY_ID_W);
+		$DICTIONARY_ID_T = intval($DICTIONARY_ID_T);
 		if (!$DICTIONARY_ID_W)
 			$DICTIONARY_ID_W = (COption::GetOptionString("forum", "FILTER_DICT_W", '', LANGUAGE_ID));
 		if (!$DICTIONARY_ID_T)
@@ -650,7 +474,7 @@ class CAllFilterUnquotableWords
 		if ($DICTIONARY_ID_W):
 			$db_res = CFilterUnquotableWords::GetList(array(), array("DICTIONARY_ID"=>$DICTIONARY_ID_W));
 			while ($res = $db_res->Fetch()):
-				if ((strlen(trim($res["WORDS"]))>0) && ($res["PATTERN_CREATE"] == "TRNSL")):
+				if ((trim($res["WORDS"]) <> '') && ($res["PATTERN_CREATE"] == "TRNSL")):
 					$pattern = CFilterUnquotableWords::CreatePattern(trim($res["WORDS"]), $DICTIONARY_ID_T);
 					if ($pattern)
 						CFilterUnquotableWords::Update($res["ID"], array("PATTERN"=>$pattern));
@@ -666,10 +490,10 @@ class CAllFilterUnquotableWords
 		$res = "";
 		$NotWord = "\s.,;:!?\#\-\*\|\[\]\(\)";
 		$word_separator = "[".$NotWord."]";
-		$pattern = strtolower(trim($pattern));
+		$pattern = mb_strtolower(trim($pattern));
 		$DICTIONARY_ID = intval($DICTIONARY_ID);
 
-		if (strlen($pattern) <= 0)
+		if ($pattern == '')
 			return false;
 
 		if ($DICTIONARY_ID == 0)
@@ -692,30 +516,30 @@ class CAllFilterUnquotableWords
 			for ($ii = 0; $ii < count($arrRepl); $ii++)
 			{
 				$arrRepl[$ii] = trim($arrRepl[$ii]);
-				if (strLen($lett["LETTER"])==1)
+				if (mb_strlen($lett["LETTER"]) == 1)
 				{
-					if (strLen($arrRepl[$ii]) == 1)
+					if (mb_strlen($arrRepl[$ii]) == 1)
 						$arrRes[$ii] = $arrRepl[$ii]."+";
-					elseif (substr($arrRepl[$ii], 0, 1) == "(" && (substr($arrRepl[$ii], -1, 1) == ")" || substr($arrRepl[$ii], -2, 1) == ")"))
+					elseif (mb_substr($arrRepl[$ii], 0, 1) == "(" && (mb_substr($arrRepl[$ii], -1, 1) == ")" || mb_substr($arrRepl[$ii], -2, 1) == ")"))
 					{
-						if (substr($arrRepl[$ii], -1, 1) == ")")
+						if (mb_substr($arrRepl[$ii], -1, 1) == ")")
 							$arrRes[$ii] = $arrRepl[$ii]."+";
 						else
 							$arrRes[$ii] = $arrRepl[$ii];
 					}
-					elseif (strLen($arrRepl[$ii]) > 1)
+					elseif (mb_strlen($arrRepl[$ii]) > 1)
 						$arrRes[$ii] = "[".$arrRepl[$ii]."]+";
 					else
 						$space = true;
 				}
 				else
 				{
-					if (strLen($arrRepl[$ii]) > 0)
+					if ($arrRepl[$ii] <> '')
 						$arrRes[$ii] = $arrRepl[$ii];
 				}
 			}
 
-			if (strLen($lett["LETTER"])==1)
+			if (mb_strlen($lett["LETTER"]) == 1)
 			{
 				if ($space)
 					$arrRes[] = "";
@@ -724,20 +548,20 @@ class CAllFilterUnquotableWords
 			}
 			else
 			{
-				$lettersPatt["/".preg_quote($lett["LETTER"])."/is".BX_UTF_PCRE_MODIFIER] = "(".implode("|", $arrRes).")";
+				$lettersPatt["/".preg_quote($lett["LETTER"])."/isu"] = "(".implode("|", $arrRes).")";
 			}
 		}
 		// letters
 		foreach ($lettersPatt as $key => $val)
-			$pattern = preg_replace($key.BX_UTF_PCRE_MODIFIER, $val, $pattern);
-		for ($ii = 0; $ii < strLen($pattern); $ii++)
+			$pattern = preg_replace($key, $val, $pattern);
+		for ($ii = 0; $ii < mb_strlen($pattern); $ii++)
 		{
-			$sPattern = substr($pattern, $ii, 1);
-			if (is_set($lettPatt, substr($pattern, $ii, 1)))
-				$res .= "(".$lettPatt[substr($pattern, $ii, 1)].")";
+			$sPattern = mb_substr($pattern, $ii, 1);
+			if (is_set($lettPatt, mb_substr($pattern, $ii, 1)))
+				$res .= "(".$lettPatt[mb_substr($pattern, $ii, 1)].")";
 			else
 			{
-				$ord = ord(substr($pattern, $ii, 1));
+				$ord = ord(mb_substr($pattern, $ii, 1));
 				if ((48>$ord) || ((64>$ord) and ($ord>57)) || ((97>$ord) and ($ord>90)) || ((127>$ord) and ($ord>122)))
 				{
 					if ($ord == 42)
@@ -747,17 +571,16 @@ class CAllFilterUnquotableWords
 					elseif ($ord == 63)
 						$res .= ".?";
 					else
-						$res .= substr($pattern, $ii, 1);
+						$res .= mb_substr($pattern, $ii, 1);
 				}
 				else
-					$res .= substr($pattern, $ii, 1)."+";
+					$res .= mb_substr($pattern, $ii, 1)."+";
 			}
 			$res .= $separator;
 		}
-		$res = "/(?<=".$word_separator.")(".$res.")(?=".$word_separator.")/is".BX_UTF_PCRE_MODIFIER;
+		$res = "/(?<=".$word_separator.")(".$res.")(?=".$word_separator.")/isu";
 		return $res;
 	}
-
 
 	public static function FilterPerm()
 	{
@@ -786,10 +609,10 @@ class CAllFilterUnquotableWords
 				$replace = COption::GetOptionString("forum", "FILTER_RPL", "*");
 				while ($res = $db_res->Fetch())
 				{
-					if (strlen(trim($res["PATTERN"])) > 0 )
+					if (trim($res["PATTERN"]) <> '' )
 					{
 						$arFilterPattern[LANGUAGE_ID]["pattern"][] = trim($res["PATTERN"]);
-						$arFilterPattern[LANGUAGE_ID]["replacement"][] = strlen($res["REPLACEMENT"]) > 0 ? " ".$res["REPLACEMENT"]." " : " ".$replace." ";
+						$arFilterPattern[LANGUAGE_ID]["replacement"][] = $res["REPLACEMENT"] <> '' ? " ".$res["REPLACEMENT"]." " : " ".$replace." ";
 					}
 				}
 			}
@@ -816,4 +639,3 @@ class CAllFilterUnquotableWords
 		return trim($message);
 	}
 }
-?>

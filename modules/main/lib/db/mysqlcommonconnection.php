@@ -1,75 +1,33 @@
 <?php
+
 namespace Bitrix\Main\DB;
 
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Fields\ScalarField;
 
 abstract class MysqlCommonConnection extends Connection
 {
 	protected $engine = "";
+	protected int $transactionLevel = 0;
 
 	/**
-	 * $configuration may contain following keys:
-	 * <ul>
-	 * <li>host
-	 * <li>database
-	 * <li>login
-	 * <li>password
-	 * <li>initCommand
-	 * <li>options
-	 * <li>engine
-	 * </ul>
-	 *
-	 * @param array $configuration Array of Name => Value pairs.
+	 * @inheritDoc
 	 */
-	
-	/**
-	* <p>Нестатический метод вызывается при создании экземпляра класса и позволяет в нем произвести  при создании объекта какие-то действия.</p>
-	*
-	*
-	* @param array $configuration  Массив ключей: <ul> <li> <b>host</b> - хост; </li> <li> <b>database</b> - база данных; </li>
-	* <li> <b>login</b> - логин; </li> <li> <b>password</b> - пароль; </li> <li> <b>initCommand</b> -
-	* команда инициализации; </li> <li> <b>options</b> - настройки; </li> <li> <b>engine</b> -
-	* тип механизма хранения. </li> </ul>
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/__construct.php
-	* @author Bitrix
-	*/
 	public function __construct(array $configuration)
 	{
 		parent::__construct($configuration);
-		$this->engine = isset($configuration['engine']) ? $configuration['engine'] : "";
+		$this->engine = $configuration['engine'] ?? '';
 	}
 
 	/**
-	 * Checks if a table exists.
-	 *
-	 * @param string $tableName The table name.
-	 *
-	 * @return boolean
+	 * @inheritDoc
 	 */
-	
-	/**
-	* <p>Нестатический метод проверяет существование таблицы.</p>
-	*
-	*
-	* @param string $tableName  Имя таблицы
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/istableexists.php
-	* @author Bitrix
-	*/
 	public function isTableExists($tableName)
 	{
 		$tableName = preg_replace("/[^a-z0-9%_]+/i", "", $tableName);
 		$tableName = trim($tableName);
 
-		if (strlen($tableName) <= 0)
+		if ($tableName == '')
 		{
 			return false;
 		}
@@ -80,75 +38,31 @@ abstract class MysqlCommonConnection extends Connection
 	}
 
 	/**
-	 * Checks if an index exists.
-	 * Actual columns in the index may differ from requested.
-	 * $columns may present an "prefix" of actual index columns.
-	 *
-	 * @param string $tableName A table name.
-	 * @param array  $columns An array of columns in the index.
-	 *
-	 * @return boolean
-	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 * @inheritDoc
 	 */
-	
-	/**
-	* <p>Нестатический метод проверяет существование индекса.</p> <p>Актуально содержание колонок в индексе может отличаться от запрошенных. В <code>$columns</code> можно использовать префикс столбцов актуального индекса.</p>
-	*
-	*
-	* @param string $tableName  Имя таблицы.
-	*
-	* @param array $columns  Массив столбцов в индексе.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/isindexexists.php
-	* @author Bitrix
-	*/
 	public function isIndexExists($tableName, array $columns)
 	{
 		return $this->getIndexName($tableName, $columns) !== null;
 	}
 
 	/**
-	 * Returns the name of an index.
-	 *
-	 * @param string $tableName A table name.
-	 * @param array $columns An array of columns in the index.
-	 * @param bool $strict The flag indicating that the columns in the index must exactly match the columns in the $arColumns parameter.
-	 *
-	 * @return string|null Name of the index or null if the index doesn't exist.
-	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 * @inheritDoc
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает имя индекса.</p>
-	*
-	*
-	* @param string $tableName  Название таблицы.
-	*
-	* @param array $columns  Массив колонок индекса.
-	*
-	* @param boolean $strict = false Флаг, устанавливающий, что колонки в индексе должны точно
-	* соответствовать колонкам в параметре $Columns.
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/getindexname.php
-	* @author Bitrix
-	*/
 	public function getIndexName($tableName, array $columns, $strict = false)
 	{
-		if (!is_array($columns) || count($columns) <= 0)
+		if (empty($columns))
+		{
 			return null;
+		}
 
 		$tableName = preg_replace("/[^a-z0-9_]+/i", "", $tableName);
 		$tableName = trim($tableName);
 
 		$rs = $this->query("SHOW INDEX FROM `".$this->getSqlHelper()->forSql($tableName)."`");
 		if (!$rs)
+		{
 			return null;
+		}
 
 		$indexes = array();
 		while ($ar = $rs->fetch())
@@ -156,55 +70,23 @@ abstract class MysqlCommonConnection extends Connection
 			$indexes[$ar["Key_name"]][$ar["Seq_in_index"] - 1] = $ar["Column_name"];
 		}
 
-		$columnsList = implode(",", $columns);
-		foreach ($indexes as $indexName => $indexColumns)
-		{
-			ksort($indexColumns);
-			$indexColumnList = implode(",", $indexColumns);
-			if ($strict)
-			{
-				if ($indexColumnList === $columnsList)
-					return $indexName;
-			}
-			else
-			{
-				if (substr($indexColumnList, 0, strlen($columnsList)) === $columnsList)
-					return $indexName;
-			}
-		}
-
-		return null;
+		return static::findIndex($indexes, $columns, $strict);
 	}
 
 	/**
-	 * Returns fields objects according to the columns of a table.
-	 * Table must exists.
-	 *
-	 * @param string $tableName The table name.
-	 *
-	 * @return Entity\ScalarField[] An array of objects with columns information.
-	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 * @inheritDoc
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает объекты полей соответствующие колонкам таблицы. Таблица должна существовать.</p>
-	*
-	*
-	* @param string $tableName  Имя таблицы
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/gettablefields.php
-	* @author Bitrix
-	*/
 	public function getTableFields($tableName)
 	{
 		if (!isset($this->tableColumnsCache[$tableName]))
 		{
 			$this->connectInternal();
 
-			$query = $this->queryInternal("SELECT * FROM ".$this->getSqlHelper()->quote($tableName)." LIMIT 0");
+			$sqlTableName = ($tableName[0] === '(')
+				? $tableName.' AS xyz' // subquery
+				: $this->getSqlHelper()->quote($tableName); // regular table name
+
+			$query = $this->queryInternal("SELECT * FROM {$sqlTableName} LIMIT 0");
 
 			$result = $this->createResult($query);
 
@@ -214,23 +96,16 @@ abstract class MysqlCommonConnection extends Connection
 	}
 
 	/**
-	 * @param string $tableName Name of the new table.
-	 * @param \Bitrix\Main\Entity\ScalarField[] $fields Array with columns descriptions.
-	 * @param string[] $primary Array with primary key column names.
-	 * @param string[] $autoincrement Which columns will be auto incremented ones.
-	 *
-	 * @return void
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 * @inheritDoc
 	 */
 	public function createTable($tableName, $fields, $primary = array(), $autoincrement = array())
 	{
-		$sql = 'CREATE TABLE '.$this->getSqlHelper()->quote($tableName).' (';
+		$sql = 'CREATE TABLE IF NOT EXISTS '.$this->getSqlHelper()->quote($tableName).' (';
 		$sqlFields = array();
 
 		foreach ($fields as $columnName => $field)
 		{
-			if (!($field instanceof Entity\ScalarField))
+			if (!($field instanceof ScalarField))
 			{
 				throw new ArgumentException(sprintf(
 					'Field `%s` should be an Entity\ScalarField instance', $columnName
@@ -241,7 +116,7 @@ abstract class MysqlCommonConnection extends Connection
 
 			$sqlFields[] = $this->getSqlHelper()->quote($realColumnName)
 				. ' ' . $this->getSqlHelper()->getColumnTypeByField($field)
-				. ' NOT NULL' // null for oracle if is not primary
+				. ($field->isNullable() ? '' : ' NOT NULL') // null for oracle if is not primary
 				. (in_array($columnName, $autoincrement, true) ? ' AUTO_INCREMENT' : '')
 			;
 		}
@@ -270,39 +145,9 @@ abstract class MysqlCommonConnection extends Connection
 	}
 
 	/**
-	 * Creates index on column(s)
-	 * @api
-	 *
-	 * @param string          $tableName     Name of the table.
-	 * @param string          $indexName     Name of the new index.
-	 * @param string|string[] $columnNames   Name of the column or array of column names to be included into the index.
-	 * @param string[]        $columnLengths Array of column names and maximum length for them.
-	 *
-	 * @return Result
-	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 * @inheritDoc
 	 */
-	
-	/**
-	* <p>Нестатический метод создаёт индекс колонок.</p>
-	*
-	*
-	* @param string $tableName  Имя таблицы.
-	*
-	* @param string $indexName  Имя нового индекса.
-	*
-	* @param string $string  Имя колонки ли массив имён колонок, для которых создаётся индекс.
-	*
-	* @param strin $arraycolumnNames  
-	*
-	* @param array$columnName $arraycolumnLengths = null 
-	*
-	* @return \Bitrix\Main\DB\Result 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/createindex.php
-	* @author Bitrix
-	*/
-	public function createIndex($tableName, $indexName, $columnNames, $columnLengths = null)
+	public function createIndex($tableName, $indexName, $columnNames, $columnLengths = null, $indexType = null)
 	{
 		if (!is_array($columnNames))
 		{
@@ -330,134 +175,150 @@ abstract class MysqlCommonConnection extends Connection
 		}
 		unset($columnName);
 
-		$sql = 'CREATE INDEX '.$sqlHelper->quote($indexName).' ON '.$sqlHelper->quote($tableName).' ('.join(', ', $columnNames).')';
+		$indexTypeSql = '';
 
-		return $this->query($sql);
+		if ($indexType !== null
+			&& in_array(strtoupper($indexType), [static::INDEX_UNIQUE, static::INDEX_FULLTEXT, static::INDEX_SPATIAL], true)
+		)
+		{
+			$indexTypeSql = strtoupper($indexType);
+		}
+
+		$sql = 'CREATE '.$indexTypeSql.' INDEX '.$sqlHelper->quote($indexName).' ON '.$sqlHelper->quote($tableName)
+			.' ('.join(', ', $columnNames).')';
+
+		try
+		{
+			$result = $this->query($sql);
+		}
+		catch (\Bitrix\Main\DB\SqlQueryException $e)
+		{
+			//Duplicate key name
+			if (strpos($e->getMessage(), '(1061)') === false)
+			{
+				throw $e;
+			}
+		}
+
+		return $result;
 	}
 
 	/**
-	 * Renames the table. Renamed table must exists and new name must not be occupied by any database object.
-	 *
-	 * @param string $currentName Old name of the table.
-	 * @param string $newName New name of the table.
-	 *
-	 * @return void
-	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 * @inheritDoc
 	 */
-	
-	/**
-	* <p>Нестатический метод переименовывает таблицу. Таблица обязательно должна существовать и новое имя не должно встречаться в БД.</p>
-	*
-	*
-	* @param string $currentName  Текущее имя таблицы.
-	*
-	* @param string $newName  Новое имя таблицы.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/renametable.php
-	* @author Bitrix
-	*/
 	public function renameTable($currentName, $newName)
 	{
 		$this->query('RENAME TABLE '.$this->getSqlHelper()->quote($currentName).' TO '.$this->getSqlHelper()->quote($newName));
 	}
 
 	/**
-	 * Drops the table.
-	 *
-	 * @param string $tableName Name of the table to be dropped.
-	 *
-	 * @return void
-	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 * @inheritDoc
 	 */
-	
-	/**
-	* <p>Нестатический метод удаляет таблицу.</p>
-	*
-	*
-	* @param string $tableName  Имя удаляемой таблицы
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/droptable.php
-	* @author Bitrix
-	*/
 	public function dropTable($tableName)
 	{
 		$this->query('DROP TABLE '.$this->getSqlHelper()->quote($tableName));
 	}
 
 	/*********************************************************
-	 * Transaction
+	 * Transactions
 	 *********************************************************/
 
 	/**
-	 * Starts new database transaction.
-	 *
-	 * @return void
-	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 * @inheritDoc
 	 */
-	
-	/**
-	* <p>Нестатический метод производит запуск новой транзакции базы данных.</p> <p>Без параметров</p>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/starttransaction.php
-	* @author Bitrix
-	*/
 	public function startTransaction()
 	{
-		$this->query("START TRANSACTION");
+		if ($this->transactionLevel == 0)
+		{
+			$this->query("START TRANSACTION");
+		}
+		else
+		{
+			$this->query("SAVEPOINT TRANS{$this->transactionLevel}");
+		}
+
+		$this->transactionLevel++;
 	}
 
 	/**
-	 * Commits started database transaction.
-	 *
-	 * @return void
-	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 * @inheritDoc
 	 */
-	
-	/**
-	* <p>Нестатический метод останавливает начатую транзакцию Базы данных.</p> <p>Без параметров</p>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/committransaction.php
-	* @author Bitrix
-	*/
 	public function commitTransaction()
 	{
-		$this->query("COMMIT");
+		$this->transactionLevel--;
+
+		if ($this->transactionLevel < 0)
+		{
+			throw new TransactionException('Transaction was not started.');
+		}
+
+		if ($this->transactionLevel == 0)
+		{
+			// commits all nested transactions
+			$this->query("COMMIT");
+		}
 	}
 
 	/**
-	 * Rollbacks started database transaction.
-	 *
-	 * @return void
-	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 * @inheritDoc
+	 * @throws TransactionException
 	 */
-	
-	/**
-	* <p>Нестатический метод откатывает начатую транзакцию.</p> <p>Без параметров</p>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/rollbacktransaction.php
-	* @author Bitrix
-	*/
 	public function rollbackTransaction()
 	{
-		$this->query("ROLLBACK");
+		$this->transactionLevel--;
+
+		if ($this->transactionLevel < 0)
+		{
+			throw new TransactionException('Transaction was not started.');
+		}
+
+		if ($this->transactionLevel == 0)
+		{
+			$this->query("ROLLBACK");
+		}
+		else
+		{
+			$this->query("ROLLBACK TO SAVEPOINT TRANS{$this->transactionLevel}");
+
+			throw new TransactionException('Nested rollbacks are unsupported.');
+		}
+	}
+
+	/*********************************************************
+	 * Global named lock
+	 *********************************************************/
+
+	/**
+	 * @inheritDoc
+	 */
+	public function lock($name, $timeout = 0)
+	{
+		$timeout = (int)$timeout;
+		$name = $this->getLockName($name);
+
+		$lock = $this->query("SELECT GET_LOCK('{$name}', {$timeout}) as L")->fetch();
+
+		return ($lock["L"] == "1");
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function unlock($name)
+	{
+		$name = $this->getLockName($name);
+
+		$lock = $this->query("SELECT RELEASE_LOCK('{$name}') as L")->fetch();
+
+		return ($lock["L"] == "1");
+	}
+
+	protected function getLockName($name)
+	{
+		$unique = \CMain::GetServerUniqID();
+
+		//64 characters max for mysql 5.7+
+		return md5($unique).md5($name);
 	}
 
 	/*********************************************************
@@ -465,23 +326,19 @@ abstract class MysqlCommonConnection extends Connection
 	 *********************************************************/
 
 	/**
+	 * @inheritDoc
+	 */
+	public function getType()
+	{
+		return "mysql";
+	}
+
+	/**
 	 * Sets default storage engine for all consequent CREATE TABLE statements and all other relevant DDL.
 	 * Storage engine read from .settings.php file. It is 'engine' key of the 'default' from the 'connections'.
 	 *
 	 * @return void
-	 * @throws \Bitrix\Main\Db\SqlQueryException
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает настройки по умолчанию для механизма хранения для всех операторов CREATE TABLE и для всех остальных релевантных DDL.</p> <p>Значение настроек типа хранения получаются из файла <a href="https://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;LESSON_ID=2795" >.settings.php</a>. Это ключ <b>engine</b> из массива <code>default</code> секции <code>connections</code>.</p> <p>Без параметров</p>
-	*
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/setstorageengine.php
-	* @author Bitrix
-	*/
 	public function setStorageEngine()
 	{
 		if ($this->engine)
@@ -496,18 +353,28 @@ abstract class MysqlCommonConnection extends Connection
 	 * @param string $database Database name.
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Нестатический абстрактный метод устанавливает БД по умолчанию для запросов.</p>
-	*
-	*
-	* @param string $database  Имя БД.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/mysqlcommonconnection/selectdatabase.php
-	* @author Bitrix
-	*/
 	abstract public function selectDatabase($database);
+
+	/**
+	 * Returns max packet length to send to or receive from the database server.
+	 *
+	 * @return int
+	 */
+	public function getMaxAllowedPacket()
+	{
+		static $mtu;
+
+		if (is_null($mtu))
+		{
+			$mtu = 0;
+
+			$res = $this->query("SHOW VARIABLES LIKE 'max_allowed_packet'")->fetch();
+			if ($res['Variable_name'] == 'max_allowed_packet')
+			{
+				$mtu = intval($res['Value']);
+			}
+		}
+
+		return $mtu;
+	}
 }

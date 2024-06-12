@@ -1,22 +1,25 @@
 <?php
-/**
- * Bitrix Framework
- * @package bitrix
- * @subpackage sale
- * @copyright 2001-2012 Bitrix
- */
+
 namespace Bitrix\Sale\Internals;
 
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class CollectionBase
+ * @package Bitrix\Sale\Internals
+ */
 abstract class CollectionBase
 	implements \ArrayAccess, \Countable, \IteratorAggregate
 {
+	/** @var CollectableEntity[] $collection */
 	protected $collection = array();
 
-	public function getIterator()
+	/**
+	 * @return \ArrayIterator
+	 */
+	public function getIterator(): \Traversable
 	{
 		return new \ArrayIterator($this->collection);
 	}
@@ -25,18 +28,7 @@ abstract class CollectionBase
 	/**
 	 * Whether a offset exists
 	 */
-	
-	/**
-	* <p>Метод определяет, существует или нет заданное смещение (ключ). Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/collectionbase/offsetexists.php
-	* @author Bitrix
-	*/
-	public function offsetExists($offset)
+	public function offsetExists($offset): bool
 	{
 		return isset($this->collection[$offset]) || array_key_exists($offset, $this->collection);
 	}
@@ -44,17 +36,7 @@ abstract class CollectionBase
 	/**
 	 * Offset to retrieve
 	 */
-	
-	/**
-	* <p>Метод возвращает заданное смещение (ключ). Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/collectionbase/offsetget.php
-	* @author Bitrix
-	*/
+	#[\ReturnTypeWillChange]
 	public function offsetGet($offset)
 	{
 		if (isset($this->collection[$offset]) || array_key_exists($offset, $this->collection))
@@ -68,18 +50,7 @@ abstract class CollectionBase
 	/**
 	 * Offset to set
 	 */
-	
-	/**
-	* <p>Метод устанавливает заданное смещение (ключ). Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/collectionbase/offsetset.php
-	* @author Bitrix
-	*/
-	public function offsetSet($offset, $value)
+	public function offsetSet($offset, $value): void
 	{
 		if($offset === null)
 		{
@@ -94,18 +65,7 @@ abstract class CollectionBase
 	/**
 	 * Offset to unset
 	 */
-	
-	/**
-	* <p>Метод удаляет смещение. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/collectionbase/offsetunset.php
-	* @author Bitrix
-	*/
-	public function offsetUnset($offset)
+	public function offsetUnset($offset): void
 	{
 		unset($this->collection[$offset]);
 	}
@@ -113,18 +73,7 @@ abstract class CollectionBase
 	/**
 	 * Count elements of an object
 	 */
-	
-	/**
-	* <p>Метод возвращает количество элементов объекта. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/collectionbase/count.php
-	* @author Bitrix
-	*/
-	public function count()
+	public function count(): int
 	{
 		return count($this->collection);
 	}
@@ -132,17 +81,6 @@ abstract class CollectionBase
 	/**
 	 * Return the current element
 	 */
-	
-	/**
-	* <p>Метод возвращает текущий элемент. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/collectionbase/current.php
-	* @author Bitrix
-	*/
 	public function current()
 	{
 		return current($this->collection);
@@ -151,17 +89,6 @@ abstract class CollectionBase
 	/**
 	 * Move forward to next element
 	 */
-	
-	/**
-	* <p>Метод выполняет перемещение вперед к следующему элементу. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/collectionbase/next.php
-	* @author Bitrix
-	*/
 	public function next()
 	{
 		return next($this->collection);
@@ -170,17 +97,6 @@ abstract class CollectionBase
 	/**
 	 * Return the key of the current element
 	 */
-	
-	/**
-	* <p>Метод возвращает ключ текущего элемента. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/collectionbase/key.php
-	* @author Bitrix
-	*/
 	public function key()
 	{
 		return key($this->collection);
@@ -189,17 +105,6 @@ abstract class CollectionBase
 	/**
 	 * Checks if current position is valid
 	 */
-	
-	/**
-	* <p>Метод проверяет, корректна ли текущая позиция. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/collectionbase/valid.php
-	* @author Bitrix
-	*/
 	public function valid()
 	{
 		$key = $this->key();
@@ -209,21 +114,30 @@ abstract class CollectionBase
 	/**
 	 * Rewind the Iterator to the first element
 	 */
-	
-	/**
-	* <p>Метод возвращает итератор на первый элемент. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/collectionbase/rewind.php
-	* @author Bitrix
-	*/
 	public function rewind()
 	{
 		return reset($this->collection);
 	}
 
+	/**
+	 * Checks if collection is empty.
+	 *
+	 * @return bool
+	 */
+	public function isEmpty()
+	{
+		return empty($this->collection);
+	}
 
+	public function toArray()
+	{
+		$result = [];
+
+		foreach ($this->collection as $entity)
+		{
+			$result[] = $entity->toArray();
+		}
+
+		return $result;
+	}
 }

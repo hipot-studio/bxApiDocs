@@ -68,8 +68,15 @@ class CListPermissions
 
 		$socnet_role = CSocNetUserToGroup::GetUserRole($USER->GetID(), $socnet_group_id);
 
-		if($socnet_role !== "A" && CIBlock::GetArrayByID($iblock_id, "RIGHTS_MODE") === "E")
-			return '';
+		if (CSocNetUser::IsCurrentUserModuleAdmin())
+		{
+			$socnet_role = "A";
+		}
+
+		if ($socnet_role !== "A" && CIBlock::GetArrayByID($iblock_id, "RIGHTS_MODE") === "E")
+		{
+			return '0';
+		}
 
 		static $roles = array("A", "E", "K", "T");
 		if(!in_array($socnet_role, $roles))
@@ -103,6 +110,11 @@ class CListPermissions
 		{
 			$socnet_role = CSocNetUserToGroup::GetUserRole($USER->GetID(), $socnet_group_id);
 
+			if (CSocNetUser::IsCurrentUserModuleAdmin())
+			{
+				$socnet_role = "A";
+			}
+
 			if (
 				$socnet_role == "A"
 				&& CSocNetFeaturesPerms::CanPerformOperation($USER->GetID(), SONET_ENTITY_GROUP, $socnet_group_id, "group_lists", "write", CSocNetUser::IsCurrentUserModuleAdmin())
@@ -123,17 +135,17 @@ class CListPermissions
 
 	/**
 	 * @param $USER CUser
-	 * @param $iblock_type_id string
+	 * @param $iblockTypeId string
 	 * @return string
 	 */
-	static protected function _lists_type_check($USER, $iblock_type_id)
+	static protected function _lists_type_check($USER, $iblockTypeId)
 	{
-		$arListsPerm = CLists::GetPermission($iblock_type_id);
-		if(!count($arListsPerm))
+		$listsPermission = CLists::GetPermission($iblockTypeId);
+		if (!is_array($listsPermission) || !count($listsPermission))
 			return CListPermissions::ACCESS_DENIED;
 
-		$arUSER_GROUPS = $USER->GetUserGroupArray();
-		if(count(array_intersect($arListsPerm, $arUSER_GROUPS)) > 0)
+		$userGroups = $USER->GetUserGroupArray();
+		if (count(array_intersect($listsPermission, $userGroups)) > 0)
 			return CListPermissions::IS_ADMIN;
 
 		return CListPermissions::CAN_READ;
@@ -152,8 +164,10 @@ class CListPermissions
 			return $iblock_check;
 
 		$arListsPerm = CLists::GetPermission($iblock_type_id);
-		if(!count($arListsPerm))
+		if(!$arListsPerm)
+		{
 			return CListPermissions::ACCESS_DENIED;
+		}
 
 		$arUSER_GROUPS = $USER->GetUserGroupArray();
 		if(count(array_intersect($arListsPerm, $arUSER_GROUPS)) > 0)

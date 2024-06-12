@@ -18,6 +18,22 @@ use Bitrix\Sale\Location\DB\Helper;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class ChainTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Chain_Query query()
+ * @method static EO_Chain_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Chain_Result getById($id)
+ * @method static EO_Chain_Result getList(array $parameters = [])
+ * @method static EO_Chain_Entity getEntity()
+ * @method static \Bitrix\Sale\Location\Search\EO_Chain createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Location\Search\EO_Chain_Collection createCollection()
+ * @method static \Bitrix\Sale\Location\Search\EO_Chain wakeUpObject($row)
+ * @method static \Bitrix\Sale\Location\Search\EO_Chain_Collection wakeUpCollection($rows)
+ */
 final class ChainTable extends Entity\DataManager implements \Serializable
 {
 	const STEP_SIZE = 	10000;
@@ -40,10 +56,25 @@ final class ChainTable extends Entity\DataManager implements \Serializable
 	{
 		return serialize($this->procData);
 	}
-	public function unserialize($data)
+
+	public function unserialize($data): void
 	{
-		$this->procData = unserialize($data);
+		$this->procData = unserialize($data, ['allowed_classes' => false]);
 		$this->initInsertHandles();
+	}
+
+	public function __serialize()
+	{
+		return $this->procData;
+	}
+
+	public function __unserialize($data): void
+	{
+		if (is_array($data))
+		{
+			$this->procData = $data;
+			$this->initInsertHandles();
+		}
 	}
 
 	public function __construct($parameters = array())
@@ -156,7 +187,7 @@ final class ChainTable extends Entity\DataManager implements \Serializable
 
 		$res = Location\LocationTable::getList(array(
 			'select' => array(
-				'ID', 
+				'ID',
 				'TYPE_ID',
 				'DEPTH_LEVEL',
 				'SORT'

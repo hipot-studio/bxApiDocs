@@ -3,16 +3,27 @@ namespace Bitrix\Main\Component;
 
 use Bitrix\Main\Entity\DataManager;
 
+/**
+ * Class ParametersTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Parameters_Query query()
+ * @method static EO_Parameters_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Parameters_Result getById($id)
+ * @method static EO_Parameters_Result getList(array $parameters = [])
+ * @method static EO_Parameters_Entity getEntity()
+ * @method static \Bitrix\Main\Component\EO_Parameters createObject($setDefaultValues = true)
+ * @method static \Bitrix\Main\Component\EO_Parameters_Collection createCollection()
+ * @method static \Bitrix\Main\Component\EO_Parameters wakeUpObject($row)
+ * @method static \Bitrix\Main\Component\EO_Parameters_Collection wakeUpCollection($rows)
+ */
 class ParametersTable
 	extends DataManager
 {
 	const SEF_MODE = 'Y';
 	const NOT_SEF_MODE = 'N';
-
-	public static function getFilePath()
-	{
-		return __FILE__;
-	}
 
 	public static function getTableName()
 	{
@@ -44,7 +55,7 @@ class ParametersTable
 			),
 			'SEF_MODE' => array(
 				'data_type' => 'boolean',
-				'values' => array(self::SEF_MODE, self::NOT_SEF_MODE),
+				'values' => array(self::NOT_SEF_MODE, self::SEF_MODE),
 			),
 			'SEF_FOLDER' => array(
 				'data_type' => 'string',

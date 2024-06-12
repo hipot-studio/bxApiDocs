@@ -23,17 +23,6 @@ class YandexBase extends BitrixEngine
 	 *
 	 * @return string Url
 	 */
-	
-	/**
-	* <p>Метод возвращает URL для авторизации в приложении. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/yandexbase/getauthurl.php
-	* @author Bitrix
-	*/
 	public function getAuthUrl()
 	{
 		return $this->getInterface()->getAuthUrl();
@@ -44,17 +33,6 @@ class YandexBase extends BitrixEngine
 	 *
 	 * @return \CYandexOAuthInterface
 	 */
-	
-	/**
-	* <p>Метод создает экземпляр объекта по протоколу OAuth. Метод нестатический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \CYandexOAuthInterface 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/yandexbase/getinterface.php
-	* @author Bitrix
-	*/
 	public function getInterface()
 	{
 		if($this->authInterface === null)
@@ -128,17 +106,6 @@ class YandexBase extends BitrixEngine
 	 * @throws SystemException
 	 * @throws YandexException
 	 */
-	
-	/**
-	* <p>Метод возвращает авторизационные данные текущего пользователя Яндекс. Метод нестатический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/engine/yandexbase/getcurrentuser.php
-	* @author Bitrix
-	*/
 	public function getCurrentUser()
 	{
 		if(
@@ -148,7 +115,7 @@ class YandexBase extends BitrixEngine
 		{
 			$queryResult = self::query(self::QUERY_USER);
 
-			if($queryResult->getStatus() == self::HTTP_STATUS_OK && strlen($queryResult->getResult()) > 0)
+			if($queryResult->getStatus() == self::HTTP_STATUS_OK && $queryResult->getResult() <> '')
 			{
 				$res = Web\Json::decode($queryResult->getResult());
 

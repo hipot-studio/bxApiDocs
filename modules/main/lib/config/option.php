@@ -1,18 +1,22 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2015 Bitrix
+ * @copyright 2001-2021 Bitrix
  */
+
 namespace Bitrix\Main\Config;
 
 use Bitrix\Main;
 
 class Option
 {
-	protected static $options = array();
-	protected static $cacheTtl = null;
+	protected const CACHE_DIR = "b_option";
+
+	protected static $options = [];
+	protected static $loading = [];
 
 	/**
 	 * Returns a value of an option.
@@ -22,75 +26,28 @@ class Option
 	 * @param string $default The default value to return, if a value doesn't exist.
 	 * @param bool|string $siteId The site ID, if the option differs for sites.
 	 * @return string
-	 * @throws Main\ArgumentNullException
-	 * @throws Main\ArgumentOutOfRangeException
 	 */
-	
-	/**
-	* <p>Статический метод возвращает значение параметра.</p> <p>Аналог методов <a href="http://dev.1c-bitrix.ru/api_help/main/reference/coption/getoptionint.php" >COption::GetOptionInt</a> и <a href="http://dev.1c-bitrix.ru/api_help/main/reference/coption/getoptionstring.php" >COption::GetOptionString</a> в старом ядре.</p>
-	*
-	*
-	* @param string $moduleId  ID модуля. Обязательный.
-	*
-	* @param string $name  Имя параметра. Обязательный.
-	*
-	* @param string $default = "" Возвращается значение по умолчанию, если значение не задано.
-	*
-	* @param mixed $boolean  ID сайта, если значение параметра различно для разных сайтов.
-	*
-	* @param string $siteId = false 
-	*
-	* @return string 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* $size = Option::get("main", "max_file_size");
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/config/option/get.php
-	* @author Bitrix
-	*/
 	public static function get($moduleId, $name, $default = "", $siteId = false)
 	{
-		if (empty($moduleId))
-			throw new Main\ArgumentNullException("moduleId");
-		if (empty($name))
-			throw new Main\ArgumentNullException("name");
+		$value = static::getRealValue($moduleId, $name, $siteId);
 
-		static $defaultSite = null;
-		if ($siteId === false)
+		if ($value !== null)
 		{
-			if ($defaultSite === null)
-			{
-				$context = Main\Application::getInstance()->getContext();
-				if ($context != null)
-					$defaultSite = $context->getSite();
-			}
-			$siteId = $defaultSite;
+			return $value;
 		}
 
-		$siteKey = ($siteId == "") ? "-" : $siteId;
-		if (static::$cacheTtl === null)
-			static::$cacheTtl = self::getCacheTtl();
-		if ((static::$cacheTtl === false) && !isset(self::$options[$siteKey][$moduleId])
-			|| (static::$cacheTtl !== false) && empty(self::$options))
+		if (isset(self::$options[$moduleId]["-"][$name]))
 		{
-			self::load($moduleId, $siteId);
+			return self::$options[$moduleId]["-"][$name];
 		}
-
-		if (isset(self::$options[$siteKey][$moduleId][$name]))
-			return self::$options[$siteKey][$moduleId][$name];
-
-		if (isset(self::$options["-"][$moduleId][$name]))
-			return self::$options["-"][$moduleId][$name];
 
 		if ($default == "")
 		{
-			$moduleDefaults = self::getDefaults($moduleId);
+			$moduleDefaults = static::getDefaults($moduleId);
 			if (isset($moduleDefaults[$name]))
+			{
 				return $moduleDefaults[$name];
+			}
 		}
 
 		return $default;
@@ -105,50 +62,38 @@ class Option
 	 * @return null|string
 	 * @throws Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Статический метод возвращает реальные значения параметров, какие были записаны в Базу данных.</p> <p>В отличии от <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/main/config/option/get.php">get</a>, не используются значения по умолчанию. То есть нельзя передать в метод, нельзя учесть изначально заданные значения параметра по умолчанию.</p>
-	*
-	*
-	* @param string $moduleId  ID модуля.
-	*
-	* @param string $name  Название параметра.
-	*
-	* @param string $boolean  ID сайта, если для разных сайтов установлены разные значения.
-	*
-	* @param string $siteId = false 
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/config/option/getrealvalue.php
-	* @author Bitrix
-	*/
 	public static function getRealValue($moduleId, $name, $siteId = false)
 	{
-		if (empty($moduleId))
+		if ($moduleId == '')
+		{
 			throw new Main\ArgumentNullException("moduleId");
-		if (empty($name))
+		}
+		if ($name == '')
+		{
 			throw new Main\ArgumentNullException("name");
+		}
+
+		if (isset(self::$loading[$moduleId]))
+		{
+			trigger_error("Options are already in the process of loading for the module {$moduleId}. Default value will be used for the option {$name}.", E_USER_WARNING);
+		}
+
+		if (!isset(self::$options[$moduleId]))
+		{
+			static::load($moduleId);
+		}
 
 		if ($siteId === false)
 		{
-			$context = Main\Application::getInstance()->getContext();
-			if ($context != null)
-				$siteId = $context->getSite();
+			$siteId = static::getDefaultSite();
 		}
 
-		$siteKey = ($siteId == "") ? "-" : $siteId;
-		if (static::$cacheTtl === null)
-			static::$cacheTtl = self::getCacheTtl();
-		if ((static::$cacheTtl === false) && !isset(self::$options[$siteKey][$moduleId])
-			|| (static::$cacheTtl !== false) && empty(self::$options))
+		$siteKey = ($siteId == ""? "-" : $siteId);
+
+		if (isset(self::$options[$moduleId][$siteKey][$name]))
 		{
-			self::load($moduleId, $siteId);
+			return self::$options[$moduleId][$siteKey][$name];
 		}
-
-		if (isset(self::$options[$siteKey][$moduleId][$name]))
-			return self::$options[$siteKey][$moduleId][$name];
 
 		return null;
 	}
@@ -160,96 +105,140 @@ class Option
 	 * @return array
 	 * @throws Main\ArgumentOutOfRangeException
 	 */
-	
-	/**
-	* <p>Статический метод возвращает массив с значениями по умолчанию параметров модуля (из файла <b>default_option.php</b>).</p>
-	*
-	*
-	* @param string $moduleId  ID модуля. Обязательный.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/config/option/getdefaults.php
-	* @author Bitrix
-	*/
 	public static function getDefaults($moduleId)
 	{
-		static $defaultsCache = array();
+		static $defaultsCache = [];
+
 		if (isset($defaultsCache[$moduleId]))
+		{
 			return $defaultsCache[$moduleId];
+		}
 
 		if (preg_match("#[^a-zA-Z0-9._]#", $moduleId))
+		{
 			throw new Main\ArgumentOutOfRangeException("moduleId");
+		}
 
 		$path = Main\Loader::getLocal("modules/".$moduleId."/default_option.php");
 		if ($path === false)
-			return $defaultsCache[$moduleId] = array();
+		{
+			$defaultsCache[$moduleId] = [];
+			return $defaultsCache[$moduleId];
+		}
 
 		include($path);
 
 		$varName = str_replace(".", "_", $moduleId)."_default_option";
 		if (isset(${$varName}) && is_array(${$varName}))
-			return $defaultsCache[$moduleId] = ${$varName};
+		{
+			$defaultsCache[$moduleId] = ${$varName};
+			return $defaultsCache[$moduleId];
+		}
 
-		return $defaultsCache[$moduleId] = array();
+		$defaultsCache[$moduleId] = [];
+		return $defaultsCache[$moduleId];
 	}
 
-	private static function load($moduleId, $siteId)
+	/**
+	 * Returns an array of set options array(name => value).
+	 *
+	 * @param string $moduleId The module ID.
+	 * @param bool|string $siteId The site ID, if the option differs for sites.
+	 * @return array
+	 * @throws Main\ArgumentNullException
+	 */
+	public static function getForModule($moduleId, $siteId = false)
 	{
-		$siteKey = ($siteId == "") ? "-" : $siteId;
-
-		if (static::$cacheTtl === null)
-			static::$cacheTtl = self::getCacheTtl();
-
-		if (static::$cacheTtl === false)
+		if ($moduleId == '')
 		{
-			if (!isset(self::$options[$siteKey][$moduleId]))
+			throw new Main\ArgumentNullException("moduleId");
+		}
+
+		if (!isset(self::$options[$moduleId]))
+		{
+			static::load($moduleId);
+		}
+
+		if ($siteId === false)
+		{
+			$siteId = static::getDefaultSite();
+		}
+
+		$result = self::$options[$moduleId]["-"];
+
+		if($siteId <> "" && !empty(self::$options[$moduleId][$siteId]))
+		{
+			//options for the site override general ones
+			$result = array_replace($result, self::$options[$moduleId][$siteId]);
+		}
+
+		return $result;
+	}
+
+	protected static function load($moduleId)
+	{
+		$cache = Main\Application::getInstance()->getManagedCache();
+		$cacheTtl = static::getCacheTtl();
+		$loadFromDb = true;
+
+		if ($cacheTtl !== false)
+		{
+			if($cache->read($cacheTtl, "b_option:{$moduleId}", self::CACHE_DIR))
 			{
-				self::$options[$siteKey][$moduleId] = array();
+				self::$options[$moduleId] = $cache->get("b_option:{$moduleId}");
+				$loadFromDb = false;
+			}
+		}
 
-				$con = Main\Application::getConnection();
-				$sqlHelper = $con->getSqlHelper();
+		if($loadFromDb)
+		{
+			self::$loading[$moduleId] = true;
 
-				$res = $con->query(
-					"SELECT SITE_ID, NAME, VALUE ".
-					"FROM b_option ".
-					"WHERE (SITE_ID = '".$sqlHelper->forSql($siteId, 2)."' OR SITE_ID IS NULL) ".
-					"	AND MODULE_ID = '". $sqlHelper->forSql($moduleId)."' "
-				);
+			$con = Main\Application::getConnection();
+			$sqlHelper = $con->getSqlHelper();
+
+			// prevents recursion and cache miss
+			self::$options[$moduleId] = ["-" => []];
+
+			$query = "
+				SELECT NAME, VALUE
+				FROM b_option
+				WHERE MODULE_ID = '{$sqlHelper->forSql($moduleId)}'
+			";
+
+			$res = $con->query($query);
+			while ($ar = $res->fetch())
+			{
+				self::$options[$moduleId]["-"][$ar["NAME"]] = $ar["VALUE"];
+			}
+
+			try
+			{
+				//b_option_site possibly doesn't exist
+
+				$query = "
+					SELECT SITE_ID, NAME, VALUE
+					FROM b_option_site
+					WHERE MODULE_ID = '{$sqlHelper->forSql($moduleId)}'
+				";
+
+				$res = $con->query($query);
 				while ($ar = $res->fetch())
 				{
-					$s = ($ar["SITE_ID"] == ""? "-" : $ar["SITE_ID"]);
-					self::$options[$s][$moduleId][$ar["NAME"]] = $ar["VALUE"];
+					self::$options[$moduleId][$ar["SITE_ID"]][$ar["NAME"]] = $ar["VALUE"];
 				}
 			}
-		}
-		else
-		{
-			if (empty(self::$options))
-			{
-				$cache = Main\Application::getInstance()->getManagedCache();
-				if ($cache->read(static::$cacheTtl, "b_option"))
-				{
-					self::$options = $cache->get("b_option");
-				}
-				else
-				{
-					$con = Main\Application::getConnection();
-					$res = $con->query(
-						"SELECT o.SITE_ID, o.MODULE_ID, o.NAME, o.VALUE ".
-						"FROM b_option o "
-					);
-					while ($ar = $res->fetch())
-					{
-						$s = ($ar["SITE_ID"] == "") ? "-" : $ar["SITE_ID"];
-						self::$options[$s][$ar["MODULE_ID"]][$ar["NAME"]] = $ar["VALUE"];
-					}
+			catch(Main\DB\SqlQueryException $e){}
 
-					$cache->set("b_option", self::$options);
-				}
+			if($cacheTtl !== false)
+			{
+				$cache->setImmediate("b_option:{$moduleId}", self::$options[$moduleId]);
 			}
+
+			unset(self::$loading[$moduleId]);
 		}
+
+		/*patchvalidationoptions4*/
 	}
 
 	/**
@@ -261,94 +250,65 @@ class Option
 	 * @param string $siteId The site ID, if the option depends on a site.
 	 * @throws Main\ArgumentOutOfRangeException
 	 */
-	
-	/**
-	* <p>Статический метод  устанавливает значения параметра и сохраняет его в Базу данных. После сохранения запускается событие <b>OnAfterSetOption</b>.</p> <p>Аналогичен функциям <a href="http://dev.1c-bitrix.ru/api_help/main/reference/coption/setoptionint.php" >COption::SetOptionInt</a> и <a href="http://dev.1c-bitrix.ru/api_help/main/reference/coption/setoptionstring.php" >COption::SetOptionString</a> в старом ядре.</p>
-	*
-	*
-	* @param string $moduleId  ID модуля. Длина не более 50 символов.
-	*
-	* @param string $name  Имя параметра. Длина не более 50 символов.
-	*
-	* @param string $value = "" Значение параметра. Необязательный. По умолчанию - "".
-	* Максимальная сохраняемая длина значения - 2000 символов.
-	*
-	* @param string $siteId = "" Идентификатор сайта, для которого устанавливается параметр.
-	* Необязательный. Если установлен false, то будет текущий сайт.
-	*
-	* @return public 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* use Bitrix\Main\Config\Option;
-	* 
-	* Option::set("main", "max_file_size", "1024");
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/config/option/set.php
-	* @author Bitrix
-	*/
 	public static function set($moduleId, $name, $value = "", $siteId = "")
 	{
-		if (static::$cacheTtl === null)
-			static::$cacheTtl = self::getCacheTtl();
-		if (static::$cacheTtl !== false)
+		if ($moduleId == '')
 		{
-			$cache = Main\Application::getInstance()->getManagedCache();
-			$cache->clean("b_option");
+			throw new Main\ArgumentNullException("moduleId");
+		}
+		if ($name == '')
+		{
+			throw new Main\ArgumentNullException("name");
+		}
+
+		if (mb_strlen($name) > 100)
+		{
+			trigger_error("Option name {$name} will be truncated on saving.", E_USER_WARNING);
 		}
 
 		if ($siteId === false)
 		{
-			$context = Main\Application::getInstance()->getContext();
-			if ($context != null)
-				$siteId = $context->getSite();
+			$siteId = static::getDefaultSite();
 		}
 
 		$con = Main\Application::getConnection();
 		$sqlHelper = $con->getSqlHelper();
 
-		$strSqlWhere = sprintf(
-			"SITE_ID %s AND MODULE_ID = '%s' AND NAME = '%s'",
-			($siteId == "") ? "IS NULL" : "= '".$sqlHelper->forSql($siteId, 2)."'",
-			$sqlHelper->forSql($moduleId),
-			$sqlHelper->forSql($name)
-		);
+		$updateFields = [
+			"VALUE" => $value,
+		];
 
-		$res = $con->queryScalar(
-			"SELECT 'x' ".
-			"FROM b_option ".
-			"WHERE ".$strSqlWhere
-		);
-
-		if ($res != null)
+		if($siteId == "")
 		{
-			$con->queryExecute(
-				"UPDATE b_option SET ".
-				"	VALUE = '".$sqlHelper->forSql($value, 2000)."' ".
-				"WHERE ".$strSqlWhere
-			);
+			$insertFields = [
+				"MODULE_ID" => $moduleId,
+				"NAME" => $name,
+				"VALUE" => $value,
+			];
+
+			$keyFields = ["MODULE_ID", "NAME"];
+
+			$sql = $sqlHelper->prepareMerge("b_option", $keyFields, $insertFields, $updateFields);
 		}
 		else
 		{
-			$con->queryExecute(
-				sprintf(
-					"INSERT INTO b_option(SITE_ID, MODULE_ID, NAME, VALUE) ".
-					"VALUES(%s, '%s', '%s', '%s') ",
-					($siteId == "") ? "NULL" : "'".$sqlHelper->forSql($siteId, 2)."'",
-					$sqlHelper->forSql($moduleId, 50),
-					$sqlHelper->forSql($name, 50),
-					$sqlHelper->forSql($value, 2000)
-				)
-			);
+			$insertFields = [
+				"MODULE_ID" => $moduleId,
+				"NAME" => $name,
+				"SITE_ID" => $siteId,
+				"VALUE" => $value,
+			];
+
+			$keyFields = ["MODULE_ID", "NAME", "SITE_ID"];
+
+			$sql = $sqlHelper->prepareMerge("b_option_site", $keyFields, $insertFields, $updateFields);
 		}
 
-		$s = ($siteId == ""? '-' : $siteId);
-		self::$options[$s][$moduleId][$name] = $value;
+		$con->queryExecute(current($sql));
 
-		self::loadTriggers($moduleId);
+		static::clearCache($moduleId);
+
+		static::loadTriggers($moduleId);
 
 		$event = new Main\Event(
 			"main",
@@ -370,128 +330,141 @@ class Option
 		$event->send();
 	}
 
-	private static function loadTriggers($moduleId)
+	protected static function loadTriggers($moduleId)
 	{
-		static $triggersCache = array();
+		static $triggersCache = [];
+
 		if (isset($triggersCache[$moduleId]))
+		{
 			return;
+		}
 
 		if (preg_match("#[^a-zA-Z0-9._]#", $moduleId))
+		{
 			throw new Main\ArgumentOutOfRangeException("moduleId");
+		}
 
 		$triggersCache[$moduleId] = true;
 
 		$path = Main\Loader::getLocal("modules/".$moduleId."/option_triggers.php");
 		if ($path === false)
+		{
 			return;
+		}
 
 		include($path);
 	}
 
-	private static function getCacheTtl()
+	protected static function getCacheTtl()
 	{
-		$cacheFlags = Configuration::getValue("cache_flags");
-		if (!isset($cacheFlags["config_options"]))
-			return 0;
-		return $cacheFlags["config_options"];
+		static $cacheTtl = null;
+
+		if($cacheTtl === null)
+		{
+			$cacheFlags = Configuration::getValue("cache_flags");
+			$cacheTtl = $cacheFlags["config_options"] ?? 3600;
+		}
+		return $cacheTtl;
 	}
 
 	/**
 	 * Deletes options from a DB.
 	 *
 	 * @param string $moduleId The module ID.
-	 * @param array $filter The array with filter keys:
+	 * @param array $filter {name: string, site_id: string} The array with filter keys:
 	 * 		name - the name of the option;
 	 * 		site_id - the site ID (can be empty).
 	 * @throws Main\ArgumentNullException
 	 */
-	
-	/**
-	* <p>Статический метод удаляет значения параметров модуля для сайта из Базы данных. Значение только одно, массив полей передать нельзя. То есть удалить сразу несколько параметров, просто перечислив их имена, нельзя.</p> <p>Аналог метода <a href="http://dev.1c-bitrix.ru/api_help/main/reference/coption/removeoption.php" >COption::RemoveOption</a> в старом ядре.</p>
-	*
-	*
-	* @param string $moduleId  ID модуля. Обязательный.
-	*
-	* @param array $filter = array() Название параметра
-	*
-	* @return public 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* Option::delete("main", array(
-	*     "name" =&gt; "max_file_size",
-	*     "site_id" =&gt; "s2"
-	*     )
-	* );
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/config/option/delete.php
-	* @author Bitrix
-	*/
-	public static function delete($moduleId, $filter = array())
+	public static function delete($moduleId, array $filter = array())
 	{
-		if (static::$cacheTtl === null)
-			static::$cacheTtl = self::getCacheTtl();
-
-		if (static::$cacheTtl !== false)
+		if ($moduleId == '')
 		{
-			$cache = Main\Application::getInstance()->getManagedCache();
-			$cache->clean("b_option");
+			throw new Main\ArgumentNullException("moduleId");
 		}
 
 		$con = Main\Application::getConnection();
 		$sqlHelper = $con->getSqlHelper();
 
-		$strSqlWhere = "";
+		$deleteForSites = true;
+		$sqlWhere = $sqlWhereSite = "";
+
 		if (isset($filter["name"]))
 		{
-			if (empty($filter["name"]))
-				throw new Main\ArgumentNullException("filter[name]");
-			$strSqlWhere .= " AND NAME = '".$sqlHelper->forSql($filter["name"])."' ";
-		}
-		if (isset($filter["site_id"]))
-			$strSqlWhere .= " AND SITE_ID ".(($filter["site_id"] == "") ? "IS NULL" : "= '".$sqlHelper->forSql($filter["site_id"], 2)."'");
-
-		if ($moduleId == "main")
-		{
-			$con->queryExecute(
-				"DELETE FROM b_option ".
-				"WHERE MODULE_ID = 'main' ".
-				"   AND NAME NOT LIKE '~%' ".
-				"	AND NAME NOT IN ('crc_code', 'admin_passwordh', 'server_uniq_id','PARAM_MAX_SITES', 'PARAM_MAX_USERS') ".
-				$strSqlWhere
-			);
-		}
-		else
-		{
-			$con->queryExecute(
-				"DELETE FROM b_option ".
-				"WHERE MODULE_ID = '".$sqlHelper->forSql($moduleId)."' ".
-				"   AND NAME <> '~bsm_stop_date' ".
-				$strSqlWhere
-			);
-		}
-
-		if (isset($filter["site_id"]))
-		{
-			$siteKey = $filter["site_id"] == "" ? "-" : $filter["site_id"];
-			if (!isset($filter["name"]))
-				unset(self::$options[$siteKey][$moduleId]);
-			else
-				unset(self::$options[$siteKey][$moduleId][$filter["name"]]);
-		}
-		else
-		{
-			$arSites = array_keys(self::$options);
-			foreach ($arSites as $s)
+			if ($filter["name"] == '')
 			{
-				if (!isset($filter["name"]))
-					unset(self::$options[$s][$moduleId]);
-				else
-					unset(self::$options[$s][$moduleId][$filter["name"]]);
+				throw new Main\ArgumentNullException("filter[name]");
+			}
+			$sqlWhere .= " AND NAME = '{$sqlHelper->forSql($filter["name"])}'";
+		}
+		if (isset($filter["site_id"]))
+		{
+			if($filter["site_id"] <> "")
+			{
+				$sqlWhereSite = " AND SITE_ID = '{$sqlHelper->forSql($filter["site_id"], 2)}'";
+			}
+			else
+			{
+				$deleteForSites = false;
 			}
 		}
+		if($moduleId == 'main')
+		{
+			$sqlWhere .= "
+				AND NAME NOT LIKE '~%'
+				AND NAME NOT IN ('crc_code', 'admin_passwordh', 'server_uniq_id','PARAM_MAX_SITES', 'PARAM_MAX_USERS')
+			";
+		}
+		else
+		{
+			$sqlWhere .= " AND NAME <> '~bsm_stop_date'";
+		}
+
+		if($sqlWhereSite == '')
+		{
+			$con->queryExecute("
+				DELETE FROM b_option
+				WHERE MODULE_ID = '{$sqlHelper->forSql($moduleId)}'
+					{$sqlWhere}
+			");
+		}
+
+		if($deleteForSites)
+		{
+			$con->queryExecute("
+				DELETE FROM b_option_site
+				WHERE MODULE_ID = '{$sqlHelper->forSql($moduleId)}'
+					{$sqlWhere}
+					{$sqlWhereSite}
+			");
+		}
+
+		static::clearCache($moduleId);
+	}
+
+	protected static function clearCache($moduleId)
+	{
+		unset(self::$options[$moduleId]);
+
+		if (static::getCacheTtl() !== false)
+		{
+			$cache = Main\Application::getInstance()->getManagedCache();
+			$cache->clean("b_option:{$moduleId}", self::CACHE_DIR);
+		}
+	}
+
+	protected static function getDefaultSite()
+	{
+		static $defaultSite;
+
+		if ($defaultSite === null)
+		{
+			$context = Main\Application::getInstance()->getContext();
+			if ($context != null)
+			{
+				$defaultSite = $context->getSite();
+			}
+		}
+		return $defaultSite;
 	}
 }

@@ -38,19 +38,6 @@ class Element extends Base
 	 *
 	 * @return \Bitrix\Iblock\Template\Entity\Base
 	 */
-	
-	/**
-	* <p>Метод используется для поиска элемента для обработки шаблона. Нестатический метод.</p>
-	*
-	*
-	* @param string $entity  Элемент для поиска.
-	*
-	* @return \Bitrix\Iblock\Template\Entity\Base 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/element/resolve.php
-	* @author Bitrix
-	*/
 	public function resolve($entity)
 	{
 		if ($entity === "property")
@@ -121,19 +108,6 @@ class Element extends Base
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Используется для инициализации полей элемента из некоторого внешнего источника. Нестатический метод.</p>
-	*
-	*
-	* @param array $fields  Массив, содержащий поля элемента.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/element/setfields.php
-	* @author Bitrix
-	*/
 	public function setFields(array $fields)
 	{
 		parent::setFields($fields);
@@ -197,14 +171,19 @@ class Element extends Base
 	 */
 	protected function loadFromDatabase()
 	{
-		if (!isset($this->fields))
+		static $cache = array();
+		if ($this->id > 0)
 		{
-			//Element fields
-			$elementList = \Bitrix\Iblock\ElementTable::getList(array(
-				"select" => array_values($this->fieldMap),
-				"filter" => array("=ID" => $this->id),
-			));
-			$this->fields = $elementList->fetch();
+			if (!isset($cache[$this->id]))
+			{
+				//Element fields
+				$elementList = \Bitrix\Iblock\ElementTable::getList(array(
+					"select" => array_values($this->fieldMap),
+					"filter" => array("=ID" => $this->id),
+				));
+				$cache[$this->id] = $elementList->fetch();
+			}
+			$this->fields = $cache[$this->id];
 		}
 		return is_array($this->fields);
 	}

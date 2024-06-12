@@ -3,7 +3,7 @@ namespace Bitrix\Main\Text;
 
 class XmlConverter extends Converter
 {
-	static public function encode($text, $textType = "")
+	public function encode($text, $textType = "")
 	{
 		if (is_object($text))
 			return $text;
@@ -11,7 +11,7 @@ class XmlConverter extends Converter
 		return HtmlFilter::encode($text);
 	}
 
-	static public function decode($text, $textType = "")
+	public function decode($text, $textType = "")
 	{
 		if (is_object($text))
 			return $text;

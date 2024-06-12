@@ -51,9 +51,9 @@ class AliasedQuery extends Query
 
 	public function addAlias($alias, $field = null)
 	{
-		if ($this->aliases[$alias])
+		if (($this->aliases[$alias] ?? false))
 		{
-			throw new SystemException("`$alias` already added", 0, __FILE__, __LINE__);
+			throw new SystemException("'$alias' already added", 0, __FILE__, __LINE__);
 		}
 		elseif (! $field)
 		{
@@ -65,7 +65,7 @@ class AliasedQuery extends Query
 		}
 		else
 		{
-			throw new SystemException("invalid `$alias` type", 0, __FILE__, __LINE__);
+			throw new SystemException("invalid '$alias' type", 0, __FILE__, __LINE__);
 		}
 
 		return $this;
@@ -73,31 +73,31 @@ class AliasedQuery extends Query
 
 	public function getAliasName($alias)
 	{
-		if ($field = $this->aliases[$alias])
-		{
-			if (is_string($field))
-			{
-				return $field; // name
-			}
-			elseif (is_array($field)) // TODO Field support
-			{
-				$name = '__'.$alias.'_ALIAS__';
-				if (! $field['registered'])
-				{
-					$field['registered'] = true;
-					$this->registerRuntimeField($name, $field);
-				}
-				return $name;
-			}
-			else
-			{
-				throw new SystemException("invalid alias '$alias' type", 0, __FILE__, __LINE__);
-			}
-		}
-		else
+		if (!isset($this->aliases[$alias]))
 		{
 			return null;
 		}
+
+		$field = $this->aliases[$alias];
+
+		if (is_string($field))
+		{
+			return $field; // name
+		}
+		elseif (is_array($field)) // TODO Field support
+		{
+			$name = '__'.$alias.'_ALIAS__';
+			$field['registered'] ??= false;
+			if (!$field['registered'])
+			{
+				$field['registered'] = true;
+				$this->registerRuntimeField($name, $field);
+			}
+
+			return $name;
+		}
+
+		throw new SystemException("invalid alias '$alias' type", 0, __FILE__, __LINE__);
 	}
 
 	public function addAliasSelect($alias)
@@ -194,7 +194,7 @@ class AliasedQuery extends Query
 
 final class CDBResult extends \CDBResult
 {
-	public function compatibleNavQuery(Query $query, array $arNavStartParams) //, $bIgnoreErrors = false)
+	function compatibleNavQuery(Query $query, array $arNavStartParams) //, $bIgnoreErrors = false)
 	{
 		$cnt = $query->exec()->getSelectedRowsCount(); // TODO check groups
 
@@ -228,19 +228,7 @@ final class CDBResult extends \CDBResult
 				$this->NavPageCount = 1;
 
 			//page number to display
-			$this->NavPageNomer =
-				(
-				$this->PAGEN < 1 || $this->PAGEN > $this->NavPageCount
-					?
-					($_SESSION[$this->SESS_PAGEN] < 1 || $_SESSION[$this->SESS_PAGEN] > $this->NavPageCount
-						?
-						$this->NavPageCount
-						:
-						$_SESSION[$this->SESS_PAGEN]
-					)
-					:
-					$this->PAGEN
-				);
+			$this->calculatePageNumber($this->NavPageCount);
 
 			//rows to skip
 			$NavFirstRecordShow = 0;
@@ -256,14 +244,11 @@ final class CDBResult extends \CDBResult
 				$this->NavPageCount++;
 
 			//calculate total pages depend on rows count. start with 1
-			if($this->PAGEN >= 1 && $this->PAGEN <= $this->NavPageCount)
-				$this->NavPageNomer = $this->PAGEN;
-			elseif($_SESSION[$this->SESS_PAGEN] >= 1 && $_SESSION[$this->SESS_PAGEN] <= $this->NavPageCount)
-				$this->NavPageNomer = $_SESSION[$this->SESS_PAGEN];
-			elseif($arNavStartParams["checkOutOfRange"] !== true)
-				$this->NavPageNomer = 1;
-			else
+			$this->calculatePageNumber(1, true, (bool)($arNavStartParams["checkOutOfRange"] ?? false));
+			if ($this->NavPageNomer === null)
+			{
 				return null;
+			}
 
 			//rows to skip
 			$NavFirstRecordShow = $this->NavPageSize*($this->NavPageNomer-1);
@@ -287,7 +272,7 @@ final class CDBResult extends \CDBResult
 //			return false;
 
 //		$this->result = $res_tmp->result;
-		$this->DB = DB;
+		$this->DB = $DB;
 
 		if($this->SqlTraceIndex)
 			$start_time = microtime(true);
@@ -331,7 +316,7 @@ final class CDBResult extends \CDBResult
 		$this->fetchAdapters[] = $adapter;
 	}
 
-	public function Fetch()
+	function Fetch()
 	{
 		if ($row = parent::Fetch())
 			foreach ($this->fetchAdapters as $adapter)
@@ -343,14 +328,14 @@ final class CDBResult extends \CDBResult
 
 interface FetchAdapter
 {
-	static public function adapt(array $row);
+	public function adapt(array $row);
 }
 
 class AggregateAdapter implements FetchAdapter
 {
 	private $aggregated = array();
 
-	public function __construct(array $aggregated)
+	function __construct(array $aggregated)
 	{
 		$this->aggregated = $aggregated;
 	}
@@ -405,7 +390,7 @@ class OrderQuery extends AliasedQuery
 
 	public static function explodeFilterKey($key)
 	{
-		preg_match('/^([!+]{0,1})([<=>@%~]{0,2})(.*)$/', $key, $matches);
+		preg_match('/^([!+*]{0,1})([<=>@%~?]{0,2})(.*)$/', $key, $matches);
 
 		return array(
 			'modifier' => $matches[1], // can be ""
@@ -427,14 +412,17 @@ class OrderQuery extends AliasedQuery
 		switch ($operator)
 		{
 			case  '':
-			case '@': $operator = '='; break;
+			case '@': $operator = ($modifier === '*' ? '' : '=');
+				break;
 
-			case '~': $operator =  ''; break;
+			case '~': $operator =  '';
+				break;
 			// default: with no changes
 		}
 
 		switch ($modifier)
 		{
+			case '*':
 			case '' : return $this->addFilter($modifier.$operator.$name, $value);
 
 			case '!': return $operator == '=' && $value
@@ -486,7 +474,7 @@ class OrderQuery extends AliasedQuery
 				{
 					if ($name = $this->getAliasName($alias))
 					{
-						if (is_string($key) && ($aggregate = ToUpper($key)) && $aggregates[$aggregate])
+						if (is_string($key) && ($aggregate = mb_strtoupper($key)) && $aggregates[$aggregate])
 						{
 							$this->addAggregatedSelect($alias, $aggregate, $name);
 						}
@@ -527,7 +515,7 @@ class OrderQuery extends AliasedQuery
 
 					if ($name = $this->getAliasName($alias))
 					{
-						if (is_string($key) && ($aggregate = ToUpper($key)) && $aggregates[$aggregate])
+						if (is_string($key) && ($aggregate = mb_strtoupper($key)) && $aggregates[$aggregate])
 						{
 							$this->addAggregatedSelect($alias, $aggregate, $name);
 						}
@@ -570,6 +558,11 @@ class OrderQuery extends AliasedQuery
 		return $names;
 	}
 
+	protected function prepareCompatibleRows(array $rows)
+	{
+		return $rows;
+	}
+
 	public function compatibleExec(CDBResult $result, $navStart)
 	{
 		if ($this->aggregated)
@@ -591,9 +584,79 @@ class OrderQuery extends AliasedQuery
 		}
 
 		$rows = $this->exec()->fetchAll();
+		$rows = $this->prepareCompatibleRows($rows);
 		$result->InitFromArray($rows);
 
 		return $result;
+	}
+}
+
+class OrderPropertyValuesQuery extends OrderQuery
+{
+	/**
+	 * @param array $rows
+	 * @return array
+	 */
+	protected function prepareCompatibleRows(array $rows)
+	{
+		$locationIds = [];
+		foreach ($rows as $key => $row)
+		{
+			if ($row['TYPE'] === 'LOCATION' && !empty($row['VALUE']))
+			{
+				if (is_array($row['VALUE']))
+				{
+					$locationIds = array_merge($locationIds, $row['VALUE']);
+				}
+				else
+				{
+					$locationIds[] = $row['VALUE'];
+				}
+			}
+		}
+
+		if (!empty($locationIds))
+		{
+			$locationMap = [];
+			$locationRaw = \Bitrix\Sale\Location\LocationTable::getList([
+				'filter' => ['=CODE' => $locationIds],
+				'select' => ['ID', 'CODE']
+			]);
+			while ($location = $locationRaw->fetch())
+			{
+				$locationMap[$location['CODE']] = $location['ID'];
+			}
+		}
+
+		foreach ($rows as &$row)
+		{
+			if (isset($row['VALUE']))
+			{
+				if ($row['TYPE'] === 'LOCATION' && !empty($row['VALUE']))
+				{
+					if (is_array($row['VALUE']))
+					{
+						foreach ($row['VALUE'] as &$valueItem)
+						{
+							$valueItem = $locationMap[$valueItem];
+						}
+					}
+					else
+					{
+						$row['VALUE'] = $locationMap[$row['VALUE']];
+					}
+				}
+
+				$row['PROXY_VALUE'] = $row['VALUE'];
+				if (is_array($row['VALUE']))
+				{
+					$row['PROXY_VALUE'] = serialize($row['VALUE']);
+				}
+				unset($row['VALUE']);
+			}
+		}
+
+		return $rows;
 	}
 }
 
@@ -657,17 +720,25 @@ class OrderQueryLocation extends OrderQuery
 		{
 			$parsed = static::explodeFilterKey($field);
 
-			if($this->locationFieldMap[$parsed['alias']])
+			if (isset($this->locationFieldMap[$parsed['alias']]))
+			{
 				return $parsed['modifier'].$parsed['operator'].'PROXY_'.$parsed['alias'];
+			}
 			else
+			{
 				return $field;
+			}
 		}
 		else
 		{
-			if($this->locationFieldMap[$field])
+			if (isset($this->locationFieldMap[$field]))
+			{
 				return 'PROXY_'.$field;
+			}
 			else
+			{
 				return $field;
+			}
 		}
 	}
 }

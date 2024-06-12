@@ -67,7 +67,7 @@ class CUpdateOutput
 	{
 		if(defined("__CUpdateOutputScript"))
 			return "";
-		// define("__CUpdateOutputScript", true);
+		define("__CUpdateOutputScript", true);
 		return '
 <script type="text/javascript">
 function ToggleInfo(id, obj)

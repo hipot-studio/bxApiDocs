@@ -117,6 +117,7 @@ class CSecurityFilter
 			"SECURITY_FILTER_XSS2" => "[SECURITY_FILTER_XSS2] ".getMessage("SECURITY_FILTER_XSS"),
 			"SECURITY_FILTER_PHP" => "[SECURITY_FILTER_PHP] ".getMessage("SECURITY_FILTER_PHP"),
 			"SECURITY_REDIRECT" => "[SECURITY_REDIRECT] ".getMessage("SECURITY_REDIRECT"),
+			"SECURITY_OTP" => "[SECURITY_OTP] ".getMessage("SECURITY_OTP"),
 		);
 	}
 
@@ -222,9 +223,46 @@ class CSecurityFilter
 	 * @param string $pAction
 	 * @return string
 	 */
-	static public function testXSS($pValue, $pAction = "clear")
+	public function testXSS($pValue, $pAction = "clear")
 	{
 		return $pValue;
+	}
+
+	public static function processVar(array|string $var)
+	{
+		static $skip = null;
+
+		if (is_null($skip))
+		{
+			$skip = !CSecurityFilter::IsActive();
+			$skip = $skip || CSecuritySystemInformation::isCliMode();
+			$skip = $skip || CSecurityFilterMask::Check(SITE_ID, $_SERVER["REQUEST_URI"]);
+			$skip = $skip || (check_bitrix_sessid() && self::currentUserHaveRightsForSkip());
+		}
+
+		if ($skip)
+		{
+			return $var;
+		}
+
+		$instance = new CSecurityFilter();
+
+		$auditors = $instance->getAuditorInstances();
+		$instance->requestFilter->setAuditors($auditors);
+
+		$array = is_array($var) ? ['data' => $var] : ['data' => ['key' => $var]];
+
+		$filteredValues = $instance->requestFilter->filter($array, false);
+		$filteredValues = $filteredValues['data'];
+
+		if ($instance->isAuditorsTriggered())
+		{
+			$instance->doPostProcessActions();
+		}
+
+		unset($instance);
+
+		return is_array($var) ? $filteredValues : ($filteredValues['key'] ?? '') ;
 	}
 
 	protected function process()
@@ -279,8 +317,6 @@ class CSecurityFilter
 
 	protected function overrideSuperGlobals()
 	{
-		global $HTTP_GET_VARS, $HTTP_POST_VARS, $HTTP_COOKIE_VARS, $HTTP_REQUEST_VARS, $HTTP_SERVER_VARS;
-
 		self::cleanGlobals();
 
 		$httpRequest = $this->getHttpRequest();
@@ -291,12 +327,6 @@ class CSecurityFilter
 
 		self::reconstructRequest();
 		self::restoreGlobals();
-
-		$HTTP_GET_VARS = $_GET;
-		$HTTP_POST_VARS = $_POST;
-		$HTTP_COOKIE_VARS = $_COOKIE;
-		$HTTP_REQUEST_VARS = $_REQUEST;
-		$HTTP_SERVER_VARS = $_SERVER;
 	}
 
 	/**
@@ -375,13 +405,32 @@ class CSecurityFilter
 		$rule = new CSecurityIPRule;
 
 		CTimeZone::Disable();
+		$startTimestamp = ConvertTimeStamp(false, "FULL");
+		$endTimestamp = ConvertTimeStamp(time()+COption::getOptionInt("security", "filter_duration")*60, "FULL");
+		$ruleList = $rule->GetList(array("ID"), array(
+			"=RULE_TYPE" => "A",
+			"=ACTIVE" => "Y",
+			"=ADMIN_SECTION" => "Y",
+			"=NAME" => getMessage("SECURITY_FILTER_IP_RULE", array("#IP#" => $ip)),
+			"<=ACTIVE_FROM" => $startTimestamp,
+			"<=ACTIVE_TO" => $endTimestamp,
+		), array("ID" => "DESC"));
+		while ($prevRule = $ruleList->Fetch())
+		{
+			if ($rule->Update($prevRule['ID'], array("ACTIVE_TO" => $endTimestamp)))
+			{
+				CTimeZone::Enable();
+				return true;
+			}
+			break;
+		}
 		$added = $rule->Add(array(
 			"RULE_TYPE" => "A",
 			"ACTIVE" => "Y",
 			"ADMIN_SECTION" => "Y",
 			"NAME" => getMessage("SECURITY_FILTER_IP_RULE", array("#IP#" => $ip)),
-			"ACTIVE_FROM" => ConvertTimeStamp(false, "FULL"),
-			"ACTIVE_TO" => ConvertTimeStamp(time()+COption::getOptionInt("security", "filter_duration")*60, "FULL"),
+			"ACTIVE_FROM" => $startTimestamp,
+			"ACTIVE_TO" => $endTimestamp,
 			"INCL_IPS" => array($ip),
 			"INCL_MASKS" => array("/*"),
 		));
@@ -489,7 +538,7 @@ class CSecurityFilter
 		$systemOrder = static::getRequestOrder();
 
 		$_REQUEST = self::getSuperGlobalArray($systemOrder[0]);
-		for($i = 1, $count = strlen($systemOrder); $i < $count; $i ++)
+		for($i = 1, $count = mb_strlen($systemOrder); $i < $count; $i ++)
 		{
 			$targetArray = self::getSuperGlobalArray($systemOrder[$i]);
 			foreach($targetArray as $k => $v)

@@ -1,4 +1,5 @@
-<?
+<?php
+
 /**
  * The entire class was marked as deprecated.
  * It will be removed from future releases. Do not rely on this code.
@@ -17,18 +18,6 @@ use Bitrix\Main\Localization;
 
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/index.php
- * @author Bitrix
- * @deprecated
- */
 class CAllSaleLocation
 {
 	const LOC2_M_OPT = 					'sale_locationpro_migrated';
@@ -91,7 +80,7 @@ class CAllSaleLocation
 				CSaleLocation::locationProEnable();
 				return true;
 			}
-			
+
 			?>
 			<form action="" method="post">
 				Location 2.0 were disabled.&nbsp;<button name="l2switch" value="ON">Enable</button>
@@ -177,16 +166,21 @@ class CAllSaleLocation
 				//"JS_CONTROL_DEFERRED_INIT" => "soa_deferred"
 			), $additionalParams);
 
-			if(strlen($parameters['SITE_ID']) || ADMIN_SECTION != 'Y')
+			$siteExists = isset($parameters['SITE_ID']) && $parameters['SITE_ID'];
+			if (
+				$siteExists || !defined('ADMIN_SECTION') || ADMIN_SECTION != 'Y'
+			)
 			{
 				$parametersProxed["FILTER_BY_SITE"] = "Y";
-				$parametersProxed["FILTER_SITE_ID"] = strlen($parameters['SITE_ID']) ? $parameters['SITE_ID'] : SITE_ID;
+				$parametersProxed["FILTER_SITE_ID"] = $siteExists ? $parameters['SITE_ID'] : SITE_ID;
 			}
 
-			if(strlen($wrapNewComponentWith))
+			if($wrapNewComponentWith <> '')
+			{
 				print('<div class="'.$wrapNewComponentWith.'">');
+			}
 
-			if(!strlen($template))
+			if($template == '')
 				$appearance = \Bitrix\Sale\Location\Admin\Helper::getWidgetAppearance();
 			else
 			{
@@ -243,7 +237,7 @@ class CAllSaleLocation
 
 	public static function getLocationIDbyCODE($code)
 	{
-		if(CSaleLocation::isLocationProMigrated() && strlen($code))
+		if(CSaleLocation::isLocationProMigrated() && mb_strlen($code))
 		{
 			$item = Location\LocationTable::getList(array(
 				'select' => array(
@@ -304,7 +298,7 @@ class CAllSaleLocation
 
 	public static function checkLocationIsAboveCity($locationId)
 	{
-		if(strlen($locationId))
+		if($locationId <> '')
 		{
 			$tail = CSaleLocation::getLocationCityTail();
 			if(!empty($tail))
@@ -316,7 +310,9 @@ class CAllSaleLocation
 				)))->fetch();
 
 				if(!isset($tail[$location['TYPE_ID']])) // is not a city and not a descendant of it
+				{
 					return true;
+				}
 			}
 		}
 
@@ -524,12 +520,12 @@ class CAllSaleLocation
 		for($i=0; $i < $countFilterKey; $i++)
 		{
 			$val = $DB->ForSql($arFilter[$filter_keys[$i]]);
-			if (strlen($val)<=0) continue;
+			if ($val == '') continue;
 
 			$key = $filter_keys[$i];
 			if ($key[0]=="!")
 			{
-				$key = substr($key, 1);
+				$key = mb_substr($key, 1);
 				$bInvert = true;
 			}
 			else
@@ -610,11 +606,11 @@ class CAllSaleLocation
 			"	LEFT JOIN b_sale_loc_name LN ON (L.ID = LN.LOCATION_ID AND LN.LANGUAGE_ID = 'en') ".
 			"	LEFT JOIN b_sale_loc_name LLN ON (L.ID = LLN.LOCATION_ID AND LLN.LANGUAGE_ID = '".$DB->ForSql($strLang, 2)."') ".
 
-			($joinLCO ? 
+			($joinLCO ?
 				" INNER JOIN b_sale_location LCO ON (L.COUNTRY_ID = LCO.ID) " :
 				"").
 
-			($joinLRE ? 
+			($joinLRE ?
 				" INNER JOIN b_sale_location LRE ON (L.REGION_ID = LRE.ID) " :
 				"").
 
@@ -677,7 +673,7 @@ class CAllSaleLocation
 		$item = $class::getList(array('select' => array($type.'_ID'), 'limit' => 1, 'order' => array($type.'_ID' => 'desc')))->fetch();
 
 		$fromLocTable = intval($item[$type.'_ID']);
-	
+
 		$res = self::GetLocationTypeList($type, array('ID' => 'desc'))->fetch();
 		$fromTypeTable = $res['ID'];
 
@@ -727,16 +723,18 @@ class CAllSaleLocation
 				$found = array();
 				preg_match(self::KEY_PARSE_R, $k, $found);
 
-				if(strlen($found[3]))
+				if($found[3] <> '')
 				{
 					$f = array(
 						'NOT' => $found[1] == '!',
-						'OP' => !strlen($found[2]) ? '=' : $found[2],
+						'OP' => !mb_strlen($found[2])? '=' : $found[2],
 						'VALUE' => $v
 					);
 
 					if(in_array($f['OP'], static::$allowedOps))
+					{
 						$result[$found[3]] = $f;
+					}
 				}
 			}
 		}
@@ -894,7 +892,7 @@ class CAllSaleLocation
 				$arCountry["NAME_LANG"] = $arCountry["COUNTRY_NAME_LANG"];
 
 			$arCountryList[] = $arCountry;
-			if ($arCountry["ID"] == $countryId && strlen($arCountry["NAME_LANG"]) > 0)
+			if ($arCountry["ID"] == $countryId && $arCountry["NAME_LANG"] <> '')
 				$locationString .= $arCountry["NAME_LANG"];
 		}
 
@@ -909,7 +907,7 @@ class CAllSaleLocation
 		{
 			$arRegionFilter = array("LID" => $langId, "!REGION_ID" => "NULL", "!REGION_ID" => "0");
 			if ($countryId > 0)
-				$arRegionFilter["COUNTRY_ID"] = IntVal($countryId);
+				$arRegionFilter["COUNTRY_ID"] = intval($countryId);
 
 			if ($bEmptyCity == "Y")
 				$rsRegionList = CSaleLocation::GetList(array("SORT" => "ASC", "NAME_LANG" => "ASC"), $arRegionFilter, false, false, array("ID", "REGION_ID", "REGION_NAME_LANG"));
@@ -925,7 +923,7 @@ class CAllSaleLocation
 					$arRegion["NAME_LANG"] = $arRegion["REGION_NAME_LANG"];
 
 				$arRegionList[] = $arRegion;
-				if ($arRegion["ID"] == $regionId && strlen($arRegion["NAME_LANG"]) > 0)
+				if ($arRegion["ID"] == $regionId && $arRegion["NAME_LANG"] <> '')
 					$locationString = $arRegion["NAME_LANG"].", ".$locationString;
 			}
 		}
@@ -975,7 +973,7 @@ class CAllSaleLocation
 					"CITY_NAME" => $arCity["CITY_NAME"],
 				);
 				if ($arCity["ID"] == $cityId)
-					$locationString = (strlen($arCity["CITY_NAME"]) > 0 ? $arCity["CITY_NAME"].", " : "").$locationString;
+					$locationString = ($arCity["CITY_NAME"] <> '' ? $arCity["CITY_NAME"].", " : "").$locationString;
 			}//end while
 		}
 
@@ -988,7 +986,7 @@ class CAllSaleLocation
 	{
 		global $DB;
 
-		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && strlen($arFields["NAME"])<=0) return false;
+		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && $arFields["NAME"] == '') return false;
 
 		/*
 		$db_lang = CLangAdmin::GetList(($b="sort"), ($o="asc"), array("ACTIVE" => "Y"));
@@ -1001,30 +999,6 @@ class CAllSaleLocation
 		return True;
 	}
 
-	
-	/**
-	* <p>Метод изменяет параметры страны с кодом ID на новые параметры из массива arFields. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код страны.
-	*
-	* @param array $arFields  Массив с параметрами страны должен содержать ключи: <ul> <li> <b>NAME</b> -
-	* название страны (не зависящее от языка);</li> 	<li> <b>SHORT_NAME</b> -
-	* сокращенное название страны - абревиатура (не зависящее от
-	* языка);</li> 	<li> <b>&lt;код языка&gt;</b> - ключем является код языка, а
-	* значением ассоциативный массив вида <pre class="syntax">array("LID" =&gt; "код
-	* языка",       "NAME" =&gt; "название страны на этом языке",       "SHORT_NAME" =&gt;
-	* "сокращенное название страны                        (аббревиатура) на этом
-	* языке")</pre> Эта пара ключ-значение должна присутствовать для
-	* каждого языка системы.</li> </ul>
-	*
-	* @return int <p>Возвращается код измененной страны или <i>false</i> у случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__updatecountry.d8fa5b90.php
-	* @author Bitrix
-	*/
 	public static function UpdateCountry($ID, $arFields)
 	{
 		global $DB;
@@ -1072,7 +1046,7 @@ class CAllSaleLocation
 			$strSql = "UPDATE b_sale_location_country SET ".$strUpdate." WHERE ID = ".$ID."";
 			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 
-			$db_lang = CLangAdmin::GetList(($b="sort"), ($o="asc"), array("ACTIVE" => "Y"));
+			$db_lang = CLangAdmin::GetList("sort", "asc", array("ACTIVE" => "Y"));
 			while ($arLang = $db_lang->Fetch())
 			{
 				if ($arCntLang = CSaleLocation::GetCountryLangByID($ID, $arLang["LID"]))
@@ -1099,32 +1073,10 @@ class CAllSaleLocation
 		return $ID;
 	}
 
-	
-	/**
-	* <p>Метод удаляет страну с кодом ID. Связанные с этой страной местоположения не изменяются. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код страны.
-	*
-	* @return bool <p>Метод возвращает <i>true</i> в случае успешного удаления
-	* местоположения и <i>false</i> - в противном случае.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (!CSaleLocation::DeleteCountry(12))
-	*    echo "Ошибка удаления страны";<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__deletecountry.e37a14ed.php
-	* @author Bitrix
-	*/
 	public static function DeleteCountry($ID)
 	{
 		global $DB;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		foreach (GetModuleEvents("sale", "OnBeforeCountryDelete", true) as $arEvent)
 			if (ExecuteModuleEventEx($arEvent, array($ID))===false)
@@ -1154,7 +1106,7 @@ class CAllSaleLocation
 				return false;
 			}
 		}
-		
+
 		// and also drop old records, if any
 		$DB->Query("DELETE FROM b_sale_location_country_lang WHERE COUNTRY_ID = ".$ID."", true);
 		$bDelete = $DB->Query("DELETE FROM b_sale_location_country WHERE ID = ".$ID."", true);
@@ -1165,23 +1117,6 @@ class CAllSaleLocation
 		return $bDelete;
 	}
 
-	
-	/**
-	* <p>Метод возвращает языконезависимые параметры страны с кодом ID. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код страны.
-	*
-	* @return array <p>Возвращается ассоциативный массив с ключами:</p><table class="tnormal"
-	* width="100%"> <tr> <th width="15%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>ID</td>     <td>Код
-	* страны.</td> </tr> <tr> <td>NAME</td>     <td>Языконезависимое название страны.</td>
-	* </tr> <tr> <td>SHORT_NAME</td>     <td>Языконезависимое короткое название
-	* страны.</td> </tr> </table><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__getcountrybyid.bc803b85.php
-	* @author Bitrix
-	*/
 	public static function GetCountryByID($ID)
 	{
 		if(self::isLocationProMigrated())
@@ -1218,7 +1153,7 @@ class CAllSaleLocation
 		{
 			global $DB;
 
-			$ID = IntVal($ID);
+			$ID = intval($ID);
 			$strSql =
 				"SELECT * ".
 				"FROM b_sale_location_country ".
@@ -1234,26 +1169,6 @@ class CAllSaleLocation
 		}
 	}
 
-	
-	/**
-	* <p>Метод возвращает языкозависимые параметры страны по ее коду ID и языку strLang. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код страны.
-	*
-	* @param string $strLang = LANGUAGE_ID Язык. По умолчанию берется текущий язык.
-	*
-	* @return array <p>Возвращается ассоциативный массив с ключами:</p><table class="tnormal"
-	* width="100%"> <tr> <th width="15%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>ID</td>     <td>Код
-	* записи.</td> </tr> <tr> <td>COUNTRY_ID</td>     <td>Код страны.</td> </tr> <tr> <td>LID</td>    
-	* <td>Язык.</td> </tr> <tr> <td>NAME</td>     <td>Языкозависимое название страны.</td>
-	* </tr> <tr> <td>SHORT_NAME</td>     <td>Языкозависимое короткое название страны.</td>
-	* </tr> </table><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__getcountrylangbyid.aef8761b.php
-	* @author Bitrix
-	*/
 	public static function GetCountryLangByID($ID, $strLang = LANGUAGE_ID)
 	{
 		if(self::isLocationProMigrated())
@@ -1300,7 +1215,7 @@ class CAllSaleLocation
 
 			global $DB;
 
-			$ID = IntVal($ID);
+			$ID = intval($ID);
 			$strLang = Trim($strLang);
 
 			$strSql =
@@ -1320,10 +1235,10 @@ class CAllSaleLocation
 	}
 
 	/////////////////////////////////////////////
-	
+
 	public static function RegionCheckFields($ACTION, &$arFields)
 	{
-		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && strlen($arFields["NAME"])<=0) return false;
+		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && $arFields["NAME"] == '') return false;
 
 		return True;
 	}
@@ -1372,7 +1287,7 @@ class CAllSaleLocation
 			$strSql = "UPDATE b_sale_location_region SET ".$strUpdate." WHERE ID = ".$ID."";
 			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 
-			$db_lang = CLangAdmin::GetList(($b="sort"), ($o="asc"), array("ACTIVE" => "Y"));
+			$db_lang = CLangAdmin::GetList("sort", "asc", array("ACTIVE" => "Y"));
 			while ($arLang = $db_lang->Fetch())
 			{
 				if ($arCntLang = CSaleLocation::GetRegionLangByID($ID, $arLang["LID"]))
@@ -1403,7 +1318,7 @@ class CAllSaleLocation
 		// there is no such entity in terms of location 2.0, so... just delete old entity
 
 		global $DB;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		foreach (GetModuleEvents("sale", "OnBeforeRegionDelete", true) as $arEvent)
 			if (ExecuteModuleEventEx($arEvent, array($ID))===false)
@@ -1433,7 +1348,7 @@ class CAllSaleLocation
 				return false;
 			}
 		}
-		
+
 		// and also drop old records, if any
 		$DB->Query("DELETE FROM b_sale_location_region_lang WHERE REGION_ID = ".$ID."", true);
 		$bDelete = $DB->Query("DELETE FROM b_sale_location_region WHERE ID = ".$ID."", true);
@@ -1480,7 +1395,7 @@ class CAllSaleLocation
 		{
 			global $DB;
 
-			$ID = IntVal($ID);
+			$ID = intval($ID);
 			$strSql =
 				"SELECT * ".
 				"FROM b_sale_location_region ".
@@ -1541,7 +1456,7 @@ class CAllSaleLocation
 		{
 			global $DB;
 
-			$ID = IntVal($ID);
+			$ID = intval($ID);
 			$strLang = Trim($strLang);
 
 			$strSql =
@@ -1565,7 +1480,7 @@ class CAllSaleLocation
 	{
 		global $DB;
 
-		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && strlen($arFields["NAME"])<=0) return false;
+		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && $arFields["NAME"] == '') return false;
 
 		/*
 		$db_lang = CLangAdmin::GetList(($b="sort"), ($o="asc"), array("ACTIVE" => "Y"));
@@ -1578,30 +1493,6 @@ class CAllSaleLocation
 		return True;
 	}
 
-	
-	/**
-	* <p>Метод изменяет параметры города с кодом ID на значения из массива arFields. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код города.
-	*
-	* @param array $arFields  Массив с параметрами города должен содержать ключи: <ul> <li> <b>NAME</b> -
-	* название города (не зависящее от языка);</li> 	<li> <b>SHORT_NAME</b> -
-	* сокращенное название города - абревиатура (не зависящее от
-	* языка);</li> 	<li> <b>&lt;код языка&gt;</b> - ключем является код языка, а
-	* значением ассоциативный массив вида <pre class="syntax"> array("LID" =&gt; "код
-	* языка",       "NAME" =&gt; "название города на этом языке",       "SHORT_NAME" =&gt;
-	* "сокращенное название города                        (аббревиатура) на этом
-	* языке")</pre> 	Эта пара ключ-значение должна присутствовать для
-	* каждого языка системы.</li> </ul>
-	*
-	* @return int <p>Возвращается код измененного города или <i>false</i> у случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__updatecity.3fe4165d.php
-	* @author Bitrix
-	*/
 	public static function UpdateCity($ID, $arFields)
 	{
 		global $DB;
@@ -1646,7 +1537,7 @@ class CAllSaleLocation
 			$strSql = "UPDATE b_sale_location_city SET ".$strUpdate." WHERE ID = ".$ID."";
 			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 
-			$db_lang = CLangAdmin::GetList(($b="sort"), ($o="asc"), array("ACTIVE" => "Y"));
+			$db_lang = CLangAdmin::GetList("sort", "asc", array("ACTIVE" => "Y"));
 			while ($arLang = $db_lang->Fetch())
 			{
 				if ($arCntLang = CSaleLocation::GetCityLangByID($ID, $arLang["LID"]))
@@ -1671,34 +1562,12 @@ class CAllSaleLocation
 		return $ID;
 	}
 
-	
-	/**
-	* <p>Метод удаляет город с кодом ID. Местоположение, с которым связан этот город, не изменяется. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код города.
-	*
-	* @return bool <p>Метод возвращает <i>true</i> в случае успешного удаления
-	* местоположения и <i>false</i> - в противном случае.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (!CSaleLocation::DeleteCity(12))
-	*    echo "Ошибка удаления города";<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__deletecity.339c5a43.php
-	* @author Bitrix
-	*/
 	public static function DeleteCity($ID)
 	{
 		// there is no such entity in terms of location 2.0, so... just delete old entity
 
 		global $DB;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		foreach (GetModuleEvents("sale", "OnBeforeCityDelete", true) as $arEvent)
 			if (ExecuteModuleEventEx($arEvent, array($ID))===false)
@@ -1740,23 +1609,6 @@ class CAllSaleLocation
 		return $bDelete;
 	}
 
-	
-	/**
-	* <p>Метод возвращает языконезависимые параметры города с кодом ID. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код города.
-	*
-	* @return array <p>Возвращается ассоциативный массив с ключами:</p><table class="tnormal"
-	* width="100%"> <tr> <th width="15%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>ID</td>     <td>Код
-	* города.</td> </tr> <tr> <td>NAME</td>     <td>Языконезависимое название города.</td>
-	* </tr> <tr> <td>SHORT_NAME</td>     <td>Языконезависимое короткое название
-	* города.</td> </tr> <tr> <td>REGION_ID</td>     <td>Код региона.</td> </tr> </table><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__getcitybyid.fb724f2b.php
-	* @author Bitrix
-	*/
 	public static function GetCityByID($ID)
 	{
 		if(self::isLocationProMigrated())
@@ -1826,7 +1678,7 @@ class CAllSaleLocation
 		{
 			global $DB;
 
-			$ID = IntVal($ID);
+			$ID = intval($ID);
 			$strSql =
 				"SELECT * ".
 				"FROM b_sale_location_city ".
@@ -1841,26 +1693,6 @@ class CAllSaleLocation
 		}
 	}
 
-	
-	/**
-	* <p>Метод возвращает языкозависимые параметры города по его коду ID и языку strLang. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код города.
-	*
-	* @param string $strLang = LANGUAGE_ID Язык. По умолчанию равен текущему языку.
-	*
-	* @return array <p>Возвращается ассоциативный массив с ключами:</p><table class="tnormal"
-	* width="100%"> <tr> <th width="15%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>ID</td>     <td>Код
-	* записи.</td> </tr> <tr> <td>CITY_ID</td>     <td>Код города.</td> </tr> <tr> <td>LID</td>    
-	* <td>Язык.</td> </tr> <tr> <td>NAME</td>     <td>Языкозависимое название города.</td>
-	* </tr> <tr> <td>SHORT_NAME</td>     <td>Языкозависимое короткое название города.</td>
-	* </tr> </table><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__getcitylangbyid.f2bc091a.php
-	* @author Bitrix
-	*/
 	public static function GetCityLangByID($ID, $strLang = LANGUAGE_ID)
 	{
 		if(self::isLocationProMigrated())
@@ -1907,7 +1739,7 @@ class CAllSaleLocation
 		{
 			global $DB;
 
-			$ID = IntVal($ID);
+			$ID = intval($ID);
 			$strLang = Trim($strLang);
 
 			$strSql =
@@ -1982,7 +1814,7 @@ class CAllSaleLocation
 				$found = array();
 				preg_match(self::MODIFIER_SEARCH_R, $fld, $found);
 
-				$modifier = strlen($found[1]) ? $found[1] : '';
+				$modifier = $found[1] <> ''? $found[1] : '';
 				$fldClean = preg_replace(self::MODIFIER_SEARCH_R, '', $fld);
 
 				if(isset($fieldProxy[$fldClean]))
@@ -2067,7 +1899,7 @@ class CAllSaleLocation
 		if(!is_array($fieldProxy) || empty($fieldProxy))
 			return $res;
 
-		$result = array(); 
+		$result = array();
 		while($item = $res->fetch())
 		{
 			$pItem = array();
@@ -2130,7 +1962,7 @@ class CAllSaleLocation
 		global $DB;
 
 		$additionalFilter = "";
-		if (isset($arFilter["LID"]) || strlen($arFilter["LID"]) > 0)
+		if (isset($arFilter["LID"]) || $arFilter["LID"] <> '')
 		{
 
 			if(self::isLocationProMigrated())
@@ -2216,10 +2048,10 @@ class CAllSaleLocation
 
 					"CITY_NAME_ORIG" => array("FIELD" => "LG.NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_city LG ON (L.CITY_ID = LG.ID)"),
 					"CITY_SHORT_NAME" => array("FIELD" => "LG.SHORT_NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_city LG ON (L.CITY_ID = LG.ID)"),
-				
+
 					"REGION_NAME_ORIG" => array("FIELD" => "LR.NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_region LR ON (L.REGION_ID = LR.ID)"),
 					"REGION_SHORT_NAME" => array("FIELD" => "LR.SHORT_NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_region LR ON (L.REGION_ID = LR.ID)"),
-				
+
 					"COUNTRY_LID" => array("FIELD" => "LCL.LID", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_country_lang LCL ON (L.COUNTRY_ID = LCL.COUNTRY_ID".$additionalFilterLCL.")"),
 					"COUNTRY_NAME" => array("FIELD" => "LCL.NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_country_lang LCL ON (L.COUNTRY_ID = LCL.COUNTRY_ID".$additionalFilterLCL.")"),
 					"COUNTRY_NAME_LANG" => array("FIELD" => "LCL.NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_country_lang LCL ON (L.COUNTRY_ID = LCL.COUNTRY_ID".$additionalFilterLCL.")"),
@@ -2229,7 +2061,7 @@ class CAllSaleLocation
 					"REGION_NAME" => array("FIELD" => "LRL.NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_region_lang LRL ON (L.REGION_ID = LRL.REGION_ID".$additionalFilterLRL.")"),
 					"REGION_NAME_LANG" => array("FIELD" => "LRL.NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_region_lang LRL ON (L.REGION_ID = LRL.REGION_ID".$additionalFilterLRL.")"),
 					"REGION_SHORT_NAME_LANG" => array("FIELD" => "LRL.SHORT_NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_region_lang LRL ON (L.REGION_ID = LRL.REGION_ID".$additionalFilterLRL.")"),
-				
+
 					"CITY_LID" => array("FIELD" => "LGL.LID", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_city_lang LGL ON (L.CITY_ID = LGL.CITY_ID".$additionalFilterLGL.")"),
 					"CITY_NAME" => array("FIELD" => "LGL.NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_city_lang LGL ON (L.CITY_ID = LGL.CITY_ID".$additionalFilterLGL.")"),
 					"CITY_NAME_LANG" => array("FIELD" => "LGL.NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_location_city_lang LGL ON (L.CITY_ID = LGL.CITY_ID".$additionalFilterLGL.")"),
@@ -2275,7 +2107,7 @@ class CAllSaleLocation
 
 		$types = self::getTypes();
 		$typeCode = ToUpper($dbHelper->forSql($typeCode));
-		$strLang = substr($dbHelper->forSql($strLang), 0, 2);
+		$strLang = mb_substr($dbHelper->forSql($strLang), 0, 2);
 
 		$mappedTypes = array("'".intval($types[$typeCode])."'");
 
@@ -2304,12 +2136,13 @@ class CAllSaleLocation
 		";
 
 		$item = $DB->query($query)->fetch();
+		if(!is_array($item))
+		{
+			return [];
+		}
 
 		$item[$typeCode.'_NAME_ORIG'] = $item[$typeCode.'_NAME'];
 		$item[$typeCode.'_NAME_LANG'] = $item[$typeCode.'_NAME'];
-
-		if(!is_array($item))
-			return array();
 
 		return $item;
 	}
@@ -2328,7 +2161,13 @@ class CAllSaleLocation
 
 		$loc = CSaleLocation::GetByID($primary, $strLang);
 
-		if(!intval($loc['REGION_ID'])) // no region
+		$noRegion = empty($loc);
+		if (!$noRegion)
+		{
+			$noRegion = (int)($loc['REGION_ID'] ?? 0) <= 0;
+		}
+
+		if ($noRegion) // no region
 		{
 			if(isset(self::$city2RegionMap[(string) $primary])) // got CODE and this code in The List
 			{
@@ -2338,26 +2177,33 @@ class CAllSaleLocation
 			{
 				$regLoc = CSaleLocation::GetByID(self::$city2RegionMap[(string) $loc['CODE']], $strLang);
 			}
-			elseif((string) $loc['CITY_NAME_LANG'] != '') // search by name
+			elseif (!empty($loc))
 			{
-				$name = ToUpper(trim($loc['CITY_NAME_LANG']));
-				$regionName = false;
+				$nameNang = (string)($loc['CITY_NAME_LANG'] ?? '');
 
-				foreach(self::$specialCities as $city)
+				if ($nameNang !== '') // search by name
 				{
-					if($name == ToUpper(GetMessage('CITY_'.$city)))
-						$regionName = GetMessage('REGION_'.$city);
-				}
+					$name = ToUpper(trim($loc['CITY_NAME_LANG']));
+					$regionName = false;
 
-				if($regionName !== false)
-				{
-					$regLoc = CSaleLocation::GetList(
-						false, 
-						array('~REGION_NAME_LANG' => $regionName.'%', 'LID' => $strLang), 
-						false, 
-						array('nTopCount' => 1), 
-						array('REGION_ID', 'REGION_NAME', 'REGION_SHORT_NAME', 'REGION_NAME_ORIG', 'REGION_NAME_LANG')
-					)->fetch();
+					foreach (self::$specialCities as $city)
+					{
+						if ($name == ToUpper(GetMessage('CITY_' . $city)))
+						{
+							$regionName = GetMessage('REGION_' . $city);
+						}
+					}
+
+					if ($regionName !== false)
+					{
+						$regLoc = CSaleLocation::GetList(
+							false,
+							['~REGION_NAME_LANG' => $regionName . '%', 'LID' => $strLang],
+							false,
+							['nTopCount' => 1],
+							['REGION_ID', 'REGION_NAME', 'REGION_SHORT_NAME', 'REGION_NAME_ORIG', 'REGION_NAME_LANG']
+						)->fetch();
+					}
 				}
 			}
 		}
@@ -2366,67 +2212,20 @@ class CAllSaleLocation
 		{
 			if(intval($regLoc['REGION_ID']))
 			{
-				$loc['REGION_ID'] = 		$regLoc['REGION_ID'];
-				$loc['REGION_NAME'] = 		$regLoc['REGION_NAME'];
+				$loc['REGION_ID'] = $regLoc['REGION_ID'];
+				$loc['REGION_NAME'] = $regLoc['REGION_NAME'];
 				$loc['REGION_SHORT_NAME'] = $regLoc['REGION_SHORT_NAME'];
-				$loc['REGION_NAME_ORIG'] = 	$regLoc['REGION_NAME_ORIG'];
-				$loc['REGION_NAME_LANG'] = 	$regLoc['REGION_NAME_LANG'];
+				$loc['REGION_NAME_ORIG'] = $regLoc['REGION_NAME_ORIG'];
+				$loc['REGION_NAME_LANG'] = $regLoc['REGION_NAME_LANG'];
 			}
 		}
 
 		return $loc;
 	}
 
-	
-	/**
-	* <p>Метод возвращает параметры местоположения с кодом ID, включая параметры страны и города. Параметры, зависящие от языка, возвращаются для языка strLang. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код местоположения.
-	*
-	* @param string $strLang = LANGUAGE_ID Язык параметров, зависящих от языка. По умолчанию равен текущему
-	* языку.
-	*
-	* @return array <p>Возвращает ассоциативный массив с ключами:</p><table class="tnormal"
-	* width="100%"> <tr> <th width="15%">Ключ</th>     <th>Описание</th> <th>С версии</th>   </tr> <tr>
-	* <td>ID</td>     <td>Код местоположения.</td> <td></td> </tr> <tr> <td>COUNTRY_ID</td>     <td>Код
-	* страны.</td> <td></td> </tr> <tr> <td>CITY_ID</td>     <td>Код города.</td> <td></td> </tr> <tr>
-	* <td>SORT</td>     <td>Индекс сортировки.</td> <td></td> </tr> <tr> <td>COUNTRY_NAME_ORIG</td>    
-	* <td>Языконезависимое название страны.</td> <td></td> </tr> <tr>
-	* <td>COUNTRY_SHORT_NAME</td>     <td>Языконезависимое сокращенное название
-	* страны.</td> <td></td> </tr> <tr> <td>COUNTRY_NAME_LANG</td>     <td>Языкозависимое название
-	* страны.</td> <td></td> </tr> <tr> <td>CITY_NAME_ORIG</td>     <td>Языконезависимое
-	* название города.</td> <td></td> </tr> <tr> <td>CITY_SHORT_NAME</td>    
-	* <td>Языконезависимое сокращенное название города.</td> <td></td> </tr> <tr>
-	* <td>CITY_NAME_LANG</td>     <td>Языкозависимое название города.</td> <td></td> </tr> <tr>
-	* <td>REGION_ID</td>     <td>Код региона.</td> <td></td> </tr> <tr> <td>REGION_NAME_ORIG</td>    
-	* <td>Языконезависимое название региона.</td> <td>12.5 </td> </tr> <tr>
-	* <td>REGION_SHORT_NAME</td>     <td>Языконезависимое сокращенное название
-	* региона.</td> <td>12.5 </td> </tr> <tr> <td>REGION_NAME_LANG</td>     <td>Языкозависимое
-	* название региона.</td> <td>12.5 </td> </tr> <tr> <td>COUNTRY_NAME</td>    
-	* <td>Языкозависимое название страны, если оно есть. Иначе -
-	* языконезависимое название страны.</td> <td></td> </tr> <tr> <td>CITY_NAME</td>    
-	* <td>Языкозависимое название города, если оно есть. Иначе -
-	* языконезависимое название города.</td> <td></td> </tr> <tr> <td>REGION_NAME</td>    
-	* <td>Языкозависимое название региона, если оно есть. Иначе -
-	* языконезависимое название региона.</td> <td>12.5 </td> </tr> </table><p>  </p><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $arLocs = CSaleLocation::GetByID(22, LANGUAGE_ID);
-	* echo $arLocs["COUNTRY_NAME"]." - ".$arLocs["CITY_NAME"];<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__getbyid.bbc61011.php
-	* @author Bitrix
-	*/
 	public static function GetByID($primary, $strLang = LANGUAGE_ID)
 	{
-		if(!strlen($primary))
+		if($primary == '')
 			return false;
 
 		try
@@ -2434,7 +2233,7 @@ class CAllSaleLocation
 			// try code
 			$item = Location\LocationTable::getList(array('filter' => array(
 				array('=CODE' => $primary)
-			), 'select' => 
+			), 'select' =>
 				array('ID', 'SORT', 'LEFT_MARGIN', 'RIGHT_MARGIN', 'CODE')
 			))->fetch();
 
@@ -2443,7 +2242,7 @@ class CAllSaleLocation
 				// try id
 				$item = Location\LocationTable::getList(array('filter' => array(
 					array('=ID' => $primary)
-				), 'select' => 
+				), 'select' =>
 					array('ID', 'SORT', 'LEFT_MARGIN', 'RIGHT_MARGIN', 'CODE')
 				))->fetch();
 			}
@@ -2472,33 +2271,13 @@ class CAllSaleLocation
 	{
 		global $DB;
 
-		if ((is_set($arFields, "SORT") || $ACTION=="ADD") && IntVal($arFields["SORT"])<=0) $arFields["SORT"] = 100;
-		if (is_set($arFields, "COUNTRY_ID")) $arFields["COUNTRY_ID"] = IntVal($arFields["COUNTRY_ID"]);
-		if (is_set($arFields, "CITY_ID")) $arFields["CITY_ID"] = IntVal($arFields["CITY_ID"]);
+		if ((is_set($arFields, "SORT") || $ACTION=="ADD") && intval($arFields["SORT"])<=0) $arFields["SORT"] = 100;
+		if (is_set($arFields, "COUNTRY_ID")) $arFields["COUNTRY_ID"] = intval($arFields["COUNTRY_ID"]);
+		if (is_set($arFields, "CITY_ID")) $arFields["CITY_ID"] = intval($arFields["CITY_ID"]);
 
 		return True;
 	}
 
-	
-	/**
-	* <p>Метод обновляет параметры местоположения с кодом ID в соответствии с параметрами из массива arFields. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код местоположения.
-	*
-	* @param array $arFields  Ассоциативный массив параметров местоположения с ключами: <ul> <li>
-	* <b>SORT</b> - индекс сортировки; </li> 	<li> <b>COUNTRY_ID</b> - код страны;</li> 	<li>
-	* <b>REGION_ID</b> - код региона;</li> <li> <b>CITY_ID</b> - код города (если такой город
-	* уже есть, иначе код должен быть нулем, и должен быть заполнен ключ
-	* CITY).</li> </ul>
-	*
-	* @return int <p>Возвращается код измененного местоположения или <i>false</i> в
-	* случае ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__updatelocation.3c5a6205.php
-	* @author Bitrix
-	*/
 	public static function UpdateLocation($ID, $arFields)
 	{
 		// it seems that method is okay... we probably want to move region and city as it set in $arFields, but then we`ll have to adjsut the rest of locations
@@ -2626,152 +2405,6 @@ class CAllSaleLocation
 		return $parent;
 	}
 
-	
-	/**
-	* <p>Метод добавляет новое местоположение включая страну и город местоположения, если нужно. Нестатический метод.</p> <p class="note"><b>Внимание!</b> Начиная с версии 14.10.0 метод не обновляется и обратная совместимость не поддерживается. Рекомендуется использовать методы нового ядра D7. Примеры работы с новым ядром можно увидеть <a href="https://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;LESSON_ID=3570" >здесь</a>.</p>
-	*
-	*
-	* @param array $arFields  Ассоциативный массив параметров местоположения с ключами: <ul> <li>
-	* <b>SORT</b> - индекс сортировки; </li> 	<li> <b>COUNTRY_ID</b> - код страны (если
-	* такая страна уже есть, иначе код должен быть нулем, и должен быть
-	* заполнен ключ COUNTRY);</li> 	<li> <b>COUNTRY</b> - массив с параметрами страны
-	* (если страна уже есть и установлен ключ COUNTRY_ID, то этот ключ
-	* заполнять не нужно); </li> 	<li> <b>WITHOUT_CITY</b> - флаг (Y/N), означающий, что
-	* это местоположение без города (только страна) (если значением с
-	* этим ключом является N, то необходимо заполнить ключ CITY);</li> 	<li>
-	* <b>CITY</b> - массив с параметрами города (если установлен флаг WITHOUT_CITY
-	* в значение Y, то этот ключ заполнять не нужно);</li> 	<li> <b>REGION_NAME</b> -
-	* название региона;</li> 	<li> <b>REGION_ID</b> - ID региона;</li> </ul> Массив с
-	* параметрами страны должен содержать ключи: <ul> <li> <b>NAME</b> - название
-	* страны (не зависящее от языка);</li> 	<li> <b>SHORT_NAME</b> - сокращенное
-	* название страны - абревиатура (не зависящее от языка);</li> 	<li>
-	* <b>&lt;код языка&gt;</b> - ключом является код языка, а значением
-	* ассоциативный массив вида: <pre class="syntax">array("LID" =&gt; "код языка",      
-	* "NAME" =&gt; "название страны на этом языке",       "SHORT_NAME" =&gt; "сокращенное
-	* название страны                        (аббревиатура) на этом языке")</pre>      
-	* Эта пара ключ-значение должна присутствовать для каждого языка
-	* системы. </li> </ul>	   Массив с параметрами города должен содержать
-	* ключи: <ul> <li> <b>NAME</b> - название города (не зависящее от языка);</li> 	<li>
-	* <b>SHORT_NAME</b> - сокращенное название города - абревиатура (не
-	* зависящее от языка);</li> 	<li> <b>&lt;код языка&gt;</b> - ключем является код
-	* языка, а значением ассоциативный массив вида: <pre class="syntax">array("LID"
-	* =&gt; "код языка",       "NAME" =&gt; "название города на этом языке",      
-	* "SHORT_NAME" =&gt; "сокращенное название города                       
-	* (аббревиатура) на этом языке")</pre>       Эта пара ключ-значение должна
-	* присутствовать для каждого языка системы. </li> </ul>
-	*
-	* @return int <p>Возвращается код добавленного местоположения или <i>false</i> у
-	* случае ошибки.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* Параметры вызова
-	* <tr>
-	* <th width="15%">Параметр</th>
-	* <th width="444">Описание</th>
-	* </tr>
-	* <tr>
-	* <td>arFields</td>
-	* 	<td>Ассоциативный массив параметров местоположения с ключами:
-	* <ul>
-	* <li>
-	* <b>SORT</b> - индекс сортировки; </li>
-	* 	<li>
-	* <b>COUNTRY_ID</b> - код страны (если такая страна уже есть, иначе код должен быть нулем, и должен быть заполнен ключ COUNTRY);</li>
-	* 	<li>
-	* <b>COUNTRY</b> - массив с параметрами страны (если страна уже есть и установлен ключ COUNTRY_ID, то этот ключ заполнять не нужно); </li>
-	* 	<li>
-	* <b>WITHOUT_CITY</b> - флаг (Y/N), означающий, что это местоположение без города (только страна) (если значением с этим ключом является N, то необходимо заполнить ключ CITY);</li>
-	* 	<li>
-	* <b>CITY</b> - массив с параметрами города (если установлен флаг WITHOUT_CITY в значение Y, то этот ключ заполнять не нужно);</li>
-	* 	<li>
-	* <b>REGION_NAME</b> - название региона;</li>
-	* 	<li>
-	* <b>REGION_ID</b> - ID региона;</li>
-	* </ul>
-	* Массив с параметрами страны должен содержать ключи:
-	* <ul>
-	* <li>
-	* <b>NAME</b> - название страны (не зависящее от языка);</li>
-	* 	<li>
-	* <b>SHORT_NAME</b> - сокращенное название страны - абревиатура (не зависящее от языка);</li>
-	* 	<li>
-	* <b>&lt;код языка&gt;</b> - ключом является код языка, а значением ассоциативный массив вида:
-	* <pre class="syntax">array("LID" =&gt; "код языка",
-	*       "NAME" =&gt; "название страны на этом языке",
-	*       "SHORT_NAME" =&gt; "сокращенное название страны
-	*                        (аббревиатура) на этом языке")</pre>
-	*       Эта пара ключ-значение должна присутствовать для каждого языка системы. </li>
-	* </ul>	  
-	* Массив с параметрами города должен содержать ключи:
-	* <ul>
-	* <li>
-	* <b>NAME</b> - название города (не зависящее от языка);</li>
-	* 	<li>
-	* <b>SHORT_NAME</b> - сокращенное название города - абревиатура (не зависящее от языка);</li>
-	* 	<li>
-	* <b>&lt;код языка&gt;</b> - ключем является код языка, а значением ассоциативный массив вида:
-	* <pre class="syntax">array("LID" =&gt; "код языка",
-	*       "NAME" =&gt; "название города на этом языке",
-	*       "SHORT_NAME" =&gt; "сокращенное название города
-	*                        (аббревиатура) на этом языке")</pre>
-	*       Эта пара ключ-значение должна присутствовать для каждого языка системы. </li>
-	* </ul>
-	* </td>
-	* </tr>
-	* 
-	* &lt;?
-	* $arFields = array(
-	*    "SORT" =&gt; 100,
-	*    "COUNTRY_ID" =&gt; 0,
-	*    "WITHOUT_CITY" =&gt; "N"
-	* );
-	* 
-	* $arCountry = array(
-	*    "NAME" =&gt; "Russian Federation",
-	*    "SHORT_NAME" =&gt; "Russia",
-	*    "ru" =&gt; array(
-	*       "LID" =&gt; "ru",
-	*       "NAME" =&gt; "Российская федерация",
-	*       "SHORT_NAME" =&gt; "Россия"
-	*       ),
-	*    "en" =&gt; array(
-	*       "LID" =&gt; "en",
-	*       "NAME" =&gt; "Russian Federation",
-	*       "SHORT_NAME" =&gt; "Russia"
-	*       )
-	* );
-	* 
-	* $arFields["COUNTRY"] = $arCountry;
-	* 
-	* $arCity = array(
-	*    "NAME" =&gt; "Kaliningrad",
-	*    "SHORT_NAME" =&gt; "Kaliningrad",
-	*    "ru" =&gt; array(
-	*       "LID" =&gt; "ru",
-	*       "NAME" =&gt; "Калининград",
-	*       "SHORT_NAME" =&gt; "Калининград"
-	*       ),
-	*    "en" =&gt; array(
-	*       "LID" =&gt; "en",
-	*       "NAME" =&gt; "Kaliningrad",
-	*       "SHORT_NAME" =&gt; "Kaliningrad"
-	*       )
-	* );
-	* 
-	* $arFields["CITY"] = $arCity;
-	* 
-	* $ID = CSaleLocation::Add($arFields);
-	* if (IntVal($ID)&lt;=0)
-	*    echo "Ошибка добавления местоположения";
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__add.92483b06.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		global $DB;
@@ -2787,7 +2420,7 @@ class CAllSaleLocation
 				$region = self::getTypeValueToStore('REGION', $arFields);
 				$city = self::getTypeValueToStore('CITY', $arFields);
 
-				// Let`s treat a location 1.0 structure as a static structure where you can not move nodes up\down 
+				// Let`s treat a location 1.0 structure as a static structure where you can not move nodes up\down
 				// along a tree by passing just IDs in triplets like (COUNTRY_ID, REGION_ID, CITY_ID).
 				// Then parse out some meaningless situations to preserve tree integrity:
 
@@ -2831,12 +2464,12 @@ class CAllSaleLocation
 		else
 		{
 
-			if ((!is_set($arFields, "COUNTRY_ID") || IntVal($arFields["COUNTRY_ID"])<=0) && strlen($arFields["COUNTRY_ID"]) > 0)
+			if ((!is_set($arFields, "COUNTRY_ID") || intval($arFields["COUNTRY_ID"])<=0) && $arFields["COUNTRY_ID"] <> '')
 			{
 				$arFields["COUNTRY_ID"] = CSaleLocation::AddCountry($arFields["COUNTRY"]);
-				if (IntVal($arFields["COUNTRY_ID"])<=0) return false;
+				if (intval($arFields["COUNTRY_ID"])<=0) return false;
 
-				if ($arFields["WITHOUT_CITY"]!="Y" && strlen($arFields["REGION_ID"]) <= 0)
+				if ($arFields["WITHOUT_CITY"]!="Y" && $arFields["REGION_ID"] == '')
 				{
 					UnSet($arFields["CITY_ID"]);
 					CSaleLocation::AddLocation($arFields);
@@ -2846,7 +2479,7 @@ class CAllSaleLocation
 			if ($arFields["REGION_ID"] <= 0 && $arFields["REGION_ID"] != "")
 			{
 				$arFields["REGION_ID"] = CSaleLocation::AddRegion($arFields["REGION"]);
-				if (IntVal($arFields["REGION_ID"])<=0) return false;
+				if (intval($arFields["REGION_ID"])<=0) return false;
 
 				if ($arFields["WITHOUT_CITY"] != "Y")
 				{
@@ -2862,10 +2495,10 @@ class CAllSaleLocation
 
 			if ($arFields["WITHOUT_CITY"]!="Y")
 			{
-				if (IntVal($arFields["REGION_ID"]) > 0)
+				if (intval($arFields["REGION_ID"]) > 0)
 					$arFields["CITY"]["REGION_ID"] = $arFields["REGION_ID"];
 				$arFields["CITY_ID"] = CSaleLocation::AddCity($arFields["CITY"]);
-				if (IntVal($arFields["CITY_ID"])<=0) return false;
+				if (intval($arFields["CITY_ID"])<=0) return false;
 			}
 			else
 			{
@@ -2879,84 +2512,6 @@ class CAllSaleLocation
 		}
 	}
 
-	
-	/**
-	* <p>Метод обновляет параметры местоположения с кодом ID в соответствии с параметрами из массива arFields. Обновляются так же страна и город этого местоположения. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код местоположения.
-	*
-	* @param array $arFields  Ассоциативный массив параметров местоположения с ключами: <ul> <li>
-	* <b>SORT</b> - индекс сортировки; </li> 	<li> <b>COUNTRY_ID</b> - код страны (если
-	* такая страна уже есть, иначе код должен быть нулем, и должен быть
-	* заполнен ключ COUNTRY);</li> 	<li> <b>COUNTRY</b> - массив с параметрами страны
-	* (должен быть заполнен, если не установлен ключ COUNTRY_ID или если ключ
-	* CHANGE_COUNTRY установлен в значение Y); </li> 	<li> <b>CHANGE_COUNTRY</b> - флаг (Y/N),
-	* изменять ли параметры страны (долны быть установлены ключи COUNTRY_ID
-	* и COUNTRY); </li> 	<li> <b>WITHOUT_CITY</b> - флаг (Y/N), означающий, что это
-	* местоположение без города (только страна) (если значением с этим
-	* ключем является N, то необходимо заполнить ключ CITY);</li> 	<li> <b>CITY_ID</b>
-	* -     код города (если такой город уже есть, иначе код должен быть
-	* нулем, и должен быть заполнен ключ CITY);</li> 	<li> <b>CITY</b> - массив с
-	* параметрами города (если установлен флаг WITHOUT_CITY в значение Y, то
-	* этот ключ заполнять не нужно);</li> </ul>       Массив с параметрами
-	* страны должен содержать ключи: <ul> <li> <b>NAME</b> - название страны (не
-	* зависящее от языка);</li> 	<li> <b>SHORT_NAME</b> - сокращенное название страны
-	* - абревиатура (не зависящее от языка);</li> 	<li> <b>&lt;код языка&gt;</b> -
-	* ключем является код языка, а значением ассоциативный массив вида
-	* <pre class="syntax"> array("LID" =&gt; "код языка",       "NAME" =&gt; "название страны на
-	* этом языке",       "SHORT_NAME" =&gt; "сокращенное название страны                    
-	*    (аббревиатура) на этом языке")</pre> Эта пара ключ-значение должна
-	* присутствовать для каждого языка системы. </li> </ul> Массив с
-	* параметрами города должен содержать ключи: <ul> <li> <b>NAME</b> - название
-	* города (не зависящее от языка);</li> 	<li> <b>SHORT_NAME</b> - сокращенное
-	* название города - абревиатура (не зависящее от языка);</li> 	<li>
-	* <b>&lt;код языка&gt;</b> - ключем является код языка, а значением
-	* ассоциативный массив вида <pre class="syntax"> array("LID" =&gt; "код языка",      
-	* "NAME" =&gt; "название города на этом языке",       "SHORT_NAME" =&gt; "сокращенное
-	* название города                        (аббревиатура) на этом языке")</pre> Эта
-	* пара ключ-значение должна присутствовать для каждого языка
-	* системы.</li> </ul>
-	*
-	* @return int <p>Возвращается код измененного местоположения или <i>false</i> у
-	* случае ошибки.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $arFields = array(
-	*    "SORT" =&gt; 100,
-	*    "COUNTRY_ID" =&gt; 8,
-	*    "WITHOUT_CITY" =&gt; "N"
-	* );
-	* 
-	* $arCity = array(
-	*    "NAME" =&gt; "Kaliningrad",
-	*    "SHORT_NAME" =&gt; "Kaliningrad",
-	*    "ru" =&gt; array(
-	*       "LID" =&gt; "ru",
-	*       "NAME" =&gt; "Калининград",
-	*       "SHORT_NAME" =&gt; "Калининград"
-	*       ),
-	*    "en" =&gt; array(
-	*       "LID" =&gt; "en",
-	*       "NAME" =&gt; "Kaliningrad",
-	*       "SHORT_NAME" =&gt; "Kaliningrad"
-	*       )
-	* );
-	* 
-	* $arFields["CITY"] = $arCity;
-	* 
-	* if (!CSaleLocation::Update(6, $arFields))
-	*    echo "Ошибка изменения местоположения";
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__update.a6601f1c.php
-	* @author Bitrix
-	*/
 	public static function Update($ID, $arFields)
 	{
 		global $DB;
@@ -2987,10 +2542,10 @@ class CAllSaleLocation
 		}
 		else
 		{
-			if ((!is_set($arFields, "COUNTRY_ID") || IntVal($arFields["COUNTRY_ID"])<=0) && $arFields["COUNTRY_ID"] != "")
+			if ((!is_set($arFields, "COUNTRY_ID") || intval($arFields["COUNTRY_ID"])<=0) && $arFields["COUNTRY_ID"] != "")
 			{
 				$arFields["COUNTRY_ID"] = CSaleLocation::AddCountry($arFields["COUNTRY"]);
-				if (IntVal($arFields["COUNTRY_ID"])<=0) return false;
+				if (intval($arFields["COUNTRY_ID"])<=0) return false;
 
 				UnSet($arFields["CITY_ID"]);
 				UnSet($arFields["REGION_ID"]);
@@ -3004,14 +2559,14 @@ class CAllSaleLocation
 			//city
 			if ($arFields["WITHOUT_CITY"]!="Y")
 			{
-				if (IntVal($arLocRes["CITY_ID"])>0)
+				if (intval($arLocRes["CITY_ID"])>0)
 				{
-					CSaleLocation::UpdateCity(IntVal($arLocRes["CITY_ID"]), $arFields["CITY"]);
+					CSaleLocation::UpdateCity(intval($arLocRes["CITY_ID"]), $arFields["CITY"]);
 				}
 				else
 				{
 					$arFields["CITY_ID"] = CSaleLocation::AddCity($arFields["CITY"]);
-					if (IntVal($arFields["CITY_ID"])<=0) return false;
+					if (intval($arFields["CITY_ID"])<=0) return false;
 				}
 			}
 			else
@@ -3021,9 +2576,9 @@ class CAllSaleLocation
 			}
 
 			//region
-			if (IntVal($arFields["REGION_ID"])>0)
+			if (intval($arFields["REGION_ID"])>0)
 			{
-				CSaleLocation::UpdateRegion(IntVal($arLocRes["REGION_ID"]), $arFields["REGION"]);
+				CSaleLocation::UpdateRegion(intval($arLocRes["REGION_ID"]), $arFields["REGION"]);
 			}
 			elseif ($arFields["REGION_ID"] == 0 && $arFields["REGION_ID"] != '')
 			{
@@ -3035,7 +2590,7 @@ class CAllSaleLocation
 				else
 				{
 					$arFields["REGION_ID"] = CSaleLocation::AddRegion($arFields["REGION"]);
-					if (IntVal($arFields["REGION_ID"])<=0)
+					if (intval($arFields["REGION_ID"])<=0)
 						return false;
 
 					$arFieldsTmp = $arFields;
@@ -3060,32 +2615,10 @@ class CAllSaleLocation
 	}
 
 	// ???
-	
-	/**
-	* <p>Метод удаляет местоположение с кодом ID. Метод также удаляет город этого местоположения, страну этого местоположения (если она не входит больше ни в одно другое местоположение), а также связи этого местоположения с группами местоположений и службами доставки. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код местоположения.
-	*
-	* @return bool <p>Метод возвращает <i>true</i> в случае успешного удаления
-	* местоположения и <i>false</i> - в противном случае.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (!CSaleLocation::Delete(12))
-	*    echo "Ошибка удаления местоположения";<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__delete.008e0aa2.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		global $DB;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		if (!($arLocRes = CSaleLocation::GetByID($ID, LANGUAGE_ID)))
 			return false;
@@ -3094,7 +2627,7 @@ class CAllSaleLocation
 			if (ExecuteModuleEventEx($arEvent, array($ID))===false)
 				return false;
 
-		if (IntVal($arLocRes["CITY_ID"]) > 0)
+		if (intval($arLocRes["CITY_ID"]) > 0)
 			CSaleLocation::DeleteCity($arLocRes["CITY_ID"]);
 
 		$bDelCountry = True;
@@ -3106,7 +2639,7 @@ class CAllSaleLocation
 		if ($db_res->Fetch())
 			$bDelCountry = false;
 
-		if ($bDelCountry && IntVal($arLocRes["COUNTRY_ID"]) > 0)
+		if ($bDelCountry && intval($arLocRes["COUNTRY_ID"]) > 0)
 			CSaleLocation::DeleteCountry($arLocRes["COUNTRY_ID"]);
 
 		$bDelRegion = True;
@@ -3118,7 +2651,7 @@ class CAllSaleLocation
 		if ($db_res->Fetch())
 			$bDelRegion = false;
 
-		if ($bDelRegion && IntVal($arLocRes["REGION_ID"]) > 0)
+		if ($bDelRegion && intval($arLocRes["REGION_ID"]) > 0)
 			CSaleLocation::DeleteRegion($arLocRes["REGION_ID"]);
 
 		$DB->Query("DELETE FROM b_sale_location2location_group WHERE LOCATION_ID = ".$ID."", true);
@@ -3168,17 +2701,6 @@ class CAllSaleLocation
 		return true;
 	}
 
-	
-	/**
-	* <p>Метод удаляет все местоположения из базы. Нестатический метод.</p> <br><br>
-	*
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalelocation/csalelocation__deleteall.1cda6559.php
-	* @author Bitrix
-	*/
 	public static function DeleteAll()
 	{
 		global $DB;
@@ -3203,7 +2725,7 @@ class CAllSaleLocation
 			$DB->Query("DELETE FROM ".Location\GroupLocationTable::getTableName());
 			$DB->Query("DELETE FROM ".Location\SiteLocationTable::getTableName());
 			$DB->Query("DELETE FROM ".Delivery\DeliveryLocationTable::getTableName());
-			
+
 			//other
 			$DB->Query("DELETE FROM ".Location\DefaultSiteTable::getTableName());
 			$DB->Query("DELETE FROM ".Location\ExternalTable::getTableName());
@@ -3272,7 +2794,7 @@ class CAllSaleLocation
 		{
 			try
 			{
-				if(!strlen($zip))
+				if($zip == '')
 					throw new Exception();
 
 				$res = Location\ExternalTable::getList(array(
@@ -3436,7 +2958,7 @@ class CAllSaleLocation
 
 			foreach ($arZipList as $ZIP)
 			{
-				if (strlen($ZIP) > 0)
+				if ($ZIP <> '')
 					self::AddLocationZIP($location, $ZIP);
 			}
 		}
@@ -3471,7 +2993,7 @@ class CAllSaleLocation
 					'=TYPE_ID' => $types['REGION'],
 					'!=REGION_ID' => '0'
 				);
-				
+
 				if($countryId = intval($countryId))
 					$filterFields['=COUNTRY_ID'] = $countryId;
 
@@ -3489,8 +3011,10 @@ class CAllSaleLocation
 				$nameJoinCondition = array(
 					'=this.ID' => 'ref.LOCATION_ID',
 				);
-				if(strlen($strLang))
+				if($strLang <> '')
+				{
 					$nameJoinCondition['=ref.LANGUAGE_ID'] = array('?', $strLang);
+				}
 
 				$query->registerRuntimeField(
 					'NAME',
@@ -3511,7 +3035,7 @@ class CAllSaleLocation
 				$res = $query->exec();
 				while($item = $res->fetch())
 				{
-					$result[strlen($item['RNAME']) ? $item['RNAME'] : $item['RSHORT_NAME']] = $item['RID'];
+					$result[$item['RNAME'] <> ''? $item['RNAME'] : $item['RSHORT_NAME']] = $item['RID'];
 				}
 
 				return $result;
@@ -3560,7 +3084,7 @@ class CAllSaleLocation
 
 					while($arRegion = $dbList->Fetch())
 					{
-						if(strlen($arRegion["NAME"]) > 0)
+						if($arRegion["NAME"] <> '')
 							$idx = $arRegion["NAME"];
 						else
 							$idx = $arRegion["SHORT_NAME"];
@@ -3592,22 +3116,22 @@ class CAllSaleLocation
 						$parsedList[] = intval($id);
 				}
 
-				if(!strlen($lang))
+				if($lang == '')
 					$lang = LANGUAGE_ID;
 
 				$arResult = array();
-				if(!empty($parsedList))
+				foreach ($parsedList as $id)
 				{
 					$res = self::GetLocationTypeList(
 						'REGION',
 						array('NAME' => 'asc', 'SHORT_NAME' => 'asc'),
-						array('ID' => $parsedList),
+						array('ID' => $id),
 						$lang
 					);
 
 					while($arRegion = $res->fetch())
 					{
-						$arResult[$arRegion["ID"]] = strlen($arRegion["NAME"]) > 0 ? $arRegion["NAME"] : $arRegion["SHORT_NAME"];
+						$arResult[$arRegion["ID"]] = $arRegion["NAME"] ?: $arRegion["SHORT_NAME"];
 					}
 				}
 
@@ -3644,7 +3168,7 @@ class CAllSaleLocation
 					$dbList = $DB->Query($query);
 
 					while($arRegion = $dbList->Fetch())
-						$arResult[$arRegion["REGION_ID"]] = strlen($arRegion["NAME"]) > 0 ? $arRegion["NAME"] : $arRegion["SHORT_NAME"];
+						$arResult[$arRegion["REGION_ID"]] = $arRegion["NAME"] <> '' ? $arRegion["NAME"] : $arRegion["SHORT_NAME"];
 				}
 			}
 
@@ -3677,7 +3201,7 @@ class CAllSaleLocation
 			$city_name = $DB->ForSql($city_name);
 			foreach ($arQueryFields as $field)
 			{
-				if (strlen($field) > 0)
+				if ($field <> '')
 					$arWhere[] = $field."='".$city_name."'";
 			}
 		}
@@ -3821,4 +3345,3 @@ WHERE ".$strWhere;
 		return $loc2Update;
 	}
 }
-?>

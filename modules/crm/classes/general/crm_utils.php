@@ -14,13 +14,11 @@ class CCrmUtils
 			return;
 		}
 
-		$file = fopen($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/crm/log.txt', 'a');
-		fwrite($file, "$id: $msg\n");
-		fclose($file);
+		\Bitrix\Main\Diag\Debug::writeToFile($msg, $id, 'crm.log');
 	}
 
-	public static function Dump($obj)
+	public static function Dump($id, $obj)
 	{
-		echo '<pre>', mydump($obj), '</pre>';
+		\Bitrix\Main\Diag\Debug::dump($obj, $id);
 	}
 }

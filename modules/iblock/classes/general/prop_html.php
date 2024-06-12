@@ -1,20 +1,48 @@
-<?
-use Bitrix\Main\Loader,
-	Bitrix\Main\Localization\Loc;
+<?php
 
-Loc::loadMessages(__FILE__);
+use Bitrix\Main;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Iblock;
 
 class CIBlockPropertyHTML
 {
+	/** @deprecated  */
+	public const USER_TYPE = Iblock\PropertyTable::USER_TYPE_HTML;
+
+	public const VALUE_TYPE_TEXT = 'TEXT';
+	public const VALUE_TYPE_HTML = 'HTML';
+
+	public static function GetUserTypeDescription(): array
+	{
+		return [
+			'PROPERTY_TYPE' => Iblock\PropertyTable::TYPE_STRING,
+			'USER_TYPE' => Iblock\PropertyTable::USER_TYPE_HTML,
+			'DESCRIPTION' => Loc::getMessage('IBLOCK_PROP_HTML_DESC'),
+			'GetPublicViewHTML' => [__CLASS__, 'GetPublicViewHTML'],
+			'GetPublicEditHTML' => [__CLASS__, 'GetPublicEditHTML'],
+			'GetAdminListViewHTML' => [__CLASS__, 'GetAdminListViewHTML'],
+			'GetPropertyFieldHtml' => [__CLASS__, 'GetPropertyFieldHtml'],
+			'ConvertToDB' => [__CLASS__, 'ConvertToDB'],
+			'ConvertFromDB' => [__CLASS__, 'ConvertFromDB'],
+			'GetLength' => [__CLASS__, 'GetLength'],
+			'PrepareSettings' => [__CLASS__, 'PrepareSettings'],
+			'GetSettingsHTML' => [__CLASS__, 'GetSettingsHTML'],
+			'GetUIFilterProperty' => [__CLASS__, 'GetUIFilterProperty'],
+		];
+	}
+
 	public static function GetPublicViewHTML($arProperty, $value, $strHTMLControlName)
 	{
 		if (!is_array($value["VALUE"]))
 			$value = static::ConvertFromDB($arProperty, $value);
-		$ar = $value["VALUE"];
+		$ar = $value['VALUE'] ?? '';
 		if (!empty($ar) && is_array($ar))
 		{
 			if (isset($strHTMLControlName['MODE']) && $strHTMLControlName['MODE'] == 'CSV_EXPORT')
 				return '['.$ar["TYPE"].']'.$ar["TEXT"];
+			elseif (isset($strHTMLControlName['MODE']) && $strHTMLControlName['MODE'] == 'SIMPLE_TEXT')
+				return ($ar["TYPE"] === self::VALUE_TYPE_HTML ? strip_tags($ar["TEXT"]) : $ar["TEXT"]);
 			else
 				return FormatText($ar["TEXT"], $ar["TYPE"]);
 		}
@@ -41,7 +69,11 @@ class CIBlockPropertyHTML
 		if (!is_array($value["VALUE"]))
 			$value = static::ConvertFromDB($arProperty, $value);
 
-		$settings = static::PrepareSettings($arProperty);
+		if (isset($strHTMLControlName["MODE"]) && $strHTMLControlName["MODE"]=="SIMPLE")
+		{
+			return '<input type="hidden" name="'.$strHTMLControlName["VALUE"].'[TYPE]" value="html">'
+				.'<textarea cols="60" rows="10" name="'.$strHTMLControlName["VALUE"].'[TEXT]" style="width:100%">'.htmlspecialcharsEx($value["VALUE"]["TEXT"]).'</textarea>';
+		}
 
 		$id = preg_replace("/[^a-z0-9]/i", '', $strHTMLControlName['VALUE']);
 
@@ -52,7 +84,7 @@ class CIBlockPropertyHTML
 			'name' => $strHTMLControlName["VALUE"].'[TEXT]',
 			'id' => $id,
 			'inputName' => $strHTMLControlName["VALUE"].'[TEXT]',
-			'content' => $value["VALUE"]['TEXT'],
+			'content' => $value['VALUE']['TEXT'] ?? '',
 			'width' => '100%',
 			'minBodyWidth' => 350,
 			'normalBodyWidth' => 555,
@@ -67,7 +99,9 @@ class CIBlockPropertyHTML
 			'showNodeNavi' => false,
 			'askBeforeUnloadPage' => true,
 			'bbCode' => false,
+			'actionUrl' => '/bitrix/tools/html_editor_action.php',
 			'siteId' => SITE_ID,
+			'setFocusAfterShow' => false,
 			'controlsMap' => array(
 				array('id' => 'Bold', 'compact' => true, 'sort' => 80),
 				array('id' => 'Italic', 'compact' => true, 'sort' => 90),
@@ -98,13 +132,32 @@ class CIBlockPropertyHTML
 
 	public static function GetPropertyFieldHtml($arProperty, $value, $strHTMLControlName)
 	{
+		if (!is_array($arProperty))
+		{
+			$arProperty = [];
+		}
+		$arProperty['WITH_DESCRIPTION'] = ($arProperty['WITH_DESCRIPTION'] ?? 'N') === 'Y' ? 'Y' : 'N';
+
+		if (!is_array($strHTMLControlName))
+		{
+			$strHTMLControlName = [];
+		}
+
+		$strHTMLControlName['VALUE'] ??= '';
+		$strHTMLControlName['DESCRIPTION'] ??= '';
+		if (!is_string($strHTMLControlName['DESCRIPTION']))
+		{
+			$strHTMLControlName['DESCRIPTION'] = '';
+		}
+
 		$strHTMLControlName["VALUE"] = htmlspecialcharsEx($strHTMLControlName["VALUE"]);
 		if (!is_array($value["VALUE"]))
+		{
 			$value = static::ConvertFromDB($arProperty, $value);
-		$ar = $value["VALUE"];
-		if (!$ar && isset($arProperty['DEFAULT_VALUE']) && is_array($arProperty['DEFAULT_VALUE']))
-			$ar = $arProperty['DEFAULT_VALUE'];
-		if (strtolower($ar["TYPE"]) != "text")
+		}
+		$ar = $value["VALUE"] ?? self::getEmptyValue();
+
+		if (mb_strtolower($ar["TYPE"]) != "text")
 			$ar["TYPE"] = "html";
 		else
 			$ar["TYPE"] = "text";
@@ -113,14 +166,29 @@ class CIBlockPropertyHTML
 
 		ob_start();
 		?><table width="100%"><?
-		if($strHTMLControlName["MODE"]=="FORM_FILL" && COption::GetOptionString("iblock", "use_htmledit", "Y")=="Y" && Loader::includeModule("fileman")):
+		if (
+			isset($strHTMLControlName['MODE'])
+			&& $strHTMLControlName['MODE'] === 'FORM_FILL'
+			&& Main\Config\Option::get('iblock', 'use_htmledit') === "Y"
+			&& Loader::includeModule('fileman')
+		):
 		?><tr>
 			<td colspan="2" align="center">
 			<input type="hidden" name="<?=$strHTMLControlName["VALUE"]?>" value="">
 				<?
 				$text_name = preg_replace("/([^a-z0-9])/is", "_", $strHTMLControlName["VALUE"]."[TEXT]");
 				$text_type = preg_replace("/([^a-z0-9])/is", "_", $strHTMLControlName["VALUE"]."[TYPE]");
-				CFileMan::AddHTMLEditorFrame($text_name, htmlspecialcharsBx($ar["TEXT"]), $text_type, strtolower($ar["TYPE"]), $settings['height'], "N", 0, "", "");
+				CFileMan::AddHTMLEditorFrame(
+					$text_name,
+					htmlspecialcharsBx($ar["TEXT"]),
+					$text_type,
+					mb_strtolower($ar["TYPE"]),
+					$settings['height'],
+					"N",
+					0,
+					"",
+					""
+				);
 				?>
 			</td>
 		</tr>
@@ -138,7 +206,11 @@ class CIBlockPropertyHTML
 			<td colspan="2" align="center"><textarea cols="60" rows="10" name="<?=$strHTMLControlName["VALUE"]?>[TEXT]" style="width:100%"><?=htmlspecialcharsEx($ar["TEXT"])?></textarea></td>
 		</tr>
 		<?endif;
-		if (($arProperty["WITH_DESCRIPTION"]=="Y") && ('' != trim($strHTMLControlName["DESCRIPTION"]))):?>
+		if (
+			$arProperty['WITH_DESCRIPTION'] === 'Y'
+			&& $strHTMLControlName['DESCRIPTION'] !== ''
+		):
+		?>
 		<tr>
 			<td colspan="2">
 				<span title="<?echo Loc::getMessage("IBLOCK_PROP_HTML_DESCRIPTION_TITLE")?>"><?echo Loc::getMessage("IBLOCK_PROP_HTML_DESCRIPTION_LABEL")?>:<input type="text" name="<?=$strHTMLControlName["DESCRIPTION"]?>" value="<?=$value["DESCRIPTION"]?>" size="18"></span>
@@ -149,12 +221,14 @@ class CIBlockPropertyHTML
 		<?
 		$return = ob_get_contents();
 		ob_end_clean();
+
 		return  $return;
 	}
 
 	public static function ConvertToDB($arProperty, $value)
 	{
 		global $DB;
+
 		$return = false;
 
 		if (!is_array($value))
@@ -169,29 +243,60 @@ class CIBlockPropertyHTML
 
 		if(
 			is_array($value)
-			&& array_key_exists("VALUE", $value)
+			&& array_key_exists('VALUE', $value)
 		)
 		{
-			$text = trim($value["VALUE"]["TEXT"]);
-			$len = strlen($text);
+			if (
+				isset($value['VALUE']['TEXT'])
+				&& !is_scalar($value['VALUE']['TEXT'])
+			)
+			{
+				$value['VALUE']['TEXT'] =
+					is_object($value['VALUE']['TEXT']) && method_exists($value['VALUE']['TEXT'], '__toString')
+						? (string)$value['VALUE']['TEXT']
+						: ''
+				;
+			}
+			$value['VALUE']['TEXT'] ??= '';
+			$value['VALUE']['TEXT'] = trim($value['VALUE']['TEXT']);
+			if (Loader::includeModule('bitrix24'))
+			{
+				$sanitizer = new \CBXSanitizer();
+				$sanitizer->setLevel(\CBXSanitizer::SECURE_LEVEL_LOW);
+				$sanitizer->ApplyDoubleEncode(false);
+				$value['VALUE']['TEXT'] = $sanitizer->SanitizeHtml($value['VALUE']['TEXT']);
+			}
+			$len = mb_strlen($value['VALUE']['TEXT']);
 			if ($len > 0 || $defaultValue)
 			{
-				if ($DB->type === "MYSQL")
+				if ($DB->type === 'MYSQL')
+				{
 					$limit = 63200;
+				}
 				else
+				{
 					$limit = 1950;
+				}
 
 				if ($len > $limit)
-					$value["VALUE"]["TEXT"] = substr($text, 0, $limit);
+				{
+					$value['VALUE']['TEXT'] = mb_substr($value['VALUE']['TEXT'], 0, $limit);
+				}
 
-				$val = static::CheckArray($value["VALUE"], $defaultValue);
+				$val = static::CheckArray($value['VALUE'], $defaultValue);
 				if (is_array($val))
 				{
 					$return = array(
-						"VALUE" => serialize($val),
+						'VALUE' => serialize($val),
 					);
-					if (trim($value["DESCRIPTION"]) != '')
-						$return["DESCRIPTION"] = trim($value["DESCRIPTION"]);
+					if (isset($value['DESCRIPTION']) && is_string($value['DESCRIPTION']))
+					{
+						$value['DESCRIPTION'] = trim($value['DESCRIPTION']);
+						if ($value['DESCRIPTION'] !== '')
+						{
+							$return['DESCRIPTION'] = $value['DESCRIPTION'];
+						}
+					}
 				}
 			}
 		}
@@ -202,23 +307,52 @@ class CIBlockPropertyHTML
 	public static function ConvertFromDB($arProperty, $value)
 	{
 		$return = false;
-		if (!is_array($value["VALUE"]))
+		if (!is_array($value['VALUE']))
 		{
-			$return = array(
-				"VALUE" => unserialize($value["VALUE"]),
-			);
-			if ($return['VALUE'] === false && strlen($value['VALUE']) > 0)
+			$value['VALUE'] = (string)$value['VALUE'];
+			if ($value['VALUE'] !== '')
 			{
-				$return = array(
-					"VALUE" => array(
-						'TEXT' => $value["VALUE"],
-						'TYPE' => 'TEXT'
-					)
-				);
+				if (CheckSerializedData($value["VALUE"]))
+				{
+					$return = [
+						'VALUE' => unserialize($value['VALUE'], ['allowed_classes' => false]),
+					];
+					if ($return['VALUE'] === false)
+					{
+						$return = [
+							'VALUE' => [
+								'TEXT' => $value['VALUE'],
+								'TYPE' => self::VALUE_TYPE_TEXT,
+							]
+						];
+					}
+				}
+				else
+				{
+					$return = [
+						'VALUE' => [
+							'TEXT' => $value['VALUE'],
+							'TYPE' => self::VALUE_TYPE_TEXT,
+						]
+					];
+				}
 			}
-			if($value["DESCRIPTION"])
-				$return["DESCRIPTION"] = trim($value["DESCRIPTION"]);
+			if (isset($value['DESCRIPTION']))
+			{
+				$value['DESCRIPTION'] = (string)$value['DESCRIPTION'];
+				if ($value['DESCRIPTION'] !== '')
+				{
+					if (!is_array($return))
+					{
+						$return = [
+							"VALUE" => null,
+						];
+					}
+					$return["DESCRIPTION"] = trim($value["DESCRIPTION"]);
+				}
+			}
 		}
+
 		return $return;
 	}
 
@@ -235,8 +369,10 @@ class CIBlockPropertyHTML
 		if (!is_array($arFields))
 		{
 			$return = false;
-			if (CheckSerializedData($arFields))
-				$return = unserialize($arFields);
+			if (is_string($arFields) && $arFields !== '' && CheckSerializedData($arFields))
+			{
+				$return = unserialize($arFields, ['allowed_classes' => false]);
+			}
 		}
 		else
 		{
@@ -245,52 +381,65 @@ class CIBlockPropertyHTML
 
 		if ($return)
 		{
-			if (is_set($return, "TEXT") && ((strlen(trim($return["TEXT"])) > 0) || $defaultValue))
+			if (array_key_exists('TEXT', $return) && ((trim((string)$return['TEXT']) !== '') || $defaultValue))
 			{
-				$return["TYPE"] = strtoupper($return["TYPE"]);
-				if (($return["TYPE"] != "TEXT") && ($return["TYPE"] != "HTML"))
-					$return["TYPE"] = "HTML";
+				$return['TYPE'] = mb_strtoupper($return['TYPE']);
+				if (($return['TYPE'] !== self::VALUE_TYPE_TEXT) && ($return['TYPE'] !== self::VALUE_TYPE_HTML))
+				{
+					$return['TYPE'] = self::VALUE_TYPE_HTML;
+				}
 			}
 			else
 			{
 				$return = false;
 			}
 		}
+
 		return $return;
 	}
 
 	public static function GetLength($arProperty, $value)
 	{
-		if(is_array($value) && isset($value["VALUE"]["TEXT"]))
-			return strlen(trim($value["VALUE"]["TEXT"]));
+		if (is_array($value) && isset($value['VALUE']['TEXT']))
+		{
+			return mb_strlen(trim((string)$value['VALUE']['TEXT']));
+		}
 		else
+		{
 			return 0;
+		}
 	}
 
 	public static function PrepareSettings($arProperty)
 	{
 		$height = 0;
-		if (isset($arProperty["USER_TYPE_SETTINGS"]["height"]))
-			$height = (int)$arProperty["USER_TYPE_SETTINGS"]["height"];
+		if (isset($arProperty['USER_TYPE_SETTINGS']['height']))
+		{
+			$height = (int)$arProperty['USER_TYPE_SETTINGS']['height'];
+		}
 		if ($height <= 0)
+		{
 			$height = 200;
+		}
 
-		return array(
-			"height" =>  $height,
-		);
+		return [
+			'height' =>  $height,
+		];
 	}
 
 	public static function GetSettingsHTML($arProperty, $strHTMLControlName, &$arPropertyFields)
 	{
-		$arPropertyFields = array(
-			"HIDE" => array("ROW_COUNT", "COL_COUNT"),
-		);
+		$arPropertyFields = [
+			'HIDE' => [
+				'ROW_COUNT',
+				'COL_COUNT',
+				'MULTIPLE',
+			],
+		];
 
-		$height = 0;
-		if (isset($arProperty["USER_TYPE_SETTINGS"]["height"]))
-			$height = (int)$arProperty["USER_TYPE_SETTINGS"]["height"];
-		if($height <= 0)
-			$height = 200;
+		$settings = static::PrepareSettings($arProperty);
+
+		$height = $settings['height'];
 
 		return '
 		<tr valign="top">
@@ -300,20 +449,35 @@ class CIBlockPropertyHTML
 		';
 	}
 
+	/**
+	 * @param array $property
+	 * @param array $strHTMLControlName
+	 * @param array &$fields
+	 * @return void
+	 */
+	public static function GetUIFilterProperty($property, $strHTMLControlName, &$fields)
+	{
+		$fields['type'] = 'string';
+		$fields['operators'] = array(
+			'default' => '%'
+		);
+		$fields['filterable'] = '?';
+	}
+
 	protected static function getValueFromString($value, $getFull = false)
 	{
 		$getFull = ($getFull === true);
-		$valueType = 'HTML';
+		$valueType = self::VALUE_TYPE_HTML;
 		$value = (string)$value;
 		if ($value !== '')
 		{
-			$prefix = strtoupper(substr($value, 0, 6));
+			$prefix = mb_strtoupper(mb_substr($value, 0, 6));
 			$isText = $prefix == '[TEXT]';
 			if ($prefix == '[HTML]' || $isText)
 			{
 				if ($isText)
-					$valueType = 'TEXT';
-				$value = substr($value, 6);
+					$valueType = self::VALUE_TYPE_TEXT;
+				$value = mb_substr($value, 6);
 			}
 		}
 		if ($getFull)
@@ -332,5 +496,13 @@ class CIBlockPropertyHTML
 				'TYPE' => $valueType
 			);
 		}
+	}
+
+	private static function getEmptyValue(): array
+	{
+		return [
+			'TEXT' => '',
+			'TYPE' => self::VALUE_TYPE_TEXT,
+		];
 	}
 }

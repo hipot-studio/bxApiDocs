@@ -12,10 +12,11 @@ use Bitrix\Sale\ResultError;
 use Bitrix\Sale\Shipment;
 use Bitrix\Sale\UserMessageException;
 use Bitrix\Main\Entity\EntityError;
+use Bitrix\Sale\Configuration;
 
 Loc::loadMessages(__FILE__);
 
-require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/admin_tool.php");
+require_once __DIR__.'/../../../../general/admin_tool.php';
 
 class OrderBasketShipment extends OrderBasket
 {
@@ -31,7 +32,7 @@ class OrderBasketShipment extends OrderBasket
 	 */
 	public function __construct(Shipment $shipment, $jsObjName = "", $idPrefix = "")
 	{
-		self::$useStoreControl = (Option::get('catalog', 'default_use_store_control', 'N') == 'Y');
+		self::$useStoreControl = Configuration::useStoreControl();
 		$order = $shipment->getCollection()->getOrder();
 		$this->visibleColumns = $this->getVisibleColumns('sale_shipment_basket');
 		parent::__construct($order, $jsObjName, $idPrefix);
@@ -80,7 +81,7 @@ class OrderBasketShipment extends OrderBasket
 				<table class="adm-s-order-table-ddi-table" style="width: 100%;" id="'.$this->idPrefix.'sale_order_edit_product_table">
 					<thead>
 					<tr>
-						<td>
+						<td class="adm-s-order-table-context-menu-column">
 							<span class="adm-s-order-table-title-icon"
 								title="'.Loc::getMessage("SALE_ORDER_BASKET_SETTINGS_BUTTON_TITLE").'"
 								onclick="'.$this->jsObjName.'.onHeadMenu(this);"
@@ -100,7 +101,7 @@ class OrderBasketShipment extends OrderBasket
 				</table>
 			</div>';
 
-		$result .= '<div class="adm-list-table-footer" id="b_sale_order_shipment_footer" style="margin-top: -20px; padding-top: 10px;">
+		$result .= '<div class="adm-list-table-footer" id="b_sale_order_shipment_footer" style="margin-top: -5px; padding-top: 10px;">
 			<span class="adm-selectall-wrap" style="margin-top: 5px; font-weight: bold;">'.Loc::getMessage('SALE_ORDER_SHIPMENT_BASKET_GOODS_ALL').': </span><span class="adm-selectall-wrap" style="margin-top: 5px; font-weight: bold;" id="'.$this->idPrefix.'_count">0</span>
 			<span class="adm-selectall-wrap" style="margin-top: 5px; font-weight: bold;">'.Loc::getMessage('SALE_ORDER_SHIPMENT_BASKET_GOODS_SELECTED').': </span><span class="adm-selectall-wrap" style="margin-top: 5px; font-weight: bold;" id="'.$this->idPrefix.'_selected_count">0</span>
 			<span class="adm-selectall-wrap" style="margin-top: 5px; font-weight: bold;">'.str_replace(array('#CURRENT_PAGE#', '#COUNT_PAGE#'), array('1', '1'),Loc::getMessage('SALE_ORDER_SHIPMENT_BASKET_PAGE')).'</span>
@@ -170,11 +171,18 @@ class OrderBasketShipment extends OrderBasket
 				array(
 					"STORE" => Loc::getMessage("SALE_ORDER_BASKET_SETTINGS_COL_STORE"),
 					"CUR_AMOUNT" => Loc::getMessage("SALE_ORDER_BASKET_SETTINGS_COL_CUR_AMOUNT"),
-					"REMAINING_QUANTITY" => Loc::getMessage("SALE_ORDER_BASKET_SETTINGS_COL_REMAINING_QUANTITY"),
-					"BARCODE" => Loc::getMessage("SALE_ORDER_BASKET_SETTINGS_COL_BARCODE"),
+					"REMAINING_QUANTITY" => Loc::getMessage("SALE_ORDER_BASKET_SETTINGS_COL_REMAINING_QUANTITY")
 				)
 			);
 		}
+
+		$columnName = array_merge(
+			$columnName,
+			array(
+				"BARCODE" => Loc::getMessage("SALE_ORDER_BASKET_SETTINGS_COL_BARCODE"),
+			)
+		);
+
 		return $columnName;
 	}
 
@@ -252,12 +260,12 @@ class OrderBasketShipment extends OrderBasket
 		{
 			$basketItem = $item->getBasketItem();
 
-			if ($basketItem->getField("MODULE") == "catalog")
+			if ($basketItem && $basketItem->getField("MODULE") == "catalog")
 				$catalogProductsIds[] = $basketItem->getProductId();
 		}
 
 		if(!empty($catalogProductsIds))
-			$catalogProductsFields = self::getProductsData($catalogProductsIds, $this->order->getSiteId(), $this->visibleColumns);
+			$catalogProductsFields = self::getProductsData($catalogProductsIds, $this->order->getSiteId(), $this->visibleColumns, $this->order->getUserId());
 
 		/** @var \Bitrix\Sale\ShipmentItem $item */
 		foreach($shipmentItemCollection as $item)
@@ -267,6 +275,7 @@ class OrderBasketShipment extends OrderBasket
 			$basketItem = $item->getBasketItem();
 			if ($basketItem)
 			{
+				$systemShipmentItem = null;
 				if ($systemShipmentItemCollection)
 				{
 					/** @var \Bitrix\Sale\ShipmentItemCollection $systemShipmentItemCollection */
@@ -275,41 +284,65 @@ class OrderBasketShipment extends OrderBasket
 
 				$productId = $basketItem->getProductId();
 
-				if ($basketItem->getField("MODULE") == "catalog" && !empty($catalogProductsFields[$productId]))
+				if ($basketItem->getField("MODULE") === "catalog" && !empty($catalogProductsFields[$productId]))
+				{
 					$params = $catalogProductsFields[$productId];
+				}
 
 				if (intval($basketItem->getField("MEASURE_CODE")) > 0)
+				{
 					$params["MEASURE_CODE"] = intval($basketItem->getField("MEASURE_CODE"));
+				}
 				elseif (!isset($params["MEASURE_CODE"]))
+				{
 					$params["MEASURE_CODE"] = 0;
+				}
 
-				if(strlen($basketItem->getField("MEASURE_NAME")) > 0)
+				if (!empty($basketItem->getField("MEASURE_NAME")))
+				{
 					$params["MEASURE_TEXT"] = $basketItem->getField("MEASURE_NAME");
+				}
 				elseif(!isset($params["MEASURE_TEXT"]))
+				{
 					$params["MEASURE_TEXT"] = "";
+				}
 
 				if ($basketItem->isBundleParent())
+				{
 					$params["BASE_ELEMENTS_QUANTITY"] = $basketItem->getBundleBaseQuantity();
+					if (!isset($params['IS_SET_ITEM']))
+						$params['IS_SET_ITEM'] = 'N';
+					if (!isset($params['IS_SET_PARENT']))
+						$params['IS_SET_PARENT'] = 'Y';
+					if (!isset($params['OLD_PARENT_ID']))
+						$params['OLD_PARENT_ID'] = '';
+				}
 				$params["BASKET_ID"] = $basketItem->getId();
 				$params["PRODUCT_PROVIDER_CLASS"] = $basketItem->getProvider();
 				$params["NAME"] = $basketItem->getField("NAME");
 				$params["MODULE"] = $basketItem->getField("MODULE");
+				$params['TYPE'] = (int)$basketItem->getField('TYPE');
+				$params['BARCODE_INFO'] = [];
 
 				$itemStoreCollection = $item->getShipmentItemStoreCollection();
-
-				/** @var \Bitrix\Sale\ShipmentItemStore $barcode */
-				$params['BARCODE_INFO'] = array();
-				foreach ($itemStoreCollection as $barcode)
+				if ($itemStoreCollection)
 				{
-					$storeId = $barcode->getStoreId();
-					if (!isset($params['BARCODE_INFO'][$storeId]))
-						$params['BARCODE_INFO'][$storeId] = array();
+					/** @var \Bitrix\Sale\ShipmentItemStore $barcode */
+					foreach ($itemStoreCollection as $barcode)
+					{
+						$storeId = $barcode->getStoreId();
+						if (!isset($params['BARCODE_INFO'][$storeId]))
+						{
+							$params['BARCODE_INFO'][$storeId] = [];
+						}
 
-					$params['BARCODE_INFO'][$storeId][] = array(
-						'ID' => $barcode->getId(),
-						'BARCODE' => $barcode->getField('BARCODE'),
-						'QUANTITY' => $barcode->getQuantity()
-					);
+						$params['BARCODE_INFO'][$storeId][] = [
+							'ID' => $barcode->getId(),
+							'BARCODE' => $barcode->getBarcode(),
+							'MARKING_CODE' => $barcode->getMarkingCode(),
+							'QUANTITY' => $barcode->getQuantity(),
+						];
+					}
 				}
 
 				if (!$shipment->isSystem())
@@ -320,7 +353,6 @@ class OrderBasketShipment extends OrderBasket
 				$params["AMOUNT"] = floatval($item->getQuantity());
 				$params["PRICE"] = $basketItem->getPrice();
 				$params["CURRENCY"] = $basketItem->getCurrency();
-				$params["PRODUCT_PROVIDER_CLASS"] = $basketItem->getProvider();
 				$params["PROPS"] = array();
 
 				/** @var \Bitrix\Sale\BasketPropertyItem $property */
@@ -337,16 +369,28 @@ class OrderBasketShipment extends OrderBasket
 				if(\Bitrix\Main\Loader::includeModule("catalog"))
 				{
 					$productInfo = \CCatalogSku::GetProductInfo($productId);
-					$params["OFFERS_IBLOCK_ID"] = $productInfo["OFFER_IBLOCK_ID"];
-					$params["IBLOCK_ID"] = $productInfo["IBLOCK_ID"];
-					$params["PRODUCT_ID"] = $productInfo["ID"];
+					if ($productInfo)
+					{
+						$params["OFFERS_IBLOCK_ID"] = $productInfo["OFFER_IBLOCK_ID"];
+						$params["IBLOCK_ID"] = $productInfo["IBLOCK_ID"];
+						$params["PRODUCT_ID"] = $productInfo["ID"];
+					}
 				}
 
-				if ($basketItem->isBundleChild())
-					$params["PARENT_BASKET_ID"] = $basketItem->getParentBasketItem()->getId();
+				$params["PARENT_BASKET_ID"] = $basketItem->getParentBasketItemId() ?? 0;
+
+				//If product became bundle, but in saved order it is a simple product.
+				if ($basketItem->getBasketCode() == intval($basketItem->getBasketCode()) && !$basketItem->isBundleParent() && !empty($params['SET_ITEMS']))
+				{
+					unset($params['SET_ITEMS'], $params['OLD_PARENT_ID']);
+					$params['IS_SET_PARENT'] = 'N';
+				}
+
+				$params['IS_SUPPORTED_MARKING_CODE'] = $basketItem->isSupportedMarkingCode() ? 'Y' : 'N';
 			}
 			else
 			{
+				$systemShipmentItem = null;
 				if ($systemShipmentItemCollection)
 				{
 					/** @var \Bitrix\Sale\ShipmentItemCollection $systemShipmentItemCollection */
@@ -464,8 +508,9 @@ class OrderBasketShipment extends OrderBasket
 								foreach ($info['BARCODE'] as $barcode)
 								{
 									$item['BARCODE_INFO'][$storeId][] = array(
-										'ID' => $barcode['ID'],
-										'BARCODE' => $barcode['VALUE'],
+										'ID' => (int)$barcode['ID'],
+										'BARCODE' => (string)$barcode['VALUE'],
+										'MARKING_CODE' => (string)$barcode['MARKING_CODE'],
 										'QUANTITY' => ($basketItem->isbarcodeMulti()) ? 1 : $info['QUANTITY']
 									);
 								}
@@ -478,8 +523,9 @@ class OrderBasketShipment extends OrderBasket
 								if ($info['BARCODE'])
 								{
 									$barcode = array_shift($info['BARCODE']);
-									$barcodeInfo['ID'] = $barcode['ID'];
-									$barcodeInfo['BARCODE'] = $barcode['VALUE'];
+									$barcodeInfo['ID'] = (int)$barcode['ID'];
+									$barcodeInfo['BARCODE'] = (string)$barcode['VALUE'];
+									$barcodeInfo['MARKING_CODE'] = (string)$barcode['MARKING_CODE'];
 								}
 								$barcodeInfo['QUANTITY'] = ($basketItem->isbarcodeMulti()) ? 1 : $info['QUANTITY'];
 							}
@@ -500,10 +546,11 @@ class OrderBasketShipment extends OrderBasket
 		{
 			\Bitrix\Main\Page\Asset::getInstance()->addJs("/bitrix/js/sale/admin/order_basket.js");
 			\Bitrix\Main\Page\Asset::getInstance()->addJs("/bitrix/js/sale/admin/order_shipment_basket.js");
+			\Bitrix\Main\UI\Extension::load('sale.admin_order');
 			static::$jsInited = true;
 		}
 		$data =	$this->prepareData();
-		
+
 		if (!empty($recoveryData))
 		{
 			$data = $this->modifyFromRequest($data, $recoveryData['1']['PRODUCT']);
@@ -512,7 +559,7 @@ class OrderBasketShipment extends OrderBasket
 		$keys = array_merge(array_keys($data["ITEMS"]), array_keys($data["UNSHIPPED_PRODUCTS"]));
 
 		$result = '
-			<script type="text/javascript">
+			<script>
 				BX.message({
 					SALE_ORDER_BASKET_ROW_SETTINGS: "'.\CUtil::JSEscape(Loc::getMessage("SALE_ORDER_BASKET_ROW_SETTINGS")).'",
 					SALE_ORDER_BASKET_PROD_MENU_ADD: "'.\CUtil::JSEscape(Loc::getMessage("SALE_ORDER_BASKET_PROD_MENU_ADD")).'",
@@ -542,6 +589,7 @@ class OrderBasketShipment extends OrderBasket
 						productsOrder: '.\CUtil::PhpToJSObject($keys).',
 						idPrefix: "'.$this->idPrefix.'",
 						products: '.\CUtil::PhpToJSObject($data["ITEMS"]).',
+						orderId: '.((int)$this->order->getId()).',
 						visibleColumns: '.\CUtil::PhpToJSObject($this->visibleColumns).',
 						objName: "'.$this->jsObjName.'",
 						isShipped: "'.$this->shipment->isShipped().'",
@@ -552,8 +600,8 @@ class OrderBasketShipment extends OrderBasket
 								type: "currency"
 							}
 						},
-						dataForRecovery : '.\CUtil::PhpToJSObject($recoveryData).',
-						useStoreControl : "'.self::$useStoreControl.'"
+						dataForRecovery: '.\CUtil::PhpToJSObject($recoveryData).',
+						useStoreControl: "'.self::$useStoreControl.'"
 					});
 
 					'.$this->systemJsObjName.' = new BX.Sale.Admin.SystemShipmentBasketEdit({
@@ -561,7 +609,7 @@ class OrderBasketShipment extends OrderBasket
 						productsOrder: '.\CUtil::PhpToJSObject($keys).',
 						idPrefix: "del",
 						products: '.\CUtil::PhpToJSObject($data["UNSHIPPED_PRODUCTS"]).',
-						visibleColumns : '.\CUtil::PhpToJSObject(self::getDefaultUnShippedVisibleColumns()).',
+						visibleColumns: '.\CUtil::PhpToJSObject(self::getDefaultUnShippedVisibleColumns()).',
 						objName: "'.$this->systemJsObjName.'"
 					});
 
@@ -578,9 +626,10 @@ class OrderBasketShipment extends OrderBasket
 	public function getViewScript($index, $visibleColumns)
 	{
 		\Bitrix\Main\Page\Asset::getInstance()->addJs("/bitrix/js/sale/admin/order_shipment_basket.js");
+		\Bitrix\Main\UI\Extension::load('sale.admin_order');
 
 		$data = $this->prepareData();
-		
+
 		return '<script>
 			BX.message({
 				SALE_ORDER_SHIPMENT_VIEW_BASKET_NO_PRODUCTS: "'.\CUtil::JSEscape(Loc::getMessage("SALE_ORDER_SHIPMENT_VIEW_BASKET_NO_PRODUCTS")).'",
@@ -596,7 +645,8 @@ class OrderBasketShipment extends OrderBasket
 					productsOrder: '.\CUtil::PhpToJSObject(array_keys($data["ITEMS"])).',
 					tableId: "'.$this->idPrefix.'_'.$index.'",
 					products: '.\CUtil::PhpToJSObject($data["ITEMS"]).',
-					visibleColumns: '.\CUtil::PhpToJSObject($visibleColumns).'
+					visibleColumns: '.\CUtil::PhpToJSObject($visibleColumns).',
+					useStoreControl: "'.self::$useStoreControl.'"
 				});
 			});
 		</script>';
@@ -611,23 +661,26 @@ class OrderBasketShipment extends OrderBasket
 		$basket = $order->getBasket();
 		$shipmentItemCollection = $shipment->getShipmentItemCollection();
 		if (is_null(self::$useStoreControl))
-			self::$useStoreControl = (Option::get('catalog', 'default_use_store_control', 'N') == 'Y');
+			self::$useStoreControl = Configuration::useStoreControl();
 
 		if(is_array($shipmentBasket))
 		{
 			// PREPARE DATA FOR SET_FIELDS
 			foreach ($shipmentBasket as $items)
 			{
-				$items['QUANTITY'] = floatval(str_replace(',', '.', $items['QUANTITY']));
+				$items['QUANTITY'] = floatval(str_replace(',', '.', $items['QUANTITY'] ?? 0));
 				$items['AMOUNT'] = floatval(str_replace(',', '.', $items['AMOUNT']));
 				if (isset($items['BASKET_ID']) && $items['BASKET_ID'] > 0)
 				{
 					if (!$basketItem = $basket->getItemById($items['BASKET_ID']))
 					{
-						$result->addError( new ResultError(
-						   Loc::getMessage('SALE_ORDER_SHIPMENT_BASKET_BASKET_ITEM_NOT_FOUND',  array(
-							   '#BASKET_ITEM_ID#' => $items['BASKET_ID'],
-						   )), 
+						$result->addError(new ResultError(
+							Loc::getMessage(
+								'SALE_ORDER_SHIPMENT_BASKET_BASKET_ITEM_NOT_FOUND',
+								[
+									'#BASKET_ITEM_ID#' => $items['BASKET_ID'],
+								]
+							),
 							'PROVIDER_UNRESERVED_SHIPMENT_ITEM_WRONG_BASKET_ITEM')
 						);
 						return $result;
@@ -640,11 +693,14 @@ class OrderBasketShipment extends OrderBasket
 					$basketCode = $items['BASKET_CODE'];
 					if(!$basketItem = $basket->getItemByBasketCode($basketCode))
 					{
-						$result->addError( new ResultError(
-						   Loc::getMessage('SALE_ORDER_SHIPMENT_BASKET_BASKET_ITEM_NOT_FOUND',  array(
-							   '#BASKET_ITEM_ID#' => $items['BASKET_ID'],
-						   )),
-						   'PROVIDER_UNRESERVED_SHIPMENT_ITEM_WRONG_BASKET_ITEM')
+						$result->addError(new ResultError(
+							Loc::getMessage(
+								'SALE_ORDER_SHIPMENT_BASKET_BASKET_ITEM_NOT_FOUND',
+								[
+									'#BASKET_ITEM_ID#' => $items['BASKET_ID'],
+								]
+							),
+							'PROVIDER_UNRESERVED_SHIPMENT_ITEM_WRONG_BASKET_ITEM')
 						);
 						return $result;
 					}
@@ -653,11 +709,11 @@ class OrderBasketShipment extends OrderBasket
 				$tmp = array(
 					'BASKET_CODE' => $basketCode,
 					'AMOUNT' => $items['AMOUNT'],
-					'ORDER_DELIVERY_BASKET_ID' => $items['ORDER_DELIVERY_BASKET_ID']
+					'ORDER_DELIVERY_BASKET_ID' => $items['ORDER_DELIVERY_BASKET_ID'] ?? null,
 				);
 				$idsFromForm[$basketCode] = array();
 
-				if ($items['BARCODE_INFO'] && self::$useStoreControl)
+				if (!empty($items['BARCODE_INFO']) && (self::$useStoreControl || $basketItem->isSupportedMarkingCode()))
 				{
 					foreach ($items['BARCODE_INFO'] as $item)
 					{
@@ -669,38 +725,47 @@ class OrderBasketShipment extends OrderBasket
 
 						$tmp['BARCODE'] = array(
 							'ORDER_DELIVERY_BASKET_ID' => $items['ORDER_DELIVERY_BASKET_ID'],
-							'STORE_ID' => $item['STORE_ID'],
-							'QUANTITY' => ($basketItem->isBarcodeMulti()) ? 1 : $item['QUANTITY']
+							'STORE_ID' => (int)$item['STORE_ID'],
+							'QUANTITY' => ($basketItem->isBarcodeMulti() || $basketItem->isSupportedMarkingCode()) ? 1 : $item['QUANTITY']
 						);
 
 						$barcodeCount = 0;
-						if ($item['BARCODE'])
+						if (!empty($item['BARCODE']) && is_array($item['BARCODE']))
 						{
 							foreach ($item['BARCODE'] as $barcode)
 							{
+								if(self::$useStoreControl && ($barcodeCount >= $items['QUANTITY']))
+								{
+									break;
+								}
+
+								$barcode['ID'] = (int)$barcode['ID'];
 								$idsFromForm[$basketCode]['BARCODE_IDS'][$barcode['ID']] = true;
+
 								if ($barcode['ID'] > 0)
 									$tmp['BARCODE']['ID'] = $barcode['ID'];
 								else
 									unset($tmp['BARCODE']['ID']);
+
 								$tmp['BARCODE']['BARCODE'] = $barcode['VALUE'];
+								$tmp['BARCODE']['MARKING_CODE'] = $barcode['MARKING_CODE'];
 								$shippingItems[] = $tmp;
 								$barcodeCount++;
 							}
 						}
-						elseif (!$basketItem->isBarcodeMulti())
+						elseif (!$basketItem->isBarcodeMulti() && !$basketItem->isSupportedMarkingCode())
 						{
 							$shippingItems[] = $tmp;
 							continue;
 						}
 
-
-						if ($basketItem->isBarcodeMulti())
+						if ($basketItem->isBarcodeMulti() || $basketItem->isSupportedMarkingCode())
 						{
 							while ($barcodeCount < $item['QUANTITY'])
 							{
 								unset($tmp['BARCODE']['ID']);
 								$tmp['BARCODE']['BARCODE'] = '';
+								$tmp['BARCODE']['MARKING_CODE'] = '';
 								$shippingItems[] = $tmp;
 								$barcodeCount++;
 							}
@@ -728,16 +793,18 @@ class OrderBasketShipment extends OrderBasket
 			}
 
 			$shipmentItemStoreCollection = $shipmentItem->getShipmentItemStoreCollection();
-
-			/** @var \Bitrix\Sale\ShipmentItemStore $shipmentItemStore */
-			foreach ($shipmentItemStoreCollection as $shipmentItemStore)
+			if ($shipmentItemStoreCollection)
 			{
-				$shipmentItemId = $shipmentItemStore->getId();
-				if (!isset($idsFromForm[$shipmentItem->getBasketCode()]['BARCODE_IDS'][$shipmentItemId]))
+				/** @var \Bitrix\Sale\ShipmentItemStore $shipmentItemStore */
+				foreach ($shipmentItemStoreCollection as $shipmentItemStore)
 				{
-					$delResult = $shipmentItemStore->delete();
-					if (!$delResult->isSuccess())
-						$result->addErrors($delResult->getErrors());
+					$shipmentItemId = $shipmentItemStore->getId();
+					if (!isset($idsFromForm[$shipmentItem->getBasketCode()]['BARCODE_IDS'][$shipmentItemId]))
+					{
+						$delResult = $shipmentItemStore->delete();
+						if (!$delResult->isSuccess())
+							$result->addErrors($delResult->getErrors());
+					}
 				}
 			}
 		}
@@ -793,40 +860,43 @@ class OrderBasketShipment extends OrderBasket
 					$result->addErrors($setFieldResult->getErrors());
 			}
 
-			if (!empty($shippingItem['BARCODE']) && self::$useStoreControl)
+			if (!empty($shippingItem['BARCODE']) && (self::$useStoreControl || $basketItem->isSupportedMarkingCode()))
 			{
 				$barcode = $shippingItem['BARCODE'];
 
 				/** @var \Bitrix\Sale\ShipmentItemStoreCollection $shipmentItemStoreCollection */
 				$shipmentItemStoreCollection = $shipmentItem->getShipmentItemStoreCollection();
-				if (!$basketItem->isBarcodeMulti())
+				if ($shipmentItemStoreCollection)
 				{
-					/** @var Result $r */
-					$r = $shipmentItemStoreCollection->setBarcodeQuantityFromArray($shipmentBasket[$basketItem->getId()]);
-					if(!$r->isSuccess())
+					if (!$basketItem->isBarcodeMulti() && !$basketItem->isSupportedMarkingCode())
 					{
-						$result->addErrors($r->getErrors());
+						/** @var Result $r */
+						$r = $shipmentItemStoreCollection->setBarcodeQuantityFromArray($shipmentBasket[$basketItem->getId()]);
+						if(!$r->isSuccess())
+						{
+							$result->addErrors($r->getErrors());
+						}
 					}
-				}
 
-				if (isset($barcode['ID']) && intval($barcode['ID']) > 0)
-				{
-					/** @var \Bitrix\Sale\ShipmentItemStore $shipmentItemStore */
-					if ($shipmentItemStore = $shipmentItemStoreCollection->getItemById($barcode['ID']))
+					if (isset($barcode['ID']) && intval($barcode['ID']) > 0)
 					{
-						unset($barcode['ID']);
-						$setFieldResult = $shipmentItemStore->setFields($barcode);
+						/** @var \Bitrix\Sale\ShipmentItemStore $shipmentItemStore */
+						if ($shipmentItemStore = $shipmentItemStoreCollection->getItemById($barcode['ID']))
+						{
+							unset($barcode['ID']);
+							$setFieldResult = $shipmentItemStore->setFields($barcode);
 
+							if (!$setFieldResult->isSuccess())
+								$result->addErrors($setFieldResult->getErrors());
+						}
+					}
+					else
+					{
+						$shipmentItemStore = $shipmentItemStoreCollection->createItem($basketItem);
+						$setFieldResult = $shipmentItemStore->setFields($barcode);
 						if (!$setFieldResult->isSuccess())
 							$result->addErrors($setFieldResult->getErrors());
 					}
-				}
-				else
-				{
-					$shipmentItemStore = $shipmentItemStoreCollection->createItem($basketItem);
-					$setFieldResult = $shipmentItemStore->setFields($barcode);
-					if (!$setFieldResult->isSuccess())
-						$result->addErrors($setFieldResult->getErrors());
 				}
 			}
 

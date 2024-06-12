@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Scale;
 
 /**
@@ -16,7 +17,7 @@ class ServersData
 	 */
 	public static function getServer($hostname)
 	{
-		if(strlen($hostname) <= 0)
+		if($hostname == '')
 			throw new \Bitrix\Main\ArgumentNullException("hostname");
 
 		$result = array();
@@ -51,6 +52,7 @@ class ServersData
 					{
 						$server["BX_ENV_VER"] = static::getBxEnvVer($hostname);
 						$bxInfo = static::getBxInfo($hostname);
+						$server["BX_INFO"] = $bxInfo;
 
 						if(isset($bxInfo["bx_last_password_change"]))
 							$server["LAST_PASSWORD_CHANGE"] = $bxInfo["bx_last_password_change"];
@@ -83,7 +85,7 @@ class ServersData
 	 */
 	public static function getServerRoles($hostname)
 	{
-		if(strlen($hostname) <= 0)
+		if($hostname == '')
 			throw new \Bitrix\Main\ArgumentNullException("hostname");
 
 		$result = array();
@@ -97,9 +99,9 @@ class ServersData
 		return $result;
 	}
 
-	static public function getDbList($hostname)
+	public static function getDbList($hostname)
 	{
-		if(strlen($hostname) <= 0)
+		if($hostname == '')
 			throw new \Bitrix\Main\ArgumentNullException("hostname");
 
 		$dbList = array();
@@ -134,7 +136,7 @@ class ServersData
 	 */
 	protected static function getBxInfo($hostname)
 	{
-		if(strlen($hostname) <= 0)
+		if($hostname == '')
 			throw new \Bitrix\Main\ArgumentNullException("hostname");
 
 		$result = array();
@@ -162,7 +164,7 @@ class ServersData
 			}
 			elseif(isset($actRes["get_bx_info"]["RESULT"])
 				&& $actRes["get_bx_info"]["RESULT"] = "ERROR"
-					&& strlen($actRes["get_bx_info"]["ERROR"]) > 0
+					&& $actRes["get_bx_info"]["ERROR"] <> ''
 			)
 			{
 				throw new \Bitrix\Scale\ServerBxInfoException($actRes["get_bx_info"]["ERROR"], $hostname);
@@ -177,9 +179,9 @@ class ServersData
 	 * @return bool|string - Version of bitrix environment.
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	static public function getBxEnvVer($hostname)
+	public static function getBxEnvVer($hostname)
 	{
-		if(strlen($hostname) <= 0)
+		if($hostname == '')
 			throw new \Bitrix\Main\ArgumentNullException("hostname");
 
 		$bxInfo = static::getBxInfo($hostname);

@@ -1,6 +1,9 @@
-<?
+<?php
 
 IncludeModuleLangFile(__FILE__);
+
+use Bitrix\Sale\Location;
+use Bitrix\Sale\Location\Admin\LocationHelper;
 
 class CCrmLocations
 {
@@ -22,10 +25,22 @@ class CCrmLocations
 		return self::$LOCATIONS;
 	}
 
+	public static function CheckLocationExists($locID)
+	{
+		if(intval($locID) <= 0)
+			return false;
+
+		$res = Location\LocationTable::getById($locID)->fetch();
+		return !!$res['ID'];
+	}
+
 	public static function GetByID($locID)
 	{
 		if(intval($locID) <= 0)
 			return false;
+
+		if(CSaleLocation::isLocationProMigrated())
+			return CSaleLocation::GetByID($locID);
 
 		$arLocs = self::GetAll();
 
@@ -60,6 +75,12 @@ class CCrmLocations
 
 	public static function isLocationsCreated()
 	{
+		if(CSaleLocation::isLocationProMigrated())
+		{
+			$res = Location\LocationTable::getList(array('select' => array('CNT')))->fetch();
+			return $res['CNT'] > 0;
+		}
+
 		$dbResultList = CSaleLocation::GetList();
 
 		if($dbResultList->Fetch())
@@ -68,21 +89,57 @@ class CCrmLocations
 		return false;
 	}
 
+	/**
+	 * @param mixed $locID
+	 * @return string
+	 * @deprecated
+	 * @see \CCrmLocations::getLocationStringByCode
+	 */
 	public static function getLocationString($locID)
 	{
-		if(!is_int($locID))
+		if(CSaleLocation::isLocationProMigrated())
 		{
-			$locID = (int)$locID;
-		}
+			if($locID == '')
+				return '';
 
-		if ($locID <= 0 || !(IsModuleInstalled('sale') && CModule::IncludeModule('sale')))
+			if((string) $locID === (string) intval($locID))
+				return \Bitrix\Sale\Location\Admin\LocationHelper::getLocationStringById($locID);
+			else
+				return \Bitrix\Sale\Location\Admin\LocationHelper::getLocationStringByCode($locID);
+		}
+		else
+		{
+			if(!is_int($locID))
+			{
+				$locID = (int)$locID;
+			}
+
+			if ($locID <= 0 || !(IsModuleInstalled('sale') && CModule::IncludeModule('sale')))
+			{
+				return '';
+			}
+
+			$entity = new CSaleLocation();
+			return $entity->GetLocationString($locID);
+		}
+	}
+
+	/**
+	 * @param string|null $locationCode
+	 * @return string
+	 */
+	public static function getLocationStringByCode(?string $locationCode): string
+	{
+		if (!CSaleLocation::isLocationProMigrated())
 		{
 			return '';
 		}
 
-		$entity = new CSaleLocation();
-		return $entity->GetLocationString($locID);
+		if (!$locationCode)
+		{
+			return '';
+		}
+
+		return LocationHelper::getLocationStringByCode($locationCode);
 	}
 }
-
-?>

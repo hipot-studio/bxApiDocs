@@ -1,17 +1,35 @@
 <?php
+
+use Bitrix\Crm\Category\Entity\ItemCategory;
+use Bitrix\Crm\Category\EntityTypeRelationsRepository;
+use Bitrix\Crm\EntityAddress;
+use Bitrix\Crm\EntityAddressType;
+use Bitrix\Crm\EntityBankDetail;
+use Bitrix\Crm\EntityPreset;
+use Bitrix\Crm\EntityRequisite;
+use Bitrix\Crm\Integration\ClientResolver;
+use Bitrix\Crm\Integration\OpenLineManager;
+use Bitrix\Crm\Integrity\DuplicateControl;
+use Bitrix\Crm\Restriction\RestrictionManager;
+use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\StatusTable;
+use Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
+
+Loc::loadMessages(__FILE__);
+
 class CCrmComponentHelper
 {
-	private static $USER_NAME_FORMATS = null;
 	public static function TrimZeroTime($str)
 	{
 		$str = trim($str);
-		if(substr($str, -9) == ' 00:00:00')
+		if(mb_substr($str, -9) == ' 00:00:00')
 		{
-			return substr($str, 0, -9);
+			return mb_substr($str, 0, -9);
 		}
-		elseif(substr($str, -3) == ':00')
+		elseif(mb_substr($str, -3) == ':00')
 		{
-			return substr($str, 0, -3);
+			return mb_substr($str, 0, -3);
 		}
 		return $str;
 	}
@@ -27,12 +45,12 @@ class CCrmComponentHelper
 		$time = "{$ary[1][0]}:{$ary[2][0]}";
 		//Treat tail as part of time (AM/PM)
 		$tailPos = $ary[3][1] + 2;
-		if($tailPos < strlen($str))
+		if($tailPos < mb_strlen($str))
 		{
-			$time .= substr($str, $tailPos);
+			$time .= mb_substr($str, $tailPos);
 		}
 		$timeFormat = is_array($options) && isset($options['TIME_FORMAT']) ? strval($options['TIME_FORMAT']) : '';
-		return substr($str, 0, $ary[0][1]).($timeFormat === '' ? $time : str_replace('#TIME#', $time, $timeFormat));
+		return mb_substr($str, 0, $ary[0][1]).($timeFormat === ''? $time : str_replace('#TIME#', $time, $timeFormat));
 	}
 
 	public static function TrimDateTimeString($str, $options = null)
@@ -64,7 +82,7 @@ class CCrmComponentHelper
 		$normalizeTabs = isset($options['NORMALIZE_TABS']) ? $options['NORMALIZE_TABS'] : array();
 		if(!empty($normalizeTabs))
 		{
-			if(COption::GetOptionString('crm', strtolower($formID).'_normalized', 'N') !== 'Y')
+			if(COption::GetOptionString('crm', mb_strtolower($formID).'_normalized', 'N') !== 'Y')
 			{
 				foreach($arOptions['tabs'] as &$tab)
 				{
@@ -92,7 +110,7 @@ class CCrmComponentHelper
 					CUserOptions::SetOption('main.interface.form', $formID, $arOptions);
 					$changed = false;
 				}
-				COption::SetOptionString('crm', strtolower($formID).'_normalized', 'Y');
+				COption::SetOptionString('crm', mb_strtolower($formID).'_normalized', 'Y');
 			}
 		}
 
@@ -185,8 +203,8 @@ class CCrmComponentHelper
 
 				foreach($tab['fields'] as $itemKey => $item)
 				{
-					$itemID = isset($item['id']) ? strtoupper($item['id']) : '';
-					if(strpos($itemID, 'UF_CRM_') === 0 && !isset($arUserFields[$itemID]))
+					$itemID = isset($item['id'])? mb_strtoupper($item['id']) : '';
+					if(mb_strpos($itemID, 'UF_CRM_') === 0 && !isset($arUserFields[$itemID]))
 					{
 						$arJunkKeys[] = $itemKey;
 					}
@@ -225,7 +243,7 @@ class CCrmComponentHelper
 			}
 			else
 			{
-				$type = isset($arFields[$k]['TYPE']) ? strtolower($arFields[$k]['TYPE']) : '';
+				$type = isset($arFields[$k]['TYPE'])? mb_strtolower($arFields[$k]['TYPE']) : '';
 				if($type !== 'string' )
 				{
 					$result["~{$k}"] = $result[$k] = $v;
@@ -318,7 +336,7 @@ class CCrmComponentHelper
 
 	public static function RegisterScriptLink($url)
 	{
-		$url = trim(strtolower(strval($url)));
+		$url = trim(mb_strtolower(strval($url)));
 		if($url === '')
 		{
 			return false;
@@ -376,6 +394,582 @@ class CCrmComponentHelper
 			array_splice($tabs, $index, 0, array($tab));
 		}
 		return true;
+	}
+
+	public static function getFieldInfoData($entityTypeId, $fieldType, array $options = [])
+	{
+		$result = [];
+		switch ($fieldType)
+		{
+			case "requisite":
+				$result = [
+					'presets'=> \CCrmInstantEditorHelper::prepareRequisitesPresetList(
+						EntityRequisite::getDefaultPresetId($entityTypeId)
+					),
+					'feedback_form' => EntityRequisite::getRequisiteFeedbackFormParams(),
+					'isEditMode' => $options['IS_EDIT_MODE'] ?? false,
+				];
+				break;
+			case "requisite_address":
+				$result = static::getRequisiteAddressFieldData((int)$entityTypeId);
+				break;
+			case "address":
+				$featureRestriction = RestrictionManager::getAddressSearchRestriction();
+				$result = [
+					'multiple' => false,
+					'autocompleteEnabled' => $featureRestriction->hasPermission(),
+					'featureRestrictionCallback' => (
+						$featureRestriction ? $featureRestriction->prepareInfoHelperScript() : ''
+					),
+				];
+				break;
+		}
+
+		return $result;
+	}
+
+	public static function getRequisiteAddressFieldData(int $entityTypeId, int $categoryId = 0): array
+	{
+		$featureRestriction = RestrictionManager::getAddressSearchRestriction();
+		$addressTypeInfos = [];
+		foreach (EntityAddressType::getAllDescriptions() as $id => $desc)
+		{
+			$addressTypeInfos[$id] = [
+				'ID' => $id,
+				'DESCRIPTION' => $desc
+			];
+		}
+		$countryAddressTypeMap = [];
+		foreach (EntityRequisite::getCountryAddressZoneMap() as $countryId => $addressZoneId)
+		{
+			$countryAddressTypeMap[$countryId] = EntityAddressType::getIdsByZonesOrValues([$addressZoneId]);
+		}
+		$addressZoneId = EntityAddress::getZoneId();
+
+		$result = [
+			'multiple' => true,
+			'types' => $addressTypeInfos,
+			'autocompleteEnabled' => $featureRestriction->hasPermission(),
+			'featureRestrictionCallback' => $featureRestriction->prepareInfoHelperScript(),
+			'addressZoneConfig' => [
+				'defaultAddressType' => EntityAddressType::getDefaultIdByEditorConfigOrByZone($entityTypeId),
+				'currentZoneAddressTypes' => EntityAddressType::getIdsByZonesOrValues([$addressZoneId]),
+				'countryAddressTypeMap' => $countryAddressTypeMap,
+			],
+		];
+
+		if (CCrmOwnerType::IsDefined($entityTypeId) && $categoryId > 0)
+		{
+			$factory = Container::getInstance()->getFactory($entityTypeId);
+			if ($factory && $factory->isCategoryAvailable($categoryId))
+			{
+				$category = $factory->getCategory($categoryId);
+				if ($category instanceof ItemCategory)
+				{
+					$result['defaultAddressTypeByCategory'] = $category->getDefaultAddressType();
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	public static function getRequisiteAutocompleteFieldInfoData(int $countryId): array
+	{
+		$clientResolverPropertyType = ClientResolver::getClientResolverPropertyWithPlacements($countryId);
+		$placementParams = ClientResolver::getClientResolverPlacementParams($countryId);
+		$featureRestriction = ClientResolver::getRestriction($countryId);
+
+		return [
+			'enabled' => !!$clientResolverPropertyType,
+			'featureRestrictionCallback' =>
+				$featureRestriction ? $featureRestriction->prepareInfoHelperScript() : ''
+			,
+			'placeholder' => ClientResolver::getClientResolverPlaceholderText($countryId),
+			'feedback_form' => EntityRequisite::getRequisiteFeedbackFormParams(),
+			'clientResolverPlacementParams' => $placementParams
+		];
+	}
+
+	public static function getBankDetailsAutocompleteFieldInfoData(int $countryId): array
+	{
+		$enabled = false;
+		$title = '';
+
+		if (
+			$countryId === 1    // ru
+			&& RestrictionManager::isDetailsSearchByInnPermitted()
+		)
+		{
+			$enabled = true;
+			$bankDetailsEntity = new EntityBankDetail();
+			$titles = $bankDetailsEntity->getFieldsTitles($countryId);
+			$title = $titles['RQ_BIK'];
+		}
+
+		/*$featureRestriction = ClientResolver::getRestriction($countryId);*/
+
+		return [
+			'enabled' => $enabled,
+			'featureRestrictionCallback' =>/*
+				$featureRestriction ? $featureRestriction->prepareInfoHelperScript() :*/ ''
+			,
+			'placeholder' => ClientResolver::getClientResolverPlaceholderTextByTitle($title),
+			/*'feedback_form' => EntityRequisite::getBankDetailsFeedbackFormParams(),*/
+			'clientResolverProperty' => [
+				'VALUE' => ClientResolver::PROP_BIC,
+				'TITLE' => $title,
+				'IS_PLACEMENT' => 'N',
+				'COUNTRY_ID' => $countryId,
+			],
+			'clientResolverPlacementParams' => [
+				'isPlacement' => false,
+				'numberOfPlacements' => 0,
+				'countryId' => $countryId,
+				'defaultAppInfo' => [
+					'code' => '',
+					'title' => '',
+					'isAvailable' => 'N',
+					'isInstalled' => 'N',
+				],
+			],
+		];
+	}
+
+	public static function getEventTabParams(
+		int $entityId,
+		string $tabName,
+		string $entityTypeName,
+		array $result
+	): array
+	{
+		$tabParams = [
+			'id' => 'tab_event',
+			'name' => $tabName,
+		];
+
+		if ($entityId > 0)
+		{
+			if (!RestrictionManager::isHistoryViewPermitted())
+			{
+				$tabParams['tariffLock'] = RestrictionManager::getHistoryViewRestriction()->prepareInfoHelperScript();
+			}
+			else
+			{
+				$tabParams['loader'] = [
+					'serviceUrl' =>
+						'/bitrix/components/bitrix/crm.event.view/lazyload.ajax.php?&site='
+						. SITE_ID . '&' . bitrix_sessid_get()
+					,
+					'componentData' => [
+						'template' => '',
+						'contextId' => "{$entityTypeName}_{$entityId}_EVENT",
+						'signedParameters' => \CCrmInstantEditorHelper::signComponentParams([
+							'AJAX_OPTION_ADDITIONAL' => "{$entityTypeName}_{$entityId}_EVENT",
+							'ENTITY_TYPE' => $entityTypeName,
+							'ENTITY_ID' => $entityId,
+							'PATH_TO_USER_PROFILE' => $result['PATH_TO_USER_PROFILE'],
+							'TAB_ID' => 'tab_event',
+							'INTERNAL' => 'Y',
+							'SHOW_INTERNAL_FILTER' => 'Y',
+							'PRESERVE_HISTORY' => true,
+							'NAME_TEMPLATE' => $result['NAME_TEMPLATE']
+						], 'crm.event.view')
+					]
+				];
+			}
+		}
+		else
+		{
+			$tabParams['enabled'] = false;
+		}
+
+		return $tabParams;
+	}
+
+	/**
+	 * Method allows detecting active item for "bitrix:crm.control_panel"
+	 *
+	 * @param string          $entityName Entity name (CONTACT|COMPANY or custom value)
+	 * @param int|string|null $categoryId Category ID
+	 *
+	 * @return string
+	 */
+	public static function getMenuActiveItemId(string $entityName, $categoryId): string
+	{
+		$categoryId = isset($categoryId) ? (int)$categoryId : 0;
+
+		return $categoryId > 0
+			? "{$entityName}_C{$categoryId}"
+			: $entityName;
+	}
+
+	/**
+	 * @param int $entityTypeId Entity type ID
+	 * @param int $categoryId   Entity category ID
+	 *
+	 * @return int[][]
+	 *
+	 * @todo: temporary stub to get entity client field additional parameters
+	 */
+	public static function getEntityClientFieldCategoryParams(int $entityTypeId, int $categoryId = 0, ?int $parentEntityTypeId = null): array
+	{
+		if ($entityTypeId === CCrmOwnerType::SmartDocument || $parentEntityTypeId === CCrmOwnerType::SmartDocument)
+		{
+			$contactCategory = Container::getInstance()
+				->getFactory(\CCrmOwnerType::Contact)
+				->getCategoryByCode(\Bitrix\Crm\Service\Factory\SmartDocument::CONTACT_CATEGORY_CODE)
+			;
+			if ($contactCategory)
+			{
+				return [
+					\CCrmOwnerType::Contact => [
+						'categoryId' => $contactCategory->getId(),
+						'extraCategoryIds' => [
+							$categoryId
+						]
+					],
+					\CCrmOwnerType::Company => [
+						'categoryId' => $categoryId,
+					]
+				];
+			}
+		}
+
+		return array_map(
+			function ($categoryId)
+			{
+				return [
+					'categoryId' => $categoryId,
+				];
+			},
+			EntityTypeRelationsRepository::getInstance()->getMapByEntityTypeId(
+				$entityTypeId,
+				$categoryId
+			)
+		);
+	}
+
+	public static function prepareMultifieldData(
+		int $entityTypeId,
+		array $entityIds,
+		array $typeIds,
+		array &$entityData,
+		array $options = []
+	)
+	{
+		$addToDataLevel = isset($options['ADD_TO_DATA_LEVEL']) && $options['ADD_TO_DATA_LEVEL'] === true;
+		$copyMode = isset($options['COPY_MODE']) && $options['COPY_MODE'] === true;
+
+		if (empty($entityIds))
+		{
+			return;
+		}
+
+		$multiFieldEntityTypes = \CCrmFieldMulti::GetEntityTypes();
+		$multiFieldViewClassNames = [
+			'PHONE' => 'crm-entity-phone-number',
+			'EMAIL' => 'crm-entity-email',
+			'IM' => 'crm-entity-phone-number',
+		];
+
+		if (!isset($entityData['MULTIFIELD_DATA']))
+		{
+			$entityData['MULTIFIELD_DATA'] = [];
+		}
+
+		$filter = [
+			'=ENTITY_ID' => CCrmOwnerType::ResolveName($entityTypeId),
+			'@ELEMENT_ID' => $entityIds,
+		];
+		if (!empty($typeIds))
+		{
+			$filter['@TYPE_ID'] = $typeIds;
+		}
+
+		// fetch field IDs to create phone country list
+		$multiFieldIds = [];
+		$dbResultIds = CCrmFieldMulti::GetListEx(['ID' => 'asc'], $filter, false, false, ['ID']);
+		while ($row = $dbResultIds->fetch())
+		{
+			$multiFieldIds[] = (int)$row['ID'];
+		}
+		$phoneCountryList = CCrmFieldMulti::GetPhoneCountryList($multiFieldIds);
+
+		$ownerTitles = self::getOwnerTitles($entityTypeId, $entityIds);
+
+		$dbResult = CCrmFieldMulti::GetListEx(['ID' => 'asc'], $filter);
+		while ($fields = $dbResult->fetch())
+		{
+			$elementID = (int)$fields['ELEMENT_ID'];
+			$entityKey = "{$entityTypeId}_{$elementID}";
+			$typeID = $fields['TYPE_ID'];
+			$value = $fields['VALUE'] ?? '';
+			if ($value === '')
+			{
+				continue;
+			}
+
+			$ID = $fields['ID'];
+			$complexID = isset($fields['COMPLEX_ID']) ? $fields['COMPLEX_ID'] : '';
+			$valueTypeID = isset($fields['VALUE_TYPE']) ? $fields['VALUE_TYPE'] : '';
+
+			if (!isset($entityData['MULTIFIELD_DATA'][$typeID]))
+			{
+				$entityData['MULTIFIELD_DATA'][$typeID] = array();
+			}
+
+			if (!isset($entityData['MULTIFIELD_DATA'][$typeID][$entityKey]))
+			{
+				$entityData['MULTIFIELD_DATA'][$typeID][$entityKey] = array();
+			}
+
+			//Is required for phone & email & messenger menu
+			if (
+				$typeID === 'PHONE'
+				|| $typeID === 'EMAIL'
+				|| ($typeID === 'IM' && OpenLineManager::isImOpenLinesValue($value))
+			)
+			{
+				$formattedValue = $typeID === 'PHONE'
+					? Main\PhoneNumber\Parser::getInstance()->parse($value)->format()
+					: $value;
+
+				$entityData['MULTIFIELD_DATA'][$typeID][$entityKey][] = [
+					'ID' => $ID,
+					'VALUE' => $value,
+					'VALUE_TYPE' => $valueTypeID,
+					'VALUE_EXTRA' => [
+						'COUNTRY_CODE' => $phoneCountryList[$ID] ?? ''
+					],
+					'VALUE_FORMATTED' => $formattedValue,
+					'COMPLEX_ID' => $complexID,
+					'COMPLEX_NAME' => \CCrmFieldMulti::GetEntityNameByComplex($complexID, false),
+					'TITLE' => OpenLineManager::isImOpenLinesValue($value) ? OpenLineManager::getOpenLineTitle($value) : '',
+					'OWNER' => [
+						'ID' => $elementID,
+						'TYPE_ID' => $entityTypeId,
+						'TITLE' => $ownerTitles[$elementID] ?? '',
+					],
+				];
+			}
+
+			if ($addToDataLevel)
+			{
+				$multiFieldID = $ID;
+				if ($copyMode)
+				{
+					$multiFieldID = "n0{$multiFieldID}";
+				}
+
+				$entityData[$typeID][] = [
+					'ID' => $multiFieldID,
+					'VALUE' => $value,
+					'VALUE_TYPE' => $valueTypeID,
+					'VALUE_EXTRA' => [
+						'COUNTRY_CODE' => $phoneCountryList[$multiFieldID] ?? ''
+					],
+					'VIEW_DATA' => \CCrmViewHelper::PrepareMultiFieldValueItemData(
+						$typeID,
+						[
+							'VALUE' => $value,
+							'VALUE_TYPE_ID' => $valueTypeID,
+							'VALUE_TYPE' => $multiFieldEntityTypes[$typeID][$valueTypeID] ?? null,
+							'CLASS_NAME' => $multiFieldViewClassNames[$typeID] ?? '',
+						],
+						[
+							'ENABLE_SIP' => false,
+							'SIP_PARAMS' => [
+								'ENTITY_TYPE_NAME' => CCrmOwnerType::ResolveName($entityTypeId),
+								'ENTITY_ID' => $elementID,
+								'AUTO_FOLD' => true,
+							],
+						]
+					)
+				];
+			}
+		}
+	}
+
+	/**
+	 * @param int $entityTypeId
+	 * @param int[] $entityIds
+	 * @return array
+	 */
+	private static function getOwnerTitles(int $entityTypeId, array $entityIds): array
+	{
+		$factory = Container::getInstance()->getFactory($entityTypeId);
+		if (!$factory || !\CcrmOwnerType::isUseFactoryBasedApproach($entityTypeId))
+		{
+			return [];
+		}
+
+		$items = $factory->getItemsFilteredByPermissions([
+			'filter' => [
+				'@ID' => $entityIds,
+			],
+		]);
+
+		$result = [];
+		foreach ($items as $item)
+		{
+			$result[$item->getId()] = $item->getHeading();
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @return array
+	 */
+	public static function prepareClientEditorFieldsParams(array $params = []): array
+	{
+		$result = [];
+
+		$entityTypeCategoryMap = [
+			CCrmOwnerType::Contact => 0,
+			CCrmOwnerType::Company => 0,
+		];
+
+		$entityTypeMap = [];
+		if (isset($params['entityTypes']) && is_array($params['entityTypes']))
+		{
+			foreach($params['entityTypes'] as $entityTypeId)
+			{
+				if (is_int($entityTypeId) && isset($entityTypeCategoryMap[$entityTypeId]))
+				{
+					$entityTypeMap[$entityTypeId] = true;
+				}
+			}
+		}
+
+		if (isset($params['categoryParams']) && is_array($params['categoryParams']))
+		{
+			foreach (array_keys($entityTypeCategoryMap) as $entityTypeId)
+			{
+				if (
+					isset($params['categoryParams'][$entityTypeId])
+					&& is_array($params['categoryParams'][$entityTypeId])
+					&& isset($params['categoryParams'][$entityTypeId]['categoryId'])
+					&& is_int($params['categoryParams'][$entityTypeId]['categoryId'])
+					&& $params['categoryParams'][$entityTypeId]['categoryId'] > 0
+				)
+				{
+					$entityTypeCategoryMap[$entityTypeId] = $params['categoryParams'][$entityTypeId]['categoryId'];
+				}
+			}
+		}
+
+		$isLocationModuleIncluded = Main\Loader::includeModule('location');
+
+		foreach (array_keys($entityTypeCategoryMap) as $entityTypeId)
+		{
+			if (empty($entityTypeMap) || isset($entityTypeMap[$entityTypeId]))
+			{
+				$entityTypeName = CCrmOwnerType::ResolveName($entityTypeId);
+				$result[$entityTypeName] = [
+					'REQUISITES' => static::getFieldInfoData($entityTypeId, 'requisite')
+				];
+				if ($isLocationModuleIncluded)
+				{
+					$result[$entityTypeName]['ADDRESS'] =
+						static::getRequisiteAddressFieldData($entityTypeId, $entityTypeCategoryMap[$entityTypeId])
+					;
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	public static function prepareClientEditorDuplicateControlParams(array $params = []): array
+	{
+		$result = [];
+
+		$entityTypes =
+			(isset($params['entityTypes']) && is_array($params['entityTypes']))
+				? $params['entityTypes']
+				: []
+		;
+
+		foreach ($entityTypes as $entityTypeId)
+		{
+			$entityTypeId = (int)$entityTypeId;
+			if (
+				CCrmOwnerType::IsDefined($entityTypeId)
+				&& DuplicateControl::isControlEnabledFor($entityTypeId)
+			)
+			{
+				$entityTypeName = CCrmOwnerType::ResolveName($entityTypeId);
+				$entityTypeNameLower = mb_strtolower($entityTypeName);
+				$result[$entityTypeId] = [
+					'enabled' => true,
+					'serviceUrl' =>
+						'/bitrix/components/bitrix/crm.'
+						. $entityTypeNameLower
+						. '.edit/ajax.php?'
+						. bitrix_sessid_get(),
+					'entityTypeName' => $entityTypeName,
+					'groups' => [
+						'title' => [
+							'parameterName' => 'TITLE',
+							'groupType' => 'single',
+							'groupSummaryTitle' => Loc::getMessage('CRM_COMPONENT_HELPER_DUP_CTRL_TTL_SUMMARY_TITLE')
+						],
+						'email' => [
+							'groupType' => 'communication',
+							'communicationType' => 'EMAIL',
+							'groupSummaryTitle' => Loc::getMessage('CRM_COMPONENT_HELPER_DUP_CTRL_EMAIL_SUMMARY_TITLE')
+						],
+						'phone' => [
+							'groupType' => 'communication',
+							'communicationType' => 'PHONE',
+							'groupSummaryTitle' => Loc::getMessage('CRM_COMPONENT_HELPER_DUP_CTRL_PHONE_SUMMARY_TITLE')
+						],
+					],
+				];
+			}
+		}
+
+		return $result;
+	}
+
+	public static function encodeErrorMessage(string $text): string
+	{
+		if ($text === '')
+		{
+			return '';
+		}
+		$text = str_ireplace(['<br/>', '<br />', '<br>'], '<br>', $text);
+		$textLines = explode('<br>', $text);
+		$textLines = array_map(static function($item) { return htmlspecialcharsbx($item); }, $textLines);
+
+		return implode('<br>', $textLines);
+	}
+
+	public static function prepareInitReceiverRepositoryJS(int $entityTypeId, int $entityId): string
+	{
+		\Bitrix\Main\UI\Extension::load('crm.messagesender');
+
+		$receivers = [];
+		if (\CCrmOwnerType::IsDefined($entityTypeId) && $entityId > 0)
+		{
+			$repo = \Bitrix\Crm\MessageSender\Channel\ChannelRepository::create(
+				new \Bitrix\Crm\ItemIdentifier($entityTypeId, $entityId),
+			);
+
+			$receivers = $repo->getToList();
+		}
+
+		$receiversJson = Main\Web\Json::encode($receivers);
+
+		return <<<JS
+<script>
+	BX.ready(() => {
+		BX.Crm.MessageSender.ReceiverRepository.onDetailsLoad({$entityTypeId}, {$entityId}, '{$receiversJson}');
+	});
+</script>
+JS;
 	}
 }
 
@@ -458,7 +1052,7 @@ class CCrmInstantEditorHelper
 	private static $IS_FILEMAN_INCLUDED = false;
 	public static function CreateMultiFields($fieldTypeID, &$fieldValues, &$formFields, $fieldParams = array(), $readOnlyMode = true)
 	{
-		$fieldTypeID = strtoupper(strval($fieldTypeID));
+		$fieldTypeID = mb_strtoupper(strval($fieldTypeID));
 		if($fieldTypeID === '' || !is_array($fieldValues) || count($fieldValues) === 0 || !is_array($formFields))
 		{
 			return false;
@@ -471,7 +1065,7 @@ class CCrmInstantEditorHelper
 
 		foreach($fieldValues as $ID => &$data)
 		{
-			$valueType = isset($data['VALUE_TYPE']) ? strtoupper($data['VALUE_TYPE']) : '';
+			$valueType = isset($data['VALUE_TYPE'])? mb_strtoupper($data['VALUE_TYPE']) : '';
 			$value = isset($data['VALUE']) ? $data['VALUE'] : '';
 
 			$fieldID = "FM.{$fieldTypeID}.{$valueType}";
@@ -488,7 +1082,7 @@ class CCrmInstantEditorHelper
 			else
 			{
 				$templateType = 'INPUT';
-				$editorFieldType = strtolower($fieldTypeID);
+				$editorFieldType = mb_strtolower($fieldTypeID);
 
 				if($fieldTypeID === 'PHONE' || $fieldTypeID === 'EMAIL' || $fieldTypeID === 'WEB')
 				{
@@ -498,14 +1092,14 @@ class CCrmInstantEditorHelper
 					{
 						if($valueType !== 'WORK' && $valueType !== 'HOME' && $valueType !== 'OTHER')
 						{
-							$editorFieldType .= '-'.strtolower($valueType);
+							$editorFieldType .= '-'.mb_strtolower($valueType);
 						}
 					}
 				}
 				elseif($fieldTypeID === 'IM')
 				{
 					$templateType = $valueType === 'SKYPE' || $valueType === 'ICQ' || $valueType === 'MSN' ? '_LINK_' : 'INPUT';
-					$editorFieldType .= '-'.strtolower($valueType);
+					$editorFieldType .= '-'.mb_strtolower($valueType);
 				}
 
 				$template = isset(self::$TEMPLATES[$templateType]) ? self::$TEMPLATES[$templateType] : '';
@@ -793,8 +1387,8 @@ class CCrmInstantEditorHelper
 		}
 
 		$dbUser = CUser::GetList(
-			$by = 'ID',
-			$order = 'ASC',
+			'ID',
+			'ASC',
 			array('ID' => $userID)
 		);
 
@@ -815,8 +1409,8 @@ class CCrmInstantEditorHelper
 		$photoInfo = CFile::ResizeImageGet(
 			$arUser['PERSONAL_PHOTO'],
 			array(
-				'width' => $photoW > 0 ? $photoW : 32,
-				'height'=> $photoH > 0 ? $photoH : 32
+				'width' => $photoW > 0 ? $photoW : 100,
+				'height'=> $photoH > 0 ? $photoH : 100
 			),
 			BX_RESIZE_IMAGE_EXACT
 		);
@@ -847,8 +1441,8 @@ class CCrmInstantEditorHelper
 
 	public static function PrepareUpdate($ownerTypeID, &$arFields, &$arFieldNames, &$arFieldValues)
 	{
-		$sanitizer = null;
 		$count = count($arFieldNames);
+		$fieldMap = array();
 		for($i = 0; $i < $count; $i++)
 		{
 			$fieldName = $arFieldNames[$i];
@@ -856,23 +1450,15 @@ class CCrmInstantEditorHelper
 
 			if($fieldName === 'COMMENTS' || $fieldName === 'USER_DESCRIPTION')
 			{
-				if($sanitizer === null)
-				{
-					$sanitizer = new CBXSanitizer();
-					$sanitizer->ApplyDoubleEncode(false);
-					$sanitizer->SetLevel(CBXSanitizer::SECURE_LEVEL_MIDDLE);
-					//Crutch for for Chrome line break behaviour in HTML editor and background button.
-					$sanitizer->AddTags(array('div' => array(), 'span' => array('style')));
-				}
-				$arFields[$fieldName] = $sanitizer->SanitizeHtml($fieldValue);
+				$arFields[$fieldName] = \Bitrix\Crm\Format\TextHelper::sanitizeHtml($fieldValue);
 			}
-			elseif(strpos($fieldName, 'FM.') === 0)
+			elseif(mb_strpos($fieldName, 'FM.') === 0)
 			{
 				// Processing of multifield name (FM.[TYPE].[VALUE_TYPE].[ID])
-				$fmParts = explode('.', substr($fieldName, 3));
+				$fmParts = explode('.', mb_substr($fieldName, 3));
 				if(count($fmParts) === 3)
 				{
-					list($fmType, $fmValueType, $fmID) = $fmParts;
+					[$fmType, $fmValueType, $fmID] = $fmParts;
 
 					$fmType = strval($fmType);
 					$fmValueType = strval($fmValueType);
@@ -897,6 +1483,17 @@ class CCrmInstantEditorHelper
 			elseif(array_key_exists($fieldName, $arFields))
 			{
 				$arFields[$fieldName] = $fieldValue;
+			}
+
+			$fieldMap[$fieldName] = isset($arFields[$fieldName]) ? $arFields[$fieldName] : null;
+		}
+
+		//Cleanup not changed user fields
+		foreach($arFields as $fieldName => $fieldValue)
+		{
+			if(mb_strpos($fieldName, 'UF_') === 0 && !isset($fieldMap[$fieldName]))
+			{
+				unset($arFields[$fieldName]);
 			}
 		}
 
@@ -1035,5 +1632,140 @@ class CCrmInstantEditorHelper
 			),
 			self::$TEMPLATES['TEXT_AREA']
 		);
+	}
+
+	public static function PrepareListOptions(array $list, array $options = null)
+	{
+		if($options === null)
+		{
+			$options = array();
+		}
+
+		$excludeFromEdit = isset($options['EXCLUDE_FROM_EDIT']) && is_array($options['EXCLUDE_FROM_EDIT'])
+			? $options['EXCLUDE_FROM_EDIT'] : null;
+
+		$results = array();
+		if(isset($options['NOT_SELECTED']) && is_string($options['NOT_SELECTED']))
+		{
+			$results[] = array(
+				'NAME' => $options['NOT_SELECTED'],
+				'VALUE' => isset($options['NOT_SELECTED_VALUE']) ? $options['NOT_SELECTED_VALUE'] : '0'
+			);
+		}
+
+		foreach($list as $k => $v)
+		{
+			$item = array('NAME' => $v, 'VALUE' => $k);
+			if($excludeFromEdit && in_array($k, $excludeFromEdit, true))
+			{
+				$item['IS_EDITABLE'] = false;
+			}
+			$results[] = $item;
+		}
+		return $results;
+	}
+
+	protected static function prepareStatusItemsConfig(string $statusType, array $fakeValues): array
+	{
+		$result = [
+			'fakeValues' => $fakeValues,
+			'systemValues' => [],
+			'systemInitText' => [],
+		];
+
+		foreach (StatusTable::loadStatusesByEntityId($statusType) as $statusInfo)
+		{
+			if (isset($statusInfo['SYSTEM']) && $statusInfo['SYSTEM'] === 'Y')
+			{
+				$result['systemValues'][] = $statusInfo['STATUS_ID'];
+				$result['systemInitText'][$statusInfo['STATUS_ID']] =
+					is_string($statusInfo['NAME_INIT']) ? $statusInfo['NAME_INIT'] : ''
+				;
+			}
+		}
+
+		return $result;
+	}
+
+	public static function prepareInnerConfig(
+		string $type,
+		string $controller,
+		string $statusType,
+		array $fakeValues
+	): array
+	{
+		static $allowMap = null;
+
+		if ($allowMap === null)
+		{
+			$allowMap = array_fill_keys(
+				CCrmStatus::getAllowedInnerConfigTypes(),
+				CCrmStatus::CheckCreatePermission()
+			);
+		}
+
+		$result = [];
+
+		if (isset($allowMap[$statusType]) && $allowMap[$statusType])
+		{
+			$result = [
+				'type' => $type,
+				'controller' => $controller,
+				'statusType' => $statusType,
+				'itemsConfig' => self::prepareStatusItemsConfig($statusType, $fakeValues),
+			];
+		}
+
+		return $result;
+	}
+
+	public static function prepareRequisitesPresetList($defaultPresetId): array
+	{
+		$result = [];
+		$propertyTypeByCountry = [];
+		$list = EntityPreset::getListForRequisiteEntityEditor();
+		foreach ($list as $item)
+		{
+			$countryId = (int)$item['COUNTRY_ID'];
+			$preset = [
+				'NAME' => $item['NAME'],
+				'VALUE' => $item['ID'],
+				'IS_DEFAULT' => ($defaultPresetId == $item['ID'])
+			];
+			if (!isset($propertyTypeByCountry[$countryId]))
+			{
+				$propertyValue = ClientResolver::getClientResolverPropertyWithPlacements($countryId);
+				$propertyTypeByCountry[$countryId] = $propertyValue;
+			}
+			$preset['CLIENT_RESOLVER_PROP'] = $propertyTypeByCountry[$countryId];
+			$result[] = $preset;
+		}
+
+		return $result;
+	}
+
+	public static function signComponentParams(array $params, string $componentName): string
+	{
+		$signer = new \Bitrix\Main\Security\Sign\Signer;
+
+		return $signer->sign(base64_encode(serialize($params)), 'signed_' . $componentName);
+	}
+
+	public static function unsignComponentParams(string $params, string $componentName): ?array
+	{
+		$signer = new \Bitrix\Main\Security\Sign\Signer;
+		try
+		{
+			return (array)unserialize(
+				base64_decode(
+					$signer->unsign($params, 'signed_' . $componentName)
+				),
+				['allowed_classes' => false]
+			);
+		}
+		catch (\Bitrix\Main\Security\Sign\BadSignatureException $e)
+		{
+			return null;
+		}
 	}
 }

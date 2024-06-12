@@ -32,7 +32,7 @@ final class ErrorCollection extends Dictionary
 	 * @param Error[] $errors Array of errors.
 	 * @return void
 	 */
-	static public function add(array $errors)
+	public function add(array $errors)
 	{
 		foreach ($errors as $error)
 		{
@@ -46,7 +46,7 @@ final class ErrorCollection extends Dictionary
 	 * @param Error $error Error object.
 	 * @return void
 	 */
-	static public function addOne(Error $error)
+	public function addOne(Error $error)
 	{
 		$this[] = $error;
 	}
@@ -72,7 +72,7 @@ final class ErrorCollection extends Dictionary
 	 * Returns true if collection has errors.
 	 * @return bool
 	 */
-	static public function hasErrors()
+	public function hasErrors()
 	{
 		return (bool)count($this);
 	}

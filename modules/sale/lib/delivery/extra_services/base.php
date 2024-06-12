@@ -10,48 +10,68 @@ abstract class Base
 {
 	protected $id;
 	protected $code;
-	protected $name = "";
-	protected $description = "";
+	protected $name = '';
+	protected $description = '';
 	protected $className = __CLASS__;
 	protected $params = array();
 	protected $rights = array (
-		Manager::RIGHTS_ADMIN_IDX => "N",
-		Manager::RIGHTS_MANAGER_IDX => "N",
-		Manager::RIGHTS_CLIENT_IDX => "N"
+		Manager::RIGHTS_ADMIN_IDX => 'N',
+		Manager::RIGHTS_MANAGER_IDX => 'N',
+		Manager::RIGHTS_CLIENT_IDX => 'N'
 	);
 	protected $deliveryId = 0;
-	protected $initial = "";
+	protected $initial = '';
 	protected $active = false;
 	protected $sort = 100;
 	protected $value = null;
-	protected $currency = "";
-	protected $operatingCurrency = "";
+	protected $currency = '';
+	protected $operatingCurrency = '';
 
-	abstract public function getClassTitle();
+	abstract public static function getClassTitle();
 
 	public function __construct($id, array $initParams, $currency, $value = null, array $additionalParams = array())
 	{
-		if(strlen($id) <= 0)
+		if ($id == '')
+		{
 			throw new ArgumentNullException('id');
+		}
+
+		$initParams['CODE'] ??= '';
+		$initParams['NAME'] ??= '';
+		$initParams['DESCRIPTION'] ??= null;
+		$initParams['PARAMS'] ??= [];
+		if (!is_array($initParams['PARAMS']))
+		{
+			$initParams['PARAMS'] = [];
+		}
+		$initParams['DELIVERY_ID'] ??= null;
+		$initParams['INIT_VALUE'] ??= null;
+		$initParams['ACTIVE'] = (string)($initParams['ACTIVE'] ?? 'N');
+		$initParams['SORT'] ??= null;
 
 		$this->id = $id;
-		$this->code = $initParams["CODE"];
-		$this->name = $initParams["NAME"];
-		$this->description = $initParams["DESCRIPTION"];
-		$this->className = $initParams["CLASS_NAME"];
-		$this->params = $initParams["PARAMS"];
-		$this->rights = $initParams["RIGHTS"];
-		$this->deliveryId = $initParams["DELIVERY_ID"];
-		$this->initial = isset($initParams["INIT_VALUE"]) ? $initParams["INIT_VALUE"] : null;
-		$this->active = $initParams["ACTIVE"];
-		$this->sort = $initParams["SORT"];
+		$this->code = $initParams['CODE'];
+		$this->name = $initParams['NAME'];
+		$this->description = $initParams['DESCRIPTION'];
+		$this->className = $initParams['CLASS_NAME'];
+		$this->params = $initParams['PARAMS'];
+		$this->rights = $initParams['RIGHTS'];
+		$this->deliveryId = $initParams['DELIVERY_ID'];
+		$this->initial = $initParams['INIT_VALUE'];
+		$this->active = $initParams['ACTIVE'];
+		$this->sort = $initParams['SORT'];
 
-		$this->currency = $this->operatingCurrency = $currency;
+		$this->currency = $currency;
+		$this->operatingCurrency = $currency;
 
-		if($value !== null)
+		if ($value !== null)
+		{
 			$this->setValue($value);
-		elseif($this->initial !== null)
+		}
+		elseif ($this->initial !== null)
+		{
 			$this->setValue($this->initial);
+		}
 	}
 
 	public function setValue($value)
@@ -74,9 +94,9 @@ abstract class Base
 		return $this->value;
 	}
 
-	public function getEditControl($prefix = "", $value = false)
+	public function getEditControl($prefix = '', $value = false)
 	{
-		if(strlen($prefix) > 0)
+		if($prefix <> '')
 			$name = $prefix;
 		else
 			$name = $this->id;
@@ -102,8 +122,8 @@ abstract class Base
 	{
 		$result = false;
 
-		if(isset($this->params["PRICE"]))
-			$result = $this->convertToOperatingCurrency($this->params["PRICE"]);
+		if(isset($this->params['PRICE']))
+			$result = $this->convertToOperatingCurrency($this->params['PRICE']);
 
 		return $result;
 	}
@@ -115,7 +135,7 @@ abstract class Base
 		if($result <= 0)
 			return $value;
 
-		if(strlen($this->currency) <= 0 || strlen($currency) <= 0)
+		if($this->currency == '' || $currency == '')
 			return $value;
 
 		if($this->currency == $currency)
@@ -151,20 +171,20 @@ abstract class Base
 
 	public function canUserEditValue()
 	{
-		return $this->rights[Manager::RIGHTS_CLIENT_IDX] == "Y";
+		return $this->rights[Manager::RIGHTS_CLIENT_IDX] == 'Y';
 	}
 
 	public function canManagerEditValue()
 	{
-		return $this->rights[Manager::RIGHTS_MANAGER_IDX] == "Y";
+		return $this->rights[Manager::RIGHTS_MANAGER_IDX] == 'Y';
 	}
 
-	public function getAdminDefaultControl($prefix = "", $value = false)
+	public function getAdminDefaultControl($prefix = '', $value = false)
 	{
 		return $this->getEditControl($prefix, $value);
 	}
 
-	public static function getAdminParamsControl($name, array $params, $currency = "")
+	public static function getAdminParamsControl($name, array $params, $currency = '')
 	{
 		return false;
 	}
@@ -199,6 +219,10 @@ abstract class Base
 		return $this->code;
 	}
 
+	public function getId()
+	{
+		return $this->id;
+	}
 
 	public function getCostShipment(Shipment $shipment = null)
 	{
@@ -210,7 +234,7 @@ abstract class Base
 	 * @deprecated
 	 * use \Bitrix\Sale\Delivery\ExtraServices\Base::getCostShipment()
 	 */
-	static public function getCost()
+	public function getCost()
 	{
 		return 0;
 	}
@@ -223,5 +247,21 @@ abstract class Base
 	public function getPriceShipment(Shipment $shipment = null)
 	{
 		return $this->getPrice();
+	}
+
+	/**
+	 * @return string|null
+	 */
+	public function getDisplayValue(): ?string
+	{
+		return is_null($this->value) ? null : (string)$this->value;
+	}
+
+	/**
+	 * @return string|null
+	 */
+	public function getInitial()
+	{
+		return $this->initial;
 	}
 }

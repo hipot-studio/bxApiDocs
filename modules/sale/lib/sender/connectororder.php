@@ -2,15 +2,21 @@
 
 namespace Bitrix\Sale\Sender;
 
+use Bitrix\Main\Loader;
+
+if (!Loader::includeModule('sender'))
+{
+	return;
+}
 
 class ConnectorOrder extends \Bitrix\Sender\Connector
 {
-    static public function getName()
+    public function getName()
     {
         return 'Sale - orders';
     }
 
-    static public function getCode()
+    public function getCode()
     {
         return "order";
     }
@@ -53,7 +59,7 @@ class ConnectorOrder extends \Bitrix\Sender\Connector
         return new \CDBResult($resultDb);
     }
 
-    static public function getForm()
+    public function getForm()
     {
         return '';
     }

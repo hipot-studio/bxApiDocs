@@ -8,12 +8,12 @@ class CMSSOAPResearch extends CSOAPServerResponser
 	var $query_path;
 	var $registration_path;
 
-	public static function OnBeforeRequest(&$cserver) 
+	function OnBeforeRequest(&$cserver) 
 	{
 		//AddMessage2Log(mydump($cserver->GetRequestData()));	
 	}
 
-	public function ProcessRequestBody(&$cserver, $body) 
+	function ProcessRequestBody(&$cserver, $body) 
 	{
 		$functionName = $body->name();
 		$namespaceURI = $body->namespaceURI();

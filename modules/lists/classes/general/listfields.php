@@ -8,7 +8,7 @@ class CListFieldList
 	/** @var array[string]CListField  */
 	protected $fields = array();
 
-	public function __construct($iblock_id)
+	function __construct($iblock_id)
 	{
 		if($iblock_id > 0)
 		{
@@ -296,7 +296,7 @@ class CListFieldList
 	 * @param $b CListField
 	 * @return int
 	 */
-	public static function Order($a, $b)
+	function Order($a, $b)
 	{
 		$a_sort = $a->GetSort();
 		$b_sort = $b->GetSort();

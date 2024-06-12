@@ -1,5 +1,6 @@
 <?php
 namespace Bitrix\Scale;
+use Bitrix\Main\SiteDomainTable;
 
 /**
  * Class SitesData
@@ -14,7 +15,7 @@ class SitesData
 	 */
 	public static function getSite($siteName, $dbName = false)
 	{
-		if(strlen($siteName) <= 0)
+		if($siteName == '')
 			throw new \Bitrix\Main\ArgumentNullException("siteName");
 
 		$result = array();
@@ -39,6 +40,20 @@ class SitesData
 	}
 
 	/**
+	 * @return array
+	 */
+	public static function getKernelsList()
+	{
+		$result = array();
+
+		foreach(self::getList() as $siteId => $siteParams)
+			if($siteParams['SiteInstall'] == 'kernel')
+				$result[$siteId] = isset($siteParams['NAME']) ? $siteParams['NAME'] : $siteId;
+
+		return $result;
+	}
+
+	/**
 	 * @return string
 	 */
 	public static function getKernelRoot()
@@ -56,19 +71,13 @@ class SitesData
 	 */
 	public static function getList($dbName = false)
 	{
-		if(!$dbName)
-		{
-			$connection = \Bitrix\Main\Application::getConnection();
-			$dbName = $connection->getDatabase();
-		}
+		static $hitCache = null;
 
-		static $result = array();
-
-		if(!isset($result[$dbName]))
+		if($hitCache === null)
 		{
 			$resSite = array();
 			$shellAdapter = new ShellAdapter();
-			$execRes = $shellAdapter->syncExec("sudo -u root /opt/webdir/bin/bx-sites -o json -a list -d ".$dbName);
+			$execRes = $shellAdapter->syncExec("sudo -u root /opt/webdir/bin/bx-sites -o json -a list --hiden");
 			$sitesData = $shellAdapter->getLastOutput();
 
 			if($execRes)
@@ -78,29 +87,60 @@ class SitesData
 				if(isset($arData["params"]))
 					$resSite = $arData["params"];
 
+				$domains = array();
+				$sdRes = SiteDomainTable::getList();
+
+				while($dom = $sdRes->fetch())
+				{
+					if(isset($domains[$dom['LID']]))
+						$domains[$dom['LID']] .= ', ';
+					else
+						$domains[$dom['LID']] = '';
+
+					$domains[$dom['LID']] .= $dom['DOMAIN'];
+				}
+
 				$rsSite = \Bitrix\Main\SiteTable::getList();
 
 				while ($site = $rsSite->fetch())
 				{
 					foreach($resSite as $siteId => $siteInfo)
 					{
-						$docRoot = strlen($site["DOC_ROOT"]) > 0 ? $site["DOC_ROOT"] : \Bitrix\Main\Application::getDocumentRoot();
+						$docRoot = $site["DOC_ROOT"] <> '' ? $site["DOC_ROOT"] : \Bitrix\Main\Application::getDocumentRoot();
 
 						if($siteInfo["DocumentRoot"] == $docRoot)
 						{
 							$resSite[$siteId]["NAME"] = $site["NAME"]." (".$site["LID"].") ";
+							$resSite[$siteId]["LID"] = $site["LID"];
+							$resSite[$siteId]["EMAIL"] = $site["EMAIL"];
+							$resSite[$siteId]["DOMAINS"] = isset($domains[$site["LID"]]) ? $domains[$site["LID"]] : '';
 						}
 						else
 						{
 							$resSite[$siteId]["NAME"] = $siteId;
 						}
+
+						$resSite[$siteId]["SMTP_USE_AUTH"] = ($siteInfo['SMTPPassword'] !== null && $siteInfo['SMTPUser'] !== null) ? 'Y' : 'N';
 					}
 				}
 			}
 
-			$result[$dbName] = $resSite;
+			$hitCache = $resSite;
 		}
 
-		return $result[$dbName];
+		if($dbName != false && !empty($hitCache))
+		{
+			$result = array();
+
+			foreach($hitCache as $siteId => $siteInfo)
+				if($siteInfo['DBName'] == $dbName)
+					$result[$siteId] = $siteInfo;
+		}
+		else
+		{
+			$result = $hitCache;
+		}
+
+		return $result;
 	}
 }

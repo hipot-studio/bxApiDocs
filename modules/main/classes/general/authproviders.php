@@ -3,8 +3,11 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2013 Bitrix
+ * @copyright 2001-2023 Bitrix
  */
+
+use Bitrix\Main\Application;
+use Bitrix\Main\Type\DateTime;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -14,112 +17,157 @@ class CAuthProvider
 
 	public function DeleteByUser($USER_ID)
 	{
-		global $DB;
-		$USER_ID = intval($USER_ID);
-
-		$DB->Query("delete from b_user_access where user_id=".$USER_ID." and provider_id='".$DB->ForSQL($this->id)."'");
-
-		CAccess::ClearStat($this->id, $USER_ID);
+		CAccess::RecalculateForUser($USER_ID, $this->id);
 	}
 
 	public function DeleteAll()
 	{
-		global $DB;
+		CAccess::RecalculateForProvider($this->id);
+	}
 
-		$DB->Query("delete from b_user_access where provider_id='".$DB->ForSQL($this->id)."' AND user_id > 0");
+	public function AddCode($userId, $code)
+	{
+		CAccess::AddCode($userId, $this->id, $code);
+	}
 
-		CAccess::ClearStat($this->id);
+	public function RemoveCode($userId, $code)
+	{
+		CAccess::RemoveCode($userId, $this->id, $code);
 	}
 }
 
 interface IProviderInterface
 {
-	static public function GetFormHtml($arParams=false);
-	static public function GetNames($arCodes);
+	public function GetFormHtml($arParams=false);
+	public function GetNames($arCodes);
 }
 
 class CGroupAuthProvider extends CAuthProvider implements IProviderInterface
 {
 	const ID = 'group';
-	
+
 	public function __construct()
 	{
 		$this->id = self::ID;
 	}
-	
+
 	public function UpdateCodes($USER_ID)
 	{
 		global $DB;
+
 		$USER_ID = intval($USER_ID);
-		
-		$DB->Query("
-			INSERT INTO b_user_access (USER_ID, PROVIDER_ID, ACCESS_CODE)
-			SELECT UG.USER_ID, '".$DB->ForSQL($this->id)."', ".$DB->Concat("'G'", ($DB->type == "MSSQL" ? "CAST(UG.GROUP_ID as varchar(17))": "UG.GROUP_ID"))."
-			FROM b_user_group UG, b_group G 
-			WHERE UG.USER_ID=".$USER_ID."
-				AND G.ID=UG.GROUP_ID
-				AND G.ACTIVE='Y'
-				AND ((UG.DATE_ACTIVE_FROM IS NULL) OR (UG.DATE_ACTIVE_FROM <= ".$DB->CurrentTimeFunction().")) 
-				AND ((UG.DATE_ACTIVE_TO IS NULL) OR (UG.DATE_ACTIVE_TO >= ".$DB->CurrentTimeFunction().")) 
-			UNION 
-			SELECT ID, '".$DB->ForSQL($this->id)."', 'G2' 
-			FROM b_user
-			WHERE ID=".$USER_ID."
-		");
+
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+
+		$sql = $helper->getInsertIgnore(
+			'b_user_access',
+			'(USER_ID, PROVIDER_ID, ACCESS_CODE)',
+			"SELECT UG.USER_ID, '".$DB->ForSQL($this->id)."', ".$DB->Concat("'G'", "UG.GROUP_ID")."
+				FROM b_user_group UG, b_group G 
+				WHERE UG.USER_ID=".$USER_ID."
+					AND G.ID=UG.GROUP_ID
+					AND G.ACTIVE='Y'
+					AND ((UG.DATE_ACTIVE_FROM IS NULL) OR (UG.DATE_ACTIVE_FROM <= ".$DB->CurrentTimeFunction().")) 
+					AND ((UG.DATE_ACTIVE_TO IS NULL) OR (UG.DATE_ACTIVE_TO >= ".$DB->CurrentTimeFunction().")) 
+				UNION 
+				SELECT ID, '".$DB->ForSQL($this->id)."', 'G2' 
+				FROM b_user
+				WHERE ID=".$USER_ID
+		);
+
+		$DB->Query($sql);
 	}
-	
-	public static function OnBeforeGroupUpdate($ID, &$arFields)
+
+	public static function OnBeforeGroupUpdate($ID, $arFields)
 	{
 		if(array_key_exists("ACTIVE", $arFields) || array_key_exists("USER_ID", $arFields))
-			self::DeleteByGroup($ID);
-		return true;
-	}
-
-	public static function OnAfterGroupAdd(&$arFields)
-	{
-		if(count($arFields["USER_ID"]) > 0)
-			self::DeleteByGroup($arFields["ID"]);
-	}
-	
-	public static function OnBeforeGroupDelete($ID)
-	{
-		self::DeleteByGroup($ID);
-		return true;
-	}
-	
-	public static function OnAfterSetUserGroup($USER_ID)
-	{
-		$provider = new CGroupAuthProvider();
-		$provider->DeleteByUser($USER_ID);
-	}
-
-	public static function OnUserLogin($USER_ID)
-	{
-		global $USER;
-		
-		$arGroups = $USER->GetUserGroupArray();
-		
-		$arCodes = array();
-		$res = CAccess::GetUserCodes($USER_ID, array("PROVIDER_ID"=>self::ID));
-		while($arCode = $res->Fetch())
-			$arCodes[] = substr($arCode["ACCESS_CODE"], 1);
-		
-		sort($arCodes);
-		
-		if($arCodes <> $arGroups)
 		{
-			$provider = new CGroupAuthProvider();
-			$provider->DeleteByUser($USER_ID);
+			self::RecalculateForGroup($ID);
+		}
+		return true;
+	}
+
+	public static function OnAfterGroupAdd($arFields)
+	{
+		if(is_array($arFields["USER_ID"]) && !empty($arFields["USER_ID"]))
+		{
+			self::RecalculateForGroup($arFields["ID"]);
 		}
 	}
 
-	protected static function DeleteByGroup($ID)
+	public static function OnBeforeGroupDelete($ID)
+	{
+		self::RecalculateForGroup($ID);
+		return true;
+	}
+
+	public static function OnAfterSetUserGroup($USER_ID, $groups)
+	{
+		$dates = [];
+		foreach ($groups as $group)
+		{
+			if ($group['DATE_ACTIVE_FROM'] == '' && $group['DATE_ACTIVE_TO'] == '')
+			{
+				if (!isset($dates['']))
+				{
+					$dates[''] = null;
+				}
+			}
+			else
+			{
+				if ($group['DATE_ACTIVE_FROM'] != '')
+				{
+					if (!isset($dates['DATE_ACTIVE_FROM']))
+					{
+						$dates[$group['DATE_ACTIVE_FROM']] = DateTime::createFromUserTime($group['DATE_ACTIVE_FROM']);
+					}
+				}
+				if ($group['DATE_ACTIVE_TO'] != '')
+				{
+					if (!isset($dates['DATE_ACTIVE_TO']))
+					{
+						$dates[$group['DATE_ACTIVE_TO']] = DateTime::createFromUserTime($group['DATE_ACTIVE_TO']);
+					}
+				}
+			}
+		}
+
+		foreach ($dates as $date)
+		{
+			CAccess::RecalculateForUser($USER_ID, self::ID, $date);
+		}
+	}
+
+	protected static function RecalculateForGroup($ID)
 	{
 		global $DB;
 
-		$DB->Query("delete from b_user_access where user_id in (select user_id from b_user_group where group_id=".intval($ID).") and provider_id='".self::ID."'");
+		$helper = Application::getConnection()->getSqlHelper();
 
-		CAccess::ClearStat(self::ID);
+		$groups = $DB->Query("
+			select USER_ID, DATE_ACTIVE_FROM, DATE_ACTIVE_TO
+			from b_user_group 
+			where GROUP_ID = " . intval($ID)
+		);
+		while ($group = $groups->Fetch())
+		{
+			if ($group['DATE_ACTIVE_FROM'] == '' && $group['DATE_ACTIVE_TO'] == '')
+			{
+				CAccess::RecalculateForUser($group["USER_ID"], self::ID);
+			}
+			else
+			{
+				if ($group['DATE_ACTIVE_FROM'] != '')
+				{
+					CAccess::RecalculateForUser($group["USER_ID"], self::ID, $helper->convertFromDbDateTime($group['DATE_ACTIVE_FROM']));
+				}
+				if ($group['DATE_ACTIVE_TO'] != '')
+				{
+					CAccess::RecalculateForUser($group["USER_ID"], self::ID, $helper->convertFromDbDateTime($group['DATE_ACTIVE_TO']));
+				}
+			}
+		}
 	}
 
 	public function AjaxRequest()
@@ -127,16 +175,16 @@ class CGroupAuthProvider extends CAuthProvider implements IProviderInterface
 		global $USER;
 		if(!$USER->CanDoOperation('view_groups'))
 			return false;
-			
+
 		$elements = "";
 		$arFinderParams = array(
 			"PROVIDER" => $this->id,
 			"TYPE" => 1,
 		);
-		
+
 		$search = urldecode($_REQUEST['search']);
-		
-		$dbRes = CGroup::GetList(($by="sort"), ($order=""), array("ANONYMOUS"=>"N", "NAME"=>$search));
+
+		$dbRes = CGroup::GetList('sort', 'asc', array("ANONYMOUS"=>"N", "NAME"=>$search));
 		$dbRes->NavStart(13);
 		while ($arGroup = $dbRes->NavNext(false))
 		{
@@ -144,7 +192,7 @@ class CGroupAuthProvider extends CAuthProvider implements IProviderInterface
 				"ID" => "G".$arGroup["ID"],
 				"NAME" => $arGroup["NAME"],
 			);
-			
+
 			$elements .= CFinder::GetFinderItem($arFinderParams, $arItem);
 		}
 		return $elements;
@@ -154,28 +202,30 @@ class CGroupAuthProvider extends CAuthProvider implements IProviderInterface
 	{
 		global $USER;
 
-		if(is_array($arParams["groups"]) && $arParams["groups"]["disabled"] == "true")
+		if (isset($arParams["groups"]) && is_array($arParams["groups"]) && $arParams["groups"]["disabled"] == "true")
+		{
 			return false;
+		}
 
 		if(!$USER->CanDoOperation('view_groups'))
 			return false;
-			
+
 		$elements = $last = "";
 		$arFinderParams = array(
 			"PROVIDER" => $this->id,
 			"TYPE" => 1,
 		);
-		
+
 		$arLRU = CAccess::GetLastRecentlyUsed($this->id);
-		
-		$res = CGroup::GetList(($by="sort"), ($order=""), array("ANONYMOUS"=>"N"));
+
+		$res = CGroup::GetList('sort', 'asc', array("ANONYMOUS"=>"N"));
 		while($arGroup = $res->Fetch())
 		{
 			$arItem = array(
 				"ID" => "G".$arGroup["ID"],
 				"NAME" => $arGroup["NAME"],
 			);
-			
+
 			$element = CFinder::GetFinderItem($arFinderParams, $arItem);
 			$elements .= $element;
 
@@ -199,26 +249,26 @@ class CGroupAuthProvider extends CAuthProvider implements IProviderInterface
 			),
 		);
 		$html = CFinder::GetFinderAppearance($arFinderParams, $arPanels);
-		
+
 		return array("HTML"=>$html);
 	}
 
-	static public function GetNames($arCodes)
+	public function GetNames($arCodes)
 	{
 		$aID = array();
 		foreach($arCodes as $code)
 			if(preg_match('/^G[0-9]+$/', $code))
 				$aID[] = substr($code, 1);
-		
+
 		if(!empty($aID))
 		{
 			$arResult = array();
-			$res = CGroup::GetList(($by="id"), ($order=""), array("ANONYMOUS"=>"N", "ID"=>implode("|", $aID)));
+			$res = CGroup::GetList('id', 'asc', array("ANONYMOUS"=>"N", "ID"=>implode("|", $aID)));
 			while($arGroup = $res->Fetch())
 			{
 				$arResult["G".$arGroup["ID"]] = array("provider" => GetMessage("authprov_group_prov"), "name"=>$arGroup["NAME"]);
 			}
-				
+
 			return $arResult;
 		}
 		return false;
@@ -227,30 +277,39 @@ class CGroupAuthProvider extends CAuthProvider implements IProviderInterface
 
 class CUserAuthProvider extends CAuthProvider implements IProviderInterface
 {
+	const ID = 'user';
+
 	public function __construct()
 	{
-		$this->id = 'user';
+		$this->id = self::ID;
 	}
 
 	public function UpdateCodes($USER_ID)
 	{
 		global $DB;
+
 		$USER_ID = intval($USER_ID);
 
-		$DB->Query("
-			insert into b_user_access (user_id, provider_id, access_code)
-			select ID, '".$DB->ForSQL($this->id)."', 'U".$USER_ID."'
-			from b_user
-			where id=".$USER_ID."
-		");
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+
+		$sql = $helper->getInsertIgnore(
+			'b_user_access',
+			'(user_id, provider_id, access_code)',
+			"select ID, '".$DB->ForSQL($this->id)."', 'U".$USER_ID."'
+				from b_user
+				where id=".$USER_ID
+		);
+
+		$DB->Query($sql);
 	}
-	
+
 	public function AjaxRequest()
 	{
 		global $USER;
 		if(!$USER->CanDoOperation('view_all_users'))
 			return false;
-			
+
 		$search = urldecode($_REQUEST['search']);
 		$elements = "";
 		$arFinderParams = array(
@@ -260,7 +319,11 @@ class CUserAuthProvider extends CAuthProvider implements IProviderInterface
 
 		$nameFormat = CSite::GetNameFormat(false);
 
-		$arFilter = array('ACTIVE' => 'Y', 'NAME_SEARCH' => $search);
+		$arFilter = array(
+			'ACTIVE' => 'Y',
+			'NAME_SEARCH' => $search,
+			'!EXTERNAL_AUTH_ID' => \Bitrix\Main\UserTable::getExternalUserTypes(),
+		);
 
 		if (
 			IsModuleInstalled('intranet')
@@ -271,10 +334,12 @@ class CUserAuthProvider extends CAuthProvider implements IProviderInterface
 		}
 
 		//be careful with field list because of CUser::FormatName()
-		$dbRes = CUser::GetList(($by = 'last_name'), ($order = 'asc'),
+		$dbRes = CUser::GetList('last_name', 'asc',
 			$arFilter,
-			array("FIELDS" => array('ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL')),
-			array('NAV_PARAMS' => array('nTopCount' => 20))
+			array(
+				"FIELDS" => array('ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL'),
+				'NAV_PARAMS' => array('nTopCount' => 20),
+			)
 		);
 		while ($arUser = $dbRes->NavNext(false))
 		{
@@ -286,13 +351,15 @@ class CUserAuthProvider extends CAuthProvider implements IProviderInterface
 		}
 		return $elements;
 	}
-	
+
 	public function GetFormHtml($arParams=false)
 	{
 		global $USER;
 
-		if(is_array($arParams["user"]) && $arParams["user"]["disabled"] == "true")
+		if (isset($arParams["user"]) && is_array($arParams["user"]) && $arParams["user"]["disabled"] == "true")
+		{
 			return false;
+		}
 
 		if(!$USER->CanDoOperation('view_all_users'))
 			return false;
@@ -302,7 +369,7 @@ class CUserAuthProvider extends CAuthProvider implements IProviderInterface
 			"PROVIDER" => $this->id,
 			"TYPE" => 2,
 		);
-		
+
 		$arLRU = CAccess::GetLastRecentlyUsed($this->id);
 		if(!empty($arLRU))
 		{
@@ -312,7 +379,7 @@ class CUserAuthProvider extends CAuthProvider implements IProviderInterface
 			$nameFormat = CSite::GetNameFormat(false);
 
 			//be careful with field list because of CUser::FormatName()
-			$res = CUser::GetList(($by="LAST_NAME"), ($order="asc"),
+			$res = CUser::GetList("LAST_NAME", "asc",
 				array("ID" => implode("|", $arLRU)),
 				array("FIELDS" => array('ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL'))
 			);
@@ -325,7 +392,7 @@ class CUserAuthProvider extends CAuthProvider implements IProviderInterface
 				$elements .= CFinder::GetFinderItem($arFinderParams, $arItem);
 			}
 		}
-		
+
 		$arPanels = array(
 			array(
 				"NAME" => GetMessage("authprov_last"),
@@ -342,7 +409,7 @@ class CUserAuthProvider extends CAuthProvider implements IProviderInterface
 		return array("HTML"=>$html);
 	}
 
-	static public function GetNames($arCodes)
+	public function GetNames($arCodes)
 	{
 		$aID = array();
 		foreach($arCodes as $code)
@@ -359,7 +426,7 @@ class CUserAuthProvider extends CAuthProvider implements IProviderInterface
 
 			$arResult = array();
 			//be careful with field list because of CUser::FormatName()
-			$res = CUser::GetList(($by="id"), ($order=""),
+			$res = CUser::GetList('id', 'asc',
 				array("ID" => implode("|", $aID)),
 				array("FIELDS" => array('ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL'))
 			);
@@ -379,13 +446,15 @@ class CUserAuthProvider extends CAuthProvider implements IProviderInterface
 
 class COtherAuthProvider implements IProviderInterface
 {
-	static public function GetFormHtml($arParams=false)
+	public function GetFormHtml($arParams=false)
 	{
 		global $USER;
 
-		if(is_array($arParams["other"]) && $arParams["other"]["disabled"] == "true")
+		if (isset($arParams["other"]) && is_array($arParams["other"]) && $arParams["other"]["disabled"] == "true")
+		{
 			return false;
-		
+		}
+
 		$elements = "";
 		$arFinderParams = array(
 			"PROVIDER" => "other",
@@ -400,7 +469,7 @@ class COtherAuthProvider implements IProviderInterface
 		);
 		$elements .= CFinder::GetFinderItem($arFinderParams, $arItem);
 
-		if(!is_array($arParams["other"]) || $arParams["other"]["disabled_cr"] != "true")
+		if(!isset($arParams["other"]) || !is_array($arParams["other"]) || $arParams["other"]["disabled_cr"] != "true")
 		{
 			$arItem = array(
 				"ID" => "CR",
@@ -410,8 +479,8 @@ class COtherAuthProvider implements IProviderInterface
 			);
 			$elements .= CFinder::GetFinderItem($arFinderParams, $arItem);
 		}
-		
-		if(!is_array($arParams["other"]) || $arParams["other"]["disabled_g2"] != "true")
+
+		if(!isset($arParams["other"]) || !is_array($arParams["other"]) || $arParams["other"]["disabled_g2"] != "true")
 		{
 			$arItem = array(
 				"ID" => "G2",
@@ -421,8 +490,8 @@ class COtherAuthProvider implements IProviderInterface
 			);
 			$elements .= CFinder::GetFinderItem($arFinderParams, $arItem);
 		}
-		
-		if(!is_array($arParams["other"]) || $arParams["other"]["disabled_au"] != "true")
+
+		if(!isset($arParams["other"]["disabled_au"]) || $arParams["other"]["disabled_au"] != "true")
 		{
 			$arItem = array(
 				"ID" => "AU",
@@ -432,7 +501,7 @@ class COtherAuthProvider implements IProviderInterface
 			);
 			$elements .= CFinder::GetFinderItem($arFinderParams, $arItem);
 		}
-		
+
 		$arPanels = array(
 			array(
 				"NAME" => GetMessage("authprov_other"),
@@ -441,11 +510,11 @@ class COtherAuthProvider implements IProviderInterface
 			),
 		);
 		$html = CFinder::GetFinderAppearance($arFinderParams, $arPanels);
-		
+
 		return array("HTML"=>$html);
 	}
 
-	static public function GetNames($arCodes)
+	public function GetNames($arCodes)
 	{
 		return array(
 			"CR" => array("provider"=>"", "name"=>GetMessage("authprov_author")),

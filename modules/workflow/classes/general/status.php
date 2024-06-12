@@ -11,7 +11,7 @@ class CWorkflowStatus
 	}
 
 	//Despite this function is not documented it should be version compatible
-	public static function GetList(&$by, &$order, $arFilter=Array(), &$is_filtered, $arSelect=Array())
+	public static function GetList($by = 's_c_sort', $order = 'asc', $arFilter = [], $is_filtered = null, $arSelect = [])
 	{
 		$err_mess = (CWorkflowStatus::err_mess())."<br>Function: GetList<br>Line: ";
 		global $DB;
@@ -58,13 +58,13 @@ class CWorkflowStatus
 		}
 		else
 		{
-			$by = "s_c_sort";
 			$strSqlOrder = "ORDER BY S.C_SORT";
 			$arSelect[] = "C_SORT";
 		}
 
-		if($order!="desc")
-			$order="asc";
+		if($order != "desc")
+			$order = "asc";
+
 		$strSqlOrder .= " $order ";
 
 		$arSelectFields = array(
@@ -126,7 +126,7 @@ class CWorkflowStatus
 				}
 				else
 				{
-					if(strlen($val)<=0 || "$val"=="NOT_REF") continue;
+					if((string)$val == '' || "$val"=="NOT_REF") continue;
 				}
 
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -194,7 +194,7 @@ class CWorkflowStatus
 						}
 						break;
 				}
-				if(strlen($predicate) > 0 && $predicate!="0")
+				if($predicate <> '' && $predicate!="0")
 					$arSqlSearch[] = $predicate;
 			}
 		}
@@ -211,8 +211,10 @@ class CWorkflowStatus
 
 		if(count($arSqlSearch_g) > 0)
 		{
-			if(strlen($strSqlSearch))
+			if($strSqlSearch <> '')
+			{
 				$strSqlSearch .= " AND ";
+			}
 			$strSqlSearch .= "(".implode(") and (", $arSqlSearch_g).") ";
 		}
 
@@ -221,22 +223,22 @@ class CWorkflowStatus
 				".implode(", ", $arSqlSelect)."
 			FROM
 				b_workflow_status S
-			".(strlen($strSqlSearch_h) > 0 || array_key_exists("DOCUMENTS", $arSqlSelect)? "LEFT JOIN b_workflow_document D ON (D.STATUS_ID = S.ID)": "")."
+			".($strSqlSearch_h <> '' || array_key_exists("DOCUMENTS", $arSqlSelect)? "LEFT JOIN b_workflow_document D ON (D.STATUS_ID = S.ID)": "")."
 			".(count($arSqlSearch_g) > 0? "LEFT JOIN b_workflow_status2group G ON (G.STATUS_ID = S.ID)": "")."
-			".(strlen($strSqlSearch) > 0? "WHERE ".$strSqlSearch: "")."
+			".($strSqlSearch <> ''? "WHERE ".$strSqlSearch: "")."
 			".($bGroup? "GROUP BY ".implode(", ", $arSqlGroup): "")."
-			".(strlen($strSqlSearch_h) > 0? "HAVING ".$strSqlSearch_h: "")."
+			".($strSqlSearch_h <> ''? "HAVING ".$strSqlSearch_h: "")."
 			$strSqlOrder
 			";
 
 		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
-		$is_filtered = strlen($strSqlSearch) > 0;
+
 		return $res;
 	}
 
 	public static function GetByID($ID)
 	{
-		return CWorkflowStatus::GetList($b, $o, array("ID" => $ID, "ID_EXACT_MATCH" => "Y"), $is_filtered);
+		return CWorkflowStatus::GetList('', '', array("ID" => $ID, "ID_EXACT_MATCH" => "Y"));
 	}
 
 	public static function GetDropDownList($SHOW_ALL="N", $strOrder = "desc", $arFilter = array())
@@ -258,7 +260,7 @@ class CWorkflowStatus
 			$arFilter["PERMISSION_TYPE_1"] = 1;
 		}
 
-		return CWorkflowStatus::GetList($by = "s_c_sort", $strOrder, $arFilter, $is_filtered, array("REFERENCE_ID", "REFERENCE", "IS_FINAL", "C_SORT"));
+		return CWorkflowStatus::GetList("s_c_sort", $strOrder, $arFilter, null, array("REFERENCE_ID", "REFERENCE", "IS_FINAL", "C_SORT"));
 	}
 
 	public static function GetNextSort()
@@ -272,13 +274,13 @@ class CWorkflowStatus
 	}
 
 	//check fields before writing
-	public static function CheckFields($ID, $arFields)
+	function CheckFields($ID, $arFields)
 	{
 		$aMsg = array();
 
 		$ID = intval($ID);
 
-		if(($ID <= 0) && (strlen(trim($arFields["TITLE"])) <= 0))
+		if(($ID <= 0) && (trim($arFields["TITLE"]) == ''))
 			$aMsg[] = array("id"=>"TITLE", "text"=> GetMessage("FLOW_FORGOT_TITLE"));
 
 		if(!empty($aMsg))
@@ -291,7 +293,7 @@ class CWorkflowStatus
 	}
 
 	//add
-	public function Add($arFields)
+	function Add($arFields)
 	{
 		global $DB;
 
@@ -309,7 +311,7 @@ class CWorkflowStatus
 	}
 
 	//update
-	public function Update($ID, $arFields)
+	function Update($ID, $arFields)
 	{
 		global $DB;
 		$ID = intval($ID);
@@ -329,7 +331,7 @@ class CWorkflowStatus
 		return true;
 	}
 
-	public static function SetPermissions($STATUS_ID, $arGroups, $PERMISSION_TYPE = 1)
+	function SetPermissions($STATUS_ID, $arGroups, $PERMISSION_TYPE = 1)
 	{
 		global $DB;
 		$STATUS_ID = intval($STATUS_ID);

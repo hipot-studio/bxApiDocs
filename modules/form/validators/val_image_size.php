@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CFormValidatorImageSize
 {
-	public static function GetDescription()
+	function GetDescription()
 	{
 		return array(
 			"NAME" => "image_size", // unique validator string ID
@@ -16,7 +16,7 @@ class CFormValidatorImageSize
 		);
 	}
 
-	public static function GetSettings()
+	function GetSettings()
 	{
 		return array(
 			"WIDTH_FROM" => array(
@@ -45,7 +45,7 @@ class CFormValidatorImageSize
 		);
 	}
 
-	public static function ToDB($arParams)
+	function ToDB($arParams)
 	{
 		$arParams["WIDTH_FROM"] = intval($arParams["WIDTH_FROM"]);
 		$arParams["WIDTH_TO"] = intval($arParams["WIDTH_TO"]);
@@ -70,12 +70,12 @@ class CFormValidatorImageSize
 		return serialize($arParams);
 	}
 
-	public static function FromDB($strParams)
+	function FromDB($strParams)
 	{
 		return unserialize($strParams);
 	}
 
-	public static function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
+	function DoValidate($arParams, $arQuestion, $arAnswers, $arValues)
 	{
 		global $APPLICATION;
 

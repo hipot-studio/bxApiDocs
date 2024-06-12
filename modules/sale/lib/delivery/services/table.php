@@ -5,6 +5,7 @@ namespace Bitrix\Sale\Delivery\Services;
 use Bitrix\Main\Application;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Data\DeleteResult;
 use Bitrix\Sale\Delivery\Services;
 
 Loc::loadMessages(__FILE__);
@@ -29,7 +30,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Sale\Delivery *
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO__Query query()
+ * @method static EO__Result getByPrimary($primary, array $parameters = [])
+ * @method static EO__Result getById($id)
+ * @method static EO__Result getList(array $parameters = [])
+ * @method static EO__Entity getEntity()
+ * @method static \Bitrix\Sale\Delivery\Services\EO_NNM_Object createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Delivery\Services\EO__Collection createCollection()
+ * @method static \Bitrix\Sale\Delivery\Services\EO_NNM_Object wakeUpObject($row)
+ * @method static \Bitrix\Sale\Delivery\Services\EO__Collection wakeUpCollection($rows)
+ */
 
 class Table extends Entity\DataManager
 {
@@ -85,7 +99,7 @@ class Table extends Entity\DataManager
 			),
 			'SORT' => array(
 				'data_type' => 'integer',
-				'default' => 100,
+				'default_value' => 100,
 				'title' => Loc::getMessage('DELIVERY_SERVICE_ENTITY_SORT_FIELD'),
 			),
 			'LOGOTIP' => array(
@@ -115,9 +129,16 @@ class Table extends Entity\DataManager
 			'ALLOW_EDIT_SHIPMENT' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
-				'default' => 'Y',
+				'default_value' => 'Y',
 				'title' => Loc::getMessage('DELIVERY_SERVICE_ENTITY_ALLOW_EDIT_SHIPMENT_FIELD')
-			)
+			),
+			'VAT_ID' => array(
+				'data_type' => 'integer',
+				'title' => Loc::getMessage('DELIVERY_SERVICE_ENTITY_VAT_ID_FIELD')
+			),
+			'XML_ID' => array(
+				'data_type' => 'string',
+			),
 		);
 	}
 
@@ -166,7 +187,7 @@ class Table extends Entity\DataManager
 
 	/**
 	 * @param mixed $primary
-	 * @return Entity\DeleteResult
+	 *	@return DeleteResult
 	 * @throws \Exception
 	 */
 	public static function delete($primary)

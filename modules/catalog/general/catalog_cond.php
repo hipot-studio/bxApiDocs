@@ -1,28 +1,30 @@
 <?
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\UserTable;
-use Bitrix\Catalog;
+use Bitrix\Main\Localization\Loc,
+	Bitrix\Main\UserTable,
+	Bitrix\Main,
+	Bitrix\Iblock,
+	Bitrix\Catalog;
 
 Loc::loadMessages(__FILE__);
 
-// define('BT_COND_LOGIC_EQ', 0);						// = (equal)
-// define('BT_COND_LOGIC_NOT_EQ', 1);					// != (not equal)
-// define('BT_COND_LOGIC_GR', 2);						// > (great)
-// define('BT_COND_LOGIC_LS', 3);						// < (less)
-// define('BT_COND_LOGIC_EGR', 4);						// => (great or equal)
-// define('BT_COND_LOGIC_ELS', 5);						// =< (less or equal)
-// define('BT_COND_LOGIC_CONT', 6);					// contain
-// define('BT_COND_LOGIC_NOT_CONT', 7);				// not contain
+define('BT_COND_LOGIC_EQ', 0);						// = (equal)
+define('BT_COND_LOGIC_NOT_EQ', 1);					// != (not equal)
+define('BT_COND_LOGIC_GR', 2);						// > (great)
+define('BT_COND_LOGIC_LS', 3);						// < (less)
+define('BT_COND_LOGIC_EGR', 4);						// => (great or equal)
+define('BT_COND_LOGIC_ELS', 5);						// =< (less or equal)
+define('BT_COND_LOGIC_CONT', 6);					// contain
+define('BT_COND_LOGIC_NOT_CONT', 7);				// not contain
 
-// define('BT_COND_MODE_DEFAULT', 0);					// full mode
-// define('BT_COND_MODE_PARSE', 1);					// parsing mode
-// define('BT_COND_MODE_GENERATE', 2);					// generate mode
-// define('BT_COND_MODE_SQL', 3);						// generate getlist mode
-// define('BT_COND_MODE_SEARCH', 4);					// info mode
+define('BT_COND_MODE_DEFAULT', 0);					// full mode
+define('BT_COND_MODE_PARSE', 1);					// parsing mode
+define('BT_COND_MODE_GENERATE', 2);					// generate mode
+define('BT_COND_MODE_SQL', 3);						// generate getlist mode
+define('BT_COND_MODE_SEARCH', 4);					// info mode
 
-// define('BT_COND_BUILD_CATALOG', 0);					// catalog conditions
-// define('BT_COND_BUILD_SALE', 1);					// sale conditions
-// define('BT_COND_BUILD_SALE_ACTIONS', 2);			// sale actions conditions
+define('BT_COND_BUILD_CATALOG', 0);					// catalog conditions
+define('BT_COND_BUILD_SALE', 1);					// sale conditions
+define('BT_COND_BUILD_SALE_ACTIONS', 2);			// sale actions conditions
 
 class CGlobalCondCtrl
 {
@@ -200,7 +202,7 @@ class CGlobalCondCtrl
 			BT_COND_LOGIC_CONT => array(
 				'ID' => BT_COND_LOGIC_CONT,
 				'OP' => array(
-					'N' => 'false !== strpos(#FIELD#, #VALUE#)',
+					'N' => 'false !== mb_strpos(#FIELD#, #VALUE#)',
 					'Y' => 'CGlobalCondCtrl::LogicContain(#FIELD#, #VALUE#)'
 				),
 				'PARENT' => ' || ',
@@ -211,7 +213,7 @@ class CGlobalCondCtrl
 			BT_COND_LOGIC_NOT_CONT => array(
 				'ID' => BT_COND_LOGIC_NOT_CONT,
 				'OP' => array(
-					'N' => 'false === strpos(#FIELD#, #VALUE#)',
+					'N' => 'false === mb_strpos(#FIELD#, #VALUE#)',
 					'Y' => 'CGlobalCondCtrl::LogicNotContain(#FIELD#, #VALUE#)'
 				),
 				'PARENT' => ' && ',
@@ -400,8 +402,7 @@ class CGlobalCondCtrl
 							{
 								$intOneValue = (int)$intOneValue;
 							}
-							if (isset($intOneValue))
-								unset($intOneValue);
+							unset($intOneValue);
 						}
 						else
 						{
@@ -415,8 +416,7 @@ class CGlobalCondCtrl
 							{
 								$dblOneValue = (float)$dblOneValue;
 							}
-							if (isset($dblOneValue))
-								unset($dblOneValue);
+							unset($dblOneValue);
 						}
 						else
 						{
@@ -428,14 +428,13 @@ class CGlobalCondCtrl
 						{
 							foreach ($arOneCondition['value'] as &$strOneValue)
 							{
-								$strOneValue = substr($strOneValue, 0, 1);
+								$strOneValue = mb_substr($strOneValue, 0, 1);
 							}
-							if (isset($strOneValue))
-								unset($strOneValue);
+							unset($strOneValue);
 						}
 						else
 						{
-							$arOneCondition['value'] = substr($arOneCondition['value'], 0, 1);
+							$arOneCondition['value'] = mb_substr($arOneCondition['value'], 0, 1);
 						}
 						break;
 					case 'string':
@@ -446,14 +445,13 @@ class CGlobalCondCtrl
 						{
 							foreach ($arOneCondition['value'] as &$strOneValue)
 							{
-								$strOneValue = substr($strOneValue, 0, $intMaxLen);
+								$strOneValue = mb_substr($strOneValue, 0, $intMaxLen);
 							}
-							if (isset($strOneValue))
-								unset($strOneValue);
+							unset($strOneValue);
 						}
 						else
 						{
-							$arOneCondition['value'] = substr($arOneCondition['value'], 0, $intMaxLen);
+							$arOneCondition['value'] = mb_substr($arOneCondition['value'], 0, $intMaxLen);
 						}
 						break;
 					case 'text':
@@ -470,22 +468,22 @@ class CGlobalCondCtrl
 							$strFormat = 'FULL';
 							$intOffset = $intTimeOffset;
 						}
-						$boolValueError = CGlobalCondCtrl::ConvertInt2DateTime($arOneCondition['value'], $strFormat, $intOffset);
+						$boolValueError = static::ConvertInt2DateTime($arOneCondition['value'], $strFormat, $intOffset);
 						break;
 					default:
 						$boolValueError = true;
 						break;
 				}
-			}
-			if (!$boolValueError)
-			{
-				if ($boolMulti)
-					$arOneCondition['value'] = array_values(array_unique($arOneCondition['value']));
+				if (!$boolValueError)
+				{
+					if ($boolMulti)
+						$arOneCondition['value'] = array_values(array_unique($arOneCondition['value']));
+				}
 			}
 
 			if (!$boolValueError)
 			{
-				if (isset($arControl['PHP_VALUE']) && isset($arControl['PHP_VALUE']['VALIDATE']) && !empty($arControl['PHP_VALUE']['VALIDATE']))
+				if (isset($arControl['PHP_VALUE']) && !empty($arControl['PHP_VALUE']['VALIDATE']))
 				{
 					$arValidate = static::Validate($arOneCondition, $arParams, $arControl, $boolShow);
 					if ($arValidate === false)
@@ -553,8 +551,7 @@ class CGlobalCondCtrl
 							{
 								$intOneValue = (int)$intOneValue;
 							}
-							if (isset($intOneValue))
-								unset($intOneValue);
+							unset($intOneValue);
 						}
 						else
 						{
@@ -568,8 +565,7 @@ class CGlobalCondCtrl
 							{
 								$dblOneValue = (float)$dblOneValue;
 							}
-							if (isset($dblOneValue))
-								unset($dblOneValue);
+							unset($dblOneValue);
 						}
 						else
 						{
@@ -581,14 +577,13 @@ class CGlobalCondCtrl
 						{
 							foreach ($arOneCondition['value'] as &$strOneValue)
 							{
-								$strOneValue = substr($strOneValue, 0, 1);
+								$strOneValue = mb_substr($strOneValue, 0, 1);
 							}
-							if (isset($strOneValue))
-								unset($strOneValue);
+							unset($strOneValue);
 						}
 						else
 						{
-							$arOneCondition['value'] = substr($arOneCondition['value'], 0, 1);
+							$arOneCondition['value'] = mb_substr($arOneCondition['value'], 0, 1);
 						}
 						break;
 					case 'string':
@@ -599,14 +594,13 @@ class CGlobalCondCtrl
 						{
 							foreach ($arOneCondition['value'] as &$strOneValue)
 							{
-								$strOneValue = substr($strOneValue, 0, $intMaxLen);
+								$strOneValue = mb_substr($strOneValue, 0, $intMaxLen);
 							}
-							if (isset($strOneValue))
-								unset($strOneValue);
+							unset($strOneValue);
 						}
 						else
 						{
-							$arOneCondition['value'] = substr($arOneCondition['value'], 0, $intMaxLen);
+							$arOneCondition['value'] = mb_substr($arOneCondition['value'], 0, $intMaxLen);
 						}
 						break;
 					case 'text':
@@ -623,7 +617,7 @@ class CGlobalCondCtrl
 							$strFormat = 'FULL';
 							$intOffset = $intTimeOffset;
 						}
-						$boolError = CGlobalCondCtrl::ConvertDateTime2Int($arOneCondition['value'], $strFormat, $intOffset);
+						$boolError = static::ConvertDateTime2Int($arOneCondition['value'], $strFormat, $intOffset);
 						break;
 					default:
 						$boolError = true;
@@ -638,7 +632,7 @@ class CGlobalCondCtrl
 
 			if (!$boolError)
 			{
-				if (isset($arControl['PHP_VALUE']) && isset($arControl['PHP_VALUE']['VALIDATE']) && !empty($arControl['PHP_VALUE']['VALIDATE']))
+				if (isset($arControl['PHP_VALUE']) && !empty($arControl['PHP_VALUE']['VALIDATE']))
 				{
 					$arValidate = static::Validate($arOneCondition, $arParams, $arControl, $boolShow);
 					if ($arValidate === false)
@@ -830,6 +824,45 @@ class CGlobalCondCtrl
 							}
 						}
 						break;
+					case 'enumValue':
+						$iterator = Iblock\PropertyEnumerationTable::getList(array(
+							'select' => array('ID', 'VALUE'),
+							'filter' => array('@ID' => $arOneCondition['value'])
+						));
+						if ($boolMulti)
+						{
+							$checkResult = array();
+							while ($row = $iterator->fetch())
+								$checkResult[$row['ID']] = $row['VALUE'];
+							unset($row);
+							if (!empty($checkResult))
+							{
+								$arResult['values'] = array_keys($checkResult);
+								$arResult['labels'] = array_values($checkResult);
+							}
+							else
+							{
+								$boolError = true;
+								$arMsg[] = Loc::getMessage('BT_MOD_COND_ERR_CHECK_DATA_ENUM_VALUE_ABSENT_MULTI');
+							}
+							unset($checkResult);
+						}
+						else
+						{
+							$row = $iterator->fetch();
+							if (!empty($row))
+							{
+								$arResult['values'] = $row['ID'];
+								$arResult['labels'] = $row['VALUE'];
+							}
+							else
+							{
+								$boolError = true;
+								$arMsg[] = Loc::getMessage('BT_MOD_COND_ERR_CHECK_DATA_ENUM_VALUE_ABSENT');
+							}
+						}
+						unset($iterator);
+						break;
 					case 'user':
 						if ($userNameFormat === null)
 							$userNameFormat = CSite::GetNameFormat(true);
@@ -1019,6 +1052,34 @@ class CGlobalCondCtrl
 							}
 						}
 						break;
+					case 'enumValue':
+						$iterator = Iblock\PropertyEnumerationTable::getList(array(
+							'select' => array('ID'),
+							'filter' => array('@ID' => $arOneCondition['value'])
+						));
+						if ($boolMulti)
+						{
+							$checkResult = array();
+							while ($row = $iterator->fetch())
+								$checkResult[] = (int)$row['ID'];
+							unset($row);
+							if (!empty($checkResult))
+								$arResult['values'] = $checkResult;
+							else
+								$boolError = true;
+							unset($checkResult);
+						}
+						else
+						{
+							$row = $iterator->fetch();
+							if (!empty($row))
+								$arResult['values'] = (int)$row['ID'];
+							else
+								$boolError = true;
+							unset($row);
+						}
+						unset($iterator);
+						break;
 					case 'user':
 						if ($boolMulti)
 						{
@@ -1205,14 +1266,14 @@ class CGlobalCondCtrl
 								{
 									foreach ($arOneCondition[$strID] as &$strOneValue)
 									{
-										$strOneValue = substr($strOneValue, 0, 1);
+										$strOneValue = mb_substr($strOneValue, 0, 1);
 									}
 									if (isset($strOneValue))
 										unset($strOneValue);
 								}
 								else
 								{
-									$arOneCondition[$strID] = substr($arOneCondition[$strID], 0, 1);
+									$arOneCondition[$strID] = mb_substr($arOneCondition[$strID], 0, 1);
 								}
 								break;
 							case 'string':
@@ -1223,14 +1284,14 @@ class CGlobalCondCtrl
 								{
 									foreach ($arOneCondition[$strID] as &$strOneValue)
 									{
-										$strOneValue = substr($strOneValue, 0, $intMaxLen);
+										$strOneValue = mb_substr($strOneValue, 0, $intMaxLen);
 									}
 									if (isset($strOneValue))
 										unset($strOneValue);
 								}
 								else
 								{
-									$arOneCondition[$strID] = substr($arOneCondition[$strID], 0, $intMaxLen);
+									$arOneCondition[$strID] = mb_substr($arOneCondition[$strID], 0, $intMaxLen);
 								}
 								break;
 							case 'text':
@@ -1247,7 +1308,7 @@ class CGlobalCondCtrl
 									$strFormat = 'FULL';
 									$intOffset = $intTimeOffset;
 								}
-								$boolAtomError = CGlobalCondCtrl::ConvertInt2DateTime($arOneCondition[$strID], $strFormat, $intOffset);
+								$boolAtomError = static::ConvertInt2DateTime($arOneCondition[$strID], $strFormat, $intOffset);
 								break;
 							default:
 								$boolAtomError = true;
@@ -1372,14 +1433,14 @@ class CGlobalCondCtrl
 								{
 									foreach ($arOneCondition[$strName] as &$strOneValue)
 									{
-										$strOneValue = substr($strOneValue, 0, 1);
+										$strOneValue = mb_substr($strOneValue, 0, 1);
 									}
 									if (isset($strOneValue))
 										unset($strOneValue);
 								}
 								else
 								{
-									$arOneCondition[$strName] = substr($arOneCondition[$strName], 0, 1);
+									$arOneCondition[$strName] = mb_substr($arOneCondition[$strName], 0, 1);
 								}
 								break;
 							case 'string':
@@ -1390,14 +1451,14 @@ class CGlobalCondCtrl
 								{
 									foreach ($arOneCondition[$strName] as &$strOneValue)
 									{
-										$strOneValue = substr($strOneValue, 0, $intMaxLen);
+										$strOneValue = mb_substr($strOneValue, 0, $intMaxLen);
 									}
 									if (isset($strOneValue))
 										unset($strOneValue);
 								}
 								else
 								{
-									$arOneCondition[$strName] = substr($arOneCondition[$strName], 0, $intMaxLen);
+									$arOneCondition[$strName] = mb_substr($arOneCondition[$strName], 0, $intMaxLen);
 								}
 								break;
 							case 'text':
@@ -1414,7 +1475,7 @@ class CGlobalCondCtrl
 									$strFormat = 'FULL';
 									$intOffset = $intTimeOffset;
 								}
-								$boolAtomError = CGlobalCondCtrl::ConvertDateTime2Int($arOneCondition[$strName], $strFormat, $intOffset);
+								$boolAtomError = static::ConvertDateTime2Int($arOneCondition[$strName], $strFormat, $intOffset);
 								break;
 							default:
 								$boolAtomError = true;
@@ -1920,15 +1981,7 @@ class CGlobalCondCtrl
 		}
 	}
 
-	public static function UndefinedCondition($boolFatal = false)
-	{
-		$boolFatal = (true === $boolFatal);
-		$arResult = array(
-			''
-		);
-	}
-
-	static function LogicGreat($arField, $mxValue)
+	public static function LogicGreat($arField, $mxValue)
 	{
 		$boolResult = false;
 		if (!is_array($arField))
@@ -1951,7 +2004,7 @@ class CGlobalCondCtrl
 		return $boolResult;
 	}
 
-	static function LogicLess($arField, $mxValue)
+	public static function LogicLess($arField, $mxValue)
 	{
 		$boolResult = false;
 		if (!is_array($arField))
@@ -1974,7 +2027,7 @@ class CGlobalCondCtrl
 		return $boolResult;
 	}
 
-	static function LogicEqualGreat($arField, $mxValue)
+	public static function LogicEqualGreat($arField, $mxValue)
 	{
 		$boolResult = false;
 		if (!is_array($arField))
@@ -1997,7 +2050,7 @@ class CGlobalCondCtrl
 		return $boolResult;
 	}
 
-	static function LogicEqualLess($arField, $mxValue)
+	public static function LogicEqualLess($arField, $mxValue)
 	{
 		$boolResult = false;
 		if (!is_array($arField))
@@ -2020,7 +2073,7 @@ class CGlobalCondCtrl
 		return $boolResult;
 	}
 
-	static function LogicContain($arField, $mxValue)
+	public static function LogicContain($arField, $mxValue)
 	{
 		$boolResult = false;
 		if (!is_array($arField))
@@ -2029,7 +2082,7 @@ class CGlobalCondCtrl
 		{
 			foreach ($arField as &$mxOneValue)
 			{
-				if (strpos($mxOneValue, $mxValue) !== false)
+				if (mb_strpos($mxOneValue, $mxValue) !== false)
 				{
 					$boolResult = true;
 					break;
@@ -2041,7 +2094,7 @@ class CGlobalCondCtrl
 		return $boolResult;
 	}
 
-	static function LogicNotContain($arField, $mxValue)
+	public static function LogicNotContain($arField, $mxValue)
 	{
 		$boolResult = true;
 		if (!is_array($arField))
@@ -2050,7 +2103,7 @@ class CGlobalCondCtrl
 		{
 			foreach ($arField as &$mxOneValue)
 			{
-				if (strpos($mxOneValue, $mxValue) !== false)
+				if (mb_strpos($mxOneValue, $mxValue) !== false)
 				{
 					$boolResult = false;
 					break;
@@ -2098,7 +2151,7 @@ class CGlobalCondCtrl
 		return $boolLocalError;
 	}
 
-	static function ConvertInt2DateTime(&$mxValues, $strFormat, $intOffset)
+	public static function ConvertInt2DateTime(&$mxValues, $strFormat, $intOffset)
 	{
 		global $DB;
 
@@ -2130,7 +2183,7 @@ class CGlobalCondCtrl
 		return $boolValueError;
 	}
 
-	static function ConvertDateTime2Int(&$mxValues, $strFormat, $intOffset)
+	public static function ConvertDateTime2Int(&$mxValues, $strFormat, $intOffset)
 	{
 		global $DB;
 
@@ -2176,6 +2229,49 @@ class CGlobalCondCtrl
 			}
 		}
 		return $boolError;
+	}
+
+	/**
+	 * @param array $atoms
+	 * @param string|false $controlId
+	 * @param bool $extendedMode
+	 * @return array|false
+	 */
+	protected static function searchControlAtoms(array $atoms, $controlId, $extendedMode)
+	{
+		if (empty($atoms))
+			return false;
+
+		$extendedMode = ($extendedMode === true);
+		if (!$extendedMode)
+		{
+			foreach (array_keys($atoms) as $index)
+			{
+				foreach (array_keys($atoms[$index]) as $atomId)
+				{
+					$atoms[$index][$atomId] = $atoms[$index][$atomId]['JS'];
+				}
+			}
+			unset($atomId, $index);
+		}
+
+		if ($controlId === false)
+			return $atoms;
+
+		$controlId = (string)$controlId;
+		return (isset($atoms[$controlId]) ? $atoms[$controlId] : false);
+	}
+
+	protected static function searchControl(array $controls, $controlId)
+	{
+		if (empty($controls))
+			return false;
+
+		if ($controlId === false)
+			return $controls;
+
+		$controlId = (string)$controlId;
+		return (isset($controls[$controlId]) ? $controls[$controlId] : false);
 	}
 }
 
@@ -2683,6 +2779,8 @@ class CGlobalCondCtrlGroup extends CGlobalCondCtrl
 			$commandLine = $itemPrefix.implode($logic.$itemPrefix, $arSubs);
 			if ($prefix != '')
 				$commandLine = $prefix.'('.$commandLine.')';
+			if ($commandLine != '')
+				$commandLine = '('.$commandLine.')';
 			$result = $commandLine;
 			unset($commandLine);
 		}
@@ -2706,10 +2804,23 @@ class CCatalogCondCtrlComplex extends CGlobalCondCtrlComplex
 
 class CCatalogCondCtrlGroup extends CGlobalCondCtrlGroup
 {
+	public static function GetControlDescr()
+	{
+		$description = parent::GetControlDescr();
+		$description['SORT'] = 100;
+		return $description;
+	}
 }
 
 class CCatalogCondCtrlIBlockFields extends CCatalogCondCtrlComplex
 {
+	public static function GetControlDescr()
+	{
+		$description = parent::GetControlDescr();
+		$description['SORT'] = 200;
+		return $description;
+	}
+
 	/**
 	 * @return string|array
 	 */
@@ -2722,7 +2833,6 @@ class CCatalogCondCtrlIBlockFields extends CCatalogCondCtrlComplex
 			'CondIBCode',
 			'CondIBXmlID',
 			'CondIBName',
-			'CondIBActive',
 			'CondIBDateActiveFrom',
 			'CondIBDateActiveTo',
 			'CondIBSort',
@@ -2750,7 +2860,7 @@ class CCatalogCondCtrlIBlockFields extends CCatalogCondCtrlComplex
 			'showIn' => static::GetShowIn($arParams['SHOW_IN_GROUPS']),
 			'children' => array()
 		);
-		foreach ($arControls as &$arOneControl)
+		foreach ($arControls as $arOneControl)
 		{
 			$arResult['children'][] = array(
 				'controlId' => $arOneControl['ID'],
@@ -2780,7 +2890,10 @@ class CCatalogCondCtrlIBlockFields extends CCatalogCondCtrlComplex
 	public static function GetControls($strControlID = false)
 	{
 		$vatList = array();
-		$vatIterator = Catalog\VatTable::getList(array('select' => array('ID', 'NAME', 'SORT'), 'order' => array('SORT' => 'ASC')));
+		$vatIterator = Catalog\VatTable::getList(array(
+			'select' => array('ID', 'NAME', 'SORT'),
+			'order' => array('SORT' => 'ASC')
+		));
 		while ($vat = $vatIterator->fetch())
 		{
 			$vat['ID'] = (int)$vat['ID'];
@@ -2798,7 +2911,7 @@ class CCatalogCondCtrlIBlockFields extends CCatalogCondCtrlComplex
 				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ)),
 				'JS_VALUE' => array(
 					'type' => 'multiDialog',
-					'popup_url' =>  '/bitrix/admin/cat_product_search_dialog.php',
+					'popup_url' => self::getAdminSection().'cat_product_search_dialog.php',
 					'popup_params' => array(
 						'lang' => LANGUAGE_ID,
 						'caller' => 'discount_rules',
@@ -2820,7 +2933,7 @@ class CCatalogCondCtrlIBlockFields extends CCatalogCondCtrlComplex
 				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ)),
 				'JS_VALUE' => array(
 					'type' => 'popup',
-					'popup_url' =>  '/bitrix/admin/cat_iblock_search.php',
+					'popup_url' => self::getAdminSection().'cat_iblock_search.php',
 					'popup_params' => array(
 						'lang' => LANGUAGE_ID,
 						'discount' => 'Y'
@@ -2842,10 +2955,11 @@ class CCatalogCondCtrlIBlockFields extends CCatalogCondCtrlComplex
 				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ)),
 				'JS_VALUE' => array(
 					'type' => 'popup',
-					'popup_url' =>  '/bitrix/admin/cat_section_search.php',
+					'popup_url' => self::getAdminSection().'iblock_section_search.php',
 					'popup_params' => array(
 						'lang' => LANGUAGE_ID,
-						'discount' => 'Y'
+						'discount' => 'Y',
+						'simplename' => 'Y'
 					),
 					'param_id' => 'n',
 					'show_value' => 'Y'
@@ -2892,24 +3006,6 @@ class CCatalogCondCtrlIBlockFields extends CCatalogCondCtrlComplex
 					'type' => 'input'
 				),
 				'PHP_VALUE' => ''
-			),
-			'CondIBActive' => array(
-				'ID' => 'CondIBActive',
-				'FIELD' => 'ACTIVE',
-				'FIELD_TYPE' => 'char',
-				'LABEL' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_ACTIVE_LABEL'),
-				'PREFIX' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_ACTIVE_PREFIX'),
-				'LOGIC' => static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ)),
-				'JS_VALUE' => array(
-					'type' => 'select',
-					'values' => array(
-						'Y' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_ACTIVE_VALUE_YES'),
-						'N' => Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_ACTIVE_VALUE_NO')
-					)
-				),
-				'PHP_VALUE' => array(
-					'VALIDATE' => 'list'
-				)
 			),
 			'CondIBDateActiveFrom' => array(
 				'ID' => 'CondIBDateActiveFrom',
@@ -3132,22 +3228,12 @@ class CCatalogCondCtrlIBlockFields extends CCatalogCondCtrlComplex
 				$control['FIELD_TABLE'] = false;
 			$control['MULTIPLE'] = 'N';
 			$control['GROUP'] = 'N';
+			$control['ENTITY_ID'] = -1;
 		}
 		unset($control);
 		$arControlList['CondIBSection']['MULTIPLE'] = 'Y';
 
-		if ($strControlID === false)
-		{
-			return $arControlList;
-		}
-		elseif (isset($arControlList[$strControlID]))
-		{
-			return $arControlList[$strControlID];
-		}
-		else
-		{
-			return false;
-		}
+		return static::searchControl($arControlList, $strControlID);
 	}
 
 	public static function Generate($arOneCondition, $arParams, $arControl, $arSubs = false)
@@ -3328,10 +3414,26 @@ class CCatalogCondCtrlIBlockFields extends CCatalogCondCtrlComplex
 
 		return (!$boolError ? $arResult : false);
 	}
+
+	/**
+	 * @return string
+	 */
+	private static function getAdminSection()
+	{
+		//TODO: need use \CAdminPage::getSelfFolderUrl, but in general it is impossible now
+		return (defined('SELF_FOLDER_URL') ? SELF_FOLDER_URL : '/bitrix/admin/');
+	}
 }
 
 class CCatalogCondCtrlIBlockProps extends CCatalogCondCtrlComplex
 {
+	public static function GetControlDescr()
+	{
+		$description = parent::GetControlDescr();
+		$description['SORT'] = 300;
+		return $description;
+	}
+
 	/**
 	 * @param bool|string $strControlID
 	 * @return bool|array
@@ -3340,8 +3442,10 @@ class CCatalogCondCtrlIBlockProps extends CCatalogCondCtrlComplex
 	{
 		$arControlList = array();
 		$arIBlockList = array();
-		$rsIBlocks = CCatalog::GetList(array(), array(), false, false, array('IBLOCK_ID', 'PRODUCT_IBLOCK_ID'));
-		while ($arIBlock = $rsIBlocks->Fetch())
+		$iterator = Catalog\CatalogIblockTable::getList(array(
+			'select' => array('IBLOCK_ID', 'PRODUCT_IBLOCK_ID')
+		));
+		while ($arIBlock = $iterator->fetch())
 		{
 			$arIBlock['IBLOCK_ID'] = (int)$arIBlock['IBLOCK_ID'];
 			$arIBlock['PRODUCT_IBLOCK_ID'] = (int)$arIBlock['PRODUCT_IBLOCK_ID'];
@@ -3350,12 +3454,12 @@ class CCatalogCondCtrlIBlockProps extends CCatalogCondCtrlComplex
 			if ($arIBlock['PRODUCT_IBLOCK_ID'] > 0)
 				$arIBlockList[$arIBlock['PRODUCT_IBLOCK_ID']] = true;
 		}
-		unset($arIBlock, $rsIBlocks);
+		unset($arIBlock, $iterator);
 		if (!empty($arIBlockList))
 		{
 			$arIBlockList = array_keys($arIBlockList);
 			sort($arIBlockList);
-			foreach ($arIBlockList as &$intIBlockID)
+			foreach ($arIBlockList as $intIBlockID)
 			{
 				$strName = CIBlock::GetArrayByID($intIBlockID, 'NAME');
 				if (false !== $strName)
@@ -3367,16 +3471,7 @@ class CCatalogCondCtrlIBlockProps extends CCatalogCondCtrlComplex
 						if ('CML2_LINK' == $arProp['XML_ID'] || 'F' == $arProp['PROPERTY_TYPE'])
 							continue;
 						if ('L' == $arProp['PROPERTY_TYPE'])
-						{
 							$arProp['VALUES'] = array();
-							$rsPropEnums = CIBlockPropertyEnum::GetList(array('DEF' => 'DESC', 'SORT' => 'ASC'), array('PROPERTY_ID' => $arProp['ID']));
-							while ($arPropEnum = $rsPropEnums->Fetch())
-							{
-								$arProp['VALUES'][] = $arPropEnum;
-							}
-							if (empty($arProp['VALUES']))
-								continue;
-						}
 
 						$strFieldType = '';
 						$arLogic = array();
@@ -3406,6 +3501,19 @@ class CCatalogCondCtrlIBlockProps extends CCatalogCondCtrlComplex
 									);
 									$boolUserType = true;
 									break;
+								case 'directory':
+									$strFieldType = 'text';
+									$arLogic = static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ));
+									$arValue = array(
+										'type' => 'lazySelect',
+										'load_url' => '/bitrix/tools/catalog/get_property_values.php',
+										'load_params' => array(
+											'lang' => LANGUAGE_ID,
+											'propertyId' => $arProp['ID']
+										)
+									);
+									$boolUserType = true;
+									break;
 								default:
 									$boolUserType = false;
 									break;
@@ -3430,23 +3538,21 @@ class CCatalogCondCtrlIBlockProps extends CCatalogCondCtrlComplex
 									$strFieldType = 'int';
 									$arLogic = static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ));
 									$arValue = array(
-										'type' => 'select',
-										'values' => array()
+										'type' => 'lazySelect',
+										'load_url' => '/bitrix/tools/catalog/get_property_values.php',
+										'load_params' => array(
+											'lang' => LANGUAGE_ID,
+											'propertyId' => $arProp['ID']
+										)
 									);
-									foreach ($arProp['VALUES'] as &$arOnePropValue)
-									{
-										$arValue['values'][$arOnePropValue['ID']] = $arOnePropValue['VALUE'];
-									}
-									if (isset($arOnePropValue))
-										unset($arOnePropValue);
-									$arPhpValue = array('VALIDATE' => 'list');
+									$arPhpValue = array('VALIDATE' => 'enumValue');
 									break;
 								case 'E':
 									$strFieldType = 'int';
 									$arLogic = static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ));
 									$arValue = array(
 										'type' => 'popup',
-										'popup_url' =>  '/bitrix/admin/iblock_element_search.php',
+										'popup_url' => self::getAdminSection().'iblock_element_search.php',
 										'popup_params' => array(
 											'lang' => LANGUAGE_ID,
 											'IBLOCK_ID' => $arProp['LINK_IBLOCK_ID'],
@@ -3457,18 +3563,23 @@ class CCatalogCondCtrlIBlockProps extends CCatalogCondCtrlComplex
 									$arPhpValue = array('VALIDATE' => 'element');
 									break;
 								case 'G':
+									$popupParams = array(
+										'lang' => LANGUAGE_ID,
+										'IBLOCK_ID' => $arProp['LINK_IBLOCK_ID'],
+										'discount' => 'Y',
+										'simplename' => 'Y',
+									);
+									if ($arProp['LINK_IBLOCK_ID'] > 0)
+										$popupParams['iblockfix'] = 'y';
 									$strFieldType = 'int';
 									$arLogic = static::GetLogic(array(BT_COND_LOGIC_EQ, BT_COND_LOGIC_NOT_EQ));
 									$arValue = array(
 										'type' => 'popup',
-										'popup_url' =>  '/bitrix/admin/cat_section_search.php',
-										'popup_params' => array(
-											'lang' => LANGUAGE_ID,
-											'IBLOCK_ID' => $arProp['LINK_IBLOCK_ID'],
-											'discount' => 'Y'
-										),
+										'popup_url' => self::getAdminSection().'iblock_section_search.php',
+										'popup_params' => $popupParams,
 										'param_id' => 'n'
 									);
+									unset($popupParams);
 									$arPhpValue = array('VALIDATE' => 'section');
 									break;
 							}
@@ -3480,16 +3591,29 @@ class CCatalogCondCtrlIBlockProps extends CCatalogCondCtrlComplex
 							'MODULE_ID' => 'catalog',
 							'MODULE_ENTITY' => 'iblock',
 							'ENTITY' => 'ELEMENT_PROPERTY',
-							'IBLOCK_ID' => $intIBlockID,
+							'ENTITY_ID' => $intIBlockID,
+							'IBLOCK_ID' => $intIBlockID, // deprecated
+							'PROPERTY_ID' => $arProp['ID'],
 							'FIELD' => 'PROPERTY_'.$arProp['ID'].'_VALUE',
 							'FIELD_TABLE' => $intIBlockID.':'.$arProp['ID'],
 							'FIELD_TYPE' => $strFieldType,
 							'MULTIPLE' => 'Y',
 							'GROUP' => 'N',
 							'SEP' => ($boolSep ? 'Y' : 'N'),
-							'SEP_LABEL' => ($boolSep ? str_replace(array('#ID#', '#NAME#'), array($intIBlockID, $strName), Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_PROP_LABEL')) : ''),
+							'SEP_LABEL' => ($boolSep
+								? str_replace(
+									array('#ID#', '#NAME#'),
+									array($intIBlockID, $strName),
+									Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_PROP_LABEL')
+								)
+								: ''
+							),
 							'LABEL' => $arProp['NAME'],
-							'PREFIX' => str_replace(array('#NAME#', '#IBLOCK_ID#', '#IBLOCK_NAME#'), array($arProp['NAME'], $intIBlockID, $strName), Loc::getMessage('BT_MOD_CATALOG_COND_CMP_CATALOG_ONE_PROP_PREFIX')),
+							'PREFIX' => str_replace(
+								array('#NAME#', '#IBLOCK_ID#', '#IBLOCK_NAME#'),
+								array($arProp['NAME'], $intIBlockID, $strName),
+								Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_ONE_PROP_PREFIX')
+							),
 							'LOGIC' => $arLogic,
 							'JS_VALUE' => $arValue,
 							'PHP_VALUE' => $arPhpValue
@@ -3499,23 +3623,11 @@ class CCatalogCondCtrlIBlockProps extends CCatalogCondCtrlComplex
 					}
 				}
 			}
-			if (isset($intIBlockID))
-				unset($intIBlockID);
-			unset($arIBlockList);
+			unset($intIBlockID);
 		}
+		unset($arIBlockList);
 
-		if ($strControlID === false)
-		{
-			return $arControlList;
-		}
-		elseif (isset($arControlList[$strControlID]))
-		{
-			return $arControlList[$strControlID];
-		}
-		else
-		{
-			return false;
-		}
+		return static::searchControl($arControlList, $strControlID);
 	}
 
 	public static function GetControlShow($arParams)
@@ -3629,10 +3741,62 @@ class CCatalogCondCtrlIBlockProps extends CCatalogCondCtrlComplex
 		}
 		return (!$boolError ? $arResult : false);
 	}
+
+	public static function Check($arOneCondition, $arParams, $arControl, $boolShow)
+	{
+		$result = parent::Check($arOneCondition, $arParams, $arControl, $boolShow);
+		if (self::checkActiveProperty($arControl))
+			return $result;
+		$boolShow = ($boolShow === true);
+		if ($boolShow)
+		{
+			$result['err_cond'] = 'Y';
+			if (isset($result['err_cond_mess']))
+				$result['err_cond_mess'] .= '. '.Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_PROPERTY_NOT_ACTIVE');
+			else
+				$result['err_cond_mess'] = Loc::getMessage('BT_MOD_CATALOG_COND_CMP_IBLOCK_PROPERTY_NOT_ACTIVE');
+		}
+		else
+		{
+			$result = false;
+		}
+		return $result;
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function getAdminSection()
+	{
+		//TODO: need use \CAdminPage::getSelfFolderUrl, but in general it is impossible now
+		return (defined('SELF_FOLDER_URL') ? SELF_FOLDER_URL : '/bitrix/admin/');
+	}
+
+	/**
+	 * @param array $control
+	 * @return bool
+	 */
+	private static function checkActiveProperty(array $control)
+	{
+		$iterator = Iblock\PropertyTable::getList([
+			'select' => ['ID', 'IBLOCK_ID'],
+			'filter' => [
+				'=IBLOCK_ID' => $control['IBLOCK_ID'],
+				'=ID' => $control['PROPERTY_ID'],
+				'=ACTIVE' => 'Y'
+			]
+		]);
+		$row = $iterator->fetch();
+		$result = !empty($row);
+		unset($row, $iterator);
+		return $result;
+	}
 }
 
 class CGlobalCondTree
 {
+	protected const PARAM_TITLE_MASK = '/^[A-Za-z_][A-Za-z01-9_]*$/';
+
 	protected $intMode = BT_COND_MODE_DEFAULT;			// work mode
 	protected $arEvents = array();						// events ID
 	protected $arInitParams = array();					// start params
@@ -3671,50 +3835,130 @@ class CGlobalCondTree
 
 	protected $arConditions = null;						// conditions array
 
-	static public function __construct()
+	public function __construct()
 	{
 		CJSCore::Init(array("core_condtree"));
 	}
 
-	static public function __destruct()
+	public function __destruct()
 	{
 
 	}
 
 	public function OnConditionAtomBuildList()
 	{
-		if (!$this->boolError && !isset($this->arAtomList))
+		if ($this->boolError || isset($this->arAtomList))
+			return;
+
+		$this->arAtomList = array();
+		$this->arAtomJSPath = array();
+
+		$result = array();
+		if (isset($this->arEvents['INTERFACE_ATOMS']))
 		{
-			$this->arAtomList = array();
-			$this->arAtomJSPath = array();
+			$event = new Main\Event(
+				$this->arEvents['INTERFACE_ATOMS']['MODULE_ID'],
+				$this->arEvents['INTERFACE_ATOMS']['EVENT_ID']
+			);
+			$event->send();
+			$resultList = $event->getResults();
+			if (!empty($resultList))
+			{
+				foreach ($resultList as $eventResult)
+				{
+					if ($eventResult->getType() != Main\EventResult::SUCCESS)
+						continue;
+					$module = $eventResult->getModuleId();
+					if (empty($module))
+						continue;
+					$result[] = $eventResult->getParameters();
+				}
+				unset($eventResult);
+			}
+			unset($resultList, $event);
+		}
+		if (isset($this->arEvents['ATOMS']))
+		{
 			foreach (GetModuleEvents($this->arEvents['ATOMS']['MODULE_ID'], $this->arEvents['ATOMS']['EVENT_ID'], true) as $arEvent)
 			{
-				$arRes = ExecuteModuleEventEx($arEvent);
-				if (!isset($arRes['ID']))
-					continue;;
-				$this->arAtomList[$arRes["ID"]] = $arRes;
-				if (isset($arRes['JS_SRC']))
-				{
-					if (!in_array($arRes['JS_SRC'], $this->arAtomJSPath))
-						$this->arAtomJSPath[] = $arRes['JS_SRC'];
-				}
+				$result[] = ExecuteModuleEventEx($arEvent);
 			}
 		}
+
+		if (!empty($result))
+		{
+			foreach ($result as $row)
+			{
+				if (empty($row) || !is_array($row))
+					continue;
+				if (empty($row['ID']) || isset($this->arAtomList[$row['ID']]))
+					continue;
+				$this->arAtomList[$row['ID']] = $row;
+				if (
+					!empty($row['JS_SRC'])
+					&& is_string($row['JS_SRC'])
+					&& !in_array($row['JS_SRC'], $this->arAtomJSPath)
+				)
+				{
+					$this->arAtomJSPath[] = $row['JS_SRC'];
+				}
+			}
+			unset($row);
+		}
+		unset($result);
 	}
 
 	public function OnConditionControlBuildList()
 	{
-		if (!$this->boolError && !isset($this->arControlList))
+		if ($this->boolError || isset($this->arControlList))
+			return;
+
+		$this->arControlList = array();
+		$this->arShowInGroups = array();
+		$this->forcedShowInGroup = array();
+		$this->arShowControlList = array();
+		$this->arInitControlList = array();
+
+		$result = array();
+
+		if (isset($this->arEvents['CONTROLS']))
 		{
-			$this->arControlList = array();
-			$this->arShowInGroups = array();
-			$this->forcedShowInGroup = array();
-			$this->arShowControlList = array();
-			$this->arInitControlList = array();
 			foreach (GetModuleEvents($this->arEvents['CONTROLS']['MODULE_ID'], $this->arEvents['CONTROLS']['EVENT_ID'], true) as $arEvent)
 			{
-				$arRes = ExecuteModuleEventEx($arEvent);
-				if (!is_array($arRes))
+				$result[] = ExecuteModuleEventEx($arEvent);
+			}
+		}
+		if (isset($this->arEvents['INTERFACE_CONTROLS']))
+		{
+			$event = new Main\Event(
+				$this->arEvents['INTERFACE_CONTROLS']['MODULE_ID'],
+				$this->arEvents['INTERFACE_CONTROLS']['EVENT_ID']
+			);
+			$event->send();
+			$resultList = $event->getResults();
+			if (!empty($resultList))
+			{
+				foreach ($resultList as $eventResult)
+				{
+					if ($eventResult->getType() != Main\EventResult::SUCCESS)
+						continue;
+					$module = $eventResult->getModuleId();
+					if (empty($module))
+						continue;
+					$result[] = $eventResult->getParameters();
+				}
+				unset($eventResult);
+			}
+			unset($resultList, $event);
+		}
+
+		if (!empty($result))
+		{
+			$rawControls = array();
+			$controlIndex = 0;
+			foreach ($result as $arRes)
+			{
+				if (empty($arRes) || !is_array($arRes))
 					continue;
 				if (isset($arRes['ID']))
 				{
@@ -3749,8 +3993,10 @@ class CGlobalCondTree
 							}
 							else
 							{
-								$forcedList = (!is_array($arRes['FORCED_SHOW_LIST']) ? array($arRes['FORCED_SHOW_LIST']) : $arRes['FORCED_SHOW_LIST']);
-								foreach ($forcedList as &$forcedId)
+								$forcedList = $arRes['FORCED_SHOW_LIST'];
+								if (!is_array($forcedList))
+									$forcedList = array($forcedList);
+								foreach ($forcedList as $forcedId)
 								{
 									if (is_array($forcedId))
 										continue;
@@ -3761,13 +4007,31 @@ class CGlobalCondTree
 										$this->forcedShowInGroup[$forcedId] = array();
 									$this->forcedShowInGroup[$forcedId][] = $arRes['ID'];
 								}
-								unset($forcedId);
+								unset($forcedId, $forcedList);
 							}
 						}
 						if (isset($arRes['GetControlShow']) && !empty($arRes['GetControlShow']))
 						{
 							if (!in_array($arRes['GetControlShow'], $this->arShowControlList))
+							{
 								$this->arShowControlList[] = $arRes['GetControlShow'];
+								$showDescription = array(
+									'CONTROL' => $arRes['GetControlShow'],
+								);
+								if (isset($arRes['SORT']) && (int)$arRes['SORT'] > 0)
+								{
+									$showDescription['SORT'] = (int)$arRes['SORT'];
+									$showDescription['INDEX'] = 1;
+								}
+								else
+								{
+									$showDescription['SORT'] = INF;
+									$showDescription['INDEX'] = $controlIndex;
+									$controlIndex++;
+								}
+								$rawControls[] = $showDescription;
+								unset($showDescription);
+							}
 						}
 						if (isset($arRes['InitParams']) && !empty($arRes['InitParams']))
 						{
@@ -3825,7 +4089,25 @@ class CGlobalCondTree
 						if (isset($arRes['GetControlShow']) && !empty($arRes['GetControlShow']))
 						{
 							if (!in_array($arRes['GetControlShow'], $this->arShowControlList))
+							{
 								$this->arShowControlList[] = $arRes['GetControlShow'];
+								$showDescription = array(
+									'CONTROL' => $arRes['GetControlShow'],
+								);
+								if (isset($arRes['SORT']) && (int)$arRes['SORT'] > 0)
+								{
+									$showDescription['SORT'] = (int)$arRes['SORT'];
+									$showDescription['INDEX'] = 1;
+								}
+								else
+								{
+									$showDescription['SORT'] = INF;
+									$showDescription['INDEX'] = $controlIndex;
+									$controlIndex++;
+								}
+								$rawControls[] = $showDescription;
+								unset($showDescription);
+							}
 						}
 						if (isset($arRes['InitParams']) && !empty($arRes['InitParams']))
 						{
@@ -3836,8 +4118,6 @@ class CGlobalCondTree
 				}
 				else
 				{
-					if (empty($arRes))
-						continue;
 					foreach ($arRes as &$arOneRes)
 					{
 						if (is_array($arOneRes) && isset($arOneRes['ID']))
@@ -3891,7 +4171,25 @@ class CGlobalCondTree
 								if (isset($arOneRes['GetControlShow']) && !empty($arOneRes['GetControlShow']))
 								{
 									if (!in_array($arOneRes['GetControlShow'], $this->arShowControlList))
+									{
 										$this->arShowControlList[] = $arOneRes['GetControlShow'];
+										$showDescription = array(
+											'CONTROL' => $arOneRes['GetControlShow'],
+										);
+										if (isset($arOneRes['SORT']) && (int)$arOneRes['SORT'] > 0)
+										{
+											$showDescription['SORT'] = (int)$arOneRes['SORT'];
+											$showDescription['INDEX'] = 1;
+										}
+										else
+										{
+											$showDescription['SORT'] = INF;
+											$showDescription['INDEX'] = $controlIndex;
+											$controlIndex++;
+										}
+										$rawControls[] = $showDescription;
+										unset($showDescription);
+									}
 								}
 								if (isset($arOneRes['InitParams']) && !empty($arOneRes['InitParams']))
 								{
@@ -3904,11 +4202,22 @@ class CGlobalCondTree
 					unset($arOneRes);
 				}
 			}
-			if (empty($this->arControlList))
+			unset($arRes);
+
+			if (!empty($rawControls))
 			{
-				$this->arMsg[] = array('id' => 'CONTROLS', 'text' => Loc::getMessage('BT_MOD_COND_ERR_CONTROLS_EMPTY'));
-				$this->boolError = true;
+				$this->arShowControlList = array();
+				Main\Type\Collection::sortByColumn($rawControls, array('SORT' => SORT_ASC, 'INDEX' => SORT_ASC));
+				foreach ($rawControls as $row)
+					$this->arShowControlList[] = $row['CONTROL'];
+				unset($row);
 			}
+			unset($controlIndex, $rawControls);
+		}
+		if (empty($this->arControlList))
+		{
+			$this->arMsg[] = array('id' => 'CONTROLS', 'text' => Loc::getMessage('BT_MOD_COND_ERR_CONTROLS_EMPTY'));
+			$this->boolError = true;
 		}
 	}
 
@@ -3942,6 +4251,14 @@ class CGlobalCondTree
 	{
 		$arEventList = array(
 			BT_COND_BUILD_CATALOG => array(
+				'INTERFACE_ATOMS' => array(
+					'MODULE_ID' => 'catalog',
+					'EVENT_ID' => 'onBuildDiscountInterfaceAtoms'
+				),
+				'INTERFACE_CONTROLS' => array(
+					'MODULE_ID' => 'catalog',
+					'EVENT_ID' => 'onBuildDiscountInterfaceControls'
+				),
 				'ATOMS' => array(
 					'MODULE_ID' => 'catalog',
 					'EVENT_ID' => 'OnCondCatAtomBuildList'
@@ -3952,6 +4269,14 @@ class CGlobalCondTree
 				)
 			),
 			BT_COND_BUILD_SALE => array(
+				'INTERFACE_ATOMS' => array(
+					'MODULE_ID' => 'sale',
+					'EVENT_ID' => 'onBuildDiscountConditionInterfaceAtoms'
+				),
+				'INTERFACE_CONTROLS' => array(
+					'MODULE_ID' => 'sale',
+					'EVENT_ID' => 'onBuildDiscountConditionInterfaceControls'
+				),
 				'ATOMS' => array(
 					'MODULE_ID' => 'sale',
 					'EVENT_ID' => 'OnCondSaleAtomBuildList'
@@ -3962,6 +4287,14 @@ class CGlobalCondTree
 				)
 			),
 			BT_COND_BUILD_SALE_ACTIONS => array(
+				'INTERFACE_ATOMS' => array(
+					'MODULE_ID' => 'sale',
+					'EVENT_ID' => 'onBuildDiscountActionInterfaceAtoms'
+				),
+				'INTERFACE_CONTROLS' => array(
+					'MODULE_ID' => 'sale',
+					'EVENT_ID' => 'onBuildDiscountActionInterfaceControls'
+				),
 				'ATOMS' => array(
 					'MODULE_ID' => 'sale',
 					'EVENT_ID' => 'OnCondSaleActionsAtomBuildList'
@@ -3999,32 +4332,25 @@ class CGlobalCondTree
 		$arEvent = false;
 		if (is_array($mxEvent))
 		{
-			if (isset($mxEvent['CONTROLS']) && $this->CheckEvent($mxEvent['CONTROLS']))
+			$fields = array(
+				'INTERFACE_ATOMS', 'INTERFACE_CONTROLS',
+				'ATOMS', 'CONTROLS'
+			);
+			foreach ($fields as $fieldName)
 			{
-				$arEvent['CONTROLS'] = $mxEvent['CONTROLS'];
+				if (!isset($mxEvent[$fieldName]) || !$this->CheckEvent($mxEvent[$fieldName]))
+					continue;
+				$arEvent[$fieldName] = $mxEvent[$fieldName];
 			}
-			else
-			{
-				$this->boolError = true;
-				$this->arMsg[] = array('id' => 'EVENT','text' => Loc::getMessage('BT_MOD_COND_ERR_EVENT_BAD'));
-			}
-			if (isset($mxEvent['ATOMS']) && $this->CheckEvent($mxEvent['ATOMS']))
-			{
-				$arEvent['ATOMS'] = $mxEvent['ATOMS'];
-			}
-			else
-			{
-				$this->boolError = true;
-				$this->arMsg[] = array('id' => 'EVENT','text' => Loc::getMessage('BT_MOD_COND_ERR_EVENT_BAD'));
-			}
+			unset($fieldName);
+			if (!isset($arEvent['INTERFACE_CONTROLS']) && !isset($arEvent['CONTROLS']))
+				$arEvent = false;
 		}
 		else
 		{
 			$mxEvent = (int)$mxEvent;
 			if ($mxEvent >= 0)
-			{
 				$arEvent = $this->GetEventList($mxEvent);
-			}
 		}
 
 		if ($arEvent === false)
@@ -4042,18 +4368,43 @@ class CGlobalCondTree
 		if (!is_array($arParams))
 			$arParams = array();
 
+		$parsedValues = [];
 		if (BT_COND_MODE_DEFAULT == $this->intMode)
 		{
 			if (!empty($arParams) && is_array($arParams))
 			{
-				if (isset($arParams['FORM_NAME']) && !empty($arParams['FORM_NAME']))
+				if (
+					isset($arParams['FORM_NAME'])
+					&& is_string($arParams['FORM_NAME'])
+					&& preg_match(self::PARAM_TITLE_MASK, $arParams['FORM_NAME'], $parsedValues)
+				)
+				{
 					$this->strFormName = $arParams['FORM_NAME'];
-				if (isset($arParams['FORM_ID']) && !empty($arParams['FORM_ID']))
+				}
+				if (
+					isset($arParams['FORM_ID'])
+					&& is_string($arParams['FORM_ID'])
+					&& preg_match(self::PARAM_TITLE_MASK, $arParams['FORM_ID'], $parsedValues)
+				)
+				{
 					$this->strFormID = $arParams['FORM_ID'];
-				if (isset($arParams['CONT_ID']) && !empty($arParams['CONT_ID']))
+				}
+				if (
+					isset($arParams['CONT_ID'])
+					&& is_string($arParams['CONT_ID'])
+					&& preg_match(self::PARAM_TITLE_MASK, $arParams['CONT_ID'], $parsedValues)
+				)
+				{
 					$this->strContID = $arParams['CONT_ID'];
-				if (isset($arParams['JS_NAME']) && !empty($arParams['JS_NAME']))
+				}
+				if (
+					isset($arParams['JS_NAME'])
+					&& is_string($arParams['JS_NAME'])
+					&& preg_match(self::PARAM_TITLE_MASK, $arParams['JS_NAME'], $parsedValues)
+				)
+				{
 					$this->strJSName = $arParams['JS_NAME'];
+				}
 
 				$this->boolCreateForm = (isset($arParams['CREATE_FORM']) && 'Y' == $arParams['CREATE_FORM']);
 				$this->boolCreateCont = (isset($arParams['CREATE_CONT']) && 'Y' == $arParams['CREATE_CONT']);
@@ -4076,10 +4427,22 @@ class CGlobalCondTree
 		{
 			if (!empty($arParams) && is_array($arParams))
 			{
-				if (isset($arParams['PREFIX']) && !empty($arParams['PREFIX']))
+				if (
+					isset($arParams['PREFIX'])
+					&& is_string($arParams['PREFIX'])
+					&& preg_match(self::PARAM_TITLE_MASK, $arParams['PREFIX'], $parsedValues)
+				)
+				{
 					$this->strPrefix = $arParams['PREFIX'];
-				if (isset($arParams['SEP_ID']) && !empty($arParams['SEP_ID']))
+				}
+				if (
+					isset($arParams['SEP_ID'])
+					&& is_string($arParams['SEP_ID'])
+					&& preg_match(self::PARAM_TITLE_MASK, $arParams['SEP_ID'], $parsedValues)
+				)
+				{
 					$this->strSepID = $arParams['SEP_ID'];
+				}
 			}
 		}
 
@@ -4139,7 +4502,7 @@ class CGlobalCondTree
 					}
 					else
 					{
-						$arConditions = unserialize($arConditions);
+						$arConditions = unserialize($arConditions, ['allowed_classes' => false]);
 						if (!is_array($arConditions))
 						{
 							$this->boolError = true;
@@ -4189,7 +4552,7 @@ class CGlobalCondTree
 		}
 	}
 
-	static public function GetDefaultConditions()
+	public function GetDefaultConditions()
 	{
 		return array(
 			'CLASS_ID' => 'CondGroup',
@@ -4296,22 +4659,19 @@ class CGlobalCondTree
 
 	public function ShowAtoms()
 	{
-		global $APPLICATION;
-
 		if (!$this->boolError)
 		{
 			if (!isset($this->arAtomList))
 			{
 				$this->OnConditionAtomBuildList();
 			}
-			if (isset($this->arAtomJSPath) && !empty($this->arAtomJSPath))
+			if (!empty($this->arAtomJSPath) && is_array($this->arAtomJSPath))
 			{
-				foreach ($this->arAtomJSPath as &$strJSPath)
-				{
-					$APPLICATION->AddHeadScript($strJSPath);
-				}
-				if (isset($strJSPath))
-					unset($strJSPath);
+				$asset = Main\Page\Asset::getInstance();
+				foreach ($this->arAtomJSPath as $jsPath)
+					$asset->addJs($jsPath);
+				unset($jsPath);
+				unset($asset);
 			}
 		}
 	}
@@ -4404,7 +4764,6 @@ class CGlobalCondTree
 							$arOneResult['children'] = $this->ShowLevel($arLevel['CHILDREN'], false);
 					}
 					$arResult[] = $arOneResult;
-					$intCount++;
 				}
 			}
 		}
@@ -4794,12 +5153,25 @@ class CGlobalCondTree
 			$entityID .= (is_array($control['FIELD']) ? implode('-', $control['FIELD']) : $control['FIELD']);
 			if (!isset($this->usedEntity[$entityID]))
 			{
-				$this->usedEntity[$entityID] = array(
+				$row = [
 					'MODULE' => (!empty($control['MODULE_ID']) ? $control['MODULE_ID'] : $control['MODULE_ENTITY']),
 					'ENTITY' => $control['ENTITY'],
 					'FIELD_ENTITY' => $control['FIELD'],
 					'FIELD_TABLE' => (!empty($control['FIELD_TABLE']) ? $control['FIELD_TABLE'] : $control['FIELD'])
-				);
+				];
+				if (isset($control['ENTITY_ID']))
+				{
+					$row['ENTITY_ID'] = $control['ENTITY_ID'];
+				}
+				if (isset($control['ENTITY_VALUE']) || isset($control['ENTITY_ID']))
+				{
+					$row['ENTITY_VALUE'] = (isset($control['ENTITY_VALUE'])
+						? $control['ENTITY_VALUE']
+						: $control['ENTITY_ID']
+					);
+				}
+				$this->usedEntity[$entityID] = $row;
+				unset($row);
 			}
 			unset($entityID);
 		}
@@ -4863,12 +5235,12 @@ class CGlobalCondTree
 
 class CCatalogCondTree extends CGlobalCondTree
 {
-	static public function __construct()
+	public function __construct()
 	{
 		parent::__construct();
 	}
 
-	static public function __destruct()
+	public function __destruct()
 	{
 		parent::__destruct();
 	}

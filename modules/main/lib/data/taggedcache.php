@@ -12,36 +12,29 @@ use Bitrix\Main;
 
 class TaggedCache
 {
-	protected $compCacheStack = array();
+	protected $compCacheStack = [];
 	protected $salt = false;
-	protected $dbCacheTags = array();
+	protected $cacheTag = [];
 	protected $wasTagged = false;
 	protected $isMySql = false;
+	protected $pool = false;
 
 	public function __construct()
 	{
-		$this->isMySql = (static::getDbType() === "MYSQL");
-	}
-
-	protected static function getDbType()
-	{
-		static $type = null;
-		if ($type === null)
-		{
-			$cm = Main\Application::getInstance()->getConnectionPool();
-			$type = $cm->getDefaultConnectionType();
-		}
-		return $type;
+		$this->pool = Main\Application::getInstance()->getConnectionPool();
+		$this->isMySql = ($this->pool->getConnection()->getType() === "mysql");
 	}
 
 	protected function initDbCache($path)
 	{
-		if (!isset($this->dbCacheTags[$path]))
+		if (!isset($this->cacheTag[$path]))
 		{
-			$this->dbCacheTags[$path] = array();
+			$this->cacheTag[$path] = [];
 
 			$con = Main\Application::getConnection();
 			$sqlHelper = $con->getSqlHelper();
+
+			$this->pool->useMasterOnly(true);
 
 			$rs = $con->query("
 				SELECT TAG
@@ -50,10 +43,13 @@ class TaggedCache
 				AND CACHE_SALT = '".$sqlHelper->forSql($this->salt, 4)."'
 				AND RELATIVE_PATH = '".$sqlHelper->forSql($path)."'
 			");
+
 			while ($ar = $rs->fetch())
 			{
-				$this->dbCacheTags[$path][$ar["TAG"]] = true;
+				$this->cacheTag[$path][$ar["TAG"]] = true;
 			}
+
+			$this->pool->useMasterOnly(false);
 		}
 	}
 
@@ -67,7 +63,7 @@ class TaggedCache
 
 	public function startTagCache($relativePath)
 	{
-		array_unshift($this->compCacheStack, array($relativePath, array()));
+		array_unshift($this->compCacheStack, [$relativePath, []]);
 	}
 
 	public function endTagCache()
@@ -76,6 +72,8 @@ class TaggedCache
 
 		if ($this->wasTagged)
 		{
+			$this->pool->useMasterOnly(true);
+
 			$con = Main\Application::getConnection();
 			$sqlHelper = $con->getSqlHelper();
 
@@ -102,23 +100,25 @@ class TaggedCache
 
 					foreach ($arCompCache[1] as $tag => $t)
 					{
-						if (!isset($this->dbCacheTags[$path][$tag]))
+						if (!isset($this->cacheTag[$path][$tag]))
 						{
-							$strSqlValues .= $sql." '".$sqlHelper->forSql($tag, 50)."')";
-							if (strlen($strSqlValues) > $maxValuesLen)
+							$strSqlValues .= $sql." '".$sqlHelper->forSql($tag, 100)."')";
+							if (mb_strlen($strSqlValues) > $maxValuesLen)
 							{
-								$con->queryExecute($strSqlPrefix.substr($strSqlValues, 2));
+								$con->queryExecute($strSqlPrefix.mb_substr($strSqlValues, 2));
 								$strSqlValues = "";
 							}
-							$this->dbCacheTags[$path][$tag] = true;
+							$this->cacheTag[$path][$tag] = true;
 						}
 					}
 				}
 			}
 			if ($strSqlValues <> '')
 			{
-				$con->queryExecute($strSqlPrefix.substr($strSqlValues, 2));
+				$con->queryExecute($strSqlPrefix.mb_substr($strSqlValues, 2));
 			}
+
+			$this->pool->useMasterOnly(false);
 		}
 
 		array_shift($this->compCacheStack);
@@ -140,49 +140,64 @@ class TaggedCache
 
 	public function clearByTag($tag)
 	{
+		$this->pool->useMasterOnly(true);
+
 		$con = Main\Application::getConnection();
-		$sqlHelper = $con->getSqlHelper();
+		$helper = $con->getSqlHelper();
 
 		if ($tag === true)
 		{
-			$sqlWhere = " WHERE TAG <> '*'";
+			$where = " WHERE TAG <> '*'";
 		}
 		else
 		{
-			$sqlWhere = "  WHERE TAG = '".$sqlHelper->forSql($tag)."'";
+			$where = " WHERE TAG = '".$helper->forSql($tag)."'";
 		}
 
-		$arDirs = array();
-		$rs = $con->query("SELECT * FROM b_cache_tag".$sqlWhere);
+		$dirs = [];
+		$rs = $con->query("SELECT ID, RELATIVE_PATH FROM b_cache_tag".$where);
 		while ($ar = $rs->fetch())
 		{
-			$arDirs[$ar["RELATIVE_PATH"]] = $ar;
+			$dirs[$ar["RELATIVE_PATH"]][] = $ar["ID"];
 		}
 
-		$con->queryExecute("DELETE FROM b_cache_tag".$sqlWhere);
+		$con->queryExecute("DELETE FROM b_cache_tag".$where);
 
+		$max_length = 102400;
+		$sql = "DELETE FROM b_cache_tag WHERE ID in (%s)";
+		$where_list = array();
+		$length = 0;
 		$cache = Cache::createInstance();
-		$managedCache = Main\Application::getInstance()->getManagedCache();
-
-		foreach ($arDirs as $path => $ar)
+		foreach ($dirs as $path => $ar)
 		{
-			$con->queryExecute("
-				DELETE FROM b_cache_tag
-				WHERE SITE_ID = '".$sqlHelper->forSql($ar["SITE_ID"])."'
-				AND CACHE_SALT = '".$sqlHelper->forSql($ar["CACHE_SALT"])."'
-				AND RELATIVE_PATH = '".$sqlHelper->forSql($ar["RELATIVE_PATH"])."'
-			");
+			$cache->cleanDir($path);
+			unset($this->cacheTag[$path]);
 
-			if (preg_match("/^managed:(.+)$/", $path, $match))
+			foreach ($ar as $cacheTagId)
 			{
-				$managedCache->cleanDir($match[1]);
+				$where = intval($cacheTagId);
+				$length += mb_strlen($where) + 1;
+				$where_list[] = $where;
+				if ($length > $max_length)
+				{
+					$con->queryExecute(sprintf($sql, implode(",", $where_list)));
+					$where_list = array();
+					$length = 0;
+				}
 			}
-			else
-			{
-				$cache->cleanDir($path);
-			}
-
-			unset($this->dbCacheTags[$path]);
 		}
+
+		if ($where_list)
+		{
+			$con->queryExecute(sprintf($sql, implode(",", $where_list)));
+		}
+
+		$this->pool->useMasterOnly(false);
+	}
+
+	public function deleteAllTags()
+	{
+		$con = Main\Application::getConnection();
+		$con->query("TRUNCATE TABLE b_cache_tag");
 	}
 }

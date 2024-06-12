@@ -2,7 +2,7 @@
 ##############################################
 # Bitrix Site Manager Forum                  #
 # Copyright (c) 2002-2009 Bitrix             #
-# http://www.bitrixsoft.com                  #
+# https://www.bitrixsoft.com                 #
 # mailto:admin@bitrixsoft.com                #
 ##############################################
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/forum/classes/general/forum_new.php");
@@ -29,15 +29,14 @@ class CForumNew extends CAllForumNew
 			return false;
 		$arInsert = $DB->PrepareInsert("b_forum", $arFields);
 		$strSql = "INSERT INTO b_forum(".$arInsert[0].") VALUES(".$arInsert[1].")";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-		$ID = intVal($DB->LastID());
+		$DB->Query($strSql);
+		$ID = intval($DB->LastID());
 
 		if ($ID > 0)
 		{
 			foreach ($arFields["SITES"] as $key => $value)
 			{
-				$DB->Query("INSERT INTO b_forum2site (FORUM_ID, SITE_ID, PATH2FORUM_MESSAGE) VALUES(".$ID.", '".$DB->ForSql($key, 2)."', '".$DB->ForSql($value, 250)."')",
-					false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query("INSERT INTO b_forum2site (FORUM_ID, SITE_ID, PATH2FORUM_MESSAGE) VALUES(".$ID.", '".$DB->ForSql($key, 2)."', '".$DB->ForSql($value, 250)."')");
 			}
 			if (is_set($arFields, "GROUP_ID") && is_array($arFields["GROUP_ID"]))
 			{
@@ -51,142 +50,184 @@ class CForumNew extends CAllForumNew
 		return $ID;
 	}
 
-	public static function OnReindex($NS = array(), $oCallback = NULL, $callback_method = "")
+	public static function reindex(&$NS, $oCallback = NULL, $callback_method = "")
 	{
 		global $DB;
 
-		$arResultAll = array();
-		$arParams = array(
-			"PERMISSION" => array(),
-			"SITE" => array(),
-			"DEFAULT_URL" => array());
-		$search_message_count = intVal(COption::GetOptionInt("forum", "search_message_count", 0));
+		$join = array();
+		$filter = array();
 
-		$strNSJoin = "";
-		$strFilter = "";
+		$lastMessageId = intval($NS["ID"]);
+		if ($NS["MODULE"] == "forum" && $lastMessageId > 0)
+		{
+			$filter[] = ( intval($NS["CNT"]) > 0 ?
+				"FM.ID>".$lastMessageId :
+				"FM.ID>=".$lastMessageId
+			);
+		}
 
-		if ($NS["MODULE"] == "forum" && intVal($NS["ID"]) > 0 && intVal($NS["CNT"]) > 0)
-			$strFilter = " AND (FM.ID>".intVal($NS["ID"]).") ";
-		elseif ($NS["MODULE"] == "forum" && intVal($NS["ID"]) > 0) // out of date
-			$strFilter = " AND (FM.ID>=".intVal($NS["ID"]).") ";
 		if ($NS["SITE_ID"] != "")
 		{
-			$strNSJoin .= " INNER JOIN b_forum2site FS ON (FS.FORUM_ID=F.ID) ";
-			$strFilter .= " AND FS.SITE_ID='".$DB->ForSQL($NS["SITE_ID"])."' ";
+			$join[] = " INNER JOIN b_forum2site FS ON (FS.FORUM_ID=F.ID) ";
+			$filter[] = "FS.SITE_ID='".$DB->ForSQL($NS["SITE_ID"])."' ";
 		}
+		if (array_key_exists("FILTER", $NS))
+			foreach ($NS["FILTER"] as $f)
+				$filter[] = $f;
+		if (array_key_exists("JOIN", $NS))
+			foreach ($NS["JOIN"] as $j)
+				$join[] = $j;
+		$NS["SKIPPED"] = array();
 
 		$strSql =
-			"SELECT STRAIGHT_JOIN FT.ID as TID, FM.ID as MID, FM.ID as ID, FT.FORUM_ID, FT.TITLE, ".
-				CForumNew::Concat("-", array("FT.ID", "FT.TITLE_SEO"))." as TITLE_SEO,
-				FT.DESCRIPTION, FT.TAGS, FT.HTML as FT_HTML,
-				FM.PARAM1, FM.PARAM2, FM.POST_MESSAGE, FM.POST_MESSAGE_FILTER, FM.POST_MESSAGE_HTML, FM.AUTHOR_NAME, FM.AUTHOR_ID, FM.NEW_TOPIC,
-				".$DB->DateToCharFunction("FM.POST_DATE")." as POST_DATE, ".$DB->DateToCharFunction("FM.EDIT_DATE")." as EDIT_DATE, FT.SOCNET_GROUP_ID, FT.OWNER_ID
-			FROM b_forum_message FM use index (PRIMARY), b_forum_topic FT, b_forum F
-			".$strNSJoin."
-			WHERE (FM.TOPIC_ID = FT.ID) AND (F.ID = FT.FORUM_ID) AND (F.INDEXATION = 'Y') AND (FM.APPROVED = 'Y')
-			".$strFilter."
-			ORDER BY FM.ID";
-		if ($search_message_count > 0)
-			$strSql .= " LIMIT 0, ".$search_message_count;
+			"SELECT STRAIGHT_JOIN FT.ID as TID, FM.ID as MID,
+				".CForumTopic::GetSelectFields(array("sPrefix" => "FT_", "sReturnResult" => "string")).", 
+				FM.*, ".$DB->DateToCharFunction("FM.POST_DATE", "FULL")." as POST_DATE,
+				".$DB->DateToCharFunction("FM.EDIT_DATE", "FULL")." as EDIT_DATE,
+				FU.SHOW_NAME, FU.DESCRIPTION, FU.NUM_POSTS, FU.POINTS as NUM_POINTS, FU.SIGNATURE, FU.AVATAR, FU.RANK_ID,
+				".$DB->DateToCharFunction("FU.DATE_REG", "SHORT")." as DATE_REG,
+				U.EMAIL, U.PERSONAL_ICQ, U.LOGIN, U.NAME, U.SECOND_NAME, U.LAST_NAME, U.PERSONAL_PHOTO
+			FROM b_forum_message FM use index (PRIMARY)
+				LEFT JOIN b_forum_topic FT ON (FM.TOPIC_ID = FT.ID)
+				LEFT JOIN b_forum F ON (F.ID = FT.FORUM_ID) 
+				LEFT JOIN b_forum_user FU ON (FM.AUTHOR_ID = FU.USER_ID)
+				LEFT JOIN b_user U ON (FM.AUTHOR_ID = U.ID)
+			".implode(" ", $join)."
+			WHERE (F.INDEXATION = 'Y' AND FM.APPROVED = 'Y') ".(empty($filter) ? "" : " AND ".implode(" AND ", $filter))."
+			ORDER BY FM.ID ASC ";
+		$cnt = intval(COption::GetOptionInt("forum", "search_message_count", 50));
+		if ($cnt > 0)
+			$strSql .= " LIMIT 0, ".$cnt;
 
-		$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-		if ($db_res && COption::GetOptionString("forum", "FILTER", "Y") == "Y")
+		$db_res = $DB->Query($strSql);
+		if (COption::GetOptionString("forum", "FILTER", "Y") == "Y")
 			$db_res = new _CMessageDBResult($db_res);
+
+		$return = array();
+
 		$rownum = 0;
-		while ($res = $db_res->Fetch())
+		$lastMessageId = 0;
+		if ($res = $db_res->Fetch())
 		{
-			$rownum++;
-			if (empty($arParams["PERMISSION"][$res["FORUM_ID"]]))
+			static $permissions = array();
+			static $sites = array();
+			do
 			{
-				$arGroups = CForumNew::GetAccessPermissions($res["FORUM_ID"]);
-				$arParams["PERMISSION"][$res["FORUM_ID"]] = array();
-				for ($i = 0; $i < count($arGroups); $i++)
+				$lastMessageId = $res["ID"];
+				$rownum++;
+				if (!array_key_exists($res["FORUM_ID"], $permissions))
 				{
-					if ($arGroups[$i][1] >= "E")
+					$permissions[$res["FORUM_ID"]] = array();
+					$groups = CForumNew::GetAccessPermissions($res["FORUM_ID"]);
+					foreach ($groups as $group)
 					{
-						$arParams["PERMISSION"][$res["FORUM_ID"]][] = $arGroups[$i][0];
-						if ($arGroups[$i][0]==2)
-							break;
+						if ($group[1] >= "E")
+						{
+							$permissions[$res["FORUM_ID"]][] = $group[0];
+							if ($group[0]==2)
+								break;
+						}
 					}
 				}
-			}
 
-			if (empty($arParams["SITE"][$res["FORUM_ID"]]))
-			{
-				$arParams["SITE"][$res["FORUM_ID"]] =  CForumNew::GetSites($res["FORUM_ID"]);
-			}
-
-			$arResult = array(
-				"ID" => $res["MID"],
-				"LID" => array(),
-				"LAST_MODIFIED" => ((!empty($res["EDIT_DATE"])) ? $res["EDIT_DATE"] : $res["POST_DATE"]),
-				"PARAM1" => $res["FORUM_ID"],
-				"PARAM2" => $res["TID"],
-				"USER_ID" => $res["AUTHOR_ID"],
-				"ENTITY_TYPE_ID"  => ($res["NEW_TOPIC"] == "Y" ? "FORUM_TOPIC" : "FORUM_POST"),
-				"ENTITY_ID" => ($res["NEW_TOPIC"] == "Y" ? $res["TID"] : $res["MID"]),
-				"PERMISSIONS" => $arParams["PERMISSION"][$res["FORUM_ID"]],
-				"TITLE" => $res["TITLE"].($res["NEW_TOPIC"] == "Y" && !empty($res["DESCRIPTION"]) ?
-						", ".$res["DESCRIPTION"] : ""),
-				"TAGS" => ($res["NEW_TOPIC"] == "Y" ? $res["TAGS"] : ""),
-				"BODY" => GetMessage("AVTOR_PREF")." ".$res["AUTHOR_NAME"].". ".
-					forumTextParser::clearAllTags(
-						COption::GetOptionString("forum", "FILTER", "Y") != "Y" ? $res["POST_MESSAGE"] : $res["POST_MESSAGE_FILTER"]),
-				"URL" => "",
-				"INDEX_TITLE" => $res["NEW_TOPIC"] == "Y",
-			);
-
-			foreach ($arParams["SITE"][$res["FORUM_ID"]] as $key => $val)
-			{
-				$arResult["LID"][$key] = CForumNew::PreparePath2Message($val,
-					array("FORUM_ID"=>$res["FORUM_ID"],
-						"TOPIC_ID"=>$res["TID"], "TITLE_SEO"=>$res["TITLE_SEO"],
-						"MESSAGE_ID"=>$res["MID"],
-						"SOCNET_GROUP_ID" => $res["SOCNET_GROUP_ID"], "OWNER_ID" => $res["OWNER_ID"],
-						"PARAM1" => $res["PARAM1"], "PARAM2" => $res["PARAM2"]));
-				if (empty($arResult["URL"]) && !empty($arResult["LID"][$key]))
-					$arResult["URL"] = $arResult["LID"][$key];
-			}
-
-			if (empty($arResult["URL"]))
-			{
-				if (empty($arParams["DEFAULT_URL"][$res["FORUM_ID"]]))
+				$result = array(
+					"ID" => $res["ID"],
+					"LID" => array(),
+					"LAST_MODIFIED" => ((!empty($res["EDIT_DATE"])) ? $res["EDIT_DATE"] : $res["POST_DATE"]),
+					"PARAM1" => $res["FORUM_ID"],
+					"PARAM2" => $res["TOPIC_ID"],
+					"USER_ID" => $res["AUTHOR_ID"],
+					"ENTITY_TYPE_ID"  => ($res["NEW_TOPIC"] == "Y" ? "FORUM_TOPIC" : "FORUM_POST"),
+					"ENTITY_ID" => ($res["NEW_TOPIC"] == "Y" ? $res["TOPIC_ID"] : $res["ID"]),
+					"PERMISSIONS" => $permissions[$res["FORUM_ID"]],
+					"TITLE" => $res["FT_TITLE"].($res["NEW_TOPIC"] == "Y" && !empty($res["FT_DESCRIPTION"]) ?
+							", ".$res["FT_DESCRIPTION"] : ""),
+					"TAGS" => ($res["NEW_TOPIC"] == "Y" ? $res["FT_TAGS"] : ""),
+					"BODY" => GetMessage("AVTOR_PREF")." ".$res["AUTHOR_NAME"].". ".
+						forumTextParser::clearAllTags(
+							COption::GetOptionString("forum", "FILTER", "Y") != "Y" ? $res["POST_MESSAGE"] : $res["POST_MESSAGE_FILTER"]),
+					"URL" => "",
+					"INDEX_TITLE" => $res["NEW_TOPIC"] == "Y",
+				);
+				if (!array_key_exists($res["FORUM_ID"], $sites))
+					$sites[$res["FORUM_ID"]] =  CForumNew::GetSites($res["FORUM_ID"]);
+				foreach ($sites[$res["FORUM_ID"]] as $key => $val)
 				{
-					$arParams["DEFAULT_URL"][$res["FORUM_ID"]] = "/";
-					foreach ($arParams["SITE"][$res["FORUM_ID"]] as $key => $val):
-						$db_lang = CLang::GetByID($key);
-						if ($db_lang && $ar_lang = $db_lang->Fetch()):
-							$arParams["DEFAULT_URL"][$res["FORUM_ID"]] = $ar_lang["DIR"];
-							break;
-						endif;
-					endforeach;
-					$arParams["DEFAULT_URL"][$res["FORUM_ID"]] .= COption::GetOptionString("forum", "REL_FPATH", "").
-						"forum/read.php?FID=#FID#&TID=#TID#&MID=#MID##message#MID#";
+					$result["LID"][$key] = CForumNew::PreparePath2Message($val,
+						array(
+							"FORUM_ID"=>$res["FORUM_ID"],
+							"TOPIC_ID"=>$res["TOPIC_ID"],
+							"TITLE_SEO"=>$res["FT_TITLE_SEO"],
+							"MESSAGE_ID"=>$res["ID"],
+							"SOCNET_GROUP_ID" =>$res["FT_SOCNET_GROUP_ID"],
+							"OWNER_ID" => $res["FT_OWNER_ID"],
+							"PARAM1" => $res["PARAM1"],
+							"PARAM2" => $res["PARAM2"]));
+					if (empty($result["URL"]) && !empty($result["LID"][$key]))
+						$result["URL"] = $result["LID"][$key];
 				}
-				$arResult["URL"] = CForumNew::PreparePath2Message($arParams["DEFAULT_URL"][$res["FORUM_ID"]],
-					array("FORUM_ID"=>$res["FORUM_ID"], "TOPIC_ID"=>$res["TID"], "MESSAGE_ID"=>$res["MID"],
-						"SOCNET_GROUP_ID" => $res["SOCNET_GROUP_ID"], "OWNER_ID" => $res["OWNER_ID"],
-						"PARAM1" => $res["PARAM1"], "PARAM2" => $res["PARAM2"]));
-			}
 
-			if($oCallback)
-			{
-				$resCall = call_user_func(array($oCallback, $callback_method), $arResult);
-				if(!$resCall)
-					return $arResult["ID"];
-			}
-			else
-			{
-				$arResultAll[] = $arResult;
-			}
+				if (empty($result["URL"]))
+				{
+					static $defaultUrl = array();
+					if (array_key_exists($res["FORUM_ID"], $defaultUrl))
+					{
+						$defaultUrl[$res["FORUM_ID"]] = "/";
+						foreach ($sites[$res["FORUM_ID"]] as $key => $val)
+						{
+							if (($lang = CLang::GetByID($key)->Fetch()) && !empty($lang))
+							{
+								$defaultUrl[$res["FORUM_ID"]] = $lang["DIR"];
+								break;
+							}
+						}
+						$defaultUrl[$res["FORUM_ID"]] .= COption::GetOptionString("forum", "REL_FPATH", "")."forum/read.php?FID=#FID#&TID=#TID#&MID=#MID##message#MID#";
+					}
+					$result["URL"] = CForumNew::PreparePath2Message(
+						$defaultUrl[$res["FORUM_ID"]],
+						array(
+							"FORUM_ID"=>$res["FORUM_ID"],
+							"TOPIC_ID"=>$res["TOPIC_ID"],
+							"TITLE_SEO"=>$res["FT_TITLE_SEO"],
+							"MESSAGE_ID"=>$res["ID"],
+							"SOCNET_GROUP_ID" =>$res["FT_SOCNET_GROUP_ID"],
+							"OWNER_ID" => $res["FT_OWNER_ID"],
+							"PARAM1" => $res["PARAM1"],
+							"PARAM2" => $res["PARAM2"]
+						)
+					);
+				}
+				/***************** Events onMessageIsIndexed ***********************/
+				$index = true;
+				foreach(GetModuleEvents("forum", "onMessageIsIndexed", true) as $arEvent)
+				{
+					if (ExecuteModuleEventEx($arEvent, array($res["ID"], $res, &$result)) === false)
+					{
+						$index = false;
+						break;
+					}
+				}
+				/***************** /Events *****************************************/
+				if ($index === true)
+				{
+					if ($oCallback && !call_user_func(array($oCallback, $callback_method), $result))
+					{
+						return $result["ID"];
+					}
+					$return[] = $result;
+				}
+				else
+				{
+					$NS["SKIPPED"][] = $res["ID"];
+				}
+			} while ($res = $db_res->Fetch());
 		}
 
-		if ($oCallback && ($search_message_count > 0) && ($rownum >= ($search_message_count - 1)))
-			return $arResult["ID"];
+		if ($oCallback && ($cnt > 0) && ($rownum >= ($cnt - 1)))
+			return $lastMessageId;
 		if ($oCallback)
 			return false;
-
-		return $arResultAll;
+		return $return;
 	}
 
 	public static function GetNowTime($ResultType = "timestamp")
@@ -195,7 +236,7 @@ class CForumNew extends CAllForumNew
 		static $result = array();
 		$ResultType = (in_array($ResultType, array("timestamp", "time")) ? $ResultType : "timestamp");
 		if (empty($result)):
-			$db_res = $DB->Query("SELECT ".$DB->DateToCharFunction($DB->GetNowFunction(), "FULL")." FORUM_DATE", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$db_res = $DB->Query("SELECT ".$DB->DateToCharFunction($DB->GetNowFunction(), "FULL")." FORUM_DATE");
 			$res = $db_res->Fetch();
 			$result["time"] = $res["FORUM_DATE"];
 			$result["timestamp"] = MakeTimeStamp($res["FORUM_DATE"]);
@@ -234,8 +275,8 @@ class CForumGroup extends CAllForumGroup
 			return false;
 		$arInsert = $DB->PrepareInsert("b_forum_group", $arFields);
 		$strSql = "INSERT INTO b_forum_group(".$arInsert[0].") VALUES(".$arInsert[1].")";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-		$ID = intVal($DB->LastID());
+		$DB->Query($strSql);
+		$ID = intval($DB->LastID());
 
 		if (array_key_exists("LANG", $arFields))
 		{
@@ -243,7 +284,7 @@ class CForumGroup extends CAllForumGroup
 			{
 				$arInsert = $DB->PrepareInsert("b_forum_group_lang", $l);
 				$strSql = "INSERT INTO b_forum_group_lang(FORUM_GROUP_ID, ".$arInsert[0].") VALUES(".$ID.", ".$arInsert[1].")";
-				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql);
 			}
 		}
 		CForumGroup::Resort();
@@ -257,7 +298,7 @@ class CForumGroup extends CAllForumGroup
 	public static function Update($ID, $arFields)
 	{
 		global $DB;
-		$ID = intVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0):
 			return false;
 		endif;
@@ -279,17 +320,17 @@ class CForumGroup extends CAllForumGroup
 		if (!empty($strUpdate))
 		{
 			$strSql = "UPDATE b_forum_group SET ".$strUpdate." WHERE ID = ".$ID;
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 		}
 		if (is_set($arFields, "LANG"))
 		{
-			$DB->Query("DELETE FROM b_forum_group_lang WHERE FORUM_GROUP_ID = ".$ID, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query("DELETE FROM b_forum_group_lang WHERE FORUM_GROUP_ID = ".$ID);
 
 			foreach ($arFields["LANG"] as $l)
 			{
 				$arInsert = $DB->PrepareInsert("b_forum_group_lang", $l);
 				$strSql = "INSERT INTO b_forum_group_lang(FORUM_GROUP_ID, ".$arInsert[0].") VALUES(".$ID.", ".$arInsert[1].")";
-				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql);
 			}
 		}
 		CForumGroup::Resort();

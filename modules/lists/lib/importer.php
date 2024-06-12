@@ -2,6 +2,7 @@
 namespace Bitrix\Lists;
 
 use Bitrix\Main;
+use Bitrix\Main\ModuleManager;
 
 Main\Loader::includeModule("iblock");
 Main\Loader::includeModule("bizproc");
@@ -12,9 +13,9 @@ Main\Loader::includeModule("bizproc");
  *
  *
  * 	$APPLICATION->RestartBuffer();
- *	if (есть права)
+ *	if (has perms)
  *	{
- *      $id = iblock ID
+ *		$id = iblock ID
  *		$datum = \Bitrix\Lists\Importer::export($id);
  *
  *		header("HTTP/1.1 200 OK");
@@ -47,9 +48,12 @@ class Importer
 	const DIRECTION_EXPORT = 0;
 	const DIRECTION_IMPORT = 1;
 
- 	/**
+	private static $listRuLanguage = array('ua', 'by', 'kz');
+
+	/**
 	 * @param int $iblockId This variable is the id iblock.
 	 * @return string
+	 * @throws Main\ArgumentException
 	 * @throws Main\ArgumentNullException
 	 * @throws Main\ArgumentOutOfRangeException
 	 */
@@ -67,6 +71,9 @@ class Importer
 		if(!$iblock["CODE"])
 			throw new Main\ArgumentException("Parameter 'CODE' is required.", "matches");
 
+		foreach(\CIBlock::getMessages($iblockId) as $messageKey => $message)
+			$iblock[$messageKey] = $message;
+
 		$list = new \CList($iblockId);
 		$fields = $list->getFields();
 		foreach($fields as $fieldId => $field)
@@ -75,7 +82,7 @@ class Importer
 			{
 				$iblock["~NAME_FIELD"] = array(
 					"NAME" => $field["NAME"],
-					"SETTINGS" => $field["SETTINGS"],
+					"SETTINGS" => $field["SETTlINGS"],
 					"DEFAULT_VALUE" => $field["DEFAULT_VALUE"],
 					"SORT" => $field["SORT"],
 				);
@@ -140,13 +147,13 @@ class Importer
 		$datum = fread($f, filesize($filePath));
 		fclose($f);
 
-		if (substr($datum, 0, 10) === "compressed")
+		if (mb_substr($datum, 0, 10) === "compressed")
 			$datum = gzuncompress(Main\Text\BinaryString::getSubstring($datum, 10));
 
 		$len = intval(Main\Text\BinaryString::getSubstring($datum, 0, 10));
 		$dataSerialized = Main\Text\BinaryString::getSubstring($datum, 10, $len);
 
-		$data = CheckSerializedData($dataSerialized) ? unserialize($dataSerialized) : array();
+		$data = CheckSerializedData($dataSerialized) ? unserialize($dataSerialized, ["allowed_classes" => false]) : [];
 		$data = Main\Text\Encoding::convertEncodingArray($data, "UTF-8", LANG_CHARSET);
 
 		return $data;
@@ -163,7 +170,7 @@ class Importer
 		if (empty($datum))
 			throw new Main\ArgumentNullException("datum");
 
-		if (substr($datum, 0, 10) === "compressed")
+		if (mb_substr($datum, 0, 10) === "compressed")
 			$datum = gzuncompress(Main\Text\BinaryString::getSubstring($datum, 10));
 
 		$len = intval(Main\Text\BinaryString::getSubstring($datum, 0, 10));
@@ -186,7 +193,7 @@ class Importer
 			$marker = Main\Text\BinaryString::getSubstring($datum, 0, 1);
 		}
 
-		$iblock = CheckSerializedData($iblockSerialized) ? unserialize($iblockSerialized) : array();
+		$iblock = CheckSerializedData($iblockSerialized) ? unserialize($iblockSerialized, ['allowed_classes' => false]) : [];
 		$iblock = Main\Text\Encoding::convertEncodingArray($iblock, "UTF-8", LANG_CHARSET);
 		$iblockId = static::createIBlock($iblockType, $iblock, $pictureType, $picture, $siteId);
 
@@ -202,7 +209,7 @@ class Importer
 					$bpDescr = Main\Text\BinaryString::getSubstring($datum, 11, $len);
 					$datum = Main\Text\BinaryString::getSubstring($datum, $len + 11);
 
-					$bpDescr = CheckSerializedData($bpDescr) ? unserialize($bpDescr) : array();
+					$bpDescr = CheckSerializedData($bpDescr) ? unserialize($bpDescr, ["allowed_classes" => false]) : [];
 					$bpDescr = Main\Text\Encoding::convertEncodingArray($bpDescr, "UTF-8", LANG_CHARSET);
 
 					$len = intval(Main\Text\BinaryString::getSubstring($datum, 0, 10));
@@ -282,21 +289,23 @@ class Importer
 			"WORKFLOW" => "N",
 			"ELEMENTS_NAME" => $iblock["ELEMENTS_NAME"],
 			"ELEMENT_NAME" => $iblock["ELEMENT_NAME"],
-			"ELEMENT_ADD" => $iblock["ELEMENT_ADD"],
-			"ELEMENT_EDIT" => $iblock["ELEMENT_EDIT"],
-			"ELEMENT_DELETE" => $iblock["ELEMENT_DELETE"],
-			"SECTIONS_NAME" => $iblock["SECTIONS_NAME"],
-			"SECTION_NAME" => $iblock["SECTION_NAME"],
-			"SECTION_ADD" => $iblock["SECTION_ADD"],
-			"SECTION_EDIT" => $iblock["SECTION_EDIT"],
-			"SECTION_DELETE" => $iblock["SECTION_DELETE"],
+			"ELEMENT_ADD" => $iblock["ELEMENT_ADD"] ?? null,
+			"ELEMENT_EDIT" => $iblock["ELEMENT_EDIT"] ?? null,
+			"ELEMENT_DELETE" => $iblock["ELEMENT_DELETE"] ?? null,
+			"SECTIONS_NAME" => $iblock["SECTIONS_NAME"] ?? null,
+			"SECTION_NAME" => $iblock["SECTION_NAME"] ?? null,
+			"SECTION_ADD" => $iblock["SECTION_ADD"] ?? null,
+			"SECTION_EDIT" => $iblock["SECTION_EDIT"] ?? null,
+			"SECTION_DELETE" => $iblock["SECTION_DELETE"] ?? null,
 			"BIZPROC" => "Y",
 			"SITE_ID" => array($siteId),
 			"RIGHTS_MODE" => "E",
 		);
 
 		if ($iblock["SOCNET_GROUP_ID"])
+		{
 			$fields["SOCNET_GROUP_ID"] = $iblock["SOCNET_GROUP_ID"];
+		}
 
 		static $exts = array(
 			"image/jpeg" => "jpg",
@@ -400,7 +409,13 @@ class Importer
 		if (!$res)
 			static::createIBlockType();
 
+		if(in_array($lang, self::$listRuLanguage))
+			$lang = 'ru';
+
 		$dir = new Main\IO\Directory(Main\Loader::getDocumentRoot() . static::PATH . $lang . "/");
+		if(!$dir->isExists())
+			$dir = new Main\IO\Directory(Main\Loader::getDocumentRoot() . static::PATH . "en/");
+
 		if ($dir->isExists())
 		{
 			$children = $dir->getChildren();
@@ -457,23 +472,25 @@ class Importer
 		if (empty($lang))
 			throw new Main\ArgumentNullException("lang");
 
+		if(in_array($lang, self::$listRuLanguage))
+			$lang = 'ru';
+
 		if(!empty($path))
 		{
+			$path = rtrim($path, "/");
 			$path = $path."/";
 		}
 		else
 		{
-			if($systemProcesses)
-			{
-				$path = Main\Loader::getDocumentRoot() . static::PATH . $lang . "/";
-			}
-			else
-			{
-				$path = Main\Loader::getDocumentRoot() . static::PATH_USER_PROCESSES . $lang . "/";
-			}
+			$path = self::getPathToProcesses($lang, $systemProcesses);
 		}
 
 		$dir = new Main\IO\Directory($path);
+		if (!$dir->isExists() && $lang === 'en')
+		{
+			return;
+		}
+
 		if ($dir->isExists())
 		{
 			$children = $dir->getChildren();
@@ -497,6 +514,25 @@ class Importer
 				}
 			}
 		}
+		else
+		{
+			$path = self::getPathToProcesses("en", $systemProcesses);
+			self::loadDataProcesses('en', $systemProcesses, $fileData, $path);
+		}
+	}
+
+	private static function getPathToProcesses($lang, $systemProcesses = true)
+	{
+		if($systemProcesses)
+		{
+			$path = Main\Loader::getDocumentRoot() . static::PATH . $lang . "/";
+		}
+		else
+		{
+			$path = Main\Loader::getDocumentRoot() . static::PATH_USER_PROCESSES . $lang . "/";
+		}
+
+		return $path;
 	}
 
 	protected static function createIBlockType()
@@ -508,9 +544,7 @@ class Importer
 			'LANG' => array(),
 		);
 
-		$by = "lid";
-		$order = "asc";
-		$langList = \CLanguage::GetList($by, $order, array("ACTIVE" => "Y"));
+		$langList = \CLanguage::GetList('lid', 'asc', array("ACTIVE" => "Y"));
 		while ($lang = $langList->Fetch())
 			$iblockType['LANG'][$lang['LID']]['NAME'] = "Processes";
 
@@ -544,11 +578,19 @@ class Importer
 	 * @param string $lang This variable is the value language.
 	 * @return string
 	 * @throws Main\ArgumentNullException
+	 * @throws Main\IO\FileNotFoundException
 	 */
 	public static function onAgent($lang)
 	{
-		self::installProcesses($lang);
-		return "";
+		if (ModuleManager::isModuleInstalled("bizproc"))
+		{
+			self::installProcesses($lang);
+			return "";
+		}
+		else
+		{
+			return '\Bitrix\Lists\Importer::onAgent("'.$lang.'");';
+		}
 	}
 
 	public static function migrateList($id)

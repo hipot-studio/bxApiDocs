@@ -640,26 +640,6 @@ final class MobileDetect
      * @param string $userAgent Inject the User-Agent header. If null, will use HTTP_USER_AGENT
      *                          from the $headers array instead.
      */
-    
-    /**
-    * <p>Нестатический метод создает экземпляр класса.</p>
-    *
-    *
-    * @param array $headers = null Указывает заголовок размещения. Имена заголовков должны быть в
-    * стиле ключей глобальной PHP-переменной <code>$_SERVER</code>, т.е. заглавными
-    * буквами и с подчеркиваниями вместо дефисов. Если оставлено
-    * пустым, будет использовать глобальные переменные
-    * <code><em>SERVER['HTTP</em>*']</code>.
-    *
-    * @param string $userAgent = null Вставляет заголовок User-Agent'a. Если оставлен пустым, будет
-    * использовать <code>HTTP_USER_AGENT</code> из массива <code>$headers</code>.
-    *
-    * @return public 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/__construct.php
-    * @author Bitrix
-    * @deprecated since version 2.6.9
-    */
     public function __construct(
         array $headers = null,
         $userAgent = null
@@ -676,17 +656,6 @@ final class MobileDetect
      *
      * @return string The version number in semantic version format.
      */
-    
-    /**
-    * <p>Статический метод получает текущую версию скрипта.</p> <p>Очень полезно для файла <b>demo.php</b>, чтобы проверить на какой версии мобильного устройства проводится тестирование.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return string 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getscriptversion.php
-    * @author Bitrix
-    */
     public static function getScriptVersion()
     {
         return self::VERSION;
@@ -698,21 +667,6 @@ final class MobileDetect
      * @param array $httpHeaders The headers to set. If null, then using PHP's _SERVER to extract
      *                           the headers. The default null is left for backwards compatibilty.
      */
-    
-    /**
-    * <p>Нестатический метод устанавливает HTTP-заголовки. Имена заголовков должны быть в стиле ключей глобальной PHP-переменной <code>$_SERVER</code>, т.е. заглавными буквами и с подчеркиваниями вместо дефисов. Метод переустанавливает текущие заголовки.</p>
-    *
-    *
-    * @param array $httpHeaders = null Устанавливаемые заголовки. Если оставлен пустым, то будет
-    * использовать <code>$_SERVER</code> для извлечения заголовков. Пустое
-    * значение по умолчанию устанавливается для обратной
-    * совместимости.
-    *
-    * @return public 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/sethttpheaders.php
-    * @author Bitrix
-    */
     public function setHttpHeaders($httpHeaders = null)
     {
         // use global _SERVER if $httpHeaders aren't defined
@@ -726,7 +680,7 @@ final class MobileDetect
         // Only save HTTP headers. In PHP land, that means only _SERVER vars that
         // start with HTTP_.
         foreach ($httpHeaders as $key => $value) {
-            if (substr($key, 0, 5) === 'HTTP_') {
+            if (mb_substr($key, 0, 5) === 'HTTP_') {
                 $this->httpHeaders[$key] = $value;
             }
         }
@@ -737,16 +691,6 @@ final class MobileDetect
      *
      * @return array
      */
-    
-    /**
-    * <p>Нестатический метод возвращает HTTP-заголовки.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return array 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/gethttpheaders.php
-    * @author Bitrix
-    */
     public function getHttpHeaders()
     {
         return $this->httpHeaders;
@@ -762,26 +706,12 @@ final class MobileDetect
      *
      * @return string|null The value of the header.
      */
-    
-    /**
-    * <p>Нестатический метод извлекает определенный заголовок. Если не существует, то не будет вызвано исключение/ошибка. Возвращает пустое значение.</p>
-    *
-    *
-    * @param string $header  Имя извлекаемого заголовка. Может быть HTTP-подобным,
-    * например<code>"User-Agent"</code> или <code>"X-Device-User-Agent"</code>. Или php-подобным, т.е.
-    * со всеми заглавными буквами и подчеркиваниями вместо дефисов.
-    *
-    * @return mixed 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/gethttpheader.php
-    * @author Bitrix
-    */
     public function getHttpHeader($header)
     {
         // are we using PHP-flavored headers?
-        if (strpos($header, '_') === false) {
+        if (mb_strpos($header, '_') === false) {
             $header = str_replace('-', '_', $header);
-            $header = strtoupper($header);
+			$header = mb_strtoupper($header);
         }
 
         // test the alternate, too
@@ -797,7 +727,7 @@ final class MobileDetect
         return null;
     }
 
-    static public function getMobileHeaders()
+    public function getMobileHeaders()
     {
         return self::$mobileHeaders;
     }
@@ -808,18 +738,7 @@ final class MobileDetect
      *
      * @return array List of HTTP headers.
      */
-    
-    /**
-    * <p>Нестатический метод возвращает все возможные HTTP-заголовки, которые могут содержать строку <code>User-Agent</code>.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return array 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getuahttpheaders.php
-    * @author Bitrix
-    */
-    static public function getUaHttpHeaders()
+    public function getUaHttpHeaders()
     {
         return self::$uaHttpHeaders;
     }
@@ -831,18 +750,6 @@ final class MobileDetect
      *
      * @return string|null
      */
-    
-    /**
-    * <p>Нестатический метод устанавливает <code>User-Agent</code> на использование.</p>
-    *
-    *
-    * @param string $userAgent = null Устанавливаемый <code>User-Agent</code>.
-    *
-    * @return mixed 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/setuseragent.php
-    * @author Bitrix
-    */
     public function setUserAgent($userAgent = null)
     {
         // Invalidate cache due to #375
@@ -868,16 +775,6 @@ final class MobileDetect
      *
      * @return string|null The user agent if it's set.
      */
-    
-    /**
-    * <p>Нестатический метод извлекает <code>User-Agent</code>.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return mixed 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getuseragent.php
-    * @author Bitrix
-    */
     public function getUserAgent()
     {
         return $this->userAgent;
@@ -892,21 +789,6 @@ final class MobileDetect
      * @param string $type The type. Must be a self::DETECTION_TYPE_* constant. The default
      *                     parameter is null which will default to self::DETECTION_TYPE_MOBILE.
      */
-    
-    /**
-    * <p>Нестатический метод устанавливает один из типов обнаружения: <code>self::DETECTION_TYPE_MOBILE</code> или <code>self::DETECTION_TYPE_EXTENDED</code>. В противном случае ничего не устанавливается.</p>
-    *
-    *
-    * @param string $type = null Тип. Должен быть константой <code>self::DETECTION_TYPE</code>. По умолчанию
-    * параметр принимает пустое значение, что соответствует
-    * <code>self::DETECTION_TYPE_MOBILE</code>.
-    *
-    * @return deprecated 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/setdetectiontype.php
-    * @author Bitrix
-    * @deprecated since version 2.6.9
-    */
     public function setDetectionType($type = null)
     {
         if ($type === null) {
@@ -935,17 +817,6 @@ final class MobileDetect
      *
      * @return array List of phone devices.
      */
-    
-    /**
-    * <p>Статический метод возвращает список известных мобильных устройств.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return array 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getphonedevices.php
-    * @author Bitrix
-    */
     public static function getPhoneDevices()
     {
         return self::$phoneDevices;
@@ -956,17 +827,6 @@ final class MobileDetect
      *
      * @return array List of tablet devices.
      */
-    
-    /**
-    * <p>Статический метод возвращает список известных планшетных устройств.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return array 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/gettabletdevices.php
-    * @author Bitrix
-    */
     public static function getTabletDevices()
     {
         return self::$tabletDevices;
@@ -977,17 +837,6 @@ final class MobileDetect
      *
      * @return array List of user agents.
      */
-    
-    /**
-    * <p>Таблица псевдонимов для метода <a href="http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getbrowsers.php">getBrowsers()</a> (<code>\Bitrix\Conversion\Internals\MobileDetect::getBrowsers</code>).</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return array 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getuseragents.php
-    * @author Bitrix
-    */
     public static function getUserAgents()
     {
         return self::getBrowsers();
@@ -998,17 +847,6 @@ final class MobileDetect
      *
      * @return array List of browsers / user agents.
      */
-    
-    /**
-    * <p>Статический метод возвращает список известных браузеров. Конкретно, их <code>User Agent</code>.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return array 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getbrowsers.php
-    * @author Bitrix
-    */
     public static function getBrowsers()
     {
         return self::$browsers;
@@ -1019,17 +857,6 @@ final class MobileDetect
      *
      * @return array List of utilities.
      */
-    
-    /**
-    * <p>Статический метод возвращает список известных служебных программ.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return array 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getutilities.php
-    * @author Bitrix
-    */
     public static function getUtilities()
     {
         return self::$utilities;
@@ -1042,18 +869,6 @@ final class MobileDetect
      *
      * @return array All the rules (but not extended).
      */
-    
-    /**
-    * <p>Статический метод получает правила обнаружения мобильных устройств. Метод используется в методах <code>$detect-&gt;is*()</code>.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return deprecated 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getmobiledetectionrules.php
-    * @author Bitrix
-    * @deprecated since version 2.6.9
-    */
     public static function getMobileDetectionRules()
     {
         static $rules;
@@ -1081,19 +896,7 @@ final class MobileDetect
      *
      * @return array All the rules + extended.
      */
-    
-    /**
-    * <p>Нестатический метод получает список правил обнаружения мобильных устройств и служебных программ.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return deprecated 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getmobiledetectionrulesextended.php
-    * @author Bitrix
-    * @deprecated since version 2.6.9
-    */
-    static public function getMobileDetectionRulesExtended()
+    public function getMobileDetectionRulesExtended()
     {
         static $rules;
 
@@ -1118,17 +921,6 @@ final class MobileDetect
      *
      * @return array
      */
-    
-    /**
-    * <p>Нестатический мтеод возвращает текущий набор правил.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return deprecated 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getrules.php
-    * @author Bitrix
-    * @deprecated since version 2.6.9
-    */
     public function getRules()
     {
         if ($this->detectionType == self::DETECTION_TYPE_EXTENDED) {
@@ -1143,17 +935,6 @@ final class MobileDetect
      *
      * @return array The list of mobile operating systems.
      */
-    
-    /**
-    * <p>Статический метод возвращает список мобильных операционных систем.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return array 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getoperatingsystems.php
-    * @author Bitrix
-    */
     public static function getOperatingSystems()
     {
         return self::$operatingSystems;
@@ -1166,16 +947,6 @@ final class MobileDetect
      *
      * @return bool
      */
-    
-    /**
-    * <p>Нестатический метод проверяет HTTP-заголовки на признаки мобильных устройств.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return boolean 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/checkhttpheadersformobile.php
-    * @author Bitrix
-    */
     public function checkHttpHeadersForMobile()
     {
 
@@ -1183,7 +954,7 @@ final class MobileDetect
             if (isset($this->httpHeaders[$mobileHeader])) {
                 if (is_array($matchType['matches'])) {
                     foreach ($matchType['matches'] as $_match) {
-                        if (strpos($this->httpHeaders[$mobileHeader], $_match) !== false) {
+                        if (mb_strpos($this->httpHeaders[$mobileHeader], $_match) !== false) {
                             return true;
                         }
                     }
@@ -1208,33 +979,16 @@ final class MobileDetect
      * @return mixed
      * @throws BadMethodCallException when the method doesn't exist and doesn't start with 'is'
      */
-    
-    /**
-    * <p>Магический метод для перегрузки недоступных методов.</p>
-    *
-    *
-    * @param string $name  Имя вызываемого метода.
-    *
-    * @param array $arguments  Представляет собой числовой массив, содержащий параметры,
-    * переданные в вызываемый метод <code>$name</code>. Например, если вызвать
-    * <code>testM1(12, 17)<code>, то в <code>$name</code> будет <code>'testM1'</code>, а в <code>$arguments</code>
-    * — <code>array(12, 17)</code>.</code></code>
-    *
-    * @return mixed 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/__call.php
-    * @author Bitrix
-    */
     public function __call($name, $arguments)
     {
         // make sure the name starts with 'is', otherwise
-        if (substr($name, 0, 2) !== 'is') {
+        if (mb_substr($name, 0, 2) !== 'is') {
             throw new BadMethodCallException("No such method exists: $name");
         }
 
         $this->setDetectionType(self::DETECTION_TYPE_MOBILE);
 
-        $key = substr($name, 2);
+		$key = mb_substr($name, 2);
 
         return $this->matchUAAgainstKey($key);
     }
@@ -1273,7 +1027,7 @@ final class MobileDetect
     protected function matchUAAgainstKey($key)
     {
         // Make the keys lowercase so we can match: isIphone(), isiPhone(), isiphone(), etc.
-        $key = strtolower($key);
+		$key = mb_strtolower($key);
         if (false === isset($this->cache[$key])) {
 
             // change the keys to lower case
@@ -1298,20 +1052,6 @@ final class MobileDetect
      * @param  null $httpHeaders deprecated
      * @return bool
      */
-    
-    /**
-    * <p>Нестатический метод проверяет, является ли устройство мобильным телефоном. Возвращает <code>true</code>, если является.</p>
-    *
-    *
-    * @param null $userAgent = null Устаревший параметр.
-    *
-    * @param null $httpHeaders = null Устаревший параметр.
-    *
-    * @return boolean 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/ismobile.php
-    * @author Bitrix
-    */
     public function isMobile($userAgent = null, $httpHeaders = null)
     {
 
@@ -1341,20 +1081,6 @@ final class MobileDetect
      * @param  array  $httpHeaders deprecated
      * @return bool
      */
-    
-    /**
-    * <p>Нестатический метод проверяет, является ли устройство планшетным компьютером. Возвращает <code>true</code>, если обнаружен планшетный компьютер.</p>
-    *
-    *
-    * @param string $userAgent = null Устаревший параметр.
-    *
-    * @param array $httpHeaders = null Устаревший параметр.
-    *
-    * @return boolean 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/istablet.php
-    * @author Bitrix
-    */
     public function isTablet($userAgent = null, $httpHeaders = null)
     {
         $this->setDetectionType(self::DETECTION_TYPE_MOBILE);
@@ -1378,22 +1104,6 @@ final class MobileDetect
      * @param  string        $httpHeaders deprecated
      * @return bool|int|null
      */
-    
-    /**
-    * <p>Проверяет <code>userAgent</code> на наличии определенного свойства.</p>
-    *
-    *
-    * @param string $key  Имя правила, на соответствие которому проверяется <code>User-Agent</code>.
-    *
-    * @param string $userAgent = null Устаревший параметр.
-    *
-    * @param string $httpHeaders = null Устаревший параметр.
-    *
-    * @return mixed 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/is.php
-    * @author Bitrix
-    */
     public function is($key, $userAgent = null, $httpHeaders = null)
     {
         // Set the UA and HTTP headers only if needed (eg. batch mode).
@@ -1425,20 +1135,6 @@ final class MobileDetect
      *
      * @todo: search in the HTTP headers too.
      */
-    
-    /**
-    * <p>Нестатический метод сверяет пользовательские регулярные выражения со строкой <code>User Agent</code>.</p>
-    *
-    *
-    * @param mixed $regex  Регулярное выражение.
-    *
-    * @param string $userAgent = null <code>UserAgent</code>.
-    *
-    * @return boolean 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/match.php
-    * @author Bitrix
-    */
     public function match($regex, $userAgent = null)
     {
         $match = (bool) preg_match(sprintf('#%s#is', $regex), (false === empty($userAgent) ? $userAgent : $this->userAgent), $matches);
@@ -1456,17 +1152,6 @@ final class MobileDetect
      *
      * @return array
      */
-    
-    /**
-    * <p>Статический метод возвращает массив параметров.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return array 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/getproperties.php
-    * @author Bitrix
-    */
     public static function getProperties()
     {
         return self::$properties;
@@ -1481,20 +1166,7 @@ final class MobileDetect
      *
      * @return float
      */
-    
-    /**
-    * <p>Нестатический метод подготавливает номер версии.</p>
-    *
-    *
-    * @param string $ver  Строка версии, например <code>"2.6.21.2152"</code>.
-    *
-    * @return float 
-    *
-    * @static
-    * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/prepareversionno.php
-    * @author Bitrix
-    */
-    static public function prepareVersionNo($ver)
+    public function prepareVersionNo($ver)
     {
         $ver = str_replace(array('_', ' ', '/'), '.', $ver);
         $arrVer = explode('.', $ver, 2);
@@ -1519,25 +1191,6 @@ final class MobileDetect
      *
      * @return string|float The version of the property we are trying to extract.
      */
-    
-    /**
-    * <p>Нестатический метод проверяет версию данного параметра в <code>User-Agent</code>. Возвращает число с плавающей точкой (например 2_0 будет возвращено как 2.0, 4.3.1 будет возвращено как 4.31).</p>
-    *
-    *
-    * @param string $propertyName  Имя параметра. См. <code>self::getProperties() array keys</code> чтобы получить все
-    * параметры.
-    *
-    * @param string $type = self::VERSION_TYPE_STRING Тип: <ol> <li>если принимает значение <code>self::VERSION_TYPE_STRING</code>, то будет
-    * возвращено строчное значение;</li> <li>если принимает значение
-    * <code>self::VERSION_TYPE_FLOAT</code>, то идентифицируется число с плавающей
-    * точкой.</li>  </ol> <p>Параметр является необязательным и по умолчанию
-    * устанавливается значение <code>self::VERSION_TYPE_STRING</code>.</p>
-    *
-    * @return mixed 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/version.php
-    * @author Bitrix
-    */
     public function version($propertyName, $type = self::VERSION_TYPE_STRING)
     {
         if (empty($propertyName)) {
@@ -1583,22 +1236,12 @@ final class MobileDetect
      *
      * @return string One of the self::MOBILE_GRADE_* constants.
      */
-    
-    /**
-    * <p>Нестатический метод извлекает мобильную шкалу, используя константы <code>self::MOBILE_GRADE_*</code>.</p> <p>Без параметров</p> <a name="example"></a>
-    *
-    *
-    * @return string 
-    *
-   * @link http://dev.1c-bitrix.ru/api_d7/bitrix/conversion/mobiledetect/mobilegrade.php
-    * @author Bitrix
-    */
     public function mobileGrade()
     {
         $isMobile = $this->isMobile();
 
         if (
-            // Apple iOS 4-7.0 вЂ“ Tested on the original iPad (4.3 / 5.0), iPad 2 (4.3 / 5.1 / 6.1), iPad 3 (5.1 / 6.0), iPad Mini (6.1), iPad Retina (7.0), iPhone 3GS (4.3), iPhone 4 (4.3 / 5.1), iPhone 4S (5.1 / 6.0), iPhone 5 (6.0), and iPhone 5S (7.0)
+            // Apple iOS 4-7.0 – Tested on the original iPad (4.3 / 5.0), iPad 2 (4.3 / 5.1 / 6.1), iPad 3 (5.1 / 6.0), iPad Mini (6.1), iPad Retina (7.0), iPhone 3GS (4.3), iPhone 4 (4.3 / 5.1), iPhone 4S (5.1 / 6.0), iPhone 5 (6.0), and iPhone 5S (7.0)
             $this->is('iOS') && $this->version('iPad', self::VERSION_TYPE_FLOAT) >= 4.3 ||
             $this->is('iOS') && $this->version('iPhone', self::VERSION_TYPE_FLOAT) >= 4.3 ||
             $this->is('iOS') && $this->version('iPod', self::VERSION_TYPE_FLOAT) >= 4.3 ||
@@ -1612,7 +1255,7 @@ final class MobileDetect
             // Windows Phone 7.5-8 - Tested on the HTC Surround (7.5), HTC Trophy (7.5), LG-E900 (7.5), Nokia 800 (7.8), HTC Mazaa (7.8), Nokia Lumia 520 (8), Nokia Lumia 920 (8), HTC 8x (8)
             $this->version('Windows Phone OS', self::VERSION_TYPE_FLOAT) >= 7.5 ||
 
-            // Tested on the Torch 9800 (6) and Style 9670 (6), BlackBerryВ® Torch 9810 (7), BlackBerry Z10 (10)
+            // Tested on the Torch 9800 (6) and Style 9670 (6), BlackBerry® Torch 9810 (7), BlackBerry Z10 (10)
             $this->is('BlackBerry') && $this->version('BlackBerry', self::VERSION_TYPE_FLOAT) >= 6.0 ||
             // Blackberry Playbook (1.0-2.0) - Tested on PlayBook
             $this->match('Playbook.*Tablet') ||

@@ -2,25 +2,30 @@
 namespace Bitrix\Crm\Integrity;
 use Bitrix\Main;
 use Bitrix\Crm;
+use Bitrix\Main\Localization\Loc;
+
 class DuplicateOrganizationCriterion extends DuplicateCriterion
 {
-	private static $LANG_INCLUDED = false;
+	private static $langIncluded = false;
 	protected $title = '';
-	protected $useStrictComparison = false;
-	protected static $TYPE_RX = null;
+	protected static $typeRx = null;
+	private static $ignoredTitles = false;
 
 	public function __construct($title)
 	{
+		parent::__construct();
+
+		$this->useStrictComparison = false;
 		$this->setTitle($title);
 	}
 	public static function getTypeRegexPattern()
 	{
-		if(self::$TYPE_RX !== null)
+		if(self::$typeRx !== null)
 		{
-			return self::$TYPE_RX;
+			return self::$typeRx;
 		}
 
-		self::$TYPE_RX = array();
+		self::$typeRx = array();
 		$dbBizType = Crm\BusinessTypeTable::getList(
 			array(
 				'select' =>array('NAME'),
@@ -78,36 +83,36 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 
 			if($pattern !== '')
 			{
-				self::$TYPE_RX[] = "/{$pattern}/i".BX_UTF_PCRE_MODIFIER;
+				self::$typeRx[] = "/{$pattern}/iu";
 			}
 		}
 
 		if($isUtf)
 		{
-			//\u00AB « left-pointing double angle quotation mark
-			//\u00BB » right-pointing double angle quotation mark
-			//\u201E „ double low-9 quotation mark
+			//\u00AB Â« left-pointing double angle quotation mark
+			//\u00BB Â» right-pointing double angle quotation mark
+			//\u201E â€ž double low-9 quotation mark
 			//\u201F ? double high-reversed-9 quotation mark
-			//\u2018 ‘ left single quotation mark
-			//\u2019 ’ right single quotation mark
-			//\u201C “ left double quotation mark
-			//\u201D ” right double quotation mark
-			self::$TYPE_RX[] = '/[\x{00AB}\x{00BB}\x{2018}\x{2019}\x{201C}\x{201D}\x{201E}\x{201F}]/u';
+			//\u2018 â€˜ left single quotation mark
+			//\u2019 â€™ right single quotation mark
+			//\u201C â€œ left double quotation mark
+			//\u201D â€ right double quotation mark
+			self::$typeRx[] = '/[\x{00AB}\x{00BB}\x{2018}\x{2019}\x{201C}\x{201D}\x{201E}\x{201F}]/u';
 		}
 		else
 		{
-			//AB « left-pointing double angle quotation mark
-			//BB » right-pointing double angle quotation mark
-			//84 „ double low-9 quotation mark
-			//91 ‘ left single quotation mark
-			//92 ’ right single quotation mark
-			//93 “ left double quotation mark
-			//94 ” right double quotation mark
-			self::$TYPE_RX[] = '/[\xAB\xBB\x84\x91\x92\x93\x94]/';
+			//AB Â« left-pointing double angle quotation mark
+			//BB Â» right-pointing double angle quotation mark
+			//84 â€ž double low-9 quotation mark
+			//91 â€˜ left single quotation mark
+			//92 â€™ right single quotation mark
+			//93 â€œ left double quotation mark
+			//94 â€ right double quotation mark
+			self::$typeRx[] = '/[\xAB\xBB\x84\x91\x92\x93\x94]/';
 		}
 
-		self::$TYPE_RX[] = '/[\"\'\-\,\.\;\:\s]/i'.BX_UTF_PCRE_MODIFIER;
-		return self::$TYPE_RX;
+		self::$typeRx[] = '/[\"\'\-\,\.\;\:\s]/iu';
+		return self::$typeRx;
 	}
 	public function getTitle()
 	{
@@ -121,19 +126,7 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 		}
 		$this->title = $isRaw ? self::prepareCode($title) : $title;
 	}
-	public function isStrictComparison()
-	{
-		return $this->useStrictComparison;
-	}
-	public function setStrictComparison($useStrictComparison)
-	{
-		if(!is_bool($useStrictComparison))
-		{
-			throw new Main\ArgumentTypeException('useStrictComparison', 'boolean');
-		}
 
-		$this->useStrictComparison = $useStrictComparison;
-	}
 	/*public function prepareFilter(Crm\Mapper $mapper, DuplicateSearchParams $params)
 	{
 		$filter = array();
@@ -156,12 +149,12 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 			return '';
 		}
 
-		if(strpos($title, '&') >= 0)
+		if(mb_strpos($title, '&') >= 0)
 		{
 			$title = preg_replace('/\&/', 'and', $title);
 		}
 
-		return strtolower(trim(preg_replace(self::getTypeRegexPattern(), '', $title)));
+		return mb_strtolower(trim(preg_replace(self::getTypeRegexPattern(), '', $title)));
 	}
 	public static function register($entityTypeID, $entityID, $title, $isRaw = true)
 	{
@@ -188,6 +181,11 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 		}
 
 		if($title === '')
+		{
+			return;
+		}
+
+		if (in_array($title, static::getIgnoredTitles()))
 		{
 			return;
 		}
@@ -265,12 +263,12 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 		$results = array();
 		while($fields = $dbResult->fetch())
 		{
-			$matches = array('TITLE' => isset($fields['TITLE']) ? $fields['TITLE'] : '');
+			$matches = array('TITLE' => isset($fields['TITLE']) ? $fields['TITLE'] : '', 'NORMALIZED' => true);
 			$results[self::prepareMatchHash($matches)] = $matches;
 		}
 		return $results;
 	}
-	public static function prepareSortParams($entityTypeID, array &$entityIDs)
+	public static function prepareSortParams($entityTypeID, array $entityIDs)
 	{
 		if(empty($entityIDs))
 		{
@@ -304,14 +302,28 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 		}
 		$userID = isset($params['USER_ID']) ? intval($params['USER_ID']) : 0;
 
+		$scope = null;
+		if (isset($params['SCOPE']))
+		{
+			$scope = $params['SCOPE'];
+			if (!DuplicateIndexType::checkScopeValue($scope))
+			{
+				throw new Main\ArgumentException("Parameter has invalid value", 'SCOPE');
+			}
+		}
+
+		$filter = array(
+			'=USER_ID' => $userID,
+			'=ENTITY_TYPE_ID' => $entityTypeID,
+			'=TYPE_ID' => DuplicateIndexType::ORGANIZATION
+		);
+		if ($scope !== null)
+			$filter['=SCOPE'] = $scope;
+
 		$listParams = array(
 			'select' => array('USER_ID', 'TYPE_ID', 'ENTITY_TYPE_ID'),
 			'order' => array('USER_ID'=>'ASC', 'TYPE_ID'=>'ASC', 'ENTITY_TYPE_ID'=>'ASC'),
-			'filter' => array(
-				'=USER_ID' => $userID,
-				'=ENTITY_TYPE_ID' => $entityTypeID,
-				'=TYPE_ID' => DuplicateIndexType::ORGANIZATION
-			),
+			'filter' => $filter,
 			'limit' => 1
 		);
 
@@ -334,6 +346,66 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 		}
 		$query->addFilter('=TITLE', $title);
 	}
+	/**
+	 * Prepare duplicate search query
+	 * @param \CCrmOwnerType $entityTypeID Target Entity Type ID
+	 * @param int $limit Limit of result query
+	 * @return Main\Entity\Query
+	 * @throws Main\ArgumentTypeException
+	 * @throws Main\InvalidOperationException
+	 */
+	public function prepareSearchQuery($entityTypeID = \CCrmOwnerType::Undefined, array $select = null, array $order = null, $limit = 0)
+	{
+		if($this->title === '')
+		{
+			throw new Main\InvalidOperationException('The field "title" is not assigned.');
+		}
+
+		if(!is_int($entityTypeID))
+		{
+			throw new Main\ArgumentTypeException('entityTypeID', 'integer');
+		}
+
+		$query = new Main\Entity\Query(DuplicateOrganizationMatchCodeTable::getEntity());
+		if(!is_array($select))
+		{
+			$select = array();
+		}
+		if(empty($select))
+		{
+			$select = array('ENTITY_TYPE_ID', 'ENTITY_ID');
+		}
+		$query->setSelect($select);
+
+		if(is_array($order) && !empty($order))
+		{
+			$query->setOrder($order);
+		}
+
+		$filter = array();
+		if($this->useStrictComparison)
+		{
+			$filter['=TITLE'] = $this->title;
+		}
+		else
+		{
+			$filter['%TITLE'] = new Main\DB\SqlExpression('?s', mb_strtoupper($this->title).'%');
+		}
+
+		if(\CCrmOwnerType::IsDefined($entityTypeID))
+		{
+			$filter['ENTITY_TYPE_ID'] = $entityTypeID;
+		}
+
+		$query->setFilter($filter);
+
+		if($limit > 0)
+		{
+			$query->setLimit($limit);
+		}
+
+		return $query;
+	}
 	public function find($entityTypeID = \CCrmOwnerType::Undefined, $limit = 50)
 	{
 		if($this->title === '')
@@ -352,19 +424,14 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 			throw new Main\ArgumentTypeException('limit', 'integer');
 		}
 
-		if($limit <= 0)
-		{
-			$limit = 50;
-		}
-
 		$filter = array();
 		if($this->useStrictComparison)
 		{
-			$filter['TITLE'] = $this->title;
+			$filter['=TITLE'] = $this->title;
 		}
 		else
 		{
-			$filter['%TITLE'] = new \CSQLWhereExpression('?s', strtoupper($this->title).'%');
+			$filter['=%TITLE'] = "{$this->title}%";
 		}
 
 		if(\CCrmOwnerType::IsDefined($entityTypeID))
@@ -372,14 +439,17 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 			$filter['ENTITY_TYPE_ID'] = $entityTypeID;
 		}
 
-		$dbResult = DuplicateOrganizationMatchCodeTable::getList(
-			array(
-				'select' =>array('ENTITY_TYPE_ID', 'ENTITY_ID'),
-				'order' => array('ENTITY_TYPE_ID' => 'ASC', 'ENTITY_ID' => 'ASC'),
-				'filter' => $filter,
-				'limit' => $limit
-			)
-		);
+		$listParams = $this->applyEntityCategoryFilter($entityTypeID, [
+			'select' => ['ENTITY_TYPE_ID', 'ENTITY_ID'],
+			'order' => [
+				'ENTITY_TYPE_ID' => $this->sortDescendingByEntityTypeId ? 'DESC' : 'ASC',
+				'ENTITY_ID' => 'ASC'
+			],
+			'filter' => $filter,
+			'limit' => $limit,
+		]);
+		$dbResult = DuplicateOrganizationMatchCodeTable::getList($listParams);
+
 		$entities = array();
 		while($fields = $dbResult->fetch())
 		{
@@ -409,13 +479,20 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 	public function getMatches()
 	{
 		return array(
-			'TITLE' => $this->title
+			'TITLE' => $this->title,
+			'NORMALIZED' => true
 		);
 	}
 	public static function createFromMatches(array $matches)
 	{
 		$title = isset($matches['TITLE']) ? $matches['TITLE'] : '';
-		return new DuplicateOrganizationCriterion($title);
+		$normalized = isset($matches['NORMALIZED']) && $matches['NORMALIZED'];
+		$criterion = new DuplicateOrganizationCriterion($title);
+		if ($normalized)
+		{
+			$criterion->setTitle($title, false);
+		}
+		return $criterion;
 	}
 	public static function loadEntityMatches($entityTypeID, $entityID)
 	{
@@ -428,7 +505,7 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 		$query->setLimit(1);
 		$dbResult = $query->exec();
 		$fields = $dbResult->fetch();
-		return is_array($fields) ? $fields : null;
+		return is_array($fields) ? array_merge($fields, ['NORMALIZED' => true]) : null;
 	}
 	public static function loadEntitiesMatches($entityTypeID, array $entityIDs)
 	{
@@ -450,6 +527,7 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 			}
 			$results[$entityID] = array(
 				'TITLE' => isset($fields['TITLE']) ? $fields['TITLE'] : '',
+				'NORMALIZED' => true
 			);
 		}
 		return $results;
@@ -470,6 +548,15 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 	public function getMatchDescription()
 	{
 		return ucfirst($this->title);
+	}
+	public function getSummary()
+	{
+		self::includeLangFile();
+
+		return GetMessage(
+			'CRM_DUP_CRITERION_ORG_SUMMARY',
+			array('#DESCR#'=> $this->getMatchDescription())
+		);
 	}
 	public function getTextTotals($count, $limit = 0)
 	{
@@ -499,11 +586,37 @@ class DuplicateOrganizationCriterion extends DuplicateCriterion
 			)
 		);
 	}
+	/**
+	 * Get types supported by deduplication system.
+	 * @return array
+	 */
+	public static function getSupportedDedupeTypes()
+	{
+		return array(DuplicateIndexType::ORGANIZATION);
+	}
 	private static function includeLangFile()
 	{
-		if(!self::$LANG_INCLUDED)
+		if(!self::$langIncluded)
 		{
-			self::$LANG_INCLUDED = IncludeModuleLangFile(__FILE__);
+			self::$langIncluded = IncludeModuleLangFile(__FILE__);
 		}
+	}
+
+	/**
+	 * Titles which should be interpreted as empty
+	 * @return array
+	 */
+	private static function getIgnoredTitles(): array
+	{
+		if(!self::$ignoredTitles)
+		{
+			Loc::loadMessages($_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/modules/crm/lib/webform/entity.php');
+
+			self::$ignoredTitles = [
+				self::prepareCode(Loc::getMessage('CRM_WEBFORM_ENTITY_FIELD_NAME_COMPANY_TEMPLATE')),
+				self::prepareCode(\CCrmCompany::GetDefaultTitle())
+			];
+		}
+		return self::$ignoredTitles;
 	}
 }

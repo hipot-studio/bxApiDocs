@@ -7,13 +7,13 @@ use Bitrix\Sale\Payment;
 
 interface IPrePayable
 {
-	static public function initPrePayment(Payment $payment = null, Request $request);
+	public function initPrePayment(Payment $payment = null, Request $request);
 
 	public function getProps();
 
-	static public function payOrder($orderData = array());
+	public function payOrder($orderData = array());
 
-	static public function setOrderConfig($orderData = array());
+	public function setOrderConfig($orderData = array());
 
-	static public function basketButtonAction($orderData);
+	public function basketButtonAction($orderData);
 }

@@ -2,7 +2,7 @@
 namespace Bitrix\Crm;
 class Mapper
 {
-	protected static $STUB = null;
+	protected static $stub = null;
 	protected $map = null;
 
 	public function __construct(array $map = null)
@@ -19,10 +19,10 @@ class Mapper
 	}
 	public static function stub()
 	{
-		if(self::$STUB === null)
+		if(self::$stub === null)
 		{
-			self::$STUB = new Mapper();
+			self::$stub = new Mapper();
 		}
-		return self::$STUB;
+		return self::$stub;
 	}
 }

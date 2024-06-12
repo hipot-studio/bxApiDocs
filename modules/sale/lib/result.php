@@ -3,14 +3,21 @@ namespace Bitrix\Sale;
 
 use Bitrix\Main\Entity;
 use Bitrix\Main\Error;
+use Bitrix\Main\ErrorCollection;
 
-class Result extends Entity\Result
+class Result extends \Bitrix\Main\ORM\Data\Result
 {
 	/** @var  int */
 	protected $id;
 
-	static public function __construct()
+	protected $warnings = array();
+
+	/** @var bool */
+	protected $isSuccess = true;
+
+	public function __construct()
 	{
+		$this->warnings = new ErrorCollection();
 		parent::__construct();
 	}
 
@@ -23,23 +30,12 @@ class Result extends Entity\Result
 	 * Returns id of added record
 	 * @return int
 	 */
-	
-	/**
-	* <p>Возвращает идентификатор созданной записи. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/result/getid.php
-	* @author Bitrix
-	*/
 	public function getId()
 	{
 		return $this->id;
 	}
 
-	static public function __destruct()
+	public function __destruct()
 	{
 		//just quietly die in contrast Entity\Result either checked errors or not.
 	}
@@ -56,33 +52,107 @@ class Result extends Entity\Result
 		}
 	}
 
-	/**
-	 * @param Error[] $errors
-	 *
-	 * @return null
-	 */
-	public function addWarnings(array $errors)
+	public function get($offset)
 	{
-		/** @var Error $error */
-		foreach ($errors as $error)
+		if (isset($this->data[$offset]) || array_key_exists($offset, $this->data))
 		{
-			$this->addError(ResultWarning::create($error));
+			return $this->data[$offset];
+		}
+
+		return null;
+	}
+
+	public function set($offset, $value)
+	{
+		if ($offset === null)
+		{
+			$this->data[] = $value;
+		}
+		else
+		{
+			$this->data[$offset] = $value;
 		}
 	}
 
 	/**
 	 * @param Error[] $errors
 	 *
-	 * @return null
+	 * @return void
 	 */
-	public function addNotices(array $errors)
+	public function addWarnings(array $errors)
 	{
 		/** @var Error $error */
 		foreach ($errors as $error)
 		{
-			$this->addError(ResultNotice::create($error));
+			$this->addWarning(ResultWarning::create($error));
 		}
 	}
+
+	/**
+	 * Adds the error.
+	 *
+	 * @param Error $error
+	 */
+	public function addWarning(Error $error)
+	{
+		$this->warnings[] = $error;
+	}
+
+	/**
+	 * Adds the error.
+	 *
+	 * @param Error $error
+	 * @return Result
+	 */
+	public function addError(Error $error)
+	{
+		if ($error instanceof ResultWarning)
+		{
+			static::addWarning($error);
+		}
+		else
+		{
+			$this->isSuccess = false;
+			$this->errors[] = $error;
+		}
+
+		return $this;
+	}
+
+	/**
+	 * Returns an array of Error objects.
+	 *
+	 * @return Error[]
+	 */
+	public function getWarnings()
+	{
+		return $this->warnings->toArray();
+	}
+
+	/**
+	 * Returns array of strings with warning messages
+	 *
+	 * @return array
+	 */
+	public function getWarningMessages()
+	{
+		$messages = array();
+
+		foreach($this->getWarnings() as $warning)
+			$messages[] = $warning->getMessage();
+
+		return $messages;
+	}
+
+
+	/**
+	 * @return bool
+	 */
+	public function hasWarnings()
+	{
+		return (count($this->warnings));
+	}
+
 
 }
 

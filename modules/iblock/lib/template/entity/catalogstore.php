@@ -28,20 +28,7 @@ class CatalogStore extends Base
 	 *
 	 * @return \Bitrix\Iblock\Template\Entity\Base
 	 */
-	
-	/**
-	* <p>Метод используется для поиска склада для обработки шаблона. Нестатический метод.</p>
-	*
-	*
-	* @param string $entity  Склад для поиска.
-	*
-	* @return \Bitrix\Iblock\Template\Entity\Base 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/catalogstore/resolve.php
-	* @author Bitrix
-	*/
-	static public function resolve($entity)
+	public function resolve($entity)
 	{
 		if (intval($entity) > 0)
 		{
@@ -58,19 +45,6 @@ class CatalogStore extends Base
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Используется для инициализации полей сущности из некоторого внешнего источника. Нестатический метод.</p>
-	*
-	*
-	* @param array $fields  Массив, содержащий поля сущности.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/catalogstore/setfields.php
-	* @author Bitrix
-	*/
 	public function setFields(array $fields)
 	{
 		parent::setFields($fields);

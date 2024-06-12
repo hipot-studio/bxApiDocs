@@ -42,6 +42,7 @@ Class CIdeaManagmentSonetNotify
 				'ADD_CALLBACK'  =>  array(__CLASS__, 'CallBack_AddComment'),
 				'UPDATE_CALLBACK'  =>  array(__CLASS__, 'CallBack_UpdateComment'),
 				'DELETE_CALLBACK'  =>  array(__CLASS__, 'CallBack_DeleteComment'),
+				'RATING_TYPE_ID'  =>  "BLOG_COMMENT"
 			)
 		);
 	}
@@ -535,12 +536,12 @@ Class CIdeaManagmentSonetNotify
 		return false;
 	}
 
-	static public function Disable()
+	public function Disable()
 	{
 		self::$Enable = false;
 	}
 
-	static public function Enable()
+	public function Enable()
 	{
 		self::$Enable = true;
 	}

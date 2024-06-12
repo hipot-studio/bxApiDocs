@@ -5,7 +5,7 @@ class CSocServMyMailRu extends CSocServAuth
 {
 	const ID = "MyMailRu";
 
-	static public function GetSettings()
+	public function GetSettings()
 	{
 		return array(
 			array("mailru_id", GetMessage("socserv_mailru_id"), "", Array("text", 40)),
@@ -29,7 +29,7 @@ class CSocServMyMailRu extends CSocServAuth
 		return "BX.util.popup('".CUtil::JSEscape($url)."', 580, 400)";
 	}
 
-	static public function getUrl()
+	public function getUrl()
 	{
 		$appID = trim(self::GetOption("mailru_id"));
 		$appSecret = trim(self::GetOption("mailru_secret_key"));
@@ -37,7 +37,7 @@ class CSocServMyMailRu extends CSocServAuth
 		$gAuth = new CMailRuOAuthInterface($appID, $appSecret);
 
 		$redirect_uri = CSocServUtil::GetCurUrl('auth_service_id='.self::ID);
-		$state = 'site_id='.SITE_ID.'&backurl='.($GLOBALS["APPLICATION"]->GetCurPageParam('check_key='.$_SESSION["UNIQUE_KEY"], array("logout", "auth_service_error", "auth_service_id", "backurl")));
+		$state = 'site_id='.SITE_ID.'&backurl='.($GLOBALS["APPLICATION"]->GetCurPageParam('check_key='.\CSocServAuthManager::getUniqueKey(), array("logout", "auth_service_error", "auth_service_id", "backurl")));
 
 		return $gAuth->GetAuthUrl($redirect_uri, $state);
 	}
@@ -103,7 +103,7 @@ class CSocServMyMailRu extends CSocServAuth
 						if ($arPic = CFile::MakeFileArray($arMRUser['0']['pic_190'].'?name=/'.md5($arMRUser['0']['pic_190']).'.jpg'))
 							$arFields["PERSONAL_PHOTO"] = $arPic;
 					$arFields["PERSONAL_WWW"] = $arMRUser['0']['link'];
-					if(strlen(SITE_ID) > 0)
+					if(SITE_ID <> '')
 						$arFields["SITE_ID"] = SITE_ID;
 					$bSuccess = $this->AuthorizeUser($arFields);
 				}
@@ -136,7 +136,7 @@ if(window.opener)
 window.close();
 </script>
 ';
-		die();
+		CMain::FinalActions();
 	}
 }
 

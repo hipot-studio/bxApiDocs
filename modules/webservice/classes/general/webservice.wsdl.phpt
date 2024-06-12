@@ -12,50 +12,50 @@ class cGenTest2
 
 class CGenericWSDLTestWS extends IWebService
 {
-	public static function wsTestStart($str1, $str2)
+	function wsTestStart($str1, $str2)
 	{
 		return $str1.$str2." :Эта функция склеила два входящих параметра.";
 	}	
 	
-	public static function wsTestStart2($str1, $stra /*array str*/)
+	function wsTestStart2($str1, $stra /*array str*/)
 	{
 		return $str1.":".implode(".",$stra);
 	}
 	
-	public static function wsTestStart3($sGetTest /*struct*/)
+	function wsTestStart3($sGetTest /*struct*/)
 	{
 		return $sGetTest["id"]."worked!;)\n".mydump($sGetTest);
 	}
 	
-	public static function wsTestStart4($str1, $sGetTestX /*array of struct*/)
+	function wsTestStart4($str1, $sGetTestX /*array of struct*/)
 	{
 		return "{$str1}worked!;)\n".mydump($sGetTestX);
 	}
 	
-	public static function wsTestStart5($cGetTest /* simple class */)
+	function wsTestStart5($cGetTest /* simple class */)
 	{
 		
 		return $cGetTest->id."worked!;)\n".mydump($cGetTest);
 	}
 	
-	public static function wsTestStart6($cGetTest2 /* class that contains array of classes */)
+	function wsTestStart6($cGetTest2 /* class that contains array of classes */)
 	{		
 		return $cGetTest2->id."worked!;)\n".mydump($cGetTest2);
 	}
 	
-	public static function wsTestStartOut1($str1, $str2, $int3)
+	function wsTestStartOut1($str1, $str2, $int3)
 	{
 		/* return array of strings */
 		return array($str1, $str2, (string)$int3);
 	}
 	
-	public static function wsTestStartOut2($str1)
+	function wsTestStartOut2($str1)
 	{
 		/* return struct (assoc array) */
 		return array("id" => "51212312", "name" => "struct return test test xxx.");
 	}
 	
-	public static function wsTestStartOut3($str1)
+	function wsTestStartOut3($str1)
 	{
 		/* return class */
 		$test = new cGenTest();
@@ -64,14 +64,14 @@ class CGenericWSDLTestWS extends IWebService
 		return $test;
 	}
 	
-	public static function wsTestStartOut4($str1)
+	function wsTestStartOut4($str1)
 	{
 		/* return array of structs */
 		return array(array("id" => "123", "name" => "yyy.".$str1),
 			array("id" => "234", "name" => "xxx.".$str1));
 	}
 	
-	public static function wsTestStartOut5($str1)
+	function wsTestStartOut5($str1)
 	{
 		/* return array of classes */
 		$test = new cGenTest();
@@ -83,7 +83,7 @@ class CGenericWSDLTestWS extends IWebService
 		return array($test, $test2);
 	}
 	
-	public static function wsTestStartOut6($str1)
+	function wsTestStartOut6($str1)
 	{
 		/* return array of classes that contain array of classes */
 		$testx = new cGenTest2();
@@ -108,7 +108,7 @@ class CGenericWSDLTestWS extends IWebService
 		return array($testx, $testy);
 	}
 
-	public static function GetWebServiceDesc() 
+	function GetWebServiceDesc() 
 	{
 		$wsdesc = new CWebServiceDesc();
 		$wsdesc->wsname = "bitrix.wsdl.test1";
@@ -286,7 +286,7 @@ class CGenericWSDLTestWS extends IWebService
 		return $wsdesc;
 	}
 	
-	public static function TestComponent() 
+	function TestComponent() 
 	{
 		global $APPLICATION;
 		$client = new CSOAPClient( $_SERVER["HTTP_HOST"], $APPLICATION->GetCurPage() );

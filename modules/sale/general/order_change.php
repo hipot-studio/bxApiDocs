@@ -1,23 +1,24 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CAllSaleOrderChange
 {
 	public static function CheckFields($ACTION, &$arFields, $ID = 0)
 	{
-		if ((is_set($arFields, "ORDER_ID") || $ACTION=="ADD") && strlen($arFields["ORDER_ID"]) <= 0)
+		if ((is_set($arFields, "ORDER_ID") || $ACTION=="ADD") && (int)$arFields["ORDER_ID"] === 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SOC_EMPTY_ORDER_ID"), "SOC_ADD_EMPTY_ORDER_ID");
 			return false;
 		}
 
-		if ((is_set($arFields, "USER_ID") || $ACTION=="ADD") && strlen($arFields["USER_ID"]) < 0)
+		if ((is_set($arFields, "USER_ID") || $ACTION=="ADD") && (int)$arFields["USER_ID"] === 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SOC_EMPTY_USER_ID"), "SOC_ADD_EMPTY_USER_ID");
 			return false;
 		}
 
-		if ((is_set($arFields, "TYPE") || $ACTION=="ADD") && strlen($arFields["TYPE"]) <= 0)
+		if ((is_set($arFields, "TYPE") || $ACTION=="ADD") && (string)$arFields["TYPE"] === '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SOC_EMPTY_TYPE"), "SOC_ADD_EMPTY_TYPE");
 			return false;
@@ -26,11 +27,11 @@ class CAllSaleOrderChange
 		return true;
 	}
 
-	static public function GetByID($ID)
+	public static function GetByID($ID)
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$strSql =
 			"SELECT O.*, ".
@@ -47,11 +48,11 @@ class CAllSaleOrderChange
 		return False;
 	}
 
-	static public function Delete($ID)
+	public static function Delete($ID)
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 			return False;
 
@@ -64,7 +65,7 @@ class CAllSaleOrderChange
 	 *
 	 * @return bool|CDBResult
 	 */
-	static public function deleteByOrderId($id)
+	public static function deleteByOrderId($id)
 	{
 		global $DB;
 
@@ -74,6 +75,42 @@ class CAllSaleOrderChange
 			return false;
 
 		return $DB->Query("DELETE FROM b_sale_order_change WHERE ORDER_ID = ".$id." ", true);
+	}
+
+	/**
+	 * Delete records from history which older then count days
+	 *
+	 * @param $days
+	 * @param null $limit
+	 *
+	 * @return bool
+	 */
+	public static function deleteOld($days, $limit = null)
+	{
+		$days = (int)($days);
+
+		if ($days <= 0)
+			return false;
+
+		$expired = new \Bitrix\Main\Type\DateTime();
+		$expired->add('-'.$days.' days');
+		$expiredValue = $expired->format('Y-m-d H:i:s');
+
+		/** @var \Bitrix\Main\DB\Connection $connection */
+		$connection = \Bitrix\Main\Application::getConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper $sqlHelper */
+		$sqlHelper = $connection->getSqlHelper();
+		$sqlExpiredDate = $sqlHelper->getDateToCharFunction("'" . $expiredValue . "'");
+
+		if ($connection instanceof \Bitrix\Main\DB\MysqlCommonConnection)
+		{
+			$query = "DELETE FROM b_sale_order_change WHERE DATE_CREATE < $sqlExpiredDate";
+			if ((int)$limit > 0)
+				$query .= " LIMIT ".(int)$limit;
+			$connection->queryExecute($query);
+		}
+
+		return true;
 	}
 
 	/*
@@ -137,13 +174,21 @@ class CAllSaleOrderChange
 			if (is_array($val))
 				continue;
 
-			if (!array_key_exists($key, $arOldFields) || (array_key_exists($key, $arOldFields) && strlen($val) > 0 && $val != $arOldFields[$key]) && !in_array($key, $arDeleteFields))
+			if (!array_key_exists($key, $arOldFields) || (array_key_exists($key, $arOldFields) && $val <> '' && $val != $arOldFields[$key]) && !in_array($key, $arDeleteFields))
 			{
 				$arRecord = CSaleOrderChange::MakeRecordFromField($key, $arNewFields, $entityName, $entity);
 				if ($arRecord)
 				{
-					$data = array_merge($data, $arRecord["DATA"]);
-					CSaleOrderChange::AddRecord($orderId, $arRecord["TYPE"], $data, $entityName, $entityId);
+					$result = $arRecord["DATA"];
+					foreach ($arRecord["DATA"] as $fieldKey => $fieldValue)
+					{
+						if (!isset($result['OLD_'.$fieldKey]) && isset($data['OLD_'.$fieldKey]))
+						{
+							$result['OLD_'.$fieldKey] = TruncateText($data['OLD_'.$key], 128);
+						}
+					}
+
+					CSaleOrderChange::AddRecord($orderId, $arRecord["TYPE"], $result, $entityName, $entityId);
 				}
 			}
 		}
@@ -248,7 +293,7 @@ class CAllSaleOrderChange
 	 * @param string $data - serialized data saved in the database for the record of this type
 	 * @return array with keys: NAME - record name, INFO - full description (string)
 	 */
-	static public function GetRecordDescription($type, $data)
+	public static function GetRecordDescription($type, $data)
 	{
 		foreach (CSaleOrderChangeFormat::$operationTypes as $typeCode => $arInfo)
 		{
@@ -256,9 +301,9 @@ class CAllSaleOrderChange
 			{
 				if (isset($arInfo["FUNCTION"]) && is_callable(array("CSaleOrderChangeFormat", $arInfo["FUNCTION"])))
 				{
-					$dataFields = $data;
+					$dataFields = unserialize($data, ['allowed_classes' => [DateTime::class, \Bitrix\Main\Type\DateTime::class, \Bitrix\Main\Type\Date::class]]);
 
-					if (!(CheckSerializedData($data) && ($dataFields = unserialize($data)) !== false))
+					if ($dataFields === false)
 					{
 						$dataFields = $data;
 					}
@@ -337,7 +382,7 @@ class CSaleOrderChangeFormat
 		"ORDER_COMMENTED" => array(
 			"TRIGGER_FIELDS" => array("COMMENTS"),
 			"FUNCTION" => "FormatOrderCommented",
-			"DATA_FIELDS" => array("COMMENTS"),
+			"DATA_FIELDS" => array("COMMENTS", 'OLD_COMMENTS'),
 			"ENTITY" => 'ORDER',
 		),
 		"ORDER_STATUS_CHANGED" => array(
@@ -397,7 +442,7 @@ class CSaleOrderChangeFormat
 		"ORDER_USER_DESCRIPTION_CHANGED" => array(
 			"TRIGGER_FIELDS" => array("USER_DESCRIPTION"),
 			"FUNCTION" => "FormatOrderUserDescriptionChanged",
-			"DATA_FIELDS" => array("USER_DESCRIPTION"),
+			"DATA_FIELDS" => array("USER_DESCRIPTION", "OLD_USER_DESCRIPTION"),
 			"ENTITY" => 'ORDER',
 		),
 		"ORDER_PRICE_DELIVERY_CHANGED" => array(
@@ -965,6 +1010,30 @@ class CSaleOrderChangeFormat
 			"ENTITY" => 'SHIPMENT_ITEM'
 		),
 
+		"MARKER_SUCCESS" => array(
+			"TRIGGER_FIELDS" => array(),
+			"FUNCTION" => "FormatMarkerSuccess",
+			"DATA_FIELDS" => array("ENTITY_ID", "MESSAGE"),
+			"ENTITY" => 'SHIPMENT'
+		),
+		"ORDER_SYNCHRONIZATION_IMPORT" => array(
+			"TRIGGER_FIELDS" => array(),
+			"FUNCTION" => "FormatLog",
+			"DATA_FIELDS" => array(),
+			"ENTITY" => 'ORDER'
+		),
+		"ORDER_SYNCHRONIZATION_EXPORT" => array(
+			"TRIGGER_FIELDS" => array(),
+			"FUNCTION" => "FormatLog",
+			"DATA_FIELDS" => array(),
+			"ENTITY" => 'ORDER'
+		),
+		"ORDER_SYNCHRONIZATION_EXPORT_ERROR" => array(
+			"TRIGGER_FIELDS" => array(),
+			"FUNCTION" => "FormatErrorLog",
+			"DATA_FIELDS" => array("ERROR"),
+			"ENTITY" => 'BASKET_ITEM'
+		),
 	);
 
 	public static function FormatBasketAdded($data)
@@ -993,7 +1062,7 @@ class CSaleOrderChangeFormat
 
 	public static function FormatOrderMarked($data)
 	{
-		if (is_array($data) && isset($data["REASON_MARKED"]) && strlen($data["REASON_MARKED"]) > 0)
+		if (is_array($data) && isset($data["REASON_MARKED"]) && $data["REASON_MARKED"] <> '')
 		{
 			$info = GetMessage("SOC_ORDER_MARKED_INFO");
 
@@ -1141,7 +1210,7 @@ class CSaleOrderChangeFormat
 
 	public static function FormatOrderDeliverySystemChanged($data)
 	{
-		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
+		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 		$info = GetMessage("SOC_ORDER_DELIVERY_SYSTEM_CHANGED_INFO");
 		if (is_array($data))
 		{
@@ -1149,9 +1218,9 @@ class CSaleOrderChangeFormat
 			{
 				if ($param == "DELIVERY_ID")
 				{
-					if (!array_key_exists('DELIVERY_NAME', $arData) && strval($arData['DELIVERY_NAME']) != '')
+					if (!array_key_exists('DELIVERY_NAME', $data) && strval($data['DELIVERY_NAME']) != '')
 					{
-						if (strpos($value, ":") !== false)
+						if (mb_strpos($value, ":") !== false)
 						{
 							$arId = explode(":", $value);
 							$dbDelivery = CSaleDeliveryHandler::GetBySID($arId[0]);
@@ -1161,7 +1230,7 @@ class CSaleOrderChangeFormat
 						}
 						elseif (intval($value) > 0)
 						{
-							if ($isOrderConverted == "Y")
+							if ($isOrderConverted != 'N')
 							{
 								$arDelivery = \Bitrix\Sale\Delivery\Services\Manager::getById($value);
 							}
@@ -1174,7 +1243,7 @@ class CSaleOrderChangeFormat
 					}
 					else
 					{
-						$value = "\"".$arData['DELIVERY_NAME']."\"";
+						$value = "\"".$data['DELIVERY_NAME']."\"";
 					}
 				}
 				elseif($param == "DELIVERY_NAME")
@@ -1358,6 +1427,7 @@ class CSaleOrderChangeFormat
 			"INFO" => $info
 		);
 	}
+
 	public static function FormatOrderDeliveryRequestSent($data)
 	{
 		if(is_array($data) && $data["RESULT"] == "OK")
@@ -1374,7 +1444,7 @@ class CSaleOrderChangeFormat
 					$reqDescription .=": ".$data["TEXT"].".";
 
 				if(isset($data["DATA"]))
-					$reqDescription .= GetMessage("SOC_ORDER_DELIVERY_REQUEST_SENT_ADD_INFO").": ".serialize($arData["DATA"]);
+					$reqDescription .= GetMessage("SOC_ORDER_DELIVERY_REQUEST_SENT_ADD_INFO").": ".serialize($data["DATA"]);
 			}
 
 		}
@@ -1384,7 +1454,6 @@ class CSaleOrderChangeFormat
 			"INFO" => $reqDescription,
 		);
 	}
-
 
 	public static function FormatPaymentPaid($data)
 	{
@@ -1419,7 +1488,7 @@ class CSaleOrderChangeFormat
 	public static function FormatShipmentMarked($data)
 	{
 		$info = "";
-		if (is_array($data) && isset($data["REASON_MARKED"]) && strlen($data["REASON_MARKED"]) > 0)
+		if (is_array($data) && isset($data["REASON_MARKED"]) && $data["REASON_MARKED"] <> '')
 		{
 			$info = GetMessage("SOC_SHIPMENT_MARKED_INFO");
 			$info = static::doProcessLogMessage($info, $data);
@@ -1430,7 +1499,6 @@ class CSaleOrderChangeFormat
 			"INFO" => $info
 		);
 	}
-
 
 	public static function FormatShipmentItemBasketAdded($data)
 	{
@@ -1464,7 +1532,6 @@ class CSaleOrderChangeFormat
 			"INFO" => $info,
 		);
 	}
-
 
 	public static function FormatShipmentCanceled($data)
 	{
@@ -1635,7 +1702,7 @@ class CSaleOrderChangeFormat
 				{
 					foreach ($data as $param => $value)
 					{
-						if (strpos($param, "OLD_") === 0)
+						if (mb_strpos($param, "OLD_") === 0)
 							continue;
 
 						$info .=(strval($info) != "" ? "; " : ""). $param.": ".$value;
@@ -1699,7 +1766,7 @@ class CSaleOrderChangeFormat
 				{
 					foreach ($data as $param => $value)
 					{
-						if (strpos($param, "OLD_") === 0)
+						if (mb_strpos($param, "OLD_") === 0)
 							continue;
 
 						$info .=(strval($info) != "" ? "; " : ""). $param.": ".$value;
@@ -1827,5 +1894,24 @@ class CSaleOrderChangeFormat
 		}
 
 		return $text;
+	}
+
+	public static function FormatMarkerSuccess($data)
+	{
+		$info = GetMessage("SOC_MARKER_SUCCESS_INFO");
+
+
+		if (!empty($data['ENTITY_TYPE']))
+		{
+			$data['ENTITY_NAME'] = \Bitrix\Main\Localization\Loc::getMessage('SOC_MARKER_'. $data['ENTITY_TYPE'] .'_INFO');
+		}
+
+		$info = static::doProcessLogMessage($info, $data);
+
+
+		return array(
+			"NAME" => GetMessage("SOC_MARKER_SUCCESS"),
+			"INFO" => $info,
+		);
 	}
 }

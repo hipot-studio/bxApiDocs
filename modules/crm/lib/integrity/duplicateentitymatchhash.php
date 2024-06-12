@@ -3,7 +3,7 @@ namespace Bitrix\Crm\Integrity;
 use Bitrix\Main;
 class DuplicateEntityMatchHash
 {
-	public static function register($entityTypeID, $entityID, $typeID, $matchHash, $isPrimary = true)
+	public static function register($entityTypeID, $entityID, $typeID, $matchHash, $isPrimary = true, $scope = '')
 	{
 		Entity\DuplicateEntityMatchHashTable::upsert(
 			array(
@@ -11,12 +11,13 @@ class DuplicateEntityMatchHash
 				'ENTITY_TYPE_ID' => $entityTypeID,
 				'TYPE_ID' => $typeID,
 				'MATCH_HASH' => $matchHash,
-				'IS_PRIMARY' => $isPrimary
+				'SCOPE' => $scope,
+				'IS_PRIMARY' => $isPrimary,
 			)
 		);
 
 	}
-	public static function unregister($entityTypeID, $entityID, $typeID, $matchHash)
+	public static function unregister($entityTypeID, $entityID, $typeID, $matchHash, $scope = '')
 	{
 		Entity\DuplicateEntityMatchHashTable::delete(
 			array(
@@ -27,10 +28,21 @@ class DuplicateEntityMatchHash
 			)
 		);
 	}
-	public static function unregisterEntity($entityTypeID, $entityID, $typeID = 0)
+	public static function unregisterEntity($entityTypeID, $entityID, $typeID = 0, $scope = null)
 	{
 		Entity\DuplicateEntityMatchHashTable::deleteByFilter(
-			array('ENTITY_ID' => $entityID, 'ENTITY_TYPE_ID' => $entityTypeID, 'TYPE_ID' => $typeID)
+			array('ENTITY_ID' => $entityID, 'ENTITY_TYPE_ID' => $entityTypeID, 'TYPE_ID' => $typeID, 'SCOPE' => $scope)
+		);
+	}
+
+	public static function setDateModify($entityTypeID, $entityID)
+	{
+		Entity\DuplicateEntityMatchHashTable::setDateModify(
+			array(
+				'ENTITY_ID'=> $entityID,
+				'ENTITY_TYPE_ID' => $entityTypeID,
+			),
+			new Main\Type\DateTime()
 		);
 	}
 }

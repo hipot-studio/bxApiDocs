@@ -7,9 +7,25 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class BusinessTypeTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_BusinessType_Query query()
+ * @method static EO_BusinessType_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_BusinessType_Result getById($id)
+ * @method static EO_BusinessType_Result getList(array $parameters = [])
+ * @method static EO_BusinessType_Entity getEntity()
+ * @method static \Bitrix\Crm\EO_BusinessType createObject($setDefaultValues = true)
+ * @method static \Bitrix\Crm\EO_BusinessType_Collection createCollection()
+ * @method static \Bitrix\Crm\EO_BusinessType wakeUpObject($row)
+ * @method static \Bitrix\Crm\EO_BusinessType_Collection wakeUpCollection($rows)
+ */
 class BusinessTypeTable extends Entity\DataManager
 {
-	protected static $ALL_LANG_IDS = null;
+	protected static $allLangIDs = null;
 
 	public static function getTableName()
 	{
@@ -37,24 +53,22 @@ class BusinessTypeTable extends Entity\DataManager
 
 	protected static function getAllLangIDs()
 	{
-		if(self::$ALL_LANG_IDS !== null)
+		if(self::$allLangIDs !== null)
 		{
-			return self::$ALL_LANG_IDS;
+			return self::$allLangIDs;
 		}
 
-		self::$ALL_LANG_IDS = array();
-		$sort = 'sort';
-		$order = 'asc';
+		self::$allLangIDs = array();
 		$langEntity = new \CLanguage();
-		$dbLangs = $langEntity->GetList($sort, $order);
+		$dbLangs = $langEntity->GetList();
 		while($lang = $dbLangs->Fetch())
 		{
 			if(isset($lang['LID']))
 			{
-				self::$ALL_LANG_IDS[] = $lang['LID'];
+				self::$allLangIDs[] = $lang['LID'];
 			}
 		}
-		return self::$ALL_LANG_IDS;
+		return self::$allLangIDs;
 	}
 
 	public static function installDefault()
@@ -75,6 +89,12 @@ class BusinessTypeTable extends Entity\DataManager
 				$ary = explode(';', $slug);
 				if(count($ary) < 2)
 				{
+					continue;
+				}
+
+				if(is_array(self::getByPrimary($ary[0])->fetch()))
+				{
+					//Already exists
 					continue;
 				}
 

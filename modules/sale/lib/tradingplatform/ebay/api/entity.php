@@ -1,22 +1,19 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: wasil
- * Date: 11.09.14
- * Time: 14:47
- */
 
 namespace Bitrix\Sale\TradingPlatform\Ebay\Api;
 
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
-use Bitrix\Sale\TradingPlatform\Ebay\Ebay;
 use Bitrix\Main\ArgumentNullException;
+
+Loc::loadMessages(__FILE__);
 
 abstract class Entity
 {
 	protected $siteId;
 	protected $apiCaller;
 	protected $authToken;
+	protected $ebaySiteId;
 	protected $warningLevel = "High";
 
 	public function __construct($siteId)
@@ -29,10 +26,10 @@ abstract class Entity
 		$settings = $ebay->getSettings();
 
 		if(empty($settings[$siteId]["API"]["SITE_ID"]))
-			throw new SystemException("EBAY API SITE_ID is not defined!");
+			throw new SystemException(Loc::getMessage('SALE_EBAY_ENTITY_SETTINGS_EMPTY', array('#SITE_ID#' => $siteId)));
 
 		if(empty($settings[$siteId]["API"]["SITE_ID"]))
-			throw new ArgumentNullException("EBAY AUTH_TOKEN is not defined!");
+			throw new ArgumentNullException(Loc::getMessage('SALE_EBAY_ENTITY_TOKEN_EMPTY', array('#SITE_ID#' => $siteId)));
 
 		$this->ebaySiteId = $settings[$siteId]["API"]["SITE_ID"];
 		$this->authToken = $settings[$siteId]["API"]["AUTH_TOKEN"];
@@ -64,7 +61,7 @@ abstract class Entity
 					}
 				}
 			}
-			elseif(strlen($value) > 0)
+			elseif($value <> '')
 			{
 				$result .= '<'.$tag.'>'.$value.'</'.$tag.'>'."\n";
 			}

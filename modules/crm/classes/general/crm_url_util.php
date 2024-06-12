@@ -4,20 +4,20 @@ class CCrmUrlUtil
 	public static function GetUrlScheme($url)
 	{
 		$url = trim(strval($url));
-		$colonOffset = strpos($url, ':');
+		$colonOffset = mb_strpos($url, ':');
 		if($colonOffset === false)
 		{
 			$colonOffset = -1;
 		}
 
-		$slashOffset = strpos($url, '/');
+		$slashOffset = mb_strpos($url, '/');
 		if($slashOffset === false)
 		{
 			$slashOffset = -1;
 		}
 
 		return $colonOffset > 0 && ($slashOffset < 0 || $colonOffset < $slashOffset)
-			? strtolower(substr($url, 0, $colonOffset)) : '';
+			? mb_strtolower(mb_substr($url, 0, $colonOffset)) : '';
 	}
 	public static function HasScheme($url)
 	{
@@ -67,7 +67,7 @@ class CCrmUrlUtil
 
 		if(preg_match('/^\//', $url))
 		{
-			$url = substr($url, 1);
+			$url = mb_substr($url, 1);
 		}
 
 		return $scheme.'://'.$host.(($port !== 80 && $port !== 443) ? ':'.$port : '').'/'.$url;
@@ -94,6 +94,20 @@ class CCrmUrlUtil
 
 		return $result;
 	}
+	private static function AppendUrlParam($name, $value, array &$params)
+	{
+		if(!is_array($value))
+		{
+			$params[] = $name.'='.$value;
+		}
+		else
+		{
+			foreach($value as $v)
+			{
+				self::AppendUrlParam("{$name}[]", $v, $params);
+			}
+		}
+	}
 	public static function AddUrlParams($url, $params)
 	{
 		if(empty($params))
@@ -102,17 +116,23 @@ class CCrmUrlUtil
 		}
 
 		$query = array();
-		foreach($params as $k => &$v)
+		foreach($params as $k => $v)
 		{
-			$query[] = $k.'='.$v;
+			self::AppendUrlParam($k, $v, $query);
 		}
-		unset($v);
 
-		return $url.(strpos($url, '?') === false ? '?' : '&').implode('&', $query);
+		return $url.(mb_strpos($url, '?') === false ? '?' : '&').implode('&', $query);
 	}
 	public static function PrepareCallToUrl($value)
 	{
 		return CCrmCallToUrl::Format($value);
+	}
+	public static function PrepareSliderUrl($url)
+	{
+		return self::AddUrlParams(
+			$url,
+			array('IFRAME' => 'Y', 'IFRAME_TYPE' => 'SIDE_SLIDER')
+		);
 	}
 }
 
@@ -155,7 +175,7 @@ class CCrmCallToUrl
 		}
 
 		$s = COption::GetOptionString('crm', 'callto_custom_settings', '');
-		return (self::$CUSTOM_SETTINGS = $s !== '' ? unserialize($s) : array());
+		return (self::$CUSTOM_SETTINGS = $s !== '' ? unserialize($s, ['allowed_classes' => false]) : array());
 	}
 
 	public static function SetCustomSettings($settings)
@@ -179,8 +199,14 @@ class CCrmCallToUrl
 			return strval($number);
 		}
 
-		return preg_replace('/[^0-9\|\+\,]/', '', strval($number));
+		return preg_replace('/[^0-9\|\+\,\;\#]/', '', strval($number));
 	}
+
+	/**
+	 * @param string $value
+	 * @return string
+	 * @deprecated Please use PrepareLinkAttributes instead.
+	 */
 	public static function Format($value)
 	{
 		$value = self::NormalizeNumberIfRequired($value);
@@ -188,10 +214,6 @@ class CCrmCallToUrl
 		$format = self::GetFormat(self::Slashless);
 		if($format !== self::Custom )
 		{
-			if($format === self::Bitrix)
-			{
-				return "bx://callto/phone/{$value}";
-			}
 			if($format === self::Slashless)
 			{
 				return "callto:{$value}";
@@ -207,16 +229,27 @@ class CCrmCallToUrl
 		}
 		return self::$URL_TEMPLATE->Build(array('PHONE' => $value));
 	}
-	public static function PrepareLinkAttributes($value)
+
+	/**
+	 * @param string $value
+	 * @param array $params
+	 * @return array
+	 */
+	public static function PrepareLinkAttributes($value, $params = array())
 	{
 		$value = self::NormalizeNumberIfRequired($value);
-		$format = self::GetFormat(self::Slashless);
+		$format = self::GetFormat(self::Bitrix);
 
 		if($format === self::Bitrix)
 		{
+			$paramsString = '';
+			if (is_array($params) && count($params) > 0)
+			{
+				$paramsString = ', '.\Bitrix\Main\Web\Json::encode($params);
+			}
 			return array(
 				'HREF' => "callto://{$value}",
-				'ONCLICK' => "if(typeof(BXIM) !== 'undefined') { BXIM.phoneTo('{$value}'); return BX.PreventDefault(); }"
+				'ONCLICK' => "if(typeof(top.BXIM) !== 'undefined') { top.BXIM.phoneTo('{$value}'".$paramsString."); return BX.PreventDefault(event); }"
 			);
 		}
 
@@ -308,7 +341,7 @@ class CCrmUrlTemplate
 
 	private static function IsChildNodesSupported($nodeName)
 	{
-		$nodeName = strtoupper(strval($nodeName));
+		$nodeName = mb_strtoupper(strval($nodeName));
 		return in_array($nodeName, self::$CONTAINER_TAGS, true);
 	}
 
@@ -386,7 +419,8 @@ class CCrmUrlTemplate
 
 		$this->nodes = array();
 
-		$result = preg_match_all('/\[\s*\/?\s*[a-z0-9_]+\s*\/?\s*\]/i',
+		$this->template = preg_replace('/[\r\n]/', '', $this->template);
+		$result = preg_match_all('/\[\s*\/?\s*[a-z0-9_]+\s*\/?\s*\]/iu',
 			$this->template,
 			$matches,
 			PREG_SET_ORDER|PREG_OFFSET_CAPTURE
@@ -409,19 +443,19 @@ class CCrmUrlTemplate
 			}
 
 			$tag = $m[0];
-			$tagLength = strlen($tag);
-			$tagName = trim(substr($tag, 1, $tagLength - 2));
-			$slashPos = strpos($tagName, '/');
+			$tagLength = mb_strlen($tag);
+			$tagName = trim(mb_substr($tag, 1, $tagLength - 2));
+			$slashPos = mb_strpos($tagName, '/');
 			$isEnd = $slashPos === 0;
-			$isSelfClosing = $slashPos === strlen($tagName) - 1;
+			$isSelfClosing = $slashPos === mb_strlen($tagName) - 1;
 
 			if($isEnd)
 			{
-				$tagName = trim(substr($tagName, 1));
+				$tagName = trim(mb_substr($tagName, 1));
 			}
 			elseif($isSelfClosing)
 			{
-				$tagName = trim(substr($tagName, 0, strlen($tagName) - 1));
+				$tagName = trim(mb_substr($tagName, 0, mb_strlen($tagName) - 1));
 			}
 
 			if(!$isSelfClosing && !self::IsChildNodesSupported($tagName))
@@ -431,7 +465,7 @@ class CCrmUrlTemplate
 
 			$node = array(
 				'nodeType' => 1, //object
-				'name' => strtoupper($tagName),
+				'name' => mb_strtoupper($tagName),
 				'offset' => intval($m[1]),
 				'length' => $tagLength,
 				'isEnd' => $isEnd,
@@ -447,7 +481,7 @@ class CCrmUrlTemplate
 			{
 				$textNode = array(
 					'nodeType' => 2, //text
-					'content' => substr($this->template, $offset, $node['offset'] - $offset)
+					'content' => mb_substr($this->template, $offset, $node['offset'] - $offset)
 				);
 
 				if($curNode)
@@ -504,11 +538,11 @@ class CCrmUrlTemplate
 		if($lastNode)
 		{
 			$endPos = $lastNode['offset'] + $lastNode['length'];
-			if($endPos < (strlen($this->template) - 1))
+			if($endPos < (mb_strlen($this->template) - 1))
 			{
 				$this->nodes[] = array(
 					'nodeType' => 2, //text
-					'content' => substr($this->template, $endPos)
+					'content' => mb_substr($this->template, $endPos)
 				);
 			}
 		}

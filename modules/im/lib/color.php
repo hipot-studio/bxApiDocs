@@ -13,24 +13,27 @@ Loc::loadMessages(__FILE__);
  */
 class Color
 {
+	public const MAX_COLOR_COUNT = 99;
+
 	private static $colors = Array(
 		'RED' => '#df532d',
-		'GREEN' => '#aac337',
+		'GREEN' => '#64a513',
 		'MINT' => '#4ba984',
-		'LIGHT_BLUE' => '#6fc8e5',
+		'LIGHT_BLUE' => '#4ba5c3',
 		'DARK_BLUE' => '#3e99ce',
 		'PURPLE' => '#8474c8',
 		'AQUA' => '#1eb4aa',
-		'PINK' => '#e98fa6',
-		'LIME' => '#85cb7b',
+		'PINK' => '#f76187',
+		'LIME' => '#58cc47',
 		'BROWN' => '#ab7761',
 		'AZURE' => '#29619b',
 		'KHAKI' => '#728f7a',
 		'SAND' => '#ba9c7b',
 		'ORANGE' => '#e8a441',
 		'MARENGO' => '#556574',
-		'GRAY' => '#77828e',
-		'GRAPHITE' => '#3a403e',
+		'GRAY' => '#909090',
+		'GRAPHITE' => '#5e5f5e',
+		'COPILOT' => '#8d51eb',
 	);
 
 	private static $replaceColors = Array(
@@ -171,7 +174,7 @@ class Color
 		}
 		else
 		{
-			$number = intval(substr($number.'', -1));
+			$number = intval(mb_substr($number.'', -1));
 			$number = $number == 0? 9: $number - 1;
 
 			$code = $colors[$number];
@@ -190,6 +193,13 @@ class Color
 	public static function getRandomColor()
 	{
 		$colors = array_values(self::getColors());
+
+		return $colors[mt_rand(0, count($colors)-1)];
+	}
+
+	public static function getRandomCode()
+	{
+		$colors = array_keys(self::getColors());
 
 		return $colors[mt_rand(0, count($colors)-1)];
 	}

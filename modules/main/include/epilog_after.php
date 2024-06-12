@@ -1,5 +1,5 @@
 <?
-// define("START_EXEC_EPILOG_AFTER_1", microtime());
+define("START_EXEC_EPILOG_AFTER_1", microtime());
 $GLOBALS["BX_STATE"] = "EA";
 
 if(!isset($USER)) {global $USER;}
@@ -38,12 +38,17 @@ $main_exec_time = round(microtime(true) - START_EXEC_TIME, 4);
 
 \Bitrix\Main\Context::getCurrent()->getResponse()->flush($r);
 
+if (!defined('BX_WITH_ON_AFTER_EPILOG'))
+{
+	define('BX_WITH_ON_AFTER_EPILOG', true);
+}
+
 $arAllEvents = GetModuleEvents("main", "OnAfterEpilog", true);
 
-// define("START_EXEC_EVENTS_1", microtime());
+define("START_EXEC_EVENTS_1", microtime());
 $GLOBALS["BX_STATE"] = "EV";
 CMain::EpilogActions();
-// define("START_EXEC_EVENTS_2", microtime());
+define("START_EXEC_EVENTS_2", microtime());
 $GLOBALS["BX_STATE"] = "EA";
 
 foreach($arAllEvents as $arEvent)

@@ -2,7 +2,7 @@
 /**
  * Bitrix Framework
  * @package bitrix
- * @subpackage bitrix24
+ * @subpackage im
  * @copyright 2001-2016 Bitrix
  */
 
@@ -18,13 +18,10 @@ class Command
 	const CACHE_TTL = 31536000;
 	const CACHE_PATH = '/bx/im/command/';
 
-	const CACHE_TOKEN_TTL = 86400;
-	const CACHE_TOKEN_PATH = '/bx/im/token/';
-
 	public static function register(array $fields)
 	{
 		$moduleId = $fields['MODULE_ID'];
-		$command = substr($fields['COMMAND'], 0, 1) == '/'? substr($fields['COMMAND'], 1): $fields['COMMAND'];
+		$command = mb_substr($fields['COMMAND'], 0, 1) == '/'? mb_substr($fields['COMMAND'], 1) : $fields['COMMAND'];
 
 		$botId = isset($fields['BOT_ID'])? intval($fields['BOT_ID']): 0;
 		if ($botId > 0 && (!\Bitrix\Im\User::getInstance($botId)->isExists() || !\Bitrix\Im\User::getInstance($botId)->isBot()))
@@ -51,7 +48,7 @@ class Command
 		$appId = isset($fields['APP_ID'])? $fields['APP_ID']: '';
 		$langSet = isset($fields['LANG'])? $fields['LANG']: Array();
 
-		if (strlen($moduleId) <= 0)
+		if ($moduleId == '')
 		{
 			return false;
 		}
@@ -133,7 +130,7 @@ class Command
 				{
 					\Bitrix\Im\Model\CommandLangTable::add(array(
 						'COMMAND_ID' => $commandId,
-						'LANGUAGE_ID' => strtolower($lang['LANGUAGE_ID']),
+						'LANGUAGE_ID' => mb_strtolower($lang['LANGUAGE_ID']),
 						'TITLE' => $lang['TITLE'],
 						'PARAMS' => isset($lang['PARAMS'])? $lang['PARAMS']: ''
 					));
@@ -162,10 +159,10 @@ class Command
 			if (!isset($commands[$commandId]))
 				return false;
 
-			if (strlen($moduleId) > 0 && $commands[$commandId]['MODULE_ID'] != $moduleId)
+			if ($moduleId <> '' && $commands[$commandId]['MODULE_ID'] != $moduleId)
 				return false;
 
-			if (strlen($appId) > 0 && $commands[$commandId]['APP_ID'] != $appId)
+			if ($appId <> '' && $commands[$commandId]['APP_ID'] != $appId)
 				return false;
 		}
 
@@ -186,10 +183,11 @@ class Command
 		{
 			\CPullStack::AddShared(Array(
 				'module_id' => 'im',
-				'command' => 'deleteCommand',
+				'command' => 'commandDelete',
 				'params' => Array(
 					'commandId' => $commandId
-				)
+				),
+				'extra' => \Bitrix\Im\Common::getPullExtra()
 			));
 		}
 
@@ -209,10 +207,10 @@ class Command
 		if (!isset($commands[$commandId]))
 			return false;
 
-		if (strlen($moduleId) > 0 && $commands[$commandId]['MODULE_ID'] != $moduleId)
+		if ($moduleId <> '' && $commands[$commandId]['MODULE_ID'] != $moduleId)
 			return false;
 
-		if (strlen($appId) > 0 && $commands[$commandId]['APP_ID'] != $appId)
+		if ($appId <> '' && $commands[$commandId]['APP_ID'] != $appId)
 			return false;
 
 		if (isset($updateFields['LANG']) && $commands[$commandId]['MODULE_ID'] == 'rest')
@@ -236,7 +234,7 @@ class Command
 				{
 					\Bitrix\Im\Model\CommandLangTable::add(array(
 						'COMMAND_ID' => $commandId,
-						'LANGUAGE_ID' => strtolower($lang['LANGUAGE_ID']),
+						'LANGUAGE_ID' => mb_strtolower($lang['LANGUAGE_ID']),
 						'TITLE' => $lang['TITLE'],
 						'PARAMS' => isset($lang['PARAMS'])? $lang['PARAMS']: ''
 					));
@@ -248,10 +246,6 @@ class Command
 		}
 
 		$update = Array();
-		if (isset($updateFields['COMMAND']) && !empty($updateFields['COMMAND']))
-		{
-			$update['COMMAND'] = $updateFields['COMMAND'];
-		}
 		if (isset($updateFields['CLASS']) && !empty($updateFields['CLASS']))
 		{
 			$update['CLASS'] = $updateFields['CLASS'];
@@ -300,47 +294,75 @@ class Command
 
 	public static function onCommandAdd($messageId, $messageFields)
 	{
-		if ($messageFields['SKIP_COMMAND'] == 'Y' || $messageFields['SYSTEM'] == 'Y')
+		$skipCommand = $messageFields['SKIP_COMMAND'] ?? null;
+		$isSystem = $messageFields['SYSTEM'] ?? null;
+
+		if ($skipCommand === 'Y' || $isSystem === 'Y')
+		{
 			return true;
+		}
 
 		$commands = self::getListCache();
 		if (empty($commands))
+		{
 			return false;
+		}
 
 		$commandList = Array();
-		if (preg_match_all("/^\\/(?P<COMMAND>[^\\040\\n]*)(\\040?)(?P<PARAMS>.*)$/m", $messageFields['MESSAGE'], $matches))
+		$message = $messageFields['MESSAGE'] ?? null;
+		if (preg_match_all("/^\\/(?P<COMMAND>[^\\040\\n]*)(\\040?)(?P<PARAMS>.*)$/m", $message, $matches))
 		{
 			foreach($matches['COMMAND'] as $idx => $cmd)
 			{
 				$commandData = self::findCommands(Array('COMMAND' => $cmd, 'EXEC_PARAMS' => $matches['PARAMS'][$idx], 'MESSAGE_FIELDS' => $messageFields));
 				if (!$commandData)
+				{
 					continue;
+				}
 
 				$commandList = array_merge($commandList, $commandData);
 			}
 		}
 		if (empty($commandList))
+		{
 			return false;
+		}
 
-		$messageFields['DIALOG_ID'] = \Bitrix\Im\Command::getDialogId($messageFields);
-		unset($messageFields['MESSAGE_OUT']);
-		unset($messageFields['NOTIFY_EVENT']);
-		unset($messageFields['NOTIFY_MODULE']);
-		unset($messageFields['URL_PREVIEW']);
+		$messageFields['DIALOG_ID'] = self::getDialogId($messageFields);
+		unset(
+			$messageFields['MESSAGE_OUT'],
+			$messageFields['NOTIFY_EVENT'],
+			$messageFields['NOTIFY_MODULE'],
+			$messageFields['URL_PREVIEW']
+		);
 
+		$count = 0;
+		$executed = Array();
 		foreach ($commandList as $params)
 		{
 			if (!$params['MODULE_ID'] || !\Bitrix\Main\Loader::includeModule($params['MODULE_ID']))
 			{
 				continue;
 			}
+			$hash = md5($params['EXEC_PARAMS'].$params['COMMAND_ID']);
+			if (isset($executed[$hash]) && $executed[$hash])
+			{
+				continue;
+			}
+			$executed[$hash] = true;
+
+			if ($count >= 10)
+			{
+				break;
+			}
+			$count++;
 
 			if ($params['BOT_ID'] > 0)
 			{
-				self::addAccessToken($params['BOT_ID'], $messageFields['DIALOG_ID']);
+				Bot\Token::add($params['BOT_ID'], $messageFields['DIALOG_ID']);
 				if ($messageFields['MESSAGE_TYPE'] == IM_MESSAGE_PRIVATE)
 				{
-					self::addAccessToken($params['BOT_ID'], $messageFields['TO_USER_ID']);
+					Bot\Token::add($params['BOT_ID'], $messageFields['TO_USER_ID']);
 				}
 			}
 
@@ -360,21 +382,18 @@ class Command
 				call_user_func_array(array($params["CLASS"], $params["METHOD_COMMAND_ADD"]), Array($messageId, $messageFields));
 			}
 		}
-		unset($messageFields['COMMAND']);
-		unset($messageFields['COMMAND_ID']);
-		unset($messageFields['COMMAND_PARAMS']);
-		unset($messageFields['COMMAND_CONTEXT']);
+		unset(
+			$messageFields['COMMAND'],
+			$messageFields['COMMAND_ID'],
+			$messageFields['COMMAND_PARAMS'],
+			$messageFields['COMMAND_CONTEXT']
+		);
 
 		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImCommandAdd") as $event)
 		{
 			ExecuteModuleEventEx($event, Array($commandList, $messageId, $messageFields));
 		}
 
-		return true;
-	}
-
-	public static function commandExecute($dialogId, $messageId, $bodId, $command, $commandParams)
-	{
 		return true;
 	}
 
@@ -392,10 +411,10 @@ class Command
 		if (!isset($commands[$commandId]))
 			return false;
 
-		if (strlen($moduleId) > 0 && $commands[$commandId]['MODULE_ID'] != $moduleId)
+		if ($moduleId <> '' && $commands[$commandId]['MODULE_ID'] != $moduleId)
 			return false;
 
-		if (strlen($appId) > 0 && $commands[$commandId]['APP_ID'] != $appId)
+		if ($appId <> '' && $commands[$commandId]['APP_ID'] != $appId)
 			return false;
 
 		$botId = intval($commands[$commandId]['BOT_ID']);
@@ -404,7 +423,11 @@ class Command
 		if (!($message = $orm->fetch()))
 			return false;
 
-		$relations = \CIMChat::GetRelationById($message['CHAT_ID']);
+		$orm = \Bitrix\Im\Model\ChatTable::getById($message['CHAT_ID']);
+		if (!($chat = $orm->fetch()))
+			return false;
+
+		$relations = \CIMChat::GetRelationById($message['CHAT_ID'], false, true, false);
 
 		$chatWithBot = false;
 		foreach ($relations as $userId => $relation)
@@ -433,7 +456,7 @@ class Command
 		if ($botId > 0)
 		{
 			$grantAccess = false;
-			if (self::hasAccessToken($botId, $messageFields['DIALOG_ID']))
+			if (Bot\Token::isActive($botId, $messageFields['DIALOG_ID']))
 			{
 				$grantAccess = true;
 			}
@@ -458,10 +481,11 @@ class Command
 
 		$messageFields['ATTACH'] = $messageFields['ATTACH']? $messageFields['ATTACH']: null;
 		$messageFields['KEYBOARD'] = $messageFields['KEYBOARD']? $messageFields['KEYBOARD']: null;
+		$messageFields['MENU'] = $messageFields['MENU']? $messageFields['MENU']: null;
 
-		if (self::isChat($messageFields['DIALOG_ID']))
+		if (Common::isChatId($messageFields['DIALOG_ID']))
 		{
-			$chatId = intval(substr($messageFields['DIALOG_ID'], 4));
+			$chatId = \Bitrix\Im\Dialog::getChatId($messageFields['DIALOG_ID']);
 			if ($chatId <= 0)
 				return false;
 
@@ -472,6 +496,7 @@ class Command
 					"TO_CHAT_ID" => $chatId,
 					"ATTACH" => $messageFields['ATTACH'],
 					"KEYBOARD" => $messageFields['KEYBOARD'],
+					"MENU" => $messageFields['MENU'],
 				);
 				if (isset($messageFields['MESSAGE']))
 				{
@@ -485,6 +510,7 @@ class Command
 					"TO_CHAT_ID" => $chatId,
 					"ATTACH" => $messageFields['ATTACH'],
 					"KEYBOARD" => $messageFields['KEYBOARD'],
+					"MENU" => $messageFields['MENU'],
 					"SYSTEM" => 'Y',
 				);
 				if (isset($messageFields['MESSAGE']))
@@ -493,11 +519,11 @@ class Command
 				}
 				if ($botId > 0)
 				{
-					$ar['MESSAGE'] = Loc::getMessage("COMMAND_BOT_ANSWER", Array("#BOT_NAME#" => "[USER=".$botId."]".\Bitrix\Im\User::getInstance($botId)->getFullName()."[/USER][BR]")).$ar['MESSAGE'];
+					$ar['MESSAGE'] = Loc::getMessage("COMMAND_BOT_ANSWER", Array("#BOT_NAME#" => "[USER=".$botId."][/USER]\n ")).$ar['MESSAGE'];
 				}
 				else
 				{
-					$ar['MESSAGE'] = "[B]".Loc::getMessage("COMMAND_SYSTEM_ANSWER", Array("#COMMAND#" => "/".$commands[$commandId]['COMMAND']))."[/B]\n".$ar['MESSAGE'];
+					$ar['MESSAGE'] = "[B]".Loc::getMessage("COMMAND_SYSTEM_ANSWER", Array("#COMMAND#" => "/".$commands[$commandId]['COMMAND']))."[/B]\n ".$ar['MESSAGE'];
 				}
 			}
 
@@ -551,11 +577,11 @@ class Command
 				}
 				if ($botId > 0)
 				{
-					$ar['MESSAGE'] = Loc::getMessage("COMMAND_BOT_ANSWER", Array("#BOT_NAME#" => "[USER=".$botId."]".\Bitrix\Im\User::getInstance($botId)->getFullName()."[/USER][BR]")).$ar['MESSAGE'];
+					$ar['MESSAGE'] = Loc::getMessage("COMMAND_BOT_ANSWER", Array("#BOT_NAME#" => "[USER=".$botId."][/USER]\n ")).$ar['MESSAGE'];
 				}
 				else
 				{
-					$ar['MESSAGE'] = "[B]".Loc::getMessage("COMMAND_SYSTEM_ANSWER", Array("#COMMAND#" => "/".$commands[$commandId]['COMMAND']))."[/B]\n".$ar['MESSAGE'];
+					$ar['MESSAGE'] = "[B]".Loc::getMessage("COMMAND_SYSTEM_ANSWER", Array("#COMMAND#" => "/".$commands[$commandId]['COMMAND']))."[/B]\n ".$ar['MESSAGE'];
 				}
 			}
 
@@ -585,30 +611,19 @@ class Command
 		return $dialogId;
 	}
 
-	public static function isChat($dialogId)
-	{
-		$isChat = false;
-		if (is_string($dialogId) && substr($dialogId, 0, 4) == 'chat')
-		{
-			$isChat = true;
-		}
-
-		return $isChat;
-	}
-
 	private static function findCommands($fields)
 	{
-		$command = substr($fields['COMMAND'], 0, 1) == '/'? substr($fields['COMMAND'], 1): $fields['COMMAND'];
+		$command = mb_substr($fields['COMMAND'], 0, 1) == '/'? mb_substr($fields['COMMAND'], 1) : $fields['COMMAND'];
 		$execParams = isset($fields['EXEC_PARAMS'])? $fields['EXEC_PARAMS']: '';
 		$messageFields = isset($fields['MESSAGE_FIELDS'])? $fields['MESSAGE_FIELDS']: Array();
-		
+
 		if ($messageFields['MESSAGE_TYPE'] != IM_MESSAGE_PRIVATE)
 		{
-			$relations = \CIMChat::GetRelationById($messageFields['TO_CHAT_ID']);
+			$relations = \CIMChat::GetRelationById($messageFields['TO_CHAT_ID'], false, true, false);
 		}
 
 		$result = Array();
-		if (strlen($command) <= 0)
+		if ($command == '')
 			return $result;
 
 		$isExtranet = \Bitrix\Im\User::getInstance($messageFields['FROM_USER_ID'])->isExtranet();
@@ -617,7 +632,11 @@ class Command
 		$bots = Bot::getListCache();
 		foreach ($commands as $value)
 		{
-			if ($messageFields['CHAT_ENTITY_TYPE'] == 'LIVECHAT' || $messageFields['CHAT_ENTITY_TYPE'] == 'LINES' && $bots[$value['BOT_ID']]['OPENLINE'] != 'Y')
+			$chatEntityType = $messageFields['CHAT_ENTITY_TYPE'] ?? null;
+			if (
+				$chatEntityType === 'LIVECHAT'
+				|| ($chatEntityType === 'LINES' && $bots[$value['BOT_ID']]['OPENLINE'] != 'Y')
+			)
 			{
 				continue;
 			}
@@ -661,6 +680,7 @@ class Command
 			Array('COMMAND' => 'loud', 'TITLE' => Loc::getMessage("COMMAND_DEF_LOUD_TITLE"), 'PARAMS' => Loc::getMessage("COMMAND_DEF_LOUD_PARAMS"), 'HIDDEN' => 'N', 'EXTRANET_SUPPORT' => 'Y'),
 			Array('COMMAND' => '>>', 'TITLE' => Loc::getMessage("COMMAND_DEF_QUOTE_TITLE"), 'PARAMS' => Loc::getMessage("COMMAND_DEF_QUOTE_PARAMS"), 'HIDDEN' => 'N', 'EXTRANET_SUPPORT' => 'Y'),
 			Array('COMMAND' => 'rename', 'TITLE' => Loc::getMessage("COMMAND_DEF_RENAME_TITLE"), 'PARAMS' => Loc::getMessage("COMMAND_DEF_RENAME_PARAMS"), 'HIDDEN' => 'N', 'EXTRANET_SUPPORT' => 'Y', 'CATEGORY' => Loc::getMessage("COMMAND_DEF_CATEGORY_CHAT"), 'CONTEXT' => 'chat'),
+			Array('COMMAND' => 'getDialogId', 'TITLE' => Loc::getMessage("COMMAND_DEF_DIALOGID_TITLE"), 'HIDDEN' => 'N', 'EXTRANET_SUPPORT' => 'N', 'CATEGORY' => Loc::getMessage("COMMAND_DEF_CATEGORY_CHAT")),
 			Array('COMMAND' => 'webrtcDebug', 'TITLE' => Loc::getMessage("COMMAND_DEF_WD_TITLE"), 'HIDDEN' => 'N', 'EXTRANET_SUPPORT' => 'Y', 'CATEGORY' => Loc::getMessage("COMMAND_DEF_CATEGORY_DEBUG"), 'CONTEXT' => 'call'),
 		);
 
@@ -707,7 +727,7 @@ class Command
 	public static function getListCache($lang = LANGUAGE_ID)
 	{
 		$cache = \Bitrix\Main\Data\Cache::createInstance();
-		if($cache->initCache(self::CACHE_TTL, 'list_v3_'.$lang, self::CACHE_PATH))
+		if($cache->initCache(self::CACHE_TTL, 'list_v5_'.$lang, self::CACHE_PATH))
 		{
 			$result = $cache->getVars();
 		}
@@ -767,10 +787,18 @@ class Command
 						$loadRestLang = true;
 						if ($row['BOT_ID'] <= 0 && $row['APP_ID'])
 						{
-							$res = \CBitrix24App::getList(array(), array('APP_ID' => $row['APP_ID']));
+							$res = \Bitrix\Rest\AppTable::getList([
+								'filter' => array('=CLIENT_ID' => $row['APP_ID']),
+							]);
 							if ($app = $res->fetch())
 							{
-								$row['CATEGORY'] = isset($app['APP_NAME'])? $app['APP_NAME']: $app['CODE'];
+								$row['CATEGORY'] = !empty($app['APP_NAME'])
+									? $app['APP_NAME']
+									: (!empty($app['APP_NAME_DEFAULT'])
+										? $app['APP_NAME_DEFAULT']
+										: $app['CODE']
+									)
+								;
 							}
 						}
 					}
@@ -889,118 +917,6 @@ class Command
 				'params' => $command['PARAMS'],
 				'extranet' => $command['EXTRANET_SUPPORT'] == 'Y',
 			);
-		}
-
-		return $result;
-	}
-
-
-	/* tmp methods */
-	private static function hasAccessToken($botId, $dialogId)
-	{
-		if ($botId == $dialogId)
-			return true;
-
-		$date = new \Bitrix\Main\Type\DateTime();
-
-		$result = self::getAccessTokenCache($botId);
-		return $result && $result[$dialogId] && $result[$dialogId]['DATE_EXPIRE'] >= $date->getTimestamp();
-	}
-
-	public static function addAccessToken($botId, $dialogId)
-	{
-		return self::getAccessToken($botId, $dialogId, true);
-	}
-
-	public static function getAccessToken($botId, $dialogId, $prolong = false)
-	{
-		if ($botId == $dialogId)
-			return false;
-
-		$result = self::getAccessTokenCache($botId);
-
-		$date = new \Bitrix\Main\Type\DateTime();
-		if (!$result[$dialogId] || $result[$dialogId]['DATE_EXPIRE'] < $date->getTimestamp())
-		{
-			$cache = \Bitrix\Main\Data\Cache::createInstance();
-			$cache->clean('token_'.$botId, self::CACHE_TOKEN_PATH);
-
-			$orm = \Bitrix\Im\Model\BotTokenTable::add(Array(
-				'DATE_EXPIRE' => $date->add('10 MINUTES'),
-				'BOT_ID' => $botId,
-				'DIALOG_ID' => $dialogId
-			));
-			if ($orm->getId() <= 0)
-			{
-				return false;
-			}
-			$addResult = $orm->getData();
-
-			$result[$dialogId] = Array(
-				'ID' => $orm->getId(),
-				'TOKEN' => '',
-				'DIALOG_ID' => $addResult['DIALOG_ID'],
-				'DATE_EXPIRE' => $addResult['DATE_EXPIRE']->getTimestamp()
-			);
-		}
-		else if ($prolong)
-		{
-			$date = new \Bitrix\Main\Type\DateTime();
-			$orm = \Bitrix\Im\Model\BotTokenTable::update($result[$dialogId]['ID'], Array(
-				'DATE_EXPIRE' => $date->add('10 MINUTES')
-			));
-			if ($orm->isSuccess())
-			{
-				$addResult = $orm->getData();
-				$result[$dialogId]['DATE_EXPIRE'] = $addResult['DATE_EXPIRE']->getTimestamp();
-
-				$cache = \Bitrix\Main\Data\Cache::createInstance();
-				$cache->initCache(self::CACHE_TOKEN_TTL, 'token_'.$botId, self::CACHE_TOKEN_PATH);
-				$cache->startDataCache();
-				$cache->endDataCache($result);
-			}
-		}
-
-		return $result[$dialogId];
-	}
-
-	private static function getAccessTokenCache($botId)
-	{
-		$cache = \Bitrix\Main\Data\Cache::createInstance();
-		if($cache->initCache(self::CACHE_TOKEN_TTL, 'token_'.$botId, self::CACHE_TOKEN_PATH))
-		{
-			$result = $cache->getVars();
-		}
-		else
-		{
-			$result = Array();
-			$orm = \Bitrix\Im\Model\BotTokenTable::getList(Array(
-				'filter' => array(
-					'>DATE_EXPIRE' => new \Bitrix\Main\Type\DateTime(),
-					'=BOT_ID' => $botId
-				),
-			));
-			while ($token = $orm->fetch())
-			{
-				$result[$token['DIALOG_ID']] = Array(
-					'ID' => $token['ID'],
-					'TOKEN' => $token['TOKEN'],
-					'DIALOG_ID' => $token['DIALOG_ID'],
-					'DATE_EXPIRE' => is_object($token['DATE_EXPIRE'])? $token['DATE_EXPIRE']->getTimestamp(): 0
-				);
-				if ($token['TOKEN'])
-				{
-					$result[$token['TOKEN']] = Array(
-						'ID' => $token['ID'],
-						'TOKEN' => $token['TOKEN'],
-						'DIALOG_ID' => $token['DIALOG_ID'],
-						'DATE_EXPIRE' => is_object($token['DATE_EXPIRE'])? $token['DATE_EXPIRE']->getTimestamp(): 0
-					);
-				}
-			}
-
-			$cache->startDataCache();
-			$cache->endDataCache($result);
 		}
 
 		return $result;

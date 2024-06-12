@@ -66,4 +66,9 @@ abstract class CAllCrmSonetRelation
 	{
 		self::GetCurrent()->Rebind($entityTypeID, $srcEntityID, $dstEntityID);
 	}
+
+	public static function TransferRelationsOwnership($srcEntityTypeID, $srcEntityID, $dstEntityTypeID, $dstEntityID)
+	{
+		self::GetCurrent()->TransferOwnership($srcEntityTypeID, $srcEntityID, $dstEntityTypeID, $dstEntityID);
+	}
 }

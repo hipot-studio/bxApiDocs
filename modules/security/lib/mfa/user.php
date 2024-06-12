@@ -1,45 +1,33 @@
 <?php
+
 namespace Bitrix\Security\Mfa;
 
-
-use Bitrix\Main\Entity;
+use Bitrix\Main\ORM;
 use Bitrix\Main\Type;
 
-/*
-CREATE TABLE b_sec_user
-(
-	USER_ID INT(11) NOT NULL REFERENCES b_user(ID),
-	ACTIVE CHAR(1) NOT NULL DEFAULT 'N',
-	SECRET VARCHAR(64) NOT NULL,
-	PARAMS text,
-	TYPE VARCHAR(16) NOT NULL,
-	ATTEMPTS int(18),
-	INITIAL_DATE date,
-	SKIP_MANDATORY CHAR(1) DEFAULT 'N',
-	DEACTIVATE_UNTIL datetime,
-	PRIMARY KEY (USER_ID)
-);
+/**
+ * Class UserTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_User_Query query()
+ * @method static EO_User_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_User_Result getById($id)
+ * @method static EO_User_Result getList(array $parameters = [])
+ * @method static EO_User_Entity getEntity()
+ * @method static \Bitrix\Security\Mfa\EO_User createObject($setDefaultValues = true)
+ * @method static \Bitrix\Security\Mfa\EO_User_Collection createCollection()
+ * @method static \Bitrix\Security\Mfa\EO_User wakeUpObject($row)
+ * @method static \Bitrix\Security\Mfa\EO_User_Collection wakeUpCollection($rows)
  */
-
-class UserTable
-	extends Entity\DataManager
+class UserTable	extends ORM\Data\DataManager
 {
 	/**
 	 * {@inheritdoc}
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает имя таблицы в базе данных, соответствующей сущности.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/usertable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_sec_user';
@@ -50,17 +38,6 @@ class UserTable
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p> 	Статический метод возвращает список полей с типами. </p> <p> 	 Без параметров </p>  <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/usertable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -70,11 +47,12 @@ class UserTable
 			),
 			'USER' => array(
 				'data_type' => '\Bitrix\Main\User',
-				'reference' => array('=this.USER_ID' => 'ref.ID')
+				'reference' => array('=this.USER_ID' => 'ref.ID'),
+				'join_type' => 'INNER',
 			),
 			'ACTIVE' => array(
 				'data_type' => 'boolean',
-				'values' => array('Y', 'N'),
+				'values' => array('N', 'Y'),
 				'default' => 'N'
 			),
 			'SECRET' => array(
@@ -99,42 +77,24 @@ class UserTable
 			),
 			'SKIP_MANDATORY' => array(
 				'data_type' => 'boolean',
-				'values' => array('Y', 'N'),
+				'values' => array('N', 'Y'),
 				'default' => 'N'
 			),
 			'DEACTIVATE_UNTIL' => array(
 				'data_type' => 'datetime'
 			),
+			(new ORM\Fields\ArrayField('INIT_PARAMS')),
 		);
 	}
 
 	/**
 	 * Clear recovery codes after delete user
 	 *
-	 * @param Entity\Event $event Our event.
+	 * @param ORM\Event $event Our event.
 	 * @return void
 	 * @throws \Bitrix\Main\ArgumentTypeException
 	 */
-	
-	/**
-	* <p>Статический метод очищает резервные коды после удаления пользователя.</p>
-	*
-	*
-	* @param mixed $Bitrix  Событие.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $Entity  
-	*
-	* @param Event $event  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/mfa/usertable/onafterdelete.php
-	* @author Bitrix
-	*/
-	public static function onAfterDelete(Entity\Event $event)
+	public static function onAfterDelete(ORM\Event $event)
 	{
 		$primary = $event->getParameter('primary');
 		RecoveryCodesTable::clearByUser($primary['USER_ID']);

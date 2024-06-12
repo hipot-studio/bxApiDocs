@@ -2,30 +2,40 @@
 
 namespace Sale\Handlers\Delivery;
 
-use Bitrix\Main\Config\Option;
-use Bitrix\Main\Loader;
-use Bitrix\Main\IO\File;
-use Bitrix\Sale\Shipment;
-use Bitrix\Main\Page\Asset;
-use Bitrix\Main\SystemException;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ArgumentNullException;
-use Bitrix\Sale\Delivery\Services\Base;
-use Bitrix\Sale\Delivery\Services\Manager;
-use Bitrix\Sale\Delivery\ExtraServices\Table;
-use Sale\Handlers\Delivery\Additional\Location;
-use Sale\Handlers\Delivery\Additional\RestClient;
-use Bitrix\Sale\Internals\ServiceRestrictionTable;
+use Bitrix\Main\Error,
+	Bitrix\Main\Loader,
+	Bitrix\Main\IO\File,
+	Bitrix\Sale\Shipment,
+	Bitrix\Main\Page\Asset,
+	Bitrix\Main\Config\Option,
+	Bitrix\Main\SystemException,
+	Bitrix\Main\Localization\Loc,
+	Bitrix\Main\ArgumentNullException,
+	Bitrix\Sale\Delivery\Services\Base,
+	Bitrix\Sale\Delivery\ExtraServices,
+	Bitrix\Sale\Location\ExternalTable,
+	Bitrix\Sale\Location\LocationTable,
+	Bitrix\Sale\Delivery\Services\Manager,
+	Bitrix\Sale\Delivery\ExtraServices\Table,
+	Bitrix\Sale\Location\Admin\LocationHelper,
+	Sale\Handlers\Delivery\Additional\Location,
+	Sale\Handlers\Delivery\Additional\RestClient,
+	Bitrix\Sale\Internals\ServiceRestrictionTable,
+	Sale\Handlers\Delivery\Additional\DeliveryRequests\RusPost,
+	Sale\Handlers\Delivery\Additional\RusPost\Reliability;
 
 Loc::loadMessages(__FILE__);
 
 Loader::registerAutoLoadClasses(
 	'sale',
 	array(
-		'Sale\Handlers\Delivery\AdditionalProfile' => 'handlers/delivery/additional/profile.php',
-		'Sale\Handlers\Delivery\Additional\Location' => 'handlers/delivery/additional/location.php',
-		'Sale\Handlers\Delivery\Additional\CacheManager' => 'handlers/delivery/additional/cache.php',
-		'Sale\Handlers\Delivery\Additional\RestClient' => 'handlers/delivery/additional/restclient.php',
+		__NAMESPACE__.'\Additional\Action' => 'handlers/delivery/additional/action.php',
+		__NAMESPACE__.'\AdditionalProfile' => 'handlers/delivery/additional/profile.php',
+		__NAMESPACE__.'\Additional\Location' => 'handlers/delivery/additional/location.php',
+		__NAMESPACE__.'\Additional\CacheManager' => 'handlers/delivery/additional/cache.php',
+		__NAMESPACE__.'\Additional\RestClient' => 'handlers/delivery/additional/restclient.php',
+		__NAMESPACE__.'\Additional\RusPost\Helper' => 'handlers/delivery/additional/ruspost/helper.php',
+		__NAMESPACE__.'\Additional\DeliveryRequests\RusPost\Handler' => 'handlers/delivery/additional/deliveryrequests/ruspost/handler.php',
 	)
 );
 
@@ -40,6 +50,11 @@ class AdditionalHandler extends Base
 	protected $serviceType = "";
 	protected static $canHasProfiles = true;
 	protected static $whetherAdminExtraServicesShow = true;
+	protected $trackingClass = '\Sale\Handlers\Delivery\AdditionalTracking';
+	protected $trackingTitle = '';
+	protected $trackingDescription = '';
+	protected $profilesListFull = null;
+	protected $extraServicesList = null;
 
 	const LOGO_FILE_ID_OPTION = 'handlers_dlv_add_lgotip';
 
@@ -53,13 +68,25 @@ class AdditionalHandler extends Base
 	{
 		parent::__construct($initParams);
 
-		if(isset($initParams['SERVICE_TYPE']) && strlen($initParams['SERVICE_TYPE']) > 0)
+		if(isset($initParams['SERVICE_TYPE']) && $initParams['SERVICE_TYPE'] <> '')
 			$this->serviceType = $initParams['SERVICE_TYPE'];
 		elseif(isset($this->config["MAIN"]["SERVICE_TYPE"]))
 			$this->serviceType = $this->config["MAIN"]["SERVICE_TYPE"];
 
-		if(strlen($this->serviceType) <= 0)
+		if($this->serviceType == '')
 			throw new ArgumentNullException('initParams[SERVICE_TYPE]');
+
+		if (
+			isset($initParams['CONFIG']['MAIN']['SERVICE_TYPE'])
+			&& $initParams['CONFIG']['MAIN']['SERVICE_TYPE'] === "RUSPOST"
+		)
+		{
+			$this->setTrackingClass('\Bitrix\Sale\Delivery\Tracking\RusPost');
+		}
+		elseif(empty($this->config['MAIN']['TRACKING_TITLE']))
+		{
+			$this->trackingClass = '';
+		}
 
 		if(intval($this->id) <= 0)
 		{
@@ -74,6 +101,27 @@ class AdditionalHandler extends Base
 			if(!empty($srvParams['LOGOTIP']))
 				$this->logotip = $srvParams['LOGOTIP'];
 		}
+
+		$this->deliveryRequestHandler = $this->getDeliveryRequestHandler();
+	}
+
+	/**
+	 * @return string
+	 */
+	public function getHandlerCode(): string
+	{
+		return 'BITRIX_ADDITIONAL_' . (string)$this->serviceType;
+	}
+
+	public function getDeliveryRequestHandler()
+	{
+		$result = null;
+
+		if($this->serviceType == "RUSPOST")
+			if(!empty($this->config["MAIN"]["OTPRAVKA_AUTH_TOKEN"]) && !empty($this->config["MAIN"]["OTPRAVKA_AUTH_KEY"]))
+				$result = new RusPost\Handler($this);
+
+		return $result;
 	}
 
 	/**
@@ -90,16 +138,6 @@ class AdditionalHandler extends Base
 	public static function getClassDescription()
 	{
 		return Loc::getMessage("SALE_DLVRS_ADD_DESCRIPTION");
-	}
-
-	/**
-	 * @param Shipment $shipment
-	 * @throws SystemException
-	 * @return \Bitrix\Sale\Delivery\CalculationResult
-	 */
-	protected function calculateConcrete(Shipment $shipment)
-	{
-		throw new SystemException("Only Additional Profiles can calculate concrete");
 	}
 
 	/**
@@ -136,8 +174,17 @@ class AdditionalHandler extends Base
 		);
 
 		if(!empty($fields['CONFIG']) && is_array($fields['CONFIG']))
+		{
 			foreach($fields['CONFIG'] as $key => $params)
+			{
+				if($this->serviceType == "RUSPOST" && $this->id <= 0 && $key == 'SHIPPING_POINT')
+				{
+					continue;
+				}
+
 				$result['MAIN']['ITEMS'][$key] = $params;
+			}
+		}
 
 		$result['MAIN']['ITEMS']["DEFAULT_VALUES"] = array(
 			"TYPE" => "DELIVERY_SECTION",
@@ -180,9 +227,46 @@ class AdditionalHandler extends Base
 			$res = $client->getDeliveryList();
 
 			if($res->isSuccess())
+			{
 				$result = $res->getData();
+			}
 			else
-				$result = array(array("ERROR" => "Can't receive supported services list data"));
+			{
+				$errors = array();
+				$notes = array();
+				$nothingFound = false;
+
+				/** @var Error $error */
+				foreach($res->getErrorCollection() as $error)
+				{
+					if($error->getCode() === \Bitrix\Sale\Services\Base\RestClient::ERROR_NOTHING_FOUND)
+					{
+						$nothingFound = true;
+						continue;
+					}
+
+					$message = $error->getMessage();
+
+					if($message == 'verification_needed. License check failed.')
+						$notes[$error->getCode()] = Loc::getMessage('SALE_DLVRS_ADD_LIST_LICENSE_WRONG');
+					else
+						$errors[$error->getCode()] = $message;
+				}
+
+				if(!empty($errors))
+					$result = array("ERRORS" => $errors);
+
+				if(!empty($notes))
+					$result['NOTES'] = $notes;
+
+				if(empty($errors) && empty($notes))
+				{
+					if($nothingFound === false || $res->getErrorCollection()->count() !== 1)
+					{
+						$errors[] = Loc::getMessage('SALE_DLVRS_ADD_LIST_RECEIVE_ERROR');
+					}
+				}
+			}
 		}
 
 		return $result;
@@ -199,10 +283,17 @@ class AdditionalHandler extends Base
 
 		if($res->isSuccess())
 		{
+			$logo = false;
 			$logoId = intval($this->getLogoFileId());
+
+			if($logoId > 0)
+			{
+				$logo = \CFile::GetByID($logoId)->Fetch();
+			}
+
 			$result = $res->getData();
 
-			if($logoId <= 0 && !empty($result['LOGOTIP']['CONTENT']) && !empty($result['LOGOTIP']['NAME']))
+			if(($logoId <= 0 || !$logo) && !empty($result['LOGOTIP']['CONTENT']) && !empty($result['LOGOTIP']['NAME']))
 			{
 				$tmpDir = \CTempFile::GetDirectoryName();
 				CheckDirPath($tmpDir);
@@ -217,7 +308,7 @@ class AdditionalHandler extends Base
 				{
 					$file = \CFile::MakeFileArray($tmpDir."/".$result['LOGOTIP']['NAME']);
 					$file['MODULE_ID'] = "sale";
-					$logoId = intval(\CFile::SaveFile($file, $filePath));
+					$logoId = intval(\CFile::SaveFile($file, "sale/delivery/logotip"));
 					$this->setLogoFileId($logoId);
 				}
 			}
@@ -264,24 +355,53 @@ class AdditionalHandler extends Base
 		return $result;
 	}
 
+	public function getTrackingStatuses(array $trackingNumbers = array())
+	{
+		$result = array();
+		$client = new RestClient();
+		$res = $client->getTrackingStatuses(
+			$this->serviceType,
+			AdditionalProfile::extractConfigValues($this->getConfig()),
+			$trackingNumbers
+		);
+
+		if($res->isSuccess())
+		{
+			$data = $res->getData();
+
+			if(!empty($data['STATUSES']) && is_array($data['STATUSES']))
+				$result = $data['STATUSES'];
+		}
+
+		return $result;
+	}
+
+	public function getTrackingClassTitle()
+	{
+		return !empty($this->config['MAIN']['TRACKING_TITLE']) ? $this->config['MAIN']['TRACKING_TITLE'] : '';
+	}
+
+	public function getTrackingClassDescription()
+	{
+		return !empty($this->config['MAIN']['TRACKING_DESCRIPTION']) ? $this->config['MAIN']['TRACKING_DESCRIPTION'] : '';
+	}
+
 	/**
 	 * @return array All profile fields.
 	 */
 	public function getProfilesListFull()
 	{
-		static $result = null;
-
-		if($result === null)
+		if($this->profilesListFull === null)
 		{
-			$result = array();
+			$this->profilesListFull = array();
 			$client = new RestClient();
 			$res = $client->getDeliveryProfilesList($this->serviceType);
 
 			if($res->isSuccess())
-				$result = $res->getData();
+				$this->profilesListFull = $res->getData();
 		}
 
-		return $result;
+		return $this->profilesListFull;
 	}
 
 	/**
@@ -317,6 +437,19 @@ class AdditionalHandler extends Base
 		return self::$canHasProfiles;
 	}
 
+	public static function onAfterUpdate($serviceId, array $fields = array())
+	{
+		/** @var self $service */
+		$service = new self($fields);
+
+		if ($service->getServiceType() == 'RUSPOST')
+		{
+			$config = $service->getConfigValues();
+			$doInstall = isset($config['MAIN']['RELIABILITY']) && $config['MAIN']['RELIABILITY'] == 'Y';
+			self::installReliability($serviceId, $doInstall);
+		}
+	}
+
 	/**
 	 * @param int $serviceId
 	 * @param array $fields
@@ -338,6 +471,9 @@ class AdditionalHandler extends Base
 		{
 			foreach($profiles as $profileType => $pFields)
 			{
+				if(isset($pFields['DEFAULT_INSTALL_SKIP']) && $pFields['DEFAULT_INSTALL_SKIP'] == 'Y')
+					continue;
+
 				$profile = $srv->getProfileDefaultParams($profileType, $pFields);
 				$res = Manager::add($profile);
 
@@ -369,7 +505,26 @@ class AdditionalHandler extends Base
 			}
 		}
 
+		if ($srv->getServiceType() == 'RUSPOST')
+		{
+			$config = $srv->getConfigValues();
+			$doInstall = isset($config['MAIN']['RELIABILITY']) && $config['MAIN']['RELIABILITY'] == 'Y';
+			self::installReliability($serviceId, $doInstall);
+		}
+
 		return $result;
+	}
+
+	protected static function installReliability(int $serviceId, bool $doInstall)
+	{
+		if($doInstall)
+		{
+			Reliability\Service::install($serviceId);
+		}
+		else
+		{
+			Reliability\Service::unInstall($serviceId);
+		}
 	}
 
 	/**
@@ -381,10 +536,13 @@ class AdditionalHandler extends Base
 	protected function addRestriction($type, $profileId, array $params)
 	{
 		$fields  = array();
+		$className = null;
 
 		switch($type)
 		{
 			case "WEIGHT":
+				$className = \Bitrix\Sale\Delivery\Restrictions\ByWeight::class;
+
 				$p = array();
 				if(isset($params['MIN']))	$p['MIN_WEIGHT'] = $params['MIN'];
 				if(isset($params['MAX']))	$p['MAX_WEIGHT'] = $params['MAX'];
@@ -393,7 +551,6 @@ class AdditionalHandler extends Base
 				{
 					$fields = array(
 						"SERVICE_ID" => $profileId,
-						"CLASS_NAME" => '\Bitrix\Sale\Delivery\Restrictions\ByWeight',
 						"SERVICE_TYPE" => \Bitrix\Sale\Services\Base\RestrictionManager::SERVICE_TYPE_SHIPMENT,
 						"PARAMS" => $p
 					);
@@ -402,6 +559,8 @@ class AdditionalHandler extends Base
 				break;
 
 			case "DIMENSIONS":
+				$className = \Bitrix\Sale\Delivery\Restrictions\ByDimensions::class;
+
 				$p = array();
 				if(isset($params['LENGTH']))	$p['LENGTH'] = $params['LENGTH'];
 				if(isset($params['WIDTH']))	$p['WIDTH'] = $params['WIDTH'];
@@ -411,17 +570,59 @@ class AdditionalHandler extends Base
 				{
 					$fields = array(
 						"SERVICE_ID" => $profileId,
-						"CLASS_NAME" => '\Bitrix\Sale\Delivery\Restrictions\ByDimensions',
 						"SERVICE_TYPE" => \Bitrix\Sale\Services\Base\RestrictionManager::SERVICE_TYPE_SHIPMENT,
 						"PARAMS" => $p
 					);
 				}
 
 				break;
+
+			case "MAX_SIZE":
+
+				$className = \Bitrix\Sale\Delivery\Restrictions\ByMaxSize::class;
+
+				$p = array();
+				if(isset($params['MAX_SIZE']) && intval($params['MAX_SIZE']) > 0)	$p['MAX_SIZE'] = $params['MAX_SIZE'];
+
+				if(!empty($p))
+				{
+					$fields = array(
+						"SERVICE_ID" => $profileId,
+						"SERVICE_TYPE" => \Bitrix\Sale\Services\Base\RestrictionManager::SERVICE_TYPE_SHIPMENT,
+						"PARAMS" => $p
+					);
+				}
+
+				break;
+
+			case 'BY_LOCATION':
+			case 'EXCLUDE_LOCATION':
+
+				$className = ($type === 'BY_LOCATION')
+					? \Bitrix\Sale\Delivery\Restrictions\ByLocation::class
+					: \Bitrix\Sale\Delivery\Restrictions\ExcludeLocation::class;
+
+				if (isset($params['LOCATION']))
+				{
+					$p['LOCATION'] = $params['LOCATION'];
+				}
+
+				if(!empty($p))
+				{
+					$fields = array(
+						'SERVICE_ID' => $profileId,
+						'SERVICE_TYPE' => \Bitrix\Sale\Services\Base\RestrictionManager::SERVICE_TYPE_SHIPMENT,
+						'PARAMS' => $p,
+					);
+				}
+
+				break;
 		}
 
-		if(!empty($fields))
-			ServiceRestrictionTable::add($fields);
+		if($className && !empty($fields))
+		{
+			$className::save($fields);
+		}
 	}
 
 	/**
@@ -429,14 +630,24 @@ class AdditionalHandler extends Base
 	 * @param array $fields
 	 * @return array
 	 */
-	protected function getProfileDefaultParams($type, array $fields)
+	protected function 	getProfileDefaultParams($type, array $fields)
 	{
-		return array(
+		if(isset($fields["ACTIVE"]))
+			$active = $fields["ACTIVE"];
+		else
+			$active = $this->active ? "Y" : "N";
+
+		if(isset($fields["SORT"]))
+			$sort = $fields["SORT"];
+		else
+			$sort = $this->sort;
+
+		$result = array(
 			"CODE" => "",
 			"PARENT_ID" => $this->id,
 			"NAME" => $fields["NAME"],
-			"ACTIVE" => $this->active ? "Y" : "N",
-			"SORT" => $this->sort,
+			"ACTIVE" => $active,
+			"SORT" => $sort,
 			"DESCRIPTION" => $fields["DESCRIPTION"],
 			"CLASS_NAME" => '\Sale\Handlers\Delivery\AdditionalProfile',
 			"CURRENCY" => $this->currency,
@@ -444,11 +655,18 @@ class AdditionalHandler extends Base
 				"MAIN" => array(
 					"PROFILE_TYPE" => $type,
 					"NAME" => $fields["NAME"],
-					"DESCRIPTION" => $fields["DESCRIPTION"],
-					"MODE" => $fields["MODE"]
+					"DESCRIPTION" => $fields["DESCRIPTION"]
 				)
 			)
 		);
+
+		if(!empty($fields["MODE"]))
+			$result['CONFIG']['MAIN']["MODE"] = $fields["MODE"];
+
+		if(!empty($fields['DEFAULT']['MAIN']))
+			$result['CONFIG']['MAIN'] = array_merge($result['CONFIG']['MAIN'], $fields['DEFAULT']['MAIN']);
+
+		return $result;
 	}
 
 	public function getAdminMessage()
@@ -461,10 +679,10 @@ class AdditionalHandler extends Base
 		elseif(!Location::isInstalled() && !empty($_REQUEST['ID']))
 			$message = Loc::getMessage('SALE_DLVRS_ADD_LOC_INSTALL');
 
-		if(strlen($message) > 0)
+		if($message <> '')
 		{
 			$result = array(
-				'MESSAGE' => $message,
+				"DETAILS" => $message,
 				"TYPE" => "ERROR",
 				"HTML" => true
 			);
@@ -478,15 +696,25 @@ class AdditionalHandler extends Base
 		return Option::get('sale', RestClient::WRONG_LICENSE_OPTION, 'N') == 'Y';
 	}
 
-	static public function execAdminAction()
+	public function execAdminAction()
 	{
 		$result = new \Bitrix\Sale\Result();
-		Asset::getInstance()->addJs("/bitrix/js/sale/additional_delivery.js", true);
+		\Bitrix\Main\UI\Extension::load("main.core");
+		Asset::getInstance()->addJs("/bitrix/js/sale/additional_delivery.js");
 		Asset::getInstance()->addString('<link rel="stylesheet" type="text/css" href="/bitrix/css/sale/additional_delivery.css">');
+		Asset::getInstance()->addString('<script>
+			if(top.BX)
+			{
+				BX.addCustomEvent(
+					\'onSaleDeliveryRusPostShippingPointSelect\', 
+					BX.Sale.Handler.Delivery.Additional.onRusPostShippingPointsSelect
+				);
+			}
+		</script>');
 		return $result;
 	}
 
-	static public function getAdminAdditionalTabs()
+	public function getAdminAdditionalTabs()
 	{
 		self::install();
 
@@ -533,6 +761,7 @@ class AdditionalHandler extends Base
 
 		$eventManager = \Bitrix\Main\EventManager::getInstance();
 		$eventManager->registerEventHandler('sale', 'onSaleDeliveryExtraServicesClassNamesBuildList' , 'sale', '\Sale\Handlers\Delivery\AdditionalHandler', 'onSaleDeliveryExtraServicesClassNamesBuildList');
+		$eventManager->registerEventHandler('sale', 'onSaleDeliveryTrackingClassNamesBuildList', 'sale', '\Sale\Handlers\Delivery\AdditionalHandler', 'onSaleDeliveryTrackingClassNamesBuildList');
 
 		return parent::install();
 	}
@@ -566,25 +795,35 @@ class AdditionalHandler extends Base
 
 		$eventManager = \Bitrix\Main\EventManager::getInstance();
 		$eventManager->unRegisterEventHandler('sale', 'onSaleDeliveryExtraServicesClassNamesBuildList' , 'sale', '\Sale\Handlers\Delivery\AdditionalHandler', 'onSaleDeliveryExtraServicesClassNamesBuildList');
+		$eventManager->unRegisterEventHandler('sale', 'onSaleDeliveryTrackingClassNamesBuildList' , 'sale', '\Sale\Handlers\Delivery\AdditionalHandler', 'onSaleDeliveryTrackingClassNamesBuildList');
 
 		return parent::install();
 	}
 
+	public static function onSaleDeliveryTrackingClassNamesBuildList()
+	{
+		return new \Bitrix\Main\EventResult(
+			\Bitrix\Main\EventResult::SUCCESS,
+			array(
+				'\Sale\Handlers\Delivery\AdditionalTracking' => '/bitrix/modules/sale/handlers/delivery/additional/tracking.php'
+			),
+			'sale'
+		);
+	}
+
 	public function getEmbeddedExtraServicesList()
 	{
-		static $result = null;
-
-		if($result === null)
+		if($this->extraServicesList === null)
 		{
-			$result = array();
+			$this->extraServicesList = array();
 			$client = new RestClient();
 			$res = $client->getDeliveryExtraServices($this->serviceType);
 
 			if($res->isSuccess())
-				$result = $res->getData();
+				$this->extraServicesList = $res->getData();
 		}
 
-		return $result;
+		return $this->extraServicesList;
 	}
 
 	public static function onSaleDeliveryExtraServicesClassNamesBuildList()
@@ -599,9 +838,279 @@ class AdditionalHandler extends Base
 		);
 	}
 
-	static public function isCompatible(Shipment $shipment)
+	public function isCompatible(Shipment $shipment)
 	{
 		$client = new RestClient();
 		return $client->isServerAlive();
+	}
+
+	public function getTrackingUrlTempl()
+	{
+		$config = \Sale\Handlers\Delivery\AdditionalProfile::extractConfigValues($this->getConfig());
+		return !empty($config["MAIN"]["TRACKING_URL_TEMPL"]) ? $config["MAIN"]["TRACKING_URL_TEMPL"] : '';
+	}
+
+	/**
+	 * @param Shipment $shipment
+	 * @param string $serviceType
+	 * @return array
+	 */
+	public static function getShipmentParams(Shipment $shipment, $serviceType)
+	{
+		/** @var \Bitrix\Sale\ShipmentCollection $shipmentCollection */
+		$shipmentCollection = $shipment->getCollection();
+		/** @var \Bitrix\Sale\Order $order */
+		$order = $shipmentCollection->getOrder();
+		$props = $order->getPropertyCollection();
+		$loc = $props->getDeliveryLocation();
+		$locToInternalCode = !!$loc ? $loc->getValue() : "";
+		$locFromRequest = array();
+		$locToRequest = array();
+
+		if(!empty($locToInternalCode))
+			$locToRequest = self::getLocationForRequest($locToInternalCode);
+
+		$shopLocation = \CSaleHelper::getShopLocation();
+
+		if(!empty($shopLocation['CODE']))
+			$locFromRequest = self::getLocationForRequest($shopLocation['CODE']);
+
+		$result = array(
+			"ITEMS" => array(),
+			"LOCATION_FROM" => $locFromRequest['EXTERNAL_ID'] ?? null,
+			"LOCATION_FROM_NAME" => $locFromRequest['NAME'] ??  null,
+			"LOCATION_FROM_CODE" => (!empty($shopLocation['CODE'])) ? $shopLocation['CODE'] : '',
+			"LOCATION_TO" => $locToRequest['EXTERNAL_ID'] ?? null,
+			"LOCATION_TO_NAME" => $locToRequest['NAME'] ?? null,
+			"LOCATION_TO_CODE" => $locToInternalCode,
+			"LOCATION_TO_TYPES" => self::getLocationChainByTypes($locToInternalCode, LANGUAGE_ID)
+		);
+
+		if($address = $props->getAddress())
+			$result["ADDRESS"] = $address->getValue();
+
+		if($phone = $props->getPhone())
+			$result["PHONE"] = $phone->getValue();
+
+		if($payerName = $props->getPayerName())
+			$result["PAYER_NAME"] = $payerName->getValue();
+
+		if($serviceType == "RUSPOST" )
+		{
+			$zipFrom = \CSaleHelper::getShopLocationZIP();
+
+			if($zipFrom <> '')
+			{
+				$result["ZIP_FROM"] = $zipFrom;
+			}
+			elseif(!empty($shopLocation['CODE']))
+			{
+				$extLoc = LocationHelper::getZipByLocation($shopLocation['CODE'], array('limit' => 1))->fetch();
+
+				if(!empty($extLoc['XML_ID']))
+					$result["ZIP_FROM"] = $extLoc['XML_ID'];
+			}
+
+			$zipTo = $props->getDeliveryLocationZip();
+			$zipTo = !!$zipTo ? $zipTo->getValue() : "";
+
+			if($zipTo <> '')
+			{
+				$result["ZIP_TO"] = $zipTo;
+			}
+			elseif(!empty($locToInternalCode))
+			{
+				$extLoc = LocationHelper::getZipByLocation($locToInternalCode, array('limit' => 1))->fetch();
+
+				if(!empty($extLoc['XML_ID']))
+					$result["ZIP_TO"] = $extLoc['XML_ID'];
+			}
+		}
+
+		$price = 0;
+		$weight = 0;
+
+		/** @var \Bitrix\Sale\ShipmentItem $shipmentItem */
+		foreach($shipment->getShipmentItemCollection()->getShippableItems() as $shipmentItem)
+		{
+			$basketItem = $shipmentItem->getBasketItem();
+
+			if(!$basketItem)
+				continue;
+
+			//$itemFieldValues = $basketItem->getFieldValues();
+			$itemFieldValues = array(
+				"PRICE" => $basketItem->getPrice(),
+				"WEIGHT" => $basketItem->getWeight(),
+				"CURRENCY" => $basketItem->getCurrency(),
+				"QUANTITY" => $shipmentItem->getQuantity(),
+				"DIMENSIONS" => $basketItem->getField("DIMENSIONS")
+			);
+
+			$price += $itemFieldValues["PRICE"] * $itemFieldValues["QUANTITY"];
+
+			if(!empty($itemFieldValues["DIMENSIONS"]) && is_string($itemFieldValues["DIMENSIONS"]))
+				$itemFieldValues["DIMENSIONS"] = unserialize($itemFieldValues["DIMENSIONS"], ['allowed_classes' => false]);
+
+			$result["ITEMS"][] = $itemFieldValues;
+		}
+
+		//Extra services
+		$esList = \Bitrix\Sale\Delivery\ExtraServices\Manager::getExtraServicesList($shipment->getDeliveryId(), false);
+
+		if(!empty($esList))
+		{
+			$result['EXTRA_SERVICES'] = array();
+
+			foreach($shipment->getExtraServices() as $esId => $esVal)
+			{
+				if(empty($esList[$esId]['CODE']))
+					continue;
+
+				if($esList[$esId]['CLASS_NAME'] == '\Bitrix\Sale\Delivery\ExtraServices\Checkbox' && $esVal != 'Y')
+					continue;
+
+				$result['EXTRA_SERVICES'][$esList[$esId]['CODE']] = $esVal;
+			}
+		}
+
+		$delivery= Manager::getObjectById($shipment->getDeliveryId());
+		$result['DELIVERY_SERVICE_CONFIG'] = $delivery ? $delivery->getConfigValues() : [];
+		$result['WEIGHT'] = $shipment->getWeight();
+		$result['PRICE'] = $price;
+		$result['SHIPMENT_ID'] = $shipment->getId();
+		$result['PRICE_DELIVERY'] = $shipment->getField('PRICE_DELIVERY');
+
+		return $result;
+	}
+
+	/**
+	 * @param $locationCode
+	 * @return array
+	 * @throws \Bitrix\Main\ArgumentException
+	 */
+	protected static function getLocationForRequest($locationCode)
+	{
+		if($locationCode == '')
+			return array();
+
+		static $result = array();
+
+		if(!isset($result[$locationCode]))
+		{
+			$externalId = Location::getExternalId($locationCode);
+			$name = '';
+
+			if($externalId <> '')
+			{
+				$dbRes = ExternalTable::getList(array(
+					'filter' => array(
+						'XML_ID' => $externalId,
+						'SERVICE_ID' => Location::getExternalServiceId(),
+						'LOCATION.NAME.LANGUAGE_ID' => 'ru'
+					),
+					'select' => array('NAME' => 'LOCATION.NAME.NAME')
+				));
+
+				if($rec = $dbRes->fetch())
+					$name = $rec['NAME'];
+			}
+
+			$result[$locationCode] = array(
+				'EXTERNAL_ID' => $externalId,
+				'NAME' => $name
+			);
+		}
+
+		return $result[$locationCode];
+	}
+
+	/**
+	 * @param int $locationCode Location code.
+	 * @param string $lang Language identifier.
+	 * @return array Location components by type.
+	 */
+	protected static function getLocationChainByTypes($locationCode, $lang = LANGUAGE_ID)
+	{
+		if ($locationCode == '')
+		{
+			return [];
+		}
+
+		$res = LocationTable::getList([
+			'filter' => [
+				'=CODE' => $locationCode,
+			],
+			'select' => [
+				'ID',
+				'CODE',
+				'LEFT_MARGIN',
+				'RIGHT_MARGIN',
+			]
+		]);
+
+		if (!$loc = $res->fetch())
+		{
+			return [];
+		}
+
+		$result = [];
+
+		$res = LocationTable::getList(array(
+			'filter' => [
+				'<=LEFT_MARGIN' => $loc['LEFT_MARGIN'],
+				'>=RIGHT_MARGIN' => $loc['RIGHT_MARGIN'],
+				'NAME.LANGUAGE_ID' => $lang,
+				'TYPE.NAME.LANGUAGE_ID' => $lang,
+			],
+			'select' => [
+				'ID',
+				'CODE',
+				'LOCATION_NAME' => 'NAME.NAME',
+				'TYPE_NAME' => 'TYPE.NAME.NAME',
+				'TYPE_CODE' => 'TYPE.CODE',
+			]
+		));
+
+		while ($locParent = $res->fetch())
+		{
+			if (!isset($result[$locParent['TYPE_CODE']]))
+			{
+				$result[$locParent['TYPE_CODE']] = [];
+			}
+
+			$result[$locParent['TYPE_CODE']][] = $locParent['LOCATION_NAME'];
+		}
+
+		return $result;
+	}
+
+	public function prepareFieldsForSaving(array $fields)
+	{
+		if(isset($fields['CONFIG']['MAIN']['SHIPPING_POINT']['NAME']))
+			$fields['CONFIG']['MAIN']['SHIPPING_POINT']['NAME'] = htmlspecialcharsback($fields['CONFIG']['MAIN']['SHIPPING_POINT']['NAME']);
+
+		if(isset($fields['CONFIG']['MAIN']['SHIPPING_POINT']['VALUE']))
+			$fields['CONFIG']['MAIN']['SHIPPING_POINT']['VALUE'] = htmlspecialcharsback($fields['CONFIG']['MAIN']['SHIPPING_POINT']['VALUE']);
+
+		if(isset($fields['CONFIG']['MAIN']['SHIPPING_POINT']['ADDITIONAL']))
+			$fields['CONFIG']['MAIN']['SHIPPING_POINT']['ADDITIONAL'] = htmlspecialcharsback($fields['CONFIG']['MAIN']['SHIPPING_POINT']['ADDITIONAL']);
+
+		return parent::prepareFieldsForSaving($fields);
+	}
+
+	/** @inheritDoc */
+	public static function isHandlerCompatible()
+	{
+		if(!parent::isHandlerCompatible())
+		{
+			return false;
+		}
+
+		return in_array(
+			\Bitrix\Sale\Delivery\Helper::getPortalZone(),
+			['', 'ru', 'kz', 'by'],
+			true
+		);
 	}
 }

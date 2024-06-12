@@ -1,4 +1,4 @@
-<?
+<?php
 
 use	Bitrix\Sale\Compatible,
 	Bitrix\Sale\Internals,
@@ -7,143 +7,8 @@ use	Bitrix\Sale\Compatible,
 
 Loc::loadMessages(__FILE__);
 
-/** @deprecated */
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorderpropsvalue/index.php
- * @author Bitrix
- * @deprecated
- */
-class CSaleOrderPropsValue
+class CAllSaleOrderPropsValue
 {
-	
-	/**
-	* <p>Метод возвращает результат выборки записей из заказов в соответствии со своими параметрами. Нестатический метод.</p>
-	*
-	*
-	* @param array $arOrder = array() Массив, в соответствии с которым сортируются результирующие
-	* записи. Массив имеет вид: 		<pre class="syntax">array( "название_поля1" =&gt;
-	* "направление_сортировки1", "название_поля2" =&gt;
-	* "направление_сортировки2", . . . )</pre> 		В качестве "название_поля<i>N</i>"
-	* может стоять любое поле 		местоположения, а в качестве
-	* "направление_сортировки<i>X</i>" могут быть значения "<i>ASC</i>" (по
-	* возрастанию) и "<i>DESC</i>" (по убыванию).<br><br> 		Если массив сортировки
-	* имеет несколько элементов, то 		результирующий набор сортируется
-	* последовательно по каждому элементу (т.е. сначала сортируется по
-	* первому элементу, потом результат сортируется по второму и
-	* т.д.). <br><br>  Значение по умолчанию - пустой массив array() - означает,
-	* что результат отсортирован не будет.
-	*
-	* @param array $arFilter = array() Массив, в соответствии с которым фильтруются 		записи значений
-	* свойств. Массив имеет вид: 		<pre class="syntax">array(
-	* "[модификатор1][оператор1]название_поля1" =&gt; "значение1",
-	* "[модификатор2][оператор2]название_поля2" =&gt; "значение2", . . . )</pre>
-	* Удовлетворяющие фильтру записи возвращаются в результате, а
-	* записи, которые не удовлетворяют условиям фильтра,
-	* отбрасываются.<br><br> 	Допустимыми являются следующие
-	* модификаторы: 		<ul> <li> <b> 	!</b>  - отрицание;</li> 			<li> <b> 	+</b>  - значения
-	* null, 0 и пустая строка так же удовлетворяют условиям фильтра.</li>
-	* 		</ul> 	Допустимыми являются следующие операторы: 	<ul> <li> <b>&gt;=</b> -
-	* значение поля больше или равно передаваемой в фильтр величины;</li>
-	* 			<li> <b>&gt;</b>  - значение поля строго больше передаваемой в фильтр
-	* величины;</li> 			<li> <b>&lt;=</b> - значение поля меньше или равно
-	* передаваемой в фильтр величины;</li> 			<li> <b>&lt;</b> - значение поля
-	* строго меньше передаваемой в фильтр величины;</li> 			<li> <b>@</b>  -
-	* значение поля находится в передаваемом в фильтр массиве со
-	* списком значений;</li> 			<li> <b>~</b>  - значение поля проверяется на
-	* соответствие передаваемому в фильтр шаблону;</li> 			<li> <b>%</b>  -
-	* значение поля проверяется на соответствие передаваемой в фильтр
-	* строке в соответствии с языком запросов.</li> 	</ul> В качестве
-	* "название_поляX" может стоять любое поле 		заказов.<br><br> 		Пример
-	* фильтра: 		<pre class="syntax">array("~CODE" =&gt; "SH*")</pre> 		Этот фильтр означает
-	* "выбрать все записи, в которых значение в поле CODE (символьный код
-	* свойства) начинается с SH".<br><br> 	Значение по умолчанию - пустой
-	* массив array() - означает, что результат отфильтрован не будет.
-	*
-	* @param array $arGroupBy = false Массив полей, по которым группируются записи 		значений свойств.
-	* Массив имеет вид: 		<pre class="syntax"> array("название_поля1",      
-	* "группирующая_функция2" =&gt; "название_поля2", . . .)</pre> 	В качестве
-	* "название_поля<i>N</i>" может стоять любое поле 		значений свойств. В
-	* качестве группирующей функции могут стоять: 		<ul> <li> 	<b> 	COUNT</b> -
-	* подсчет количества;</li> 			<li> <b>AVG</b> - вычисление среднего
-	* значения;</li> 			<li> <b>MIN</b> - вычисление минимального значения;</li> 			<li>
-	* 	<b> 	MAX</b> - вычисление максимального значения;</li> 			<li> <b>SUM</b> -
-	* вычисление суммы.</li> 		</ul> 	Если массив пустой, то метод вернет
-	* число записей, удовлетворяющих фильтру.<br><br> 		Значение по
-	* умолчанию - <i>false</i> - означает, что результат группироваться не
-	* будет.
-	*
-	* @param array $arNavStartParams = false Массив параметров выборки. Может содержать следующие ключи: 		<ul>
-	* <li>"<b>nTopCount</b>" - количество возвращаемых методом записей будет
-	* ограничено сверху значением этого ключа;</li> 			<li> 	любой ключ,
-	* принимаемый методом <b> CDBResult::NavQuery</b> 				в качестве третьего
-	* параметра.</li> 		</ul> Значение по умолчанию - <i>false</i> - означает, что
-	* параметров выборки нет.
-	*
-	* @param array $arSelectFields = array() Массив полей записей, которые будут возвращены методом. Можно
-	* указать только те поля, которые необходимы. Если в массиве
-	* присутствует значение 		"*", то будут возвращены все доступные
-	* поля.<br><br> 		Значение по умолчанию - пустой массив 		array() - означает,
-	* что будут возвращены все поля основной таблицы запроса.
-	*
-	* @return CDBResult <p>Возвращается объект класса CDBResult, содержащий набор
-	* ассоциативных массивов параметров значений свойств с
-	* ключами:</p><table class="tnormal" width="100%"> <tr> <th width="15%">Ключ</th>     <th>Описание</th>
-	*   </tr> <tr> <td>ID</td>     <td>Код значения свойства заказа.</td>   </tr> <tr>
-	* <td>ORDER_ID</td>     <td>Код заказа.</td>   </tr> <tr> <td>ORDER_PROPS_ID</td>     <td>Код
-	* свойства.</td>   </tr> <tr> <td>NAME</td>     <td>Название свойства.</td>   </tr> <tr>
-	* <td>VALUE</td>     <td>Значение свойства.</td>   </tr> <tr> <td>CODE</td>     <td>Символьный
-	* код свойства.</td>   </tr> </table><p>Если в качестве параметра arGroupBy
-	* передается пустой массив, то метод вернет число записей,
-	* удовлетворяющих фильтру.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // Узнаем имя заказчика (т.е. значение, которое было введено в поле свойства 
-	* // заказа $ORDER_ID с установленным флагом IS_PAYER)
-	* $PAYER_NAME = "";
-	* $db_order = CSaleOrder::GetList(
-	*         array("DATE_UPDATE" =&gt; "DESC"),
-	*         array("ID" =&gt; $ORDER_ID)
-	*     );
-	* if ($arOrder = $db_order-&gt;Fetch())
-	* {
-	*    $db_props = CSaleOrderProps::GetList(
-	*         array("SORT" =&gt; "ASC"),
-	*         array(
-	*                 "PERSON_TYPE_ID" =&gt; $arOrder["PERSON_TYPE_ID"],
-	*                 "IS_PAYER" =&gt; "Y"
-	*             )
-	*     );
-	*    if ($arProps = $db_props-&gt;Fetch())
-	*    {
-	*       $db_vals = CSaleOrderPropsValue::GetList(
-	*             array("SORT" =&gt; "ASC"),
-	*             array(
-	*                     "ORDER_ID" =&gt; $ORDER_ID,
-	*                     "ORDER_PROPS_ID" =&gt; $arProps["ID"]
-	*                 )
-	*         );
-	*       if ($arVals = $db_vals-&gt;Fetch())
-	*         $PAYER_NAME = $arVals["VALUE"];
-	*    }
-	* }
-	* echo $PAYER_NAME;
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorderpropsvalue/csaleorderpropsvalue__getlist.52da0d54.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		global $DB;
@@ -152,7 +17,7 @@ class CSaleOrderPropsValue
 		{
 			$arOrder = strval($arOrder);
 			$arFilter = strval($arFilter);
-			if (strlen($arOrder) > 0 && strlen($arFilter) > 0)
+			if ($arOrder <> '' && $arFilter <> '')
 				$arOrder = array($arOrder => $arFilter);
 			else
 				$arOrder = array();
@@ -170,10 +35,10 @@ class CSaleOrderPropsValue
 
 		// add aliases
 
-		$query = new Compatible\OrderQueryLocation(Internals\OrderPropsValueTable::getEntity());
-		$query->addLocationRuntimeField('VALUE', 'PROPERTY');
+		$query = new Compatible\OrderPropertyValuesQuery(Internals\OrderPropsValueTable::getEntity());
 		$query->addAliases(array(
 			// for GetList
+			'VALUE_ORIG'           => 'VALUE',
 			'PROP_ID'              => 'PROPERTY.ID',
 			'PROP_PERSON_TYPE_ID'  => 'PROPERTY.PERSON_TYPE_ID',
 			'PROP_NAME'            => 'PROPERTY.NAME',
@@ -216,7 +81,7 @@ class CSaleOrderPropsValue
 
 		$relationFilter = array();
 
-		if ($arFilter['PAYSYSTEM_ID'])
+		if (!empty($arFilter['PAYSYSTEM_ID']))
 		{
 			$relationFilter []= array(
 				'=PROPERTY.Bitrix\Sale\Internals\OrderPropsRelationTable:lPROPERTY.ENTITY_TYPE' => 'P',
@@ -224,7 +89,7 @@ class CSaleOrderPropsValue
 			);
 		}
 
-		if ($arFilter['DELIVERY_ID'])
+		if (!empty($arFilter['DELIVERY_ID']))
 		{
 			$relationFilter['LOGIC'] = 'OR';
 			$relationFilter []= array(
@@ -234,7 +99,11 @@ class CSaleOrderPropsValue
 		}
 
 		if ($relationFilter)
+		{
 			$query->addFilter(null, $relationFilter);
+		}
+
+		$arFilter['ENTITY_TYPE'] = \Bitrix\Sale\Registry::ENTITY_ORDER;
 
 		// execute
 
@@ -270,25 +139,6 @@ class CSaleOrderPropsValue
 		}
 	}
 
-	
-	/**
-	* <p>Метод возвращает параметры значения с кодом ID свойства заказа. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код значения свойства заказа.
-	*
-	* @return array <p>Возвращается ассоциативный массив параметров значения
-	* свойства с ключами:</p><table class="tnormal" width="100%"> <tr> <th width="15%">Ключ</th>    
-	* <th>Описание</th>   </tr> <tr> <td>ID</td>     <td>Код значения свойства заказа.</td>
-	* </tr> <tr> <td>ORDER_ID</td>     <td>Код заказа.</td>   </tr> <tr> <td>ORDER_PROPS_ID</td>     <td>Код
-	* свойства.</td>   </tr> <tr> <td>NAME</td>     <td>Название свойства.</td>   </tr> <tr>
-	* <td>VALUE</td>     <td>Значение свойства.</td>   </tr> <tr> <td>CODE</td>     <td>Символьный
-	* код свойства.</td>   </tr> </table><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorderpropsvalue/csaleorderpropsvalue__getbyid.54043fd5.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		return $ID
@@ -296,103 +146,6 @@ class CSaleOrderPropsValue
 			: false;
 	}
 
-	
-	/**
-	* <p>Метод возвращает набор значений свойств для заказа с кодом ORDER_ID. Кроме параметров значений свойств возвращаются также некоторые связанные значения. Нестатический метод.</p>
-	*
-	*
-	* @param int $ORDER_ID  Код заказа.
-	*
-	* @return CDBResult <p>Возвращается объект класса CDBResult, содержащий ассоциативные
-	* массивы параметров значений свойств заказа (и сопутствующие
-	* параметры других объектов) с ключами:</p><table class="tnormal" width="100%"> <tr> <th
-	* width="15%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>ID</td>     <td>Код значения
-	* свойства заказа.</td> </tr> <tr> <td>ORDER_ID</td>     <td>Код заказа.</td> </tr> <tr>
-	* <td>ORDER_PROPS_ID</td>     <td>Код свойства заказа.</td> </tr> <tr> <td>NAME</td>    
-	* <td>Название свойства заказа (привязанное к значению) </td>   </tr> <tr>
-	* <td>VALUE</td>     <td>Значение свойства заказа.</td> </tr> <tr> <td>CODE</td>    
-	* <td>Символьный код свойства заказа.</td> </tr> <tr> <td>PROPERTY_NAME</td>    
-	* <td>Название свойства заказа.</td> </tr> <tr> <td>TYPE</td>     <td>Тип свойства
-	* заказа.</td> </tr> <tr> <td>PROPS_GROUP_ID</td>     <td>Код группы свойств заказа.</td>
-	* </tr> <tr> <td>GROUP_NAME</td>     <td>Название группы свойств заказа.</td> </tr> <tr>
-	* <td>IS_LOCATION</td>     <td>Флаг (Y/N) использовать ли это значение в качестве
-	* кода местоположения для получения стоимости доставки.</td> </tr> <tr>
-	* <td>IS_EMAIL</td>     <td>Флаг (Y/N) использовать ли это значение в качестве email
-	* адреса покупателя.</td> </tr> <tr> <td>IS_PROFILE_NAME</td>     <td>Флаг (Y/N)
-	* использовать ли это значение в качестве названия профиля
-	* покупателя.</td> </tr> <tr> <td>IS_PAYER</td>     <td>Флаг (Y/N) использовать ли это
-	* значение в качестве имени покупателя.</td> </tr> </table><p>Результирующий
-	* набор отсортирован последовательно по индексу сортировки группы
-	* свойств заказа, названию группы свойств заказа, индексу
-	* сортировки свойства заказа, названию свойства заказа.</p><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // Выведем все свойства заказа с кодом $ID, сгруппированые по группам свойств
-	* $db_props = CSaleOrderPropsValue::GetOrderProps($ID);
-	* $iGroup = -1;
-	* while ($arProps = $db_props-&gt;Fetch())
-	* {
-	*    if ($iGroup!=IntVal($arProps["PROPS_GROUP_ID"]))
-	*    {
-	*       echo "&lt;b&gt;".$arProps["GROUP_NAME"]."&lt;/b&gt;&lt;br&gt;";
-	*       $iGroup = IntVal($arProps["PROPS_GROUP_ID"]);
-	*    }
-	* 
-	*    echo $arProps["NAME"].": ";
-	* 
-	*    if ($arProps["TYPE"]=="CHECKBOX")
-	*    {
-	*       if ($arProps["VALUE"]=="Y")
-	*          echo "Да";
-	*       else
-	*          echo "Нет";
-	*    }
-	*    elseif ($arProps["TYPE"]=="TEXT" || $arProps["TYPE"]=="TEXTAREA")
-	*    {
-	*       echo htmlspecialchars($arProps["VALUE"]);
-	*    }
-	*    elseif ($arProps["TYPE"]=="SELECT" || $arProps["TYPE"]=="RADIO")
-	*    {
-	*       $arVal = CSaleOrderPropsVariant::GetByValue($arProps["ORDER_PROPS_ID"], $arProps["VALUE"]);
-	*       echo htmlspecialchars($arVal["NAME"]);
-	*    }
-	*    elseif ($arProps["TYPE"]=="MULTISELECT")
-	*    {
-	*       $curVal = split(",", $arProps["VALUE"]);
-	*       for ($i = 0; $i&lt;count($curVal); $i++)
-	*       {
-	*          $arVal = CSaleOrderPropsVariant::GetByValue($arProps["ORDER_PROPS_ID"], $curVal[$i]);
-	*          if ($i&gt;0) echo ", ";
-	*          echo htmlspecialchars($arVal["NAME"]);
-	*       }
-	*    }
-	*    elseif ($arProps["TYPE"]=="LOCATION")
-	*    {
-	*       $arVal = CSaleLocation::GetByID($arProps["VALUE"], LANGUAGE_ID);
-	*       echo htmlspecialchars($arVal["COUNTRY_NAME"]." - ".$arVal["CITY_NAME"]);
-	*    }
-	* 
-	*    echo "&lt;br&gt;";
-	* }
-	* ?&gt;
-	* //выборка по нескольким свойствам (например, по LOCATION и ADDRESS):
-	* $dbOrderProps = CSaleOrderPropsValue::GetList(
-	*         array("SORT" =&gt; "ASC"),
-	*         array("ORDER_ID" =&gt; $intOrderID, "CODE"=&gt;array("LOCATION", "ADDRESS"))
-	*     );
-	*     while ($arOrderProps = $dbOrderProps-&gt;GetNext()):
-	*             echo "&lt;pre&gt;"; print_r($arOrderProps); echo "&lt;/pre&gt;";
-	*     endwhile;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorderpropsvalue/csaleorderpropsvalue__getorderprops.af7c248d.php
-	* @author Bitrix
-	*/
 	public static function GetOrderProps($ORDER_ID)
 	{
 		return self::GetList(
@@ -428,13 +181,13 @@ class CSaleOrderPropsValue
 
 	public static function CheckFields($ACTION, &$arFields, $ID = 0)
 	{
-		if ((is_set($arFields, "ORDER_ID") || $ACTION=="ADD") && IntVal($arFields["ORDER_ID"]) <= 0)
+		if ((is_set($arFields, "ORDER_ID") || $ACTION=="ADD") && intval($arFields["ORDER_ID"]) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGOPV_EMPTY_ORDER_ID"), "EMPTY_ORDER_ID");
 			return false;
 		}
-		
-		if ((is_set($arFields, "ORDER_PROPS_ID") || $ACTION=="ADD") && IntVal($arFields["ORDER_PROPS_ID"]) <= 0)
+
+		if ((is_set($arFields, "ORDER_PROPS_ID") || $ACTION=="ADD") && intval($arFields["ORDER_PROPS_ID"]) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGOPV_EMPTY_PROP_ID"), "EMPTY_ORDER_PROPS_ID");
 			return false;
@@ -463,7 +216,7 @@ class CSaleOrderPropsValue
 						"ORDER_ID" => $arFields["ORDER_ID"],
 						"ORDER_PROPS_ID" => $arFields["ORDER_PROPS_ID"],
 					);
-				if(IntVal($ID) > 0)
+				if(intval($ID) > 0)
 					$arFilter["!ID"] = $ID;
 				$dbP = CSaleOrderPropsValue::GetList(Array(), $arFilter);
 				if($arP = $dbP->Fetch())
@@ -474,72 +227,22 @@ class CSaleOrderPropsValue
 			}
 		}
 
+		if (
+			$ACTION === 'UPDATE'
+			&& $ID > 0
+			&& !self::GetByID($ID)
+		)
+		{
+			return false;
+		}
+
 		return true;
 	}
 
-	
-	/**
-	* <p>Метод добавляет новое значение свойства к заказу на основании параметров arFields. Нестатический метод.</p>
-	*
-	*
-	* @param array $arFields  Ассоциативный массив параметров значения свойства, ключами в
-	* котором являются названия параметров значения свойства, а
-	* значениями - соответствующие значения.<br><br> 	  Допустимые ключи:<ul>
-	* <li> <b>ORDER_ID</b> - код заказа (обязательное);</li> 	<li> <b>ORDER_PROPS_ID</b> - код
-	* свойства (обязательное);</li> 	<li> <b>NAME</b> - название свойства
-	* (обязательное);</li> 	<li> <b>VALUE</b> - значение свойства;</li> 	<li> <b>CODE</b> -
-	* символьный код свойства.</li> </ul>
-	*
-	* @return int <p>Метод возвращает код добавленного значения свойства или <i>false</i>
-	* в случае ошибки.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $arFields = array(
-	*    "ORDER_ID" =&gt; 124859,
-	*    "ORDER_PROPS_ID" =&gt; 15,
-	*    "NAME" =&gt; "Адрес доставки",
-	*    "CODE" =&gt; "ADDRESS",
-	*    "VALUE" =&gt; "ул. Строителей, дом 88, кв. 15"
-	* );
-	* 
-	* CSaleOrderPropsValue::Add($arFields);
-	* ?&gt;
-	* //метод класса, который добавляет свойство (код/значение) к заказу, динамически узнавая идентификатор свойства: 
-	*  public static function AddOrderProperty($code, $value, $order) {
-	*       if (!strlen($code)) {
-	*          return false;
-	*       }
-	*       if (CModule::IncludeModule('sale')) {
-	*          if ($arProp = CSaleOrderProps::GetList(array(), array('CODE' =&gt; $code))-&gt;Fetch()) {
-	*             return CSaleOrderPropsValue::Add(array(
-	*                'NAME' =&gt; $arProp['NAME'],
-	*                'CODE' =&gt; $arProp['CODE'],
-	*                'ORDER_PROPS_ID' =&gt; $arProp['ID'],
-	*                'ORDER_ID' =&gt; $order,
-	*                'VALUE' =&gt; $value,
-	*             ));
-	*          }
-	*       }
-	*    }
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorderpropsvalue/csaleorderpropsvalue__add.af505780.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		if (! self::CheckFields('ADD', $arFields, 0))
 			return false;
-
-//		if ($arFields['VALUE'] && ($oldProperty = CSaleOrderProps::GetById($arFields['ORDER_PROPS_ID'])))
-//		{
-//			$oldProperty['VALUE'] = $arFields['VALUE'];
-//			$arFields['VALUE'] = CSaleOrderPropsAdapter::convertOldToNew($oldProperty, 'VALUE', true);
-//		}
 
 		// location ID to CODE, VALUE is always present
 		if((string) $arFields['VALUE'] != '')
@@ -547,62 +250,30 @@ class CSaleOrderPropsValue
 
 		if (!empty($arFields['ORDER_PROPS_ID']) && intval($arFields['ORDER_PROPS_ID']) > 0 && !empty($arFields['VALUE']))
 		{
-			if ($value = static::correctValueToMultiple($arFields['ORDER_PROPS_ID'], $arFields['VALUE']))
+			if ($value = self::correctValueToMultiple($arFields['ORDER_PROPS_ID'], $arFields['VALUE']))
 			{
 				$arFields['VALUE'] = $value;
 			}
 		}
 
-		return Internals\OrderPropsValueTable::add(array_intersect_key($arFields, CSaleOrderPropsValueAdapter::$allFields))->getId();
+		$arFields = array_intersect_key($arFields, CSaleOrderPropsValueAdapter::$allFields);
+
+		$arFields['ENTITY_ID'] = $arFields['ORDER_ID'];
+		$arFields['ENTITY_TYPE'] = \Bitrix\Sale\Registry::ENTITY_ORDER;
+
+		$res = Internals\OrderPropsValueTable::add($arFields);
+		if ($res->isSuccess())
+		{
+			return $res->getId();
+		}
+
+		return 0;
 	}
 
-	
-	/**
-	* <p>Метод обновляет параметры значения с кодом ID свойства заказа на параметры из массива arFields. Нестатический метод.</p> <p></p> <div class="note"> <b>Примечание:</b> если при оформлении заказа не были заполнены какие-то свойства, то эти свойства обновить потом не получится, т.к. их нет в базе данных (незаполненные свойства не имеют пустых значений в базе). Поэтому, если нужно заполнить такое свойство, то сперва нужно создать его через <a href="http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorderpropsvalue/csaleorderpropsvalue__add.af505780.php">CSaleOrderPropsValue::Add</a> и только затем значение этого свойства будет доступно для <b>CSaleOrderPropsValue::Update</b> и <a href="http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorderpropsvalue/csaleorderpropsvalue__getlist.52da0d54.php">CSaleOrderPropsValue::Getlist</a>.</div>
-	*
-	*
-	* @param mixed $intID  Код значения свойства заказа.
-	*
-	* @param array $arFields  Ассоциативный массив параметров значения свойства, ключами в
-	* котором являются названия параметров значения свойства, а
-	* значениями - соответствующие новые значения.          <br><br>       
-	* Допустимые ключи:          <ul> <li> <b>ORDER_ID</b> - код заказа;</li>          	           
-	* <li> <b>ORDER_PROPS_ID</b> - код свойства;</li>          	            <li> <b>NAME</b> - название
-	* свойства;</li>          	            <li> <b>VALUE</b> - значение свойства;</li>          	     
-	*       <li> <b>CODE</b> - символьный код свойства.</li>          </ul>
-	*
-	* @return int <p>Метод возвращает код обновленного значения свойства или <i>false</i>
-	* в случае ошибки.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>CSaleOrderPropsValue::Update(8, array("CODE"=&gt;"ADDRESS"));<br>?&gt;<br>
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleorderpropsvalue/csaleorderpropsvalue__update.4d3a46b6.php
-	* @author Bitrix
-	*/
 	public static function Update($ID, $arFields)
 	{
 		if (! self::CheckFields('UPDATE', $arFields, $ID))
 			return false;
-
-//		if ($arFields['VALUE'])
-//		{
-//			if (!  ($propertyId = $arFields['ORDER_PROPS_ID'])
-//				&& ($propertyValue = Internals\OrderPropsValueTable::getById($ID)->fetch()))
-//			{
-//				$propertyId = $propertyValue['ORDER_PROPS_ID'];
-//			}
-//
-//			if ($propertyId && ($oldProperty = CSaleOrderProps::GetById($propertyId)))
-//			{
-//				$oldProperty['VALUE'] = $arFields['VALUE'];
-//				$arFields['VALUE'] = CSaleOrderPropsAdapter::convertOldToNew($oldProperty, 'VALUE', true);
-//			}
-//		}
 
 		// location ID to CODE
 		if((string) $arFields['VALUE'] != '')
@@ -620,13 +291,26 @@ class CSaleOrderPropsValue
 
 		if (!empty($arFields['ORDER_PROPS_ID']) && intval($arFields['ORDER_PROPS_ID']) > 0 && !empty($arFields['VALUE']))
 		{
-			if ($value = static::correctValueToMultiple($arFields['ORDER_PROPS_ID'], $arFields['VALUE']))
+			if ($value = self::correctValueToMultiple($arFields['ORDER_PROPS_ID'], $arFields['VALUE']))
 			{
 				$arFields['VALUE'] = $value;
 			}
 		}
 
-		return Internals\OrderPropsValueTable::update($ID, array_intersect_key($arFields, CSaleOrderPropsValueAdapter::$allFields))->getId();
+		$arFields = array_intersect_key($arFields, CSaleOrderPropsValueAdapter::$allFields);
+
+		if (isset($arFields['ORDER_ID']))
+		{
+			$arFields['ENTITY_ID'] = $arFields['ORDER_ID'];
+		}
+
+		$res = Internals\OrderPropsValueTable::update($ID, $arFields);
+		if ($res->isSuccess())
+		{
+			return $res->getId();
+		}
+
+		return 0;
 	}
 
 	/**
@@ -676,7 +360,7 @@ class CSaleOrderPropsValue
 	public static function Delete($ID)
 	{
 		global $DB;
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 
 		$strSql = "DELETE FROM b_sale_order_props_value WHERE ID = ".$ID." ";
 		return $DB->Query($strSql, True);
@@ -685,7 +369,7 @@ class CSaleOrderPropsValue
 	public static function DeleteByOrder($orderID)
 	{
 		global $DB;
-		$orderID = IntVal($orderID);
+		$orderID = intval($orderID);
 
 		$strSql = "DELETE FROM b_sale_order_props_value WHERE ORDER_ID = ".$orderID." ";
 		return $DB->Query($strSql, True);
@@ -696,8 +380,9 @@ class CSaleOrderPropsValue
 final class CSaleOrderPropsValueAdapter implements Compatible\FetchAdapter
 {
 	private $fieldProxy = array();
+	private array $select;
 
-	public function __construct(array $select)
+	function __construct(array $select)
 	{
 		$this->select = $select;
 	}

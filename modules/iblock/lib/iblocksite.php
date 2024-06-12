@@ -17,46 +17,27 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Iblock
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_IblockSite_Query query()
+ * @method static EO_IblockSite_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_IblockSite_Result getById($id)
+ * @method static EO_IblockSite_Result getList(array $parameters = [])
+ * @method static EO_IblockSite_Entity getEntity()
+ * @method static \Bitrix\Iblock\EO_IblockSite createObject($setDefaultValues = true)
+ * @method static \Bitrix\Iblock\EO_IblockSite_Collection createCollection()
+ * @method static \Bitrix\Iblock\EO_IblockSite wakeUpObject($row)
+ * @method static \Bitrix\Iblock\EO_IblockSite_Collection wakeUpCollection($rows)
  */
 class IblockSiteTable extends Entity\DataManager
 {
-	/**
-	 * Returns path to the file which contains definition of the class.
-	 *
-	 * @return string
-	 */
-	
-	/**
-	* <p>Метод возвращает путь к файлу, содержащему определение класса. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/iblocksitetable/getfilepath.php
-	* @author Bitrix
-	*/
-	public static function getFilePath()
-	{
-		return __FILE__;
-	}
-
 	/**
 	 * Returns DB table name for entity
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы привязки инфоблоков к сайтам в базе данных. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/iblocksitetable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_iblock_site';
@@ -67,17 +48,6 @@ class IblockSiteTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы привязки инфоблоков к сайтам. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/iblocksitetable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -108,17 +78,6 @@ class IblockSiteTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>SITE_ID</code> (идентификатор сайта). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/iblocksitetable/validatesiteid.php
-	* @author Bitrix
-	*/
 	public static function validateSiteId()
 	{
 		return array(

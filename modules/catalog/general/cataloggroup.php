@@ -5,67 +5,10 @@ use Bitrix\Main\Application,
 
 IncludeModuleLangFile(__FILE__);
 
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/catalog/classes/ccataloggroup/index.php
- * @author Bitrix
- */
 class CAllCatalogGroup
 {
 	protected static $arBaseGroupCache = array();
 
-	
-	/**
-	* <p>Метод служит для проверки параметров, переданных в методы <a href="http://dev.1c-bitrix.ru/api_help/catalog/classes/ccataloggroup/ccataloggroup__add.c71829a2.php">CCatalogGroup::Add</a> и <a href="http://dev.1c-bitrix.ru/api_help/catalog/classes/ccataloggroup/ccataloggroup__update.a6d06df4.php">CCatalogGroup::Update</a>. Нестатический метод.</p>
-	*
-	*
-	* @param string $ACTION  Указывает, для какого метода идет проверка. Возможные значения: 
-	* 			<br><ul> <li> <b>ADD</b> - для метода <a
-	* href="http://dev.1c-bitrix.ru/api_help/catalog/classes/ccataloggroup/ccataloggroup__add.c71829a2.php">CCatalogGroup::Add</a>;</li>
-	* 				<li> <b>UPDATE</b> - для метода <a
-	* href="http://dev.1c-bitrix.ru/api_help/catalog/classes/ccataloggroup/ccataloggroup__update.a6d06df4.php">CCatalogGroup::Update</a>.</li>
-	* 			</ul>
-	*
-	* @param array &$arFields  Ассоциативный массив параметров типа цены. Допустимые ключи:  			   
-	*      <ul> <li>BASE - Флаг (Y/N) является ли тип базовым.</li>           <li>NAME -
-	* Внутреннее название типа цены. Ключ является обязательным, если
-	* $ACTION = 'ADD'.</li> 		  <li>SORT - Индекс сортировки.</li> 		  <li>XML_ID - Внешний
-	* код.</li> 		  <li>CREATED_BY - ID создателя типа цен.</li> 		  <li>MODIFIED_BY - ID
-	* последнего изменившего тип цен.</li> 		  <li>USER_GROUP - Массив кодов групп
-	* пользователей, члены которых могут видеть цены этого типа. Ключ
-	* является обязательным, если $ACTION = 'ADD'.</li> 		  <li>USER_GROUP_BUY - Массив
-	* кодов групп пользователей, члены которых могут покупать товары
-	* по ценам этого типа. Ключ является обязательным, если $ACTION = 'ADD'.</li>
-	* 		  <li>USER_LANG - Ассоциативный массив языкозависимых параметров типа
-	* цены, ключами которого являются коды языков, а значениями -
-	* названия этого типа цены на соответствующем языке.</li>         </ul>
-	*
-	* @param int $intID = 0 Код типа цен. Параметр является необязательным и имеет смысл
-	* только для $ACTION = 'UPDATE'.
-	*
-	* @return bool <p> В случае корректности переданных параметров возвращает true,
-	* иначе - false. Если метод вернул false, с помощью $APPLICATION-&gt;GetException() можно
-	* получить текст ошибок.</p>
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a href="http://dev.1c-bitrix.ru/api_help/catalog/fields.php">Структура таблицы</a></li>
-	* 	<li><a
-	* href="http://dev.1c-bitrix.ru/api_help/catalog/classes/ccataloggroup/ccataloggroup__add.c71829a2.php">CCatalogGroup::Add</a></li>
-	* 	<li><a
-	* href="http://dev.1c-bitrix.ru/api_help/catalog/classes/ccataloggroup/ccataloggroup__update.a6d06df4.php">CCatalogGroup::Update</a></li>
-	* </ul><br><br>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/catalog/classes/ccataloggroup/checkfields.php
-	* @author Bitrix
-	*/
 	public static function CheckFields($ACTION, &$arFields, $ID = 0)
 	{
 		global $APPLICATION;
@@ -75,7 +18,7 @@ class CAllCatalogGroup
 		$boolResult = true;
 		$arMsg = array();
 
-		$ACTION = strtoupper($ACTION);
+		$ACTION = mb_strtoupper($ACTION);
 		if ('UPDATE' != $ACTION && 'ADD' != $ACTION)
 			return false;
 
@@ -111,18 +54,38 @@ class CAllCatalogGroup
 		if (array_key_exists('DATE_CREATE', $arFields))
 			unset($arFields['DATE_CREATE']);
 		$arFields['~TIMESTAMP_X'] = $strDateFunction;
-		if ($boolUserExist)
+		if (array_key_exists('MODIFIED_BY', $arFields))
 		{
-			if (!array_key_exists('MODIFIED_BY', $arFields) || intval($arFields["MODIFIED_BY"]) <= 0)
-				$arFields["MODIFIED_BY"] = $intUserID;
+			if ($arFields['MODIFIED_BY'] !== false)
+			{
+				$arFields['MODIFIED_BY'] = (int)$arFields['MODIFIED_BY'];
+				if ($arFields['MODIFIED_BY'] <= 0)
+				{
+					unset($arFields['MODIFIED_BY']);
+				}
+			}
+		}
+		if (!isset($arFields['MODIFIED_BY']) && $boolUserExist)
+		{
+			$arFields["MODIFIED_BY"] = $intUserID;
 		}
 		if ('ADD' == $ACTION)
 		{
 			$arFields['~DATE_CREATE'] = $strDateFunction;
-			if ($boolUserExist)
+			if (array_key_exists('CREATED_BY', $arFields))
 			{
-				if (!array_key_exists('CREATED_BY', $arFields) || intval($arFields["CREATED_BY"]) <= 0)
-					$arFields["CREATED_BY"] = $intUserID;
+				if ($arFields['CREATED_BY'] !== false)
+				{
+					$arFields['CREATED_BY'] = (int)$arFields['CREATED_BY'];
+					if ($arFields['CREATED_BY'] <= 0)
+					{
+						unset($arFields['CREATED_BY']);
+					}
+				}
+			}
+			if (!isset($arFields['CREATED_BY']) && $boolUserExist)
+			{
+				$arFields["CREATED_BY"] = $intUserID;
 			}
 		}
 		if ('UPDATE' == $ACTION)
@@ -318,80 +281,45 @@ class CAllCatalogGroup
 		return $result;
 	}
 
-	public static function GetListArray()
+	/**
+	 * @deprecated
+	 * @see Catalog\GroupTable::getTypeList()
+	 *
+	 * @return array
+	 */
+	public static function GetListArray(): array
 	{
-		$result = array();
-
-		if (defined('CATALOG_SKIP_CACHE') && CATALOG_SKIP_CACHE)
-		{
-			$groupIterator = Catalog\GroupTable::getList(array(
-				'select' => array('ID', 'NAME', 'BASE', 'SORT', 'XML_ID', 'NAME_LANG' =>'CURRENT_LANG.NAME'),
-				'order' => array('SORT' => 'ASC', 'ID' => 'ASC')
-			));
-			while ($group = $groupIterator->fetch())
-				$result[$group['ID']] = $group;
-			unset($group, $groupIterator);
-		}
-		else
-		{
-
-			$cacheTime = (int)(defined('CATALOG_CACHE_TIME') ? CATALOG_CACHE_TIME : CATALOG_CACHE_DEFAULT_TIME);
-			$managedCache = Application::getInstance()->getManagedCache();
-			if ($managedCache->read($cacheTime, 'catalog_group_'.LANGUAGE_ID, 'catalog_group'))
-			{
-				$result = $managedCache->get('catalog_group_'.LANGUAGE_ID);
-			}
-			else
-			{
-				$groupIterator = Catalog\GroupTable::getList(array(
-					'select' => array('ID', 'NAME', 'BASE', 'SORT', 'XML_ID', 'NAME_LANG' =>'CURRENT_LANG.NAME'),
-					'order' => array('SORT' => 'ASC', 'ID' => 'ASC')
-				));
-				while ($group = $groupIterator->fetch())
-					$result[$group['ID']] = $group;
-				unset($group, $groupIterator);
-				$managedCache->set('catalog_group_'.LANGUAGE_ID, $result);
-			}
-			unset($managedCache, $cacheTime);
-		}
-
-		return $result;
+		return Catalog\GroupTable::getTypeList();
 	}
 
-	
 	/**
-	* <p>Метод возвращает код и внутреннее название базового типа цен. Результат работы метода кешируется, поэтому повторные вызовы этого метода в рамках одной страницы не приводят к дополнительным запросам базы данных. Нестатический метод.</p> <p>От цены базового типа расчитываются цены других типов, если они указаны с использованием системы наценок. Понятие базового типа цены используется только в административной части и не оказывает влияния на публичную часть. </p>
-	*
-	*
-	* @return array <p>Метод возвращает ассоциативный массив с ключами:</p><table class="tnormal"
-	* width="100%"> <tr> <th width="15%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>ID</td> <td>Код
-	* базового типа цен.</td> </tr> <tr> <td>NAME</td> <td>Внутреннее название
-	* базового типа цен.</td> </tr> <tr> <td>NAME_LANG</td> <td>Базовая цена.</td> </tr> <tr>
-	* <td>XML_ID</td> <td>XML ID базовой цены.</td> </tr> </table><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/catalog/classes/ccataloggroup/ccataloggroup__getbasegroup.e06a3542.php
-	* @author Bitrix
-	*/
+	 * @deprecated
+	 * @see Catalog\GroupTable::getBasePriceType()
+	 *
+	 * @return array|false
+	 */
 	public static function GetBaseGroup()
 	{
-		if (empty(self::$arBaseGroupCache) && is_array(self::$arBaseGroupCache))
+		$group = Catalog\GroupTable::getBasePriceType();
+		if (!empty($group))
 		{
-			self::$arBaseGroupCache = false;
-			$group = Catalog\GroupTable::getList(array(
-				'select' => array('ID', 'NAME', 'BASE', 'SORT', 'XML_ID', 'NAME_LANG' =>'CURRENT_LANG.NAME'),
-				'filter' => array('=BASE' => 'Y')
-			))->fetch();
-			if (!empty($group))
-			{
-				$group['ID'] = (int)$group['ID'];
-				$group['NAME_LANG'] = (string)$group['NAME_LANG'];
-				$group['XML_ID'] = (string)$group['XML_ID'];
+			$group['NAME_LANG'] = (string)$group['NAME_LANG'];
+			$group['XML_ID'] = (string)$group['XML_ID'];
 
-				self::$arBaseGroupCache = $group;
-			}
-			unset($group);
+			return $group;
 		}
-		return self::$arBaseGroupCache;
+
+		return false;
+	}
+
+	/**
+	 * @deprecated
+	 * @see Catalog\GroupTable::getBasePriceTypeId()
+	 *
+	 * @return int|null
+	 */
+	public static function GetBaseGroupId(): ?int
+	{
+		return Catalog\GroupTable::getBasePriceTypeId();
 	}
 }

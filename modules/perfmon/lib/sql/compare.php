@@ -3,7 +3,7 @@ namespace Bitrix\Perfmon\Sql;
 
 class Compare
 {
-	private $difference = array();
+	private $difference = [];
 
 	/**
 	 * Compares two database schemas and returns array of pairs.
@@ -18,33 +18,6 @@ class Compare
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Нестатический метод сравнивает две схемы баз данных и возвращает массив пар.</p> <p>Парой будет массив из двух элементов:</p> <p>-Первый элемент с индексом <code>"0"</code> это объект из исходного содержания.</p> <p>-Второй элемент с индексом <code>"1"</code> это объект из <code>$targetList</code>. Парный объект может быть пустым, если такой элемент найден не был.</p>
-	*
-	*
-	* @param mixed $Bitrix  Исходная схема.
-	*
-	* @param Bitri $Perfmon  Целевая схема.
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param Schema $source  
-	*
-	* @param Schema $Bitrix  
-	*
-	* @param Bitri $Perfmon  
-	*
-	* @param Perfmo $Sql  
-	*
-	* @param Schema $target  
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/perfmon/sql/compare/diff.php
-	* @author Bitrix
-	*/
 	public static function diff(Schema $source, Schema $target)
 	{
 		$compare = new Compare;
@@ -105,11 +78,7 @@ class Compare
 			elseif (!isset($pair[0]) && isset($pair[1])) //Table created
 			{
 				$this->difference[] = $pair;
-				$emptyCollection = new Collection;
-				foreach ($emptyCollection->compare($pair[1]->indexes) as $pair2)
-				{
-					$this->difference[] = $pair2;
-				}
+
 				$emptyCollection = new Collection;
 				foreach ($emptyCollection->compare($pair[1]->triggers) as $pair2)
 				{
@@ -168,21 +137,15 @@ class Compare
 	 */
 	private function compareColumn(Column $source, Column $target)
 	{
-		if ($source->type !== $target->type)
+		if (
+			$source->type !== $target->type
+			|| $source->unsigned !== $target->unsigned
+			|| $source->length !== $target->length
+			|| $source->nullable !== $target->nullable
+			|| $source->default !== $target->default
+		)
 		{
-			$this->difference[] = array($source, $target);
-		}
-		elseif ($source->length !== $target->length)
-		{
-			$this->difference[] = array($source, $target);
-		}
-		elseif ($source->nullable !== $target->nullable)
-		{
-			$this->difference[] = array($source, $target);
-		}
-		elseif ($source->default !== $target->default)
-		{
-			$this->difference[] = array($source, $target);
+			$this->difference[] = [$source, $target];
 		}
 	}
 }

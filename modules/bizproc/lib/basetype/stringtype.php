@@ -1,8 +1,10 @@
 <?php
+
 namespace Bitrix\Bizproc\BaseType;
 
 use Bitrix\Main;
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc;
 
 /**
  * Class String
@@ -25,33 +27,24 @@ class StringType extends Base
 	 * @param mixed $value Field value.
 	 * @return mixed Normalized value
 	 */
-	
-	/**
-	* <p>Статический метод нормализует одиночное значение.</p>
-	*
-	*
-	* @param mixed $Bitrix  Тип поля документа.
-	*
-	* @param Bitri $Bizproc  Значение поля.
-	*
-	* @param FieldType $fieldType  
-	*
-	* @param mixed $value  
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/basetype/stringtype/tosinglevalue.php
-	* @author Bitrix
-	*/
 	public static function toSingleValue(FieldType $fieldType, $value)
 	{
 		if (is_array($value))
 		{
-			reset($value);
-			$value = current($value);
+			$value = current(\CBPHelper::makeArrayFlat($value));
 		}
+
 		return $value;
+	}
+
+	public static function externalizeValue(FieldType $fieldType, $context, $value)
+	{
+		if (is_array($value))
+		{
+			return (string)current(\CBPHelper::makeArrayFlat($value));
+		}
+
+		return parent::externalizeValue($fieldType, $context, $value);
 	}
 
 	/**
@@ -67,18 +60,27 @@ class StringType extends Base
 		switch ($type)
 		{
 			case FieldType::BOOL:
-				$value = strtolower((string)$value);
-				$value = in_array($value, array('y', 'yes', 'true', '1')) ? 'Y' : 'N';
+				$value = mb_strtolower((string)$value);
+				$value = in_array($value, ['y', 'yes', 'true', '1']) ? 'Y' : 'N';
 				break;
 			case FieldType::DATE:
 			case FieldType::DATETIME:
-				$value = (string) $value;
+				$value = (string)$value;
+
+				if (Bizproc\BaseType\Value\DateTime::isSerialized($value))
+				{
+					break;
+				}
+
 				if ($value)
 				{
 					$format = ($type == FieldType::DATE) ? \FORMAT_DATE : \FORMAT_DATETIME;
 					if (\CheckDateTime($value, $format))
 					{
-						$value = date(Main\Type\Date::convertFormatToPhp($format), \MakeTimeStamp($value, $format));
+						$value = date(
+							Main\Type\Date::convertFormatToPhp($format),
+							\CBPHelper::makeTimestamp($value, $format)
+						);
 					}
 					else
 					{
@@ -96,12 +98,13 @@ class StringType extends Base
 				break;
 			case FieldType::STRING:
 			case FieldType::TEXT:
-				$value = (string) $value;
+				$value = (string)$value;
 				break;
 			case FieldType::USER:
 				$value = trim($value);
-				if (strpos($value, 'user_') === false
-					&& strpos($value, 'group_') === false
+				if (
+					mb_strpos($value, 'user_') === false
+					&& mb_strpos($value, 'group_') === false
 					&& !preg_match('#^[0-9]+$#', $value)
 				)
 				{
@@ -117,23 +120,13 @@ class StringType extends Base
 
 	/**
 	 * Return conversion map for current type.
+	 *
 	 * @return array Map.
 	 */
-	
-	/**
-	* <p>Статический метод возвращает таблицу преобразования для текущего типа.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/bizproc/basetype/stringtype/getconversionmap.php
-	* @author Bitrix
-	*/
 	public static function getConversionMap()
 	{
-		return array(
-			array(
+		return [
+			[
 				FieldType::BOOL,
 				FieldType::DATE,
 				FieldType::DATETIME,
@@ -141,9 +134,9 @@ class StringType extends Base
 				FieldType::INT,
 				FieldType::STRING,
 				FieldType::TEXT,
-				FieldType::USER
-			)
-		);
+				FieldType::USER,
+			],
+		];
 	}
 
 	/**
@@ -156,12 +149,12 @@ class StringType extends Base
 	 */
 	protected static function renderControl(FieldType $fieldType, array $field, $value, $allowSelection, $renderMode)
 	{
-		$renderResult = parent::renderControl($fieldType, $field, $value, $allowSelection, $renderMode);
-		if ($allowSelection)
+		if ($allowSelection && !($renderMode & FieldType::RENDER_MODE_PUBLIC))
 		{
-			$renderResult .= static::renderControlSelector($field, null, false, '', $fieldType);
+			return static::renderControlSelector($field, $value, 'combine', '', $fieldType);
 		}
-		return $renderResult;
+
+		return parent::renderControl($fieldType, $field, $value, $allowSelection, $renderMode);
 	}
 
 	/**
@@ -184,6 +177,7 @@ class StringType extends Base
 	public static function renderControlSingle(FieldType $fieldType, array $field, $value, $allowSelection, $renderMode)
 	{
 		$value = static::toSingleValue($fieldType, $value);
+
 		return static::renderControl($fieldType, $field, $value, $allowSelection, $renderMode);
 	}
 
@@ -195,15 +189,25 @@ class StringType extends Base
 	 * @param int $renderMode Control render mode.
 	 * @return string
 	 */
-	public static function renderControlMultiple(FieldType $fieldType, array $field, $value, $allowSelection, $renderMode)
+	public static function renderControlMultiple(
+		FieldType $fieldType,
+		array $field,
+		$value,
+		$allowSelection,
+		$renderMode
+	)
 	{
 		if (!is_array($value) || is_array($value) && \CBPHelper::isAssociativeArray($value))
-			$value = array($value);
+		{
+			$value = [$value];
+		}
 
 		if (empty($value))
+		{
 			$value[] = null;
+		}
 
-		$controls = array();
+		$controls = [];
 
 		foreach ($value as $k => $v)
 		{
@@ -217,9 +221,38 @@ class StringType extends Base
 				$renderMode
 			);
 		}
-		$renderResult = static::wrapCloneableControls($controls, static::generateControlName($field));
+
+		if ($renderMode & FieldType::RENDER_MODE_PUBLIC)
+		{
+			$renderResult = static::renderPublicMultipleWrapper($fieldType, $field, $controls);
+		}
+		else
+		{
+			$renderResult = static::wrapCloneableControls($controls, static::generateControlName($field));
+		}
 
 		return $renderResult;
 	}
 
+	public static function mergeValue(FieldType $fieldType, array $baseValue, $appendValue): array
+	{
+		if (\CBPHelper::isEmptyValue($baseValue))
+		{
+			return (array)$appendValue;
+		}
+
+		if (!is_array($appendValue))
+		{
+			$baseValue[] = $appendValue;
+
+			return $baseValue;
+		}
+
+		if (!\CBPHelper::isAssociativeArray($baseValue) && !\CBPHelper::isAssociativeArray($appendValue))
+		{
+			return array_values(array_merge($baseValue, $appendValue));
+		}
+
+		return $baseValue + $appendValue;
+	}
 }

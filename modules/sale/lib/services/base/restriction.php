@@ -1,8 +1,11 @@
 <?php
 namespace Bitrix\Sale\Services\Base;
 
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotImplementedException;
-use Bitrix\Sale\Internals\CollectableEntity;
+use Bitrix\Main\Result;
+use Bitrix\Sale\Internals\Entity;
 use Bitrix\Sale\Internals\ServiceRestrictionTable;
 
 /**
@@ -10,7 +13,8 @@ use Bitrix\Sale\Internals\ServiceRestrictionTable;
  * Base class for payment and delivery services restrictions.
  * @package Bitrix\Sale\Services
  */
-abstract class Restriction {
+abstract class Restriction
+{
 
 	/** @var int
 	 * 100 - lightweight - just compare with params
@@ -38,26 +42,46 @@ abstract class Restriction {
 	}
 
 	/**
-	 * @param $params
-	 * @param array $restrictionParams
-	 * @param int $serviceId
+	 * Returns message that will be display if error occurs while applying restriction
+	 *
+	 * @return string
+	 */
+	public static function getOnApplyErrorMessage(): string
+	{
+		$class = new \ReflectionClass(static::class);
+
+		return Loc::getMessage('SALE_BASE_RESTRICTION_ON_APPLY_ERROR_MSG', [
+			'#RSTR_CLASSNAME#' => $class->getName(),
+		]) ?? '';
+	}
+
+	/**
+	 * Checking the service parameters for compliance with the restriction.
+	 *
+	 * To check of the constraint itself, use method self::validateRestriction
+	 *
+	 * @param mixed $params Params to check.
+	 * @param array $restrictionParams Restriction params.
+	 * @param int $serviceId Service identifier.
 	 * @return bool
 	 * @throws NotImplementedException
 	 */
-	protected static function check($params, array $restrictionParams, $serviceId = 0)
+	public static function check($params, array $restrictionParams, $serviceId = 0)
 	{
 		throw new NotImplementedException;
 	}
 
 	/**
-	 * @param CollectableEntity $entity
+	 * Checking the service parameters for compliance with the restriction by entity.
+	 *
+	 * @param Entity $entity
 	 * @param array $restrictionParams
 	 * @param int $mode
 	 * @param int $serviceId
 	 * @return int
 	 * @throws NotImplementedException
 	 */
-	public static function checkByEntity(CollectableEntity $entity, array $restrictionParams, $mode, $serviceId = 0)
+	public static function checkByEntity(Entity $entity, array $restrictionParams, $mode, $serviceId = 0)
 	{
 		$severity = static::getSeverity($mode);
 
@@ -70,11 +94,25 @@ abstract class Restriction {
 	}
 
 	/**
-	 * @param CollectableEntity $entity
+	 * Checking the restriction for compliance with business rules.
+	 *
+	 * For example, for the restriction "currency" in this method,
+	 * you can compare which currencies the payment system works with which the restriction is linked.
+	 *
+	 * @param array $fields restriction fields
+	 * @return Result
+	 */
+	public static function validateRestriction($fields)
+	{
+		return new Result();
+	}
+
+	/**
+	 * @param Entity $entity
 	 * @return mixed
 	 * @throws NotImplementedException
 	 */
-	protected static function extractParams(CollectableEntity $entity)
+	protected static function extractParams(Entity $entity)
 	{
 		throw new NotImplementedException;
 	}
@@ -83,17 +121,6 @@ abstract class Restriction {
 	 * Returns params structure to show it to user
 	 * @return array
 	 */
-	
-	/**
-	* <p>Возвращает структуру параметров для отображения пользователю. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/services/base/restriction/getparamsstructure.php
-	* @author Bitrix
-	*/
 	public static function getParamsStructure($entityId = 0)
 	{
 		return array();
@@ -104,17 +131,6 @@ abstract class Restriction {
 	 * @param int $entityId
 	 * @return array
 	 */
-	
-	/**
-	* <p>Подготавливает параметры ограничения для отображения данных , например, в административной части для редактирования или просмотра. Статический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/services/base/restriction/prepareparamsvalues.php
-	* @author Bitrix
-	*/
 	public static function prepareParamsValues(array $paramsValues, $entityId = 0)
 	{
 		return $paramsValues;
@@ -131,9 +147,13 @@ abstract class Restriction {
 		$fields["CLASS_NAME"] = '\\'.get_called_class();
 
 		if($restrictionId > 0)
+		{
 			$res = ServiceRestrictionTable::update($restrictionId, $fields);
+		}
 		else
+		{
 			$res = ServiceRestrictionTable::add($fields);
+		}
 
 		return $res;
 	}
@@ -170,6 +190,48 @@ abstract class Restriction {
 	public static function prepareData(array $servicesIds)
 	{
 		return true;
+	}
+
+	/**
+	 * @return bool
+	 */
+	public static function isAvailable()
+	{
+		return true;
+	}
+
+	/**
+	 * Get a restriction code that is comparable to the service handler restriction code.
+	 * <br>
+	 * Bitrix restrictions will return name of restriction class. Vendor restrictions must return full classname with namespace.
+	 * <br><br>
+	 * <i>Example 1: for bitrix currency restriction class **Bitrix\Currency** it will return 'currency'</i>
+	 * <br>
+	 * <i>Example 2: for vendor currency restriction class **Vendor\Currency** it will return 'Vendor\Currency'</i>
+	 *
+	 * @return string
+	 */
+	public static function getCode(): string
+	{
+		$class = new \ReflectionClass(static::class);
+		if (self::isBitrixNamespace($class->getNamespaceName()))
+		{
+			return $class->getShortName();
+		}
+
+		return $class->getName();
+	}
+
+	public static function isMyCode(string $code): bool
+	{
+		return static::getCode() === $code;
+	}
+
+	private static function isBitrixNamespace(string $namespace): bool
+	{
+		$vendorName = mb_substr($namespace, 0, 7);
+
+		return ($vendorName === 'Bitrix' || $vendorName === 'Bitrix\\');
 	}
 
 	/*

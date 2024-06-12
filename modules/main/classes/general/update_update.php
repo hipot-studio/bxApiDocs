@@ -4,7 +4,7 @@
 /**    MODIFICATION OF THIS FILE WILL ENTAIL SITE FAILURE            **/
 /**********************************************************************/
 if (!defined("UPDATE_SYSTEM_VERSION"))
-	// define("UPDATE_SYSTEM_VERSION", "11.0.12");
+	define("UPDATE_SYSTEM_VERSION", "11.0.12");
 if (file_exists($_SERVER["DOCUMENT_ROOT"]."/bitrix/admin/update_system.php"))
 {
 	require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/admin/update_system.php");
@@ -12,7 +12,7 @@ if (file_exists($_SERVER["DOCUMENT_ROOT"]."/bitrix/admin/update_system.php"))
 }
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
-// define("HELP_FILE", "updates/index.php");
+define("HELP_FILE", "updates/index.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/classes/general/update_class.php");
 
 @set_time_limit(0);

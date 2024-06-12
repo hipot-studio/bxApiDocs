@@ -16,7 +16,7 @@ class Price
 	/* cache time */
 	const CACHE_TIME = 360000;
 	/* maximal precision */
-	const VALUE_EPS = 1E-5;
+	const VALUE_EPS = 1E-6;
 
 	/* static cache */
 	protected static $roundRules = array();
@@ -27,23 +27,6 @@ class Price
 	 * @param Main\Event $event			Event data (old and new currency rate).
 	 * @return void
 	 */
-	
-	/**
-	* <p>Является обработчиком события <code>onAfterUpdateCurrencyBaseRate</code> для изменения поля <code>PRICE_SCALE</code> после изменения курса валюты.</p>
-	*
-	*
-	* @param mixed $Bitrix  Параметры события (старый и новый курс валюты).
-	*
-	* @param Bitri $Main  
-	*
-	* @param Event $event  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/product/price/handlerafterupdatecurrencybaserate.php
-	* @author Bitrix
-	*/
 	public static function handlerAfterUpdateCurrencyBaseRate(Main\Event $event)
 	{
 		$params = $event->getParameters();
@@ -74,11 +57,81 @@ class Price
 	}
 
 	/**
+	 * Load round rules list for price types.
+	 *
+	 * @param array $priceTypes		Price type ids.
+	 * @return void
+	 */
+	public static function loadRoundRules(array $priceTypes)
+	{
+		if (empty($priceTypes))
+			return;
+		Main\Type\Collection::normalizeArrayValuesByInt($priceTypes);
+		if (empty($priceTypes))
+			return;
+
+		$skipCache = (defined('CATALOG_SKIP_CACHE') && CATALOG_SKIP_CACHE);
+		$cacheTime = (int)self::CACHE_TIME;
+		/** @var \Bitrix\Main\Data\ManagedCache $managedCache */
+		$managedCache = Main\Application::getInstance()->getManagedCache();
+
+		$needLoad = array();
+		foreach ($priceTypes as $priceTypeId)
+		{
+			if (!isset(self::$roundRules[$priceTypeId]))
+			{
+				$rulesFound = false;
+				$cacheId = static::getRulesCacheId($priceTypeId);
+				if (!$skipCache)
+				{
+					$cacheExist = $managedCache->read($cacheTime, $cacheId, Catalog\RoundingTable::getTableName());
+					if ($cacheExist)
+					{
+						$rulesFound = true;
+						self::$roundRules[$priceTypeId] = $managedCache->get($cacheId);
+					}
+				}
+				if ($skipCache || !$rulesFound)
+					$needLoad[] = $priceTypeId;
+				unset($cacheId, $rulesFound);
+			}
+		}
+		unset($priceTypeId);
+
+		if (!empty($needLoad))
+		{
+			foreach ($needLoad as $priceTypeId)
+				self::$roundRules[$priceTypeId] = array();
+			unset($priceTypeId);
+			$iterator = Catalog\RoundingTable::getList(array(
+				'select' => array('PRICE', 'ROUND_TYPE', 'ROUND_PRECISION', 'CATALOG_GROUP_ID'),
+				'filter' => array('@CATALOG_GROUP_ID' => $needLoad),
+				'order' => array('CATALOG_GROUP_ID' => 'ASC', 'PRICE' => 'DESC')
+			));
+			while ($row = $iterator->fetch())
+			{
+				$priceTypeId = (int)$row['CATALOG_GROUP_ID'];
+				self::$roundRules[$priceTypeId][] = $row;
+				unset($priceTypeId);
+			}
+			unset($row, $iterator);
+
+			if (!$skipCache)
+			{
+				foreach ($needLoad as $priceTypeId)
+					$managedCache->set(static::getRulesCacheId($priceTypeId), self::$roundRules[$priceTypeId]);
+				unset($priceType);
+			}
+		}
+		unset($needLoad);
+		unset($managedCache, $cacheTime, $skipCache);
+	}
+
+	/**
 	 * Return round rules list for price type.
 	 *
 	 * @param int $priceType		Price type id.
 	 * @return array
-	 * @throws Main\ArgumentException
 	 */
 	public static function getRoundRules($priceType)
 	{
@@ -86,42 +139,8 @@ class Price
 		if ($priceType <= 0)
 			return array();
 		if (!isset(self::$roundRules[$priceType]))
-		{
-			self::$roundRules[$priceType] = array();
+			static::loadRoundRules(array($priceType));
 
-			/** @var \Bitrix\Main\Data\ManagedCache $managedCache */
-			$rulesFound = false;
-			$cacheId = static::getRulesCacheId($priceType);
-			$skipCache = (defined('CURRENCY_SKIP_CACHE') && CURRENCY_SKIP_CACHE);
-			$cacheExist = false;
-			if (!$skipCache)
-			{
-				$cacheTime = (int)self::CACHE_TIME;
-				$managedCache = Main\Application::getInstance()->getManagedCache();
-				$cacheExist = $managedCache->read($cacheTime, $cacheId, Catalog\RoundingTable::getTableName());
-				if ($cacheExist)
-				{
-					$rulesFound = true;
-					self::$roundRules[$priceType] = $managedCache->get($cacheId);
-				}
-			}
-			if ($skipCache || !$rulesFound)
-			{
-				$iterator = Catalog\RoundingTable::getList(array(
-					'select' => array('PRICE', 'ROUND_TYPE', 'ROUND_PRECISION', 'CATALOG_GROUP_ID'),
-					'filter' => array('=CATALOG_GROUP_ID' => $priceType),
-					'order' => array('PRICE' => 'DESC')
-				));
-				while ($row = $iterator->fetch())
-				{
-					$rulesFound = true;
-					self::$roundRules[$priceType][] = $row;
-				}
-				unset($row, $iterator);
-			}
-			if (!$skipCache && $rulesFound && !$cacheExist)
-				$managedCache->set($cacheId, self::$roundRules[$priceType]);
-		}
 		return self::$roundRules[$priceType];
 	}
 
@@ -251,10 +270,12 @@ class Price
 					$quotientFloor += 1;
 				break;
 			case Catalog\RoundingTable::ROUND_DOWN:
+				if ($quotientFloor < floor(($value + self::VALUE_EPS)/$precision))
+					$quotientFloor += 1;
 				break;
 			case Catalog\RoundingTable::ROUND_MATH:
 			default:
-				if (($quotient - $quotientFloor) >= .5)
+				if (($quotient - $quotientFloor + self::VALUE_EPS) >= .5)
 					$quotientFloor += 1;
 				break;
 		}

@@ -2,13 +2,18 @@
 
 namespace Bitrix\Sale\Delivery;
 
+use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Sale\Internals\Input;
 use Bitrix\Currency;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class Helper
+ * @package Bitrix\Sale\Delivery
+ */
 class Helper
 {
 	/**
@@ -18,17 +23,6 @@ class Helper
 	 * @throws SystemException
 	 * @throws \Bitrix\Main\LoaderException
 	 */
-	
-	/**
-	* <p>Метод возвращает список валют. Метод статический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/delivery/helper/getcurrencieslist.php
-	* @author Bitrix
-	*/
 	public static function getCurrenciesList()
 	{
 		static $currencies = null;
@@ -83,27 +77,6 @@ class Helper
 	 * @param bool $anyGroup						Allowed select any group.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает HTML (элемент <code>&lt;select&gt;....&lt;/select&gt;</code>) для выбора группы служб доставок из списка. Метод статический.</p>
-	*
-	*
-	* @param mixed $integer  Выбранная группа.
-	*
-	* @param string $selectedGroupId  Название группы.
-	*
-	* @param string $name  Дополнительные параметры для выбора тега.
-	*
-	* @param string $addParams = "" Позволяет выбрать только одну группу.
-	*
-	* @param boolean $anyGroup = false 
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/delivery/helper/getgroupchoosecontrol.php
-	* @author Bitrix
-	*/
 	public static function getGroupChooseControl($selectedGroupId, $name, $addParams = "", $anyGroup = false)
 	{
 		$groups = array();
@@ -140,6 +113,12 @@ class Helper
 		return $result;
 	}
 
+	/**
+	 * @return string Default site id.
+	 * @throws SystemException
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 */
 	public static function getDefaultSiteId()
 	{
 		static $result = null;
@@ -156,5 +135,45 @@ class Helper
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Clean additional delivery cache
+	 */
+	public static function additionalHandlerCacheClean()
+	{
+		require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/handlers/delivery/additional/cache.php");
+		\Sale\Handlers\Delivery\Additional\CacheManager::cleanAll();
+	}
+
+	/**
+	 * Returns portal zone
+	 *
+	 * @return string
+	 * @throws \Bitrix\Main\LoaderException
+	 */
+	public static function getPortalZone(): string
+	{
+		static $result = null;
+
+		if ($result === null)
+		{
+			$result = '';
+
+			if (ModuleManager::isModuleInstalled('bitrix24')
+				&& Loader::includeModule('bitrix24')
+			)
+			{
+				$result = \CBitrix24::getLicensePrefix();
+			}
+			elseif (ModuleManager::isModuleInstalled('intranet')
+				&& Loader::includeModule('intranet')
+			)
+			{
+				$result = \CIntranetUtils::getPortalZone();
+			}
+		}
+
+		return (string)$result;
 	}
 }

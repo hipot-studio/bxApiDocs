@@ -27,7 +27,7 @@ abstract class Helper
 	#### Entity settings
 	#####################################
 
-	abstract public function getEntityRoadMap();
+	abstract public static function getEntityRoadMap();
 
 	public static function getEntityRoadCode()
 	{
@@ -104,26 +104,30 @@ abstract class Helper
 
 					if(is_array($proxed['FILTER'][$code]))
 					{
-						if(strlen($proxed['FILTER'][$code]['FROM']) && strlen($proxed['FILTER'][$code]['TO'])) // range
+						if(mb_strlen($proxed['FILTER'][$code]['FROM']) && mb_strlen($proxed['FILTER'][$code]['TO'])) // range
 						{
 							$filter['><'.$code] = array($proxed['FILTER'][$code]['FROM'], $proxed['FILTER'][$code]['TO']);
 						}
-						elseif(strlen($proxed['FILTER'][$code]['FROM'])) // greather than
+						elseif(mb_strlen($proxed['FILTER'][$code]['FROM'])) // greather than
 						{
 							$filter['>='.$code] = $proxed['FILTER'][$code]['FROM'];
 						}
-						elseif(strlen($proxed['FILTER'][$code]['TO'])) // less than
+						elseif(mb_strlen($proxed['FILTER'][$code]['TO'])) // less than
 						{
 							$filter['<='.$code] = $proxed['FILTER'][$code]['TO'];
 						}
 					}
-					elseif(strlen($proxed['FILTER'][$code]))
-						$filter['='.$code] = (string) $proxed['FILTER'][$code];
+					elseif(mb_strlen($proxed['FILTER'][$code]))
+					{
+						$filter['='.$code] = (string)$proxed['FILTER'][$code];
+					}
 				}
 				else
 				{
-					if(strlen($proxed['FILTER'][$code]))
+					if($proxed['FILTER'][$code] <> '')
+					{
 						$filter[static::getFilterModifier($fld['data_type']).$code] = $proxed['FILTER'][$code];
+					}
 				}
 			}
 		}
@@ -138,7 +142,7 @@ abstract class Helper
 		// order
 		if(is_array($proxed['ORDER']) && !empty($proxed['ORDER']))
 			$parameters['order'] = $proxed['ORDER'];
-		
+
 		// nav (unused)
 		if(($page = intval($proxed['NAV']['PAGE_NUM'])) && ($lop = intval($proxed['NAV']['LOP'])))
 		{
@@ -197,10 +201,25 @@ abstract class Helper
 		{
 			$entityClass = static::getEntityClass();
 			$parameters = Helper::getParametersForList($parameters); // from generalized to orm
-			$resItems = $entityClass::getList(array('filter' => $parameters['filter'], 'select' => array('ID')));
+
+			$glParams = array('select' => array('ID'));
+
+			if(is_array($parameters['filter']) && !empty($parameters['filter']))
+				$glParams['filter'] = $parameters['filter'];
+
+			$resItems = $entityClass::getList($glParams);
 
 			while ($item = $resItems->fetch())
 			{
+
+				/* Locations have tree-style structure so
+				 * we could have deleted some of them
+				 * during previous iterations. Let's check this.
+				*/
+				if(!$entityClass::getById($item['ID'])->fetch())
+					continue;
+				/**/
+
 				$res = static::delete($item['ID']);
 				if(!$res['success'])
 				{
@@ -231,18 +250,21 @@ abstract class Helper
 	{
 		$columns = static::getColumns('');
 
+		$value = (string)$value;
 		if(!empty($columns[$code]))
 		{
-			if(!strlen($value) && strlen($columns[$code]['default']))
-				$value = $columns[$code]['default'];
+			if ($value === '' && isset($columns[$code]['default']))
+			{
+				$value = (string)$columns[$code]['default'];
+			}
 
 			switch($columns[$code]['data_type'])
 			{
 				case 'integer':
-					$value = intval($value);
+					$value = (int)$value;
 					break;
 				case 'float':
-					$value = floatval($value);
+					$value = (float)$value;
 					break;
 				default:
 					$value = htmlspecialcharsbx($value);
@@ -302,39 +324,47 @@ abstract class Helper
 				$from = 'find_'.$code.'_1';
 				$to = 'find_'.$code.'_2';
 
-				if($fld['data_type'] == 'integer' && (isset($GLOBALS[$from]) || isset($GLOBALS[$to])))
+				if ($fld['data_type'] === 'integer' && (isset($GLOBALS[$from]) || isset($GLOBALS[$to])))
 				{
 					// range expected
 
-					if(strlen($GLOBALS[$from]) && strlen($GLOBALS[$to])) // range
+					$valueFrom = trim((string)($GLOBALS[$from] ?? ''));
+					$valueTo = trim((string)($GLOBALS[$to] ?? ''));
+
+					if ($valueFrom !== '' && $valueTo !== '') // range
 					{
-						$filter['><'.$code] = array($GLOBALS[$from], $GLOBALS[$to]);
+						$filter['><'.$code] = [(int)$valueFrom, (int)$valueTo];
 					}
-					elseif(strlen($GLOBALS[$from])) // greather than
+					elseif ($valueFrom !== '') // greather than
 					{
-						$filter['>='.$code] = $GLOBALS[$from];
+						$filter['>='.$code] = (int)$valueFrom;
 					}
-					elseif(strlen($GLOBALS[$to])) // less than
+					elseif ($valueTo !== '') // less than
 					{
-						$filter['<='.$code] = $GLOBALS[$to];
+						$filter['<='.$code] = (int)$valueTo;
 					}
 				}
 				else
 				{
-					if(strlen($GLOBALS['find_'.$code]))
-						$filter[static::getFilterModifier($fld['data_type']).$code] = $GLOBALS['find_'.$code];
+					$value = trim((string)($GLOBALS['find_'.$code] ?? ''));
+					if ($value !== '')
+					{
+						$filter[static::getFilterModifier($fld['data_type']).$code] = $value;
+					}
 				}
 			}
 		}
 
 		if(!empty($filter))
 			$parameters['filter'] = $filter;
-		if(strlen($by))
+		if($by <> '')
 		{
 			$columns = static::getColumns($page); // check if that column really exists, for the whole extension hierarchy
 
 			if(isset($columns[$by]))
-				$parameters['order'] = array($by => isset($order) ? $order : 'asc');
+			{
+				$parameters['order'] = array($by => isset($order)? $order : 'asc');
+			}
 		}
 
 		return $parameters;
@@ -423,15 +453,20 @@ abstract class Helper
 
 	// function calculates limit and offset for sql select query, based on current request and session
 	// variables, then forms fake old-style database result
-	public static function getList($parameters = array(), $tableId = false, $navigation = 20)
+	public static function getList($parameters = array(), $tableId = false, $navigation = 20, $params = array())
 	{
 		$entityClass = static::getEntityClass();
-
-		$navNum = $GLOBALS['NavNum'] + 1;
+		$navNum = ($GLOBALS['NavNum'] ?? 0) + 1;
 		$unique = md5($GLOBALS['APPLICATION']->GetCurPage());
-		$showAll = $_SESSION[$unique.'SESS_ALL_'.$navNum] || $_GET['SHOWALL_'.$navNum];
+		$showAll = ($_SESSION[$unique.'SESS_ALL_'.$navNum] ?? null) || ($GET['SHOWALL_'.$navNum] ?? null);
+		$isAdminSection = defined('ADMIN_SECTION') && ADMIN_SECTION === true;
+		$tableId = trim((string)$tableId);
 
-		if(ADMIN_SECTION === true && strlen($tableId))
+		if (($params["uiMode"] ?? null))
+		{
+			$result = new \CSaleProxyAdminUiResult($parameters, $entityClass, $tableId);
+		}
+		elseif($isAdminSection && $tableId !== '')
 		{
 			$result = new \CSaleProxyAdminResult($parameters, $entityClass, $tableId); // being in admin and knowing table, do admin result api call
 		}
@@ -504,7 +539,7 @@ abstract class Helper
 	{
 		$map = static::getEntityRoadMap();
 
-		return strlen($map['main']['primaryFieldName']) ? $map['main']['primaryFieldName'] : 'ID';
+		return (string)($map['main']['primaryFieldName'] ?? '') !== '' ? $map['main']['primaryFieldName'] : 'ID';
 	}
 
 	// returns element name by it`s primary
@@ -551,8 +586,10 @@ abstract class Helper
 
 		$parameters['lang'] = LANGUAGE_ID;
 
+		$selfFolderUrl = (defined("SELF_FOLDER_URL") ? SELF_FOLDER_URL : "/bitrix/admin/");
+
 		$packed = self::packUrlParameters($parameters);
-		return '/bitrix/admin/'.$page.(strlen($packed) ? '?'.$packed : '');
+		return $selfFolderUrl.$page.($packed <> ''? '?'.$packed : '');
 	}
 
 	#####################################
@@ -562,7 +599,7 @@ abstract class Helper
 	// deprecated: too strong relation with admin grid
 	public static function checkUseFilter()
 	{
-		return $GLOBALS['filter'] == 'Y' && !$GLOBALS['del_filter'];
+		return ($GLOBALS['filter'] ?? null) === 'Y' && !$GLOBALS['del_filter'];
 	}
 
 	public static function readMap($entityRoadCode, $page = 'list')
@@ -573,29 +610,44 @@ abstract class Helper
 		if(!$road['name'])
 			throw new Main\SystemException('Undefined entity name in entity map');
 
-		if(!strlen($page))
+		if($page == '')
 			$page = 'list';
 
 		$flds = array();
 		$class = $road['name'].'Table';
-		$excluded = $road['pages'][$page]['excludedColumns'];
-		$included = $road['pages'][$page]['includedColumns'];
+		$excluded = $road['pages'][$page]['excludedColumns'] ?? null;
+		$included = $road['pages'][$page]['includedColumns'] ?? null;
 
 		$map = $class::getMap();
-		if(is_array($road['additional']) && !empty($road['additional']))
-			$map = array_merge($map, $road['additional']);
-
-		foreach($map as $fldCode => $fldDesc)
+		if (!empty($road['additional']) && is_array($road['additional']))
 		{
-			if((strlen($fldDesc['title']) || $fldDesc['required'] || $fldDesc['primary'] || $fldCode == 'ID'))
+			$map = array_merge($map, $road['additional']);
+		}
+
+		foreach ($map as $fldCode => $fldDesc)
+		{
+			if (is_array($excluded) && in_array($fldCode, $excluded))
 			{
-				if(is_array($excluded) && in_array($fldCode, $excluded))
-					continue;
+				continue;
+			}
 
-				if(is_array($included) && !in_array($fldCode, $included))
-					continue;
+			if (is_array($included) && !in_array($fldCode, $included))
+			{
+				continue;
+			}
 
-				$fldDesc['title'] = strlen($fldDesc['title']) ? htmlspecialcharsbx($fldDesc['title']) : $fldCode;
+			if (
+				is_array($fldDesc)
+				&& (
+					(isset($fldDesc['title']) && mb_strlen($fldDesc['title']))
+					|| (isset($fldDesc['required']) && $fldDesc['required'])
+					|| (isset($fldDesc['primary']) && $fldDesc['primary'])
+					|| $fldCode === 'ID'
+				)
+			)
+			{
+				$title = trim((string)($fldDesc['title'] ?? ''));
+				$fldDesc['title'] = $title !== ''? htmlspecialcharsbx($title) : $fldCode;
 				$fldDesc['ownerEntity'] = $road['name']; // map can be cumulative, from several entites, so we need to know who is an owner
 				$flds[$fldCode] = $fldDesc;
 			}
@@ -614,15 +666,17 @@ abstract class Helper
 		$params = array();
 		foreach($parameters as $param => $value)
 		{
-			if(strlen($value))
+			if($value <> '')
 			{
-				if(strpos($param, '=') === 0)
+				if(mb_strpos($param, '=') === 0)
 				{
 					// value goes as-is, unsafe
-					$param = substr($param, 1);
+					$param = mb_substr($param, 1);
 				}
 				else
+				{
 					$value = urlencode($value);
+				}
 
 				$params[] = urlencode($param).'='.$value;
 			}
@@ -634,7 +688,7 @@ abstract class Helper
 	protected static function getEntityClass($code = '')
 	{
 		$entityRoad = static::getEntityRoadMap();
-		$entityName = $entityRoad[strlen($code) ? $code : self::getEntityRoadCode()]['name'];
+		$entityName = $entityRoad[$code <> ''? $code : self::getEntityRoadCode()]['name'];
 
 		if(!$entityName)
 			throw new Main\SystemException('Undefined entity name in helper');
@@ -646,7 +700,7 @@ abstract class Helper
 	{
 		$appearance = Config\Option::get("sale", "sale_location_selector_appearance");
 
-		if(!strlen($appearance) || !in_array($appearance, array('search', 'steps')))
+		if(!mb_strlen($appearance) || !in_array($appearance, array('search', 'steps')))
 			return 'steps';
 
 		return $appearance;
@@ -668,7 +722,7 @@ abstract class Helper
 			}
 			else
 			{
-				if(!strlen($list[$i]))
+				if($list[$i] == '')
 					unset($list[$i]);
 			}
 		}

@@ -69,6 +69,16 @@ class CSocServOAuthTransport
 		return $this->refresh_token;
 	}
 
+	public function removeScope(string $scope): void
+	{
+		if (!$this->scope)
+		{
+			return;
+		}
+
+		$this->scope = array_diff($this->scope, [$scope]);
+	}
+
 	public function addScope($scope)
 	{
 		if(is_array($scope))
@@ -108,15 +118,15 @@ class CSocServOAuthTransport
 		$accessToken = '';
 		if($this->userId > 0)
 		{
-			$dbSocservUser = CSocServAuthDB::GetList(
-				array(),
-				array(
-					'USER_ID' => $this->userId,
-					"EXTERNAL_AUTH_ID" => static::SERVICE_ID
-				), false, false, array("USER_ID", "XML_ID", "OATOKEN", "OATOKEN_EXPIRES", "REFRESH_TOKEN", "PERMISSIONS")
-			);
+			$dbSocservUser = \Bitrix\Socialservices\UserTable::getList([
+				'filter' => [
+					'=USER_ID' => $this->userId,
+					"=EXTERNAL_AUTH_ID" => static::SERVICE_ID
+				],
+				'select' => ["USER_ID", "XML_ID", "OATOKEN", "OATOKEN_EXPIRES", "REFRESH_TOKEN", "PERMISSIONS"]
+			]);
 
-			$accessToken = $dbSocservUser->Fetch();
+			$accessToken = $dbSocservUser->fetch();
 		}
 		return $accessToken;
 	}
@@ -143,5 +153,47 @@ class CSocServOAuthTransport
 	public function checkAccessToken()
 	{
 		return (($this->accessTokenExpires - 30) < time()) ? false : true;
+	}
+
+	public function getResult()
+	{
+		return array();
+	}
+
+	protected function getDecodedJson($url, $postData = null)
+	{
+		$http = new \Bitrix\Main\Web\HttpClient([
+			'socketTimeout' => $this->httpTimeout,
+			'streamTimeout' => $this->httpTimeout,
+		]);
+
+		if (isset($postData))
+		{
+			$postResult = $http->post($url, $postData);
+		}
+		else
+		{
+			$postResult = $http->get($url);
+		}
+
+		try
+		{
+			$decodedResult = \Bitrix\Main\Web\Json::decode($postResult);
+		}
+		catch (\Bitrix\Main\ArgumentException $e)
+		{
+			if (defined("BX_SOCIALSERVICES_ERROR_DEBUG"))
+			{
+				AddMessage2Log([
+					'post_url' => $http->getEffectiveUrl(),
+					'result_status' => $http->getStatus(),
+					'result_error' => $http->getError(),
+					'result_text' => $http->getResult(),
+				], 'socialservices', 40);
+			}
+			$decodedResult = [];
+		}
+
+		return $decodedResult;
 	}
 }

@@ -1,5 +1,7 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
+
 class CEditorUtils
 {
 	public static function RenderComponents($arParams)
@@ -12,7 +14,7 @@ class CEditorUtils
 		$arParams['siteTemplateId'] = addslashes($arParams['siteTemplateId']);
 
 		if ($arParams['siteTemplateId'] && !defined("SITE_TEMPLATE_ID"))
-			// define("SITE_TEMPLATE_ID", $arParams['siteTemplateId']);
+			define("SITE_TEMPLATE_ID", $arParams['siteTemplateId']);
 
 		// Report only errors
 		error_reporting(E_ERROR);
@@ -73,11 +75,11 @@ class CEditorUtils
 				continue;
 			}
 
-			if (strtolower($val) == 'array()')
+			if (mb_strtolower($val) == 'array()')
 			{
 				$arProps[$key] = Array();
 			}
-			elseif (substr(strtolower($val), 0, 6) == 'array(')
+			elseif (mb_substr(mb_strtolower($val), 0, 6) == 'array(')
 			{
 				$str = array();
 				$tArr = array();
@@ -87,8 +89,8 @@ class CEditorUtils
 				{
 					foreach($tArr as $k => $v)
 					{
-						if(substr($v, 0, 2) == "={" && substr($v, -1, 1)=="}" && strlen($v)>3)
-							$v = substr($v, 2, -1);
+						if(mb_substr($v, 0, 2) == "={" && mb_substr($v, -1, 1) == "}" && mb_strlen($v) > 3)
+							$v = mb_substr($v, 2, -1);
 						unset($tArr[$k]);
 						$tArr[addslashes($k)] = addslashes(trim($v, " \"'"));
 					}
@@ -132,14 +134,14 @@ class CEditorUtils
 			{
 				//Trim php tags
 				$src = $arPHP[$n][2];
-				if (SubStr($src, 0, 5) == "<?"."php")
-					$src = SubStr($src, 5);
+				if (mb_substr($src, 0, 5) == "<?"."php")
+					$src = mb_substr($src, 5);
 				else
-					$src = SubStr($src, 2);
-				$src = SubStr($src, 0, -2);
+					$src = mb_substr($src, 2);
+				$src = mb_substr($src, 0, -2);
 
 				$comp2_begin = '$APPLICATION->INCLUDECOMPONENT(';
-				if (strtoupper(substr($src, 0, strlen($comp2_begin))) != $comp2_begin)
+				if (mb_strtoupper(mb_substr($src, 0, mb_strlen($comp2_begin))) != $comp2_begin)
 					continue;
 
 				$arRes = PHPParser::CheckForComponent2($arPHP[$n][2]);
@@ -204,11 +206,11 @@ class CEditorUtils
 					$parent_comp = CMain::_ReplaceNonLatin($arRes['PARENT_COMP']);
 					$arExParams_ = $arRes['FUNCTION_PARAMS'];
 					$bEx = isset($arExParams_) && is_array($arExParams_) && count($arExParams_) > 0;
-					if (!$parent_comp || strtolower($parent_comp) == 'false')
+					if (!$parent_comp || mb_strtolower($parent_comp) == 'false')
 						$parent_comp = false;
 					if ($parent_comp)
 					{
-						if ($parent_comp == 'true' || intVal($parent_comp) == $parent_comp)
+						if ($parent_comp == 'true' || intval($parent_comp) == $parent_comp)
 							$code .= ','.$br."\t".$parent_comp;
 						else
 							$code .= ','.$br."\t\"".$parent_comp.'"';
@@ -223,7 +225,7 @@ class CEditorUtils
 						{
 							$k = CMain::_ReplaceNonLatin($k);
 							$v = CMain::_ReplaceNonLatin($v);
-							if (strlen($k) > 0 && strlen($v) > 0)
+							if ($k <> '' && $v <> '')
 								$arExParams[$k] = $v;
 						}
 						$exParams = PHPParser::ReturnPHPStr2($arExParams);
@@ -276,8 +278,8 @@ class CEditorUtils
 		for ($i = 0, $l = count($arCSS); $i < $l; $i++)
 		{
 			$path = $arCSS[$i];
-			if (strpos($path, '?') !== false)
-				$path = substr($path, 0, strpos($path, '?'));
+			if (mb_strpos($path, '?') !== false)
+				$path = mb_substr($path, 0, mb_strpos($path, '?'));
 			$filename = $_SERVER["DOCUMENT_ROOT"].$path;
 			if (file_exists($filename))
 				echo 'window.arUsedCSS.push("'.$path.'");'."\n";
@@ -298,4 +300,3 @@ class CEditorUtils
 		return $ar;
 	}
 }
-?>

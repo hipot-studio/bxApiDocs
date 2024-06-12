@@ -12,31 +12,32 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class InvoiceSpecTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_InvoiceSpec_Query query()
+ * @method static EO_InvoiceSpec_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_InvoiceSpec_Result getById($id)
+ * @method static EO_InvoiceSpec_Result getList(array $parameters = [])
+ * @method static EO_InvoiceSpec_Entity getEntity()
+ * @method static \Bitrix\Crm\EO_InvoiceSpec createObject($setDefaultValues = true)
+ * @method static \Bitrix\Crm\EO_InvoiceSpec_Collection createCollection()
+ * @method static \Bitrix\Crm\EO_InvoiceSpec wakeUpObject($row)
+ * @method static \Bitrix\Crm\EO_InvoiceSpec_Collection wakeUpCollection($rows)
+ */
 class InvoiceSpecTable extends Entity\DataManager
 {
 	public static function getTableName()
 	{
-		return 'b_sale_basket';
+		return 'b_crm_invoice_basket';
 	}
 
 	public static function getMap()
 	{
-		global $DB, $DBType;
-
-		if (function_exists('___dbCastIntToChar') !== true)
-		{
-			eval(
-				'function ___dbCastIntToChar($dbtype, $param)'.
-				'{'.
-				'   $result = $param;'.
-				'   if (ToLower($dbtype) === "mssql")'.
-				'   {'.
-				'       $result = "CAST(".$param." AS VARCHAR)";'.
-				'   }'.
-				'   return $result;'.
-				'}'
-			);
-		}
+		global $DB;
 
 		return array(
 			'ID' => array(
@@ -70,9 +71,9 @@ class InvoiceSpecTable extends Entity\DataManager
 			),
 			'NAME_WITH_IDENT' => array(
 				'data_type' => 'string',
-				'expression' => array(
-					$DB->concat('%s', '\' [\'', ___dbCastIntToChar($DBType, '%s'), '\']\''), 'NAME', 'PRODUCT_ID'
-				)
+				'expression' => [
+					$DB->concat('%s', "' ['", '%s', "']'"), 'NAME', 'PRODUCT_ID'
+				],
 			),
 			'IBLOCK_ELEMENT' => array(
 				'data_type' => 'IBlockElementProxy',

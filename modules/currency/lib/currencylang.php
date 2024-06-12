@@ -3,7 +3,6 @@ namespace Bitrix\Currency;
 
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
-Loc::loadMessages(__FILE__);
 
 /**
  * Class CurrencyLangTable
@@ -14,8 +13,8 @@ Loc::loadMessages(__FILE__);
  * <li> LID string(2) mandatory primary
  * <li> FORMAT_STRING string(50) mandatory
  * <li> FULL_NAME string(50) optional
- * <li> DEC_POINT string(5) optional default '.'
- * <li> THOUSANDS_SEP string(5) optional default ' '
+ * <li> DEC_POINT string(16) optional default '.'
+ * <li> THOUSANDS_SEP string(16) optional default ' '
  * <li> DECIMALS int optional default 2
  * <li> THOUSANDS_VARIANT string(1) optional
  * <li> HIDE_ZERO bool optional default 'N'
@@ -29,7 +28,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Currency
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_CurrencyLang_Query query()
+ * @method static EO_CurrencyLang_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_CurrencyLang_Result getById($id)
+ * @method static EO_CurrencyLang_Result getList(array $parameters = [])
+ * @method static EO_CurrencyLang_Entity getEntity()
+ * @method static \Bitrix\Currency\EO_CurrencyLang createObject($setDefaultValues = true)
+ * @method static \Bitrix\Currency\EO_CurrencyLang_Collection createCollection()
+ * @method static \Bitrix\Currency\EO_CurrencyLang wakeUpObject($row)
+ * @method static \Bitrix\Currency\EO_CurrencyLang_Collection wakeUpCollection($rows)
+ */
 
 class CurrencyLangTable extends Main\Entity\DataManager
 {
@@ -38,18 +50,7 @@ class CurrencyLangTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы в базе данных с языкозависимыми параметрами валюты. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencylangtable/gettablename.php
-	* @author Bitrix
-	*/
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_catalog_currency_lang';
 	}
@@ -59,18 +60,7 @@ class CurrencyLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы языкозависимых параметров валюты. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencylangtable/getmap.php
-	* @author Bitrix
-	*/
-	public static function getMap()
+	public static function getMap(): array
 	{
 		return array(
 			'CURRENCY' => new Main\Entity\StringField('CURRENCY', array(
@@ -119,6 +109,11 @@ class CurrencyLangTable extends Main\Entity\DataManager
 				'title' => Loc::getMessage('CURRENCY_LANG_ENTITY_CREATED_BY_FIELD')
 			)),
 			'DATE_CREATE' => new Main\Entity\DatetimeField('DATE_CREATE', array(
+				'default_value' => function()
+					{
+						return new Main\Type\DateTime();
+					}
+				,
 				'title' => Loc::getMessage('CURRENCY_LANG_ENTITY_DATE_CREATE_FIELD')
 			)),
 			'MODIFIED_BY' => new Main\Entity\IntegerField('MODIFIED_BY', array(
@@ -126,7 +121,11 @@ class CurrencyLangTable extends Main\Entity\DataManager
 			)),
 			'TIMESTAMP_X' => new Main\Entity\DatetimeField('TIMESTAMP_X', array(
 				'required' => true,
-				'default_value' => new Main\Type\DateTime(),
+				'default_value' => function()
+					{
+						return new Main\Type\DateTime();
+					}
+				,
 				'title' => Loc::getMessage('CURRENCY_LANG_ENTITY_TIMESTAMP_X_FIELD')
 			)),
 			'CREATED_BY_USER' => array(
@@ -149,17 +148,6 @@ class CurrencyLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>CURRENCY</code> (код валюты). Метод статический и используется для валидации новых значений полей при добавлении валюты или изменении параметров уже существующей.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencylangtable/validatecurrency.php
-	* @author Bitrix
-	*/
 	public static function validateCurrency()
 	{
 		return array(
@@ -172,17 +160,6 @@ class CurrencyLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>LID</code> (код языка). Метод статический и используется для валидации новых значений полей при добавлении валюты или изменении параметров уже существующей.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencylangtable/validatelid.php
-	* @author Bitrix
-	*/
 	public static function validateLid()
 	{
 		return array(
@@ -195,17 +172,6 @@ class CurrencyLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>FORMAT_STRING</code> (формат строки для вывода валюты). Метод статический и используется для валидации новых значений полей при добавлении валюты или изменении параметров уже существующей.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencylangtable/validateformatstring.php
-	* @author Bitrix
-	*/
 	public static function validateFormatString()
 	{
 		return array(
@@ -218,17 +184,6 @@ class CurrencyLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>FULL_NAME</code> (полное название валюты). Метод статический и используется для валидации новых значений полей при добавлении валюты или изменении параметров уже существующей.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencylangtable/validatefullname.php
-	* @author Bitrix
-	*/
 	public static function validateFullName()
 	{
 		return array(
@@ -241,21 +196,10 @@ class CurrencyLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>DEC_POINT</code> (десятичная точка при выводе валюты). Метод статический и используется для валидации новых значений полей при добавлении валюты или изменении параметров уже существующей.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencylangtable/validatedecpoint.php
-	* @author Bitrix
-	*/
 	public static function validateDecPoint()
 	{
 		return array(
-			new Main\Entity\Validator\Length(null, 5),
+			new Main\Entity\Validator\Length(null, 16),
 		);
 	}
 
@@ -264,21 +208,10 @@ class CurrencyLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>THOUSANDS_SEP</code> (разделитель тысяч при выводе). Метод статический и используется для валидации новых значений полей при добавлении валюты или изменении параметров уже существующей.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencylangtable/validatethousandssep.php
-	* @author Bitrix
-	*/
 	public static function validateThousandsSep()
 	{
 		return array(
-			new Main\Entity\Validator\Length(null, 5),
+			new Main\Entity\Validator\Length(null, 16),
 		);
 	}
 
@@ -287,21 +220,34 @@ class CurrencyLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>THOUSANDS_VARIANT</code> (один из предустановленных вариантов разделителя тысяч или признак, что разделитель кастомизированный и берется из другого поля). Метод статический и используется для валидации новых значений полей при добавлении валюты или изменении параметров уже существующей.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/currency/currencylangtable/validatethousandsvariant.php
-	* @author Bitrix
-	*/
 	public static function validateThousandsVariant()
 	{
 		return array(
 			new Main\Entity\Validator\Length(null, 1),
 		);
+	}
+
+	public static function deleteByCurrency(string $currency): void
+	{
+		$currency = trim($currency);
+		if ($currency === '')
+		{
+			return;
+		}
+		$conn = Main\Application::getConnection();
+		$helper = $conn->getSqlHelper();
+		$conn->queryExecute(
+			'delete from ' . $helper->quote(self::getTableName())
+				. ' where '.$helper->quote('CURRENCY').' = \''. $helper->forSql($currency) . '\''
+		);
+		unset($helper, $conn);
+
+		static::cleanCache();
+	}
+
+	public static function cleanCache(): void
+	{
+		parent::cleanCache();
+		CurrencyTable::cleanCache();
 	}
 }

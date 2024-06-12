@@ -33,17 +33,6 @@ class Base
 	 *
 	 * @return integer
 	 */
-	
-	/**
-	* <p>Метод возвращает идентификатор сущности. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/base/getid.php
-	* @author Bitrix
-	*/
 	public function getId()
 	{
 		return $this->id;
@@ -56,20 +45,7 @@ class Base
 	 *
 	 * @return \Bitrix\Iblock\Template\Entity\Base
 	 */
-	
-	/**
-	* <p>Метод используется для поиска сущности для обработки шаблона. Нестатический метод.</p>
-	*
-	*
-	* @param string $entity  Сущность, которую необходимо найти.
-	*
-	* @return \Bitrix\Iblock\Template\Entity\Base 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/base/resolve.php
-	* @author Bitrix
-	*/
-	static public function resolve($entity)
+	public function resolve($entity)
 	{
 		if ($entity === "this")
 			return $this;
@@ -84,19 +60,6 @@ class Base
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Используется для инициализации полей сущности из некоторого внешнего источника. Нестатический метод.</p>
-	*
-	*
-	* @param array $fields  Массив, содержащий поля сущности.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/base/setfields.php
-	* @author Bitrix
-	*/
 	public function setFields(array $fields)
 	{
 		$this->fields = $fields;
@@ -109,19 +72,6 @@ class Base
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает значение поля. Нестатический метод.</p>
-	*
-	*
-	* @param string $fieldName  Название поля, значение которого необходимо получить.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/base/getfield.php
-	* @author Bitrix
-	*/
 	public function getField($fieldName)
 	{
 		if (!$this->loadFromDatabase())
@@ -187,7 +137,7 @@ class Base
 	{
 		if (!isset($this->fields[$internalName]))
 			$this->fields[$internalName] = $value;
-		$this->fieldMap[strtolower($fieldName)] = $internalName;
+		$this->fieldMap[mb_strtolower($fieldName)] = $internalName;
 	}
 }
 
@@ -205,7 +155,7 @@ class LazyValueLoader
 	/**
 	 * @param string|integer $key Unique identifier.
 	 */
-	public function __construct($key)
+	function __construct($key)
 	{
 		$this->key = $key;
 	}
@@ -215,17 +165,6 @@ class LazyValueLoader
 	 *
 	 * @return mixed
 	 */
-	
-	/**
-	* <p>Вызывает метод загрузки данных из базы данных, если они еще не были получены. Метод вызывается при преобразовании объекта в строку. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/lazyvalueloader/__tostring.php
-	* @author Bitrix
-	*/
 	public function __toString()
 	{
 		if (!isset($this->value))
@@ -238,17 +177,6 @@ class LazyValueLoader
 	 *
 	 * @return mixed
 	 */
-	
-	/**
-	* <p>Вызывает метод загрузки данных из базы данных, если они еще не были получены. Нестатический метод.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/entity/lazyvalueloader/getvalue.php
-	* @author Bitrix
-	*/
 	public function getValue()
 	{
 		if (!isset($this->value))

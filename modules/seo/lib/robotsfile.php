@@ -10,8 +10,7 @@ namespace Bitrix\Seo;
 use Bitrix\Main\IO;
 use Bitrix\Main\SiteTable;
 
-class RobotsFile
-	extends IO\File
+class RobotsFile extends IO\File
 {
 	const ROBOTS_FILE_NAME = 'robots.txt';
 	const SECTION_RULE = 'User-Agent';
@@ -62,14 +61,14 @@ class RobotsFile
 		$this->save();
 	}
 
-	static public function getRuleText($rule)
+	public function getRuleText($rule)
 	{
 		return implode(': ', $rule);
 	}
 
-	static public function parseRule($strRule)
+	public function parseRule($strRule)
 	{
-		if(substr($strRule, 0, 1) == '#')
+		if(mb_substr($strRule, 0, 1) == '#')
 		{
 			return array($strRule);
 		}
@@ -140,7 +139,7 @@ class RobotsFile
 				{
 					$line = trim($line);
 
-					if(strlen($line) > 0)
+					if($line <> '')
 					{
 						$rule = $this->parseRule($line);
 						if(ToUpper($rule[0]) == $strSectionCompare)

@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 /***********************************************************************/
@@ -6,32 +7,21 @@ IncludeModuleLangFile(__FILE__);
 /***********************************************************************/
 $GLOBALS["SALE_RECURRING"] = Array();
 
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalerecurring/index.php
- * @author Bitrix
- */
 class CAllSaleRecurring
 {
 	public static function CheckFields($ACTION, &$arFields, $ID = 0)
 	{
-		if ((is_set($arFields, "USER_ID") || $ACTION=="ADD") && IntVal($arFields["USER_ID"]) <= 0)
+		if ((is_set($arFields, "USER_ID") || $ACTION=="ADD") && intval($arFields["USER_ID"]) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGR_EMPTY_USER_ID"), "NO_USER_ID");
 			return false;
 		}
-		if ((is_set($arFields, "NEXT_DATE") || $ACTION=="ADD") && strlen($arFields["NEXT_DATE"]) <= 0)
+		if ((is_set($arFields, "NEXT_DATE") || $ACTION=="ADD") && $arFields["NEXT_DATE"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGR_EMPTY_NEXT_DATE"), "NO_NEXT_DATE");
 			return false;
 		}
-		if ((is_set($arFields, "ORDER_ID") || $ACTION=="ADD") && IntVal($arFields["ORDER_ID"]) <= 0)
+		if ((is_set($arFields, "ORDER_ID") || $ACTION=="ADD") && intval($arFields["ORDER_ID"]) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGR_EMPTY_ORDER_ID"), "NO_ORDER_ID");
 			return false;
@@ -76,41 +66,11 @@ class CAllSaleRecurring
 		return True;
 	}
 
-	
-	/**
-	* <p>Метод изменяет параметры записи на продление подписки в соответствии с параметрами из массива arFields. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код изменяемой записи на продление подписки.
-	*
-	* @param array $arFields  Ассоциативный массив новых параметров новой записи 		продления
-	* подписки с ключами: <ul> <li> <b>USER_ID</b> - код пользователя;</li> 	<li> <b>MODULE</b>
-	* - модуль, товар которого продлевается;</li> 	<li> <b>PRODUCT_ID</b> - код
-	* продлеваемого товара;</li> 	<li> <b>PRODUCT_NAME</b> - название продлеваемого
-	* товара;</li> 	<li> <b>PRODUCT_URL</b> - ссылка на продлеваемый товар;</li> 	<li>
-	* <b>RECUR_SCHEME_TYPE</b> - тип периода оплаты;</li> 	<li> <b>RECUR_SCHEME_LENGTH</b> - длина
-	* периода оплаты;</li> 	<li> <b>WITHOUT_ORDER</b> - флаг "Без оформления заказа";</li>
-	* 	<li> <b>ORDER_ID</b> - код базового заказа для продления;</li> 	<li> <b>CANCELED</b> -
-	* флаг отмены продления;</li> 	<li> <b>DESCRIPTION</b> - описание;</li> 	<li>
-	* <b>CALLBACK_FUNC</b> - функция обратного вызова для обновления параметров
-	* продления;</li> 	<li> <b>REMAINING_ATTEMPTS</b> - количество оставшихся попыток
-	* осуществления продления;</li> 	<li> <b>SUCCESS_PAYMENT</b> - успешное
-	* осуществление продления;</li> 	<li> <b>CANCELED_REASON</b> - причина отмены;</li>
-	* 	<li> <b>DATE_CANCELED</b> - дата отмены;</li> 	<li> <b>PRIOR_DATE</b> - дата последнего
-	* продления;</li> 	<li> <b>NEXT_DATE</b> - дата очередного продления.</li> </ul>
-	*
-	* @return int <p>Метод возвращает код измененной записи или False в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalerecurring/csalerecurring.update.php
-	* @author Bitrix
-	*/
 	public static function Update($ID, $arFields)
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 			return False;
 
@@ -126,25 +86,11 @@ class CAllSaleRecurring
 		return $ID;
 	}
 
-	
-	/**
-	* <p>Метод удаляет запись на продление подписки с кодом ID. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код удаляемой записи.
-	*
-	* @return bool <p>Метод возвращает <i>true</i> в случае успешного удаления или <i>false</i>
-	* в случае ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalerecurring/csalerecurring.delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		global $DB;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 			return False;
 
@@ -157,12 +103,12 @@ class CAllSaleRecurring
 	{
 		$callbackFunc = trim($callbackFunc);
 		$module = trim($module);
-		$productID = IntVal($productID);
+		$productID = intval($productID);
 
 		$result = False;
-		if (strlen($callbackFunc) > 0)
+		if ($callbackFunc <> '')
 		{
-			if (strlen($module)>0 && $module != "main")
+			if ($module <> '' && $module != "main")
 				CModule::IncludeModule($module);
 
 			$arArgs = array($productID);
@@ -177,17 +123,6 @@ class CAllSaleRecurring
 		return $result;
 	}
 
-	
-	/**
-	* <p>Метод ищет подписки, которые пора продлить, и пытается осуществить продление. За раз осуществляется продление не более трех подписок. Этот метод можно вызывать из агентов или cron'а для автоматического продления подписки. Нестатический метод.</p>
-	*
-	*
-	* @return void <p>Метод не возвращает значений.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalerecurring/csalerecurring.checkrecurring.php
-	* @author Bitrix
-	*/
 	public static function CheckRecurring()
 	{
 		if (defined("SALE_PROC_REC_NUM"))
@@ -216,26 +151,12 @@ class CAllSaleRecurring
 		}
 	}
 
-	
-	/**
-	* <p>Метод осуществляет продление подписки с кодом ID. Нестатический метод.</p> <p></p> <div class="note"> <b>Примечание:</b> метод использует внутреннюю транзакцию. Если у вас используется <b>MySQL</b> и <b>InnoDB</b>, и  ранее была открыта транзакция, то ее необходимо закрыть до подключения метода.</div>
-	*
-	*
-	* @param mixed $intID  Код записи с информацией о продлении.
-	*
-	* @return bool <p>Метод возвращает <i>true</i> в случае успешного продления или <i>false</i>
-	* в случае ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalerecurring/csalerecurring.nextpayment.php
-	* @author Bitrix
-	*/
 	public static function NextPayment($ID)
 	{
 		global $DB;
 		global $USER;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		if ($ID <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGR_NO_RECID"), "NO_RECORD_ID");
@@ -258,7 +179,7 @@ class CAllSaleRecurring
 
 
 		$bSuccess = True;
-		$newOrderID = IntVal($arRecur["ORDER_ID"]);
+		$newOrderID = intval($arRecur["ORDER_ID"]);
 
 		/** @var $productProvider IBXSaleProductProvider */
 		if ($productProvider = CSaleBasket::GetProductProvider($arRecur))
@@ -293,7 +214,7 @@ class CAllSaleRecurring
 			// Delivery
 			$deliveryPrice = 0;
 			$deliveryID = 0;
-			$arOrder["DELIVERY_ID"] = IntVal($arOrder["DELIVERY_ID"]);
+			$arOrder["DELIVERY_ID"] = intval($arOrder["DELIVERY_ID"]);
 			if ($arOrder["DELIVERY_ID"] > 0)
 			{
 				$deliveryLocation = 0;
@@ -308,7 +229,7 @@ class CAllSaleRecurring
 						array("VALUE")
 					);
 				if ($arOrderPropValues = $dbOrderPropValues->Fetch())
-					$deliveryLocation = IntVal($arOrderPropValues["VALUE"]);
+					$deliveryLocation = intval($arOrderPropValues["VALUE"]);
 
 				$dbDelivery = CSaleDelivery::GetList(
 						array("SORT" => "ASC", "NAME" => "ASC"),
@@ -323,15 +244,15 @@ class CAllSaleRecurring
 				while ($arDelivery = $dbDelivery->Fetch())
 				{
 					$deliveryPriceTmp = \Bitrix\Sale\PriceMaths::roundPrecision(CCurrencyRates::ConvertCurrency($arDelivery["PRICE"], $arDelivery["CURRENCY"], $baseSiteCurrency));
-					if (IntVal($arDelivery["ID"]) == $arOrder["DELIVERY_ID"])
+					if (intval($arDelivery["ID"]) == $arOrder["DELIVERY_ID"])
 					{
-						$deliveryID = IntVal($arDelivery["ID"]);
+						$deliveryID = intval($arDelivery["ID"]);
 						$deliveryPrice = $deliveryPriceTmp;
 						break;
 					}
 					if ($deliveryPriceTmp < $deliveryPrice || $deliveryID <= 0)
 					{
-						$deliveryID = IntVal($arDelivery["ID"]);
+						$deliveryID = intval($arDelivery["ID"]);
 						$deliveryPrice = $deliveryPriceTmp;
 					}
 				}
@@ -404,7 +325,7 @@ class CAllSaleRecurring
 				$dbTaxExemptTmp = CSaleTax::GetExemptList(array("GROUP_ID" => $arUserGroups["GROUP_ID"]));
 				while ($arTaxExemptTmp = $dbTaxExemptTmp->Fetch())
 				{
-					$arTaxExemptTmp["TAX_ID"] = IntVal($arTaxExemptTmp["TAX_ID"]);
+					$arTaxExemptTmp["TAX_ID"] = intval($arTaxExemptTmp["TAX_ID"]);
 					if (!in_array($arTaxExemptTmp["TAX_ID"], $arTaxExempt))
 						$arTaxExempt[] = $arTaxExemptTmp["TAX_ID"];
 				}
@@ -426,7 +347,7 @@ class CAllSaleRecurring
 						array("VALUE")
 					);
 				if ($arOrderPropValues = $dbOrderPropValues->Fetch())
-					$taxLocation = IntVal($arOrderPropValues["VALUE"]);
+					$taxLocation = intval($arOrderPropValues["VALUE"]);
 
 				$arTaxList = array();
 				$dbTaxRateTmp = CSaleTaxRate::GetList(
@@ -440,7 +361,7 @@ class CAllSaleRecurring
 					);
 				while ($arTaxRateTmp = $dbTaxRateTmp->Fetch())
 				{
-					if (!in_array(IntVal($arTaxRateTmp["TAX_ID"]), $arTaxExempt))
+					if (!in_array(intval($arTaxRateTmp["TAX_ID"]), $arTaxExempt))
 					{
 						$arTaxList[] = $arTaxRateTmp;
 					}
@@ -551,7 +472,7 @@ class CAllSaleRecurring
 
 				$basketID = CSaleBasket::Add($arFields);
 
-				$basketID = IntVal($basketID);
+				$basketID = intval($basketID);
 				if ($basketID <= 0)
 					$bSuccess = False;
 
@@ -582,7 +503,7 @@ class CAllSaleRecurring
 
 					$newOrderID = CSaleOrder::Add($arFields);
 
-					$newOrderID = IntVal($newOrderID);
+					$newOrderID = intval($newOrderID);
 					if ($newOrderID <= 0)
 						$bSuccess = False;
 				}
@@ -655,14 +576,14 @@ class CAllSaleRecurring
 						$strOrderList .= "\n";
 					}
 
-					if (strlen($payerName) <= 0 || strlen($payerEMail) <= 0)
+					if ($payerName == '' || $payerEMail == '')
 					{
 						$dbUser = CUser::GetByID($arOrder["USER_ID"]);
 						if ($arUser = $dbUser->Fetch())
 						{
-							if (strlen($payerName) <= 0)
-								$payerName = $arUser["NAME"].((strlen($arUser["NAME"])<=0 || strlen($arUser["LAST_NAME"])<=0) ? "" : " ").$arUser["LAST_NAME"];
-							if (strlen($payerEMail) <= 0)
+							if ($payerName == '')
+								$payerName = $arUser["NAME"].(($arUser["NAME"] == '' || $arUser["LAST_NAME"] == '') ? "" : " ").$arUser["LAST_NAME"];
+							if ($payerEMail == '')
 								$payerEMail = $arUser["EMAIL"];
 						}
 					}
@@ -768,12 +689,12 @@ class CAllSaleRecurring
 					"RECUR_SCHEME_TYPE" => $arProduct["RECUR_SCHEME_TYPE"],
 					"WITHOUT_ORDER" => $arProduct["WITHOUT_ORDER"],
 					"NEXT_DATE" => Date($GLOBALS["DB"]->DateFormatToPHP(CLang::GetDateFormat("FULL", SITE_ID)), time() + SALE_PROC_REC_TIME + CTimeZone::GetOffset()),
-					"REMAINING_ATTEMPTS" => (IntVal($arRecur["REMAINING_ATTEMPTS"]) - 1),
+					"REMAINING_ATTEMPTS" => (intval($arRecur["REMAINING_ATTEMPTS"]) - 1),
 					"SUCCESS_PAYMENT" => "N"
 				);
 				CSaleRecurring::Update($arRecur["ID"], $arFields);
 
-				if ((IntVal($arRecur["REMAINING_ATTEMPTS"]) - 1) <= 0)
+				if ((intval($arRecur["REMAINING_ATTEMPTS"]) - 1) <= 0)
 				{
 					CSaleRecurring::CancelRecurring($arRecur["ID"], "Y", "Can't pay order");
 					/*
@@ -788,30 +709,11 @@ class CAllSaleRecurring
 		return $res;
 	}
 
-	
-	/**
-	* <p>Метод осуществляет отмену продления подписки с кодом ID. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код записи с информацией о продлении.
-	*
-	* @param string $val  "Y", если подписка отменяется, и "N", если подписка
-	* восстанавливается.
-	*
-	* @param string $description = ""] Причина отмены подписки.
-	*
-	* @return bool <p>Метод возвращает код отменяемой записи или <i>false</i> в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csalerecurring/csalerecurring.cancelrecurring.php
-	* @author Bitrix
-	*/
 	public static function CancelRecurring($ID, $val, $description = "")
 	{
 		global $DB, $USER;
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$val = (($val != "Y") ? "N" : "Y");
 		$description = Trim($description);
 
@@ -837,7 +739,7 @@ class CAllSaleRecurring
 		$arFields = array(
 				"CANCELED" => $val,
 				"DATE_CANCELED" => (($val == "Y") ? Date(CDatabase::DateFormatToPHP(CLang::GetDateFormat("FULL", LANG))) : False),
-				"CANCELED_REASON" => ( strlen($description)>0 ? $description : false )
+				"CANCELED_REASON" => ( $description <> '' ? $description : false )
 			);
 		$res = CSaleRecurring::Update($ID, $arFields);
 
@@ -886,8 +788,8 @@ class CAllSaleRecurring
 		CSaleRecurring::CheckRecurring();
 
 		global $pPERIOD;
-		if (defined("SALE_PROC_REC_FREQUENCY") && IntVal(SALE_PROC_REC_FREQUENCY) > 0)
-			$pPERIOD = IntVal(SALE_PROC_REC_FREQUENCY);
+		if (defined("SALE_PROC_REC_FREQUENCY") && intval(SALE_PROC_REC_FREQUENCY) > 0)
+			$pPERIOD = intval(SALE_PROC_REC_FREQUENCY);
 		else
 			$pPERIOD = 7200;
 
@@ -902,7 +804,7 @@ class CAllSaleRecurring
 	public static function OnCurrencyDelete($Currency)
 	{
 		global $DB;
-		if (strlen($Currency)<=0) return false;
+		if ($Currency == '') return false;
 
 		return $DB->Query("DELETE FROM b_sale_recurring WHERE CURRENCY = '".$DB->ForSql($ID)."' ", true);
 	}
@@ -910,10 +812,8 @@ class CAllSaleRecurring
 	public static function OnUserDelete($UserID)
 	{
 		global $DB;
-		$UserID = IntVal($UserID);
+		$UserID = intval($UserID);
 
 		return $DB->Query("DELETE FROM b_sale_recurring WHERE USER_ID = ".$UserID." ", true);
 	}
 }
-
-?>

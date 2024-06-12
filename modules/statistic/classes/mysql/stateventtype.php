@@ -1,54 +1,9 @@
-<?
+<?php
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/statistic/classes/general/stateventtype.php");
 
-/**
- * <b>CStatEventType</b> - класс для работы с <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event_type">типами событий</a>.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/index.php
- * @author Bitrix
- */
 class CStatEventType extends CAllStatEventType
 {
-	
-	/**
-	* <p>Возвращает данные по указанному <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event_type">типу события</a>.</p>
-	*
-	*
-	* @param int $type_id  ID типа события.
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $type_id = 1;
-	* if ($rs = <b>CStatEventType::GetByID</b>($type_id))
-	* {
-	*     $ar = $rs-&gt;Fetch();
-	*     // выведем параметры типа события
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/getbyevents.php">CStatEventType::GetByEvents</a>
-	* 	</li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/conditionset.php">CStatEventType::ConditionSet</a>
-	* 	</li> <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event_type">Термин "Тип
-	* события"</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
@@ -69,147 +24,12 @@ class CStatEventType extends CAllStatEventType
 		return $res;
 	}
 
-	
-	/**
-	* <p>Возвращает список <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event_type">типов событий</a>.</p>
-	*
-	*
-	* @param string &$by = "s_today_counter" Поле для сортировки. Возможные значения:          <ul> <li> <b>s_id</b> - ID типа
-	* события; </li>                    <li> <b>s_date_last</b> - дата последнего <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event">события</a> данного типа; </li>     
-	*               <li> <b>s_date_enter</b> - дата первого события данного типа; </li>          
-	*          <li> <b>s_today_counter</b> - количество событий данного типа за сегодня;
-	* </li>                    <li> <b>s_yesterday_counter</b> - количество событий данного типа
-	* за вчера; </li>                    <li> <b>s_b_yesterday_counter</b> - количество событий
-	* данного типа за позавчера; </li>                    <li> <b>s_total_counter</b> -
-	* суммарное количество событий данного типа; </li>                    <li>
-	* <b>s_period_counter</b> - количество событий данного типа за указанный
-	* период <nobr>(<i>filter</i>[<b>DATE1_PERIOD</b>], <i>filter</i>[<b>DATE2_PERIOD</b>])</nobr>; </li>               
-	*     <li> <b>s_name</b> - название типа события; </li>                    <li> <b>s_event1</b> - <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event_type_id">идентификатор event1</a> типа
-	* события; </li>                    <li> <b>s_event2</b> - идентификатор event2 типа
-	* события; </li>                    <li> <b>s_event12</b> - сортировка по "EVENT1, EVENT2"; </li>      
-	*              <li> <b>s_chart</b> - сортировка по "DIAGRAM_DEFAULT desc, TOTAL_COUNTER"; </li>               
-	*     <li> <b>s_stat</b> - сортировка по "TODAY_COUNTER desc, YESTERDAY_COUNTER desc, B_YESTERDAY_COUNTER
-	* desc, TOTAL_COUNTER desc, PERIOD_COUNTER". </li>         </ul>
-	*
-	* @param string &$order = "desc" Порядок сортировки. Возможные значения:          <ul> <li> <b>asc</b> - по
-	* возрастанию; </li>                    <li> <b>desc</b> - по убыванию. </li>         </ul>
-	*
-	* @param array $filter = array() Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи:          <ul> <li> <b>ID</b>* - ID типа события; </li>     
-	*               <li> <b>ID_EXACT_MATCH</b> - если значение равно "N", то при фильтрации
-	* по <b>ID</b> будет искаться вхождение; </li>                    <li> <b>EVENT1</b>* -
-	* идентификатор event1 типа события; </li>                    <li> <b>EVENT1_EXACT_MATCH</b> -
-	* если значение равно "Y", то при фильтрации по <b>EVENT1</b> будет
-	* искаться точное совпадение; </li>                    <li> <b>EVENT2</b>* -
-	* идентификатор event2 типа события; </li>                    <li> <b>EVENT2_EXACT_MATCH</b> -
-	* если значение равно "Y", то при фильтрации по <b>EVENT2</b> будет
-	* искаться точное совпадение; </li>                    <li> <b>NAME</b>* - название
-	* типа события; </li>                    <li> <b>NAME_EXACT_MATCH</b> - если значение равно
-	* "Y", то при фильтрации по <b>NAME</b> будет искаться точное совпадение;
-	* </li>                    <li> <b>DESCRIPTION</b>* - описание типа события; </li>                   
-	* <li> <b>DESCRIPTION_EXACT_MATCH</b> - если значение равно "Y", то при фильтрации по
-	* <b>DESCRIPTION</b> будет искаться точное совпадение; </li>                    <li>
-	* <b>DATE_ENTER_1</b> - начальное значение интервала для поля "дата первого
-	* события данного типа"; </li>                    <li> <b>DATE_ENTER_2</b> - конечное
-	* значение интервала для поля "дата первого события данного типа";
-	* </li>                    <li> <b>DATE_LAST_1</b> - начальное значение интервала для
-	* поля "дата последнего события данного типа"; </li>                    <li>
-	* <b>DATE_LAST_2</b> - конечное значение интервала для поля "дата последнего
-	* события данного типа"; </li>                    <li> <b>DATE1_PERIOD</b> - начальное
-	* значение значение для произвольного периода; </li>                    <li>
-	* <b>DATE2_PERIOD</b> - конечное значение значение для произвольного
-	* периода; </li>                    <li> <b>COUNTER1</b> - начальное значение интервала
-	* для поля "суммарное количество событий данного типа"; </li>                 
-	*   <li> <b>COUNTER2</b> - конечное значение интервала для поля "суммарное
-	* количество событий данного типа"; </li>                    <li> <b>ADV_VISIBLE</b> -
-	* флаг включать ли статистику по данному типу события в отчет по
-	* рекламным кампаниям, возможные значения:              <ul> <li> <b>Y</b> -
-	* включать; </li>                            <li> <b>N</b> - не включать. </li>             </ul> </li> 
-	*                   <li> <b>DIAGRAM_DEFAULT</b> - флаг включать ли данный тип события в
-	* круговую диаграмму и график по умолчанию, возможные значения:       
-	*       <ul> <li> <b>Y</b> - включать; </li>                            <li> <b>N</b> - не включать.
-	* </li>             </ul> </li>                    <li> <b>KEEP_DAYS1</b> - начальное значение
-	* интервала для поля "количество дней отведенное для хранения
-	* событий данного типа"; </li>                    <li> <b>KEEP_DAYS2</b> - конечное
-	* значение интервала для поля "количество дней отведенное для
-	* хранения событий данного типа"; </li>                    <li> <b>DYNAMIC_KEEP_DAYS1</b> -
-	* начальное значение интервала для поля "количество дней
-	* отведенное для хранения статистики по данному типу события в
-	* разрезе по дням"; </li>                    <li> <b>DYNAMIC_KEEP_DAYS2</b> - конечное
-	* значение интервала для поля "количество дней отведенное для
-	* хранения статистики по данному типу события в разрезе по дням";
-	* </li>                    <li> <b>MONEY1</b> - начальное значение интервала для поля
-	* "суммарная денежная сумма для данного типа событий"; </li>                   
-	* <li> <b>MONEY2</b> - конечное значение интервала для поля "суммарная
-	* денежная сумма для данного типа событий"; </li>                    <li>
-	* <b>CURRENCY</b> - трехсимвольный идентификатор валюты для денежной
-	* суммы; </li>                    <li> <b>GROUP</b> - группировка результирующего
-	* списка, возможные значения:              <ul> <li> <b>event1</b> - группировка по
-	* <i>event1</i>; </li>                            <li> <b>event2</b> - группировка по <i>event2</i>. </li>   
-	*          </ul> </li>         </ul>       * - допускается <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/general/filter.php">сложная логика</a>
-	*
-	* @param bool &$is_filtered  Флаг отфильтрованности результирующего списка. Если значение
-	* равно "true", то список был отфильтрован.
-	*
-	* @param mixed $limit = false Максимальное число типов событий которые будут выбраны в списке.
-	* Если значение равно "false", то кол-во РК будет ограничено в
-	* соответствии со значением параметра <b>Максимальное кол-во
-	* показываемых записей в таблицах</b> из настроек модуля
-	* "Статистика".
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // получим данные только по тем типам событий 
-	* // у которых event1 = "download"
-	* // а также получим дополнительные данные на декабрь 2007 года
-	* $arFilter = array(
-	*     "DATE1_PERIOD" =&gt; "01.12.2007",
-	*     "DATE2_PERIOD" =&gt; "31.12.2007",
-	*     "EVENT1"       =&gt; "download"
-	*     );
-	* 
-	* // получим список записей
-	* $rs = <b>CStatEventType::GetList</b>(
-	*     ($by = "s_today_counter"), 
-	*     ($order = "desc"), 
-	*     $arFilter, 
-	*     $is_filtered
-	*     );
-	* 
-	* // выведем все записи
-	* while ($ar = $rs-&gt;Fetch())
-	* {
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";    
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/getdynamiclist.php">CStatEventType::GetDynamicList</a>
-	* </li>   <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/getsimplelist.php">CStatEventType::GetSimpleList</a>
-	* </li>   <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event_type">Термин "Тип
-	* события"</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/getlist.php
-	* @author Bitrix
-	*/
-	public static function GetList(&$by, &$order, $arFilter=Array(), &$is_filtered, $LIMIT=false)
+	public static function GetList($by = 's_today_counter', $order = 'desc', $arFilter = [], &$is_filtered = false, $LIMIT = false)
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
 
-		$find_group = $arFilter["GROUP"];
+		$find_group = $arFilter["GROUP"] ?? '';
 		if($find_group!="event1" && $find_group!="event2" && $find_group!="total")
 			$find_group="";
 
@@ -224,14 +44,14 @@ class CStatEventType extends CAllStatEventType
 		if (is_array($arFilter))
 		{
 			ResetFilterLogic();
-			$date1 = $arFilter["DATE1_PERIOD"];
-			$date2 = $arFilter["DATE2_PERIOD"];
+			$date1 = $arFilter["DATE1_PERIOD"] ?? '';
+			$date2 = $arFilter["DATE2_PERIOD"] ?? '';
 			$date_from = MkDateTime(ConvertDateTime($date1,"D.M.Y"),"d.m.Y");
 			$date_to = MkDateTime(ConvertDateTime($date2,"D.M.Y")." 23:59","d.m.Y H:i");
-			if (strlen($date1)>0)
+			if ($date1 <> '')
 			{
 				$filter_period = true;
-				if (strlen($date2)>0)
+				if ($date2 <> '')
 				{
 					$strSqlPeriod = "if(D.DATE_STAT<FROM_UNIXTIME('$date_from'),0, if(D.DATE_STAT>FROM_UNIXTIME('$date_to'),0,";
 					$strT="))";
@@ -242,7 +62,7 @@ class CStatEventType extends CAllStatEventType
 					$strT=")";
 				}
 			}
-			elseif (strlen($date2)>0)
+			elseif ($date2 <> '')
 			{
 				$filter_period = true;
 				$strSqlPeriod = "if(D.DATE_STAT>FROM_UNIXTIME('$date_to'),0,";
@@ -258,7 +78,7 @@ class CStatEventType extends CAllStatEventType
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -333,11 +153,11 @@ class CStatEventType extends CAllStatEventType
 		$rate = 1;
 		$base_currency = GetStatisticBaseCurrency();
 		$view_currency = $base_currency;
-		if (strlen($base_currency)>0)
+		if ($base_currency <> '')
 		{
 			if (CModule::IncludeModule("currency"))
 			{
-				if ($CURRENCY!=$base_currency && strlen($CURRENCY)>0)
+				if ($CURRENCY!=$base_currency && $CURRENCY <> '')
 				{
 					$rate = CCurrencyRates::GetConvertFactor($base_currency, $CURRENCY);
 					$view_currency = $CURRENCY;
@@ -363,13 +183,12 @@ class CStatEventType extends CAllStatEventType
 		elseif ($by == "s_stat")				$strSqlOrder = "ORDER BY TODAY_COUNTER desc, YESTERDAY_COUNTER desc, B_YESTERDAY_COUNTER desc, TOTAL_COUNTER desc, PERIOD_COUNTER";
 		else
 		{
-			$by = "s_today_counter";
 			$strSqlOrder = "ORDER BY TODAY_COUNTER desc, YESTERDAY_COUNTER desc, B_YESTERDAY_COUNTER desc, TOTAL_COUNTER desc, PERIOD_COUNTER";
 		}
-		if ($order!="asc")
+
+		if ($order != "asc")
 		{
 			$strSqlOrder .= " desc ";
-			$order="desc";
 		}
 
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
@@ -554,89 +373,11 @@ class CStatEventType extends CAllStatEventType
 			$res = new CDBResult;
 			$res->InitFromArray($arResult);
 		}
-		$is_filtered = (IsFiltered($strSqlSearch) || $filter_period || strlen($strSqlSearch_h)>0 || $find_group!="");
+		$is_filtered = (IsFiltered($strSqlSearch) || $filter_period || $strSqlSearch_h <> '' || $find_group!="");
 		return $res;
 	}
 
-	
-	/**
-	* <p>Возвращает список <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event_type">типов событий</a> в упрощённом виде.</p>
-	*
-	*
-	* @param string &$by = "s_event1" Поле для сортировки. Возможные значения:          <ul> <li> <b>s_id</b> - ID типа
-	* события; </li>                    <li> <b>s_event1</b> - <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event_type_id">идентификатор event1</a> типа
-	* события; </li>                    <li> <b>s_event2</b> - идентификатор event2 типа
-	* события; </li>                    <li> <b>s_name</b> - название типа события; </li>           
-	*         <li> <b>s_description</b> - описание типа события. </li>         </ul>
-	*
-	* @param string &$order = "desc" Порядок сортировки. Возможные значения:          <ul> <li> <b>asc</b> - по
-	* возрастанию; </li>                    <li> <b>desc</b> - по убыванию. </li>         </ul>
-	*
-	* @param array $filter = array() Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи:          <ul> <li> <b>ID</b>* - ID типа события; </li>     
-	*               <li> <b>ID_EXACT_MATCH</b> - если значение равно "N", то при фильтрации
-	* по <b>ID</b> будет искаться вхождение; </li>                    <li> <b>EVENT1</b>* -
-	* идентификатор event1 типа события; </li>                    <li> <b>EVENT1_EXACT_MATCH</b> -
-	* если значение равно "Y", то при фильтрации по <b>EVENT1</b> будет
-	* искаться точное совпадение; </li>                    <li> <b>EVENT2</b>* -
-	* идентификатор event2 типа события; </li>                    <li> <b>EVENT2_EXACT_MATCH</b> -
-	* если значение равно "Y", то при фильтрации по <b>EVENT2</b> будет
-	* искаться точное совпадение; </li>                    <li> <b>NAME</b>* - название
-	* типа события; </li>                    <li> <b>NAME_EXACT_MATCH</b> - если значение равно
-	* "Y", то при фильтрации по <b>NAME</b> будет искаться точное совпадение;
-	* </li>                    <li> <b>DESCRIPTION</b>* - описание типа события; </li>                   
-	* <li> <b>DESCRIPTION_EXACT_MATCH</b> - если значение равно "Y", то при фильтрации по
-	* <b>DESCRIPTION</b> будет искаться точное совпадение; </li>                    <li>
-	* <b>KEYWORDS</b> - event1, event2, название и описание типа события; </li>                   
-	* <li> <b>KEYWORDS_EXACT_MATCH</b> - если значение равно "Y", то при фильтрации по
-	* <b>KEYWORDS</b> будет искаться точное совпадение. </li>         </ul>       * -
-	* допускается <a href="http://www.1c-bitrix.ru/user_help/general/filter.php">сложная логика</a>
-	*
-	* @param bool &$is_filtered  Флаг отфильтрованности результирующего списка. Если значение
-	* равно "true", то список был отфильтрован.
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // выберем только те типы событий у которых в event1 входит "download"
-	* $arFilter = array(
-	*     "EVENT1" =&gt; "download"
-	*     );
-	* 
-	* // получим список записей
-	* $rs = <b>CStatEventType::GetSimpleList</b>(
-	*     ($by="s_event2"), 
-	*     ($order="desc"), 
-	*     $arFilter, 
-	*     $is_filtered
-	*     );
-	* 
-	* // выведем все записи
-	* while ($ar = $rs-&gt;Fetch())
-	* {
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";    
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/getdynamiclist.php">CStatEventType::GetDynamicList</a>
-	* </li>   <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/getlist.php">CStatEventType::GetList</a> </li>  
-	* <li> <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event_type">Термин "Тип события"</a>
-	* </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/getsimplelist.php
-	* @author Bitrix
-	*/
-	public static function GetSimpleList(&$by, &$order, $arFilter=Array(), &$is_filtered)
+	public static function GetSimpleList($by = 's_event1', $order = 'asc', $arFilter = [])
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -653,7 +394,7 @@ class CStatEventType extends CAllStatEventType
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -680,7 +421,8 @@ class CStatEventType extends CAllStatEventType
 		}
 
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
-		$order= ($order!="desc") ? "asc" : "desc";
+
+		$order = ($order != "desc" ? "asc" : "desc");
 
 		if ($by == "s_id")
 			$strSqlOrder = "ORDER BY E.ID ".$order;
@@ -694,7 +436,6 @@ class CStatEventType extends CAllStatEventType
 			$strSqlOrder = "ORDER BY E.DESCRIPTION ".$order;
 		else
 		{
-			$by = "s_event1";
 			$strSqlOrder = "ORDER BY E.EVENT1 ".$order.", E.EVENT2";
 		}
 
@@ -712,7 +453,7 @@ class CStatEventType extends CAllStatEventType
 		";
 
 		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
-		$is_filtered = (IsFiltered($strSqlSearch));
+
 		return $res;
 	}
 
@@ -732,79 +473,7 @@ class CStatEventType extends CAllStatEventType
 		return $res;
 	}
 
-	
-	/**
-	* <p>Возвращает количество <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event">событий</a> указанного <a href="http://dev.1c-bitrix.ru/api_help/statistic/terms.php#event_type">типа</a> в разрезе по дням.</p>
-	*
-	*
-	* @param int $type_id  ID типа события.
-	*
-	* @param string &$by = "s_date" Поле для сортировки. Возможные значения: 			<ul><li> <b>s_date</b> - дата.
-	* 			</li></ul>
-	*
-	* @param string &$order = "desc" Порядок сортировки. Возможные значения: 			<ul> <li> <b>asc</b> - по
-	* возрастанию; 				</li> <li> <b>desc</b> - по убыванию. 			</li> </ul>
-	*
-	* @param array $max_min  Ссылка на массив содержащий максимальную и минимальную даты
-	* результирующего списка. Структура данного массива: 	<pre
-	* style="font-size:95%"> Array (     [DATE_FIRST] =&gt; минимальная дата     [MIN_DAY] =&gt; день
-	* минимальной даты (1-31)     [MIN_MONTH] =&gt; месяц минимальной даты (1-12)    
-	* [MIN_YEAR] =&gt; год минимальной даты     [DATE_LAST] =&gt; максимальная дата    
-	* [MAX_DAY] =&gt; день максимальной даты (1-31)     [MAX_MONTH] =&gt; месяц
-	* максимальной даты (1-12)     [MAX_YEAR] =&gt; год максимальной даты  )</pre>
-	*
-	* @param array $filter  Массив для фильтрации результирующего списка. В массиве
-	* допустимы следующие ключи: 			<ul> <li> <b>DATE1</b> - начальное значение
-	* интервала для поля "дата"; 				</li> <li> <b>DATE2</b> - конечное значение
-	* интервала для поля "дата". 			</li> </ul>
-	*
-	* @return CDBResult 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* $type_id = 1;
-	* 
-	* // установим фильтр на декабрь 2007 года
-	* $arFilter = array(
-	*     "DATE1" =&gt; "01.12.2007",
-	*     "DATE2" =&gt; "31.12.2007"
-	*     );
-	* 
-	* // получим набор записей
-	* $rs = <b>CStatEventType::GetDynamicList</b>(
-	*     $type_id, 
-	*     ($by="s_date"), 
-	*     ($order="desc"), 
-	*     $arMaxMin, 
-	*     $arFilter
-	*     );
-	* 
-	* // выведем массив с максимальной и минимальной датами
-	* echo "&lt;pre&gt;"; print_r($arMaxMin); echo "&lt;/pre&gt;";    
-	* 
-	* // выведем все записи
-	* while ($ar = $rs-&gt;Fetch())
-	* {
-	*     echo "&lt;pre&gt;"; print_r($ar); echo "&lt;/pre&gt;";    
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/getlist.php">CStatEventType::GetList</a> 	</li>
-	* <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/getsimplelist.php">CStatEventType::GetSimpleList</a>
-	* </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/statistic/classes/cstateventtype/getdynamiclist.php
-	* @author Bitrix
-	*/
-	public static function GetDynamicList($EVENT_ID, &$by, &$order, &$arMaxMin, $arFilter=Array())
+	public static function GetDynamicList($EVENT_ID, $by = 's_date', $order = 'desc', &$arMaxMin = [], $arFilter = [])
 	{
 		$err_mess = "File: ".__FILE__."<br>Line: ";
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -822,7 +491,7 @@ class CStatEventType extends CAllStatEventType
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 
@@ -848,14 +517,12 @@ class CStatEventType extends CAllStatEventType
 			$strSqlOrder = "ORDER BY D.DATE_STAT";
 		else
 		{
-			$by = "s_date";
 			$strSqlOrder = "ORDER BY D.DATE_STAT";
 		}
 
 		if ($order!="asc")
 		{
 			$strSqlOrder .= " desc ";
-			$order = "desc";
 		}
 
 		$strSql = "
@@ -928,4 +595,3 @@ class CStatEventType extends CAllStatEventType
 		return $strSql;
 	}
 }
-?>

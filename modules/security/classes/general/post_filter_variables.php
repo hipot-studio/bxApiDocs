@@ -49,16 +49,17 @@ class CSecurityXSSDetectVariables
 	}
 
 	/**
+	 * @param string $name
 	 * @param string $value
 	 * @param bool $containsQuote
 	 * @return bool
 	 */
-	protected function pushValue($value, $containsQuote = false)
+	protected function pushValue($name, $value, $containsQuote = false)
 	{
 		if($containsQuote)
-			$this->searchValuesWithQuotes[] = $value;
+			$this->searchValuesWithQuotes[] = array("name" => $name, "value" => $value);
 		else
-			$this->searchValuesWithoutQuotes[] = $value;
+			$this->searchValuesWithoutQuotes[] = array("name" => $name, "value" => $value);
 
 		return true;
 	}
@@ -76,6 +77,7 @@ class CSecurityXSSDetectVariables
 		{
 			$encodedValue = htmlspecialcharsbx($value);
 			$this->pushValue(
+				$name,
 				$value,
 				true
 			);
@@ -83,6 +85,7 @@ class CSecurityXSSDetectVariables
 			if ($encodedValue && $encodedValue !== $value)
 			{
 				$this->pushValue(
+					$name,
 					$encodedValue,
 					true
 				);
@@ -91,6 +94,7 @@ class CSecurityXSSDetectVariables
 		elseif(preg_match("/[^\\\](((\\\)(\\\))*+\")+/s"," ".$value))
 		{
 			$this->pushValue(
+				$name,
 				$value,
 				true
 			);
@@ -99,6 +103,7 @@ class CSecurityXSSDetectVariables
 		{
 			$encodedValue = htmlspecialcharsbx($value);
 			$this->pushValue(
+					$name,
 					$value,
 					false
 			);
@@ -106,6 +111,7 @@ class CSecurityXSSDetectVariables
 			if ($encodedValue && $encodedValue !== $value)
 			{
 				$this->pushValue(
+					$name,
 					$encodedValue,
 					false
 				);

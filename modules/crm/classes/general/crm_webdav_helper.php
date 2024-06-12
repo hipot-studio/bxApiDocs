@@ -80,7 +80,8 @@ class CCrmWebDavHelper
 				'IBLOCK_ID',
 				'IBLOCK_SECTION_ID',
 				'SOCNET_GROUP_ID',
-				'CREATED_BY'
+				'CREATED_BY',
+				'PROPERTY_FILE',
 			)
 		);
 
@@ -215,7 +216,7 @@ class CCrmWebDavHelper
 			: str_replace('view', 'edit', $showUrl).'EDIT/';
 		$deleteUrl = $deleteUrlTemplate !== ''
 			? self::PrepareUrl($deleteUrlTemplate, $arElement)
-			: preg_match('/\/docs\/shared\//i', $showUrl) ? '' : str_replace('view', 'edit', $showUrl).'DELETE_DROPPED/';
+			: (preg_match('/\/docs\/shared\//i', $showUrl) ? '' : str_replace('view', 'edit', $showUrl).'DELETE_DROPPED/');
 
 		$size = '';
 		$dbSize = CIBlockElement::GetProperty($arElement['IBLOCK_ID'], $arElement['ID'], array(), array('CODE' => 'WEBDAV_SIZE'));
@@ -226,6 +227,7 @@ class CCrmWebDavHelper
 
 		return array(
 			'ID' => $elementID,
+			'FILE_ID' => $arElement['PROPERTY_FILE_VALUE'],
 			'NAME' => $arElement['NAME'],
 			'EDIT_URL' => CHTTP::urlAddParams($editUrl, array('ncc' => '1')),
 			'VIEW_URL' => CHTTP::urlAddParams($viewUrl, array('ncc' => '1')),
@@ -457,7 +459,7 @@ class CCrmWebDavHelper
 		}
 		else
 		{
-			$sharedFilesSettings = unserialize(COption::GetOptionString('webdav', 'shared_files', ''));
+			$sharedFilesSettings = unserialize(COption::GetOptionString('webdav', 'shared_files', ''), ['allowed_classes' => false]);
 			if(isset($sharedFilesSettings[$siteID]))
 			{
 				$siteSettings = $sharedFilesSettings[$siteID];
@@ -545,9 +547,10 @@ class CCrmWebDavHelper
 		return $blockSectionID;
 	}
 
-	public static function SaveEmailAttachment($arFile, $siteID = SITE_ID)
+	public static function SaveEmailAttachment($arFile, $siteID = SITE_ID, $params = array())
 	{
-		return self::SaveFile($arFile, $siteID, array('TYPE_ID' => CCrmWebDavFileType::EmailAttachment));
+		$params['TYPE_ID'] = CCrmWebDavFileType::EmailAttachment;
+		return self::SaveFile($arFile, $siteID, $params);
 	}
 
 	public static function SaveFile($arFile, $siteID = SITE_ID, $params = array())
@@ -567,7 +570,7 @@ class CCrmWebDavHelper
 			}
 			else
 			{
-				$dbSites = CSite::GetList($by = 'sort', $order = 'desc', array('DEFAULT' => 'Y'));
+				$dbSites = CSite::GetList('sort', 'desc', array('DEFAULT' => 'Y'));
 				while($arSite = $dbSites->Fetch())
 				{
 					$siteID = $arSite['LID'];

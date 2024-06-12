@@ -18,7 +18,7 @@ class CBXShortUri
 		$strSql =
 			"INSERT INTO b_short_uri (".$arInsert[0].", MODIFIED) ".
 			"VALUES(".$arInsert[1].", ".$DB->CurrentTimeFunction().")";
-		$DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$taskId = intval($DB->LastID());
 
@@ -41,7 +41,7 @@ class CBXShortUri
 		{
 			foreach ($arFilter as $key => $val)
 			{
-				$key = strtoupper($key);
+				$key = mb_strtoupper($key);
 				switch($key)
 				{
 					case "ID":
@@ -87,7 +87,7 @@ class CBXShortUri
 		}
 
 		$strWherePart = "";
-		if (count($arWherePart) > 0)
+		if (!empty($arWherePart))
 		{
 			foreach ($arWherePart as $val)
 			{
@@ -104,10 +104,10 @@ class CBXShortUri
 		{
 			foreach ($arOrder as $key => $val)
 			{
-				$key = strtoupper($key);
+				$key = mb_strtoupper($key);
 				if (!in_array($key, array("ID", "URI", "URI_CRC", "SHORT_URI", "SHORT_URI_CRC", "STATUS", "MODIFIED", "LAST_USED", "NUMBER_USED")))
 					continue;
-				$val = strtoupper($val);
+				$val = mb_strtoupper($val);
 				if (!in_array($val, array("ASC", "DESC")))
 					$val = "ASC";
 				if ($key == "MODIFIED")
@@ -119,7 +119,7 @@ class CBXShortUri
 		}
 
 		$strOrderByPart = "";
-		if (count($arOrderByPart) > 0)
+		if (!empty($arOrderByPart))
 		{
 			foreach ($arOrderByPart as $val)
 			{
@@ -135,7 +135,7 @@ class CBXShortUri
 
 		if ($arNavStartParams)
 		{
-			$dbResultCount = $DB->Query("SELECT COUNT(U.ID) as C ".$strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbResultCount = $DB->Query("SELECT COUNT(U.ID) as C ".$strSql);
 			$arResultCount = $dbResultCount->Fetch();
 			$strSql = "SELECT ID, URI, URI_CRC, SHORT_URI, SHORT_URI_CRC, STATUS, ".$DB->DateToCharFunction("MODIFIED")." MODIFIED, MODIFIED MODIFIED1, ".$DB->DateToCharFunction("LAST_USED")." LAST_USED, LAST_USED LAST_USED1, NUMBER_USED ".$strSql.$strOrderByPart;
 			$dbResult = new CDBResult();
@@ -144,7 +144,7 @@ class CBXShortUri
 		else
 		{
 			$strSql = "SELECT ID, URI, URI_CRC, SHORT_URI, SHORT_URI_CRC, STATUS, ".$DB->DateToCharFunction("MODIFIED")." MODIFIED, MODIFIED MODIFIED1, ".$DB->DateToCharFunction("LAST_USED")." LAST_USED, LAST_USED LAST_USED1, NUMBER_USED ".$strSql.$strOrderByPart;
-			$dbResult = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbResult = $DB->Query($strSql);
 		}
 
 		return $dbResult;

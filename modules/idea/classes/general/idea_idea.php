@@ -6,7 +6,7 @@ Class CIdeaManagmentIdea
 	private static $CategoryIB = false;
 	private static $instance = null;
 
-	public function __construct($IdeaId = false)
+	function __construct($IdeaId = false)
 	{
 		$this->SetId($IdeaId);
 	}
@@ -33,7 +33,7 @@ Class CIdeaManagmentIdea
 		return $this;
 	}
 
-	static public function SetCategoryListID($ID)
+	public function SetCategoryListID($ID)
 	{
 		if(intval($ID)>0)
 			self::$CategoryIB = intval($ID);
@@ -41,7 +41,7 @@ Class CIdeaManagmentIdea
 		return $this;
 	}
 
-	static public function GetCategoryListID()
+	public function GetCategoryListID()
 	{
 		return (int)self::$CategoryIB;
 	}
@@ -88,14 +88,14 @@ Class CIdeaManagmentIdea
 			$arCategoryList[$arCategory["ID"]] = $arCategory;
 
 		$arSequnce = array("CATEGORY_1" => false, "CATEGORY_2" => false);
-		$CODE = ToUpper($CODE);
+		$CODE = mb_strtoupper($CODE);
 
 		$arFullSequence = array();
 		while(array_key_exists($CODE, $arCategoryListXML))
 		{
-			array_unshift($arFullSequence, ToLower($CODE));
+			array_unshift($arFullSequence, mb_strtolower($CODE));
 			if($arCategoryListXML[$CODE]["IBLOCK_SECTION_ID"]>0 && $arCategoryList[$arCategoryListXML[$CODE]["IBLOCK_SECTION_ID"]])
-				$CODE = ToUpper($arCategoryList[$arCategoryListXML[$CODE]["IBLOCK_SECTION_ID"]]["CODE"]);
+				$CODE = mb_strtoupper($arCategoryList[$arCategoryListXML[$CODE]["IBLOCK_SECTION_ID"]]["CODE"]);
 			else
 				break;
 		}
@@ -141,8 +141,8 @@ Class CIdeaManagmentIdea
 
 			$obSec = CIBlockSection::GetList(array("left_margin"=>"ASC"), array("IBLOCK_ID" => $CategoryIB, "ACTIVE" => "Y"));
 			while($r = $obSec->GetNext())
-				if(strlen($r["CODE"])>0)
-					$arCategory[ToUpper($r["CODE"])] = $r;
+				if($r["CODE"] <> '')
+					$arCategory[mb_strtoupper($r["CODE"])] = $r;
 				//else
 				//	$arCategory[$r["ID"]] = $r;
 
@@ -281,8 +281,8 @@ Class CIdeaManagmentIdea
 	}
 
 	//%TODO%
-	static public function BindDuplicate(){}
+	public function BindDuplicate(){}
 	//%TODO%
-	static public function UnBindDuplicate(){}
+	public function UnBindDuplicate(){}
 }
 ?>

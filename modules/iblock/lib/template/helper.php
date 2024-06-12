@@ -20,24 +20,11 @@ class Helper
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает массив из двух элементов: первый - с шаблоном, второй - с дополнительными модификаторами. Метод статический.</p>
-	*
-	*
-	* @param string $template  Строка шаблона. Например: <code>{=this.name}/lt-<code>.</code></code>
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/helper/splittemplate.php
-	* @author Bitrix
-	*/
 	public static function splitTemplate($template)
 	{
 		if (preg_match("/\\/(l|t.?)+\$/", $template, $match))
 		{
-			return array(substr($template, 0, -strlen($match[0])), substr($match[0], 1));
+			return array(mb_substr($template, 0, -mb_strlen($match[0])), mb_substr($match[0], 1));
 		}
 		else
 		{
@@ -52,19 +39,6 @@ class Helper
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает массив модификаторов, если таковые найдены. Метод статический.</p>
-	*
-	*
-	* @param string $modifiers  Строка модификаторов. Например: <code>lt-</code>.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/helper/splitmodifiers.php
-	* @author Bitrix
-	*/
 	public static function splitModifiers($modifiers)
 	{
 		if (preg_match_all("/(l|t.?)/", $modifiers, $match))
@@ -80,44 +54,27 @@ class Helper
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает <code>TEMPLATE</code> вместе с закодированными и присоединенными модификаторами. Метод статический.</p>
-	*
-	*
-	* @param mixed $Bitrix  Информация о шаблоне в том виде, в котором она приходит из базы
-	* данных.
-	*
-	* @param Bitri $Iblock  
-	*
-	* @param Ibloc $Template  
-	*
-	* @param Templat $array  
-	*
-	* @param arra $string  
-	*
-	* @param string $template  
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/helper/convertarraytomodifiers.php
-	* @author Bitrix
-	*/
 	public static function convertArrayToModifiers(array $template)
 	{
-		$TEMPLATE = $template["TEMPLATE"];
+		$TEMPLATE = $template["TEMPLATE"] ?? '';
 		$modifiers = "";
-		if ($template["LOWER"] === "Y")
+		if (isset($template["LOWER"]) && $template["LOWER"] === "Y")
+		{
 			$modifiers .= "l";
-		if ($template["TRANSLIT"] === "Y")
+		}
+		if (isset($template["TRANSLIT"]) && $template["TRANSLIT"] === "Y")
 		{
 			$modifiers .= "t";
-			if ($template["SPACE"] != "")
+			if (isset($template["SPACE"]) && is_string($template["SPACE"]) && $template["SPACE"] !== "")
+			{
 				$modifiers .= $template["SPACE"];
+			}
 		}
-		if ($modifiers != "")
-			$modifiers = "/".$modifiers;
+		if ($modifiers !== "")
+		{
+			$modifiers = "/" . $modifiers;
+		}
+
 		return $TEMPLATE.$modifiers;
 	}
 
@@ -130,30 +87,6 @@ class Helper
 	 *
 	 * @return array[string]string
 	 */
-	
-	/**
-	* <p>Метод возвращает шаблон <code>$template</code> с дополнительным описанием. Поле <code>TEMPLATE</code> возвращается без модификаторов, а каждый модификатор возвращается в отдельном поле. Метод статический.</p>
-	*
-	*
-	* @param mixed $Bitrix  Информация о шаблоне в том виде, в котором она приходит из базы
-	* данных.
-	*
-	* @param Bitri $Iblock  
-	*
-	* @param Ibloc $Template  
-	*
-	* @param Templat $array  
-	*
-	* @param arra $string  
-	*
-	* @param string $template = null 
-	*
-	* @return \Bitrix\Iblock\Template\array[string]string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/helper/convertmodifierstoarray.php
-	* @author Bitrix
-	*/
 	public static function convertModifiersToArray(array $template = null)
 	{
 		if ($template === null)
@@ -168,7 +101,7 @@ class Helper
 		$TRANSLIT = "N";
 		$SPACE = "";
 
-		list($TEMPLATE, $modifiers) = self::splitTemplate($TEMPLATE);
+		[$TEMPLATE, $modifiers] = self::splitTemplate($TEMPLATE);
 		foreach(self::splitModifiers($modifiers) as $mod)
 		{
 			if ($mod == "l")
@@ -178,7 +111,7 @@ class Helper
 			else
 			{
 				$TRANSLIT = "Y";
-				$SPACE = substr($mod, 1);
+				$SPACE = mb_substr($mod, 1);
 			}
 		}
 
@@ -200,45 +133,24 @@ class Helper
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает имя файла, отформатированное с помощью шаблона. Метод статический.</p>
-	*
-	*
-	* @param mixed $Bitrix  Шаблоны для поиска.
-	*
-	* @param Bitri $Iblock  Название шаблона, выбираемого из <code>$ipropTemplates</code>.
-	*
-	* @param Ibloc $InheritedProperty  Массив полей для обработки шаблона.
-	*
-	* @param BaseTemplate $ipropTemplates  Массив содержит информацию о файле в формате, определяемом с
-	* помощью <code>$ _FILES</code>.
-	*
-	* @param string $templateName  
-	*
-	* @param array $fields  
-	*
-	* @param array $file  
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/template/helper/makefilename.php
-	* @author Bitrix
-	*/
 	public static function makeFileName(
 		\Bitrix\Iblock\InheritedProperty\BaseTemplate $ipropTemplates,
-		$templateName,
+		string $templateName,
 		array $fields,
 		array $file
-	)
+	): string
 	{
+		if (!isset($file['name']))
+		{
+			return '';
+		}
+
 		if (preg_match("/^(.+)(\\.[a-zA-Z0-9]+)\$/", $file["name"], $fileName))
 		{
-			if (!isset($fields["IPROPERTY_TEMPLATES"]) || $fields["IPROPERTY_TEMPLATES"][$templateName] == "")
+			if (!isset($fields["IPROPERTY_TEMPLATES"]) || (string)($fields["IPROPERTY_TEMPLATES"][$templateName] ?? '') === '')
 			{
 				$templates = $ipropTemplates->findTemplates();
-				$TEMPLATE = $templates[$templateName]["TEMPLATE"];
+				$TEMPLATE = ($templates[$templateName]["TEMPLATE"] ?? '');
 			}
 			else
 			{
@@ -247,7 +159,7 @@ class Helper
 
 			if ($TEMPLATE != "")
 			{
-				list($template, $modifiers) = Helper::splitTemplate($TEMPLATE);
+				[$template, $modifiers] = Helper::splitTemplate($TEMPLATE);
 				if ($template != "")
 				{
 					$values = $ipropTemplates->getValuesEntity();
@@ -265,6 +177,7 @@ class Helper
 				}
 			}
 		}
+
 		return $file["name"];
 	}
 }

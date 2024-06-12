@@ -1,6 +1,10 @@
 <?php
 namespace Bitrix\Main;
 
+use Bitrix\Main\ORM\Fields;
+use Bitrix\Main\ORM\Query;
+use Bitrix\Main\File\Internal;
+
 /**
  * Class FileTable
  *
@@ -22,7 +26,21 @@ namespace Bitrix\Main;
  * </ul>
  *
  * @package Bitrix\File
- **/
+ * @internal
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_File_Query query()
+ * @method static EO_File_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_File_Result getById($id)
+ * @method static EO_File_Result getList(array $parameters = [])
+ * @method static EO_File_Entity getEntity()
+ * @method static \Bitrix\Main\EO_File createObject($setDefaultValues = true)
+ * @method static \Bitrix\Main\EO_File_Collection createCollection()
+ * @method static \Bitrix\Main\EO_File wakeUpObject($row)
+ * @method static \Bitrix\Main\EO_File_Collection wakeUpCollection($rows)
+ */
 class FileTable extends Entity\DataManager
 {
 	/**
@@ -78,6 +96,12 @@ class FileTable extends Entity\DataManager
 			'EXTERNAL_ID' => new Entity\StringField('EXTERNAL_ID', array(
 				'validation' => array(__CLASS__, 'validateExternalId'),
 			)),
+			(new Fields\Relations\Reference(
+				'HASH',
+				Internal\FileHashTable::class,
+				Query\Join::on('this.ID', 'ref.FILE_ID')
+			))
+				->configureJoinType(Query\Join::TYPE_LEFT),
 		);
 	}
 

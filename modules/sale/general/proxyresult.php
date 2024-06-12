@@ -1,4 +1,4 @@
-<?
+<?php
 class CSaleProxyResult extends CDBResult
 {
 	private $parameters = array();
@@ -11,15 +11,23 @@ class CSaleProxyResult extends CDBResult
 		parent::__construct(array());
 	}
 
-	public function NavStart($nPageSize = 20, $bShowAll = true, $iNumPage = false)
+	function NavStart($nPageSize = 20, $bShowAll = true, $iNumPage = false)
 	{
 		$this->InitNavStartVars(intval($nPageSize), $bShowAll, $iNumPage);
 
 		// force to db resource type, although we got empty array on input
 		$en = $this->entityName;
 
-		$runtime = is_array($this->parameters['runtime']) ? $this->parameters['runtime'] : array();
-		$filter = is_array($this->parameters['filter']) ? $this->parameters['filter'] : array();
+		$runtime = $this->parameters['runtime'] ?? [];
+		if (!is_array($runtime))
+		{
+			$runtime = [];
+		}
+		$filter = $this->parameters['filter'] ?? [];
+		if (!is_array($filter))
+		{
+			$filter = [];
+		}
 
 		// to increase perfomance, have to throw away unused (in filter) runtimes
 		foreach($runtime as $fld => $desc)
@@ -27,7 +35,7 @@ class CSaleProxyResult extends CDBResult
 			$found = false;
 			foreach($filter as $condition => $value)
 			{
-				if(strpos($condition, $fld) !== false)
+				if(mb_strpos($condition, $fld) !== false)
 				{
 					$found = true;
 					break;
@@ -51,7 +59,7 @@ class CSaleProxyResult extends CDBResult
 			))
 		))->fetch();
 		$this->NavRecordCount = $count['REC_CNT'];
-		
+
 		// the following code was taken from DBNavStart()
 
 		// here we could use Bitrix\Main\DB\Paginator
@@ -62,7 +70,7 @@ class CSaleProxyResult extends CDBResult
 			$this->NavPageCount++;
 
 		//page number to display. start with 1
-		$this->NavPageNomer = ($this->PAGEN < 1 || $this->PAGEN > $this->NavPageCount? ($_SESSION[$this->SESS_PAGEN] < 1 || $_SESSION[$this->SESS_PAGEN] > $this->NavPageCount? 1:$_SESSION[$this->SESS_PAGEN]):$this->PAGEN);
+		$this->calculatePageNumber();
 
 		$parameters = $this->parameters;
 		$parameters['limit'] = $this->NavPageSize;

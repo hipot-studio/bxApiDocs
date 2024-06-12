@@ -1,4 +1,5 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 if (!CModule::IncludeModule("bizproc"))
@@ -13,7 +14,7 @@ class CIBlockDocument
 
 	public static function GetFieldInputControl($documentType, $arFieldType, $arFieldName, $fieldValue, $bAllowSelection = false, $publicMode = false)
 	{
-		$iblockId = intval(substr($documentType, strlen("iblock_")));
+		$iblockId = intval(mb_substr($documentType, mb_strlen("iblock_")));
 		if ($iblockId <= 0)
 			throw new CBPArgumentOutOfRangeException("documentType", $documentType);
 
@@ -38,9 +39,9 @@ class CIBlockDocument
 
 		$customMethodName = "";
 		$customMethodNameMulty = "";
-		if (strpos($arFieldType["Type"], ":") !== false)
+		if (mb_strpos($arFieldType["Type"], ":") !== false)
 		{
-			$ar = CIBlockProperty::GetUserType(substr($arFieldType["Type"], 2));
+			$ar = CIBlockProperty::GetUserType(mb_substr($arFieldType["Type"], 2));
 			if (array_key_exists("GetPublicEditHTML", $ar))
 				$customMethodName = $ar["GetPublicEditHTML"];
 			if (array_key_exists("GetPublicEditHTMLMulty", $ar))
@@ -96,11 +97,11 @@ class CIBlockDocument
 			$fieldValue = CBPHelper::UsersArrayToString($fieldValue, null, array("iblock", "CIBlockDocument", $documentType));
 			?><input type="text" size="40" id="id_<?= htmlspecialcharsbx($arFieldName["Field"]) ?>" name="<?= htmlspecialcharsbx($arFieldName["Field"]) ?>" value="<?= htmlspecialcharsbx($fieldValue) ?>"><input type="button" value="..." onclick="BPAShowSelector('id_<?= htmlspecialcharsbx($arFieldName["Field"]) ?>', 'user');"><?
 		}
-		elseif ((strpos($arFieldType["Type"], ":") !== false)
+		elseif ((mb_strpos($arFieldType["Type"], ":") !== false)
 			&& $arFieldType["Multiple"]
 			&& (
 				is_array($customMethodNameMulty) && count($customMethodNameMulty) > 0
-				|| !is_array($customMethodNameMulty) && strlen($customMethodNameMulty) > 0
+				|| !is_array($customMethodNameMulty) && $customMethodNameMulty <> ''
 			)
 		)
 		{
@@ -338,7 +339,7 @@ class CIBlockDocument
 				if ($arFieldType["Multiple"])
 					echo '<tr><td>';
 
-				if (is_array($customMethodName) && count($customMethodName) > 0 || !is_array($customMethodName) && strlen($customMethodName) > 0)
+				if (is_array($customMethodName) && count($customMethodName) > 0 || !is_array($customMethodName) && $customMethodName <> '')
 				{
 					if($arFieldType["Type"] == "S:HTML")
 					{
@@ -513,7 +514,7 @@ class CIBlockDocument
 
 				if ($bAllowSelection)
 				{
-					if (!in_array($arFieldType["Type"], array("file", "bool", "date", "datetime")) && (is_array($customMethodName) && count($customMethodName) <= 0 || !is_array($customMethodName) && strlen($customMethodName) <= 0))
+					if (!in_array($arFieldType["Type"], array("file", "bool", "date", "datetime")) && (is_array($customMethodName) && count($customMethodName) <= 0 || !is_array($customMethodName) && $customMethodName == ''))
 					{
 						?><input type="button" value="..." onclick="BPAShowSelector('<?= $fieldNameId ?>', '<?= htmlspecialcharsbx($arFieldType["BaseType"]) ?>');"><?
 					}
@@ -538,7 +539,7 @@ class CIBlockDocument
 
 			if ($bAllowSelection)
 			{
-				if (in_array($arFieldType["Type"], array("file", "bool", "date", "datetime")) || (is_array($customMethodName) && count($customMethodName) > 0 || !is_array($customMethodName) && strlen($customMethodName) > 0))
+				if (in_array($arFieldType["Type"], array("file", "bool", "date", "datetime")) || (is_array($customMethodName) && count($customMethodName) > 0 || !is_array($customMethodName) && $customMethodName <> ''))
 				{
 					?>
 					<input type="text" id="id_<?= htmlspecialcharsbx($arFieldName["Field"]) ?>_text" name="<?= htmlspecialcharsbx($arFieldName["Field"]) ?>_text" value="<?
@@ -563,7 +564,7 @@ class CIBlockDocument
 	public static function GetFieldInputValue($documentType, $arFieldType, $arFieldName, $arRequest, &$arErrors)
 	{
 
-		$iblockId = intval(substr($documentType, strlen("iblock_")));
+		$iblockId = intval(mb_substr($documentType, mb_strlen("iblock_")));
 		if ($iblockId <= 0)
 			throw new CBPArgumentOutOfRangeException("documentType", $documentType);
 
@@ -572,7 +573,7 @@ class CIBlockDocument
 		if ($arFieldType["Type"] == "user")
 		{
 			$value = $arRequest[$arFieldName["Field"]];
-			if (strlen($value) > 0)
+			if ($value <> '')
 			{
 				$result = CBPHelper::UsersStringToArray($value, array("iblock", "CIBlockDocument", $documentType), $arErrors);
 				if (count($arErrors) > 0)
@@ -600,7 +601,7 @@ class CIBlockDocument
 				{
 					if ($arFieldType["Type"] == "int")
 					{
-						if (strlen($value) > 0)
+						if ($value <> '')
 						{
 							$value = str_replace(" ", "", $value);
 							if ($value."|" == intval($value)."|")
@@ -624,7 +625,7 @@ class CIBlockDocument
 					}
 					elseif ($arFieldType["Type"] == "double")
 					{
-						if (strlen($value) > 0)
+						if ($value <> '')
 						{
 							$value = str_replace(" ", "", str_replace(",", ".", $value));
 							if (is_numeric($value))
@@ -648,7 +649,7 @@ class CIBlockDocument
 					}
 					elseif ($arFieldType["Type"] == "select")
 					{
-						if (!is_array($arFieldType["Options"]) || count($arFieldType["Options"]) <= 0 || strlen($value) <= 0)
+						if (!is_array($arFieldType["Options"]) || count($arFieldType["Options"]) <= 0 || $value == '')
 						{
 							$value = null;
 						}
@@ -702,9 +703,9 @@ class CIBlockDocument
 							{
 								$value = "N";
 							}
-							elseif (strlen($value) > 0)
+							elseif ($value <> '')
 							{
-								$value = strtolower($value);
+								$value = mb_strtolower($value);
 								if (in_array($value, array("y", "yes", "true", "1")))
 								{
 									$value = "Y";
@@ -731,9 +732,9 @@ class CIBlockDocument
 					}
 					elseif ($arFieldType["Type"] == "file")
 					{
-						if (is_array($value) && array_key_exists("name", $value) && strlen($value["name"]) > 0)
+						if (is_array($value) && array_key_exists("name", $value) && $value["name"] <> '')
 						{
-							if (!array_key_exists("MODULE_ID", $value) || strlen($value["MODULE_ID"]) <= 0)
+							if (!array_key_exists("MODULE_ID", $value) || $value["MODULE_ID"] == '')
 								$value["MODULE_ID"] = "bizproc";
 
 							$value = CFile::SaveFile($value, "bizproc_wf", true, true);
@@ -752,9 +753,9 @@ class CIBlockDocument
 							$value = null;
 						}
 					}
-					elseif (strpos($arFieldType["Type"], ":") !== false)
+					elseif (mb_strpos($arFieldType["Type"], ":") !== false)
 					{
-						$arCustomType = CIBlockProperty::GetUserType(substr($arFieldType["Type"], 2));
+						$arCustomType = CIBlockProperty::GetUserType(mb_substr($arFieldType["Type"], 2));
 						if (array_key_exists("GetLength", $arCustomType))
 						{
 							if (call_user_func_array(
@@ -801,7 +802,7 @@ class CIBlockDocument
 					}
 					else
 					{
-						if (!is_array($value) && strlen($value) <= 0)
+						if (!is_array($value) && $value == '')
 							$value = null;
 					}
 				}
@@ -840,11 +841,11 @@ class CIBlockDocument
 				{
 					$result = array();
 					foreach ($fieldValue as $r)
-						$result[] = ((strtoupper($r) != "N" && !empty($r)) ? GetMessage("BPVDX_YES") : GetMessage("BPVDX_NO"));
+						$result[] = ((mb_strtoupper($r) != "N" && !empty($r)) ? GetMessage("BPVDX_YES") : GetMessage("BPVDX_NO"));
 				}
 				else
 				{
-					$result = ((strtoupper($fieldValue) != "N" && !empty($fieldValue)) ? GetMessage("BPVDX_YES") : GetMessage("BPVDX_NO"));
+					$result = ((mb_strtoupper($fieldValue) != "N" && !empty($fieldValue)) ? GetMessage("BPVDX_YES") : GetMessage("BPVDX_NO"));
 				}
 				break;
 
@@ -890,12 +891,12 @@ class CIBlockDocument
 				break;
 		}
 
-		if (strpos($arFieldType['Type'], ":") !== false)
+		if (mb_strpos($arFieldType['Type'], ":") !== false)
 		{
 			if ($arFieldType["Type"] == "S:employee")
 				$fieldValue = CBPHelper::StripUserPrefix($fieldValue);
 
-			$arCustomType = CIBlockProperty::GetUserType(substr($arFieldType['Type'], 2));
+			$arCustomType = CIBlockProperty::GetUserType(mb_substr($arFieldType['Type'], 2));
 			if (array_key_exists("GetPublicViewHTML", $arCustomType))
 			{
 				if (is_array($fieldValue) && !CBPHelper::IsAssociativeArray($fieldValue))
@@ -943,7 +944,7 @@ class CIBlockDocument
 			static $arCache = array();
 			if (!array_key_exists($documentId, $arCache))
 			{
-				if (substr($documentId, 0, strlen("iblock_")) == "iblock_")
+				if (mb_substr($documentId, 0, mb_strlen("iblock_")) == "iblock_")
 					$arCache[$documentId] = $documentId;
 				else
 					$arCache[$documentId] = self::GetDocumentType($documentId);
@@ -970,7 +971,7 @@ class CIBlockDocument
 	* @param string $documentId - document id.
 	* @return string - document admin page url.
 	*/
-	static public function GetDocumentAdminPage($documentId)
+	public static function GetDocumentAdminPage($documentId)
 	{
 		$documentId = intval($documentId);
 		if ($documentId <= 0)
@@ -1003,7 +1004,7 @@ class CIBlockDocument
 	 * @throws CBPArgumentNullException
 	 */
 
-	static public function getDocumentName($documentId)
+	public static function getDocumentName($documentId)
 	{
 		$documentId = intval($documentId);
 		if ($documentId <= 0)
@@ -1026,17 +1027,45 @@ class CIBlockDocument
 
 	public static function getDocumentTypeName($documentType)
 	{
-		if (strpos($documentType, 'iblock_') !== 0)
+		if (mb_strpos($documentType, 'iblock_') !== 0)
+		{
 			return $documentType;
+		}
 
-		$id = (int) substr($documentType, 7);
+		$id = (int)mb_substr($documentType, 7);
 
 		$iterator = CIBlock::GetList(false,array('ID' => $id));
 		$result = $iterator->fetch();
 		if (!$result)
+		{
 			return $documentType;
+		}
 
 		return '['.$result['IBLOCK_TYPE_ID'].'] '.$result['NAME'];
+	}
+
+	public static function getDocumentTypeCaption($documentType)
+	{
+		if (mb_strpos($documentType, 'iblock_') !== 0)
+		{
+			return $documentType;
+		}
+
+		$id = (int)mb_substr($documentType, 7);
+
+		$result = (CIBlock::GetList(
+			false,
+			[
+				'ID' => $id,
+				'CHECK_PERMISSIONS' => 'N'
+			])
+		)->fetch();
+		if (!$result)
+		{
+			return $documentType;
+		}
+
+		return $result['NAME'];
 	}
 
 	/**
@@ -1045,7 +1074,7 @@ class CIBlockDocument
 	 * @throws CBPArgumentNullException
 	 * @throws CBPArgumentOutOfRangeException
 	 */
-	static public function GetDocument($documentId)
+	public static function GetDocument($documentId)
 	{
 		$documentId = intval($documentId);
 		if ($documentId <= 0)
@@ -1064,7 +1093,7 @@ class CIBlockDocument
 
 			foreach ($arDocumentFields as $fieldKey => $fieldValue)
 			{
-				if (substr($fieldKey, 0, 1) == "~")
+				if (mb_substr($fieldKey, 0, 1) == "~")
 					continue;
 
 				$arResult[$fieldKey] = $fieldValue;
@@ -1082,7 +1111,7 @@ class CIBlockDocument
 
 			foreach ($arDocumentProperties as $propertyKey => $propertyValue)
 			{
-				if (strlen($propertyValue["USER_TYPE"]) > 0)
+				if ($propertyValue["USER_TYPE"] <> '')
 				{
 					if ($propertyValue["USER_TYPE"] == "UserID" || $propertyValue["USER_TYPE"] == "employee" &&
 						(COption::GetOptionString("bizproc", "employee_compatible_mode", "N") != "Y"))
@@ -1096,24 +1125,24 @@ class CIBlockDocument
 							$propertyValue["VALUE"] = array($propertyValue["VALUE"]);
 						}
 						$listUsers = implode(' | ', $propertyValue["VALUE"]);
-						$userQuery = CUser::getList($by = 'ID', $order = 'ASC',
+						$userQuery = CUser::getList('ID', 'ASC',
 							array('ID' => $listUsers) ,
 							array('FIELDS' => array('ID' ,'LOGIN', 'NAME', 'LAST_NAME')));
 						while($user = $userQuery->fetch())
 						{
 							if($propertyValue["MULTIPLE"] == "Y")
 							{
-								$arResult["PROPERTY_".$propertyKey][$user['ID']] = "user_".intval($user['ID']);
-								$arResult["PROPERTY_".$propertyKey."_PRINTABLE"][$user['ID']] = "(".$user["LOGIN"].")".
-									((strlen($user["NAME"]) > 0 || strlen($user["LAST_NAME"]) > 0) ? " " : "").$user["NAME"].
-									((strlen($user["NAME"]) > 0 && strlen($user["LAST_NAME"]) > 0) ? " " : "").$user["LAST_NAME"];
+								$arResult["PROPERTY_".$propertyKey][] = "user_".intval($user['ID']);
+								$arResult["PROPERTY_".$propertyKey."_PRINTABLE"][] = "(".$user["LOGIN"].")".
+									(($user["NAME"] <> '' || $user["LAST_NAME"] <> '') ? " " : "").$user["NAME"].
+									(($user["NAME"] <> '' && $user["LAST_NAME"] <> '') ? " " : "").$user["LAST_NAME"];
 							}
 							else
 							{
 								$arResult["PROPERTY_".$propertyKey] = "user_".intval($user['ID']);
 								$arResult["PROPERTY_".$propertyKey."_PRINTABLE"] = "(".$user["LOGIN"].")".
-									((strlen($user["NAME"]) > 0 || strlen($user["LAST_NAME"]) > 0) ? " " : "").$user["NAME"].
-									((strlen($user["NAME"]) > 0 && strlen($user["LAST_NAME"]) > 0) ? " " : "").$user["LAST_NAME"];
+									(($user["NAME"] <> '' || $user["LAST_NAME"] <> '') ? " " : "").$user["NAME"].
+									(($user["NAME"] <> '' && $user["LAST_NAME"] <> '') ? " " : "").$user["LAST_NAME"];
 							}
 						}
 					}
@@ -1209,9 +1238,9 @@ class CIBlockDocument
 		return $arResult;
 	}
 
-	static public function GetDocumentType($documentId)
+	public static function GetDocumentType($documentId)
 	{
-		if (substr($documentId, 0, strlen("iblock_")) == "iblock_")
+		if (mb_substr($documentId, 0, mb_strlen("iblock_")) == "iblock_")
 			return $documentId;
 
 		$documentId = intval($documentId);
@@ -1226,9 +1255,9 @@ class CIBlockDocument
 		return "iblock_".$arResult["IBLOCK_ID"];
 	}
 
-	static public function GetDocumentFields($documentType)
+	public static function GetDocumentFields($documentType)
 	{
-		$iblockId = intval(substr($documentType, strlen("iblock_")));
+		$iblockId = intval(mb_substr($documentType, mb_strlen("iblock_")));
 		if ($iblockId <= 0)
 			throw new CBPArgumentOutOfRangeException("documentType", $documentType);
 
@@ -1409,7 +1438,7 @@ class CIBlockDocument
 		);
 		while ($arProperty = $dbProperties->Fetch())
 		{
-			if (strlen(trim($arProperty["CODE"])) > 0)
+			if (trim($arProperty["CODE"]) <> '')
 				$key = "PROPERTY_".$arProperty["CODE"];
 			else
 				$key = "PROPERTY_".$arProperty["ID"];
@@ -1422,10 +1451,10 @@ class CIBlockDocument
 				"Multiple" => ($arProperty["MULTIPLE"] == "Y"),
 			);
 
-			if(strlen(trim($arProperty["CODE"])) > 0)
+			if(trim($arProperty["CODE"]) <> '')
 				$arResult[$key]["Alias"] = "PROPERTY_".$arProperty["ID"];
 
-			if (strlen($arProperty["USER_TYPE"]) > 0)
+			if ($arProperty["USER_TYPE"] <> '')
 			{
 				if ($arProperty["USER_TYPE"] == "UserID"
 					|| $arProperty["USER_TYPE"] == "employee" && (COption::GetOptionString("bizproc", "employee_compatible_mode", "N") != "Y"))
@@ -1519,9 +1548,9 @@ class CIBlockDocument
 		return $arResult;
 	}
 
-	static public function GetDocumentFieldTypes($documentType)
+	public static function GetDocumentFieldTypes($documentType)
 	{
-		$iblockId = intval(substr($documentType, strlen("iblock_")));
+		$iblockId = intval(mb_substr($documentType, mb_strlen("iblock_")));
 		if ($iblockId <= 0)
 			throw new CBPArgumentOutOfRangeException("documentType", $documentType);
 
@@ -1538,17 +1567,13 @@ class CIBlockDocument
 			"file" => array("Name" => GetMessage("BPCGHLP_PROP_FILE"), "BaseType" => "file"),
 		);
 
-		$ignoredTypes = array('map_yandex');
+		$ignoredTypes = array('map_yandex', 'directory', 'SectionAuto', 'SKU', 'EAutocomplete');
 
-		//TODO: remove class_exists, add version_control
-		if (class_exists('\Bitrix\Bizproc\BaseType\InternalSelect'))
-		{
-			$arResult[\Bitrix\Bizproc\FieldType::INTERNALSELECT] = array(
-				"Name" => GetMessage("BPCGHLP_PROP_SELECT_INTERNAL"),
-				"BaseType" => "string",
-				"Complex" => true,
-			);
-		}
+		$arResult[\Bitrix\Bizproc\FieldType::INTERNALSELECT] = array(
+			"Name" => GetMessage("BPCGHLP_PROP_SELECT_INTERNAL"),
+			"BaseType" => "string",
+			"Complex" => true,
+		);
 
 		foreach (CIBlockProperty::GetUserType() as  $ar)
 		{
@@ -1558,6 +1583,12 @@ class CIBlockDocument
 			}
 
 			$t = $ar["PROPERTY_TYPE"].":".$ar["USER_TYPE"];
+
+			if($t == "S:ECrm")
+			{
+				$t = "E:ECrm";
+			}
+
 			if (COption::GetOptionString("bizproc", "SkipNonPublicCustomTypes", "N") == "Y"
 				&& !array_key_exists("GetPublicEditHTML", $ar) || $t == "S:UserID" || $t == "S:DateTime" || $t == "S:Date")
 				continue;
@@ -1565,9 +1596,12 @@ class CIBlockDocument
 			$arResult[$t] = array("Name" => $ar["DESCRIPTION"], "BaseType" => "string", 'typeClass' => '\Bitrix\Iblock\BizprocType\UserTypeProperty');
 			if ($t == "S:employee")
 			{
-				if (COption::GetOptionString("bizproc", "employee_compatible_mode", "N") != "Y")
-					$arResult[$t]["BaseType"] = "user";
 				$arResult[$t]['typeClass'] = '\Bitrix\Iblock\BizprocType\UserTypePropertyEmployee';
+				if (COption::GetOptionString("bizproc", "employee_compatible_mode", "N") != "Y")
+				{
+					$arResult[$t]["BaseType"] = "user";
+					$arResult[$t]['typeClass'] = \Bitrix\Bizproc\BaseType\User::class;
+				}
 			}
 			elseif ($t == "E:EList")
 			{
@@ -1583,6 +1617,22 @@ class CIBlockDocument
 			{
 				$arResult[$t]["BaseType"] = "int";
 				$arResult[$t]['typeClass'] = '\Bitrix\Iblock\BizprocType\UserTypePropertyDiskFile';
+			}
+			elseif($t == 'E:ECrm')
+			{
+				$arResult[$t]["BaseType"] = "string";
+				$arResult[$t]["Complex"] = true;
+				$arResult[$t]['typeClass'] = '\Bitrix\Iblock\BizprocType\ECrm';
+			}
+			elseif($t == 'S:Money')
+			{
+				$arResult[$t]["BaseType"] = "string";
+				$arResult[$t]['typeClass'] = '\Bitrix\Iblock\BizprocType\Money';
+			}
+			elseif($t == 'N:Sequence')
+			{
+				$arResult[$t]["BaseType"] = "int";
+				$arResult[$t]['typeClass'] = '\Bitrix\Iblock\BizprocType\Sequence';
 			}
 		}
 
@@ -1603,14 +1653,14 @@ class CIBlockDocument
 		return $code;
 	}
 
-	static public function AddDocumentField($documentType, $arFields)
+	public static function AddDocumentField($documentType, $arFields)
 	{
-		$iblockId = intval(substr($documentType, strlen("iblock_")));
+		$iblockId = intval(mb_substr($documentType, mb_strlen("iblock_")));
 		if ($iblockId <= 0)
 			throw new CBPArgumentOutOfRangeException("documentType", $documentType);
 
-		if (substr($arFields["code"], 0, strlen("PROPERTY_")) == "PROPERTY_")
-			$arFields["code"] = substr($arFields["code"], strlen("PROPERTY_"));
+		if (mb_substr($arFields["code"], 0, mb_strlen("PROPERTY_")) == "PROPERTY_")
+			$arFields["code"] = mb_substr($arFields["code"], mb_strlen("PROPERTY_"));
 
 		$arFieldsTmp = array(
 			"NAME" => $arFields["name"],
@@ -1623,13 +1673,13 @@ class CIBlockDocument
 			"FILTRABLE" => "Y",
 		);
 
-		if (strpos("0123456789", substr($arFieldsTmp["CODE"], 0, 1))!==false)
+		if (mb_strpos("0123456789", mb_substr($arFieldsTmp["CODE"], 0, 1)) !== false)
 			$arFieldsTmp["CODE"] = self::generateMnemonicCode($arFieldsTmp["CODE"]);
 
 		if (array_key_exists("additional_type_info", $arFields))
 			$arFieldsTmp["LINK_IBLOCK_ID"] = intval($arFields["additional_type_info"]);
 
-		if (strstr($arFields["type"], ":") !== false)
+		if (mb_strstr($arFields["type"], ":") !== false)
 		{
 			if($arFields["type"] == "S:DiskFile")
 			{
@@ -1676,7 +1726,7 @@ class CIBlockDocument
 					$i = $i + 10;
 				}
 			}
-			elseif (is_string($arFields["options"]) && (strlen($arFields["options"]) > 0))
+			elseif (is_string($arFields["options"]) && ($arFields["options"] <> ''))
 			{
 				$a = explode("\n", $arFields["options"]);
 				$i = 10;
@@ -1686,10 +1736,10 @@ class CIBlockDocument
 					if (!$v)
 						continue;
 					$v1 = $v2 = $v;
-					if (substr($v, 0, 1) == "[" && strpos($v, "]") !== false)
+					if (mb_substr($v, 0, 1) == "[" && mb_strpos($v, "]") !== false)
 					{
-						$v1 = substr($v, 1, strpos($v, "]") - 1);
-						$v2 = trim(substr($v, strpos($v, "]") + 1));
+						$v1 = mb_substr($v, 1, mb_strpos($v, "]") - 1);
+						$v2 = trim(mb_substr($v, mb_strpos($v, "]") + 1));
 					}
 					$arFieldsTmp["VALUES"][] = array("XML_ID" => $v1, "VALUE" => $v2, "DEF" => "N", "SORT" => $i);
 					$i = $i + 10;
@@ -1739,7 +1789,7 @@ class CIBlockDocument
 		return "PROPERTY_".$arFields["code"];
 	}
 
-	static public function UpdateDocument($documentId, $arFields)
+	public static function UpdateDocument($documentId, $arFields)
 	{
 		$documentId = intval($documentId);
 		if ($documentId <= 0)
@@ -1748,6 +1798,7 @@ class CIBlockDocument
 		CIBlockElement::WF_CleanUpHistoryCopies($documentId, 0);
 
 		$arFieldsPropertyValues = array();
+		$complexDocumentId = ['iblock', get_called_class(), $documentId];
 
 		$dbResult = CIBlockElement::GetList(
 			array(),
@@ -1769,27 +1820,12 @@ class CIBlockDocument
 
 			$arFields[$key] = (is_array($arFields[$key]) && !CBPHelper::IsAssociativeArray($arFields[$key])) ?
 				$arFields[$key] : array($arFields[$key]);
-			$realKey = ((substr($key, 0, strlen("PROPERTY_")) == "PROPERTY_") ?
-				substr($key, strlen("PROPERTY_")) : $key);
+			$realKey = ((mb_substr($key, 0, mb_strlen("PROPERTY_")) == "PROPERTY_")?
+				mb_substr($key, mb_strlen("PROPERTY_")) : $key);
 
 			if ($arDocumentFields[$key]["Type"] == "user")
 			{
-				$ar = array();
-				foreach ($arFields[$key] as $v1)
-				{
-					if (substr($v1, 0, strlen("user_")) == "user_")
-					{
-						$ar[] = substr($v1, strlen("user_"));
-					}
-					else
-					{
-						$a1 = self::GetUsersFromUserGroup($v1, $documentId);
-						foreach ($a1 as $a11)
-							$ar[] = $a11;
-					}
-				}
-
-				$arFields[$key] = $ar;
+				$arFields[$key] = \CBPHelper::extractUsers($arFields[$key], $complexDocumentId);
 			}
 			elseif ($arDocumentFields[$key]["Type"] == "select")
 			{
@@ -1833,13 +1869,22 @@ class CIBlockDocument
 					{
 						foreach($value as $file)
 						{
-							$files[] = CFile::MakeFileArray($file);
+							$makeFileArray = CFile::MakeFileArray($file);
+							if($makeFileArray)
+								$files[] = $makeFileArray;
 						}
 					}
 					else
-						$files[] = CFile::MakeFileArray($value);
+					{
+						$makeFileArray = CFile::MakeFileArray($value);
+						if($makeFileArray)
+							$files[] = $makeFileArray;
+					}
 				}
-				$arFields[$key] = $files;
+				if($files)
+					$arFields[$key] = $files;
+				else
+					$arFields[$key] = array(array('del' => 'Y'));
 			}
 			elseif($arDocumentFields[$key]["Type"] == "S:DiskFile")
 			{
@@ -1873,9 +1918,9 @@ class CIBlockDocument
 				}
 			}
 
-			if (substr($key, 0, strlen("PROPERTY_")) == "PROPERTY_")
+			if (mb_substr($key, 0, mb_strlen("PROPERTY_")) == "PROPERTY_")
 			{
-				$realKey = substr($key, strlen("PROPERTY_"));
+				$realKey = mb_substr($key, mb_strlen("PROPERTY_"));
 				$arFieldsPropertyValues[$realKey] = (is_array($arFields[$key]) &&
 					!CBPHelper::IsAssociativeArray($arFields[$key])) ? $arFields[$key] : array($arFields[$key]);
 				if(empty($arFieldsPropertyValues[$realKey]))
@@ -1884,20 +1929,18 @@ class CIBlockDocument
 			}
 		}
 
-		if (count($arFieldsPropertyValues) > 0)
-			$arFields["PROPERTY_VALUES"] = $arFieldsPropertyValues;
-
 		$iblockElement = new CIBlockElement();
-		if (count($arFields["PROPERTY_VALUES"]) > 0)
-			$iblockElement->SetPropertyValuesEx($documentId, $arResult["IBLOCK_ID"], $arFields["PROPERTY_VALUES"]);
+		if (!empty($arFieldsPropertyValues))
+		{
+			$iblockElement->SetPropertyValuesEx($documentId, $arResult["IBLOCK_ID"], $arFieldsPropertyValues);
+		}
 
-		UnSet($arFields["PROPERTY_VALUES"]);
 		$res = $iblockElement->Update($documentId, $arFields, false, true, true);
 		if (!$res)
 			throw new Exception($iblockElement->LAST_ERROR);
 	}
 
-	static public function LockDocument($documentId, $workflowId)
+	public static function LockDocument($documentId, $workflowId)
 	{
 		global $DB;
 		$strSql = "
@@ -1926,7 +1969,7 @@ class CIBlockDocument
 		}
 	}
 
-	static public function UnlockDocument($documentId, $workflowId)
+	public static function UnlockDocument($documentId, $workflowId)
 	{
 		global $DB;
 
@@ -1961,7 +2004,7 @@ class CIBlockDocument
 		return $result > 0;
 	}
 
-	static public function IsDocumentLocked($documentId, $workflowId)
+	public static function IsDocumentLocked($documentId, $workflowId)
 	{
 		global $DB;
 		$strSql = "
@@ -1979,7 +2022,7 @@ class CIBlockDocument
 	public static function CanUserOperateDocument($operation, $userId, $documentId, $arParameters = array())
 	{
 		$documentId = trim($documentId);
-		if (strlen($documentId) <= 0)
+		if ($documentId == '')
 			return false;
 
 		if (!array_key_exists("IBlockId", $arParameters)
@@ -2172,10 +2215,10 @@ class CIBlockDocument
 	public static function CanUserOperateDocumentType($operation, $userId, $documentType, $arParameters = array())
 	{
 		$documentType = trim($documentType);
-		if (strlen($documentType) <= 0)
+		if ($documentType == '')
 			return false;
 
-		$arParameters["IBlockId"] = intval(substr($documentType, strlen("iblock_")));
+		$arParameters["IBlockId"] = intval(mb_substr($documentType, mb_strlen("iblock_")));
 		$arParameters['sectionId'] = !empty($arParameters['sectionId']) ? (int)$arParameters['sectionId'] : 0;
 
 		if (!array_key_exists("IBlockRightsMode", $arParameters))
@@ -2326,19 +2369,20 @@ class CIBlockDocument
 	}
 
 	/**
-	* Метод создает новый документ с указанными свойствами (полями).
+	* Create document.
 	*
-	* @param array $arFields - массив значений свойств документа в виде array(код_свойства => значение, ...). Коды свойств соответствуют кодам свойств, возвращаемым методом GetDocumentFields.
-	* @return int - код созданного документа.
+	* @param array $arFields - document fields.
+	* @return int
 	*/
-	static public function CreateDocument($parentDocumentId, $arFields)
+	public static function CreateDocument($parentDocumentId, $arFields)
 	{
 		if (!array_key_exists("IBLOCK_ID", $arFields) || intval($arFields["IBLOCK_ID"]) <= 0)
 			throw new Exception("IBlock ID is not found");
 
 		$arFieldsPropertyValues = array();
+		$complexDocumentId = ['iblock', get_called_class(), $parentDocumentId];
 
-		$arDocumentFields = self::GetDocumentFields("iblock_".$arFields["IBLOCK_ID"]);
+		$arDocumentFields = static::GetDocumentFields("iblock_".$arFields["IBLOCK_ID"]);
 
 		$arKeys = array_keys($arFields);
 		foreach ($arKeys as $key)
@@ -2348,27 +2392,11 @@ class CIBlockDocument
 
 			$arFields[$key] = (is_array($arFields[$key]) &&
 				!CBPHelper::IsAssociativeArray($arFields[$key])) ? $arFields[$key] : array($arFields[$key]);
-			$realKey = ((substr($key, 0, strlen("PROPERTY_")) == "PROPERTY_") ? substr($key, strlen("PROPERTY_")) : $key);
+			$realKey = ((mb_substr($key, 0, mb_strlen("PROPERTY_")) == "PROPERTY_")? mb_substr($key, mb_strlen("PROPERTY_")) : $key);
 
 			if ($arDocumentFields[$key]["Type"] == "user")
 			{
-				$ar = array();
-				$arFields[$key] = CBPHelper::MakeArrayFlat($arFields[$key]);
-				foreach ($arFields[$key] as $v1)
-				{
-					if (substr($v1, 0, strlen("user_")) == "user_")
-					{
-						$ar[] = substr($v1, strlen("user_"));
-					}
-					else
-					{
-						$a1 = self::GetUsersFromUserGroup($v1, $parentDocumentId);
-						foreach ($a1 as $a11)
-							$ar[] = $a11;
-					}
-				}
-
-				$arFields[$key] = $ar;
+				$arFields[$key] = \CBPHelper::extractUsers($arFields[$key], $complexDocumentId);
 			}
 			elseif ($arDocumentFields[$key]["Type"] == "select")
 			{
@@ -2427,6 +2455,20 @@ class CIBlockDocument
 				}
 				$arFields[$key] = array("VALUE" => $arFields[$key], "DESCRIPTION" => "workflow");
 			}
+			elseif ($arDocumentFields[$key]["Type"] == "N:Sequence")
+			{
+				$queryObject = \CIBlockProperty::getByID($realKey, $arFields["IBLOCK_ID"]);
+				if ($property = $queryObject->fetch())
+				{
+					$propertyId = $property["ID"];
+					$sequence = new \CIBlockSequence($arFields["IBLOCK_ID"], $propertyId);
+					foreach ($arFields[$key] as &$value)
+					{
+						$value = ["VALUE" => $value];
+					}
+					$value = ["VALUE" => $sequence->getNext()];
+				}
+			}
 			elseif ($arDocumentFields[$key]["Type"] == "S:HTML")
 			{
 				foreach ($arFields[$key] as &$value)
@@ -2448,9 +2490,9 @@ class CIBlockDocument
 				}
 			}
 
-			if (substr($key, 0, strlen("PROPERTY_")) == "PROPERTY_")
+			if (mb_substr($key, 0, mb_strlen("PROPERTY_")) == "PROPERTY_")
 			{
-				$realKey = substr($key, strlen("PROPERTY_"));
+				$realKey = mb_substr($key, mb_strlen("PROPERTY_"));
 				$arFieldsPropertyValues[$realKey] = (is_array($arFields[$key]) &&
 					!CBPHelper::IsAssociativeArray($arFields[$key])) ? $arFields[$key] : array($arFields[$key]);
 				unset($arFields[$key]);
@@ -2459,6 +2501,11 @@ class CIBlockDocument
 
 		if (count($arFieldsPropertyValues) > 0)
 			$arFields["PROPERTY_VALUES"] = $arFieldsPropertyValues;
+
+		if (isset($arFields['SORT']))
+		{
+			$arFields['SORT'] = (int) $arFields['SORT'];
+		}
 
 		$iblockElement = new CIBlockElement();
 		$id = $iblockElement->Add($arFields, false, true, true);
@@ -2469,11 +2516,11 @@ class CIBlockDocument
 	}
 
 	/**
-	* Метод удаляет указанный документ.
-	*
-	* @param string $documentId - код документа.
-	*/
-	static public function DeleteDocument($documentId)
+	 * Remove document.
+	 *
+	 * @param string $documentId - document id.
+	 */
+	public static function DeleteDocument($documentId)
 	{
 		$documentId = intval($documentId);
 		if ($documentId <= 0)
@@ -2483,11 +2530,11 @@ class CIBlockDocument
 	}
 
 	/**
-	* Метод публикует документ. То есть делает его доступным в публичной части сайта.
-	*
-	* @param string $documentId - код документа.
-	*/
-	static public function PublishDocument($documentId)
+	 * Publish document.
+	 *
+	 * @param string $documentId - document id.
+	 */
+	public static function PublishDocument($documentId)
 	{
 		global $DB;
 		$ID = intval($documentId);
@@ -2527,8 +2574,6 @@ class CIBlockDocument
 			$PARENT_ID = intval($ar_element["WF_PARENT_ELEMENT_ID"]);
 			if($PARENT_ID)
 			{
-				// TODO: Если в документе $documentId поле WF_PARENT_ELEMENT_ID не NULL, то при публикации нужно перенести данные
-				// (скопировать документ) из документа $documentId в документ WF_PARENT_ELEMENT_ID,
 				$obElement = new CIBlockElement;
 				$ar_element["WF_PARENT_ELEMENT_ID"] = false;
 
@@ -2590,36 +2635,37 @@ class CIBlockDocument
 				}
 
 				$obElement->Update($PARENT_ID, $ar_element);
-				// вызвать CBPDocument::MergeDocuments(WF_PARENT_ELEMENT_ID, $documentId) для переноса состояний и истории БП,
+
 				CBPDocument::MergeDocuments(
 					array("iblock", "CIBlockDocument", $PARENT_ID),
 					array("iblock", "CIBlockDocument", $documentId)
 				);
-				// грохнуть документ $documentId,
+
 				CIBlockElement::Delete($ID);
-				// опубликовать документ WF_PARENT_ELEMENT_ID
+
 				CIBlockElement::WF_CleanUpHistoryCopies($PARENT_ID, 0);
 				$strSql = "update b_iblock_element set WF_STATUS_ID='1', WF_NEW=NULL WHERE ID=".$PARENT_ID." AND WF_PARENT_ELEMENT_ID IS NULL";
 				$DB->Query($strSql, false, "FILE: ".__FILE__."<br>LINE: ".__LINE__);
 				CIBlockElement::UpdateSearch($PARENT_ID);
 				\Bitrix\Iblock\PropertyIndex\Manager::updateElementIndex($ar_element["IBLOCK_ID"], $PARENT_ID);
+
 				return $PARENT_ID;
 			}
 			else
 			{
-				// Если WF_PARENT_ELEMENT_ID равно NULL, то все как раньше.
 				CIBlockElement::WF_CleanUpHistoryCopies($ID, 0);
 				$strSql = "update b_iblock_element set WF_STATUS_ID='1', WF_NEW=NULL WHERE ID=".$ID." AND WF_PARENT_ELEMENT_ID IS NULL";
 				$DB->Query($strSql, false, "FILE: ".__FILE__."<br>LINE: ".__LINE__);
 				CIBlockElement::UpdateSearch($ID);
 				\Bitrix\Iblock\PropertyIndex\Manager::updateElementIndex($ar_element["IBLOCK_ID"], $ID);
+
 				return $ID;
 			}
 		}
 		return false;
 	}
 
-	static public function CloneElement($ID, $arFields = array())
+	public static function CloneElement($ID, $arFields = array())
 	{
 		global $DB;
 		$ID = intval($ID);
@@ -2742,11 +2788,11 @@ class CIBlockDocument
 	}
 
 	/**
-	* Метод снимает документ с публикации. То есть делает его недоступным в публичной части сайта.
-	*
-	* @param string $documentId - код документа.
-	*/
-	static public function UnpublishDocument($documentId)
+	 * Canceling publication document.
+	 *
+	 * @param string $documentId - document id.
+	 */
+	public static function UnpublishDocument($documentId)
 	{
 		global $DB;
 		CIBlockElement::WF_CleanUpHistoryCopies($documentId, 0);
@@ -2755,10 +2801,10 @@ class CIBlockDocument
 		CIBlockElement::UpdateSearch($documentId);
 	}
 
-	// array("read" => "Ета чтение", "write" => "Ета запысь")
-	static public function GetAllowableOperations($documentType)
+	// array("read" => "it's reading", "write" => "it's writing")
+	public static function GetAllowableOperations($documentType)
 	{
-		$iblockId = intval(substr($documentType, strlen("iblock_")));
+		$iblockId = intval(mb_substr($documentType, mb_strlen("iblock_")));
 		if ($iblockId <= 0)
 			throw new CBPArgumentOutOfRangeException("documentType", $documentType);
 
@@ -2771,7 +2817,7 @@ class CIBlockDocument
 		return array("read" => GetMessage("IBD_OPERATION_READ"), "write" => GetMessage("IBD_OPERATION_WRITE"));
 	}
 
-	static public function GetJSFunctionsForFields($documentType, $objectName, $arDocumentFields = array(), $arDocumentFieldTypes = array())
+	public static function GetJSFunctionsForFields($documentType, $objectName, $arDocumentFields = array(), $arDocumentFieldTypes = array())
 	{
 		return "";
 	}
@@ -2898,13 +2944,13 @@ class CIBlockDocument
 		return $result;
 	}
 
-	static public function GetAllowableUserGroups($documentType, $withExtended = false)
+	public static function GetAllowableUserGroups($documentType, $withExtended = false)
 	{
 		$documentType = trim($documentType);
-		if (strlen($documentType) <= 0)
+		if ($documentType == '')
 			return false;
 
-		$iblockId = intval(substr($documentType, strlen("iblock_")));
+		$iblockId = intval(mb_substr($documentType, mb_strlen("iblock_")));
 
 		$result = array('Author' => GetMessage('IBD_DOCUMENT_AUTHOR'));
 
@@ -2943,9 +2989,9 @@ class CIBlockDocument
 		return $result;
 	}
 
-	static public function GetUsersFromUserGroup($group, $documentId)
+	public static function GetUsersFromUserGroup($group, $documentId)
 	{
-		$group = strtolower($group);
+		$group = mb_strtolower($group);
 		if ($group == 'author')
 		{
 			$documentId = (int)$documentId;
@@ -2967,24 +3013,29 @@ class CIBlockDocument
 
 		$arResult = array();
 
-		$arFilter = array("ACTIVE" => "Y");
+		$arFilter = ['ACTIVE' => 'Y', 'IS_REAL_USER' => true];
 		if ($group != 2)
+		{
 			$arFilter["GROUPS_ID"] = $group;
+		}
 
-		$dbUsersList = CUser::GetList(($b = "ID"), ($o = "ASC"), $arFilter);
+		$dbUsersList = CUser::GetList("ID", "ASC", $arFilter, ['FIELDS' => ['ID']]);
 		while ($arUser = $dbUsersList->Fetch())
+		{
 			$arResult[] = $arUser["ID"];
+		}
+
 		return $arResult;
 	}
 
-	static public function SetPermissions($documentId, $workflowId, $arPermissions, $bRewrite = true)
+	public static function SetPermissions($documentId, $workflowId, $arPermissions, $bRewrite = true)
 	{
 		$documentId = intval($documentId);
 		if ($documentId <= 0)
 			throw new CBPArgumentNullException("documentId");
 
 		$documentType = self::GetDocumentType($documentId);
-		$iblockId = intval(substr($documentType, strlen("iblock_")));
+		$iblockId = intval(mb_substr($documentType, mb_strlen("iblock_")));
 		if ($iblockId <= 0)
 			throw new CBPArgumentOutOfRangeException("documentType", $documentType);
 
@@ -3027,7 +3078,7 @@ class CIBlockDocument
 		}
 
 		$i = 0;
-		$l = strlen("user_");
+		$l = mb_strlen("user_");
 		foreach ($arPermissions as $taskId => $arUsers)
 		{
 			foreach ($arUsers as $user)
@@ -3041,13 +3092,13 @@ class CIBlockDocument
 					foreach ($u as $u1)
 						$gc = "U".$u1;
 				}
-				elseif (strpos($user, 'group_') === 0)
+				elseif (mb_strpos($user, 'group_') === 0)
 				{
-					$gc = strtoupper(substr($user, strlen('group_')));
+					$gc = mb_strtoupper(mb_substr($user, mb_strlen('group_')));
 				}
 				else
 				{
-					$gc = ((substr($user, 0, $l) == "user_") ? "U".substr($user, $l) : "G".$user);
+					$gc = ((mb_substr($user, 0, $l) == "user_") ? "U".mb_substr($user, $l) : "G".$user);
 				}
 				if ($gc != null)
 				{
@@ -3069,7 +3120,7 @@ class CIBlockDocument
 	* @param string $documentId - document id.
 	* @return array - document information array.
 	*/
-	static public function GetDocumentForHistory($documentId, $historyIndex)
+	public static function GetDocumentForHistory($documentId, $historyIndex)
 	{
 		$documentId = intval($documentId);
 		if ($documentId <= 0)
@@ -3093,22 +3144,22 @@ class CIBlockDocument
 			{
 				if ($fieldKey == "~PREVIEW_PICTURE" || $fieldKey == "~DETAIL_PICTURE")
 				{
-					$arResult["FIELDS"][substr($fieldKey, 1)] = CBPDocument::PrepareFileForHistory(
+					$arResult["FIELDS"][mb_substr($fieldKey, 1)] = CBPDocument::PrepareFileForHistory(
 						array("iblock", "CIBlockDocument", $documentId),
 						$fieldValue,
 						$historyIndex
 					);
 				}
-				elseif (substr($fieldKey, 0, 1) == "~")
+				elseif (mb_substr($fieldKey, 0, 1) == "~")
 				{
-					$arResult["FIELDS"][substr($fieldKey, 1)] = $fieldValue;
+					$arResult["FIELDS"][mb_substr($fieldKey, 1)] = $fieldValue;
 				}
 			}
 
 			$arResult["PROPERTIES"] = array();
 			foreach ($arDocumentProperties as $propertyKey => $propertyValue)
 			{
-				if (strlen($propertyValue["USER_TYPE"]) > 0)
+				if ($propertyValue["USER_TYPE"] <> '')
 				{
 					$arResult["PROPERTIES"][$propertyKey] = array(
 						"VALUE" => $propertyValue["VALUE"],
@@ -3152,16 +3203,16 @@ class CIBlockDocument
 	* @param string $documentId - document id.
 	* @param array $arDocument - array.
 	*/
-	static public function RecoverDocumentFromHistory($documentId, $arDocument)
+	public static function RecoverDocumentFromHistory($documentId, $arDocument)
 	{
 		$documentId = intval($documentId);
 		if ($documentId <= 0)
 			throw new CBPArgumentNullException("documentId");
 
 		$arFields = $arDocument["FIELDS"];
-		if (strlen($arFields["PREVIEW_PICTURE"]) > 0)
+		if ($arFields["PREVIEW_PICTURE"] <> '')
 			$arFields["PREVIEW_PICTURE"] = CFile::MakeFileArray($arFields["PREVIEW_PICTURE"]);
-		if (strlen($arFields["DETAIL_PICTURE"]) > 0)
+		if ($arFields["DETAIL_PICTURE"] <> '')
 			$arFields["DETAIL_PICTURE"] = CFile::MakeFileArray($arFields["DETAIL_PICTURE"]);
 
 		$arFields["PROPERTY_VALUES"] = array();
@@ -3172,7 +3223,7 @@ class CIBlockDocument
 		);
 		while ($arProperty = $dbProperties->Fetch())
 		{
-			if (strlen(trim($arProperty["CODE"])) > 0)
+			if (trim($arProperty["CODE"]) <> '')
 				$key = $arProperty["CODE"];
 			else
 				$key = $arProperty["ID"];
@@ -3182,7 +3233,7 @@ class CIBlockDocument
 
 			$documentValue = $arDocument["PROPERTIES"][$key]["VALUE"];
 
-			if(strlen($arProperty["USER_TYPE"]) <= 0 && $arProperty["PROPERTY_TYPE"] == "F")
+			if($arProperty["USER_TYPE"] == '' && $arProperty["PROPERTY_TYPE"] == "F")
 			{
 				$arFields["PROPERTY_VALUES"][$key] = array();
 				//Mark files to be deleted
@@ -3201,7 +3252,7 @@ class CIBlockDocument
 				{
 					$n = 0;
 					foreach ($documentValue as $i => $v)
-						if(strlen($v) > 0)
+						if($v <> '')
 						{
 							$arFields["PROPERTY_VALUES"][$key]["n".($n++)] = array(
 								"VALUE" => CFile::MakeFileArray($io->GetPhysicalName($v)),
@@ -3211,7 +3262,7 @@ class CIBlockDocument
 				}
 				else
 				{
-					if(strlen($documentValue) > 0)
+					if($documentValue <> '')
 					{
 						$arFields["PROPERTY_VALUES"][$key]["n0"] = array(
 							"VALUE" => CFile::MakeFileArray($io->GetPhysicalName($documentValue)),
@@ -3226,7 +3277,7 @@ class CIBlockDocument
 				{
 					$n = 0;
 					foreach ($documentValue as $i => $v)
-						if(strlen($v) > 0)
+						if($v <> '')
 							$arFields["PROPERTY_VALUES"][$key]["n".($n++)] = array(
 								"VALUE" => $v,
 								"DESCRIPTION" => $arDocument["PROPERTIES"][$key]["DESCRIPTION"][$i]
@@ -3234,7 +3285,7 @@ class CIBlockDocument
 				}
 				else
 				{
-					if(strlen($documentValue) > 0)
+					if($documentValue <> '')
 						$arFields["PROPERTY_VALUES"][$key]["n0"] = array(
 							"VALUE" => $documentValue,
 							"DESCRIPTION" => $arDocument["PROPERTIES"][$key]["DESCRIPTION"]
@@ -3245,7 +3296,7 @@ class CIBlockDocument
 
 		$iblockElement = new CIBlockElement();
 		$res = $iblockElement->Update($documentId, $arFields);
-		if (intVal($arFields["WF_STATUS_ID"]) > 1 && intVal($arFields["WF_PARENT_ELEMENT_ID"]) <= 0)
+		if (intval($arFields["WF_STATUS_ID"]) > 1 && intval($arFields["WF_PARENT_ELEMENT_ID"]) <= 0)
 			self::UnpublishDocument($documentId);
 		if (!$res)
 			throw new Exception($iblockElement->LAST_ERROR);
@@ -3255,7 +3306,7 @@ class CIBlockDocument
 
 	public static function isExtendedPermsSupported($documentType)
 	{
-		$iblockId = (int)substr($documentType, strlen("iblock_"));
+		$iblockId = (int)mb_substr($documentType, mb_strlen("iblock_"));
 		if ($iblockId <= 0)
 			throw new CBPArgumentOutOfRangeException("documentType", $documentType);
 
@@ -3264,7 +3315,7 @@ class CIBlockDocument
 
 	public static function generatePropertyCode($name, $code, $iblockId, $propertyId = 0)
 	{
-		if(empty($code))
+		if(empty($code) || is_numeric($code))
 		{
 			$code = CUtil::translit($name, LANGUAGE_ID, array("change_case" => "U"));
 		}
@@ -3282,4 +3333,3 @@ class CIBlockDocument
 		return $code;
 	}
 }
-?>

@@ -3,11 +3,12 @@
 namespace Bitrix\Sale\PaySystem;
 
 use Bitrix\Main\Request;
-use Bitrix\Sale\BusinessValue;
 use Bitrix\Sale\Payment;
-use Bitrix\Sale\Result;
+use Bitrix\Sale\Services\Base\RestrictionInfo;
+use Bitrix\Sale\Services\Base\RestrictionInfoCollection;
+use Bitrix\Sale\Services\PaySystem\Restrictions\RestrictableServiceHandler;
 
-abstract class ServiceHandler extends BaseServiceHandler
+abstract class ServiceHandler extends BaseServiceHandler implements RestrictableServiceHandler
 {
 	/**
 	 * @return array
@@ -56,7 +57,7 @@ abstract class ServiceHandler extends BaseServiceHandler
 	/**
 	 * @param Payment $payment
 	 * @param Request $request
-	 * @return mixed
+	 * @return ServiceResult
 	 */
 	public abstract function processRequest(Payment $payment, Request $request);
 
@@ -65,7 +66,7 @@ abstract class ServiceHandler extends BaseServiceHandler
 	 * @param Request $request
 	 * @return mixed
 	 */
-	static public function sendResponse(ServiceResult $result, Request $request)
+	public function sendResponse(ServiceResult $result, Request $request)
 	{
 		return '';
 	}
@@ -75,4 +76,32 @@ abstract class ServiceHandler extends BaseServiceHandler
 	 * @return mixed
 	 */
 	public abstract function getPaymentIdFromRequest(Request $request);
+
+	/**
+	 * @param array $paySystemList
+	 * @return array
+	 */
+	public static function findMyDataRefundablePage(array $paySystemList)
+	{
+		return array();
+	}
+
+	/**
+	 * Returns list of restrictions that installed on service add
+	 *
+	 * @return RestrictionInfoCollection
+	 */
+	public function getRestrictionList(): RestrictionInfoCollection
+	{
+		$collection = new RestrictionInfoCollection();
+
+		$currencyList = $this->getCurrencyList();
+		if (is_array($currencyList) && !empty($currencyList))
+		{
+			$currencyRestrictionContainer = new RestrictionInfo('Currency', ['CURRENCY' => $currencyList]);
+			$collection->add($currencyRestrictionContainer);
+		}
+
+		return $collection;
+	}
 }

@@ -31,4 +31,15 @@ class BasketBundleCollection
 		return $this->parentBasketItem;
 	}
 
+	/**
+	 * @return Basket
+	 */
+	protected static function createBasketObject()
+	{
+		$registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
+		$basketClassName = $registry->getBundleBasketClassName();
+
+		return new $basketClassName;
+	}
+
 }

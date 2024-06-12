@@ -12,7 +12,7 @@ class CSaleDiscountConvert
 	public static $arErrors = array();
 	public static $strSessID = '';
 
-	static public function __construct()
+	public function __construct()
 	{
 
 	}
@@ -53,22 +53,10 @@ class CSaleDiscountConvert
 
 	public static function GetCountOld()
 	{
-		global $DBType;
 		global $DB;
 
-		$strSql = '';
-		switch(ToUpper($DBType))
-		{
-			case 'MYSQL':
-				$strSql = "SELECT COUNT(*) CNT FROM b_sale_discount WHERE VERSION=".CSaleDiscount::VERSION_OLD;
-				break;
-			case 'MSSQL':
-				$strSql = "SELECT COUNT(*) CNT FROM B_SALE_DISCOUNT WHERE VERSION=".CSaleDiscount::VERSION_OLD;
-				break;
-			case 'ORACLE':
-				$strSql = "SELECT COUNT(*) CNT FROM B_SALE_DISCOUNT WHERE VERSION=".CSaleDiscount::VERSION_OLD;
-				break;
-		}
+		$strSql = "SELECT COUNT(*) CNT FROM b_sale_discount WHERE VERSION=".CSaleDiscount::VERSION_OLD;
+
 		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 		if (!$res)
 			return 0;
@@ -79,22 +67,10 @@ class CSaleDiscountConvert
 
 	public static function GetCount()
 	{
-		global $DBType;
 		global $DB;
 
-		$strSql = '';
-		switch(ToUpper($DBType))
-		{
-			case 'MYSQL':
-				$strSql = "SELECT COUNT(*) CNT FROM b_sale_discount WHERE 1=1";
-				break;
-			case 'MSSQL':
-				$strSql = "SELECT COUNT(*) CNT FROM B_SALE_DISCOUNT WHERE 1=1";
-				break;
-			case 'ORACLE':
-				$strSql = "SELECT COUNT(*) CNT FROM B_SALE_DISCOUNT WHERE 1=1";
-				break;
-		}
+		$strSql = "SELECT COUNT(*) CNT FROM b_sale_discount WHERE 1=1";
+
 		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 		if (!$res)
 			return 0;
@@ -105,7 +81,6 @@ class CSaleDiscountConvert
 
 	public static function ConvertDiscount($intStep = 100, $intMaxExecutionTime = 15)
 	{
-		global $DBType;
 		global $DB;
 		global $APPLICATION;
 
@@ -118,19 +93,7 @@ class CSaleDiscountConvert
 
 		$obDiscount = new CSaleDiscount();
 
-		$strTableName = '';
-		switch (ToUpper($DBType))
-		{
-			case 'MYSQL':
-				$strTableName = 'b_catalog_discount';
-				break;
-			case 'MSSQL':
-				$strTableName = 'B_CATALOG_DISCOUNT';
-				break;
-			case 'ORACLE':
-				$strTableName = 'B_CATALOG_DISCOUNT';
-				break;
-		}
+		$strTableName = 'b_catalog_discount';
 
 		$intCount = CSaleDiscountConvert::GetCount();
 		if (0 == $intCount)
@@ -140,7 +103,7 @@ class CSaleDiscountConvert
 		$strStatus = (1 < $intCount ? 'N' : 'Y');
 
 		$arBaseCurrencies = array();
-		$rsSites = CSite::GetList($b="id", $o="asc");
+		$rsSites = CSite::GetList("id", "asc");
 		while ($arSite = $rsSites->Fetch())
 		{
 			$arBaseCurrencies[$arSite['ID']] = CSaleLang::GetLangCurrency($arSite['ID']);

@@ -8,7 +8,7 @@ class CBPTrackingService
 	{
 		global $DB;
 
-		if (in_array($type, $this->skipTypes))
+		if (!$this->canWrite($type, $workflowId))
 			return;
 
 		$workflowId = trim($workflowId);
@@ -123,7 +123,7 @@ class CBPTrackingService
 		return $dbRes;
 	}
 
-	public static function ClearOld($days = 0)
+	function ClearOld($days = 0)
 	{
 		global $DB;
 

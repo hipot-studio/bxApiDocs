@@ -21,47 +21,28 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Iblock
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_PropertyEnumeration_Query query()
+ * @method static EO_PropertyEnumeration_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_PropertyEnumeration_Result getById($id)
+ * @method static EO_PropertyEnumeration_Result getList(array $parameters = [])
+ * @method static EO_PropertyEnumeration_Entity getEntity()
+ * @method static \Bitrix\Iblock\EO_PropertyEnumeration createObject($setDefaultValues = true)
+ * @method static \Bitrix\Iblock\EO_PropertyEnumeration_Collection createCollection()
+ * @method static \Bitrix\Iblock\EO_PropertyEnumeration wakeUpObject($row)
+ * @method static \Bitrix\Iblock\EO_PropertyEnumeration_Collection wakeUpCollection($rows)
+ */
 
 class PropertyEnumerationTable extends Entity\DataManager
 {
-	/**
-	 * Returns path to the file which contains definition of the class.
-	 *
-	 * @return string
-	 */
-	
-	/**
-	* <p>Метод возвращает путь к файлу, содержащему определение класса. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyenumerationtable/getfilepath.php
-	* @author Bitrix
-	*/
-	public static function getFilePath()
-	{
-		return __FILE__;
-	}
-
 	/**
 	 * Returns DB table name for entity
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы вариантов значений свойств типа <b>Список</b>. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyenumerationtable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_iblock_property_enum';
@@ -72,17 +53,6 @@ class PropertyEnumerationTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы вариантов значений свойств типа <b>Список</b>. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyenumerationtable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -134,17 +104,6 @@ class PropertyEnumerationTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>VALUE</code> (значение варианта свойства). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyenumerationtable/validatevalue.php
-	* @author Bitrix
-	*/
 	public static function validateValue()
 	{
 		return array(
@@ -157,17 +116,6 @@ class PropertyEnumerationTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>XML_ID </code> (внешний код варианта свойства). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyenumerationtable/validatexmlid.php
-	* @author Bitrix
-	*/
 	public static function validateXmlId()
 	{
 		return array(
@@ -181,17 +129,6 @@ class PropertyEnumerationTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>TMP_ID</code> (временный символьный идентификатор, используемый для служебных целей). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/propertyenumerationtable/validatetmpid.php
-	* @author Bitrix
-	*/
 	public static function validateTmpId()
 	{
 		return array(

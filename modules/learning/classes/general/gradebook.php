@@ -1,24 +1,5 @@
 <?php
 
-
-/**
- * <br><br>
- *
- *
- * @return mixed 
- *
- * <h4>Example</h4> 
- * <pre bgcolor="#323232" style="padding:5px;">
- * // пример пересчета журнала
- * $gradebook = new CGradeBook; 
- * $gradebook-&gt;RecountAttempts($STUDENT_ID,$TEST_ID);
- * </pre>
- *
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/index.php
- * @author Bitrix
- */
 class CAllGradeBook
 {
 	public static function LessonIdByGradeBookId ($certId)
@@ -34,7 +15,6 @@ class CAllGradeBook
 
 		return ( (int) $row['LINKED_LESSON_ID'] );
 	}
-
 
 	public static function CheckFields(&$arFields, $ID = false)
 	{
@@ -87,65 +67,6 @@ class CAllGradeBook
 		return true;
 	}
 
-
-	
-	/**
-	* <p>Метод добавляет новую запись в журнал. Метод нестатический.</p>
-	*
-	*
-	* @param array $arFields  Массив <b>Array("поле"=&gt;"значение", ...)</b>. Содержит        значения <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#gradebook">всех полей</a> журнала.       
-	* Обязательные поля должны быть заполнены. <br>
-	*
-	* @return int <p>Метод возвращает идентификатор добавленной записи в журнал,
-	* если добавление  прошло успешно. При возникновении ошибки метод
-	* вернёт <i>false</i>, а в  исключениях будут содержаться ошибки.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $TEST_ID = 32;
-	*     $STUDENT_ID = 3;
-	* 
-	*     $arFields = Array(
-	*         
-	*         "TEST_ID" =&gt; $TEST_ID,
-	*         "STUDENT_ID" =&gt; $STUDENT_ID,
-	*         "RESULT" =&gt; 300,
-	*         "MAX_RESULT" =&gt; 300
-	*     );
-	* 
-	*     $gradebook = new CGradeBook;
-	*     $ID = $gradebook-&gt;Add($arFields);
-	*     $success = ($ID&gt;0);
-	* 
-	*     if($success)
-	*     {
-	*         echo "Ok!";
-	*     }
-	*     else
-	*     {
-	*         if($e = $APPLICATION-&gt;GetException())
-	*             echo "Error: ".$e-&gt;GetString();
-	*     }
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/index.php">CGradeBook</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/update.php">Update</a> </li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#gradebook">Поля журнала</a> </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/add.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		global $DB;
@@ -162,61 +83,6 @@ class CAllGradeBook
 		return false;
 	}
 
-
-	
-	/**
-	* <p>Метод изменяет параметры записи в журнале с идентификатором ID. Метод нестатический.</p>
-	*
-	*
-	* @param int $intID  Идентификатор записи в журнале.
-	*
-	* @param array $arFields  Массив Array("поле"=&gt;"значение", ...). Содержит значения <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#gradebook">всех полей</a> журнала.       
-	* Обязательные поля должны быть заполнены. <br>
-	*
-	* @return bool <p>Метод возвращает <i>true</i>, если изменение прошло успешно, при 
-	* возникновении ошибки метод вернет <i>false</i>. При возникновении
-	* ошибки в  исключениях будет содержаться текст ошибки.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $RECORD_ID = 96;
-	* 
-	*     $arFields = Array(
-	*         "RESULT" =&gt; 250,
-	*         "MAX_RESULT" =&gt; 300
-	*     );
-	* 
-	*     $gradebook = new CGradeBook;
-	*     $success = $gradebook-&gt;Update($RECORD_ID, $arFields);
-	* 
-	*     if($success)
-	*     {
-	*         echo "Ok!";
-	*     }
-	*     else
-	*     {
-	*         if($e = $APPLICATION-&gt;GetException())
-	*             echo "Error: ".$e-&gt;GetString();
-	*     }
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#gradebook">Поля журнала</a>  </li>
-	* <li> <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/index.php">CGradeBook</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/add.php">Add</a> </li> </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/update.php
-	* @author Bitrix
-	*/
 	public static function Update($ID, $arFields)
 	{
 		global $DB;
@@ -242,43 +108,6 @@ class CAllGradeBook
 		return false;
 	}
 
-
-	
-	/**
-	* <p>Метод удаляет запись в журнале с идентификатором ID. Метод нестатический.</p>
-	*
-	*
-	* @param int $intID  Идентификатор записи.
-	*
-	* @return bool <p>Метод возвращает <i>true</i> в случае успешного удаления записи, в
-	* противном  случае возвращает <i>false</i>.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $RECORD_ID = 96;
-	* 
-	*     @set_time_limit(0);
-	*     $DB-&gt;StartTransaction();
-	*     if (!CGradeBook::Delete($RECORD_ID))
-	*     {
-	*         echo "Error!";
-	*         $DB-&gt;Rollback();
-	*     }
-	*     else
-	*         $DB-&gt;Commit();
-	* 
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/delete.php
-	* @author Bitrix
-	*/
 	public static function Delete($ID)
 	{
 		global $DB;
@@ -306,7 +135,6 @@ class CAllGradeBook
 		return true;
 	}
 
-
 	public static function GetFilter($arFilter)
 	{
 		if (!is_array($arFilter))
@@ -320,7 +148,7 @@ class CAllGradeBook
 			$key = $res["FIELD"];
 			$cOperationType = $res["OPERATION"];
 
-			$key = strtoupper($key);
+			$key = mb_strtoupper($key);
 
 			switch ($key)
 			{
@@ -337,6 +165,17 @@ class CAllGradeBook
 				case "USER":
 					$arSqlSearch[] = GetFilterQuery("U.ID, U.LOGIN, U.NAME, U.LAST_NAME",$val);
 					break;
+				case "USER_LOGIN":
+					$arSqlSearch[] = CLearnHelper::FilterCreate("U.LOGIN", $val, "string_equal", $bFullJoin, $cOperationType);
+					break;
+
+				case "USER_NAME":
+					$arSqlSearch[] = CLearnHelper::FilterCreate("U.NAME", $val, "string_equal", $bFullJoin, $cOperationType);
+					break;
+
+				case "USER_LAST_NAME":
+					$arSqlSearch[] = CLearnHelper::FilterCreate("U.LAST_NAME", $val, "string_equal", $bFullJoin, $cOperationType);
+					break;
 			}
 
 		}
@@ -344,53 +183,10 @@ class CAllGradeBook
 		return $arSqlSearch;
 	}
 
-
-	
-	/**
-	* <p>Возвращает запись журнала по идентификатору ID. Учитываются права доступа текущего пользователя. Метод нестатический.</p>
-	*
-	*
-	* @param int $intID  Идентификатор записи в журнале.
-	*
-	* @return CDBResult <p>Возвращается объект <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $RECORD_ID = 95;
-	*     
-	*     $res = CGradeBook::GetByID($RECORD_ID);
-	* 
-	*     if ($arGradeBook = $res-&gt;GetNext())
-	*     {
-	*         echo "Test: ".$arGradeBook["TEST_NAME"]." User: ".$arGradeBook["USER_NAME"]." Score: ".$arGradeBook["RESULT"];
-	*     }
-	* }
-	* 
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a> </li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#gradebook">Поля журнала</a> </li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/index.php">CGradeBook</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/getlist.php">GetList</a> </li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		return CGradeBook::GetList(Array(), Array("ID"=>$ID));
 	}
-
 
 	public static function RecountAttempts($STUDENT_ID,$TEST_ID)
 	{
@@ -446,7 +242,6 @@ class CAllGradeBook
 		return true;
 	}
 
-
 	public static function GetExtraAttempts($STUDENT_ID, $TEST_ID)
 	{
 		global $DB;
@@ -465,7 +260,6 @@ class CAllGradeBook
 			return $ar["EXTRA_ATTEMPTS"];
 		}
 	}
-
 
 	public static function AddExtraAttempts($STUDENT_ID, $TEST_ID, $COUNT = 1)
 	{
@@ -498,99 +292,6 @@ class CAllGradeBook
 		}
 	}
 
-
-	
-	/**
-	* <p>Возвращает список записей журнала по фильтру arFilter, отсортированный в порядке arOrder. Учитываются права доступа текущего пользователя. Метод статический.</p>
-	*
-	*
-	* @param array $arrayarOrder = Array("ID"=>"DESC") Массив для сортировки результата. Массив вида <i>array("поле
-	* сортировки"=&gt;"направление сортировки" [, ...])</i>.<br> 		Поле для
-	* сортировки может принимать значения: 		<ul> <li> <b>ID</b> - идентификатор
-	* записи;</li> 			<li> <b>TEST_ID</b> - идентификатор теста;</li> 			<li> <b>STUDENT_ID</b> -
-	* идентификатор студента ;</li> 			<li> <b>RESULT</b> - количество баллов;</li>
-	* 			<li> <b>MAX_RESULT</b> - максимальное количество баллов;</li> 			<li> <b>COMPLETED</b> -
-	* тест пройден;</li> 			<li> <b>USER_NAME</b> - имя студента;</li> 			<li> <b>TEST_NAME</b> -
-	* название теста.</li> 		</ul> 		Направление сортировки может принимать
-	* значения: 		<ul> <li> <b>asc</b> - по возрастанию;</li> 		<li> <b>desc</b> - по
-	* убыванию;</li> 		</ul> 	Необязательный. По умолчанию фильтруется по
-	* убыванию идентификатора записи журнала.
-	*
-	* @param array $arrayarFilter = Array() Массив вида <i> array("фильтруемое поле"=&gt;"значение фильтра" [, ...])</i>.
-	* 		Фильтруемое поле может принимать значения: 		<ul> <li> <b>ID</b> -
-	* идентификатор записи;</li> 		<li> <b>TEST_ID</b> - идентификатор теста;</li> 		<li>
-	* <b>STUDENT_ID</b> - идентификатор студента;</li> 		<li> <b>RESULT</b> - количество
-	* баллов;</li> 		<li> <b>MAX_RESULT</b> - максимальное количество баллов;</li> 		<li>
-	* <b>COMPLETED</b> - тест пройден (Y|N);</li> 		<li> <b>USER</b> - пользователь (возможны
-	* сложные условия по полям пользователя ID, LOGIN, NAME, LAST_NAME);</li> 		<li>
-	* <b>MIN_PERMISSION</b> - минимальный уровень доcтупа. По умолчанию "R". Список
-	* прав доступа см. в <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccourse/setpermission.php">CCourse::SetPermission</a>.</li>
-	* 		<li> <b>CHECK_PERMISSIONS</b> - проверять уровень доступа. Если установлено
-	* значение "N" - права доступа не проверяются.</li> 		</ul> 		Перед
-	* названием фильтруемого поля можно указать тип фильтрации: 		<ul>
-	* <li>"!" - не равно</li> 		<li>"&lt;" - меньше</li> 		<li>"&lt;=" - меньше либо равно</li>
-	* 		<li>"&gt;" - больше</li> 		<li>"&gt;=" - больше либо равно</li> 		</ul> <br> "<i>значения
-	* фильтра</i>" - одиночное значение или массив.<br><br> Необязательный.
-	* По умолчанию записи не фильтруются.
-	*
-	* @return CDBResult <p>Возвращается объект <a
-	* href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $TEST_ID = 45;
-	*     $res = CGradebook::GetList(
-	*         Array("ID" =&gt; "ASC"), 
-	*         Array("TEST_ID" =&gt; $TEST_ID)
-	*     );
-	* 
-	*     while ($arGradebook = $res-&gt;GetNext())
-	*     {
-	*         echo "Student: ".$arGradebook["USER_NAME"]."; Test name: ".$arGradebook["TEST_NAME"]."; Completed: ".$arGradebook["COMPLETED"]."&lt;br&gt;";
-	*     }
-	* }
-	* 
-	* ?&gt;
-	* 
-	* &lt;?
-	* 
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $TEST_ID = 45;
-	*     $STUDENT_ID = 3;
-	* 
-	*     $res = CGradebook::GetList(
-	*         Array("ID" =&gt; "ASC"), 
-	*         Array("CHECK_PERMISSIONS" =&gt; "N", "TEST_ID" =&gt; $TEST_ID, "STUDENT_ID" =&gt; $STUDENT_ID)
-	*     );
-	* 
-	*     while ($arGradebook = $res-&gt;GetNext())
-	*     {
-	*         echo "Student: ".$arGradebook["USER_NAME"]."; Test name: ".$arGradebook["TEST_NAME"]."; Completed: ".$arGradebook["COMPLETED"]."&lt;br&gt;";
-	*     }
-	* 
-	* }
-	* 
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a> </li> <li> <a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/index.php">CGradeBook</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/getbyid.php">GetByID</a> </li> <li><a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/fields.php#gradebook">Поля журнала</a></li> </ul><a
-	* name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/cgradebook/getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder = array(), $arFilter = array(), $arNavParams = array())
 	{
 		global $DB;
@@ -612,7 +313,7 @@ class CAllGradeBook
 				$arLID = $arFilter["SITE_ID"];
 			else
 			{
-				if (strlen($arFilter["SITE_ID"]) > 0)
+				if ($arFilter["SITE_ID"] <> '')
 					$arLID[] = $arFilter["SITE_ID"];
 			}
 
@@ -639,10 +340,12 @@ class CAllGradeBook
 		if (!is_array($arOrder))
 			$arOrder = array();
 
+		$arSqlOrder = [];
+
 		foreach($arOrder as $by=>$order)
 		{
-			$by = strtolower($by);
-			$order = strtolower($order);
+			$by = mb_strtolower($by);
+			$order = mb_strtolower($order);
 			if ($order!="asc")
 				$order = "desc";
 
@@ -668,14 +371,18 @@ class CAllGradeBook
 
 		$strSqlOrder = "";
 		DelDuplicateSort($arSqlOrder);
-		for ($i=0, $len = count($arSqlOrder); $i < $len; $i++)
-		{
-			if($i==0)
-				$strSqlOrder = " ORDER BY ";
-			else
-				$strSqlOrder .= ",";
 
-			$strSqlOrder .= $arSqlOrder[$i];
+		if (!empty($arSqlOrder))
+		{
+			for ($i=0, $len = count($arSqlOrder); $i < $len; $i++)
+			{
+				if($i==0)
+					$strSqlOrder = " ORDER BY ";
+				else
+					$strSqlOrder .= ",";
+
+				$strSqlOrder .= $arSqlOrder[$i];
+			}
 		}
 
 		$strSql .= $strSqlOrder;
@@ -700,7 +407,6 @@ class CAllGradeBook
 
 		return $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 	}
-
 
 	/**
 	 * This function is for internal use only.
@@ -735,7 +441,7 @@ class CAllGradeBook
 							END
 					)
 				) ".
-			(strlen($SqlSearchLang)<=2?"":
+			(mb_strlen($SqlSearchLang) <= 2?"":
 				"AND
 					EXISTS
 					(	SELECT 'x' FROM b_learn_course_site CS

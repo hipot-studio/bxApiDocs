@@ -2,7 +2,10 @@
 
 namespace Bitrix\Sale\TradingPlatform;
 
+use Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\SystemException;
+
+Loc::loadMessages(__FILE__);
 
 /**
  * Class Sftp
@@ -28,28 +31,7 @@ class Sftp
 	 * @param int $port Sftp port.
 	 * @param string $fingerprint Hostkey hash.
 	 */
-	
-	/**
-	* <p>Создает объект данного типа. Метод нестатический.</p>
-	*
-	*
-	* @param string $login  Логин SFTP.
-	*
-	* @param string $pass  Пароль SFTP.
-	*
-	* @param string $host = "mip.ebay.com" Хост SFTP.
-	*
-	* @param integer $port = 22 Порт SFTP.
-	*
-	* @param string $fingerprint = "A9429730355B91EC642AE6E6186DA3DC" Хэш, по которому можно удостовериться, что подключен нужный хост.
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/sftp/__construct.php
-	* @author Bitrix
-	*/
-	public function __construct($login, $pass, $host="mip.ebay.com" , $port=22, $fingerprint="A9429730355B91EC642AE6E6186DA3DC")
+	public function __construct($login, $pass, $host, $port, $fingerprint="")
 	{
 		$this->host = $host;
 		$this->login = $login;
@@ -63,39 +45,50 @@ class Sftp
 	 * @return bool.
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	
-	/**
-	* <p>Устанавливает соединение с помощью SFTP. Метод нестатический.</p> <p>Без параметров</p>
-	*
-	*
-	* @return \Bitrix\Sale\TradingPlatform\bool. 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/tradingplatform/sftp/connect.php
-	* @author Bitrix
-	*/
 	public function connect()
 	{
+		if(!extension_loaded("ssh2"))
+			throw new SystemException(Loc::getMessage("TRADING_PLATFORM_SFTP_ERROR_SSH2_EXT"));
+
 		$this->connection = @ssh2_connect($this->host, $this->port);
 
 		if(!$this->connection)
-			throw new SystemException("Can't connect via ssh to: ".$this->host.":".$this->port);
+		{
+			throw new SystemException(
+				Loc::getMessage(
+					"TRADING_PLATFORM_SFTP_ERROR_CONNECT",
+					array(
+						"#HOST#" => $this->host,
+						"#PORT#" => $this->port
+					)
+				)
+			);
+		}
 
 		if($this->fingerprint != "")
 		{
 			$fingerprint = ssh2_fingerprint($this->connection, SSH2_FINGERPRINT_MD5 | SSH2_FINGERPRINT_HEX);
 
 			if ($fingerprint != $this->fingerprint)
-				throw new SystemException("HOSTKEY MISMATCH! Possible Man-In-The-Middle Attack? Actual fingerint:".$fingerprint." expected: ".$this->fingerprint);
+			{
+				throw new SystemException(Loc::getMessage(
+					"TRADING_PLATFORM_SFTP_ERROR_FINGERPRINT",
+					array(
+						"#HOST#" => $this->host,
+						"#FINGERPRINT1#" => $fingerprint,
+						"#FINGERPRINT2#" => $this->fingerprint,
+					)
+				));
+			}
 		}
 
 		if(!@ssh2_auth_password($this->connection, $this->login, $this->pass))
-			throw new SystemException("Incorrect sftp login or password ");
+			throw new SystemException(Loc::getMessage("TRADING_PLATFORM_SFTP_ERROR_PASS"));
 
 		$this->sftp = ssh2_sftp($this->connection);
 
 		if(!$this->sftp)
-			throw new SystemException("Could not initialize SFTP subsystem.");
+			throw new SystemException(Loc::getMessage("TRADING_PLATFORM_SFTP_ERROR_INIT"));
 
 		return true;
 	}
@@ -108,18 +101,19 @@ class Sftp
 	 */
 	public function uploadFile($localFile, $remoteFile)
 	{
-		$stream = fopen("ssh2.sftp://".$this->sftp.$remoteFile, 'w');
+		$remotePath = "sftp://".intval($this->sftp).$remoteFile;
+		$stream = @fopen("ssh2.".$remotePath, 'w');
 
 		if (!$stream)
-			throw new SystemException("Could not open file: $remoteFile");
+			throw new SystemException(Loc::getMessage("TRADING_PLATFORM_SFTP_ERROR_OPEN_FILE", array("#FILE#" => $remotePath)));
 
 		$data = file_get_contents($localFile);
 
 		if ($data === false)
-			throw new SystemException("Could not open local file: ". $localFile);
+			throw new SystemException(Loc::getMessage("TRADING_PLATFORM_SFTP_ERROR_READ_FILE", array("#FILE#" => $localFile)));
 
 		if (fwrite($stream, $data) === false)
-			throw new SystemException("Could not write to remote file : ".$remoteFile);
+			throw new SystemException(Loc::getMessage("TRADING_PLATFORM_SFTP_ERROR_WRITE_FILE", array("#FILE#" => $remotePath)));
 
 		@fclose($stream);
 
@@ -134,15 +128,16 @@ class Sftp
 	 */
 	public function downloadFile($remoteFile, $localFile)
 	{
-		$stream = @fopen("ssh2.sftp://".$this->sftp.$remoteFile, 'r');
+		$remotePath = "sftp://".intval($this->sftp).$remoteFile;
+		$stream = @fopen("ssh2.".$remotePath, 'r');
 
 		if (!$stream)
-			throw new SystemException("Could not open remote file: ".$remoteFile);
+			throw new SystemException(Loc::getMessage("TRADING_PLATFORM_SFTP_ERROR_OPEN_FILE", array("#FILE#" => $remotePath)));
 
 		$contents = stream_get_contents($stream);
 
 		if(file_put_contents($localFile, $contents) === false)
-			throw new SystemException("Could not write to local file: ".$localFile);
+			throw new SystemException(Loc::getMessage("TRADING_PLATFORM_SFTP_ERROR_WRITE_FILE", array("#FILE#" => $localFile)));
 
 		@fclose($stream);
 		return true;
@@ -156,24 +151,25 @@ class Sftp
 	public function getFilesList($remotePath)
 	{
 		$result = array();
-		$dirHandle = opendir("ssh2.sftp://".$this->sftp."/".$remotePath);
+		$fullPath = "sftp://".intval($this->sftp).$remotePath;
+		$dirHandle = @opendir("ssh2.".$fullPath);
 
 		if($dirHandle === false)
-			throw new SystemException("Could not open remote path: ".$remotePath);
+			throw new SystemException(Loc::getMessage("TRADING_PLATFORM_SFTP_ERROR_OPEN_PATH", array("#PATH#" => $fullPath)));
 
 		while (false !== ($file = readdir($dirHandle)))
-			if(is_file("ssh2.sftp://".$this->sftp."/".$remotePath."/".$file))
+			if(is_file("ssh2.".$fullPath."/".$file))
 				$result[] = $file;
 
 		return $result;
 	}
 
 	/**
-	 * @param $remoteFile Remote path.
+	 * @param string $remoteFile Remote file.
 	 * @return int Filesize.
 	 */
 	public function getFileSize($remoteFile)
 	{
-		return filesize("ssh2.sftp://".$this->sftp.$remoteFile);
+		return filesize("ssh2.sftp://".intval($this->sftp).$remoteFile);
 	}
 } 

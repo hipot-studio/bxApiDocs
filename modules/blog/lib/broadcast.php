@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
@@ -7,6 +8,8 @@
  */
 namespace Bitrix\Blog;
 
+use Bitrix\Im\Configuration\Manager;
+use Bitrix\Im\Configuration\Notification;
 use Bitrix\Main;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -14,119 +17,116 @@ use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Entity\ExpressionField;
-use Bitrix\Socialnetwork\LogFollowTable;
-
 
 Loc::loadMessages(__FILE__);
 
 class Broadcast
 {
-	const ON_CNT = 5;
-	const OFF_CNT = 5;
+	protected const ON_CNT = 5;
+	protected const OFF_CNT = 5;
 
-	const ON_PERIOD = 'P7D'; // 7 days
-	const OFF_PERIOD = 'P7D'; // 7 days
+	protected const ON_PERIOD = 'P7D'; // 7 days
+	protected const OFF_PERIOD = 'P7D'; // 7 days
 
-	private function getValue()
+	private static function getValue(): string
 	{
-		return Option::get('blog', 'log_notify_all', "N");
+		return Option::get('blog', 'log_notify_all', 'N');
 	}
 
-	private function setValue($value = false)
+	private static function setValue($value = false): void
 	{
 		$value = ($value === true);
-		Option::set('blog', 'log_notify_all', ($value ? "Y" : "N"));
+		Option::set('blog', 'log_notify_all', ($value ? 'Y' : 'N'));
 	}
 
-	private function getOffModeRequested()
+	private static function getOffModeRequested(): bool
 	{
-		return (Option::get('blog', 'log_notify_all_off_requested', false) == "Y");
+		return (Option::get('blog', 'log_notify_all_off_requested', false) === 'Y');
 	}
 
-	private function getOnModeRequested()
+	private static function getOnModeRequested(): bool
 	{
-		return (Option::get('blog', 'log_notify_all_on_requested', false) == "Y");
+		return (Option::get('blog', 'log_notify_all_on_requested', false) === 'Y');
 	}
 
-	private function setOffModeRequested()
+	private static function setOffModeRequested(): void
 	{
 		Option::set('blog', 'log_notify_all_off_requested', 'Y');
 	}
 
-	private function setOnModeRequested()
+	private static function setOnModeRequested(): void
 	{
 		Option::set('blog', 'log_notify_all_on_requested', 'Y');
 	}
 
-	private function getCount($period)
+	private static function getCount($period): int
 	{
 		$counter = 0;
 
 		$now = new \DateTime();
 
-		$res = PostTable::getList(array(
-			'order' => array(),
-			'filter' => array(
-				"=PostSocnetRights:POST.ENTITY" => 'G2',
-				"=PUBLISH_STATUS" => BLOG_PUBLISH_STATUS_PUBLISH,
+		$res = PostTable::getList([
+			'order' => [],
+			'filter' => [
+				'=PostSocnetRights:POST.ENTITY' => 'G2',
+				'=PUBLISH_STATUS' => BLOG_PUBLISH_STATUS_PUBLISH,
 				'>DATE_PUBLISH' => DateTime::createFromUserTime(DateTime::createFromUserTime($now->sub(new \DateInterval($period))->format(DateTime::getFormat()))),
-			),
-			'group' => array(),
-			'select' => array('CNT'),
-			'runtime' => array(
-				new ExpressionField('CNT', 'COUNT(*)')
-			),
-			'data_doubling' => false
-		));
-		while($ar = $res->fetch())
+			],
+			'group' => [],
+			'select' => [ 'CNT' ],
+			'runtime' => [
+				new ExpressionField('CNT', 'COUNT(*)'),
+			],
+			'data_doubling' => false,
+		]);
+		while ($ar = $res->fetch())
 		{
-			$counter = intval($ar['CNT']);
+			$counter = (int)$ar['CNT'];
 		}
 
 		return $counter;
 	}
 
-	private function onModeNeeded()
+	private static function onModeNeeded(): bool
 	{
 		$counter = self::getCount(self::ON_PERIOD);
 
 		return ($counter < self::ON_CNT);
 	}
 
-	private function offModeNeeded()
+	private static function offModeNeeded(): bool
 	{
 		$counter = self::getCount(self::OFF_PERIOD);
 
 		return ($counter > self::OFF_CNT);
 	}
 
-	public static function getData()
+	public static function getData(): array
 	{
-		$result = array(
-			"cnt" => 0,
-			"rate" => 0
-		);
+		$result = [
+			'cnt' => 0,
+			'rate' => 0,
+		];
 		$value = Option::get('blog', 'log_notify_all_data', false);
 		if ($value)
 		{
-			$value = unserialize($value);
+			$value = unserialize($value, ['allowed_classes' => false]);
 			if (
 				is_array($value)
-				&& isset($value['cnt'])
-				&& isset($value['rate'])
+				&& isset($value['cnt'], $value['rate'])
 			)
 			{
-				$result = array(
-					"cnt" => intval($value['cnt']),
-					"rate" => intval($value['rate'])
-				);
+				$result = [
+					'cnt' => (int)$value['cnt'],
+					'rate' => (int)$value['rate'],
+				];
 			}
 		}
 
 		return $result;
 	}
 
-	public static function setRequestedMode($value)
+	public static function setRequestedMode($value): void
 	{
 		$value = ($value === true);
 
@@ -140,7 +140,7 @@ class Broadcast
 		}
 	}
 
-	public static function checkMode()
+	public static function checkMode(): bool
 	{
 		if (ModuleManager::isModuleInstalled('intranet'))
 		{
@@ -157,7 +157,7 @@ class Broadcast
 			}
 
 			if (
-				$mode == "N"
+				$mode === 'N'
 				&& !$onModeRequested
 			)
 			{
@@ -168,7 +168,7 @@ class Broadcast
 
 			}
 			elseif (
-				$mode == "Y"
+				$mode === 'Y'
 				&& !$offModeRequested
 			)
 			{
@@ -182,34 +182,42 @@ class Broadcast
 		return true;
 	}
 
-	private function sendRequest($value, $siteId = SITE_ID)
+	private static function sendRequest($value, $siteId = SITE_ID): void
 	{
 		$value = ($value === true);
 
 		if (Loader::includeModule('im'))
 		{
 			$str = ($value ? 'ON' : 'OFF');
-			$tag = "BLOG|BROADCAST_REQUEST|".($value ? "ON" : "OFF");
+			$tag = 'BLOG|BROADCAST_REQUEST|' . ($value ? 'ON' : 'OFF');
 
-			$fields = array(
-				"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
-				"NOTIFY_TYPE" => IM_NOTIFY_CONFIRM,
-				"NOTIFY_MODULE" => "blog",
-				"NOTIFY_EVENT" => "log_notify_all_request",
-				"NOTIFY_SUB_TAG" => $tag,
-				"NOTIFY_MESSAGE" => Loc::getMessage("BLOG_BROADCAST_REQUEST_IM_MESSAGE_".$str),
-				"NOTIFY_MESSAGE_OUT" => IM_MAIL_SKIP,
-				"NOTIFY_BUTTONS" => Array(
-					array("TITLE" => GetMessage("BLOG_BROADCAST_REQUEST_IM_BUTTON_".$str."_Y"), "VALUE" => "Y", "TYPE" => "accept"),
-					array("TITLE" => GetMessage("BLOG_BROADCAST_REQUEST_IM_BUTTON_".$str."_N"), "VALUE" => "N", "TYPE" => "cancel"),
-				)
-			);
+			$fields = [
+				'MESSAGE_TYPE' => IM_MESSAGE_SYSTEM,
+				'NOTIFY_TYPE' => IM_NOTIFY_CONFIRM,
+				'NOTIFY_MODULE' => 'blog',
+				'NOTIFY_EVENT' => 'log_notify_all_request',
+				'NOTIFY_SUB_TAG' => $tag,
+				'NOTIFY_MESSAGE' => Loc::getMessage('BLOG_BROADCAST_REQUEST_IM_MESSAGE_' . $str),
+				'NOTIFY_MESSAGE_OUT' => IM_MAIL_SKIP,
+				'NOTIFY_BUTTONS' => [
+					[
+						'TITLE' => Loc::getMessage('BLOG_BROADCAST_REQUEST_IM_BUTTON_' . $str . '_Y'),
+						'VALUE' => 'Y',
+						'TYPE' => 'accept',
+					],
+					[
+						'TITLE' => Loc::getMessage('BLOG_BROADCAST_REQUEST_IM_BUTTON_' . $str . '_N'),
+						'VALUE' => 'N',
+						'TYPE' => 'cancel',
+					],
+				]
+			];
 
-			$moduleAdminList = array_keys(\Bitrix\Socialnetwork\User::getModuleAdminList(array($siteId, false)));
-			foreach($moduleAdminList as $userId)
+			$moduleAdminList = array_keys(\Bitrix\Socialnetwork\User::getModuleAdminList([ $siteId, false ]));
+			foreach ($moduleAdminList as $userId)
 			{
-				$fields["TO_USER_ID"] = $userId;
-				$fields["NOTIFY_TAG"] = $tag."|".$userId;
+				$fields['TO_USER_ID'] = $userId;
+				$fields['NOTIFY_TAG'] = $tag . '|' . $userId;
 
 				\CIMNotify::add($fields);
 			}
@@ -218,7 +226,7 @@ class Broadcast
 		self::setRequestedMode($value);
 	}
 
-	public static function send($params)
+	public static function send($params): bool
 	{
 		if (
 			!Loader::includeModule('intranet')
@@ -229,33 +237,33 @@ class Broadcast
 		}
 
 		if (
-			empty($params["ENTITY_TYPE"])
-			|| !in_array($params["ENTITY_TYPE"], array("POST"))
-			|| empty($params["ENTITY_ID"])
-			|| empty($params["AUTHOR_ID"])
-			|| empty($params["URL"])
-			|| empty($params["SOCNET_RIGHTS"])
-			|| !is_array($params["SOCNET_RIGHTS"])
+			empty($params['ENTITY_TYPE'])
+			|| $params['ENTITY_TYPE'] !== 'POST'
+			|| empty($params['ENTITY_ID'])
+			|| empty($params['AUTHOR_ID'])
+			|| empty($params['URL'])
+			|| empty($params['SOCNET_RIGHTS'])
+			|| !is_array($params['SOCNET_RIGHTS'])
 		)
 		{
 			return false;
 		}
 
-		if (empty($params["SITE_ID"]))
+		if (empty($params['SITE_ID']))
 		{
-			$params["SITE_ID"] = SITE_ID;
+			$params['SITE_ID'] = SITE_ID;
 		}
 
-		$res = Main\UserTable::getList(array(
-			'filter' => array(
-				'=ID' => intval($params["AUTHOR_ID"])
-			),
-			'select' => array('ID', 'PERSONAL_GENDER', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN')
-		));
+		$res = Main\UserTable::getList([
+			'filter' => [
+				'=ID' => (int)$params['AUTHOR_ID'],
+			],
+			'select' => [ 'ID', 'PERSONAL_GENDER', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN' ],
+		]);
 
-		if($author = $res->fetch())
+		if ($author = $res->fetch())
 		{
-			$author['NAME_FORMATTED'] = \CUser::formatName(\CSite::getNameFormat(null, $params["SITE_ID"]), $author, true);
+			$author['NAME_FORMATTED'] = \CUser::formatName(\CSite::getNameFormat(null, $params['SITE_ID']), $author, true);
 			switch($author['PERSONAL_GENDER'])
 			{
 				case 'M':
@@ -273,42 +281,49 @@ class Broadcast
 			return false;
 		}
 
+		$params['SOCNET_RIGHTS'] = array_map(static function ($right) {
+			return ($right === 'G2' ? 'UA' : $right);
+		}, $params['SOCNET_RIGHTS']);
+
 		if (
-			!empty($params["SOCNET_RIGHTS_OLD"])
-			&& is_array($params["SOCNET_RIGHTS_OLD"])
+			!empty($params['SOCNET_RIGHTS_OLD'])
+			&& is_array($params['SOCNET_RIGHTS_OLD'])
 		)
 		{
-			$rightsOld = array();
-			foreach($params["SOCNET_RIGHTS_OLD"] as $key => $entities)
+			$rightsOld = [];
+			foreach ($params['SOCNET_RIGHTS_OLD'] as $entities)
 			{
-				foreach($entities as $rightsList)
+				foreach ($entities as $rightsList)
 				{
-					foreach($rightsList as $right)
+					foreach ($rightsList as $right)
 					{
-						$rightsOld[] = ($right == 'G2' ? 'UA' : $right);
+						$rightsOld[] = ($right === 'G2' ? 'UA' : $right);
 					}
 				}
 			}
-			$params["SOCNET_RIGHTS"] = array_diff($params["SOCNET_RIGHTS"], $rightsOld);
+			$params['SOCNET_RIGHTS'] = array_diff($params['SOCNET_RIGHTS'], $rightsOld);
 		}
 
 		$found = false;
 
-		$userListParams = array(
-			"SKIP" => intval($params["AUTHOR_ID"]),
-			"DEPARTMENTS" => array()
-		);
+		$userListParams = [
+			'SKIP' => (int)$params['AUTHOR_ID'],
+			'DEPARTMENTS' => [],
+		];
 
-		foreach($params["SOCNET_RIGHTS"] as $right)
+		foreach ($params['SOCNET_RIGHTS'] as $right)
 		{
-			if ($right == 'UA')
+			if (
+				$right === 'UA'
+				|| $right === 'G2'
+			)
 			{
-				$userListParams["SITE_ID"] = $params["SITE_ID"];
+				$userListParams['SITE_ID'] = $params['SITE_ID'];
 				$found = true;
 			}
 			elseif (preg_match('/^DR(\d+)$/', $right, $matches))
 			{
-				$userListParams["DEPARTMENTS"][] = $matches[1];
+				$userListParams['DEPARTMENTS'][] = $matches[1];
 				$found = true;
 			}
 		}
@@ -324,91 +339,90 @@ class Broadcast
 		}
 
 		if (
-			$params["ENTITY_TYPE"] == "POST"
-			&& ($post = \CBlogPost::getByID($params["ENTITY_ID"]))
+			$params['ENTITY_TYPE'] === 'POST'
+			&& ($post = \CBlogPost::getById($params['ENTITY_ID']))
+			&& !empty($post['PUBLISH_STATUS'])
+			&& ($post['PUBLISH_STATUS'] === BLOG_PUBLISH_STATUS_PUBLISH)
 		)
 		{
-			$titleTmp = str_replace(array("\r\n", "\n"), " ", $post["TITLE"]);
+			$titleTmp = str_replace([ "\r\n", "\n" ], ' ', $post['TITLE']);
 			$title = truncateText($titleTmp, 100);
-			$titleEmail = ($post['MICRO'] != 'Y' ? truncateText($titleTmp, 255) : '');
+			$titleEmail = ($post['MICRO'] !== 'Y' ? truncateText($titleTmp, 255) : '');
 
-			$titleEmpty = (strlen(trim($title, " \t\n\r\0\x0B\xA0" )) <= 0);
+			$titleEmpty = (trim($title, " \t\n\r\0\x0B\xA0" ) === '');
 
 			$message = Loc::getMessage(
-				'BLOG_BROADCAST_PUSH_POST'.($titleEmpty ? 'A' : '').$authorSuffix,
-				array(
+				'BLOG_BROADCAST_PUSH_POST' . ($titleEmpty ? 'A' : '') . $authorSuffix,
+				[
 					'#author#' => $author['NAME_FORMATTED'],
-					'#title#' => $title
-				)
+					'#title#' => $title,
+				]
 			);
 
 			$userIdList = array_keys($userList);
 			if (
-				!empty($params["EXCLUDE_USERS"])
-				&& is_array($params["EXCLUDE_USERS"])
+				!empty($params['EXCLUDE_USERS'])
+				&& is_array($params['EXCLUDE_USERS'])
 			)
 			{
-				$userIdList = array_diff($userIdList, $params["EXCLUDE_USERS"]);
+				$userIdList = array_diff($userIdList, $params['EXCLUDE_USERS']);
 			}
 
 			if (!empty($userIdList))
 			{
-				$userIdListPush = $userIdList;
-				foreach ($userIdListPush as $key=> $userId)
+				$userIdListPush = self::filterRecipients($userIdList, \CIMSettings::CLIENT_PUSH);
+
+				\Bitrix\Pull\Push::add($userIdListPush, [
+					'module_id' => 'blog',
+					'push' => [
+						'message' => $message,
+						'params' => [
+							'ACTION' => 'post',
+							'TAG' => 'BLOG|POST|' . $params['ENTITY_ID']
+						],
+						'tag' => 'BLOG|POST|' . $params['ENTITY_ID'],
+						'send_immediately' => 'Y',
+					]
+				]);
+
+				$offlineUserIdList = [];
+
+				$mailRecipients = self::filterRecipients($userIdList, \CIMSettings::CLIENT_MAIL);
+
+				$deviceInfo = \CPushManager::getDeviceInfo($mailRecipients);
+				if (is_array($deviceInfo))
 				{
-					if (!\CIMSettings::getNotifyAccess($userId, 'blog', 'broadcast_post', \CIMSettings::CLIENT_PUSH))
+					foreach ($deviceInfo as $userId => $info)
 					{
-						unset($userIdListPush[$key]);
-					}
-				}
-
-				$CPushManager = new \CPushManager();
-
-				$CPushManager->addQueue(Array(
-					'USER_ID' => $userIdListPush,
-					'MESSAGE' => str_replace("\n", " ", $message),
-					'PARAMS' => array(
-						'ACTION' => 'post',
-						'TAG' => 'BLOG|POST|'.$params["ENTITY_ID"]
-					),
-					'TAG' => 'BLOG|POST|'.$params["ENTITY_ID"],
-					'SEND_IMMEDIATELY' => 'Y',
-				));
-
-				$CPushManager->addQueue(Array(
-					'USER_ID' => $userIdListPush,
-					'SEND_DEFERRED' => 'Y',
-				));
-
-				$offlineUserIdList = array();
-
-				$deviceInfo = \CPushManager::getDeviceInfo($userIdList);
-				foreach($deviceInfo as $userId => $info)
-				{
-					if (
-						in_array($info['mode'], array(\CPushManager::SEND_DEFERRED, \CPushManager::RECORD_NOT_FOUND))
-						&& \CIMSettings::getNotifyAccess($userId, 'blog', 'broadcast_post', \CIMSettings::CLIENT_MAIL)
-					)
-					{
-						$offlineUserIdList[] = $userId;
+						if (in_array(
+							$info['mode'],
+							[
+								\CPushManager::SEND_DEFERRED,
+								\CPushManager::RECORD_NOT_FOUND,
+							],
+							true
+						))
+						{
+							$offlineUserIdList[] = $userId;
+						}
 					}
 				}
 
 				if (!empty($offlineUserIdList))
 				{
-					$res = Main\UserTable::getList(array(
-						'filter' => array(
+					$res = Main\UserTable::getList([
+						'filter' => [
 							'=SEND_EMAIL' => 'Y',
-							'@ID' => $offlineUserIdList
-						),
-						'runtime' => array(
-							new Main\Entity\ExpressionField('SEND_EMAIL', "CASE WHEN LAST_ACTIVITY_DATE IS NOT NULL AND LAST_ACTIVITY_DATE > ".Main\Application::getConnection()->getSqlHelper()->addSecondsToDateTime('-'.(60*60*24*90))." THEN 'Y' ELSE 'N' END")
-						),
-						'select' => array('ID')
-					));
+							'@ID' => $offlineUserIdList,
+						],
+						'runtime' => [
+							new Main\Entity\ExpressionField('SEND_EMAIL', 'CASE WHEN LAST_ACTIVITY_DATE IS NOT NULL AND LAST_ACTIVITY_DATE > ' . Main\Application::getConnection()->getSqlHelper()->addSecondsToDateTime('-' . (60*60*24*90)) . " THEN 'Y' ELSE 'N' END"),
+						],
+						'select' => [ 'ID' ],
+					]);
 
-					$offlineUserIdList = array();
-					while($ar = $res->fetch())
+					$offlineUserIdList = [];
+					while ($ar = $res->fetch())
 					{
 						$offlineUserIdList[] = $ar['ID'];
 					}
@@ -418,7 +432,7 @@ class Broadcast
 				{
 					$serverName = '';
 
-					$res = \CSite::getByID($params["SITE_ID"]);
+					$res = \CSite::getByID($params['SITE_ID']);
 					if ($site = $res->fetch())
 					{
 						$serverName = $site['SERVER_NAME'];
@@ -426,51 +440,40 @@ class Broadcast
 					if (empty($serverName))
 					{
 						$serverName = (
-							defined("SITE_SERVER_NAME")
-							&& strlen(SITE_SERVER_NAME) > 0
+							defined('SITE_SERVER_NAME')
+							&& SITE_SERVER_NAME <> ''
 								? SITE_SERVER_NAME
-								: Option::get("main", "server_name", $_SERVER["SERVER_NAME"])
+								: Option::get('main', 'server_name', $_SERVER['SERVER_NAME'])
 						);
 					}
 
-					$serverName = (\CMain::isHTTPS() ? "https" : "http")."://".$serverName;
+					$serverName = (\CMain::isHTTPS() ? 'https' : 'http') . '://' . $serverName;
 
-					$textEmail = $post["DETAIL_TEXT"];
-					if ($post["DETAIL_TEXT_TYPE"] == "html")
+					$textEmail = $post['DETAIL_TEXT'];
+					if ($post['DETAIL_TEXT_TYPE'] === 'html')
 					{
 						$textEmail = HTMLToTxt($textEmail);
 					}
 
-					$imageList = array();
-					$res = \CBlogImage::getList(
-						array("ID"=>"ASC"),
-						array(
-							"POST_ID" => $post["ID"],
-							"BLOG_ID" => $post["BLOG_ID"],
-							"IS_COMMENT" => "N"
-						)
-					);
-					while ($image = $res->fetch())
-					{
-						$imageList[$image['ID']] = $image['FILE_ID'];
-					}
+					$imageList = [];
+
 					$parserBlog = new \blogTextParser();
 					$textEmail = $parserBlog->convert4mail($textEmail, $imageList);
 
-					foreach($offlineUserIdList as $userId)
+					foreach ($offlineUserIdList as $userId)
 					{
-						if (!empty($userList[$userId]["EMAIL"]))
+						if (!empty($userList[$userId]['EMAIL']))
 						{
 							\CEvent::send(
-								"BLOG_POST_BROADCAST",
-								$params["SITE_ID"],
-								array(
-									"EMAIL_TO" => (!empty($userList[$userId]["NAME_FORMATTED"]) ? ''.$userList[$userId]["NAME_FORMATTED"].' <'.$userList[$userId]["EMAIL"].'>' : $userList[$userId]["EMAIL"]),
-									"AUTHOR" => $author['NAME_FORMATTED'],
-									"MESSAGE_TITLE" => $titleEmail,
-									"MESSAGE_TEXT" => $textEmail,
-									"MESSAGE_PATH" => $serverName.$params["URL"]
-								)
+								'BLOG_POST_BROADCAST',
+								$params['SITE_ID'],
+								[
+									'EMAIL_TO' => (!empty($userList[$userId]['NAME_FORMATTED']) ? '' . $userList[$userId]['NAME_FORMATTED'] . ' <' . $userList[$userId]['EMAIL'] . '>' : $userList[$userId]['EMAIL']),
+									'AUTHOR' => $author['NAME_FORMATTED'],
+									'MESSAGE_TITLE' => $titleEmail,
+									'MESSAGE_TEXT' => $textEmail,
+									'MESSAGE_PATH' => $serverName . $params['URL'],
+								]
 							);
 						}
 					}
@@ -481,24 +484,24 @@ class Broadcast
 		return false;
 	}
 
-	public static function onBeforeConfirmNotify($module, $tag, $value, $params)
+	public function onBeforeConfirmNotify($module, $tag, $value, $params): bool
 	{
-		if ($module == "blog")
+		if ($module === 'blog')
 		{
-			$tagList = explode("|", $tag);
+			$tagList = explode('|', $tag);
 			if (
-				count($tagList) == 4
-				&& $tagList[1] == 'BROADCAST_REQUEST'
+				count($tagList) === 4
+				&& $tagList[1] === 'BROADCAST_REQUEST'
 			)
 			{
 				$mode = $tagList[2];
 				if (
-					$value == 'Y'
-					&& in_array($mode, array('ON', 'OFF'))
+					$value === 'Y'
+					&& in_array($mode, [ 'ON', 'OFF' ])
 				)
 				{
-					self::setValue($mode == 'ON');
-					\CIMNotify::deleteBySubTag("BLOG|BROADCAST_REQUEST|".$mode);
+					self::setValue($mode === 'ON');
+					\CIMNotify::deleteBySubTag('BLOG|BROADCAST_REQUEST|' . $mode);
 				}
 
 				return true;
@@ -506,5 +509,40 @@ class Broadcast
 		}
 
 		return false;
+	}
+
+	public static function filterRecipients(array $usersId, string $notifyType): array
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return $usersId;
+		}
+
+		if (Manager::isSettingsMigrated())
+		{
+			if ($notifyType === \CIMSettings::CLIENT_MAIL)
+			{
+				$notifyType = Notification::MAIL;
+			}
+
+			$notification = new Notification('blog', 'broadcast_post');
+
+			return $notification->filterAllowedUsers($usersId, $notifyType);
+		}
+
+		foreach ($usersId as $key=> $userId)
+		{
+			if (!\CIMSettings::getNotifyAccess(
+				$userId,
+				'blog',
+				'broadcast_post',
+				$notifyType
+			))
+			{
+				unset($usersId[$key]);
+			}
+		}
+
+		return $usersId;
 	}
 }

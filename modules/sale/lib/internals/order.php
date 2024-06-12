@@ -12,6 +12,22 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Class OrderTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Order_Query query()
+ * @method static EO_Order_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Order_Result getById($id)
+ * @method static EO_Order_Result getList(array $parameters = [])
+ * @method static EO_Order_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_Order createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_Order_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_Order wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_Order_Collection wakeUpCollection($rows)
+ */
 class OrderTable extends Main\Entity\DataManager
 {
 	/**
@@ -19,17 +35,6 @@ class OrderTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы заказов в базе данных. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordertable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_sale_order';
@@ -40,17 +45,6 @@ class OrderTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы заказов. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/sale/internals/ordertable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		global $DB, $USER;
@@ -61,20 +55,6 @@ class OrderTable extends Main\Entity\DataManager
 
 		$connection = Main\Application::getConnection();
 		$helper = $connection->getSqlHelper();
-
-		$lockStatusExpression = '';
-		if ($DB->type == 'MYSQL')
-		{
-			$lockStatusExpression = "if(DATE_LOCK is null, 'green', if(DATE_ADD(DATE_LOCK, interval ".$maxLock." MINUTE)<now(), 'green', if(LOCKED_BY=".$userID.", 'yellow', 'red')))";
-		}
-		elseif ($DB->type == 'MSSQL')
-		{
-			$lockStatusExpression = "case when DATE_LOCK is null then 'green' else case when dateadd(minute, ".$maxLock.", DATE_LOCK)<getdate() then 'green' else case when LOCKED_BY=".$userID." then 'yellow' else 'red' end end end";
-		}
-		elseif ($DB->type == 'ORACLE')
-		{
-			$lockStatusExpression = "DECODE(DATE_LOCK, NULL, 'green', DECODE(SIGN(1440*(SYSDATE-DATE_LOCK)-".$maxLock."), 1, 'green', decode(LOCKED_BY,".$userID.",'yellow','red')))";
-		}
 
 		return array(
 			new Main\Entity\IntegerField('ID',
@@ -144,11 +124,19 @@ class OrderTable extends Main\Entity\DataManager
 				'USER',
 				'\Bitrix\Main\User',
 				array('=this.USER_ID' => 'ref.ID'),
-				array('join_type' => 'INNER')
+				array('join_type' => 'left')
 			),
 
 			new Main\Entity\BooleanField(
 				'PAYED',
+				array(
+					'values' => array('N', 'Y'),
+					'default_value' => 'N'
+				)
+			),
+
+			new Main\Entity\BooleanField(
+				'IS_SYNC_B24',
 				array(
 					'values' => array('N', 'Y'),
 					'default_value' => 'N'
@@ -307,6 +295,8 @@ class OrderTable extends Main\Entity\DataManager
 
 			new Main\Entity\StringField('COMMENTS'),
 
+			new Main\Entity\IntegerField('COMPANY_ID'),
+
 			new Main\Entity\IntegerField('CREATED_BY'),
 
 			new Main\Entity\ReferenceField(
@@ -333,6 +323,14 @@ class OrderTable extends Main\Entity\DataManager
 
 			new Main\Entity\DateField('DATE_BILL'),
 
+			new Main\Entity\BooleanField(
+				'IS_RECURRING',
+				array(
+					'values' => array('N', 'Y'),
+					'default_value' => 'N'
+				)
+			),
+
 			new Main\Entity\IntegerField('RECURRING_ID'),
 
 			new Main\Entity\IntegerField('LOCKED_BY'),
@@ -357,7 +355,7 @@ class OrderTable extends Main\Entity\DataManager
 
 			new Main\Entity\ExpressionField(
 				'LOCK_STATUS',
-				$lockStatusExpression
+				"case when DATE_LOCK is null or " . $helper->addSecondsToDateTime($maxLock * 60, 'DATE_LOCK') . " < now() then 'green' when LOCKED_BY = ".$userID." then 'yellow' else 'red' end"
 			),
 
 			new Main\Entity\ReferenceField(
@@ -493,6 +491,16 @@ class OrderTable extends Main\Entity\DataManager
 
 			new Main\Entity\StringField('BX_USER_ID'),
 
+			new Main\Entity\TextField('SEARCH_CONTENT'),
+
+			new Main\Entity\BooleanField(
+				'RUNNING',
+				array(
+					'values' => array('N', 'Y'),
+					'default_value' => 'N'
+				)
+			),
+
 			new Main\Entity\ReferenceField(
 				'ORDER_COUPONS',
 				'Bitrix\Sale\Internals\OrderCoupons',
@@ -512,11 +520,29 @@ class OrderTable extends Main\Entity\DataManager
 				array('join_type' => 'LEFT')
 			),
 
+			new Main\Entity\ReferenceField(
+				'ORDER_DISCOUNT_RULES',
+				'Bitrix\Sale\Internals\OrderRules',
+				array(
+					'=ref.ORDER_ID' => 'this.ID',
+				),
+				array('join_type' => 'LEFT')
+			),
+
 			new Main\Entity\ExpressionField(
 				'BY_RECOMMENDATION',
 				"(SELECT (CASE WHEN MAX(BR.RECOMMENDATION) IS NULL OR MAX(BR.RECOMMENDATION) = '' THEN 'N' ELSE 'Y' END) FROM b_sale_basket BR WHERE BR.ORDER_ID=%s GROUP BY BR.ORDER_ID)",
 				array('ID')
-			)
+			),
+
+			new Main\Entity\ReferenceField(
+				'TRADING_PLATFORM',
+				\Bitrix\Sale\TradingPlatform\OrderTable::getEntity(),
+				array(
+					'=ref.ORDER_ID' => 'this.ID',
+				),
+				array('join_type' => 'LEFT')
+			),
 		);
 	}
 

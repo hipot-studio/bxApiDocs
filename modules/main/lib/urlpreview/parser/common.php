@@ -3,7 +3,7 @@
 namespace Bitrix\Main\UrlPreview\Parser;
 use Bitrix\Main\UrlPreview\HtmlDocument;
 use Bitrix\Main\UrlPreview\Parser;
-use Bitrix\Main\Web\HttpHeaders;
+use Bitrix\Main\Web\Uri;
 
 class Common extends Parser
 {
@@ -19,42 +19,23 @@ class Common extends Parser
 	 * @param HtmlDocument $document HTML document to scan for metadata.
 	 * @return void
 	 */
-	
-	/**
-	* <p>Нестатический метод парсит метатеги HTML документа и заполняет поля метаданных документа.</p>
-	*
-	*
-	* @param mixed $Bitrix  HTML документ для сканирования метаданных
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $UrlPreview  
-	*
-	* @param HtmlDocument $document  
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/urlpreview/parser/common/handle.php
-	* @author Bitrix
-	*/
 	public function handle(HtmlDocument $document)
 	{
-		if(strlen($document->getTitle()) == 0)
+		if($document->getTitle() == '')
 		{
 			$document->setTitle($this->getTitle($document));
 		}
 
-		if(strlen($document->getDescription()) == 0)
+		if($document->getDescription() == '')
 		{
 			$document->setDescription($document->getMetaContent('description'));
 		}
 
 		$this->imgElements = $document->extractElementAttributes('img');
-		if(strlen($document->getImage()) == 0)
+		if($document->getImage() == '')
 		{
 			$image = $this->getImage($document);
-			if(strlen($image) > 0)
+			if($image <> '')
 			{
 				$document->setImage($image);
 			}
@@ -71,6 +52,21 @@ class Common extends Parser
 				}
 			}
 		}
+		if($document->getExtraField('VIDEO') == '')
+		{
+			preg_match_all("/<video.+?<\/video>/mis", $document->getHtml(), $videoTags);
+			foreach($videoTags[0] as $videoTag)
+			{
+				$videoInfo = $this->getVideoInfo($videoTag);
+				if(!empty($videoInfo))
+				{
+					$document->setExtraField('VIDEO', $videoInfo['src']);
+					$document->setExtraField('VIDEO_TYPE', $videoInfo['type']);
+					$document->setExtraField('VIDEO_WIDTH', $videoInfo['width']);
+					$document->setExtraField('VIDEO_HEIGHT', $videoInfo['height']);
+				}
+			}
+		}
 	}
 
 	/**
@@ -80,13 +76,13 @@ class Common extends Parser
 	protected function getTitle(HtmlDocument $document)
 	{
 		$title = $document->getMetaContent('title');
-		if(strlen($title) > 0)
+		if($title <> '')
 		{
 			return $title;
 		}
 
 		preg_match('/<title>(.+?)<\/title>/mis', $document->getHtml(), $matches);
-		return (isset($matches[1]) ? $matches[1] : null);
+		return ($matches[1] ?? null);
 	}
 
 	/**
@@ -96,7 +92,7 @@ class Common extends Parser
 	protected function getImage(HtmlDocument $document)
 	{
 		$result = $document->getLinkHref('image_src');
-		if(strlen($result) > 0)
+		if($result <> '')
 		{
 			return $result;
 		}
@@ -155,5 +151,78 @@ class Common extends Parser
 			}
 		}
 		return $result;
+	}
+
+	/**
+	 * Parse one <video> tag and try to get valid information off it.
+	 *
+	 * @param string $html - one <video> from the document.
+	 * @return array
+	 */
+	protected function getVideoInfo($html = '')
+	{
+		$maxWeight = -1;
+		$result = array();
+		$uri = new Uri('/');
+		$document = new HtmlDocument($html, $uri);
+		$videoElements = $document->extractElementAttributes('video');
+		foreach ($videoElements as $videoElement)
+		{
+			if (!isset($videoElement['src']))
+			{
+				$sourceElements = $document->extractElementAttributes('source');
+				foreach ($sourceElements as $sourceElement)
+				{
+					if (
+						isset($sourceElement['type'])
+						&& $this->isValidVideoMimeType($sourceElement['type'])
+					)
+					{
+						$videoElement['src'] = $sourceElement['src'];
+						$videoElement['type'] = $sourceElement['type'];
+						break;
+					}
+				}
+			}
+			if (isset($videoElement['src']))
+			{
+				if (
+					(isset($videoElement['width']) &&
+					isset($videoElement['height']) &&
+					(int)$videoElement['width'] * (int)$videoElement['height'] > $maxWeight) ||
+					(empty($result))
+				)
+				{
+					$result = $videoElement;
+					$maxWeight = 0;
+					if(isset($videoElement['width']) && isset($videoElement['height']))
+					{
+						$maxWeight = (int)$videoElement['width'] * (int)$videoElement['height'];
+					}
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Returns true if $type is a valid video mime-type.
+	 *
+	 * @param string $type
+	 * @return bool
+	 */
+	protected function isValidVideoMimeType($type = '')
+	{
+		if(empty($type))
+		{
+			return false;
+		}
+
+		static $validTypes = array(
+			'video/mp4', 'video/x-flv', 'video/webm', 'video/ogg', 'video/quicktime'
+		);
+
+		return in_array($type, $validTypes);
 	}
 }

@@ -1,193 +1,282 @@
-<?
-IncludeModuleLangFile(__FILE__);
+<?php
+
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ModuleManager;
+use Bitrix\Iblock\Component\Tools;
+use Bitrix\Iblock\PropertyTable;
 
 class CIBlockFormatProperties
 {
-	
-	/**
-	* <p>Метод помогает компонентам показать значения свойства элемента. Вынесен в модуль для унификации отображения. Метод статический.</p>
-	*
-	*
-	* @param array $arItem  Массив полей элемента.
-	*
-	* @param array $arProperty  Массив полей свойства (как его возвращает метод <a
-	* href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockelement/getproperty.php">CIBlockElement::GetProperty</a>).
-	*
-	* @param string $event1  Метка для создания события перехода по ссылке в случае, когда
-	* установлен модуль <b>Веб-аналитика</b>.
-	*
-	* @return array <p>Массив полей элемента.</p><p></p><div class="note"> <b>Примечание:</b> метод в
-	* поле DISPLAY_VALUE выводит только активные по дате элементы
-	* (используется фильтр на уровне ядра, поэтому вывести ссылки на
-	* неактивные элементы не получится стандартными средствами).
-	* </div><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockformatproperties/getdisplayvalue.php
-	* @author Bitrix
-	*/
-	public static function GetDisplayValue($arItem, $arProperty, $event1)
+	private static ?bool $b24Installed = null;
+
+	private static array $userTypeCache = [];
+
+	private static array $nameCache = [
+		PropertyTable::TYPE_ELEMENT => [],
+		PropertyTable::TYPE_SECTION => [],
+	];
+
+	private const USER_TYPE = 'UserType';
+
+	public static function GetDisplayValue($arItem, $arProperty, $event1 = '')
 	{
-		static $installedStatictic = null;
-		if (null === $installedStatictic)
+		if (self::$b24Installed === null)
 		{
-			$installedStatictic = \Bitrix\Main\ModuleManager::isModuleInstalled('statistic');
-		}
-		$arUserTypeFormat = false;
-		if(isset($arProperty["USER_TYPE"]) && !empty($arProperty["USER_TYPE"]))
-		{
-			$arUserType = CIBlockProperty::GetUserType($arProperty["USER_TYPE"]);
-			if(isset($arUserType["GetPublicViewHTML"]))
-				$arUserTypeFormat = $arUserType["GetPublicViewHTML"];
+			self::$b24Installed = ModuleManager::isModuleInstalled('bitrix24');
 		}
 
-		static $CACHE = array("E"=>array(),"G"=>array());
-		if($arUserTypeFormat)
+		$arProperty['RAW_PROPERTY_TYPE'] = $arProperty['PROPERTY_TYPE'];
+		/** @var array $arUserTypeFormat */
+		$arUserTypeFormat = false;
+		if (!empty($arProperty['USER_TYPE']))
 		{
-			if($arProperty["MULTIPLE"]=="N" || !is_array($arProperty["~VALUE"]))
-				$arValues = array($arProperty["~VALUE"]);
+			$userTypeId = $arProperty['USER_TYPE'];
+			if (!isset(self::$userTypeCache[$userTypeId]))
+			{
+				self::$userTypeCache[$userTypeId] = false;
+				$arUserType = CIBlockProperty::GetUserType($userTypeId);
+				if (isset($arUserType['GetPublicViewHTML']))
+				{
+					self::$userTypeCache[$userTypeId] = $arUserType['GetPublicViewHTML'];
+				}
+				unset($arUserType);
+			}
+			$arUserTypeFormat = self::$userTypeCache[$userTypeId];
+		}
+
+		if ($arUserTypeFormat)
+		{
+			$arProperty['PROPERTY_TYPE'] = self::USER_TYPE;
+			if ($arProperty['MULTIPLE'] === 'N' || !is_array($arProperty['~VALUE']))
+			{
+				$arValues = [$arProperty['~VALUE']];
+			}
 			else
-				$arValues = $arProperty["~VALUE"];
+			{
+				$arValues = $arProperty['~VALUE'];
+			}
 		}
 		else
 		{
-			if(is_array($arProperty["VALUE"]))
-				$arValues = $arProperty["VALUE"];
+			if (is_array($arProperty['VALUE']))
+			{
+				$arValues = $arProperty['VALUE'];
+			}
 			else
-				$arValues = array($arProperty["VALUE"]);
+			{
+				$arValues = [$arProperty['VALUE']];
+			}
 		}
-		$arDisplayValue = array();
-		$arFiles = array();
-		$arLinkElements = array();
-		$arLinkSections = array();
-		foreach($arValues as $val)
+		$arDisplayValue = [];
+
+		switch ($arProperty['PROPERTY_TYPE'])
 		{
-			if($arUserTypeFormat)
-			{
-				$arDisplayValue[] = call_user_func_array($arUserTypeFormat,
-					array(
-						$arProperty,
-						array("VALUE" => $val),
-						array(),
-					));
-			}
-			elseif($arProperty["PROPERTY_TYPE"] == "E")
-			{
-				if(intval($val) > 0)
+			case self::USER_TYPE:
+				foreach ($arValues as $val)
 				{
-					if(!isset($CACHE["E"][$val]))
+					$arDisplayValue[] = (string)call_user_func_array(
+						$arUserTypeFormat,
+						[
+							$arProperty,
+							['VALUE' => $val],
+							[],
+						]
+					);
+				}
+				break;
+			case PropertyTable::TYPE_ELEMENT:
+				$arLinkElements = [];
+				foreach ($arValues as $val)
+				{
+					$val = (int)$val;
+					if ($val > 0)
 					{
-						//USED TO GET "LINKED" ELEMENTS
-						$arLinkFilter = array (
-							"ID" => $val,
-							"ACTIVE" => "Y",
-							"ACTIVE_DATE" => "Y",
-							"CHECK_PERMISSIONS" => "Y",
-						);
-						$rsLink = CIBlockElement::GetList(
-							array(),
-							$arLinkFilter,
-							false,
-							false,
-							array("ID", "IBLOCK_ID", "NAME", "DETAIL_PAGE_URL", "PREVIEW_PICTURE", "DETAIL_PICTURE", "SORT")
-						);
-						$CACHE["E"][$val] = $rsLink->GetNext();
-					}
-					if(is_array($CACHE["E"][$val]))
-					{
-						$arDisplayValue[]='<a href="'.$CACHE["E"][$val]["DETAIL_PAGE_URL"].'">'.$CACHE["E"][$val]["NAME"].'</a>';
-						$arLinkElements[$val] = $CACHE["E"][$val];
+						if (!isset(self::$nameCache[PropertyTable::TYPE_ELEMENT][$val]))
+						{
+							//USED TO GET "LINKED" ELEMENTS
+							$rsLink = CIBlockElement::GetList(
+								[],
+								[
+									'ID' => $val,
+									'ACTIVE' => 'Y',
+									'ACTIVE_DATE' => 'Y',
+									'CHECK_PERMISSIONS' => 'Y',
+									'MIN_PERMISSION' => CIBlockRights::PUBLIC_READ,
+								],
+								false,
+								false,
+								[
+									'ID',
+									'IBLOCK_ID',
+									'NAME',
+									'DETAIL_PAGE_URL',
+									'PREVIEW_PICTURE',
+									'DETAIL_PICTURE',
+									'SORT',
+								]
+							);
+							self::$nameCache[PropertyTable::TYPE_ELEMENT][$val] = $rsLink->GetNext();
+							unset($rsLink);
+						}
+						if (is_array(self::$nameCache[PropertyTable::TYPE_ELEMENT][$val]))
+						{
+							$row = self::$nameCache[PropertyTable::TYPE_ELEMENT][$val];
+							if (self::$b24Installed)
+							{
+								$arDisplayValue[] = $row['NAME'];
+							}
+							else
+							{
+								$arDisplayValue[] = '<a href="' . $row['DETAIL_PAGE_URL'] . '">' . $row['NAME'] . '</a>';
+							}
+							$arLinkElements[$val] = $row;
+							unset($row);
+						}
 					}
 				}
-			}
-			elseif($arProperty["PROPERTY_TYPE"] == "G")
-			{
-				if(intval($val) > 0)
+				$arProperty['LINK_ELEMENT_VALUE'] = (!empty($arLinkElements) ? $arLinkElements : false);
+				unset($arLinkElements);
+				break;
+			case PropertyTable::TYPE_SECTION:
+				$arLinkSections = [];
+				foreach ($arValues as $val)
 				{
-					if(!isset($CACHE["G"][$val]))
+					$val = (int)$val;
+					if ($val > 0)
 					{
-						//USED TO GET SECTIONS NAMES
-						$arSectionFilter = array (
-							"ID" => $val,
-						);
-						$rsSection = CIBlockSection::GetList(
-							array(),
-							$arSectionFilter,
-							false,
-							array("ID", "IBLOCK_ID", "NAME", "SECTION_PAGE_URL", "PICTURE", "DETAIL_PICTURE", "SORT")
-						);
-						$CACHE["G"][$val] = $rsSection->GetNext();
-					}
-					if(is_array($CACHE["G"][$val]))
-					{
-						$arDisplayValue[]='<a href="'.$CACHE["G"][$val]["SECTION_PAGE_URL"].'">'.$CACHE["G"][$val]["NAME"].'</a>';
-						$arLinkSections[$val] = $CACHE["G"][$val];
+						if (!isset(self::$nameCache[PropertyTable::TYPE_SECTION][$val]))
+						{
+							//USED TO GET SECTIONS NAMES
+							$rsSection = CIBlockSection::GetList(
+								[],
+								[
+									'ID' => $val,
+									'CHECK_PERMISSIONS' => 'Y',
+									'MIN_PERMISSION' => CIBlockRights::PUBLIC_READ,
+								],
+								false,
+								[
+									'ID',
+									'IBLOCK_ID',
+									'NAME',
+									'SECTION_PAGE_URL',
+									'PICTURE',
+									'DETAIL_PICTURE',
+									'SORT',
+								]
+							);
+							self::$nameCache[PropertyTable::TYPE_SECTION][$val] = $rsSection->GetNext();
+							unset($rsSection);
+						}
+						if (is_array(self::$nameCache[PropertyTable::TYPE_SECTION][$val]))
+						{
+							$row = self::$nameCache[PropertyTable::TYPE_SECTION][$val];
+							if (self::$b24Installed)
+							{
+								$arDisplayValue[] = $row['NAME'];
+							}
+							else
+							{
+								$arDisplayValue[] = '<a href="' . $row['SECTION_PAGE_URL'] . '">' . $row['NAME'] . '</a>';
+							}
+							$arLinkSections[$val] = self::$nameCache[PropertyTable::TYPE_SECTION][$val];
+						}
 					}
 				}
-			}
-			elseif($arProperty["PROPERTY_TYPE"]=="L")
-			{
-				$arDisplayValue[] = $val;
-			}
-			elseif($arProperty["PROPERTY_TYPE"]=="F")
-			{
-				if($arFile = CFile::GetFileArray($val))
+				$arProperty['LINK_SECTION_VALUE'] = (!empty($arLinkSections) ? $arLinkSections : false);
+				unset($arLinkSections);
+				break;
+			case PropertyTable::TYPE_LIST:
+				$isCheckBox = Tools::isCheckboxProperty($arProperty);
+				foreach ($arValues as $val)
 				{
-					$arFiles[] = $arFile;
-					if($installedStatictic)
-						$arDisplayValue[] =  '<a href="'.htmlspecialcharsbx("/bitrix/redirect.php?event1=".urlencode($event1)."&event2=".urlencode($arFile["SRC"])."&event3=".urlencode($arFile["ORIGINAL_NAME"])."&goto=".urlencode($arFile["SRC"])).'">'.GetMessage('IBLOCK_DOWNLOAD').'</a>';
+					$val = (string)$val;
+					if ($isCheckBox)
+					{
+						if ($val === Tools::CHECKBOX_VALUE_YES)
+						{
+							$arDisplayValue[] = Loc::getMessage('IBLOCK_FORMATPROPS_PROPERTY_YES');
+						}
+						else
+						{
+							$arDisplayValue[] = Loc::getMessage('IBLOCK_FORMATPROPS_PROPERTY_NO');
+						}
+					}
 					else
-						$arDisplayValue[] =  '<a href="'.htmlspecialcharsbx($arFile["SRC"]).'">'.GetMessage('IBLOCK_DOWNLOAD').'</a>';
+					{
+						if ($val !== '')
+						{
+							$arDisplayValue[] = $val;
+						}
+					}
 				}
-			}
-			else
-			{
-				$trimmed = trim($val);
-				if (strpos($trimmed, "http") === 0)
+				unset($isCheckBox);
+				break;
+			case PropertyTable::TYPE_FILE:
+				$arFiles = [];
+				foreach ($arValues as $val)
 				{
-					if($installedStatictic)
-						$arDisplayValue[] =  '<a href="'.htmlspecialcharsbx("/bitrix/redirect.php?event1=".urlencode($event1)."&event2=".urlencode($trimmed)."&event3=".urlencode($arItem["NAME"])."&goto=".urlencode($trimmed)).'">'.$trimmed.'</a>';
-					else
-						$arDisplayValue[] =  '<a href="'.htmlspecialcharsbx($trimmed).'">'.$trimmed.'</a>';
+					if ($arFile = CFile::GetFileArray($val))
+					{
+						$arFiles[] = $arFile;
+						$arDisplayValue[] =
+							'<a href="' . htmlspecialcharsbx($arFile['SRC']) . '">'
+							. Loc::getMessage('IBLOCK_DOWNLOAD')
+							. '</a>'
+						;
+					}
 				}
-				elseif (strpos($trimmed, "www") === 0)
+				$fileCount = count($arFiles);
+				if ($fileCount == 1)
 				{
-					if($installedStatictic)
-						$arDisplayValue[] =  '<a href="'.htmlspecialcharsbx("/bitrix/redirect.php?event1=".urlencode($event1)."&event2=".urlencode("http://".$trimmed)."&event3=".urlencode($arItem["NAME"])."&goto=".urlencode("http://".$trimmed)).'">'.$trimmed.'</a>';
-					else
-						$arDisplayValue[] =  '<a href="'.htmlspecialcharsbx("http://".$trimmed).'">'.$trimmed.'</a>';
+					$arProperty['FILE_VALUE'] = $arFiles[0];
+				}
+				elseif ($fileCount > 1)
+				{
+					$arProperty['FILE_VALUE'] = $arFiles;
 				}
 				else
-					$arDisplayValue[] = $val;
-			}
+				{
+					$arProperty['FILE_VALUE'] = false;
+				}
+				unset($fileCount, $arFiles);
+				break;
+			default:
+				foreach ($arValues as $val)
+				{
+					$trimmed = trim((string)$val);
+					if (strpos($trimmed, 'http') === 0)
+					{
+						$arDisplayValue[] =  '<a href="' . htmlspecialcharsbx($trimmed) . '">' . $trimmed . '</a>';
+					}
+					elseif (strpos($trimmed, 'www') === 0)
+					{
+						$arDisplayValue[] =  '<a href="' . htmlspecialcharsbx('https://' . $trimmed) . '">' . $trimmed . '</a>';
+					}
+					else
+					{
+						$arDisplayValue[] = $val;
+					}
+				}
+				break;
 		}
 
 		$displayCount = count($arDisplayValue);
 		if ($displayCount == 1)
-			$arProperty["DISPLAY_VALUE"] = $arDisplayValue[0];
+		{
+			$arProperty['DISPLAY_VALUE'] = $arDisplayValue[0];
+		}
 		elseif ($displayCount > 1)
-			$arProperty["DISPLAY_VALUE"] = $arDisplayValue;
+		{
+			$arProperty['DISPLAY_VALUE'] = $arDisplayValue;
+		}
 		else
-			$arProperty["DISPLAY_VALUE"] = false;
+		{
+			$arProperty['DISPLAY_VALUE'] = false;
+		}
 
-		if ($arProperty["PROPERTY_TYPE"]=="F")
-		{
-			$fileCount = count($arFiles);
-			if ($fileCount == 1)
-				$arProperty["FILE_VALUE"] = $arFiles[0];
-			elseif ($fileCount > 1)
-				$arProperty["FILE_VALUE"] = $arFiles;
-			else
-				$arProperty["FILE_VALUE"] = false;
-		}
-		elseif ($arProperty['PROPERTY_TYPE'] == 'E')
-		{
-			$arProperty['LINK_ELEMENT_VALUE'] = (!empty($arLinkElements) ? $arLinkElements : false);
-		}
-		elseif ($arProperty['PROPERTY_TYPE'] == 'G')
-		{
-			$arProperty['LINK_SECTION_VALUE'] = (!empty($arLinkSections) ? $arLinkSections : false);
-		}
+		$arProperty['PROPERTY_TYPE'] = $arProperty['RAW_PROPERTY_TYPE'];
+		unset($arProperty['RAW_PROPERTY_TYPE']);
 
 		return $arProperty;
 	}
@@ -197,35 +286,27 @@ class CIBlockFormatProperties
 	 * @param int $timestamp
 	 * @return string
 	 */
-	
-	/**
-	* <p>Конвертирует дату в нужный формат. Доступные форматы можно посмотреть, вызвав <b>CIBlockParameters::GetDateFormat</b>. Метод статический.</p> <p></p> <div class="note"> <b>Примечание:</b> является функцией-оберткой для <a href="http://dev.1c-bitrix.ru/api_help/main/functions/date/formatdate.php">FormatDate</a>.</div>
-	*
-	*
-	* @param string $format  Формат даты/времени. Может дополнительно принимать 2 значения:
-	* <i>SHORT</i> и <i>FULL</i> (для них берется формат даты или времени для
-	* сайта).
-	*
-	* @param string $timestamp  Метка времени в Unix формате.
-	*
-	* @return string <p>Отформатированная строка.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockformatproperties/dateformat.php
-	* @author Bitrix
-	*/
 	public static function DateFormat($format, $timestamp)
 	{
 		global $DB;
 
-		switch($format)
+		switch ($format)
 		{
-		case "SHORT":
-			return FormatDate($DB->DateFormatToPHP(FORMAT_DATE), $timestamp);
-		case "FULL":
-			return FormatDate($DB->DateFormatToPHP(FORMAT_DATETIME), $timestamp);
-		default:
-			return FormatDate($format, $timestamp);
+			case 'SHORT':
+				return FormatDate($DB->DateFormatToPHP(FORMAT_DATE), $timestamp);
+			case 'FULL':
+				return FormatDate($DB->DateFormatToPHP(FORMAT_DATETIME), $timestamp);
+			default:
+				return FormatDate($format, $timestamp);
 		}
+	}
+
+	public static function clearCache(): void
+	{
+		self::$userTypeCache = [];
+		self::$nameCache = [
+			PropertyTable::TYPE_ELEMENT => [],
+			PropertyTable::TYPE_SECTION => [],
+		];
 	}
 }

@@ -1,11 +1,17 @@
 <?php
-
 IncludeModuleLangFile(__FILE__);
+
+use Bitrix\Crm\Security\Role\Model\RolePermissionTable;
+use Bitrix\Crm\Security\Role\Model\RoleRelationTable;
+use Bitrix\Crm\Security\Role\RolePermission;
+use Bitrix\Main;
 
 class CCrmRole
 {
 	protected $cdb = null;
-	private static $PERMISSIONS_BY_USER = array();
+
+	private const CACHE_TIME = 8640000; // 100 days
+	private const CACHE_PATH = '/crm/user_permission_roles/';
 
 	function __construct()
 	{
@@ -31,7 +37,25 @@ class CCrmRole
 				'FIELD_NAME' => 'R.NAME',
 				'FIELD_TYPE' => 'string',
 				'JOIN' => false
-			)
+			),
+			'IS_SYSTEM' => array(
+				'TABLE_ALIAS' => 'R',
+				'FIELD_NAME' => 'R.IS_SYSTEM',
+				'FIELD_TYPE' => 'string',
+				'JOIN' => false
+			),
+			'CODE' => array(
+				'TABLE_ALIAS' => 'R',
+				'FIELD_NAME' => 'R.CODE',
+				'FIELD_TYPE' => 'string',
+				'JOIN' => false
+			),
+			'GROUP_CODE' => array(
+				'TABLE_ALIAS' => 'R',
+				'FIELD_NAME' => 'R.GROUP_CODE',
+				'FIELD_TYPE' => 'string',
+				'JOIN' => false
+			),
 		);
 
 		$obQueryWhere = new CSQLWhere();
@@ -50,8 +74,8 @@ class CCrmRole
 			$arOrder = Array('ID' => 'DESC');
 		foreach ($arOrder as $by => $order)
 		{
-			$by = strtoupper($by);
-			$order = strtolower($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtolower($order);
 			if($order != 'asc')
 				$order = 'desc';
 
@@ -71,7 +95,7 @@ class CCrmRole
 
 		$sSql = "
 			SELECT
-				ID, NAME
+				ID, NAME, IS_SYSTEM, CODE, GROUP_CODE
 			FROM
 				b_crm_role R
 			WHERE
@@ -93,10 +117,16 @@ class CCrmRole
 		return $obRes;
 	}
 
-	public function SetRelation($arRelation)
+	public function SetRelation($arRelation, $ignoreSystem = true)
 	{
+		$this->log('SetRelation', $arRelation);
 		global $DB;
-		$sSql = 'DELETE FROM b_crm_role_relation';
+		
+		$sSql = $ignoreSystem
+			? 'DELETE FROM b_crm_role_relation WHERE ROLE_ID IN (SELECT ID FROM b_crm_role WHERE IS_SYSTEM != \'Y\')'
+			: 'DELETE FROM b_crm_role_relation'
+		;
+		
 		$DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
 		foreach ($arRelation as $sRel => $arRole)
 		{
@@ -134,20 +164,26 @@ class CCrmRole
 	// BX_CRM_PERM_NONE  - not supported
 	static public function GetRoleByAttr($permEntity, $permAttr = CCrmPerms::PERM_SELF, $permType = 'READ')
 	{
-		global $DB;
-		$permEntity = $DB->ForSql($permEntity);
-		$permAttr = $DB->ForSql($permAttr);
-		$permType = $DB->ForSql($permType);
-		$sSql = "
-			SELECT ROLE_ID
-			FROM b_crm_role_perms
-			WHERE ENTITY = '$permEntity' AND PERM_TYPE = '$permType' AND ATTR >= '$permAttr'";
+		$dbRes = RolePermissionTable::getList([
+			'select' => [
+				'ROLE_ID',
+			],
+			'filter' => [
+				'=ENTITY' => (string)$permEntity,
+				'=PERM_TYPE' => (string)$permType,
+				'>=ATTR' => (string)$permAttr,
+			],
+			'cache' => [
+				'ttl' => 84600,
+			],
+		]);
+		$result = [];
+		while ($row = $dbRes->fetch())
+		{
+			$result[] = $row['ROLE_ID'];
+		}
 
-		$obRes = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
-		$arResult = array();
-		while ($arRow = $obRes->Fetch())
-			$arResult[] = $arRow['ROLE_ID'];
-		return $arResult;
+		return $result;
 	}
 
 	static public function GetCalculateRolePermsByRelation($arRel)
@@ -159,7 +195,7 @@ class CCrmRole
 			return $arRel;
 
 		foreach ($arRel as &$sRel)
-			$sRel = $DB->ForSql(strtoupper($sRel));
+			$sRel = $DB->ForSql(mb_strtoupper($sRel));
 		$sin = implode("','", $arRel);
 
 		if (isset($arResult[$sin]))
@@ -189,48 +225,68 @@ class CCrmRole
 		return $_arResult;
 	}
 
-	static public function GetUserPerms($userID)
+	static public function GetUserPerms($userId)
 	{
-		global $DB;
-
-		$userID = intval($userID);
-		if($userID <= 0)
+		$userId = intval($userId);
+		if($userId <= 0)
 		{
-			return array();
+			return [];
 		}
 
-		// Prepare user codes if need
-		$CAccess = new CAccess();
-		$CAccess->UpdateCodes(array('USER_ID' => $userID));
-
-		$obRes = $DB->Query(
-			"SELECT RP.* FROM b_crm_role_perms RP INNER JOIN b_crm_role_relation RR ON RR.ROLE_ID = RP.ROLE_ID INNER JOIN b_user_access UA ON UA.ACCESS_CODE = RR.RELATION AND UA.USER_ID = $userID",
-			false,
-			'FILE: '.__FILE__.'<br /> LINE: '.__LINE__
-		);
-
-		$arResult = array();
-		while ($arRow = $obRes->Fetch())
+		static $memoryCache = [];
+		if (isset($memoryCache[$userId]))
 		{
-			$arRow['ATTR'] = trim($arRow['ATTR']);
-			if ($arRow['FIELD'] == '-')
+			return $memoryCache[$userId];
+		}
+
+		$userAccessCodes = \Bitrix\Crm\Service\Container::getInstance()
+			->getUserPermissions($userId)
+			->getAttributesProvider()
+			->getUserAttributesCodes()
+		;
+
+		$cache = Main\Application::getInstance()->getCache();
+		$cacheId = 'crm_user_permission_roles_' . $userId . '_' . md5(serialize($userAccessCodes));
+
+		if ($cache->initCache(self::CACHE_TIME, $cacheId, self::CACHE_PATH))
+		{
+			$roles = $cache->getVars();
+		}
+		else
+		{
+			$cache->startDataCache();
+			$roles = [];
+
+			if (!empty($userAccessCodes))
 			{
-				if (!isset($arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']])
-					|| $arRow['ATTR'] > $arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']])
-					$arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']] = $arRow['ATTR'];
+				$rolesRelations = RoleRelationTable::getList([
+					'filter' => [
+						'@RELATION' => $userAccessCodes,
+					],
+					'select' => [
+						'ROLE_ID'
+					]
+				]);
+				while ($roleRelation = $rolesRelations->fetch())
+				{
+					$roles[] = $roleRelation['ROLE_ID'];
+				}
 			}
-			else
-				if (!isset($arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']][$arRow['FIELD_VALUE']])
-					|| $arRow['ATTR'] > $arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']][$arRow['FIELD_VALUE']])
-					$arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']][$arRow['FIELD_VALUE']] = $arRow['ATTR'];
+			$cache->endDataCache($roles);
 		}
-		return $arResult;
+
+		$result = RolePermission::getPermissionsByRoles($roles);
+		$memoryCache[$userId] = $result;
+
+		return $result;
 	}
 
-	private static function ClearCache()
+	public static function ClearCache()
 	{
 		// Clean up cached permissions
-		self::$PERMISSIONS_BY_USER = array();
+		Main\Application::getInstance()->getCache()->cleanDir(self::CACHE_PATH);
+		RolePermissionTable::getEntity()->cleanCache();
+
 		CrmClearMenuCache();
 	}
 
@@ -260,6 +316,8 @@ class CCrmRole
 	{
 		global $DB;
 		$ID = (int)$ID;
+
+		$this->log('SetRoleRelation', ['ID' => $ID, 'RELATION' => $arRelation]);
 
 		$sSql = 'DELETE FROM b_crm_role_perms WHERE ROLE_ID = '.$ID;
 		$DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
@@ -325,7 +383,7 @@ class CCrmRole
 			if (!isset($arFields['RELATION']) || !is_array($arFields['RELATION']))
 				$arFields['RELATION'] = array();
 			$sUpdate = $DB->PrepareUpdate('b_crm_role', $arFields, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
-			if (strlen($sUpdate) > 0)
+			if ($sUpdate <> '')
 				$DB->Query("UPDATE b_crm_role SET $sUpdate WHERE ID = $ID", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
 
 			$this->SetRoleRelation($ID, $arFields['RELATION']);
@@ -337,6 +395,7 @@ class CCrmRole
 
 	public function Delete($ID)
 	{
+		$this->log('Delete', ['ID' => $ID]);
 		global $DB;
 		$ID = (int)$ID;
 		$sSql = 'DELETE FROM b_crm_role_relation WHERE ROLE_ID = '.$ID;
@@ -355,9 +414,104 @@ class CCrmRole
 		if (($ID == false || isset($arFields['NAME'])) && empty($arFields['NAME']))
 			$this->LAST_ERROR .= GetMessage('CRM_ERROR_FIELD_IS_MISSING', array('%FIELD_NAME%' => GetMessage('CRM_FIELD_NAME')))."<br />";
 
-		if(strlen($this->LAST_ERROR) > 0)
+		if($this->LAST_ERROR <> '')
 			return false;
 
 		return true;
+	}
+
+	public static function EraseEntityPermissons($entity)
+	{
+		$connection = Main\Application::getConnection();
+		$helper = $connection->getSqlHelper();
+		$entity = $helper->forSql($entity);
+		(new self())->log('EraseEntityPermissons', ['Entity' => $entity]);
+		$connection->queryExecute("DELETE FROM b_crm_role_perms WHERE ENTITY = '{$entity}'");
+		self::ClearCache();
+	}
+
+	public static function GetDefaultPermissionSet()
+	{
+		return array(
+			'READ' => array('-' => 'X'),
+			'EXPORT' => array('-' => 'X'),
+			'IMPORT' => array('-' => 'X'),
+			'ADD' => array('-' => 'X'),
+			'WRITE' => array('-' => 'X'),
+			'DELETE' => array('-' => 'X')
+		);
+	}
+
+	public static function normalizePermissions(array $permissions): array
+	{
+		foreach ($permissions as $entityTypeName => $entityPermissions)
+		{
+			if (!is_array($entityPermissions))
+			{
+				$entityPermissions = [];
+				$permissions[$entityTypeName] = [];
+			}
+
+			foreach ($entityPermissions as $permissionType => $permissionsForType)
+			{
+				if (!is_array($permissionsForType))
+				{
+					$permissionsForType = [];
+					$permissions[$entityTypeName][$permissionType] = [];
+				}
+
+				$defaultPermissionValue = '-';
+				foreach ($permissionsForType as $fieldName => $permissionValue)
+				{
+					if ($fieldName === '-') // default permission
+					{
+						$defaultPermissionValue = trim($permissionValue);
+					}
+				}
+				foreach ($permissionsForType as $fieldName => $permissionValues)
+				{
+					if ($fieldName !== '-')
+					{
+						if (!is_array($permissionValues))
+						{
+							$permissionValues = [];
+							$permissions[$entityTypeName][$permissionType][$fieldName] = [];
+						}
+						foreach ($permissionValues as $fieldValue => $permissionValue)
+						{
+							if (trim($permissionValue) === $defaultPermissionValue)
+							{
+								// if permission for this field value equals to default permission, use inheritance:
+								$permissions[$entityTypeName][$permissionType][$fieldName][$fieldValue] = '-';
+							}
+						}
+					}
+				}
+			}
+		}
+		return $permissions;
+	}
+
+	public function GetLastError(): string
+	{
+		return $this->LAST_ERROR ?? '';
+	}
+
+	/**
+	 * @internal
+	 */
+	protected function log(string $event, $extraData): void
+	{
+		if (Main\Config\Option::get('crm', '~CRM_LOG_PERMISSION_ROLE_CHANGES', 'N') !== 'Y')
+		{
+			return;
+		}
+		$logData = 'CRM_LOG_PERMISSION_ROLE_CHANGES: ' . $event . "\n";
+		$logData .= 'User: ' . \CCrmSecurityHelper::GetCurrentUserID();
+		if (!empty($extraData))
+		{
+			$logData .= "\n" . print_r($extraData, true);
+		}
+		AddMessage2Log($logData, 'crm', 10);
 	}
 }

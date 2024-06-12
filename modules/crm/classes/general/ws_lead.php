@@ -48,7 +48,7 @@ class CCrmLeadWS extends IWebService
 
 		CCrmFieldMulti::PrepareFields($arFields);
 		$CCrmUserType = new CCrmUserType($GLOBALS['USER_FIELD_MANAGER'], CCrmLead::$sUFEntityID);
-		$CCrmUserType->PrepareImport($arFields, ',');
+		$CCrmUserType->InternalizeFields($arFields, ',');
 
 		$CCrmBizProc = new CCrmBizProc('LEAD');
 		if (false === $CCrmBizProc->CheckFields(false, true))
@@ -174,7 +174,7 @@ class CCrmLeadWS extends IWebService
 		return array('GetFieldsListResult' => $fields);
 	}
 
-	public function GetWebServiceDesc()
+	public static function GetWebServiceDesc()
 	{
 		$wsdesc = new CWebServiceDesc();
 		$wsdesc->wsname = 'bitrix.crm.lead.webservice';

@@ -1,4 +1,12 @@
 <?php
+
+use Bitrix\Crm\PhaseSemantics;
+use Bitrix\Crm\Settings\Crm;
+
+/**
+ * @deprecated
+ * @see \Bitrix\Crm\Counter\EntityCounterFactory
+ */
 class CCrmUserCounter
 {
 	const Undefined = 0;
@@ -7,8 +15,10 @@ class CCrmUserCounter
 	const CurrentContactActivies = 3;
 	const CurrentLeadActivies = 4;
 	const CurrentDealActivies = 5;
-	const CurrentQuoteActivies = 6; // refresh last number in LastType constant
-	const LastType = 6;
+	const CurrentQuoteActivies = 6;
+	const CurrentDealCategoryActivities = 7; // refresh last number in LastType constant
+	const LastType = 7;
+	const CurrentOrderActivies = 8;
 
 	private $userID = 0;
 	private $typeID = 0;
@@ -16,14 +26,30 @@ class CCrmUserCounter
 	private $optionName = '';
 	private $lastCalculatedTime = null;
 	private $curValue = null;
+	private $params = array();
 
 	private static $STATUSES = array();
 
-	function __construct($userID, $typeID)
+	function __construct($userID, $typeID, array $params = null)
 	{
-		$this->userID = intval($userID);
-		$this->typeID = intval($typeID);
-		$this->code = self::ResolveCode($this->typeID);
+		if(!is_int($userID))
+		{
+			$userID = (int)$userID;
+		}
+		$this->userID = $userID;
+
+		if(!is_int($typeID))
+		{
+			$typeID = (int)$typeID;
+		}
+		$this->typeID = ($typeID);
+
+		if($params !== null)
+		{
+			$this->params = $params;
+		}
+
+		$this->code = self::ResolveCode($this->typeID, $this->params);
 		$this->optionName = $this->code !== '' ? $this->code.'_last_calc_'.SITE_ID : '';
 	}
 
@@ -48,7 +74,7 @@ class CCrmUserCounter
 		return self::$STATUSES[$id];
 	}
 
-	private static function ResolveCode($typeID)
+	private static function ResolveCode($typeID, array $params)
 	{
 		$code = '';
 		if($typeID === self::CurrentActivies)
@@ -71,11 +97,26 @@ class CCrmUserCounter
 		{
 			$code = 'crm_cur_act_deal';
 		}
-		elseif($typeID === self::CurrentQuoteActivies)
+		elseif($typeID === self::CurrentOrderActivies)
 		{
-			$code = 'crm_cur_act_quote';
+			$code = 'crm_cur_act_order';
+		}
+		elseif($typeID === self::CurrentDealCategoryActivities)
+		{
+			$categoryID = isset($params['CATEGORY_ID']) ? (int)$params['CATEGORY_ID'] : 0;
+			$code = "crm_cur_act_deal_c{$categoryID}";
 		}
 		return $code;
+	}
+
+	private function GetParamIntegerValue($name, $dafeultValue = 0)
+	{
+		return isset($this->params[$name]) ? (int)$this->params[$name] : $dafeultValue;
+	}
+
+	public function GetCode()
+	{
+		return $this->code;
 	}
 
 	public function GetValue($forceSync = false)
@@ -105,13 +146,22 @@ class CCrmUserCounter
 		$currentDayEnd = ConvertTimeStamp(mktime(23, 59, 59, date('n', $currentDay), date('j', $currentDay), date('Y', $currentDay)), 'FULL', SITE_ID);
 
 		$count = 0;
-		if($this->typeID === self::CurrentActivies)
+		if (
+			!\Bitrix\Crm\Settings\CounterSettings::getInstance()->isEnabled()
+			|| !\Bitrix\Crm\Settings\CounterSettings::getInstance()->canBeCounted()
+		)
+		{
+			$count = 0; // counters feature is completely disabled
+		}
+		elseif($this->typeID === self::CurrentActivies)
 		{
 			//Count of open user activities (start time: before tomorrow)
+			//Activities are filtered by RESPONSIBLE - we can switch off permission checking
 			$filter = array(
 				'RESPONSIBLE_ID' => $this->userID,
 				'COMPLETED' => 'N',
-				'<=START_TIME' => $currentDayEnd
+				'<=START_TIME' => $currentDayEnd,
+				'CHECK_PERMISSIONS' => 'N'
 			);
 
 			$count = CCrmActivity::GetCount($filter);
@@ -131,39 +181,20 @@ class CCrmUserCounter
 			{
 				$leadTable = CCrmLead::TABLE_NAME;
 				$activityTable = CCrmActivity::USER_ACTIVITY_TABLE_NAME;
+				$ownerTypeID = CCrmOwnerType::Lead;
 
-				$statusStr = "'CONVERTED'";
-				$statusCount = 1;
-				$statuses = self::GetStatusList('STATUS');
-				$isFound = false;
-				foreach($statuses as &$status)
-				{
-					if(!$isFound)
-					{
-						$isFound = $status['STATUS_ID'] === 'CONVERTED';
-					}
-					else
-					{
-						$statusStr .= ",'{$status['STATUS_ID']}'";
-						$statusCount++;
-						// Foolproof
-						if($statusCount === 10)
-						{
-							break;
-						}
-					}
-
-				}
-				unset($status);
-
-				global $DBType;
-				$sqlData = array(
-					'FROM' => '',
-					'WHERE' => "l.ASSIGNED_BY_ID = {$this->userID} AND l.STATUS_ID NOT IN({$statusStr}) AND l.ID NOT IN(SELECT a.OWNER_ID FROM {$activityTable} a WHERE a.USER_ID = 0 AND a.OWNER_TYPE_ID = 1)",
-					'GROUPBY' => ''
+				global $DB;
+				$dbResult = $DB->Query(
+					//"SELECT COUNT(l.ID) AS CNT FROM {$leadTable} l WHERE l.ASSIGNED_BY_ID = {$this->userID} AND l.STATUS_SEMANTIC_ID = 'P' AND l.ID NOT IN(SELECT a.OWNER_ID FROM {$activityTable} a WHERE a.USER_ID = 0 AND a.OWNER_TYPE_ID = 1)",
+					"SELECT COUNT(l.ID) AS CNT
+						FROM {$leadTable} l
+						LEFT JOIN {$activityTable} a ON a.OWNER_ID = l.ID AND a.OWNER_TYPE_ID = {$ownerTypeID} AND a.USER_ID = 0
+						WHERE l.ASSIGNED_BY_ID = {$this->userID} AND l.STATUS_SEMANTIC_ID = 'P' AND a.OWNER_ID IS NULL",
+					false,
+					'File: '.__FILE__.'<br/>Line: '.__LINE__
 				);
-
-				$count += CSqlUtil::GetRowCount($sqlData, $leadTable, 'l', $DBType);
+				$result = $dbResult->Fetch();
+				$count += is_array($result) ? intval($result['CNT']) : 0;
 			}
 		}
 		elseif($this->typeID === self::CurrentDealActivies)
@@ -173,35 +204,57 @@ class CCrmUserCounter
 			{
 				$dealTable = CCrmDeal::TABLE_NAME;
 				$activityTable = CCrmActivity::USER_ACTIVITY_TABLE_NAME;
-
-				$stageStr = "'WON'";
-				$stageCount = 1;
-				$stages = self::GetStatusList('DEAL_STAGE');
-				$isFound = false;
-				foreach($stages as &$stage)
-				{
-					if(!$isFound)
-					{
-						$isFound = $stage['STATUS_ID'] === 'WON';
-					}
-					else
-					{
-						$stageStr .= ",'{$stage['STATUS_ID']}'";
-						$stageCount++;
-						// Foolproof
-						if($stageCount === 10)
-						{
-							break;
-						}
-					}
-
-				}
-				unset($stage);
+				$ownerTypeID = CCrmOwnerType::Deal;
 
 				global $DB;
-
 				$dbResult = $DB->Query(
-					"SELECT COUNT(d.ID) AS CNT FROM {$dealTable} d WHERE d.ASSIGNED_BY_ID = {$this->userID} AND d.STAGE_ID NOT IN({$stageStr}) AND d.ID NOT IN(SELECT a.OWNER_ID FROM {$activityTable} a WHERE a.USER_ID = 0 AND a.OWNER_TYPE_ID = 2)",
+					//"SELECT COUNT(d.ID) AS CNT FROM {$dealTable} d WHERE d.ASSIGNED_BY_ID = {$this->userID} AND d.STAGE_SEMANTIC_ID = 'P' AND d.ID NOT IN(SELECT a.OWNER_ID FROM {$activityTable} a WHERE a.USER_ID = 0 AND a.OWNER_TYPE_ID = 2)",
+					"SELECT COUNT(d.ID) AS CNT
+						FROM {$dealTable} d
+						LEFT JOIN {$activityTable} a ON a.OWNER_ID = d.ID AND a.OWNER_TYPE_ID = {$ownerTypeID} AND a.USER_ID = 0
+						WHERE d.ASSIGNED_BY_ID = {$this->userID} AND d.STAGE_SEMANTIC_ID = 'P' AND a.OWNER_ID IS NULL",
+					false,
+					'File: '.__FILE__.'<br/>Line: '.__LINE__
+				);
+				$result = $dbResult->Fetch();
+				$count += is_array($result) ? intval($result['CNT']) : 0;
+			}
+		}
+		elseif($this->typeID === self::CurrentDealCategoryActivities)
+		{
+			$categoryID = $this->GetParamIntegerValue('CATEGORY_ID');
+
+			$dealTable = CCrmDeal::TABLE_NAME;
+			$activityTable = CCrmActivity::USER_ACTIVITY_TABLE_NAME;
+			global $DB;
+
+			$currentDay = time() + CTimeZone::GetOffset();
+			$currentDayEnd = ConvertTimeStamp(mktime(23, 59, 59, date('n', $currentDay), date('j', $currentDay), date('Y', $currentDay)), 'FULL', SITE_ID);
+			$currentDayEnd = $DB->CharToDateFunction($DB->ForSql($currentDayEnd), 'FULL');
+			$ownerTypeID = CCrmOwnerType::Deal;
+			$sql = "SELECT COUNT(DISTINCT a.OWNER_ID) AS CNT FROM {$activityTable} a
+				INNER JOIN {$dealTable} d ON a.OWNER_TYPE_ID = {$ownerTypeID}
+					AND a.OWNER_ID = d.ID
+					AND d.CATEGORY_ID = {$categoryID}
+					AND a.USER_ID = {$this->userID}
+					AND a.ACTIVITY_TIME <= {$currentDayEnd}";
+
+			$dbResult = $DB->Query(
+				$sql,
+				false,
+				'File: '.__FILE__.'<br/>Line: '.__LINE__
+			);
+			$result = $dbResult->Fetch();
+			$count = is_array($result) ? (int)$result['CNT'] : 0;
+
+			if(CCrmUserCounterSettings::GetValue(CCrmUserCounterSettings::ReckonActivitylessItems, true))
+			{
+				$dbResult = $DB->Query(
+					//"SELECT COUNT(d.ID) AS CNT FROM {$dealTable} d WHERE d.ASSIGNED_BY_ID = {$this->userID} AND d.STAGE_SEMANTIC_ID = 'P' AND d.CATEGORY_ID = {$categoryID} AND d.ID NOT IN(SELECT a.OWNER_ID FROM {$activityTable} a WHERE a.USER_ID = 0 AND a.OWNER_TYPE_ID = 2)",
+					"SELECT COUNT(d.ID) AS CNT
+						FROM {$dealTable} d
+						LEFT JOIN {$activityTable} a ON a.OWNER_ID = d.ID AND a.OWNER_TYPE_ID = {$ownerTypeID} AND a.USER_ID = 0
+						WHERE d.ASSIGNED_BY_ID = {$this->userID} AND d.STAGE_SEMANTIC_ID = 'P' AND d.CATEGORY_ID = {$categoryID} AND a.OWNER_ID IS NULL",
 					false,
 					'File: '.__FILE__.'<br/>Line: '.__LINE__
 				);
@@ -255,13 +308,18 @@ class CCrmUserCounter
 				$count += is_array($result) ? intval($result['CNT']) : 0;
 			}
 		}
+		elseif($this->typeID === self::CurrentOrderActivies)
+		{
+			//todo: order
+			$count = 0;
+		}
 
-		if($this->curValue !== $count)
+		if($this->GetValue() !== $count)
 		{
 			$this->curValue = $count;
 			if($this->code !== '')
 			{
-				CUserCounter::Set($this->userID, $this->code, $this->curValue, SITE_ID);
+				CUserCounter::Set($this->userID, $this->code, $this->curValue, SITE_ID, '', false);
 			}
 		}
 		$this->RefreshLastCalculatedTime();
@@ -284,22 +342,20 @@ class CCrmUserCounter
 			}
 
 			$assignedByID = isset($entity['ASSIGNED_BY_ID']) ? $entity['ASSIGNED_BY_ID'] : 0;
-			$stageID = isset($entity['STAGE_ID']) ? $entity['STAGE_ID'] : '';
-			$stages = self::GetStatusList('DEAL_STAGE');
 
-			$stageSort = 0;
-			if($stageID !== '' && isset($stages[$stageID]))
+			$stageID = isset($entity['STAGE_ID']) ? $entity['STAGE_ID'] : '';
+			$categoryID = isset($entity['CATEGORY_ID']) ? (int)$entity['CATEGORY_ID'] : 0;
+			$stageSemanticID = isset($entity['STAGE_SEMANTIC_ID']) ? $entity['STAGE_SEMANTIC_ID'] : '';
+			if($stageSemanticID === PhaseSemantics::UNDEFINED)
 			{
-				$stageSort = intval($stages[$stageID]['SORT']);
+				$stageSemanticID = CCrmDeal::GetSemanticID($stageID, $categoryID);
 			}
-			$finalSort = isset($stages['WON']) ? intval($stages['WON']['SORT']) : 0;
-			$isCompleted = $stageSort > 0 && $finalSort > 0 && $stageSort >= $finalSort;
+			$isCompleted = PhaseSemantics::isFinal($stageSemanticID);
 			if(!is_array($activity))
 			{
 				return !$isCompleted && $userID === $assignedByID
 					&& CCrmUserCounterSettings::GetValue(CCrmUserCounterSettings::ReckonActivitylessItems, true);
 			}
-
 
 			$activityResponsibleID = isset($activity['RESPONSIBLE_ID']) ? intval($activity['RESPONSIBLE_ID']) : 0;
 			if($userID !== $activityResponsibleID)
@@ -399,6 +455,14 @@ class CCrmUserCounter
 		return false;
 	}
 
+	private function GetLastCalculatedTime()
+	{
+		if($this->lastCalculatedTime === null && $this->optionName !== '')
+		{
+			$this->lastCalculatedTime = CUserOptions::GetOption('crm', $this->optionName, 0, $this->userID);
+		}
+		return $this->lastCalculatedTime;
+	}
 	private function RefreshLastCalculatedTime()
 	{
 		if($this->optionName === '')
@@ -407,7 +471,7 @@ class CCrmUserCounter
 		}
 
 		$current = mktime(0, 0, 0, date('n'), date('j'), date('Y'));
-		if($this->lastCalculatedTime !== $current)
+		if($this->GetLastCalculatedTime() !== $current)
 		{
 			$this->lastCalculatedTime = $current;
 			CUserOptions::SetOption('crm', $this->optionName, $this->lastCalculatedTime, false, $this->userID);
@@ -422,11 +486,7 @@ class CCrmUserCounter
 		}
 
 		$current = mktime(0, 0, 0, date('n'), date('j'), date('Y'));
-		if($this->lastCalculatedTime === null)
-		{
-			$this->lastCalculatedTime = CUserOptions::GetOption('crm', $this->optionName, 0, $this->userID);
-		}
-		return $this->lastCalculatedTime >= $current;
+		return $this->GetLastCalculatedTime() >= $current;
 	}
 }
 
@@ -443,7 +503,7 @@ class CCrmUserCounterSettings
 
 	private static function GetBooleanValue($settingName, $default = false)
 	{
-		return strtoupper(COption::GetOptionString('crm', $settingName, $default ? 'Y' : 'N')) !== 'N';
+		return mb_strtoupper(COption::GetOptionString('crm', $settingName, $default? 'Y' : 'N')) !== 'N';
 	}
 
 	private static function SetBooleanValue($settingName, $value)
@@ -461,6 +521,10 @@ class CCrmUserCounterSettings
 
 		if($setting === self::ReckonActivitylessItems)
 		{
+			if (Crm::isUniversalActivityScenarioEnabled())
+			{
+				return false;
+			}
 			return self::GetBooleanValue('usr_counter_reckon_items', $default);
 		}
 
@@ -478,6 +542,7 @@ class CCrmUserCounterSettings
 		if($setting === self::ReckonActivitylessItems)
 		{
 			self::SetBooleanValue('usr_counter_reckon_items', $value);
+			\Bitrix\Crm\Counter\EntityCounterManager::processSettingChange(self::ReckonActivitylessItems, $value);
 		}
 	}
 }

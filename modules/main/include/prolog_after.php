@@ -17,7 +17,7 @@ use Bitrix\Main;
 
 global $USER, $APPLICATION;
 
-// define("START_EXEC_PROLOG_AFTER_1", microtime());
+define("START_EXEC_PROLOG_AFTER_1", microtime());
 $GLOBALS["BX_STATE"] = "PA";
 
 if(!headers_sent())
@@ -65,6 +65,16 @@ if(defined("DEMO") && DEMO=="Y")
 	elseif($daysToExpire == 0)
 	{
 		echo GetMessage("expire_mess1");
+	}
+}
+elseif (defined("TIMELIMIT_EDITION") && TIMELIMIT_EDITION == "Y")
+{
+	if (defined("OLDSITEEXPIREDATE") && defined("SITEEXPIREDATE") && OLDSITEEXPIREDATE != SITEEXPIREDATE)
+		die(GetMessage("expire_mess2"));
+
+	if ($SiteExpireDate < time())
+	{
+		echo GetMessage("expire_mess_timelicense1");
 	}
 }
 
@@ -133,7 +143,7 @@ if($APPLICATION->GetShowIncludeAreas())
 		}
 	}
 }
-// define("START_EXEC_PROLOG_AFTER_2", microtime());
+define("START_EXEC_PROLOG_AFTER_2", microtime());
 $GLOBALS["BX_STATE"] = "WA";
 $APPLICATION->RestartWorkarea(true);
 

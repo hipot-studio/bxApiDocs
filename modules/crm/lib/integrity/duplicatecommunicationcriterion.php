@@ -1,16 +1,22 @@
 <?php
 namespace Bitrix\Crm\Integrity;
 use Bitrix\Main;
-use Bitrix\Crm;
+use Bitrix\Crm\CommunicationType;
+
 class DuplicateCommunicationCriterion extends DuplicateCriterion
 {
-	private static $LANG_INCLUDED = false;
+	private static $langIncluded = false;
 	protected $entityTypeID = 0;
 	protected $communicationType = '';
 	protected $value = '';
 
+	private static $entityMultiFields = array();
+
 	public function __construct($communicationType, $value)
 	{
+		parent::__construct();
+
+		$this->useStrictComparison = true;
 		$this->setCommunicationType($communicationType);
 		$this->setValue($value);
 	}
@@ -38,21 +44,57 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 		}
 		$this->value = $value;
 	}
-	/*public function prepareFilter(Crm\Mapper $mapper, DuplicateSearchParams $params)
+
+	public static function getMultifieldsValues(array $multifields, $communicationType)
 	{
-		$filter = array();
-		if($this->value !== '')
+		if($communicationType === CommunicationType::EMAIL_NAME)
 		{
-			$filter['=VALUE'] = $this->value;
-			$filter['=TYPE_ID'] = $this->type;
-			if($this->entityTypeID !== \CCrmOwnerType::Undefined)
-			{
-				$filter['=ENTITY_ID'] = \CCrmOwnerType::ResolveName($this->entityTypeID);
-			}
+			return self::extractMultifieldsValues($multifields, \CCrmFieldMulti::EMAIL);
 		}
-		return $filter;
-	}*/
-	public static function extractMultifieldsValues(array $multifiels, $type)
+		elseif($communicationType === CommunicationType::PHONE_NAME)
+		{
+			return self::extractMultifieldsValues($multifields, \CCrmFieldMulti::PHONE);
+		}
+		elseif($communicationType === CommunicationType::SLUSER_NAME)
+		{
+			return self::extractMultifieldsValues($multifields, \CCrmFieldMulti::LINK, 'USER');
+		}
+		elseif($communicationType === CommunicationType::FACEBOOK_NAME)
+		{
+			return self::extractMultifieldsValues($multifields, \CCrmFieldMulti::IM, 'FACEBOOK');
+		}
+		elseif($communicationType === CommunicationType::TELEGRAM_NAME)
+		{
+			return self::extractMultifieldsValues($multifields, \CCrmFieldMulti::IM, 'TELEGRAM');
+		}
+		elseif($communicationType === CommunicationType::VK_NAME)
+		{
+			return self::extractMultifieldsValues($multifields, \CCrmFieldMulti::IM, 'VK');
+		}
+		elseif($communicationType === CommunicationType::SKYPE_NAME)
+		{
+			return self::extractMultifieldsValues($multifields, \CCrmFieldMulti::IM, 'SKYPE');
+		}
+		elseif($communicationType === CommunicationType::BITRIX24_NAME)
+		{
+			return self::extractMultifieldsValues($multifields, \CCrmFieldMulti::IM, 'BITRIX24');
+		}
+		elseif($communicationType === CommunicationType::OPENLINE_NAME)
+		{
+			return self::extractMultifieldsValues($multifields, \CCrmFieldMulti::IM, 'OPENLINE');
+		}
+		elseif($communicationType === CommunicationType::VIBER_NAME)
+		{
+			return self::extractMultifieldsValues($multifields, \CCrmFieldMulti::IM, 'VIBER');
+		}
+		elseif($communicationType === CommunicationType::IMOL_NAME)
+		{
+			return self::extractMultifieldsValues($multifields, \CCrmFieldMulti::IM, 'IMOL');
+		}
+
+		return array();
+	}
+	public static function extractMultifieldsValues(array $multifields, $type, $valueType = '')
 	{
 		if(!is_string($type))
 		{
@@ -60,35 +102,149 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 		}
 
 		$result = array();
-		if(isset($multifiels[$type]) && is_array($multifiels[$type]))
+		if(isset($multifields[$type]) && is_array($multifields[$type]))
 		{
-			foreach($multifiels[$type] as &$data)
+			$checkValueType = $valueType !== '';
+			foreach($multifields[$type] as &$data)
 			{
-				if(isset($data['VALUE']) && $data['VALUE'] !== '')
+				$curentValue = isset($data['VALUE']) ? $data['VALUE'] : '';
+				$currentValueType = isset($data['VALUE_TYPE']) ? $data['VALUE_TYPE'] : '';
+				if($curentValue === '' || ($checkValueType && $currentValueType !== $valueType))
 				{
-					$result[] = $data['VALUE'];
+					continue;
 				}
+
+				$result[] = $curentValue;
 			}
 			unset($data);
 		}
 		return $result;
 	}
-	public static function normalizePhone($value)
+
+	protected static function invalidateCache($entityTypeID, $entityID)
 	{
-		if(!is_string($value) || $value === '')
+		if(isset(self::$entityMultiFields[$entityTypeID]))
 		{
-			return '';
+			unset(self::$entityMultiFields[$entityTypeID][$entityID]);
+		}
+	}
+
+	public static function processMultifieldsChange($entityTypeID, $entityID)
+	{
+		self::invalidateCache($entityTypeID, $entityID);
+	}
+
+	public static function prepareEntityMultifieldValues($entityTypeID, $entityID, array $options = null)
+	{
+		if(!is_array($options))
+		{
+			$options = array();
 		}
 
-		$result = \NormalizePhone($value, 1);
-		if(is_string($result) && $result !== '')
+		if(isset($options['invalidateCache']) && $options['invalidateCache'])
 		{
-			return $result;
+			self::invalidateCache($entityTypeID, $entityID);
 		}
 
-		// Is not valid phone - just clear value
-		$result = preg_replace("/[^0-9\#\*]/i", "", $value);
-		return is_string($result) ? $result : '';
+		if(isset(self::$entityMultiFields[$entityTypeID])
+			&& is_array(self::$entityMultiFields[$entityTypeID])
+			&& isset(self::$entityMultiFields[$entityTypeID][$entityID])
+		)
+		{
+			return self::$entityMultiFields[$entityTypeID][$entityID];
+		}
+
+		if(!isset(self::$entityMultiFields[$entityTypeID]))
+		{
+			self::$entityMultiFields[$entityTypeID] = array();
+		}
+
+		$dbResult = \CCrmFieldMulti::GetListEx(
+			array(),
+			array(
+				'=ENTITY_ID' => \CCrmOwnerType::ResolveName($entityTypeID),
+				'=ELEMENT_ID' => $entityID,
+				'@TYPE_ID' => CommunicationType::getMultiFieldTypeIDs()
+			),
+			false,
+			false,
+			array('TYPE_ID', 'VALUE', 'VALUE_TYPE')
+		);
+
+		$results = array();
+		if(is_object($dbResult))
+		{
+			while($fields = $dbResult->Fetch())
+			{
+				$typeID = isset($fields['TYPE_ID']) ? $fields['TYPE_ID'] : '';
+				$value = isset($fields['VALUE']) ? $fields['VALUE'] : '';
+				$valueType = isset($fields['VALUE_TYPE']) ? $fields['VALUE_TYPE'] : '';
+				if($typeID === '' || $value === '')
+				{
+					continue;
+				}
+
+				if(!isset($results[$typeID]))
+				{
+					$results[$typeID] = array();
+				}
+				$results[$typeID][] = array('VALUE'=> $value, 'VALUE_TYPE' => $valueType);
+			}
+		}
+		self::$entityMultiFields[$entityTypeID][$entityID] = $results;
+		return $results;
+	}
+	public static function prepareBatchEntityMultifieldValues($entityTypeID, array $entityIDs)
+	{
+		$dbResult = \CCrmFieldMulti::GetListEx(
+			array(),
+			array(
+				'=ENTITY_ID' => \CCrmOwnerType::ResolveName($entityTypeID),
+				'@ELEMENT_ID' => $entityIDs,
+				'@TYPE_ID' => CommunicationType::getMultiFieldTypeIDs()
+			)
+		);
+
+		$results = array();
+		if(is_object($dbResult))
+		{
+			while($fields = $dbResult->Fetch())
+			{
+				$elementID = isset($fields['ELEMENT_ID']) ? $fields['ELEMENT_ID'] : '';
+				$typeID = isset($fields['TYPE_ID']) ? $fields['TYPE_ID'] : '';
+				$value = isset($fields['VALUE']) ? $fields['VALUE'] : '';
+				$valueType = isset($fields['VALUE_TYPE']) ? $fields['VALUE_TYPE'] : '';
+				if($elementID === '' || $typeID === '' || $value === '')
+				{
+					continue;
+				}
+
+				if(!isset($results[$elementID]))
+				{
+					$results[$elementID] = array();
+				}
+
+				if(!isset($results[$elementID][$typeID]))
+				{
+					$results[$elementID][$typeID] = array();
+				}
+				$results[$elementID][$typeID][] = array('VALUE'=> $value, 'VALUE_TYPE' => $valueType);
+			}
+		}
+		return $results;
+	}
+	public static function prepareBulkData(array $multifields)
+	{
+		$results = array();
+		foreach(CommunicationType::getAllNames() as $typeName)
+		{
+			$values = self::getMultifieldsValues($multifields, $typeName);
+			if(!empty($values))
+			{
+				$results[$typeName] = $values;
+			}
+		}
+		return $results;
 	}
 	public static function prepareCodes($communicationType, array $values)
 	{
@@ -98,7 +254,7 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 		}
 
 		$result = array();
-		if($communicationType === 'PHONE')
+		if($communicationType === CommunicationType::PHONE_NAME)
 		{
 			foreach($values as $value)
 			{
@@ -109,22 +265,49 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 				}
 			}
 		}
-		else
+		else    // EMAIL_NAME || SLUSER_NAME
 		{
 			foreach($values as $value)
 			{
-				if(is_string($value) && $value !== '')
+				if(!is_string($value))
 				{
-					$result[] = strtolower($value);
+					continue;
+				}
+
+				$value = trim($value);
+				if($value !== '')
+				{
+					$result[] = mb_strtolower($value);
 				}
 			}
 		}
-		return $result;
+		return array_unique($result);
 	}
 	public static function prepareCode($communicationType, $value)
 	{
 		$result = self::prepareCodes($communicationType, array($value));
 		return !empty($result) ? $result[0] : $value;
+	}
+	public static function sanitizePhone($value)
+	{
+		return preg_replace("/[^0-9\#\*,;]/i", "", $value);
+	}
+	public static function normalizePhone($value)
+	{
+		if(!is_string($value) || $value === '')
+		{
+			return '';
+		}
+
+		$result = \NormalizePhone($value, 1);
+		if($result === false || $result == '')
+		{
+			// Is not valid phone - just clear value
+			$result = preg_replace("/[^0-9\#\*,;]/i", "", $value);
+		}
+
+		$result = preg_replace('/(\d+)([;#]*)([\d,]*)/', '$1', $result);
+		return is_string($result) ? $result : '';
 	}
 	public static function register($entityTypeID, $entityID, $type, array $values, $isRaw = true)
 	{
@@ -150,17 +333,9 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 
 		DuplicateCommunicationMatchCodeTable::replaceValues($entityTypeID, $entityID, $type, $values);
 
-		$typeID = DuplicateIndexType::UNDEFINED;
-		if($type === 'PHONE')
-		{
-			$typeID = DuplicateIndexType::COMMUNICATION_PHONE;
-		}
-		elseif($type === 'EMAIL')
-		{
-			$typeID = DuplicateIndexType::COMMUNICATION_EMAIL;
-		}
-
-		if($typeID !== DuplicateIndexType::UNDEFINED)
+		$typeID = DuplicateIndexType::convertFromCommunicationType(CommunicationType::resolveID($type));
+		$supportedTypes = array_merge(self::getSupportedDedupeTypes(), self::getHiddenSupportedDedupeTypes());
+		if(in_array($typeID, $supportedTypes, true))
 		{
 			DuplicateEntityMatchHash::unregisterEntity($entityTypeID, $entityID, $typeID);
 			foreach($values as $value)
@@ -171,6 +346,60 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 					$entityID,
 					$typeID,
 					self::prepareMatchHash($matches),
+					true
+				);
+			}
+		}
+	}
+	public static function bulkRegister($entityTypeID, $entityID, array $data, $isRaw = true)
+	{
+		if(!is_int($entityTypeID))
+		{
+			throw new Main\ArgumentTypeException('entityTypeID', 'integer');
+		}
+
+		if(!is_int($entityID))
+		{
+			throw new Main\ArgumentTypeException('entityID', 'integer');
+		}
+
+		if(!$isRaw)
+		{
+			$effectiveData = $data;
+		}
+		else
+		{
+			$effectiveData = array();
+			foreach($data as $type => $values)
+			{
+				if(is_array($values))
+				{
+					$effectiveData[$type] = self::prepareCodes($type, $values);
+				}
+			}
+		}
+
+		DuplicateCommunicationMatchCodeTable::bulkReplaceValues($entityTypeID, $entityID, $effectiveData);
+
+		$supportedTypes = array_merge(self::getSupportedDedupeTypes(), self::getHiddenSupportedDedupeTypes());
+		foreach($supportedTypes as $typeID)
+		{
+			DuplicateEntityMatchHash::unregisterEntity($entityTypeID, $entityID, $typeID);
+
+			$type = CommunicationType::resolveName(DuplicateIndexType::convertToCommunicationType($typeID));
+			if(!isset($effectiveData[$type]))
+			{
+				continue;
+			}
+
+			$values = $effectiveData[$type];
+			foreach($values as $value)
+			{
+				DuplicateEntityMatchHash::register(
+					$entityTypeID,
+					$entityID,
+					$typeID,
+					self::prepareMatchHash(array('TYPE' => $type, 'VALUE' => $value)),
 					true
 				);
 			}
@@ -215,18 +444,47 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 			DuplicateCommunicationMatchCodeTable::delete($fields['ID']);
 		}
 
-		if($type === 'PHONE')
+		if($type === CommunicationType::PHONE_NAME)
 		{
-			DuplicateEntityMatchHash::unregisterEntity($entityTypeID, $entityID, DuplicateIndexType::COMMUNICATION_PHONE);
+			DuplicateEntityMatchHash::unregisterEntity(
+				$entityTypeID,
+				$entityID,
+				DuplicateIndexType::COMMUNICATION_PHONE
+			);
 		}
-		elseif($type === 'EMAIL')
+		elseif($type === CommunicationType::EMAIL_NAME)
 		{
-			DuplicateEntityMatchHash::unregisterEntity($entityTypeID, $entityID, DuplicateIndexType::COMMUNICATION_EMAIL);
+			DuplicateEntityMatchHash::unregisterEntity(
+				$entityTypeID,
+				$entityID,
+				DuplicateIndexType::COMMUNICATION_EMAIL
+			);
+		}
+		elseif($type === CommunicationType::SLUSER_NAME)
+		{
+			DuplicateEntityMatchHash::unregisterEntity(
+				$entityTypeID,
+				$entityID,
+				DuplicateIndexType::COMMUNICATION_SLUSER
+			);
 		}
 		elseif($type === '')
 		{
-			DuplicateEntityMatchHash::unregisterEntity($entityTypeID, $entityID, DuplicateIndexType::COMMUNICATION_PHONE);
-			DuplicateEntityMatchHash::unregisterEntity($entityTypeID, $entityID, DuplicateIndexType::COMMUNICATION_EMAIL);
+			DuplicateEntityMatchHash::unregisterEntity(
+				$entityTypeID,
+				$entityID,
+				DuplicateIndexType::COMMUNICATION_PHONE
+			);
+			DuplicateEntityMatchHash::unregisterEntity(
+				$entityTypeID,
+				$entityID,
+				DuplicateIndexType::COMMUNICATION_EMAIL
+			);
+			DuplicateEntityMatchHash::unregisterEntity(
+				$entityTypeID,
+				$entityID,
+				DuplicateIndexType::COMMUNICATION_SLUSER
+			);
 		}
 	}
 	public static function getRegisteredEntityMatches($entityTypeID, $entityID, $type = '')
@@ -267,7 +525,7 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 		}
 		return $results;
 	}
-	public static function prepareSortParams($entityTypeID, array &$entityIDs, $type = '')
+	public static function prepareSortParams($entityTypeID, array $entityIDs, $type = '')
 	{
 		if(empty($entityIDs))
 		{
@@ -337,22 +595,39 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 		}
 
 		$typeID = isset($params['TYPE_ID']) ? intval($params['TYPE_ID']) : DuplicateIndexType::UNDEFINED;
-		if($typeID !== DuplicateIndexType::COMMUNICATION_PHONE
-			&& $typeID !== DuplicateIndexType::COMMUNICATION_EMAIL)
+		if(
+			$typeID !== DuplicateIndexType::COMMUNICATION_PHONE
+			&& $typeID !== DuplicateIndexType::COMMUNICATION_EMAIL
+			&& $typeID !== DuplicateIndexType::COMMUNICATION_SLUSER
+		)
 		{
 			throw new Main\NotSupportedException("Criterion type(s): '".DuplicateIndexType::resolveName($typeID)."' is not supported in current context");
 		}
 
 		$userID = isset($params['USER_ID']) ? intval($params['USER_ID']) : 0;
 
+		$scope = null;
+		if (isset($params['SCOPE']))
+		{
+			$scope = $params['SCOPE'];
+			if (!DuplicateIndexType::checkScopeValue($scope))
+			{
+				throw new Main\ArgumentException("Parameter has invalid value", 'SCOPE');
+			}
+		}
+
+		$filter = array(
+			'=USER_ID' => $userID,
+			'=ENTITY_TYPE_ID' => $entityTypeID,
+			'=TYPE_ID' => $typeID
+		);
+		if ($scope !== null)
+			$filter['=SCOPE'] = $scope;
+
 		$listParams = array(
 			'select' => array('USER_ID', 'TYPE_ID', 'ENTITY_TYPE_ID'),
 			'order' => array('USER_ID'=>'ASC', 'TYPE_ID'=>'ASC', 'ENTITY_TYPE_ID'=>'ASC'),
-			'filter' => array(
-				'=USER_ID' => $userID,
-				'=ENTITY_TYPE_ID' => $entityTypeID,
-				'=TYPE_ID' => $typeID
-			),
+			'filter' => $filter,
 			'limit' => 1
 		);
 
@@ -410,6 +685,72 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 		}
 		return $result;
 	}
+	/**
+	 * Prepare duplicate search query
+	 * @param \CCrmOwnerType $entityTypeID Target Entity Type ID
+	 * @param int $limit Limit of result query
+	 * @return Main\Entity\Query
+	 * @throws Main\ArgumentTypeException
+	 * @throws Main\InvalidOperationException
+	 */
+	public function prepareSearchQuery($entityTypeID = \CCrmOwnerType::Undefined, array $select = null, array $order = null, $limit = 0)
+	{
+		if($this->communicationType === '')
+		{
+			throw new Main\InvalidOperationException('The field "communicationType" is not assigned.');
+		}
+
+		if($this->value === '')
+		{
+			throw new Main\InvalidOperationException('The field "value" is not assigned.');
+		}
+
+		if(!is_int($entityTypeID))
+		{
+			throw new Main\ArgumentTypeException('entityTypeID', 'integer');
+		}
+
+		$query = new Main\Entity\Query(DuplicateCommunicationMatchCodeTable::getEntity());
+		if(!is_array($select))
+		{
+			$select = array();
+		}
+		if(empty($select))
+		{
+			$select = array('ENTITY_TYPE_ID', 'ENTITY_ID');
+		}
+		$query->setSelect($select);
+
+		if(is_array($order) && !empty($order))
+		{
+			$query->setOrder($order);
+		}
+
+		$filter = array('=TYPE' => $this->communicationType,);
+		$value = self::prepareCode($this->communicationType, $this->value);
+		if($this->useStrictComparison)
+		{
+			$filter['=VALUE'] = $value;
+		}
+		else
+		{
+			$filter['%VALUE'] = new Main\DB\SqlExpression('?s', $value.'%');
+		}
+
+		if(\CCrmOwnerType::IsDefined($entityTypeID))
+		{
+			$filter['ENTITY_TYPE_ID'] = $entityTypeID;
+		}
+
+		$query->setFilter($filter);
+
+		if($limit > 0)
+		{
+			$query->setLimit($limit);
+		}
+
+		return $query;
+	}
 	/*
 	 *  @return Duplicate;
 	 */
@@ -444,8 +785,8 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 		}
 
 		$filter = array(
-			'TYPE' => $this->communicationType,
-			'VALUE' => self::prepareCode($this->communicationType, $this->value)
+			'=TYPE' => $this->communicationType,
+			'=VALUE' => self::prepareCode($this->communicationType, $this->value)
 		);
 
 		if(\CCrmOwnerType::IsDefined($entityTypeID))
@@ -453,14 +794,17 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 			$filter['ENTITY_TYPE_ID'] = $entityTypeID;
 		}
 
-		$dbResult = DuplicateCommunicationMatchCodeTable::getList(
-			array(
-				'select' =>array('ENTITY_TYPE_ID', 'ENTITY_ID'),
-				'order' => array('ENTITY_TYPE_ID' => 'ASC', 'ENTITY_ID' => 'ASC'),
-				'filter' => $filter,
-				'limit' => $limit
-			)
-		);
+		$listParams = $this->applyEntityCategoryFilter($entityTypeID, [
+			'select' => ['ENTITY_TYPE_ID', 'ENTITY_ID'],
+			'order' => [
+				'ENTITY_TYPE_ID' => $this->sortDescendingByEntityTypeId ? 'DESC' : 'ASC',
+				'ENTITY_ID' => 'ASC'
+			],
+			'filter' => $filter,
+			'limit' => $limit,
+		]);
+
+		$dbResult = DuplicateCommunicationMatchCodeTable::getList($listParams);
 		$entities = array();
 		while($fields = $dbResult->fetch())
 		{
@@ -486,7 +830,7 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 			return false;
 		}
 
-		if($this->communicationType === 'PHONE')
+		if($this->communicationType === CommunicationType::PHONE_NAME)
 		{
 			return self::normalizePhone($this->value) === self::normalizePhone($item->getValue());
 		}
@@ -495,18 +839,91 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 	}
 	public function getIndexTypeID()
 	{
-		if($this->communicationType === 'PHONE')
+		if($this->communicationType === CommunicationType::PHONE_NAME)
 		{
 			return DuplicateIndexType::COMMUNICATION_PHONE;
 		}
-		elseif($this->communicationType === 'EMAIL')
+		elseif($this->communicationType === CommunicationType::EMAIL_NAME)
 		{
 			return DuplicateIndexType::COMMUNICATION_EMAIL;
+		}
+		elseif($this->communicationType === CommunicationType::SLUSER_NAME)
+		{
+			return DuplicateIndexType::COMMUNICATION_SLUSER;
+		}
+		elseif($this->communicationType === CommunicationType::FACEBOOK_NAME)
+		{
+			return DuplicateIndexType::COMMUNICATION_FACEBOOK;
+		}
+		elseif($this->communicationType === CommunicationType::TELEGRAM_NAME)
+		{
+			return DuplicateIndexType::COMMUNICATION_TELEGRAM;
+		}
+		elseif($this->communicationType === CommunicationType::VK_NAME)
+		{
+			return DuplicateIndexType::COMMUNICATION_VK;
+		}
+		elseif($this->communicationType === CommunicationType::SKYPE_NAME)
+		{
+			return DuplicateIndexType::COMMUNICATION_SKYPE;
+		}
+		elseif($this->communicationType === CommunicationType::BITRIX24_NAME)
+		{
+			return DuplicateIndexType::COMMUNICATION_BITRIX24;
+		}
+		elseif($this->communicationType === CommunicationType::OPENLINE_NAME)
+		{
+			return DuplicateIndexType::COMMUNICATION_OPENLINE;
 		}
 		else
 		{
 			return DuplicateIndexType::UNDEFINED;
 		}
+	}
+	public static function resolveTypeByIndexTypeID($indexTypeID)
+	{
+		if($indexTypeID === DuplicateIndexType::COMMUNICATION_PHONE)
+		{
+			return CommunicationType::PHONE_NAME;
+		}
+		elseif($indexTypeID === DuplicateIndexType::COMMUNICATION_EMAIL)
+		{
+			return CommunicationType::EMAIL_NAME;
+		}
+		elseif($indexTypeID === DuplicateIndexType::COMMUNICATION_SLUSER)
+		{
+			return CommunicationType::SLUSER_NAME;
+		}
+		elseif($indexTypeID === DuplicateIndexType::COMMUNICATION_FACEBOOK)
+		{
+			return CommunicationType::FACEBOOK_NAME;
+		}
+		elseif($indexTypeID === DuplicateIndexType::COMMUNICATION_TELEGRAM)
+		{
+			return CommunicationType::TELEGRAM_NAME;
+		}
+		elseif($indexTypeID === DuplicateIndexType::COMMUNICATION_VK)
+		{
+			return CommunicationType::VK_NAME;
+		}
+		elseif($indexTypeID === DuplicateIndexType::COMMUNICATION_SKYPE)
+		{
+			return CommunicationType::SKYPE_NAME;
+		}
+		elseif($indexTypeID === DuplicateIndexType::COMMUNICATION_BITRIX24)
+		{
+			return CommunicationType::BITRIX24_NAME;
+		}
+		elseif($indexTypeID === DuplicateIndexType::COMMUNICATION_OPENLINE)
+		{
+			return CommunicationType::OPENLINE_NAME;
+		}
+		elseif($indexTypeID === DuplicateIndexType::COMMUNICATION_VIBER)
+		{
+			return CommunicationType::VIBER_NAME;
+		}
+
+		return '';
 	}
 	public function getTypeName()
 	{
@@ -672,6 +1089,20 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 		}
 		return $results;
 	}
+	public function getSummary()
+	{
+		self::includeLangFile();
+
+		/*
+		 * CRM_DUP_CRITERION_COMM_PHONE_SUMMARY
+		 * CRM_DUP_CRITERION_COMM_EMAIL_SUMMARY
+		 */
+
+		return GetMessage(
+			"CRM_DUP_CRITERION_COMM_{$this->communicationType}_SUMMARY",
+			array('#DESCR#'=> $this->getMatchDescription())
+		);
+	}
 	public function getTextTotals($count, $limit = 0)
 	{
 		self::includeLangFile();
@@ -708,23 +1139,31 @@ class DuplicateCommunicationCriterion extends DuplicateCriterion
 			)
 		);
 	}
-	public static function resolveTypeByIndexTypeID($indexTypeID)
+	/**
+	 * Get types supported by deduplication system.
+	 * @return array
+	 */
+	public static function getSupportedDedupeTypes()
 	{
-		if($indexTypeID === DuplicateIndexType::COMMUNICATION_EMAIL)
-		{
-			return 'EMAIL';
-		}
-		elseif($indexTypeID === DuplicateIndexType::COMMUNICATION_PHONE)
-		{
-			return 'PHONE';
-		}
-		return '';
+		//TODO: Please add
+		//TODO: DuplicateIndexType::COMMUNICATION_FACEBOOK, DuplicateIndexType::COMMUNICATION_SKYPE
+		//TODO: and etc. if required
+		return [
+			DuplicateIndexType::COMMUNICATION_PHONE,
+			DuplicateIndexType::COMMUNICATION_EMAIL,
+		];
+	}
+	public static function getHiddenSupportedDedupeTypes()
+	{
+		return [
+			DuplicateIndexType::COMMUNICATION_SLUSER,
+		];
 	}
 	private static function includeLangFile()
 	{
-		if(!self::$LANG_INCLUDED)
+		if(!self::$langIncluded)
 		{
-			self::$LANG_INCLUDED = IncludeModuleLangFile(__FILE__);
+			self::$langIncluded = IncludeModuleLangFile(__FILE__);
 		}
 	}
 }

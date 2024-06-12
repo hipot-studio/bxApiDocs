@@ -18,47 +18,28 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Iblock
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_IblockGroup_Query query()
+ * @method static EO_IblockGroup_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_IblockGroup_Result getById($id)
+ * @method static EO_IblockGroup_Result getList(array $parameters = [])
+ * @method static EO_IblockGroup_Entity getEntity()
+ * @method static \Bitrix\Iblock\EO_IblockGroup createObject($setDefaultValues = true)
+ * @method static \Bitrix\Iblock\EO_IblockGroup_Collection createCollection()
+ * @method static \Bitrix\Iblock\EO_IblockGroup wakeUpObject($row)
+ * @method static \Bitrix\Iblock\EO_IblockGroup_Collection wakeUpCollection($rows)
+ */
 
 class IblockGroupTable extends Entity\DataManager
 {
-	/**
-	 * Returns path to the file which contains definition of the class.
-	 *
-	 * @return string
-	 */
-	
-	/**
-	* <p>Метод возвращает путь к файлу, содержащему определение класса. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/iblockgrouptable/getfilepath.php
-	* @author Bitrix
-	*/
-	public static function getFilePath()
-	{
-		return __FILE__;
-	}
-
 	/**
 	 * Returns DB table name for entity
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы прав доступа к инфоблокам в базе данных. Метод статический. </p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/iblockgrouptable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_iblock_group';
@@ -69,17 +50,6 @@ class IblockGroupTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы прав доступа к инфоблокам. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/iblockgrouptable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -100,7 +70,7 @@ class IblockGroupTable extends Entity\DataManager
 				'title' => Loc::getMessage('IBLOCK_GROUP_ENTITY_PERMISSION_FIELD'),
 			),
 			'GROUP' => array(
-				'data_type' => 'Bitrix\Group\Group',
+				'data_type' => 'Bitrix\Main\Group',
 				'reference' => array('=this.GROUP_ID' => 'ref.ID'),
 			),
 			'IBLOCK' => array(
@@ -115,17 +85,6 @@ class IblockGroupTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>PERMISSION</code> (право доступа). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/iblock/iblockgrouptable/validatepermission.php
-	* @author Bitrix
-	*/
 	public static function validatePermission()
 	{
 		return array(

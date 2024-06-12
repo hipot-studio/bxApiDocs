@@ -2,9 +2,11 @@
 ##############################################
 # Bitrix Site Manager Forum					 #
 # Copyright (c) 2002-2009 Bitrix			 #
-# http://www.bitrixsoft.com					 #
+# https://www.bitrixsoft.com					 #
 # mailto:admin@bitrixsoft.com				 #
 ##############################################
+use Bitrix\Main\Error;
+
 IncludeModuleLangFile(__FILE__);
 
 class CAllVote
@@ -23,7 +25,7 @@ class CAllVote
 	public static function CheckFields($ACTION, &$arFields, $ID = 0)
 	{
 		$aMsg = array();
-		$ID = intVal($ID);
+		$ID = intval($ID);
 		$arVote = array();
 		if ($ID > 0):
 			$db_res = CVote::GetByID($ID);
@@ -35,13 +37,13 @@ class CAllVote
 		unset($arFields["ID"]);
 		if (is_set($arFields, "CHANNEL_ID") || $ACTION == "ADD")
 		{
-			$arFields["CHANNEL_ID"] = intVal($arFields["CHANNEL_ID"]);
+			$arFields["CHANNEL_ID"] = intval($arFields["CHANNEL_ID"]);
 			if ($arFields["CHANNEL_ID"] <= 0):
 				$aMsg[] = array(
 					"id" => "CHANNEL_ID",
 					"text" => GetMessage("VOTE_EMPTY_CHANNEL_ID"));
 			else:
-				$rChannel = CVoteChannel::GetList($by, $order, arraY('ID' => intval($arFields['CHANNEL_ID'])), $filtered);
+				$rChannel = CVoteChannel::GetList('', '', array('ID' => intval($arFields['CHANNEL_ID'])));
 				if (! ($rChannel && $arChannel = $rChannel->Fetch()))
 				{
 					$aMsg[] = array(
@@ -70,7 +72,7 @@ class CAllVote
 		if (is_set($arFields, "DATE_END") || $ACTION == "ADD")
 		{
 			$arFields["DATE_END"] = trim($arFields["DATE_END"]);
-			if (strlen($arFields["DATE_END"]) <= 0):
+			if ($arFields["DATE_END"] == ''):
 				if ($date_start != false):
 					$date_end = $date_start + 2592000;
 					$arFields["DATE_END"] = GetTime($date_end, "FULL");
@@ -106,13 +108,13 @@ class CAllVote
 					"CHANNEL_ID" => (is_set($arFields, "CHANNEL_ID") ? $arFields["CHANNEL_ID"] : false));
 				$vid = CVote::WrongDateInterval($ID, $res["DATE_START"], $res["DATE_END"], $res["CHANNEL_ID"]);
 			}
-			if (intVal($vid) > 0):
+			if (intval($vid) > 0):
 				$aMsg[] = array(
 					"id" => "DATE_START",
 					"text" => str_replace("#ID#", $vid, GetMessage("VOTE_WRONG_INTERVAL")));
 			endif;
 		}
-		if (is_set($arFields, "IMAGE_ID") && strLen($arFields["IMAGE_ID"]["name"]) <= 0 && strLen($arFields["IMAGE_ID"]["del"]) <= 0)
+		if (is_set($arFields, "IMAGE_ID") && $arFields["IMAGE_ID"]["name"] == '' && $arFields["IMAGE_ID"]["del"] == '')
 		{
 			unset($arFields["IMAGE_ID"]);
 		}
@@ -130,7 +132,7 @@ class CAllVote
 			endif;
 		}
 
-		if (is_set($arFields, "COUNTER")) $arFields["COUNTER"] = intVal($arFields["COUNTER"]);
+		if (is_set($arFields, "COUNTER")) $arFields["COUNTER"] = intval($arFields["COUNTER"]);
 		if (is_set($arFields, "TITLE")) $arFields["TITLE"] = trim($arFields["TITLE"]);
 		if (is_set($arFields, "DESCRIPTION")) $arFields["DESCRIPTION"] = trim($arFields["DESCRIPTION"]);
 		if (is_set($arFields, "DESCRIPTION_TYPE") || $ACTION == "ADD") $arFields["DESCRIPTION_TYPE"] = ($arFields["DESCRIPTION_TYPE"] == "html" ? "html" : "text");
@@ -138,42 +140,31 @@ class CAllVote
 		if (is_set($arFields, "EVENT1")) $arFields["EVENT1"] = trim($arFields["EVENT1"]);
 		if (is_set($arFields, "EVENT2")) $arFields["EVENT2"] = trim($arFields["EVENT2"]);
 		if (is_set($arFields, "EVENT3")) $arFields["EVENT3"] = trim($arFields["EVENT3"]);
-		if (is_set($arFields, "UNIQUE_TYPE")) $arFields["UNIQUE_TYPE"] = intVal($arFields["UNIQUE_TYPE"]);
-
-		if (is_set($arFields, "DELAY_TYPE") || $ACTION == "ADD")
+		if (is_set($arFields, "UNIQUE_TYPE")) $arFields["UNIQUE_TYPE"] = intval($arFields["UNIQUE_TYPE"]);
+		if (is_set($arFields, "OPTIONS"))
 		{
-			$arFields["DELAY_TYPE"] = trim($arFields["DELAY_TYPE"]);
-			$arFields["DELAY_TYPE"] = (in_array($arFields["DELAY_TYPE"], array("S", "M", "H", "D")) ? $arFields["DELAY_TYPE"] : "D");
-		}
-		if (is_set($arFields, "DELAY") || $ACTION == "ADD") $arFields["DELAY"] = intVal($arFields["DELAY"]);
 
-		unset($arFields["KEEP_IP_SEC"]);
-		$sec = 1;
-		switch ($arFields["DELAY_TYPE"])
-		{
-			case "S": $sec = 1; break;
-			case "M": $sec = 60; break;
-			case "H": $sec = 3600; break;
-			case "D": $sec = 86400; break;
+			$arFields["OPTIONS"] = intval($arFields["OPTIONS"]);
 		}
-		$arFields["KEEP_IP_SEC"] = intval($arFields["DELAY"]) * $sec;
 
-		if ((is_set($arFields, "UNIQUE_TYPE")) && ($arFields['UNIQUE_TYPE'] < 5))
+		if (is_set($arFields, "DELAY") && array_key_exists("DELAY_TYPE", $arFields))
 		{
-			switch($arFields['UNIQUE_TYPE'])
-			{
-				case 0:$arFields['UNIQUE_TYPE']=5;
-					break;
-				case 1:$arFields['UNIQUE_TYPE']=6;
-					break;
-				case 2:$arFields['UNIQUE_TYPE']=8;
-					break;
-				case 3:$arFields['UNIQUE_TYPE']=12;
-					break;
-				case 4:$arFields['UNIQUE_TYPE']=20;
-					break;
-			}
+			$arFields["DELAY"] = intval($arFields["DELAY"]);
+			$type = in_array($arFields["DELAY_TYPE"], array("S", "M", "H", "D")) ? $arFields["DELAY_TYPE"] : "D";
+			$typeMultiplier = array(
+				"S" => 1,
+				"M" => 60,
+				"H" => 3600,
+				"D" => 86400
+			);
+			$arFields["KEEP_IP_SEC"] = $arFields["DELAY"] * $typeMultiplier[$type];
 		}
+		else if (array_key_exists("KEEP_IP_SEC", $arFields) || $ACTION == "ADD")
+		{
+			$arFields["KEEP_IP_SEC"] = intval($arFields["KEEP_IP_SEC"]);
+		}
+		unset ($arFields["DELAY"]);
+		unset ($arFields["DELAY_TYPE"]);
 
 		if (CVote::IsOldVersion() != "Y")
 		{
@@ -197,92 +188,64 @@ class CAllVote
 		return true;
 	}
 
+	/**
+	 * @deprecated 18.5.1
+	 * @param array $arFields
+	 * @param bool $strUploadDir
+	 * @return array|bool|int
+	 * @throws Exception
+	 */
 	public static function Add($arFields, $strUploadDir = false)
 	{
-		global $DB;
-		$arBinds = array();
-		$strUploadDir = ($strUploadDir === false ? "vote" : $strUploadDir);
-
-		if (!CVote::CheckFields("ADD", $arFields))
+		$result = \Bitrix\Vote\VoteTable::add($arFields);
+		if (!$result->isSuccess())
+		{
+			$aMsg = [];
+			$errCollection = $result->getErrorCollection();
+			for ($errCollection->rewind(); $errCollection->valid(); $errCollection->next())
+			{
+				/** @var Error $error */
+				$error = $errCollection->current();
+				$aMsg[] = ["id" => $error->getCode(), "text" => $error->getMessage()];
+			}
+			if (!empty($aMsg))
+			{
+				global $APPLICATION;
+				$APPLICATION->ThrowException((new CAdminException(array_reverse($aMsg))));
+			}
 			return false;
-/***************** Event onBeforeVoteAdd ***************************/
-		foreach (GetModuleEvents("vote", "onBeforeVoteAdd", true) as $arEvent)
-			if (ExecuteModuleEventEx($arEvent, array(&$arFields)) === false)
-				return false;
-/***************** /Event ******************************************/
-		if (empty($arFields))
-			return false;
-
-		if (
-			array_key_exists("IMAGE_ID", $arFields)
-			&& is_array($arFields["IMAGE_ID"])
-			&& (
-				!array_key_exists("MODULE_ID", $arFields["IMAGE_ID"])
-				|| strlen($arFields["IMAGE_ID"]["MODULE_ID"]) <= 0
-			)
-		)
-			$arFields["IMAGE_ID"]["MODULE_ID"] = "vote";
-
-		CFile::SaveForDB($arFields, "IMAGE_ID", $strUploadDir);
-
-		$arFields["~TIMESTAMP_X"] = $DB->GetNowFunction();
-		if (is_set($arFields, "DESCRIPTION"))
-			$arBinds["DESCRIPTION"] = $arFields["DESCRIPTION"];
-
-		$ID = $DB->Add("b_vote", $arFields, $arBinds);
-
-/***************** Event onAfterVoteAdd ****************************/
-		foreach (GetModuleEvents("vote", "onAfterVoteAdd", true) as $arEvent)
-			ExecuteModuleEventEx($arEvent, array($ID, $arFields));
-/***************** /Event ******************************************/
-		return $ID;
+		}
+		return $result->getId();
 	}
 
+	/**
+	 * @deprecated 18.5.1
+	 * @param $ID
+	 * @param $arFields
+	 * @param bool $strUploadDir
+	 * @return bool|int
+	 */
 	public static function Update($ID, $arFields, $strUploadDir = false)
 	{
-		global $DB;
-		$arBinds = array();
-		$strUploadDir = ($strUploadDir === false ? "vote" : $strUploadDir);
-		$ID = intVal($ID);
-
-		if ($ID <= 0 || !CVote::CheckFields("UPDATE", $arFields, $ID))
+		$result = \Bitrix\Vote\VoteTable::update($ID, $arFields);
+		if (!$result->isSuccess())
+		{
+			$aMsg = [];
+			$errCollection = $result->getErrorCollection();
+			for ($errCollection->rewind(); $errCollection->valid(); $errCollection->next())
+			{
+				/** @var Error $error */
+				$error = $errCollection->current();
+				$aMsg[] = ["id" => $error->getCode(), "text" => $error->getMessage()];
+			}
+			if (!empty($aMsg))
+			{
+				global $APPLICATION;
+				$APPLICATION->ThrowException((new CAdminException(array_reverse($aMsg))));
+			}
 			return false;
-
-/***************** Event onBeforeVoteUpdate ************************/
-		foreach (GetModuleEvents("vote", "onBeforeVoteUpdate", true) as $arEvent)
-			if (ExecuteModuleEventEx($arEvent, array(&$ID, &$arFields)) === false)
-				return false;
-/***************** /Event ******************************************/
-		if (empty($arFields))
-			return false;
-
-		$arFields["~TIMESTAMP_X"] = $DB->GetNowFunction();
-		if (is_set($arFields, "DESCRIPTION"))
-			$arBinds["DESCRIPTION"] = $arFields["DESCRIPTION"];
-
-		if (
-			array_key_exists("IMAGE_ID", $arFields)
-			&& is_array($arFields["IMAGE_ID"])
-			&& (
-				!array_key_exists("MODULE_ID", $arFields["IMAGE_ID"])
-				|| strlen($arFields["IMAGE_ID"]["MODULE_ID"]) <= 0
-			)
-		)
-			$arFields["IMAGE_ID"]["MODULE_ID"] = "vote";
-
-		CFile::SaveForDB($arFields, "IMAGE_ID", $strUploadDir);
-
-		$strUpdate = $DB->PrepareUpdateBind("b_vote", $arFields, $strUploadDir, false, $arBinds);
-
-		if (!empty($strUpdate)):
-			$strSql = "UPDATE b_vote SET ".$strUpdate." WHERE ID=".$ID;
-			$DB->QueryBind($strSql, $arBinds);
-		endif;
-/***************** Event onAfterVoteUpdate *************************/
-		foreach (GetModuleEvents("vote", "onAfterVoteUpdate", true) as $arEvent)
-			ExecuteModuleEventEx($arEvent, array($ID, $arFields));
-/***************** /Event ******************************************/
-		return $ID;
+		}
+		return $result->getId();
 	}
 
 	public static function Delete($ID)
@@ -305,6 +268,7 @@ class CAllVote
 
 		// delete questions
 		CVoteQuestion::Delete(false, $ID);
+		\Bitrix\Vote\AttachTable::deleteByFilter(array("OBJECT_ID" => $ID));
 		// delete vote images
 		$strSql = "SELECT IMAGE_ID FROM b_vote WHERE ID = ".$ID." AND IMAGE_ID > 0";
 		$z = $DB->Query($strSql, false, $err_mess.__LINE__);
@@ -324,23 +288,10 @@ class CAllVote
 
 	public static function Reset($ID)
 	{
-		global $DB;
-		$err_mess = (CVote::err_mess())."<br>Function: Reset<br>Line: ";
-		$ID = intval($ID);
-		if ($ID <= 0):
-			return false;
-		endif;
-		// zeroize questions
-		CVoteQuestion::Reset(false, $ID);
-		// zeroize events
-		$DB->Query("DELETE FROM b_vote_event WHERE VOTE_ID='$ID'", false, $err_mess.__LINE__);
-		// zeroize vote counter
+		\Bitrix\Vote\Event::resetStatistic($ID);
 		unset($GLOBALS["VOTE_CACHE_VOTING"][$ID]);
-		$DB->Update("b_vote", array("COUNTER"=>"0"), "WHERE ID=".$ID, $err_mess.__LINE__);
-		/***************** Event OnVoteReset *******************************/
-		foreach (GetModuleEvents("vote", "onVoteReset", true) as $arEvent)
-			ExecuteModuleEventEx($arEvent, array($ID));
-		/***************** /Event ******************************************/
+		if (array_key_exists("VOTE", $_SESSION) && array_key_exists("VOTES", $_SESSION["VOTE"]))
+			unset($_SESSION["VOTE"]["VOTES"][$ID]);
 		return true;
 	}
 
@@ -375,7 +326,7 @@ class CAllVote
 		}
 
 		$state = true;
-		$rQuestions = CVoteQuestion::GetList($ID, $by, $order, array(), $is_filtered);
+		$rQuestions = CVoteQuestion::GetList($ID);
 		while ($arQuestion = $rQuestions->Fetch())
 		{
 			$state = $state && ( CVoteQuestion::Copy($arQuestion['ID'], $newID) !== false);
@@ -407,7 +358,7 @@ class CAllVote
 	public static function GetByID($ID)
 	{
 		$ID = intval($ID);
-		return CVote::GetList($by="s_id", $order="desc", array("ID" => $ID), $is_filtered = false);
+		return CVote::GetList("s_id", "desc", array("ID" => $ID));
 	}
 
 	public static function GetByIDEx($ID)
@@ -439,122 +390,99 @@ class CAllVote
 		return $db_res;
 	}
 
-	public static function UserAlreadyVote($VOTE_ID, $VOTE_USER_ID, $UNIQUE_TYPE, $KEEP_IP_SEC, $USER_ID = false)
+	public static function UserAlreadyVote($voteId, $VOTE_USER_ID, $UNIQUE_TYPE, $delay, $USER_ID = false)
 	{
 		global $DB, $USER;
 		$err_mess = (CAllVote::err_mess())."<br>Function: UserAlreadyVote<br>Line: ";
-		$VOTE_ID = intval($VOTE_ID);
+		$voteId = intval($voteId);
 		$UNIQUE_TYPE = intval($UNIQUE_TYPE);
 		$VOTE_USER_ID = intval($VOTE_USER_ID);
 		$USER_ID = intval($USER_ID);
 
-		if ($VOTE_ID <= 0)
-			return false;
-
-		if ($UNIQUE_TYPE <= 0)
-			return false;
-
-		if ($UNIQUE_TYPE > 4)
-			$UNIQUE_TYPE -= 5;
-		//No restrictions
-		if ($UNIQUE_TYPE <= 0)
+		if ($voteId <= 0 || $UNIQUE_TYPE <= 0)
 			return false;
 
 		//One session
-		if (($UNIQUE_TYPE & 1) && IsModuleInstalled('statistic') && is_array($_SESSION["VOTE_ARRAY"]) && in_array($VOTE_ID, $_SESSION["VOTE_ARRAY"]))
+		if (($UNIQUE_TYPE & 1) && IsModuleInstalled('statistic') && array_key_exists($voteId, $_SESSION["VOTE"]["VOTES"]))
 			return 1;
 
+
+		$return = array();
 		$arSqlSearch = array();
 		$arSqlSelect = array("VE.ID");
 
 		//Same cookie
-		if ($UNIQUE_TYPE & 2)
+		if ($UNIQUE_TYPE & 2 && ($VOTE_USER_ID > 0))
 		{
-			if (($VOTE_USER_ID > 0) && ($UNIQUE_TYPE != 6))
-			{
-				$arSqlSelect[] = "VE.VOTE_USER_ID";
-				$arSqlSearch[] = "VE.VOTE_USER_ID='".$VOTE_USER_ID."'";
-			}
+			$arSqlSelect[] = "VE.VOTE_USER_ID";
+			$arSqlSearch[] = "VE.VOTE_USER_ID='".$VOTE_USER_ID."'";
 		}
 
 		// Same IP
 		if ($UNIQUE_TYPE & 4)
 		{
-			$tmp = CVote::CheckVotingIP($VOTE_ID, $_SERVER["REMOTE_ADDR"], $KEEP_IP_SEC, array("RETURN_SEARCH_ARRAY" => "Y"));
-			if (is_array($tmp))
-			{
-				$arSqlSelect[] = $tmp["select"];
-				$arSqlSearch[] = $tmp["search"];
-			}
-			else
-				return 4;
+			$tmp = \CVote::CheckVotingIP($voteId, $_SERVER["REMOTE_ADDR"], $delay, array("RETURN_SEARCH_ARRAY" => "Y"));
+			$arSqlSelect[] = $tmp["select"];
+			$arSqlSearch[] = $tmp["search"];
 		}
 
 		// Same ID
 		if ($UNIQUE_TYPE & 8)
 		{
-			if ($USER_ID <= 0 || $USER_ID == $USER->GetID() && !!$_SESSION["VOTE"]["VOTES"][$VOTE_ID])
+			if ($USER_ID <= 0 || $USER_ID == $USER->GetID() && isset($_SESSION["VOTE"]["VOTES"][$voteId]))
 			{
-				return 8;
+				$return[] = 8;
 			}
 			else
 			{
-				if ($UNIQUE_TYPE & 16) // Register date
-				{
-					$rUser = CUser::GetByID($USER_ID);
-					if ($rUser && $arUser = $rUser->Fetch())
-					{
-						$userRegister = MakeTimeStamp($arUser['DATE_REGISTER']);
-						$rVote = CVote::GetByID($VOTE_ID);
-						if ($rVote && $arVote = $rVote->Fetch())
-						{
-							$voteStart = MakeTimeStamp($arVote['DATE_START']);
-							if ($userRegister > $voteStart)
-							{
-								return 16;
-							}
-						}
-					}
-				}
 				$arSqlSelect[] = "VU.AUTH_USER_ID";
 				$arSqlSearch[] = "VU.AUTH_USER_ID=".$USER_ID;
+			}
+			// Register date
+			if (($UNIQUE_TYPE & 16) &&
+				($arUser = \CUser::GetByID($USER_ID)->fetch()) &&
+				is_array($arUser) &&
+				($userRegister = MakeTimeStamp($arUser['DATE_REGISTER'])) &&
+				($vote = \CVote::GetByID($voteId)->Fetch()) &&
+				is_array($vote) &&
+				($voteStart = MakeTimeStamp($vote['DATE_START'])) &&
+				($userRegister > $voteStart)
+			)
+			{
+				$return[] = 16;
 			}
 		}
 
 		if (!empty($arSqlSearch))
 		{
-			$strSql = "SELECT ".implode(",", $arSqlSelect)."
+			$db_res = $DB->Query("SELECT ".implode(",", $arSqlSelect)."
 				FROM b_vote_event VE
 				LEFT JOIN b_vote_user VU ON (VE.VOTE_USER_ID = VU.ID)
-				WHERE VE.VOTE_ID=".$VOTE_ID." AND ((".implode(") OR (", $arSqlSearch)."))";
-			$db_res = $DB->Query($strSql, false, $err_mess.__LINE__);
-			if ($db_res && $res = $db_res->Fetch())
+				WHERE VE.VOTE_ID=".$voteId." AND ((".implode(") OR (", $arSqlSearch)."))", false, $err_mess.__LINE__);
+			while ($res = $db_res->Fetch())
 			{
-				$return = 16; $event_id = 0;
-				do {
-					if (($UNIQUE_TYPE & 2) && $res["VOTE_USER_ID"] == $VOTE_USER_ID)
-					{
-						$return = min($return, 2);
-						break;
-					}
-					elseif (($UNIQUE_TYPE & 4) && $res["IP"] == $_SERVER["REMOTE_ADDR"] && (
-						$KEEP_IP_SEC <= 0 || $KEEP_IP_SEC > $res["KEEP_IP_SEC"]))
-					{
-						$return = min($return, 4);
-					}
-					elseif (($UNIQUE_TYPE & 8) && $res["AUTH_USER_ID"] == $USER_ID)
-					{
-						$return = min($return, 8);
-						$event_id = ($event_id > 0  && $USER_ID == $USER->GetID() ? $event_id : intval($res["ID"]));
-					}
-				} while ($res = $db_res->Fetch());
-				if ($event_id > 0)
-					$_SESSION["VOTE"]["VOTES"][$VOTE_ID] = $event_id;
-				return ($return != 16 ? $return : true);
+				if ($USER_ID > 0 && $USER_ID == $USER->GetID())
+					$_SESSION["VOTE"]["VOTES"][$voteId] = $res["ID"];
+				// $UNIQUE_TYPE & 2
+				if (isset($res["VOTE_USER_ID"]) && $res["VOTE_USER_ID"] == $VOTE_USER_ID)
+				{
+					$return[] = 2;
+				}
+				//$UNIQUE_TYPE & 4
+				if (isset($res["IP"]) && $res["IP"] == $_SERVER["REMOTE_ADDR"]
+					&& ($delay <= 0 || !isset($res["KEEP_IP_SEC"]) || $delay > $res["KEEP_IP_SEC"]))
+				{
+					$return[] = 4;
+				}
+				// $UNIQUE_TYPE & 8
+				if (isset($res["AUTH_USER_ID"]) && $res["AUTH_USER_ID"] == $USER_ID)
+				{
+					$return[] = 8;
+				}
 			}
 		}
-
-		return false;
+		$return = empty($return) ? 0 : min($return);
+		return ($return > 0 ? $return : false);
 	}
 
 	public static function UserGroupPermission($CHANNEL_ID)
@@ -565,27 +493,7 @@ class CAllVote
 
 	public static function SetVoteUserID()
 	{
-		global $DB, $USER, $APPLICATION;
-		$err_mess = (CAllVote::err_mess())."<br>Function: SetVoteUserID<br>Line: ";
-		$COOKIE_VOTE_USER_ID = intval($APPLICATION->get_cookie("VOTE_USER_ID"));
-		$_SESSION["VOTE_USER_ID"] = $COOKIE_VOTE_USER_ID;
-		$arFields = array(
-			"LAST_IP"		=> "'".$DB->ForSql($_SERVER["REMOTE_ADDR"],15)."'",
-			"DATE_LAST"		=> $DB->GetNowFunction(),
-			"STAT_GUEST_ID"	=> "'".intval($_SESSION["SESS_GUEST_ID"])."'",
-			"AUTH_USER_ID"	=> "'".intval($USER->GetID())."'"
-			);
-		$rows = $DB->Update("b_vote_user", $arFields, "WHERE (ID='".$COOKIE_VOTE_USER_ID."') AND (AUTH_USER_ID='".intval($USER->GetID())."')", $err_mess.__LINE__);
-		// insert user if not exists
-		if (intval($rows)<=0)
-		{
-			$arFields["DATE_LAST"] = $DB->GetNowFunction();
-			$arFields["DATE_FIRST"] = $DB->GetNowFunction();
-			$_SESSION["VOTE_USER_ID"] = $DB->Insert("b_vote_user",$arFields, $err_mess.__LINE__);
-			$_SESSION["VOTE_USER_ID"] = intval($_SESSION["VOTE_USER_ID"]);
-			$APPLICATION->set_cookie("VOTE_USER_ID", $_SESSION["VOTE_USER_ID"]);
-		}
-		return $_SESSION["VOTE_USER_ID"];
+		return \Bitrix\Vote\User::getCurrent()->setVotedUserId();
 	}
 
 	public static function UpdateVoteUserID($VOTE_USER_ID)
@@ -601,376 +509,62 @@ class CAllVote
 		return $DB->Update("b_vote_user", $arFields, "WHERE ID='".$VOTE_USER_ID."'", $err_mess.__LINE__);
 	}
 
-	public static function KeepVoting()
+	public static function keepVoting()
 	{
-		global $DB, $VOTING_LAMP, $USER_ALREADY_VOTE, $USER_GROUP_PERMISSION, $USER;
-		$err_mess = (CAllVote::err_mess())."<br>Function: KeepVoting<br>Line: ";
-		$VOTING_LAMP = "green";
-		$USER_ALREADY_VOTE = "N";
-		$PUBLIC_VOTE_ID = intval($_REQUEST["PUBLIC_VOTE_ID"]);
-		$aMsg = array();
-		$VOTE_ID = 0;
-		$arVote = array();
-		$arQuestions = array();
+		global $USER;
+		/** @var $r \Bitrix\Main\HttpRequest */
+		$r = \Bitrix\Main\Context::getCurrent()->getRequest();
+		$request = array_merge($r->getQueryList()->toArray(), $r->getPostList()->toArray());
 
-		if (!(!empty($_REQUEST["vote"]) && $PUBLIC_VOTE_ID > 0 && check_bitrix_sessid()))
+		$PUBLIC_VOTE_ID = intval($request["PUBLIC_VOTE_ID"]);
+		$errorCollection = new \Bitrix\Main\ErrorCollection();
+
+		try
 		{
-			$aMsg[] = array(
-				"id" => "bad_params",
-				"text" => GetMessage("VOTE_NOT_FOUND"));
-		}
-		elseif (($VOTE_ID = intVal(GetVoteDataByID($PUBLIC_VOTE_ID, $arChannel, $arVote, $arQuestions, $arAnswers, $arDropDown, $arMultiSelect, $arGroupAnswers, "N")))
-			&& ($VOTE_ID <= 0 || $arVote["LAMP"] != "green"))
-		{
-			$VOTING_LAMP = "red";
-			if ($VOTE_ID <= 0)
-				$aMsg[] = array(
-					"id" => "VOTE_ID",
-					"text" => GetMessage("VOTE_NOT_FOUND"));
-			else
-				$aMsg[] = array(
-					"id" => "LAMP",
-					"text" => GetMessage("VOTE_RED_LAMP"));
-		}
-		elseif ($arChannel["USE_CAPTCHA"] == "Y" && !$USER->IsAuthorized())
-		{
-			include_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/classes/general/captcha.php");
-			$cpt = new CCaptcha();
-			if (!empty($_REQUEST["captcha_word"]))
+			if (empty($request["vote"]) || $PUBLIC_VOTE_ID <= 0 || !check_bitrix_sessid())
+				throw new \Bitrix\Main\ArgumentException(GetMessage("VOTE_NOT_FOUND"), "bad_params");
+
+			$vote = new \Bitrix\Vote\Vote($PUBLIC_VOTE_ID);
+
+			if (\CVote::UserGroupPermission($vote["CHANNEL_ID"]) < 2)
+				throw new \Bitrix\Main\AccessDeniedException();
+
+			$channel = $vote->getChannel();
+			if ($channel["USE_CAPTCHA"] == "Y" && !$USER->IsAuthorized())
 			{
-				$captchaPass = COption::GetOptionString("main", "captcha_password", "");
-				if (!$cpt->CheckCodeCrypt($_REQUEST["captcha_word"], $_REQUEST["captcha_code"], $captchaPass))
+				include_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/classes/general/captcha.php");
+				$cpt = new CCaptcha();
+				if ((!empty($request["captcha_code"]) && !$cpt->CheckCodeCrypt($request["captcha_word"], $request["captcha_code"])) ||
+					empty($request["captcha_code"]) && !$cpt->CheckCode($request["captcha_word"], 0))
 				{
 					$GLOBALS["BAD_CAPTCHA"] = "Y";
-					$aMsg[] = array(
-						"id" => "CAPTCHA",
-						"text" => GetMessage("VOTE_BAD_CAPTCHA"));
+					throw new \Bitrix\Main\ArgumentException(GetMessage("VOTE_BAD_CAPTCHA"), "captcha");
 				}
 			}
+			if (!$vote->voteFor($request))
+				$errorCollection->add($vote->getErrors());
 			else
-			{
-				if (!$cpt->CheckCode($_REQUEST["captcha_word"], 0))
-				{
-					$GLOBALS["NO_CAPTCHA"] = "Y";
-					$aMsg[] = array(
-						"id" => "CAPTCHA",
-						"text" => GetMessage("VOTE_BAD_CAPTCHA"));
-				}
-			}
+				$GLOBALS["VOTING_ID"] = $vote->getId();
 		}
-
-		if (empty($aMsg))
+		catch (\Exception $e)
 		{
-			// get user id
-			$_SESSION["VOTE_USER_ID"] = CVote::SetVoteUserID();
-			$GLOBALS["VOTING_ID"] = $VOTE_ID;
-			// check: can user vote
-			$UNIQUE_TYPE = $arVote["UNIQUE_TYPE"];
-			$KEEP_IP_SEC = $arVote["KEEP_IP_SEC"];
-			$CHANNEL_ID = $arVote["CHANNEL_ID"];
-
-			$StatusVote = CVote::UserAlreadyVote($VOTE_ID, $_SESSION["VOTE_USER_ID"], $UNIQUE_TYPE, $KEEP_IP_SEC, $USER->GetID());
-			$USER_ALREADY_VOTE = ($StatusVote != false ? "Y" : "N");
-
-			$USER_GROUP_PERMISSION = CVote::UserGroupPermission($CHANNEL_ID);
-
-			// if user can vote that
-			if (($USER_ALREADY_VOTE == "N" || ($StatusVote == 8 && $_REQUEST["REVOTE_ID"] == $VOTE_ID)) && $USER_GROUP_PERMISSION >= 2)
-			{
-				$arSqlAnswers = array();
-				// check answers
-				foreach ($arQuestions as $qID => $arQuestion)
-				{
-					$arSqlAnswers[$arQuestion["ID"]] = array();
-					$bIndicators = array();
-					foreach ($arQuestion["ANSWERS"] as $arAnswer)
-					{
-						switch ($arAnswer["FIELD_TYPE"]):
-							case 0: // radio
-							case 2: // dropdown list
-								$fieldName = ($arAnswer["FIELD_TYPE"] == 0 ? "vote_radio_" : "vote_dropdown_").$qID;
-								$aID = intval($GLOBALS[$fieldName]);
-								if (!isset($bIndicators[$fieldName]) && array_key_exists($aID, $arQuestion["ANSWERS"]))
-								{
-									if (!empty($arAnswer['MESSAGE']))
-										$arSqlAnswers[$qID][$aID] = array("ANSWER_ID" => $aID);
-									$bIndicators[$fieldName] = "Y";
-								}
-								break;
-							case 1: // checkbox
-							case 3: // multiselect list
-								$fieldName = ($arAnswer["FIELD_TYPE"] == 1 ? "vote_checkbox_" : "vote_multiselect_").$qID;
-								$res = $GLOBALS[$fieldName];
-								if (!isset($bIndicators[$fieldName]) && is_array($res) && !empty($res))
-								{
-									reset($res);
-									foreach($res as $aID):
-										if (array_key_exists($aID, $arQuestion["ANSWERS"]))
-											$arSqlAnswers[$qID][$aID] = array("ANSWER_ID" => $aID);
-									endforeach;
-									$bIndicators[$fieldName] = "Y";
-								}
-								break;
-							case 4: // field
-							case 5: // text
-								$aID = $arAnswer["ID"];
-								$fieldName = ($arAnswer["FIELD_TYPE"] == 4 ? "vote_field_" : "vote_memo_").$aID;
-								$MESSAGE = trim($GLOBALS[$fieldName]);
-								if ($MESSAGE != "")
-								{
-									$arSqlAnswers[$qID][$aID] = array(
-										"ANSWER_ID" => $aID,
-										"MESSAGE" => "'".$DB->ForSql(trim($MESSAGE), 2000)."'");
-								}
-								break;
-						endswitch;
-					}
-					if (empty($arSqlAnswers[$qID]))
-					{
-						unset($arSqlAnswers[$qID]);
-						if ($arQuestion['REQUIRED'] == 'Y')
-						{
-							$aMsg[] = array(
-								"id" => "QUESTION_".$qID,
-								"text" => GetMessage("VOTE_REQUIRED_MISSING"));
-							$GLOBALS["VOTE_REQUIRED_MISSING"] = "Y";
-							break;
-						}
-					}
-				}
-				if (!empty($aMsg))
-				{
-					/* do nothing; */
-				}
-				elseif (!empty($arSqlAnswers))
-				{
-					// vote event
-					$arFields = array(
-						"VOTE_ID"			=> $VOTE_ID,
-						"VOTE_USER_ID"		=> intval($_SESSION["VOTE_USER_ID"]),
-						"DATE_VOTE"			=> $DB->GetNowFunction(),
-						"STAT_SESSION_ID"	=> intval($_SESSION["SESS_SESSION_ID"]),
-						"IP"				=> "'".$DB->ForSql($_SERVER["REMOTE_ADDR"],15)."'",
-						"VALID"				=> "'Y'");
-
-					/***************** Event onBeforeVoting ****************************/
-					foreach (GetModuleEvents("vote", "onBeforeVoting", true) as $arEvent)
-					{
-						if (ExecuteModuleEventEx($arEvent, array(&$arFields, &$arSqlAnswers)) === false)
-							return false;
-					}
-					/***************** /Event ******************************************/
-					if ($StatusVote == 8 && $_REQUEST["REVOTE_ID"] == $VOTE_ID)
-					{
-						$strSql = "SELECT VE.ID, VEQ.QUESTION_ID, VEA.ANSWER_ID".
-							" FROM b_vote_event VE ".
-							"	LEFT JOIN b_vote_event_question VEQ ON (VEQ.EVENT_ID=VE.ID)".
-							"	LEFT JOIN b_vote_event_answer VEA ON (VEA.EVENT_QUESTION_ID=VEQ.ID)".
-							"	LEFT JOIN b_vote_user VU ON (VE.VOTE_USER_ID = VU.ID)".
-							" WHERE VE.VOTE_ID=".$VOTE_ID." AND VU.AUTH_USER_ID=".intval($USER->GetID()).
-							" ORDER BY VE.ID ASC, VEQ.QUESTION_ID ASC";
-						$db_res = $DB->Query($strSql, false, $err_mess.__LINE__);
-						if ($db_res && $res = $db_res->Fetch())
-						{
-							if ($USER->GetID() > 0 && CModule::IncludeModule("im"))
-								CIMNotify::DeleteByTag("VOTING|".$VOTE_ID, $USER->GetID());
-							$del = false; $delQ = false;
-							do {
-								if ($delQ !== $res["QUESTION_ID"])
-								{
-									if ($del !== $res["ID"])
-									{
-										CVoteEvent::Delete($res["ID"]);
-										$del = $res["ID"];
-										$arVote["COUNTER"] = intval($arVote["COUNTER"]) - 1;
-									}
-									$delQ = $res["QUESTION_ID"];
-									$arQuestions[$res["QUESTION_ID"]]["COUNTER"] =
-										intval($arQuestions[$res["QUESTION_ID"]]["COUNTER"]) - 1;
-								}
-								$arQuestions[$res["QUESTION_ID"]]["ANSWERS"][$res["ANSWER_ID"]]["COUNTER"] =
-									intval($arQuestions[$res["QUESTION_ID"]]["ANSWERS"][$res["ANSWER_ID"]]["COUNTER"]) - 1;
-							} while($res = $db_res->Fetch());
-						}
-						$USER_ALREADY_VOTE = "N";
-					}
-
-					unset($GLOBALS["VOTE_CACHE_VOTING"][$VOTE_ID]);
-					unset($GLOBALS["VOTE_CACHE"]["VOTE"][$VOTE_ID]);
-					$EVENT_ID = intval($DB->Insert("b_vote_event", $arFields, $err_mess.__LINE__));
-					if ($EVENT_ID > 0)
-					{
-						$arSqlQuestionsID = array();
-						$arSqlAnswersID = array();
-
-						foreach ($arSqlAnswers as $qID => $arSqlAnswer):
-							$arFields = array("EVENT_ID" => $EVENT_ID, "QUESTION_ID" => $qID);
-							$EVENT_QUESTION_ID = intval($DB->Insert("b_vote_event_question", $arFields, $err_mess.__LINE__));
-							if ($EVENT_QUESTION_ID > 0):
-								$arSqlQuestionsID[] = $qID;
-								$arQuestions[$qID]["COUNTER"] = intval($arQuestions[$qID]["COUNTER"]) + 1;
-								foreach ($arSqlAnswer as $aID => $res):
-									$res["EVENT_QUESTION_ID"] = $EVENT_QUESTION_ID;
-									if ($DB->Insert("b_vote_event_answer", $res, $err_mess.__LINE__))
-									{
-										$arSqlAnswersID[$aID] = $qID;
-										$arQuestions[$qID]["ANSWERS"][$aID]["COUNTER"] =
-											intval($arQuestions[$qID]["ANSWERS"][$aID]["COUNTER"]) + 1;
-									}
-								endforeach;
-							endif;
-						endforeach;
-
-						if (empty($arSqlQuestionsID) || empty($arSqlAnswersID)):
-							$DB->Query("DELETE FROM b_vote_event WHERE ID=".$EVENT_ID, $arFields, $err_mess.__LINE__);
-						else:
-							$arFields = array("COUNTER" => "COUNTER+1");
-							$DB->Update("b_vote", $arFields, "WHERE ID='".$VOTE_ID."'", $err_mess.__LINE__);
-							$arVote["COUNTER"] = intval($arVote["COUNTER"]) + 1;
-
-
-							$DB->Update("b_vote_question", $arFields, "WHERE ID in (".implode(", ", $arSqlQuestionsID).")",$err_mess.__LINE__);
-							$DB->Update("b_vote_answer", $arFields, "WHERE ID in (".implode(", ", array_keys($arSqlAnswersID)).")", $err_mess.__LINE__);
-
-							// increment user counter
-							CVote::UpdateVoteUserID($_SESSION["VOTE_USER_ID"]);
-							$GLOBALS["VOTING_OK"] = "Y";
-							$_SESSION["VOTE_ARRAY"][] = $VOTE_ID;
-							if ($UNIQUE_TYPE & 8)
-								$_SESSION["VOTE"]["VOTES"][$VOTE_ID] = $EVENT_ID;
-							// statistic module
-							if (CModule::IncludeModule("statistic"))
-							{
-								$event3 = $arVote["EVENT3"];
-								if (!empty($event3)):
-									$event3 = "http://".$_SERVER["HTTP_HOST"]."/bitrix/admin/vote_user_results.php?EVENT_ID=". $EVENT_ID."&lang=".LANGUAGE_ID;
-								endif;
-								CStatEvent::AddCurrent($arVote["EVENT1"], $arVote["EVENT2"], $event3);
-							}
-							// notification
-							if (!!$arVote["AUTHOR_ID"] && $arVote["AUTHOR_ID"] != $USER->GetID())
-							{
-								if (empty($arVote["TITLE"]))
-								{
-									$arQuestion = reset($arQuestions);
-									$arVote["TITLE"] = $arQuestion["QUESTION"];
-								}
-								if ($arVote["NOTIFY"] == "I" && CModule::IncludeModule("im"))
-								{
-									$arVote["TOTAL_URL"] = "";
-									if (!empty($arVote["URL"]))
-									{
-										if (defined('SITE_SERVER_NAME'))
-											$arVote["TOTAL_URL"] = SITE_SERVER_NAME;
-										$arVote["TOTAL_URL"] = (!empty($arVote["TOTAL_URL"]) ? $arVote["TOTAL_URL"] : COption::GetOptionString("main", "server_name", $GLOBALS["SERVER_NAME"]));
-										if (!empty($arVote["TOTAL_URL"]))
-											$arVote["TOTAL_URL"] = (CMain::IsHTTPS() ? "https" : "http")."://".$arVote["TOTAL_URL"].$arVote["URL"];
-									}
-
-
-									// send notification
-									$gender = ($USER->getParam("PERSONAL_GENDER") == "F" ? "_F" : "");
-									$arMessageFields = array(
-										"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
-										"TO_USER_ID" => $arVote["AUTHOR_ID"],
-										"FROM_USER_ID" => $USER->GetID(),
-										"NOTIFY_TYPE" => IM_NOTIFY_FROM,
-										"NOTIFY_MODULE" => "vote",
-										"NOTIFY_EVENT" => "voting",
-										"NOTIFY_TAG" => "VOTING|".$VOTE_ID,
-										"NOTIFY_MESSAGE" => (!empty($arVote["URL"]) ?
-											GetMessage("V_NOTIFY_MESSAGE_HREF".$gender, array("#VOTE_TITLE#" => $arVote["TITLE"], "#VOTE_URL#" => $arVote["URL"])) :
-											GetMessage("V_NOTIFY_MESSAGE".$gender, array("#VOTE_TITLE#" => $arVote["TITLE"]))),
-										"NOTIFY_MESSAGE_OUT" => (!empty($arVote["TOTAL_URL"]) ?
-											GetMessage("V_NOTIFY_MESSAGE_OUT_HREF".$gender, array("#VOTE_TITLE#" => $arVote["TITLE"], "#VOTE_URL#" => $arVote["TOTAL_URL"])) :
-											GetMessage("V_NOTIFY_MESSAGE".$gender, array("#VOTE_TITLE#" => $arVote["TITLE"])))
-									);
-
-									CIMNotify::Add($arMessageFields);
-								}
-								else if ($arVote["NOTIFY"] == "Y")
-								{
-									// send e-mail
-									$db_user = CUser::GetById($arVote["AUTHOR_ID"]);
-									if ($db_user && ($arUser = $db_user->Fetch()) && !empty($arUser["EMAIL"]))
-									{
-										$arEventFields = array(
-											"EMAIL_TO"			=> $arUser["EMAIL"],
-											"VOTE_STATISTIC"	=> "",
-											"ID"				=> $EVENT_ID,
-											"TIME"				=> GetTime(time(),"FULL"),
-											"VOTE_TITLE"		=> $arVote["TITLE"],
-											"VOTE_DESCRIPTION"	=> $arVote["DESCRIPTION"],
-											"VOTE_ID"			=> $arVote["ID"],
-											"VOTE_COUNTER"		=> $arVote["COUNTER"],
-											"URL"				=> $arVote["URL"],
-											"CHANNEL"			=> $arChannel["TITLE"],
-											"CHANNEL_ID"		=> $arChannel["ID"],
-											"VOTER_ID"			=> $_SESSION["VOTE_USER_ID"],
-											"USER_NAME"			=> $USER->GetFullName(),
-											"LOGIN"				=> $USER->GetLogin(),
-											"USER_ID"			=> $USER->GetID(),
-											"STAT_GUEST_ID"		=> intval($_SESSION["SESS_GUEST_ID"]),
-											"SESSION_ID"		=> intval($_SESSION["SESS_SESSION_ID"]),
-											"IP"				=> $_SERVER["REMOTE_ADDR"]);
-										$arEventFields["USER_NAME"] = (!!$arEventFields["USER_NAME"] ? $arEventFields["USER_NAME"] : $arEventFields["LOGIN"]);
-										// VOTE_STATISTIC
-										$text = array();
-										foreach ($arSqlAnswersID as $aID => $qID)
-										{
-											$text[$qID] = (is_array($text[$qID]) ? $text[$qID] : array());
-											if ($arQuestions[$qID]["ANSWERS"][$aID]["FIELD_TYPE"] == 4 ||
-												$arQuestions[$qID]["ANSWERS"][$aID]["FIELD_TYPE"] == 5)
-											{
-												if (!empty($arSqlAnswers[$qID][$aID]["MESSAGE"]))
-													$text[$qID][] = $arSqlAnswers[$qID][$aID]["MESSAGE"];
-											}
-											else
-											{
-												$text[$qID][] = $arQuestions[$qID]["ANSWERS"][$aID]["MESSAGE"];
-											}
-										}
-										foreach ($text as $qID => $txt)
-										{
-											$text[$qID] = " - ".$arQuestions[$qID]["QUESTION"]."\n - ".implode(", ", $text[$qID]);
-										}
-										$arEventFields["VOTE_STATISTIC"] = "\n".implode("\n\n", $text);
-										$arrSites = CVoteChannel::GetSiteArray($arChannel["ID"]);
-										CEvent::Send("VOTE_FOR", $arrSites, $arEventFields, "N");
-									}
-								}
-							}
-						endif;
-						/***************** Event onAfterVoting *****************************/
-						foreach (GetModuleEvents("vote", "onAfterVoting", true) as $arEvent)
-							ExecuteModuleEventEx($arEvent, array($VOTE_ID, $EVENT_ID));
-						/***************** /Event ******************************************/
-					}
-				}
-				else
-				{
-					$GLOBALS["USER_VOTE_EMPTY"] = "Y";
-					$aMsg[] = array(
-						"id" => "VOTE_ID",
-						"text" => GetMessage("USER_VOTE_EMPTY"));
-				}
-			}
-			else
-			{
-				$aMsg[] = array(
-					"id" => "VOTE_ID",
-					"text" => ($USER_GROUP_PERMISSION >= 2 ? GetMessage("VOTE_ALREADY_VOTE") : GetMessage("VOTE_ACCESS_DENIED")));
-			}
+			$errorCollection->add(array(new \Bitrix\Main\Error($e->getMessage(), $e->getCode())));
 		}
-		if(!empty($aMsg))
+
+		if ($errorCollection->isEmpty())
 		{
-			$e = new CAdminException($aMsg, "CVote::KeepVoting");
-			$GLOBALS["APPLICATION"]->ThrowException($e);
-			$GLOBALS["VOTING_OK"] = "N";
-			return false;
+			$GLOBALS["VOTING_OK"] = "Y";
+			return true;
 		}
+		global $APPLICATION, $VOTING_OK;
+		$VOTING_OK = "N";
+		$m = [];
+		for ($errorCollection->rewind(); $errorCollection->valid(); $errorCollection->next())
+			$m[] = $errorCollection->current()->getMessage();
 
-		return true;
+		$APPLICATION->ThrowException(implode("", $m), "CVote::KeepVoting");
+
+		return false;
 	}
 
 	public static function GetNextSort($CHANNEL_ID)
@@ -1044,11 +638,11 @@ class CAllVote
 
 class _CVoteDBResult extends CDBResult
 {
-	public static function _CVoteDBResult($res, $params = array())
+	public function __construct($res, $params = array())
 	{
-		parent::CDBResult($res);
+		parent::__construct($res);
 	}
-	public static function Fetch()
+	function Fetch()
 	{
 		if($res = parent::Fetch())
 		{

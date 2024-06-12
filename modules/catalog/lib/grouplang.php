@@ -19,7 +19,20 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Catalog
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_GroupLang_Query query()
+ * @method static EO_GroupLang_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_GroupLang_Result getById($id)
+ * @method static EO_GroupLang_Result getList(array $parameters = [])
+ * @method static EO_GroupLang_Entity getEntity()
+ * @method static \Bitrix\Catalog\EO_GroupLang createObject($setDefaultValues = true)
+ * @method static \Bitrix\Catalog\EO_GroupLang_Collection createCollection()
+ * @method static \Bitrix\Catalog\EO_GroupLang wakeUpObject($row)
+ * @method static \Bitrix\Catalog\EO_GroupLang_Collection wakeUpCollection($rows)
+ */
 
 class GroupLangTable extends Main\Entity\DataManager
 {
@@ -28,17 +41,6 @@ class GroupLangTable extends Main\Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы языкозависимых параметров типов цен. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/grouplangtable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_catalog_group_lang';
@@ -49,17 +51,6 @@ class GroupLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей для таблицы языкозависимых параметров типов цен. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/grouplangtable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -81,7 +72,7 @@ class GroupLangTable extends Main\Entity\DataManager
 			)),
 			'CATALOG_GROUP' => new Main\Entity\ReferenceField(
 				'CATALOG_GROUP',
-				'Bitrix\Catalog\Group',
+				'\Bitrix\Catalog\Group',
 				array('=this.CATALOG_GROUP_ID' => 'ref.ID')
 			)
 		);
@@ -91,17 +82,6 @@ class GroupLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>LID</code> (код языка интерфейса). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/grouplangtable/validatelang.php
-	* @author Bitrix
-	*/
 	public static function validateLang()
 	{
 		return array(
@@ -113,17 +93,6 @@ class GroupLangTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает валидатор для поля <code>NAME</code> (название типа цен в зависимости от языка интерфейса). Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/catalog/grouplangtable/validatename.php
-	* @author Bitrix
-	*/
 	public static function validateName()
 	{
 		return array(

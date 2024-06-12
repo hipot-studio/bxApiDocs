@@ -23,10 +23,10 @@ class Path
 	protected function getFilters()
 	{
 		$filters = array();
-		$filters['#([\\\/]\.)(\.[\\\/])#is'] = $this->getSplittingString(2);
+		$filters['#((?:[\\\/]|%2f|%5c)(?:\.|%2e))((?:\.|%2e)(?:[\\\/]|%2f|%5c))#is'] = $this->getSplittingString(2);
 		if(
 			(!defined('PHP_OS'))
-			|| (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN')
+			|| (mb_strtoupper(mb_substr(PHP_OS, 0, 3)) === 'WIN')
 		)
 		{
 			$slashes = '\\\/\x20\x22\x3c\x3e\x5c';

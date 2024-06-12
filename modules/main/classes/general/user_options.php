@@ -52,7 +52,7 @@ class CUserOptions
 
 		$strSqlSearch = "";
 		foreach ($arSqlSearch as $condition)
-			if (strlen($condition) > 0)
+			if ($condition <> '')
 				$strSqlSearch.= " AND  (".$condition.") ";
 
 		$strSql = "
@@ -90,7 +90,7 @@ class CUserOptions
 		else
 			$strSqlOrder = "";
 
-		$res = $DB->Query($strSql.$strSqlOrder, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+		$res = $DB->Query($strSql.$strSqlOrder);
 		return $res;
 	}
 
@@ -98,74 +98,63 @@ class CUserOptions
 	{
 		global $DB, $USER, $CACHE_MANAGER;
 
-		if ($user_id === false && is_object($USER) && ((get_class($USER) === 'CUser') || ($USER instanceof CUser)))
+		if ($user_id === false && $USER instanceof CUser)
+		{
 			$user_id = $USER->GetID();
+		}
 
 		$user_id = intval($user_id);
 		$category = strtolower($category);
 
-		if (!isset(self::$cache[$user_id][$category][$name]))
+		if (!isset(self::$cache[$user_id][$category]))
 		{
-			if ($user_id > 0)
+			$mcache_id = "user_option:{$user_id}:{$category}";
+
+			// options for user '0' are always from DB (there are much more options for user '0' than for specific one)
+			if ($user_id > 0 && $CACHE_MANAGER->read(3600, $mcache_id, "user_option"))
 			{
 				// options for specified user from managed cache
-				if (!isset(self::$cache[$user_id][$category]))
-				{
-					$mcache_id = "user_option:".$user_id.":".$category;
-					if ($CACHE_MANAGER->read(3600, $mcache_id, "user_option"))
-					{
-						self::$cache[$user_id][$category] = $CACHE_MANAGER->get($mcache_id);
-					}
-					else
-					{
-						$strSql = "
-							SELECT CATEGORY, NAME, VALUE, COMMON
-							FROM b_user_option
-							WHERE (USER_ID=".$user_id." OR USER_ID=0 AND COMMON='Y')
-								AND CATEGORY='".$DB->ForSql($category)."'
-						";
-
-						$res = $DB->Query($strSql);
-						while ($res_array = $res->Fetch())
-						{
-							if (!isset(self::$cache[$user_id][$category][$res_array["NAME"]]) || $res_array["COMMON"] <> 'Y')
-								self::$cache[$user_id][$category][$res_array["NAME"]] = unserialize($res_array["VALUE"]);
-						}
-
-						$CACHE_MANAGER->Set($mcache_id, self::$cache[$user_id][$category]);
-					}
-				}
-
-				if (!isset(self::$cache[$user_id][$category][$name]))
-				{
-					self::$cache[$user_id][$category][$name] = $default_value;
-				}
+				self::$cache[$user_id][$category] = $CACHE_MANAGER->get($mcache_id);
 			}
 			else
 			{
-				// options for user '0' from DB (there are much more options for user '0' than for specific one)
-				if (!isset(self::$cache[$user_id][$category]))
-				{
-					$strSql = "
-						SELECT CATEGORY, NAME, VALUE, COMMON
-						FROM b_user_option
-						WHERE (USER_ID=".$user_id." OR USER_ID=0 AND COMMON='Y')
-							AND CATEGORY='".$DB->ForSql($category)."'
-					";
+				//read from DB
+				$sql = "
+					SELECT NAME, VALUE, COMMON
+					FROM b_user_option
+					WHERE (USER_ID = {$user_id} OR (USER_ID = 0 AND COMMON = 'Y'))
+						AND CATEGORY = '{$DB->ForSql($category)}'
+				";
 
-					$res = $DB->Query($strSql);
-					while ($res_array = $res->Fetch())
+				$res = $DB->Query($sql);
+				while ($option = $res->Fetch())
+				{
+					if (!isset(self::$cache[$user_id][$category][$option["NAME"]]) || $option["COMMON"] <> 'Y')
 					{
-						if (!isset(self::$cache[$user_id][$category][$res_array["NAME"]]) || $res_array["COMMON"] <> 'Y')
-							self::$cache[$user_id][$category][$res_array["NAME"]] = unserialize($res_array["VALUE"]);
+						self::$cache[$user_id][$category][$option["NAME"]] = unserialize($option["VALUE"], ['allowed_classes' => false]);
 					}
 				}
 
-				if (!isset(self::$cache[$user_id][$category][$name]))
+				if (!isset(self::$cache[$user_id][$category]))
 				{
-					self::$cache[$user_id][$category][$name] = $default_value;
+					self::$cache[$user_id][$category] = [];
+				}
+
+				if ($user_id > 0)
+				{
+					$CACHE_MANAGER->Set($mcache_id, self::$cache[$user_id][$category]);
 				}
 			}
+
+			if (!isset(self::$cache[$user_id][$category][$name]))
+			{
+				self::$cache[$user_id][$category][$name] = null;
+			}
+		}
+
+		if (!isset(self::$cache[$user_id][$category][$name]))
+		{
+			return $default_value;
 		}
 
 		return self::$cache[$user_id][$category][$name];
@@ -188,6 +177,8 @@ class CUserOptions
 			$user_id = $USER->GetID();
 		}
 
+		$category = strtolower($category);
+
 		$user_id = intval($user_id);
 		$arFields = array(
 			"USER_ID" => $user_id,
@@ -197,42 +188,16 @@ class CUserOptions
 			"COMMON" => ($bCommon ? "Y" : "N"),
 		);
 
-		if($DB->type == "ORACLE")
-		{
-			//old way because MERGE doesn't support bindings
-			$res = $DB->Query("
-				SELECT ID FROM b_user_option
-				WHERE
-				".($bCommon ? "USER_ID=0 AND COMMON='Y' " : "USER_ID=".$user_id)."
-					AND CATEGORY='".$DB->ForSql($category, 50)."'
-					AND NAME='".$DB->ForSql($name, 255)."'
-			");
+		$arUpdateFields = array(
+			"VALUE" => $arFields["VALUE"],
+			"COMMON" => $arFields["COMMON"],
+		);
+		$helper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
+		$sql = $helper->prepareMerge("b_user_option", array("USER_ID", "CATEGORY", "NAME"), $arFields, $arUpdateFields);
 
-			if ($res_array = $res->Fetch())
-			{
-				$strUpdate = $DB->PrepareUpdate("b_user_option", $arFields);
-				if ($strUpdate != "")
-				{
-					$strSql = "UPDATE b_user_option SET ".$strUpdate." WHERE ID=".$res_array["ID"];
-					if (!$DB->QueryBind($strSql, array("VALUE" => $arFields["VALUE"])))
-						return false;
-				}
-			}
-			else
-			{
-				if (!$DB->Add("b_user_option", $arFields, array("VALUE")))
-					return false;
-			}
-		}
-		else
+		if(!$DB->Query(current($sql)))
 		{
-			$helper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
-			$sql = $helper->prepareMerge("b_user_option", array("USER_ID", "CATEGORY", "NAME"), $arFields, $arFields);
-
-			if(!$DB->Query(current($sql)))
-			{
-				return false;
-			}
+			return false;
 		}
 
 		if($bCommon)
@@ -271,8 +236,10 @@ class CUserOptions
 					}
 				}
 				CUserOptions::SetOption($opt["c"], $opt["n"], $val);
-				if ($opt["d"] == "Y" && $USER->CanDoOperation('edit_other_settings'))
+				if (isset($opt["d"]) && $opt["d"] === "Y" && $USER->CanDoOperation('edit_other_settings'))
+				{
 					CUserOptions::SetOption($opt["c"], $opt["n"], $val, true);
+				}
 			}
 		}
 	}
@@ -281,8 +248,10 @@ class CUserOptions
 	{
 		global $DB, $USER, $CACHE_MANAGER;
 
-		if ($user_id === false)
+		if ($user_id === false && $USER instanceof CUser)
+		{
 			$user_id = $USER->GetID();
+		}
 
 		$user_id = intval($user_id);
 		$strSql = "
@@ -291,7 +260,7 @@ class CUserOptions
 			AND CATEGORY='".$DB->ForSql($category, 50)."'
 			AND NAME='".$DB->ForSql($name, 255)."'
 		";
-		if ($DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__))
+		if ($DB->Query($strSql))
 		{
 			if($bCommon)
 			{
@@ -312,7 +281,7 @@ class CUserOptions
 	{
 		global $DB, $CACHE_MANAGER;
 
-		if ($DB->Query("DELETE FROM b_user_option WHERE COMMON='Y' AND NAME NOT LIKE '~%'", false, "File: ".__FILE__."<br>Line: ".__LINE__))
+		if ($DB->Query("DELETE FROM b_user_option WHERE COMMON='Y' AND NAME NOT LIKE '~%'"))
 		{
 			$CACHE_MANAGER->cleanDir("user_option");
 			self::$cache = array();
@@ -325,7 +294,7 @@ class CUserOptions
 	{
 		global $DB, $CACHE_MANAGER;
 
-		if ($DB->Query("DELETE FROM b_user_option WHERE USER_ID<>0 AND NAME NOT LIKE '~%'  ".($user_id <> false? " AND USER_ID=".intval($user_id):""), false, "File: ".__FILE__."<br>Line: ".__LINE__))
+		if ($DB->Query("DELETE FROM b_user_option WHERE USER_ID<>0 AND NAME NOT LIKE '~%'  ".($user_id <> false? " AND USER_ID=".intval($user_id):"")))
 		{
 			$CACHE_MANAGER->cleanDir("user_option");
 			self::$cache = array();
@@ -339,7 +308,7 @@ class CUserOptions
 		global $DB, $CACHE_MANAGER;
 
 		$strSql = "DELETE FROM b_user_option WHERE CATEGORY='".$DB->ForSql($category, 50)."' AND NAME='".$DB->ForSql($name, 255)."'";
-		if ($DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__))
+		if ($DB->Query($strSql))
 		{
 			$CACHE_MANAGER->cleanDir("user_option");
 			self::$cache = array();
@@ -374,7 +343,7 @@ class CUserOptions
 
 		$user_id = intval($user_id);
 
-		if ($DB->Query("DELETE FROM b_user_option WHERE USER_ID=". $user_id, false, "File: ".__FILE__."<br>Line: ".__LINE__))
+		if ($DB->Query("DELETE FROM b_user_option WHERE USER_ID=". $user_id))
 		{
 			$CACHE_MANAGER->cleanDir("user_option");
 			self::$cache = array();

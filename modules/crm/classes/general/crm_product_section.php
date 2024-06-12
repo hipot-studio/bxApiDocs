@@ -38,11 +38,23 @@ class CCrmProductSection
 				'NAME' => array(
 					'TYPE' => 'string',
 					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Required)
+				),
+				'XML_ID' => array(
+					'TYPE' => 'string'
+				),
+				'CODE' => array(
+					'TYPE' => 'string'
 				)
 			);
 		}
 
 		return self::$FIELD_INFOS;
+	}
+
+	public static function GetFieldCaption($fieldName)
+	{
+		$result = GetMessage("CRM_PRODUCT_SECTION_FIELD_{$fieldName}");
+		return is_string($result) ? $result : '';
 	}
 	// CRUD -->
 	public static function Add(&$arFields)
@@ -59,10 +71,10 @@ class CCrmProductSection
 			return false;
 		}
 
-		$catalogID = isset($arFields['CATALOG_ID']) ? intval($arFields['CATALOG_ID']) : 0;
+		$catalogID = isset($arFields['CATALOG_ID']) ? (int)$arFields['CATALOG_ID'] : 0;
 		if(!($catalogID > 0 && CCrmCatalog::Exists($catalogID)))
 		{
-			$catalogID = CCrmCatalog::EnsureDefaultExists();
+			$catalogID = (int)CCrmCatalog::EnsureDefaultExists();
 		}
 		$arFields['CATALOG_ID'] = $catalogID;
 
@@ -70,6 +82,18 @@ class CCrmProductSection
 		$sectionFields['CHECK_PERMISSIONS'] = 'N';
 
 		$section = new CIBlockSection();
+		if (!isset($sectionFields['CODE']))
+		{
+			// TODO: remove this merge after CIBlockSection::createMnemonicCode fix
+			$tmpSectionFields = $sectionFields;
+			$tmpSectionFields['ID'] ??= null;
+			// TODO: change $tmpSectionFields to $sectionFields after CIBlockSection::createMnemonicCode fix
+			$mnemonicCode = $section->createMnemonicCode($tmpSectionFields);
+			if ($mnemonicCode !== null)
+			{
+				$sectionFields['CODE'] = $mnemonicCode;
+			}
+		}
 		$result = $section->Add($sectionFields);
 
 		if(!(is_int($result) && $result > 0))
@@ -92,11 +116,11 @@ class CCrmProductSection
 			array(),
 			array(
 				'ID' => $ID,
-				'GLOBAL_ACTIVE' => 'Y',
+				/*'GLOBAL_ACTIVE' => 'Y',*/
 				'CHECK_PERMISSIONS' => 'N'
 			),
 			false,
-			array('ID', 'NAME', 'IBLOCK_ID', 'IBLOCK_SECTION_ID'),
+			array('ID', 'NAME', 'IBLOCK_ID', 'IBLOCK_SECTION_ID', 'XML_ID', 'CODE'),
 			false
 		);
 
@@ -125,7 +149,7 @@ class CCrmProductSection
 			array(),
 			array(
 				'ID' => $ID,
-				'GLOBAL_ACTIVE' => 'Y',
+				/*'GLOBAL_ACTIVE' => 'Y',*/
 				'CHECK_PERMISSIONS' => 'N'
 			),
 			false,
@@ -166,7 +190,7 @@ class CCrmProductSection
 			array(),
 			array(
 				'ID' => $ID,
-				'GLOBAL_ACTIVE' => 'Y',
+				/*'GLOBAL_ACTIVE' => 'Y',*/
 				'CHECK_PERMISSIONS' => 'N'
 			),
 			false,
@@ -221,10 +245,16 @@ class CCrmProductSection
 
 		$section = new CIBlockSection();
 
+		$effectiveFilter = CCrmProductSectionDbResult::MapKeys($arFilter);
+		if(isset($effectiveFilter['IBLOCK_SECTION_ID']))
+		{
+			$effectiveFilter['SECTION_ID'] = (int)$effectiveFilter['IBLOCK_SECTION_ID'];
+		}
+
 		return new CCrmProductSectionDbResult(
 			$section->GetList(
 				CCrmProductSectionDbResult::MapKeys($arOrder),
-				CCrmProductSectionDbResult::MapKeys($arFilter),
+				$effectiveFilter,
 				false,
 				CCrmProductSectionDbResult::MapValues($arSelectFields),
 				$arNavStartParams
@@ -292,6 +322,56 @@ class CCrmProductSection
 
 		return $result;
 	}
+	public static function GetMaxDepth($catalogId = 0)
+	{
+		$result = 0;
+
+		if ($catalogId <= 0)
+		{
+			$catalogId = CCrmCatalog::GetDefaultID();
+
+			if ($catalogId > 0)
+			{
+				$connection = \Bitrix\Main\Application::getInstance()->getConnection();
+				$res = $connection->query(
+					"SELECT MAX(DEPTH_LEVEL) AS MAX_DEPTH FROM b_iblock_section WHERE IBLOCK_ID = {$catalogId}"
+				);
+				$row = is_object($res) ? $res->fetch() : null;
+				if (is_array($row) && isset($row['MAX_DEPTH']))
+				{
+					$result = (int)$row['MAX_DEPTH'];
+				}
+			}
+		}
+
+		return $result;
+	}
+	public static function GetPath($catalogId, $sectionId, $select)
+	{
+		$result = [];
+
+		if (!Bitrix\Main\Loader::includeModule('iblock'))
+		{
+			return $result;
+		}
+
+		if ($catalogId <= 0)
+		{
+			$catalogId = CCrmCatalog::GetDefaultID();
+		}
+
+		if ($catalogId > 0)
+		{
+			$sectionId = (int)$sectionId;
+			if (!is_array($select))
+			{
+				$select = [];
+			}
+			$result = CIBlockSection::GetNavChain($catalogId, $sectionId, $select, true);
+		}
+
+		return $result;
+	}
 }
 
 class CCrmProductSectionDbResult extends CDBResult
@@ -300,7 +380,10 @@ class CCrmProductSectionDbResult extends CDBResult
 		'ID' => 'ID',
 		'CATALOG_ID' => 'IBLOCK_ID',
 		'SECTION_ID' => 'IBLOCK_SECTION_ID',
-		'NAME' => 'NAME'
+		'NAME' => 'NAME',
+		'XML_ID' => 'XML_ID',
+		'SORT' => 'SORT',
+		'CODE' => 'CODE'
 	);
 	function Fetch()
 	{

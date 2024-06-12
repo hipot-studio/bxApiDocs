@@ -1,13 +1,17 @@
-<?
+<?php
+
 use Bitrix\Iblock;
 use Bitrix\Main;
+use Bitrix\Catalog;
+use Bitrix\Sale;
+
 IncludeModuleLangFile(__FILE__);
 
 class CALLSaleProduct
 {
 	public static $arProductIblockInfoCache = array();
 
-	static function GetProductSkuProps($ID, $IBLOCK_ID = '', $getExt = false)
+	public static function GetProductSkuProps($ID, $IBLOCK_ID = '', $getExt = false)
 	{
 		$getExt = ($getExt === true);
 		$arSkuProps = array();
@@ -49,7 +53,7 @@ class CALLSaleProduct
 							$boolArr = is_array($prop["VALUE"]);
 							if(
 								($boolArr && !empty($prop["VALUE"]))
-								|| (!$boolArr && strlen($prop["VALUE"]) > 0)
+								|| (!$boolArr && $prop["VALUE"] <> '')
 							)
 							{
 								$displayProperty = CIBlockFormatProperties::GetDisplayValue($arElement, $prop, '');
@@ -98,7 +102,6 @@ class CALLSaleProduct
 		}
 		return $arSkuProps;
 	}
-
 
 	/**
 	 * get sku for product.
@@ -204,7 +207,7 @@ class CALLSaleProduct
 				{
 					break;
 				}
-				elseif (strlen($CURRENCY) > 0)
+				elseif ($CURRENCY <> '')
 				{
 					$arPrice["PRICE"]["PRICE"] = CCurrencyRates::ConvertCurrency($arPrice["PRICE"]["PRICE"], $arPrice["PRICE"]["CURRENCY"], $CURRENCY);
 					if ($arPrice["DISCOUNT_PRICE"] > 0)
@@ -312,7 +315,7 @@ class CALLSaleProduct
 
 				if (count($arPrice["DISCOUNT"]) > 0)
 				{
-					$discountPercent = IntVal($arPrice["DISCOUNT"]["VALUE"]);
+					$discountPercent = intval($arPrice["DISCOUNT"]["VALUE"]);
 
 					$arSkuTmp["DISCOUNT_PRICE"] = $arPrice["DISCOUNT_PRICE"];
 					$arSkuTmp["DISCOUNT_PRICE_FORMATED"] = CCurrencyLang::CurrencyFormat($arPrice["DISCOUNT_PRICE"], $arPrice["PRICE"]["CURRENCY"], false);
@@ -391,22 +394,11 @@ class CALLSaleProduct
 		return $arResult;
 	}
 
+	/** @deprecated */
 	public static function RefreshProductList()
 	{
-		global $DB;
-		$strSql = "truncate table b_sale_product2product";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-
-		$strSql = "INSERT INTO b_sale_product2product (PRODUCT_ID, PARENT_PRODUCT_ID, CNT)
-			select b.PRODUCT_ID as PRODUCT_ID, b1.PRODUCT_ID as PARENT_PRODUCT_ID, COUNT(b1.PRODUCT_ID) as CNT
-			from b_sale_basket b
-			left join b_sale_basket b1 on (b.ORDER_ID = b1.ORDER_ID)
-			inner join b_sale_order o on (o.ID = b.ORDER_ID)
-			where
-				o.ALLOW_DELIVERY = 'Y'
-				AND b.ID <> b1.ID
-			GROUP BY b.PRODUCT_ID, b1.PRODUCT_ID";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$liveTime = (int)Main\Config\Option::get('sale', 'p2p_del_exp', 10);
+		\Bitrix\Sale\Product2ProductTable::refreshProductStatistic($liveTime);
 
 		return "CSaleProduct::RefreshProductList();";
 	}
@@ -511,11 +503,14 @@ class CALLSaleProduct
 					array("NAME", "ID", "LID", 'IBLOCK_ID', 'IBLOCK_SECTION_ID', "DETAIL_PICTURE", "PREVIEW_PICTURE", "DETAIL_PAGE_URL")
 				);
 
-				$currentVatMode = CCatalogProduct::getPriceVatIncludeMode();
-				$currentUseDiscount = CCatalogProduct::getUseDiscount();
-				CCatalogProduct::setUseDiscount(true);
-				CCatalogProduct::setPriceVatIncludeMode(true);
-				CCatalogProduct::setUsedCurrency(CSaleLang::GetLangCurrency($LID));
+				Catalog\Product\Price\Calculation::pushConfig();
+				Catalog\Product\Price\Calculation::setConfig(array(
+					'CURRENCY' => Sale\Internals\SiteCurrencyTable::getSiteCurrency($LID),
+					'PRECISION' => (int)Main\Config\Option::get('sale', 'value_precision'),
+					'USE_DISCOUNTS' => true,
+					'RESULT_WITH_VAT' => true
+				));
+
 				$i = 0;
 				while ($arElement = $rsElement->GetNext())
 				{
@@ -546,10 +541,8 @@ class CALLSaleProduct
 						$i++;
 					}
 				}
-				CCatalogProduct::clearUsedCurrency();
-				CCatalogProduct::setPriceVatIncludeMode($currentVatMode);
-				CCatalogProduct::setUseDiscount($currentUseDiscount);
-				unset($currentUseDiscount, $currentVatMode);
+
+				Catalog\Product\Price\Calculation::popConfig();
 			}
 		}
 		return $arRecomendetResult;
@@ -565,7 +558,7 @@ class CAllSaleViewedProduct
 	* @param array $arFields - parameters for update
 	* @return true false
 	*/
-	static public function Update($ID, $arFields)
+	public static function Update($ID, $arFields)
 	{
 		global $DB;
 
@@ -588,7 +581,7 @@ class CAllSaleViewedProduct
 			$strUpdateSql .= ", DATE_VISIT = ".$DB->GetNowFunction()." ";
 		}
 
-		$ID = IntVal($ID);
+		$ID = intval($ID);
 		$strUpdate = $DB->PrepareUpdate("b_sale_viewed_product", $arFields);
 
 		$strSql = "UPDATE b_sale_viewed_product SET ".
@@ -608,7 +601,7 @@ class CAllSaleViewedProduct
 	* @param
 	* @return true false
 	*/
-	static public function ClearViewed()
+	public static function ClearViewed()
 	{
 		CSaleViewedProduct::_ClearViewed();
 

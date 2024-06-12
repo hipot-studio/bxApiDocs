@@ -1,4 +1,4 @@
-<?
+<?php
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/forum/classes/general/topic.php");
 
 class CForumTopic extends CAllForumTopic
@@ -9,6 +9,8 @@ class CForumTopic extends CAllForumTopic
 		$arOrder = (is_array($arOrder) ? $arOrder : array());
 		$arFilter = (is_array($arFilter) ? $arFilter : array());
 		$arAddParams = (is_array($arAddParams) ? $arAddParams : array($arAddParams));
+		$selectTopCount = isset($arAddParams['nTopCount']) ? (int) $arAddParams['nTopCount'] : 0;
+		$descPageNumbering = isset($arAddParams['bDescPageNumbering']) && $selectTopCount <= 0;
 		$arSqlSearch = array();
 		$arSqlSelect = array();
 		$arSqlGroup = array();
@@ -22,7 +24,7 @@ class CForumTopic extends CAllForumTopic
 		foreach ($arFilter as $key => $val)
 		{
 			$key_res = CForumNew::GetFilterOperation($key);
-			$key = strtoupper($key_res["FIELD"]);
+			$key = mb_strtoupper($key_res["FIELD"]);
 			$strNegative = $key_res["NEGATIVE"];
 			$strOperation = $key_res["OPERATION"];
 
@@ -47,15 +49,15 @@ class CForumTopic extends CAllForumTopic
 				case "SORT":
 				case "POSTS":
 				case "TOPICS":
-					if (($strOperation!="IN") && (intVal($val) > 0))
-						$arSqlSearch[] = ($strNegative=="Y"?" FT.".$key." IS NULL OR NOT ":"")."(FT.".$key." ".$strOperation." ".intVal($val)." )";
-					elseif (($strOperation =="IN") && ((is_array($val) && (array_sum($val) > 0)) || (strlen($val) > 0) ))
+					if (($strOperation!="IN") && (intval($val) > 0))
+						$arSqlSearch[] = ($strNegative=="Y"?" FT.".$key." IS NULL OR NOT ":"")."(FT.".$key." ".$strOperation." ".intval($val)." )";
+					elseif (($strOperation =="IN") && ((is_array($val) && (array_sum($val) > 0)) || ($val <> '') ))
 					{
 						if (!is_array($val)) 
 							$val = explode(',', $val);
 						$val_int = array();
 						foreach ($val as $v)
-							$val_int[] = intVal($v);
+							$val_int[] = intval($v);
 						$val = implode(", ", $val_int);
 
 						$arSqlSearch[] = ($strNegative=="Y"?" NOT ":"")."(FT.".$key." IN (".$DB->ForSql($val).") )";
@@ -72,11 +74,11 @@ class CForumTopic extends CAllForumTopic
 					if (is_array($val) && !empty($val))
 					{
 						foreach ($val as $k => $v)
-							$arSqlTemp[] = "(FT.ID=".intVal($k).") AND (FT.LAST_POST_DATE > ".$DB->CharToDateFunction($DB->ForSql($v), "FULL").")";
+							$arSqlTemp[] = "(FT.ID=".intval($k).") AND (FT.LAST_POST_DATE > ".$DB->CharToDateFunction($DB->ForSql($v), "FULL").")";
 
 						$val_int = array();
 						foreach (array_keys($val) as $k)
-							$val_int[] = intVal($k);
+							$val_int[] = intval($k);
 						$keys = implode(", ", $val_int);
 
 					$arSqlSearch[] = 
@@ -87,7 +89,7 @@ class CForumTopic extends CAllForumTopic
 					break;
 				case "START_DATE":
 				case "LAST_POST_DATE":
-					if(strlen($val)<=0)
+					if($val == '')
 						$arSqlSearch[] = ($strNegative=="Y"?"NOT":"")."(FT.".$key." IS NULL)";
 					else
 						$arSqlSearch[] = ($strNegative=="Y"?" FT.".$key." IS NULL OR NOT ":"")."(FT.".$key." ".$strOperation." ".$DB->CharToDateFunction($DB->ForSql($val), "FULL").")";
@@ -102,7 +104,7 @@ class CForumTopic extends CAllForumTopic
 		{
 			foreach ($arSqlSelect as $key => $val)
 			{
-				if (substr($key, 0, 1) != "!")
+				if (mb_substr($key, 0, 1) != "!")
 					$arSqlGroup[$key] = $val;
 			}
 			if (!empty($arSqlGroup)):
@@ -111,7 +113,8 @@ class CForumTopic extends CAllForumTopic
 		}
 		foreach ($arOrder as $by => $order)
 		{
-			$by = strtoupper($by); $order = strtoupper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			if ($order!="ASC") $order = "DESC";
 			if (in_array($by, array("ID", "FORUM_ID", "TOPIC_ID", "TITLE", "TAGS", "DESCRIPTION", "ICON",
 					"STATE", "APPROVED", "SORT", "VIEWS", "USER_START_ID", "USER_START_NAME", "START_DATE", 
@@ -129,17 +132,17 @@ class CForumTopic extends CAllForumTopic
 		if (count($arSqlOrder) > 0)
 			$strSqlOrder = " ORDER BY ".implode(", ", $arSqlOrder);
 
-		if ($bCount || (is_set($arAddParams, "bDescPageNumbering") && intVal($arAddParams["nTopCount"]) <= 0))
+		if ($bCount || $descPageNumbering)
 		{
 			$strSql = 
 				"SELECT COUNT(FT.ID) as CNT 
 				FROM b_forum_topic FT
 				WHERE 1 = 1 
 				".$strSqlSearch;
-			$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$db_res = $DB->Query($strSql);
 			$iCnt = 0;
 			if ($ar_res = $db_res->Fetch()):
-				$iCnt = intVal($ar_res["CNT"]);
+				$iCnt = intval($ar_res["CNT"]);
 			endif;
 			if ($bCount):
 				return $iCnt;
@@ -214,26 +217,33 @@ class CForumTopic extends CAllForumTopic
 				$strSqlOrder;
 		}
 
-		$iNum = intVal($iNum);
-		if ($iNum > 0 || intVal($arAddParams["nTopCount"]) > 0)
+		$limit = $iNum > 0 ? (int)$iNum : $selectTopCount;
+		if ($limit > 0)
 		{
-			$iNum = ($iNum > 0) ? $iNum : intVal($arAddParams["nTopCount"]);
-			$strSql .= "\nLIMIT 0,".$iNum;
+			$connection = \Bitrix\Main\Application::getConnection();
+			if ($connection->getType() === 'pgsql')
+			{
+				$strSql .= "\nLIMIT ".$limit;
+			}
+			else
+			{
+				$strSql .= "\nLIMIT 0,".$limit;
+			}
 		}
 		
-		if (!$iNum && is_set($arAddParams, "bDescPageNumbering") && intVal($arAddParams["nTopCount"]) <= 0)
+		if (!$iNum && $descPageNumbering)
 		{
 			$db_res =  new CDBResult();
 			$db_res->NavQuery($strSql, $iCnt, $arAddParams);
 		}
 		else 
 		{
-			$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$db_res = $DB->Query($strSql);
 		}
 		return new _CTopicDBResult($db_res, $arAddParams);
 	}
 
-	public static function GetListEx($arOrder = Array("SORT"=>"ASC"), $arFilter = Array(), $bCount = false, $iNum = 0, $arAddParams = array())
+	public static function GetListEx($arOrder = Array("SORT"=>"ASC"), $arFilter = Array(), $bCount = false, $iNum = 0, $arAddParams = [])
 	{
 		global $DB, $USER;
 		$arOrder = (is_array($arOrder) ? $arOrder : array());
@@ -250,11 +260,13 @@ class CForumTopic extends CAllForumTopic
 		$strSqlOrder = "";
 		$UseGroup = false;
 		$arAddParams = (is_array($arAddParams) ? $arAddParams : array($arAddParams));
+		$selectTopCount = isset($arAddParams['nTopCount']) ? (int) $arAddParams['nTopCount'] : 0;
+		$descPageNumbering = isset($arAddParams['bDescPageNumbering']) && $selectTopCount <= 0;
 
 		foreach ($arFilter as $key => $val)
 		{
 			$key_res = CForumNew::GetFilterOperation($key);
-			$key = strtoupper($key_res["FIELD"]);
+			$key = mb_strtoupper($key_res["FIELD"]);
 			$strNegative = $key_res["NEGATIVE"];
 			$strOperation = $key_res["OPERATION"];
 			switch ($key)
@@ -278,15 +290,15 @@ class CForumTopic extends CAllForumTopic
 				case "SORT":
 				case "POSTS":
 				case "TOPICS":
-					if (($strOperation!="IN")&&(intVal($val)>0))
-						$arSqlSearch[] = ($strNegative=="Y"?" FT.".$key." IS NULL OR NOT ":"")."(FT.".$key." ".$strOperation." ".intVal($val)." )";
-					elseif (($strOperation =="IN") && ((is_array($val) && (array_sum($val) > 0)) || (is_string($val) && strlen($val) > 0) ))
+					if (($strOperation!="IN")&&(intval($val)>0))
+						$arSqlSearch[] = ($strNegative=="Y"?" FT.".$key." IS NULL OR NOT ":"")."(FT.".$key." ".$strOperation." ".intval($val)." )";
+					elseif (($strOperation =="IN") && ((is_array($val) && (array_sum($val) > 0)) || (is_string($val) && $val <> '') ))
 					{
 						if (!is_array($val))
 							$val = explode(',', $val);
 						$val_int = array();
 						foreach ($val as $v)
-							$val_int[] = intVal($v);
+							$val_int[] = intval($v);
 						$val = implode(", ", $val_int);
 						$arSqlSearch[] = ($strNegative=="Y"?" NOT ":"")."(FT.".$key." IN (".$DB->ForSql($val).") )";
 					}
@@ -304,7 +316,7 @@ class CForumTopic extends CAllForumTopic
 				case "START_DATE":
 				case "LAST_POST_DATE":
 				case "ABS_LAST_POST_DATE":
-					if(strlen($val)<=0)
+					if($val == '')
 						$arSqlSearch[] = ($strNegative=="Y"?"NOT":"")."(FT.".$key." IS NULL)";
 					else
 						$arSqlSearch[] = ($strNegative=="Y"?" FT.".$key." IS NULL OR NOT ":"")."(FT.".$key." ".$strOperation." ".$DB->CharToDateFunction($DB->ForSql($val), "FULL").")";
@@ -312,14 +324,14 @@ class CForumTopic extends CAllForumTopic
 				case "USER_ID":
 					$arSqlSelect["LAST_VISIT"] = $DB->DateToCharFunction("FUT.LAST_VISIT", "FULL");
 					$arSqlFrom["FUT"] = "LEFT JOIN b_forum_user_topic FUT ON (".(
-							strlen($val) <= 0 ? 
+							$val == '' ?
 								($strNegative=="Y"?"NOT":"")."(FUT.USER_ID IS NULL)"
 								:
-								"FUT.USER_ID=".intVal($val)
+								"FUT.USER_ID=".intval($val)
 						)." AND FUT.FORUM_ID = FT.FORUM_ID AND FUT.TOPIC_ID = FT.ID)";
 					break;
 				case "RENEW_TOPIC":
-						if ((strlen($val)>0) && array_key_exists("FUT", $arSqlFrom))
+						if (($val <> '') && array_key_exists("FUT", $arSqlFrom))
 						{
 							$arSqlSearch[] =
 								"((FT.LAST_POST_DATE ".$strOperation." ".$DB->CharToDateFunction($DB->ForSql($val), "FULL").") AND
@@ -345,7 +357,7 @@ class CForumTopic extends CAllForumTopic
 					elseif (is_array($val)):
 						$val_int = array();
 						foreach ($val as $v)
-							$val_int[] = intVal($v);
+							$val_int[] = intval($v);
 						$val = implode(", ", $val_int);
 					endif;
 					$arSqlFrom["FPP"] =
@@ -354,13 +366,13 @@ class CForumTopic extends CAllForumTopic
 						"	FROM b_forum_perms FPP \n".
 						"	WHERE FPP.GROUP_ID IN (".$DB->ForSql($val).") AND FPP.PERMISSION > 'A' \n".
 						"	GROUP BY FPP.FORUM_ID) FPP ON (FPP.FORUM_ID = FT.FORUM_ID) ";
-					$arSqlSelect[] = "FPP.PERMISSION AS PERMISSION";
+					$arSqlSelect["PERMISSION"] = "FPP.PERMISSION";
 				break;
 				case "RENEW":
 					$val = (is_array($val) ? $val : array("USER_ID" => $val));
-					$val["USER_ID"] = intVal($val["USER_ID"]);
+					$val["USER_ID"] = intval($val["USER_ID"]);
 					if ($val["USER_ID"] <= 0):
-						continue;
+						break;
 					endif;
 					$perms = "NOT_CHECK";
 					$arUserGroups = $GLOBALS["USER"]->GetGroups();
@@ -370,7 +382,7 @@ class CForumTopic extends CAllForumTopic
 						$perms = "ONLY_APPROVED";
 					endif;
 
-					$arSqlFrom["FUT"] = "LEFT JOIN b_forum_user_topic FUT ON (FUT.USER_ID=".intVal($val["USER_ID"])." AND FUT.FORUM_ID = FT.FORUM_ID AND FUT.TOPIC_ID = FT.ID)";
+					$arSqlFrom["FUT"] = "LEFT JOIN b_forum_user_topic FUT ON (FUT.USER_ID=".intval($val["USER_ID"])." AND FUT.FORUM_ID = FT.FORUM_ID AND FUT.TOPIC_ID = FT.ID)";
 					$arSqlFrom["FUF"] = "LEFT JOIN b_forum_user_forum FUF ON (FUF.USER_ID=".$val["USER_ID"]." AND FUF.FORUM_ID = FT.FORUM_ID)";
 					$arSqlFrom["FUF_ALL"] = "LEFT JOIN b_forum_user_forum FUF_ALL ON (FUF_ALL.USER_ID=".$val["USER_ID"]." AND FUF_ALL.FORUM_ID = 0)";
 
@@ -463,8 +475,8 @@ class CForumTopic extends CAllForumTopic
 			$res = array();
 			foreach ($arSqlSelect as $key => $val)
 			{
-				if (substr($key, 0, 1) == "!")
-					$key = substr($key, 1);
+				if (mb_substr($key, 0, 1) == "!")
+					$key = mb_substr($key, 1);
 				if ($key != $val)
 					$res[] = $val." AS ".$key;
 				else 
@@ -478,7 +490,7 @@ class CForumTopic extends CAllForumTopic
 		{
 			foreach ($arSqlSelect as $key => $val)
 			{
-				if (substr($key, 0, 1) != "!")
+				if (mb_substr($key, 0, 1) != "!")
 					$arSqlGroup[$key] = $val;
 			}
 			if (!empty($arSqlGroup)):
@@ -488,7 +500,8 @@ class CForumTopic extends CAllForumTopic
 
 		foreach ($arOrder as $by => $order)
 		{
-			$by = strtoupper($by); $order = strtoupper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			if ($order!="ASC") $order = "DESC";
 			if (in_array($by, array("ID", "FORUM_ID", "TOPIC_ID", "TITLE", "TAGS", "DESCRIPTION", "ICON",
 					"STATE", "APPROVED", "SORT", "VIEWS", "USER_START_ID", "USER_START_NAME", "START_DATE", 
@@ -509,22 +522,22 @@ class CForumTopic extends CAllForumTopic
 			$strSqlOrder = " ORDER BY ".implode(", ", $arSqlOrder);
 		endif;
 
-		if ($bCount || (is_set($arAddParams, "bDescPageNumbering") && intVal($arAddParams["nTopCount"])<=0))
+		if ($bCount || $descPageNumbering)
 		{
 			$strSql = "SELECT COUNT(FT.ID) as CNT FROM b_forum_topic FT ";
 
 			$arCountSqlFrom = $arSqlFrom;
-			if (isset($arSqlFrom['FUT']) && (strpos($strSqlSearch, "FUT.") === false))
+			if (isset($arSqlFrom['FUT']) && (mb_strpos($strSqlSearch, "FUT.") === false))
 				unset($arCountSqlFrom['FUT']);
 			$strSqlCountFrom = implode("\n", $arCountSqlFrom);
 
 			$strSql .= $strSqlCountFrom . " WHERE 1 = 1 ".$strSqlSearch;
 
-			$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$db_res = $DB->Query($strSql);
 			$iCnt = 0;
 			if ($ar_res = $db_res->Fetch())
 			{
-				$iCnt = intVal($ar_res["CNT"]);
+				$iCnt = intval($ar_res["CNT"]);
 			}
 			if ($bCount)
 				return $iCnt;
@@ -607,20 +620,28 @@ class CForumTopic extends CAllForumTopic
 				$strSqlOrder;
 		}
 
-		$iNum = intVal($iNum);
-		if ($iNum > 0 || intVal($arAddParams["nTopCount"]) > 0)
+		$iNum = intval($iNum);
+		$limit = $iNum ?? $selectTopCount;
+		if ($limit > 0)
 		{
-			$iNum = ($iNum > 0) ? $iNum : intVal($arAddParams["nTopCount"]);
-			$strSql .= "\nLIMIT 0,".$iNum;
+			$connection = \Bitrix\Main\Application::getConnection();
+			if ($connection->getType() === 'pgsql')
+			{
+				$strSql .= "\nLIMIT ".$limit;
+			}
+			else
+			{
+				$strSql .= "\nLIMIT 0,".$limit;
+			}
 		}
-		if (!$iNum && is_set($arAddParams, "bDescPageNumbering") && intVal($arAddParams["nTopCount"]) <= 0)
+		if (!$iNum && $descPageNumbering)
 		{
 			$db_res =  new CDBResult();
 			$db_res->NavQuery($strSql, $iCnt, $arAddParams);
 		}
 		else 
 		{
-			$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$db_res = $DB->Query($strSql);
 		}
 		return new _CTopicDBResult($db_res, $arAddParams);
 	}

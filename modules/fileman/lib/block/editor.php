@@ -8,6 +8,7 @@
 namespace Bitrix\Fileman\Block;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Web\DOM\Document;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\DOM\CssParser;
@@ -19,19 +20,22 @@ class Editor
 {
 	CONST SLICE_SECTION_ID = 'BX_BLOCK_EDITOR_EDITABLE_SECTION';
 	CONST BLOCK_PLACE_ATTR = 'data-bx-block-editor-place';
+	CONST BLOCK_PHP_ATTR = 'data-bx-editor-php-slice';
 	CONST STYLIST_TAG_ATTR = 'data-bx-stylist-container';
 	CONST BLOCK_PLACE_ATTR_DEF_VALUE = 'body';
-	CONST BLOCK_COUNT_PER_PAGE = 16;
+	CONST BLOCK_COUNT_PER_PAGE = 14;
 
 	public $id;
 	protected $site;
 	protected $url;
 	protected $previewUrl;
+	protected $saveFileUrl;
 	protected $templateType;
 	protected $templateId;
 	protected $charset;
 	protected $isTemplateMode;
 	protected $isUserHavePhpAccess;
+	protected $useLightTextEditor;
 	protected $ownResultId;
 
 	/*
@@ -59,8 +63,9 @@ class Editor
 			<div class="button-panel">
 				#tabs#
 
-				<span class="bx-editor-block-btn-close" title="#MESS_BTN_MIN#"></span>
-				<span class="bx-editor-block-btn-full" title="#MESS_BTN_MAX#"></span>
+				<span class="bx-editor-block-btn-close" title="#MESS_BTN_MIN#">#MESS_BTN_MIN#</span>
+				<span class="bx-editor-block-btn-full" title="#MESS_BTN_MAX#">#MESS_BTN_MAX#</span>
+				<span data-role="block-editor-tab-btn-get-html" class="bx-editor-block-btn-full bx-editor-block-btn-html-copy" title="#MESS_BTN_HTML_COPY#"></span>
 			</div>
 			#panels#
 		</div>
@@ -138,8 +143,8 @@ HTML
 
 								<div style="clear: both;"></div>
 								<div class="block-pager adm-nav-pages-block">
-									<span class="adm-nav-page adm-nav-page-prev"></span>
-									<span class="adm-nav-page adm-nav-page-next"></span>
+									<span class="adm-nav-page adm-nav-page-prev #nav-display#"></span>
+									<span class="adm-nav-page adm-nav-page-next #nav-display#"></span>
 								</div>
 
 							</div>
@@ -161,9 +166,11 @@ HTML
 					</div>
 
 					<div class="block-edit-tabs">
-						<span data-bx-block-editor-settings-tab="cont" class="bx-editor-block-tab active">#MESS_TOOL_CONTENT#</span>
-						<span data-bx-block-editor-settings-tab="style" class="bx-editor-block-tab">#MESS_TOOL_STYLES#</span>
-						<span data-bx-block-editor-settings-tab="prop" class="bx-editor-block-tab">#MESS_TOOL_SETTINGS#</span>
+						<div class="block-edit-tabs-inner">
+							<span data-bx-block-editor-settings-tab="cont" class="bx-editor-block-tab active">#MESS_TOOL_CONTENT#</span>
+							<span data-bx-block-editor-settings-tab="style" class="bx-editor-block-tab">#MESS_TOOL_STYLES#</span>
+							<span data-bx-block-editor-settings-tab="prop" class="bx-editor-block-tab">#MESS_TOOL_SETTINGS#</span>
+						</div>
 					</div>
 				</div>
 
@@ -189,7 +196,7 @@ HTML
 
 			<center>
 				<div class="iframe-wrapper">
-					<iframe class="preview-iframe" src=""></iframe>
+					<iframe sandbox="allow-same-origin allow-forms" class="preview-iframe" src=""></iframe>
 				</div>
 			</center>
 		</div>
@@ -208,19 +215,6 @@ HTML
 	 * @param array $params
 	 * @return Editor
 	 */
-	
-	/**
-	* <p>Статический метод возвращает объект редактора.</p>
-	*
-	*
-	* @param array $params  Параметры возвращаемого объекта.
-	*
-	* @return \Bitrix\Fileman\Block\Editor 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/createinstance.php
-	* @author Bitrix
-	*/
 	public static function createInstance($params)
 	{
 		return new static($params);
@@ -231,29 +225,18 @@ HTML
 	 *
 	 * @param array $params
 	 */
-	
-	/**
-	* <p>Нестатический метод создает объект редактора.</p>
-	*
-	*
-	* @param array $params  Параметры создаваемого объекта.
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/__construct.php
-	* @author Bitrix
-	*/
 	public function __construct($params)
 	{
 		$this->id = $params['id'];
 		$this->url = $params['url'];
 		$this->previewUrl = isset($params['previewUrl']) ? $params['previewUrl'] : '/bitrix/admin/fileman_block_editor.php?action=preview';
+		$this->saveFileUrl = isset($params['saveFileUrl']) ? $params['saveFileUrl'] : '/bitrix/admin/fileman_block_editor.php?action=save_file';
 		$this->templateType = $params['templateType'];
 		$this->templateId = $params['templateId'];
 		$this->site = $params['site'];
 		$this->charset = $params['charset'];
 		$this->isTemplateMode = isset($params['isTemplateMode']) ? (bool) $params['isTemplateMode'] : false;
+		$this->useLightTextEditor = isset($params['useLightTextEditor']) ? (bool) $params['useLightTextEditor'] : false;
 		$this->isUserHavePhpAccess = isset($params['isUserHavePhpAccess']) ? (bool) $params['isUserHavePhpAccess'] : false;
 		$this->ownResultId = isset($params['own_result_id']) ? $params['own_result_id'] : true;
 
@@ -269,7 +252,7 @@ HTML
 		$this->tabs = array(
 			'edit' => array('NAME' => Loc::getMessage('BLOCK_EDITOR_TABS_EDIT'), 'ACTIVE' => true),
 			'preview' => array('NAME' => Loc::getMessage('BLOCK_EDITOR_TABS_PREVIEW'), 'ACTIVE' => false),
-			'get-html' => array('NAME' => Loc::getMessage('BLOCK_EDITOR_TABS_HTML'), 'ACTIVE' => false),
+			//'get-html' => array('NAME' => Loc::getMessage('BLOCK_EDITOR_TABS_HTML'), 'ACTIVE' => false),
 		);
 	}
 
@@ -280,19 +263,6 @@ HTML
 	 * @param array $blocks
 	 * @return void
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает пользовательский список блоков.</p>
-	*
-	*
-	* @param array $blocks  Список блоков.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/setblocklist.php
-	* @author Bitrix
-	*/
 	public function setBlockList(array $blocks)
 	{
 		$this->blocks = $blocks;
@@ -314,32 +284,35 @@ HTML
 			$this->blocks[$key] = $block;
 		}
 
-		$componentList = $this->getComponentList();
 		$componentsNotAsBlocks = array();
-		foreach($componentList as $component)
+		if (!$this->useLightTextEditor)
 		{
-			if(!isset($this->componentsAsBlocks[$component['NAME']]))
+			$componentList = $this->getComponentList();
+			foreach($componentList as $component)
 			{
-				$componentsNotAsBlocks[] = array(
-					'TYPE' => 'component',
-					'IS_COMPONENT' => true,
-					'CODE' => $component['NAME'],
-					'NAME' => $component['TITLE'],
-					'DESC' => $component['TITLE'] . ".\n" . $component['DESCRIPTION'],
-					'HTML' => ''
-				);
-			}
-			else
-			{
-				$interfaceName = $this->componentsAsBlocks[$component['NAME']]['NAME'];
-				$this->blocks[] = array(
-					'TYPE' => 'component',
-					'IS_COMPONENT' => false,
-					'CODE' => $component['NAME'],
-					'NAME' => $interfaceName ? $interfaceName : $component['TITLE'],
-					'DESC' => $component['DESCRIPTION'],
-					'HTML' => ''
-				);
+				if(!isset($this->componentsAsBlocks[$component['NAME']]))
+				{
+					$componentsNotAsBlocks[] = array(
+						'TYPE' => 'component',
+						'IS_COMPONENT' => true,
+						'CODE' => $component['NAME'],
+						'NAME' => $component['TITLE'],
+						'DESC' => $component['TITLE'] . ".\n" . $component['DESCRIPTION'],
+						'HTML' => ''
+					);
+				}
+				else
+				{
+					$interfaceName = $this->componentsAsBlocks[$component['NAME']]['NAME'];
+					$this->blocks[] = array(
+						'TYPE' => 'component',
+						'IS_COMPONENT' => false,
+						'CODE' => $component['NAME'],
+						'NAME' => $interfaceName ? $interfaceName : $component['TITLE'],
+						'DESC' => $component['DESCRIPTION'],
+						'HTML' => ''
+					);
+				}
 			}
 		}
 		$this->blocks = array_merge($this->blocks, $componentsNotAsBlocks);
@@ -352,19 +325,6 @@ HTML
 	 * @param array $tools
 	 * @return void
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает пользовательский список инструментов.</p>
-	*
-	*
-	* @param array $tools  Список инструментов.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/settoollist.php
-	* @author Bitrix
-	*/
 	public function setToolList(array $tools)
 	{
 		$this->tools = $tools;
@@ -375,18 +335,7 @@ HTML
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает список стандартных блоков.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/getdefaultblocklist.php
-	* @author Bitrix
-	*/
-	static public function getDefaultBlockList()
+	public function getDefaultBlockList()
 	{
 		return array(
 			array(
@@ -399,24 +348,29 @@ HTML
 	}
 
 	/**
+	 * Return true if can use Russian services.
+	 *
+	 * @return bool
+	 */
+	public static function isAvailableRussian()
+	{
+		if (!Loader::includeModule('bitrix24'))
+		{
+			return true;
+		}
+
+		return in_array(\CBitrix24::getPortalZone(), array('ru', 'kz', 'by'));
+	}
+
+	/**
 	 * Return list of default tools, uses for block changing
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает список стандартных инструментов, используемых для изменения блоков.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/getdefaulttoollist.php
-	* @author Bitrix
-	*/
 	public function getDefaultToolList()
 	{
 		$isUserHavePhpAccess = $this->isUserHavePhpAccess;
+		$useLightTextEditor = $this->useLightTextEditor;
 
 
 		$resultList = array();
@@ -461,37 +415,110 @@ HTML
 		ob_start();
 		?>
 		<div class="column" data-bx-editor-column="item">
-			<span data-bx-editor-column-number="1"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_COLUMN')?> 1</span>
-			<span data-bx-editor-column-number="2"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_COLUMN')?> 2</span>
-			<span data-bx-editor-column-number="3"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_COLUMN')?> 3</span>
-			<span data-bx-editor-column-number="4"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_COLUMN')?> 4</span>
+			<?for ($columnNumber = 1; $columnNumber < 5; $columnNumber++):?>
+			<span data-bx-editor-column-number="<?=$columnNumber?>"
+				style="display: none;">
+				<?=Loc::getMessage('BLOCK_EDITOR_TOOL_COLUMN')?> <?=$columnNumber?>
+			</span>
+			<?endfor;?>
 		</div>
 		<?
-		\CFileMan::AddHTMLEditorFrame(
-			'BX_BLOCK_EDITOR_CONTENT_' . $this->id,
-			'',
-			false,
-			"html",
-			array(
-				'height' => '200',
-				'width' => '100%'
-			),
-			"N",
-			0,
-			"",
-			'',//'data-bx-editor-tool-input="content"',
-			false,
-			!$isUserHavePhpAccess,
-			false,
-			array(
-				//'templateID' => $str_SITE_TEMPLATE_ID,
-				'componentFilter' => $this->componentFilter,
-				'limit_php_access' => !$isUserHavePhpAccess,
-				'hideTypeSelector' => true,
-				'minBodyWidth' => '420',
-				'normalBodyWidth' => '420',
-			)
-		);
+		if ($useLightTextEditor)
+		{
+			echo '<div style="color: #bfbfbf; font-size: 17px; padding: 0 0; position: relative;">';
+
+			$editor = new \CHTMLEditor;
+			$res = array_merge(
+				array(
+					'height' => 400,
+					'minBodyWidth' => 350,
+					'normalBodyWidth' => 555,
+					'bAllowPhp' => false,
+					'limitPhpAccess' => false,
+					'showTaskbars' => false,
+					'showNodeNavi' => false,
+					'askBeforeUnloadPage' => true,
+					'useFileDialogs' => !IsModuleInstalled('intranet'),
+					'bbCode' => false,
+					'siteId' => SITE_ID,
+					'autoResize' => false,
+					'autoResizeOffset' => 40,
+					'saveOnBlur' => true,
+					'controlsMap' => array(
+						array('id' => 'placeholder_selector',  'compact' => true, 'sort' => 60),
+						array('id' => 'StyleSelector',  'compact' => true, 'sort' => 70),
+						array('id' => 'Bold',  'compact' => true, 'sort' => 80),
+						array('id' => 'Italic',  'compact' => true, 'sort' => 90),
+						array('id' => 'Underline',  'compact' => true, 'sort' => 100),
+						array('id' => 'Strikeout',  'compact' => true, 'sort' => 110),
+						array('id' => 'RemoveFormat',  'compact' => true, 'sort' => 120),
+						array('id' => 'Color',  'compact' => true, 'sort' => 130),
+						array('id' => 'FontSelector',  'compact' => false, 'sort' => 135),
+						array('id' => 'FontSize',  'compact' => false, 'sort' => 140),
+						//array('separator' => true, 'compact' => false, 'sort' => 145),
+						array('id' => 'OrderedList',  'compact' => true, 'sort' => 150),
+						array('id' => 'UnorderedList',  'compact' => true, 'sort' => 160),
+						array('id' => 'AlignList', 'compact' => false, 'sort' => 190),
+						//array('separator' => true, 'compact' => false, 'sort' => 200),
+						array('id' => 'InsertLink',  'compact' => true, 'sort' => 210),
+						//array('id' => 'InsertImage',  'compact' => false, 'sort' => 220),
+						//array('id' => 'InsertVideo',  'compact' => true, 'sort' => 230, 'wrap' => 'bx-b-video-'.$arParams["FORM_ID"]),
+						//array('id' => 'InsertTable',  'compact' => false, 'sort' => 250),
+						//array('id' => 'Code',  'compact' => true, 'sort' => 260),
+						//array('id' => 'Quote',  'compact' => true, 'sort' => 270, 'wrap' => 'bx-b-quote-'.$arParams["FORM_ID"]),
+						//array('id' => 'Smile',  'compact' => false, 'sort' => 280),
+						//array('separator' => true, 'compact' => false, 'sort' => 290),
+						array('id' => 'RemoveFormat',  'compact' => false, 'sort' => 310),
+						array('id' => 'Fullscreen',  'compact' => false, 'sort' => 320),
+						array('id' => 'BbCode',  'compact' => true, 'sort' => 340),
+						array('id' => 'More',  'compact' => true, 'sort' => 400)
+					),
+					'isCopilotEnabled' => false,
+				),
+				array(
+					'name' => 'BX_BLOCK_EDITOR_CONTENT_' . $this->id,
+					'id' => 'BX_BLOCK_EDITOR_CONTENT_' . $this->id,
+					'width' => '100%',
+					'arSmilesSet' => array(),
+					'arSmiles' => array(),
+					'content' => '',
+					'fontSize' => '14px',
+					'iframeCss' =>
+						'.bx-spoiler {border:1px solid #cecece;background-color:#f6f6f6;padding: 8px 8px 8px 24px;color:#373737;border-radius:var(--ui-border-radius-sm, 2px);min-height:1em;margin: 0;}',
+				)
+			);
+			$editor->Show($res);
+
+			echo '</div>';
+		}
+		else
+		{
+			\CFileMan::AddHTMLEditorFrame(
+				'BX_BLOCK_EDITOR_CONTENT_' . $this->id,
+				'',
+				false,
+				"html",
+				array(
+					'height' => '200',
+					'width' => '100%'
+				),
+				"N",
+				0,
+				"",
+				'',//'data-bx-editor-tool-input="content"',
+				false,
+				!$isUserHavePhpAccess,
+				false,
+				array(
+					//'templateID' => $str_SITE_TEMPLATE_ID,
+					'componentFilter' => $this->componentFilter,
+					'limit_php_access' => !$isUserHavePhpAccess,
+					'hideTypeSelector' => true,
+					'minBodyWidth' => '420',
+					'normalBodyWidth' => '420',
+				)
+			);
+		}
 
 		$resultList[] = array(
 			'GROUP' => 'cont',
@@ -511,9 +538,12 @@ HTML
 						<select class="preset">
 							<option value=""><?=Loc::getMessage('BLOCK_EDITOR_TOOL_SOCIAL_CONTENT_SELECT')?></option>
 							<option value="http://#SERVER_NAME#/"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_SOCIAL_CONTENT_OURSITE')?></option>
-							<option value="http://vk.com/"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_SOCIAL_CONTENT_VK')?></option>
-							<option value="http://ok.ru/"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_SOCIAL_CONTENT_OK')?></option>
+							<?if (self::isAvailableRussian()):?>
+								<option value="http://vk.com/"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_SOCIAL_CONTENT_VK')?></option>
+								<option value="http://ok.ru/"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_SOCIAL_CONTENT_OK')?></option>
+							<?endif;?>
 							<option value="http://facebook.com/"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_SOCIAL_CONTENT_FACEBOOK')?></option>
+							<option value="http://instagram.com/"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_SOCIAL_CONTENT_INSTAGRAM')?></option>
 							<option value="http://twitter.com/"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_SOCIAL_CONTENT_TWITTER')?></option>
 							<option value="http://"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_SOCIAL_CONTENT_SITE')?></option>
 							<option value="mailto:"><?=Loc::getMessage('BLOCK_EDITOR_TOOL_SOCIAL_CONTENT_EMAIL')?></option>
@@ -572,9 +602,20 @@ HTML
 					<option value="dashed">' . Loc::getMessage('BLOCK_EDITOR_TOOL_BORDER_DASHED') . '</option>
 					<option value="dotted">' . Loc::getMessage('BLOCK_EDITOR_TOOL_BORDER_DOTTED') . '</option>
 				</select>
-				<input id="block_editor_style_border_width" type="text">
-				<input id="block_editor_style_border_color" type="text" class="bx-editor-color-picker">
-				<span class="bx-editor-color-picker-view"></span>',
+				<select id="block_editor_style_border_width" style="width: 80px; min-width: 80px;">
+					<option value="">' . Loc::getMessage('BLOCK_EDITOR_COMMON_NO') . '</option>
+					<option value="1px">1px</option>
+					<option value="2px">2px</option>
+					<option value="3px">3px</option>
+					<option value="4px">4px</option>
+					<option value="5px">5px</option>
+					<option value="6px">6px</option>
+					<option value="7px">7px</option>
+				</select>
+				<input id="block_editor_style_border_color" type="hidden" class="bx-editor-color-picker">
+				<span class="bx-editor-color-picker-view"></span>
+				<span class="bx-editor-color-picker-text">' . Loc::getMessage('BLOCK_EDITOR_TOOLS_COLOR') .'</span>
+				',
 		);
 
 		$resultList[] = array(
@@ -741,63 +782,63 @@ HTML
 		$resultList[] = array(
 			'GROUP' => 'style',
 			'ID' => 'bx-stylist-text-color',
-			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_COLOR'),
+			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_COLOR'),
 			'HTML' => Tools::getControlColor(),
 		);
 
 		$resultList[] = array(
 			'GROUP' => 'style',
 			'ID' => 'bx-stylist-text-font-family',
-			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_FAMILY'),
+			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_FAMILY'),
 			'HTML' => Tools::getControlFontFamily(),
 		);
 
 		$resultList[] = array(
 			'GROUP' => 'style',
 			'ID' => 'bx-stylist-text-font-size',
-			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_SIZE'),
+			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_SIZE'),
 			'HTML' => Tools::getControlFontSize(),
 		);
 
 		$resultList[] = array(
 			'GROUP' => 'style',
 			'ID' => 'bx-stylist-text-font-weight',
-			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_WEIGHT'),
+			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_WEIGHT'),
 			'HTML' => Tools::getControlFontWeight(),
 		);
 
 		$resultList[] = array(
 			'GROUP' => 'style',
 			'ID' => 'bx-stylist-text-line-height',
-			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_LINE_HEIGHT'),
+			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_LINE_HEIGHT'),
 			'HTML' => Tools::getControlLineHeight(),
 		);
 
 		$resultList[] = array(
 			'GROUP' => 'style',
 			'ID' => 'bx-stylist-text-text-align',
-			'NAME' =>  Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_TEXT_ALIGN'),
+			'NAME' =>  Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_TEXT') . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_TEXT_ALIGN'),
 			'HTML' => Tools::getControlTextAlign(),
 		);
 
 		$resultList[] = array(
 			'GROUP' => 'style',
 			'ID' => 'bx-stylist-a-color',
-			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_LINK') . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_COLOR'),
+			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_LINK') . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_COLOR'),
 			'HTML' => Tools::getControlColor(),
 		);
 
 		$resultList[] = array(
 			'GROUP' => 'style',
 			'ID' => 'bx-stylist-a-font-weight',
-			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_LINK') . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_WEIGHT'),
+			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_LINK') . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_WEIGHT'),
 			'HTML' => Tools::getControlFontWeight(),
 		);
 
 		$resultList[] = array(
 			'GROUP' => 'style',
 			'ID' => 'bx-stylist-a-text-decoration',
-			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_LINK') . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_TEXT_DECORATION'),
+			'NAME' => Loc::getMessage('BLOCK_EDITOR_TOOL_STYLIST_LINK') . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_TEXT_DECORATION'),
 			'HTML' => Tools::getControlTextDecoration(),
 		);
 
@@ -806,35 +847,35 @@ HTML
 			$resultList[] = array(
 				'GROUP' => 'style',
 				'ID' => 'bx-stylist-h' . $i . '-color',
-				'NAME' => 'H' . $i . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_COLOR'),
+				'NAME' => 'H' . $i . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_COLOR'),
 				'HTML' => Tools::getControlColor(),
 			);
 
 			$resultList[] = array(
 				'GROUP' => 'style',
 				'ID' => 'bx-stylist-h' . $i . '-font-size',
-				'NAME' => 'H' . $i . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_SIZE'),
+				'NAME' => 'H' . $i . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_SIZE'),
 				'HTML' => Tools::getControlFontSize(),
 			);
 
 			$resultList[] = array(
 				'GROUP' => 'style',
 				'ID' => 'bx-stylist-h' . $i . '-font-weight',
-				'NAME' => 'H' . $i . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_WEIGHT'),
+				'NAME' => 'H' . $i . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_FONT_WEIGHT'),
 				'HTML' => Tools::getControlFontWeight(),
 			);
 
 			$resultList[] = array(
 				'GROUP' => 'style',
 				'ID' => 'bx-stylist-h' . $i . '-line-height',
-				'NAME' => 'H' . $i . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_LINE_HEIGHT'),
+				'NAME' => 'H' . $i . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_LINE_HEIGHT'),
 				'HTML' => Tools::getControlLineHeight(),
 			);
 
 			$resultList[] = array(
 				'GROUP' => 'style',
 				'ID' => 'bx-stylist-h' . $i . '-text-align',
-				'NAME' => 'H' . $i . ': ' . Loc::getMessage('BLOCK_EDITOR_TOOL_TEXT_ALIGN'),
+				'NAME' => 'H' . $i . ' ' . Loc::getMessage('BLOCK_EDITOR_TOOL_TEXT_ALIGN'),
 				'HTML' => Tools::getControlTextAlign(),
 			);
 		}
@@ -849,24 +890,9 @@ HTML
 	 * @param array $values
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает HTML части интерфейса.</p>
-	*
-	*
-	* @param string $id  Код шаблона.
-	*
-	* @param array $values  Массив заменяемых полей.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/getui.php
-	* @author Bitrix
-	*/
 	public function getUI($id, array $values)
 	{
-		if(!array_key_exists($id, $this->uiPatterns) || strlen(trim($this->uiPatterns[$id])) === 0)
+		if(!array_key_exists($id, $this->uiPatterns) || trim($this->uiPatterns[$id]) == '')
 		{
 			return '';
 		}
@@ -883,17 +909,6 @@ HTML
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает HTML интерфейса редактора без css и js.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/showeditor.php
-	* @author Bitrix
-	*/
 	public function showEditor()
 	{
 		$textArea = '';
@@ -935,7 +950,7 @@ HTML
 		foreach($this->previewModes as $mode)
 		{
 			$devices .= $this->getUI('device', array(
-				'MESS_NAME' => strtoupper(htmlspecialcharsbx($mode['NAME'])),
+				'MESS_NAME' => mb_strtoupper(htmlspecialcharsbx($mode['NAME'])),
 				'class' => htmlspecialcharsbx($mode['CLASS']),
 				'width' => htmlspecialcharsbx($mode['WIDTH']),
 				'height' => htmlspecialcharsbx($mode['HEIGHT']),
@@ -968,6 +983,7 @@ HTML
 				'blocks' => $blocks,
 				'tools' => $tools,
 				'devices' => $devices,
+				'nav-display' => count($this->blocks) <= static::BLOCK_COUNT_PER_PAGE ? 'bx-block-hide' : '',
 				'MESS_ACCESS_DENIED' => Loc::getMessage('ACCESS_DENIED'),
 				'MESS_STYLES' => Loc::getMessage('BLOCK_EDITOR_UI_STYLES'),
 				'MESS_BLOCKS' => Loc::getMessage('BLOCK_EDITOR_UI_BLOCKS'),
@@ -995,6 +1011,7 @@ HTML
 			'panels' => $panels,
 			'MESS_BTN_MAX' => Loc::getMessage('BLOCK_EDITOR_UI_BTN_MAX'),
 			'MESS_BTN_MIN' => Loc::getMessage('BLOCK_EDITOR_UI_BTN_MIN'),
+			'MESS_BTN_HTML_COPY' => Loc::getMessage('BLOCK_EDITOR_UI_BTN_HTML_COPY'),
 		));
 	}
 
@@ -1003,17 +1020,6 @@ HTML
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает HTML-код для показа в редакторе, включая css и js.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/show.php
-	* @author Bitrix
-	*/
 	public function show()
 	{
 		\CJSCore::RegisterExt('block_editor', array(
@@ -1024,9 +1030,10 @@ HTML
 				'/bitrix/js/fileman/block_editor/editor.js',
 			),
 			'css' => '/bitrix/js/fileman/block_editor/dialog.css',
+			'rel' => ['ui.design-tokens', 'ui.fonts.opensans'],
 			'lang' => '/bitrix/modules/fileman/lang/' . LANGUAGE_ID . '/js_block_editor.php',
 		));
-		\CJSCore::Init(array("block_editor"));
+		\CJSCore::Init(array("block_editor", "color_picker", "clipboard"));
 
 		static $isBlockEditorManagerInited = false;
 		$editorBlockTypeListByCode = array();
@@ -1042,6 +1049,7 @@ HTML
 			'id' => $this->id,
 			'url' => $this->url,
 			'previewUrl' => $this->previewUrl,
+			'saveFileUrl' => $this->saveFileUrl,
 			'templateType' => $this->templateType,
 			'templateId' => $this->templateId,
 			'isTemplateMode' => $this->isTemplateMode,
@@ -1078,28 +1086,14 @@ HTML
 	 * @param string $charset
 	 * @return string $html
 	 */
-	
-	/**
-	* <p>Статический метод возвращает принятую строку, преобразованную php в специальный формат для работы с блочным редактором.</p>
-	*
-	*
-	* @param string $html  Принятая HTML-строка.
-	*
-	* @param string $charset = null Кодировка.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/gethtmlforeditor.php
-	* @author Bitrix
-	*/
 	public static function getHtmlForEditor($html, $charset = null)
 	{
 		$phpList = \PHPParser::ParseFile($html);
 		foreach($phpList as $php)
 		{
+			$phpFormatted = htmlspecialcharsbx(str_replace(["\r", "\n"], "", $php[2]));
 			$id = 'bx_block_php_' . mt_rand();
-			$surrogate = '<span id="' . $id . '" data-bx-editor-php-slice="' . htmlspecialcharsbx($php[2]) . '" class="bxhtmled-surrogate" title=""></span>';
+			$surrogate = '<span id="' . $id . '" ' . self::BLOCK_PHP_ATTR . '="' . ($phpFormatted) . '" class="bxhtmled-surrogate" title=""></span>';
 			$html = str_replace($php[2], $surrogate, $html);
 		}
 
@@ -1112,6 +1106,7 @@ HTML
 		$charsetPlaceholder = '#CHARSET#';
 		$html = static::replaceCharset($html, $charsetPlaceholder);
 		$html = str_replace($charsetPlaceholder, HtmlFilter::encode($charset), $html);
+		$html = Sanitizer::clean($html);
 
 		return $html;
 	}
@@ -1124,23 +1119,6 @@ HTML
 	 * @param bool $add
 	 * @return string $html
 	 */
-	
-	/**
-	* <p>Статический метод меняет кодировку в HTML-строке.</p>
-	*
-	*
-	* @param string $html  HTML-строка.
-	*
-	* @param string $charset = '#CHARSET#' Кодировка.
-	*
-	* @param boolean $add = false Добавлять ли кодировку, если она не указана в HTML.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/replacecharset.php
-	* @author Bitrix
-	*/
 	public static function replaceCharset($html, $charset = '#CHARSET#', $add = false)
 	{
 		$html = preg_replace(
@@ -1170,267 +1148,30 @@ HTML
 	 * Result is string.
 	 *
 	 * @param string $template
-	 * @param string $sliceContent
+	 * @param string $string Content string.
 	 * @param string $encoding
 	 * @return string
+	 * @deprecated
+	 * @see \Bitrix\Fileman\Block\Content\Engine::fillHtmlTemplate
 	 */
-	
-	/**
-	* <p>Статический метод заполняет шаблон (как HTML) кусочным контентом. Результатом исполнения является строка.</p>
-	*
-	*
-	* @param string $template  Целевой шаблон.
-	*
-	* @param string $sliceContent  Кусочный контент, которым будет заполнен шаблон.
-	*
-	* @param string $encoding = null Кодировка.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/filltemplatebyslicecontent.php
-	* @author Bitrix
-	*/
-	public static function fillTemplateBySliceContent($template, $sliceContent, $encoding = null)
+	public static function fillTemplateBySliceContent($template, $string, $encoding = null)
 	{
-		if(!static::isSliceContent($sliceContent))
-		{
-			return $template;
-		}
-
-		// create DomDocument from template
-		$document = new Document;
-		$document->loadHTML($template);
-
-		$fillResult = static::fillDocumentBySliceContent($document, $sliceContent, $encoding);
-		if($fillResult)
-		{
-			$result = $document->saveHTML();
-			return $result ? $result : $template;
-		}
-		else
-		{
-			return $template;
-		}
+		return Content\Engine::fillHtmlTemplate($template, $string, $encoding);
 	}
 
 	/**
-	 * Fill template(as a DOM Document) by slice content.
-	 * Result is DOM Document.
+	 * Fill template(as a DOM Document) by content.
 	 *
-	 * @param \Bitrix\Main\Web\DOM\Document $document
-	 * @param string $sliceContent
+	 * @param Document $document Document.
+	 * @param string $string Content string.
 	 * @param string $encoding
 	 * @return boolean
+	 * @deprecated
+	 * @see \Bitrix\Fileman\Block\Content\Engine::fillHtmlTemplate
 	 */
-	
-	/**
-	* <p>Статический метод заполняет шаблон (как DOM-документ) кусочным контентом. Результатом исполнения является DOM-документ.</p>
-	*
-	*
-	* @param mixed $Bitrix  Целевой документ.
-	*
-	* @param Bitri $Main  Кусочный контент, которым будет заполнен шаблон.
-	*
-	* @param Mai $Web  Кодировка.
-	*
-	* @param We $DOM  
-	*
-	* @param Document $document  
-	*
-	* @param string $sliceContent  
-	*
-	* @param string $encoding = null 
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/filldocumentbyslicecontent.php
-	* @author Bitrix
-	*/
-	public static function fillDocumentBySliceContent(Document $document, $sliceContent, $encoding = null)
+	public static function fillDocumentBySliceContent(Document $document, $string, $encoding = null)
 	{
-		$blocks = array();
-		$styles = '';
-
-		// parse content to slices of blocks and styles
-		$sliceList = static::parseSliceContent($sliceContent);
-		// group blocks by places
-		if(array_key_exists('BLOCKS', $sliceList))
-		{
-			$groupedSliceList = array();
-			foreach($sliceList['BLOCKS'] as $slice)
-			{
-				if($slice['VALUE'])
-				{
-					$groupedSliceList[$slice['ITEM']][] = $slice['VALUE'];
-				}
-			}
-
-			foreach($groupedSliceList as $item => $valueList)
-			{
-				$blocks[$item] = "\n" . implode("\n", $valueList) . "\n";
-			}
-
-			unset($groupedSliceList);
-		}
-
-		// unite styles to one string
-		if(array_key_exists('STYLES', $sliceList))
-		{
-			foreach($sliceList['STYLES'] as $slice)
-			{
-				if($slice['VALUE'])
-				{
-					$styles .= "\n" . $slice['VALUE'];
-				}
-			}
-
-			if($styles && preg_match_all("#<style[\\s\\S]*?>([\\s\\S]*?)</style>#i", $styles, $matchesStyles))
-			{
-				$styles = '';
-				$matchesStylesCount = count($matchesStyles);
-				for($i = 0; $i < $matchesStylesCount; $i++)
-				{
-					$styles .= "\n" . $matchesStyles[1][$i];
-				}
-			}
-		}
-
-		// if nothing to replace, return content
-		if(!$styles && count($blocks) ===  0)
-		{
-			return false;
-		}
-
-		// add styles block to head of document
-		if($styles)
-		{
-			$headDomElement = $document->getHead();
-			if($headDomElement)
-			{
-				$styleNode = end($headDomElement->querySelectorAll('style[' . self::STYLIST_TAG_ATTR . ']'));
-				if(!$styleNode)
-				{
-					$styleNode = $document->createElement('style');
-					$styleNode->setAttribute('type', 'text/css');
-					$styleNode->setAttribute(self::STYLIST_TAG_ATTR, 'item');
-					$headDomElement->appendChild($styleNode);
-					$styleNode->appendChild($document->createTextNode($styles));
-				}
-				else
-				{
-					$styleList1 = CssParser::parseCss($styleNode->getTextContent());
-					$styleList2 = CssParser::parseCss($styles);
-					$styleList = array_merge($styleList1, $styleList2);
-
-					$styleListByKey = array();
-					foreach($styleList as $styleItem)
-					{
-						if(!is_array($styleListByKey[$styleItem['SELECTOR']]))
-						{
-							$styleListByKey[$styleItem['SELECTOR']] = array();
-						}
-
-						$styleListByKey[$styleItem['SELECTOR']] = array_merge(
-							$styleListByKey[$styleItem['SELECTOR']],
-							$styleItem['STYLE']
-						);
-					}
-
-					$stylesString = '';
-					foreach($styleListByKey as $selector => $declarationList)
-					{
-						$stylesString .= $selector . '{' . CssParser::getDeclarationString($declarationList) . "}\n";
-					}
-
-					if($stylesString)
-					{
-						$styleNode->setInnerHTML('');
-						$styleNode->appendChild($document->createTextNode($stylesString));
-					}
-				}
-			}
-		}
-
-		// fill places by blocks
-		if($blocks)
-		{
-			$placeList = $document->querySelectorAll('[' . static::BLOCK_PLACE_ATTR . ']');
-			if(!empty($placeList))
-			{
-				// find available places
-				$firstPlaceCode = null;
-				$bodyPlaceCode = null;
-				$placeListByCode = array();
-				foreach($placeList as $place)
-				{
-					/* @var $place \Bitrix\Main\Web\DOM\Element */
-					if (!$place || !$place->getAttributeNode(static::BLOCK_PLACE_ATTR))
-					{
-						continue;
-					}
-
-					/*
-					// remove child nodes
-					foreach($place->getChildNodesArray() as $child)
-					{
-						$place->removeChild($child);
-					}
-					*/
-
-					$placeCode = $place->getAttribute(static::BLOCK_PLACE_ATTR);
-					$placeListByCode[$placeCode] = $place;
-					if(!$firstPlaceCode)
-					{
-						$firstPlaceCode = $placeCode;
-					}
-
-					if(!$bodyPlaceCode && $placeCode == static::BLOCK_PLACE_ATTR_DEF_VALUE)
-					{
-						$bodyPlaceCode = $placeCode;
-					}
-				}
-
-				// group block list by existed places
-				$blocksByExistType = array();
-				foreach($blocks as $placeCode => $blockHtml)
-				{
-					// if there is no place, find body-place or first place or skip filling place
-					if(!array_key_exists($placeCode, $placeListByCode))
-					{
-						if($bodyPlaceCode)
-						{
-							$placeCode = $bodyPlaceCode;
-						}
-						elseif($firstPlaceCode)
-						{
-							$placeCode = $firstPlaceCode;
-						}
-						else
-						{
-							continue;
-						}
-					}
-
-					$blocksByExistType[$placeCode][] = $blockHtml;
-				}
-
-				//fill existed places by blocks
-				foreach($blocksByExistType as $placeCode => $blockHtmlList)
-				{
-					if(!array_key_exists($placeCode, $placeListByCode))
-					{
-						continue;
-					}
-
-					$place = $placeListByCode[$placeCode];
-					$place->setInnerHTML(implode("\n", $blockHtmlList));
-				}
-			}
-		}
-
-		return true;
+		return Content\Engine::create($document)->setEncoding($encoding)->setContent($string)->fill();
 	}
 
 	/**
@@ -1439,22 +1180,9 @@ HTML
 	 * @param string $content
 	 * @return boolean
 	 */
-	
-	/**
-	* <p>Статический метод проверяет строку на наличие атрибутов тегов, указывающих на поддержку блочного редактора.</p>
-	*
-	*
-	* @param string $content  Проверяемый контент.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/iscontentsupported.php
-	* @author Bitrix
-	*/
 	public static function isContentSupported($content)
 	{
-		if(!$content || strpos($content, self::BLOCK_PLACE_ATTR) === false)
+		if(!$content || mb_strpos($content, Content\Engine::BLOCK_PLACE_ATTR) === false)
 		{
 			return false;
 		}
@@ -1470,114 +1198,21 @@ HTML
 	 * @param string $content
 	 * @return bool
 	 */
-	
-	/**
-	* <p>Статический метод проверяет строку на наличие HTML.</p>
-	*
-	*
-	* @param string $content  Проверяемый контент.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/ishtmldocument.php
-	* @author Bitrix
-	*/
 	public static function isHtmlDocument($content)
 	{
 		$result = true;
-		$content = strtoupper($content);
-		if(strpos($content, '<HTML') === false)
+		$content = mb_strtoupper($content);
+		if(mb_strpos($content, '<HTML') === false)
 		{
 			$result = false;
 		}
-		if(strpos($content, '</HTML') === false)
+		if(mb_strpos($content, '</HTML') === false)
 		{
 			$result = false;
 		}
-		if(strpos($content, '<BODY') === false)
+		if(mb_strpos($content, '<BODY') === false)
 		{
 			$result = false;
-		}
-
-		return $result;
-	}
-
-	/**
-	 * Check string for the presence of slices
-	 *
-	 * @param string $content
-	 * @return bool
-	 */
-	
-	/**
-	* <p>Статический метод проверяет строку на наличие кусочного контента.</p>
-	*
-	*
-	* @param string $content  Проверяемый контент.
-	*
-	* @return boolean 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/isslicecontent.php
-	* @author Bitrix
-	*/
-	public static function isSliceContent($content)
-	{
-		$result = true;
-		$content = strtoupper($content);
-		if(strpos($content, '<!--START ' . static::SLICE_SECTION_ID . '/') === false)
-		{
-			$result = false;
-		}
-		if(strpos($content, '<!--END ' . static::SLICE_SECTION_ID . '/') === false)
-		{
-			$result = false;
-		}
-
-		return $result;
-	}
-
-	/**
-	 * Parse string of sliced content to array of block content
-	 *
-	 * @param string $content
-	 * @return array
-	 */
-	
-	/**
-	* <p>Статический метод преобразует строку кусочного контента в массив элементов блочного контента.</p>
-	*
-	*
-	* @param string $content  Преобразуемый контент.
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/parseslicecontent.php
-	* @author Bitrix
-	*/
-	public static function parseSliceContent($content)
-	{
-		$result = array();
-		$pattern = '#<!--START '
-			. static::SLICE_SECTION_ID . '/([\w]+?)/([\w]+?)/-->'
-			. '([\s\S,\n]*?)'
-			. '<!--END ' . static::SLICE_SECTION_ID . '[/\w]+?-->#';
-
-		$matches = array();
-		if(preg_match_all($pattern, $content, $matches))
-		{
-			$matchesCount = count($matches[0]);
-			for($i = 0; $i < $matchesCount; $i++)
-			{
-				$section = trim($matches[1][$i]);
-				$result[$section][] = array(
-					'SECTION' => $section,
-					'ITEM' => trim($matches[2][$i]),
-					'VALUE' => trim($matches[3][$i]),
-				);
-			}
 		}
 
 		return $result;
@@ -1589,19 +1224,6 @@ HTML
 	 * @param array $componentFilter
 	 * @return void
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает фильтр компонентов.</p>
-	*
-	*
-	* @param array $componentFilter = null Устанавливаемый фильтр.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/fileman/block/editor/setcomponentfilter.php
-	* @author Bitrix
-	*/
 	public function setComponentFilter(array $componentFilter = null)
 	{
 		$this->componentFilter = $componentFilter;

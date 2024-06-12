@@ -8,7 +8,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CCityLookup
 {
-
+	public $is_installed = false;
 	public $ip_addr = "";
 	public $ip_number = "";
 	public $country_code = "";
@@ -21,9 +21,8 @@ class CCityLookup
 
 	/**
 	 * @param array[string]string $arDBRecord
-	 * @return void
 	*/
-	public function __construct($arDBRecord = /*.(array[string]string).*/array())
+	function __construct($arDBRecord = /*.(array[string]string).*/array())
 	{
 		if(is_array($arDBRecord))
 		{
@@ -55,24 +54,24 @@ class CCityLookup
 	/**
 	 * @return array[string]string
 	*/
-	public function ArrayForDB()
+	function ArrayForDB()
 	{
 		$ar = /*.(array[string]string).*/array();
-		if(strlen($this->ip_addr) > 0) $ar["IPA"] = $this->ip_addr;
-		if(strlen($this->ip_number) > 0) $ar["IPN"] = $this->ip_number;
-		if(strlen($this->country_code) > 0) $ar["COC"] = $this->country_code;
-		if(strlen($this->country_short_name) > 0) $ar["COS"] = $this->country_short_name;
-		if(strlen($this->country_full_name) > 0) $ar["COF"] = $this->country_full_name;
-		if(strlen($this->region_name) > 0) $ar["REN"] = $this->region_name;
-		if(strlen($this->city_name) > 0) $ar["CIN"] = $this->city_name;
-		if(strlen($this->city_id) > 0) $ar["CID"] = $this->city_id;
+		if($this->ip_addr <> '') $ar["IPA"] = $this->ip_addr;
+		if($this->ip_number <> '') $ar["IPN"] = $this->ip_number;
+		if($this->country_code <> '') $ar["COC"] = $this->country_code;
+		if($this->country_short_name <> '') $ar["COS"] = $this->country_short_name;
+		if($this->country_full_name <> '') $ar["COF"] = $this->country_full_name;
+		if($this->region_name <> '') $ar["REN"] = $this->region_name;
+		if($this->city_name <> '') $ar["CIN"] = $this->city_name;
+		if($this->city_id <> '') $ar["CID"] = $this->city_id;
 		return $ar;
 	}
 
 	/**
 	 * @return array[string][string]string
 	*/
-	public function GetFullInfo()
+	function GetFullInfo()
 	{
 		return array(
 			"IP_ADDR" => array(
@@ -106,7 +105,7 @@ class CCityLookup
 	/**
 	 * @return array[string]mixed
 	*/
-	public static function GetDescription()
+	function GetDescription()
 	{
 		$res = /*.(array[string]mixed).*/array();
 		$res["ID"] = "CCityLookup";
@@ -120,7 +119,7 @@ class CCityLookup
 	/**
 	 * @return bool
 	*/
-	public static function IsInstalled()
+	function IsInstalled()
 	{
 		return false;
 	}
@@ -128,7 +127,7 @@ class CCityLookup
 	/**
 	 * @return void
 	*/
-	public function Lookup()
+	function Lookup()
 	{
 		$this->country_code = "N0";
 		$this->country_short_name = "N00";
@@ -143,7 +142,7 @@ class CStatRegion
 	 * @param array[string]string $arFilter
 	 * @return CDBResult
 	*/
-	public static function GetList($arOrder = /*.(array[string]string).*/array(), $arFilter = /*.(array[string]string).*/array())
+	function GetList($arOrder = /*.(array[string]string).*/array(), $arFilter = /*.(array[string]string).*/array())
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
 
@@ -152,8 +151,8 @@ class CStatRegion
 		{
 			foreach($arOrder as $strColumn => $strDirection)
 			{
-				$strColumn = strtoupper($strColumn);
-				$strDirection = strtoupper($strDirection)==="ASC"? "ASC": "DESC";
+				$strColumn = mb_strtoupper($strColumn);
+				$strDirection = mb_strtoupper($strDirection) === "ASC"? "ASC": "DESC";
 				switch($strColumn)
 				{
 					case "COUNTRY_ID":
@@ -213,7 +212,7 @@ class CStatRegion
 
 		$strQueryWhere = $obQueryWhere->GetQuery($arFilter);
 
-		if(strlen($strQueryWhere) > 0)
+		if($strQueryWhere <> '')
 		{
 			$strSql .= "
 				WHERE
@@ -246,19 +245,18 @@ class CCity
 
 	/**
 	 * @param string $dbRecord
-	 * @return void
 	*/
-	public function __construct($dbRecord = "")
+	function __construct($dbRecord = "")
 	{
-		if(strlen($dbRecord) > 0)
-			$arDBRecord = unserialize($dbRecord);
+		if($dbRecord <> '')
+			$arDBRecord = unserialize($dbRecord, ['allowed_classes' => false]);
 		else
 			$arDBRecord = false;
 
 		if(is_array($arDBRecord))
 		{
 			$this->lookup_class = $arDBRecord["LC"];
-			if(!$this->lookup_class || !class_exists(strtolower($this->lookup_class)))
+			if(!$this->lookup_class || !class_exists(mb_strtolower($this->lookup_class)))
 				$this->lookup_class = "CCityLookup";
 
 			$this->lookup = call_user_func_array(array($this->lookup_class, "OnCityLookup"), array($arDBRecord["LD"]));
@@ -269,7 +267,7 @@ class CCity
 		else
 		{
 			$this->lookup_class = $this->GetHandler();
-			if(!$this->lookup_class || !class_exists(strtolower($this->lookup_class)))
+			if(!$this->lookup_class || !class_exists(mb_strtolower($this->lookup_class)))
 				$this->lookup_class = "CCityLookup";
 
 			$ob = call_user_func_array(array($this->lookup_class, "OnCityLookup"), array());
@@ -301,8 +299,8 @@ class CCity
 		$arQueryOrder = array();
 		foreach($arOrder as $strColumn => $strDirection)
 		{
-			$strColumn = strtoupper($strColumn);
-			$strDirection = strtoupper($strDirection)==="ASC"? "ASC": "DESC";
+			$strColumn = mb_strtoupper($strColumn);
+			$strDirection = mb_strtoupper($strDirection) === "ASC"? "ASC": "DESC";
 			switch($strColumn)
 			{
 				case "COUNTRY_ID":
@@ -376,7 +374,7 @@ class CCity
 		";
 		$strQueryWhere = $obQueryWhere->GetQuery($arFilter);
 
-		if(strlen($strQueryWhere) > 0)
+		if($strQueryWhere <> '')
 		{
 			$strSql .= "
 				WHERE
@@ -399,7 +397,7 @@ class CCity
 	/**
 	 * @return string
 	*/
-	public function ForSQL()
+	function ForSQL()
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
 		return $DB->ForSQL(serialize(array(
@@ -410,7 +408,7 @@ class CCity
 		)));
 	}
 
-	public function GetFullInfo()
+	function GetFullInfo()
 	{
 		$this->GetCityID();
 		return $this->lookup->GetFullInfo();
@@ -444,7 +442,7 @@ class CCity
 		return $selected;
 	}
 
-	public function GetCountryCode()
+	function GetCountryCode()
 	{
 		if(!$this->country_code)
 		{
@@ -454,7 +452,7 @@ class CCity
 		return $this->country_code? $this->country_code: "N0";
 	}
 
-	public function Recode($str)
+	function Recode($str)
 	{
 		if($str && $this->lookup->charset)
 		{
@@ -464,7 +462,7 @@ class CCity
 		return $str;
 	}
 
-	public function GetCityID()
+	function GetCityID()
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
 		$country_code = $this->GetCountryCode();
@@ -525,7 +523,6 @@ class CCity
 		global $arCityColor;
 		$DB = CDatabase::GetModuleConnection('statistic');
 		$arSqlSearch = Array();
-		$strSqlSearch = "";
 		if(is_array($arFilter))
 		{
 			foreach ($arFilter as $key => $val)
@@ -537,7 +534,7 @@ class CCity
 				}
 				else
 				{
-					if( (strlen($val) <= 0) || ($val === "NOT_REF") )
+					if( ((string)$val == '') || ($val === "NOT_REF") )
 						continue;
 				}
 				$match_value_set = array_key_exists($key."_EXACT_MATCH", $arFilter);
@@ -668,12 +665,13 @@ class CCity
 			}
 		}
 
+		$color_getnext = '';
 		$total = count($arLegend);
 		foreach($arLegend as $key => $arr)
 		{
-			if (strlen($arCountryColor[$key])>0)
+			if ($arCityColor[$key] <> '')
 			{
-				$color = $arCountryColor[$key];
+				$color = $arCityColor[$key];
 			}
 			else
 			{
@@ -697,7 +695,7 @@ class CCity
 			{
 				if (is_file($_SERVER["DOCUMENT_ROOT"].$path."/".$fname) && $fname!="." && $fname!="..")
 				{
-					$ext = substr(strtolower($fname), -4);
+					$ext = mb_substr(mb_strtolower($fname), -4);
 					if($ext === ".csv" || $ext === ".txt")
 					{
 						$arFiles[] = $fname;
@@ -1148,7 +1146,7 @@ class CCity
 				if(
 					$FIELD_ID === "COUNTRY_ID"
 					&& !array_key_exists($value, $arCountryCache)
-					&& strlen($value) > 0
+					&& $value <> ''
 				)
 				{
 					$cid = $DB->ForSQL($value, 2);
@@ -1161,7 +1159,7 @@ class CCity
 				if(
 					$FIELD_ID === "COUNTRY_ID"
 					&& isset($arField["update_city"])
-					&& strlen($value) > 0
+					&& $value <> ''
 				)
 				{
 					$city_id = $DB->ForSQL(trim($arr[$arField["update_city"]], "\" \n\r\t"));
@@ -1260,4 +1258,3 @@ class CCity
 		return "Y";
 	}
 }
-?>

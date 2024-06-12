@@ -1,10 +1,11 @@
 <?php
 namespace Bitrix\Im\Model;
 
-use Bitrix\Main,
-	Bitrix\Main\Localization\Loc;
+use Bitrix\Im\V2\Entity\User\Data\BotData;
+use Bitrix\Main;
+use Bitrix\Main\ORM\Event;
+use Bitrix\Im\V2\Common\UpdateByFilterTrait;
 
-Loc::loadMessages(__FILE__);
 
 /**
  * Class BotTable
@@ -18,10 +19,24 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Im
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Bot_Query query()
+ * @method static EO_Bot_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Bot_Result getById($id)
+ * @method static EO_Bot_Result getList(array $parameters = array())
+ * @method static EO_Bot_Entity getEntity()
+ * @method static \Bitrix\Im\Model\EO_Bot createObject($setDefaultValues = true)
+ * @method static \Bitrix\Im\Model\EO_Bot_Collection createCollection()
+ * @method static \Bitrix\Im\Model\EO_Bot wakeUpObject($row)
+ * @method static \Bitrix\Im\Model\EO_Bot_Collection wakeUpCollection($rows)
+ */
 
 class BotTable extends Main\Entity\DataManager
 {
+	use UpdateByFilterTrait;
 	/**
 	 * Returns DB table name for entity.
 	 *
@@ -43,104 +58,120 @@ class BotTable extends Main\Entity\DataManager
 			'BOT_ID' => array(
 				'data_type' => 'integer',
 				'primary' => true,
-				'title' => Loc::getMessage('BOT_ENTITY_BOT_ID_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_BOT_ID_FIELD'),
 			),
 			'MODULE_ID' => array(
-				'data_type' => 'integer',
+				'data_type' => 'string',
+				'validation' => array(__CLASS__, 'validateModuleId'),
 				'required' => true,
-				'title' => Loc::getMessage('BOT_ENTITY_MODULE_ID_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_MODULE_ID_FIELD'),
 			),
 			'CODE' => array(
 				'data_type' => 'string',
 				'required' => true,
-				'validation' => array(__CLASS__, 'validateBotName'),
-				'title' => Loc::getMessage('BOT_ENTITY_BOT_NAME_FIELD'),
+				'validation' => array(__CLASS__, 'validateBotCode'),
+				//'title' => Loc::getMessage('BOT_ENTITY_BOT_NAME_FIELD'),
 			),
 			'TYPE' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateBotType'),
-				'title' => Loc::getMessage('BOT_ENTITY_BOT_TYPE_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_BOT_TYPE_FIELD'),
 				'default_value' => 'B',
 			),
 			'CLASS' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateToClass'),
-				'title' => Loc::getMessage('BOT_ENTITY_TO_CLASS_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_TO_CLASS_FIELD'),
 			),
 			'LANG' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateLanguage'),
-				'title' => Loc::getMessage('BOT_ENTITY_LANGUAGE_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_LANGUAGE_FIELD'),
 				'default_value' => '',
 			),
 			'METHOD_BOT_DELETE' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateToMethod'),
-				'title' => Loc::getMessage('BOT_ENTITY_METHOD_BOT_DELETE_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_METHOD_BOT_DELETE_FIELD'),
 			),
 			'METHOD_MESSAGE_ADD' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateToMethod'),
-				'title' => Loc::getMessage('BOT_ENTITY_METHOD_MESSAGE_ADD_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_METHOD_MESSAGE_ADD_FIELD'),
+			),
+			'METHOD_MESSAGE_UPDATE' => array(
+				'data_type' => 'string',
+				'validation' => array(__CLASS__, 'validateToMethod'),
+				//'title' => Loc::getMessage('BOT_ENTITY_METHOD_MESSAGE_UPDATE_FIELD'),
+			),
+			'METHOD_MESSAGE_DELETE' => array(
+				'data_type' => 'string',
+				'validation' => array(__CLASS__, 'validateToMethod'),
+				//'title' => Loc::getMessage('BOT_ENTITY_METHOD_MESSAGE_DELETE_FIELD'),
 			),
 			'METHOD_WELCOME_MESSAGE' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateToMethod'),
-				'title' => Loc::getMessage('BOT_ENTITY_METHOD_WELCOME_MESSAGE_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_METHOD_WELCOME_MESSAGE_FIELD'),
 			),
 			'TEXT_PRIVATE_WELCOME_MESSAGE' => array(
 				'data_type' => 'text',
-				'title' => Loc::getMessage('BOT_ENTITY_TEXT_CHAT_WELCOME_MESSAGE_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_TEXT_CHAT_WELCOME_MESSAGE_FIELD'),
 			),
 			'TEXT_CHAT_WELCOME_MESSAGE' => array(
 				'data_type' => 'text',
-				'title' => Loc::getMessage('BOT_ENTITY_TEXT_CHAT_WELCOME_MESSAGE_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_TEXT_CHAT_WELCOME_MESSAGE_FIELD'),
 			),
 			'COUNT_MESSAGE' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('BOT_ENTITY_COUNT_MESSAGE_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_COUNT_MESSAGE_FIELD'),
 			),
 			'COUNT_COMMAND' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('BOT_ENTITY_COUNT_COMMAND_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_COUNT_COMMAND_FIELD'),
 			),
 			'COUNT_CHAT' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('BOT_ENTITY_COUNT_CHAT_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_COUNT_CHAT_FIELD'),
 			),
 			'COUNT_USER' => array(
 				'data_type' => 'integer',
-				'title' => Loc::getMessage('BOT_ENTITY_COUNT_USER_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_COUNT_USER_FIELD'),
 			),
 			'APP_ID' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateAppId'),
-				'title' => Loc::getMessage('BOT_ENTITY_APP_ID_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_APP_ID_FIELD'),
 				'default_value' => '',
 			),
 			'VERIFIED' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
-				'title' => Loc::getMessage('BOT_ENTITY_VERIFIED_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_VERIFIED_FIELD'),
 				'default_value' => 'N',
 			),
 			'OPENLINE' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
-				'title' => Loc::getMessage('BOT_ENTITY_OPENLINE_FIELD'),
+				//'title' => Loc::getMessage('BOT_ENTITY_OPENLINE_FIELD'),
+				'default_value' => 'N',
+			),
+			'HIDDEN' => array(
+				'data_type' => 'boolean',
+				'values' => array('N', 'Y'),
 				'default_value' => 'N',
 			),
 		);
 	}
 	/**
-	 * Returns validators for NAME field.
+	 * Returns validators for CODE field.
 	 *
 	 * @return array
 	 */
-	public static function validateBotName()
+	public static function validateBotCode()
 	{
 		return array(
-			new Main\Entity\Validator\Length(null, 50),
+			new Main\Entity\Validator\Length(1, 50),
 		);
 	}
 	/**
@@ -149,6 +180,17 @@ class BotTable extends Main\Entity\DataManager
 	 * @return array
 	 */
 	public static function validateToClass()
+	{
+		return array(
+			new Main\Entity\Validator\Length(null, 255),
+		);
+	}
+	/**
+	 * Returns validators for MODULE_ID field.
+	 *
+	 * @return array
+	 */
+	public static function validateModuleId()
 	{
 		return array(
 			new Main\Entity\Validator\Length(null, 255),
@@ -200,6 +242,50 @@ class BotTable extends Main\Entity\DataManager
 			new  Main\Entity\Validator\Length(null, 50),
 		);
 	}
-}
 
-class_alias("Bitrix\\Im\\Model\\BotTable", "Bitrix\\Im\\BotTable", false);
+	public static function onAfterUpdate(\Bitrix\Main\ORM\Event $event)
+	{
+		$id = (int)$event->getParameter('primary')['BOT_ID'];
+		$fields = $event->getParameter('fields');
+
+		if (static::needCacheInvalidate($fields))
+		{
+			BotData::cleanCache($id);
+		}
+
+		return new Main\Entity\EventResult();
+	}
+
+	public static function onAfterDelete(Event $event)
+	{
+		$id = (int)$event->getParameter('primary')['BOT_ID'];
+		BotData::cleanCache($id);
+
+		return new Main\Entity\EventResult();
+	}
+
+	protected static function needCacheInvalidate(array $updatedFields): bool
+	{
+		$cacheInvalidatingFields = [
+			'BOT_ID',
+			'MODULE_ID',
+			'CODE',
+			'TYPE',
+			'CLASS',
+			'LANG',
+			'METHOD_BOT_DELETE',
+			'METHOD_MESSAGE_ADD',
+			'METHOD_MESSAGE_UPDATE',
+			'METHOD_MESSAGE_DELETE',
+			'METHOD_WELCOME_MESSAGE',
+			'TEXT_PRIVATE_WELCOME_MESSAGE',
+			'TEXT_CHAT_WELCOME_MESSAGE',
+			'APP_ID',
+			'VERIFIED',
+			'OPENLINE',
+			'HIDDEN',
+		];
+
+		return !empty(array_intersect($cacheInvalidatingFields, array_keys($updatedFields)));
+	}
+}

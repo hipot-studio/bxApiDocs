@@ -3,17 +3,17 @@ IncludeModuleLangFile(__FILE__);
 
 class CSocServLiveID extends CSocServAuth
 {
-	static public function GetSettings()
+	public function GetSettings()
 	{
 		$liveid_disabled = !WindowsLiveLogin::IsAvailable();
 		return array(
 			array("liveid_appid", GetMessage("MAIN_OPTION_AUTH_LIVEID_APPLID"), "", Array("text", 40), $liveid_disabled),
 			array("liveid_secret", GetMessage("MAIN_OPTION_AUTH_LIVEID_SECRET"), "", Array("text", 40), $liveid_disabled),
-			array("note"=>GetMessage('MAIN_OPTION_COMMENT1')),
+			array("note"=>GetMessage('MAIN_OPTION_COMMENT2')),
 		);
 	}
 
-	static public function GetFormHtml($arParams)
+	public function GetFormHtml($arParams)
 	{
 		$wll = new WindowsLiveLogin();
 	

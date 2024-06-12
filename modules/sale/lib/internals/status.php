@@ -7,17 +7,29 @@
  */
 namespace Bitrix\Sale\Internals;
 
-use	Bitrix\Main,
-	Bitrix\Main\Localization\Loc;
+use	Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
 
-Loc::loadMessages(__FILE__);
-
+/**
+ * Class StatusTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Status_Query query()
+ * @method static EO_Status_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Status_Result getById($id)
+ * @method static EO_Status_Result getList(array $parameters = [])
+ * @method static EO_Status_Entity getEntity()
+ * @method static \Bitrix\Sale\Internals\EO_Status createObject($setDefaultValues = true)
+ * @method static \Bitrix\Sale\Internals\EO_Status_Collection createCollection()
+ * @method static \Bitrix\Sale\Internals\EO_Status wakeUpObject($row)
+ * @method static \Bitrix\Sale\Internals\EO_Status_Collection wakeUpCollection($rows)
+ */
 class StatusTable extends Main\Entity\DataManager
 {
-	public static function getFilePath()
-	{
-		return __FILE__;
-	}
+	public const TYPE_ORDER = 'O';
+	public const TYPE_SHIPMENT = 'D';
 
 	public static function getTableName()
 	{
@@ -41,8 +53,8 @@ class StatusTable extends Main\Entity\DataManager
 			)),
 
 			new Main\Entity\BooleanField('TYPE', array(
-				'default_value' => 'O',
-				'values'        => array('O', 'D'),
+				'default_value' => self::TYPE_ORDER,
+				'values'        => array(self::TYPE_ORDER, self::TYPE_SHIPMENT),
 				'title'         => Loc::getMessage('B_SALE_STATUS_TYPE'),
 			)),
 
@@ -58,6 +70,74 @@ class StatusTable extends Main\Entity\DataManager
 				'title'         => Loc::getMessage('B_SALE_STATUS_NOTIFY'),
 			)),
 
+			new Main\Entity\StringField('COLOR', array(
+				'title'         => Loc::getMessage('B_SALE_STATUS_COLOR'),
+			)),
+
+			new Main\Entity\StringField('XML_ID', array(
+				'title' => Loc::getMessage('B_SALE_STATUS_XML_ID'),
+			)),
+
+			new Main\ORM\Fields\Relations\Reference(
+				'STATUS_LANG',
+				StatusLangTable::class,
+				Main\ORM\Query\Join::on('this.ID', 'ref.STATUS_ID'),
+				array('join_type' => 'left')
+			)
 		);
+	}
+
+	/**
+	 * @param mixed $primary
+	 * @param array $data
+	 *
+	 * @return Main\Entity\UpdateResult
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ArgumentOutOfRangeException
+	 * @throws \Exception
+	 */
+	public static function update($primary, array $data)
+	{
+		$result = parent::update($primary, $data);
+		if (Main\Config\Option::get('sale', 'expiration_processing_events', 'N') === 'Y')
+		{
+			foreach (GetModuleEvents("sale", "OnStatusUpdate", true) as $event)
+			{
+				ExecuteModuleEventEx($event, array($primary, $data));
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param array $data
+	 *
+	 * @return Main\Entity\AddResult
+	 * @throws Main\ArgumentNullException
+	 * @throws Main\ArgumentOutOfRangeException
+	 * @throws \Exception
+	 */
+	public static function add(array $data)
+	{
+		$result = parent::add($data);
+		if (Main\Config\Option::get('sale', 'expiration_processing_events', 'N') === 'Y')
+		{
+			$id = $result->getId();
+			foreach (GetModuleEvents("sale", "OnStatusAdd", true) as $event)
+			{
+				ExecuteModuleEventEx($event, array($id, $data));
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @return string
+	 */
+	public static function generateXmlId()
+	{
+		return uniqid('bx_');
 	}
 }

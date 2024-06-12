@@ -16,7 +16,7 @@ class CSecurityTaintCheckingTest
 	const REQUEST_TIMEOUT = 3;
 	protected $internalName = "TaintCheckingTest";
 
-	static public function __construct()
+	public function __construct()
 	{
 		require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/classes/general/vuln_scanner.php");
 		IncludeModuleLangFile(__FILE__);
@@ -29,7 +29,7 @@ class CSecurityTaintCheckingTest
 	 * @throws CSecurityRequirementsException
 	 * @return bool
 	 */
-	static public function checkRequirements($params = array())
+	public function checkRequirements($params = array())
 	{
 		if(extension_loaded('tokenizer') !== true)
 			throw new CSecurityRequirementsException(GetMessage("SECURITY_SITE_CHECKER_TAINT_TOKENIZER_NOT_FOUND"));
@@ -47,7 +47,7 @@ class CSecurityTaintCheckingTest
 	 * @param array $params
 	 * @return array
 	 */
-	public function check($params)
+	public function check(array $params = array())
 	{
 		$dirtyResults = CQAACheckListTests::checkVulnerabilities($params);
 		$result = $this->formatResults($dirtyResults);

@@ -41,7 +41,7 @@ class Exception extends SystemException
 		return $this->info;
 	}
 
-	static public function getDefaultMessage()
+	public function getDefaultMessage()
 	{
 		return '';
 	}

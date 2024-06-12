@@ -1,28 +1,33 @@
-<?
+<?php
+
 /*
 ##############################################
 # Bitrix Site Manager                        #
-# Copyright (c) 2002-2007 Bitrix             #
+# Copyright (c) 2002-2022 Bitrix             #
 # http://www.bitrixsoft.com                  #
 # mailto:admin@bitrixsoft.com                #
 ##############################################
 */
+
 IncludeModuleLangFile(__FILE__);
 
-/**
- * <b>CDiskQuota</b> - класс для работы с дисковыми квотами.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/main/reference/cdiskquota/index.php
- * @author Bitrix
- */
-class CAllDiskQuota
+class CDiskQuota
 {
 	var $max_execution_time = 20; // 20 sec
 	var $LAST_ERROR = false;
+	private static $instance;
+	protected static $recalculateDb = false;
+
+	public static function getInstance()
+	{
+		if (!isset(self::$instance))
+		{
+			$c = __CLASS__;
+			self::$instance = new $c;
+		}
+
+		return self::$instance;
+	}
 
 	public function __construct($params = array())
 	{
@@ -30,14 +35,47 @@ class CAllDiskQuota
 			$this->max_execution_time = intval($params["max_execution_time"]);
 	}
 
-	static function SetDBSize()
+	public static function recalculateDb(bool $mode = true): void
 	{
+		static::$recalculateDb = $mode;
+	}
+
+	public static function SetDBSize()
+	{
+		global $DB;
+		$DBSize = 0;
+
+		if (static::$recalculateDb && COption::GetOptionInt("main", "disk_space") > 0)
+		{
+			$db_res = $DB->Query("
+				SELECT sum(Data_length + Index_length) as TOTAL_LEN
+				FROM information_schema.tables
+				WHERE table_schema = '{$DB->ForSql($DB->DBName)}'
+			");
+			if ($db_res && ($res = $db_res->Fetch()))
+			{
+				$DBSize = $res['TOTAL_LEN'];
+			}
+
+			COption::SetOptionString("main_size", "~db", $DBSize);
+			$params = array("status" => "d", "time" => time());
+			COption::SetOptionString("main_size", "~db_params", serialize($params));
+
+			static::recalculateDb(false);
+		}
+		else
+		{
+			$params = array("time" => false);
+		}
+
+		return array("status" => "done", "size" => $DBSize, "time" => $params["time"]);
 	}
 
 	public function SetDirSize($path="", $name="", $recount=false, $skip_dir = false)
 	{
 		if (empty($name))
 			$name = $path;
+
 		if ((empty($name) && empty($path)) || ($path == "files"))
 		{
 			$name = "files";
@@ -45,8 +83,7 @@ class CAllDiskQuota
 		}
 
 		$abs_path = str_replace("//", "/", $_SERVER['DOCUMENT_ROOT']."/".$path."/");
-		$path =  str_replace("//", "/", "/".$path."/");
-		$size = 0;
+
 		$result = array();
 
 		if (empty($abs_path))
@@ -65,7 +102,7 @@ class CAllDiskQuota
 		if (!empty($record["size"]) && !$recount)
 		{
 			$record = array_merge(
-				unserialize(COption::GetOptionString("main_size", "~".$name."_params")),
+				unserialize(COption::GetOptionString("main_size", "~".$name."_params"), ['allowed_classes' => false]),
 				$record);
 
 			$record["path_to_last_file"] = str_replace("//", "/", $abs_path.$record["file"]);
@@ -75,7 +112,7 @@ class CAllDiskQuota
 				if ($res["status"] == "done" || $res["status"] == "continue")
 				{
 					$properties = array(
-						"status" => substr($res["status"], 0, 1),
+						"status" => mb_substr($res["status"], 0, 1),
 						"file" => str_replace($abs_path, "", str_replace("//", "/", $res["last_file"])),
 						"time" => time());
 
@@ -86,7 +123,7 @@ class CAllDiskQuota
 					$result["size"] = $record["size"];
 				}
 			}
-			elseif ($record["status"] == "d" && !$recount)
+			elseif ($record["status"] == "d")
 			{
 				return array("status" => "done", "last_file" => $record["file"], "size" => $record["size"]);
 			}
@@ -100,7 +137,7 @@ class CAllDiskQuota
 			if ($res["status"] == "done" || $res["status"] == "continue")
 			{
 				$properties = array(
-					"status" => substr($res["status"], 0, 1),
+					"status" => mb_substr($res["status"], 0, 1),
 					"file" => str_replace($abs_path, "", str_replace("//", "/", $res["last_file"])),
 					"time" => time());
 
@@ -152,7 +189,7 @@ class CAllDiskQuota
 				{
 					$res[] = $path.$file;
 					$size += filesize($path.$file);
-					if ($check_time && intVal(getmicrotime() - START_EXEC_TIME) >= $this->max_execution_time)
+					if ($check_time && intval(microtime(true) - START_EXEC_TIME) >= $this->max_execution_time)
 					{
 						return array("tree" => $res, "status" => "continue", "last_file" => $path.$file, "size" => $size);
 					}
@@ -174,6 +211,7 @@ class CAllDiskQuota
 		$path_to_lf = str_replace($path, "", $path_to_last_file);
 		$size = 0;
 		$res = array();
+		$file = '';
 		$path_tree = explode("/", $path_to_lf);
 		while ($lf = array_pop($path_tree))
 		{
@@ -212,7 +250,7 @@ class CAllDiskQuota
 
 						$res[] = $path_to_dir.$file;
 						$size += filesize($path_to_dir.$file);
-						if ($check_time && intVal(getmicrotime() - START_EXEC_TIME) >= $this->max_execution_time)
+						if ($check_time && intval(microtime(true) - START_EXEC_TIME) >= $this->max_execution_time)
 						{
 							return array("tree" => $res, "status" => "continue", "last_file" => $path_to_dir.$file, "size" => $size);
 						}
@@ -229,21 +267,10 @@ class CAllDiskQuota
 		if ((COption::GetOptionInt("main", "disk_space") <= 0))
 			return true;
 
-		if ($id != "db" && $id != "files" && (!is_dir($_SERVER['DOCUMENT_ROOT']."/".$id)))
+		if ($id != "files" && (!is_dir($_SERVER['DOCUMENT_ROOT']."/".$id)))
 			return array("status" => "error");
 
-		if ($id == "db")
-		{
-			if ($recount)
-				$_SESSION["SESS_RECOUNT_DB"] = "Y";
-			$result = array("size" => COption::GetOptionString("main_size", "~db"));
-			$result["params"] = COption::GetOptionString("main_size", "~db_params");
-			if (!empty($result["params"]) && is_array(unserialize($result["params"])))
-			{
-				$result = array_merge(unserialize($result["params"]), $result);
-			}
-		}
-		elseif ($id == "files")
+		if ($id == "files")
 		{
 			$result = $this->SetDirSize("", "files", $recount, array("bitrix"));
 		}
@@ -269,7 +296,7 @@ class CAllDiskQuota
 
 		if (COption::GetOptionInt("main_size", "~db") <= 0)
 		{
-			$_SESSION["SESS_RECOUNT_DB"] = "Y";
+			static::recalculateDb();
 		}
 
 		$quota = doubleVal(COption::GetOptionInt("main", "disk_space")*1024*1024 -
@@ -299,23 +326,23 @@ class CAllDiskQuota
 			return false;
 
 		if (is_array($size))
-			$size = strlen(implode("", $size));
+			$size = mb_strlen(implode("", $size));
 		elseif (doubleval($size) > 0)
 			$size = doubleval($size);
 		else
-			$size = strlen($size);
+			$size = mb_strlen($size);
 
 		$size = doubleval($size);
 
-		$name = strtolower($type) == "db" ? "db" : "files";
+		$name = mb_strtolower($type) == "db" ? "db" : "files";
 
-		if (in_array(strtolower($action), array("delete", "del")))
+		if (in_array(mb_strtolower($action), array("delete", "del")))
 		{
 			COption::SetOptionString("main_size", "~".$name,
 				doubleval(COption::GetOptionInt("main_size", "~".$name) - $size));
 			return true;
 		}
-		if (in_array(strtolower($action), array("update", "insert", "add", "copy")))
+		if (in_array(mb_strtolower($action), array("update", "insert", "add", "copy")))
 		{
 			COption::SetOptionString("main_size", "~".$name,
 				doubleval(COption::GetOptionInt("main_size", "~".$name) + $size));
@@ -341,7 +368,6 @@ class CAllDiskQuota
 		{
 			if (is_array($params))
 			{
-				$size = false;
 				if (is_set($params, "FILE_SIZE"))
 					$size = $params["FILE_SIZE"];
 				elseif (is_set($params, "SIZE"))
@@ -351,17 +377,16 @@ class CAllDiskQuota
 				elseif (is_set($params, "size"))
 					$size = $params["size"];
 				else
-					$size = strlen(serialize($params));
+					$size = mb_strlen(serialize($params));
 
 				if ($size !== false)
 					return ((double)$quota - $size) > 0;
 			}
 			if (!is_array($params) && doubleVal($params) > 0 && ((double)$quota - $params) > 0)
 				return true;
-			if (((double)$quota - strLen($params)) > 0)
+			if (((double)$quota - mb_strlen($params)) > 0)
 				return true;
 		}
 		return false;
 	}
 }
-?>

@@ -15,7 +15,7 @@ namespace Bitrix\Main\DB;
  *
  * @package Bitrix\Main\DB
  */
-abstract class Result
+abstract class Result implements \IteratorAggregate
 {
 	/** @var \Bitrix\Main\DB\Connection */
 	protected $connection;
@@ -66,17 +66,6 @@ abstract class Result
 	 *
 	 * @return null|resource
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает специфичные ресурсы запроса.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/getresource.php
-	* @author Bitrix
-	*/
 	public function getResource()
 	{
 		return $this->resource;
@@ -91,35 +80,6 @@ abstract class Result
 	 * @return void
 	 * @see \Bitrix\Main\Db\Result::addReplacedAliases
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает список колонок с алиасами. Это позволяет обойти ограничение базы данных на длину имён колонок.</p>
-	*
-	*
-	* @param mixed $Bitrix  Карта алиасов с технического на человекопонятные названия.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $MaiDB  
-	*
-	* @param D $array  
-	*
-	* @param arra $string  
-	*
-	* @param string $replacedAliases  
-	*
-	* @return void 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a
-	* href="http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/addreplacedaliases.php">\Bitrix\Main\Db\Result::addReplacedAliases</a></li>
-	* </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/setreplacedaliases.php
-	* @author Bitrix
-	*/
 	public function setReplacedAliases(array $replacedAliases)
 	{
 		$this->replacedAliases = $replacedAliases;
@@ -133,35 +93,6 @@ abstract class Result
 	 * @return void
 	 * @see \Bitrix\Main\Db\Result::setReplacedAliases
 	 */
-	
-	/**
-	* <p>Нестатический метод расширяет список колонок с алиасами.</p>
-	*
-	*
-	* @param mixed $Bitrix  Карта алиасов от технических названий к человекопонятным.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $MaiDB  
-	*
-	* @param D $array  
-	*
-	* @param arra $string  
-	*
-	* @param string $replacedAliases  
-	*
-	* @return void 
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li><a
-	* href="http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/setreplacedaliases.php">\Bitrix\Main\Db\Result::setReplacedAliases</a></li>
-	* </ul><a name="example"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/addreplacedaliases.php
-	* @author Bitrix
-	*/
 	public function addReplacedAliases(array $replacedAliases)
 	{
 		$this->replacedAliases = array_merge($this->replacedAliases, $replacedAliases);
@@ -174,19 +105,6 @@ abstract class Result
 	 *
 	 * @return void
 	 */
-	
-	/**
-	* <p>Нестатический метод устанавливает внутренний список полей, которые должны быть десериализированы при получении.</p>
-	*
-	*
-	* @param array $serializedFields  Список полей
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/setserializedfields.php
-	* @author Bitrix
-	*/
 	public function setSerializedFields(array $serializedFields)
 	{
 		$this->serializedFields = $serializedFields;
@@ -202,19 +120,6 @@ abstract class Result
 	 * @return void
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	
-	/**
-	* <p>Нестатический метод. Модификатор получает извлечённый массив как аргумент и модифицирует его как ссылку или возвращает новый массив</p> <pre class="syntax">function (&amp;$data) { $data['AGE'] -= 7; }  function ($data) { $data['AGE'] -= 7; return $data; }</pre>
-	*
-	*
-	* @param callable $fetchDataModifier  Валидный ответ.
-	*
-	* @return void 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/addfetchdatamodifier.php
-	* @author Bitrix
-	*/
 	public function addFetchDataModifier($fetchDataModifier)
 	{
 		if (!is_callable($fetchDataModifier))
@@ -230,17 +135,6 @@ abstract class Result
 	 *
 	 * @return array|false
 	 */
-	
-	/**
-	* <p>Нестатический метод получает одну строку из запроса и возвращает её в ассоциированном массиве с необработанными данными БД или возвращает <i>false</i> при пустых данных.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/fetchraw.php
-	* @author Bitrix
-	*/
 	public function fetchRaw()
 	{
 		if ($this->trackerQuery != null)
@@ -270,25 +164,6 @@ abstract class Result
 	 *
 	 * @return array|false
 	 */
-	
-	/**
-	* <p>Нестатический метод получает строку из результата запроса и возвращает её в ассоциативном массиве с конвертированными данными или возвращает <i>false</i> при пустых данных.</p>
-	*
-	*
-	* @param mixed $Bitrix  Конвертер для расшифровки данных при получении.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $Text  
-	*
-	* @param Converter $converter = null 
-	*
-	* @return mixed 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/fetch.php
-	* @author Bitrix
-	*/
 	public function fetch(\Bitrix\Main\Text\Converter $converter = null)
 	{
 		$data = $this->fetchRaw();
@@ -337,13 +212,13 @@ abstract class Result
 			}
 		}
 
-		if ($converter != null)
+		if ($converter !== null)
 		{
 			foreach ($data as $key => $val)
 			{
 				$data[$key] = $converter->encode(
 					$val,
-					(isset($data[$key."_TYPE"])? $data[$key."_TYPE"] : \Bitrix\Main\Text\Converter::TEXT)
+					($data[$key."_TYPE"] ?? \Bitrix\Main\Text\Converter::TEXT)
 				);
 			}
 		}
@@ -359,25 +234,6 @@ abstract class Result
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Нестатический метод получает все строки запроса и возвращает ассоциированный массив. Если запрос пустой, возвращает пустой массив.</p>
-	*
-	*
-	* @param mixed $Bitrix  Конвертер для расшифровки при получении.
-	*
-	* @param Bitri $Main  
-	*
-	* @param Mai $Text  
-	*
-	* @param Converter $converter = null 
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/fetchall.php
-	* @author Bitrix
-	*/
 	public function fetchAll(\Bitrix\Main\Text\Converter $converter = null)
 	{
 		$res = array();
@@ -391,19 +247,8 @@ abstract class Result
 	/**
 	 * Returns an array of fields according to columns in the result.
 	 *
-	 * @return @return \Bitrix\Main\Entity\ScalarField[]
+	 * @return \Bitrix\Main\ORM\Fields\ScalarField[]
 	 */
-	
-	/**
-	* <p>Нестатический абстрактный метод возвращает массив полей, связанный с колонками в результате запроса.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Main\DB\@return 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/getfields.php
-	* @author Bitrix
-	*/
 	abstract public function getFields();
 
 	/**
@@ -411,17 +256,6 @@ abstract class Result
 	 *
 	 * @return int
 	 */
-	
-	/**
-	* <p>Нестатический абстрактный метод возвращает число строк в результате запроса.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/getselectedrowscount.php
-	* @author Bitrix
-	*/
 	abstract public function getSelectedRowsCount();
 
 	/**
@@ -436,39 +270,31 @@ abstract class Result
 	 *
 	 * @return \Bitrix\Main\Diag\SqlTrackerQuery|null
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает трекер текущего запроса.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return \Bitrix\Main\Diag\SqlTrackerQuery|null 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/gettrackerquery.php
-	* @author Bitrix
-	*/
 	public function getTrackerQuery()
 	{
 		return $this->trackerQuery;
 	}
 
 	/**
+	 * @return callable[]
+	 */
+	public function getConverters()
+	{
+		return $this->converters;
+	}
+
+	/**
+	 * @param callable[] $converters
+	 */
+	public function setConverters($converters)
+	{
+		$this->converters = $converters;
+	}
+
+	/**
 	 * Sets record count.
 	 * @param int $n
 	 */
-	
-	/**
-	* <p>Нестатический метод производит запись количества.</p>
-	*
-	*
-	* @param mixed $integern  Записываемое количество
-	*
-	* @return public 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/setcount.php
-	* @author Bitrix
-	*/
 	public function setCount($n)
 	{
 		$this->count = (int)$n;
@@ -479,17 +305,6 @@ abstract class Result
 	 * @return int
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 */
-	
-	/**
-	* <p>Нестатический метод возвращает записанное количество. Необходимо чтобы запись была сделана ранее.</p> <p>Без параметров</p>
-	*
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/db/result/getcount.php
-	* @author Bitrix
-	*/
 	public function getCount()
 	{
 		if($this->count !== null)
@@ -497,5 +312,17 @@ abstract class Result
 			return $this->count;
 		}
 		throw new \Bitrix\Main\ObjectPropertyException("count");
+	}
+
+	/**
+	 * Retrieve an external iterator
+	 * @link http://php.net/manual/en/iteratoraggregate.getiterator.php
+	 * @return \Traversable An instance of an object implementing <b>Iterator</b> or
+	 * <b>Traversable</b>
+	 * @since 5.0.0
+	 */
+	public function getIterator(): \Traversable
+	{
+		return new ResultIterator($this);
 	}
 }

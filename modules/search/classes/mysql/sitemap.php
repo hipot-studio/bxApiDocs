@@ -1,19 +1,8 @@
 <?php
 
-
-/**
- * Класс поддержки Google Sitemap.
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/search/classes/csitemap/index.php
- * @author Bitrix
- */
 class CSiteMap extends CAllSiteMap
 {
-	public static function GetURLs($site_id, $ID, $limit = 0)
+	function GetURLs($site_id, $ID, $limit = 0)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$strSql = "
@@ -52,6 +41,6 @@ class CSiteMap extends CAllSiteMap
 			$strSql .= "LIMIT ".intval($limit);
 		}
 		$r = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-		parent::CDBResult($r->result);
+		parent::__construct($r->result);
 	}
 }

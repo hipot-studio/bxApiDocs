@@ -57,19 +57,6 @@ class Base32
 	 * @return string Base32 encoded data.
 	 * @throws ArgumentTypeException
 	 */
-	
-	/**
-	* <p>Статический метод кодирует данные в строку алгоритмом Base32.</p>
-	*
-	*
-	* @param string $string  Данные для кодирования.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/codec/base32/encode.php
-	* @author Bitrix
-	*/
 	public static function encode($string)
 	{
 		if (!$string)
@@ -129,19 +116,6 @@ class Base32
 	 * @throws DecodingException
 	 * @return string Original data.
 	 */
-	
-	/**
-	* <p>Статический метод декодирует строку, закодированную при помощи алгоритма Base32.</p>
-	*
-	*
-	* @param string $base32String  Строка в формате Base32.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/security/codec/base32/decode.php
-	* @author Bitrix
-	*/
 	public static function decode($base32String)
 	{
 		if (!$base32String)

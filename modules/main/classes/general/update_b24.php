@@ -28,18 +28,72 @@ class CB24Updater
 
 	private static function GetOption($name, $def = "")
 	{
-		return COption::GetOptionString('main', $name, $def);
+		$cache = \Bitrix\Main\Application::getInstance()->getManagedCache();
+
+		$cacheFlags = \Bitrix\Main\Config\Configuration::getValue("cache_flags");
+		if (isset($cacheFlags["config_options"]))
+			$cacheTtl = $cacheFlags["config_options"];
+		else
+			$cacheTtl = 0;
+
+		if ($cache->read($cacheTtl, "b_option:main", "b_option"))
+		{
+			$options = $cache->get("b_option:main");
+			return $options["-"][$name];
+		}
+
+		$con = \Bitrix\Main\Application::getConnection();
+		$sqlHelper = $con->getSqlHelper();
+
+		$query = "
+			SELECT VALUE
+			FROM b_option
+			WHERE MODULE_ID = 'main'
+				AND NAME = '{$sqlHelper->forSql($name)}'
+		";
+
+		$res = $con->query($query);
+		if ($ar = $res->fetch())
+		{
+			return $ar["VALUE"];
+		}
+
+		return $def;
 	}
 
 	private static function SetOption($name, $value = "")
 	{
-		COption::SetOptionString('main', $name, $value);
+		$con = \Bitrix\Main\Application::getConnection();
+		$sqlHelper = $con->getSqlHelper();
+
+		$updateFields = [
+			"VALUE" => $value,
+		];
+
+		$insertFields = [
+			"MODULE_ID" => "main",
+			"NAME" => $name,
+			"VALUE" => $value,
+		];
+
+		$keyFields = ["MODULE_ID", "NAME"];
+
+		$sql = $sqlHelper->prepareMerge("b_option", $keyFields, $insertFields, $updateFields);
+
+		$con->queryExecute(current($sql));
+
+		$cache = \Bitrix\Main\Application::getInstance()->getManagedCache();
+		$cache->clean("b_option:main", "b_option");
+
+//		$path = \Bitrix\Main\Loader::getLocal("modules/main/option_triggers.php");
+//		if ($path !== false)
+//			include($path);
 	}
 
 	private static function GetServerUniqID()
 	{
 		$uniq = self::GetOption("server_uniq_id", "");
-		if (strlen($uniq) <= 0)
+		if ($uniq == '')
 		{
 			$uniq = md5(uniqid(rand(), true));
 			self::SetOption("server_uniq_id", $uniq);
@@ -55,7 +109,7 @@ class CB24Updater
 
 		if ($DB->type == "MYSQL")
 		{
-			$dbLock = $DB->Query("SELECT GET_LOCK('".$uniq."_DBUpdater', 0) as L", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbLock = $DB->Query("SELECT GET_LOCK('".$uniq."_DBUpdater', 0) as L");
 			$arLock = $dbLock->Fetch();
 			if ($arLock["L"] == "1")
 				return true;
@@ -90,10 +144,10 @@ class CB24Updater
 		else
 		{
 			$i = 60;
-			$DB->Query("DELETE FROM b_option WHERE MODULE_ID = 'main' AND NAME = '".$uniq."_DBUpdater' AND SITE_ID IS NULL AND DATEDIFF(SECOND, CONVERT(DATETIME, DESCRIPTION), GETDATE()) > ".$i, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-			$DB->Query("SET LOCK_TIMEOUT 1", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query("DELETE FROM b_option WHERE MODULE_ID = 'main' AND NAME = '".$uniq."_DBUpdater' AND SITE_ID IS NULL AND DATEDIFF(SECOND, CONVERT(DATETIME, DESCRIPTION), GETDATE()) > ".$i);
+			$DB->Query("SET LOCK_TIMEOUT 1");
 			$dbLock = $DB->Query("INSERT INTO b_option(MODULE_ID, NAME, SITE_ID, VALUE, DESCRIPTION) VALUES ('main', '".$uniq."_DBUpdater', NULL,  NULL, CONVERT(VARCHAR(128), GETDATE()))", true);
-			$DB->Query("SET LOCK_TIMEOUT -1", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query("SET LOCK_TIMEOUT -1");
 			return ($dbLock !== false);
 		}
 	}
@@ -106,7 +160,7 @@ class CB24Updater
 
 		if ($DB->type == "MYSQL")
 		{
-			$dbLock = $DB->Query("SELECT RELEASE_LOCK('".$uniq."_DBUpdater') as L", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbLock = $DB->Query("SELECT RELEASE_LOCK('".$uniq."_DBUpdater') as L");
 			$arLock = $dbLock->Fetch();
 			if($arLock["L"] == "0")
 				return false;
@@ -119,7 +173,7 @@ class CB24Updater
 		}
 		else
 		{
-			$DB->Query("DELETE FROM b_option WHERE MODULE_ID = 'main' AND NAME = '".$uniq."_DBUpdater' AND SITE_ID IS NULL", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query("DELETE FROM b_option WHERE MODULE_ID = 'main' AND NAME = '".$uniq."_DBUpdater' AND SITE_ID IS NULL");
 			return true;
 		}
 	}
@@ -134,9 +188,9 @@ class CB24Updater
 		if ($arResult = $dbResult->Fetch())
 		{
 			$val = $arResult["VALUE"];
-			if (strlen($val) > 0)
+			if ($val <> '')
 			{
-				$arDBVersions = unserialize($val);
+				$arDBVersions = unserialize($val, ['allowed_classes' => false]);
 				if (!is_array($arDBVersions))
 					$arDBVersions = array();
 			}
@@ -147,8 +201,13 @@ class CB24Updater
 
 	private static function SetDatabaseVersions($arDBVersions)
 	{
+		global $DB;
+
 		if(is_array($arDBVersions))
+		{
 			self::SetOption("BITRIX24_VERSIONS", serialize($arDBVersions));
+			$DB->Query("INSERT INTO b_sm_version_history(DATE_INSERT, VERSIONS) VALUES(NOW(), '".$DB->ForSql(serialize($arDBVersions))."')", true);
+		}
 	}
 
 	private function InitializeFileData()
@@ -163,14 +222,14 @@ class CB24Updater
 				$arVersions = array();
 		}
 
-		if (count($arVersions) <= 0)
+		if (empty($arVersions))
 		{
 			include_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/classes/general/update_client.php");
 
 			$errorMessage = "";
 			$arVersions = CUpdateClient::GetCurrentModules($errorMessage, false);
 			$generationDate = time();
-			if (strlen($errorMessage) <= 0)
+			if ($errorMessage == '')
 			{
 				$f = fopen($this->versionsFileName, "w");
 				fwrite($f, "<"."?\n");
@@ -228,7 +287,7 @@ class CB24Updater
 	public function CheckUpdates()
 	{
 		$arDBVersions = self::GetDatabaseVersions();
-		if (count($arDBVersions) <= 0)
+		if (empty($arDBVersions))
 		{
 			$this->CollectDatabaseVersions("ALL");
 			$arDBVersions = self::GetDatabaseVersions();
@@ -239,20 +298,49 @@ class CB24Updater
 		$arResult = array();
 		foreach ($arFileVersions as $moduleId => $version)
 		{
-			if ($this->isProcessingMain && $moduleId != "main" || !$this->isProcessingMain && $moduleId == "main")
+			if (($this->isProcessingMain && ($moduleId !== "main"))
+				|| (!$this->isProcessingMain && ($moduleId === "main")))
 				continue;
 
 			if (CUpdateClient::CompareVersions($version, $arDBVersions[$moduleId]) > 0)
 				$arResult[$moduleId] = $arDBVersions[$moduleId];
 		}
 
+		// Das ist strashnyy kostyl' for new Options
+		global $DB;
+
+		if ($this->isProcessingMain && !empty($arResult))
+		{
+			if(!$DB->TableExists("b_option_site"))
+			{
+				$DB->Query("
+					CREATE TABLE b_option_site
+					(
+						MODULE_ID VARCHAR(50) not null,
+						NAME VARCHAR(50) not null,
+						SITE_ID CHAR(2) not null,
+						VALUE TEXT,
+						PRIMARY KEY(MODULE_ID, NAME, SITE_ID),
+						INDEX ix_option_site_module_site(MODULE_ID, SITE_ID)
+					)
+				", true);
+			}
+			if(!$DB->Query("SELECT UNIQUE_ID FROM b_module_to_module WHERE 1=0", true))
+			{
+				$DB->Query("ALTER TABLE b_module_to_module ADD UNIQUE_ID VARCHAR(32) NOT NULL", true);
+			}
+		}
+		// End of strashnyy kostyl'
+
 		return $arResult;
 	}
 
 	public function UpdateFromVersion($moduleId, $dbVersion)
 	{
-		if (strlen($moduleId) <= 0)
+		if ($moduleId == '')
+		{
 			return;
+		}
 
 		$errorMessage = "";
 
@@ -265,7 +353,9 @@ class CB24Updater
 				while (false !== ($dir = readdir($handle)))
 				{
 					if ($dir == "." || $dir == "..")
+					{
 						continue;
+					}
 
 					if (substr($dir, 0, 7) == "updater")
 					{
@@ -273,17 +363,21 @@ class CB24Updater
 						{
 							$num = substr($dir, 7, strlen($dir) - 11);
 							if (substr($dir, strlen($dir) - 9) == "_post.php")
+							{
 								$num = substr($dir, 7, strlen($dir) - 16);
+							}
 
-							$arUpdaters[] = array("/".$dir, Trim($num));
+							$arUpdaters[] = array("/".$dir, trim($num));
 						}
 						elseif (file_exists($this->updatersDir.$moduleId."/".$dir."/index.php"))
 						{
 							$num = substr($dir, 7);
 							if (substr($dir, strlen($dir) - 5) == "_post")
+							{
 								$num = substr($dir, 7, strlen($dir) - 12);
+							}
 
-							$arUpdaters[] = array("/".$dir."/index.php", Trim($num));
+							$arUpdaters[] = array("/".$dir."/index.php", trim($num));
 						}
 					}
 				}
@@ -307,7 +401,9 @@ class CB24Updater
 			for ($i1 = 0; $i1 < $ni1; $i1++)
 			{
 				if (CUpdateClient::CompareVersions($arUpdaters[$i1][1], $dbVersion) <= 0)
+				{
 					continue;
+				}
 
 				$errorMessageTmp = "";
 
@@ -317,17 +413,27 @@ class CB24Updater
 
 				syslog(LOG_INFO, $_SERVER["HTTP_HOST"]."\tend\t".$moduleId.$arUpdaters[$i1][0]."\t".$errorMessageTmp);
 
-				if (strlen($errorMessageTmp) > 0)
+				if ($errorMessageTmp <> '')
+				{
 					$errorMessage .= str_replace("#MODULE#", $moduleId, str_replace("#VER#", $arUpdaters[$i1][1], GetMessage("SUPP_UK_UPDN_ERR"))).": ".$errorMessageTmp.".";
+				}
 
 				$this->CollectDatabaseVersions("MODULE", $moduleId, $arUpdaters[$i1][1]);
 			}
 		}
 
-		if (strlen($errorMessage) > 0)
-			CUpdateClient::AddMessage2Log("Database update error (".$moduleId."-".$dbVersion."): ".$errorMessage, "DUE");
+		if ($errorMessage <> '')
+		{
+			$message = "Database update error (".$moduleId."-".$dbVersion."): ".$errorMessage;
+			CUpdateClient::AddMessage2Log($message, "DUE");
+			syslog(LOG_INFO, $_SERVER["HTTP_HOST"] . "\terror\t" . $message);
+		}
 		else
-			CUpdateClient::AddMessage2Log("Database updated successfully (".$moduleId."-".$dbVersion.")", "DUS");
+		{
+			$message = "Database updated successfully (".$moduleId."-".$dbVersion.")";
+			CUpdateClient::AddMessage2Log($message, "DUS");
+			syslog(LOG_INFO, $_SERVER["HTTP_HOST"] . "\tok\t" . $message);
+		}
 	}
 
 	public function CollectDatabaseVersions($type, $moduleId = null, $version = null)

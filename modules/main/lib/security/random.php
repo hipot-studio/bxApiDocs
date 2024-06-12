@@ -1,7 +1,6 @@
 <?php
-namespace Bitrix\Main\Security;
 
-use Bitrix\Main\Text\BinaryString;
+namespace Bitrix\Main\Security;
 
 class Random
 {
@@ -28,21 +27,6 @@ class Random
 	 * @return int
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	
-	/**
-	* <p>Статический метод возвращает случайное целое число из указанного диапазона.</p>
-	*
-	*
-	* @param integer $min  Нижняя границ диапазона.
-	*
-	* @param integer $max = \PHP_INT_MAX Верхняя граница диапазона.
-	*
-	* @return integer 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/random/getint.php
-	* @author Bitrix
-	*/
 	public static function getInt($min = 0, $max = \PHP_INT_MAX)
 	{
 		if ($min > $max)
@@ -89,57 +73,36 @@ class Random
 	 * @param bool $caseSensitive Generate case sensitive random string (e.g. `SoMeRandom1`).
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает случайную, если возможно, буквенно-цифровую строку.</p>
-	*
-	*
-	* @param integer $length  Длина строки результата.
-	*
-	* @param boolean $caseSensitive = false Сформировать чувствительную к регистру случайную строку
-	* (например <code>SoMeRandom1</code>).
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/random/getstring.php
-	* @author Bitrix
-	*/
 	public static function getString($length, $caseSensitive = false)
 	{
 		$alphabet = self::ALPHABET_NUM | self::ALPHABET_ALPHALOWER;
 		if ($caseSensitive)
+		{
 			$alphabet |= self::ALPHABET_ALPHAUPPER;
+		}
 
 		return static::getStringByAlphabet($length, $alphabet);
 	}
 
 	/**
 	 * Returns random (if possible) ASCII string for a given alphabet mask (@see self::ALPHABET_ALL)
-	 *
 	 * @param int $length Result string length.
-	 * @param int $alphabet Alpabet masks (e.g. Random::ALPHABET_NUM|Random::ALPHABET_ALPHALOWER).
+	 * @param int $alphabet Alphabet masks (e.g. Random::ALPHABET_NUM|Random::ALPHABET_ALPHALOWER).
+	 * @param bool $requireAll Required chars from all the alphabet masks.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает случайную (если возможно) строку в ASCII для заданной алфавитной маски.</p>
-	*
-	*
-	* @param integer $length  Длина строки результата.
-	*
-	* @param integer $alphabet  Алфавитные маски (например: <code>Random::ALPHABET_NUM | Random::ALPHABET_ALPHALOWER</code>).
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/random/getstringbyalphabet.php
-	* @author Bitrix
-	*/
-	public static function getStringByAlphabet($length, $alphabet)
+	public static function getStringByAlphabet($length, $alphabet, $requireAll = false)
 	{
 		$charsetList = static::getCharsetsforAlphabet($alphabet);
-		return static::getStringByCharsets($length, $charsetList);
+
+		if($requireAll && count($charsetList) > 1)
+		{
+			return static::getStringByArray($length, $charsetList);
+		}
+		else
+		{
+			return static::getStringByCharsets($length, implode("", $charsetList));
+		}
 	}
 
 	/**
@@ -149,24 +112,9 @@ class Random
 	 * @param string $charsetList Charset list, must be ASCII.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает случайную (если возможно) строку для данного листа кодировок.</p>
-	*
-	*
-	* @param integer $length  Длина строки результата.
-	*
-	* @param string $charsetList  Лист кодировок, должен быть в ASCII.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/random/getstringbycharsets.php
-	* @author Bitrix
-	*/
 	public static function getStringByCharsets($length, $charsetList)
 	{
-		$charsetVariants = BinaryString::getLength($charsetList);
+		$charsetVariants = strlen($charsetList);
 		$randomSequence = static::getBytes($length);
 
 		$result = '';
@@ -179,71 +127,97 @@ class Random
 	}
 
 	/**
+	 * This function places chars from every charset into the result string randomly.
+	 * @param int $length Result string length.
+	 * @param array $charsetList Array of charsets.
+	 * @return string
+	 */
+	public static function getStringByArray(int $length, array $charsetList): string
+	{
+		$count = count($charsetList);
+
+		// take strlen() out of the cycle
+		$charsets = [];
+		foreach ($charsetList as $charset)
+		{
+			$charsets[] = [$charset, strlen($charset)];
+		}
+
+		$randomSequence = static::getBytes($length);
+
+		$result = '';
+		for ($i = 0; $i < $length; $i += $count)
+		{
+			shuffle($charsets);
+
+			for ($j = 0; $j < $count; $j++)
+			{
+				$randomNumber = ord($randomSequence[$i + $j]);
+
+				$charset = $charsets[$j][0];
+				$charsetVariants = $charsets[$j][1];
+				$result .= $charset[$randomNumber % $charsetVariants];
+
+				if (($i + $j + 1) == $length)
+				{
+					break 2;
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	/**
 	 * Returns random (if possible) byte string
 	 *
 	 * @param int $length Result byte string length.
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает случайную (если возможно) байтовую строку.</p>
-	*
-	*
-	* @param integer $length  Длина результирующей байтовой строки.
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/security/random/getbytes.php
-	* @author Bitrix
-	*/
 	public static function getBytes($length)
 	{
 		$backup = null;
 
-		if (static::isOpensslAvailable())
+		if ($length <= 0)
 		{
-			$bytes = openssl_random_pseudo_bytes($length, $strong);
-			if ($bytes && BinaryString::getLength($bytes) >= $length)
+			$length = 1;
+		}
+
+		$bytes = openssl_random_pseudo_bytes($length, $strong);
+		if ($bytes && strlen($bytes) >= $length)
+		{
+			if ($strong)
 			{
-				if ($strong)
-					return BinaryString::getSubstring($bytes, 0, $length);
-				else
-					$backup = $bytes;
+				return substr($bytes, 0, $length);
+			}
+			$backup = $bytes;
+		}
+
+		if (file_exists('/dev/urandom'))
+		{
+			if ($file = @fopen('/dev/urandom', 'rb'))
+			{
+				$bytes = @fread($file, $length + 1);
+				@fclose($file);
+				if ($bytes && strlen($bytes) >= $length)
+				{
+					return substr($bytes, 0, $length);
+				}
 			}
 		}
 
-		if (function_exists('mcrypt_create_iv'))
+		if ($backup && strlen($backup) >= $length)
 		{
-			$bytes = mcrypt_create_iv($length, MCRYPT_DEV_URANDOM);
-			if ($bytes && BinaryString::getLength($bytes) >= $length)
-			{
-				return BinaryString::getSubstring($bytes, 0, $length);
-			}
-		}
-
-		if ($file = @fopen('/dev/urandom','rb'))
-		{
-			$bytes = @fread($file, $length + 1);
-			@fclose($file);
-			if ($bytes && BinaryString::getLength($bytes) >= $length)
-			{
-				return BinaryString::getSubstring($bytes, 0, $length);
-			}
-		}
-
-		if ($backup && BinaryString::getLength($backup) >= $length)
-		{
-			return BinaryString::getSubstring($backup, 0, $length);
+			return substr($backup, 0, $length);
 		}
 
 		$bytes = '';
-		while (BinaryString::getLength($bytes) < $length)
+		while (strlen($bytes) < $length)
 		{
 			$bytes .= static::getPseudoRandomBlock();
 		}
 
-		return BinaryString::getSubstring($bytes, 0, $length);
+		return substr($bytes, 0, $length);
 	}
 
 	/**
@@ -253,15 +227,10 @@ class Random
 	 */
 	protected static function getPseudoRandomBlock()
 	{
-		global $APPLICATION;
-
-		if (static::isOpensslAvailable())
+		$bytes = openssl_random_pseudo_bytes(static::RANDOM_BLOCK_LENGTH);
+		if ($bytes && strlen($bytes) >= static::RANDOM_BLOCK_LENGTH)
 		{
-			$bytes = openssl_random_pseudo_bytes(static::RANDOM_BLOCK_LENGTH);
-			if ($bytes && BinaryString::getLength($bytes) >= static::RANDOM_BLOCK_LENGTH)
-			{
-				return BinaryString::getSubstring($bytes, 0, static::RANDOM_BLOCK_LENGTH);
-			}
+			return substr($bytes, 0, static::RANDOM_BLOCK_LENGTH);
 		}
 
 		$bytes = '';
@@ -270,38 +239,13 @@ class Random
 			$bytes .= pack('S', mt_rand(0,0xffff));
 		}
 
-		$bytes .= $APPLICATION->getServerUniqID();
-
 		return hash('sha512', $bytes, true);
-	}
-	
-	/**
-	 * Checks OpenSSL available
-	 *
-	 * @return bool
-	 */
-	protected static function isOpensslAvailable()
-	{
-		static $result = null;
-		if ($result === null)
-		{
-			$result = (
-				function_exists('openssl_random_pseudo_bytes')
-				&& (
-					// PHP have strange behavior for "openssl_random_pseudo_bytes" on older PHP versions
-					!(strtolower(substr(PHP_OS, 0, 3)) === "win")
-					|| version_compare(phpversion(),"5.4.0",">=")
-				)
-			);
-		}
-
-		return $result;
 	}
 
 	/**
 	 * Returns strings with charsets based on alpabet mask (see $this->alphabet)
 	 *
-	 * Simple example:
+	 * Simple example (now arrays!):
 	 * <code>
 	 * echo $this->getCharsetsforAlphabet(static::ALPHABET_NUM|static::ALPHABET_ALPHALOWER);
 	 * //output: 0123456789abcdefghijklmnopqrstuvwxyz
@@ -314,17 +258,17 @@ class Random
 	 * </code>
 	 *
 	 * @param string $alphabet Alpabet masks (e.g. static::ALPHABET_NUM|static::ALPHABET_ALPHALOWER).
-	 * @return string
+	 * @return array
 	 */
 	protected static function getCharsetsForAlphabet($alphabet)
 	{
-		$result = '';
+		$result = [];
 		foreach (static::$alphabet as $mask => $value)
 		{
-			if (!($alphabet & $mask))
-				continue;
-
-			$result .= $value;
+			if ($alphabet & $mask)
+			{
+				$result[] = $value;
+			}
 		}
 
 		return $result;
@@ -344,5 +288,4 @@ class Random
 
 		return $result;
 	}
-
 }

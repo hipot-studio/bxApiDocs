@@ -1,4 +1,7 @@
-<?
+<?php
+
+use Bitrix\Sale\Location;
+
 IncludeModuleLangFile(__FILE__);
 
 /**
@@ -16,60 +19,82 @@ class CSaleDeliveryHelper
 		static $arRegions = array();
 		$flipIndex = intval($bFlip);
 
+		$countryId = (int)$countryId;
+
 		if(isset($arRegions[$countryId][$flipIndex]))
 			return $arRegions[$countryId][$flipIndex];
 
 		if(CSaleLocation::isLocationProMigrated())
 		{
-			$types = array();
-			$res = \Bitrix\Sale\Location\TypeTable::getList(array(
-				'select' => array('ID', 'CODE')
-			));
+			$types = [];
+			$res = Location\TypeTable::getList([
+				'select' => [
+					'ID',
+					'CODE',
+				]
+			]);
 			while($item = $res->fetch())
-				$types[$item['CODE']] = $item['ID'];
-
-			$filter = array(
-				array(
-					'LOGIC' => 'OR',
-					array(
-						'=TYPE_ID' => $types['CITY'], 
-						'=NAME.LANGUAGE_ID' => LANGUAGE_ID,
-						array(
-							'LOGIC' => 'OR',
-							array(
-								'=PARENT.TYPE_ID' => $types['COUNTRY']
-							),
-							array(
-								'=PARENT.TYPE_ID' => $types['COUNTRY_DISTRICT']
-							),
-							array(
-								'=PARENT_ID' => '0'
-							)
-						)
-					),
-					array(
-						'=TYPE_ID' => $types['REGION'],
-					)
-				)
-			);
-
-			if(intval($countryId))
 			{
-				$filter['=PARENTS.TYPE_ID'] = $types['COUNTRY'];
+				$types[$item['CODE']] = $item['ID'];
+			}
+			unset($item, $res);
+
+			if (empty($types))
+			{
+				return [];
+			}
+
+			$filter = [
+				[
+					'LOGIC' => 'OR',
+					[
+						'=TYPE_ID' => $types['CITY'] ?? null,
+						'=NAME.LANGUAGE_ID' => LANGUAGE_ID,
+						[
+							'LOGIC' => 'OR',
+							[
+								'=PARENT.TYPE_ID' => $types['COUNTRY'] ?? null
+							],
+							[
+								'=PARENT.TYPE_ID' => $types['COUNTRY_DISTRICT'] ?? null
+							],
+							[
+								'=PARENT_ID' => '0'
+							]
+						]
+					],
+					[
+						'=TYPE_ID' => $types['REGION'] ?? null,
+					]
+				]
+			];
+
+			if ($countryId > 0)
+			{
+				$filter['=PARENTS.TYPE_ID'] = $types['COUNTRY'] ?? null;
 				$filter['=PARENTS.ID'] = $countryId;
 			}
 
-			$dbRegionList = \Bitrix\Sale\Location\LocationTable::getList(array(
+			$dbRegionList = Location\LocationTable::getList([
 				'filter' => $filter,
-				'select' => array('ID', 'CODE', 'NAME_LANG' => 'NAME.NAME'),
-				'order' => array('NAME.NAME' => 'asc')
-			));
+				'select' => [
+					'ID',
+					'CODE',
+					'NAME_LANG' => 'NAME.NAME',
+				],
+				'order' => [
+					'NAME_LANG' => 'ASC',
+				],
+			]);
+
 		}
 		else
 		{
-			$arFilterRegion = array();
-			if (intval($countryId) > 0)
+			$arFilterRegion = [];
+			if ($countryId > 0)
+			{
 				$arFilterRegion["COUNTRY_ID"] = $countryId;
+			}
 
 			$dbRegionList = CSaleLocation::GetRegionList(array("NAME_LANG"=>"ASC"), $arFilterRegion, LANGUAGE_ID);
 		}
@@ -83,7 +108,7 @@ class CSaleDeliveryHelper
 				$key = 'CODE';
 			}
 
-			if($key == 'CODE' && strlen($arRegionList['CODE']) <= 0)
+			if($key == 'CODE' && $arRegionList['CODE'] == '')
 			{
 				continue;
 			}
@@ -92,7 +117,7 @@ class CSaleDeliveryHelper
 			$arRegions[$countryId][1][$arRegionList["NAME_LANG"]] = $arRegionList[$key]; // $bFlip == true
 		}
 
-		return isset($arRegions[$countryId][$flipIndex]) ? $arRegions[$countryId][$flipIndex] : array();
+		return $arRegions[$countryId][$flipIndex] ?? [];
 	}
 
 	public static function getDeliverySIDAndProfile($deliveryId)
@@ -101,7 +126,7 @@ class CSaleDeliveryHelper
 
 		$dId = $dpId = false;
 
-		if (strpos($deliveryId, ":") !== false)
+		if (mb_strpos($deliveryId, ":") !== false)
 		{
 			$arId = explode(":", $deliveryId);
 			$dId = $arId[0];
@@ -180,6 +205,7 @@ class CSaleDeliveryHelper
 	{
 		$packCount = 1;
 		$packVolume = 0;
+		$itemsDims = [];
 
 		reset($arPacks);
 		$FIRST_PACK = key($arPacks);
@@ -214,11 +240,29 @@ class CSaleDeliveryHelper
 				$arTmpItems[$item["PRODUCT_ID"]]["SET_PARENT_ID"] = $item["SET_PARENT_ID"];
 				$arTmpItems[$item["PRODUCT_ID"]]["TYPE"] = $item["TYPE"];
 
+				if( $packVolume <= 0
+					&& (int)$item['DIMENSIONS']['LENGTH'] > 0
+					&& (int)$item['DIMENSIONS']['WIDTH'] > 0
+					&& (int)$item['DIMENSIONS']['HEIGHT'] > 0
+				)
+				{
+					$itemsDims[] = [
+						(int)$item['DIMENSIONS']['LENGTH'],
+						(int)$item['DIMENSIONS']['WIDTH'],
+						(int)$item['DIMENSIONS']['HEIGHT']
+					];
+				}
+
 				if($item["QUANTITY"] > 1)
 				{
 					for ($i=$item["QUANTITY"]; $i > 1 ; $i--)
 					{
 						$arTmpItems[$item["PRODUCT_ID"]."_".$i] = $arTmpItems[$item["PRODUCT_ID"]];
+						$itemsDims[] = [
+							(int)$item['DIMENSIONS']['LENGTH'],
+							(int)$item['DIMENSIONS']['WIDTH'],
+							(int)$item['DIMENSIONS']['HEIGHT']
+						];
 					}
 				}
 			}
@@ -248,6 +292,7 @@ class CSaleDeliveryHelper
 				$tmpPackageVolume = 0;
 				$tmpPackageWeight = 0;
 				$tmpPackagePrice = 0;
+
 				foreach ($arTmpItems as $arItem)
 				{
 					if(
@@ -293,6 +338,11 @@ class CSaleDeliveryHelper
 						$arResultPacksParams[$packCount-1]["VOLUME"] = $packVolume;
 						$arResultPacksParams[$packCount-1]["WEIGHT"] = $tmpPackageWeight;
 						$arResultPacksParams[$packCount-1]["PRICE"] = $tmpPackagePrice;
+						$arResultPacksParams[$packCount-1]["DIMENSIONS"] = array(
+							"WIDTH" => $arPacks[$FIRST_PACK]['DIMENSIONS'][$P_WIDTH_IDX],
+							"HEIGHT" => $arPacks[$FIRST_PACK]['DIMENSIONS'][$P_HEIGHT_IDX],
+							"LENGTH" => $arPacks[$FIRST_PACK]['DIMENSIONS'][$P_LENGTH_IDX]
+						);
 
 						$tmpPackageVolume = $arItem["VOLUME"];
 						$tmpPackageWeight = $arItem["WEIGHT"];
@@ -301,17 +351,36 @@ class CSaleDeliveryHelper
 					}
 				}
 
-
 				$arResultPacksParams[$packCount-1] = array();
-				$arResultPacksParams[$packCount-1]["VOLUME"] = $packVolume;
 				$arResultPacksParams[$packCount-1]["WEIGHT"] = $tmpPackageWeight;
 				$arResultPacksParams[$packCount-1]["PRICE"] = $tmpPackagePrice;
-				$arResultPacksParams[$packCount-1]["DIMENSIONS"] = array(
-					"WIDTH" => $arPacks[$FIRST_PACK]['DIMENSIONS'][$P_WIDTH_IDX],
-					"HEIGHT" => $arPacks[$FIRST_PACK]['DIMENSIONS'][$P_HEIGHT_IDX],
-					"LENGTH" => $arPacks[$FIRST_PACK]['DIMENSIONS'][$P_LENGTH_IDX]
-				);
 
+				if($packCount == 1 && $packVolume <= 0 && !empty($itemsDims))
+				{
+					$dimensions = \Bitrix\Sale\Delivery\Packing\Packer::countMinContainerSize($itemsDims);
+					$arResultPacksParams[$packCount-1]["DIMENSIONS"] = array(
+						"WIDTH" => $dimensions[0],
+						"HEIGHT" => $dimensions[1],
+						"LENGTH" => $dimensions[2],
+					);
+
+					$volume = $dimensions[0]*$dimensions[1]*$dimensions[2];
+
+					if($tmpPackageVolume < $volume)
+					{
+						$tmpPackageVolume = $volume;
+					}
+				}
+				else
+				{
+					$arResultPacksParams[$packCount-1]["DIMENSIONS"] = array(
+						"WIDTH" => $arPacks[$FIRST_PACK]['DIMENSIONS'][$P_WIDTH_IDX],
+						"HEIGHT" => $arPacks[$FIRST_PACK]['DIMENSIONS'][$P_HEIGHT_IDX],
+						"LENGTH" => $arPacks[$FIRST_PACK]['DIMENSIONS'][$P_LENGTH_IDX]
+					);
+				}
+
+				$arResultPacksParams[$packCount-1]["VOLUME"] = intval($packVolume) > 0 ? $packVolume : $tmpPackageVolume;
 			}
 		}
 
@@ -379,7 +448,7 @@ class CSaleDeliveryHelper
 	{
 		$arBoxes = array();
 
-		if(is_array($arConfig) && strlen($profile) > 0)
+		if(is_array($arConfig) && $profile <> '')
 		{
 			foreach ($arConfig as $key => $value)
 			{
@@ -389,8 +458,8 @@ class CSaleDeliveryHelper
 				if(!isset($value['MCS_ID']))
 					continue;
 
-				$boxId = substr($value['MCS_ID'], 4);
-				$subKey = substr($key, 0, 8);
+				$boxId = mb_substr($value['MCS_ID'], 4);
+				$subKey = mb_substr($key, 0, 8);
 
 				if($subKey == 'BOX_AV_C')
 					$arBoxes[$boxId]['NAME'] = $value['TITLE'];
@@ -453,7 +522,7 @@ class CSaleDeliveryHelper
 			$error = GetMessage("SALE_DHLP_FIELD")." \"".$name.
 					"\" ".GetMessage("SALE_DHLP_CONTAIN")." \"".$locale["decimal_point"]."\"";
 
-			if(strlen($locale["thousands_sep"]) > 0)
+			if($locale["thousands_sep"] <> '')
 				$error .= " ".GetMessage("SALE_DHLP_SEPARATOR")." \"".$locale["thousands_sep"]."\"";
 			$error .= "<br>\n";
 		}
@@ -512,7 +581,7 @@ class CSaleDeliveryHelper
 
 			while ($arItem = $dbItemsList->GetNext())
 			{
-				$arItem["DIMENSIONS"] = unserialize($arItem["~DIMENSIONS"]);
+				$arItem["DIMENSIONS"] = unserialize($arItem["~DIMENSIONS"], ['allowed_classes' => false]);
 				unset($arItem["~DIMENSIONS"]);
 				$arOrder["ITEMS"][] = $arItem;
 			}
@@ -565,4 +634,3 @@ class CSaleDeliveryHelper
 		return $arResult;
 	}
 }
-?>

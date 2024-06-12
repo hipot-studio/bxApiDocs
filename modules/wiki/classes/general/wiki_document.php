@@ -1,6 +1,9 @@
-<?
+<?php
 
 IncludeModuleLangFile(__FILE__);
+
+if(!CModule::IncludeModule('iblock'))
+	return;
 
 class CWikiDocument extends CIBlockDocument
 {
@@ -14,5 +17,3 @@ class CWikiDocument extends CIBlockDocument
 			return parent::CanUserOperateDocument($operation, $userId, $documentId, $arParameters);    
 	}
 }
-
-?>

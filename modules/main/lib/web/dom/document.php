@@ -116,7 +116,7 @@ class Document extends Node
 	 * If the node has a parent it is first removed from its parent child list.
 	 * This effectively allows moving a subtree from one document to another.
 	 */
-	static public function adoptNode(Node $source)
+	public function adoptNode(Node $source)
 	{
 		if($source->getParentNode())
 		{
@@ -149,11 +149,11 @@ class Document extends Node
 	 * @param string $tagName
 	 * @return Element
 	 */
-	static public function createElement($tagName)
+	public function createElement($tagName)
 	{
 		static $classByTag = array();
 
-		$tagName = strtoupper($tagName);
+		$tagName = mb_strtoupper($tagName);
 		$elementClass = "Bitrix\\Main\\Web\\DOM\\Element\\" . $tagName;
 
 		if(!isset($classByTag[$tagName]))
@@ -187,7 +187,7 @@ class Document extends Node
 	 * @param string $value
 	 * @return Attr
 	 */
-	static public function createAttribute($name, $value)
+	public function createAttribute($name, $value)
 	{
 		$node = new Attr($name, $value);
 		$node->setOwnerDocument($this);
@@ -198,7 +198,7 @@ class Document extends Node
 	 * @param string $comment
 	 * @return Comment
 	 */
-	static public function createComment($comment)
+	public function createComment($comment)
 	{
 		$node = new Comment($comment);
 		$node->setOwnerDocument($this);
@@ -209,7 +209,7 @@ class Document extends Node
 	 * @param string $text
 	 * @return Text
 	 */
-	static public function createTextNode($text)
+	public function createTextNode($text)
 	{
 		$node = new Text($text);
 		$node->setOwnerDocument($this);
@@ -219,7 +219,7 @@ class Document extends Node
 	/*
 	 * @return null
 	 */
-	static public function createDocumentFragment()
+	public function createDocumentFragment()
 	{
 		throw new DomException('Not implemented');
 	}
@@ -230,7 +230,7 @@ class Document extends Node
 	public function getElementById($id)
 	{
 		$resultList = $this->getElementsByAttr('id', $id, 1);
-		return (count($resultList) > 0) ? current($resultList) : null;
+		return (!empty($resultList)) ? current($resultList) : null;
 	}
 
 	/*
@@ -239,7 +239,7 @@ class Document extends Node
 	public function getElementByClassName($className)
 	{
 		$resultList = $this->getElementsByClassName($className, 1);
-		return (count($resultList) > 0) ? current($resultList) : null;
+		return (!empty($resultList)) ? current($resultList) : null;
 	}
 
 	/*
@@ -250,7 +250,7 @@ class Document extends Node
 		return $this->getElementsByAttr('name', $name);
 	}
 
-	static public function getTextContent()
+	public function getTextContent()
 	{
 		return null;
 	}
@@ -260,7 +260,7 @@ class Document extends Node
 	 */
 	public function getElementsByAttr($attrName, $attrValue = null, $limit = 0)
 	{
-		$attrName = strtolower($attrName);
+		$attrName = mb_strtolower($attrName);
 		$nodeList = $this->getQueryEngine()->walk(
 			array(
 				array(
@@ -291,7 +291,7 @@ class Document extends Node
 	 */
 	public function getElementsByTagName($tagName)
 	{
-		$tagName = strtoupper($tagName);
+		$tagName = mb_strtoupper($tagName);
 		$nodeList = $this->getQueryEngine()->walk(
 			array(
 				array(QueryEngine::FILTER_NODE_NAME => $tagName)

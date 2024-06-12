@@ -5,10 +5,17 @@ namespace Sale\Handlers\Delivery\Additional;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Error;
+use Bitrix\Sale\Delivery\ExtraServices\Manager;
+use Bitrix\Sale\Delivery\Services\Table;
+use Bitrix\Sale\Location\Admin\LocationHelper;
+use Bitrix\Sale\Location\ExternalTable;
+use Bitrix\Sale\Location\Name\LocationTable;
 use Bitrix\Sale\Result;
+use Bitrix\Sale\ResultSerializable;
 use Bitrix\Sale\Shipment;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Delivery\CalculationResult;
+use Sale\Handlers\Delivery\AdditionalHandler;
 
 Loc::loadMessages(__FILE__);
 
@@ -92,7 +99,7 @@ class RestClient extends \Bitrix\Sale\Services\Base\RestClient
 			'profileType' => $profileType,
 			'serviceParams' => $serviceParams,
 			'profileParams' => $profileParams,
-			'shipmentParams' => self::getShipmentParams($shipment)
+			'shipmentParams' => AdditionalHandler::getShipmentParams($shipment, $serviceType)
 		);
 
 		$hash = md5(serialize($params));
@@ -107,7 +114,7 @@ class RestClient extends \Bitrix\Sale\Services\Base\RestClient
 		if($answer->isSuccess())
 		{
 			$data = $answer->getData();
-			$result = unserialize(rawurldecode($data['PRICE']));
+			$result = unserialize(rawurldecode($data['PRICE']), ['allowed_classes' => [CalculationResult::class]]);
 
 			if(!($result instanceof CalculationResult))
 			{
@@ -137,56 +144,6 @@ class RestClient extends \Bitrix\Sale\Services\Base\RestClient
 		return $result;
 	}
 
-	/**
-	 * @param Shipment $shipment
-	 * @return array
-	 */
-	protected static function getShipmentParams(Shipment $shipment)
-	{
-		/** @var \Bitrix\Sale\ShipmentCollection $shipmentCollection */
-		$shipmentCollection = $shipment->getCollection();
-		/** @var \Bitrix\Sale\Order $newOrder */
-		$order = $shipmentCollection->getOrder();
-		$props = $order->getPropertyCollection();
-		$loc = $props->getDeliveryLocation();
-		$locationTo = !!$loc ? $loc->getValue() : "";
-
-		if(intval($locationTo) > 0)
-			$locationTo = Location::getExternalId($locationTo);
-
-		$shopLocation = \CSaleHelper::getShopLocation();
-
-		$locationFrom = "";
-
-		if(!empty($shopLocation['ID']))
-			$locationFrom = Location::getExternalId($shopLocation['ID']);
-
-		$result = array(
-			"ITEMS" => array(),
-			"LOCATION_FROM" => $locationFrom,
-			"LOCATION_TO" => $locationTo
-		);
-
-		/** @var \Bitrix\Sale\ShipmentItem $shipmentItem */
-		foreach($shipment->getShipmentItemCollection() as $shipmentItem)
-		{
-			$basketItem = $shipmentItem->getBasketItem();
-
-			if(!$basketItem)
-				continue;
-
-			$itemFieldValues = $basketItem->getFieldValues();
-			$itemFieldValues["QUANTITY"] = $shipmentItem->getField("QUANTITY");
-
-			if(!empty($itemFieldValues["DIMENSIONS"]) && is_string($itemFieldValues["DIMENSIONS"]))
-				$itemFieldValues["DIMENSIONS"] = unserialize($itemFieldValues["DIMENSIONS"]);
-
-			$result["ITEMS"][] = $itemFieldValues;
-		}
-
-		return $result;
-	}
-
 	public function getProfileConfig($serviceType, $profileType)
 	{
 		return $this->getItem(
@@ -207,14 +164,29 @@ class RestClient extends \Bitrix\Sale\Services\Base\RestClient
 		);
 	}
 
-	public function getProfileExtraServices($serviceType, $profileType)
+	public function getProfileExtraServices($serviceType, $profileType, array $profileParams)
 	{
 		return $this->getItem(
 			'delivery.profile.extraservices',
 			CacheManager::TYPE_EXTRA_SERVICES,
-			array('serviceType' => $serviceType, 'profileType' => $profileType),
-			array($serviceType, $profileType)
+			array('serviceType' => $serviceType, 'profileType' => $profileType, 'profileParams' => $profileParams),
+			array($serviceType, $profileType, $profileParams)
 		);
+	}
+
+	public function getTrackingStatuses($serviceType, array $serviceParams, array $trackingNumbers = array())
+	{
+		return $this->getItem(
+			'delivery.tracking.statuses',
+			CacheManager::TYPE_NONE,
+			array('serviceType' => $serviceType, 'serviceParams' => $serviceParams, 'trackingNumbers' => $trackingNumbers)
+		);
+	}
+
+	protected function setCacheItem($result, $cacheType, array $cacheIds)
+	{
+		$cache = CacheManager::getItem($cacheType);
+		$cache->set(serialize($result), $cacheIds);
 	}
 
 	protected function getItem($callMethod, $cacheType, array $callParams = array(), array $cacheIds = array())
@@ -222,21 +194,33 @@ class RestClient extends \Bitrix\Sale\Services\Base\RestClient
 		$cache = CacheManager::getItem($cacheType);
 		$isLicenseWrong = Option::get('sale', self::WRONG_LICENSE_OPTION, 'N') == 'Y';
 		$skipCache = defined('SALE_HANDLERS_DLV_ADD_SKIP_CACHE');
+		$result = false;
 
 		if(!$skipCache && !$isLicenseWrong && $cache && $result = $cache->get($cacheIds))
 		{
-			$result = unserialize($result);
+			$result = unserialize($result, ['allowed_classes' => [ResultSerializable::class]]);
 		}
-		else
+
+		if(!($result instanceof ResultSerializable))
 		{
-			if($isLicenseWrong)
-				$cache->clean($cacheIds);
+			if($isLicenseWrong && $cache)
+				$cache->clean();
 
 			$result = $this->call(static::SCOPE.'.'.$callMethod, $callParams);
 
 			if($result->isSuccess())
 			{
-				$cache->set(serialize($result), $cacheIds);
+				$data = $result->getData();
+
+				if(!empty($data['ACTIONS']) && is_array($data['ACTIONS']))
+				{
+					$this->processActions($data['ACTIONS']);
+					unset($data['ACTIONS']);
+					$result->setData($data);
+				}
+
+				if($cache)
+					$cache->set(serialize($result), $cacheIds);
 			}
 			else
 			{
@@ -267,5 +251,25 @@ class RestClient extends \Bitrix\Sale\Services\Base\RestClient
 			Option::delete('sale', array('name' => self::WRONG_LICENSE_OPTION));
 
 		return $result;
+	}
+
+	private function processActions(array $actions)
+	{
+		foreach($actions as $actType => $actParams)
+		{
+			$res = Action::execute($actParams);
+
+			if(!$res->isSuccess() && defined('SALE_HANDLERS_DLV_ADD_LOG_ACTIONS_ERRORS'))
+			{
+				$eventLog = new \CEventLog();
+				$eventLog->Add(array(
+					"SEVERITY" => $eventLog::SEVERITY_ERROR,
+					"AUDIT_TYPE_ID" => "SALE_HANDLERS_DLV_ADD_LOG_ACTIONS_ERRORS",
+					"MODULE_ID" => "sale",
+					"ITEM_ID" => $actType,
+					"DESCRIPTION" => implode(', ', $res->getErrorMessages()),
+				));
+			}
+		}
 	}
 }

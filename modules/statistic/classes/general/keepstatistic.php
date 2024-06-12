@@ -1,4 +1,5 @@
-<?
+<?php
+
 class CKeepStatistics
 {
 	static $HIT_ID = 0;
@@ -74,7 +75,7 @@ class CKeepStatistics
 		if(defined("STOP_STATISTICS")) $GO = false;
 		if($HANDLE_CALL) $GO = true;
 
-		if($GO && $_SESSION["SESS_NO_KEEP_STATISTIC"]!="Y" && !defined("NO_KEEP_STATISTIC"))
+		if($GO && (!isset($_SESSION["SESS_NO_KEEP_STATISTIC"]) || $_SESSION["SESS_NO_KEEP_STATISTIC"]!="Y") && !defined("NO_KEEP_STATISTIC"))
 		{
 			$GLOBALS["DB"]->StartUsingMasterOnly();
 			if(CStatistics::CheckSkip())
@@ -131,7 +132,7 @@ class CKeepStatistics
 			$STOP_LIST_ID = intval($STOP_LIST_ID);
 			if ($ERROR_404=="Y") init_get_params($APPLICATION->GetCurUri());
 
-			$IS_USER_AUTHORIZED = (intval($_SESSION["SESS_LAST_USER_ID"])>0 && is_object($USER) && $USER->IsAuthorized()) ? "Y" : "N";
+			$IS_USER_AUTHORIZED = (isset($_SESSION["SESS_LAST_USER_ID"]) && intval($_SESSION["SESS_LAST_USER_ID"])>0 && is_object($USER) && $USER->IsAuthorized()) ? "Y" : "N";
 
 			stat_session_register("SESS_SEARCHER_ID");
 			stat_session_register("SESS_SEARCHER_NAME");
@@ -169,7 +170,7 @@ class CKeepStatistics
 			if (!$BLOCK_ACTIVITY)
 			{
 				//Check if searcher was not deleted from searchers list
-				if (intval($_SESSION["SESS_SEARCHER_ID"]) > 0)
+				if (isset($_SESSION["SESS_SEARCHER_ID"]) && intval($_SESSION["SESS_SEARCHER_ID"]) > 0)
 				{
 					$strSql = "
 						SELECT ID
@@ -182,7 +183,7 @@ class CKeepStatistics
 				}
 
 				// We did not check for searcher
-				if(strlen($_SESSION["SESS_SEARCHER_ID"])<=0)
+				if(!isset($_SESSION["SESS_SEARCHER_ID"]) || $_SESSION["SESS_SEARCHER_ID"] == '')
 				{
 					// is it searcher hit?
 					$strSql = "
@@ -193,7 +194,7 @@ class CKeepStatistics
 						WHERE
 							ACTIVE = 'Y'
 						and ".$DB->Length("USER_AGENT").">0
-						and upper('".$DB->ForSql($_SERVER["HTTP_USER_AGENT"],500)."') like ".$DB->Concat("'%'", "upper(USER_AGENT)", "'%'")."
+						and upper('".$DB->ForSql($_SERVER["HTTP_USER_AGENT"] ?? '', 500)."') like ".$DB->Concat("'%'", "upper(USER_AGENT)", "'%'")."
 						ORDER BY ".$DB->Length("USER_AGENT")." desc, ID
 						";
 
@@ -208,7 +209,7 @@ class CKeepStatistics
 						//Here was warning "A session is active. You cannot change the session module's ini settings at this time."
 						//@ini_set("url_rewriter.tags", "");
 					}
-					$_SESSION["SESS_SEARCHER_ID"] = intval($_SESSION["SESS_SEARCHER_ID"]);
+					$_SESSION["SESS_SEARCHER_ID"] = intval($_SESSION["SESS_SEARCHER_ID"] ?? 0);
 				}
 
 				/************************************************
@@ -257,7 +258,7 @@ class CKeepStatistics
 					// save indexed page if neccessary
 					if ($_SESSION["SESS_SEARCHER_SAVE_STATISTIC"]=="Y")
 					{
-						$sql_HIT_KEEP_DAYS = (strlen($_SESSION["SESS_SEARCHER_HIT_KEEP_DAYS"])>0) ? intval($_SESSION["SESS_SEARCHER_HIT_KEEP_DAYS"]) : "null";
+						$sql_HIT_KEEP_DAYS = ($_SESSION["SESS_SEARCHER_HIT_KEEP_DAYS"] <> '') ? intval($_SESSION["SESS_SEARCHER_HIT_KEEP_DAYS"]) : "null";
 						$arFields = Array(
 							"DATE_HIT" => $DB_now,
 							"SEARCHER_ID" => intval($_SESSION["SESS_SEARCHER_ID"]),
@@ -300,7 +301,7 @@ class CKeepStatistics
 							Country detection
 					************************************************/
 
-					if(strlen($_SESSION["SESS_COUNTRY_ID"])<=0)
+					if(!isset($_SESSION["SESS_COUNTRY_ID"]) || $_SESSION["SESS_COUNTRY_ID"] == '')
 					{
 						$obCity = new CCity;
 						$_SESSION["SESS_COUNTRY_ID"] = $obCity->GetCountryCode();
@@ -338,7 +339,7 @@ class CKeepStatistics
 							Session section
 					************************************************/
 
-					$_SESSION["SESS_SESSION_ID"] = intval($_SESSION["SESS_SESSION_ID"]);
+					$_SESSION["SESS_SESSION_ID"] = intval($_SESSION["SESS_SESSION_ID"] ?? 0);
 
 					//session already exists
 					if($_SESSION["SESS_SESSION_ID"] > 0)
@@ -348,7 +349,7 @@ class CKeepStatistics
 						$arFields = Array(
 							"USER_ID"		=> intval($_SESSION["SESS_LAST_USER_ID"]),
 							"USER_AUTH"		=> "'".$IS_USER_AUTHORIZED."'",
-							"USER_AGENT"		=> "'".$DB->ForSql($_SERVER["HTTP_USER_AGENT"],500)."'",
+							"USER_AGENT"		=> "'".$DB->ForSql($_SERVER["HTTP_USER_AGENT"] ?? '', 500)."'",
 							"DATE_LAST"		=> $DB_now,
 							"IP_LAST"		=> "'".$DB->ForSql($_SERVER["REMOTE_ADDR"],15)."'",
 							"IP_LAST_NUMBER"	=> $REMOTE_ADDR_NUMBER,
@@ -374,19 +375,19 @@ class CKeepStatistics
 					if($_SESSION["SESS_SESSION_ID"] <= 0)
 					{
 						$SESSION_NEW = "Y";
-
+						$sessionId = \Bitrix\Main\Application::getInstance()->getKernelSession()->getId();
 						// save session data
 						$arFields = Array(
 							"GUEST_ID"		=> intval($_SESSION["SESS_GUEST_ID"]),
 							"NEW_GUEST"		=> "'".$DB->ForSql($_SESSION["SESS_GUEST_NEW"])."'",
 							"USER_ID"		=> intval($_SESSION["SESS_LAST_USER_ID"]),
 							"USER_AUTH"		=> "'".$DB->ForSql($IS_USER_AUTHORIZED)."'",
-							"URL_FROM"		=> "'".$DB->ForSql($_SERVER["HTTP_REFERER"],2000)."'",
+							"URL_FROM"		=> "'".$DB->ForSql($_SERVER["HTTP_REFERER"] ?? '', 2000)."'",
 							"URL_TO"		=> "'".$DB->ForSql($CURRENT_URI,2000)."'",
 							"URL_TO_404"		=> "'".$DB->ForSql($ERROR_404)."'",
 							"URL_LAST"		=> "'".$DB->ForSql($CURRENT_URI,2000)."'",
 							"URL_LAST_404"		=> "'".$DB->ForSql($ERROR_404)."'",
-							"USER_AGENT"		=> "'".$DB->ForSql($_SERVER["HTTP_USER_AGENT"],500)."'",
+							"USER_AGENT"		=> "'".$DB->ForSql($_SERVER["HTTP_USER_AGENT"] ?? '', 500)."'",
 							"DATE_STAT"		=> $DB_now_date,
 							"DATE_FIRST"		=> $DB_now,
 							"DATE_LAST"		=> $DB_now,
@@ -394,7 +395,7 @@ class CKeepStatistics
 							"IP_FIRST_NUMBER"	=> "'".$DB->ForSql($REMOTE_ADDR_NUMBER)."'",
 							"IP_LAST"		=> "'".$DB->ForSql($_SERVER["REMOTE_ADDR"],15)."'",
 							"IP_LAST_NUMBER"	=> "'".$DB->ForSql($REMOTE_ADDR_NUMBER)."'",
-							"PHPSESSID"		=> "'".$DB->ForSql(session_id(),255)."'",
+							"PHPSESSID"		=> "'".$DB->ForSql($sessionId,255)."'",
 							"STOP_LIST_ID"		=> "'".$DB->ForSql($STOP_LIST_ID)."'",
 							"COUNTRY_ID"		=> "'".$DB->ForSql($_SESSION["SESS_COUNTRY_ID"],2)."'",
 							"CITY_ID"		=> $_SESSION["SESS_CITY_ID"] > 0? intval($_SESSION["SESS_CITY_ID"]): "null",
@@ -423,7 +424,7 @@ class CKeepStatistics
 
 						// look for the same IP?
 						$day_host_counter = 1;
-						$day_host_counter_site = strlen($SITE_ID)>0? 1: 0;
+						$day_host_counter_site = $SITE_ID <> ''? 1: 0;
 						$strSql = "
 							SELECT S.FIRST_SITE_ID
 							FROM b_stat_session S
@@ -460,7 +461,7 @@ class CKeepStatistics
 						else // guest was here
 						{
 							// first hit for today
-							if ($_SESSION["SESS_LAST"]!="Y")
+							if (!isset($_SESSION["SESS_LAST"]) || $_SESSION["SESS_LAST"] != "Y")
 							{
 								// update day statistic
 								$day_guest_counter = 1;
@@ -507,7 +508,7 @@ class CKeepStatistics
 						}
 
 						// site is not defined
-						if (strlen($SITE_ID)>0)
+						if ($SITE_ID <> '')
 						{
 							// обновляем счетчик "по дням" для текущего сайта
 							$arFields = Array(
@@ -542,7 +543,7 @@ class CKeepStatistics
 						}
 
 						// если страна определена то
-						if (strlen($_SESSION["SESS_COUNTRY_ID"])>0)
+						if ($_SESSION["SESS_COUNTRY_ID"] <> '')
 						{
 							$arFields = Array(
 								"SESSIONS"	=> 1,
@@ -564,7 +565,7 @@ class CKeepStatistics
 						$arFields = Array(
 							"SESSIONS" => "SESSIONS + 1",
 							"LAST_SESSION_ID" => $_SESSION["SESS_SESSION_ID"],
-							"LAST_USER_AGENT" => "'".$DB->ForSql($_SERVER["HTTP_USER_AGENT"],500)."'",
+							"LAST_USER_AGENT" => "'".$DB->ForSql($_SERVER["HTTP_USER_AGENT"] ?? '', 500)."'",
 							"LAST_COUNTRY_ID" => "'".$DB->ForSql($_SESSION["SESS_COUNTRY_ID"],2)."'",
 							"LAST_CITY_ID" => $_SESSION["SESS_CITY_ID"] > 0? intval($_SESSION["SESS_CITY_ID"]): "null",
 						);
@@ -607,7 +608,7 @@ class CKeepStatistics
 						if(
 							$SAVE_REFERERS != "N"
 							&& __GetReferringSite($PROT, $SN, $SN_WithoutPort, $PAGE_FROM)
-							&& strlen($SN) > 0
+							&& $SN <> ''
 							&& $SN != $_SERVER["HTTP_HOST"]
 						)
 						{
@@ -617,8 +618,8 @@ class CKeepStatistics
 									Search phrases
 							************************************************/
 
-							if (substr($SN,0,4)=="www.")
-								$sql = "('".$DB->ForSql(substr($SN,4),255)."' like P.DOMAIN or '".$DB->ForSql($SN,255)."' like P.DOMAIN)";
+							if (mb_substr($SN, 0, 4) == "www.")
+								$sql = "('".$DB->ForSql(mb_substr($SN, 4), 255)."' like P.DOMAIN or '".$DB->ForSql($SN,255)."' like P.DOMAIN)";
 							else
 								$sql = "'".$DB->ForSql($SN,255)."' like P.DOMAIN";
 							$strSql = "
@@ -642,9 +643,9 @@ class CKeepStatistics
 								$_SESSION["FROM_SEARCHER_ID"] = $qr["ID"];
 								$FROM_SEARCHER_NAME = $qr["NAME"];
 								$FROM_SEARCHER_PHRASE = "";
-								if (strlen($qr["VARIABLE"])>0)
+								if ($qr["VARIABLE"] <> '')
 								{
-									$page=substr($PAGE_FROM, strpos($PAGE_FROM, "?")+1);
+									$page = mb_substr($PAGE_FROM, mb_strpos($PAGE_FROM, "?") + 1);
 									$bIsUTF8 = is_utf8_url($page);
 									parse_str($page, $arr);
 									$arrVar = explode(",",$qr["VARIABLE"]);
@@ -653,32 +654,33 @@ class CKeepStatistics
 										$var = trim($var);
 										$phrase = $arr[$var];
 
-										if (get_magic_quotes_gpc())
-											$phrase = stripslashes($phrase);
-
 										if($bIsUTF8)
 										{
 											$phrase_temp = trim($APPLICATION->ConvertCharset($phrase, "utf-8", LANG_CHARSET));
-											if(strlen($phrase_temp))
+											if($phrase_temp <> '')
+											{
 												$phrase = $phrase_temp;
+											}
 										}
-										elseif(strlen($qr["CHAR_SET"]) > 0)
+										elseif($qr["CHAR_SET"] <> '')
 										{
 											$phrase_temp = trim($APPLICATION->ConvertCharset($phrase, $qr["CHAR_SET"], LANG_CHARSET));
-											if(strlen($phrase_temp))
+											if($phrase_temp <> '')
+											{
 												$phrase = $phrase_temp;
+											}
 										}
 
 										$phrase = trim($phrase);
-										if(strlen($phrase))
+										if($phrase <> '')
 										{
-											$FROM_SEARCHER_PHRASE .= (strlen($FROM_SEARCHER_PHRASE)>0) ? " / ".$phrase : $phrase;
+											$FROM_SEARCHER_PHRASE .= ($FROM_SEARCHER_PHRASE <> '')? " / ".$phrase : $phrase;
 										}
 									}
 								}
 								//echo "FROM_SEARCHER_PHRASE = ".$FROM_SEARCHER_PHRASE."<br>\n";
 								// если извлекли поисковую фразу, то занесем ее в базу
-								if (strlen($FROM_SEARCHER_PHRASE)>0)
+								if ($FROM_SEARCHER_PHRASE <> '')
 								{
 									$arFields = Array(
 										"DATE_HIT" => $DB_now,
@@ -732,7 +734,7 @@ class CKeepStatistics
 								"IP" => "'".$DB->ForSql($_SERVER["REMOTE_ADDR"],15)."'",
 								"METHOD" => "'".$DB->ForSql($_SERVER["REQUEST_METHOD"],10)."'",
 								"COOKIES" => "'".$DB->ForSql(GetCookieString(),2000)."'",
-								"USER_AGENT" => "'".$DB->ForSql($_SERVER["HTTP_USER_AGENT"],500)."'",
+								"USER_AGENT" => "'".$DB->ForSql($_SERVER["HTTP_USER_AGENT"] ?? '', 500)."'",
 								"STOP_LIST_ID" => "'".$STOP_LIST_ID."'",
 								"COUNTRY_ID" => "'".$DB->ForSql($_SESSION["SESS_COUNTRY_ID"],2)."'",
 								"CITY_ID" => $_SESSION["SESS_CITY_ID"] > 0? intval($_SESSION["SESS_CITY_ID"]): "null",
@@ -792,7 +794,7 @@ class CKeepStatistics
 						}
 
 						// если сайт определен то
-						if (strlen($SITE_ID)>0)
+						if ($SITE_ID <> '')
 						{
 							// обновляем счетчик "по дням"
 							$arFields = Array(
@@ -867,10 +869,10 @@ class CKeepStatistics
 							"LAST_USER_AUTH"	=> "'".$IS_USER_AUTHORIZED."'",
 							"LAST_URL_LAST"		=> "'".$DB->ForSql($CURRENT_URI,2000)."'",
 							"LAST_URL_LAST_404"	=> "'".$ERROR_404."'",
-							"LAST_USER_AGENT"	=> "'".$DB->ForSql($_SERVER["HTTP_USER_AGENT"],500)."'",
+							"LAST_USER_AGENT"	=> "'".$DB->ForSql($_SERVER["HTTP_USER_AGENT"] ?? '', 500)."'",
 							"LAST_IP"		=> "'".$DB->ForSql($_SERVER["REMOTE_ADDR"],15)."'",
 							"LAST_COOKIE"		=> "'".$DB->ForSql(GetCookieString(),2000)."'",
-							"LAST_LANGUAGE"		=> "'".$DB->ForSql($_SERVER["HTTP_ACCEPT_LANGUAGE"],255)."'",
+							"LAST_LANGUAGE"		=> "'".$DB->ForSql($_SERVER["HTTP_ACCEPT_LANGUAGE"] ?? '', 255)."'",
 							"LAST_SITE_ID"		=> $sql_site
 							);
 						if ($FAVORITES=="Y") $arFields["FAVORITES"] = "'Y'";
@@ -949,13 +951,13 @@ class CKeepStatistics
 						if (defined("GENERATE_EVENT") && GENERATE_EVENT=="Y")
 						{
 							global $event1, $event2, $event3, $goto, $money, $currency, $site_id;
-							if(strlen($site_id) <= 0)
+							if($site_id == '')
 								$site_id = false;
 							CStatistics::Set_Event($event1, $event2, $event3, $goto, $money, $currency, $site_id);
 						}
 
 						// увеличиваем счетчик хитов у страны
-						if (strlen($_SESSION["SESS_COUNTRY_ID"])>0)
+						if ($_SESSION["SESS_COUNTRY_ID"] <> '')
 						{
 							CStatistics::UpdateCountry($_SESSION["SESS_COUNTRY_ID"], Array("HITS" => 1));
 						}
@@ -995,7 +997,7 @@ class CKeepStatistics
 						Переменные хранящие параметры предыдущей страницы
 					*******************************************************/
 
-					$_SESSION["SESS_HTTP_REFERER"] = $_SESSION["SESS_LAST_URI"];
+					$_SESSION["SESS_HTTP_REFERER"] = $_SESSION["SESS_LAST_URI"] ?? '';
 					$_SESSION["SESS_LAST_PROTOCOL"] = $CURRENT_PROTOCOL;
 					$_SESSION["SESS_LAST_PORT"] = $CURRENT_PORT;
 					$_SESSION["SESS_LAST_HOST"] = $CURRENT_HOST;
@@ -1031,7 +1033,7 @@ class CKeepStatistics
 			if($SESSION_DATA_ID)
 			{
 				$arrSTAT_SESSION = stat_session_register(true);
-				$sess_data_for_db = (strtolower($DB->type)=="oracle") ? "'".$DB->ForSql(serialize($arrSTAT_SESSION), 2000)."'" :  "'".$DB->ForSql(serialize($arrSTAT_SESSION))."'";
+				$sess_data_for_db = ($DB->type == "ORACLE") ? "'".$DB->ForSql(serialize($arrSTAT_SESSION), 2000)."'" :  "'".$DB->ForSql(serialize($arrSTAT_SESSION))."'";
 				// если в результате этого select'а были выбраны данные то
 				if((intval($SESSION_DATA_ID) > 0) && ($SESSION_DATA_ID !== true))
 				{
@@ -1063,21 +1065,21 @@ class CKeepStatistics
 		{
 			$z = CLanguage::GetByID($STOP_MESSAGE_LID);
 			$zr = $z->Fetch();
-			$charset = (strlen($zr["CHARSET"])>0) ? $zr["CHARSET"] : "windows-1251";
+			$charset = ($zr["CHARSET"] <> '') ? $zr["CHARSET"] : "windows-1251";
 
 			//We have URL with no MESSAGE
-			if((strlen($STOP_REDIRECT_URL) > 0) && (strlen($STOP_MESSAGE) <= 0))
+			if(($STOP_REDIRECT_URL <> '') && ($STOP_MESSAGE == ''))
 			{//So just do redirect
 				LocalRedirect($STOP_REDIRECT_URL, true);
 			}
 			//We have some to say
-			elseif(strlen($STOP_MESSAGE)>0)
+			elseif($STOP_MESSAGE <> '')
 			{
 				$STOP_MESSAGE .= " [".$STOP_LIST_ID."]";
 echo '<html>
 	<head>
 		<meta http-equiv="Content-Type" content="text/html; charset='.$charset.'">
-		'.(strlen($STOP_REDIRECT_URL) > 0? '<meta http-equiv="Refresh" content="3;URL='.htmlspecialcharsbx($STOP_REDIRECT_URL).'">': '').'
+		'.($STOP_REDIRECT_URL <> ''? '<meta http-equiv="Refresh" content="3;URL='.htmlspecialcharsbx($STOP_REDIRECT_URL).'">': '').'
 	</head>
 	<body>
 		<div align="center"><h3>'.$STOP_MESSAGE.'</h3></div>
@@ -1092,7 +1094,7 @@ echo '<html>
 	{
 		global $APPLICATION;
 		// if there is no session ID
-		if(intval($_SESSION["SESS_SESSION_ID"]) <= 0)
+		if(!isset($_SESSION["SESS_SESSION_ID"]) || intval($_SESSION["SESS_SESSION_ID"]) <= 0)
 		{
 			if(COption::GetOptionString("statistic", "SAVE_SESSION_DATA") == "Y")
 			{
@@ -1104,7 +1106,7 @@ echo '<html>
 					$z = CStatistics::GetSessionDataByMD5(get_guest_md5());
 					if($zr = $z->Fetch())
 					{
-						$arrSESSION_DATA = unserialize($zr["SESSION_DATA"]);
+						$arrSESSION_DATA = unserialize($zr["SESSION_DATA"], ['allowed_classes' => false]);
 						if(is_array($arrSESSION_DATA))
 						{
 							foreach($arrSESSION_DATA as $key => $value)
@@ -1199,24 +1201,30 @@ echo '<html>
 		$DB_now_date = $DB->GetNowDate();
 		$STEPS = intval(COption::GetOptionString("statistic", "MAX_PATH_STEPS"));
 
-		if($_SESSION["SESS_LAST_PAGE"]==$CURRENT_PAGE)
+		if(isset($_SESSION["SESS_LAST_PAGE"]) && $_SESSION["SESS_LAST_PAGE"] == $CURRENT_PAGE)
 			return;
 
 		$COUNTER_ABNORMAL = 0; // счетчик показывающий сколько раз прошли по данному пути без поддержки HTTP_REFERER
 
 		// получим ссылающуюся страницу
-		if (strlen($_SERVER["HTTP_REFERER"])<=0)
+		if (empty($_SERVER["HTTP_REFERER"]))
 		{
-			if (strlen($_SESSION["SESS_LAST_PAGE"])>0) $COUNTER_ABNORMAL = 1;
-			$PATH_REFERER = __GetFullReferer($_SESSION["SESS_LAST_PAGE"]);
+			if (!empty($_SESSION["SESS_LAST_PAGE"]))
+			{
+				$COUNTER_ABNORMAL = 1;
+			}
+			$PATH_REFERER = __GetFullReferer($_SESSION["SESS_LAST_PAGE"] ?? '');
 		}
-		else $PATH_REFERER = __GetFullReferer();
+		else
+		{
+			$PATH_REFERER = __GetFullReferer();
+		}
 
 		if($PATH_REFERER==$CURRENT_PAGE)
 			return;
 
 		// получим из кэша данные по предыдущему пути: ID пути, набор страниц и т.д.
-		if(strlen($PATH_REFERER)>0)
+		if($PATH_REFERER <> '')
 		{
 			$where1 = " and C.PATH_LAST_PAGE = '".$DB->ForSql($PATH_REFERER,255)."'";
 		}
@@ -1247,12 +1255,24 @@ echo '<html>
 		$rsPREV_PATH = $DB->Query($strSql,false,"File: ".__FILE__."<br>Line: ".__LINE__);
 		$arPREV_PATH = $rsPREV_PATH->Fetch();
 
+		if (!$arPREV_PATH)
+		{
+			$arPREV_PATH = [
+				"PATH_ID" => '',
+				"PATH_PAGES" => '',
+				"PATH_STEPS" => '',
+				"PATH_FIRST_PAGE" => '',
+				"PATH_LAST_PAGE" => '',
+				"IS_LAST_PAGE" => '',
+			];
+		}
+
 		$arrUpdate404_1 = array();
 		$arrUpdate404_2 = array();
 
 		// сформируем переменные описывающие текущий путь
 		$CURRENT_PATH_ID = GetStatPathID($CURRENT_PAGE, $arPREV_PATH["PATH_ID"]);
-		$tmp_SITE_ID = (strlen($SITE_ID)>0) ? "[".$SITE_ID."] " : "";
+		$tmp_SITE_ID = ($SITE_ID <> '') ? "[".$SITE_ID."] " : "";
 		$CURRENT_PATH_PAGES_404 = $arPREV_PATH["PATH_PAGES"].$tmp_SITE_ID."ERROR_404: ".$CURRENT_PAGE."\n";
 
 		if ($ERROR_404=="Y")
@@ -1263,10 +1283,10 @@ echo '<html>
 		{
 			$CURRENT_PATH_PAGES = $arPREV_PATH["PATH_PAGES"].$tmp_SITE_ID.$CURRENT_PAGE."\n";
 
-			if(strtolower($DB->type)=="oracle")
-				$arrUpdate404_1["PATH_PAGES"] = substr($CURRENT_PATH_PAGES_404, 0, 2000);
-			elseif(strtolower($DB->type)=="mssql")
-				$arrUpdate404_1["PATH_PAGES"] = substr($CURRENT_PATH_PAGES_404, 0, 7000);
+			if($DB->type == "ORACLE")
+				$arrUpdate404_1["PATH_PAGES"] = mb_substr($CURRENT_PATH_PAGES_404, 0, 2000);
+			elseif($DB->type == "MSSQL")
+				$arrUpdate404_1["PATH_PAGES"] = mb_substr($CURRENT_PATH_PAGES_404, 0, 7000);
 			else
 				$arrUpdate404_1["PATH_PAGES"] = $CURRENT_PATH_PAGES_404;
 
@@ -1274,7 +1294,7 @@ echo '<html>
 		}
 
 		$CURRENT_PATH_STEPS = intval($arPREV_PATH["PATH_STEPS"])+1;
-		if (strlen($arPREV_PATH["PATH_FIRST_PAGE"])>0)
+		if ($arPREV_PATH["PATH_FIRST_PAGE"] <> '')
 		{
 			$FIRST_PAGE = $arPREV_PATH["PATH_FIRST_PAGE"];
 			$FIRST_PAGE_SITE_ID = $arPREV_PATH["PATH_FIRST_PAGE_SITE_ID"];
@@ -1293,16 +1313,11 @@ echo '<html>
 			}
 		}
 
-		if(strtolower($DB->type)=="oracle")
-			$sql_CURRENT_PATH_PAGES = $DB->ForSql($CURRENT_PATH_PAGES, 2000);
-		elseif(strtolower($DB->type)=="mssql")
-			$sql_CURRENT_PATH_PAGES = $DB->ForSql($CURRENT_PATH_PAGES, 7000);
-		else
-			$sql_CURRENT_PATH_PAGES = $DB->ForSql($CURRENT_PATH_PAGES);
+		$sql_CURRENT_PATH_PAGES = $DB->ForSql($CURRENT_PATH_PAGES);
 
-		$sql_FIRST_PAGE_SITE_ID = strlen($FIRST_PAGE_SITE_ID)>0 ? "'".$DB->ForSql($FIRST_PAGE_SITE_ID,2)."'" : "null";
+		$sql_FIRST_PAGE_SITE_ID = $FIRST_PAGE_SITE_ID <> '' ? "'".$DB->ForSql($FIRST_PAGE_SITE_ID,2)."'" : "null";
 
-		$sql_LAST_PAGE_SITE_ID = strlen($SITE_ID)>0 ? "'".$DB->ForSql($SITE_ID,2)."'" : "null";
+		$sql_LAST_PAGE_SITE_ID = $SITE_ID <> '' ? "'".$DB->ForSql($SITE_ID,2)."'" : "null";
 
 		// вставим данный путь в кэш
 		$arFields = array(
@@ -1337,7 +1352,7 @@ echo '<html>
 
 		if (intval($rows)<=0)
 		{
-			$sql_PARENT_PATH_ID = (strlen($arPREV_PATH["PATH_ID"])>0) ? $arPREV_PATH["PATH_ID"] : "null";
+			$sql_PARENT_PATH_ID = ($arPREV_PATH["PATH_ID"] <> '') ? $arPREV_PATH["PATH_ID"] : "null";
 			$arFields = array(
 				"PATH_ID"		=> intval($CURRENT_PATH_ID),
 				"PARENT_PATH_ID"	=> $sql_PARENT_PATH_ID,
@@ -1444,15 +1459,15 @@ echo '<html>
 		$DB = CDatabase::GetModuleConnection('statistic');
 		$DB_now_date = $DB->GetNowDate();
 		$enter_counter = ($SESSION_NEW=="Y") ? 1 : 0;
-		if (strlen($CURRENT_DIR)>0 && strlen($CURRENT_PAGE)>0)
+		if ($CURRENT_DIR <> '' && $CURRENT_PAGE <> '')
 		{
-			$LAST_DIR_ID = intval($_SESSION["SESS_LAST_DIR_ID"]);
-			$LAST_PAGE_ID = intval($_SESSION["SESS_LAST_PAGE_ID"]);
+			$LAST_DIR_ID = intval($_SESSION["SESS_LAST_DIR_ID"] ?? 0);
+			$LAST_PAGE_ID = intval($_SESSION["SESS_LAST_PAGE_ID"] ?? 0);
 			$CURRENT_DIR_ID = 0;
 			$CURRENT_PAGE_ID = 0;
 			$exit_dir_counter = 0; // счетчик точки выхода для раздела
 			$exit_page_counter = 0; // счетчик точки выхода для страницы
-			if ($_SESSION["SESS_LAST_DIR"]!=$CURRENT_DIR || $_SESSION["SESS_LAST_PAGE"]!=$CURRENT_PAGE)
+			if (!isset($_SESSION["SESS_LAST_DIR"]) || $_SESSION["SESS_LAST_DIR"] != $CURRENT_DIR || !isset($_SESSION["SESS_LAST_PAGE"]) || $_SESSION["SESS_LAST_PAGE"] != $CURRENT_PAGE)
 			{
 				$strSql = "
 					SELECT
@@ -1665,9 +1680,6 @@ echo '<html>
 		}
 	}
 
-	/************************************************
-			Referring sites
-	************************************************/
 	public static function GetRefererListID($PROT, $SN, $PAGE_FROM, $CURRENT_URI, $ERROR_404, $sql_site)
 	{
 		$DB = CDatabase::GetModuleConnection('statistic');
@@ -1727,4 +1739,3 @@ echo '<html>
 		return $REFERER_LIST_ID;
 	}
 }
-?>

@@ -1,50 +1,10 @@
-<?
+<?php
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/user.php");
 
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleuseraccount/index.php
- * @author Bitrix
- */
 class CSaleUserAccount extends CAllSaleUserAccount
 {
 	//********** SELECT **************//
-	
-	/**
-	* <p>Метод возвращает ассоциативный массив параметров счета с кодом ID. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код счета.
-	*
-	* @return array <p>Метод возвращает ассоциативный массив параметров счета с
-	* ключами:</p><ul> <li> <b>ID</b> - код счета;</li> 	<li> <b>USER_ID</b> - код
-	* пользователя-владельца;</li> 	<li> <b>CURRENT_BUDGET</b> - текущая сумма на
-	* счете;</li> 	<li> <b>CURRENCY</b> - валюта;</li> 	<li> <b>NOTES</b> - текстовое
-	* описание;</li> 	<li> <b>LOCKED</b> - флаг заблокированности счета;</li> 	<li>
-	* <b>TIMESTAMP_X</b> - дата последнего изменения;</li> 	<li> <b>DATE_LOCKED</b> - дата
-	* блокировки счета.</li> </ul><p></p><div class="note"> <b>Примечание:</b> результат
-	* выполнения метода кешируется в рамках страницы, поэтому
-	* повторный вызов метода на одной странице не влечет за собой
-	* дополнительных обращений к базе данных.</div><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;? if ($ar = CSaleUserAccount::GetByID(5)) 
-	* { echo "На счете ".SaleFormatCurrency($ar["CURRENT_BUDGET"], 
-	*                                       $ar["CURRENCY"]); } ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleuseraccount/csaleuseraccount.getbyid.php
-	* @author Bitrix
-	*/
 	public static function GetByID($ID)
 	{
 		global $DB;
@@ -77,37 +37,6 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		return false;
 	}
 
-	
-	/**
-	* <p>Метод возвращает ассоциативный массив параметров счета с валютой currency для пользователя с кодом userID. Нестатический метод.</p>
-	*
-	*
-	* @param int $userID  Код пользователя.
-	*
-	* @param string $currency  Валюта счета.
-	*
-	* @return array <p>Метод возвращает ассоциативный массив параметров счета с
-	* ключами:</p><ul> <li> <b> ID</b> - код счета;</li> 	<li> <b> USER_ID</b> - код
-	* пользователя-владельца;</li> 	<li> <b> CURRENT_BUDGET</b> - текущая сумма на
-	* счете;</li> 	<li> <b> CURRENCY</b> - валюта;</li> 	<li> <b> NOTES</b> - текстовое
-	* описание;</li> 	<li> <b> LOCKED</b> - флаг заблокированности счета;</li> 	<li> <b>
-	* TIMESTAMP_X</b> - дата последнего изменения;</li> 	<li> <b> DATE_LOCKED</b> - дата
-	* блокировки счета.</li> </ul><p></p><div class="note"> <b>Примечание:</b> результат
-	* выполнения метода кешируется в рамках страницы, поэтому
-	* повторный вызов метода на одной странице не влечет за собой
-	* дополнительных обращений к базе данных.</div><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;? if ($ar = CSaleUserAccount::GetByUserID(172, "USD")) 
-	*  { echo "На счете ".SaleFormatCurrency($ar["CURRENT_BUDGET"], $ar["CURRENCY"]); } ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleuseraccount/csaleuseraccount.getbyuserid.php
-	* @author Bitrix
-	*/
 	public static function GetByUserID($userID, $currency)
 	{
 		global $DB;
@@ -146,125 +75,6 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		return false;
 	}
 
-	
-	/**
-	* <p>Метод возвращает результат выборки записей счетов в соответствии со своими параметрами. Нестатический метод.</p>
-	*
-	*
-	* @param array $arOrder = array() Массив, в соответствии с которым сортируются результирующие
-	* записи. Массив имеет вид: 		<pre class="syntax">array( "название_поля1" =&gt;
-	* "направление_сортировки1", "название_поля2" =&gt;
-	* "направление_сортировки2", . . . )</pre> 		В качестве "название_поля<i>N</i>"
-	* может стоять любое поле 		счетов, а в качестве
-	* "направление_сортировки<i>X</i>" могут быть значения "<i>ASC</i>" (по
-	* возрастанию) и "<i>DESC</i>" (по убыванию).<br><br> 		Если массив сортировки
-	* имеет несколько элементов, то 		результирующий набор сортируется
-	* последовательно по каждому элементу (т.е. сначала сортируется по
-	* первому элементу, потом результат сортируется по второму и
-	* т.д.). <br><br>  Значение по умолчанию - пустой массив array() - означает,
-	* что результат отсортирован не будет.
-	*
-	* @param array $arFilter = array() Массив, в соответствии с которым фильтруются 		записи счетов.
-	* Массив имеет вид: 		<pre class="syntax">array(
-	* "[модификатор1][оператор1]название_поля1" =&gt; "значение1",
-	* "[модификатор2][оператор2]название_поля2" =&gt; "значение2", . . . )</pre>
-	* Удовлетворяющие фильтру записи возвращаются в результате, а
-	* записи, которые не удовлетворяют условиям фильтра,
-	* отбрасываются.<br><br> 	Допустимыми являются следующие
-	* модификаторы: 		<ul> <li> <b> 	!</b>  - отрицание;</li> 			<li> <b> 	+</b>  - значения
-	* null, 0 и пустая строка так же удовлетворяют условиям фильтра.</li>
-	* 		</ul> 	Допустимыми являются следующие операторы: 	<ul> <li> <b>&gt;=</b> -
-	* значение поля больше или равно передаваемой в фильтр величины;</li>
-	* 			<li> <b>&gt;</b>  - значение поля строго больше передаваемой в фильтр
-	* величины;</li> 			<li> <b>&lt;=</b> - значение поля меньше или равно
-	* передаваемой в фильтр величины;</li> 			<li> <b>&lt;</b> - значение поля
-	* строго меньше передаваемой в фильтр величины;</li> 			<li> <b>@</b>  -
-	* значение поля находится в передаваемом в фильтр разделенном
-	* запятой списке значений;</li> 			<li> <b>~</b>  - значение поля проверяется
-	* на соответствие передаваемому в фильтр шаблону;</li> 			<li> <b>%</b>  -
-	* значение поля проверяется на соответствие передаваемой в фильтр
-	* строке в соответствии с языком запросов.</li> 	</ul> В качестве
-	* "название_поляX" может стоять любое поле 		заказов.<br><br> 		Пример
-	* фильтра: 		<pre class="syntax">array("USER_ID" =&gt; 150)</pre> 		Этот фильтр означает
-	* "выбрать все записи, в которых значение в поле USER_ID (код
-	* пользователя) равно 150".<br><br> 	Значение по умолчанию - пустой массив
-	* array() - означает, что результат отфильтрован не будет.
-	*
-	* @param array $arGroupBy = false Массив полей, по которым группируются записи 		счетов. Массив
-	* имеет вид: 		<pre class="syntax">array("название_поля1",      
-	* "группирующая_функция2" =&gt; "название_поля2", ...)</pre> 	В качестве
-	* "название_поля<i>N</i>" может стоять любое поле 		счетов. В качестве
-	* группирующей функции могут стоять: 		<ul> <li> 	<b> 	COUNT</b> - подсчет
-	* количества;</li> 			<li> <b>AVG</b> - вычисление среднего значения;</li> 			<li>
-	* <b>MIN</b> - вычисление минимального значения;</li> 			<li> 	<b> 	MAX</b> -
-	* вычисление максимального значения;</li> 			<li> <b>SUM</b> - вычисление
-	* суммы.</li> 		</ul> 	Если массив пустой, то метод вернет число записей,
-	* удовлетворяющих фильтру.<br><br> 		Значение по умолчанию - <i>false</i> -
-	* означает, что результат группироваться не будет.
-	*
-	* @param array $arNavStartParams = false Массив параметров выборки. Может содержать следующие ключи: 		<ul>
-	* <li>"<b>nTopCount</b>" - количество возвращаемых методом записей будет
-	* ограничено сверху значением этого ключа;</li> 			<li> 	любой ключ,
-	* принимаемый методом <b> CDBResult::NavQuery</b> 				в качестве третьего
-	* параметра.</li> 		</ul> Значение по умолчанию - <i>false</i> - означает, что
-	* параметров выборки нет.
-	*
-	* @param array $arSelectFields = array() Массив полей записей, которые будут возвращены методом. Можно
-	* указать только те поля, которые необходимы. Если в массиве
-	* присутствует значение 		"*", то будут возвращены все доступные
-	* поля.<br><br> 		Значение по умолчанию - пустой массив 		array() - означает,
-	* что будут возвращены все поля основной таблицы запроса.
-	*
-	* @return CDBResult <p>Возвращается объект класса CDBResult, содержащий набор
-	* ассоциативных массивов параметров счетов:</p><ul> <li> <b>ID</b> - код
-	* счета;</li> 	<li> <b>USER_ID</b> - код пользователя-владельца;</li> 	<li>
-	* <b>CURRENT_BUDGET</b> - текущая сумма на счете;</li> 	<li> <b>CURRENCY</b> - валюта;</li> 	<li>
-	* <b>NOTES</b> - текстовое описание;</li> 	<li> <b>LOCKED</b> - флаг
-	* заблокированности счета;</li> 	<li> <b>TIMESTAMP_X</b> - дата последнего
-	* изменения;</li> 	<li> <b>DATE_LOCKED</b> - дата блокировки счета Если в
-	* качестве параметра arGroupBy передается пустой массив, то метод
-	* вернет число записей, удовлетворяющих фильтру.</li> </ul><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // Выберем все счета (в разных валютах) пользователя с кодом 21
-	* $dbAccountCurrency = CSaleUserAccount::GetList(
-	*         array(),
-	*         array("USER_ID" =&gt; "21"),
-	*         false,
-	*         false,
-	*         array("CURRENT_BUDGET", "CURRENCY")
-	*     );
-	* while ($arAccountCurrency = $dbAccountCurrency-&gt;Fetch())
-	* {
-	*     echo "На счете ".$arAccountCurrency["CURRENCY"].": ";
-	*     echo SaleFormatCurrency($arAccountCurrency["CURRENT_BUDGET"],
-	*                             $arAccountCurrency["CURRENCY"])."&lt;br&gt;";
-	* }
-	* 
-	* // Выберем, сумму счетов покупателей (сколько должен магазин покупателям)
-	* $dbAccountCurrency = CSaleUserAccount::GetList(
-	*         array("CURRENCY" =&gt; "ASC"),
-	*         array(),
-	*         array("CURRENCY", "SUM" =&gt; "CURRENT_BUDGET"),
-	*         false,
-	*         array("CURRENCY", "SUM" =&gt; "CURRENT_BUDGET")
-	*     );
-	* while ($arAccountCurrency = $dbAccountCurrency-&gt;Fetch())
-	* {
-	*     echo "В валюте ".$arAccountCurrency["CURRENCY"].": ";
-	*     echo SaleFormatCurrency($arAccountCurrency["CURRENT_BUDGET"],
-	*                             $arAccountCurrency["CURRENCY"])."&lt;br&gt;";
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleuseraccount/csaleuseraccount.getlist.php
-	* @author Bitrix
-	*/
 	public static function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		global $DB;
@@ -301,9 +111,9 @@ class CSaleUserAccount extends CAllSaleUserAccount
 				"SELECT ".$arSqls["SELECT"]." ".
 				"FROM b_sale_user_account UA ".
 				"	".$arSqls["FROM"]." ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
 			//echo "!1!=".htmlspecialcharsbx($strSql)."<br>";
@@ -319,11 +129,11 @@ class CSaleUserAccount extends CAllSaleUserAccount
 			"SELECT ".$arSqls["SELECT"]." ".
 			"FROM b_sale_user_account UA ".
 			"	".$arSqls["FROM"]." ";
-		if (strlen($arSqls["WHERE"]) > 0)
+		if ($arSqls["WHERE"] <> '')
 			$strSql .= "WHERE ".$arSqls["WHERE"]." ";
-		if (strlen($arSqls["GROUPBY"]) > 0)
+		if ($arSqls["GROUPBY"] <> '')
 			$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
-		if (strlen($arSqls["ORDERBY"]) > 0)
+		if ($arSqls["ORDERBY"] <> '')
 			$strSql .= "ORDER BY ".$arSqls["ORDERBY"]." ";
 
 		if (is_array($arNavStartParams) && intval($arNavStartParams["nTopCount"])<=0)
@@ -332,16 +142,16 @@ class CSaleUserAccount extends CAllSaleUserAccount
 				"SELECT COUNT('x') as CNT ".
 				"FROM b_sale_user_account UA ".
 				"	".$arSqls["FROM"]." ";
-			if (strlen($arSqls["WHERE"]) > 0)
+			if ($arSqls["WHERE"] <> '')
 				$strSql_tmp .= "WHERE ".$arSqls["WHERE"]." ";
-			if (strlen($arSqls["GROUPBY"]) > 0)
+			if ($arSqls["GROUPBY"] <> '')
 				$strSql_tmp .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
 			//echo "!2.1!=".htmlspecialcharsbx($strSql_tmp)."<br>";
 
 			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 			$cnt = 0;
-			if (strlen($arSqls["GROUPBY"]) <= 0)
+			if ($arSqls["GROUPBY"] == '')
 			{
 				if ($arRes = $dbRes->Fetch())
 					$cnt = $arRes["CNT"];
@@ -371,41 +181,6 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		return $dbRes;
 	}
 
-	
-	/**
-	* <p>Метод добавляет новый счет пользователя в соответствии с параметрами из массива arFields. Нестатический метод.</p>
-	*
-	*
-	* @param array $arFields  Ассоциативный массив параметров нового счета. Может содержать
-	* следующие ключи:  		<ul> <li> <b>USER_ID</b> - код пользователя-владельца </li>
-	* 			<li> <b>CURRENT_BUDGET</b> - текущая сумма на счете </li> 			<li> <b>CURRENCY</b> -
-	* валюта </li> 			<li> <b>NOTES</b> - текстовое описание </li> 			<li> <b>LOCKED</b> - флаг
-	* заблокированности счета </li> 			<li> <b>DATE_LOCKED</b> - дата блокировки
-	* счета</li> 		</ul>
-	*
-	* @return int <p>Метод возвращает код добавленного счета или <i>false</i> в случае
-	* ошибки.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* if($USER-&gt;IsAuthorized())
-	* {
-	* $user_id = $USER-&gt;GetID();
-	* $arFields = Array("USER_ID" =&gt; $user_id, "CURRENCY" =&gt; "USD", "CURRENT_BUDGET" =&gt; 0);
-	* $accountID = CSaleUserAccount::Add($arFields);
-	* }
-	* Создание счета для текущего пользователя
-	* if(!CSaleUserAccount::GetByUserID($USER-&gt;GetID(), "RUB")){
-	*    $arFields = Array("USER_ID" =&gt; $USER-&gt;GetID(), "CURRENCY" =&gt; "RUB", "CURRENT_BUDGET" =&gt; 0);
-	*    CSaleUserAccount::Add($arFields);  
-	* }
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleuseraccount/csaleuseraccount.add.php
-	* @author Bitrix
-	*/
 	public static function Add($arFields)
 	{
 		global $DB;
@@ -413,9 +188,9 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		$arFields1 = array();
 		foreach ($arFields as $key => $value)
 		{
-			if (substr($key, 0, 1)=="=")
+			if (mb_substr($key, 0, 1) == "=")
 			{
-				$arFields1[substr($key, 1)] = $value;
+				$arFields1[mb_substr($key, 1)] = $value;
 				unset($arFields[$key]);
 			}
 		}
@@ -436,9 +211,9 @@ class CSaleUserAccount extends CAllSaleUserAccount
 
 		foreach ($arFields1 as $key => $value)
 		{
-			if (strlen($arInsert[0])>0) $arInsert[0] .= ", ";
+			if ($arInsert[0] <> '') $arInsert[0] .= ", ";
 			$arInsert[0] .= $key;
-			if (strlen($arInsert[1])>0) $arInsert[1] .= ", ";
+			if ($arInsert[1] <> '') $arInsert[1] .= ", ";
 			$arInsert[1] .= $value;
 		}
 
@@ -446,7 +221,6 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 
 		$ID = (int)$DB->LastID();
-		$_SESSION["SALE_BASKET_NUM_PRODUCTS"][SITE_ID] = 0;
 
 		$dbEvents = GetModuleEvents("sale", "OnAfterUserAccountAdd");
 		while ($arEvent = $dbEvents->Fetch())
@@ -457,27 +231,6 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		return $ID;
 	}
 
-	
-	/**
-	* <p>Метод изменяет параметры счета пользователя в соответствии с параметрами из массива arFields. Нестатический метод.</p>
-	*
-	*
-	* @param mixed $intID  Код изменяемого счета.
-	*
-	* @param array $arFields  Ассоциативный массив новых параметров счета. Может содержать
-	* следующие ключи: 		<ul> <li> <b>USER_ID</b> - код пользователя-владельца;</li>
-	* 			<li> <b>CURRENT_BUDGET</b> - текущая сумма на счете;</li> 			<li> <b>CURRENCY</b> -
-	* валюта;</li> 			<li> <b>NOTES</b> - текстовое описание;</li> 			<li> <b>LOCKED</b> - флаг
-	* заблокированности счета;</li> 			<li> <b>DATE_LOCKED</b> - дата блокировки
-	* счета.</li> 		</ul>
-	*
-	* @return int <p>Метод возвращает код измененного счета или <i>false</i> в случае
-	* ошибки.</p><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaleuseraccount/csaleuseraccount.update.php
-	* @author Bitrix
-	*/
 	public static function Update($ID, $arFields)
 	{
 		global $DB;
@@ -489,9 +242,9 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		$arFields1 = array();
 		foreach ($arFields as $key => $value)
 		{
-			if (substr($key, 0, 1)=="=")
+			if (mb_substr($key, 0, 1) == "=")
 			{
-				$arFields1[substr($key, 1)] = $value;
+				$arFields1[mb_substr($key, 1)] = $value;
 				unset($arFields[$key]);
 			}
 		}
@@ -514,7 +267,7 @@ class CSaleUserAccount extends CAllSaleUserAccount
 
 		foreach ($arFields1 as $key => $value)
 		{
-			if (strlen($strUpdate)>0) $strUpdate .= ", ";
+			if ($strUpdate <> '') $strUpdate .= ", ";
 			$strUpdate .= $key."=".$value." ";
 		}
 
@@ -522,7 +275,7 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 
 		unset($GLOBALS["SALE_USER_ACCOUNT"]["SALE_USER_ACCOUNT_CACHE_".$ID]);
-		unset($GLOBALS["SALE_USER_ACCOUNT"]["SALE_USER_ACCOUNT_CACHE1_".$arOldUserAccount["USER_ID"]."_".$arOldUserAccount["CURRENCY"]]);
+		unset($GLOBALS["SALE_USER_ACCOUNT"]["SALE_USER_ACCOUNT_CACHE_".$arOldUserAccount["USER_ID"]."_".$arOldUserAccount["CURRENCY"]]);
 
 		$dbEvents = GetModuleEvents("sale", "OnAfterUserAccountUpdate");
 		while ($arEvent = $dbEvents->Fetch())

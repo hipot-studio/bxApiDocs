@@ -23,7 +23,20 @@ use Bitrix\Seo\Engine;
  * </ul>
  *
  * @package Bitrix\Seo
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Order_Query query()
+ * @method static EO_Order_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Order_Result getById($id)
+ * @method static EO_Order_Result getList(array $parameters = array())
+ * @method static EO_Order_Entity getEntity()
+ * @method static \Bitrix\Seo\Adv\EO_Order createObject($setDefaultValues = true)
+ * @method static \Bitrix\Seo\Adv\EO_Order_Collection createCollection()
+ * @method static \Bitrix\Seo\Adv\EO_Order wakeUpObject($row)
+ * @method static \Bitrix\Seo\Adv\EO_Order_Collection wakeUpCollection($rows)
+ */
 
 class OrderTable extends Entity\DataManager
 {
@@ -35,17 +48,6 @@ class OrderTable extends Entity\DataManager
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Метод возвращает название таблицы прибыли при переходах по объявлениям Яндекс.Директа. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/ordertable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_seo_adv_order';
@@ -56,17 +58,6 @@ class OrderTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Метод возвращает список полей таблицы прибыли при переходах по объявлениям Яндекс.Директа. Метод статический.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/seo/adv/ordertable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(

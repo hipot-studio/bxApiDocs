@@ -1,16 +1,5 @@
 <?
 // 2012-04-18 Checked/modified for compatibility with new data model
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/index.php
- * @author Bitrix
- */
 class CCoursePackage
 {
 
@@ -30,61 +19,7 @@ class CCoursePackage
 	private $replacingResId;
 
 	// 2012-04-18 Checked/modified for compatibility with new data model
-	
-	/**
-	* <p>Конструктор класса CCoursePackage инициализирует экспортируемый курс. Метод нестатический.</p>
-	*
-	*
-	* @param int $COURSE_ID  Идентификатор курса.
-	*
-	* @return bool 
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $COURSE_ID = 97;
-	* 
-	*     if (CCourse::GetPermission($COURSE_ID) &gt;= 'W')
-	*     {
-	*         @set_time_limit(0);
-	*         $package = new CCoursePackage($COURSE_ID);
-	* 
-	*         if (strlen($package-&gt;LAST_ERROR) &gt; 0)
-	*         {
-	*             echo "Error: ".$package-&gt;LAST_ERROR;
-	*         }
-	*         else
-	*         {
-	*             $success = $package-&gt;CreatePackage($PACKAGE_DIR = "/upload/mypackage/");
-	* 
-	*             if (!$success)
-	*                 echo "Error: ".$package-&gt;LAST_ERROR;
-	*             else
-	*                 echo "Ok!";
-	*         }
-	* 
-	*     }
-	* }
-	* 
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/index.php">CCoursePackage</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/createpackage.php">CreatePackage</a> </li> <li>
-	* <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/index.php">CCoursePackage</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/createmanifest.php">CreateManifest</a> </li>
-	* </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/ccoursepackage.php
-	* @author Bitrix
-	*/
-	public function CCoursePackage($COURSE_ID)
+	public function __construct($COURSE_ID)
 	{
 		global $DB;
 		$this->ID = intval($COURSE_ID);
@@ -109,9 +44,9 @@ class CCoursePackage
 		}
 
 		//Define charset
-		if (strlen($charset) <= 0)
+		if ($charset == '')
 		{
-			if (defined("SITE_CHARSET") && strlen(SITE_CHARSET) > 0)
+			if (defined("SITE_CHARSET") && SITE_CHARSET <> '')
 				$charset = SITE_CHARSET;
 			else
 				$charset = "windows-1251";
@@ -156,70 +91,13 @@ class CCoursePackage
 
 
 	// 2012-04-18 Checked/modified for compatibility with new data model
-	
-	/**
-	* <p>Создает архив с учебным курсом. Метод нестатический.</p>
-	*
-	*
-	* @param int $PACKAGE_DIR  Путь (относительно корня сайта) к директории, куда будет
-	* скопирован        архив курса.
-	*
-	* @return bool <p>Метод возвращает <i>true</i>, если создание архива прошло успешно.
-	* При  возникновении ошибки метод вернет false, а в свойстве объекта
-	* LAST_ERROR будет  содержаться текст ошибки.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $COURSE_ID = 97;
-	* 
-	*     if (CCourse::GetPermission($COURSE_ID) &gt;= 'W')
-	*     {
-	*         @set_time_limit(0);
-	*         $package = new CCoursePackage($COURSE_ID);
-	* 
-	*         if (strlen($package-&gt;LAST_ERROR) &gt; 0)
-	*         {
-	*             echo "Error: ".$package-&gt;LAST_ERROR;
-	*         }
-	*         else
-	*         {
-	*             $success = $package-&gt;CreatePackage($PACKAGE_DIR = "/upload/mypackage/");
-	* 
-	*             if (!$success)
-	*                 echo "Error: ".$package-&gt;LAST_ERROR;
-	*             else
-	*                 echo "Ok!";
-	*         }
-	* 
-	*     }
-	* }
-	* 
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/index.php">CCoursePackage</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/ccoursepackage.php">CCoursePackage</a>  </li>
-	* <li> <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/index.php">CCoursePackage</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/createmanifest.php">CreateManifest</a> </li>
-	* </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/createpackage.php
-	* @author Bitrix
-	*/
-	public function CreatePackage($PACKAGE_DIR)
+	function CreatePackage($PACKAGE_DIR)
 	{
-		if (strlen($this->LAST_ERROR)>0)
+		if ($this->LAST_ERROR <> '')
 			return false;
 
 		//Add last slash
-		if (substr($PACKAGE_DIR,-1, 1) != "/")
+		if (mb_substr($PACKAGE_DIR, -1, 1) != "/")
 			$PACKAGE_DIR .= "/";
 
 		$path = $_SERVER["DOCUMENT_ROOT"].$PACKAGE_DIR;
@@ -270,59 +148,11 @@ class CCoursePackage
 
 
 	// 2012-04-18 Checked/modified for compatibility with new data model
-	
-	/**
-	* <p>Возвращает манифест (в xml-формате) архива учебного курса. Метод нестатический.</p>
-	*
-	*
-	* @return string <p>Метод возвращает строку - содержимое файла imsmanifest.xml архива
-	* учебного курса.</p>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* if (CModule::IncludeModule("learning"))
-	* {
-	*     $COURSE_ID = 97;
-	* 
-	*     if (CCourse::GetPermission($COURSE_ID) &gt;= 'W')
-	*     {
-	*         @set_time_limit(0);
-	*         $package = new CCoursePackage($COURSE_ID);
-	* 
-	*         if (strlen($package-&gt;LAST_ERROR) &gt; 0)
-	*         {
-	*             echo "Error: ".$package-&gt;LAST_ERROR;
-	*         }
-	*         else
-	*         {
-	*             echo htmlspecialchars($package-&gt;CreateManifest());
-	*         }
-	* 
-	*     }
-	* }
-	* 
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* <h4>See Also</h4> 
-	* <ul> <li> <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/index.php">CCoursePackage</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/ccoursepackage.php">CCoursePackage</a> </li> <li>
-	* <a href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/index.php">CCoursePackage</a>::<a
-	* href="http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/createpackage.php">CreatePackage</a> </li>
-	* </ul><a name="examples"></a>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/learning/classes/ccoursepackage/createmanifest.php
-	* @author Bitrix
-	*/
-	public function CreateManifest()
+	function CreateManifest()
 	{
 		global $DB;
 
-		if (strlen($this->LAST_ERROR)>0)
+		if ($this->LAST_ERROR <> '')
 			return false;
 
 		$this->createQuestionItems($this->arCourse["LESSON_ID"]);
@@ -345,7 +175,7 @@ class CCoursePackage
 	}
 
 	// 2012-04-18 Checked/modified for compatibility with new data model
-	public function _GetCourseContent($parentLessonId, $DEPTH_LEVEL = 1)
+	function _GetCourseContent($parentLessonId, $DEPTH_LEVEL = 1)
 	{
 		global $DB;
 
@@ -387,7 +217,7 @@ class CCoursePackage
 
 
 	// 2012-04-18 Checked/modified for compatibility with new data model
-	public function _CreateCourseToc()
+	function _CreateCourseToc()
 	{
 		$str = "<"."?xml version=\"1.0\" encoding=\"".$this->charset."\"?".">\n";
 		$str .= "<coursetoc>";
@@ -395,21 +225,21 @@ class CCoursePackage
 		foreach ($this->arCourse as $key => $val)
 		{
 			$strDelayed = '';
-			$key = strtolower($key);
+			$key = mb_strtolower($key);
 
 			if ($key === 'site_id')
 				continue;
 
 			$str .= "<".$key.">";
-			if (in_array($key, $this->arDraftFields) && strlen($val) > 0)
+			if (in_array($key, $this->arDraftFields) && $val <> '')
 			{
 				$str .= "<![CDATA[".$this->_ReplaceImages($val, 1)."]]>";
 			}
-			elseif (in_array($key, $this->arDate) && strlen($val) > 0)
+			elseif (in_array($key, $this->arDate) && $val <> '')
 			{
 				$str .= MakeTimeStamp($val);
 			}
-			elseif (in_array($key, $this->arPicture) && strlen($val) > 0)
+			elseif (in_array($key, $this->arPicture) && $val <> '')
 			{
 				$src = CFile::GetPath($val);
 				$ext = GetFileExtension($src);
@@ -438,7 +268,7 @@ class CCoursePackage
 	}
 
 	// 2012-04-18 Checked/modified for compatibility with new data model
-	public function _GetResourceFiles($res_id)
+	function _GetResourceFiles($res_id)
 	{
 		$str = "";
 
@@ -452,7 +282,7 @@ class CCoursePackage
 	}
 
 	// 2012-04-18 Checked/modified for compatibility with new data model
-	public function _CreateContent($TYPE, $arParams, $res_id)
+	function _CreateContent($TYPE, $arParams, $res_id)
 	{
 		$str = "<"."?xml version=\"1.0\" encoding=\"".$this->charset."\"?".">\n";
 		$str .= '<content type="'.$TYPE.'">';
@@ -461,17 +291,17 @@ class CCoursePackage
 		{
 			$strDelayed = '';
 
-			$key = strtolower($key);
+			$key = mb_strtolower($key);
 
 			if ($key === 'site_id')
 				continue;
 
 			$str .= "<".$key.">";
-			if (in_array($key, $this->arDraftFields) && strlen($val) > 0)
+			if (in_array($key, $this->arDraftFields) && $val <> '')
 			{
 				$str .= "<![CDATA[".$this->_ReplaceImages($val, $res_id)."]]>";
 			}
-			elseif (in_array($key, $this->arPicture) && strlen($val) > 0)
+			elseif (in_array($key, $this->arPicture) && $val <> '')
 			{
 				$src = CFile::GetPath($val);
 				$ext = GetFileExtension($src);
@@ -486,7 +316,7 @@ class CCoursePackage
 						. '</' . $key . '_description' . '>';
 				}
 			}
-			elseif (in_array($key, $this->arDate) && strlen($val) > 0)
+			elseif (in_array($key, $this->arDate) && $val <> '')
 			{
 				$str .= MakeTimeStamp($val);
 			}
@@ -504,7 +334,7 @@ class CCoursePackage
 	}
 
 	// 2012-04-18 Checked/modified for compatibility with new data model
-	public function _replace_img($matches)
+	function _replace_img($matches)
 	{
 		$src = $matches[3];
 		if($src <> "" && is_file($_SERVER["DOCUMENT_ROOT"].$src))
@@ -520,7 +350,7 @@ class CCoursePackage
 	}
 
 	// 2012-04-18 Checked/modified for compatibility with new data model
-	public function _ReplaceImages($text, $res_id)
+	function _ReplaceImages($text, $res_id)
 	{
 		$this->replacingResId = $res_id;
 		return preg_replace_callback("/(<.+?src\\s*=\\s*)([\"']?)(.*?)(\\2)(.*?>)/is", array($this, "_replace_img"), $text);
@@ -542,11 +372,11 @@ class CCoursePackage
 	}
 
 	// 2012-04-18 Checked/modified for compatibility with new data model
-	public function CreateQTI($arParams, $res_id = 1)
+	function CreateQTI($arParams, $res_id = 1)
 	{
 		global $DB;
 
-		if (strlen($this->LAST_ERROR)>0)
+		if ($this->LAST_ERROR <> '')
 			return false;
 
 		$str = "<"."?xml version=\"1.0\" encoding=\"".$this->charset."\"?".">\n";
@@ -608,7 +438,7 @@ class CCoursePackage
 
 		$str .= "<bitrix>";
 		$str .= "<description>";
-		if (strlen($arParams["DESCRIPTION"])>0)
+		if ($arParams["DESCRIPTION"] <> '')
 		{
 			$str .= "<![CDATA[".$this->_ReplaceImages($arParams["DESCRIPTION"], $res_id)."]]>";
 		}
@@ -626,7 +456,7 @@ class CCoursePackage
 		return $str;
 	}
 
-	public function CreateTMK($arParams, $res_id = 1)
+	function CreateTMK($arParams, $res_id = 1)
 	{
 		$str = "<"."?xml version=\"1.0\" encoding=\"".$this->charset."\"?".">\n"
 			. '<content type="TMK">'

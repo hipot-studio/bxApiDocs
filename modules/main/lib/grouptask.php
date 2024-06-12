@@ -1,8 +1,11 @@
 <?php
+
 namespace Bitrix\Main;
 
-use Bitrix\Main,
-	Bitrix\Main\Localization\Loc;
+use Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+
 Loc::loadMessages(__FILE__);
 
 /**
@@ -18,26 +21,30 @@ Loc::loadMessages(__FILE__);
  * </ul>
  *
  * @package Bitrix\Main
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_GroupTask_Query query()
+ * @method static EO_GroupTask_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_GroupTask_Result getById($id)
+ * @method static EO_GroupTask_Result getList(array $parameters = [])
+ * @method static EO_GroupTask_Entity getEntity()
+ * @method static \Bitrix\Main\EO_GroupTask createObject($setDefaultValues = true)
+ * @method static \Bitrix\Main\EO_GroupTask_Collection createCollection()
+ * @method static \Bitrix\Main\EO_GroupTask wakeUpObject($row)
+ * @method static \Bitrix\Main\EO_GroupTask_Collection wakeUpCollection($rows)
+ */
 
 class GroupTaskTable extends Main\Entity\DataManager
 {
+	use DeleteByFilterTrait;
+
 	/**
 	 * Returns DB table name for entity.
 	 *
 	 * @return string
 	 */
-	
-	/**
-	* <p>Статический метод возвращает название таблицы БД для сущности.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return string 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/grouptasktable/gettablename.php
-	* @author Bitrix
-	*/
 	public static function getTableName()
 	{
 		return 'b_group_task';
@@ -48,17 +55,6 @@ class GroupTaskTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает список полей для таблицы.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/grouptasktable/getmap.php
-	* @author Bitrix
-	*/
 	public static function getMap()
 	{
 		return array(
@@ -89,17 +85,6 @@ class GroupTaskTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	
-	/**
-	* <p>Статический метод возвращает валидаторы для поля EXTERNAL_ID.</p> <p>Без параметров</p> <a name="example"></a>
-	*
-	*
-	* @return array 
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_d7/bitrix/main/grouptasktable/validateexternalid.php
-	* @author Bitrix
-	*/
 	public static function validateExternalId()
 	{
 		return array(

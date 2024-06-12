@@ -1,26 +1,13 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
-use Bitrix\Main\DB;
-use Bitrix\Sale\Location;
 use Bitrix\Sale\Shipment;
 use Bitrix\Sale\Internals\DeliveryPaySystemTable;
 use Bitrix\Sale\Location\Admin\LocationHelper as Helper;
 
 /**
  * Class CAllSaleDelivery
- * @deprecated
- */
-
-/**
- * 
- *
- *
- * @return mixed 
- *
- * @static
- * @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaledelivery/index.php
- * @author Bitrix
  * @deprecated
  */
 class CAllSaleDelivery
@@ -44,7 +31,7 @@ class CAllSaleDelivery
 		try
 		{
 			$class = self::CONN_ENTITY_NAME.'Table';
-			return $field." in (".$class::getConnectedEntitiesQuery(IntVal($val), 'id', array('select' => array('ID'))).")";
+			return $field." in (".$class::getConnectedEntitiesQuery(intval($val), 'id', array('select' => array('ID'))).")";
 		}
 		catch(Exception $e)
 		{
@@ -62,9 +49,9 @@ class CAllSaleDelivery
 	 * @internal
 	 * @deprecated
 	 */
-	static function DoProcessOrder(&$arOrder, $deliveryCode, &$arErrors)
+	public static function DoProcessOrder(&$arOrder, $deliveryCode, &$arErrors)
 	{
-		if(strlen($deliveryCode) <= 0 || $deliveryCode == '0')
+		if($deliveryCode == '' || $deliveryCode == '0')
 			return false;
 
 		if(CSaleDeliveryHandler::isSidNew($deliveryCode))
@@ -80,7 +67,7 @@ class CAllSaleDelivery
 
 		if ($service)
 		{
-			$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'N');
+			$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
 			$arOrderTmpDel = array(
 				"PRICE" => $arOrder["ORDER_PRICE"] + $arOrder["TAX_PRICE"] - $arOrder["DISCOUNT_PRICE"],
@@ -92,7 +79,7 @@ class CAllSaleDelivery
 				"CURRENCY" => $arOrder["CURRENCY"]
 			);
 
-			if ($isOrderConverted == "Y"
+			if ($isOrderConverted != 'N'
 				&& !empty($arOrder['ORDER_PROP']) && is_array($arOrder['ORDER_PROP']))
 			{
 				$arOrderTmpDel['PROPERTIES'] = $arOrder['ORDER_PROP'];
@@ -138,7 +125,7 @@ class CAllSaleDelivery
 		{
 			if (!is_array($arBasketItem["DIMENSIONS"]))
 			{
-				$arDim = unserialize($arBasketItem["~DIMENSIONS"]);
+				$arDim = unserialize($arBasketItem["~DIMENSIONS"], ['allowed_classes' => false]);
 				$arBasketItem["DIMENSIONS"] = $arDim;
 				unset($arBasketItem["~DIMENSIONS"]);
 			}
@@ -259,98 +246,21 @@ class CAllSaleDelivery
 	/**
 	 * @deprecated Use \Bitrix\Sale\Delivery\Services\Table::getById().
 	 */
-	
-	/**
-	* <p>Метод возвращает параметры службы доставки с кодом ID. Метод статический.</p>
-	*
-	*
-	* @param mixed $intID  Код службы доставки.
-	*
-	* @return array <p>Возвращается ассоциативный массив параметров доставки с
-	* ключами:</p><table class="tnormal" width="100%"> <tr> <th width="15%">Ключ</th>     <th>Описание</th>
-	*   </tr> <tr> <td>ID</td>     <td>Код службы доставки.</td> </tr> <tr> <td>NAME</td>    
-	* <td>Название доставки.</td>   </tr> <tr> <td>LID</td>     <td>Код сайта, к которому
-	* привязана эта доставка.</td>   </tr> <tr> <td>PERIOD_FROM</td>     <td>Минимальный
-	* срок доставки.</td>   </tr> <tr> <td>PERIOD_TO</td>     <td>Максимальный срок
-	* доставки.</td>   </tr> <tr> <td>PERIOD_TYPE</td>     <td>Единица измерения срока: D -
-	* дни, H - часы, M - месяцы.</td>   </tr> <tr> <td>WEIGHT_FROM</td>     <td>Минимальный вес
-	* заказа, для которого возможна эта доставка (единица измерения
-	* едина на сайте).</td>   </tr> <tr> <td>WEIGHT_TO</td>     <td>Максимальный вес заказа,
-	* для которого возможна эта доставка (единица измерения едина на
-	* сайте).</td>   </tr> <tr> <td>ORDER_PRICE_FROM</td>     <td>Минимальная стоимость заказа,
-	* для которой возможна эта доставка.</td>   </tr> <tr> <td>ORDER_PRICE_TO</td>    
-	* <td>Максимальная стоимость заказа, для которой возможна эта
-	* доставка.</td>   </tr> <tr> <td>ORDER_CURRENCY</td>     <td>Валюта ограничений по
-	* стоимости.</td>   </tr> <tr> <td>ACTIVE</td>     <td>Флаг (Y/N) активности доставки.</td>
-	* </tr> <tr> <td>PRICE</td>     <td>Стоимость доставки.</td>   </tr> <tr> <td>CURRENCY</td>    
-	* <td>Валюта стоимости доставки.</td>   </tr> <tr> <td>SORT</td>     <td>Индекс
-	* сортировки.</td>   </tr> <tr> <td>DESCRIPTION</td>     <td>Описание доставки.</td>   </tr>
-	* </table><p> </p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* // $DELIVERY_ID - код службы доставки
-	* 
-	* $arDeliv = CSaleDelivery::GetByID($DELIVERY_ID);
-	* if ($arDeliv)
-	* {
-	*    echo "Доставка \"".$arDeliv["NAME"]."\" стоит ".CurrencyFormat($arDeliv["PRICE"], $arDeliv["CURRENCY"]);
-	* }
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaledelivery/csaledelivery__getbyid.d44054be.php
-	* @author Bitrix
-	* @deprecated Use \Bitrix\Sale\Delivery\Services\Table::getById().
-	*/
 	public static function GetByID($ID)
 	{
 		$res = self::GetList(array(), array("ID" => $ID));
 		return $res->Fetch();
 	}
 
-
 	/**
 	 * @param array $arFilter
 	 * @return bool|CDBResult
 	 * @deprecated
 	 */
-	
-	/**
-	* <p>Метод возвращает набор местоположений по фильтру arFilter. Нестатический метод.</p>
-	*
-	*
-	* @param array $arrayarFilter = Array() Фильтр представляет собой ассоциативный массив, в котором
-	* ключами являются названия параметров, а значениями - условия.<br><br>
-	* Допустимые ключи:<br><ul> <li> <b>DELIVERY_ID</b> - код доставки;</li> 	<li>
-	* <b>LOCATION_ID</b> - код местоположения или группы местоположений;</li> 	<li>
-	* <b>LOCATION_TYPE</b> - тип (L - местоположение, G - группа местоположений).</li>
-	* </ul>
-	*
-	* @return CDBResult <p>Возвращается объект класса CDBResult, содержащий набор
-	* ассоциативных массивов с ключами:</p><table class="tnormal" width="100%"> <tr> <th
-	* width="15%">Ключ</th>     <th>Описание</th>   </tr> <tr> <td>DELIVERY_ID</td>     <td>Код службы
-	* доставки.</td> </tr> <tr> <td>LOCATION_ID</td>     <td>Код местоположения или группы
-	* местоположений.</td> </tr> <tr> <td>LOCATION_TYPE</td>     <td>Тип (L - местоположение, G
-	* - группа местоположений) </td>   </tr> </table><br><br>
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaledelivery/csaledelivery__getlocationlist.e2a07bf9.php
-	* @author Bitrix
-	* @deprecated
-	*/
 	public static function GetLocationList($arFilter = Array())
 	{
-		$deliveryId = 0;
-
 		if(!empty($arFilter['DELIVERY_ID']))
-		{
-			$deliveryId = $arFilter['DELIVERY_ID'];
-			$arFilter['DELIVERY_ID'] = self::getIdByCode($deliveryId);
-		}
+			$arFilter['DELIVERY_ID'] = self::getIdByCode($arFilter['DELIVERY_ID']);
 
 		try
 		{
@@ -359,8 +269,13 @@ class CAllSaleDelivery
 
 			while($loc = $res->Fetch())
 			{
-				 $loc['DELIVERY_ID'] = $deliveryId;
-				 $locations[] = $loc;
+				$oldDeliveryId = self::getCodeById($loc['DELIVERY_ID']);
+
+				if($oldDeliveryId == '')
+					continue;
+
+				$loc['DELIVERY_ID'] = $oldDeliveryId;
+				$locations[] = $loc;
 			}
 		}
 		catch(Exception $e)
@@ -381,13 +296,13 @@ class CAllSaleDelivery
 	{
 		global $DB;
 
-		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && strlen($arFields["NAME"]) <= 0)
+		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && $arFields["NAME"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGD_EMPTY_DELIVERY"), "ERROR_NO_NAME");
 			return false;
 		}
 
-		if ((is_set($arFields, "LID") || $ACTION=="ADD") && strlen($arFields["LID"]) <= 0)
+		if ((is_set($arFields, "LID") || $ACTION=="ADD") && $arFields["LID"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGD_EMPTY_SITE"), "ERROR_NO_SITE");
 			return false;
@@ -395,7 +310,7 @@ class CAllSaleDelivery
 
 		if (is_set($arFields, "ACTIVE") && $arFields["ACTIVE"] != "Y")
 			$arFields["ACTIVE"] = "N";
-		if ((is_set($arFields, "SORT") || $ACTION=="ADD") && IntVal($arFields["SORT"]) <= 0)
+		if ((is_set($arFields, "SORT") || $ACTION=="ADD") && intval($arFields["SORT"]) <= 0)
 			$arFields["SORT"] = 100;
 
 		if (is_set($arFields, "PRICE"))
@@ -406,7 +321,7 @@ class CAllSaleDelivery
 		if ((is_set($arFields, "PRICE") || $ACTION=="ADD") && DoubleVal($arFields["PRICE"]) < 0)
 			return false;
 
-		if ((is_set($arFields, "CURRENCY") || $ACTION=="ADD") && strlen($arFields["CURRENCY"]) <= 0)
+		if ((is_set($arFields, "CURRENCY") || $ACTION=="ADD") && $arFields["CURRENCY"] == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGD_EMPTY_CURRENCY"), "ERROR_NO_CURRENCY");
 			return false;
@@ -479,58 +394,9 @@ class CAllSaleDelivery
 	/**
 	 * @deprecated
 	 */
-	
-	/**
-	* <p>Метод изменяет параметры доставки с кодом ID на новые значения из массива arFields. Метод статический.</p>
-	*
-	*
-	* @param mixed $intID  Код доставки.
-	*
-	* @param array $arFields  Ассоциативный массив новых параметров доставки, ключами в
-	* котором являются названия параметров доставки, а значениями -
-	* значения параметров.         <br>        Допустимые ключи:         <br><ul> <li>
-	* <b>NAME</b> - название доставки (обязательное, задается на языке сайта,
-	* к которому привязана эта доставка);</li>          	           <li> <b>LID</b> - код
-	* сайта, к которому привязана эта доставка;</li>          	           <li>
-	* <b>PERIOD_FROM</b> - минимальный срок доставки;</li>          	           <li> <b>PERIOD_TO</b> -
-	* максимальный срок доставки;</li>          	           <li> <b>PERIOD_TYPE</b> - единица
-	* измерения срока: D - дни, H - часы, M - месяцы;</li>          	           <li>
-	* <b>WEIGHT_FROM</b> - минимальный вес заказа, для которого возможна эта
-	* доставка (единица измерения должна быть едина на сайте);</li>          	  
-	*         <li> <b>WEIGHT_TO</b> - максимальный вес заказа, для которого возможна
-	* эта доставка (единица измерения должна быть едина на сайте);</li>      
-	*    	           <li> <b>ORDER_PRICE_FROM</b> - минимальная стоимость заказа, для
-	* которой возможна эта доставка;</li>          	           <li> <b>ORDER_PRICE_TO</b> -
-	* максимальная стоимость заказа, для которой возможна эта
-	* доставка;</li>          	           <li> <b>ORDER_CURRENCY</b> - валюта ограничений по
-	* стоимости;</li>          	           <li> <b>ACTIVE</b> - флаг (Y/N) активности
-	* доставки;</li>          	           <li> <b>PRICE</b> - стоимость доставки;</li>          	    
-	*       <li> <b>CURRENCY</b> - валюта стоимости доставки;</li>          	           <li>
-	* <b>SORT</b> - индекс сортировки;</li>          	           <li> <b>DESCRIPTION</b> - описание
-	* доставки;</li>          	           <li> <b>LOCATIONS</b> - массив массивов вида: 		          
-	*   <pre class="syntax">array("LOCATION_ID" =&gt; "код местоположения или <br>                       
-	* группы местоположений",<br>      "LOCATION_TYPE"=&gt;"L - для местоположения, <br> 
-	*                       G - для группы")</pre>            		содержащий местоположения и
-	* группы местоположений, для которых работает эта доставка</li>         
-	* </ul>
-	*
-	* @return int <p>Возвращает код изменяемой записи или <i>false</i> в случае ошибки.</p><a
-	* name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$arFields = array(<br>   "NAME" =&gt; "Доставка курьером",<br>   "LID" =&gt; "ru",<br>   "PERIOD_FROM" =&gt; 1,<br>   "PERIOD_TO" =&gt; 3,<br>   "PERIOD_TYPE" =&gt; "D",<br>   "WEIGHT_FROM" =&gt; 0,<br>   "WEIGHT_TO" =&gt; 2500,<br>   "ORDER_PRICE_FROM" =&gt; 0,<br>   "ORDER_PRICE_TO" =&gt; 10000,<br>   "ORDER_CURRENCY" =&gt; "RUB",<br>   "ACTIVE" =&gt; "Y",<br>   "PRICE" =&gt; 58,<br>   "CURRENCY" =&gt; "RUB",<br>   "SORT" =&gt; 100,<br>   "DESCRIPTION" =&gt; "Заказ будет доставлен Вам в течение 3 - 10 рабочих дней после передачи его в курьерскую службу.",<br>   "LOCATIONS" =&gt; array(<br>      array("LOCATION_ID"=&gt;1, "LOCATION_TYPE"=&gt;"L"),<br>      array("LOCATION_ID"=&gt;3, "LOCATION_TYPE"=&gt;"G")<br>      )<br>);<br><br>if (!CSaleDelivery::Update($ID, $arFields))<br>   echo "Ошибка изменения доставки";<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaledelivery/csaledelivery__update.dcec3766.php
-	* @author Bitrix
-	* @deprecated
-	*/
 	public static function Update($oldId, $arFields, $arOptions = array())
 	{
-		if(strlen($oldId) <= 0)
+		if($oldId == '')
 			return false;
 
 		$dbRes = Bitrix\Sale\Delivery\Services\Table::getList(array(
@@ -605,7 +471,7 @@ class CAllSaleDelivery
 				$rres = \Bitrix\Sale\Internals\ServiceRestrictionTable::add($rfields);
 		}
 
-		if(isset($arFields["LID"]) && strlen($arFields["LID"]) > 0)
+		if(isset($arFields["LID"]) && $arFields["LID"] <> '')
 		{
 			$rfields = array(
 				"SERVICE_ID" => $newId,
@@ -698,7 +564,7 @@ class CAllSaleDelivery
 
 			if($restrict = $rstrRes->fetch())
 			{
-				if(floatval($arFields["ORDER_PRICE_FROM"]) <= 0 && floatval($arFields["ORDER_PRICE_TO"]) <= 0 && strlen($arFields["ORDER_CURRENCY"]) <= 0)
+				if(floatval($arFields["ORDER_PRICE_FROM"]) <= 0 && floatval($arFields["ORDER_PRICE_TO"]) <= 0 && $arFields["ORDER_CURRENCY"] == '')
 				{
 					$rres = \Bitrix\Sale\Internals\ServiceRestrictionTable::delete($restrict["ID"]);
 				}
@@ -724,7 +590,7 @@ class CAllSaleDelivery
 
 		if(isset($arFields["STORE"]))
 		{
-			$stores = unserialize($arFields["STORE"]);
+			$stores = unserialize($arFields["STORE"], ['allowed_classes' => false]);
 
 			if($stores)
 				\Bitrix\Sale\Delivery\ExtraServices\Manager::saveStores($newId, $stores);
@@ -737,29 +603,6 @@ class CAllSaleDelivery
 	/**
 	 * @deprecated
 	 */
-	
-	/**
-	* <p>Метод удаляет доставку с кодом ID. Метод статический.</p>
-	*
-	*
-	* @param mixed $intID  Код доставки.
-	*
-	* @return bool <p>Возвращает <i>true</i> в случае успешного удаления и <i>false</i> - в
-	* противном случае.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?
-	* CSaleDelivery::Delete(8);
-	* ?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaledelivery/csaledelivery__delete.cb546e37.php
-	* @author Bitrix
-	* @deprecated
-	*/
 	public static function Delete($ID)
 	{
 		$newId = \CSaleDelivery::getIdByCode($ID);
@@ -776,7 +619,6 @@ class CAllSaleDelivery
 
 		return new CDBResult($res);
 	}
-
 
 	/**
 	 * The function select delivery and paysystem
@@ -805,11 +647,11 @@ class CAllSaleDelivery
 	 * @return int $ID - code delivery
 	 * @deprecated
 	 */
-	static function UpdateDeliveryPay($ID, $arFields)
+	public static function UpdateDeliveryPay($ID, $arFields)
 	{
 		$ID = trim($ID);
 
-		if (strlen($ID) <= 0 || !is_array($arFields) || empty($arFields))
+		if ($ID == '' || !is_array($arFields) || empty($arFields))
 			return false;
 
 		if ($arFields[0] == "")
@@ -1011,7 +853,7 @@ class CAllSaleDelivery
 				$fieldInFilter = self::isFieldInFilter2("ORDER_CURRENCY", $filter);
 				$value = self::getFilterValue("ORDER_CURRENCY", $filter);
 
-				if($fieldInFilter && strlen($value) > 0 && strlen($restriction["PARAMS"]["CURRENCY"]) > 0)
+				if($fieldInFilter && $value <> '' && $restriction["PARAMS"]["CURRENCY"] <> '')
 				{
 					$result = ($value == $restriction["PARAMS"]["CURRENCY"]);
 
@@ -1025,7 +867,7 @@ class CAllSaleDelivery
 				$fieldInFilter = self::isFieldInFilter2("LOCATION", $filter);
 				$value = self::getFilterValue("LOCATION", $filter);
 
-				if($fieldInFilter && strlen($value) > 0 && $restriction['SERVICE_ID'] > 0)
+				if($fieldInFilter && $value <> '' && $restriction['SERVICE_ID'] > 0)
 				{
 					try
 					{
@@ -1144,115 +986,6 @@ class CAllSaleDelivery
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @deprecated
 	 */
-	
-	/**
-	* <p>Метод возвращает результат выборки записей из служб доставки в соответствии со своими параметрами. Метод статический.</p> <p>Метод устарел, вместо него следует использовать метод <a href="https://dev.1c-bitrix.ru/api_d7/bitrix/sale/delivery/services/manager/getactivelist.php" >Bitrix\Sale\Delivery\Services\Manager::getActiveList( )</a>.</p>
-	*
-	*
-	* @param array $arOrder = array() Массив, в соответствии с которым сортируются результирующие
-	* записи. Массив имеет вид: 		          <pre class="syntax">array(<br>"название_поля1"
-	* =&gt; "направление_сортировки1",<br>"название_поля2" =&gt;
-	* "направление_сортировки2",<br>. . .<br>)</pre>        		В качестве
-	* "название_поля<i>N</i>" может стоять любое поле корзины, а в качестве
-	* "направление_сортировки<i>X</i>" могут быть значения "<i>ASC</i>" (по
-	* возрастанию) и "<i>DESC</i>" (по убыванию).          <br><br>        		Если массив
-	* сортировки имеет несколько элементов, то 		результирующий набор
-	* сортируется последовательно по каждому элементу (т.е. сначала
-	* сортируется по первому элементу, потом результат сортируется по
-	* второму и т.д.).           <br><br>        Значение по умолчанию - пустой
-	* массив array() - означает, что результат отсортирован не будет.
-	*
-	* @param array $arFilter = array() Массив, в соответствии с которым фильтруются 		записи службы
-	* доставки. Массив имеет вид: 		          <pre
-	* class="syntax">array(<br>"[модификатор1][оператор1]название_поля1" =&gt;
-	* "значение1",<br>"[модификатор2][оператор2]название_поля2" =&gt;
-	* "значение2",<br>. . .<br>)</pre>        Удовлетворяющие фильтру записи
-	* возвращаются в результате, а записи, которые не удовлетворяют
-	* условиям фильтра, отбрасываются.          <br><br>        	Допустимыми
-	* являются следующие модификаторы: 		          <ul> <li> <b> 	!</b> -
-	* отрицание;</li>          			            <li> <b> 	+</b> - значения null, 0 и пустая строка
-	* так же удовлетворяют условиям фильтра.</li>          		</ul>       
-	* 	Допустимыми являются следующие операторы: 	          <ul> <li> <b>&gt;= </b> -
-	* значение поля больше или равно передаваемой в фильтр величины;</li>
-	*          			            <li> <b>&gt;</b> - значение поля строго больше передаваемой
-	* в фильтр величины;</li>          			            <li> <b>&lt;=</b> - значение поля
-	* меньше или равно передаваемой в фильтр величины;</li>          			           
-	* <li> <b>&lt;</b> - значение поля строго меньше передаваемой в фильтр
-	* величины;</li>          			            <li> <b>@</b> - значение поля находится в
-	* передаваемом в фильтр разделенном запятой списке значений;</li>      
-	*    			            <li> <b>~</b> - значение поля проверяется на соответствие
-	* передаваемому в фильтр шаблону;</li>          			            <li> <b>%</b> - значение
-	* поля проверяется на соответствие передаваемой в фильтр строке в
-	* соответствии с языком запросов.</li>          	</ul>        В качестве
-	* "название_поляX" может стоять любое поле корзины.          <br><br>       
-	* 		Пример фильтра: 		          <pre class="syntax">array("+&lt;=WEIGHT_FROM" =&gt; 1000)</pre>       
-	* 		Этот фильтр означает "выбрать все записи, в которых значение в
-	* поле WEIGHT_FROM (вес от) меньше либо равно 1000 или значение не
-	* установлено (null или ноль)".          <br><br>        	Значение по умолчанию -
-	* пустой массив array() - означает, что результат отфильтрован не
-	* будет.
-	*
-	* @param array $arGroupBy = false Массив полей, по которым группируются записи 		служб доставки.
-	* Массив имеет вид: 		          <pre class="syntax">array("название_поля1",<br>     
-	* "группирующая_функция2" =&gt; "название_поля2", ...)</pre>        	В качестве
-	* "название_поля<i>N</i>" может стоять любое поле 		служб доставки. В
-	* качестве группирующей функции могут стоять: 		          <ul> <li> 	<b> 	COUNT</b>
-	* - подсчет количества;</li>          			            <li> <b>AVG</b> - вычисление
-	* среднего значения;</li>          			            <li> <b>MIN</b> - вычисление
-	* минимального значения;</li>          			            <li> 	<b> 	MAX</b> - вычисление
-	* максимального значения;</li>          			            <li> <b>SUM</b> - вычисление
-	* суммы.</li>          		</ul>        	Если массив пустой, то метод вернет число
-	* записей, удовлетворяющих фильтру.          <br><br>        		Значение по
-	* умолчанию - <i>false</i> - означает, что результат группироваться не
-	* будет.
-	*
-	* @param array $arNavStartParams = false Массив параметров выборки. Может содержать следующие ключи: 		       
-	*   <ul> <li>"<b>nTopCount</b>" - количество возвращаемых методом записей будет
-	* ограничено сверху значением этого ключа;</li>          			            <li>
-	* 	любой ключ, принимаемый методом <b> CDBResult::NavQuery</b> 				в качестве
-	* третьего параметра.</li>          		</ul>        Значение по умолчанию -
-	* <i>false</i> - означает, что параметров выборки нет.
-	*
-	* @param array $arSelectFields = array() Массив полей записей, которые будут возвращены методом. Можно
-	* указать только те поля, которые необходимы. Если в массиве
-	* присутствует значение 		"*", то будут возвращены все доступные
-	* поля.          <br><br>        		Значение по умолчанию - пустой массив 		array() -
-	* означает, что будут возвращены все поля основной таблицы запроса.
-	*
-	* @return CDBResult <p>Возвращается объект класса CDBResult, содержащий набор
-	* ассоциативных массивов параметров доставки с ключами:</p><table
-	* width="100%" class="tnormal"><tbody> <tr> <th width="15%">Ключ</th> <th>Описание</th> </tr> <tr> <td>ID</td>
-	* <td>Код службы доставки.</td> </tr> <tr> <td>NAME</td> <td>Название доставки.</td>
-	* </tr> <tr> <td>LID</td> <td>Код сайта, к которому привязана эта доставка.</td>
-	* </tr> <tr> <td>PERIOD_FROM</td> <td>Минимальный срок доставки.</td> </tr> <tr> <td>PERIOD_TO</td>
-	* <td>Максимальный срок доставки.</td> </tr> <tr> <td>PERIOD_TYPE</td> <td>Единица
-	* измерения срока: D - дни, H - часы, M - месяцы.</td> </tr> <tr> <td>WEIGHT_FROM</td>
-	* <td>Минимальный вес заказа, для которого возможна эта доставка
-	* (единица измерения едина на сайте).</td> </tr> <tr> <td>WEIGHT_TO</td>
-	* <td>Максимальный вес заказа, для которого возможна эта доставка
-	* (единица измерения едина на сайте).</td> </tr> <tr> <td>ORDER_PRICE_FROM</td>
-	* <td>Минимальная стоимость заказа, для которой возможна эта
-	* доставка.</td> </tr> <tr> <td>ORDER_PRICE_TO</td> <td>Максимальная стоимость заказа,
-	* для которой возможна эта доставка.</td> </tr> <tr> <td>ORDER_CURRENCY</td> <td>Валюта
-	* ограничений по стоимости.</td> </tr> <tr> <td>ACTIVE</td> <td>Флаг (Y/N) активности
-	* доставки.</td> </tr> <tr> <td>PRICE</td> <td>Стоимость доставки.</td> </tr> <tr>
-	* <td>CURRENCY</td> <td>Валюта стоимости доставки.</td> </tr> <tr> <td>SORT</td> <td>Индекс
-	* сортировки.</td> </tr> <tr> <td>DESCRIPTION</td> <td>Описание доставки.</td> </tr>
-	* </tbody></table><p>Если в качестве параметра <b> arGroupBy</b> передается пустой
-	* массив, то метод вернет число записей, удовлетворяющих
-	* фильтру.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>// Выберем отсортированные по индексу сортировки, а потом (при равных индексах) по имени<br>// активные службы доставки, доступные для текущего сайта, заказа с весом $ORDER_WEIGHT и <br>// стоимостью $ORDER_PRICE (в базовой валюте текущего сайта), доставки в <br>// местоположение $DELIVERY_LOCATION<br>$db_dtype = CSaleDelivery::GetList(<br>    array(<br>            "SORT" =&gt; "ASC",<br>            "NAME" =&gt; "ASC"<br>        ),<br>    array(<br>            "LID" =&gt; SITE_ID,<br>            "+&lt;=WEIGHT_FROM" =&gt; $ORDER_WEIGHT,<br>            "+&gt;=WEIGHT_TO" =&gt; $ORDER_WEIGHT,<br>            "+&lt;=ORDER_PRICE_FROM" =&gt; $ORDER_PRICE,<br>            "+&gt;=ORDER_PRICE_TO" =&gt; $ORDER_PRICE,<br>            "ACTIVE" =&gt; "Y",<br>            "LOCATION" =&gt; $DELIVERY_LOCATION<br>        ),<br>    false,<br>    false,<br>    array()<br>);<br>if ($ar_dtype = $db_dtype-&gt;Fetch())<br>{<br>   echo "Вам доступны следующие способы доставки:&lt;br&gt;";<br>   do<br>   {<br>      echo $ar_dtype["NAME"]." - стоимость ".CurrencyFormat($ar_dtype["PRICE"], $ar_dtype["CURRENCY"])."&lt;br&gt;";<br>   }<br>   while ($ar_dtype = $db_dtype-&gt;Fetch());<br>}<br>else<br>{<br>   echo "Доступных способов доставки не найдено&lt;br&gt;";<br>}<br>?&gt;
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaledelivery/csaledelivery__getlist.28cc1782.php
-	* @author Bitrix
-	* @deprecated
-	*/
 	public static function GetList($arOrder = array("SORT" => "ASC", "NAME" => "ASC"), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array('*'))
 	{
 		if(empty($arSelectFields))
@@ -1277,7 +1010,7 @@ class CAllSaleDelivery
 				$arFilter["+>=WEIGHT_TO"] = $arFilter["WEIGHT"];
 		}
 
-		if (isset($arFilter["ORDER_PRICE"]) && IntVal($arFilter["ORDER_PRICE"]) > 0)
+		if (isset($arFilter["ORDER_PRICE"]) && intval($arFilter["ORDER_PRICE"]) > 0)
 		{
 			if (!isset($arFilter["ORDER_PRICE_FROM"]) || floatval($arFilter["ORDER_PRICE"]) > floatval($arFilter["ORDER_PRICE_FROM"]))
 				$arFilter["+<=ORDER_PRICE_FROM"] = $arFilter["ORDER_PRICE"];
@@ -1321,7 +1054,7 @@ class CAllSaleDelivery
 			if($selectAsterisk || in_array("PRICE", $arSelectFields))
 			{
 				$service["CLASS_NAME"] = '\Bitrix\Sale\Delivery\Services\Configurable';
-				$tmpSrv = \Bitrix\Sale\Delivery\Services\Manager::createObject($service);
+				$tmpSrv = \Bitrix\Sale\Delivery\Services\Manager::getPooledObject($service);
 
 				if($tmpSrv)
 				{
@@ -1373,54 +1106,7 @@ class CAllSaleDelivery
 	 * @throws Exception
 	 * @deprecated
 	 */
-	
-	/**
-	* <p>Метод добавляет новый способ (службу) доставки с параметрами из массива arFields. Метод статический.</p>
-	*
-	*
-	* @param array $arFields  Ассоциативный массив параметров доставки, ключами в котором
-	* являются названия параметров доставки, а значениями - значения
-	* параметров.         <br><br>       Допустимые ключи:         <br><ul> <li> <b>NAME</b> -
-	* название доставки (обязательное, задается на языке сайта, к
-	* которому привязана эта доставка);</li>          	           <li> <b>LID</b> - код
-	* сайта, к которому привязана эта доставка;</li>          	           <li>
-	* <b>PERIOD_FROM</b> - минимальный срок доставки;</li>          	           <li> <b>PERIOD_TO</b> -
-	* максимальный срок доставки;</li>          	           <li> <b>PERIOD_TYPE</b> - единица
-	* измерения срока: D - дни, H - часы, M - месяцы;</li>          	           <li>
-	* <b>WEIGHT_FROM</b> - минимальный вес заказа, для которого возможна эта
-	* доставка (единица измерения должна быть едина на сайте);</li>          	  
-	*         <li> <b>WEIGHT_TO</b> - максимальный вес заказа, для которого возможна
-	* эта доставка (единица измерения должна быть едина на сайте);</li>      
-	*    	           <li> <b>ORDER_PRICE_FROM</b> - минимальная стоимость заказа, для
-	* которой возможна эта доставка;</li>          	           <li> <b>ORDER_PRICE_TO</b> -
-	* максимальная стоимость заказа, для которой возможна эта
-	* доставка;</li>          	           <li> <b>ORDER_CURRENCY</b> - валюта ограничений по
-	* стоимости;</li>          	           <li> <b>ACTIVE</b> - флаг (Y/N) активности
-	* доставки;</li>          	           <li> <b>PRICE</b> - стоимость доставки;</li>          	    
-	*       <li> <b>CURRENCY</b> - валюта стоимости доставки;</li>          	           <li>
-	* <b>SORT</b> - индекс сортировки;</li>          	           <li> <b>DESCRIPTION</b> - описание
-	* доставки;</li>          	           <li> <b>LOCATIONS</b> - массив массивов вида: 		          
-	*   <pre class="syntax">array("LOCATION_ID" =&gt; "код местоположения или <br>                       
-	* группы местоположений",<br>      "LOCATION_TYPE"=&gt;"L - для местоположения, <br> 
-	*                       G - для группы")</pre>            		содержащий местоположения и
-	* группы местоположений, для которых работает эта доставка</li>         
-	* 	           <li> <b>LOGOTIP</b> - логотип.</li>          </ul>
-	*
-	* @return int <p>Возвращает код добавленной записи или <i>false</i> в случае
-	* ошибки.</p><a name="examples"></a>
-	*
-	* <h4>Example</h4> 
-	* <pre bgcolor="#323232" style="padding:5px;">
-	* &lt;?<br>$arFields = array(<br>   "NAME" =&gt; "Доставка курьером",<br>   "LID" =&gt; "ru",<br>   "PERIOD_FROM" =&gt; 1,<br>   "PERIOD_TO" =&gt; 3,<br>   "PERIOD_TYPE" =&gt; "D",<br>   "WEIGHT_FROM" =&gt; 0,<br>   "WEIGHT_TO" =&gt; 2500,<br>   "ORDER_PRICE_FROM" =&gt; 0,<br>   "ORDER_PRICE_TO" =&gt; 10000,<br>   "ORDER_CURRENCY" =&gt; "RUB",<br>   "ACTIVE" =&gt; "Y",<br>   "PRICE" =&gt; 58,<br>   "CURRENCY" =&gt; "RUB",<br>   "SORT" =&gt; 100,<br>   "DESCRIPTION" =&gt; "Заказ будет доставлен Вам в течение 3 - 10 рабочих дней после передачи его в курьерскую службу.",<br>   "LOCATIONS" =&gt; array(<br>      array("LOCATION_ID"=&gt;1, "LOCATION_TYPE"=&gt;"L"),<br>      array("LOCATION_ID"=&gt;3, "LOCATION_TYPE"=&gt;"G")<br>      )<br>);<br><br>$ID = CSaleDelivery::Add($arFields);<br>if ($ID&lt;=0)<br>   echo "Ошибка добавления доставки";<br>?&gt;<br>
-	* </pre>
-	*
-	*
-	* @static
-	* @link http://dev.1c-bitrix.ru/api_help/sale/classes/csaledelivery/csaledelivery__add.564001a4.php
-	* @author Bitrix
-	* @deprecated
-	*/
-	static function Add($arFields, $arOptions = array())
+	public static function Add($arFields, $arOptions = array())
 	{
 		$fields = array_intersect_key($arFields, Bitrix\Sale\Delivery\Services\Table::getMap());
 
@@ -1493,14 +1179,23 @@ class CAllSaleDelivery
 		}
 
 		if(isset($arFields["LOCATIONS"]) && is_array($arFields["LOCATIONS"]))
+		{
 			Helper::resetLocationsForEntity($newId, $arFields['LOCATIONS'], self::CONN_ENTITY_NAME, !!$arOptions['EXPECT_LOCATION_CODES']);
+
+			\Bitrix\Sale\Internals\ServiceRestrictionTable::add(array(
+				"SERVICE_ID" => $newId,
+				"SERVICE_TYPE" => \Bitrix\Sale\Services\Base\RestrictionManager::SERVICE_TYPE_SHIPMENT,
+				"CLASS_NAME" => '\Bitrix\Sale\Delivery\Restrictions\ByLocation',
+				"SORT" => 100
+			));
+		}
 
 		if (isset($arFields["PAY_SYSTEM"]))
 			CSaleDelivery::UpdateDeliveryPay($newId, $arFields["PAY_SYSTEM"]);
 
 		if(isset($arFields["STORE"]))
 		{
-			$stores = unserialize($arFields["STORE"]);
+			$stores = unserialize($arFields["STORE"], ['allowed_classes' => false]);
 
 			if($stores)
 				\Bitrix\Sale\Delivery\ExtraServices\Manager::saveStores($newId, $stores);
@@ -1619,13 +1314,6 @@ class CAllSaleDelivery
 				$result->addError( new \Bitrix\Main\Entity\EntityError("Can't convert old delivery id: ".$delivery["CODE"]));
 				continue;
 			}
-
-			$res = \Bitrix\Sale\Internals\ServiceRestrictionTable::add(array(
-				"SERVICE_ID" => $newId,
-				"SERVICE_TYPE" => \Bitrix\Sale\Services\Base\RestrictionManager::SERVICE_TYPE_SHIPMENT,
-				"CLASS_NAME" => '\Bitrix\Sale\Delivery\Restrictions\ByLocation',
-				"SORT" => 100
-			));
 
 			if(!$res->isSuccess())
 				$result->addErrors($res->getErrors());
@@ -1757,7 +1445,6 @@ class CAllSaleDelivery
 		if($collection = $shipment->getShipmentItemCollection())
 			$oldOrder["PRICE"] = $collection->getPrice();
 
-		$oldOrder["WEIGHT"] = 0;
 		$oldOrder["LOCATION_FROM"] = \Bitrix\Main\Config\Option::get(
 			'sale',
 			'location',
@@ -1783,17 +1470,18 @@ class CAllSaleDelivery
 			if(!$basketItem)
 				continue;
 
+			if($basketItem->isBundleChild())
+				continue;
+
 			$itemFieldValues = $basketItem->getFieldValues();
 			$itemFieldValues["QUANTITY"] = $shipmentItem->getField("QUANTITY");
 
 			if(!empty($itemFieldValues["DIMENSIONS"]) && is_string($itemFieldValues["DIMENSIONS"]))
-				$itemFieldValues["DIMENSIONS"] = unserialize($itemFieldValues["DIMENSIONS"]);
+				$itemFieldValues["DIMENSIONS"] = unserialize($itemFieldValues["DIMENSIONS"], ['allowed_classes' => false]);
 
+			unset($itemFieldValues['DATE_INSERT'], $itemFieldValues['DATE_UPDATE']);
 			$oldOrder["ITEMS"][] = $itemFieldValues;
-			$itemWeight = floatval($basketItem->getField("WEIGHT"));
-
-			if($itemWeight > 0)
-				$oldOrder["WEIGHT"] += $itemWeight*floatval($basketItem->getField("QUANTITY"));
+			$oldOrder["WEIGHT"] = $shipment->getWeight();
 		}
 
 		return $oldOrder;
@@ -1807,7 +1495,13 @@ class CAllSaleDelivery
 	public static function convertOrderOldToNew(array $oldOrder)
 	{
 		$siteId = isset($oldOrder["SITE_ID"]) ? $oldOrder["SITE_ID"] : SITE_ID;
-		$newOrder = \Bitrix\Sale\Order::create($siteId, null, $oldOrder["CURRENCY"]);
+
+		$registry = \Bitrix\Sale\Registry::getInstance(\Bitrix\Sale\Registry::REGISTRY_TYPE_ORDER);
+
+		/** @var \Bitrix\Sale\Order $orderClass */
+		$orderClass = $registry->getOrderClassName();
+
+		$newOrder = $orderClass::create($siteId, null, $oldOrder["CURRENCY"]);
 		$isStartField = $newOrder->isStartField();
 
 		if(!empty($oldOrder["PERSON_TYPE_ID"]) && intval($oldOrder["PERSON_TYPE_ID"]) > 0)
@@ -1826,7 +1520,11 @@ class CAllSaleDelivery
 
 		$newOrder->setPersonTypeId($personTypeId);
 		$newOrder->setFieldNoDemand("PRICE", $oldOrder["PRICE"]);
-		$basket = \Bitrix\Sale\Basket::create($siteId);
+
+		/** @var \Bitrix\Sale\Basket $basketClass */
+		$basketClass = $registry->getBasketClassName();
+
+		$basket = $basketClass::create($siteId);
 		$settableFields = array_flip(\Bitrix\Sale\BasketItemBase::getSettableFields());
 
 		if (!empty($oldOrder["ITEMS"]) && is_array($oldOrder["ITEMS"]))
@@ -1878,9 +1576,9 @@ class CAllSaleDelivery
 			$shipmentItem = $shipmentItemCollection->createItem($item);
 			$shipmentItem->setQuantity($item->getQuantity());
 
-			if(strlen($shipmentItem->getField("DIMENSIONS")))
+			if($shipmentItem->getField("DIMENSIONS") <> '')
 			{
-				$shipmentItem->setField("DIMENSIONS", unserialize($shipmentItem->getField("DIMENSIONS")));
+				$shipmentItem->setField("DIMENSIONS", unserialize($shipmentItem->getField("DIMENSIONS"), ['allowed_classes' => false]));
 			}
 		}
 
@@ -1947,7 +1645,7 @@ class CAllSaleDelivery
 		else
 			$id = \Bitrix\Sale\Delivery\Services\Manager::getIdByCode($code);
 
-		return $id;
+		return (int)$id;
 	}
 
 	/**
@@ -1961,10 +1659,9 @@ class CAllSaleDelivery
 
 		$code = \Bitrix\Sale\Delivery\Services\Manager::getCodeById($id);
 
-		if(strlen($code) <= 0)
+		if($code == '')
 			$code = 'new'.strval($id).':profile';
 
 		return $code;
 	}
 }
-?>

@@ -3,7 +3,7 @@ namespace Bitrix\Crm\Integrity;
 use Bitrix\Main;
 class Duplicate
 {
-	private static $LANG_INCLUDED = false;
+	private static $langIncluded = false;
 	//protected $created = '';
 	protected $rootEntityID = 0;
 	protected $rootPersonName = '';
@@ -19,6 +19,7 @@ class Duplicate
 	protected $summary = '';
 	protected $isJunk = false;
 	protected $options = null;
+	protected $queueId = null;
 
 	public function __construct(DuplicateCriterion $criterion, array $entities)
 	{
@@ -95,12 +96,7 @@ class Duplicate
 	{
 		self::includeLangFile();
 		$count = intval($count);
-		return $count.' '.\Bitrix\Crm\MessageHelper::getNumberDeclension(
-			$count,
-			GetMessage('CRM_DUP_ENTITY_COUNT_NOMINATIVE'),
-			GetMessage('CRM_DUP_ENTITY_COUNT_GENITIVE_SINGULAR'),
-			GetMessage('CRM_DUP_ENTITY_COUNT_GENITIVE_PLURAL')
-		);
+		return $count . ' ' . Main\Localization\Loc::getMessagePlural('CRM_DUP_ENTITY_COUNT', $count);
 	}
 	public function getEntityArray()
 	{
@@ -219,11 +215,19 @@ class Duplicate
 	{
 		return is_array($this->options) && isset($this->options[$name]) ? $this->options[$name] : $default;
 	}
+	public function setQueueId($queueId)
+	{
+		$this->queueId = $queueId;
+	}
+	public function getQueueId()
+	{
+		return $this->queueId;
+	}
 	private static function includeLangFile()
 	{
-		if(!self::$LANG_INCLUDED)
+		if(!self::$langIncluded)
 		{
-			self::$LANG_INCLUDED = IncludeModuleLangFile(__FILE__);
+			self::$langIncluded = IncludeModuleLangFile(__FILE__);
 		}
 	}
 }

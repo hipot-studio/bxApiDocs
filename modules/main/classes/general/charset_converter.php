@@ -27,13 +27,13 @@ class CharsetConverter
 	{
 		$string = strval($string);
 
-		return \Bitrix\Main\Text\Encoding::convertEncoding($string, $charset_in, $charset_out, $errorMessage);
+		return \Bitrix\Main\Text\Encoding::convertEncoding($string, $charset_in, $charset_out);
 	}
 
 	/**
 	 * @deprecated
 	 */
-	static public function Convert($sourceString, $charsetFrom, $charsetTo)
+	public function Convert($sourceString, $charsetFrom, $charsetTo)
 	{
 		return self::ConvertCharset($sourceString, $charsetFrom, $charsetTo);
 	}

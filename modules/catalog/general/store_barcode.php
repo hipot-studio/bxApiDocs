@@ -1,16 +1,17 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 class CAllCatalogStoreBarCode
 {
-	protected function CheckFields($action, &$arFields)
+	protected static function CheckFields($action, &$arFields)
 	{
 		if((($action == 'ADD') || isset($arFields["PRODUCT_ID"])) && intval($arFields["PRODUCT_ID"]) <= 0)
 		{
 			return false;
 		}
 
-		if((($action == 'ADD') || isset($arFields["BARCODE"])) && strlen($arFields["BARCODE"]) <= 0)
+		if((($action == 'ADD') || isset($arFields["BARCODE"])) && $arFields["BARCODE"] == '')
 		{
 			return false;
 		}
@@ -18,10 +19,10 @@ class CAllCatalogStoreBarCode
 		return true;
 	}
 
-	static function Update($id, $arFields)
+	public static function Update($id, $arFields)
 	{
 		global $DB;
-		$id = intval($id);
+		$id = (int)$id;
 
 		foreach(GetModuleEvents("catalog", "OnBeforeCatalogStoreBarCodeUpdate", true) as $arEvent)
 			if(ExecuteModuleEventEx($arEvent, array($id, &$arFields)) === false)
@@ -55,7 +56,7 @@ class CAllCatalogStoreBarCode
 		return $id;
 	}
 
-	static function Delete($id)
+	public static function Delete($id)
 	{
 		global $DB;
 		$id = intval($id);

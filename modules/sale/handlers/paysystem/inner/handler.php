@@ -8,11 +8,9 @@ use Bitrix\Sale\Order;
 use Bitrix\Sale\PaySystem;
 use Bitrix\Sale\Payment;
 use Bitrix\Sale\PriceMaths;
-use Bitrix\Sale\Result;
 use Bitrix\Sale\Internals\UserBudgetPool;
 use Bitrix\Main\Entity\EntityError;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Sale\ResultError;
 
 Loc::loadMessages(__FILE__);
 
@@ -24,7 +22,7 @@ class InnerHandler extends PaySystem\BaseServiceHandler implements PaySystem\IRe
 	 * @return PaySystem\ServiceResult
 	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
 	 */
-	static public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, Request $request = null)
 	{
 		$result = new PaySystem\ServiceResult();
 
@@ -41,8 +39,10 @@ class InnerHandler extends PaySystem\BaseServiceHandler implements PaySystem\IRe
 				if ($res->isSuccess())
 				{
 					$res = $order->save();
-					if ($res)
+					if (!$res->isSuccess())
+					{
 						$result->addErrors($res->getErrors());
+					}
 				}
 				else
 				{
@@ -57,7 +57,7 @@ class InnerHandler extends PaySystem\BaseServiceHandler implements PaySystem\IRe
 	/**
 	 * @return array
 	 */
-	static public function getCurrencyList()
+	public function getCurrencyList()
 	{
 		return array();
 	}
@@ -84,6 +84,7 @@ class InnerHandler extends PaySystem\BaseServiceHandler implements PaySystem\IRe
 		}
 
 		UserBudgetPool::addPoolItem($order, $refundableSum, UserBudgetPool::BUDGET_TYPE_ORDER_UNPAY, $payment);
+		$result->setOperationType(PaySystem\ServiceResult::MONEY_LEAVING);
 
 		return $result;
 	}
@@ -108,8 +109,8 @@ class InnerHandler extends PaySystem\BaseServiceHandler implements PaySystem\IRe
 			return $result;
 		}
 
-		$paymentSum = PriceMaths::roundByFormatCurrency($payment->getSum(), $order->getCurrency());
-		$userBudget = PriceMaths::roundByFormatCurrency(UserBudgetPool::getUserBudgetByOrder($order), $order->getCurrency());
+		$paymentSum = PriceMaths::roundPrecision($payment->getSum());
+		$userBudget = PriceMaths::roundPrecision(UserBudgetPool::getUserBudgetByOrder($order));
 
 		if($userBudget >= $paymentSum)
 			UserBudgetPool::addPoolItem($order, ( $paymentSum * -1 ), UserBudgetPool::BUDGET_TYPE_ORDER_PAY, $payment);
