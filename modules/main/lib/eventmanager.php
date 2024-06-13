@@ -102,7 +102,7 @@ class EventManager
 		return $iEventHandlerKey;
 	}
 
-	public function addEventHandler($fromModuleId, $eventType, $callback, $includeFile = false, $sort = 100)
+	public function addEventHandler($fromModuleId, $eventType, callable $callback, $includeFile = false, $sort = 100)
 	{
 		return $this->addEventHandlerInternal($fromModuleId, $eventType, $callback, $includeFile, $sort, 2);
 	}

@@ -4630,7 +4630,7 @@ function UnRegisterModule($id)
 	Main\ModuleManager::unRegisterModule($id);
 }
 
-function AddEventHandler($FROM_MODULE_ID, $MESSAGE_ID, $CALLBACK, $SORT=100, $FULL_PATH = false)
+function AddEventHandler($FROM_MODULE_ID, $MESSAGE_ID, callable $CALLBACK, $SORT=100, $FULL_PATH = false)
 {
 	$eventManager = Main\EventManager::getInstance();
 	return $eventManager->addEventHandlerCompatible($FROM_MODULE_ID, $MESSAGE_ID, $CALLBACK, $FULL_PATH, $SORT);
