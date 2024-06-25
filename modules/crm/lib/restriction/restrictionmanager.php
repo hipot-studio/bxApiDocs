@@ -751,10 +751,19 @@ class RestrictionManager
 	{
 		if (!static::$dynamicTypesLimit)
 		{
-			static::$dynamicTypesLimit = new DynamicTypesLimit();
+			static::$dynamicTypesLimit = new DynamicTypesLimit(
+				new DynamicTypesQuantityRestriction(),
+			);
 		}
 
 		return static::$dynamicTypesLimit;
+	}
+
+	final public static function getAutomatedSolutionLimitRestriction(): AutomatedSolutionLimit
+	{
+		static $restriction = new AutomatedSolutionLimit();
+
+		return $restriction;
 	}
 
 	public static function getLeadsRestriction(): Bitrix24AccessRestriction

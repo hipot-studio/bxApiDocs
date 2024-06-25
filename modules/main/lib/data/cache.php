@@ -35,14 +35,15 @@ class Cache
 
 	public static function createCacheEngine($params = [])
 	{
-		static $cacheEngine = null;
-		if ($cacheEngine)
+		$hash = sha1(serialize($params));
+
+		static $cacheEngine = [];
+		if (!empty($cacheEngine[$hash]))
 		{
-			return clone $cacheEngine;
+			return clone $cacheEngine[$hash];
 		}
 
 		// Events can't be used here because events use cache
-
 		$cacheType = 'files';
 		$v = Config\Configuration::getValue('cache');
 		if ($v != null && isset($v['type']) && !empty($v['type']))
@@ -69,7 +70,7 @@ class Cache
 					$className = $cacheType['class_name'];
 					if (class_exists($className))
 					{
-						$cacheEngine = new $className($params);
+						$cacheEngine[$hash] = new $className($params);
 					}
 				}
 			}
@@ -79,40 +80,40 @@ class Cache
 			switch ($cacheType)
 			{
 				case 'redis':
-					$cacheEngine = new CacheEngineRedis($params);
+					$cacheEngine[$hash] = new CacheEngineRedis($params);
 					break;
 				case 'memcached':
-					$cacheEngine = new CacheEngineMemcached($params);
+					$cacheEngine[$hash] = new CacheEngineMemcached($params);
 					break;
 				case 'memcache':
-					$cacheEngine = new CacheEngineMemcache($params);
+					$cacheEngine[$hash] = new CacheEngineMemcache($params);
 					break;
 				case 'apc':
 				case 'apcu':
-					$cacheEngine = new CacheEngineApc($params);
+					$cacheEngine[$hash] = new CacheEngineApc($params);
 					break;
 				case 'files':
-					$cacheEngine = new CacheEngineFiles($params);
+					$cacheEngine[$hash] = new CacheEngineFiles($params);
 					break;
 				default:
-					$cacheEngine = new CacheEngineNone();
+					$cacheEngine[$hash] = new CacheEngineNone();
 					break;
 			}
 		}
 
-		if ($cacheEngine == null)
+		if (empty($cacheEngine[$hash]))
 		{
-			$cacheEngine = new CacheEngineNone();
+			$cacheEngine[$hash] = new CacheEngineNone();
 			trigger_error('Cache engine is not found', E_USER_WARNING);
 		}
 
-		if (!$cacheEngine->isAvailable())
+		if (!$cacheEngine[$hash]->isAvailable())
 		{
-			$cacheEngine = new CacheEngineNone();
+			$cacheEngine[$hash] = new CacheEngineNone();
 			trigger_error('Cache engine is not available', E_USER_WARNING);
 		}
 
-		return clone $cacheEngine;
+		return clone $cacheEngine[$hash];
 	}
 
 	public static function getCacheEngineType()
@@ -510,7 +511,7 @@ class Cache
 						$res = false;
 					}
 				}
-				elseif (mb_substr($file, -4) === '.php')
+				elseif (str_ends_with($file, '.php'))
 				{
 					$c = static::createInstance();
 					if ($c->isCacheExpired($path . '/' . $file))

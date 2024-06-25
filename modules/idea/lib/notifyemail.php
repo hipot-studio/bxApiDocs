@@ -85,11 +85,16 @@ class NotifyEmailTable extends Entity\DataManager
 					'=this.USER_ID' =>  'ref.ID'
 				),
 			),
+			new \Bitrix\Main\Entity\ExpressionField(
+				'LOWER_ENTITY_CODE',
+				'LOWER(%s)',
+				'ENTITY_CODE'
+			),
 			'ASCENDED_CATEGORIES' => array(
 				'data_type' => 'Bitrix\Iblock\Section',
 				'reference' => array(
 					'=this.ENTITY_TYPE' =>  array('?', 'CATEGORY'),
-					'=this.ENTITY_CODE' => 'ref.CODE'
+					'=this.LOWER_ENTITY_CODE' => 'ref.CODE'
 				),
 			)
 		);

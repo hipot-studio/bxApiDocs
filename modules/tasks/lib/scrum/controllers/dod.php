@@ -111,8 +111,6 @@ class DoD extends Controller
 
 		$parentId = (int) $task['PARENT_ID'];
 
-		return $this->isTmpNecessary($groupId, $parentId);
-
 		if ($parentId)
 		{
 			$queryObject = TaskTable::getList([
@@ -128,47 +126,7 @@ class DoD extends Controller
 			}
 		}
 
-		$type = $this->getItemType($taskId);
-
-		if (!$type->isEmpty())
-		{
-			if ($this->isNecessaryForTask($groupId, $userId, $type))
-			{
-				return true;
-			}
-			else
-			{
-				return false;
-			}
-		}
-
-		if ($this->isNecessaryForScrum($groupId, $userId))
-		{
-			return true;
-		}
-
-		return false;
-	}
-
-	// todo tmp
-	private function isTmpNecessary(int $groupId, int $parentId): bool
-	{
-		if ($parentId)
-		{
-			$queryObject = TaskTable::getList([
-				'filter' => [
-					'ID' => $parentId,
-					'GROUP_ID' => $groupId,
-				],
-				'select' => [ 'ID' ],
-			]);
-
-			if (!$queryObject->fetch())
-			{
-				return true;
-			}
-		}
-		else
+		if ($this->existsDod($groupId))
 		{
 			return true;
 		}
@@ -508,6 +466,13 @@ class DoD extends Controller
 	 */
 	public function getDodInfoAction(int $groupId): array
 	{
+		return [
+			'existsDod' => $this->existsDod($groupId),
+		];
+	}
+
+	private function existsDod(int $groupId): bool
+	{
 		$typeService = new TypeService();
 		$backlogService = new BacklogService();
 
@@ -519,9 +484,7 @@ class DoD extends Controller
 			$types[] = $type->toArray();
 		}
 
-		return [
-			'existsDod' => (!empty($types)),
-		];
+		return (!empty($types));
 	}
 
 	private function convertTypeItems(int $itemId, array $typeItems): array
@@ -617,111 +580,5 @@ class DoD extends Controller
 		$item = $itemService->getItemBySourceId($taskId);
 
 		return $typeService->getType($item->getTypeId());
-	}
-
-	private function isNecessaryForTask(int $groupId, int $userId, TypeForm $type): bool
-	{
-		$participantsIds = [];
-
-		if (!$type->isEmpty())
-		{
-			$participantsIds = $this->getParticipantsIds($groupId, $type->getParticipantsCodes());
-		}
-
-		return in_array($userId, $participantsIds);
-	}
-
-	private function isNecessaryForScrum(int $groupId, int $userId): bool
-	{
-		$typeService = new TypeService();
-		$backlogService = new BacklogService();
-
-		$backlog = $backlogService->getBacklogByGroupId($groupId);
-
-		$participantsCodes = [];
-		foreach ($typeService->getTypes($backlog->getId()) as $type)
-		{
-			$participantsCodes = array_merge($participantsCodes, $type->getParticipantsCodes());
-		}
-
-		$participantsIds = $this->getParticipantsIds($groupId, $participantsCodes);
-
-		return in_array($userId, $participantsIds);
-	}
-
-	private function getParticipantsIds(int $groupId, array $participantsCodes): array
-	{
-		$participantsIds = [];
-
-		$scrumMasterRole = 'M';
-
-		$group = Workgroup::getById($groupId);
-
-		$scrumMasterId = (int) $group->getScrumMaster();
-
-		foreach ($participantsCodes as $code)
-		{
-			if (mb_substr($code, 0, 1) === 'U')
-			{
-				$userId = (int) mb_substr($code, 1);
-				if (!in_array($userId, $participantsIds))
-				{
-					$participantsIds[] = $userId;
-				}
-			}
-			elseif (preg_match('/^SG([0-9]+)_?([AEKM])?$/', $code, $match) && isset($match[2]))
-			{
-				$role = $match[2];
-				if ($role === $scrumMasterRole)
-				{
-					$participantsIds[] = $scrumMasterId;
-				}
-				else
-				{
-					$participantsIds = array_merge(
-						$participantsIds,
-						$this->getSonetUserIds($groupId, $role, $scrumMasterId)
-					);
-				}
-			}
-		}
-
-		return $participantsIds;
-	}
-
-	private function getSonetUserIds(int $groupId, string $role, int $scrumMasterId): array
-	{
-		$userIds = [];
-
-		$queryObject = \CSocNetUserToGroup::getList(
-			['RAND' => 'ASC'],
-			[
-				'GROUP_ID' => $groupId,
-				'=ROLE' => $role,
-				'USER_ACTIVE' => 'Y'
-			],
-			false,
-			false,
-			[
-				'ID',
-				'USER_ID',
-			]
-		);
-
-		if ($queryObject)
-		{
-			while ($userData = $queryObject->fetch())
-			{
-				$userId = (int) $userData['USER_ID'];
-				if ($role === SONET_ROLES_MODERATOR && $userId === $scrumMasterId)
-				{
-					continue;
-				}
-
-				$userIds[] = $userId;
-			}
-		}
-
-		return $userIds;
 	}
 }

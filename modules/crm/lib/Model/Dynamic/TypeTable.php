@@ -2,10 +2,10 @@
 
 namespace Bitrix\Crm\Model\Dynamic;
 
+use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\Automation\Trigger\Entity\TriggerTable;
 use Bitrix\Crm\Binding\EntityContactTable;
 use Bitrix\Crm\Conversion\Entity\EntityConversionMapTable;
-use Bitrix\Crm\CustomSection\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\EventRelationsTable;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Integration;
@@ -19,6 +19,7 @@ use Bitrix\Crm\ProductRowTable;
 use Bitrix\Crm\Recycling\DynamicController;
 use Bitrix\Crm\Relation\EntityRelationTable;
 use Bitrix\Crm\SequenceService;
+use Bitrix\Crm\Security\AccessAttribute\DynamicBasedAttrTableLifecycle;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory\Dynamic;
 use Bitrix\Crm\StatusTable;
@@ -134,7 +135,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			->configureNullable()
 			->configureTitle(Loc::getMessage('CRM_TYPE_CUSTOM_SECTION_ID_TITLE'));
 		$fieldsMap[] = new ReferenceField(
-			'CRM_TYPE_CUSTOM_SECTION',
+			'AUTOMATED_SOLUTION',
 			AutomatedSolutionTable::class,
 			['=this.CUSTOM_SECTION_ID' => 'ref.ID']
 		);
@@ -286,51 +287,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 
 	public static function getNextAvailableEntityTypeId(): ?int
 	{
-		return \CCrmOwnerType::isUnlimitedDynamicTypeEnabled()
-			? self::getNextAvailableEntityTypeIdUnlimitedWay()
-			: self::getNextAvailableEntityTypeId64LimitWay();
-	}
-
-	private static function getNextAvailableEntityTypeIdUnlimitedWay(): int
-	{
-		$seqService = SequenceService::getInstance();
-
-		return $seqService->nextDynamicTypeId();
-	}
-
-	private static function getNextAvailableEntityTypeId64LimitWay(): ?int
-	{
-		$entities = static::getList([
-			'select' => ['ENTITY_TYPE_ID'],
-		])->fetchAll();
-		$existingEntityIds = array_column($entities, 'ENTITY_TYPE_ID');
-		if (Loader::includeModule('recyclebin'))
-		{
-			$recycleHandlers = Recyclebin\Dynamic::getSurveyInfoFromRecyclebin();
-			foreach ($recycleHandlers as $handlerData)
-			{
-				$existingEntityIds[] = Recyclebin\Dynamic::resolveEntityTypeId($handlerData['NAME']);
-			}
-		}
-		$minimumIdentifier = \CCrmOwnerType::DynamicTypeStart;
-		$maximumIdentifier = (\CCrmOwnerType::DynamicTypeEnd - 1);
-		$availableIdentifiersCount = \CCrmOwnerType::DynamicTypeEnd - $minimumIdentifier;
-		if (empty($existingEntityIds))
-		{
-			return Random::getInt($minimumIdentifier, $maximumIdentifier);
-		}
-		$existingEntityIds = array_unique($existingEntityIds);
-		if (count($existingEntityIds) >= $availableIdentifiersCount)
-		{
-			return null;
-		}
-		$availableIdentifiers = array_diff(
-			range($minimumIdentifier, $maximumIdentifier),
-			$existingEntityIds
-		);
-		shuffle($availableIdentifiers);
-
-		return $availableIdentifiers[0];
+		return SequenceService::getInstance()->nextDynamicTypeId();
 	}
 
 	public static function getByEntityTypeId(int $entityTypeId): QueryResult
@@ -375,6 +332,8 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			$factory = Container::getInstance()->getFactory($type->getEntityTypeId());
 			$factory?->createDefaultCategoryIfNotExist();
 
+			DynamicBasedAttrTableLifecycle::getInstance()->createTable($factory->getEntityName());
+
 			static::clearBindingMenuCache();
 		}
 
@@ -392,6 +351,10 @@ class TypeTable extends UserField\Internal\TypeDataManager
 
 		static::deleteItemIndexTable($typeData);
 		static::deleteItemFieldsContextTable($typeData);
+
+		DynamicBasedAttrTableLifecycle::getInstance()->dropTable(
+			 \CCrmOwnerType::ResolveName($typeData['ENTITY_TYPE_ID'] ?? '')
+		);
 
 		$entityTypeId = (int)$typeData['ENTITY_TYPE_ID'];
 

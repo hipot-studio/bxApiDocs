@@ -8,6 +8,7 @@ use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals\FolderTable;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Loader;
+use Bitrix\Rest\AccessException;
 
 class Disk extends \IRestService
 {
@@ -43,7 +44,7 @@ class Disk extends \IRestService
 			"filter" => $filter,
 			'limit' => 50,
 			'count_total' => true,
-			'offset' => $offset > 0 ? $offset : 0,
+			'offset' => max($offset, 0),
 		];
 
 		if (is_array($filter))
@@ -120,7 +121,6 @@ class Disk extends \IRestService
 					$result["items"] = $items;
 					$result["storageId"] = $storage->getId();
 					$result["folderId"] = $targetFolderId;
-					$result["name"] = $folder->getName();
 					$result["rootFolderId"] = $storage->getRootObjectId();
 
 					$count = $childrenRows->getCount();
@@ -144,16 +144,21 @@ class Disk extends \IRestService
 	 */
 	public static function getAttachmentsData($params)
 	{
+		global $USER;
+		$userId = $USER->getId();
 		$result = [];
 		$attachmentsIds = (is_array($params['attachmentsIds']) ? $params['attachmentsIds'] : []);
 
 		$driver = Driver::getInstance();
 		$urlManager = $driver->getUrlManager();
+		$userFieldManager = $driver->getUserFieldManager();
+		$userFieldManager->loadBatchAttachedObject($attachmentsIds);
 
 		foreach ($attachmentsIds as $id)
 		{
-			$attachedObject = AttachedObject::loadById($id, ['OBJECT']);
-			if(!$attachedObject || $file = !$attachedObject->getFile())
+			$attachedObject = $userFieldManager->getAttachedObjectById($id);
+
+			if(!$attachedObject || !$attachedObject->getFile() || !$attachedObject->canRead($userId))
 			{
 				continue;
 			}

@@ -37,6 +37,7 @@ class Permission
 	public const TYPE_DEFAULT = 'DEFAULT';
 	public const TYPE_PRIVATE = 'PRIVATE';
 	public const TYPE_GENERAL = 'GENERAL';
+	public const TYPE_GENERAL_CHANNEL = 'GENERAL_CHANNEL';
 	public const TYPE_CHANNEL = 'CHANNEL';
 	public const TYPE_OPEN_CHANNEL = 'OPEN_CHANNEL';
 	public const TYPE_COMMENT = 'COMMENT';
@@ -115,6 +116,13 @@ class Permission
 			$roleForPostToGeneral = $generalChat->getManageMessages();
 		}
 
+		$generalChannel = GeneralChannel::get();
+		$roleForPostToGeneralChannel = Chat::ROLE_MEMBER;
+		if ($generalChannel !== null)
+		{
+			$roleForPostToGeneralChannel = $generalChannel->getManageMessages();
+		}
+
 		$default = [
 			self::ACTION_CHANGE_AVATAR => Chat::ROLE_MEMBER,
 			self::ACTION_RENAME => Chat::ROLE_MEMBER,
@@ -149,6 +157,19 @@ class Permission
 			self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
 			self::ACTION_SEND => $roleForPostToGeneral,
 			self::ACTION_DELETE_OTHERS_MESSAGE => Chat::ROLE_MANAGER,
+		];
+
+		self::$permissionsByChatTypes[self::TYPE_GENERAL_CHANNEL] = [
+			self::ACTION_CHANGE_AVATAR => Chat::ROLE_NONE,
+			self::ACTION_RENAME => Chat::ROLE_NONE,
+			self::ACTION_EXTEND => Chat::ROLE_NONE,
+			self::ACTION_LEAVE => Chat::ROLE_NONE,
+			self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
+			self::ACTION_SEND => $roleForPostToGeneralChannel,
+			self::ACTION_DELETE_OTHERS_MESSAGE => Chat::ROLE_MANAGER,
+			self::ACTION_CALL => Chat::ROLE_NONE,
+			self::ACTION_CREATE_TASK => Chat::ROLE_NONE,
+			self::ACTION_CREATE_MEETING => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[self::TYPE_COPILOT] = [

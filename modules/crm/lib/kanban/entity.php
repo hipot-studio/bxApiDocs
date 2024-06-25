@@ -571,7 +571,7 @@ abstract class Entity
 			);
 		}
 
-		return $fields;
+		return (is_array($fields) ? $fields : null);
 	}
 
 	protected function getDefaultAdditionalSelectFields(): array
@@ -1554,11 +1554,18 @@ abstract class Entity
 
 		$item->setStageId($stageId);
 
-		return
-			$this->factory
-				->getUpdateOperation($item)
-				->launch()
-		;
+		$operation = $this->factory->getUpdateOperation($item);
+
+		$eventId = $newStateParams['eventId'] ?? null;
+		if ($eventId)
+		{
+			$context = clone Container::getInstance()->getContext();
+			$context->setEventId($eventId);
+
+			$operation->setContext($context);
+		}
+
+		return $operation->launch();
 	}
 
 	protected function runAutomationOnUpdate(int $id, array $fields): void

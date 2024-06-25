@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Controller\Timeline;
 
+use Bitrix\Crm\Badge\Badge;
 use Bitrix\Crm\Category\EditorHelper;
 use Bitrix\Crm\Comparer\ComparerBase;
 use Bitrix\Crm\Controller\ErrorCode;
@@ -21,6 +22,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Timeline\Config;
+use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Error;
@@ -180,10 +182,15 @@ class AI extends Activity
 
 	public function fieldsFillingStatusAction(int $mergeId): array
 	{
-		$operationStatus = JobRepository::getInstance()->getFieldsFillingOperationStatusById($mergeId);
+		$operation = JobRepository::getInstance()->getFieldsFillingOperationById($mergeId);
+
+		if ($operation)
+		{
+			$this->removeEntityBadgeByOwner(new ItemIdentifier($operation->getEntityTypeId(), $operation->getEntityId()));
+		}
 
 		return [
-			'operationStatus' => $operationStatus,
+			'operationStatus' => $operation?->getOperationStatus(),
 		];
 	}
 
@@ -248,6 +255,8 @@ class AI extends Activity
 			return null;
 		}
 
+		$this->removeEntityBadgeByOwner(new ItemIdentifier($ownerTypeId, $ownerId));
+
 		return [
 			'aiJobResult' => $summary,
 			'callRecord' => $callRecord,
@@ -269,6 +278,8 @@ class AI extends Activity
 		{
 			return null;
 		}
+
+		$this->removeEntityBadgeByOwner(new ItemIdentifier($ownerTypeId, $ownerId));
 
 		return [
 			'aiJobResult' => $transcription,
@@ -680,5 +691,20 @@ class AI extends Activity
 		);
 
 		return $newNumberOfManualStarts;
+	}
+
+	private function removeEntityBadgeByOwner(ItemIdentifier $identifier): void
+	{
+		$currentUserId = (int)$this->getCurrentUser()->getId();
+
+		$assignedById = Container::getInstance()
+			->getFactory($identifier->getEntityTypeId())?->getItem($identifier->getEntityId())?->getAssignedById();
+
+		if ($currentUserId === $assignedById)
+		{
+			Badge::deleteByEntity($identifier, Badge::AI_CALL_FIELDS_FILLING_RESULT);
+
+			Monitor::getInstance()->onBadgesSync($identifier);
+		}
 	}
 }

@@ -2,7 +2,7 @@
 ##############################################
 # Bitrix Site Manager                        #
 # Copyright (c) 2002-2007 Bitrix             #
-# http://www.bitrixsoft.com                  #
+# https://www.bitrixsoft.com                 #
 # mailto:sources@bitrixsoft.com              #
 ##############################################
 IncludeModuleLangFile(__FILE__);
@@ -24,9 +24,9 @@ class CControllerClient
 
 		$prefix = COption::GetOptionString("main", "auth_controller_prefix", "controller");
 		if(
-			($prefix!='' && mb_substr(mb_strtolower($arParams["LOGIN"]), 0, mb_strlen($prefix) + 1) == $prefix.'\\')
+			($prefix!='' && str_starts_with(mb_strtolower($arParams["LOGIN"]), $prefix . '\\'))
 			||
-			($prefix=='' && strpos($arParams["LOGIN"], "\\") === false)
+			($prefix=='' && !str_contains($arParams["LOGIN"], "\\"))
 		)
 		{
 			$site = $prefix;
@@ -87,7 +87,7 @@ class CControllerClient
 			$password = $arParams["PASSWORD"];
 
 			$url = mb_strtolower(trim($site, " \t\r\n./"));
-			if(mb_substr($url, 0, 7) != "http://" && mb_substr($url, 0, 8) != "https://")
+			if(!str_starts_with($url, "http://") && !str_starts_with($url, "https://"))
 				$url = array("http://".$url, "https://".$url);
 
 			$dbr_mem = CControllerMember::GetList(
@@ -1160,20 +1160,20 @@ class __CControllerPacketRequest extends __CControllerPacket
 
 		$server_port = 80;
 		$server_name = mb_strtolower(trim($url, "/ \r\n\t"));
-		if (mb_substr($server_name, 0, 7) == 'http://')
+		if (str_starts_with($server_name, 'http://'))
 		{
-			$server_name = mb_substr($server_name, 7);
+			$server_name = substr($server_name, 7);
 		}
-		elseif (mb_substr($server_name, 0, 8) == 'https://')
+		elseif (str_starts_with($server_name, 'https://'))
 		{
-			$server_name = mb_substr($server_name, 8);
+			$server_name = substr($server_name, 8);
 			$server_port = 443;
 		}
 
 		if (preg_match('/.+:([0-9]+)$/', $server_name, $matches))
 		{
 			$server_port = $matches[1];
-			$server_name = mb_substr($server_name, 0, 0 - mb_strlen($server_port) - 1);
+			$server_name = substr($server_name, 0, 0 - strlen($server_port) - 1);
 		}
 
 		$proxy_url = CPageOption::GetOptionString("main", "controller_proxy_url", "");
@@ -1363,7 +1363,7 @@ class __CControllerPacketResponse extends __CControllerPacket
 	// Возвращает успешно ли выполнился запрос по статус его ответа
 	function OK()
 	{
-		return (mb_substr($this->status, 0, 1) == "2");
+		return (str_starts_with($this->status, "2"));
 	}
 
 	// Разбирает строку ответа по полям объекта

@@ -148,23 +148,23 @@ class Sharing extends Controller
 		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->checkUpdatePermissions($entityTypeId, $entityId))
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
-			
+
 			return $result;
 		}
-		
+
 		if (!\Bitrix\Main\Loader::includeModule('calendar'))
 		{
 			$this->addError(new Error('Calendar module not found'));
-			
+
 			return $result;
 		}
-		
+
 		$context = new TimelineMenuBar\Context($entityTypeId, $entityId);
-		
+
 		$sharing = new TimelineMenuBar\Item\Sharing($context);
-		$result = $sharing->getSettings();
+		$result = $sharing->getConfig();
 		$result['smsConfig'] = $this->getSmsConfig($sharing, $context);
-		
+
 		return $result;
 	}
 	
@@ -230,9 +230,5 @@ class Sharing extends Controller
 		return $result;
 	}
 
-	public function disableOptionPayAttentionToNewCrmSharingFeatureAction(): void
-	{
-		$userOptionName = TimelineMenuBar\Item\Sharing::PAY_ATTENTION_TO_NEW_FEATURE_OPTION_NAME;
-		\CUserOptions::setOption("crm", $userOptionName, 'N');
-	}
+
 }

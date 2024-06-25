@@ -3,6 +3,7 @@
 namespace Bitrix\Main\Html;
 
 use Bitrix\Main\Text\HtmlFilter;
+use Bitrix\Main\Web\Json;
 use CUtil;
 
 /**
@@ -107,7 +108,7 @@ final class Attributes
 				{
 					if (is_array($value))
 					{
-						$escapedValue = '(' . HtmlFilter::encode(CUtil::PhpToJSObject($value)) . ')';
+						$escapedValue = '(' . HtmlFilter::encode(Json::encode($value)) . ')';
 					}
 					elseif (is_bool($value))
 					{

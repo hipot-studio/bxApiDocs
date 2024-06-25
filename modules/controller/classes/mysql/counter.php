@@ -11,10 +11,12 @@ class CControllerCounter extends CAllControllerCounter
 			SELECT
 				cc.ID
 				,cc.NAME
-				,if(cc.COUNTER_TYPE = 'I', ccv.VALUE_INT
-					,if(cc.COUNTER_TYPE = 'F', ccv.VALUE_FLOAT
-					,if(cc.COUNTER_TYPE = 'D', ".$DB->DateToCharFunction("ccv.VALUE_DATE", "FULL")."
-					,ccv.VALUE_STRING))) VALUE
+				,case
+					when cc.COUNTER_TYPE = 'I' then ccv.VALUE_INT
+					when cc.COUNTER_TYPE = 'F' then ccv.VALUE_FLOAT
+					when cc.COUNTER_TYPE = 'D' then " . $DB->DateToCharFunction('ccv.VALUE_DATE', 'FULL') . '
+					else ccv.VALUE_STRING
+				end as VALUE
 				,cc.COUNTER_FORMAT
 			FROM
 				b_controller_member cm
@@ -22,10 +24,10 @@ class CControllerCounter extends CAllControllerCounter
 				INNER JOIN b_controller_counter cc ON cc.ID = ccg.CONTROLLER_COUNTER_ID
 				LEFT JOIN b_controller_counter_value ccv ON ccv.CONTROLLER_MEMBER_ID = cm.ID AND ccv.CONTROLLER_COUNTER_ID = cc.ID
 			WHERE
-				cm.ID = ".$CONTROLLER_MEMBER_ID."
+				cm.ID = ' . $CONTROLLER_MEMBER_ID . '
 			ORDER BY
 				cc.NAME
-		");
+		');
 
 		return new CControllerCounterResult($rs);
 	}

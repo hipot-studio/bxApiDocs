@@ -12,7 +12,7 @@ class Result extends \Bitrix\Main\Result
 	/**
 	 * Sets only the result.
 	 * @param T $result
-	 * @return self
+	 * @return static
 	 */
 	public function setResult($result): self
 	{

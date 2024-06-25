@@ -61,7 +61,7 @@ class SmartInvoice implements PermissionEntity
 		$stages = [];
 		foreach ($smartInvoiceFactory->getStages($category->getId()) as $stage)
 		{
-			$stages[htmlspecialcharsbx($stage->getStatusId())] = htmlspecialcharsbx($stage->getName());
+			$stages[htmlspecialcharsbx($stage->getStatusId())] = $stage->getName();
 		}
 
 		return $stages;

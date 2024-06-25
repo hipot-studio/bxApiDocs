@@ -261,8 +261,10 @@ abstract class EntityProvider extends BaseProvider
 
 		$result = $searchProvider->getSearchResult($searchQuery->getQuery());
 
+		$wasFulltextUsed = \Bitrix\Main\Search\Content::canUseFulltextSearch($searchQuery->getQuery());
 		$wereAllResultsFoundForThisQuery = (count($result->getIds()) < $searchProvider->getLimit());
-		$searchQuery->setCacheable($wereAllResultsFoundForThisQuery);
+
+		$searchQuery->setCacheable($wasFulltextUsed && $wereAllResultsFoundForThisQuery);
 
 		$dialog->addItems($this->makeItemsByIds($result->getIds()));
 	}

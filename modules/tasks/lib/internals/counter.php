@@ -244,62 +244,63 @@ class Counter
 
 	/**
 	 * @param $name
+	 * @param int $entityId (either group_id or flow_id)
 	 * @return bool|int|mixed
 	 * @throws Main\ArgumentException
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function get($name, int $groupId = 0)
+	public function get($name, int $entityId = 0)
 	{
 		$value = 0;
 
 		switch ($name)
 		{
 			case CounterDictionary::COUNTER_TOTAL:
-				$value = $this->get(CounterDictionary::COUNTER_EXPIRED, $groupId)
-					+ $this->get(CounterDictionary::COUNTER_NEW_COMMENTS, $groupId)
+				$value = $this->get(CounterDictionary::COUNTER_EXPIRED, $entityId)
+					+ $this->get(CounterDictionary::COUNTER_NEW_COMMENTS, $entityId)
 					+ $this->getMajorForeignExpired();
 				break;
 
 			case CounterDictionary::COUNTER_MEMBER_TOTAL:
-				$value = $this->get(CounterDictionary::COUNTER_EXPIRED, $groupId)
-					+ $this->get(CounterDictionary::COUNTER_NEW_COMMENTS, $groupId);
+				$value = $this->get(CounterDictionary::COUNTER_EXPIRED, $entityId)
+					+ $this->get(CounterDictionary::COUNTER_NEW_COMMENTS, $entityId);
 				break;
 
 			case CounterDictionary::COUNTER_MY:
-				$value = $this->get(CounterDictionary::COUNTER_MY_EXPIRED, $groupId)
-					+ $this->get(CounterDictionary::COUNTER_MY_NEW_COMMENTS, $groupId);
+				$value = $this->get(CounterDictionary::COUNTER_MY_EXPIRED, $entityId)
+					+ $this->get(CounterDictionary::COUNTER_MY_NEW_COMMENTS, $entityId);
 				break;
 
 			case CounterDictionary::COUNTER_ORIGINATOR:
-				$value = $this->get(CounterDictionary::COUNTER_ORIGINATOR_EXPIRED, $groupId)
-					+ $this->get(CounterDictionary::COUNTER_ORIGINATOR_NEW_COMMENTS, $groupId);
+				$value = $this->get(CounterDictionary::COUNTER_ORIGINATOR_EXPIRED, $entityId)
+					+ $this->get(CounterDictionary::COUNTER_ORIGINATOR_NEW_COMMENTS, $entityId);
 				break;
 
 			case CounterDictionary::COUNTER_ACCOMPLICES:
-				$value = $this->get(CounterDictionary::COUNTER_ACCOMPLICES_EXPIRED, $groupId)
-					+ $this->get(CounterDictionary::COUNTER_ACCOMPLICES_NEW_COMMENTS, $groupId);
+				$value = $this->get(CounterDictionary::COUNTER_ACCOMPLICES_EXPIRED, $entityId)
+					+ $this->get(CounterDictionary::COUNTER_ACCOMPLICES_NEW_COMMENTS, $entityId);
 				break;
 
 			case CounterDictionary::COUNTER_AUDITOR:
-				$value = $this->get(CounterDictionary::COUNTER_AUDITOR_EXPIRED, $groupId)
-					+ $this->get(CounterDictionary::COUNTER_AUDITOR_NEW_COMMENTS, $groupId);
+				$value = $this->get(CounterDictionary::COUNTER_AUDITOR_EXPIRED, $entityId)
+					+ $this->get(CounterDictionary::COUNTER_AUDITOR_NEW_COMMENTS, $entityId);
 				break;
 
 			case CounterDictionary::COUNTER_GROUP_EXPIRED:
-				if ($groupId && self::isSonetEnable())
+				if ($entityId && self::isSonetEnable())
 				{
-					$value = $this->getState()->getValue(CounterDictionary::COUNTER_GROUP_EXPIRED, $groupId)
-						- $this->getState()->getValue(CounterDictionary::COUNTER_EXPIRED, $groupId);
+					$value = $this->getState()->getValue(CounterDictionary::COUNTER_GROUP_EXPIRED, $entityId)
+						- $this->getState()->getValue(CounterDictionary::COUNTER_EXPIRED, $entityId);
 					$value = ($value > 0) ? $value : 0;
 				}
 				break;
 
 			case CounterDictionary::COUNTER_GROUP_COMMENTS:
-				if ($groupId && self::isSonetEnable())
+				if ($entityId && self::isSonetEnable())
 				{
-					$value = $this->getState()->getValue(CounterDictionary::COUNTER_GROUP_COMMENTS, $groupId)
-						- $this->getState()->getValue(CounterDictionary::COUNTER_NEW_COMMENTS, $groupId);
+					$value = $this->getState()->getValue(CounterDictionary::COUNTER_GROUP_COMMENTS, $entityId)
+						- $this->getState()->getValue(CounterDictionary::COUNTER_NEW_COMMENTS, $entityId);
 					$value = ($value > 0) ? $value : 0;
 				}
 				break;
@@ -363,8 +364,30 @@ class Counter
 				}
 				break;
 
+			case CounterDictionary::COUNTER_FLOW_TOTAL:
+				if (self::isSonetEnable())
+				{
+					$value = $this->get(CounterDictionary::COUNTER_FLOW_TOTAL_COMMENTS, $entityId)
+						+ $this->get(CounterDictionary::COUNTER_FLOW_TOTAL_EXPIRED, $entityId)
+					;
+				}
+				break;
+
+			case CounterDictionary::COUNTER_FLOW_TOTAL_COMMENTS:
+			case CounterDictionary::COUNTER_FLOW_TOTAL_EXPIRED:
+				if (self::isSonetEnable())
+				{
+					$counters = $this->getRawCounters(CounterDictionary::META_PROP_FLOW);
+					$types = CounterDictionary::MAP_FLOW_TOTAL[$name];
+					foreach ($types as $type)
+					{
+						$value += (isset($counters[$type][$entityId]) && $counters[$type][$entityId]) ? $counters[$type][$entityId] : 0;
+					}
+				}
+				break;
+
 			default:
-				$value = $this->getState()->getValue($name, $groupId);
+				$value = $this->getState()->getValue($name, $entityId);
 				break;
 		}
 

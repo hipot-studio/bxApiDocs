@@ -146,7 +146,7 @@ class PgsqlConnection extends Connection
 		{
 			$sql = "INSERT INTO ".$tableName."(".$insert[0].") VALUES (".$insert[1].")";
 			$this->query($sql);
-			return $data[$identity];
+			return $data[$identity] ?? null;
 		}
 	}
 

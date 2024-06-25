@@ -64,7 +64,7 @@ final class Restriction
 
 	private static function hadUserFieldsBefore($entityCode, $forceUpdate)
 	{
-		$optionName = 'have_uf_' . ToLower($entityCode);
+		$optionName = 'have_uf_' . mb_strtolower($entityCode);
 		$optionValue = Util::getOption($optionName);
 
 		if ($optionValue === '' || $forceUpdate) // not checked before, check then
@@ -79,7 +79,7 @@ final class Restriction
 				];
 				unset($possibleEntityCodes[$entityCode]);
 
-				$anotherOptionName = 'have_uf_' . ToLower(key($possibleEntityCodes));
+				$anotherOptionName = 'have_uf_' . mb_strtolower(key($possibleEntityCodes));
 				$anotherUserFieldExists = static::checkUserFieldsExists(key($possibleEntityCodes));
 
 				Util::setOption($anotherOptionName, ($anotherUserFieldExists? '1' : '0'));

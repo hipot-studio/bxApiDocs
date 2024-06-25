@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Main\Application;
+use Bitrix\Main\ModuleTable;
 
 class CSiteCheckerTest
 {
@@ -47,27 +48,8 @@ class CSiteCheckerTest
 		{
 			if (!preg_match('/^[a-z0-9.\-]+$/i', $this->host)) // cyrillic domain hack
 			{
-				$host = $this->host;
-				$host0 = \Bitrix\Main\Text\Encoding::convertEncoding($host, 'utf8', 'cp1251');
-				if (preg_match("/[\xC0-\xFF]/", $host0))
-				{
-					// utf-8;
-					if (!defined('BX_UTF') || BX_UTF !== true)
-					{
-						$host = $host0;
-					}
-				}
-				elseif (preg_match("/[\xC0-\xFF]/", $host))
-				{
-					// windows-1251
-					if (defined('BX_UTF') && BX_UTF === true)
-					{
-						$host = \Bitrix\Main\Text\Encoding::convertEncoding($host, 'cp1251', 'utf8');
-					}
-				}
 				$converter = new CBXPunycode();
-				$host = $converter->Encode($host);
-				$this->host = $host;
+				$this->host = $converter->Encode($this->host);
 			}
 		}
 		$this->ssl = isset($_REQUEST['HTTPS']) && $_REQUEST['HTTPS'] == 'on';
@@ -131,7 +113,6 @@ class CSiteCheckerTest
 
 		$arGroupName[16] = GetMessage('SC_GR_EXTENDED');
 		$arTestGroup[16] = [
-			['check_dbconn_settings' => GetMessage('SC_T_DBCONN_SETTINGS')],
 			['check_dbconn' => GetMessage('SC_T_DBCONN')],
 			['check_session_ua' => GetMessage('SC_T_SESS_UA')],
 			['check_sites' => GetMessage('SC_T_SITES')],
@@ -227,7 +208,7 @@ class CSiteCheckerTest
 			else
 			{
 				$profile |= 16;
-				switch (\Bitrix\Main\Application::getConnection()->getType())
+				switch (Application::getConnection()->getType())
 				{
 					case 'mysql':
 						$profile |= 32;
@@ -526,7 +507,6 @@ class CSiteCheckerTest
 			'gzcompress' => "Zlib",
 			'imagecreatetruecolor' => GetMessage("SC_MOD_GD"),
 			'imagecreatefromjpeg' => GetMessage("SC_MOD_GD_JPEG"),
-			'json_encode' => GetMessage("SC_MOD_JSON"),
 			'hash' => 'Hash',
 			'highlight_file' => 'PHP Syntax Highlight',
 		];
@@ -581,7 +561,6 @@ class CSiteCheckerTest
 		$arRequiredParams = [
 			'safe_mode' => 0,
 			'file_uploads' => 1,
-			'wincache.chkinterval' => 0,
 			'session.auto_start' => 0,
 			'magic_quotes_runtime' => 0,
 			'magic_quotes_sybase' => 0,
@@ -647,7 +626,7 @@ class CSiteCheckerTest
 				{
 					$ob = new CHTTP();
 					$ob->http_timeout = 5;
-					$ob->Download('http://repos.1c-bitrix.ru/yum/bitrix-env.version', $tmp);
+					$ob->Download('https://repos.1c-bitrix.ru/yum/bitrix-env.version', $tmp);
 				}
 
 				if (file_exists($tmp))
@@ -1070,29 +1049,6 @@ class CSiteCheckerTest
 		return $retVal;
 	}
 
-	function check_dbconn_settings()
-	{
-		global $DB;
-
-		$conn = Bitrix\Main\Application::getInstance()->getConnectionPool()->getConnection();
-		if ($DB->DBHost == $conn->getHost() && $DB->DBLogin == $conn->getLogin() && $DB->DBName == $conn->getDatabase())
-		{
-			return true;
-		}
-
-		echo "/bitrix/php_interface/dbconn.php\n" .
-			'$DBHost = "' . $DB->DBHost . "\"\n" .
-			'$DBLogin = "' . $DB->DBLogin . "\"\n" .
-			'$DBName = "' . $DB->DBName . "\"\n" .
-			"\n" .
-			"/bitrix/.settings.php\n" .
-			'host = "' . $conn->getHost() . "\"\n" .
-			'login = "' . $conn->getLogin() . "\"\n" .
-			'database = "' . $conn->getDatabase() . "\"\n";
-
-		return $this->Result(false, GetMessage('SC_ERR_CONN_DIFFER'));
-	}
-
 	function check_upload($big = false, $raw = false)
 	{
 		if (($sp = ini_get("upload_tmp_dir")))
@@ -1340,11 +1296,6 @@ class CSiteCheckerTest
 			return $this->Result(false, GetMessage('SC_ERR_NO_SETTINGS') . $link);
 		}
 
-		if (\Bitrix\Main\Config\Configuration::getValue("utf_mode") !== (defined('BX_UTF') && BX_UTF === true))
-		{
-			return $this->Result(false, GetMessage('MAIN_SC_MBSTRING_SETTIGNS_DIFFER'));
-		}
-
 		$encoding = strtolower(ini_get('mbstring.internal_encoding'));
 		$default = strtolower(ini_get('default_charset'));
 
@@ -1387,31 +1338,10 @@ class CSiteCheckerTest
 				$text .= '<br>' . GetMessage("MAIN_SC_ENC_UTF");
 				$this->arTestVars['check_mbstring_fail'] = true;
 			}
-
-			if (!defined('BX_UTF') || BX_UTF !== true)
-			{
-				$retVal = false;
-				$text .= '<br>' . GetMessage('SC_BX_UTF');
-				$this->arTestVars['check_mbstring_fail'] = true;
-			}
 		}
 		else
 		{
 			$text = GetMessage('SC_MB_NOT_UTF');
-
-			if ($default == "utf-8")
-			{
-				$retVal = false;
-				$text .= '<br>' . GetMessage("MAIN_SC_ENC_NON_UTF");
-				$this->arTestVars['check_mbstring_fail'] = true;
-			}
-
-			if (defined('BX_UTF'))
-			{
-				$retVal = false;
-				$text .= '<br>' . GetMessage('SC_BX_UTF_DISABLE');
-				$this->arTestVars['check_mbstring_fail'] = true;
-			}
 		}
 
 		if ($retVal)
@@ -1600,7 +1530,7 @@ class CSiteCheckerTest
 						$sub_domain = $ar['host'];
 						$sub_host = ($ar['scheme'] == 'https' ? 'ssl://' : '') . $sub_domain;
 						$sub = $ar['path'] . '?' . $ar['query'];
-						$sub_port = $ar['port'];
+						$sub_port = $ar['port'] ?? null;
 						if (!$sub_port)
 						{
 							$sub_port = $ar['scheme'] == 'https' ? 443 : 80;
@@ -1694,13 +1624,13 @@ class CSiteCheckerTest
 
 	function check_pull_comments()
 	{
-		if ($this->arTestVars['push_stream_warn'])
+		if (!empty($this->arTestVars['push_stream_warn']))
 		{
 			return $this->Result(null, GetMessage("MAIN_SC_NO_PUSH_STREAM_2"));
 		}
 		else
 		{
-			if ($this->arTestVars['push_stream_fail'])
+			if (!empty($this->arTestVars['push_stream_fail']))
 			{
 				return $this->Result(false, GetMessage("MAIN_SC_NO_PUSH_STREAM_2"));
 			}
@@ -2332,7 +2262,7 @@ class CSiteCheckerTest
 
 	function check_bx_crontab()
 	{
-		$connection = \Bitrix\Main\Application::getConnection();
+		$connection = Application::getConnection();
 		$helper = $connection->getSqlHelper();
 
 		$this->arTestVars['check_bx_crontab'] = false;
@@ -2356,7 +2286,7 @@ class CSiteCheckerTest
 
 	function check_pgsql_version()
 	{
-		$connection = \Bitrix\Main\Application::getConnection();
+		$connection = Application::getConnection();
 
 		$PgSql_vercheck_min = '11.0.0';
 
@@ -2374,24 +2304,16 @@ class CSiteCheckerTest
 
 	function check_pgsql_db_charset()
 	{
-		global $DB;
-
+		$connection = Application::getConnection();
 		$strError = '';
 
-		$res = $DB->Query('SHOW LC_CTYPE');
-		$f = $res->Fetch();
+		$f = $connection->query('SHOW LC_CTYPE')->fetch();
 		$collation_database = $f['LC_CTYPE'];
-
-		$res = $DB->Query("SELECT pg_encoding_to_char(encoding) DB_ENCODING FROM pg_database where datname='" . $DB->ForSql($DB->DBName) . "'");
-		$f = $res->Fetch();
-		$character_set_database = $f['DB_ENCODING']; //UTF8
 
 		if (!preg_match('/\.(UTF-8|UTF8)$/i', $collation_database))
 		{
 			$strError = GetMessage('SC_DATABASE_LC_CTYPE', ['#VAL0#' => $collation_database]);
 		}
-
-		//echo 'CHARSET='.$character_set_database.', COLLATION='.$collation_database;
 
 		if (!$strError)
 		{
@@ -2404,7 +2326,7 @@ class CSiteCheckerTest
 
 	function check_pgsql_connection_charset()
 	{
-		$connection = \Bitrix\Main\Application::getConnection();
+		$connection = Application::getConnection();
 		$strError = '';
 
 		if ($this->arTestVars['check_mbstring_fail'])
@@ -2412,34 +2334,12 @@ class CSiteCheckerTest
 			return $this->Result(null, GetMessage('SC_MBSTRING_NA'));
 		}
 
-		$res = $connection->query('SHOW client_encoding');
-		$f = $res->fetch();
+		$f = $connection->query('SHOW client_encoding')->fetch();
 		$character_set_connection = $f['CLIENT_ENCODING'];
 
-		$bAllIn1251 = true;
-		$res1 = $connection->query('SELECT C.CHARSET FROM b_lang L, b_culture C WHERE C.ID=L.CULTURE_ID AND L.ACTIVE=\'Y\''); // for 'no kernel mode'
-		while ($f1 = $res1->fetch())
+		if ($character_set_connection != 'UTF8')
 		{
-			$bAllIn1251 = $bAllIn1251 && trim(strtolower($f1['CHARSET'])) == 'windows-1251';
-		}
-
-		if (defined('BX_UTF') && BX_UTF === true)
-		{
-			if ($character_set_connection != 'UTF8')
-			{
-				$strError = GetMessage('SC_CONNECTION_CHARSET_WRONG', ['#VAL#' => 'utf8', '#VAL1#' => $character_set_connection]);
-			}
-		}
-		else
-		{
-			if ($bAllIn1251 && $character_set_connection != 'WIN1251')
-			{
-				$strError = GetMessage('SC_CONNECTION_CHARSET_WRONG', ['#VAL#' => 'cp1251', '#VAL1#' => $character_set_connection]);
-			}
-			elseif ($character_set_connection == 'UTF8')
-			{
-				$strError = GetMessage('SC_CONNECTION_CHARSET_WRONG_NOT_UTF', ['#VAL#' => $character_set_connection]);
-			}
+			$strError = GetMessage('SC_CONNECTION_CHARSET_WRONG', ['#VAL#' => 'utf8', '#VAL1#' => $character_set_connection]);
 		}
 
 		echo 'character_set_connection=' . $character_set_connection;
@@ -2631,34 +2531,13 @@ class CSiteCheckerTest
 		$f = $res->Fetch();
 		$collation_connection = $f['Value'];
 
-		$bAllIn1251 = true;
-		$res1 = $DB->Query('SELECT C.CHARSET FROM b_lang L, b_culture C WHERE C.ID=L.CULTURE_ID AND L.ACTIVE="Y"'); // for 'no kernel mode'
-		while ($f1 = $res1->Fetch())
+		if (!in_array($character_set_connection, ['utf8', 'utf8mb3', 'utf8mb4']))
 		{
-			$bAllIn1251 = $bAllIn1251 && trim(strtolower($f1['CHARSET'])) == 'windows-1251';
+			$strError = GetMessage("SC_CONNECTION_CHARSET_WRONG", ['#VAL#' => 'utf8', '#VAL1#' => $character_set_connection]);
 		}
-
-		if (defined('BX_UTF') && BX_UTF === true)
+		elseif (!preg_match('/^(utf8|utf8mb3|utf8mb4)_/', $collation_connection))
 		{
-			if (!in_array($character_set_connection, ['utf8', 'utf8mb3', 'utf8mb4']))
-			{
-				$strError = GetMessage("SC_CONNECTION_CHARSET_WRONG", ['#VAL#' => 'utf8', '#VAL1#' => $character_set_connection]);
-			}
-			elseif (!preg_match('/^(utf8|utf8mb3|utf8mb4)_/', $collation_connection))
-			{
-				$strError = GetMessage("SC_CONNECTION_COLLATION_WRONG_UTF", ['#VAL#' => $collation_connection]);
-			}
-		}
-		else
-		{
-			if ($bAllIn1251 && $character_set_connection != 'cp1251')
-			{
-				$strError = GetMessage("SC_CONNECTION_CHARSET_WRONG", ['#VAL#' => 'cp1251', '#VAL1#' => $character_set_connection]);
-			}
-			elseif ($character_set_connection == 'utf8')
-			{
-				$strError = GetMessage("SC_CONNECTION_CHARSET_WRONG_NOT_UTF", ['#VAL#' => $character_set_connection]);
-			}
+			$strError = GetMessage("SC_CONNECTION_COLLATION_WRONG_UTF", ['#VAL#' => $collation_connection]);
 		}
 
 		if (!$strError && $character_set_connection != $character_set_results)
@@ -2758,10 +2637,10 @@ class CSiteCheckerTest
 				and TABLE_TYPE = 'BASE TABLE'
 				and TABLE_NAME like 'b\_%'
 				and (
-					ROW_FORMAT <> 'Dynamic'
+					UPPER(ROW_FORMAT) in ('REDUNDANT', 'COMPACT')
 					or ENGINE <> 'InnoDB'
 				)
-			");
+		");
 		while ($f = $res->Fetch())
 		{
 			if ($this->fix_mode)
@@ -3109,7 +2988,7 @@ class CSiteCheckerTest
 		if (file_exists($file)) // uses database...
 		{
 			$arTableColumns = [];
-			$bModuleInstalled = $DB->Query('SELECT * FROM b_module WHERE id=\'' . $DB->ForSQL($module) . '\'')->Fetch();
+			$bModuleInstalled = ModuleTable::getById($module)->fetch();
 
 			if (false === ($query = file_get_contents($file)))
 			{
@@ -3141,10 +3020,10 @@ class CSiteCheckerTest
 						else
 						{
 							$strError .= GetMessage('SC_ERR_NO_TABLE', ['#TABLE#' => $table]) . "<br>";
-							\Bitrix\Main\Application::getInstance()->getSession()['FixQueryList'][] = $sql;
-							$this->arTestVars['iError']++;
-							$this->arTestVars['iErrorAutoFix']++;
-							$this->arTestVars['cntNoTables']++;
+							Application::getInstance()->getSession()['FixQueryList'][] = $sql;
+							$this->arTestVars['iError'] = ($this->arTestVars['iError'] ?? 0) + 1;
+							$this->arTestVars['iErrorAutoFix'] = ($this->arTestVars['iErrorAutoFix'] ?? 0) + 1;
+							$this->arTestVars['cntNoTables'] = ($this->arTestVars['cntNoTables'] ?? 0) + 1;
 							continue;
 						}
 					}
@@ -3233,10 +3112,10 @@ class CSiteCheckerTest
 							else
 							{
 								$strError .= GetMessage('SC_ERR_NO_VALUE', ['#TABLE#' => $table, '#SQL#' => $sql]) . "<br>";
-								\Bitrix\Main\Application::getInstance()->getSession()['FixQueryList'][] = $sql;
-								$this->arTestVars['iError']++;
-								$this->arTestVars['iErrorAutoFix']++;
-								$this->arTestVars['cntNoValues']++;
+								Application::getInstance()->getSession()['FixQueryList'][] = $sql;
+								$this->arTestVars['iError'] = ($this->arTestVars['iError'] ?? 0) + 1;
+								$this->arTestVars['iErrorAutoFix'] = ($this->arTestVars['iErrorAutoFix'] ?? 0) + 1;
+								$this->arTestVars['cntNoValues'] = ($this->arTestVars['cntNoValues'] ?? 0) + 1;
 							}
 						}
 					}
@@ -3323,9 +3202,9 @@ class CSiteCheckerTest
 							}
 							else
 							{
-								\Bitrix\Main\Application::getInstance()->getSession()['FixQueryList'][] = $sql;
-								$this->arTestVars['iError']++;
-								$this->arTestVars['iErrorAutoFix']++;
+								Application::getInstance()->getSession()['FixQueryList'][] = $sql;
+								$this->arTestVars['iError'] = ($this->arTestVars['iError'] ?? 0) + 1;
+								$this->arTestVars['iErrorAutoFix'] = ($this->arTestVars['iErrorAutoFix'] ?? 0) + 1;
 							}
 						}
 					}
@@ -3358,19 +3237,19 @@ class CSiteCheckerTest
 								}
 								else
 								{
-									$this->arTestVars['iErrorFix']++;
+									$this->arTestVars['iErrorFix'] = ($this->arTestVars['iErrorFix'] ?? 0) + 1;
 								}
 							}
 							else
 							{
-								\Bitrix\Main\Application::getInstance()->getSession()['FixQueryList'][] = $sql;
+								Application::getInstance()->getSession()['FixQueryList'][] = $sql;
 								$strError .= GetMessage('SC_ERR_FIELD_DIFFERS', ['#TABLE#' => $table, '#FIELD#' => $f['Field'], '#CUR#' => $cur, '#NEW#' => $tmp]) . "<br>";
-								$this->arTestVars['iError']++;
+								$this->arTestVars['iError'] = ($this->arTestVars['iError'] ?? 0) + 1;
 								if ($this->TableFieldCanBeAltered($f, $f_tmp))
 								{
-									$this->arTestVars['iErrorAutoFix']++;
+									$this->arTestVars['iErrorAutoFix'] = ($this->arTestVars['iErrorAutoFix'] ?? 0) + 1;
 								}
-								$this->arTestVars['cntDiffFields']++;
+								$this->arTestVars['cntDiffFields'] = ($this->arTestVars['cntDiffFields'] ?? 0) + 1;
 							}
 						}
 					}
@@ -3386,11 +3265,11 @@ class CSiteCheckerTest
 						}
 						else
 						{
-							\Bitrix\Main\Application::getInstance()->getSession()['FixQueryList'][] = $sql;
+							Application::getInstance()->getSession()['FixQueryList'][] = $sql;
 							$strError .= GetMessage('SC_ERR_NO_FIELD', ['#TABLE#' => $table, '#FIELD#' => $f_tmp['Field']]) . "<br>";
-							$this->arTestVars['iError']++;
-							$this->arTestVars['iErrorAutoFix']++;
-							$this->arTestVars['cntNoFields']++;
+							$this->arTestVars['iError'] = ($this->arTestVars['iError'] ?? 0) + 1;
+							$this->arTestVars['iErrorAutoFix'] = ($this->arTestVars['iErrorAutoFix'] ?? 0) + 1;
+							$this->arTestVars['cntNoFields'] = ($this->arTestVars['cntNoFields'] ?? 0) + 1;
 						}
 					}
 				}
@@ -3401,7 +3280,7 @@ class CSiteCheckerTest
 					{
 						if ($name == 'PRIMARY' && $arIndexes['PRIMARY']) // Primary key exists
 						{
-							$this->arTestVars['iError']++;
+							$this->arTestVars['iError'] = ($this->arTestVars['iError'] ?? 0) + 1;
 							$strError .= GetMessage('SC_ERR_NO_INDEX', ['#TABLE#' => $table, '#INDEX#' => $name . ' (' . $ix . ')']) . "<br>";
 							continue;
 						}
@@ -3416,11 +3295,11 @@ class CSiteCheckerTest
 						}
 						else
 						{
-							\Bitrix\Main\Application::getInstance()->getSession()['FixQueryList'][] = $sql;
+							Application::getInstance()->getSession()['FixQueryList'][] = $sql;
 							$strError .= GetMessage('SC_ERR_NO_INDEX', ['#TABLE#' => $table, '#INDEX#' => $name . ' (' . $ix . ')']) . "<br>";
-							$this->arTestVars['iError']++;
-							$this->arTestVars['iErrorAutoFix']++;
-							$this->arTestVars['cntNoIndexes']++;
+							$this->arTestVars['iError'] = ($this->arTestVars['iError'] ?? 0) + 1;
+							$this->arTestVars['iErrorAutoFix'] = ($this->arTestVars['iErrorAutoFix'] ?? 0) + 1;
+							$this->arTestVars['cntNoIndexes'] = ($this->arTestVars['cntNoIndexes'] ?? 0) + 1;
 						}
 					}
 				}
@@ -3440,7 +3319,7 @@ class CSiteCheckerTest
 
 		if ($this->fix_mode)
 		{
-			if ($this->arTestVars['iErrorFix'] > 0)
+			if (!empty($this->arTestVars['iErrorFix']))
 			{
 				return $this->Result(null, GetMessage('SC_CHECK_TABLES_STRUCT_ERRORS_FIX',
 					[
@@ -3452,21 +3331,23 @@ class CSiteCheckerTest
 		{
 			if (isset($this->arTestVars['iError']) && $this->arTestVars['iError'] > 0)
 			{
-				if (is_array(\Bitrix\Main\Application::getInstance()->getSession()['FixQueryList']) && count(\Bitrix\Main\Application::getInstance()->getSession()['FixQueryList']))
+				if (is_array(Application::getInstance()->getSession()['FixQueryList']) && count(Application::getInstance()->getSession()['FixQueryList']))
 				{
-					echo implode(";\n", \Bitrix\Main\Application::getInstance()->getSession()['FixQueryList']) . ';';
+					echo implode(";\n", Application::getInstance()->getSession()['FixQueryList']) . ';';
 				}
-				\Bitrix\Main\Application::getInstance()->getSession()['FixQueryList'] = [];
-				return $this->Result(false, GetMessage('SC_CHECK_TABLES_STRUCT_ERRORS',
-						[
-							'#VAL#' => intval($this->arTestVars['iError']),
-							'#VAL1#' => intval($this->arTestVars['iErrorAutoFix']),
-							'#NO_TABLES#' => intval($this->arTestVars['cntNoTables']),
-							'#NO_FIELDS#' => intval($this->arTestVars['cntNoFields']),
-							'#DIFF_FIELDS#' => intval($this->arTestVars['cntDiffFields']),
-							'#NO_INDEXES#' => intval($this->arTestVars['cntNoIndexes']),
-							'#NO_VALUES#' => intval($this->arTestVars['cntNoValues']),
-						]) . ($this->arTestVars['iErrorAutoFix'] > 0 ? fix_link(3) : ''));
+				Application::getInstance()->getSession()['FixQueryList'] = [];
+				return $this->Result(
+					false,
+					GetMessage('SC_CHECK_TABLES_STRUCT_ERRORS', [
+						'#VAL#' => intval($this->arTestVars['iError'] ?? 0),
+						'#VAL1#' => intval($this->arTestVars['iErrorAutoFix'] ?? 0),
+						'#NO_TABLES#' => intval($this->arTestVars['cntNoTables'] ?? 0),
+						'#NO_FIELDS#' => intval($this->arTestVars['cntNoFields'] ?? 0),
+						'#DIFF_FIELDS#' => intval($this->arTestVars['cntDiffFields'] ?? 0),
+						'#NO_INDEXES#' => intval($this->arTestVars['cntNoIndexes'] ?? 0),
+						'#NO_VALUES#' => intval($this->arTestVars['cntNoValues'] ?? 0),
+					]) . (!empty($this->arTestVars['iErrorAutoFix']) ? fix_link(3) : '')
+				);
 			}
 		}
 		return true;
@@ -3818,6 +3699,9 @@ function getCharsetByCollation($collation)
 
 function InitPureDB()
 {
+	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/bx_root.php");
+	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/lib/loader.php");
+	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/autoload.php");
 	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/tools.php");
 
 	global $DB, $DBDebug, $DBDebugToFile;
@@ -3829,17 +3713,7 @@ function InitPureDB()
 	 */
 	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/php_interface/dbconn.php");
 
-	if (defined('BX_UTF'))
-	{
-		define('BX_UTF_PCRE_MODIFIER', 'u');
-	}
-	else
-	{
-		define('BX_UTF_PCRE_MODIFIER', '');
-	}
-
-	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/lib/loader.php");
-	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/autoload.php");
+	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/constants.php");
 
 	// Database-dependent classes
 	CAllDatabase::registerAutoload();

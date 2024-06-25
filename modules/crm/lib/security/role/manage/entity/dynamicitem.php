@@ -46,13 +46,13 @@ class DynamicItem implements PermissionEntity
 					$stages = [];
 					foreach ($typesMap->getStages($type->getEntityTypeId(), $category->getId()) as $stage)
 					{
-						$stages[htmlspecialcharsbx($stage->getStatusId())] = htmlspecialcharsbx($stage->getName());
+						$stages[htmlspecialcharsbx($stage->getStatusId())] = $stage->getName();
 					}
 
 					$fields = [$stagesFieldName => $stages];
 				}
 
-				$result[] = new EntityDTO($entityName, htmlspecialcharsbx($entityTitle), $fields, $perms);
+				$result[] = new EntityDTO($entityName, $entityTitle, $fields, $perms);
 			}
 		}
 

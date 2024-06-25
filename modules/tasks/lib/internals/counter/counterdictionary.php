@@ -2,6 +2,7 @@
 namespace Bitrix\Tasks\Internals\Counter;
 
 use Bitrix\Tasks\Internals\Task\MemberTable;
+use ReflectionClass;
 
 /**
  * Class CounterDictionary
@@ -17,6 +18,7 @@ class CounterDictionary
 	public const META_PROP_PROJECT = 'project';
 	public const META_PROP_SONET = 'sonet';
 	public const META_PROP_SCRUM = 'scrum';
+	public const META_PROP_FLOW = 'flow';
 	public const META_PROP_NONE = 'none';
 
 	public const LEFT_MENU_TASKS = 'tasks_total';
@@ -79,6 +81,10 @@ class CounterDictionary
 		COUNTER_SCRUM_TOTAL_COMMENTS			= 'scrum_total_comments',
 		COUNTER_SCRUM_FOREIGN_COMMENTS			= 'scrum_foreign_comments',
 
+		COUNTER_FLOW_TOTAL						= 'flow_total',
+		COUNTER_FLOW_TOTAL_COMMENTS				= 'flow_total_comments',
+		COUNTER_FLOW_TOTAL_EXPIRED				= 'flow_total_expired',
+
 		COUNTER_FLAG_COUNTED					= 'flag_computed_20210501',
 		COUNTER_FLAG_CLEARED					= 'flag_cleared';
 
@@ -132,6 +138,24 @@ class CounterDictionary
 		self::COUNTER_SCRUM_FOREIGN_COMMENTS => self::COUNTER_GROUPS_FOREIGN_COMMENTS,
 	];
 
+	public const MAP_FLOW_TOTAL = [
+		self::COUNTER_FLOW_TOTAL_COMMENTS => [
+			self::COUNTER_MY_NEW_COMMENTS,
+			self::COUNTER_ORIGINATOR_NEW_COMMENTS,
+		],
+		self::COUNTER_FLOW_TOTAL_EXPIRED => [
+			self::COUNTER_MY_EXPIRED,
+			self::COUNTER_ORIGINATOR_EXPIRED,
+		],
+	];
+
+	public const FLOW_TYPES = [
+		self::COUNTER_MY_EXPIRED,
+		self::COUNTER_ORIGINATOR_EXPIRED,
+		self::COUNTER_MY_NEW_COMMENTS,
+		self::COUNTER_ORIGINATOR_NEW_COMMENTS,
+	];
+
 	/**
 	 * @param string $name
 	 * @return string
@@ -139,5 +163,19 @@ class CounterDictionary
 	public static function getCounterId(string $name): string
 	{
 		return self::PREFIX . $name;
+	}
+
+	public static function isValid(string $type): bool
+	{
+		$reflection = new ReflectionClass(static::class);
+		foreach ($reflection->getConstants() as $name => $constant)
+		{
+			if (is_string($constant) && $type === $constant && str_starts_with($name, 'COUNTER_'))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

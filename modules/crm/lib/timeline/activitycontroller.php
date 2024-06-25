@@ -191,12 +191,35 @@ class ActivityController extends EntityController
 		}
 		elseif($typeID === \CCrmActivityType::Provider
 			&& isset($fields['PROVIDER_ID'])
-			&& $fields['PROVIDER_ID'] === Activity\Provider\ToDo::getId()
+			&& $fields['PROVIDER_ID'] === Activity\Provider\ToDo\ToDo::getId()
 		)
 		{
 			$logMessageController = LogMessageController::getInstance();
+			$duration = null;
+
+			if (
+				!empty($fields['START_TIME'])
+				&& !empty($fields['END_TIME'])
+				&& $fields['START_TIME'] !== $fields['END_TIME']
+			)
+			{
+				$from = DateTime::createFromUserTime($fields['START_TIME'])->getTimestamp();
+				$to = DateTime::createFromUserTime($fields['END_TIME'])->getTimestamp();
+				$duration = $to - $from;
+			}
+
 			foreach ($bindings as $binding)
 			{
+				$activityData = [
+					'DESCRIPTION' => $fields['DESCRIPTION'],
+					'ASSOCIATED_ENTITY_ID' => $fields['ASSOCIATED_ENTITY_ID'],
+					'DEADLINE_TIMESTAMP' => $fields['DEADLINE'] ? (DateTime::createFromUserTime($fields['DEADLINE'])->getTimestamp()) : null,
+				];
+				if ($duration)
+				{
+					$activityData['DURATION'] = $duration;
+				}
+
 				$logMessageController->onCreate(
 					[
 						'ENTITY_TYPE_ID' => $binding['OWNER_TYPE_ID'],
@@ -204,12 +227,8 @@ class ActivityController extends EntityController
 						'ASSOCIATED_ENTITY_TYPE_ID' => \CCrmOwnerType::Activity,
 						'ASSOCIATED_ENTITY_ID' => $ownerID,
 						'SETTINGS' => [
-							'ACTIVITY_DATA' => [
-								'DESCRIPTION' => $fields['DESCRIPTION'],
-								'ASSOCIATED_ENTITY_ID' => $fields['ASSOCIATED_ENTITY_ID'],
-								'DEADLINE_TIMESTAMP' => $fields['DEADLINE'] ? (DateTime::createFromUserTime($fields['DEADLINE'])->getTimestamp()) : null,
-							]
-						]
+							'ACTIVITY_DATA' => $activityData,
+						],
 					],
 					LogMessageType::TODO_CREATED,
 					$params['CURRENT_USER'] ?? null
@@ -334,7 +353,7 @@ class ActivityController extends EntityController
 				&& in_array(
 					$providerID,
 					[
-						Activity\Provider\ToDo::getId(),
+						Activity\Provider\ToDo\ToDo::getId(),
 						Activity\Provider\ConfigurableRestApp::getId(),
 						Activity\Provider\Zoom::getId(),
 						Activity\Provider\Tasks\Task::getId(),
@@ -652,7 +671,7 @@ class ActivityController extends EntityController
 			Activity\Provider\Document::getId(),
 			Activity\Provider\SignDocument::getId(),
 			Activity\Provider\SignB2eDocument::getId(),
-			Activity\Provider\ToDo::getId(),
+			Activity\Provider\ToDo\ToDo::getId(),
 			Activity\Provider\Payment::getId(),
 			Activity\Provider\ConfigurableRestApp::getId(),
 			Activity\Provider\CalendarSharing::getId(),
@@ -661,26 +680,31 @@ class ActivityController extends EntityController
 		];
 	}
 
-	protected static function isActivityProviderSupported($providerID)
+	protected static function isActivityProviderSupported(string $providerId): bool
 	{
-		return(
-			$providerID === Activity\Provider\WebForm::getId()
-			|| $providerID === Activity\Provider\Wait::getId()
-			|| $providerID === Activity\Provider\Request::getId()
-			|| $providerID === Activity\Provider\OpenLine::getId()
-			|| $providerID === Activity\Provider\Sms::getId()
-			|| $providerID === Activity\Provider\Notification::getId()
-			|| $providerID === Activity\Provider\RestApp::getId()
-			|| $providerID === Activity\Provider\Visit::getId()
-			|| $providerID === Activity\Provider\Zoom::getId()
-			|| $providerID === Activity\Provider\Document::getId()
-			|| $providerID === Activity\Provider\SignDocument::getId()
-			|| $providerID === Activity\Provider\SignB2eDocument::getId()
-			|| $providerID === Activity\Provider\ToDo::getId()
-			|| $providerID === Activity\Provider\ConfigurableRestApp::getId()
-			|| $providerID === Activity\Provider\CalendarSharing::getId()
-			|| $providerID === Activity\Provider\Tasks\Comment::getId()
-			|| $providerID === Activity\Provider\Tasks\Task::getId()
+		return in_array(
+			$providerId,
+			[
+				Activity\Provider\WebForm::getId(),
+				Activity\Provider\Wait::getId(),
+				Activity\Provider\Request::getId(),
+				Activity\Provider\OpenLine::getId(),
+				Activity\Provider\Sms::getId(),
+				Activity\Provider\WhatsApp::getId(),
+				Activity\Provider\Notification::getId(),
+				Activity\Provider\RestApp::getId(),
+				Activity\Provider\Visit::getId(),
+				Activity\Provider\Zoom::getId(),
+				Activity\Provider\Document::getId(),
+				Activity\Provider\SignDocument::getId(),
+				Activity\Provider\SignB2eDocument::getId(),
+				Activity\Provider\ToDo\ToDo::getId(),
+				Activity\Provider\ConfigurableRestApp::getId(),
+				Activity\Provider\CalendarSharing::getId(),
+				Activity\Provider\Tasks\Comment::getId(),
+				Activity\Provider\Tasks\Task::getId(),
+			],
+			true
 		);
 	}
 
@@ -878,9 +902,9 @@ class ActivityController extends EntityController
 		$typeID = (int)($fields['TYPE_ID'] ?? 0);
 		$providerID = $fields['PROVIDER_ID'] ?? '';
 
-		if ($providerID === Activity\Provider\ToDo::getId())
+		if ($providerID === Activity\Provider\ToDo\ToDo::getId())
 		{
-			$fields['PING_OFFSETS'] = Activity\Provider\ToDo::getPingOffsets($ID);
+			$fields['PING_OFFSETS'] = Activity\Provider\ToDo\ToDo::getPingOffsets($ID);
 		}
 		else
 		{
@@ -937,7 +961,13 @@ class ActivityController extends EntityController
 				}
 			}
 		}
-		elseif($providerID === Activity\Provider\Sms::getId())
+		elseif (
+			in_array(
+				$providerID,
+				[Activity\Provider\Sms::getId(), Activity\Provider\Whatsapp::getId()],
+				true
+			)
+		)
 		{
 			// first, check original message fields
 			$smsFields = Integration\SmsManager::getMessageFields($fields['ASSOCIATED_ENTITY_ID']);

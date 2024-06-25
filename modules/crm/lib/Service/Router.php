@@ -172,6 +172,8 @@ class Router
 			'bitrix:crm.sales.tunnels' => 'type/#entityTypeId#/categories/',
 			'bitrix:crm.item.automation' => 'type/#entityTypeId#/automation/#categoryId#/',
 			'bitrix:crm.item.deadlines' => 'type/#entityTypeId#/deadlines/category/#categoryId#/',
+			'bitrix:crm.automated_solution.list' => 'type/automated_solution/list/',
+			'bitrix:crm.automated_solution.details' => 'type/automated_solution/details/#id#/',
 		];
 	}
 
@@ -472,6 +474,16 @@ class Router
 				'entityTypeId' => $entityTypeId,
 			]
 		);
+	}
+
+	public function getAutomatedSolutionListUrl(): ?Uri
+	{
+		return new Uri('/automation/type/automated_solution/list/');
+	}
+
+	public function getAutomatedSolutionDetailUrl(int $automatedSolutionId): ?Uri
+	{
+		return new Uri("/automation/type/automated_solution/details/{$automatedSolutionId}/");
 	}
 
 	public function getItemListUrl(int $entityTypeId, int $categoryId = null): ?Uri

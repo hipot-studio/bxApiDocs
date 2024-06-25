@@ -59,7 +59,7 @@ class CTimeZone
 		foreach(DateTimeZone::listIdentifiers() as $tz)
 		{
 			foreach($aExcept as $ex)
-				if(strpos($tz, $ex) === 0)
+				if(str_starts_with($tz, $ex))
 					continue 2;
 			try
 			{
@@ -99,7 +99,7 @@ class CTimeZone
 			$cookieDate->setTime(0,	0);
 
 			$APPLICATION->AddHeadString(
-				'<script type="text/javascript">if (Intl && Intl.DateTimeFormat) document.cookie="'.$cookiePrefix.'_TZ="+Intl.DateTimeFormat().resolvedOptions().timeZone+"; path=/; expires='.$cookieDate->format("r").'";</script>', true
+				'<script>if (Intl && Intl.DateTimeFormat) document.cookie="'.$cookiePrefix.'_TZ="+Intl.DateTimeFormat().resolvedOptions().timeZone+"; path=/; expires='.$cookieDate->format("r").'";</script>', true
 			);
 		}
 		elseif (isset($_COOKIE[$cookiePrefix."_TZ"]))

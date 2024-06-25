@@ -72,9 +72,7 @@ final class ClientCommunications
 
 	private function getDealClientCommunications(string $valueType = null, string $idDirection = 'asc'): array
 	{
-		$broker = Container::getInstance()->getEntityBroker(\CCrmOwnerType::Deal);
-		$deal = $this->entityId > 0 ? $broker?->getById($this->entityId) : null;
-
+		$deal = $this->entityId > 0 ? \CCrmDeal::GetByID($this->entityId, false) : null;
 		if (!$deal)
 		{
 			return [];
@@ -136,8 +134,7 @@ final class ClientCommunications
 			return $communications;
 		}
 
-		$broker = Container::getInstance()->getEntityBroker(\CCrmOwnerType::Lead);
-		$lead = $broker?->getById($this->entityId);
+		$lead = \CCrmLead::GetByID($this->entityId, false);
 		if (!$lead)
 		{
 			return [];

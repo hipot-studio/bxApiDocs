@@ -70,18 +70,18 @@ class CDatabaseMysql extends CAllDatabase
 
 		$format = str_replace($search, $replace, $format);
 
-		if (strpos($format, '%H') === false)
+		if (!str_contains($format, '%H'))
 		{
 			$format = str_replace("H", "%h", $format);
 		}
 
-		if (strpos($format, '%M') === false)
+		if (!str_contains($format, '%M'))
 		{
 			$format = str_replace("M", "%b", $format);
 		}
 
 		$lowerAmPm = false;
-		if (strpos($format, 'T') !== false)
+		if (str_contains($format, 'T'))
 		{
 			//lowercase am/pm
 			$lowerAmPm = true;

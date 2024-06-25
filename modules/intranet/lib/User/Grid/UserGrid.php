@@ -34,6 +34,8 @@ final class UserGrid extends Grid
 	{
 		$params = parent::getOrmParams();
 
+		array_push($params['select'], 'ID', 'ACTIVE', 'CONFIRM_CODE');
+
 		if (empty($params['order']))
 		{
 			$params['order'] = [

@@ -644,7 +644,7 @@ class CCrmStatus
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
 
 		$strSql = "SELECT CS.* FROM b_crm_status CS WHERE {$strSqlSearch} {$strSqlOrder}";
-		$res = $DB->Query($strSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$res = $DB->Query($strSql);
 
 		return $res;
 	}
@@ -780,7 +780,7 @@ class CCrmStatus
 			$sql = "SELECT STATUS_ID AS MAX_STATUS_ID FROM b_crm_status WHERE ENTITY_ID = '{$DB->ForSql($this->entityId)}' AND $castedStatus > 0 ORDER BY $castedStatus DESC LIMIT 1";
 		}
 
-		$res = $DB->Query($sql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$res = $DB->Query($sql);
 		$fields = is_object($res) ? $res->Fetch() : array();
 
 		return (isset($fields['MAX_STATUS_ID']) ? intval($fields['MAX_STATUS_ID']) : 0) + 1;
@@ -856,7 +856,7 @@ class CCrmStatus
 	public static function GetEntityID($statusId)
 	{
 		global $DB;
-		$res = $DB->Query("SELECT ENTITY_ID FROM b_crm_status WHERE STATUS_ID ='{$DB->ForSql($statusId)}'", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$res = $DB->Query("SELECT ENTITY_ID FROM b_crm_status WHERE STATUS_ID ='{$DB->ForSql($statusId)}'");
 		$fields = is_object($res) ? $res->Fetch() : array();
 		return isset($fields['ENTITY_ID']) ? $fields['ENTITY_ID'] : '';
 	}
@@ -900,7 +900,7 @@ class CCrmStatus
 	 * @param string $entityId
 	 * @return array
 	 */
-	public static function GetStatusListEx($entityId): array
+	public static function GetStatusListEx($entityId, bool $isEscapeName = true): array
 	{
 		if(!is_string($entityId))
 		{
@@ -910,7 +910,12 @@ class CCrmStatus
 		$escapedList = [];
 		foreach (static::GetStatusList($entityId) as $statusId => $statusName)
 		{
-			$escapedList[htmlspecialcharsbx($statusId)] = htmlspecialcharsbx($statusName);
+			if ($isEscapeName)
+			{
+				$statusName = htmlspecialcharsbx($statusName);
+			}
+
+			$escapedList[htmlspecialcharsbx($statusId)] = $statusName;
 		}
 
 		return $escapedList;

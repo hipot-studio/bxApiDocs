@@ -2,20 +2,18 @@
 
 namespace Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 
-use Bitrix\Main\Application;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Loader;
+use Bitrix\Calendar;
+use Bitrix\Calendar\Sharing\Link;
 use Bitrix\Crm;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Context;
-use Bitrix\Calendar;
-use Bitrix\Calendar\Sharing\Link;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 
 class Sharing extends Item
 {
-	public const PAY_ATTENTION_TO_NEW_FEATURE_OPTION_NAME = 'payAttentionToNewCrmSharingFeature';
 	protected ?array $communications = null;
 
 	public function getId(): string
@@ -46,8 +44,23 @@ class Sharing extends Item
 
 	public function prepareSettings(): array
 	{
+		return [
+			'config' => [
+				'isResponsible' => $this->isResponsible(),
+			],
+			'isAvailable' => \Bitrix\Crm\Restriction\RestrictionManager::getCalendarSharingRestriction()->hasPermission(),
+		];
+	}
+
+	public function getConfig(): array
+	{
+		if (!$this->isAvailable())
+		{
+			return [];
+		}
+
 		$settings = \CCalendar::GetSettings();
-		
+
 		return [
 			'config' => [
 				'isResponsible' => $this->isResponsible(),
@@ -56,7 +69,6 @@ class Sharing extends Item
 				'selectedChannelId' => $this->getSelectedChannelId(),
 				'communicationChannels' => $this->getCommunicationChannels(),
 				'isNotificationsAvailable' => $this->isNotificationsAvailable(),
-				'doPayAttentionToNewFeature' => $this->doPayAttentionToNewFeatureAction(),
 				'areCommunicationChannelsAvailable' => $this->areCommunicationChannelsAvailable(),
 				'calendarSettings' => [
 					'weekHolidays' => $settings['week_holidays'],
@@ -165,24 +177,6 @@ class Sharing extends Item
 		return $this->communications ?? [];
 	}
 
-	protected function doPayAttentionToNewFeatureAction(): bool
-	{
-		$today = new \DateTime();
-		$outdated = new \DateTime('2023-09-01');
-		if ($today->getTimestamp() > $outdated->getTimestamp())
-		{
-			return false;
-		}
-
-		$calendarOptionName = self::PAY_ATTENTION_TO_NEW_FEATURE_OPTION_NAME;
-		$signOptionName = 'create-document-from-deal';
-
-		$calendarOption = \CUserOptions::getOption('crm', $calendarOptionName, 'Y');
-		$signOption = \CUserOptions::GetOption('crm', $signOptionName, []);
-
-		return $calendarOption === 'Y' && (isset($signOption['closed']) && $signOption['closed'] === 'Y');
-	}
-
 	protected function areCommunicationChannelsAvailable(): bool
 	{
 		$result = false;
@@ -226,8 +220,6 @@ class Sharing extends Item
 
 	protected function isNotificationsAvailable(): bool
 	{
-		return Loader::includeModule('bitrix24')
-			&& Application::getInstance()->getLicense()->getRegion() === 'ru'
-		;
+		return Loader::includeModule('bitrix24') && $this->context->getRegion() === 'ru';
 	}
 }

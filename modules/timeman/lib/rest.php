@@ -853,8 +853,8 @@ class Rest extends \IRestService
 	protected static function setDayGeoPosition($entryId, $query, $action = 'open')
 	{
 		$updateFields = array(
-			'LAT_'.ToUpper($action) => isset($query['LAT']) ? doubleval($query['LAT']) : '',
-			'LON_'.ToUpper($action) => isset($query['LON']) ? doubleval($query['LON']) : '',
+			'LAT_'.mb_strtoupper($action) => isset($query['LAT']) ? doubleval($query['LAT']) : '',
+			'LON_'.mb_strtoupper($action) => isset($query['LON']) ? doubleval($query['LON']) : '',
 		);
 
 		\CTimeManEntry::Update($entryId, $updateFields);

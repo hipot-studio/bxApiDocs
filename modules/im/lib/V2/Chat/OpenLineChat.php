@@ -286,9 +286,9 @@ class OpenLineChat extends EntityChat
 		return $this;
 	}
 
-	protected function addUsersToRelation(array $usersToAdd, array $managerIds = [], ?bool $hideHistory = null)
+	protected function addUsersToRelation(array $usersToAdd, array $managerIds = [], ?bool $hideHistory = null, \Bitrix\Im\V2\Relation\Reason $reason = \Bitrix\Im\V2\Relation\Reason::DEFAULT)
 	{
-		parent::addUsersToRelation($usersToAdd, $managerIds, false);
+		parent::addUsersToRelation($usersToAdd, $managerIds, false, $reason);
 	}
 
 	protected function addIndex(): \Bitrix\Im\V2\Chat

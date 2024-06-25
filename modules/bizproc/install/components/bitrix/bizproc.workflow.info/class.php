@@ -1,5 +1,8 @@
 <?php
 
+use Bitrix\Bizproc\Api\Request\WorkflowAccessService\CanViewTimelineRequest;
+use Bitrix\Bizproc\Api\Service\WorkflowAccessService;
+use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 
@@ -98,11 +101,19 @@ class BizprocWorkflowInfo extends \CBitrixComponent
 
 	public function executeComponent()
 	{
+		if ($this->getTemplateName() === 'slider')
+		{
+			$this->prepareSliderResult();
+			$this->includeComponentTemplate();
+
+			return;
+		}
+
 		$id = $this->getWorkflowId();
 		$this->arResult = array(
 			'NeedAuth' => $this->isAuthorizationNeeded()? 'Y' : 'N',
 			'FatalErrorMessage' => '',
-			'ErrorMessage' => ''
+			'ErrorMessage' => '',
 		);
 
 		if ($id)
@@ -153,5 +164,119 @@ class BizprocWorkflowInfo extends \CBitrixComponent
 		{
 			$this->setPageTitle(Loc::getMessage('BPWFI_PAGE_TITLE'));
 		}
+	}
+
+	private function prepareSliderResult(): void
+	{
+		$this->arResult['pageTitle'] = $this->arParams['SET_TITLE'] ? Loc::getMessage('BPWFI_PAGE_TITLE') : '';
+
+		$workflowId = $this->getWorkflowId();
+		$currentUserId = $this->getCurrentUserId();
+		$isAdmin = (new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser))->isAdmin();
+
+		$userId = $this->getUserId() ?: $currentUserId;
+
+		if (!$isAdmin)
+		{
+			$accessService = new WorkflowAccessService();
+			$accessRequest = new CanViewTimelineRequest(workflowId: $workflowId, userId: $currentUserId);
+			$accessResponse = $accessService->canViewTimeline($accessRequest);
+
+			if (!$accessResponse->isSuccess())
+			{
+				$isHead = ($userId !== $currentUserId && CBPHelper::checkUserSubordination($currentUserId, $userId));
+				if (!$isHead)
+				{
+					$this->arResult['errors'] = $accessResponse->getErrorMessages();
+
+					return;
+				}
+			}
+		}
+
+		$workflowState = WorkflowStateTable::getById($workflowId)->fetchObject();
+		if (!$workflowState)
+		{
+			$this->arResult['errors'] = [Loc::getMessage('BPWFI_WORKFLOW_NOT_FOUND')];
+
+			return;
+		}
+
+		$workflowView = new \Bitrix\Bizproc\UI\WorkflowUserView($workflowState, $userId);
+
+		$this->arResult['workflow'] = $workflowView;
+		$this->arResult['documentUrl'] = \CBPDocument::getDocumentAdminPage($workflowState->getComplexDocumentId());
+		$this->arResult['documentType'] = $this->getDocumentType($workflowState->getComplexDocumentId());
+
+		$this->arResult['isMyTask'] = $currentUserId === $userId;
+		$this->arResult['userName'] = $this->getUserFormatName($userId);
+		$this->arResult['task'] = $this->extractTask($workflowView->getTasks());
+		$this->arResult['isAdmin'] = $isAdmin;
+	}
+
+	private function getCurrentUserId()
+	{
+		return (int)(\Bitrix\Main\Engine\CurrentUser::get()->getId());
+	}
+
+	private function getUserId()
+	{
+		return (int)($this->arParams['USER_ID'] ?? 0);
+	}
+
+	private function getUserFormatName(int $userId)
+	{
+		$format = \CSite::GetNameFormat(false);
+		$user = \CUser::GetList(
+			'id',
+			'asc',
+			['ID_EQUAL_EXACT' => $userId],
+			[
+				'FIELDS' => [
+					'TITLE',
+					'NAME',
+					'LAST_NAME',
+					'SECOND_NAME',
+					'NAME_SHORT',
+					'LAST_NAME_SHORT',
+					'SECOND_NAME_SHORT',
+					'EMAIL',
+					'ID',
+				],
+			]
+		)->Fetch();
+
+		return $user ? \CUser::FormatName($format, $user, false, false) : '';
+	}
+
+	private function getDocumentType(array $documentId): ?array
+	{
+		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
+		try
+		{
+			return $documentService->getDocumentType($documentId);
+		}
+		catch (\Exception $exception)
+		{}
+
+		return null;
+	}
+
+	private function extractTask(array $tasks): ?array
+	{
+		$taskId = (int)($this->arParams['TASK_ID'] ?? 0);
+
+		if ($taskId > 0)
+		{
+			foreach ($tasks as $task)
+			{
+				if ($task['id'] === $taskId)
+				{
+					return $task;
+				}
+			}
+		}
+
+		return $tasks[0] ?? null;
 	}
 }

@@ -1128,7 +1128,7 @@ class CAllCrmContact
 			$sSql = $DB->TopSql($sSql, $nPageTop);
 		}
 
-		$obRes = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$obRes = $DB->Query($sSql);
 		$obRes->SetUserFields($USER_FIELD_MANAGER->GetUserFields(self::$sUFEntityID));
 		return $obRes;
 	}
@@ -1594,9 +1594,7 @@ class CAllCrmContact
 				if($sUpdate <> '')
 				{
 					$DB->Query(
-						"UPDATE b_crm_contact SET {$sUpdate} WHERE ID = {$ID}",
-						false,
-						'FILE: '.__FILE__.'<br /> LINE: '.__LINE__
+						"UPDATE b_crm_contact SET {$sUpdate} WHERE ID = {$ID}"
 					);
 				};
 			}
@@ -2312,7 +2310,7 @@ class CAllCrmContact
 			}
 			else
 			{
-				$dbRes = $DB->Query("SELECT NAME, LAST_NAME FROM b_crm_contact WHERE ID = $ID", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+				$dbRes = $DB->Query("SELECT NAME, LAST_NAME FROM b_crm_contact WHERE ID = $ID");
 				$arRes = $dbRes->Fetch();
 				if(isset($arFields['NAME']))
 				{
@@ -2366,7 +2364,7 @@ class CAllCrmContact
 			if ($sUpdate <> '')
 			{
 				$bResult = true;
-				$DB->Query("UPDATE b_crm_contact SET {$sUpdate} WHERE ID = {$ID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+				$DB->Query("UPDATE b_crm_contact SET {$sUpdate} WHERE ID = {$ID}");
 			}
 
 			//region Save Observers
@@ -2557,9 +2555,7 @@ class CAllCrmContact
 					$DB->Query(
 						"UPDATE b_crm_contact "
 							. "SET HAS_EMAIL = '$hasEmail', HAS_PHONE = '$hasPhone', HAS_IMOL = '$hasImol' "
-							. "WHERE ID = $ID",
-						false,
-						'FILE: '.__FILE__.'<br /> LINE: '.__LINE__
+							. "WHERE ID = $ID"
 					);
 
 					$arFields['HAS_EMAIL'] = $hasEmail;
@@ -2866,7 +2862,7 @@ class CAllCrmContact
 			\Bitrix\Crm\Recycling\ContactController::getInstance()->moveToBin($ID, array('FIELDS' => $arFields));
 		}
 
-		$obRes = $DB->Query("DELETE FROM b_crm_contact WHERE ID = {$ID}{$sWherePerm}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$obRes = $DB->Query("DELETE FROM b_crm_contact WHERE ID = {$ID}{$sWherePerm}");
 		if (is_object($obRes) && $obRes->AffectedRowsCount() > 0)
 		{
 			if(defined('BX_COMP_MANAGED_CACHE'))
@@ -3273,7 +3269,7 @@ class CAllCrmContact
 		$companyID = (int) $companyID;
 
 		if (!empty($arContactID))
-			$DB->Query("UPDATE b_crm_contact SET COMPANY_ID = $companyID WHERE ID IN (".implode(',', $arContactID).")", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+			$DB->Query("UPDATE b_crm_contact SET COMPANY_ID = $companyID WHERE ID IN (".implode(',', $arContactID).")");
 
 		return true;
 	}
@@ -3795,9 +3791,7 @@ class CAllCrmContact
 		if($ownerTypeID === CCrmOwnerType::Company)
 		{
 			$DB->Query(
-				"UPDATE {$tableName} SET COMPANY_ID = {$newID} WHERE COMPANY_ID = {$oldID}",
-				false,
-				'File: '.__FILE__.'<br>Line: '.__LINE__
+				"UPDATE {$tableName} SET COMPANY_ID = {$newID} WHERE COMPANY_ID = {$oldID}"
 			);
 		}
 	}
@@ -3805,13 +3799,13 @@ class CAllCrmContact
 	public static function ProcessLeadDeletion($leadID)
 	{
 		global $DB;
-		$DB->Query("UPDATE b_crm_contact SET LEAD_ID = NULL WHERE LEAD_ID = {$leadID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$DB->Query("UPDATE b_crm_contact SET LEAD_ID = NULL WHERE LEAD_ID = {$leadID}");
 	}
 
 	public static function ProcessCompanyDeletion($companyID)
 	{
 		global $DB;
-		$DB->Query("UPDATE b_crm_contact SET COMPANY_ID = NULL WHERE COMPANY_ID = {$companyID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$DB->Query("UPDATE b_crm_contact SET COMPANY_ID = NULL WHERE COMPANY_ID = {$companyID}");
 	}
 
 	public static function CreateRequisite($ID, $presetID)
@@ -3976,7 +3970,7 @@ class CAllCrmContact
 			!isset($fields['HAS_IMOL']) || $fields['HAS_IMOL'] !== $hasImol
 		)
 		{
-			$DB->Query("UPDATE b_crm_contact SET HAS_EMAIL = '{$hasEmail}', HAS_PHONE = '{$hasPhone}', HAS_IMOL = '{$hasImol}' WHERE ID = {$sourceID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+			$DB->Query("UPDATE b_crm_contact SET HAS_EMAIL = '{$hasEmail}', HAS_PHONE = '{$hasPhone}', HAS_IMOL = '{$hasImol}' WHERE ID = {$sourceID}");
 		}
 	}
 

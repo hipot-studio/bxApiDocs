@@ -4,6 +4,7 @@ IncludeModuleLangFile(__FILE__);
 use Bitrix\Crm;
 use Bitrix\Crm\Binding\EntityBinding;
 use Bitrix\Crm\Binding\LeadContactTable;
+use Bitrix\Crm\Comparer\ComparerBase;
 use Bitrix\Crm\CustomerType;
 use Bitrix\Crm\Entity\Traits\EntityFieldsNormalizer;
 use Bitrix\Crm\Entity\Traits\UserFieldPreparer;
@@ -1346,7 +1347,7 @@ class CAllCrmLead
 			$sSql = $DB->TopSql($sSql, $nPageTop);
 		}
 
-		$obRes = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$obRes = $DB->Query($sSql);
 		$obRes->SetUserFields($USER_FIELD_MANAGER->GetUserFields(self::$sUFEntityID));
 		return $obRes;
 	}
@@ -1719,7 +1720,7 @@ class CAllCrmLead
 		unset($arFields['ID']);
 
 		$this->normalizeEntityFields($arFields);
-		$ID = (int) $DB->Add(self::TABLE_NAME, $arFields, [], '', false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$ID = (int) $DB->Add(self::TABLE_NAME, $arFields, [], '');
 
 		//Append ID to TITLE if required
 		if($ID > 0 && $arFields['TITLE'] === self::GetDefaultTitle())
@@ -1728,7 +1729,7 @@ class CAllCrmLead
 			$sUpdate = $DB->PrepareUpdate('b_crm_lead', array('TITLE' => $arFields['TITLE']));
 			if($sUpdate <> '')
 			{
-				$DB->Query("UPDATE b_crm_lead SET {$sUpdate} WHERE ID = {$ID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+				$DB->Query("UPDATE b_crm_lead SET {$sUpdate} WHERE ID = {$ID}");
 			};
 		}
 
@@ -1962,7 +1963,7 @@ class CAllCrmLead
 
 				if ($deadline)
 				{
-					\Bitrix\Crm\Activity\Entity\ToDo::createWithDefaultDescription(
+					\Bitrix\Crm\Activity\Entity\ToDo::createWithDefaultSubjectAndDescription(
 						\CCrmOwnerType::Lead,
 						$ID,
 						$deadline
@@ -2517,7 +2518,7 @@ class CAllCrmLead
 			}
 			else
 			{
-				$dbRes = $DB->Query("SELECT NAME, LAST_NAME FROM b_crm_lead WHERE ID = {$ID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+				$dbRes = $DB->Query("SELECT NAME, LAST_NAME FROM b_crm_lead WHERE ID = {$ID}");
 				$arRes = $dbRes->Fetch();
 				$arFields['FULL_NAME'] = trim((isset($arFields['NAME'])? $arFields['NAME']: $arRes['NAME']).' '.(isset($arFields['LAST_NAME'])? $arFields['LAST_NAME']: $arRes['LAST_NAME']));
 			}
@@ -2544,7 +2545,7 @@ class CAllCrmLead
 
 			if ($sUpdate <> '')
 			{
-				$DB->Query("UPDATE b_crm_lead SET {$sUpdate} WHERE ID = {$ID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+				$DB->Query("UPDATE b_crm_lead SET {$sUpdate} WHERE ID = {$ID}");
 
 				$bResult = true;
 			}
@@ -2798,7 +2799,7 @@ class CAllCrmLead
 					$hasImol !== (isset($arRow['HAS_IMOL']) ? $arRow['HAS_IMOL'] : 'N')
 				)
 				{
-					$DB->Query("UPDATE b_crm_lead SET HAS_EMAIL = '{$hasEmail}', HAS_PHONE = '{$hasPhone}', HAS_IMOL = '{$hasImol}' WHERE ID = {$ID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+					$DB->Query("UPDATE b_crm_lead SET HAS_EMAIL = '{$hasEmail}', HAS_PHONE = '{$hasPhone}', HAS_IMOL = '{$hasImol}' WHERE ID = {$ID}");
 
 					$arFields['HAS_EMAIL'] = $hasEmail;
 					$arFields['HAS_PHONE'] = $hasPhone;
@@ -3040,6 +3041,16 @@ class CAllCrmLead
 				$scope = \Bitrix\Crm\Service\Container::getInstance()->getContext()->getScope();
 				$filler = new ValueFiller(CCrmOwnerType::Lead, $ID, $scope);
 				$filler->fill($options['CURRENT_FIELDS'], $arFields);
+
+				if (
+					isset($arRow['STATUS_ID'])
+					&& isset($currentFields['STATUS_ID'])
+					&& ComparerBase::isMovedToFinalStage(CCrmOwnerType::Lead, $arRow['STATUS_ID'], $currentFields['STATUS_ID'])
+				)
+				{
+					$item = Container::getInstance()->getFactory(CCrmOwnerType::Lead)->getItem($ID);
+					(new Bitrix\Crm\Service\Operation\Action\DeleteEntityBadges())->process($item);
+				}
 			}
 
 			if ($bResult && !$syncStatusSemantics)
@@ -3190,7 +3201,7 @@ class CAllCrmLead
 
 		$tableName = CCrmLead::TABLE_NAME;
 		$sSql = "DELETE FROM {$tableName} WHERE ID = {$ID}";
-		$obRes = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$obRes = $DB->Query($sSql);
 		if (is_object($obRes) && $obRes->AffectedRowsCount() > 0)
 		{
 			if(defined('BX_COMP_MANAGED_CACHE'))
@@ -5036,7 +5047,7 @@ class CAllCrmLead
 			!isset($fields['HAS_IMOL']) || $fields['HAS_IMOL'] !== $hasImol
 		)
 		{
-			$DB->Query("UPDATE b_crm_lead SET HAS_EMAIL = '{$hasEmail}', HAS_PHONE = '{$hasPhone}', HAS_IMOL = '{$hasImol}' WHERE ID = {$sourceID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+			$DB->Query("UPDATE b_crm_lead SET HAS_EMAIL = '{$hasEmail}', HAS_PHONE = '{$hasPhone}', HAS_IMOL = '{$hasImol}' WHERE ID = {$sourceID}");
 		}
 	}
 

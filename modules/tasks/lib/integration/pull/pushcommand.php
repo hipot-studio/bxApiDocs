@@ -12,6 +12,13 @@ abstract class PushCommand
 	public const TASK_TIMER_STOPPED = 'task_timer_stop';
 	public const TASK_STAGE_UPDATED = 'stage_change';
 
+	public const TEMPLATE_ADDED = 'template_add';
+	public const TEMPLATE_UPDATED = 'template_update';
+
+	public const FLOW_ADDED = 'flow_add';
+	public const FLOW_UPDATED = 'flow_update';
+	public const FLOW_DELETED = 'flow_delete';
+
 	public const TAG_ADDED = 'tag_added';
 	public const TAG_UPDATED = 'tag_changed';
 

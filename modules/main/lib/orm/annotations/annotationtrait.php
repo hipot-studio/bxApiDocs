@@ -166,7 +166,7 @@ trait AnnotationTrait
 		$code[] = "\t}"; // end class
 
 		// compatibility with default classes
-		if (strpos($objectClassName, Entity::DEFAULT_OBJECT_PREFIX) !== 0) // better to compare full classes definitions
+		if (!str_starts_with($objectClassName, Entity::DEFAULT_OBJECT_PREFIX)) // better to compare full classes definitions
 		{
 			$defaultObjectClassName = Entity::getDefaultObjectClassName($entity->getName());
 
@@ -214,7 +214,7 @@ trait AnnotationTrait
 			$code[] = "\t * @method void next() Iterator";
 			$code[] = "\t * @method bool valid() Iterator";
 			$code[] = "\t * @method int count() Countable";
-			$code[] = "\t * @method {$collectionClassName} merge(?{$collectionClassName} \$collection)";
+			$code[] = "\t * @method {$collectionClass} merge(?{$collectionClass} \$collection)";
 			$code[] = "\t * @method bool isEmpty()";
 		}
 
@@ -226,7 +226,7 @@ trait AnnotationTrait
 		$code[] = "\t}"; // end class
 
 		// compatibility with default classes
-		if (strpos($collectionClassName, Entity::DEFAULT_OBJECT_PREFIX) !== 0) // better to compare full classes definitions
+		if (!str_starts_with($collectionClassName, Entity::DEFAULT_OBJECT_PREFIX)) // better to compare full classes definitions
 		{
 			$defaultCollectionClassName = Entity::getDefaultCollectionClassName($entity->getName());
 
@@ -291,7 +291,7 @@ trait AnnotationTrait
 			foreach (get_class_methods($dataClass) as $method)
 			{
 				// search for with* methods
-				if (substr($method, 0, 4) === 'with')
+				if (str_starts_with($method, 'with'))
 				{
 					$reflectionMethod = new \ReflectionMethod($dataClass, $method);
 

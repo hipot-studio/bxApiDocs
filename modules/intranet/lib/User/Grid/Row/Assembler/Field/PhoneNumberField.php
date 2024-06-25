@@ -8,7 +8,7 @@ use Bitrix\Main\PhoneNumber\Format;
 
 class PhoneNumberField extends FieldAssembler
 {
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): mixed
 	{
 		if (empty($value))
 		{

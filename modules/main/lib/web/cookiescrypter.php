@@ -184,7 +184,7 @@ final class CookiesCrypter
 
 	public function shouldDecrypt(string $cookieName, string $cookieValue): bool
 	{
-		return strpos($cookieValue, self::SIGN_PREFIX) === 0;
+		return str_starts_with($cookieValue, self::SIGN_PREFIX);
 	}
 
 	protected function prependSign(string $value): string

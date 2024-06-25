@@ -4,6 +4,7 @@ namespace Bitrix\Im\Model;
 use Bitrix\Im\Internals\ChatIndex;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Sync;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Event;
@@ -320,7 +321,14 @@ class ChatTable extends Entity\DataManager
 		}
 		$insertData = self::prepareParamsForIndex($index);
 
-		ChatIndexTable::add($insertData);
+		try
+		{
+			ChatIndexTable::add($insertData);
+		}
+		catch (SqlQueryException)
+		{
+			self::updateIndexRecord($index);
+		}
 	}
 
 	public static function updateIndexRecord(ChatIndex $index)

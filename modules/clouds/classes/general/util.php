@@ -29,11 +29,11 @@ class CCloudUtil
 			}
 			elseif (defined('BX_CLOUD_OLD_URL_ENCODE') && constant('BX_CLOUD_OLD_URL_ENCODE') === true)
 			{
-				$strEncodedURL .= rawurlencode($APPLICATION->ConvertCharset(rawurldecode((string)$part_of_url), LANG_CHARSET, $charset));
+				$strEncodedURL .= rawurlencode(\Bitrix\Main\Text\Encoding::convertEncoding(rawurldecode((string)$part_of_url), LANG_CHARSET, $charset));
 			}
 			else
 			{
-				$strEncodedURL .= rawurlencode($APPLICATION->ConvertCharset((string)$part_of_url, LANG_CHARSET, $charset));
+				$strEncodedURL .= rawurlencode(\Bitrix\Main\Text\Encoding::convertEncoding((string)$part_of_url, LANG_CHARSET, $charset));
 			}
 		}
 

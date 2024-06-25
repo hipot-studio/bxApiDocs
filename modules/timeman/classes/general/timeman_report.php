@@ -122,7 +122,7 @@ WHERE 1=1';
 
 		foreach ($arFilter as $fld => $val)
 		{
-			$fld = ToUpper($fld);
+			$fld = mb_strtoupper($fld);
 
 			if ($arFields[$fld])
 			{
@@ -138,12 +138,12 @@ WHERE 1=1';
 		$strOrder = '';
 		foreach ($arOrder as $fld => $dir)
 		{
-			$fld = ToUpper($fld);
+			$fld = mb_strtoupper($fld);
 
 			if ($arFields[$fld])
 			{
 				$strOrder .= ($strOrder == '' ? '' : ', ')
-					.$arFields[$fld]['FIELD'].' '.(ToUpper($dir) == 'DESC' ? 'DESC' : 'ASC');
+					.$arFields[$fld]['FIELD'].' '.(mb_strtoupper($dir) == 'DESC' ? 'DESC' : 'ASC');
 			}
 		}
 
@@ -152,7 +152,7 @@ WHERE 1=1';
 			$strSql .= ' ORDER BY '.$strOrder;
 		}
 
-		return ($DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__));
+		return ($DB->Query($strSql));
 	}
 
 	public static function Reopen($ENTRY_ID)

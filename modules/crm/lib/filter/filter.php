@@ -62,6 +62,14 @@ class Filter extends \Bitrix\Main\Filter\Filter
 	 */
 	public function prepareListFilterParams(array &$filter): void
 	{
+		/**
+		 * possible subtype values for example:
+		 *   null | employee | string | url | address | money | integer | double | boolean | datetime |
+		 *   date | enumeration | crm_status | iblock_element | iblock_section | crm
+		 * may also take other value
+		 */
+		$filterSubtype = ['address'];
+
 		foreach ($filter as $k => $v)
 		{
 			$match = array();
@@ -76,6 +84,12 @@ class Filter extends \Bitrix\Main\Filter\Filter
 					$v = \CCrmDateTimeHelper::SetMaxDayTime($v);
 				}
 				Crm\UI\Filter\Range::prepareTo($filter, $match[1], $v);
+			}
+
+			if (in_array($this->getField($k)?->getSubtype(), $filterSubtype) && mb_strpos($k, 'UF_CRM_') === 0)
+			{
+				$filter['%' . $k] = $filter[$k];
+				unset($filter[$k]);
 			}
 
 			$this->entityDataProvider->prepareListFilterParam($filter, $k);

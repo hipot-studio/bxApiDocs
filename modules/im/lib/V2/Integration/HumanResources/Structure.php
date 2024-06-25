@@ -2,11 +2,13 @@
 
 namespace Bitrix\Im\V2\Integration\HumanResources;
 
+use Bitrix\HumanResources\Config\Storage;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\RelationEntityType;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Loader;
+use Bitrix\Main\UI\EntitySelector\Converter;
 
 class Structure
 {
@@ -19,6 +21,7 @@ class Structure
 
 	public static function splitEntities(array $entities): array
 	{
+		$entities = static::convertEntities($entities);
 		$users = [];
 		$structureNodes = [];
 
@@ -35,6 +38,13 @@ class Structure
 		}
 
 		return [$users, $structureNodes];
+	}
+
+	public static function isSyncAvailable(): bool
+	{
+		return Loader::includeModule('humanresources')
+			&& Storage::instance()->isCompanyStructureConverted()
+		;
 	}
 
 	public function link(array $structureNodeIds): Result
@@ -56,11 +66,11 @@ class Structure
 		foreach ($structureNodeIds as $structureNodeId)
 		{
 			try {
-				/*$nodeRelationService->linkEntityToNodeByAccessCode(
+				$nodeRelationService->linkEntityToNodeByAccessCode(
 					$structureNodeId,
 					RelationEntityType::CHAT,
 					$this->chat->getId()
-				);*/
+				);
 			}
 			catch (\Exception $exception)
 			{
@@ -69,5 +79,49 @@ class Structure
 		}
 
 		return $result;
+	}
+
+	public function unlink(array $structureNodeIds): Result
+	{
+		$result = new Result();
+
+		if (empty($structureNodeIds))
+		{
+			return $result;
+		}
+
+		if (!Loader::includeModule('humanresources'))
+		{
+			return $result->addError(new Error(Error::UNLINK_ERROR));
+		}
+
+		$nodeRelationService = Container::getNodeRelationService();
+
+		foreach ($structureNodeIds as $structureNodeId)
+		{
+			try {
+				$nodeRelationService->unlinkEntityFromNodeByAccessCode(
+					$structureNodeId,
+					RelationEntityType::CHAT,
+					$this->chat->getId()
+				);
+			}
+			catch (\Exception $exception)
+			{
+				$result->addError(new Error(Error::UNLINK_ERROR));
+			}
+		}
+
+		return $result;
+	}
+
+	protected static function convertEntities(array $entities): array
+	{
+		if (!Loader::includeModule('ui'))
+		{
+			return [];
+		}
+
+		return Converter::convertToFinderCodes($entities);
 	}
 }

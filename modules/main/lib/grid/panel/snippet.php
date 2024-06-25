@@ -189,7 +189,7 @@ class Snippet
 		return array(
 			'TYPE' => Types::BUTTON,
 			'ID' => "apply_button",
-			'CLASS' => "apply",
+			'CLASS' => "ui-btn-primary",
 			'TEXT' => Loc::getMessage("APPLY_BUTTON_TEXT"),
 			'ONCHANGE' => isset($params['ONCHANGE']) && is_array($params['ONCHANGE']) ? $params['ONCHANGE'] : array()
 		);
@@ -222,7 +222,7 @@ class Snippet
 
 		$button = new Button();
 		$button->setId('apply_button');
-		$button->setClass('apply');
+		$button->setClass('ui-btn-primary');
 		$button->setOnchange($onchange);
 		$button->setText(Loc::getMessage("APPLY_BUTTON_TEXT"));
 

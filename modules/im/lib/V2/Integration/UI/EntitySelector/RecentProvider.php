@@ -8,6 +8,7 @@ use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\Model\UserTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserBot;

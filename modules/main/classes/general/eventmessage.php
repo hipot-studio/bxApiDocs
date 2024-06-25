@@ -1017,58 +1017,58 @@ class CEventType
 	public static function GetFilterOperation($key)
 	{
 		$strNegative = "N";
-		if (mb_substr($key, 0, 1) == "!")
+		if (str_starts_with($key, "!"))
 		{
-			$key = mb_substr($key, 1);
+			$key = substr($key, 1);
 			$strNegative = "Y";
 		}
 
 		$strOrNull = "N";
-		if (mb_substr($key, 0, 1) == "+")
+		if (str_starts_with($key, "+"))
 		{
-			$key = mb_substr($key, 1);
+			$key = substr($key, 1);
 			$strOrNull = "Y";
 		}
 
-		if (mb_substr($key, 0, 2) == ">=")
+		if (str_starts_with($key, ">="))
 		{
-			$key = mb_substr($key, 2);
+			$key = substr($key, 2);
 			$strOperation = ">=";
 			$strNOperation = ($strNegative == "Y" ? '<' : $strOperation);
 		}
-		elseif (mb_substr($key, 0, 1) == ">")
+		elseif (str_starts_with($key, ">"))
 		{
-			$key = mb_substr($key, 1);
+			$key = substr($key, 1);
 			$strOperation = ">";
 			$strNOperation = ($strNegative == "Y" ? '<=' : $strOperation);
 		}
-		elseif (mb_substr($key, 0, 2) == "<=")
+		elseif (str_starts_with($key, "<="))
 		{
-			$key = mb_substr($key, 2);
+			$key = substr($key, 2);
 			$strOperation = "<=";
 			$strNOperation = ($strNegative == "Y" ? '>' : $strOperation);
 		}
-		elseif (mb_substr($key, 0, 1) == "<")
+		elseif (str_starts_with($key, "<"))
 		{
-			$key = mb_substr($key, 1);
+			$key = substr($key, 1);
 			$strOperation = "<";
 			$strNOperation = ($strNegative == "Y" ? '>=' : $strOperation);
 		}
-		elseif (mb_substr($key, 0, 1) == "@")
+		elseif (str_starts_with($key, "@"))
 		{
-			$key = mb_substr($key, 1);
+			$key = substr($key, 1);
 			$strOperation = "IN";
 			$strNOperation = '';
 		}
-		elseif (mb_substr($key, 0, 1) == "~")
+		elseif (str_starts_with($key, "~"))
 		{
-			$key = mb_substr($key, 1);
+			$key = substr($key, 1);
 			$strOperation = "LIKE";
 			$strNOperation = ($strNegative == "Y" ? '!=%' : '=%');
 		}
-		elseif (mb_substr($key, 0, 1) == "%")
+		elseif (str_starts_with($key, "%"))
 		{
-			$key = mb_substr($key, 1);
+			$key = substr($key, 1);
 			$strOperation = "QUERY";
 			$strNOperation = '';
 		}

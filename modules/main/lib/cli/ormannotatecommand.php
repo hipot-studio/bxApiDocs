@@ -359,7 +359,7 @@ class OrmAnnotateCommand extends Command implements AnnotationInterface
 			foreach ($this->excludedFiles as $excludedFile)
 			{
 				$currentPath = str_replace('\\', '/', $item->getPathname());
-				if (mb_substr($currentPath, -mb_strlen($excludedFile)) === $excludedFile)
+				if (str_ends_with($currentPath, $excludedFile))
 				{
 					continue 2;
 				}
@@ -367,7 +367,7 @@ class OrmAnnotateCommand extends Command implements AnnotationInterface
 
 			/** @var $iterator \RecursiveDirectoryIterator */
 			/** @var $item \SplFileInfo */
-			if ($item->isFile() && $item->isReadable() && mb_substr($item->getFilename(), -4) == '.php')
+			if ($item->isFile() && $item->isReadable() && str_ends_with($item->getFilename(), '.php'))
 			{
 				$this->debug($output,'handle file: '.$item->getPathname());
 
@@ -400,7 +400,7 @@ class OrmAnnotateCommand extends Command implements AnnotationInterface
 		{
 			$debugMsg = $class;
 
-			if (is_subclass_of($class, DataManager::class) && mb_substr($class, -5) == 'Table')
+			if (is_subclass_of($class, DataManager::class) && str_ends_with($class, 'Table'))
 			{
 				if ((new \ReflectionClass($class))->isAbstract())
 				{

@@ -136,6 +136,11 @@ class ChatFactory
 		return GeneralChat::get();
 	}
 
+	public function getGeneralChannel(): ?ChannelChat
+	{
+		return GeneralChannel::get();
+	}
+
 	/**
 	 * @return Chat|Chat\PrivateChat|null
 	 */
@@ -188,6 +193,10 @@ class ChatFactory
 
 			case $entityType === Chat::ENTITY_TYPE_GENERAL:
 				$chat = new GeneralChat($params);
+				break;
+
+			case $entityType === Chat::ENTITY_TYPE_GENERAL_CHANNEL:
+				$chat = new GeneralChannel($params);
 				break;
 
 			case $type === Chat::IM_TYPE_OPEN_LINE:
@@ -503,6 +512,9 @@ class ChatFactory
 				break;
 			case Chat::ENTITY_TYPE_GENERAL:
 				$addResult = (new GeneralChat())->add($params);
+				break;
+			case Chat::ENTITY_TYPE_GENERAL_CHANNEL:
+				$addResult = (new GeneralChannel())->add($params);
 				break;
 			case Chat::ENTITY_TYPE_LIVECHAT:
 				$addResult = (new OpenLineLiveChat())->add($params);

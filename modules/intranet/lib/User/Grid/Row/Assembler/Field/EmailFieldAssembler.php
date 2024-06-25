@@ -6,7 +6,7 @@ use Bitrix\Main\Grid\Row\FieldAssembler;
 
 class EmailFieldAssembler extends FieldAssembler
 {
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): mixed
 	{
 		if ($this->getSettings()->isExcelMode())
 		{

@@ -131,7 +131,7 @@ class Manager
 				include_once $fileName;
 				if (isset($b24Languages) && is_array($b24Languages))
 				{
-					$list = \Bitrix\Main\Text\Encoding::convertEncoding($b24Languages, 'UTF-8', SITE_CHARSET);
+					$list = $b24Languages;
 					$found = !empty($list);
 				}
 			}

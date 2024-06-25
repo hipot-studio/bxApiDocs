@@ -7,7 +7,7 @@ use Bitrix\Main\Localization\Loc;
 
 class DesktopAppsField extends CustomUserFieldAssembler
 {
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): mixed
 	{
 		$apps = Util::getAppsInstallationConfig($value['ID']);
 

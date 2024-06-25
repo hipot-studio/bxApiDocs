@@ -203,7 +203,8 @@ class ProductRowSynchronizer implements LoggerAwareInterface
 					$dealBasketItem['PRODUCT_PROVIDER_CLASS'] = '\\'.CatalogProvider::class;
 				}
 
-				$basketItem = $basket->createItem('catalog', $dealBasketItem['PRODUCT_ID']);
+				$moduleId = $productId > 0 ? 'catalog' : '';
+				$basketItem = $basket->createItem($moduleId, $dealBasketItem['PRODUCT_ID']);
 				$syncResult->addNewBasketItem($rowId, $basketItem);
 			}
 

@@ -531,6 +531,7 @@ class EditorAdapter
 				CommentsHelper::compileFieldDescriptionForDetails(
 					$this->item->getEntityTypeId(),
 					$name,
+					isset($this->entityData['ID']) ? (int)$this->entityData['ID'] : 0,
 				)
 				+ $field
 			;

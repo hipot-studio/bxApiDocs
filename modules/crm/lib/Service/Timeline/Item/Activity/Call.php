@@ -720,7 +720,7 @@ class Call extends Activity
 		;
 
 		if (
-			!AIManager::isAiLicenceExceededAccepted() &&
+			!AIManager::isAILicenceAccepted() &&
 			!$this->getContext()->getUserPermissions()->isAdmin()
 		)
 		{
@@ -873,7 +873,7 @@ class Call extends Activity
 
 	private function isVoxImplant(?string $originId): bool
 	{
-		return isset($originId) && str_contains($originId, 'VI_');
+		return isset($originId) && VoxImplantManager::isVoxImplantOriginId($originId);
 	}
 
 	private function isTranscribed(array $input): bool

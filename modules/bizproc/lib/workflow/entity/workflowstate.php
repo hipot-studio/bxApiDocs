@@ -199,6 +199,7 @@ class WorkflowStateTable extends ORM\Data\DataManager
 		$id = $event->getParameter('primary')['ID'];
 
 		WorkflowUserTable::deleteByWorkflow($id);
+		WorkflowUserCommentTable::deleteByWorkflow($id);
 		WorkflowFilterTable::delete($id);
 	}
 }

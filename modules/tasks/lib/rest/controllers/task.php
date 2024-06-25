@@ -295,8 +295,12 @@ final class Task extends Base
 		}
 		catch (Exception $exception)
 		{
-			if ($errors = unserialize($exception->getMessage(), ['allowed_classes' => false]))
+			if (
+				$exception instanceof TasksException
+				&& $exception->isSerialized()
+			)
 			{
+				$errors = unserialize($exception->getMessage(), ['allowed_classes' => false]);
 				$error = $errors[0];
 				$this->addError(new Error($error['text'], $error['id']));
 			}
@@ -334,8 +338,12 @@ final class Task extends Base
 		}
 		catch (Exception $exception)
 		{
-			if ($errors = unserialize($exception->getMessage(), ['allowed_classes' => false]))
+			if (
+				$exception instanceof TasksException
+				&& $exception->isSerialized()
+			)
 			{
+				$errors = unserialize($exception->getMessage(), ['allowed_classes' => false]);
 				$error = $errors[0];
 				$this->addError(new Error($error['text'], $error['id']));
 			}
@@ -1389,7 +1397,7 @@ final class Task extends Base
 			'IMAGE_ID',
 			'OPENED',
 			'NUMBER_OF_MEMBERS',
-			'AVATAR_TYPE'
+			'AVATAR_TYPE',
 		];
 		$groupsData = SocialNetwork\Group::getData($groupIds, $select, $params);
 
@@ -1874,12 +1882,11 @@ final class Task extends Base
 		foreach ($filter as $fieldName => $fieldData)
 		{
 			preg_match('#(\w+)#', $fieldName, $m);
-			if (
-				array_key_exists($m[1], $dateFields)
-				&& is_string($fieldData)
-			)
+			if (array_key_exists($m[1], $dateFields) && $fieldData)
 			{
-				$filter[$fieldName] = DateTime::createFromTimestamp(strtotime($fieldData));
+				//compatibility..
+				$date = is_string($fieldData) ? strtotime($fieldData) : false;
+				$filter[$fieldName] = DateTime::createFromTimestamp($date);
 			}
 		}
 
@@ -1961,10 +1968,10 @@ final class Task extends Base
 			if (
 				isset($fields[$fieldName])
 				&& ($date = $fields[$fieldName])
-				&& is_string($date)
 			)
 			{
-				$timestamp = strtotime($date);
+				//compatibility..
+				$timestamp = is_string($date) ? strtotime($date) : false;
 				if ($timestamp !== false)
 				{
 					$timestamp += CTimeZone::GetOffset() - DateTime::createFromTimestamp($timestamp)->getSecondGmt();

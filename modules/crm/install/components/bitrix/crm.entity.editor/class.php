@@ -95,6 +95,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 		$availableFields = [];
 		$requiredFields = array();
 		$hasEmptyRequiredFields = false;
+		$hasBBCodeFields = false;
 		$htmlFieldNames = [];
 		$bbFieldNames = [];
 		$isUfAddressConverterEnabled = $this->isUfAddressConvertionEnabled();
@@ -114,6 +115,11 @@ class CCrmEntityEditorComponent extends UIFormComponent
 			if ($typeName === 'bb')
 			{
 				$bbFieldNames[] = $name;
+			}
+
+			if ($typeName === 'bbcode')
+			{
+				$hasBBCodeFields = true;
 			}
 
 			if ($name === 'LINK' && $typeName === 'multifield')
@@ -191,6 +197,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 			'available' => $availableFields,
 			'required' => $requiredFields,
 			'hasEmptyRequiredFields' => $hasEmptyRequiredFields,
+			'hasBBCodeFields' => $hasBBCodeFields,
 			'html' => $htmlFieldNames,
 			'bb' => $bbFieldNames,
 		];
@@ -605,7 +612,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 					$this->arResult['ATTRIBUTE_CONFIG']['LOCK_SCRIPT'] =
 						RestrictionManager::getAttributeConfigRestriction()->prepareInfoHelperScript();
 				}
-				unset($isPermitted, $isPhaseDependent);
+				unset($isPermitted, $isPhaseDependent, $isEntitySupported);
 			}
 		}
 		//endregion

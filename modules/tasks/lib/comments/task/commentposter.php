@@ -8,6 +8,7 @@ use Bitrix\Main\Text\StringHelper;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Tasks\Access;
 use Bitrix\Tasks\Comments\Internals\Comment;
+use Bitrix\Tasks\Flow\Internal\Entity\FlowEntity;
 use Bitrix\Tasks\Integration\CRM;
 use Bitrix\Tasks\Integration\Disk;
 use Bitrix\Tasks\Integration\Forum;
@@ -15,7 +16,7 @@ use Bitrix\Tasks\Integration\Mail;
 use Bitrix\Tasks\Integration\SocialNetwork;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Task\Status;
-use Bitrix\Tasks\Internals\TaskTable;
+use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\Util\Collection;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
@@ -427,6 +428,31 @@ class CommentPoster
 		}
 
 		return $addComments;
+	}
+
+	/**
+	 * @param TaskObject $task
+	 * @param FlowEntity $flowEntity
+	 * @return Comment|null
+	 */
+	private function prepareCommentOnTaskAddToFlowWithManualDistribution(TaskObject $task, FlowEntity $flowEntity): ?Comment
+	{
+		$messageKey = 'COMMENT_POSTER_COMMENT_TASK_ADD_TO_FLOW_WITH_MANUAL_DISTRIBUTION';
+		$replace = [
+			'#FLOW_NAME#' => $flowEntity->getName(),
+			'#RESPONSIBLE#' => $this->parseUserToLinked($task->getResponsibleId()),
+		];
+		$message = Loc::getMessage(
+			$messageKey,
+			$replace,
+		);
+
+		return new Comment(
+			$message,
+			$this->authorId,
+			Comment::TYPE_ADD_TO_FLOW_WITH_MANUAL_DISTRIBUTION,
+			[[$messageKey, $replace]],
+		);
 	}
 
 	/**
@@ -1060,6 +1086,32 @@ class CommentPoster
 	}
 
 	/**
+	 * Builds and posts comments on task add to flow if deferred post mode is off.
+	 *
+	 * @param TaskObject $task
+	 * @param FlowEntity $flowEntity
+	 */
+	public function postCommentOnTaskAddToFlowWithManualDistribution(TaskObject $task, FlowEntity $flowEntity): void
+	{
+		$comment = $this->prepareCommentOnTaskAddToFlowWithManualDistribution($task, $flowEntity);
+
+		if (!$comment)
+		{
+			return;
+		}
+
+		$this->addComments([$comment]);
+
+		if ($this->getDeferredPostMode())
+		{
+			return;
+		}
+
+		$this->postComments();
+		$this->clearComments();
+	}
+
+	/**
 	 * Builds and posts comments on task update if deferred post mode is off.
 	 *
 	 * @param array $oldFields
@@ -1209,6 +1261,7 @@ class CommentPoster
 			'TASK_APPROVE',
 			'TASK_DISAPPROVE',
 			'TASK_COMPLETE',
+			'TASK_CHANGE_RESPONSIBLE',
 		];
 		foreach ($replaces as $key)
 		{
@@ -1252,11 +1305,13 @@ class CommentPoster
 				case 'TASK_APPROVE':
 				case 'TASK_DISAPPROVE':
 				case 'TASK_COMPLETE':
+				case 'TASK_CHANGE_RESPONSIBLE':
 					$actionMap = [
 						'DEADLINE_CHANGE' => Access\ActionDictionary::ACTION_TASK_DEADLINE,
 						'TASK_APPROVE' => Access\ActionDictionary::ACTION_TASK_APPROVE,
 						'TASK_DISAPPROVE' => Access\ActionDictionary::ACTION_TASK_DISAPPROVE,
 						'TASK_COMPLETE' => Access\ActionDictionary::ACTION_TASK_COMPLETE,
+						'TASK_CHANGE_RESPONSIBLE' => Access\ActionDictionary::ACTION_TASK_CHANGE_RESPONSIBLE,
 					];
 					$replace = '';
 					if (isset($taskId) && Access\TaskAccessController::can($userId, $actionMap[$key], $taskId))
@@ -1528,6 +1583,8 @@ class CommentPoster
 		return match ($key)
 		{
 			'RESPONSIBLE_ID' => 'ASSIGNEE',
+			'START_DATE_PLAN' => 'START_DATE_PLAN',
+			'END_DATE_PLAN' => 'END_DATE_PLAN',
 			default => $key,
 		};
 	}

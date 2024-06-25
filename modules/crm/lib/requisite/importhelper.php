@@ -310,7 +310,8 @@ class ImportHelper
 				'PRESET_ID' => $presetId,
 				'NAME' => $presetName,
 				'SORT' => 500,
-				'ACTIVE' => 'Y'
+				'ACTIVE' => 'Y',
+				'ADDRESS_ONLY' => 'Y',
 			);
 			foreach (array_keys($fieldsInPreset) as $fieldName)
 			{
@@ -1432,8 +1433,8 @@ class ImportHelper
 												'CRM_RQ_IMP_HLPR_ERR_'.$entityTypeName.'_GENITIVE'
 											),
 											'#ID#' => $entityId,
-										).': '.$errMsg
-									),
+										)
+									) . ': ' . $errMsg,
 									self::ERR_UPDATE_REQUISITE
 								)
 							);
@@ -1665,8 +1666,8 @@ class ImportHelper
 																'CRM_RQ_IMP_HLPR_ERR_'.$entityTypeName.'_GENITIVE'
 															),
 															'#ID#' => $entityId,
-														).': '.$errMsg
-													),
+														)
+													) . ': ' . $errMsg,
 													self::ERR_UPDATE_BANK_DETAIL
 												)
 											);
@@ -1722,7 +1723,7 @@ class ImportHelper
 													),
 													'#ID#' => $entityId,
 												)
-											).': '.$errMsg,
+											) . ': ' . $errMsg,
 											self::ERR_CREATE_BANK_DETAIL
 										)
 									);
@@ -1780,7 +1781,7 @@ class ImportHelper
 									),
 									'#ID#' => $entityId,
 								)
-							).': '.$errMsg,
+							) . ': ' . $errMsg,
 							self::ERR_CREATE_REQUISITE
 						)
 					);
@@ -1855,7 +1856,7 @@ class ImportHelper
 											),
 											'#ID#' => $entityId,
 										)
-									).': '.$errMsg,
+									) . ': ' . $errMsg,
 									self::ERR_CREATE_BANK_DETAIL
 								)
 							);

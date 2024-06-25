@@ -10,6 +10,8 @@ use Bitrix\Main\SystemException;
 
 class BitrixCall extends Call
 {
+	protected $provider = parent::PROVIDER_BITRIX;
+
 	/**
 	 * @return void
 	 * @throws SystemException
@@ -75,7 +77,7 @@ class BitrixCall extends Call
 		];
 	}
 
-	public function inviteUsers(int $senderId, array $toUserIds, $isLegacyMobile, $video = false, $sendPush = true)
+	public function inviteUsers(int $senderId, array $toUserIds, $isLegacyMobile, $video = false, $sendPush = true): void
 	{
 		foreach ($toUserIds as $toUserId)
 		{
@@ -90,8 +92,8 @@ class BitrixCall extends Call
 		}
 	}
 
-	public function getMaxUsers()
+	public function getMaxUsers(): int
 	{
-		return static::getMaxCallServerParticipants();
+		return parent::getMaxCallServerParticipants();
 	}
 }

@@ -128,16 +128,26 @@ abstract class AbstractOperation
 			],
 		);
 
-		$result = new Result(static::TYPE_ID, $this->target, $this->userId, parentJobId: $this->parentJobId);
+		$result = new Result(
+			static::TYPE_ID,
+			$this->target,
+			$this->userId,
+			parentJobId: $this->parentJobId,
+			isManualLaunch: $this->isManualLaunch,
+		);
 
-		if (!AIManager::isAiLicenceExceededAccepted())
+		if (!AIManager::isAILicenceAccepted())
 		{
 			AIManager::logger()->error(
 				'{date}: {class}: Cant start operation {operationType} on {target} because the license agreement to use AI has not been accepted' . PHP_EOL,
 				['class' => static::class, 'target' => $this->target, 'operationType' => static::TYPE_ID],
 			);
 
-			return $result->addError(ErrorCode::getAINotAvailableError());
+			$result->addError(ErrorCode::getLicenseNotAcceptedError());
+
+			static::notifyAboutJobError($result, false);
+
+			return $result;
 		}
 
 		if (!AIManager::isAvailable())
@@ -147,7 +157,11 @@ abstract class AbstractOperation
 				['class' => static::class, 'target' => $this->target, 'operationType' => static::TYPE_ID],
 			);
 
-			return $result->addError(ErrorCode::getAINotAvailableError());
+			$result->addError(ErrorCode::getAINotAvailableError());
+
+			static::notifyAboutJobError($result, false);
+
+			return $result;
 		}
 
 		if (!AIManager::isEnabledInGlobalSettings())
@@ -157,9 +171,11 @@ abstract class AbstractOperation
 				['class' => static::class, 'target' => $this->target, 'operationType' => static::TYPE_ID],
 			);
 
-			static::notifyAboutJobError($result, false, false);
+			$result->addError(ErrorCode::getAIDisabledError(['sliderCode' => AIManager::AI_DISABLED_SLIDER_CODE]));
 
-			return $result->addError(ErrorCode::getAIDisabledError(['sliderCode' => AIManager::AI_DISABLED_SLIDER_CODE]));
+			static::notifyAboutJobError($result, false,);
+
+			return $result;
 		}
 
 		if (!static::isSuitableTarget($this->target))
@@ -169,9 +185,11 @@ abstract class AbstractOperation
 				['class' => static::class, 'target' => $this->target, 'operationType' => static::TYPE_ID],
 			);
 
-			static::notifyAboutJobError($result, false, false);
+			$result->addError(ErrorCode::getNotSuitableTargetError());
 
-			return $result->addError(ErrorCode::getNotSuitableTargetError());
+			static::notifyAboutJobError($result, false);
+
+			return $result;
 		}
 
 		$context = $this->getAIEngineContext();
@@ -197,13 +215,13 @@ abstract class AbstractOperation
 				],
 			);
 
-			static::notifyAboutJobError($result, false, false);
-
-			$customData = [
+			$result->addError(ErrorCode::getAIEngineNotFoundError([
 				'isAiMarketplaceAppsExist' => $this->isAiMarketplaceAppsExist(),
-			];
+			]));
 
-			return $result->addError(ErrorCode::getAIEngineNotFoundError($customData));
+			static::notifyAboutJobError($result, false);
+
+			return $result;
 		}
 
 		if (method_exists($engine, 'skipAgreement'))
@@ -211,9 +229,13 @@ abstract class AbstractOperation
 			$engine->skipAgreement();
 		}
 
-		$sliderCode = AIManager::getLimitSliderCode($engine);
-		if (!empty($sliderCode))
+		$limitsResult = AIManager::getLimitResult($engine);
+		if (!$limitsResult->isSuccess())
 		{
+			$result->addErrors($limitsResult->getErrors());
+
+			$errorData = $result->getErrorCollection()->getErrorByCode(ErrorCode::AI_ENGINE_LIMIT_EXCEEDED)?->getCustomData() ?? [];
+
 			AIManager::logger()->error(
 				'{date}: {class}: Cant start operation {operationType} on {target} because limit of requests to AI exceeded!'
 				. ' Category {engineCategory}, context {engineContext}, slider code "{sliderCode}"' . PHP_EOL,
@@ -223,15 +245,13 @@ abstract class AbstractOperation
 					'operationType' => static::TYPE_ID,
 					'engineCategory' => static::ENGINE_CATEGORY,
 					'engineContext' => $context,
-					'sliderCode' => $sliderCode,
+					'sliderCode' => $errorData['sliderCode'] ?? null,
 				],
 			);
 
-			static::notifyAboutJobError($result, false, false);
+			static::notifyAboutJobError($result, false);
 
-			return $result->addError(
-				ErrorCode::getAILimitOfRequestsExceededError(['sliderCode' => $sliderCode])
-			);
+			return $result;
 		}
 
 		$checkJobsResult = static::checkPreviousJobs($this->target, (int)$this->parentJobId);
@@ -243,7 +263,11 @@ abstract class AbstractOperation
 				['class' => static::class, 'target' => $this->target, 'operationType' => static::TYPE_ID, 'errors' => $checkJobsResult->getErrors()],
 			);
 
-			return $result->addErrors($checkJobsResult->getErrors());
+			$result->addErrors($checkJobsResult->getErrors());
+
+			static::notifyAboutJobError($result, false);
+
+			return $result;
 		}
 
 		$previousJob = $checkJobsResult->getData()['previousJob'] ?? null;
@@ -262,7 +286,11 @@ abstract class AbstractOperation
 				],
 			);
 
-			return $result->addErrors($aiPayloadResult->getErrors());
+			$result->addErrors($aiPayloadResult->getErrors());
+
+			static::notifyAboutJobError($result, false);
+
+			return $result;
 		}
 
 		$hash = null;
@@ -329,7 +357,7 @@ abstract class AbstractOperation
 
 			if (empty($error->getMessage()))
 			{
-				$error = ErrorCode::getAIEngineNotFoundError();
+				$error = new Error(ErrorCode::getAIEngineNotFoundError()->getMessage());
 			}
 
 			$result->addError($error);
@@ -397,11 +425,6 @@ abstract class AbstractOperation
 			return $result;
 		}
 
-		if (static::TYPE_ID === 1)
-		{
-			static::notifyTimelinesAboutActivityUpdate($this->target->getEntityId());
-		}
-
 		$result->setJobId($dbSaveResult->getId());
 
 		if ($result->isSuccess())
@@ -426,6 +449,12 @@ abstract class AbstractOperation
 				'result' => $result,
 			],
 		);
+
+		if (static::TYPE_ID === 1)
+		{
+			static::notifyTimelinesAboutActivityUpdate($this->target->getEntityId());
+			self::sendCallParsingAnalyticsEvent($result, self::extractActivityIdFromResult($result));
+		}
 
 		return $result;
 	}
@@ -543,7 +572,7 @@ abstract class AbstractOperation
 				],
 			);
 
-			$dummyResult->addError(ErrorCode::getAIEngineNotFoundError());
+			$dummyResult->addError(ErrorCode::getAIResultFoundError());
 
 			static::notifyAboutJobError($dummyResult);
 
@@ -904,8 +933,23 @@ abstract class AbstractOperation
 		return self::getTargetRealId(new ItemIdentifier($job->getEntityTypeId(), $job->getEntityId()), $job->getParentId());
 	}
 
-	final protected static function sendCallParsingAnalyticsEvent(int $activityId, string $status, bool $isManualLaunch): void
+	private static function extractActivityIdFromResult(Result $result): int
 	{
+		return self::getTargetRealId($result->getTarget(), $result->getParentJobId());
+	}
+
+	final protected static function sendCallParsingAnalyticsEvent(
+		Result $result,
+		int $activityId,
+		?int $totalScenarioDuration = null
+	): void
+	{
+		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
+		if (!$activity)
+		{
+			return;
+		}
+
 		$owner = Container::getInstance()->getActivityBroker()->getOwner($activityId);
 		if (!$owner)
 		{
@@ -913,11 +957,13 @@ abstract class AbstractOperation
 		}
 
 		(new CallParsingEvent())
-			->setIsManualLaunch($isManualLaunch)
+			->setIsManualLaunch($result->isManualLaunch())
 			->setActivityOwnerTypeId($owner->getEntityTypeId())
 			->setActivityId($activityId)
+			->setActivityDirection($activity['DIRECTION'])
+			->setTotalScenarioDuration($totalScenarioDuration)
 			->setElement(Dictionary::ELEMENT_COPILOT_BUTTON)
-			->setStatus($status)
+			->setStatus(CallParsingEvent::resolveStatusByJobResult($result))
 			->buildEvent()
 			->send()
 		;

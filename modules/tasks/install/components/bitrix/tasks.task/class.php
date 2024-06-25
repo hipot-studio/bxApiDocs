@@ -12,6 +12,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\AI;
 use Bitrix\Disk\Driver;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
@@ -27,6 +28,7 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\ParameterDictionary;
 use Bitrix\Main\Web\Json;
+use Bitrix\Main\Web\Uri;
 use Bitrix\Socialnetwork\Internals\Registry\FeaturePermRegistry;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
@@ -41,6 +43,11 @@ use Bitrix\Tasks\CheckList\Template\TemplateCheckListConverterHelper;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\Comments\Task\CommentPoster;
 use Bitrix\Tasks\Control\Conversion\Converter;
+use Bitrix\Tasks\Flow\Access\FlowAccessController;
+use Bitrix\Tasks\Flow\Access\FlowAction;
+use Bitrix\Tasks\Flow\Flow;
+use Bitrix\Tasks\Flow\Provider\Exception\FlowNotFoundException;
+use Bitrix\Tasks\Flow\Provider\FlowProvider;
 use Bitrix\Tasks\Integration;
 use Bitrix\Tasks\Integration\Forum\Task\Comment;
 use Bitrix\Tasks\Integration\Forum\Task\Topic;
@@ -49,6 +56,7 @@ use Bitrix\Tasks\Integration\SocialNetwork\Group;
 use Bitrix\Tasks\Internals\Counter\Collector\UserCollector;
 use Bitrix\Tasks\Internals\Counter\EffectiveTable;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
+use Bitrix\Tasks\Internals\Routes\RouteDictionary;
 use Bitrix\Tasks\Internals\Task\ElapsedTimeTable;
 use Bitrix\Tasks\Internals\Task\MemberTable;
 use Bitrix\Tasks\Internals\Task\Priority;
@@ -68,6 +76,7 @@ use Bitrix\Tasks\Kanban\StagesTable;
 use Bitrix\Tasks\Kanban\TaskStageTable;
 use Bitrix\Tasks\Manager;
 use Bitrix\Tasks\Manager\Task;
+use Bitrix\Tasks\Manager\Task\Project;
 use Bitrix\Tasks\Replication\Replicator\RegularTaskReplicator;
 use Bitrix\Tasks\Replication\Replicator\TemplateTaskReplicator;
 use Bitrix\Tasks\Scrum\Service\EpicService;
@@ -84,11 +93,13 @@ use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Socialnetwork\Helper\ServiceComment;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Component\Task\TasksTaskHitStateStructure;
+use Bitrix\Tasks\Component\Task\TasksFlowFormState;
 use Bitrix\Tasks\Component\Task\TasksTaskFormState;
 use Bitrix\Main\Engine\CurrentUser;
 
 Loc::loadMessages(__FILE__);
 
+require_once(__DIR__ . '/class/tasksflowformstate.php');
 require_once(__DIR__ . '/class/taskstaskformstate.php');
 require_once(__DIR__ . '/class/taskstaskhitstatestructure.php');
 
@@ -100,6 +111,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 	const DATA_SOURCE_TEMPLATE = 'TEMPLATE';
 	const DATA_SOURCE_TASK = 'TASK';
 
+	private ?Flow $flow = null;
 	protected $task = null;
 	protected $users2Get = [];
 	protected $groups2Get = [];
@@ -115,6 +127,8 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 	protected $hitState = null;
 
 	protected $errorCollection;
+
+	private bool $isFlowForm;
 
 	public function configureActions()
 	{
@@ -410,14 +424,21 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		return new Component('bitrix:tasks.task', '', $componentParameters);
 	}
 
-	public function setStateAction(array $state = [])
+	public function setStateAction(array $state = [], bool $isFlowForm = false)
 	{
 		if (!Loader::includeModule('tasks'))
 		{
 			return null;
 		}
 
-		TasksTaskFormState::set($state);
+		if ($isFlowForm)
+		{
+			TasksFlowFormState::set($state);
+		}
+		else
+		{
+			TasksTaskFormState::set($state);
+		}
 	}
 
 	public function moveStageAction($taskId, $stageId, $before = 0, $after = 0)
@@ -2568,11 +2589,29 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		$taskId = 0;
 		if ($isActionAdd)
 		{
+			$action = 'edit';
+
 			$taskId = $resultTaskId;
 			if ($this->request['STAY_AT_PAGE'])
 			{
 				$taskId = 0;
+			}
+		}
+
+		if (
+			$isActionAdd
+			&& !TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_EDIT, $resultTaskId)
+		)
+		{
+			if ($this->request['STAY_AT_PAGE'])
+			{
+				$taskId = 0;
 				$action = 'edit';
+			}
+			else
+			{
+				$taskId = $resultTaskId;
+				$action = 'view';
 			}
 		}
 
@@ -2612,7 +2651,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 
 		if (
 			!$additional
-			|| $additional['SAVE_AS_TEMPLATE'] !== 'Y'
+			|| ($additional['SAVE_AS_TEMPLATE'] ?? null) !== 'Y'
 		)
 		{
 			return;
@@ -2812,6 +2851,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			'FORUM_ID' => CTasksTools::getForumIdForIntranet(), // obsolete
 			'REPLICATE' => 'N',
 			'IS_REGULAR' => 'N',
+			'FLOW_ID' => 0,
 
 			'REQUIRE_RESULT' => $stateFlags['REQUIRE_RESULT'] ? 'Y' : 'N',
 			'TASK_PARAM_3' => $stateFlags['TASK_PARAM_3'] ? 'Y' : 'N',
@@ -2842,7 +2882,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 	 */
 	protected function getDataRequest()
 	{
-		$this->hitState->set($this->request->toArray(), 'INITIAL_TASK_DATA');
+		$this->setHitState();
 
 		$data = [];
 
@@ -2971,6 +3011,12 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			$data['SCENARIO'] = $scenario;
 		}
 
+		$flowId = $this->hitState->get('INITIAL_TASK_DATA.FLOW_ID');
+		if ($flowId)
+		{
+			$data['FLOW_ID'] = $flowId;
+		}
+
 		return ['DATA' => $data];
 	}
 
@@ -3027,11 +3073,9 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			}
 		}
 
-		$taskObject = new TaskObject(['ID' => $this->task->getId()]);
-		if (RegularTaskReplicator::isEnabled())
-		{
-			$data['DATA']['REGULAR']['REGULAR_PARAMS'] = $taskObject->getRegularFields()?->getRegularParameters();
-		}
+		$this->arResult['flowId'] = $data['DATA']['FLOW_ID'];
+
+
 
 		return $data;
 	}
@@ -3083,6 +3127,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			// copy from another task
 			elseif ((int)$this->request['COPY'] || (int)$this->request['_COPY'])
 			{
+				$this->setHitState();
 				$taskIdToCopy = (int)($this->request['COPY'] ?: $this->request['_COPY']);
 				$sourceData = $this->getCopiedTaskSourceData($taskIdToCopy);
 				$this->arResult['DATA']['CHECKLIST_CONVERTED'] =
@@ -3213,11 +3258,16 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			)
 		)
 		{
+
 			$data[$originatorKey]['ID'] = $this->userId;
-			$this->errors->addWarning(
-				'AUTO_CHANGE_ORIGINATOR',
-				Loc::getMessage('TASKS_TT_AUTO_CHANGE_ORIGINATOR')
-			);
+
+			if (!$this->isFlowForm)
+			{
+				$this->errors->addWarning(
+					'AUTO_CHANGE_ORIGINATOR',
+					Loc::getMessage('TASKS_TT_AUTO_CHANGE_ORIGINATOR')
+				);
+			}
 		}
 
 		return $data;
@@ -3229,10 +3279,14 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		if ($responsibleId > 0)
 		{
 			$data[Task\Responsible::getCode(true)] = [['ID' => $responsibleId]];
-			$this->errors->addWarning(
-				'AUTO_CHANGE_RESPONSIBLE',
-				Loc::getMessage('TASKS_TT_AUTO_CHANGE_ASSIGNEE')
-			);
+
+			if (!$this->isFlowForm)
+			{
+				$this->errors->addWarning(
+					'AUTO_CHANGE_RESPONSIBLE',
+					Loc::getMessage('TASKS_TT_AUTO_CHANGE_ASSIGNEE')
+				);
+			}
 		}
 
 		return $data;
@@ -3258,7 +3312,15 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		if ($groupId > 0)
 		{
 			$data[Task\Project::getCode(true)] = ['ID' => $groupId];
-			$this->errors->addWarning('AUTO_CHANGE_GROUP', Loc::getMessage('TASKS_TT_AUTO_CHANGE_GROUP'));
+
+			if (!$this->isFlowForm)
+			{
+				$this->errors->addWarning('AUTO_CHANGE_GROUP', Loc::getMessage('TASKS_TT_AUTO_CHANGE_GROUP'));
+			}
+			else
+			{
+				$data['GROUP_ID'] = $groupId;
+			}
 
 			return $data;
 		}
@@ -3271,10 +3333,14 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			{
 				$this->rememberGroup($parentTask['GROUP_ID']);
 				$data[Task\Project::getCode(true)] = ['ID' => $parentTask['GROUP_ID']];
-				$this->errors->addWarning(
-					'AUTO_CHANGE_PARENT_GROUP',
-					Loc::getMessage('TASKS_TT_AUTO_CHANGE_PARENT_GROUP')
-				);
+
+				if (!$this->isFlowForm)
+				{
+					$this->errors->addWarning(
+						'AUTO_CHANGE_PARENT_GROUP',
+						Loc::getMessage('TASKS_TT_AUTO_CHANGE_PARENT_GROUP')
+					);
+				}
 			}
 		}
 
@@ -3287,7 +3353,10 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		// todo: if we have not done any redirect after doing some actions, better re-check task accessibility here
 
 		//TasksTaskFormState::reset();
-		$this->arResult['COMPONENT_DATA']['STATE'] = static::getState();
+		$this->arResult['COMPONENT_DATA']['STATE'] = $this->isFlowForm
+			? static::getFlowState()
+			: static::getState()
+		;
 		$this->arResult['COMPONENT_DATA']['OPEN_TIME'] = (new DateTime())->getTimestamp();
 		$this->arResult['COMPONENT_DATA']['CALENDAR_EVENT_ID'] = $this->request->get('CALENDAR_EVENT_ID');
 		$this->arResult['COMPONENT_DATA']['CALENDAR_EVENT_DATA'] = $this->request->get('CALENDAR_EVENT_DATA');
@@ -3356,8 +3425,17 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		$this->arResult['CAN_SHOW_AI_CHECKLIST_BUTTON'] = (new Integration\AI\Restriction\Text())->isChecklistAvailable();
 		$this->arResult['CAN_USE_AI_CHECKLIST_BUTTON'] = Integration\AI\Settings::isTextAvailable();
 
-		// http://jabber.bx/view.php?id=185636
-		// $this->shiftDeadline();
+		$this->arResult['DATA']['FLOW'] = [];
+
+		if ($this->isFlowForm)
+		{
+			$this->flowDeadline();
+		}
+		else
+		{
+			// http://jabber.bx/view.php?id=185636
+			// $this->shiftDeadline();
+		}
 		$this->fillWithIMData();
 		// obtaining additional data: calendar settings, user fields
 		$this->getDataAux();
@@ -3367,6 +3445,11 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		$this->collectRelatedTasks();
 		$this->collectProjects();
 		$this->collectLogItems();
+
+		if ($this->isFlowForm)
+		{
+			$this->collectFlowData();
+		}
 	}
 
 	/**
@@ -3380,12 +3463,18 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 	 * @throws SystemException
 	 * @access private
 	 */
-	private function cloneDataFromTemplate($itemId)
+	private function cloneDataFromTemplate($itemId): array
 	{
 		$data = [];
 
 		$template = new Template($itemId, $this->userId);
-		$result = $template->transform(new \Bitrix\Tasks\Item\Converter\Task\Template\ToTask());
+
+		$skipAccessCheck = $this->isFlowForm && $this->getFlow()?->getTemplateId() === $itemId;
+
+		$result = $template
+			->skipAccessCheck($skipAccessCheck)
+			->transform(new \Bitrix\Tasks\Item\Converter\Task\Template\ToTask());
+
 		if ($result->isSuccess())
 		{
 			$data = Task::convertFromItem($result->getInstance());
@@ -3400,9 +3489,18 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 					$responsibles[] = ['ID' => $userId];
 				}
 			}
+
+			if ($this->isFlowForm && count($responsibles) === 1)
+			{
+				if (!($responsibles[0]['ID'] ?? null))
+				{
+					$responsibles[0]['ID'] = $this->userId;
+				}
+			}
+
 			$data['SE_RESPONSIBLE'] = $responsibles;
 
-			$checkListItems = TemplateCheckListFacade::getItemsForEntity($itemId, $this->userId);
+			$checkListItems = TemplateCheckListFacade::getItemsForEntity($itemId, $this->userId, $skipAccessCheck);
 			if ($checkListItems)
 			{
 				foreach (array_keys($checkListItems) as $id)
@@ -3757,9 +3855,65 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		);
 		$this->arResult['DATA']['GROUP'] = Group::getData($this->groups2Get, ['IMAGE_ID', 'AVATAR_TYPE']);
 		$this->arResult['DATA']['USER'] = User::getData($this->users2Get);
+		$this->arResult['DATA']['FLOW'] = $this->getFlowData($this->arResult['DATA']['TASK']['FLOW_ID'] ?? 0);
 
 		$this->getCurrentUserData();
 		$this->checkIsNetworkTask();
+	}
+
+	protected function getFlowData(int $flowId): ?array
+	{
+		if ($flowId <= 0)
+		{
+			return null;
+		}
+
+		if (!FlowAccessController::can($this->userId, FlowAction::READ, $flowId))
+		{
+			return null;
+		}
+
+		$flow = \Bitrix\Tasks\Flow\FlowRegistry::getInstance()->get($flowId);
+
+		if (!$flow)
+		{
+			return null;
+		}
+
+		$tasksPath = str_replace('#user_id#', $this->userId, RouteDictionary::PATH_TO_USER_TASKS_LIST);
+
+		$flowUri = new Uri($tasksPath . 'flow/');
+
+		$demoSuffix = \Bitrix\Tasks\Flow\FlowFeature::isFeatureEnabledByTrial() ? 'Y' : 'N';
+
+		$flowUri->addParams([
+			'apply_filter' => 'Y',
+			'ID_numsel' => 'exact',
+			'ID_from' => $flow->getId(),
+			'ta_cat' => 'flows',
+			'ta_sec' => 'tasks',
+			'ta_sub' => \Bitrix\Tasks\Helper\Analytics::SUB_SECTION['task_card'],
+			'ta_el' => \Bitrix\Tasks\Helper\Analytics::ELEMENT['title_click'],
+			'p1' => 'isDemo_' . $demoSuffix,
+		]);
+
+		$responsibleId = (int) ($this->arResult['DATA']['TASK']['RESPONSIBLE_ID'] ?? null);
+
+		$showAhaStartFlowTask = (
+			$responsibleId === $this->userId
+			&& (\CUserOptions::getOption(
+				'ui-tour',
+				'view_date_task_start_' . $this->userId,
+				null
+			) === null)
+		);
+
+		return [
+			'NAME' => Main\Text\Emoji::decode($flow->getName()),
+			'ID' => $flow->getId(),
+			'URL' => $flowUri->getUri(),
+			'SHOW_AHA_START_FLOW_TASK' => $showAhaStartFlowTask,
+		];
 	}
 
 	protected function getCurrentUserData()
@@ -3830,11 +3984,51 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 
 		if (Type::isIterable($data))
 		{
+			$seProject = null;
+
+			if (
+				$this->isFlowForm
+				&& !empty($data['SE_PROJECT'])
+			)
+			{
+				$seProject = $data['SE_PROJECT'];
+			}
+
 			Task::extendData($data, $this->arResult['DATA']);
+
+			if (
+				$this->isFlowForm
+				&& $seProject
+				&& isset($this->arResult['DATA']['GROUP'])
+				&& is_array($this->arResult['DATA']['GROUP'])
+			)
+			{
+				$data['SE_PROJECT'] = $seProject;
+				Project::extendData($data, $this->arResult['DATA']['GROUP']);
+			}
+
+			if (
+				$this->isFlowForm
+				&& !empty($data['SE_PROJECT'])
+				&& !$this->isUserCanViewProject($this->userId, $data['SE_PROJECT']['ID'])
+			)
+			{
+				$data['SE_PROJECT']['NAME'] = Loc::getMessage('TASKS_TASK_FLOW_SECRET_PROJECT_LABEL');
+			}
 
 			// left for compatibility
 			$data[Task::SE_PREFIX . 'PARENT'] = $data[Task\ParentTask::getCode(true)] ?? null;
 		}
+	}
+
+	private function isUserCanViewProject(int $userId, int $groupId): bool
+	{
+		$groupPermissions = \Bitrix\Socialnetwork\Helper\Workgroup::getPermissions([
+			'userId' => $userId,
+			'groupId' => $groupId,
+		]);
+
+		return (bool) $groupPermissions['UserCanViewGroup'];
 	}
 
 	protected function doPreAction()
@@ -3842,6 +4036,53 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		parent::doPreAction();
 
 		$this->arResult['COMPONENT_DATA']['BACKURL'] = $this->getBackUrl();
+		$this->prepareCopilotParams();
+
+		$flowId = (int) $this->request['FLOW_ID'];
+
+		$this->arResult['flowId'] = $flowId;
+		$this->isFlowForm = (bool)$flowId;
+		$this->arResult['isFlowForm'] = $this->isFlowForm;
+		// this data will be passed into the get parameters for saving
+		$this->arResult['immutable'] = [];
+	}
+
+	protected function prepareCopilotParams(): void
+	{
+		$isCopilotEnabled = $this->isCopilotEnabled();
+		$isCopilotEnabledBySettings = $this->isCopilotEnabledBySettings();
+
+		$this->arResult['IS_QUOTE_COPILOT_ENABLED'] = $isCopilotEnabled && $isCopilotEnabledBySettings;
+		$this->arResult['IS_COPILOT_READONLY_ENABLED'] = $isCopilotEnabled;
+		$this->arResult['IS_COPILOT_READONLY_ENABLED_BY_SETTINGS'] = $isCopilotEnabledBySettings;
+
+		$this->arResult['PATH_TO_USER_ADD_TASK'] = \Bitrix\Tasks\Slider\Path\TaskPathMaker::getPath([
+			'task_id' => 0,
+			'action' => 'edit',
+			'user_id' => $this->userId,
+		]);
+	}
+
+	protected function isCopilotEnabled(): bool
+	{
+		if (!Loader::includeModule('ai'))
+		{
+			return false;
+		}
+
+		$engine = AI\Engine::getByCategory(AI\Engine::CATEGORIES['text'], AI\Context::getFake());
+
+		return !is_null($engine);
+	}
+
+	protected function isCopilotEnabledBySettings(): bool
+	{
+		if (!Loader::includeModule('tasks'))
+		{
+			return false;
+		}
+
+		return Integration\AI\Settings::isTextAvailable();
 	}
 
 	protected function doPostAction()
@@ -4187,6 +4428,11 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		return TasksTaskFormState::get();
 	}
 
+	public static function getFlowState(): array
+	{
+		return TasksFlowFormState::get();
+	}
+
 	/**
 	 * @param int $taskId
 	 * @param array $data
@@ -4274,7 +4520,13 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 	{
 		return [
 			'setState',
+			'setFlowState',
 		];
+	}
+
+	public static function setFlowState(array $state = [])
+	{
+		TasksFlowFormState::set($state);
 	}
 
 	public static function setState(array $state = [])
@@ -4364,21 +4616,27 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			new WorkTimeService($this->userId)
 		);
 
+		$navParams = \CDBResult::getNavParams($params['COMMENTS_IN_EVENT'] ?? null);
 		$this->arResult['DATA']['TASK']['DEADLINE'] = $service->getClosestWorkTime(static::DEADLINE_OFFSET_IN_DAYS);
+	}
+
+	private function flowDeadline(): void
+	{
+		$this->arResult['DATA']['TASK']['DISPLAY_DEADLINE'] = Loc::getMessage('TASKS_TASK_FLOW_DEADLINE_LABEL');
 	}
 
 	private function fillWithIMData(): void
 	{
-		$request = $this->getRequest();
+		$request = Main\Context::getCurrent()->getRequest();
 		$chatId = (int)($request['IM_CHAT_ID'] ?? null);
 		$messageId = (int)($request['IM_MESSAGE_ID'] ?? null);
 		if ($chatId > 0)
 		{
-			$this->arResult['DATA']['TASK']['IM_CHAT_ID'] = $chatId;
+			$this->arResult['immutable']['IM_CHAT_ID'] = $chatId;
 		}
 		if ($messageId > 0)
 		{
-			$this->arResult['DATA']['TASK']['IM_MESSAGE_ID'] = $messageId;
+			$this->arResult['immutable']['IM_MESSAGE_ID'] = $messageId;
 		}
 	}
 
@@ -4390,5 +4648,36 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 	private function hasTaskDataSource(): bool
 	{
 		return !is_null($this->getDataSource());
+	}
+
+	private function collectFlowData(): void
+	{
+		$this->arResult['DATA']['FLOW'] = $this->getFlow()?->toArray();
+	}
+
+	private function getFlow(): ?Flow
+	{
+		if (null !== $this->flow)
+		{
+			return $this->flow;
+		}
+
+		$flowProvider = new FlowProvider();
+
+		try
+		{
+			$this->flow = $flowProvider->getFlow($this->arResult['flowId']);
+		}
+		catch (FlowNotFoundException)
+		{
+			$this->flow = null;
+		}
+
+		return $this->flow;
+	}
+
+	private function setHitState(): void
+	{
+		$this->hitState?->set($this->request->toArray(), 'INITIAL_TASK_DATA');
 	}
 }

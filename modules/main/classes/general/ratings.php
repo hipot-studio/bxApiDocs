@@ -184,7 +184,7 @@ class CAllRatings
 		if ($sOrder == '')
 			$sOrder = "R.ID DESC";
 
-		$strSqlOrder = " ORDER BY ".TrimEx($sOrder,",");
+		$strSqlOrder = " ORDER BY ".trim($sOrder, ", ");
 
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
 		$strSql = "
@@ -504,7 +504,13 @@ class CAllRatings
 		$user_id = (int)$user_id;
 
 		if ($user_id == 0)
+		{
+			if (!($USER instanceof CUser))
+			{
+				return $arResult;
+			}
 			$user_id = $USER->GetID();
+		}
 
 		if (is_array($entityId))
 		{
@@ -1451,7 +1457,7 @@ class CAllRatings
 		if ($sOrder == '')
 			$sOrder = "RW.ID DESC";
 
-		$strSqlOrder = " ORDER BY ".TrimEx($sOrder,",");
+		$strSqlOrder = " ORDER BY ".trim($sOrder, ", ");
 
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
 		$strSql = "

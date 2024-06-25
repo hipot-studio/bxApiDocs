@@ -12,6 +12,9 @@ use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config;
 use Bitrix\Main\EventResult;
+use Bitrix\Main\IO\File;
+use Bitrix\Main\Loader;
+use Bitrix\Main\SiteTable;
 use Bitrix\Main\Security\Sign\BadSignatureException;
 use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\SystemException;
@@ -169,7 +172,7 @@ class Tracking
 			$uri .= "/tools/track_mail_$opCode.php";
 		}
 
-		$uri = $uri . (strpos($uri, "?") === false ? "?" : "&");
+		$uri = $uri . (!str_contains($uri, "?") ? "?" : "&");
 		$uri .= 'tag=' . urlencode($tag);
 
 		return $uri;

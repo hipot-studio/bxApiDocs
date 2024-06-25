@@ -14,7 +14,7 @@ class Sign extends Tool
 
 	public function getName(): string
 	{
-		return Loc::getMessage('INTRANET_SETTINGS_TOOLS_SIGN_MAIN') ?? '';
+		return Loc::getMessage('INTRANET_SETTINGS_TOOLS_SIGN_MAIN_MSGVER_1') ?? '';
 	}
 
 	public function isAvailable(): bool

@@ -2,22 +2,30 @@
 
 namespace Bitrix\Tasks\Integration\UI\EntitySelector;
 
+use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\TemplateAccessController;
+use Bitrix\Tasks\Slider\Path\PathMaker;
+use Bitrix\Tasks\Slider\Path\TemplatePathMaker;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
 use Bitrix\UI\EntitySelector\RecentItem;
 use Bitrix\UI\EntitySelector\SearchQuery;
+use CTaskTemplates;
 
 class TaskTemplateProvider extends BaseProvider
 {
 	private const ENTITY_ID = 'task-template';
 	private const LIMIT = 30;
+
 	private int $templateId;
+	private string $context;
 
 	public function __construct(array $options = [])
 	{
 		parent::__construct();
-		$this->templateId = $options['templateId'] ?? null;
+		$this->templateId = $options['templateId'] ?? 0;
 	}
 
 	public function isAvailable(): bool
@@ -61,6 +69,23 @@ class TaskTemplateProvider extends BaseProvider
 				}
 			}
 		}
+
+		$this->context = (string)$dialog->getContext();
+		$dialog->setFooter('BX.Tasks.EntitySelector.Footer', $this->getFooterOptions());
+	}
+
+	private function getFooterOptions(): array
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		$templateAddUrl = (new TemplatePathMaker(0, PathMaker::EDIT_ACTION, $userId))
+			->addQueryParam('context', $this->context)
+			->makeEntityPath();
+
+		return [
+			'templateAddUrl' => $templateAddUrl,
+			'canCreateTemplate' => TemplateAccessController::can($userId, ActionDictionary::ACTION_TEMPLATE_CREATE),
+			'context' => $this->context,
+		];
 	}
 
 	private function fillWithRecentItems(Dialog $dialog): void
@@ -114,7 +139,7 @@ class TaskTemplateProvider extends BaseProvider
 
 	private function getTemplateItems(array $options = []): array
 	{
-		return $this->makeTemplateItems($this->getTemplates($options), $options);
+		return $this->makeTemplateItems($this->getTemplates($options));
 	}
 
 	private function getTemplates(array $options = []): array
@@ -135,7 +160,7 @@ class TaskTemplateProvider extends BaseProvider
 		];
 		$select = ['ID', 'TITLE'];
 
-		$templatesResult = \CTaskTemplates::GetList($order, $filter, $navigation, $parameters, $select);
+		$templatesResult = CTaskTemplates::GetList($order, $filter, $navigation, $parameters, $select);
 		while ($template = $templatesResult->Fetch())
 		{
 			$templates[$template['ID']] = $template['TITLE'];
@@ -179,12 +204,12 @@ class TaskTemplateProvider extends BaseProvider
 		return $filter;
 	}
 
-	private function makeTemplateItems(array $templates, array $options = []): array
+	private function makeTemplateItems(array $templates): array
 	{
-		return self::makeItems($templates, array_merge($this->getOptions(), $options));
+		return self::makeItems($templates);
 	}
 
-	private static function makeItems(array $templates, array $options = []): array
+	private static function makeItems(array $templates): array
 	{
 		$result = [];
 		foreach ($templates as $id => $title)

@@ -138,6 +138,12 @@ class UserPermissions
 		return $this->getCrmPermissions()->havePerm('CONFIG', static::PERMISSION_CONFIG, static::OPERATION_UPDATE);
 	}
 
+	/**
+	 * ATTENTION! Currently, user can't configure this permission.
+	 * And because of hack in \CCrmPerms::HavePerm, this method returns TRUE for everyone.
+	 *
+	 * @return bool
+	 */
 	public function canReadConfig(): bool
 	{
 		return $this->getCrmPermissions()->havePerm('CONFIG', static::PERMISSION_CONFIG, static::OPERATION_READ);
@@ -779,7 +785,11 @@ class UserPermissions
 
 		if (mb_strpos($permissionEntityType, \CCrmOwnerType::DynamicTypePrefixName) === 0)
 		{
-			[$prefix, $entityTypeId, $categoryPostfix] = explode('_', $permissionEntityType);
+			// $sections[0] - prefix
+			// $sections[1] - entityTypeId
+			// $sections[2] - categoryPostfix
+			$sections = explode('_', $permissionEntityType);
+			$entityTypeId = $sections[1] ?? 0;
 
 			return \CCrmOwnerType::ResolveName((int)$entityTypeId);
 		}

@@ -6,6 +6,7 @@ use Bitrix\Crm\Binding\DealContactTable;
 use Bitrix\Crm\Binding\EntityBinding;
 use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\Category\DealCategoryChangeError;
+use Bitrix\Crm\Comparer\ComparerBase;
 use Bitrix\Crm\CustomerType;
 use Bitrix\Crm\Entity\Traits\EntityFieldsNormalizer;
 use Bitrix\Crm\Entity\Traits\UserFieldPreparer;
@@ -1511,7 +1512,7 @@ class CAllCrmDeal
 			$sSql = $DB->TopSql($sSql, $nPageTop);
 		}
 
-		$obRes = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$obRes = $DB->Query($sSql);
 		$obRes->SetUserFields($USER_FIELD_MANAGER->GetUserFields(self::$sUFEntityID));
 		return $obRes;
 	}
@@ -2023,7 +2024,7 @@ class CAllCrmDeal
 				$sUpdate = $DB->PrepareUpdate('b_crm_deal', array('TITLE' => $arFields['TITLE']));
 				if($sUpdate <> '')
 				{
-					$DB->Query("UPDATE b_crm_deal SET {$sUpdate} WHERE ID = {$ID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+					$DB->Query("UPDATE b_crm_deal SET {$sUpdate} WHERE ID = {$ID}");
 				};
 			}
 
@@ -2285,7 +2286,7 @@ class CAllCrmDeal
 
 					if ($deadline)
 					{
-						\Bitrix\Crm\Activity\Entity\ToDo::createWithDefaultDescription(
+						\Bitrix\Crm\Activity\Entity\ToDo::createWithDefaultSubjectAndDescription(
 							\CCrmOwnerType::Deal,
 							$ID,
 							$deadline
@@ -3185,7 +3186,7 @@ class CAllCrmDeal
 
 			if ($sUpdate <> '')
 			{
-				$DB->Query("UPDATE b_crm_deal SET {$sUpdate} WHERE ID = {$ID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+				$DB->Query("UPDATE b_crm_deal SET {$sUpdate} WHERE ID = {$ID}");
 				$bResult = true;
 			}
 
@@ -3599,6 +3600,16 @@ class CAllCrmDeal
 				$scope = \Bitrix\Crm\Service\Container::getInstance()->getContext()->getScope();
 				$filler = new ValueFiller(CCrmOwnerType::Deal, $ID, $scope);
 				$filler->fill($options['CURRENT_FIELDS'], $arFields);
+
+				if (
+					isset($arRow['STAGE_ID'])
+					&& isset($currentFields['STAGE_ID'])
+					&& ComparerBase::isMovedToFinalStage(CCrmOwnerType::Deal, $arRow['STAGE_ID'], $currentFields['STAGE_ID'])
+				)
+				{
+					$item = Container::getInstance()->getFactory(CCrmOwnerType::Deal)->getItem($ID);
+					(new Bitrix\Crm\Service\Operation\Action\DeleteEntityBadges())->process($item);
+				}
 			}
 
 			if ($bResult && !$syncStageSemantics)
@@ -3714,7 +3725,7 @@ class CAllCrmDeal
 			\Bitrix\Crm\Recycling\DealController::getInstance()->moveToBin($ID, array('FIELDS' => $arFields));
 		}
 
-		$dbRes = $DB->Query("DELETE FROM b_crm_deal WHERE ID = {$ID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$dbRes = $DB->Query("DELETE FROM b_crm_deal WHERE ID = {$ID}");
 		if (is_object($dbRes) && $dbRes->AffectedRowsCount() > 0)
 		{
 			if(defined('BX_COMP_MANAGED_CACHE'))
@@ -5381,17 +5392,13 @@ class CAllCrmDeal
 		if($ownerTypeID === CCrmOwnerType::Contact)
 		{
 			$DB->Query(
-				"UPDATE {$tableName} SET CONTACT_ID = {$newID} WHERE CONTACT_ID = {$oldID}",
-				false,
-				'File: '.__FILE__.'<br>Line: '.__LINE__
+				"UPDATE {$tableName} SET CONTACT_ID = {$newID} WHERE CONTACT_ID = {$oldID}"
 			);
 		}
 		elseif($ownerTypeID === CCrmOwnerType::Company)
 		{
 			$DB->Query(
-				"UPDATE {$tableName} SET COMPANY_ID = {$newID} WHERE COMPANY_ID = {$oldID}",
-				false,
-				'File: '.__FILE__.'<br>Line: '.__LINE__
+				"UPDATE {$tableName} SET COMPANY_ID = {$newID} WHERE COMPANY_ID = {$oldID}"
 			);
 		}
 	}
@@ -5692,19 +5699,19 @@ class CAllCrmDeal
 	public static function ProcessContactDeletion($contactID)
 	{
 		global $DB;
-		$DB->Query("UPDATE b_crm_deal SET CONTACT_ID = NULL WHERE CONTACT_ID = {$contactID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$DB->Query("UPDATE b_crm_deal SET CONTACT_ID = NULL WHERE CONTACT_ID = {$contactID}");
 
 		\Bitrix\Crm\Binding\DealContactTable::unbindAllDeals($contactID);
 	}
 	public static function ProcessCompanyDeletion($companyID)
 	{
 		global $DB;
-		$DB->Query("UPDATE b_crm_deal SET COMPANY_ID = NULL WHERE COMPANY_ID = {$companyID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$DB->Query("UPDATE b_crm_deal SET COMPANY_ID = NULL WHERE COMPANY_ID = {$companyID}");
 	}
 	public static function ProcessLeadDeletion($leadID)
 	{
 		global $DB;
-		$DB->Query("UPDATE b_crm_deal SET LEAD_ID = NULL WHERE LEAD_ID = {$leadID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$DB->Query("UPDATE b_crm_deal SET LEAD_ID = NULL WHERE LEAD_ID = {$leadID}");
 	}
 	/**
 	 * @deprecated

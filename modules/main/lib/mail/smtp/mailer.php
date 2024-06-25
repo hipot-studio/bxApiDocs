@@ -45,7 +45,6 @@ class Mailer extends PHPMailer
 				'password' => $context->getSmtp()->getPassword(),
 				'from' => $context->getSmtp()->getFrom(),
 				'debug' => $configuration['debug'] ?? false,
-				'force_from' => $configuration['force_from'] ?? false,
 				'logFile' => $configuration['log_file'] ?? null,
 				'isOauth' => $context->getSmtp()->getIsOauth(),
 			];

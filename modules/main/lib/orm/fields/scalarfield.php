@@ -277,6 +277,6 @@ abstract class ScalarField extends Field implements IStorable, ITypeHintable
 	 */
 	protected function getNullableTypeHint(string $type): string
 	{
-		return $this->is_nullable ? '?' . $type : $type;
+		return $this->is_nullable ? 'null|' . $type : $type;
 	}
 }

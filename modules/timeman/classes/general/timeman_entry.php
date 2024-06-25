@@ -188,6 +188,8 @@ class CAllTimeManEntry
 			unset($arFields['TIME_LEAKS_ADD']);
 		}
 
+		$arFields['DURATION'] = self::correctDuration($arFields['DURATION'] ?? 0);
+
 		unset($arFields['ID']);
 		unset($arFields['TIMESTAMP_X']);
 
@@ -917,5 +919,17 @@ class CAllTimeManEntry
 		}
 
 		return $res;
+	}
+
+	private static function correctDuration(int $duration): int
+	{
+		$secondsPerDay = 86400;
+
+		if ($duration < 0)
+		{
+			return $duration + $secondsPerDay;
+		}
+
+		return $duration;
 	}
 }

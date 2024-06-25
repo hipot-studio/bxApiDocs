@@ -223,7 +223,7 @@ class Spotlight
 		$refClass = new \ReflectionClass(__CLASS__);
 		foreach ($refClass->getConstants() as $name => $value)
 		{
-			if (mb_substr($name, 0, 9) === "USER_TYPE")
+			if (str_starts_with($name, "USER_TYPE"))
 			{
 				$types[] = $value;
 			}

@@ -218,7 +218,9 @@ class CrmStoreDocumentListComponent extends CBitrixComponent implements Controll
 			->setOffset($pageNavigation->getOffset())
 			->setLimit($pageNavigation->getLimit())
 			->setFilter($listFilter)
-			->setSelect($select);
+			->setSelect($select)
+			->setDistinct()
+		;
 
 		foreach ($this->getListRuntime() as $field)
 		{

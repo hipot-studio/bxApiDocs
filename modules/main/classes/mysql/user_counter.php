@@ -527,7 +527,7 @@ class CUserCounter extends CAllUserCounter
 		$connection = \Bitrix\Main\Application::getConnection();
 
 		$isLiveFeed = (
-			mb_strpos($code, self::LIVEFEED_CODE) === 0
+			str_starts_with($code, self::LIVEFEED_CODE)
 			&& $code !== self::LIVEFEED_CODE
 		);
 

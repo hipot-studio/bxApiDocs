@@ -312,6 +312,8 @@ class ApacheSupersetSettingComponent
 			return null;
 		}
 
+		$proxyIntegrator->refreshDomainConnection();
+
 		if ($key)
 		{
 			$key->delete();

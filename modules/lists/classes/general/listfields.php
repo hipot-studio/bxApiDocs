@@ -212,7 +212,7 @@ class CListFieldList
 			SELECT * FROM b_lists_field
 			WHERE IBLOCK_ID = ".$this->iblock_id."
 			ORDER BY SORT ASC
-		", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		");
 		$dbFields = array();
 		while($arField = $rsFields->Fetch())
 			$dbFields[$arField["FIELD_ID"]] = $arField;
@@ -264,7 +264,7 @@ class CListFieldList
 					DELETE FROM b_lists_field
 					WHERE IBLOCK_ID = ".$this->iblock_id."
 					AND FIELD_ID = '".$DB->ForSQL($FIELD_ID)."'
-				", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				");
 			}
 		}
 		else//or from module metadata
@@ -283,7 +283,7 @@ class CListFieldList
 						DELETE FROM b_lists_field
 						WHERE IBLOCK_ID = ".$this->iblock_id."
 						AND FIELD_ID = '".$DB->ForSQL($FIELD_ID)."'
-					", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+					");
 				}
 			}
 		}
@@ -338,7 +338,7 @@ class CListFieldList
 		$DB->Query("
 			DELETE FROM b_lists_field
 			WHERE IBLOCK_ID = ".$iblock_id."
-		", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		");
 
 		$rsOptions = CUserOptions::GetList(array("ID" => "ASC"), array(
 			"CATEGORY" => "form",

@@ -79,12 +79,6 @@ class CLDAP
 
 		global $APPLICATION;
 
-		if($this->arFields["CONVERT_UTF8"] == "Y")
-		{
-			$login = $APPLICATION->ConvertCharset($login, SITE_CHARSET, "utf-8");
-			$password = $APPLICATION->ConvertCharset($password, SITE_CHARSET, "utf-8");
-		}
-
 		if(mb_strpos($password, "\0") !== false || $password == '')
 			return false;
 
@@ -166,21 +160,12 @@ class CLDAP
 
 	public function WorkAttr($values)
 	{
-		global $APPLICATION;
-
 		if(is_array($values) && $values['count']==1)
 		{
-			if($this->arFields["CONVERT_UTF8"]=="Y" && mb_strtolower(SITE_CHARSET) != "utf-8")
-				return $APPLICATION->ConvertCharset($values[0], "utf-8", SITE_CHARSET);
-
 			return $values[0];
 		}
 
 		unset($values['count']);
-
-		if($this->arFields["CONVERT_UTF8"]=="Y" && mb_strtolower(SITE_CHARSET) != "utf-8")
-			foreach($values as $key=>$val)
-				$values[$key] = $APPLICATION->ConvertCharset($val, "utf-8", SITE_CHARSET);
 
 		return $values;
 	}
@@ -196,19 +181,11 @@ class CLDAP
 		$info = false;
 		$i=0;
 
-		if($this->arFields["CONVERT_UTF8"] == "Y")
-			$str = $APPLICATION->ConvertCharset($str, SITE_CHARSET, "utf-8");
-
 		foreach($arBaseDNs as $BaseDN)
 		{
-			global $APPLICATION;
-
 			$BaseDN = trim($BaseDN);
 			if($BaseDN == "")
 				continue;
-
-			if($this->arFields["CONVERT_UTF8"]=="Y")
-				$BaseDN = $APPLICATION->ConvertCharset($BaseDN, SITE_CHARSET, "utf-8");
 
 			$defaultMaxPageSizeAD = 1000;
 			$pageSize = isset($this->arFields['MAX_PAGE_SIZE']) && intval($this->arFields['MAX_PAGE_SIZE'] > 0) ? intval($this->arFields['MAX_PAGE_SIZE']) : $defaultMaxPageSizeAD;
@@ -279,10 +256,7 @@ class CLDAP
 							}
 							if(!is_set($info[$i], 'dn'))
 							{
-								if($this->arFields["CONVERT_UTF8"]=="Y")
-									$info[$i]['dn'] = $APPLICATION->ConvertCharset(ldap_get_dn($this->conn, $entry), "utf-8", SITE_CHARSET);
-								else
-									$info[$i]['dn'] = ldap_get_dn($this->conn, $entry);
+								$info[$i]['dn'] = ldap_get_dn($this->conn, $entry);
 							}
 							$i++;
 

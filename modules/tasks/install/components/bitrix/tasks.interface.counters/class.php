@@ -251,6 +251,7 @@ class TasksInterfaceCountersComponent extends \CBitrixComponent
 			CounterDictionary::COUNTER_PROJECTS_TOTAL_EXPIRED,
 			CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED,
 			CounterDictionary::COUNTER_SONET_TOTAL_EXPIRED,
+			CounterDictionary::COUNTER_FLOW_TOTAL_EXPIRED,
 		]))
 		{
 			return Counter\Template\CounterStyle::STYLE_RED;
@@ -266,6 +267,7 @@ class TasksInterfaceCountersComponent extends \CBitrixComponent
 			CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS,
 			CounterDictionary::COUNTER_SONET_TOTAL_COMMENTS,
 			CounterDictionary::COUNTER_SCRUM_TOTAL_COMMENTS,
+			CounterDictionary::COUNTER_FLOW_TOTAL_COMMENTS,
 		]))
 		{
 			return Counter\Template\CounterStyle::STYLE_GREEN;
@@ -316,6 +318,9 @@ class TasksInterfaceCountersComponent extends \CBitrixComponent
 			// scrum's list
 			CounterDictionary::COUNTER_SCRUM_TOTAL_COMMENTS => 'NEW_COMMENTS',
 			CounterDictionary::COUNTER_SCRUM_FOREIGN_COMMENTS => 'PROJECT_NEW_COMMENTS',
+			// flow
+			CounterDictionary::COUNTER_FLOW_TOTAL_COMMENTS => Counter\Type::TYPE_NEW_COMMENTS,
+			CounterDictionary::COUNTER_FLOW_TOTAL_EXPIRED => Counter\Type::TYPE_EXPIRED,
 		];
 
 		return (array_key_exists($counter, $map) ? (string)$map[$counter] : '');

@@ -17,6 +17,29 @@ class Limit extends Bitrix24Restriction
 	public const DEFAULT_LIMIT = 100;
 	public const OPTION_LIMIT_KEY = '_tasks_restrict_limit_b';
 
+	public static function getLimitLock(string $code): string
+	{
+		\Bitrix\Main\UI\Extension::load(['ui.info-helper']);
+
+		$onLockClick = "
+			BX.Runtime.loadExtension('ui.info-helper').then(({ FeaturePromotersRegistry }) => {
+				if (FeaturePromotersRegistry)
+				{
+					FeaturePromotersRegistry.getPromoter({ code: '$code', bindElement: this }).show();
+				}
+				else
+				{
+					BX.UI.InfoHelper.show('$code', { isLimit: true, limitAnalyticsLabels: { module: 'tasks' } });
+				}
+			});
+		";
+		$lockStyle = 'margin-right: 10px; align-self: center; cursor: pointer;';
+
+		return <<<HTML
+<div class="tariff-lock" onclick="$onLockClick" style="$lockStyle"></div>
+HTML;
+	}
+
 	/**
 	 * Checks if limit exceeded
 	 *

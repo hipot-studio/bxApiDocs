@@ -5,13 +5,12 @@ namespace Bitrix\TasksMobile;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\MobileApp\Mobile;
+use Bitrix\Tasks\Flow\FlowFeature;
 
 final class Settings
 {
-	public const BETA_API_VERSION = 52;
 	public const IS_BETA_AVAILABLE = 'isBetaAvailable';
 	public const IS_BETA_ACTIVE = 'isBetaActive';
-	public const IS_NEW_CHECKLIST_ACTIVE = 'isNewChecklistActive';
 
 	protected int $userId;
 
@@ -36,13 +35,18 @@ final class Settings
 		$this->userId = $userId;
 	}
 
+	public function clientHasApiVersion(int $apiVersion): bool
+	{
+		return Mobile::getInstance()::getApiVersion() >= $apiVersion;
+	}
+
 	public function isBetaAvailable(): bool
 	{
 		return (
-			Mobile::getInstance()::getApiVersion() >= Settings::BETA_API_VERSION
-			&& (
-				Mobile::getInstance()::$isDev
-				|| Option::get('tasksmobile', Settings::IS_BETA_AVAILABLE, 'N', '-') === 'Y'
+			Mobile::getInstance()::$isDev
+			|| (
+				$this->clientHasApiVersion(54)
+				&& Option::get('tasksmobile', Settings::IS_BETA_AVAILABLE, 'Y', '-') === 'Y'
 			)
 		);
 	}
@@ -67,19 +71,9 @@ final class Settings
 		\CUserOptions::SetOption('tasksmobile', Settings::IS_BETA_ACTIVE, false, false, $this->userId);
 	}
 
-	public function isNewChecklistActive(): bool
+	public function isTaskFlowAvailable(): bool
 	{
-		return \CUserOptions::GetOption('tasksmobile', Settings::IS_NEW_CHECKLIST_ACTIVE, false, $this->userId);
-	}
-
-	public function activateNewChecklist(): void
-	{
-		\CUserOptions::SetOption('tasksmobile', Settings::IS_NEW_CHECKLIST_ACTIVE, true, false, $this->userId);
-	}
-
-	public function deactivateNewChecklist(): void
-	{
-		\CUserOptions::SetOption('tasksmobile', Settings::IS_NEW_CHECKLIST_ACTIVE, false, false, $this->userId);
+		return FlowFeature::isOn() && $this->clientHasApiVersion(54);
 	}
 
 	public function getDashboardSelectedView(int $projectId = 0): string

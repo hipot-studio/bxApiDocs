@@ -80,13 +80,18 @@ class Task extends Base
 		];
 	}
 
-	public function doAction(int $taskId, array $taskRequest): ?bool
+	public function doAction(int $taskId, ?array $taskRequest = null): ?bool
 	{
 		$currentUserId = $this->getCurrentUser()->getId();
 
 		$taskService = new Bizproc\Api\Service\TaskService(
 			new Bizproc\Api\Service\TaskAccessService($currentUserId)
 		);
+
+		if ($taskRequest === null)
+		{
+			$taskRequest = $this->request->getPostList()->toArray() + $this->request->getFileList()->toArray();
+		}
 
 		$request = new Bizproc\Api\Request\TaskService\DoTaskRequest(
 			taskId: $taskId,

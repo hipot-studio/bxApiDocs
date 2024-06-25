@@ -240,7 +240,10 @@ class DeleteService
 
 	protected function isOwnMessage(): bool
 	{
-		return $this->getContext()->getUserId() === $this->message->getAuthorId();
+		return
+			$this->getContext()->getUserId() === $this->message->getAuthorId()
+			&& !$this->message->isSystem()
+		;
 	}
 
 	private function deleteSoft(): Result
@@ -771,6 +774,6 @@ class DeleteService
 		$this->message->setContext($context);
 		$this->chat->setContext($context);
 
-		return $this;
+		return $this->defaultSetContext($context);
 	}
 }

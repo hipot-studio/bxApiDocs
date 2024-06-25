@@ -1918,7 +1918,6 @@ class CAllMailMessage
 			}
 			else
 			{
-				self::logEmptyHtml($message_id, $initialHtmlLen, $params);
 				self::addDefferedDownload($mailboxId, $message_id);
 			}
 
@@ -1985,28 +1984,6 @@ class CAllMailMessage
 		}
 
 		return $message_id;
-	}
-
-	private static function logEmptyHtml($messageId, $initialHtmlLen, $params): void
-	{
-		if (isset($params['log_parts']))
-		{
-			if (is_array($params['log_parts']))
-			{
-				$logParts = count($params['log_parts']);
-			}
-			else
-			{
-				$logParts = -2;
-			}
-		}
-		else
-		{
-			$logParts = -1;
-		}
-		addMessage2Log(
-			sprintf('MAIL_EMPTY_BODY id: %s initalLen: %s parts: %s', $messageId, $initialHtmlLen, $logParts),
-			'mail');
 	}
 
 	/**
@@ -3166,7 +3143,7 @@ class CMailFilter
 				"	".$DB->DateToCharFunction("MF.TIMESTAMP_X")."	as TIMESTAMP_X "
 				).
 				"	".
-				"FROM b_mail_mailbox MB ".($arFilter["EMPTY"]=="Y"?"LEFT":"INNER")." JOIN b_mail_filter MF ON MB.ID=MF.MAILBOX_ID ";
+				"FROM b_mail_mailbox MB ".(isset($arFilter["EMPTY"]) && $arFilter["EMPTY"] === "Y"?"LEFT":"INNER")." JOIN b_mail_filter MF ON MB.ID=MF.MAILBOX_ID ";
 
 		if(!is_array($arFilter))
 			$arFilter = Array();

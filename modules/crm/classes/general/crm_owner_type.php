@@ -234,6 +234,11 @@ class CCrmOwnerType
 	{
 		if (static::isPossibleSuspendedDynamicTypeId($typeId))
 		{
+			if ($typeId >= self::UnlimitedTypeStart)
+			{
+				return $typeId - 1;
+			}
+
 			$typeId -= (static::SuspendedDynamicTypeEnd - static::SuspendedDynamicTypeStart);
 		}
 
@@ -361,6 +366,10 @@ class CCrmOwnerType
 			case CCrmOwnerTypeAbbr::SuspendedSmartInvoice:
 			case self::SuspendedSmartInvoiceName:
 				return self::SuspendedSmartInvoice;
+
+			case CCrmOwnerTypeAbbr::BankDetail:
+			case self::BankDetailName:
+				return self::BankDetail;
 
 			case CCrmOwnerTypeAbbr::SmartDocument:
 			case self::SmartDocumentName:
@@ -3589,11 +3598,6 @@ class CCrmOwnerType
 	{
 		return [self::SmartInvoice, self::SmartDocument, self::SmartB2eDocument];
 	}
-
-	public static function isUnlimitedDynamicTypeEnabled(): bool
-	{
-		return Bitrix\Main\Config\Option::get('crm', 'dynamic_type_unlimited', 'N') === 'Y';
-	}
 }
 
 class CCrmOwnerTypeAbbr
@@ -3613,6 +3617,7 @@ class CCrmOwnerTypeAbbr
 	public const OrderShipment = 'OS';
 	public const OrderPayment = 'OP';
 	public const SmartInvoice = 'SI';
+	public const BankDetail = 'BD';
 	public const SmartDocument = 'DO';
 	public const SmartB2eDocument = 'SBD';
 

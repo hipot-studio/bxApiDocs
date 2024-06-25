@@ -38,7 +38,7 @@ class CrmQuotes extends CrmBase
 			'entityType' => 'quotes',
 			'entityId' => $data['ID'],
 			'name' => $data['ID'] . ' - '.htmlspecialcharsbx((str_replace([';', ','], ' ', $data['TITLE']))),
-			'desc' => $clientTitle
+			'desc' => htmlspecialcharsbx($clientTitle),
 		];
 
 		if (

@@ -914,7 +914,11 @@ class CCrmLeadDetailsComponent
 				'type' => 'boolean',
 				'editable' => true
 			),
-			Crm\Entity\CommentsHelper::compileFieldDescriptionForDetails(\CCrmOwnerType::Lead, 'COMMENTS'),
+			Crm\Entity\CommentsHelper::compileFieldDescriptionForDetails(
+				\CCrmOwnerType::Lead,
+				'COMMENTS',
+				$this->entityID,
+			),
 			EditorAdapter::getProductRowSummaryField(
 				Loc::getMessage('CRM_LEAD_FIELD_PRODUCTS'),
 				'PRODUCT_ROW_SUMMARY'

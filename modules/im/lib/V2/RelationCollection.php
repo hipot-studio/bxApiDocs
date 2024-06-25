@@ -15,7 +15,7 @@ use Bitrix\Main\UserTable;
  */
 class RelationCollection extends Collection
 {
-	public const COMMON_FIELDS = ['ID', 'MESSAGE_TYPE', 'CHAT_ID', 'USER_ID', 'START_ID', 'LAST_FILE_ID', 'LAST_ID', 'UNREAD_ID', 'NOTIFY_BLOCK', 'MANAGER'];
+	public const COMMON_FIELDS = ['ID', 'MESSAGE_TYPE', 'CHAT_ID', 'USER_ID', 'START_ID', 'LAST_FILE_ID', 'LAST_ID', 'UNREAD_ID', 'NOTIFY_BLOCK', 'MANAGER', 'REASON'];
 
 	protected static array $startIdStaticCache = [];
 

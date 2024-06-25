@@ -48,9 +48,11 @@ class Manager
 		{
 			if ($evenResult->getType() == \Bitrix\Main\EventResult::SUCCESS)
 			{
+				/** @var \Bitrix\BIConnector\Service $service */
 				$service = $evenResult->getParameters();
 				if ($service)
 				{
+					$this->serviceId = $service::getServiceId();
 					return $service;
 				}
 			}

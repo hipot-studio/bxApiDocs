@@ -29,11 +29,26 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Rest\AppTable;
+use Bitrix\Main\ArgumentException;
 
 class ConfigurableRestApp extends Activity
 {
 	private ?LayoutDto $layoutDto = null;
 	private ?int $restAppId = null;
+
+	public static function isModelValid(\Bitrix\Crm\Service\Timeline\Item\Model $model): bool
+	{
+		try
+		{
+			$layout = Json::decode($model->getAssociatedEntityModel()?->get('PROVIDER_DATA'));
+
+			return !empty($layout);
+		}
+		catch (ArgumentException)
+		{
+			return false;
+		}
+	}
 
 	protected function getActivityTypeId(): string
 	{
@@ -281,7 +296,15 @@ class ConfigurableRestApp extends Activity
 	{
 		if (!$this->layoutDto)
 		{
-			$layout = Json::decode($this->getAssociatedEntityModel()->get('PROVIDER_DATA'));
+			try
+			{
+				$layout = Json::decode($this->getAssociatedEntityModel()->get('PROVIDER_DATA'));
+			}
+			catch (ArgumentException)
+			{
+				$layout = [];
+			}
+
 			$this->layoutDto = new LayoutDto((array)$layout);
 		}
 

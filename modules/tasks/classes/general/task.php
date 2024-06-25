@@ -208,10 +208,14 @@ class CTasks
 		{
 			$handler->skipBP();
 		}
-		$withImmediatelyCrmEvents = $arParams['IMMEDIATELY_CRM_EVENTS'] ?? false;
-		if ($withImmediatelyCrmEvents)
+
+		if (array_key_exists('SKIP_TIMEZONE', $arParams))
 		{
-			$handler->withImmediatelyCrmEvents();
+			$dateFields = $arParams['SKIP_TIMEZONE'] ?? [];
+			if (in_array('DEADLINE', $dateFields, true))
+			{
+				$handler->skipDeadlineTimeZone();
+			}
 		}
 
 		try
@@ -337,12 +341,6 @@ class CTasks
 			$handler->withSkipPush();
 		}
 
-		$withImmediatelyCrmEvents = $arParams['IMMEDIATELY_CRM_EVENTS'] ?? false;
-		if ($withImmediatelyCrmEvents)
-		{
-			$handler->withImmediatelyCrmEvents();
-		}
-
 		try
 		{
 			$handler->update($taskId, $arFields);
@@ -463,12 +461,6 @@ class CTasks
 		)
 		{
 			$handler->withSkipExchangeSync();
-		}
-
-		$withImmediatelyCrmEvents = $parameters['IMMEDIATELY_CRM_EVENTS'] ?? false;
-		if ($withImmediatelyCrmEvents)
-		{
-			$handler->withImmediatelyCrmEvents();
 		}
 
 		return $handler->delete((int)$taskId);
@@ -2649,8 +2641,6 @@ class CTasks
 
 	/**
 	 * This method is deprecated. Use CTaskItem class instead.
-	 *
-	 * @deprecated
 	 */
 	public static function GetByID($ID, $bCheckPermissions = true, $arParams = [])
 	{
@@ -2693,7 +2683,7 @@ class CTasks
 		// no further access verification required
 		$arFilter["CHECK_PERMISSIONS"] = "N";
 
-		$select = ['*', 'UF_*'];
+		$select = ['*', 'UF_*', 'FLOW_ID'];
 		if (array_key_exists('select', $arParams))
 		{
 			$select = $arParams['select'];
@@ -2855,7 +2845,7 @@ class CTasks
 			// bottleneck
 			$strSql = "SELECT DISTINCT(T.GROUP_ID) FROM b_tasks T WHERE T.GROUP_ID IS NOT NULL";
 
-			$rsGroups = $DB->Query($strSql, false, "File: " . __FILE__ . "<br>Line: " . __LINE__);
+			$rsGroups = $DB->Query($strSql);
 			$ALLOWED_GROUPS[$userId] = $arGroupsWithTasks = [];
 			while ($arGroup = $rsGroups->Fetch())
 			{
@@ -3382,6 +3372,10 @@ class CTasks
 					'N' => Loc::getMessage('TASKS_FIELDS_N'),
 				],
 				'default' => 'N',
+			],
+			'FLOW_ID' => [
+				'type' => 'integer',
+				'default' => 0,
 			],
 		];
 
@@ -3950,7 +3944,7 @@ class CTasks
 					$fieldKeyData = static::parseFieldKey($name, $key);
 
 					$field = Query::expr()->upper($key);
-					$val = '%' . ToUpper($val) . '%';
+					$val = '%' . mb_strtoupper($val) . '%';
 
 					$runtimeOptions['FILTERS'][$key] = Query::filter()->where($field, $fieldKeyData['OPERATOR'], $val);
 				}
@@ -4907,7 +4901,7 @@ class CTasks
 			GROUP BY T.PARENT_ID
 		";
 
-		$res = $DB->Query($strSql, false, "File: " . __FILE__ . "<br>Line: " . __LINE__);
+		$res = $DB->Query($strSql);
 
 		return $res;
 	}
@@ -5537,12 +5531,7 @@ class CTasks
 		{
 			$templateData = [];
 		}
-		$templateData['REPLICATE_PARAMS'] = $arParams;
-
-		$result = Replicator\Task\FromTemplate::getNextTime($templateData, $agentTime);
-		$rData = $result->getData();
-
-		return $rData['TIME'] == '' ? false : $rData['TIME'];
+		return (new RegularTemplateTaskReplicator())->getNextTimeByTemplateId((int)$templateData['ID']);
 	}
 
 	public static function CanGivenUserDelete($userId, $taskCreatedBy, $taskGroupId,
@@ -5715,7 +5704,7 @@ class CTasks
 						TL.TASK_ID
 				";
 
-				$rsUpdatesCount = $DB->Query($strSql, false, "File: " . __FILE__ . "<br>Line: " . __LINE__);
+				$rsUpdatesCount = $DB->Query($strSql);
 				while ($arUpdate = $rsUpdatesCount->Fetch())
 				{
 					$arUpdatesCount[$arUpdate["TASK_ID"]] = $arUpdate["CNT"];
@@ -5747,7 +5736,7 @@ class CTasks
 				WHERE
 					TF.TASK_ID IN (" . implode(",", $arTasksIDs) . ")
 			";
-			$rsFilesCount = $DB->Query($strSql, false, "File: " . __FILE__ . "<br>Line: " . __LINE__);
+			$rsFilesCount = $DB->Query($strSql);
 			while ($arFile = $rsFilesCount->Fetch())
 			{
 				$arFilesCount[$arFile["TASK_ID"]] = $arFile["CNT"];
@@ -5876,7 +5865,7 @@ class CTasks
 			WHERE GROUP_ID = $groupId
 			";
 
-		$result = $DB->Query($strSql, false, 'File: ' . __FILE__ . '<br>Line: ' . __LINE__);
+		$result = $DB->Query($strSql);
 		if ($result === false)
 		{
 			$APPLICATION->ThrowException('EA_SQL_ERROR_OCCURED');
@@ -6055,7 +6044,7 @@ class CTasks
 			. $USER_ID
 			. ")
 		";
-		$result = $DB->Query($strSql, false, "File: " . __FILE__ . "<br>Line: " . __LINE__);
+		$result = $DB->Query($strSql);
 		while ($arResult = $result->Fetch())
 		{
 			$CACHE_MANAGER->ClearByTag("tasks_user_" . $arResult["USER_ID"]);
@@ -6514,6 +6503,7 @@ class CTasks
 			'SCENARIO_NAME' => [1, 1, 0, 1, 0],
 			'IS_REGULAR' => [1, 1, 0, 1, 0],
 			'REGULAR_PARAMS' => [1, 1, 0, 1, 0],
+			'FLOW_ID' => [1, 1, 0, 0, 0],
 		];
 	}
 

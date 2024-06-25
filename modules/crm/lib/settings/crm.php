@@ -15,10 +15,12 @@ class Crm
 	private const OPTION_MODULE = 'crm';
 	private const OPTION_NAME = 'WAS_INITED';
 
-	private const UNIVERSAL_ACTIVITY_OPTION_NAME = 'UNIVERSAL_ACTIVITY_ENABLED';
 	private const DOCUMENT_SIGNING_OPTION_NAME = 'DOCUMENTS_SIGNING_ENABLED';
 	private const LF_GENERATION_OPTION_NAME = 'LIVE_FEED_RECORDS_GENERATION_ENABLED';
-	private const TIMELINE_TODO_CALENDAR_SYNC_OPTION_NAME = 'TIMELINE_TODO_CALENDAR_SYNC_ENABLED';
+	private const WHATSAPP_SCENARIO_OPTION_NAME = 'WHATSAPP_SCENARIO_ENABLED';
+	private const AUTOMATED_SOLUTION_LIST_OPTION_NAME = 'AUTOMATED_SOLUTION_LIST_ENABLED';
+	private const TIMELINE_TODO_USE_V2_OPTION_NAME = 'TIMELINE_TODO_USE_V2_ENABLED';
+	private const WHATSAPP_GOTOCHAT_OPTION_NAME = 'WHATSAPP_GOTOCHAT_ENABLED';
 
 	public static function wasInitiated(): bool
 	{
@@ -173,21 +175,98 @@ class Crm
 		\Bitrix\Main\Config\Option::set(self::OPTION_MODULE, self::LF_GENERATION_OPTION_NAME, $isEnabled);
 	}
 
-	public static function isTimelineToDoCalendarSyncEnabled(): bool
+	/**
+	 * @deprecated Do not use, will be removed soon
+	 */
+	public static function isTimelineToDoUseV2Enabled(): bool
 	{
-		return (bool)\Bitrix\Main\Config\Option::get(
-			self::OPTION_MODULE,
-			self::TIMELINE_TODO_CALENDAR_SYNC_OPTION_NAME,
-			false
-		);
+		return true;
 	}
 
-	public static function setTimelineToDoCalendarSyncEnabled(bool $isEnabled): void
+	/**
+	 * @deprecated Do not use, will be removed soon
+	 */
+	public static function setTimelineToDoUseV2Enabled(bool $value): void
 	{
 		\Bitrix\Main\Config\Option::set(
 			self::OPTION_MODULE,
-			self::TIMELINE_TODO_CALENDAR_SYNC_OPTION_NAME,
+			self::TIMELINE_TODO_USE_V2_OPTION_NAME,
+			$value
+		);
+	}
+
+	/**
+	 * @deprecated Do not use, will be removed soon
+	 */
+	public static function isWhatsAppScenarioEnabled(): bool
+	{
+		return true;
+	}
+
+	/**
+	 * @deprecated Do not use, will be removed soon
+	 */
+	public static function setWhatsAppScenarioEnabled(bool $isEnabled): void
+	{
+		\Bitrix\Main\Config\Option::set(
+			self::OPTION_MODULE,
+			self::WHATSAPP_SCENARIO_OPTION_NAME,
 			$isEnabled
 		);
+	}
+
+	/**
+	 * @deprecated Do not use, will be removed soon
+	 */
+	public static function isAutomatedSolutionListEnabled(): bool
+	{
+		return true;
+	}
+
+	/**
+	 * @deprecated Do not use, will be removed soon
+	 */
+	public static function setAutomatedSolutionListEnabled(bool $isEnabled): void
+	{
+		\Bitrix\Main\Config\Option::set(
+			self::OPTION_MODULE,
+			self::AUTOMATED_SOLUTION_LIST_OPTION_NAME,
+			$isEnabled
+		);
+	}
+
+	/**
+	 * @deprecated Do not use, will be removed soon
+	 */
+	public static function isWhatsAppGoToChatEnabled(): bool
+	{
+		return true;
+	}
+
+	/**
+	 * @deprecated Do not use, will be removed soon
+	 */
+	public static function setWhatsAppGoToChatEnabled(bool $value): void
+	{
+		\Bitrix\Main\Config\Option::set(
+			self::OPTION_MODULE,
+			self::WHATSAPP_GOTOCHAT_OPTION_NAME,
+			$value
+		);
+	}
+
+	public static function isBoxOrEtalon(): bool
+	{
+		return self::isBox() || self::isEtalon();
+	}
+
+	public static function isBox(): bool
+	{
+		return !Loader::includeModule('bitrix24');
+	}
+
+	public static function isEtalon(): bool
+	{
+		return Loader::includeModule('bitrix24') && \CBitrix24::isEtalon();
 	}
 }

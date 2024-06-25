@@ -39,7 +39,7 @@ class ThemePicker
 		self::BEHAVIOUR_RETURN,
 	];
 
-	public const DEFAULT_THEME_ID = 'light:video-jupiter';
+	public const DEFAULT_THEME_ID = 'light:video-orion';
 
 	private static $instance = null;
 	private static $config = null;
@@ -788,18 +788,24 @@ class ThemePicker
 
 	public function getInitialDefaultThemeId(): string
 	{
+		$eastReleaseDate = \DateTime::createFromFormat('d.m.Y H:i', '15.05.2024 10:00', new \DateTimeZone('Europe/Moscow'));
 		if (in_array($this->getZoneId(), ['ru', 'kz', 'by']))
 		{
-			return 'light:video-jupiter';
+			if (time() > $eastReleaseDate->getTimestamp())
+			{
+				return 'light:video-orion'; // New Default East Theme
+			}
+
+			return 'light:video-jupiter'; // Old Default East Theme
 		}
 
-		$westernReleaseDate = \DateTime::createFromFormat('d.m.Y H:i', '29.11.2023 10:00', new \DateTimeZone('Europe/Moscow'));
+		$westernReleaseDate = \DateTime::createFromFormat('d.m.Y H:i', '30.05.2024 10:00', new \DateTimeZone('Europe/Moscow'));
 		if (time() > $westernReleaseDate->getTimestamp())
 		{
-			return 'light:orbital-symphony';
+			return 'light:contrast-horizon'; // New Default West Theme
 		}
 
-		return 'light:milky-way';
+		return 'light:orbital-symphony'; // Old Default West Theme
 	}
 
 	public function setDefaultTheme($themeId, $currentUserId = 0): bool
@@ -1097,7 +1103,7 @@ class ThemePicker
 			}
 		}
 
-		sortByColumn($themes, array("sort" => SORT_ASC));
+		sortByColumn($themes, array("new" => SORT_DESC, "sort" => SORT_ASC));
 	}
 
 	private function getConfig()

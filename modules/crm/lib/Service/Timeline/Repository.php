@@ -80,6 +80,7 @@ class Repository
 					'RESULT_MARK',
 					'ORIGIN_ID',
 					'LAST_UPDATED',
+					'START_TIME',
 					'END_TIME',
 					'STORAGE_TYPE_ID',
 					'STORAGE_ELEMENT_IDS',

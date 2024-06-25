@@ -148,7 +148,7 @@ trait ActivityTrait
 		{
 			if ($hasOnlyIncomingActivities)
 			{
-				$result = \Bitrix\Crm\Activity\Entity\ToDo::createWithDefaultDescription(
+				$result = \Bitrix\Crm\Activity\Entity\ToDo::createWithDefaultSubjectAndDescription(
 					$ownerTypeId,
 					$ownerId,
 					$deadline

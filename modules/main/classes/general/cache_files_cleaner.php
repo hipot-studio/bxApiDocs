@@ -145,7 +145,7 @@ class CFileCacheCleaner
 		{
 			return 1;//like an very old file
 		}
-		elseif(mb_substr($FileName, -4) == ".php")
+		elseif(str_ends_with($FileName, ".php"))
 		{
 			$fd = fopen($FileName, "rb");
 			if($fd)
@@ -156,14 +156,14 @@ class CFileCacheCleaner
 					return doubleval($match[1]);
 			}
 		}
-		elseif(mb_substr($FileName, -5) == ".html")
+		elseif(str_ends_with($FileName, ".html"))
 		{
 			$fd = fopen($FileName, "rb");
 			if($fd)
 			{
 				$header = fread($fd, 26);
 				fclose($fd);
-				if(mb_substr($header, 0, 2) == "BX")
+				if(str_starts_with($header, "BX"))
 					return doubleval(mb_substr($header, 14, 12));
 			}
 		}

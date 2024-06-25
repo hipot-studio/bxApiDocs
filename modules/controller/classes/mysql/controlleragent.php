@@ -4,65 +4,70 @@ class CControllerAgent
 {
 	public static function CleanUp()
 	{
-		global $DB;
-		$DB->Query("DELETE FROM b_controller_log WHERE TIMESTAMP_X < DATE_ADD(now(), INTERVAL -14 DAY)");
-		$DB->Query("DELETE FROM b_controller_task WHERE STATUS<>'N' AND DATE_EXECUTE IS NOT NULL AND DATE_EXECUTE < DATE_ADD(now(), INTERVAL -14 DAY)");
-		$DB->Query("DELETE FROM b_controller_command WHERE DATE_INSERT < DATE_ADD(now(), INTERVAL -14 DAY)");
-		return "CControllerAgent::CleanUp();";
+		$connection = \Bitrix\Main\Application::getConnection();
+		$helper = $connection->getSqlHelper();
+
+		$connection->queryExecute('DELETE FROM b_controller_log WHERE TIMESTAMP_X < ' . $helper->addDaysToDateTime(-14));
+		$connection->queryExecute('DELETE FROM b_controller_task WHERE STATUS <> \'N\' AND DATE_EXECUTE IS NOT NULL AND DATE_EXECUTE < ' . $helper->addDaysToDateTime(-14));
+		$connection->queryExecute('DELETE FROM b_controller_command WHERE DATE_INSERT < ' . $helper->addDaysToDateTime(-14));
+
+		return 'CControllerAgent::CleanUp();';
 	}
 
 	public static function _OrderBy($arOrder, $arFields, $obUserFieldsSql = null)
 	{
-		$arOrderBy = array();
+		$arOrderBy = [];
 		if (is_array($arOrder))
 		{
 			foreach ($arOrder as $by => $order)
 			{
 				$by = mb_strtoupper($by);
-				$order = (mb_strtolower($order) == 'desc'? 'desc': 'asc');
+				$order = (mb_strtolower($order) === 'desc' ? 'desc' : 'asc');
 
 				if (
 					isset($arFields[$by])
-					&& isset($arFields[$by]["FIELD_TYPE"])
+					&& isset($arFields[$by]['FIELD_TYPE'])
 				)
-					$arOrderBy[$by] = $arFields[$by]["FIELD_NAME"].' '.$order;
+				{
+					$arOrderBy[$by] = $arFields[$by]['FIELD_NAME'] . ' ' . $order;
+				}
 				elseif (
 					isset($obUserFieldsSql)
 					&& ($s = $obUserFieldsSql->GetOrder($by))
 				)
-					$arOrderBy[$by] = $s.' '.$order;
+				{
+					$arOrderBy[$by] = $s . ' ' . $order;
+				}
 			}
 		}
 
 		if (count($arOrderBy))
-			return "ORDER BY ".implode(", ", $arOrderBy);
+		{
+			return 'ORDER BY ' . implode(', ', $arOrderBy);
+		}
 		else
-			return "";
+		{
+			return '';
+		}
 	}
 
+	/**
+	 * @deprecated Use \Bitrix\Main\Application::getConnection()->lock()
+	 */
 	public static function _Lock($uniq)
 	{
-		global $DB;
+		$connection = \Bitrix\Main\Application::getConnection();
 
-		$db_lock = $DB->Query("SELECT GET_LOCK('".$DB->ForSQL($uniq)."', 0) as L", false, "File: ".__FILE__."<br>Line: ".__LINE__);
-		$ar_lock = $db_lock->Fetch();
-
-		if ($ar_lock["L"] == "1")
-			return true;
-		else
-			return false;
+		return $connection->lock($uniq);
 	}
 
+	/**
+	 * @deprecated Use \Bitrix\Main\Application::getConnection()->unlock()
+	 */
 	public static function _UnLock($uniq)
 	{
-		global $DB;
+		$connection = \Bitrix\Main\Application::getConnection();
 
-		$db_lock = $DB->Query("SELECT RELEASE_LOCK('".$DB->ForSQL($uniq)."') as L", false, "File: ".__FILE__."<br>Line: ".__LINE__);
-		$ar_lock = $db_lock->Fetch();
-
-		if ($ar_lock["L"] == "0")
-			return false;
-		else
-			return true;
+		return $connection->unlock($uniq);
 	}
 }

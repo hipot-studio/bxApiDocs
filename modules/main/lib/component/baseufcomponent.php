@@ -105,6 +105,7 @@ abstract class BaseUfComponent extends CBitrixComponent
 	final protected function initResult(): void
 	{
 		$this->setUserField($this->arParams['~userField'] ?? []);
+		// TODO: $this->arParams['additionalParameters'] contains already html-encoded values (mostly by chance). This is deeply incorrect.
 		$this->setAdditionalParameters($this->arParams['additionalParameters'] ?? []);
 		$this->setParentComponent($this->getAdditionalParameter('parentComponent'));
 
@@ -335,7 +336,7 @@ abstract class BaseUfComponent extends CBitrixComponent
 		$result = [];
 		foreach($constants as $name => $value)
 		{
-			if(mb_strpos($name, 'MEDIA_TYPE_') === 0)
+			if(str_starts_with($name, 'MEDIA_TYPE_'))
 			{
 				$result[$name] = $value;
 			}

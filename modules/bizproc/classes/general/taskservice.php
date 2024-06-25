@@ -380,30 +380,7 @@ class CBPTaskService extends CBPRuntimeService
 			$users = array_merge($users, array_keys($taskData['USERS_STATUSES']));
 		self::cleanCountersCache($users);
 
-		switch ($status)
-		{
-			case CBPTaskChangedStatus::Add:
-				Bizproc\Workflow\Task\TaskSearchContentTable::add([
-					'TASK_ID' => $taskId,
-					'WORKFLOW_ID' => $taskData['WORKFLOW_ID'],
-					'SEARCH_CONTENT' => $taskData['NAME'] . ' ' . ($taskData['DESCRIPTION'] ?? ''),
-				]);
-				break;
-			case CBPTaskChangedStatus::Update:
-				if (!empty($taskData['NAME']) && !empty($taskData['DESCRIPTION']))
-				{
-					Bizproc\Workflow\Task\TaskSearchContentTable::update(
-						$taskId,
-						[
-							'SEARCH_CONTENT' => $taskData['NAME'] . ' ' . $taskData['DESCRIPTION'],
-						]
-					);
-				}
-				break;
-			case CBPTaskChangedStatus::Delete:
-				Bizproc\Workflow\Task\TaskSearchContentTable::delete($taskId);
-				break;
-		}
+		self::setSearchContent($status, $taskId, $taskData);
 
 		//ping document
 		$runtime = CBPRuntime::GetRuntime();
@@ -861,6 +838,41 @@ class CBPTaskService extends CBPRuntimeService
 
 		$dbRes = new CBPTaskResult($dbRes);
 		return $dbRes;
+	}
+
+	private static function setSearchContent($status, $taskId, $taskData): void
+	{
+		try
+		{
+			switch ($status)
+			{
+				case CBPTaskChangedStatus::Add:
+					Bizproc\Workflow\Task\TaskSearchContentTable::add([
+						'TASK_ID' => $taskId,
+						'WORKFLOW_ID' => $taskData['WORKFLOW_ID'],
+						'SEARCH_CONTENT' => $taskData['NAME'] . ' ' . ($taskData['DESCRIPTION'] ?? ''),
+					]);
+					break;
+				case CBPTaskChangedStatus::Update:
+					if (!empty($taskData['NAME']) && !empty($taskData['DESCRIPTION']))
+					{
+						Bizproc\Workflow\Task\TaskSearchContentTable::update(
+							$taskId,
+							[
+								'SEARCH_CONTENT' => $taskData['NAME'] . ' ' . $taskData['DESCRIPTION'],
+							]
+						);
+					}
+					break;
+				case CBPTaskChangedStatus::Delete:
+					Bizproc\Workflow\Task\TaskSearchContentTable::delete($taskId);
+					break;
+			}
+		}
+		catch (Main\DB\SqlQueryException $e)
+		{
+			//skip operation, empty search content
+		}
 	}
 }
 

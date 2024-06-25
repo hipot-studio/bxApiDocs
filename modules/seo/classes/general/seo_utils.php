@@ -15,7 +15,7 @@ class CSeoUtils
 			{
 				if (false !== ($pos = mb_strpos($param, '=')))
 				{
-					$param_name = ToLower(mb_substr($param, 0, $pos));
+					$param_name = mb_strtolower(mb_substr($param, 0, $pos));
 					if (
 						mb_substr($param_name, 0, 7) == 'bitrix_'
 						|| mb_substr($param_name, 0, 5) == 'show_'

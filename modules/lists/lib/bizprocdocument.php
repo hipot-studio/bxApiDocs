@@ -1084,7 +1084,7 @@ class BizprocDocument extends CIBlockDocument
 				"FILTRABLE" => "Y",
 				"SETTINGS" => $fields["settings"] ? $fields["settings"] :
 					array("SHOW_ADD_FORM" => 'Y', "SHOW_EDIT_FORM"=>'Y'),
-				"DEFAULT_VALUE" => $fields['DefaultValue']
+				"DEFAULT_VALUE" => $fields['DefaultValue'] ?? null,
 			);
 
 			if (array_key_exists("additional_type_info", $fields))
@@ -3044,7 +3044,7 @@ class BizprocDocument extends CIBlockDocument
 			SELECT * FROM b_iblock_element_lock
 			WHERE IBLOCK_ELEMENT_ID = ".intval($documentId)."
 		";
-		$query = $DB->query($strSql, false, "FILE: ".__FILE__."<br>LINE: ".__LINE__);
+		$query = $DB->query($strSql);
 		if($query->fetch())
 		{
 			$strSql = "
@@ -3052,7 +3052,7 @@ class BizprocDocument extends CIBlockDocument
 				WHERE IBLOCK_ELEMENT_ID = ".intval($documentId)."
 				AND (LOCKED_BY = '".$DB->forSQL($workflowId, 32)."' OR '".$DB->forSQL($workflowId, 32)."' = '')
 			";
-			$query = $DB->query($strSql, false, "FILE: ".__FILE__."<br>LINE: ".__LINE__);
+			$query = $DB->query($strSql);
 			$result = $query->affectedRowsCount();
 		}
 		else
@@ -3184,7 +3184,7 @@ class BizprocDocument extends CIBlockDocument
 				CIBlockElement::delete($ID);
 				CIBlockElement::wF_CleanUpHistoryCopies($parentId, 0);
 				$strSql = "update b_iblock_element set WF_STATUS_ID='1', WF_NEW=NULL WHERE ID=".$parentId." AND WF_PARENT_ELEMENT_ID IS NULL";
-				$DB->Query($strSql, false, "FILE: ".__FILE__."<br>LINE: ".__LINE__);
+				$DB->Query($strSql);
 				CIBlockElement::updateSearch($parentId);
 				return $parentId;
 			}
@@ -3192,7 +3192,7 @@ class BizprocDocument extends CIBlockDocument
 			{
 				CIBlockElement::wF_CleanUpHistoryCopies($ID, 0);
 				$strSql = "update b_iblock_element set WF_STATUS_ID='1', WF_NEW=NULL WHERE ID=".$ID." AND WF_PARENT_ELEMENT_ID IS NULL";
-				$DB->Query($strSql, false, "FILE: ".__FILE__."<br>LINE: ".__LINE__);
+				$DB->Query($strSql);
 				CIBlockElement::updateSearch($ID);
 				return $ID;
 			}

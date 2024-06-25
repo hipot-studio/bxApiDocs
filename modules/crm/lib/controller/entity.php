@@ -43,6 +43,12 @@ class Entity extends Main\Engine\Controller
 			'canChangeCurrency' => [
 				'class' => Crm\Controller\Action\Entity\CanChangeCurrencyAction::class,
 			],
+			'processWhatsAppMessage' => [
+				'class' => Crm\Controller\Action\Entity\ProcessWhatsAppMessageAction::class,
+			],
+			'prepareWhatsAppMessage' => [
+				'class' => Crm\Controller\Action\Entity\PrepareWhatsAppMessageAction::class,
+			],
 		];
 	}
 

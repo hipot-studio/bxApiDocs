@@ -66,10 +66,13 @@ class DateType
 		{
 			$id = mb_substr($key, 0, 0 - mb_strlen(self::getPostfix()));
 			if (array_key_exists($id."_from", $data))
+			{
 				$filter[">=".$id] = $data[$id."_from"];
+			}
 			if (array_key_exists($id."_to", $data))
+			{
 				$filter["<=".$id] = $data[$id."_to"];
-			break;
+			}
 		}
 		return $filter;
 	}

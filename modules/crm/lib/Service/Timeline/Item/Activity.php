@@ -137,11 +137,6 @@ abstract class Activity extends Configurable
 		return $menuItems;
 	}
 
-	protected function isScheduled(): bool
-	{
-		return ($this->getModel()->isScheduled());
-	}
-
 	protected function isOverdue(): bool
 	{
 		if (!$this->isScheduled())
@@ -223,6 +218,14 @@ abstract class Activity extends Configurable
 
 	protected function getDeadline(): ?DateTime
 	{
+//		$model = $this->getAssociatedEntityModel();
+//		if (!$model)
+//		{
+//			return null;
+//		}
+//
+//		$deadline = $model->get('START_TIME') ?? $model->get('DEADLINE');
+
 		$deadline = $this->getAssociatedEntityModel()?->get('DEADLINE');
 
 		return ($deadline && !CCrmDateTimeHelper::IsMaxDatabaseDate($deadline))

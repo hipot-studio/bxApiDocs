@@ -1,0 +1,64 @@
+<?php
+
+namespace Bitrix\TasksMobile\Provider;
+
+use Bitrix\Disk\Driver;
+use Bitrix\Disk\TypeFile;
+use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Loader;
+
+class DiskFileProvider
+{
+	public function __construct(private ?int $userId = null)
+	{
+		$this->userId = ($userId ?? CurrentUser::get()->getId());
+	}
+
+	/**
+	 * @param array $fileIds
+	 * @return array
+	 */
+	public function getDiskFileAttachments(array $fileIds): array
+	{
+		if (!Loader::includeModule('disk'))
+		{
+			return [];
+		}
+
+		$diskFileAttachments = [];
+
+		$driver = Driver::getInstance();
+		$urlManager = $driver->getUrlManager();
+		$userFieldManager = $driver->getUserFieldManager();
+
+		$userFieldManager->loadBatchAttachedObject($fileIds);
+
+		foreach ($fileIds as $fileId)
+		{
+			$attachedObject = $userFieldManager->getAttachedObjectById($fileId);
+			if (!$attachedObject || !$attachedObject->canRead($this->userId))
+			{
+				continue;
+			}
+
+			$file = $attachedObject->getFile();
+			if (!$file)
+			{
+				continue;
+			}
+
+			$diskFileAttachments[$fileId] = [
+				'ID' => $fileId,
+				'OBJECT_ID' => $attachedObject->getObjectId(),
+				'NAME' => $file->getName(),
+				'TYPE' => TypeFile::getMimeTypeByFilename($file->getName()),
+				'URL' => $urlManager::getUrlUfController('show', ['attachedId' => $fileId]),
+				'PREVIEW_URL' => $urlManager::getUrlToActionShowUfFile($fileId, ['width' => 640, 'height' => 640]),
+				'WIDTH' => $attachedObject->getExtra()->get('FILE_WIDTH'),
+				'HEIGHT' => $attachedObject->getExtra()->get('FILE_HEIGHT'),
+			];
+		}
+
+		return $diskFileAttachments;
+	}
+}

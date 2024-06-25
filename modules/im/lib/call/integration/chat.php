@@ -388,7 +388,7 @@ class Chat extends AbstractEntity
 
 		return [
 			'type' => $this->getEntityType(),
-			'id' => $this->getEntityId($currentUserId),
+			'id' => (string)$this->getEntityId($currentUserId), //todo: Cast to string for compatibility with immobile. Remove it in a while
 			'name' => $this->getName($currentUserId),
 			'avatar' => $this->getAvatar($currentUserId),
 			'avatarColor' => $this->getAvatarColor($currentUserId),

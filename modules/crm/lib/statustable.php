@@ -9,6 +9,7 @@ namespace Bitrix\Crm;
 
 use Bitrix\Crm\Attribute\Entity\FieldAttributeTable;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
+use Bitrix\Crm\Security\StagePermissions;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Main\Entity;
@@ -455,6 +456,8 @@ class StatusTable extends Entity\DataManager
 		{
 			$result[$status['STATUS_ID']] = $status;
 		}
+
+		StagePermissions::fillAllPermissionsByStages($result);
 
 		return $result;
 	}

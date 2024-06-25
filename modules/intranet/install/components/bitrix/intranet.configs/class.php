@@ -607,38 +607,12 @@ final class IntranetConfigsComponent extends CBitrixComponent
 		//im chat
 		if (CModule::IncludeModule('im'))
 		{
-			if (COption::GetOptionString("im", "im_general_chat_new_rights") !== 'Y')
+			if (isset($_POST["general_chat_can_post"]))
 			{
-				if (isset($_POST["allow_general_chat_toall"]))
-				{
-					$valuesToSave = [];
-					if (is_array($_POST["imchat_toall_rights"]))
-					{
-						foreach($_POST["imchat_toall_rights"] as $key => $value)
-						{
-							$valuesToSave[] = ($value == 'UA' ? 'AU' : $value);
-						}
-					}
+				$generalChat = \Bitrix\Im\V2\Chat\ChatFactory::getInstance()->getGeneralChat();
 
-					if (in_array('AU', $valuesToSave) || empty($valuesToSave))
-					{
-						CIMChat::SetAccessToGeneralChat(true);
-					}
-					else
-					{
-						CIMChat::SetAccessToGeneralChat(false, $valuesToSave);
-					}
-				}
-				else
+				if ($generalChat)
 				{
-					CIMChat::SetAccessToGeneralChat(false);
-				}
-			}
-			else
-			{
-				if (isset($_POST["general_chat_can_post"]))
-				{
-					$generalChat = \Bitrix\Im\V2\Chat\ChatFactory::getInstance()->getGeneralChat();
 					$generalChat->setCanPost($_POST["general_chat_can_post"]);
 					if ($_POST["general_chat_can_post"] === \Bitrix\Im\V2\Chat::MANAGE_RIGHTS_MANAGERS)
 					{

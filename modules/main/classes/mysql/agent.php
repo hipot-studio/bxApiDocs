@@ -28,7 +28,7 @@ class CAgent extends CAllAgent
 
 	public static function ExecuteAgents()
 	{
-		global $DB, $CACHE_MANAGER, $pPERIOD;
+		global $DB, $CACHE_MANAGER, $pPERIOD, $USER;
 
 		$cron = static::OnCron();
 
@@ -164,19 +164,22 @@ class CAgent extends CAllAgent
 
 			CTimeZone::Disable();
 
+			// global $USER should not be available here
 			$USER = null;
+
 			try
 			{
 				$eval_result = "";
 				$e = eval("\$eval_result=".$arAgent["NAME"]);
 			}
-			catch (Throwable $e)
+			catch (Throwable $exception)
 			{
 				CTimeZone::Enable();
 
 				$application = \Bitrix\Main\Application::getInstance();
 				$exceptionHandler = $application->getExceptionHandler();
-				$exceptionHandler->writeToLog($e);
+				$exceptionHandler->writeToLog(new \Bitrix\Main\SystemException("Error in agent {$arAgent["NAME"]}, see the next log record."));
+				$exceptionHandler->writeToLog($exception);
 
 				continue;
 			}

@@ -182,7 +182,7 @@ class Add extends Operation
 
 			if ($deadline)
 			{
-				ToDo::createWithDefaultDescription(
+				ToDo::createWithDefaultSubjectAndDescription(
 					$this->item->getEntityTypeId(),
 					$this->item->getId(),
 					$deadline

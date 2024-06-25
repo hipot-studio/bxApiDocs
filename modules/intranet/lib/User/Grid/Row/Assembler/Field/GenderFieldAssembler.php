@@ -7,7 +7,7 @@ use Bitrix\Main\Localization\Loc;
 
 class GenderFieldAssembler extends FieldAssembler
 {
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): mixed
 	{
 		return !empty($value)
 			? Loc::getMessage('INTRANET_USER_LIST_GENDER_' . $value)

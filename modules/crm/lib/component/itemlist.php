@@ -39,7 +39,6 @@ abstract class ItemList extends Base
 	protected $users;
 	/** @var Category */
 	protected $category;
-	protected Service\Router $router;
 	/** @var Service\Factory */
 	protected $factory;
 	/** @var Kanban\Entity */
@@ -84,7 +83,6 @@ abstract class ItemList extends Base
 
 		$this->entityTypeId = $type->getEntityTypeId();
 
-		$this->router = Container::getInstance()->getRouter();
 		$this->router->setCurrentListView($this->entityTypeId, $this->getListViewType());
 
 		$this->factory = Service\Container::getInstance()->getFactory($this->entityTypeId);

@@ -169,8 +169,9 @@ class IntranetUserDataProvider extends EntityDataProvider
 				],
 			];
 		}
-		if (
+		elseif (
 			!$this->getSettings()->isFilterAvailable(IntranetUserSettings::FIRED_FIELD)
+			|| empty($filterValue[IntranetUserSettings::FIRED_FIELD])
 			|| $filterValue[IntranetUserSettings::FIRED_FIELD] === 'N'
 		)
 		{
@@ -261,6 +262,20 @@ class IntranetUserDataProvider extends EntityDataProvider
 			{
 				$filterValue['=ACTIVE'] = 'Y';
 				$filterValue['!CONFIRM_CODE'] = false;
+			}
+			elseif ($filterValue[IntranetUserSettings::INVITED_FIELD] === 'N')
+			{
+				$filterValue[] = [
+					'LOGIC' => 'OR',
+					[
+						'=ACTIVE' => 'N',
+						'!CONFIRM_CODE' => false,
+					],
+					[
+						'=ACTIVE' => 'Y',
+						'CONFIRM_CODE' => false,
+					]
+				];
 			}
 		}
 	}

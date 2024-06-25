@@ -628,7 +628,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 
 			$isExportEventEnabled = HistorySettings::getCurrent()->isExportEventEnabled();
 			$notAccessibleFields = $this->getNotAccessibleFieldNames();
-			$itemsData = [];
+			$itemsData = $listById = [];
 			foreach($list as $item)
 			{
 				$itemData = $item->getData();
@@ -640,7 +640,10 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 					$trackedObject = $this->factory->getTrackedObject($item);
 					Container::getInstance()->getEventHistory()->registerExport($trackedObject);
 				}
+				$listById[$item->getId()] = $item;
 			}
+			$list = $listById;
+			unset($listById);
 
 			$displayOptions =
 				(new Display\Options())
@@ -722,6 +725,13 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 					}
 				}
 			}
+
+			if (!$this->isExportMode())
+			{
+				$entityBadges = new Bitrix\Crm\Kanban\EntityBadge($this->entityTypeId, $itemIds);
+				$entityBadges->appendToEntityItems($list);
+			}
+
 			foreach($list as $item)
 			{
 				$itemId = $item->getId();
@@ -744,6 +754,11 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 					{
 						$itemColumn[Item::FIELD_NAME_PRODUCTS.'.PRODUCT_ID'] = $this->getProductsItemColumn($itemProducts[$item->getId()]);
 					}
+				}
+
+				if ($item->getBadges())
+				{
+					$itemColumn['TITLE'] .= Bitrix\Crm\Component\EntityList\BadgeBuilder::render($item->getBadges());
 				}
 
 				$result[] = [

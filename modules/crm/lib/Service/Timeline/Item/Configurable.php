@@ -107,6 +107,7 @@ abstract class Configurable extends Item
 			'languageId' => \Bitrix\Main\Context::getCurrent()?->getLanguage(),
 			'targetUsersList' => $this->getListOfTargetUsers(),
 			'canBeReloaded' => $this->canBeReloaded(),
+			'color' => $this->getColor(),
 		];
 	}
 
@@ -145,6 +146,7 @@ abstract class Configurable extends Item
 				->setCode($iconCode)
 				->setCounterType($this->getCounterType())
 				->setBackgroundColorToken($this->getBackgroundColorToken())
+				->setBackgroundColor($this->isScheduled() ? $this->getIconBackgroundColor() : null)
 			: null
 		;
 	}
@@ -178,6 +180,28 @@ abstract class Configurable extends Item
 		return Layout\Icon::BACKGROUND_PRIMARY;
 	}
 
+	public function getIconBackgroundColor(): ?string
+	{
+		$color = $this->getColor();
+
+		if (!$color)
+		{
+			return null;
+		}
+
+		return $color['iconBackground'] ?? null;
+	}
+
+	public function canUseColorSelector(): bool
+	{
+		return false;
+	}
+
+	public function getColor(): ?array
+	{
+		return null;
+	}
+
 	/**
 	 * Change stream button used to change item stream:
 	 * Scheduled -> History or History <--> Fixed history
@@ -201,7 +225,7 @@ abstract class Configurable extends Item
 	{
 		$canBeUnFixed =
 			$this->isPinnable()
-			&& !$this->getModel()->isScheduled()
+			&& !$this->isScheduled()
 			&& $this->getModel()->isFixed()
 		;
 		if (!$canBeUnFixed)
@@ -391,13 +415,13 @@ abstract class Configurable extends Item
 	{
 		$canBeFixed =
 			$this->isPinnable()
-			&& !$this->getModel()->isScheduled()
+			&& !$this->isScheduled()
 			&& !$this->getModel()->isFixed()
 		;
 
 		$canBeUnFixed =
 			$this->isPinnable()
-			&& !$this->getModel()->isScheduled()
+			&& !$this->isScheduled()
 			&& $this->getModel()->isFixed()
 		;
 
@@ -438,6 +462,11 @@ abstract class Configurable extends Item
 	public function isLogMessage(): bool
 	{
 		return false;
+	}
+
+	public function isScheduled(): bool
+	{
+		return $this->getModel()->isScheduled();
 	}
 
 	public function getMarketPanel(): ?MarketPanel

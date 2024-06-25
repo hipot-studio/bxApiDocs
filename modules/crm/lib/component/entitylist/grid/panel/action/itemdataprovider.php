@@ -10,9 +10,12 @@ use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\ItemGroupAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\MyCompanyItemGroupAction;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\RecurringItemGroupAction;
 use Bitrix\Crm\Component\EntityList\Grid\Settings\ItemSettings;
+use Bitrix\Crm\Integration\SmsManager;
+use Bitrix\Crm\MessageSender\MassWhatsApp\SendItem;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\Settings;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Grid\Panel\Action\DataProvider;
 use Bitrix\Main\Grid\Panel\Action\ForAllCheckboxAction;
@@ -68,6 +71,14 @@ final class ItemDataProvider extends DataProvider
 			{
 				$actions[] = new CreateAndStartCallListAction($this->factory->getEntityTypeId());
 			}
+
+			if ($this->isShowWhatsAppMessageAction())
+			{
+				$actions[] = new WhatsAppMessageAction(
+					$this->factory->getEntityTypeId(),
+					$this->getCategoryId()
+				);
+			}
 		}
 
 		if (!empty($actions))
@@ -101,6 +112,38 @@ final class ItemDataProvider extends DataProvider
 		}
 
 		return $actions;
+	}
+
+	private function isShowWhatsAppMessageAction(): bool
+	{
+		if (!Settings\Crm::isWhatsAppScenarioEnabled())
+		{
+			return false;
+		}
+
+		$sender = SmsManager::getSenderById(SendItem::DEFAULT_PROVIDER);
+
+		if (!$sender)
+		{
+			return false;
+		}
+
+		if (!$sender::isSupported())
+		{
+			return false;
+		}
+
+		if ($this->factory->getEntityTypeId() === \CCrmOwnerType::Contact)
+		{
+			return true;
+		}
+
+		if ($this->factory->getEntityTypeId() === \CCrmOwnerType::Company && !$this->getSettings()->isMyCompany())
+		{
+			return true;
+		}
+
+		return false;
 	}
 
 	private function getCategoryId(): ?int

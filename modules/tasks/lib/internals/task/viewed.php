@@ -426,11 +426,17 @@ class ViewedTable extends TaskDataManager
 			]
 		);
 
-		(new TimeLineManager($taskId, $userId))->onTaskAllCommentViewed()->save();
+		TimeLineManager::get($taskId)
+			->setUserId($userId)
+			->onTaskAllCommentViewed()
+			->save();
 	}
 
 	private static function onFirstRealView(int $taskId, int $userId): void
 	{
-		(new TimeLineManager($taskId, $userId))->onTaskViewed()->save();
+		TimeLineManager::get($taskId)
+			->setUserId($userId)
+			->onTaskViewed()
+			->save();
 	}
 }

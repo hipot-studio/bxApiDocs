@@ -5,11 +5,12 @@ namespace Bitrix\Tasks\Control\Handler;
 use Bitrix\Main\Entity\DatetimeField;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
+use Bitrix\Main\ObjectException;
 use Bitrix\Main\Text\Emoji;
-use Bitrix\Tasks\Access\ActionDictionary;
-use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Control\Handler\Exception\TaskFieldValidateException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Tasks\Flow\Provider\FlowProvider;
+use Bitrix\Tasks\Flow\Responsible\Distributor;
 use Bitrix\Tasks\Integration\Intranet\Department;
 use Bitrix\Tasks\Internals\Helper\Task\Dependence;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
@@ -26,17 +27,27 @@ use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Replication\Task\Regularity\Exception\RegularityException;
 use Bitrix\Tasks\Replication\Task\Regularity\Time\Service\DeadlineRegularityService;
 use Bitrix\Tasks\Replication\Repository\TaskRepository;
+use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
+use CTimeZone;
+use Throwable;
 
 class TaskFieldHandler
 {
 	private $taskId;
+	private array $skipTimeZoneFields = [];
 
 	public function __construct(private int $userId, private array $fields = [], private ?array $taskData = null)
 	{
 		$this->setTaskId();
+	}
+
+	public function skipTimeZoneFields(string ...$fields): static
+	{
+		$this->skipTimeZoneFields = $fields;
+		return $this;
 	}
 
 	/**
@@ -45,6 +56,56 @@ class TaskFieldHandler
 	public function prepareId(): self
 	{
 		unset($this->fields['ID']);
+		return $this;
+	}
+
+	public function prepareFlow(): self
+	{
+		if ($this->isExistingTask())
+		{
+			return $this;
+		}
+
+		$flowId = (int) ($this->fields['FLOW_ID'] ?? 0);
+		if (!$flowId)
+		{
+			return $this;
+		}
+
+		$flowProvider = new FlowProvider();
+		$flow = $flowProvider->getFlow($flowId, ['*', 'OPTIONS']);
+
+		if (!\Bitrix\Tasks\Flow\FlowFeature::isFeatureEnabled())
+		{
+			throw new TaskFieldValidateException('You cannot run a task without flow feature');
+		}
+
+		if (!$flow->isActive())
+		{
+			throw new TaskFieldValidateException('You cannot run a task on an inactive flow');
+		}
+
+		$distributor = new Distributor();
+		$responsible = $distributor->generateResponsible($flow);
+
+		$this->fields['RESPONSIBLE_ID'] = $responsible->getId();
+
+		$deadline = $this->getDeadlineMatchWorkTimeWithTZOffset(
+			$flow->getPlannedCompletionTime(),
+			$flow->getMatchWorkTime()
+		);
+
+		$this->fields['MATCH_WORK_TIME'] = $flow->getMatchWorkTime();
+		$this->fields['DEADLINE'] = UI::formatDateTime($deadline->convertToLocalTime()->getTimestamp());
+		$this->fields['GROUP_ID'] = $flow->getGroupId();
+		$this->fields['TASK_CONTROL'] = $flow->getTaskControl();
+		$this->fields['ALLOW_CHANGE_DEADLINE'] = $flow->canResponsibleChangeDeadline();
+
+		if (!empty($this->fields['SE_PROJECT']))
+		{
+			$this->fields['SE_PROJECT']['ID'] = $flow->getGroupId();
+		}
+
 		return $this;
 	}
 
@@ -65,7 +126,7 @@ class TaskFieldHandler
 			'filter' => [
 				'=GUID' => $this->fields['GUID'],
 			],
-			'limit' => 1
+			'limit' => 1,
 		]);
 		$task = $res->fetch();
 
@@ -433,7 +494,7 @@ class TaskFieldHandler
 			'ADD_IN_REPORT',
 			'MATCH_WORK_TIME',
 			'REPLICATE',
-			'IS_REGULAR'
+			'IS_REGULAR',
 		];
 
 		foreach ($flags as $flag)
@@ -568,6 +629,7 @@ class TaskFieldHandler
 			&& (string) $this->fields['DEADLINE'] != ''
 			&& isset($this->fields['MATCH_WORK_TIME'])
 			&& $this->fields['MATCH_WORK_TIME'] == 'Y'
+			&& !isset($this->fields['FLOW_ID']) // skip, because the deadline has already been set
 		)
 		{
 			$this->fields['DEADLINE'] = $this->getDeadlineMatchWorkTime($this->fields['DEADLINE']);
@@ -791,7 +853,20 @@ class TaskFieldHandler
 				&& !empty($value)
 			)
 			{
-				$fields[$fieldName] = \Bitrix\Main\Type\DateTime::createFromUserTime($value);
+				$this->isTimeZoneSkip($fieldName) && CTimeZone::Disable();
+
+				try
+				{
+					$fields[$fieldName] = \Bitrix\Main\Type\DateTime::createFromUserTime($value);
+				}
+				catch (Throwable)
+				{
+					throw new ObjectException('Incorrect date/time');
+				}
+				finally
+				{
+					$this->isTimeZoneSkip($fieldName) && CTimeZone::Enable();
+				}
 			}
 		}
 
@@ -904,7 +979,8 @@ class TaskFieldHandler
 		foreach ($this->fields['SE_PARAMETER'] as $parameter)
 		{
 			if (
-				(int)$parameter['CODE'] === ParameterTable::PARAM_SUBTASKS_TIME
+				is_array($parameter)
+				&& (int)$parameter['CODE'] === ParameterTable::PARAM_SUBTASKS_TIME
 				&& $parameter['VALUE'] === 'Y'
 			)
 			{
@@ -1178,5 +1254,55 @@ class TaskFieldHandler
 	{
 		return ($this->taskData['IS_REGULAR'] ?? null) === 'Y'
 			&& isset($this->fields['REGULAR_PARAMS']);
+	}
+
+	private function isTimeZoneSkip(string $field): bool
+	{
+		return in_array($field, $this->skipTimeZoneFields, true);
+	}
+
+	private function getDeadlineMatchWorkTimeWithTZOffset(
+		int $offsetInSeconds,
+		bool $matchWorkTime = false
+	): DateTime
+	{
+		$currentDate = DateTime::createFromUserTimeGmt((new Util\Type\DateTime()))->disableUserTime();
+
+		$deadline = $currentDate->add(($offsetInSeconds) . ' seconds');
+
+		if (!$matchWorkTime)
+		{
+			return $deadline;
+		}
+
+		$calendar = Util\Calendar::getInstance();
+		$isWorkTime = $calendar->isWorkTime($deadline);
+
+		if ($isWorkTime)
+		{
+			$closestWorkTime = $deadline;
+		}
+		else
+		{
+			$closestWorkTime = $calendar->getClosestWorkTime($deadline);
+
+			$endTimeHour = $calendar->getEndHour();
+			$endTimeMinute = $calendar->getEndMinute();
+
+			$endDateTime = (new Util\Type\DateTime())
+				->setDate($currentDate->getYear(), $currentDate->getMonth(), $currentDate->getDay())
+				->setTime($endTimeHour, $endTimeMinute);
+
+			$restSeconds = abs($endDateTime->getTimestamp() - $currentDate->getTimestamp());
+
+			$closestWorkTime->add($restSeconds . ' seconds');
+		}
+
+		return $closestWorkTime;
+	}
+
+	private function isExistingTask(): bool
+	{
+		return isset($this->taskId) && $this->taskId > 0;
 	}
 }

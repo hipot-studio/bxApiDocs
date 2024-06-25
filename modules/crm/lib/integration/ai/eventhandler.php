@@ -5,11 +5,14 @@ namespace Bitrix\Crm\Integration\AI;
 use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Tuning;
+use Bitrix\Crm\Activity\Provider\Call;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
+use Bitrix\Crm\Integration\Analytics\Builder\AI\CallActivityWithAudioRecordingEvent;
+use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
@@ -186,6 +189,14 @@ final class EventHandler
 
 	public static function onAfterCallActivityAdd(array $activityFields): void
 	{
+		if (
+			VoxImplantManager::isActivityBelongsToVoximplant($activityFields)
+			&& Call::hasRecordings($activityFields)
+		)
+		{
+			self::registerCallActivityWithAudioRecordingEvent($activityFields);
+		}
+
 		if (!AIManager::isAiCallProcessingEnabled() || !AIManager::isEnabledInGlobalSettings())
 		{
 			return;
@@ -203,8 +214,35 @@ final class EventHandler
 		}
 	}
 
-	public static function onAfterCallActivityUpdate(array $changedFields, array $newFields): void
+	private static function registerCallActivityWithAudioRecordingEvent(array $activityFields): void
 	{
+		$nullSafeInt = fn(array $input, string $key) => (int)($input[$key] ?? null);
+
+		$originId = $activityFields['ORIGIN_ID'] ?? '';
+		$callId = VoxImplantManager::extractCallIdFromOriginId($originId);
+
+		$builder = (new CallActivityWithAudioRecordingEvent())
+			->setActivityOwnerTypeId($nullSafeInt($activityFields, 'OWNER_TYPE_ID'))
+			->setActivityId($nullSafeInt($activityFields, 'ID'))
+			->setActivityDirection($nullSafeInt($activityFields, 'DIRECTION'))
+			->setCallDuration(VoxImplantManager::getCallDuration($callId) ?? 0)
+		;
+
+		$builder->buildEvent()->send();
+	}
+
+	public static function onAfterCallActivityUpdate(array $changedFields, array $oldFields, array $newFields): void
+	{
+		if (
+			VoxImplantManager::isActivityBelongsToVoximplant($newFields)
+			// if records were added
+			&& !Call::hasRecordings($oldFields)
+			&& Call::hasRecordings($newFields)
+		)
+		{
+			self::registerCallActivityWithAudioRecordingEvent($newFields);
+		}
+
 		if (!AIManager::isAiCallProcessingEnabled() || !AIManager::isEnabledInGlobalSettings())
 		{
 			return;

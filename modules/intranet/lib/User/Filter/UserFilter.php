@@ -298,7 +298,7 @@ class UserFilter extends Filter
 				}
 			}
 
-			$findFilter = \Bitrix\Main\UserUtils::getUserSearchFilter([
+			$findFilter = \Bitrix\Main\UserUtils::getAdminSearchFilter([
 				'FIND' => $searchString
 			]);
 

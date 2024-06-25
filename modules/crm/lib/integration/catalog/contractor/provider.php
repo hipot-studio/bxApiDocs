@@ -13,7 +13,6 @@ use Bitrix\Crm\Settings\EntityEditSettings;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\Text\Encoding;
 use Bitrix\Crm\Controller\Entity;
 use Bitrix\Main\Web\Json;
 use Bitrix\Crm\Binding\ContactCompanyTable;
@@ -568,9 +567,7 @@ abstract class Provider implements IProvider
 		$clientData = null;
 		try
 		{
-			$clientData = Json::decode(
-				Encoding::convertEncoding($requestClientData, LANG_CHARSET, 'UTF-8')
-			);
+			$clientData = Json::decode($requestClientData);
 		}
 		catch (SystemException $e) {}
 

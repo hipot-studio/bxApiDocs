@@ -864,7 +864,7 @@ class CUpdateClientPartner
 
 			$dbv = $GLOBALS["DB"]->GetVersion();
 
-			$strResult = "utf=".urlencode(defined('BX_UTF') ? "Y" : "N").
+			$strResult = "utf=Y".
 				"&lang=".urlencode($lang).
 				"&stable=".urlencode($stableVersionsOnly).
 				"&CANGZIP=".urlencode((CUpdateClientPartner::__IsGzipInstalled()) ? "Y" : "N").
@@ -1263,8 +1263,6 @@ class CUpdateClientPartner
 
 	private static function getSocketError($errstr, $errno, $addrParams)
 	{
-		if (class_exists('CUtil') && method_exists('CUtil', 'ConvertToLangCharset'))
-			$errstr = CUtil::ConvertToLangCharset($errstr);
 		$error = GetMessage("SUPP_GHTTP_ER").": [".$errno."] ".$errstr.". ";
 		if (intval($errno) <= 0)
 			$error .= GetMessage("SUPP_GHTTP_ER_DEF")." ";
@@ -1655,7 +1653,7 @@ class CUpdateClientPartner
 					{
 						while (false !== ($dir = readdir($handle)))
 						{
-							if (mb_substr($dir, 0, 7) == "updater")
+							if (str_starts_with($dir, "updater"))
 							{
 								$bPostUpdater = "N";
 								if (is_file($updateDirFrom."/".$dir))
@@ -2233,7 +2231,7 @@ class CUpdateClientPartner
 							if ($file == "." || $file == "..")
 								continue;
 
-							if ($bSkipUpdater && mb_substr($file, 0, mb_strlen("updater")) == "updater")
+							if ($bSkipUpdater && str_starts_with($file, "updater"))
 								continue;
 
 							if (is_dir($path_from."/".$file))

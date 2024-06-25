@@ -2,12 +2,15 @@
 
 IncludeModuleLangFile(__FILE__);
 
+use Bitrix\Crm\Activity\ToDo\CalendarSettings\CalendarSettingsProvider;
+use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\Color\PhaseColorScheme;
 use Bitrix\Crm\Conversion\LeadConversionType;
 use Bitrix\Crm\Integration\OpenLineManager;
 use Bitrix\Crm\Order;
+use Bitrix\Crm\Security\StagePermissions;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline;
 use Bitrix\Crm\Workflow\PaymentStage;
@@ -595,6 +598,7 @@ class CCrmViewHelper
 				if ($provider)
 				{
 					$isDetailExist = $provider::hasPlanner($arParams);
+					$subject = $provider::getActivityTitle(array_merge($arParams, ['COMPLETED' => 'N']));
 				}
 			}
 
@@ -629,13 +633,27 @@ class CCrmViewHelper
 					if (\Bitrix\Crm\Settings\Crm::isUniversalActivityScenarioEnabled())
 					{
 						$currentUser = CUtil::PhpToJSObject(static::getUserInfo(true, false));
-						$pingSettings = CUtil::PhpToJSObject(
-							(new TodoPingSettingsProvider(
-								$entityTypeId,
-								$categoryId
-							))->fetchForJsComponent()
+
+						$pingSettings = (new TodoPingSettingsProvider(
+							$entityTypeId,
+							$categoryId
+						))->fetchForJsComponent();
+
+						$calendarSettings = (new CalendarSettingsProvider())->fetchForJsComponent();
+						$useTodoEditorV2 = \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled();
+						$colorSettings = (
+							$useTodoEditorV2
+								? (new ColorSettingsProvider())->fetchForJsComponent()
+								: null
 						);
-						$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '".$preparedGridId."', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $pingSettings . ");";
+
+						$settings = CUtil::PhpToJSObject([
+							'pingSettings' => $pingSettings,
+							'calendarSettings' => $calendarSettings,
+							'colorSettings' => $colorSettings,
+						]);
+
+						$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $settings . ", " . $useTodoEditorV2 . ");";
 					}
 					else
 					{
@@ -703,13 +721,28 @@ class CCrmViewHelper
 				if (\Bitrix\Crm\Settings\Crm::isUniversalActivityScenarioEnabled())
 				{
 					$currentUser = CUtil::PhpToJSObject(static::getUserInfo(true, false));
-					$pingSettings = CUtil::PhpToJSObject(
-						(new TodoPingSettingsProvider(
-							$entityTypeId,
-							$categoryId
-						))->fetchForJsComponent()
+
+					$pingSettings = (new TodoPingSettingsProvider(
+						$entityTypeId,
+						$categoryId
+					))->fetchForJsComponent();
+					$calendarSettings = (new CalendarSettingsProvider())->fetchForJsComponent();
+
+					$useTodoEditorV2 = \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled();
+
+					$colorSettings = (
+						$useTodoEditorV2
+							? (new ColorSettingsProvider())->fetchForJsComponent()
+							: null
 					);
-					$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '".$preparedGridId."', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $pingSettings . ");";
+
+					$settings = CUtil::PhpToJSObject([
+						'pingSettings' => $pingSettings,
+						'calendarSettings' => $calendarSettings,
+						'colorSettings' => $colorSettings,
+					]);
+
+					$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $settings . ", " . $useTodoEditorV2 . ");";
 				}
 				else
 				{
@@ -1968,15 +2001,24 @@ class CCrmViewHelper
 		$result = array();
 
 		$isTresholdPassed = false;
+
+		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
 		$successStageID = CCrmDeal::GetSuccessStageID($categoryId);
 		$failureStageID = CCrmDeal::GetFailureStageID($categoryId);
-		foreach(self::PrepareDealStages($categoryId) as $stage)
+		$preparedDealStages = self::PrepareDealStages($categoryId);
+		(new StagePermissions(CCrmOwnerType::Deal, $categoryId))
+			->fill($preparedDealStages)
+		;
+
+		foreach($preparedDealStages as $stage)
 		{
 			$info = array(
 				'id' => $stage['STATUS_ID'],
 				'name' => $stage['NAME'],
 				'sort' => intval($stage['SORT']),
-				'color' => isset($stage['COLOR']) ? $stage['COLOR'] : ''
+				'color' => isset($stage['COLOR']) ? $stage['COLOR'] : '',
+				'stagesToMove' => $stage['STAGES_TO_MOVE'] ?? [],
+				'allowMoveToAnyStage' => $canWriteConfig,
 			);
 
 			if($stage['STATUS_ID'] === $successStageID)
@@ -2079,13 +2121,22 @@ class CCrmViewHelper
 	{
 		$result = array();
 		$isThresholdPassed = false;
-		foreach(self::PrepareLeadStatuses() as $status)
+		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
+
+		$preparedLeadStatuses = self::PrepareLeadStatuses();
+		(new StagePermissions(CCrmOwnerType::Lead, null))
+			->fill($preparedLeadStatuses)
+		;
+
+		foreach($preparedLeadStatuses as $status)
 		{
 			$info = array(
 				'id' => $status['STATUS_ID'],
 				'name' => $status['NAME'],
 				'sort' => intval($status['SORT']),
-				'color' => isset($status['COLOR']) ? $status['COLOR'] : ''
+				'color' => isset($status['COLOR']) ? $status['COLOR'] : '',
+				'stagesToMove' => $status['STAGES_TO_MOVE'] ?? [],
+				'allowMoveToAnyStage' => $canWriteConfig,
 			);
 
 			if($status['STATUS_ID'] === 'CONVERTED')
@@ -2146,6 +2197,8 @@ class CCrmViewHelper
 	{
 		$result = array();
 		$isTresholdPassed = false;
+		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
+
 		foreach(self::PrepareInvoiceStatuses() as $status)
 		{
 			$info = array(
@@ -2174,6 +2227,10 @@ class CCrmViewHelper
 			{
 				$info['semantics'] = 'apology';
 			}
+
+			$info['stagesToMove'] = ($status['STAGES_TO_MOVE'] ?? []);
+			$info['allowMoveToAnyStage'] = $canWriteConfig;
+
 			$result[] = $info;
 		}
 
@@ -2357,6 +2414,7 @@ class CCrmViewHelper
 			return '';
 		}
 
+		Extension::load('crm.stage.permission-checker');
 		\Bitrix\Main\Page\Asset::getInstance()->addJs('/bitrix/js/crm/progress_control.js');
 		\Bitrix\Main\Page\Asset::getInstance()->addJs('/bitrix/js/crm/partial_entity_editor.js');
 		\Bitrix\Main\Page\Asset::getInstance()->addCss('/bitrix/js/crm/css/crm.css');
@@ -2569,7 +2627,7 @@ class CCrmViewHelper
 		{
 			if($isSuccessful || $isFailed)
 			{
-				$wrapperStyle = 'style="background:'.$finalColor.'"';
+				// $wrapperStyle = 'style="background:'.$finalColor.'"';
 			}
 		}
 		else
@@ -2635,7 +2693,9 @@ class CCrmViewHelper
 		return $registrationScript.'<div class="crm-list-stage-bar'.$wrapperClass.'" '.$wrapperStyle.' id="'.htmlspecialcharsbx($controlID).'"><table class="crm-list-stage-bar-table"><tr>'
 			.$stepHtml
 			.'</tr></table>'
-			.'<script>BX.ready(function(){ BX.CrmProgressControl.create("'
+			.'<script>BX.ready(function(){'
+			.'BX.loadExt("crm.stage.permission-checker").then(() => {'
+			.'BX.CrmProgressControl.create("'
 			.CUtil::JSEscape($controlID).'"'
 			.', BX.CrmParamBag.create({"containerId": "'.CUtil::JSEscape($controlID).'"'
 			.', "entityType":"'.CUtil::JSEscape($entityTypeName).'"'
@@ -2652,7 +2712,7 @@ class CCrmViewHelper
 			.', "readOnly":'.($isReadOnly ? 'true' : 'false')
 			.', "enableCustomColors":'.($enableCustomColors ? 'true' : 'false')
 			.', "converterId":"' . CUtil::JSEscape($converterId) . '"'
-			.' }));});</script>'
+			.' }));})})</script>'
 			.'</div>'.$legendHtml;
 	}
 	public static function RenderQuoteStatusControl($arParams)
@@ -2949,13 +3009,20 @@ class CCrmViewHelper
 	{
 		$result = array();
 		$isTresholdPassed = false;
-		foreach(self::PrepareOrderShipmentStatuses() as $status)
+		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
+
+		$preparedOrderShipmentStatuses = self::PrepareOrderShipmentStatuses();
+		StagePermissions::fillAllPermissionsByStages($preparedOrderShipmentStatuses);
+
+		foreach($preparedOrderShipmentStatuses as $status)
 		{
 			$info = array(
 				'id' => $status['STATUS_ID'],
 				'name' => $status['NAME'],
 				'sort' => intval($status['SORT']),
-				'color' => isset($status['COLOR']) ? $status['COLOR'] : ''
+				'color' => isset($status['COLOR']) ? $status['COLOR'] : '',
+				'stagesToMove' => $status['STAGES_TO_MOVE'] ?? [],
+				'allowMoveToAnyStage' => $canWriteConfig,
 			);
 
 			if($status['STATUS_ID'] === 'DF')
@@ -2997,13 +3064,20 @@ class CCrmViewHelper
 	{
 		$result = array();
 		$isTresholdPassed = false;
-		foreach(self::PrepareOrderStatuses() as $status)
+		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
+
+		$preparedOrderStatuses = self::PrepareOrderStatuses();
+		StagePermissions::fillAllPermissionsByStages($preparedOrderStatuses);
+
+		foreach($preparedOrderStatuses as $status)
 		{
 			$info = array(
 				'id' => $status['STATUS_ID'],
 				'name' => $status['NAME'],
 				'sort' => intval($status['SORT']),
-				'color' => isset($status['COLOR']) ? $status['COLOR'] : ''
+				'color' => isset($status['COLOR']) ? $status['COLOR'] : '',
+				'stagesToMove' => $status['STAGES_TO_MOVE'] ?? [],
+				'allowMoveToAnyStage' => $canWriteConfig,
 			);
 
 			if($status['STATUS_ID'] === 'F')
@@ -3056,13 +3130,22 @@ class CCrmViewHelper
 	{
 		$result = array();
 		$isTresholdPassed = false;
-		foreach(self::PrepareQuoteStatuses() as $status)
+		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
+
+		$preparedQuoteStatuses = self::PrepareQuoteStatuses();
+		(new StagePermissions(CCrmOwnerType::Quote, null))
+			->fill($preparedQuoteStatuses)
+		;
+
+		foreach($preparedQuoteStatuses as $status)
 		{
 			$info = array(
 				'id' => $status['STATUS_ID'],
 				'name' => $status['NAME'],
 				'sort' => intval($status['SORT']),
-				'color' => isset($status['COLOR']) ? $status['COLOR'] : ''
+				'color' => isset($status['COLOR']) ? $status['COLOR'] : '',
+				'stagesToMove' => $status['STAGES_TO_MOVE'] ?? [],
+				'allowMoveToAnyStage' => $canWriteConfig,
 			);
 
 			if($status['STATUS_ID'] === 'APPROVED')
@@ -3105,7 +3188,14 @@ class CCrmViewHelper
 		$result = [];
 
 		$isFinalFailurePassed = false;
-		foreach (self::PrepareItemsStatuses($entityTypeId, $categoryId) as $status)
+		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
+
+		$preparedItemsStatuses = self::PrepareItemsStatuses($entityTypeId, $categoryId);
+		(new StagePermissions($entityTypeId, $categoryId))
+			->fill($preparedItemsStatuses)
+		;
+
+		foreach ($preparedItemsStatuses as $status)
 		{
 			$info = [
 				'id' => $status['STATUS_ID'],
@@ -3113,17 +3203,22 @@ class CCrmViewHelper
 				'sort' => intval($status['SORT']),
 				'color' => $status['COLOR'] ?? '',
 				'semantics' => $status['SEMANTICS'],
+				'stagesToMove' => $status['STAGES_TO_MOVE'] ?? [],
+				'allowMoveToAnyStage' => $canWriteConfig,
 			];
+
 			if ($status['SEMANTICS'] === 'F')
 			{
 				$info['semantics'] = $isFinalFailurePassed ? 'apology' : 'failure';
 				$isFinalFailurePassed = true;
 			}
+
 			if ($status['SEMANTICS'] === 'S')
 			{
 				$info['semantics'] = 'success';
 				$info['hint'] = GetMessage('CRM_ITEM_STATUS_MANAGER_SELECTOR_TTL');
 			}
+
 			$result[] = $info;
 		}
 		return $result;

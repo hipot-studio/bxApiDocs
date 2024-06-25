@@ -50,7 +50,7 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 
 		$insertSql = "INSERT INTO {$tableName}(SL_ID, SL_EVENT_ID, SL_ENTITY_TYPE, ENTITY_ID, SL_PARENT_ENTITY_TYPE, PARENT_ENTITY_ID, SL_LAST_UPDATED, TYPE_ID, LVL)
 			VALUES({$logEntityID}, '{$logEventID}', '{$slEntityType}', {$entityID}, '{$slParentEntityType}', {$parentEntityID}, {$logLastUpdateTime}, {$typeID}, {$level})";
-		$DB->Query($insertSql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+		$DB->Query($insertSql);
 	}
 	public function RegisterBundle($logEntityID, $logEventID, $entityTypeID, $entityID, &$parents, $options = array())
 	{
@@ -173,9 +173,7 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 		}
 
 		$DB->Query(
-			'INSERT INTO '.self::TABLE_NAME.'('.$bulkColumns.') VALUES'.$query,
-			false,
-			'File: '.__FILE__.'<br/>Line: '.__LINE__
+			'INSERT INTO '.self::TABLE_NAME.'('.$bulkColumns.') VALUES'.$query
 		);
 	}
 	public function Replace($entityTypeID, $entityID, $currentParent, $previousParent, $options = array())
@@ -233,7 +231,7 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 
 		$updateSql = "UPDATE {$tableName} SET SL_PARENT_ENTITY_TYPE = '{$currentSlParentEntityType}', PARENT_ENTITY_ID = {$currentParentEntityID}
 			WHERE SL_ENTITY_TYPE = '{$slEntityType}' AND ENTITY_ID = {$entityID} AND SL_PARENT_ENTITY_TYPE = '{$previousSlParentEntityType}'AND PARENT_ENTITY_ID = {$previousParentEntityID}";
-		$dbResult = $DB->Query($updateSql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+		$dbResult = $DB->Query($updateSql);
 		return is_object($dbResult) && $dbResult->AffectedRowsCount() > 0;
 	}
 	public function UnRegisterByLogEntityID($logEntityID, $typeID = CCrmSonetRelationType::Undefined)
@@ -250,7 +248,7 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 		$deleteSql = CCrmSonetRelationType::IsDefined($typeID)
 			? "DELETE FROM {$tableName} WHERE SL_ID = {$logEntityID} AND TYPE_ID = {$typeID}"
 			: "DELETE FROM {$tableName} WHERE SL_ID = {$logEntityID}";
-		$DB->Query($deleteSql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+		$DB->Query($deleteSql);
 	}
 	public function UnRegisterByEntity($entityTypeID, $entityID, $options = array())
 	{
@@ -277,7 +275,7 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 		$slEntityType = $DB->ForSql(CCrmLiveFeedEntity::GetByEntityTypeID($entityTypeID));
 
 		$deleteSql = "DELETE{$modifiers} FROM {$tableName} WHERE (SL_ENTITY_TYPE = '{$slEntityType}' AND ENTITY_ID = {$entityID}) OR (SL_PARENT_ENTITY_TYPE = '{$slEntityType}' AND PARENT_ENTITY_ID = {$entityID})";
-		$DB->Query($deleteSql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+		$DB->Query($deleteSql);
 	}
 	public function SynchronizeLastUpdateTime($logEntityID)
 	{
@@ -310,7 +308,7 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 
 		$updateSql = "UPDATE {$tableName} SET ENTITY_ID = {$dstEntityID}
 			WHERE SL_ENTITY_TYPE = '{$slEntityType}' AND ENTITY_ID = {$srcEntityID}";
-		$dbResult = $DB->Query($updateSql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+		$dbResult = $DB->Query($updateSql);
 
 		if(is_object($dbResult))
 		{
@@ -319,7 +317,7 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 
 		$updateSql = "UPDATE {$tableName} SET PARENT_ENTITY_ID = {$dstEntityID}
 			WHERE SL_PARENT_ENTITY_TYPE = '{$slEntityType}' AND PARENT_ENTITY_ID = {$srcEntityID}";
-		$dbResult = $DB->Query($updateSql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+		$dbResult = $DB->Query($updateSql);
 
 		if(is_object($dbResult))
 		{
@@ -340,7 +338,7 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 
 		$updateSql = "UPDATE {$tableName} SET SL_ENTITY_TYPE = '{$dstSonetEntityType}', ENTITY_ID = {$dstEntityID}
 			WHERE SL_ENTITY_TYPE = '{$srcSonetEntityType}' AND ENTITY_ID = {$srcEntityID}";
-		$dbResult = $DB->Query($updateSql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+		$dbResult = $DB->Query($updateSql);
 
 		if(is_object($dbResult))
 		{
@@ -349,7 +347,7 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 
 		$updateSql = "UPDATE {$tableName} SET SL_PARENT_ENTITY_TYPE = '{$dstSonetEntityType}', PARENT_ENTITY_ID = {$dstEntityID}
 			WHERE SL_PARENT_ENTITY_TYPE = '{$srcSonetEntityType}' AND PARENT_ENTITY_ID = {$srcEntityID}";
-		$dbResult = $DB->Query($updateSql, false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+		$dbResult = $DB->Query($updateSql);
 
 		if(is_object($dbResult))
 		{

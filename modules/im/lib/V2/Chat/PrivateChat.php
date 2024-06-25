@@ -193,7 +193,7 @@ class PrivateChat extends Chat implements PopupDataAggregatable
 		);
 	}
 
-	public function addUsers(array $userIds, array $managerIds = [], ?bool $hideHistory = null, bool $withMessage = true, bool $skipRecent = false): Chat
+	public function addUsers(array $userIds, array $managerIds = [], ?bool $hideHistory = null, bool $withMessage = true, bool $skipRecent = false, Relation\Reason $reason = Relation\Reason::DEFAULT): Chat
 	{
 		return $this;
 	}

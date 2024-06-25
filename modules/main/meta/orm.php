@@ -931,66 +931,66 @@ namespace Bitrix\Main\Authentication\Internal {
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin resetIp()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin unsetIp()
 	 * @method \string fillIp()
-	 * @method ?\int getCityGeoid()
-	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setCityGeoid(?\int|\Bitrix\Main\DB\SqlExpression $cityGeoid)
+	 * @method null|\int getCityGeoid()
+	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setCityGeoid(null|\int|\Bitrix\Main\DB\SqlExpression $cityGeoid)
 	 * @method bool hasCityGeoid()
 	 * @method bool isCityGeoidFilled()
 	 * @method bool isCityGeoidChanged()
-	 * @method ?\int remindActualCityGeoid()
-	 * @method ?\int requireCityGeoid()
+	 * @method null|\int remindActualCityGeoid()
+	 * @method null|\int requireCityGeoid()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin resetCityGeoid()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin unsetCityGeoid()
-	 * @method ?\int fillCityGeoid()
-	 * @method ?\int getRegionGeoid()
-	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setRegionGeoid(?\int|\Bitrix\Main\DB\SqlExpression $regionGeoid)
+	 * @method null|\int fillCityGeoid()
+	 * @method null|\int getRegionGeoid()
+	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setRegionGeoid(null|\int|\Bitrix\Main\DB\SqlExpression $regionGeoid)
 	 * @method bool hasRegionGeoid()
 	 * @method bool isRegionGeoidFilled()
 	 * @method bool isRegionGeoidChanged()
-	 * @method ?\int remindActualRegionGeoid()
-	 * @method ?\int requireRegionGeoid()
+	 * @method null|\int remindActualRegionGeoid()
+	 * @method null|\int requireRegionGeoid()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin resetRegionGeoid()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin unsetRegionGeoid()
-	 * @method ?\int fillRegionGeoid()
-	 * @method ?\string getCountryIsoCode()
-	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setCountryIsoCode(?\string|\Bitrix\Main\DB\SqlExpression $countryIsoCode)
+	 * @method null|\int fillRegionGeoid()
+	 * @method null|\string getCountryIsoCode()
+	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setCountryIsoCode(null|\string|\Bitrix\Main\DB\SqlExpression $countryIsoCode)
 	 * @method bool hasCountryIsoCode()
 	 * @method bool isCountryIsoCodeFilled()
 	 * @method bool isCountryIsoCodeChanged()
-	 * @method ?\string remindActualCountryIsoCode()
-	 * @method ?\string requireCountryIsoCode()
+	 * @method null|\string remindActualCountryIsoCode()
+	 * @method null|\string requireCountryIsoCode()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin resetCountryIsoCode()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin unsetCountryIsoCode()
-	 * @method ?\string fillCountryIsoCode()
-	 * @method ?\int getAppPasswordId()
-	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setAppPasswordId(?\int|\Bitrix\Main\DB\SqlExpression $appPasswordId)
+	 * @method null|\string fillCountryIsoCode()
+	 * @method null|\int getAppPasswordId()
+	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setAppPasswordId(null|\int|\Bitrix\Main\DB\SqlExpression $appPasswordId)
 	 * @method bool hasAppPasswordId()
 	 * @method bool isAppPasswordIdFilled()
 	 * @method bool isAppPasswordIdChanged()
-	 * @method ?\int remindActualAppPasswordId()
-	 * @method ?\int requireAppPasswordId()
+	 * @method null|\int remindActualAppPasswordId()
+	 * @method null|\int requireAppPasswordId()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin resetAppPasswordId()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin unsetAppPasswordId()
-	 * @method ?\int fillAppPasswordId()
-	 * @method ?\int getStoredAuthId()
-	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setStoredAuthId(?\int|\Bitrix\Main\DB\SqlExpression $storedAuthId)
+	 * @method null|\int fillAppPasswordId()
+	 * @method null|\int getStoredAuthId()
+	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setStoredAuthId(null|\int|\Bitrix\Main\DB\SqlExpression $storedAuthId)
 	 * @method bool hasStoredAuthId()
 	 * @method bool isStoredAuthIdFilled()
 	 * @method bool isStoredAuthIdChanged()
-	 * @method ?\int remindActualStoredAuthId()
-	 * @method ?\int requireStoredAuthId()
+	 * @method null|\int remindActualStoredAuthId()
+	 * @method null|\int requireStoredAuthId()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin resetStoredAuthId()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin unsetStoredAuthId()
-	 * @method ?\int fillStoredAuthId()
-	 * @method ?\int getHitAuthId()
-	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setHitAuthId(?\int|\Bitrix\Main\DB\SqlExpression $hitAuthId)
+	 * @method null|\int fillStoredAuthId()
+	 * @method null|\int getHitAuthId()
+	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin setHitAuthId(null|\int|\Bitrix\Main\DB\SqlExpression $hitAuthId)
 	 * @method bool hasHitAuthId()
 	 * @method bool isHitAuthIdFilled()
 	 * @method bool isHitAuthIdChanged()
-	 * @method ?\int remindActualHitAuthId()
-	 * @method ?\int requireHitAuthId()
+	 * @method null|\int remindActualHitAuthId()
+	 * @method null|\int requireHitAuthId()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin resetHitAuthId()
 	 * @method \Bitrix\Main\Authentication\Internal\EO_UserDeviceLogin unsetHitAuthId()
-	 * @method ?\int fillHitAuthId()
+	 * @method null|\int fillHitAuthId()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1041,18 +1041,18 @@ namespace Bitrix\Main\Authentication\Internal {
 	 * @method \Bitrix\Main\Type\DateTime[] fillLoginDate()
 	 * @method \string[] getIpList()
 	 * @method \string[] fillIp()
-	 * @method ?\int[] getCityGeoidList()
-	 * @method ?\int[] fillCityGeoid()
-	 * @method ?\int[] getRegionGeoidList()
-	 * @method ?\int[] fillRegionGeoid()
-	 * @method ?\string[] getCountryIsoCodeList()
-	 * @method ?\string[] fillCountryIsoCode()
-	 * @method ?\int[] getAppPasswordIdList()
-	 * @method ?\int[] fillAppPasswordId()
-	 * @method ?\int[] getStoredAuthIdList()
-	 * @method ?\int[] fillStoredAuthId()
-	 * @method ?\int[] getHitAuthIdList()
-	 * @method ?\int[] fillHitAuthId()
+	 * @method null|\int[] getCityGeoidList()
+	 * @method null|\int[] fillCityGeoid()
+	 * @method null|\int[] getRegionGeoidList()
+	 * @method null|\int[] fillRegionGeoid()
+	 * @method null|\string[] getCountryIsoCodeList()
+	 * @method null|\string[] fillCountryIsoCode()
+	 * @method null|\int[] getAppPasswordIdList()
+	 * @method null|\int[] fillAppPasswordId()
+	 * @method null|\int[] getStoredAuthIdList()
+	 * @method null|\int[] fillStoredAuthId()
+	 * @method null|\int[] getHitAuthIdList()
+	 * @method null|\int[] fillHitAuthId()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -4508,6 +4508,13 @@ namespace Bitrix\Main {
 	 * @method bool isCodeUserIdFilled()
 	 * @method \Bitrix\Main\EO_FinderDest unsetCodeUserId()
 	 * @method \string fillCodeUserId()
+	 * @method \string getMaxLastUseDate()
+	 * @method \string remindActualMaxLastUseDate()
+	 * @method \string requireMaxLastUseDate()
+	 * @method bool hasMaxLastUseDate()
+	 * @method bool isMaxLastUseDateFilled()
+	 * @method \Bitrix\Main\EO_FinderDest unsetMaxLastUseDate()
+	 * @method \string fillMaxLastUseDate()
 	 * @method \Bitrix\Main\EO_User getCodeUser()
 	 * @method \Bitrix\Main\EO_User remindActualCodeUser()
 	 * @method \Bitrix\Main\EO_User requireCodeUser()
@@ -4590,6 +4597,8 @@ namespace Bitrix\Main {
 	 * @method \string[] fillCodeType()
 	 * @method \string[] getCodeUserIdList()
 	 * @method \string[] fillCodeUserId()
+	 * @method \string[] getMaxLastUseDateList()
+	 * @method \string[] fillMaxLastUseDate()
 	 * @method \Bitrix\Main\EO_User[] getCodeUserList()
 	 * @method \Bitrix\Main\EO_FinderDest_Collection getCodeUserCollection()
 	 * @method \Bitrix\Main\EO_User_Collection fillCodeUser()
@@ -4746,6 +4755,13 @@ namespace Bitrix\Main\UI\EntitySelector {
 	 * @method bool isCodeUserIdFilled()
 	 * @method \Bitrix\Main\UI\EntitySelector\EO_EntityUsage unsetCodeUserId()
 	 * @method \string fillCodeUserId()
+	 * @method \string getMaxLastUseDate()
+	 * @method \string remindActualMaxLastUseDate()
+	 * @method \string requireMaxLastUseDate()
+	 * @method bool hasMaxLastUseDate()
+	 * @method bool isMaxLastUseDateFilled()
+	 * @method \Bitrix\Main\UI\EntitySelector\EO_EntityUsage unsetMaxLastUseDate()
+	 * @method \string fillMaxLastUseDate()
 	 * @method \Bitrix\Main\EO_User getCodeUser()
 	 * @method \Bitrix\Main\EO_User remindActualCodeUser()
 	 * @method \Bitrix\Main\EO_User requireCodeUser()
@@ -4828,6 +4844,8 @@ namespace Bitrix\Main\UI\EntitySelector {
 	 * @method \string[] fillCodeType()
 	 * @method \string[] getCodeUserIdList()
 	 * @method \string[] fillCodeUserId()
+	 * @method \string[] getMaxLastUseDateList()
+	 * @method \string[] fillMaxLastUseDate()
 	 * @method \Bitrix\Main\EO_User[] getCodeUserList()
 	 * @method \Bitrix\Main\UI\EntitySelector\EO_EntityUsage_Collection getCodeUserCollection()
 	 * @method \Bitrix\Main\EO_User_Collection fillCodeUser()
@@ -6945,6 +6963,26 @@ namespace Bitrix\Main\Mail\Internal {
 	 * @method \Bitrix\Main\Mail\Internal\Sender resetOptions()
 	 * @method \Bitrix\Main\Mail\Internal\Sender unsetOptions()
 	 * @method array fillOptions()
+	 * @method \string getParentModuleId()
+	 * @method \Bitrix\Main\Mail\Internal\Sender setParentModuleId(\string|\Bitrix\Main\DB\SqlExpression $parentModuleId)
+	 * @method bool hasParentModuleId()
+	 * @method bool isParentModuleIdFilled()
+	 * @method bool isParentModuleIdChanged()
+	 * @method \string remindActualParentModuleId()
+	 * @method \string requireParentModuleId()
+	 * @method \Bitrix\Main\Mail\Internal\Sender resetParentModuleId()
+	 * @method \Bitrix\Main\Mail\Internal\Sender unsetParentModuleId()
+	 * @method \string fillParentModuleId()
+	 * @method null|\int getParentId()
+	 * @method \Bitrix\Main\Mail\Internal\Sender setParentId(null|\int|\Bitrix\Main\DB\SqlExpression $parentId)
+	 * @method bool hasParentId()
+	 * @method bool isParentIdFilled()
+	 * @method bool isParentIdChanged()
+	 * @method null|\int remindActualParentId()
+	 * @method null|\int requireParentId()
+	 * @method \Bitrix\Main\Mail\Internal\Sender resetParentId()
+	 * @method \Bitrix\Main\Mail\Internal\Sender unsetParentId()
+	 * @method null|\int fillParentId()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -7001,6 +7039,10 @@ namespace Bitrix\Main\Mail\Internal {
 	 * @method \boolean[] fillIsPublic()
 	 * @method array[] getOptionsList()
 	 * @method array[] fillOptions()
+	 * @method \string[] getParentModuleIdList()
+	 * @method \string[] fillParentModuleId()
+	 * @method null|\int[] getParentIdList()
+	 * @method null|\int[] fillParentId()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -7197,6 +7239,136 @@ namespace Bitrix\Main\Mail\Internal {
 	 */
 	class EO_SenderSendCounter_Entity extends \Bitrix\Main\ORM\Entity {}
 }
+/* ORMENTITYANNOTATION:Bitrix\Main\ModuleTable:main/lib/moduletable.php */
+namespace Bitrix\Main {
+	/**
+	 * EO_Module
+	 * @see \Bitrix\Main\ModuleTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string getId()
+	 * @method \Bitrix\Main\EO_Module setId(\string|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \Bitrix\Main\Type\DateTime getDateActive()
+	 * @method \Bitrix\Main\EO_Module setDateActive(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateActive)
+	 * @method bool hasDateActive()
+	 * @method bool isDateActiveFilled()
+	 * @method bool isDateActiveChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateActive()
+	 * @method \Bitrix\Main\Type\DateTime requireDateActive()
+	 * @method \Bitrix\Main\EO_Module resetDateActive()
+	 * @method \Bitrix\Main\EO_Module unsetDateActive()
+	 * @method \Bitrix\Main\Type\DateTime fillDateActive()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Main\EO_Module set($fieldName, $value)
+	 * @method \Bitrix\Main\EO_Module reset($fieldName)
+	 * @method \Bitrix\Main\EO_Module unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Main\EO_Module wakeUp($data)
+	 */
+	class EO_Module {
+		/* @var \Bitrix\Main\ModuleTable */
+		static public $dataClass = '\Bitrix\Main\ModuleTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Main {
+	/**
+	 * EO_Module_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string[] getIdList()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateActiveList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateActive()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Main\EO_Module $object)
+	 * @method bool has(\Bitrix\Main\EO_Module $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Main\EO_Module getByPrimary($primary)
+	 * @method \Bitrix\Main\EO_Module[] getAll()
+	 * @method bool remove(\Bitrix\Main\EO_Module $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Main\EO_Module_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Main\EO_Module current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_Module_Collection merge(?EO_Module_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Module_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Main\ModuleTable */
+		static public $dataClass = '\Bitrix\Main\ModuleTable';
+	}
+}
+namespace Bitrix\Main {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Module_Result exec()
+	 * @method \Bitrix\Main\EO_Module fetchObject()
+	 * @method \Bitrix\Main\EO_Module_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Module_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Main\EO_Module fetchObject()
+	 * @method \Bitrix\Main\EO_Module_Collection fetchCollection()
+	 */
+	class EO_Module_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Main\EO_Module createObject($setDefaultValues = true)
+	 * @method \Bitrix\Main\EO_Module_Collection createCollection()
+	 * @method \Bitrix\Main\EO_Module wakeUpObject($row)
+	 * @method \Bitrix\Main\EO_Module_Collection wakeUpCollection($rows)
+	 */
+	class EO_Module_Entity extends \Bitrix\Main\ORM\Entity {}
+}
 /* ORMENTITYANNOTATION:Bitrix\Main\Numerator\Model\NumeratorTable:main/lib/numerator/model/numerator.php */
 namespace Bitrix\Main\Numerator\Model {
 	/**
@@ -7291,16 +7463,16 @@ namespace Bitrix\Main\Numerator\Model {
 	 * @method \Bitrix\Main\Numerator\Model\EO_Numerator resetUpdatedBy()
 	 * @method \Bitrix\Main\Numerator\Model\EO_Numerator unsetUpdatedBy()
 	 * @method \int fillUpdatedBy()
-	 * @method ?\string getCode()
-	 * @method \Bitrix\Main\Numerator\Model\EO_Numerator setCode(?\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method null|\string getCode()
+	 * @method \Bitrix\Main\Numerator\Model\EO_Numerator setCode(null|\string|\Bitrix\Main\DB\SqlExpression $code)
 	 * @method bool hasCode()
 	 * @method bool isCodeFilled()
 	 * @method bool isCodeChanged()
-	 * @method ?\string remindActualCode()
-	 * @method ?\string requireCode()
+	 * @method null|\string remindActualCode()
+	 * @method null|\string requireCode()
 	 * @method \Bitrix\Main\Numerator\Model\EO_Numerator resetCode()
 	 * @method \Bitrix\Main\Numerator\Model\EO_Numerator unsetCode()
-	 * @method ?\string fillCode()
+	 * @method null|\string fillCode()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -7361,8 +7533,8 @@ namespace Bitrix\Main\Numerator\Model {
 	 * @method \Bitrix\Main\Type\DateTime[] fillUpdatedAt()
 	 * @method \int[] getUpdatedByList()
 	 * @method \int[] fillUpdatedBy()
-	 * @method ?\string[] getCodeList()
-	 * @method ?\string[] fillCode()
+	 * @method null|\string[] getCodeList()
+	 * @method null|\string[] fillCode()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -8213,6 +8385,160 @@ namespace Bitrix\Main\Rating {
 	 * @method \Bitrix\Main\Rating\EO_Results_Collection wakeUpCollection($rows)
 	 */
 	class EO_Results_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Main\Security\W\Rules\RuleRecordTable:main/lib/security/w/rules/rulerecordtable.php */
+namespace Bitrix\Main\Security\W\Rules {
+	/**
+	 * EO_RuleRecord
+	 * @see \Bitrix\Main\Security\W\Rules\RuleRecordTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getData()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord setData(\string|\Bitrix\Main\DB\SqlExpression $data)
+	 * @method bool hasData()
+	 * @method bool isDataFilled()
+	 * @method bool isDataChanged()
+	 * @method \string remindActualData()
+	 * @method \string requireData()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord resetData()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord unsetData()
+	 * @method \string fillData()
+	 * @method \string getModule()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord setModule(\string|\Bitrix\Main\DB\SqlExpression $module)
+	 * @method bool hasModule()
+	 * @method bool isModuleFilled()
+	 * @method bool isModuleChanged()
+	 * @method \string remindActualModule()
+	 * @method \string requireModule()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord resetModule()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord unsetModule()
+	 * @method \string fillModule()
+	 * @method \string getModuleVersion()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord setModuleVersion(\string|\Bitrix\Main\DB\SqlExpression $moduleVersion)
+	 * @method bool hasModuleVersion()
+	 * @method bool isModuleVersionFilled()
+	 * @method bool isModuleVersionChanged()
+	 * @method \string remindActualModuleVersion()
+	 * @method \string requireModuleVersion()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord resetModuleVersion()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord unsetModuleVersion()
+	 * @method \string fillModuleVersion()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord set($fieldName, $value)
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord reset($fieldName)
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Main\Security\W\Rules\EO_RuleRecord wakeUp($data)
+	 */
+	class EO_RuleRecord {
+		/* @var \Bitrix\Main\Security\W\Rules\RuleRecordTable */
+		static public $dataClass = '\Bitrix\Main\Security\W\Rules\RuleRecordTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Main\Security\W\Rules {
+	/**
+	 * EO_RuleRecord_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getDataList()
+	 * @method \string[] fillData()
+	 * @method \string[] getModuleList()
+	 * @method \string[] fillModule()
+	 * @method \string[] getModuleVersionList()
+	 * @method \string[] fillModuleVersion()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Main\Security\W\Rules\EO_RuleRecord $object)
+	 * @method bool has(\Bitrix\Main\Security\W\Rules\EO_RuleRecord $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord getByPrimary($primary)
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord[] getAll()
+	 * @method bool remove(\Bitrix\Main\Security\W\Rules\EO_RuleRecord $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Main\Security\W\Rules\EO_RuleRecord_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_RuleRecord_Collection merge(?EO_RuleRecord_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_RuleRecord_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Main\Security\W\Rules\RuleRecordTable */
+		static public $dataClass = '\Bitrix\Main\Security\W\Rules\RuleRecordTable';
+	}
+}
+namespace Bitrix\Main\Security\W\Rules {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_RuleRecord_Result exec()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord fetchObject()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_RuleRecord_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord fetchObject()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord_Collection fetchCollection()
+	 */
+	class EO_RuleRecord_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord createObject($setDefaultValues = true)
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord_Collection createCollection()
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord wakeUpObject($row)
+	 * @method \Bitrix\Main\Security\W\Rules\EO_RuleRecord_Collection wakeUpCollection($rows)
+	 */
+	class EO_RuleRecord_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Main\Service\GeoIp\HandlerTable:main/lib/service/geoip/handler.php */
 namespace Bitrix\Main\Service\GeoIp {
@@ -9564,6 +9890,13 @@ namespace Bitrix\Main {
 	 * @method bool isSiteFilled()
 	 * @method bool isSiteChanged()
 	 * @method \Bitrix\Main\EO_Site fillSite()
+	 * @method \string getEmptyCondition()
+	 * @method \string remindActualEmptyCondition()
+	 * @method \string requireEmptyCondition()
+	 * @method bool hasEmptyCondition()
+	 * @method bool isEmptyConditionFilled()
+	 * @method \Bitrix\Main\EO_SiteTemplate unsetEmptyCondition()
+	 * @method \string fillEmptyCondition()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -9619,6 +9952,8 @@ namespace Bitrix\Main {
 	 * @method \Bitrix\Main\EO_Site[] getSiteList()
 	 * @method \Bitrix\Main\EO_SiteTemplate_Collection getSiteCollection()
 	 * @method \Bitrix\Main\EO_Site_Collection fillSite()
+	 * @method \string[] getEmptyConditionList()
+	 * @method \string[] fillEmptyCondition()
 	 *
 	 * Common methods:
 	 * ---------------

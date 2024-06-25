@@ -7,7 +7,7 @@ use Bitrix\Main\Context;
 
 class BirthDayFieldAssembler extends CustomUserFieldAssembler
 {
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): mixed
 	{
 		$birthdayFormat = Context::getCurrent()->getCulture()->getLongDateFormat();
 		$showYearValue = Option::get("intranet", "user_profile_show_year", "Y");

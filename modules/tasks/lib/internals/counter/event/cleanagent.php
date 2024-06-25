@@ -23,13 +23,14 @@ class CleanAgent implements AgentInterface
 
 	public static function execute(): string
 	{
+		return '';
 		if (self::$processing)
 		{
 			return static::getAgentName();
 		}
 
 		$filter = [
-			'>=PROCESSED' => DateTime::createFromTimestamp(0),
+			'>PROCESSED' => DateTime::createFromTimestamp(0),
 			'<PROCESSED' => DateTime::createFromTimestamp(time() - self::TTL)
 		];
 		EventTable::deleteList($filter);

@@ -890,8 +890,8 @@ abstract class CBPActivity
 			$m = mb_strtolower($m);
 			if (isset($typesMap[$m]))
 			{
-				$typeName = $m;
-				$typeClass = $typesMap[$m];
+				$typeName ??= $m;
+				$typeClass ??= $typesMap[$m];
 			}
 			else
 			{

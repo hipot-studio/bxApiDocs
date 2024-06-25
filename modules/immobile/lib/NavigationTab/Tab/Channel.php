@@ -12,7 +12,7 @@ class Channel extends BaseRecent
 	
 	public function isAvailable(): bool
 	{
-		return ChannelChat::isListAvailable();
+		return true;
 	}
 	
 	public function getId(): string

@@ -1621,6 +1621,11 @@ class Field
 
 		if($field['READ'] == 'Y')
 		{
+			if (!array_key_exists('customHtml', $result))
+			{
+				$result['customHtml'] = '';
+			}
+
 			foreach($field['VALUE'] as $value)
 				$result['customHtml'] .= '<input type="hidden" name="'.$field['FIELD_ID'].'[]" value="'.
 					HtmlFilter::encode($value).'">';

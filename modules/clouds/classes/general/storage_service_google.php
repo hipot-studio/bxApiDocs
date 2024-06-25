@@ -447,7 +447,6 @@ class CCloudStorageService_GoogleStorage extends CCloudStorageService
 			if(mb_substr($filePath, 0, mb_strlen($arBucket["PREFIX"]) + 2) != "/".$arBucket["PREFIX"]."/")
 				$filePath = $arBucket["PREFIX"]."/".ltrim($filePath, "/");
 		}
-		$filePath = $APPLICATION->ConvertCharset($filePath, LANG_CHARSET, "UTF-8");
 		$filePath = str_replace(" ", "+", $filePath);
 
 		$marker = '';
@@ -478,7 +477,7 @@ class CCloudStorageService_GoogleStorage extends CCloudStorageService
 					foreach($response["ListBucketResult"]["#"]["CommonPrefixes"] as $a)
 					{
 						$dir_name = mb_substr(rtrim($a["#"]["Prefix"][0]["#"], "/"), mb_strlen($filePath));
-						$result["dir"][] = $APPLICATION->ConvertCharset($dir_name, "UTF-8", LANG_CHARSET);
+						$result["dir"][] = $dir_name;
 					}
 				}
 
@@ -490,7 +489,7 @@ class CCloudStorageService_GoogleStorage extends CCloudStorageService
 					foreach($response["ListBucketResult"]["#"]["Contents"] as $a)
 					{
 						$file_name = mb_substr($a["#"]["Key"][0]["#"], mb_strlen($filePath));
-						$result["file"][] = $APPLICATION->ConvertCharset($file_name, "UTF-8", LANG_CHARSET);
+						$result["file"][] = $file_name;
 						$result["file_size"][] = $a["#"]["Size"][0]["#"];
 						$result["file_mtime"][] = mb_substr($a["#"]["LastModified"][0]["#"], 0, 19);
 						$result["file_hash"][] = trim($a["#"]["ETag"][0]["#"], '"');
@@ -834,7 +833,6 @@ class CCloudStorageService_GoogleStorage extends CCloudStorageService
 		$CanonicalizedResource = "/".$bucket.$RequestURI;
 
 		$StringToSign = "$RequestMethod\n\n$ContentType\n$RequestDATE\n$CanonicalizedAmzHeaders$CanonicalizedResource";
-		//$utf = $APPLICATION->ConvertCharset($StringToSign, LANG_CHARSET, "UTF-8");
 
 		$Signature = base64_encode($this->hmacsha1($StringToSign, $secret_key));
 		$Authorization = "GOOG1 ".$access_key.":".$Signature;

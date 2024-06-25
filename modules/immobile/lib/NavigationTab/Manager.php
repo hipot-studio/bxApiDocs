@@ -42,6 +42,11 @@ class Manager
 		$this->channel = new Tab\Channel();
 	}
 	
+	public static function getShortTitle()
+	{
+		return Loc::getMessage('IMMOBILE_NAVIGATION_TAB_SHORT_TITLE');
+	}
+	
 	public function isNextNavigation(): bool
 	{
 		return MobileApp\Mobile::getApiVersion() >= 41;
@@ -49,12 +54,15 @@ class Manager
 	
 	public function getMessengerComponent(): array
 	{
+		/**
+		 * @type Tab\TabInterface[] $items
+		 */
 		$items = array_values(
 			array_filter($this->getSortedItems(), static fn ($item) => $item->isAvailable())
 		);
 
 		$itemsData = [];
-		$sharedParams = $this->getSharedParams();
+		$sharedParams = $this->getSharedParams($items);
 		foreach ($items as $item)
 		{
 			if ($item->isNeedMergeSharedParams())
@@ -106,7 +114,7 @@ class Manager
 				'componentCode' => 'im.recent',
 				'scriptPath' => MobileApp\Janative\Manager::getComponentPath('im:im.recent'),
 				'params' => array_merge(
-					$this->getSharedParams(),
+					$this->getSharedParams([]),
 					[
 						'TAB_CODE' => 'chats',
 						'COMPONENT_CODE' => 'im.recent',
@@ -150,9 +158,9 @@ class Manager
 		return [
 			$this->openLines,
 			$this->messenger,
-			$this->channel,
-			$this->copilot,
 			$this->notifications,
+			$this->copilot,
+			$this->channel,
 		];
 	}
 
@@ -160,10 +168,10 @@ class Manager
 	{
 		return [
 			$this->messenger,
-			$this->channel,
-			$this->copilot,
 			$this->openLines,
 			$this->notifications,
+			$this->copilot,
+			$this->channel,
 		];
 	}
 
@@ -171,14 +179,19 @@ class Manager
 	{
 		return [
 			$this->messenger,
-			$this->channel,
 			$this->copilot,
 			$this->notifications,
+			$this->channel,
 			$this->openLines,
 		];
 	}
-
-	private function getSharedParams(): array
+	
+	/**
+	 * @param Tab\TabInterface[] $tabs
+	 * @return array
+	 * @throws \Bitrix\Main\LoaderException
+	 */
+	private function getSharedParams(array $tabs): array
 	{
 		$isCloud = ModuleManager::isModuleInstalled('bitrix24') && defined('BX24_HOST_NAME');
 
@@ -194,6 +207,17 @@ class Manager
 					break;
 				}
 			}
+		}
+		$humanResourcesStructureAvailable = false;
+		if (method_exists('\Bitrix\Im\V2\Integration\HumanResources\Structure', 'isSyncAvailable'))
+		{
+			$humanResourcesStructureAvailable = \Bitrix\Im\V2\Integration\HumanResources\Structure::isSyncAvailable();
+		}
+
+		$firstTabId = '';
+		if (count($tabs) > 0)
+		{
+			$firstTabId = $tabs[0]->getId();
 		}
 
 		return array_merge(
@@ -215,7 +239,6 @@ class Manager
 				'COMPONENT_CHAT_DIALOG_VERSION' => Mobile\WebComponentManager::getWebComponentVersion('im.dialog'),
 				'COMPONENT_CHAT_DIALOG_VUE_VERSION' => Mobile\WebComponentManager::getWebComponentVersion('im.dialog.vue'),
 
-				'MIN_SEARCH_SIZE' => Helper::getMinTokenSize(),
 				'IS_NETWORK_SEARCH_AVAILABLE' => $this->isNetworkSearchAvailable(),
 				'IS_DEVELOPMENT_ENVIRONMENT' => $this->isDevelopmentEnvironment(),
 
@@ -235,11 +258,13 @@ class Manager
 				'SHOULD_SHOW_CHAT_V2_UPDATE_HINT' => Settings::shouldShowChatV2UpdateHint(),
 				'SMILE_LAST_UPDATE_DATE' => CSmile::getLastUpdate()->format(DateTimeInterface::ATOM),
 				'IS_COPILOT_AVAILABLE' => Settings::isCopilotAvailable(),
-				'IS_COPILOT_ADD_USERS' => Settings::isCopilotAddUsersEnabled(),
 				'CAN_USE_TELEPHONY' => Loader::includeModule('voximplant') && \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls(),
+				'FIRST_TAB_ID' => $firstTabId,
+				'HUMAN_RESOURCES_STRUCTURE_AVAILABLE' => $humanResourcesStructureAvailable ? 'Y' : 'N',
 			],
 			$this->getInvitationParams(),
 		);
+		
 	}
 
 	/**

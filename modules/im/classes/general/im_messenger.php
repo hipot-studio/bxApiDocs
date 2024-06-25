@@ -3717,65 +3717,13 @@ class CIMMessenger
 
 	public static function GetV2TemplateJS($arResult): string
 	{
-		global $USER;
-
-		$counters = (new \Bitrix\Im\V2\Message\CounterService())->get();
-		$recentList = \Bitrix\Im\Recent::getList(null, [
-			'SKIP_NOTIFICATION' => 'Y',
-			'SKIP_OPENLINES' => 'Y',
-			'JSON' => 'Y',
-			'GET_ORIGINAL_TEXT' => 'Y',
-			'SHORT_INFO' => 'Y',
-		]);
-
 		$isDesktop = $arResult['DESKTOP'] === true;
+		$application = new \Bitrix\Im\V2\Application($isDesktop);
 
-		$permissionManager = new \Bitrix\Im\V2\Chat\Permission(true);
-		$permissions = [
-			'byChatType' => $permissionManager->getByChatTypes(),
-			'actionGroups' => $permissionManager->getActionGroupDefinitions(),
-			'actionGroupsDefaults' => $permissionManager->getDefaultPermissionForGroupActions()
-		];
-		$marketApps = (new \Bitrix\Im\V2\Marketplace\Application())->toRestFormat();
-		$currentUser =  \CIMContactList::GetUserData([
-			'ID' => $USER->GetID(),
-			'PHONES' => 'Y',
-			'SHOW_ONLINE' => 'N',
-			'EXTRA_FIELDS' => 'Y',
-			'DATE_ATOM' => 'Y'
-		])['users'][$USER->GetID()];
-		$currentUser['isAdmin'] = self::IsAdmin();
-		$loggerConfig = \Bitrix\Im\Settings::getLoggerConfig();
-		$settings = (new \Bitrix\Im\V2\Settings\UserConfiguration($USER->GetID()))->getGeneralSettings();
-		$settings['notifications'] = (new \Bitrix\Im\V2\Settings\UserConfiguration($USER->GetID()))->getNotifySettings();
-		$sessionTime = (new \Bitrix\Im\V2\UpdateState())->getInterval();
-		$promoType = $isDesktop ? \Bitrix\Im\Promotion::DEVICE_TYPE_DESKTOP : \Bitrix\Im\Promotion::DEVICE_TYPE_BROWSER;
-		$promoList = \Bitrix\Im\Promotion::getActive($promoType);
-
-		$applicationName = $isDesktop ? 'messenger' : 'quickAccess';
-
-		return "
-			BX.ready(function() {
-				BX.Messenger.v2.Application.Launch('" . $applicationName . "', {
-					node: '#bx-im-external-recent-list',
-					preloadedList: " . \Bitrix\Main\Web\Json::encode($recentList) . ",
-					permissions: " . \Bitrix\Main\Web\Json::encode($permissions) . ",
-					marketApps: " . \Bitrix\Main\Web\Json::encode($marketApps) . ",
-					currentUser: " . \Bitrix\Main\Web\Json::encode($currentUser) . ",
-					loggerConfig: " . \Bitrix\Main\Web\Json::encode($loggerConfig) . ",
-					counters: " . \Bitrix\Main\Web\Json::encode($counters) . ",
-					settings: " . \Bitrix\Main\Web\Json::encode($settings) . ",
-					promoList: " . \Bitrix\Main\Web\Json::encode($promoList) . ",
-					phoneSettings: " . \Bitrix\Main\Web\Json::encode(self::getPhoneSettings()) . ",
-					sessionTime: " . \Bitrix\Main\Web\Json::encode($sessionTime) . ",
-				}).then((application) => {
-					" . ($isDesktop ? "application.initComponent('body')" : '') . "
-				});
-			});
-		";
+		return $application->getTemplate();
 	}
 
-	public static function getPhoneSettings()
+	public static function getPhoneSettings(): array
 	{
 		global $USER;
 
@@ -5155,27 +5103,12 @@ class CIMMessenger
 
 	protected static function needSendPush(array $arChat): bool
 	{
-		if ($arChat['CHAT_TYPE'] === \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT)
-		{
-			return self::canSendPushFromCopilot();
-		}
 		if ($arChat['CHAT_TYPE'] === \Bitrix\Im\V2\Chat::IM_TYPE_COMMENT)
 		{
 			return false;
 		}
 
 		return true;
-	}
-
-	protected static function canSendPushFromCopilot(): bool
-	{
-		if (!\Bitrix\Main\Loader::includeModule('mobile'))
-		{
-			return false;
-		}
-
-		/** @see \Bitrix\Mobile\AppTabs\Chat::isCopilotMobileEnabled */
-		return \Bitrix\Main\Config\Option::get('immobile', 'copilot_mobile_chat_enabled', 'N') === 'Y';
 	}
 
 	public static function needToSendPublicPull(?string $chatType): bool

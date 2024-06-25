@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Tour;
 
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Main\Localization\Loc;
 
 final class CopilotInCallAutomatically extends CopilotInCall
@@ -49,5 +50,10 @@ final class CopilotInCallAutomatically extends CopilotInCall
 				],
 			],
 		];
+	}
+
+	protected function isShowEnabled(): bool
+	{
+		return parent::isShowEnabled() && AIManager::isAiCallAutomaticProcessingAllowed();
 	}
 }

@@ -6,7 +6,7 @@ use Bitrix\Main\Grid\Row\FieldAssembler;
 
 class CountryFieldAssembler extends FieldAssembler
 {
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): mixed
 	{
 		$country = \Bitrix\Main\UserUtils::getCountryValue([
 			'VALUE' => $value

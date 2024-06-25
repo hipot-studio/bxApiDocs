@@ -487,6 +487,14 @@ class UserList extends \CBitrixComponent implements Controllerable, Errorable
 						'currentUserId' => $USER->getId(),
 						'isCurrentUserAdmin' => $USER->isAdmin()
 					]);
+					if ($result)
+					{
+						if ($userId > 0)
+						{
+							$deactivateUser = new User($userId);
+							Invitation::fullSyncCounterByUser($deactivateUser->fetchOriginatorUser());
+						}
+					}
 					break;
 			}
 		}
@@ -653,4 +661,3 @@ class UserList extends \CBitrixComponent implements Controllerable, Errorable
 		return \Bitrix\Intranet\Util::checkIntegratorActionRestriction($params);
 	}
 }
-?>

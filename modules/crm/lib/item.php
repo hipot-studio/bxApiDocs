@@ -238,6 +238,7 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	private $fieldToImplementationMap = [];
 	/** @var FieldImplementation[]|null */
 	private $allImplementationsCache;
+	private array $badges = [];
 
 	public function __construct(
 		int $entityTypeId,
@@ -2246,5 +2247,15 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 			),
 			true
 		);
+	}
+
+	public function getBadges(): array
+	{
+		return $this->badges;
+	}
+
+	public function addBadge(array $badge): void
+	{
+		$this->badges[] = $badge;
 	}
 }

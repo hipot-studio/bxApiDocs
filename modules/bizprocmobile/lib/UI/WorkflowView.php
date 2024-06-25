@@ -2,6 +2,7 @@
 
 namespace Bitrix\BizprocMobile\UI;
 
+use Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable;
 use Bitrix\Bizproc\WorkflowInstanceTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Type\DateTime;
@@ -22,6 +23,7 @@ class WorkflowView implements \JsonSerializable
 		$this->tasks = \CBPViewHelper::getWorkflowTasks($workflow['ID'], true, true);
 
 		$this->workflowIsCompleted = !WorkflowInstanceTable::exists($this->workflow['ID']);
+		$this->newCommentsCounter = $this->getNewCommentCounter();
 	}
 
 	public function getFacesIds(): array
@@ -54,6 +56,7 @@ class WorkflowView implements \JsonSerializable
 			'faces' => $this->getFaces(),
 			'tasks' => $myTasks,
 			'authorId' => $this->workflow['STARTED_USER_INFO']['ID'],
+			'newCommentsCounter' => $this->newCommentsCounter,
 		];
 	}
 
@@ -373,5 +376,18 @@ class WorkflowView implements \JsonSerializable
 		$runningTask = $this->getRunningTask();
 
 		return $this->extractUserIds($runningTask['USERS'] ?? []);
+	}
+
+	private function getNewCommentCounter(): int
+	{
+		$row = WorkflowUserCommentTable::getList([
+			'filter' => [
+				'=WORKFLOW_ID' => $this->workflow['ID'],
+				'=USER_ID' => $this->userId,
+			],
+			'select' => ['UNREAD_CNT'],
+		])->fetch();
+
+		return $row ? (int)$row['UNREAD_CNT'] : 0;
 	}
 }

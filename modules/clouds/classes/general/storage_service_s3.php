@@ -510,7 +510,7 @@ class CCloudStorageService_S3 extends CCloudStorageService
 					{
 						$Name = $Bucket["#"]["Name"][0]["#"];
 						$CreationDate = $Bucket["#"]["CreationDate"][0]["#"];
-						$result["bucket"][] = $APPLICATION->ConvertCharset(urldecode($Name), "UTF-8", LANG_CHARSET);
+						$result["bucket"][] = urldecode($Name);
 						$result["ctime"][] = strtotime($CreationDate);
 					}
 				}
@@ -1162,7 +1162,6 @@ class CCloudStorageService_S3 extends CCloudStorageService
 			if(mb_substr($filePath, 0, mb_strlen($arBucket["PREFIX"]) + 2) != "/".$arBucket["PREFIX"]."/")
 				$filePath = $arBucket["PREFIX"]."/".ltrim($filePath, "/");
 		}
-		$filePath = $APPLICATION->ConvertCharset($filePath, LANG_CHARSET, "UTF-8");
 
 		$this->SetLocation($arBucket["LOCATION"]);
 		$marker = $pageSize > 0? $filePath.$pageMarker: '';
@@ -1194,7 +1193,7 @@ class CCloudStorageService_S3 extends CCloudStorageService
 					foreach($response["ListBucketResult"]["#"]["CommonPrefixes"] as $a)
 					{
 						$dir_name = mb_substr(rtrim($a["#"]["Prefix"][0]["#"], "/"), mb_strlen($filePath));
-						$result["dir"][] = $APPLICATION->ConvertCharset($dir_name, "UTF-8", LANG_CHARSET);
+						$result["dir"][] = $dir_name;
 					}
 				}
 
@@ -1209,11 +1208,11 @@ class CCloudStorageService_S3 extends CCloudStorageService
 						$file_name = mb_substr($a["#"]["Key"][0]["#"], mb_strlen($filePath));
 						if ($file_name <> '' && mb_substr($file_name, -1) !== '/')
 						{
-							$result["file"][] = $APPLICATION->ConvertCharset($file_name, "UTF-8", LANG_CHARSET);
+							$result["file"][] = $file_name;
 							$result["file_size"][] = $a["#"]["Size"][0]["#"];
 							$result["file_mtime"][] = mb_substr($a["#"]["LastModified"][0]["#"], 0, 19);
 							$result["file_hash"][] = trim($a["#"]["ETag"][0]["#"], '"');
-							$result["last_key"] = $APPLICATION->ConvertCharset($file_name, "UTF-8", LANG_CHARSET);
+							$result["last_key"] = $file_name;
 							$lastKey = $a["#"]["Key"][0]["#"];
 							if ($pageSize > 0 && count($result["file"]) >= $pageSize)
 							{

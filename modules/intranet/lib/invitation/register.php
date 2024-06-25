@@ -366,7 +366,7 @@ class Register
 
 	private static function isIntranetUser(array $user): bool
 	{
-		return isset($user["UF_DEPARTMENT"])
+		return !empty($user["UF_DEPARTMENT"])
 		&& (
 			(
 				is_array($user["UF_DEPARTMENT"])
@@ -382,7 +382,7 @@ class Register
 	private static function isExtranetUser(array $user): bool
 	{
 		return (
-			!isset($user["UF_DEPARTMENT"])
+			empty($user["UF_DEPARTMENT"])
 			|| (
 				is_array($user["UF_DEPARTMENT"])
 				&& (int)$user["UF_DEPARTMENT"][0] <= 0

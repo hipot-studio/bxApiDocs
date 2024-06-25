@@ -3,14 +3,18 @@
 namespace Bitrix\Crm\Activity\Entity;
 
 use Bitrix\Crm\Activity\Provider;
-use Bitrix\Crm\Activity\Settings\OptionallyConfigurable;
+use Bitrix\Crm\Activity\Provider\ToDo\OptionallyConfigurable;
+use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
+use Bitrix\Crm\Integration\DiskManager;
 use Bitrix\Crm\Integration\StorageType;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Settings\Crm;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Web\Uri;
 use CCrmActivity;
 
 class ToDo implements OptionallyConfigurable
@@ -32,17 +36,20 @@ class ToDo implements OptionallyConfigurable
 
 	protected bool $checkPermissions = true;
 
-	protected int $calendarEventId = 0;
+	protected ?int $calendarEventId = null;
+	protected ?string $colorId = null;
 
 	protected ?array $storageElementIds = null;
+	protected ?array $settings = null;
 
 	protected array $additionalFields = [];
 
-	public static function createWithDefaultDescription(
+	public static function createWithDefaultSubjectAndDescription(
 		int $entityTypeId,
 		int $id,
 		DateTime $deadline,
-		bool $ceilDeadlineTime = true
+		bool $ceilDeadlineTime = true,
+		bool $skipSubject = false
 	): Result
 	{
 		if ($ceilDeadlineTime)
@@ -54,11 +61,35 @@ class ToDo implements OptionallyConfigurable
 		}
 
 		$itemIdentifier = new ItemIdentifier($entityTypeId, $id);
-		return (new self($itemIdentifier))
+
+		$todo = (new self($itemIdentifier))
 			->setDefaultDescription()
 			->setDeadline($deadline)
-			->save()
 		;
+
+		if (!$skipSubject)
+		{
+			$todo->setDefaultSubject();
+		}
+
+		return $todo->save();
+	}
+
+	// @deprecated
+	public static function createWithDefaultDescription(
+		int $entityTypeId,
+		int $id,
+		DateTime $deadline,
+		bool $ceilDeadlineTime = true
+	): Result
+	{
+		return self::createWithDefaultSubjectAndDescription(
+			$entityTypeId,
+			$id,
+			$deadline,
+			$ceilDeadlineTime,
+			true
+		);
 	}
 
 	public function __construct(ItemIdentifier $owner)
@@ -85,8 +116,8 @@ class ToDo implements OptionallyConfigurable
 	{
 		$filter = [
 			'=COMPLETED' => 'N',
-			'=PROVIDER_ID' => Provider\ToDo::PROVIDER_ID,
-			'=PROVIDER_TYPE_ID' => Provider\ToDo::PROVIDER_TYPE_ID_DEFAULT,
+			'=PROVIDER_ID' => Provider\ToDo\ToDo::PROVIDER_ID,
+			'=PROVIDER_TYPE_ID' => Provider\ToDo\ToDo::PROVIDER_TYPE_ID_DEFAULT,
 			'BINDINGS' => [
 				[
 					'OWNER_TYPE_ID' => $owner->getEntityTypeId(),
@@ -130,6 +161,7 @@ class ToDo implements OptionallyConfigurable
 				'AUTOCOMPLETE_RULE',
 				'STORAGE_ELEMENT_IDS',
 				'CALENDAR_EVENT_ID',
+				'SETTINGS',
 			],
 			$options
 		)->Fetch();
@@ -155,6 +187,7 @@ class ToDo implements OptionallyConfigurable
 			->setCompleted($data['COMPLETED'])
 			->setCalendarEventId($data['CALENDAR_EVENT_ID'])
 			->setStorageElementIds($data['STORAGE_ELEMENT_IDS'] ?: null)
+			->setSettings($data['SETTINGS'] ?: null)
 		;
 
 		return $todo;
@@ -212,7 +245,7 @@ class ToDo implements OptionallyConfigurable
 
 	public function getProviderId(): string
 	{
-		return Provider\ToDo::PROVIDER_ID;
+		return Provider\ToDo\ToDo::PROVIDER_ID;
 	}
 
 	public function getDescription(): string
@@ -231,6 +264,11 @@ class ToDo implements OptionallyConfigurable
 		$this->description = $description;
 
 		return $this;
+	}
+
+	public function setDefaultSubject(): ToDo
+	{
+		return $this->setSubject(Loc::getMessage('CRM_TODO_ENTITY_ACTIVITY_DEFAULT_SUBJECT'));
 	}
 
 	public function getSubject(): string
@@ -303,12 +341,12 @@ class ToDo implements OptionallyConfigurable
 		return $this->storageElementIds;
 	}
 
-	public function getCalendarEventId(): int
+	public function getCalendarEventId(): ?int
 	{
 		return $this->calendarEventId;
 	}
 
-	public function setCalendarEventId(int $id): self
+	public function setCalendarEventId(?int $id): self
 	{
 		$this->calendarEventId = $id;
 
@@ -335,6 +373,42 @@ class ToDo implements OptionallyConfigurable
 		return $this;
 	}
 
+	/**
+	 * @internal
+	 * @todo refactor it
+	 */
+	public function setCalendarFileLinks(): void
+	{
+		if (!is_array($this->storageElementIds))
+		{
+			return;
+		}
+
+		$options = [
+			'OWNER_TYPE_ID' => \CCrmOwnerType::Activity,
+			'OWNER_ID' => $this->getId(),
+		];
+
+		$title = Loc::getMessage('CRM_TODO_ENTITY_ACTIVITY_FILES_TITLE');
+
+		$fields['CALENDAR_ADDITIONAL_DESCRIPTION_DATA']['FILE'] = [
+			'TITLE' => $title,
+			'ITEMS' => [],
+		];
+
+		foreach ($this->storageElementIds as $id)
+		{
+			$fileInfo = DiskManager::getFileInfo($id, false, $options);
+			if (is_array($fileInfo) && !empty($fileInfo['VIEW_URL']))
+			{
+				$link = (new Uri($fileInfo['VIEW_URL']))->toAbsolute();
+				$fields['CALENDAR_ADDITIONAL_DESCRIPTION_DATA']['FILE']['ITEMS'][] = '<a href="' . $link . '" target="_blank">' . $fileInfo['NAME'] . '</a>';
+			}
+		}
+
+		$this->appendAdditionalFields($fields);
+	}
+
 	public function setCheckPermissions(bool $checkPermissions): self
 	{
 		$this->checkPermissions = $checkPermissions;
@@ -342,22 +416,25 @@ class ToDo implements OptionallyConfigurable
 		return $this;
 	}
 
-	public function save(array $options = []): Result
+	public function save(array $options = [], $useCurrentSettings = false): Result
 	{
 		$result = new Result();
 
-		if ($this->getDescription() === '')
+		if (Crm::isTimelineToDoUseV2Enabled())
 		{
-			$result->addError(new Error(Loc::getMessage('CRM_TODO_ENTITY_ACTIVITY_EMPTY_DESCRIPTION'), 'ERROR_EMPTY_DESCRIPTION'));
-
-			return $result;
+			$subject = $this->getSubject();
+		}
+		else
+		{
+			$subject = $this->getSubjectFromDescription($this->getDescription());
 		}
 
 		$fields = [
+			'SUBJECT' => $subject,
 			'DESCRIPTION' => $this->getDescription(),
-			'SUBJECT' => $this->getSubjectFromDescription($this->getDescription()),
 			'CALENDAR_EVENT_ID' => $this->getCalendarEventId(),
 			'RESPONSIBLE_ID' => $this->getResponsibleId(),
+			'BINDINGS' => CCrmActivity::GetBindings($this->getId()),
 		];
 
 		if ($this->getDeadline())
@@ -387,13 +464,24 @@ class ToDo implements OptionallyConfigurable
 			}
 		}
 
-		if (!is_null($this->getStorageElementIds()))
+		if (is_array($this->getStorageElementIds()))
 		{
 			$fields['STORAGE_TYPE_ID'] = StorageType::Disk;
 			$fields['STORAGE_ELEMENT_IDS'] = $this->getStorageElementIds();
 		}
 
 		$fields = array_merge($fields, $this->getAdditionalFields());
+
+		if ($useCurrentSettings)
+		{
+			$fields['SETTINGS'] = $this->getSettings();
+		}
+
+		$color = $this->getColorId();
+		if ($color)
+		{
+			$fields['SETTINGS']['COLOR'] = $color;
+		}
 
 		if($this->checkPermissions && !CCrmActivity::CheckUpdatePermission($this->getOwner()->getEntityTypeId(), $this->getOwner()->getEntityId()))
 		{
@@ -433,7 +521,7 @@ class ToDo implements OptionallyConfigurable
 
 				return $result;
 			}
-			if ($existedActivity['PROVIDER_ID'] !== \Bitrix\Crm\Activity\Provider\ToDo::getId())
+			if ($existedActivity['PROVIDER_ID'] !== \Bitrix\Crm\Activity\Provider\ToDo\ToDo::getId())
 			{
 				$result->addError(\Bitrix\Crm\Controller\ErrorCode::getNotFoundError());
 
@@ -460,8 +548,8 @@ class ToDo implements OptionallyConfigurable
 					],
 				]
 				: $parentActivityBindings;
-			$provider = new \Bitrix\Crm\Activity\Provider\ToDo();
-			$result = $provider->createActivity(\Bitrix\Crm\Activity\Provider\ToDo::PROVIDER_TYPE_ID_DEFAULT, $fields, $options);
+			$provider = new \Bitrix\Crm\Activity\Provider\ToDo\ToDo();
+			$result = $provider->createActivity(\Bitrix\Crm\Activity\Provider\ToDo\ToDo::PROVIDER_TYPE_ID_DEFAULT, $fields, $options);
 			if ($result->isSuccess())
 			{
 				$this->id = (int)$result->getData()['id'];
@@ -478,22 +566,6 @@ class ToDo implements OptionallyConfigurable
 		}
 
 		return $result;
-	}
-
-	private function getSubjectFromDescription(string $description): string
-	{
-		$lines = explode("\n", $description, 2);
-		if (count($lines) > 1)
-		{
-			$subject = $lines[0];
-			if(mb_strlen($subject) > self::MAX_SUBJECT_LENGTH)
-			{
-				$subject = mb_substr($subject, 0, self::MAX_SUBJECT_LENGTH);
-			}
-			return rtrim($subject, '.') . '...';
-		}
-
-		return TruncateText($lines[0], self::MAX_SUBJECT_LENGTH);
 	}
 
 	private function isParentActivityCompleted(int $activityId): bool
@@ -539,5 +611,57 @@ class ToDo implements OptionallyConfigurable
 	public function getAdditionalFields(): array
 	{
 		return $this->additionalFields;
+	}
+
+	public function appendAdditionalFields(array $fields): self
+	{
+		$this->additionalFields = array_merge_recursive($this->additionalFields, $fields);
+
+		return $this;
+	}
+
+	public function getSettings(): ?array
+	{
+		return $this->settings;
+	}
+
+	public function setSettings(?array $settings): self
+	{
+		$this->settings = $settings;
+
+		return $this;
+	}
+
+	final protected function getColorId(): ?string
+	{
+		return $this->colorId;
+	}
+
+	final public function setColorId(?string $colorId): ToDo
+	{
+		$colorSettingsProvider = new ColorSettingsProvider();
+		if ($colorSettingsProvider->isAvailableColorId($colorId))
+		{
+			$this->colorId = $colorId;
+		}
+
+		return $this;
+	}
+
+	private function getSubjectFromDescription(string $description): string
+	{
+		$lines = explode("\n", $description, 2);
+		if (count($lines) > 1)
+		{
+			$subject = $lines[0];
+			if (mb_strlen($subject) > self::MAX_SUBJECT_LENGTH)
+			{
+				$subject = mb_substr($subject, 0, self::MAX_SUBJECT_LENGTH);
+			}
+
+			return rtrim($subject, '.') . '...';
+		}
+
+		return TruncateText($lines[0], self::MAX_SUBJECT_LENGTH);
 	}
 }

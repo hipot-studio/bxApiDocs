@@ -399,7 +399,7 @@ class CTasksWebService extends IWebService
 			);
 		}
 
-		$listName = ToUpper(CIntranetUtils::makeGUID($listName_original));
+		$listName = mb_strtoupper(CIntranetUtils::makeGUID($listName_original));
 
 		$data = new CXMLCreator('List');
 		$data->setAttribute('ID', $listName);
@@ -447,7 +447,7 @@ class CTasksWebService extends IWebService
 			return new CSoapFault('Data error', 'Wrong GUID - '.$listName);
 		}
 
-		$listName = ToUpper(CIntranetUtils::makeGUID($listName_original));
+		$listName = mb_strtoupper(CIntranetUtils::makeGUID($listName_original));
 
 		$taskId = (int) $listItemID;
 
@@ -466,7 +466,7 @@ class CTasksWebService extends IWebService
 					$data .= '<Attachment>'
 						. tasksServerName() . '/tasks/getfile/' . (int) $taskId
 						. '/' . (int) $taskFile['FILE_ID']
-						. '/' . urlencode(ToLower(basename($path)))
+						. '/' . urlencode(mb_strtolower(basename($path)))
 					. '</Attachment>';
 				}
 			}
@@ -493,7 +493,7 @@ class CTasksWebService extends IWebService
 			return new CSoapFault('Wrong attachment', 'Wrong attachment');
 		}
 
-		$listName = ToUpper(CIntranetUtils::makeGUID($listName_original));
+		$listName = mb_strtoupper(CIntranetUtils::makeGUID($listName_original));
 
 		$listItemID = intval($listItemID);
 
@@ -504,8 +504,8 @@ class CTasksWebService extends IWebService
 
 			foreach ($task["FILES"] as $fileID)
 			{
-				$FILE = ToLower(basename(CFile::GetPath($fileID)));
-				if ($FILE == ToLower($fileName))
+				$FILE = mb_strtolower(basename(CFile::GetPath($fileID)));
+				if ($FILE == mb_strtolower($fileName))
 				{
 					Header('HTTP/1.1 500 Internal Server Error');
 
@@ -535,7 +535,7 @@ class CTasksWebService extends IWebService
 			return array(
 				'AddAttachmentResult' => '/tasks/getfile/' . (int) $listItemID
 					. '/' . (int) $FILE_ID
-					. '/' . urlencode(ToLower(basename(CFile::GetPath($FILE_ID))))
+					. '/' . urlencode(mb_strtolower(basename(CFile::GetPath($FILE_ID))))
 			);
 		}
 		else
@@ -559,7 +559,7 @@ class CTasksWebService extends IWebService
 
 		$pos = mb_strrpos($url, '/');
 		if ($pos)
-			$fileName = ToLower(str_replace(array('/', '\\', '..'), '', mb_substr($url, $pos + 1))); // minor security
+			$fileName = mb_strtolower(str_replace(array('/', '\\', '..'), '', mb_substr($url, $pos + 1))); // minor security
 
 		if (!$fileName)
 			return new CSoapFault('Wrong file', 'Wrong file URL');
@@ -568,7 +568,7 @@ class CTasksWebService extends IWebService
 
 		while ($taskFile = $dbRes->Fetch())
 		{
-			$FILE_NAME = ToLower(basename(CFile::GetPath($taskFile["FILE_ID"])));
+			$FILE_NAME = mb_strtolower(basename(CFile::GetPath($taskFile["FILE_ID"])));
 
 			if ($FILE_NAME == $fileName)
 			{
@@ -614,7 +614,7 @@ class CTasksWebService extends IWebService
 		if (!$listName_original = CIntranetUtils::checkGUID($listName))
 			return new CSoapFault('Data error', 'Wrong GUID - '.$listName);
 
-		$listName = ToUpper(CIntranetUtils::makeGUID($listName_original));
+		$listName = mb_strtoupper(CIntranetUtils::makeGUID($listName_original));
 
 		$arFilter = array();
 
@@ -754,7 +754,7 @@ class CTasksWebService extends IWebService
 			return new CSoapFault('Data error', 'Wrong GUID - '.$listName);
 		}
 
-		$listName = ToUpper(CIntranetUtils::makeGUID($listName_original));
+		$listName = mb_strtoupper(CIntranetUtils::makeGUID($listName_original));
 
 		$obResponse = new CXMLCreator('Results');
 

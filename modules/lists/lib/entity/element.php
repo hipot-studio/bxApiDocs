@@ -7,6 +7,7 @@ use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ErrorableImplementation;
+use Bitrix\Rest\RestException;
 
 class Element implements Controllable, Errorable
 {
@@ -24,6 +25,8 @@ class Element implements Controllable, Errorable
 
 	private $iblockId;
 	private $elementId;
+	private array $elementFields = [];
+	private array $elementProperty = [];
 	private $listObject;
 
 	public $resultSanitizeFilter = [];
@@ -195,7 +198,9 @@ class Element implements Controllable, Errorable
 			return false;
 		}
 
-		list($elementSelect, $elementFields, $elementProperty) = $this->getElementData();
+		[$elementSelect, $elementFields, $elementProperty] = $this->getElementData();
+		$this->elementFields = $elementFields;
+		$this->elementProperty = $elementProperty;
 
 		$fields = $this->getElementFields($this->elementId, $this->params["FIELDS"]);
 
@@ -405,7 +410,7 @@ class Element implements Controllable, Errorable
 		$fields = $this->listObject->getFields();
 		foreach ($fields as $fieldId => $fieldData)
 		{
-			$fieldValue = $this->params["FIELDS"][$fieldId];
+			$fieldValue = $this->params["FIELDS"][$fieldId] ?? null;
 
 			if (
 				empty($this->params["FIELDS"][$fieldId])
@@ -460,7 +465,7 @@ class Element implements Controllable, Errorable
 		$fields = $this->listObject->getFields();
 		foreach ($fields as $fieldId => $fieldData)
 		{
-			$fieldValue = $values[$fieldId];
+			$fieldValue = $values[$fieldId] ?? null;
 
 			if ($this->listObject->is_field($fieldId))
 			{
@@ -519,7 +524,7 @@ class Element implements Controllable, Errorable
 		unset($elementFields["TIMESTAMP_X"]);
 
 		$elementFields["IBLOCK_SECTION_ID"] = (
-			is_numeric($values['IBLOCK_SECTION_ID'])
+			is_numeric($values['IBLOCK_SECTION_ID'] ?? null)
 			? (int) $values['IBLOCK_SECTION_ID'] : 0
 		);
 
@@ -584,6 +589,13 @@ class Element implements Controllable, Errorable
 			return;
 		}
 
+		$property =  isset($fieldData['ID'])
+			? ($this->elementProperty[$fieldData['ID']] ?? null)
+			: ($this->elementFields[$fieldId] ?? null)
+		;
+
+		$prevIds = array_values($property['VALUES_LIST'] ?? []);
+
 		foreach ($fieldValue as $key => $value)
 		{
 			if (is_array($value))
@@ -594,6 +606,11 @@ class Element implements Controllable, Errorable
 			{
 				if (is_numeric($value))
 				{
+					if (!in_array($value, $prevIds))
+					{
+						// security bugfix #188430
+						throw new RestException('Writing file values by ID is not supported', static::ERROR_ELEMENT_FIELD_VALUE);
+					}
 					$elementFields["PROPERTY_VALUES"][$fieldData["ID"]][$key]["VALUE"] = \CFile::makeFileArray($value);
 				}
 				else

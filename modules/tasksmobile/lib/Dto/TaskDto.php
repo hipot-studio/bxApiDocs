@@ -15,11 +15,14 @@ final class TaskDto extends Dto
 	public string $description;
 	public string $parsedDescription;
 	public int $groupId;
+	public int $flowId = 0;
 	public int $timeElapsed;
 	public int $timeEstimate;
 	public int $commentsCount;
 	public int $serviceCommentsCount;
 	public int $newCommentsCount;
+	public int $viewsCount = 0;
+	public int $resultsCount = 0;
 	public int $status;
 	public int $subStatus;
 	public int $priority;
@@ -65,6 +68,9 @@ final class TaskDto extends Dto
 
 	public ChecklistSummaryDto $checklist;
 
+	/** @var ChecklistDetailsDto[] */
+	public array $checklistDetails;
+
 	public TaskCounterDto $counter;
 
 	/** @var RelatedCrmItemDto[] */
@@ -72,6 +78,8 @@ final class TaskDto extends Dto
 
 	/** @var array<string, boolean> */
 	public array $actions = [];
+	/** @var array<string, boolean> */
+	public array $actionsOld = [];
 
 	public function getCasts(): array
 	{
@@ -79,6 +87,7 @@ final class TaskDto extends Dto
 			'tags' => Type::collection(TaskTagDto::class),
 			'files' => Type::collection(DiskFileDto::class),
 			'crm' => Type::collection(RelatedCrmItemDto::class),
+			'checklistDetails' => Type::collection(ChecklistDetailsDto::class),
 		];
 	}
 
@@ -88,12 +97,14 @@ final class TaskDto extends Dto
 			function (array $fields) {
 				if (!empty($fields['actions']))
 				{
-					$converter = new Converter(
-						Converter::KEYS
-						| Converter::TO_CAMEL
-						| Converter::LC_FIRST
-					);
+					$converter = new Converter(Converter::KEYS | Converter::TO_CAMEL | Converter::LC_FIRST);
 					$fields['actions'] = $converter->process($fields['actions']);
+				}
+
+				if (!empty($fields['actionsOld']))
+				{
+					$converter = new Converter(Converter::KEYS | Converter::TO_CAMEL | Converter::LC_FIRST);
+					$fields['actionsOld'] = $converter->process($fields['actionsOld']);
 				}
 
 				return $fields;

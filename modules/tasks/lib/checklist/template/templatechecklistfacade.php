@@ -4,6 +4,7 @@ namespace Bitrix\Tasks\CheckList\Template;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\SystemException;
+use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TemplateAccessController;
 use Bitrix\Tasks\AnalyticLogger;
 use Bitrix\Tasks\CheckList\CheckListFacade;
@@ -107,12 +108,17 @@ class TemplateCheckListFacade extends CheckListFacade
 	 * @throws NotImplementedException
 	 * @throws SystemException
 	 */
-	public static function getItemsForEntity($templateId, $userId)
+	public static function getItemsForEntity($templateId, $userId, bool $skipAccessCheck = false): array
 	{
-		$items = false;
+		$items = [];
 		$template = new Template($templateId, $userId);
 
-		$canRead = \Bitrix\Tasks\Access\TemplateAccessController::can((int) $userId, \Bitrix\Tasks\Access\ActionDictionary::ACTION_TEMPLATE_READ, (int) $templateId);
+		$canRead = $skipAccessCheck
+			|| TemplateAccessController::can(
+				(int)$userId,
+				ActionDictionary::ACTION_TEMPLATE_READ,
+				(int)$templateId
+			);
 
 		if ($template !== null && $canRead)
 		{
@@ -160,7 +166,7 @@ class TemplateCheckListFacade extends CheckListFacade
 	protected static function fillCommonAccessActions($templateId, $userId)
 	{
 		$actions = array_keys(self::ACTIONS['COMMON']);
-		$canUpdate = \Bitrix\Tasks\Access\TemplateAccessController::can((int) $userId, \Bitrix\Tasks\Access\ActionDictionary::ACTION_TEMPLATE_EDIT, (int) $templateId);
+		$canUpdate = TemplateAccessController::can((int) $userId, ActionDictionary::ACTION_TEMPLATE_EDIT, (int) $templateId);
 
 		static::$commonAccessActions[$templateId][$userId] = array_fill_keys($actions, $canUpdate);
 	}
@@ -175,7 +181,7 @@ class TemplateCheckListFacade extends CheckListFacade
 	{
 		$actions = array_keys(self::ACTIONS['ITEM']);
 		$checkListId = $checkList->getFields()['ID'];
-		$canUpdate = \Bitrix\Tasks\Access\TemplateAccessController::can((int) $userId, \Bitrix\Tasks\Access\ActionDictionary::ACTION_TEMPLATE_EDIT, (int) $templateId);
+		$canUpdate = TemplateAccessController::can((int) $userId, ActionDictionary::ACTION_TEMPLATE_EDIT, (int) $templateId);
 		static::$itemAccessActions[$templateId][$userId][$checkListId] = array_fill_keys($actions, $canUpdate);
 	}
 

@@ -12,6 +12,7 @@ abstract class RestrictionUrl
 	public const TASK_RATE_SLIDER_URL = 'limit_tasks_rate';
 	public const TEMPLATE_LIMIT_SLIDER_URL = 'limit_tasks_template';
 	public const TASK_LIMIT_OFF_SLIDER_URL = 'limit_tasks_off';
+	public const TASK_LIMIT_FLOWS_OFF_SLIDER_URL = 'limit_flows_off';
 	public const TASK_LIMIT_SCRUM_OFF_SLIDER_URL = 'limit_tasks_scrum_off';
 	public const LIMIT_PROJECTS_OFF_SLIDER_URL = 'limit_projects_off';
 }

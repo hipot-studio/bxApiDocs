@@ -55,6 +55,8 @@ class DepartmentRepository
 	public function getAllChildDepartmentsIds($depId)
 	{
 		$departments = (array) \CIntranetUtils::getSubDepartments($depId);
+		$departments = array_filter($departments, 'is_numeric');
+
 		$allDepartments = $departments;
 
 		foreach ($departments as $childId)
@@ -142,7 +144,10 @@ class DepartmentRepository
 	{
 		$structure = \CIntranetUtils::getStructure();
 
-		$employees = array_map('intval', (array) ($structure['DATA'][$depId]['EMPLOYEES'] ?? null));
+		$employeesData = (array) ($structure['DATA'][$depId]['EMPLOYEES'] ?? null);
+		$filteredEmployeesData = array_filter($employeesData, 'is_numeric');
+
+		$employees = array_map('intval', $filteredEmployeesData);
 
 		return empty($employees) ? [] : $employees;
 	}

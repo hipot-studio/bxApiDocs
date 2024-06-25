@@ -168,52 +168,37 @@ class MailboxSyncManager
 		}
 	}
 
-	public function getMailboxSyncInfo($mailboxID)
+	public function getMailboxesSyncInfo(): array
 	{
-		$dateLastOpening = \Bitrix\Mail\Internals\MailEntityOptionsTable::getList(
+		$mailboxesSyncInfo = [];
+		$userMailboxIds = array_keys(MailboxTable::getUserMailboxes());
+
+		$datesLastOpening = MailEntityOptionsTable::getList(
 			[
 				'select' => [
+					'ENTITY_ID',
 					'VALUE',
 					'DATE_INSERT',
 				],
 				'filter' => [
-					'=MAILBOX_ID' => $mailboxID,
 					'=ENTITY_TYPE' => 'MAILBOX',
-					'=ENTITY_ID' => $mailboxID,
+					'=ENTITY_ID' => $userMailboxIds,
 					'=PROPERTY_NAME' => 'SYNC_STATUS',
 				],
-				'limit' => 1,
 			]
-		)->fetch();
+		)->fetchAll();
 
-		if(isset($dateLastOpening['VALUE']))
+		foreach ($datesLastOpening as $date)
 		{
-			return [
-				'isSuccess' => (bool)$dateLastOpening['VALUE'],
-				'timeStarted' => $dateLastOpening['DATE_INSERT']->getTimestamp(),
-			];
-		}
-
-		return false;
-	}
-
-	/**
-	 * @return mixed
-	 */
-	public function getMailboxesSyncInfo()
-	{
-		$mailboxesSyncInfo = [];
-
-		$userMailboxIds = array_keys(MailboxTable::getUserMailboxes());
-		foreach ($userMailboxIds as $id)
-		{
-			$id = (int)$id;
-			$mailboxSyncInfo = $this->getMailboxSyncInfo($id);
-			if($mailboxSyncInfo !== false)
+			if (isset($date['VALUE']))
 			{
-				$mailboxesSyncInfo[$id] = $mailboxSyncInfo;
+				$mailboxesSyncInfo[(int)$date['ENTITY_ID']] = [
+					'isSuccess' => (bool)$date['VALUE'],
+					'timeStarted' => $date['DATE_INSERT']->getTimestamp(),
+				];
 			}
 		}
+
 		return $mailboxesSyncInfo;
 	}
 

@@ -948,7 +948,7 @@ class CAllCrmQuote
 				}
 				else
 				{
-					$DB->Query($sql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+					$DB->Query($sql);
 				}
 				$bResult = true;
 			}
@@ -1116,15 +1116,14 @@ class CAllCrmQuote
 				return false;
 
 			if(!$DB->Query(
-				'DELETE FROM '.CCrmQuote::ELEMENT_TABLE_NAME.' WHERE QUOTE_ID = '.$ID,
-				false, 'File: '.__FILE__.'<br/>Line: '.__LINE__))
+				'DELETE FROM '.CCrmQuote::ELEMENT_TABLE_NAME.' WHERE QUOTE_ID = '.$ID))
 			{
 				$APPLICATION->throwException(GetMessage('CRM_QUOTE_ERR_DELETE_STORAGE_ELEMENTS_QUERY_MSGVER_1'));
 				return false;
 			}
 		}
 
-		$dbRes = $DB->Query("DELETE FROM b_crm_quote WHERE ID = {$ID}{$sWherePerm}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$dbRes = $DB->Query("DELETE FROM b_crm_quote WHERE ID = {$ID}{$sWherePerm}");
 		if (is_object($dbRes) && $dbRes->AffectedRowsCount() > 0)
 		{
 			Bitrix\Crm\Kanban\SortTable::clearEntity($ID, \CCrmOwnerType::QuoteName);
@@ -2264,9 +2263,7 @@ class CAllCrmQuote
 		$elementID = (int)$elementID;
 
 		$dbResult = $DB->Query(
-			'SELECT 1 FROM '.CCrmQuote::ELEMENT_TABLE_NAME.' WHERE QUOTE_ID = '.$quoteID.' AND STORAGE_TYPE_ID = '.$storageTypeID.' AND ELEMENT_ID = '.$elementID,
-			false,
-			'File: '.__FILE__.'<br/>Line: '.__LINE__
+			'SELECT 1 FROM '.CCrmQuote::ELEMENT_TABLE_NAME.' WHERE QUOTE_ID = '.$quoteID.' AND STORAGE_TYPE_ID = '.$storageTypeID.' AND ELEMENT_ID = '.$elementID
 		);
 		return is_array($dbResult->Fetch());
 	}
@@ -2620,7 +2617,7 @@ class CAllCrmQuote
 		global $DB;
 		$result = array();
 		$table = CCrmQuote::ELEMENT_TABLE_NAME;
-		$dbResult = $DB->Query("SELECT ELEMENT_ID FROM {$table} WHERE QUOTE_ID = {$ID}", false, 'File: '.__FILE__.'<br/>Line: '.__LINE__);
+		$dbResult = $DB->Query("SELECT ELEMENT_ID FROM {$table} WHERE QUOTE_ID = {$ID}");
 		while($arResult = $dbResult->Fetch())
 		{
 			$elementID = isset($arResult['ELEMENT_ID']) ? (int)$arResult['ELEMENT_ID'] : 0;
@@ -3477,9 +3474,7 @@ class CAllCrmQuote
 		$elementID = (int)$elementID;
 
 		$dbResult = $DB->Query(
-			'SELECT QUOTE_ID FROM '.CCrmQuote::ELEMENT_TABLE_NAME.' WHERE STORAGE_TYPE_ID = '.$storageTypeID.' AND ELEMENT_ID = '.$elementID,
-			false,
-			'File: '.__FILE__.'<br/>Line: '.__LINE__
+			'SELECT QUOTE_ID FROM '.CCrmQuote::ELEMENT_TABLE_NAME.' WHERE STORAGE_TYPE_ID = '.$storageTypeID.' AND ELEMENT_ID = '.$elementID
 		);
 
 		while($arResult = $dbResult->Fetch())
@@ -4315,25 +4310,19 @@ class CAllCrmQuote
 		if($ownerTypeID === CCrmOwnerType::Lead)
 		{
 			$DB->Query(
-				"UPDATE {$tableName} SET LEAD_ID = {$newID} WHERE LEAD_ID = {$oldID}",
-				false,
-				'File: '.__FILE__.'<br>Line: '.__LINE__
+				"UPDATE {$tableName} SET LEAD_ID = {$newID} WHERE LEAD_ID = {$oldID}"
 			);
 		}
 		elseif($ownerTypeID === CCrmOwnerType::Contact)
 		{
 			$DB->Query(
-				"UPDATE {$tableName} SET CONTACT_ID = {$newID} WHERE CONTACT_ID = {$oldID}",
-				false,
-				'File: '.__FILE__.'<br>Line: '.__LINE__
+				"UPDATE {$tableName} SET CONTACT_ID = {$newID} WHERE CONTACT_ID = {$oldID}"
 			);
 		}
 		elseif($ownerTypeID === CCrmOwnerType::Company)
 		{
 			$DB->Query(
-				"UPDATE {$tableName} SET COMPANY_ID = {$newID} WHERE COMPANY_ID = {$oldID}",
-				false,
-				'File: '.__FILE__.'<br>Line: '.__LINE__
+				"UPDATE {$tableName} SET COMPANY_ID = {$newID} WHERE COMPANY_ID = {$oldID}"
 			);
 		}
 	}

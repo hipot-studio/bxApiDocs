@@ -117,9 +117,7 @@ class CCrmActivity extends CAllCrmActivity
 		}
 
 		$DB->Query(
-			'INSERT INTO '.self::BINDING_TABLE_NAME.'('.$bulkColumns.') VALUES'.$query,
-			false,
-			'File: '.__FILE__.'<br/>Line: '.__LINE__
+			'INSERT INTO '.self::BINDING_TABLE_NAME.'('.$bulkColumns.') VALUES'.$query
 		);
 		if (!empty($newBindings) && $registerBindingsChanges)
 		{
@@ -336,9 +334,7 @@ class CCrmActivity extends CAllCrmActivity
 		}
 
 		$DB->Query(
-			'INSERT INTO '.self::COMMUNICATION_TABLE_NAME.'('.$bulkColumns.') VALUES'.$query,
-			false,
-			'File: '.__FILE__.'<br/>Line: '.__LINE__
+			'INSERT INTO '.self::COMMUNICATION_TABLE_NAME.'('.$bulkColumns.') VALUES'.$query
 		);
 
 		if($registerEvents)
@@ -368,9 +364,7 @@ class CCrmActivity extends CAllCrmActivity
 		}
 
 		$DB->Query(
-			'DELETE FROM '.self::ELEMENT_TABLE_NAME.' WHERE ACTIVITY_ID = '.$ID,
-			false,
-			'File: '.__FILE__.'<br/>Line: '.__LINE__
+			'DELETE FROM '.self::ELEMENT_TABLE_NAME.' WHERE ACTIVITY_ID = '.$ID
 		);
 
 		return true;
@@ -473,9 +467,7 @@ class CCrmActivity extends CAllCrmActivity
 
 		$tableName = self::COMMUNICATION_TABLE_NAME;
 		$DB->Query(
-			"UPDATE {$tableName} SET ENTITY_SETTINGS = NULL WHERE ENTITY_TYPE_ID = {$entityTypeID} AND ENTITY_ID = {$entityID}",
-			false,
-			'File: '.__FILE__.'<br/>Line: '.__LINE__
+			"UPDATE {$tableName} SET ENTITY_SETTINGS = NULL WHERE ENTITY_TYPE_ID = {$entityTypeID} AND ENTITY_ID = {$entityID}"
 		);
 	}
 	protected static function DoSaveEntityCommunicationSettings($entityTypeID, $entityID, $settings)
@@ -488,9 +480,7 @@ class CCrmActivity extends CAllCrmActivity
 
 		$tableName = self::COMMUNICATION_TABLE_NAME;
 		$DB->Query(
-			"UPDATE {$tableName} SET ENTITY_SETTINGS = '{$settings}' WHERE ENTITY_SETTINGS IS NULL AND ENTITY_TYPE_ID = {$entityTypeID} AND ENTITY_ID = {$entityID}",
-			false,
-			'File: '.__FILE__.'<br/>Line: '.__LINE__
+			"UPDATE {$tableName} SET ENTITY_SETTINGS = '{$settings}' WHERE ENTITY_SETTINGS IS NULL AND ENTITY_TYPE_ID = {$entityTypeID} AND ENTITY_ID = {$entityID}"
 		);
 	}
 }

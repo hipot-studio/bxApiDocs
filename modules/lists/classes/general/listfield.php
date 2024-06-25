@@ -54,7 +54,7 @@ abstract class CListField
 					,NAME = '".$DB->ForSQL($this->_label)."'
 					WHERE IBLOCK_ID = ".$this->_iblock_id."
 					AND FIELD_ID = '".$DB->ForSQL($this->_field_id)."'
-				", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				");
 				$this->_clear_cache();
 			}
 		}
@@ -69,7 +69,7 @@ abstract class CListField
 			$rsFields = $DB->Query("
 				SELECT * FROM b_lists_field
 				WHERE IBLOCK_ID = ".$this->_iblock_id."
-			", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			");
 
 			self::$prop_cache[$this->_iblock_id] = array();
 			while($arField = $rsFields->Fetch())
@@ -210,7 +210,7 @@ abstract class CListField
 			DELETE FROM b_lists_field
 			WHERE IBLOCK_ID = ".$this->_iblock_id."
 			AND FIELD_ID = '".$DB->ForSQL($this->_field_id)."'
-		", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		");
 	}
 
 	abstract public function Update($arFields);

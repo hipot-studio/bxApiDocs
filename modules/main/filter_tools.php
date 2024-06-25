@@ -155,10 +155,9 @@ function GetFilterHiddens($var = "filter_", $button = array("filter" => "Y", "se
 		$arKeys = @array_merge(array_keys($_GET), array_keys($_POST));
 		if (is_array($arKeys) && !empty($arKeys))
 		{
-			$len = mb_strlen($var);
 			foreach (array_unique($arKeys) as $key)
 			{
-				if (mb_substr($key, 0, $len) == $var)
+				if (str_starts_with($key, $var))
 				{
 					$arrVars[] = $key;
 				}
@@ -219,9 +218,8 @@ function GetFilterParams($var="filter_", $bDoHtmlEncode=true, $button = array("f
 		$arKeys = @array_merge(array_keys($_GET), array_keys($_POST));
 		if(is_array($arKeys) && !empty($arKeys))
 		{
-			$len = mb_strlen($var);
 			foreach (array_unique($arKeys) as $key)
-				if (mb_substr($key, 0, $len) == $var)
+				if (str_starts_with($key, $var))
 					$arrVars[] = $key;
 		}
 	}
@@ -354,10 +352,10 @@ function ShowFilterLogicHelp()
 	if(LANGUAGE_ID == "ru")
 		$help_link = "https://dev.1c-bitrix.ru/api_help/main/general/filter.php";
 	else
-		$help_link = "http://www.bitrixsoft.com/help/index.html?page=".urlencode("source/main/help/en/filter.php.html");
+		$help_link = "https://www.bitrixsoft.com/help/index.html?page=".urlencode("source/main/help/en/filter.php.html");
 	if ($LogicHelp != "Y")
 	{
-		$str = "<script type=\"text/javascript\">
+		$str = "<script>
 		function LogicHelp() { window.open('".$help_link."', '','scrollbars=yes,resizable=yes,width=780,height=500,top='+Math.floor((screen.height - 500)/2-14)+',left='+Math.floor((screen.width - 780)/2-5)); }
 		</script>";
 	}
@@ -436,7 +434,7 @@ function BeginFilter($sID, $bFilterSet, $bShowStatus=true)
 	if(!$bFilterScriptShown)
 	{
 		$s .= '
-<script type="text/javascript">
+<script>
 function showfilter(id)
 {
 	var div = document.getElementById("flt_div_"+id);
@@ -581,7 +579,7 @@ function EndFilter($sID="")
 		$fltval = $_COOKIE["flt_".$sID];
 
 	if($fltval[0]<>"Y")
-		$s .= '<script type="text/javascript">hidefilter(\''.CUtil::JSEscape($sID).'\');</script>'."\n";
+		$s .= '<script>hidefilter(\''.CUtil::JSEscape($sID).'\');</script>'."\n";
 	return $s;
 }
 
@@ -667,12 +665,12 @@ function InitSorting($Path=false, $sByVar="by", $sOrderVar="order")
 	if ($$sByVar <> '')
 		Application::getInstance()->getSession()["SESS_SORT_BY"][$md5Path] = $$sByVar;
 	else
-		$$sByVar = Application::getInstance()->getSession()["SESS_SORT_BY"][$md5Path];
+		$$sByVar = Application::getInstance()->getSession()["SESS_SORT_BY"][$md5Path] ?? '';
 
 	if($$sOrderVar <> '')
 		Application::getInstance()->getSession()["SESS_SORT_ORDER"][$md5Path] = $$sOrderVar;
 	else
-		$$sOrderVar = Application::getInstance()->getSession()["SESS_SORT_ORDER"][$md5Path];
+		$$sOrderVar = Application::getInstance()->getSession()["SESS_SORT_ORDER"][$md5Path] ?? '';
 
 	$$sByVar = strtolower($$sByVar);
 	$$sOrderVar = strtolower($$sOrderVar);

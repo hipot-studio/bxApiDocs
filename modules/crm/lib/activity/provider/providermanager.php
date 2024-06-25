@@ -1,11 +1,12 @@
 <?php
 namespace Bitrix\Crm\Activity\Provider;
 
-use Bitrix\Crm\Activity\Provider\Tasks;
+use Bitrix\Crm\Activity\Provider\ToDo\ToDo;
 use Bitrix\Crm\Badge\SourceIdentifier;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Monitor;
+use Bitrix\Crm\Settings;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Query;
 
@@ -68,6 +69,11 @@ class ProviderManager
 			Tasks\Comment::getId() => Tasks\Comment::class,
 			Tasks\Task::getId() => Tasks\Task::class,
 		];
+
+		if (Settings\Crm::isWhatsAppScenarioEnabled())
+		{
+			$providersList[Whatsapp::getId()] = Whatsapp::className();
+		}
 
 		if(!$checkAvailable || Visit::isAvailable())
 		{

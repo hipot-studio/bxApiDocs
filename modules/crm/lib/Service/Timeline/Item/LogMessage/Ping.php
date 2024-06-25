@@ -4,10 +4,10 @@ namespace Bitrix\Crm\Service\Timeline\Item\LogMessage;
 
 use Bitrix\Crm\Model\ActivityPingOffsetsTable;
 use Bitrix\Crm\Service\Timeline\Item\AssociatedEntityModel;
-use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Crm\Service\Timeline\Item\LogMessage;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockFactory;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\EditableDescription;
+use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 
@@ -82,7 +82,19 @@ class Ping extends LogMessage
 		$pingText = (string)$this->entityModel->get('DESCRIPTION');
 		if ($pingText === '')
 		{
-			$pingText = (string)$this->entityModel->get('SUBJECT');
+			$providerId = $this->entityModel->get('PROVIDER_ID');
+			if ($providerId)
+			{
+				$provider = \CCrmActivity::GetProviderById($providerId);
+				$pingText = $provider::getActivityTitle([
+					'SUBJECT' => (string)$this->entityModel->get('SUBJECT'),
+					'COMPLETED' => 'N',
+				]);
+			}
+			else
+			{
+				$pingText = (string)$this->entityModel->get('SUBJECT');
+			}
 		}
 
 		return [

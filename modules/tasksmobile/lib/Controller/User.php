@@ -2,24 +2,25 @@
 
 namespace Bitrix\TasksMobile\Controller;
 
-use Bitrix\Main\Engine\ActionFilter\CloseSession;
-use Bitrix\Main\Engine\Controller;
+use Bitrix\Mobile\Provider\UserRepository;
 use Bitrix\Tasks\Ui\Avatar;
 
-class User extends Controller
+class User extends Base
 {
-	public function configureActions(): array
+	protected function getQueryActionNames(): array
 	{
 		return [
-			'getUsersData' => [
-				'+prefilters' => [
-					new CloseSession(),
-				],
-			],
+			'getUsersData',
+			'getUsersDataLegacy',
 		];
 	}
 
 	public function getUsersDataAction(array $userIds): array
+	{
+		return UserRepository::getByIds($userIds);
+	}
+
+	public function getUsersDataLegacyAction(array $userIds): array
 	{
 		if (empty($userIds))
 		{

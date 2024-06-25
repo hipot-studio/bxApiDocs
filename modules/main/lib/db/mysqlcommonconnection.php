@@ -2,6 +2,7 @@
 
 namespace Bitrix\Main\DB;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ORM\Fields\ScalarField;
 
@@ -194,7 +195,7 @@ abstract class MysqlCommonConnection extends Connection
 		catch (\Bitrix\Main\DB\SqlQueryException $e)
 		{
 			//Duplicate key name
-			if (strpos($e->getMessage(), '(1061)') === false)
+			if (!str_contains($e->getMessage(), '(1061)'))
 			{
 				throw $e;
 			}
@@ -296,7 +297,12 @@ abstract class MysqlCommonConnection extends Connection
 		$timeout = (int)$timeout;
 		$name = $this->getLockName($name);
 
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+
 		$lock = $this->query("SELECT GET_LOCK('{$name}', {$timeout}) as L")->fetch();
+
+		$pool->useMasterOnly(false);
 
 		return ($lock["L"] == "1");
 	}
@@ -308,7 +314,12 @@ abstract class MysqlCommonConnection extends Connection
 	{
 		$name = $this->getLockName($name);
 
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+
 		$lock = $this->query("SELECT RELEASE_LOCK('{$name}') as L")->fetch();
+
+		$pool->useMasterOnly(false);
 
 		return ($lock["L"] == "1");
 	}
@@ -343,7 +354,22 @@ abstract class MysqlCommonConnection extends Connection
 	{
 		if ($this->engine)
 		{
-			$this->query("SET storage_engine = '".$this->engine."'");
+			// TODO: remove try-catch when mysql 5.7 will be minimal system requirement
+			try
+			{
+				$this->query("SET default_storage_engine = '".$this->engine."'");
+			}
+			catch (SqlQueryException)
+			{
+				try
+				{
+					$this->query("SET storage_engine = '".$this->engine."'");
+				}
+				catch (SqlQueryException)
+				{
+
+				}
+			}
 		}
 	}
 

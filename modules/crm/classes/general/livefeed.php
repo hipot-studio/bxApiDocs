@@ -3800,7 +3800,7 @@ class CCrmLiveFeed
 				GROUP BY RL.RELATION, RP.ATTR, RP.ENTITY
 			";
 
-			$res = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+			$res = $DB->Query($sSql);
 			while($row = $res->Fetch())
 			{
 				if (!isset($permsList[$row['ENTITY']]))
@@ -3881,7 +3881,7 @@ class CCrmLiveFeed
 							WHERE
 								UA.USER_ID IN (".implode(', ', $responsibleList).")
 								AND UA.ACCESS_CODE IN ('".implode("', '", $selfRelationsListChunk)."')";
-						$rsUser = $DB->Query($strSQL, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+						$rsUser = $DB->Query($strSQL);
 						while ($arUser = $rsUser->Fetch())
 						{
 							if ($arUser["USER_ID"] != $author_id)
@@ -3901,7 +3901,7 @@ class CCrmLiveFeed
 							FROM b_user_access UA
 							WHERE
 								UA.ACCESS_CODE IN ('".implode("', '", $userRelationsListChunk)."')";
-						$rsUser = $DB->Query($strSQL, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+						$rsUser = $DB->Query($strSQL);
 						while ($arUser = $rsUser->Fetch())
 						{
 							if ($arUser["USER_ID"] != $author_id)
@@ -3927,7 +3927,7 @@ class CCrmLiveFeed
 								INNER JOIN b_user_access UA2 ON
 									UA2.USER_ID = UA.USER_ID
 									AND UA2.ACCESS_CODE IN ('".implode("', '", $departmentRelationsListChunk)."')";
-						$rsUser = $DB->Query($strSQL, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+						$rsUser = $DB->Query($strSQL);
 						while ($arUser = $rsUser->Fetch())
 						{
 							if ($arUser["USER_ID"] != $author_id)
@@ -3952,7 +3952,7 @@ class CCrmLiveFeed
 								INNER JOIN b_user_access UA2 ON
 									UA2.USER_ID = UA.USER_ID
 									AND UA2.ACCESS_CODE IN ('".implode("', '", $subDepartmentRelationsListChunk)."')";
-						$rsUser = $DB->Query($strSQL, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+						$rsUser = $DB->Query($strSQL);
 						while ($arUser = $rsUser->Fetch())
 						{
 							if ($arUser["USER_ID"] != $author_id)

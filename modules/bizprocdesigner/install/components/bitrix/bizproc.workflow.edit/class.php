@@ -371,7 +371,7 @@ protected function listKeysSignedParameters()
 				header("HTTP/1.1 200 OK");
 				header("Content-Type: application/force-download; name=\"bp-".$ID.".bpt\"");
 				header("Content-Transfer-Encoding: binary");
-				header("Content-Length: ". \Bitrix\Main\Text\BinaryString::getLength($datum));
+				header("Content-Length: ". strlen($datum));
 				header("Content-Disposition: attachment; filename=\"bp-".$ID.".bpt\"");
 				header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
 				header("Expires: 0");

@@ -89,7 +89,7 @@ class CFavorites extends CAllFavorites
 		}
 		if ($sOrder == '')
 			$sOrder = "F.ID DESC";
-		$strSqlOrder = " ORDER BY ".TrimEx($sOrder,",");
+		$strSqlOrder = " ORDER BY ".trim($sOrder, ", ");
 
 		$strSqlSearch = GetFilterSqlSearch($arSqlSearch);
 		$strSql = "

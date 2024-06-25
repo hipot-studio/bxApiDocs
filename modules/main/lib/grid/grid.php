@@ -17,7 +17,6 @@ use Bitrix\Main\Grid\UI\Request\GridRequestFactory;
 use Bitrix\Main\Grid\UI\Response\GridResponseFactory;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\UI\PageNavigation;
-use Bitrix\Main\Web\PostDecodeFilter;
 
 /**
  * Grid object.
@@ -227,7 +226,7 @@ abstract class Grid
 	}
 
 	/**
-	 * Set raw rows (only data after ORM calling).
+	 * Set raw rows (only data).
 	 *
 	 * @param iterable $rawValue
 	 *
@@ -292,7 +291,6 @@ abstract class Grid
 	public function processRequest(?HttpRequest $request = null): void
 	{
 		$request ??= Context::getCurrent()->getRequest();
-		$request->addFilter(new PostDecodeFilter);
 		$gridRequest = $this->gridRequestFactory->createFromRequest($request);
 
 		$response = $this->processGridActionsRequest($gridRequest);

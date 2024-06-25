@@ -21,6 +21,12 @@ class UserDataFilter extends BaseFilter
 		{
 			$this->options['role'] = $options['role'];
 		}
+
+		$this->options['groupId'] = 0;
+		if (isset($options['groupId']) && is_int($options['groupId']))
+		{
+			$this->options['groupId'] = $options['groupId'];
+		}
 	}
 
 	public function isAvailable(): bool
@@ -47,6 +53,7 @@ class UserDataFilter extends BaseFilter
 				$task = TaskModel::createFromArray([
 					'CREATED_BY' => $currentUserId,
 					'RESPONSIBLE_ID' => $item->getId(),
+					'GROUP_ID' => $this->getOption('groupId'),
 				]);
 				$isSelectable = $accessController->check(
 					ActionDictionary::ACTION_TASK_CHANGE_RESPONSIBLE,
@@ -60,6 +67,7 @@ class UserDataFilter extends BaseFilter
 					'CREATED_BY' => $currentUserId,
 					'RESPONSIBLE_ID' => $currentUserId,
 					'ACCOMPLICES' => $item->getId(),
+					'GROUP_ID' => $this->getOption('groupId'),
 				]);
 				$isSelectable = $accessController->check(
 					ActionDictionary::ACTION_TASK_CHANGE_ACCOMPLICES,

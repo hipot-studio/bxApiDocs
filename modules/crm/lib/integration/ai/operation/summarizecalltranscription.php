@@ -11,7 +11,6 @@ use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\SummaryEvent;
-use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\AI\Call\Controller;
@@ -141,7 +140,10 @@ class SummarizeCallTranscription extends AbstractOperation
 
 			if ($withSendAnalytics)
 			{
-				self::sendCallParsingAnalyticsEvent($activityId, Dictionary::STATUS_ERROR_GPT, $result->isManualLaunch());
+				self::sendCallParsingAnalyticsEvent(
+					$result,
+					$activityId
+				);
 			}
 		}
 	}

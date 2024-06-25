@@ -160,7 +160,7 @@ class DynamicTypesMap
 					],
 					'filter' => [
 						'@ENTITY_ID' => array_keys($this->stageEntityIds),
-					]
+					],
 				])->fetchCollection() as $stage)
 			{
 				$this->stages[$stage->getEntityId()][$stage->getStatusId()] = $stage;
@@ -188,6 +188,14 @@ class DynamicTypesMap
 		}
 
 		return $this->types;
+	}
+
+	final public function getBunchOfTypesByIds(array $typeIds): array
+	{
+		return array_filter(
+			$this->getTypes(),
+			fn(Type $type) => in_array($type->getId(), $typeIds, true),
+		);
 	}
 
 	/**

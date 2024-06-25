@@ -24,6 +24,8 @@ use Bitrix\Tasks\Control\Exception\TaskNotFoundException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\Control\Handler\TaskFieldHandler;
 use Bitrix\Tasks\Control\Handler\Exception\TaskFieldValidateException;
+use Bitrix\Tasks\Flow\Control\FlowService;
+use Bitrix\Tasks\Flow\Notification\NotificationService;
 use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Integration\Bizproc\Listener;
 use Bitrix\Tasks\Integration\CRM\TimeLineManager;
@@ -118,10 +120,10 @@ class Task
 	private $skipComments = false;
 	private $skipPush = false;
 	private $skipBP = false;
-	private bool $withImmediatelyCrmEvents = false;
 	private $isAddedComment = false;
 
 	private $eventGuid;
+	/** @var TaskObject */
 	private $task;
 	private $shiftResult;
 	private $fullTaskData;
@@ -131,6 +133,8 @@ class Task
 	private $changes;
 
 	private $occurUserId;
+
+	private array $skipTimeZoneFields = [];
 
 	public function __construct(private int $userId)
 	{
@@ -234,15 +238,15 @@ class Task
 		return $this;
 	}
 
+	public function skipDeadlineTimeZone(): static
+	{
+		$this->skipTimeZoneFields[] = 'DEADLINE';
+		return $this;
+	}
+
 	public function getLegacyOperationResultData(): ?array
 	{
 		return $this->legacyOperationResultData;
-	}
-
-	public function withImmediatelyCrmEvents(): self
-	{
-		$this->withImmediatelyCrmEvents = true;
-		return $this;
 	}
 
 	/**
@@ -315,6 +319,7 @@ class Task
 
 		$this->addLog();
 		$fields = $this->onTaskAdd($fields);
+		$this->handleFlow($task, [], 'add');
 		$this->setSearchIndex();
 		$this->resetCache();
 		$this->updateLastActivity();
@@ -397,7 +402,7 @@ class Task
 		catch (Exception $exception)
 		{
 			LogFacade::logThrowable($exception);
-			throw new TaskUpdateException();
+			throw new TaskUpdateException($exception->getMessage());
 		}
 
 		if (null === $task)
@@ -438,6 +443,7 @@ class Task
 		$this->sendUpdatePush($updateComment);
 
 		$this->sendUpdateIntegrationEvent($fields, $taskBeforeUpdate);
+		$this->handleFlow($task, $fields, 'update');
 		$this->replicate();
 
 		return $task;
@@ -478,8 +484,8 @@ class Task
 			return false;
 		}
 
-		$taskObject = TaskRegistry::getInstance()->getObject($taskId, true);
-		$timeLineManager = new TimeLineManager($taskId, $this->userId, $this->withImmediatelyCrmEvents);
+		$taskObject = TaskRegistry::getInstance()->getObject($taskId, true)?->fillAllMemberIds();
+		$timeLineManager = new TimeLineManager($taskId, $this->userId);
 		$timeLineManager->onTaskDeleted();
 
 		$this->stopTimer(true);
@@ -499,7 +505,12 @@ class Task
 		}
 
 		$this->sendDeletePush();
-		$this->onTaskDelete();
+
+		$deleteEventParameters = [
+			'FLOW_ID' => $taskObject->fillFlowTask()?->getFlowId(),
+		];
+
+		$this->onTaskDelete($deleteEventParameters);
 
 		if (!$safeDelete)
 		{
@@ -538,7 +549,7 @@ class Task
 	 */
 	private function sendAddIntegrationEvent(array $fields): void
 	{
-		(new TimeLineManager($this->taskId, $this->userId, $this->withImmediatelyCrmEvents))
+		(new TimeLineManager($this->taskId, $this->userId))
 			->onTaskCreated()
 			->save();
 
@@ -584,7 +595,7 @@ class Task
 	{
 		$application = Application::getInstance();
 
-		(new TimeLineManager($this->taskId, $this->userId, $this->withImmediatelyCrmEvents))
+		(new TimeLineManager($this->taskId, $this->userId))
 			->onTaskUpdated($taskBeforeUpdate)
 			->save();
 
@@ -1057,10 +1068,11 @@ class Task
 		$fields['ID'] = $this->taskId;
 
 		$this->getTask(true);
-		/** @var EO_Scenario $scenarioObject */
 		$scenarioObject = $this->task->getScenario();
 		$fields['SCENARIO'] = is_null($scenarioObject) ? ScenarioTable::SCENARIO_DEFAULT
 			: $scenarioObject->getScenario();
+
+		$fields['FLOW_ID'] = $this->task->fillFlowTask()?->getFlowId();
 
 		return $fields;
 	}
@@ -1112,11 +1124,12 @@ class Task
 			\Bitrix\Tasks\Internals\Helper\Task\Dependence::attach($this->taskId, intval($fields['PARENT_ID']));
 		}
 
-		if (
-			$this->shiftResult
-			&& $this->correctDatePlanDependent
-		)
+		if ($this->correctDatePlanDependent)
 		{
+			if (!$this->shiftResult)
+			{
+				$this->shiftResult = Scheduler::getInstance($this->userId)->processEntity($this->taskId, $fields);
+			}
 			$saveResult = $this->shiftResult->save(['!ID' => $this->taskId]);
 			if ($saveResult->isSuccess())
 			{
@@ -1239,11 +1252,13 @@ class Task
 	/**
 	 * @throws SqlQueryException
 	 */
-	private function onTaskDelete(): void
+	private function onTaskDelete(array $parameters = []): void
 	{
+		$parameters = array_merge($parameters, $this->byPassParams);
+
 		foreach (GetModuleEvents('tasks', 'OnTaskDelete', true) as $arEvent)
 		{
-			ExecuteModuleEventEx($arEvent, [$this->taskId, $this->byPassParams]);
+			ExecuteModuleEventEx($arEvent, [$this->taskId, $parameters]);
 		}
 		if (!$this->skipBP)
 		{
@@ -1294,11 +1309,14 @@ class Task
 			);
 		}
 
+		$flowId = (isset($taskData['FLOW_ID']) && (int) $taskData['FLOW_ID']) ? (int) $taskData['FLOW_ID'] : 0;
+
 		PushService::addEvent($pushRecipients, [
 			'module_id' => 'tasks',
 			'command' => PushCommand::TASK_DELETED,
 			'params' => [
 				'TASK_ID' => $this->taskId,
+				'FLOW_ID' => $flowId,
 				'TS' => time(),
 				'event_GUID' => $this->eventGuid,
 				'BEFORE' => [
@@ -1481,6 +1499,9 @@ class Task
 		{
 			return;
 		}
+
+		$timer = CTaskTimerManager::getInstance($taskData['CREATED_BY']);
+		$timer->stop($this->taskId);
 
 		$timer = CTaskTimerManager::getInstance($taskData['RESPONSIBLE_ID']);
 		$timer->stop($this->taskId);
@@ -2190,7 +2211,7 @@ class Task
 	private function insert(array $data): TaskObject
 	{
 		$handler = new TaskFieldHandler($this->userId, $data);
-		$data = $handler->getFieldsToDb();
+		$data = $handler->skipTimeZoneFields(...$this->skipTimeZoneFields)->getFieldsToDb();
 
 		$task = new TaskObject($data);
 		$result = $task->save();
@@ -2262,7 +2283,7 @@ class Task
 			$select = ['select' => ['*', 'UTS_DATA', 'MEMBER_LIST']];
 		}
 
-		return TaskTable::getByPrimary($taskId, $select)->fetchObject();
+		return TaskTable::getByPrimary($taskId, $select)->fetchObject()?->cacheCrmFields();
 	}
 
 	/**
@@ -2541,6 +2562,7 @@ class Task
 		$handler = new TaskFieldHandler($this->userId, $fields, $taskData);
 
 		$handler
+			->prepareFlow()
 			->prepareGuid()
 			->prepareSiteId()
 			->prepareGroupId()
@@ -2726,12 +2748,45 @@ class Task
 			$event = $parentId ? Analytics::EVENT['subtask_add'] : Analytics::EVENT['task_create'];
 
 			Analytics::getInstance($this->userId)->onTaskCreate(
+				$fields['TASKS_ANALYTICS_CATEGORY'] ?: Analytics::TASK_CATEGORY,
 				$event,
 				$fields['TASKS_ANALYTICS_SECTION'],
 				$fields['TASKS_ANALYTICS_ELEMENT'] ?? null,
 				$fields['TASKS_ANALYTICS_SUB_SECTION'] ?? null,
-				$status
+				$status,
+				$fields['TASKS_ANALYTICS_PARAMS'] ?? [],
 			);
+		}
+	}
+
+	private function handleFlow(TaskObject $task, array $fields, string $action): void
+	{
+		if (!$task->onFlow())
+		{
+			return;
+		}
+
+		switch ($action)
+		{
+			case 'add':
+				(new NotificationService())->onTaskToFlowAdded($task->getId(), $task->getFlowId());
+				(new FlowService($this->userId))->upActivity($task->getFlowId());
+				break;
+			case 'update':
+				if (isset($fields['DEADLINE']))
+				{
+					(new NotificationService())->onTaskExpireTimeChange($task->getId());
+				}
+				if (isset($fields['STATUS']))
+				{
+					(new NotificationService())->onTaskStatusChanged($task->getId());
+
+					if (in_array($fields['STATUS'], \Bitrix\Tasks\Flow\Task\Status::STATUSES_CHANGING_ACTIVITY))
+					{
+						(new FlowService($this->userId))->upActivity($task->getFlowId());
+					}
+				}
+				break;
 		}
 	}
 }

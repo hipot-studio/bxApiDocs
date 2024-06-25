@@ -3,13 +3,13 @@
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage;
 
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Crm\Service\Timeline\Item\LogMessage;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockFactory;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Date;
+use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\EditableDescription;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\LineOfTextBlocks;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
-use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\EditableDescription;
+use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use CCrmActivity;
@@ -30,7 +30,14 @@ class TodoCreated extends LogMessage
 
 	public function getTitle(): ?string
 	{
-		return Loc::getMessage('CRM_TIMELINE_LOG_TODO_CREATED_TITLE');
+		$subject = $this->getModel()->getAssociatedEntityModel()?->get('SUBJECT');
+
+		if (empty($subject))
+		{
+			return Loc::getMessage('CRM_TIMELINE_LOG_TODO_CREATED_TITLE');
+		}
+
+		return $subject;
 	}
 
 	public function getContentBlocks(): ?array
@@ -40,6 +47,12 @@ class TodoCreated extends LogMessage
 		$baseActivityId = $activityData['ASSOCIATED_ENTITY_ID'] ?? 0;
 		$deadlineTimestamp = $activityData['DEADLINE_TIMESTAMP'] ?? null;
 		$description = trim($activityData['DESCRIPTION'] ?? '');
+		$calendarEventId = $this->getHistoryItemModel()?->get('ASSOCIATED_ENTITY')['CALENDAR_EVENT_ID'] ?? null;
+		$duration = null;
+		if ($calendarEventId)
+		{
+			$duration = $activityData['DURATION'] ?? null;
+		}
 
 		$result = [];
 		if ($baseActivityId)
@@ -56,7 +69,8 @@ class TodoCreated extends LogMessage
 					'SUBJECT',
 					'ID'
 				]
-			)->Fetch();
+			)?->Fetch();
+
 			if ($baseActivity)
 			{
 				$result['baseActivity'] = (new LineOfTextBlocks())
@@ -73,6 +87,7 @@ class TodoCreated extends LogMessage
 				;
 			}
 		}
+
 		if ($deadlineTimestamp)
 		{
 			$result['created'] = (new LineOfTextBlocks())
@@ -82,7 +97,11 @@ class TodoCreated extends LogMessage
 				)
 				->addContentBlock(
 					'value',
-					(new Date())->setDate(DateTime::createFromTimestamp($deadlineTimestamp))->setColor(Text::COLOR_BASE_90)
+					(new Date())
+						->setDate(DateTime::createFromTimestamp($deadlineTimestamp))
+						->setDuration($duration)
+						->setColor(Text::COLOR_BASE_90)
+						->setFontSize(Text::FONT_SIZE_SM)
 				)
 			;
 		}

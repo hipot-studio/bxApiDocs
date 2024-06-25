@@ -5,6 +5,9 @@ namespace Bitrix\Crm\Integration\AI;
 use Bitrix\AI\Context;
 use Bitrix\AI\Context\Language;
 use Bitrix\AI\Engine;
+use Bitrix\AI\Limiter\Enums\ErrorLimit;
+use Bitrix\AI\Limiter\LimitControlService;
+use Bitrix\AI\Limiter\ReserveRequest;
 use Bitrix\AI\Limiter\Usage;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
@@ -17,6 +20,7 @@ use Bitrix\Crm\Integration\StorageType;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Diag\Logger;
@@ -38,12 +42,18 @@ final class AIManager
 	public const AI_PROVIDER_PARTNER_CRM = 'ai_provider_partner_crm';
 	public const AI_DISABLED_SLIDER_CODE = 'limit_copilot_off';
 
+	public const AI_LIMIT_CODE_DAILY = 'Daily';
+	public const AI_LIMIT_CODE_MONTHLY = 'Monthly';
+	public const AI_LIMIT_BAAS = 'BAAS';
+
 	private const AI_COPILOT_FEATURE_NAME = 'crm_copilot';
 	private const AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME = 'AI_CALL_PROCESSING_ALLOWED_AUTO_V2';
 	private const AI_LIMIT_SLIDERS_MAP = [
-		'Daily' => 'limit_copilot_max_number_daily_requests',
-		'Monthly' => 'limit_copilot_requests',
+		self::AI_LIMIT_CODE_DAILY => 'limit_copilot_max_number_daily_requests',
+		self::AI_LIMIT_CODE_MONTHLY => 'limit_copilot_requests',
+		self::AI_LIMIT_BAAS => 'limit_boost_copilot',
 	];
+
 	private const AI_APP_COLLECTION_MARKET_MAP = [
 		'ru' => 19021440,
 		'by' => 19021806,
@@ -132,11 +142,11 @@ final class AIManager
 	{
 		return
 			self::isAiCallProcessingEnabled()
-			&& Option::get('crm', self::AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME, true)
+			&& Option::get('crm', self::AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME, false)
 		;
 	}
 
-	public static function isAiLicenceExceededAccepted(): bool
+	public static function isAILicenceAccepted(): bool
 	{
 		return
 			self::isAvailable()
@@ -391,13 +401,10 @@ final class AIManager
 
 			$storageTypeId = $activity['STORAGE_TYPE_ID'] ?? null;
 
-			if (!empty($activity['STORAGE_ELEMENT_IDS']) && is_string($activity['STORAGE_ELEMENT_IDS']))
+			$storageElementIds = \CCrmActivity::extractStorageElementIds($activity) ?? [];
+			if (!empty($storageElementIds))
 			{
-				$fileIds = unserialize($activity['STORAGE_ELEMENT_IDS'], ['allowed_classes' => false]);
-				if (is_array($fileIds))
-				{
-					$storageElementId = max(array_filter(array_map('intval', $fileIds), fn(int $id) => $id > 0));
-				}
+				$storageElementId = max($storageElementIds);
 			}
 		}
 
@@ -453,18 +460,47 @@ final class AIManager
 		return new NullLogger();
 	}
 
-	public static function getLimitSliderCode(Engine $engine): ?string
+	public static function getLimitResult(Engine $engine): Main\Result
 	{
-		if (!self::isAvailable())
+		$limitControlService = new LimitControlService();
+		$reservedRequest = $limitControlService->reserveRequest(
+			new Usage($engine->getIEngine()->getContext())
+		);
+
+		if ($reservedRequest->isSuccess() === false)
 		{
-			return null;
+			return self::getErrorLimitResult($reservedRequest);
 		}
 
-		$code = null;
-		$limiter = new Usage($engine->getIEngine()->getContext());
-		$limiter->isInLimit($code);
+		return new Main\Result();
+	}
 
-		return self::AI_LIMIT_SLIDERS_MAP[$code] ?? null;
+	private static function getErrorLimitResult(ReserveRequest $reservedRequest): Main\Result
+	{
+		$result = new Main\Result();
+		if ($reservedRequest->getErrorLimit() === ErrorLimit::BAAS_LIMIT)
+		{
+			$result->addError(ErrorCode::getAILimitOfRequestsExceededError([
+				'sliderCode' => self::AI_LIMIT_SLIDERS_MAP[self::AI_LIMIT_BAAS],
+				'limitCode' => self::AI_LIMIT_BAAS,
+			]));
+
+			return $result;
+		}
+
+		if ($reservedRequest->getPromoLimitCode())
+		{
+			$errorData = [
+				'sliderCode' => self::AI_LIMIT_SLIDERS_MAP[$reservedRequest->getPromoLimitCode()],
+				'limitCode' => $reservedRequest->getPromoLimitCode(),
+			];
+		}
+
+		$result->addError(ErrorCode::getAILimitOfRequestsExceededError(
+			$errorData ?? null
+		));
+
+		return $result;
 	}
 
 	public static function getAiAppCollectionMarketLink(): string
@@ -586,11 +622,10 @@ final class AIManager
 			return $result;
 		}
 
-		if ($originId !== '')
+		if (VoxImplantManager::isVoxImplantOriginId($originId))
 		{
-			$callId = mb_substr($originId, 3);
-			$callInfo = VoxImplantManager::getCallInfo($callId);
-			$callDuration = $callInfo['DURATION'] ?? 0;
+			$callId = VoxImplantManager::extractCallIdFromOriginId($originId);
+			$callDuration = VoxImplantManager::getCallDuration($callId) ?? 0;
 
 			$minCallDuration = (int)Option::get('crm', 'ai_integration_audio_min_call_time', self::AUDIO_MIN_CALL_TIME);
 			$maxCallDuration = (int)Option::get('crm', 'ai_integration_audio_max_call_time', self::AUDIO_MAX_CALL_TIME);

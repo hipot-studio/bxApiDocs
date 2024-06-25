@@ -2945,7 +2945,8 @@ class CIMChat
 		$message = '';
 		if ($this->user_id > 0 && $arRes['CHAT_TYPE'] !== Chat::IM_TYPE_OPEN_CHANNEL)
 		{
-			$message = GetMessage("IM_CHAT_JOIN_".$arUsers[$this->user_id]['gender'], Array('#USER_1_NAME#' => htmlspecialcharsback($arUsers[$this->user_id]['name']), '#USER_2_NAME#' => implode(', ', $arUsersName)));
+			$type = $arRes['CHAT_TYPE'] === Chat::IM_TYPE_CHANNEL ? 'CHANNEL' : 'CHAT';
+			$message = GetMessage("IM_{$type}_JOIN_".$arUsers[$this->user_id]['gender'], Array('#USER_1_NAME#' => htmlspecialcharsback($arUsers[$this->user_id]['name']), '#USER_2_NAME#' => implode(', ', $arUsersName)));
 		}
 		else
 		{
@@ -3239,7 +3240,8 @@ class CIMChat
 		$checkPermission = true,
 		$skipMessage = false,
 		$skipRecent = false,
-		$withoutRead = false
+		$withoutRead = false,
+		$additionalParams = []
 	)
 	{
 		global $DB;
@@ -3293,7 +3295,7 @@ class CIMChat
 		$arOldRelation = CIMChat::GetRelationById($chatId, false, true, false);
 
 		$currentUser = IM\User::getInstance()->getId();
-		if ($userId !== $currentUser)
+		if ($userId !== $currentUser && !isset($additionalParams['SKIP_RIGHTS']))
 		{
 			if ($this->user_id !== 0 && !self::canDo($arRes, $arOldRelation, Chat\Permission::ACTION_KICK))
 			{

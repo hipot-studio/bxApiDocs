@@ -1324,13 +1324,11 @@ class Export extends Main\Engine\Controller
 		if(is_resource($file))
 		{
 			// add UTF-8 BOM marker
-			if (\Bitrix\Main\Application::isUtfMode() || defined('BX_UTF'))
+			if($precedeUtf8Bom === true && (filesize($this->filePath) === 0))
 			{
-				if($precedeUtf8Bom === true && (filesize($this->filePath) === 0))
-				{
-					fwrite($file, chr(239).chr(187).chr(191));
-				}
+				fwrite($file, chr(239).chr(187).chr(191));
 			}
+
 			fwrite($file, $data);
 			fclose($file);
 			unset($file);

@@ -41,6 +41,10 @@ final class EntityFieldsFillingResult extends Base
 						->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
 						// analytic metrics
 						->addActionParamInt('activityId', $this->getActivityId())
+						->addActionParamString(
+							'activityDirection',
+							mb_strtolower(\CCrmActivityDirection::ResolveName($this->getAssociatedEntityModel()?->get('DIRECTION')))
+						)
 						->setAnimation(Action\Animation::disableBlock())
 				)
 				->setScopeWeb()
@@ -60,6 +64,11 @@ final class EntityFieldsFillingResult extends Base
 				->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
 				->addActionParamInt('ownerId', $this->getContext()->getEntityId())
 				->addActionParamString('languageTitle', $this->getJobResultLanguageTitle())
+				// for analytics
+				->addActionParamString(
+					'activityDirection',
+					mb_strtolower(\CCrmActivityDirection::ResolveName($this->getAssociatedEntityModel()?->get('DIRECTION')))
+				)
 			;
 		}
 

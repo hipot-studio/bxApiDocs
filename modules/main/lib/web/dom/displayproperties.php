@@ -265,7 +265,7 @@ class DisplayProperties
 						}
 						elseif($name == 'font-style')
 						{
-							if($value == 'italic' || mb_strpos($value, 'oblique') === 0)
+							if($value == 'italic' || str_starts_with($value, 'oblique'))
 							{
 								$font[static::FONT_ITALIC] = true;
 							}
@@ -276,11 +276,11 @@ class DisplayProperties
 						}
 						elseif($name == 'text-decoration')
 						{
-							if(strpos($value, 'underline') !== false)
+							if(str_contains($value, 'underline'))
 							{
 								$font[static::FONT_UNDERLINED] = true;
 							}
-							if(strpos($value, 'line-through') !== false)
+							if(str_contains($value, 'line-through'))
 							{
 								$font[static::FONT_DELETED] = true;
 							}

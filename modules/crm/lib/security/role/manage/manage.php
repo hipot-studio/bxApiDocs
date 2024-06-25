@@ -2,11 +2,11 @@
 
 namespace Bitrix\Crm\Security\Role\Manage;
 
-use Bitrix\Bizproc\Error;
 use Bitrix\Crm\Security\Role\Manage\DTO\PermissionModel;
 use Bitrix\Crm\Security\Role\Manage\DTO\RoleDTO;
 use Bitrix\Crm\Security\Role\Manage\Exceptions\RoleNotFoundException;
 use Bitrix\Crm\Security\Role\Model\RoleTable;
+use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use CCrmRole;

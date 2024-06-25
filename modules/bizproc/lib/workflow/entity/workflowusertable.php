@@ -72,6 +72,12 @@ class WorkflowUserTable extends DataManager
 			))
 				->configureJoinType(Join::TYPE_INNER)
 			,
+			(new Reference(
+				'COMMENTS',
+				WorkflowUserCommentTable::class,
+				Join::on('this.WORKFLOW_ID', 'ref.WORKFLOW_ID')
+					->whereColumn('this.USER_ID', 'ref.USER_ID')
+			)),
 		];
 	}
 
@@ -105,16 +111,38 @@ class WorkflowUserTable extends DataManager
 		static::syncUsers($workflowId, $users);
 	}
 
-	private static function isLiveFeedProcess(array $documentId): bool
-	{
-		return ($documentId[0] ?? '') === 'lists' && ($documentId[1] ?? '') === 'BizprocDocument';
-	}
-
 	public static function syncOnTaskUpdated(string $workflowId): array
 	{
 		$users = static::getTaskUsers($workflowId);
 
 		return static::syncUsers($workflowId, $users);
+	}
+
+	public static function getUserIdsByWorkflowId(string $workflowId): array
+	{
+		$result = static::getList([
+			'select' => ['USER_ID'],
+			'filter' => ['=WORKFLOW_ID' => $workflowId],
+		])->fetchAll();
+
+		$ids = array_column($result, 'USER_ID');
+		return array_map(
+			static fn($id) => (int)$id,
+			$ids,
+		);
+	}
+
+	public static function touchWorkflowUsers(string $workflowId, array $userIds): void
+	{
+		static::updateOnSync(
+			$workflowId,
+			array_fill_keys($userIds, [/* MODIFIED = new DateTime() */])
+		);
+	}
+
+	private static function isLiveFeedProcess(array $documentId): bool
+	{
+		return ($documentId[0] ?? '') === 'lists' && ($documentId[1] ?? '') === 'BizprocDocument';
 	}
 
 	private static function getTaskUsers(string $workflowId): array
@@ -223,7 +251,7 @@ class WorkflowUserTable extends DataManager
 
 		foreach ($toUpdate as $userId => $user)
 		{
-			$user['MODIFIED'] = $modified;
+			$user['MODIFIED'] ??= $modified;
 
 			static::update(
 				[

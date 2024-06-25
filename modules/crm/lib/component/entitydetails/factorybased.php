@@ -21,6 +21,7 @@ use Bitrix\Crm\Relation;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Restriction\RestrictionManager;
+use Bitrix\Crm\Security\StagePermissions;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Service\Factory;
@@ -322,7 +323,13 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		if ($this->factory->isStagesEnabled())
 		{
 			$converter = Container::getInstance()->getStageConverter();
+			$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
 			$stages = $this->factory->getStages($this->categoryId);
+			$stagePermissions = new StagePermissions(
+				$this->getEntityTypeID(),
+				$this->categoryId === 0 ? null : $this->categoryId,
+			);
+
 			$stageId = $this->item->getStageId();
 			$currentStage = null;
 			foreach($stages as $stage)
@@ -335,8 +342,14 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				{
 					$currentStage = $stage;
 				}
-				$this->arResult['jsParams']['stages'][] = $converter->toJson($stage);
+
+				$jsParamStage = $converter->toJson($stage);
+				$jsParamStage['stagesToMove'] = $stagePermissions->getPermissionsByStatusId($stage->getStatusId());
+				$jsParamStage['allowMoveToAnyStage'] = $canWriteConfig;
+
+				$this->arResult['jsParams']['stages'][] = $jsParamStage;
 			}
+
 			$this->arResult['jsParams']['currentStageId'] = $currentStage ? $currentStage->getId() : null;
 		}
 

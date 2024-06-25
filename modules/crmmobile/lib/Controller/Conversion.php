@@ -39,11 +39,8 @@ class Conversion extends Base
 
 		$existActiveLeads = false;
 
-		$dbRes = \CCrmLead::GetListEx(['DATE_CREATE' => 'desc'],
-			["STATUS_SEMANTIC_ID" => \Bitrix\Crm\PhaseSemantics::PROCESS],
-			false, ["nPageSize" => 1], ["ID"]);
-		$dbRes->NavStart(1, false);
-		if ($dbRes->GetNext())
+		$dbResult = \CCrmLead::GetListEx([], ["STATUS_SEMANTIC_ID" => \Bitrix\Crm\PhaseSemantics::PROCESS], false, ["nTopCount" => 1], ["ID"]);
+		if ($dbResult->Fetch())
 		{
 			$existActiveLeads = true;
 		}
@@ -63,7 +60,7 @@ class Conversion extends Base
 		//remove from conversion to old invoices and documents
 		$conversionData['items'] = array_values(
 			array_filter($conversionData['items'],
-				fn ($item) => $item['name'] !== \CCrmOwnerType::InvoiceName
+				fn($item) => $item['name'] !== \CCrmOwnerType::InvoiceName
 					&& $item['name'] !== \CCrmOwnerType::SmartDocumentName
 			)
 		);

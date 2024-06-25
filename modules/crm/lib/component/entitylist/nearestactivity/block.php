@@ -2,6 +2,8 @@
 
 namespace Bitrix\Crm\Component\EntityList\NearestActivity;
 
+use Bitrix\Crm\Activity\ToDo\CalendarSettings\CalendarSettingsProvider;
+use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
@@ -64,6 +66,7 @@ class Block
 				if ($provider)
 				{
 					$isDetailExist = $provider::hasPlanner($this->activity);
+					$subject = $provider::getActivityTitle(array_merge($this->activity, ['COMPLETED' => 'N']));
 				}
 			}
 
@@ -86,13 +89,26 @@ class Block
 			if ($allowEdit)
 			{
 				$currentUser = CUtil::PhpToJSObject(CCrmViewHelper::getUserInfo(true, false));
-				$pingSettings = CUtil::PhpToJSObject(
-					(new TodoPingSettingsProvider(
-						$entityTypeId,
-						$categoryId
-					))->fetchForJsComponent()
+				$pingSettings = (new TodoPingSettingsProvider(
+					$entityTypeId,
+					$categoryId
+				))->fetchForJsComponent();
+				$calendarSettings = (new CalendarSettingsProvider())->fetchForJsComponent();
+
+				$useTodoEditorV2 = \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled();
+				$colorSettings = (
+					$useTodoEditorV2
+						? (new ColorSettingsProvider())->fetchForJsComponent()
+						: null
 				);
-				$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $pingSettings . ");";
+
+				$settings = CUtil::PhpToJSObject([
+					'pingSettings' => $pingSettings,
+					'calendarSettings' => $calendarSettings,
+					'colorSettings' => $colorSettings,
+				]);
+
+				$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $settings . ", " . $useTodoEditorV2 . ");";
 				$result .= '<div class="crm-nearest-activity-plus" onclick="' . $jsOnClick . ' return false;"></div>';
 			}
 
@@ -116,13 +132,27 @@ class Block
 		{
 			$hintText = $this->emptyStatePlaceholder;
 			$currentUser = CUtil::PhpToJSObject(CCrmViewHelper::getUserInfo(true, false));
-			$pingSettings = CUtil::PhpToJSObject(
-				(new TodoPingSettingsProvider(
-					$entityTypeId,
-					$categoryId
-				))->fetchForJsComponent()
+
+			$pingSettings = (new TodoPingSettingsProvider(
+				$entityTypeId,
+				$categoryId
+			))->fetchForJsComponent();
+			$calendarSettings = (new CalendarSettingsProvider())->fetchForJsComponent();
+
+			$useTodoEditorV2 = \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled();
+			$colorSettings = (
+				$useTodoEditorV2
+					? (new ColorSettingsProvider())->fetchForJsComponent()
+					: null
 			);
-			$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $pingSettings . ");";
+
+			$settings = CUtil::PhpToJSObject([
+				'pingSettings' => $pingSettings,
+				'calendarSettings' => $calendarSettings,
+				'colorSettings' => $colorSettings,
+			]);
+
+			$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $settings . ", " . $useTodoEditorV2 . ");";
 
 			return '<span class="crm-activity-add-hint">' . htmlspecialcharsbx($hintText) . '</span>
 				<a class="crm-activity-add" onclick="' . $jsOnClick . ' return false;">' . htmlspecialcharsbx(Loc::getMessage('CRM_ENTITY_ADD_ACTIVITY')) . '</a>';

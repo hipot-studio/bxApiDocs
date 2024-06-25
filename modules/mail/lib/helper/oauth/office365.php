@@ -47,7 +47,7 @@ class Office365 extends Mail\Helper\OAuth
 
 	public function getControllerUrl()
 	{
-		return \CSocServOffice365OAuth::CONTROLLER_URL;
+		return \CSocServOffice365OAuth::getControllerUrl();
 	}
 
 }

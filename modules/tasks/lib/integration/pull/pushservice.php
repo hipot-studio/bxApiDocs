@@ -45,6 +45,8 @@ class PushService
 	 */
 	public static function addEvent($recipients, array $params): void
 	{
+		$params = self::preparePullManagerParams($params);
+
 		$parameters = [
 			'RECIPIENTS' => $recipients,
 			'PARAMS' => $params,
@@ -55,6 +57,8 @@ class PushService
 
 	public static function addEventByTag(string $tag, array $params): void
 	{
+		$params = self::preparePullManagerParams($params);
+
 		$parameters = [
 			'TAG' => $tag,
 			'PARAMS' => $params,
@@ -114,4 +118,18 @@ class PushService
 		}
 	}
 
+	private static function preparePullManagerParams(array $params): array
+	{
+		$pullManagerParams = [
+			'eventName' => $params['command'],
+			'item' => [],
+			'skipCurrentUser' => false,
+			'eventId' => null,
+			'ignoreDelay' => false,
+		];
+
+		$params['params'] = array_merge($params['params'], $pullManagerParams);
+
+		return $params;
+	}
 }

@@ -4,6 +4,8 @@ namespace Bitrix\Crm\Entity;
 
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Format\TextHelper;
+use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Model\FieldContentTypeTable;
 use Bitrix\Crm\Service\Container;
@@ -98,15 +100,39 @@ final class CommentsHelper
 	}
 
 	//region Entity Editor
-	public static function compileFieldDescriptionForDetails(int $entityTypeId, string $field): array
+	public static function compileFieldDescriptionForDetails(int $entityTypeId, string $field, int $entityId): array
 	{
 		$factory = Container::getInstance()->getFactory($entityTypeId);
+		$copilotOptions = [];
+		$isCopilotEnabled = AIManager::isEnabledInGlobalSettings(EventHandler::SETTINGS_FILL_CRM_TEXT_ENABLED_CODE);
+		if ($isCopilotEnabled)
+		{
+			$entityName = $factory ? strtolower($factory->getEntityName()) : '';
+			$fieldId = strtolower($field);
+			$contextId = "crm_editor-{$entityName}-{$entityId}-{$fieldId}";
+			$copilotOptions = [
+				'copilotOptions' => [
+					'moduleId' => 'crm',
+					'contextId' => $contextId,
+					'category' => 'crm_comment_field',
+					'autoHide' => true,
+				],
+				'triggerBySpace' => true,
+			];
+		}
 
 		return [
 			'name' => $field,
 			'title' => $factory ? $factory->getFieldCaption($field) : $field,
 			'type' => 'bb',
+			// 'type' => 'bbcode', // Uncomment these line to use a new text editor
 			'editable' => true,
+			'data' => [
+				'editorOptions' => [
+					'copilot' => $copilotOptions,
+					'paragraphPlaceholder' => 'auto',
+				],
+			],
 		];
 	}
 
@@ -166,9 +192,21 @@ final class CommentsHelper
 
 	public static function prepareFieldsFromCompatibleRestToRead(int $entityTypeId, int $entityId, array $fields): array
 	{
+		$flexibleFields = self::getFieldsWithFlexibleContentType($entityTypeId);
+		if (empty($flexibleFields))
+		{
+			return $fields;
+		}
+
+		$isFlexibleFieldsInFields = array_intersect_key($fields, array_flip($flexibleFields));
+		if (!$isFlexibleFieldsInFields)
+		{
+			return $fields;
+		}
+
 		$contentTypes = FieldContentTypeTable::loadForItem(new ItemIdentifier($entityTypeId, $entityId));
 
-		foreach (self::getFieldsWithFlexibleContentType($entityTypeId) as $fieldName)
+		foreach ($flexibleFields as $fieldName)
 		{
 			if (empty($fields[$fieldName]))
 			{

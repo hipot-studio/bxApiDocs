@@ -12,6 +12,8 @@ use Bitrix\Main\Type\DateTime;
 
 class ChannelChat extends GroupChat
 {
+	private const MESSAGE_COMPONENT_START_CHANNEL = 'ChannelCreationMessage';
+
 	public function extendPullWatch(): void
 	{
 		if (!Loader::includeModule('pull'))
@@ -63,36 +65,6 @@ class ChannelChat extends GroupChat
 		return self::MANAGE_RIGHTS_MANAGERS;
 	}
 
-	public static function isListAvailable(): bool
-	{
-		if (Option::get('im', 'channel_list_enabled', 'N') === 'Y')
-		{
-			return true;
-		}
-
-		if (\CUserOptions::GetOption('im', 'channel_list_user_enabled', 'N') === 'Y')
-		{
-			return true;
-		}
-
-		return false;
-	}
-
-	public static function isCreationAvailable(): bool
-	{
-		if (Option::get('im', 'channel_creation_enabled', 'N') === 'Y')
-		{
-			return true;
-		}
-
-		if (\CUserOptions::GetOption('im', 'channel_creation_user_enabled', 'N') === 'Y')
-		{
-			return true;
-		}
-
-		return false;
-	}
-
 	public function realAllComments(): void
 	{
 		$readComments = (new ReadService())->readChildren($this);
@@ -112,5 +84,20 @@ class ChannelChat extends GroupChat
 		];
 
 		\Bitrix\Pull\Event::add($this->getContext()->getUserId(), $pushMessage);
+	}
+
+	protected function sendBanner(?int $authorId = null): void
+	{
+		\CIMMessage::Add([
+			'MESSAGE_TYPE' => $this->getType(),
+			'TO_CHAT_ID' => $this->getChatId(),
+			'FROM_USER_ID' => 0,
+			'MESSAGE' => Loc::getMessage('IM_CHAT_CHANNEL_CREATE_WELCOME'),
+			'SYSTEM' => 'Y',
+			'PUSH' => 'N',
+			'PARAMS' => [
+				'COMPONENT_ID' => self::MESSAGE_COMPONENT_START_CHANNEL,
+			]
+		]);
 	}
 }

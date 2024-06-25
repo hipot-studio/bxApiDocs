@@ -46,6 +46,15 @@ class TeamWork extends Tool
 		];
 	}
 
+	public function getSubgroupNameById(string $id): string
+	{
+		return match ($id) {
+			'instant_messenger' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_MESSENGER'),
+			'news' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_NEWS_FEED'),
+			default => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_' . strtoupper($id)),
+		};
+	}
+
 	protected function getSubgroupSettingsTitle(): array
 	{
 		return [];
@@ -116,7 +125,7 @@ class TeamWork extends Tool
 			}
 
 			$result[$id] = [
-				'name' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_' . strtoupper($id)),
+				'name' => $this->getSubgroupNameById($id),
 				'id' => $id,
 				'code' => $this->getSubgroupCode($id),
 				'enabled' => $this->isEnabledSubgroupById($id),

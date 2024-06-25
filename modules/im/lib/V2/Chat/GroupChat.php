@@ -69,7 +69,7 @@ class GroupChat extends Chat implements PopupDataAggregatable
 		return $this->getRelations($options)->hasUser($userId, $this->getChatId());
 	}
 
-	protected function linkToStructureNodes(array $structureNodes): void
+	public function linkToStructureNodes(array $structureNodes): void
 	{
 		if (empty($structureNodes))
 		{
@@ -77,6 +77,16 @@ class GroupChat extends Chat implements PopupDataAggregatable
 		}
 
 		(new Structure($this))->link($structureNodes);
+	}
+
+	public function unlinkStructureNodes(array $structureNodes): void
+	{
+		if (empty($structureNodes))
+		{
+			return;
+		}
+
+		(new Structure($this))->unlink($structureNodes);
 	}
 
 	public function add(array $params, ?Context $context = null): Result
@@ -256,9 +266,9 @@ class GroupChat extends Chat implements PopupDataAggregatable
 		return $result->setResult($params);
 	}
 
-	protected function addUsersToRelation(array $usersToAdd, array $managerIds = [], ?bool $hideHistory = null)
+	protected function addUsersToRelation(array $usersToAdd, array $managerIds = [], ?bool $hideHistory = null, \Bitrix\Im\V2\Relation\Reason $reason = \Bitrix\Im\V2\Relation\Reason::DEFAULT)
 	{
-		parent::addUsersToRelation($usersToAdd, $managerIds, $hideHistory ?? \CIMSettings::GetStartChatMessage() == \CIMSettings::START_MESSAGE_LAST);
+		parent::addUsersToRelation($usersToAdd, $managerIds, $hideHistory ?? \CIMSettings::GetStartChatMessage() == \CIMSettings::START_MESSAGE_LAST, $reason);
 	}
 
 	public function addManagers(array $userIds): self
@@ -461,7 +471,7 @@ class GroupChat extends Chat implements PopupDataAggregatable
 				'MESSAGE_TYPE' => $this->getType(),
 				'TO_CHAT_ID' => $this->getChatId(),
 				'FROM_USER_ID' => $author->getId(),
-				'MESSAGE' => Loc::getMessage('IM_CHAT_CREATE_WELCOME'),
+				'MESSAGE' => Loc::getMessage('IM_CHAT_CREATE_WELCOME_MSGVER_1'),
 				'SYSTEM' => 'Y',
 				'PUSH' => 'N',
 				'PARAMS' => [
@@ -758,7 +768,6 @@ class GroupChat extends Chat implements PopupDataAggregatable
 
 		return $result;
 	}
-
 
 	protected function sendDescriptionMessage(?int $authorId = null): void
 	{

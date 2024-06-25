@@ -221,7 +221,7 @@ class CAllCrmMailTemplate
 		}
 		else
 		{
-			$DB->Query($sql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+			$DB->Query($sql);
 		}
 
 		self::updateUserFields($ID, $arFields);

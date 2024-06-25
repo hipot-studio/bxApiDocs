@@ -404,13 +404,13 @@ class CBXFavAdmMenu
 		{
 			ob_start();
 
-			echo '<script type="text/javascript" bxrunfirst="true">BX.adminFav.setLastId('.intval($id).');</script>';
+			echo '<script bxrunfirst="true">BX.adminFav.setLastId('.intval($id).');</script>';
 
 			$menuScripts = '';
 			foreach ($menuItems as $arItem)
 				$menuScripts .= $adminMenu->Show($arItem);
 
-			echo '<script type="text/javascript">'.$menuScripts.'</script>';
+			echo '<script>'.$menuScripts.'</script>';
 
 			$buff .= ob_get_contents();
 			ob_end_clean();

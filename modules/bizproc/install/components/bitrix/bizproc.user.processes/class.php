@@ -6,23 +6,38 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Bizproc\Api\Data\WorkflowStateService\WorkflowStateFilter;
+use Bitrix\Lists\Api\Service\ServiceFactory\ProcessService;
+use Bitrix\Lists\Api\Service\ServiceFactory\ServiceFactory;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Bizproc\Api\Data\WorkflowStateService\WorkflowStateToGet;
 use Bitrix\Bizproc\Api\Service\WorkflowStateService;
-use Bitrix\Bizproc\Workflow\WorkflowState;
-use Bitrix\Bizproc\Workflow\Task;
+use Bitrix\Bizproc\Api\Response\WorkflowStateService\GetListResponse;
+use Bitrix\Main\Web\Uri;
 
 class BizprocUserProcesses
 	extends CBitrixComponent
 	implements \Bitrix\Main\Errorable, \Bitrix\Main\Engine\Contract\Controllerable
 {
-	const GRID_ID = 'bizproc_user_processes';
-	const FILTER_ID = 'bizproc_user_processes_filter';
+	protected const GRID_ID = 'bizproc_user_processes_v2';
+	protected const NAVIGATION_ID = 'page';
+	protected const FILTER_ID = self::GRID_ID . '_filter';
 
 	private ErrorCollection $errorCollection;
 	private \Bitrix\Main\UI\Filter\Options $filterOptions;
+	private bool $isRenderingOnFront = false;
+
+	private const WORKFLOW_FIELDS_TO_LOAD = [
+		'STARTED_BY',
+		'STATE_TITLE',
+		'MODIFIED',
+		'STARTED',
+		'STARTED_BY',
+		'TEMPLATE.NAME',
+	];
 
 	public function configureActions()
 	{
@@ -64,6 +79,54 @@ class BizprocUserProcesses
 	public function hasErrors(): bool
 	{
 		return !$this->errorCollection->isEmpty();
+	}
+
+	public function loadWorkflowsAction(array $ids): ?array
+	{
+		$this->init();
+
+		if ($this->hasErrors())
+		{
+			return null;
+		}
+
+		$workflowIds = [];
+		foreach ($ids as $id)
+		{
+			if (is_string($id) && $id)
+			{
+				$workflowIds[] = $id;
+			}
+		}
+
+		if (!$workflowIds)
+		{
+			return null;
+		}
+
+		$request = (new WorkflowStateToGet())
+			->setAdditionalSelectFields(static::WORKFLOW_FIELDS_TO_LOAD)
+			->setFilterWorkflowIds($workflowIds)
+			->setLimit($this->getPageNavigation()->getLimit())
+		;
+		$this->setFilterToRequest($request);
+
+		$service = new WorkflowStateService();
+
+		$response = $service->getList($request);
+
+		if (!$response->isSuccess())
+		{
+			$this->addErrors($response->getErrors());
+
+			return null;
+		}
+
+		$this->isRenderingOnFront = true;
+
+		return [
+			'workflows' => $this->getWorkflowsViewData($response),
+		];
 	}
 
 	public function delegateTasksAction(array $taskIds, int $toUserId): ?array
@@ -114,22 +177,38 @@ class BizprocUserProcesses
 		$APPLICATION->SetTitle(Loc::getMessage('BIZPROC_USER_PROCESSES_TITLE'));
 
 		$this->init();
-
-		$this->addToolbar();
 		$this->fillGridInfo();
+
 		if (!$this->hasErrors())
 		{
+			$this->addToolbar();
+			$this->fillCounters();
 			$this->fillGridData();
 			$this->fillGridActions();
+			$this->subscribeToPushes();
 		}
 
 		$this->includeComponentTemplate();
 	}
 
+	private function subscribeToPushes(): void
+	{
+		$pageNavigation = $this->getPageNavigation();
+
+		if (Loader::includeModule('pull') && $pageNavigation->getOffset() === 0)
+		{
+			\Bitrix\Bizproc\Integration\Push\WorkflowPush::subscribeUser($this->getCurrentUserId());
+			$this->arResult['mustSubscribeToPushes'] = true;
+		}
+	}
+
 	private function init(): void
 	{
 		$this->checkModules();
-		$this->checkRights();
+		if (!$this->hasErrors())
+		{
+			$this->checkRights();
+		}
 
 		$this->arResult['viewData'] = [];
 	}
@@ -157,9 +236,23 @@ class BizprocUserProcesses
 	private function fillGridInfo(): void
 	{
 		$this->arResult['gridId'] = static::GRID_ID;
+		$this->arResult['filterId'] = static::FILTER_ID;
+		$this->arResult['navigationId'] = static::NAVIGATION_ID;
 		$this->arResult['gridColumns'] = $this->getGridColumns();
 		$this->arResult['pageNavigation'] = $this->getPageNavigation();
 		$this->arResult['pageSizes'] = $this->getPageSizes();
+	}
+
+	private function fillCounters(): void
+	{
+		$userId = $this->getCurrentUserId();
+
+		$this->arResult['counters'] = [
+			'task' => (int)(CBPTaskService::getCounters($userId)['*'] ?? 0),
+			'comment' => \Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable::getCountUserUnread(
+				$userId
+			),
+		];
 	}
 
 	private function getGridColumns(): array
@@ -185,15 +278,44 @@ class BizprocUserProcesses
 			],
 			[
 				'id' => 'PROCESS',
-				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_PROCESS'),
+				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_PROCESS_DESC'),
 				'default' => true,
 				'sort' => '',
 			],
 			[
-				'id' => 'TASK_PROGRESS',
-				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_TASK_PROGRESS'),
+				'id' => 'MODIFIED',
+				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_MODIFIED_2'),
 				'default' => true,
 				'sort' => '',
+				'width' => 192,
+				//'align' => 'center',
+				'first_order' => 'desc',
+				'color' => \Bitrix\Main\Grid\Column\Color::BLUE,
+			],
+			[
+				'id' => 'TASK_PROGRESS',
+				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_TASK_FACES'),
+				'default' => true,
+				'sort' => '',
+				'width' => 316,
+				'resizeable' => false,
+			],
+			[
+				'id' => 'TASK',
+				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_RESULT'),
+				'default' => true,
+				'sort' => '',
+				'width' => 200,
+				'resizeable' => false,
+				'prevent_default' => false,
+			],
+			[
+				'id' => 'SUMMARY',
+				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_SUMMARY'),
+				'default' => true,
+				'sort' => '',
+				'width' => 100,
+				'resizeable' => false,
 			],
 			[
 				'id' => 'WORKFLOW_TEMPLATE_NAME',
@@ -202,28 +324,8 @@ class BizprocUserProcesses
 				'sort' => '',
 			],
 			[
-				'id' => 'TASK',
-				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_TASK'),
-				'default' => true,
-				'sort' => '',
-			],
-			[
-				'id' => 'TASK_COMMENTS',
-				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_COMMENTS'),
-				'default' => true,
-				'sort' => '',
-				'hideName' => true,
-				'iconCls' => 'bp-comments-icon',
-			],
-			[
 				'id' => 'WORKFLOW_STATE',
 				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_WORKFLOW_STATE'),
-				'default' => true,
-				'sort' => '',
-			],
-			[
-				'id' => 'MODIFIED',
-				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_MODIFIED'),
 				'default' => false,
 				'sort' => '',
 			],
@@ -253,8 +355,14 @@ class BizprocUserProcesses
 		$options = new \Bitrix\Main\Grid\Options(static::GRID_ID);
 		$navParams = $options->GetNavParams();
 
-		$pageNavigation = new \Bitrix\Main\UI\PageNavigation(static::GRID_ID);
+		$pageNavigation = new \Bitrix\Main\UI\PageNavigation(static::NAVIGATION_ID);
 		$pageNavigation->setPageSize($navParams['nPageSize'])->initFromUri();
+
+		$currentPage = $this->request->getQuery(static::NAVIGATION_ID);
+		if (is_numeric($currentPage))
+		{
+			$pageNavigation->setCurrentPage((int)$currentPage);
+		}
 
 		return $pageNavigation;
 	}
@@ -275,62 +383,13 @@ class BizprocUserProcesses
 		/** @var \Bitrix\Main\UI\PageNavigation $pageNav */
 		$pageNav = $this->arResult['pageNavigation'];
 
-		$workflowStateService = new WorkflowStateService();
-
-		$workflowsRequest = (new WorkflowStateToGet())
-			->setAdditionalSelectFields([
-				'STARTED_BY',
-				'STATE_TITLE',
-				'STARTED',
-				'STARTED_BY',
-				'TEMPLATE.NAME',
-			])
-			->setTaskSelectFields([
-				'NAME',
-				'ACTIVITY',
-				'DESCRIPTION',
-				'MODIFIED',
-				'STATUS',
-				'IS_INLINE',
-				'DELEGATION_TYPE',
-				'OVERDUE_DATE',
-				'PARAMETERS',
-				'TASK_USERS.USER_ID',
-				'TASK_USERS.STATUS',
-			])
-			->setLimit($pageNav->getLimit())
-			->setOffset($pageNav->getOffset())
-			->countTotal()
-		;
-
-		$this->setFilterToRequest($workflowsRequest);
-
-		$workflowsResponse = $workflowStateService->getList($workflowsRequest);
+		$workflowsResponse = $this->fetchWorkflows($pageNav->getLimit(), $pageNav->getOffset());
 
 		$workflowViews = [];
 		if ($workflowsResponse->isSuccess())
 		{
-			$workflows = $workflowsResponse->getWorkflowStatesCollection();
+			$workflowViews = $this->getWorkflowsViewData($workflowsResponse);
 			$pageNav->setRecordCount($workflowsResponse->getTotalCount());
-			foreach ($workflows as $workflowState)
-			{
-				$tasks = $workflowsResponse->getWorkflowTasks($workflowState->getId());
-				$preparedTasks = $this->prepareTasksForView($tasks?->getAll() ?? []);
-				$complexDocumentId = $workflowState->getComplexDocumentId();
-
-				$workflowViews[$workflowState->getId()] = [
-					'workflowId' => $workflowState->getId(),
-					'startedBy' => \Bitrix\Main\UserTable::getById($workflowState->getStartedBy())->fetchObject(),
-					'workflowStateTitle' => $workflowState->getStateTitle(),
-					'templateName' => $workflowState->getTemplate()?->fillName() ?? '',
-					'workflowStarted' => FormatDateFromDB($workflowState->getStarted()),
-					'document' => [
-						'url' => $this->getDocumentUrl($complexDocumentId),
-						'name' => $this->getDocumentName($complexDocumentId),
-					],
-					'tasks' => $this->getTasksViewData($workflowState, $preparedTasks),
-				];
-			}
 		}
 		else
 		{
@@ -340,6 +399,25 @@ class BizprocUserProcesses
 		$this->arResult['viewData']['userId'] = $this->getCurrentUserId();
 		$this->arResult['viewData']['targetUserId'] = $this->getTargetUserId();
 		$this->arResult['viewData']['workflows'] = $workflowViews;
+	}
+
+	private function fetchWorkflows(int $limit, int $offset, bool $shouldCountTotal = true): GetListResponse
+	{
+		$workflowStateService = new WorkflowStateService();
+
+		$workflowsRequest = (new WorkflowStateToGet())
+			->setAdditionalSelectFields(static::WORKFLOW_FIELDS_TO_LOAD)
+			->setLimit($limit)
+			->setOffset($offset)
+		;
+		if ($shouldCountTotal)
+		{
+			$workflowsRequest->countTotal();
+		}
+
+		$this->setFilterToRequest($workflowsRequest);
+
+		return $workflowStateService->getList($workflowsRequest);
 	}
 
 	private function setFilterToRequest(WorkflowStateToGet $workflowsRequest): void
@@ -388,202 +466,70 @@ class BizprocUserProcesses
 		];
 	}
 
-	/**
-	 * @param Task[] $tasks
-	 * @return array
-	 */
-	private function prepareTasksForView(array $tasks): array
+	private function getWorkflowsViewData(GetListResponse $workflows): array
 	{
-		if (!$tasks)
-		{
-			return [];
-		}
+		$workflowViews = [];
+		$userId = $this->getTargetUserId();
 
-		$preparedTasks = [];
-		$taskIdx = 0;
-		$firstTaskIdx = null;
-		$hasTargetUserTask = false;
-		$hasCurrentUserTask = false;
-		foreach ($tasks as $userTask)
+		foreach ($workflows->getWorkflowStatesCollection() as $workflowState)
 		{
-			$currentTaskUser = null;
-			$targetTaskUser = null;
-			foreach ($userTask->getTaskUsers() as $taskUser)
+			$workflowId = $workflowState->getId();
+			$complexDocumentId = $workflowState->getComplexDocumentId();
+
+			$startedBy = \Bitrix\Main\UserTable::getById($workflowState->getStartedBy())->fetchObject();
+			if ($this->isRenderingOnFront)
 			{
-				if ($taskUser->getUserId() === $this->getCurrentUserId())
-				{
-					$currentTaskUser = $taskUser;
-				}
-				elseif ($taskUser->getUserId() === $this->getTargetUserId())
-				{
-					$targetTaskUser = $taskUser;
-				}
-				elseif (isset($currentTaskUser, $targetTaskUser))
-				{
-					break;
-				}
+				$startedBy =
+					isset($startedBy)
+						? CUser::FormatName(CSite::GetNameFormat(false), $startedBy)
+						: null;
 			}
 
-			if (
-				isset($targetTaskUser)
-				&& $targetTaskUser->getStatus() === CBPTaskUserStatus::Waiting
-				&& !$hasTargetUserTask
-			)
-			{
-				$hasTargetUserTask = true;
-				$firstTaskIdx = $taskIdx;
-			}
-			elseif (
-				isset($currentTaskUser)
-				&& $currentTaskUser->getStatus() === CBPTaskUserStatus::Waiting
-				&& !$hasTargetUserTask
-				&& !$hasCurrentUserTask
-			)
-			{
-				$hasCurrentUserTask = true;
-				$firstTaskIdx = $taskIdx;
-			}
-			if (isset($targetTaskUser) || isset($currentTaskUser))
-			{
-				$preparedTasks[] = $userTask;
-				$taskIdx += 1;
-			}
-		}
+			$workflowView = new \Bitrix\Bizproc\UI\WorkflowUserView($workflowState, $userId);
 
-		if (!$preparedTasks)
-		{
-			$preparedTasks[] = end($tasks);
-		}
-		elseif (is_int($firstTaskIdx) && $firstTaskIdx > 0)
-		{
-			[$preparedTasks[0], $preparedTasks[$firstTaskIdx]] = [$preparedTasks[$firstTaskIdx], $preparedTasks[0]];
-		}
-
-		return $preparedTasks;
-	}
-
-	/**
-	 * @param WorkflowState $state
-	 * @param Task[] $workflowTasks
-	 * @return Task[]
-	 */
-	private function getTasksViewData(WorkflowState $state, array $workflowTasks): array
-	{
-		$complexDocumentId = $state->getComplexDocumentId();
-		$taskViews = [];
-
-		$isAdmin = $this->isCurrentUserAdmin();
-		foreach ($workflowTasks as $task)
-		{
-			$isResponsibleForTask = $task->isResponsibleForTask($this->getCurrentUserId());
-			// todo - move to service
-			$canView =
-				$isAdmin
-				|| CBPHelper::checkUserSubordination($this->getCurrentUserId(), $this->getTargetUserId())
-				|| $isResponsibleForTask
-			;
-			$canModify = $isResponsibleForTask;
-
-			$viewData = [
-				'id' => $task->getId(),
-				'name' => $task->getName(),
-				'status' => $task->getStatus(),
-				'statusName' => $this->getTaskStatusName($task->getStatus()),
-				'canView' => $canView,
-				'canModify' => $canModify,
-				'canShowInPopup' => (
-					$task->getActivity() !== 'RequestInformationActivity'
-					&& $task->getActivity() !== 'RequestInformationOptionalActivity'
-					&& $complexDocumentId[0] !== 'rpa'
-				),
-				'controls' =>
-					$task->isInline()
-						? CBPDocument::getTaskControls($task->getValues())
-						: null,
-				'modified' => FormatDateFromDB($task->getModified()),
-				'url' => $this->getTaskUrl($task),
-				'users' => $this->getTaskUsersView($task),
-			];
-			if ($task->hasDescription() && ($canView || !$task->isRightsRestricted()))
-			{
-				$viewData['description'] = $task->get('DESCRIPTION');
-			}
-			if ($task->hasOverdueDate() && $task->get('OVERDUE_DATE'))
-			{
-				$viewData['overdueDate'] = FormatDateFromDB($task->get('OVERDUE_DATE'));
-			}
-			if (\Bitrix\Main\Loader::includeModule('forum'))
-			{
-				$viewData['comments'] = $this->getWorkflowCommentsViewData($state);
-			}
-
-			$taskViews[] = $viewData;
-		}
-
-		return $taskViews;
-	}
-
-	private function getTaskStatusName(int $status): ?string
-	{
-		return match ($status)
-		{
-			CBPTaskUserStatus::Yes => Loc::getMessage('BIZPROC_USER_PROCESSES_TASK_STATUS_YES'),
-			CBPTaskUserStatus::No, CBPTaskUserStatus::Cancel => Loc::getMessage('BIZPROC_USER_PROCESSES_TASK_STATUS_NO'),
-			default => Loc::getMessage('BIZPROC_USER_PROCESSES_TASK_STATUS_OK'),
-		};
-	}
-
-	private function getWorkflowCommentsViewData(WorkflowState $state): int
-	{
-		$topic = CForumTopic::getList([], ['XML_ID' => 'WF_' . $state->getId()])->fetch() ?: [];
-
-		return isset($topic['POSTS']) ? (int)$topic['POSTS'] : 0;
-	}
-
-	private function getTaskUrl(Task $task): string
-	{
-		$parameters = $task->getParameters();
-
-		if (is_string($parameters['TASK_EDIT_URL'] ?? null) && $parameters['TASK_EDIT_URL'])
-		{
-			$taskUrl = $parameters['TASK_EDIT_URL'];
-		}
-		else
-		{
-			$taskUrl = '/company/personal/bizproc/#ID#/';
-		}
-
-		$rawUrl = CComponentEngine::makePathFromTemplate(
-			$taskUrl,
-			['ID' => $task->getId(), 'task_id' => $task->getId()],
-		);
-
-		if (!$task->isResponsibleForTask($this->getCurrentUserId()))
-		{
-			$url = new \Bitrix\Main\Web\Uri($rawUrl);
-			$url->addParams([
-				'USER_ID' => $this->getTargetUserId(),
-			]);
-
-			return $url->getUri();
-		}
-
-		return $rawUrl;
-	}
-
-	private function getTaskUsersView(Task $task): array
-	{
-		$usersView = [];
-
-		foreach ($task->getTaskUsers() as $taskUser)
-		{
-			$usersView[] = [
-				'id' => $taskUser->getUserId(),
-				'status' => $taskUser->getStatus(),
+			$workflowViews[] = [
+				'workflowId' => $workflowId,
+				'userId' => $userId,
+				'startedById' => $workflowState->getStartedBy(),
+				'startedBy' => $startedBy,
+				'taskProgress' => $workflowView->getFaces(),
+				'name' => $workflowView->getName(),
+				'description' => $workflowView->getDescription(),
+				'typeName' => $workflowView->getTypeName(),
+				'statusText' => $workflowView->getStatusText(),
+				'modified' => $this->formatDate($workflows->getUserModified($workflowId)),
+				'templateName' => $workflowState->getTemplate()?->fillName() ?? '',
+				'workflowStarted' => $this->formatDate($workflowState->getStarted()),
+				'document' => [
+					'url' => $this->getDocumentUrl($complexDocumentId),
+					'name' => $this->getDocumentName($complexDocumentId),
+				],
+				'task' => $workflowView->getTasks()[0] ?? null,
+				'taskCnt' => count($workflowView->getTasks()),
+				'commentCnt' => $workflowView->getCommentCounter(),
+				'isCompleted' => $workflowView->getIsCompleted(),
 			];
 		}
 
-		return $usersView;
+		return $workflowViews;
+	}
+
+	private function formatDate(?DateTime $date): string
+	{
+		if (!$date)
+		{
+			return '';
+		}
+
+		$thisYear = $date->format('Y') === date('Y');
+		$culture = \Bitrix\Main\Application::getInstance()->getContext()->getCulture();
+		$df = $thisYear
+			? $culture?->getDayMonthFormat() ?? 'j F'
+			: $culture?->getLongDateFormat() ?? 'j F Y'
+		;
+		$tf = $culture?->getShortTimeFormat() ?? 'H:i';
+
+		return \FormatDate("$df, $tf", $date->toUserTime());
 	}
 
 	private function fillGridActions(): void
@@ -680,17 +626,6 @@ class BizprocUserProcesses
 		return \Bitrix\Main\Engine\CurrentUser::get()->getId();
 	}
 
-	private function isCurrentUserAdmin(): bool
-	{
-		return
-			\Bitrix\Main\Engine\CurrentUser::get()->isAdmin()
-			|| (
-				\Bitrix\Main\Loader::includeModule('bitrix24')
-				&& CBitrix24::IsPortalAdmin($this->getCurrentUserId())
-			)
-		;
-	}
-
 	private function addToolbar(): void
 	{
 		$filterParams = [
@@ -712,6 +647,9 @@ class BizprocUserProcesses
 			$addButton = new \Bitrix\UI\Buttons\AddButton([
 				'color' => \Bitrix\UI\Buttons\Color::SUCCESS,
 				'text' => Loc::getMessage('BIZPROC_USER_PROCESSES_BUTTON_START_WORKFLOW'),
+				'dataset' => [
+					'toolbar-collapsed-icon' => \Bitrix\UI\Buttons\Icon::ADD,
+				],
 			]);
 
 			$this->arResult['viewData']['startWorkflowButtonId'] = static::GRID_ID . '-filter-start-workflow-button';
@@ -732,86 +670,81 @@ class BizprocUserProcesses
 			return null;
 		}
 
-		$iblockTypeId = \Bitrix\Main\Config\Option::get("lists", "livefeed_iblock_type_id");
-		$hasPermissions = $this->checkListsPermission($iblockTypeId);
-		if (!$hasPermissions)
+		$iBlockTypeId = ProcessService::getIBlockTypeId();
+		$factory = ServiceFactory::getServiceByIBlockTypeId($iBlockTypeId, $this->getCurrentUserId());
+
+		if (!$factory)
+		{
+			return null;
+		}
+
+		$showAllProcesses = method_exists($factory::class, 'getAddElementCatalog');
+
+		$response = $showAllProcesses ? $factory->getAddElementCatalog() : $factory->getCatalog();
+		if (!$response->isSuccess())
 		{
 			return null;
 		}
 
 		$siteDir = SITE_DIR;
-		$siteId = SITE_ID;
-
 		$path = rtrim($siteDir, '/');
 
-		$listData = [];
-		$lists = CIBlock::getList(
-			[
-				'SORT' => 'ASC',
-				'NAME' => 'ASC',
-			],
-			[
-				'ACTIVE' => 'Y',
-				'TYPE' => $iblockTypeId,
-				'SITE_ID' => $siteId,
-			],
-		);
-		while($list = $lists->fetch())
-		{
-			if(CLists::getLiveFeed($list['ID']))
-			{
-				$listData[$list['ID']]['name'] = $list['NAME'];
+		$requestIBlockId = (int)$this->request->get('iBlockId');
 
-				$url = new \Bitrix\Main\Web\Uri($path . \Bitrix\Main\Config\Option::get('lists', 'livefeed_url'));
+		$listData = [];
+		foreach ($response->getCatalog() as $process)
+		{
+			$iBlockId = (int)$process['ID'];
+
+			if (!$showAllProcesses && !CLists::getLiveFeed($iBlockId))
+			{
+				continue;
+			}
+
+			$data = [
+				'name' => $process['NAME'],
+				'iBlockTypeId' => $iBlockTypeId,
+				'iBlockId' => $iBlockId,
+				'icon' => '/bitrix/images/lists/default.png',
+				'selected' => false,
+			];
+
+			if (!$showAllProcesses)
+			{
+				$url = new Uri($path . \Bitrix\Main\Config\Option::get('lists', 'livefeed_url'));
 				$url->addParams([
 					'livefeed' => 'y',
-					'list_id' => $list['ID'],
+					'list_id' => $iBlockId,
 					'element_id' => 0,
 					'back_url' => $this->request->getRequestUri(),
 				]);
-				$listData[$list['ID']]['url'] = $url;
-				if($list['PICTURE'] > 0)
+				$data['url'] = $url;
+			}
+
+			if ($process['PICTURE'] > 0)
+			{
+				$imageFile = CFile::GetFileArray($process['PICTURE']);
+				if($imageFile !== false)
 				{
-					$imageFile = CFile::GetFileArray($list['PICTURE']);
-					if($imageFile !== false)
-					{
-						$imageFile = CFile::ResizeImageGet(
-							$imageFile,
-							['width' => 36, 'height' => 30],
-							BX_RESIZE_IMAGE_PROPORTIONAL,
-							false
-						);
-						$listData[$list['ID']]['icon'] = $imageFile['src'];
-					}
-				}
-				else
-				{
-					$listData[$list['ID']]['icon'] = '/bitrix/images/lists/default.png';
+					$imageFile = CFile::ResizeImageGet(
+						$imageFile,
+						['width' => 36, 'height' => 30],
+						BX_RESIZE_IMAGE_PROPORTIONAL,
+						false
+					);
+					$data['icon'] = $imageFile['src'];
 				}
 			}
+
+			if ($iBlockId === $requestIBlockId)
+			{
+				$data['selected'] = true;
+			}
+
+			$listData[] = $data;
 		}
 
 		return $listData;
-	}
-
-	protected function checkListsPermission(?string $iBlockTypeId): bool
-	{
-		global $USER;
-		$listPerm = CListPermissions::checkAccess(
-			$USER,
-			$iBlockTypeId
-		);
-
-		if($listPerm < 0)
-		{
-			return false;
-		}
-		elseif($listPerm <= CListPermissions::ACCESS_DENIED)
-		{
-			return false;
-		}
-
-		return true;
 	}
 
 	private function getFilterFields(): array

@@ -109,7 +109,7 @@ class CopilotChat extends GroupChat
 		return parent::add($params, $context);
 	}
 
-	public function addUsers(array $userIds, array $managerIds = [], ?bool $hideHistory = null, bool $withMessage = true, bool $skipRecent = false): Chat
+	public function addUsers(array $userIds, array $managerIds = [], ?bool $hideHistory = null, bool $withMessage = true, bool $skipRecent = false, Im\V2\Relation\Reason $reason = Im\V2\Relation\Reason::DEFAULT): Chat
 	{
 		if (empty($userIds) || !$this->getChatId())
 		{
@@ -125,7 +125,7 @@ class CopilotChat extends GroupChat
 
 		$usersToAdd = $this->getUsersWithoutBots($usersToAdd);
 
-		return parent::addUsers($usersToAdd, $managerIds, $hideHistory, $withMessage, $skipRecent);
+		return parent::addUsers($usersToAdd, $managerIds, $hideHistory, $withMessage, $skipRecent, $reason);
 	}
 
 	protected function getUsersWithoutBots(array $userIds): array
@@ -178,11 +178,6 @@ class CopilotChat extends GroupChat
 			$roleManager = new Im\V2\Integration\AI\RoleManager();
 			$copilotCode = $roleManager->getMainRole($this->getChatId());
 			$copilotName = $roleManager->getRoles([$copilotCode], $this->getContext()->getUserId())[$copilotCode]['name'];
-		}
-
-		if (Option::get('im', 'im_copilot_chat_roles_available', 'N') === 'N')
-		{
-			$copilotName = 'CoPilot';
 		}
 
 		\CIMMessage::Add([
@@ -340,13 +335,13 @@ class CopilotChat extends GroupChat
 			&& static::getBotIdOrRegister();
 	}
 
-	public function deleteUser(int $userId, bool $withMessage = true, bool $skipRecent = false, bool $withNotification = true): Result
+	public function deleteUser(int $userId, bool $withMessage = true, bool $skipRecent = false, bool $withNotification = true, bool $skipCheckReason = false): Result
 	{
 		if (CopilotChatBot::getBotId() === $userId && $this->getContext()->getUserId() !== $userId)
 		{
 			return (new Result())->addError(new ChatError(ChatError::COPILOT_DELETE_ERROR));
 		}
 
-		return parent::deleteUser($userId, $withMessage, $skipRecent);
+		return parent::deleteUser($userId, $withMessage, $skipRecent, $skipCheckReason);
 	}
 }

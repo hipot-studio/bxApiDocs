@@ -112,6 +112,11 @@ class RelationTable extends Entity\DataManager
 			'LAST_SEND_MESSAGE_ID' => array(
 				'data_type' => 'integer',
 			),
+			'REASON' => array(
+				'data_type' => 'string',
+				'default_value' => '',
+				'validation' => array(__CLASS__, 'validateReason'),
+			),
 			'LAST_FILE_ID' => array(
 				'data_type' => 'integer',
 				//'title' => Loc::getMessage('RELATION_ENTITY_LAST_FILE_ID_FIELD'),
@@ -192,6 +197,18 @@ class RelationTable extends Entity\DataManager
 	 * @return array
 	 */
 	public static function validateMessageStatus()
+	{
+		return array(
+			new Entity\Validator\Length(null, 50),
+		);
+	}
+
+	/**
+	 * Returns validators for REASON field.
+	 *
+	 * @return array
+	 */
+	public static function validateReason()
 	{
 		return array(
 			new Entity\Validator\Length(null, 50),

@@ -15,12 +15,10 @@ class UserDataProvider extends DataProvider
 	public function prepareActions(): array
 	{
 		$result = [
+			new Action\RestoreAction($this->getSettings()),
 			new Action\ConfirmAction($this->getSettings()),
 			new Action\DeclineAction($this->getSettings()),
 			new Action\OpenProfileAction(),
-			new Action\FireAction($this->getSettings()),
-			new Action\DeleteAction($this->getSettings()),
-			new Action\RestoreAction($this->getSettings()),
 		];
 
 		if (Loader::includeModule('tasks'))
@@ -32,6 +30,9 @@ class UserDataProvider extends DataProvider
 		{
 			$result[] = new Action\MessageAction();
 		}
+
+		$result[] = new Action\FireAction($this->getSettings());
+		$result[] = new Action\DeleteAction($this->getSettings());
 
 		return $result;
 	}

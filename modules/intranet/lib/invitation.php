@@ -41,6 +41,20 @@ class Invitation
 		];
 	}
 
+	public static function isAllowed(): bool
+	{
+		if (
+			Loader::includeModule('bitrix24')
+			&& class_exists(Sso\Configuration::class)
+			&& Sso\Configuration::isSsoEnabled()
+		)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
 	/**
 	 * Add filter.
 	 *
@@ -254,11 +268,7 @@ class Invitation
 	{
 		global $USER;
 
-		if (
-			Loader::includeModule('bitrix24')
-			&& class_exists(Sso\Configuration::class)
-			&& Sso\Configuration::isSsoEnabled()
-		)
+		if (!self::isAllowed())
 		{
 			return false;
 		}
@@ -419,7 +429,6 @@ class Invitation
 	public static function onAfterUserAuthorizeHandler($params): bool
 	{
 		$userData = $params['user_fields'];
-
 		if (in_array($userData['EXTERNAL_AUTH_ID'], \Bitrix\Main\UserTable::getExternalUserTypes()))
 		{
 			return true;
@@ -435,6 +444,12 @@ class Invitation
 			return true;
 		}
 
+		if (empty($userData['CONFIRM_CODE']))
+		{
+			return true;
+		}
+
+
 		$userId = (int)$userData['ID'];
 		$authorizeUser = new User($userId);
 		$ownUser = $authorizeUser->fetchOriginatorUser();
@@ -446,6 +461,12 @@ class Invitation
 		}
 		$counter = new Counter(static::getInvitedCounterId(), $syncStrategy);
 		$counter->sync();
+
+		$totalCounter = new Counter(
+			static::getTotalInvitationCounterId(),
+			new TotalInvitationSynchronization($ownUser)
+		);
+		$totalCounter->sync();
 
 		return true;
 	}
@@ -512,7 +533,7 @@ class Invitation
 			$isAccept ? 'Y' : 'N',
 			$notifyFields
 		);
-		if (isset($eventResult['result']) && $eventResult['result'] === false)
+		if (isset($eventResult['success']) && $eventResult['success'] === false)
 		{
 			if (!empty($eventResult['text']))
 			{

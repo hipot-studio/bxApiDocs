@@ -43,11 +43,6 @@ class RoleManager
 				'default' => $role['code'] === \Bitrix\AI\Role\RoleManager::getUniversalRoleCode(),
 				'prompts' => $this->getPrompts($roleManager, $role['code']),
 			];
-
-			if (Option::get('im', 'im_copilot_chat_roles_available', 'N') === 'N')
-			{
-				$roleData[$role['code']]['name'] = 'CoPilot';
-			}
 		}
 
 		return !empty($roleData) ? $roleData : null;

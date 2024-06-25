@@ -28,7 +28,7 @@ class TagsFieldAssembler extends CustomUserFieldAssembler
 		}
 	}
 
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): mixed
 	{
 		$userTagsList = $this->getUserTagsList($value['ID']);
 

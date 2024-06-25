@@ -21,6 +21,7 @@ use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Item\MemberCollection;
 use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Repository\MemberRepository;
+use Bitrix\Sign\Service\Sign\MemberService;
 use Bitrix\Sign\Type\Document\EntityType;
 use Bitrix\Sign\Type\DocumentStatus;
 use Bitrix\Sign\Type\Member\Role;
@@ -36,6 +37,7 @@ final class SignB2eDocument extends Activity
 	private ?MemberRepository $memberRepository = null;
 	private ?MemberCollection $members = null;
 	private DocumentService $documentService;
+	private ?MemberService $memberService = null;
 	private ?bool $isSignDocumentFill = null;
 	private ?bool $isSignDocumentReview = null;
 	private ?array $signersByStatuses = null;
@@ -49,6 +51,14 @@ final class SignB2eDocument extends Activity
 			$this->documentRepository = \Bitrix\Sign\Service\Container::instance()->getDocumentRepository();
 			$this->memberRepository = \Bitrix\Sign\Service\Container::instance()->getMemberRepository();
 			$this->documentService = \Bitrix\Sign\Service\Container::instance()->getDocumentService();
+
+			if (method_exists(
+				'\Bitrix\Sign\Service\Cache\Memory\Sign\MemberService',
+				'getUserRepresentedName'
+			))
+			{
+				$this->memberService = new \Bitrix\Sign\Service\Cache\Memory\Sign\MemberService();
+			}
 		}
 
 		parent::__construct($context, $model);
@@ -374,7 +384,10 @@ final class SignB2eDocument extends Activity
 	private function getUserProfileLink(int $userId, bool $withDelimiter = false): Layout\Body\ContentBlock\Link
 	{
 		$user = $this->getUserData($userId);
-		$name = $user['FORMATTED_NAME'] ?? '';
+		$name = $this->memberService !== null
+			? $this->memberService->getUserRepresentedName($userId)
+			: $user['FORMATTED_NAME'] ?? ''
+		;
 
 		return (new Layout\Body\ContentBlock\Link())
 			->setValue($withDelimiter ? $name . ',' : $name)

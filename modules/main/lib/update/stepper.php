@@ -2,12 +2,12 @@
 
 namespace Bitrix\Main\Update;
 
-use \Bitrix\Main;
-use \Bitrix\Main\HttpApplication;
-use \Bitrix\Main\Web\Json;
-use \Bitrix\Main\Config\Option;
-use \Bitrix\Main\Context;
-use \Bitrix\Main\Localization\Loc;
+use Bitrix\Main;
+use Bitrix\Main\HttpApplication;
+use Bitrix\Main\Web\Json;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Context;
+use Bitrix\Main\Localization\Loc;
 
 /**
  * Class Stepper
@@ -124,7 +124,7 @@ abstract class Stepper
 	</div>
 </div>
 HTML;
-			$return = \CUtil::PhpToJSObject($return);
+			$return = Json::encode($return);
 			$result = <<<HTML
 <div class="main-stepper-block">{$result}
 <script>BX.ready(function(){ if (BX && BX["UpdateStepperRegister"]) { BX.UpdateStepperRegister({$id}, {$return}); }});</script>

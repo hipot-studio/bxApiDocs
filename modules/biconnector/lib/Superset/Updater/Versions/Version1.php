@@ -21,6 +21,14 @@ final class Version1 extends BaseVersion
 	{
 		$result = new Result();
 
+		if (
+			SupersetInitializer::getSupersetStatus() == SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS
+			|| SupersetInitializer::getSupersetStatus() == SupersetInitializer::SUPERSET_STATUS_DELETED_BY_CLIENT
+		)
+		{
+			return $result;
+		}
+
 		if (SupersetInitializer::getSupersetStatus() !== SupersetInitializer::SUPERSET_STATUS_READY)
 		{
 			$result->addError(new Main\Error('Superset status is not READY'));

@@ -12,7 +12,7 @@ use Bitrix\Main\Result;
  */
 final class ClientUpdater
 {
-	private const LAST_VERSION = 1;
+	private const LAST_VERSION = 2;
 
 	/**
 	 * Get current version value.

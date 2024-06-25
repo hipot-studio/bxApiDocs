@@ -46,7 +46,7 @@ JS;
 		$js = str_replace(array("\n", "\t"), "", $js);
 		if ($stripTags === false)
 		{
-			return "<script type=\"text/javascript\">".$js."</script>";
+			return "<script>".$js."</script>";
 		}
 		else
 		{

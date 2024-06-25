@@ -16,7 +16,7 @@ class UFFieldAssembler extends FieldAssembler
 		parent::__construct($columnIds, $settings);
 	}
 
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): mixed
 	{
 		$field = new \Bitrix\Main\UserField\Renderer($value, [
 			'mode' => $this->getSettings()->isExcelMode()

@@ -129,7 +129,7 @@ class TemplateProvider
 
 		$query = $this->buildQuery();
 
-		if ($dbRes = $this->db->Query($query, false, "File: ".__FILE__."<br>Line: ".__LINE__))
+		if ($dbRes = $this->db->Query($query))
 		{
 			if ($arRes = $dbRes->Fetch())
 			{
@@ -226,7 +226,7 @@ class TemplateProvider
 			if ($nTopCount > 0)
 			{
 				$query = $this->db->TopSql($query, $nTopCount);
-				$res = $this->db->Query($query, false, "File: " . __FILE__ . "<br>Line: " . __LINE__);
+				$res = $this->db->Query($query);
 
 				$res->SetUserFields($this->userFieldManager->GetUserFields("TASKS_TASK_TEMPLATE"));
 			}
@@ -241,7 +241,7 @@ class TemplateProvider
 		}
 		else
 		{
-			$res = $this->db->Query($query, false, "File: " . __FILE__ . "<br>Line: " . __LINE__);
+			$res = $this->db->Query($query);
 			$res->SetUserFields($this->userFieldManager->GetUserFields("TASKS_TASK_TEMPLATE"));
 		}
 

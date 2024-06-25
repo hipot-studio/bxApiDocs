@@ -722,6 +722,20 @@ class CBPWorkflow
 		}
 
 		WorkflowUserTable::syncOnWorkflowUpdated($this, $status);
+
+		/* not ready now
+		if ($status === CBPWorkflowStatus::Completed && $this->getStartedBy())
+		{
+			$commentService = new Bizproc\Api\Service\WorkflowCommentService();
+			$commentService->addSystemComment(
+				new Bizproc\Api\Request\WorkflowCommentService\AddSystemCommentRequest(
+					$this->getInstanceId(),
+					$this->getStartedBy(),
+					\Bitrix\Main\Localization\Loc::getMessage('BPCGWF_COMPLETED_COMMENT_TEXT'),
+				)
+			);
+		}
+		*/
 	}
 
 	/**

@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Integrity\DuplicateControl;
 use Bitrix\Crm\Component\EntityDetails\Config\Scope;
 use Bitrix\Crm\Restriction\RestrictionManager;
@@ -14,6 +15,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
+use Bitrix\Main\Result;
 use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type;
@@ -33,6 +35,8 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 {
 	/** @var ErrorCollection */
 	protected $errors;
+	/** @var ErrorCollection */
+	protected $checkErrors;
 
 	/** @var bool */
 	protected $isRestModuleIncluded = false;
@@ -150,11 +154,14 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 
 	protected string $permissionToken = '';
 
+	private $entityFieldAttributeConfigs = null;
+
 	public function __construct($component = null)
 	{
 		parent::__construct($component);
 
 		$this->errors = new ErrorCollection();
+		$this->checkErrors = new ErrorCollection();
 		$this->requisite = EntityRequisite::getSingleInstance();
 		$this->userFieldDispatcher = UserField\Dispatcher::instance();
 		$this->preset = EntityPreset::getSingleInstance();
@@ -209,6 +216,17 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 		}
 
 		return $result;
+	}
+
+	/** @return bool */
+	public function hasCheckErrors()
+	{
+		return !$this->checkErrors->isEmpty();
+	}
+
+	public function getCheckErrors()
+	{
+		return $this->checkErrors;
 	}
 
 	protected function initialize()
@@ -378,9 +396,9 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 							'order' => ['SORT', 'ID'],
 							'filter' => [
 								'=ENTITY_TYPE_ID' => CCrmOwnerType::Requisite,
-								'=ENTITY_ID' => $this->requisiteId
+								'=ENTITY_ID' => $this->requisiteId,
 							],
-							'select' => $select
+							'select' => $select,
 						)
 					);
 					while ($row = $res->fetch())
@@ -779,7 +797,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 				'NAME' => '',
 				'ACTIVE' => 'Y',
 				'ADDRESS_ONLY' => $this->isAddressOnly ? 'Y' : 'N',
-				'SORT' => 500
+				'SORT' => 500,
 			];
 
 			if(is_array($this->rawPresetData) && isset($this->rawPresetData['NAME']))
@@ -967,7 +985,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 										if ($locationAddress)
 										{
 											$this->rawRequisiteData[$rqFieldName][$addressTypeId] = [
-												'LOC_ADDR' => $locationAddress
+												'LOC_ADDR' => $locationAddress,
 											];
 										}
 									}
@@ -1030,7 +1048,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 					$this->rawBankDetailList[$pseudoId] = [
 						'ENTITY_TYPE_ID' => CCrmOwnerType::Requisite,
 						'ENTITY_ID' => $this->requisiteId,
-						'COUNTRY_ID' => $this->presetCountryId
+						'COUNTRY_ID' => $this->presetCountryId,
 					];
 				}
 				foreach ($fields as $fieldName => $fieldValue)
@@ -1065,7 +1083,13 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 		{
 			if(is_array($this->rawBankDetailList) && !empty($this->rawBankDetailList))
 			{
-				foreach($this->rawBankDetailList as $pseudoId => &$bankDetailFields)
+				$bankDetailOptions = [];
+				$presetId = $this->requisite->getPresetIdFromFields($this->rawRequisiteData);
+				if ($presetId > 0)
+				{
+					$bankDetailOptions['FIELD_CHECK_OPTIONS'] = ['PRESET_ID' => $presetId];
+				}
+				foreach($this->rawBankDetailList as $pseudoId => $bankDetailFields)
 				{
 					if (isset($this->deletedBankDetailMap[$pseudoId]))
 					{
@@ -1074,25 +1098,42 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 
 					if ($pseudoId > 0)
 					{
-						$bankDetailResult = $this->bankDetail->checkBeforeUpdate($pseudoId, $bankDetailFields);
+						$bankDetailResult = $this->bankDetail->checkBeforeUpdate(
+							$pseudoId,
+							$bankDetailFields,
+							$bankDetailOptions
+						);
 					}
 					else
 					{
-						$bankDetailResult = $this->bankDetail->checkBeforeAdd($bankDetailFields);
+						$bankDetailResult = $this->bankDetail->checkBeforeAdd(
+							$bankDetailFields,
+							$bankDetailOptions
+						);
 					}
 
 					if($bankDetailResult !== null && !$bankDetailResult->isSuccess())
 					{
 						$result->addErrors($bankDetailResult->getErrors());
+						$this->checkErrors->add(
+							$this->prepareBankDetailCheckErrors(
+								(string)$pseudoId,
+								$bankDetailResult
+							)
+						);
 					}
 				}
-				unset($bankDetailFields);
 			}
 		}
 
 		if ($result && !$result->isSuccess())
 		{
 			$this->errors->add($result->getErrors());
+			$resultData = $result->getData();
+			if (isset($resultData['CHECK_ERRORS']) && is_array($resultData['CHECK_ERRORS']))
+			{
+				$this->checkErrors->add($resultData['CHECK_ERRORS']);
+			}
 		}
 	}
 
@@ -1140,6 +1181,12 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 			}
 			elseif(is_array($this->rawBankDetailList) && !empty($this->rawBankDetailList))
 			{
+				$bankDetailOptions = [];
+				$presetId = $this->requisite->getPresetIdFromFields($this->rawRequisiteData);
+				if ($presetId > 0)
+				{
+					$bankDetailOptions['FIELD_CHECK_OPTIONS'] = ['PRESET_ID' => $presetId];
+				}
 				$changeKeyMap = [];
 				foreach($this->rawBankDetailList as $pseudoId => &$bankDetailFields)
 				{
@@ -1158,13 +1205,17 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 					}
 					elseif ((int)$pseudoId > 0)
 					{
-						$bankDetailResult = $this->bankDetail->update($pseudoId, $bankDetailFields);
+						$bankDetailResult = $this->bankDetail->update(
+							$pseudoId,
+							$bankDetailFields,
+							$bankDetailOptions
+						);
 					}
 					else
 					{
 						$bankDetailFields['ENTITY_TYPE_ID'] = CCrmOwnerType::Requisite;
 						$bankDetailFields['ENTITY_ID'] = $this->requisiteId;
-						$bankDetailResult = $this->bankDetail->add($bankDetailFields);
+						$bankDetailResult = $this->bankDetail->add($bankDetailFields, $bankDetailOptions);
 						if($bankDetailResult && $bankDetailResult->isSuccess())
 						{
 							$bankDetailFields['ID'] = $changeKeyMap[$pseudoId] = $bankDetailResult->getId();
@@ -1174,6 +1225,12 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 					if($bankDetailResult !== null && !$bankDetailResult->isSuccess())
 					{
 						$result->addErrors($bankDetailResult->getErrors());
+						$this->checkErrors->add(
+							$this->prepareBankDetailCheckErrors(
+								(string)$pseudoId,
+								$bankDetailResult
+							)
+						);
 					}
 				}
 				unset($bankDetailFields);
@@ -1209,6 +1266,11 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 			{
 				$dbConnection->rollbackTransaction();
 				$this->errors->add($result->getErrors());
+				$resultData = $result->getData();
+				if (isset($resultData['CHECK_ERRORS']) && is_array($resultData['CHECK_ERRORS']))
+				{
+					$this->checkErrors->add($resultData['CHECK_ERRORS']);
+				}
 			}
 		}
 	}
@@ -1326,9 +1388,14 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 				'name' => $fieldName,
 				'title' => $fieldInfo['title'],
 				'type' => $fieldInfo['formType'],
-				'required' => $fieldInfo['required']
+				'required' => $fieldInfo['required'],
 			];
 		}
+
+		FieldAttributeManager::prepareEditorFieldInfosWithAttributes(
+			$this->prepareEntityFieldAttributeConfigs(CCrmOwnerType::BankDetail),
+			$fields
+		);
 
 		return $fields;
 	}
@@ -1370,7 +1437,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 			'type' => 'requisite_autocomplete',
 			'editable' => true,
 			'enabledMenu' => false,
-			'data' => CCrmComponentHelper::getRequisiteAutocompleteFieldInfoData($this->presetCountryId)
+			'data' => CCrmComponentHelper::getRequisiteAutocompleteFieldInfoData($this->presetCountryId),
 		];
 
 		if ($this->presetId > 0)
@@ -1383,10 +1450,10 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 					'items'=> CCrmInstantEditorHelper::PrepareListOptions(
 						EntityPreset::getActiveItemList(),
 						['DEFAULT_PRESET_ID' => $this->presetId]
-					)
+					),
 				),
 				'editable' => true,
-				'enabledMenu' => false
+				'enabledMenu' => false,
 			];
 		}
 
@@ -1394,7 +1461,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 			'title' => isset($this->requisiteFieldTitles['NAME']) ? $this->requisiteFieldTitles['NAME'] : 'NAME',
 			'name' => 'NAME',
 			'type' => 'text',
-			'required' => true
+			'required' => true,
 		];
 
 		// rq fields
@@ -1438,9 +1505,9 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 									'FIELD' => $fieldName,
 									'MULTIPLE' => $fieldInfo['multiple'],
 									'MANDATORY' => $fieldInfo['required'],
-									'SETTINGS' => isset($fieldInfo['settings']) ? $fieldInfo['settings'] : null
-								]
-							]
+									'SETTINGS' => isset($fieldInfo['settings']) ? $fieldInfo['settings'] : null,
+								],
+							],
 						];
 						$fields[] = $ufInfo;
 						unset($ufInfo);
@@ -1455,6 +1522,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 									'title' => $fieldTitle,
 									'name' => $fieldName,
 									'type' => 'crm_address',
+									'enableAttributes' => false,
 									'editable' => true,
 									'data' =>
 										CCrmComponentHelper::getRequisiteAddressFieldData(
@@ -1485,7 +1553,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 							$fieldFormConfig = [
 								'title' => $fieldTitle,
 								'name' => $fieldName,
-								'type' => $fieldType
+								'type' => $fieldType,
 							];
 
 							if ($fieldInfo['formType'] === 'crm_status')
@@ -1526,9 +1594,14 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 			'data' => [
 				'fields' => $bankDetailFields,
 				'nextIndex' => $this->getNextBankDetailIndex(),
-				'config' => $this->prepareBankDetailsFormConfig($bankDetailFields)
-			]
+				'config' => $this->prepareBankDetailsFormConfig($bankDetailFields),
+			],
 		];
+
+		FieldAttributeManager::prepareEditorFieldInfosWithAttributes(
+			$this->prepareEntityFieldAttributeConfigs(CCrmOwnerType::Requisite, $this->requisiteId),
+			$fields
+		);
 
 		return $fields;
 	}
@@ -1552,7 +1625,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 					'data' => [
 						'isRemovable' => false,
 						'enableTitle' => false,
-						'enableToggling' => false
+						'enableToggling' => false,
 					],
 					'elements' => $fields,
 				],
@@ -1563,7 +1636,35 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 		$formComponentParams = array_merge($formComponentParams, $this->prepareFormConfigurationUpdateParams());
 		$formComponent->arParams = $formComponentParams;
 
-		return $formComponent->prepareResult();
+		$config = $formComponent->prepareResult();
+
+		$config['ATTRIBUTE_CONFIG'] = $this->prepareFieldAttributeConfig(CCrmOwnerType::BankDetail);
+
+		return $config;
+	}
+
+	protected function prepareBankDetailCheckErrors(string $pseudoId, Result $result): array
+	{
+		$checkErrors = [];
+
+		$resultData = $result->getData();
+		if (isset($resultData['CHECK_ERRORS']) && is_array($resultData['CHECK_ERRORS']))
+		{
+			$checkErrors = $resultData['CHECK_ERRORS'];
+			/** @var Error $error */
+			foreach ($checkErrors as $index => $error)
+			{
+				$code = $error->getCode();
+				$checkErrors[$index] = new Error(
+					$error->getMessage(),
+					"BANK_DETAILS[$pseudoId][$code]",
+					$error->getCustomData()
+				);
+			}
+			$this->checkErrors->add($checkErrors);
+		}
+
+		return $checkErrors;
 	}
 
 	protected function prepareSingleUserFieldValue($value)
@@ -1599,7 +1700,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 					'ID' => $pseudoId,
 					'ENTITY_TYPE_ID' => CCrmOwnerType::Requisite,
 					'ENTITY_ID' => $this->requisiteId,
-					'COUNTRY_ID' => $this->presetCountryId
+					'COUNTRY_ID' => $this->presetCountryId,
 				];
 				if (is_array($bankDetailFields))
 				{
@@ -1684,7 +1785,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 							'FIELD' => $fieldName,
 							'MULTIPLE' => $fieldInfo['multiple'],
 							'MANDATORY' => $fieldInfo['required'],
-							'SETTINGS' => isset($fieldInfo['settings']) ? $fieldInfo['settings'] : null
+							'SETTINGS' => isset($fieldInfo['settings']) ? $fieldInfo['settings'] : null,
 						];
 						if((is_string($fieldValue) && $fieldValue !== '')
 							|| (is_numeric($fieldValue) && $fieldValue !== 0)
@@ -1705,7 +1806,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 						{
 							$data[$fieldName] = [
 								'SIGNATURE' => $fieldSignature,
-								'IS_EMPTY' => true
+								'IS_EMPTY' => true,
 							];
 						}
 						else
@@ -1713,7 +1814,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 							$data[$fieldName] = [
 								'VALUE' => $fieldValue,
 								'SIGNATURE' => $fieldSignature,
-								'IS_EMPTY' => false
+								'IS_EMPTY' => false,
 							];
 						}
 					}
@@ -1901,7 +2002,68 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 					$bankDetailsFieldsMap[$this->presetCountryId] : [],
 			];
 		}
+
+		$params['entityTypeId'] = CCrmOwnerType::Requisite;
+		$params['attributeConfig'] = $this->prepareFieldAttributeConfig(CCrmOwnerType::Requisite);
+
 		return $params;
+	}
+
+	protected function prepareFieldAttributeConfig(int $entityTypeId): ?array
+	{
+		if (!CCrmAuthorizationHelper::CheckConfigurationUpdatePermission())
+		{
+			return null;
+		}
+
+		$entityId = $this->requisiteId;
+		$options = ['PRESET_ID' => $this->presetId];
+		$isPermitted = FieldAttributeManager::isEnabled();
+		$isPhaseDependent = FieldAttributeManager::isPhaseDependent();
+		$isEntitySupported = FieldAttributeManager::isEntitySupported($entityTypeId);
+
+		$attrConfig = [
+			'ENTITY_TYPE_ID' => $entityTypeId,
+			'ENTITY_SCOPE' => FieldAttributeManager::resolveEntityScope($entityTypeId, $entityId, $options),
+			'CAPTIONS' => FieldAttributeManager::getCaptionsForEntityWithStages($entityTypeId),
+			'IS_PERMITTED' => $isPermitted,
+			'IS_PHASE_DEPENDENT' => $isPhaseDependent,
+			'IS_ATTR_CONFIG_BUTTON_HIDDEN' => !$isEntitySupported,
+		];
+
+		if(!($isPermitted && $isPhaseDependent))
+		{
+			$attrConfig['LOCK_SCRIPT'] =
+				RestrictionManager::getAttributeConfigRestriction()
+					->prepareInfoHelperScript()
+			;
+		}
+
+		return $attrConfig;
+	}
+
+	public function prepareEntityFieldAttributeConfigs(int $entityTypeId, int $entityId = 0): array
+	{
+		if (!$this->entityFieldAttributeConfigs)
+		{
+			$this->entityFieldAttributeConfigs = [];
+		}
+
+		if (!isset($this->entityFieldAttributeConfigs[$entityTypeId]))
+		{
+			$this->entityFieldAttributeConfigs[$entityTypeId] =
+				FieldAttributeManager::getEntityConfigurations(
+					$entityTypeId,
+					FieldAttributeManager::resolveEntityScope(
+						$entityTypeId,
+						$entityId,
+						['PRESET_ID' => $this->presetId]
+					)
+				)
+			;
+		}
+
+		return $this->entityFieldAttributeConfigs[$entityTypeId];
 	}
 
 	protected function prepareResult()
@@ -2045,7 +2207,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 			'fields' => $dataFields,
 			'viewData' => $this->requisite->prepareViewDataFormatted($dataFields, $fieldsInView),
 			'bankDetailFieldsList' => array(),
-			'bankDetailViewDataList' => array()
+			'bankDetailViewDataList' => array(),
 		);
 		unset($dataFields, $fieldName, $value, $fieldsInView);
 
@@ -2061,7 +2223,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 				'viewData' => $this->bankDetail->prepareViewData(
 					$bankDetailFields,
 					array_keys($this->getBankDetailFieldsInfo())
-				)
+				),
 			];
 		}
 		unset($bankDetailFields, $fieldName, $value, $pseudoId);
@@ -2115,7 +2277,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 
 		return [
 			'data' => $requisiteData,
-			'sign' => $requisiteDataSign
+			'sign' => $requisiteDataSign,
 		];
 	}
 
@@ -2126,6 +2288,21 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 		if ($this->hasErrors())
 		{
 			$result['ERROR'] = $this->getErrorsAsHtml();
+			if ($this->hasCheckErrors())
+			{
+				$checkErrors = [];
+				foreach ($this->getCheckErrors() as $checkError)
+				{
+					if ($checkError instanceof Error)
+					{
+						$checkErrors[$checkError->getCode()] = $checkError->getMessage();
+					}
+				}
+				if (!empty($checkErrors))
+				{
+					$result['CHECK_ERRORS'] = $checkErrors;
+				}
+			}
 		}
 		else
 		{

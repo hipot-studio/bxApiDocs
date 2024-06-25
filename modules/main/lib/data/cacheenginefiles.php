@@ -248,7 +248,7 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 	 */
 	protected function unlock($fileName)
 	{
-		if (self::$lockHandles[$fileName])
+		if (!empty(self::$lockHandles[$fileName]))
 		{
 			fclose(self::$lockHandles[$fileName]);
 			unset(self::$lockHandles[$fileName]);

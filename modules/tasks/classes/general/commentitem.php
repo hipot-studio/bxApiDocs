@@ -337,7 +337,7 @@ final class CTaskCommentItem extends CTaskSubItemAbstract
 		{
 			foreach ($result as $index => $comment)
 			{
-				$attachedObjectsIds = $comment['ATTACHED_OBJECTS_IDS'];
+				$attachedObjectsIds = $comment['ATTACHED_OBJECTS_IDS'] ?? null;
 				if (is_array($attachedObjectsIds))
 				{
 					foreach ($attachedObjectsIds as $attachmentId)

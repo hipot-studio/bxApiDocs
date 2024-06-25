@@ -433,7 +433,7 @@ class TasksDepartmentsOverviewComponent extends TasksBaseComponent
 
 		if (!$list)
 		{
-			$list = \CIntranetUtils::GetStructure();
+			$list = CIntranetUtils::GetStructure();
 		}
 
 		return $list['DATA'];
@@ -497,38 +497,24 @@ class TasksDepartmentsOverviewComponent extends TasksBaseComponent
 	{
 		static $list = [];
 
-		if (!$list)
+		if (!empty($list))
 		{
-			$allDeps = \CIntranetUtils::GetStructure();
+			return $list;
+		}
 
-			$deps = \CIntranetUtils::GetSubordinateDepartments($this->arParams['USER_ID']);
-
-			foreach ($deps as $depId)
+		$userDepartments = CIntranetUtils::GetUserDepartments($this->arParams['USER_ID']);
+		$departmentsIds = [];
+		foreach ($userDepartments as $departmentId)
+		{
+			if ((int)CIntranetUtils::GetDepartmentManagerID($departmentId) === (int)$this->arParams['USER_ID'])
 			{
-				$list[$depId] = $allDeps['DATA'][$depId]['NAME'];
-
-				$subDeps = \CIntranetUtils::GetDeparmentsTree($depId, 0);
-
-				if (empty($subDeps))
-				{
-					continue;
-				}
-
-				foreach ($subDeps[$depId] as $subDepId)
-				{
-					$list[$subDepId] = str_repeat('.', 2).$allDeps['DATA'][$subDepId]['NAME'];
-
-					$subSubDeps = \CIntranetUtils::GetDeparmentsTree($subDepId, 0);
-					if (array_key_exists($subDepId, $subSubDeps))
-					{
-						foreach ($subSubDeps[$subDepId] as $subSubDepId)
-						{
-							$list[$subSubDepId] = str_repeat('.', 4).$allDeps['DATA'][$subSubDepId]['NAME'];
-						}
-					}
-				}
+				$departmentsIds = array_merge($departmentsIds, CIntranetUtils::GetIBlockSectionChildren($departmentId));
 			}
 		}
+
+		$departmentsIds = array_unique($departmentsIds);
+
+		$list = array_combine($departmentsIds, CIntranetUtils::GetDepartmentsData($departmentsIds));
 
 		return $list;
 	}
@@ -576,8 +562,8 @@ class TasksDepartmentsOverviewComponent extends TasksBaseComponent
 	private function getFilterPresets(): array
 	{
 		$list = [];
-		$deps = \CIntranetUtils::GetSubordinateDepartments($this->arParams['USER_ID']);
-		$allDeps = \CIntranetUtils::GetStructure();
+		$deps = CIntranetUtils::GetSubordinateDepartments($this->arParams['USER_ID']);
+		$allDeps = CIntranetUtils::GetStructure();
 
 		if ($deps)
 		{

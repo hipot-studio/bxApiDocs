@@ -570,12 +570,6 @@ class CHTMLEditor
 			return false;
 		}
 
-		$isCopilotFeatureEnabled = \COption::GetOptionString('fileman', 'isCopilotFeatureEnabled', 'N') === 'Y';
-		if (!$isCopilotFeatureEnabled)
-		{
-			return false;
-		}
-
 		$engine = AI\Engine::getByCategory(AI\Engine::CATEGORIES['text'], AI\Context::getFake());
 
 		return !is_null($engine);
@@ -1441,10 +1435,8 @@ class CHTMLEditor
 		$server_name = rtrim($server_name, '/');
 		if (!preg_match('/^[a-z0-9\.\-]+$/i', $server_name)) // cyrillic domain hack
 		{
-			$converter = new CBXPunycode(defined('BX_UTF') && BX_UTF === true ? 'UTF-8' : 'windows-1251');
+			$converter = new CBXPunycode('UTF-8');
 			$host = $converter->Encode($server_name);
-			if (!preg_match('#--p1ai$#', $host)) // trying to guess
-				$host = $converter->Encode(CharsetConverter::ConvertCharset($server_name, 'utf-8', 'windows-1251'));
 			$server_name = $host;
 		}
 

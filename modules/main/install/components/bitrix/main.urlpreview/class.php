@@ -55,7 +55,7 @@ class UrlPreviewComponent extends \CBitrixComponent
 		if(isset($this->arParams['~METADATA']['EMBED']) && $this->arParams['~METADATA']['EMBED'] != '')
 		{
 			$this->arResult['METADATA']['EMBED'] = $this->arParams['~METADATA']['EMBED'];
-			if(mb_strpos($this->arResult['METADATA']['EMBED'], '<iframe') !== 0)
+			if(!str_starts_with($this->arResult['METADATA']['EMBED'], '<iframe'))
 			{
 				$this->arResult['METADATA']['EMBED'] = '<iframe class="urlpreview-iframe-html-embed" src="'.Main\UrlPreview\UrlPreview::getInnerFrameUrl($this->arResult['METADATA']['ID']).'" allowfullscreen="" width="'.Main\UrlPreview\UrlPreview::IFRAME_MAX_WIDTH.'" height="'.Main\UrlPreview\UrlPreview::IFRAME_MAX_HEIGHT.'" frameborder="0" onload="BXUrlPreview.adjustFrameHeight(this);"></iframe>';
 			}

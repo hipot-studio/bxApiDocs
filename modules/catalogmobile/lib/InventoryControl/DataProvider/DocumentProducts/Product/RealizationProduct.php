@@ -73,6 +73,7 @@ final class RealizationProduct extends BaseProduct
 				'BASE_PRICE_EXTRA' => '',
 				'BASE_PRICE_EXTRA_RATE' => '',
 				'BASKET_ID' => $basketItem->getId(),
+				'BASKET_CODE' => $basketItem->getBasketCode(),
 				'AMOUNT' => 0,
 				'BARCODE' => '',
 				'CURRENCY' => $basketItem->getCurrency(),
@@ -139,6 +140,7 @@ final class RealizationProduct extends BaseProduct
 				'storeFromAvailableAmount' => $storeFromAvailableAmount,
 				'storeFromAmount' => $storeFromAmount,
 				'amount' => (float)$documentProduct['AMOUNT'],
+				'basketCode' => $documentProduct['BASKET_CODE'],
 				'price' => [
 					'sell' => [
 						'amount' => (float)$documentProduct['BASE_PRICE'],
@@ -286,6 +288,7 @@ final class RealizationProduct extends BaseProduct
 					'hasStoreFromAccess' => $hasStoreFromAccess,
 					'name' => $deliverableProduct['NAME'],
 					'amount' => $quantity,
+					'basketCode' => $deliverableProduct['BASKET_CODE'],
 					'price' => [
 						'sell' => [
 							'amount' => $deliverableProduct['BASE_PRICE'],

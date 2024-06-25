@@ -547,7 +547,7 @@ abstract class OAuth
 			{
 				?>
 
-				<script type="text/javascript">
+				<script>
 
 					targetWindow = window.opener ? window.opener : window;
 

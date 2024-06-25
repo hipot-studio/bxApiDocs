@@ -423,7 +423,7 @@ class ConfigurationSettings extends AbstractSettings
 		{
 			$data['sectionMapsInCrm'] = new Section(
 				'settings-configuration-section-maps_in_crm',
-				Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_MAPS'),
+				Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_MAPS_LIST'),
 				'ui-icon-set --crm-map',
 				false
 			);
@@ -760,7 +760,7 @@ class ConfigurationSettings extends AbstractSettings
 
 		if (!empty($this->getMapsProviderCRM()))
 		{
-			$searchSections['settings-configuration-section-maps_in_crm'] = Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_MAPS');
+			$searchSections['settings-configuration-section-maps_in_crm'] = Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_MAPS_LIST');
 		}
 
 		$searchEngine = SearchEngine::initWithDefaultFormatter($searchSections + [

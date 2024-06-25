@@ -2,6 +2,8 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage;
 
+use Bitrix\Crm\Service\Timeline\Context;
+use Bitrix\Crm\Service\Timeline\Item\Model;
 use Bitrix\Crm\Service\Timeline\Layout\Action\Redirect;
 use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Crm\Service\Timeline\Item\LogMessage;
@@ -10,11 +12,13 @@ use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Timeline\SignDocument\DocumentData;
 use Bitrix\Crm\Timeline\SignDocument\MessageData;
 use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\Sign\MemberService;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\ProviderCode;
 
@@ -24,6 +28,23 @@ class SignB2eDocument extends LogMessage
 	protected ?MessageData $messageData = null;
 	protected ?\Bitrix\Sign\Item\Document $signDocument = null;
 	private ?\Bitrix\Sign\Item\Member $member = null;
+	private ?MemberService $memberService = null;
+
+	public function __construct(Context $context, Model $model)
+	{
+		if (Loader::includeModule('sign'))
+		{
+			if (method_exists(
+				'\Bitrix\Sign\Service\Cache\Memory\Sign\MemberService',
+				'getUserRepresentedName'
+			))
+			{
+				$this->memberService = new \Bitrix\Sign\Service\Cache\Memory\Sign\MemberService();
+			}
+		}
+
+		parent::__construct($context, $model);
+	}
 
 	public function getType(): string
 	{
@@ -51,6 +72,7 @@ class SignB2eDocument extends LogMessage
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_CANCELED_BY_REVIEWER => Icon::DOCUMENT,
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_CANCELED_BY_EDITOR => Icon::DOCUMENT,
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MESSAGE_DELIVERED => Icon::DOCUMENT,
+			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MEMBER_SIGNED_DELIVERED => Icon::DOCUMENT,
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MESSAGE_DELIVERY_ERROR => Icon::DOCUMENT,
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MESSAGE_SENT => $this->getChannelIcon(),
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MEMBER_SIGNING_EXPIRED => Icon::ATTENTION,
@@ -80,6 +102,7 @@ class SignB2eDocument extends LogMessage
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_CANCELED_BY_EMPLOYEE => Loc::getMessage('CRM_SERVICE_TIMELINE_LAYOUT_SIGNB2EDOCUMENT_EMPLOYEE_CANCEL_TITLE_MSG_1'),
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MESSAGE_SENT => $this->getMessageSentTitle(),
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MESSAGE_DELIVERED => $this->getMessageDelivered(),
+			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MEMBER_SIGNED_DELIVERED => Loc::getMessage('CRM_SERVICE_TIMELINE_LAYOUT_SIGNB2EDOCUMENT_EMPLOYEE_SIGN_DELIVERED_TITLE'),
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MESSAGE_DELIVERY_ERROR => Loc::getMessage('CRM_SERVICE_TIMELINE_LAYOUT_SIGNB2EDOCUMENT_DOCUMENT_DELIVERY_ERROR'),
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MEMBER_SIGNING_EXPIRED => Loc::getMessage('CRM_SERVICE_TIMELINE_LAYOUT_SIGNB2EDOCUMENT_DOCUMENT_MEMBER_SIGNING_EXPIRED'),
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MEMBER_SNILS_ERROR => Loc::getMessage('CRM_SERVICE_TIMELINE_LAYOUT_SIGNB2EDOCUMENT_DOCUMENT_MEMBER_SNILS_ERROR'),
@@ -266,9 +289,13 @@ class SignB2eDocument extends LogMessage
 	private function getUserNameLink(int $userId): Layout\Body\ContentBlock\Link
 	{
 		$userData = $this->getUserData($userId);
+		$name = $this->memberService !== null
+			? $this->memberService->getUserRepresentedName($userId)
+			: $userData['FORMATTED_NAME'] ?? null
+		;
 
 		return (new Layout\Body\ContentBlock\Link())
-			->setValue($userData['FORMATTED_NAME'] ?? null)
+			->setValue($name)
 			->setAction(new Redirect(new Uri($userData['SHOW_URL'] ?? '')))
 		;
 	}
@@ -330,7 +357,7 @@ class SignB2eDocument extends LogMessage
 	 */
 	private function getSesSignBlocks(int $userId): array
 	{
-		if (!$this->loadMessageData() || !$this->messageData->getSesUsername() || !$this->messageData->getSesSign())
+		if (!$this->loadMessageData() || !$this->messageData->getSesUsername())
 		{
 			return [];
 		}
@@ -339,7 +366,6 @@ class SignB2eDocument extends LogMessage
 
 		return [
 			'provider' => $this->getProviderChannelBlock($channelName),
-			'sesSign' => $this->getSesSignBlock($this->messageData->getSesSign()),
 			'sesSignBuild' => $this->getSesSignBuildBlock($this->messageData->getSesUsername(), $userId),
 		];
 	}

@@ -182,7 +182,7 @@ class UserDataProvider extends DataProvider
 				->setSelect(['ID', 'LOGIN', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'EMAIL', 'TITLE', 'PERSONAL_PHOTO', 'WORK_POSITION', 'PERSONAL_GENDER', 'CONFIRM_CODE', 'ACTIVE', 'UF_DEPARTMENT'])
 				->setName(Loc::getMessage('INTRANET_USER_LIST_COLUMN_EMPLOYEE_CARD'))
 				->setDefault(true)
-				->setSort('NAME')
+				->setSort('LAST_NAME')
 		;
 
 		$result[] =
@@ -242,7 +242,7 @@ class UserDataProvider extends DataProvider
 				->setSelect(['ID', 'LOGIN', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'EMAIL', 'TITLE', 'WORK_POSITION', 'CONFIRM_CODE', 'ACTIVE', 'UF_DEPARTMENT'])
 				->setName(Loc::getMessage('INTRANET_USER_LIST_COLUMN_FULL_NAME'))
 				->setDefault(false)
-				->setSort('NAME')
+				->setSort('LAST_NAME')
 		;
 
 		$result[] =

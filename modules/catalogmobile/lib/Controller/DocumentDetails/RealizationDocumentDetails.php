@@ -288,7 +288,7 @@ class RealizationDocumentDetails extends BaseDocumentDetails
 		$parsedProducts = [];
 		foreach ($products as $productKey => $product)
 		{
-			$basketCode = is_int($product['id']) ? $product['id'] : 'n' . $productKey;
+			$basketCode = $product['basketCode'] ?? 'n' . $productKey;;
 			$parsedProducts[$basketCode] = [
 				'NAME' => $product['name'],
 				'QUANTITY' => (float)$product['amount'],
@@ -323,7 +323,7 @@ class RealizationDocumentDetails extends BaseDocumentDetails
 		$parsedProducts = [];
 		foreach ($products as $productKey => $product)
 		{
-			$basketCode = is_int($product['id']) ? $product['id'] : 'n' . $productKey;
+			$basketCode = $product['basketCode'] ?? 'n' . $productKey;;
 			$parsedProducts[$basketCode] = [
 				'QUANTITY' => (float)$product['amount'],
 				'AMOUNT' => (float)$product['amount'],

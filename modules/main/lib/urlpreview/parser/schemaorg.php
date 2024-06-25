@@ -25,7 +25,7 @@ class SchemaOrg extends Parser
 	public function handle(HtmlDocument $document)
 	{
 		$this->documentEncoding = $document->getEncoding();
-		if(strpos($document->getHtml(), 'itemscope') === false)
+		if(!str_contains($document->getHtml(), 'itemscope'))
 			return null;
 
 		if(!$this->initializeDom($document))

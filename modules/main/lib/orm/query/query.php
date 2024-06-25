@@ -280,12 +280,12 @@ class Query
 	public function __call($method, $arguments)
 	{
 		// where and having proxies
-		if (substr($method, 0, 6) === 'having')
+		if (str_starts_with($method, 'having'))
 		{
 			$method = str_replace('having', 'where', $method);
 		}
 
-		if (substr($method, 0, 5) === 'where')
+		if (str_starts_with($method, 'where'))
 		{
 			if (method_exists($this->filterHandler, $method))
 			{
@@ -298,7 +298,7 @@ class Query
 			}
 		}
 
-		if (substr($method, 0, 4) === 'with')
+		if (str_starts_with($method, 'with'))
 		{
 			$dataClass = $this->entity->getDataClass();
 
@@ -907,14 +907,18 @@ class Query
 	 * Used to create ExpressionField in a short way.
 	 * @see Filter::where()
 	 *
+	 * @param ?string $alias Name for ExpressionField
+	 *
 	 * @return Expression
 	 */
-	public static function expr()
+	public static function expr($alias = null)
 	{
 		if (static::$expressionHelper === null)
 		{
 			static::$expressionHelper = new Expression;
 		}
+
+		static::$expressionHelper->alias = $alias;
 
 		return static::$expressionHelper;
 	}
@@ -1007,6 +1011,11 @@ class Query
 	 */
 	public function fetchObject()
 	{
+		if (empty($this->select))
+		{
+			$this->addSelect('*');
+		}
+
 		return $this->exec()->fetchObject();
 	}
 
@@ -1019,6 +1028,11 @@ class Query
 	 */
 	public function fetchCollection()
 	{
+		if (empty($this->select))
+		{
+			$this->addSelect('*');
+		}
+
 		return $this->exec()->fetchCollection();
 	}
 
@@ -1145,8 +1159,8 @@ class Query
 			}
 
 			// if there is a shell pattern in final segment, run recursively
-			if ((strlen($localDefinition) > 1 && strpos($localDefinition, '*') !== false)
-				|| strpos($localDefinition, '?') !== false
+			if ((strlen($localDefinition) > 1 && str_contains($localDefinition, '*'))
+				|| str_contains($localDefinition, '?')
 			)
 			{
 				// get fields by pattern
@@ -1165,7 +1179,7 @@ class Query
 
 						// skip uf utm single
 						if (
-							substr($field->getName(), 0, 3) == 'UF_' && substr($field->getName(), -7) == '_SINGLE'
+							str_starts_with($field->getName(), 'UF_') && substr($field->getName(), -7) == '_SINGLE'
 							&& $localEntity->hasField(substr($field->getName(), 0, -7))
 						)
 						{
@@ -1867,6 +1881,12 @@ class Query
 		if ($chain->getLastElement()->getValue() instanceof ExpressionField)
 		{
 			$this->collectExprChains($chain);
+		}
+
+		if ($this->is_distinct)
+		{
+			// make sure field is in select while distinct
+			$this->addToSelectChain($definition);
 		}
 	}
 
@@ -2740,7 +2760,7 @@ class Query
 				$csw_result = $sqlWhere->makeOperation($k);
 				list($field, $operation) = array_values($csw_result);
 
-				if (strpos($field, 'this.') === 0)
+				if (str_starts_with($field, 'this.'))
 				{
 					// parse the chain
 					$definition = str_replace(\CSQLWhere::getOperationByCode($operation).'this.', '', $k);
@@ -2784,11 +2804,11 @@ class Query
 
 					$k = \CSQLWhere::getOperationByCode($operation).$chain->getSqlDefinition();
 				}
-				elseif (strpos($field, 'ref.') === 0)
+				elseif (str_starts_with($field, 'ref.'))
 				{
 					$definition = str_replace(\CSQLWhere::getOperationByCode($operation).'ref.', '', $k);
 
-					if (strpos($definition, '.') !== false)
+					if (str_contains($definition, '.'))
 					{
 						throw new Main\ArgumentException(sprintf(
 							'Reference chain `%s` is not allowed here. First-level definitions only.', $field
@@ -2835,7 +2855,7 @@ class Query
 				}
 				elseif (!is_object($v))
 				{
-					if (strpos($v, 'this.') === 0)
+					if (str_starts_with($v, 'this.'))
 					{
 						$definition = str_replace('this.', '', $v);
 						$absDefinition = $baseDefinition <> ''? $baseDefinition.'.'.$definition : $definition;
@@ -2878,11 +2898,11 @@ class Query
 
 						$field_def = $chain->getSqlDefinition();
 					}
-					elseif (strpos($v, 'ref.') === 0)
+					elseif (str_starts_with($v, 'ref.'))
 					{
 						$definition = str_replace('ref.', '', $v);
 
-						if (strpos($definition, '.') !== false)
+						if (str_contains($definition, '.'))
 						{
 							throw new Main\ArgumentException(sprintf(
 								'Reference chain `%s` is not allowed here. First-level definitions only.', $v
@@ -2993,7 +3013,7 @@ class Query
 				// regular condition
 				$field = $condition->getDefinition();
 
-				if (strpos($field, 'this.') === 0)
+				if (str_starts_with($field, 'this.'))
 				{
 					// parse the chain
 					$definition = str_replace('this.', '', $field);
@@ -3037,11 +3057,11 @@ class Query
 
 					$condition->setColumn($absDefinition);
 				}
-				elseif (strpos($field, 'ref.') === 0)
+				elseif (str_starts_with($field, 'ref.'))
 				{
 					$definition = str_replace('ref.', '', $field);
 
-					if (strpos($definition, '.') !== false)
+					if (str_contains($definition, '.'))
 					{
 						throw new Main\ArgumentException(sprintf(
 							'Reference chain `%s` is not allowed here. First-level definitions only.', $field
@@ -3085,7 +3105,7 @@ class Query
 				}
 				elseif ($v instanceof ColumnExpression)
 				{
-					if (strpos($v->getDefinition(), 'this.') === 0)
+					if (str_starts_with($v->getDefinition(), 'this.'))
 					{
 						$definition = str_replace('this.', '', $v->getDefinition());
 						$absDefinition = $baseDefinition <> ''? $baseDefinition.'.'.$definition : $definition;
@@ -3128,11 +3148,11 @@ class Query
 
 						$v->setDefinition($absDefinition);
 					}
-					elseif (strpos($v->getDefinition(), 'ref.') === 0)
+					elseif (str_starts_with($v->getDefinition(), 'ref.'))
 					{
 						$definition = str_replace('ref.', '', $v->getDefinition());
 
-						if (strpos($definition, '.') !== false)
+						if (str_contains($definition, '.'))
 						{
 							throw new Main\ArgumentException(sprintf(
 								'Reference chain `%s` is not allowed here. First-level definitions only.', $v->getDefinition()

@@ -29,20 +29,6 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 	/** @var Crm\Automation\TunnelManager */
 	protected $tunnelManager;
 
-	protected function addError(Error $error): self
-	{
-		$this->errorCollection[] = $error;
-
-		return $this;
-	}
-
-	protected function addErrors(array $errors): self
-	{
-		$this->errorCollection->add($errors);
-
-		return $this;
-	}
-
 	public function onPrepareComponentParams($arParams): array
 	{
 		$this->fillParameterFromRequest('entityTypeId', $arParams);

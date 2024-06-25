@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Common\FieldAccessImplementation;
 use Bitrix\Im\V2\Common\RegistryEntryImplementation;
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Relation\Reason;
 use Bitrix\Main\Type\DateTime;
 
 class Relation implements ArrayAccess, RegistryEntry, ActiveRecord
@@ -36,6 +37,7 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord
 	protected ?int $counter = null;
 	protected ?int $startCounter = null;
 	protected ?User $user = null;
+	protected Reason $reason = Reason::DEFAULT;
 
 	public function __construct($source = null)
 	{
@@ -197,6 +199,13 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord
 				'field' => 'startCounter',
 				'set' => 'setStartCounter', /** @see Relation::setStartCounter */
 				'get' => 'getStartCounter', /** @see Relation::getStartCounter */
+			],
+			'REASON' => [
+				'field' => 'reason',
+				'set' => 'setReason', /** @see Relation::setReason */
+				'get' => 'getReason', /** @see Relation::getReason */
+				'loadFilter' => 'prepareReasonForLoad', /** @see Relation::prepareReasonForLoad */
+				'saveFilter' => 'prepareReasonForSave', /** @see Relation::prepareReasonForSave */
 			],
 		];
 	}
@@ -404,6 +413,28 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord
 	{
 		$this->startCounter = $startCounter;
 		return $this;
+	}
+
+	public function getReason(): Reason
+	{
+		return $this->reason;
+	}
+
+	public function setReason(Reason $reason): self
+	{
+		$this->reason = $reason;
+
+		return $this;
+	}
+
+	public function prepareReasonForLoad(string $reason): Reason
+	{
+		return Reason::tryFrom($reason) ?? Reason::DEFAULT;
+	}
+
+	public function prepareReasonForSave(Reason $reason): string
+	{
+		return $reason->value;
 	}
 
 	//endregion

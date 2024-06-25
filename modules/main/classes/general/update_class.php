@@ -468,10 +468,7 @@ class CUpdateSystem
 		if ($strError_tmp == '')
 		{
 			$aFiles = array(
-				//"UUU071"=>"update_update.php",
 				"UUU072"=>"update_class.php",
-				"UUU073"=>"update_list.php",
-				//"UUU074"=>"update_update5.php",
 				"UUU075"=>"update_log.php",
 			);
 			foreach($aFiles as $err=>$file)
@@ -3384,12 +3381,12 @@ class CUpdateSystem
 				$maxReadSize = 4096;
 
 				$length = 0;
-				$line = FGets($FP, $maxReadSize);
-				$line = StrToLower($line);
+				$line = fgets($FP,$maxReadSize);
+				$line = strtolower($line);
 
 				$strChunkSize = "";
 				$i = 0;
-				while ($i < StrLen($line) && in_array($line[$i], array("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f")))
+				while ($i < strlen($line) && in_array($line[$i], array("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f")))
 				{
 					$strChunkSize .= $line[$i];
 					$i++;
@@ -3405,20 +3402,20 @@ class CUpdateSystem
 					while ($readSize > 0 && $line = fread($FP, $readSize))
 					{
 						$content .= $line;
-						$processedSize += StrLen($line);
+						$processedSize += strlen($line);
 						$newSize = $chunkSize - $processedSize;
 						$readSize = (($newSize > $maxReadSize) ? $maxReadSize : $newSize);
 					}
 					$length += $chunkSize;
 
-					$line = FGets($FP, $maxReadSize);
+					$line = fgets($FP,$maxReadSize);
 
-					$line = FGets($FP, $maxReadSize);
-					$line = StrToLower($line);
+					$line = fgets($FP,$maxReadSize);
+					$line = strtolower($line);
 
 					$strChunkSize = "";
 					$i = 0;
-					while ($i < StrLen($line) && in_array($line[$i], array("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f")))
+					while ($i < strlen($line) && in_array($line[$i], array("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f")))
 					{
 						$strChunkSize .= $line[$i];
 						$i++;
@@ -3441,7 +3438,7 @@ class CUpdateSystem
 			$strError .= GetMessage("SUPP_GHTTP_ER").": [".$errno."] ".$errstr.". ";
 			if (intval($errno)<=0) $strError .= GetMessage("SUPP_GHTTP_ER_DEF")." ";
 
-			CUpdateSystem::AddMessage2Log("Error connecting 2 ".$ServerIP.": [".$errno."] ".$errstr."", "ERRCONN");
+			CUpdateSystem::AddMessage2Log("Error connecting 2 ".$ServerIP.": [".$errno."] ".$errstr, "ERRCONN");
 		}
 		return $content;
 	}
@@ -4312,8 +4309,8 @@ class CUpdatesXML
 	protected function replaceSpecialChars($content)
 	{
 		return str_replace(
-			["&gt;", "&lt;", "&apos;", "&quot;", "&amp;"],
-			[">", "<", "'", '"', "&"],
+			array("&gt;", "&lt;", "&apos;", "&quot;", "&amp;"),
+			array(">", "<", "'", '"', "&"),
 			$content
 		);
 	}
@@ -4380,7 +4377,7 @@ class CUpdater
 	{
 		$this->errorMessage = array();
 		$this->curPath = $curPath;
-		$this->dbType = StrToUpper($dbType);
+		$this->dbType = strtoupper($dbType);
 		$this->updater = $updater;
 		$this->curModulePath = $curDir;
 		$this->moduleID = $moduleID;
@@ -4680,7 +4677,7 @@ class CUpdater
 			{
 				foreach ($query as $key => $value)
 				{
-					if ($this->dbType == StrToUpper($key))
+					if ($this->dbType == strtoupper($key))
 					{
 						$strQuery = $value;
 						break;
@@ -4731,7 +4728,7 @@ class CUpdater
 			{
 				foreach ($queryPath as $key => $value)
 				{
-					if ($this->dbType == StrToUpper($key))
+					if ($this->dbType == strtoupper($key))
 					{
 						$strQueryPath = $value;
 						break;
@@ -4795,6 +4792,30 @@ class CUpdater
 			return true;
 		else
 			return false;
+	}
+
+	function ColumnExists($tableName, $columnName)
+	{
+		global $DB;
+
+		/**
+		 * @var \CDatabase $DB
+		 */
+
+		if (!$this->CanUpdateDatabase() || !$this->TableExists($tableName))
+		{
+			return false;
+		}
+
+		$re = '/[^A-Za-z0-9\_]+/';
+		$columnName = preg_replace($re, '', $columnName);
+		$tableName = preg_replace($re, '', $tableName);
+		if (empty($tableName) || empty($columnName))
+		{
+			return false;
+		}
+
+		return $DB->Query("SELECT {$columnName} FROM {$tableName} WHERE 1 = 0", true) !== false;
 	}
 
 	function CanUpdateDatabase()

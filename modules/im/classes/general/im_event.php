@@ -809,7 +809,11 @@ class CIMEvent
 				if ($commonChatId && CIMChat::GetRelationById($commonChatId, $arParams["ID"], true, false))
 				{
 					$CIMChat = new CIMChat($arParams["ID"]);
-					$CIMChat->DeleteUser($commonChatId, $arParams["ID"]);
+					$CIMChat->DeleteUser(
+						$commonChatId,
+						$arParams["ID"],
+						additionalParams: ['SKIP_RIGHTS' => true]
+					);
 				}
 			}
 			else
@@ -833,7 +837,11 @@ class CIMEvent
 					if ($userInChat && !$userCanJoin)
 					{
 						$CIMChat = new CIMChat($arParams["ID"]);
-						$CIMChat->DeleteUser($commonChatId, $arParams["ID"]);
+						$CIMChat->DeleteUser(
+							$commonChatId,
+							$arParams["ID"],
+							additionalParams: ['SKIP_RIGHTS' => true]
+						);
 					}
 					else if (!$userInChat && $userCanJoin)
 					{

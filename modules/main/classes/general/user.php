@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2023 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
 
 use Bitrix\Main;
@@ -199,7 +199,7 @@ class CAllUser extends CDBResult
 	public function Add($arFields)
 	{
 		/** @global CUserTypeManager $USER_FIELD_MANAGER */
-		global $DB, $USER_FIELD_MANAGER, $CACHE_MANAGER;
+		global $DB, $USER_FIELD_MANAGER;
 
 		$ID = 0;
 		if (!$this->CheckFields($arFields))
@@ -338,12 +338,7 @@ class CAllUser extends CDBResult
 		if ($ID > 0 && defined("BX_COMP_MANAGED_CACHE"))
 		{
 			$isRealUser = empty($arFields['EXTERNAL_AUTH_ID']) || !in_array($arFields['EXTERNAL_AUTH_ID'], Main\UserTable::getExternalUserTypes());
-
-			$CACHE_MANAGER->ClearByTag("USER_CARD_" . intval($ID / TAGGED_user_card_size));
-			$CACHE_MANAGER->ClearByTag($isRealUser ? "USER_CARD" : "EXTERNAL_USER_CARD");
-
-			$CACHE_MANAGER->ClearByTag("USER_NAME_" . $ID);
-			$CACHE_MANAGER->ClearByTag($isRealUser ? "USER_NAME" : "EXTERNAL_USER_NAME");
+			static::clearTagCache($ID, $isRealUser);
 		}
 
 		Main\UserTable::indexRecord($ID);
@@ -1556,7 +1551,7 @@ class CAllUser extends CDBResult
 				}
 
 				$languageId = '';
-				if ($arUser['LANGUAGE_ID'] === '')
+				if (empty($arUser['LANGUAGE_ID']))
 				{
 					$arUser['LANGUAGE_ID'] = LANGUAGE_ID;
 					$languageId = ", LANGUAGE_ID='" . $DB->ForSql(LANGUAGE_ID) . "'";
@@ -1728,6 +1723,11 @@ class CAllUser extends CDBResult
 	public function Login($login, $password, $remember = 'N', $password_original = 'Y')
 	{
 		global $APPLICATION;
+
+		if (!is_string($login) || !is_string($password) || !is_string($remember) || !is_string($password_original))
+		{
+			return false;
+		}
 
 		$result_message = true;
 		$user_id = 0;
@@ -3793,7 +3793,7 @@ class CAllUser extends CDBResult
 	public function Update($ID, $arFields, $authActions = true)
 	{
 		/** @global CUserTypeManager $USER_FIELD_MANAGER */
-		global $DB, $USER_FIELD_MANAGER, $CACHE_MANAGER, $USER;
+		global $DB, $USER_FIELD_MANAGER, $USER;
 
 		$ID = intval($ID);
 
@@ -4091,34 +4091,10 @@ class CAllUser extends CDBResult
 
 			if (defined("BX_COMP_MANAGED_CACHE"))
 			{
-				$userData = Main\UserTable::getById($ID)->fetch();
+				$userData = Main\UserTable::getList(['select' => ['EXTERNAL_AUTH_ID'], 'filter' => ['=ID' => $ID]])->fetch();
 				$isRealUser = !$userData['EXTERNAL_AUTH_ID'] || !in_array($userData['EXTERNAL_AUTH_ID'], Main\UserTable::getExternalUserTypes());
 
-				$CACHE_MANAGER->ClearByTag("USER_CARD_" . intval($ID / TAGGED_user_card_size));
-				$CACHE_MANAGER->ClearByTag($isRealUser ? "USER_CARD" : "EXTERNAL_USER_CARD");
-
-				static $arNameFields = [
-					"NAME", "LAST_NAME", "SECOND_NAME",
-					"ACTIVE",
-					"LOGIN", "EMAIL",
-					"PERSONAL_GENDER", "PERSONAL_PHOTO", "WORK_POSITION", "PERSONAL_PROFESSION", "PERSONAL_WWW", "PERSONAL_BIRTHDAY", "TITLE",
-					"EXTERNAL_AUTH_ID", "UF_DEPARTMENT",
-					"AUTO_TIME_ZONE", "TIME_ZONE", "TIME_ZONE_OFFSET",
-				];
-				$bClear = false;
-				foreach ($arNameFields as $val)
-				{
-					if (isset($arFields[$val]))
-					{
-						$bClear = true;
-						break;
-					}
-				}
-				if ($bClear)
-				{
-					$CACHE_MANAGER->ClearByTag("USER_NAME_" . $ID);
-					$CACHE_MANAGER->ClearByTag($isRealUser ? "USER_NAME" : "EXTERNAL_USER_NAME");
-				}
+				static::clearTagCache($ID, $isRealUser, $arFields);
 			}
 		}
 
@@ -4309,7 +4285,7 @@ class CAllUser extends CDBResult
 
 	public static function Delete($ID)
 	{
-		global $DB, $APPLICATION, $USER_FIELD_MANAGER, $CACHE_MANAGER;
+		global $DB, $APPLICATION, $USER_FIELD_MANAGER;
 
 		$ID = intval($ID);
 
@@ -4373,7 +4349,7 @@ class CAllUser extends CDBResult
 
 		ShortCode::deleteByUser($ID);
 
-		CHotKeys::GetInstance()->DeleteByUser($ID);
+		CHotKeys::DeleteByUser($ID);
 
 		UserPasswordTable::deleteByFilter($userFilter);
 
@@ -4399,12 +4375,7 @@ class CAllUser extends CDBResult
 		if (defined("BX_COMP_MANAGED_CACHE"))
 		{
 			$isRealUser = !$arUser['EXTERNAL_AUTH_ID'] || !in_array($arUser['EXTERNAL_AUTH_ID'], Main\UserTable::getExternalUserTypes());
-
-			$CACHE_MANAGER->ClearByTag("USER_CARD_" . intval($ID / TAGGED_user_card_size));
-			$CACHE_MANAGER->ClearByTag($isRealUser ? "USER_CARD" : "EXTERNAL_USER_CARD");
-
-			$CACHE_MANAGER->ClearByTag("USER_NAME_" . $ID);
-			$CACHE_MANAGER->ClearByTag($isRealUser ? "USER_NAME" : "EXTERNAL_USER_CARD");
+			static::clearTagCache($ID, $isRealUser);
 		}
 
 		static::clearUserGroupCache($ID);
@@ -4484,7 +4455,7 @@ class CAllUser extends CDBResult
 	 */
 	public static function getPolicy($userId)
 	{
-		global $DB, $CACHE_MANAGER;
+		global $DB;
 
 		static $cache = [];
 
@@ -4766,11 +4737,11 @@ class CAllUser extends CDBResult
 
 		static $arAlowedOperations = ['fm_delete_file', 'fm_rename_folder', 'fm_view_permission'];
 
-		if (mb_substr($arPath[1], -10) == "/.htaccess" && !$USER->CanDoOperation('edit_php') && !in_array($op_name, $arAlowedOperations))
+		if (str_ends_with($arPath[1], "/.htaccess") && !$USER->CanDoOperation('edit_php') && !in_array($op_name, $arAlowedOperations))
 		{
 			return false;
 		}
-		if (mb_substr($arPath[1], -12) == "/.access.php")
+		if (str_ends_with($arPath[1], "/.access.php"))
 		{
 			return false;
 		}
@@ -5896,6 +5867,47 @@ class CAllUser extends CDBResult
 			$this->context = Authentication\Context::jsonDecode((string)$this->GetParam('CONTEXT'));
 		}
 		return $this->context;
+	}
+
+	protected static function clearTagCache(int $ID, bool $realUser, array $fields = null)
+	{
+		global $CACHE_MANAGER;
+
+		$CACHE_MANAGER->ClearByTag('USER_CARD_' . intval($ID / TAGGED_user_card_size));
+		if ($realUser)
+		{
+			$CACHE_MANAGER->ClearByTag('USER_CARD');
+		}
+
+		static $nameFields = [
+			'NAME', 'LAST_NAME', 'SECOND_NAME',
+			'ACTIVE', 'LOGIN', 'EMAIL',
+			'PERSONAL_GENDER', 'PERSONAL_PHOTO', 'WORK_POSITION', 'PERSONAL_PROFESSION', 'PERSONAL_WWW', 'PERSONAL_BIRTHDAY', 'TITLE',
+			'EXTERNAL_AUTH_ID', 'UF_DEPARTMENT',
+			'AUTO_TIME_ZONE', 'TIME_ZONE', 'TIME_ZONE_OFFSET',
+		];
+
+		$clearName = true;
+		if ($fields !== null)
+		{
+			$clearName = false;
+			foreach ($nameFields as $val)
+			{
+				if (isset($fields[$val]))
+				{
+					$clearName = true;
+					break;
+				}
+			}
+		}
+		if ($clearName)
+		{
+			$CACHE_MANAGER->ClearByTag('USER_NAME_' . $ID);
+			if ($realUser)
+			{
+				$CACHE_MANAGER->ClearByTag('USER_NAME');
+			}
+		}
 	}
 }
 

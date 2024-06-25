@@ -7,6 +7,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Text;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\Web;
+use Bitrix\Main\Web\Json;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die();
 
@@ -560,6 +561,9 @@ class CMainUIGrid extends CBitrixComponent
 			isset($this->arParams["HANDLE_RESPONSE_ERRORS"])
 			&& $this->arParams["HANDLE_RESPONSE_ERRORS"] === true
 		);
+
+		$useCheckboxListForSettingsPopup = (bool)($this->arParams['USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP'] ?? false);
+		$this->arResult['USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP'] = $useCheckboxListForSettingsPopup;
 
 		return $this;
 	}
@@ -1985,7 +1989,7 @@ class CMainUIGrid extends CBitrixComponent
 				{
 					$offsetLeft = 20;
 					$paddingLeft = $row["depth"] * $offsetLeft;
-					$cellStyle .= "padding-left: {$paddingLeft}px";
+					$cellStyle .= "padding-left: {$paddingLeft}px;";
 				}
 			}
 
@@ -2865,7 +2869,7 @@ trait DeprecatedMethods
 			{
 				if (is_array($value))
 				{
-					$escapedValue = "(" . Text\HtmlFilter::encode(CUtil::PhpToJSObject($value)) . ")";
+					$escapedValue = "(" . Text\HtmlFilter::encode(Json::encode($value)) . ")";
 				}
 				else
 				{

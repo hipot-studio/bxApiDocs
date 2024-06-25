@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2021 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
 
 namespace Bitrix\Main\Config;
@@ -200,6 +200,10 @@ class Option
 			// prevents recursion and cache miss
 			self::$options[$moduleId] = ["-" => []];
 
+			// prevents recursion on early stages with cluster module installed
+			$pool = Main\Application::getInstance()->getConnectionPool();
+			$pool->useMasterOnly(true);
+
 			$query = "
 				SELECT NAME, VALUE
 				FROM b_option
@@ -228,7 +232,11 @@ class Option
 					self::$options[$moduleId][$ar["SITE_ID"]][$ar["NAME"]] = $ar["VALUE"];
 				}
 			}
-			catch(Main\DB\SqlQueryException $e){}
+			catch(Main\DB\SqlQueryException)
+			{
+			}
+
+			$pool->useMasterOnly(false);
 
 			if($cacheTtl !== false)
 			{

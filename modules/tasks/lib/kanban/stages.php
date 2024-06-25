@@ -48,9 +48,9 @@ Loc::loadMessages(__FILE__);
  * @method static EO_Stages_Result getList(array $parameters = [])
  * @method static EO_Stages_Entity getEntity()
  * @method static \Bitrix\Tasks\Kanban\Stage createObject($setDefaultValues = true)
- * @method static \Bitrix\Tasks\Kanban\EO_Stages_Collection createCollection()
+ * @method static \Bitrix\Tasks\Kanban\StagesCollection createCollection()
  * @method static \Bitrix\Tasks\Kanban\Stage wakeUpObject($row)
- * @method static \Bitrix\Tasks\Kanban\EO_Stages_Collection wakeUpCollection($rows)
+ * @method static \Bitrix\Tasks\Kanban\StagesCollection wakeUpCollection($rows)
  */
 class StagesTable extends DataManager
 {
@@ -66,6 +66,10 @@ class StagesTable extends DataManager
 	public const SYS_TYPE_PROGRESS = 'WORK';
 	public const SYS_TYPE_FINISH = 'FINISH';
 	public const SYS_TYPE_DEFAULT = 'NEW';
+
+	public const SYS_TYPE_NEW_COLOR = '00C4FB';
+	public const SYS_TYPE_PROGRESS_COLOR = self::DEF_COLOR_STAGE;
+	public const SYS_TYPE_FINISH_COLOR = '75D900';
 
 	/**
 	 * Default colors.
@@ -124,10 +128,11 @@ class StagesTable extends DataManager
 
 	public static function checkWorkMode(string $mode): bool
 	{
-		return $mode == self::WORK_MODE_GROUP
-			|| $mode == self::WORK_MODE_USER
-			|| $mode == self::WORK_MODE_TIMELINE
-			|| $mode == self::WORK_MODE_ACTIVE_SPRINT;
+		return $mode === self::WORK_MODE_GROUP
+			|| $mode === self::WORK_MODE_USER
+			|| $mode === self::WORK_MODE_TIMELINE
+			|| $mode === self::WORK_MODE_ACTIVE_SPRINT
+		;
 	}
 
 	public static function setWorkMode(string $mode): void
@@ -337,14 +342,14 @@ class StagesTable extends DataManager
 					'SORT' => 100,
 					'ENTITY_ID' => $entityId,
 					'ENTITY_TYPE' => $entityType,
-					'COLOR' => '00C4FB',
+					'COLOR' => static::SYS_TYPE_NEW_COLOR,
 				]);
 				self::add([
 					'TITLE' => Loc::getMessage('TASKS_STAGE_MP_2'),
 					'SORT' => 200,
 					'ENTITY_ID' => $entityId,
 					'ENTITY_TYPE' => $entityType,
-					'COLOR' => '47D1E2',
+					'COLOR' => static::DEF_COLOR_STAGE,
 				]);
 			}
 			elseif ($entityType == self::WORK_MODE_GROUP)
@@ -361,21 +366,21 @@ class StagesTable extends DataManager
 						'SORT' => 100,
 						'ENTITY_ID' => $entityId,
 						'ENTITY_TYPE' => $entityType,
-						'COLOR' => '00C4FB',
+						'COLOR' => static::SYS_TYPE_NEW_COLOR,
 					]);
 					self::add([
 						'SYSTEM_TYPE' => self::SYS_TYPE_PROGRESS,
 						'SORT' => 200,
 						'ENTITY_ID' => $entityId,
 						'ENTITY_TYPE' => $entityType,
-						'COLOR' => '47D1E2',
+						'COLOR' => static::SYS_TYPE_PROGRESS_COLOR,
 					]);
 					self::add([
 						'SYSTEM_TYPE' => self::SYS_TYPE_FINISH,
 						'SORT' => 300,
 						'ENTITY_ID' => $entityId,
 						'ENTITY_TYPE' => $entityType,
-						'COLOR' => '75D900',
+						'COLOR' => static::SYS_TYPE_FINISH_COLOR,
 					]);
 				}
 			}
@@ -413,6 +418,70 @@ class StagesTable extends DataManager
 		}
 
 		return $stages[$entityType . $entityId];
+	}
+
+	/**
+	 * @param int $groupId
+	 * @param bool $disableCreate
+	 * @return array
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public static function getGroupStages(int $groupId, bool $disableCreate = false): array
+	{
+		$previousMode = self::getWorkMode();
+		self::setWorkMode(self::WORK_MODE_GROUP);
+		$stages = self::getStages($groupId, $disableCreate);
+		self::setWorkMode($previousMode);
+
+		return $stages;
+	}
+
+	/**
+	 * @param int $sprintId
+	 * @param bool $disableCreate
+	 * @return array
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public static function getActiveSprintStages(int $sprintId, bool $disableCreate = false): array
+	{
+		$previousMode = self::getWorkMode();
+		self::setWorkMode(self::WORK_MODE_ACTIVE_SPRINT);
+		$stages = self::getStages($sprintId, $disableCreate);
+		self::setWorkMode($previousMode);
+
+		return $stages;
+	}
+
+	/**
+	 * @param int $stageId
+	 * @param int $groupId
+	 * @return array|null
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public static function getGroupStageById(int $stageId, int $groupId): ?array
+	{
+		$stages = self::getGroupStages($groupId, true);
+
+		foreach ($stages as $stage)
+		{
+			if ($stageId === 0 && $stage['SYSTEM_TYPE'] === self::SYS_TYPE_NEW)
+			{
+				return $stage;
+			}
+
+			if ((int)$stage['ID'] === $stageId)
+			{
+				return $stage;
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -1105,5 +1174,10 @@ class StagesTable extends DataManager
 	public static function getObjectClass(): string
 	{
 		return Stage::class;
+	}
+
+	public static function getCollectionClass(): string
+	{
+		return StagesCollection::class;
 	}
 }

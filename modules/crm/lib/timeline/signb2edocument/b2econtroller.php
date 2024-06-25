@@ -66,6 +66,18 @@ final class B2eController extends Timeline\Controller
 		);
 	}
 
+	public function onSignedDocumentDelivered(
+		ItemIdentifier $identifier,
+		DocumentData $documentData
+	): array
+	{
+		return $this->handleSignEvent(
+			Entry::TYPE_CATEGORY_MEMBER_SIGNED_DELIVERED,
+			$identifier,
+			$documentData
+		);
+	}
+
 	public function onDeliveryError(
 		ItemIdentifier $identifier,
 		DocumentData $documentData,
@@ -391,6 +403,7 @@ final class B2eController extends Timeline\Controller
 			Entry::TYPE_CATEGORY_MEMBER_STOPPED_BY_REVIEWER => [TimelineEntry\Facade::SIGN_B2E_DOCUMENT_LOG,],
 			Entry::TYPE_CATEGORY_MEMBER_STOPPED_BY_EDITOR => [TimelineEntry\Facade::SIGN_B2E_DOCUMENT_LOG,],
 			Entry::TYPE_CATEGORY_MEMBER_STOPPED_BY_ASSIGNEE => [TimelineEntry\Facade::SIGN_B2E_DOCUMENT_LOG,],
+			Entry::TYPE_CATEGORY_MEMBER_SIGNED_DELIVERED => [TimelineEntry\Facade::SIGN_B2E_DOCUMENT_LOG,],
 		];
 	}
 

@@ -164,9 +164,9 @@ class Entity
 		{
 			if (!empty($fieldInfo['reference']))
 			{
-				if (is_string($fieldInfo['data_type']) && strpos($fieldInfo['data_type'], '\\') === false)
+				if (is_string($fieldInfo['data_type']) && !str_contains($fieldInfo['data_type'], '\\'))
 				{
-					// if reference has no namespace, then it'is in the same namespace
+					// if reference has no namespace, then it's in the same namespace
 					$fieldInfo['data_type'] = $this->getNamespace().$fieldInfo['data_type'];
 				}
 
@@ -773,7 +773,7 @@ class Entity
 			$entityName .= 'Table';
 		}
 
-		if (substr($entityName, 0, 1) !== '\\')
+		if (!str_starts_with($entityName, '\\'))
 		{
 			$entityName = '\\'.$entityName;
 		}
@@ -875,7 +875,7 @@ class Entity
 
 	public static function normalizeName($entityName)
 	{
-		if (substr($entityName, 0, 1) !== '\\')
+		if (!str_starts_with($entityName, '\\'))
 		{
 			$entityName = '\\'.$entityName;
 		}

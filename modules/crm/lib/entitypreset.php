@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm;
 
+use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Order\Matcher\BaseEntityMatcher;
 use Bitrix\Crm\Order\Matcher\Internals\OrderPropsMatchTable;
 use Bitrix\Main;
@@ -167,15 +168,13 @@ class EntityPreset
 		return isset($types[$entityTypeId]['CODE']) ? $types[$entityTypeId]['CODE'] : '';
 	}
 
+	/**
+	 * @deprecated
+	 * @return true
+	 */
 	public static function isUTFMode()
 	{
-		if (Option::get('crm', 'entity_preset_force_utf_mode', 'N') === 'Y')
-			return true;
-
-		if (defined('BX_UTF') && BX_UTF)
-			return true;
-
-		return false;
+		return true;
 	}
 
 	public function getFields()
@@ -521,7 +520,14 @@ class EntityPreset
 		$this->clearCache();
 		CCrmEntitySelectorHelper::clearPrepareRequisiteDataCacheByPreset($id);
 
-		return PresetTable::update($id, $fields);
+		$result = PresetTable::update($id, $fields);
+
+		if ($result->isSuccess() && $fields['SETTINGS'])
+		{
+			$this->syncFieldAttributes($id, $fields['SETTINGS']);
+		}
+
+		return $result;
 	}
 
 	public function delete($id, $options = array())
@@ -577,7 +583,13 @@ class EntityPreset
 		$this->clearCache();
 		CCrmEntitySelectorHelper::clearPrepareRequisiteDataCacheByPreset($id);
 
-		return PresetTable::delete($id);
+		$result = PresetTable::delete($id);
+		if ($result->isSuccess())
+		{
+			FieldAttributeManager::deleteByScopePrefix("preset_$id");
+		}
+
+		return $result;
 	}
 
 	public function extractFieldNames(array $settings)
@@ -591,6 +603,25 @@ class EntityPreset
 			}
 		}
 		return $results;
+	}
+
+	protected function syncFieldAttributes(int $presetId, array $settings)
+	{
+		if ($presetId <= 0)
+		{
+			return;
+		}
+
+		$fieldMap = array_fill_keys(array_keys(EntityRequisite::getBasicFieldsInfo()), true);
+		$fieldInfos = $this->settingsGetFields($settings);
+		foreach($fieldInfos as $fieldInfo)
+		{
+			if(($fieldInfo['FIELD_NAME'] ?? '') !== '')
+			{
+				$fieldMap[$fieldInfo['FIELD_NAME']] = true;
+			}
+		}
+		FieldAttributeManager::deleteByScope("preset_$presetId", array_keys($fieldMap));
 	}
 
 	public function settingsGetFields(array $settings)
@@ -1221,6 +1252,7 @@ class EntityPreset
 									$delResult = PresetTable::delete($id);
 									if ($delResult->isSuccess())
 									{
+										FieldAttributeManager::deleteByScopePrefix("preset_$id");
 										$deleted = 'Y';
 									}
 								}

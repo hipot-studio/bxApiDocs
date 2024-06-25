@@ -6,7 +6,7 @@ use Bitrix\Main\Grid\Row\FieldAssembler;
 
 class StringFieldAssembler extends FieldAssembler
 {
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): mixed
 	{
 		return htmlspecialcharsbx($value);
 	}

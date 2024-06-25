@@ -878,9 +878,7 @@ class DealCategory
 			$infos = \CCrmStatus::GetStatus(self::convertToStatusEntityID($ID));
 		}
 
-		$infos = PhaseColorScheme::fillDefaultColors($infos);
-
-		return $infos;
+		return PhaseColorScheme::fillDefaultColors($infos);
 	}
 
 	/**

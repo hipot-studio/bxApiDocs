@@ -3,7 +3,7 @@ namespace Bitrix\Im;
 
 use Bitrix\Im\Model\BlockUserTable;
 use Bitrix\Im\V2\Chat\EntityLink;
-use Bitrix\Im\V2\Integration\AI\AIHelper;
+use Bitrix\Im\V2\Chat\GeneralChannel;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Message\Delete\DisappearService;
 use Bitrix\Im\V2\Message\ReadService;
@@ -67,6 +67,10 @@ class Chat
 		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_CHANNEL)
 		{
 			$result = 'CHANNEL';
+		}
+		else if (isset($chatId) && $chatId === GeneralChannel::getGeneralChannelId())
+		{
+			$result = 'GENERAL_CHANNEL';
 		}
 		else if ($messageType === \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_CHANNEL)
 		{

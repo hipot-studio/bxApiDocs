@@ -19,7 +19,7 @@ class Lead implements PermissionEntity
 	 */
 	public function make(): array
 	{
-		$fields = ['STATUS_ID' => CCrmStatus::GetStatusListEx('STATUS')];
+		$fields = ['STATUS_ID' => CCrmStatus::GetStatusListEx('STATUS', false)];
 
 		$name = Container::getInstance()->getFactory(CCrmOwnerType::Lead)->getEntityDescription();
 

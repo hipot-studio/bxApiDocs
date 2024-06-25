@@ -964,9 +964,7 @@ class CUserHRXMLImport
 		if ($DB->TableExists($tblName))
 		{
 			$rs = $DB->Query(
-				"SELECT ID, XML_ID, ACTIVE FROM ".$tblName." WHERE XML_ID IS NOT NULL AND XML_ID <> ''",
-				false,
-				"FILE: ".__FILE__."<br>LINE: ".__LINE__
+				"SELECT ID, XML_ID, ACTIVE FROM ".$tblName." WHERE XML_ID IS NOT NULL AND XML_ID <> ''"
 			);
 			while ($ar = $rs->Fetch())
 			{

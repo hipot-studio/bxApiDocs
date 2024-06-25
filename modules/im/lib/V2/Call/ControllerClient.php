@@ -72,22 +72,45 @@ class ControllerClient extends BaseSender
 	 */
 	public function createCall(Call $call): Result
 	{
+		$action = 'callcontroller.InternalApi.createCall';
 		$data = [
+			'callType' => 'call',
 			'uuid' => $call->getUuid(),
-			'secretKey' => $call->getSecretKey(),
 			'initiatorUserId' => $call->getInitiatorId(),
 			'callId' => $call->getId(),
-			'conference' => 'N',
-			'usersCount' => count($call->getUsers()),
 			'version' => \Bitrix\Main\ModuleManager::getVersion('call'),
-			'maxParticipants' => \Bitrix\Im\Call\Call::getMaxCallServerParticipants(),
+			'usersCount' => count($call->getUsers()),
 		];
 
-		$this->httpClientParameters = [
-			'waitResponse' => true,
-		];
+		if ($call instanceof ConferenceCall)
+		{
+			$data['callType'] = 'conference';
+		}
 
-		return $this->performRequest('callcontroller.InternalApi.createCall', $data);
+		if ($call instanceof PlainCall)
+		{
+			$action = 'callcontroller.InternalApi.createPlain';
+			$data['callType'] = 'plain';
+			$this->httpClientParameters = [
+				'waitResponse' => false,
+				'socketTimeout' => 5,
+				'streamTimeout' => 5,
+			];
+		}
+		else
+		{
+			$data = array_merge($data, [
+				'secretKey' => $call->getSecretKey(),
+				'maxParticipants' => \Bitrix\Im\Call\Call::getMaxCallServerParticipants(),
+			]);
+			$this->httpClientParameters = [
+				'waitResponse' => true,
+				'socketTimeout' => 10,
+				'streamTimeout' => 15,
+			];
+		}
+
+		return $this->performRequest($action, $data);
 	}
 
 	/**
@@ -104,10 +127,21 @@ class ControllerClient extends BaseSender
 		$this->httpClientParameters = [
 			'waitResponse' => false,
 			'socketTimeout' => 5,
-			'streamTimeout' => 10,
+			'streamTimeout' => 5,
 		];
 
-		return $this->performRequest('callcontroller.InternalApi.finishCall', $data);
+		$action = 'callcontroller.InternalApi.finishCall';
+		if ($call instanceof ConferenceCall)
+		{
+			$data['callType'] = 'conference';
+		}
+		if ($call instanceof PlainCall)
+		{
+			$action = 'callcontroller.InternalApi.finishPlain';
+			$data['callType'] = 'plain';
+		}
+
+		return $this->performRequest($action, $data);
 	}
 
 	public function getHttpClientParameters(): array

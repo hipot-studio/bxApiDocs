@@ -675,7 +675,6 @@ class CCloudStorageService_OpenStackStorage extends CCloudStorageService
 			if(mb_substr($filePath, 0, mb_strlen($arBucket["PREFIX"]) + 2) != "/".$arBucket["PREFIX"]."/")
 				$filePath = $arBucket["PREFIX"]."/".ltrim($filePath, "/");
 		}
-		$filePath = $APPLICATION->ConvertCharset($filePath, LANG_CHARSET, "UTF-8");
 		$filePath = str_replace(" ", "+", $filePath);
 
 		$marker = '';
@@ -718,12 +717,11 @@ class CCloudStorageService_OpenStackStorage extends CCloudStorageService
 								if($a["#"]["content_type"][0]["#"] === "application/directory")
 								{
 									$dir_name = trim(mb_substr($a["#"]["name"][0]["#"], mb_strlen($filePath)), "/");
-									$result["dir"][$APPLICATION->ConvertCharset($dir_name, "UTF-8", LANG_CHARSET)] = true;
+									$result["dir"][$dir_name] = true;
 								}
 								else
 								{
 									$file_name = mb_substr($a["#"]["name"][0]["#"], mb_strlen($filePath));
-									$file_name = $APPLICATION->ConvertCharset($file_name, "UTF-8", LANG_CHARSET);
 									if (!in_array($file_name, $result["file"]))
 									{
 										$result["file"][] = $file_name;
@@ -747,7 +745,7 @@ class CCloudStorageService_OpenStackStorage extends CCloudStorageService
 							{
 								$new_marker = $a["@"]["name"];
 								$dir_name = trim(mb_substr($a["@"]["name"], mb_strlen($filePath)), "/");
-								$result["dir"][$APPLICATION->ConvertCharset(rawurldecode($dir_name), "UTF-8", LANG_CHARSET)] = true;
+								$result["dir"][rawurldecode($dir_name)] = true;
 							}
 						}
 					}

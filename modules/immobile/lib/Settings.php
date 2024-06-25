@@ -69,9 +69,4 @@ class Settings
 
 		return \Bitrix\Im\V2\Chat\CopilotChat::isAvailable();
 	}
-
-	public static function isCopilotAddUsersEnabled(): bool
-	{
-		return \Bitrix\Main\Config\Option::get('im', 'im_add_users_to_copilot_chat', 'N') === 'Y';
-	}
 }

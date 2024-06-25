@@ -125,6 +125,18 @@ abstract class Entity
 		return $this;
 	}
 
+	/**
+	 * @param string $name
+	 * @param string $value
+	 * @return $this
+	 */
+	public function setValue(string $name, string $value): Entity
+	{
+		$this->values[$name] = $value;
+
+		return $this;
+	}
+
 	public function save(): void
 	{
 		Storage::saveEntityValues($this);

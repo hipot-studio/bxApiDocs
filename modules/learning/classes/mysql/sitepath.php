@@ -41,7 +41,7 @@ class CSitePath extends CAllSitePath
 			$strSql =
 				"INSERT INTO b_learn_site_path(".$arInsert[0].") ".
 				"VALUES(".$arInsert[1].")";
-			$DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			$ID = intval($DB->LastID());
 
@@ -86,7 +86,7 @@ class CSitePath extends CAllSitePath
 				"UPDATE b_learn_site_path SET ".
 				"	".$strUpdate." ".
 				"WHERE ID = ".$ID." ";
-			$DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 
 			unset($GLOBALS["LEARNING_SITE_PATH"]["LEARNING_SITE_PATH_CACHE_".$ID]);
 
@@ -131,7 +131,7 @@ class CSitePath extends CAllSitePath
 
 			//echo "!1!=".htmlspecialcharsbx($strSql)."<br>";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			if ($arRes = $dbRes->Fetch())
 				return $arRes["CNT"];
 			else
@@ -162,7 +162,7 @@ class CSitePath extends CAllSitePath
 
 			//echo "!2.1!=".htmlspecialcharsbx($strSql_tmp)."<br>";
 
-			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql_tmp);
 			$cnt = 0;
 			if ($arSqls["GROUPBY"] == '')
 			{
@@ -188,7 +188,7 @@ class CSitePath extends CAllSitePath
 
 			//echo "!3!=".htmlspecialcharsbx($strSql)."<br>";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 		}
 
 		return $dbRes;

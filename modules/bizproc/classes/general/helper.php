@@ -2446,7 +2446,7 @@ class CBPHelper
 			COption::SetOptionString("bizproc", "forum_id", $forumId);
 		}
 
-		return $forumId;
+		return (int)$forumId;
 	}
 
 	public static function getDistrName()
@@ -2515,7 +2515,7 @@ class CBPHelper
 		}
 	}
 
-	public static function makeTimestamp($date)
+	public static function makeTimestamp($date, bool $appendOffset = false)
 	{
 		if (!$date)
 		{
@@ -2535,7 +2535,7 @@ class CBPHelper
 
 		if ($date instanceof Bizproc\BaseType\Value\Date)
 		{
-			return $date->getTimestamp();
+			return $date->getTimestamp() + ($appendOffset ? $date->getOffset() : 0);
 		}
 
 		if ($date instanceof Main\Type\Date)

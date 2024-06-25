@@ -468,7 +468,7 @@ class Helper
 		$path = str_replace(array("\\", "//"), "/", $path);
 
 		//remove file name
-		if (mb_substr($path, -1) != "/")
+		if (!str_ends_with($path, "/"))
 		{
 			$p = mb_strrpos($path, "/");
 			$path = mb_substr($path, 0, $p);

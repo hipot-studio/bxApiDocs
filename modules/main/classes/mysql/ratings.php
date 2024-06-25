@@ -40,7 +40,7 @@ class CRatings extends CAllRatings
 				WHERE
 					RC.RATING_ID = ".$ID." and RR.ID IS NULL
 				GROUP BY RC.ENTITY_ID";
-			$res = $DB->Query($strSql);
+			$DB->Query($strSql);
 
 			// Update current results
 			$strSql = $helper->prepareCorrelatedUpdate("b_rating_results", "RR", [
@@ -58,7 +58,7 @@ class CRatings extends CAllRatings
 					and	RR.ENTITY_ID = RCR.ENTITY_ID
 				"
 			);
-			$res = $DB->Query($strSql);
+			$DB->Query($strSql);
 
 			// Calculation position in rating
 			if ($arRating['POSITION'] == 'Y')
@@ -83,7 +83,7 @@ class CRatings extends CAllRatings
 						and	RR.ENTITY_ID = RP.ENTITY_ID
 					"
 				);
-				$res = $DB->Query($strSql);
+				$DB->Query($strSql);
 			}
 
 			// Insert new user rating prop
@@ -100,7 +100,7 @@ class CRatings extends CAllRatings
 					U.ACTIVE = 'Y' 
 					AND (CASE WHEN U.EXTERNAL_AUTH_ID IN ('".join("', '", \Bitrix\Main\UserTable::getExternalUserTypes())."') THEN 'Y' ELSE 'N' END) = 'N'
 					AND RU.ID IS NULL	";
-			$res = $DB->Query($strSql);
+			$DB->Query($strSql);
 			// authority calc
 			if ($arRating['AUTHORITY'] == 'Y')
 			{
@@ -161,7 +161,7 @@ class CRatings extends CAllRatings
 
 					$ratingCountVote = COption::GetOptionString("main", "rating_count_vote", 10);
 					$strSql =  "UPDATE b_rating_user SET VOTE_COUNT = 0, VOTE_WEIGHT =0 WHERE RATING_ID=".$ID;
-					$res = $DB->Query($strSql);
+					$DB->Query($strSql);
 					// default vote count + user authority
 					$strSql = $helper->prepareCorrelatedUpdate("b_rating_user", "RU", [
 							'VOTE_COUNT' => intval($ratingCountVote)." + RP.CURRENT_VALUE",
@@ -176,14 +176,15 @@ class CRatings extends CAllRatings
 							and	RU.ENTITY_ID = RP.ENTITY_ID
 						"
 					);
-					$res = $DB->Query($strSql);
+					$DB->Query($strSql);
 				}
 				else
 				{
 					// Depending on current authority set correct weight votes
 					// Depending on current authority set correct vote count
 					$strSql =  "UPDATE b_rating_user SET VOTE_COUNT = 0, VOTE_WEIGHT =0 WHERE RATING_ID=".$ID;
-					$res = $DB->Query($strSql);
+					$DB->Query($strSql);
+
 					$strSql = $helper->prepareCorrelatedUpdate("b_rating_user", "RU", [
 							'VOTE_COUNT' => 'RP.COUNT',
 							'VOTE_WEIGHT' => 'RP.WEIGHT',
@@ -202,7 +203,7 @@ class CRatings extends CAllRatings
 							and RU.ENTITY_ID = RP.ENTITY_ID
 						"
 					);
-					$res = $DB->Query($strSql);
+					$DB->Query($strSql);
 				}
 			}
 			global $CACHE_MANAGER;
@@ -344,7 +345,6 @@ class CRatings extends CAllRatings
 		$helper = $connection->getSqlHelper();
 
 		$bAllGroups = false;
-		$arInfo = Array();
 		$arGroups = Array();
 		$communityLastVisit = COption::GetOptionString("main", "rating_community_last_visit", '90');
 		$res = CRatings::GetVoteGroup();
@@ -464,8 +464,8 @@ class CRatings extends CAllRatings
 		}
 		else
 		{
-			$userId = (int)$USER->GetId();
-			$bUserAuth = $USER->IsAuthorized();
+			$userId = (int)$USER?->GetId();
+			$bUserAuth = (bool)$USER?->IsAuthorized();
 		}
 
 		$arInfo = array(
@@ -483,7 +483,7 @@ class CRatings extends CAllRatings
 				'ERROR_MSG' => GetMessage('RATING_ALLOW_VOTE_SELF'),
 			);
 		}
-		else if (!$bUserAuth)
+		elseif (!$bUserAuth)
 		{
 			$arInfo = array(
 				'RESULT' => false,
@@ -567,7 +567,7 @@ class CRatings extends CAllRatings
 				{
 					if ($cacheVoteSize >= $cacheUserVote[$userId])
 					{
-						$arInfo = $cacheAllowVote[$userId] = array(
+						$cacheAllowVote[$userId] = array(
 							'RESULT' => false,
 							'ERROR_TYPE' => 'COUNT_VOTE',
 							'ERROR_MSG' => GetMessage('RATING_ALLOW_VOTE_COUNT_VOTE'),
@@ -604,17 +604,18 @@ class CRatings extends CAllRatings
 		global $DB;
 
 		$rsRatings = CRatings::GetList(array('ID' => 'ASC'), array('ENTITY_ID' => 'USER'));
+		$arRatingList = [];
 		while ($arRatingsTmp = $rsRatings->GetNext())
 			$arRatingList[] = $arRatingsTmp['ID'];
 
-		if (isset($arParams['DEFAULT_USER_ACTIVE']) && $arParams['DEFAULT_USER_ACTIVE'] == 'Y' && IsModuleInstalled("forum") && is_array($arRatingList) && !empty($arRatingList))
+		if (isset($arParams['DEFAULT_USER_ACTIVE']) && $arParams['DEFAULT_USER_ACTIVE'] == 'Y' && IsModuleInstalled("forum") && !empty($arRatingList))
 		{
 			$ratingStartValue = 0;
 			if (isset($arParams['DEFAULT_CONFIG_NEW_USER']) && $arParams['DEFAULT_CONFIG_NEW_USER'] == 'Y')
 				$ratingStartValue = COption::GetOptionString("main", "rating_start_authority", 3);
 
 			$strSql =  "UPDATE b_rating_user SET BONUS = $ratingStartValue WHERE RATING_ID IN (".implode(',', $arRatingList).")";
-			$res = $DB->Query($strSql);
+			$DB->Query($strSql);
 			$strSql =  "
 				UPDATE
 					b_rating_user RU,
@@ -630,13 +631,13 @@ class CRatings extends CAllRatings
 					RU.RATING_ID IN (".implode(',', $arRatingList).")
 				and	RU.ENTITY_ID = RP.ENTITY_ID
 			";
-			$res = $DB->Query($strSql);
+			$DB->Query($strSql);
 		}
-		else if (isset($arParams['DEFAULT_CONFIG_NEW_USER']) && $arParams['DEFAULT_CONFIG_NEW_USER'] == 'Y' && is_array($arRatingList) && !empty($arRatingList))
+		else if (isset($arParams['DEFAULT_CONFIG_NEW_USER']) && $arParams['DEFAULT_CONFIG_NEW_USER'] == 'Y' && !empty($arRatingList))
 		{
 			$ratingStartValue = COption::GetOptionString("main", "rating_start_authority", 3);
 			$strSql =  "UPDATE b_rating_user SET BONUS = ".$ratingStartValue." WHERE RATING_ID IN (".implode(',', $arRatingList).")";
-			$res = $DB->Query($strSql);
+			$DB->Query($strSql);
 		}
 
 		return true;

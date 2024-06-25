@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2023 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
 
 namespace Bitrix\Main;
@@ -348,7 +348,7 @@ class HttpRequest extends Request
 
 	protected static function decode($url)
 	{
-		return Text\Encoding::convertEncodingToCurrent(rawurldecode($url));
+		return rawurldecode($url);
 	}
 
 	/**
@@ -417,7 +417,7 @@ class HttpRequest extends Request
 		$cookiesNew = $cookiesToDecrypt = [];
 		foreach ($cookies as $name => $value)
 		{
-			if (mb_strpos($name, $cookiePrefix) !== 0)
+			if (!str_starts_with($name, $cookiePrefix))
 			{
 				continue;
 			}

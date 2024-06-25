@@ -8,12 +8,8 @@ use Bitrix\Crm\ActivityTable;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Dto\SummarizeCallTranscriptionPayload;
 use Bitrix\Crm\Integration\AI\Dto\TranscribeCallRecordingPayload;
-use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Result;
-use Bitrix\Crm\Integration\Analytics\Builder\AI\CallParsingEvent;
-use Bitrix\Crm\Integration\Analytics\Dictionary;
-use Bitrix\Crm\Integration\StorageType;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
@@ -143,8 +139,7 @@ final class Orchestrator
 			$activityId > 0
 			&& $nextTarget
 			&& $userId > 0
-			&& StorageType::isDefined($storageTypeId)
-			&& !empty($storageElementIds)
+			&& Call::hasRecordings($activityFields)
 			&& ($activityFields['IS_INCOMING_CHANNEL'] ?? 'N') === 'Y'
 			&& AIManager::checkForSuitableAudios((string)$activityFields['ORIGIN_ID'], $storageTypeId, serialize($storageElementIds))->isSuccess()
 		)
@@ -164,14 +159,13 @@ final class Orchestrator
 					'{date}: Trying to autostart operation with type {operationType}' . PHP_EOL,
 					['operationType' => TranscribeCallRecording::TYPE_ID]
 				);
-				$result = AIManager::launchCallRecordingTranscription(
+				AIManager::launchCallRecordingTranscription(
 					$activityId,
 					$userId,
 					$storageTypeId,
 					max($storageElementIds),
 					false,
 				);
-				$this->sendAnalytics($result, $activityFields);
 			}
 		}
 	}
@@ -208,8 +202,7 @@ final class Orchestrator
 			$activityId > 0
 			&& $nextTarget
 			&& $userId > 0
-			&& StorageType::isDefined($storageTypeId)
-			&& !empty($storageElementIds)
+			&& Call::hasRecordings($activityFields)
 			&& ($activityFields['IS_INCOMING_CHANNEL'] ?? 'N') === 'Y'
 			&& !$this->jobRepo->isJobOfSameTypeAlreadyExistsForTarget(
 				new ItemIdentifier(\CCrmOwnerType::Activity, $activityId),
@@ -233,14 +226,13 @@ final class Orchestrator
 					'{date}: Trying to autostart operation with type {operationType}' . PHP_EOL,
 					['operationType' => TranscribeCallRecording::TYPE_ID]
 				);
-				$result = AIManager::launchCallRecordingTranscription(
+				AIManager::launchCallRecordingTranscription(
 					$activityId,
 					$userId,
 					$storageTypeId,
 					max($storageElementIds),
 					false,
 				);
-				$this->sendAnalytics($result, $activityFields);
 			}
 		}
 	}
@@ -248,30 +240,6 @@ final class Orchestrator
 	public function findPossibleFillFieldsTarget(int $activityId): ?ItemIdentifier
 	{
 		return $this->findPossibleFillFieldsTargetByBindings(\CCrmActivity::GetBindings($activityId));
-	}
-
-	private function sendAnalytics(Result $result, array $activityFields): void
-	{
-		$status = Dictionary::STATUS_SUCCESS;
-		if (!$result->isSuccess())
-		{
-			$status = Dictionary::STATUS_ERROR_B24;
-			$error = $result->getErrors()[0] ?? null;
-			if ($error && $error->getCode() === ErrorCode::AI_ENGINE_LIMIT_EXCEEDED)
-			{
-				$status = Dictionary::STATUS_ERROR_NO_LIMITS;
-			}
-		}
-
-		(new CallParsingEvent())
-			->setIsManualLaunch($result->isManualLaunch())
-			->setActivityOwnerTypeId((int)($activityFields['OWNER_TYPE_ID'] ?? 0))
-			->setActivityId((int)($activityFields['ID'] ?? 0))
-			->setElement(Dictionary::ELEMENT_COPILOT_BUTTON)
-			->setStatus($status)
-			->buildEvent()
-			->send()
-		;
 	}
 
 	private function findPossibleFillFieldsTargetByBindings(array $bindings): ?ItemIdentifier
@@ -398,7 +366,7 @@ final class Orchestrator
 		$allOtherCallActivityIdsOfTarget = ActivityTable::query()
 			->setSelect(['ID'])
 			->where('PROVIDER_ID', Call::ACTIVITY_PROVIDER_ID)
-			->whereNotNull('ORIGIN_ID') // check that it's a real call from voximplant or another telephony
+			->whereNotNull('ORIGIN_ID') // check that it's a real call from voximplant
 			->where('BINDINGS.OWNER_TYPE_ID', $possibleTarget->getEntityTypeId())
 			->where('BINDINGS.OWNER_ID', $possibleTarget->getEntityId())
 			->setLimit(100)

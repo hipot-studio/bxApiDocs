@@ -2,9 +2,11 @@
 
 namespace Bitrix\Crm\Service\Operation;
 
+use Bitrix\Crm\Agent\Security\DynamicTypes\AttrConvertOptions;
 use Bitrix\Crm\Cleaning;
 use Bitrix\Crm\Integration\PullManager;
 use Bitrix\Crm\Integrity;
+use Bitrix\Crm\Security\Controller\DynamicItem;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Statistics;
@@ -221,12 +223,32 @@ class Delete extends Operation
 		$item = $this->getItemBeforeSave();
 		$permissionEntityType = \Bitrix\Crm\Service\UserPermissions::getItemPermissionEntityType($item);
 
-		\Bitrix\Crm\Security\Manager::resolveController($permissionEntityType)
+		$controller = \Bitrix\Crm\Security\Manager::resolveController($permissionEntityType);
+		$controller
 			->unregister(
 				$permissionEntityType,
 				$item->getId()
 			)
 		;
+
+		// While the conversion of the rights storage type is in progress, it is necessary to register the
+		// rights in both controllers.
+		if (
+			AttrConvertOptions::getCurrentEntityTypeId() === $item->getEntityTypeId()
+			&& !$controller instanceof DynamicItem
+		)
+		{
+			try {
+				$additionalController = new DynamicItem($item->getEntityTypeId());
+				$additionalController->unregister(
+					$permissionEntityType,
+					$item->getId(),
+				);
+			}
+			catch (\Exception $e)
+			{
+			}
+		}
 	}
 
 	protected function runCleaning(): Result

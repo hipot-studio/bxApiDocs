@@ -26,7 +26,7 @@ abstract class JsExtensionFieldAssembler extends CustomUserFieldAssembler
 	abstract protected function getExtensionClassName(): string;
 	abstract protected function getRenderParams($rawValue): array;
 
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): mixed
 	{
 		if (!$this->extensionName)
 		{

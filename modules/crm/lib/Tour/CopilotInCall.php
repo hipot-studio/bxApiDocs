@@ -90,7 +90,7 @@ class CopilotInCall extends Base
 		];
 	}
 
-	final protected function isShowEnabled(): bool
+	protected function isShowEnabled(): bool
 	{
 		return AIManager::isAiCallProcessingEnabled()
 			&& in_array(

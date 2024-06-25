@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Controller;
 
+use Bitrix\Crm\Engine\ActionFilter\CheckWriteConfigPermission;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Integration\Intranet\CustomSection;
 use Bitrix\Crm\Model\Dynamic;
@@ -11,12 +12,9 @@ use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\UserField\UserFieldManager;
-use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Error;
-use Bitrix\Main\Event;
-use Bitrix\Main\EventResult;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\UI\PageNavigation;
@@ -29,23 +27,7 @@ class Type extends Base
 	public function getDefaultPreFilters(): array
 	{
 		$preFilters = parent::getDefaultPreFilters();
-		$preFilters[] = new class extends ActionFilter\Base {
-			public function onBeforeAction(Event $event): ?EventResult
-			{
-				$userPermissions = Container::getInstance()->getUserPermissions();
-				if (!$userPermissions->canWriteConfig())
-				{
-					$this->addError(new Error(Loc::getMessage('CRM_COMMON_ERROR_ACCESS_DENIED')));
-				}
-
-				return new EventResult(
-					$this->errorCollection->isEmpty() ? EventResult::SUCCESS : EventResult::ERROR,
-					null,
-					null,
-					$this
-				);
-			}
-		};
+		$preFilters[] = new CheckWriteConfigPermission();
 
 		return $preFilters;
 	}
@@ -153,6 +135,7 @@ class Type extends Base
 		$originalFields = $fields;
 		$fields = $this->convertKeysToUpper($fields);
 		$fieldKeysToUnset = ['ID', 'IS_EXTERNAL', 'CREATED_TIME', 'CREATED_BY', 'UPDATED_TIME', 'UPDATED_BY', 'IS_SAVE_FROM_TYPE_DETAIL'];
+		$fieldKeysToNotSetToType = ['CUSTOM_SECTION_ID'];
 
 		$isNew = $type->getId() <= 0;
 		$restriction = RestrictionManager::getDynamicTypesLimitRestriction();
@@ -228,7 +211,7 @@ class Type extends Base
 
 		foreach($fields as $name => $value)
 		{
-			if($type->entity->hasField($name))
+			if($type->entity->hasField($name) && !in_array($name, $fieldKeysToNotSetToType, true))
 			{
 				$type->set($name, $value);
 			}
@@ -539,7 +522,7 @@ class Type extends Base
 	 */
 	protected function saveCustomSections(Dynamic\Type $type, array $fields): Result
 	{
-		return Container::getInstance()->getAutomatedSolutionManager()->updateAutomatedSolutions($type, $fields);
+		return Container::getInstance()->getAutomatedSolutionManager()->setAutomatedSolutions($type, $fields);
 	}
 
 	/**

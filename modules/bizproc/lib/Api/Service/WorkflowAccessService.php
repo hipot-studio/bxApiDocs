@@ -2,9 +2,12 @@
 
 namespace Bitrix\Bizproc\Api\Service;
 
+use Bitrix\Bizproc\Api\Request\WorkflowAccessService\CanViewTimelineRequest;
 use Bitrix\Bizproc\Api\Request\WorkflowAccessService\CheckStartWorkflowRequest;
 use Bitrix\Bizproc\Api\Response\Error;
+use Bitrix\Bizproc\Api\Response\WorkflowAccessService\CanViewTimelineResponse;
 use Bitrix\Bizproc\Api\Response\WorkflowAccessService\CheckAccessResponse;
+use Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable;
 use Bitrix\Main\Localization\Loc;
 
 class WorkflowAccessService
@@ -30,5 +33,46 @@ class WorkflowAccessService
 		}
 
 		return $response;
+	}
+
+	public function canViewTimeline(CanViewTimelineRequest $request): CanViewTimelineResponse
+	{
+		$workflowUser =
+			WorkflowUserTable::query()
+				->setSelect(['*'])
+				->setFilter([
+					'=WORKFLOW_ID' => $request->workflowId,
+					'=USER_ID' => $request->userId,
+				])
+				->setLimit(1)
+				->exec()
+				->fetchObject()
+		;
+
+		if (!$workflowUser && !$this->canViewWorkflow($request->workflowId, $request->userId))
+		{
+			return CanViewTimelineResponse::createError(
+				new \Bitrix\Bizproc\Error(Loc::getMessage(static::PREFIX_LOC_ID . 'VIEW_TIMELINE_RIGHTS_ERROR_1'))
+			);
+		}
+
+		return new CanViewTimelineResponse();
+	}
+
+	private function canViewWorkflow($workflowId, $userId): bool
+	{
+		$documentId = \CBPStateService::getStateDocumentId($workflowId);
+
+		return (
+			$documentId
+			&& \CBPDocument::canUserOperateDocument(
+				\CBPCanUserOperateOperation::ViewWorkflow,
+				$userId,
+				$documentId,
+				[
+					'WorkflowId' => $workflowId,
+				]
+			)
+		);
 	}
 }

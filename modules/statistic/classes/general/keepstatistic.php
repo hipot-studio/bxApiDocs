@@ -67,6 +67,12 @@ class CKeepStatistics
 	/////////////////////////////
 	public static function Keep($HANDLE_CALL=false)
 	{
+		static $wasCalled = false;
+		if ($wasCalled)
+		{
+			return;
+		}
+		$wasCalled = true;
 
 		__SetNoKeepStatistics();
 		__GoogleAd();
@@ -177,7 +183,7 @@ class CKeepStatistics
 						FROM b_stat_searcher
 						WHERE ID = '".intval($_SESSION["SESS_SEARCHER_ID"])."'
 					";
-					$z = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+					$z = $DB->Query($strSql);
 					if(!$z->Fetch())
 						unset($_SESSION["SESS_SEARCHER_ID"]);
 				}
@@ -198,7 +204,7 @@ class CKeepStatistics
 						ORDER BY ".$DB->Length("USER_AGENT")." desc, ID
 						";
 
-					$z = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+					$z = $DB->Query($strSql);
 					if ($zr = $z->Fetch())
 					{
 						$_SESSION["SESS_SEARCHER_ID"] = intval($zr["ID"]);
@@ -243,14 +249,14 @@ class CKeepStatistics
 					{
 						$strSql = "SELECT ID FROM b_stat_searcher_day WHERE SEARCHER_ID='".$_SESSION["SESS_SEARCHER_ID"]."' and DATE_STAT=".$DB_now_date." ORDER BY ID";
 						$i=0;
-						$rs = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+						$rs = $DB->Query($strSql);
 						while ($ar = $rs->Fetch())
 						{
 							$i++;
 							if ($i>1)
 							{
 								$strSql = "DELETE FROM b_stat_searcher_day WHERE ID = ".$ar["ID"];
-								$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+								$DB->Query($strSql);
 							}
 						}
 					}
@@ -431,7 +437,7 @@ class CKeepStatistics
 							WHERE S.IP_FIRST_NUMBER = ".$REMOTE_ADDR_NUMBER."
 								AND S.DATE_STAT=".$DB_now_date."
 						";
-						$e = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+						$e = $DB->Query($strSql);
 						while($er = $e->Fetch())
 						{
 							$day_host_counter = 0;
@@ -637,7 +643,7 @@ class CKeepStatistics
 								and	P.SEARCHER_ID = S.ID
 								and	".$sql."
 							";
-							$q = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+							$q = $DB->Query($strSql);
 							if ($qr = $q->Fetch())
 							{
 								$_SESSION["FROM_SEARCHER_ID"] = $qr["ID"];
@@ -646,7 +652,7 @@ class CKeepStatistics
 								if ($qr["VARIABLE"] <> '')
 								{
 									$page = mb_substr($PAGE_FROM, mb_strpos($PAGE_FROM, "?") + 1);
-									$bIsUTF8 = is_utf8_url($page);
+									$utf = \Bitrix\Main\Text\Encoding::detectUtf8($page);
 									parse_str($page, $arr);
 									$arrVar = explode(",",$qr["VARIABLE"]);
 									foreach ($arrVar as $var)
@@ -654,17 +660,9 @@ class CKeepStatistics
 										$var = trim($var);
 										$phrase = $arr[$var];
 
-										if($bIsUTF8)
+										if(!$utf && $qr["CHAR_SET"] <> '')
 										{
-											$phrase_temp = trim($APPLICATION->ConvertCharset($phrase, "utf-8", LANG_CHARSET));
-											if($phrase_temp <> '')
-											{
-												$phrase = $phrase_temp;
-											}
-										}
-										elseif($qr["CHAR_SET"] <> '')
-										{
-											$phrase_temp = trim($APPLICATION->ConvertCharset($phrase, $qr["CHAR_SET"], LANG_CHARSET));
+											$phrase_temp = trim(\Bitrix\Main\Text\Encoding::convertEncoding($phrase, $qr["CHAR_SET"], "UTF-8"));
 											if($phrase_temp <> '')
 											{
 												$phrase = $phrase_temp;
@@ -1252,7 +1250,7 @@ echo '<html>
 				C.ID desc
 			", 1);
 
-		$rsPREV_PATH = $DB->Query($strSql,false,"File: ".__FILE__."<br>Line: ".__LINE__);
+		$rsPREV_PATH = $DB->Query($strSql);
 		$arPREV_PATH = $rsPREV_PATH->Fetch();
 
 		if (!$arPREV_PATH)
@@ -1483,7 +1481,7 @@ echo '<html>
 						)
 					";
 
-				$rsID = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$rsID = $DB->Query($strSql);
 				while ($arID = $rsID->Fetch())
 				{
 					if ($arID["DIR"]=="Y") $CURRENT_DIR_ID = $arID["ID"];
@@ -1690,7 +1688,7 @@ echo '<html>
 			SELECT ID
 			FROM b_stat_referer
 			WHERE SITE_NAME = '".$DB->ForSql($SN, 255)."'
-		", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		");
 		$arReferer = $rsReferer->Fetch();
 
 		if($arReferer)

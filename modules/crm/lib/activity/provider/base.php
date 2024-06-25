@@ -808,4 +808,9 @@ class Base
 
 		return $typeListItems;
 	}
+
+	public static function getActivityTitle(array $activity): string
+	{
+		return $activity['SUBJECT'] ?? '';
+	}
 }

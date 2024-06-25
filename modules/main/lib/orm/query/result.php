@@ -296,7 +296,7 @@ class Result extends BaseResult
 
 									foreach ($this->query->getFilterChains() as $chain)
 									{
-										if (strpos($chain->getDefinition(), $currentDefinition) === 0)
+										if (str_starts_with($chain->getDefinition(), $currentDefinition))
 										{
 											$noRelationInFilter = false;
 											break;

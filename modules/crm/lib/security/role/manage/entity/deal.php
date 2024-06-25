@@ -23,7 +23,7 @@ class Deal implements PermissionEntity
 
 		foreach($dealCategoryConfigs as $typeName => $config)
 		{
-			$name = isset($config['NAME']) ? htmlspecialcharsbx($config['NAME']) : $typeName;
+			$name = isset($config['NAME']) ? $config['NAME'] : $typeName;
 
 			$fields = $this->getStageFieldsFromConfig($config);
 
@@ -45,7 +45,7 @@ class Deal implements PermissionEntity
 		$result = [];
 		foreach ($stageIdFields as $stageId => $stageName)
 		{
-			$result[htmlspecialcharsbx($stageId)] = htmlspecialcharsbx($stageName);
+			$result[htmlspecialcharsbx($stageId)] = $stageName;
 		}
 
 

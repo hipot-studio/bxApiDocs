@@ -9,6 +9,7 @@ use Bitrix\Main;
 	\COption::SetOptionString('main', 'bitrix:main.post.form:AIImage', 'Y');
 	\COption::SetOptionString('tasks', 'tasks_ai_image_available', 'N');
 	\COption::SetOptionString('socialnetwork', 'ai_base_enabled', 'N');
+	\COption::SetOptionString('fileman', 'isCopilotFeatureEnabled', 'Y');
 */
 
 final class MainPostForm extends CBitrixComponent
@@ -87,15 +88,14 @@ final class MainPostForm extends CBitrixComponent
 			return false;
 		}
 
-		if (
-			!(Main\Config\Option::get('main', 'bitrix:main.post.form:Copilot', 'N') === 'Y')
-			|| !(Main\Config\Option::get('fileman', 'isCopilotFeatureEnabled', 'N') === 'Y')
+		$engine = null;
+
+		if (Main\Config\Option::get('main', 'bitrix:main.post.form:Copilot', 'N') === 'Y'
+			&& Main\Config\Option::get('fileman', 'isCopilotFeatureEnabled', 'N') === 'Y'
 		)
 		{
-			return false;
+			$engine = AI\Engine::getByCategory(AI\Engine::CATEGORIES['text'], AI\Context::getFake());
 		}
-
-		$engine = AI\Engine::getByCategory(AI\Engine::CATEGORIES['text'], AI\Context::getFake());
 
 		return !is_null($engine);
 	}

@@ -273,7 +273,7 @@ class CCrmPerms
 		if (!empty($arRole))
 		{
 			$sSql = 'SELECT RELATION FROM b_crm_role_relation WHERE RELATION LIKE \'G%\' AND ROLE_ID IN ('.implode(',', $arRole).')';
-			$res = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+			$res = $DB->Query($sSql);
 			while($row = $res->Fetch())
 				$arResult[] = mb_substr($row['RELATION'], 1);
 		}
@@ -290,7 +290,7 @@ class CCrmPerms
 		if (!empty($arRole))
 		{
 			$sSql = 'SELECT RELATION FROM b_crm_role_relation WHERE ROLE_ID IN ('.implode(',', $arRole).')';
-			$res = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+			$res = $DB->Query($sSql);
 			while($row = $res->Fetch())
 				$arResult[] = $row['RELATION'];
 		}

@@ -13,8 +13,9 @@ use Bitrix\Crm\Activity\Provider\SignDocument;
 use Bitrix\Crm\Activity\Provider\Sms;
 use Bitrix\Crm\Activity\Provider\StoreDocument;
 use Bitrix\Crm\Activity\Provider\Tasks;
-use Bitrix\Crm\Activity\Provider\ToDo;
+use Bitrix\Crm\Activity\Provider\ToDo\ToDo;
 use Bitrix\Crm\Activity\Provider\Visit;
+use Bitrix\Crm\Activity\Provider\WhatsApp;
 use Bitrix\Crm\Activity\Provider\Zoom;
 use Bitrix\Crm\Activity\ProviderId;
 use Bitrix\Crm\Service\Timeline\Context;
@@ -120,6 +121,11 @@ class ConfigurableActivity
 				return new Item\Activity\Sms\Sms($context, $model);
 			}
 
+			if ($providerId === WhatsApp::getId())
+			{
+				return new Item\Activity\Sms\Whatsapp($context, $model);
+			}
+
 			if ($providerId === Notification::getId())
 			{
 				return new Item\Activity\Sms\Notification($context, $model);
@@ -132,7 +138,12 @@ class ConfigurableActivity
 
 			if ($providerId === ConfigurableRestApp::getId())
 			{
-				return new Item\Activity\ConfigurableRestApp($context, $model);
+				if (Item\Activity\ConfigurableRestApp::isModelValid($model))
+				{
+					return new Item\Activity\ConfigurableRestApp($context, $model);
+				}
+
+				return new Item\NotAvailable($context, $model);
 			}
 
 			if ($providerId === Tasks\Comment::getId())

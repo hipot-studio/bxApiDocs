@@ -251,8 +251,7 @@ class Update extends Operation
 			);
 		}
 
-		$factory = Container::getInstance()->getFactory($this->getItem()->getEntityTypeId());
-		if ($factory?->isStagesEnabled() && $this->wasItemMovedToFinalStage())
+		if ($this->isFinalizedWithStages())
 		{
 			MarkController::getInstance()->onItemMoveToFinalStage(
 				$this->getItemIdentifier(),
@@ -338,5 +337,12 @@ class Update extends Operation
 	protected function isClearItemCategoryCacheNeeded(): bool
 	{
 		return $this->item->isCategoriesSupported() && $this->item->isChangedCategoryId();
+	}
+
+	public function isFinalizedWithStages(): bool
+	{
+		$factory = Container::getInstance()->getFactory($this->getItem()->getEntityTypeId());
+
+		return $factory?->isStagesEnabled() && $this->wasItemMovedToFinalStage();
 	}
 }

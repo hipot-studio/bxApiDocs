@@ -1,8 +1,8 @@
 <?php
 namespace Bitrix\Crm\Entity;
 
-use Bitrix\Main;
 use Bitrix\Crm;
+use Bitrix\Main;
 use Bitrix\Ui\EntityForm\Scope;
 
 class EntityEditorConfig
@@ -565,6 +565,11 @@ class EntityEditorConfig
 		{
 			foreach ($config as $section)
 			{
+				if (!isset($section['elements']))
+				{
+					return null;
+				}
+
 				foreach ($section['elements'] as $element)
 				{
 					if ($element['name'] === $fieldName)

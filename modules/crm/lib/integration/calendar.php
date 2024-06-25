@@ -2,18 +2,18 @@
 namespace Bitrix\Crm\Integration;
 
 use Bitrix\Crm\Entity\EntityEditorConfigScope;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
-use Bitrix\Ui\EntityForm\Scope;
 
 class Calendar
 {
     public const EVENT_FIELD_NAME = 'UF_CRM_CAL_EVENT';
     public const USER_FIELD_ENTITY_ID = 'CALENDAR_EVENT';
 
-	private static
-		$isResourceBookingEnabled,
-		$fieldsMap = array();
+	private static ?bool $isResourceBookingEnabled = null;
+	private static array $fieldsMap = [];
+	private static array $calendarEvents = [];
 
 	public static function isResourceBookingEnabled()
 	{
@@ -396,5 +396,23 @@ class Calendar
 			$js = 'BX.Calendar.UserField.ResourceBooking.openExternalSettingsSlider('.\Bitrix\Main\Web\Json::encode($settingsParams).')';
 		}
 		return $js;
+	}
+
+	public static function getEvent(int $id, bool $checkPermissions = false): ?array
+	{
+		if (
+			empty(self::$calendarEvents[$id])
+			&& $id > 0
+			&& Loader::includeModule('calendar')
+		)
+		{
+			$calendarEvent = \CCalendarEvent::GetById($id, $checkPermissions);
+			if (is_array($calendarEvent))
+			{
+				self::$calendarEvents[$id] = $calendarEvent;
+			}
+		}
+
+		return self::$calendarEvents[$id] ?? null;
 	}
 }

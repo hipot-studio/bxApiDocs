@@ -24,7 +24,7 @@ class Auth
 		];
 	}
 
-	public static function getOneTimeAuthHash(int $userId = null)
+	public static function getOneTimeAuthHash(int $userId = null, int $ttl = null)
 	{
 		$path = '/mobile/';
 
@@ -42,7 +42,7 @@ class Auth
 		}
 		else
 		{
-			return \CUser::AddHitAuthHash($path, $userId, $siteId);
+			return \CUser::AddHitAuthHash($path, $userId, $siteId, $ttl);
 		}
 	}
 

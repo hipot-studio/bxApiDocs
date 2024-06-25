@@ -15,6 +15,14 @@ use CIMChat;
 
 class CheckMessageSend extends Base
 {
+	private string $actionName;
+
+	public function __construct(string $actionName)
+	{
+		parent::__construct();
+		$this->actionName = $actionName;
+	}
+
 	public function onBeforeAction(Event $event)
 	{
 		$arguments = $this->getAction()->getArguments();
@@ -55,9 +63,6 @@ class CheckMessageSend extends Base
 			return true;
 		}
 
-		$userRole = $chat->getRole();
-		$chatRole = $chat->getManageMessages();
-
-		return Chat\Permission::compareRole($userRole, $chatRole);
+		return $chat->canDo($this->actionName);
 	}
 }

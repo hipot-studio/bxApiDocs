@@ -1088,7 +1088,7 @@ class CAllCrmCompany
 			$sSql = $DB->TopSql($sSql, $nPageTop);
 		}
 
-		$obRes = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$obRes = $DB->Query($sSql);
 		$obRes->SetUserFields($USER_FIELD_MANAGER->GetUserFields(self::$sUFEntityID));
 		return $obRes;
 	}
@@ -1451,9 +1451,7 @@ class CAllCrmCompany
 				if($sUpdate <> '')
 				{
 					$DB->Query(
-						"UPDATE b_crm_company SET {$sUpdate} WHERE ID = {$ID}",
-						false,
-						'FILE: '.__FILE__.'<br /> LINE: '.__LINE__
+						"UPDATE b_crm_company SET {$sUpdate} WHERE ID = {$ID}"
 					);
 				};
 			}
@@ -2066,7 +2064,7 @@ class CAllCrmCompany
 
 			if ($sUpdate <> '')
 			{
-				$DB->Query("UPDATE b_crm_company SET {$sUpdate} WHERE ID = {$ID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+				$DB->Query("UPDATE b_crm_company SET {$sUpdate} WHERE ID = {$ID}");
 				$bResult = true;
 			}
 
@@ -2273,7 +2271,7 @@ class CAllCrmCompany
 					$hasImol !== (isset($arRow['HAS_IMOL']) ? $arRow['HAS_IMOL'] : 'N')
 				)
 				{
-					$DB->Query("UPDATE b_crm_company SET HAS_EMAIL = '{$hasEmail}', HAS_PHONE = '{$hasPhone}', HAS_IMOL = '{$hasImol}' WHERE ID = {$ID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+					$DB->Query("UPDATE b_crm_company SET HAS_EMAIL = '{$hasEmail}', HAS_PHONE = '{$hasPhone}', HAS_IMOL = '{$hasImol}' WHERE ID = {$ID}");
 
 					$arFields['HAS_EMAIL'] = $hasEmail;
 					$arFields['HAS_PHONE'] = $hasPhone;
@@ -2627,7 +2625,7 @@ class CAllCrmCompany
 			\Bitrix\Crm\Recycling\CompanyController::getInstance()->moveToBin($ID, array('FIELDS' => $arFields));
 		}
 
-		$obRes = $DB->Query("DELETE FROM b_crm_company WHERE ID = {$ID}{$sWherePerm}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$obRes = $DB->Query("DELETE FROM b_crm_company WHERE ID = {$ID}{$sWherePerm}");
 		if (is_object($obRes) && $obRes->AffectedRowsCount() > 0)
 		{
 			if(defined('BX_COMP_MANAGED_CACHE'))
@@ -3224,9 +3222,7 @@ class CAllCrmCompany
 		}
 
 		$DB->Query(
-			"UPDATE {$tableName} SET ASSIGNED_BY_ID = CREATED_BY_ID WHERE ASSIGNED_BY_ID IS NULL",
-			false,
-			'File: '.__FILE__.'<br/>Line: '.__LINE__
+			"UPDATE {$tableName} SET ASSIGNED_BY_ID = CREATED_BY_ID WHERE ASSIGNED_BY_ID IS NULL"
 		);
 
 		return true;
@@ -3391,9 +3387,7 @@ class CAllCrmCompany
 	{
 		global $DB;
 		$DB->Query(
-			"UPDATE b_crm_company SET LEAD_ID = NULL WHERE LEAD_ID = {$leadID}",
-			false,
-			'FILE: ' . __FILE__ . '<br /> LINE: ' . __LINE__
+			"UPDATE b_crm_company SET LEAD_ID = NULL WHERE LEAD_ID = {$leadID}"
 		);
 	}
 
@@ -3543,7 +3537,7 @@ class CAllCrmCompany
 			!isset($fields['HAS_IMOL']) || $fields['HAS_IMOL'] !== $hasImol
 		)
 		{
-			$DB->Query("UPDATE b_crm_company SET HAS_EMAIL = '{$hasEmail}', HAS_PHONE = '{$hasPhone}', HAS_IMOL = '{$hasImol}' WHERE ID = {$sourceID}", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+			$DB->Query("UPDATE b_crm_company SET HAS_EMAIL = '{$hasEmail}', HAS_PHONE = '{$hasPhone}', HAS_IMOL = '{$hasImol}' WHERE ID = {$sourceID}");
 		}
 	}
 

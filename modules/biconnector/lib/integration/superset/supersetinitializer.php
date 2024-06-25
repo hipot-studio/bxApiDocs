@@ -373,11 +373,17 @@ final class SupersetInitializer
 			return null;
 		}
 
-		$response = ProxyIntegrator::getInstance()->refreshDomainConnection();
-
-		if (!$response->hasErrors() && $response->getStatus() === IntegratorResponse::STATUS_OK)
+		if (
+			ProxyIntegrator::getInstance()->ping()
+			&& self::getSupersetStatus() === self::SUPERSET_STATUS_READY
+		)
 		{
-			return null;
+			$response = ProxyIntegrator::getInstance()->refreshDomainConnection();
+
+			if (!$response->hasErrors() && $response->getStatus() === IntegratorResponse::STATUS_OK)
+			{
+				return null;
+			}
 		}
 
 		$className = __CLASS__;

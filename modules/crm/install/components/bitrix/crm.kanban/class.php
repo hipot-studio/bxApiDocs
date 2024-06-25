@@ -42,6 +42,8 @@ class CrmKanbanComponent extends \CBitrixComponent
 	protected $componentParams = [];
 	protected bool $needPrepareColumns = false;
 
+	protected ?\Bitrix\Crm\Service\Context $operationContext = null;
+
 	public function onPrepareComponentParams($arParams): array
 	{
 		if (!Loader::includeModule('crm'))
@@ -644,29 +646,6 @@ class CrmKanbanComponent extends \CBitrixComponent
 	}
 
 	/**
-	 * Convert charset from utf-8 to site.
-	 * @param mixed $data
-	 * @param bool $fromUtf Direction - from (true) or to (false).
-	 * @return mixed
-	 */
-	protected function convertUtf($data, $fromUtf)
-	{
-		if (SITE_CHARSET === 'UTF-8')
-		{
-			return $data;
-		}
-
-		$from = ($fromUtf ? 'UTF-8' : SITE_CHARSET);
-		$to = (!$fromUtf ? 'UTF-8' : SITE_CHARSET);
-
-		return (
-			is_array($data)
-				? $this->application->ConvertCharsetArray($data, $from, $to)
-				: $this->application->ConvertCharset($data, $from, $to)
-		);
-	}
-
-	/**
 	 * Notify admin for get access.
 	 * @return array
 	 */
@@ -737,7 +716,7 @@ class CrmKanbanComponent extends \CBitrixComponent
 
 		if ($columnName)
 		{
-			$columnName = $this->convertUtf($this->request('columnName'), true);
+			$columnName = $this->request('columnName');
 		}
 
 		$fields = [
@@ -1103,7 +1082,7 @@ class CrmKanbanComponent extends \CBitrixComponent
 	protected function actionSaveFields(): array
 	{
 		$type = (string) $this->request('type');
-		$fields = $this->convertUtf($this->request('fields'), true);
+		$fields = $this->request('fields');
 
 		return $this->getEntity()->saveAdditionalFields($fields, $type, $this->getKanban()->canEditSettings());
 	}
@@ -1208,10 +1187,16 @@ class CrmKanbanComponent extends \CBitrixComponent
 		$ajaxParamsName = ((int) $request->getPost('version') === 2) ? 'ajaxParams' : 'status_params';
 		$newStateParams = (array)$request->getPost($ajaxParamsName);
 
+		$eventId = $request->getPost('eventId');
+		if ($eventId)
+		{
+			$newStateParams['eventId'] = $eventId;
+		}
+
 		$result = $this->getEntity()->updateItemStage(
 			$id,
 			$status,
-			$this->convertUtf($newStateParams, true),
+			$newStateParams,
 			$statuses
 		);
 		if(!$result->isSuccess())

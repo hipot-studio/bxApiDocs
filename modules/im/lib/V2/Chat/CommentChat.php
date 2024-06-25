@@ -215,11 +215,11 @@ class CommentChat extends GroupChat
 		return $folder;
 	}
 
-	protected function createRelation(int $userId, bool $hideHistory, array $managersMap): Relation
+	protected function createRelation(int $userId, bool $hideHistory, array $managersMap, Relation\Reason $reason): Relation
 	{
 		$notifyBlock = $userId !== $this->getParentMessage()->getAuthorId();
 
-		return parent::createRelation($userId, $hideHistory, $managersMap)->setLastId(0)->setNotifyBlock($notifyBlock);
+		return parent::createRelation($userId, $hideHistory, $managersMap, $reason)->setLastId(0)->setNotifyBlock($notifyBlock);
 	}
 
 	protected function getDefaultType(): string

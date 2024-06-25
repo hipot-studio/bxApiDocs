@@ -15,6 +15,7 @@ use Bitrix\Main\Component\ParameterSigner;
 use Bitrix\Main\Engine\ActionFilter\Csrf;
 use Bitrix\Main\Engine\Response\BFile;
 use Bitrix\Main\Engine\Response\Component;
+use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
@@ -133,9 +134,21 @@ class Item extends Base
 		$parameters['select'] = $select;
 		$parameters['filter'] = $this->convertKeysToUpper((array)$filter);
 		$parameters['filter'] = $this->prepareFilter($factory, $parameters['filter']);
+
+		$allowedFields = $factory->getFieldsCollection()->getFieldNameList();
+		if (!$this->validateFilter($parameters['filter'], $allowedFields))
+		{
+			return null;
+		}
+
 		if(is_array($order))
 		{
 			$parameters['order'] = $this->convertKeysToUpper($order);
+			$parameters['order'] = $this->convertValuesToUpper($parameters['order'], Converter::TO_UPPER | Converter::VALUES);
+			if (!$this->validateOrder($parameters['order'], $allowedFields))
+			{
+				return null;
+			}
 		}
 
 		if($pageNavigation)

@@ -115,7 +115,7 @@ class CUserTypeManager
 
 	public function PrepareSettings($ID, $arUserField, $bCheckUserType = true)
 	{
-		$user_type_id = $arUserField["USER_TYPE_ID"];
+		$user_type_id = $arUserField['USER_TYPE_ID'] ?? null;
 		if ($ID > 0)
 		{
 			$rsUserType = CUserTypeEntity::GetList([], ["ID" => $ID]);
@@ -145,17 +145,18 @@ class CUserTypeManager
 			}
 		}
 
-		if ($arType = $this->GetUserType($user_type_id))
+		$userType = $this->GetUserType($user_type_id);
+
+		if ($userType && is_callable([$userType['CLASS_NAME'], 'preparesettings']))
 		{
-			if (is_callable([$arType["CLASS_NAME"], "preparesettings"]))
-			{
-				return call_user_func_array([$arType["CLASS_NAME"], "preparesettings"], [$arUserField]);
-			}
+			return call_user_func_array([$userType['CLASS_NAME'], 'preparesettings'], [$arUserField]);
 		}
-		else
+
+		if (!$userType)
 		{
 			return [];
 		}
+
 		return null;
 	}
 
@@ -283,7 +284,7 @@ class CUserTypeManager
 					{
 						if ($result[$key]["MULTIPLE"] == "Y")
 						{
-							if (mb_substr($value, 0, 1) !== 'a' && $value > 0)
+							if (!str_starts_with($value, 'a') && $value > 0)
 							{
 								$value = $this->LoadMultipleValues($result[$key], $value);
 							}
@@ -376,7 +377,7 @@ class CUserTypeManager
 				}
 
 				$result[$key]["VALUE"] = $this->OnAfterFetch($result[$key], $value);
-				$result[$key]["ENTITY_VALUE_ID"] = $readyData[$primaryIdName];
+				$result[$key]["ENTITY_VALUE_ID"] = $readyData[$primaryIdName] ?? null;
 			}
 		}
 
@@ -466,7 +467,7 @@ class CUserTypeManager
 					$result = $eventResult->getParameters(); // [ENTITY_ID => 'SomeTable']
 					foreach ($result as $entityId => $entityClass)
 					{
-						if (mb_substr($entityClass, 0, 1) !== '\\')
+						if (!str_starts_with($entityClass, '\\'))
 						{
 							$entityClass = '\\' . $entityClass;
 						}
@@ -803,8 +804,8 @@ class CUserTypeManager
 				$arUserField['USER_TYPE']['BASE_TYPE'] == 'datetime'
 			)
 			{
-				$value1 = $GLOBALS['find_' . $fieldName . '_from'];
-				$value2 = $GLOBALS['find_' . $fieldName . '_to'];
+				$value1 = $GLOBALS['find_' . $fieldName . '_from'] ?? null;
+				$value2 = $GLOBALS['find_' . $fieldName . '_to'] ?? null;
 				if ($this->IsNotEmpty($value1) && \Bitrix\Main\Type\Date::isCorrect($value1))
 				{
 					$date = new \Bitrix\Main\Type\Date($value1);
@@ -950,7 +951,7 @@ class CUserTypeManager
 		}
 	}
 
-	public function AddUserFields($entity_id, $arRes, &$row)
+	public function AddUserFields($entity_id, $arRes, $row)
 	{
 		$arUserFields = $this->GetUserFields($entity_id);
 		foreach ($arUserFields as $FIELD_NAME => $arUserField)
@@ -1150,7 +1151,7 @@ class CUserTypeManager
 					return '<tr' . ($rowClass != '' ? ' class="' . $rowClass . '"' : '') . '><td class="adm-detail-valign-top">' . $strLabelHTML . '</td><td>' .
 						'<table id="table_' . $arUserField["FIELD_NAME"] . '">' . $html . '<tr><td>' . $fieldHtml . '</td></tr>' .
 						'<tr><td style="padding-top: 6px;"><input type="button" value="' . GetMessage("USER_TYPE_PROP_ADD") . '" onClick="addNewRow(\'table_' . $arUserField["FIELD_NAME"] . '\', \'' . $FIELD_NAME_X . '|' . $arUserField["FIELD_NAME"] . '|' . $arUserField["FIELD_NAME"] . '_old_id\')"></td></tr>' .
-						"<script type=\"text/javascript\">BX.addCustomEvent('onAutoSaveRestore', function(ob, data) {for (var i in data){if (i.substring(0," . (mb_strlen($arUserField['FIELD_NAME']) + 1) . ")=='" . CUtil::JSEscape($arUserField['FIELD_NAME']) . "['){" .
+						"<script>BX.addCustomEvent('onAutoSaveRestore', function(ob, data) {for (var i in data){if (i.substring(0," . (mb_strlen($arUserField['FIELD_NAME']) + 1) . ")=='" . CUtil::JSEscape($arUserField['FIELD_NAME']) . "['){" .
 						'addNewRow(\'table_' . $arUserField["FIELD_NAME"] . '\', \'' . $FIELD_NAME_X . '|' . $arUserField["FIELD_NAME"] . '|' . $arUserField["FIELD_NAME"] . '_old_id\')' .
 						"}}})</script>" .
 						'</table>' .
@@ -1167,19 +1168,22 @@ class CUserTypeManager
 		{
 			if (is_callable([$arUserField["USER_TYPE"]["CLASS_NAME"], "getfilterhtml"]))
 			{
+				$useFieldComponent = ($arUserField['USER_TYPE']['USE_FIELD_COMPONENT'] ?? false) === true;
 				$html = call_user_func_array(
 						[$arUserField["USER_TYPE"]["CLASS_NAME"], "getfilterhtml"],
 						[
 							$arUserField,
 							[
-								"NAME" => $filter_name,
-								"VALUE" => htmlspecialcharsex($filter_value),
+								'NAME' => $filter_name,
+								'VALUE' => ($useFieldComponent ? $filter_value : htmlspecialcharsEx($filter_value)),
 							],
 						]
 					) . CAdminCalendar::ShowScript();
+
 				return '<tr><td>' . htmlspecialcharsbx($arUserField["LIST_FILTER_LABEL"] ?: $arUserField["FIELD_NAME"]) . ':</td><td>' . $html . '</td></tr>';
 			}
 		}
+
 		return '';
 	}
 

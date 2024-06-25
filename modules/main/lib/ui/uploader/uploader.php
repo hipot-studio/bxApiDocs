@@ -297,7 +297,7 @@ class Uploader
 			function(&$v, $k) {
 				if ($k == "error")
 				{
-					$v = preg_replace("/<(.+?)>/is".BX_UTF_PCRE_MODIFIER, "", $v);
+					$v = preg_replace("/<(.+?)>/isu", "", $v);
 				}
 			}
 		);

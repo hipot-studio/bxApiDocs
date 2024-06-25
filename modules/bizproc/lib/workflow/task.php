@@ -3,6 +3,7 @@
 namespace Bitrix\Bizproc\Workflow;
 
 use Bitrix\Bizproc\Workflow\Task\EO_Task;
+use Bitrix\Bizproc\Workflow\Task\EO_TaskUser;
 
 class Task extends EO_Task
 {
@@ -61,17 +62,22 @@ class Task extends EO_Task
 		return $this->isResponsibleForTask($userId);
 	}
 
-	public function isResponsibleForTask(int $userId): bool
+	public function getTaskUserById(int $userId): ?EO_TaskUser
 	{
 		foreach ($this->getTaskUsers() as $taskUser)
 		{
 			if ($taskUser->getUserId() === $userId)
 			{
-				return true;
+				return $taskUser;
 			}
 		}
 
-		return false;
+		return null;
+	}
+
+	public function isResponsibleForTask(int $userId): bool
+	{
+		return $this->getTaskUserById($userId) !== null;
 	}
 
 	public function isInline(): bool

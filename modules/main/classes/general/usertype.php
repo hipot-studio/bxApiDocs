@@ -16,6 +16,9 @@
  * @todo Добавить подсказку
  */
 
+use Bitrix\Main\UserFieldTable;
+use Bitrix\Main\UserFieldLangTable;
+
 IncludeModuleLangFile(__FILE__);
 
 /**
@@ -567,6 +570,9 @@ class CAllUserTypeEntity extends CDBResult
 				$arInsert = $DB->PrepareInsert("b_user_field_lang", $arLangFields);
 				$DB->Query("INSERT INTO b_user_field_lang (".$arInsert[0].") VALUES (".$arInsert[1].")");
 			}
+
+			UserFieldTable::cleanCache();
+			UserFieldLangTable::cleanCache();
 		}
 
 		// post event
@@ -672,7 +678,7 @@ class CAllUserTypeEntity extends CDBResult
 		$arLangs = array();
 		foreach($arLabels as $label)
 		{
-			if(is_array($arFields[$label]))
+			if (isset($arFields[$label]) && is_array($arFields[$label]))
 			{
 				foreach($arFields[$label] as $lang => $value)
 				{
@@ -710,6 +716,9 @@ class CAllUserTypeEntity extends CDBResult
 					$DB->Query("INSERT INTO b_user_field_lang (".$arInsert[0].") VALUES (".$arInsert[1].")");
 					}
 			}
+
+			UserFieldTable::cleanCache();
+			UserFieldLangTable::cleanCache();
 
 			foreach(GetModuleEvents("main", "OnAfterUserTypeUpdate", true) as $arEvent)
 			{
@@ -824,6 +833,9 @@ class CAllUserTypeEntity extends CDBResult
 				}
 			}
 
+			UserFieldTable::cleanCache();
+			UserFieldLangTable::cleanCache();
+
 			foreach(GetModuleEvents("main", "OnAfterUserTypeDelete", true) as $arEvent)
 			{
 				ExecuteModuleEventEx($arEvent, array($arField, $ID));
@@ -879,6 +891,9 @@ class CAllUserTypeEntity extends CDBResult
 
 		if(is_object($USER_FIELD_MANAGER))
 			$USER_FIELD_MANAGER->CleanCache();
+
+		UserFieldTable::cleanCache();
+		UserFieldLangTable::cleanCache();
 
 		return $rs;
 	}

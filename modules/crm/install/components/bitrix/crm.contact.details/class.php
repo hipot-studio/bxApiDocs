@@ -915,7 +915,11 @@ class CCrmContactDetailsComponent
 				'type' => 'text',
 				'editable' => true
 			),
-			Crm\Entity\CommentsHelper::compileFieldDescriptionForDetails(\CCrmOwnerType::Contact, 'COMMENTS'),
+			Crm\Entity\CommentsHelper::compileFieldDescriptionForDetails(
+				\CCrmOwnerType::Contact,
+				'COMMENTS',
+				$this->entityID,
+			),
 			array(
 				'name' => 'ASSIGNED_BY_ID',
 				'title' => Loc::getMessage('CRM_CONTACT_FIELD_ASSIGNED_BY_ID'),

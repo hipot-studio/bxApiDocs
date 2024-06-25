@@ -6,7 +6,7 @@ use Bitrix\Intranet\CurrentUser;
 
 abstract class Base
 {
-	protected ?int $headId;
+	protected ?int $headId = null;
 
 	public function __construct(private string $code)
 	{

@@ -76,7 +76,7 @@ class StringType extends BaseType
 			'REGEXP' => $regExp,
 			'MIN_LENGTH' => $min,
 			'MAX_LENGTH' => $max,
-			'DEFAULT_VALUE' => is_array($userField['SETTINGS']) ? $userField['SETTINGS']['DEFAULT_VALUE'] : '',
+			'DEFAULT_VALUE' => is_array($userField['SETTINGS']) ? ($userField['SETTINGS']['DEFAULT_VALUE'] ?? '') : '',
 		];
 	}
 

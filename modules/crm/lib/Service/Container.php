@@ -2,7 +2,9 @@
 
 namespace Bitrix\Crm\Service;
 
+use Bitrix\Crm\AutomatedSolution\AutomatedSolutionManager;
 use Bitrix\Crm\Badge\Badge;
+use Bitrix\Crm\Binding\ClientBinder;
 use Bitrix\Crm\Conversion;
 use Bitrix\Crm\FieldContext\ContextManager;
 use Bitrix\Crm\Filter;
@@ -15,19 +17,18 @@ use Bitrix\Crm\Relation\RelationManager;
 use Bitrix\Crm\Service\Factory\Dynamic;
 use Bitrix\Crm\Service\Sale\Shipment\ProductService;
 use Bitrix\Crm\Service\Sale\Terminal\PaymentService;
-use Bitrix\Crm\Service\Sign\B2e\TypeService;
-use Bitrix\Crm\Summary\SummaryFactory;
 use Bitrix\Crm\Service\Sign\B2e\ItemService;
 use Bitrix\Crm\Service\Sign\B2e\LanguageService;
 use Bitrix\Crm\Service\Sign\B2e\StageService;
 use Bitrix\Crm\Service\Sign\B2e\StatusService;
 use Bitrix\Crm\Service\Sign\B2e\TriggerService;
+use Bitrix\Crm\Service\Sign\B2e\TypeService;
+use Bitrix\Crm\Summary\SummaryFactory;
 use Bitrix\Crm\Timeline;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Loader;
-use Bitrix\Crm\AutomatedSolution\AutomatedSolutionManager;
 
 class Container
 {
@@ -315,6 +316,11 @@ class Container
 	public function getCategoryConverter(): Converter\Category
 	{
 		return ServiceLocator::getInstance()->get('crm.service.converter.category');
+	}
+
+	public function getAutomatedSolutionConverter(): Converter\AutomatedSolution
+	{
+		return ServiceLocator::getInstance()->get('crm.service.converter.automatedSolution');
 	}
 
 	public function getEntityBroker(int $entityTypeId): ?Broker
@@ -615,5 +621,10 @@ class Container
 	public function getSignB2eStatusService(): StatusService
 	{
 		return ServiceLocator::getInstance()->get('crm.service.sign.b2e.status');
+	}
+
+	public function getClientBinder(): ClientBinder
+	{
+		return ServiceLocator::getInstance()->get('crm.binding.clientBinder');
 	}
 }

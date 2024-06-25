@@ -1,4 +1,4 @@
-<?
+<?php
 namespace Bitrix\Intranet\Controller;
 
 use Bitrix\Main\Error;
@@ -18,7 +18,7 @@ class Invite extends Main\Engine\Controller
 	{
 		$preFilters = parent::getDefaultPreFilters();
 		$preFilters[] = new Intranet\ActionFilter\UserType(['employee', 'extranet']);
-		$preFilters[] = new Intranet\ActionFilter\InviteAccessControl();
+		$preFilters[] = new Intranet\ActionFilter\InviteIntranetAccessControl();
 
 		return $preFilters;
 	}

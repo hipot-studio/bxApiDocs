@@ -23,6 +23,8 @@ class GeneralChat extends GroupChat
 	public const MANAGERS_CACHE_ID = 'general_chat_managers';
 	public const DISABLE_GENERAL_CHAT_OPTION = 'disable_general_chat';
 
+	private const MESSAGE_COMPONENT_START = 'GeneralChatCreationMessage';
+
 	protected static ?self $instance = null;
 	protected static bool $wasSearched = false;
 	protected static Result $resultFind;
@@ -130,11 +132,11 @@ class GeneralChat extends GroupChat
 			->fetch() ?: []
 		;
 
-		$chatId = $result['ID'] ?? null;
+		$chatId = $result['ID'] ?? 0;
 		$cache->startDataCache();
 		$cache->endDataCache($chatId);
 
-		return $chatId ?? 0;
+		return $chatId;
 	}
 
 	public function setManagers(array $managerIds): Chat
@@ -202,8 +204,8 @@ class GeneralChat extends GroupChat
 			'ENTITY_TYPE' => self::ENTITY_TYPE_GENERAL,
 			'COLOR' => 'AZURE',
 			'TITLE' => Loc::getMessage('IM_CHAT_GENERAL_TITLE'),
-			'DESCRIPTION' => Loc::getMessage('IM_CHAT_GENERAL_DESCRIPTION'),
-			'AUTHOR_ID' => 0,
+			'DESCRIPTION' => Loc::getMessage('IM_CHAT_GENERAL_DESCRIPTION_MSGVER_1'),
+			'AUTHOR_ID' => User::getFirstAdmin(),
 			'USER_COUNT' => count($installUsers),
 		];
 
@@ -387,11 +389,11 @@ class GeneralChat extends GroupChat
 			'MESSAGE_TYPE' => self::IM_TYPE_CHAT,
 			'TO_CHAT_ID' => $this->getChatId(),
 			'FROM_USER_ID' => 0,
-			'MESSAGE' => Loc::getMessage('IM_CHAT_GENERAL_DESCRIPTION'),
+			'MESSAGE' => Loc::getMessage('IM_CHAT_GENERAL_CREATE_WELCOME'),
 			'SYSTEM' => 'Y',
 			'PUSH' => 'N',
 			'PARAMS' => [
-				'COMPONENT_ID' => 'ChatCreationMessage',
+				'COMPONENT_ID' => self::MESSAGE_COMPONENT_START,
 				'NOTIFY' => 'N',
 			],
 			'SKIP_COUNTER_INCREMENTS' => 'Y',

@@ -726,7 +726,7 @@ class CCloudStorage
 		$arFilters = $arResizeParams[4];
 
 		$from_path = $io->GetLogicalName($tmpFile["tmp_name"]);
-		$to_path = \Bitrix\Main\Text\Encoding::convertEncoding(rawurldecode($task["TO_PATH"]), "UTF-8", LANG_CHARSET);
+		$to_path = rawurldecode($task["TO_PATH"]);
 		$to_path = CFile::GetTempName('', bx_basename($to_path));
 
 		if (!CFile::ResizeImageFile($from_path, $to_path, $arSize, $resizeType, $arWaterMark, $jpgQuality, $arFilters))
@@ -753,7 +753,7 @@ class CCloudStorage
 
 		$baseURL = preg_replace("/^https?:/i", "", $obBucket->GetFileSRC("/"));
 		$pathToStore = mb_substr($task["TO_PATH"], mb_strlen($baseURL) - 1);
-		$pathToStore = \Bitrix\Main\Text\Encoding::convertEncoding(rawurldecode($pathToStore), "UTF-8", LANG_CHARSET);
+		$pathToStore = rawurldecode($pathToStore);
 		if (!$obBucket->SaveFile($pathToStore, $fileToStore))
 		{
 			$DB->Query("
@@ -788,7 +788,7 @@ class CCloudStorage
 				return false;
 
 			$filePath = mb_substr($file, mb_strlen($bucket->GetFileSRC("/")) - 1);
-			$filePath = \Bitrix\Main\Text\Encoding::convertEncoding(rawurldecode($filePath), "UTF-8", LANG_CHARSET);
+			$filePath = rawurldecode($filePath);
 
 			$io = CBXVirtualIo::GetInstance();
 			$target = CFile::GetTempName('', bx_basename($filePath));
@@ -1699,7 +1699,7 @@ class CCloudStorage
 		if (defined("BX_CHECK_SHORT_URI") && BX_CHECK_SHORT_URI)
 		{
 			$upload_dir = "/".trim(COption::GetOptionString("main", "upload_dir", "upload"), "/")."/";
-			$request_uri = \Bitrix\Main\Text\Encoding::convertEncoding(rawurldecode($_SERVER["REQUEST_URI"]), "UTF-8", LANG_CHARSET);
+			$request_uri = rawurldecode($_SERVER["REQUEST_URI"]);
 
 			foreach (CCloudStorageBucket::GetAllBuckets() as $arBucket)
 			{

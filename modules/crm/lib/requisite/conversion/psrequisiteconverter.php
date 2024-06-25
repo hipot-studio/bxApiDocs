@@ -1387,7 +1387,7 @@ class PSRequisiteConverter
 						$fields[$rqName] = $rqValue;
 					}
 				}
-				$result = $requisite->add($fields);
+				$result = $requisite->add($fields, ['DISABLE_REQUIRED_USER_FIELD_CHECK' => true]);
 				if ($result->isSuccess())
 					$requisiteId = $result->getId();
 			}
@@ -1440,7 +1440,7 @@ class PSRequisiteConverter
 				);
 				foreach ($info['BD'] as $bdName => $bdValue)
 					$fields[$bdName] = $bdValue;
-				$result = $bankDetail->add($fields);
+				$result = $bankDetail->add($fields, ['DISABLE_REQUIRED_USER_FIELD_CHECK' => true]);
 				if ($result->isSuccess())
 					$bankDetailId = $result->getId();
 			}

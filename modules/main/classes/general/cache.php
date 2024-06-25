@@ -133,7 +133,7 @@ class CPHPCache
 						$res = false;
 					}
 				}
-				elseif (mb_substr($file, -5) == ".html")
+				elseif (str_ends_with($file, ".html"))
 				{
 					$obCache = new CPHPCache();
 					if ($obCache->IsCacheExpired($path . "/" . $file))
@@ -145,7 +145,7 @@ class CPHPCache
 						}
 					}
 				}
-				elseif (mb_substr($file, -4) == ".php")
+				elseif (str_ends_with($file, ".php"))
 				{
 					$obCache = new CPHPCache();
 					if ($obCache->IsCacheExpired($path . "/" . $file))

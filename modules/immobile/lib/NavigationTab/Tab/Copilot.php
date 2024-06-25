@@ -12,7 +12,7 @@ class Copilot extends BaseRecent
 	
 	public function isAvailable(): bool
 	{
-		return CopilotChat::isAvailable() && $this->isCopilotMobileEnabled();
+		return CopilotChat::isAvailable();
 	}
 	
 	protected function getParams(): array
@@ -56,10 +56,5 @@ class Copilot extends BaseRecent
 	protected function getComponentName(): string
 	{
 		return 'im:copilot-messenger';
-	}
-	
-	private function isCopilotMobileEnabled(): bool
-	{
-		return Option::get('immobile', 'copilot_mobile_chat_enabled', 'N') === 'Y';
 	}
 }

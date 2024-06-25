@@ -10,6 +10,9 @@ use Bitrix\Mail;
 use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Mail\MailServicesTable;
+use Bitrix\Main\Mail\Internal\SenderTable;
+use Bitrix\Main\Mail\Sender\UserSenderDataProvider;
+use Bitrix\Main\Engine\CurrentUser;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
@@ -21,6 +24,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 {
 	private const NEGATIVE_ANSWER = 'N';
 	private const POSITIVE_ANSWER = 'Y';
+	private const DEFAULT_SEND_LIMIT = 250;
 
 	public function configureActions()
 	{
@@ -66,7 +70,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		$this->arResult['MAX_ALLOWED_CONNECTED_MAILBOXES'] = LicenseManager::getUserMailboxesLimit();
 		$this->arResult['CAN_CONNECT_NEW_MAILBOX'] = MailboxConnector::canConnectNewMailbox();
-		$this->arParams['SERVICES'] = self::prepareMailServices();
+		$this->arParams['DEFAULT_SEND_LIMIT'] = self::DEFAULT_SEND_LIMIT;
 
 		$this->includeComponentTemplate();
 	}
@@ -123,20 +127,36 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 			if ($this->arParams['IS_SMTP_AVAILABLE'])
 			{
-				$res = Main\Mail\Internal\SenderTable::getList(array(
-					'filter' => array(
-						'IS_CONFIRMED' => true,
-						'=EMAIL' => $mailbox['EMAIL'],
-					),
-					'order' => array(
-						'ID' => 'DESC',
-					),
-				));
-				while ($item = $res->fetch())
+				$senders = SenderTable::query()
+					->setSelect(['ID', 'PARENT_MODULE_ID', 'OPTIONS'])
+					->where('IS_CONFIRMED', true)
+					->where('EMAIL', $mailbox['EMAIL'])
+					->where('USER_ID', $mailbox['USER_ID'])
+					->fetchAll()
+				;
+
+				foreach ($senders as $sender)
 				{
-					if (!empty($item['OPTIONS']['smtp']['server']) && empty($item['OPTIONS']['smtp']['encrypted']))
+					if (
+						(!empty($sender['OPTIONS']['smtp']['server']) && empty($sender['OPTIONS']['smtp']['encrypted']))
+						&& (
+							$sender['PARENT_MODULE_ID'] === 'mail'
+							|| ($sender['OPTIONS']['source'] === 'mail.client.config')
+						)
+					)
 					{
-						$mailbox['__smtp'] = $item['OPTIONS']['smtp'];
+						if ($sender['PARENT_MODULE_ID'] !== 'mail')
+						{
+							SenderTable::update(
+								$sender['ID'],
+								[
+									'PARENT_MODULE_ID' => 'mail',
+									'PARENT_ID' => $mailbox['ID']
+								]
+							);
+						}
+
+						$mailbox['__smtp'] = $sender['OPTIONS']['smtp'];
 						break;
 					}
 				}
@@ -399,6 +419,14 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		$this->arResult['MICROSOFT_SERVICE_NAMES'] = $this->getMicrosoftServiceNames();
 
+		$this->arResult['IS_SMTP_SENDER_ADDED'] = ($_REQUEST['smtp'] ?? '') === 'Y';
+		$this->arResult['LOCK_SMTP'] = $this->isSmtpSwitcherDisabled();
+
+		$this->arParams['DEFAULT_SEND_LIMIT'] = self::DEFAULT_SEND_LIMIT;
+
+		$this->arParams['SERVICE']['IS_SMTP_SWITCHER_CHECKED'] = $this->arResult['LOCK_SMTP'] === true || $this->isSmtpSwitcherChecked();
+		$this->arParams['SENDER_NAME'] =  $this->getSenderName($mailbox['USERNAME'] ?? '', $mailbox['USER_ID'] ?? null);
+
 		$this->includeComponentTemplate('edit');
 	}
 
@@ -407,8 +435,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		$service = Mail\MailServicesTable::getList(array(
 			'filter' => array(
 				'=ID'          => $serviceId,
-				'ACTIVE'       => 'Y',
-				'SERVICE_TYPE' => 'imap',
+				'=ACTIVE'       => 'Y',
+				'=SERVICE_TYPE' => 'imap',
 			),
 		))->fetch();
 
@@ -464,7 +492,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			$service = Mail\MailServicesTable::getList(array(
 				'filter' => array(
 					'=ID'          => $fields['service_id'],
-					'SERVICE_TYPE' => 'imap',
+					'=SERVICE_TYPE' => 'imap',
 				),
 			))->fetch();
 		}
@@ -555,6 +583,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 				'USERNAME' => trim($fields['sender']),
 				'LOGIN'    => $mailbox['LOGIN'],
 				'PASSWORD' => $mailbox['PASSWORD'],
+				'USER_ID' => $mailbox['USER_ID'],
 				'PERIOD_CHECK' => 60 * 24,
 				'OPTIONS'  => (array) $mailbox['OPTIONS'],
 			);
@@ -720,72 +749,68 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		if ($this->arParams['IS_SMTP_AVAILABLE'] && !$useSmtp && !empty($mailbox))
 		{
-			$res = Main\Mail\Internal\SenderTable::getList(array(
-				'filter' => array(
-					'IS_CONFIRMED' => true,
-					'=EMAIL' => $mailboxData['EMAIL'],
-				),
-			));
-			while ($item = $res->fetch())
-			{
-				if (!empty($item['OPTIONS']['smtp']['server']))
-				{
-					unset($item['OPTIONS']['smtp']);
-					Main\Mail\Internal\SenderTable::update(
-						$item['ID'],
-						array(
-							'OPTIONS' => $item['OPTIONS'],
-						)
-					);
-				}
-			}
-
-			Main\Mail\Sender::clearCustomSmtpCache($mailboxData['EMAIL']);
+			self::deleteMailboxSender((int)$fields['mailbox_id'], $mailboxData['EMAIL']);
 		}
 
-		if ($this->arParams['IS_SMTP_AVAILABLE'] && $useSmtp)
-		{
-			$senderFields = array(
+		$senderFields = [];
+		if ($this->arParams['IS_SMTP_AVAILABLE'] && $useSmtp) {
+			$senderFields =[
 				'NAME' => $mailboxData['USERNAME'],
 				'EMAIL' => $mailboxData['EMAIL'],
-				'USER_ID' => $USER->getId(),
+				'USER_ID' => $mailboxData['USER_ID'] ?? CurrentUser::get()->getId(),
 				'IS_CONFIRMED' => false,
 				'IS_PUBLIC' => false,
-				'OPTIONS' => array(
-					'source' => 'mail.client.config',
-				),
-			);
+			];
 
-			$res = Main\Mail\Internal\SenderTable::getList(array(
-				'filter' => array(
-					'IS_CONFIRMED' => true,
-					'=EMAIL' => $mailboxData['EMAIL'],
-				),
-				'order' => array(
-					'ID' => 'DESC',
-				),
-			));
-			while ($item = $res->fetch())
+			$mailboxSender = SenderTable::query()
+				->setSelect(['ID', 'OPTIONS'])
+				->where('IS_CONFIRMED', true)
+				->where('EMAIL', $mailboxData['EMAIL'])
+				->where('PARENT_MODULE_ID', 'mail')
+				->where('PARENT_ID', $fields['mailbox_id'])
+				->setLimit(1)
+				->fetchObject()
+			;
+
+			if($mailboxSender)
 			{
-				if (empty($smtpConfirmed))
-				{
-					if (!empty($item['OPTIONS']['smtp']['server']) && empty($item['OPTIONS']['smtp']['encrypted']))
-					{
-						$smtpConfirmed = $item['OPTIONS']['smtp'];
+				$senderFields['ID'] = $mailboxSender['ID'];
+				$smtpConfirmed = $mailboxSender['OPTIONS']['smtp'];
+			}
+			else
+			{
+				$mailboxSenders = SenderTable::query()
+					->setSelect(['ID', 'OPTIONS'])
+					->where('IS_CONFIRMED', true)
+					->where('EMAIL', $mailbox['EMAIL'])
+					->where('USER_ID', $mailbox['USER_ID'])
+					->fetchAll()
+				;
+
+				foreach ($mailboxSenders as $sender) {
+					if (!empty($sender['OPTIONS']['smtp']['server']) && empty($sender['OPTIONS']['smtp']['encrypted'])) {
+						$smtpConfirmed = $sender['OPTIONS']['smtp'];
 					}
-				}
 
-				if ($senderFields['USER_ID'] == $item['USER_ID'] && $senderFields['NAME'] == $item['NAME'])
-				{
-					$senderFields = $item;
-					$senderFields['IS_CONFIRMED'] = false;
-					$senderFields['OPTIONS']['__replaces'] = $item['ID'];
+					if ($sender['OPTIONS']['source'] === 'mail.client.config') {
+						SenderTable::update(
+							$sender['ID'],
+							[
+								'PARENT_MODULE_ID' => 'mail',
+								'PARENT_ID' => $mailbox['ID']
+							]
+						);
 
-					unset($senderFields['ID']);
+						$senderFields = $sender;
+						$senderFields['IS_CONFIRMED'] = false;
+						$senderFields['OPTIONS']['__replaces'] = $sender['ID'];
 
-					if (!empty($smtpConfirmed))
-					{
-						break;
+						unset($senderFields['ID']);
+
+						if (!empty($smtpConfirmed))
+						{
+							break;
+						}
 					}
 				}
 			}
@@ -793,12 +818,28 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		if (!empty($senderFields))
 		{
+			// don't check the sender name if it has not changed or is equal to the username
+			if (
+				!empty($senderFields['NAME'])
+				&& $senderFields['NAME'] !== $this->getSenderName($mailbox['USERNAME'] ?? '', $mailbox['USER_ID'] ?? null)
+			)
+			{
+				$checkResult = Main\Mail\Sender::checkSenderNameCharacters((string)$senderFields['NAME']);
+				if (!$checkResult->isSuccess())
+				{
+					$this->error($checkResult->getErrorMessages()[0]);
+
+					return null;
+				}
+			}
+
 			$smtpConfig = array(
 				'server'   => $service['SMTP_SERVER'] ?: trim($fields['server_smtp']),
 				'port'     => $service['SMTP_PORT'] ?: (int) $fields['port_smtp'],
 				'protocol' => ('Y' == ($service['SMTP_ENCRYPTION'] ?: $fields['ssl_smtp']) ? 'smtps' : 'smtp'),
 				'login'    => $service['SMTP_LOGIN_AS_IMAP'] == 'Y' ? $mailboxData['LOGIN'] : $fields['login_smtp'],
 				'password' => '',
+				'limit' => $fields['use_limit_smtp'] === 'Y' ? max((int)($fields['limit_smtp'] ?? 0), 0) : null,
 			);
 
 			if (!empty($smtpConfirmed) && is_array($smtpConfirmed))
@@ -971,24 +1012,6 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			}
 		}
 
-		if (!empty($senderFields) && empty($senderFields['IS_CONFIRMED']))
-		{
-			$result = MailboxConnector::appendSender($senderFields, (string)($fields['user_principal_name'] ?? ''));
-
-			if (!empty($result['errors']) && $result['errors'] instanceof Main\ErrorCollection)
-			{
-				return $this->error($result['errors'], $isOAuth, true);
-			}
-			else if (!empty($result['error']))
-			{
-				return $this->error($result['error'], $isOAuth, true);
-			}
-			else if (empty($result['confirmed']))
-			{
-				return $this->error('MAIL_CLIENT_CONFIG_SMTP_CONFIRM');
-			}
-		}
-
 		if (Main\Loader::includeModule('calendar'))
 		{
 			if (!isset($fields['ical_access']))
@@ -1027,6 +1050,40 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		if (!($result > 0))
 		{
 			return $this->error(Loc::getMessage('MAIL_CLIENT_SAVE_ERROR'));
+		}
+
+		if (!empty($senderFields))
+		{
+			$result = [];
+			if (!empty($senderFields['ID']))
+			{
+				$updateResult = Main\Mail\Sender::updateSender($senderFields['ID'], $senderFields);
+				if ($updateResult->isSuccess())
+				{
+					$result['confirmed'] = true;
+				}
+				else
+				{
+					$result['errors'] = $updateResult->getErrorCollection();
+				}
+			}
+			else
+			{
+				$result = MailboxConnector::appendSender($senderFields, (string)($fields['user_principal_name'] ?? ''), (int)$mailboxId);
+			}
+
+			if (!empty($result['errors']) && $result['errors'] instanceof Main\ErrorCollection)
+			{
+				return $this->error($result['errors'], $isSmtpOauthEnabled, true);
+			}
+			else if (!empty($result['error']))
+			{
+				return $this->error($result['error'], $isSmtpOauthEnabled, true);
+			}
+			else if (empty($result['confirmed']))
+			{
+				return $this->error('MAIL_CLIENT_CONFIG_SMTP_CONFIRM', $isSmtpOauthEnabled, true);
+			}
 		}
 
 		$entity = Mail\Internals\MailboxAccessTable::getEntity();
@@ -1128,7 +1185,22 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			// @TODO: process old messages
 		}
 
-		return ['id' => $mailboxId];
+		if (
+			!empty($senderFields)
+			&& strlen($senderFields['EMAIL'] ?? '') > 0
+		)
+		{
+			$senderName = UserSenderDataProvider::getAddressInEmailAngleFormat(
+				email:$senderFields['EMAIL'],
+				senderName: $senderFields['NAME'],
+				userId: $senderFields['USER_ID'],
+			);
+		}
+
+		return [
+			'id' => $mailboxId,
+			'senderName' => $senderName ?? null,
+		];
 	}
 
 	public function deleteAction($id)
@@ -1154,6 +1226,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		}
 
 		\CMailbox::update($mailbox['ID'], array('ACTIVE' => 'N'));
+		self::deleteMailboxSender((int)$mailbox['ID'], $mailbox['EMAIL']);
 
 		\CUserCounter::clear($USER->getId(), 'mail_unseen', $mailbox['LID']);
 		$mailboxSyncManager = new \Bitrix\Mail\Helper\Mailbox\MailboxSyncManager($mailbox['USER_ID']);
@@ -1251,19 +1324,23 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 	 * @param array|null $mailboxes
 	 * @return array
 	 */
-	private static function prepareMailServices(array $mailboxes = null): array
+	private static function prepareMailServices(?array $mailboxes = null): array
 	{
 		$mailboxes = $mailboxes ?? Mailbox::getServices();
 
 		foreach ($mailboxes as &$mailbox)
 		{
-			$mailbox['serviceName'] = match ($mailbox['name'])
-			{
-				'icloud' => 'iCloud',
+			$mailbox['serviceName'] = match ($mailbox['name']) {
+				'aol' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_AOL'),
+				'yahoo' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_YAHOO'),
+				'icloud' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_ICLOUD'),
+				'gmail' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_GMAIL'),
 				'yandex' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_YANDEX'),
-				'outlook.com' => 'Outlook',
-				'exchangeOnline' => 'Exchange',
-				'other' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_IMAP'),
+				'outlook.com' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_OUTLOOK'),
+				'exchange', 'exchangeOnline' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_EXCHANGE'),
+				'mail.ru' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_MAILRU'),
+				'office365' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_OFFICE365'),
+				'other' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_IMAP_MSGVER_1'),
 				default => ucfirst($mailbox['name']),
 			};
 		}
@@ -1271,9 +1348,53 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		return $mailboxes;
 	}
 
+	private function isSmtpSwitcherChecked(): bool
+	{
+		$excludedServices = $this->getMicrosoftServiceNames();
+		$mailbox = $this->arParams['MAILBOX'] ?? [];
+		$service = $this->arParams['SERVICE'] ?? [];
+
+		if (!empty($mailbox['__smtp']))
+		{
+			return true;
+		}
+
+		if (!empty($mailbox))
+		{
+			return false;
+		}
+
+		return !in_array($service['name'] ?? null, $excludedServices, true);
+	}
+
+	private function isSmtpSwitcherDisabled(): bool
+	{
+
+		if (!empty($this->arParams['MAILBOX']) && !$this->isSmtpSwitcherChecked())
+		{
+			return false;
+		}
+
+		if ($this->arResult['IS_SMTP_SENDER_ADDED'] ?? false)
+		{
+			return true;
+		}
+
+		if (
+			isset($this->arParams['SERVICE']['oauth_smtp_enabled'])
+			&& $this->arParams['SERVICE']['oauth_smtp_enabled'] === true
+			&& $this->isNotMicrosoftService($this->arParams['SERVICE'] ?? [])
+		)
+		{
+			return true;
+		}
+
+		return false;
+	}
+
 	private function isNotMicrosoftService(?array $service): bool
 	{
-		$serviceName = $service['NAME'] ?? null;
+		$serviceName = $service['NAME'] ?? $service['name'] ?? null;
 
 		return !in_array($serviceName, $this->getMicrosoftServiceNames(), true);
 	}
@@ -1285,6 +1406,35 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			'exchangeOnline',
 			'outlook.com',
 		];
+	}
+
+	private function getSenderName(string $name, ?int $userId = null): string
+	{
+		if (strlen($name) > 0)
+		{
+			return $name;
+		}
+
+		return Sender\UserSenderDataProvider::getUserFormattedName($userId) ?? '';
+	}
+
+	private static function deleteMailboxSender(int $mailboxId, string $email): void
+	{
+		$sender = SenderTable::query()
+			->setSelect(['ID'])
+			->where('IS_CONFIRMED', true)
+			->where('PARENT_MODULE_ID', 'mail')
+			->where('EMAIL', $email)
+			->where('PARENT_ID', $mailboxId)
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		if ($sender)
+		{
+			Main\Mail\Sender::delete([$sender['ID']]);
+			Main\Mail\Sender::clearCustomSmtpCache($email);
+		}
 	}
 
 	private function isSmtpInvalid(array $fields, string $principalName, bool $isOAuth): bool

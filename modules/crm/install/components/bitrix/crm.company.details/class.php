@@ -973,7 +973,11 @@ class CCrmCompanyDetailsComponent
 					"formattedWithCurrency" => "FORMATTED_REVENUE_WITH_CURRENCY"
 				)
 			),
-			Crm\Entity\CommentsHelper::compileFieldDescriptionForDetails(\CCrmOwnerType::Company, 'COMMENTS'),
+			Crm\Entity\CommentsHelper::compileFieldDescriptionForDetails(
+				\CCrmOwnerType::Company,
+				'COMMENTS',
+				$this->entityID,
+			),
 			array(
 				'name' => 'OPENED',
 				'title' => Loc::getMessage('CRM_COMPANY_FIELD_OPENED'),

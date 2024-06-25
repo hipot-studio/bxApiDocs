@@ -347,44 +347,48 @@ class CAllSQLWhere
 						$this->c_joins[$key] = 0;
 					}
 					$this->c_joins[$key]++;
-					if(
-						(
-							($operation=="I" || $operation=="E" || $operation=="S" || $operation=="M")
-							&& (
-								is_scalar($value)
+
+					if (!empty($this->fields[$key]["TABLE_ALIAS"]))
+					{
+						if(
+							(
+								($operation=="I" || $operation=="E" || $operation=="S" || $operation=="M")
 								&& (
-									($FIELD_TYPE=="int" && intval($value)==0)
-									|| ($FIELD_TYPE=="double" && doubleval($value)==0)
-									|| $value == ''
+									is_scalar($value)
+									&& (
+										($FIELD_TYPE=="int" && intval($value)==0)
+										|| ($FIELD_TYPE=="double" && doubleval($value)==0)
+										|| $value == ''
+									)
+								)
+							)
+							||
+							(
+								($operation=="NI" || $operation=="N" || $operation=="NS" || $operation=="NB" || $operation=="NM")
+								&& !is_object($value)
+								&& (
+									is_array($value)
+									|| (
+										($FIELD_TYPE=="int" && intval($value)!=0)
+										|| ($FIELD_TYPE=="double" && doubleval($value)!=0)
+										|| ($FIELD_TYPE!="int" && $FIELD_TYPE!="double" && is_scalar($value) && $value <> '')
+									)
 								)
 							)
 						)
-						||
-						(
-							($operation=="NI" || $operation=="N" || $operation=="NS" || $operation=="NB" || $operation=="NM")
-							&& !is_object($value)
-							&& (
-								is_array($value)
-								|| (
-									($FIELD_TYPE=="int" && intval($value)!=0)
-									|| ($FIELD_TYPE=="double" && doubleval($value)!=0)
-									|| ($FIELD_TYPE!="int" && $FIELD_TYPE!="double" && is_scalar($value) && $value <> '')
-								)
-							)
-						)
-					)
-					{
-						if($logic == "OR")
-							$arJoins[$this->fields[$key]["TABLE_ALIAS"]] |= true;
+						{
+							if($logic == "OR")
+								$arJoins[$this->fields[$key]["TABLE_ALIAS"]] |= true;
+							else
+								$arJoins[$this->fields[$key]["TABLE_ALIAS"]] &= true;
+						}
 						else
-							$arJoins[$this->fields[$key]["TABLE_ALIAS"]] &= true;
-					}
-					else
-					{
-						if($logic == "OR")
-							$arJoins[$this->fields[$key]["TABLE_ALIAS"]] |= false;
-						else
-							$arJoins[$this->fields[$key]["TABLE_ALIAS"]] &= false;
+						{
+							if($logic == "OR")
+								$arJoins[$this->fields[$key]["TABLE_ALIAS"]] |= false;
+							else
+								$arJoins[$this->fields[$key]["TABLE_ALIAS"]] &= false;
+						}
 					}
 
 					switch($FIELD_TYPE)

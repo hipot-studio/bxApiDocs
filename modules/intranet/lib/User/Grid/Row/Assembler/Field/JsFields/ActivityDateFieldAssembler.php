@@ -48,7 +48,7 @@ class ActivityDateFieldAssembler extends JsExtensionFieldAssembler
 		return $data['LAST_ACTIVITY_DATE'] ? FormatDateFromDB($data['LAST_ACTIVITY_DATE'], $this->dateFormat) : '';
 	}
 
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): mixed
 	{
 		if (!empty($value['CONFIRM_CODE']))
 		{

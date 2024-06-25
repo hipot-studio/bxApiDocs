@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service;
 
+use Bitrix\Crm\Agent\Security\DynamicTypes\AttrConvertOptions;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Automation\Starter;
 use Bitrix\Crm\Field;
@@ -11,6 +12,7 @@ use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Kanban\Entity;
 use Bitrix\Crm\Multifield;
 use Bitrix\Crm\Search\SearchContentBuilderFactory;
+use Bitrix\Crm\Security\Controller\DynamicItem;
 use Bitrix\Crm\Service\Operation\Action;
 use Bitrix\Crm\Statistics;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
@@ -1166,13 +1168,33 @@ abstract class Operation
 			->setEntityAttributes($userPermissions->prepareItemPermissionAttributes($this->item))
 		;
 
-		\Bitrix\Crm\Security\Manager::resolveController($permissionEntityType)
-			->register(
+		$controller = \Bitrix\Crm\Security\Manager::resolveController($permissionEntityType);
+		$controller->register(
 				$permissionEntityType,
 				$this->item->getId(),
 				$securityRegisterOptions
 			)
 		;
+
+		// While the conversion of the rights storage type is in progress, it is necessary to register the
+		// rights in both controllers.
+		if (
+			AttrConvertOptions::getCurrentEntityTypeId() === $this->item->getEntityTypeId()
+			&& !$controller instanceof DynamicItem
+		)
+		{
+			try {
+				$additionalController = new DynamicItem($this->item->getEntityTypeId());
+				$additionalController->register(
+					$permissionEntityType,
+					$this->item->getId(),
+					$securityRegisterOptions
+				);
+			}
+			catch (\Exception $e)
+			{
+			}
+		}
 	}
 
 	protected function updateSearchIndexes(): void

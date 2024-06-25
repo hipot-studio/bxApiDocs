@@ -102,7 +102,7 @@ class CCrmRole
 				1=1 $sSqlSearch
 			$sSqlOrder";
 
-		$obRes = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$obRes = $DB->Query($sSql);
 		return $obRes;
 	}
 
@@ -113,7 +113,7 @@ class CCrmRole
 			SELECT RR.* FROM b_crm_role R, b_crm_role_relation RR
 			WHERE R.ID = RR.ROLE_ID
 			ORDER BY R.ID asc';
-		$obRes = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$obRes = $DB->Query($sSql);
 		return $obRes;
 	}
 
@@ -127,7 +127,7 @@ class CCrmRole
 			: 'DELETE FROM b_crm_role_relation'
 		;
 		
-		$DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$DB->Query($sSql);
 		foreach ($arRelation as $sRel => $arRole)
 		{
 			foreach ($arRole as $iRoleID)
@@ -148,7 +148,7 @@ class CCrmRole
 		global $DB;
 		$ID = (int)$ID;
 		$sSql = 'SELECT * FROM b_crm_role_perms WHERE role_id = '.$ID;
-		$obRes = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$obRes = $DB->Query($sSql);
 		$_arResult = array();
 		while ($arRow = $obRes->Fetch())
 		{
@@ -205,7 +205,7 @@ class CCrmRole
 			SELECT RP.*
 			FROM b_crm_role_perms RP, b_crm_role_relation RR
 			WHERE RP.ROLE_ID = RR.ROLE_ID AND RR.RELATION IN('$sin')";
-		$obRes = $DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$obRes = $DB->Query($sSql);
 		$_arResult = array();
 		while ($arRow = $obRes->Fetch())
 		{
@@ -320,7 +320,7 @@ class CCrmRole
 		$this->log('SetRoleRelation', ['ID' => $ID, 'RELATION' => $arRelation]);
 
 		$sSql = 'DELETE FROM b_crm_role_perms WHERE ROLE_ID = '.$ID;
-		$DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$DB->Query($sSql);
 		foreach ($arRelation as $sEntity => $arPerms)
 		{
 			foreach ($arPerms as $sPerm => $arFields)
@@ -384,7 +384,7 @@ class CCrmRole
 				$arFields['RELATION'] = array();
 			$sUpdate = $DB->PrepareUpdate('b_crm_role', $arFields, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
 			if ($sUpdate <> '')
-				$DB->Query("UPDATE b_crm_role SET $sUpdate WHERE ID = $ID", false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+				$DB->Query("UPDATE b_crm_role SET $sUpdate WHERE ID = $ID");
 
 			$this->SetRoleRelation($ID, $arFields['RELATION']);
 			$arFields['ID'] = $ID;
@@ -399,11 +399,11 @@ class CCrmRole
 		global $DB;
 		$ID = (int)$ID;
 		$sSql = 'DELETE FROM b_crm_role_relation WHERE ROLE_ID = '.$ID;
-		$DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$DB->Query($sSql);
 		$sSql = 'DELETE FROM b_crm_role_perms WHERE ROLE_ID = '.$ID;
-		$DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$DB->Query($sSql);
 		$sSql = 'DELETE FROM b_crm_role WHERE ID = '.$ID;
-		$DB->Query($sSql, false, 'FILE: '.__FILE__.'<br /> LINE: '.__LINE__);
+		$DB->Query($sSql);
 
 		self::ClearCache();
 	}

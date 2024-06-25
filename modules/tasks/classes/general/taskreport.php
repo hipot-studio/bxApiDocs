@@ -126,7 +126,7 @@ class CTaskReport
 			if ($nTopCount > 0)
 			{
 				$strSql = $DB->TopSql($strSql, $nTopCount);
-				$res = $DB->Query($strSql, false, "File: " . __FILE__ . "<br>Line: " . __LINE__);
+				$res = $DB->Query($strSql);
 			}
 			else
 			{
@@ -152,7 +152,7 @@ class CTaskReport
 			}
 		}
 		else
-			$res = $DB->Query($strSql, false, "File: " . __FILE__ . "<br>Line: " . __LINE__);
+			$res = $DB->Query($strSql);
 
 		return $res;
 	}
@@ -197,7 +197,7 @@ class CTaskReport
 				BUF1.VALUE_INT
 		";
 
-		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 
 		return $res;
 	}
@@ -229,7 +229,7 @@ class CTaskReport
 		if (count($arSqlSearch) !== 0)
 			$strSql .= ' AND ' . implode(' AND ', $arSqlSearch);
 
-		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 
 		return $res;
 	}
@@ -258,7 +258,7 @@ class CTaskReport
 			AND
 				BUF1.VALUE_INT IS NOT NULL AND BUF1.VALUE_INT <> 0
 		";
-		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 		if ($arRes = $res->Fetch())
 		{
 			return $arRes["CNT"];

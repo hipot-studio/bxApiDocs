@@ -6,6 +6,7 @@ use Bitrix\Crm\Activity\CommunicationStatistics;
 use Bitrix\Crm\Activity\IncomingChannel;
 use Bitrix\Crm\Badge;
 use Bitrix\Crm\Communication;
+use Bitrix\Crm\Integration\StorageType;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
@@ -437,7 +438,7 @@ class Call extends Base
 		array $params = null
 	)
 	{
-		\Bitrix\Crm\Integration\AI\EventHandler::onAfterCallActivityUpdate($changedFields, $newFields);
+		\Bitrix\Crm\Integration\AI\EventHandler::onAfterCallActivityUpdate($changedFields, $oldFields, $newFields);
 	}
 
 	/**
@@ -561,6 +562,15 @@ class Call extends Base
 
 	public static function hasPlanner(array $activity): bool
 	{
-		return empty($activity['ORIGIN_ID']);
+		return !VoxImplantManager::isActivityBelongsToVoximplant($activity);
+	}
+
+	public static function hasRecordings(array $activity): bool
+	{
+		$storageTypeId = (int)($activity['STORAGE_TYPE_ID'] ?? null);
+
+		$storageElementIds = \CCrmActivity::extractStorageElementIds($activity);
+
+		return StorageType::isDefined($storageTypeId) && !empty($storageElementIds);
 	}
 }

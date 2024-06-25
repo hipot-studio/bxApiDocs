@@ -93,7 +93,8 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 	public const
 		ENTITY_TYPE_VIDEOCONF = 'VIDEOCONF',
 		ENTITY_TYPE_GENERAL = 'GENERAL',
-		ENTITY_TYPE_FAVORITE = 'FAVORITE'
+		ENTITY_TYPE_FAVORITE = 'FAVORITE',
+		ENTITY_TYPE_GENERAL_CHANNEL = 'GENERAL_CHANNEL'
 	;
 
 	//OPENLINES
@@ -2427,9 +2428,9 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 	{
 		return [
 			self::MANAGE_RIGHTS_NONE => Loc::getMessage('IM_CHAT_CAN_POST_NONE'),
-			self::MANAGE_RIGHTS_MEMBER => Loc::getMessage('IM_CHAT_CAN_POST_ALL'),
-			self::MANAGE_RIGHTS_OWNER => Loc::getMessage('IM_CHAT_CAN_POST_OWNER'),
-			self::MANAGE_RIGHTS_MANAGERS => Loc::getMessage('IM_CHAT_CAN_POST_MANAGERS')
+			self::MANAGE_RIGHTS_MEMBER => Loc::getMessage('IM_CHAT_CAN_POST_ALL_MSGVER_1'),
+			self::MANAGE_RIGHTS_OWNER => Loc::getMessage('IM_CHAT_CAN_POST_OWNER_MSGVER_1'),
+			self::MANAGE_RIGHTS_MANAGERS => Loc::getMessage('IM_CHAT_CAN_POST_MANAGERS_MSGVER_1')
 		];
 	}
 	//endregion
@@ -2481,7 +2482,14 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 	 * @param array $userIds
 	 * @return self
 	 */
-	public function addUsers(array $userIds, array $managerIds = [], ?bool $hideHistory = null, bool $withMessage = true, bool $skipRecent = false): self
+	public function addUsers(
+		array $userIds,
+		array $managerIds = [],
+		?bool $hideHistory = null,
+		bool $withMessage = true,
+		bool $skipRecent = false,
+		Im\V2\Relation\Reason $reason = Im\V2\Relation\Reason::DEFAULT
+	): self
 	{
 		if (empty($userIds) || !$this->getChatId())
 		{
@@ -2496,7 +2504,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 		}
 
 		$relations = $this->getRelations();
-		$this->addUsersToRelation($usersToAdd, $managerIds, $hideHistory);
+		$this->addUsersToRelation($usersToAdd, $managerIds, $hideHistory, $reason);
 		$this->updateStateAfterUsersAdd($usersToAdd)->save();
 		$this->sendPushUsersAdd($usersToAdd, $relations);
 		$this->sendEventUsersAdd($usersToAdd);
@@ -2537,8 +2545,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 		else
 		{
 			$currentUser = Im\V2\Entity\User\User::getInstance($currentUserId);
+			$type = $this instanceof Im\V2\Chat\ChannelChat ? 'CHANNEL' : 'CHAT';
+			$code = "IM_{$type}_JOIN_{$currentUser->getGender()}";
 			$messageText = Loc::getMessage(
-				"IM_CHAT_JOIN_{$currentUser->getGender()}",
+				$code,
 				[
 					'#USER_1_NAME#' => htmlspecialcharsback($currentUser->getName()),
 					'#USER_2_NAME#' => $userCodesString
@@ -2640,7 +2650,12 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 		return $this;
 	}
 
-	protected function addUsersToRelation(array $usersToAdd, array $managerIds = [], ?bool $hideHistory = null)
+	protected function addUsersToRelation(
+		array $usersToAdd,
+		array $managerIds = [],
+		?bool $hideHistory = null,
+		Im\V2\Relation\Reason $reason = Im\V2\Relation\Reason::DEFAULT
+	)
 	{
 		$usersToAdd = array_filter($usersToAdd);
 
@@ -2672,7 +2687,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 			}
 
 			$hideHistory = (!static::EXTRANET_CAN_SEE_HISTORY && $user->isExtranet()) ? true : $hideHistory;
-			$relation = $this->createRelation($userId, $hideHistory, $managersMap);
+			$relation = $this->createRelation($userId, $hideHistory, $managersMap, $reason);
 			$relations->add($relation);
 		}
 		$relations->save(true);
@@ -2680,7 +2695,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 		$this->isSelfRelationFilled = false;
 	}
 
-	protected function createRelation(int $userId, bool $hideHistory, array $managersMap): Relation
+	protected function createRelation(int $userId, bool $hideHistory, array $managersMap, Im\V2\Relation\Reason $reason): Relation
 	{
 		$relation = new Relation();
 		$relation
@@ -2689,6 +2704,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 			->setUserId($userId)
 			->setLastId($this->getLastMessageId())
 			->setStatus(\IM_STATUS_READ)
+			->setReason($reason)
 			->fillRestriction($hideHistory, $this)
 		;
 		if (isset($managersMap[$userId]))
@@ -2766,7 +2782,13 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 		}
 	}
 
-	public function deleteUser(int $userId, bool $withMessage = true, bool $skipRecent = false, bool $withNotification = true): Result
+	public function deleteUser(
+		int $userId,
+		bool $withMessage = true,
+		bool $skipRecent = false,
+		bool $withNotification = true,
+		bool $skipCheckReason = false
+	): Result
 	{
 		$relations = clone $this->getRelations();
 		$userRelation = $this->getRelations()->getByUserId($userId, $this->getId());
@@ -2774,6 +2796,11 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 		if ($userRelation === null)
 		{
 			return (new Result())->addError(new Im\V2\Entity\User\UserError(Im\V2\Entity\User\UserError::NOT_FOUND));
+		}
+
+		if (!$skipCheckReason && $userRelation->getReason() !== Im\V2\Relation\Reason::DEFAULT)
+		{
+			return (new Result())->addError(new Im\V2\Entity\User\UserError(Im\V2\Entity\User\UserError::DELETE_FROM_STRUCTURE_SYNC));
 		}
 
 		if ($this->getAuthorId() === $userId)
@@ -3601,11 +3628,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 	public function canDo(string $action): bool
 	{
 		$userRights = $this->getRole();
-
-		if ($this->getContext()->getUser()->isAdmin())
-		{
-			return true;
-		}
 
 		$rightByType = Im\V2\Chat\Permission::getRoleForActionByType($this->getExtendedType(false), $action);
 		$manageRights = Chat::ROLE_GUEST;

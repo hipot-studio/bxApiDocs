@@ -27,6 +27,17 @@ abstract class Bitrix24 extends \Bitrix\Tasks\Integration
 		return \CBitrix24::PATH_CONFIGS;
 	}
 
+	public static function getScheduleUrl(): string
+	{
+		$url = static::getSettingsURL();
+		if ('' === $url)
+		{
+			return '';
+		}
+
+		return $url . '?page=schedule';
+	}
+
 	public static function checkToolAvailable($toolName)
 	{
 		if(isset($GLOBALS['__TASKS_DEVEL_ENV__']))
@@ -124,8 +135,8 @@ abstract class Bitrix24 extends \Bitrix\Tasks\Integration
 	{
 		if (static::includeModule() && method_exists('CBitrix24', 'prepareStubInfo'))
 		{
-			$title = ($params['TITLE'] ?? '');
-			$content = ($params['CONTENT'] ?? '');
+			$title = $params['TITLE'] ?? '';
+			$content = $params['CONTENT'] ?? '';
 
 			$replacements = $params['REPLACEMENTS'];
 			$replacements = (isset($replacements) && is_array($replacements) ? $replacements : []);
@@ -139,8 +150,8 @@ abstract class Bitrix24 extends \Bitrix\Tasks\Integration
 				$content = str_replace($search, $replace, $content);
 			}
 
-			$licenseAllButtonClass = ($params['GLOBAL_SEARCH'] ? 'ui-btn ui-btn-xs ui-btn-light-border' : 'success');
-			$licenseDemoButtonClass = ($params['GLOBAL_SEARCH'] ? 'ui-btn ui-btn-xs ui-btn-light' : '');
+			$licenseAllButtonClass = !empty($params['GLOBAL_SEARCH']) ? 'ui-btn ui-btn-xs ui-btn-light-border' : 'success';
+			$licenseDemoButtonClass = !empty($params['GLOBAL_SEARCH']) ? 'ui-btn ui-btn-xs ui-btn-light' : '';
 			$buttons = [
 				['ID' => \CBitrix24::BUTTON_LICENSE_ALL, 'CLASS_NAME' => $licenseAllButtonClass],
 				['ID' => \CBitrix24::BUTTON_LICENSE_DEMO, 'CLASS_NAME' => $licenseDemoButtonClass],
@@ -148,7 +159,7 @@ abstract class Bitrix24 extends \Bitrix\Tasks\Integration
 			$parameters = [
 				'ANALYTICS_LABEL' => 'TASK_FILTER_LIMITS',
 			];
-			$parameters = ($params['GLOBAL_SEARCH'] ? [] : $parameters);
+			$parameters = !empty($params['GLOBAL_SEARCH']) ? [] : $parameters;
 
 			return \CBitrix24::prepareStubInfo($title, $content, $buttons, $parameters);
 		}

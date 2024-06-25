@@ -4,6 +4,7 @@ namespace Bitrix\BizprocMobile\Controller;
 
 use Bitrix\BizprocMobile\EntityEditor\Converter;
 use Bitrix\BizprocMobile\EntityEditor\TaskProvider;
+use Bitrix\BizprocMobile\UI\CommentCounterView;
 use Bitrix\BizprocMobile\Workflow\Task\Fields;
 use Bitrix\BizprocMobile\UI\TaskView;
 use Bitrix\Main\Engine\ActionFilter;
@@ -66,6 +67,8 @@ class Task extends BaseController
 			$provider = new TaskProvider((int)$task['ID'], $converter->toMobile()->getConvertedProperties());
 		}
 
+		$commentCounter = new CommentCounterView($task['WORKFLOW_ID'], $currentUserId);
+
 		return [
 			'task' => new TaskView($task),
 			'allCount' => $this->countParallelTasks($task['WORKFLOW_ID'], $targetUserId),
@@ -77,6 +80,7 @@ class Task extends BaseController
 			'rights' => [
 				'delegate' => ((int)$task['DELEGATION_TYPE'] !== \CBPTaskDelegationType::None) || $this->isCurrentUserAdmin(),
 			],
+			'commentCounter' => $commentCounter,
 		];
 	}
 

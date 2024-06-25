@@ -124,7 +124,7 @@ FROM
 
 		if (is_array($arGroupBy) && count($arGroupBy)==0)
 		{
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			if ($arRes = $dbRes->Fetch())
 				return $arRes["CNT"];
 			else
@@ -155,7 +155,7 @@ FROM
 			if ($arSqls["GROUPBY"] <> '')
 				$strSql_tmp .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
-			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql_tmp);
 			$cnt = 0;
 			if ($arSqls["GROUPBY"] == '')
 			{
@@ -177,7 +177,7 @@ FROM
 			if (is_array($arNavStartParams) && intval($arNavStartParams["nTopCount"]) > 0)
 				$strSql .= "LIMIT ".$arNavStartParams["nTopCount"];
 //echo '<pre>',$strSql,'</pre>'; die();
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			$dbRes->SetUserFields($USER_FIELD_MANAGER->GetUserFields("USER"));
 		}
 

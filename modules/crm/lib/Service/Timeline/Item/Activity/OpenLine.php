@@ -71,7 +71,7 @@ class OpenLine extends Activity
 			'vkgroup' => Layout\Common\Logo::CHANNEL_VK,
 			'vkgrouporder' => Layout\Common\Logo::CHANNEL_VK_ORDER,
 			'whatsappbytwilio' => Layout\Common\Logo::CHANNEL_WHATSAPP_BITRIX,
-			'whatsappbyedna' => Layout\Common\Logo::CHANNEL_EDNA,
+			'whatsappbyedna' => Layout\Common\Logo::CHANNEL_WHATSAPP,
 		];
 		$userCode = $this->getAssociatedEntityModel()->get('PROVIDER_PARAMS')['USER_CODE'];
 		if (isset($userCode))

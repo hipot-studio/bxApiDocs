@@ -79,24 +79,24 @@ class CCrmCurrency
 
 	public static function GetFieldCaption($fieldName)
 	{
-		$result = Loc::getMessage("CRM_CURRENCY_FIELD_{$fieldName}");
-		return is_string($result) ? $result : '';
+		return (string)Loc::getMessage('CRM_CURRENCY_FIELD_' . $fieldName);
 	}
 
 	public static function GetCurrencyLocalizationFieldsInfo()
 	{
-		if(!self::$LOC_FIELD_INFOS)
+		if (!self::$LOC_FIELD_INFOS)
 		{
-			self::$LOC_FIELD_INFOS = array(
-				'FULL_NAME' => array('TYPE' => 'string'),
-				'FORMAT_STRING' => array('TYPE' => 'string'),
-				'DEC_POINT' => array('TYPE' => 'string'),
-				'THOUSANDS_VARIANT' => array('TYPE' => 'string'),
-				'THOUSANDS_SEP' => array('TYPE' => 'string'),
-				'DECIMALS' => array('TYPE' => 'int'),
-				'HIDE_ZERO' => array('TYPE' => 'char')
-			);
+			self::$LOC_FIELD_INFOS = [
+				'FULL_NAME' => ['TYPE' => 'string'],
+				'FORMAT_STRING' => ['TYPE' => 'string'],
+				'DEC_POINT' => ['TYPE' => 'string'],
+				'THOUSANDS_VARIANT' => ['TYPE' => 'string'],
+				'THOUSANDS_SEP' => ['TYPE' => 'string'],
+				'DECIMALS' => ['TYPE' => 'int'],
+				'HIDE_ZERO' => ['TYPE' => 'char'],
+			];
 		}
+
 		return self::$LOC_FIELD_INFOS;
 	}
 
@@ -221,14 +221,16 @@ class CCrmCurrency
 		{
 			return false;
 		}
+
 		return self::GetByID($baseCurrencyID);
 	}
 
 	public static function EnsureReady()
 	{
-		if(!Loader::includeModule('currency'))
+		if (!Loader::includeModule('currency'))
 		{
 			self::$LAST_ERROR = Loc::getMessage('CRM_CURRERCY_MODULE_WARNING');
+
 			return false;
 		}
 
@@ -273,7 +275,7 @@ class CCrmCurrency
 	{
 		if (!Loader::includeModule('currency'))
 		{
-			return array();
+			return [];
 		}
 
 		$langID = (string)$langID;
@@ -291,7 +293,9 @@ class CCrmCurrency
 			{
 				$arCurrency['FULL_NAME'] = (string)$arCurrency['FULL_NAME'];
 				if ($arCurrency['FULL_NAME'] === '')
+				{
 					$arCurrency['FULL_NAME'] = $arCurrency['CURRENCY'];
+				}
 				$currencies[$arCurrency['CURRENCY']] = $arCurrency;
 			}
 			self::$CURRENCY_BY_LANG[$langID] = $currencies;
@@ -307,13 +311,13 @@ class CCrmCurrency
 			return false;
 		}
 
-		if(!is_array($arOrder))
+		if (!is_array($arOrder))
 		{
-			$arOrder = array();
+			$arOrder = [];
 		}
 
 		$arOrderFields = array_keys($arOrder);
-		if(count($arOrderFields) > 0)
+		if (!empty($arOrderFields))
 		{
 			$by = $arOrderFields[0];
 			$order = $arOrder[$by];
@@ -362,7 +366,7 @@ class CCrmCurrency
 
 	private static function GetLanguagesID()
 	{
-		if(self::$LANGS_ID)
+		if (self::$LANGS_ID)
 		{
 			return self::$LANGS_ID;
 		}
@@ -393,24 +397,24 @@ class CCrmCurrency
 		$processed = 0;
 		foreach($langsID as $langID)
 		{
-			$item = isset($arItems[$langID]) ? $arItems[$langID] : null;
+			$item = $arItems[$langID] ?? null;
 
 
-			if(!is_array($item))
+			if (!is_array($item))
 			{
 				continue;
 			}
 
-			$fields = array();
-			foreach($allowedKeys as $key)
+			$fields = [];
+			foreach ($allowedKeys as $key)
 			{
-				if(isset($item[$key]))
+				if (isset($item[$key]))
 				{
 					$fields[$key] = $item[$key];
 				}
 			}
 
-			if(empty($fields))
+			if (empty($fields))
 			{
 				continue;
 			}
@@ -418,21 +422,20 @@ class CCrmCurrency
 			$fields['CURRENCY'] = $currencyID;
 			$fields['LID'] = $langID;
 
-			if(is_array(CCurrencyLang::GetByID($currencyID, $langID)))
+			if (is_array(CCurrencyLang::GetByID($currencyID, $langID)))
 			{
 				CCurrencyLang::Update($currencyID, $langID, $fields);
-				$processed++;
 			}
 			else
 			{
-				if(!isset($fields['DECIMALS']))
+				if (!isset($fields['DECIMALS']))
 				{
 					$fields['DECIMALS'] = 2;
 				}
 				CCurrencyLang::Add($fields);
 
-				$processed++;
 			}
+			$processed++;
 		}
 
 		return $processed > 0;
@@ -445,7 +448,7 @@ class CCrmCurrency
 			return false;
 		}
 
-		if(!is_array($arLangs) || empty($arLangs))
+		if (!is_array($arLangs) || empty($arLangs))
 		{
 			return false;
 		}
@@ -455,13 +458,15 @@ class CCrmCurrency
 		$processed = 0;
 		foreach($langsID as $langID)
 		{
-			if(!in_array($langID, $arLangs, true)
-				|| !is_array(CCurrencyLang::GetByID($currencyID, $langID)))
+			if (
+				!in_array($langID, $arLangs, true)
+				|| !is_array(CCurrencyLang::GetByID($currencyID, $langID))
+			)
 			{
 				continue;
 			}
 
-			if(CCurrencyLang::Delete($currencyID, $langID))
+			if (CCurrencyLang::Delete($currencyID, $langID))
 			{
 				$processed++;
 			}
@@ -577,109 +582,23 @@ class CCrmCurrency
 
 	public static function MoneyToString($sum, $currencyID, $formatStr = '')
 	{
-		if(!Loader::includeModule('currency'))
+		if (!Loader::includeModule('currency'))
 		{
 			return number_format($sum, 2, '.', '');
 		}
 
-		$formatInfo = CCurrencyLang::GetCurrencyFormat($currencyID);
-		$formatInfo['DECIMALS'] = isset($formatInfo['DECIMALS']) ?  intval($formatInfo['DECIMALS']) : 2;
+		$currencyID = (string)$currencyID;
 
-		if(!isset($formatInfo['DEC_POINT']))
-		{
-			$formatInfo['DEC_POINT'] = '.';
-		}
+		CCurrencyLang::enableUseHideZero();
+		$result = strip_tags(CCurrencyLang::CurrencyFormat($sum, $currencyID, $formatStr !== '#'));
+		CCurrencyLang::disableUseHideZero();
 
-		if(!empty($formatInfo['THOUSANDS_VARIANT']))
-		{
-			$thousands = $formatInfo['THOUSANDS_VARIANT'];
-
-			if($thousands === 'N')
-			{
-				$formatInfo['THOUSANDS_SEP'] = '';
-			}
-			elseif($thousands === 'D')
-			{
-				$formatInfo['THOUSANDS_SEP'] = '.';
-			}
-			elseif($thousands === 'C')
-			{
-				$formatInfo['THOUSANDS_SEP'] = ',';
-			}
-			elseif($thousands === 'S' || $thousands === 'B')
-			{
-				$formatInfo['THOUSANDS_SEP'] = chr(32);
-			}
-		}
-
-		if(!isset($formatInfo['THOUSANDS_SEP']))
-		{
-			$formatInfo['THOUSANDS_SEP'] = '';
-		}
-
-		if($sum === '' || filter_var($sum, FILTER_VALIDATE_INT|FILTER_VALIDATE_FLOAT) !== false)
-		{
-			// Standard format for float
-			CCurrencyLang::enableUseHideZero();
-			$result = strip_tags(CCurrencyLang::CurrencyFormat($sum, $currencyID, $formatStr !== '#'));
-			CCurrencyLang::disableUseHideZero();
-			return $result;
-		}
-		else
-		{
-			// Do not convert to float to avoid data lost caused by overflow (9 999 999 999 999 999.99 ->10 000 000 000 000 000.00)
-			$triadSep = (string)$formatInfo['THOUSANDS_SEP'];
-			$decPoint = (string)$formatInfo['DEC_POINT'];
-			$dec = $formatInfo['DECIMALS'];
-
-			$sum = str_replace(',', '.', (string)$sum);
-			$sumArr = explode('.', $sum, 2);
-			$i = $sumArr[0] ?? null;
-			$d = $sumArr[1] ?? null;
-
-			$len = mb_strlen($i);
-			$leadLen = $len % 3;
-			if($leadLen === 0)
-			{
-				$leadLen = 3; //take a first triad
-			}
-			$lead = mb_substr($i, 0, $leadLen);
-			if(!is_string($lead))
-			{
-				$lead = '';
-			}
-			$triads = mb_substr($i, $leadLen);
-			if(!is_string($triads))
-			{
-				$triads = '';
-			}
-			$s = $triads !== '' ? $lead.preg_replace('/(\\d{3})/', $triadSep.'\\1', $triads) : ($lead !== '' ? $lead : '0');
-			if($dec > 0)
-			{
-				$s .= $decPoint.str_pad(mb_substr($d, 0, $dec), $dec, '0', STR_PAD_RIGHT);
-			}
-		}
-
-		$formatStr = (string)$formatStr;
-		if($formatStr === '' && ($formatInfo['FORMAT_STRING'] ?? '') !== '')
-		{
-			$formatStr = $formatInfo['FORMAT_STRING'];
-		}
-
-		if($formatStr === '' || $formatStr === '#')
-		{
-			return strip_tags($s);
-		}
-
-		//Skip HTML entities
-		return strip_tags(
-			preg_replace('/(^|[^&])#/', '${1}'.$s, $formatStr)
-		);
+		return $result;
 	}
 
 	public static function ConvertMoney($sum, $srcCurrencyID, $dstCurrencyID, $srcExchRate = -1)
 	{
-		$sum = doubleval($sum);
+		$sum = (float)$sum;
 
 		if (!Loader::includeModule('currency'))
 		{
@@ -688,7 +607,7 @@ class CCrmCurrency
 
 		$srcCurrencyID = self::NormalizeCurrencyID($srcCurrencyID);
 		$dstCurrencyID = self::NormalizeCurrencyID($dstCurrencyID);
-		$srcExchRate = doubleval($srcExchRate);
+		$srcExchRate = (float)$srcExchRate;
 
 		if($sum === 0.0 || $srcCurrencyID === $dstCurrencyID)
 		{
@@ -704,32 +623,22 @@ class CCrmCurrency
 		{
 			// Convert source currency to base and convert base currency to destination
 			$result = self::$currencyRatesClassName::ConvertCurrency(
-				doubleval($sum * $srcExchRate),
+				$sum * $srcExchRate,
 				self::GetBaseCurrencyID(),
 				$dstCurrencyID
 			);
 		}
 
-		$decimals = 2;
-		$formatInfo = CCurrencyLang::GetCurrencyFormat($dstCurrencyID);
-		if(isset($formatInfo['DECIMALS']))
-		{
-			$decimals = intval($formatInfo['DECIMALS']);
-		}
+		$formatInfo = CCurrencyLang::GetFormatDescription($dstCurrencyID);
 
-		$result = round($result, $decimals);
-		return $result;
+		return round($result, $formatInfo['DECIMALS']);
 	}
 
 	public static function GetCurrencyDecimals($currencyID)
 	{
-		$decimals = 2;
-		$formatInfo = CCurrencyLang::GetCurrencyFormat($currencyID);
-		if(isset($formatInfo['DECIMALS']))
-		{
-			$decimals = intval($formatInfo['DECIMALS']);
-		}
-		return $decimals;
+		$formatInfo = CCurrencyLang::GetFormatDescription($currencyID);
+
+		return $formatInfo['DECIMALS'];
 	}
 
 	public static function GetExchangeRate($currencyID)
@@ -739,10 +648,10 @@ class CCrmCurrency
 			return 1;
 		}
 
-		$currencyID = (string) $currencyID;
+		$currencyID = (string)$currencyID;
 
 		$rates = new self::$currencyRatesClassName();
-		if(!($rs = $rates->_get_last_rates(date('Y-m-d'), $currencyID)))
+		if (!($rs = $rates->_get_last_rates(date('Y-m-d'), $currencyID)))
 		{
 			return 1.0;
 		}

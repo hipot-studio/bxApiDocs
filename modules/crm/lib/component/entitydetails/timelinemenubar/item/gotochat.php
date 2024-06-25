@@ -3,7 +3,6 @@
 namespace Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 
 class GoToChat extends Item
@@ -43,12 +42,9 @@ class GoToChat extends Item
 	public function prepareSettings(): array
 	{
 		$options = \CUserOptions::getOption('crm', 'gotochat', []);
-		$isTourViewedInWeb = (bool)($options['isTimelineTourViewedInWeb'] ?? false);
-		$isHideAllTours = (Option::get('crm.tour', 'HIDE_ALL_TOURS', 'N') === 'Y');
 
 		return [
-			'isTourViewed' => $isTourViewedInWeb || $isHideAllTours,
-			'region' => (\Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?? 'ru'),
+			'region' => $this->context->getRegion(),
 		];
 	}
 }

@@ -642,4 +642,34 @@ class User implements RestEntity
 
 		return $url;
 	}
+
+	public static function getFirstAdmin(): int
+	{
+		$adminIds = [];
+
+		if (Loader::includeModule('bitrix24'))
+		{
+			$adminIds = \CBitrix24::getAllAdminId();
+		}
+		else
+		{
+			$res = \CGroup::getGroupUserEx(1);
+			while ($row = $res->fetch())
+			{
+				$adminIds[] = (int)$row["USER_ID"];
+			}
+		}
+
+		$resultAdminIds = [];
+		foreach ($adminIds as $adminId)
+		{
+			$user = User::getInstance((int)$adminId);
+			if (!$user->isExtranet())
+			{
+				$resultAdminIds[] = (int)$adminId;
+			}
+		}
+
+		return !empty($resultAdminIds) ? (int)min($resultAdminIds) : 0;
+	}
 }

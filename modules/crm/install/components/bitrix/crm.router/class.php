@@ -18,9 +18,6 @@ if(!Loader::includeModule('crm'))
 
 class CrmRouterComponent extends Bitrix\Crm\Component\Base
 {
-	/** @var Router */
-	protected $router;
-
 	public function onPrepareComponentParams($arParams): array
 	{
 		$arParams = parent::onPrepareComponentParams($arParams);
@@ -45,7 +42,6 @@ class CrmRouterComponent extends Bitrix\Crm\Component\Base
 			$isSefMode = false;
 		}
 
-		$this->router = Container::getInstance()->getRouter();
 		$this->router->setSefMode($isSefMode);
 		$root = $this->arParams['root'];
 		if(is_string($root) && !empty($root))
@@ -67,6 +63,11 @@ class CrmRouterComponent extends Bitrix\Crm\Component\Base
 		$parseResult = $this->getComponentData();
 		$componentName = $parseResult->getComponentName();
 		$componentParameters = $parseResult->getComponentParameters();
+
+		if (is_array($componentParameters))
+		{
+			$componentParameters += ['isExternal' => $this->isExternal($componentParameters)];
+		}
 
 		$this->arResult['componentName'] = $componentName;
 		$this->arResult['componentParameters'] = $componentParameters;
@@ -144,26 +145,27 @@ class CrmRouterComponent extends Bitrix\Crm\Component\Base
 	protected function getComponentData(): Router\ParseResult
 	{
 		$useUrlParsing = $this->arParams['useUrlParsing'] ?? true;
-
-		$defaultComponentName = $this->router->getDefaultComponent();
-		$defaultComponentParameters = $this->router->getDefaultComponentParameters();
-
-		if (!$useUrlParsing)
+		if ($useUrlParsing)
 		{
-			return new Router\ParseResult(
-				$this->arParams['componentName'] ?? $defaultComponentName,
-				$this->arParams['componentParameters'] ?? $defaultComponentParameters,
-				$this->arParams['componentTemplate'] ?? null,
-				$this->arParams['entityTypeId'] ?? \CCrmOwnerType::Undefined
-			);
+			return $this->parseRequest();
 		}
 
+		return new Router\ParseResult(
+			$this->arParams['componentName'] ?? $this->router->getDefaultComponent(),
+			$this->arParams['componentParameters'] ?? $this->router->getDefaultComponentParameters(),
+			$this->arParams['componentTemplate'] ?? null,
+			$this->arParams['entityTypeId'] ?? \CCrmOwnerType::Undefined
+		);
+	}
+
+	private function parseRequest(): Router\ParseResult
+	{
 		$parseResult = $this->router->parseRequest();
 		if(!$parseResult->isFound())
 		{
 			return new Router\ParseResult(
-				$defaultComponentName,
-				$defaultComponentParameters,
+				$this->router->getDefaultComponent(),
+				$this->router->getDefaultComponentParameters(),
 			);
 		}
 
@@ -205,5 +207,13 @@ class CrmRouterComponent extends Bitrix\Crm\Component\Base
 		$defaultRoot = $this->router->getDefaultRoot();
 
 		return array_merge($customRoots, [$currentRoot, $defaultRoot]);
+	}
+
+	private function isExternal(array $componentParams): bool
+	{
+		return (
+			str_starts_with($this->router->getRoot(), '/automation')
+			|| isset($componentParams['isExternal']) && $componentParams['isExternal'] === true
+		);
 	}
 }

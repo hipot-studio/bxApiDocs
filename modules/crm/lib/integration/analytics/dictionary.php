@@ -24,6 +24,7 @@ final class Dictionary
 	public const EVENT_AUDIO_TO_TEXT = 'audio_to_text';
 	public const EVENT_SUMMARY = 'summary';
 	public const EVENT_EXTRACT_FIELDS = 'extract_fields';
+	public const EVENT_CALL_ACTIVITY_WITH_AUDIO_RECORDING = 'activity_call_with_audio_recording';
 	// endregion
 
 	// region Type const
@@ -97,7 +98,11 @@ final class Dictionary
 	public const STATUS_SUCCESS_FIELDS = 'success_fields';
 	public const STATUS_SUCCESS_COMMENT = 'success_comment_only';
 	public const STATUS_ERROR_NO_LIMITS = 'error_no_limits';
-	public const STATUS_ERROR_GPT = 'error_gpt';
+	public const STATUS_ERROR_AGREEMENT = 'error_agreement';
+	public const STATUS_ERROR_LIMIT_DAILY = 'error_limit_daily';
+	public const STATUS_ERROR_LIMIT_MONTHLY = 'error_limit_monthly';
+	public const STATUS_ERROR_LIMIT_BAAS = 'error_limit_baas';
+	public const STATUS_ERROR_PROVIDER = 'error_provider';
 	public const STATUS_ERROR_B24 = 'error_b24';
 	// endregion
 

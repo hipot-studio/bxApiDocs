@@ -526,11 +526,18 @@ class InvoiceRequisiteConverter extends EntityRequisiteConverter
 			$requisiteFields = array_merge($fields, $requisiteFields);
 			if($requisiteID > 0)
 			{
-				$result = $requisiteEntity->update($requisiteID, $requisiteFields);
+				$result = $requisiteEntity->update(
+					$requisiteID,
+					$requisiteFields,
+					['DISABLE_REQUIRED_USER_FIELD_CHECK' => true]
+				);
 			}
 			else
 			{
-				$result = $requisiteEntity->add($requisiteFields);
+				$result = $requisiteEntity->add(
+					$requisiteFields,
+					['DISABLE_REQUIRED_USER_FIELD_CHECK' => true]
+				);
 				if($result->isSuccess())
 				{
 					$requisiteID = (int)$result->getId();

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Agent\Activity;
 
+use Bitrix\Crm\Activity\Provider\ToDo\ToDo;
 use Bitrix\Crm\ActivityTable;
 use Bitrix\Crm\Agent\AgentBase;
 use Bitrix\Crm\Entity\MessageBuilder\ProcessTodoActivity;
@@ -145,11 +146,11 @@ class PingAgent extends AgentBase
 			$entityName = Container::getInstance()->getFactory($ownerTypeId)?->getItem($ownerId)?->getHeading();
 		}
 
+		$subject = ToDo::getActivityTitle($activity);
+
 		$message = (new ProcessTodoActivity($ownerTypeId))
 			->getMessage([
-				'#subject#' => isset($activity['SUBJECT']) && mb_strlen($activity['SUBJECT']) > 0
-					? htmlspecialcharsbx($activity['SUBJECT'])
-					: '',
+				'#subject#' => htmlspecialcharsbx($subject),
 				'#url#' => '#url#',
 				'#title#' => htmlspecialcharsbx(trim($entityName)),
 				'#deadline#' => static::transformDateTime($activity['DEADLINE'] ?? null, $activity['RESPONSIBLE_ID'] ?? null),

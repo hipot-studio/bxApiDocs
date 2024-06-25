@@ -259,6 +259,11 @@ class CrmDocumentViewComponent extends ViewComponent
 		$this->arResult['isSigningEnabledInCurrentTariff'] = $signIntegration->isEnabledInCurrentTariff();
 		$this->arResult['signingInfoHelperSliderCode'] = 'limit_crm_sign_integration';
 
+		$this->arResult['baas']['fastTransform'] = [
+			'isAvailable' => DocumentGeneratorManager::getInstance()->isBaasFastTransformFeatureAvailable(),
+			'isActive' => DocumentGeneratorManager::getInstance()->isBaasFastTransformFeatureActive(),
+		];
+
 		$this->includeComponentTemplate();
 	}
 

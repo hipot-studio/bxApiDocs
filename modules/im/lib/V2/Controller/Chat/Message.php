@@ -144,7 +144,7 @@ class Message extends BaseController
 			],
 			'send' => [
 				'+prefilters' => [
-					new CheckMessageSend(),
+					new CheckMessageSend(Chat\Permission::ACTION_SEND),
 				],
 			],
 			'pin' => [

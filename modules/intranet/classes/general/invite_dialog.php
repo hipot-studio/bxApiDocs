@@ -1041,7 +1041,8 @@ class CIntranetInviteDialog
 			'LAST_NAME' => $userData['LAST_NAME'] ?? null,
 			'GROUP_ID' => $userData['GROUP_ID'],
 			'LID' => $SITE_ID,
-			'UF_DEPARTMENT' => (is_array($userData['UF_DEPARTMENT']) ? $userData['UF_DEPARTMENT'] : [$userData['UF_DEPARTMENT']]),
+			'UF_DEPARTMENT' => empty($userData['UF_DEPARTMENT']) ? [] :
+				(is_array($userData['UF_DEPARTMENT']) ? $userData['UF_DEPARTMENT'] : [$userData['UF_DEPARTMENT']]),
 			'LANGUAGE_ID' => ($site = \CSite::GetArrayByID($SITE_ID)) ? $site['LANGUAGE_ID'] : LANGUAGE_ID,
 		];
 
@@ -1136,7 +1137,7 @@ class CIntranetInviteDialog
 		$bExtranet = (
 			ModuleManager::isModuleInstalled('extranet')
 			&& (
-				!isset($arUser["UF_DEPARTMENT"])
+				empty($arUser["UF_DEPARTMENT"])
 				|| (
 					is_array($arUser["UF_DEPARTMENT"])
 					&& (int)$arUser["UF_DEPARTMENT"][0] <= 0

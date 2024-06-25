@@ -83,15 +83,15 @@ class PHPParser
 	{
 		$found = false;
 		$paramsList = "";
-		if (mb_strtolower(mb_substr($params, 0, 6)) == 'array(')
+		if (mb_strtolower(substr($params, 0, 6)) == 'array(')
 		{
 			$found = true;
-			$paramsList = mb_substr($params, 6);
+			$paramsList = substr($params, 6);
 		}
-		elseif(mb_substr($params, 0, 1) == "[")
+		elseif(str_starts_with($params, "["))
 		{
 			$found = true;
-			$paramsList = mb_substr($params, 1);
+			$paramsList = substr($params, 1);
 		}
 		if($found)
 		{
@@ -127,12 +127,12 @@ class PHPParser
 	// Parse string and check if it is a component call. Return call params array
 	public static function CheckForComponent($str)
 	{
-		if(mb_substr($str, 0, 5) == "<?"."php")
-			$str = mb_substr($str, 5);
+		if(str_starts_with($str, "<?php"))
+			$str = substr($str, 5);
 		else
-			$str = mb_substr($str, 2);
+			$str = substr($str, 2);
 
-		$str = mb_substr($str, 0, -2);
+		$str = substr($str, 0, -2);
 
 		$bSlashed = false;
 		$bInString = false;
@@ -313,10 +313,7 @@ class PHPParser
 		$instruction = "";
 
 		//mb_substr is catastrophic slow, so in UTF we use array of characters
-		if(defined("BX_UTF"))
-			$allChars = preg_split('//u', $scriptContent, -1, PREG_SPLIT_NO_EMPTY);
-		else
-			$allChars = &$scriptContent;
+		$allChars = preg_split('//u', $scriptContent, -1, PREG_SPLIT_NO_EMPTY);
 
 		$scriptContentLength = mb_strlen($scriptContent);
 		$arAllStr = array();
@@ -460,12 +457,12 @@ class PHPParser
 	// Components 2. Parse string and check if it is a component call. Return call params array
 	public static function CheckForComponent2($str)
 	{
-		if (mb_substr($str, 0, 5) == "<?"."php")
-			$str = mb_substr($str, 5);
+		if (str_starts_with($str, "<?php"))
+			$str = substr($str, 5);
 		else
-			$str = mb_substr($str, 2);
+			$str = substr($str, 2);
 
-		$str = mb_substr($str, 0, -2);
+		$str = substr($str, 0, -2);
 
 		$bSlashed = false;
 		$bInString = false;
@@ -688,8 +685,8 @@ class PHPParser
 
 	public static function PreparePHP($str)
 	{
-		if(mb_substr($str, 0, 2) == "={" && mb_substr($str, -1, 1) == "}" && mb_strlen($str) > 3)
-			return mb_substr($str, 2, -1);
+		if(str_starts_with($str, "={") && str_ends_with($str, "}") && mb_strlen($str) > 3)
+			return substr($str, 2, -1);
 
 		return '"'.EscapePHPString($str).'"';
 	}

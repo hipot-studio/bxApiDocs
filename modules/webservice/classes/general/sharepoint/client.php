@@ -443,11 +443,7 @@ class CSPListsClient extends CSOAPClient
 			$URL = str_replace(
 				array('%3A', '%2F'),
 				array(':', '/'),
-				rawurlencode($GLOBALS['APPLICATION']->ConvertCharset(
-					urldecode($arParams['URL']),
-					LANG_CHARSET,
-					'utf-8'
-				))
+				rawurlencode(urldecode($arParams['URL']))
 			);
 
 			$CLIENT = new CHTTP();

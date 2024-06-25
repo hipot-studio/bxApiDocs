@@ -1435,7 +1435,11 @@ class CCrmDealDetailsComponent
 				"type" => "boolean",
 				"editable" => true
 			),
-			Crm\Entity\CommentsHelper::compileFieldDescriptionForDetails(\CCrmOwnerType::Deal, 'COMMENTS'),
+			Crm\Entity\CommentsHelper::compileFieldDescriptionForDetails(
+				\CCrmOwnerType::Deal,
+				'COMMENTS',
+				$this->entityID,
+			),
 			array(
 				'name' => 'CLIENT',
 				'title' => Loc::getMessage('CRM_DEAL_FIELD_CLIENT'),

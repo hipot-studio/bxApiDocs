@@ -80,7 +80,7 @@ class CMobileEvent
 		$content = "";
 		if (defined('JN_HOTRELOAD_ENABLED') && defined('JN_HOTRELOAD_HOST')) {
 			$hotreloadHost = JN_HOTRELOAD_HOST;
-			$content  = (new Extension("hotreload"))->getContent();
+			$content  = (Extension::getInstance("hotreload"))->getContent();
 			$content .= "\n(()=>{ let wsclient = startHotReload(this.env.userId, '$hotreloadHost') })();\n";
 		}
 

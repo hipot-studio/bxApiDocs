@@ -118,6 +118,10 @@ class ContentBlockFactory
 		foreach ($parts as $singlePart)
 		{
 			$singlePart = trim($singlePart, ' ');
+			if ($singlePart === '')
+			{
+				continue;
+			}
 
 			if (mb_strpos($singlePart, '#') === 0)
 			{

@@ -8,7 +8,7 @@ class CTestAttempt extends CAllTestAttempt
 	{
 		global $DB;
 
-		if ($arInsert[0] == '' || $arInsert[0] == '')		// BUG ?
+		if ($arInsert[0] == '')		// BUG ?
 			return false;
 
 		if (!isset($arFields["DATE_START"]))
@@ -21,7 +21,7 @@ class CTestAttempt extends CAllTestAttempt
 			"INSERT INTO b_learn_attempt(".$arInsert[0].") ".
 			"VALUES(".$arInsert[1].")";
 
-		if($DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__))
+		if($DB->Query($strSql))
 			return $DB->LastID();
 
 		return false;
