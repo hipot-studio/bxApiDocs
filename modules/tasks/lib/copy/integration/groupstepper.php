@@ -144,7 +144,7 @@ class GroupStepper extends Stepper
 						$task = new \CTaskItem($taskIdTo, $executiveUserId);
 						$task->addProjectDependence($taskIdFrom, $dependence["TYPE"]);
 					}
-					catch (\Exception $exception) {}
+					catch (\Throwable $exception) {}
 				}
 			}
 		}

@@ -54,7 +54,7 @@ class EventManager
 		}
 	}
 
-	protected function addEventHandlerInternal($fromModuleId, $eventType, $callback, $includeFile, $sort, $version)
+	protected function addEventHandlerInternal($fromModuleId, $eventType, callable $callback, $includeFile, $sort, $version)
 	{
 		$arEvent = [
 			'FROM_MODULE_ID' => $fromModuleId,

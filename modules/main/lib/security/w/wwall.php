@@ -3,6 +3,7 @@
 namespace Bitrix\Main\Security\W;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Security\PublicKeyCipher;
@@ -377,15 +378,14 @@ class WWall
 	{
 		try
 		{
-			$cache = Cache::createInstance();
+			$lastTime = Option::get('main_sec', 'WWALL_ACTUALIZE_RULES', 0);
 
-			if ($cache->initCache(static::CACHE_RULES_TTL, 'WWALL_ACTUALIZE_RULES', 'security'))
+			if ((time() - $lastTime) < static::CACHE_RULES_TTL)
 			{
 				return;
 			}
 
-			$cache->startDataCache();
-			$cache->endDataCache(true);
+			Option::set('main_sec', 'WWALL_ACTUALIZE_RULES', time());
 
 			$newRules = null;
 

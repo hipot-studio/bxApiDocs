@@ -3,8 +3,7 @@
 namespace Bitrix\Main\Security\Notifications;
 
 use Bitrix\Main\Application;
-use Bitrix\Main\Data\Cache;
-use Bitrix\Main\License;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
@@ -18,15 +17,14 @@ class VendorNotifier
 	{
 		try
 		{
-			$cache = Cache::createInstance();
+			$lastTime = Option::get('main_sec', 'SEC_ACTUALIZE_VENDOR_NOTIFICATIONS', 0);
 
-			if ($cache->initCache(static::CACHE_RULES_TTL, 'SEC_ACTUALIZE_VENDOR_NOTIFICATIONS', 'security'))
+			if ((time() - $lastTime) < static::CACHE_RULES_TTL)
 			{
 				return;
 			}
 
-			$cache->startDataCache();
-			$cache->endDataCache(true);
+			Option::set('main_sec', 'SEC_ACTUALIZE_VENDOR_NOTIFICATIONS', time());
 
 			$newData = null;
 
