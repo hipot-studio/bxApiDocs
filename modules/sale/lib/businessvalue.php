@@ -984,15 +984,18 @@ class BusinessValueHandlers
 				),
 				'GET_INSTANCE_VALUE' => function ($providerInstance, $providerValue, $personTypeId)
 				{
-					$value = null;
-
-					global $USER;
-
-					if ($user = $USER->GetByID($providerInstance)->Fetch())
+					if (!$providerValue)
 					{
-						$value = $user[$providerValue];
+						return null;
 					}
-					return $value;
+
+					$user = \CUser::GetByID($providerInstance)->Fetch();
+					if (!$user)
+					{
+						return null;
+					}
+
+					return $user[$providerValue] ?? null;
 				},
 			),
 			'PAYMENT' => array(

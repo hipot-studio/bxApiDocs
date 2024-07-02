@@ -56,7 +56,7 @@ class Storage implements Storable
 			"tmp_name" => $newFile,
 			"type" => $file["type"]
 		));
-		if (str_ends_with($newFile, $file['tmp_name']))
+		if (mb_substr($newFile, -mb_strlen($file['tmp_name'])) == $file['tmp_name'])
 		{
 		}
 		elseif (!$directory->create())

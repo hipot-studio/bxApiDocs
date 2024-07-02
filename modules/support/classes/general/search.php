@@ -7,13 +7,6 @@ class CSupportSearch
 	static $searchModule;
 	const TABLE_NAME = "b_ticket_search";
 
-	static function err_mess()
-	{
-		$module_id = "support";
-		@include($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/" . $module_id . "/install/version.php");
-		return "<br>Module: " . $module_id . " <br>Class: CSupportSearch<br>File: " . __FILE__;
-	}
-
 	public static function getSql($query)
 	{
 		if (!static::isIndexExists() || !static::CheckModule())
@@ -185,7 +178,7 @@ class CSupportSearch
 			$q
 		);
 		$q="($q)";
-		$q = preg_replace("/\\s+/".BX_UTF_PCRE_MODIFIER, " ", $q);
+		$q = preg_replace("/\\s+/u", " ", $q);
 
 		return $q;
 	}
@@ -386,7 +379,7 @@ class CSupportSearch
 			$insertQuery = "INSERT INTO " . self::TABLE_NAME . "(TICKET_ID, SEARCH_WORD) VALUES ".
 				"(".intval($ticket['ID']).", '" . $DB->ForSql($phrase) . "')";
 
-			$DB->Query($insertQuery, false, (self::err_mess()) . "<br>Method: indexTicket<br>Line: " . __LINE__);
+			$DB->Query($insertQuery);
 		}
 	}
 
@@ -408,8 +401,7 @@ class CSupportSearch
 			$ticketId = intval($ticket);
 		}
 
-		$err_mess = (self::err_mess()) . "<br>Function: reindexTicket<br>Line: ";
-		$DB->Query("DELETE FROM ".self::TABLE_NAME." WHERE TICKET_ID = ".$ticketId, false, $err_mess . __LINE__);
+		$DB->Query("DELETE FROM ".self::TABLE_NAME." WHERE TICKET_ID = ".$ticketId);
 
 		return static::indexTicket($ticket, $messages);
 	}
@@ -509,20 +501,19 @@ class CSupportSearch
 	{
 		global $DB;
 		if(!self::CheckModule()) return;
-		$err_mess = (self::err_mess()) . "<br>Function: writeWordsInTable<br>Line: ";
 		$M_ID = intval($M_ID);
 		$ticketSearch = self::TABLE_NAME;
 		$rsSite = CSite::GetByID($SITE_ID);
 		$arrSite = $rsSite->Fetch();
 		$langID = $arrSite["LANGUAGE_ID"];
 		
-		$DB->Query("DELETE FROM $ticketSearch WHERE MESSAGE_ID = $M_ID", false, $err_mess . __LINE__);
+		$DB->Query("DELETE FROM $ticketSearch WHERE MESSAGE_ID = $M_ID");
 		$res = stemming(HTMLToTxt($s), $langID);
 		foreach($res as $key => $val)
 		{
 			$strSql = "INSERT INTO " . $ticketSearch . "(MESSAGE_ID, SEARCH_WORD) VALUES ($M_ID, '" . $DB->ForSql($key) . "')";
-			$res = $DB->Query($strSql, false, $err_mess . __LINE__);
-			//$DB->Insert($ticketSearch, array("MESSAGE_ID" => $M_ID, "SEARCH_WORD" => "'" . $DB->ForSql($key) . "'"), $err_mess . __LINE__);
+			$res = $DB->Query($strSql);
+			//$DB->Insert($ticketSearch, array("MESSAGE_ID" => $M_ID, "SEARCH_WORD" => "'" . $DB->ForSql($key) . "'"));
 		}
 	}
 
@@ -534,7 +525,6 @@ class CSupportSearch
 		global $DB;
 		$firstID = intval($firstID);
 		
-		$err_mess = (self::err_mess()) . "<br>Function: reindexMessages<br>Line: ";
 		$endTime = time() + $periodS;
 		$strSql = "
 			SELECT
@@ -549,7 +539,7 @@ class CSupportSearch
 						AND TM.IS_LOG = 'N'
 						AND LENGTH(TM.MESSAGE) < 10240
 			ORDER BY TM.ID";
-		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$res = $DB->Query($strSql);
 		$lastID = 0;
 		while($cs = $res->Fetch())
 		{
