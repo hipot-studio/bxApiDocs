@@ -99,7 +99,7 @@ class Order implements Entity, Nameable
 
 	public static function getLangName()
 	{
-		return '–ó–∞–∫–∞–∑';
+		return '«‡Í‡Á';
 	}
 
 	/**

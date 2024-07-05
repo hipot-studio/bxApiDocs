@@ -104,6 +104,6 @@ class BusinessValue extends ChildEntity
 	 */
 	public static function getLangName()
 	{
-		return 'Р‘РёР·РЅРµСЃ-СЃРјС‹СЃР»С‹';
+		return 'Бизнес-смыслы';
 	}
 }

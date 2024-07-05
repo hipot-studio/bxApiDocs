@@ -5,10 +5,11 @@ namespace Bitrix\Im\V2\Application;
 use Bitrix\Im\Call\Integration\Zoom;
 use Bitrix\Im\Integration\Disk\Documents;
 use Bitrix\Im\Settings;
-use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
+use Bitrix\ImBot\Bot\Giphy;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Loader;
 
 class Features
 {
@@ -21,10 +22,13 @@ class Features
 		public readonly bool $sidebarBriefs,
 		public readonly bool $zoomActive,
 		public readonly bool $zoomAvailable,
+		public readonly bool $giphyAvailable,
 	){}
 
 	public static function get(): self
 	{
+
+
 		return new self(
 			!Settings::isLegacyChatActivated(),
 			Structure::isSyncAvailable(),
@@ -34,6 +38,15 @@ class Features
 			Documents::getResumesOfCallStatus() === Documents::ENABLED,
 			Zoom::isActive(),
 			Zoom::isAvailable(),
+			self::isGiphyAvailable(),
 		);
+	}
+
+	private static function isGiphyAvailable(): bool
+	{
+		return Loader::includeModule('imbot')
+			&& method_exists(Giphy::class, 'isAvailable')
+			&& Giphy::isAvailable()
+		;
 	}
 }
