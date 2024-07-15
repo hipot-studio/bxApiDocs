@@ -508,4 +508,13 @@ class Deal extends Entity
 	{
 		return true;
 	}
+
+	protected function getHideSumForStagePermissionType(string $stageId, \CCrmPerms $userPermissions): ?string
+	{
+		return $userPermissions->GetPermType(
+			DealCategory::convertToPermissionEntityType($this->categoryId),
+			'HIDE_SUM',
+			["STAGE_ID{$stageId}"]
+		);
+	}
 }

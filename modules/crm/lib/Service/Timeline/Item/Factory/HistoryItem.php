@@ -180,6 +180,12 @@ class HistoryItem
 					return new Item\LogMessage\AI\Call\FillingEntityFieldsFinished($context, $model);
 				case LogMessageType::AI_CALL_LAUNCH_ERROR:
 					return new Item\LogMessage\AI\Call\LaunchError($context, $model);
+				case LogMessageType::AI_CALL_AUTOMATION_LAUNCH_ERROR:
+					return new Item\LogMessage\AI\Call\AutomationLaunchError($context, $model);
+				case LogMessageType::CALL_MOVED:
+				case LogMessageType::OPEN_LINE_MOVED:
+				case LogMessageType::EMAIL_INCOMING_MOVED:
+					return new Item\LogMessage\Binding\Moved($context, $model);
 			}
 		}
 

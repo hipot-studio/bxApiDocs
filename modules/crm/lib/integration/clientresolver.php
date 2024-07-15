@@ -866,12 +866,7 @@ class ClientResolver
 		;
 		if (is_string($title) && $title !== '' && $clientResolverPropertyType['IS_PLACEMENT'] !== 'Y')
 		{
-			$template = Loc::getMessage('CRM_CLIENT_REQUISITE_AUTOCOMPLETE_FILL_IN_01');
-			if (is_string($template) && $template !== '')
-			{
-				$template = mb_strtolower($template);
-				$title = strtr($template, ['#field_name#' => $title]);
-			}
+			$title = static::getClientResolverPlaceholderTextByTitle($title);
 		}
 
 		return $title;
@@ -879,13 +874,16 @@ class ClientResolver
 
 	public static function getClientResolverPlaceholderTextByTitle(string $title): string
 	{
-		if (is_string($title) && $title !== '')
+		if ($title !== '')
 		{
-			$template = Loc::getMessage('CRM_CLIENT_REQUISITE_AUTOCOMPLETE_FILL_IN_01');
-			if (is_string($template) && $template !== '')
+			$modifiedTitle = Loc::getMessage(
+				'CRM_CLIENT_REQUISITE_AUTOCOMPLETE_FILL_IN_02',
+				['#FIELD_NAME#' => $title]
+			);
+
+			if (is_string($modifiedTitle) && $modifiedTitle !== '')
 			{
-				$template = mb_strtolower($template);
-				$title = strtr($template, ['#field_name#' => $title]);
+				$title = $modifiedTitle;
 			}
 		}
 

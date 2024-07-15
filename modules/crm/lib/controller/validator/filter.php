@@ -15,6 +15,7 @@ final class Filter implements Validator
 		'>' => '>',
 		'<' => '<',
 		'@' => '@',
+		'!' => '!',
 		'!@' => '!@',
 		'!=' => '!=',
 		'!%' => '!%',
@@ -124,7 +125,7 @@ final class Filter implements Validator
 			return true;
 		}
 
-		return is_string($filterValue) || is_numeric($filterValue);
+		return is_string($filterValue) || is_numeric($filterValue) || is_null($filterValue) || is_bool($filterValue);
 	}
 
 	private function extractPrefix(string $filterFieldName): ?string

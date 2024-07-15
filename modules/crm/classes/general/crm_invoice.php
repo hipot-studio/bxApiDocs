@@ -4521,6 +4521,11 @@ class CAllCrmInvoice
 	}
 	private static function UnregisterLiveFeedEvent($invoiceID)
 	{
+		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		{
+			return;
+		}
+
 		$invoiceID = intval($invoiceID);
 		if($invoiceID <= 0)
 		{

@@ -154,6 +154,16 @@ class RelationManager
 	}
 
 	/**
+	 * @internal
+	 */
+	public function cleanRelationsCache(): void
+	{
+		EntityConversionMapTable::cleanCache();
+		$this->relationsCache = [];
+		$this->customRelations = null;
+	}
+
+	/**
 	 * Bind the types with each other
 	 *
 	 * @param Relation $relation

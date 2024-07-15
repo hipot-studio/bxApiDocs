@@ -6,6 +6,7 @@ use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\SetExportPreparedData;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Service\Operation\TransactionWrapper;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Result;
 
@@ -49,6 +50,11 @@ final class SetExport extends Base
 		return $item->get(Item\Contact::FIELD_NAME_EXPORT) === $data->export;
 	}
 
+	protected function isWrapItemProcessingInTransaction(): bool
+	{
+		return false;
+	}
+
 	protected function processItem(Factory $factory, Item $item, PreparedData $data): Result
 	{
 		if (!($data instanceof SetExportPreparedData))
@@ -58,6 +64,8 @@ final class SetExport extends Base
 
 		$item->set(Item\Contact::FIELD_NAME_EXPORT, $data->export);
 
-		return $factory->getUpdateOperation($item)->launch();
+		$operation = $factory->getUpdateOperation($item);
+
+		return (new TransactionWrapper($operation))->launch();
 	}
 }

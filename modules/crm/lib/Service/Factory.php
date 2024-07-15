@@ -396,24 +396,31 @@ abstract class Factory
 
 		$parameters = $this->prepareGetListParameters($parameters);
 
-		$itemIds =
-			$this->getDataClass()::getList(['select' => [Item::FIELD_NAME_ID]] + $parameters)
-				->fetchCollection()
-				->getIdList()
-		;
-		if (empty($itemIds))
+		if ($this->isSkipSelectIdsHack($parameters))
 		{
-			return [];
+			$list = $this->getDataClass()::getList($parameters);
+		}
+		else
+		{
+			$itemIds =
+				$this->getDataClass()::getList(['select' => [Item::FIELD_NAME_ID]] + $parameters)
+					->fetchCollection()
+					->getIdList()
+			;
+			if (empty($itemIds))
+			{
+				return [];
+			}
+
+			$params = [
+					'filter' => ['@' . Item::FIELD_NAME_ID => $itemIds],
+					'limit' => null,
+				] + $parameters;
+
+			$list = $this->getDataClass()::getList($params);
 		}
 
 		$items = [];
-
-		$params = [
-				'filter' => ['@' . Item::FIELD_NAME_ID => $itemIds],
-				'limit' => null,
-			] + $parameters;
-
-		$list = $this->getDataClass()::getList($params);
 		while($item = $list->fetchObject())
 		{
 			$items[] = $this->getItemByEntityObject($item);
@@ -1314,7 +1321,14 @@ abstract class Factory
 	 */
 	public function getUpdateOperation(Item $item, Context $context = null): Operation\Update
 	{
-		return new Operation\Update($item, $this->getOperationSettings($context), $this->getFieldsCollection());
+		$operation = new Operation\Update($item, $this->getOperationSettings($context), $this->getFieldsCollection());
+
+		$operation->addAction(
+			Operation::ACTION_AFTER_SAVE,
+			new Operation\Action\DeleteEntityBadges(),
+		);
+
+		return $operation;
 	}
 
 	/**
@@ -2013,6 +2027,41 @@ abstract class Factory
 
 	public function isInCustomSection(): bool
 	{
+		return false;
+	}
+
+	private function isSkipSelectIdsHack(array $parameters): bool
+	{
+		$filter = $parameters['filter'] ?? [];
+		$select = $parameters['select'] ?? [];
+
+		if (count($filter) === 1 && $this->isFilterContainField($filter, Item::FIELD_NAME_ID))
+		{
+			return true;
+		}
+
+		if ((count($select) === 1 && array_key_exists(Item::FIELD_NAME_ID, $select)))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	private function isFilterContainField(array $array, string $field): bool
+	{
+		$keys = array_keys($array);
+		foreach ($keys as $key)
+		{
+			// remove any special symbols from $key
+			$key = preg_replace('/[^a-zA-Z0-9_]/', '', $key);
+
+			if ($key === $field)
+			{
+				return true;
+			}
+		}
+
 		return false;
 	}
 }

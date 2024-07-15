@@ -1,11 +1,11 @@
 <?php
 
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Crm\Integration\StorageManager;
 use Bitrix\Crm\Integration\Channel;
+use Bitrix\Crm\Integration\StorageManager;
 use Bitrix\Crm\Settings\ActivitySettings;
-use Bitrix\Crm\Tracking;
 use Bitrix\Crm\Timeline;
+use Bitrix\Crm\Tracking;
+use Bitrix\Main\Localization\Loc;
 
 if(!IsModuleInstalled('bitrix24'))
 {
@@ -1632,6 +1632,7 @@ class CCrmEMail
 							'ASSOCIATED_ENTITY_ID' => $activityId,
 						],
 						Timeline\LogMessageType::EMAIL_INCOMING_MESSAGE,
+						$activityFields['AUTHOR_ID'] ?? null
 					);
 				}
 			}

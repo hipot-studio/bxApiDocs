@@ -224,7 +224,7 @@ class OpenLine extends Base
 			&& !empty($activityFields['PROVIDER_PARAMS']['USER_CODE'])
 		)
 		{
-			OpenLineManager::closeDialog($activityFields['PROVIDER_PARAMS']['USER_CODE']);
+			OpenLineManager::closeDialog($activityFields['PROVIDER_PARAMS']['USER_CODE'], $params['CURRENT_USER'] ?? 0);
 		}
 	}
 
@@ -268,5 +268,10 @@ class OpenLine extends Base
 	public static function hasPlanner(array $activity): bool
 	{
 		return !Crm::isUniversalActivityScenarioEnabled();
+	}
+
+	public static function getMoveBindingsLogMessageType(): ?string
+	{
+		return LogMessageType::OPEN_LINE_MOVED;
 	}
 }

@@ -6,6 +6,7 @@ use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\SetOpenedPreparedData;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Service\Operation\TransactionWrapper;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Result;
 
@@ -44,6 +45,11 @@ final class SetOpened extends Base
 		return $item->getOpened() === $data->isOpened;
 	}
 
+	protected function isWrapItemProcessingInTransaction(): bool
+	{
+		return false;
+	}
+
 	protected function processItem(Factory $factory, Item $item, PreparedData $data): Result
 	{
 		if (!($data instanceof SetOpenedPreparedData))
@@ -53,6 +59,8 @@ final class SetOpened extends Base
 
 		$item->setOpened($data->isOpened);
 
-		return $factory->getUpdateOperation($item)->launch();
+		$operation = $factory->getUpdateOperation($item);
+
+		return (new TransactionWrapper($operation))->launch();
 	}
 }

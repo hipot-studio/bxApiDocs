@@ -26,6 +26,7 @@ use Bitrix\Crm\Tracking;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
 use Bitrix\Crm\UtmTable;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Crm\Security\QueryBuilder\Result\JoinWithUnionSpecification;
 
 class CAllCrmLead
 {
@@ -210,7 +211,6 @@ class CAllCrmLead
 				),
 				'TITLE' => array(
 					'TYPE' => 'string',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::Required)
 				),
 				'HONORIFIC' => array(
 					'TYPE' => 'crm_status',
@@ -885,6 +885,12 @@ class CAllCrmLead
 		{
 			$arOptions['PERMISSION_SQL_TYPE'] = 'FROM';
 			$arOptions['PERMISSION_SQL_UNION'] = 'DISTINCT';
+		}
+
+		if (JoinWithUnionSpecification::getInstance()->isSatisfiedBy($arFilter))
+		{
+			// When forming a request for restricting rights, the optimization mode with the use of union was used.
+			$arOptions['PERMISSION_BUILDER_OPTION_OBSERVER_JOIN_AS_UNION'] = true;
 		}
 
 		$lb = new CCrmEntityListBuilder(
@@ -2715,35 +2721,39 @@ class CAllCrmLead
 			//endregion
 
 			//region Complete activities if entity is closed
-			if($arRow['STATUS_SEMANTIC_ID'] !== $currentFields['STATUS_SEMANTIC_ID']
+			if (
+				$arRow['STATUS_SEMANTIC_ID'] !== $currentFields['STATUS_SEMANTIC_ID']
 				&& $currentFields['STATUS_SEMANTIC_ID'] !== Bitrix\Crm\PhaseSemantics::PROCESS
 				&& (!isset($options['ENABLE_ACTIVITY_COMPLETION']) || $options['ENABLE_ACTIVITY_COMPLETION'] === true)
 			)
 			{
-				$providerIDs = array();
+				$providerIDs = [];
 				$completionConfig = \Bitrix\Crm\Settings\LeadSettings::getCurrent()->getActivityCompletionConfig();
-				foreach(\Bitrix\Crm\Activity\Provider\ProviderManager::getCompletableProviderList() as $providerInfo)
+				foreach (\Bitrix\Crm\Activity\Provider\ProviderManager::getCompletableProviderList() as $providerInfo)
 				{
 					$providerID = $providerInfo['ID'];
-					if(!isset($completionConfig[$providerID]) || $completionConfig[$providerID])
+					if (!isset($completionConfig[$providerID]) || $completionConfig[$providerID])
 					{
 						$providerIDs[] = $providerID;
 					}
 				}
 
 				$providerQty = count($providerIDs);
-				if($providerQty > 0)
+				if ($providerQty > 0)
 				{
 					$activityUserID = $iUserId;
-					if($activityUserID <= 0 && isset($arFields['MODIFY_BY_ID']))
+					if ($activityUserID <= 0 && isset($arFields['MODIFY_BY_ID']))
 					{
 						$activityUserID = $arFields['MODIFY_BY_ID'];
 					}
+
 					\CCrmActivity::SetAutoCompletedByOwner(
 						CCrmOwnerType::Lead,
 						$ID,
-						$providerQty < count($completionConfig) ? $providerIDs : array(),
-						array('CURRENT_USER' => $activityUserID)
+						$providerQty < count($completionConfig) ? $providerIDs : [],
+						[
+							'CURRENT_USER' => $activityUserID,
+						]
 					);
 				}
 			}

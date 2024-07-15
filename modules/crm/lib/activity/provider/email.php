@@ -7,6 +7,7 @@ use Bitrix\Crm\Activity;
 use Bitrix\Crm\Activity\CommunicationStatistics;
 use Bitrix\Crm\Automation\Trigger\EmailSentTrigger;
 use Bitrix\Crm\Service\Timeline;
+use Bitrix\Crm\Timeline\LogMessageType;
 use Bitrix\Mail\Message;
 use Bitrix\Main\Config;
 use Bitrix\Main\Loader;
@@ -14,7 +15,6 @@ use Bitrix\Main\Localization\Loc;
 
 class Email extends Activity\Provider\Base
 {
-
 	/**
 	 * Size of html description can cause long sanitizing
 	 */
@@ -486,4 +486,8 @@ class Email extends Activity\Provider\Base
 		return preg_replace('/(\s*(\r\n|\n|\r))+/', '<br>', htmlspecialcharsbx($textLikeTextBody));
 	}
 
+	public static function getMoveBindingsLogMessageType(): ?string
+	{
+		return LogMessageType::EMAIL_INCOMING_MOVED;
+	}
 }

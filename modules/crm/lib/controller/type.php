@@ -134,7 +134,7 @@ class Type extends Base
 		}
 		$originalFields = $fields;
 		$fields = $this->convertKeysToUpper($fields);
-		$fieldKeysToUnset = ['ID', 'IS_EXTERNAL', 'CREATED_TIME', 'CREATED_BY', 'UPDATED_TIME', 'UPDATED_BY', 'IS_SAVE_FROM_TYPE_DETAIL'];
+		$fieldKeysToUnset = ['ID', 'IS_EXTERNAL', 'CREATED_TIME', 'CREATED_BY', 'UPDATED_TIME', 'UPDATED_BY'];
 		$fieldKeysToNotSetToType = ['CUSTOM_SECTION_ID'];
 
 		$isNew = $type->getId() <= 0;
@@ -158,37 +158,6 @@ class Type extends Base
 			$this->addError(new Error(Loc::getMessage('CRM_CONTROLLER_TYPE_EXTERNAL_TYPE_WITHOUT_CUSTOM_SECTION_ERROR')));
 
 			return null;
-		}
-
-		$customSectionsArrays = (isset($fields['CUSTOM_SECTIONS']) && is_array($fields['CUSTOM_SECTIONS']))
-			? $fields['CUSTOM_SECTIONS']
-			: []
-		;
-
-		$customSections = [];
-		foreach ($customSectionsArrays as $customSectionsArray)
-		{
-			$customSections[$customSectionsArray['ID']] = CustomSection\Assembler::constructCustomSection($customSectionsArray);
-		}
-
-		$existingCustomSections = $this->getExistingCustomSections();
-
-		// disable deletion of smart processes if saving occurs not due to crm.type.detail
-		$isSaveFromTypeDetail = isset($fields['IS_SAVE_FROM_TYPE_DETAIL']) && $fields['IS_SAVE_FROM_TYPE_DETAIL'] === 'true';
-		if (!$isSaveFromTypeDetail)
-		{
-			$customSections = $this->getAugmentedCustomSections($customSections, $existingCustomSections);
-			$fields['CUSTOM_SECTIONS'] = $this->getCustomSectionsArray($customSections);
-		}
-
-		foreach ($existingCustomSections as $id => $section)
-		{
-			if (!isset($customSections[$id]) && !empty($section->getPages()))
-			{
-				$this->addError(new Error(Loc::getMessage('CRM_CONTROLLER_TYPE_DELETE_CUSTOM_SECTION_WITH_PAGES_ERROR')));
-
-				return null;
-			}
 		}
 
 		if (isset($fields['TITLE']))
@@ -249,65 +218,6 @@ class Type extends Base
 
 		$this->addErrors($result->getErrors());
 		return null;
-	}
-
-	/**
-	 * $customSections items must be with id in key
-	 *
-	 * @param CustomSection[] $customSections
-	 * @param CustomSection[] $customSectionsToAdd
-	 * @return CustomSection[]
-	 */
-	protected function getAugmentedCustomSections(array $customSections, array $customSectionsToAdd): array
-	{
-		foreach ($customSectionsToAdd as $id => $customSectionToAdd)
-		{
-			if (!isset($customSections[$id]))
-			{
-				$customSections[$id] = $customSectionToAdd;
-			}
-		}
-
-		return $customSections;
-	}
-
-	protected function getCustomSectionsArray(array $customSections): array
-	{
-		$customSectionsArray = [];
-
-		foreach ($customSections as $customSection)
-		{
-			if (is_array($customSection))
-			{
-				$customSectionsArray[] = $customSection;
-			}
-
-			if ($customSection instanceof CustomSection)
-			{
-				$pages = [];
-
-				foreach ($customSection->getPages() as $page)
-				{
-					$pages[] = [
-						'ID' => $page->getId(),
-						'CUSTOM_SECTION_ID' => $page->getCustomSectionId(),
-						'CODE' => $page->getCode(),
-						'TITLE' => $page->getTitle(),
-						'SORT' => $page->getSort(),
-						'SETTINGS' => $page->getSettings(),
-					];
-				}
-
-				$customSectionsArray[] = [
-					'ID' => $customSection->getId(),
-					'TITLE' => $customSection->getTitle(),
-					'CODE' => $customSection->getCode(),
-					'PAGES' => $pages,
-				];
-			}
-		}
-
-		return $customSectionsArray;
 	}
 
 	public function deleteAction(?Dynamic\Type $type = null): ?array
@@ -523,13 +433,5 @@ class Type extends Base
 	protected function saveCustomSections(Dynamic\Type $type, array $fields): Result
 	{
 		return Container::getInstance()->getAutomatedSolutionManager()->setAutomatedSolutions($type, $fields);
-	}
-
-	/**
-	 * @return CustomSection[]
-	 */
-	protected function getExistingCustomSections(): array
-	{
-		return Container::getInstance()->getAutomatedSolutionManager()->getExistingIntranetCustomSections();
 	}
 }

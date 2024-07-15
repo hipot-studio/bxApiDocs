@@ -12,7 +12,9 @@ use Bitrix\Crm\Activity\Provider;
 use Bitrix\Crm\Activity\Provider\Eventable\PingOffset;
 use Bitrix\Crm\Activity\Provider\Eventable\PingQueue;
 use Bitrix\Crm\Activity\Provider\ToDo\ToDo;
+use Bitrix\Crm\ActivityTable;
 use Bitrix\Crm\Automation\Trigger\ResourceBookingTrigger;
+use Bitrix\Crm\Comparer\ComparerBase;
 use Bitrix\Crm\Entity\Traits\EntityFieldsNormalizer;
 use Bitrix\Crm\Integration\Disk\HiddenStorage;
 use Bitrix\Crm\Integration\StorageFileType;
@@ -82,11 +84,15 @@ class CAllCrmActivity
 			$arFields['STORAGE_TYPE_ID'] = StorageType::getDefaultTypeID();
 		}
 
-		$params = array();
+		$params = [
+			'INITIATED_BY_CALENDAR' => (bool) ($options['INITIATED_BY_CALENDAR'] ?? false),
+		];
+
 		if(isset($options['PRESERVE_CREATION_TIME']))
 		{
 			$params['PRESERVE_CREATION_TIME'] = $options['PRESERVE_CREATION_TIME'];
 		}
+
 		if (!self::rebuildFieldsForDataBase('ADD', $arFields, 0, $params))
 		{
 			return false;
@@ -236,14 +242,6 @@ class CAllCrmActivity
 			self::SaveCommunications($ID, $arFields['COMMUNICATIONS'], $arFields, false, false);
 		}
 
-		$needSynchronizePingQueue = false;
-		$arPingOffsets = self::fetchActivityPingOffsets($arFields);
-		if (!empty($arPingOffsets))
-		{
-			PingOffset::getInstance()->register($ID, $arPingOffsets);
-			$needSynchronizePingQueue = true;
-		}
-
 		$completed = isset($arFields['COMPLETED']) && $arFields['COMPLETED'] === 'Y';
 		if($completed && isset($arFields['STATUS']))
 		{
@@ -254,17 +252,17 @@ class CAllCrmActivity
 		{
 			$deadline = \Bitrix\Main\Type\DateTime::createFromUserTime($deadline);
 			$deadline->setTime(0, 0, 0);
-			foreach($arBindings as $arBinding)
+			foreach ($arBindings as $arBinding)
 			{
 				$curOwnerTypeID = isset($arBinding['OWNER_TYPE_ID']) ? intval($arBinding['OWNER_TYPE_ID']) : 0;
 				$curOwnerID = isset($arBinding['OWNER_ID']) ? intval($arBinding['OWNER_ID']) : 0;
-				if($curOwnerID > 0)
+				if ($curOwnerID > 0 && !CCrmDateTimeHelper::IsMaxDatabaseDate($deadline))
 				{
-					if($curOwnerTypeID === CCrmOwnerType::Deal)
+					if ($curOwnerTypeID === CCrmOwnerType::Deal)
 					{
 						Bitrix\Crm\Statistics\DealActivityStatisticEntry::register($curOwnerID, null, array('DATE' => $deadline));
 					}
-					elseif($curOwnerTypeID === CCrmOwnerType::Lead)
+					elseif ($curOwnerTypeID === CCrmOwnerType::Lead)
 					{
 						Bitrix\Crm\Statistics\LeadActivityStatisticEntry::register($curOwnerID, null, array('DATE' => $deadline));
 					}
@@ -272,6 +270,8 @@ class CAllCrmActivity
 			}
 			unset($arBinding);
 		}
+
+		$arPingOffsets = self::fetchActivityPingOffsets($arFields);
 
 		$lightTimeDate = (new FillActLightCounter())->onActAdd($arFields, $arPingOffsets);
 		$arFields['LIGHT_COUNTER_AT'] = $lightTimeDate;
@@ -289,16 +289,13 @@ class CAllCrmActivity
 					$lightTimeDate
 				)
 			);
-
-			if ($needSynchronizePingQueue)
-			{
-				PingQueue::getInstance()->register($ID, $completed, $arFields['DEADLINE']);
-			}
 		}
 
 		\Bitrix\Crm\Activity\CommunicationStatistics::registerActivity($arFields);
 		if ($deadline)
+		{
 			\Bitrix\Crm\Statistics\ActivityStatisticEntry::register($ID, $arFields);
+		}
 
 		//region Search content index
 		Bitrix\Crm\Search\SearchContentBuilderFactory::create(CCrmOwnerType::Activity)->build($ID);
@@ -334,17 +331,17 @@ class CAllCrmActivity
 		$providerTypeId = isset($arFields['PROVIDER_TYPE_ID']) ? (string) $arFields['PROVIDER_TYPE_ID'] : null;
 		if (
 			$provider !== null
-			&& $provider::canUseCalendarEvents($providerTypeId)
+			&& $provider::canAddCalendarEvents($providerTypeId)
 			&& !$provider::skipCalendarSync($arFields, $options)
 		)
 		{
 			$skipCalendarEvent = isset($options['SKIP_CALENDAR_EVENT']) ? (bool)$options['SKIP_CALENDAR_EVENT'] : null;
 			$calendarEventId =  isset($arFields['CALENDAR_EVENT_ID']) ? (int)$arFields['CALENDAR_EVENT_ID'] : 0;
-			$completed = isset($arFields['COMPLETED']) && $arFields['COMPLETED'] === 'Y';
+			$isCompleted = isset($arFields['COMPLETED']) && $arFields['COMPLETED'] === 'Y';
 			if (
 				!$skipCalendarEvent
 				&& $calendarEventId <= 0
-				&& (!$completed || $provider::canKeepCompletedInCalendar($providerTypeId))
+				&& (!$isCompleted || $provider::canKeepCompletedInCalendar($providerTypeId))
 			)
 			{
 				$eventID = self::SaveCalendarEvent($arFields);
@@ -354,6 +351,15 @@ class CAllCrmActivity
 
 					$arFields['CALENDAR_EVENT_ID'] = $eventID;
 				}
+			}
+		}
+
+		if (!$completed && !empty($arPingOffsets))
+		{
+			PingOffset::getInstance()->register($ID, $arPingOffsets);
+			if ($provider === null || $provider::needSynchronizePingQueue($arFields))
+			{
+				PingQueue::getInstance()->register($ID, false, $arFields['DEADLINE']);
 			}
 		}
 
@@ -579,8 +585,7 @@ class CAllCrmActivity
 		}
 		else
 		{
-			unset($arFields['PARENT_ID']);
-			unset($arFields['THREAD_ID']);
+			unset($arFields['PARENT_ID'], $arFields['THREAD_ID']);
 		}
 
 		self::NormalizeDateTimeFields($arFields);
@@ -729,8 +734,8 @@ class CAllCrmActivity
 			}
 		}
 
-		$prevDeadline = isset($arPrevEntity['DEADLINE']) ? $arPrevEntity['DEADLINE'] : '';
-		$curDeadline = isset($arCurEntity['DEADLINE']) ? $arCurEntity['DEADLINE'] : '';
+		$prevDeadline = $arPrevEntity['DEADLINE'] ?? '';
+		$curDeadline = $arCurEntity['DEADLINE'] ?? '';
 
 		if ($prevDeadline !== $curDeadline)
 		{
@@ -746,23 +751,25 @@ class CAllCrmActivity
 			$needRegisterUncompletedActivities = true;
 		}
 
-		if($prevCompletedForStatistics
+		if (
+			$prevCompletedForStatistics
 			&& $prevDeadline
-			&& ($bindingsChanged || $prevCompletedForStatistics != $curCompletedForStatistics || $prevDeadline !== $curDeadline))
+			&& ($bindingsChanged || $prevCompletedForStatistics != $curCompletedForStatistics || $prevDeadline !== $curDeadline)
+		)
 		{
 			$deadline = \Bitrix\Main\Type\DateTime::createFromUserTime($prevDeadline);
 			$deadline->setTime(0, 0, 0);
-			foreach($arPrevBindings as $arBinding)
+			foreach ($arPrevBindings as $arBinding)
 			{
 				$curOwnerTypeID = isset($arBinding['OWNER_TYPE_ID']) ? intval($arBinding['OWNER_TYPE_ID']) : 0;
 				$curOwnerID = isset($arBinding['OWNER_ID']) ? intval($arBinding['OWNER_ID']) : 0;
-				if($curOwnerID > 0)
+				if ($curOwnerID > 0 && !CCrmDateTimeHelper::IsMaxDatabaseDate($deadline))
 				{
-					if($curOwnerTypeID === CCrmOwnerType::Deal)
+					if ($curOwnerTypeID === CCrmOwnerType::Deal)
 					{
 						Bitrix\Crm\Statistics\DealActivityStatisticEntry::register($curOwnerID, null, array('DATE' => $deadline));
 					}
-					elseif($curOwnerTypeID === CCrmOwnerType::Lead)
+					elseif ($curOwnerTypeID === CCrmOwnerType::Lead)
 					{
 						Bitrix\Crm\Statistics\LeadActivityStatisticEntry::register($curOwnerID, null, array('DATE' => $deadline));
 					}
@@ -770,21 +777,21 @@ class CAllCrmActivity
 			}
 		}
 
-		if($curCompletedForStatistics && $curDeadline !== '')
+		if ($curCompletedForStatistics && $curDeadline !== '')
 		{
 			$deadline = \Bitrix\Main\Type\DateTime::createFromUserTime($curDeadline);
 			$deadline->setTime(0, 0, 0);
-			foreach($arBindings as $arBinding)
+			foreach ($arBindings as $arBinding)
 			{
 				$curOwnerTypeID = isset($arBinding['OWNER_TYPE_ID']) ? (int)$arBinding['OWNER_TYPE_ID'] : 0;
 				$curOwnerID = isset($arBinding['OWNER_ID']) ? (int)$arBinding['OWNER_ID'] : 0;
-				if($curOwnerID > 0)
+				if ($curOwnerID > 0 && !CCrmDateTimeHelper::IsMaxDatabaseDate($deadline))
 				{
-					if($curOwnerTypeID === CCrmOwnerType::Deal)
+					if ($curOwnerTypeID === CCrmOwnerType::Deal)
 					{
 						Bitrix\Crm\Statistics\DealActivityStatisticEntry::register($curOwnerID, null, array('DATE' => $deadline));
 					}
-					elseif($curOwnerTypeID === CCrmOwnerType::Lead)
+					elseif ($curOwnerTypeID === CCrmOwnerType::Lead)
 					{
 						Bitrix\Crm\Statistics\LeadActivityStatisticEntry::register($curOwnerID, null, array('DATE' => $deadline));
 					}
@@ -868,16 +875,29 @@ class CAllCrmActivity
 		}
 		// <-- Synchronize user activity
 
-		if ($needSynchronizePingQueue)
-		{
-			PingQueue::getInstance()->register($ID, $curCompleted, $curDeadline);
-		}
-
 		Crm\Activity\Provider\ProviderManager::syncBadgesOnActivityUpdate(
 			$ID,
 			$arCurEntity,
 			$bindingsChanged ? array_intersect($arPrevBindings, $arBindings) : $arPrevBindings,
 		);
+
+		if (!empty($options['MOVE_BINDINGS_MAP']))
+		{
+			$sourceIdentifier = $options['MOVE_BINDINGS_MAP']['source'] ?? null;
+			if ($sourceIdentifier instanceof Crm\ItemIdentifier)
+			{
+				Crm\Activity\Provider\ProviderManager::syncBadgesOnBindingsChange(
+					$ID,
+					[],
+					[
+						[
+							'OWNER_TYPE_ID' => $sourceIdentifier->getEntityTypeId(),
+							'OWNER_ID' => $sourceIdentifier->getEntityId()
+						],
+					],
+				);
+			}
+		}
 
 		\Bitrix\Crm\Counter\Monitor::getInstance()->onActivityUpdate(
 			$arPrevEntity,
@@ -913,7 +933,7 @@ class CAllCrmActivity
 
 		if (
 			$provider !== null
-			&& $provider::canUseCalendarEvents($providerTypeId)
+			&& $provider::canAddCalendarEvents($providerTypeId)
 			&& !$provider::skipCalendarSync($arFields, $options)
 		)
 		{
@@ -990,6 +1010,18 @@ class CAllCrmActivity
 			}
 		}
 
+		if ($needSynchronizePingQueue)
+		{
+			if ($provider === null || $provider::needSynchronizePingQueue($arCurEntity))
+			{
+				PingQueue::getInstance()->register($ID, $curCompleted, $curDeadline);
+			}
+			else
+			{
+				PingQueue::getInstance()->unregister($ID);
+			}
+		}
+
 		$registerSonetEvent = isset($options['REGISTER_SONET_EVENT']) && $options['REGISTER_SONET_EVENT'] === true;
 		$isSonetEventRegistred = false;
 
@@ -1008,15 +1040,16 @@ class CAllCrmActivity
 
 		\Bitrix\Crm\Timeline\ActivityController::getInstance()->onModify(
 			$ID,
-			array(
+			[
 				'CURRENT_FIELDS' => $arCurEntity,
 				'CURRENT_BINDINGS' => $arBindings,
 				'PREVIOUS_FIELDS' => $arPrevEntity,
 				'CURRENT_USER' => $options['CURRENT_USER'] ?? null,
 				'ADDITIONAL_PARAMS' => [
-					'CUSTOM_CREATION_TIME' => $options['CUSTOM_CREATION_TIME'] ?? null
-				]
-			)
+					'CUSTOM_CREATION_TIME' => $options['CUSTOM_CREATION_TIME'] ?? null,
+					'MOVE_BINDINGS_MAP' => $options['MOVE_BINDINGS_MAP'] ?? [],
+				],
+			],
 		);
 
 		if($registerSonetEvent)
@@ -1131,8 +1164,21 @@ class CAllCrmActivity
 			&& is_array($fields['BINDINGS'])
 		)
 		{
-			$fields['OWNER_ID'] = $fields['BINDINGS'][0]['OWNER_ID'];
-			$fields['OWNER_TYPE_ID'] = $fields['BINDINGS'][0]['OWNER_TYPE_ID'];
+			$bindingsFound = false;
+			foreach ($fields['BINDINGS'] as $binding)
+			{
+				if ($binding['OWNER_TYPE_ID'] != CCrmOwnerType::Contact && $binding['OWNER_TYPE_ID'] != CCrmOwnerType::Company)
+				{
+					$fields['OWNER_ID'] = $binding['OWNER_ID'];
+					$fields['OWNER_TYPE_ID'] = $binding['OWNER_TYPE_ID'];
+					$bindingsFound = true;
+				}
+			}
+			if (!$bindingsFound)
+			{
+				$fields['OWNER_ID'] = $fields['BINDINGS'][0]['OWNER_ID'];
+				$fields['OWNER_TYPE_ID'] = $fields['BINDINGS'][0]['OWNER_TYPE_ID'];
+			}
 		}
 	}
 
@@ -1184,9 +1230,18 @@ class CAllCrmActivity
 					$ary['SUBJECT'] = $provider::getActivityTitle($ary);
 				}
 
+				$moveToBinOpts = [
+					'FIELDS' => $ary
+				];
+
+				if (isset($options['RECYCLE_BIN_FORCE_USER_ID']))
+				{
+					$moveToBinOpts['FORCE_USER_ID'] = $options['RECYCLE_BIN_FORCE_USER_ID'];
+				}
+
 				$recycleBinResult = \Bitrix\Crm\Recycling\ActivityController::getInstance()->moveToBin(
 					$ID,
-					array('FIELDS' => $ary)
+					$moveToBinOpts,
 				);
 
 				if($recycleBinResult->isSuccess())
@@ -1296,20 +1351,19 @@ class CAllCrmActivity
 				{
 					$deadline = \Bitrix\Main\Type\DateTime::createFromUserTime($deadline);
 					$deadline->setTime(0, 0, 0);
-					foreach($arBindings as $arBinding)
+					foreach ($arBindings as $arBinding)
 					{
 						$curOwnerTypeID = isset($arBinding['OWNER_TYPE_ID']) ? intval($arBinding['OWNER_TYPE_ID']) : 0;
 						$curOwnerID = isset($arBinding['OWNER_ID']) ? intval($arBinding['OWNER_ID']) : 0;
-						if($curOwnerID > 0)
+						if ($curOwnerID > 0 && !CCrmDateTimeHelper::IsMaxDatabaseDate($deadline))
 						{
-							if($curOwnerTypeID === CCrmOwnerType::Deal)
+							if ($curOwnerTypeID === CCrmOwnerType::Deal)
 							{
 								Bitrix\Crm\Statistics\DealActivityStatisticEntry::register($curOwnerID, null, array('DATE' => $deadline));
 							}
-							elseif($curOwnerTypeID === CCrmOwnerType::Lead)
+							elseif ($curOwnerTypeID === CCrmOwnerType::Lead)
 							{
 								Bitrix\Crm\Statistics\LeadActivityStatisticEntry::register($curOwnerID, null, array('DATE' => $deadline));
-								//Bitrix\Crm\Statistics\LeadProcessStatisticsEntry::register($curOwnerID, null, array('IS_NEW' => false, 'DATE' => $deadline));
 							}
 						}
 					}
@@ -2028,7 +2082,7 @@ class CAllCrmActivity
 			}
 		}
 
-		$provider = self::GetActivityProvider($action == 'ADD' ? $fields : $prevFields);
+		$provider = self::GetActivityProvider($action === 'ADD' ? $fields : $prevFields);
 		if ($provider !== null)
 		{
 			$result = $provider::checkFields($action, $fields, $ID, $params);
@@ -2040,11 +2094,16 @@ class CAllCrmActivity
 					self::RegisterError(array('text' => $error->getMessage()));
 				}
 			}
+
 			if (empty($fields['PROVIDER_ID']))
+			{
 				$fields['PROVIDER_ID'] = $provider::getId();
+			}
 
 			if (empty($fields['PROVIDER_TYPE_ID']))
-				$fields['PROVIDER_TYPE_ID'] = $provider::getTypeId($action == 'ADD' ? $fields : $prevFields);
+			{
+				$fields['PROVIDER_TYPE_ID'] = $provider::getTypeId($action === 'ADD' ? $fields : $prevFields);
+			}
 		}
 
 		if (isset($fields['PROVIDER_PARAMS']) && !is_array($fields['PROVIDER_PARAMS']))
@@ -4271,7 +4330,7 @@ class CAllCrmActivity
 			$provider = self::GetActivityProvider($fields);
 			if ($provider !== null)
 			{
-				$provider::onBeforeComplete($ID, $fields);
+				$provider::onBeforeComplete($ID, $fields, ['CURRENT_USER' => $options['CURRENT_USER'] ?? \CCrmSecurityHelper::GetCurrentUserID()]);
 			}
 		}
 
@@ -4289,41 +4348,57 @@ class CAllCrmActivity
 
 		return self::Update($ID, array('COMPLETED' => 'Y', 'STATUS' => CCrmActivityStatus::AutoCompleted), true, true, $options);
 	}
-	public static function SetAutoCompletedByOwner($ownerTypeID, $ownerID, array $providerIDs = null, array $options = null)
+
+	public static function SetAutoCompletedByOwner($ownerTypeId, $ownerId, array $providerIds = null, array $options = null)
 	{
-		$ownerID = (int)$ownerID;
-		$ownerTypeID = (int)$ownerTypeID;
-		if($ownerID <= 0 || $ownerTypeID <= 0)
+		$ownerTypeId = (int)$ownerTypeId;
+		$ownerId = (int)$ownerId;
+		if ($ownerId <= 0 || $ownerTypeId <= 0)
 		{
 			return;
 		}
 
-		$query = new \Bitrix\Main\Entity\Query(\Bitrix\Crm\ActivityTable::getEntity());
-		$query->addSelect('ID');
-		$query->registerRuntimeField('',
-			new \Bitrix\Main\Entity\ReferenceField('B',
-				\Bitrix\Crm\ActivityBindingTable::getEntity(),
-				array(
-					'=ref.ACTIVITY_ID' => 'this.ID',
-					'=ref.OWNER_ID' => new \Bitrix\Main\DB\SqlExpression($ownerID),
-					'=ref.OWNER_TYPE_ID' => new \Bitrix\Main\DB\SqlExpression($ownerTypeID)
-				),
-				array('join_type' => 'INNER')
-			)
-		);
-
-		$query->addFilter('=COMPLETED', 'N');
-		if(is_array($providerIDs) && !empty($providerIDs))
+		$filter = [
+			'=COMPLETED' => 'N',
+			'=BINDINGS.OWNER_TYPE_ID' => $ownerTypeId,
+			'=BINDINGS.OWNER_ID' => $ownerId,
+		];
+		if (is_array($providerIds) && !empty($providerIds))
 		{
-			$query->addFilter('@PROVIDER_ID', $providerIDs);
+			$filter['@PROVIDER_ID']	= $providerIds;
 		}
 
-		$dbResult = $query->exec();
-		while($fields = $dbResult->fetch())
+		$fields = ActivityTable::getList([
+			'select' => ['ID'],
+			'filter' => $filter,
+		])->fetchAll();
+		$activityIds = array_column($fields, 'ID');
+		if (empty($activityIds))
 		{
-			self::SetAutoCompleted($fields['ID'], $options);
+			return;
+		}
+
+		// additional filter
+		if (ActivitySettings::getValue(ActivitySettings::CHECK_BINDINGS_BEFORE_AUTO_COMPLETE))
+		{
+			$bindings = Crm\ActivityBindingTable::getList([
+				'select' => ['ACTIVITY_ID', 'OWNER_TYPE_ID', 'OWNER_ID'],
+				'filter' => ['@ACTIVITY_ID' => $activityIds],
+			])->fetchAll();
+			$notClosedBindings = array_filter(
+				$bindings,
+				static fn($item) => !ComparerBase::isClosed(new Bitrix\Crm\ItemIdentifier($item['OWNER_TYPE_ID'], $item['OWNER_ID']))
+			);
+			$filteredActivityIds = array_unique(array_column($notClosedBindings, 'ACTIVITY_ID'));
+			$activityIds = array_diff($activityIds, $filteredActivityIds);
+		}
+
+		foreach ($activityIds as $activityId)
+		{
+			self::SetAutoCompleted($activityId, $options);
 		}
 	}
+
 	public static function SetPriority($ID, $priority, $options = array())
 	{
 		$ID = intval($ID);
@@ -4710,11 +4785,18 @@ class CAllCrmActivity
 
 			if($isNew)
 			{
-				//Meeting by default
-				$arFields['TYPE_ID'] = CCrmActivityType::Meeting;
+				if (\Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled())
+				{
+					$arFields['TYPE_ID'] = CCrmActivityType::Provider;
+					$arFields['PROVIDER_ID'] = ToDo::PROVIDER_ID;
+				}
+				else
+				{
+					$arFields['TYPE_ID'] = CCrmActivityType::Meeting;
+					$arFields['ASSOCIATED_ENTITY_ID'] = $eventID;
+				}
 				//Not completed for new activities. Do not change existed activities.
 				$arFields['COMPLETED'] = 'N';
-				$arFields['ASSOCIATED_ENTITY_ID'] = $eventID;
 			}
 
 			if($isNew || isset($arEventFields['NAME']))
@@ -4737,7 +4819,8 @@ class CAllCrmActivity
 				$userID = (int)$arEventFields['CREATED_BY'];
 			}
 
-			if($userID > 0)
+			global $USER;
+			if ($userID > 0 && !$USER?->getId())
 			{
 				//Try to use event owner timezone strictly. In case of work under agent.
 				$arFields['TIME_ZONE_OFFSET'] = CTimeZone::GetOffset($userID, true);
@@ -4929,7 +5012,15 @@ class CAllCrmActivity
 				self::SetFromCalendarEvent($eventID, $arEventFields, $arFields);
 				if (isset($arFields['BINDINGS']) && !empty($arFields['BINDINGS']))
 				{
-					self::Add($arFields, false, true, array('SKIP_CALENDAR_EVENT' => true, 'REGISTER_SONET_EVENT' => true));
+					self::Add(
+						$arFields,
+						false,
+						true, [
+							'SKIP_CALENDAR_EVENT' => true,
+							'REGISTER_SONET_EVENT' => true,
+							'INITIATED_BY_CALENDAR' => true,
+						]
+					);
 				}
 			}
 		}
@@ -4956,7 +5047,7 @@ class CAllCrmActivity
 		}
 	}
 	// <-- Event handlers
-	public static function DeleteByOwner($ownerTypeID, $ownerID)
+	public static function DeleteByOwner($ownerTypeID, $ownerID, array $delOptions = [])
 	{
 		$ownerID = (int)$ownerID;
 		$ownerTypeID = (int)$ownerTypeID;
@@ -5008,11 +5099,11 @@ class CAllCrmActivity
 		}
 
 		$itemIDs = array_keys($deleteMap);
-		$delOptions = array(
+		$delOptions = array_merge($delOptions, [
 			'SKIP_BINDINGS' => true,
 			'SKIP_USER_ACTIVITY_SYNC' => true,
 			'SKIP_STATISTICS' => true
-		);
+		]);
 
 		if(ActivitySettings::getValue(ActivitySettings::KEEP_UNBOUND_TASKS))
 		{
@@ -6843,6 +6934,23 @@ class CAllCrmActivity
 			}
 		}
 
+		if (empty($prevFields) && !empty($arFields['PING_OFFSETS'])) // only for create new calendar event
+		{
+			$arCalEventFields['REMIND'] = [];
+			foreach ($arFields['PING_OFFSETS'] as $offset)
+			{
+				if (!is_numeric($offset) || $offset < 0)
+				{
+					continue;
+				}
+
+				$arCalEventFields['REMIND'][] = [
+					'type' => 'min',
+					'count' => $offset,
+				];
+			}
+		}
+
 		//convert current user time to calendar owner time
 		if ($userTzName = \CCalendar::GetUserTimezoneName($responsibleID, true))
 		{
@@ -7585,6 +7693,11 @@ class CAllCrmActivity
 	}
 	private static function SynchronizeLiveFeedEvent($activityID, $params)
 	{
+		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		{
+			return true;
+		}
+
 		if(!is_array($params))
 		{
 			$params = array();
@@ -7754,6 +7867,11 @@ class CAllCrmActivity
 	}
 	private static function UnregisterLiveFeedEvent($activityID)
 	{
+		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		{
+			return;
+		}
+
 		$slEntities = CCrmLiveFeed::GetLogEvents(
 			array(),
 			array(
@@ -8218,12 +8336,12 @@ class CCrmActivityDirection
 
 	public static function IsDefined($typeId): bool
 	{
-		return in_array($typeId, [self::Incoming, self::Outgoing], true);
+		return in_array((int)$typeId, [self::Incoming, self::Outgoing], true);
 	}
 
 	public static function ResolveName($typeId): string
 	{
-		return match ($typeId)
+		return match ((int)$typeId)
 		{
 			self::Incoming => self::IncomingName,
 			self::Outgoing => self::OutgoingName,

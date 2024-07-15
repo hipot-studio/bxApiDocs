@@ -225,7 +225,7 @@ final class Sender
 		$comEntityId = $this->getComEntityItemIdentifier()->getEntityId();
 		$comEntityTypeId = $this->getComEntityItemIdentifier()->getEntityTypeId();
 		$bindings = $this->getBindings();
-		
+
 		$additionalFields = [
 			'ACTIVITY_PROVIDER_TYPE_ID' => $this->getActivityProviderTypeId($message->senderId),
 			'ENTITY_TYPE' => \CCrmOwnerType::ResolveName($comEntityTypeId),
@@ -235,6 +235,7 @@ final class Sender
 			'ACTIVITY_AUTHOR_ID' => $this->responsibleId,
 			'ACTIVITY_DESCRIPTION' => $message->body,
 			'MESSAGE_TO' => $message->to,
+			'ORIGINAL_TEMPLATE_ID' => $message->templateOriginalId,
 		];
 
 		$this->prepareOrderAdditionalFields($additionalFields, $bindings);
@@ -270,6 +271,7 @@ final class Sender
 				'PAYMENT' => $payment,
 				'SHIPMENT' => $this->shipmentId ? ShipmentRepository::getInstance()->getById($this->shipmentId) : null,
 			];
+			$additionalFields['CREATE_VIEWED_TIMELINE_ITEM'] = true;
 		}
 	}
 

@@ -1378,6 +1378,8 @@ abstract class Kanban
 
 		$activeAutomationDebugEntityIds = \CCrmBizProcHelper::getActiveDebugEntityIds($this->entity->getTypeId());
 
+		$userPermissions = Container::getInstance()->getUserPermissions()->getCrmPermissions();
+
 		foreach($rows as $rowId => $row)
 		{
 			if (is_array($renderedRows[$rowId]))
@@ -1402,7 +1404,10 @@ abstract class Kanban
 				if (array_key_exists($code, $row) && array_key_exists($code, $displayedFields))
 				{
 					$displayedField = $displayedFields[$code];
-					if ($this->shouldShowField($displayedField, $row[$code]))
+					if (
+						$this->shouldShowField($displayedField, $row[$code])
+						&& !$this->skipClientField($row, $code)
+					)
 					{
 						$field = [
 							'code' => $code,
@@ -1526,6 +1531,28 @@ abstract class Kanban
 				'useTodoEditorV2' => $useTodoEditorV2,
 				'draggable' => (bool)($row['DRAGGABLE'] ?? true),
 			];
+
+			/*
+			 * Perhaps in the future we will want to hide the amount in each element, then it will be enough
+			 * for this option to be set to true for the elements in which the amounts need to be hidden.
+			 *
+			 * if (!$entity->havePermissionToDisplayColumnSum($columnId, $userPermissions))
+			 * {
+			 *	$result[$rowId]['price'] = null;
+			 *	$result[$rowId]['price_formatted'] = $entity->getHiddenPriceFormattedText($row['CURRENCY_FORMAT']);
+			 *	$result[$rowId]['entity_price'] = null;
+			 *
+			 *	foreach ($result[$rowId]['fields'] as &$field)
+			 *	{
+			 *		if ($field['code'] === Item::FIELD_NAME_OPPORTUNITY)
+			 *		{
+			 *			$field['value'] = null;
+			 *		}
+			 *	}
+			 *	unset($field);
+			 * }
+			 */
+
 			$result[$rowId] = array_merge($result[$rowId], $this->prepareAdditionalFields($row));
 			$isRestricted = (!empty($restrictedItemIds) && in_array($row['ID'], $restrictedItemIds));
 			if ($isRestricted)
@@ -1558,10 +1585,17 @@ abstract class Kanban
 			$result = $this->sort($result);
 		}
 
+		$this->entity->appendAdditionalData($result);
+
 		return [
 			'ITEMS' => $result,
 			'RESTRICTED_VALUE_CLICK_CALLBACK' => $restrictedValueClickCallback,
 		];
+	}
+
+	protected function skipClientField(array $row, string $code): bool
+	{
+		return $this->entity->skipClientField($row, $code);
 	}
 
 	protected function isRequiredFieldEmpty(string $fieldName, mixed $fieldValue): bool

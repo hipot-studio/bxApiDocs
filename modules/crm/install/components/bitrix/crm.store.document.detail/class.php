@@ -23,6 +23,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Crm\Component\ComponentError;
 use Bitrix\Crm\Component\EntityDetails\ComponentMode;
 use Bitrix\Catalog;
+use Bitrix\Sale\Tax\VatCalculator;
 use Bitrix\UI;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider\ShipmentDocumentRealization;
@@ -303,7 +304,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 			'DOCUMENT_ID' => $this->entityID,
 			'ENTITY_ID' => $this->entityID,
 			'ENTITY_TYPE_ID' => CCrmOwnerType::ShipmentDocument,
-			'ENTITY_TYPE_NAME' => CCrmOwnerType::ShipmentDocument,
+			'ENTITY_TYPE_NAME' => CCrmOwnerType::ShipmentDocumentName,
 			'TITLE' => $this->entityData['TITLE'],
 			'SHOW_URL' => CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::OrderShipment, $this->entityID, false),
 		];
@@ -1187,7 +1188,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 			{
 				$basketItem = $shipmentItem->getBasketItem();
 				$documentProducts[] = [
-					'PRICE' => $basketItem->getPrice(),
+					'PRICE' => $basketItem->getPriceWithVat(),
 					'PRODUCT_NAME' => $basketItem->getField('NAME'),
 					'CURRENCY' => $basketItem->getCurrency(),
 					'QUANTITY' => $shipmentItem->getQuantity(),
@@ -1195,7 +1196,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 					'PRODUCT_ID' => $basketItem->getProductId()
 				];
 
-				$total += $basketItem->getPrice() * $shipmentItem->getQuantity();
+				$total += $basketItem->getPriceWithVat() * $shipmentItem->getQuantity();
 			}
 		}
 
@@ -1334,7 +1335,6 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 		foreach ($this->shipment->getShipmentItemCollection() as $shipmentItem)
 		{
 			$basketItem = $shipmentItem->getBasketItem();
-
 			$documentProduct = [
 				'ID' => uniqid('bx_', true),
 				'STORE_TO' => 0,
@@ -1347,7 +1347,20 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 				'BASKET_ID' => $basketItem->getId(),
 				'AMOUNT' => 0,
 				'BARCODE' => '',
+				'TAX_RATE' => $basketItem->getVatRate() === null ? null : $basketItem->getVatRate() * 100,
+				'TAX_INCLUDED' => $basketItem->getField('VAT_INCLUDED'),
+				'QUANTITY' => $basketItem->getQuantity(),
 			];
+
+			$pricesConverter = new Order\ProductManager\ProductConverter\PricesConverter();
+			$productRowPrices = $pricesConverter->convertToProductRowPrices(
+				$basketItem->getPrice(),
+				$basketItem->getBasePrice(),
+				$basketItem->getVatRate() ?? 0,
+				$basketItem->isVatInPrice()
+			);
+
+			$documentProduct += $productRowPrices;
 
 			$shipmentItemStoreCollection = $shipmentItem->getShipmentItemStoreCollection();
 			$batchManager = new BatchManager($basketItem->getProductId());
@@ -1481,7 +1494,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 				{
 					continue;
 				}
-				
+
 				if (
 					!empty($basketIdsFilter)
 					&& !in_array($deliverableProduct['BASKET_CODE'], $basketIdsFilter, true)
@@ -1513,8 +1526,9 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 					$deliverableProduct['STORE_ID'],
 					$deliverableProduct['CURRENCY']
 				);
+				$vatRate = $deliverableProduct['VAT_RATE'] ?? null;
 
-				$products[] = [
+				$product = [
 					'ID' => uniqid('bx_', true),
 					'STORE_FROM' => $deliverableProduct['STORE_ID'],
 					'STORE_TO' => 0,
@@ -1526,7 +1540,20 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 					'BASE_PRICE_EXTRA' => '',
 					'BASE_PRICE_EXTRA_RATE' => '',
 					'BARCODE' => '',
+					'TAX_RATE' => $vatRate === null ? $vatRate : ($vatRate * 100),
+					'TAX_INCLUDED' => $deliverableProduct['VAT_INCLUDED'],
+					'QUANTITY' => $quantity,
 				];
+
+				$pricesConverter = new Order\ProductManager\ProductConverter\PricesConverter();
+				$productRowPrices = $pricesConverter->convertToProductRowPrices(
+					$deliverableProduct['PRICE'],
+					$deliverableProduct['BASE_PRICE'],
+					$vatRate ?? 0,
+					$deliverableProduct['VAT_INCLUDED'] === 'Y'
+				);
+
+				$products[] = $product + $productRowPrices;
 			}
 		}
 

@@ -813,6 +813,11 @@ class LeadConverter extends EntityConverter
 				if(!empty($fields))
 				{
 					$entity = new \CCrmLead(false);
+					if (isset($this->contextData['USER_ID']))
+					{
+						$entityUpdateOptions['CURRENT_USER'] = $this->contextData['USER_ID'];
+					}
+
 					if($entity->Update($this->entityID, $fields, true, true, $entityUpdateOptions))
 					{
 						//region Requisites

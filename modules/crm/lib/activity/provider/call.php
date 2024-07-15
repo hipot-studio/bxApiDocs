@@ -11,6 +11,7 @@ use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\ActivitySettings;
+use Bitrix\Crm\Timeline\LogMessageType;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -165,11 +166,16 @@ class Call extends Base
 		return $result;
 	}
 
-	public static function canUseCalendarEvents($providerTypeId = null)
+	public static function canUseCalendarEvents($providerTypeId = null): bool
 	{
-		if ($providerTypeId === static::ACTIVITY_PROVIDER_TYPE_CALL)
+		return $providerTypeId === static::ACTIVITY_PROVIDER_TYPE_CALL;
+	}
+
+	public static function canAddCalendarEvents(?string $providerTypeId = null): bool
+	{
+		if (static::canUseCalendarEvents($providerTypeId))
 		{
-			return true;
+			return ActivitySettings::getValue(ActivitySettings::ENABLE_CREATE_CALENDAR_EVENT_FOR_CALL);
 		}
 
 		return false;
@@ -572,5 +578,10 @@ class Call extends Base
 		$storageElementIds = \CCrmActivity::extractStorageElementIds($activity);
 
 		return StorageType::isDefined($storageTypeId) && !empty($storageElementIds);
+	}
+
+	public static function getMoveBindingsLogMessageType(): ?string
+	{
+		return LogMessageType::CALL_MOVED;
 	}
 }

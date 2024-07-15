@@ -7,6 +7,7 @@ use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Integration\AI\Config;
 use Bitrix\Crm\Integration\AI\Dto\TranscribeCallRecordingPayload;
 use Bitrix\Crm\Integration\AI\ErrorCode;
+use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
@@ -32,6 +33,7 @@ final class TranscribeCallRecording extends AbstractOperation
 
 	protected const PAYLOAD_CLASS = TranscribeCallRecordingPayload::class;
 	protected const ENGINE_CATEGORY = 'audio';
+	protected const ENGINE_CODE = EventHandler::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_AUDIO_CODE;
 
 	public function __construct(
 		ItemIdentifier $target,

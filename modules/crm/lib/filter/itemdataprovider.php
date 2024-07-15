@@ -459,6 +459,16 @@ class ItemDataProvider extends EntityDataProvider
 			];
 		}
 
+		$fields['ACTIVITY_BLOCK'] = [
+			'type' => static::TYPE_STRING,
+			'displayGrid' => true,
+			'displayFilter' => false,
+			'defaultGrid' => false,
+			'defaultFilter' => false,
+			'sortField' => null,
+			'customCaption' => Loc::getMessage('CRM_FILTER_ITEMDATAPROVIDER_ACTIVITY_BLOCK'),
+		];
+
 		$this->addParentFieldsInfo($fields);
 
 		return $fields;

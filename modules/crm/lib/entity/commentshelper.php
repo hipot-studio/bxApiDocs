@@ -190,7 +190,35 @@ final class CommentsHelper
 	}
 	//endregion
 
-	public static function prepareFieldsFromCompatibleRestToRead(int $entityTypeId, int $entityId, array $fields): array
+
+	public static function prepareFieldsFromCompatibleRestToReadInList(int $entityTypeId, array $entityMap): array
+	{
+		$entityIds = array_keys($entityMap);
+		if (empty($entityIds))
+		{
+			return $entityMap;
+		}
+
+		$contentTypesMap = FieldContentTypeTable::loadForMultipleItems($entityTypeId, $entityIds);
+		foreach ($entityMap as $entityId => &$fields)
+		{
+			$fields = self::prepareFieldsFromCompatibleRestToRead(
+				$entityTypeId,
+				$entityId,
+				$fields,
+				$contentTypesMap[$entityId] ?? [],
+			);
+		}
+
+		return $entityMap;
+	}
+
+	public static function prepareFieldsFromCompatibleRestToRead(
+		int $entityTypeId,
+		int $entityId,
+		array $fields,
+		?array $preloadedContentTypes = null
+	): array
 	{
 		$flexibleFields = self::getFieldsWithFlexibleContentType($entityTypeId);
 		if (empty($flexibleFields))
@@ -204,7 +232,7 @@ final class CommentsHelper
 			return $fields;
 		}
 
-		$contentTypes = FieldContentTypeTable::loadForItem(new ItemIdentifier($entityTypeId, $entityId));
+		$contentTypes = $preloadedContentTypes ?? FieldContentTypeTable::loadForItem(new ItemIdentifier($entityTypeId, $entityId));
 
 		foreach ($flexibleFields as $fieldName)
 		{

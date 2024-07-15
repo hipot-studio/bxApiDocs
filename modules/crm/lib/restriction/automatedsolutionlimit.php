@@ -7,11 +7,54 @@ use Bitrix\Crm\Integration\Bitrix24Manager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\EventManager;
 use Bitrix\Main\Result;
 
 final class AutomatedSolutionLimit
 {
 	private ?int $count = null;
+	private array $eventHandlerIds = [];
+
+	public function __construct()
+	{
+		$eventManager = EventManager::getInstance();
+
+		$this->eventHandlerIds[AutomatedSolutionTable::EVENT_ON_AFTER_ADD] = $eventManager->addEventHandler(
+			AutomatedSolutionTable::class,
+			AutomatedSolutionTable::EVENT_ON_AFTER_ADD,
+			function (): void {
+				if ($this->count !== null)
+				{
+					$this->count++;
+				}
+			}
+		);
+
+		$this->eventHandlerIds[AutomatedSolutionTable::EVENT_ON_AFTER_DELETE] = $eventManager->addEventHandler(
+			AutomatedSolutionTable::class,
+			AutomatedSolutionTable::EVENT_ON_AFTER_DELETE,
+			function (): void {
+				if ($this->count !== null)
+				{
+					$this->count--;
+				}
+			},
+		);
+	}
+
+	public function __destruct()
+	{
+		$eventManager = EventManager::getInstance();
+
+		foreach ($this->eventHandlerIds as $eventName => $handlerId)
+		{
+			$eventManager->removeEventHandler(
+				AutomatedSolutionTable::class,
+				$eventName,
+				$handlerId,
+			);
+		}
+	}
 
 	public function check(): Result
 	{

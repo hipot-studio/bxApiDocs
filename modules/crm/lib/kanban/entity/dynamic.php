@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Kanban\Entity;
 
+use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManager;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
 use Bitrix\Crm\Filter;
@@ -609,5 +610,14 @@ class Dynamic extends Kanban\Entity
 		}
 
 		return $fields;
+	}
+
+	protected function getHideSumForStagePermissionType(string $stageId, \CCrmPerms $userPermissions): ?string
+	{
+		return $userPermissions->GetPermType(
+			(new PermissionEntityTypeHelper($this->getTypeId()))->getPermissionEntityTypeForCategory($this->categoryId),
+			'HIDE_SUM',
+			["STAGE_ID{$stageId}"]
+		);
 	}
 }

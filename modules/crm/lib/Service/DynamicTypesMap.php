@@ -45,6 +45,7 @@ class DynamicTypesMap
 	protected $stageEntityIds = [];
 	protected $stageFieldNames = [];
 	protected $isAutomationEnabled = [];
+	protected $isStagesEnabled = [];
 
 	private ?EO_Type_Collection $typesCollection = null;
 
@@ -87,24 +88,28 @@ class DynamicTypesMap
 			return $this;
 		}
 
-		if(!$this->isTypesLoaded)
+		if (!$this->isTypesLoaded)
 		{
 			$this->isTypesLoaded = true;
 			foreach ($this->getTypesCollection() as $type)
 			{
-				if (!\CCrmOwnerType::isPossibleDynamicTypeId($type->getEntityTypeId()))
+				$entityTypeId = $type->getEntityTypeId();
+
+				if (!\CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId))
 				{
 					continue;
 				}
+
 				$factory = Container::getInstance()->getDynamicFactoryByType($type);
 				$stagesFieldName = null;
 				if ($factory->isStagesSupported())
 				{
 					$stagesFieldName = $factory->getEntityFieldNameByMap(Item::FIELD_NAME_STAGE_ID);
 				}
-				$this->types[$type->getEntityTypeId()] = $type;
-				$this->stageFieldNames[$type->getEntityTypeId()] = $stagesFieldName;
-				$this->isAutomationEnabled[$type->getEntityTypeId()] = $factory->isAutomationEnabled();
+				$this->types[$entityTypeId] = $type;
+				$this->stageFieldNames[$entityTypeId] = $stagesFieldName;
+				$this->isAutomationEnabled[$entityTypeId] = $factory->isAutomationEnabled();
+				$this->isStagesEnabled[$entityTypeId] = $factory->isStagesEnabled();
 			}
 		}
 		$entityTypeIds = array_keys($this->types);
@@ -287,6 +292,11 @@ class DynamicTypesMap
 	public function isAutomationEnabled(int $entityTypeId): bool
 	{
 		return $this->isAutomationEnabled[$entityTypeId] ?? false;
+	}
+
+	public function isStagesEnabled(int $entityTypeId): bool
+	{
+		return $this->isStagesEnabled[$entityTypeId] ?? false;
 	}
 
 	/**

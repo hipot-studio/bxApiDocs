@@ -9,6 +9,10 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 
 	public function Register($logEntityID, $logEventID, $entityTypeID, $entityID, $parentEntityTypeID, $parentEntityID, $typeID = CCrmSonetRelationType::Ownership, $level = 1)
 	{
+		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		{
+			return;
+		}
 		if(!CCrmOwnerType::IsDefined($entityTypeID) || !CCrmOwnerType::IsDefined($parentEntityTypeID))
 		{
 			return;
@@ -54,6 +58,10 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 	}
 	public function RegisterBundle($logEntityID, $logEventID, $entityTypeID, $entityID, &$parents, $options = array())
 	{
+		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		{
+			return;
+		}
 		if(!CCrmOwnerType::IsDefined($entityTypeID))
 		{
 			return;
@@ -178,6 +186,10 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 	}
 	public function Replace($entityTypeID, $entityID, $currentParent, $previousParent, $options = array())
 	{
+		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		{
+			return true;
+		}
 		if(!CCrmOwnerType::IsDefined($entityTypeID))
 		{
 			return false;
@@ -236,6 +248,10 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 	}
 	public function UnRegisterByLogEntityID($logEntityID, $typeID = CCrmSonetRelationType::Undefined)
 	{
+		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		{
+			return;
+		}
 		$logEntityID = intval($logEntityID);
 		if($logEntityID <= 0)
 		{
@@ -252,6 +268,10 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 	}
 	public function UnRegisterByEntity($entityTypeID, $entityID, $options = array())
 	{
+		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		{
+			return;
+		}
 		if(!CCrmOwnerType::IsDefined($entityTypeID))
 		{
 			return;
@@ -279,6 +299,10 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 	}
 	public function SynchronizeLastUpdateTime($logEntityID)
 	{
+		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		{
+			return;
+		}
 		$logEntityID = intval($logEntityID);
 		if($logEntityID <= 0)
 		{
@@ -300,6 +324,10 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 	}
 	public function Rebind($entityTypeID, $srcEntityID, $dstEntityID)
 	{
+		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		{
+			return true;
+		}
 		global $DB;
 		$tableName = self::TABLE_NAME;
 		$slEntityType = $DB->ForSql(CCrmLiveFeedEntity::GetByEntityTypeID($entityTypeID));
@@ -328,6 +356,10 @@ class CCrmSonetRelation extends CAllCrmSonetRelation
 	}
 	public function TransferOwnership($srcEntityTypeID, $srcEntityID, $dstEntityTypeID, $dstEntityID)
 	{
+		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		{
+			return true;
+		}
 		global $DB;
 		$tableName = self::TABLE_NAME;
 

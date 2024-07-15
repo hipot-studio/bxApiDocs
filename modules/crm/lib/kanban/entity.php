@@ -19,7 +19,8 @@ use Bitrix\Crm\Item;
 use Bitrix\Crm\Observer\Entity\ObserverTable;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Security\EntityAuthorization;
-use Bitrix\Crm\Security\QueryBuilder\Result\JoinWithUnionSpecification;
+use Bitrix\Crm\Security\EntityPermission\ApproveCustomPermsToExistRole;
+use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Display\Field;
@@ -1060,12 +1061,6 @@ abstract class Entity
 			{
 				$options = [];
 
-				if (JoinWithUnionSpecification::getInstance()->isSatisfiedBy($filter))
-				{
-					// When forming a request for restricting rights, the optimization mode with the use of union was used.
-					$options['PERMISSION_BUILDER_OPTION_OBSERVER_JOIN_AS_UNION'] = true;
-				}
-
 				$select = [$stageFieldName];
 				if (mb_strpos($fieldSum, 'UF_') === 0)
 				{
@@ -1137,15 +1132,64 @@ abstract class Entity
 		$data = $this->getDataToCalculateTotalSums($fieldName, $filter, $runtime);
 
 		$stageFieldName = $this->getStageFieldName();
-		foreach($data as $stageSum)
+		foreach ($data as $stageSum)
 		{
-			if (isset($stages[$stageSum[$stageFieldName]]))
+			$stageId = ($stageSum[$stageFieldName] ?? null);
+			if (isset($stages[$stageId]))
 			{
-				$stages[$stageSum[$stageFieldName]]['count'] = $stageSum['CNT'];
-				$stages[$stageSum[$stageFieldName]]['total'] = $stageSum[$fieldName];
-				$stages[$stageSum[$stageFieldName]]['total_format'] = \CCrmCurrency::MoneyToString(round($stageSum[$fieldName]), $this->getCurrency());
+				$stages[$stageId]['count'] = $stageSum['CNT'];
+
+				$stages[$stageId]['total'] = $stageSum[$fieldName];
+				$stages[$stageId]['total_format'] = \CCrmCurrency::MoneyToString(round($stageSum[$fieldName]), $this->getCurrency());
 			}
 		}
+
+		$this->prepareStageTotalSums($stages);
+	}
+
+	private function prepareStageTotalSums(array &$stages): void
+	{
+		$currencyId = $this->getCurrency();
+		$currencyFormat = $this->getCurrencyFormat($currencyId);
+
+		$userPermissions = Container::getInstance()->getUserPermissions()->getCrmPermissions();
+
+		$code = (new HideSum())->code();
+		$isDefaultPermissionsApplied = (new ApproveCustomPermsToExistRole())->hasWaitingPermission($code);
+
+		foreach ($stages as &$stage)
+		{
+			$stage['currencyFormat'] = $currencyFormat;
+
+			if (!$isDefaultPermissionsApplied && !$this->havePermissionToDisplayColumnSum($stage['id'], $userPermissions))
+			{
+				$stage['hiddenTotalSum'] = true;
+
+				$stage['total'] = null;
+				$stage['total_format'] = $this->getHiddenPriceFormattedText($currencyFormat);
+			}
+		}
+		unset($stage);
+	}
+
+	public function havePermissionToDisplayColumnSum(string $stageId, CCrmPerms $userPermissions): bool
+	{
+		if (Container::getInstance()->getUserPermissions()->canWriteConfig())
+		{
+			return true;
+		}
+
+		return ($this->getHideSumForStagePermissionType($stageId, $userPermissions) === BX_CRM_PERM_ALL);
+	}
+
+	protected function getHideSumForStagePermissionType(string $stageId, CCrmPerms $userPermissions): ?string
+	{
+		return null;
+	}
+
+	public function getHiddenPriceFormattedText(string $currencyFormat): string
+	{
+		return '***** ' . $currencyFormat;
 	}
 
 	/**
@@ -1277,6 +1321,7 @@ abstract class Entity
 			);
 		}
 
+		$item['CURRENCY_FORMAT'] = $this->getCurrencyFormat($item['ENTITY_CURRENCY_ID']);
 		$item['OPPORTUNITY_VALUE'] = $item['OPPORTUNITY'] ?? 0.0;
 
 		$item['OPPORTUNITY'] = [
@@ -1289,6 +1334,11 @@ abstract class Entity
 		$item['DATE_FORMATTED'] = $this->dateFormatter->format($item['DATE'] ?? '', (bool)$item['FORMAT_TIME']);
 
 		return $item;
+	}
+
+	private function getCurrencyFormat(?string $currencyId): string
+	{
+		return \CCrmCurrency::getCurrencyText($currencyId);
 	}
 
 	public function getField(string $fieldName): ?\Bitrix\Crm\Field
@@ -2933,5 +2983,15 @@ abstract class Entity
 	protected function isItemsAssignedNotificationSupported(): bool
 	{
 		return false;
+	}
+
+	public function skipClientField(array $row, string $code): bool
+	{
+		return false;
+	}
+
+	public function appendAdditionalData(array &$rows): void
+	{
+		// may implement in child class
 	}
 }

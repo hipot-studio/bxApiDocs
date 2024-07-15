@@ -457,7 +457,7 @@ abstract class CAllTestAttempt
 			return true;
 
 		$strSql =
-		"SELECT SUM(Q.POINT) as CNT_ALL, SUM(CASE WHEN TR.CORRECT = 'N' AND TR.ANSWERED = 'Y' THEN TR.POINT ELSE 0 END) as CNT_WRONG ".
+		"SELECT SUM(Q.POINT) as CNT_ALL, SUM(CASE WHEN TR.CORRECT = 'N' AND TR.ANSWERED = 'Y' THEN Q.POINT ELSE 0 END) as CNT_WRONG ".
 		"FROM b_learn_test_result TR, b_learn_question Q ".
 		"WHERE TR.ATTEMPT_ID = '".intval($ATTEMPT_ID)."' AND TR.QUESTION_ID = Q.ID";
 

@@ -65,7 +65,7 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 	{
 		return (
 			in_array($target->getEntityTypeId(), self::SUPPORTED_TARGET_ENTITY_TYPE_IDS, true)
-			&& !ComparerBase::isClosed($target)
+			&& !ComparerBase::isClosed($target, true)
 		);
 	}
 
@@ -571,6 +571,16 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 					$activityId
 				);
 			}
+		}
+	}
+
+	protected static function notifyAboutLimitExceededError(Result $result): void
+	{
+		$activityId = self::getParentActivityId($result);
+		if ($activityId > 0)
+		{
+			static::syncBadges($activityId, Badge\Type\AiCallFieldsFillingResult::ERROR_LIMIT_EXCEEDED);
+			static::notifyTimelinesAboutAutomationLaunchError($result, $activityId);
 		}
 	}
 

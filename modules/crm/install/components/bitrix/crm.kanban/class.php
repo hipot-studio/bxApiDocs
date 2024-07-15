@@ -206,6 +206,7 @@ class CrmKanbanComponent extends \CBitrixComponent
 		$params['ONLY_ITEMS'] = $this->arParams['ONLY_ITEMS'];
 		$params['FORCE_FILTER'] = $this->arParams['FORCE_FILTER'];
 		$params['VIEW_MODE'] = ($this->arParams['VIEW_MODE'] ?? \Bitrix\Crm\Kanban\ViewMode::MODE_STAGES);
+
 		return $this->getKanban()->getColumns($clear, $withoutCache, $params);
 	}
 

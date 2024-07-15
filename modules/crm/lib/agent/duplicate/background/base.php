@@ -6,9 +6,9 @@ use Bitrix\Crm\Integrity\DuplicateIndexType;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Main\Security\Random;
 use CAgent;
 use CCrmOwnerType;
-use CTimeZone;
 use CUserOptions;
 use ReflectionClass;
 
@@ -295,6 +295,7 @@ abstract class Base
 	protected function getDefaultProgressData(): array
 	{
 		return [
+			'CONTEXT_ID' => '',
 			'TIMESTAMP' => 0,
 			'TIMESTAMP_START' => 0,
 			'TIMESTAMP_HALF' => 0,
@@ -539,6 +540,7 @@ abstract class Base
 		$progressData['TYPES'] = $types;
 		$progressData['SCOPE'] = $scope;
 		$progressData['NEXT_STATUS'] = static::STATUS_PENDING_START;
+		$progressData['CONTEXT_ID'] = Random::getStringByCharsets(8, 'abcdefghijklmnopqrstuvwxyz');
 		$progressData['TIMESTAMP'] = time();
 		$this->setProgressData($progressData);
 		$this->activate();

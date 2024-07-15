@@ -12,7 +12,10 @@ class Lead implements PermissionEntity
 {
 	private function permissions(): array
 	{
-		return PermissionAttrPresets::crmEntityPresetAutomation();
+		return array_merge(
+			PermissionAttrPresets::crmEntityPresetAutomation(),
+			PermissionAttrPresets::crmEntityKanbanHideSum()
+		);
 	}
 	/**
 	 * @return EntityDTO[]

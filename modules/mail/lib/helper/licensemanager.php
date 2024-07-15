@@ -423,8 +423,13 @@ class LicenseManager
 	 *
 	 * @return bool
 	 */
-	public static function isCleanupOldEnabled()
+	public static function isCleanupOldEnabled(): bool
 	{
+		if (Main\Application::getConnection()->getType() === 'pgsql')
+		{
+			return false; // not implemented yet
+		}
+
 		return static::getSyncOldLimit() > 0;
 	}
 

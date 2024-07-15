@@ -6,6 +6,7 @@ use Bitrix\Crm\Security\Role\Manage\Permissions\Add;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Automation;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Delete;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Export;
+use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Import;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Permission;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Read;
@@ -38,6 +39,13 @@ class PermissionAttrPresets
 		);
 	}
 
+	public static function crmEntityKanbanHideSum(): array
+	{
+		return [
+			new HideSum(self::hideSum()),
+		];
+	}
+
 	public static function userHierarchy(): array
 	{
 		return [
@@ -66,6 +74,14 @@ class PermissionAttrPresets
 		return [
 			'' => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_'),
 			BX_CRM_PERM_ALL => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_X'),
+		];
+	}
+
+	private static function hideSum(): array
+	{
+		return [
+			'' => GetMessage('CRM_SECURITY_ROLE_PERMS_HIDE_SUM'),
+			BX_CRM_PERM_ALL => GetMessage('CRM_SECURITY_ROLE_PERMS_SHOW_SUM'),
 		];
 	}
 

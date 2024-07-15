@@ -11,8 +11,12 @@ class Quote implements PermissionEntity
 {
 	private function permissions(): array
 	{
-		return PermissionAttrPresets::crmEntityPreset();
+		return array_merge(
+			PermissionAttrPresets::crmEntityPreset(),
+			PermissionAttrPresets::crmEntityKanbanHideSum()
+		);
 	}
+
 	/**
 	 * @return EntityDTO[]
 	 */

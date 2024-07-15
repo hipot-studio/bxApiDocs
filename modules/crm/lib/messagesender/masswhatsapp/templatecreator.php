@@ -40,7 +40,7 @@ class TemplateCreator
 		{
 			$data = Json::decode($messageTemplateCode);
 			$data['text'] = $messageBody;
-			$messageTemplateCode = Json::encode($data);
+			$messageTemplateCode = Json::encode($data, 0);
 		}
 
 		return new TplCreatorResult($messageBody, $messageTemplateCode);

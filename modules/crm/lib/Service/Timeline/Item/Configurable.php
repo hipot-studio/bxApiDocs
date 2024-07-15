@@ -233,7 +233,7 @@ abstract class Configurable extends Item
 			return null;
 		}
 
-		return (new ChangeStreamButton)
+		return (new ChangeStreamButton())
 			->setTypeUnpin()
 			->setDisableIfReadonly()
 			->setAction($this->getUnpinAction())
@@ -435,12 +435,7 @@ abstract class Configurable extends Item
 			$menuItems['pin'] = (new MenuItem(Loc::getMessage('CRM_TIMELINE_MENU_FASTEN')))
 				->setHideIfReadonly()
 				->setSort(9900)
-				->setAction(
-					(new RunAjaxAction('crm.timeline.item.pin'))
-						->addActionParamInt('id', $this->getModel()->getId())
-						->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
-						->addActionParamInt('ownerId', $this->getContext()->getEntityId())
-				)
+				->setAction($this->getPinAction())
 			;
 		}
 		if ($canBeUnFixed)
@@ -542,9 +537,18 @@ abstract class Configurable extends Item
 		return null;
 	}
 
-	private function getUnpinAction(): Layout\Action
+	protected function getUnpinAction(): Layout\Action
 	{
 		return (new RunAjaxAction('crm.timeline.item.unpin'))
+			->addActionParamInt('id', $this->getModel()->getId())
+			->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+			->addActionParamInt('ownerId', $this->getContext()->getEntityId())
+		;
+	}
+
+	protected function getPinAction(): Layout\Action
+	{
+		return (new RunAjaxAction('crm.timeline.item.pin'))
 			->addActionParamInt('id', $this->getModel()->getId())
 			->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
 			->addActionParamInt('ownerId', $this->getContext()->getEntityId())

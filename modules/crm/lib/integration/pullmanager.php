@@ -2,7 +2,9 @@
 
 namespace Bitrix\Crm\Integration;
 
+use Bitrix\Crm\Ml\Scoring;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Timeline\TimelineEntry;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
@@ -27,6 +29,7 @@ class PullManager
 	protected $isEnabled = false;
 
 	private static $instance;
+	private static array $updatePullEvents = [];
 
 	public static function getInstance(): PullManager
 	{
@@ -95,7 +98,18 @@ class PullManager
 	 */
 	public function sendItemUpdatedEvent(array $item, ?array $params = null): bool
 	{
-		$this->sendItemEvent(self::EVENT_ITEM_UPDATED, $item, $params);
+		$hashParams = $params ?? [];
+		$hashItemData = $item['data'] ?? [];
+		$hash = md5(serialize($hashItemData + [
+			'TYPE' => $hashParams['TYPE'] ?? null,
+			'CATEGORY_ID' => $hashParams['CATEGORY_ID'] ?? null,
+		]));
+
+		if (!in_array($hash, self::$updatePullEvents, true))
+		{
+			self::$updatePullEvents[] = $hash;
+			$this->sendItemEvent(self::EVENT_ITEM_UPDATED, $item, $params);
+		}
 
 		return true;
 	}
@@ -384,6 +398,33 @@ class PullManager
 	public function getChannelShared()
 	{
 		return \CPullChannel::GetChannelShared();
+	}
+
+	public function unSubscribeUserPullEvents(int $userId, int $entityTypeId, int $entityId): void
+	{
+		if (!$this->isEnabled())
+		{
+			return;
+		}
+
+		$timelineTagName = TimelineEntry::prepareEntityPushTag($entityTypeId, $entityId);
+		\CPullWatch::Delete($userId, $timelineTagName);
+
+		if (in_array($entityTypeId, [\CCrmOwnerType::Lead, \CCrmOwnerType::Deal], true))
+		{
+			$predictionTagName = Scoring::getPredictionUpdatePullTag($entityTypeId, $entityId);
+			\CPullWatch::Delete($userId, $predictionTagName);
+		}
+
+		$itemUpdateTag = static::getItemEventName(
+			static::EVENT_ITEM_UPDATED,
+			\CCrmOwnerType::ResolveName($entityTypeId),
+			$entityId
+		);
+		if ($itemUpdateTag)
+		{
+			\CPullWatch::Delete($userId, $itemUpdateTag);
+		}
 	}
 
 	public static function isPullChannelActiveByTag(string $tag): bool

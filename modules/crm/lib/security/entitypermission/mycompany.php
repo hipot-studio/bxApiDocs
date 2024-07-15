@@ -57,7 +57,7 @@ class MyCompany
 		return $this->userPermissions->canWriteConfig();
 	}
 
-	public function canAddByOwnerEntity(int $ownerEntityTypeId): bool
+	public function canAddByOwnerEntity(int $ownerEntityTypeId, ?int $ownerEntityId = null): bool
 	{
 		if (in_array($ownerEntityTypeId, [\CCrmOwnerType::SmartDocument, \CCrmOwnerType::SmartB2eDocument], true))
 		{

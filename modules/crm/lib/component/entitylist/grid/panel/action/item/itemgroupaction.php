@@ -98,7 +98,7 @@ final class ItemGroupAction extends BaseItemGroupAction
 
 		if (RefreshAccountingDataChildAction::isEntityTypeSupported($this->factory->getEntityTypeId()))
 		{
-			$actions[] = new RefreshAccountingDataChildAction($this->factory, $this->userPermissions);
+			$actions[] = new RefreshAccountingDataChildAction($this->factory->getEntityTypeId());
 		}
 
 		if (

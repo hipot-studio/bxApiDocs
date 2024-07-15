@@ -2,12 +2,14 @@
 
 if(!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
 
+use Bitrix\Crm\Agent\Quote\StorageElementIdsToAttachedObject;
 use Bitrix\Crm\Component\EntityDetails\FactoryBased;
 use Bitrix\Crm\Contact;
 use Bitrix\Crm\Conversion\ConversionManager;
 use Bitrix\Crm\Conversion\DealConversionWizard;
 use Bitrix\Crm\Conversion\EntityConversionConfig;
 use Bitrix\Crm\EO_Company;
+use Bitrix\Crm\Integration\Disk\AttachedObjectService;
 use Bitrix\Crm\Integration\StorageManager;
 use Bitrix\Crm\Integration\StorageType;
 use Bitrix\Crm\Item;
@@ -671,20 +673,14 @@ class CrmQuoteDetailsComponent extends FactoryBased
 	{
 		parent::initializeEditorAdapter();
 
-		$filesData = [];
-		$storageElementIds = array_unique($this->item->getStorageElementIds() ?? []);
-		foreach($storageElementIds as $fileId)
-		{
-			if($fileId > 0)
-			{
-				$fileInfo = StorageManager::getFileInfo($fileId);
-				if($fileInfo)
-				{
-					$filesData[] = $fileInfo;
-				}
-			}
+		$this->convertFilesToAttachedObjectIfRequired($this->item);
 
-		}
+		$storageElementIds = array_unique($this->item->getStorageElementIds() ?? []);
+		$filesData = AttachedObjectService::loadFilesData(
+			$storageElementIds,
+			$this->item->getId(),
+			\CCrmOwnerType::Quote
+		);
 
 		$additionalData = [];
 		Tracking\UI\Details::prepareEntityData(
@@ -720,6 +716,11 @@ class CrmQuoteDetailsComponent extends FactoryBased
 			->addEntityData(Item\Quote::FIELD_NAME_STORAGE_ELEMENTS, $storageElementIds)
 			->addEntityData(static::FILES_DATA, $filesData)
 		;
+	}
+
+	private function convertFilesToAttachedObjectIfRequired(Item\Quote $quote): void
+	{
+		StorageElementIdsToAttachedObject::getInstance()->convertStorageElements($quote);
 	}
 
 	public function createEmailAttachmentAction(int $paymentSystemId): ?array

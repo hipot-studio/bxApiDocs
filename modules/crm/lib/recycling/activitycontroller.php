@@ -176,6 +176,11 @@ class ActivityController extends BaseController
 		);
 
 		$recyclingEntity = Crm\Integration\Recyclebin\Activity::createRecycleBinEntity($entityID);
+		if (isset($params['FORCE_USER_ID']) && $params['FORCE_USER_ID'] > 0)
+		{
+			$recyclingEntity->setOwnerId($params['FORCE_USER_ID']);
+		}
+
 		$recyclingEntity->setTitle($entityData['TITLE']);
 
 		$slots = isset($entityData['SLOTS']) && is_array($entityData['SLOTS']) ? $entityData['SLOTS'] : array();

@@ -4,7 +4,7 @@ namespace Bitrix\Crm\Activity\ToDo\ColorSettings;
 
 final class ColorSettingsProvider
 {
-	public const DEFAULT_COLOR_ID = 'default';
+	private const DEFAULT_COLOR_ID = 'default';
 
 	private bool $readOnlyMode = false;
 
@@ -12,6 +12,11 @@ final class ColorSettingsProvider
 	public function __construct(private readonly ?string $colorId = null)
 	{
 
+	}
+
+	public static function getDefaultColorId(): string
+	{
+		return self::DEFAULT_COLOR_ID;
 	}
 
 	public function setReadOnlyMode(bool $readOnlyMode): ColorSettingsProvider
@@ -25,7 +30,7 @@ final class ColorSettingsProvider
 	{
 		return [
 			'valuesList' =>  $this->getDefaultColorsList(),
-			'selectedValueId' => $this->colorId ?? self::DEFAULT_COLOR_ID,
+			'selectedValueId' => $this->colorId ?? self::getDefaultColorId(),
 			'readOnlyMode' => $this->readOnlyMode,
 		];
 	}
@@ -60,7 +65,7 @@ final class ColorSettingsProvider
 	{
 		return [
 			[
-				'id' => self::DEFAULT_COLOR_ID,
+				'id' => self::getDefaultColorId(),
 				'color' => '#FFC34D',
 				'iconBackground' => '#FFC34D',
 				'itemBackground' => '#FEFCEE',

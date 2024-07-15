@@ -210,7 +210,6 @@ class CCrmStatus
 					'ENTITY_TYPE_ID' => \CCrmOwnerType::Quote,
 				],
 				'HONORIFIC' => ['ID' =>'HONORIFIC', 'NAME' => GetMessage('CRM_STATUS_TYPE_HONORIFIC')],
-				'EVENT_TYPE' => ['ID' =>'EVENT_TYPE', 'NAME' => GetMessage('CRM_STATUS_TYPE_EVENT_TYPE')],
 				'CALL_LIST' => ['ID' => 'CALL_LIST', 'NAME' => GetMessage('CRM_STATUS_TYPE_CALL_LIST')]
 			]
 		);
@@ -240,6 +239,7 @@ class CCrmStatus
 
 		if(self::IsDepricatedTypesEnabled())
 		{
+			$arEntityType['EVENT_TYPE'] = ['ID' =>'EVENT_TYPE', 'NAME' => GetMessage('CRM_STATUS_TYPE_EVENT_TYPE')];
 			$arEntityType['PRODUCT'] = ['ID' => 'PRODUCT', 'NAME' => GetMessage('CRM_STATUS_TYPE_PRODUCT')];
 		}
 

@@ -98,7 +98,10 @@ abstract class IndexRebuild extends Base
 				$this->getEntityTypeId(),
 				$this->getUserId(),
 				!Container::getInstance()->getUserPermissions($this->getUserId())->isAdmin(),
-				array('SCOPE' => $progressData['SCOPE'])
+				[
+					'SCOPE' => $progressData['SCOPE'],
+					'CONTEXT_ID' => $progressData['CONTEXT_ID'] ?? '',
+				]
 			);
 			$totalItemQty += $builder->getTotalCount();
 		}
@@ -154,7 +157,10 @@ abstract class IndexRebuild extends Base
 				$this->getEntityTypeId(),
 				$this->getUserId(),
 				!Container::getInstance()->getUserPermissions($this->getUserId())->isAdmin(),
-				array('SCOPE' => $progressData['SCOPE'])
+				[
+					'SCOPE' => $progressData['SCOPE'],
+					'CONTEXT_ID' => $progressData['CONTEXT_ID'] ?? '',
+				]
 			);
 
 			$buildData = $progressData['BUILD_DATA'];
@@ -216,6 +222,7 @@ abstract class IndexRebuild extends Base
 
 			if(!$isInProgress)
 			{
+				$builder->dropDataSourceCache();
 				$isFinal = $typeIndex === ($countOfTypes - 1);
 				if(!$isFinal)
 				{

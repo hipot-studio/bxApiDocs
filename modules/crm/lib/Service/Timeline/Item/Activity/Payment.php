@@ -275,11 +275,11 @@ class Payment extends Activity
 					->addActionParamString('mode', $mode)
 					->addActionParamInt(
 						'orderId',
-						$this->getAssociatedEntityModel()->get('OWNER_ID')
+						$payment->getOrder()->getId()
 					)
 					->addActionParamInt(
 						'paymentId',
-						$this->getAssociatedEntityModel()->get('ASSOCIATED_ENTITY_ID')
+						$payment->getId()
 					)
 					->addActionParamInt(
 						'ownerTypeId',

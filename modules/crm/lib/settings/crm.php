@@ -9,6 +9,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
+use Bitrix\Main\UserTable;
 
 class Crm
 {
@@ -120,6 +121,10 @@ class Crm
 		}
 
 		$relationManager = Container::getInstance()->getRelationManager();
+
+		// clean both runtime cache and ORM cache, since maybe the table was modified on a parallel hit
+		$relationManager->cleanRelationsCache();
+
 		$relationIdentifier = new RelationIdentifier(\CCrmOwnerType::Deal, \CCrmOwnerType::SmartDocument);
 		if ($isEnabled)
 		{
@@ -159,7 +164,6 @@ class Crm
 		}
 
 		$connection->unlock('crm_set_document_singing_enabled');
-		\Bitrix\Crm\Conversion\Entity\EntityConversionMapTable::cleanCache();
 	}
 
 	public static function isLiveFeedRecordsGenerationEnabled(): bool
@@ -268,5 +272,31 @@ class Crm
 	public static function isEtalon(): bool
 	{
 		return Loader::includeModule('bitrix24') && \CBitrix24::isEtalon();
+	}
+
+	public static function isPortalCreatedBefore(int $targetTimestamp): bool
+	{
+		return static::getPortalCreatedTimestamp() < $targetTimestamp;
+	}
+
+	public static function getPortalCreatedTimestamp(): int
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			$createdTime = \CBitrix24::getCreateTime();
+			if ($createdTime)
+			{
+				return (int)$createdTime;
+			}
+		}
+
+		return UserTable::query()
+			->setSelect(['ID', 'DATE_REGISTER'])
+			->where('ID', 1)
+			->setLimit(1)
+			->fetchObject()
+			->getDateRegister()
+			->getTimestamp()
+		;
 	}
 }

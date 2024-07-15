@@ -56,14 +56,9 @@ class ToDo extends Activity
 		}
 
 		$settings = $this->getAssociatedEntityModel()?->get('SETTINGS') ?? [];
-		$color = $settings['COLOR'] ?? ColorSettingsProvider::DEFAULT_COLOR_ID;
+		$color = $settings['COLOR'] ?? ColorSettingsProvider::getDefaultColorId();
 
-		if ($color)
-		{
-			return (new ColorSettingsProvider())->getByColorId($color);
-		}
-
-		return null;
+		return (new ColorSettingsProvider())->getByColorId($color);
 	}
 
 	public function getIconCode(): ?string

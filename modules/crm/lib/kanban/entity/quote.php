@@ -223,4 +223,13 @@ class Quote extends Entity
 
 		return $fields;
 	}
+
+	protected function getHideSumForStagePermissionType(string $stageId, \CCrmPerms $userPermissions): ?string
+	{
+		return $userPermissions->GetPermType(
+			$this->getTypeName(),
+			'HIDE_SUM',
+			["STAGE_ID{$stageId}"]
+		);
+	}
 }

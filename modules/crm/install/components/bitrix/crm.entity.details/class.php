@@ -299,7 +299,7 @@ class CCrmEntityPopupComponent extends CBitrixComponent
 
 		if (!$restriction->hasPermission())
 		{
-			return $restriction->prepareInfoHelperScript();
+			return $restriction->prepareFeaturePromoterScript();
 		}
 
 		return '';

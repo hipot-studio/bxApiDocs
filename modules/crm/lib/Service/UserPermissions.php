@@ -13,6 +13,8 @@ use Bitrix\Crm\Security\EntityPermission\MyCompany;
 use Bitrix\Crm\Security\Manager;
 use Bitrix\Crm\Security\QueryBuilder;
 use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
+use Bitrix\Crm\Security\QueryBuilder\Result\JoinWithUnionSpecification;
+use Bitrix\Crm\Security\QueryBuilder\Result\RawQueryObserverUnionResult;
 use Bitrix\Crm\Security\QueryBuilderFactory;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Loader;
@@ -923,12 +925,17 @@ class UserPermissions
 		?string $primary = 'ID'
 	): array
 	{
-		$filter = $filter ?? [];
-		$optionsBuilder = new OptionsBuilder(
-			new QueryBuilder\Result\RawQueryResult(
-				identityColumnName: $primary
-			)
+		$queryResult =new QueryBuilder\Result\RawQueryResult(
+			identityColumnName: $primary ?? 'ID'
 		);
+
+		if (JoinWithUnionSpecification::getInstance()->isSatisfiedBy($filter ?? []))
+		{
+			$queryResult = new RawQueryObserverUnionResult(identityColumnName: $primary ?? 'ID');
+		}
+
+		$filter = $filter ?? [];
+		$optionsBuilder = new OptionsBuilder($queryResult);
 
 		if ($operation)
 		{

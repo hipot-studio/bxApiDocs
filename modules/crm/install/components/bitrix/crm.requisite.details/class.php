@@ -1366,7 +1366,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 		{
 			$fields[] = [
 				'name' => 'AUTOCOMPLETE',
-				'title' => Loc::getMessage('CRM_BANK_DETAIL_FIELD_AUTOCOMPLETE'),
+				'title' => Loc::getMessage('CRM_BANK_DETAIL_FIELD_AUTOCOMPLETE_01'),
 				'type' => 'requisite_autocomplete',
 				'required' => false,
 				'formType' => 'requisite_autocomplete',

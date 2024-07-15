@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Activity\Provider\ToDo;
 
 use Bitrix\Crm\Activity\Provider\Base;
+use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\Model\ActivityPingOffsetsTable;
 use Bitrix\Crm\Settings\Crm;
@@ -69,12 +70,25 @@ class ToDo extends Base
 
 		$isInitiatedByCalendar = !empty($params['INITIATED_BY_CALENDAR']);
 
-		if ($action === self::ACTION_UPDATE && $isInitiatedByCalendar)
+		if (!$isInitiatedByCalendar)
+		{
+			return new Result();
+		}
+
+		if ($action === self::ACTION_UPDATE)
 		{
 			$prevDescription = trim($params['PREVIOUS_FIELDS']['DESCRIPTION'] ?? '');
 
 			$fields['DESCRIPTION'] = $prevDescription;
+		}
 
+		if ($action === self::ACTION_ADD)
+		{
+			$fields['SETTINGS']['COLOR'] = ColorSettingsProvider::getDefaultColorId();
+		}
+
+		if ($action === self::ACTION_ADD || $action === self::ACTION_UPDATE)
+		{
 			$calendarEventId = $fields['CALENDAR_EVENT_ID'] ?? 0;
 			if ($calendarEventId > 0)
 			{
@@ -290,5 +304,15 @@ class ToDo extends Base
 		}
 
 		return parent::getActivityTitle($activity);
+	}
+
+	public static function getTypeId(array $activity): string
+	{
+		return (string) ($activity['PROVIDER_TYPE_ID'] ?? self::PROVIDER_TYPE_ID_DEFAULT);
+	}
+
+	public static function needSynchronizePingQueue(array $activity): bool
+	{
+		return empty($activity['CALENDAR_EVENT_ID']);
 	}
 }

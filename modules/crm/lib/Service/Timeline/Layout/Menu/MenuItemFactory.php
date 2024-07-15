@@ -62,6 +62,14 @@ class MenuItemFactory
 		;
 	}
 
+	public static function createMoveToMenuItem(): MenuItem
+	{
+		return (new MenuItem(Loc::getMessage('CRM_TIMELINE_MENU_MOVE_TO')))
+			->setHideIfReadonly()
+			->setSort(9998)
+		;
+	}
+
 	public static function createDeleteMenuItem(): MenuItem
 	{
 		return (new MenuItem(Loc::getMessage('CRM_TIMELINE_MENU_DELETE')))

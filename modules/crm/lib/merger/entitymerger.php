@@ -2048,7 +2048,7 @@ abstract class EntityMerger
 
 		try
 		{
-			$addressFields = Main\Web\Json::encode($addressFields);
+			$addressFields = Main\Web\Json::encode($addressFields, 0);
 		}
 		catch (Main\ArgumentException $exception)
 		{

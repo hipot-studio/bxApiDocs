@@ -468,6 +468,10 @@ class Quote extends Factory
 				Operation::ACTION_AFTER_SAVE,
 				new Operation\Action\Compatible\SocialNetwork\ProcessSendNotification\WhenAddingEntity(),
 			)
+			->addAction(
+				Operation::ACTION_AFTER_SAVE,
+				new Operation\Action\QuoteAttachedFilesCreate()
+			)
 		;
 	}
 
@@ -482,6 +486,10 @@ class Quote extends Factory
 					'OnBeforeCrmQuoteUpdate',
 					'CRM_QUOTE_UPDATE_CANCELED_MSGVER_1'
 				)
+			)
+			->addAction(
+				Operation::ACTION_BEFORE_SAVE,
+				new Operation\Action\QuoteAttachedFilesUpdate()
 			)
 			->addAction(
 				Operation::ACTION_AFTER_SAVE,

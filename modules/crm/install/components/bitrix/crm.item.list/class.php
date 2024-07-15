@@ -2,6 +2,7 @@
 
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManager;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
+use Bitrix\Crm\Component\EntityList\NearestActivity\ManagerFactory;
 use Bitrix\Crm\Filter\FieldsTransform;
 use Bitrix\Crm\Filter\UiFilterOptions;
 use Bitrix\Crm\Integration;
@@ -20,6 +21,7 @@ use Bitrix\Main\Grid;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\UI\Buttons;
+use Bitrix\Crm\Component\EntityList\NearestActivity;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -49,6 +51,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 
 	private ?array $gridColumns = null;
 	private ?Grid\Panel\Panel $panel = null;
+	private ?NearestActivity\Manager $nearestActivityManager = null;
 
 	protected function init(): void
 	{
@@ -737,6 +740,9 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 				$itemId = $item->getId();
 				$itemData = $itemsData[$itemId];
 				$itemColumn = $itemColumns[$itemId];
+
+				$this->appendNearestActivityBlockToItem($item, $itemData, $itemColumn);
+
 				if (isset($restrictedItemIds[$itemId]))
 				{
 					$valueReplacer = $this->isExportMode()
@@ -795,6 +801,25 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 		}
 
 		return $result;
+	}
+
+	private function appendNearestActivityBlockToItem(Item $item, array &$itemData, array &$itemColumn): void
+	{
+		if ($this->nearestActivityManager === null)
+		{
+			$this->nearestActivityManager = ManagerFactory::getInstance()->getManager($this->entityTypeId);
+		}
+
+		$itemData['EDIT'] = $this->userPermissions->checkUpdatePermissions(
+			$this->entityTypeId,
+			$item->getId(),
+			$item->getCategoryId(),
+		);
+
+		$itemData = $this->nearestActivityManager->appendNearestActivityBlock([$itemData], true)[0];
+		$rendered = $itemData['ACTIVITY_BLOCK']->render($this->getGridId());
+
+		$itemColumn['ACTIVITY_BLOCK'] = $rendered;
 	}
 
 	protected function getContextActions(Item $item): array

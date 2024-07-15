@@ -1095,9 +1095,16 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 			$sortIndex++;
 		}
 
+		$pullManager = Container::getInstance()->getPullManager();
 		foreach ($removed as $removedObserver)
 		{
 			$this->entityObject->removeFrom($entityFieldName, $removedObserver);
+
+			$pullManager->unSubscribeUserPullEvents(
+				$removedObserver->getUserId(),
+				$this->getEntityTypeId(),
+				$this->getId()
+			);
 		}
 
 		return $this;

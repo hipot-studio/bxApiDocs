@@ -268,7 +268,12 @@ class ToDo implements OptionallyConfigurable
 
 	public function setDefaultSubject(): ToDo
 	{
-		return $this->setSubject(Loc::getMessage('CRM_TODO_ENTITY_ACTIVITY_DEFAULT_SUBJECT'));
+		return $this->setSubject($this->getDefaultSubject());
+	}
+
+	public function getDefaultSubject(): string
+	{
+		return Loc::getMessage('CRM_TODO_ENTITY_ACTIVITY_DEFAULT_SUBJECT');
 	}
 
 	public function getSubject(): string
@@ -427,6 +432,7 @@ class ToDo implements OptionallyConfigurable
 		else
 		{
 			$subject = $this->getSubjectFromDescription($this->getDescription());
+			$this->setSubject($subject);
 		}
 
 		$fields = [

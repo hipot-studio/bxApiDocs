@@ -2,21 +2,26 @@
 
 namespace Bitrix\Crm\Security\Role\Manage\Entity;
 
+use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Security\Role\Manage\DTO\EntityDTO;
 use Bitrix\Crm\Security\Role\Manage\PermissionAttrPresets;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Factory;
-use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Settings\InvoiceSettings;
 
 class SmartInvoice implements PermissionEntity
 {
 	private function permissions(bool $isAutomationEnabled): array
 	{
-		return $isAutomationEnabled ?
+		$permissions =  $isAutomationEnabled ?
 			PermissionAttrPresets::crmEntityPresetAutomation()
 			: PermissionAttrPresets::crmEntityPreset();
+
+		return array_merge(
+			$permissions,
+			PermissionAttrPresets::crmEntityKanbanHideSum()
+		);
 	}
 
 	/**

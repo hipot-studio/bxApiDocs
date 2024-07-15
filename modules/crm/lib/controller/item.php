@@ -20,6 +20,7 @@ use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotSupportedException;
+use Bitrix\Main\ORM\Fields\Relations\Relation;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\UI\PageNavigation;
 
@@ -136,9 +137,25 @@ class Item extends Base
 		$parameters['filter'] = $this->prepareFilter($factory, $parameters['filter']);
 
 		$allowedFields = $factory->getFieldsCollection()->getFieldNameList();
+
+		$dataClassFields = $factory->getDataClass()::getEntity()->getFields();
+		foreach ($dataClassFields as $field)
+		{
+			if (!($field instanceof Relation) && !in_array($field->getName(), $allowedFields))
+			{
+				$allowedFields[] = $field->getName();
+			}
+		}
+
 		if (!$this->validateFilter($parameters['filter'], $allowedFields))
 		{
 			return null;
+		}
+
+		if ($factory->isObserversEnabled() && array_key_exists('OBSERVERS', $parameters['filter']))
+		{
+			$parameters['filter']['OBSERVERS.USER_ID'] = is_null($parameters['filter']['OBSERVERS']) ? null : (array)$parameters['filter']['OBSERVERS'];
+			unset($parameters['filter']['OBSERVERS']);
 		}
 
 		if(is_array($order))

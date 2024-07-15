@@ -5,6 +5,7 @@ namespace Bitrix\Crm\AutomatedSolution\Action;
 use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\Integration\Intranet\CustomSection;
 use Bitrix\Crm\Model\Dynamic\Type;
+use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Main\Result;
 
 final class LegacySet implements Action
@@ -20,19 +21,24 @@ final class LegacySet implements Action
 	 * } $fields
 	 * @param Array<int, array> $exisingAutomatedSolutionsMap
 	 * @param CustomSection[] $existingCustomSections
+	 * @param bool $checkLimits
 	 */
 	public function __construct(
 		private readonly Type $type,
 		private readonly array $fields,
 		private readonly array $exisingAutomatedSolutionsMap,
 		private readonly array $existingCustomSections,
+		private readonly bool $checkLimits = true,
 	)
 	{
 	}
 
 	public function execute(): Result
 	{
-		if (!array_key_exists('CUSTOM_SECTIONS', $this->fields) && !array_key_exists('CUSTOM_SECTION_ID', $this->fields))
+		if (
+			!array_key_exists('CUSTOM_SECTIONS', $this->fields)
+			&& !array_key_exists('CUSTOM_SECTION_ID', $this->fields)
+		)
 		{
 			return new Result();
 		}
@@ -80,14 +86,22 @@ final class LegacySet implements Action
 		$newIdsMap = [];
 		foreach ($toAdd as $customSection)
 		{
-			$addResult = (new Add($customSection))->execute();
-			if ($addResult->isSuccess())
+			$addLimitCheckResult = $this->checkAddLimit();
+			if ($addLimitCheckResult->isSuccess())
 			{
-				$newIdsMap[$customSection['ID']] = $addResult->getData()['fields']['INTRANET_CUSTOM_SECTION_ID'];
+				$addResult = (new Add($customSection))->execute();
+				if ($addResult->isSuccess())
+				{
+					$newIdsMap[$customSection['ID']] = $addResult->getData()['fields']['INTRANET_CUSTOM_SECTION_ID'];
+				}
+				else
+				{
+					$overallResult->addErrors($addResult->getErrors());
+				}
 			}
 			else
 			{
-				$overallResult->addErrors($addResult->getErrors());
+				$overallResult->addErrors($addLimitCheckResult->getErrors());
 			}
 		}
 
@@ -115,7 +129,7 @@ final class LegacySet implements Action
 			$automatedSolution = $this->getAutomatedSolutionByCustomSectionId($customSection['ID']);
 			if ($automatedSolution)
 			{
-				$deleteResult = (new Delete($automatedSolution['ID'], true))->execute();
+				$deleteResult = (new Delete($automatedSolution['ID']))->execute();
 				if ($deleteResult->isSuccess() && $this->type->getCustomSectionId() === $automatedSolution['ID'])
 				{
 					$isCustomSectionChanged = true;
@@ -127,7 +141,9 @@ final class LegacySet implements Action
 			}
 		}
 
-		return $overallResult->setData($overallResult->getData() + ['isCustomSectionChanged' => $isCustomSectionChanged]);
+		return $overallResult->setData(
+			$overallResult->getData() + ['isCustomSectionChanged' => $isCustomSectionChanged]
+		);
 	}
 
 	private function separateByOperation(array $providedCustomSections): array
@@ -138,12 +154,10 @@ final class LegacySet implements Action
 		$providedIds = [];
 		foreach ($providedCustomSections as $providedCustomSection)
 		{
-			if (!isset($providedCustomSection['ID']))
-			{
-				continue;
-			}
-
-			if (is_string($providedCustomSection['ID']) && str_starts_with($providedCustomSection['ID'], 'new'))
+			if (
+				!isset($providedCustomSection['ID'])
+				|| (is_string($providedCustomSection['ID']) && str_starts_with($providedCustomSection['ID'], 'new'))
+			)
 			{
 				$toAdd[] = $providedCustomSection;
 			}
@@ -164,6 +178,16 @@ final class LegacySet implements Action
 			$toUpdate,
 			array_map(fn(CustomSection $section) => $section->toArray(), $toDelete),
 		];
+	}
+
+	private function checkAddLimit(): Result
+	{
+		if (!$this->checkLimits)
+		{
+			return new Result();
+		}
+
+		return RestrictionManager::getAutomatedSolutionLimitRestriction()->check();
 	}
 
 	private function getAutomatedSolutionByCustomSectionId(int $customSectionId): ?array

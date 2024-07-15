@@ -6,6 +6,7 @@ use Bitrix\Crm\Controller\Autorun\Dto\AssignPreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Service\Operation\TransactionWrapper;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Result;
 
@@ -44,6 +45,12 @@ final class Assign extends Base
 		return $item->getAssignedById() === $data->assignedById;
 	}
 
+	protected function isWrapItemProcessingInTransaction(): bool
+	{
+		// transaction is managed manually in this action
+		return false;
+	}
+
 	protected function processItem(Factory $factory, Item $item, PreparedData $data): Result
 	{
 		if (!($data instanceof AssignPreparedData))
@@ -53,6 +60,8 @@ final class Assign extends Base
 
 		$item->setAssignedById($data->assignedById);
 
-		return $factory->getUpdateOperation($item)->launch();
+		$operation = $factory->getUpdateOperation($item);
+
+		return (new TransactionWrapper($operation))->launch();
 	}
 }

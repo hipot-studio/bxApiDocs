@@ -287,4 +287,16 @@ abstract class Base extends Controller
 	{
 		return $this->getScope() === self::SCOPE_CLI;
 	}
+
+	final protected function setAccessDenied(): void
+	{
+		\Bitrix\Main\Context::getCurrent()->getResponse()->setStatus(403);
+
+		$this->addError(
+			new Error(
+				'Access denied',
+				ErrorCode::ACCESS_DENIED
+			)
+		);
+	}
 }

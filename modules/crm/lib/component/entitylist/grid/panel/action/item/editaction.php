@@ -7,8 +7,7 @@ use Bitrix\Crm\Data\EntityFieldsHelper;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\Service\Factory;
-use Bitrix\Main\Application;
-use Bitrix\Main\DB\Connection;
+use Bitrix\Crm\Service\Operation\TransactionWrapper;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Grid\Panel\Actions;
 use Bitrix\Main\Grid\Panel\Snippet;
@@ -23,11 +22,9 @@ final class EditAction extends \Bitrix\Main\Grid\Panel\Action\EditAction
 		private Context $context,
 		private ?int $categoryId = null,
 		private ?array $editableFieldsWhitelist = null, // null - all fields are editable
-		private array $columnNameToEditableFieldNameMap = [],
-		private ?Connection $connection = null
+		private array $columnNameToEditableFieldNameMap = []
 	)
 	{
-		$this->connection ??= Application::getConnection();
 	}
 
 	public function processRequest(HttpRequest $request, bool $isSelectedAllRows, ?Filter $filter): ?Result
@@ -120,19 +117,7 @@ final class EditAction extends \Bitrix\Main\Grid\Panel\Action\EditAction
 	{
 		$operation = $this->factory->getUpdateOperation($item, $this->context);
 
-		$this->connection->startTransaction();
-
-		$result = $operation->launch();
-		if ($result->isSuccess())
-		{
-			$this->connection->commitTransaction();
-		}
-		else
-		{
-			$this->connection->rollbackTransaction();
-		}
-
-		return $result;
+		return (new TransactionWrapper($operation))->launch();
 	}
 
 	public function getControl(): ?array

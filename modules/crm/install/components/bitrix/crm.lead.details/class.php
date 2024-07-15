@@ -46,6 +46,8 @@ class CCrmLeadDetailsComponent
 	use Traits\InitializeAdditionalFieldsData;
 	use Crm\Entity\Traits\VisibilityConfig;
 
+	private const PRODUCT_EDITOR_ID = 'lead_product_editor';
+
 	/** @var int */
 	private $customerType = CustomerType::GENERAL;
 	/** @var string|null */
@@ -154,7 +156,7 @@ class CCrmLeadDetailsComponent
 		$this->arResult['ACTION_URI'] = $this->arResult['POST_FORM_URI'] = POST_FORM_ACTION_URI;
 
 		$this->arResult['PRODUCT_DATA_FIELD_NAME'] = 'LEAD_PRODUCT_DATA';
-		$this->arResult['PRODUCT_EDITOR_ID'] = 'lead_product_editor';
+		$this->arResult['PRODUCT_EDITOR_ID'] = self::PRODUCT_EDITOR_ID;
 
 		$this->enableSearchHistory = !isset($this->arParams['~ENABLE_SEARCH_HISTORY'])
 			|| mb_strtoupper($this->arParams['~ENABLE_SEARCH_HISTORY']) === 'Y';
@@ -2569,7 +2571,7 @@ class CCrmLeadDetailsComponent
 				'name' => 'PRODUCT_LIST',
 				'type' => 'product_list',
 				'config' => [
-					'productListId' => $this->arResult['PRODUCT_EDITOR_ID'],
+					'productListId' => $this->arResult['PRODUCT_EDITOR_ID'] ?? self::PRODUCT_EDITOR_ID,
 					'currencyList' => $currencyList,
 					'currencyId' => $this->getCurrencyId(),
 				],

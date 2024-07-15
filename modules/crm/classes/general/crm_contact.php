@@ -2,7 +2,6 @@
 IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Crm;
-use Bitrix\Crm\Item;
 use Bitrix\Crm\Binding\ContactCompanyTable;
 use Bitrix\Crm\Binding\EntityBinding;
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
@@ -21,7 +20,9 @@ use Bitrix\Crm\Integrity\DuplicateCommunicationCriterion;
 use Bitrix\Crm\Integrity\DuplicateIndexMismatch;
 use Bitrix\Crm\Integrity\DuplicateManager;
 use Bitrix\Crm\Integrity\DuplicateRequisiteCriterion;
+use Bitrix\Crm\Item;
 use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
+use Bitrix\Crm\Security\QueryBuilder\Result\JoinWithUnionSpecification;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Tracking;
 use Bitrix\Crm\UtmTable;
@@ -563,6 +564,12 @@ class CAllCrmContact
 		}
 
 		$arOptions['RESTRICT_BY_ENTITY_TYPES'] = (new PermissionEntityTypeHelper(CCrmOwnerType::Contact))->getPermissionEntityTypesFromFilter((array)$arFilter);
+
+		if (JoinWithUnionSpecification::getInstance()->isSatisfiedBy($arFilter))
+		{
+			// When forming a request for restricting rights, the optimization mode with the use of union was used.
+			$arOptions['PERMISSION_BUILDER_OPTION_OBSERVER_JOIN_AS_UNION'] = true;
+		}
 
 		$lb = new CCrmEntityListBuilder(
 			CCrmContact::DB_TYPE,

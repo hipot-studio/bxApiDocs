@@ -180,6 +180,6 @@ class TextHelper
 			. '\b)\w+\b[^\]]*\]#iu'
 		;
 
-		return preg_replace($pattern, '', $bb);
+		return (string)preg_replace($pattern, '', $bb);
 	}
 }

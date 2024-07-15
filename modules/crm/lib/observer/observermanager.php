@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Crm\Observer;
 
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 
 class ObserverManager
@@ -40,26 +41,24 @@ class ObserverManager
 	{
 		$entityTypeID = static::normalizeEntityTypeId($entityTypeID);
 		$entityID = static::normalizeEntityId($entityID);
-
-		foreach($userIDs as $userID)
+		foreach ($userIDs as $userId)
 		{
-			if(!is_int($userID))
-			{
-				$userID = (int)$userID;
-			}
-
-			if($userID <= 0)
+			$userId = (int)($userId ?? 0);
+			if ($userId <= 0)
 			{
 				continue;
 			}
 
-			Entity\ObserverTable::delete(
-				[
-					'ENTITY_TYPE_ID' => $entityTypeID,
-					'ENTITY_ID' => $entityID,
-					'USER_ID' => $userID
-				]
-			);
+			Entity\ObserverTable::delete([
+				'ENTITY_TYPE_ID' => $entityTypeID,
+				'ENTITY_ID' => $entityID,
+				'USER_ID' => $userId,
+			]);
+
+			Container::getInstance()
+				->getPullManager()
+				->unSubscribeUserPullEvents($userId, $entityTypeID, $entityID)
+			;
 		}
 	}
 
@@ -85,6 +84,11 @@ class ObserverManager
 				'USER_ID' => $userID
 			]
 		);
+
+		Container::getInstance()
+			->getPullManager()
+			->unSubscribeUserPullEvents($userID, $entityTypeID, $entityID)
+		;
 	}
 
 	public static function observersIdsByEntity(int $entityTypeId, int $entityId): array

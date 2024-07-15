@@ -5,11 +5,13 @@ namespace Bitrix\Crm\Integration\AI\Operation;
 use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Quality;
+use Bitrix\AI\Tuning\Manager;
 use Bitrix\Crm\Badge;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Config;
 use Bitrix\Crm\Integration\AI\ErrorCode;
+use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Result;
@@ -21,6 +23,7 @@ use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\Timeline\ActivityController;
+use Bitrix\Crm\Timeline\AI\Call\Controller;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlExpression;
@@ -44,6 +47,7 @@ abstract class AbstractOperation
 	/** @var class-string<Dto> */
 	protected const PAYLOAD_CLASS = Dto::class;
 	protected const ENGINE_CATEGORY = 'text';
+	protected const ENGINE_CODE = EventHandler::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_TEXT_CODE;
 
 	private bool $isManualLaunch = true;
 	private ?string $contextLanguageId = null;
@@ -193,14 +197,7 @@ abstract class AbstractOperation
 		}
 
 		$context = $this->getAIEngineContext();
-		$engine = Engine::getByCategory(
-			static::ENGINE_CATEGORY,
-			$context,
-			new Quality([
-				Quality::QUALITIES['fields_highlight'],
-				Quality::QUALITIES['translate'],
-			])
-		);
+		$engine = $this->getAIEngine($context);
 		if (!$engine)
 		{
 			AIManager::logger()->critical(
@@ -248,6 +245,11 @@ abstract class AbstractOperation
 					'sliderCode' => $errorData['sliderCode'] ?? null,
 				],
 			);
+
+			if (!$this->isManualLaunch)
+			{
+				static::notifyAboutLimitExceededError($result);
+			}
 
 			static::notifyAboutJobError($result, false);
 
@@ -517,6 +519,22 @@ abstract class AbstractOperation
 		return $context;
 	}
 
+	protected function getAIEngine(Context $context): ?Engine
+	{
+		$manager = new Manager();
+		$item = $manager->getItem(static::ENGINE_CODE);
+		if ($item === null)
+		{
+			return null;
+		}
+
+		return Engine::getByCode(
+			$item->getValue(),
+			$context,
+			static::ENGINE_CATEGORY,
+		);
+	}
+
 	private function isAiMarketplaceAppsExist(): bool
 	{
 		if (!Loader::includeModule('rest'))
@@ -603,7 +621,7 @@ abstract class AbstractOperation
 			return self::saveErrorToJobAndReturnResult($job, $dummyResult);
 		}
 
-		$job->setResult(Json::encode($payload));
+		$job->setResult(Json::encode($payload, 0));
 		$job->setExecutionStatus(QueueTable::EXECUTION_STATUS_SUCCESS);
 
 		AIManager::logger()->debug(
@@ -734,6 +752,18 @@ abstract class AbstractOperation
 		bool $withSendAnalytics = true
 	): void;
 
+	protected static function notifyAboutLimitExceededError(Result $result): void
+	{
+		$activityId = $result->getTarget()?->getEntityId();
+		if ($activityId === null)
+		{
+			return;
+		}
+
+		self::syncBadges($activityId, Badge\Type\AiCallFieldsFillingResult::ERROR_LIMIT_EXCEEDED);
+		static::notifyTimelinesAboutAutomationLaunchError($result);
+	}
+
 	final protected static function notifyTimelinesAboutActivityUpdate(int $activityId, bool $forceUpdateHistoryItems = false): void
 	{
 		$activity = CCrmActivity::GetByID($activityId, false);
@@ -745,6 +775,22 @@ abstract class AbstractOperation
 		}
 	}
 
+	final protected static function notifyTimelinesAboutAutomationLaunchError(Result $result, int $activityId = null): void
+	{
+		$activityId = $activityId ?? $result->getTarget()?->getEntityId();
+		$target = (new Orchestrator())->findPossibleFillFieldsTarget($activityId);
+		if ($target)
+		{
+			$errorCodes = array_map(static fn($error) => $error->getCode(), $result->getErrors());
+			Controller::getInstance()->onAutomationLaunchError(
+				$target,
+				$activityId,
+				[ 'ERROR_CODES' => $errorCodes ],
+				$result->getUserId(),
+			);
+		}
+	}
+
 	final protected static function syncBadges(int $activityId, string $badgeValue = ''): void
 	{
 		$itemIdentifier = (new Orchestrator())->findPossibleFillFieldsTarget($activityId);
@@ -753,11 +799,8 @@ abstract class AbstractOperation
 			return;
 		}
 
-		if (empty($badgeValue))
-		{
-			Badge\Badge::deleteByEntity($itemIdentifier, Badge\Badge::AI_CALL_FIELDS_FILLING_RESULT);
-		}
-		else
+		Badge\Badge::deleteByEntity($itemIdentifier, Badge\Badge::AI_CALL_FIELDS_FILLING_RESULT);
+		if (!empty($badgeValue))
 		{
 			$badge = Container::getInstance()->getBadge(Badge\Badge::AI_CALL_FIELDS_FILLING_RESULT, $badgeValue);
 			$sourceIdentifier = new Badge\SourceIdentifier(

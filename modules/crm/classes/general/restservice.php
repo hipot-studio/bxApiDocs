@@ -1303,6 +1303,13 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 		{
 			throw new RestException(implode("\n", $errors));
 		}
+
+		$result = \Bitrix\Crm\Entity\CommentsHelper::prepareFieldsFromCompatibleRestToRead(
+			$this->getOwnerTypeID(),
+			(int)$ID,
+			$result,
+		);
+
 		$fieldsInfo = $this->getFieldsInfo();
 		$this->externalizeFields($result, $fieldsInfo);
 		return $result;
@@ -1314,36 +1321,12 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 
 		$navigation = CCrmRestService::getNavData($start);
 
-		$enableMultiFields = false;
-		$selectedFmTypeIDs = array();
-		if(is_array($select) && !empty($select))
+		$selectedFmTypeIDs = $this->findSelectedFmTypeIds((array)$select);
+		$wasIdentityFieldAdded = false;
+		if ($this->shouldAddIdentityFieldToSelect((array)$select, !empty($selectedFmTypeIDs)))
 		{
-			$supportedFmTypeIDs = $this->getSupportedMultiFieldTypeIDs();
-
-			if(is_array($supportedFmTypeIDs) && !empty($supportedFmTypeIDs))
-			{
-				foreach($supportedFmTypeIDs as $fmTypeID)
-				{
-					if(in_array($fmTypeID, $select, true))
-					{
-						$selectedFmTypeIDs[] = $fmTypeID;
-					}
-				}
-			}
-			$enableMultiFields = !empty($selectedFmTypeIDs);
-			if($enableMultiFields)
-			{
-				$identityFieldName = $this->getIdentityFieldName();
-				if($identityFieldName === '')
-				{
-					throw new RestException('Could not find identity field name.');
-				}
-
-				if(!in_array($identityFieldName, $select, true))
-				{
-					$select[] = $identityFieldName;
-				}
-			}
+			$select = $this->addIdentityFieldInSelect((array)$select);
+			$wasIdentityFieldAdded = true;
 		}
 
 		$fieldsInfo = $this->getFieldsInfo();
@@ -1355,14 +1338,20 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 		{
 			return $this->prepareListFromDbResult(
 				$result,
-				array('SELECTED_FM_TYPES' => $selectedFmTypeIDs)
+				[
+					'SELECTED_FM_TYPES' => $selectedFmTypeIDs,
+					'USE_ENTITY_MAP_APPROACH' => $wasIdentityFieldAdded,
+				]
 			);
 		}
 		elseif(is_array($result))
 		{
 			return $this->prepareListFromArray(
 				$result,
-				array('SELECTED_FM_TYPES' => $selectedFmTypeIDs)
+				[
+					'SELECTED_FM_TYPES' => $selectedFmTypeIDs,
+					'USE_ENTITY_MAP_APPROACH' => $wasIdentityFieldAdded,
+				]
 			);
 		}
 
@@ -1373,23 +1362,83 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 
 		throw new RestException(implode("\n", $errors));
 	}
+
+	private function findSelectedFmTypeIds(array $select): array
+	{
+		if (empty($select))
+		{
+			return [];
+		}
+
+		$supportedFmTypeIDs = $this->getSupportedMultiFieldTypeIDs();
+
+		$selectedFmTypeIDs = [];
+		if(is_array($supportedFmTypeIDs) && !empty($supportedFmTypeIDs))
+		{
+			foreach($supportedFmTypeIDs as $fmTypeID)
+			{
+				if(in_array($fmTypeID, $select, true))
+				{
+					$selectedFmTypeIDs[] = $fmTypeID;
+				}
+			}
+		}
+
+		return $selectedFmTypeIDs;
+	}
+
+	private function shouldAddIdentityFieldToSelect(array $select, bool $isMultifieldsEnabled): bool
+	{
+		if (empty($this->getIdentityFieldName()))
+		{
+			// identity is not supported
+			return false;
+		}
+
+		if ($isMultifieldsEnabled)
+		{
+			return true;
+		}
+
+		if (empty($select) || in_array('*', $select, true))
+		{
+			// empty select essentially means SELECT *
+			return true;
+		}
+
+		$isFlexibleFieldsSelected = (bool)array_intersect($select, \Bitrix\Crm\Entity\CommentsHelper::getFieldsWithFlexibleContentType($this->getOwnerTypeID()));
+
+		return $isFlexibleFieldsSelected;
+	}
+
+	private function addIdentityFieldInSelect(array $select): ?array
+	{
+		if (empty($select))
+		{
+			// empty select essentially means SELECT *
+			return $select;
+		}
+
+		$identityFieldName = $this->getIdentityFieldName();
+		if($identityFieldName === '')
+		{
+			throw new RestException('Could not find identity field name.');
+		}
+
+		if(!in_array($identityFieldName, $select, true))
+		{
+			$select[] = $identityFieldName;
+		}
+
+		return $select;
+	}
+
 	protected function prepareListFromDbResult(CDBResult $dbResult, array $options)
 	{
 		$result = array();
 		$fieldsInfo = $this->getFieldsInfo();
 
-		$selectedFmTypeIDs = $options['SELECTED_FM_TYPES'] ?? array();
-		if(empty($selectedFmTypeIDs))
-		{
-			while($fields = $dbResult->Fetch())
-			{
-				$this->prepareListItemFields($fields);
-
-				$this->externalizeFields($fields, $fieldsInfo);
-				$result[] = $fields;
-			}
-		}
-		else
+		if ($options['USE_ENTITY_MAP_APPROACH'] ?? false)
 		{
 			$entityMap = array();
 			while($fields = $dbResult->Fetch())
@@ -1404,7 +1453,15 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 				$entityMap[$entityID] = $fields;
 			}
 
-			$this->prepareListItemMultiFields($entityMap, $this->getOwnerTypeID(), $selectedFmTypeIDs);
+			$selectedFmTypeIDs = $options['SELECTED_FM_TYPES'] ?? array();
+			if (!empty($selectedFmTypeIDs))
+			{
+				$this->prepareListItemMultiFields($entityMap, $this->getOwnerTypeID(), $selectedFmTypeIDs);
+			}
+			$entityMap = \Bitrix\Crm\Entity\CommentsHelper::prepareFieldsFromCompatibleRestToReadInList(
+				$this->getOwnerTypeID(),
+				$entityMap,
+			);
 
 			foreach($entityMap as &$fields)
 			{
@@ -1412,6 +1469,16 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 				$result[] = $fields;
 			}
 			unset($fields);
+		}
+		else
+		{
+			while($fields = $dbResult->Fetch())
+			{
+				$this->prepareListItemFields($fields);
+
+				$this->externalizeFields($fields, $fieldsInfo);
+				$result[] = $fields;
+			}
 		}
 
 		return CCrmRestService::setNavData($result, $dbResult);
@@ -1421,18 +1488,7 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 		$result = array();
 		$fieldsInfo = $this->getFieldsInfo();
 
-		$selectedFmTypeIDs = $options['SELECTED_FM_TYPES'] ?? array();
-		if(empty($selectedFmTypeIDs))
-		{
-			foreach($list as $fields)
-			{
-				$this->prepareListItemFields($fields);
-
-				$this->externalizeFields($fields, $fieldsInfo);
-				$result[] = $fields;
-			}
-		}
-		else
+		if ($options['USE_ENTITY_MAP_APPROACH'] ?? false)
 		{
 			$entityMap = array();
 			foreach($list as $fields)
@@ -1447,7 +1503,15 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 				$entityMap[$entityID] = $fields;
 			}
 
-			$this->prepareListItemMultiFields($entityMap, $this->getOwnerTypeID(), $selectedFmTypeIDs);
+			$selectedFmTypeIDs = $options['SELECTED_FM_TYPES'] ?? array();
+			if (!empty($selectedFmTypeIDs))
+			{
+				$this->prepareListItemMultiFields($entityMap, $this->getOwnerTypeID(), $selectedFmTypeIDs);
+			}
+			$entityMap = \Bitrix\Crm\Entity\CommentsHelper::prepareFieldsFromCompatibleRestToReadInList(
+				$this->getOwnerTypeID(),
+				$entityMap,
+			);
 
 			foreach($entityMap as &$fields)
 			{
@@ -1455,6 +1519,16 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 				$result[] = $fields;
 			}
 			unset($fields);
+		}
+		else
+		{
+			foreach($list as $fields)
+			{
+				$this->prepareListItemFields($fields);
+
+				$this->externalizeFields($fields, $fieldsInfo);
+				$result[] = $fields;
+			}
 		}
 
 		return CCrmRestService::setNavData($result, array('offset' => 0, 'count' => count($result)));
@@ -2300,13 +2374,20 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 						$fileName = $fileInfo['name'];
 					}
 
-					$file = $folder->uploadFile(
-						$fileInfo,
-						array('NAME' => $fileName, 'CREATED_BY' => $this->getCurrentUserID()),
-						array(),
-						true
-					);
-					unlink($fileInfo['tmp_name']);
+					try
+					{
+						$file = $folder->uploadFile(
+							$fileInfo,
+							array('NAME' => $fileName, 'CREATED_BY' => $this->getCurrentUserID()),
+							array(),
+							true
+						);
+						unlink($fileInfo['tmp_name']);
+					}
+					catch (Main\ArgumentException $e)
+					{
+						$file = null;
+					}
 
 					if(!$file)
 					{
@@ -2533,16 +2614,6 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 			{
 				$this->externalizeFields($fields[$k], $fieldsInfo[$k]['FIELDS']);
 			}
-		}
-
-		$id = (int)($fields['ID'] ?? 0);
-		if ($id > 0 && \CCrmOwnerType::IsDefined($this->getOwnerTypeID()))
-		{
-			$fields = \Bitrix\Crm\Entity\CommentsHelper::prepareFieldsFromCompatibleRestToRead(
-				$this->getOwnerTypeID(),
-				$id,
-				$fields,
-			);
 		}
 	}
 	protected function tryExternalizeFileField(&$fields, $fieldName, $multiple = false, $dynamic = true)

@@ -8,6 +8,7 @@ use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\Category\DealCategoryChangeError;
 use Bitrix\Crm\Comparer\ComparerBase;
 use Bitrix\Crm\CustomerType;
+use Bitrix\Crm\DealTable;
 use Bitrix\Crm\Entity\Traits\EntityFieldsNormalizer;
 use Bitrix\Crm\Entity\Traits\UserFieldPreparer;
 use Bitrix\Crm\FieldContext\EntityFactory;
@@ -20,6 +21,7 @@ use Bitrix\Crm\Integration\PullManager;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Kanban\ViewMode;
 use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
+use Bitrix\Crm\Security\QueryBuilder\Result\JoinWithUnionSpecification;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\DealSettings;
 use Bitrix\Crm\Settings\HistorySettings;
@@ -30,6 +32,7 @@ use Bitrix\Crm\Statistics\LeadConversionStatisticsEntry;
 use Bitrix\Crm\Tracking;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
 use Bitrix\Crm\UtmTable;
+use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 
 class CAllCrmDeal
@@ -108,7 +111,7 @@ class CAllCrmDeal
 
 	private static function createCompatibilityAdapter(): Crm\Entity\Compatibility\Adapter
 	{
-		$factory = Crm\Service\Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
+		$factory = Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
 		if (!$factory)
 		{
 			throw new Error('No factory for deal');
@@ -146,7 +149,7 @@ class CAllCrmDeal
 	{
 		if (!self::$lastActivityAdapter)
 		{
-			$factory = Crm\Service\Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
+			$factory = Container::getInstance()->getFactory(\CCrmOwnerType::Deal);
 			self::$lastActivityAdapter = new Crm\Entity\Compatibility\Adapter\LastActivity($factory);
 			self::$lastActivityAdapter->setTableAlias(self::TABLE_ALIAS);
 		}
@@ -204,7 +207,6 @@ class CAllCrmDeal
 			),
 			'TITLE' => array(
 				'TYPE' => 'string',
-				'ATTRIBUTES' => array(CCrmFieldInfoAttr::Required)
 			),
 			'TYPE_ID' => array(
 				'TYPE' => 'crm_status',
@@ -364,7 +366,7 @@ class CAllCrmDeal
 
 		// add utm fields
 		self::$FIELD_INFOS += UtmTable::getUtmFieldsInfo();
-		self::$FIELD_INFOS += Crm\Service\Container::getInstance()->getParentFieldManager()->getParentFieldsInfo(\CCrmOwnerType::Deal);
+		self::$FIELD_INFOS += Container::getInstance()->getParentFieldManager()->getParentFieldsInfo(\CCrmOwnerType::Deal);
 
 		self::$FIELD_INFOS += self::getLastActivityAdapter()->getFieldsInfo();
 
@@ -555,7 +557,7 @@ class CAllCrmDeal
 		$result = array_merge($result, UtmTable::getFieldsDescriptionByEntityTypeId(CCrmOwnerType::Deal));
 		$result = array_merge(
 			$result,
-			Crm\Service\Container::getInstance()->getParentFieldManager()->getParentFieldsSqlInfo(
+			Container::getInstance()->getParentFieldManager()->getParentFieldsSqlInfo(
 				CCrmOwnerType::Deal,
 				'L'
 			)
@@ -673,7 +675,7 @@ class CAllCrmDeal
 				$stageIdsForSql = [];
 				foreach ($stageSemanticIdsFromFilter as $value)
 				{
-					$stageIdsForSql[] = "'" . \Bitrix\Main\Application::getConnection()->getSqlHelper()->forSql($value) . "'";
+					$stageIdsForSql[] = "'" . Application::getConnection()->getSqlHelper()->forSql($value) . "'";
 				}
 				$supposedHistoryConditions[] = "DSHWS.IS_SUPPOSED = 'N'";
 				$supposedHistoryConditions[] = "DSHWS.STAGE_SEMANTIC_ID IN (" . implode(', ', $stageIdsForSql) . ")";
@@ -685,7 +687,7 @@ class CAllCrmDeal
 				$statusIdsForSql = [];
 				foreach ($statusIdsFromFilter as $value)
 				{
-					$statusIdsForSql[] = "'" . \Bitrix\Main\Application::getConnection()->getSqlHelper()->forSql($value) . "'";
+					$statusIdsForSql[] = "'" . Application::getConnection()->getSqlHelper()->forSql($value) . "'";
 				}
 				$supposedHistoryConditions[] = "DSHWS.IS_SUPPOSED = 'N'";
 				$supposedHistoryConditions[] = "DSHWS.STAGE_ID  IN (" . implode(',', $statusIdsForSql) . ")";
@@ -697,7 +699,7 @@ class CAllCrmDeal
 				$statusIdsForSql = [];
 				foreach ($statusIdsFromFilter as $value)
 				{
-					$statusIdsForSql[] = "'" . \Bitrix\Main\Application::getConnection()->getSqlHelper()->forSql($value) . "'";
+					$statusIdsForSql[] = "'" . Application::getConnection()->getSqlHelper()->forSql($value) . "'";
 				}
 				$supposedHistoryConditions[] = "DSHWS.STAGE_ID IN (" . implode(',', $statusIdsForSql) . ")";
 			}
@@ -1009,6 +1011,12 @@ class CAllCrmDeal
 			{
 				$arOptions['RESTRICT_BY_ENTITY_TYPES'] = array_unique($entityTypes);
 			}
+		}
+
+		if (JoinWithUnionSpecification::getInstance()->isSatisfiedBy($arFilter))
+		{
+			// When forming a request for restricting rights, the optimization mode with the use of union was used.
+			$arOptions['PERMISSION_BUILDER_OPTION_OBSERVER_JOIN_AS_UNION'] = true;
 		}
 
 		$lb = new CCrmEntityListBuilder(
@@ -1674,7 +1682,7 @@ class CAllCrmDeal
 			->build()
 		;
 
-		$queryBuilder = Crm\Service\Container::getInstance()
+		$queryBuilder = Container::getInstance()
 			->getUserPermissions($userId)
 			->createListQueryBuilder($entityTypes, $builderOptions)
 		;
@@ -2146,7 +2154,7 @@ class CAllCrmDeal
 			// tracking of entity
 			Tracking\Entity::onAfterAdd(CCrmOwnerType::Deal, $ID, $arFields);
 			//region save parent relations
-			Crm\Service\Container::getInstance()->getParentFieldManager()->saveParentRelationsForIdentifier(
+			Container::getInstance()->getParentFieldManager()->saveParentRelationsForIdentifier(
 				new Crm\ItemIdentifier(\CCrmOwnerType::Deal, $ID),
 				$arFields
 			);
@@ -2650,7 +2658,7 @@ class CAllCrmDeal
 		$contactID = isset($fields['CONTACT_ID']) ? (int)$fields['CONTACT_ID'] : 0;
 
 		$enableSource = !isset($options['ENABLE_SOURCE']) || $options['ENABLE_SOURCE'] === true;
-		$connection = \Bitrix\Main\Application::getInstance()->getConnection();
+		$connection = Application::getInstance()->getConnection();
 
 		//region REPEATED APPROACH
 		if($enableSource)
@@ -2664,14 +2672,19 @@ class CAllCrmDeal
 			{
 				if($companyID > 0)
 				{
-					$dbResult = $connection->query("SELECT MIN(ID) AS ID FROM b_crm_deal WHERE COMPANY_ID = {$companyID} AND STAGE_SEMANTIC_ID = 'S'");
+					$resultData = self::queryMinDealIdWithCache(
+						"SELECT ID, IS_RETURN_CUSTOMER FROM b_crm_deal WHERE COMPANY_ID = {$companyID} AND STAGE_SEMANTIC_ID = 'S' ORDER BY ID ASC LIMIT 1",
+						$connection,
+					);
 				}
 				else//if($contactID > 0)
 				{
-					$dbResult = $connection->query("SELECT MIN(ID) AS ID FROM b_crm_deal WHERE CONTACT_ID = {$contactID} AND COMPANY_ID <= 0 AND STAGE_SEMANTIC_ID = 'S'");
+					$resultData = self::queryMinDealIdWithCache(
+						"SELECT ID, IS_RETURN_CUSTOMER FROM b_crm_deal WHERE CONTACT_ID = {$contactID} AND COMPANY_ID <= 0 AND STAGE_SEMANTIC_ID = 'S' ORDER BY ID ASC LIMIT 1",
+						$connection,
+					);
 				}
 
-				$resultData = $dbResult->fetch();
 				$primaryID = is_array($resultData) && isset($resultData['ID']) ? (int)$resultData['ID'] : 0;
 				$isRepeatedApproach = ($primaryID === 0);
 			}
@@ -2686,14 +2699,20 @@ class CAllCrmDeal
 		{
 			if($companyID > 0)
 			{
-				$dbResult = $connection->query("SELECT MIN(ID) AS ID FROM b_crm_deal WHERE COMPANY_ID = {$companyID} AND STAGE_SEMANTIC_ID = 'S'");
+				$resultData = self::queryMinDealIdWithCache(
+					"SELECT ID, IS_RETURN_CUSTOMER FROM b_crm_deal WHERE COMPANY_ID = {$companyID} AND STAGE_SEMANTIC_ID = 'S' ORDER BY ID ASC LIMIT 1",
+					$connection,
+				);
 			}
 			else//if($contactID > 0)
 			{
-				$dbResult = $connection->query("SELECT MIN(ID) AS ID FROM b_crm_deal WHERE CONTACT_ID = {$contactID} AND COMPANY_ID <= 0 AND STAGE_SEMANTIC_ID = 'S'");
+				$resultData = self::queryMinDealIdWithCache(
+					"SELECT ID, IS_RETURN_CUSTOMER FROM b_crm_deal WHERE CONTACT_ID = {$contactID} AND COMPANY_ID <= 0 AND STAGE_SEMANTIC_ID = 'S' ORDER BY ID ASC LIMIT 1",
+					$connection,
+				);
 			}
 
-			$resultData = $dbResult->fetch();
+			$currentIsReturnCustomer = $resultData['IS_RETURN_CUSTOMER'] ?? null;
 			$primaryID = is_array($resultData) && isset($resultData['ID']) ? (int)$resultData['ID'] : 0;
 			if($primaryID > 0)
 			{
@@ -2709,14 +2728,36 @@ class CAllCrmDeal
 						"UPDATE b_crm_deal SET IS_RETURN_CUSTOMER = 'Y', IS_REPEATED_APPROACH = 'N' WHERE IS_RETURN_CUSTOMER = 'N' AND CONTACT_ID = {$contactID} AND coalesce(COMPANY_ID, 0) = 0"
 					);
 				}
-				$connection->queryExecute("UPDATE b_crm_deal SET IS_RETURN_CUSTOMER = 'N' WHERE ID = {$primaryID}");
+
+				if ($currentIsReturnCustomer !== 'N')
+				{
+					$connection->queryExecute("UPDATE b_crm_deal SET IS_RETURN_CUSTOMER = 'N' WHERE ID = {$primaryID}");
+				}
 			}
 		}
-		elseif($enableSource)
+		elseif($enableSource && $fields['IS_RETURN_CUSTOMER'] !== 'N')
 		{
 			$connection->queryExecute("UPDATE b_crm_deal SET IS_RETURN_CUSTOMER = 'N' WHERE ID = {$sourceID}");
 		}
 		//endregion
+	}
+
+	private static function queryMinDealIdWithCache(string $sql, \Bitrix\Main\DB\Connection $connection)
+	{
+		static $cache = [];
+		$hash = hash('crc32b', $sql);
+
+		if (isset($cache[$hash]))
+		{
+			return $cache[$hash];
+		}
+
+		$dbResult = $connection->query($sql);
+		$resultData = $dbResult->fetch();
+
+		$cache[$hash] = $resultData;
+
+		return $resultData;
 	}
 
 	public function Update($ID, array &$arFields, $bCompare = true, $bUpdateSearch = true, $options = array())
@@ -3293,8 +3334,10 @@ class CAllCrmDeal
 			}
 
 			//region Complete activities if entity is closed
-			if($arRow['STAGE_SEMANTIC_ID'] !== $currentFields['STAGE_SEMANTIC_ID']
-				&& $currentFields['STAGE_SEMANTIC_ID'] !== Bitrix\Crm\PhaseSemantics::PROCESS)
+			if (
+				$arRow['STAGE_SEMANTIC_ID'] !== $currentFields['STAGE_SEMANTIC_ID']
+				&& $currentFields['STAGE_SEMANTIC_ID'] !== Bitrix\Crm\PhaseSemantics::PROCESS
+			)
 			{
 				CCrmActivity::SetAutoCompletedByOwner(CCrmOwnerType::Deal, $ID);
 			}
@@ -3345,7 +3388,7 @@ class CAllCrmDeal
 			UtmTable::updateEntityUtmFromFields(CCrmOwnerType::Deal, $ID, $arFields);
 
 			//region save parent relations
-			Crm\Service\Container::getInstance()->getParentFieldManager()->saveParentRelationsForIdentifier(
+			Container::getInstance()->getParentFieldManager()->saveParentRelationsForIdentifier(
 				new Crm\ItemIdentifier(\CCrmOwnerType::Deal, $ID),
 				$arFields
 			);
@@ -3597,7 +3640,7 @@ class CAllCrmDeal
 
 			if ($bResult)
 			{
-				$scope = \Bitrix\Crm\Service\Container::getInstance()->getContext()->getScope();
+				$scope = Container::getInstance()->getContext()->getScope();
 				$filler = new ValueFiller(CCrmOwnerType::Deal, $ID, $scope);
 				$filler->fill($options['CURRENT_FIELDS'], $arFields);
 
@@ -3673,7 +3716,7 @@ class CAllCrmDeal
 
 		$permissionEntityType = DealCategory::convertToPermissionEntityType($categoryID);
 
-		$hasDeletePerm = \Bitrix\Crm\Service\Container::getInstance()
+		$hasDeletePerm = Container::getInstance()
 			->getUserPermissions($iUserId)
 			->checkDeletePermissions(CCrmOwnerType::Deal, $ID, $categoryID)
 		;
@@ -4399,17 +4442,17 @@ class CAllCrmDeal
 
 		$deal = new Crm\ItemIdentifier(\CCrmOwnerType::Deal, $id);
 
-		return Crm\Service\Container::getInstance()->getAccounting()->calculateDeliveryTotal($deal);
+		return Container::getInstance()->getAccounting()->calculateDeliveryTotal($deal);
 	}
 
 	public static function GetCategoryID($ID)
 	{
-		return (int)Crm\Service\Container::getInstance()->getFactory(CCrmOwnerType::Deal)->getItemCategoryId((int)$ID);
+		return (int)Container::getInstance()->getFactory(CCrmOwnerType::Deal)->getItemCategoryId((int)$ID);
 	}
 
 	public static function clearCategoryCache($ID)
 	{
-		return Crm\Service\Container::getInstance()->getFactory(CCrmOwnerType::Deal)->clearItemCategoryCache((int)$ID);
+		return Container::getInstance()->getFactory(CCrmOwnerType::Deal)->clearItemCategoryCache((int)$ID);
 	}
 
 	protected static function GetPermittedCategoryIDs($permissionType, CCrmPerms $userPermissions = null)
@@ -4474,7 +4517,7 @@ class CAllCrmDeal
 	{
 		if($userPermissions === null)
 		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();;
+			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
 		}
 
 		return $userPermissions->GetPermType(
@@ -4726,7 +4769,7 @@ class CAllCrmDeal
 		}
 
 		$canCreateInvoice = IsModuleInstalled('sale') && CCrmInvoice::CheckCreatePermission($userPermissions);
-		$userPermissions = Crm\Service\Container::getInstance()->getUserPermissions($userPermissions->GetUserID());
+		$userPermissions = Container::getInstance()->getUserPermissions($userPermissions->GetUserID());
 		$canCreateSmartInvoice = $userPermissions->checkAddPermissions(\CCrmOwnerType::SmartInvoice);
 		$canCreateQuote = $userPermissions->checkAddPermissions(\CCrmOwnerType::Quote);
 
@@ -5193,32 +5236,44 @@ class CAllCrmDeal
 		}
 		$newStageSemanticID = self::GetSemanticID($newStageID, $newCategoryID);
 
-		$connection = \Bitrix\Main\Application::getConnection();
+		// Robots can provide user ID by options
+		$userID = isset($options['USER_ID']) ? (int)$options['USER_ID'] : 0;
+		if($userID <= 0)
+		{
+			$userID = Container::getInstance()->getContext()->getUserId();
+		}
+
+		$connection = Application::getConnection();
 		$sqlHelper = $connection->getSqlHelper();
 
 		$escapedCategoryId = (int)$newCategoryID;
 		$escapedStageId = $sqlHelper->forSql($newStageID);
 		$escapedNewStageSemanticId = $sqlHelper->forSql($newStageSemanticID);
-		$now = $connection->getSqlHelper()->getCurrentDateTimeFunction();
-
-		$sql = "UPDATE b_crm_deal SET "
-			. " CATEGORY_ID = {$escapedCategoryId},"
-			. " STAGE_ID = '{$escapedStageId}',"
-			. (
-				($semanticID != $newStageSemanticID)
-					? " STAGE_SEMANTIC_ID='{$escapedNewStageSemanticId}', "
-					: ''
-			)
-			. " DATE_MODIFY = {$now} "
-			. " WHERE ID = {$ID}"
-		;
-
-		$connection->query($sql);
+		$now = $sqlHelper->getCurrentDateTimeFunction();
 
 		$currentFields = array_merge($fields, [
 			'CATEGORY_ID' => $newCategoryID,
 			'STAGE_ID' => $newStageID,
 		]);
+
+		$fieldsToUpdate = [
+			'CATEGORY_ID' => $escapedCategoryId,
+			'STAGE_ID' => $escapedStageId,
+			'=DATE_MODIFY' => $now
+		];
+
+		if ($userID > 0)
+		{
+			$fieldsToUpdate['MODIFY_BY_ID'] = $userID;
+			$currentFields['MODIFY_BY_ID'] = $userID;
+		}
+
+		if ($semanticID != $newStageSemanticID)
+		{
+			$fieldsToUpdate['STAGE_SEMANTIC_ID'] = $escapedNewStageSemanticId;
+		}
+
+		DealTable::update($ID, $fieldsToUpdate);
 
 		Bitrix\Crm\Timeline\DealController::getInstance()->onModify($ID, [
 			'PREVIOUS_FIELDS' => $fields,
@@ -5264,11 +5319,7 @@ class CAllCrmDeal
 			DealActivityStatisticEntry::processCagegoryChange($ID);
 		}
 		$timestamp = time() + CTimeZone::GetOffset();
-		$userID = isset($options['USER_ID']) ? (int)$options['USER_ID'] : 0;
-		if($userID <= 0)
-		{
-			$userID = CCrmSecurityHelper::GetCurrentUserID();
-		}
+
 
 		$eventEntity = new CCrmEvent();
 		$eventEntity->Add(

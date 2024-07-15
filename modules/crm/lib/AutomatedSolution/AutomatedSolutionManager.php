@@ -219,13 +219,18 @@ final class AutomatedSolutionManager
 	/**
 	 * @deprecated
 	 */
-	public function setAutomatedSolutions(Type $type, array $fields): Result
+	public function setAutomatedSolutions(
+		Type $type,
+		array $fields,
+		bool $checkLimits = true,
+	): Result
 	{
 		$action = new LegacySet(
 			$type,
 			$fields,
 			$this->getExistingAutomatedSolutions(),
 			$this->getExistingIntranetCustomSections(),
+			$checkLimits,
 		);
 
 		$result = $action->execute();

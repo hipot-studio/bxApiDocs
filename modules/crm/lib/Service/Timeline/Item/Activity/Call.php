@@ -3,6 +3,9 @@
 namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 
 use Bitrix\Crm\Activity\StatisticsMark;
+use Bitrix\Crm\Badge\Badge;
+use Bitrix\Crm\Badge\SourceIdentifier;
+use Bitrix\Crm\Badge\Type\AiCallFieldsFillingResult;
 use Bitrix\Crm\Format\Duration;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
@@ -421,9 +424,19 @@ class Call extends Activity
 			);
 		}
 
-		$entityTypeId = $this->getContext()->getIdentifier()->getEntityTypeId();
-		if (AIManager::isLaunchOperationsSuccess(
-				$entityTypeId,
+		return array_merge($tags, $this->getAiTags());
+	}
+
+	/**
+	 * @return Tag[]
+	 */
+	private function getAiTags(): array
+	{
+		$tags = [];
+
+		if (
+			AIManager::isLaunchOperationsSuccess(
+				$this->getContext()->getIdentifier()->getEntityTypeId(),
 				$this->getContext()->getIdentifier()->getEntityId(),
 				$this->getActivityId()
 			)
@@ -432,6 +445,28 @@ class Call extends Activity
 			$tags['copilotDone'] = new Tag(
 				Loc::getMessage('CRM_TIMELINE_TAG_COPILOT_DONE'),
 				Tag::TYPE_LAVENDER
+			);
+
+			return $tags;
+		}
+
+		$limitExceededBadge = Container::getInstance()->getBadge(
+			Badge::AI_CALL_FIELDS_FILLING_RESULT,
+			AiCallFieldsFillingResult::ERROR_LIMIT_EXCEEDED,
+		);
+
+		$itemIdentifier = $this->getContext()->getIdentifier();
+		$sourceIdentifier = new SourceIdentifier(
+			SourceIdentifier::CRM_OWNER_TYPE_PROVIDER,
+			CCrmOwnerType::Activity,
+			$this->getActivityId(),
+		);
+
+		if ($limitExceededBadge->isBound($itemIdentifier, $sourceIdentifier))
+		{
+			$tags['copilotLimitExceeded'] = new Tag(
+				AiCallFieldsFillingResult::getLimitExceededTextValue(),
+				Tag::TYPE_FAILURE,
 			);
 		}
 
@@ -463,6 +498,11 @@ class Call extends Activity
 				$isWelcomeTourEnabled
 			)
 		;
+	}
+
+	protected function canMoveTo(): bool
+	{
+		return $this->isScheduled() && $this->isVoxImplant($this->fetchOriginId());
 	}
 
 	protected function getDeleteConfirmationText(): string

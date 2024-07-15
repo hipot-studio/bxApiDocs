@@ -113,6 +113,8 @@ class ObserverTable extends DataManager
 		{
 			$connection->queryExecute($query);
 		}
+
+		static::cleanCache();
 	}
 
 	public static function deleteByEntityTypeId(int $entityTypeId): void
@@ -134,6 +136,7 @@ class ObserverTable extends DataManager
 			$conditions[] = $helper->prepareAssignment($tableName, $k, $v);
 		}
 		$connection->queryExecute('DELETE FROM '.$tableName.' WHERE '.implode(' AND ', $conditions));
+		static::cleanCache();
 	}
 
 	/**
@@ -230,5 +233,7 @@ class ObserverTable extends DataManager
 		$connection->queryExecute(
 			"DELETE FROM b_crm_observer WHERE ENTITY_TYPE_ID = {$oldEntityTypeID} AND ENTITY_ID = {$oldEntityID}"
 		);
+
+		static::cleanCache();
 	}
 }

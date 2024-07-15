@@ -6,6 +6,7 @@ use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\SetCategoryPreparedData;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Service\Operation\TransactionWrapper;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Result;
 
@@ -56,6 +57,11 @@ final class SetCategory extends Base
 		return $item->getCategoryId() === $data->categoryId;
 	}
 
+	protected function isWrapItemProcessingInTransaction(): bool
+	{
+		return false;
+	}
+
 	protected function processItem(Factory $factory, Item $item, PreparedData $data): Result
 	{
 		if (!($data instanceof SetCategoryPreparedData))
@@ -65,6 +71,8 @@ final class SetCategory extends Base
 
 		$item->setCategoryId($data->categoryId);
 
-		return $factory->getUpdateOperation($item)->launch();
+		$operation = $factory->getUpdateOperation($item);
+
+		return (new TransactionWrapper($operation))->launch();
 	}
 }

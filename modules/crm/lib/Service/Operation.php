@@ -82,7 +82,7 @@ abstract class Operation
 		return ItemIdentifier::createByItem($this->getItem());
 	}
 
-	public function getItemBeforeSave(): Item
+	public function getItemBeforeSave(): ?Item
 	{
 		return $this->itemBeforeSave;
 	}
@@ -578,6 +578,9 @@ abstract class Operation
 		return $result;
 	}
 
+	/**
+	 * @see \Bitrix\Crm\Service\Operation\TransactionWrapper::runBizProc() - copy-paste
+	 */
 	protected function runBizProc(): Result
 	{
 		$result = new Result();
@@ -615,6 +618,9 @@ abstract class Operation
 		return $result;
 	}
 
+	/**
+	 * @see \Bitrix\Crm\Service\Operation\TransactionWrapper::runAutomation()
+	 */
 	protected function runAutomation(): Result
 	{
 		$starter = new Starter($this->item->getEntityTypeId(), $this->item->getId());

@@ -66,7 +66,11 @@ class Delete extends Operation
 
 		if ($this->isDeferredCleaningEnabled())
 		{
-			Cleaning\CleaningManager::register($this->itemBeforeSave->getEntityTypeId(), $this->itemBeforeSave->getId());
+			Cleaning\CleaningManager::register(
+				$this->itemBeforeSave->getEntityTypeId(),
+				$this->itemBeforeSave->getId(),
+				$this->getContext()?->getUserId(),
+			);
 		}
 		else
 		{

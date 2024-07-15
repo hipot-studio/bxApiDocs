@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Entity;
 
-use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 use Bitrix\Crm;
 use Bitrix\Crm\Workflow\PaymentStage;
@@ -10,9 +9,6 @@ use Bitrix\Crm\Workflow\PaymentWorkflow;
 use Bitrix\Crm\Workflow\EntityStageTable;
 use Bitrix\Sale;
 use Bitrix\Catalog;
-use Bitrix\Sale\Payment;
-use Bitrix\Sale\Shipment;
-use CCrmOwnerType;
 
 /**
  * Class retrieves documents related to the entity.
@@ -453,7 +449,13 @@ class PaymentDocumentsRepository
 
 		$shipmentIds = array_column($documentList, 'ID');
 		$shipmentBasketResult = Sale\ShipmentItem::getList([
-			'select' => ['PRICE' => 'BASKET.PRICE', 'ORDER_DELIVERY_ID', 'QUANTITY'],
+			'select' => [
+				'PRICE' => 'BASKET.PRICE',
+				'VAT_INCLUDED' => 'BASKET.VAT_INCLUDED',
+				'VAT_RATE' => 'BASKET.VAT_RATE',
+				'ORDER_DELIVERY_ID',
+				'QUANTITY',
+			],
 			'filter' => ['=ORDER_DELIVERY_ID' => $shipmentIds]
 		]);
 		while ($shipmentItem = $shipmentBasketResult->fetch())
@@ -461,6 +463,11 @@ class PaymentDocumentsRepository
 			if (!isset($documentTotals[$shipmentItem['ORDER_DELIVERY_ID']]))
 			{
 				$documentTotals[$shipmentItem['ORDER_DELIVERY_ID']] = 0;
+			}
+
+			if ($shipmentItem['VAT_INCLUDED'] !== 'Y')
+			{
+				$shipmentItem['PRICE'] += (float)$shipmentItem['PRICE'] * (float)$shipmentItem['VAT_RATE'];
 			}
 
 			$documentTotals[$shipmentItem['ORDER_DELIVERY_ID']] += (float)$shipmentItem['PRICE'] * $shipmentItem['QUANTITY'];
@@ -573,39 +580,5 @@ class PaymentDocumentsRepository
 			}
 		}
 		return true;
-	}
-
-	/**
-	 * @param Payment $payment
-	 * @return bool
-	 */
-	public function checkPaymentPermission(Payment $payment): bool
-	{
-		$order = $payment->getOrder();
-
-		return $this->checkPermission(CCrmOwnerType::Order, $order->getId());
-	}
-
-	/**
-	 * @param Shipment $shipment
-	 * @return bool
-	 */
-	public function checkShipmentPermission(Shipment $shipment): bool
-	{
-		$order = $shipment->getOrder();
-
-		return $this->checkPermission(CCrmOwnerType::Order, $order->getId());
-	}
-
-	/**
-	 * @param int $entityTypeId
-	 * @param int $entityId
-	 * @return bool
-	 */
-	public function checkPermission(int $entityTypeId, int $entityId): bool
-	{
-		$userPermissions = Container::getInstance()->getUserPermissions();
-
-		return $userPermissions->checkReadPermissions($entityTypeId, $entityId);
 	}
 }

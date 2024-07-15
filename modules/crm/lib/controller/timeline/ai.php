@@ -90,7 +90,8 @@ class AI extends Activity
 			AIManager::isAiCallProcessingEnabled()
 			&& in_array($ownerTypeId, AIManager::SUPPORTED_ENTITY_TYPE_IDS, true)
 			&& !ComparerBase::isClosed(
-				new ItemIdentifier($ownerTypeId, $ownerId)
+				new ItemIdentifier($ownerTypeId, $ownerId),
+				true
 			)
 		)
 		{

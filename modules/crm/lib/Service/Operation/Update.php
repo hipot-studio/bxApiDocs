@@ -18,6 +18,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Objectify\Values;
 use Bitrix\Main\Result;
+use CCrmActivity;
 
 class Update extends Operation
 {
@@ -159,11 +160,13 @@ class Update extends Operation
 				$authorId = $this->getItem()->getUpdatedBy();
 			}
 
-			\CCrmActivity::SetAutoCompletedByOwner(
+			CCrmActivity::SetAutoCompletedByOwner(
 				$this->getItem()->getEntityTypeId(),
 				$this->getItem()->getId(),
 				$this->getActivityProvidersToAutocomplete(),
-				['CURRENT_USER' => $authorId]
+				[
+					'CURRENT_USER' => $authorId,
+				]
 			);
 		}
 

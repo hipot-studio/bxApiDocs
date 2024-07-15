@@ -1,23 +1,40 @@
 <?php
 
 namespace Bitrix\Crm\Integration;
+
 use Bitrix\Crm\Activity\Provider\Call;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
+use CVoxImplantHistory;
 
 class VoxImplantManager
 {
 	private const ORIGIN_ID_PREFIX = 'VI_';
 
-	public static function getCallInfo($callID)
+	private static array $callInfoCache = [];
+
+	public static function getCallInfo(?string $callId): ?array
 	{
-		if(!Loader::includeModule('voximplant'))
+		if (!Loader::includeModule('voximplant'))
 		{
 			return null;
 		}
 
-		$info = \CVoxImplantHistory::getBriefDetails($callID);
-		return is_array($info) ? $info : null;
+		if (empty($callId))
+		{
+			return null;
+		}
+
+		if (!isset(self::$callInfoCache[$callId]))
+		{
+			$info = CVoxImplantHistory::getBriefDetails($callId);
+			if (is_array($info))
+			{
+				self::$callInfoCache[$callId] = $info;
+			}
+		}
+
+		return self::$callInfoCache[$callId] ?? null;
 	}
 
 	public static function getCallDuration(string $callId): ?int
@@ -27,14 +44,21 @@ class VoxImplantManager
 		return isset($info['DURATION']) ? (int)$info['DURATION'] : null;
 	}
 
-	public static function saveComment($callId, $comment)
+	public static function saveComment(string $callId, $comment): void
 	{
-		if(!Loader::includeModule('voximplant'))
+		if (!Loader::includeModule('voximplant'))
 		{
-			return null;
+			return;
 		}
 
-		\CVoxImplantHistory::saveComment($callId, $comment);
+		$comment = is_string($comment) ? $comment : '';
+
+		CVoxImplantHistory::saveComment($callId, $comment);
+
+		if (isset(self::$callInfoCache[$callId]))
+		{
+			unset(self::$callInfoCache[$callId]);
+		}
 	}
 
 	final public static function isActivityBelongsToVoximplant(array $activityFields): bool

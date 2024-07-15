@@ -132,6 +132,12 @@ abstract class Activity extends Configurable
 			;
 		}
 
+		$moveToMenuItem = $this->createMoveToMenuItem($activityId);
+		if ($moveToMenuItem)
+		{
+			$menuItems['moveTo'] = $moveToMenuItem;
+		}
+
 		$menuItems['delete'] = $this->createDeleteMenuItem($activityId);
 
 		return $menuItems;
@@ -326,6 +332,29 @@ abstract class Activity extends Configurable
 		;
 	}
 
+	private function createMoveToMenuItem(int $activityId): ?Layout\Menu\MenuItem
+	{
+		if (
+			$this->hasUpdatePermission()
+			&& $this->isIncomingChannel()
+			&& $this->canMoveTo()
+		)
+		{
+			return MenuItemFactory::createMoveToMenuItem()
+				->setAction(
+					(new Layout\Action\JsEvent('Activity:MoveTo'))
+						->addActionParamInt('activityId', $activityId)
+						->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+						->addActionParamInt('ownerId', $this->getContext()->getEntityId())
+						->addActionParamInt('categoryId', $this->getContext()->getEntityCategoryId())
+				)
+				->setScopeWeb() // temporary disable action for mobile app
+			;
+		}
+
+		return null;
+	}
+
 	private function canEdit(): bool
 	{
 		$provider = CCrmActivity::GetActivityProvider($this->getAssociatedEntityModel()?->toArray());
@@ -338,6 +367,11 @@ abstract class Activity extends Configurable
 		}
 
 		return $this->hasUpdatePermission();
+	}
+
+	protected function canMoveTo(): bool
+	{
+		return false;
 	}
 
 	protected function hasUpdatePermission(): bool

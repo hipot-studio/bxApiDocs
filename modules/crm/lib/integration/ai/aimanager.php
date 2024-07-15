@@ -48,6 +48,7 @@ final class AIManager
 
 	private const AI_COPILOT_FEATURE_NAME = 'crm_copilot';
 	private const AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME = 'AI_CALL_PROCESSING_ALLOWED_AUTO_V2';
+	private const AI_LOGGER_ENABLED_OPTION_NAME = 'USE_ADDM2LOG_FOR_AI';
 	private const AI_LIMIT_SLIDERS_MAP = [
 		self::AI_LIMIT_CODE_DAILY => 'limit_copilot_max_number_daily_requests',
 		self::AI_LIMIT_CODE_MONTHLY => 'limit_copilot_requests',
@@ -81,7 +82,7 @@ final class AIManager
 			return false;
 		}
 
-		return Loader::includeModule('ai') && Loader::includeModule('bitrix24');
+		return Loader::includeModule('ai');
 	}
 
 	public static function isEnabledInGlobalSettings(string $code = EventHandler::SETTINGS_FILL_ITEM_FROM_CALL_ENABLED_CODE): bool
@@ -442,7 +443,7 @@ final class AIManager
 			return $customLoggerFromSettings;
 		}
 
-		if (ModuleManager::isModuleInstalled('bitrix24'))
+		if (ModuleManager::isModuleInstalled('bitrix24') || Option::get('crm', self::AI_LOGGER_ENABLED_OPTION_NAME, false))
 		{
 			$logger = new class extends Logger {
 				protected function logMessage(string $level, string $message): void

@@ -1050,12 +1050,15 @@ class EntityConverter
 
 		if ($controller)
 		{
-			$controller->onConvert(
-				$this->getEntityID(),
-				[
-					'ENTITIES' => $this->resultData,
-				]
-			);
+			$params = [
+				'ENTITIES' => $this->resultData,
+			];
+			if (isset($this->contextData['USER_ID']))
+			{
+				$params['USER_ID'] = $this->contextData['USER_ID'];
+			}
+
+			$controller->onConvert($this->getEntityID(), $params);
 		}
 	}
 

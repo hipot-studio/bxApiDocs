@@ -9,6 +9,7 @@ use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\BooleanField;
 use Bitrix\Main\Entity\ExpressionField;
@@ -55,11 +56,6 @@ final class Storage extends Internals\Model
 	protected $cacheSecurityContext = array();
 	/** @var ProxyType\Base */
 	protected $proxyType;
-
-	/**
-	 * @var Storage[]
-	 */
-	protected static $loadedStorages = array();
 
 	/**
 	 * Gets the fully qualified name of table class which belongs to current model.
@@ -917,15 +913,19 @@ final class Storage extends Internals\Model
 		return $this->update(array('NAME' => $name));
 	}
 
-	public function delete($deletedBy)
+	public function delete($deletedBy): bool
 	{
-		if($this->getRootObject() && !$this->getRootObject()->deleteTree($deletedBy))
+		if ($this->getRootObject() && !$this->getRootObject()->deleteTree($deletedBy))
 		{
 			return false;
 		}
+
 		$status = parent::deleteInternal();
-		if($status)
+		if ($status)
 		{
+			$runtimeCache = ServiceLocator::getInstance()->get('disk.storageRuntimeCache');
+			$runtimeCache->remove($this);
+
 			$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterDeleteStorage", array($this->getId(), $deletedBy));
 			$event->send();
 
@@ -948,18 +948,31 @@ final class Storage extends Internals\Model
 	 */
 	public static function loadById($id, array $with = array())
 	{
-		if(self::isLoaded($id))
+		$runtimeCache = ServiceLocator::getInstance()->get('disk.storageRuntimeCache');
+		if ($runtimeCache->isLoadedById($id))
 		{
-			return self::$loadedStorages[$id];
+			return $runtimeCache->getById($id);
 		}
-		self::$loadedStorages[$id] = parent::loadById($id, $with);
 
-		return self::$loadedStorages[$id];
+		$storage = parent::loadById($id, $with);
+		if ($storage)
+		{
+			$runtimeCache->store($storage);
+		}
+
+		return $storage;
 	}
 
-	public static function isLoaded($id)
+	/**
+	 * @param int $id
+	 * @return bool
+	 * @deprecated
+	 * @throws \Bitrix\Main\ObjectNotFoundException
+	 * @throws \Psr\Container\NotFoundExceptionInterface
+	 */
+	public static function isLoaded(int $id): bool
 	{
-		return isset(self::$loadedStorages[$id]);
+		return ServiceLocator::getInstance()->get('disk.storageRuntimeCache')->isLoadedById($id);
 	}
 
 	/**
@@ -971,13 +984,17 @@ final class Storage extends Internals\Model
 	 */
 	public static function buildFromArray(array $attributes, array &$aliases = null)
 	{
-		if(self::isLoaded($attributes['ID']))
-		{
-			return self::$loadedStorages[$attributes['ID']];
-		}
-		self::$loadedStorages[$attributes['ID']] = parent::buildFromArray($attributes, $aliases);
+		$runtimeCache = ServiceLocator::getInstance()->get('disk.storageRuntimeCache');
 
-		return self::$loadedStorages[$attributes['ID']];
+		if ($runtimeCache->isLoadedById($attributes['ID']))
+		{
+			return $runtimeCache->getById($attributes['ID']);
+		}
+
+		$storage = parent::buildFromArray($attributes, $aliases);
+		$runtimeCache->store($storage);
+
+		return $storage;
 	}
 
 	/**
@@ -988,9 +1005,10 @@ final class Storage extends Internals\Model
 	 */
 	public static function buildFromResult(Result $result)
 	{
-		/** @var Storage $model */
 		$model = parent::buildFromResult($result);
-		self::$loadedStorages[$model->getId()] = $model;
+
+		$runtimeCache = ServiceLocator::getInstance()->get('disk.storageRuntimeCache');
+		$runtimeCache->store($model);
 
 		return $model;
 	}

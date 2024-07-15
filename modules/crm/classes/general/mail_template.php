@@ -228,9 +228,9 @@ class CAllCrmMailTemplate
 
 		$curAccessRelation = \Bitrix\Crm\MailTemplate\MailTemplateAccess::getAccessDataByTemplateID($ID);
 
-		if($arFields['ACCESS'])
+		if(!empty($arFields['ACCESS'] ?? []) || !empty($curAccessRelation))
 		{
-			\Bitrix\Crm\MailTemplate\MailTemplateAccess::setLimitedAccessToTemplate($ID, $arFields['ACCESS'], $curAccessRelation);
+			\Bitrix\Crm\MailTemplate\MailTemplateAccess::setLimitedAccessToTemplate($ID, $arFields['ACCESS'] ?? [], $curAccessRelation);
 		}
 
 		$rsEvents = GetModuleEvents('crm', 'OnMailTemplateUpdate');

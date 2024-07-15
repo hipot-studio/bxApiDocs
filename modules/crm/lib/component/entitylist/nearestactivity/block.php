@@ -2,14 +2,11 @@
 
 namespace Bitrix\Crm\Component\EntityList\NearestActivity;
 
-use Bitrix\Crm\Activity\ToDo\CalendarSettings\CalendarSettingsProvider;
-use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
-use Bitrix\Crm\Activity\TodoPingSettingsProvider;
+use Bitrix\Crm\Component\EntityList\NearestActivity\FrontIntegration\FrontIntegration;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
-use CCrmViewHelper;
 use CUtil;
 
 class Block
@@ -20,10 +17,13 @@ class Block
 	private string $emptyStatePlaceholder = '';
 	private int $userId;
 
+	private FrontIntegration $frontIntegration;
+
 	public function __construct(
-		ItemIdentifier $itemIdentifier,
-		?array $activity,
-		bool $allowEdit
+		ItemIdentifier   $itemIdentifier,
+		?array           $activity,
+		bool             $allowEdit,
+		FrontIntegration $frontIntegration,
 	)
 	{
 		$this->itemIdentifier = $itemIdentifier;
@@ -31,22 +31,23 @@ class Block
 		$this->allowEdit = $allowEdit;
 		$this->userId = Container::getInstance()->getContext()->getUserId();
 		$this->emptyStatePlaceholder = Loc::getMessage('CRM_ENTITY_ADD_ACTIVITY_HINT');
+
+		$this->frontIntegration = $frontIntegration;
 	}
 
 	public function render(string $gridManagerId): string
 	{
 		$preparedGridId = htmlspecialcharsbx(CUtil::JSescape($gridManagerId));
-		$entityTypeId = $this->itemIdentifier->getEntityTypeId();
-		$entityID = $this->itemIdentifier->getEntityId();
-		$categoryId = $this->itemIdentifier->getCategoryId() ?? 0;
 
 		$allowEdit = $this->allowEdit;
 
+		$activityId = $this->activity['ID'] ?? 0;
+
+		$onViewClick = $this->frontIntegration->onClickViewHandler($preparedGridId, $activityId);
+		$onAddClick = $this->frontIntegration->onClickAddHandler($preparedGridId, $activityId, $this->itemIdentifier);
+
 		if ($this->activity)
 		{
-			$ID = $this->activity['ID'] ?? 0;
-			$subject = $this->activity['SUBJECT'] ?? '';
-
 			$isExpired = $this->isExpired();
 
 			$deadline = isset($this->activity['DEADLINE']) && !\CCrmDateTimeHelper::IsMaxDatabaseDate($this->activity['DEADLINE'])
@@ -59,23 +60,16 @@ class Block
 				: Loc::getMessage('CRM_ACTIVITY_TIME_NOT_SPECIFIED_MSGVER_1')
 			;
 
-			$isDetailExist = true;
-			if (isset($this->activity['PROVIDER_ID']))
-			{
-				$provider = \CCrmActivity::GetProviderById($this->activity['PROVIDER_ID']);
-				if ($provider)
-				{
-					$isDetailExist = $provider::hasPlanner($this->activity);
-					$subject = $provider::getActivityTitle(array_merge($this->activity, ['COMPLETED' => 'N']));
-				}
-			}
+			$isDetailExist = $this->frontIntegration->isActivityViewSupport($this->activity);
+			$subject = $this->frontIntegration->getSubject($this->activity);
 
 			$activityEl = '<span class="crm-link">' . htmlspecialcharsbx($timeFormatted) . '</span>';
 			if ($isDetailExist)
 			{
 				$activityEl =
-					'<a class="crm-link" target = "_self"href = "#" onclick="BX.CrmUIGridExtension.viewActivity(\'' . $preparedGridId . '\', ' . $ID . ', { enableEditButton:'
-					. ($allowEdit ? 'true' : 'false') . ' }); return false;">' . htmlspecialcharsbx($timeFormatted) . '</a>';
+					'<a class="crm-link" target = "_self"href = "#" onclick="' . $onViewClick . '">' .
+					htmlspecialcharsbx($timeFormatted) .
+					'</a>';
 			}
 
 			$result = '
@@ -88,28 +82,7 @@ class Block
 
 			if ($allowEdit)
 			{
-				$currentUser = CUtil::PhpToJSObject(CCrmViewHelper::getUserInfo(true, false));
-				$pingSettings = (new TodoPingSettingsProvider(
-					$entityTypeId,
-					$categoryId
-				))->fetchForJsComponent();
-				$calendarSettings = (new CalendarSettingsProvider())->fetchForJsComponent();
-
-				$useTodoEditorV2 = \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled();
-				$colorSettings = (
-					$useTodoEditorV2
-						? (new ColorSettingsProvider())->fetchForJsComponent()
-						: null
-				);
-
-				$settings = CUtil::PhpToJSObject([
-					'pingSettings' => $pingSettings,
-					'calendarSettings' => $calendarSettings,
-					'colorSettings' => $colorSettings,
-				]);
-
-				$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $settings . ", " . $useTodoEditorV2 . ");";
-				$result .= '<div class="crm-nearest-activity-plus" onclick="' . $jsOnClick . ' return false;"></div>';
+				$result .= '<div class="crm-nearest-activity-plus" onclick="' . $onAddClick . '"></div>';
 			}
 
 			$result .= '</div>';
@@ -131,31 +104,9 @@ class Block
 		elseif ($allowEdit)
 		{
 			$hintText = $this->emptyStatePlaceholder;
-			$currentUser = CUtil::PhpToJSObject(CCrmViewHelper::getUserInfo(true, false));
-
-			$pingSettings = (new TodoPingSettingsProvider(
-				$entityTypeId,
-				$categoryId
-			))->fetchForJsComponent();
-			$calendarSettings = (new CalendarSettingsProvider())->fetchForJsComponent();
-
-			$useTodoEditorV2 = \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled();
-			$colorSettings = (
-				$useTodoEditorV2
-					? (new ColorSettingsProvider())->fetchForJsComponent()
-					: null
-			);
-
-			$settings = CUtil::PhpToJSObject([
-				'pingSettings' => $pingSettings,
-				'calendarSettings' => $calendarSettings,
-				'colorSettings' => $colorSettings,
-			]);
-
-			$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $settings . ", " . $useTodoEditorV2 . ");";
 
 			return '<span class="crm-activity-add-hint">' . htmlspecialcharsbx($hintText) . '</span>
-				<a class="crm-activity-add" onclick="' . $jsOnClick . ' return false;">' . htmlspecialcharsbx(Loc::getMessage('CRM_ENTITY_ADD_ACTIVITY')) . '</a>';
+				<a class="crm-activity-add" onclick="' . $onAddClick . '">' . htmlspecialcharsbx(Loc::getMessage('CRM_ENTITY_ADD_ACTIVITY')) . '</a>';
 		}
 
 		return '';

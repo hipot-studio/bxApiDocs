@@ -565,9 +565,9 @@ class EntityEditorConfig
 		{
 			foreach ($config as $section)
 			{
-				if (!isset($section['elements']))
+				if (($section['elements'] ?? null) === null)
 				{
-					return null;
+					continue;
 				}
 
 				foreach ($section['elements'] as $element)

@@ -10,10 +10,10 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item\Activity;
 use Bitrix\Crm\Service\Timeline\Item\Model;
-use Bitrix\Crm\Service\Timeline\Layout\Action\Redirect;
-use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Crm\Service\Timeline\Layout;
+use Bitrix\Crm\Service\Timeline\Layout\Action\Redirect;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
+use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
@@ -21,12 +21,12 @@ use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Item\MemberCollection;
 use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Repository\MemberRepository;
+use Bitrix\Sign\Service\Sign\DocumentService;
 use Bitrix\Sign\Service\Sign\MemberService;
 use Bitrix\Sign\Type\Document\EntityType;
 use Bitrix\Sign\Type\DocumentStatus;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\MemberStatus;
-use Bitrix\Sign\Service\Sign\DocumentService;
 
 final class SignB2eDocument extends Activity
 {
@@ -235,11 +235,11 @@ final class SignB2eDocument extends Activity
 
 		if ($this->isSignDocumentSigning() || $this->isSignDocumentStopped())
 		{
-			$buttons['signingProcess'] = (new Layout\Footer\Button(
-				(string)Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_SIGNING_PROCESS_MSG_1'),
-				$this->isSignDocumentStopped() ? Layout\Footer\Button::TYPE_SECONDARY : Layout\Footer\Button::TYPE_PRIMARY
-				)
-			)
+			$buttons['signingProcess'] = (
+				new Layout\Footer\Button(
+					(string)Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_SIGNING_PROCESS_MSG_1'),
+					$this->isSignDocumentStopped() ? Layout\Footer\Button::TYPE_SECONDARY : Layout\Footer\Button::TYPE_PRIMARY
+				))->setProps(['id' => 'signB2e-document-process-button'])
 				->setAction($this->getShowSigningProcessAction())
 			;
 		}

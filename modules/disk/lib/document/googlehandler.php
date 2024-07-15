@@ -268,7 +268,6 @@ class GoogleHandler extends DocumentHandler implements IViewer, FileCreatable, C
 
 		$googleMimeType = static::getInternalMimeTypeByExtension(getFileExtension($fileData->getName()));
 		$fileName = getFileNameWithoutExtension($fileData->getName());
-		$fileName = $this->convertToUtf8($fileName);
 
 		if(!$googleMimeType)
 		{

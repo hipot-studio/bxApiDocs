@@ -8,7 +8,7 @@ namespace Bitrix\Crm\Security\Role\Manage\Permissions;
  */
 abstract class Permission
 {
-	public function __construct(private array $variants)
+	public function __construct(private readonly array $variants = [])
 	{
 
 	}

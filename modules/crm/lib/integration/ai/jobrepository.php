@@ -267,7 +267,7 @@ final class JobRepository
 		}
 
 		$job->setOperationStatus($result->getOperationStatus());
-		$job->setResult(Json::encode($result->getPayload()));
+		$job->setResult(Json::encode($result->getPayload(), 0));
 
 		$saveResult = $job->save();
 		if (!$saveResult->isSuccess())

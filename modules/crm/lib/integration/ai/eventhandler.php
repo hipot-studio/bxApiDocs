@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration\AI;
 
 use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
+use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning;
 use Bitrix\Crm\Activity\Provider\Call;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
@@ -23,6 +24,8 @@ use CCrmOwnerType;
 final class EventHandler
 {
 	public const SETTINGS_FILL_ITEM_FROM_CALL_ENABLED_CODE = 'crm_copilot_fill_item_from_call_enabled';
+	public const SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_AUDIO_CODE = 'crm_copilot_fill_item_from_call_engine_audio';
+	public const SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_TEXT_CODE = 'crm_copilot_fill_item_from_call_engine_text';
 	public const SETTINGS_FILL_CRM_TEXT_ENABLED_CODE = 'crm_copilot_fill_crm_text_enabled';
 
 	public const ENGINE_CATEGORY = 'text';
@@ -63,11 +66,39 @@ final class EventHandler
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
 			];
+
+			$items[self::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_AUDIO_CODE] = array_merge(
+				Tuning\Defaults::getProviderSelectFieldParams(Engine::CATEGORIES['audio']),
+				[
+					'group' => self::SETTINGS_GROUP_CODE,
+					'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_ENGINE_AUDIO_TITLE'),
+				],
+			);
+
+			$quality = new Quality([
+				Quality::QUALITIES['fields_highlight'],
+				Quality::QUALITIES['translate'],
+			]);
+			$items[self::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_TEXT_CODE] = array_merge(
+				Tuning\Defaults::getProviderSelectFieldParams(Engine::CATEGORIES['text'], $quality),
+				[
+					'group' => self::SETTINGS_GROUP_CODE,
+					'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_ENGINE_TEXT_TITLE'),
+				],
+			);
 		}
 
 		$result->modifyFields([
-			'items' => $items,
 			'groups' => $groups,
+			'items' => $items,
+			'itemRelations' => [
+				self::SETTINGS_GROUP_CODE => [
+					self::SETTINGS_FILL_ITEM_FROM_CALL_ENABLED_CODE => [
+						self::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_AUDIO_CODE,
+						self::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_TEXT_CODE,
+					],
+				],
+			],
 		]);
 
 		return $result;

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Security\Role\Manage;
 
+use Bitrix\Crm\Security\EntityPermission\DefaultPermission;
 use Bitrix\Crm\Security\Role\Manage\DTO\EntityDTO;
 use Bitrix\Crm\Security\Role\Manage\Entity\Button;
 use Bitrix\Crm\Security\Role\Manage\Entity\Company;
@@ -21,6 +22,7 @@ use Bitrix\Crm\Security\Role\Manage\Permissions\Add;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Automation;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Delete;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Export;
+use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Import;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Read;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Write;
@@ -45,6 +47,26 @@ class EntitiesBuilder
 		return $this->entities;
 	}
 
+	public function getEntityNamesWithPermissionClass(DefaultPermission $defaultPermission): array
+	{
+		$result = [];
+
+		$entities = $this->create();
+		foreach ($entities as $entity)
+		{
+			$permissions = $entity->permissions();
+			foreach ($permissions as $permission)
+			{
+				if ($permission::class === $defaultPermission->getPermissionClass())
+				{
+					$result[] = $entity->code();
+					break;
+				}
+			}
+		}
+
+		return $result;
+	}
 
 	/**
 	 * @return EntityDTO[]
@@ -92,6 +114,7 @@ class EntitiesBuilder
 			new Export([]),
 			new Import([]),
 			new Automation([]),
+			new HideSum([]),
 		];
 	}
 }

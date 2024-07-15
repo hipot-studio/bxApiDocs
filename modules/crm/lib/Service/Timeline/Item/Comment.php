@@ -12,6 +12,8 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\CommentContent;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\FileList;
 use Bitrix\Crm\Service\Timeline\Layout\Body\Logo;
 use Bitrix\Crm\Service\Timeline\Layout\Common;
+use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
+use Bitrix\Crm\Service\Timeline\Layout\Header\ChangeStreamButton;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemFactory;
 use Bitrix\Crm\Timeline\CommentController;
 use Bitrix\Crm\Timeline\TimelineEntry;
@@ -115,6 +117,33 @@ class Comment extends Configurable
 		;
 
 		return $items;
+	}
+
+	public function getButtons(): ?array
+	{
+		$buttons = parent::getButtons() ?? [];
+
+		$isFixed = $this->getModel()->isFixed();
+		$buttons['changeStreamButton'] = !$isFixed
+			? $this->getPinFooterButton()
+			: $this->getUnpinFooterButton()
+		;
+
+		return $buttons;
+	}
+
+	private function getPinFooterButton(): Button
+	{
+		return (new Button(ChangeStreamButton::getPinTitle(), Button::TYPE_SECONDARY))
+			->setAction($this->getPinAction())
+		;
+	}
+
+	private function getUnpinFooterButton(): Button
+	{
+		return (new Button(ChangeStreamButton::getUnpinTitle(), Button::TYPE_SECONDARY))
+			->setAction($this->getUnpinAction())
+		;
 	}
 
 	public function needShowNotes(): bool

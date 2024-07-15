@@ -375,17 +375,23 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 				continue;
 			}
 
-			$this->connection->startTransaction();
+			if ($this->isWrapItemProcessingInTransaction())
+			{
+				$this->connection->startTransaction();
+			}
 
 			$result = $this->processItem($factory, $item, $data);
 
-			if ($result->isSuccess())
+			if ($result->isSuccess() && $this->isWrapItemProcessingInTransaction())
 			{
 				$this->connection->commitTransaction();
 			}
-			else
+			elseif (!$result->isSuccess())
 			{
-				$this->connection->rollbackTransaction();
+				if ($this->isWrapItemProcessingInTransaction())
+				{
+					$this->connection->rollbackTransaction();
+				}
 
 				foreach ($result->getErrors() as $error)
 				{
@@ -413,7 +419,8 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 
 	/**
 	 * Is item should be skipped since there is no sense in processing it.
-	 * For example, if this action changes item stage, and item is already at that stage, there is no sense processing it.
+	 * For example, if this action changes item stage, and item is already at that stage, there is no sense processing
+	 * it.
 	 *
 	 * Note that this method should not check permissions or data correctness.
 	 * Its designed only for performance optimization to skip unneeded work
@@ -422,6 +429,20 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 	protected function isItemShouldBeSkipped(Factory $factory, Item $item, PreparedData $data): bool
 	{
 		return false;
+	}
+
+	/**
+	 * Returns true if `$this->processItem` should be wrapped with transaction. You can return `false` from this method
+	 * if you want to manage transaction yourself.
+	 *
+	 * But it's highly recommended that you use some form of transaction in `$this->processItem` anyway to maintain
+	 * consistency, even if you decide to return `false` from this method.
+	 *
+	 * @return bool
+	 */
+	protected function isWrapItemProcessingInTransaction(): bool
+	{
+		return true;
 	}
 
 	/**

@@ -329,6 +329,11 @@ abstract class BaseMessage extends Base
 			$settings['ASSOCIATED_MESSAGE_TAG'] = $additionalFields['ASSOCIATED_MESSAGE_TAG'];
 		}
 
+		if (isset($additionalFields['ORIGINAL_TEMPLATE_ID']))
+		{
+			$settings['ORIGINAL_TEMPLATE_ID'] = $additionalFields['ORIGINAL_TEMPLATE_ID'];
+		}
+
 		static::addActivity(
 			[
 				'PROVIDER_TYPE_ID' => $additionalFields['ACTIVITY_PROVIDER_TYPE_ID'] ?? static::getDefaultTypeId(),

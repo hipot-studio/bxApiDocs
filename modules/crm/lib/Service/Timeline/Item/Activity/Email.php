@@ -22,8 +22,8 @@ use CCrmActivityDirection;
 
 class Email extends Activity
 {
-	const TIMELINE_SHORT_LIMIT_LENGTH = 57;
-	const TIMELINE_LONG_LIMIT_LENGTH = 155;
+	private const TIMELINE_SHORT_LIMIT_LENGTH = 57;
+	private const TIMELINE_LONG_LIMIT_LENGTH = 155;
 
 	final protected function getActivityTypeId(): string
 	{
@@ -161,7 +161,7 @@ class Email extends Activity
 
 		if ($withWrapper)
 		{
-			return ((new ContentBlockWithTitle())->setInline()->setWordWrap(true)->setTitle($title)
+			return ((new ContentBlockWithTitle())->setInline()->setWordWrap()->setTitle($title)
 				->setContentBlock($contactList));
 		}
 		else
@@ -298,6 +298,11 @@ class Email extends Activity
 		$title = $this->getAssociatedEntityModel()->get('SUBJECT') ?? '';
 
 		return Loc::getMessage('CRM_TIMELINE_INCOMING_EMAIL_DELETION_CONFIRM', ['#TITLE#' => $title]);
+	}
+
+	protected function canMoveTo(): bool
+	{
+		return $this->isScheduled();
 	}
 
 	public function needShowNotes(): bool

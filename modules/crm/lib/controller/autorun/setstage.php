@@ -6,6 +6,7 @@ use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\SetStagePreparedData;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Service\Operation\TransactionWrapper;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Result;
 
@@ -59,6 +60,11 @@ final class SetStage extends Base
 		return $item->getStageId() === $data->stageId;
 	}
 
+	protected function isWrapItemProcessingInTransaction(): bool
+	{
+		return false;
+	}
+
 	protected function processItem(Factory $factory, Item $item, PreparedData $data): Result
 	{
 		if (!($data instanceof SetStagePreparedData))
@@ -68,6 +74,8 @@ final class SetStage extends Base
 
 		$item->setStageId($data->stageId);
 
-		return $factory->getUpdateOperation($item)->launch();
+		$operation = $factory->getUpdateOperation($item);
+
+		return (new TransactionWrapper($operation))->launch();
 	}
 }

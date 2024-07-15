@@ -3,17 +3,17 @@ namespace Bitrix\Crm\Automation;
 
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Bizproc;
+use Bitrix\Crm\Activity\AutocompleteRule;
+use Bitrix\Crm\ActivityTable;
 use Bitrix\Crm\Automation\Trigger\BaseTrigger;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Integration\Sign;
-use Bitrix\Crm\Settings\QuoteSettings;
 use Bitrix\Crm\Settings\InvoiceSettings;
+use Bitrix\Crm\Settings\LeadSettings;
+use Bitrix\Crm\Settings\QuoteSettings;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\NotSupportedException;
-use Bitrix\Crm\Settings\LeadSettings;
-use Bitrix\Crm\Activity\AutocompleteRule;
-use Bitrix\Crm\ActivityTable;
 
 class Factory
 {
@@ -605,7 +605,14 @@ class Factory
 			$converter->setTargetItem($itemTypeId, $itemOptions);
 		}
 
-		$result->setConversionResult($converter->execute());
+		$contextData = null;
+		$userId = \CCrmOwnerType::GetResponsibleID(\CCrmOwnerType::Lead, $entityId, false);
+		if ($userId > 0)
+		{
+			$contextData['USER_ID'] = $userId;
+		}
+
+		$result->setConversionResult($converter->execute($contextData));
 
 		return $result;
 	}
