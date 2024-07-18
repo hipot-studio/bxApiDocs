@@ -244,6 +244,7 @@ define('BX_CAT_CRON', true);
  */
 define('NO_AGENT_CHECK', true);
 
+/** @var string $siteID */
 /**
  * SITE_ID
  */

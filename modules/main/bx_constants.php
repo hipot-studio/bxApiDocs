@@ -348,6 +348,7 @@ define('BX_URLREWRITE', true);
 /**
  * POST_FORM_ACTION_URI
  */
+	/** @var string $uriPath */
 define('POST_FORM_ACTION_URI', htmlspecialcharsbx("/bitrix/urlrewrite.php?SEF_APPLICATION_CUR_PAGE_URL=".urlencode($uriPath)));
 
 /**
@@ -378,6 +379,7 @@ define('B_PROLOG_INCLUDED', true);
 /**
  * LANG
  */
+	/** @var array $arLang */
 define('LANG', $arLang["LID"]);
 
 /**
@@ -443,6 +445,7 @@ define('BX_SKIP_SESSION_EXPAND', true);
 /**
  * SITE_TEMPLATE_ID
  */
+	/** @var string $siteTemplateId */
 define('SITE_TEMPLATE_ID', $siteTemplateId);
 
 /**

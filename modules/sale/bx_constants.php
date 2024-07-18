@@ -2,6 +2,7 @@
 /**
  * DLSERVER
  */
+	/** @var array $arParams */
 define('DLSERVER', $arParams['DLSERVER']);
 
 /**
@@ -27,6 +28,7 @@ define('DLZIPFILE', $arParams["DLZIPFILE"]);
 /**
  * ZIP_STEP_LENGTH
  */
+	/** @var int $step_length */
 define('ZIP_STEP_LENGTH', $step_length);
 
 /**
@@ -162,7 +164,7 @@ define('BX_SALE_MENU_CATALOG_CLEAR', 'Y');
 /**
  * BX_SALE_ENCODING
  */
-define('BX_SALE_ENCODING', $this->service->getField('ENCODING'));
+define('BX_SALE_ENCODING', 'ENCODING');
 
 /**
  * ADMIN_MODULE_NAME
