@@ -14,6 +14,7 @@ use Bitrix\Market\Application\Action;
 use Bitrix\Market\Application\License;
 use Bitrix\Market\Application\Versions;
 use Bitrix\Market\NumberApps;
+use Bitrix\Market\Rest\Actions;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Marketplace\Client;
@@ -154,7 +155,7 @@ class Installed extends BaseTemplate
 		}
 
 		if (empty($appCodes)) {
-			$response = Transport::instance()->call(Transport::METHOD_TOTAL_APPS);
+			$response = Transport::instance()->call(Actions::METHOD_TOTAL_APPS);
 			$this->setAdditionalInfo($response);
 		}
 

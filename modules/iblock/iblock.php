@@ -666,7 +666,7 @@ function GetIBlockDropDownListEx($IBLOCK_ID, $strTypeName, $strIBlockName, $arFi
 		}
 
 		$html .= '
-		<script type="text/javascript">
+		<script>
 		function OnType_'.$filterId.'_Changed(typeSelect, iblockSelectID)
 		{
 			var arIBlocks = '.CUtil::PhpToJSObject($arIBlocks[$filterId]).';

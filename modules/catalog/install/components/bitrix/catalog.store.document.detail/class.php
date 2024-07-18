@@ -43,8 +43,8 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 
 	/** @var int $documentId */
 	private $documentId;
-	/** @var string $documentType */
-	private $documentType;
+
+	private ?string $documentType = null;
 	/** @var array $document */
 	private $document;
 	/** @var AccessController */
@@ -222,7 +222,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		}
 	}
 
-	private function getDocumentType()
+	private function getDocumentType(): ?string
 	{
 		if ($this->documentType)
 		{
@@ -230,7 +230,8 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		}
 
 		$this->loadDocument();
-		return $this->document['DOC_TYPE'];
+
+		return $this->document['DOC_TYPE'] ?? null;
 	}
 
 	private function initializeDocumentFields(): void
@@ -287,7 +288,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		return $provider;
 	}
 
-	private function loadDocument()
+	private function loadDocument(): void
 	{
 		if (!$this->checkDocumentBaseRights())
 		{
@@ -304,6 +305,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 			{
 				$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_NO_VIEW_RIGHTS_ERROR');
 			}
+
 			return;
 		}
 
@@ -316,6 +318,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		if (!$documentType)
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_DOCUMENT_NOT_FOUND_ERROR');
+
 			return;
 		}
 
@@ -370,46 +373,70 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 
 	private function checkDocumentReadRights(): bool
 	{
+		$documentType = $this->getDocumentType();
+		if ($documentType === null)
+		{
+			return false;
+		}
+
 		return
 			$this->checkDocumentBaseRights()
 			&& $this->accessController->checkByValue(
 				ActionDictionary::ACTION_STORE_DOCUMENT_VIEW,
-				$this->getDocumentType()
+				$documentType
 			)
-			;
+		;
 	}
 
 	private function checkDocumentWriteRights(): bool
 	{
+		$documentType = $this->getDocumentType();
+		if ($documentType === null)
+		{
+			return false;
+		}
+
 		return
 			$this->checkDocumentBaseRights()
 			&& $this->accessController->checkByValue(
 				ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY,
-				$this->getDocumentType()
+				$documentType
 			)
-			;
+		;
 	}
 
 	private function checkDocumentConductRights(): bool
 	{
+		$documentType = $this->getDocumentType();
+		if ($documentType === null)
+		{
+			return false;
+		}
+
 		return
 			$this->checkDocumentBaseRights()
 			&& $this->accessController->checkByValue(
 				ActionDictionary::ACTION_STORE_DOCUMENT_CONDUCT,
-				$this->getDocumentType()
+				$documentType
 			)
-			;
+		;
 	}
 
 	private function checkDocumentCancelRights(): bool
 	{
+		$documentType = $this->getDocumentType();
+		if ($documentType === null)
+		{
+			return false;
+		}
+
 		return
 			$this->checkDocumentBaseRights()
 			&& $this->accessController->checkByValue(
 				ActionDictionary::ACTION_STORE_DOCUMENT_CANCEL,
-				$this->getDocumentType()
+				$documentType
 			)
-			;
+		;
 	}
 
 	private function checkEditPurchasePriceRights(): bool

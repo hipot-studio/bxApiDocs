@@ -212,6 +212,16 @@ class TaskService
 				return $result;
 			}
 
+			if (!empty($error['customData']))
+			{
+				foreach ($errors as $error)
+				{
+					$result->addError(new Error($error['message'], 0, $error['customData']));
+				}
+
+				return $result;
+			}
+
 			$result->addError(new Error($error['message']));
 		}
 

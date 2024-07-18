@@ -2,13 +2,13 @@
 
 namespace Bitrix\Iblock\UserField\Types;
 
+use Bitrix\Iblock;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\Type;
 use Bitrix\Main\UserField\Types\BaseType;
-use Bitrix\Iblock;
 use CDBResult;
 use CUserTypeManager;
 
@@ -127,27 +127,29 @@ class ElementType extends BaseType
 	public static function renderAdminListView(array $userField, ?array $additionalParameters): string
 	{
 		static $cache = [];
-		$empty_caption = '&nbsp;';
+		$emptyCaption = '&nbsp;';
 
-		if(!array_key_exists($additionalParameters['VALUE'], $cache))
+		$value = (int)($additionalParameters['VALUE'] ?? 0);
+
+		if (!isset($cache[$value]))
 		{
 			$enum = call_user_func([$userField['USER_TYPE']['CLASS_NAME'], 'getlist'], $userField);
 			if(!$enum)
 			{
-				$additionalParameters['VALUE'] = $empty_caption;
+				$additionalParameters['VALUE'] = $emptyCaption;
 				return parent::renderAdminListView($userField, $additionalParameters);
 			}
-			while($item = $enum->GetNext())
+			while ($item = $enum->Fetch())
 			{
-				$cache[$item['ID']] = $item['VALUE'];
+				$cache[(int)$item['ID']] = $item['NAME'];
 			}
 		}
-		if(!array_key_exists($additionalParameters['VALUE'], $cache))
+		if (!isset($cache[$value]))
 		{
-			$cache[$additionalParameters['VALUE']] = $empty_caption;
+			$cache[$value] = $emptyCaption;
 		}
 
-		$additionalParameters['VALUE'] = $cache[$additionalParameters['VALUE']];
+		$additionalParameters['VALUE'] = $cache[$value];
 		return parent::renderAdminListView($userField, $additionalParameters);
 	}
 
@@ -194,11 +196,15 @@ class ElementType extends BaseType
 	public static function prepareSettings(array $userField): array
 	{
 		$height = (int)($userField['SETTINGS']['LIST_HEIGHT'] ?? 1);
-		$disp = ($userField['SETTINGS']['DISPLAY'] ?? '');
+		$display = ($userField['SETTINGS']['DISPLAY'] ?? '');
 
-		if ($disp !== static::DISPLAY_CHECKBOX && $disp !== static::DISPLAY_LIST)
+		if (
+			$display !== static::DISPLAY_CHECKBOX
+			&& $display !== static::DISPLAY_LIST
+			&& $display !== static::DISPLAY_UI
+		)
 		{
-			$disp = static::DISPLAY_LIST;
+			$display = static::DISPLAY_UI;
 		}
 
 		$iblockId = (int)($userField['SETTINGS']['IBLOCK_ID'] ?? 0);
@@ -218,7 +224,7 @@ class ElementType extends BaseType
 		$activeFilter = (($userField['SETTINGS']['ACTIVE_FILTER'] ?? '') === 'Y' ? 'Y' : 'N');
 
 		return [
-			'DISPLAY' => $disp,
+			'DISPLAY' => $display,
 			'LIST_HEIGHT' => (max($height, 1)),
 			'IBLOCK_ID' => $iblockId,
 			'DEFAULT_VALUE' => $elementId,

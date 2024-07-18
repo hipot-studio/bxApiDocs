@@ -131,6 +131,8 @@ final class CatalogStoreDocumentProductListComponent
 		 * DOCUMENT_ID - string|int - parent entity id
 		 *
 		 * EXTERNAL_DOCUMENT - array|null - custom external documents
+		 *
+		 * PRESELECTED_PRODUCT_ID - int - preselected product (can be absent)
 		 */
 
 		$this->prepareEntityIds($params);
@@ -139,6 +141,12 @@ final class CatalogStoreDocumentProductListComponent
 		$this->prepareProducts($params);
 		$this->prepareSettings($params);
 		$this->prepareEntitySettings($params);
+
+		$params['PRESELECTED_PRODUCT_ID'] = (int)($params['PRESELECTED_PRODUCT_ID'] ?? 0);
+		if ($params['PRESELECTED_PRODUCT_ID'] < 0)
+		{
+			$params['PRESELECTED_PRODUCT_ID'] = 0;
+		}
 
 		return $params;
 	}
@@ -1470,10 +1478,14 @@ final class CatalogStoreDocumentProductListComponent
 			);
 		}
 
-		foreach ($userColumnsOrder as $index)
+		foreach ($userColumnsOrder as $key => $index)
 		{
-			$visibleColumnsMap[$index] = true;
-			$visibleColumns[$index] = $columnDescriptions[$index];
+			if (!isset($columnDescriptions[$key]))
+			{
+				continue;
+			}
+			$visibleColumnsMap[$key] = true;
+			$visibleColumns[$key] = $columnDescriptions[$key];
 		}
 
 		$columns = [];
@@ -2396,7 +2408,12 @@ final class CatalogStoreDocumentProductListComponent
 
 	private function getPreselectDocumentProducts(): array
 	{
-		$preselectedSku = $this->getSkuByProductId((int)$this->arParams['PRESELECTED_PRODUCT_ID']);
+		if ($this->arParams['PRESELECTED_PRODUCT_ID'] === 0)
+		{
+			return [];
+		}
+
+		$preselectedSku = $this->getSkuByProductId($this->arParams['PRESELECTED_PRODUCT_ID']);
 		if ($preselectedSku)
 		{
 			$basePriceEntity = $preselectedSku->getPriceCollection()->findBasePrice();

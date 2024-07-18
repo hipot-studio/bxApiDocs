@@ -180,14 +180,16 @@ class Email extends Activity\Provider\Base
 
 		if ($direction === \CCrmActivityDirection::Outgoing)
 		{
-			$badge = Crm\Service\Container::getInstance()->getBadge(
-				Crm\Badge\Badge::MAIL_MESSAGE_DELIVERY_STATUS_TYPE,
-				Crm\Badge\Type\MailMessageDeliveryStatus::MAIL_MESSAGE_DELIVERY_ERROR_VALUE,
-			);
-
-			$itemIdentifier = new Crm\ItemIdentifier((int)$activityFields['OWNER_TYPE_ID'], (int)$activityFields['OWNER_ID']);
-			$badge->deleteByEntity($itemIdentifier, $badge->getType(), $badge->getValue());
-			Timeline\Monitor::getInstance()->onBadgesSync($itemIdentifier);
+			$itemIdentifier = Crm\ItemIdentifier::createFromArray($activityFields);
+			if ($itemIdentifier)
+			{
+				$badge = Crm\Service\Container::getInstance()->getBadge(
+					Crm\Badge\Badge::MAIL_MESSAGE_DELIVERY_STATUS_TYPE,
+					Crm\Badge\Type\MailMessageDeliveryStatus::MAIL_MESSAGE_DELIVERY_ERROR_VALUE,
+				);
+				$badge->deleteByEntity($itemIdentifier, $badge->getType(), $badge->getValue());
+				Timeline\Monitor::getInstance()->onBadgesSync($itemIdentifier);
+			}
 		}
 	}
 

@@ -10,6 +10,16 @@ class Requisite
 {
 	private static Requisite $instance;
 	private ?RequisitesLanding $requisites = null;
+	private int|string $companyId;
+	private int $requisiteId = 0;
+
+	private function __construct()
+	{
+		if (Loader::includeModule('crm'))
+		{
+			$this->initRequisites();
+		}
+	}
 
 	private function initRequisites(): void
 	{
@@ -19,15 +29,11 @@ class Requisite
 		{
 			$company = new CompanyList(['=ID' => $companyId], ['DATE_CREATE' => 'DESC'], ['ID'], ['ID', 'ENTITY_ID']);
 			$this->requisites = $company->getLandingList()->toArray()[$companyId] ?? null;
+			$requisite = $company->getRequisiteList()->getByCompanyId($companyId);
+			$this->requisiteId = $requisite['ID'] ?? 0;
 		}
-	}
 
-	private function __construct()
-	{
-		if (Loader::includeModule('crm'))
-		{
-			$this->initRequisites();
-		}
+		$this->companyId = $companyId ?? 0;
 	}
 
 	public static function getInstance(): static
@@ -46,6 +52,8 @@ class Requisite
 		{
 			return [
 				'isCompanyCreated' => true,
+				'companyId' => $this->companyId,
+				'requisiteId' => $this->requisiteId,
 				'isConnected' => $this->requisites->isLandingConnected(),
 				'isPublic' => $this->requisites->isLandingPublic(),
 				'publicUrl' => $this->requisites->getLandingPublicUrl(),

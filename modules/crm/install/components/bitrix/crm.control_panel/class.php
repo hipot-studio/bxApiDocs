@@ -118,6 +118,7 @@ class CrmControlPanel extends CBitrixComponent
 					['ID' => 'TERMINAL'],
 				],
 			],
+			['ID' => 'BIC_DASHBOARDS'],
 			[
 				'ID' => ControlPanelMenuMapper::MENU_ID_CRM_ANALYTICS,
 				'TEXT' => Loc::getMessage('CRM_CTRL_PANEL_ITEM_ANALYTICS'),

@@ -178,7 +178,7 @@ class CIBlockDocument
 			{
 				$GLOBALS["CBPVirtualDocumentCloneRowPrinted"] = 1;
 				?>
-				<script language="JavaScript">
+				<script>
 				function CBPVirtualDocumentCloneRow(tableID)
 				{
 					var tbl = document.getElementById(tableID);
@@ -2906,7 +2906,7 @@ class CIBlockDocument
 			$result .= '<textarea id="WFSFormOptionsX" rows="5" cols="30">'.htmlspecialcharsbx($str).'</textarea><br />';
 			$result .= GetMessage("IBD_DOCUMENT_XFORMOPTIONS1").'<br />';
 			$result .= GetMessage("IBD_DOCUMENT_XFORMOPTIONS2").'<br />';
-			$result .= '<script type="text/javascript">
+			$result .= '<script>
 				function WFSFormOptionsXFunction()
 				{
 					var result = {};

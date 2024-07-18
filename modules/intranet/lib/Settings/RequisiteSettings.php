@@ -261,8 +261,8 @@ class RequisiteSettings extends AbstractSettings
 		{
 			$companyId = (int)$company['ID'];
 			$requisite = $companyList->getRequisiteList()->getByCompanyId($companyId);
-			$requisiteId = (int)$requisite['ID'];
-			$requisiteBank = $companyList->getRequisiteList()->getBankRequisiteList()->getByRequisiteId($requisiteId);
+			$requisiteId = isset($requisite['ID']) ? (int)$requisite['ID'] : 0;
+			$requisiteBank = $requisiteId ? $companyList->getRequisiteList()->getBankRequisiteList()->getByRequisiteId($requisiteId) : 0;
 
 			$landingId = [
 				'company_id' => $companyId,

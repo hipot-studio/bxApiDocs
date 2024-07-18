@@ -897,16 +897,23 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 	 * @return float|int
 	 * @throws Main\ArgumentNullException
 	 */
-	public function getVat()
+	public function getVat(): float|int
+	{
+		return PriceMaths::roundPrecision($this->getVatUnit() * $this->getQuantity());
+	}
+
+	/**
+	 * @return float|int
+	 * @throws Main\ArgumentNullException
+	 */
+	public function getVatUnit(): float|int
 	{
 		$calculator = new VatCalculator((float)$this->getVatRate());
-		$vat = $calculator->calc(
-			$this->getPrice(),
-			$this->isVatInPrice(),
-			false
-		);
 
-		return PriceMaths::roundPrecision($vat * $this->getQuantity());
+		return $calculator->calc(
+			$this->getPrice(),
+			$this->isVatInPrice()
+		);
 	}
 
 	/**

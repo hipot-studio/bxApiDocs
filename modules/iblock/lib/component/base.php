@@ -4306,7 +4306,7 @@ abstract class Base extends \CBitrixComponent
 			$addByAjax = $this->request->get('ajax_basket') === 'Y';
 			if ($addByAjax)
 			{
-				$this->request->set(Main\Text\Encoding::convertEncoding($this->request->toArray(), 'UTF-8', SITE_CHARSET));
+				$this->request->set($this->request->toArray());
 			}
 
 			[$successfulAdd, $errorMsg] = $this->addProductToBasket($productId, $action);
@@ -4556,6 +4556,7 @@ abstract class Base extends \CBitrixComponent
 			$rewriteFields = $this->getRewriteFields($action);
 			if (isset($rewriteFields['SUBSCRIBE']) && $rewriteFields['SUBSCRIBE'] == 'Y')
 			{
+				// Deprecated. Only for compatibility with older customized templates.
 				if (!SubscribeProduct($productId, $rewriteFields, $productProperties))
 				{
 					if ($ex = $APPLICATION->GetException())

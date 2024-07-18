@@ -59,7 +59,12 @@ class Task extends EO_Task
 			return true;
 		}
 
-		return $this->isResponsibleForTask($userId);
+		if ($this->isResponsibleForTask($userId))
+		{
+			return true;
+		}
+
+		return (new \CBPWorkflowTemplateUser($userId))->isAdmin();
 	}
 
 	public function getTaskUserById(int $userId): ?EO_TaskUser

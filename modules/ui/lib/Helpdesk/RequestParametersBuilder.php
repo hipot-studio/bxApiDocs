@@ -138,7 +138,7 @@ class RequestParametersBuilder
 		}
 
 		$currentUser = Intranet\CurrentUser::get();
-		$heads = \CIntranetUtils::GetDepartmentManager($currentUser->getDepartmentIds(), $currentUser->getId());
+		$heads = \CIntranetUtils::GetDepartmentManager($currentUser->getDepartmentIds(), $currentUser->getId(), true);
 
 		if (empty($heads))
 		{

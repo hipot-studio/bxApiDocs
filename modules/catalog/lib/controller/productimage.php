@@ -202,6 +202,12 @@ final class ProductImage extends Controller
 		{
 			$morePhotos = $product->getImageCollection()->getMorePhotos();
 			$image = end($morePhotos);
+			if (!$image)
+			{
+				$this->addError(new Error('Empty image.'));
+
+				return null;
+			}
 		}
 
 		return ['PRODUCT_IMAGE' => $this->prepareFileStructure($image, $restServer)];

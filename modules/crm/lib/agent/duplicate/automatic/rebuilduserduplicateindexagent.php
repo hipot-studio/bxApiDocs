@@ -186,6 +186,7 @@ class RebuildUserDuplicateIndexAgent
 		}
 
 		$isInProgress = $builder->build($buildData);
+
 		if (isset($buildData['PROCESSED_ITEM_COUNT']))
 		{
 			$progressData['PROCESSED_ITEMS'] = (int)($progressData['PROCESSED_ITEMS'] ?? 0);

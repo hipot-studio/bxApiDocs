@@ -841,7 +841,7 @@ abstract class EntityCompatibility
 			"UPDATE ".$tableName." SET ".
 			"	".$queryValue." WHERE ID = ".$entity->getId()." ";
 
-		if (!($DB->Query($sql, true, "File: ".__FILE__."<br>Line: ".__LINE__)))
+		if (!($DB->Query($sql, true)))
 		{
 			$result->addError(new Sale\ResultError(Loc::getMessage('SALE_COMPATIBLE_'.$entityName.'_RAW_FIELD_UPDATE_ERROR'), 'SALE_'.$entityName.'_COMPATIBLE_RAW_FIELD_UPDATE_ERROR'));
 			return $result;

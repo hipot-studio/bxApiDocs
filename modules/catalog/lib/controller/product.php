@@ -1043,16 +1043,17 @@ class Product extends Controller implements EventBindInterface
 
 	public function addPropertyAction($fields)
 	{
-		$r = $this->checkPermissionIBlockModify($fields['IBLOCK_ID']);
-		if(!$r->isSuccess())
+		$result = $this->checkPermissionIBlockModify($fields['IBLOCK_ID']);
+		if (!$result->isSuccess())
 		{
-			$this->addErrors($r->getErrors());
+			$this->addErrors($result->getErrors());
+
 			return null;
 		}
 
 		$iblockProperty = new \CIBlockProperty();
 
-		$propertyFields = array(
+		$propertyFields = [
 			'ACTIVE' => 'Y',
 			'IBLOCK_ID' => $fields['IBLOCK_ID'],
 			'NAME' => $fields['NAME'],
@@ -1061,18 +1062,19 @@ class Product extends Controller implements EventBindInterface
 			'MULTIPLE' => ($fields['MULTIPLE'] === 'Y') ? 'Y' : 'N',
 			'IS_REQUIRED'=> ($fields['IS_REQUIRED'] === 'Y') ? 'Y' : 'N',
 			'SECTION_PROPERTY'=> 'N',
-		);
+		];
 
-		$newID = (int)($iblockProperty->Add($propertyFields));
-		if ($newID === 0)
+		$newId = (int)($iblockProperty->Add($propertyFields));
+		if ($newId === 0)
 		{
-			$this->addError(new \Bitrix\Main\Error($iblockProperty->LAST_ERROR));
+			$this->addError(new Error($iblockProperty->getLastError()));
+
 			return null;
 		}
 
 		return [
-			'ID' => $newID,
-			'CONTROL_ID' => 'PROPERTY_'.$newID
+			'ID' => $newId,
+			'CONTROL_ID' => 'PROPERTY_' . $newId
 		];
 	}
 

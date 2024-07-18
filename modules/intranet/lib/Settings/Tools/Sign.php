@@ -46,4 +46,9 @@ class Sign extends Tool
 	{
 		return '/sign/config/permission/';
 	}
+
+	public function getAdditionalMenuItemIds(): array
+	{
+		return ['menu_sign_b2e'];
+	}
 }

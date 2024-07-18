@@ -32,6 +32,10 @@ class UStat
 
 	const ADMIN_GROUP_ID = 1;
 
+	const CACHE_ID = 'pulse_company_active_user_count';
+	const CACHE_TTL = 3600;
+	private const CACHE_PATH = '/intranet/ustat_user_count/';
+
 	public static function sendNotificationIfLimitExceeded(): bool
 	{
 		$checkLimitCompanyPulse = Option::get('intranet', 'check_limit_company_pulse', 'N');
@@ -40,7 +44,17 @@ class UStat
 			return false;
 		}
 
-		$userCount = Main\Application::getInstance()->getLicense()->getActiveUsersCount();
+		$cache = \Bitrix\Main\Data\Cache::createInstance();
+		if($cache->initCache(self::CACHE_TTL, self::CACHE_ID, self::CACHE_PATH))
+		{
+			$userCount = $cache->getVars();
+		}
+		else
+		{
+			$userCount = Main\Application::getInstance()->getLicense()->getActiveUsersCount();
+			$cache->startDataCache();
+			$cache->endDataCache($userCount);
+		}
 		if ($userCount < self::USER_LIMIT)
 		{
 			return false;

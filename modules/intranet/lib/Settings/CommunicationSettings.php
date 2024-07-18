@@ -607,7 +607,7 @@ class CommunicationSettings extends AbstractSettings
 			isEnable: !$this->isBitrix24
 			|| $this->isBitrix24
 			&& Feature::isFeatureEnabled("disk_object_lock_enabled"),
-			helpDesk:'redirect=detail&code=18213348',
+			helpDesk:'redirect=detail&code=20962214',
 		);
 
 		if (Loader::includeModule("disk"))

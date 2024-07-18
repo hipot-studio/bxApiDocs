@@ -391,15 +391,15 @@ class ConfigurationSettings extends AbstractSettings
 			helpDesk: 'redirect=detail&code=17697808',
 		);
 
-
-		$data["collectGeoData"] = new Switcher(
+		//TODO: commented on issue task#488392
+		/*$data["collectGeoData"] = new Switcher(
 			'settings-configuration-field-collectGeoData',
 			'collectGeoData',
 			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLECT_GEO_DATA'),
 			$this->getCollectGeoData(),
 			['on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_COLLECT_GEO_DATA_CLICK_ON_MSGVER_1')],
 			helpDesk: 'redirect=detail&code=18213320',
-		);
+		);*/
 
 		$data["showSettingsAllUsers"] = $this->getShowSettingsAllUsers();
 		//endregion
@@ -774,7 +774,8 @@ class ConfigurationSettings extends AbstractSettings
 			'allowUserInstallApplication' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_ALL_USER_INSTALL_APPLICATION'),
 			'allCanBuyTariff' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALL_CAN_BUY_TARIFF'),
 			'allowMeasureStressLevel' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_MEASURE_STRESS_LEVEL'),
-			'collectGeoData' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLECT_GEO_DATA'),
+			//TODO: commented on issue task#488392
+			//'collectGeoData' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLECT_GEO_DATA'),
 		]);
 
 		return $searchEngine->find($query);

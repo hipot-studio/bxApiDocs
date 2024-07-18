@@ -1275,7 +1275,11 @@ class CAllCrmActivity
 			$monitor = Crm\Service\Timeline\Monitor::getInstance();
 			foreach ($arBindings as $singleBinding)
 			{
-				$monitor->onActivityRemoveIfSuitable(new Crm\ItemIdentifier((int)$singleBinding['OWNER_TYPE_ID'], (int)$singleBinding['OWNER_ID']), $ID);
+				$itemIdentifier = Crm\ItemIdentifier::createFromArray($singleBinding);
+				if ($itemIdentifier)
+				{
+					$monitor->onActivityRemoveIfSuitable($itemIdentifier, $ID);
+				}
 			}
 		}
 

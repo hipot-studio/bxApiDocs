@@ -309,24 +309,27 @@ class User extends \CBPRuntimeService
 
 		$fields = [];
 
-		$userFieldIds = Main\UserFieldTable::getList([
-			'select' => ['ID'],
+		$userFields = Main\UserFieldTable::getList([
+			'select' => array_merge(
+				['ID', 'FIELD_NAME', 'USER_TYPE_ID', 'MULTIPLE'],
+				Main\UserFieldTable::getLabelsSelect()
+			),
 			'filter' => [
 				'=ENTITY_ID' => 'USER',
 				'%=FIELD_NAME' => 'UF_USR_%',
 			],
+			'runtime' => [
+				Main\UserFieldTable::getLabelsReference('LABELS', \LANGUAGE_ID)
+			],
 		])->fetchAll();
 
-		foreach ($userFieldIds as $fieldId)
+
+		foreach ($userFields as $field)
 		{
-			$field = Main\UserFieldTable::getFieldData($fieldId['ID']);
 			$fieldName = $field['FIELD_NAME'];
 			$fieldType = FieldType::convertUfType($field['USER_TYPE_ID']) ?? "UF:{$field['USER_TYPE_ID']}";
 
-			$name = in_array(\LANGUAGE_ID, $field['LANGUAGE_ID'])
-				? $field['LIST_COLUMN_LABEL'][\LANGUAGE_ID]
-				: $field['FIELD_NAME']
-			;
+			$name = empty($field['LIST_COLUMN_LABEL']) ? $field['FIELD_NAME'] : $field['LIST_COLUMN_LABEL'];
 
 			$fields[$fieldName] = [
 				'Name' => $name,
@@ -336,11 +339,12 @@ class User extends \CBPRuntimeService
 
 			if ($fields[$fieldName]['Type'] === 'select')
 			{
+				$fieldData = Main\UserFieldTable::getFieldData($field['ID']);
 				$fields[$fieldName]['Options'] = array_combine(
-					array_column($field['ENUM'], 'XML_ID'),
-					array_column($field['ENUM'], 'VALUE'),
+					array_column($fieldData['ENUM'], 'XML_ID'),
+					array_column($fieldData['ENUM'], 'VALUE'),
 				);
-				$fields[$fieldName]['Settings'] = ['ENUM' => $field['ENUM']];
+				$fields[$fieldName]['Settings'] = ['ENUM' => $fieldData['ENUM']];
 			}
 		}
 

@@ -9,6 +9,7 @@ use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Market\AppFavoritesTable;
 use Bitrix\Market\Categories;
 use Bitrix\Market\NumberApps;
+use Bitrix\Market\Rest\Actions;
 use Bitrix\Rest\Marketplace\Transport;
 
 class Favorites extends BaseTemplate
@@ -46,12 +47,12 @@ class Favorites extends BaseTemplate
 					'_market_' => 'Y',
 				],
 			],
-			Transport::METHOD_TOTAL_APPS => [
-				Transport::METHOD_TOTAL_APPS,
+			Actions::METHOD_TOTAL_APPS => [
+				Actions::METHOD_TOTAL_APPS,
 			],
 		];
 		if (!$isAjax && empty(Categories::get())) {
-			$batch[Transport::METHOD_GET_CATEGORIES_V2] = [Transport::METHOD_GET_CATEGORIES_V2];
+			$batch[Actions::METHOD_GET_CATEGORIES_V2] = [Actions::METHOD_GET_CATEGORIES_V2];
 		}
 
 		$response = Transport::instance()->batch($batch);
@@ -63,17 +64,17 @@ class Favorites extends BaseTemplate
 			$this->prepareApps($response[Transport::METHOD_FILTER_APP]['ITEMS']);
 		}
 
-		if (!empty($response[Transport::METHOD_GET_CATEGORIES_V2])) {
-			Categories::saveCache($response[Transport::METHOD_GET_CATEGORIES_V2]);
+		if (!empty($response[Actions::METHOD_GET_CATEGORIES_V2])) {
+			Categories::saveCache($response[Actions::METHOD_GET_CATEGORIES_V2]);
 			$this->result['CATEGORIES'] = Categories::get();
 		}
 
-		$this->result['TOTAL_APPS'] = NumberApps::get($response[Transport::METHOD_TOTAL_APPS]);
-		$this->result['SHOW_MARKET_ICON'] = $response[Transport::METHOD_TOTAL_APPS]['SHOW_MARKET_ICON'];
-		$this->result['ADDITIONAL_CONTENT'] = $response[Transport::METHOD_TOTAL_APPS]['ADDITIONAL_CONTENT'] ?? '';
-		$this->result['ADDITIONAL_MARKET_ACTION'] = $response[Transport::METHOD_TOTAL_APPS]['ADDITIONAL_MARKET_ACTION'] ?? '';
-		$this->result['ADDITIONAL_SEARCH_ACTION'] = $response[Transport::METHOD_TOTAL_APPS]['ADDITIONAL_SEARCH_ACTION'] ?? '';
-		$this->result['ADDITIONAL_HIT_ACTION'] = $response[Transport::METHOD_TOTAL_APPS]['ADDITIONAL_HIT_ACTION'] ?? '';
+		$this->result['TOTAL_APPS'] = NumberApps::get($response[Actions::METHOD_TOTAL_APPS]);
+		$this->result['SHOW_MARKET_ICON'] = $response[Actions::METHOD_TOTAL_APPS]['SHOW_MARKET_ICON'];
+		$this->result['ADDITIONAL_CONTENT'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_CONTENT'] ?? '';
+		$this->result['ADDITIONAL_MARKET_ACTION'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_MARKET_ACTION'] ?? '';
+		$this->result['ADDITIONAL_SEARCH_ACTION'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_SEARCH_ACTION'] ?? '';
+		$this->result['ADDITIONAL_HIT_ACTION'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_HIT_ACTION'] ?? '';
 	}
 
 	private function prepareApps($apps)

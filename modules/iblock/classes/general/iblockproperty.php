@@ -9,7 +9,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CAllIBlockProperty
 {
-	public $LAST_ERROR = "";
+	public string $LAST_ERROR = '';
 
 	public static function GetList($arOrder=Array(), $arFilter=Array())
 	{
@@ -1209,6 +1209,8 @@ class CAllIBlockProperty
 		if (defined("BX_COMP_MANAGED_CACHE"))
 			$CACHE_MANAGER->ClearByTag("iblock_property_enum_".$ID);
 
+		Iblock\PropertyEnumerationTable::cleanCache();
+
 		return true;
 	}
 
@@ -1375,5 +1377,10 @@ class CAllIBlockProperty
 	function _Add($ID, $arFields)
 	{
 		return false;
+	}
+
+	public function getLastError(): string
+	{
+		return $this->LAST_ERROR;
 	}
 }

@@ -48,7 +48,7 @@ class CEventCalendar
 		$page = preg_replace(array("/^(.*?)\&$/i","/^(.*?)\?$/i"), "\$1", $page);
 		$this->pageUrl = $page;
 		$this->fullUrl = (CMain::IsHTTPS() ? "https://" : "http://").$_SERVER['HTTP_HOST'].$page;
-		$this->outerUrl = $GLOBALS['APPLICATION']->GetCurPageParam('', array("action", "bx_event_calendar_request", "clear_cache", "bitrix_include_areas", "bitrix_show_mode", "back_url_admin", "SEF_APPLICATION_CUR_PAGE_URL"), false);
+		$this->outerUrl = $GLOBALS['APPLICATION']->GetCurPageParam('', array("action", "bx_event_calendar_request", "clear_cache", "bitrix_include_areas", "bitrix_show_mode", "back_url_admin"), false);
 
 		$this->userIblockId = $arParams['userIblockId'];
 		//$iblockId = COption::GetOptionInt("intranet", 'iblock_calendar'); // Get iblock id for users calendar from module-settings
@@ -1777,7 +1777,7 @@ class CEventCalendar
 
 		if (!$arParams['bSuperposed'] && !$arParams['bOnlyID'])
 		{
-			$outerUrl = $GLOBALS['APPLICATION']->GetCurPageParam('', array("action", "bx_event_calendar_request", "clear_cache", "bitrix_include_areas", "bitrix_show_mode", "back_url_admin", "SEF_APPLICATION_CUR_PAGE_URL"), false);
+			$outerUrl = $GLOBALS['APPLICATION']->GetCurPageParam('', array("action", "bx_event_calendar_request", "clear_cache", "bitrix_include_areas", "bitrix_show_mode", "back_url_admin"), false);
 		}
 
 		if ($ownerType != 'USER' && $ownerType != 'GROUP')
@@ -8017,7 +8017,7 @@ class CECCalendar
 
 		if (!$arParams['bSuperposed'] && !$arParams['bOnlyID'])
 		{
-			$outerUrl = $GLOBALS['APPLICATION']->GetCurPageParam('', array("action", "bx_event_calendar_request", "clear_cache", "bitrix_include_areas", "bitrix_show_mode", "back_url_admin", "SEF_APPLICATION_CUR_PAGE_URL"), false);
+			$outerUrl = $GLOBALS['APPLICATION']->GetCurPageParam('', array("action", "bx_event_calendar_request", "clear_cache", "bitrix_include_areas", "bitrix_show_mode", "back_url_admin"), false);
 		}
 
 		while($arRes = $rsData->Fetch())

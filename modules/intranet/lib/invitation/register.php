@@ -172,34 +172,34 @@ class Register
 
 		foreach ($phoneItems as $item)
 		{
-			$filter = array(
+			$filter = [
 				"=PHONE_NUMBER" => $item["PHONE_NUMBER"]
-			);
+			];
 
 			if (!empty($externalAuthIdList))
 			{
 				$filter['!=USER.EXTERNAL_AUTH_ID'] = $externalAuthIdList;
 			}
 
-			$rsUser = \Bitrix\Main\UserPhoneAuthTable::getList(array(
+			$rsUser = \Bitrix\Main\UserPhoneAuthTable::getList([
 				'filter' => $filter,
-				'select' => array(
+				'select' => [
 					"USER_ID",
 					"USER_CONFIRM_CODE" => "USER.CONFIRM_CODE",
 					"USER_EXTERNAL_AUTH_ID" => "USER.EXTERNAL_AUTH_ID",
 					"USER_UF_DEPARTMENT" => "USER.UF_DEPARTMENT"
-				)
-			));
+				]
+			]);
 
 			$bFound = false;
 			while ($arUser = $rsUser->Fetch())
 			{
-				$arUser = array(
+				$arUser = [
 					'ID' => $arUser["USER_ID"],
 					'CONFIRM_CODE' => $arUser["USER_CONFIRM_CODE"],
 					'EXTERNAL_AUTH_ID' => $arUser["USER_ID"],
 					'UF_DEPARTMENT' => $arUser["USER_UF_DEPARTMENT"],
-				);
+				];
 
 				$bFound = true;
 
@@ -239,13 +239,13 @@ class Register
 					)
 				)
 				{
-					$arPhoneToReinvite[] = array(
+					$arPhoneToReinvite[] = [
 						"PHONE_NUMBER" => $item["PHONE_NUMBER"],
 						"REINVITE" => true,
 						"ID" => $arUser["ID"],
 						"CONFIRM_CODE" => $arUser["CONFIRM_CODE"],
 						"UF_DEPARTMENT" => $arUser["UF_DEPARTMENT"]
-					);
+					];
 				}
 				else
 				{
@@ -366,7 +366,7 @@ class Register
 
 	private static function isIntranetUser(array $user): bool
 	{
-		return !empty($user["UF_DEPARTMENT"])
+		return isset($user["UF_DEPARTMENT"])
 		&& (
 			(
 				is_array($user["UF_DEPARTMENT"])
@@ -574,7 +574,6 @@ class Register
 
 		if (
 			empty($resPhone["PHONE_TO_REGISTER"])
-			&& empty($resPhone["PHONE_TO_REINVITE"])
 			&& empty($resEmail["EMAIL_TO_REGISTER"])
 			&& empty($resEmail["EMAIL_TO_REINVITE"])
 			&& empty($resEmail["TRANSFER_USER"])
@@ -591,6 +590,20 @@ class Register
 			{
 				$errors[] = Loc::getMessage("INTRANET_INVITATION_USER_PHONE_EXIST_ERROR", [
 					"#PHONE_LIST#" => implode(', ', $resPhone["PHONE_EXIST"]),
+				]);
+			}
+			// Method self::InviteUserByPhone($userData) is not valid - show as exist
+			if (!empty($resPhone["PHONE_TO_REINVITE"]))
+			{
+				$phones = [];
+
+				foreach ($resPhone['PHONE_TO_REINVITE'] as $phoneToReinvite)
+				{
+					$phones[] = $phoneToReinvite['PHONE_NUMBER'];
+				}
+
+				$errors[] = Loc::getMessage("INTRANET_INVITATION_USER_PHONE_EXIST_ERROR", [
+					"#PHONE_LIST#" => implode(', ', $phones),
 				]);
 			}
 

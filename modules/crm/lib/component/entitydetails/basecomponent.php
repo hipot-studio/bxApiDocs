@@ -112,11 +112,15 @@ abstract class BaseComponent extends Crm\Component\Base
 
 	public static function updateEntity($entityTypeID, $entityID, array $entityData, array $options = array())
 	{
-		$result = static::updateClient(new Crm\ItemIdentifier(
-				$entityTypeID,
-				$entityID
-			), $entityData, $options
-		);
+		$identifier = Crm\ItemIdentifier::createFromArray([
+			'ENTITY_TYPE_ID' => $entityTypeID,
+			'ENTITY_ID' => $entityID,
+		]);
+		if (!$identifier)
+		{
+			return false;
+		}
+		$result = static::updateClient($identifier, $entityData, $options);
 
 		return $result->isSuccess();
 	}

@@ -937,9 +937,13 @@ class CBPRuntime
 		{
 			if ($type === 'MIN_API_VERSION')
 			{
-				$activityMinApiVersion = is_numeric($rules) ? (int)$rules : (self::ACTIVITY_API_VERSION + 1);
+				$minApiVersion = (int)$rules;
+				if ($minApiVersion > self::ACTIVITY_API_VERSION)
+				{
+					return false;
+				}
 
-				return $activityMinApiVersion <= self::ACTIVITY_API_VERSION;
+				continue;
 			}
 
 			$found = $this->checkActivityFilterRules($rules, $documentType, $distrName);

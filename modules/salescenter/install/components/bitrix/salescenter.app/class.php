@@ -369,21 +369,25 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			$orderClassName = $registry->getOrderClassName();
 
 			$this->order = $orderClassName::load($this->arParams['orderId']);
-			if ($this->arResult['paymentId'])
+			if ($this->order)
 			{
-				$this->payment = $this->order->getPaymentCollection()->getItemById($this->arResult['paymentId']);
-				if ($this->payment && $this->arResult['shipmentId'] === 0)
+				if ($this->arResult['paymentId'])
 				{
-					/** @var Sale\PayableShipmentItem $payableItem */
-					foreach ($this->payment->getPayableItemCollection()->getShipments() as $payableItem)
+					$this->payment = $this->order->getPaymentCollection()->getItemById($this->arResult['paymentId']);
+					if ($this->payment && $this->arResult['shipmentId'] === 0)
 					{
-						$this->arResult['shipmentId'] = $payableItem->getField('ENTITY_ID');
+						/** @var Sale\PayableShipmentItem $payableItem */
+						foreach ($this->payment->getPayableItemCollection()->getShipments() as $payableItem)
+						{
+							$this->arResult['shipmentId'] = $payableItem->getField('ENTITY_ID');
+						}
 					}
 				}
-			}
-			if ($this->order && $this->arResult['shipmentId'])
-			{
-				$this->shipment = $this->order->getShipmentCollection()->getItemById($this->arResult['shipmentId']);
+
+				if ($this->arResult['shipmentId'])
+				{
+					$this->shipment = $this->order->getShipmentCollection()->getItemById($this->arResult['shipmentId']);
+				}
 			}
 
 			$this->arResult['orderId'] = ($this->order ? $this->order->getId() : 0);
@@ -600,7 +604,10 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 
 				$psAction = $this->payment->getPaySystem()?->getField('ACTION_FILE');
 
-				if (count($this->arResult['basket']) === 1 && is_null($this->arResult['basket'][0]['offerId']))
+				if (
+					count($this->arResult['basket']) === 1
+					&& is_null($this->arResult['basket'][0]['offerId'])
+				)
 				{
 					$this->arResult['isPaymentByAmount'] = true;
 					$this->arResult['currencyCode'] = $this->order->getCurrency();

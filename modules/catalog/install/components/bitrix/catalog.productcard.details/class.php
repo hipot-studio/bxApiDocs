@@ -1250,31 +1250,68 @@ class CatalogProductDetailsComponent
 				// editor file properties
 				elseif ($propertyType === PropertyTable::TYPE_FILE)
 				{
-					$defaultDescription = $property->isMultiple() ? [] : null;
-					$description = $fields[$name . '_descr'] ?? $defaultDescription;
-					if (!$property->isMultiple())
+					$isMultiple = $property->isMultiple();
+					$isImageProperty = $this->form->isImageProperty($property->getSettings());
+					if ($isImageProperty)
 					{
-						$field = [$field];
-						$description = [$description];
-					}
-					if (isset($fields[$name . '_del']))
-					{
-						if (is_array($fields[$name . '_del']))
+						$defaultDescription = $isMultiple ? [] : null;
+						$description = $fields[$name . '_descr'] ?? $defaultDescription;
+						if (!$isMultiple)
 						{
-							$field = array_diff_key($field, $fields[$name . '_del'] ?? []);
+							$field = [$field];
+							$description = [$description];
 						}
 						else
 						{
-							$field = [];
+							if (!is_array($field) || array_key_exists('tmp_name', $field))
+							{
+								$field = [$field];
+								$description = [$description];
+							}
 						}
-					}
-					if ($this->form->isImageProperty($property->getSettings()))
-					{
+
+						if (isset($fields[$name . '_del']))
+						{
+							if (is_array($fields[$name . '_del']))
+							{
+								$field = array_diff_key($field, $fields[$name . '_del']);
+							}
+							else
+							{
+								$field = [];
+							}
+						}
+
 						$field = $this->parseEditorImagePropertyValues($field, $description, $this->getPropertySavedValues($index));
 						unset($fields[$name . '_del'], $fields[$name . '_descr']);
 					}
 					else
 					{
+						if (!$isMultiple || !is_array($field))
+						{
+							$field = [$field];
+						}
+
+						if (isset($fields[$name . '_del']))
+						{
+							if (is_array($fields[$name . '_del']))
+							{
+								$deleteFiles = $fields[$name . '_del'];
+								foreach (array_keys($field) as $fileIndex)
+								{
+									if (in_array($field[$fileIndex], $deleteFiles))
+									{
+										unset($field[$fileIndex]);
+									}
+								}
+								unset($deleteFiles);
+							}
+							else
+							{
+								$field = [];
+							}
+						}
+
 						$field = \Bitrix\Main\UI\FileInputUtility::instance()->checkFiles(
 							BaseForm::PROPERTY_FIELD_PREFIX . $index . '_uploader',
 							$field
@@ -1285,6 +1322,7 @@ class CatalogProductDetailsComponent
 						}
 						unset($fields[$name . '_del'], $fields[$name . '_uploader_deleted']);
 					}
+
 					if (empty($field))
 					{
 						$field = '';

@@ -243,7 +243,18 @@ class ProductSelector extends JsonController
 			return null;
 		}
 
-		return $product->getSkuCollection()->getFirst();
+		return $product->getSkuCollection()->getFirst([$this, 'isActiveSku']);
+	}
+
+	/**
+	 * Filter for select first active offer.
+	 *
+	 * @param BaseSku $sku
+	 * @return bool
+	 */
+	public function isActiveSku(BaseSku $sku): bool
+	{
+		return $sku->isActive();
 	}
 
 	private function prepareResponse(BaseSku $sku, array $options = []): ?array
@@ -277,10 +288,10 @@ class ProductSelector extends JsonController
 			if (!empty($options['currency']) && $options['currency'] !== $currency)
 			{
 				$basePrice = \CCurrencyRates::ConvertCurrency($price, $currency, $options['currency']);
-				$currencyFormat = \CCurrencyLang::GetCurrencyFormat($currency);
+				$currencyFormat = \CCurrencyLang::GetCurrencyFormat($options['currency']);
 				$decimals = $currencyFormat['DECIMALS'] ?? 2;
 				$basePrice = round($basePrice, $decimals);
-				$price = \CCurrencyLang::CurrencyFormat($basePrice, $currency, false);
+				$price = \CCurrencyLang::CurrencyFormat($basePrice, $options['currency'], false);
 				$isCustomized = 'Y';
 				$currency = $options['currency'];
 			}

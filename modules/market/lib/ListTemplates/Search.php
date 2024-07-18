@@ -6,6 +6,7 @@ namespace Bitrix\Market\ListTemplates;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Market\Categories;
+use Bitrix\Market\Rest\Actions;
 use Bitrix\Rest\Marketplace\Transport;
 
 class Search extends BaseTemplate
@@ -41,7 +42,7 @@ class Search extends BaseTemplate
 			],
 		];
 		if (!$isAjax && empty(Categories::get())) {
-			$batch[Transport::METHOD_GET_CATEGORIES_V2] = [Transport::METHOD_GET_CATEGORIES_V2];
+			$batch[Actions::METHOD_GET_CATEGORIES_V2] = [Actions::METHOD_GET_CATEGORIES_V2];
 		}
 
 		$response = Transport::instance()->batch($batch);
@@ -62,8 +63,8 @@ class Search extends BaseTemplate
 			}
 		}
 
-		if (!empty($response[Transport::METHOD_GET_CATEGORIES_V2])) {
-			Categories::saveCache($response[Transport::METHOD_GET_CATEGORIES_V2]);
+		if (!empty($response[Actions::METHOD_GET_CATEGORIES_V2])) {
+			Categories::saveCache($response[Actions::METHOD_GET_CATEGORIES_V2]);
 			$this->result['CATEGORIES'] = Categories::get();
 		}
 	}

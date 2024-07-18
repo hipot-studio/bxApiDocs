@@ -26,6 +26,7 @@ abstract class MatchHashDedupeDataSource extends DedupeDataSource
 		}
 
 		$subQuery = $result->getData()['query'];
+		$subQuery->setOrder([]);
 
 		$query = new Main\Entity\Query($subQuery);
 		$query->registerRuntimeField('', new Main\Entity\ExpressionField('CNT', 'COUNT(*)'));
@@ -187,13 +188,13 @@ abstract class MatchHashDedupeDataSource extends DedupeDataSource
 
 	protected function getDuplicateHashesBaseQuery(array $filter = []): Result
 	{
-		$isUsingTableCache = (
-			Main\Config\Option::get('crm', '~enable_duplicate_table_cache', 'N') === 'Y'
+		$isUsingDedupeCache = (
+			MatchHashDedupeCache::isEnabled()
 			&& $this->getContextId() !== ''
 			&& ($filter === [] || (isset($filter['=MATCH_HASH']) && count($filter) === 1))
 		);
 
-		if ($isUsingTableCache)
+		if ($isUsingDedupeCache)
 		{
 			$dedupeCache = $this->getDedupeCache();
 			if (!$dedupeCache->isExists())
@@ -216,6 +217,14 @@ abstract class MatchHashDedupeDataSource extends DedupeDataSource
 			$result = $dedupeCache->getQuery();
 			if ($result->isSuccess())
 			{
+				// disabling sample bias optimization due to ticket 0193259
+				/*$resultData = $result->getData();
+				if (is_array($resultData))
+				{
+					$resultData['identifyingColumn'] = 'ID';
+					$result->setData($resultData);
+				}*/
+
 				return $result;
 			}
 		}
@@ -235,15 +244,29 @@ abstract class MatchHashDedupeDataSource extends DedupeDataSource
 			return $result;
 		}
 
-		$query = $baseQueryResult->getData()['query'];
+		$resultData = $baseQueryResult->getData();
+
+		/** @var Main\ORM\Query\Query $query */
+		$query = $resultData['query'];
 
 		if (!is_int($offset))
 		{
 			$offset = (int)$offset;
 		}
-		if ($offset > 0)
+
+		if (isset($resultData['identifyingColumn']))
 		{
-			$query->setOffset($offset);
+			$query->addFilter('>' . $resultData['identifyingColumn'], $offset);
+			$resultData = ['isUsingOffsetByColumn' => true];
+		}
+		else
+		{
+			if ($offset > 0)
+			{
+				$query->setOffset($offset);
+			}
+
+			$resultData = [];
 		}
 
 		if ($limit > 0)
@@ -251,7 +274,8 @@ abstract class MatchHashDedupeDataSource extends DedupeDataSource
 			$query->setLimit($limit);
 		}
 
-		$result->setData(['query' => $query]);
+		$resultData['query'] = $query;
+		$result->setData($resultData);
 
 		return $result;
 	}

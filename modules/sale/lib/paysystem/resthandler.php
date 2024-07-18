@@ -773,7 +773,8 @@ class RestHandler extends PaySystem\ServiceHandler
 	private function getHandlerSettings(): array
 	{
 		$handlerFields = $this->getHandlerFields();
-		return $handlerFields['SETTINGS'] ?? [];
+
+		return is_array($handlerFields['SETTINGS']) ? $handlerFields['SETTINGS'] : [];
 	}
 
 	private function getMode(): string

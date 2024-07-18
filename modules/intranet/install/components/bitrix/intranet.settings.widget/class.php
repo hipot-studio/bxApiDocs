@@ -45,6 +45,8 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 
 	private function getUser(): Intranet\CurrentUser
 	{
+		$this->user ??= Intranet\CurrentUser::get();
+
 		return $this->user;
 	}
 
@@ -143,7 +145,7 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 
 	public function getRequisitesAction(): Bitrix\Main\Response
 	{
-		if ($this->showWidget && $this->isRequisiteAvailable)
+		if (Loader::includeModule('crm') && $this->getUser()->isAdmin())
 		{
 			return AjaxJson::createSuccess([
 				'requisite' => Requisite::getInstance()->getRequisitesData(),
@@ -155,10 +157,7 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 
 	public function createRequisiteLandingAction(): Bitrix\Main\Response
 	{
-		if (
-			$this->isRequisiteAvailable
-			&& $this->showWidget
-		)
+		if (Loader::includeModule('crm') && $this->getUser()->isAdmin())
 		{
 			if ($requisites = Requisite::getInstance()->getRequisites())
 			{
@@ -222,8 +221,6 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 	{
 		if (empty(self::$cachedResult))
 		{
-			$this->user = Intranet\CurrentUser::get();
-
 			if (Loader::includeModule('bitrix24'))
 			{
 				$this->isBitrix24 = true;

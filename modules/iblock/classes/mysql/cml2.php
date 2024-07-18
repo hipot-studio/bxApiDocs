@@ -624,9 +624,9 @@ class CIBlockXMLFile
 				//Let's handle attributes
 				$elementAttrs = substr($elementName, $ps + 1);
 				$elementName = substr($elementName, 0, $ps);
-				preg_match_all("/(\\S+)\\s*=\\s*[\"](.*?)[\"]/s".BX_UTF_PCRE_MODIFIER, $elementAttrs, $attrs_tmp);
+				preg_match_all("/(\\S+)\\s*=\\s*[\"](.*?)[\"]/su", $elementAttrs, $attrs_tmp);
 				$attrs = array();
-				if(strpos($elementAttrs, "&") === false)
+				if(!str_contains($elementAttrs, "&"))
 				{
 					foreach($attrs_tmp[1] as $i=>$attrs_tmp_1)
 						$attrs[$attrs_tmp_1] = $attrs_tmp[2][$i];

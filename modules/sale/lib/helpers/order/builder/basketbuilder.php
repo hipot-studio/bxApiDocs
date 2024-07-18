@@ -1,15 +1,13 @@
 <?
 namespace Bitrix\Sale\Helpers\Order\Builder;
 
-use Bitrix\Main\Config\Option;
+use Bitrix\Catalog\Product;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Date;
-use Bitrix\Sale\Basket;
 use Bitrix\Sale\BasketItem;
 use Bitrix\Sale\BasketItemBase;
-use Bitrix\Sale\Discount;
 use Bitrix\Sale\DiscountCouponsManager;
 use Bitrix\Sale\Fuser;
 use Bitrix\Sale\Helpers\Admin\Blocks\OrderBasket;
@@ -299,6 +297,16 @@ abstract class BasketBuilder
 				continue;
 
 			$productData = $this->formData['PRODUCT'][$basketCode];
+			if (
+				isset($productData['MODULE'])
+				&& $productData['MODULE'] === 'catalog'
+				&& empty($productData['PRODUCT_PROVIDER_CLASS'])
+				&& Loader::includeModule('catalog')
+			)
+			{
+				$productData['PRODUCT_PROVIDER_CLASS'] = '\\'.Product\CatalogProvider::class;
+			}
+
 			$isProductDataNeedUpdate = in_array($basketCode, $this->needDataUpdate);
 
 			if(isset($productData["PRODUCT_PROVIDER_CLASS"]) && $productData["PRODUCT_PROVIDER_CLASS"] <> '')

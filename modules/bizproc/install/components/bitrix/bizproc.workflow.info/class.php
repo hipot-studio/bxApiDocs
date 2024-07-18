@@ -104,7 +104,7 @@ class BizprocWorkflowInfo extends \CBitrixComponent
 		if ($this->getTemplateName() === 'slider')
 		{
 			$this->prepareSliderResult();
-			$this->includeComponentTemplate();
+			$this->includeComponentTemplate(empty($this->arResult['errors']) ? '' : 'error');
 
 			return;
 		}

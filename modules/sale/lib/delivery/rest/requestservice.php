@@ -65,7 +65,7 @@ class RequestService extends BaseService
 			{
 				throw new RestException(
 					'Unexpected parameter FINALIZE value: Y, N expected',
-					self::ERROR_CODE_UNEXPECTED_OVERWRITE_PROPERTIES_VALUE
+					self::ERROR_CODE_UNEXPECTED_REQUEST_FINALIZE_INDICATOR_VALUE
 				);
 			}
 

@@ -7,6 +7,7 @@ namespace Bitrix\Market\ListTemplates;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Market\Categories;
 use Bitrix\Market\NumberApps;
+use Bitrix\Market\Rest\Actions;
 use Bitrix\Rest\Marketplace\Transport;
 
 Loc::loadMessages(__DIR__.'/../../install/components/bitrix/market.main/class.php');
@@ -43,12 +44,12 @@ class Category extends BaseTemplate
 				Transport::METHOD_FILTER_APP,
 				$params,
 			],
-			Transport::METHOD_TOTAL_APPS => [
-				Transport::METHOD_TOTAL_APPS,
+			Actions::METHOD_TOTAL_APPS => [
+				Actions::METHOD_TOTAL_APPS,
 			],
 		];
 		if (!$isAjax && empty(Categories::get())) {
-			$batch[Transport::METHOD_GET_CATEGORIES_V2] = [Transport::METHOD_GET_CATEGORIES_V2];
+			$batch[Actions::METHOD_GET_CATEGORIES_V2] = [Actions::METHOD_GET_CATEGORIES_V2];
 		}
 
 		$response = Transport::instance()->batch($batch);
@@ -77,19 +78,19 @@ class Category extends BaseTemplate
 			}
 		}
 
-		if (!empty($response[Transport::METHOD_GET_CATEGORIES_V2])) {
-			Categories::saveCache($response[Transport::METHOD_GET_CATEGORIES_V2]);
+		if (!empty($response[Actions::METHOD_GET_CATEGORIES_V2])) {
+			Categories::saveCache($response[Actions::METHOD_GET_CATEGORIES_V2]);
 			$this->result['CATEGORIES'] = Categories::get();
 		}
 
 		$this->result['TITLE'] = $title;
 		$this->result['CURRENT_APPS_CNT'] = $this->getAppsCount();
-		$this->result['TOTAL_APPS'] = NumberApps::get($response[Transport::METHOD_TOTAL_APPS]);
-		$this->result['SHOW_MARKET_ICON'] = $response[Transport::METHOD_TOTAL_APPS]['SHOW_MARKET_ICON'];
-		$this->result['ADDITIONAL_CONTENT'] = $response[Transport::METHOD_TOTAL_APPS]['ADDITIONAL_CONTENT'] ?? '';
-		$this->result['ADDITIONAL_MARKET_ACTION'] = $response[Transport::METHOD_TOTAL_APPS]['ADDITIONAL_MARKET_ACTION'] ?? '';
-		$this->result['ADDITIONAL_SEARCH_ACTION'] = $response[Transport::METHOD_TOTAL_APPS]['ADDITIONAL_SEARCH_ACTION'] ?? '';
-		$this->result['ADDITIONAL_HIT_ACTION'] = $response[Transport::METHOD_TOTAL_APPS]['ADDITIONAL_HIT_ACTION'] ?? '';
+		$this->result['TOTAL_APPS'] = NumberApps::get($response[Actions::METHOD_TOTAL_APPS]);
+		$this->result['SHOW_MARKET_ICON'] = $response[Actions::METHOD_TOTAL_APPS]['SHOW_MARKET_ICON'];
+		$this->result['ADDITIONAL_CONTENT'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_CONTENT'] ?? '';
+		$this->result['ADDITIONAL_MARKET_ACTION'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_MARKET_ACTION'] ?? '';
+		$this->result['ADDITIONAL_SEARCH_ACTION'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_SEARCH_ACTION'] ?? '';
+		$this->result['ADDITIONAL_HIT_ACTION'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_HIT_ACTION'] ?? '';
 
 		global $APPLICATION;
 		$APPLICATION->SetTitle($title);

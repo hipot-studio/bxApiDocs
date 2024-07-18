@@ -626,9 +626,11 @@ abstract class BaseForm
 					$isImageInput = $this->isImageProperty($description['settings']);
 
 					$descriptionSingle = $description;
-					$descriptionSingle['settings']['MULTIPLE'] = false;
+					$descriptionSingle['settings']['MULTIPLE'] = 'N';
+					$descriptionSingle['multiple'] = false;
 					$descriptionMultiple = $description;
-					$descriptionMultiple['settings']['MULTIPLE'] = true;
+					$descriptionMultiple['settings']['MULTIPLE'] = 'Y';
+					$descriptionMultiple['multiple'] = true;
 
 					if ($isImageInput)
 					{

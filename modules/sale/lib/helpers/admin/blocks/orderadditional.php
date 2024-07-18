@@ -8,6 +8,7 @@ use Bitrix\Sale\Helpers\Admin\OrderEdit;
 use Bitrix\Sale\Services\Company\Manager;
 
 Loc::loadMessages(__FILE__);
+Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/sale/lib/helpers/admin/blocks/ordershipment.php');
 
 class OrderAdditional
 {

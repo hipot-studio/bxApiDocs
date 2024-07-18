@@ -472,6 +472,48 @@ class CIBlockElement extends CAllIBlockElement
 	{
 		global $DB;
 
+		if (
+			isset($arFilter['CHECK_PERMISSIONS'])
+			&& $arFilter['CHECK_PERMISSIONS'] === 'Y'
+		)
+		{
+			$filterIblockId = null;
+			if (isset($arFilter['IBLOCK_ID']) && is_numeric($arFilter['IBLOCK_ID']))
+			{
+				$arFilter['IBLOCK_ID'] = (int)$arFilter['IBLOCK_ID'];
+				$filterIblockId = $arFilter['IBLOCK_ID'];
+			}
+			elseif (isset($arFilter['=IBLOCK_ID']) && is_numeric($arFilter['IBLOCK_ID']))
+			{
+				$arFilter['=IBLOCK_ID'] = (int)$arFilter['=IBLOCK_ID'];
+				$filterIblockId = $arFilter['=IBLOCK_ID'];
+			}
+
+			if (\CIBlock::GetArrayByID($filterIblockId, 'RIGHTS_MODE') === Iblock\IblockTable::RIGHTS_SIMPLE)
+			{
+				$min_permission =
+					isset($arFilter['MIN_PERMISSION']) && mb_strlen($arFilter['MIN_PERMISSION']) === 1
+						? $arFilter['MIN_PERMISSION']
+						: 'R'
+				;
+				$currentPermission = CIBlock::GetPermission($filterIblockId, $arFilter['PERMISSIONS_BY'] ?? false);
+				if ($currentPermission < $min_permission)
+				{
+					return new CIBlockResult();
+				}
+				if (
+					!defined('ADMIN_SECTION')
+					&& $currentPermission !== 'X'
+					&& CIBlock::GetArrayByID($filterIblockId, 'ACTIVE') !== 'Y'
+				)
+				{
+					return new CIBlockResult();
+				}
+
+				unset($arFilter['CHECK_PERMISSIONS'], $arFilter['MIN_PERMISSION']);
+			}
+		}
+
 		$el = new CIBlockElement();
 		$el->prepareSql($arSelectFields, $arFilter, $arGroupBy, $arOrder);
 
@@ -525,7 +567,7 @@ class CIBlockElement extends CAllIBlockElement
 
 				$connection = Main\Application::getConnection();
 
-				if ($connection->getType() === 'pgsql')
+				if ($connection instanceof Main\DB\PgsqlConnection)
 				{
 					$res = $connection->query('
 						select * from (
@@ -749,9 +791,8 @@ class CIBlockElement extends CAllIBlockElement
 					else
 						$pr_id = $arProp['ID'];
 
-					if(
-						array_key_exists($pr_id, $arFieldProps)
-						&& array_key_exists($pr_val_id, $arFieldProps[$pr_id])
+					if (
+						isset($arFieldProps[$pr_id][$pr_val_id])
 						&& is_array($arFieldProps[$pr_id][$pr_val_id])
 					)
 					{
@@ -1172,11 +1213,9 @@ class CIBlockElement extends CAllIBlockElement
 
 		if ($this->searchIncluded)
 		{
-			$arFields["SEARCHABLE_CONTENT"] = ToUpper(
-				$searchableFields['NAME']."\r\n".
+			$arFields["SEARCHABLE_CONTENT"] = mb_strtoupper($searchableFields['NAME']."\r\n".
 				($searchableFields['PREVIEW_TEXT_TYPE'] == "html" ? HTMLToTxt($searchableFields['PREVIEW_TEXT']) : $searchableFields['PREVIEW_TEXT'])."\r\n".
-				($searchableFields['DETAIL_TEXT_TYPE'] == "html" ? HTMLToTxt($searchableFields['DETAIL_TEXT']) : $searchableFields['DETAIL_TEXT'])
-			);
+				($searchableFields['DETAIL_TEXT_TYPE'] == "html" ? HTMLToTxt($searchableFields['DETAIL_TEXT']) : $searchableFields['DETAIL_TEXT']));
 		}
 
 		if(array_key_exists("IBLOCK_SECTION_ID", $arFields))
@@ -1455,10 +1494,13 @@ class CIBlockElement extends CAllIBlockElement
 			if (!$this->searchIncluded)
 			{
 				if (
-					$existFields['NAME']
-					|| $existFields['PREVIEW_TEXT']
-					|| $existFields['DETAIL_TEXT']
-					|| $existFields['PROPERTY_VALUES']
+					!array_key_exists('SEARCHABLE_CONTENT', $arFields)
+					&& (
+						$existFields['NAME']
+						|| $existFields['PREVIEW_TEXT']
+						|| $existFields['DETAIL_TEXT']
+						|| $existFields['PROPERTY_VALUES']
+					)
 				)
 				{
 					$elementFields = $arFields;
@@ -2598,31 +2640,6 @@ class CIBlockElement extends CAllIBlockElement
 		";
 
 		return $DB->Query($strSql, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
-	}
-
-	/**
-	 * @param mixed $order
-	 * @return string
-	 */
-	protected function getIdOrder($order): string
-	{
-		if (is_array($order))
-		{
-			Main\Type\Collection::normalizeArrayValuesByInt($order, false);
-			if (!empty($order))
-			{
-				$connection = Main\Application::getConnection();
-				$helper = $connection->getSqlHelper();
-
-				return $helper->getOrderByIntField('BE.ID', $order, false);
-			}
-			else
-			{
-				return parent::getIdOrder('');
-			}
-		}
-
-		return parent::getIdOrder($order);
 	}
 
 	private static function getUserNameSql(string $tableAlias): string

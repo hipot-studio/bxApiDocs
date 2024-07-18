@@ -2108,7 +2108,7 @@ class ProductCategories extends Base
 		else
 		{
 			$addCategoryScript = "window.InS".md5('SECTIONS_IDS')."=function(id, name){{$input['JS_HANDLER']}.addRestrictionProductSection(id, name, '{$input['ID']}', this);};";
-			$url = 'cat_section_search.php?lang=ru&m=y&n=SECTIONS_IDS';
+			$url = 'cat_section_search.php?lang=' . LANGUAGE_ID . '&m=y&n=SECTIONS_IDS';
 		}
 
 		$editSection = "

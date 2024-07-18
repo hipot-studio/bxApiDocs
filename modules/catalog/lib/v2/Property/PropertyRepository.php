@@ -153,13 +153,26 @@ class PropertyRepository implements PropertyRepositoryContract
 
 		if (!empty($props) && $result->isSuccess())
 		{
+			$elementId = $parentEntity->getId();
 			$element = new \CIBlockElement();
-			$res = $element->update($parentEntity->getId(), [
-				'PROPERTY_VALUES' => $props,
-			]);
+			$res = $element->update(
+				$elementId,
+				[
+					'PROPERTY_VALUES' => $props,
+				]
+			);
 			if (!$res)
 			{
-				$result->addError(new Error($element->LAST_ERROR));
+				$result->addError(new Error($element->getLastError()));
+			}
+			else
+			{
+				$ipropValues = new \Bitrix\Iblock\InheritedProperty\ElementValues(
+					\CIBlockElement::GetIBlockByID($elementId),
+					$elementId
+				);
+				$ipropValues->clearValues();
+				unset($ipropValues);
 			}
 		}
 

@@ -348,11 +348,14 @@ class CBPRestActivity extends CBPActivity implements
 						$value = $fieldTypeObject->internalizeValue($this->GetName(), $value);
 					}
 
-					$map = $this->getDebugInfo(
-						[$name => $value],
-						[$name => $property]
-					);
-					$this->writeDebugInfo($map);
+					if ($this->workflow->isDebug())
+					{
+						$map = $this->getDebugInfo(
+							[$name => $value],
+							[$name => $property]
+						);
+						$this->writeDebugInfo($map);
+					}
 				}
 
 				$this->__set($whiteList[$name], $value);

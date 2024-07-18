@@ -380,6 +380,9 @@ class EmployeeSettings extends AbstractSettings
 				];
 				$hintList[$format->getCode()] = $sanitizer->SanitizeHtml($format->getDescription());
 			}
+			usort($addressFormatList, function ($a, $b) {
+				return strcmp($a['name'], $b['name']);
+			});
 			$hintList['hintTitle'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_TITLE_ADDRESS_FORMAT');
 			$data['fieldFormatAddress'] = new Selector(
 				'settings-employee-field-format_address',

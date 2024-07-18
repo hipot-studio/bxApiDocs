@@ -702,7 +702,7 @@ class SalesCenterPaySystemComponent extends CBitrixComponent implements Main\Eng
 						'title' => htmlspecialcharsbx($block['LABEL']),
 						'type' => 'cashboxSettings',
 						'warning' => $warning,
-						'collapsed' => $block['COLLAPSED'],
+						'collapsed' => $block['COLLAPSED'] ?? 'N',
 						'hint' => $hint,
 					];
 

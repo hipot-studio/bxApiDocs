@@ -14,7 +14,8 @@ abstract class MatchHashDedupeCacheTable extends DataManager
 	public static function getMap()
 	{
 		return [
-			new StringField('MATCH_HASH', ['size' => 32, 'primary' => true]),
+			new IntegerField('ID', ['primary' => true, 'autocomplete' => true]),
+			new StringField('MATCH_HASH', ['size' => 32, 'unique' => true]),
 			new IntegerField('QTY'),
 		];
 	}

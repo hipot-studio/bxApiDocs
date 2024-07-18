@@ -634,7 +634,7 @@ class CBPWorkflow
 			$this->instanceId,
 			array(
 				"STATE" => "Terminated",
-				"TITLE" => $stateTitle ? $stateTitle : GetMessage("BPCGWF_TERMINATED"),
+				"TITLE" => $stateTitle ?: GetMessage("BPCGWF_TERMINATED_MSGVER_1"),
 				"PARAMETERS" => array()
 			),
 			false//array()

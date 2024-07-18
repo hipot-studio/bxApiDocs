@@ -222,9 +222,17 @@ class ToDo extends Base
 		bool $isCopy = false,
 	): ?array
 	{
-		$todo = new Entity\ToDo(
-			new ItemIdentifier($ownerTypeId, $ownerId)
-		);
+		$identifier = ItemIdentifier::createFromArray([
+			'ENTITY_TYPE_ID' => $ownerTypeId,
+			'ENTITY_ID' => $ownerId,
+		]);
+		if (!$identifier)
+		{
+			$this->addError(ErrorCode::getNotFoundError());
+			return null;
+		}
+
+		$todo = new Entity\ToDo($identifier);
 
 		$todo = $this->getPreparedEntity(
 			$todo,

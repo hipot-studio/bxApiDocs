@@ -2081,7 +2081,7 @@ class CBPVirtualDocument extends CIBlockDocument
 
 		ob_start();
 
-		echo CAdminCalendar::ShowScript();
+		CAdminCalendar::ShowScript();
 		?>
 		<script>
 		<?= $objectName ?>.GetGUIFieldEdit = function(field, value, showAddButton, inputName)

@@ -270,8 +270,6 @@ class CIBlock extends CAllIBlock
 
 	public function _Add($ID)
 	{
-		global $DB;
-		$err_mess = 'FILE: ' . __FILE__ . '<br>LINE: ';
 		$ID = (int)$ID;
 
 		$connection = Application::getConnection();

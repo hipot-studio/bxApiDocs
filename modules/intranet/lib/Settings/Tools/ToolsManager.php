@@ -128,6 +128,12 @@ class ToolsManager
 				if (!$tool->isEnabled() && $tool->getMenuItemId())
 				{
 					$this->disabledMenuItemListId[$tool->getId()] = $tool->getMenuItemId();
+					$additionalMenuItemIds = $tool->getAdditionalMenuItemIds();
+
+					foreach ($additionalMenuItemIds as $menuItemId)
+					{
+						$this->disabledMenuItemListId[] = $menuItemId;
+					}
 				}
 
 				$subgroups = $tool->getSubgroups();

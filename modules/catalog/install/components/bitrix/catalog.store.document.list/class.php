@@ -784,7 +784,7 @@ class CatalogStoreDocumentListComponent extends CBitrixComponent implements Cont
 				<div class="catalog-store-document-stub-transfer-content">
 					<div class="catalog-store-document-stub-transfer-info">
 						<div class="catalog-store-document-stub-transfer-info-text">
-							' . Loc::getMessage('DOCUMENT_LIST_STUB_MIGRATION_TITLE') . '
+							' . Loc::getMessage('DOCUMENT_LIST_STUB_MIGRATION_TITLE_MSGVER_1') . '
 						</div>
 						' . $this->getStubLogoList() . '
 					</div>

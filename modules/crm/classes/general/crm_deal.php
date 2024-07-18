@@ -2700,19 +2700,18 @@ class CAllCrmDeal
 			if($companyID > 0)
 			{
 				$resultData = self::queryMinDealIdWithCache(
-					"SELECT ID, IS_RETURN_CUSTOMER FROM b_crm_deal WHERE COMPANY_ID = {$companyID} AND STAGE_SEMANTIC_ID = 'S' ORDER BY ID ASC LIMIT 1",
+					"SELECT ID FROM b_crm_deal WHERE COMPANY_ID = {$companyID} AND STAGE_SEMANTIC_ID = 'S' ORDER BY ID ASC LIMIT 1",
 					$connection,
 				);
 			}
 			else//if($contactID > 0)
 			{
 				$resultData = self::queryMinDealIdWithCache(
-					"SELECT ID, IS_RETURN_CUSTOMER FROM b_crm_deal WHERE CONTACT_ID = {$contactID} AND COMPANY_ID <= 0 AND STAGE_SEMANTIC_ID = 'S' ORDER BY ID ASC LIMIT 1",
+					"SELECT ID FROM b_crm_deal WHERE CONTACT_ID = {$contactID} AND COMPANY_ID <= 0 AND STAGE_SEMANTIC_ID = 'S' ORDER BY ID ASC LIMIT 1",
 					$connection,
 				);
 			}
 
-			$currentIsReturnCustomer = $resultData['IS_RETURN_CUSTOMER'] ?? null;
 			$primaryID = is_array($resultData) && isset($resultData['ID']) ? (int)$resultData['ID'] : 0;
 			if($primaryID > 0)
 			{
@@ -2729,6 +2728,7 @@ class CAllCrmDeal
 					);
 				}
 
+				$currentIsReturnCustomer = $connection->query("SELECT IS_RETURN_CUSTOMER from b_crm_deal WHERE ID = {$primaryID}")->fetch()['IS_RETURN_CUSTOMER'] ?? null;
 				if ($currentIsReturnCustomer !== 'N')
 				{
 					$connection->queryExecute("UPDATE b_crm_deal SET IS_RETURN_CUSTOMER = 'N' WHERE ID = {$primaryID}");

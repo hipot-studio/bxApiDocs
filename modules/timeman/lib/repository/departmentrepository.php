@@ -142,9 +142,23 @@ class DepartmentRepository
 
 	public function getUsersOfDepartment($depId)
 	{
-		$structure = \CIntranetUtils::getStructure();
+		if (!is_string($depId) && !is_int($depId))
+		{
+			return [];
+		}
 
-		$employeesData = (array) ($structure['DATA'][$depId]['EMPLOYEES'] ?? null);
+		$structure = \CIntranetUtils::getStructure();
+		if (
+			!is_array($structure)
+			|| !isset($structure['DATA'])
+			|| !is_array($structure['DATA'])
+			|| !isset($structure['DATA'][$depId]['EMPLOYEES'])
+		)
+		{
+			return [];
+		}
+
+		$employeesData = (array) $structure['DATA'][$depId]['EMPLOYEES'];
 		$filteredEmployeesData = array_filter($employeesData, 'is_numeric');
 
 		$employees = array_map('intval', $filteredEmployeesData);

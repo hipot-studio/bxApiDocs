@@ -278,10 +278,6 @@ class BasketComponentHelper
 	 */
 	public static function onSaleBasketItemEntitySaved(Main\Event $event): Main\EventResult
 	{
-		if (Main\ModuleManager::isModuleInstalled('bitrix24'))
-		{
-			return new Main\EventResult( Main\EventResult::SUCCESS, null, 'sale');
-		}
 		$fuserId = Fuser::getId(true);
 		$basketItem = $event->getParameter('ENTITY');
 
@@ -356,10 +352,6 @@ class BasketComponentHelper
 	 */
 	public static function onSaleBasketItemDeleted(Main\Event $event): Main\EventResult
 	{
-		if (Main\ModuleManager::isModuleInstalled('bitrix24'))
-		{
-			return new Main\EventResult( Main\EventResult::SUCCESS, null, 'sale');
-		}
 		$fuserId = Fuser::getId(true);
 		$originalValues = $event->getParameter('VALUES');
 		if ($originalValues['FUSER_ID'] != $fuserId)

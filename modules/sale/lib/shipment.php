@@ -2853,6 +2853,7 @@ class Shipment extends Internals\CollectableEntity implements IBusinessValueProv
 		$result = parent::toArray();
 
 		$result['ITEMS'] = $this->getShipmentItemCollection()->toArray();
+		$result['PROPERTIES'] = $this->getPropertyCollection()->toArray();
 
 		return $result;
 	}

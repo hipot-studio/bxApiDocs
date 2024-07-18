@@ -933,3 +933,22 @@ define('VUEJS_DEBUG', true);
  */
 define("BX_COMP_MANAGED_CACHE", true);
 
+
+// some addons cache config
+define('CACHED_b_iblock_type', 3600 * 24);
+define("CACHED_b_iblock", 3600 * 24);
+define("CACHED_b_iblock_bucket_size", 40);
+define('CACHED_b_iblock_property_enum', 3600 * 24);
+define('CACHED_b_iblock_property_enum_bucket_size', 100);
+define('CACHED_b_user_access_check', 3600);
+
+define("CATALOG_CACHE_TIME", 3600 * 24);
+define("CACHED_b_user_field", 3600 * 24 * 3);
+define("CACHED_b_user_field_enum", 3600 * 24 * 3);
+define("CATALOG_CACHE_DEFAULT_TIME", 3600 * 24);
+define("CACHED_b_group", 3600 * 3);
+define("CACHED_b_group_subordinate", 3600 * 3);
+define("CACHE_MODULE_PERMISSIONS", "SESSION");
+define("CACHED_b_sale_order", 3600);
+define('CURRENCY_SKIP_CACHE', false);
+define('CURRENCY_CACHE_TIME', 3600);

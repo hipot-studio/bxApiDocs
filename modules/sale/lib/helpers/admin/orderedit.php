@@ -903,7 +903,7 @@ class OrderEdit
 			{
 				$providerData = array();
 
-				if($productData["IS_SET_ITEM"] == "Y")
+				if (($productData['IS_SET_ITEM'] ?? null) === 'Y')
 				{
 					continue;
 				}
@@ -975,8 +975,7 @@ class OrderEdit
 					if ($basketCode != $productData["BASKET_CODE"])
 						$productData["BASKET_CODE"] = $item->getBasketCode();
 
-					if(isset($productData["OFFER_ID"]) || intval($productData["OFFER_ID"]) >= 0)
-						$productData["PRODUCT_ID"] = $productData["OFFER_ID"];
+					$productData["PRODUCT_ID"] = $productData["OFFER_ID"] ?? null;
 
 					$itemFields = array_intersect_key($productData, array_flip($item::getAvailableFields()));
 
@@ -1434,7 +1433,7 @@ class OrderEdit
 			}
 
 			OrderEdit::setProductDetails(
-				$productData["OFFER_ID"],
+				$productData["OFFER_ID"] ?? null,
 				$order->getUserId(),
 				$order->getSiteId(),
 				array_merge($product, $productData)

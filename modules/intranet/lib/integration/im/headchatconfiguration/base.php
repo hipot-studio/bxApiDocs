@@ -39,7 +39,7 @@ abstract class Base
 	private function initializationHeadId(): void
 	{
 		$currentUser = CurrentUser::get();
-		$heads = \CIntranetUtils::GetDepartmentManager($currentUser->getDepartmentIds(), $currentUser->getId());
+		$heads = \CIntranetUtils::GetDepartmentManager($currentUser->getDepartmentIds(), $currentUser->getId(), true);
 
 		foreach ($heads as $head)
 		{

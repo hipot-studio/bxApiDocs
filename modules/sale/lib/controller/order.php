@@ -24,7 +24,8 @@ class Order extends Controller
 		return new ExactParameter(
 			Sale\Order::class,
 			'order',
-			function($className, $id) {
+			function($className, $id)
+			{
 				$id = (int)$id;
 				if ($id > 0)
 				{
@@ -42,6 +43,7 @@ class Order extends Controller
 				}
 
 				$this->addError(new Error('order is not exists', 200540400001));
+
 				return null;
 			}
 		);
@@ -245,7 +247,13 @@ class Order extends Controller
 		}
 	}
 
-	public function listAction(PageNavigation $pageNavigation, array $select = [], array $filter = [], array $order = []): Page
+	public function listAction(
+		PageNavigation $pageNavigation,
+		array $select = [],
+		array $filter = [],
+		array $order = [],
+		bool $__calculateTotalCount = true
+	): Page
 	{
 		$select = empty($select) ? ['*'] : $select;
 		$order = empty($order) ? ['ID' => 'ASC'] : $order;
@@ -267,28 +275,21 @@ class Order extends Controller
 		/** @var Sale\Order $orderClass */
 		$orderClass = $registry->getOrderClassName();
 
-		$orders = $orderClass::getList(
+		$iterator = $orderClass::getList(
 			[
-				'select'=>$select,
-				'filter'=>$filter,
-				'order'=>$order,
-				'offset'=>$pageNavigation->getOffset(),
-				'limit'=>$pageNavigation->getLimit(),
-				'runtime'=>$runtime
+				'select' => $select,
+				'filter' => $filter,
+				'order' => $order,
+				'offset' => $pageNavigation->getOffset(),
+				'limit' => $pageNavigation->getLimit(),
+				'runtime' => $runtime,
+				'count_total' => $__calculateTotalCount,
 			]
-		)->fetchAll();
+		);
+		$orders = $iterator->fetchAll();
+		$totalCount = $__calculateTotalCount ? $iterator->getCount() : 0;
 
-		return new Page('ORDERS', $orders, function() use ($select, $filter, $runtime)
-		{
-			$registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
-
-			/** @var Sale\Order $orderClass */
-			$orderClass = $registry->getOrderClassName();
-
-			return count(
-				$orderClass::getList(['select'=>$select, 'filter'=>$filter, 'runtime'=>$runtime])->fetchAll()
-			);
-		});
+		return new Page('ORDERS', $orders, $totalCount);
 	}
 
 	public function deleteAction(\Bitrix\Sale\Order $order)
@@ -474,11 +475,12 @@ class Order extends Controller
 		$r = new Result();
 
 		$builder = $this->getBuilder();
-		try{
+		try
+		{
 			$builder->build($fields);
 			$errorsContainer = $builder->getErrorsContainer();
 		}
-		catch(BuildingException $e)
+		catch(BuildingException)
 		{
 			if($builder->getErrorsContainer()->getErrorCollection()->count()<=0)
 			{
@@ -501,8 +503,10 @@ class Order extends Controller
 
 		$fields = ['ORDER'=>$fields];
 
-		if($fields['ORDER']['ID'])
+		if (isset($fields['ORDER']['ID']))
+		{
 			unset($fields['ORDER']['ID']);
+		}
 
 		$orderBuilder = $this->getBuilder();
 		$order = $orderBuilder->buildEntityOrder($fields);

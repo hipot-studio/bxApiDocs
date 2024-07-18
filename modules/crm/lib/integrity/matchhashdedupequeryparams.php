@@ -42,21 +42,16 @@ class MatchHashDedupeQueryParams
 
 	public function getHash()
 	{
-		$hashData = '';
-		$i = 0;
+		$hashDataVersion = '1';
+		$hashData = $hashDataVersion;
 		foreach ($this->paramNameList as $paramName)
 		{
-			if ($i > 0)
-			{
-				$hashData .= '|';
-			}
 			$value = $this->$paramName;
 			if (is_bool($value))
 			{
 				$value = $value ? 'Y' : 'N';
 			}
-			$hashData .= $value;
-			$i++;
+			$hashData .= '|' . $value;
 		}
 
 		return substr(hash('SHA256', $hashData), 0, 16);

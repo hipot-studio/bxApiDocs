@@ -487,7 +487,7 @@ class CAdminSubList extends CAdminList
 
 		if ($this->bPublicMode && $boolCloseMessage)
 		{
-			echo '<script type="text/javascript">top.BX.WindowManager.Get().hideNotify();</script>';
+			echo '<script>top.BX.WindowManager.Get().hideNotify();</script>';
 		}
 
 		echo $this->sPrologContent;
@@ -748,7 +748,7 @@ echo '<table class="adm-list-table" id="'.$this->table_id.'">
 		}
 		$aUserOpt['context_ctrl'] = (string)($aUserOpt['context_ctrl'] ?? 'N');
 		echo '
-<script type="text/javascript">
+<script>
 var '.$this->table_id.'= new BX.adminSubList("'.$tbl.'", {context_ctrl: '.($aUserOpt["context_ctrl"] === "Y"? "true":"false").'}, "'.$this->GetListUrl(true).'");
 function ReloadSubList()
 {
@@ -785,7 +785,7 @@ function ReloadOffers()
 			{
 				echo '<html><head></head><body>
 <div id="'.$this->table_id.'_result_frame_div">'.$string.'</div>
-<script type="text/javascript">
+<script>
 ';
 				if($this->bEditMode || count($this->arUpdateErrorIDs)>0)
 					echo $this->table_id.'._DeActivateMainForm();';
@@ -799,7 +799,7 @@ function ReloadOffers()
 			else
 			{
 				if($this->onLoadScript)
-					echo '<script type="text/javascript">'.$this->onLoadScript.'</script>';
+					echo '<script>'.$this->onLoadScript.'</script>';
 				echo $string;
 			}
 			define("ADMIN_AJAX_MODE", true);
@@ -1334,7 +1334,7 @@ class CAdminSubListRow extends CAdminListRow
 			{
 				if ($strFieldType == '')
 					$strFieldType = 'HIDDEN';
-				$this->arFieldNames[$strFieldName] = ToUpper($strFieldType);
+				$this->arFieldNames[$strFieldName] = mb_strtoupper($strFieldType);
 			}
 		}
 	}
@@ -1776,7 +1776,7 @@ class CAdminSubForm extends CAdminForm
 
 <input type="hidden" id="'.$this->name.'_active_tab" name="'.$this->name.'_active_tab" value="'.htmlspecialcharsbx($this->selectedTab).'">
 
-<script type="text/javascript">';
+<script>';
 		$s = "";
 		foreach($this->tabs as $tab)
 		{
@@ -1825,7 +1825,7 @@ echo '
 		if ($this->bPublicModeBuffer)
 		{
 			echo '</div>';
-			echo '<script type="text/javascript">BX.ready(function() {'.$this->publicObject.'.SwapContent(\''.$this->publicModeBuffer_id.'\');});</script>';
+			echo '<script>BX.ready(function() {'.$this->publicObject.'.SwapContent(\''.$this->publicModeBuffer_id.'\');});</script>';
 		}
 	}
 
@@ -1833,7 +1833,7 @@ echo '
 	{
 		$reload = ($reload !== false);
 		$closeWait = ($closeWait !== false);
-		$result = '<script type="text/javascript">';
+		$result = '<script>';
 		$result .= '
 			var currentWindow = top.window;
 			if (top.BX.SidePanel && top.BX.SidePanel.Instance && top.BX.SidePanel.Instance.getTopSlider())
@@ -2018,7 +2018,7 @@ class CAdminSubMessage extends CAdminMessage
 	{
 		if (defined('BX_PUBLIC_MODE') && BX_PUBLIC_MODE == 1)
 		{
-			return '<script type="text/javascript">top.BX.WindowManager.Get().ShowError(\''.CUtil::JSEscape(str_replace(array('<br>', '<br />', '<BR>', '<BR />'), "\r\n", htmlspecialcharsback($this->message['DETAILS']? $this->message['DETAILS'] : $this->message['MESSAGE']))).'\');</script>';
+			return '<script>top.BX.WindowManager.Get().ShowError(\''.CUtil::JSEscape(str_replace(array('<br>', '<br />', '<BR>', '<BR />'), "\r\n", htmlspecialcharsback($this->message['DETAILS']? $this->message['DETAILS'] : $this->message['MESSAGE']))).'\');</script>';
 		}
 		else
 		{

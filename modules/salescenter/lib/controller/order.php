@@ -5,12 +5,14 @@ namespace Bitrix\SalesCenter\Controller;
 use Bitrix\Location\Entity\Address;
 use Bitrix\Main;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale;
 use Bitrix\Crm;
 use Bitrix\Sale\BasketItemBase;
+use Bitrix\Sale\Label\EntityLabelService;
 use Bitrix\SalesCenter\Component\ReceivePaymentModeDictionary;
 use Bitrix\SalesCenter\Integration\Bitrix24Manager;
 use Bitrix\SalesCenter\Integration\CrmManager;
@@ -836,6 +838,8 @@ class Order extends Base
 		$payment = $paymentResult->getData()['payment'];
 		$order = $payment->getOrder();
 
+		SaleManager::onSalescenterPaymentCreated($payment);
+
 		if (isset($options['stageOnOrderPaid']))
 		{
 			CrmManager::getInstance()->saveTriggerOnOrderPaid(
@@ -1052,6 +1056,10 @@ class Order extends Base
 				{
 					ImConnectorManager::getInstance()->sendTelegramPaymentNotification($payment, $options['sendingMethodDesc']);
 				}
+
+				$this->markPaymentWithLabels($payment, $options);
+
+				SaleManager::onSalescenterPaymentCreated($payment);
 			}
 
 			$data['entity'] = $this->getEntityData($entityTypeId, $entityId);
@@ -1221,6 +1229,34 @@ class Order extends Base
 		}
 
 		return [];
+	}
+
+	private function markPaymentWithLabels(Crm\Order\Payment $payment, array $options): void
+	{
+		$paymentLabels = $options['paymentLabels'] ?? [];
+
+		$sectionLabel = '';
+		if ($options['context'] === SalesCenter\Component\ContextDictionary::SMS)
+		{
+			$sectionLabel = Salescenter\Analytics\Dictionary\SectionDictionary::CRM_SMS->value;
+		}
+		elseif ($options['context'] === SalesCenter\Component\ContextDictionary::CHAT)
+		{
+			$sectionLabel = Salescenter\Analytics\Dictionary\SectionDictionary::CHATS->value;
+		}
+		else
+		{
+			$sectionLabel = Salescenter\Analytics\Dictionary\SectionDictionary::CRM->value;
+		}
+		$paymentLabels[] = new Sale\Label\Label('section', $sectionLabel);
+
+		/** @var EntityLabelService $entityLabelService */
+		$entityLabelService = ServiceLocator::getInstance()->get('sale.entityLabel');
+		/** @var Sale\Label\Label $label */
+		foreach ($paymentLabels as $label)
+		{
+			$entityLabelService->mark($payment, $label);
+		}
 	}
 
 	/**

@@ -1059,7 +1059,7 @@ class CBPHelper
 	{
 		ob_start();
 
-		echo CAdminCalendar::ShowScript();
+		CAdminCalendar::ShowScript();
 		?>
 		<script>
 		<?= $objectName ?>.GetGUIFieldEdit = function(field, value, showAddButton, inputName)
@@ -1954,6 +1954,13 @@ class CBPHelper
 	 */
 	public static function extractUsersFromExtendedGroup($code)
 	{
+		static $cache = [];
+
+		if (isset($cache[$code]))
+		{
+			return $cache[$code];
+		}
+
 		if (mb_strpos($code, 'group_') !== 0)
 		{
 			return false;
@@ -1982,6 +1989,7 @@ class CBPHelper
 			{
 				$result[] = $user['ID'];
 			}
+			$cache[$code] = $result;
 
 			return $result;
 		}
@@ -2002,6 +2010,8 @@ class CBPHelper
 			{
 				$result[] = $user['ID'];
 			}
+			$cache[$code] = $result;
+
 			return $result;
 		}
 
@@ -2014,7 +2024,7 @@ class CBPHelper
 
 			if ($recursive)
 			{
-				//TODO: replace with \CIntranetUtils::getSubStructure($id)
+				//TODO: replace with \Bitrix\HumanResources\Contract\Repository\NodeRepository::getChildOf when humanresources will be done
 				$iterator = CIBlockSection::GetList(
 					array('ID' => 'ASC'),
 					array('=IBLOCK_ID' => $iblockId, 'ID'=> $id),
@@ -2044,6 +2054,8 @@ class CBPHelper
 			{
 				$result[] = $user['ID'];
 			}
+			$cache[$code] = $result;
+
 			return $result;
 		}
 		if ($code == 'Dextranet' && CModule::IncludeModule('extranet'))
@@ -2060,6 +2072,8 @@ class CBPHelper
 			{
 				$result[] = $user['ID'];
 			}
+			$cache[$code] = $result;
+
 			return $result;
 		}
 		if (preg_match('/^SG([0-9]+)_?([AEK])?$/', $code, $match) && CModule::IncludeModule('socialnetwork'))
@@ -2083,6 +2097,8 @@ class CBPHelper
 			{
 				$result[] = $user['USER_ID'];
 			}
+			$cache[$code] = $result;
+
 			return $result;
 		}
 

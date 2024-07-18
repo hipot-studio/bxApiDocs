@@ -1020,19 +1020,21 @@ class CAllIBlockElement
 		$helper = $connection->getSqlHelper();
 
 		$catalogIncluded = Loader::includeModule('catalog');
-		$catalogFields = array();
+		$catalogFields = [];
 
-		$arSqlSearch = Array();
-		$permSQL = "";
+		$arSqlSearch = [];
+		$permSQL = '';
 
-		$arSectionFilter = Array(
-			"LOGIC" => "",
-			"BE" => array(),
-			"BS" => array(),
-		);
+		$arSectionFilter = [
+			'LOGIC' => '',
+			'BE' => [],
+			'BS' => [],
+		];
 
 		if (!is_array($arFilter))
-			$arFilter = array();
+		{
+			$arFilter = [];
+		}
 
 		foreach ($arFilter as $key => $val)
 		{
@@ -1049,7 +1051,7 @@ class CAllIBlockElement
 		{
 			$origKey = $key;
 			$key = mb_strtoupper($key);
-			$p = mb_strpos($key, "PROPERTY_");
+			$p = mb_strpos($key, 'PROPERTY_');
 			if ($p !== false && $p < 4)
 			{
 				$newIndex = mb_substr($key, 0, $p) . 'PROPERTY';
@@ -1061,7 +1063,7 @@ class CAllIBlockElement
 			else
 			{
 				$p = strpos($key, 'SUBQUERY');
-				if ($p !== false && $p <4)
+				if ($p !== false && $p < 4)
 				{
 					if (!empty($val) && is_array($val))
 					{
@@ -1075,36 +1077,37 @@ class CAllIBlockElement
 			}
 		}
 
-		if (isset($arFilter["LOGIC"]) && $arFilter["LOGIC"] == "OR")
+		if (isset($arFilter['LOGIC']) && $arFilter['LOGIC'] === 'OR')
 		{
-			$Logic = "OR";
-			unset($arFilter["LOGIC"]);
+			$Logic = 'OR';
+			unset($arFilter['LOGIC']);
 			$bPropertyLeftJoin = true;
 		}
 		else
 		{
-			$Logic = "AND";
+			$Logic = 'AND';
 		}
 
-		if ($Logic === "AND" && $level === 0 && isset($arFilter["IBLOCK_ID"]))
+		if ($Logic === "AND" && $level === 0 && isset($arFilter['IBLOCK_ID']))
 		{
-			$f = new \Bitrix\Iblock\PropertyIndex\QueryBuilder($arFilter["IBLOCK_ID"]);
+			$f = new \Bitrix\Iblock\PropertyIndex\QueryBuilder($arFilter['IBLOCK_ID']);
 			if ($f->isValid())
 			{
-				$arJoinProps["FC"] = $f->getFilterSql($arFilter, $arSqlSearch);
-				$arJoinProps["FC_DISTINCT"] = $f->getDistinct();
+				$arJoinProps['FC'] = $f->getFilterSql($arFilter, $arSqlSearch);
+				$arJoinProps['FC_DISTINCT'] = $f->getDistinct();
 			}
+			unset($f);
 		}
 
-		foreach($arFilter as $orig_key => $val)
+		foreach ($arFilter as $orig_key => $val)
 		{
 			$res = CIBlock::MkOperationFilter($orig_key);
-			$key = $res["FIELD"];
-			$cOperationType = $res["OPERATION"];
+			$key = $res['FIELD'];
+			$cOperationType = $res['OPERATION'];
 
 			//it was done before $key = strtoupper($key);
 
-			switch($key."")
+			switch ($key)
 			{
 			case "ACTIVE":
 			case "DETAIL_TEXT_TYPE":
@@ -1412,11 +1415,18 @@ class CAllIBlockElement
 				$arSqlSearch[] = CIBlock::FilterCreateEx("BE.WF_STATUS_ID", $val, "number", $bFullJoinTmp, $cOperationType);
 				break;
 			case "WF_LOCK_STATUS":
-				if($val <> '')
+				$val = (string)$val;
+				if ($val !== '')
 				{
-					$USER_ID = is_object($USER)? intval($USER->GetID()): 0;
-					$lockInterval = COption::GetOptionInt("workflow", "MAX_LOCK_TIME", 60) * 60;
-					$arSqlSearch[] = "case when BE.WF_DATE_LOCK is null then 'green' when " . $helper->addSecondsToDateTime($lockInterval, 'BE.WF_DATE_LOCK') . " < " . $helper->getCurrentDateTimeFunction() . " then 'green' when BE.WF_LOCKED_BY = " . $USER_ID . " then 'yellow' else 'red' end) = '" . $DB->ForSql($val) . "'";
+					$lockInterval = (int)Main\Config\Option::get('workflow', 'MAX_LOCK_TIME', 60) * 60;
+					$arSqlSearch[] =
+						"(case when BE.WF_DATE_LOCK is null then 'green' when "
+						. $helper->addSecondsToDateTime($lockInterval, 'BE.WF_DATE_LOCK')
+						. " < " . $helper->getCurrentDateTimeFunction()
+						. " then 'green' when BE.WF_LOCKED_BY = " . $this->userId
+						. " then 'yellow' else 'red' end) = '" . $DB->ForSql($val) . "'"
+					;
+					unset($lockInterval);
 				}
 				break;
 			case "WF_LAST_STATUS_ID":
@@ -2095,9 +2105,6 @@ class CAllIBlockElement
 
 	public function MkPropertyOrder($by, $order, $bSort, $db_prop, &$arJoinProps, &$arSqlOrder)
 	{
-		if($bSort && $db_prop["PROPERTY_TYPE"] != "L")
-			return;
-
 		global $DB;
 		static $arJoinEFields = false;
 
@@ -2156,6 +2163,12 @@ class CAllIBlockElement
 				"XML_ID" => "BE#i#.XML_ID",
 				"STATUS" => "BE#i#.WF_STATUS_ID",
 			);
+
+			$jProp_ID = mb_substr($by[2], 9);
+			$db_jprop = CIBlockProperty::GetPropertyArray($jProp_ID, CIBlock::_MergeIBArrays($db_prop["LINK_IBLOCK_ID"]));
+			if ($bSort && $db_jprop["PROPERTY_TYPE"] != "L")
+				return;
+
 			//Joined Elements Field
 			if(array_key_exists($by[2], $arJoinEFields))
 			{
@@ -2169,8 +2182,6 @@ class CAllIBlockElement
 			}
 			elseif(mb_substr($by[2], 0, 9) == "PROPERTY_")
 			{
-				$jProp_ID = mb_substr($by[2], 9);
-				$db_jprop = CIBlockProperty::GetPropertyArray($jProp_ID, CIBlock::_MergeIBArrays($db_prop["LINK_IBLOCK_ID"]));
 				if(is_array($db_jprop))
 				{
 					//join elements
@@ -2218,6 +2229,9 @@ class CAllIBlockElement
 		}
 		else
 		{
+			if ($bSort && $db_prop["PROPERTY_TYPE"] != "L")
+				return;
+
 			if($db_prop["PROPERTY_TYPE"]=="L" && $bSort)
 				$arSqlOrder[$by] = CIBlock::_Order("FPEN".$iFpenCnt.".SORT", $order, "desc");
 			elseif($db_prop["PROPERTY_TYPE"]=="L")
@@ -2925,6 +2939,14 @@ class CAllIBlockElement
 				}
 				else
 				{
+					if ($db_prop['PROPERTY_TYPE'] === Iblock\PropertyTable::TYPE_NUMBER)
+					{
+						$arSelect['FPV' . $iPropCnt . '.VALUE_NUM'] = CIBlockElement::MkAlias(
+							$mal,
+							'PROPERTY_' . $PR_ID . '_VALUE_NUM',
+							$this->arIBlockLongProps
+						);
+					}
 					$arSelect["FPV".$iPropCnt.".VALUE"] = CIBlockElement::MkAlias($mal, "PROPERTY_".$PR_ID."_VALUE", $this->arIBlockLongProps);
 				}
 
@@ -3067,41 +3089,47 @@ class CAllIBlockElement
 
 		global $DB;
 
-		if((!is_array($arSelectFields) && $arSelectFields=="") || count($arSelectFields)<=0 || $arSelectFields===false)
-			$arSelectFields = Array("*");
+		if (empty($arSelectFields))
+		{
+			$arSelectFields = ['*'];
+		}
 
-		if(is_bool($arGroupBy) && $arGroupBy!==false)
-			$arGroupBy = Array();
+		if ($arGroupBy === true)
+		{
+			$arGroupBy = [];
+		}
 
-		if(is_array($arGroupBy) && count($arGroupBy)==0)
+		if (empty($arGroupBy) && is_array($arGroupBy))
+		{
 			$this->bOnlyCount = true;
+		}
 
 		$iPropCnt = 0;
-		$arJoinProps = Array(
-			"FP" => array(
+		$arJoinProps = [
+			'FP' => [
 				//CNT
 				//bFullJoin
-			),
-			"FPV" => array(
+			],
+			'FPV' => [
 				//CNT
 				//IBLOCK_ID
 				//MULTIPLE
 				//VERSION
 				//JOIN
 				//bFullJoin
-			),
-			"FPS" => array(
+			],
+			'FPS' => [
 				//
-			),
-			"FPEN" => array(
+			],
+			'FPEN' => [
 				//CNT
 				//MULTIPLE
 				//VERSION
 				//ORIG_ID
 				//JOIN
 				//bFullJoin
-			),
-			"BE" => array(
+			],
+			'BE' => [
 				//CNT
 				//MULTIPLE
 				//VERSION
@@ -3109,13 +3137,13 @@ class CAllIBlockElement
 				//JOIN
 				//bJoinIBlock
 				//bJoinSection
-			),
-			"BE_FP" => array(
+			],
+			'BE_FP' => [
 				//CNT
 				//JOIN
 				//bFullJoin
-			),
-			"BE_FPV" => array(
+			],
+			'BE_FPV' => [
 				//CNT
 				//IBLOCK_ID
 				//MULTIPLE
@@ -3123,29 +3151,29 @@ class CAllIBlockElement
 				//JOIN
 				//BE_JOIN
 				//bFullJoin
-			),
-			"BE_FPS" => array(
+			],
+			'BE_FPS' => [
 				//CNT
 				//JOIN
-			),
-			"BE_FPEN" => array(
+			],
+			'BE_FPEN' => [
 				//CNT
 				//MULTIPLE
 				//VERSION
 				//ORIG_ID
 				//JOIN
 				//bFullJoin
-			),
-			"BES" => "",
-			"RV" => false,
-			"RVU" => false,
-			"RVV" => false,
-			"FC" => "",
-		);
+			],
+			'BES' => '',
+			'RV' => false,
+			'RVU' => false,
+			'RVV' => false,
+			'FC' => '',
+		];
 
-		$this->arIBlockMultProps = Array();
-		$this->arIBlockAllProps = Array();
-		$this->arIBlockNumProps = Array();
+		$this->arIBlockMultProps = [];
+		$this->arIBlockAllProps = [];
+		$this->arIBlockNumProps = [];
 		$bWasGroup = false;
 
 		//********************************ORDER BY PART***********************************************
@@ -3159,11 +3187,13 @@ class CAllIBlockElement
 			'DATE_ACTIVE_FROM' => 'ACTIVE_FROM',
 			'DATE_ACTIVE_TO' => 'ACTIVE_TO'
 		);
-		$arSqlOrder = Array();
-		$arAddOrderByFields = Array();
+		$arSqlOrder = [];
+		$arAddOrderByFields = [];
 		$iOrdNum = -1;
-		if(!is_array($arOrder))
-			$arOrder = Array();
+		if (!is_array($arOrder))
+		{
+			$arOrder = [];
+		}
 		foreach($arOrder as $by=>$order)
 		{
 			$by_orig = $by;
@@ -3352,12 +3382,14 @@ class CAllIBlockElement
 						$sGroupBy .= CIBlockElement::MkPropertyGroup($db_prop, $arJoinProps, true);
 				}
 			}
-			if($sGroupBy!="")
-				$sGroupBy = " GROUP BY ".mb_substr($sGroupBy, 1)." ";
+			if ($sGroupBy !== '')
+			{
+				$sGroupBy = " GROUP BY " . mb_substr($sGroupBy, 1 ). " ";
+			}
 		}
 
 		//*************************SELECT PART****************************
-		$arAddSelectFields = Array();
+		$arAddSelectFields = [];
 		if($this->bOnlyCount)
 		{
 			$sSelect = "COUNT(%%_DISTINCT_%% BE.ID) as CNT ";
@@ -3552,7 +3584,7 @@ class CAllIBlockElement
 					$sSelect.=",".$val." as ".$key;
 				}
 			}
-			elseif($sGroupBy=="")
+			elseif ($sGroupBy === '')
 			{
 				//Try to add missing fields for correct URL translation (only then no grouping)
 				if(isset($arDisplayedColumns["DETAIL_PAGE_URL"]))
@@ -3582,15 +3614,19 @@ class CAllIBlockElement
 				}
 			}
 
-			if($sGroupBy!="")
-				$sSelect = mb_substr($sSelect, 1).", COUNT(%%_DISTINCT_%% BE.ID) as CNT ";
-			elseif($sSelect !== '')
-				$sSelect = "%%_DISTINCT_%% ".mb_substr($sSelect, 1)." ";
+			if ($sGroupBy !== '')
+			{
+				$sSelect = mb_substr($sSelect, 1). ", COUNT(%%_DISTINCT_%% BE.ID) as CNT ";
+			}
+			elseif ($sSelect !== '')
+			{
+				$sSelect = "%%_DISTINCT_%% " . mb_substr($sSelect, 1) . " ";
+			}
 		}
 
 		//*********************WHERE PART*********************
-		$arAddWhereFields = Array();
-		if(is_array($arFilter) && isset($arFilter["CATALOG"]))
+		$arAddWhereFields = [];
+		if (is_array($arFilter) && isset($arFilter["CATALOG"]))
 		{
 			$arAddWhereFields = $arFilter["CATALOG"];
 			unset($arFilter["CATALOG"]);
@@ -3602,8 +3638,12 @@ class CAllIBlockElement
 
 		$sWhere = "";
 		foreach ($arSqlSearch as $condition)
+		{
 			if (trim($condition, "\n\t") !== '')
-				$sWhere .= "\n\t\t\tAND (".$condition.")";
+			{
+				$sWhere .= "\n\t\t\tAND (" . $condition . ")";
+			}
+		}
 	}
 
 	///////////////////////////////////////////////////////////////////
@@ -6804,10 +6844,11 @@ class CAllIBlockElement
 
 	public static function GetIBVersion($iblock_id)
 	{
-		if(CIBlock::GetArrayByID($iblock_id, "VERSION") == 2)
-			return 2;
-		else
-			return 1;
+		return
+			(int)CIBlock::GetArrayByID($iblock_id, 'VERSION') === Iblock\IblockTable::PROPERTY_STORAGE_SEPARATE
+				? Iblock\IblockTable::PROPERTY_STORAGE_SEPARATE
+				: Iblock\IblockTable::PROPERTY_STORAGE_COMMON
+		;
 	}
 
 	public static function DeletePropertySQL($property, $iblock_element_id)
@@ -7553,12 +7594,18 @@ class CAllIBlockElement
 	protected static function _check_rights_sql($min_permission, $permissionsBy = null)
 	{
 		global $DB, $USER;
-		$min_permission = (mb_strlen($min_permission) == 1) ? $min_permission : "R";
+
+		$min_permission = (string)$min_permission;
+		$min_permission = (mb_strlen($min_permission) === 1) ? $min_permission : CIBlockRights::PUBLIC_READ;
 
 		if ($permissionsBy !== null)
+		{
 			$permissionsBy = (int)$permissionsBy;
+		}
 		if ($permissionsBy < 0)
+		{
 			$permissionsBy = null;
+		}
 
 		if ($permissionsBy !== null)
 		{
@@ -7568,7 +7615,7 @@ class CAllIBlockElement
 		}
 		else
 		{
-			if (is_object($USER))
+			if (isset($USER) && $USER instanceof CUser)
 			{
 				$iUserID = (int)$USER->GetID();
 				$strGroups = $USER->GetGroups();
@@ -7588,48 +7635,59 @@ class CAllIBlockElement
 			WHERE IBG.GROUP_ID IN (".$strGroups.")
 			AND IBG.PERMISSION >= '".$DB->ForSQL($min_permission)."'
 		";
-		if(!defined("ADMIN_SECTION"))
-			$stdPermissions .= "
-				AND (IBG.PERMISSION='X' OR B.ACTIVE='Y')
-			";
-
-		if($min_permission >= "X")
-			$operation = 'element_rights_edit';
-		elseif($min_permission >= "W")
-			$operation = 'element_edit';
-		elseif($min_permission >= "R")
-			$operation = 'element_read';
-		else
-			$operation = '';
-
-		if($operation)
+		if (!defined('ADMIN_SECTION'))
 		{
-			$acc = new CAccess;
-			$acc->UpdateCodes($permissionsBy !== null ? array('USER_ID' => $permissionsBy) : false);
+			$stdPermissions .= "
+				AND (IBG.PERMISSION='" . CIBlockRights::FULL_ACCESS . "' OR B.ACTIVE='Y')
+			";
 		}
 
-		if($operation == "element_read")
+		if ($min_permission >= CIBlockRights::FULL_ACCESS)
+		{
+			$operation = CIBlockElementRights::OPERATION_RIGHTS_EDIT;
+		}
+		elseif ($min_permission >= CIBlockRights::EDIT_ACCESS)
+		{
+			$operation = CIBlockElementRights::OPERATION_EDIT;
+		}
+		elseif ($min_permission >= CIBlockRights::PUBLIC_READ)
+		{
+			$operation = CIBlockElementRights::OPERATION_READ;
+		}
+		else
+		{
+			$operation = '';
+		}
+
+		if ($operation)
+		{
+			$acc = new CAccess;
+			$acc->UpdateCodes($permissionsBy !== null ? ['USER_ID' => $permissionsBy] : false);
+			unset($acc);
+		}
+
+		if ($operation === CIBlockElementRights::OPERATION_READ)
 		{
 			$extPermissions = "
 				SELECT ER.ELEMENT_ID
 				FROM b_iblock_element_right ER
 				INNER JOIN b_iblock_right IBR ON IBR.ID = ER.RIGHT_ID
-				".($iUserID > 0? "LEFT": "INNER")." JOIN b_user_access UA ON UA.ACCESS_CODE = IBR.GROUP_CODE AND UA.USER_ID = ".$iUserID."
+				".($iUserID > 0 ? "LEFT": "INNER")." JOIN b_user_access UA ON UA.ACCESS_CODE = IBR.GROUP_CODE AND UA.USER_ID = ".$iUserID."
 				WHERE ER.ELEMENT_ID = BE.ID
 				AND IBR.OP_EREAD = 'Y'
-				".($bAuthorized || $iUserID > 0? "
+				".($bAuthorized || $iUserID > 0 ? "
 					AND (UA.USER_ID IS NOT NULL
-					".($bAuthorized? "OR IBR.GROUP_CODE = 'AU'": "")."
-					".($iUserID > 0? "OR (IBR.GROUP_CODE = 'CR' AND BE.CREATED_BY = ".$iUserID.")": "")."
+					".($bAuthorized ? "OR IBR.GROUP_CODE = 'AU'": "")."
+					".($iUserID > 0 ? "OR (IBR.GROUP_CODE = 'CR' AND BE.CREATED_BY = ".$iUserID.")": "")."
 				)": "")."
 			";
 
 			$strResult = "(
 				B.ID IN ($stdPermissions)
-				OR (B.RIGHTS_MODE = 'E' AND EXISTS ($extPermissions))
+				OR (B.RIGHTS_MODE = '" . Iblock\IblockTable::RIGHTS_EXTENDED . "' AND EXISTS ($extPermissions))
 			)";
 		}
-		elseif($operation)
+		elseif ($operation)
 		{
 			$extPermissions = "
 				SELECT ER.ELEMENT_ID
@@ -7637,19 +7695,19 @@ class CAllIBlockElement
 				INNER JOIN b_iblock_right IBR ON IBR.ID = ER.RIGHT_ID
 				INNER JOIN b_task_operation T ON T.TASK_ID = IBR.TASK_ID
 				INNER JOIN b_operation O ON O.ID = T.OPERATION_ID
-				".($iUserID > 0? "LEFT": "INNER")." JOIN b_user_access UA ON UA.ACCESS_CODE = IBR.GROUP_CODE AND UA.USER_ID = ".$iUserID."
+				".($iUserID > 0 ? "LEFT": "INNER")." JOIN b_user_access UA ON UA.ACCESS_CODE = IBR.GROUP_CODE AND UA.USER_ID = ".$iUserID."
 				WHERE ER.ELEMENT_ID = BE.ID
 				AND O.NAME = '".$operation."'
-				".($bAuthorized || $iUserID > 0? "
+				".($bAuthorized || $iUserID > 0 ? "
 					AND (UA.USER_ID IS NOT NULL
-					".($bAuthorized? "OR IBR.GROUP_CODE = 'AU'": "")."
-					".($iUserID > 0? "OR (IBR.GROUP_CODE = 'CR' AND BE.CREATED_BY = ".$iUserID.")": "")."
+					".($bAuthorized ? "OR IBR.GROUP_CODE = 'AU'": "")."
+					".($iUserID > 0 ? "OR (IBR.GROUP_CODE = 'CR' AND BE.CREATED_BY = ".$iUserID.")": "")."
 				)": "")."
 			";
 
 			$strResult = "(
 				B.ID IN ($stdPermissions)
-				OR (B.RIGHTS_MODE = 'E' AND EXISTS ($extPermissions))
+				OR (B.RIGHTS_MODE = '" . Iblock\IblockTable::RIGHTS_EXTENDED . "' AND EXISTS ($extPermissions))
 			)";
 		}
 		else
@@ -7686,6 +7744,21 @@ class CAllIBlockElement
 	 */
 	protected function getIdOrder($order): string
 	{
+		if (is_array($order))
+		{
+			Main\Type\Collection::normalizeArrayValuesByInt($order, false);
+			if (!empty($order))
+			{
+				$connection = Main\Application::getConnection();
+				$helper = $connection->getSqlHelper();
+
+				return $helper->getOrderByIntField('BE.ID', $order, false);
+			}
+			else
+			{
+				$order = '';
+			}
+		}
 		if (!is_string($order))
 		{
 			$order = '';

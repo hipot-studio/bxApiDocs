@@ -1961,9 +1961,39 @@ class CIBlockCMLImport
 				unset($arProperty['SERIALIZED']);
 			}
 
-			$rsProperty = $obProperty->GetList(array(), array("IBLOCK_ID"=>$IBLOCK_ID, "XML_ID"=>$arProperty["XML_ID"]));
-			if($arDBProperty = $rsProperty->Fetch())
+			$rsProperty = $obProperty->GetList(
+				array(),
+				array(
+					"IBLOCK_ID"=>$IBLOCK_ID,
+					"XML_ID"=>$arProperty["XML_ID"],
+				)
+			);
+			$arDBProperty = $rsProperty->Fetch();
+			unset($rsProperty);
+			if ($arDBProperty)
 			{
+				$arDBProperty['FEATURES'] = [];
+				$featuresIterator = Iblock\PropertyFeatureTable::getList([
+					'select' => [
+						'ID',
+						'MODULE_ID',
+						'FEATURE_ID',
+						'IS_ENABLED',
+					],
+					'filter' => [
+						'=PROPERTY_ID' => (int)$arDBProperty['ID'],
+					],
+					'order' => [
+						'ID' => 'ASC',
+					],
+				]);
+				while ($featureRow = $featuresIterator->fetch())
+				{
+					unset($featureRow['ID']);
+					$arDBProperty['FEATURES'][] = $featureRow;
+				}
+				unset($featureRow, $featuresIterator);
+
 				$bChanged = false;
 				foreach($arProperty as $key=>$value)
 				{
@@ -2890,15 +2920,7 @@ class CIBlockCMLImport
 
 	function Unserialize($string)
 	{
-		if(defined("BX_UTF"))
-		{
-			//                                 1      2   3
-			$decoded_string = preg_replace_callback('/(s:\d+:")(.*?)(";)/s', array($this, "__unserialize_callback"), $string);
-		}
-		else
-		{
-			$decoded_string = $string;
-		}
+		$decoded_string = preg_replace_callback('/(s:\d+:")(.*?)(";)/s', array($this, "__unserialize_callback"), $string);
 		return unserialize($decoded_string, ['allowed_classes' => false]);
 	}
 
@@ -5247,7 +5269,7 @@ class CIBlockCMLImport
 			return $counter;
 
 		$arFilter = array(
-			">ID" => $this->next_step["LAST_ID"],
+			">ID" => $this->next_step["LAST_ID"] ?? 0,
 			"IBLOCK_ID" => $IBLOCK_ID,
 		);
 		if(!$bDelete)
@@ -6791,7 +6813,7 @@ class CIBlockCMLExport
 			$arFilter = array (
 				"IBLOCK_ID"=> $this->arIBlock["ID"],
 				"ACTIVE" => "Y",
-				">ID" => $this->next_step["LAST_ID"],
+				">ID" => $this->next_step["LAST_ID"] ?? 0,
 			);
 			if($arElementFilter === "all")
 				unset($arFilter["ACTIVE"]);

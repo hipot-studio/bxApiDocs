@@ -953,11 +953,15 @@ class CBitrixBasketComponent extends CBitrixComponent
 		return Catalog\Product\Basket::addProductToBasketWithPermissions($basket, $fields, $context, false);
 	}
 
-	protected function getUserId()
+	protected function getUserId(): ?int
 	{
 		global $USER;
 
-		return $USER instanceof CUser ? $USER->GetID() : null;
+		return
+			isset($USER) && $USER instanceof \CUser
+				? (int)$USER->GetID()
+				: null
+		;
 	}
 
 	protected function needToReloadGifts(array $result)
@@ -972,7 +976,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 			{
 				if (!empty($result['BASKET_DATA']['FULL_DISCOUNT_LIST']))
 				{
-					$giftManager = Sale\Discount\Gift\Manager::getInstance()->setUserId($this->getUserId());
+					$giftManager = Sale\Discount\Gift\Manager::getInstance()->setUserId($this->getUserId() ?? 0);
 
 					Sale\Compatible\DiscountCompatibility::stopUsageCompatible();
 					$collections = $giftManager->getCollectionsByBasket(
@@ -3701,7 +3705,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 			$result['DELETED_BASKET_ITEMS'][] = $item->getId();
 
 			// compatibility
-			$userId = $this->getUserId();
+			$userId = $this->getUserId() ?? 0;
 
 			if ($item->getField('SUBSCRIBE') === 'Y' && is_array($_SESSION['NOTIFY_PRODUCT'][$userId]))
 			{

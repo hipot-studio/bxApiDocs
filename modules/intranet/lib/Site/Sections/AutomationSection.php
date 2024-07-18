@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\Site\Sections;
 
+use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Crm;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Router;
@@ -38,6 +39,7 @@ class AutomationSection
 				static::getSmartProcesses(),
 				static::getRpa(),
 				static::getOnec(),
+				static::getBIBuilder(),
 				static::getScripts(),
 				static::getLists(),
 				static::getAI(),
@@ -576,6 +578,20 @@ class AutomationSection
 				'menu_item_id' => self::MENU_ITEMS_ID['ai'],
 			],
 		];
+	}
+
+	public static function getBIBuilder(): array
+	{
+		if (
+			Loader::includeModule('biconnector')
+			&& class_exists('\Bitrix\BIConnector\Superset\Scope\ScopeService')
+		)
+		{
+			/** @see \Bitrix\BIConnector\Superset\Scope\MenuItem\MenuItemCreatorBizproc::getMenuItemData */
+			return ScopeService::getInstance()->prepareScopeMenuItem(ScopeService::BIC_SCOPE_BIZPROC);
+		}
+
+		return [];
 	}
 
 	public static function getOnec(): array

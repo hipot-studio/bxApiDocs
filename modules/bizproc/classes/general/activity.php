@@ -1503,6 +1503,11 @@ abstract class CBPActivity
 
 	protected function writeDebugInfo(array $map)
 	{
+		if (!$this->workflow->isDebug())
+		{
+			return;
+		}
+
 		/** @var CBPDocumentService $documentService */
 		$documentService = $this->workflow->GetService("DocumentService");
 
