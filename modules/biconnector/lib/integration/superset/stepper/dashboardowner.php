@@ -6,9 +6,9 @@ use Bitrix\Main;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegratorResponse;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 
 class DashboardOwner extends Main\Update\Stepper
 {
@@ -61,7 +61,7 @@ class DashboardOwner extends Main\Update\Stepper
 
 		$timeStart = Main\Diag\Helper::getCurrentMicrotime();
 
-		$integrator = ProxyIntegrator::getInstance();
+		$integrator = Integrator::getInstance();
 
 		$customDashboardList = $this->getCustomDashboardList();
 		if ($customDashboardList)
@@ -84,7 +84,7 @@ class DashboardOwner extends Main\Update\Stepper
 				$setOwnerDashboardResult = $integrator->setDashboardOwner($externalDashboardId, $user);
 				if (
 					$setOwnerDashboardResult->hasErrors()
-					&& $setOwnerDashboardResult->getStatus() !== ProxyIntegratorResponse::HTTP_STATUS_NOT_FOUND
+					&& $setOwnerDashboardResult->getStatus() !== IntegratorResponse::STATUS_NOT_FOUND
 				)
 				{
 					return self::CONTINUE_EXECUTION;
@@ -110,7 +110,7 @@ class DashboardOwner extends Main\Update\Stepper
 					$setOwnerDashboardResult = $integrator->setDashboardOwner($supersetDashboardId, $user);
 					if (
 						$setOwnerDashboardResult->hasErrors()
-						&& $setOwnerDashboardResult->getStatus() !== ProxyIntegratorResponse::HTTP_STATUS_NOT_FOUND
+						&& $setOwnerDashboardResult->getStatus() !== IntegratorResponse::STATUS_NOT_FOUND
 					)
 					{
 						return self::CONTINUE_EXECUTION;
@@ -137,7 +137,7 @@ class DashboardOwner extends Main\Update\Stepper
 
 	private function createUser(int $userId): void
 	{
-		$superset = new SupersetController(ProxyIntegrator::getInstance());
+		$superset = new SupersetController(Integrator::getInstance());
 		$superset->createUser($userId);
 	}
 
@@ -198,7 +198,7 @@ class DashboardOwner extends Main\Update\Stepper
 		$localDashboardsIds = array_column($localDashboards, 'EXTERNAL_ID');
 		$localDashboardsIds = array_map('intval', $localDashboardsIds);
 
-		$integrator = ProxyIntegrator::getInstance();
+		$integrator = Integrator::getInstance();
 		$integratorResult = $integrator->getDashboardList($localDashboardsIds);
 
 		if ($integratorResult->hasErrors())

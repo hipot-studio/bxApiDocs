@@ -19,7 +19,7 @@ class StatusFieldAssembler extends FieldAssembler
 
 	protected function prepareColumn($value): string
 	{
-		if (SupersetInitializer::isSupersetFrozen())
+		if (SupersetInitializer::isSupersetLoad())
 		{
 			return self::getStatusLabelByStatusType(SupersetDashboardTable::DASHBOARD_STATUS_LOAD);
 		}

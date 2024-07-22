@@ -20,6 +20,7 @@ final class ActionDictionary
 	public const ACTION_BIC_DASHBOARD_EXPORT = 'bic_dashboard_export';
 	public const ACTION_BIC_DASHBOARD_COPY = 'bic_dashboard_copy';
 	public const ACTION_BIC_DASHBOARD_TAG_MODIFY = 'bic_tag_modify';
+	public const ACTION_BIC_EDIT_SCOPE = 'bic_edit_scope';
 
 	public static function getActionPermissionMap(): array
 	{
@@ -31,6 +32,7 @@ final class ActionDictionary
 			self::ACTION_BIC_DASHBOARD_VIEW => PermissionDictionary::BIC_DASHBOARD,
 			self::ACTION_BIC_DASHBOARD_EDIT => PermissionDictionary::BIC_DASHBOARD,
 			self::ACTION_BIC_DASHBOARD_TAG_MODIFY => PermissionDictionary::BIC_DASHBOARD_TAG_MODIFY,
+			self::ACTION_BIC_EDIT_SCOPE => PermissionDictionary::BIC_DASHBOARD_EDIT_SCOPE,
 			self::ACTION_BIC_DASHBOARD_DELETE => PermissionDictionary::BIC_DASHBOARD,
 			self::ACTION_BIC_DASHBOARD_EXPORT => PermissionDictionary::BIC_DASHBOARD,
 			self::ACTION_BIC_DASHBOARD_COPY => PermissionDictionary::BIC_DASHBOARD,

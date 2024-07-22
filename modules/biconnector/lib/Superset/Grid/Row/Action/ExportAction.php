@@ -47,15 +47,9 @@ final class ExportAction extends BaseAction
 		}
 
 		$dashboardId = (int)$rawFields['ID'];
-		$appId = \CUtil::JSEscape($rawFields['APP_ID']);
-		$type = \CUtil::JSEscape($rawFields['TYPE']);
 		$onClickHandler = <<<JS
-			BX.BIConnector.SupersetDashboardGridManager.Instance.exportDashboard({$dashboardId}, {
-				id: {$dashboardId},
-				appId: '{$appId}',
-				type: '{$type}'.toLowerCase(),
-				from: 'grid_menu',
-			})
+			/** @see BX.BIConnector.SupersetDashboardGridManager.exportDashboard */
+			BX.BIConnector.SupersetDashboardGridManager.Instance.exportDashboard({$dashboardId});
 		JS;
 
 		$this->onclick = $onClickHandler;

@@ -35,7 +35,7 @@ class DynamicItems
 		{
 			$result['crm_dynamic_items_' . $type->getEntityTypeId()] = [
 				'TABLE_NAME' => $type->getTableName(),
-				'TABLE_DESCRIPTION' => $type->getName(),
+				'TABLE_DESCRIPTION' => $type->getTitle(),
 				'TABLE_ALIAS' => 'D',
 				'FIELDS' => [
 					'ID' => [

@@ -142,6 +142,14 @@ final class SupersetDashboardTable extends DataManager
 				->configureMediatorTableName('b_biconnector_superset_dashboard_tag')
 				->configureLocalPrimary('ID', 'DASHBOARD_ID')
 				->configureRemotePrimary('ID', 'TAG_ID'),
+
+			(new Fields\Relations\OneToMany(
+				'SCOPE',
+				SupersetScopeTable::class,
+				'DASHBOARD',
+			))
+				->configureJoinType(Join::TYPE_LEFT)
+			,
 		];
 	}
 
@@ -152,7 +160,7 @@ final class SupersetDashboardTable extends DataManager
 		$service->deletePermissionsByDashboard($dashboardId);
 
 		$tagBindings = SupersetDashboardTagTable::getList([
-			'filter' => ['DASHBOARD_ID' => $dashboardId]
+			'filter' => ['=DASHBOARD_ID' => $dashboardId]
 		])
 			->fetchCollection()
 		;
@@ -210,6 +218,16 @@ final class SupersetDashboardTable extends DataManager
 					user_id: $row['USER_ID'],
 				);
 			}
+		}
+
+		$scopeBindings = SupersetScopeTable::getList([
+			'filter' => ['=DASHBOARD_ID' => $dashboardId],
+		])
+			->fetchCollection()
+		;
+		foreach ($scopeBindings as $scopeBinding)
+		{
+			$scopeBinding->delete();
 		}
 	}
 }

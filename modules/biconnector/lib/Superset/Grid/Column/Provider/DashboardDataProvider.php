@@ -56,6 +56,14 @@ class DashboardDataProvider extends DataProvider
 		;
 
 		$result[] =
+			$this->createColumn('SCOPE')
+				->setType(Type::TEXT)
+				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_SCOPE'))
+				->setAlign('left')
+				->setDefault(true)
+		;
+
+		$result[] =
 			$this->createColumn('EDIT_URL')
 				->setType(Type::TEXT)
 				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_ACTIONS'))

@@ -1299,6 +1299,17 @@ namespace Bitrix\BIConnector\Integration\Superset\Model {
 	 * @method void removeAllTags()
 	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard resetTags()
 	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard unsetTags()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection getScope()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection requireScope()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection fillScope()
+	 * @method bool hasScope()
+	 * @method bool isScopeFilled()
+	 * @method bool isScopeChanged()
+	 * @method void addToScope(\Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope $supersetScope)
+	 * @method void removeFromScope(\Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope $supersetScope)
+	 * @method void removeAllScope()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard resetScope()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard unsetScope()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1378,6 +1389,9 @@ namespace Bitrix\BIConnector\Integration\Superset\Model {
 	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetTag_Collection[] getTagsList()
 	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetTag_Collection getTagsCollection()
 	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetTag_Collection fillTags()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection[] getScopeList()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection getScopeCollection()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection fillScope()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1605,6 +1619,161 @@ namespace Bitrix\BIConnector\Integration\Superset\Model {
 	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboardTag_Collection wakeUpCollection($rows)
 	 */
 	class EO_SupersetDashboardTag_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable:biconnector\lib\integration\superset\model\supersetscopetable.php */
+namespace Bitrix\BIConnector\Integration\Superset\Model {
+	/**
+	 * EO_SupersetScope
+	 * @see \Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getDashboardId()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope setDashboardId(\int|\Bitrix\Main\DB\SqlExpression $dashboardId)
+	 * @method bool hasDashboardId()
+	 * @method bool isDashboardIdFilled()
+	 * @method bool isDashboardIdChanged()
+	 * @method \int remindActualDashboardId()
+	 * @method \int requireDashboardId()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope resetDashboardId()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope unsetDashboardId()
+	 * @method \int fillDashboardId()
+	 * @method \string getScopeCode()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope setScopeCode(\string|\Bitrix\Main\DB\SqlExpression $scopeCode)
+	 * @method bool hasScopeCode()
+	 * @method bool isScopeCodeFilled()
+	 * @method bool isScopeCodeChanged()
+	 * @method \string remindActualScopeCode()
+	 * @method \string requireScopeCode()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope resetScopeCode()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope unsetScopeCode()
+	 * @method \string fillScopeCode()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard getDashboard()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard remindActualDashboard()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard requireDashboard()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope setDashboard(\Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard $object)
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope resetDashboard()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope unsetDashboard()
+	 * @method bool hasDashboard()
+	 * @method bool isDashboardFilled()
+	 * @method bool isDashboardChanged()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard fillDashboard()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope set($fieldName, $value)
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope reset($fieldName)
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope wakeUp($data)
+	 */
+	class EO_SupersetScope {
+		/* @var \Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable */
+		static public $dataClass = '\Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\BIConnector\Integration\Superset\Model {
+	/**
+	 * EO_SupersetScope_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getDashboardIdList()
+	 * @method \int[] fillDashboardId()
+	 * @method \string[] getScopeCodeList()
+	 * @method \string[] fillScopeCode()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard[] getDashboardList()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection getDashboardCollection()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection fillDashboard()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope $object)
+	 * @method bool has(\Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope getByPrimary($primary)
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope[] getAll()
+	 * @method bool remove(\Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection merge(?\Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_SupersetScope_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable */
+		static public $dataClass = '\Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable';
+	}
+}
+namespace Bitrix\BIConnector\Integration\Superset\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_SupersetScope_Result exec()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope fetchObject()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_SupersetScope_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope fetchObject()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection fetchCollection()
+	 */
+	class EO_SupersetScope_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope createObject($setDefaultValues = true)
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection createCollection()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope wakeUpObject($row)
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetScope_Collection wakeUpCollection($rows)
+	 */
+	class EO_SupersetScope_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\BIConnector\Integration\Superset\Model\SupersetTagTable:biconnector\lib\integration\superset\model\supersettagtable.php */
 namespace Bitrix\BIConnector\Integration\Superset\Model {

@@ -79,6 +79,12 @@ class DashboardDataProvider extends EntityDataProvider
 				'partial' => true,
 				'type' => 'entity_selector',
 			]),
+			'SCOPE' => $this->createField('SCOPE.SCOPE_CODE', [
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TITLE_SCOPE'),
+				'default' => true,
+				'partial' => true,
+				'type' => 'entity_selector',
+			]),
 			'CREATED_BY_ID' => $this->createField('CREATED_BY_ID', [
 				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TITLE_CREATED_BY'),
 				'default' => false,
@@ -157,6 +163,31 @@ class DashboardDataProvider extends EntityDataProvider
 						],
 						'dropdownMode' => true,
 						'compactView' => true,
+					],
+				],
+			];
+		}
+
+		if ($fieldID === 'SCOPE.SCOPE_CODE')
+		{
+			return [
+				'params' => [
+					'multiple' => 'Y',
+					'dialogOptions' => [
+						'context' => 'biconnector-superset-scope',
+						'multiple' => 'Y',
+						'entities' => [
+							[
+								'id' => 'biconnector-superset-scope',
+								'options' => ['filter' => true],
+								'dynamicLoad' => true,
+								'dynamicSearch' => true,
+							],
+						],
+						'dropdownMode' => true,
+						'compactView' => true,
+						'showAvatars' => false,
+						'height' => 200,
 					],
 				],
 			];

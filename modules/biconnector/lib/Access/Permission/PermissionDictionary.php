@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Access\Permission;
 
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\Main\Access\Permission;
+use Bitrix\Main\Localization\Loc;
 
 final class PermissionDictionary extends Permission\PermissionDictionary
 {
@@ -14,6 +15,7 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 	public const BIC_SETTINGS_ACCESS = 3;
 	public const BIC_SETTINGS_EDIT_RIGHTS = 4;
 	public const BIC_DASHBOARD_TAG_MODIFY = 5;
+	public const BIC_DASHBOARD_EDIT_SCOPE = 6;
 
 	public const BIC_DASHBOARD = 100;
 	public const BIC_DASHBOARD_VIEW = 101;
@@ -25,6 +27,11 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 	public static function getPermission($permissionId): array
 	{
 		$permission = parent::getPermission($permissionId);
+		if ($permissionId === self::BIC_ACCESS)
+		{
+			$permission['title'] = Loc::getMessage('BIC_ACCESS_MSGVER_1');
+			$permission['hint'] = Loc::getMessage('BIC_ACCESS_HINT');
+		}
 		$dashboardPermissions = [
 			self::BIC_DASHBOARD_VIEW,
 			self::BIC_DASHBOARD_EDIT,

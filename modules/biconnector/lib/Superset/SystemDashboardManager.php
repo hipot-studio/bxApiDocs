@@ -146,7 +146,7 @@ final class SystemDashboardManager
 	 */
 	public static function onAfterUserUpdateHandler(array $fields): void
 	{
-		if (!SupersetInitializer::isSupersetActive())
+		if (!SupersetInitializer::isSupersetReady())
 		{
 			return;
 		}

@@ -13,12 +13,16 @@ class DateTime extends UrlFilter
 	public const CONFIG_DATE_START_OPTION_NAME = 'bi_superset_dashboard_default_date_start';
 	public const CONFIG_DATE_END_OPTION_NAME = 'bi_superset_dashboard_default_date_end';
 
-	public const PERIOD_WEEK = 'week';
-	public const PERIOD_MONTH = 'month';
-	public const PERIOD_QUARTER = 'quarter';
-	public const PERIOD_HALF_YEAR = 'halfyear';
-	public const PERIOD_YEAR = 'year';
 	public const PERIOD_RANGE = 'range';
+
+	public const PERIOD_LAST_7 = 'last_7';
+	public const PERIOD_LAST_30 = 'last_30';
+	public const PERIOD_LAST_90 = 'last_90';
+	public const PERIOD_LAST_180 = 'last_180';
+	public const PERIOD_LAST_365 = 'last_365';
+	public const PERIOD_CURRENT_MONTH = 'current_month';
+	public const PERIOD_CURRENT_WEEK = 'current_week';
+	public const PERIOD_CURRENT_YEAR = 'current_year';
 
 	public const PERIOD_DEFAULT = 'default';
 
@@ -27,7 +31,7 @@ class DateTime extends UrlFilter
 	private ?Date $from;
 	private ?Date $to;
 
-	public function __construct(private Dashboard $dashboard)
+	public function __construct(private readonly Dashboard $dashboard)
 	{
 		$this->period = $dashboard->getOrmObject()->getFilterPeriod();
 		if (empty($this->period))
@@ -50,27 +54,64 @@ class DateTime extends UrlFilter
 				$this->to = self::getDefaultDateEnd();
 			}
 		}
+		elseif ($this->isCurrentRange())
+		{
+			$this->from = new Date();
+			$this->to = new Date();
+
+			$currentYear = (int)(new Date())->format('Y');
+			$currentMonth = (int)(new Date())->format('m');
+
+			if ($this->period === self::PERIOD_CURRENT_MONTH)
+			{
+				$nextMonth = ($currentMonth + 1) % 12;
+				$nextMonth = $nextMonth === 0 ? 12 : $nextMonth;
+				$nextYear = $nextMonth === 1 ? $currentYear + 1 : $currentYear;
+
+				$this->from->setDate($currentYear, $currentMonth, 1);
+				$this->to->setDate($nextYear, $nextMonth, 1)->add('-1 day');
+			}
+			elseif ($this->period === self::PERIOD_CURRENT_YEAR)
+			{
+				$this->from->setDate($currentYear, 1, 1);
+				$this->to->setDate($currentYear, 12, 31);
+			}
+			elseif ($this->period === self::PERIOD_CURRENT_WEEK)
+			{
+				$weekDay = (int)(new Date())->format('w');
+				$weekDay = $weekDay === 0 ? 7 : $weekDay;
+
+				$this->from->add('-' . ($weekDay - 1) . ' days');
+				$this->to->add('+' . (7 - $weekDay) . ' days');
+			}
+
+			$this->to->add('+1 day');
+		}
 		else
 		{
 			$this->to = new Date();
 
 			$interval = '-1 year';
 
-			if ($this->period === self::PERIOD_WEEK)
+			if ($this->period === self::PERIOD_LAST_7)
 			{
-				$interval = '-1 week';
+				$interval = '-7 days';
 			}
-			elseif ($this->period === self::PERIOD_MONTH)
+			elseif ($this->period === self::PERIOD_LAST_30)
 			{
-				$interval = '-1 month';
+				$interval = '-30 days';
 			}
-			elseif ($this->period === self::PERIOD_QUARTER)
+			elseif ($this->period === self::PERIOD_LAST_90)
 			{
-				$interval = '-3 month';
+				$interval = '-90 days';
 			}
-			elseif ($this->period === self::PERIOD_HALF_YEAR)
+			elseif ($this->period === self::PERIOD_LAST_180)
 			{
-				$interval = '-6 month';
+				$interval = '-180 days';
+			}
+			elseif ($this->period === self::PERIOD_LAST_365)
+			{
+				$interval = '-365 days';
 			}
 
 			$this->from = clone($this->to);
@@ -86,6 +127,15 @@ class DateTime extends UrlFilter
 	private function isRange(): bool
 	{
 		return $this->period === self::PERIOD_RANGE;
+	}
+
+	private function isCurrentRange(): bool
+	{
+		return in_array($this->period, [
+			self::PERIOD_CURRENT_YEAR,
+			self::PERIOD_CURRENT_MONTH,
+			self::PERIOD_CURRENT_WEEK,
+		]);
 	}
 
 	public function getCode(): string
@@ -152,7 +202,7 @@ class DateTime extends UrlFilter
 
 	public static function getDefaultPeriod(): string
 	{
-		$defaultValue = self::PERIOD_YEAR;
+		$defaultValue = self::PERIOD_LAST_365;
 		$value = Option::get('biconnector', self::CONFIG_PERIOD_OPTION_NAME, $defaultValue);
 		if (self::isAvailablePeriod($value))
 		{
@@ -197,12 +247,15 @@ class DateTime extends UrlFilter
 		return in_array(
 			$period,
 			[
-				self::PERIOD_WEEK,
-				self::PERIOD_MONTH,
-				self::PERIOD_QUARTER,
-				self::PERIOD_HALF_YEAR,
-				self::PERIOD_YEAR,
+				self::PERIOD_LAST_7,
+				self::PERIOD_LAST_30,
+				self::PERIOD_LAST_90,
+				self::PERIOD_LAST_180,
+				self::PERIOD_LAST_365,
 				self::PERIOD_RANGE,
+				self::PERIOD_CURRENT_WEEK,
+				self::PERIOD_CURRENT_MONTH,
+				self::PERIOD_CURRENT_YEAR,
 			],
 		true
 		);

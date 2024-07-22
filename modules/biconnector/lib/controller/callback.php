@@ -22,17 +22,11 @@ class Callback extends Controller
 
 	public function enableSupersetAction(): void
 	{
-		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_FROZEN)
-		{
-			SupersetInitializer::setSupersetUnfreezed();
-
-			return;
-		}
-
 		$context = Context::getCurrent();
 
 		$responseBody = $context->getRequest()->getJsonList();
 		$status = $responseBody->get('status');
+
 		if (isset($status) && $status === 'error')
 		{
 			$errorMsg = $responseBody->get('error') ?? 'Unknown server error';
@@ -82,14 +76,14 @@ class Callback extends Controller
 		if (Bitrix24\LicenseScanner\Manager::getInstance()->shouldWarnPortal())
 		{
 			// Deleting instance was initiated by client - when tariff is over.
-			SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DELETED_BY_CLIENT);
 			SupersetInitializerLogger::logInfo('Superset instance was deleted by client due to tariff ending');
 		}
 		else
 		{
 			// Deleting instance was initiated by admins - to recreate instance.
-			SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS);
 			SupersetInitializerLogger::logInfo('Superset instance was deleted by admins');
 		}
+
+		SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DELETED);
 	}
 }

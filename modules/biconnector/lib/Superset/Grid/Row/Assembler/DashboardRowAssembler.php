@@ -49,6 +49,9 @@ class DashboardRowAssembler extends RowAssembler
 				],
 				$this->settings,
 			),
+			new Field\ScopeFieldAssembler([
+				'SCOPE',
+			]),
 			new Field\BasedOnFieldAssembler([
 				'SOURCE_ID',
 			]),

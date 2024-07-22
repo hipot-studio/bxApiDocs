@@ -2,7 +2,7 @@
 
 namespace Bitrix\BIConnector\Integration\Superset\Repository;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\SupersetIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection;
@@ -13,7 +13,7 @@ use Bitrix\Main\Type\Collection;
 
 final class DashboardRepository
 {
-	public function __construct(private SupersetIntegrator $integrator)
+	public function __construct(private Integrator $integrator)
 	{}
 
 	/**
@@ -108,7 +108,7 @@ final class DashboardRepository
 	 */
 	private function loadAdditionalDashboardData(array $dashboardExternalIds): ?array
 	{
-		if (!SupersetInitializer::isSupersetActive())
+		if (!SupersetInitializer::isSupersetReady())
 		{
 			return null;
 		}

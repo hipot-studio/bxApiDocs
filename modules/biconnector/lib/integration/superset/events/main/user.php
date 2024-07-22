@@ -2,9 +2,10 @@
 
 namespace Bitrix\BIConnector\Integration\Superset\Events\Main;
 
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\Main\Application;
 use Bitrix\Main\UserTable;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Access\Superset\Synchronizer;
@@ -37,6 +38,11 @@ class User
 	 */
 	public static function onAfterUserUpdate(array $fields): void
 	{
+		if (!SupersetInitializer::isSupersetReady())
+		{
+			return;
+		}
+
 		$userId = 0;
 
 		if (!self::$currentUserFields)
@@ -105,7 +111,7 @@ class User
 
 	private static function changeActivity(Dto\User $user, bool $isActive): void
 	{
-		$integrator = ProxyIntegrator::getInstance();
+		$integrator = Integrator::getInstance();
 
 		Application::getInstance()->addBackgroundJob(function() use ($integrator, $user, $isActive) {
 			if ($isActive)
@@ -130,7 +136,7 @@ class User
 		$user->firstName = $firstName;
 		$user->lastName = $lastName;
 
-		$integrator = ProxyIntegrator::getInstance();
+		$integrator = Integrator::getInstance();
 
 		Application::getInstance()->addBackgroundJob(function() use ($integrator, $user) {
 			$integrator->updateUser($user);

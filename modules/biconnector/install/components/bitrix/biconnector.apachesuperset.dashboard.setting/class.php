@@ -8,9 +8,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
+use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\IconController;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Section\EntityEditorSection;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\EntityEditorController;
@@ -136,6 +137,11 @@ class ApacheSupersetDashboardSettingComponent
 			$settingsPanel->addSection($this->getOwnerSection());
 		}
 
+		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EDIT_SCOPE))
+		{
+			$settingsPanel->addSection($this->getScopeSection());
+		}
+
 		if (isset($this->arParams['DASHBOARD_ID']))
 		{
 			$settingsPanel->setEntityId($this->arParams['DASHBOARD_ID']);
@@ -192,7 +198,7 @@ class ApacheSupersetDashboardSettingComponent
 
 	private function initDashboard(): void
 	{
-		$superset = new SupersetController(ProxyIntegrator::getInstance());
+		$superset = new SupersetController(Integrator::getInstance());
 		$this->dashboard = $superset->getDashboardRepository()->getById((int)$this->arParams['DASHBOARD_ID']);
 	}
 
@@ -233,6 +239,20 @@ class ApacheSupersetDashboardSettingComponent
 				dashboard: $this->dashboard,
 			))
 			->setIconClass('--person-check')
+		;
+	}
+
+	private function getScopeSection(): EntityEditorSection
+	{
+		return (new EntityEditorSection(
+			name: 'SCOPE',
+			title: Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_SECTION_SCOPE_TITLE'),
+		))
+			->addField(new Field\ScopeField(
+				id: 'SCOPE',
+				dashboard: $this->dashboard,
+			))
+			->setIconClass('--opened-eye')
 		;
 	}
 
@@ -349,7 +369,7 @@ class ApacheSupersetDashboardSettingComponent
 				return null;
 			}
 
-			$integrator = ProxyIntegrator::getInstance();
+			$integrator = Integrator::getInstance();
 			$newOwnerId = (int)$data['OWNER_ID'];
 			if ($newOwnerId <= 0)
 			{
@@ -407,6 +427,20 @@ class ApacheSupersetDashboardSettingComponent
 			}
 			$dashboardObject->setOwnerId((int)$data['OWNER_ID']);
 			$result['OWNER_ID'] = (int)$data['OWNER_ID'];
+		}
+
+		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EDIT_SCOPE))
+		{
+			$scopes = $data['SCOPE'] ?? [];
+			$saveScopeResult = ScopeService::getInstance()->saveDashboardScopes($dashboardObject->getId(), $scopes);
+			if (!$saveScopeResult->isSuccess())
+			{
+				$this->errorCollection->setError(
+					new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_SCOPE_ERROR')),
+				);
+
+				return null;
+			}
 		}
 
 		$dashboardObject->save();

@@ -19,9 +19,6 @@ class CUserTypeHlblock extends BaseType
 	public const DISPLAY_UI = 'UI';
 	public const DISPLAY_DIALOG = 'DIALOG';
 
-	/** @var array hlblockId => [referenceField] */
-	protected static array $hlblockEntityReferences = [];
-
 	protected static bool $highloadblockIncluded;
 
 	public static function getDescription(): array
@@ -501,11 +498,6 @@ class CUserTypeHlblock extends BaseType
 		// here
 		if ($userfield['SETTINGS']['HLBLOCK_ID'])
 		{
-			if (isset(static::$hlblockEntityReferences[$userfield['SETTINGS']['HLBLOCK_ID']]))
-			{
-				return static::$hlblockEntityReferences[$userfield['SETTINGS']['HLBLOCK_ID']];
-			}
-
 			$hlblock = \Bitrix\Highloadblock\HighloadBlockTable::getByPrimary(
 				$userfield['SETTINGS']['HLBLOCK_ID'], ['cache' => ['ttl' => 3600*24*365]]
 			)->fetch();
@@ -521,8 +513,6 @@ class CUserTypeHlblock extends BaseType
 						['=this.' . $entityField->getName() => 'ref.ID']
 					)
 				];
-
-				static::$hlblockEntityReferences[$userfield['SETTINGS']['HLBLOCK_ID']] = $referenceFields;
 
 				return $referenceFields;
 			}

@@ -7,7 +7,7 @@ use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 
@@ -74,7 +74,7 @@ final class Synchronizer
 			$role = self::ROLE_WRITER_NAME;
 		}
 
-		$integrator = ProxyIntegrator::getInstance();
+		$integrator = Integrator::getInstance();
 		$syncProfileResult = $integrator->syncProfile(
 			$user,
 			[

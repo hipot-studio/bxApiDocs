@@ -4,7 +4,7 @@ namespace Bitrix\BIConnector\Integration\UI\EntitySelector;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
@@ -69,7 +69,7 @@ class SupersetDashboardProvider extends BaseProvider
 			'filter' => $filter,
 			'limit' => $limit ?? self::ELEMENTS_LIMIT,
 		];
-		$integrator = ProxyIntegrator::getInstance();
+		$integrator = Integrator::getInstance();
 		$superset = new SupersetController($integrator);
 
 		$accessFilter = AccessController::getCurrent()->getEntityFilter(

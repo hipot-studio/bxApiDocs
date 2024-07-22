@@ -3,6 +3,7 @@
 
 namespace Bitrix\BiConnector\Configuration;
 
+use Bitrix\BIConnector\Integration\Superset\Model;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
@@ -130,7 +131,7 @@ class Action
 			];
 		}
 
-		if (!SupersetInitializer::isSupersetActive())
+		if (!SupersetInitializer::isSupersetReady())
 		{
 			return [
 				'ERROR_EXCEPTION' => [
@@ -156,7 +157,15 @@ class Action
 				{
 					$manager = MarketDashboardManager::getInstance();
 					$importResult = $manager->handleInstallMarketDashboard($filePath, $event);
-					if (!$importResult->isSuccess())
+					if ($importResult->isSuccess())
+					{
+						$dashboard = $importResult->getData()['dashboard'];
+						if ($dashboard instanceof Model\EO_SupersetDashboard)
+						{
+							$manager->applyDashboardSettings($dashboard, $content['DATA']['dashboardSettings'] ?? []);
+						}
+					}
+					else
 					{
 						foreach ($importResult->getErrors() as $error)
 						{
@@ -198,7 +207,7 @@ class Action
 			];
 		}
 
-		if (!SupersetInitializer::isSupersetActive())
+		if (!SupersetInitializer::isSupersetReady())
 		{
 			return [
 				'ERROR_EXCEPTION' => [

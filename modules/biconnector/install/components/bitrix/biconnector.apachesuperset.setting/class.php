@@ -9,16 +9,18 @@ use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\IconController;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\KeyTable;
 use Bitrix\BIConnector\Services\ApacheSuperset;
 use Bitrix\BIConnector\Superset\KeyManager;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\KeyInfoField;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\NewDashboardNotificationSelectorField;
+use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\DeleteSupersetField;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Section\EntityEditorSection;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\EntityEditorController;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\SettingsComponentController;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\PeriodFilterField;
+use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\ClearCacheField;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\SettingsPanel;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\Main\Config\Option;
@@ -36,6 +38,7 @@ use Bitrix\Main\Web\Json;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Buttons;
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Bitrix24;
 
 Loader::includeModule("biconnector");
 
@@ -112,6 +115,7 @@ class ApacheSupersetSettingComponent
 			)
 			->addSection($this->getFilterSection())
 			->addSection($this->getNewDashboardNotificationSection())
+			// ->addSection($this->getClearCacheSection())
 			->setAjaxData($ajaxData)
 		;
 
@@ -119,6 +123,11 @@ class ApacheSupersetSettingComponent
 		if (KeyManager::canManageKey($user))
 		{
 			$settingsPanel->addSection($this->getSupersetKeySection());
+		}
+
+		if (Bitrix24\CurrentUser::get()->isAdmin())
+		{
+			$settingsPanel->addSection($this->getDeleteSupersetSection());
 		}
 
 		$this->arResult['SETTINGS_PANEL'] = $settingsPanel;
@@ -182,6 +191,28 @@ class ApacheSupersetSettingComponent
 		$dateFilterSection->addField(new NewDashboardNotificationSelectorField('NOTIFICATION_SELECTOR'));
 
 		return $dateFilterSection;
+	}
+
+	private function getDeleteSupersetSection(): EntityEditorSection
+	{
+		return (new EntityEditorSection(
+			name: 'DELETE_SUPERSET_SECTION',
+			title: Loc::getMessage('BICONNECTOR_SUPERSET_NEW_DASHBOARD_DELETE_SUPERSET_SECTION'),
+		))
+			->setIconClass('--trash-bin')
+			->addField(new DeleteSupersetField('DELETE_SUPERSET'))
+		;
+	}
+
+	private function getClearCacheSection(): EntityEditorSection
+	{
+		return (new EntityEditorSection(
+			name: 'CLEAR_CACHE_SECTION',
+			title: Loc::getMessage('BICONNECTOR_SUPERSET_NEW_DASHBOARD_CLEAR_CACHE_SECTION'),
+		))
+			->setIconClass('--refresh-5')
+			->addField(new ClearCacheField('CLEAR_CACHE'))
+		;
 	}
 
 	private function getSupersetKeySection(): EntityEditorSection
@@ -304,7 +335,7 @@ class ApacheSupersetSettingComponent
 			return null;
 		}
 
-		$proxyIntegrator = ProxyIntegrator::getInstance();
+		$proxyIntegrator = Integrator::getInstance();
 		$response = $proxyIntegrator->changeBiconnectorToken($accessKey);
 
 		if ($response->hasErrors())

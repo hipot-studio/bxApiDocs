@@ -3,8 +3,8 @@
 namespace Bitrix\BIConnector\Integration\Superset\Model;
 
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
-use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorResponse;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
@@ -162,7 +162,7 @@ final class Dashboard
 		return $this->dashboardData !== null;
 	}
 
-	private function getNativeFilterFields(): array
+	public function getNativeFilterFields(): array
 	{
 		$dateFilter = new EmbeddedFilter\DateTime($this);
 
@@ -194,7 +194,7 @@ final class Dashboard
 			return $result->addError(new Error("Cannot change title without external id"));
 		}
 
-		$response = ProxyIntegrator::getInstance()->updateDashboard($externalId, ['dashboard_title' => $title]);
+		$response = Integrator::getInstance()->updateDashboard($externalId, ['dashboard_title' => $title]);
 		if ($response->getStatus() !== IntegratorResponse::STATUS_OK || $response->hasErrors())
 		{
 			return $result->addError(new Error("Error while changing title in superset"));

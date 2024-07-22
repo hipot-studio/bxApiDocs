@@ -6,7 +6,7 @@ use Bitrix\BIConnector\Access\Install\AccessInstaller;
 use Bitrix\BIConnector\Access\Role\RoleTable;
 use Bitrix\Main;
 use Bitrix\BIConnector\Integration\Superset;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\Rest;
@@ -18,7 +18,7 @@ class Agent
 		if (
 			Main\Loader::includeModule('rest')
 			&& is_callable(['\Bitrix\Rest\UsageStatTable', 'logBISuperset'])
-			&& Superset\SupersetInitializer::isSupersetActive()
+			&& Superset\SupersetInitializer::isSupersetReady()
 		)
 		{
 			$dashboardIterator = Superset\Model\SupersetDashboardTable::getList([
@@ -71,7 +71,7 @@ class Agent
 	{
 		$user = (new SupersetUserRepository)->getAdmin();
 
-		$integrator = ProxyIntegrator::getInstance();
+		$integrator = Integrator::getInstance();
 		if ($user && !$user->clientId)
 		{
 			$superset = new SupersetController($integrator);

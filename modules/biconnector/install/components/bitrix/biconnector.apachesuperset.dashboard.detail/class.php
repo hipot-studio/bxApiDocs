@@ -8,8 +8,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
-use Bitrix\BIConnector\Integration\Superset\Integrator\SupersetServiceLocation;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ServiceLocation;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
@@ -29,8 +29,6 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 	public function onPrepareComponentParams($arParams)
 	{
 		$arParams['DASHBOARD_ID'] = (int)($arParams['DASHBOARD_ID'] ?? 0);
-
-		$arParams['SOURCE_DASHBOARD_ID'] = (int)($arParams['SOURCE_DASHBOARD_ID'] ?? 0);
 		$arParams['CODE'] = $arParams['CODE'] ?? '';
 
 		return parent::onPrepareComponentParams($arParams);
@@ -40,7 +38,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 	{
 		if (!isset($this->supersetController))
 		{
-			$this->supersetController = new SupersetController(ProxyIntegrator::getInstance());
+			$this->supersetController = new SupersetController(Integrator::getInstance());
 		}
 
 		return $this->supersetController;
@@ -55,9 +53,8 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			'SUPERSET_DOMAIN' => '',
 			'ERROR_MESSAGES' => [],
 			'NATIVE_FILTERS' => '',
-			'SOURCE_DASHBOARD_DATA' => null,
 			'MARKET_COLLECTION_URL' => MarketDashboardManager::getMarketCollectionUrl(),
-			'SUPERSET_SERVICE_LOCATION' => SupersetServiceLocation::getCurrentDatacenterLocationRegion(),
+			'SUPERSET_SERVICE_LOCATION' => ServiceLocation::getCurrentDatacenterLocationRegion(),
 		];
 	}
 
@@ -89,7 +86,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->prepareResult();
 		$this->initDashboard();
 
-		if (SupersetInitializer::isSupersetFrozen() || SupersetInitializer::isSupersetLoad())
+		if (SupersetInitializer::isSupersetLoad())
 		{
 			$dashboard['STATUS'] = SupersetDashboardTable::DASHBOARD_STATUS_LOAD;
 			$this->showStartupTemplate($dashboard);
@@ -97,16 +94,17 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			return;
 		}
 
-		if (!$this->supersetController->isExternalServiceAvailable())
+		if (SupersetInitializer::isSupersetDoesntWork())
 		{
 			$this->showStartupTemplate($dashboard, false);
 
 			return;
 		}
 
+
 		if (
 			$dashboard['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_READY
-			&& SupersetInitializer::isSupersetActive()
+			&& SupersetInitializer::isSupersetReady()
 			&& !$this->dashboard->isSupersetDashboardDataLoaded()
 		)
 		{
@@ -116,17 +114,12 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			return;
 		}
 
-		if (
-			$dashboard['STATUS'] !== SupersetDashboardTable::DASHBOARD_STATUS_READY
-			|| !$this->dashboard->isSupersetDashboardDataLoaded()
-		)
+		if (in_array($dashboard['STATUS'], [SupersetDashboardTable::DASHBOARD_STATUS_LOAD, SupersetDashboardTable::DASHBOARD_STATUS_FAILED]))
 		{
 			$this->showStartupTemplate($dashboard);
 
 			return;
 		}
-
-		$this->initSourceDashboard();
 
 		if ($this->dashboard === null)
 		{
@@ -168,26 +161,6 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		}
 
 		return true;
-	}
-
-	private function initSourceDashboard(): void
-	{
-		if (isset($this->arParams['SOURCE_DASHBOARD_ID']) && $this->arParams['SOURCE_DASHBOARD_ID'] > 0)
-		{
-			$dashboardId = (int)$this->arParams['SOURCE_DASHBOARD_ID'];
-			$superset = $this->getSupersetController();
-			$dashboard = $superset->getDashboardRepository()->getById($dashboardId);
-
-			if ($dashboard === null)
-			{
-				return;
-			}
-
-			$this->arResult['SOURCE_DASHBOARD_DATA'] = [
-				'title' => $dashboard->getTitle(),
-				'link' => "/bi/dashboard/detail/{$dashboard->getId()}/",
-			];
-		}
 	}
 
 	private function prepareEmbeddedCredentials(): void

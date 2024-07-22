@@ -143,6 +143,7 @@ class DictionaryManager
 		if (!$select)
 		{
 			static::$validated[$dictionaryId] = false;
+
 			return false;
 		}
 
@@ -156,6 +157,7 @@ class DictionaryManager
 		if ($updateDate)
 		{
 			static::$validated[$dictionaryId] = true;
+
 			return true;
 		}
 
@@ -180,13 +182,23 @@ class DictionaryManager
 			$connection->queryExecute($query);
 		}
 
-		DictionaryDataTable::deleteByFilter([
-			'=DICTIONARY_ID' => $dictionaryId,
-		]);
+		try
+		{
+			DictionaryDataTable::deleteByFilter([
+				'=DICTIONARY_ID' => $dictionaryId,
+			]);
 
-		DictionaryDataTable::insertSelect($select);
+			DictionaryDataTable::insertSelect($select);
+		}
+		catch (\Exception $exception)
+		{
+			static::$validated[$dictionaryId] = false;
+
+			return false;
+		}
 
 		static::$validated[$dictionaryId] = true;
+		
 		return true;
 	}
 

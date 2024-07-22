@@ -13,6 +13,7 @@ use Bitrix\BIconnector\Access\Role\RoleDictionary;
 
 final class PermissionConfig
 {
+	public const SECTION_BIC_ACCESS = 'SECTION_BIC_ACCESS';
 	public const SECTION_MAIN_RIGHTS = 'SECTION_RIGHTS_MAIN';
 	public const SECTION_DASHBOARD_RIGHTS = 'SECTION_RIGHTS_DASHBOARD';
 
@@ -91,12 +92,15 @@ final class PermissionConfig
 		}
 
 		return [
-			self::SECTION_MAIN_RIGHTS => [
+			self::SECTION_BIC_ACCESS => [
 				PermissionDictionary::BIC_ACCESS,
+			],
+			self::SECTION_MAIN_RIGHTS => [
 				PermissionDictionary::BIC_DASHBOARD_CREATE,
 				PermissionDictionary::BIC_DASHBOARD_TAG_MODIFY,
 				PermissionDictionary::BIC_SETTINGS_ACCESS,
 				PermissionDictionary::BIC_SETTINGS_EDIT_RIGHTS,
+				PermissionDictionary::BIC_DASHBOARD_EDIT_SCOPE,
 			],
 			self::SECTION_DASHBOARD_RIGHTS => $dashboardRights,
 		];

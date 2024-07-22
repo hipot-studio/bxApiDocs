@@ -12,8 +12,12 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
+use Bitrix\Bitrix24;
+use Bitrix\BIConnector\Controller;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -25,25 +29,23 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 	private const URL_TEMPLATE_LIST = 'list';
 	private const URL_TEMPLATE_DETAIL = 'detail';
 
-	public function onPrepareComponentParams($params)
+	public function onPrepareComponentParams($arParams)
 	{
-		if (!is_array($params))
+		if (!is_array($arParams))
 		{
-			$params = [];
+			$arParams = [];
 		}
 
-		$params['SEF_URL_TEMPLATES'] = $params['SEF_URL_TEMPLATES'] ?? [];
-		$params['VARIABLE_ALIASES'] = $params['VARIABLE_ALIASES'] ?? [];
+		$arParams['SEF_URL_TEMPLATES'] ??= [];
+		$arParams['VARIABLE_ALIASES'] ??= [];
 
-		return parent::onPrepareComponentParams($params);
+		return parent::onPrepareComponentParams($arParams);
 	}
 
 	public function executeComponent()
 	{
 		global $APPLICATION;
 		$APPLICATION->setTitle(Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_TITLE'));
-
-		(new Synchronizer(CurrentUser::get()->getId()))->sync();
 
 		$templateUrls = self::getTemplateUrls();
 
@@ -53,23 +55,6 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 		if ($this->arParams['SEF_MODE'] === 'Y')
 		{
 			[$template, $variables] = $this->processSefMode($templateUrls);
-		}
-
-		$this->arResult['VARIABLES'] = $variables;
-
-		$this->arResult['CAN_SEND_STARTUP_METRIC'] = self::canSendStartupSupersetMetric();
-
-		$this->arResult['ERROR_MESSAGES'] = [];
-		$this->arResult['FEATURE_AVAILABLE'] = true;
-		$this->arResult['TOOLS_AVAILABLE'] = true;
-		$this->arResult['HELPER_CODE'] = null;
-
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_ACCESS))
-		{
-			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_PERMISSION_ERROR');
-			$this->includeComponentTemplate($template);
-
-			return;
 		}
 
 		if (Loader::includeModule('bitrix24'))
@@ -88,11 +73,15 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 				return;
 			}
 
-			if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED_BY_CLIENT)
+			if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED)
 			{
-				$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_DISABLED_MANUALLY');
-				$this->arResult['ERROR_DESCRIPTIONS'][] = '';
-				$this->includeComponentTemplate($template);
+				$this->arResult['CAN_CREATE'] = Bitrix24\CurrentUser::get()->isAdmin();
+
+				$cleanTimestamp = (int)\Bitrix\Main\Config\Option::get('biconnector', Controller\Superset::SUPERSET_CLEAN_TIMESTAMP_OPTION, 0);
+				$day = 60 * 60 * 24;
+				$this->arResult['IS_ENABLE_TIME_REACHED'] = time() > ($cleanTimestamp + $day);
+				$this->arResult['ENABLE_DATE'] = \Bitrix\Main\Type\DateTime::createFromTimestamp($cleanTimestamp + $day)->toString();
+				$this->includeComponentTemplate('create_superset');
 
 				return;
 			}
@@ -100,6 +89,28 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 		else
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_BOX_ERROR');
+			$this->includeComponentTemplate($template);
+
+			return;
+		}
+
+		if (SupersetInitializer::isSupersetReady())
+		{
+			(new Synchronizer(CurrentUser::get()->getId()))->sync();
+		}
+
+		$this->arResult['VARIABLES'] = $variables;
+
+		$this->arResult['CAN_SEND_STARTUP_METRIC'] = self::canSendStartupSupersetMetric();
+
+		$this->arResult['ERROR_MESSAGES'] = [];
+		$this->arResult['FEATURE_AVAILABLE'] = true;
+		$this->arResult['TOOLS_AVAILABLE'] = true;
+		$this->arResult['HELPER_CODE'] = null;
+
+		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_ACCESS))
+		{
+			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_PERMISSION_ERROR');
 			$this->includeComponentTemplate($template);
 
 			return;
@@ -120,6 +131,9 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 			DashboardOwner::bind(60);
 		}
 		Application::getInstance()->addBackgroundJob(fn() => Superset\Updater\ClientUpdater::update());
+
+		$superset = new SupersetController(Integrator::getInstance());
+		$superset->initializeOrCheckSupersetStatus();
 
 		$this->includeComponentTemplate($template);
 	}
@@ -143,7 +157,7 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 				'color' => Buttons\Color::DANGER,
 				'text' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_CLEAR_BUTTON'),
 				'click' => new Buttons\JsCode(
-					'BX.BIConnector.ApacheSupersetCleaner.Instance.handleButtonClick(this)'
+					'BX.BIConnector.ApacheSupersetTariffCleaner.Instance.handleButtonClick(this)'
 				),
 			]);
 			Toolbar::addButton($clearButton);

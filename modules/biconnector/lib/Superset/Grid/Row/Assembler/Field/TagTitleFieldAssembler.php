@@ -4,9 +4,6 @@ namespace Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
-use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Main\UI\Extension;
 

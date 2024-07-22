@@ -7,27 +7,24 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTagTable;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\UI\UIHelper;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Entity\Base;
-use Bitrix\Bitrix24\Feature;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Buttons\Button;
 use Bitrix\UI\Buttons\Color;
-use Bitrix\UI\Buttons\SettingsButton;
 use Bitrix\UI\Toolbar\ButtonLocation;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Buttons\JsCode;
@@ -49,13 +46,6 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 	public function executeComponent()
 	{
-		$superset = new SupersetController(ProxyIntegrator::getInstance());
-
-		if (!$superset->isSupersetEnabled())
-		{
-			$superset->initSuperset();
-		}
-
 		$this->init();
 		$this->grid->processRequest();
 		$this->grid->setSupersetAvailability($this->getSupersetController()->isExternalServiceAvailable());
@@ -172,6 +162,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		}
 
 		$pinnedDashboardIds = CUserOptions::GetOption('biconnector', 'grid_pinned_dashboards', []);
+		Bitrix\Main\Type\Collection::normalizeArrayValuesByInt($pinnedDashboardIds);
 		if (!empty($pinnedDashboardIds))
 		{
 			$ormParams['runtime'][] = new ExpressionField(
@@ -199,7 +190,11 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 			MarketDashboardManager::getMarketCollectionUrl(),
 			'grid'
 		);
-		$splitButton = new Buttons\Split\CreateButton();
+		$splitButton = new Buttons\Split\CreateButton([
+			'dataset' => [
+				'toolbar-collapsed-icon' => Buttons\Icon::ADD,
+			],
+		]);
 
 		$mainButton = $splitButton->getMainButton();
 		$mainButton->getAttributeCollection()['onclick'] = $openMarketScript;
@@ -240,7 +235,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 				'color' => Color::DANGER,
 				'text' => Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DASHBOARD_LIST_CLEAR_BUTTON'),
 				'click' => new JsCode(
-					'BX.BIConnector.ApacheSupersetCleaner.Instance.handleButtonClick(this)'
+					'BX.BIConnector.ApacheSupersetTariffCleaner.Instance.handleButtonClick(this)'
 				),
 			]);
 			Toolbar::addButton($clearButton);
@@ -328,6 +323,16 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 			}
 		}
 
+		$dashboardScopeQuery = SupersetScopeTable::getList([
+			'select' => ['SCOPE_CODE', 'DASHBOARD_ID'],
+			'filter' => ['=DASHBOARD_ID' => array_keys($dashboardIds)],
+			'order' => ['SCOPE_CODE' => 'asc'],
+		]);
+		foreach ($dashboardScopeQuery->fetchCollection() as $scope)
+		{
+			$dashboardList[$dashboardIds[$scope->getDashboardId()]]['SCOPE'][] = $scope->getScopeCode();
+		}
+
 		return $dashboardList;
 	}
 
@@ -343,7 +348,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 	{
 		if (!isset($this->supersetController))
 		{
-			$this->supersetController = new SupersetController(ProxyIntegrator::getInstance());
+			$this->supersetController = new SupersetController(Integrator::getInstance());
 		}
 
 		return $this->supersetController;
@@ -351,7 +356,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 	private function isNeedShowTopMenuGuide(): bool
 	{
-		if (!SupersetInitializer::isSupersetActive())
+		if (!SupersetInitializer::isSupersetReady())
 		{
 			return false;
 		}

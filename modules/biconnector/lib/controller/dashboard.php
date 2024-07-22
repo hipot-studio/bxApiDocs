@@ -5,8 +5,8 @@ namespace Bitrix\BIConnector\Controller;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
-use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorResponse;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTagTable;
@@ -19,6 +19,7 @@ use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
+use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
@@ -65,7 +66,7 @@ class Dashboard extends Controller
 			'dashboard',
 			function($className, $id)
 			{
-				$superset = new SupersetController(ProxyIntegrator::getInstance());
+				$superset = new SupersetController(Integrator::getInstance());
 				$dashboard = $superset->getDashboardRepository()->getById($id);
 				if (!$dashboard)
 				{
@@ -88,7 +89,7 @@ class Dashboard extends Controller
 			return null;
 		}
 
-		$integrator = ProxyIntegrator::getInstance();
+		$integrator = Integrator::getInstance();
 		$superset = new SupersetController($integrator);
 		$externalId = $dashboard->getExternalId();
 		$dashboardId = $dashboard->getId();
@@ -164,10 +165,12 @@ class Dashboard extends Controller
 					'DASHBOARD_ID' => $newDashboard->getId(),
 				]);
 			}
+			$scopes = ScopeService::getInstance()->getDashboardScopes($dashboard->getId());
+			ScopeService::getInstance()->saveDashboardScopes($copiedDashboardId, $scopes);
 
 			$gridRow = $this->prepareGridRow($newDashboard);
 			$data['id'] = $copiedDashboardId;
-			$data['detail_url'] = "/bi/dashboard/detail/{$copiedDashboardId}/?SOURCE={$dashboardId}";
+			$data['detail_url'] = "/bi/dashboard/detail/{$copiedDashboardId}/";
 			$data['columns'] = $gridRow['columns'];
 			$data['actions'] = $gridRow['actions'];
 
@@ -177,7 +180,7 @@ class Dashboard extends Controller
 		return null;
 	}
 
-	public function exportAction(Model\Dashboard $dashboard): ?array
+	public function exportAction(Model\Dashboard $dashboard, bool $withSettings): ?array
 	{
 		if (!MarketDashboardManager::getInstance()->isExportEnabled())
 		{
@@ -193,7 +196,7 @@ class Dashboard extends Controller
 			return null;
 		}
 
-		$integrator = ProxyIntegrator::getInstance();
+		$integrator = Integrator::getInstance();
 		$externalDashboardId = $dashboard->getExternalId();
 		if ((int)$externalDashboardId <= 0)
 		{
@@ -202,7 +205,31 @@ class Dashboard extends Controller
 			return null;
 		}
 
-		$response = $integrator->exportDashboard($externalDashboardId);
+		$dashboardSettings = [];
+		if ($withSettings)
+		{
+			$filterPeriod = $dashboard->getOrmObject()->getFilterPeriod();
+			if (!$filterPeriod)
+			{
+				$filterPeriod = EmbeddedFilter\DateTime::PERIOD_DEFAULT;
+			}
+			$dashboardSettings = [
+				'period' => [
+					'FILTER_PERIOD' => $filterPeriod,
+					'DATE_FILTER_START' => $dashboard->getOrmObject()->getDateFilterStart(),
+					'DATE_FILTER_END' => $dashboard->getOrmObject()->getDateFilterEnd(),
+				],
+			];
+			$dashboardScopes = Model\SupersetScopeTable::getList([
+				'filter' => ['=DASHBOARD_ID' => $dashboard->getId()],
+			])
+				->fetchCollection()
+				->getScopeCodeList()
+			;
+			$dashboardSettings['scope'] = $dashboardScopes;
+		}
+
+		$response = $integrator->exportDashboard($externalDashboardId, $dashboardSettings);
 		if ($response->hasErrors())
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_EXPORT_ERROR')));
@@ -276,7 +303,7 @@ class Dashboard extends Controller
 		if ($dashboard->isEditable())
 		{
 			$externalDashboardId = $dashboard->getExternalId();
-			$response = ProxyIntegrator::getInstance()->deleteDashboard([$externalDashboardId]);
+			$response = Integrator::getInstance()->deleteDashboard([$externalDashboardId]);
 			if ($response->hasErrors())
 			{
 				if ($response->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
@@ -298,28 +325,12 @@ class Dashboard extends Controller
 
 	public function restartImportAction(Model\Dashboard $dashboard): ?array
 	{
-		if ($dashboard->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_FAILED)
+		if (
+			$dashboard->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_FAILED
+			|| !SupersetInitializer::isSupersetReady()
+		)
 		{
 			return null;
-		}
-
-		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DISABLED)
-		{
-			SupersetInitializer::startupSuperset();
-
-			$marketManager = MarketDashboardManager::getInstance();
-			$systemDashboards = $marketManager->getSystemDashboardApps();
-			$existingDashboardInfoList = SupersetDashboardTable::getList([
-				'select' => ['ID'],
-				'filter' => [
-					'=APP_ID' => array_column($systemDashboards, 'CODE'),
-				],
-			])->fetchAll();
-
-			$systemDashboardIds = array_column($existingDashboardInfoList, 'ID');
-			return [
-				'restartedDashboardIds' => $systemDashboardIds,
-			];
 		}
 
 		Application::getInstance()->addBackgroundJob(function () use ($dashboard) {
@@ -371,6 +382,7 @@ class Dashboard extends Controller
 				'guestToken' => $dashboard->getEmbeddedCredentials()->guestToken,
 				'supersetDomain' => $dashboard->getEmbeddedCredentials()->supersetDomain,
 				'editUrl' => $dashboard->getEditUrl(),
+				'dashboardUrl' => "/bi/dashboard/detail/{$dashboard->getId()}/",
 				'appId' => $dashboard->getAppId(),
 				'nativeFilters' => $dashboard->getNativeFilter(),
 				'canExport' => $canExport ? 'Y' : 'N',
@@ -463,7 +475,7 @@ class Dashboard extends Controller
 			$name .= " ($number)";
 		}
 
-		$integrator = ProxyIntegrator::getInstance();
+		$integrator = Integrator::getInstance();
 		$response = $integrator->createEmptyDashboard([
 			'name' => $name,
 		]);
@@ -498,7 +510,7 @@ class Dashboard extends Controller
 		}
 
 		$data = [];
-		$superset = new SupersetController(ProxyIntegrator::getInstance());
+		$superset = new SupersetController(Integrator::getInstance());
 		$dashboard = $superset->getDashboardRepository()->getById($addDashboardResult->getId());
 		if ($dashboard)
 		{
@@ -537,7 +549,7 @@ class Dashboard extends Controller
 			return null;
 		}
 
-		$loginUrl = (new SupersetController(ProxyIntegrator::getInstance()))->getLoginUrl();
+		$loginUrl = (new SupersetController(Integrator::getInstance()))->getLoginUrl();
 
 		if ($loginUrl)
 		{
@@ -554,7 +566,7 @@ class Dashboard extends Controller
 
 	private function prepareGridRow(Model\Dashboard $dashboard): array
 	{
-		$supersetController = new SupersetController(ProxyIntegrator::getInstance());
+		$supersetController = new SupersetController(Integrator::getInstance());
 
 		$settings = new DashboardSettings([
 			'ID' => 'biconnector_superset_dashboard_grid',
@@ -574,6 +586,7 @@ class Dashboard extends Controller
 			];
 		}
 		$dashboardFields['TAGS'] = $tagList;
+		$dashboardFields['SCOPE'] = ScopeService::getInstance()->getDashboardScopes($dashboard->getId());
 
 		$result = $grid->getRows()->prepareRows([$dashboardFields]);
 		$result = current($result);
@@ -604,7 +617,7 @@ class Dashboard extends Controller
 			return;
 		}
 
-		$supersetController = new SupersetController(ProxyIntegrator::getInstance());
+		$supersetController = new SupersetController(Integrator::getInstance());
 		if (!$supersetController->isSupersetEnabled() || !$supersetController->isExternalServiceAvailable())
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_RENAME_ERROR_UNAVAILABLE')));
@@ -785,5 +798,60 @@ class Dashboard extends Controller
 		);
 
 		return true;
+	}
+
+	public function getExportDataAction(Model\Dashboard $dashboard): ?array
+	{
+		$accessItem = DashboardAccessItem::createFromArray([
+			'ID' => $dashboard->getId(),
+			'TYPE' => $dashboard->getType(),
+			'OWNER_ID' => $dashboard->getField('OWNER_ID'),
+		]);
+
+		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EXPORT, $accessItem))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_EXPORT')));
+
+			return null;
+		}
+
+		$filterPeriod = $dashboard->getNativeFilterFields();
+		if (!$dashboard->getOrmObject()->getFilterPeriod())
+		{
+			$period = Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_EXPORT_DATA_PERIOD_DEFAULT');
+		}
+		else if ($filterPeriod['FILTER_PERIOD'] !== EmbeddedFilter\DateTime::PERIOD_RANGE)
+		{
+			$period = EmbeddedFilter\DateTime::getPeriodName($filterPeriod['FILTER_PERIOD']) ?? '';
+		}
+		else
+		{
+			$dateStart = $filterPeriod['DATE_FILTER_START'];
+			if ($dateStart instanceof Date)
+			{
+				$dateStart->toString();
+			}
+			$dateEnd = $filterPeriod['DATE_FILTER_END'];
+			if ($dateEnd instanceof Date)
+			{
+				$dateEnd->toString();
+			}
+			$period = "{$dateStart} - {$dateEnd}";
+		}
+
+		$scopeCodes = Model\SupersetScopeTable::getList([
+			'filter' => ['=DASHBOARD_ID' => $dashboard->getId()],
+		])
+			->fetchCollection()
+			->getScopeCodeList()
+		;
+
+		return [
+			'title' => htmlspecialcharsbx($dashboard->getTitle()),
+			'period' => $period,
+			'scope' => implode(', ', ScopeService::getInstance()->getScopeNameList($scopeCodes)),
+			'type' => $dashboard->getType(),
+			'appId' => $dashboard->getAppId(),
+		];
 	}
 }

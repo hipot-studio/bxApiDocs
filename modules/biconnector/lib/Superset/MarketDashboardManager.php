@@ -2,10 +2,12 @@
 
 namespace Bitrix\BIConnector\Superset;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Model;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
-use Bitrix\BIConnector\Integration\Superset\SupersetController;
+use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\BIConnector\Superset\UI\DashboardManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
@@ -13,6 +15,7 @@ use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest;
 use Bitrix\Rest\AppTable;
@@ -28,7 +31,7 @@ final class MarketDashboardManager
 	private const EVENT_ON_AFTER_DASHBOARD_INSTALL = 'onAfterDashboardInstall';
 
 	private static ?MarketDashboardManager $instance = null;
-	private ProxyIntegrator $integrator;
+	private Integrator $integrator;
 
 	public static function getInstance(): self
 	{
@@ -37,7 +40,7 @@ final class MarketDashboardManager
 
 	private function __construct()
 	{
-		$this->integrator = ProxyIntegrator::getInstance();
+		$this->integrator = Integrator::getInstance();
 	}
 
 	public static function getMarketCollectionUrl(): string
@@ -155,7 +158,68 @@ final class MarketDashboardManager
 			SystemDashboardManager::notifyUserDashboardModification($dashboard, $isDashboardExists);
 		}
 
+		$result->setData(['dashboard' => $dashboard]);
+
 		return $result;
+	}
+
+	/**
+	 * Sets dashboard settings contained in archive. Sets period, scopes, etc.
+	 *
+	 * @param Model\EO_SupersetDashboard $dashboard
+	 * @param array $dashboardSettings
+	 *
+	 * @return void
+	 */
+	public function applyDashboardSettings(Model\EO_SupersetDashboard $dashboard, array $dashboardSettings = []): void
+	{
+		if (!$dashboardSettings)
+		{
+			return;
+		}
+
+		if (isset($dashboardSettings['period']))
+		{
+			$periodSetting = $dashboardSettings['period'];
+			if ($periodSetting['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_DEFAULT)
+			{
+				$dashboard->setDateFilterStart(null);
+				$dashboard->setDateFilterEnd(null);
+				$dashboard->setFilterPeriod(null);
+			}
+			elseif ($periodSetting['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_RANGE)
+			{
+				try
+				{
+					$dateStart = new Date($periodSetting['DATE_FILTER_START']);
+					$dateEnd = new Date($periodSetting['DATE_FILTER_END']);
+					$dashboard->setDateFilterStart($dateStart);
+					$dashboard->setDateFilterEnd($dateEnd);
+					$dashboard->setFilterPeriod(EmbeddedFilter\DateTime::PERIOD_RANGE);
+				}
+				catch (\Bitrix\Main\ObjectException)
+				{}
+			}
+			else
+			{
+				$period = EmbeddedFilter\DateTime::getDefaultPeriod();
+				$innerPeriod = $periodSetting['FILTER_PERIOD'] ?? '';
+				if (is_string($innerPeriod) && EmbeddedFilter\DateTime::isAvailablePeriod($innerPeriod))
+				{
+					$period = $innerPeriod;
+				}
+				$dashboard->setFilterPeriod($period);
+			}
+		}
+
+		if (is_array($dashboardSettings['scope'] ?? null))
+		{
+			$scopes = ScopeService::getInstance()->getDashboardScopes($dashboard->getId());
+			$scopesToSave = array_unique([...$scopes, ...$dashboardSettings['scope']]);
+			ScopeService::getInstance()->saveDashboardScopes($dashboard->getId(), $scopesToSave);
+		}
+
+		$dashboard->save();
 	}
 
 	/**

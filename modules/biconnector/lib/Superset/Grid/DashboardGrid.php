@@ -46,6 +46,7 @@ final class DashboardGrid extends Grid
 				'SOURCE_ID',
 				'EDIT_URL',
 				'TAGS',
+				'SCOPE',
 				'FILTER_PERIOD',
 				'ID',
 			],

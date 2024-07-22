@@ -5,7 +5,7 @@ namespace Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\Main\Grid\Row\FieldAssembler;
@@ -106,7 +106,7 @@ class NameFieldAssembler extends FieldAssembler
 	 */
 	protected function canEditTitle(array $dashboardData): bool
 	{
-		$supersetController = new SupersetController(ProxyIntegrator::getInstance());
+		$supersetController = new SupersetController(Integrator::getInstance());
 		if (!$supersetController->isSupersetEnabled() || !$supersetController->isExternalServiceAvailable())
 		{
 			return false;

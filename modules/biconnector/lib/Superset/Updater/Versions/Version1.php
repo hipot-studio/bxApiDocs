@@ -2,8 +2,8 @@
 
 namespace Bitrix\BIConnector\Superset\Updater\Versions;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegratorResponse;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
@@ -23,7 +23,7 @@ final class Version1 extends BaseVersion
 
 		if (
 			SupersetInitializer::getSupersetStatus() == SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS
-			|| SupersetInitializer::getSupersetStatus() == SupersetInitializer::SUPERSET_STATUS_DELETED_BY_CLIENT
+			|| SupersetInitializer::getSupersetStatus() == SupersetInitializer::SUPERSET_STATUS_DELETED
 		)
 		{
 			return $result;
@@ -77,7 +77,7 @@ final class Version1 extends BaseVersion
 			->fetchCollection()
 		;
 
-		$integrator = ProxyIntegrator::getInstance();
+		$integrator = Integrator::getInstance();
 		foreach ($deprecatedDashboards as $dashboard)
 		{
 			if ($dashboard->getType() === SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM)
@@ -90,7 +90,7 @@ final class Version1 extends BaseVersion
 				$setOwnerResult = $integrator->setDashboardOwner($dashboard->getExternalId(), $user);
 				if (
 					$setOwnerResult->hasErrors()
-					&& $setOwnerResult->getStatus() !== ProxyIntegratorResponse::HTTP_STATUS_NOT_FOUND
+					&& $setOwnerResult->getStatus() !== IntegratorResponse::STATUS_NOT_FOUND
 				)
 				{
 					$result->addErrors($setOwnerResult->getErrors());
