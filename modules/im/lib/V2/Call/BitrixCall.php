@@ -4,9 +4,10 @@ namespace Bitrix\Im\V2\Call;
 
 use Bitrix\Im\Call\Call;
 use Bitrix\Im\Call\Util;
+use Bitrix\Main\Error;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\Web\JWT;
-use Bitrix\Main\SystemException;
+
 
 class BitrixCall extends Call
 {
@@ -14,7 +15,6 @@ class BitrixCall extends Call
 
 	/**
 	 * @return void
-	 * @throws SystemException
 	 */
 	protected function initCall(): void
 	{
@@ -34,14 +34,16 @@ class BitrixCall extends Call
 			{
 				parent::finish();
 
-				throw new SystemException($createResult->getErrorMessages()[0]);
+				$this->addErrors($createResult->getErrors());
 			}
 			$callData = $createResult->getData();
 			if (!$callData['endpoint'])
 			{
 				parent::finish();
 
-				throw new SystemException('Empty endpoint');
+				$this->addError(new Error('Empty endpoint', 'empty_endpoint'));
+
+				return;
 			}
 
 			$this->setEndpoint($callData['endpoint']);

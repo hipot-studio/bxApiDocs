@@ -2,7 +2,7 @@
 
 namespace Bitrix\ImConnector\Connectors;
 
-use Bitrix\ImConnector\Result;
+use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -77,10 +77,12 @@ class Notifications extends Base implements MessengerUrl
 			]
 		);
 
-		$fullurl = $url . urlencode($text);
+		$host = UrlManager::getInstance()->getHostUrl();
+		$urlWeb = $url . urlencode($text);
+		$urlMob = str_replace($url, 'whatsapp://send?phone=' . $phoneNumber . '&text=', $urlWeb);
 		$result = [
-			'web' => $fullurl,
-			'mob' => str_replace($url, 'whatsapp://send?phone=' . $phoneNumber . '&text=', $fullurl),
+			'web' => $host . \CBXShortUri::getShortUri($urlWeb),
+			'mob' => $host . \CBXShortUri::getShortUri($urlMob),
 		];
 
 		return $result;

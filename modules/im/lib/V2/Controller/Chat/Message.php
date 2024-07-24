@@ -6,7 +6,6 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\Controller\Filter\CheckActionAccess;
 use Bitrix\Im\V2\Controller\Filter\CheckMessageDisappearingDuration;
-use Bitrix\Im\V2\Controller\Filter\CheckMessageSend;
 use Bitrix\Im\V2\Controller\Filter\UpdateStatus;
 use Bitrix\Im\V2\Entity\View\ViewCollection;
 use Bitrix\Im\V2\Message\Delete\DisappearService;
@@ -144,7 +143,7 @@ class Message extends BaseController
 			],
 			'send' => [
 				'+prefilters' => [
-					new CheckMessageSend(Chat\Permission::ACTION_SEND),
+					new CheckActionAccess(Chat\Permission::ACTION_SEND),
 				],
 			],
 			'pin' => [

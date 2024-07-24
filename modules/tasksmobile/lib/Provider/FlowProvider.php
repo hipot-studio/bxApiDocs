@@ -145,7 +145,18 @@ final class FlowProvider
 			'items' => $data['items'],
 			'users' => UserRepository::getByIds($data['userIds']),
 			'groups' => GroupProvider::loadByIds($data['groupIds']),
+			'showFlowsInfo' => FlowProvider::getShowFlowsFeatureInfo(),
 		];
+	}
+
+	public function getShowFlowsFeatureInfo(): bool
+	{
+		return \CUserOptions::getOption('show_flows_feature_info', 'enabled', true);
+	}
+
+	public function disableShowFlowsFeatureInfoFlag(): bool
+	{
+		return \CUserOptions::setOption('show_flows_feature_info', 'enabled', false);
 	}
 
 	private function getFlowsInternal(FlowQuery $query): array

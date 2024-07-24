@@ -160,7 +160,7 @@ final class TaskProvider
 		return [
 			'items' => $this->prepareItems($tasks),
 			'users' => $this->getUsersData($tasks),
-			'groups' => $this->getGroupsData($tasks, $params),
+			'groups' => $this->getGroupsData($tasks),
 			'flows' => $this->getFlowsData($tasks),
 			'tasks_stages' => $this->getStagesData($tasks, $workMode, $stageId, $projectId),
 		];
@@ -1220,7 +1220,7 @@ final class TaskProvider
 	 * @param int|null $projectId
 	 * @return array
 	 */
-	private function getTasksByQuery(TaskQuery $query, ?int $projectId = null): array
+	private function getTasksByQuery(TaskQuery $query): array
 	{
 		try
 		{
@@ -1231,12 +1231,10 @@ final class TaskProvider
 			return [];
 		}
 
-		$params = $this->getParams($projectId);
-
 		return [
 			'items' => $this->prepareItems($tasks),
 			'users' => $this->getUsersData($tasks),
-			'groups' => $this->getGroupsData($tasks, $params),
+			'groups' => $this->getGroupsData($tasks),
 		];
 	}
 
@@ -1447,14 +1445,13 @@ final class TaskProvider
 		return UserRepository::getByIds($userIds);
 	}
 
-	private function getGroupsData(array $tasks, array $params = []): array
+	private function getGroupsData(array $tasks): array
 	{
 		if (empty($tasks))
 		{
 			return [];
 		}
 		$groupIds = array_column($tasks, 'GROUP_ID');
-		$groupIds[] = $params['PROJECT_ID'];
 
 		return GroupProvider::loadByIds($groupIds);
 	}

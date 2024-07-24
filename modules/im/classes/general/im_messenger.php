@@ -5,6 +5,7 @@ use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Sync;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Text\Emoji;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -1354,7 +1355,7 @@ class CIMMessenger
 						}
 						if ($arRes['CHAT_TYPE'] === \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_CHANNEL)
 						{
-							\Bitrix\Im\V2\Chat\OpenChannelChat::sendSharedPull($watchPullMessage, $chatId, array_keys($relations));
+							\Bitrix\Im\V2\Chat\OpenChannelChat::sendSharedPull($watchPullMessage);
 						}
 
 						$groups = self::GetEventByCounterGroup($events);
@@ -2231,7 +2232,13 @@ class CIMMessenger
 		$completeDelete = $message['CHAT_ID'] == CIMChat::GetGeneralChatId() && self::IsAdmin()? true: $completeDelete;
 
 		$userId ??= \Bitrix\Im\Common::getUserId();
-		$deleteService = new \Bitrix\Im\V2\Message\Delete\DeleteService(new \Bitrix\Im\V2\Message((int)$id));
+		$messageObject = new \Bitrix\Im\V2\Message((int)$id);
+		if (!$messageObject->getId())
+		{
+			return false;
+		}
+
+		$deleteService = new \Bitrix\Im\V2\Message\Delete\DeleteService($messageObject);
 		$deleteService->setContext((new \Bitrix\Im\V2\Service\Context())->setUserId($userId));
 		$deleteService->setByEvent($byEvent);
 		if ($completeDelete)
@@ -3691,7 +3698,7 @@ class CIMMessenger
 						'turnServerFirefox' : '".CUtil::JSEscape($arTemplate['TURN_SERVER_FIREFOX'])."',
 						'turnServerLogin' : '".CUtil::JSEscape($arTemplate['TURN_SERVER_LOGIN'])."',
 						'turnServerPassword' : '".CUtil::JSEscape($arTemplate['TURN_SERVER_PASSWORD'])."',
-						'bitrixCallEnabled': ".(\Bitrix\Im\Call\Call::isBitrixCallEnabled() ? 'true' : 'false').",
+						'bitrixCallEnabled': ".(\Bitrix\Im\Call\Call::isCallServerEnabled() ? 'true' : 'false').",
 						'mobileSupport': false,
 						'phoneEnabled': ".($phoneEnabled? 'true': 'false').",
 						'phoneDeviceActive': '".($phoneDeviceActive? 'Y': 'N')."',
@@ -4271,11 +4278,29 @@ class CIMMessenger
 			}
 			elseif ($key === 'COMPONENT_PARAMS')
 			{
-				$params[$key] = Converter::toJson()->process($value);
+				$params[$key] = Converter::toJson()->process(self::decodeEmoji($value));
 			}
 		}
 
 		return $params;
+	}
+
+	protected static function decodeEmoji($value)
+	{
+		if (is_string($value))
+		{
+			$value = Emoji::decode($value);
+		}
+
+		if (is_array($value))
+		{
+			foreach ($value as $key => $item)
+			{
+				$value[$key] = self::decodeEmoji($item);
+			}
+		}
+
+		return $value;
 	}
 
 	public static function PreparePushForMentionInChat($params)

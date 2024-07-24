@@ -4,8 +4,6 @@ namespace Bitrix\TasksMobile\Controller;
 
 use Bitrix\Crm\Service\Display;
 use Bitrix\Crm\Service\Display\Field;
-use Bitrix\Disk\Driver;
-use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -18,6 +16,7 @@ use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\Integration\CRM;
 use Bitrix\Tasks\Flow\Access\FlowAccessController;
 use Bitrix\Tasks\Flow\Access\FlowAction;
+use Bitrix\Tasks\Provider\TemplateProvider;
 use Bitrix\TasksMobile\Dto\DiskFileDto;
 use Bitrix\TasksMobile\Dto\FlowRequestFilter;
 use Bitrix\TasksMobile\Dto\RelatedCrmItemDto;
@@ -25,6 +24,7 @@ use Bitrix\TasksMobile\Dto\TaskTemplateDto;
 use Bitrix\TasksMobile\Dto\TaskTemplateTagDto;
 use Bitrix\TasksMobile\Enum\TaskPriority;
 use Bitrix\TasksMobile\Provider\ChecklistProvider;
+use Bitrix\TasksMobile\Provider\DiskFileProvider;
 use Bitrix\TasksMobile\Provider\FlowProvider;
 use Bitrix\TasksMobile\Provider\GroupProvider;
 use Bitrix\TasksMobile\Settings;
@@ -71,6 +71,22 @@ final class Flow extends Base
 		))->getFlows();
 
 		return $this->convertKeysToCamelCase($result);
+	}
+
+	/**
+	 * @restMethod tasksmobile.Flow.disableShowFlowsFeatureInfoFlagInDB
+	 * @return bool
+	 */
+	public function disableShowFlowsFeatureInfoFlagInDBAction(): bool
+	{
+		if (!Settings::getInstance()->isTaskFlowAvailable())
+		{
+			$this->addError(new Error('Flow feature is not available.'));
+
+			return false;
+		}
+
+		return (new FlowProvider($this->getCurrentUser()->getId()))->disableShowFlowsFeatureInfoFlag();
 	}
 
 	/**
@@ -179,32 +195,74 @@ final class Flow extends Base
 
 		if ($flow->templateId)
 		{
-			$result = (new \Bitrix\Tasks\Item\Task\Template($flow->templateId, $user->getId()))
-				->skipAccessCheck()
-				->transform(new \Bitrix\Tasks\Item\Converter\Task\Template\ToTask());
-
-			if ($result->isSuccess())
+			// todo remove this check after tasks 24.200.0 release
+			if (method_exists(TemplateProvider::class, 'getById'))
 			{
-				$data = \Bitrix\Tasks\Manager\Task::convertFromItem($result->getInstance());
+				$select = [
+					'TITLE',
+					'DESCRIPTION',
+					'PRIORITY',
+					'ACCOMPLICES',
+					'AUDITORS',
+					'TAGS',
+					CRM\UserField::getMainSysUFCode(),
+				];
+				$data = TemplateProvider::getById($flow->templateId, $select);
 
-				$template = new TaskTemplateDto(
-					name: $data['TITLE'],
-					description: $data['DESCRIPTION'],
-					priority: TaskPriority::tryFrom((int)$data['PRIORITY']) ?? TaskPriority::Normal,
-					accomplices: array_map('intval', $data['ACCOMPLICES'] ?? []),
-					auditors: array_map('intval', $data['AUDITORS'] ?? []),
-					files: $this->prepareDiskFiles($flow->templateId, $user->getId()),
-					checklist: $this->prepareChecklist($flow->templateId, $user->getId()),
-					tags: array_map(
-						fn($tag) => new TaskTemplateTagDto(id: $tag, name: $tag),
-						$data['TAGS'] ?? [],
-					),
-					crm: $this->prepareCrmElements($data),
-				);
+				if ($data)
+				{
+					$accomplices = unserialize($data['ACCOMPLICES'], ['allowed_classes' => false]);
+					$auditors = unserialize($data['AUDITORS'], ['allowed_classes' => false]);
 
-				$userIds = array_unique(
-					array_merge($template->accomplices, $template->auditors)
-				);
+					$template = new TaskTemplateDto(
+						name: $data['TITLE'],
+						description: $data['DESCRIPTION'],
+						priority: TaskPriority::tryFrom((int)$data['PRIORITY']) ?? TaskPriority::Normal,
+						accomplices: array_map('intval', $accomplices ?? []),
+						auditors: array_map('intval', $auditors ?? []),
+						files: $this->prepareDiskFiles($flow->templateId, $user->getId()),
+						checklist: $this->prepareChecklist($flow->templateId, $user->getId()),
+						tags: array_map(
+							fn($tag) => new TaskTemplateTagDto(id: $tag, name: $tag),
+							$data['TAGS'] ?? [],
+						),
+						crm: $this->prepareCrmElements($data),
+					);
+
+					$userIds = array_unique(
+						array_merge($template->accomplices, $template->auditors)
+					);
+				}
+			}
+			else
+			{
+				$result = (new \Bitrix\Tasks\Item\Task\Template($flow->templateId, $user->getId()))
+					->skipAccessCheck()
+					->transform(new \Bitrix\Tasks\Item\Converter\Task\Template\ToTask());
+
+				if ($result->isSuccess())
+				{
+					$data = \Bitrix\Tasks\Manager\Task::convertFromItem($result->getInstance());
+
+					$template = new TaskTemplateDto(
+						name: $data['TITLE'],
+						description: $data['DESCRIPTION'],
+						priority: TaskPriority::tryFrom((int)$data['PRIORITY']) ?? TaskPriority::Normal,
+						accomplices: array_map('intval', $data['ACCOMPLICES'] ?? []),
+						auditors: array_map('intval', $data['AUDITORS'] ?? []),
+						files: $this->prepareDiskFiles($flow->templateId, $user->getId()),
+						checklist: $this->prepareChecklist($flow->templateId, $user->getId()),
+						tags: array_map(
+							fn($tag) => new TaskTemplateTagDto(id: $tag, name: $tag),
+							$data['TAGS'] ?? [],
+						),
+						crm: $this->prepareCrmElements($data),
+					);
+
+					$userIds = array_unique(
+						array_merge($template->accomplices, $template->auditors)
+					);
+				}
 			}
 		}
 
@@ -251,53 +309,10 @@ final class Flow extends Base
 
 	private function prepareDiskFiles(int $templateId, ?int $userId): array
 	{
-		if (!Loader::includeModule('disk'))
-		{
-			return [];
-		}
+		$diskFileProvider = new DiskFileProvider($userId);
+		$attachments = $diskFileProvider->getDiskFileAttachmentsByTemplate($templateId);
 
-		$driver = Driver::getInstance();
-		$urlManager = $driver->getUrlManager();
-		$userFieldManager = $driver->getUserFieldManager();
-		$attachedObjects = $userFieldManager->getAttachedObjectByEntity(
-			'TASKS_TASK_TEMPLATE',
-			$templateId,
-			'UF_TASK_WEBDAV_FILES'
-		);
-
-		if (empty($attachedObjects))
-		{
-			return [];
-		}
-
-		$result = [];
-
-		foreach ($attachedObjects as $attachedObject)
-		{
-			$file = $attachedObject->getFile();
-			if (!$file || !$attachedObject->canRead($userId))
-			{
-				continue;
-			}
-
-			$fileId = $attachedObject->getId();
-
-			$result[] = DiskFileDto::make([
-				'ID' => $fileId,
-				'OBJECT_ID' => $attachedObject->getObjectId(),
-				'NAME' => $file->getName(),
-				'TYPE' => TypeFile::getMimeTypeByFilename($file->getName()),
-				'URL' => $urlManager::getUrlUfController('show', ['attachedId' => $fileId]),
-				'PREVIEW_URL' => $urlManager::getUrlToActionShowUfFile($fileId, [
-					'width' => 640,
-					'height' => 640,
-				]),
-				'PREVIEW_HEIGHT' => 640,
-				'PREVIEW_WIDTH' => 640,
-			]);
-		}
-
-		return $result;
+		return array_values(array_map(fn($attachment) => DiskFileDto::make($attachment), $attachments));
 	}
 
 	/**

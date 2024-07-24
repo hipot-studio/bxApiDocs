@@ -44,6 +44,7 @@ class TasksMobileCommentsComponent extends CBitrixComponent
 
 	private function checkParameters(): void
 	{
+		$this->arResult['TASK_ID'] = (int)$this->arParams['TASK_ID'];
 		$this->arResult['NAME_TEMPLATE'] = (
 			empty($this->arParams['NAME_TEMPLATE'])
 				? CSite::GetNameFormat(false)

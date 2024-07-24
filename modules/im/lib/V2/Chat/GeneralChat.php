@@ -14,6 +14,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use CAllSite;
 
 class GeneralChat extends GroupChat
 {
@@ -199,12 +200,14 @@ class GeneralChat extends GroupChat
 
 		$installUsers = $this->getUsersForInstall();
 
+		$portalLanguage = self::getPortalLanguage();
+
 		$params = [
 			'TYPE' => self::IM_TYPE_OPEN,
 			'ENTITY_TYPE' => self::ENTITY_TYPE_GENERAL,
 			'COLOR' => 'AZURE',
-			'TITLE' => Loc::getMessage('IM_CHAT_GENERAL_TITLE'),
-			'DESCRIPTION' => Loc::getMessage('IM_CHAT_GENERAL_DESCRIPTION_MSGVER_1'),
+			'TITLE' => Loc::getMessage('IM_CHAT_GENERAL_TITLE', null, $portalLanguage),
+			'DESCRIPTION' => Loc::getMessage('IM_CHAT_GENERAL_DESCRIPTION_MSGVER_1', null, $portalLanguage),
 			'AUTHOR_ID' => User::getFirstAdmin(),
 			'USER_COUNT' => count($installUsers),
 		];
@@ -252,6 +255,27 @@ class GeneralChat extends GroupChat
 		$chat->isFilledNonCachedData = false;
 
 		return $result;
+	}
+
+	private static function getPortalLanguage(): ?string
+	{
+		$defSite = CAllSite::GetDefSite();
+		if ($defSite === false)
+		{
+			return null;
+		}
+
+		$portalData = CAllSite::GetByID($defSite)->Fetch();
+		if ($portalData)
+		{
+			$languageId = $portalData['LANGUAGE_ID'];
+			if ($languageId !== '')
+			{
+				return $languageId;
+			}
+		}
+
+		return null;
 	}
 
 	public static function linkGeneralChat(?int $chatId = null): bool
@@ -389,7 +413,7 @@ class GeneralChat extends GroupChat
 			'MESSAGE_TYPE' => self::IM_TYPE_CHAT,
 			'TO_CHAT_ID' => $this->getChatId(),
 			'FROM_USER_ID' => 0,
-			'MESSAGE' => Loc::getMessage('IM_CHAT_GENERAL_CREATE_WELCOME'),
+			'MESSAGE' => Loc::getMessage('IM_CHAT_GENERAL_CREATE_WELCOME', null, self::getPortalLanguage()),
 			'SYSTEM' => 'Y',
 			'PUSH' => 'N',
 			'PARAMS' => [
@@ -535,6 +559,29 @@ class GeneralChat extends GroupChat
 		$user = User::getInstance($userId);
 
 		return Loc::getMessage("IM_CHAT_GENERAL_LEAVE_{$user->getGender()}", Array('#USER_NAME#' => htmlspecialcharsback($user->getName())));
+	}
+
+	public static function changeLangAgent(): string
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return '';
+		}
+
+		GeneralChat::cleanGeneralChatCache(self::ID_CACHE_ID);
+
+		$chatId = GeneralChat::getGeneralChatId();
+		if ($chatId > 0)
+		{
+			$portalLanguage = self::getPortalLanguage();
+
+			ChatTable::update($chatId, [
+				'TITLE' => Loc::getMessage('IM_CHAT_GENERAL_TITLE', null, $portalLanguage),
+				'DESCRIPTION' => Loc::getMessage('IM_CHAT_GENERAL_DESCRIPTION_MSGVER_1', null, $portalLanguage),
+			]);
+		}
+
+		return '';
 	}
 
 	private static function getCache(string $cacheId): Cache

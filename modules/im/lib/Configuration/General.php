@@ -168,7 +168,7 @@ class General extends Base
 			];
 		}
 
-		OptionStateTable::addMulti($rows, true);
+		OptionStateTable::multiplyInsertWithoutDuplicate($rows);
 	}
 
 	/**

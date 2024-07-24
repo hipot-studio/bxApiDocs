@@ -2,6 +2,7 @@
 
 namespace Bitrix\ImMobile\NavigationTab;
 
+use Bitrix\Main\EventManager;
 use DateTimeInterface;
 use CCloudStorageBucket;
 use CSmile;
@@ -219,6 +220,17 @@ class Manager
 		{
 			$firstTabId = $tabs[0]->getId();
 		}
+		$enableDevWorkspace = false;
+		if (Option::get('mobile', 'developers_menu_section', 'N') === 'Y')
+		{
+			foreach (EventManager::getInstance()->findEventHandlers("mobileapp", "onJNComponentWorkspaceGet", ['immobile']) as $event)
+			{
+				if ($event['TO_METHOD'] === 'getImmobileJNDevWorkspace')
+				{
+					$enableDevWorkspace = true;
+				}
+			}
+		}
 
 		return array_merge(
 			[
@@ -261,6 +273,7 @@ class Manager
 				'CAN_USE_TELEPHONY' => Loader::includeModule('voximplant') && \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls(),
 				'FIRST_TAB_ID' => $firstTabId,
 				'HUMAN_RESOURCES_STRUCTURE_AVAILABLE' => $humanResourcesStructureAvailable ? 'Y' : 'N',
+				'ENABLE_DEV_WORKSPACE' => $enableDevWorkspace ? 'Y' : 'N',
 			],
 			$this->getInvitationParams(),
 		);

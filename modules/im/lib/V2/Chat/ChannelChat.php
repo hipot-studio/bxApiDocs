@@ -97,7 +97,8 @@ class ChannelChat extends GroupChat
 			'PUSH' => 'N',
 			'PARAMS' => [
 				'COMPONENT_ID' => self::MESSAGE_COMPONENT_START_CHANNEL,
-			]
+			],
+			'SKIP_COUNTER_INCREMENTS' => 'Y',
 		]);
 	}
 }

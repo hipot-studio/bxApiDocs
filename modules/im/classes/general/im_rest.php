@@ -1025,6 +1025,15 @@ class CIMRestService extends IRestService
 			$config['PARSE_TEXT'] = 'Y';
 		}
 
+		if (isset($arParams['DATE_LAST_ACTIVITY']) && $arParams['DATE_LAST_ACTIVITY'])
+		{
+			try
+			{
+				$config['LAST_MESSAGE_DATE'] = new \Bitrix\Main\Type\DateTime($arParams['DATE_LAST_ACTIVITY'], \DateTimeInterface::RFC3339);
+			}
+			catch (Exception $e){}
+		}
+
 		if (isset($arParams['LAST_MESSAGE_DATE']) && $arParams['LAST_MESSAGE_DATE'])
 		{
 			try

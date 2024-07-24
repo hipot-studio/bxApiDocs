@@ -8,6 +8,7 @@ use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals\FolderTable;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Loader;
+use Bitrix\Disk\File;
 use Bitrix\Rest\AccessException;
 
 class Disk extends \IRestService
@@ -16,8 +17,18 @@ class Disk extends \IRestService
 	{
 		return [
 			'mobile.disk.folder.getchildren' => ['callback' => [__CLASS__, 'get'], 'options' => ['private' => false]],
-			'mobile.disk.getattachmentsdata' => ['callback' => [__CLASS__, 'getAttachmentsData'], 'options' => ['private' => false]],
-			'mobile.disk.getUploadedFilesFolder' => ['callback' => [__CLASS__, 'getUploadedFilesFolder'], 'options' => ['private' => false]],
+			'mobile.disk.getattachmentsdata' => [
+				'callback' => [__CLASS__, 'getAttachmentsData'],
+				'options' => ['private' => false],
+			],
+			'mobile.disk.getUploadedFilesFolder' => [
+				'callback' => [__CLASS__, 'getUploadedFilesFolder'],
+				'options' => ['private' => false],
+			],
+			'mobile.disk.getFileByObjectId' => [
+				'callback' => [__CLASS__, 'getFileByObjectId'],
+				'options' => ['private' => false],
+			],
 		];
 	}
 
@@ -88,10 +99,13 @@ class Disk extends \IRestService
 					$targetFolderId = $folderId;
 				}
 				$securityContext = $storage->getCurrentUserSecurityContext();
-				$parameters = Driver::getInstance()->getRightsManager()->addRightsCheck($securityContext, $parameters, ['ID', 'CREATED_BY']);
+				$parameters = Driver::getInstance()->getRightsManager()->addRightsCheck($securityContext, $parameters, [
+					'ID',
+					'CREATED_BY',
+				]);
 
 				$folder = Folder::getById($targetFolderId);
-				if($folder)
+				if ($folder)
 				{
 					$childrenRows = FolderTable::getChildren($folder->getRealObjectId(), $parameters);
 					$children = [];
@@ -107,7 +121,7 @@ class Disk extends \IRestService
 						$arrayData["SYNC_UPDATE_TIME"] = \CRestUtil::ConvertDateTime($arrayData["SYNC_UPDATE_TIME"]);
 						unset($arrayData["PARENT"]);
 						$arrayData["TYPE"] = $arrayData["TYPE"] == "2" ? "folder" : "file";
-						if($arrayData["TYPE"] == "file")
+						if ($arrayData["TYPE"] == "file")
 							$arrayData["PREVIEW_URL"] = \Bitrix\Main\Engine\UrlManager::getInstance()->create('disk.api.file.showImage', [
 								'fileId' => $arrayData["ID"],
 								'signature' => \Bitrix\Disk\Security\ParameterSigner::getImageSignature($arrayData["ID"], 400, 400),
@@ -158,7 +172,7 @@ class Disk extends \IRestService
 		{
 			$attachedObject = $userFieldManager->getAttachedObjectById($id);
 
-			if(!$attachedObject || !$attachedObject->getFile() || !$attachedObject->canRead($userId))
+			if (!$attachedObject || !$attachedObject->getFile() || !$attachedObject->canRead($userId))
 			{
 				continue;
 			}
@@ -199,5 +213,43 @@ class Disk extends \IRestService
 		}
 
 		return $folder->getId();
+	}
+
+	public static function getFileByObjectId(array $params): array
+	{
+		global $USER;
+		$userId = $USER->getId();
+		$storage = Driver::getInstance()->getStorageByUserId($userId);
+
+		if (!$storage)
+		{
+			return [];
+		}
+
+		$securityContext = $storage->getSecurityContext($userId);
+		$file = File::getById((int)$params['objectId']);
+
+		if (!$file)
+		{
+			return [];
+		}
+
+		if (!$securityContext->canRead($file->getRealObjectId()))
+		{
+			throw new AccessException();
+		}
+
+		$name = $file->getName();
+		$extension = $file->getExtension();
+		$type = TypeFile::getMimeTypeByFilename($name);
+
+		return [
+			'id' => $file->getId(),
+			'name' => $name,
+			'type' => $type,
+			'extension' => $extension,
+			'downloadLink' => Driver::getInstance()->getUrlManager()->getUrlForDownloadFile($file, true),
+		];
+
 	}
 }

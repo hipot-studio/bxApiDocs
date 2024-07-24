@@ -4,10 +4,12 @@ namespace Bitrix\Im\V2\Chat\Param;
 
 use Bitrix\Im\Model\ChatParamTable;
 use Bitrix\Im\Model\EO_ChatParam;
-use Bitrix\Im\V2\Chat\Param\Param\CopilotRoles;
 use Bitrix\Im\V2\Registry;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Application;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
+use Bitrix\Main\Loader;
 use Bitrix\Main\ORM;
 use IteratorAggregate;
 
@@ -16,6 +18,7 @@ use IteratorAggregate;
  */
 class Params extends Registry
 {
+	public const EVENT_CHAT_PARAM_INIT = 'OnChatParamInit';
 	public const
 		IS_COPILOT = 'IS_COPILOT',
 		COPILOT_ROLES = 'COPILOT_ROLES',
@@ -31,6 +34,7 @@ class Params extends Registry
 	protected string $paramName = '';
 	protected bool $isCreated = false;
 	protected array $droppedItems = [];
+	protected static ?array $eventParams = null;
 
 	private const CACHE_TTL = 18144000;
 	private static ?array $instance = [];
@@ -54,21 +58,57 @@ class Params extends Registry
 
 	protected function createParam($paramName): Param
 	{
+		$eventParam = $this->createEventParam($paramName);
+		if (isset($eventParam))
+		{
+			return $eventParam;
+		}
+
 		switch ($paramName)
 		{
 			case (self::IS_COPILOT):
 				return (new Param())->setType(Param::TYPE_BOOL);
+
 			case (self::COPILOT_MAIN_ROLE):
 				return (new Param())->setType(Param::TYPE_STRING);
-			case (self::COPILOT_ROLES):
-				return (new CopilotRoles());
+
 			default:
 				return (new Param())->setType(Param::TYPE_STRING);
 		}
 	}
 
+	protected function createEventParam(string $paramName): ?Param
+	{
+		foreach (self::$eventParams as $name => $data)
+		{
+			if ($name === $paramName)
+			{
+				if (isset($data['type']) && $this->isValidType((string)$data['type']))
+				{
+					return (new Param())->setType($data['type']);
+				}
+
+				if (
+					Loader::includeModule($data['moduleId'])
+					&& class_exists($data['className'])
+					&& is_subclass_of($data['className'], Param::class)
+				)
+				{
+					return (new $data['className']);
+				}
+			}
+		}
+
+		return null;
+	}
+
 	protected function load($source): Params
 	{
+		if (self::$eventParams === null)
+		{
+			$this->getParamsByEvent();
+		}
+
 		if (is_array($source))
 		{
 			$this->initByArray($source);
@@ -85,6 +125,38 @@ class Params extends Registry
 		$this->isLoaded = true;
 
 		return $this;
+	}
+
+	protected function isValidType(string $type): bool
+	{
+		return in_array($type, Param::PARAM_TYPES, true);
+	}
+
+	protected function getParamsByEvent(): void
+	{
+		$allParams = [];
+
+		$event = new Event('im', self::EVENT_CHAT_PARAM_INIT);
+		$event->send();
+		$resultList = $event->getResults();
+
+		foreach ($resultList as $eventResult)
+		{
+			if ($eventResult->getType() === EventResult::SUCCESS)
+			{
+				$params = $eventResult->getParameters();
+
+				if (is_array($params))
+				{
+					foreach ($params as $paramName => $paramData)
+					{
+						$allParams[$paramName] = $paramData;
+					}
+				}
+			}
+		}
+
+		self::$eventParams = $allParams;
 	}
 
 	public static function loadWithoutChat(array $source): self
@@ -140,7 +212,7 @@ class Params extends Registry
 			$cache->endDataCache($params);
 		}
 
-		$this->initByArray($params);
+		$this->load($params);
 
 		return $this;
 	}
@@ -358,6 +430,14 @@ class Params extends Registry
 
 	public function isValidParamName(string $paramName): bool
 	{
+		foreach (self::$eventParams as $name => $param)
+		{
+			if ($paramName === $name)
+			{
+				return true;
+			}
+		}
+
 		return in_array($paramName, self::CHAT_PARAMS, true);
 	}
 

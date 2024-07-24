@@ -135,6 +135,7 @@ class ImComponentConference extends CBitrixComponent
 
 		if (!Loader::includeModule('call'))
 		{
+			\ShowError(Loc::getMessage('IM_COMPONENT_MODULE_CALL_NOT_INSTALLED'));
 			return false;
 		}
 

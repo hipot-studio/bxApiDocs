@@ -16,6 +16,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use CAllSite;
 
 class GeneralChannel extends OpenChannelChat
 {
@@ -106,12 +107,14 @@ class GeneralChannel extends OpenChannelChat
 			]);
 		}
 
+		$portalLanguage = self::getPortalLanguage();
+
 		$params = [
 			'TYPE' => self::IM_TYPE_OPEN_CHANNEL,
 			'ENTITY_TYPE' => self::ENTITY_TYPE_GENERAL_CHANNEL,
 			'COLOR' => 'AZURE',
-			'TITLE' => Loc::getMessage('IM_CHAT_GENERAL_CHANNEL_TITLE'),
-			'DESCRIPTION' => Loc::getMessage('IM_CHAT_GENERAL_CHANNEL_DESCRIPTION'),
+			'TITLE' => Loc::getMessage('IM_CHAT_GENERAL_CHANNEL_TITLE', null, $portalLanguage),
+			'DESCRIPTION' => Loc::getMessage('IM_CHAT_GENERAL_CHANNEL_DESCRIPTION', null, $portalLanguage),
 			'AUTHOR_ID' => User::getFirstAdmin(),
 			'MEMBER_ENTITIES' => [['department', $this->getCompanyStructureId()]],
 		];
@@ -120,6 +123,27 @@ class GeneralChannel extends OpenChannelChat
 		self::cleanGeneralChannelCache(self::ID_CACHE_ID);
 
 		return $result;
+	}
+
+	private static function getPortalLanguage(): ?string
+	{
+		$defSite = CAllSite::GetDefSite();
+		if ($defSite === false)
+		{
+			return null;
+		}
+
+		$portalData = CAllSite::GetByID($defSite)->Fetch();
+		if ($portalData)
+		{
+			$languageId = $portalData['LANGUAGE_ID'];
+			if ($languageId !== '')
+			{
+				return $languageId;
+			}
+		}
+
+		return null;
 	}
 
 	public function addUsers(
@@ -190,7 +214,7 @@ class GeneralChannel extends OpenChannelChat
 			'MESSAGE_TYPE' => self::IM_TYPE_OPEN_CHANNEL,
 			'TO_CHAT_ID' => $this->getChatId(),
 			'FROM_USER_ID' => 0,
-			'MESSAGE' => Loc::getMessage('IM_CHAT_GENERAL_CHANNEL_CREATE_WELCOME'),
+			'MESSAGE' => Loc::getMessage('IM_CHAT_GENERAL_CHANNEL_CREATE_WELCOME', null, self::getPortalLanguage()),
 			'SYSTEM' => 'Y',
 			'PUSH' => 'N',
 			'PARAMS' => [
@@ -251,6 +275,29 @@ class GeneralChannel extends OpenChannelChat
 		}
 
 		self::installGeneralChannel();
+
+		return '';
+	}
+
+	public static function changeLangAgent(): string
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return '';
+		}
+
+		GeneralChannel::cleanGeneralChannelCache(self::ID_CACHE_ID);
+
+		$chatId = GeneralChannel::getGeneralChannelId();
+		if ($chatId > 0)
+		{
+			$portalLanguage = self::getPortalLanguage();
+
+			ChatTable::update($chatId, [
+				'TITLE' => Loc::getMessage('IM_CHAT_GENERAL_CHANNEL_TITLE', null, $portalLanguage),
+				'DESCRIPTION' => Loc::getMessage('IM_CHAT_GENERAL_CHANNEL_DESCRIPTION', null, $portalLanguage),
+			]);
+		}
 
 		return '';
 	}

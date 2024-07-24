@@ -47,6 +47,13 @@ class Call extends Engine\Controller
 		{
 			if ($call)
 			{
+				if ($call->hasErrors())
+				{
+					$this->addErrors($call->getErrors());
+					Application::getConnection()->unlock($lockName);
+					return null;
+				}
+
 				if (!$call->getAssociatedEntity()->checkAccess($currentUserId))
 				{
 					$this->addError(new Error("You can not access this call", 'access_denied'));
@@ -78,6 +85,13 @@ class Call extends Engine\Controller
 				catch (\Throwable $e)
 				{
 					$this->addError(new Error($e->getMessage(), $e->getCode()));
+					Application::getConnection()->unlock($lockName);
+					return null;
+				}
+
+				if ($call->hasErrors())
+				{
+					$this->addErrors($call->getErrors());
 					Application::getConnection()->unlock($lockName);
 					return null;
 				}
@@ -155,6 +169,11 @@ class Call extends Engine\Controller
 		}
 
 		$childCall = $parentCall->makeClone($newProvider);
+		if ($childCall->hasErrors())
+		{
+			$this->addErrors($childCall->getErrors());
+			return null;
+		}
 
 		$initiator = $childCall->getUser($currentUserId);
 		$initiator->updateState(CallUser::STATE_READY);
@@ -196,6 +215,12 @@ class Call extends Engine\Controller
 			return [
 				'success' => false
 			];
+		}
+
+		if ($call->hasErrors())
+		{
+			$this->addErrors($call->getErrors());
+			return null;
 		}
 
 		if (!$call->getAssociatedEntity()->checkAccess($currentUserId))
@@ -312,6 +337,12 @@ class Call extends Engine\Controller
 		$currentUserId = $this->getCurrentUser()->getId();
 		if (!$this->checkCallAccess($call, $currentUserId))
 		{
+			return null;
+		}
+
+		if ($call->hasErrors())
+		{
+			$this->addErrors($call->getErrors());
 			return null;
 		}
 

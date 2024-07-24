@@ -22,6 +22,15 @@ Class Param implements RegistryEntry, ActiveRecord
 		TYPE_INT_ARRAY = 'arrayInteger'
 	;
 
+	public const PARAM_TYPES = [
+		self::TYPE_STRING,
+		self::TYPE_INT,
+		self::TYPE_BOOL,
+		self::TYPE_JSON,
+		self::TYPE_STRING_ARRAY,
+		self::TYPE_INT_ARRAY,
+	];
+
 	protected ?string $type = null;
 	protected ?int $paramId = null;
 	protected ?int $chatId = null;
@@ -29,13 +38,6 @@ Class Param implements RegistryEntry, ActiveRecord
 	protected ?string $jsonValue = null;
 	protected $value = null;
 	protected bool $isHidden = false;
-
-	public static function getInstance(string $paramName, string $paramType, mixed $paramValue): self
-	{
-		$param = new self();
-
-		return $param->setName($paramName)->setType($paramType)->setValue($paramValue);
-	}
 
 	public static function getDataClass(): string
 	{

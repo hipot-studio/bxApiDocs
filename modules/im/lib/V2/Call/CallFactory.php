@@ -104,8 +104,8 @@ class CallFactory
 
 		if ($entityType === EntityType::CHAT && strpos($entityId, "chat") !== 0)
 		{
-			$query->where("INITIATOR_ID", $entityId);
-			$query->where("ENTITY_ID", $currentUserId);
+			$query->where('INITIATOR_ID', $currentUserId);
+			$query->where('ENTITY_ID', $entityId);
 		}
 		else
 		{

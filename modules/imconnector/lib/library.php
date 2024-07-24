@@ -1233,7 +1233,8 @@ class Library
 				$fileName = mb_substr($fileName, -50);
 			}
 
-			$tempFilePath = \CFile::GetTempName('', $fileName);
+			$tempFileName = \Bitrix\Main\Security\Random::getString(10);
+			$tempFilePath = \CFile::GetTempName('', $tempFileName);
 
 			if (
 				$httpClient->download($file['url'], $tempFilePath)

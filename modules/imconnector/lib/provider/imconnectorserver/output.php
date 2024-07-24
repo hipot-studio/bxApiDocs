@@ -361,6 +361,10 @@ class Output extends Base\Output
 							__METHOD__,
 							$errors
 						));
+
+						$errors[] = 'url:'.$this->controllerUrl;
+						$systemException = new \Bitrix\Main\SystemException('Network connection error: '.implode('; ', $errors));
+						\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog($systemException);
 					}
 				}
 				elseif ($waitResponse)

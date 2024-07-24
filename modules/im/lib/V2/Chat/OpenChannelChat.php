@@ -2,11 +2,7 @@
 
 namespace Bitrix\Im\V2\Chat;
 
-use Bitrix\Im\Recent;
-use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
-use Bitrix\Im\V2\Message;
-use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 
@@ -77,20 +73,10 @@ class OpenChannelChat extends ChannelChat
 		return true;
 	}
 
-	public static function sendSharedPull(array $pull, int $chatId = 0, ?array $userIds = null): void
+	public static function sendSharedPull(array $pull): void
 	{
-		Application::getInstance()->addBackgroundJob(function () use ($pull, $chatId, $userIds) {
-			$pull['extra']['is_shared_event'] = true;
-			if ($userIds !== null)
-			{
-				$pull['skip_users'] = $userIds;
-			}
-			elseif ($chatId)
-			{
-				$pull['skip_users'] = Chat::getInstance($chatId)->getRelations()->getUserIds();
-			}
-			\CPullWatch::AddToStack(\Bitrix\Im\V2\Chat\OpenChannelChat::PULL_TAG_SHARED_LIST, $pull);
-		});
+		$pull['extra']['is_shared_event'] = true;
+		\CPullWatch::AddToStack(\Bitrix\Im\V2\Chat\OpenChannelChat::PULL_TAG_SHARED_LIST, $pull);
 	}
 
 	public function isNew(): bool

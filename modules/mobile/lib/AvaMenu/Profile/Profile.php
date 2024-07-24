@@ -24,12 +24,17 @@ class Profile
 	{
 		global $USER;
 
-		return \CUser::FormatName(\CSite::GetNameFormat(false), [
-			"NAME" => $USER->GetFirstName(),
-			"LAST_NAME" => $USER->GetLastName(),
-			"SECOND_NAME" => $USER->GetSecondName(),
-			"LOGIN" => $USER->GetLogin(),
-		]);
+		return \CUser::FormatName(
+			\CSite::GetNameFormat(false),
+			[
+				"NAME" => $USER->GetFirstName(),
+				"LAST_NAME" => $USER->GetLastName(),
+				"SECOND_NAME" => $USER->GetSecondName(),
+				"LOGIN" => $USER->GetLogin(),
+			],
+			false,
+			false
+		);
 	}
 
 	private function getImageUrl(): string
@@ -71,6 +76,7 @@ class Profile
 			else
 			{
 				$url = '';
+
 				return $url;
 			}
 		}

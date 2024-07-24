@@ -500,7 +500,8 @@ class CounterService
 			self::DELAY_DELETION_COUNTERS_OF_FIRED_USER,
 			'',
 			'Y',
-			ConvertTimeStamp(time()+CTimeZone::GetOffset()+self::DELAY_DELETION_COUNTERS_OF_FIRED_USER, "FULL")
+			ConvertTimeStamp(time()+CTimeZone::GetOffset()+self::DELAY_DELETION_COUNTERS_OF_FIRED_USER, "FULL"),
+			existError: false
 		);
 	}
 

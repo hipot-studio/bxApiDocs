@@ -19,10 +19,10 @@ class Recent extends Registry implements RestConvertible, PopupDataAggregatable
 {
 	use ContextCustomer;
 
-	public static function getOpenChannels(int $userId, int $limit, ?int $lastMessageId = null): self
+	public static function getOpenChannels(int $limit, ?int $lastMessageId = null): self
 	{
 		$recent = new static();
-		$chatEntities = static::getOpenChannelEntities($userId, $limit, $lastMessageId);
+		$chatEntities = static::getOpenChannelEntities($limit, $lastMessageId);
 
 		foreach ($chatEntities as $entity)
 		{
@@ -38,13 +38,11 @@ class Recent extends Registry implements RestConvertible, PopupDataAggregatable
 		return $recent;
 	}
 
-	protected static function getOpenChannelEntities(int $userId, int $limit, ?int $lastMessageId = null): EO_Chat_Collection
+	protected static function getOpenChannelEntities(int $limit, ?int $lastMessageId = null): EO_Chat_Collection
 	{
 		$query = ChatTable::query()
 			->setSelect(['ID', 'LAST_MESSAGE_ID'])
 			->where('TYPE', Chat::IM_TYPE_OPEN_CHANNEL)
-			->withRelation($userId)
-			->whereNull('RELATION.ID')
 			->setLimit($limit)
 			->setOrder(['LAST_MESSAGE_ID' => 'DESC'])
 		;

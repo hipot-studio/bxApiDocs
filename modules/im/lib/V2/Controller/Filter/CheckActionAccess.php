@@ -22,7 +22,9 @@ class CheckActionAccess extends Base
 		$chat = $this->getChat();
 		if (!$chat instanceof Chat)
 		{
-			return null;
+			$this->addError(new Chat\ChatError(Chat\ChatError::NOT_FOUND));
+
+			return new EventResult(EventResult::ERROR, null, null, $this);
 		}
 
 		if (!$chat->canDo($this->actionName))

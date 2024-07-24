@@ -16,6 +16,8 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Event;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\Web\JWT;
+use Bitrix\Main\Error;
+use Bitrix\Main\ErrorCollection;
 
 class Call
 {
@@ -61,6 +63,8 @@ class Call
 	/** @var Signaling */
 	protected $signaling;
 
+	protected ?ErrorCollection $errorCollection = null;
+
 	/**
 	 * Use one of the named constructors
 	 */
@@ -98,6 +102,60 @@ class Call
 	public function getActionUserId(): ?int
 	{
 		return $this->actionUserId;
+	}
+
+	/**
+	 * Add multiple errors
+	 * @param Error[] $errors
+	 */
+	public function addErrors(array $errors): void
+	{
+		if (!$this->errorCollection instanceof ErrorCollection)
+		{
+			$this->errorCollection = new ErrorCollection();
+		}
+		$this->errorCollection->add($errors);
+	}
+
+	/**
+	 * @return Error[]
+	 */
+	public function getErrors(): array
+	{
+		if ($this->errorCollection instanceof ErrorCollection)
+		{
+			return $this->errorCollection->toArray();
+		}
+
+		return [];
+	}
+
+	/**
+	 * Upends stack of errors.
+	 * @param Error $error Error message object.
+	 * @return void
+	 */
+	public function addError(Error $error): void
+	{
+		if (!$this->errorCollection instanceof ErrorCollection)
+		{
+			$this->errorCollection = new ErrorCollection();
+		}
+		$this->errorCollection->add([$error]);
+	}
+
+	/**
+	 * Tells true if error have happened.
+	 * @return boolean
+	 */
+	public function hasErrors(): bool
+	{
+		if ($this->errorCollection instanceof ErrorCollection)
+		{
+			return !$this->errorCollection->isEmpty();
+		}
+
+		return false;
 	}
 
 	public function setActionUserId(int $byUserId): self
@@ -797,20 +855,12 @@ class Call
 
 	public static function isCallServerEnabled(): bool
 	{
-		if (Loader::includeModule("bitrix24"))
+		if (!Loader::includeModule('call'))
 		{
-			return true;
+			return false;
 		}
 
 		return (bool)Option::get("im", "call_server_enabled");
-	}
-
-	/**
-	 * @deprecated
-	 */
-	public static function isBitrixCallServerEnabled(): bool
-	{
-		return self::isCallServerEnabled();
 	}
 
 	public static function isBitrixCallEnabled(): bool
@@ -830,11 +880,6 @@ class Call
 		//$isEnabled = Option::get('im', 'new_call_layout_enabled', 'N');
 
 		return true;
-	}
-
-	public static function isVoximplantCallServerEnabled(): bool
-	{
-		return self::isCallServerEnabled();
 	}
 
 	protected function getCurrentUserId() : int
