@@ -6,24 +6,27 @@ use Bitrix\StaffTrack\Model\Shift;
 
 class ShiftMapper
 {
-	public function __construct()
-	{
-
-	}
-
 	public function createEntityFromDto(ShiftDto $shiftDto): Shift
 	{
 		$shift = (new Shift(false))
 			->setUserId($shiftDto->userId)
-			->setShiftDate($shiftDto->shiftDate)
-			->setDateCreate($shiftDto->dateCreate)
-			->setLocation($shiftDto->location)
 			->setStatus($shiftDto->status)
+			->setLocation($shiftDto->location)
 		;
 
 		if (!empty($shiftDto->id))
 		{
 			$shift->setId($shiftDto->id);
+		}
+
+		if ($shiftDto->shiftDate !== null)
+		{
+			$shift->setShiftDate($shiftDto->shiftDate);
+		}
+
+		if ($shiftDto->dateCreate !== null)
+		{
+			$shift->setDateCreate($shiftDto->dateCreate);
 		}
 
 		return $shift;
@@ -41,4 +44,3 @@ class ShiftMapper
 		;
 	}
 }
-

@@ -5,7 +5,6 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields;
 
-
 Loc::loadMessages(__FILE__);
 
 /**

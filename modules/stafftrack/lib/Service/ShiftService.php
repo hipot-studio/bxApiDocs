@@ -3,8 +3,7 @@
 namespace Bitrix\StaffTrack\Service;
 
 use Bitrix\Main;
-use Bitrix\StaffTrack\Model\ShiftCollection;
-use Bitrix\StaffTrack\Provider\ShiftProvider;
+use Bitrix\StaffTrack\Internals\Exception\InvalidDtoException;
 use Bitrix\StaffTrack\Shift\Command\Add;
 use Bitrix\StaffTrack\Shift\Command\Delete;
 use Bitrix\StaffTrack\Shift\Command\Update;
@@ -28,11 +27,17 @@ class ShiftService
 	{
 	}
 
+	/**
+	 * @throws InvalidDtoException
+	 */
 	public function add(ShiftDto $shiftDto): Main\Result
 	{
 		return (new Add())->execute($shiftDto);
 	}
 
+	/**
+	 * @throws InvalidDtoException
+	 */
 	public function update(ShiftDto $shiftDto): Main\Result
 	{
 		return (new Update())->execute($shiftDto);

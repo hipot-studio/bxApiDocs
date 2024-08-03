@@ -58,8 +58,6 @@ class Add implements ObserverInterface
 		{
 			$this->handleDialogUserCounter();
 		}
-
-		$this->provider->setNotNew();
 	}
 
 	/**
@@ -115,6 +113,7 @@ class Add implements ObserverInterface
 		$handledChat = HandledChatTable::query()
 			->setSelect(['*'])
 			->where('CHAT_ID', $this->chatId)
+			->setCacheTtl(86400)
 			->setLimit(1)
 			->exec()->fetchObject()
 		;
@@ -170,5 +169,7 @@ class Add implements ObserverInterface
 
 		$sqlString = $helper->getInsertIgnore(CounterTable::getTableName(), "(USER_ID)", " VALUES " . $query);
 		$connection->query($sqlString);
+
+		CounterTable::cleanCache();
 	}
 }

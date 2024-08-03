@@ -1,7 +1,7 @@
 <?php
 IncludeModuleLangFile(__FILE__);
 
-class CAllControllerCounter
+class CControllerCounter
 {
 	public static function GetTypeArray()
 	{
@@ -542,22 +542,32 @@ class CAllControllerCounter
 
 		return $DB->Query($strSql);
 	}
-}
 
-class CControllerCounterResult extends CDBResult
-{
-	public function __construct($res)
+	public static function GetMemberValues($CONTROLLER_MEMBER_ID)
 	{
-		parent::__construct($res);
-	}
+		$connection = \Bitrix\Main\Application::getConnection();
 
-	public function Fetch()
-	{
-		$res = parent::Fetch();
-		if ($res)
-		{
-			$res['DISPLAY_VALUE'] = CControllerCounter::FormatValue($res['VALUE'], $res['COUNTER_FORMAT']);
-		}
-		return $res;
+		$result = $connection->query('
+			SELECT
+				cc.ID
+				,cc.NAME
+				,cc.COUNTER_TYPE
+				,cc.COUNTER_FORMAT
+				,ccv.VALUE_INT
+				,ccv.VALUE_FLOAT
+				,ccv.VALUE_DATE
+				,ccv.VALUE_STRING
+			FROM
+				b_controller_member cm
+				INNER JOIN b_controller_counter_group ccg ON ccg.CONTROLLER_GROUP_ID = cm.CONTROLLER_GROUP_ID
+				INNER JOIN b_controller_counter cc ON cc.ID = ccg.CONTROLLER_COUNTER_ID
+				LEFT JOIN b_controller_counter_value ccv ON ccv.CONTROLLER_MEMBER_ID = cm.ID AND ccv.CONTROLLER_COUNTER_ID = cc.ID
+			WHERE
+				cm.ID = ' . intval($CONTROLLER_MEMBER_ID) . '
+			ORDER BY
+				cc.NAME
+		');
+
+		return new CControllerCounterResult($result);
 	}
 }

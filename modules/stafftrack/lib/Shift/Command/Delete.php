@@ -4,20 +4,24 @@ namespace Bitrix\StaffTrack\Shift\Command;
 
 use Bitrix\Main;
 use Bitrix\Stafftrack\Integration\Pull;
+use Bitrix\StaffTrack\Internals\Exception\InvalidDtoException;
 use Bitrix\StaffTrack\Shift\ShiftDto;
-use Bitrix\StaffTrack\Shift\Observer;
 
 class Delete extends AbstractCommand
 {
 	/**
 	 * @param ShiftDto $shiftDto
 	 * @return Main\Result
+	 * @throws InvalidDtoException
 	 */
 	public function execute(ShiftDto $shiftDto): Main\Result
 	{
 		$result = new Main\Result();
 
 		$this->shiftDto = $shiftDto;
+
+		$this->shiftDto->validateDelete();
+
 		$shift = $this->mapper->createEntityFromDto($this->shiftDto);
 
 		$deleteResult = $shift->delete();

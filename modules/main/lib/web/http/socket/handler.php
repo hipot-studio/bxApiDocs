@@ -35,10 +35,10 @@ class Handler extends Http\Handler
 
 	/**
 	 * @param RequestInterface $request
-	 * @param Http\ResponseBuilder $responseBuilder
+	 * @param Http\ResponseBuilderInterface $responseBuilder
 	 * @param array $options
 	 */
-	public function __construct(RequestInterface $request, Http\ResponseBuilder $responseBuilder, array $options = [])
+	public function __construct(RequestInterface $request, Http\ResponseBuilderInterface $responseBuilder, array $options = [])
 	{
 		Http\Handler::__construct($request, $responseBuilder, $options);
 

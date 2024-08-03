@@ -8,6 +8,7 @@ use Bitrix\StaffTrack\Helper\DateHelper;
 use Bitrix\StaffTrack\Internals\Attribute\CheckInterface;
 use Bitrix\StaffTrack\Internals\Attribute\Nullable;
 use Bitrix\StaffTrack\Internals\Attribute\Primary;
+use Bitrix\StaffTrack\Internals\Attribute\Skip;
 use Bitrix\StaffTrack\Internals\Exception\InvalidDtoException;
 use ReflectionClass;
 use ReflectionException;
@@ -249,6 +250,11 @@ abstract class AbstractDto implements Arrayable
 		$map = [];
 		foreach ($properties as $property)
 		{
+			if (!empty($property->getAttributes(Skip::class)))
+			{
+				continue;
+			}
+
 			$name = $property->getName();
 
 			if (

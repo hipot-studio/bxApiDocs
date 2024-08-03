@@ -10,6 +10,7 @@ enum CancelReason: string
 	case SICK_LEAVE = 'STAFFTRACK_CANCEL_REASON_SICK_LEAVE';
 	case TIME_OFF = 'STAFFTRACK_CANCEL_REASON_TIME_OFF';
 	case VACATION = 'STAFFTRACK_CANCEL_REASON_VACATION';
+	case CUSTOM = 'STAFFTRACK_CANCEL_REASON_CUSTOM';
 
 	public static function getName(string $name): string
 	{

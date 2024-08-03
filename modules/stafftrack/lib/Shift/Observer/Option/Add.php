@@ -5,9 +5,9 @@ namespace Bitrix\StaffTrack\Shift\Observer\Option;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\Text\Emoji;
 use Bitrix\StaffTrack\Dictionary\Location;
 use Bitrix\StaffTrack\Dictionary\Option;
+use Bitrix\StaffTrack\Dictionary\Status;
 use Bitrix\StaffTrack\Provider\OptionProvider;
 use Bitrix\StaffTrack\Service\OptionService;
 use Bitrix\StaffTrack\Shift\Observer\ObserverInterface;
@@ -38,7 +38,7 @@ class Add implements ObserverInterface
 
 		$this->saveOption(
 			Option::TIMEZONE_OFFSET,
-			Emoji::encode($this->shiftDto->timezoneOffset)
+			$this->shiftDto->timezoneOffset
 		);
 
 		if ($this->shiftDto->skipOptions === true)
@@ -60,19 +60,31 @@ class Add implements ObserverInterface
 		{
 			$this->saveOption(
 				Option::DEFAULT_MESSAGE,
-				Emoji::encode($this->shiftDto->message)
+				$this->shiftDto->message
 			);
 		}
 
-		if (
-			!empty($this->shiftDto->location)
-			&& Location::tryFrom($this->shiftDto->location)
-		)
+		if (!empty($this->shiftDto->location))
 		{
-			$this->saveOption(
-				Option::DEFAULT_LOCATION,
-				Emoji::encode($this->shiftDto->location)
-			);
+			if (Location::tryFrom($this->shiftDto->location))
+			{
+				$this->saveOption(
+					Option::DEFAULT_LOCATION,
+					$this->shiftDto->location
+				);
+			}
+			else
+			{
+				$this->saveOption(
+					Option::DEFAULT_LOCATION,
+					Location::CUSTOM->value,
+				);
+
+				$this->saveOption(
+					Option::DEFAULT_CUSTOM_LOCATION,
+					$this->shiftDto->location,
+				);
+			}
 		}
 
 		$this->provider->invalidateCache($this->shiftDto->userId);
@@ -86,10 +98,13 @@ class Add implements ObserverInterface
 	 */
 	private function saveStateOption(): void
 	{
-		$this->saveOption(
-			Option::SEND_MESSAGE,
-			!empty($this->shiftDto->message) ? 'Y' : 'N',
-		);
+		if (Status::isWorkingStatus($this->shiftDto->status))
+		{
+			$this->saveOption(
+				Option::SEND_MESSAGE,
+				!empty($this->shiftDto->message) ? 'Y' : 'N',
+			);
+		}
 
 		$this->saveOption(
 			Option::SEND_GEO,

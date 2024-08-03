@@ -84,6 +84,11 @@ final class ShowcaseParams
 
 	private function getProviders(): array
 	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return [];
+		}
+
 		$services = Mailbox::getServices();
 		$providers = [];
 		foreach ($services as $service)

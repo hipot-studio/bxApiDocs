@@ -5,7 +5,6 @@ namespace Bitrix\Main\Mail;
 use Bitrix\Main;
 use Bitrix\Main\Error;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Data\UpdateResult;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Mail\Internal\SenderTable;
@@ -369,12 +368,7 @@ class Sender
 					'password' => $config['password'],
 					'isOauth' => $config['isOauth'],
 				));
-				if ($config->getIsOauth() && \CModule::includeModule('mail'))
-				{
-					$expireGapSeconds = self::getOAuthTokenExpireGapSeconds();
-					$token = \Bitrix\Mail\Helper\OAuth::getTokenByMeta($config->getPassword(), $expireGapSeconds);
-					$config->setPassword($token);
-				}
+				(new Main\Mail\Smtp\OAuthConfigPreparer())->prepareBeforeSendIfNeed($config);
 			}
 
 			$smtp[$email] = $config;
@@ -845,12 +839,4 @@ class Sender
 		;
 	}
 
-	private static function getOAuthTokenExpireGapSeconds(): int
-	{
-		// we use 55 minutes because providers give tokens for 1 hour or more,
-		// 5 minutes is left for not refresh token too frequent, for mass send
-		$default = isModuleInstalled('bitrix24') ? 55 * 60 : 10;
-
-		return (int)Main\Config\Option::get('main', '~oauth_token_expire_gap_seconds', $default);
-	}
 }

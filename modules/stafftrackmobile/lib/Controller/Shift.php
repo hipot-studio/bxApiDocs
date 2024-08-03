@@ -8,6 +8,7 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\StaffTrack\Dictionary\Mute;
@@ -106,6 +107,7 @@ class Shift extends Controller
 		return [
 			'defaultMessage' => Emoji::decode($optionProvider->getOption($userId, Option::DEFAULT_MESSAGE)?->getValue()),
 			'defaultLocation' => Emoji::decode($optionProvider->getOption($userId, Option::DEFAULT_LOCATION)?->getValue()),
+			'defaultCustomLocation' => Emoji::decode($optionProvider->getOption($userId, Option::DEFAULT_CUSTOM_LOCATION)?->getValue()),
 			'isFirstHelpViewed' => $optionProvider->getOption($userId, Option::IS_FIRST_HELP_VIEWED)?->getValue() === 'Y',
 			'sendGeo' => !$sendGeoOption || $sendGeoOption === 'Y',
 			'sendMessage' => !$sendMessageOption || $sendMessageOption === 'Y',
@@ -270,9 +272,14 @@ class Shift extends Controller
 			return $result;
 		}
 
+		$geoImageUrl = $staticMapResult->getData()['geoImageUrl'];
+		$addressString = $addressResult->getData()['addressString'];
+
 		return [
-			'geoImageUrl' => $staticMapResult->getData()['geoImageUrl'],
-			'addressString' => $addressResult->getData()['addressString'],
+			'signedGeoImageUrl' => (new Signer())->sign($geoImageUrl),
+			'signedAddressString' => (new Signer())->sign($addressString),
+			'geoImageUrl' => $geoImageUrl,
+			'addressString' => $addressString,
 		];
 	}
 

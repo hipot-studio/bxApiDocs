@@ -8,6 +8,7 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Type\Date;
 use Bitrix\StaffTrack\Access\Model\ShiftModel;
 use Bitrix\StaffTrack\Access\ShiftAccessController;
@@ -19,7 +20,6 @@ use Bitrix\StaffTrack\Model\Shift;
 use Bitrix\StaffTrack\Model\ShiftCollection;
 use Bitrix\StaffTrack\Shift\ShiftDto;
 use Bitrix\StaffTrack\Shift\ShiftRegistry;
-use Bitrix\StaffTrack\Type\DateTime;
 
 class ShiftProvider
 {
@@ -28,7 +28,11 @@ class ShiftProvider
 	/** @var int $userId */
 	private int $userId;
 
-	public static function getInstance(int $userId)
+	/**
+	 * @param int $userId
+	 * @return self
+	 */
+	public static function getInstance(int $userId): self
 	{
 		if (!isset(self::$instances[$userId]))
 		{
@@ -101,10 +105,9 @@ class ShiftProvider
 	 */
 	public function hasActiveShift(): bool
 	{
-		$timezoneOffset = DateHelper::getInstance()->getUserTimezoneOffsetUtc($this->userId);
-		$dateTime = DateTime::createFromTimezoneOffset($timezoneOffset);
+		$dateTime = DateHelper::getInstance()->getOffsetDate($this->userId);
 
-		return $this->findByDate($dateTime->toString()) !== null;
+		return $this->findByDate($dateTime->format(DateHelper::DATE_FORMAT)) !== null;
 	}
 
 	/**
@@ -196,7 +199,6 @@ class ShiftProvider
 	 * @param array $filter
 	 * @param Query $query
 	 * @return void
-	 * @throws \Bitrix\Main\ObjectException
 	 */
 	private function prepareFilter(array $filter, Query $query): void
 	{
@@ -297,10 +299,12 @@ class ShiftProvider
 		return $result;
 	}
 
+	/**
+	 * @param ShiftDto $shiftDto
+	 * @return ShiftDto
+	 */
 	public function prepareToAdd(ShiftDto $shiftDto): ShiftDto
 	{
-		$status = Status::tryFrom($shiftDto->status) ?? Status::WORKING;
-
 		if (!empty($shiftDto->cancelReason))
 		{
 			$shiftDto->setDateCancel(DateHelper::getInstance()->getServerDate());
@@ -308,23 +312,25 @@ class ShiftProvider
 
 		if (empty($shiftDto->shiftDate))
 		{
-			$shiftDto->setShiftDate(new Date());
+			$shiftDto->setShiftDate(DateHelper::getInstance()->getServerDate());
 		}
 
 		return $shiftDto
 			->setUserId($this->userId)
 			->setDateCreate(DateHelper::getInstance()->getServerDate())
-			->setStatus($status->value)
 			->setMessage($this->prepareStringParam($shiftDto->message))
 			->setLocation($this->prepareStringParam($shiftDto->location))
 			->setCancelReason($this->prepareStringParam($shiftDto->cancelReason))
 		;
 	}
 
+	/**
+	 * @param Shift $shift
+	 * @param ShiftDto $shiftDto
+	 * @return ShiftDto
+	 */
 	public function prepareToUpdate(Shift $shift, ShiftDto $shiftDto): ShiftDto
 	{
-		$status = Status::tryFrom($shiftDto->status) ?? Status::WORKING;
-
 		if (!empty($shiftDto->cancelReason))
 		{
 			$shiftDto->setDateCancel(DateHelper::getInstance()->getServerDate());
@@ -335,16 +341,18 @@ class ShiftProvider
 			->setUserId($shift->getUserId())
 			->setShiftDate($shift->getShiftDate())
 			->setDateCreate($shift->getDateCreate())
-			->setLocation($shift->getLocation())
-			->setStatus($status->value)
 			->setMessage($this->prepareStringParam($shiftDto->message))
 			->setLocation($this->prepareStringParam($shiftDto->location))
 			->setCancelReason($this->prepareStringParam($shiftDto->cancelReason))
 		;
 	}
 
+	/**
+	 * @param string|null $value
+	 * @return string|null
+	 */
 	private function prepareStringParam(?string $value): ?string
 	{
-		return is_string($value) ? trim($value) : $value;
+		return is_string($value) ? Emoji::encode(trim($value)) : $value;
 	}
 }

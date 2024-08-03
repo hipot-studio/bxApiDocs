@@ -5,6 +5,7 @@ namespace Bitrix\StaffTrack\Controller;
 use Bitrix\Main;
 use Bitrix\Main\Access\Exception\UnknownActionException;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
@@ -12,12 +13,15 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\Security\Sign\BadSignatureException;
+use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\SystemException;
 use Bitrix\StaffTrack\Access\Model\ShiftModel;
 use Bitrix\StaffTrack\Access\ShiftAccessController;
 use Bitrix\StaffTrack\Access\ShiftAction;
 use Bitrix\StaffTrack\Controller\Trait\ErrorResponseTrait;
 use Bitrix\StaffTrack\Helper\DateHelper;
+use Bitrix\StaffTrack\Internals\Exception\InvalidDtoException;
 use Bitrix\StaffTrack\Model;
 use Bitrix\StaffTrack\Provider\ShiftProvider;
 use Bitrix\StaffTrack\Service\ShiftService;
@@ -61,40 +65,6 @@ class Shift extends Controller
 		$this->provider = ShiftProvider::getInstance($this->userId);
 		$this->service = ShiftService::getInstance($this->userId);
 		$this->accessController = ShiftAccessController::getInstance($this->userId);
-	}
-
-	/**
-	 * @param string $date
-	 * @return array
-	 * @throws ArgumentException
-	 * @throws Main\LoaderException
-	 * @throws ObjectException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 * @throws UnknownActionException
-	 */
-	public function findByDateAction(string $date): array
-	{
-		if (!$this->isIntranetUser())
-		{
-			return $this->buildErrorResponse('Access denied');
-		}
-
-		$shift = $this->provider->findByDate($date);
-		if ($shift === null)
-		{
-			return $this->buildErrorResponse('Shift not found');
-		}
-
-		$accessModel = ShiftModel::createFromObject($shift);
-		if (!$this->accessController->check(ShiftAction::VIEW, $accessModel))
-		{
-			return $this->buildErrorResponse('Access denied');
-		}
-
-		return [
-			'shift' => $shift,
-		];
 	}
 
 	/**
@@ -166,11 +136,7 @@ class Shift extends Controller
 	/**
 	 * @param ShiftDto $shiftDto
 	 * @return array
-	 * @throws ArgumentException
 	 * @throws LoaderException
-	 * @throws ObjectException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
 	 * @throws UnknownActionException
 	 */
 	public function addAction(ShiftDto $shiftDto): array
@@ -181,6 +147,10 @@ class Shift extends Controller
 		}
 
 		$shiftDto = $this->provider->prepareToAdd($shiftDto);
+		if (!$this->validateGeo($shiftDto))
+		{
+			return $this->buildErrorResponse('Stop hacking');
+		}
 
 		$accessModel = ShiftModel::createFromDto($shiftDto);
 		if (!$this->accessController->check(ShiftAction::ADD, $accessModel))
@@ -196,7 +166,15 @@ class Shift extends Controller
 			return $this->buildErrorResponse('Shift already exist');
 		}
 
-		$saveResult = $this->service->add($shiftDto);
+		try
+		{
+			$saveResult = $this->service->add($shiftDto);
+		}
+		catch (InvalidDtoException $exception)
+		{
+			return $this->buildErrorResponse($exception->getMessage());
+		}
+
 		if ($saveResult->isSuccess())
 		{
 			return $saveResult->getData();
@@ -205,6 +183,35 @@ class Shift extends Controller
 		$this->addErrors($saveResult->getErrors());
 
 		return [];
+	}
+
+	protected function validateGeo(ShiftDto $shiftDto): bool
+	{
+		if (empty($shiftDto->geoImageUrl) || in_array($shiftDto->geoImageUrl, $this->getRandomMapImages(), true))
+		{
+			return true;
+		}
+
+		try
+		{
+			$shiftDto
+				->setGeoImageUrl((new Signer())->unsign($shiftDto->geoImageUrl))
+				->setAddress((new Signer())->unsign($shiftDto->address))
+			;
+		}
+		catch (BadSignatureException | ArgumentTypeException)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	protected function getRandomMapImages(): array
+	{
+		$imagesPath = '/bitrix/mobileapp/stafftrackmobile/extensions/stafftrack/map/images';
+
+		return array_map(static fn (int $i) => "$imagesPath/blurred-map-$i.png", range(1, 10));
 	}
 
 	/**
@@ -234,7 +241,15 @@ class Shift extends Controller
 			return $this->buildErrorResponse('Access denied');
 		}
 
-		$updateResult = $this->service->update($shiftDto);
+		try
+		{
+			$updateResult = $this->service->update($shiftDto);
+		}
+		catch (InvalidDtoException $exception)
+		{
+			return $this->buildErrorResponse($exception->getMessage());
+		}
+
 		if ($updateResult->isSuccess())
 		{
 			return $updateResult->getData();

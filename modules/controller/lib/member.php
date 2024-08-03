@@ -150,7 +150,7 @@ class MemberTable extends DataManager
 			new Fields\BooleanField(
 				'DISCONNECTED',
 				[
-					'values' =>['N', 'Y'],
+					'values' => ['N', 'Y'],
 					'default' => 'N',
 					'title' => Loc::getMessage('MEMBER_ENTITY_DISCONNECTED_FIELD'),
 				]
@@ -158,7 +158,7 @@ class MemberTable extends DataManager
 			new Fields\BooleanField(
 				'SHARED_KERNEL',
 				[
-					'values' =>['N', 'Y'],
+					'values' => ['N', 'Y'],
 					'default' => 'N',
 					'title' => Loc::getMessage('MEMBER_ENTITY_SHARED_KERNEL_FIELD'),
 				]
@@ -166,7 +166,7 @@ class MemberTable extends DataManager
 			new Fields\BooleanField(
 				'ACTIVE',
 				[
-					'values' =>['N', 'Y'],
+					'values' => ['N', 'Y'],
 					'default' => 'Y',
 					'title' => Loc::getMessage('MEMBER_ENTITY_ACTIVE_FIELD'),
 				]
@@ -186,7 +186,7 @@ class MemberTable extends DataManager
 			new Fields\BooleanField(
 				'SITE_ACTIVE',
 				[
-					'values' =>['N', 'Y'],
+					'values' => ['N', 'Y'],
 					'default' => 'Y',
 					'title' => Loc::getMessage('MEMBER_ENTITY_SITE_ACTIVE_FIELD'),
 				]

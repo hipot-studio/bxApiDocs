@@ -234,11 +234,9 @@ class WorkDayService
 	 */
 	private static function createShiftFromDefaultParams(int $userId, string $date, int $offset): ShiftDto
 	{
-		$dateTime = new \Bitrix\StaffTrack\Type\DateTime($date);
-
 		$dto = (new ShiftDto())
 			->setUserId($userId)
-			->setShiftDate($dateTime->getDate())
+			->setShiftDate(DateHelper::getInstance()->getServerDate($date))
 			->setTimezoneOffset($offset)
 			->setStatus(Status::WORKING->value)
 			->setLocation(Location::OFFICE->value)

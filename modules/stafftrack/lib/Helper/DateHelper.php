@@ -16,10 +16,16 @@ class DateHelper
 	public const DATE_FORMAT = 'd.m.Y';
 
 	/** @var string  */
+	public const DATETIME_FORMAT = 'd.m.Y H:i:s';
+
+	/** @var string  */
 	public const CLIENT_DATE_FORMAT = 'D M d Y';
 
 	/** @var string  */
 	public const CLIENT_DATETIME_FORMAT = 'Y-m-d\TH:i:s\Z';
+
+	/** @var string  */
+	public const UTC_TIMEZONE_NAME = 'UTC';
 
 	/** @var int[] */
 	private array $timezoneOffset = [];
@@ -33,24 +39,6 @@ class DateHelper
 	public function getDateUtc(DateTime $dateTime): DateTime
 	{
 		return DateTime::createFromTimestamp($dateTime->getTimestamp() - $this->getServerOffset());
-	}
-
-	/**
-	 * @param int $userId
-	 * @return int
-	 */
-	public function getUserTimezoneOffsetUtc(int $userId): int
-	{
-		if (isset($this->timezoneOffset[$userId]))
-		{
-			return $this->timezoneOffset[$userId];
-		}
-
-		$offsetOption = OptionProvider::getInstance()->getOption($userId, Option::TIMEZONE_OFFSET);
-
-		$this->timezoneOffset[$userId] = (int)($offsetOption?->getValue() ?? date('Z'));
-
-		return $this->timezoneOffset[$userId];
 	}
 
 	/**
@@ -80,6 +68,49 @@ class DateHelper
 		}
 	}
 
+	/**
+	 * @param int $userId
+	 * @return DateTime
+	 * @throws ObjectException
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function getOffsetDate(int $userId): DateTime
+	{
+		$userTimezoneOffset = $this->getUserTimezoneOffsetUtc($userId);
+		$dateTimezone = new \DateTimeZone(self::UTC_TIMEZONE_NAME);
+		$currentTime = new DateTime(null, null, $dateTimezone);
+
+		return DateTime::createFromTimestamp($currentTime->getTimestamp() + $userTimezoneOffset)
+			->setTimeZone($dateTimezone)
+		;
+	}
+
+	/**
+	 * @param int $userId
+	 * @return int
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	private function getUserTimezoneOffsetUtc(int $userId): int
+	{
+		if (isset($this->timezoneOffset[$userId]))
+		{
+			return $this->timezoneOffset[$userId];
+		}
+
+		$offsetOption = OptionProvider::getInstance()->getOption($userId, Option::TIMEZONE_OFFSET);
+
+		$this->timezoneOffset[$userId] = (int)($offsetOption?->getValue() ?? date('Z'));
+
+		return $this->timezoneOffset[$userId];
+	}
+
+	/**
+	 * @return int
+	 */
 	private function getServerOffset(): int
 	{
 		if ($this->serverOffset === null)

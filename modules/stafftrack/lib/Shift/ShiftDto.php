@@ -2,14 +2,18 @@
 
 namespace Bitrix\StaffTrack\Shift;
 
-use Bitrix\Main\ObjectException;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\StaffTrack\Dictionary\Status;
+use Bitrix\StaffTrack\Helper\DateHelper;
 use Bitrix\StaffTrack\Internals\AbstractDto;
+use Bitrix\StaffTrack\Internals\Attribute\Enum;
 use Bitrix\StaffTrack\Internals\Attribute\Min;
 use Bitrix\StaffTrack\Internals\Attribute\NotEmpty;
+use Bitrix\StaffTrack\Internals\Attribute\NotNull;
 use Bitrix\StaffTrack\Internals\Attribute\Nullable;
 use Bitrix\StaffTrack\Internals\Attribute\Primary;
+use Bitrix\StaffTrack\Internals\Attribute\Skip;
 use ReflectionProperty;
 
 /**
@@ -23,6 +27,7 @@ use ReflectionProperty;
  * @method self setDialogId(int $dialogId)
  * @method self setMessage(string $message)
  * @method self setGeoImageUrl(string $geoImageUrl)
+ * @method self setAddress(string $address)
  * @method self setCancelReason(string $cancelReason)
  * @method self setDateCancel(DateTime $dateCancel)
  * @method self setSkipTm(bool $skipTm)
@@ -32,26 +37,27 @@ use ReflectionProperty;
 final class ShiftDto extends AbstractDto
 {
 	#[Primary]
-	#[Min(0)]
+	#[Min(1)]
 	public int $id = 0;
 
+	#[NotEmpty]
 	#[Min(1)]
 	public int $userId;
 
 	#[NotEmpty]
-	public Date $shiftDate;
+	public ?Date $shiftDate = null;
+
+	#[NotNull]
+	public ?int $timezoneOffset = null;
+
+	#[Enum(Status::class)]
+	public ?int $status = null;
 
 	#[Nullable]
 	public ?DateTime $dateCreate = null;
 
-	#[NotEmpty]
-	public int $timezoneOffset = 0;
-
-	#[Min(1)]
-	public int $status;
-
 	#[Nullable]
-	public string $location = '';
+	public ?string $location = null;
 
 	#[Nullable]
 	public ?string $dialogId = null;
@@ -67,29 +73,27 @@ final class ShiftDto extends AbstractDto
 
 	#[Nullable]
 	public ?string $address = null;
+
 	#[Nullable]
 	public ?string $cancelReason = null;
 
 	#[Nullable]
 	public ?DateTime $dateCancel = null;
 
+	#[Skip]
 	public bool $skipTm = false;
 
+	#[Skip]
 	public bool $skipOptions = false;
 
+	#[Skip]
 	public bool $skipCounter = false;
 
 	protected function setValue(ReflectionProperty $property, mixed $value): void
 	{
 		if (is_string($value) && $property->getName() === 'shiftDate')
 		{
-			try
-			{
-				$dateTime = new \Bitrix\StaffTrack\Type\DateTime($value);
-				$this->shiftDate = $dateTime->getDate();
-				$this->timezoneOffset = $dateTime->getOffset();
-			}
-			catch (ObjectException) {}
+			$this->shiftDate = DateHelper::getInstance()->getServerDate($value);
 		}
 		else
 		{

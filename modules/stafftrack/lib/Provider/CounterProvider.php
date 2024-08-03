@@ -12,7 +12,7 @@ class CounterProvider
 {
 	use Singleton;
 
-	public const IS_NEW = 'stafftrack_counter_new';
+	private static array $cache = [];
 
 	/**
 	 * @param int $userId
@@ -23,9 +23,27 @@ class CounterProvider
 	 */
 	public function get(int $userId): ?Counter
 	{
+		if (!array_key_exists($userId, $this::$cache))
+		{
+			self::$cache[$userId] = $this->load($userId);
+		}
+
+		return self::$cache[$userId];
+	}
+
+	/**
+	 * @param int $userId
+	 * @return Counter|null
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	protected function load(int $userId): ?Counter
+	{
 		return CounterTable::query()
 			->setSelect(['*'])
 			->setLimit(1)
+			->setCacheTtl(86400)
 			->where('USER_ID', $userId)
 			->exec()->fetchObject()
 		;
@@ -58,15 +76,5 @@ class CounterProvider
 		}
 
 		return !ShiftProvider::getInstance($userId)->hasActiveShift();
-	}
-
-	public function isNew(): bool
-	{
-		return \CUserOptions::GetOption('stafftrack', self::IS_NEW, 'Y') === 'Y';
-	}
-
-	public function setNotNew(): void
-	{
-		\CUserOptions::SetOption('stafftrack', self::IS_NEW, 'N');
 	}
 }

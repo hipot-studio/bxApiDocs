@@ -57,6 +57,8 @@ class Config
 	 */
 	protected bool $isOauth = false;
 
+	protected ?CloudOAuthRefreshData $cloudOAuthRefreshData = null;
+
 	public function __construct(array $params = null)
 	{
 		if (!empty($params))
@@ -157,6 +159,18 @@ class Config
 	public function getIsOauth(): bool
 	{
 		return $this->isOauth;
+	}
+
+	public function getCloudOAuthRefreshData(): ?CloudOAuthRefreshData
+	{
+		return $this->cloudOAuthRefreshData;
+	}
+
+	public function setCloudOAuthRefreshData(?CloudOAuthRefreshData $data): static
+	{
+		$this->cloudOAuthRefreshData = $data;
+
+		return $this;
 	}
 
 	public static function canCheck()
