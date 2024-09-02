@@ -21,6 +21,8 @@ use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Spotlight;
 use Bitrix\UI;
+use Bitrix\Ui\EntityForm\Scope;
+use Bitrix\UI\Form\EntityEditorConfiguration;
 
 Loc::loadMessages(__FILE__);
 
@@ -44,6 +46,15 @@ class CCrmEntityEditorComponent extends UIFormComponent
 
 	/** @var int|null */
 	protected $categoryId;
+
+	private static function isAdminForEntity(mixed $entityTypeID): bool
+	{
+		if (is_numeric($entityTypeID))
+		{
+			return Container::getInstance()->getUserPermissions()->isAdminForEntity((int)$entityTypeID);
+		}
+		return false;
+	}
 
 	protected function emitOnUIFormInitializeEvent(): void
 	{
@@ -497,7 +508,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 
 		//region CAN_UPDATE_PERSONAL_CONFIGURATION && CAN_UPDATE_COMMON_CONFIGURATION
 		$this->arResult['CAN_UPDATE_PERSONAL_CONFIGURATION'] = true;
-		$this->arResult['CAN_UPDATE_COMMON_CONFIGURATION'] = CCrmAuthorizationHelper::CheckConfigurationUpdatePermission();
+		$this->arResult['CAN_UPDATE_COMMON_CONFIGURATION'] = self::isAdminForEntity($this->entityTypeID);
 
 		if(!isset($this->arParams['~ENABLE_CONFIGURATION_UPDATE']))
 		{
@@ -907,5 +918,111 @@ class CCrmEntityEditorComponent extends UIFormComponent
 		$schemeElement['options']['isPaymentDocumentsVisible'] = $schemeElement['options']['isPaymentDocumentsVisible'] ?? 'true';
 
 		return $schemeElement;
+	}
+
+	protected function getSavedScopeAndConfiguration(EntityEditorConfiguration $configuration, $configScope, bool $isForceDefaultConfig): array
+	{
+		$scopeConfigId = (empty($this->arResult['SCOPE_PREFIX'])
+			? $this->configID
+			: $this->arResult['SCOPE_PREFIX']
+		);
+		if (!$configScope)
+		{
+			$configScope = EntityEditorConfigScope::UNDEFINED;
+		}
+		if (!EntityEditorConfigScope::isDefined($configScope))
+		{
+			$configScope = $configuration->getScope($scopeConfigId);
+		}
+
+		$userScopeId = null;
+		if (is_array($configScope))
+		{
+			$userScopeId = $configScope['userScopeId'];
+			$configScope = $configScope['scope'];
+		}
+
+		$configScope = $this->rewriteConfigScopeByUserPermission($configScope);
+
+		$userScopes = null;
+		if (isset($scopeConfigId))
+		{
+			$userScopes = Scope::getInstance()->getUserScopes($scopeConfigId, ($this->arParams['MODULE_ID'] ?? null));
+		}
+
+		$config = null;
+		if (!$isForceDefaultConfig)
+		{
+			[$config, $configScope] = $this->getConfigByScope($configuration, $configScope, $userScopeId, $userScopes);
+		}
+
+		if (
+			(!$config && $configScope === EntityEditorConfigScope::CUSTOM)
+			|| $configScope === EntityEditorConfigScope::UNDEFINED
+		)
+		{
+			$configScope = is_array($configuration->get($this->configID, EntityEditorConfigScope::PERSONAL))
+				? EntityEditorConfigScope::PERSONAL
+				: EntityEditorConfigScope::COMMON;
+		}
+
+		return [$configScope, $config, $userScopes, $userScopeId];
+	}
+
+	private function rewriteConfigScopeByUserPermission(?string $configScope): ?string
+	{
+		$isPersonalViewAllowed = Container::getInstance()->getUserPermissions()->isPersonalViewAllowed($this->entityTypeID, $this->categoryId);
+
+		if ($configScope === EntityEditorConfigScope::PERSONAL && !$isPersonalViewAllowed)
+		{
+			$configScope = EntityEditorConfigScope::COMMON;
+		}
+
+		$this->arResult['PERSONAL_VIEW_ALLOWED'] = $isPersonalViewAllowed;
+
+		return $configScope;
+	}
+
+	/**
+	 * @param EntityEditorConfiguration $configuration
+	 * @param string|null $configScope
+	 * @param mixed $userScopeId
+	 * @param array|null $userScopes
+	 * @return array
+	 */
+	private function getConfigByScope(EntityEditorConfiguration $configuration, ?string $configScope, mixed $userScopeId, ?array $userScopes): array
+	{
+		$config = null;
+
+		if ($configScope === UI\Form\EntityEditorConfigScope::CUSTOM)
+		{
+			if (array_key_exists($userScopeId, $userScopes))
+			{
+				$config = Scope::getInstance()->getScopeById($userScopeId);
+			}
+			if (!$config)
+			{
+				$configScope = UI\Form\EntityEditorConfigScope::UNDEFINED;
+			}
+		}
+
+		if (!$config && UI\Form\EntityEditorConfigScope::isDefined($configScope))
+		{
+			$config = $configuration->get($this->configID, $configScope);
+		} elseif (!$config)
+		{
+			//Try to resolve current scope by stored configuration
+			$config = $configuration->get($this->configID, UI\Form\EntityEditorConfigScope::PERSONAL);
+			if (is_array($config) && !empty($config))
+			{
+				$configScope = UI\Form\EntityEditorConfigScope::PERSONAL;
+			} else
+			{
+				$config = $configuration->get($this->configID, UI\Form\EntityEditorConfigScope::COMMON);
+				$configScope = UI\Form\EntityEditorConfigScope::COMMON;
+			}
+		}
+
+		return array($config, $configScope);
 	}
 }

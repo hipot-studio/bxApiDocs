@@ -61,6 +61,11 @@ class GeoService
 			return $result->addErrors($staticMapResult->getErrors());
 		}
 
+		if (empty($staticMapResult->getPath()))
+		{
+			return $result->addError(new Error('Empty image path'));
+		}
+
 		$result->setData([
 			'geoImageUrl' => $staticMapResult->getPath(),
 		]);

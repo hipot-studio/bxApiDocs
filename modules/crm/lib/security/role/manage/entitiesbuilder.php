@@ -21,10 +21,12 @@ use Bitrix\Crm\Security\Role\Manage\Entity\WebForm;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Add;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Automation;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Delete;
+use Bitrix\Crm\Security\Role\Manage\Permissions\MyCardView;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Export;
 use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Import;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Read;
+use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Write;
 use Bitrix\Crm\Traits\Singleton;
 
@@ -115,6 +117,8 @@ class EntitiesBuilder
 			new Import([]),
 			new Automation([]),
 			new HideSum([]),
+			new MyCardView([]),
+			new Transition([]),
 		];
 	}
 }

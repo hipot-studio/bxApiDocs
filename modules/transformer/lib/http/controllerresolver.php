@@ -44,7 +44,7 @@ final class ControllerResolver
 			return null;
 		}
 
-		return $this->getControllerUrlFromConst($this->dedicatedControllerUrlConstName);
+		return $this->getBaasDedicatedControllerUrl();
 	}
 
 	private function resolveToRegularController(): ?string
@@ -107,6 +107,11 @@ final class ControllerResolver
 			'ru' => 'https://transformer-ru-boxes.bitrix.info/bitrix/tools/transformercontroller/add_queue.php',
 			default => Http::CLOUD_CONVERTER_URL,
 		};
+	}
+
+	public function getBaasDedicatedControllerUrl(): ?string
+	{
+		return $this->getControllerUrlFromConst($this->dedicatedControllerUrlConstName);
 	}
 
 	/**

@@ -1,4 +1,5 @@
 <?php
+
 class CSupportTableFields
 {
 	const VT_NUMBER		= "number";					

@@ -2957,7 +2957,7 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 
 			$sessionActive = (
 				$session->getSessionId() > 0
-				&& $session->getParam('DATE_FINISH') === null
+				&& $session->getParam('STATUS') !== self::MULTIDIALOG_STATUS_CLOSE
 			);
 
 			if (!$sessionActive)// don't hide active session

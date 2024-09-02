@@ -311,6 +311,7 @@ class CBPWorkflowTemplateLoader
 			EventManager::getInstance()->send($event);
 
 			WorkflowDurationStatTable::deleteAllByTemplateId($id);
+			Bitrix\Main\Config\Option::delete('bizproc', ['name' => 'tpl_track_on_' . $id]);
 		}
 		else
 		{

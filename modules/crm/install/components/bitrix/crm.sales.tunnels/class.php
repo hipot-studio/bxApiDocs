@@ -64,7 +64,7 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 			return;
 		}
 
-		if(!$this->userPermissions->canWriteConfig())
+		if(!$this->userPermissions->isAdminForEntity($this->factory->getEntityTypeId()))
 		{
 			$this->addError(new Error(Loc::getMessage('CRM_SALES_TUNNELS_ACCESS_DENIED2')));
 

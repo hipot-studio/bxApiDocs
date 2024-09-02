@@ -409,23 +409,10 @@ class CAllCrmQuote
 
 			$result = $arFields['ID'] = $ID;
 
-			if (isset($GLOBALS["USER"]) && isset($arFields['COMPANY_ID']) && intval($arFields['COMPANY_ID']) > 0)
-			{
-				CUserOptions::SetOption('crm', 'crm_company_search', array('last_selected' => $arFields['COMPANY_ID']));
-			}
-
 			//region Save contacts
 			if(!empty($contactBindings))
 			{
 				QuoteContactTable::bindContacts($ID, $contactBindings);
-				if (isset($GLOBALS['USER']))
-				{
-					CUserOptions::SetOption(
-						'crm',
-						'crm_contact_search',
-						array('last_selected' => $contactIDs[count($contactIDs) - 1])
-					);
-				}
 			}
 			//endregion
 
@@ -766,9 +753,6 @@ class CAllCrmQuote
 					$arFields['OPENED'] = 'Y';
 				}
 			}
-
-			if (isset($arFields['ASSIGNED_BY_ID']) && $arRow['ASSIGNED_BY_ID'] != $arFields['ASSIGNED_BY_ID'])
-				CCrmEvent::SetAssignedByElement($arFields['ASSIGNED_BY_ID'], 'QUOTE', $ID);
 
 			//region Preparation of contacts
 			$originalContactBindings = QuoteContactTable::getQuoteBindings($ID);
@@ -2749,18 +2733,23 @@ class CAllCrmQuote
 
 	public static function GetSemanticID($statusID)
 	{
-		if($statusID === 'APPROVED')
+		if (is_null($statusID))
 		{
-			return Bitrix\Crm\PhaseSemantics::SUCCESS;
+			return (self::GetStatusSort($statusID) > self::GetFinalStatusSort())
+				? Bitrix\Crm\PhaseSemantics::FAILURE
+				: Bitrix\Crm\PhaseSemantics::PROCESS
+			;
 		}
 
-		if($statusID === 'DECLAINED')
+		if ($statusID === '')
 		{
-			return Bitrix\Crm\PhaseSemantics::FAILURE;
+			return Bitrix\Crm\PhaseSemantics::UNDEFINED;
 		}
 
-		return (self::GetStatusSort($statusID) > self::GetFinalStatusSort())
-			? Bitrix\Crm\PhaseSemantics::FAILURE : Bitrix\Crm\PhaseSemantics::PROCESS;
+		return Crm\Service\Container::getInstance()
+			->getFactory(\CCrmOwnerType::Quote)
+			?->getStageSemantics($statusID)
+		;
 	}
 
 	public static function GetStatuses()

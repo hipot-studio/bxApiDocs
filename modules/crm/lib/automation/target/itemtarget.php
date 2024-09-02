@@ -85,6 +85,7 @@ class ItemTarget extends BaseTarget
 			->disableCheckAccess()
 			// automation will be launched right after
 			->disableAutomation()
+			->disableCheckTransitionAccess()
 		;
 
 		return $operation->launch()->isSuccess();

@@ -10,7 +10,7 @@ use Bitrix\Market\AppFavoritesTable;
 use Bitrix\Market\Categories;
 use Bitrix\Market\NumberApps;
 use Bitrix\Market\Rest\Actions;
-use Bitrix\Rest\Marketplace\Transport;
+use Bitrix\Market\Rest\Transport;
 
 class Favorites extends BaseTemplate
 {
@@ -40,11 +40,10 @@ class Favorites extends BaseTemplate
 		}
 
 		$batch = [
-			Transport::METHOD_FILTER_APP => [
-				Transport::METHOD_FILTER_APP,
+			Actions::METHOD_GET_FAVORITES => [
+				Actions::METHOD_GET_FAVORITES,
 				[
 					'app_codes' => $this->result['ALL_CODES'],
-					'_market_' => 'Y',
 				],
 			],
 			Actions::METHOD_TOTAL_APPS => [
@@ -57,11 +56,11 @@ class Favorites extends BaseTemplate
 
 		$response = Transport::instance()->batch($batch);
 		if (
-			isset($response[Transport::METHOD_FILTER_APP]) &&
-			isset($response[Transport::METHOD_FILTER_APP]['ITEMS']) &&
-			is_array($response[Transport::METHOD_FILTER_APP]['ITEMS'])
+			isset($response[Actions::METHOD_GET_FAVORITES]) &&
+			isset($response[Actions::METHOD_GET_FAVORITES]['ITEMS']) &&
+			is_array($response[Actions::METHOD_GET_FAVORITES]['ITEMS'])
 		) {
-			$this->prepareApps($response[Transport::METHOD_FILTER_APP]['ITEMS']);
+			$this->prepareApps($response[Actions::METHOD_GET_FAVORITES]['ITEMS']);
 		}
 
 		if (!empty($response[Actions::METHOD_GET_CATEGORIES_V2])) {

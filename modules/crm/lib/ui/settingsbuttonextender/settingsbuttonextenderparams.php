@@ -182,7 +182,10 @@ JS;
 			&& AutostartSettings::checkSavePermissions($entityTypeId, $this->categoryId)
 		)
 		{
-			if (AIManager::isAiCallAutomaticProcessingAllowed())
+			if (
+				AIManager::isAiCallAutomaticProcessingAllowed()
+				&& AIManager::isBaasServiceAvailable()
+			)
 			{
 				$settings = AutostartSettings::get(
 					$entityTypeId,

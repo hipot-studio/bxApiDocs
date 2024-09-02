@@ -1,47 +1,53 @@
 <?php
 
+if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
+{
+	die();
+}
+
+use Bitrix\Catalog;
 use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
+use Bitrix\Catalog\v2\Integration\JS\ProductForm;
+use Bitrix\Catalog\v2\Integration\JS\ProductForm\BasketItem;
 use Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookFacade;
 use Bitrix\Catalog\v2\IoC\ServiceContainer;
-use Bitrix\Crm\Service\Container;
-use Bitrix\Main\ObjectNotFoundException;
-use Bitrix\Main;
+use Bitrix\Catalog\VatTable;
 use Bitrix\Crm;
-use Bitrix\Main\Application;
-use Bitrix\Main\Localization\Loc;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Currency\CurrencyManager;
+use Bitrix\Main;
+use Bitrix\Main\Application;
+use Bitrix\Main\Engine\Contract\Controllerable;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Rest;
+use Bitrix\Sale;
+use Bitrix\Sale\Cashbox;
+use Bitrix\Sale\Internals\SiteCurrencyTable;
+use Bitrix\Sale\PaySystem;
+use Bitrix\Sale\PaySystem\ClientType;
+use Bitrix\Sale\Tax\VatCalculator;
+use Bitrix\SalesCenter;
 use Bitrix\SalesCenter\Component\PaymentSlip;
 use Bitrix\SalesCenter\Component\ReceivePaymentHelper;
 use Bitrix\SalesCenter\Driver;
+use Bitrix\SalesCenter\Integration\Bitrix24Manager;
 use Bitrix\SalesCenter\Integration\CatalogManager;
+use Bitrix\SalesCenter\Integration\CrmManager;
 use Bitrix\SalesCenter\Integration\ImOpenLinesManager;
 use Bitrix\SalesCenter\Integration\LandingManager;
-use Bitrix\SalesCenter\Integration\PullManager;
-use Bitrix\SalesCenter\Integration\SaleManager;
-use Bitrix\SalesCenter\Integration\CrmManager;
-use Bitrix\SalesCenter\Integration\Bitrix24Manager;
-use Bitrix\SalesCenter\Integration\RestManager;
-use Bitrix\Sale\Internals\SiteCurrencyTable;
-use Bitrix\Sale\PaySystem;
-use Bitrix\Sale\Cashbox;
-use Bitrix\Sale;
-use Bitrix\Main\Engine\Contract\Controllerable;
-use Bitrix\Rest;
-use Bitrix\SalesCenter;
 use Bitrix\SalesCenter\Integration\LocationManager;
-use Bitrix\Catalog\v2\Integration\JS\ProductForm;
-use Bitrix\Catalog;
-use Bitrix\Catalog\v2\Integration\JS\ProductForm\BasketItem;
-use Bitrix\Catalog\VatTable;
-use Bitrix\Sale\PaySystem\ClientType;
-use Bitrix\Sale\Tax\VatCalculator;
+use Bitrix\SalesCenter\Integration\PullManager;
+use Bitrix\SalesCenter\Integration\RestManager;
+use Bitrix\SalesCenter\Integration\SaleManager;
 use Bitrix\Salescenter\Restriction\ToolAvailabilityManager;
 
-if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
-
-Main\Loader::includeModule('sale');
+if (!Main\Loader::includeModule('sale'))
+{
+	return;
+}
 
 /**
  * Class CSalesCenterAppComponent
@@ -192,6 +198,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		if (!Driver::getInstance()->isEnabled())
 		{
 			$this->includeComponentTemplate('limit');
+
 			return;
 		}
 
@@ -210,6 +217,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		{
 			$this->arResult['isOrderLimitReached'] = true;
 			$this->includeComponentTemplate('limit');
+
 			return;
 		}
 
@@ -425,8 +433,8 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		$this->fillSendersData($this->arResult);
 		$this->arResult['mostPopularProducts'] = $this->getMostPopularProducts();
 		$this->arResult['vatList'] = $this->getProductVatList();
-		$this->arResult['catalogIblockId'] = \CCrmCatalog::GetDefaultID();
-		$this->arResult['basePriceId'] = \CCatalogGroup::GetBaseGroup()['ID'];
+		$this->arResult['catalogIblockId'] = (int)Crm\Product\Catalog::getDefaultId();
+		$this->arResult['basePriceId'] = Catalog\GroupTable::getBasePriceTypeId();
 		$notificationCenterEnabled = $this->arResult['currentSenderCode'] === \Bitrix\Crm\Integration\NotificationsManager::getSenderCode();
 		$this->arResult['showCompilationModeSwitcher'] = !$notificationCenterEnabled && !$this->arResult['compilation'] ? 'Y' : 'N';
 		$this->arResult['showProductDiscounts'] = \CUserOptions::GetOption('catalog.product-form', 'showDiscountBlock', 'Y');
@@ -1090,6 +1098,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	}
 
 	/**
+	 * @param int $personTypeId
 	 * @param string $attribute
 	 * @return int[]
 	 */
@@ -1135,6 +1144,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	}
 
 	/**
+	 * @param int $contactId
 	 * @return array
 	 */
 	private function getDeliveryToList(int $contactId): array
@@ -1234,7 +1244,8 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	}
 
 	/**
-	 * @param $stageId
+	 * @param int $entityId
+	 * @param int $entityTypeId
 	 * @return array
 	 */
 	private function getEntityStageList(int $entityId, int $entityTypeId) : array
@@ -1489,7 +1500,11 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		];
 
 		$paySystemList = SaleManager::getInstance()->getPaySystemList([
-			'!=ACTION_FILE' => ['inner', 'cash'],
+			'!=ACTION_FILE' => [
+				'inner',
+				'cash',
+				'orderdocument',
+			],
 		]);
 		if ($paySystemList)
 		{
@@ -1542,7 +1557,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			$paySystemHandlerList = $this->getSliderPaySystemHandlers();
 			$handlerList = PaySystem\Manager::getHandlerList();
 			$systemHandlers = array_keys($handlerList['SYSTEM']);
-			foreach ($systemHandlers as $key => $systemHandler)
+			foreach ($systemHandlers as $systemHandler)
 			{
 				if (mb_strpos($systemHandler, 'quote_') !== false)
 				{
@@ -1560,7 +1575,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 					continue;
 				}
 
-				$img = '/bitrix/components/bitrix/salescenter.paysystem.panel/templates/.default/images/'.$systemHandler;
+				$img = '/bitrix/components/bitrix/salescenter.paysystem.panel/templates/.default/images/' . $systemHandler;
 				$queryParams['ACTION_FILE'] = $systemHandler;
 
 				[$handlerClass] = PaySystem\Manager::includeHandler($systemHandler);
@@ -1577,14 +1592,15 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 						$queryParams['PS_MODE'] = $psMode;
 						$paySystemPath->addParams($queryParams);
 
-						$psModeImage = $img.'_'.$psMode.'.svg';
+						$psModeImage = $img . '_' . $psMode . '.svg';
 						if (!Main\IO\File::isFileExists(Application::getDocumentRoot().$psModeImage))
 						{
-							$psModeImage = $img.'.svg';
+							$psModeImage = $img . '.svg';
 						}
 
 						$result['items'][] = [
 							'name' => $handlerDescription['NAME'] ?? $handlerList['SYSTEM'][$systemHandler],
+							'psModeName' => $psModeList[$psMode],
 							'img' => $psModeImage,
 							'info' => Loc::getMessage(
 								'SALESCENTER_APP_PAYSYSTEM_MODE_INFO',
@@ -1595,7 +1611,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 							),
 							'link' => $paySystemPath->getLocator(),
 							'type' => 'paysystem',
-							'showTitle' => false,
+							'showTitle' => true,
 							'sort' => $this->getPaySystemSort($systemHandler, $psMode),
 						];
 					}
@@ -1615,7 +1631,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 						),
 						'link' => $paySystemPath->getLocator(),
 						'type' => 'paysystem',
-						'showTitle' => false,
+						'showTitle' => true,
 						'sort' => $this->getPaySystemSort($systemHandler),
 					];
 				}
@@ -1645,6 +1661,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 				'group' => 'other',
 			];
 		}
+
 		return $result;
 	}
 
@@ -1684,8 +1701,8 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 				if (!$img)
 				{
 					$img = $marketplaceApp['ICON']
-						? $marketplaceApp['ICON']
-						: '/bitrix/components/bitrix/salescenter.paysystem.panel/templates/.default/images/marketplace_default.svg';
+						?: '/bitrix/components/bitrix/salescenter.paysystem.panel/templates/.default/images/marketplace_default.svg'
+					;
 				}
 
 				$result['items'][] = [
@@ -1723,12 +1740,12 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		$result = [
 			'hasInstallable' => $handlersCollection->hasInstallableItems(),
 			'isInstalled' => false,
-			'items' => []
+			'items' => [],
 		];
 
 		$handlers = $handlersCollection->getInstallableItems();
 
-		$internalItems = [];
+		/* load internal deliveries */
 		foreach ($handlers as $handler)
 		{
 			if ($handler->isInstalled())
@@ -1736,7 +1753,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 				$result['isInstalled'] = true;
 			}
 
-			$internalItems[] = [
+			$result['items'][] = [
 				'code' => $handler->getCode(),
 				'name' => $handler->getName(),
 				'link' => $handler->getInstallationLink(),
@@ -1744,17 +1761,20 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 				'info' => $handler->getShortDescription(),
 				'type' => 'delivery',
 				'showTitle' => !$handler->doesImageContainName(),
-				'width' => 835
+				'width' => 835,
 			];
 		}
 
-		$marketplaceItems = [];
+		/** load marketplace deliveries */
 		if (RestManager::getInstance()->isEnabled())
 		{
 			$marketplaceItems = $this->getDeliveryMarketplaceItems();
+			if (!empty($marketplaceItems))
+			{
+				$result['items'] = array_merge($result['items'], $marketplaceItems);
+			}
+			unset($marketplaceItems);
 		}
-
-		$result['items'] = array_merge($internalItems, $marketplaceItems);
 
 		if (Bitrix24Manager::getInstance()->isEnabled())
 		{
@@ -1812,8 +1832,8 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 				if (!$img)
 				{
 					$img = $marketplaceApp['ICON']
-						? $marketplaceApp['ICON']
-						: '/bitrix/components/bitrix/salescenter.delivery.panel/templates/.default/images/marketplace_default.svg';
+						?: '/bitrix/components/bitrix/salescenter.delivery.panel/templates/.default/images/marketplace_default.svg'
+					;
 				}
 
 				$result[] = [
@@ -2056,16 +2076,19 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	 */
 	private function needShowPaySystemSettingBanner() : bool
 	{
-		$dbRes = PaySystem\Manager::getList([
+		$iterator = PaySystem\Manager::getList([
 			'select' => ['ID', 'NAME', 'ACTION_FILE'],
 			'filter' => [
 				'!ID' => PaySystem\Manager::getInnerPaySystemId(),
 				'!=ACTION_FILE' => 'cash',
 				'=ACTIVE' => 'Y',
 			],
+			'limit' => 1,
 		]);
 
-		return $dbRes->fetch() ? false : true;
+		$row = $iterator->fetch();
+
+		return empty($row);
 	}
 
 	/**
@@ -2127,9 +2150,8 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	{
 		$path = \CComponentEngine::makeComponentPath($name);
 		$path = getLocalPath('components'.$path.'/slider.php');
-		$path = new Main\Web\Uri($path);
 
-		return $path;
+		return new Main\Web\Uri($path);
 	}
 
 	/**
@@ -2406,8 +2428,8 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 
 			return
 				Main\Loader::includeModule('bitrix24')
-					? "/contact_center/connector?ID=facebook&LINE={$line}&action-line=create&MENU_TAB=catalog"
-					: "/services/contact_center/connector?ID=facebook&LINE={$line}&action-line=create&MENU_TAB=catalog"
+					? '/contact_center/connector?ID=facebook&LINE=' . $line . '&action-line=create&MENU_TAB=catalog'
+					: '/services/contact_center/connector?ID=facebook&LINE=' . $line . '&action-line=create&MENU_TAB=catalog'
 			;
 		}
 
@@ -2427,7 +2449,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 					$iblockId = CCrmCatalog::EnsureDefaultExists();
 					$facade = ServiceContainer::get('integration.seo.facebook.facade', compact('iblockId'));
 				}
-				catch (ObjectNotFoundException $exception)
+				catch (ObjectNotFoundException)
 				{
 				}
 			}
@@ -2504,6 +2526,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	}
 
 	/**
+	 * @param $fields
 	 * @return array
 	 */
 	public function refreshContactPhoneAction($fields): array

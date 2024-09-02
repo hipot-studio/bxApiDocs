@@ -301,6 +301,7 @@ class Product extends Controller implements EventBindInterface
 				$elementFields = $groupFields['elementFields'];
 
 				$productFields = $this->prepareProductFields($productFields);
+				$propertyFields = $this->verifyPropertyFields($fields['IBLOCK_ID'], $propertyFields);
 				$propertyFields = $this->preparePropertyFields($propertyFields);
 				$elementFieldsAdd = count($propertyFields)>0 ? array_merge($elementFields, ['PROPERTY_VALUES'=>$propertyFields]):$elementFields;
 
@@ -382,6 +383,7 @@ class Product extends Controller implements EventBindInterface
 		$elementFields = $groupFields['elementFields'];
 
 		$productFields = $this->prepareProductFields($productFields);
+		$propertyFields = $this->verifyPropertyFields((int)$fields['IBLOCK_ID'], $propertyFields);
 		$propertyFields = $this->preparePropertyFields($propertyFields);
 
 		$propertyFields = $this->fillPropertyFieldsDefaultPropertyValues($id, $fields['IBLOCK_ID'], $propertyFields);
@@ -617,6 +619,64 @@ class Product extends Controller implements EventBindInterface
 		if (State::isUsedInventoryManagement())
 		{
 			unset($result['QUANTITY_TRACE']);
+		}
+
+		return $result;
+	}
+
+	private function verifyPropertyFields(int $iblockId, array $fields): array
+	{
+		$singleProperties = [];
+		$iterator = Iblock\PropertyTable::getList([
+			'select' => [
+				'ID',
+				'PROPERTY_TYPE',
+				'USER_TYPE',
+			],
+			'filter' => [
+				'=IBLOCK_ID' => $iblockId,
+				'@PROPERTY_TYPE' => [
+					Iblock\PropertyTable::TYPE_STRING,
+					iblock\PropertyTable::TYPE_NUMBER,
+				],
+				'=ACTIVE' => 'Y',
+				'=MULTIPLE' => 'N',
+			],
+			'order' => [
+				'ID' => 'ASC',
+			],
+			'cache' => [
+				'ttl' => 86400,
+			]
+		]);
+		while ($row = $iterator->Fetch())
+		{
+			if ((string)$row['USER_TYPE'] !== '')
+			{
+				continue;
+			}
+
+			$singleProperties['PROPERTY_' . $row['ID']] = true;
+		}
+		unset(
+			$row,
+			$iterator,
+		);
+
+		$result = [];
+
+		foreach ($fields as $name => $value)
+		{
+			if (
+				isset($singleProperties[$name])
+				&& isset($value['VALUE'])
+				&& is_array($value['VALUE'])
+			)
+			{
+				continue;
+			}
+
+			$result[$name] = $value;
 		}
 
 		return $result;

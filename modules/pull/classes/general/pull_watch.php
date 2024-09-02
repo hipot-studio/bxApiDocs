@@ -34,7 +34,7 @@ class CAllPullWatch
 
 			$CACHE_MANAGER->Set($cache_id, $arResult);
 		}
-		if ($arResult && $arResult[$tag])
+		if (!empty($arResult[$tag]))
 		{
 			if ($arResult[$tag]['DATE_CREATE']+1860 > time())
 			{

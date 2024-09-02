@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
+use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 
 class GoToChat extends Item
@@ -41,10 +42,8 @@ class GoToChat extends Item
 
 	public function prepareSettings(): array
 	{
-		$options = \CUserOptions::getOption('crm', 'gotochat', []);
-
 		return [
-			'region' => $this->context->getRegion(),
+			'region' => Application::getInstance()->getLicense()->getRegion() ?? $this->context->getRegion(),
 		];
 	}
 }

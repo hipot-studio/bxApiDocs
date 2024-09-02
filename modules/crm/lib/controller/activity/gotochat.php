@@ -126,6 +126,8 @@ class GoToChat extends Base
 		$channels = $this->getChannels($entityTypeId, $entityId);
 		$currentChannelId = $this->getCurrentChannelId($channels);
 
+		$isBox = Crm::isBox();
+
 		return [
 			'region' => Application::getInstance()->getLicense()->getRegion() ?? Context::getCurrent()->getLanguage(),
 			'channels' => $channels,
@@ -137,7 +139,8 @@ class GoToChat extends Base
 			'marketplaceUrl' => Router::getBasePath() . 'category/crm_robot_sms/',
 			'services' => [
 				'telegrambot' => true,
-				'whatsappbyedna' => Crm::isWhatsAppGoToChatEnabled() && !Crm::isBox(),
+				'ru-whatsapp' => !$isBox,
+				'whatsapp' => !$isBox,
 			],
 		];
 	}

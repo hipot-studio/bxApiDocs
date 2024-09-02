@@ -3,6 +3,7 @@
 namespace Bitrix\Bizproc;
 
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Loader;
 use Bitrix\Rest\AppLangTable;
 use Bitrix\Rest\AppTable;
@@ -254,7 +255,14 @@ class RestService extends \IRestService
 			self::upsertAppPlacement($appId, $params['CODE'], $params['PLACEMENT_HANDLER'] ?? null);
 		}
 
-		$result = RestActivityTable::add($params);
+		try
+		{
+			$result = RestActivityTable::add($params);
+		}
+		catch (SqlQueryException $exception)
+		{
+			throw new RestException('Activity or Robot already added!', self::ERROR_ACTIVITY_ADD_FAILURE);
+		}
 
 		if ($result->getErrors())
 		{

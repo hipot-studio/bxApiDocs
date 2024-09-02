@@ -2,9 +2,11 @@
 
 namespace Bitrix\Crm\Security\Role\Manage\Serializers;
 
+use Bitrix\Crm\Security\EntityPermission\ApproveCustomPermsToExistRole;
 use Bitrix\Crm\Security\Role\Manage\DTO\Restrictions;
 use Bitrix\Crm\Security\Role\Manage\EntitiesBuilder;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Permission;
+use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
 use Bitrix\Crm\Security\Role\Manage\RoleData;
 
 class RoleEditorSerializer
@@ -20,6 +22,7 @@ class RoleEditorSerializer
 			'permissionEntities' => $this->permissionEntities($roleData),
 			'roleAssignedPermissions' => $this->roleAssignedPermissions($roleData),
 			'restriction' => $this->prepareRestriction($roleData->restriction()),
+			'roleAssignedSettings' => $this->roleAssignedStageSettings($roleData),
 		];
 	}
 
@@ -31,6 +34,11 @@ class RoleEditorSerializer
 			$permissions = [];
 			foreach ($entity->permissions() as $permission)
 			{
+				if ((new ApproveCustomPermsToExistRole())->hasWaitingPermission($permission->code()))
+				{
+					continue;
+				}
+
 				$permissions[$permission->code()] = $permission->variants();
 			}
 
@@ -70,6 +78,11 @@ class RoleEditorSerializer
 		$result = [];
 		foreach ($this->getAllAvailablePermissions() as $permission)
 		{
+			if ((new ApproveCustomPermsToExistRole())->hasWaitingPermission($permission->code()))
+			{
+				continue;
+			}
+
 			$result[] = [
 				'code' => $permission->code(),
 				'name' => $permission->name(),
@@ -137,5 +150,47 @@ class RoleEditorSerializer
 			'hasPermission' => $restriction->hasPermission(),
 			'restrictionScript' => $restriction->restrictionScript()
 		];
+	}
+
+	private function roleAssignedStageSettings(RoleData $roleData): array
+	{
+		$result = [];
+
+		foreach ($roleData->userAssigned() as $item)
+		{
+
+			$entityCode = $item['ENTITY'];
+			$permType = $item['PERM_TYPE'];
+			$field = $item['FIELD'] ?? null;
+			$fieldValue = $item['FIELD_VALUE'] ?? null;
+			$settings = $item['SETTINGS'] ?? [];
+
+			if ($permType !== (new Transition([]))->code())
+			{
+				continue;
+			}
+
+			if (!isset($result[$entityCode]))
+			{
+				$result[$entityCode] = [];
+			}
+
+			if ($field === '-')
+			{
+				$result[$entityCode]['-'] = $settings;
+
+				continue;
+			}
+
+			if (!isset($result[$entityCode][$field]))
+			{
+				$result[$entityCode][$field] = [];
+			}
+
+			$result[$entityCode][$field][$fieldValue] = $settings;
+		}
+
+
+		return $result;
 	}
 }

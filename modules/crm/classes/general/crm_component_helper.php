@@ -13,6 +13,7 @@ use Bitrix\Crm\Integrity\DuplicateControl;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\StatusTable;
+use Bitrix\Crm\Item;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 
@@ -804,7 +805,30 @@ class CCrmComponentHelper
 			return [];
 		}
 
+		$select = [
+			Item::FIELD_NAME_ID
+		];
+
+		if ($factory->isFieldExists(Item::FIELD_NAME_CATEGORY_ID))
+		{
+			$select[] = Item::FIELD_NAME_CATEGORY_ID;
+		}
+
+		if ($factory->isFieldExists(Item::FIELD_NAME_TITLE))
+		{
+			$select[] = Item::FIELD_NAME_TITLE;
+		}
+
+		if ($entityTypeId == CCrmOwnerType::Contact)
+		{
+			$select[] = Item::FIELD_NAME_LAST_NAME;
+			$select[] = Item::FIELD_NAME_SECOND_NAME;
+			$select[] = Item::FIELD_NAME_NAME;
+			$select[] = Item::FIELD_NAME_HONORIFIC;
+		}
+
 		$items = $factory->getItemsFilteredByPermissions([
+			'select' => $select,
 			'filter' => [
 				'@ID' => $entityIds,
 			],

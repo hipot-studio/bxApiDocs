@@ -1,4 +1,4 @@
-<?
+<?php
 class CSupportTools
 {
 	static $speedArray = array();

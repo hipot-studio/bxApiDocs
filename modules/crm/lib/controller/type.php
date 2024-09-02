@@ -13,6 +13,7 @@ use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\UserField\UserFieldManager;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
+use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
@@ -78,13 +79,30 @@ class Type extends Base
 		$parameters = [];
 
 		$parameters['filter'] = $this->removeDotsFromKeys($this->convertKeysToUpper((array)$filter));
+
+		$typeTable = Container::getInstance()->getDynamicTypeDataClass();
+
+		$allowedFields = array_keys($typeTable::getFieldsInfo());
+
+		if (!$this->validateFilter($parameters['filter'], $allowedFields))
+		{
+			return null;
+		}
+
 		$parameters['filter'][] = [
 			'!@ENTITY_TYPE_ID' => \CCrmOwnerType::getDynamicTypeBasedStaticEntityTypeIds(),
 		];
+
 		if(is_array($order))
 		{
 			$parameters['order'] = $this->convertKeysToUpper($order);
+			$parameters['order'] = $this->convertValuesToUpper($parameters['order'], Converter::TO_UPPER | Converter::VALUES);
+			if (!$this->validateOrder($parameters['order'], $allowedFields))
+			{
+				return null;
+			}
 		}
+
 		if($pageNavigation)
 		{
 			$parameters['offset'] = $pageNavigation->getOffset();
@@ -92,7 +110,7 @@ class Type extends Base
 		}
 
 		$types = [];
-		$typeTable = Container::getInstance()->getDynamicTypeDataClass();
+
 		$list = $typeTable::getList($parameters);
 		/** @var Dynamic\Type $type */
 		while($type = $list->fetchObject())

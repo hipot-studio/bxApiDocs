@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Integration\AI;
 use Bitrix\AI\Context;
 use Bitrix\AI\Context\Language;
 use Bitrix\AI\Engine;
+use Bitrix\AI\Integration\Baas\BaasTokenService;
 use Bitrix\AI\Limiter\Enums\ErrorLimit;
 use Bitrix\AI\Limiter\LimitControlService;
 use Bitrix\AI\Limiter\ReserveRequest;
@@ -41,6 +42,7 @@ final class AIManager
 	public const AI_LICENCE_FEATURE_NAME = 'ai_available_by_version';
 	public const AI_PROVIDER_PARTNER_CRM = 'ai_provider_partner_crm';
 	public const AI_DISABLED_SLIDER_CODE = 'limit_copilot_off';
+	public const AI_PACKAGES_EMPTY_SLIDER_CODE = 'limit_boost_crm_automation';
 
 	public const AI_LIMIT_CODE_DAILY = 'Daily';
 	public const AI_LIMIT_CODE_MONTHLY = 'Monthly';
@@ -66,6 +68,8 @@ final class AIManager
 	private const AUDIO_FILE_MAX_SIZE = 25 * 1024 * 1024;
 	private const AUDIO_MIN_CALL_TIME = 10;
 	private const AUDIO_MAX_CALL_TIME = 60 * 60;
+
+	private static ?BaasTokenService $baasService = null;
 
 	public static function isAvailable(): bool
 	{
@@ -143,16 +147,66 @@ final class AIManager
 	{
 		return
 			self::isAiCallProcessingEnabled()
-			&& Option::get('crm', self::AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME, false)
+			&& Option::get(
+				'crm',
+				self::AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME,
+				self::isBaasServiceAvailable()
+			)
 		;
 	}
 
-	public static function isAILicenceAccepted(): bool
+	public static function isBaasServiceAvailable(): bool
 	{
-		return
-			self::isAvailable()
-			&& Bitrix24Manager::isFeatureEnabled(self::AI_LICENCE_FEATURE_NAME)
-		;
+		if (!Loader::includeModule('baas'))
+		{
+			return false;
+		}
+
+		if (!self::$baasService)
+		{
+			self::$baasService = new BaasTokenService();
+		}
+
+		return self::$baasService->isAvailable();
+	}
+
+	public static function isBaasServiceHasPackage(): bool
+	{
+		if (!Loader::includeModule('baas'))
+		{
+			return false;
+		}
+
+		if (!self::$baasService)
+		{
+			self::$baasService = new BaasTokenService();
+		}
+
+		return self::$baasService->hasPackage() && self::$baasService->canConsume();
+	}
+
+	public static function isAILicenceAccepted(int $userId = null): bool
+	{
+		if (self::isAvailable())
+		{
+			// check for box instances
+			if (\Bitrix\Crm\Settings\Crm::isBox())
+			{
+				if (!method_exists(\Bitrix\AI\Agreement::class, 'isAcceptedByUser'))
+				{
+					return true;
+				}
+
+				$userId = $userId ?? Container::getInstance()->getContext()->getUserId();
+
+				return \Bitrix\AI\Agreement::get('AI_BOX_AGREEMENT')?->isAcceptedByUser($userId) ?? false;
+			}
+
+			// check for cloud instances
+			return Bitrix24Manager::isFeatureEnabled(self::AI_LICENCE_FEATURE_NAME);
+		}
+
+		return false;
 	}
 
 	public static function setAiCallAutomaticProcessingAllowed(?bool $isAllowed): void

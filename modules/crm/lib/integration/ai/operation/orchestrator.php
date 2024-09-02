@@ -47,12 +47,19 @@ final class Orchestrator
 			['autostartSettings' => $settings, 'previousJobResult' => $previousJobResult],
 		);
 
+		$activityId = $previousJobResult->getTarget()?->getEntityId();
+		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
+
 		if (
 			$previousJobResult->getTypeId() === TranscribeCallRecording::TYPE_ID
 			&& $previousJobResult->isSuccess()
 			&& $previousJobResult->getPayload() instanceof TranscribeCallRecordingPayload
 			&& !empty($previousJobResult->getPayload()->transcription)
-			&& $settings->shouldAutostart(SummarizeCallTranscription::TYPE_ID, false)
+			&& $settings->shouldAutostart(
+				SummarizeCallTranscription::TYPE_ID,
+				(int)($activity['DIRECTION'] ?? 0),
+				false
+			)
 		)
 		{
 			$this->logger->info(
@@ -79,7 +86,11 @@ final class Orchestrator
 			&& $previousJobResult->isSuccess()
 			&& $previousJobResult->getPayload() instanceof SummarizeCallTranscriptionPayload
 			&& !empty($previousJobResult->getPayload()->summary)
-			&& $settings->shouldAutostart(FillItemFieldsFromCallTranscription::TYPE_ID, false)
+			&& $settings->shouldAutostart(
+				FillItemFieldsFromCallTranscription::TYPE_ID,
+				(int)($activity['DIRECTION'] ?? 0),
+				false
+			)
 		)
 		{
 			$this->logger->info(
@@ -119,7 +130,10 @@ final class Orchestrator
 			['autostartSettings' => $settings, 'activity' => $activityFields],
 		);
 
-		if (!$settings->shouldAutostart(TranscribeCallRecording::TYPE_ID))
+		if (!$settings->shouldAutostart(
+			TranscribeCallRecording::TYPE_ID,
+			(int)($activityFields['DIRECTION'] ?? 0)
+		))
 		{
 			return;
 		}
@@ -140,7 +154,6 @@ final class Orchestrator
 			&& $nextTarget
 			&& $userId > 0
 			&& Call::hasRecordings($activityFields)
-			&& ($activityFields['IS_INCOMING_CHANNEL'] ?? 'N') === 'Y'
 			&& AIManager::checkForSuitableAudios((string)$activityFields['ORIGIN_ID'], $storageTypeId, serialize($storageElementIds))->isSuccess()
 		)
 		{
@@ -182,7 +195,10 @@ final class Orchestrator
 			['autostartSettings' => $settings, 'activity' => $activityFields, 'changedFields' => $changedFields],
 		);
 
-		if (!$settings->shouldAutostart(TranscribeCallRecording::TYPE_ID))
+		if (!$settings->shouldAutostart(
+			TranscribeCallRecording::TYPE_ID,
+			(int)($activityFields['DIRECTION'] ?? 0)
+		))
 		{
 			return;
 		}
@@ -203,7 +219,6 @@ final class Orchestrator
 			&& $nextTarget
 			&& $userId > 0
 			&& Call::hasRecordings($activityFields)
-			&& ($activityFields['IS_INCOMING_CHANNEL'] ?? 'N') === 'Y'
 			&& !$this->jobRepo->isJobOfSameTypeAlreadyExistsForTarget(
 				new ItemIdentifier(\CCrmOwnerType::Activity, $activityId),
 				TranscribeCallRecording::TYPE_ID,

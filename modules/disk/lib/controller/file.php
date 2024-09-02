@@ -328,12 +328,12 @@ class File extends BaseObject
 
 	public function markDeletedAction(Disk\File $file)
 	{
-		return $this->markDeleted($file);
+		$this->markDeleted($file);
 	}
 
 	public function deleteAction(Disk\File $file)
 	{
-		return $this->deleteFile($file);
+		$this->deleteFile($file);
 	}
 
 	public function restoreAction(Disk\File $file)

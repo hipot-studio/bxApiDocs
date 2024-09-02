@@ -3,7 +3,6 @@
 namespace Bitrix\Crm\Integration\AI\Operation;
 
 use Bitrix\Crm\Badge;
-use Bitrix\Crm\Comparer\ComparerBase;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Entity\FieldDataProvider;
 use Bitrix\Crm\Integration\AI\AIManager;
@@ -63,10 +62,7 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 
 	public static function isSuitableTarget(ItemIdentifier $target): bool
 	{
-		return (
-			in_array($target->getEntityTypeId(), self::SUPPORTED_TARGET_ENTITY_TYPE_IDS, true)
-			&& !ComparerBase::isClosed($target, true)
-		);
+		return in_array($target->getEntityTypeId(), self::SUPPORTED_TARGET_ENTITY_TYPE_IDS, true);
 	}
 
 	protected static function findDuplicateJob(ItemIdentifier $target, int $parentId): ?EO_Queue

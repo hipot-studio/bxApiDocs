@@ -5811,10 +5811,16 @@ class CAllCrmActivity
 	}
 	public static function CheckItemUpdatePermission(array $fields, $userPermissions = null)
 	{
+		static $cache = [];
+
 		$ID = isset($fields['ID']) ? (int)$fields['ID'] : 0;
 		if($ID <=  0)
 		{
 			return false;
+		}
+		if (isset($cache[$ID]))
+		{
+			return $cache[$ID];
 		}
 
 		$bindings = self::GetBindings($ID);
@@ -5824,19 +5830,27 @@ class CAllCrmActivity
 			{
 				if(self::CheckUpdatePermission($binding['OWNER_TYPE_ID'], $binding['OWNER_ID'], $userPermissions))
 				{
+					$cache[$ID] = true;
+
 					return true;
 				}
 			}
 			unset($binding);
+			$cache[$ID] = false;
+
 			return false;
 		}
 
 		$ownerTypeID = isset($fields['OWNER_TYPE_ID']) ? (int)$fields['OWNER_TYPE_ID'] : CCrmOwnerType::Undefined;
 		$ownerID = isset($fields['OWNER_ID']) ? (int)$fields['OWNER_ID'] : 0;
 
-		return $ownerID > 0
+		$result = $ownerID > 0
 			&& CCrmOwnerType::IsDefined($ownerTypeID)
 			&& self::CheckUpdatePermission($ownerTypeID, $ownerID, $userPermissions);
+
+		$cache[$ID] = $result;
+
+		return $result;
 	}
 	public static function CheckCompletePermission($ownerType, $ownerID, $userPermissions = null, $params = null)
 	{

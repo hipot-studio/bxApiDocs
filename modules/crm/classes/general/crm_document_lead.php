@@ -664,7 +664,8 @@ class CCrmDocumentLead extends CCrmDocument
 			[
 				'DISABLE_USER_FIELD_CHECK' => true,
 				'REGISTER_SONET_EVENT' => true,
-				'CURRENT_USER' => $modifiedById ?? static::getSystemUserId()
+				'CURRENT_USER' => $modifiedById ?? static::getSystemUserId(),
+				'CHECK_TRANSITION_ACCESS_ENABLED' => 'N',
 			]
 		);
 

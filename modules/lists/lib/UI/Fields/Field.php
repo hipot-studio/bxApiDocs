@@ -99,7 +99,7 @@ class Field
 
 		if ($this->getType() === 'G' || $this->getType() === 'E' || $this->getType() === 'L')
 		{
-			return [$defaultValue];
+			return is_array($defaultValue) ? $defaultValue : [$defaultValue];
 		}
 
 		$value = [

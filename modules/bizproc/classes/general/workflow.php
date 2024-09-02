@@ -60,6 +60,11 @@ class CBPWorkflow
 		return $this->rootActivity->GetDocumentId();
 	}
 
+	public function getTemplateId(): int
+	{
+		return (int)$this->rootActivity->getWorkflowTemplateId();
+	}
+
 	public function getStartedBy(): ?int
 	{
 		$startedBy = (int)CBPHelper::stripUserPrefix($this->rootActivity->{\CBPDocument::PARAM_TAGRET_USER});

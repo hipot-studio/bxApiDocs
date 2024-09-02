@@ -6,6 +6,7 @@ use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\EditableDate;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ItemSelector;
+use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\PingSelector;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
 use Bitrix\Main\ArgumentTypeException;
 
@@ -15,7 +16,7 @@ class DeadlineAndPingSelector extends ContentBlock
 	public const BACKGROUND_GREY = 'gray';
 
 	private ?EditableDate $deadlineBlock = null;
-	private Text|ItemSelector|null $pingSelectorBlock = null;
+	private Text|ItemSelector|PingSelector|null $pingSelectorBlock = null;
 	private ?string $deadlineBlockTitle = null;
 	private ?string $backgroundToken = null;
 	private ?string $backgroundColor = null;
@@ -40,7 +41,7 @@ class DeadlineAndPingSelector extends ContentBlock
 		return $this;
 	}
 
-	public function setPingSelectorBlock(Text | ItemSelector $pingSelectorBlock): self
+	public function setPingSelectorBlock(Text | ItemSelector | PingSelector $pingSelectorBlock): self
 	{
 		if (!$this->isAvailableContentBlock($pingSelectorBlock))
 		{
@@ -60,6 +61,7 @@ class DeadlineAndPingSelector extends ContentBlock
 		return
 			($contentBlock instanceof Text)
 			|| ($contentBlock instanceof ItemSelector)
+			|| ($contentBlock instanceof PingSelector)
 		;
 	}
 

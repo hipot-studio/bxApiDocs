@@ -6,8 +6,12 @@ use Bitrix\Main;
 
 class ObserverManager
 {
+	private static array $bulkObserverIDsCache = [];
+
 	public static function registerBulk(array $userIDs, $entityTypeID, $entityID, $sortOffset = 0)
 	{
+		self::resetBulkObserverIDsCache();
+
 		$entityTypeID = static::normalizeEntityTypeId($entityTypeID);
 		$entityID = static::normalizeEntityId($entityID);
 
@@ -39,6 +43,8 @@ class ObserverManager
 
 	public static function unregisterBulk(array $userIDs, $entityTypeID, $entityID)
 	{
+		self::resetBulkObserverIDsCache();
+
 		$entityTypeID = static::normalizeEntityTypeId($entityTypeID);
 		$entityID = static::normalizeEntityId($entityID);
 		foreach ($userIDs as $userId)
@@ -64,6 +70,8 @@ class ObserverManager
 
 	public static function unregister($userID, $entityTypeID, $entityID)
 	{
+		self::resetBulkObserverIDsCache();
+
 		if(!is_int($userID))
 		{
 			$userID = (int)$userID;
@@ -127,11 +135,18 @@ class ObserverManager
 			return [];
 		}
 
+		$hash = 'type_'.$entityTypeID.'_ids_'.implode('_', $entityIDs);
+
+		if (isset(self::$bulkObserverIDsCache[$hash]))
+		{
+			return self::$bulkObserverIDsCache[$hash];
+		}
+
 		$dbResult = Entity\ObserverTable::getList(
 			[
 				'filter' => [
 					'=ENTITY_TYPE_ID' => $entityTypeID,
-					'@ENTITY_ID' => $entityIDs
+					'@ENTITY_ID' => $entityIDs,
 				],
 				'select' => ['ENTITY_ID', 'USER_ID'],
 				'order' => ['SORT' => 'ASC']
@@ -149,6 +164,8 @@ class ObserverManager
 			}
 			$results[$entityId][] = (int)$fields['USER_ID'];
 		}
+
+		self::$bulkObserverIDsCache[$hash] = $results;
 
 		return $results;
 	}
@@ -228,5 +245,10 @@ class ObserverManager
 		}
 
 		return $entityID;
+	}
+
+	private static function resetBulkObserverIDsCache(): void
+	{
+		self::$bulkObserverIDsCache = [];
 	}
 }

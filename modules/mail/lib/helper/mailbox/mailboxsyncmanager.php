@@ -238,14 +238,27 @@ class MailboxSyncManager
 			: null;
 	}
 
-	public function getLastMailboxSyncIsSuccessStatus($mailboxId)
+	/**
+	 * Returns the status of the last sync.
+	 * If the status could not be found out, null will be returned.
+	 *
+	 * @param int $mailboxId
+	 * @return bool|null
+	 */
+	public function getLastMailboxSyncIsSuccessStatus(int $mailboxId): ?bool
 	{
 		$mailboxesOptions = $this->getMailboxesSyncInfo();
 		if (!(isset($mailboxesOptions[$mailboxId]) && array_key_exists('isSuccess', $mailboxesOptions[$mailboxId])))
 		{
 			return null;
 		}
-		return $mailboxesOptions[$mailboxId]['isSuccess'];
+
+		if (isset($mailboxesOptions[$mailboxId]['isSuccess']))
+		{
+			return (bool)$mailboxesOptions[$mailboxId]['isSuccess'];
+		}
+
+		return null;
 	}
 
 	public function getLastMailboxSyncTime($mailboxId)

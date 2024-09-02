@@ -4293,7 +4293,7 @@ class CCrmLiveFeed
 			$entity_type = $arLog["ENTITY_TYPE"];
 			$entity_id = $arLog["ENTITY_ID"];
 
-			$strURL = $APPLICATION->GetCurPageParam("", array("IFRAME", "MID", "SEF_APPLICATION_CUR_PAGE_URL", BX_AJAX_PARAM_ID, "result"));
+			$strURL = $APPLICATION->GetCurPageParam("", array("IFRAME", "MID", BX_AJAX_PARAM_ID, "result"));
 			$strURL = ForumAddPageParams(
 				$strURL,
 				array(

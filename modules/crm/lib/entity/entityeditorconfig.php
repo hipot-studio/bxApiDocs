@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Entity;
 
 use Bitrix\Crm;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 use Bitrix\Ui\EntityForm\Scope;
 
@@ -84,6 +85,8 @@ class EntityEditorConfig
 				$configScope = Crm\Entity\EntityEditorConfigScope::COMMON;
 			}
 		}
+
+		$configScope = $this->rewriteConfigScopeByUserPermission($configScope);
 
 		$this->setScope($configScope);
 		if ($userScopeId > 0)
@@ -328,6 +331,8 @@ class EntityEditorConfig
 				'userScopeId' => $this->getUserScopeId() ?: null,
 			]
 		);
+
+		return true;
 	}
 
 	public function reset()
@@ -581,5 +586,21 @@ class EntityEditorConfig
 		}
 
 		return null;
+	}
+
+	private function rewriteConfigScopeByUserPermission(?string $configScope): ?string
+	{
+		$categoryId = $this->extras['CATEGORY_ID'] ?? $this->extras['DEAL_CATEGORY_ID'] ?? 0;
+
+		$isPersonalViewAllowed = Container::getInstance()
+			->getUserPermissions()
+			->isPersonalViewAllowed($this->entityTypeID, $categoryId) ;
+
+		if ($configScope === EntityEditorConfigScope::PERSONAL && !$isPersonalViewAllowed)
+		{
+			$configScope = EntityEditorConfigScope::COMMON;
+		}
+
+		return $configScope;
 	}
 }

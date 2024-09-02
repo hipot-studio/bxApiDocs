@@ -12,7 +12,7 @@ class Toolbar
 	{
 		$result = [
 			'CATEGORIES' => Categories::forceGet(),
-			'FAV_NUMBERS' => AppFavoritesTable::getUserFavoritesCount(),
+			'FAV_NUMBERS' => count(AppFavoritesTable::getUserFavorites()),
 			'MENU_INFO' => Menu::getList(),
 			'MARKET_SLIDER' => Status::getSlider(),
 			'MARKET_ACTION' => $marketAction,

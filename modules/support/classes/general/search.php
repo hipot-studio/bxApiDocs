@@ -5,6 +5,7 @@ IncludeModuleLangFile(__FILE__);
 class CSupportSearch
 {
 	static $searchModule;
+
 	const TABLE_NAME = "b_ticket_search";
 
 	public static function getSql($query)

@@ -71,6 +71,7 @@ use Bitrix\Main\Type\DateTime;
  * @method Item setContactBindings(array $contactBindings)
  * @method array getContacts()
  * @method string|null getStageId()
+ * @method string|null getPreviousStageId()
  * @method Item setStageId(string $stageId)
  * @method bool isChangedStageId()
  * @method int|null getCategoryId()

@@ -426,6 +426,7 @@ class DialogSession
 		$filter['!=SESSION_ID'] = 0;
 		$days = self::EXPIRES_DAYS;
 		$filter['>DATE_CREATE'] = (new \Bitrix\Main\Type\DateTime())->add("-{$days}D");
+		$filter['=STATUS'] = Network::MULTIDIALOG_STATUS_OPEN;
 
 		return NetworkSessionTable::getCount($filter);
 	}

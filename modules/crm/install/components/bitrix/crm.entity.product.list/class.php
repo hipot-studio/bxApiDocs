@@ -1163,6 +1163,7 @@ final class CCrmEntityProductListComponent
 			'SHOW_PAGESIZE' => false,
 			//'PAGINATION' => $this->arParams['~PAGINATION'],
 			'PAGINATION' => [],
+			'USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP' => \Bitrix\Main\ModuleManager::isModuleInstalled('ui'),
 
 			'FORM_ID' => $this->getStorageItem(self::STORAGE_GRID, 'FORM_ID'),
 			'TAB_ID' => $this->getStorageItem(self::STORAGE_GRID, 'TAB_ID'),

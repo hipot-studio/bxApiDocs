@@ -324,9 +324,17 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		}
 
 		$dashboardScopeQuery = SupersetScopeTable::getList([
-			'select' => ['SCOPE_CODE', 'DASHBOARD_ID'],
+			'select' => ['SCOPE_CODE', 'DASHBOARD_ID', 'IS_AUTOMATED_SOLUTION'],
 			'filter' => ['=DASHBOARD_ID' => array_keys($dashboardIds)],
-			'order' => ['SCOPE_CODE' => 'asc'],
+			'order' => ['IS_AUTOMATED_SOLUTION' => 'asc', 'SCOPE_CODE' => 'asc'],
+			'runtime' => [
+				new ExpressionField(
+					'IS_AUTOMATED_SOLUTION',
+					"CASE WHEN %s LIKE 'automated_solution_%%' THEN 1 ELSE 0 END",
+					['SCOPE_CODE'],
+					['data_type' => 'integer']
+				),
+			],
 		]);
 		foreach ($dashboardScopeQuery->fetchCollection() as $scope)
 		{

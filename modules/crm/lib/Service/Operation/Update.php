@@ -8,6 +8,7 @@ use Bitrix\Crm\Field\Collection;
 use Bitrix\Crm\Integration\PullManager;
 use Bitrix\Crm\Integrity;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Operation;
@@ -347,5 +348,56 @@ class Update extends Operation
 		$factory = Container::getInstance()->getFactory($this->getItem()->getEntityTypeId());
 
 		return $factory?->isStagesEnabled() && $this->wasItemMovedToFinalStage();
+	}
+
+	private function isTransitionAllowed(): bool
+	{
+		if ($this->item->getStageId() === $this->item->remindActual('STAGE_ID'))
+		{
+			return true;
+		}
+
+		if ($this->item->isCategoriesSupported() && ($this->item->getCategoryId() !== $this->item->remindActual('CATEGORY_ID')))
+		{
+			return true;
+		}
+
+		return Container::getInstance()->getUserPermissions($this->getContext()->getUserId())
+			->isStageTransitionAllowed(
+				$this->item->remindActual('STAGE_ID'),
+				$this->item->getStageId(),
+				new ItemIdentifier($this->item->getEntityTypeId(), $this->item->getId(), $this->item->getCategoryId())				,
+			);
+	}
+
+	protected function preSaveChecks(): ?Result
+	{
+		$checkResult = parent::preSaveChecks();
+		if ($checkResult)
+		{
+			return $checkResult;
+		}
+
+		$userId = $this->getContext()->getUserId();
+
+		if (
+			Container::getInstance()->getUserPermissions($userId)->isAdmin()
+			|| Container::getInstance()->getUserPermissions($userId)->isCrmAdmin()
+		)
+		{
+			return null;
+		}
+
+		if (!$this->isCheckTransitionAccessEnabled())
+		{
+			return null;
+		}
+
+		if ($this->item->isStagesEnabled() && !$this->isTransitionAllowed())
+		{
+			return (new Result())->addError(new Error(Loc::getMessage('CRM_PERMISSION_STAGE_TRANSITION_NOT_ALLOWED')));
+		}
+
+		return null;
 	}
 }

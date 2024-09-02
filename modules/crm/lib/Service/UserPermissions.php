@@ -8,7 +8,9 @@ use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\EO_Status_Collection;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Security\AttributesProvider;
+use Bitrix\Crm\Security\EntityPermission\ApproveCustomPermsToExistRole;
 use Bitrix\Crm\Security\EntityPermission\MyCompany;
 use Bitrix\Crm\Security\Manager;
 use Bitrix\Crm\Security\QueryBuilder;
@@ -16,8 +18,12 @@ use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
 use Bitrix\Crm\Security\QueryBuilder\Result\JoinWithUnionSpecification;
 use Bitrix\Crm\Security\QueryBuilder\Result\RawQueryObserverUnionResult;
 use Bitrix\Crm\Security\QueryBuilderFactory;
+use Bitrix\Crm\Security\Role\Manage\Permissions\MyCardView;
+use Bitrix\Main\Config\Option;
+use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Loader;
+use CCrmOwnerType;
 
 class UserPermissions
 {
@@ -80,6 +86,11 @@ class UserPermissions
 		return $this->userId;
 	}
 
+	/**
+	 * Is user a portal admin
+	 *
+	 * @return bool
+	 */
 	public function isAdmin(): bool
 	{
 		if ($this->isAdmin !== null)
@@ -133,6 +144,70 @@ class UserPermissions
 		}
 
 		return $this->isAdmin;
+	}
+
+	/**
+	 * Is user a crm admin
+	 *
+	 * @return bool
+	 */
+	public function isCrmAdmin(): bool
+	{
+		return $this->canWriteConfig();
+	}
+
+	/**
+	 * Is user an admin of automated solution
+	 *
+	 * @param int $automatedSolutionId
+	 * @return bool
+	 */
+	public function isAutomatedSolutionAdmin(int $automatedSolutionId): bool
+	{
+		// Here will be a real rights check for the automated solution soon.
+		// Temporary you can use this option to test admin behavior:
+
+		/*
+		\Bitrix\Main\Config\Option::set('crm', 'AutomatedSolutionAdmins', \Bitrix\Main\Web\Json::encode([
+			1 => [2,3],
+			2 => [4,5],
+		]));
+		*/
+
+		try
+		{
+			$data = (array)\Bitrix\Main\Web\Json::decode(\Bitrix\Main\Config\Option::get('crm', 'AutomatedSolutionAdmins', null));
+		}
+		catch (\Bitrix\Main\ArgumentException $e)
+		{
+			$data = [];
+		}
+		if (isset($data[$automatedSolutionId]))
+		{
+			return in_array($this->userId, (array)$data[$automatedSolutionId]);
+		}
+
+		return $this->isCrmAdmin();
+	}
+
+	/**
+	 * Is user an admin of entity
+	 *
+	 * @param int $entityTypeId
+	 * @return bool
+	 */
+	public function isAdminForEntity(int $entityTypeId): bool
+	{
+		if (\CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId))
+		{
+			$automatedSolutionId = Container::getInstance()->getTypeByEntityTypeId($entityTypeId)?->getCustomSectionId();
+			if ($automatedSolutionId)
+			{
+				return $this->isAutomatedSolutionAdmin($automatedSolutionId);
+			}
+		}
+
+		return $this->isCrmAdmin();
 	}
 
 	public function canWriteConfig(): bool
@@ -193,7 +268,7 @@ class UserPermissions
 	 */
 	public function canAddType(): bool
 	{
-		return $this->canWriteConfig();
+		return $this->isCrmAdmin();
 	}
 
 	/**
@@ -209,7 +284,7 @@ class UserPermissions
 			return false;
 		}
 
-		return $this->canWriteConfig();
+		return $this->isCrmAdmin();
 	}
 
 	/**
@@ -428,13 +503,11 @@ class UserPermissions
 	 * @param int $entityTypeId
 	 * @return string|null
 	 */
-	protected function getStageFieldName(int $entityTypeId): ?string
+	public function getStageFieldName(int $entityTypeId): ?string
 	{
 		$factory = Container::getInstance()->getFactory($entityTypeId);
 
-		$stageFieldName = $factory
-			? $factory->getEntityFieldNameByMap(Item::FIELD_NAME_STAGE_ID)
-			: null;
+		$stageFieldName = $factory?->getEntityFieldNameByMap(Item::FIELD_NAME_STAGE_ID);
 
 		if (
 			!$stageFieldName
@@ -679,12 +752,12 @@ class UserPermissions
 
 	public function canAddCategory(Category $category): bool
 	{
-		return $this->canWriteConfig();
+		return $this->isCrmAdmin();
 	}
 
 	public function canUpdateCategory(Category $category): bool
 	{
-		return $this->canWriteConfig();
+		return $this->isCrmAdmin();
 	}
 
 	public function canDeleteCategory(Category $category): bool
@@ -1051,5 +1124,108 @@ class UserPermissions
 		}
 
 		return $this->myCompanyPermissions;
+	}
+
+	public static function isPersonalViewAllowed(int $entityTypeId, ?int $categoryId): bool
+	{
+		$permissionCode = (new MyCardView([]))->code();
+
+		if ((new ApproveCustomPermsToExistRole())->hasWaitingPermission($permissionCode))
+		{
+			return true;
+		}
+
+		if (self::isAlwaysAllowedEntity($entityTypeId))
+		{
+			return true;
+		}
+
+		$contactCategoryId = Container::getInstance()->getFactory(CCrmOwnerType::Contact)
+			->getCategoryByCode('SMART_DOCUMENT_CONTACT')
+			?->getId();
+
+		if (CCrmOwnerType::Contact && $contactCategoryId === $categoryId)
+		{
+			return true;
+		}
+
+		$userId = Container::getInstance()->getContext()->getUserId();
+		$userPermissions = \CCrmPerms::GetUserPermissions($userId);
+		$entityName = static::getPermissionEntityType($entityTypeId, $categoryId);
+
+		if (
+			Container::getInstance()->getUserPermissions($userId)->isAdmin()
+			|| Container::getInstance()->getUserPermissions($userId)->isCrmAdmin()
+		)
+		{
+			return true;
+		}
+
+		return $userPermissions->GetPermType($entityName, $permissionCode) === \CCrmPerms::PERM_ALL;
+	}
+
+	private function getStageTransitions(int $entityTypeId, string $currentStage, ?int $categoryId): array
+	{
+		$entityTypeName = \CCrmOwnerType::ResolveName($entityTypeId);
+		if ($categoryId)
+		{
+			$entityTypeName = self::getPermissionEntityType($entityTypeId, $categoryId);
+		}
+		$stageFieldName = $this->getStageFieldName($entityTypeId);
+		$permission = (new Transition([]))->code();
+		$userPermissions = \CCrmRole::GetUserPerms($this->userId);
+		$entityPermissions = $userPermissions['settings'][$entityTypeName][$permission]['-'] ?? [];
+
+		$stageTransitions = [];
+		if (isset($userPermissions['settings'][$entityTypeName][$permission][$stageFieldName][$currentStage]))
+		{
+			$stageTransitions = $userPermissions['settings'][$entityTypeName][$permission][$stageFieldName][$currentStage];
+		}
+
+		if (
+			(
+				(count($stageTransitions) === 1 && reset($stageTransitions) === Transition::TRANSITION_INHERIT)
+				|| !$stageTransitions
+			)
+			&& $entityPermissions
+		)
+		{
+			$stageTransitions = $entityPermissions;
+		}
+
+		return $stageTransitions;
+	}
+
+	public function isStageTransitionAllowed(string $currentStage, string $newStageId, ItemIdentifier $itemIdentifier): bool
+	{
+		if ((new ApproveCustomPermsToExistRole())->hasWaitingPermission((new Transition([]))->code()))
+		{
+			return true;
+		}
+
+		if (self::isAlwaysAllowedEntity($itemIdentifier->getEntityTypeId()))
+		{
+			return true;
+		}
+
+		if ($this->isAdmin() || $this->isCrmAdmin())
+		{
+			return true;
+		}
+
+		if (!$this->checkUpdatePermissions($itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId(), $itemIdentifier->getCategoryId()))
+		{
+			return false;
+		}
+
+		$transitions = $this->getStageTransitions($itemIdentifier->getEntityTypeId(), $currentStage, $itemIdentifier->getCategoryId());
+
+		return in_array($newStageId, $transitions) || in_array(Transition::TRANSITION_ANY, $transitions);
+	}
+
+	//always allow for specific entities
+	private static function isAlwaysAllowedEntity(int $entityTypeId): bool
+	{
+		return in_array($entityTypeId, [\CCrmOwnerType::SmartDocument, \CCrmOwnerType::SmartB2eDocument]);
 	}
 }

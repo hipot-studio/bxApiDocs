@@ -484,7 +484,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		if (empty($currentSite))
 		{
-			return $this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+			$this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+			return;
 		}
 
 		if (!empty($fields['service_id']))
@@ -499,7 +500,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		if (empty($service) || $service['SITE_ID'] != $currentSite['LID'])
 		{
-			return $this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+			$this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+			return;
 		}
 
 		if ($fields['mailbox_id'] > 0)
@@ -514,14 +516,16 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 			if ($USER->getId() != $mailbox['USER_ID'] && !$USER->isAdmin() && !$USER->canDoOperation('bitrix24_config'))
 			{
-				return $this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+				$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+				return;
 			}
 
 			if (!empty($mailbox))
 			{
 				if ($mailbox['SERVICE_ID'] != $service['ID'])
 				{
-					return $this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+					$this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+					return;
 				}
 
 				foreach (array($mailbox['EMAIL'], $mailbox['NAME'], $mailbox['LOGIN']) as $item)
@@ -540,11 +544,13 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		{
 			if ($service['ACTIVE'] !== 'Y')
 			{
-				return $this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+				$this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+				return;
 			}
 			if (!MailboxConnector::canConnectNewMailbox())
 			{
-				return $this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+				$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+				return;
 			}
 
 			$mailboxData = array(
@@ -643,7 +649,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			$address = new Main\Mail\Address($mailboxData['EMAIL']);
 			if (!$address->validate())
 			{
-				return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_EMAIL_BAD'));
+				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_EMAIL_BAD'));
+				return;
 			}
 
 			$mailboxData['EMAIL'] = $address->getEmail();
@@ -662,7 +669,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 			if (!empty($mailbox))
 			{
-				return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_EMAIL_EXISTS'));
+				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_EMAIL_EXISTS'));
+				return;
 			}
 		}
 
@@ -676,14 +684,16 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			$regex = '/^(?:(?:http|https|ssl|tls|imap):\/\/)?((?:[a-z0-9](?:-*[a-z0-9])*\.?)+)$/i';
 			if (!preg_match($regex, $mailboxData['SERVER'], $matches) && $matches[1] <> '')
 			{
-				return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_SERVER_BAD'));
+				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_SERVER_BAD'));
+				return;
 			}
 
 			$mailboxData['SERVER'] = $matches[1];
 
 			if (!MailboxConnector::isValidMailHost($mailboxData['SERVER']))
 			{
-				return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_SERVER_BAD'));
+				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_SERVER_BAD'));
+				return;
 			}
 		}
 
@@ -691,7 +701,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		{
 			if ($mailboxData['PORT'] <= 0 || $mailboxData['PORT'] > 65535)
 			{
-				return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_PORT_BAD'));
+				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_PORT_BAD'));
+				return;
 			}
 		}
 
@@ -705,7 +716,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			$regex = '/^(https?:\/\/)?((?:[a-z0-9](?:-*[a-z0-9])*\.?)+)(:[0-9]+)?\/?(.*)/i';
 			if (!(preg_match($regex, $mailboxData['LINK'], $matches) && $matches[2] <> ''))
 			{
-				return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_LINK_BAD'));
+				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_LINK_BAD'));
+				return;
 			}
 
 			$mailboxData['LINK'] = $matches[0];
@@ -724,7 +736,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 				if ($maxAgeLimit > 0 && $maxAge > $maxAgeLimit)
 				{
-					return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_MAX_AGE_ERROR'));
+					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_MAX_AGE_ERROR'));
+					return;
 				}
 
 				if ($maxAge < 0)
@@ -741,7 +754,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		$unseen = Mail\Helper::getImapUnseen($mailboxData, 'inbox', $error, $errors);
 		if ($unseen === false)
 		{
-			return $this->error($errors instanceof Main\ErrorCollection ? $errors : $error, $isOAuth);
+			$this->error($errors instanceof Main\ErrorCollection ? $errors : $error, $isOAuth);
+			return;
 		}
 
 		$isSmtpOauthEnabled = MailboxConnector::isOauthSmtpEnabled($service['NAME'] ?? '');
@@ -857,11 +871,13 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			{
 				if (preg_match('/^\^/', $fields['pass_smtp']))
 				{
-					return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_PASS_BAD_CARET'));
+					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_PASS_BAD_CARET'));
+					return;
 				}
 				else if (preg_match('/\x00/', $fields['pass_smtp']))
 				{
-					return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_PASS_BAD_NULL'));
+					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_PASS_BAD_NULL'));
+					return;
 				}
 
 				$smtpConfig['password'] = $fields['pass_smtp'];
@@ -873,14 +889,16 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 				$regex = '/^(?:(?:http|https|ssl|tls|smtp):\/\/)?((?:[a-z0-9](?:-*[a-z0-9])*\.?)+)$/i';
 				if (!preg_match($regex, $smtpConfig['server'], $matches) && $matches[1] <> '')
 				{
-					return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_SERVER_BAD'));
+					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_SERVER_BAD'));
+					return;
 				}
 
 				$smtpConfig['server'] = $matches[1];
 
 				if (!MailboxConnector::isValidMailHost($smtpConfig['server']))
 				{
-					return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_SERVER_BAD'));
+					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_SERVER_BAD'));
+					return;
 				}
 			}
 
@@ -888,7 +906,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			{
 				if ($smtpConfig['port'] <= 0 || $smtpConfig['port'] > 65535)
 				{
-					return $this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_PORT_BAD'));
+					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_PORT_BAD'));
+					return;
 				}
 			}
 
@@ -1049,7 +1068,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		if (!($result > 0))
 		{
-			return $this->error(Loc::getMessage('MAIL_CLIENT_SAVE_ERROR'));
+			$this->error(Loc::getMessage('MAIL_CLIENT_SAVE_ERROR'));
+			return;
 		}
 
 		if (!empty($senderFields))
@@ -1074,15 +1094,18 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 			if (!empty($result['errors']) && $result['errors'] instanceof Main\ErrorCollection)
 			{
-				return $this->error($result['errors'], $isSmtpOauthEnabled, true);
+				$this->error($result['errors'], $isSmtpOauthEnabled, true);
+				return;
 			}
 			else if (!empty($result['error']))
 			{
-				return $this->error($result['error'], $isSmtpOauthEnabled, true);
+				$this->error($result['error'], $isSmtpOauthEnabled, true);
+				return;
 			}
 			else if (empty($result['confirmed']))
 			{
-				return $this->error('MAIL_CLIENT_CONFIG_SMTP_CONFIRM', $isSmtpOauthEnabled, true);
+				$this->error('MAIL_CLIENT_CONFIG_SMTP_CONFIRM', $isSmtpOauthEnabled, true);
+				return;
 			}
 		}
 
@@ -1217,12 +1240,14 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		if (empty($mailbox))
 		{
-			return $this->error(Loc::getMessage('MAIL_CLIENT_ELEMENT_NOT_FOUND'));
+			$this->error(Loc::getMessage('MAIL_CLIENT_ELEMENT_NOT_FOUND'));
+			return;
 		}
 
 		if ($USER->getId() != $mailbox['USER_ID'] && !$USER->isAdmin() && !$USER->canDoOperation('bitrix24_config'))
 		{
-			return $this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+			$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+			return;
 		}
 
 		\CMailbox::update($mailbox['ID'], array('ACTIVE' => 'N'));

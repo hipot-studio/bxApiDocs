@@ -73,6 +73,7 @@ class AI extends Base
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
+
 			return null;
 		}
 

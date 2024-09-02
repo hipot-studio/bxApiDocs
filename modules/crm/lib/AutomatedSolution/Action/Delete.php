@@ -7,6 +7,7 @@ use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Intranet\CustomSection\Entity\CustomSectionTable;
 use Bitrix\Main\Error;
+use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
@@ -61,6 +62,13 @@ final class Delete implements Action
 		}
 
 		Container::getInstance()->getDynamicTypesMap()->invalidateTypesCollectionCache();
+
+		$event = new Event('crm', 'onAfterAutomatedSolutionDelete', [
+			'automatedSolution' => [
+				'ID' => $this->automatedSolutionId,
+			]
+		]);
+		$event->send();
 
 		return $overallResult;
 	}

@@ -1629,11 +1629,6 @@ class CAllCrmContact
 			{
 				\Bitrix\Crm\Binding\ContactCompanyTable::bindCompanies($ID, $companyBindings);
 			}
-
-			if (isset($GLOBALS['USER']) && $companyID > 0)
-			{
-				CUserOptions::SetOption('crm', 'crm_company_search', array('last_selected' => $companyID));
-			}
 			//endregion
 
 			//region Statistics & History
@@ -2095,11 +2090,6 @@ class CAllCrmContact
 				}
 			}
 
-			if (isset($arFields['ASSIGNED_BY_ID']) && intval($arRow['ASSIGNED_BY_ID']) !== intval($arFields['ASSIGNED_BY_ID']))
-			{
-				CcrmEvent::SetAssignedByElement($arFields['ASSIGNED_BY_ID'], 'CONTACT', $ID);
-			}
-
 			//region Preparation of companies
 			$originalCompanyBindings = \Bitrix\Crm\Binding\ContactCompanyTable::getContactBindings($ID);
 			$originalCompanyIDs = EntityBinding::prepareEntityIDs(CCrmOwnerType::Company, $originalCompanyBindings);
@@ -2412,20 +2402,6 @@ class CAllCrmContact
 			if(!empty($addedCompanyBindings))
 			{
 				\Bitrix\Crm\Binding\ContactCompanyTable::bindCompanies($ID, $addedCompanyBindings);
-
-				if (isset($GLOBALS['USER']))
-				{
-					CUserOptions::SetOption(
-						'crm',
-						'crm_company_search',
-						array(
-							'last_selected' => EntityBinding::getLastEntityID(
-								CCrmOwnerType::Company,
-								$addedCompanyBindings
-							)
-						)
-					);
-				}
 			}
 			//endregion
 
@@ -2634,11 +2610,6 @@ class CAllCrmContact
 					'REMOVED_OBSERVER_IDS' => $removedObserverIDs
 				]
 			);
-
-			if (isset($GLOBALS["USER"]) && isset($arFields['COMPANY_ID']) && intval($arFields['COMPANY_ID']) > 0)
-			{
-				CUserOptions::SetOption("crm", "crm_company_search", array('last_selected' => $arFields['COMPANY_ID']));
-			}
 
 			$arFields['ID'] = $ID;
 

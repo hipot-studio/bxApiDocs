@@ -10,6 +10,7 @@ class PermissionModel
 		private string $field,
 		private ?string $filedValue,
 		private ?string $attribute = null,
+		private array $settings = [],
 	)
 	{
 	}
@@ -39,6 +40,11 @@ class PermissionModel
 		return $this->attribute;
 	}
 
+	public function settings(): array
+	{
+		return $this->settings;
+	}
+
 	public function isValidIdentifier(): bool
 	{
 		if ($this->field === '-')
@@ -57,8 +63,9 @@ class PermissionModel
 		$fieldValue = $form['stageCode'] ?? null;
 
 		$attr = $form['value'] ?? null;
+		$settings = $form['settings'] ?? [];
 
-		return new self($entity, $permissionCode, $field, $fieldValue, $attr);
+		return new self($entity, $permissionCode, $field, $fieldValue, $attr, $settings);
 	}
 
 	/**

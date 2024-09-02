@@ -1301,6 +1301,11 @@ class CDiskFolderListComponent extends DiskComponent implements \Bitrix\Main\Eng
 			)), '/');
 		}
 
+		if (!$object->getParent())
+		{
+			return '';
+		}
+
 		return $this->getUrlManager()->getPathFolderList($object->getParent());
 	}
 

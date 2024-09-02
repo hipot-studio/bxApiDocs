@@ -2475,8 +2475,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 
 		$basket = $this->getBasketStorage()->getOrderableBasket();
 		$fUserId = $this->getFuserId();
-
-		$sessionBasketPrice = $this->getSessionFUserBasketPrice($fUserId);
+		$siteId = $this->getSiteId();
 
 		$basketPrice = 0;
 		/** @var Sale\BasketItemBase $basketItem */
@@ -2488,13 +2487,14 @@ class CBitrixBasketComponent extends CBitrixComponent
 			}
 		}
 
-		if ($sessionBasketPrice === null || $sessionBasketPrice != $basketPrice)
+		if (
+			!Sale\BasketComponentHelper::existsFUserBasketPrice($fUserId, $siteId)
+			|| $this->getSessionFUserBasketPrice($fUserId) != $basketPrice
+		)
 		{
 			$state = 'Y';
 			$this->setSessionFUserBasketPrice($basketPrice, $fUserId);
 		}
-
-		$sessionBasketQuantity = $this->getSessionFUserBasketQuantity($fUserId);
 
 		$basketItemQuantity = 0;
 		/** @var Sale\BasketItemBase $basketItem */
@@ -2506,7 +2506,10 @@ class CBitrixBasketComponent extends CBitrixComponent
 			}
 		}
 
-		if ($sessionBasketQuantity === null || $sessionBasketQuantity != $basketItemQuantity)
+		if (
+			!Sale\BasketComponentHelper::existsFUserBasketQuantity($fUserId, $siteId)
+			|| $this->getSessionFUserBasketQuantity($fUserId) != $basketItemQuantity
+		)
 		{
 			$state = 'Y';
 			$this->setSessionFUserBasketQuantity($basketItemQuantity, $fUserId);

@@ -4,7 +4,7 @@ namespace Bitrix\Market;
 
 use Bitrix\Main\Application;
 use Bitrix\Market\Rest\Actions;
-use Bitrix\Rest\Marketplace\Transport;
+use Bitrix\Market\Rest\Transport;
 
 class Categories
 {

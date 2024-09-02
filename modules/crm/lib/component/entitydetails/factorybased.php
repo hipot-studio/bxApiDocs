@@ -516,7 +516,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 	protected function getExtras(): array
 	{
 		return [
-			'CATEGORY_ID' => $this->categoryId
+			'CATEGORY_ID' => $this->categoryId,
 		];
 	}
 

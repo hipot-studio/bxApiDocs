@@ -145,7 +145,10 @@ class Helper
 	{
 		$mailboxHelper = Helper\Mailbox::createInstance($id, false);
 
-		$result = empty($mailboxHelper) ? false : $mailboxHelper->syncOutgoing();
+		if ($mailboxHelper)
+		{
+			$mailboxHelper->syncOutgoing();
+		}
 
 		return '';
 	}
@@ -296,7 +299,10 @@ class Helper
 	{
 		$mailboxHelper = Helper\Mailbox::createInstance($id, false);
 
-		$result = empty($mailboxHelper) ? false : $mailboxHelper->resortTree();
+		if ($mailboxHelper)
+		{
+			$mailboxHelper->resortTree();
+		}
 
 		return '';
 	}

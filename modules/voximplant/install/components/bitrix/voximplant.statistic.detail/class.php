@@ -746,6 +746,8 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 				"TEXT" => GetMessage("TEL_STAT_ACTION_DOWNLOAD"),
 				"ONCLICK" => "window.open('".CUtil::JSEscape($row["CALL_RECORD_DOWNLOAD_URL"])."')",
 			);
+
+			$this->addDeleteRecordAction($result, $row);
 		}
 		elseif (
 			!is_null($row['CALL_START_DATE_RAW']) &&
@@ -760,6 +762,8 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 				"ONCLICK" =>
 					"BX.VoximplantStatisticDetail.Instance.downloadVoxRecords([{historyId: ".CUtil::JSEscape($row["ID"])."}]);"
 			);
+
+			$this->addDeleteRecordAction($result, $row);
 		}
 
 		if($row["TRANSCRIPT_ID"] > 0)
@@ -781,6 +785,65 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 		}
 
 		return $result;
+	}
+
+	protected function checkModifyAccess($callHistory)
+	{
+		$allowedUserIdsToModifyRecord = Helper::getAllowedUserIds(
+			Helper::getCurrentUserId(),
+			$this->userPermissions->getPermission(Permissions::ENTITY_CALL_RECORD, Permissions::ACTION_MODIFY)
+		);
+
+		return !is_array($allowedUserIdsToModifyRecord) || in_array($callHistory['PORTAL_USER_ID'], $allowedUserIdsToModifyRecord);
+	}
+
+	protected function addDeleteRecordAction(&$result, $row)
+	{
+		if ($this->checkModifyAccess($row))
+		{
+			$result[] = array(
+				"TITLE" => Loc::getMessage("TEL_STAT_ACTION_DELETE_RECORD"),
+				"TEXT" => Loc::getMessage("TEL_STAT_ACTION_DELETE_RECORD"),
+				"ONCLICK" => "BX.VoximplantStatisticDetail.Instance.openDeleteConfirm(false, [{historyId: ".CUtil::JSEscape($row["ID"])."}]);"
+			);
+		}
+	}
+
+	public function deleteRecordAction(int $historyId)
+	{
+		if (!isset($historyId))
+		{
+			return;
+		}
+
+		$this->init();
+
+		$callHistory = \Bitrix\Voximplant\StatisticTable::getRow([
+			'select' => [
+				'CALL_RECORD_ID',
+				'PORTAL_USER_ID',
+			],
+			'filter' => [
+				'=ID' => $historyId
+			]
+		]);
+
+		if (!$this->checkModifyAccess($callHistory))
+		{
+			return;
+		}
+
+		if (!empty($callHistory['CALL_RECORD_ID']))
+		{
+			\CFile::Delete($callHistory['CALL_RECORD_ID']);
+		}
+
+		\Bitrix\Voximplant\StatisticTable::update($historyId, [
+			'CALL_RECORD_ID' => null,
+			'CALL_RECORD_URL' => null,
+			'RECORD_DURATION' => null,
+			'CALL_WEBDAV_ID' => null,
+		]);
 	}
 
 	public function isRecordsAlreadyUploadedAction(array $historyIds): bool

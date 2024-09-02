@@ -2,7 +2,9 @@
 
 namespace Bitrix\Crm\Security\Role\Manage;
 
+use Bitrix\Crm\Security\EntityPermission\ApproveCustomPermsToExistRole;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Add;
+use Bitrix\Crm\Security\Role\Manage\Permissions\MyCardView;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Automation;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Delete;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Export;
@@ -10,6 +12,7 @@ use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Import;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Permission;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Read;
+use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Write;
 
 class PermissionAttrPresets
@@ -26,6 +29,7 @@ class PermissionAttrPresets
 			new Delete(self::userHierarchyAndOpen()),
 			new Export(self::userHierarchyAndOpen()),
 			new Import(self::userHierarchyAndOpen()),
+			new MyCardView(self::allowedYesNo()),
 		];
 	}
 
@@ -43,6 +47,21 @@ class PermissionAttrPresets
 	{
 		return [
 			new HideSum(self::hideSum()),
+		];
+	}
+
+	public static function crmStageTransition(array $stages = []): array
+	{
+		$variants = array_merge(
+			[
+				'INHERIT' => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_TRANSITION_INHERITED'),
+				'ANY' => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_TRANSITION_ANY')
+			],
+			$stages,
+		);
+
+		return [
+			new Transition($variants),
 		];
 	}
 
@@ -90,6 +109,14 @@ class PermissionAttrPresets
 		return [
 			'' => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_AUTOMATION_NONE'),
 			BX_CRM_PERM_ALL => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_AUTOMATION_ALL'),
+		];
+	}
+
+	public static function allowedYesNo(): array
+	{
+		return [
+			'' => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_ALLOWED_NO'),
+			BX_CRM_PERM_ALL => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_ALLOWED_YES'),
 		];
 	}
 }

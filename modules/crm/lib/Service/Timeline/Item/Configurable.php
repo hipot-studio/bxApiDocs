@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item;
 
+use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\ContentBlockDto;
 use Bitrix\Crm\Integration\Intranet\BindingMenu\CodeBuilder;
 use Bitrix\Crm\Integration\Intranet\BindingMenu\SectionCode;
 use Bitrix\Crm\Service\Container;
@@ -13,6 +14,8 @@ use Bitrix\Crm\Service\Timeline\Layout\Action\RunAjaxAction;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Note;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
 use Bitrix\Crm\Service\Timeline\Layout\Converter;
+use Bitrix\Crm\Service\Timeline\Layout\Factory\RestAppConfigurable\ActionFactory;
+use Bitrix\Crm\Service\Timeline\Layout\Factory\RestAppConfigurable\ContentBlockFactory;
 use Bitrix\Crm\Service\Timeline\Layout\Header\ChangeStreamButton;
 use Bitrix\Crm\Service\Timeline\Layout\MarketPanel;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItem;
@@ -21,6 +24,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Rest\AppTable;
 
 abstract class Configurable extends Item
 {
@@ -352,9 +356,20 @@ abstract class Configurable extends Item
 	public function getCommonContentBlocksBlocks(): array
 	{
 		$blocks = [];
-		if($this->needShowNotes()) {
+
+		if ($this->needShowRestAppLayoutBlocks())
+		{
+			foreach ($this->getBuiltRestAppLayoutBlocks() as $restAppLayoutBlock)
+			{
+				$blocks[$restAppLayoutBlock->getContentBlockName()] = $restAppLayoutBlock;
+			}
+		}
+
+		if ($this->needShowNotes())
+		{
 			$blocks['note'] =  $this->buildNoteBlock();
 		}
+
 		return $blocks;
 	}
 
@@ -396,6 +411,11 @@ abstract class Configurable extends Item
 	public function needShowNotes(): bool
 	{
 		return false;
+	}
+
+	public function needShowRestAppLayoutBlocks(): bool
+	{
+		return true;
 	}
 
 	/**
@@ -580,6 +600,50 @@ abstract class Configurable extends Item
 		}
 
 		return $note;
+	}
+
+	/**
+	 * @return Layout\Body\ContentBlock\RestAppLayoutBlocks[]
+	 */
+	protected function getBuiltRestAppLayoutBlocks(): array
+	{
+		$layoutBlocksModels = $this->model->getRestAppLayoutBlocksModels();
+
+		$builtRestAppLayoutBlocks = [];
+		foreach ($layoutBlocksModels as $layoutBlocksModel)
+		{
+			$clientId = $layoutBlocksModel->getClientId();
+			$restApp = $this->getAppInfo($clientId);
+			if ($restApp === null)
+			{
+				continue;
+			}
+
+			$actionFactory = new ActionFactory($this, $clientId, $restApp['ID'] ?? 0);
+			$contentBlockFactory = new ContentBlockFactory($this, $actionFactory);
+
+			$createContentBlock = static fn(ContentBlockDto $dto) => $contentBlockFactory->createByDto($dto);
+			$contentBlocks = array_map($createContentBlock, $layoutBlocksModel->getContentBlocks());
+
+			$builtRestAppLayoutBlocks[] = (new Layout\Body\ContentBlock\RestAppLayoutBlocks(
+				$layoutBlocksModel->getItemTypeId(),
+				$layoutBlocksModel->getItemId(),
+				$restApp,
+				$contentBlocks,
+			))->setSort(PHP_INT_MAX - 1);
+		}
+
+		return $builtRestAppLayoutBlocks;
+	}
+
+	private function getAppInfo(string $clientId): ?array
+	{
+		if (Loader::includeModule('rest'))
+		{
+			return AppTable::getByClientId($clientId) ?? null;
+		}
+
+		return null;
 	}
 
 	public function getNoteItemType(): int

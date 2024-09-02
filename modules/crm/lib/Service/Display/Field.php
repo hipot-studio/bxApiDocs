@@ -695,7 +695,10 @@ abstract class Field
 	{
 		if ($this->isUserField())
 		{
-			$values = array_map('htmlspecialcharsback', $values);
+			$values = array_map(
+				'htmlspecialcharsback',
+				array_filter($values, 'is_scalar')
+			);
 		}
 
 		return array_values($values);

@@ -3,7 +3,6 @@
 use Bitrix\Mail\Helper\MailContact;
 use Bitrix\Mail\MailMessageTable;
 use Bitrix\Main\Application;
-use Bitrix\Main\Text\BinaryString;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Config\Ini;
 use Bitrix\Mail\Internals\MessageClosureTable;
@@ -362,7 +361,7 @@ class CAllMailBox
 
 		$strSql .= $strSqlSearch.$strSqlOrder;
 
-		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 		$res = new _CMailBoxDBRes($res);
 		$res->is_filtered = $is_filtered;
 		return $res;
@@ -384,7 +383,7 @@ class CAllMailBox
 					"FROM b_mail_mailbox MB ".
 					"WHERE ACTIVE='Y' ";
 
-			$dbr = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbr = $DB->Query($strSql);
 			while($ar = $dbr->Fetch())
 				$mbx[] = $ar["ID"];
 		}
@@ -425,7 +424,7 @@ class CAllMailBox
 				"	AND USER_ID = 0";
 
 		$strReturn = '';
-		$dbr = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbr = $DB->Query($strSql);
 		if($ar = $dbr->Fetch())
 		{
 			$mb = new CMailbox();
@@ -884,7 +883,7 @@ class CAllMailBox
 				"FROM b_mail_mailbox MB, b_lang L, b_culture C ".
 				"WHERE MB.LID=L.LID AND C.ID=L.CULTURE_ID ".
 				"	AND MB.ID=".$mailbox_id;
-		$dbr = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbr = $DB->Query($strSql);
 		$dbr = new _CMailBoxDBRes($dbr);
 		if(!$arMAILBOX_PARAMS = $dbr->Fetch())
 			return CMailError::SetError("ERR_MAILBOX_NOT_FOUND", GetMessage("MAIL_CL_ERR_MAILBOX_NOT_FOUND"), GetMessage("MAIL_CL_ERR_MAILBOX_NOT_FOUND"));
@@ -1022,7 +1021,7 @@ class CAllMailBox
 			if (count($arUIDL) > 0)
 			{
 				$strSql = 'SELECT ID FROM b_mail_message_uid WHERE MAILBOX_ID = ' . $mailbox_id;
-				$db_res = $DB->query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+				$db_res = $DB->query($strSql);
 				while ($ar_res = $db_res->fetch())
 				{
 					if (isset($arUIDL[$ar_res['ID']]))
@@ -1044,7 +1043,7 @@ class CAllMailBox
 				AddMessage2Log($toLog);*/
 
 				$strSql = 'DELETE FROM b_mail_message_uid WHERE MAILBOX_ID = ' . $mailbox_id . ' AND ID IN (' . $ids . ')';
-				$DB->query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+				$DB->query($strSql);
 			}
 
 			$this->new_mess_count = 0;
@@ -1464,7 +1463,7 @@ class CAllMailMessage
 
 		$strSql .= " WHERE 1=1 ".$strSqlSearch.$strSqlOrder;
 
-		$dbr = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbr = $DB->Query($strSql);
 		$dbr = new \CMailMessageDBResult($dbr);
 		$dbr->is_filtered = $is_filtered;
 		return $dbr;
@@ -2048,7 +2047,7 @@ class CAllMailMessage
 
 		$params = $DB->PrepareInsert("b_mail_message", $arFields);
 		$sql = sprintf("INSERT INTO b_mail_message (%s) VALUES (%s)", $params[0], $params[1]);
-		$length = BinaryString::getLength($sql);
+		$length = strlen($sql);
 
 		if (!\CMailUtil::IsSizeAllowed($length))
 		{
@@ -2060,7 +2059,7 @@ class CAllMailMessage
 			$sql = sprintf("INSERT INTO b_mail_message (%s) VALUES (%s)", $params[0], $params[1]);
 		}
 
-		$DB->Query($sql, false, "File: " . __FILE__ . "<br>Line: " . __LINE__);
+		$DB->Query($sql);
 
 		$ID = intval($DB->LastID());
 
@@ -2119,7 +2118,7 @@ class CAllMailMessage
 
 		$params = $DB->PrepareUpdate("b_mail_message", $arFields);
 		$sql = sprintf("UPDATE b_mail_message SET %s WHERE ID=%s", $params, $ID);
-		$length = BinaryString::getLength($sql);
+		$length = strlen($sql);
 
 		if (!\CMailUtil::IsSizeAllowed($length))
 		{
@@ -2131,7 +2130,7 @@ class CAllMailMessage
 			$sql = sprintf("UPDATE b_mail_message SET %s WHERE ID=%s", $params, $ID);
 		}
 
-		$DB->Query($sql, false, "File: " . __FILE__ . "<br>Line: " . __LINE__);
+		$DB->Query($sql);
 
 		static::saveForDeferredDownload($ID, $arFields, $mailboxID);
 
@@ -2156,7 +2155,7 @@ class CAllMailMessage
 					$filter,
 					function ($total, $name) use ($fields)
 					{
-						$length = BinaryString::getLength($fields[$name]);
+						$length = strlen($fields[$name]);
 						return $total + $length;
 					},
 					0
@@ -2171,11 +2170,11 @@ class CAllMailMessage
 
 				foreach ($filter as $subFilter)
 				{
-					$length = BinaryString::getLength($fields[$subFilter]);
+					$length = strlen($fields[$subFilter]);
 					$ratio = $length / $totalLength;
 					$over = ceil($trimLength * $ratio);
 					$newLength = $length - $over;
-					$fields[$subFilter] = $newLength > 0 ? BinaryString::getSubstring($fields[$subFilter], 0, $newLength) : '';
+					$fields[$subFilter] = $newLength > 0 ? substr($fields[$subFilter], 0, $newLength) : '';
 					$overLength += $newLength > 0 ? $over : $length;
 				}
 
@@ -2185,9 +2184,9 @@ class CAllMailMessage
 			{
 				if (isset($fields[$filter]))
 				{
-					$length = BinaryString::getLength($fields[$filter]);
+					$length = strlen($fields[$filter]);
 					$newLength = $length - $trimLength;
-					$fields[$filter] = $newLength > 0 ? BinaryString::getSubstring($fields[$filter], 0, $newLength) : '';
+					$fields[$filter] = $newLength > 0 ? substr($fields[$filter], 0, $newLength) : '';
 					$trimLength -= $newLength > 0 ? $trimLength : $length;
 				}
 			}
@@ -2217,14 +2216,14 @@ class CAllMailMessage
 		}
 
 		$strSql = "DELETE FROM b_mail_msg_attachment WHERE MESSAGE_ID=".$id;
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$DB->query(sprintf('DELETE FROM b_mail_message_access WHERE MESSAGE_ID = %u', $id));
 
 		$DB->query(sprintf('DELETE FROM b_mail_message_closure WHERE MESSAGE_ID = %1$u OR PARENT_ID = %1$u', $id));
 
 		$strSql = "DELETE FROM b_mail_message WHERE ID=".$id;
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		return true;
 	}
@@ -2293,7 +2292,7 @@ class CAllMailMessage
 		$arFields['FILE_NAME'] = trim($arFields['FILE_NAME']);
 
 		$strSql = "SELECT ID, MAILBOX_ID, ATTACHMENTS FROM b_mail_message WHERE ID=".intval($arFields["MESSAGE_ID"]);
-		$dbr = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbr = $DB->Query($strSql);
 		if(!($dbr_arr = $dbr->Fetch()))
 			return false;
 
@@ -2349,7 +2348,7 @@ class CAllMailMessage
 		if ($ID > 0)
 		{
 			$strSql = 'UPDATE b_mail_message SET ATTACHMENTS = ' . $n . ' WHERE ID = ' . intval($arFields['MESSAGE_ID']);
-			$DB->query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+			$DB->query($strSql);
 
 			try
 			{
@@ -2728,7 +2727,7 @@ class CMailAttachment
 
 		$strSql .= " WHERE 1=1 ".$strSqlSearch.$strSqlOrder;
 		//echo "<pre>".$strSql."</pre>";
-		$dbr = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbr = $DB->Query($strSql);
 		$dbr = new _CMailAttachmentDBRes($dbr);
 		$dbr->is_filtered = $is_filtered;
 		return $dbr;
@@ -2755,7 +2754,7 @@ class CMailAttachment
 		}
 
 		$strSql = "DELETE FROM b_mail_msg_attachment WHERE ID=".$id;
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 	}
 
 	public static function getContents($attachment)
@@ -3241,7 +3240,7 @@ class CMailFilter
 
 		$strSql .= " WHERE 1=1 ".$strSqlSearch.$strSqlOrder;
 
-		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 		$res->is_filtered = $is_filtered;
 		return $res;
 	}
@@ -3483,7 +3482,7 @@ class CMailFilter
 					$strSqlAdd."
 				ORDER BY f.SORT, f.ID";
 
-			$dbr = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbr = $DB->Query($strSql);
 
 			$arFilter = Array();
 			$arFilterCond = Array();
@@ -3863,7 +3862,7 @@ class CMailFilter
 
 		$a = 1;
 		$b = 1;
-		$dbr = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbr = $DB->Query($strSql);
 		$arr = true;
 		$words = "";
 
@@ -3995,7 +3994,7 @@ class CMailFilter
 						"WHERE WORD_ID='".$word_md5."'";// AND WORD_REAL = '".$DB->ForSql($word, 40)."'";
 				}
 
-				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql);
 			}
 		}
 
@@ -4119,7 +4118,7 @@ class CMailFilterCondition
 
 		$strSql .= " WHERE 1=1 ".$strSqlSearch.$strSqlOrder;
 
-		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 		$res->is_filtered = (count($arSqlOrder)>0);
 		return $res;
 	}
@@ -4149,7 +4148,7 @@ class CMailFilterCondition
 			"FROM b_mail_filter_cond ".
 			"WHERE FILTER_ID=".$FILTER_ID;
 
-		$dbr = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbr = $DB->Query($strSql);
 
 		while($dbr_arr = $dbr->Fetch())
 		{
@@ -4216,7 +4215,7 @@ class CMailFilterCondition
 				$strUpdate." ".
 			"WHERE ID=".$ID;
 
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		return true;
 	}
@@ -4355,7 +4354,7 @@ class CMailLog
 
 		$strSql .= " WHERE 1=1 ".$strSqlSearch.$strSqlOrder;
 
-		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 		$res = new _CMailLogDBRes($res);
 		$res->is_filtered = $is_filtered;
 		return $res;

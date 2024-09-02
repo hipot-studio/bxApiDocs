@@ -1049,8 +1049,7 @@ class EitherYN extends Base
 	public static function getErrorSingle(array $input, $value)
 	{
 		$input['REQUIRED'] ??= 'N';
-		$input['NAME'] ??= $input['LABEL'];
-		$input['NAME'] ??= '';
+		$input['NAME'] ??= (string)($input['LABEL'] ?? '');
 
 		if (
 			($input['REQUIRED'] === 'Y' || $input['REQUIRED'] === true)

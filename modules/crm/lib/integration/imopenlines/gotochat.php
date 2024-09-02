@@ -93,7 +93,7 @@ class GoToChat
 			$lineId = $this->getFirstAvailableLineId();
 		}
 
-		if (!$this->isValidLineId($lineId))
+		if ($this->connectorId !== self::WHATS_APP_CONNECTOR_ID && !$this->isValidLineId($lineId))
 		{
 			$result->addError(new Error(Loc::getMessage('CRM_IMOL_INVITATION_WRONG_LINE')));
 

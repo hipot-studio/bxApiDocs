@@ -23,55 +23,73 @@ class CCrmCurrency
 	// Get Fields Metadata
 	public static function GetFieldsInfo()
 	{
-		if(!self::$FIELD_INFOS)
+		if (!self::$FIELD_INFOS)
 		{
-			self::$FIELD_INFOS = array(
-				'CURRENCY' => array(
+			self::$FIELD_INFOS = [
+				'CURRENCY' => [
 					'TYPE' => 'string',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::UserPKey)
-				),
-				'AMOUNT_CNT' => array(
-					'TYPE' => 'int'
-				),
-				'AMOUNT' => array(
-					'TYPE' => 'double'
-				),
-				'BASE' => array(
-					'TYPE' => 'char',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
-				),
-				'SORT' => array(
-					'TYPE' => 'int'
-				),
-				'DATE_UPDATE' => array(
-					'TYPE' => 'datetime',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
-				),
-				'LID' => array(
-					'TYPE' => 'string',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
-				),
-				'FORMAT_STRING' => array(
-					'TYPE' => 'string',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
-				),
-				'FULL_NAME' => array(
-					'TYPE' => 'string',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
-				),
-				'DEC_POINT' => array(
-					'TYPE' => 'string',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
-				),
-				'THOUSANDS_SEP' => array(
-					'TYPE' => 'string',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
-				),
-				'DECIMALS' => array(
+					'ATTRIBUTES' => [
+						CCrmFieldInfoAttr::UserPKey,
+					],
+				],
+				'AMOUNT_CNT' => [
 					'TYPE' => 'int',
-					'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
-				)
-			);
+				],
+				'AMOUNT' => [
+					'TYPE' => 'double',
+				],
+				'BASE' => [
+					'TYPE' => 'char',
+					'ATTRIBUTES' => [
+						CCrmFieldInfoAttr::ReadOnly,
+					],
+				],
+				'SORT' => [
+					'TYPE' => 'int',
+				],
+				'DATE_UPDATE' => [
+					'TYPE' => 'datetime',
+					'ATTRIBUTES' => [
+						CCrmFieldInfoAttr::ReadOnly,
+					],
+				],
+				'LID' => [
+					'TYPE' => 'string',
+					'ATTRIBUTES' => [
+						CCrmFieldInfoAttr::ReadOnly,
+					],
+				],
+				'FORMAT_STRING' => [
+					'TYPE' => 'string',
+					'ATTRIBUTES' => [
+						CCrmFieldInfoAttr::ReadOnly,
+					],
+				],
+				'FULL_NAME' => [
+					'TYPE' => 'string',
+					'ATTRIBUTES' => [
+						CCrmFieldInfoAttr::ReadOnly,
+					],
+				],
+				'DEC_POINT' => [
+					'TYPE' => 'string',
+					'ATTRIBUTES' => [
+						CCrmFieldInfoAttr::ReadOnly,
+					],
+				],
+				'THOUSANDS_SEP' => [
+					'TYPE' => 'string',
+					'ATTRIBUTES' => [
+						CCrmFieldInfoAttr::ReadOnly,
+					],
+				],
+				'DECIMALS' => [
+					'TYPE' => 'int',
+					'ATTRIBUTES' => [
+						CCrmFieldInfoAttr::ReadOnly,
+					],
+				],
+			];
 		}
 
 		return self::$FIELD_INFOS;
@@ -79,7 +97,14 @@ class CCrmCurrency
 
 	public static function GetFieldCaption($fieldName)
 	{
-		return (string)Loc::getMessage('CRM_CURRENCY_FIELD_' . $fieldName);
+		$messageId = match ((string)$fieldName)
+		{
+			'AMOUNT' => 'CRM_CURRENCY_FIELD_AMOUNT_MSGVER_1',
+			'AMOUNT_CNT' => 'CRM_CURRENCY_FIELD_AMOUNT_CNT_MSGVER_1',
+			default => 'CRM_CURRENCY_FIELD_' . $fieldName,
+		};
+
+		return (string)Loc::getMessage($messageId);
 	}
 
 	public static function GetCurrencyLocalizationFieldsInfo()
@@ -87,13 +112,27 @@ class CCrmCurrency
 		if (!self::$LOC_FIELD_INFOS)
 		{
 			self::$LOC_FIELD_INFOS = [
-				'FULL_NAME' => ['TYPE' => 'string'],
-				'FORMAT_STRING' => ['TYPE' => 'string'],
-				'DEC_POINT' => ['TYPE' => 'string'],
-				'THOUSANDS_VARIANT' => ['TYPE' => 'string'],
-				'THOUSANDS_SEP' => ['TYPE' => 'string'],
-				'DECIMALS' => ['TYPE' => 'int'],
-				'HIDE_ZERO' => ['TYPE' => 'char'],
+				'FULL_NAME' => [
+					'TYPE' => 'string',
+				],
+				'FORMAT_STRING' => [
+					'TYPE' => 'string',
+				],
+				'DEC_POINT' => [
+					'TYPE' => 'string',
+				],
+				'THOUSANDS_VARIANT' => [
+					'TYPE' => 'string',
+				],
+				'THOUSANDS_SEP' => [
+					'TYPE' => 'string',
+				],
+				'DECIMALS' => [
+					'TYPE' => 'int',
+				],
+				'HIDE_ZERO' => [
+					'TYPE' => 'char',
+				],
 			];
 		}
 
@@ -118,7 +157,7 @@ class CCrmCurrency
 			],
 			'cache' => [
 				'ttl' => 86400,
-			]
+			],
 		]);
 		if ($row !== null)
 		{
@@ -135,7 +174,7 @@ class CCrmCurrency
 				],
 				'cache' => [
 					'ttl' => 86400,
-				]
+				],
 			]);
 			if ($row !== null)
 			{
@@ -165,6 +204,7 @@ class CCrmCurrency
 
 		return self::$BASE_CURRENCY_ID;
 	}
+
 	public static function SetBaseCurrencyID($currencyID)
 	{
 		if (!Loader::includeModule('currency'))
@@ -174,13 +214,14 @@ class CCrmCurrency
 
 		return CCurrency::SetBaseCurrency($currencyID);
 	}
+
 	// Is used in reports only
 	public static function GetAccountCurrencyID()
 	{
-		if(!self::$ACCOUNT_CURRENCY_ID)
+		if (!self::$ACCOUNT_CURRENCY_ID)
 		{
 			self::$ACCOUNT_CURRENCY_ID = COption::GetOptionString('crm', 'account_currency_id', '');
-			if(!isset(self::$ACCOUNT_CURRENCY_ID[0]))
+			if (!isset(self::$ACCOUNT_CURRENCY_ID[0]))
 			{
 				self::$ACCOUNT_CURRENCY_ID = self::GetBaseCurrencyID();
 			}
@@ -192,7 +233,7 @@ class CCrmCurrency
 	public static function SetAccountCurrencyID($currencyID)
 	{
 		$currencyID = self::NormalizeCurrencyID($currencyID);
-		if($currencyID === self::$ACCOUNT_CURRENCY_ID)
+		if ($currencyID === self::$ACCOUNT_CURRENCY_ID)
 		{
 			return;
 		}
@@ -355,7 +396,7 @@ class CCrmCurrency
 		$dbResult = CCurrencyLang::GetList('', '', self::NormalizeCurrencyID($currencyID));
 		if ($dbResult)
 		{
-			while($item = $dbResult->Fetch())
+			while ($item = $dbResult->Fetch())
 			{
 				$result[$item['LID']] = $item;
 			}
@@ -371,8 +412,7 @@ class CCrmCurrency
 			return self::$LANGS_ID;
 		}
 
-
-		self::$LANGS_ID = array();
+		self::$LANGS_ID = [];
 
 		$dbResult = CLangAdmin::GetList();
 		while ($arResult = $dbResult->Fetch())
@@ -395,10 +435,9 @@ class CCrmCurrency
 
 		$allowedKeys = array_keys(self::GetCurrencyLocalizationFieldsInfo());
 		$processed = 0;
-		foreach($langsID as $langID)
+		foreach ($langsID as $langID)
 		{
 			$item = $arItems[$langID] ?? null;
-
 
 			if (!is_array($item))
 			{
@@ -456,7 +495,7 @@ class CCrmCurrency
 		$langsID = self::GetLanguagesID();
 
 		$processed = 0;
-		foreach($langsID as $langID)
+		foreach ($langsID as $langID)
 		{
 			if (
 				!in_array($langID, $arLangs, true)
@@ -471,6 +510,7 @@ class CCrmCurrency
 				$processed++;
 			}
 		}
+
 		return $processed > 0;
 	}
 
@@ -609,12 +649,12 @@ class CCrmCurrency
 		$dstCurrencyID = self::NormalizeCurrencyID($dstCurrencyID);
 		$srcExchRate = (float)$srcExchRate;
 
-		if($sum === 0.0 || $srcCurrencyID === $dstCurrencyID)
+		if ($sum === 0.0 || $srcCurrencyID === $dstCurrencyID)
 		{
 			return $sum;
 		}
 
-		if($srcExchRate <= 0)
+		if ($srcExchRate <= 0)
 		{
 			// Use default exchenge rate
 			$result = self::$currencyRatesClassName::ConvertCurrency($sum, $srcCurrencyID, $dstCurrencyID);
@@ -651,17 +691,18 @@ class CCrmCurrency
 		$currencyID = (string)$currencyID;
 
 		$rates = new self::$currencyRatesClassName();
-		if (!($rs = $rates->_get_last_rates(date('Y-m-d'), $currencyID)))
+		$rs = $rates->_get_last_rates(date('Y-m-d'), $currencyID);
+		if (!$rs)
 		{
 			return 1.0;
 		}
 
-		$exchRate = (double)$rs['RATE'];
+		$exchRate = (float)$rs['RATE'];
 		$cnt = (int)$rs['RATE_CNT'];
 
 		if ($exchRate <= 0)
 		{
-			$exchRate = (double)$rs["AMOUNT"];
+			$exchRate = (float)$rs['AMOUNT'];
 			$cnt = (int)$rs['AMOUNT_CNT'];
 		}
 
@@ -680,12 +721,12 @@ class CCrmCurrency
 
 	private static function CheckFields($action, &$arFields, $ID)
 	{
-		if(isset($arFields['AMOUNT_CNT']))
+		if (isset($arFields['AMOUNT_CNT']))
 		{
 			$arFields['AMOUNT_CNT'] = intval($arFields['AMOUNT_CNT']);
 		}
 
-		if(isset($arFields['AMOUNT']))
+		if (isset($arFields['AMOUNT']))
 		{
 			$arFields['AMOUNT'] = doubleval($arFields['AMOUNT']);
 		}
@@ -711,13 +752,13 @@ class CCrmCurrency
 		global $APPLICATION;
 
 		$ID = $arFields['CURRENCY'] ?? '';
-		if(!self::CheckFields('ADD', $arFields, $ID))
+		if (!self::CheckFields('ADD', $arFields, $ID))
 		{
 			return false;
 		}
 
 		$ID = CCurrency::Add($arFields);
-		if(!$ID)
+		if (!$ID)
 		{
 			$ex = $APPLICATION->GetException();
 			if ($ex)
@@ -746,12 +787,12 @@ class CCrmCurrency
 
 		$arFields['CURRENCY'] = $ID;
 
-		if(!self::CheckFields('UPDATE', $arFields, $ID))
+		if (!self::CheckFields('UPDATE', $arFields, $ID))
 		{
 			return false;
 		}
 
-		if(!CCurrency::Update($ID, $arFields))
+		if (!CCurrency::Update($ID, $arFields))
 		{
 			$ex = $APPLICATION->GetException();
 			if ($ex)
@@ -784,14 +825,14 @@ class CCrmCurrency
 			return false;
 		}
 
-		if($ID === self::GetBaseCurrencyID())
+		if ($ID === self::GetBaseCurrencyID())
 		{
 			self::$LAST_ERROR = Loc::getMessage('CRM_CURRERCY_ERR_DELETION_OF_BASE_CURRENCY');
 
 			return false;
 		}
 
-		if($ID === self::GetAccountCurrencyID())
+		if ($ID === self::GetAccountCurrencyID())
 		{
 			self::$LAST_ERROR = Loc::getMessage('CRM_CURRERCY_ERR_DELETION_OF_ACCOUNTING_CURRENCY');
 
@@ -817,24 +858,28 @@ class CCrmCurrency
 	public static function CheckCreatePermission()
 	{
 		$perms = CCrmPerms::GetCurrentUserPermissions();
+
 		return $perms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE');
 	}
 
 	public static function CheckUpdatePermission($ID)
 	{
 		$perms = CCrmPerms::GetCurrentUserPermissions();
+
 		return $perms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE');
 	}
 
 	public static function CheckDeletePermission($ID)
 	{
 		$perms = CCrmPerms::GetCurrentUserPermissions();
+
 		return $perms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE');
 	}
 
 	public static function CheckReadPermission($ID = 0)
 	{
 		$perms = CCrmPerms::GetCurrentUserPermissions();
+
 		return $perms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'READ');
 	}
 

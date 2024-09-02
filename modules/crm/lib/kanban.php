@@ -1999,9 +1999,7 @@ abstract class Kanban
 	 */
 	public function isCrmAdmin(): bool
 	{
-		$crmPerms = new \CCrmPerms($this->currentUserId);
-
-		return $crmPerms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE');
+		return Container::getInstance()->getUserPermissions($this->currentUserId)->isAdminForEntity($this->getEntity()->getTypeId());
 	}
 
 	public function removeUserAdditionalSelectFields(): void

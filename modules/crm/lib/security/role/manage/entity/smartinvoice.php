@@ -12,7 +12,7 @@ use Bitrix\Crm\Settings\InvoiceSettings;
 
 class SmartInvoice implements PermissionEntity
 {
-	private function permissions(bool $isAutomationEnabled): array
+	private function permissions(bool $isAutomationEnabled, array $stages): array
 	{
 		$permissions =  $isAutomationEnabled ?
 			PermissionAttrPresets::crmEntityPresetAutomation()
@@ -20,7 +20,8 @@ class SmartInvoice implements PermissionEntity
 
 		return array_merge(
 			$permissions,
-			PermissionAttrPresets::crmEntityKanbanHideSum()
+			PermissionAttrPresets::crmEntityKanbanHideSum(),
+			PermissionAttrPresets::crmStageTransition($stages)
 		);
 	}
 
@@ -41,7 +42,6 @@ class SmartInvoice implements PermissionEntity
 		}
 
 		$isAutomationEnabled = $smartInvoiceFactory->isAutomationEnabled();
-		$perms = $this->permissions($isAutomationEnabled);
 
 		$result = [];
 		foreach ($smartInvoiceFactory->getCategories() as $category)
@@ -54,6 +54,7 @@ class SmartInvoice implements PermissionEntity
 			}
 
 			$stages = $this->prepareStages($smartInvoiceFactory, $category);
+			$perms = $this->permissions($isAutomationEnabled, $stages);
 
 			$result[] = new EntityDTO($entityName, $entityTitle, [Item::FIELD_NAME_STAGE_ID => $stages], $perms);
 		}

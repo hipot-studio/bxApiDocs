@@ -40,11 +40,10 @@ final class Sender
 		$this->owner = $owner;
 		$this->message = $message;
 		$this->responsibleId = Container::getInstance()->getContext()->getUserId();
-
-		$this->senderExtra = $senderExtra === null ? new SenderExtra() : $senderExtra;
+		$this->senderExtra = $senderExtra ?? new SenderExtra();
 	}
 
-	public function send(): Result
+	public function send(bool $checkUserPermissions = true): Result
 	{
 		$ownerTypeId = $this->owner->getEntityTypeId();
 		$ownerId = $this->owner->getEntityId();
@@ -69,7 +68,10 @@ final class Sender
 			return $result;
 		}
 
-		if (!Container::getInstance()->getUserPermissions()->checkUpdatePermissions($ownerTypeId, $ownerId))
+		if (
+			$checkUserPermissions
+			&& !Container::getInstance()->getUserPermissions()->checkUpdatePermissions($ownerTypeId, $ownerId)
+		)
 		{
 			$result->addError(new Error('CRM_PERMISSION_DENIED'));
 

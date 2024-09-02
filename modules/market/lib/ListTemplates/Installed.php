@@ -1,8 +1,6 @@
 <?php
 
-
 namespace Bitrix\Market\ListTemplates;
-
 
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
@@ -15,10 +13,10 @@ use Bitrix\Market\Application\License;
 use Bitrix\Market\Application\Versions;
 use Bitrix\Market\NumberApps;
 use Bitrix\Market\Rest\Actions;
+use Bitrix\Market\Rest\Transport;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Marketplace\Client;
-use Bitrix\Rest\Marketplace\Transport;
 use Bitrix\Rest\Marketplace\Url;
 use Bitrix\Rest\OAuthService;
 use CRestUtil;
@@ -36,20 +34,20 @@ class Installed extends BaseTemplate
 		global $APPLICATION;
 		$APPLICATION->SetTitle($title);
 
-		if(!Loader::includeModule('rest')) {
+		if (!Loader::includeModule('rest')) {
 			die;
 		}
 
 		$this->result['ADMIN'] = CRestUtil::isAdmin();
 
-		if(!$this->result['ADMIN']) {
+		if (!$this->result['ADMIN']) {
 			ShowError(Loc::getMessage('RMI_ACCESS_DENIED'));
 			die;
-		} else if (!OAuthService::getEngine()->isRegistered()) {
+		} elseif (!OAuthService::getEngine()->isRegistered()) {
 			try {
 				OAuthService::register();
 				OAuthService::getEngine()->getClient()->getApplicationList();
-			} catch(SystemException $e) {
+			} catch (SystemException $e) {
 				ShowError($e->getMessage());
 				die;
 			}
@@ -110,7 +108,7 @@ class Installed extends BaseTemplate
 		while ($app = $dbApps->Fetch()) {
 			$appCodes[] = $app['CODE'];
 			$app['APP_STATUS'] = AppTable::getAppStatusInfo($app, '');
-			if(isset($app['APP_STATUS']['MESSAGE_REPLACE']['#DAYS#'])) {
+			if (isset($app['APP_STATUS']['MESSAGE_REPLACE']['#DAYS#'])) {
 				$app['APP_STATUS']['MESSAGE_REPLACE']['#DAYS#']++;
 				$app['APP_STATUS']['MESSAGE_REPLACE']['#DAYS#'] = FormatDate('ddiff', time(), time() + 24 * 60 * 60 * $app['APP_STATUS']['MESSAGE_REPLACE']['#DAYS#']);
 			}
@@ -208,7 +206,7 @@ class Installed extends BaseTemplate
 			[
 				'name' => Loc::getMessage('MARKET_NEED_UPDATING', ['#COUNT#' => $numUpdates]),
 				'value' => Installed::FILTER_UPDATES,
-			]
+			],
 		];
 	}
 

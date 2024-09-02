@@ -388,6 +388,7 @@ class CrmKanbanComponent extends \CBitrixComponent
 		$this->arResult['SKIP_COLUMN_COUNT_CHECK'] = $this->isSkipColumnCountCheck();
 		$this->arResult['USE_ITEM_PLANNER'] = ($this->arParams['USE_ITEM_PLANNER'] ?? 'N') === 'Y';
 		$this->arResult['USE_PUSH_CRM'] = ($this->arParams['USE_PUSH_CRM'] ?? 'Y') === 'Y';
+		$this->arResult['PERFORMANCE'] = $this->arParams['PERFORMANCE'] ?? [];
 
 		$context = Application::getInstance()->getContext();
 		$request = $context->getRequest();

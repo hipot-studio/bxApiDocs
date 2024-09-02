@@ -4,7 +4,6 @@ namespace Bitrix\Crm\Controller\Timeline;
 
 use Bitrix\Crm\Badge\Badge;
 use Bitrix\Crm\Category\EditorHelper;
-use Bitrix\Crm\Comparer\ComparerBase;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Entity\FieldDataProvider;
 use Bitrix\Crm\Integration\AI\AIManager;
@@ -35,7 +34,7 @@ use CUserOptions;
 
 class AI extends Activity
 {
-	private const OPTION_NAME_NUMBER_OF_MANUAL_STARTS = 'timeline-copilot-button-in-call-manual-starts';
+	private const OPTION_NAME_NUMBER_OF_MANUAL_STARTS = 'timeline-copilot-button-in-call-manual-starts-v2';
 
 	private UserPermissions $permissions;
 	private JobRepository $jobRepository;
@@ -89,10 +88,6 @@ class AI extends Activity
 		if (
 			AIManager::isAiCallProcessingEnabled()
 			&& in_array($ownerTypeId, AIManager::SUPPORTED_ENTITY_TYPE_IDS, true)
-			&& !ComparerBase::isClosed(
-				new ItemIdentifier($ownerTypeId, $ownerId),
-				true
-			)
 		)
 		{
 			$result = AIManager::launchFillItemFromCallRecordingScenario($activityId); // async start transcription
@@ -107,6 +102,8 @@ class AI extends Activity
 				'numberOfManualStarts' => $this->processNumberOfManualStarts(),
 			];
 		}
+
+		$this->addError(AIErrorCode::getAIEngineNotFoundError());
 
 		return null;
 	}
@@ -677,13 +674,18 @@ class AI extends Activity
 
 	private function processNumberOfManualStarts(): int
 	{
-		$numberOfManualStarts = CUserOptions::getOption(
+		$numberOfManualStarts = (int)CUserOptions::getOption(
 			'crm',
 			self::OPTION_NAME_NUMBER_OF_MANUAL_STARTS,
 			0
 		);
 
-		$newNumberOfManualStarts = (int)$numberOfManualStarts + 1;
+		if (!AIManager::isBaasServiceHasPackage())
+		{
+			return $numberOfManualStarts;
+		}
+
+		$newNumberOfManualStarts = $numberOfManualStarts + 1;
 
 		CUserOptions::setOption(
 			'crm',

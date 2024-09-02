@@ -8,9 +8,14 @@ use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collectio
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable;
 use Bitrix\BIConnector\Superset\Scope\MenuItem\MenuItemCreatorFactory;
+use Bitrix\Crm;
 use Bitrix\Main\Application;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
+use Bitrix\Main\Event;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Result;
 use Bitrix\Main\Text\StringHelper;
 
@@ -19,6 +24,7 @@ final class ScopeService
 	public const BIC_SCOPE_CRM = 'crm';
 	public const BIC_SCOPE_BIZPROC = 'bizproc';
 	public const BIC_SCOPE_TASKS = 'tasks';
+	public const BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX = 'automated_solution_';
 
 	private static ?ScopeService $instance = null;
 	private static array $scopeNameMap = [];
@@ -46,7 +52,15 @@ final class ScopeService
 			'filter' => [
 				'=DASHBOARD_ID' => $dashboardId,
 			],
-			'order' => ['SCOPE_CODE' => 'asc'],
+			'order' => ['IS_AUTOMATED_SOLUTION' => 'asc', 'SCOPE_CODE' => 'asc'],
+			'runtime' => [
+				new ExpressionField(
+					'IS_AUTOMATED_SOLUTION',
+					"CASE WHEN %s LIKE 'automated_solution_%%' THEN 1 ELSE 0 END",
+					['SCOPE_CODE'],
+					['data_type' => 'integer']
+				),
+			],
 		])->fetchCollection();
 
 		foreach ($scopeCollection as $scope)
@@ -83,7 +97,7 @@ final class ScopeService
 				$scope->delete();
 			}
 
-			$availableScopeCodes = $this->getScopeList();
+			$availableScopeCodes = $this->getScopeList(checkPermissions: false);
 			foreach ($scopeCodes as $scopeCode)
 			{
 				if (in_array($scopeCode, $availableScopeCodes))
@@ -145,17 +159,75 @@ final class ScopeService
 	}
 
 	/**
+	 * Get array of menu items to embed in top menu.
+	 * @param string $code Code of CRM automated solution.
+	 *
+	 * @return array
+	 */
+	public function prepareAutomatedSolutionMenuItem(string $code): array
+	{
+		$result = Crm\AutomatedSolution\Entity\AutomatedSolutionTable::getList([
+			'filter' => ['=CODE' => $code],
+			'limit' => 1,
+			'cache' => ['ttl' => 86400],
+		])
+			->fetchObject()
+		;
+		$scopeCode = self::BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX . $result->getId();
+
+		return $this->prepareScopeMenuItem($scopeCode);
+	}
+
+	/**
 	 * Get available scopes.
 	 *
 	 * @return string[]
 	 */
-	public function getScopeList(): array
+	public function getScopeList(bool $checkPermissions = true): array
 	{
-		return [
-			self::BIC_SCOPE_CRM,
+		$result = [
 			self::BIC_SCOPE_BIZPROC,
+			self::BIC_SCOPE_CRM,
 			self::BIC_SCOPE_TASKS,
 		];
+
+		if (Loader::includeModule('crm'))
+		{
+			$container = Crm\Service\Container::getInstance();
+			$automatedSolutionManager = $container->getAutomatedSolutionManager();
+			$userPermissions = $container->getUserPermissions(CurrentUser::get()->getId());
+			foreach ($automatedSolutionManager->getExistingAutomatedSolutions() as $automatedSolution)
+			{
+				if (!$checkPermissions && empty($automatedSolution['TYPE_IDS']))
+				{
+					$code = self::BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX . $automatedSolution['ID'];
+					$result[] = $code;
+					if (!isset(self::$scopeNameMap[$code]))
+					{
+						self::$scopeNameMap[$code] = $automatedSolution['TITLE'];
+					}
+				}
+
+				foreach ($automatedSolution['TYPE_IDS'] as $typeId)
+				{
+					$smartProcess = $container->getType($typeId);
+					if ($smartProcess)
+					{
+						if (!$checkPermissions || $userPermissions->canReadType($smartProcess->getEntityTypeId()))
+						{
+							$code = self::BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX . $automatedSolution['ID'];
+							$result[] = $code;
+							if (!isset(self::$scopeNameMap[$code]))
+							{
+								self::$scopeNameMap[$code] = $automatedSolution['TITLE'];
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return $result;
 	}
 
 	/**
@@ -166,9 +238,14 @@ final class ScopeService
 	 */
 	public function getScopeName(string $scopeCode): string
 	{
-		if (!self::$scopeNameMap)
+		if (isset(self::$scopeNameMap[$scopeCode]))
 		{
-			foreach ($this->getScopeList() as $scope)
+			return self::$scopeNameMap[$scopeCode];
+		}
+
+		foreach ($this->getScopeList() as $scope)
+		{
+			if (!str_starts_with($scope, self::BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX))
 			{
 				$langCode = 'BIC_SCOPE_NAME_' . StringHelper::strtoupper($scope);
 				self::$scopeNameMap[$scope] = Loc::getMessage($langCode);
@@ -180,6 +257,9 @@ final class ScopeService
 
 	/**
 	 * Converts array of scope codes to array of readable names.
+	 * With checking automated solutions permissions.
+	 * Doesn't contain scope name if user doesn't have permission to view this automated solution.
+	 *
 	 * @param string[] $scopeCodes Array with scope codes.
 	 * @return array
 	 */
@@ -188,9 +268,45 @@ final class ScopeService
 		$result = [];
 		foreach ($scopeCodes as $scopeCode)
 		{
-			$result[] = $this->getScopeName($scopeCode);
+			$scopeName = $this->getScopeName($scopeCode);
+			if ($scopeName)
+			{
+				$result[] = $scopeName;
+			}
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Returns entity selector's item title of automation solutions.
+	 *
+	 * @return string
+	 */
+	public function getAutomationSolutionsTitle(): string
+	{
+		return Loc::getMessage('BIC_SCOPE_NAME_AUTOMATED_SOLUTIONS');
+	}
+
+	/**
+	 * Event crm onAfterAutomatedSolutionDelete handler.
+	 *
+	 * @param Event $event Event with id of automated solution that was deleted.
+	 *
+	 * @return void
+	 */
+	public static function deleteAutomatedSolutionBinding(Event $event): void
+	{
+		$data = $event->getParameter('automatedSolution');
+		if (is_array($data) && isset($data['ID']))
+		{
+			$automatedSolutionId = (int)$data['ID'];
+			$scopeCode = self::BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX . $automatedSolutionId;
+			$scopes = SupersetScopeTable::getList(['filter' => ['=SCOPE_CODE' => $scopeCode]])->fetchCollection();
+			foreach ($scopes as $scope)
+			{
+				$scope->delete();
+			}
+		}
 	}
 }

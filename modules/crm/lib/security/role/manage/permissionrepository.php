@@ -3,17 +3,16 @@
 namespace Bitrix\Crm\Security\Role\Manage;
 
 use Bitrix\Crm\Restriction\RestrictionManager;
+use Bitrix\Crm\Security\Role\Manage\DTO\EntityDTO;
 use Bitrix\Crm\Security\Role\Manage\DTO\PermissionModel;
 use Bitrix\Crm\Security\Role\Manage\DTO\Restrictions;
 use Bitrix\Crm\Security\Role\Manage\DTO\RoleDTO;
-use Bitrix\Crm\Security\Role\Manage\Exceptions\RoleNotFoundException;
 use Bitrix\Crm\Security\Role\Model\RolePermissionTable;
 use Bitrix\Crm\Traits\Singleton;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\Result;
-use CCrmPerms;
 use CCrmRole;
 
 class PermissionRepository
@@ -39,15 +38,49 @@ class PermissionRepository
 		$ct->logic(ConditionTree::LOGIC_OR);
 		$ct->where('ATTR', '<>', '');
 		$ct->where('FIELD_VALUE', '<>', '');
+		$ct->where('SETTINGS', '<>', '');
 
 
 		$query = RolePermissionTable::query()
-			->setSelect(['ENTITY', 'PERM_TYPE', 'FIELD', 'FIELD_VALUE', 'ATTR'])
+			->setSelect(['ENTITY', 'PERM_TYPE', 'FIELD', 'FIELD_VALUE', 'ATTR', 'SETTINGS'])
 			->where('ROLE_ID', $roleId)
 			->where($ct)
 		;
 
 		return $query->fetchAll();
+	}
+
+	/**
+	 * @param EntityDTO[] $permissionEntities
+	 * @return array
+	 */
+	public function getDefaultRoleAssignedPermissions(array $permissionEntities): array
+	{
+		$result = [];
+
+		foreach ($permissionEntities as $entity)
+		{
+			foreach ($entity->permissions() as $permission)
+			{
+				$attr = $permission->getDefaultAttribute();
+				$settings = $permission->getDefaultSettings();
+				if ($attr === null && empty($settings))
+				{
+					continue;
+				}
+
+				$result[] = [
+					'ENTITY' => $entity->code(),
+					'PERM_TYPE' => $permission->code(),
+					'FIELD' => '-',
+					'FIELD_VALUE' => null,
+					'ATTR' => $attr,
+					'SETTINGS' => $settings,
+				];
+			}
+		}
+
+		return $result;
 	}
 
 	public function getTariffRestrictions(): Restrictions

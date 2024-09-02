@@ -13,11 +13,16 @@ class HideSum extends Permission
 
 	public function name(): string
 	{
-		return Loc::getMessage('CRM_SECURITY_ROLE_PERMS_HEAD_HIDE_SUM');
+		return Loc::getMessage('CRM_SECURITY_ROLE_PERMS_HEAD_HIDE_SUM_MSGVER_1');
 	}
 
 	public function canAssignPermissionToStages(): bool
 	{
 		return true;
+	}
+
+	public function getDefaultAttribute(): ?string
+	{
+		return BX_CRM_PERM_ALL;
 	}
 }

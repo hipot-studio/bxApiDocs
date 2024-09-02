@@ -12,11 +12,11 @@ use Bitrix\Market\Application\Rights;
 use Bitrix\Market\Application\Versions;
 use Bitrix\Market\Menu;
 use Bitrix\Market\Rest\Actions;
+use Bitrix\Market\Rest\Transport;
 use Bitrix\Market\Subscription\Status;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Marketplace\Client;
-use Bitrix\Rest\Marketplace\Transport;
 use Bitrix\Rest\Marketplace\Url;
 use Bitrix\Rest\OAuthService;
 

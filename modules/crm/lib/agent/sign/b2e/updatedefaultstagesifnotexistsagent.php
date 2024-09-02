@@ -105,9 +105,13 @@ final class UpdateDefaultStagesIfNotExistsAgent extends AgentBase
 				'SORT' => $sort,
 				'SYSTEM' => in_array($newStatus, self::SYSTEM_STATUSES) ? 'Y' : 'N',
 				'COLOR' => $color,
-				'SEMANTICS' => self::SEMANTIC_STATUSES[$newStatus] ?? '',
 				'CATEGORY_ID' => $defaultCategoryId,
 			];
+
+			if (self::SEMANTIC_STATUSES[$newStatus] ?? null)
+			{
+				$stage['SEMANTICS'] = self::SEMANTIC_STATUSES[$newStatus];
+			}
 
 			$sort += 10;
 			$stageService->addStage($stage);

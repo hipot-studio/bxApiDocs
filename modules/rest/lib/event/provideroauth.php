@@ -77,9 +77,9 @@ class ProviderOAuth implements ProviderInterface
 						'result' => $result,
 						'CLIENT_ID' => $item['client_id'] ?? null,
 						'METHOD' => $item['query']['QUERY_DATA']['event'] ?? null,
-						'EVENT_ID' => $item['query']['QUERY_DATA']['event_id'] ?? null,
+						'EVENT_ID' => $item['query']['QUERY_DATA']['event_handler_id'] ?? null,
 						'MESSAGE' => LogType::SEND_SQS->value,
-						'REQUEST_DATA' => $queryData,
+						'REQUEST_DATA' => $item,
 						'RESPONSE_DATA' => $result,
 					]);
 				}

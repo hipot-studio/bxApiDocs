@@ -39,7 +39,7 @@ final class ApproveCustomPermsToExistRole
 			->getEntityNamesWithPermissionClass($defaultPermission)
 		;
 		$existedPermissions = [];
-		if (empty($entities))
+		if (empty($entities) && !$this->needContinue($defaultPermissions))
 		{
 			return self::DONE;
 		}
@@ -69,6 +69,7 @@ final class ApproveCustomPermsToExistRole
 					->setEntity($entity)
 					->setPermType($defaultPermission->getPermissionType())
 					->setAttr($defaultPermission->getAttr())
+					->setSettings($defaultPermission->getSettings())
 				;
 
 				$rolePermissionKey = $this->getRolePermissionKey($rolePermission);
@@ -205,6 +206,11 @@ final class ApproveCustomPermsToExistRole
 
 	public function hasWaitingPermission(string $code): bool
 	{
+		if ($code === (new \Bitrix\Crm\Security\Role\Manage\Permissions\Transition([]))->code()) // temporary always in waiting state
+		{
+			return true;
+		}
+
 		$defaultPermissions = $this->getDefaultPermissions();
 
 		foreach ($defaultPermissions as $defaultPermission)

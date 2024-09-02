@@ -213,7 +213,7 @@ class Callback
 				}
 			}
 
-			if(count($call) > 0)
+			if (!empty($call))
 			{
 				Sender::call($call);
 			}

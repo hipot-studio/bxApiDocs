@@ -39,6 +39,10 @@ class CrmTimelineMenuBarComponent extends \CBitrixComponent
 		$this->arResult['entityCategoryId'] = $this->entityCategoryId;
 		$this->arResult['isReadonly'] = $this->isReadonly;
 		$this->arResult['editMode'] = $this->getEditMode();
+		$this->arResult['extras'] = [
+			'isMyCompany' => ($this->arParams['EXTRAS']['IS_MY_COMPANY'] ?? 'N') === 'Y',
+			'analytics' => $this->arParams['EXTRAS']['ANALYTICS'] ?? [],
+		];
 	}
 
 	public function executeComponent()

@@ -196,6 +196,7 @@ class Entity extends Main\Engine\Controller
 			];
 		}
 
+		$currentItems = $items;
 		$qty = count($items);
 		if ($qty < static::ITEMS_LIMIT && isset($options['EXPAND_ENTITY_TYPE_ID']))
 		{
@@ -206,9 +207,31 @@ class Entity extends Main\Engine\Controller
 				$actualCategoryId,
 				static::ITEMS_LIMIT - $qty
 			);
+
+			$currentItemsHashes = array_map(fn ($item) => self::itemToStringKey($item), $currentItems);
+
+			$newlyItems = array_filter($items, function (array $item) use ($currentItemsHashes) {
+				$itemHash = self::itemToStringKey($item);
+
+				return !in_array($itemHash, $currentItemsHashes);
+			});
+
+			if (!empty($newlyItems))
+			{
+				self::addLastRecentlyUsedItems($category, $code, $items);
+			}
 		}
 
 		return $items;
+	}
+
+	private static function itemToStringKey(array $item): string
+	{
+		$entityTypeId = isset($item['ENTITY_TYPE_ID']) ? (int)$item['ENTITY_TYPE_ID'] : 0;
+		$entityId = isset($item['ENTITY_ID']) ? (int)$item['ENTITY_ID'] : 0;
+		$categoryId = isset($item['CATEGORY_ID']) ? (int)$item['CATEGORY_ID'] : 0;
+
+		return "{$entityTypeId}:{$entityId}:{$categoryId}";
 	}
 
 	/**

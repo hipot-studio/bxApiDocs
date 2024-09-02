@@ -290,6 +290,8 @@ class SalesCenterPaySystemPanel extends CBitrixComponent implements Controllerab
 			'alfabank' => '#EF3124',
 			'roboxchange' => [
 				'bank_card' => '#19D0C8',
+				'widget' => '#FF5722',
+				'sbp' => '#1487C9',
 				'apple_pay' => '#8F8F8F',
 				'google_pay' => '#4285F4',
 				'samsung_pay' => '#1429A1',

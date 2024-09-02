@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 
+use Bitrix\Crm\Activity\Analytics\Dictionary;
 use Bitrix\Crm\Activity\Provider;
 use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
@@ -23,6 +24,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\EditableDescription;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\FileList;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ItemSelector;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\LineOfTextBlocks;
+use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\PingSelector;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
 use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemFactory;
@@ -480,14 +482,58 @@ class ToDo extends Activity
 		return $deadlineAndPingSelector;
 	}
 
-	private function buildWebPingListBlock(): ItemSelector | Text | null
+	private function buildWebPingListBlock(): ItemSelector | PingSelector | Text | null
 	{
 		if ($this->isScheduled() && $this->hasUpdatePermission())
 		{
-			return $this->buildChangeablePingSelectorItem(null, null, true);
+			if (\Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled())
+			{
+				return $this->buildChangeablePingSelectorItem();
+			}
+
+			return $this->buildChangeableItemSelectorItem(
+				null,
+				null,
+				true
+			);
 		}
 
 		return $this->buildReadonlyPingSelectorItem();
+	}
+
+	private function buildChangeablePingSelectorItem(): PingSelector
+	{
+		$result = [];
+		foreach (TodoPingSettingsProvider::getDefaultOffsetList() as $item)
+		{
+			$result[$item['id']] = $item;
+		}
+
+		$offsets = $this->getPingOffsets();
+		foreach ($offsets as $item)
+		{
+			$result[$item['id']] = $item;
+		}
+
+		usort($result, static fn($a, $b) => $a['offset'] <=> $b['offset']);
+
+		$identifier = $this->getContext()->getIdentifier();
+
+		return (new PingSelector())
+			->setValue(array_column($offsets, 'offset'))
+			->setValuesList(array_map(
+				static fn($item) => ['id' => (string)$item['offset'], 'title' => $item['title']],
+				array_values($result)
+			))
+			->setAction(
+				(new Layout\Action\RunAjaxAction('crm.activity.todo.updatePingOffsets'))
+					->addActionParamInt('ownerTypeId', $identifier->getEntityTypeId())
+					->addActionParamInt('ownerId', $identifier->getEntityId())
+					->addActionParamInt('id', $this->getActivityId())
+			)
+			->setIcon('bell')
+			->setDeadline(new DateTime($this->getAssociatedEntityModel()->get('DEADLINE')))
+		;
 	}
 
 	private function buildMobilePingListBlock(): ?ContentBlock
@@ -497,27 +543,23 @@ class ToDo extends Activity
 
 		if ($this->isScheduled() && $this->hasUpdatePermission())
 		{
-			return $this->buildChangeablePingSelectorBlock($emptyStateText, $selectorTitle);
+			return $this->buildChangeablePingSelectorMobileBlock($emptyStateText, $selectorTitle);
 		}
 
-		$blockText = $this->buildMobilePingBlockText($emptyStateText);
-
-		return $this->buildReadonlyPingSelectorBlock($blockText);
+		return $this->buildReadonlyPingSelectorBlock($this->buildMobilePingBlockText($emptyStateText));
 	}
 
-	private function buildChangeablePingSelectorBlock($emptyStateText = null, $selectorTitle = null): ?ContentBlock
+	private function buildChangeablePingSelectorMobileBlock($emptyStateText = null, $selectorTitle = null): ?ContentBlock
 	{
 		return (new ContentBlockWithTitle())
 			->setFixedWidth(false)
 			->setTitle(Loc::getMessage('CRM_TIMELINE_ITEM_TODO_PING_OFFSETS_TITLE'))
-			->setContentBlock(
-				$this->buildChangeablePingSelectorItem($emptyStateText, $selectorTitle)
-			)
+			->setContentBlock($this->buildChangeableItemSelectorItem($emptyStateText, $selectorTitle))
 			->setInline()
 		;
 	}
 
-	private function buildChangeablePingSelectorItem(
+	private function buildChangeableItemSelectorItem(
 		$emptyStateText = null,
 		$selectorTitle = null,
 		bool $compactMode = false
@@ -1001,5 +1043,47 @@ class ToDo extends Activity
 			->addValueInt('ownerId', $context->getEntityId())
 			->addValueInt('id', $this->getActivityId())
 		;
+	}
+
+	protected function getCompleteAction(): Layout\Action\RunAjaxAction
+	{
+		$action = parent::getCompleteAction();
+
+		$entityTypeId = $this->getContext()->getEntityTypeId();
+		$categoryId = $this->getContext()->getEntityCategoryId();
+
+		if ($entityTypeId === CCrmOwnerType::Contact && $categoryId !== 0)
+		{
+			$section = \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CATALOG_CONTRACTOR_CONTACT;
+		}
+		else if ($entityTypeId === CCrmOwnerType::Company && $categoryId !== 0)
+		{
+			$section = \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CATALOG_CONTRACTOR_COMPANY;
+		}
+		else
+		{
+			$entityTypeName = \Bitrix\Crm\Integration\Analytics\Dictionary::getAnalyticsEntityType($entityTypeId);
+
+			if ($entityTypeName === null)
+			{
+				return $action;
+			}
+
+			$section = $entityTypeName . '_section';
+		}
+
+		$analytics = new Layout\Action\Analytics([
+			'tool' => Dictionary::TOOL,
+			'category' => Dictionary::OPERATIONS_CATEGORY,
+			'event' => Dictionary::COMPLETE_EVENT,
+			'type' => Dictionary::TODO_TYPE,
+			'c_section' => $section,
+			'c_sub_section' => Dictionary::DETAILS_SUB_SECTION,
+			'c_element' => Dictionary::COMPLETE_BUTTON_ELEMENT,
+			'p1' => \Bitrix\Crm\Integration\Analytics\Dictionary::getCrmMode(),
+		]);
+		$action->setAnalytics($analytics);
+
+		return $action;
 	}
 }

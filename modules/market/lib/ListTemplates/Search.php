@@ -7,7 +7,7 @@ namespace Bitrix\Market\ListTemplates;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Market\Categories;
 use Bitrix\Market\Rest\Actions;
-use Bitrix\Rest\Marketplace\Transport;
+use Bitrix\Market\Rest\Transport;
 
 class Search extends BaseTemplate
 {
@@ -23,21 +23,22 @@ class Search extends BaseTemplate
 		global $APPLICATION;
 		$APPLICATION->SetTitle(Loc::getMessage('MARKET_SEARCH_PAGE_TITLE'));
 
-		$params = [
-			'_market_' => 'Y',
-			'show_categories' => 'Y',
-			'page' => $this->page,
-		];
-		if (!empty($this->searchText)) {
-			$params['q'] = $this->searchText;
+		if (empty($this->searchText)) {
+			return;
 		}
+
+		$params = [
+			'q' => $this->searchText,
+			'page' => $this->page,
+			'show_categories' => 'Y',
+		];
 		if (!empty($this->order)) {
 			$params['custom_sort'] = $this->order;
 		}
 
 		$batch = [
-			Transport::METHOD_FILTER_APP => [
-				Transport::METHOD_FILTER_APP,
+			Actions::METHOD_GET_SEARCH_ITEMS => [
+				Actions::METHOD_GET_SEARCH_ITEMS,
 				$params,
 			],
 		];
@@ -49,15 +50,15 @@ class Search extends BaseTemplate
 
 		$this->result['APPS'] = [];
 
-		if (isset($response[Transport::METHOD_FILTER_APP])) {
-			if (isset($response[Transport::METHOD_FILTER_APP]['ITEMS']) && is_array($response[Transport::METHOD_FILTER_APP]['ITEMS'])) {
-				$this->result['APPS'] = $response[Transport::METHOD_FILTER_APP]['ITEMS'];
-				$this->result['PAGES'] = $response[Transport::METHOD_FILTER_APP]['PAGES'];
-				$this->result['CUR_PAGE'] = $response[Transport::METHOD_FILTER_APP]['CUR_PAGE'];
+		if (isset($response[Actions::METHOD_GET_SEARCH_ITEMS])) {
+			if (isset($response[Actions::METHOD_GET_SEARCH_ITEMS]['ITEMS']) && is_array($response[Actions::METHOD_GET_SEARCH_ITEMS]['ITEMS'])) {
+				$this->result['APPS'] = $response[Actions::METHOD_GET_SEARCH_ITEMS]['ITEMS'];
+				$this->result['PAGES'] = $response[Actions::METHOD_GET_SEARCH_ITEMS]['PAGES'];
+				$this->result['CUR_PAGE'] = $response[Actions::METHOD_GET_SEARCH_ITEMS]['CUR_PAGE'];
 			}
 
-			if (isset($response[Transport::METHOD_FILTER_APP]['SORT_INFO']) && is_array($response[Transport::METHOD_FILTER_APP]['SORT_INFO'])) {
-				$this->result['SORT_INFO'] = $response[Transport::METHOD_FILTER_APP]['SORT_INFO'];
+			if (isset($response[Actions::METHOD_GET_SEARCH_ITEMS]['SORT_INFO']) && is_array($response[Actions::METHOD_GET_SEARCH_ITEMS]['SORT_INFO'])) {
+				$this->result['SORT_INFO'] = $response[Actions::METHOD_GET_SEARCH_ITEMS]['SORT_INFO'];
 				$this->result['SHOW_SORT_MENU'] = 'Y';
 				$this->result['FILTER_TAGS'] = [];
 			}

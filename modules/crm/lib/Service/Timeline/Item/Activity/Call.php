@@ -735,7 +735,6 @@ class Call extends Activity
 			&& $this->hasUpdatePermission()
 			&& in_array($ownerTypeId, AIManager::SUPPORTED_ENTITY_TYPE_IDS, true)
 			&& count($this->fetchAudioRecordList()) > 0
-			&& !$this->getContext()->isClosedEntity()
 			&& (new Orchestrator())->findPossibleFillFieldsTarget($activityId)?->getHash() === $this->getContext()->getIdentifier()->getHash()
 		;
 
@@ -747,27 +746,33 @@ class Call extends Activity
 		$buttonProps = [
 			'data-activity-id' => $activityId,
 		];
+		$jsEventAction = (new JsEvent('Call:LaunchCallRecordingTranscription'))
+			->addActionParamInt('activityId', $activityId)
+			->addActionParamInt('ownerTypeId', $ownerTypeId)
+			->addActionParamInt('ownerId', $ownerId)
+			->addActionParamBoolean('isCopilotBannerNeedShow', $this->isCopilotBannerNeedShow())
+		;
+
 		$button = (new Button(Loc::getMessage('CRM_COMMON_COPILOT'), Button::TYPE_AI))
 			->setIcon(Button::TYPE_AI)
-			->setAction(
-				(new JsEvent('Call:LaunchCallRecordingTranscription'))
-					->addActionParamInt('activityId', $activityId)
-					->addActionParamInt('ownerTypeId', $ownerTypeId)
-					->addActionParamInt('ownerId', $ownerId)
-					->addActionParamBoolean('isCopilotBannerNeedShow', $this->isCopilotBannerNeedShow())
-			)
 			->setScopeWeb()
 		;
 
-		if (
-			!AIManager::isAILicenceAccepted() &&
-			!$this->getContext()->getUserPermissions()->isAdmin()
-		)
+		if (!AIManager::isAILicenceAccepted($this->getContext()->getUserId()))
 		{
-			$buttonProps = [
-				'data-bitrix24-license-feature' => AIManager::AI_LICENCE_FEATURE_NAME,
-			];
+			if (\Bitrix\Crm\Settings\Crm::isBox())
+			{
+				$jsEventAction->addActionParamBoolean('isCopilotAgreementNeedShow', true);
+			}
+			else if (!$this->getContext()->getUserPermissions()->isAdmin())
+			{
+				$buttonProps = [
+					'data-bitrix24-license-feature' => AIManager::AI_LICENCE_FEATURE_NAME,
+				];
+			}
 		}
+
+		$button->setAction($jsEventAction);
 
 		if (!empty($buttonProps))
 		{

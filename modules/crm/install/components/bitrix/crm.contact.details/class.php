@@ -535,27 +535,7 @@ class CCrmContactDetailsComponent
 				)
 			);
 			$this->arResult['TABS'][] = $this->getEventTabParams();
-			if (!$this->arResult['CATEGORY_ID'])
-			{
-				$this->arResult['TABS'][] = [
-					'id' => 'tab_portrait',
-					'name' => Loc::getMessage('CRM_CONTACT_TAB_PORTRAIT'),
-					'loader' => [
-						'serviceUrl' => '/bitrix/components/bitrix/crm.client.portrait/lazyload.ajax.php?&site='
-							. SITE_ID
-							. '&'
-							. bitrix_sessid_get(),
-						'componentData' => [
-							'template' => '.default',
-							'signedParameters' => \CCrmInstantEditorHelper::signComponentParams([
-								'ELEMENT_ID' => $this->entityID,
-								'ELEMENT_TYPE' => CCrmOwnerType::Contact,
-								'IS_FRAME' => 'Y'
-							], 'crm.client.portrait'),
-						]
-					]
-				];
-			}
+
 			if (CModule::IncludeModule('lists') && !$this->arResult['CATEGORY_ID'])
 			{
 				$listIblock = CLists::getIblockAttachedCrm(CCrmOwnerType::ContactName);
@@ -610,14 +590,6 @@ class CCrmContactDetailsComponent
 			}
 			$this->arResult['TABS'][] = $this->getEventTabParams();
 
-			if (!$this->arResult['CATEGORY_ID'])
-			{
-				$this->arResult['TABS'][] = [
-					'id' => 'tab_portrait',
-					'name' => Loc::getMessage('CRM_CONTACT_TAB_PORTRAIT'),
-					'enabled' => false
-				];
-			}
 			if (CModule::IncludeModule('lists') && !$this->arResult['CATEGORY_ID'])
 			{
 				$listIblock = CLists::getIblockAttachedCrm(CCrmOwnerType::ContactName);

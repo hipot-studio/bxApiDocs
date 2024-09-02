@@ -8260,252 +8260,322 @@ class CCrmCurrencyRestProxy extends CCrmRestProxyBase
 {
 	private $FIELDS_INFO = null;
 	private $LOC_FIELDS_INFO = null;
+
 	/**
 	 * @return array
 	 */
 	protected function getFieldsInfo()
 	{
-		if(!$this->FIELDS_INFO)
+		if (!$this->FIELDS_INFO)
 		{
 			$this->FIELDS_INFO = CCrmCurrency::GetFieldsInfo();
-			foreach ($this->FIELDS_INFO  as $code=>&$field)
+			foreach (array_keys($this->FIELDS_INFO) as $code)
 			{
-				$field['CAPTION'] = CCrmCurrency::GetFieldCaption($code);
+				$this->FIELDS_INFO[$code]['CAPTION'] = CCrmCurrency::GetFieldCaption($code);
 			}
 
-			$this->FIELDS_INFO['LANG'] = array(
+			$this->FIELDS_INFO['LANG'] = [
 				'TYPE' => 'currency_localization',
-				'ATTRIBUTES' => array(CCrmFieldInfoAttr::Multiple),
-				'CAPTION' => Loc::getMessage("CRM_REST_CURRENCY_FIELD_LANG")
-			);
+				'ATTRIBUTES' => [
+					CCrmFieldInfoAttr::Multiple,
+				],
+				'CAPTION' => Loc::getMessage('CRM_REST_CURRENCY_FIELD_LANG'),
+			];
 		}
+
 		return $this->FIELDS_INFO;
 	}
+
 	public function getLocalizationFieldsInfo()
 	{
-		if(!$this->LOC_FIELDS_INFO)
+		if (!$this->LOC_FIELDS_INFO)
 		{
 			$this->LOC_FIELDS_INFO = CCrmCurrency::GetCurrencyLocalizationFieldsInfo();
-			foreach ($this->LOC_FIELDS_INFO  as $code=>&$field)
+			foreach (array_keys($this->LOC_FIELDS_INFO) as $code)
 			{
-				$field['CAPTION'] = CCrmCurrency::GetFieldCaption($code);
+				$this->LOC_FIELDS_INFO[$code]['CAPTION'] = CCrmCurrency::GetFieldCaption($code);
 			}
 		}
+
 		return $this->LOC_FIELDS_INFO;
 	}
+
 	public function isValidID($ID)
 	{
 		return is_string($ID) && $ID !== '';
 	}
+
 	protected function innerAdd(&$fields, &$errors, array $params = null)
 	{
-		if(!CCrmCurrency::CheckCreatePermission())
+		if (!CCrmCurrency::CheckCreatePermission())
 		{
 			$errors[] = 'Access denied.';
+
 			return false;
 		}
 
 		$result = CCrmCurrency::Add($fields);
-		if($result === false)
+		if ($result === false)
 		{
 			$errors[] = CCrmCurrency::GetLastError();
 		}
+
 		return $result;
 	}
+
+	private function getClearedLocalizations(array $rawLocalizations): array
+	{
+		if (empty($rawLocalizations))
+		{
+			return [];
+		}
+
+		$result = [];
+
+		$whiteList = $this->getLocalizationFieldsInfo();
+
+		foreach (array_keys($rawLocalizations) as $langId)
+		{
+			$result[$langId] = array_intersect_key(
+				$rawLocalizations[$langId],
+				$whiteList
+			);
+		}
+
+		return $result;
+	}
+
 	protected function innerGet($ID, &$errors)
 	{
-		if(!CCrmCurrency::CheckReadPermission($ID))
+		if (!CCrmCurrency::CheckReadPermission($ID))
 		{
 			$errors[] = 'Access denied.';
+
 			return false;
 		}
 
 		$result = CCrmCurrency::GetByID($ID);
-		if(is_array($result))
+		if (!is_array($result))
 		{
-			return $result;
+			$errors[] = 'Not found';
+
+			return false;
 		}
 
-		$errors[] = 'Not found';
-		return false;
+		$result['LANG'] = $this->getClearedLocalizations(\CCrmCurrency::GetCurrencyLocalizations($ID));
+
+		return $result;
 	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
-		if(!CCrmCurrency::CheckReadPermission(0))
+		if (!CCrmCurrency::CheckReadPermission(0))
 		{
 			$errors[] = 'Access denied.';
+
 			return false;
 		}
 
 		return CCrmCurrency::GetList($order);
 	}
+
 	protected function innerUpdate($ID, &$fields, &$errors, array $params = null)
 	{
-		if(!CCrmCurrency::CheckUpdatePermission($ID))
+		if (!CCrmCurrency::CheckUpdatePermission($ID))
 		{
 			$errors[] = 'Access denied.';
+
 			return false;
 		}
 
-		if(!CCrmCurrency::IsExists($ID))
+		if (!CCrmCurrency::IsExists($ID))
 		{
 			$errors[] = 'Currency is not found';
+
 			return false;
 		}
 
 		$result = CCrmCurrency::Update($ID, $fields);
-		if($result !== true)
+		if ($result !== true)
 		{
 			$errors[] = CCrmCurrency::GetLastError();
 		}
+
 		return $result;
 	}
+
 	protected function innerDelete($ID, &$errors, array $params = null)
 	{
 		if(!CCrmCurrency::CheckDeletePermission($ID))
 		{
 			$errors[] = 'Access denied.';
+
 			return false;
 		}
 
 		$result = CCrmCurrency::Delete($ID);
-		if($result !== true)
+		if ($result !== true)
 		{
 			$errors[] = CCrmCurrency::GetLastError();
 		}
 
 		return $result;
 	}
+
 	protected function resolveEntityID(&$arParams)
 	{
 		return isset($arParams['ID'])
 			? mb_strtoupper($arParams['ID'])
-			: (isset($arParams['id'])? mb_strtoupper($arParams['id']) : '');
+			: (isset($arParams['id'])? mb_strtoupper($arParams['id']) : '')
+			;
 	}
+
 	protected function checkEntityID($ID)
 	{
 		return is_string($ID) && $ID !== '';
 	}
+
 	public function getLocalizations($ID)
 	{
-		$ID = strval($ID);
-		if($ID === '')
+		$ID = (string)$ID;
+		if ($ID === '')
 		{
 			throw new RestException('The parameter id is invalid or not defined.');
 		}
 
-		if(!CCrmCurrency::CheckReadPermission($ID))
+		if (!CCrmCurrency::CheckReadPermission($ID))
 		{
 			throw new RestException('Access denied.');
 		}
 
-		return CCrmCurrency::GetCurrencyLocalizations($ID);
+		return $this->getClearedLocalizations(CCrmCurrency::GetCurrencyLocalizations($ID));
 	}
+
 	public function setLocalizations($ID, $localizations)
 	{
-		$ID = strval($ID);
-		if($ID === '')
+		$ID = (string)$ID;
+		if ($ID === '')
 		{
 			throw new RestException('The parameter id is invalid or not defined.');
 		}
 
-		if(!is_array($localizations) || empty($localizations))
+		if (!is_array($localizations) || empty($localizations))
 		{
 			return false;
 		}
 
-		if(!CCrmCurrency::CheckUpdatePermission($ID))
+		if (!CCrmCurrency::CheckUpdatePermission($ID))
 		{
 			throw new RestException('Access denied.');
 		}
 
 		return CCrmCurrency::SetCurrencyLocalizations($ID, $localizations);
 	}
+
 	public function deleteLocalizations($ID, $langs)
 	{
-		$ID = strval($ID);
-		if($ID === '')
+		$ID = (string)$ID;
+		if ($ID === '')
 		{
 			throw new RestException('The parameter id is invalid or not defined.');
 		}
 
-		if(!is_array($langs) || empty($langs))
+		if (!is_array($langs) || empty($langs))
 		{
 			return false;
 		}
 
-		if(!CCrmCurrency::CheckUpdatePermission($ID))
+		if (!CCrmCurrency::CheckUpdatePermission($ID))
 		{
 			throw new RestException('Access denied.');
 		}
 
 		return CCrmCurrency::DeleteCurrencyLocalizations($ID, $langs);
 	}
+
 	public function processMethodRequest($name, $nameDetails, $arParams, $nav, $server)
 	{
 		$name = mb_strtoupper($name);
-		if($name === 'LOCALIZATIONS')
+		if ($name === 'LOCALIZATIONS')
 		{
 			$nameSuffix = mb_strtoupper(!empty($nameDetails)? implode('_', $nameDetails) : '');
-			if($nameSuffix === 'FIELDS')
+			if ($nameSuffix === 'FIELDS')
 			{
 				$fildsInfo = $this->getLocalizationFieldsInfo();
+
 				return parent::prepareFields($fildsInfo);
 			}
-			elseif($nameSuffix === 'GET')
+			elseif ($nameSuffix === 'GET')
 			{
 				return $this->getLocalizations($this->resolveEntityID($arParams));
 			}
-			elseif($nameSuffix === 'SET')
+			elseif ($nameSuffix === 'SET')
 			{
 				$ID = $this->resolveEntityID($arParams);
 				$localizations = $this->resolveArrayParam($arParams, 'localizations');
+
 				return $this->setLocalizations($ID, $localizations);
 			}
-			elseif($nameSuffix === 'DELETE')
+			elseif ($nameSuffix === 'DELETE')
 			{
 				$ID = $this->resolveEntityID($arParams);
 				$lids = $this->resolveArrayParam($arParams, 'lids');
+
 				return $this->deleteLocalizations($ID, $lids);
 			}
 		}
-		elseif($name === 'BASE')
+		elseif ($name === 'BASE')
 		{
 			$nameSuffix = mb_strtoupper(!empty($nameDetails)? implode('_', $nameDetails) : '');
-			if($nameSuffix === 'GET')
+			if ($nameSuffix === 'GET')
 			{
 				return \CCrmCurrency::GetBaseCurrencyID();
 			}
-			elseif($nameSuffix === 'SET')
+			elseif ($nameSuffix === 'SET')
 			{
 				$ID = $this->resolveEntityID($arParams);
-				if(!CCrmCurrency::CheckUpdatePermission($ID))
+				if (!CCrmCurrency::CheckUpdatePermission($ID))
 				{
 					throw new RestException('Access denied.');
 				}
+
 				return \CCrmCurrency::SetBaseCurrencyID($ID);
 			}
 		}
+
 		return parent::processMethodRequest($name, $nameDetails, $arParams, $nav, $server);
 	}
 
 	public static function registerEventBindings(array &$bindings)
 	{
-		if(!isset($bindings[CRestUtil::EVENTS]))
+		if (!isset($bindings[CRestUtil::EVENTS]))
 		{
-			$bindings[CRestUtil::EVENTS] = array();
+			$bindings[CRestUtil::EVENTS] = [];
 		}
 
-		$callback = array('CCrmCurrencyRestProxy', 'processEvent');
+		$callback = ['CCrmCurrencyRestProxy', 'processEvent'];
 
-		$bindings[CRestUtil::EVENTS]['onCrmCurrencyAdd'] = self::createEventInfo('currency', 'OnCurrencyAdd', $callback);
-		$bindings[CRestUtil::EVENTS]['onCrmCurrencyUpdate'] = self::createEventInfo('currency', 'OnCurrencyUpdate', $callback);
-		$bindings[CRestUtil::EVENTS]['onCrmCurrencyDelete'] = self::createEventInfo('currency', 'OnCurrencyDelete', $callback);
+		$bindings[CRestUtil::EVENTS]['onCrmCurrencyAdd'] = self::createEventInfo(
+			'currency',
+			'OnCurrencyAdd',
+			$callback
+		);
+		$bindings[CRestUtil::EVENTS]['onCrmCurrencyUpdate'] = self::createEventInfo(
+			'currency',
+			'OnCurrencyUpdate',
+			$callback
+		);
+		$bindings[CRestUtil::EVENTS]['onCrmCurrencyDelete'] = self::createEventInfo(
+			'currency',
+			'OnCurrencyDelete',
+			$callback
+		);
 	}
+
 	public static function processEvent(array $arParams, array $arHandler)
 	{
 		$eventName = $arHandler['EVENT_NAME'];
-		switch(mb_strtolower($eventName))
+		switch (mb_strtolower($eventName))
 		{
 			case 'oncrmcurrencyadd':
 			case 'oncrmcurrencyupdate':
@@ -8518,11 +8588,16 @@ class CCrmCurrencyRestProxy extends CCrmRestProxyBase
 				throw new RestException("The Event \"{$eventName}\" is not supported in current context");
 		}
 
-		if($ID === '')
+		if ($ID === '')
 		{
 			throw new RestException("Could not find entity ID in fields of event \"{$eventName}\"");
 		}
-		return array('FIELDS' => array('ID' => $ID));
+
+		return [
+			'FIELDS' => [
+				'ID' => $ID,
+			],
+		];
 	}
 }
 
@@ -15180,6 +15255,11 @@ class CCrmTimelineCommentRestProxy extends CCrmRestProxyBase
 
 		$page = isset($navigation['iNumPage']) ? (int)$navigation['iNumPage'] : 1;
 		$limit = isset($navigation['nPageSize']) ? (int)$navigation['nPageSize'] : CCrmRestService::LIST_LIMIT;
+		$offset = $limit * ($page - 1);
+
+		$params['limit'] = $limit;
+		$params['offset'] = $offset;
+		$params['count_total'] = true;
 
 		$dataRaw = \Bitrix\Crm\Timeline\Entity\TimelineTable::getList($params);
 		$items = [];
@@ -15193,6 +15273,12 @@ class CCrmTimelineCommentRestProxy extends CCrmRestProxyBase
 		$dbResult = new CDBResult();
 		$dbResult->InitFromArray($items);
 		$dbResult->NavStart($limit, false, $page);
+
+		// reassign pager values because original NavStart method does not support array response limited by limit offset.
+		$dbResult->NavPageCount = ceil($dataRaw->getCount() / $limit);
+		$dbResult->NavRecordCount = $dataRaw->getCount();
+		$dbResult->NavPageNomer = $page;
+
 		return $dbResult;
 	}
 	private function prepareGetResult(array $comment, $select = null)

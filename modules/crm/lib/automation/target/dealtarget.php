@@ -85,11 +85,12 @@ class DealTarget extends BaseTarget
 		}
 
 		$CCrmDeal = new \CCrmDeal(false);
-		$updateResult = $CCrmDeal->Update($id, $fields, true, true, array(
+		$updateResult = $CCrmDeal->Update($id, $fields, true, true, [
 			'DISABLE_USER_FIELD_CHECK' => true,
 			'REGISTER_SONET_EVENT' => true,
-			'CURRENT_USER' => $executeBy ?? 0 //System user
-		));
+			'CURRENT_USER' => $executeBy ?? 0, //System user
+			'CHECK_TRANSITION_ACCESS_ENABLED' => 'N',
+		]);
 
 		if ($updateResult)
 		{

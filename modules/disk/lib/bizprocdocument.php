@@ -478,7 +478,8 @@ class BizProcDocument
 			'disk_version',
 			'date',
 			'vote',
-			'url_preview'
+			'url_preview',
+			'snils',
 		);
 
 		$types = $USER_FIELD_MANAGER->getUserType();

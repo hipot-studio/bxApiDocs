@@ -6,7 +6,7 @@ use Bitrix\Crm\Dto\Validator\RequiredField;
 
 final class SetCategoryPreparedData extends PreparedData
 {
-	public string $categoryId;
+	public int $categoryId;
 
 	protected function getValidators(array $fields): array
 	{

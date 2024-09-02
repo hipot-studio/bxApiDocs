@@ -1416,6 +1416,9 @@ class ActivityController extends EntityController
 				]
 			);
 			$items = NoteTable::loadForItems($items, NoteTable::NOTE_TYPE_ACTIVITY);
+			$items = (new Crm\Timeline\Entity\Repository\RestAppLayoutBlocksRepository())
+				->loadForItems($items, Crm\Timeline\Entity\RestAppLayoutBlocksTable::ACTIVITY_ITEM_TYPE)
+			;
 
 			foreach ($identifiers as $identifier)
 			{

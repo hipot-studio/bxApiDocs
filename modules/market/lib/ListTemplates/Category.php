@@ -8,7 +8,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Market\Categories;
 use Bitrix\Market\NumberApps;
 use Bitrix\Market\Rest\Actions;
-use Bitrix\Rest\Marketplace\Transport;
+use Bitrix\Market\Rest\Transport;
 
 Loc::loadMessages(__DIR__.'/../../install/components/bitrix/market.main/class.php');
 
@@ -27,7 +27,6 @@ class Category extends BaseTemplate
 
 		$params = [
 			'category' => $this->categoryCode,
-			'_market_' => 'Y',
 			'page' => $this->page,
 		];
 		if (!empty($this->filter['tag'])) {
@@ -40,8 +39,8 @@ class Category extends BaseTemplate
 		}
 
 		$batch = [
-			Transport::METHOD_FILTER_APP => [
-				Transport::METHOD_FILTER_APP,
+			Actions::METHOD_GET_FULL_CATEGORY => [
+				Actions::METHOD_GET_FULL_CATEGORY,
 				$params,
 			],
 			Actions::METHOD_TOTAL_APPS => [
@@ -55,25 +54,25 @@ class Category extends BaseTemplate
 		$response = Transport::instance()->batch($batch);
 
 		$this->result['APPS'] = [];
-		if (isset($response[Transport::METHOD_FILTER_APP])) {
-			if (isset($response[Transport::METHOD_FILTER_APP]['ITEMS']) && is_array($response[Transport::METHOD_FILTER_APP]['ITEMS'])) {
-				$this->result['APPS'] = $response[Transport::METHOD_FILTER_APP]['ITEMS'];
-				$this->result['PAGES'] = $response[Transport::METHOD_FILTER_APP]['PAGES'];
-				$this->result['CUR_PAGE'] = $response[Transport::METHOD_FILTER_APP]['CUR_PAGE'];
-				$title = $response[Transport::METHOD_FILTER_APP]['CATEGORY_NAME'];
+		if (isset($response[Actions::METHOD_GET_FULL_CATEGORY])) {
+			if (isset($response[Actions::METHOD_GET_FULL_CATEGORY]['ITEMS']) && is_array($response[Actions::METHOD_GET_FULL_CATEGORY]['ITEMS'])) {
+				$this->result['APPS'] = $response[Actions::METHOD_GET_FULL_CATEGORY]['ITEMS'];
+				$this->result['PAGES'] = $response[Actions::METHOD_GET_FULL_CATEGORY]['PAGES'];
+				$this->result['CUR_PAGE'] = $response[Actions::METHOD_GET_FULL_CATEGORY]['CUR_PAGE'];
+				$title = $response[Actions::METHOD_GET_FULL_CATEGORY]['CATEGORY_NAME'];
 			}
 
-			if (isset($response[Transport::METHOD_FILTER_APP]['SUB_CATEGORIES']) && is_array($response[Transport::METHOD_FILTER_APP]['SUB_CATEGORIES'])) {
-				$this->result['FILTER_TAGS'] = $this->prepareFilterTagsByCategory($response[Transport::METHOD_FILTER_APP]['SUB_CATEGORIES']);
+			if (isset($response[Actions::METHOD_GET_FULL_CATEGORY]['SUB_CATEGORIES']) && is_array($response[Actions::METHOD_GET_FULL_CATEGORY]['SUB_CATEGORIES'])) {
+				$this->result['FILTER_TAGS'] = $this->prepareFilterTagsByCategory($response[Actions::METHOD_GET_FULL_CATEGORY]['SUB_CATEGORIES']);
 			}
 
-			if (isset($response[Transport::METHOD_FILTER_APP]['DEVELOPER_TAGS']) && !empty($response[Transport::METHOD_FILTER_APP]['DEVELOPER_TAGS'])) {
+			if (isset($response[Actions::METHOD_GET_FULL_CATEGORY]['DEVELOPER_TAGS']) && !empty($response[Actions::METHOD_GET_FULL_CATEGORY]['DEVELOPER_TAGS'])) {
 				$this->result['CATEGORY_TAGS'] = 'Y';
-				$this->result['FILTER_TAGS'] = $this->prepareFilterTagsByTags($response[Transport::METHOD_FILTER_APP]['DEVELOPER_TAGS']);
+				$this->result['FILTER_TAGS'] = $this->prepareFilterTagsByTags($response[Actions::METHOD_GET_FULL_CATEGORY]['DEVELOPER_TAGS']);
 			}
 
-			if (isset($response[Transport::METHOD_FILTER_APP]['SORT_INFO']) && is_array($response[Transport::METHOD_FILTER_APP]['SORT_INFO'])) {
-				$this->result['SORT_INFO'] = $response[Transport::METHOD_FILTER_APP]['SORT_INFO'];
+			if (isset($response[Actions::METHOD_GET_FULL_CATEGORY]['SORT_INFO']) && is_array($response[Actions::METHOD_GET_FULL_CATEGORY]['SORT_INFO'])) {
+				$this->result['SORT_INFO'] = $response[Actions::METHOD_GET_FULL_CATEGORY]['SORT_INFO'];
 				$this->result['SHOW_SORT_MENU'] = 'Y';
 			}
 		}

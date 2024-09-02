@@ -2076,17 +2076,9 @@ class CAllCrmDeal
 			;
 
 			//region Save contacts
-			if(!empty($contactBindings))
+			if (!empty($contactBindings))
 			{
 				DealContactTable::bindContacts($ID, $contactBindings);
-				if (isset($GLOBALS['USER']) && !empty($contactIDs))
-				{
-					CUserOptions::SetOption(
-						'crm',
-						'crm_contact_search',
-						array('last_selected' => $contactIDs[count($contactIDs) - 1])
-					);
-				}
 			}
 			//endregion
 
@@ -2166,11 +2158,6 @@ class CAllCrmDeal
 				if (!$this->bCheckPermission)
 					$arFilterTmp["CHECK_PERMISSIONS"] = "N";
 				CCrmSearch::UpdateSearch($arFilterTmp, 'DEAL', true);
-			}
-
-			if (isset($GLOBALS['USER']) && isset($arFields['COMPANY_ID']) && intval($arFields['COMPANY_ID']) > 0)
-			{
-				CUserOptions::SetOption('crm', 'crm_company_search', array('last_selected' => $arFields['COMPANY_ID']));
 			}
 
 			//region Search content index
@@ -2888,6 +2875,23 @@ class CAllCrmDeal
 				return false;
 			}
 
+			$stageId = $arFields['STAGE_ID'] ?? $arRow['STAGE_ID'];
+			$categoryID = isset($arRow['CATEGORY_ID']) ? (int)$arRow['CATEGORY_ID'] : 0;
+			if (
+				($options['CHECK_TRANSITION_ACCESS_ENABLED'] ?? 'Y') !== 'N'
+				&& $stageId !== $arRow['STAGE_ID']
+				&& !Container::getInstance()->getUserPermissions($userID)->isStageTransitionAllowed(
+					$arRow['STAGE_ID'],
+					$stageId,
+					new Crm\ItemIdentifier(CCrmOwnerType::Deal, $ID, $categoryID)
+				)
+			)
+			{
+				$this->LAST_ERROR = Loc::getMessage('CRM_PERMISSION_STAGE_TRANSITION_NOT_ALLOWED');
+
+				return false;
+			}
+
 			if(!isset($arFields['ID']))
 			{
 				$arFields['ID'] = $ID;
@@ -2945,9 +2949,6 @@ class CAllCrmDeal
 					$arFields['OPENED'] = 'Y';
 				}
 			}
-
-			if (isset($arFields['ASSIGNED_BY_ID']) && $arRow['ASSIGNED_BY_ID'] != $arFields['ASSIGNED_BY_ID'])
-				CCrmEvent::SetAssignedByElement($arFields['ASSIGNED_BY_ID'], 'DEAL', $ID);
 
 			//region Preparation of contacts
 			$originalContactBindings = DealContactTable::getDealBindings($ID);
@@ -3328,11 +3329,6 @@ class CAllCrmDeal
 			self::SynchronizeCustomerData($ID, $arRow, array('ENABLE_SOURCE' => false));
 			self::SynchronizeCustomerData($ID, $currentFields);
 
-			if (isset($GLOBALS['USER']) && isset($arFields['COMPANY_ID']) && $arFields['COMPANY_ID'] > 0)
-			{
-				CUserOptions::SetOption('crm', 'crm_company_search', array('last_selected' => $arFields['COMPANY_ID']));
-			}
-
 			//region Complete activities if entity is closed
 			if (
 				$arRow['STAGE_SEMANTIC_ID'] !== $currentFields['STAGE_SEMANTIC_ID']
@@ -3645,13 +3641,19 @@ class CAllCrmDeal
 				$filler->fill($options['CURRENT_FIELDS'], $arFields);
 
 				if (
-					isset($arRow['STAGE_ID'])
-					&& isset($currentFields['STAGE_ID'])
-					&& ComparerBase::isMovedToFinalStage(CCrmOwnerType::Deal, $arRow['STAGE_ID'], $currentFields['STAGE_ID'])
+					isset($arRow['STAGE_ID'], $currentFields['STAGE_ID'])
+					&& ComparerBase::isMovedToFinalStage(
+						CCrmOwnerType::Deal,
+						$arRow['STAGE_ID'],
+						$currentFields['STAGE_ID']
+					)
 				)
 				{
-					$item = Container::getInstance()->getFactory(CCrmOwnerType::Deal)->getItem($ID);
-					(new Bitrix\Crm\Service\Operation\Action\DeleteEntityBadges())->process($item);
+					$item = Container::getInstance()->getFactory(CCrmOwnerType::Deal)?->getItem($ID);
+					if ($item)
+					{
+						(new Bitrix\Crm\Service\Operation\Action\DeleteEntityBadges())->process($item);
+					}
 				}
 			}
 
@@ -4452,7 +4454,7 @@ class CAllCrmDeal
 
 	public static function clearCategoryCache($ID)
 	{
-		return Container::getInstance()->getFactory(CCrmOwnerType::Deal)->clearItemCategoryCache((int)$ID);
+		Container::getInstance()->getFactory(CCrmOwnerType::Deal)->clearItemCategoryCache((int)$ID);
 	}
 
 	protected static function GetPermittedCategoryIDs($permissionType, CCrmPerms $userPermissions = null)
@@ -5049,33 +5051,35 @@ class CAllCrmDeal
 
 	public static function GetSemanticID($stageID, $categoryID = -1)
 	{
-		if($stageID === '')
+		if (is_null($stageID))
+		{
+			if (!is_int($categoryID))
+			{
+				$categoryID = (int)$categoryID;
+			}
+
+			if ($categoryID < 0)
+			{
+				$categoryID = DealCategory::resolveFromStageID($stageID);
+			}
+
+			return (self::GetStageSort($stageID, $categoryID) > self::GetFinalStageSort($categoryID))
+				? Bitrix\Crm\PhaseSemantics::FAILURE
+				: Bitrix\Crm\PhaseSemantics::PROCESS
+			;
+		}
+
+		if ($stageID === '')
 		{
 			return Bitrix\Crm\PhaseSemantics::UNDEFINED;
 		}
 
-		if(!is_int($categoryID))
-		{
-			$categoryID = (int)$categoryID;
-		}
+		$semantics = Container::getInstance()
+			->getFactory(\CCrmOwnerType::Deal)
+			?->getStageSemantics($stageID)
+		;
 
-		if($categoryID < 0)
-		{
-			$categoryID = DealCategory::resolveFromStageID($stageID);
-		}
-
-		if($stageID === DealCategory::prepareStageID($categoryID, 'WON'))
-		{
-			return Bitrix\Crm\PhaseSemantics::SUCCESS;
-		}
-
-		if($stageID === DealCategory::prepareStageID($categoryID, 'LOSE'))
-		{
-			return Bitrix\Crm\PhaseSemantics::FAILURE;
-		}
-
-		return (self::GetStageSort($stageID, $categoryID) > self::GetFinalStageSort($categoryID))
-			? Bitrix\Crm\PhaseSemantics::FAILURE : Bitrix\Crm\PhaseSemantics::PROCESS;
+		return $semantics ?? Bitrix\Crm\PhaseSemantics::UNDEFINED;
 	}
 
 	public static function GetAllStageNames($categoryID = 0)
@@ -5259,7 +5263,7 @@ class CAllCrmDeal
 		$fieldsToUpdate = [
 			'CATEGORY_ID' => $escapedCategoryId,
 			'STAGE_ID' => $escapedStageId,
-			'=DATE_MODIFY' => $now
+			'=DATE_MODIFY' => $now,
 		];
 
 		if ($userID > 0)

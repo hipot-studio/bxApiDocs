@@ -365,6 +365,7 @@ abstract class OAuth
 		{
 			$this->oauthEntity->setToken($token = $item['TOKEN']);
 			$this->oauthEntity->setRefreshToken($item['REFRESH_TOKEN']);
+			$this->oauthEntity->setAccessTokenExpires((int)($item['TOKEN_EXPIRES'] ?? 0));
 			$expireThreshold = time() + $expireGapSeconds;
 
 			if (empty($token) || $item['TOKEN_EXPIRES'] > 0 && $item['TOKEN_EXPIRES'] < $expireThreshold)
@@ -459,6 +460,22 @@ abstract class OAuth
 	public static function getServiceName()
 	{
 		throw new Main\ObjectException('abstract');
+	}
+
+	/**
+	 * Convert expires to unixtime, because it can be interval like 3600 seconds or date
+	 *
+	 * @param int $intervalOrTime Unixtime or seconds to expire
+	 *
+	 * @return int
+	 */
+	public static function convertTokenExpiresToUnixtimeIfNeed(int $intervalOrTime): int
+	{
+		$year = 60 * 60 * 24 * 365;
+		$maxExpectedLifetime = 5 * $year;
+		$isInterval = $intervalOrTime <= $maxExpectedLifetime;
+
+		return $isInterval ? $intervalOrTime + time() : $intervalOrTime;
 	}
 
     public function saveResponse($state): bool

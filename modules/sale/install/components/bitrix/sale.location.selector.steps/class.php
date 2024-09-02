@@ -56,7 +56,7 @@ class CBitrixLocationSelectorStepsComponent extends CBitrixLocationSelectorSearc
 				'TYPE_ID' // cut off?
 			)),
 			'filter' => array(
-				'NAME.LANGUAGE_ID' => LANGUAGE_ID
+				'=NAME.LANGUAGE_ID' => LANGUAGE_ID
 			)
 		);
 	}

@@ -3,16 +3,17 @@
 namespace Bitrix\Crm\Security\EntityPermission;
 
 use Bitrix\Crm\Security\Role\Manage\Permissions\Permission;
+use JsonSerializable;
 
-final class DefaultPermission
+final class DefaultPermission implements JsonSerializable
 {
 	public static function createFromArray(array $data): ?self
 	{
-		if (is_subclass_of($data['permissionClass'], Permission::class))
+		if (isset($data['permissionClass']) && is_subclass_of($data['permissionClass'], Permission::class))
 		{
 			$permission = new $data['permissionClass'];
 
-			return new self($permission, $data['attr']);
+			return new self($permission, $data['attr'] ?? '', $data['settings'] ?? []);
 		}
 
 		return null;
@@ -20,7 +21,8 @@ final class DefaultPermission
 
 	public function __construct(
 		private readonly Permission $permission,
-		private readonly string $attr = ''
+		private readonly ?string $attr = '',
+		private readonly ?array $settings = [],
 	)
 	{
 
@@ -36,9 +38,14 @@ final class DefaultPermission
 		return $this->permission::class;
 	}
 
-	public function getAttr(): string
+	public function getAttr(): ?string
 	{
 		return $this->attr;
+	}
+
+	public function getSettings(): ?array
+	{
+		return $this->settings;
 	}
 
 	public function toArray(): array
@@ -47,6 +54,17 @@ final class DefaultPermission
 			'permissionClass' => $this->getPermissionClass(),
 			'permissionType' => $this->getPermissionType(),
 			'attr' => $this->getAttr(),
+			'settings' => $this->getSettings(),
+		];
+	}
+
+	public function jsonSerialize(): array
+	{
+		return [
+			'permissionClass' => $this->getPermissionClass(),
+			'permissionType' => $this->getPermissionType(),
+			'attr' => $this->getAttr() ?? '',
+			'settings' => $this->getSettings() ?? [],
 		];
 	}
 }

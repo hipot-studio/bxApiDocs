@@ -673,7 +673,9 @@ class ProductManager
 
 			$resultProductList[] = $item;
 
-			$usedIndexes[$productId][] = end(array_keys($resultProductList));
+			$keyList = array_keys($resultProductList);
+			$usedIndexes[$productId][] = end($keyList);
+			unset($keyList);
 		}
 
 		return $resultProductList;

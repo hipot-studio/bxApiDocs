@@ -21,12 +21,12 @@ use Bitrix\Crm\Integrity\DuplicateManager;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Kanban\ViewMode;
 use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
+use Bitrix\Crm\Security\QueryBuilder\Result\JoinWithUnionSpecification;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Tracking;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
 use Bitrix\Crm\UtmTable;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Crm\Security\QueryBuilder\Result\JoinWithUnionSpecification;
 
 class CAllCrmLead
 {
@@ -1845,17 +1845,9 @@ class CAllCrmLead
 		Tracking\Entity::onAfterAdd(CCrmOwnerType::Lead, $ID, $arFields);
 
 		//region Save contacts
-		if(!empty($contactBindings))
+		if (!empty($contactBindings))
 		{
 			LeadContactTable::bindContacts($ID, $contactBindings);
-			if(isset($GLOBALS['USER']) && !empty($contactIDs))
-			{
-				CUserOptions::SetOption(
-					'crm',
-					'crm_contact_search',
-					array('last_selected' => $contactIDs[count($contactIDs) - 1])
-				);
-			}
 		}
 		//endregion
 
@@ -2178,6 +2170,22 @@ class CAllCrmLead
 				return false;
 			}
 
+
+			if (
+				($options['CHECK_TRANSITION_ACCESS_ENABLED'] ?? 'Y') !== 'N'
+				&& $statusID !== $arRow['STATUS_ID']
+				&& !Container::getInstance()->getUserPermissions($iUserId)->isStageTransitionAllowed(
+					$arRow['STATUS_ID'],
+					$statusID,
+					new Crm\ItemIdentifier(CCrmOwnerType::Lead, $ID)
+				)
+			)
+			{
+				$this->LAST_ERROR = Loc::getMessage('CRM_PERMISSION_STAGE_TRANSITION_NOT_ALLOWED');
+
+				return false;
+			}
+
 			if(!isset($arFields['ID']))
 			{
 				$arFields['ID'] = $ID;
@@ -2254,11 +2262,6 @@ class CAllCrmLead
 				{
 					$arFields['OPENED'] = 'Y';
 				}
-			}
-
-			if (isset($arFields['ASSIGNED_BY_ID']) && $arRow['ASSIGNED_BY_ID'] != $arFields['ASSIGNED_BY_ID'])
-			{
-				CCrmEvent::SetAssignedByElement($arFields['ASSIGNED_BY_ID'], 'LEAD', $ID);
 			}
 
 			//region Preparation of contacts
@@ -4381,18 +4384,25 @@ class CAllCrmLead
 
 	public static function GetSemanticID($statusID)
 	{
-		if($statusID === 'CONVERTED')
+		if (is_null($statusID))
 		{
-			return Bitrix\Crm\PhaseSemantics::SUCCESS;
+			return (self::GetStatusSort($statusID) > self::GetFinalStatusSort())
+				? Bitrix\Crm\PhaseSemantics::FAILURE
+				: Bitrix\Crm\PhaseSemantics::PROCESS
+			;
 		}
 
-		if($statusID === 'JUNK')
+		if ($statusID === '')
 		{
-			return Bitrix\Crm\PhaseSemantics::FAILURE;
+			return Bitrix\Crm\PhaseSemantics::UNDEFINED;
 		}
 
-		return (self::GetStatusSort($statusID) > self::GetFinalStatusSort())
-			? Bitrix\Crm\PhaseSemantics::FAILURE : Bitrix\Crm\PhaseSemantics::PROCESS;
+		$semantics = Container::getInstance()
+			->getFactory(\CCrmOwnerType::Lead)
+			?->getStageSemantics($statusID)
+		;
+
+		return $semantics ?? Bitrix\Crm\PhaseSemantics::UNDEFINED;
 	}
 
 	/**

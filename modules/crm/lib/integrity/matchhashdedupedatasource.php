@@ -217,13 +217,12 @@ abstract class MatchHashDedupeDataSource extends DedupeDataSource
 			$result = $dedupeCache->getQuery();
 			if ($result->isSuccess())
 			{
-				// disabling sample bias optimization due to ticket 0193259
-				/*$resultData = $result->getData();
+				$resultData = $result->getData();
 				if (is_array($resultData))
 				{
 					$resultData['identifyingColumn'] = 'ID';
 					$result->setData($resultData);
-				}*/
+				}
 
 				return $result;
 			}

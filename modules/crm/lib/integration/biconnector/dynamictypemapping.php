@@ -48,6 +48,10 @@ class DynamicTypeMapping
 					'TABLE_ALIAS' => 'CS',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_automated_solution CS ON CS.ID = DT.CUSTOM_SECTION_ID',
 				],
+				'PRODUCT_DATASET_NAME' => [
+					'FIELD_NAME' => 'concat_ws(\'\', "crm_dynamic_items_prod_", DT.ENTITY_TYPE_ID)',
+					'FIELD_TYPE' => 'string',
+				]
 				//  `CREATED_BY` int unsigned NOT NULL,
 				//  `IS_CATEGORIES_ENABLED` char(1) NOT NULL DEFAULT 'N',
 				//  `IS_STAGES_ENABLED` char(1) NOT NULL DEFAULT 'N',

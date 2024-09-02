@@ -493,7 +493,7 @@ class PaymentDocumentsRepository
 			],
 			'filter' => [
 				'=ORDER_ID' => $this->orderIds,
-				'!SYSTEM' => 'Y',
+				'!=SYSTEM' => 'Y',
 			],
 		]);
 		while ($shipment = $shipments->fetch())

@@ -4033,7 +4033,7 @@ class CAllCrmInvoice
 		if (!Loader::includeModule('iblock'))
 			return false;
 		$quota = new \CDiskQuota();
-		if(!$quota->checkDiskQuota([]))
+		if(!$quota->checkDiskQuota(['size' => 0]))
 			return false;
 		if (!Loader::includeModule('catalog'))
 			return true;

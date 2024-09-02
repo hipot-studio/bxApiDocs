@@ -59,7 +59,7 @@ class Folder extends BaseObject
 
 	public function markDeletedAction(Disk\Folder $folder)
 	{
-		return $this->markDeleted($folder);
+		$this->markDeleted($folder);
 	}
 
 	public function deleteTreeAction(Disk\Folder $folder)

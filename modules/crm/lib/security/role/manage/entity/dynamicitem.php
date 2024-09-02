@@ -8,19 +8,28 @@ use Bitrix\Crm\Service;
 
 class DynamicItem implements PermissionEntity
 {
-	private function permissions(bool $isAutomationEnabled, bool $isStagesEnabled): array
+	private function permissions(bool $isAutomationEnabled, bool $isStagesEnabled, array $stages = []): array
 	{
 		$permissions = $isAutomationEnabled
 			? PermissionAttrPresets::crmEntityPresetAutomation()
 			: PermissionAttrPresets::crmEntityPreset()
 		;
 
-		return array_merge(
+		$permissions = array_merge(
 			$permissions,
 			PermissionAttrPresets::crmEntityKanbanHideSum()
 		);
-	}
 
+		if ($isStagesEnabled)
+		{
+			$permissions = array_merge(
+				$permissions,
+				PermissionAttrPresets::crmStageTransition($stages),
+			);
+		}
+
+		return $permissions;
+	}
 	/**
 	 * @return EntityDTO[]
 	 */
@@ -58,6 +67,8 @@ class DynamicItem implements PermissionEntity
 					}
 
 					$fields = [$stagesFieldName => $stages];
+
+					$perms = $this->permissions($isAutomationEnabled, $isStagesEnabled, $fields[$stagesFieldName]);
 				}
 
 				$result[] = new EntityDTO($entityName, $entityTitle, $fields, $perms);

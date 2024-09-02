@@ -6,6 +6,8 @@ use Bitrix\Crm\Badge\Badge;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\Timeline\Entity\NoteTable;
+use Bitrix\Crm\Timeline\Entity\Repository\RestAppLayoutBlocksRepository;
+use Bitrix\Crm\Timeline\Entity\RestAppLayoutBlocksTable;
 use Bitrix\Crm\Timeline\Entity\TimelineTable;
 use Bitrix\Crm\Timeline\TimelineType;
 use Bitrix\Main;
@@ -241,6 +243,7 @@ class ActivityController extends BaseController
 		$this->suspendLiveFeed($entityID, $recyclingEntityID);
 		$this->suspendBadges((int)$entityID, (int)$recyclingEntityID);
 		$this->suspendNotes((int)$entityID, (int)$recyclingEntityID);
+		$this->suspendRestAppLayoutBlocks((int)$entityID, (int)$recyclingEntityID);
 		\Bitrix\Crm\Integration\AI\EventHandler::onItemMoveToBin(
 			new Crm\ItemIdentifier($this->getEntityTypeID(), $entityID),
 			new Crm\ItemIdentifier($this->getSuspendedEntityTypeID(), $recyclingEntityID),
@@ -460,6 +463,7 @@ class ActivityController extends BaseController
 		$this->recoverLiveFeed($recyclingEntityID, $newEntityID);
 		$this->recoverBadges((int)$recyclingEntityID, (int)$newEntityID);
 		$this->recoverNotes((int)$recyclingEntityID, (int)$newEntityID);
+		$this->recoverRestAppLayoutBlocks($recyclingEntityID, (int)$newEntityID);
 		\Bitrix\Crm\Integration\AI\EventHandler::onItemRestoreFromRecycleBin(
 			new Crm\ItemIdentifier($this->getEntityTypeID(), $newEntityID),
 			new Crm\ItemIdentifier($this->getSuspendedEntityTypeID(), $recyclingEntityID),
@@ -498,6 +502,7 @@ class ActivityController extends BaseController
 		$this->eraseSuspendedUserFields($recyclingEntityID);
 		$this->eraseSuspendedBadges($recyclingEntityID);
 		$this->eraseSuspendedNotes($recyclingEntityID);
+		$this->eraseSuspendedRestAppLayoutBlocks($recyclingEntityID);
 		\Bitrix\Crm\Integration\AI\EventHandler::onItemDelete(
 			new Crm\ItemIdentifier($this->getSuspendedEntityTypeID(), $recyclingEntityID),
 		);
@@ -693,6 +698,33 @@ class ActivityController extends BaseController
 		NoteTable::deleteByItemId(NoteTable::NOTE_TYPE_SUSPENDED_ACTIVITY, $recyclingEntityId);
 	}
 	//endregion
+
+	protected function suspendRestAppLayoutBlocks(int $entityId, int $recyclingEntityId): void
+	{
+		(new RestAppLayoutBlocksRepository())->rebind(
+			RestAppLayoutBlocksTable::ACTIVITY_ITEM_TYPE,
+			$entityId,
+			RestAppLayoutBlocksTable::SUSPENDED_ACTIVITY_TYPE,
+			$recyclingEntityId,
+		);
+	}
+
+	protected function recoverRestAppLayoutBlocks(int $recyclingEntityId, int $newEntityId): void
+	{
+		(new RestAppLayoutBlocksRepository())->rebind(
+			RestAppLayoutBlocksTable::SUSPENDED_ACTIVITY_TYPE,
+			$recyclingEntityId,
+			RestAppLayoutBlocksTable::ACTIVITY_ITEM_TYPE,
+			$newEntityId,
+		);
+	}
+
+	protected function eraseSuspendedRestAppLayoutBlocks(int $recyclingEntityId): void
+	{
+		(new RestAppLayoutBlocksRepository())
+			->deleteByItem($recyclingEntityId, RestAppLayoutBlocksTable::SUSPENDED_ACTIVITY_TYPE)
+		;
+	}
 
 	protected function notifyTimelineMonitorAboutMoveToBin(array $bindings): void
 	{

@@ -559,13 +559,14 @@ abstract class Factory
 	 * Returns Item by $id. Contacts, products and observers are selected by default
 	 *
 	 * @param int $id
+	 * @param array $fieldsToSelect Fields to select. All fields by default.
 	 *
 	 * @return Item|null
 	 */
-	public function getItem(int $id): ?Item
+	public function getItem(int $id, array $fieldsToSelect = ['*']): ?Item
 	{
 		$parameters = [
-			'select' => ['*'],
+			'select' => $fieldsToSelect,
 			'filter' => ['=ID' => $id],
 			// Do not set limit here! 'limit' limits number of DB rows, not items.
 			// If sql contains joins, there are multiple rows for each item. Some data will not be fetched

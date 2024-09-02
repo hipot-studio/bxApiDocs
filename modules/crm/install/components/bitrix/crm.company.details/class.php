@@ -194,6 +194,11 @@ class CCrmCompanyDetailsComponent
 		}
 
 		$this->arResult['CATEGORY_ID'] = $this->getCategoryId();
+		$this->arResult['ANALYTICS'] = $this->arParams['EXTRAS']['ANALYTICS'] ?? [];
+		if ($this->isMyCompany())
+		{
+			$this->arResult['ANALYTICS']['c_section'] = Crm\Integration\Analytics\Dictionary::SECTION_MYCOMPANY;
+		}
 
 		//region Permissions check
 		$this->initializeMode();
@@ -536,28 +541,6 @@ class CCrmCompanyDetailsComponent
 				);
 				$this->arResult['TABS'][] = $this->getEventTabParams();
 
-				if (!$this->arResult['CATEGORY_ID'])
-				{
-					$this->arResult['TABS'][] = [
-						'id' => 'tab_portrait',
-						'name' => Loc::getMessage('CRM_COMPANY_TAB_PORTRAIT'),
-						'loader' => [
-							'serviceUrl' =>
-								'/bitrix/components/bitrix/crm.client.portrait/lazyload.ajax.php?&site='
-								. SITE_ID . '&' . bitrix_sessid_get()
-							,
-							'componentData' => [
-								'template' => '.default',
-								'signedParameters' => \CCrmInstantEditorHelper::signComponentParams([
-									'ELEMENT_ID' => $this->entityID,
-									'ELEMENT_TYPE' => CCrmOwnerType::Company,
-									'IS_FRAME' => 'Y'
-								], 'crm.client.portrait')
-							]
-						]
-					];
-				}
-
 				if (CModule::IncludeModule('lists') && !$this->arResult['CATEGORY_ID'])
 				{
 					$listIblock = CLists::getIblockAttachedCrm(CCrmOwnerType::CompanyName);
@@ -619,14 +602,7 @@ class CCrmCompanyDetailsComponent
 				);
 			}
 			$this->arResult['TABS'][] = $this->getEventTabParams();
-			if (!$this->arResult['CATEGORY_ID'])
-			{
-				$this->arResult['TABS'][] = [
-					'id' => 'tab_portrait',
-					'name' => Loc::getMessage('CRM_COMPANY_TAB_PORTRAIT'),
-					'enabled' => false
-				];
-			}
+
 			if (CModule::IncludeModule('lists') && !$this->arResult['CATEGORY_ID'])
 			{
 				$listIblock = CLists::getIblockAttachedCrm(CCrmOwnerType::CompanyName);

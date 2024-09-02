@@ -4,6 +4,8 @@ namespace Bitrix\Crm\Timeline;
 
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Timeline\Entity\NoteTable;
+use Bitrix\Crm\Timeline\Entity\Repository\RestAppLayoutBlocksRepository;
+use Bitrix\Crm\Timeline\Entity\RestAppLayoutBlocksTable;
 use Bitrix\Main\Loader;
 
 class TimelineManager
@@ -174,6 +176,7 @@ class TimelineManager
 	{
 		$entityMap = array();
 		$items = NoteTable::loadForItems($items, NoteTable::NOTE_TYPE_HISTORY);
+		$items = (new RestAppLayoutBlocksRepository())->loadForItems($items, RestAppLayoutBlocksTable::TIMELINE_ITEM_TYPE);
 
 		foreach($items as $ID => $item)
 		{
@@ -281,14 +284,19 @@ class TimelineManager
 						'CALENDAR_EVENT_ID'
 					]
 				);
-				$noteData = [];
+
+				$additionalData = [];
 				foreach ($activityIDs as $activityId)
 				{
-					$noteData[$activityId] = [
+					$additionalData[$activityId] = [
 						'ID' => $activityId,
 					];
 				}
-				$noteData = NoteTable::loadForItems($noteData, NoteTable::NOTE_TYPE_ACTIVITY);
+				$additionalData = NoteTable::loadForItems($additionalData, NoteTable::NOTE_TYPE_ACTIVITY);
+				$additionalData = (new RestAppLayoutBlocksRepository())
+					->loadForItems($additionalData, RestAppLayoutBlocksTable::ACTIVITY_ITEM_TYPE)
+				;
+
 				while($fields = $dbResult->Fetch())
 				{
 					$assocEntityID = (int)$fields['ID'];
@@ -313,7 +321,9 @@ class TimelineManager
 					$itemIDs = isset($entityInfos[$assocEntityID]['ITEM_IDS'])
 						? $entityInfos[$assocEntityID]['ITEM_IDS'] : array();
 
-					$note = $noteData[$assocEntityID]['NOTE'] ?? null;
+					$note = $additionalData[$assocEntityID]['NOTE'] ?? null;
+					$restAppLayoutBlocks = $additionalData[$assocEntityID]['REST_APP_LAYOUT_BLOCKS'] ?? [];
+
 					if($isPermitted)
 					{
 						$fields = ActivityController::prepareEntityDataModel(
@@ -325,6 +335,7 @@ class TimelineManager
 						foreach($itemIDs as $itemID)
 						{
 							$items[$itemID]['ASSOCIATED_ENTITY'] = $fields;
+							$items[$itemID]['REST_APP_LAYOUT_BLOCKS'] = $restAppLayoutBlocks;
 							if ($note)
 							{
 								$items[$itemID]['NOTE'] = $note;

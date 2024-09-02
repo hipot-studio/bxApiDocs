@@ -19,6 +19,36 @@ class BasketComponentHelper
 	static array $cacheRatioData = [];
 
 	/**
+	 * Returns true, if the fuser basket summary quantity has already been calculated.
+	 *
+	 * @param int|null $fuserId
+	 * @param string|null $siteId
+	 * @return bool
+	 */
+	public static function existsFUserBasketQuantity(?int $fuserId, ?string $siteId = null): bool
+	{
+		$siteId = self::prepareSiteId($siteId);
+		$fuserId = self::prepareFuserId($fuserId);
+
+		return self::getCurrentBasketQuantity($fuserId, $siteId) !== null;
+	}
+
+	/**
+	 * Returns true, if the fuser basket summary price has bedd already calculated.
+	 *
+	 * @param int|null $fuserId
+	 * @param string|null $siteId
+	 * @return bool
+	 */
+	public static function existsFUserBasketPrice(?int $fuserId, ?string $siteId = null): bool
+	{
+		$siteId = self::prepareSiteId($siteId);
+		$fuserId = self::prepareFuserId($fuserId);
+
+		return self::getCurrentBasketPrice($fuserId, $siteId) !== null;
+	}
+
+	/**
 	 * @param null|int $fuserId
 	 * @param string|null $siteId
 	 *

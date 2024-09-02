@@ -372,6 +372,11 @@ class CVoxImplantHistory
 
 	public static function DownloadAgent(int $historyID, string $recordUrl, $attachToCrm = true, $retryOnFailure = true): bool
 	{
+		if (self::isBase64Encoded($recordUrl))
+		{
+			$recordUrl = base64_decode($recordUrl);
+		}
+
 		$recordUrl = \Bitrix\Main\Web\Uri::urnDecode($recordUrl);
 		self::WriteToLog('Downloading record ' . $recordUrl);
 		$attachToCrm = ($attachToCrm === true);
@@ -459,7 +464,7 @@ class CVoxImplantHistory
 		{
 			$recordUrl = \Bitrix\Main\Web\Uri::urnEncode($recordUrl);
 			CAgent::AddAgent(
-				"CVoxImplantHistory::DownloadAgent('{$historyID}','" . EscapePHPString($recordUrl, "'") . "','{$attachToCrm}', false);",
+				"CVoxImplantHistory::DownloadAgent('{$historyID}','" . base64_encode($recordUrl) . "','{$attachToCrm}', false);",
 				'voximplant',
 				'N',
 				60,
@@ -1139,5 +1144,27 @@ class CVoxImplantHistory
 	public static function getLastPaidCallTimestamp()
 	{
 		return \Bitrix\Main\Config\Option::get('voximplant', 'last_paid_call_timestamp', 0);
+	}
+
+	/**
+	 * @param string $str
+	 * @return bool
+	 */
+	public static function isBase64Encoded(string $str): bool
+	{
+		if (empty($str)) {
+			return false;
+		}
+
+		$decoded = base64_decode($str, true);
+		if ($decoded === false) {
+			return false;
+		}
+
+		if (base64_encode($decoded) !== $str) {
+			return false;
+		}
+
+		return true;
 	}
 }

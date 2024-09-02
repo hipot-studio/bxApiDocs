@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Main\Grid\Row\FieldAssembler;
+use Bitrix\Main\Localization\Loc;
 
 /**
  * @method DashboardSettings getSettings()
@@ -18,9 +19,44 @@ class ScopeFieldAssembler extends FieldAssembler
 			return '';
 		}
 
-		$text = implode(', ', ScopeService::getInstance()->getScopeNameList($value['SCOPE']));
+		$scopeNames = array_filter(ScopeService::getInstance()->getScopeNameList($value['SCOPE']));
+		$hintMore = null;
+		if (count($scopeNames) > 4)
+		{
+			$scopeNamesToShow = array_slice($scopeNames, 0, 3);
+			$scopeNamesToHide = array_slice($scopeNames, 3);
 
-		return $text;
+			$shownPart = htmlspecialcharsbx(
+				implode(', ', $scopeNamesToShow)
+				. ' ',
+			);
+			$hiddenPart = htmlspecialcharsbx(implode(', ', $scopeNamesToHide));
+			$hintMoreText = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_SCOPE_MORE', [
+				'#COUNT#' => count($scopeNamesToHide),
+			]);
+			$hintMore = <<<HTML
+				<span
+					data-hint="{$hiddenPart}" 
+					data-hint-no-icon
+					data-hint-interactivity
+					data-hint-center
+					class="biconnector-grid-scope-hint-more"
+				>
+					$hintMoreText
+				</span>
+				HTML;
+		}
+		else
+		{
+			$shownPart = htmlspecialcharsbx(implode(', ', $scopeNames));
+		}
+
+		return <<<HTML
+			<span>
+				{$shownPart}
+				{$hintMore}
+			</span>
+			HTML;
 	}
 
 	protected function prepareRow(array $row): array

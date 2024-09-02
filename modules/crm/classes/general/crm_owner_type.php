@@ -2,6 +2,7 @@
 
 use Bitrix\Catalog\StoreDocumentTable;
 use Bitrix\Catalog\AgentContractTable;
+use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Crm\Security\EntityAuthorization;
@@ -1625,13 +1626,29 @@ class CCrmOwnerType
 			$factory = Container::getInstance()->getFactory($typeID);
 			if ($factory)
 			{
-				$item = $factory->getItem($ID);
+				$items = $factory->getItems([
+					'select' => [
+						Item::FIELD_NAME_ID,
+						Item::FIELD_NAME_TITLE,
+						Item::FIELD_NAME_CATEGORY_ID
+					],
+					'filter' => ['=ID' => $ID],
+				]);
+
+				/** @var Item|null $item */
+				$item = array_shift($items);
+
 				if (!$item)
 				{
 					self::$CAPTIONS[$key] = '';
 					return '';
 				}
-				if ($checkRights && !Container::getInstance()->getUserPermissions()->canReadItem($item))
+
+				$up = Container::getInstance()->getUserPermissions();
+				if (
+					$checkRights
+					&& !$up->checkReadPermissions($typeID, $ID, $item->getCategoryIdForPermissions())
+				)
 				{
 					self::$CAPTIONS[$key] = '';
 					return '';

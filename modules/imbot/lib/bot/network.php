@@ -1249,7 +1249,7 @@ class Network extends Base implements NetworkBot
 	 */
 	public static function clientMessageAdd(array $fields)
 	{
-		$user = self::getUserInfo((int)$fields['USER_ID']);
+		$user = static::getUserInfo((int)$fields['USER_ID']);
 
 		$portalTariff = 'box';
 		$portalTariffLevel = 'paid';
@@ -1375,7 +1375,7 @@ class Network extends Base implements NetworkBot
 			}
 		}
 
-		$user = self::getUserInfo((int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID']));
+		$user = static::getUserInfo((int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID']));
 
 		$http = self::instanceHttpClient();
 		$response = $http->query(
@@ -1403,7 +1403,7 @@ class Network extends Base implements NetworkBot
 	 */
 	protected static function clientMessageDelete($messageId, $messageFields)
 	{
-		$user = self::getUserInfo((int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID']));
+		$user = static::getUserInfo((int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID']));
 
 		$http = self::instanceHttpClient();
 		$response = $http->query(
@@ -2226,7 +2226,6 @@ class Network extends Base implements NetworkBot
 			($bot = $botData[$joinFields['BOT_ID']])
 			&& $bot["TEXT_PRIVATE_WELCOME_MESSAGE"] <> ''
 			&& $joinFields['CHAT_TYPE'] == \IM_MESSAGE_PRIVATE
-			&& $joinFields['FROM_USER_ID'] != $joinFields['BOT_ID']
 		)
 		{
 			$messageFields = [
@@ -3536,7 +3535,7 @@ class Network extends Base implements NetworkBot
 		}
 
 		$result = $countryCode.($countryName? ' / '.$countryName: '').($cityName? ' / '.$cityName: '');
-		
+
 		Main\Application::getInstance()->getKernelSession()['IMBOT']['GEO_DATA'] = $result;
 
 		return $result;
@@ -3725,6 +3724,11 @@ class Network extends Base implements NetworkBot
 		$keyboard = null;
 		if (!empty($messageFields['KEYBOARD']))
 		{
+			if (!is_array($messageFields['KEYBOARD']))
+			{
+				$messageFields['KEYBOARD'] = \CUtil::JsObjectToPhp($messageFields['KEYBOARD']);
+			}
+
 			$keyboardData = [];
 			if (!isset($messageFields['KEYBOARD']['BUTTONS']))
 			{

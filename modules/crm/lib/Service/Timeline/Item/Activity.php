@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Service\Timeline\Item;
 
 use Bitrix\Crm\Integration\StorageManager;
 use Bitrix\Crm\Service\Timeline\Config;
+use Bitrix\Crm\Service\Timeline\Item\Interfaces\Deadlinable;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
@@ -16,7 +17,7 @@ use CCrmActivity;
 use CCrmDateTimeHelper;
 use CCrmOwnerType;
 
-abstract class Activity extends Configurable
+abstract class Activity extends Configurable implements Deadlinable
 {
 	protected const NEAREST_WORK_DATE_DAYS = 3;
 	protected const NEAREST_WORK_DATE_HOURS = 1;
@@ -208,7 +209,7 @@ abstract class Activity extends Configurable
 		;
 	}
 
-	protected function getChangeDeadlineAction(): Layout\Action\RunAjaxAction
+	public function getChangeDeadlineAction(): Layout\Action\RunAjaxAction
 	{
 		return (new Layout\Action\RunAjaxAction('crm.timeline.activity.setDeadline'))
 			->addActionParamInt('activityId', $this->getActivityId())
@@ -222,7 +223,7 @@ abstract class Activity extends Configurable
 		return $this->getModel()->getAssociatedEntityId();
 	}
 
-	protected function getDeadline(): ?DateTime
+	public function getDeadline(): ?DateTime
 	{
 //		$model = $this->getAssociatedEntityModel();
 //		if (!$model)

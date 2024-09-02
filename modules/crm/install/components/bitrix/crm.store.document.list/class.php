@@ -16,6 +16,7 @@ use Bitrix\Main\Web\Uri;
 use Bitrix\Crm;
 use Bitrix\Main\Web\Json;
 use Bitrix\Sale\Internals\ShipmentTable;
+use Bitrix\Sale\Tax\VatCalculator;
 use Bitrix\UI;
 use Bitrix\Catalog;
 use Bitrix\Catalog\Access\Model\StoreDocument;
@@ -271,6 +272,9 @@ class CrmStoreDocumentListComponent extends CBitrixComponent implements Controll
 		$result['PAGE_SIZES'] = [['NAME' => 10, 'VALUE' => '10'], ['NAME' => 20, 'VALUE' => '20'], ['NAME' => 50, 'VALUE' => '50']];
 		$result['SHOW_ROW_CHECKBOXES'] = true;
 		$result['SHOW_CHECK_ALL_CHECKBOXES'] = true;
+		$result['USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP'] = (bool)(
+			$this->arParams['USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP'] ?? \Bitrix\Main\ModuleManager::isModuleInstalled('ui')
+		);
 
 
 		$result['ACTION_PANEL'] = $this->getGroupActionPanel();
@@ -905,7 +909,8 @@ class CrmStoreDocumentListComponent extends CBitrixComponent implements Controll
 			'THEME' => Bitrix\Main\UI\Filter\Theme::LIGHT,
 			'CONFIG' => [
 				'AUTOFOCUS' => false,
-			]
+			],
+			'USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP' => \Bitrix\Main\ModuleManager::isModuleInstalled('ui'),
 		];
 		UI\Toolbar\Facade\Toolbar::addFilter($filterOptions);
 
@@ -1157,7 +1162,13 @@ class CrmStoreDocumentListComponent extends CBitrixComponent implements Controll
 	{
 		$shipmentIds = array_column($documentList, 'ID');
 		$shipmentBasketResult = Sale\ShipmentItem::getList([
-			'select' => ['PRICE' => 'BASKET.PRICE', 'ORDER_DELIVERY_ID', 'QUANTITY'],
+			'select' => [
+				'PRICE' => 'BASKET.PRICE',
+				'VAT_RATE' => 'BASKET.VAT_RATE',
+				'VAT_INCLUDED' => 'BASKET.VAT_INCLUDED',
+				'ORDER_DELIVERY_ID',
+				'QUANTITY',
+			],
 			'filter' => ['=ORDER_DELIVERY_ID' => $shipmentIds]
 		]);
 		while ($shipmentItem = $shipmentBasketResult->fetch())
@@ -1166,7 +1177,18 @@ class CrmStoreDocumentListComponent extends CBitrixComponent implements Controll
 			{
 				$this->documentTotals[$shipmentItem['ORDER_DELIVERY_ID']] = 0;
 			}
-			$this->documentTotals[$shipmentItem['ORDER_DELIVERY_ID']] += (float)$shipmentItem['PRICE'] * $shipmentItem['QUANTITY'];
+
+			$priceWithVat = (float)$shipmentItem['PRICE'];
+			if ($shipmentItem['VAT_RATE'] !== null)
+			{
+				$vatCalculator = new VatCalculator((float)$shipmentItem['VAT_RATE']);
+
+				$priceWithVat = ($shipmentItem['VAT_INCLUDED'] === 'Y')
+					? $priceWithVat
+					: $vatCalculator->accrue($priceWithVat);
+			}
+
+			$this->documentTotals[$shipmentItem['ORDER_DELIVERY_ID']] += $priceWithVat * $shipmentItem['QUANTITY'];
 		}
 	}
 

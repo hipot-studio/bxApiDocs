@@ -4,7 +4,6 @@ namespace Bitrix\Crm\Integration\AI\Operation;
 
 use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
-use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Crm\Badge;
 use Bitrix\Crm\Dto\Dto;
@@ -140,7 +139,7 @@ abstract class AbstractOperation
 			isManualLaunch: $this->isManualLaunch,
 		);
 
-		if (!AIManager::isAILicenceAccepted())
+		if (!AIManager::isAILicenceAccepted($this->userId))
 		{
 			AIManager::logger()->error(
 				'{date}: {class}: Cant start operation {operationType} on {target} because the license agreement to use AI has not been accepted' . PHP_EOL,

@@ -44,6 +44,8 @@ class Sender
 		"sendRefreshToken" => false,
 	);
 
+	protected static array $appData = [];
+
 	/**
 	 * Utility function to parse pseudo-method name
 	 *
@@ -205,10 +207,31 @@ class Sender
 				);
 
 			$authData = null;
-			if($handler['APP_ID'] > 0)
+			if(isset($handler['APP_ID']) && $handler['APP_ID'] > 0)
 			{
-				$dbRes = AppTable::getById($handler['APP_ID']);
-				$application = $dbRes->fetch();
+				if (isset(static::$appData[$handler['APP_ID']]) && is_array(static::$appData[$handler['APP_ID']]))
+				{
+					$application = static::$appData[$handler['APP_ID']];
+				}
+				else
+				{
+					$select = [
+						'CLIENT_ID',
+						'ID',
+						'CODE',
+						'STATUS',
+						'DATE_FINISH',
+						'IS_TRIALED',
+						'URL_DEMO',
+						'APPLICATION_TOKEN',
+						'CLIENT_SECRET',
+						'SHARED_KEY',
+					];
+					$dbRes = AppTable::getByPrimary($handler['APP_ID'], ['select' => $select]);
+					$application = $dbRes->fetch();
+					static::$appData[$handler['APP_ID']] = $application;
+				}
+
 
 				$appStatus = \Bitrix\Rest\AppTable::getAppStatusInfo($application, '');
 				if($appStatus['PAYMENT_ALLOW'] === 'Y')
@@ -238,20 +261,32 @@ class Sender
 
 			if($authData)
 			{
-				if($handler['EVENT_HANDLER'] <> '')
+				if ($handler['EVENT_HANDLER'] !== '')
 				{
-					self::$queryData[] = Sqs::queryItem(
+					$eventBufferAddResult = Buffer::getInstance()->addEvent([
 						$application['CLIENT_ID'],
 						$handler['EVENT_HANDLER'],
-						array(
-							'event' => $handler['EVENT_NAME'],
-							'event_id' => $handler['ID'],
-							'data' => $data,
-							'ts' => time(),
-						),
+						$handler['EVENT_NAME'],
 						$authData,
+						$data,
 						$additional
-					);
+					]);
+
+					if ($eventBufferAddResult->isSuccess())
+					{
+						self::$queryData[] = Sqs::queryItem(
+							$application['CLIENT_ID'],
+							$handler['EVENT_HANDLER'],
+							array(
+								'event' => $handler['EVENT_NAME'],
+								'event_handler_id' => $handler['ID'],
+								'data' => $data,
+								'ts' => time(),
+							),
+							$authData,
+							$additional
+						);
+					}
 				}
 				else
 				{

@@ -197,6 +197,40 @@ class MailMessageUidTable extends Entity\DataManager
 		return true;
 	}
 
+	public static function getMessage(
+		int $mailboxId,
+		$select,
+		int $id = null,
+		int $uid = null,
+	): array|null
+	{
+		if (!is_null($id))
+		{
+			$filter = [
+				'=MESSAGE_ID' => $id,
+				'=MAILBOX_ID' => $mailboxId,
+			];
+		}
+		else if(!is_null($uid))
+		{
+			$filter = [
+				'=MSG_UID' => $uid,
+				'=MAILBOX_ID' => $mailboxId,
+			];
+		}
+		else
+		{
+			return null;
+		}
+
+		return self::getRow(
+			[
+				'select' => $select,
+				'filter' => $filter,
+			]
+		);
+	}
+
 	/**
 	 * Insert into delete queue table
 	 *

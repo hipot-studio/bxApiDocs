@@ -978,6 +978,8 @@ class CAllStatistics extends CKeepStatistics
 				$DEFENCE_DELAY = intval(COption::GetOptionString("statistic", "DEFENCE_DELAY"));
 				$STACK_TIME = COption::GetOptionString("statistic", "DEFENCE_STACK_TIME");
 				$MAX_STACK_HITS = COption::GetOptionString("statistic", "DEFENCE_MAX_STACK_HITS");
+				$STACK_HITS = 0;
+
 				if (intval($STACK_TIME)>0)
 				{
 					// если лимит активности уже превышался то
@@ -996,20 +998,23 @@ class CAllStatistics extends CKeepStatistics
 							$_SESSION["SESS_GRABBER_STOP_TIME"] = "";
 						}
 					}
-					// запомним время текущего хита в стэке
-					$_SESSION["SESS_GRABBER_DEFENCE_STACK"][] = time();
-					// почистим стэк до заданного максимального интервала времени
-					$first_element = reset($_SESSION["SESS_GRABBER_DEFENCE_STACK"]);
-					$stmp = time();
-					$current_stack_length = $stmp-$first_element;
-					while(is_array($_SESSION["SESS_GRABBER_DEFENCE_STACK"]) && $current_stack_length>$STACK_TIME && count($_SESSION["SESS_GRABBER_DEFENCE_STACK"])>0)
+					if (isset($_SESSION["SESS_GRABBER_DEFENCE_STACK"]) && is_array($_SESSION["SESS_GRABBER_DEFENCE_STACK"]))
 					{
-						$first_element = array_shift($_SESSION["SESS_GRABBER_DEFENCE_STACK"]);
+						// запомним время текущего хита в стэке
+						$_SESSION["SESS_GRABBER_DEFENCE_STACK"][] = time();
+						// почистим стэк до заданного максимального интервала времени
+						$first_element = reset($_SESSION["SESS_GRABBER_DEFENCE_STACK"]);
+						$stmp = time();
 						$current_stack_length = $stmp-$first_element;
+						while($current_stack_length>$STACK_TIME && count($_SESSION["SESS_GRABBER_DEFENCE_STACK"])>0)
+						{
+							$first_element = array_shift($_SESSION["SESS_GRABBER_DEFENCE_STACK"]);
+							$current_stack_length = $stmp-$first_element;
+						}
+						$STACK_HITS = count($_SESSION["SESS_GRABBER_DEFENCE_STACK"]);
 					}
-					$STACK_HITS = count($_SESSION["SESS_GRABBER_DEFENCE_STACK"]);
 					// проверим стэк на превышение максимального кол-ва хитов
-					if (intval($STACK_HITS)>$MAX_STACK_HITS)
+					if ($STACK_HITS > $MAX_STACK_HITS)
 					{
 						// инициализируем превышение активности
 						$stmp = time();
@@ -1048,9 +1053,9 @@ class CAllStatistics extends CKeepStatistics
 
 							$arEventFields = array(
 								"ACTIVITY_TIME_LIMIT"	=> intval($STACK_TIME),
-								"ACTIVITY_HITS"			=> intval($STACK_HITS),
+								"ACTIVITY_HITS"			=> $STACK_HITS,
 								"ACTIVITY_HITS_LIMIT"	=> intval($MAX_STACK_HITS),
-								"ACTIVITY_EXCEEDING"	=> (intval($STACK_HITS) - intval($MAX_STACK_HITS)),
+								"ACTIVITY_EXCEEDING"	=> $STACK_HITS - intval($MAX_STACK_HITS),
 								"CURRENT_TIME"			=> GetTime($stmp,"FULL",$arSite["ID"]),
 								"DELAY_TIME"			=> $DEFENCE_DELAY,
 								"USER_AGENT"			=> $_SERVER["HTTP_USER_AGENT"],

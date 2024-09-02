@@ -8,12 +8,12 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Market\Application\Installed;
 use Bitrix\Market\Rest\Actions;
+use Bitrix\Market\Rest\Transport;
 use Bitrix\Rest\AppTable;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Market\Link;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Marketplace\Client;
-use Bitrix\Rest\Marketplace\Transport;
 
 class Application extends Controller
 {
@@ -142,7 +142,6 @@ class Application extends Controller
 
 		return AjaxJson::createSuccess([
 			'success' => $response['SUCCESS'] === 'Y' ? 'Y' : 'N',
-			'can_edit_review' => $response['CAN_EDIT_REVIEW'] === 'Y' ? 'Y' : 'N',
 			'review_info' => $response['REVIEW_INFO'] ?? [],
 			'error' => (array)($response['ERROR'] ?? []),
 		]);

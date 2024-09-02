@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Security\Role;
 
+use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
 use Bitrix\Crm\Security\Role\Model\RoleTable;
 use Bitrix\Main;
 use Bitrix\Crm\Security\Role\Model\RolePermissionTable;
@@ -27,6 +28,7 @@ class RolePermission
 				'FIELD_VALUE',
 				'ATTR',
 				'PERM_TYPE',
+				'SETTINGS',
 			],
 			'cache' => [
 				'ttl' => 84600,
@@ -41,6 +43,7 @@ class RolePermission
 			$fieldValue = (string)$permission['FIELD_VALUE'];
 			$entity = (string)$permission['ENTITY'];
 			$permissionType = (string)$permission['PERM_TYPE'];
+			$settings = $permission['SETTINGS'];
 
 			if ($field == '-')
 			{
@@ -56,6 +59,32 @@ class RolePermission
 				{
 					$result[$entity][$permissionType][$field][$fieldValue] = $attribute;
 				}
+
+			if ($permissionType !== (new Transition([]))->code())
+			{
+				continue;
+			}
+
+			if ($field === '-')
+			{
+				if (!isset($result[$entity][$permissionType][$field]))
+				{
+					$result['settings'][$entity][$permissionType][$field] = $settings ?? [];
+				} else
+				{
+					$values = array_unique(array_merge($settings, $result['settings'][$entity][$permissionType][$field] ?? []));
+					$result['settings'][$entity][$permissionType][$field] = array_filter($values);
+				}
+			}
+			else if (!isset($result[$entity][$permissionType][$field][$fieldValue]))
+			{
+				$result['settings'][$entity][$permissionType][$field][$fieldValue] = $settings ?? [];
+			}
+			else
+			{
+				$values = array_unique(array_merge($settings, $result['settings'][$entity][$permissionType][$field][$fieldValue] ?? []));
+				$result['settings'][$entity][$permissionType][$field][$fieldValue] = array_filter($values);
+			}
 		}
 
 		return $result;

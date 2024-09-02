@@ -1028,4 +1028,16 @@ class CrmQuoteDetailsComponent extends FactoryBased
 		}
 		return $data;
 	}
+
+	protected function getExtras(): array
+	{
+		$extras = parent::getExtras();
+
+		$extras['ANALYTICS'] = [
+			'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_QUOTE,
+			'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
+		];
+
+		return $extras;
+	}
 }

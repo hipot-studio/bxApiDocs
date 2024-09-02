@@ -31,11 +31,23 @@ abstract class Permission
 			'name' => $this->name(),
 			'variants' => $this->variants(),
 			'canAssignPermissionToStages' => $this->canAssignPermissionToStages(),
+			'defaultAttribute' => $this->getDefaultAttribute(),
+			'defaultSettings' => $this->getDefaultSettings(),
 		];
 	}
 
 	public function sortOrder(): ?int
 	{
 		return 999;
+	}
+
+	public function getDefaultAttribute(): ?string
+	{
+		return null;
+	}
+
+	public function getDefaultSettings(): array
+	{
+		return [];
 	}
 }

@@ -30,6 +30,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Web\Uri;
@@ -221,7 +222,10 @@ class Dashboard extends Controller
 				],
 			];
 			$dashboardScopes = Model\SupersetScopeTable::getList([
-				'filter' => ['=DASHBOARD_ID' => $dashboard->getId()],
+				'filter' => [
+					'=DASHBOARD_ID' => $dashboard->getId(),
+					'!%=SCOPE_CODE' => ScopeService::BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX . '%',
+				],
 			])
 				->fetchCollection()
 				->getScopeCodeList()
@@ -840,16 +844,32 @@ class Dashboard extends Controller
 		}
 
 		$scopeCodes = Model\SupersetScopeTable::getList([
-			'filter' => ['=DASHBOARD_ID' => $dashboard->getId()],
+			'select' => ['*', 'IS_AUTOMATED_SOLUTION'],
+			'filter' => [
+				'=DASHBOARD_ID' => $dashboard->getId(),
+			],
+			'runtime' => [
+				new ExpressionField(
+					'IS_AUTOMATED_SOLUTION',
+					"CASE WHEN %s LIKE 'automated_solution_%%' THEN 1 ELSE 0 END",
+					['SCOPE_CODE'],
+					['data_type' => 'integer']
+				),
+			],
 		])
-			->fetchCollection()
-			->getScopeCodeList()
+			->fetchAll()
 		;
+		$scopesToExport = array_filter($scopeCodes, static fn ($scope) => !$scope['IS_AUTOMATED_SOLUTION']);
+		$scopesNotToExport = array_filter($scopeCodes, static fn ($scope) => $scope['IS_AUTOMATED_SOLUTION']);
+
+		$scopeNamesToExport = ScopeService::getInstance()->getScopeNameList(array_column($scopesToExport, 'SCOPE_CODE'));
+		$scopeNamesNotToExport = ScopeService::getInstance()->getScopeNameList(array_column($scopesNotToExport, 'SCOPE_CODE'));
 
 		return [
 			'title' => htmlspecialcharsbx($dashboard->getTitle()),
 			'period' => $period,
-			'scope' => implode(', ', ScopeService::getInstance()->getScopeNameList($scopeCodes)),
+			'scopesToExport' => htmlspecialcharsbx(implode(', ', $scopeNamesToExport)),
+			'scopesNotToExport' => htmlspecialcharsbx(implode(', ', $scopeNamesNotToExport)),
 			'type' => $dashboard->getType(),
 			'appId' => $dashboard->getAppId(),
 		];

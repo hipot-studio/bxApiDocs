@@ -127,72 +127,10 @@ abstract class Operation
 			$this->item->fill();
 		}
 
-		if ($this->isCheckLimitsEnabled())
+		$checkResult = $this->preSaveChecks();
+		if ($checkResult)
 		{
-			$checkLimitsResult = $this->checkLimits();
-			if (!$checkLimitsResult->isSuccess())
-			{
-				return $checkLimitsResult;
-			}
-		}
-
-		if ($this->isCheckAccessEnabled())
-		{
-			$checkAccessResult = $this->checkAccess();
-			if (!$checkAccessResult->isSuccess())
-			{
-				return $checkAccessResult;
-			}
-
-			$processFieldsResult = $this->processFieldsWithPermissions();
-			if (!$processFieldsResult->isSuccess())
-			{
-				return $processFieldsResult;
-			}
-		}
-
-		if ($this->isCheckWorkflowsEnabled())
-		{
-			$checkWorkflowsResult = $this->checkRunningWorkflows();
-			if (!$checkWorkflowsResult->isSuccess())
-			{
-				return $checkWorkflowsResult;
-			}
-		}
-
-		if ($this->isFieldProcessionEnabled())
-		{
-			$processFieldsResult = $this->processFieldsBeforeSave();
-			if (!$processFieldsResult->isSuccess())
-			{
-				return $processFieldsResult;
-			}
-		}
-
-		if ($this->isCheckFieldsEnabled())
-		{
-			$checkFieldsResult = $this->checkFields();
-			if (!$checkFieldsResult->isSuccess())
-			{
-				return $checkFieldsResult;
-			}
-		}
-
-		if ($this->isItemChanged() && $this->isBeforeSaveActionsEnabled())
-		{
-			$actionsResult = $this->processActions(static::ACTION_BEFORE_SAVE);
-			if (!$actionsResult->isSuccess())
-			{
-				return $actionsResult;
-			}
-		}
-
-		// no changes - no actions
-		if (!$this->isItemChanged())
-		{
-			$this->item->reset(Item::FIELD_NAME_UPDATED_TIME);
-			$this->item->reset(Item::FIELD_NAME_UPDATED_BY);
-			return new Result();
+			return $checkResult;
 		}
 
 		$this->itemBeforeSave = clone $this->item;
@@ -1085,6 +1023,21 @@ abstract class Operation
 
 		return $this;
 	}
+
+	public function isCheckTransitionAccessEnabled(): bool
+	{
+		return $this->settings->isCheckTransitionAccessEnabled();
+	}
+
+	public function disableCheckTransitionAccess(): void
+	{
+		$this->settings->disableCheckTransitionAccess();
+	}
+
+	public function enableCheckTransitionAccess(): void
+	{
+		$this->settings->enableCheckTransitionAccess();
+	}
 	//endregion
 
 	protected function saveToHistory(): Result
@@ -1418,5 +1371,78 @@ abstract class Operation
 		{
 			$factory->clearItemCategoryCache($this->item->getId());
 		}
+	}
+
+	protected function preSaveChecks(): ?Result
+	{
+		if ($this->isCheckLimitsEnabled())
+		{
+			$checkLimitsResult = $this->checkLimits();
+			if (!$checkLimitsResult->isSuccess())
+			{
+				return $checkLimitsResult;
+			}
+		}
+
+		if ($this->isCheckAccessEnabled())
+		{
+			$checkAccessResult = $this->checkAccess();
+			if (!$checkAccessResult->isSuccess())
+			{
+				return $checkAccessResult;
+			}
+
+			$processFieldsResult = $this->processFieldsWithPermissions();
+			if (!$processFieldsResult->isSuccess())
+			{
+				return $processFieldsResult;
+			}
+		}
+
+		if ($this->isCheckWorkflowsEnabled())
+		{
+			$checkWorkflowsResult = $this->checkRunningWorkflows();
+			if (!$checkWorkflowsResult->isSuccess())
+			{
+				return $checkWorkflowsResult;
+			}
+		}
+
+		if ($this->isFieldProcessionEnabled())
+		{
+			$processFieldsResult = $this->processFieldsBeforeSave();
+			if (!$processFieldsResult->isSuccess())
+			{
+				return $processFieldsResult;
+			}
+		}
+
+		if ($this->isCheckFieldsEnabled())
+		{
+			$checkFieldsResult = $this->checkFields();
+			if (!$checkFieldsResult->isSuccess())
+			{
+				return $checkFieldsResult;
+			}
+		}
+
+		if ($this->isItemChanged() && $this->isBeforeSaveActionsEnabled())
+		{
+			$actionsResult = $this->processActions(static::ACTION_BEFORE_SAVE);
+			if (!$actionsResult->isSuccess())
+			{
+				return $actionsResult;
+			}
+		}
+
+		// no changes - no actions
+		if (!$this->isItemChanged())
+		{
+			$this->item->reset(Item::FIELD_NAME_UPDATED_TIME);
+			$this->item->reset(Item::FIELD_NAME_UPDATED_BY);
+			return new Result();
+		}
+
+		return null;
 	}
 }

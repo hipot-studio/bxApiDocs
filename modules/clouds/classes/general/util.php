@@ -9,21 +9,20 @@ class CCloudUtil
 	*/
 	public static function URLEncode($str, $charset, $file_name = false)
 	{
-		global $APPLICATION;
 		$strEncodedURL = '';
 
 		if ($file_name)
 		{
-			$arUrlComponents = preg_split("#(://|/)#", $str, -1, PREG_SPLIT_DELIM_CAPTURE);
+			$arUrlComponents = preg_split('#(://|/)#', $str, -1, PREG_SPLIT_DELIM_CAPTURE);
 		}
 		else
 		{
-			$arUrlComponents = preg_split("#(://|/|\\?|=|&)#", $str, -1, PREG_SPLIT_DELIM_CAPTURE);
+			$arUrlComponents = preg_split('#(://|/|\\?|=|&)#', $str, -1, PREG_SPLIT_DELIM_CAPTURE);
 		}
 
-		foreach($arUrlComponents as $i => $part_of_url)
+		foreach ($arUrlComponents as $i => $part_of_url)
 		{
-			if((intval($i) % 2) == 1)
+			if ((intval($i) % 2) == 1)
 			{
 				$strEncodedURL .= (string)$part_of_url;
 			}
@@ -39,13 +38,14 @@ class CCloudUtil
 
 		return $strEncodedURL;
 	}
+
 	/**
 	 * @param string $str
 	 * @return \Bitrix\Main\Type\DateTime
 	*/
 	public static function gmtTimeToDateTime($str)
 	{
-		$timestamp = strtotime($str."Z");
+		$timestamp = strtotime($str . 'Z');
 		$datetime = \Bitrix\Main\Type\DateTime::createFromTimestamp($timestamp);
 		return $datetime;
 	}

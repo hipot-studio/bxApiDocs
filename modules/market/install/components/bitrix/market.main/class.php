@@ -8,16 +8,15 @@ use Bitrix\Main\Security\Random;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Market\Categories;
 use Bitrix\Market\History;
-use Bitrix\Market\Link;
 use Bitrix\Market\Loadable;
 use Bitrix\Market\NumberApps;
 use Bitrix\Market\PageRules;
 use Bitrix\Market\PricePolicy;
 use Bitrix\Market\Rest\Actions;
+use Bitrix\Market\Rest\Transport;
 use Bitrix\Market\Tag\TagTable;
 use Bitrix\Market\AppFavoritesTable;
 use Bitrix\Market\Toolbar;
-use Bitrix\Rest\Marketplace\Transport;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) {
 	die();

@@ -51,30 +51,29 @@ class Queue
 
 	/**
 	 * @param $session
-	 * @return bool|\Bitrix\ImOpenLines\Queue\Evenly|\Bitrix\ImOpenLines\Queue\All|\Bitrix\ImOpenLines\Queue\Strictly
+	 * @return Queue\Evenly|Queue\All|Queue\Strictly|null
 	 */
-	public static function initialization($session)
+	public static function initialization(Session $session): ?Queue\Queue
 	{
-		$result = false;
+		$queue = null;
 
-		if(!empty($session) && $session instanceof Session)
+		$config = $session->getConfig();
+		$chat = $session->getChat();
+
+		if (
+			!empty($config)
+			&& !empty($config['QUEUE_TYPE'])
+			&& !empty(self::$type[$config['QUEUE_TYPE']])
+			&& !empty($chat)
+		)
 		{
-			$configData = $session->getConfig();
-			$chatManager = $session->getChat();
+			$queueClass = "Bitrix\\ImOpenLines\\Queue\\" . ucfirst(mb_strtolower($config['QUEUE_TYPE']));
 
-			if(
-				!empty($configData) &&
-				!empty($configData['QUEUE_TYPE']) && !empty(self::$type[$configData['QUEUE_TYPE']]) &&
-				!empty($chatManager)
-			)
-			{
-				$queue = "Bitrix\\ImOpenLines\\Queue\\" . ucfirst(mb_strtolower($configData['QUEUE_TYPE']));
-
-				$result = new $queue($session);
-			}
+			/** @var Queue\Evenly|Queue\All|Queue\Strictly $queue */
+			$queue = new $queueClass($session);
 		}
 
-		return $result;
+		return $queue;
 	}
 
 	/**

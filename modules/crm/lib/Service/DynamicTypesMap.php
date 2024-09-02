@@ -66,7 +66,7 @@ class DynamicTypesMap
 	{
 		$isLoadStages = $params['isLoadStages'] ?? true;
 		$isLoadCategories = $params['isLoadCategories'] ?? true;
-		if($isLoadStages)
+		if ($isLoadStages)
 		{
 			// we have to load categories to properly load stages
 			$isLoadCategories = true;
@@ -157,7 +157,7 @@ class DynamicTypesMap
 			return $this;
 		}
 
-		if(!$this->isStagesLoaded)
+		if (!$this->isStagesLoaded)
 		{
 			foreach (static::$stagesDataClass::getList([
 					'order' => [

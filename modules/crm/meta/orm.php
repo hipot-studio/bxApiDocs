@@ -12626,6 +12626,16 @@ namespace Bitrix\Crm\Security\Role\Model {
 	 * @method \Bitrix\Crm\Security\Role\Model\EO_RolePermission resetAttr()
 	 * @method \Bitrix\Crm\Security\Role\Model\EO_RolePermission unsetAttr()
 	 * @method \string fillAttr()
+	 * @method array getSettings()
+	 * @method \Bitrix\Crm\Security\Role\Model\EO_RolePermission setSettings(array|\Bitrix\Main\DB\SqlExpression $settings)
+	 * @method bool hasSettings()
+	 * @method bool isSettingsFilled()
+	 * @method bool isSettingsChanged()
+	 * @method array remindActualSettings()
+	 * @method array requireSettings()
+	 * @method \Bitrix\Crm\Security\Role\Model\EO_RolePermission resetSettings()
+	 * @method \Bitrix\Crm\Security\Role\Model\EO_RolePermission unsetSettings()
+	 * @method array fillSettings()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -38969,6 +38979,172 @@ namespace Bitrix\Crm\Timeline\Entity {
 	 * @method \Bitrix\Crm\Timeline\Entity\EO_Timeline_Collection wakeUpCollection($rows)
 	 */
 	class EO_Timeline_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Crm\Timeline\Entity\RestAppLayoutBlocksTable:crm\lib\timeline\entity\restapplayoutblocks.php */
+namespace Bitrix\Crm\Timeline\Entity {
+	/**
+	 * EO_RestAppLayoutBlocks
+	 * @see \Bitrix\Crm\Timeline\Entity\RestAppLayoutBlocksTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getItemType()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks setItemType(\int|\Bitrix\Main\DB\SqlExpression $itemType)
+	 * @method bool hasItemType()
+	 * @method bool isItemTypeFilled()
+	 * @method bool isItemTypeChanged()
+	 * @method \int remindActualItemType()
+	 * @method \int requireItemType()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks resetItemType()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks unsetItemType()
+	 * @method \int fillItemType()
+	 * @method \int getItemId()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks setItemId(\int|\Bitrix\Main\DB\SqlExpression $itemId)
+	 * @method bool hasItemId()
+	 * @method bool isItemIdFilled()
+	 * @method bool isItemIdChanged()
+	 * @method \int remindActualItemId()
+	 * @method \int requireItemId()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks resetItemId()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks unsetItemId()
+	 * @method \int fillItemId()
+	 * @method \string getClientId()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks setClientId(\string|\Bitrix\Main\DB\SqlExpression $clientId)
+	 * @method bool hasClientId()
+	 * @method bool isClientIdFilled()
+	 * @method bool isClientIdChanged()
+	 * @method \string remindActualClientId()
+	 * @method \string requireClientId()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks resetClientId()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks unsetClientId()
+	 * @method \string fillClientId()
+	 * @method \string getLayout()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks setLayout(\string|\Bitrix\Main\DB\SqlExpression $layout)
+	 * @method bool hasLayout()
+	 * @method bool isLayoutFilled()
+	 * @method bool isLayoutChanged()
+	 * @method \string remindActualLayout()
+	 * @method \string requireLayout()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks resetLayout()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks unsetLayout()
+	 * @method \string fillLayout()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks set($fieldName, $value)
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks reset($fieldName)
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks wakeUp($data)
+	 */
+	class EO_RestAppLayoutBlocks {
+		/* @var \Bitrix\Crm\Timeline\Entity\RestAppLayoutBlocksTable */
+		static public $dataClass = '\Bitrix\Crm\Timeline\Entity\RestAppLayoutBlocksTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Crm\Timeline\Entity {
+	/**
+	 * EO_RestAppLayoutBlocks_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getItemTypeList()
+	 * @method \int[] fillItemType()
+	 * @method \int[] getItemIdList()
+	 * @method \int[] fillItemId()
+	 * @method \string[] getClientIdList()
+	 * @method \string[] fillClientId()
+	 * @method \string[] getLayoutList()
+	 * @method \string[] fillLayout()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks $object)
+	 * @method bool has(\Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks getByPrimary($primary)
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks[] getAll()
+	 * @method bool remove(\Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks_Collection merge(?\Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_RestAppLayoutBlocks_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Crm\Timeline\Entity\RestAppLayoutBlocksTable */
+		static public $dataClass = '\Bitrix\Crm\Timeline\Entity\RestAppLayoutBlocksTable';
+	}
+}
+namespace Bitrix\Crm\Timeline\Entity {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_RestAppLayoutBlocks_Result exec()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks fetchObject()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_RestAppLayoutBlocks_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks fetchObject()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks_Collection fetchCollection()
+	 */
+	class EO_RestAppLayoutBlocks_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks createObject($setDefaultValues = true)
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks_Collection createCollection()
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks wakeUpObject($row)
+	 * @method \Bitrix\Crm\Timeline\Entity\EO_RestAppLayoutBlocks_Collection wakeUpCollection($rows)
+	 */
+	class EO_RestAppLayoutBlocks_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Crm\Timeline\Entity\CustomIconTable:crm/lib/timeline/entity/customicon.php */
 namespace Bitrix\Crm\Timeline\Entity {

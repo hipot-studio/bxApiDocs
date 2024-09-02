@@ -14,9 +14,11 @@ class Lead implements PermissionEntity
 	{
 		return array_merge(
 			PermissionAttrPresets::crmEntityPresetAutomation(),
-			PermissionAttrPresets::crmEntityKanbanHideSum()
+			PermissionAttrPresets::crmEntityKanbanHideSum(),
+			PermissionAttrPresets::crmStageTransition(CCrmStatus::GetStatusListEx('STATUS'))
 		);
 	}
+
 	/**
 	 * @return EntityDTO[]
 	 */

@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Integration\Superset\Model;
 
 use Bitrix\BIConnector\Access\Service\RolePermissionService;
+use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Event;
@@ -167,7 +168,11 @@ final class SupersetDashboardTable extends DataManager
 
 		foreach ($tagBindings as $tagBinding)
 		{
-			$tagBinding->delete();
+			$tagDeleteResult = $tagBinding->delete();
+			if (!$tagDeleteResult->isSuccess())
+			{
+				Logger::logErrors($tagDeleteResult->getErrors(), ['Deleting tags of dashboard ' . $dashboardId]);
+			}
 		}
 
 		$topMenuDashboardsOptions = \CUserOptions::getList(
@@ -227,7 +232,11 @@ final class SupersetDashboardTable extends DataManager
 		;
 		foreach ($scopeBindings as $scopeBinding)
 		{
-			$scopeBinding->delete();
+			$scopeDeleteResult = $scopeBinding->delete();
+			if (!$scopeDeleteResult->isSuccess())
+			{
+				Logger::logErrors($scopeDeleteResult->getErrors(), ['Deleting scopes of dashboard ' . $dashboardId]);
+			}
 		}
 	}
 }

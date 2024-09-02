@@ -7,7 +7,7 @@ use Bitrix\Main\Localization\Loc;
 
 final class CopilotInCallAutomatically extends CopilotInCall
 {
-	protected const OPTION_NAME = 'copilot-in-call-automatically';
+	protected const OPTION_NAME = 'copilot-in-call-automatically-v2';
 
 	protected int $numberOfViewsLimit = 1;
 
@@ -54,6 +54,9 @@ final class CopilotInCallAutomatically extends CopilotInCall
 
 	protected function isShowEnabled(): bool
 	{
-		return parent::isShowEnabled() && AIManager::isAiCallAutomaticProcessingAllowed();
+		return parent::isShowEnabled()
+			&& AIManager::isAiCallAutomaticProcessingAllowed()
+			&& AIManager::isBaasServiceHasPackage()
+		;
 	}
 }

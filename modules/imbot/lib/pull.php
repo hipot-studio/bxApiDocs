@@ -3,6 +3,7 @@ namespace Bitrix\ImBot;
 
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Service\Context;
 use Bitrix\ImBot\Bot\Network;
 use Bitrix\ImBot\Model\NetworkSessionTable;
 use Bitrix\Main\Loader;
@@ -110,6 +111,8 @@ class Pull
 
 		$chat = \Bitrix\Im\V2\Chat::getInstance((int)$chatId);
 		$pullUsers = self::getPullUsers($chat);
+		$userContext = (new Context())->setUserId(current($pullUsers));
+		$chat->setContext($userContext);
 
 		$lastMessage = new Message($chat->getLastMessageId());
 

@@ -33,16 +33,15 @@ class Manage
 	{
 		$permissionEntities = $this->entitiesBuilder->create();
 
-		if ($roleId)
+		if ($roleId > 0)
 		{
 			$roleDto = $this->getRoleOrThrow($roleId);
-
 			$rolAssignedPermissions = $this->permissionRepository->getRoleAssignedPermissions($roleId);
 		}
 		else
 		{
 			$roleDto = RoleDTO::createBlank();
-			$rolAssignedPermissions = [];
+			$rolAssignedPermissions = $this->permissionRepository->getDefaultRoleAssignedPermissions($permissionEntities);
 		}
 
 		return new RoleData(

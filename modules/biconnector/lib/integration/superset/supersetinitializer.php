@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
 use Bitrix\BIConnector\Superset\ActionFilter\ProxyAuth;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Superset\KeyManager;
+use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\BIConnector\Superset\Logger\SupersetInitializerLogger;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
@@ -400,7 +401,12 @@ final class SupersetInitializer
 				AppTable::update($app->getId(), ['ACTIVE' => 'N', 'INSTALLED' => 'N']);
 			}
 
-			$dashboard->delete();
+			$dashboardId = $dashboard->getId();
+			$deleteResult = $dashboard->delete();
+			if (!$deleteResult->isSuccess())
+			{
+				Logger::logErrors($deleteResult->getErrors(), ['clearSupersetData, deleting dashboard ' . $dashboardId]);
+			}
 		}
 
 		$apps = AppTable::getList()->fetchCollection();

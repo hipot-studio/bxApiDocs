@@ -8,13 +8,15 @@ use Bitrix\Crm\Security\Role\Manage\PermissionAttrPresets;
 
 class Deal implements PermissionEntity
 {
-	private function permissions(): array
+	private function permissions(array $stages): array
 	{
 		return array_merge(
 			PermissionAttrPresets::crmEntityPresetAutomation(),
-			PermissionAttrPresets::crmEntityKanbanHideSum()
+			PermissionAttrPresets::crmEntityKanbanHideSum(),
+			PermissionAttrPresets::crmStageTransition($stages)
 		);
 	}
+
 	/**
 	 * @return EntityDTO[]
 	 */
@@ -30,7 +32,7 @@ class Deal implements PermissionEntity
 
 			$fields = $this->getStageFieldsFromConfig($config);
 
-			$result[] = new EntityDTO($typeName, $name, $fields, $this->permissions());
+			$result[] = new EntityDTO($typeName, $name, $fields, $this->permissions($fields['STAGE_ID']));
 		}
 
 		return $result;
@@ -50,7 +52,6 @@ class Deal implements PermissionEntity
 		{
 			$result[htmlspecialcharsbx($stageId)] = $stageName;
 		}
-
 
 		return ['STAGE_ID' => $result];
 	}

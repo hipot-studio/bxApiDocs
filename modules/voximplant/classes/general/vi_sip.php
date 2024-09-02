@@ -156,6 +156,7 @@ class CVoxImplantSip
 			if ($currentConfig['SEARCH_ID'] == CVoxImplantConfig::GetPortalNumber())
 			{
 				COption::SetOptionString("voximplant", "portal_number", $arUpdate['SEARCH_ID']);
+				CVoxImplantConfig::clearUserCache($arUpdate['SEARCH_ID'], true);
 			}
 
 			VI\ConfigTable::update($configId, Array(

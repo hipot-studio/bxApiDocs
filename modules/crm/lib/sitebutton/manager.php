@@ -306,7 +306,7 @@ class Manager
 
 		$isAdded = true;
 
-		$agent = new \CAllAgent();
+		$agent = new \CAgent();
 		$list = $agent->getList(
 			["ID" => "DESC"],
 			[

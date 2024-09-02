@@ -2,7 +2,6 @@
 IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Crm;
-use Bitrix\Crm\Item;
 use Bitrix\Crm\Binding\ContactCompanyTable;
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\CompanyAddress;
@@ -20,6 +19,7 @@ use Bitrix\Crm\Integrity\DuplicateCommunicationCriterion;
 use Bitrix\Crm\Integrity\DuplicateIndexMismatch;
 use Bitrix\Crm\Integrity\DuplicateManager;
 use Bitrix\Crm\Integrity\DuplicateRequisiteCriterion;
+use Bitrix\Crm\Item;
 use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Tracking;
@@ -1567,10 +1567,6 @@ class CAllCrmCompany
 			{
 				$contactBindings = Crm\Binding\EntityBinding::prepareEntityBindings(CCrmOwnerType::Contact, $arFields['CONTACT_ID']);
 				\Bitrix\Crm\Binding\ContactCompanyTable::bindContactIDs($arFields['ID'], $arFields['CONTACT_ID']);
-				if (isset($GLOBALS["USER"]))
-				{
-					CUserOptions::SetOption('crm', 'crm_contact_search', array('last_selected' => implode(',', $arFields['CONTACT_ID'])));
-				}
 			}
 
 			CCrmEntityHelper::registerAdditionalTimelineEvents([
@@ -2324,11 +2320,6 @@ class CAllCrmCompany
 
 					\Bitrix\Crm\Binding\ContactCompanyTable::bindContactIDs($arFields['ID'], $arAdd);
 					\Bitrix\Crm\Binding\ContactCompanyTable::unbindContactIDs($arFields['ID'], $arDelete);
-
-					if (isset($GLOBALS["USER"]))
-					{
-						CUserOptions::SetOption("crm", "crm_contact_search", array('last_selected' => implode(',', $arAdd)));
-					}
 				}
 			}
 

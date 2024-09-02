@@ -6,6 +6,7 @@ use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Error;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Loader;
@@ -53,6 +54,7 @@ class Command
 	public const ERROR_CALLBACK = 400;
 
 	private static ?array $errorMessagesCache = null;
+	private static ?array $jsonErrorCodesCache = null;
 
 	protected $command;
 	protected $params;
@@ -616,7 +618,16 @@ class Command
 			$errorCode = self::ERROR_CONTROLLER_UNKNOWN_ERROR;
 		}
 
-		return new Error($errorMessages[$errorCode], (int)$errorCode, ['originalMessage' => $message]);
+		$jsonErrorCode = $this->getJsonErrorCodes()[$errorCode] ?? null;
+
+		return new Error(
+			$errorMessages[$errorCode],
+			(int)$errorCode,
+			[
+				'originalMessage' => $message,
+				'jsonCode' => $jsonErrorCode,
+			],
+		);
 	}
 
 	/**
@@ -631,6 +642,7 @@ class Command
 			$tryLater = Loc::getMessage('TRANSFORMER_COMMAND_TRY_LATER');
 
 			self::$errorMessagesCache = [
+				static::ERROR_EMPTY_CONTROLLER_URL => $tryLater,
 				static::ERROR_CONNECTION => Loc::getMessage('TRANSFORMER_COMMAND_REFRESH_AND_TRY_LATER'),
 				static::ERROR_CONNECTION_COUNT => $tryLater,
 				static::ERROR_CONNECTION_RESPONSE => $tryLater,
@@ -670,5 +682,30 @@ class Command
 		}
 
 		return self::$errorMessagesCache;
+	}
+
+	private function getJsonErrorCodes(): array
+	{
+		if (self::$jsonErrorCodesCache)
+		{
+			return self::$jsonErrorCodesCache;
+		}
+
+		$reflectionClass = new \ReflectionClass($this);
+
+		$intCodeToStringCodeMap = [];
+		foreach ($reflectionClass->getReflectionConstants(\ReflectionClassConstant::IS_PUBLIC) as $const)
+		{
+			if (str_starts_with($const->getName(), 'ERROR_') && is_int($const->getValue()))
+			{
+				$intCodeToStringCodeMap[$const->getValue()] = str_replace('ERROR_', '', $const->getName());
+			}
+		}
+
+		self::$jsonErrorCodesCache = (new Converter(Converter::VALUES | Converter::TO_CAMEL | Converter::LC_FIRST))
+			->process($intCodeToStringCodeMap)
+		;
+
+		return self::$jsonErrorCodesCache;
 	}
 }

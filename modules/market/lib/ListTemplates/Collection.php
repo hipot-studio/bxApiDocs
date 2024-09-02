@@ -8,7 +8,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Market\Categories;
 use Bitrix\Market\NumberApps;
 use Bitrix\Market\Rest\Actions;
-use Bitrix\Rest\Marketplace\Transport;
+use Bitrix\Market\Rest\Transport;
 
 Loc::loadMessages(__DIR__.'/../../install/components/bitrix/market.main/class.php');
 

@@ -390,11 +390,12 @@ class HighloadBlockTable extends Entity\DataManager
 
 	/**
 	 * @param array|int|string $hlblock Could be a block, ID or NAME of block.
+	 * @param bool $force force recompile if entity already exists
 	 *
 	 * @return Main\ORM\Entity
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public static function compileEntity($hlblock)
+	public static function compileEntity($hlblock, bool $force = false)
 	{
 		global $USER_FIELD_MANAGER;
 
@@ -408,7 +409,7 @@ class HighloadBlockTable extends Entity\DataManager
 		}
 		unset($rawBlock);
 
-		if (class_exists($hlblock['NAME'] . 'Table'))
+		if (class_exists($hlblock['NAME'] . 'Table') && !$force)
 		{
 			return Main\ORM\Entity::getInstance($hlblock['NAME']);
 		}
@@ -564,7 +565,7 @@ class HighloadBlockTable extends Entity\DataManager
 			if ($field['MULTIPLE'] == 'Y')
 			{
 				// create table for this relation
-				$hlentity = static::compileEntity($hlblock);
+				$hlentity = static::compileEntity($hlblock, true);
 				$utmEntity = Entity\Base::getInstance(HighloadBlockTable::getUtmEntityClassName($hlentity, $field));
 
 				$utmEntity->createDbTable();

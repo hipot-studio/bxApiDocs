@@ -32,9 +32,9 @@ class CrmActivityEmailComponent extends CBitrixComponent
 		switch(mb_strtolower($action))
 		{
 			case 'view':
-				return $this->executeView();
+				$this->executeView();
 			default:
-				return $this->executeEdit();
+				$this->executeEdit();
 		}
 	}
 

@@ -595,22 +595,6 @@ class CopilotChatBot extends Base
 		return $payload->setRole(AI\Prompt\Role::get($roleManager->getMainRole($params['CHAT']->getChatId())));
 	}
 
-	protected static function checkPrompts(string $code): bool
-	{
-		$prompts = \Bitrix\AI\Prompt\Manager::getCachedTree('chat');
-
-		$isMatch = false;
-		foreach ($prompts as $prompt)
-		{
-			if ($prompt['code'] === $code)
-			{
-				$isMatch = true;
-			}
-		}
-
-		return $isMatch;
-	}
-
 	/**
 	 * Generates summary.
 	 * @param array{DIALOG_ID: string, MESSAGE_TEXT: string} $params
@@ -977,10 +961,28 @@ class CopilotChatBot extends Base
 			{
 				if (!$engine->isAvailableByAgreement())
 				{
-					$checkResult->addError(new Error(
-						Loc::getMessage('IMBOT_COPILOT_AGREEMENT_RESTRICTION') ?? 'AI service agreement must be accepted',
-						self::ERROR_AGREEMENT
-					));
+					$isB24 = Main\ModuleManager::isModuleInstalled('bitrix24');
+					if (method_exists(AI\Facade\Bitrix24::class, 'shouldUseB24'))
+					{
+						$isB24 = AI\Facade\Bitrix24::shouldUseB24();
+					}
+
+					if ($isB24)
+					{
+						$checkResult->addError(new Error(
+							Loc::getMessage('IMBOT_COPILOT_AGREEMENT_RESTRICTION') ?? 'AI service agreement must be accepted',
+							self::ERROR_AGREEMENT
+						));
+					}
+					else
+					{
+						$checkResult->addError(new Error(
+							Loc::getMessage('IMBOT_COPILOT_AGREEMENT_RESTRICTION_BOX', [
+								'#LINK#' => '/online/?AI_UX_TRIGGER=box_agreement',
+							]) ?? 'AI service agreement must be accepted',
+							self::ERROR_AGREEMENT
+						));
+					}
 				}
 				elseif (!$engine->isAvailableByTariff())
 				{

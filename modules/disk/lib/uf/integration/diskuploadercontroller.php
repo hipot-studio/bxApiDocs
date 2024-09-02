@@ -219,7 +219,7 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 	{
 		$result = [];
 		$controller = new static([]);
-		$loadResults = $controller->load($ids);
+		$loadResults = $controller->load(array_unique($ids));
 		foreach ($loadResults as $loadResult)
 		{
 			if ($loadResult->isSuccess() && $loadResult->getFile() !== null)

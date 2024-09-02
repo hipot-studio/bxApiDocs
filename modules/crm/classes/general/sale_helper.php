@@ -374,7 +374,7 @@ class CCrmSaleHelper
 	public static function getShopGroupIdByType($type): ?int
 	{
 		$groupId = null;
-		$queryObject = CGroup::getList("ID", "ASC", array("STRING_ID" => "CRM_SHOP_".mb_strtoupper($type)));
+		$queryObject = CGroup::getList("ID", "ASC", array("STRING_ID" => "CRM_SHOP_".mb_strtoupper($type), "STRING_ID_EXACT_MATCH" => "Y"));
 		if ($group = $queryObject->fetch())
 		{
 			$groupId = (int)$group["ID"];

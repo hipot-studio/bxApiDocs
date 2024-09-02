@@ -4,7 +4,6 @@ namespace Bitrix\Crm\Integration\BiConnector;
 
 use Bitrix\BIConnector\DB\MysqliConnection;
 use Bitrix\Main\Event;
-use Bitrix\Main\Localization\Loc;
 
 class EventHandler
 {
@@ -29,10 +28,14 @@ class EventHandler
 
 		$result['crm_smart_proc'] = DynamicTypeMapping::getMapping();
 		$result['crm_stages'] = StagesMapping::getMapping($helper, $languageId);
-		$result = array_merge($result, AutomatedSolutionMapping::getMapping($languageId));
 		$result['crm_entity_relation'] = EntityRelationMapping::getMapping();
+		$result = array_merge(
+			$result,
+			AutomatedSolutionMapping::getMapping($languageId),
+			DynamicItemsProductMapping::getMapping($helper, $languageId),
+		);
 
-		self::addDescriptions(['crm_smart_proc', 'crm_stages', 'crm_entity_relation'], $result, $params[2]);
+		self::addDescriptions(['crm_smart_proc', 'crm_stages', 'crm_entity_relation'], $result, $languageId);
 	}
 
 	private static function addDescriptions(array $keys, array &$mapping, ?string $languageId): void

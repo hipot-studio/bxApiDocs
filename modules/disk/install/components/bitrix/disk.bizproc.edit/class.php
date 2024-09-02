@@ -345,6 +345,22 @@ class CDiskBizprocEditComponent extends BaseComponent implements SidePanelWrappa
 			{
 				$this->arResult['ID'] = CBPWorkflowTemplateLoader::add($fields);
 			}
+
+			if (isset($_POST["workflowTemplateTrackOn"]))
+			{
+				if ($_POST["workflowTemplateTrackOn"] === 'Y')
+				{
+					$trackOn = (int)Bitrix\Main\Config\Option::get('bizproc', 'tpl_track_on_' . $this->arResult['ID'], 0);
+					if ((time() - (7 * 86400)) > $trackOn)
+					{
+						Bitrix\Main\Config\Option::set('bizproc', 'tpl_track_on_' . $this->arResult['ID'], time());
+					}
+				}
+				else
+				{
+					Bitrix\Main\Config\Option::delete('bizproc', ['name' => 'tpl_track_on_' . $this->arResult['ID']]);
+				}
+			}
 		}
 		catch (Exception $e)
 		{

@@ -70,18 +70,18 @@ class CommonActions extends BaseObject
 
 	public function markDeletedAction(Disk\BaseObject $object)
 	{
-		return $this->markDeleted($object);
+		$this->markDeleted($object);
 	}
 
 	public function deleteAction(Disk\BaseObject $object)
 	{
 		if ($object instanceof Disk\File)
 		{
-			return $this->deleteFile($object);
+			$this->deleteFile($object);
 		}
 		else
 		{
-			return $this->deleteFolder($object);
+			$this->deleteFolder($object);
 		}
 	}
 

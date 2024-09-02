@@ -803,16 +803,19 @@ class Imap extends Mail\Helper\Mailbox
 				2) messages that fall under filters are in different folders,
 				and the check goes through one folder.
 			*/
-			$result = $this->unregisterMessages([
-				'!@DIR_MD5' => array_map(
-					'md5',
-					$this->getDirsHelper()->getSyncDirsPath(true)
-				),
-			],
-			[
-				'info' => 'disabled directory synchronization in Bitrix',
-			],
-			true);
+
+			$result = $this->unregisterMessages(
+				[
+					'!@DIR_MD5' => array_map(
+						'md5',
+						$this->getDirsHelper()->getSyncDirsPath(true),
+					),
+				],
+				[
+					'info' => 'disabled directory synchronization in Bitrix',
+				],
+				true,
+			);
 
 			$countDeleted = $result ? $result->getCount() : 0;
 
@@ -1787,32 +1790,53 @@ class Imap extends Mail\Helper\Mailbox
 				{
 					$countUpdated += count($items);
 
-					$this->updateMessagesRegistry(
-						array(
-							'@ID' => array_keys($items),
-						),
-						array(
-							'IS_SEEN' => $seen,
-						),
-						$items = array() // @TODO: fix lazyload in MessageEventManager::processOnMailMessageModified()
-					);
+					$totalValues = count($items);
+					$offset = 0;
+					$batchSize = 100;
+
+					while ($offset < $totalValues)
+					{
+						$batchValues = array_slice($items, $offset, $batchSize, true);
+
+						$this->updateMessagesRegistry(
+							[
+								'@ID' => array_keys($batchValues),
+							],
+							[
+								'IS_SEEN' => $seen,
+							],
+							$items = [], // @TODO: fix lazyload in MessageEventManager::processOnMailMessageModified()
+						);
+
+						$offset += $batchSize;
+					}
 				}
 			}
 		}
 
 		if (!empty($excerpt))
 		{
-			$result = $this->unregisterMessages(
-				[
-					'@ID' => array_keys($excerpt),
-					'=DIR_MD5'  => md5($dirPath),
-				],
-				[
-					'info' => 'deletion of non-existent messages',
-				]
-			);
+			$totalValues = count($excerpt);
+			$offset = 0;
+			$batchSize = 100;
 
-			$countDeleted += $result ? $result->getCount() : 0;
+			while ($offset < $totalValues)
+			{
+				$batchValues = array_slice($excerpt, $offset, $batchSize, true);
+
+				$result = $this->unregisterMessages(
+					[
+						'@ID' => array_keys($batchValues),
+						'=DIR_MD5'  => md5($dirPath),
+					],
+					[
+						'info' => 'deletion of non-existent messages',
+					]
+				);
+
+				$countDeleted += $result ? $result->getCount() : 0;
+				$offset += $batchSize;
+			}
 		}
 
 		$this->lastSyncResult['updatedMessages'] += $countUpdated;

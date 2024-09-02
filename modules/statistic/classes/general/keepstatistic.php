@@ -67,22 +67,32 @@ class CKeepStatistics
 	/////////////////////////////
 	public static function Keep($HANDLE_CALL=false)
 	{
-		static $wasCalled = false;
-		if ($wasCalled)
-		{
-			return;
-		}
-		$wasCalled = true;
-
 		__SetNoKeepStatistics();
 		__GoogleAd();
 
 		$GO = true;
-		if(defined("STOP_STATISTICS")) $GO = false;
-		if($HANDLE_CALL) $GO = true;
-
-		if($GO && (!isset($_SESSION["SESS_NO_KEEP_STATISTIC"]) || $_SESSION["SESS_NO_KEEP_STATISTIC"]!="Y") && !defined("NO_KEEP_STATISTIC"))
+		if (defined("STOP_STATISTICS"))
 		{
+			$GO = false;
+		}
+		if ($HANDLE_CALL)
+		{
+			$GO = true;
+		}
+
+		if(
+			$GO
+			&& (!isset($_SESSION["SESS_NO_KEEP_STATISTIC"]) || $_SESSION["SESS_NO_KEEP_STATISTIC"]!="Y")
+			&& !defined("NO_KEEP_STATISTIC")
+		)
+		{
+			static $wasCalled = false;
+			if ($wasCalled)
+			{
+				return;
+			}
+			$wasCalled = true;
+
 			$GLOBALS["DB"]->StartUsingMasterOnly();
 			if(CStatistics::CheckSkip())
 				CStatistics::ReallyKeep();

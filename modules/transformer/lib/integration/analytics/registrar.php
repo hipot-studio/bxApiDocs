@@ -13,7 +13,10 @@ use Bitrix\Transformer\Integration\Baas;
  */
 final class Registrar
 {
-	public function __construct(private readonly Baas\Feature $dedicatedControllerFeature)
+	public function __construct(
+		private readonly Baas\Feature $dedicatedControllerFeature,
+		private readonly ?Uri $dedicatedControllerUri,
+	)
 	{
 	}
 
@@ -68,12 +71,22 @@ final class Registrar
 
 		if ($this->dedicatedControllerFeature->isApplicableToCommand($command))
 		{
-			$event->setP3('baasDedicatedController_' . (int)$this->dedicatedControllerFeature->isActive());
+			$isSentToDedicatedController = $this->dedicatedControllerUri?->getHost() === $controllerUri->getHost();
+
+			$event->setP3('baasDedicatedController_' . (int)$isSentToDedicatedController);
 		}
 
 		$event->setP5("guid_{$command->getGuid()}");
 
-		$event->setStatus($command->getError() ? 'error' : 'success');
+		$error = $command->getError();
+		if ($error)
+		{
+			$event->setStatus('error_' . ($error->getCustomData()['jsonCode'] ?? 'noJsonCode'));
+		}
+		else
+		{
+			$event->setStatus('success');
+		}
 
 		return $event;
 	}

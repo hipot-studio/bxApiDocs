@@ -1462,6 +1462,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 
 		$ownerTypeId = $bindingEntity->getEntityTypeId();
 		$ownerId = $bindingEntity->getId();
+		$currency = $bindingEntity->getCurrencyId();
 
 		$orderIds = Crm\Binding\OrderEntityTable::getOrderIdsByOwner($ownerId, $ownerTypeId);
 
@@ -1524,7 +1525,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 				$costPrice = $batchManager->calculateCostPrice(
 					$quantity,
 					$deliverableProduct['STORE_ID'],
-					$deliverableProduct['CURRENCY']
+					$currency
 				);
 				$vatRate = $deliverableProduct['VAT_RATE'] ?? null;
 

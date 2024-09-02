@@ -6,6 +6,7 @@ use Bitrix\Crm\Security\Role\Manage\DTO\PermissionModel;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields\ArrayField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
@@ -45,6 +46,7 @@ class RolePermissionTable extends DataManager
 			(new StringField("FIELD_VALUE", ["size" => 255])),
 			(new StringField("PERM_TYPE", ["required" => true, "size" => 20])),
 			(new StringField("ATTR", ["size" => 1, "default" => ""])),
+			(new ArrayField('SETTINGS', ["default_value" => ""]))->configureSerializationJson(),
 		];
 	}
 
@@ -75,6 +77,7 @@ class RolePermissionTable extends DataManager
 				'FIELD_VALUE' => $model->filedValue(),
 				'PERM_TYPE' => $model->permissionCode(),
 				'ATTR' => $model->attribute(),
+				'SETTINGS' => $model->settings(),
 			]);
 		}
 	}

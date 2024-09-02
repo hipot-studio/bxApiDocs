@@ -18,7 +18,7 @@ class CCloudSecurityService_STS
 	protected $status = 0;
 	protected $result = '';
 
-	function GetLastRequestStatus()
+	public function GetLastRequestStatus()
 	{
 		return $this->status;
 	}
@@ -60,7 +60,7 @@ class CCloudSecurityService_STS
 		ksort($params);
 		foreach ($params as $name => $value)
 		{
-			if ($content != '')
+			if ($content !== '')
 			{
 				$content .= '&';
 			}
@@ -179,7 +179,7 @@ class CCloudSecurityService_STS
 		ksort($params);
 		foreach ($params as $name => $value)
 		{
-			if ($content != '')
+			if ($content !== '')
 			{
 				$content .= '&';
 			}
@@ -307,7 +307,7 @@ class CCloudSecurityService_STS
 		}
 		else
 		{
-			$ContentType = $content != '' ? 'text/plain' : '';
+			$ContentType = $content !== '' ? 'text/plain' : '';
 		}
 		unset($additional_headers['Content-Type']);
 
@@ -345,6 +345,7 @@ class CCloudSecurityService_STS
 		$this->errstr = '';
 		$this->result = '';
 
+		$stime = 0;
 		$logRequest = false;
 		if (defined('BX_CLOUDS_TRACE') && $verb !== 'GET' && $verb !== 'HEAD')
 		{
@@ -391,7 +392,7 @@ class CCloudSecurityService_STS
 			{
 				return $this->result;
 			}
-			elseif ($this->result != '')
+			elseif ($this->result !== '')
 			{
 				$obXML = new CDataXML;
 				$text = preg_replace('/<' . '\\?XML.*?\\?' . '>/i', '', $this->result);

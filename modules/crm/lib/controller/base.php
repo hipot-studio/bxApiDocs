@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Controller;
 
 use Bitrix\Crm\Field;
+use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
@@ -202,6 +203,28 @@ abstract class Base extends Controller
 	protected function validateFilter(array $filter, array $allowedFields): bool
 	{
 		$result = (new Validator\Filter($allowedFields))->validate($filter);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+		}
+
+		return $result->isSuccess();
+	}
+
+	protected function validateReadPermission(ItemIdentifier $itemIdentifier): bool
+	{
+		$result = (new Validator\Entity\ReadPermission())->validate($itemIdentifier);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+		}
+
+		return $result->isSuccess();
+	}
+
+	protected function validateUpdatePermission(ItemIdentifier $itemIdentifier): bool
+	{
+		$result = (new Validator\Entity\UpdatePermission())->validate($itemIdentifier);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());

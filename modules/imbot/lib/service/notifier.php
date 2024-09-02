@@ -243,6 +243,11 @@ class Notifier
 			// feedback button
 			if (!empty($params['KEYBOARD']))
 			{
+				if (!is_array($params['KEYBOARD']))
+				{
+					$params['KEYBOARD'] = \CUtil::JsObjectToPhp($params['KEYBOARD']);
+				}
+
 				if (!isset($params['KEYBOARD']['BUTTONS']))
 				{
 					$keyboard['BUTTONS'] = $params['KEYBOARD'];
