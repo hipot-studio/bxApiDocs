@@ -216,7 +216,7 @@ class RoleManager
 	{
 		$recentsRoles = RecentRoleTable::query()
 			->setSelect([
-				'role' => 'ROLE',
+				'ROLE',
 			])
 			->setFilter(['USER_ID' => $this->userId, '!=ROLE.CODE' => [self::UNIVERSAL_ROLE_CODE, 'copilot_assistant_chat']])
 			->setOrder(['DATE_TOUCH' => 'DESC'])
@@ -285,7 +285,7 @@ class RoleManager
 	public function getFavoriteRoles(): array
 	{
 		$favoriteRoles = RoleFavoriteTable::query()
-			->setSelect(['role' => 'ROLE'])
+			->setSelect(['ROLE'])
 			->setFilter(['USER_ID' => $this->userId])
 			->setOrder(['DATE_CREATE' => 'DESC'])
 			->setLimit(self::RECENT_ROLE_LIMIT)

@@ -77,17 +77,18 @@ class WorkflowUserCommentTable extends DataManager
 			'LAST_TYPE' => $commentType,
 		];
 		$update = [
-			'UNREAD_CNT' => new \Bitrix\Main\DB\SqlExpression('?# + ?i', 'UNREAD_CNT', 1),
+			'UNREAD_CNT' => new \Bitrix\Main\DB\SqlExpression('?v + ?i', 'UNREAD_CNT', 1),
 			'MODIFIED' => $modified,
 			'LAST_TYPE' => $commentType,
 		];
 
+		$primary = [
+			'WORKFLOW_ID',
+			'USER_ID',
+		];
+
 		foreach ($userIds as $userId)
 		{
-			$primary = [
-				'WORKFLOW_ID' => $workflowId,
-				'USER_ID' => $userId,
-			];
 			$insert['USER_ID'] = $userId;
 
 			$queries = $sqlHelper->prepareMerge(static::getTableName(), $primary, $insert, $update);

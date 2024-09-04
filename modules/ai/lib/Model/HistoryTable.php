@@ -79,7 +79,9 @@ class HistoryTable extends Entity\DataManager
 				'save_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getSaveModificator'],
 				'fetch_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getFetchModificator'],
 			]),
-			new Entity\BooleanField('CACHED'),
+			(new Entity\BooleanField('CACHED'))
+				->configureValues(0, 1)
+				->configureDefaultValue(0),
 			new Entity\DatetimeField('DATE_CREATE'),
 			new Entity\IntegerField('CREATED_BY_ID', [
 				'required' => true,

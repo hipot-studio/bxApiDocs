@@ -602,7 +602,6 @@ class CWiki
 
 		AddEventHandler("main", "OnUserTypeBuildList", array("CUserTypeWiki", "GetUserTypeDescription"));
 		$GLOBALS['USER_FIELD_MANAGER']->CleanCache();
-		$GLOBALS['USER_FIELD_MANAGER']->arUserTypes = '';
 
 		$arElement = $GLOBALS['USER_FIELD_MANAGER']->GetUserFields($ENTITY_ID, $ELEMENT_ID);
 
@@ -650,7 +649,6 @@ class CWiki
 
 		AddEventHandler("main", "OnUserTypeBuildList", array("CUserTypeWiki", "GetUserTypeDescription"));
 		$GLOBALS['USER_FIELD_MANAGER']->CleanCache();
-		$GLOBALS['USER_FIELD_MANAGER']->arUserTypes = '';
 
 		$arElement = $GLOBALS['USER_FIELD_MANAGER']->GetUserFields(
 			$ENTITY_ID,

@@ -13,6 +13,17 @@ use Bitrix\MessageService\Providers\Constants\InternalOption;
 
 class Sender extends Providers\Edna\Sender
 {
+	public const EXCLUDE_CONTENT_TYPES = [
+		'image/gif',
+		'audio/wav',
+		'audio/x-wav',
+		'video/avi',
+		'video/msvideo',
+		'video/x-msvideo',
+		'video/x-matroska',
+		'application/x-troff-msvideo',
+	];
+
 	protected Providers\OptionManager $optionManager;
 	protected Providers\SupportChecker $supportChecker;
 	protected Providers\Edna\EdnaRu $utils;
@@ -167,10 +178,69 @@ class Sender extends Providers\Edna\Sender
 	 */
 	private function getSimpleMessageContent(array $messageFields): array
 	{
-		return [
-			'contentType' => 'TEXT',
-			'text' => $messageFields['MESSAGE_BODY']
+		$contentType = Constants::CONTENT_TYPE_TEXT;
+
+		if (
+			Loader::includeModule('disk')
+			&& preg_match('/^http.+~.+$/', trim($messageFields['MESSAGE_BODY']))
+		)
+		{
+			$fileUri = \CBXShortUri::GetUri($messageFields['MESSAGE_BODY']);
+			if ($fileUri)
+			{
+				$parsedUrl = parse_url($fileUri['URI']);
+				$queryParams = [];
+				parse_str($parsedUrl['query'], $queryParams);
+				if (isset($queryParams['FILE_ID']))
+				{
+					$diskFile = \Bitrix\Disk\File::getById((int)$queryParams['FILE_ID']);
+					if ($diskFile)
+					{
+						if (
+							!$this->isExcludedContentType($diskFile->getFile())
+							&& isset(Constants::CONTENT_TYPE_MAP[$diskFile->getTypeFile()]))
+						{
+							$contentType = Constants::CONTENT_TYPE_MAP[$diskFile->getTypeFile()];
+							$messageFields['MESSAGE_BODY'] = $fileUri['URI'];
+						}
+					}
+				}
+			}
+		}
+
+		$content = [
+			'contentType' => $contentType
 		];
+		switch ($contentType)
+		{
+			case Constants::CONTENT_TYPE_IMAGE:
+			case Constants::CONTENT_TYPE_AUDIO:
+			case Constants::CONTENT_TYPE_VIDEO:
+			case Constants::CONTENT_TYPE_DOCUMENT:
+				$content['attachment'] = [
+					'url' => $messageFields['MESSAGE_BODY']
+				];
+				break;
+			case Constants::CONTENT_TYPE_TEXT:
+			default:
+				$content['text'] = $messageFields['MESSAGE_BODY'];
+		}
+
+		return $content;
+	}
+
+	private function isExcludedContentType(?array $file): bool
+	{
+		if (
+			is_array($file)
+			&& isset($file['CONTENT_TYPE'])
+			&& in_array($file['CONTENT_TYPE'], self::EXCLUDE_CONTENT_TYPES, true)
+		)
+		{
+			return true;
+		}
+
+		return false;
 	}
 
 	protected function sendHSMtoChat(array $messageFields): Result

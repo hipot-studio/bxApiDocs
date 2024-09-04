@@ -48,7 +48,6 @@ final class Settings
 			Mobile::getInstance()::$isDev
 			|| (
 				$this->clientHasApiVersion(54)
-				&& Option::get('mobile', 'new_style_supported') === 'Y'
 				&& Option::get('intranetmobile', Settings::IS_BETA_AVAILABLE, 'N', '-') === 'Y'
 			)
 		);
