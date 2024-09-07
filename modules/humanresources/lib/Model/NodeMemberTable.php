@@ -76,6 +76,11 @@ class NodeMemberTable extends ORM\Data\DataManager
 				->configureDefaultValue(new DateTime())
 				->configureTitle('Row updated at')
 			,
+			(new \Bitrix\Main\ORM\Fields\Relations\Reference(
+				'NODE',
+				NodeTable::class,
+				Join::on('this.NODE_ID', 'ref.ID')
+			)),
 			(new \Bitrix\Main\ORM\Fields\Relations\ManyToMany(
 				'ROLE',
 				RoleTable::class,

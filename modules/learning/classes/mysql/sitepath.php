@@ -11,44 +11,26 @@ class CSitePath extends CAllSitePath
 	{
 		global $DB;
 
-		$arFields1 = array();
 		foreach ($arFields as $key => $value)
 		{
 			if (mb_substr($key, 0, 1) == "=")
 			{
-				$arFields1[mb_substr($key, 1)] = $value;
 				unset($arFields[$key]);
+				$arFields['~' . mb_substr($key, 1)] = $value;
 			}
 		}
 
 		if (!CSitePath::CheckFields("ADD", $arFields))
 			return false;
 
-		$arInsert = $DB->PrepareInsert("b_learn_site_path", $arFields);
-
-		foreach ($arFields1 as $key => $value)
+		if ($arFields)
 		{
-			if ($arInsert[0] <> '')
-				$arInsert[0] .= ", ";
-			$arInsert[0] .= $key;
-			if ($arInsert[1] <> '')
-				$arInsert[1] .= ", ";
-			$arInsert[1] .= $value;
+			return $DB->Add('b_learn_site_path', $arFields);
 		}
-
-		if ($arInsert[0] <> '')
+		else
 		{
-			$strSql =
-				"INSERT INTO b_learn_site_path(".$arInsert[0].") ".
-				"VALUES(".$arInsert[1].")";
-			$DB->Query($strSql);
-
-			$ID = intval($DB->LastID());
-
-			return $ID;
+			return false;
 		}
-
-		return False;
 	}
 
 	// 2012-04-16 Checked/modified for compatibility with new data model

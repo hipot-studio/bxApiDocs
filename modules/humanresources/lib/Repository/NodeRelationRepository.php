@@ -4,6 +4,7 @@ namespace Bitrix\HumanResources\Repository;
 
 use Bitrix\HumanResources\Contract\Service\EventSenderService;
 use Bitrix\HumanResources\Exception\CreationFailedException;
+use Bitrix\HumanResources\Exception\DeleteFailedException;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Item\Collection\NodeRelationCollection;
@@ -111,17 +112,22 @@ class NodeRelationRepository implements Contract\Repository\NodeRelationReposito
 
 	public function remove(Item\NodeRelation $nodeRelation): void
 	{
-		try
+		if (!$nodeRelation->id)
 		{
-			NodeRelationTable::delete($nodeRelation->id);
+			return;
+		}
 
-			$this->eventSenderService->send(EventName::RELATION_DELETED, [
-				'relation' => $nodeRelation,
-			]);
-		}
-		catch (\Exception)
+		$result = NodeRelationTable::delete($nodeRelation->id);
+		if (!$result->isSuccess())
 		{
+			throw (new DeleteFailedException())
+				->setErrors($result->getErrorCollection())
+			;
 		}
+
+		$this->eventSenderService->send(EventName::RELATION_DELETED, [
+			'relation' => $nodeRelation,
+		]);
 	}
 
 	public function findAllByNodeId(int $nodeId): Item\Collection\NodeRelationCollection
@@ -287,20 +293,19 @@ class NodeRelationRepository implements Contract\Repository\NodeRelationReposito
 
 		return <<<SQL
 SELECT $select
-  from $nodeTableName n
+	FROM $nodeTableName n
 		   INNER JOIN $nodePathTableName np ON np.CHILD_ID = n.ID
 		   INNER JOIN $nodeRelationTableName nr ON (
-	  nr.WITH_CHILD_NODES = 'Y' AND (np.PARENT_ID = nr.NODE_ID OR nr.NODE_ID = n.ID)
+	nr.WITH_CHILD_NODES = 'Y' AND (np.PARENT_ID = nr.NODE_ID OR nr.NODE_ID = n.ID)
 		  OR
-	  nr.WITH_CHILD_NODES = 'N' AND nr.NODE_ID = n.ID
-	  )
+	nr.WITH_CHILD_NODES = 'N' AND nr.NODE_ID = n.ID
+    )
 		INNER JOIN $nodeMemberTableName nm ON nm.NODE_ID = n.ID
-  WHERE
-	  nr.ENTITY_TYPE = '$relationEntityType' AND
-	  nm.ENTITY_ID = $memberEntityId
-	  AND nm.ENTITY_TYPE = '$memberEntityType'
-	  ORDER BY nr.ID ASC 
-	  
+	WHERE
+	nr.ENTITY_TYPE = '$relationEntityType' AND
+	nm.ENTITY_ID = $memberEntityId
+	AND nm.ENTITY_TYPE = '$memberEntityType'
+	ORDER BY nr.ID ASC 
 SQL;
 	}
 
@@ -349,7 +354,6 @@ SELECT $select
   WHERE
 	  nr.ENTITY_TYPE = '$relationEntityType' AND
 	  n.ID = $nodeId
-	  ORDER BY nr.ID ASC 
 SQL;
 	}
 

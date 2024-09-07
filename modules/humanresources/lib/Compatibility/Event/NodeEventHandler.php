@@ -16,6 +16,8 @@ use Bitrix\Main\Engine\CurrentUser;
 
 class NodeEventHandler
 {
+	private const NECESSARY_NODE_FIELDS = ['NAME', 'ACTIVE','GLOBAL_ACTIVE', 'SORT', 'LEFT_MARGIN', 'RIGHT_MARGIN'];
+
 	public static function onBeforeIBlockSectionUpdate($fields): void
 	{
 		if (!Storage::instance()->isCompanyStructureConverted(false))
@@ -33,14 +35,23 @@ class NodeEventHandler
 			return;
 		}
 
-		self::provideNode($fields);
+		self::provideNode(
+			fields: $fields,
+			provideChildrenForNewNode: true
+		);
 	}
 
 	/**
-	 * @throws \Bitrix\Main\ArgumentException
+	 * @param $sectionId
+	 *
+	 * @return void
+	 * @throws \Bitrix\HumanResources\Exception\DeleteFailedException
 	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\DB\SqlQueryException
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
+	 * @throws \Throwable
 	 */
 	public static function onBeforeIBlockSectionDelete($sectionId): void
 	{
@@ -70,6 +81,11 @@ class NodeEventHandler
 		}
 	}
 
+	/**
+	 * @param $fields
+	 *
+	 * @return void
+	 */
 	public static function onAfterIBlockSectionAdd($fields): void
 	{
 		if (!Storage::instance()->isCompanyStructureConverted(false))
@@ -121,7 +137,7 @@ class NodeEventHandler
 		return null;
 	}
 
-	private static function provideNode(array $fields): void
+	private static function provideNode(array $fields, bool $provideChildrenForNewNode = false): void
 	{
 		$structureId = self::getStructureId();
 		$parentId = self::getParentId($fields);
@@ -162,15 +178,30 @@ class NodeEventHandler
 				$node->name = $fields['NAME'];
 			}
 
+			if (!empty($fields['SORT']))
+			{
+				$node->sort = (int)$fields['SORT'];
+			}
+
+			if (!empty($fields['ACTIVE']))
+			{
+				$node->active = $fields['ACTIVE'] === 'Y';
+			}
+
 			Container::getNodeRepository()->update($node);
 		}
 
 		if (!$node)
 		{
-			if (!$fields['NAME'])
+			if (!self::checkNecessaryNodeFields($fields))
 			{
-				$fields['NAME'] = \CIBlockSection::GetByID($fields['ID'])->Fetch()['NAME'] ?? '';
+				$section = \CIBlockSection::GetByID($fields['ID'])->Fetch();
+				foreach (self::NECESSARY_NODE_FIELDS as $key)
+				{
+					$fields[$key] = $section[$key] ?? null;
+				}
 			}
+
 			$node = Container::getNodeService()
 				->insertAndMoveNode(
 					new Node(
@@ -178,6 +209,10 @@ class NodeEventHandler
 						type: NodeEntityType::DEPARTMENT,
 						structureId: self::getStructureId(),
 						parentId: $parentId,
+						xmlId: $fields['XML_ID'],
+						active: $fields['ACTIVE'] === 'Y',
+						globalActive: $fields['GLOBAL_ACTIVE'] === 'Y',
+						sort: (int)$fields['SORT'],
 					),
 				);
 			Container::getStructureBackwardConverter()
@@ -185,6 +220,27 @@ class NodeEventHandler
 					$node,
 					$fields['ID']
 				);
+
+			if (
+				$provideChildrenForNewNode
+				&& !is_null($fields['LEFT_MARGIN'])
+				&& !is_null($fields['RIGHT_MARGIN'])
+			)
+			{
+				$result = \CIBlockSection::GetList(
+					arFilter: [
+						'IBLOCK_ID' => self::getOldDepartmentIblockId(),
+						'>LEFT_MARGIN' => $fields["LEFT_MARGIN"],
+						'<RIGHT_MARGIN' => $fields["RIGHT_MARGIN"],
+					],
+					arSelect: ['*']
+				);
+
+				while ($section = $result->fetch())
+				{
+					self::provideNode($section);
+				}
+			}
 		}
 
 		self::updateHead($node, $fields);
@@ -227,6 +283,18 @@ class NodeEventHandler
 		return true;
 	}
 
+	private static function checkNecessaryNodeFields(array $fields): bool
+	{
+		foreach (self::NECESSARY_NODE_FIELDS as $key)
+		{
+			if (!$fields[$key])
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	private static function getRole(string $role): ?int
 	{
 		return Container::getRoleRepository()
@@ -240,8 +308,8 @@ class NodeEventHandler
 	 */
 	private static function removeEventHandlersForNodeEvents(): void
 	{
-		Container::getEventSenderService()->removeEventHandlers('iblock', 'OnAfterIBlockSectionAdd');
-		Container::getEventSenderService()->removeEventHandlers('iblock', 'OnBeforeIBlockSectionAdd');
+		Container::getSemaphoreService()->lock('iblock-OnAfterIBlockSectionAdd');
+		Container::getSemaphoreService()->lock('iblock-OnBeforeIBlockSectionAdd');
 		Container::getEventSenderService()->removeEventHandlers('humanresources', EventName::NODE_ADDED->name);
 		Container::getEventSenderService()->removeEventHandlers('humanresources', EventName::NODE_UPDATED->name);
 	}
@@ -250,52 +318,72 @@ class NodeEventHandler
 	{
 		Container::getSemaphoreService()->unlock('iblock-OnAfterIBlockSectionAdd');
 		Container::getSemaphoreService()->unlock('iblock-OnBeforeIBlockSectionAdd');
-
 	}
 
 	/**
-	 * @param \Bitrix\HumanResources\Item\Node|null $node
+	 * @param \Bitrix\HumanResources\Item\Node $node
 	 * @param array $fields
 	 *
 	 * @return void
 	 */
-	public static function updateHead(Node $node, array $fields): void
+	protected static function updateHead(Node $node, array $fields): void
 	{
 		$headRole = self::getRole('HEAD');
 		$employeeRole = self::getRole('EMPLOYEE');
 
-		$heads = Container::getNodeMemberRepository()
-			->findAllByRoleIdAndNodeId($headRole, $node->id)
+		$heads =
+			Container::getNodeMemberRepository()
+				->findAllByRoleIdAndNodeId($headRole, $node->id)
 		;
+
 		$currentHead = $fields['UF_HEAD'] ?? null;
 		$alreadyExisted = false;
 
-		foreach ($heads as $head)
+		Container::getEventSenderService()->removeEventHandlers(
+			'humanresources',
+			EventName::MEMBER_UPDATED->name
+		);
+
+		try
 		{
-			if ($head->entityId === (int)$currentHead)
+			foreach ($heads as $head)
 			{
-				$alreadyExisted = true;
-				continue;
+				if ($head->entityId === (int)$currentHead)
+				{
+					$alreadyExisted = true;
+					continue;
+				}
+
+				$head->role = $employeeRole;
+				Container::getNodeMemberRepository()->update($head);
 			}
 
-			$head->role = $employeeRole;
-			Container::getNodeMemberRepository()
-				->update($head)
-			;
-		}
+			if (!$alreadyExisted && $currentHead)
+			{
+				Container::getEventSenderService()->removeEventHandlers(
+					'humanresources',
+					EventName::MEMBER_ADDED->name,
+				);
 
-		if (!$alreadyExisted && $currentHead)
-		{
-			Container::getNodeMemberRepository()
-				->create(
-					new NodeMember(
-						entityType: MemberEntityType::USER,
-						entityId: (int)$currentHead,
-						nodeId: $node->id,
-						role: $headRole,
+				Container::getNodeMemberRepository()
+					->create(
+						new NodeMember(
+							entityType: MemberEntityType::USER,
+							entityId: (int)$currentHead,
+							nodeId: $node->id,
+							role: $headRole,
+						),
 					)
-				)
-			;
+				;
+			}
 		}
+		catch (\Exception)
+		{
+		}
+	}
+
+	private static function getOldDepartmentIblockId(): int
+	{
+		return \COption::GetOptionInt('intranet', 'iblock_structure', 0);
 	}
 }

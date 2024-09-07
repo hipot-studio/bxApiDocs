@@ -314,7 +314,7 @@ class CAllTest
 			FROM b_learn_gradebook 
 			WHERE 
 				STUDENT_ID = ".$USER->GetID()." AND 
-				COMPLETED=\"Y\" AND 
+				COMPLETED='Y' AND 
 				TEST_ID = ".$ID." AND 
 				1.0*RESULT/MAX_RESULT*100 >= ".$SCORE
 		;

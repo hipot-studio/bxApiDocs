@@ -3,6 +3,8 @@
 namespace Bitrix\HumanResources\Repository;
 
 use Bitrix\HumanResources\Exception\CreationFailedException;
+use Bitrix\HumanResources\Exception\DeleteFailedException;
+use Bitrix\HumanResources\Exception\UpdateFailedException;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Item\Structure;
 use Bitrix\HumanResources\Model\StructureTable;
@@ -136,7 +138,13 @@ class StructureRepository implements Contract\Repository\StructureRepository
 			$structureEntity->setType($structure->type->name);
 		}
 
-		$structureEntity->save();
+		$result = $structureEntity->save();
+		if (!$result->isSuccess())
+		{
+			throw (new UpdateFailedException())
+				->setErrors($result->getErrorCollection())
+			;
+		}
 		$this->removeStructureCache($structure);
 
 		return $structure;
@@ -167,14 +175,14 @@ class StructureRepository implements Contract\Repository\StructureRepository
 			return;
 		}
 
-		try
+		$result = StructureTable::delete($structure->id);
+		if (!$result->isSuccess())
 		{
-			StructureTable::delete($structure->id);
-			$this->removeStructureCache($structure);
+			throw (new DeleteFailedException())
+				->setErrors($result->getErrorCollection())
+			;
 		}
-		catch (\Exception)
-		{
-		}
+		$this->removeStructureCache($structure);
 	}
 
 	private function removeStructureCache(Structure $structure): void

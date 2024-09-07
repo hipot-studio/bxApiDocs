@@ -132,12 +132,6 @@ class MailingManager
 			catch (\Throwable $e)
 			{
 				static::$error = $e;
-				AddMessage2Log(
-					'Exception in mailing send. PostingId: '. $letter['POSTING_ID'],
-					'sender with error ' . $e->getMessage()
-					. ' and trace '
-					. $e->getTraceAsString()
-				);
 
 				$postingSendStatus = PostingManager::SEND_RESULT_ERROR;
 			}

@@ -3,7 +3,9 @@
 namespace Bitrix\HumanResources\Service;
 
 use Bitrix\HumanResources\Exception\DeleteFailedException;
+use Bitrix\HumanResources\Exception\UpdateFailedException;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
+use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Contract;
@@ -11,6 +13,7 @@ use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\Error;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 
@@ -27,14 +30,14 @@ class NodeService implements Contract\Service\NodeService
 		$this->nodeRepository = $nodeRepository ?? Container::getNodeRepository();
 		$this->structureWalkerService = $structureWalkerService ?? Container::getStructureWalkerService();
 	}
-	public function getNodesByUserId(int $userId): NodeCollection
+	public function getNodesByUserId(int $userId, NodeActiveFilter $activeFilter = NodeActiveFilter::ALL): NodeCollection
 	{
-		return $this->nodeRepository->findAllByUserId($userId);
+		return $this->nodeRepository->findAllByUserId($userId, $activeFilter);
 	}
 
-	public function getNodesByUserIdAndUserRoleId(int $userId, int $roleId): NodeCollection
+	public function getNodesByUserIdAndUserRoleId(int $userId, int $roleId, NodeActiveFilter $activeFilter = NodeActiveFilter::ALL): NodeCollection
 	{
-		return $this->nodeRepository->findAllByUserIdAndRoleId($userId, $roleId);
+		return $this->nodeRepository->findAllByUserIdAndRoleId($userId, $roleId, $activeFilter);
 	}
 
 	public function getNodeChildNodes(int $nodeId): NodeCollection
@@ -69,8 +72,13 @@ class NodeService implements Contract\Service\NodeService
 	 * @throws \Bitrix\Main\SystemException
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	public function insertNode(Node $node): Node
+	public function insertNode(Node $node, bool $move = true): Node
 	{
+		if ($move)
+		{
+			return $this->insertAndMoveNode($node);
+		}
+
 		if (!$node->id)
 		{
 			$this->nodeRepository->create($node);
@@ -114,7 +122,7 @@ class NodeService implements Contract\Service\NodeService
 	 */
 	public function insertAndMoveNode(Node $node): Node
 	{
-		$this->insertNode($node);
+		$this->insertNode($node, false);
 
 		$targetNode = null;
 		if ($node->parentId)
@@ -128,7 +136,7 @@ class NodeService implements Contract\Service\NodeService
 	/**
 	 * @throws ObjectPropertyException
 	 * @throws ArgumentException
-	 * @throws SystemException
+	 * @throws SystemException|UpdateFailedException
 	 */
 	public function updateNode(Node $node): Node
 	{
@@ -140,21 +148,18 @@ class NodeService implements Contract\Service\NodeService
 		}
 
 		if (
-			$node->name !== $nodeEntity->name
-		)
-		{
-			$nodeEntity->name = $node->name;
-			$nodeEntity = $this->nodeRepository->update($nodeEntity);
-		}
-
-		if (
 			$node->parentId !== $nodeEntity->parentId
 		)
 		{
 			$targetNode = $this->nodeRepository->getById($node->parentId);
-			$nodeEntity = $this->moveNode($nodeEntity, $targetNode);
+			if (!$targetNode)
+			{
+				throw (new UpdateFailedException())->addError(new Error("Parent node with id $node->parentId dont exist"));
+			}
+
+			$this->moveNode($nodeEntity, $targetNode);
 		}
 
-		return $nodeEntity;
+		return $this->nodeRepository->update($node);
 	}
 }

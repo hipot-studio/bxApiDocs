@@ -39,7 +39,6 @@ class StructureBackwardConverter
 	private ?NodeMemberRepository $nodeMemberRepository;
 	private ?StructureWalkerService $structureWalkerService;
 	private ?RoleRepository $roleRepository;
-	private EventManager $eventManager;
 	private Logger $logger;
 
 	/** @var array<int>  */
@@ -68,14 +67,15 @@ class StructureBackwardConverter
 		$this->roleRepository = $roleRepository ?? Container::getRoleRepository();
 		$this->nodeRepository = $nodeRepository ?? Container::getNodeRepository();
 		$this->structureWalkerService = $structureWalkerService ?? Container::getStructureWalkerService();
-		$this->eventManager = EventManager::getInstance();
 		$this->logger = $logger ?? Container::getStructureLogger();
 	}
 
 	/**
-	 * @throws \Bitrix\Main\SystemException
+	 * @return bool
 	 * @throws \Bitrix\HumanResources\Exception\CreationFailedException
 	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
 	 */
 	public function convert(): bool
 	{
@@ -86,6 +86,11 @@ class StructureBackwardConverter
 			if (!Config\Storage::instance()->isCompanyStructureConverted(false))
 			{
 				$this->installFixtures();
+			}
+
+			if (empty($departmentTree['DEPARTMENTS']))
+			{
+				return false;
 			}
 
 			foreach ($departmentTree['DEPARTMENTS'] as $department)
@@ -204,7 +209,7 @@ class StructureBackwardConverter
 			return;
 		}
 
-		$newNode = $this->nodeService->insertNode($node);
+		$newNode = $this->nodeService->insertNode($node, false);
 
 		if (!isset($this->newNodeMap[$oldDepartment['ID']]))
 		{
@@ -282,6 +287,9 @@ class StructureBackwardConverter
 	}
 
 	/**
+	 * @param \Bitrix\HumanResources\Item\Node $newNode
+	 * @param int $oldNodeId
+	 *
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
@@ -446,12 +454,16 @@ class StructureBackwardConverter
 	}
 
 	/**
-	 * @throws ElementNotFoundException
-	 * @throws ObjectPropertyException
-	 * @throws CreationFailedException
-	 * @throws ArgumentException
-	 * @throws SystemException
-	 * @throws CompanyStructureNotFoundException
+	 * @param int $limit
+	 * @param int $offset
+	 *
+	 * @return bool
+	 * @throws \Bitrix\HumanResources\Exception\CompanyStructureNotFoundException
+	 * @throws \Bitrix\HumanResources\Exception\CreationFailedException
+	 * @throws \Bitrix\HumanResources\Exception\ElementNotFoundException
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
 	 */
 	public function moveEmployeesToDepartments(int $limit = 20, int $offset = 0): bool
 	{
@@ -549,6 +561,9 @@ class StructureBackwardConverter
 		return \COption::GetOptionInt('intranet', 'iblock_structure', 0);
 	}
 
+	/**
+	 * @return string
+	 */
 	public static function startDefaultConverting(): string
 	{
 		$converterScript =
@@ -573,6 +588,12 @@ class StructureBackwardConverter
 		return 'Bitrix\HumanResources\Compatibility\Converter\StructureBackwardConverter::moveEmployees();';
 	}
 
+	/**
+	 * @param int $limit
+	 * @param int $offset
+	 *
+	 * @return string
+	 */
 	public static function moveEmployees(int $limit = 20, int $offset = 0): string
 	{
 		try

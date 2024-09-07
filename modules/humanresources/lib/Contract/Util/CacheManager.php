@@ -12,6 +12,9 @@ interface CacheManager
 	public function setData(string $key, mixed $data): static;
 
 	public function clean(string $key): static;
+	public function cleanDir(): static;
 
 	public function setTtl(int $ttl): static;
+
+	public function setDir(string $dir): static;
 }

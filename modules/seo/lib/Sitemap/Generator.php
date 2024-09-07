@@ -420,7 +420,7 @@ class Generator
 			}
 		}
 
-		if (count($processedDirs) > 0)
+		if (is_array($processedDirs) && !empty($processedDirs))
 		{
 			foreach ($processedDirs as $dirKey)
 			{
@@ -448,7 +448,7 @@ class Generator
 		if (Loader::includeModule('iblock'))
 		{
 			$arIBlockList = $this->sitemapData['SETTINGS']['IBLOCK_ACTIVE'];
-			if (is_array($arIBlockList) && count($arIBlockList) > 0)
+			if (is_array($arIBlockList) && !empty($arIBlockList))
 			{
 				$arIBlocks = [];
 				$dbIBlock = \CIBlock::GetList([], ['ID' => array_keys($arIBlockList)]);
@@ -482,7 +482,7 @@ class Generator
 		$this->state['IBLOCK'] = [];
 		$this->state['IBLOCK_MAP'] = [];
 
-		if (count($arIBlockList) <= 0)
+		if (is_array($arIBlockList) && !empty($arIBlockList))
 		{
 			$this->step = Step::STEPS[Step::STEP_IBLOCK];
 			$this->statusMessage = Loc::getMessage('SITEMAP_RUN_IBLOCK_EMPTY');
@@ -873,7 +873,7 @@ class Generator
 				}
 			}
 		}
-		if (count($forumList) > 0 && Loader::includeModule('forum'))
+		if (!empty($forumList) && Loader::includeModule('forum'))
 		{
 			$arForums = [];
 			$db_res = \CForumNew::GetListEx(
@@ -908,7 +908,7 @@ class Generator
 
 		$this->state['FORUM_CURRENT_TOPIC'] = 0;
 
-		if (count($forumList) <= 0)
+		if (is_array($forumList) && !empty($forumList))
 		{
 			$this->step = Step::STEPS[Step::STEP_FORUM];
 			$this->statusMessage = Loc::getMessage('SITEMAP_RUN_FORUM_EMPTY');
@@ -1113,7 +1113,7 @@ class Generator
 
 		$sitemapFile = new File\Index($this->sitemapData['SETTINGS']['FILENAME_INDEX'], $this->getSitemapSettings());
 		$xmlFiles = [];
-		if (count($this->state['XML_FILES']) > 0)
+		if (is_array($this->state['XML_FILES']) && !empty($this->state['XML_FILES']))
 		{
 			foreach ($this->state['XML_FILES'] as $xmlFile)
 			{

@@ -3,7 +3,7 @@
 namespace Bitrix\Location\Infrastructure\Service\Config;
 
 use Bitrix\Location\Entity\Source;
-use Bitrix\Location\Infrastructure\Service\DisputedAreaService;
+use Bitrix\Location\Infrastructure\Service\CustomFieldsService;
 use Bitrix\Location\Infrastructure\Service\LoggerService;
 use Bitrix\Location\Infrastructure\Service\CurrentRegionFinderService;
 use Bitrix\Location\Infrastructure\Service\RecentAddressesService;
@@ -116,7 +116,7 @@ class Factory implements IFactory
 				break;
 
 			case CurrentRegionFinderService::class:
-			case DisputedAreaService::class:
+			case CustomFieldsService::class:
 			case RecentAddressesService::class:
 				break;
 

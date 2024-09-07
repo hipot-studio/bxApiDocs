@@ -658,19 +658,7 @@ abstract class CAllTestAttempt
 
 	private static function getSpeedFieldSql()
 	{
-		$connection = \Bitrix\Main\Application::getConnection();
-		if ($connection instanceof \Bitrix\Main\DB\MssqlConnection)
-		{
-			return "DATEDIFF(s, A.DATE_START, A.DATE_END) / A.QUESTIONS";
-		}
-		elseif ($connection instanceof \Bitrix\Main\DB\OracleConnection)
-		{
-			return "round((A.DATE_END-A.DATE_START)*86400) / A.QUESTIONS";
-		}
-		else
-		{
-			return "round((unix_timestamp(IFNULL(A.DATE_END, A.DATE_START))-unix_timestamp(A.DATE_START)) / A.QUESTIONS)";
-		}
+		return "round((unix_timestamp(coalesce(A.DATE_END, A.DATE_START))-unix_timestamp(A.DATE_START)) / (case when A.QUESTIONS > 0 then A.QUESTIONS else 1 end))";
 	}
 
 	public static function CreateAttemptQuestions($ATTEMPT_ID)

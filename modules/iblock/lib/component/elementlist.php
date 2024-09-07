@@ -1927,9 +1927,16 @@ abstract class ElementList extends Base
 	 */
 	protected function getBigDataInfo()
 	{
-		$rows = array();
+		if (!Main\Analytics\Catalog::isOn())
+		{
+			return [
+				'enabled' => false,
+			];
+		}
+
+		$rows = [];
 		$count = 0;
-		$rowsRange = array();
+		$rowsRange = [];
 		$variantsMap = static::getTemplateVariantsMap();
 
 		if (!empty($this->arParams['PRODUCT_ROW_VARIANTS']))
@@ -1950,7 +1957,7 @@ abstract class ElementList extends Base
 			}
 		}
 
-		$shownIds = array();
+		$shownIds = [];
 		if (!empty($this->elements))
 		{
 			foreach ($this->elements as $element)
@@ -1959,19 +1966,19 @@ abstract class ElementList extends Base
 			}
 		}
 
-		return array(
+		return [
 			'enabled' => $count > 0,
 			'rows' => $rows,
 			'count' => $count,
 			'rowsRange' => $rowsRange,
 			'shownIds' => $shownIds,
-			'js' => array(
+			'js' => [
 				'cookiePrefix' => \COption::GetOptionString('main', 'cookie_name', 'BITRIX_SM'),
 				'cookieDomain' => Main\Web\Cookie::getCookieDomain(),
 				'serverTime' => $count > 0 ? time() : 0,
-			),
+			],
 			'params' => $this->getBigDataServiceRequestParams(($this->arParams['RCM_TYPE'] ?? ''))
-		);
+		];
 	}
 
 	// getting positions of enlarged elements

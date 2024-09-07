@@ -80,10 +80,14 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 	}
 
 	/**
+	 * @param \Bitrix\HumanResources\Item\NodeMember $nodeMember
+	 *
+	 * @return \Bitrix\HumanResources\Item\NodeMember
+	 * @throws \Bitrix\HumanResources\Exception\CreationFailedException
 	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\SystemException
 	 * @throws \Bitrix\Main\DB\SqlQueryException
-	 * @throws CreationFailedException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
 	 */
 	public function create(Item\NodeMember $nodeMember): Item\NodeMember
 	{
@@ -133,30 +137,41 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 			$nodeMember->role = $employeeRoleId;
 		}
 
-		$nodeMemberCreateResult = $nodeMemberEntity->setNodeId($nodeMember->nodeId)
-			->setAddedBy($currentUserId)
-			->setEntityId($nodeMember->entityId)
-			->setEntityType($nodeMember->entityType->name)
-			->save()
-		;
-
-		if (!$nodeMemberCreateResult->isSuccess())
+		try
 		{
-			throw (new CreationFailedException())
-				->setErrors($nodeMemberCreateResult->getErrorCollection())
+			$nodeMemberCreateResult =
+				$nodeMemberEntity
+					->setNodeId($nodeMember->nodeId)
+					->setAddedBy($currentUserId)
+					->setEntityId($nodeMember->entityId)
+					->setEntityType($nodeMember->entityType->name)
+					->save()
 			;
+
+			if (!$nodeMemberCreateResult->isSuccess())
+			{
+				throw (new CreationFailedException())
+					->setErrors($nodeMemberCreateResult->getErrorCollection())
+				;
+			}
+
+			$nodeMember->id = $nodeMemberCreateResult->getId();
+
+			$this->insertNodeMemberRole($nodeMember, $currentUserId);
+			$nodeMemberEntity->entity->cleanCache();
+
+			$this->eventSenderService->send(
+				EventName::MEMBER_ADDED, [
+					'member' => $nodeMember,
+				]
+			);
 		}
-
-		$nodeMember->id = $nodeMemberCreateResult->getId();
-
-		$this->insertNodeMemberRole($nodeMember, $currentUserId);
-		$nodeMemberEntity->entity->cleanCache();
-
-		$this->eventSenderService->send(
-			EventName::MEMBER_ADDED, [
-				'member' => $nodeMember,
-			]
-		);
+		catch (\Exception $e)
+		{
+			throw (new CreationFailedException())->addError(
+				new Main\Error($e->getMessage())
+			);
+		}
 
 		return $nodeMember;
 	}
@@ -193,6 +208,11 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		return $nodeMemberCollection;
 	}
 
+	/**
+	 * @param \Bitrix\HumanResources\Item\NodeMember $nodeMember
+	 *
+	 * @return bool
+	 */
 	public function remove(Item\NodeMember $nodeMember): bool
 	{
 		try
@@ -261,6 +281,8 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 				->addOrder('ID')
 				->setOffset($offset)
 				->setLimit($limit)
+				->setCacheTtl(self::CACHE_TTL)
+				->cacheJoins(true)
 		;
 
 		if ($withAllChildNodes)
@@ -428,14 +450,20 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 			return $member;
 		}
 
+		$updatedFields = [];
+
 		if (isset($member->role))
 		{
+			$updatedFields[] = 'role';
+
 			Model\NodeMemberRoleTable::deleteList(['=MEMBER_ID' => $member->id]);
 			$this->insertNodeMemberRole($member, CurrentUser::get()->getId());
 		}
 
 		if (isset($member->active))
 		{
+			$updatedFields[] = 'active';
+
 			$nodeMemberEntity->setActive($member->active);
 		}
 
@@ -455,11 +483,22 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 					->addError(new Main\Error('Member already belongs to this node'))
 				;
 			}
+			$updatedFields[] = 'nodeId';
 
 			$nodeMemberEntity->setNodeId($member->nodeId);
 		}
 
-		$nodeMemberEntity->save();
+		$result = $nodeMemberEntity->save();
+
+		if ($result->isSuccess() && $updatedFields)
+		{
+			$this->eventSenderService->send(
+				EventName::MEMBER_UPDATED, [
+					'member' => $member,
+					'fields' => $updatedFields,
+				]
+			);
+		}
 
 		return $member;
 	}
@@ -520,25 +559,20 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		MemberEntityType $entityType,
 		bool $withAllChildNodes = false,
 		int $limit = 100,
-		int $offset = 0
+		int $offset = 0,
 	): Item\Collection\NodeMemberCollection
 	{
 		$nodeMemberQuery = $this->getBaseQuery(
 			$nodeId,
 			$withAllChildNodes,
 			$limit,
-			$offset
+			$offset,
 		);
 
 		$nodeMemberQuery->where('ENTITY_TYPE', $entityType->name);
 
 		$nodeMemberCollection = new Item\Collection\NodeMemberCollection();
-
 		$this->calculateCount($nodeMemberQuery, $nodeMemberCollection);
-		$nodeMemberQuery
-			->setCacheTtl(3600)
-			->cacheJoins(true)
-		;
 
 		$nodeMemberEntities = $nodeMemberQuery->fetchCollection();
 		foreach ($nodeMemberEntities as $nodeMember)
@@ -562,16 +596,23 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		}
 
 		$countQuery = clone $nodeMemberQuery;
-		$count = $countQuery->setSelect(['CNT'])
-			->registerRuntimeField('', new ExpressionField('CNT', 'COUNT(*)'))
-			->setLimit(null)
-			->setOffset(null)
-			->setOrder(['CNT' => 'DESC'])
-			->exec()
-			->fetch()['CNT']
-		;
+		try
+		{
+			$count = $countQuery->setSelect(['CNT'])
+				->registerRuntimeField('', new ExpressionField('CNT', 'COUNT(*)'))
+				->setLimit(null)
+				->setOffset(null)
+				->setOrder(['CNT' => 'DESC'])
+				->exec()
+				->fetch()['CNT']
+			;
+			self::$queryTotalCount['usersCount'] = (int)$count;
+		}
+		catch (\Exception)
+		{
+			self::$queryTotalCount['usersCount'] = 0;
+		}
 
-		self::$queryTotalCount['usersCount'] = (int)$count;
 		$nodeMemberCollection->setTotalCount(self::$queryTotalCount['usersCount']);
 	}
 
@@ -600,7 +641,7 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 SELECT DISTINCT nm.ENTITY_ID as USER
 FROM $nodeMemberTableName nm
 INNER JOIN (
-    select distinct n.ID
+	select distinct n.ID
 	from $nodeTableName n
 		INNER JOIN $nodePathTableName np ON np.CHILD_ID = n.ID
 		INNER JOIN $nodeRelationTableName nr ON (
@@ -669,13 +710,17 @@ SQL;
 			Model\NodeMemberTable::query()
 				->setSelect(['CNT', 'NODE_ID'])
 				->registerRuntimeField(
-					 '',
-					 new ExpressionField(
-					     'CNT',
-					     'COUNT(*)'
-					 )
+					'',
+					new ExpressionField(
+						'CNT',
+						'COUNT(*)',
+					),
 				)
+				->where('NODE.STRUCTURE_ID', $structure->id)
+				->where('ACTIVE', 'Y')
 				->setGroup('NODE_ID')
+				->setCacheTtl(self::CACHE_TTL)
+				->cacheJoins(true)
 		;
 
 		$nodeMemberCount = $countQuery->fetchAll();
@@ -687,6 +732,51 @@ SQL;
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Counts all members by the given node ID.
+	 * This method takes a node ID as a parameter and returns the total count of members associated with that node.
+	 *
+	 * @param int $nodeId
+	 *
+	 * @return int The total count of members associated with the given node ID.
+	 */
+	public function countAllByByNodeId(int $nodeId): int
+	{
+		static $count = [];
+
+		if (isset($count[$nodeId]))
+		{
+			return $count[$nodeId];
+		}
+
+		try
+		{
+			$countQuery =
+				Model\NodeMemberTable::query()
+					->setSelect(['CNT'])
+					->registerRuntimeField(
+						'',
+						new ExpressionField(
+							'CNT',
+							'COUNT(*)',
+						),
+					)
+					->where('NODE_ID', $nodeId)
+					->where('ACTIVE', 'Y')
+					->setCacheTtl(self::CACHE_TTL)
+			;
+			$result = $countQuery->fetch();
+		}
+		catch (\Exception $e)
+		{
+			return 0;
+		}
+
+		$count[$nodeId] = $result['CNT'] ?? 0;
+
+		return $count[$nodeId];
 	}
 
 	/**
@@ -707,7 +797,8 @@ SQL;
 		}
 
 		$node = Container::getNodeRepository()
-				 ->getById($nodeMember->nodeId);
+			->getById($nodeMember->nodeId)
+		;
 
 		if (!$node)
 		{

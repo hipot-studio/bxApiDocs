@@ -202,11 +202,11 @@ final class MailboxConnector
 		switch ($serviceName)
 		{
 			case 'gmail':
-				return Main\Config\Option::get('mail', '~disable_gmail_oauth_smtp') === 'N';
+				return Main\Config\Option::get('mail', '~disable_gmail_oauth_smtp') !== 'Y';
 			case 'yandex':
 				return Main\Config\Option::get('mail', '~disable_yandex_oauth_smtp') !== 'Y';
 			case 'mail.ru':
-				return Main\Config\Option::get('mail', '~disable_mailru_oauth_smtp') === 'N';
+				return Main\Config\Option::get('mail', '~disable_mailru_oauth_smtp') !== 'Y';
 			case 'office365':
 			case 'outlook.com':
 			case 'exchangeOnline':

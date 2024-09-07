@@ -8,18 +8,21 @@ use Bitrix\HumanResources\Contract\ItemCollection;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 
 /**
- * @implements ItemCollection<int, V>
- * @template V
+ * @psalm-consistent-constructor
+ * @psalm-consistent-templates
+ * @implements ItemCollection<int|string, V>
+ * @template V of Item
  */
 abstract class BaseCollection implements ItemCollection
 {
 	/** @var array<int|string, V> */
 	protected array $itemMap = [];
+	/** @var array<class-string<self>, class-string<Item>> */
 	private static array $reflectionMap = [];
 	protected int $totalCount = 0;
 
 	/**
-	 * @param \Bitrix\HumanResources\Contract\Item|null ...$items
+	 * @param \Bitrix\HumanResources\Contract\Item ...$items
 	 *
 	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
 	 */
@@ -51,7 +54,7 @@ abstract class BaseCollection implements ItemCollection
 	/**
 	 * @param \Bitrix\HumanResources\Contract\Item $item
 	 *
-	 * @return \Bitrix\HumanResources\Item\Collection\BaseCollection
+	 * @return static
 	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
 	 */
 	public function add(Item $item): static

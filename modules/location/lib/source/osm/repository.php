@@ -5,7 +5,7 @@ namespace Bitrix\Location\Source\Osm;
 use Bitrix\Location\Entity\Location;
 use Bitrix\Location\Geometry\Converter\Manager;
 use Bitrix\Location\Geometry\Type\Point;
-use Bitrix\Location\Infrastructure\Service\DisputedAreaService;
+use Bitrix\Location\Infrastructure\Service\CustomFieldsService;
 use Bitrix\Location\Repository\Location\Capability\IFindByCoords;
 use Bitrix\Location\Repository\Location\Capability\IFindByExternalId;
 use Bitrix\Location\Repository\Location\Capability\ISupportAutocomplete;
@@ -82,10 +82,10 @@ final class Repository extends BaseRepository implements
 
 			if ($centroid instanceof Point)
 			{
-				$disputedScenario = DisputedAreaService::getInstance()->getDisputeByPoint($centroid);
-				if ($disputedScenario)
+				$customFieldsScenario = CustomFieldsService::getInstance()->getCustomFieldsByPoint($centroid);
+				if ($customFieldsScenario)
 				{
-					$disputedScenario->adjustLocation($location);
+					$customFieldsScenario->adjustLocation($location);
 				}
 			}
 		}
@@ -168,12 +168,12 @@ final class Repository extends BaseRepository implements
 					continue;
 				}
 
-				$disputeScenario = DisputedAreaService::getInstance()->getDisputeByPoint($geometry);
-				if (!$disputeScenario)
+				$customFieldsScenario = CustomFieldsService::getInstance()->getCustomFieldsByPoint($geometry);
+				if (!$customFieldsScenario)
 				{
 					continue;
 				}
-				$disputeScenario->adjustAutocompleteItem($result['features'][$key]['properties']);
+				$customFieldsScenario->adjustAutocompleteItem($result['features'][$key]['properties']);
 			}
 		}
 

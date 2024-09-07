@@ -2,7 +2,9 @@
 
 namespace Bitrix\HumanResources\Compatibility\Event;
 
+use Bitrix\HumanResources\Compatibility\Adapter\StructureBackwardAdapter;
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
+use Bitrix\HumanResources\Compatibility\Utils\OldStructureUtils;
 use Bitrix\HumanResources\Enum\EventName;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\MemberEntityType;
@@ -16,8 +18,9 @@ use Bitrix\Main\SystemException;
 class NewToOldEventHandler
 {
 	private const MODULE_NAME = 'humanresources-';
+
 	/**
-	 * @param Event $event
+	 * @param \Bitrix\Main\Event $event
 	 *
 	 * @return void
 	 */
@@ -36,7 +39,6 @@ class NewToOldEventHandler
 		}
 
 		$companyStructureConverter = Container::getStructureBackwardConverter();
-		\CIntranetRestService::setCheckAccess(false);
 
 		Container::getEventSenderService()->removeEventHandlers('iblock', 'OnBeforeIBlockSectionDelete');
 		Container::getEventSenderService()->removeEventHandlers('iblock', 'OnAfterIBlockSectionAdd');
@@ -46,6 +48,9 @@ class NewToOldEventHandler
 			{
 				return;
 			}
+
+			StructureBackwardAdapter::clearCache();
+
 			$parent =
 				$node->parentId
 				? Container::getNodeRepository()
@@ -54,9 +59,11 @@ class NewToOldEventHandler
 
 			$parentId = DepartmentBackwardAccessCode::extractIdFromCode($parent?->accessCode);
 
-			$newDepartmentId = \CIntranetRestService::departmentAdd([
+			$newDepartmentId = OldStructureUtils::addDepartment([
 				'NAME' => $node->name,
 				'PARENT' => $parentId,
+				'SORT' => $node->sort,
+				'ACTIVE' => $node->active,
 			]);
 
 			$companyStructureConverter->createBackwardAccessCode($node, $newDepartmentId);
@@ -72,10 +79,6 @@ class NewToOldEventHandler
 				'message' => 'onNodeAdded: Failed to update Node',
 				'userId' => CurrentUser::get()->getId(),
 			]);
-		}
-		finally
-		{
-			\CIntranetRestService::setCheckAccess(true);
 		}
 	}
 
@@ -98,12 +101,11 @@ class NewToOldEventHandler
 			return;
 		}
 
-		\CIntranetRestService::setCheckAccess(false);
 		try
 		{
 			$companyStructureConverter = Container::getStructureBackwardConverter();
 
-			if ($companyStructureConverter->getCompanyStructureId() !== $node->structureId || !$node->xmlId)
+			if ($companyStructureConverter->getCompanyStructureId() !== $node->structureId)
 			{
 				return;
 			}
@@ -112,8 +114,16 @@ class NewToOldEventHandler
 				->removeEventHandlers('iblock', 'OnBeforeIBlockSectionDelete')
 			;
 
-			\CIntranetRestService::departmentDelete([
-				'ID' => str_replace('D', '', $node->accessCode),
+			$id = DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode);
+			if (!$id)
+			{
+				return;
+			}
+
+			StructureBackwardAdapter::clearCache();
+
+			OldStructureUtils::deleteDepartment([
+				'ID' => $id,
 			]);
 		}
 		catch (\Exception)
@@ -124,10 +134,6 @@ class NewToOldEventHandler
 				'message' => 'onNodeDeleted: Failed to delete Node',
 				'userId' => CurrentUser::get()->getId(),
 			]);
-		}
-		finally
-		{
-			\CIntranetRestService::setCheckAccess(true);
 		}
 	}
 
@@ -155,7 +161,7 @@ class NewToOldEventHandler
 			return;
 		}
 
-		if (!array_intersect(['name', 'parentId',], array_keys($fields)))
+		if (!array_intersect(['name', 'parentId', 'active', 'sort'], array_keys($fields)))
 		{
 			return;
 		}
@@ -166,6 +172,8 @@ class NewToOldEventHandler
 		{
 			return;
 		}
+
+		StructureBackwardAdapter::clearCache();
 
 		$parent = $node->parentId ? Container::getNodeRepository()
 			->getById($node->parentId) : null;
@@ -182,25 +190,25 @@ class NewToOldEventHandler
 			->removeEventHandlers('iblock', 'OnBeforeIBlockSectionUpdate')
 		;
 
-		\CIntranetRestService::setCheckAccess(false);
 		try
 		{
-			\CIntranetRestService::departmentUpdate([
+			OldStructureUtils::updateDepartment([
 				'ID' => $nodeId,
 				'NAME' => $node->name,
 				'PARENT' => $parentId,
+				'ACTIVE' => $node->active === true ? 'Y' : 'N',
+				'SORT' => $node->sort,
 			]);
 		}
 		catch (\Exception)
 		{
 		}
-		\CIntranetRestService::setCheckAccess(true);
 	}
 
 	/**
-	 * @param Event $event
 	 *
-	 * @return void
+	 * @param \Bitrix\Main\Event $event
+	 *
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
@@ -224,6 +232,8 @@ class NewToOldEventHandler
 		{
 			return;
 		}
+
+		StructureBackwardAdapter::clearCache();
 
 		$nodes = Container::getNodeRepository()
 			->findAllByUserId($member->entityId);
@@ -253,20 +263,16 @@ class NewToOldEventHandler
 		if ($member->role === Container::getRoleHelperService()->getHeadRoleId())
 		{
 			$node = Container::getNodeRepository()->getById($member->nodeId);
-			\CIntranetRestService::setCheckAccess(false);
 			try
 			{
-				\CIntranetRestService::departmentUpdate(
-					[
-						'ID' => DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode),
-						'UF_HEAD' => $member->entityId,
-					]
-				);
+				OldStructureUtils::updateDepartment([
+					'ID' => DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode),
+					'UF_HEAD' => $member->entityId,
+				]);
 			}
 			catch (\Exception)
 			{
 			}
-			\CIntranetRestService::setCheckAccess(true);
 		}
 
 		Container::getSemaphoreService()->unlock($onAfterUserUpdateEvent);
@@ -276,7 +282,7 @@ class NewToOldEventHandler
 	{
 		if (
 			Container::getSemaphoreService()
-					 ->isLocked(self::MODULE_NAME . EventName::MEMBER_DELETED->name)
+				->isLocked(self::MODULE_NAME . EventName::MEMBER_DELETED->name)
 		)
 		{
 			return;
@@ -294,6 +300,8 @@ class NewToOldEventHandler
 		{
 			return;
 		}
+
+		StructureBackwardAdapter::clearCache();
 
 		$onAfterUserDeleteEvent = 'main-OnAfterUserDelete';
 		Container::getSemaphoreService()->lock($onAfterUserDeleteEvent);
@@ -319,15 +327,10 @@ class NewToOldEventHandler
 			return;
 		}
 
-		\CIntranetRestService::setCheckAccess(false);
 		$departmentId = DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode);
-		$memberDepartment = \CIntranetRestService::departmentGet(
-			[
-				'ID' => $departmentId,
-			],
-		)[0] ?? null;
+		$memberDepartment = OldStructureUtils::getOldDepartmentById($departmentId ?? 0) ?? null;
 
-		if (!$memberDepartment || $memberDepartment['UF_HEAD'] !== $member->entityId)
+		if (!$memberDepartment || (int)$memberDepartment['UF_HEAD'] !== $member->entityId)
 		{
 			Container::getSemaphoreService()->unlock($onAfterUserDeleteEvent);
 
@@ -336,18 +339,15 @@ class NewToOldEventHandler
 
 		try
 		{
-			\CIntranetRestService::departmentUpdate(
-				[
-					'ID' => $departmentId,
-					'UF_HEAD' => null,
-				],
-			);
+			OldStructureUtils::updateDepartment([
+				'ID' => $departmentId,
+				'UF_HEAD' => null,
+			]);
 		}
 		catch (\Exception)
 		{
 		}
 
-		\CIntranetRestService::setCheckAccess(true);
 		Container::getSemaphoreService()->unlock($onAfterUserDeleteEvent);
 	}
 }

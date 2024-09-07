@@ -12,7 +12,6 @@ interface NodeMemberRepository
 	/**
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\SystemException
-	 * @throws \Bitrix\Main\DB\SqlQueryException
 	 * @throws \Bitrix\HumanResources\Exception\CreationFailedException
 	 */
 	public function create(Item\NodeMember $nodeMember): Item\NodeMember;
@@ -94,4 +93,14 @@ interface NodeMemberRepository
 	): ?Item\NodeMember;
 
 	public function countAllByStructureAndGroupByNode(Item\Structure $structure): array;
+
+	/**
+	 * Counts all members by the given node ID.
+	 * This method takes a node ID as a parameter and returns the total count of members associated with that node.
+	 *
+	 * @param int $nodeId
+	 *
+	 * @return int The total count of members associated with the given node ID.
+	 */
+	public function countAllByByNodeId(int $nodeId): int;
 }

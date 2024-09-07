@@ -2,6 +2,7 @@
 
 namespace Bitrix\HumanResources\Contract\Service;
 
+use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Exception\DeleteFailedException;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
@@ -29,7 +30,7 @@ interface NodeService
 	 * @throws \Bitrix\Main\SystemException
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	public function insertNode(Node $node): Node;
+	public function insertNode(Node $node, bool $move = true): Node;
 
 	/**
 	 * @param \Bitrix\HumanResources\Item\Node $node
@@ -45,8 +46,8 @@ interface NodeService
 	 * @return \Bitrix\HumanResources\Item\Node
 	 */
 	public function moveNode(Node $node, ?Node $targetNode): Node;
-	public function getNodesByUserId(int $userId): NodeCollection;
-	public function getNodesByUserIdAndUserRoleId(int $userId, int $roleId): NodeCollection;
+	public function getNodesByUserId(int $userId, NodeActiveFilter $activeFilter = NodeActiveFilter::ALL): NodeCollection;
+	public function getNodesByUserIdAndUserRoleId(int $userId, int $roleId, NodeActiveFilter $activeFilter = NodeActiveFilter::ALL): NodeCollection;
 	public function getNodeChildNodes(int $nodeId): NodeCollection;
 	public function getNodeChildNodesByAccessCode(string $accessCode): NodeCollection;
 

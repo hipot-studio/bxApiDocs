@@ -20,5 +20,8 @@ class Node implements Item
 		public ?DateTime $createdAt = null,
 		public ?DateTime $updatedAt = null,
 		public ?string $xmlId = null,
+		public ?bool $active = true,
+		public ?bool $globalActive = true,
+		public ?int $sort = 500,
 	) {}
 }

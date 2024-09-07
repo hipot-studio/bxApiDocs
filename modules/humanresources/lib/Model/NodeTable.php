@@ -2,11 +2,15 @@
 
 namespace Bitrix\HumanResources\Model;
 
+use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\SystemException;
 
 /**
  * Class StructureTable
@@ -77,6 +81,20 @@ class NodeTable extends ORM\Data\DataManager
 				->configureTitle('XML_ID')
 				->configureNullable()
 				->configureUnique()
+			,
+			(new ORM\Fields\BooleanField('ACTIVE'))
+				->configureTitle('ACTIVE')
+				->configureStorageValues('N', 'Y')
+				->configureDefaultValue('Y')
+			,
+			(new ORM\Fields\BooleanField('GLOBAL_ACTIVE'))
+				->configureTitle('GLOBAL_ACTIVE')
+				->configureStorageValues('N', 'Y')
+				->configureDefaultValue('Y')
+			,
+			(new ORM\Fields\IntegerField('SORT'))
+				->configureTitle('SORT')
+				->configureDefaultValue('500')
 			,
 			(new ORM\Fields\Relations\OneToMany(
 			'ACCESS_CODE',

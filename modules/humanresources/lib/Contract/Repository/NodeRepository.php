@@ -6,10 +6,12 @@ use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Exception\CreationFailedException;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
+use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
+use Bitrix\Main;
 
 interface NodeRepository
 {
@@ -42,7 +44,8 @@ interface NodeRepository
 
 	public function getChildOf(
 		Item\Node $node,
-		DepthLevel|int $depthLevel = DepthLevel::FIRST
+		DepthLevel|int $depthLevel = DepthLevel::FIRST,
+		NodeActiveFilter $activeFilter = NodeActiveFilter::ALL,
 	): Item\Collection\NodeCollection;
 
 	public function getChildOfNodeCollection(
@@ -50,7 +53,7 @@ interface NodeRepository
 		DepthLevel|int $depthLevel = DepthLevel::FIRST
 	): Item\Collection\NodeCollection;
 
-	public function findAllByUserId(int $userId): Item\Collection\NodeCollection;
+	public function findAllByUserId(int $userId, NodeActiveFilter $activeFilter = NodeActiveFilter::ALL): Item\Collection\NodeCollection;
 
 	/**
 	 * @param int $nodeId
@@ -72,7 +75,7 @@ interface NodeRepository
 	 */
 	public function getAllChildIdsByNodeId(int $nodeId): array;
 
-	public function findAllByUserIdAndRoleId(int $userId, int $roleId): Item\Collection\NodeCollection;
+	public function findAllByUserIdAndRoleId(int $userId, int $roleId, NodeActiveFilter $activeFilter = NodeActiveFilter::ALL): Item\Collection\NodeCollection;
 
 	/**
 	 * Retrieve a node by access code.
@@ -94,7 +97,7 @@ interface NodeRepository
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public function findAllByXmlId(string $xmlId): Item\Collection\NodeCollection;
+	public function findAllByXmlId(string $xmlId, NodeActiveFilter $activeFilter = NodeActiveFilter::ALL): Item\Collection\NodeCollection;
 
 	/**
 	 * Retrieves the root node by structure id.
@@ -119,8 +122,8 @@ interface NodeRepository
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function getAllByStructureId(int $structureId): Item\Collection\NodeCollection;
-	public function getAllPagedByStructureId(int $structureId, int $limit = 10, int $offset = 0): Item\Collection\NodeCollection;
+	public function getAllByStructureId(int $structureId, NodeActiveFilter $activeFilter = NodeActiveFilter::ALL): Item\Collection\NodeCollection;
+	public function getAllPagedByStructureId(int $structureId, int $limit = 10, int $offset = 0, NodeActiveFilter $activeFilter = NodeActiveFilter::ALL): Item\Collection\NodeCollection;
 
 	public function hasChild(Item\Node $node): bool;
 
@@ -153,6 +156,7 @@ interface NodeRepository
 		?string $name,
 		?int $limit = 100,
 		?int $parentId = null,
-		?DepthLevel $depth = null,
+		DepthLevel|int $depth = DepthLevel::FULL,
+		bool $strict = false,
 	): Item\Collection\NodeCollection;
 }

@@ -165,8 +165,6 @@ class Sender
 		{
 			$this->resultCode = self::RESULT_ERROR;
 
-			AddMessage2Log('Mailing without id','sender');
-
 			return;
 		}
 
@@ -258,7 +256,6 @@ class Sender
 		// posting not in right status
 		if ($this->status != PostingTable::STATUS_PART)
 		{
-			AddMessage2Log('Status does not equal Part. PostingId: ' . $this->postingId,'sender');
 			$this->resultCode = static::RESULT_ERROR;
 			$this->threadStrategy->updateStatus(PostingThreadTable::STATUS_NEW);
 			static::unlock($this->postingId, $threadId);

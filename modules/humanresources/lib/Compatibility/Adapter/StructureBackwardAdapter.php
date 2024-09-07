@@ -12,13 +12,16 @@ use Bitrix\HumanResources\Config;
 
 class StructureBackwardAdapter
 {
-	private const INTRANET_DEPARTMENT = '^(D)(\d+)$';
-	private static array $structureWithoutEmployee = [];
 	private static ?int $headRole = null;
 	private static array $nodeHeads = [];
+	private const STRUCTURE_EMPLOYEE_CACHE_KEY = 'humanresources/employee/structure/%d/%d';
+	private const STRUCTURE_CACHE_KEY = 'humanresources/structure/%d/%d';
 
-	private static array $structureCache = [];
-
+	/**
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 * @throws \Bitrix\Main\ArgumentException
+	 */
 	public static function getStructure(?int $fromIblockSectionId = null, ?int $depth = 0): array
 	{
 		if (!Config\Storage::instance()->isIntranetUtilsDisabled())
@@ -26,9 +29,14 @@ class StructureBackwardAdapter
 			return [];
 		}
 
-		if (!empty(self::$structureCache))
+		$cacheManager = self::getCacheManager();
+
+		$employeeCacheKey = sprintf(self::STRUCTURE_EMPLOYEE_CACHE_KEY, (int)$fromIblockSectionId, (int)$depth);
+		$structureCache = $cacheManager->getData($employeeCacheKey);
+
+		if ($structureCache !== null)
 		{
-			return self::$structureCache;
+			return $structureCache;
 		}
 
 		$structure = self::getStructureWithoutEmployee($fromIblockSectionId, $depth);
@@ -39,7 +47,6 @@ class StructureBackwardAdapter
 		}
 
 		$headRole = Container::getRoleRepository()->findByXmlId(NodeMember::DEFAULT_ROLE_XML_ID['HEAD'])->id;
-
 		$employees = Container::getNodeMemberService()->getAllEmployees($structure['ROOT']['ID'], true);
 
 		foreach ($employees as $employee)
@@ -61,11 +68,21 @@ class StructureBackwardAdapter
 				$structure['DATA'][$structure['COMPATIBILITY'][$employee->nodeId]]['UF_HEAD'] = $employee->entityId;
 			}
 		}
-		self::$structureCache = $structure;
+
+		$cacheManager->setData($employeeCacheKey, $structure);
 
 		return $structure;
 	}
 
+	/**
+	 * @param int|null $fromIblockSectionId
+	 * @param int|null $depth
+	 *
+	 * @return array
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
 	public static function getStructureWithoutEmployee(?int $fromIblockSectionId = null, ?int $depth = 0): array
 	{
 		if (!Config\Storage::instance()->isIntranetUtilsDisabled())
@@ -73,14 +90,19 @@ class StructureBackwardAdapter
 			return [];
 		}
 
-		if (!empty(self::$structureWithoutEmployee))
-		{
-			return self::$structureWithoutEmployee;
-		}
-
 		if (!Config\Storage::instance()->isCompanyStructureConverted(false))
 		{
 			return [];
+		}
+
+		$cacheManager = self::getCacheManager();
+		$cacheKey = sprintf(self::STRUCTURE_CACHE_KEY, (int)$fromIblockSectionId, (int)$depth);
+
+		$structureCache = $cacheManager->getData($cacheKey);
+
+		if ($structureCache !== null)
+		{
+			return $structureCache;
 		}
 
 		$nodeRepository = Container::getNodeRepository();
@@ -103,11 +125,11 @@ class StructureBackwardAdapter
 			else
 			{
 				$rootNode = $nodeRepository->getByAccessCode(
-					DepartmentBackwardAccessCode::makeById($fromIblockSectionId)
+					DepartmentBackwardAccessCode::makeById($fromIblockSectionId),
 				);
 			}
 		}
-		catch (\Exception $exception)
+		catch (\Exception)
 		{
 			return [];
 		}
@@ -139,24 +161,26 @@ class StructureBackwardAdapter
 				$parentId = DepartmentBackwardAccessCode::extractIdFromCode(
 					$parent !== null
 						? $parent->accessCode
-						: $nodeRepository->getById($child->parentId)?->accessCode
+						: $nodeRepository->getById($child->parentId)?->accessCode,
 				);
 			}
 
-			if ($parentId === null)
+			if ($parentId === null && $child->depth !== 0)
 			{
 				continue;
 			}
 
-			$parentNodes[$child->parentId] ??= $parentId;
-
 			$id = DepartmentBackwardAccessCode::extractIdFromCode($child->accessCode);
-			$structureArray['TREE'][$parentId][] = $id;
+
+			if ($id === null)
+			{
+				continue;
+			}
 
 			$structureArray['DATA'][$id] =  [
 				'ID' => $id,
 				'NAME' => $child->name,
-				'IBLOCK_SECTION_ID' => $parentId,
+				'IBLOCK_SECTION_ID' => $parentId ?? 0,
 				'UF_HEAD' => self::getHeadPersonValue($child),
 				'SECTION_PAGE_URL' => '#SITE_DIR#company/structure.php?set_filter_structure=Y&structure_UF_DEPARTMENT=#ID#',
 				'DEPTH_LEVEL' => $child->depth + 1,
@@ -166,27 +190,18 @@ class StructureBackwardAdapter
 
 			$structureArray['COMPATIBILITY'][$child->id] = $id;
 
-		}
-
-		self::$structureWithoutEmployee = $structureArray;
-		return self::$structureWithoutEmployee;
-	}
-
-	public static function extractId(?string $accessCode): ?int
-	{
-		if (!$accessCode)
-		{
-			return null;
-		}
-
-		if (preg_match('/'. self::INTRANET_DEPARTMENT .'/', $accessCode, $matches))
-		{
-			if (array_key_exists('2', $matches))
+			$structureArray['TREE'][$parentId ?? 0][] = $id;
+			if ($parentId === null)
 			{
-				return (int) $matches[2];
+				continue;
 			}
+
+			$parentNodes[$child->parentId] ??= $parentId;
 		}
-		return null;
+
+		$cacheManager->setData($cacheKey, $structureArray);
+
+		return $structureArray;
 	}
 
 	private static function getHeadPersonValue(Node $node): ?int
@@ -216,5 +231,27 @@ class StructureBackwardAdapter
 		}
 
 		return static::$nodeHeads[$node->id] ?? null;
+	}
+
+	/**
+	 * @return \Bitrix\HumanResources\Contract\Util\CacheManager
+	 */
+	private static function getCacheManager(): \Bitrix\HumanResources\Contract\Util\CacheManager
+	{
+		return Container::getCacheManager()
+			->setTtl(86400)
+			->setDir('structure')
+		;
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function clearCache(): void
+	{
+		self::$nodeHeads = [];
+		self::$headRole = null;
+
+		self::getCacheManager()->cleanDir();
 	}
 }

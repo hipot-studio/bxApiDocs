@@ -150,13 +150,15 @@ class CatalogElementComponent extends Element
 			// pack value and protocol version
 			$rcmLogCookieName = Main\Config\Option::get('main', 'cookie_name', 'BITRIX_SM') . '_' . Main\Analytics\Catalog::getCookieLogName();
 
-			$this->arResult['counterData'] = array(
-				'item' => base64_encode(json_encode($counterData)),
-				'user_id' => new Main\Text\JsExpression(
-					'function(){return BX.message("USER_ID") ? BX.message("USER_ID") : 0;}'
-				),
-				'recommendation' => new Main\Text\JsExpression(
-					'function() {
+			if (Main\Analytics\Catalog::isOn())
+			{
+				$this->arResult['counterData'] = array(
+					'item' => base64_encode(json_encode($counterData)),
+					'user_id' => new Main\Text\JsExpression(
+						'function(){return BX.message("USER_ID") ? BX.message("USER_ID") : 0;}'
+					),
+					'recommendation' => new Main\Text\JsExpression(
+						'function() {
 							var rcmId = "";
 							var cookieValue = BX.getCookie("' . $rcmLogCookieName . '");
 							var productId = ' . $element["ID"] . ';
@@ -181,10 +183,12 @@ class CatalogElementComponent extends Element
 
 							return rcmId;
 						}'
-				),
-				'v' => '2'
-			);
-			$resultCacheKeys[] = 'counterData';
+					),
+					'v' => '2'
+				);
+
+				$resultCacheKeys[] = 'counterData';
+			}
 
 			if ($this->arParams['SET_VIEWED_IN_COMPONENT'] === 'Y')
 			{
