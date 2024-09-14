@@ -234,7 +234,14 @@ final class MimeType
 	{
 		return self::$mimes;
 	}
-	
+
+	public static function getExtensionByMimeType(string $mimeType): ?string
+	{
+		$extension = array_search($mimeType, self::$mimes, true);
+
+		return $extension ?: null;
+	}
+
 	public static function getByFileExtension($extension)
 	{
 		$extension = strtolower($extension);

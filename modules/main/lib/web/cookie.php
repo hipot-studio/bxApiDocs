@@ -36,12 +36,13 @@ class Cookie extends Http\Cookie
 
 		if ($cookiePrefix === null)
 		{
-			$cookiePrefix = Config\Option::get("main", "cookie_name", "BITRIX_SM")."_";
+			$cookiePrefix = Config\Option::get("main", "cookie_name", "BITRIX_SM") . "_";
 		}
 		if (!str_starts_with($name, $cookiePrefix))
 		{
 			$name = $cookiePrefix . $name;
 		}
+
 		return $name;
 	}
 
@@ -75,6 +76,7 @@ class Cookie extends Http\Cookie
 	public function setSpread($spread)
 	{
 		$this->spread = $spread;
+
 		return $this;
 	}
 
@@ -109,9 +111,10 @@ class Cookie extends Http\Cookie
 
 		while ($record = $recordset->fetch())
 		{
-			if (strcasecmp(mb_substr('.'.$httpHost, -(mb_strlen($record['DOMAIN']) + 1)), ".".$record['DOMAIN']) == 0)
+			if (strcasecmp(mb_substr('.' . $httpHost, -(mb_strlen($record['DOMAIN']) + 1)), "." . $record['DOMAIN']) == 0)
 			{
 				$domain = $record['DOMAIN'];
+
 				return $domain;
 			}
 		}

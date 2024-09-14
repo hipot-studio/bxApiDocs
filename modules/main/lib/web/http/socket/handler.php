@@ -76,6 +76,7 @@ class Handler extends Http\Handler
 					}
 
 					$this->state = self::CONNECTED;
+
 					break;
 
 				case self::CONNECTED:
@@ -112,6 +113,7 @@ class Handler extends Http\Handler
 
 						$this->state = self::HEADERS_SENT;
 					}
+
 					break;
 
 				case self::CONNECT_SENT:
@@ -133,6 +135,7 @@ class Handler extends Http\Handler
 							throw new Http\NetworkException($request, 'Error receiving the CONNECT response from the proxy: ' . $headers->getStatus() . ' ' . $headers->getReasonPhrase());
 						}
 					}
+
 					break;
 
 				case self::HEADERS_SENT:
@@ -142,6 +145,7 @@ class Handler extends Http\Handler
 						// sent all the body
 						$this->state = self::BODY_SENT;
 					}
+
 					break;
 
 				case self::BODY_SENT:
@@ -175,6 +179,7 @@ class Handler extends Http\Handler
 							$this->state = self::BODY_RECEIVED;
 						}
 					}
+
 					break;
 
 				case self::HEADERS_RECEIVED:
@@ -197,6 +202,7 @@ class Handler extends Http\Handler
 
 						$this->state = self::BODY_RECEIVED;
 					}
+
 					break;
 			}
 		}
@@ -434,7 +440,7 @@ class Handler extends Http\Handler
 				'streamTimeout' => $options['streamTimeout'] ?? null,
 				'contextOptions' => $contextOptions,
 				'async' => $options['async'] ?? null,
-			]
+			],
 		);
 
 		return $socket;

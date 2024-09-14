@@ -174,6 +174,7 @@ class Handler extends Http\Handler
 		{
 			$this->responseHeaders .= $data;
 		}
+
 		return strlen($data);
 	}
 

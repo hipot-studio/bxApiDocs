@@ -29,20 +29,22 @@ class PortalSettings
 		{
 			$this->siteId = $siteId;
 		}
-		else if (
+		elseif (
 			defined('SITE_ID')
 			&& Main\Config\Option::get('main', '~wizard_id', null, SITE_ID) === 'portal'
 		)
 		{
 			$this->siteId = SITE_ID;
 		}
+
 		$this->init();
 	}
 
 	protected function init()
 	{
 		$this->siteTitle = Main\Config\Option::get('bitrix24', 'site_title', null, $this->siteId) ??
-			Main\Config\Option::get('bitrix24', 'site_title', null) ?? $this->getTitleByDefault();
+			Main\Config\Option::get('bitrix24', 'site_title', null) ??
+			$this->getTitleByDefault();
 
 		// bitrix24 as module id here is for the migrated CPs
 		if (Main\Config\Option::get('bitrix24', 'logo24show', 'Y', $this->siteId) === 'N')
@@ -62,6 +64,7 @@ class PortalSettings
 		if (!isset($this->siteName))
 		{
 			$siteName = Main\Config\Option::get('main', 'site_name', '', $this->siteId);
+
 			if ($siteName === '')
 			{
 				$siteName = Main\Config\Option::get('main', 'site_name');
@@ -135,7 +138,7 @@ class PortalSettings
 
 	protected function getTitleByDefault(): string
 	{
-		return Main\Context::getCurrent()->getServer()->getServerName();
+		return !empty($this->getName()) ? $this->getName() : Main\Context::getCurrent()->getServer()->getServerName();
 	}
 
 	public function canCurrentUserEditTitle(): bool
@@ -181,6 +184,7 @@ class PortalSettings
 		$this->removeLogo();
 		$this->siteLogoId = $logo;
 		Main\Config\Option::set('bitrix24', 'client_logo', $this->siteLogoId, $this->siteId);
+
 		if (!empty($logo2x))
 		{
 			$this->siteLogoIdForRetina = (int) $logo2x;
@@ -233,7 +237,7 @@ class PortalSettings
 		{
 			$this->settingsPath = '/configs/';
 
-			if(!File::isFileExists($_SERVER['DOCUMENT_ROOT'] . $this->settingsPath . '/index.php'))
+			if (!File::isFileExists($_SERVER['DOCUMENT_ROOT'] . $this->settingsPath . '/index.php'))
 			{
 				$this->settingsPath = '/settings/configs/';
 			}

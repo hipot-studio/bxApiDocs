@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Main\Web\DOM;
 
 class Document extends Node
@@ -66,10 +67,8 @@ class Document extends Node
 
 			return $result;
 		}
-		else
-		{
-			return $node->getOuterHTML();
-		}
+		
+		return $node->getOuterHTML();
 	}
 
 	/*
@@ -151,7 +150,7 @@ class Document extends Node
 	 */
 	public function createElement($tagName)
 	{
-		static $classByTag = array();
+		static $classByTag = [];
 
 		$tagName = mb_strtoupper($tagName);
 		$elementClass = "Bitrix\\Main\\Web\\DOM\\Element\\" . $tagName;
@@ -179,6 +178,7 @@ class Document extends Node
 		}
 
 		$node->setOwnerDocument($this);
+
 		return $node;
 	}
 
@@ -191,6 +191,7 @@ class Document extends Node
 	{
 		$node = new Attr($name, $value);
 		$node->setOwnerDocument($this);
+
 		return $node;
 	}
 
@@ -202,6 +203,7 @@ class Document extends Node
 	{
 		$node = new Comment($comment);
 		$node->setOwnerDocument($this);
+
 		return $node;
 	}
 
@@ -213,6 +215,7 @@ class Document extends Node
 	{
 		$node = new Text($text);
 		$node->setOwnerDocument($this);
+
 		return $node;
 	}
 
@@ -230,6 +233,7 @@ class Document extends Node
 	public function getElementById($id)
 	{
 		$resultList = $this->getElementsByAttr('id', $id, 1);
+
 		return (!empty($resultList)) ? current($resultList) : null;
 	}
 
@@ -239,6 +243,7 @@ class Document extends Node
 	public function getElementByClassName($className)
 	{
 		$resultList = $this->getElementsByClassName($className, 1);
+
 		return (!empty($resultList)) ? current($resultList) : null;
 	}
 
@@ -262,28 +267,26 @@ class Document extends Node
 	{
 		$attrName = mb_strtolower($attrName);
 		$nodeList = $this->getQueryEngine()->walk(
-			array(
-				array(
-					QueryEngine::FILTER_ATTR_VALUE => array(
-						array(
+			[
+				[
+					QueryEngine::FILTER_ATTR_VALUE => [
+						[
 							'name' => $attrName,
 							'value' => $attrValue,
 							'operation' => QueryEngine::FILTER_OPERATION_EQUAL,
-						)
-					)
-				)
-			),
-			null, $this, $limit
+						],
+					],
+				],
+			],
+			null, $this, $limit,
 		);
 
 		if(Node::$isNodeListAsArray)
 		{
 			return $nodeList;
 		}
-		else
-		{
-			return new NodeList($nodeList);
-		}
+		
+		return new NodeList($nodeList);
 	}
 
 	/*
@@ -293,20 +296,18 @@ class Document extends Node
 	{
 		$tagName = mb_strtoupper($tagName);
 		$nodeList = $this->getQueryEngine()->walk(
-			array(
-				array(QueryEngine::FILTER_NODE_NAME => $tagName)
-			),
-			null, $this
+			[
+				[QueryEngine::FILTER_NODE_NAME => $tagName],
+			],
+			null, $this,
 		);
 
 		if(Node::$isNodeListAsArray)
 		{
 			return $nodeList;
 		}
-		else
-		{
-			return new NodeList($nodeList);
-		}
+		
+		return new NodeList($nodeList);
 	}
 
 	/*
@@ -315,20 +316,18 @@ class Document extends Node
 	public function getElementsByClassName($className, $limit = 0)
 	{
 		$nodeList = $this->getQueryEngine()->walk(
-			array(
-				array(QueryEngine::FILTER_ATTR_CLASS_NAME => $className)
-			),
-			null, $this, $limit
+			[
+				[QueryEngine::FILTER_ATTR_CLASS_NAME => $className],
+			],
+			null, $this, $limit,
 		);
 
 		if(Node::$isNodeListAsArray)
 		{
 			return $nodeList;
 		}
-		else
-		{
-			return new NodeList($nodeList);
-		}
+
+		return new NodeList($nodeList);
 	}
 
 	/*

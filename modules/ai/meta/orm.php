@@ -1,13 +1,13 @@
 <?php
 
-/* ORMENTITYANNOTATION:Bitrix\AI\Model\PromptTable:ai/lib/Model/Prompt.php */
+/* ORMENTITYANNOTATION:Bitrix\AI\Model\PromptTable:ai/lib/model/prompttable.php */
 namespace Bitrix\AI\Model {
 	/**
 	 * Prompt
 	 * @see \Bitrix\AI\Model\PromptTable
 	 *
 	 * Custom methods:
-	 * ---------------
+	 * ----------------
 	 *
 	 * @method \int getId()
 	 * @method \Bitrix\AI\Entity\Prompt setId(\int|\Bitrix\Main\DB\SqlExpression $id)
@@ -313,7 +313,7 @@ namespace Bitrix\AI\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method EO_Prompt_Collection merge(?EO_Prompt_Collection $collection)
+	 * @method \Bitrix\AI\Model\EO_Prompt_Collection merge(?\Bitrix\AI\Model\EO_Prompt_Collection $collection)
 	 * @method bool isEmpty()
 	 */
 	class EO_Prompt_Collection implements \ArrayAccess, \Iterator, \Countable {
@@ -348,7 +348,7 @@ namespace Bitrix\AI\Model {
 	 */
 	class EO_Prompt_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\AI\Model\RoleTable:ai/lib/Model/Role.php */
+/* ORMENTITYANNOTATION:Bitrix\AI\Model\RoleTable:ai/lib/model/roletable.php */
 namespace Bitrix\AI\Model {
 	/**
 	 * Role
@@ -433,16 +433,16 @@ namespace Bitrix\AI\Model {
 	 * @method void removeAllPrompts()
 	 * @method \Bitrix\AI\Entity\Role resetPrompts()
 	 * @method \Bitrix\AI\Entity\Role unsetPrompts()
-	 * @method \string getAvatar()
-	 * @method \Bitrix\AI\Entity\Role setAvatar(\string|\Bitrix\Main\DB\SqlExpression $avatar)
+	 * @method array getAvatar()
+	 * @method \Bitrix\AI\Entity\Role setAvatar(array|\Bitrix\Main\DB\SqlExpression $avatar)
 	 * @method bool hasAvatar()
 	 * @method bool isAvatarFilled()
 	 * @method bool isAvatarChanged()
-	 * @method \string remindActualAvatar()
-	 * @method \string requireAvatar()
+	 * @method array remindActualAvatar()
+	 * @method array requireAvatar()
 	 * @method \Bitrix\AI\Entity\Role resetAvatar()
 	 * @method \Bitrix\AI\Entity\Role unsetAvatar()
-	 * @method \string fillAvatar()
+	 * @method array fillAvatar()
 	 * @method \boolean getIsNew()
 	 * @method \Bitrix\AI\Entity\Role setIsNew(\boolean|\Bitrix\Main\DB\SqlExpression $isNew)
 	 * @method bool hasIsNew()
@@ -542,8 +542,8 @@ namespace Bitrix\AI\Model {
 	 * @method \Bitrix\AI\Model\EO_Prompt_Collection[] getPromptsList()
 	 * @method \Bitrix\AI\Model\EO_Prompt_Collection getPromptsCollection()
 	 * @method \Bitrix\AI\Model\EO_Prompt_Collection fillPrompts()
-	 * @method \string[] getAvatarList()
-	 * @method \string[] fillAvatar()
+	 * @method array[] getAvatarList()
+	 * @method array[] fillAvatar()
 	 * @method \boolean[] getIsNewList()
 	 * @method \boolean[] fillIsNew()
 	 * @method \boolean[] getIsRecommendedList()
@@ -577,7 +577,7 @@ namespace Bitrix\AI\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method EO_Role_Collection merge(?EO_Role_Collection $collection)
+	 * @method \Bitrix\AI\Model\EO_Role_Collection merge(?\Bitrix\AI\Model\EO_Role_Collection $collection)
 	 * @method bool isEmpty()
 	 */
 	class EO_Role_Collection implements \ArrayAccess, \Iterator, \Countable {
@@ -612,7 +612,7 @@ namespace Bitrix\AI\Model {
 	 */
 	class EO_Role_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\AI\Model\RoleIndustryTable:ai/lib/Model/RoleIndustry.php */
+/* ORMENTITYANNOTATION:Bitrix\AI\Model\RoleIndustryTable:ai/lib/model/roleindustrytable.php */
 namespace Bitrix\AI\Model {
 	/**
 	 * RoleIndustry
@@ -667,6 +667,16 @@ namespace Bitrix\AI\Model {
 	 * @method void removeAllRoles()
 	 * @method \Bitrix\AI\Entity\RoleIndustry resetRoles()
 	 * @method \Bitrix\AI\Entity\RoleIndustry unsetRoles()
+	 * @method \boolean getIsNew()
+	 * @method \Bitrix\AI\Entity\RoleIndustry setIsNew(\boolean|\Bitrix\Main\DB\SqlExpression $isNew)
+	 * @method bool hasIsNew()
+	 * @method bool isIsNewFilled()
+	 * @method bool isIsNewChanged()
+	 * @method \boolean remindActualIsNew()
+	 * @method \boolean requireIsNew()
+	 * @method \Bitrix\AI\Entity\RoleIndustry resetIsNew()
+	 * @method \Bitrix\AI\Entity\RoleIndustry unsetIsNew()
+	 * @method \boolean fillIsNew()
 	 * @method \int getSort()
 	 * @method \Bitrix\AI\Entity\RoleIndustry setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
 	 * @method bool hasSort()
@@ -740,6 +750,8 @@ namespace Bitrix\AI\Model {
 	 * @method \Bitrix\AI\Model\EO_Role_Collection[] getRolesList()
 	 * @method \Bitrix\AI\Model\EO_Role_Collection getRolesCollection()
 	 * @method \Bitrix\AI\Model\EO_Role_Collection fillRoles()
+	 * @method \boolean[] getIsNewList()
+	 * @method \boolean[] fillIsNew()
 	 * @method \int[] getSortList()
 	 * @method \int[] fillSort()
 	 * @method \Bitrix\Main\Type\DateTime[] getDateModifyList()
@@ -769,7 +781,7 @@ namespace Bitrix\AI\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method EO_RoleIndustry_Collection merge(?EO_RoleIndustry_Collection $collection)
+	 * @method \Bitrix\AI\Model\EO_RoleIndustry_Collection merge(?\Bitrix\AI\Model\EO_RoleIndustry_Collection $collection)
 	 * @method bool isEmpty()
 	 */
 	class EO_RoleIndustry_Collection implements \ArrayAccess, \Iterator, \Countable {
@@ -804,625 +816,7 @@ namespace Bitrix\AI\Model {
 	 */
 	class EO_RoleIndustry_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\AI\Model\EngineTable:ai/lib/Model/Engine.php */
-namespace Bitrix\AI\Model {
-	/**
-	 * EO_Engine
-	 * @see \Bitrix\AI\Model\EngineTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\AI\Model\EO_Engine setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getAppCode()
-	 * @method \Bitrix\AI\Model\EO_Engine setAppCode(\string|\Bitrix\Main\DB\SqlExpression $appCode)
-	 * @method bool hasAppCode()
-	 * @method bool isAppCodeFilled()
-	 * @method bool isAppCodeChanged()
-	 * @method \string remindActualAppCode()
-	 * @method \string requireAppCode()
-	 * @method \Bitrix\AI\Model\EO_Engine resetAppCode()
-	 * @method \Bitrix\AI\Model\EO_Engine unsetAppCode()
-	 * @method \string fillAppCode()
-	 * @method \string getName()
-	 * @method \Bitrix\AI\Model\EO_Engine setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\AI\Model\EO_Engine resetName()
-	 * @method \Bitrix\AI\Model\EO_Engine unsetName()
-	 * @method \string fillName()
-	 * @method \string getCode()
-	 * @method \Bitrix\AI\Model\EO_Engine setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
-	 * @method bool hasCode()
-	 * @method bool isCodeFilled()
-	 * @method bool isCodeChanged()
-	 * @method \string remindActualCode()
-	 * @method \string requireCode()
-	 * @method \Bitrix\AI\Model\EO_Engine resetCode()
-	 * @method \Bitrix\AI\Model\EO_Engine unsetCode()
-	 * @method \string fillCode()
-	 * @method \string getCategory()
-	 * @method \Bitrix\AI\Model\EO_Engine setCategory(\string|\Bitrix\Main\DB\SqlExpression $category)
-	 * @method bool hasCategory()
-	 * @method bool isCategoryFilled()
-	 * @method bool isCategoryChanged()
-	 * @method \string remindActualCategory()
-	 * @method \string requireCategory()
-	 * @method \Bitrix\AI\Model\EO_Engine resetCategory()
-	 * @method \Bitrix\AI\Model\EO_Engine unsetCategory()
-	 * @method \string fillCategory()
-	 * @method \string getCompletionsUrl()
-	 * @method \Bitrix\AI\Model\EO_Engine setCompletionsUrl(\string|\Bitrix\Main\DB\SqlExpression $completionsUrl)
-	 * @method bool hasCompletionsUrl()
-	 * @method bool isCompletionsUrlFilled()
-	 * @method bool isCompletionsUrlChanged()
-	 * @method \string remindActualCompletionsUrl()
-	 * @method \string requireCompletionsUrl()
-	 * @method \Bitrix\AI\Model\EO_Engine resetCompletionsUrl()
-	 * @method \Bitrix\AI\Model\EO_Engine unsetCompletionsUrl()
-	 * @method \string fillCompletionsUrl()
-	 * @method array getSettings()
-	 * @method \Bitrix\AI\Model\EO_Engine setSettings(array|\Bitrix\Main\DB\SqlExpression $settings)
-	 * @method bool hasSettings()
-	 * @method bool isSettingsFilled()
-	 * @method bool isSettingsChanged()
-	 * @method array remindActualSettings()
-	 * @method array requireSettings()
-	 * @method \Bitrix\AI\Model\EO_Engine resetSettings()
-	 * @method \Bitrix\AI\Model\EO_Engine unsetSettings()
-	 * @method array fillSettings()
-	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
-	 * @method \Bitrix\AI\Model\EO_Engine setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
-	 * @method bool hasDateCreate()
-	 * @method bool isDateCreateFilled()
-	 * @method bool isDateCreateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
-	 * @method \Bitrix\AI\Model\EO_Engine resetDateCreate()
-	 * @method \Bitrix\AI\Model\EO_Engine unsetDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\AI\Model\EO_Engine set($fieldName, $value)
-	 * @method \Bitrix\AI\Model\EO_Engine reset($fieldName)
-	 * @method \Bitrix\AI\Model\EO_Engine unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\AI\Model\EO_Engine wakeUp($data)
-	 */
-	class EO_Engine {
-		/* @var \Bitrix\AI\Model\EngineTable */
-		static public $dataClass = '\Bitrix\AI\Model\EngineTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\AI\Model {
-	/**
-	 * EO_Engine_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getAppCodeList()
-	 * @method \string[] fillAppCode()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
-	 * @method \string[] getCodeList()
-	 * @method \string[] fillCode()
-	 * @method \string[] getCategoryList()
-	 * @method \string[] fillCategory()
-	 * @method \string[] getCompletionsUrlList()
-	 * @method \string[] fillCompletionsUrl()
-	 * @method array[] getSettingsList()
-	 * @method array[] fillSettings()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\AI\Model\EO_Engine $object)
-	 * @method bool has(\Bitrix\AI\Model\EO_Engine $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\AI\Model\EO_Engine getByPrimary($primary)
-	 * @method \Bitrix\AI\Model\EO_Engine[] getAll()
-	 * @method bool remove(\Bitrix\AI\Model\EO_Engine $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\AI\Model\EO_Engine_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\AI\Model\EO_Engine current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method EO_Engine_Collection merge(?EO_Engine_Collection $collection)
-	 * @method bool isEmpty()
-	 */
-	class EO_Engine_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\AI\Model\EngineTable */
-		static public $dataClass = '\Bitrix\AI\Model\EngineTable';
-	}
-}
-namespace Bitrix\AI\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Engine_Result exec()
-	 * @method \Bitrix\AI\Model\EO_Engine fetchObject()
-	 * @method \Bitrix\AI\Model\EO_Engine_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Engine_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\AI\Model\EO_Engine fetchObject()
-	 * @method \Bitrix\AI\Model\EO_Engine_Collection fetchCollection()
-	 */
-	class EO_Engine_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\AI\Model\EO_Engine createObject($setDefaultValues = true)
-	 * @method \Bitrix\AI\Model\EO_Engine_Collection createCollection()
-	 * @method \Bitrix\AI\Model\EO_Engine wakeUpObject($row)
-	 * @method \Bitrix\AI\Model\EO_Engine_Collection wakeUpCollection($rows)
-	 */
-	class EO_Engine_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\AI\Model\SectionTable:ai/lib/Model/Section.php */
-namespace Bitrix\AI\Model {
-	/**
-	 * EO_Section
-	 * @see \Bitrix\AI\Model\SectionTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\AI\Model\EO_Section setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getCode()
-	 * @method \Bitrix\AI\Model\EO_Section setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
-	 * @method bool hasCode()
-	 * @method bool isCodeFilled()
-	 * @method bool isCodeChanged()
-	 * @method \string remindActualCode()
-	 * @method \string requireCode()
-	 * @method \Bitrix\AI\Model\EO_Section resetCode()
-	 * @method \Bitrix\AI\Model\EO_Section unsetCode()
-	 * @method \string fillCode()
-	 * @method \string getHash()
-	 * @method \Bitrix\AI\Model\EO_Section setHash(\string|\Bitrix\Main\DB\SqlExpression $hash)
-	 * @method bool hasHash()
-	 * @method bool isHashFilled()
-	 * @method bool isHashChanged()
-	 * @method \string remindActualHash()
-	 * @method \string requireHash()
-	 * @method \Bitrix\AI\Model\EO_Section resetHash()
-	 * @method \Bitrix\AI\Model\EO_Section unsetHash()
-	 * @method \string fillHash()
-	 * @method array getTranslate()
-	 * @method \Bitrix\AI\Model\EO_Section setTranslate(array|\Bitrix\Main\DB\SqlExpression $translate)
-	 * @method bool hasTranslate()
-	 * @method bool isTranslateFilled()
-	 * @method bool isTranslateChanged()
-	 * @method array remindActualTranslate()
-	 * @method array requireTranslate()
-	 * @method \Bitrix\AI\Model\EO_Section resetTranslate()
-	 * @method \Bitrix\AI\Model\EO_Section unsetTranslate()
-	 * @method array fillTranslate()
-	 * @method \Bitrix\Main\Type\DateTime getDateModify()
-	 * @method \Bitrix\AI\Model\EO_Section setDateModify(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateModify)
-	 * @method bool hasDateModify()
-	 * @method bool isDateModifyFilled()
-	 * @method bool isDateModifyChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateModify()
-	 * @method \Bitrix\Main\Type\DateTime requireDateModify()
-	 * @method \Bitrix\AI\Model\EO_Section resetDateModify()
-	 * @method \Bitrix\AI\Model\EO_Section unsetDateModify()
-	 * @method \Bitrix\Main\Type\DateTime fillDateModify()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\AI\Model\EO_Section set($fieldName, $value)
-	 * @method \Bitrix\AI\Model\EO_Section reset($fieldName)
-	 * @method \Bitrix\AI\Model\EO_Section unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\AI\Model\EO_Section wakeUp($data)
-	 */
-	class EO_Section {
-		/* @var \Bitrix\AI\Model\SectionTable */
-		static public $dataClass = '\Bitrix\AI\Model\SectionTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\AI\Model {
-	/**
-	 * EO_Section_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getCodeList()
-	 * @method \string[] fillCode()
-	 * @method \string[] getHashList()
-	 * @method \string[] fillHash()
-	 * @method array[] getTranslateList()
-	 * @method array[] fillTranslate()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateModifyList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateModify()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\AI\Model\EO_Section $object)
-	 * @method bool has(\Bitrix\AI\Model\EO_Section $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\AI\Model\EO_Section getByPrimary($primary)
-	 * @method \Bitrix\AI\Model\EO_Section[] getAll()
-	 * @method bool remove(\Bitrix\AI\Model\EO_Section $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\AI\Model\EO_Section_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\AI\Model\EO_Section current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method EO_Section_Collection merge(?EO_Section_Collection $collection)
-	 * @method bool isEmpty()
-	 */
-	class EO_Section_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\AI\Model\SectionTable */
-		static public $dataClass = '\Bitrix\AI\Model\SectionTable';
-	}
-}
-namespace Bitrix\AI\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Section_Result exec()
-	 * @method \Bitrix\AI\Model\EO_Section fetchObject()
-	 * @method \Bitrix\AI\Model\EO_Section_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Section_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\AI\Model\EO_Section fetchObject()
-	 * @method \Bitrix\AI\Model\EO_Section_Collection fetchCollection()
-	 */
-	class EO_Section_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\AI\Model\EO_Section createObject($setDefaultValues = true)
-	 * @method \Bitrix\AI\Model\EO_Section_Collection createCollection()
-	 * @method \Bitrix\AI\Model\EO_Section wakeUpObject($row)
-	 * @method \Bitrix\AI\Model\EO_Section_Collection wakeUpCollection($rows)
-	 */
-	class EO_Section_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\AI\Model\QueueTable:ai/lib/Model/Queue.php */
-namespace Bitrix\AI\Model {
-	/**
-	 * EO_Queue
-	 * @see \Bitrix\AI\Model\QueueTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\AI\Model\EO_Queue setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getHash()
-	 * @method \Bitrix\AI\Model\EO_Queue setHash(\string|\Bitrix\Main\DB\SqlExpression $hash)
-	 * @method bool hasHash()
-	 * @method bool isHashFilled()
-	 * @method bool isHashChanged()
-	 * @method \string remindActualHash()
-	 * @method \string requireHash()
-	 * @method \Bitrix\AI\Model\EO_Queue resetHash()
-	 * @method \Bitrix\AI\Model\EO_Queue unsetHash()
-	 * @method \string fillHash()
-	 * @method \string getEngineClass()
-	 * @method \Bitrix\AI\Model\EO_Queue setEngineClass(\string|\Bitrix\Main\DB\SqlExpression $engineClass)
-	 * @method bool hasEngineClass()
-	 * @method bool isEngineClassFilled()
-	 * @method bool isEngineClassChanged()
-	 * @method \string remindActualEngineClass()
-	 * @method \string requireEngineClass()
-	 * @method \Bitrix\AI\Model\EO_Queue resetEngineClass()
-	 * @method \Bitrix\AI\Model\EO_Queue unsetEngineClass()
-	 * @method \string fillEngineClass()
-	 * @method \string getEngineCode()
-	 * @method \Bitrix\AI\Model\EO_Queue setEngineCode(\string|\Bitrix\Main\DB\SqlExpression $engineCode)
-	 * @method bool hasEngineCode()
-	 * @method bool isEngineCodeFilled()
-	 * @method bool isEngineCodeChanged()
-	 * @method \string remindActualEngineCode()
-	 * @method \string requireEngineCode()
-	 * @method \Bitrix\AI\Model\EO_Queue resetEngineCode()
-	 * @method \Bitrix\AI\Model\EO_Queue unsetEngineCode()
-	 * @method \string fillEngineCode()
-	 * @method \string getPayloadClass()
-	 * @method \Bitrix\AI\Model\EO_Queue setPayloadClass(\string|\Bitrix\Main\DB\SqlExpression $payloadClass)
-	 * @method bool hasPayloadClass()
-	 * @method bool isPayloadClassFilled()
-	 * @method bool isPayloadClassChanged()
-	 * @method \string remindActualPayloadClass()
-	 * @method \string requirePayloadClass()
-	 * @method \Bitrix\AI\Model\EO_Queue resetPayloadClass()
-	 * @method \Bitrix\AI\Model\EO_Queue unsetPayloadClass()
-	 * @method \string fillPayloadClass()
-	 * @method \string getPayload()
-	 * @method \Bitrix\AI\Model\EO_Queue setPayload(\string|\Bitrix\Main\DB\SqlExpression $payload)
-	 * @method bool hasPayload()
-	 * @method bool isPayloadFilled()
-	 * @method bool isPayloadChanged()
-	 * @method \string remindActualPayload()
-	 * @method \string requirePayload()
-	 * @method \Bitrix\AI\Model\EO_Queue resetPayload()
-	 * @method \Bitrix\AI\Model\EO_Queue unsetPayload()
-	 * @method \string fillPayload()
-	 * @method \string getContext()
-	 * @method \Bitrix\AI\Model\EO_Queue setContext(\string|\Bitrix\Main\DB\SqlExpression $context)
-	 * @method bool hasContext()
-	 * @method bool isContextFilled()
-	 * @method bool isContextChanged()
-	 * @method \string remindActualContext()
-	 * @method \string requireContext()
-	 * @method \Bitrix\AI\Model\EO_Queue resetContext()
-	 * @method \Bitrix\AI\Model\EO_Queue unsetContext()
-	 * @method \string fillContext()
-	 * @method array getParameters()
-	 * @method \Bitrix\AI\Model\EO_Queue setParameters(array|\Bitrix\Main\DB\SqlExpression $parameters)
-	 * @method bool hasParameters()
-	 * @method bool isParametersFilled()
-	 * @method bool isParametersChanged()
-	 * @method array remindActualParameters()
-	 * @method array requireParameters()
-	 * @method \Bitrix\AI\Model\EO_Queue resetParameters()
-	 * @method \Bitrix\AI\Model\EO_Queue unsetParameters()
-	 * @method array fillParameters()
-	 * @method \string getHistoryWrite()
-	 * @method \Bitrix\AI\Model\EO_Queue setHistoryWrite(\string|\Bitrix\Main\DB\SqlExpression $historyWrite)
-	 * @method bool hasHistoryWrite()
-	 * @method bool isHistoryWriteFilled()
-	 * @method bool isHistoryWriteChanged()
-	 * @method \string remindActualHistoryWrite()
-	 * @method \string requireHistoryWrite()
-	 * @method \Bitrix\AI\Model\EO_Queue resetHistoryWrite()
-	 * @method \Bitrix\AI\Model\EO_Queue unsetHistoryWrite()
-	 * @method \string fillHistoryWrite()
-	 * @method \int getHistoryGroupId()
-	 * @method \Bitrix\AI\Model\EO_Queue setHistoryGroupId(\int|\Bitrix\Main\DB\SqlExpression $historyGroupId)
-	 * @method bool hasHistoryGroupId()
-	 * @method bool isHistoryGroupIdFilled()
-	 * @method bool isHistoryGroupIdChanged()
-	 * @method \int remindActualHistoryGroupId()
-	 * @method \int requireHistoryGroupId()
-	 * @method \Bitrix\AI\Model\EO_Queue resetHistoryGroupId()
-	 * @method \Bitrix\AI\Model\EO_Queue unsetHistoryGroupId()
-	 * @method \int fillHistoryGroupId()
-	 * @method \string getCacheHash()
-	 * @method \Bitrix\AI\Model\EO_Queue setCacheHash(\string|\Bitrix\Main\DB\SqlExpression $cacheHash)
-	 * @method bool hasCacheHash()
-	 * @method bool isCacheHashFilled()
-	 * @method bool isCacheHashChanged()
-	 * @method \string remindActualCacheHash()
-	 * @method \string requireCacheHash()
-	 * @method \Bitrix\AI\Model\EO_Queue resetCacheHash()
-	 * @method \Bitrix\AI\Model\EO_Queue unsetCacheHash()
-	 * @method \string fillCacheHash()
-	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
-	 * @method \Bitrix\AI\Model\EO_Queue setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
-	 * @method bool hasDateCreate()
-	 * @method bool isDateCreateFilled()
-	 * @method bool isDateCreateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
-	 * @method \Bitrix\AI\Model\EO_Queue resetDateCreate()
-	 * @method \Bitrix\AI\Model\EO_Queue unsetDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\AI\Model\EO_Queue set($fieldName, $value)
-	 * @method \Bitrix\AI\Model\EO_Queue reset($fieldName)
-	 * @method \Bitrix\AI\Model\EO_Queue unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\AI\Model\EO_Queue wakeUp($data)
-	 */
-	class EO_Queue {
-		/* @var \Bitrix\AI\Model\QueueTable */
-		static public $dataClass = '\Bitrix\AI\Model\QueueTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\AI\Model {
-	/**
-	 * EO_Queue_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getHashList()
-	 * @method \string[] fillHash()
-	 * @method \string[] getEngineClassList()
-	 * @method \string[] fillEngineClass()
-	 * @method \string[] getEngineCodeList()
-	 * @method \string[] fillEngineCode()
-	 * @method \string[] getPayloadClassList()
-	 * @method \string[] fillPayloadClass()
-	 * @method \string[] getPayloadList()
-	 * @method \string[] fillPayload()
-	 * @method \string[] getContextList()
-	 * @method \string[] fillContext()
-	 * @method array[] getParametersList()
-	 * @method array[] fillParameters()
-	 * @method \string[] getHistoryWriteList()
-	 * @method \string[] fillHistoryWrite()
-	 * @method \int[] getHistoryGroupIdList()
-	 * @method \int[] fillHistoryGroupId()
-	 * @method \string[] getCacheHashList()
-	 * @method \string[] fillCacheHash()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\AI\Model\EO_Queue $object)
-	 * @method bool has(\Bitrix\AI\Model\EO_Queue $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\AI\Model\EO_Queue getByPrimary($primary)
-	 * @method \Bitrix\AI\Model\EO_Queue[] getAll()
-	 * @method bool remove(\Bitrix\AI\Model\EO_Queue $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\AI\Model\EO_Queue_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\AI\Model\EO_Queue current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method EO_Queue_Collection merge(?EO_Queue_Collection $collection)
-	 * @method bool isEmpty()
-	 */
-	class EO_Queue_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\AI\Model\QueueTable */
-		static public $dataClass = '\Bitrix\AI\Model\QueueTable';
-	}
-}
-namespace Bitrix\AI\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Queue_Result exec()
-	 * @method \Bitrix\AI\Model\EO_Queue fetchObject()
-	 * @method \Bitrix\AI\Model\EO_Queue_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Queue_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\AI\Model\EO_Queue fetchObject()
-	 * @method \Bitrix\AI\Model\EO_Queue_Collection fetchCollection()
-	 */
-	class EO_Queue_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\AI\Model\EO_Queue createObject($setDefaultValues = true)
-	 * @method \Bitrix\AI\Model\EO_Queue_Collection createCollection()
-	 * @method \Bitrix\AI\Model\EO_Queue wakeUpObject($row)
-	 * @method \Bitrix\AI\Model\EO_Queue_Collection wakeUpCollection($rows)
-	 */
-	class EO_Queue_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\AI\Model\PlanTable:ai/lib/Model/Plan.php */
+/* ORMENTITYANNOTATION:Bitrix\AI\Model\PlanTable:ai/lib/model/plantable.php */
 namespace Bitrix\AI\Model {
 	/**
 	 * EO_Plan
@@ -1553,7 +947,7 @@ namespace Bitrix\AI\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method EO_Plan_Collection merge(?EO_Plan_Collection $collection)
+	 * @method \Bitrix\AI\Model\EO_Plan_Collection merge(?\Bitrix\AI\Model\EO_Plan_Collection $collection)
 	 * @method bool isEmpty()
 	 */
 	class EO_Plan_Collection implements \ArrayAccess, \Iterator, \Countable {
@@ -1588,59 +982,59 @@ namespace Bitrix\AI\Model {
 	 */
 	class EO_Plan_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\AI\Model\UsageTable:ai/lib/Model/Usage.php */
+/* ORMENTITYANNOTATION:Bitrix\AI\Model\SectionTable:ai/lib/model/sectiontable.php */
 namespace Bitrix\AI\Model {
 	/**
-	 * EO_Usage
-	 * @see \Bitrix\AI\Model\UsageTable
+	 * EO_Section
+	 * @see \Bitrix\AI\Model\SectionTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\AI\Model\EO_Usage setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\AI\Model\EO_Section setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \int getUserId()
-	 * @method \Bitrix\AI\Model\EO_Usage setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \int remindActualUserId()
-	 * @method \int requireUserId()
-	 * @method \Bitrix\AI\Model\EO_Usage resetUserId()
-	 * @method \Bitrix\AI\Model\EO_Usage unsetUserId()
-	 * @method \int fillUserId()
-	 * @method \string getUsagePeriod()
-	 * @method \Bitrix\AI\Model\EO_Usage setUsagePeriod(\string|\Bitrix\Main\DB\SqlExpression $usagePeriod)
-	 * @method bool hasUsagePeriod()
-	 * @method bool isUsagePeriodFilled()
-	 * @method bool isUsagePeriodChanged()
-	 * @method \string remindActualUsagePeriod()
-	 * @method \string requireUsagePeriod()
-	 * @method \Bitrix\AI\Model\EO_Usage resetUsagePeriod()
-	 * @method \Bitrix\AI\Model\EO_Usage unsetUsagePeriod()
-	 * @method \string fillUsagePeriod()
-	 * @method \float getUsageCount()
-	 * @method \Bitrix\AI\Model\EO_Usage setUsageCount(\float|\Bitrix\Main\DB\SqlExpression $usageCount)
-	 * @method bool hasUsageCount()
-	 * @method bool isUsageCountFilled()
-	 * @method bool isUsageCountChanged()
-	 * @method \float remindActualUsageCount()
-	 * @method \float requireUsageCount()
-	 * @method \Bitrix\AI\Model\EO_Usage resetUsageCount()
-	 * @method \Bitrix\AI\Model\EO_Usage unsetUsageCount()
-	 * @method \float fillUsageCount()
+	 * @method \string getCode()
+	 * @method \Bitrix\AI\Model\EO_Section setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\AI\Model\EO_Section resetCode()
+	 * @method \Bitrix\AI\Model\EO_Section unsetCode()
+	 * @method \string fillCode()
+	 * @method \string getHash()
+	 * @method \Bitrix\AI\Model\EO_Section setHash(\string|\Bitrix\Main\DB\SqlExpression $hash)
+	 * @method bool hasHash()
+	 * @method bool isHashFilled()
+	 * @method bool isHashChanged()
+	 * @method \string remindActualHash()
+	 * @method \string requireHash()
+	 * @method \Bitrix\AI\Model\EO_Section resetHash()
+	 * @method \Bitrix\AI\Model\EO_Section unsetHash()
+	 * @method \string fillHash()
+	 * @method array getTranslate()
+	 * @method \Bitrix\AI\Model\EO_Section setTranslate(array|\Bitrix\Main\DB\SqlExpression $translate)
+	 * @method bool hasTranslate()
+	 * @method bool isTranslateFilled()
+	 * @method bool isTranslateChanged()
+	 * @method array remindActualTranslate()
+	 * @method array requireTranslate()
+	 * @method \Bitrix\AI\Model\EO_Section resetTranslate()
+	 * @method \Bitrix\AI\Model\EO_Section unsetTranslate()
+	 * @method array fillTranslate()
 	 * @method \Bitrix\Main\Type\DateTime getDateModify()
-	 * @method \Bitrix\AI\Model\EO_Usage setDateModify(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateModify)
+	 * @method \Bitrix\AI\Model\EO_Section setDateModify(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateModify)
 	 * @method bool hasDateModify()
 	 * @method bool isDateModifyFilled()
 	 * @method bool isDateModifyChanged()
 	 * @method \Bitrix\Main\Type\DateTime remindActualDateModify()
 	 * @method \Bitrix\Main\Type\DateTime requireDateModify()
-	 * @method \Bitrix\AI\Model\EO_Usage resetDateModify()
-	 * @method \Bitrix\AI\Model\EO_Usage unsetDateModify()
+	 * @method \Bitrix\AI\Model\EO_Section resetDateModify()
+	 * @method \Bitrix\AI\Model\EO_Section unsetDateModify()
 	 * @method \Bitrix\Main\Type\DateTime fillDateModify()
 	 *
 	 * Common methods:
@@ -1657,9 +1051,9 @@ namespace Bitrix\AI\Model {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\AI\Model\EO_Usage set($fieldName, $value)
-	 * @method \Bitrix\AI\Model\EO_Usage reset($fieldName)
-	 * @method \Bitrix\AI\Model\EO_Usage unset($fieldName)
+	 * @method \Bitrix\AI\Model\EO_Section set($fieldName, $value)
+	 * @method \Bitrix\AI\Model\EO_Section reset($fieldName)
+	 * @method \Bitrix\AI\Model\EO_Section unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -1667,11 +1061,11 @@ namespace Bitrix\AI\Model {
 	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\AI\Model\EO_Usage wakeUp($data)
+	 * @method static \Bitrix\AI\Model\EO_Section wakeUp($data)
 	 */
-	class EO_Usage {
-		/* @var \Bitrix\AI\Model\UsageTable */
-		static public $dataClass = '\Bitrix\AI\Model\UsageTable';
+	class EO_Section {
+		/* @var \Bitrix\AI\Model\SectionTable */
+		static public $dataClass = '\Bitrix\AI\Model\SectionTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
@@ -1680,18 +1074,18 @@ namespace Bitrix\AI\Model {
 }
 namespace Bitrix\AI\Model {
 	/**
-	 * EO_Usage_Collection
+	 * EO_Section_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int[] getIdList()
-	 * @method \int[] getUserIdList()
-	 * @method \int[] fillUserId()
-	 * @method \string[] getUsagePeriodList()
-	 * @method \string[] fillUsagePeriod()
-	 * @method \float[] getUsageCountList()
-	 * @method \float[] fillUsageCount()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \string[] getHashList()
+	 * @method \string[] fillHash()
+	 * @method array[] getTranslateList()
+	 * @method array[] fillTranslate()
 	 * @method \Bitrix\Main\Type\DateTime[] getDateModifyList()
 	 * @method \Bitrix\Main\Type\DateTime[] fillDateModify()
 	 *
@@ -1699,32 +1093,32 @@ namespace Bitrix\AI\Model {
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\AI\Model\EO_Usage $object)
-	 * @method bool has(\Bitrix\AI\Model\EO_Usage $object)
+	 * @method void add(\Bitrix\AI\Model\EO_Section $object)
+	 * @method bool has(\Bitrix\AI\Model\EO_Section $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\AI\Model\EO_Usage getByPrimary($primary)
-	 * @method \Bitrix\AI\Model\EO_Usage[] getAll()
-	 * @method bool remove(\Bitrix\AI\Model\EO_Usage $object)
+	 * @method \Bitrix\AI\Model\EO_Section getByPrimary($primary)
+	 * @method \Bitrix\AI\Model\EO_Section[] getAll()
+	 * @method bool remove(\Bitrix\AI\Model\EO_Section $object)
 	 * @method void removeByPrimary($primary)
 	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\AI\Model\EO_Usage_Collection wakeUp($data)
+	 * @method static \Bitrix\AI\Model\EO_Section_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\AI\Model\EO_Usage current() Iterator
+	 * @method \Bitrix\AI\Model\EO_Section current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method EO_Usage_Collection merge(?EO_Usage_Collection $collection)
+	 * @method \Bitrix\AI\Model\EO_Section_Collection merge(?\Bitrix\AI\Model\EO_Section_Collection $collection)
 	 * @method bool isEmpty()
 	 */
-	class EO_Usage_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\AI\Model\UsageTable */
-		static public $dataClass = '\Bitrix\AI\Model\UsageTable';
+	class EO_Section_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\AI\Model\SectionTable */
+		static public $dataClass = '\Bitrix\AI\Model\SectionTable';
 	}
 }
 namespace Bitrix\AI\Model {
@@ -1732,29 +1126,433 @@ namespace Bitrix\AI\Model {
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_Usage_Result exec()
-	 * @method \Bitrix\AI\Model\EO_Usage fetchObject()
-	 * @method \Bitrix\AI\Model\EO_Usage_Collection fetchCollection()
+	 * @method EO_Section_Result exec()
+	 * @method \Bitrix\AI\Model\EO_Section fetchObject()
+	 * @method \Bitrix\AI\Model\EO_Section_Collection fetchCollection()
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 */
-	class EO_Usage_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_Section_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\AI\Model\EO_Usage fetchObject()
-	 * @method \Bitrix\AI\Model\EO_Usage_Collection fetchCollection()
+	 * @method \Bitrix\AI\Model\EO_Section fetchObject()
+	 * @method \Bitrix\AI\Model\EO_Section_Collection fetchCollection()
 	 */
-	class EO_Usage_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_Section_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\AI\Model\EO_Usage createObject($setDefaultValues = true)
-	 * @method \Bitrix\AI\Model\EO_Usage_Collection createCollection()
-	 * @method \Bitrix\AI\Model\EO_Usage wakeUpObject($row)
-	 * @method \Bitrix\AI\Model\EO_Usage_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\AI\Model\EO_Section createObject($setDefaultValues = true)
+	 * @method \Bitrix\AI\Model\EO_Section_Collection createCollection()
+	 * @method \Bitrix\AI\Model\EO_Section wakeUpObject($row)
+	 * @method \Bitrix\AI\Model\EO_Section_Collection wakeUpCollection($rows)
 	 */
-	class EO_Usage_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_Section_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\AI\Model\HistoryTable:ai/lib/Model/History.php */
+/* ORMENTITYANNOTATION:Bitrix\AI\Limiter\Model\BaasPackageTable:ai/lib/limiter/model/baaspackagetable.php */
+namespace Bitrix\AI\Limiter\Model {
+	/**
+	 * EO_BaasPackage
+	 * @see \Bitrix\AI\Limiter\Model\BaasPackageTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \Bitrix\Main\Type\Date getDateStart()
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage setDateStart(\Bitrix\Main\Type\Date|\Bitrix\Main\DB\SqlExpression $dateStart)
+	 * @method bool hasDateStart()
+	 * @method bool isDateStartFilled()
+	 * @method bool isDateStartChanged()
+	 * @method \Bitrix\Main\Type\Date remindActualDateStart()
+	 * @method \Bitrix\Main\Type\Date requireDateStart()
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage resetDateStart()
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage unsetDateStart()
+	 * @method \Bitrix\Main\Type\Date fillDateStart()
+	 * @method \Bitrix\Main\Type\Date getDateExpired()
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage setDateExpired(\Bitrix\Main\Type\Date|\Bitrix\Main\DB\SqlExpression $dateExpired)
+	 * @method bool hasDateExpired()
+	 * @method bool isDateExpiredFilled()
+	 * @method bool isDateExpiredChanged()
+	 * @method \Bitrix\Main\Type\Date remindActualDateExpired()
+	 * @method \Bitrix\Main\Type\Date requireDateExpired()
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage resetDateExpired()
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage unsetDateExpired()
+	 * @method \Bitrix\Main\Type\Date fillDateExpired()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage set($fieldName, $value)
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage reset($fieldName)
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\AI\Limiter\Model\EO_BaasPackage wakeUp($data)
+	 */
+	class EO_BaasPackage {
+		/* @var \Bitrix\AI\Limiter\Model\BaasPackageTable */
+		static public $dataClass = '\Bitrix\AI\Limiter\Model\BaasPackageTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\AI\Limiter\Model {
+	/**
+	 * EO_BaasPackage_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \Bitrix\Main\Type\Date[] getDateStartList()
+	 * @method \Bitrix\Main\Type\Date[] fillDateStart()
+	 * @method \Bitrix\Main\Type\Date[] getDateExpiredList()
+	 * @method \Bitrix\Main\Type\Date[] fillDateExpired()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\AI\Limiter\Model\EO_BaasPackage $object)
+	 * @method bool has(\Bitrix\AI\Limiter\Model\EO_BaasPackage $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage getByPrimary($primary)
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage[] getAll()
+	 * @method bool remove(\Bitrix\AI\Limiter\Model\EO_BaasPackage $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\AI\Limiter\Model\EO_BaasPackage_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage_Collection merge(?\Bitrix\AI\Limiter\Model\EO_BaasPackage_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_BaasPackage_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\AI\Limiter\Model\BaasPackageTable */
+		static public $dataClass = '\Bitrix\AI\Limiter\Model\BaasPackageTable';
+	}
+}
+namespace Bitrix\AI\Limiter\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_BaasPackage_Result exec()
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage fetchObject()
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_BaasPackage_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage fetchObject()
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage_Collection fetchCollection()
+	 */
+	class EO_BaasPackage_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage createObject($setDefaultValues = true)
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage_Collection createCollection()
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage wakeUpObject($row)
+	 * @method \Bitrix\AI\Limiter\Model\EO_BaasPackage_Collection wakeUpCollection($rows)
+	 */
+	class EO_BaasPackage_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\AI\Model\QueueTable:ai/lib/model/queuetable.php */
+namespace Bitrix\AI\Model {
+	/**
+	 * EO_Queue
+	 * @see \Bitrix\AI\Model\QueueTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\AI\Model\EO_Queue setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getHash()
+	 * @method \Bitrix\AI\Model\EO_Queue setHash(\string|\Bitrix\Main\DB\SqlExpression $hash)
+	 * @method bool hasHash()
+	 * @method bool isHashFilled()
+	 * @method bool isHashChanged()
+	 * @method \string remindActualHash()
+	 * @method \string requireHash()
+	 * @method \Bitrix\AI\Model\EO_Queue resetHash()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetHash()
+	 * @method \string fillHash()
+	 * @method \string getEngineClass()
+	 * @method \Bitrix\AI\Model\EO_Queue setEngineClass(\string|\Bitrix\Main\DB\SqlExpression $engineClass)
+	 * @method bool hasEngineClass()
+	 * @method bool isEngineClassFilled()
+	 * @method bool isEngineClassChanged()
+	 * @method \string remindActualEngineClass()
+	 * @method \string requireEngineClass()
+	 * @method \Bitrix\AI\Model\EO_Queue resetEngineClass()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetEngineClass()
+	 * @method \string fillEngineClass()
+	 * @method \string getEngineCode()
+	 * @method \Bitrix\AI\Model\EO_Queue setEngineCode(\string|\Bitrix\Main\DB\SqlExpression $engineCode)
+	 * @method bool hasEngineCode()
+	 * @method bool isEngineCodeFilled()
+	 * @method bool isEngineCodeChanged()
+	 * @method \string remindActualEngineCode()
+	 * @method \string requireEngineCode()
+	 * @method \Bitrix\AI\Model\EO_Queue resetEngineCode()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetEngineCode()
+	 * @method \string fillEngineCode()
+	 * @method \string getPayloadClass()
+	 * @method \Bitrix\AI\Model\EO_Queue setPayloadClass(\string|\Bitrix\Main\DB\SqlExpression $payloadClass)
+	 * @method bool hasPayloadClass()
+	 * @method bool isPayloadClassFilled()
+	 * @method bool isPayloadClassChanged()
+	 * @method \string remindActualPayloadClass()
+	 * @method \string requirePayloadClass()
+	 * @method \Bitrix\AI\Model\EO_Queue resetPayloadClass()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetPayloadClass()
+	 * @method \string fillPayloadClass()
+	 * @method \string getPayload()
+	 * @method \Bitrix\AI\Model\EO_Queue setPayload(\string|\Bitrix\Main\DB\SqlExpression $payload)
+	 * @method bool hasPayload()
+	 * @method bool isPayloadFilled()
+	 * @method bool isPayloadChanged()
+	 * @method \string remindActualPayload()
+	 * @method \string requirePayload()
+	 * @method \Bitrix\AI\Model\EO_Queue resetPayload()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetPayload()
+	 * @method \string fillPayload()
+	 * @method \string getContext()
+	 * @method \Bitrix\AI\Model\EO_Queue setContext(\string|\Bitrix\Main\DB\SqlExpression $context)
+	 * @method bool hasContext()
+	 * @method bool isContextFilled()
+	 * @method bool isContextChanged()
+	 * @method \string remindActualContext()
+	 * @method \string requireContext()
+	 * @method \Bitrix\AI\Model\EO_Queue resetContext()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetContext()
+	 * @method \string fillContext()
+	 * @method array getParameters()
+	 * @method \Bitrix\AI\Model\EO_Queue setParameters(array|\Bitrix\Main\DB\SqlExpression $parameters)
+	 * @method bool hasParameters()
+	 * @method bool isParametersFilled()
+	 * @method bool isParametersChanged()
+	 * @method array remindActualParameters()
+	 * @method array requireParameters()
+	 * @method \Bitrix\AI\Model\EO_Queue resetParameters()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetParameters()
+	 * @method array fillParameters()
+	 * @method \string getHistoryWrite()
+	 * @method \Bitrix\AI\Model\EO_Queue setHistoryWrite(\string|\Bitrix\Main\DB\SqlExpression $historyWrite)
+	 * @method bool hasHistoryWrite()
+	 * @method bool isHistoryWriteFilled()
+	 * @method bool isHistoryWriteChanged()
+	 * @method \string remindActualHistoryWrite()
+	 * @method \string requireHistoryWrite()
+	 * @method \Bitrix\AI\Model\EO_Queue resetHistoryWrite()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetHistoryWrite()
+	 * @method \string fillHistoryWrite()
+	 * @method \int getHistoryGroupId()
+	 * @method \Bitrix\AI\Model\EO_Queue setHistoryGroupId(\int|\Bitrix\Main\DB\SqlExpression $historyGroupId)
+	 * @method bool hasHistoryGroupId()
+	 * @method bool isHistoryGroupIdFilled()
+	 * @method bool isHistoryGroupIdChanged()
+	 * @method \int remindActualHistoryGroupId()
+	 * @method \int requireHistoryGroupId()
+	 * @method \Bitrix\AI\Model\EO_Queue resetHistoryGroupId()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetHistoryGroupId()
+	 * @method \int fillHistoryGroupId()
+	 * @method \string getCacheHash()
+	 * @method \Bitrix\AI\Model\EO_Queue setCacheHash(\string|\Bitrix\Main\DB\SqlExpression $cacheHash)
+	 * @method bool hasCacheHash()
+	 * @method bool isCacheHashFilled()
+	 * @method bool isCacheHashChanged()
+	 * @method \string remindActualCacheHash()
+	 * @method \string requireCacheHash()
+	 * @method \Bitrix\AI\Model\EO_Queue resetCacheHash()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetCacheHash()
+	 * @method \string fillCacheHash()
+	 * @method \boolean getIsJsonResponseMode()
+	 * @method \Bitrix\AI\Model\EO_Queue setIsJsonResponseMode(\boolean|\Bitrix\Main\DB\SqlExpression $isJsonResponseMode)
+	 * @method bool hasIsJsonResponseMode()
+	 * @method bool isIsJsonResponseModeFilled()
+	 * @method bool isIsJsonResponseModeChanged()
+	 * @method \boolean remindActualIsJsonResponseMode()
+	 * @method \boolean requireIsJsonResponseMode()
+	 * @method \Bitrix\AI\Model\EO_Queue resetIsJsonResponseMode()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetIsJsonResponseMode()
+	 * @method \boolean fillIsJsonResponseMode()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\AI\Model\EO_Queue setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\AI\Model\EO_Queue resetDateCreate()
+	 * @method \Bitrix\AI\Model\EO_Queue unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\AI\Model\EO_Queue set($fieldName, $value)
+	 * @method \Bitrix\AI\Model\EO_Queue reset($fieldName)
+	 * @method \Bitrix\AI\Model\EO_Queue unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\AI\Model\EO_Queue wakeUp($data)
+	 */
+	class EO_Queue {
+		/* @var \Bitrix\AI\Model\QueueTable */
+		static public $dataClass = '\Bitrix\AI\Model\QueueTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\AI\Model {
+	/**
+	 * EO_Queue_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getHashList()
+	 * @method \string[] fillHash()
+	 * @method \string[] getEngineClassList()
+	 * @method \string[] fillEngineClass()
+	 * @method \string[] getEngineCodeList()
+	 * @method \string[] fillEngineCode()
+	 * @method \string[] getPayloadClassList()
+	 * @method \string[] fillPayloadClass()
+	 * @method \string[] getPayloadList()
+	 * @method \string[] fillPayload()
+	 * @method \string[] getContextList()
+	 * @method \string[] fillContext()
+	 * @method array[] getParametersList()
+	 * @method array[] fillParameters()
+	 * @method \string[] getHistoryWriteList()
+	 * @method \string[] fillHistoryWrite()
+	 * @method \int[] getHistoryGroupIdList()
+	 * @method \int[] fillHistoryGroupId()
+	 * @method \string[] getCacheHashList()
+	 * @method \string[] fillCacheHash()
+	 * @method \boolean[] getIsJsonResponseModeList()
+	 * @method \boolean[] fillIsJsonResponseMode()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\AI\Model\EO_Queue $object)
+	 * @method bool has(\Bitrix\AI\Model\EO_Queue $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\AI\Model\EO_Queue getByPrimary($primary)
+	 * @method \Bitrix\AI\Model\EO_Queue[] getAll()
+	 * @method bool remove(\Bitrix\AI\Model\EO_Queue $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\AI\Model\EO_Queue_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\AI\Model\EO_Queue current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\AI\Model\EO_Queue_Collection merge(?\Bitrix\AI\Model\EO_Queue_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Queue_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\AI\Model\QueueTable */
+		static public $dataClass = '\Bitrix\AI\Model\QueueTable';
+	}
+}
+namespace Bitrix\AI\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Queue_Result exec()
+	 * @method \Bitrix\AI\Model\EO_Queue fetchObject()
+	 * @method \Bitrix\AI\Model\EO_Queue_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Queue_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\AI\Model\EO_Queue fetchObject()
+	 * @method \Bitrix\AI\Model\EO_Queue_Collection fetchCollection()
+	 */
+	class EO_Queue_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\AI\Model\EO_Queue createObject($setDefaultValues = true)
+	 * @method \Bitrix\AI\Model\EO_Queue_Collection createCollection()
+	 * @method \Bitrix\AI\Model\EO_Queue wakeUpObject($row)
+	 * @method \Bitrix\AI\Model\EO_Queue_Collection wakeUpCollection($rows)
+	 */
+	class EO_Queue_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\AI\Model\HistoryTable:ai/lib/model/historytable.php */
 namespace Bitrix\AI\Model {
 	/**
 	 * EO_History
@@ -2005,7 +1803,7 @@ namespace Bitrix\AI\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method EO_History_Collection merge(?EO_History_Collection $collection)
+	 * @method \Bitrix\AI\Model\EO_History_Collection merge(?\Bitrix\AI\Model\EO_History_Collection $collection)
 	 * @method bool isEmpty()
 	 */
 	class EO_History_Collection implements \ArrayAccess, \Iterator, \Countable {
@@ -2040,7 +1838,315 @@ namespace Bitrix\AI\Model {
 	 */
 	class EO_History_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\AI\Model\RecentRoleTable:ai/lib/Model/RecentRole.php */
+/* ORMENTITYANNOTATION:Bitrix\AI\Model\UsageTable:ai/lib/model/usagetable.php */
+namespace Bitrix\AI\Model {
+	/**
+	 * EO_Usage
+	 * @see \Bitrix\AI\Model\UsageTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\AI\Model\EO_Usage setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getUserId()
+	 * @method \Bitrix\AI\Model\EO_Usage setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\AI\Model\EO_Usage resetUserId()
+	 * @method \Bitrix\AI\Model\EO_Usage unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \string getUsagePeriod()
+	 * @method \Bitrix\AI\Model\EO_Usage setUsagePeriod(\string|\Bitrix\Main\DB\SqlExpression $usagePeriod)
+	 * @method bool hasUsagePeriod()
+	 * @method bool isUsagePeriodFilled()
+	 * @method bool isUsagePeriodChanged()
+	 * @method \string remindActualUsagePeriod()
+	 * @method \string requireUsagePeriod()
+	 * @method \Bitrix\AI\Model\EO_Usage resetUsagePeriod()
+	 * @method \Bitrix\AI\Model\EO_Usage unsetUsagePeriod()
+	 * @method \string fillUsagePeriod()
+	 * @method \int getUsageCount()
+	 * @method \Bitrix\AI\Model\EO_Usage setUsageCount(\int|\Bitrix\Main\DB\SqlExpression $usageCount)
+	 * @method bool hasUsageCount()
+	 * @method bool isUsageCountFilled()
+	 * @method bool isUsageCountChanged()
+	 * @method \int remindActualUsageCount()
+	 * @method \int requireUsageCount()
+	 * @method \Bitrix\AI\Model\EO_Usage resetUsageCount()
+	 * @method \Bitrix\AI\Model\EO_Usage unsetUsageCount()
+	 * @method \int fillUsageCount()
+	 * @method \Bitrix\Main\Type\DateTime getDateModify()
+	 * @method \Bitrix\AI\Model\EO_Usage setDateModify(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateModify)
+	 * @method bool hasDateModify()
+	 * @method bool isDateModifyFilled()
+	 * @method bool isDateModifyChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateModify()
+	 * @method \Bitrix\Main\Type\DateTime requireDateModify()
+	 * @method \Bitrix\AI\Model\EO_Usage resetDateModify()
+	 * @method \Bitrix\AI\Model\EO_Usage unsetDateModify()
+	 * @method \Bitrix\Main\Type\DateTime fillDateModify()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\AI\Model\EO_Usage set($fieldName, $value)
+	 * @method \Bitrix\AI\Model\EO_Usage reset($fieldName)
+	 * @method \Bitrix\AI\Model\EO_Usage unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\AI\Model\EO_Usage wakeUp($data)
+	 */
+	class EO_Usage {
+		/* @var \Bitrix\AI\Model\UsageTable */
+		static public $dataClass = '\Bitrix\AI\Model\UsageTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\AI\Model {
+	/**
+	 * EO_Usage_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \string[] getUsagePeriodList()
+	 * @method \string[] fillUsagePeriod()
+	 * @method \int[] getUsageCountList()
+	 * @method \int[] fillUsageCount()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateModifyList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateModify()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\AI\Model\EO_Usage $object)
+	 * @method bool has(\Bitrix\AI\Model\EO_Usage $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\AI\Model\EO_Usage getByPrimary($primary)
+	 * @method \Bitrix\AI\Model\EO_Usage[] getAll()
+	 * @method bool remove(\Bitrix\AI\Model\EO_Usage $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\AI\Model\EO_Usage_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\AI\Model\EO_Usage current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\AI\Model\EO_Usage_Collection merge(?\Bitrix\AI\Model\EO_Usage_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Usage_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\AI\Model\UsageTable */
+		static public $dataClass = '\Bitrix\AI\Model\UsageTable';
+	}
+}
+namespace Bitrix\AI\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Usage_Result exec()
+	 * @method \Bitrix\AI\Model\EO_Usage fetchObject()
+	 * @method \Bitrix\AI\Model\EO_Usage_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Usage_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\AI\Model\EO_Usage fetchObject()
+	 * @method \Bitrix\AI\Model\EO_Usage_Collection fetchCollection()
+	 */
+	class EO_Usage_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\AI\Model\EO_Usage createObject($setDefaultValues = true)
+	 * @method \Bitrix\AI\Model\EO_Usage_Collection createCollection()
+	 * @method \Bitrix\AI\Model\EO_Usage wakeUpObject($row)
+	 * @method \Bitrix\AI\Model\EO_Usage_Collection wakeUpCollection($rows)
+	 */
+	class EO_Usage_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\AI\Model\CounterTable:ai/lib/model/countertable.php */
+namespace Bitrix\AI\Model {
+	/**
+	 * EO_Counter
+	 * @see \Bitrix\AI\Model\CounterTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\AI\Model\EO_Counter setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getName()
+	 * @method \Bitrix\AI\Model\EO_Counter setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\AI\Model\EO_Counter resetName()
+	 * @method \Bitrix\AI\Model\EO_Counter unsetName()
+	 * @method \string fillName()
+	 * @method \string getValue()
+	 * @method \Bitrix\AI\Model\EO_Counter setValue(\string|\Bitrix\Main\DB\SqlExpression $value)
+	 * @method bool hasValue()
+	 * @method bool isValueFilled()
+	 * @method bool isValueChanged()
+	 * @method \string remindActualValue()
+	 * @method \string requireValue()
+	 * @method \Bitrix\AI\Model\EO_Counter resetValue()
+	 * @method \Bitrix\AI\Model\EO_Counter unsetValue()
+	 * @method \string fillValue()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\AI\Model\EO_Counter set($fieldName, $value)
+	 * @method \Bitrix\AI\Model\EO_Counter reset($fieldName)
+	 * @method \Bitrix\AI\Model\EO_Counter unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\AI\Model\EO_Counter wakeUp($data)
+	 */
+	class EO_Counter {
+		/* @var \Bitrix\AI\Model\CounterTable */
+		static public $dataClass = '\Bitrix\AI\Model\CounterTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\AI\Model {
+	/**
+	 * EO_Counter_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \string[] getValueList()
+	 * @method \string[] fillValue()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\AI\Model\EO_Counter $object)
+	 * @method bool has(\Bitrix\AI\Model\EO_Counter $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\AI\Model\EO_Counter getByPrimary($primary)
+	 * @method \Bitrix\AI\Model\EO_Counter[] getAll()
+	 * @method bool remove(\Bitrix\AI\Model\EO_Counter $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\AI\Model\EO_Counter_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\AI\Model\EO_Counter current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\AI\Model\EO_Counter_Collection merge(?\Bitrix\AI\Model\EO_Counter_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Counter_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\AI\Model\CounterTable */
+		static public $dataClass = '\Bitrix\AI\Model\CounterTable';
+	}
+}
+namespace Bitrix\AI\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Counter_Result exec()
+	 * @method \Bitrix\AI\Model\EO_Counter fetchObject()
+	 * @method \Bitrix\AI\Model\EO_Counter_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Counter_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\AI\Model\EO_Counter fetchObject()
+	 * @method \Bitrix\AI\Model\EO_Counter_Collection fetchCollection()
+	 */
+	class EO_Counter_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\AI\Model\EO_Counter createObject($setDefaultValues = true)
+	 * @method \Bitrix\AI\Model\EO_Counter_Collection createCollection()
+	 * @method \Bitrix\AI\Model\EO_Counter wakeUpObject($row)
+	 * @method \Bitrix\AI\Model\EO_Counter_Collection wakeUpCollection($rows)
+	 */
+	class EO_Counter_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\AI\Model\RecentRoleTable:ai/lib/model/recentroletable.php */
 namespace Bitrix\AI\Model {
 	/**
 	 * EO_RecentRole
@@ -2184,7 +2290,7 @@ namespace Bitrix\AI\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method EO_RecentRole_Collection merge(?EO_RecentRole_Collection $collection)
+	 * @method \Bitrix\AI\Model\EO_RecentRole_Collection merge(?\Bitrix\AI\Model\EO_RecentRole_Collection $collection)
 	 * @method bool isEmpty()
 	 */
 	class EO_RecentRole_Collection implements \ArrayAccess, \Iterator, \Countable {
@@ -2218,4 +2324,206 @@ namespace Bitrix\AI\Model {
 	 * @method \Bitrix\AI\Model\EO_RecentRole_Collection wakeUpCollection($rows)
 	 */
 	class EO_RecentRole_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\AI\Model\EngineTable:ai/lib/model/enginetable.php */
+namespace Bitrix\AI\Model {
+	/**
+	 * EO_Engine
+	 * @see \Bitrix\AI\Model\EngineTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\AI\Model\EO_Engine setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getAppCode()
+	 * @method \Bitrix\AI\Model\EO_Engine setAppCode(\string|\Bitrix\Main\DB\SqlExpression $appCode)
+	 * @method bool hasAppCode()
+	 * @method bool isAppCodeFilled()
+	 * @method bool isAppCodeChanged()
+	 * @method \string remindActualAppCode()
+	 * @method \string requireAppCode()
+	 * @method \Bitrix\AI\Model\EO_Engine resetAppCode()
+	 * @method \Bitrix\AI\Model\EO_Engine unsetAppCode()
+	 * @method \string fillAppCode()
+	 * @method \string getName()
+	 * @method \Bitrix\AI\Model\EO_Engine setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\AI\Model\EO_Engine resetName()
+	 * @method \Bitrix\AI\Model\EO_Engine unsetName()
+	 * @method \string fillName()
+	 * @method \string getCode()
+	 * @method \Bitrix\AI\Model\EO_Engine setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\AI\Model\EO_Engine resetCode()
+	 * @method \Bitrix\AI\Model\EO_Engine unsetCode()
+	 * @method \string fillCode()
+	 * @method \string getCategory()
+	 * @method \Bitrix\AI\Model\EO_Engine setCategory(\string|\Bitrix\Main\DB\SqlExpression $category)
+	 * @method bool hasCategory()
+	 * @method bool isCategoryFilled()
+	 * @method bool isCategoryChanged()
+	 * @method \string remindActualCategory()
+	 * @method \string requireCategory()
+	 * @method \Bitrix\AI\Model\EO_Engine resetCategory()
+	 * @method \Bitrix\AI\Model\EO_Engine unsetCategory()
+	 * @method \string fillCategory()
+	 * @method \string getCompletionsUrl()
+	 * @method \Bitrix\AI\Model\EO_Engine setCompletionsUrl(\string|\Bitrix\Main\DB\SqlExpression $completionsUrl)
+	 * @method bool hasCompletionsUrl()
+	 * @method bool isCompletionsUrlFilled()
+	 * @method bool isCompletionsUrlChanged()
+	 * @method \string remindActualCompletionsUrl()
+	 * @method \string requireCompletionsUrl()
+	 * @method \Bitrix\AI\Model\EO_Engine resetCompletionsUrl()
+	 * @method \Bitrix\AI\Model\EO_Engine unsetCompletionsUrl()
+	 * @method \string fillCompletionsUrl()
+	 * @method array getSettings()
+	 * @method \Bitrix\AI\Model\EO_Engine setSettings(array|\Bitrix\Main\DB\SqlExpression $settings)
+	 * @method bool hasSettings()
+	 * @method bool isSettingsFilled()
+	 * @method bool isSettingsChanged()
+	 * @method array remindActualSettings()
+	 * @method array requireSettings()
+	 * @method \Bitrix\AI\Model\EO_Engine resetSettings()
+	 * @method \Bitrix\AI\Model\EO_Engine unsetSettings()
+	 * @method array fillSettings()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\AI\Model\EO_Engine setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\AI\Model\EO_Engine resetDateCreate()
+	 * @method \Bitrix\AI\Model\EO_Engine unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\AI\Model\EO_Engine set($fieldName, $value)
+	 * @method \Bitrix\AI\Model\EO_Engine reset($fieldName)
+	 * @method \Bitrix\AI\Model\EO_Engine unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\AI\Model\EO_Engine wakeUp($data)
+	 */
+	class EO_Engine {
+		/* @var \Bitrix\AI\Model\EngineTable */
+		static public $dataClass = '\Bitrix\AI\Model\EngineTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\AI\Model {
+	/**
+	 * EO_Engine_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getAppCodeList()
+	 * @method \string[] fillAppCode()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \string[] getCategoryList()
+	 * @method \string[] fillCategory()
+	 * @method \string[] getCompletionsUrlList()
+	 * @method \string[] fillCompletionsUrl()
+	 * @method array[] getSettingsList()
+	 * @method array[] fillSettings()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\AI\Model\EO_Engine $object)
+	 * @method bool has(\Bitrix\AI\Model\EO_Engine $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\AI\Model\EO_Engine getByPrimary($primary)
+	 * @method \Bitrix\AI\Model\EO_Engine[] getAll()
+	 * @method bool remove(\Bitrix\AI\Model\EO_Engine $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\AI\Model\EO_Engine_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\AI\Model\EO_Engine current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\AI\Model\EO_Engine_Collection merge(?\Bitrix\AI\Model\EO_Engine_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Engine_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\AI\Model\EngineTable */
+		static public $dataClass = '\Bitrix\AI\Model\EngineTable';
+	}
+}
+namespace Bitrix\AI\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Engine_Result exec()
+	 * @method \Bitrix\AI\Model\EO_Engine fetchObject()
+	 * @method \Bitrix\AI\Model\EO_Engine_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Engine_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\AI\Model\EO_Engine fetchObject()
+	 * @method \Bitrix\AI\Model\EO_Engine_Collection fetchCollection()
+	 */
+	class EO_Engine_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\AI\Model\EO_Engine createObject($setDefaultValues = true)
+	 * @method \Bitrix\AI\Model\EO_Engine_Collection createCollection()
+	 * @method \Bitrix\AI\Model\EO_Engine wakeUpObject($row)
+	 * @method \Bitrix\AI\Model\EO_Engine_Collection wakeUpCollection($rows)
+	 */
+	class EO_Engine_Entity extends \Bitrix\Main\ORM\Entity {}
 }
