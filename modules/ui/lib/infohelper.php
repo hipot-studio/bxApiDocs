@@ -15,7 +15,7 @@ use Bitrix\Bitrix24;
 /**
  * Class InfoHelper
  * @package Bitrix\UI
- * @deprecated use Bitrix\UI\InfoHelper\Provider\Slider
+ * @deprecated use Bitrix\UI\FeaturePromoter\Slider
  */
 class InfoHelper
 {

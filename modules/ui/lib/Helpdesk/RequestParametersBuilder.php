@@ -122,11 +122,14 @@ class RequestParametersBuilder
 			'host' => $this->getHostName(),
 			'languageId' => LANGUAGE_ID,
 			'demoStatus' => $this->getDemoStatus(),
+			'isAutoPay' => $this->isCloud && \CBitrix24::isAutoPayLicense(),
 		];
 
 		if ($this->isCloud)
 		{
-			$this->parameters['portal_date_register'] = Option::get('main', '~controller_date_create', '');
+			$this->parameters += [
+				'portal_date_register' => Option::get('main', '~controller_date_create', '')
+			];
 		}
 	}
 

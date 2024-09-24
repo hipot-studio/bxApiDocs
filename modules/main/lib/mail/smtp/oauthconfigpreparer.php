@@ -47,7 +47,7 @@ class OAuthConfigPreparer
 			return;
 		}
 
-		if (Option::get('main', '~cloud_refresh_enabled', 'N') !== 'Y')
+		if (Option::get('main', '~cloud_refresh_enabled', 'Y') === 'N')
 		{
 			return;
 		}

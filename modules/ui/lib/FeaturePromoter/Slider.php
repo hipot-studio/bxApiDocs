@@ -6,23 +6,22 @@ use Bitrix\Main\Loader;
 use Bitrix\UI\Helpdesk;
 use Bitrix\Bitrix24;
 
-class Slider implements FeaturePromoterProvider
+class Slider extends BaseProvider
 {
 	private const PATH_HELPDESK = '/widget2/show/code/';
-
-	public function __construct(private string $currentUrl = '')
-	{
-	}
 
 	public function getRendererParameters(): array
 	{
 		$requestHelpdesk = new Helpdesk\Request(self::PATH_HELPDESK, [
-			'url' => $this->currentUrl,
+			'url' => $this->configuration->currentUrl,
 			'featurePromoterVersion' => 2,
+			'isPromoEditionAvailable' => Loader::includeModule('bitrix24')
+				&& Bitrix24\Feature::isPromoEditionAvailableByFeature($this->configuration->featureId ?? ''),
 		]);
 
 		return [
 			'frameUrlTemplate' => $requestHelpdesk->getPreparedUrl(),
+			'code' => $this->configuration->code,
 			'trialableFeatureList' => $this->getTrialableFeatureList(),
 			'availableDomainList' => $requestHelpdesk->getUrl()->getDomain()->getList(),
 		];

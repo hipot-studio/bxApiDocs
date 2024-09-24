@@ -319,6 +319,8 @@ class MainMailFormComponent extends CBitrixComponent implements Controllerable
 				if($this->arParams['USE_CALENDAR_SHARING'] && Loader::includeModule('calendar'))
 				{
 					$field['showCalendarSharingButton']  = true;
+					$field['sharingFeatureLimitEnable'] = Calendar\Integration\Bitrix24Manager::isFeatureEnabled('calendar_sharing');
+					$field['crmSharingFeatureLimitEnable'] = Calendar\Integration\Bitrix24Manager::isFeatureEnabled('crm_event_sharing');
 					$field['showCalendarSharingTour'] = $this->isSharingCalendarTourAvailable();
 				}
 
