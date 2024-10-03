@@ -11,8 +11,12 @@ class CIMNotifyDTO
 	public ?string $notifyModule;
 	public ?string $notifyEvent;
 	public ?string $notifyTag;
-	public ?string $notifyMessage;
-	public ?string $notifyMessageOut;
+
+	/** @var string|callable|null */
+	protected mixed $notifyMessage;
+
+	/** @var callable|string|null */
+	protected mixed $notifyMessageOut;
 
 	public function getMessageType(): ?string
 	{
@@ -98,24 +102,28 @@ class CIMNotifyDTO
 		return $this;
 	}
 
-	public function getNotifyMessage(): ?string
+	public function getNotifyMessage(): callable|string|null
 	{
 		return $this->notifyMessage;
 	}
 
-	public function setNotifyMessage(string $notifyMessage): self
+	public function setNotifyMessage(
+		callable|string|null $notifyMessage,
+	): self
 	{
 		$this->notifyMessage = $notifyMessage;
 
 		return $this;
 	}
 
-	public function getNotifyMessageOut(): ?string
+	public function getNotifyMessageOut(): callable|string|null
 	{
 		return $this->notifyMessageOut;
 	}
 
-	public function setNotifyMessageOut(string $notifyMessageOut): self
+	public function setNotifyMessageOut(
+		callable|string|null $notifyMessageOut,
+	): self
 	{
 		$this->notifyMessageOut = $notifyMessageOut;
 

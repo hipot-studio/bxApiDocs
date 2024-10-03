@@ -434,7 +434,7 @@ class Export extends Main\Engine\Controller
 			$this->filePath = $this->generateTempDirPath(). $this->fileName;
 			$this->processedItems = 0;
 			$this->totalItems = 0;
-			$this->pageSize = self::ROWS_PER_PAGE;
+			$this->pageSize = $this->getRowsPerPage();
 			$this->saveProgressParameters();
 		}
 
@@ -921,7 +921,7 @@ class Export extends Main\Engine\Controller
 	{
 		$message = '';
 		$avgStepDuration = $predictedStepCount = $predictedTimeDuration = 0;
-		$avgRowsPerStep = self::ROWS_PER_PAGE;
+		$avgRowsPerStep = $this->getRowsPerPage();
 		if ($this->stepCount > 0 && $this->timeStart > 0)
 		{
 			$avgStepDuration = round((time() - $this->timeStart) / $this->stepCount);
@@ -1373,7 +1373,7 @@ class Export extends Main\Engine\Controller
 	 * @param int $timeLimit Time limit.
 	 * @return void
 	 */
-	protected function startTimer($timeLimit = 25)
+	protected function startTimer($timeLimit = 25): void
 	{
 		$this->timeLimit = $timeLimit;
 
@@ -1393,7 +1393,7 @@ class Export extends Main\Engine\Controller
 	 *
 	 * @return boolean
 	 */
-	protected function hasTimeLimitReached()
+	protected function hasTimeLimitReached(): bool
 	{
 		if ($this->timeLimit > 0)
 		{
@@ -1410,5 +1410,14 @@ class Export extends Main\Engine\Controller
 		}
 
 		return false;
+	}
+
+	/**
+	 * Returns amount result rows per page.
+	 * @return int
+	 */
+	protected function getRowsPerPage(): int
+	{
+		return static::ROWS_PER_PAGE;
 	}
 }

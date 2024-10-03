@@ -105,6 +105,16 @@ class Workgroup
 		return $this->fields;
 	}
 
+	public function getId(): int
+	{
+		return (int)($this->fields['ID'] ?? 0);
+	}
+
+	public function getName(): string
+	{
+		return (string)($this->fields['NAME'] ?? '');
+	}
+
 	public function isProject(): bool
 	{
 		return (

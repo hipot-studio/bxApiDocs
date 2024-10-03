@@ -15,6 +15,7 @@ use Bitrix\Crm\Model\Dynamic\TypeTable;
 use Bitrix\Crm\Relation\Registrar;
 use Bitrix\Crm\Relation\RelationManager;
 use Bitrix\Crm\Service\Factory\Dynamic;
+use Bitrix\Crm\Service\Integration\Sign\Kanban\PullService;
 use Bitrix\Crm\Service\Sale\Shipment\ProductService;
 use Bitrix\Crm\Service\Sale\Terminal\PaymentService;
 use Bitrix\Crm\Service\Sign\B2e\ItemService;
@@ -621,6 +622,11 @@ class Container
 	public function getSignB2eStatusService(): StatusService
 	{
 		return ServiceLocator::getInstance()->get('crm.service.sign.b2e.status');
+	}
+
+	public function getSignIntegrationKanbanPullService(): PullService
+	{
+		return ServiceLocator::getInstance()->get('crm.service.integration.sign.kanban.pull');
 	}
 
 	public function getClientBinder(): ClientBinder

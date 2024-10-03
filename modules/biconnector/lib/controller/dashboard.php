@@ -134,8 +134,9 @@ class Dashboard extends Controller
 
 		if ($filter->getPeriod() === EmbeddedFilter\DateTime::PERIOD_RANGE)
 		{
-			$addData['DATE_FILTER_START'] = new Date($filter->getDateStart());
-			$addData['DATE_FILTER_END'] = new Date($filter->getDateEnd());
+			$addData['DATE_FILTER_START'] = $dashboard->getOrmObject()->getDateFilterStart();
+			$addData['DATE_FILTER_END'] = $dashboard->getOrmObject()->getDateFilterEnd();
+			$addData['INCLUDE_LAST_FILTER_DATE'] = $dashboard->getOrmObject()->getIncludeLastFilterDate();
 		}
 
 		$addResult = SupersetDashboardTable::add($addData);
@@ -219,6 +220,7 @@ class Dashboard extends Controller
 					'FILTER_PERIOD' => $filterPeriod,
 					'DATE_FILTER_START' => $dashboard->getOrmObject()->getDateFilterStart(),
 					'DATE_FILTER_END' => $dashboard->getOrmObject()->getDateFilterEnd(),
+					'INCLUDE_LAST_FILTER_DATE' => $dashboard->getOrmObject()->getIncludeLastFilterDate(),
 				],
 			];
 			$dashboardScopes = Model\SupersetScopeTable::getList([
@@ -833,14 +835,27 @@ class Dashboard extends Controller
 			$dateStart = $filterPeriod['DATE_FILTER_START'];
 			if ($dateStart instanceof Date)
 			{
-				$dateStart->toString();
+				$dateStart = $dateStart->toString();
 			}
 			$dateEnd = $filterPeriod['DATE_FILTER_END'];
 			if ($dateEnd instanceof Date)
 			{
-				$dateEnd->toString();
+				$dateEnd = $dateEnd->toString();
 			}
-			$period = "{$dateStart} - {$dateEnd}";
+
+			$langCode = 'BICONNECTOR_CONTROLLER_DASHBOARD_EXPORT_DATA_PERIOD';
+			if ($dashboard->getOrmObject()->getIncludeLastFilterDate() === 'Y')
+			{
+				$langCode = 'BICONNECTOR_CONTROLLER_DASHBOARD_EXPORT_DATA_PERIOD_INCLUDE_LAST_FILTER_DATE';
+			}
+
+			$period = Loc::getMessage(
+				$langCode,
+				[
+					'#DATE_FROM#' => $dateStart,
+					'#DATE_TO#' => $dateEnd,
+				]
+			);
 		}
 
 		$scopeCodes = Model\SupersetScopeTable::getList([

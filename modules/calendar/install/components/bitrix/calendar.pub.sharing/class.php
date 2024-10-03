@@ -1,6 +1,8 @@
 <?php
 
+use Bitrix\Calendar\Integration\Bitrix24\FeatureDictionary;
 use Bitrix\Main;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\LanguageTable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Calendar\Sharing;
@@ -61,15 +63,12 @@ class CalendarPubSharingComponent extends CBitrixComponent
 
 	protected function isLanguageAvailable(string $language): bool
 	{
-		$defaultLanguages = ['ru', 'de', 'en'];
-
 		$installedLanguages = LanguageTable::getList([
 			'select' => ['ID'],
 			'filter' => ['=ACTIVE' => 'Y'],
 		])->fetchAll();
-		$installedLanguages = array_column($installedLanguages, 'ID');
 
-		$availableLanguages = array_unique(array_merge($installedLanguages, $defaultLanguages));
+		$availableLanguages = array_unique(array_column($installedLanguages, 'ID'));
 
 		return in_array($language, $availableLanguages, true);
 	}
@@ -84,11 +83,7 @@ class CalendarPubSharingComponent extends CBitrixComponent
 	public function executeComponent()
 	{
 		$showAlert = false;
-		if (
-			!Main\Loader::includeModule('calendar')
-			|| !\Bitrix\Calendar\Sharing\SharingFeature::isEnabled()
-			|| !Bitrix24Manager::isFeatureEnabled('calendar_sharing')
-		)
+		if (!Loader::includeModule('calendar'))
 		{
 			$showAlert = true;
 		}
@@ -107,6 +102,9 @@ class CalendarPubSharingComponent extends CBitrixComponent
 			$link['active'] = $link['active'] ?? null;
 			$link['eventId'] = $link['eventId'] ?? null;
 			$link['userId'] = $link['userId'] ?? $link['ownerId'] ?? null;
+			$isCrmLink = $link['type'] === Sharing\Link\Helper::CRM_DEAL_SHARING_TYPE
+				&& Loader::includeModule('crm')
+			;
 
 			$owner = Sharing\Helper::getOwnerInfo($link['userId']);
 			$this->arResult['OWNER'] = [
@@ -124,7 +122,6 @@ class CalendarPubSharingComponent extends CBitrixComponent
 			{
 				$this->prepareCalendarParams($link);
 			}
-
 			else if ($link['type'] === Sharing\Link\Helper::EVENT_SHARING_TYPE && $link['eventId'])
 			{
 				$this->prepareEventParams($link);
@@ -134,13 +131,18 @@ class CalendarPubSharingComponent extends CBitrixComponent
 					$showAlert = true;
 				}
 			}
-
-			else if (
-				$link['type'] === Sharing\Link\Helper::CRM_DEAL_SHARING_TYPE
-				&& Main\Loader::includeModule('crm')
-			)
+			else if ($isCrmLink)
 			{
 				$this->prepareCrmDealParams($link);
+			}
+
+			if ($isCrmLink && !$showAlert)
+			{
+				$showAlert = !Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CRM_EVENT_SHARING);
+			}
+			else if (!$showAlert)
+			{
+				$showAlert = !Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_SHARING);
 			}
 		}
 

@@ -12,7 +12,6 @@ use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Intranet\Settings\CommunicationSettings;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -307,11 +306,7 @@ class GeneralChannel extends OpenChannelChat
 		$result['generalChannelCanPostList'] = self::getCanPostList();
 		$result['generalChannelCanPost'] = $this->getManageMessages();
 		$result['generalChannelShowManagersList'] = self::MANAGE_RIGHTS_MANAGERS;
-		$managerIds = $this->getRelations([
-			'FILTER' => [
-				'MANAGER' => 'Y'
-			]
-		])->getUserIds();
+		$managerIds = $this->getRelationFacade()->getManagerOnly()->getUserIds();
 		$managers = array_map(function ($managerId) {
 			return 'U' . $managerId;
 		}, $managerIds);

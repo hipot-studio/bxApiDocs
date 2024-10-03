@@ -288,58 +288,47 @@ function SelectBoxFromArray(
 	return $strReturnBox . '</select>';
 }
 
-/**
- * Date functions
- */
-
-function Calendar($sFieldName, $sFormName = "skform", $sFromName = "", $sToName = "")
+function Calendar($fieldName, $formName = "")
 {
-	if (defined("ADMIN_SECTION") && ADMIN_SECTION == true)
+	if (defined("ADMIN_SECTION") && ADMIN_SECTION)
 	{
-		return CAdminCalendar::Calendar($sFieldName, $sFromName, $sToName);
+		return CAdminCalendar::Calendar($fieldName);
 	}
 
-	static $bCalendarCode = false;
-	$func = "";
-	if (!$bCalendarCode)
-	{
-		$bCalendarCode = true;
-		$func =
-			"<script>\n" .
-			"window.Calendar = function(params, dateVal)\n" .
-			"{\n" .
-			"	var left, top;\n" .
-			"	var width = 180, height = 160;\n" .
-			"	if('['+typeof(window.event)+']' == '[object]')\n" .
-			"	{\n" .
-			"		top = (window.event.screenY+20+height>screen.height-40? window.event.screenY-45-height:window.event.screenY+20);\n" .
-			"		left = (window.event.screenX-width/2);\n" .
-			"	}\n" .
-			"	else\n" .
-			"	{\n" .
-			"		top = Math.floor((screen.height - height)/2-14);\n" .
-			"		left = Math.floor((screen.width - width)/2-5);\n" .
-			"	}\n" .
-			"	window.open('/bitrix/tools/calendar.php?lang=" . LANGUAGE_ID . (defined("ADMIN_SECTION") && ADMIN_SECTION === true ? "&admin_section=Y" : "&admin_section=N") . "&'+params+'&date='+escape(dateVal)+'&initdate='+escape(dateVal),'','scrollbars=no,resizable=yes,width='+width+',height='+height+',left='+left+',top='+top);\n" .
-			"}\n" .
-			"</script>\n";
-	}
-	return $func . "<a href=\"javascript:void(0);\" onclick=\"window.Calendar('name=" . urlencode($sFieldName) . "&amp;from=" . urlencode($sFromName) . "&amp;to=" . urlencode($sToName) . "&amp;form=" . urlencode($sFormName) . "', document['" . $sFormName . "']['" . $sFieldName . "'].value);\" title=\"" . GetMessage("TOOLS_CALENDAR") . "\"><img src=\"" . BX_ROOT . "/images/icons/calendar.gif\" alt=\"" . GetMessage("TOOLS_CALENDAR") . "\" width=\"15\" height=\"15\" border=\"0\" /></a>";
+	global $APPLICATION;
+
+	ob_start();
+
+	$APPLICATION->IncludeComponent(
+		'bitrix:main.calendar',
+		'',
+		[
+			'RETURN' => 'Y',
+			'SHOW_INPUT' => 'N',
+			'INPUT_NAME' => $fieldName,
+			'FORM_NAME' => $formName,
+			'SHOW_TIME' => 'N'
+		],
+		null,
+		['HIDE_ICONS' => 'Y']
+	);
+
+	return ob_get_clean();
 }
 
-function CalendarDate($sFromName, $sFromVal, $sFormName = "skform", $size = "10", $param = "class=\"typeinput\"")
+function CalendarDate($fieldName, $value, $formName = "", $size = "10", $param = "class=\"typeinput\"")
 {
-	if (defined("ADMIN_SECTION") && ADMIN_SECTION == true)
+	if (defined("ADMIN_SECTION") && ADMIN_SECTION)
 	{
-		return CAdminCalendar::CalendarDate($sFromName, $sFromVal, $size, ($size > 10));
+		return CAdminCalendar::CalendarDate($fieldName, $value, $size, ($size > 10));
 	}
 
-	return '<input type="text" name="' . $sFromName . '" id="' . $sFromName . '" size="' . $size . '" value="' . htmlspecialcharsbx($sFromVal) . '" ' . $param . ' /> ' . "\n" . Calendar($sFromName, $sFormName) . "\n";
+	return '<input type="text" name="' . $fieldName . '" id="' . $fieldName . '" size="' . $size . '" value="' . htmlspecialcharsbx($value) . '" ' . $param . ' /> ' . "\n" . Calendar($fieldName, $formName) . "\n";
 }
 
 function CalendarPeriod($sFromName, $sFromVal, $sToName, $sToVal, $sFormName = "skform", $show_select = "N", $field_select = "class=\"typeselect\"", $field_input = "class=\"typeinput\"", $size = "10")
 {
-	if (defined("ADMIN_SECTION") && ADMIN_SECTION == true)
+	if (defined("ADMIN_SECTION") && ADMIN_SECTION)
 	{
 		return CAdminCalendar::CalendarPeriod($sFromName, $sToName, $sFromVal, $sToVal, ($show_select == "Y"), $size, ($size > 10));
 	}
@@ -396,9 +385,9 @@ function " . $sFromName . "_SetDate()
 	}
 	$str .=
 		'<input ' . $ds . ' ' . $field_input . ' type="text" name="' . $sFromName . '" id="' . $sFromName . '" size="' . $size . '" value="' . htmlspecialcharsbx($sFromVal) . '" /> ' . "\n" .
-		Calendar($sFromName, $sFormName, $sFromName, $sToName) . ' ... ' . "\n" .
+		Calendar($sFromName, $sFormName) . ' ... ' . "\n" .
 		'<input ' . $field_input . ' type="text" name="' . $sToName . '" id="' . $sToName . '" size="' . $size . '" value="' . htmlspecialcharsbx($sToVal) . '" /> ' . "\n" .
-		Calendar($sToName, $sFormName, $sFromName, $sToName) . "\n";
+		Calendar($sToName, $sFormName) . "\n";
 
 	return '<span style="white-space: nowrap;">' . $str . '</span>';
 }
@@ -2825,14 +2814,19 @@ function CopyDirFiles($path_from, $path_to, $ReWrite = true, $Recursive = false,
 	return false;
 }
 
-function DeleteDirFilesEx($path)
+function DeleteDirFilesEx($path, $root = null)
 {
 	if ($path == '' || $path == '/')
 	{
 		return false;
 	}
 
-	$full_path = $_SERVER["DOCUMENT_ROOT"] . "/" . $path;
+	if ($root === null)
+	{
+		$root = $_SERVER["DOCUMENT_ROOT"];
+	}
+
+	$full_path = $root . "/" . $path;
 	$full_path = preg_replace("#[\\\\\\/]+#", "/", $full_path);
 
 	$f = true;
@@ -2855,7 +2849,7 @@ function DeleteDirFilesEx($path)
 					continue;
 				}
 
-				if (!DeleteDirFilesEx($path . "/" . $file))
+				if (!DeleteDirFilesEx($path . "/" . $file, $root))
 				{
 					$f = false;
 				}
@@ -3186,7 +3180,7 @@ function GetRequestUri()
 		}
 	}
 
-	$queryString = DeleteParam(["bxrand", "SEF_APPLICATION_CUR_PAGE_URL"]);
+	$queryString = DeleteParam(["bxrand"]);
 	if ($queryString != "")
 	{
 		$uriPath = $uriPath . "?" . $queryString;
@@ -3934,7 +3928,7 @@ function AddMessage2Log($text, $module = '', $traceDepth = 6, $showArgs = false)
 		$trace = '';
 		if ($traceDepth > 0)
 		{
-			$trace = Main\Diag\Helper::getBackTrace($traceDepth, ($showArgs ? null : DEBUG_BACKTRACE_IGNORE_ARGS), 2);
+			$trace = Main\Diag\Helper::getBackTrace($traceDepth, ($showArgs ? null : DEBUG_BACKTRACE_IGNORE_ARGS));
 		}
 
 		$context = [
@@ -5135,7 +5129,7 @@ function ShowImage($PICTURE_ID, $iMaxW = 0, $iMaxH = 0, $sParams = false, $strIm
 
 function BXClearCache($full = false, $initdir = '')
 {
-	return CPHPCache::ClearCache($full, $initdir);
+	CPHPCache::ClearCache($full, $initdir);
 }
 
 function RegisterModule($id)

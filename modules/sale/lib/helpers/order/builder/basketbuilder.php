@@ -499,6 +499,10 @@ abstract class BasketBuilder
 
 		$productProviderData = array();
 
+		/** @var BasketItem $firstBasketItem */
+		$firstBasketItem = $basketItems[0] ?? null;
+		$vatIncludedByFirstItem = $firstBasketItem ? $firstBasketItem->getField('VAT_INCLUDED') : 'N';
+
 		/** @var BasketItem $item */
 		foreach($basketItems as $item)
 		{
@@ -650,6 +654,26 @@ abstract class BasketBuilder
 				}
 
 				$product["CURRENCY"] = $order->getCurrency();
+			}
+
+			if (
+				$product['VAT_INCLUDED'] !== $vatIncludedByFirstItem
+				||
+				(
+					isset($productProviderData[$basketCode]['VAT_INCLUDED'])
+					&&
+					$product['VAT_INCLUDED'] !== $productProviderData[$basketCode]['VAT_INCLUDED']
+				)
+			)
+			{
+				if ($product['VAT_INCLUDED'] === 'Y')
+				{
+					$product['PRICE'] = $product['PRICE'] / (1 + $product["VAT_RATE"]);
+					$product['BASE_PRICE'] = $product['BASE_PRICE'] / (1 + $product["VAT_RATE"]);
+				}
+
+				// There can be only one value for all of them
+				$product['VAT_INCLUDED'] = $vatIncludedByFirstItem;
 			}
 
 			$this->setBasketItemFields($item, $product);

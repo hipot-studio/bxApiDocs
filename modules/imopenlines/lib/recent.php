@@ -727,6 +727,11 @@ class Recent
 		return $result;
 	}
 
+	/**
+	 * @event 'imopenlines:OnQueueOperatorsDelete'
+	 * @param \Bitrix\Main\Event $event
+	 * @return bool
+	 */
 	public static function onQueueOperatorsDelete(\Bitrix\Main\Event $event): bool
 	{
 		$configId = $event->getParameter('line');

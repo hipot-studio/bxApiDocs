@@ -2,7 +2,6 @@
 
 namespace Bitrix\Main\Grid\Panel;
 
-use Bitrix\Main\Grid\Panel\Actions;
 use Bitrix\Main\Grid\Panel\Snippet\Button;
 use Bitrix\Main\Grid\Panel\Snippet\Checkbox;
 use Bitrix\Main\Grid\Panel\Snippet\Onchange;

@@ -181,13 +181,14 @@ class FileUploader
 		$result = new Result();
 
 		$file = new \Bitrix\Main\IO\File($fileName);
-		if(!static::isCorrectFile($file))
+		if (!static::isCorrectFile($file))
 		{
-			$result->addError(new Error($errorPrefix . 'Wrong fileName'));
+			return $result->addError(new Error($errorPrefix . 'Wrong fileName'));
 		}
-		if(!$file->putContents($data, \Bitrix\Main\IO\File::APPEND))
+
+		if (!$file->putContents($data, \Bitrix\Main\IO\File::APPEND))
 		{
-			$result->addError(new Error($errorPrefix . 'Cant write local file'));
+			return $result->addError(new Error($errorPrefix . 'Cant write local file'));
 		}
 
 		return $result->setData(['result' => 'local']);

@@ -5,7 +5,7 @@ namespace Bitrix\Tasks\Flow\Control\Middleware\Implementation;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
-use Bitrix\Tasks\Flow\Control\AbstractCommand;
+use Bitrix\Tasks\AbstractCommand;
 use Bitrix\Tasks\Flow\Control\Exception\MiddlewareException;
 use Bitrix\Tasks\Flow\Control\Middleware\AbstractMiddleware;
 use Bitrix\Tasks\Internals\Log\Logger;

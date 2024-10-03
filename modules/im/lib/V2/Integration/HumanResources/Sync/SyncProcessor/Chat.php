@@ -77,6 +77,13 @@ class Chat extends Base
 		$users = $this->filterUsersInOtherRelations($chat, $users);
 		foreach ($users as $user)
 		{
+			if ($chat->getAuthorId() === (int)$user)
+			{
+				$chat->getRelationByUserId((int)$user)?->setReason(Reason::DEFAULT)?->save();
+
+				continue;
+			}
+
 			$chat->deleteUser($user, false, false, false, true);
 		}
 	}

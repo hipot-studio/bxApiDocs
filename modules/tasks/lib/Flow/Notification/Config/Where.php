@@ -4,9 +4,9 @@ namespace Bitrix\Tasks\Flow\Notification\Config;
 
 use Bitrix\Tasks\Flow\Notification\Exception\InvalidPayload;
 use Bitrix\Tasks\Integration\Bizproc\Robot\ChannelDictionary;
-use Bitrix\Tasks\ValueObject;
+use Bitrix\Tasks\ValueObjectInterface;
 
-class Where implements ValueObject
+class Where implements ValueObjectInterface
 {
 	public const NOTIFICATION_CENTER = 'notificationCenter';
 	public const CHAT_DEPARTMENT = 'chatDepartment';

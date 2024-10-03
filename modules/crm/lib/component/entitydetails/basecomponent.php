@@ -360,8 +360,9 @@ abstract class BaseComponent extends Crm\Component\Base
 					: ComponentMode::VIEW;
 			}
 		}
-
+		//@codingStandardsIgnoreStart
 		$this->arResult['COMPONENT_MODE'] = $this->mode;
+		//@codingStandardsIgnoreEnd
 
 		return true;
 	}
@@ -399,11 +400,12 @@ abstract class BaseComponent extends Crm\Component\Base
 		{
 			$wizard = $this->initializeConversionWizardFromRequest($this->request);
 		}
-
+		//@codingStandardsIgnoreStart
 		if (is_null($wizard) && !empty($this->arParams['CONVERSION_SOURCE']))
 		{
 			$wizard = Conversion\ConversionManager::loadWizardByParams($this->arParams['CONVERSION_SOURCE']);
 		}
+		//@codingStandardsIgnoreEnd
 
 		if (!$wizard || !$wizard->isConvertingTo($this->getEntityTypeID()))
 		{
@@ -685,7 +687,7 @@ abstract class BaseComponent extends Crm\Component\Base
 					$entityTypeID,
 					$entityID,
 					\CCrmBizProcEventType::Create,
-					$arErrors
+					$errors
 				);
 			}
 		}
@@ -932,7 +934,7 @@ abstract class BaseComponent extends Crm\Component\Base
 					$entityTypeID,
 					$entityID,
 					\CCrmBizProcEventType::Edit,
-					$arErrors
+					$errors
 				);
 			}
 		}

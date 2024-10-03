@@ -953,6 +953,17 @@ class Params extends Registry
 
 	//endregion
 
+	public function toArray()
+	{
+		$result = [];
+		foreach ($this as $paramName => $param)
+		{
+			$result[$paramName] = $param->toRestFormat();
+		}
+
+		return $result;
+	}
+
 	/**
 	 * @return array<string, string|array>
 	 */

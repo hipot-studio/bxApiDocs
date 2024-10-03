@@ -8,7 +8,6 @@ class Department
 {
 	/** @var int */
 	private $id;
-	private static ?int $topDepartmentId = null;
 
 	public function __construct(int $id = 0)
 	{
@@ -32,11 +31,6 @@ class Department
 	 */
 	public function getPathFromHeadToDepartment(): array
 	{
-		if (!Loader::includeModule('iblock'))
-		{
-			return [];
-		}
-
 		$departmentTree = \CIntranetUtils::GetDeparmentsTree(0);
 		$topDepartmentId = self::getTopDepartmentId();
 
@@ -102,36 +96,13 @@ class Department
 		return $accessCodes;
 	}
 
-	public static function getTopDepartmentId()
+	/**
+	 * @deprecated Use \Bitrix\Im\V2\Integration\HumanResources\Department\Department::getTopId()
+	 */
+	public static function getTopDepartmentId(): false|int
 	{
-		if (!Loader::includeModule("iblock"))
-		{
-			return false;
-		}
+		$topId = \Bitrix\Im\V2\Integration\HumanResources\Department\Department::getInstance()->getTopId();
 
-		if (self::$topDepartmentId !== null)
-		{
-			return self::$topDepartmentId;
-		}
-
-		$departmentId = false;
-		$res = \CIBlock::GetList([], ["CODE" => "departments"]);
-		if ($iblock = $res->Fetch())
-		{
-			$res = \CIBlockSection::GetList(
-				[],
-				[
-					"SECTION_ID" => 0,
-					"IBLOCK_ID" => $iblock["ID"]
-				]
-			);
-			if ($department = $res->Fetch())
-			{
-				$departmentId = (int)$department['ID'];
-			}
-		}
-		self::$topDepartmentId = $departmentId;
-
-		return $departmentId;
+		return $topId ?? false;
 	}
 }

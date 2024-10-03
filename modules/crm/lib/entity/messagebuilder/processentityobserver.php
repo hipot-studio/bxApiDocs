@@ -28,4 +28,9 @@ final class ProcessEntityObserver extends ProcessEntity
 {
 	public const BECOME_OBSERVER = 'BECOME_OBSERVER';
 	public const NO_LONGER_OBSERVER = 'NO_LONGER_OBSERVER';
+
+	public static function getFilePath(): string
+	{
+		return __FILE__;
+	}
 }

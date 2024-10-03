@@ -10,10 +10,10 @@ use Bitrix\Crm\EntityRequisite;
 use Bitrix\Crm\Integration\ClientResolver;
 use Bitrix\Crm\Integration\OpenLineManager;
 use Bitrix\Crm\Integrity\DuplicateControl;
+use Bitrix\Crm\Item;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\StatusTable;
-use Bitrix\Crm\Item;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 
@@ -758,6 +758,7 @@ class CCrmComponentHelper
 			if ($addToDataLevel)
 			{
 				$multiFieldID = $ID;
+				$countryCode = $phoneCountryList[$multiFieldID] ?? '';
 				if ($copyMode)
 				{
 					$multiFieldID = "n0{$multiFieldID}";
@@ -768,7 +769,7 @@ class CCrmComponentHelper
 					'VALUE' => $value,
 					'VALUE_TYPE' => $valueTypeID,
 					'VALUE_EXTRA' => [
-						'COUNTRY_CODE' => $phoneCountryList[$multiFieldID] ?? ''
+						'COUNTRY_CODE' => $countryCode,
 					],
 					'VIEW_DATA' => \CCrmViewHelper::PrepareMultiFieldValueItemData(
 						$typeID,
@@ -799,6 +800,11 @@ class CCrmComponentHelper
 	 */
 	private static function getOwnerTitles(int $entityTypeId, array $entityIds): array
 	{
+		if (empty($entityIds))
+		{
+			return [];
+		}
+
 		$factory = Container::getInstance()->getFactory($entityTypeId);
 		if (!$factory || !\CcrmOwnerType::isUseFactoryBasedApproach($entityTypeId))
 		{

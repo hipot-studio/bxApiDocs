@@ -9,6 +9,7 @@ use Bitrix\Bitrix24;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Engine\Controller;
 
 class Callback extends Controller
@@ -73,7 +74,10 @@ class Callback extends Controller
 
 		SupersetInitializer::clearSupersetData();
 
-		if (Bitrix24\LicenseScanner\Manager::getInstance()->shouldWarnPortal())
+		if (
+			Loader::includeModule('bitrix24')
+			&& Bitrix24\LicenseScanner\Manager::getInstance()->shouldWarnPortal()
+		)
 		{
 			// Deleting instance was initiated by client - when tariff is over.
 			SupersetInitializerLogger::logInfo('Superset instance was deleted by client due to tariff ending');

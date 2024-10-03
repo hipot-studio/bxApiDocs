@@ -2,9 +2,7 @@
 
 namespace Bitrix\Tasks\Internals\Attribute\Trait;
 
-use Bitrix\Main\ArgumentException;
 use Bitrix\Tasks\Flow\Attribute\Instantiable;
-use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
 use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionException;

@@ -20,14 +20,9 @@ class CDatabase extends CAllDatabase
 
 	public $type = "PGSQL";
 
-	protected function ConnectInternal()
-	{
-		throw new \Bitrix\Main\NotImplementedException("Use d7 connection.");
-	}
-
 	public function ToNumber($expr)
 	{
-		return "CASE WHEN " . $expr . "~E'^\\d+$' THEN " . $expr . "::integer ELSE 0 END";
+		return "CASE WHEN " . $expr . "~E'^[0-9]+$' THEN " . $expr . "::integer ELSE 0 END";
 	}
 
 	public function DateFormatToDB($format, $field = false)

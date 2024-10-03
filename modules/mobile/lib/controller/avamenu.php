@@ -27,4 +27,9 @@ class AvaMenu extends Controller
 	{
 		return \CUserOptions::GetOption('mobile', 'avamenu_aha-moment_enabled_v2', 'Y');
 	}
+
+	public function getUserInfoAction($reloadFromDb = false)
+	{
+		return (new \Bitrix\Mobile\AvaMenu\Profile\Profile())->getMainData($reloadFromDb);
+	}
 }

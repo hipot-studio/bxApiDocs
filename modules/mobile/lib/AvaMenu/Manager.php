@@ -68,8 +68,13 @@ class Manager
 		return $result;
 	}
 
-	private function getItemTitle(AbstractMenuItem $item)
+	private function getItemTitle(AbstractMenuItem $item): string
 	{
+		if ($item->getId() === 'timeman')
+		{
+			return Loc::getMessage('AVA_MENU_NAME_TIMEMAN_MSGVER_1');
+		}
+
 		return Loc::getMessage('AVA_MENU_NAME_' . mb_strtoupper($item->getId()));
 	}
 

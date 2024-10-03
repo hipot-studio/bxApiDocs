@@ -8,6 +8,8 @@ use Bitrix\Tasks\Ui\Filter;
 
 class Analytics extends Common
 {
+	protected static ?array $instance = null;
+
 	public const TOOL = 'tasks';
 
 	public const TASK_CATEGORY = 'task_operations';
@@ -309,6 +311,61 @@ class Analytics extends Common
 		);
 
 		$this->sendAnalytics($analyticsEvent, $section, $element, $subSection);
+	}
+
+	public function onFirstProjectCreation(): void
+	{
+		$this->logToFile(
+			'markShowedStep',
+			'firstProjectCreation',
+			'0',
+			'tourGuide'
+		);
+	}
+
+	public function onFirstScrumCreation(): void
+	{
+		$this->logToFile(
+			'markShowedStep',
+			'firstScrumCreation',
+			'0',
+			'tourGuide'
+		);
+	}
+
+	public function onFirstTaskGridCreation(): void
+	{
+		$this->logToFile(
+			'markShowedStep',
+			'firstGridTaskCreation',
+			'0',
+			'tourGuide'
+		);
+	}
+
+	public function onQrMobile(): void
+	{
+		$this->logToFile(
+			'send',
+			'QrMobile',
+			0,
+			'QrMobile',
+			$this->userId
+		);
+	}
+
+	public function logToFile(
+		string $action,
+		string $tag = '',
+		string $label = '',
+		string $actionType = '',
+		?int $userId = null
+	): void
+	{
+		if (function_exists('AddEventToStatFile'))
+		{
+			AddEventToStatFile('tasks', $action, $tag, $label, $actionType, $userId);
+		}
 	}
 
 	/**

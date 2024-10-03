@@ -606,6 +606,10 @@ class CatalogStoreDocumentListComponent extends CBitrixComponent implements Cont
 		$result['SHOW_ROW_CHECKBOXES'] = true;
 		$result['SHOW_CHECK_ALL_CHECKBOXES'] = true;
 		$result['SHOW_ACTION_PANEL'] = true;
+		$result['USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP'] = (bool)(
+			$this->arParams['USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP'] ?? \Bitrix\Main\ModuleManager::isModuleInstalled('ui')
+		);
+		$result['ENABLE_FIELDS_SEARCH'] = 'Y';
 
 		$actionPanelItems = [];
 		$snippet = new \Bitrix\Main\Grid\Panel\Snippet();
@@ -1136,7 +1140,10 @@ class CatalogStoreDocumentListComponent extends CBitrixComponent implements Cont
 			'THEME' => Bitrix\Main\UI\Filter\Theme::LIGHT,
 			'CONFIG' => [
 				'AUTOFOCUS' => false,
+				'popupWidth' => 800,
 			],
+			'USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP' => Bitrix\Main\ModuleManager::isModuleInstalled('ui'),
+			'ENABLE_FIELDS_SEARCH' => 'Y',
 		];
 		Toolbar::addFilter($filterOptions);
 

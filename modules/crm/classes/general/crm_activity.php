@@ -3,6 +3,7 @@
  * CRM Activity
  */
 IncludeModuleLangFile(__FILE__);
+//@codingStandardsIgnoreFile
 
 use Bitrix\Crm;
 use Bitrix\Crm\Activity\FastSearch;
@@ -344,6 +345,11 @@ class CAllCrmActivity
 				&& (!$isCompleted || $provider::canKeepCompletedInCalendar($providerTypeId))
 			)
 			{
+				if (!self::isLocationFeatureEnabled())
+				{
+					unset($arFields['LOCATION']);
+				}
+
 				$eventID = self::SaveCalendarEvent($arFields);
 				if(is_int($eventID) && $eventID > 0)
 				{
@@ -977,7 +983,14 @@ class CAllCrmActivity
 					}
 					elseif (isset($arFields['LOCATION']))
 					{
-						$arCurEntity['LOCATION'] = $arFields['LOCATION'];
+						if (self::isLocationFeatureEnabled())
+						{
+							$arCurEntity['LOCATION'] = $arFields['LOCATION'];
+						}
+						elseif (isset($arPrevEntity['LOCATION']))
+						{
+							$arCurEntity['LOCATION'] = $arPrevEntity['LOCATION'];
+						}
 					}
 					else
 					{
@@ -6873,7 +6886,11 @@ class CAllCrmActivity
 		$providerTypeId = isset($arFields['PROVIDER_TYPE_ID']) ? (string) $arFields['PROVIDER_TYPE_ID'] : null;
 		$completed = (($arFields['COMPLETED'] ?? null) === 'Y');
 
-		if ($provider === null || $responsibleID <= 0 || !CModule::IncludeModule('calendar'))
+		if (
+			$provider === null
+			|| $responsibleID <= 0
+			|| !\Bitrix\Main\Loader::includeModule('calendar')
+		)
 		{
 			return false;
 		}
@@ -6893,6 +6910,7 @@ class CAllCrmActivity
 				(int)($arFields['PRIORITY'] ?? CCrmActivityPriority::Low)
 			),
 			'DESCRIPTION' => $description,
+			'SKIP_TIME' => false,
 		];
 
 		if (isset($arFields['ATTENDEES_CODES']))
@@ -6916,6 +6934,7 @@ class CAllCrmActivity
 		if (isset($arFields['IS_MEETING']))
 		{
 			$arCalEventFields['IS_MEETING'] = $arFields['IS_MEETING'];
+			$arCalEventFields['MEETING_HOST'] = $responsibleID;
 
 			if ($arCalEventFields['IS_MEETING'] === true)
 			{
@@ -6991,10 +7010,7 @@ class CAllCrmActivity
 			}
 		}
 
-		if (method_exists('CCalendar', 'GetCrmSection'))
-		{
-			$arCalEventFields['SECTIONS'] = [CCalendar::GetCrmSection($responsibleID, true)];
-		}
+		$arCalEventFields['SECTIONS'] = [\CCalendar::GetCrmSection($responsibleID, true)];
 
 		$calendarEventId = isset($arFields['CALENDAR_EVENT_ID']) ? (int)$arFields['CALENDAR_EVENT_ID'] : 0;
 
@@ -7009,7 +7025,7 @@ class CAllCrmActivity
 					$arCalEventFields['ID'] = $calendarEventId;
 				}
 
-				if(isset($arPresentEventFields['RRULE']) && $arPresentEventFields['RRULE'] != '')
+				if(!empty($arPresentEventFields['RRULE']))
 				{
 					$arCalEventFields['RRULE'] = CCalendarEvent::ParseRRULE($arPresentEventFields['RRULE']);
 				}
@@ -7020,7 +7036,7 @@ class CAllCrmActivity
 				&& trim($description) !== trim($prevEnrichedDescription)
 			)
 			{
-				$culture = \Bitrix\Main\Context::getCurrent()->getCulture();
+				$culture = \Bitrix\Main\Context::getCurrent()?->getCulture();
 				$date = new DateTime();
 				if ($culture)
 				{
@@ -7040,14 +7056,14 @@ class CAllCrmActivity
 				;
 			}
 		}
-		if(isset($arFields['NOTIFY_TYPE']) && $arFields['NOTIFY_TYPE'] != CCrmActivityNotifyType::None)
+		if(isset($arFields['NOTIFY_TYPE']) && (int)$arFields['NOTIFY_TYPE'] !== CCrmActivityNotifyType::None)
 		{
-			$arCalEventFields['REMIND'] = array(
-				array(
+			$arCalEventFields['REMIND'] = [
+				[
 					'type' => CCrmActivityNotifyType::ToCalendarEventRemind($arFields['NOTIFY_TYPE']),
-					'count' => isset($arFields['NOTIFY_VALUE']) ? intval($arFields['NOTIFY_VALUE']) : 15
-				)
-			);
+					'count' => isset($arFields['NOTIFY_VALUE']) ? (int)$arFields['NOTIFY_VALUE'] : 15
+				]
+			];
 		}
 
 		// Clear notification for completed activity
@@ -7057,31 +7073,23 @@ class CAllCrmActivity
 		}
 
 		self::$IGNORE_CALENDAR_EVENTS = true;
-		// We must initialize CCalendar!
-		$calendar = new CCalendar();
-		$calendar->Init(
-			array(
-				'type'=>'user',
-				'userId' => $responsibleID,
-				'ownerId' => $responsibleID
-			)
-		);
 
-		$result = $calendar->SaveEvent(
-			array(
-				'arFields' => $arCalEventFields,
-				'userId' => $responsibleID,
-				'autoDetectSection' => true,
-				'autoCreateSection' => true
-			)
-		);
+		$result = \CCalendar::SaveEvent([
+			'arFields' => $arCalEventFields,
+			'userId' => $responsibleID,
+			'autoDetectSection' => true,
+			'autoCreateSection' => true
+		]);
 
 		$ownerID = (int)$arFields['OWNER_ID'];
 		$ownerTypeID = (int)$arFields['OWNER_TYPE_ID'];
-		$arBindings = isset($arFields['BINDINGS']) ? $arFields['BINDINGS'] : array();
+		$arBindings = $arFields['BINDINGS'] ?? [];
 		if(empty($arBindings) && $ownerID > 0 && $ownerTypeID > 0)
 		{
-			$arBindings[] = array('OWNER_TYPE_ID' => $ownerTypeID, 'OWNER_ID' => $ownerID);
+			$arBindings[] = [
+				'OWNER_TYPE_ID' => $ownerTypeID,
+				'OWNER_ID' => $ownerID
+			];
 		}
 
 		$entityID = (int)$result;
@@ -7265,25 +7273,22 @@ class CAllCrmActivity
 				$tag = sprintf('crm_email_%s', md5($url));
 			}
 
-			$messageTemplate = getMessage(
-				'CRM_ACTIVITY_NOTIFY_MESSAGE_INCOMING_MULTI',
-				[
+			$getMessageCallback = static function (string $url) use ($count) {
+				$code = 'CRM_ACTIVITY_NOTIFY_MESSAGE_INCOMING_MULTI';
+				$replace = [
 					'#COUNT#' => $count,
-				],
-			);
+					'#VIEW_URL#' => $url,
+				];
+
+				return static fn (?string $languageId = null) =>
+					Loc::getMessage($code, $replace, $languageId)
+				;
+			};
 
 			return CCrmNotifier::Notify(
 				$userId,
-				str_replace(
-					'#VIEW_URL#',
-					$url,
-					$messageTemplate
-				),
-				str_replace(
-					'#VIEW_URL#',
-					$absoluteUrl,
-					$messageTemplate
-				),
+				$getMessageCallback($url),
+				$getMessageCallback($absoluteUrl),
 				$schemeTypeID,
 				$tag
 			);
@@ -7352,38 +7357,37 @@ class CAllCrmActivity
 				$tag = sprintf('crm_email_%s', md5($url));
 			}
 
-			if ($fields['SUBJECT'])
-			{
-				$messageTemplate = getMessage(
-					'CRM_ACTIVITY_NOTIFY_MESSAGE_INCOMING_1',
-					[
+			$getMessageCallback = static function (string $url) use (
+				$entityTitle,
+				$fields,
+			){
+				if ($fields['SUBJECT'])
+				{
+					$code = 'CRM_ACTIVITY_NOTIFY_MESSAGE_INCOMING_1';
+					$replace = [
 						'#ENTITY_TITLE#' => $entityTitle,
 						'#SUBJECT#' => $fields['SUBJECT'],
-					],
-				);
-			}
-			else
-			{
-				$messageTemplate = getMessage(
-					'CRM_ACTIVITY_NOTIFY_MESSAGE_INCOMING_EMPTY_SUBJECT_1',
-					[
+					];
+				}
+				else
+				{
+					$code = 'CRM_ACTIVITY_NOTIFY_MESSAGE_INCOMING_EMPTY_SUBJECT_1';
+					$replace = [
 						'#ENTITY_TITLE#' => $entityTitle,
-					],
-				);
-			}
+					];
+				}
+
+				$replace['#VIEW_URL#'] = $url;
+
+				return static fn (?string $languageId = null) =>
+					Loc::getMessage($code, $replace, $languageId)
+				;
+			};
 
 			return CCrmNotifier::Notify(
 				$responsibleID,
-				str_replace(
-					'#VIEW_URL#',
-					$url,
-					$messageTemplate
-				),
-				str_replace(
-					'#VIEW_URL#',
-					$absoluteUrl,
-					$messageTemplate
-				),
+				$getMessageCallback($url),
+				$getMessageCallback($absoluteUrl),
 				$schemeTypeID,
 				$tag
 			);
@@ -7681,6 +7685,25 @@ class CAllCrmActivity
 				if ($type)
 				{
 					$url = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Activity, $ID);
+					$absoluteUrl = CCrmUrlUtil::ToAbsoluteUrl($url);
+
+					$notifyMessage = static fn (?string $languageId = null) =>
+						Loc::getMessage(
+							"CRM_ACTIVITY_{$type}_RESPONSIBLE_IM_NOTIFY",
+							[ "#title#" => '<a href="' . $url . '">' . htmlspecialcharsbx($arFields['SUBJECT']) . '</a>' ],
+							$languageId,
+						)
+					;
+
+					$notifyMessageOut = static function (?string $languageId = null) use ($arFields, $type, $absoluteUrl) {
+						$message = Loc::getMessage(
+							"CRM_ACTIVITY_{$type}_RESPONSIBLE_IM_NOTIFY",
+							[ "#title#" => htmlspecialcharsbx($arFields['SUBJECT']) ],
+							$languageId,
+						);
+
+						return "{$message} ({$absoluteUrl})";
+					};
 
 					$arMessageFields = array(
 						"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
@@ -7691,15 +7714,23 @@ class CAllCrmActivity
 						"LOG_ID" => $eventID,
 						"NOTIFY_EVENT" => "changeAssignedBy",
 						"NOTIFY_TAG" => "CRM|ACTIVITY|".$ID,
-						"NOTIFY_MESSAGE" => GetMessage("CRM_ACTIVITY_".$type."_RESPONSIBLE_IM_NOTIFY", Array("#title#" => '<a href="'.$url.'">'.htmlspecialcharsbx($arFields['SUBJECT']).'</a>')),
-						"NOTIFY_MESSAGE_OUT" => GetMessage("CRM_ACTIVITY_".$type."_RESPONSIBLE_IM_NOTIFY", Array("#title#" => htmlspecialcharsbx($arFields['SUBJECT'])))." (".CCrmUrlUtil::ToAbsoluteUrl($url).")"
+						"NOTIFY_MESSAGE" => $notifyMessage,
+						"NOTIFY_MESSAGE_OUT" => $notifyMessageOut,
 					);
 
 					if(!$bHasPermissions)
 					{
 						//TODO: Add  message 'Need for permissions'
-						$arMessageFields["NOTIFY_MESSAGE"] = GetMessage("CRM_ACTIVITY_".$type."_RESPONSIBLE_IM_NOTIFY", Array("#title#" => htmlspecialcharsbx($arFields['SUBJECT'])));
-						$arMessageFields["NOTIFY_MESSAGE_OUT"] = GetMessage("CRM_ACTIVITY_".$type."_RESPONSIBLE_IM_NOTIFY", Array("#title#" => htmlspecialcharsbx($arFields['SUBJECT'])));
+						$message = static fn (?string $languageId = null) =>
+							Loc::getMessage(
+								"CRM_ACTIVITY_{$type}_RESPONSIBLE_IM_NOTIFY",
+								[ "#title#" => htmlspecialcharsbx($arFields['SUBJECT']) ],
+								$languageId,
+							)
+						;
+
+						$arMessageFields["NOTIFY_MESSAGE"] = $message;
+						$arMessageFields["NOTIFY_MESSAGE_OUT"] = $message;
 					}
 
 					CIMNotify::Add($arMessageFields);
@@ -7714,6 +7745,11 @@ class CAllCrmActivity
 		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
 		{
 			return true;
+		}
+
+		if (!Crm\Integration\Socialnetwork\Livefeed\AvailabilityHelper::isAvailable())
+		{
+			return false;
 		}
 
 		if(!is_array($params))
@@ -7798,6 +7834,7 @@ class CAllCrmActivity
 				if ($type)
 				{
 					$url = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Activity, $activityID);
+					$absoluteUrl = CCrmUrlUtil::ToAbsoluteUrl($url);
 
 					$arMessageFields = array(
 						"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
@@ -7826,8 +7863,23 @@ class CAllCrmActivity
 						if ($bHasPermissions)
 						{
 							$arMessageFields["TO_USER_ID"] = $params['START_RESPONSIBLE_ID'];
-							$arMessageFields["NOTIFY_MESSAGE"] = GetMessage("CRM_ACTIVITY_".$type."_NOT_RESPONSIBLE_IM_NOTIFY", Array("#title#" => '<a href="'.$url.'">'.htmlspecialcharsbx($params['SUBJECT']).'</a>'));
-							$arMessageFields["NOTIFY_MESSAGE_OUT"] = GetMessage("CRM_ACTIVITY_".$type."_NOT_RESPONSIBLE_IM_NOTIFY", Array("#title#" => htmlspecialcharsbx($params['SUBJECT'])))." (".CCrmUrlUtil::ToAbsoluteUrl($url).")";
+							$arMessageFields["NOTIFY_MESSAGE"] = static fn (?string $languageId = null) =>
+								Loc::getMessage(
+									"CRM_ACTIVITY_{$type}_NOT_RESPONSIBLE_IM_NOTIFY",
+									[ "#title#" => '<a href="' . $url . '">' . htmlspecialcharsbx($params['SUBJECT']) . '</a>' ],
+									$languageId,
+								)
+							;
+
+							$arMessageFields["NOTIFY_MESSAGE_OUT"] = static function (?string $languageId = null) use ($type, $params, $absoluteUrl) {
+								$message = Loc::getMessage(
+									"CRM_ACTIVITY_{$type}_NOT_RESPONSIBLE_IM_NOTIFY",
+									[ "#title#" => htmlspecialcharsbx($params['SUBJECT']) ],
+									$languageId,
+								);
+
+								return "{$message} ({$absoluteUrl})";
+							};
 
 							CIMNotify::Add($arMessageFields);
 						}
@@ -7849,14 +7901,36 @@ class CAllCrmActivity
 						$arMessageFields["TO_USER_ID"] = $params['FINAL_RESPONSIBLE_ID'];
 						if ($bHasPermissions)
 						{
-							$arMessageFields["NOTIFY_MESSAGE"] = GetMessage("CRM_ACTIVITY_".$type."_RESPONSIBLE_IM_NOTIFY", Array("#title#" => '<a href="'.$url.'">'.htmlspecialcharsbx($params['SUBJECT']).'</a>'));
-							$arMessageFields["NOTIFY_MESSAGE_OUT"] = GetMessage("CRM_ACTIVITY_".$type."_RESPONSIBLE_IM_NOTIFY", Array("#title#" => htmlspecialcharsbx($params['SUBJECT'])))." (".CCrmUrlUtil::ToAbsoluteUrl($url).")";
+							$arMessageFields["NOTIFY_MESSAGE"] = static fn (?string $languageId = null) =>
+								Loc::getMessage(
+									"CRM_ACTIVITY_{$type}_RESPONSIBLE_IM_NOTIFY",
+									[ "#title#" => '<a href="' . $url . '">' . htmlspecialcharsbx($params['SUBJECT']) . '</a>' ],
+									$languageId,
+								)
+							;
+							$arMessageFields["NOTIFY_MESSAGE_OUT"] = static function (?string $languageId = null) use ($type, $params, $absoluteUrl){
+								$message = Loc::getMessage(
+									"CRM_ACTIVITY_{$type}_RESPONSIBLE_IM_NOTIFY",
+									[ "#title#" => htmlspecialcharsbx($params['SUBJECT']) ],
+									$languageId,
+								);
+
+								return "{$message} ({$absoluteUrl})";
+							};
 						}
 						else
 						{
 							//TODO: Add  message 'Need for permissions'
-							$arMessageFields["NOTIFY_MESSAGE"] = GetMessage("CRM_ACTIVITY_".$type."_RESPONSIBLE_IM_NOTIFY", Array("#title#" => htmlspecialcharsbx($params['SUBJECT'])));
-							$arMessageFields["NOTIFY_MESSAGE_OUT"] = GetMessage("CRM_ACTIVITY_".$type."_RESPONSIBLE_IM_NOTIFY", Array("#title#" => htmlspecialcharsbx($params['SUBJECT'])));
+							$message = static fn (?string $languageId = null) =>
+								Loc::getMessage(
+									"CRM_ACTIVITY_{$type}_RESPONSIBLE_IM_NOTIFY",
+									[ "#title#" => htmlspecialcharsbx($params['SUBJECT']) ],
+									$languageId,
+								)
+							;
+
+							$arMessageFields["NOTIFY_MESSAGE"] = $message;
+							$arMessageFields["NOTIFY_MESSAGE_OUT"] = $message;
 						}
 
 						CIMNotify::Add($arMessageFields);
@@ -8238,6 +8312,11 @@ class CAllCrmActivity
 
 		// reindex array
 		return array_values($validIdStorageElementIds);
+	}
+
+	private static function isLocationFeatureEnabled(): bool
+	{
+		return \Bitrix\Crm\Integration\Bitrix24Manager::isFeatureEnabled('calendar_location');
 	}
 }
 

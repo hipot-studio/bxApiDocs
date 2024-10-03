@@ -353,8 +353,7 @@ final class SocialnetworkGroup extends CBitrixComponent implements \Bitrix\Main\
 		$result['Urls']['GroupLog'] = CComponentEngine::makePathFromTemplate($this->arParams['PATH_TO_GROUP_LOG'], [ 'group_id' => $result['Group']['ID'] ]);
 		$result['Urls']['Copy'] = CComponentEngine::makePathFromTemplate($this->arParams['PATH_TO_GROUP_COPY'] ?? '', [ 'group_id' => $result['Group']['ID'] ]);
 
-		// todo: tasks 24.100.0
-		if (Loader::includeModule('tasks') && class_exists('\Bitrix\Tasks\Flow\Path\FlowPathMaker'))
+		if (Loader::includeModule('tasks'))
 		{
 			$result['Urls']['Flows'] = FlowPath::get((int)$USER->getId(), (int)$result['Group']['ID']);
 		}

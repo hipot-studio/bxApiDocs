@@ -1806,6 +1806,10 @@ class CatalogProductDetailsComponent
 				$index = str_replace(BaseForm::PRICE_FIELD_PREFIX, '', $name);
 				if (!empty($index))
 				{
+					if (is_string($value))
+					{
+						str_replace(',', '.', $value);
+					}
 					$priceFields[$index]['PRICE'] = $value;
 				}
 
@@ -2023,7 +2027,10 @@ class CatalogProductDetailsComponent
 
 		if (!$this->getForm()->isPurchasingPriceAllowed())
 		{
-			unset($fields['PURCHASING_PRICE']);
+			unset(
+				$fields['PURCHASING_PRICE'],
+				$fields['PURCHASING_CURRENCY'],
+			);
 		}
 
 		if (!empty($fields))
@@ -2033,9 +2040,18 @@ class CatalogProductDetailsComponent
 				$fields['NAME'] = $product->getName();
 			}
 
-			if (isset($fields['PURCHASING_PRICE']) && $fields['PURCHASING_PRICE'] === '')
+			if (isset($fields['PURCHASING_PRICE']))
 			{
-				$fields['PURCHASING_PRICE'] = null;
+				if (is_string($fields['PURCHASING_PRICE']))
+				{
+					$fields['PURCHASING_PRICE'] = str_replace(
+						',', '.', trim($fields['PURCHASING_PRICE'])
+					);
+				}
+				if ($fields['PURCHASING_PRICE'] === '')
+				{
+					$fields['PURCHASING_PRICE'] = null;
+				}
 			}
 
 			$sku->setFields($fields);

@@ -16,8 +16,6 @@ use Bitrix\Pull;
 use Bitrix\Im;
 use Bitrix\Im\Model\RecentTable;
 
-use Bitrix\Intranet\UserAbsence;
-
 use Bitrix\ImOpenLines\Queue\Cache;
 use Bitrix\ImOpenLines\Model\QueueTable;
 use Bitrix\ImOpenLines\Model\SessionTable;

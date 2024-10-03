@@ -2,6 +2,8 @@
 
 namespace Bitrix\Sign\Type;
 
+use Bitrix\Sign\Item\Document;
+
 final class DocumentStatus
 {
 	public const NEW = 'new';
@@ -39,7 +41,7 @@ final class DocumentStatus
 	}
 
 	/**
-	 * @return array<self::*>
+	 * @return list<self::*>
 	 */
 	public static function getFinalStatuses(): array
 	{
@@ -47,5 +49,10 @@ final class DocumentStatus
 			self::DONE,
 			self::STOPPED,
 		];
+	}
+
+	public static function isFinalByDocument(Document $document): bool
+	{
+		return in_array($document->status, self::getFinalStatuses(), true);
 	}
 }

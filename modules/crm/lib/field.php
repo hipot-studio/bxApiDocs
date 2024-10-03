@@ -507,7 +507,9 @@ class Field
 			$filter['!=' . Item::FIELD_NAME_ID] = $id;
 		}
 
-		return ((int) $tableClassName::getCount($filter) === 0);
+		$existsQuery = $tableClassName::query()->setSelect(['ID'])->setFilter($filter)->setLimit(1);
+
+		return $existsQuery->fetch() === false;
 	}
 
 	public function getValueNotValidError(): Error

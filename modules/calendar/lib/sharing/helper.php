@@ -38,41 +38,10 @@ class Helper
 	protected const ABUSE_SENDER_EMAIL = 'email';
 
 	/**
-	 * returns true if user didn't view sharing tour in calendar, false otherwise
 	 * @return ?string
 	 */
 	public static function payAttentionToNewSharingFeature(): ?string
 	{
-		$now = time();
-		$defaultValue = 'unset';
-		$optionValue = CUserOptions::getOption(
-			'calendar',
-			self::PAY_ATTENTION_TO_NEW_SHARING_JOINT_FEATURE_OPTION_NAME,
-			$defaultValue
-		);
-
-		if ($optionValue === $defaultValue)
-		{
-			CUserOptions::setOption(
-				'calendar',
-				self::PAY_ATTENTION_TO_NEW_SHARING_JOINT_FEATURE_OPTION_NAME,
-				$now
-			);
-
-			return null;
-		}
-
-		if ($optionValue === 'N')
-		{
-			return null;
-		}
-
-		$timestamp = (int)$optionValue;
-		if ($timestamp && ($now > $timestamp + self::WEEK_TIMESTAMP))
-		{
-			return self::PAY_ATTENTION_TO_NEW_FEATURE_JOINT;
-		}
-
 		return null;
 	}
 

@@ -12,6 +12,8 @@ class GroupDto extends Dto
 		public readonly ?string $image,
 		public readonly ?string $resizedImage100,
 		public readonly array $additionalData,
+		public readonly ?int $dateStart = null,
+		public readonly ?int $dateFinish = null,
 	)
 	{
 		parent::__construct();

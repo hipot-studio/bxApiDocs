@@ -1,10 +1,10 @@
-<?
+<?php
 
 namespace Bitrix\Main\UI;
 
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\UserTable;
+use Bitrix\Main\Type\DateTime;
 
 class Spotlight
 {
@@ -164,7 +164,11 @@ class Spotlight
 	private function getRegisterDate($userId)
 	{
 		$user = $this->getUser($userId);
-		return $user && isset($user["DATE_REGISTER"]) ? $user["DATE_REGISTER"]->getTimestamp() : false;
+		if ($user)
+		{
+			return DateTime::tryParse($user["DATE_REGISTER"])?->getTimestamp() ?? false;
+		}
+		return false;
 	}
 
 	private function getUserId($userId = false)
@@ -174,14 +178,7 @@ class Spotlight
 
 	private function getUser($userId)
 	{
-		return UserTable::getRow(
-			array(
-				"select" => array("ID", "DATE_REGISTER"),
-				"filter" => array(
-					"=ID" => $userId
-				),
-			)
-		);
+		return \CUser::GetByID($userId)->Fetch();
 	}
 
 	/**

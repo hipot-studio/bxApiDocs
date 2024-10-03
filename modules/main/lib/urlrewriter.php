@@ -1,9 +1,6 @@
 <?php
-namespace Bitrix\Main;
 
-use Bitrix\Main\Component;
-use Bitrix\Main\Config;
-use Bitrix\Main\IO;
+namespace Bitrix\Main;
 
 class UrlRewriter
 {

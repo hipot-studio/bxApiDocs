@@ -23,6 +23,6 @@ class HideSum extends Permission
 
 	public function getDefaultAttribute(): ?string
 	{
-		return BX_CRM_PERM_ALL;
+		return \Bitrix\Crm\Service\UserPermissions::PERMISSION_ALL;
 	}
 }

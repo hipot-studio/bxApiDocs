@@ -103,41 +103,45 @@ abstract class FileTransformer implements InterfaceCallback
 	{
 		$foundFile = new File($file);
 		$publicPath = $foundFile->getPublicPath();
-		if(empty($publicPath))
+		if (empty($publicPath))
 		{
 			return false;
 		}
-		$result = false;
-		$cacheName = md5($file);
+
+		$cacheName = md5($publicPath);
 		$cachePath = self::CACHE_PATH;
 		$cacheExpire = 604800;
 		$cacheInstance = Cache::createInstance();
-		if($cacheInstance->initCache($cacheExpire, $cacheName, $cachePath))
-		{
-			$result = $cacheInstance->getVars();
-		}
-		else
-		{
-			self::clearInfoCache($file);
-			$cacheInstance->startDataCache($cacheExpire);
-			$command = Command::getByFile($publicPath);
-			if($command)
-			{
-				$result = array(
-					'status' => $command->getStatus(),
-					'time' => $command->getTime(),
-					'id' => $command->getId(),
-					'params' => $command->getParams(),
-				);
 
-				$error = $command->getError();
-				if (!is_null($error))
-				{
-					$result['error'] = $error->jsonSerialize();
-				}
-			}
-			$cacheInstance->endDataCache($result);
+		if ($cacheInstance->initCache($cacheExpire, $cacheName, $cachePath))
+		{
+			return $cacheInstance->getVars();
 		}
+
+		$cacheInstance->startDataCache($cacheExpire);
+
+		$command = Command::getByFile($publicPath);
+		if (!$command)
+		{
+			$cacheInstance->endDataCache(false);
+
+			return false;
+		}
+
+		$result = [
+			'status' => $command->getStatus(),
+			'time' => $command->getTime(),
+			'id' => $command->getId(),
+			'params' => $command->getParams(),
+		];
+
+		$error = $command->getError();
+		if (!is_null($error))
+		{
+			$result['error'] = $error->jsonSerialize();
+		}
+
+		$cacheInstance->endDataCache($result);
 
 		return $result;
 	}
@@ -153,8 +157,16 @@ abstract class FileTransformer implements InterfaceCallback
 		{
 			return;
 		}
+
+		$foundFile = new File($file);
+		$publicPath = $foundFile->getPublicPath();
+		if(empty($publicPath))
+		{
+			return;
+		}
+
 		$cacheInstance = Cache::createInstance();
-		$cacheInstance->clean(md5($file), self::CACHE_PATH);
+		$cacheInstance->clean(md5($publicPath), self::CACHE_PATH);
 	}
 
 	/**

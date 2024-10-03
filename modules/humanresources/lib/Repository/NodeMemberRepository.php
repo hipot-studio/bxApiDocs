@@ -278,7 +278,7 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		$nodeMemberQuery =
 			Model\NodeMemberTable::query()
 				->setSelect(['*', 'ROLE'])
-				->addOrder('ID')
+				->where('ACTIVE', 'Y')
 				->setOffset($offset)
 				->setLimit($limit)
 				->setCacheTtl(self::CACHE_TTL)
@@ -296,12 +296,15 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 					),
 				)
 				->where('ncn.PARENT_ID', $nodeId)
+				->addOrder('ncn.DEPTH')
 			;
 		}
 		else
 		{
 			$nodeMemberQuery->where('NODE_ID', $nodeId);
 		}
+
+		$nodeMemberQuery->addOrder('ID');
 
 		return $nodeMemberQuery;
 	}
@@ -460,13 +463,6 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 			$this->insertNodeMemberRole($member, CurrentUser::get()->getId());
 		}
 
-		if (isset($member->active))
-		{
-			$updatedFields[] = 'active';
-
-			$nodeMemberEntity->setActive($member->active);
-		}
-
 		if (
 			$nodeMemberEntity->getNodeId() !== $member->nodeId
 		)
@@ -530,6 +526,37 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		return $modelCollection->save();
 	}
 
+	public function setActiveByEntityTypeAndEntityIds(
+		MemberEntityType $entityType,
+		array $entityIds,
+		bool $active,
+	): Main\Result
+	{
+		$result = new Main\Result();
+		if (empty($entityIds))
+		{
+			return $result;
+		}
+
+		$modelCollection = NodeMemberTable::query()
+			->where('ENTITY_TYPE', $entityType->name)
+			->whereIn('ENTITY_ID', $entityIds)
+			->fetchCollection()
+		;
+
+		if ($modelCollection->isEmpty())
+		{
+			return $result;
+		}
+
+		foreach ($modelCollection as $model)
+		{
+			$model->setActive($active);
+		}
+
+		return $modelCollection->save();
+	}
+
 	/**
 	 * @inheritDoc
 	 */
@@ -542,7 +569,37 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 			->setSelect(['*'])
 			->where('ENTITY_ID', $entityId)
 			->where('ENTITY_TYPE', $entityType->name)
+			->where('ACTIVE', 'Y')
 			->fetchAll()
+		;
+
+		$nodeMemberCollection = new Item\Collection\NodeMemberCollection();
+		foreach ($nodeMemberEntities as $nodeMemberEntity)
+		{
+			$nodeMemberCollection->add($this->convertModelArrayToItem($nodeMemberEntity));
+		}
+
+		return $nodeMemberCollection;
+	}
+
+	public function findAllByEntityIdsAndEntityType(
+		array $entityIds,
+		MemberEntityType $entityType
+	): Item\Collection\NodeMemberCollection
+	{
+		$nodeMemberCollection = new Item\Collection\NodeMemberCollection();
+
+		if (empty($entityIds))
+		{
+			return $nodeMemberCollection;
+		}
+
+		$nodeMemberEntities = NodeMemberTable::query()
+			 ->setSelect(['*'])
+			 ->whereIn('ENTITY_ID', $entityIds)
+			 ->where('ENTITY_TYPE', $entityType->name)
+			 ->where('ACTIVE', 'Y')
+			 ->fetchAll()
 		;
 
 		$nodeMemberCollection = new Item\Collection\NodeMemberCollection();
@@ -557,7 +614,7 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 	public function findAllByNodeIdAndEntityType(
 		int $nodeId,
 		MemberEntityType $entityType,
-		bool $withAllChildNodes = false,
+		bool $withAllChildNodes = true,
 		int $limit = 100,
 		int $offset = 0,
 	): Item\Collection\NodeMemberCollection
@@ -654,6 +711,7 @@ INNER JOIN (
 ) as relation ON relation.ID = nm.NODE_ID
 WHERE nm.ENTITY_ID IN ($users)
 AND nm.ENTITY_TYPE = '$memberEntityType'
+AND nm.ACTIVE = 'Y' 
 SQL;
 		$result = $connection->query($query);
 
@@ -683,6 +741,7 @@ SQL;
 					Join::on('this.NODE_ID', 'ref.ID'),
 				),
 			)
+			->where('ACTIVE', 'Y')
 			->where('role.ROLE_ID', $roleId)
 			->where('node.STRUCTURE_ID', $structureId)
 		;

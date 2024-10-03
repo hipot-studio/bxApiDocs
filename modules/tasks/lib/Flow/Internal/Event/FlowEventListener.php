@@ -29,28 +29,48 @@ class FlowEventListener
 		}
 		
 		(new FlowTaskEventHandler())
-			->withFlowId($fields['FLOW_ID'])
+			->withCurrentFlowId($fields['FLOW_ID'])
 			->withTaskId($taskId)
-			->withFields($fields)
 			->onTaskAdd();
 	}
 
-	public static function onTaskUpdate(int $taskId, array $fields, array $previousFields): void
+	/**
+	 * @throws Exception
+	 */
+	public static function onTaskUpdate(int $taskId, array $changedFields, array $previousFields): void
 	{
-		if (!static::checkFlowId($fields))
-		{
-			return;
-		}
-
 		if ($taskId <= 0)
 		{
 			return;
 		}
 
+		$previousFlowId = (int)($previousFields['FLOW_ID'] ?? null);
+		$currentFlowId = (int)($changedFields['FLOW_ID'] ?? null);
+
+		if (!array_key_exists('FLOW_ID', $changedFields) && !array_key_exists('GROUP_ID', $changedFields))
+		{
+			if ($previousFlowId > 0) // has flow, no changed
+			{
+				(new FlowTaskEventHandler())
+					->withCurrentFlowId($previousFlowId)
+					->withTaskId($taskId)
+					->withChangedFields($changedFields)
+					->onFlowTaskUpdate();
+			}
+
+			return;
+		}
+
+		if ($previousFlowId === $currentFlowId)
+		{
+			return;
+		}
+
 		(new FlowTaskEventHandler())
-			->withFlowId($fields['FLOW_ID'])
+			->withPreviousFlowId($previousFlowId)
+			->withCurrentFlowId($currentFlowId)
 			->withTaskId($taskId)
-			->withFields($fields)
+			->withChangedFields($changedFields)
 			->withPreviousFields($previousFields)
 			->onTaskUpdate();
 	}
@@ -68,7 +88,7 @@ class FlowEventListener
 		}
 
 		(new FlowTaskEventHandler())
-			->withFlowId($params['FLOW_ID'])
+			->withCurrentFlowId($params['FLOW_ID'])
 			->withTaskId($taskId)
 			->onTaskDelete();
 	}

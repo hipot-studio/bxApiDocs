@@ -3306,7 +3306,7 @@ class Chat
 		if (!$hasAccess)
 		{
 			$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
-			$hasAccess = $chat->hasAccess();
+			$hasAccess = $chat->checkAccess()->isSuccess();
 		}
 
 		return $hasAccess;

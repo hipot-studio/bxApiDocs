@@ -28,7 +28,6 @@ class BizprocUserProcesses
 
 	private ErrorCollection $errorCollection;
 	private \Bitrix\Main\UI\Filter\Options $filterOptions;
-	private bool $isRenderingOnFront = false;
 
 	private const WORKFLOW_FIELDS_TO_LOAD = [
 		'STARTED_BY',
@@ -122,8 +121,6 @@ class BizprocUserProcesses
 			return null;
 		}
 
-		$this->isRenderingOnFront = true;
-
 		return [
 			'workflows' => $this->getWorkflowsViewData($response),
 		];
@@ -188,7 +185,7 @@ class BizprocUserProcesses
 			$this->subscribeToPushes();
 		}
 
-		$this->includeComponentTemplate();
+		$this->includeComponentTemplate($this->hasErrors() ? 'error' : '');
 	}
 
 	private function subscribeToPushes(): void
@@ -217,7 +214,7 @@ class BizprocUserProcesses
 	{
 		if (!\Bitrix\Main\Loader::includeModule('bizproc'))
 		{
-			$errorMessage = Loc::getMessage('BIZPROC_USER_PROCESSES_MODULE_ERROR', ['#MODULE#' => 'BizProc']);
+			$errorMessage = Loc::getMessage('BIZPROC_USER_PROCESSES_MODULE_ERROR', ['#MODULE#' => 'bizproc']);
 			$this->setError(new Error($errorMessage));
 		}
 	}
@@ -246,13 +243,20 @@ class BizprocUserProcesses
 	private function fillCounters(): void
 	{
 		$userId = $this->getCurrentUserId();
+		// time to verify
+		\Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable::verifyUserUnread($userId);
+
+		$task = (int)(CBPTaskService::getCounters($userId)['*'] ?? 0);
+		$comment = \Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable::getCountUserUnread($userId);
 
 		$this->arResult['counters'] = [
-			'task' => (int)(CBPTaskService::getCounters($userId)['*'] ?? 0),
-			'comment' => \Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable::getCountUserUnread(
-				$userId
-			),
+			'task' => $task,
+			'comment' => $comment,
 		];
+
+		$userCounters = new \Bitrix\Bizproc\Workflow\WorkflowUserCounters($userId);
+		$userCounters->setTask($task);
+		$userCounters->setComment($comment);
 	}
 
 	private function getGridColumns(): array
@@ -297,7 +301,7 @@ class BizprocUserProcesses
 				'name' => Loc::getMessage('BIZPROC_USER_PROCESSES_GRID_COLUMN_TASK_FACES'),
 				'default' => true,
 				'sort' => '',
-				'width' => 316,
+				'width' => 330,
 				'resizeable' => false,
 			],
 			[
@@ -423,7 +427,7 @@ class BizprocUserProcesses
 	private function setFilterToRequest(WorkflowStateToGet $workflowsRequest): void
 	{
 		$workflowsRequest->setFilterUserId($this->getTargetUserId());
-		$userFilter = $this->filterOptions->getFilter();
+		$userFilter = $this->filterOptions->getFilter($this->getFilterFields());
 		if (empty($userFilter) && $this->filterOptions->getCurrentFilterId() === 'default_filter')
 		{
 			$userFilter['SYSTEM_PRESET'] = WorkflowStateFilter::PRESET_DEFAULT;
@@ -476,22 +480,13 @@ class BizprocUserProcesses
 			$workflowId = $workflowState->getId();
 			$complexDocumentId = $workflowState->getComplexDocumentId();
 
-			$startedBy = \Bitrix\Main\UserTable::getById($workflowState->getStartedBy())->fetchObject();
-			if ($this->isRenderingOnFront)
-			{
-				$startedBy =
-					isset($startedBy)
-						? CUser::FormatName(CSite::GetNameFormat(false), $startedBy)
-						: null;
-			}
-
 			$workflowView = new \Bitrix\Bizproc\UI\WorkflowUserView($workflowState, $userId);
 
 			$workflowViews[] = [
 				'workflowId' => $workflowId,
 				'userId' => $userId,
-				'startedById' => $workflowState->getStartedBy(),
-				'startedBy' => $startedBy,
+				'startedById' => (int)$workflowView->getStartedBy()?->getId(),
+				'startedBy' => $this->formatName($workflowView->getStartedBy()),
 				'taskProgress' => $workflowView->getFaces(),
 				'name' => $workflowView->getName(),
 				'description' => $workflowView->getDescription(),
@@ -506,6 +501,7 @@ class BizprocUserProcesses
 				],
 				'task' => $workflowView->getTasks()[0] ?? null,
 				'taskCnt' => count($workflowView->getTasks()),
+				'overdueDate' => $this->formatDate($workflowView->getOverdueDate()),
 				'commentCnt' => $workflowView->getCommentCounter(),
 				'isCompleted' => $workflowView->getIsCompleted(),
 			];
@@ -530,6 +526,16 @@ class BizprocUserProcesses
 		$tf = $culture?->getShortTimeFormat() ?? 'H:i';
 
 		return \FormatDate("$df, $tf", $date->toUserTime());
+	}
+
+	private function formatName($user): string
+	{
+		if (is_null($user))
+		{
+			return '';
+		}
+
+		return CUser::FormatName(CSite::GetNameFormat(false), $user, bHTMLSpec: false);
 	}
 
 	private function fillGridActions(): void

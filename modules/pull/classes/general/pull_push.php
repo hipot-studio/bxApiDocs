@@ -2,6 +2,7 @@
 
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\EventManager;
 use Bitrix\Main\Web;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\ORM\Fields\ExpressionField;
@@ -63,6 +64,17 @@ class CPullPush
 
 	public static function getUniqueHash($user_id, $app_id)
 	{
+		$eventManager = EventManager::getInstance();
+		$handlers = $eventManager->findEventHandlers("pull", "onPushTokenUniqueHashGet");
+		foreach ($handlers as $handler)
+		{
+			$uniqueHash = ExecuteModuleEventEx($handler, [$user_id, $app_id]);
+			if ($uniqueHash)
+			{
+				return $uniqueHash;
+			}
+		}
+
 		return md5($user_id . $app_id);
 	}
 
@@ -120,7 +132,7 @@ class CPushManager
 	public const DEFAULT_APP_ID = "Bitrix24";
 
 	public static ?array $pushServices;
-	protected static array $appAliases = [];
+
 	private string $remoteProviderUrl ;
 
 	public function __construct()
@@ -552,7 +564,6 @@ class CPushManager
 		while ($user = $queryResult->fetch())
 		{
 			$uniqueHashes[] = CPullPush::getUniqueHash($user["ID"], $appId);
-			$uniqueHashes[] = CPullPush::getUniqueHash($user["ID"], $appId . "_bxdev");
 
 			if (in_array($user['UNIQUE_HASH'], $uniqueHashes) && $user['ACTIVE'] == 'Y')
 			{
@@ -659,53 +670,14 @@ class CPushManager
 		return $result;
 	}
 
-	private function getUniqueHashes(string $userId, string $appId): array
-	{
-		$uniqueHashes = [];
-		$uniqueHashes[] = CPullPush::getUniqueHash($userId, $appId);
-		$uniqueHashes[] = CPullPush::getUniqueHash($userId, $appId."_bxdev");
-		$aliases = $this->getAppIDAliases($appId);
-		foreach ($aliases as $appId => $data)
-		{
-			$uniqueHashes[] = CPullPush::getUniqueHash($userId, $appId);
-		}
-
-		return array_unique($uniqueHashes);
-	}
-
 	private function getAppMode(string $appId): string
 	{
-		$aliases = $this->getAppIDAliases($appId);
-		if ((isset($aliases[$appId]) && $aliases[$appId]["mode"] == "dev") || mb_strpos($appId, "_bxdev") > 0 )
-		{
-			return "SANDBOX";
-		}
-		return "PRODUCTION";
+		return mb_strpos($appId, "_bxdev") > 0 ? "SANDBOX" : "PRODUCTION";
 	}
 
-	private function getAppIDAliases($appId)
+	static private function getPureAppId($appId): string
 	{
-		$aliases = [];
-		if (isset(self::$appAliases[$appId]))
-		{
-			return self::$appAliases[$appId];
-		}
-		else
-		{
-			$events = \Bitrix\Main\EventManager::getInstance()->findEventHandlers("pull", "onAppAliasGet");
-			foreach ($events as $event)
-			{
-				$appAliases = ExecuteModuleEventEx($event, [$appId]);
-				foreach ($appAliases as $key => $value)
-				{
-					$aliases[$key]= $value;
-				}
-			}
-
-			self::$appAliases[$appId] = $aliases;
-		}
-
-		return $aliases;
+		return str_replace("_bxdev", "", $appId);
 	}
 
 	protected function shouldSendMessage($message)
@@ -765,7 +737,12 @@ class CPushManager
 				$arTmpMessages["USER_" . $message["USER_ID"]][] = htmlspecialcharsback($message);
 			}
 
-			array_push($uniqueHashes, ...$this->getUniqueHashes($message["USER_ID"], $message["APP_ID"]));
+			$hash = CPullPush::getUniqueHash($message["USER_ID"], $message["APP_ID"]);
+
+			if (!in_array($hash, $uniqueHashes))
+			{
+				$uniqueHashes[] = $hash;
+			}
 		}
 		if (empty($arDevices))
 		{
@@ -793,6 +770,11 @@ class CPushManager
 
 			if(is_array($tmpMessage))
 			{
+				$tmpMessage = array_map(function($message) use ($arDevice) {
+					$message["APP_ID"] = self::getPureAppId($arDevice["APP_ID"]);
+					return $message;
+				}, $tmpMessage);
+
 				$deviceType = $arDevice["DEVICE_TYPE"];
 				$deviceToken = $arDevice["DEVICE_TOKEN"];
 				$filteredMessages = static::filterMessagesBeforeSend($tmpMessage, $deviceType, $deviceToken);
@@ -806,6 +788,10 @@ class CPushManager
 			}
 			if(is_array($voipMessage))
 			{
+				$voipMessage = array_map(function($message) use ($arDevice) {
+					$message["APP_ID"] = self::getPureAppId($arDevice["APP_ID"]);
+					return $message;
+				}, $voipMessage);
 				$deviceType = $arDevice["VOIP_TYPE"] && $arDevice["VOIP_TOKEN"] ? $arDevice["VOIP_TYPE"]: $arDevice["DEVICE_TYPE"];
 				$deviceToken = $arDevice["VOIP_TYPE"] && $arDevice["VOIP_TOKEN"] ? $arDevice["VOIP_TOKEN"] : $arDevice["DEVICE_TOKEN"];
 				$filteredMessages = static::filterMessagesBeforeSend($voipMessage, $deviceType, $deviceToken);
@@ -856,7 +842,11 @@ class CPushManager
 				$messages = null;
 				while($messages = array_slice($arPushMessages[$serviceID],$offset, $batchMessageCount))
 				{
-					$batches[] = $service->getBatch($messages);
+					if (!empty($service->getBatch($messages)))
+					{
+						$batches[] = $service->getBatch($messages);
+					}
+
 					$offset += count($messages);
 				}
 			}

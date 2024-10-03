@@ -738,7 +738,7 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 				);
 
 				// todo: some garbage?
-				$strURL = $GLOBALS['APPLICATION']->getCurPageParam("", array("IFRAME", "IFRAME_TYPE", "MID", "SEF_APPLICATION_CUR_PAGE_URL", BX_AJAX_PARAM_ID, "result"));
+				$strURL = $GLOBALS['APPLICATION']->getCurPageParam("", array("IFRAME", "IFRAME_TYPE", "MID", BX_AJAX_PARAM_ID, "result"));
 				$strURL = \ForumAddPageParams(
 					$strURL,
 					array(
@@ -1198,7 +1198,7 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 							if ($log_id > 0)
 							{
 								$sText = (\COption::GetOptionString("forum", "FILTER", "Y") == "Y" ? $arMessage["POST_MESSAGE_FILTER"] : $arMessage["POST_MESSAGE"]);
-								$strURL = $GLOBALS['APPLICATION']->GetCurPageParam("", array("IFRAME", "IFRAME_TYPE", "MID", "SEF_APPLICATION_CUR_PAGE_URL", BX_AJAX_PARAM_ID, "result"));
+								$strURL = $GLOBALS['APPLICATION']->GetCurPageParam("", array("IFRAME", "IFRAME_TYPE", "MID", BX_AJAX_PARAM_ID, "result"));
 								$strURL = \ForumAddPageParams(
 									$strURL,
 									array(

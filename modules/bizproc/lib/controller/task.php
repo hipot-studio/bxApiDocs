@@ -5,6 +5,7 @@ namespace Bitrix\Bizproc\Controller;
 use Bitrix\Bizproc;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Engine\Response\HtmlContent;
 
 class Task extends Base
 {
@@ -108,6 +109,34 @@ class Task extends Base
 		}
 
 		return true;
+	}
+
+	public function getUserTaskByWorkflowIdAction(string $workflowId): ?HtmlContent
+	{
+		$currentUserId = $this->getCurrentUser()->getId();
+
+		$taskService = new Bizproc\Api\Service\TaskService(
+			new Bizproc\Api\Service\TaskAccessService($currentUserId)
+		);
+
+		$request = new Bizproc\Api\Request\TaskService\GetUserTaskByWorkflowIdRequest(
+			workflowId: $workflowId,
+			userId: $currentUserId,
+		);
+
+		$userTaskResult = $taskService->getUserTaskByWorkflowId($request);
+		if ($userTaskResult->isSuccess())
+		{
+			return new HtmlContent(
+				content: $userTaskResult->getContent(),
+				additionalResponseParams: $userTaskResult->getTask(),
+			);
+
+		}
+
+		$this->addErrors($userTaskResult->getErrors());
+
+		return null;
 	}
 
 	/**

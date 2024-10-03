@@ -167,6 +167,7 @@ class CBitrixCloudBackup
 		$secret_key = (is_object($node = $obXML->SelectNodes('/control/bucket/secret_key'))) ? $node->textContent() : '';
 		$session_token = (is_object($node = $obXML->SelectNodes('/control/bucket/session_token'))) ? $node->textContent() : '';
 		$file_name = (is_object($node = $obXML->SelectNodes('/control/bucket/file_name'))) ? $node->textContent() : '';
+		$service_id = (is_object($node = $obXML->SelectNodes('/control/bucket/bucket_service_id'))) ? $node->textContent() : '';
 
 		return new CBitrixCloudBackupBucket(
 			$bucket_name,
@@ -176,7 +177,8 @@ class CBitrixCloudBackup
 			$session_token,
 			$check_word,
 			$file_name,
-			$bucket_location
+			$bucket_location,
+			$service_id
 		);
 	}
 

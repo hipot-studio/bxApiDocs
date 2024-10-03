@@ -294,7 +294,7 @@ class ConfigurationSettings extends AbstractSettings
 			'settings-configuration-field-is_format_24_hours',
 			'isFormat24Hour',
 			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_TIME_FORMAT24'),
-			$this->is24HourFormat($currentSite),
+			IsAmPmMode() ? 'N' : 'Y',
 			[
 				'hintTitle' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_TITLE_TIME_FORMAT24'),
 				'on' => $this->get24HourTime(),
@@ -740,13 +740,6 @@ class ConfigurationSettings extends AbstractSettings
 	private function get12HourTime(): string
 	{
 		return $this->getCurrentDateTime()->format("g:i A");
-	}
-
-	private function is24HourFormat(array $currentSite): string
-	{
-		$currentTimeFormat = str_replace($currentSite["FORMAT_DATE"]." ", "", $currentSite["FORMAT_DATETIME"]);
-
-		return $currentTimeFormat === 'HH:MI:SS' ? 'Y' : 'N';
 	}
 
 	public function find(string $query): array

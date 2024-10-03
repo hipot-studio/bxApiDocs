@@ -7,6 +7,7 @@ use Bitrix\Calendar\Access\Model\TypeModel;
 use Bitrix\Calendar\Access\SectionAccessController;
 use Bitrix\Calendar\Access\TypeAccessController;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
+use Bitrix\Calendar\Integration\Bitrix24\FeatureDictionary;
 use Bitrix\Calendar\Internals\SectionTable;
 use Bitrix\Calendar\Rooms;
 use Bitrix\Calendar\Sharing;
@@ -285,11 +286,13 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		}
 		elseif ($mode === 'groups')
 		{
+			$sections = [];
 			$groupIds = $request->get('groupIdList') ?? [];
-			$sections = \CCalendarSect::getSuperposedList(['GROUPS' => $groupIds]);
 
 			if (Loader::includeModule('socialnetwork'))
 			{
+				$sections = \CCalendarSect::getSuperposedList(['GROUPS' => $groupIds]);
+
 				foreach ($groupIds as $groupId)
 				{
 					$groupId = (int)$groupId;
@@ -471,11 +474,9 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			);
 			$responseParams['trackingUsersList'] = UserSettings::getTrackingUsers($userId);
 			$responseParams['userSettings'] = UserSettings::get($userId);
-			$responseParams['eventWithEmailGuestLimit'] = Bitrix24Manager::getEventWithEmailGuestLimit();
-			$responseParams['countEventWithEmailGuestAmount'] = Bitrix24Manager::getCountEventWithEmailGuestAmount();
 			$responseParams['iblockMeetingRoomList'] = Rooms\IBlockMeetingRoom::getMeetingRoomList();
 			$responseParams['userIndex'] = \CCalendarEvent::getUserIndex();
-			$responseParams['locationFeatureEnabled'] = Bitrix24Manager::isFeatureEnabled("calendar_location");
+			$responseParams['locationFeatureEnabled'] = Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_LOCATION);
 			if ($responseParams['locationFeatureEnabled'])
 			{
 				$responseParams['locationList'] = Rooms\Manager::getRoomsList();
@@ -490,6 +491,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			{
 				$responseParams['meetSection'] = UserSettings::get($ownerId)['meetSection'] ?? null;
 			}
+			$responseParams['eventWithEmailGuestEnabled'] = Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_EVENTS_WITH_EMAIL_GUESTS);
 
 			return new \Bitrix\Main\Engine\Response\Component(
 				'bitrix:calendar.edit.slider',
@@ -572,12 +574,12 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			$responseParams['userIndex'] = \CCalendarEvent::getUserIndex();
 			$responseParams['userSettings'] = UserSettings::get($userId);
 			$responseParams['plannerFeatureEnabled'] = Bitrix24Manager::isPlannerFeatureEnabled();
-			$responseParams['entryUrl'] = \CHTTP::urlAddParams(
-				\CCalendar::GetPath($entry['CAL_TYPE'], $entry['OWNER_ID'], true),
-				[
-					'EVENT_ID' => (int)$entry['ID'],
-					'EVENT_DATE' => urlencode($entry['DATE_FROM'])
-				]);
+			$responseParams['entryUrl'] = \CCalendar::getEntryUrl(
+				$entry['CAL_TYPE'],
+				$entry['OWNER_ID'],
+				$entry['ID'],
+				$entry['DATE_FROM']
+			);
 			$responseParams['dayOfWeekMonthFormat'] = (
 				\Bitrix\Main\Context::getCurrent()
 					->getCulture()
@@ -643,7 +645,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 	{
 		$request = $this->getRequest();
 		$entryId = (int)$request['entryId'];
-		$parentId = (int)($request['entry']['parentId'] ?? 0);
+		$parentId = (int)($request['entry']['parentId'] ?? $request['parentId'] ?? 0);
 		$userId = \CCalendar::getCurUserId();
 		$ownerId = (int)$request['ownerId'];
 		$type = $request['type'];
@@ -695,6 +697,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		}
 
 		$prevUserList = is_array($request['prevUserList']) ? $request['prevUserList'] : [];
+		$skipFeatureCheck = ($request['skipFeatureCheck'] ?? null) === 'Y';
 
 		$dateFrom = isset($request['dateFrom']) ? $request['dateFrom'] : $request['date_from'];
 		$dateTo = isset($request['dateTo']) ? $request['dateTo'] : $request['date_to'];
@@ -713,7 +716,8 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			'location' => trim($request['location'] ?? ""),
 			'roomEventId' => (int)$request['roomEventId'],
 			'initPullWatches' => true,
-			'prevUserList' => $prevUserList
+			'prevUserList' => $prevUserList,
+			'skipFeatureCheck' => $skipFeatureCheck,
 		]);
 	}
 
@@ -1026,6 +1030,22 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			'mailboxList' => \Bitrix\Calendar\Integration\Sender\AllowedSender::getList($userId)
 		];
 
+		$listLockedFeatures = [];
+
+		if (\Bitrix\Main\Loader::includeModule('tasks'))
+		{
+			$featureName = \Bitrix\Tasks\Integration\Bitrix24\FeatureDictionary::TASK_CALENDAR_INTEGRATION;
+			$tasksCalendarIntegration = \Bitrix\Tasks\Integration\Bitrix24::checkFeatureEnabled($featureName);
+
+			if ($tasksCalendarIntegration === false)
+			{
+				$listLockedFeatures['sync_tasks'] = [
+					'locked' => true,
+					'code' => $featureName,
+				];
+			}
+		}
+
 		return new \Bitrix\Main\Engine\Response\Component(
 			'bitrix:calendar.settings.slider',
 			'',
@@ -1033,7 +1053,8 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				'id' => $uid,
 				'is_personal' => $showPersonalSettings === 'Y',
 				'show_general_settings' => $showGeneralSettings === 'Y',
-				'show_access_control' => $showAccessControl === 'Y'
+				'show_access_control' => $showAccessControl === 'Y',
+				'list_locked_features' => $listLockedFeatures,
 			],
 			$additionalResponseParams
 		);
@@ -1069,6 +1090,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		{
 			$result['section'] = \CCalendarSect::GetById($loadSectionId);
 		}
+
 		return $result;
 	}
 

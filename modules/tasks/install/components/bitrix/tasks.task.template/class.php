@@ -9,6 +9,7 @@ use Bitrix\Main\Web\Uri;
 use Bitrix\Tasks\Access\Model\UserModel;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListConverterHelper;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
+use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Integration\Intranet\Settings;
 use Bitrix\Tasks\Provider\TemplateProvider;
 use Bitrix\Tasks\Util\Error\Collection;
@@ -21,7 +22,6 @@ use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Item\Converter\Task\Template\ToTemplate;
-use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TemplateSubtaskLimit;
 
 Loc::loadMessages(__FILE__);
 
@@ -444,8 +444,21 @@ class TasksTaskTemplateComponent extends TasksBaseComponent implements Errorable
 		);
 
 		$this->arResult['AUX_DATA']['TASK_LIMIT_EXCEEDED'] = TaskLimit::isLimitExceeded();
-		$this->arResult['AUX_DATA']['TEMPLATE_SUBTASK_LIMIT_EXCEEDED'] = TemplateSubtaskLimit::isLimitExceeded();
-		$this->arResult['AUX_DATA']['TASK_RECURRENT_RESTRICT'] = Util\Restriction\Bitrix24Restriction\Limit\RecurringLimit::isLimitExceeded();
+
+		$taskTemplatesSubtasksEnabled = Bitrix24::checkFeatureEnabled(
+			Bitrix24\FeatureDictionary::TASK_TEMPLATES_SUBTASKS
+		);
+		$this->arResult['AUX_DATA']['TEMPLATE_SUBTASK_LIMIT_EXCEEDED'] = !$taskTemplatesSubtasksEnabled;
+
+		$taskRecurringEnabled = Bitrix24::checkFeatureEnabled(
+			Bitrix24\FeatureDictionary::TASK_RECURRING_TASKS
+		);
+		$this->arResult['AUX_DATA']['TASK_RECURRENT_RESTRICT'] = !$taskRecurringEnabled;
+
+		$taskTimeTrackingEnabled = Bitrix24::checkFeatureEnabled(
+			Bitrix24\FeatureDictionary::TASK_TIME_TRACKING
+		);
+		$this->arResult['AUX_DATA']['TASK_TIME_TRACKING_RESTRICT'] = !$taskTimeTrackingEnabled;
 
 		parent::getAuxData();
 	}

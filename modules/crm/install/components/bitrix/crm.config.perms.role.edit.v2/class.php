@@ -1,8 +1,8 @@
 <?php
 
-use Bitrix\Crm\Security\Role\Manage\Exceptions\RoleNotFoundException;
-use Bitrix\Crm\Security\Role\Manage\Manage;
-use Bitrix\Crm\Security\Role\Manage\Serializers\RoleEditorSerializer;
+use Bitrix\Crm\Security\Role\Exceptions\RoleNotFoundException;
+use Bitrix\Crm\Security\Role\UIAdapters\RoleEditV2\Manage;
+use Bitrix\Crm\Security\Role\UIAdapters\RoleEditV2\RoleEditorSerializer;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Engine\ActionFilter\ContentType;
 use Bitrix\Main\Engine\Contract\Controllerable;
@@ -55,7 +55,7 @@ class CrmConfigPermsRoleEditV2 extends CBitrixComponent implements Controllerabl
 		$roleId = (int)$this->arParams['ROLE_ID'];
 
 		try {
-			$data = $this->manage->permissions($roleId);
+			$data = $this->manage->getRoleData($roleId);
 			$serializer = new RoleEditorSerializer();
 
 			$this->arResult['APP_DATA'] = $serializer->serialize($data);

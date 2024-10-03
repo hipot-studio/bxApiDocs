@@ -275,6 +275,7 @@ class CrmStoreDocumentListComponent extends CBitrixComponent implements Controll
 		$result['USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP'] = (bool)(
 			$this->arParams['USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP'] ?? \Bitrix\Main\ModuleManager::isModuleInstalled('ui')
 		);
+		$result['ENABLE_FIELDS_SEARCH'] = 'Y';
 
 
 		$result['ACTION_PANEL'] = $this->getGroupActionPanel();
@@ -909,8 +910,10 @@ class CrmStoreDocumentListComponent extends CBitrixComponent implements Controll
 			'THEME' => Bitrix\Main\UI\Filter\Theme::LIGHT,
 			'CONFIG' => [
 				'AUTOFOCUS' => false,
+				'popupWidth' => 800,
 			],
 			'USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP' => \Bitrix\Main\ModuleManager::isModuleInstalled('ui'),
+			'ENABLE_FIELDS_SEARCH' => 'Y',
 		];
 		UI\Toolbar\Facade\Toolbar::addFilter($filterOptions);
 

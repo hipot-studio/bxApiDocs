@@ -22,6 +22,9 @@ use Bitrix\Tasks\Util\Collection;
  */
 class Counter
 {
+	private const FLAG_SONET_DISABLE = 'tasksSonetCountersDisable';
+	private const FLAG_SONET_ENABLE = 'tasksSonetCountersEnable';
+
 	private const DEFAULT_LIMIT = 4999;
 
 	private static $instance = [];
@@ -43,7 +46,7 @@ class Counter
 	 */
 	public static function isSonetEnable(): bool
 	{
-		return !\COption::GetOptionString("tasks", "tasksSonetCountersDisable", 0);
+		return (int) \COption::GetOptionString("tasks", self::FLAG_SONET_ENABLE, 0) === 1;
 	}
 
 	/**
@@ -311,6 +314,12 @@ class Counter
 
 			case CounterDictionary::COUNTER_PROJECTS_TOTAL_EXPIRED:
 			case CounterDictionary::COUNTER_PROJECTS_TOTAL_COMMENTS:
+				$counters = $this->getRawCounters(CounterDictionary::META_PROP_PROJECT);
+				$type = CounterDictionary::MAP_SONET_TOTAL[$name];
+				$value = (isset($counters[$type][0]) && $counters[$type][0]) ? $counters[$type][0] : 0;
+
+				break;
+
 			case CounterDictionary::COUNTER_PROJECTS_FOREIGN_EXPIRED:
 			case CounterDictionary::COUNTER_PROJECTS_FOREIGN_COMMENTS:
 				if (self::isSonetEnable())
@@ -323,6 +332,12 @@ class Counter
 
 			case CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED:
 			case CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS:
+				$counters = $this->getRawCounters(CounterDictionary::META_PROP_GROUP);
+				$type = CounterDictionary::MAP_SONET_TOTAL[$name];
+				$value = (isset($counters[$type][0]) && $counters[$type][0]) ? $counters[$type][0] : 0;
+
+				break;
+
 			case CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED:
 			case CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS:
 				if (self::isSonetEnable())
@@ -335,6 +350,12 @@ class Counter
 
 			case CounterDictionary::COUNTER_SONET_TOTAL_EXPIRED:
 			case CounterDictionary::COUNTER_SONET_TOTAL_COMMENTS:
+				$counters = $this->getRawCounters();
+				$type = CounterDictionary::MAP_SONET_TOTAL[$name];
+				$value = (isset($counters[$type][0]) && $counters[$type][0]) ? $counters[$type][0] : 0;
+
+				break;
+
 			case CounterDictionary::COUNTER_SONET_FOREIGN_EXPIRED:
 			case CounterDictionary::COUNTER_SONET_FOREIGN_COMMENTS:
 				if (self::isSonetEnable())
@@ -355,6 +376,12 @@ class Counter
 				break;
 
 			case CounterDictionary::COUNTER_SCRUM_TOTAL_COMMENTS:
+				$counters = $this->getRawCounters(CounterDictionary::META_PROP_SCRUM);
+				$type = CounterDictionary::MAP_SCRUM_TOTAL[$name];
+				$value = (isset($counters[$type][0]) && $counters[$type][0]) ? $counters[$type][0] : 0;
+
+				break;
+
 			case CounterDictionary::COUNTER_SCRUM_FOREIGN_COMMENTS:
 				if (self::isSonetEnable())
 				{

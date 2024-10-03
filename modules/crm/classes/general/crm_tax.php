@@ -96,7 +96,15 @@ class CCrmTax
 		}
 		else
 		{
-			self::$bVatMode = Catalog\VatTable::getCount(['=ACTIVE' => 'Y',]) > 0;
+			self::$bVatMode = (bool)Catalog\VatTable::getRow([
+				'select' => ['ID'],
+				'filter' => [
+					'=ACTIVE' => 'Y',
+				],
+				'cache' => [
+					'ttl' => 86400,
+				],
+			]);
 		}
 
 		return self::$bVatMode;

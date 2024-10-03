@@ -3,7 +3,7 @@
 namespace Bitrix\Tasks\Flow\Kanban\Stages;
 
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\Flow\Integration\BizProc\Robot\RobotCommand;
+use Bitrix\Tasks\Flow\Integration\BizProc\Robot\RobotStatusChangedCommand;
 use Bitrix\Tasks\Flow\Integration\BizProc\Trigger\TriggerCommand;
 use Bitrix\Tasks\Flow\Kanban\AbstractStage;
 use Bitrix\Tasks\Internals\Task\Status;
@@ -36,7 +36,7 @@ class ProgressStage extends AbstractStage
 	protected function getRobots(): array
 	{
 		return [
-			new RobotCommand(
+			new RobotStatusChangedCommand(
 				Loc::getMessage('TASKS_FLOW_AUTO_CREATED_GROUP_STAGE_PROGRESS_ROBOT'),
 				Status::IN_PROGRESS
 			)

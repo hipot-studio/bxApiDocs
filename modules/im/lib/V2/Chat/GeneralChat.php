@@ -87,12 +87,12 @@ class GeneralChat extends GroupChat
 			return $cachedManagerList;
 		}
 
-		$managerList = $this->getRelations(['FILTER' => ['MANAGER' => 'Y']])->getUserIds();
+		$managerList = $this->getRelationFacade()->getManagerOnly()->getUserIds();
 
 		$cache->startDataCache();
 		$cache->endDataCache($managerList);
 
-		return $this->getRelations(['FILTER' => ['MANAGER' => 'Y']])->getUserIds();
+		return $this->getRelationFacade()->getManagerOnly()->getUserIds();
 	}
 
 	public static function get(): ?GeneralChat
@@ -442,11 +442,7 @@ class GeneralChat extends GroupChat
 		$result['generalChatCanPostList'] = self::getCanPostList();
 		$result['generalChatCanPost'] = $this->getManageMessages();
 		$result['generalChatShowManagersList'] = self::MANAGE_RIGHTS_MANAGERS;
-		$managerIds = $this->getRelations([
-			'FILTER' => [
-				'MANAGER' => 'Y'
-			]
-		])->getUserIds();
+		$managerIds = $this->getRelationFacade()->getManagerOnly()->getUserIds();
 		$managers = array_map(function ($managerId) {
 			return 'U' . $managerId;
 		}, $managerIds);

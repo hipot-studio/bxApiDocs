@@ -14,6 +14,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Page\Asset;
 use Bitrix\Main\Page\AssetLocation;
+use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\SystemException;
 use Bitrix\Socialnetwork\WorkgroupSiteTable;
 
@@ -287,13 +288,13 @@ class ThemePicker
 
 	public function getCurrentBaseThemeId()
 	{
-		list($baseThemeId) = static::getThemeIdParts($this->getCurrentThemeId());
+		[$baseThemeId] = static::getThemeIdParts($this->getCurrentThemeId());
 		return $baseThemeId;
 	}
 
 	public function getCurrentSubThemeId()
 	{
-		list(, $subThemeId) = static::getThemeIdParts($this->getCurrentThemeId());
+		[, $subThemeId] = static::getThemeIdParts($this->getCurrentThemeId());
 		return $subThemeId;
 	}
 
@@ -440,6 +441,9 @@ class ThemePicker
 			}
 
 			$theme["bgImage"] = $imageId;
+
+			$signer = new Signer();
+			$theme["bgImageSignature"] = $signer->sign((string)$imageId, 'theme-picker');
 		}
 
 		if (empty($theme))
@@ -569,7 +573,7 @@ class ThemePicker
 			return null;
 		}
 
-		list($baseThemeId) = static::getThemeIdParts($customThemeId);
+		[$baseThemeId] = static::getThemeIdParts($customThemeId);
 		$customThemeOptions = $customThemes[$customThemeId];
 
 		$customTheme = array(
@@ -580,7 +584,7 @@ class ThemePicker
 		);
 
 		$style = "body { ";
-		if (isset($customThemeOptions["bgImage"]))
+		if ($this->validateBgImage($customThemeOptions))
 		{
 			$bgImage = \CFile::getPath($customThemeOptions["bgImage"]);
 			$customTheme["prefetchImages"] = array($bgImage);
@@ -618,6 +622,18 @@ class ThemePicker
 		$customTheme["style"] = $style;
 
 		return $customTheme;
+	}
+
+	protected function validateBgImage(array $customTheme): bool
+	{
+		if (!isset($customTheme["bgImage"]) || empty($customTheme["bgImageSignature"]))
+		{
+			return false;
+		}
+
+		$signer = new Signer();
+
+		return $signer->sign((string)$customTheme["bgImage"], 'theme-picker') === $customTheme["bgImageSignature"];
 	}
 
 	public function getPatternThemes(): array
@@ -668,7 +684,7 @@ class ThemePicker
 			return null;
 		}
 
-		list($baseThemeId, $subThemeId) = static::getThemeIdParts($themeId);
+		[$baseThemeId, $subThemeId] = static::getThemeIdParts($themeId);
 		if (!isset($config["baseThemes"][$baseThemeId]) || !isset($config["subThemes"][$themeId]))
 		{
 			return null;
@@ -974,7 +990,7 @@ class ThemePicker
 		}
 
 		//Check physical existence
-		list($baseThemeId, $subThemeId) = static::getThemeIdParts($themeId);
+		[$baseThemeId, $subThemeId] = static::getThemeIdParts($themeId);
 		$baseThemePath = Application::getDocumentRoot().$this->getThemesPath()."/".$baseThemeId;
 
 		if (!Path::validateFilename($baseThemeId) || !Directory::isDirectoryExists($baseThemePath))
@@ -1161,7 +1177,7 @@ class ThemePicker
 			return false;
 		}
 
-		list(, $subThemeId) = static::getThemeIdParts($themeId);
+		[, $subThemeId] = static::getThemeIdParts($themeId);
 		return preg_match("/^".$this->getCustomThemePrefix()."[0-9]{10}/", $subThemeId);
 	}
 

@@ -2,6 +2,9 @@
 
 namespace Bitrix\Tasks\Flow\Kanban;
 
+use Bitrix\Tasks\InvalidCommandException;
+use Bitrix\Tasks\Flow\Integration\BizProc\DocumentTrait;
+use Bitrix\Tasks\Flow\Kanban\Command\AddKanbanCommand;
 use Bitrix\Tasks\Flow\Kanban\Stages\CompletedStage;
 use Bitrix\Tasks\Flow\Kanban\Stages\NewStage;
 use Bitrix\Tasks\Flow\Kanban\Stages\ProgressStage;
@@ -11,18 +14,25 @@ use Throwable;
 
 class KanbanService
 {
-	protected KanbanCommand $command;
-	
-	public function add(KanbanCommand $command): void
+	use DocumentTrait;
+
+	protected AddKanbanCommand $addCommand;
+
+	/**
+	 * @throws InvalidCommandException
+	 */
+	public function add(AddKanbanCommand $command): void
 	{
-		$this->command = $command;
+		$this->addCommand = $command;
+
+		$this->addCommand->validateAdd();
 		
 		$stages = $this->getStages();
 		foreach ($stages as $stage)
 		{
 			try
 			{
-				$result = $stage->save();
+				$result = $stage->create();
 			}
 			catch (Throwable $t)
 			{
@@ -43,10 +53,11 @@ class KanbanService
 	protected function getStages(): array
 	{
 		return [
-			new NewStage($this->command->projectId, $this->command->ownerId),
-			new ProgressStage($this->command->projectId, $this->command->ownerId),
-			new ReviewStage($this->command->projectId, $this->command->ownerId),
-			new CompletedStage($this->command->projectId, $this->command->ownerId),
+			new NewStage($this->addCommand->projectId, $this->addCommand->ownerId, $this->addCommand->flowId),
+			new ProgressStage($this->addCommand->projectId, $this->addCommand->ownerId, $this->addCommand->flowId),
+			// not currently used
+			// new ReviewStage($this->addCommand->projectId, $this->addCommand->ownerId, $this->addCommand->flowId),
+			new CompletedStage($this->addCommand->projectId, $this->addCommand->ownerId, $this->addCommand->flowId),
 		];
 	}
 }

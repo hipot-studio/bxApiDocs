@@ -128,7 +128,8 @@ class RequestParametersBuilder
 		if ($this->isCloud)
 		{
 			$this->parameters += [
-				'portal_date_register' => Option::get('main', '~controller_date_create', '')
+				'portal_date_register' => Option::get('main', '~controller_date_create', ''),
+				'canAllUsersBuyTariff' => \CBitrix24::canAllBuyLicense(),
 			];
 		}
 	}

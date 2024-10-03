@@ -2,7 +2,7 @@
 
 namespace Bitrix\Main\Mail\Smtp;
 
-use \Bitrix\Main\Security\Sign\Signer;
+use Bitrix\Main\Security\Sign\Signer;
 
 class CloudOAuthRefreshData
 {

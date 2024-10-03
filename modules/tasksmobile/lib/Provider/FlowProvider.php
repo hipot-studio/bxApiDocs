@@ -9,7 +9,6 @@ use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Mobile\Provider\UserRepository;
 use Bitrix\Tasks\Flow\Filter\Filter;
 use Bitrix\Tasks\Flow\FlowCollection;
-use Bitrix\Tasks\Flow\FlowFeature;
 use Bitrix\Tasks\Flow\Grid\Preload\AccessPreloader;
 use Bitrix\Tasks\Flow\Grid\Preload\AtWorkTaskPreloader;
 use Bitrix\Tasks\Flow\Grid\Preload\AverageAtWorkTimePreloader;
@@ -93,13 +92,6 @@ final class FlowProvider
 		}
 
 		return $success;
-	}
-
-	public function getFeatureRestrictions()
-	{
-		return [
-			'isFlowTaskCreationProhibited' => !(FlowFeature::isFeatureEnabled() || FlowFeature::isFeatureEnabledByTrial()),
-		];
 	}
 
 	public function getFlowById(int $id): ?FlowDto

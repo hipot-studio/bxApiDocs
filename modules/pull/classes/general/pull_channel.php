@@ -46,9 +46,9 @@ class CPullChannel
 			return false;
 		}
 		$channelType = (string)$channelType ?: self::TYPE_PRIVATE;
-		$cache_id = self::getCacheKey($userId, $channelType);
+		$lockId = self::getLockKey($userId, $channelType);
 
-		$arResult = static::getInternal($userId, $cache, $channelType);
+		$arResult = static::getInternal($userId, $channelType);
 		if ($arResult && intval($arResult['DATE_CREATE']) + self::CHANNEL_TTL > time())
 		{
 			return [
@@ -61,17 +61,17 @@ class CPullChannel
 		}
 
 		$connection = \Bitrix\Main\Application::getConnection();
-		if (!$connection->lock($cache_id, 2))
+		if (!$connection->lock($lockId, 2))
 		{
 			trigger_error("Could not get lock for creating a new channel", E_USER_WARNING);
 			return false;
 		}
 
 		// try reading once again, because DB state could be changed in a concurrent process
-		$arResult = static::getInternal($userId, $cache, $channelType);
+		$arResult = static::getInternal($userId, $channelType);
 		if ($arResult && intval($arResult['DATE_CREATE']) + self::CHANNEL_TTL > time())
 		{
-			$connection->unlock($cache_id);
+			$connection->unlock($lockId);
 			return [
 				'CHANNEL_ID' => $arResult['CHANNEL_ID'],
 				'CHANNEL_PUBLIC_ID' => $arResult['CHANNEL_PUBLIC_ID'],
@@ -87,12 +87,11 @@ class CPullChannel
 		$arChannelData = self::Add($userId, $channelId, $publicChannelId, $channelType);
 		if (!$arChannelData)
 		{
-			$connection->unlock($cache_id);
+			$connection->unlock($lockId);
 			return false;
 		}
-		self::SaveToCache($cache_id, $arChannelData);
 
-		$connection->unlock($cache_id);
+		$connection->unlock($lockId);
 
 		$channelId = $arChannelData['CHANNEL_ID'];
 		$publicChannelId = $arChannelData['CHANNEL_PUBLIC_ID'];
@@ -111,21 +110,11 @@ class CPullChannel
 		];
 	}
 
-	private static function getInternal(int $userId, $cache = true, $channelType = self::TYPE_PRIVATE)
+	private static function getInternal(int $userId, $channelType = self::TYPE_PRIVATE)
 	{
-		global $DB, $CACHE_MANAGER;
+		global $DB;
 
 		$arResult = false;
-		$cache_id = self::getCacheKey($userId, $channelType);
-
-		if ($cache)
-		{
-			$res = $CACHE_MANAGER->Read(self::CHANNEL_TTL, $cache_id, self::CACHE_TABLE);
-			if ($res)
-			{
-				$arResult = $CACHE_MANAGER->Get($cache_id);
-			}
-		}
 
 		if(!is_array($arResult) || !isset($arResult['CHANNEL_ID']) || ($userId > 0 && !isset($arResult['CHANNEL_PUBLIC_ID'])))
 		{
@@ -138,10 +127,6 @@ class CPullChannel
 			CTimeZone::Enable();
 			$res = $DB->Query($strSql);
 			$arResult = $res->Fetch();
-			if ($arResult && $cache && intval($arResult['DATE_CREATE'])+ self::CHANNEL_TTL > time())
-			{
-				self::SaveToCache($cache_id, $arResult);
-			}
 		}
 
 		return $arResult;
@@ -273,8 +258,6 @@ class CPullChannel
 			$strSql = "DELETE FROM b_pull_channel WHERE USER_ID = ".$arRes['USER_ID']." AND CHANNEL_TYPE = '".$DB->ForSql($arRes['CHANNEL_TYPE'])."'";
 			$DB->Query($strSql);
 
-			$CACHE_MANAGER->Clean(self::getCacheKey($arRes['USER_ID'], $arRes['CHANNEL_TYPE']), self::CACHE_TABLE);
-
 			$channelType = $arRes['CHANNEL_TYPE'];
 
 			$params = Array(
@@ -337,8 +320,6 @@ class CPullChannel
 
 		$strSql = "DELETE FROM b_pull_channel WHERE USER_ID = ".$userId." AND ".$channelTypeSql;
 		$DB->Query($strSql);
-
-		$CACHE_MANAGER->Clean(self::getCacheKey($userId, $channelType), self::CACHE_TABLE);
 
 		$params = Array(
 			'action' => $channelType != self::TYPE_PRIVATE? 'reconnect': 'get_config',
@@ -796,7 +777,7 @@ class CPullChannel
 		return $result;
 	}
 
-	private static function getCacheKey(int $userId, $channelType): string
+	private static function getLockKey(int $userId, $channelType): string
 	{
 		return "b_pchc_{$userId}_{$channelType}";
 	}

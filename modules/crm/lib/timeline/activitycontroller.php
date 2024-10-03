@@ -506,10 +506,11 @@ class ActivityController extends EntityController
 		$bindings = isset($params['BINDINGS']) && is_array($params['BINDINGS']) ? $params['BINDINGS'] : [];
 		foreach($bindings as $binding)
 		{
-			$this->sendPullEventOnDeleteScheduled(
-				new Crm\ItemIdentifier($binding['OWNER_TYPE_ID'], $binding['OWNER_ID']),
-				$ownerID
-			);
+			$entityItemIdentifier = Crm\ItemIdentifier::createFromArray($binding);
+			if ($entityItemIdentifier)
+			{
+				$this->sendPullEventOnDeleteScheduled($entityItemIdentifier, $ownerID);
+			}
 		}
 
 		$movedToRecycleBin = isset($params['MOVED_TO_RECYCLE_BIN']) && $params['MOVED_TO_RECYCLE_BIN'];

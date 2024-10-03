@@ -35,6 +35,10 @@ class Filter extends Controller
 	{
 		/** @var \Bitrix\Tasks\Helper\Filter $filterInstance */
 		$filterInstance = \Bitrix\Tasks\Helper\Filter::getInstance($this->getCurrentUser()->getId(), $groupId);
+		if (method_exists(\Bitrix\Tasks\Helper\Filter::class, 'setRolePresetsEnabledForMobile'))
+		{
+			\Bitrix\Tasks\Helper\Filter::setRolePresetsEnabledForMobile(true);
+		}
 		$filterOptions = $filterInstance->getOptions();
 		$presets = $filterInstance->getAllPresets();
 

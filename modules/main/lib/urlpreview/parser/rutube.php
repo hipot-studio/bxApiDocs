@@ -4,7 +4,6 @@ namespace Bitrix\Main\UrlPreview\Parser;
 
 use Bitrix\Main\UrlPreview\HtmlDocument;
 use Bitrix\Main\UrlPreview\UrlPreview;
-use Bitrix\Main\Web\HttpClient;
 
 class RuTube extends OpenGraph
 {

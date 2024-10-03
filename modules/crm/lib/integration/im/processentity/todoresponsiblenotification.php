@@ -101,24 +101,35 @@ final class ToDoResponsibleNotification
 		return str_replace('#ACTIVITY_ID#', self::NOTIFY_TAG_PLACEHOLDER, $this->todo->getId());
 	}
 
-	private function getNotifyMessage(string $messageType): string
+	private function getNotifyMessage(string $messageType): callable
 	{
-		return $this->getMessage($messageType);
+		return $this->getMessageCallback($messageType);
 	}
 
-	private function getNotifyMessageOut(string $messageType): string
+	private function getNotifyMessageOut(string $messageType): callable
 	{
-		// remove link in message for MESSAGE_OUT
-		return strip_tags($this->getMessage($messageType));
+		return function (?string $languageId = null) use ($messageType)
+		{
+			$getMessageCallback = $this->getMessageCallback($messageType);
+			if (!($getMessageCallback instanceof \Closure))
+			{
+				return null;
+			}
+
+			$message = $getMessageCallback($languageId);
+
+			// remove link in message for MESSAGE_OUT
+			return strip_tags($message);
+		};
 	}
 
-	private function getMessage(string $messageType): string
+	private function getMessageCallback(string $messageType): callable
 	{
 		[ $type, $replace ] = $this->getMessageBuilderData($messageType);
 
 		return $this->messageBuilder
 			->setType($type)
-			->getMessage($replace)
+			->getMessageCallback($replace)
 		;
 	}
 

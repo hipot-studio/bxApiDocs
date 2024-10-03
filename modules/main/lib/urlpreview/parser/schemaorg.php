@@ -2,7 +2,6 @@
 
 namespace Bitrix\Main\UrlPreview\Parser;
 
-use Bitrix\Main\Context;
 use Bitrix\Main\Text\Encoding;
 use Bitrix\Main\UrlPreview\HtmlDocument;
 use Bitrix\Main\UrlPreview\Parser;

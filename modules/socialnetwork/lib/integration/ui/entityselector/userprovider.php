@@ -146,6 +146,18 @@ class UserProvider extends BaseProvider
 			$this->options['inviteGuestLink'] = $options['inviteGuestLink'];
 		}
 
+		$this->options['lockGuestLinkFeatureId'] = '';
+		if (isset($options['lockGuestLinkFeatureId']) && is_string($options['lockGuestLinkFeatureId']))
+		{
+			$this->options['lockGuestLinkFeatureId'] = $options['lockGuestLinkFeatureId'];
+		}
+
+		$this->options['lockGuestLink'] = false;
+		if (isset($options['lockGuestLink']) && is_bool($options['lockGuestLink']))
+		{
+			$this->options['lockGuestLink'] = $options['lockGuestLink'];
+		}
+
 		// User Whitelist
 		if (isset($options['userId']))
 		{
@@ -354,6 +366,12 @@ class UserProvider extends BaseProvider
 				if ($inviteEmployeeLink)
 				{
 					$footerOptions['inviteEmployeeScope'] = ($employeeInvitationAvailable ? 'I' : '').($extranetInvitationAvailable ? 'E' : '');
+				}
+
+				if ($inviteGuestLink && $this->options['lockGuestLink'])
+				{
+					$footerOptions['lockGuestLink'] = true;
+					$footerOptions['lockGuestLinkFeatureId'] = $this->options['lockGuestLinkFeatureId'] ?? '';
 				}
 
 				$dialog->setFooter('BX.SocialNetwork.EntitySelector.Footer', $footerOptions);

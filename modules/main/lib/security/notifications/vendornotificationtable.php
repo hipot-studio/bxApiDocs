@@ -8,6 +8,22 @@ use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\TextField;
 
+/**
+ * Class VendorNotificationTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_VendorNotification_Query query()
+ * @method static EO_VendorNotification_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_VendorNotification_Result getById($id)
+ * @method static EO_VendorNotification_Result getList(array $parameters = [])
+ * @method static EO_VendorNotification_Entity getEntity()
+ * @method static \Bitrix\Main\Security\Notifications\EO_VendorNotification createObject($setDefaultValues = true)
+ * @method static \Bitrix\Main\Security\Notifications\EO_VendorNotification_Collection createCollection()
+ * @method static \Bitrix\Main\Security\Notifications\EO_VendorNotification wakeUpObject($row)
+ * @method static \Bitrix\Main\Security\Notifications\EO_VendorNotification_Collection wakeUpCollection($rows)
+ */
 class VendorNotificationTable extends DataManager
 {
 	public static function getTableName()

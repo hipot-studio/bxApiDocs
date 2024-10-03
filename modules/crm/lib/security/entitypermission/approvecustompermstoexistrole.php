@@ -2,7 +2,7 @@
 
 namespace Bitrix\Crm\Security\EntityPermission;
 
-use Bitrix\Crm\Security\Role\Manage\EntitiesBuilder;
+use Bitrix\Crm\Security\Role\Manage\RoleManagementModelBuilder;
 use Bitrix\Crm\Security\Role\Model\EO_RolePermission;
 use Bitrix\Crm\Security\Role\Model\RolePermissionTable;
 use Bitrix\Main\ArgumentException;
@@ -35,7 +35,7 @@ final class ApproveCustomPermsToExistRole
 
 		$defaultPermission = array_shift($defaultPermissions);
 
-		$entities = (EntitiesBuilder::getInstance())
+		$entities = (RoleManagementModelBuilder::getInstance())
 			->getEntityNamesWithPermissionClass($defaultPermission)
 		;
 		$existedPermissions = [];
@@ -206,11 +206,6 @@ final class ApproveCustomPermsToExistRole
 
 	public function hasWaitingPermission(string $code): bool
 	{
-		if ($code === (new \Bitrix\Crm\Security\Role\Manage\Permissions\Transition([]))->code()) // temporary always in waiting state
-		{
-			return true;
-		}
-
 		$defaultPermissions = $this->getDefaultPermissions();
 
 		foreach ($defaultPermissions as $defaultPermission)

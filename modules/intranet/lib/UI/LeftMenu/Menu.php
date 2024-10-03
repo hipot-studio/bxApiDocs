@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Intranet\UI\LeftMenu;
 
+use Bitrix\Intranet\MainPage;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Intranet\UI\LeftMenu\MenuItem;
 
@@ -9,6 +10,7 @@ class Menu
 	protected $items = [];
 	protected $user;
 	protected $siteId;
+	protected MainPage\Page $mainPage;
 
 	public function __construct(array $menuItemsData, User $user)
 	{
@@ -17,6 +19,7 @@ class Menu
 
 		$this->items['shown'] = new MenuItem\GroupService(['ID' => 'shown', 'TEXT' => 'Shown']);
 		$this->items['hidden'] = new MenuItem\GroupService(['ID' => 'hidden', 'TEXT' => 'Hidden']);
+		$this->mainPage = new MainPage\Page();
 
 		foreach ($menuItemsData as $itemData)
 		{
@@ -60,6 +63,14 @@ class Menu
 					$this->setItem($item);
 				}
 			}
+		}
+
+		if ($this->mainPage->enabled())
+		{
+			$this->setItem(new MenuItem\MainPageItem([
+				'TEXT' => $this->mainPage->getName(),
+				'LINK' => $this->mainPage->getLink(),
+			]));
 		}
 	}
 
@@ -183,7 +194,7 @@ class Menu
 						$item->getParent()->getId()
 					);
 				}
-				else if ($item->getLink() === \CIntranetUtils::getB24FirstPageLink())
+				else if (!$this->mainPage->isAvailable() && $item->getLink() === \CIntranetUtils::getB24FirstPageLink())
 				{
 					$sort = 1;
 				}

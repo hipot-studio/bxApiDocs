@@ -4,6 +4,7 @@ namespace Bitrix\Im\V2\Application;
 
 use Bitrix\Im\Promotion;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\TariffLimit\Limit;
 
 class Config implements \JsonSerializable
 {
@@ -36,6 +37,7 @@ class Config implements \JsonSerializable
 			'phoneSettings' => $this->getPhoneSettings(),
 			'sessionTime' => $this->getSessionTime(),
 			'featureOptions' => $this->getFeatureOptions(),
+			'tariffRestrictions' => $this->getTariffRestrictions(),
 		];
 	}
 
@@ -118,5 +120,10 @@ class Config implements \JsonSerializable
 	protected function getFeatureOptions(): Features
 	{
 		return Features::get();
+	}
+
+	protected function getTariffRestrictions(): array
+	{
+		return Limit::getInstance()->getRestrictions();
 	}
 }

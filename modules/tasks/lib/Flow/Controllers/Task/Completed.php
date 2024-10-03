@@ -5,7 +5,6 @@ namespace Bitrix\Tasks\Flow\Controllers\Task;
 use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
-use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\PageNavigation;
@@ -56,7 +55,7 @@ class Completed extends Controller
 	/**
 	 * @restMethod tasks.flow.task.completed.list
 	 */
-	public function listAction(FlowDto $flowData, PageNavigation $pageNavigation, DaysAgoDto $ago): ?Page
+	public function listAction(FlowDto $flowData, PageNavigation $pageNavigation, DaysAgoDto $ago): ?array
 	{
 		if (!FlowAccessController::can($this->userId, FlowAction::READ, $flowData->id))
 		{

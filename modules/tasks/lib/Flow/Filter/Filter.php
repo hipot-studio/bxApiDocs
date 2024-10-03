@@ -72,17 +72,19 @@ class Filter
 		$presets = [];
 
 		$user = current($this->userProvider->getUsersInfo([$this->userId]));
-
-		$presets[self::MY_PRESET] = [
-			'name' => Loc::getMessage('TASKS_FLOW_FILTER_PRESET_MY'),
-			'fields' => [
-				'CREATOR_ID' => $this->userId,
-				'CREATOR_ID_label' => $user->toArray()['name'],
-				'OWNER_ID' => $this->userId,
-				'OWNER_ID_label' => $user->toArray()['name'],
-			],
-			'default' => false,
-		];
+		if ($user)
+		{
+			$presets[self::MY_PRESET] = [
+				'name' => Loc::getMessage('TASKS_FLOW_FILTER_PRESET_MY'),
+				'fields' => [
+					'CREATOR_ID' => $this->userId,
+					'CREATOR_ID_label' => $user->toArray()['name'],
+					'OWNER_ID' => $this->userId,
+					'OWNER_ID_label' => $user->toArray()['name'],
+				],
+				'default' => false,
+			];
+		}
 
 		$presets[self::ACTIVE_PRESET] = [
 			'name' => Loc::getMessage('TASKS_FLOW_FILTER_PRESET_ACTIVE'),

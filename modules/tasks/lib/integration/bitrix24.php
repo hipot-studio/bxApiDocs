@@ -12,6 +12,7 @@ use Bitrix\Bitrix24\Feature;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use \Bitrix\Tasks\Util;
+use \Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit;
 
 abstract class Bitrix24 extends \Bitrix\Tasks\Integration
 {
@@ -40,11 +41,6 @@ abstract class Bitrix24 extends \Bitrix\Tasks\Integration
 
 	public static function checkToolAvailable($toolName)
 	{
-		if(isset($GLOBALS['__TASKS_DEVEL_ENV__']))
-		{
-			return true;
-		}
-
 		if(!static::includeModule()) // box installation, say yes
 		{
 			return true;
@@ -55,12 +51,16 @@ abstract class Bitrix24 extends \Bitrix\Tasks\Integration
 
 	public static function checkFeatureEnabled($featureName)
 	{
-		if(isset($GLOBALS['__TASKS_DEVEL_ENV__']))
+		if (!static::includeModule()) // box installation, say yes
 		{
 			return true;
 		}
 
-		if(!static::includeModule()) // box installation, say yes
+		if (
+			Limit\TaskLimit::isRelatedWithFeature($featureName)
+			&& Limit\TaskLimit::isLimitExist()
+			&& !Limit\TaskLimit::isLimitExceeded()
+		)
 		{
 			return true;
 		}
@@ -81,6 +81,16 @@ abstract class Bitrix24 extends \Bitrix\Tasks\Integration
 		}
 
 		return \CBitrix24::isLicensePaid();
+	}
+
+	public static function getCurrentLicenseType()
+	{
+		if(!static::includeModule()) // box installation is like a free license in terms of bitrix24
+		{
+			return true;
+		}
+
+		return \CBitrix24::getLicenseType();
 	}
 
 	public static function isLicenseShareware()

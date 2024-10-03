@@ -293,8 +293,6 @@ class Factory
 		static::doAutocompleteActivities($entityTypeId, $entityId);
 
 		$automationTarget = static::getTarget($entityTypeId, $entityId);
-		//refresh target entity fields
-		$automationTarget->setEntityById($entityId);
 		$automationTarget->getRuntime()->onDocumentStatusChanged();
 
 		if ($conversionResult = self::shiftConversionResult($entityTypeId, $entityId))
@@ -313,8 +311,6 @@ class Factory
 		}
 
 		$automationTarget = static::getTarget($entityTypeId, $entityId);
-		//refresh target entity fields
-		$automationTarget->setEntityById($entityId);
 		$automationTarget->getRuntime()->onFieldsChanged($changedFields);
 	}
 
@@ -386,7 +382,8 @@ class Factory
 			return self::$targets[$entityTypeId][$entityId];
 		}
 		$target = self::createTarget($entityTypeId);
-		$target->setEntityById($entityId);
+		$target->setEntityId($entityId);
+		$target->setDocumentId(\CCrmOwnerType::ResolveName($target->getEntityTypeId()) . "_" . $entityId);
 
 		self::setTarget($target);
 
@@ -605,7 +602,9 @@ class Factory
 			$converter->setTargetItem($itemTypeId, $itemOptions);
 		}
 
-		$contextData = null;
+		$contextData = [
+			'CHECK_TRANSITION_ACCESS_ENABLED' => 'N',
+		];
 		$userId = \CCrmOwnerType::GetResponsibleID(\CCrmOwnerType::Lead, $entityId, false);
 		if ($userId > 0)
 		{

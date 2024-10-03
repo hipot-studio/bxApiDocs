@@ -85,7 +85,7 @@ class UserBackwardConverter
 			{
 				$this->logger->write([
 					'message' => "Employee convertation failure: " . implode(', ', $result->getErrorMessages()),
-					'entityType' => LoggerEntityType::MEMBER_USER,
+					'entityType' => LoggerEntityType::MEMBER_USER->name,
 					'entityId' => $userId,
 					'userId' => Main\Engine\CurrentUser::get()->getId(),
 				]);

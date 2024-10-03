@@ -650,7 +650,7 @@ class RealizationDocumentProvider extends \Bitrix\UI\EntityEditor\BaseProvider
 				{
 					foreach ($this->order->getBasket() as $basketItem)
 					{
-						$total += (float)$basketItem->getField('PRICE') * (float)$basketItem->getField('QUANTITY');
+						$total += $basketItem->getPriceWithVat() * $basketItem->getQuantity();
 						$count++;
 					}
 				}
@@ -659,7 +659,7 @@ class RealizationDocumentProvider extends \Bitrix\UI\EntityEditor\BaseProvider
 					foreach ($this->payment->getPayableItemCollection()->getBasketItems() as $payableItem)
 					{
 						$basketItem = $payableItem->getEntityObject();
-						$total += (float)$basketItem->getField('PRICE') * (float)$basketItem->getField('QUANTITY');
+						$total += $basketItem->getPriceWithVat() * $payableItem->getQuantity();
 						$count++;
 					}
 				}
@@ -669,7 +669,7 @@ class RealizationDocumentProvider extends \Bitrix\UI\EntityEditor\BaseProvider
 				foreach ($this->shipment->getShipmentItemCollection() as $shipmentItem)
 				{
 					$basketItem = $shipmentItem->getBasketItem();
-					$total += (float)$basketItem->getField('PRICE') * (float)$basketItem->getField('QUANTITY');
+					$total += $basketItem->getPriceWithVat() * $shipmentItem->getQuantity();
 					$count++;
 				}
 			}

@@ -61,7 +61,7 @@ class VideoConfChat extends GroupChat
 		{
 			$aliasData = $params['VIDEOCONF']['ALIAS_DATA'];
 
-			AliasTable::update($aliasData['ID'], ['ENTITY_ID' => $chat->getChatId()]);
+			Alias::update($aliasData['ID'], ['ENTITY_ID' => $chat->getChatId()]);
 		}
 
 		$conferenceData = [

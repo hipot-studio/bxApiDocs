@@ -26,6 +26,7 @@ final class FieldType
 	public const FIRST_NAME = 'firstname';
 	public const LAST_NAME = 'lastname';
 	public const PATRONYMIC = 'patronymic';
+	public const POSITION = 'position';
 	public const ENUMERATION = 'enumeration';
 
 	public const ADDRESS_SUBFIELD_MAP = [
@@ -60,6 +61,7 @@ final class FieldType
 			self::FIRST_NAME,
 			self::LAST_NAME,
 			self::PATRONYMIC,
+			self::POSITION,
 			self::ENUMERATION,
 		];
 	}

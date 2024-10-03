@@ -180,12 +180,6 @@ class Action
 			'ta_el' => Analytics::ELEMENT['context_menu'],
 		]);
 
-		$flowId = (int)($this->rowData['FLOW_ID'] ?? null);
-		if ($flowId > 0)
-		{
-			$copyTaskPath->addParams(['FLOW_ID' => $flowId]);
-		}
-
 		$taskRowActions[] = [
 			'text' => GetMessageJS('TASKS_GRID_TASK_ROW_ACTION_COPY'),
 			'href' => $copyTaskPath->getUri(),

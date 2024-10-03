@@ -21,7 +21,6 @@ use Bitrix\Tasks\Internals\Log\LogFacade;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Task\SortingTable;
 use Bitrix\Tasks\Internals\TaskTable as Task;
-use Bitrix\Tasks\ProjectsTable;
 use Bitrix\Main\ORM\Fields\ArrayField;
 use Bitrix\Tasks\Provider\Exception\InvalidGroupByException;
 use Bitrix\Tasks\Provider\TaskList;
@@ -64,6 +63,7 @@ class StagesTable extends DataManager
 	 */
 	public const SYS_TYPE_NEW = 'NEW';
 	public const SYS_TYPE_PROGRESS = 'WORK';
+	public const SYS_TYPE_REVIEW = 'REVIEW';
 	public const SYS_TYPE_FINISH = 'FINISH';
 	public const SYS_TYPE_DEFAULT = 'NEW';
 
@@ -100,6 +100,11 @@ class StagesTable extends DataManager
 	 * Disable pin for these users.
 	 */
 	private static string $mode = 'G';
+
+	/**
+	 * @var array
+	 */
+	private static array $cache = [];
 
 	public static function getTableName(): string
 	{
@@ -935,7 +940,8 @@ class StagesTable extends DataManager
 		if ($task['GROUP_ID'] > 0 && !empty($checkStages) && ($newTask || $refreshGroup))
 		{
 			// get order
-			if (($project = ProjectsTable::getById($task['GROUP_ID'])->fetch()))
+			$project = self::getProject((int) $task['GROUP_ID']);
+			if ($project)
 			{
 				$order = $project['ORDER_NEW_TASK'] ?: 'desc';
 			}
@@ -1179,5 +1185,32 @@ class StagesTable extends DataManager
 	public static function getCollectionClass(): string
 	{
 		return StagesCollection::class;
+	}
+
+	/**
+	 * @param int $groupId
+	 * @return mixed|null
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	private static function getProject(int $groupId)
+	{
+		if (
+			isset(self::$cache['projects'])
+			&& array_key_exists($groupId, self::$cache['projects'])
+		)
+		{
+			return self::$cache['projects'][$groupId];
+		}
+
+		$project = ProjectsTable::getById($groupId)->fetch();
+		if ($project)
+		{
+			self::$cache['projects'][$groupId] = $project;
+			return self::$cache['projects'][$groupId];
+		}
+
+		return null;
 	}
 }

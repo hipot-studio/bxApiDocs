@@ -35,6 +35,7 @@ class PushSender
 		{
 			$pushData = [];
 			$pushData['userId'] = $userId;
+			$pushData['isSonetEnabled'] = Counter::isSonetEnable();
 
 			$counter = Counter::getInstance($userId);
 			$counters = $counter->getRawCounters();

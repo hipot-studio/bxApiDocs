@@ -15,10 +15,8 @@ class Director
 		{
 			return new Scenario\Collection($scenarios);
 		}
-		if ($factory->getType()->getIsSetOpenPermissions())
-		{
-			$scenarios[] = new Scenario\DefaultCategoryPermissions($entityTypeId, $categoryId);
-		}
+		$scenarios[] = new Scenario\DefaultCategoryPermissions($entityTypeId, $categoryId, $factory->getType()->getIsSetOpenPermissions());
+
 		$defaultStages = new Scenario\DefaultStages(
 			$factory->getStagesEntityId($categoryId),
 			\CCrmStatus::getDynamicEntityStatusPrefix($entityTypeId, $categoryId),

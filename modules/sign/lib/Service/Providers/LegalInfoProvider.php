@@ -38,6 +38,7 @@ class LegalInfoProvider extends InfoProvider
 			'UF_LEGAL_NAME' => FieldType::FIRST_NAME,
 			'UF_LEGAL_LAST_NAME' => FieldType::LAST_NAME,
 			'UF_LEGAL_PATRONYMIC_NAME' => FieldType::PATRONYMIC,
+			'UF_LEGAL_POSITION' => FieldType::POSITION,
 			default => parent::getType($field),
 		};
 	}

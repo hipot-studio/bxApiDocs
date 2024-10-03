@@ -3,7 +3,7 @@
 namespace Bitrix\Tasks\Flow\Control\Middleware\Implementation;
 
 use Bitrix\Main\Loader;
-use Bitrix\Tasks\Flow\Control\AbstractCommand;
+use Bitrix\Tasks\AbstractCommand;
 use Bitrix\Tasks\Flow\Control\Exception\MiddlewareException;
 use Bitrix\Tasks\Flow\Control\Middleware\AbstractMiddleware;
 use Bitrix\Tasks\Integration\Intranet\Flow\Department;

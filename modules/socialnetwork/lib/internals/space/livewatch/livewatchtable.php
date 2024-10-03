@@ -18,6 +18,19 @@ use Bitrix\Main\ORM\Fields\IntegerField;
  * </ul>
  *
  * @package Bitrix\Socialnetwork\Internals\Space\LiveWatch
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_LiveWatch_Query query()
+ * @method static EO_LiveWatch_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_LiveWatch_Result getById($id)
+ * @method static EO_LiveWatch_Result getList(array $parameters = [])
+ * @method static EO_LiveWatch_Entity getEntity()
+ * @method static \Bitrix\Socialnetwork\Internals\Space\LiveWatch\EO_LiveWatch createObject($setDefaultValues = true)
+ * @method static \Bitrix\Socialnetwork\Internals\Space\LiveWatch\EO_LiveWatch_Collection createCollection()
+ * @method static \Bitrix\Socialnetwork\Internals\Space\LiveWatch\EO_LiveWatch wakeUpObject($row)
+ * @method static \Bitrix\Socialnetwork\Internals\Space\LiveWatch\EO_LiveWatch_Collection wakeUpCollection($rows)
  */
 
 final class LiveWatchTable extends DataManager

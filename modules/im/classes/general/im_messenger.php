@@ -1,6 +1,7 @@
 <?
 use Bitrix\Im\Integration\Imopenlines;
 use Bitrix\Im\Message;
+use Bitrix\Im\V2\Analytics\MessageAnalytics;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Sync;
 use Bitrix\Main\Engine\Response\Converter;
@@ -116,6 +117,39 @@ class CIMMessenger
 	 */
 	public static function Add($arFields)
 	{
+		$v2SendEnabled = \Bitrix\Main\Config\Option::get('im', 'v2_send_enabled', 'N');
+		if ($v2SendEnabled === 'Y' && $arFields['MESSAGE_TYPE'] !== 'S')
+		{
+			$messageObject = self::getMessageObject($arFields);
+			if (!$messageObject)
+			{
+				return false;
+			}
+
+			$config = new \Bitrix\Im\V2\Message\Send\SendingConfig($arFields);
+
+			$chat = $messageObject->getChat()->withContextUser($messageObject->getAuthorId());
+
+			if ($chat instanceof \Bitrix\Im\V2\Chat\NullChat || $chat === null)
+			{
+				return false;
+			}
+
+			if (!$config->skipUserCheck() && $messageObject->getAuthorId() && !$chat->canDo(\Bitrix\Im\V2\Chat\Permission::ACTION_SEND))
+			{
+				return false;
+			}
+
+			$result = $chat->sendMessage($messageObject, $config);
+
+			if (!$result->isSuccess())
+			{
+				return false;
+			}
+
+			return $result->getResult()['messageId'] ?? false;
+		}
+
 		global $DB;
 
 		$templateId = $arFields['TEMPLATE_ID'] ?? '';
@@ -784,10 +818,17 @@ class CIMMessenger
 						(new \Bitrix\Im\V2\Link\Url\UrlService())->saveUrlsFromMessage($message);
 					}
 
-					(new \Bitrix\Im\V2\Link\File\FileService())->saveFilesFromMessage($arFields['FILES_FROM_TEXT'] ?? [], $message);
+					$allFiles = self::getFilesFromMessage(
+						$arFields['FILE_MODELS'] ?? [],
+						$arFields['FILES_FROM_TEXT'] ?? [],
+						$arFields['PARAMS'] ?? []
+					);
+
+					(new \Bitrix\Im\V2\Link\File\FileService())->saveFilesFromMessage($allFiles, $message);
 				}
 
 				\Bitrix\Im\Model\MessageTable::indexRecord($messageID);
+				(new MessageAnalytics())->addSendMessage($messageID);
 
 				return $messageID;
 			}
@@ -1421,10 +1462,17 @@ class CIMMessenger
 						(new \Bitrix\Im\V2\Link\Url\UrlService())->saveUrlsFromMessage($message);
 					}
 
-					(new \Bitrix\Im\V2\Link\File\FileService())->saveFilesFromMessage($arFields['FILES_FROM_TEXT'] ?? [], $message);
+					$allFiles = self::getFilesFromMessage(
+						$arFields['FILE_MODELS'] ?? [],
+						$arFields['FILES_FROM_TEXT'] ?? [],
+						$arFields['PARAMS'] ?? []
+					);
+
+					(new \Bitrix\Im\V2\Link\File\FileService())->saveFilesFromMessage($allFiles, $message);
 				}
 
 				\Bitrix\Im\Model\MessageTable::indexRecord($messageID);
+				(new MessageAnalytics())->addSendMessage($messageID);
 
 				return $messageID;
 			}
@@ -5018,6 +5066,41 @@ class CIMMessenger
 		return $result;
 	}
 
+	private static function getFilesFromMessage(array $models, array $filesFromText, array $params): array
+	{
+		$allFiles = [];
+		$filesToSelect = [];
+
+		foreach ([$models, $filesFromText] as $sourceModels)
+		{
+			foreach ($sourceModels as $model)
+			{
+				if ($model instanceof \Bitrix\Disk\File)
+				{
+					$allFiles[$model->getId()] = $model;
+				}
+			}
+		}
+
+		foreach ($params['FILE_ID'] ?? [] as $fileId)
+		{
+			if (!isset($allFiles[$fileId]))
+			{
+				$filesToSelect[] = $fileId;
+			}
+		}
+
+		if (!empty($filesToSelect))
+		{
+			$selectedFiles = \Bitrix\Im\V2\Entity\File\FileCollection::initByDiskFilesIds($filesToSelect)
+				->getDiskFiles()
+			;
+			$allFiles += $selectedFiles;
+		}
+
+		return $allFiles;
+	}
+
 	public static function PrepareMessageForPushSendPutCallBack($params)
 	{
 		$code = mb_strpos(mb_strtoupper($params[0]), '[SEND') === 0? 'SEND': 'PUT';
@@ -5126,6 +5209,11 @@ class CIMMessenger
 		return $USER->GetID();
 	}
 
+	public static function loadLoc(): void
+	{
+		Loc::loadMessages(__FILE__);
+	}
+
 	protected static function needSendPush(array $arChat): bool
 	{
 		if ($arChat['CHAT_TYPE'] === \Bitrix\Im\V2\Chat::IM_TYPE_COMMENT)
@@ -5154,7 +5242,7 @@ class CIMMessenger
 		}
 
 		$filteredRelations = [];
-		$parentRelations = \Bitrix\Im\V2\Chat::getInstance($chatId)->getRelations(['FILTER' => ['USER_ID' => $userIds]]);
+		$parentRelations = \Bitrix\Im\V2\Chat::getInstance($chatId)->getRelationsByUserIds($userIds);
 		foreach ($parentRelations as $parentRelation)
 		{
 			$userId = $parentRelation->getUserId();
@@ -5184,7 +5272,7 @@ class CIMMessenger
 	protected static function getChatRelationForMention(\Bitrix\Im\V2\Chat $chat, array $users): array
 	{
 		$chatRelationsLegacy = [];
-		foreach ($chat->getRelations(['FILTER' => ['USER_ID' => $users]]) as $relation)
+		foreach ($chat->getRelationsByUserIds($users) as $relation)
 		{
 			$chatRelationsLegacy[$relation->getUserId()] = [
 				'NOTIFY_BLOCK' => $relation->getNotifyBlock() ? 'Y' : 'N',
@@ -5236,5 +5324,45 @@ class CIMMessenger
 		\Bitrix\Main\Type\Collection::sortByColumn($finalGroup, Array('count' => SORT_ASC));
 
 		return $finalGroup;
+	}
+
+	protected static function getMessageObject(array $fields): ?\Bitrix\Im\V2\Message
+	{
+		$fields['FROM_USER_ID'] ??= 0;
+
+		if (isset($fields['SYSTEM']))
+		{
+			$fields['SYSTEM'] = $fields['SYSTEM'] === 'Y';
+		}
+
+		if (isset($fields['NOTIFY_ANSWER']))
+		{
+			$fields['NOTIFY_ANSWER'] = $fields['NOTIFY_ANSWER'] === 'Y';
+		}
+
+		$message = new \Bitrix\Im\V2\Message($fields);
+
+		$message->setAuthorId((int)$fields['FROM_USER_ID']);
+
+		if (isset($fields['TO_USER_ID']))
+		{
+			$chat = \Bitrix\Im\V2\Entity\User\User::getInstance((int)$fields['FROM_USER_ID'])
+				->getChatWith((int)$fields['TO_USER_ID'])
+			;
+			$message->setChat($chat)->setChatId($chat->getId());
+		}
+
+		if (isset($fields['DIALOG_ID']))
+		{
+			$chatId = \Bitrix\Im\Dialog::getChatId($fields['DIALOG_ID'], (int)$fields['FROM_USER_ID']);
+			$message->setChatId($chatId);
+		}
+
+		if (isset($fields['FILE_MODELS']))
+		{
+			\Bitrix\Im\V2\Entity\File\FileCollection::addDiskFilesToPreload($fields['FILE_MODELS']);
+		}
+
+		return $message;
 	}
 }

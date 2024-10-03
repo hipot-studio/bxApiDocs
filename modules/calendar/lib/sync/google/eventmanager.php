@@ -92,21 +92,18 @@ class EventManager extends Manager implements EventManagerInterface
 			if ($event->getUid())
 			{
 				$event->setUid(null);
+
 				return $this->create($event, $context);
 			}
-			else
-			{
-				$result->addError(new Error($e->getMessage(), $e->getCode()));
-			}
+
+			$result->addError(new Error($e->getMessage(), $e->getCode()));
 		}
 		catch (ArgumentException $e)
 		{
-			AddMessage2Log($e->getMessage(), 'calendar', 2, true);
 			$result->addError(new Error('failed to create an event in google'));
 		}
 		catch (ObjectException $e)
 		{
-			AddMessage2Log($e->getMessage(), 'calendar', 2, true);
 			$result->addError(new Error('failed to convert event'));
 		}
 
@@ -194,12 +191,10 @@ class EventManager extends Manager implements EventManagerInterface
 		}
 		catch (ArgumentException $e)
 		{
-			AddMessage2Log($e->getMessage(), 'calendar', 2, true);
 			$result->addError(new Error('failed to update an event in google'));
 		}
 		catch (ObjectException $e)
 		{
-			AddMessage2Log($e->getMessage(), 'calendar', 2, true);
 			$result->addError(new Error('failed to convert event'));
 		}
 
@@ -255,12 +250,10 @@ class EventManager extends Manager implements EventManagerInterface
 		}
 		catch (ArgumentException $e)
 		{
-			AddMessage2Log($e->getMessage(), 'calendar', 2, true);
 			$result->addError(new Error('failed to delete an event in google'));
 		}
 		catch (ObjectException $e)
 		{
-			AddMessage2Log($e->getMessage(), 'calendar', 2, true);
 			$result->addError(new Error('failed to convert event'));
 		}
 
@@ -279,7 +272,6 @@ class EventManager extends Manager implements EventManagerInterface
 		$instanceContext = $this->prepareContextForInstance($event, $context);
 		if ($instanceContext === null)
 		{
-			AddMessage2Log('failed to create instance. id='. $event->getId(), 'calendar', 2, true);
 			return $result->addError(new Error('failed to create an instance in google'));
 		}
 
@@ -320,7 +312,6 @@ class EventManager extends Manager implements EventManagerInterface
 		}
 		catch (ArgumentException $e)
 		{
-			AddMessage2Log($e->getMessage(), 'calendar', 2, true);
 			$result->addError(new Error('failed to create an instance in google'));
 		}
 
@@ -374,7 +365,6 @@ class EventManager extends Manager implements EventManagerInterface
 
 		if ($instanceContext === null)
 		{
-			AddMessage2Log('failed to create instance. id='. $event->getId(), 'calendar', 2, true);
 			return $result->addError(new Error('failed to delete an instance in google'));
 		}
 
@@ -410,7 +400,6 @@ class EventManager extends Manager implements EventManagerInterface
 
 		catch (ArgumentException $e)
 		{
-			AddMessage2Log($e->getMessage(), 'calendar', 2, true);
 			$result->addError(new Error('failed to delete an instance in google'));
 		}
 

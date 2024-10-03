@@ -137,14 +137,14 @@ class TaskObject extends EO_Task implements Arrayable
 		return $this->getCached('CRM_FIELDS') ?? [];
 	}
 
-	public function getFlowId(): int
+	public function getFlowId(bool $force = true): int
 	{
-		if ($this->onFlow() === false)
+		if ($force && $this->onFlow() === false)
 		{
 			return 0;
 		}
 
-		return $this->getFlowTask()->getFlowId();
+		return (int)$this->getFlowTask()?->getFlowId();
 	}
 
 	public function isDeleted(): bool

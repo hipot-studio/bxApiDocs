@@ -6,6 +6,7 @@ use Bitrix\Crm\Security\Role\Manage\DTO\EntityDTO;
 use Bitrix\Crm\Security\Role\Manage\PermissionAttrPresets;
 use Bitrix\Crm\Service\Container;
 use CCrmOwnerType;
+use CCrmStatus;
 
 class Quote implements PermissionEntity
 {
@@ -13,7 +14,8 @@ class Quote implements PermissionEntity
 	{
 		return array_merge(
 			PermissionAttrPresets::crmEntityPreset(),
-			PermissionAttrPresets::crmEntityKanbanHideSum()
+			PermissionAttrPresets::crmEntityKanbanHideSum(),
+			PermissionAttrPresets::crmStageTransition(CCrmStatus::GetStatusListEx('QUOTE_STATUS'))
 		);
 	}
 

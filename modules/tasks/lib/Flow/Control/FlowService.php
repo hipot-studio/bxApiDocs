@@ -16,7 +16,7 @@ use Bitrix\Tasks\Flow\Control\Exception\FlowNotAddedException;
 use Bitrix\Tasks\Flow\Control\Exception\FlowNotDeletedException;
 use Bitrix\Tasks\Flow\Control\Exception\FlowNotFoundException;
 use Bitrix\Tasks\Flow\Control\Exception\FlowNotUpdatedException;
-use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
+use Bitrix\Tasks\InvalidCommandException;
 use Bitrix\Tasks\Flow\Flow;
 use Bitrix\Tasks\Internals\Log\Logger;
 use Throwable;
@@ -72,58 +72,6 @@ class FlowService
 		/** @var DeleteCommandHandler $commandHandler */
 		$commandHandler = $this->locator->get('deleteCommandHandler');
 		return $commandHandler($command);
-	}
-
-	/**
-	 * @param int $flowId
-	 * @param int $efficiency
-	 * @return void
-	 * @throws CommandNotFoundException
-	 * @throws FlowNotUpdatedException
-	 * @throws InvalidCommandException
-	 * @throws SqlQueryException
-	 */
-	public function onFlowEfficiencyChanged(int $flowId, int $efficiency): void
-	{
-		try
-		{
-			$updateCommand = (new UpdateCommand())
-				->setId($flowId)
-				->setEfficiency($efficiency)
-				->disablePush()
-			;
-
-			$this->update($updateCommand);
-		}
-		catch (FlowNotFoundException)
-		{
-			// ignore it
-		}
-		catch (Throwable $t)
-		{
-			Logger::logThrowable($t);
-		}
-	}
-
-	/**
-	 * Changes the flow activity to the current time.
-	 *
-	 * @param int $flowId Flow id.
-	 * @return void
-	 * @throws CommandNotFoundException
-	 * @throws FlowNotFoundException
-	 * @throws FlowNotUpdatedException
-	 * @throws InvalidCommandException
-	 * @throws SqlQueryException
-	 */
-	public function upActivity(int $flowId): void
-	{
-		$updateCommand = (new UpdateCommand())
-			->setId($flowId)
-			->setActivity(new DateTime())
-		;
-
-		$this->update($updateCommand);
 	}
 
 	protected function init(): void

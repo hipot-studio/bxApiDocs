@@ -23,9 +23,8 @@ use Bitrix\Tasks\Control\Exception\TaskAddException;
 use Bitrix\Tasks\Control\Exception\TaskNotFoundException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\Control\Handler\TaskFieldHandler;
+use Bitrix\Tasks\Control\Handler\TariffFieldHandler;
 use Bitrix\Tasks\Control\Handler\Exception\TaskFieldValidateException;
-use Bitrix\Tasks\Flow\Control\FlowService;
-use Bitrix\Tasks\Flow\Notification\NotificationService;
 use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Integration\Bizproc\Listener;
 use Bitrix\Tasks\Integration\CRM\TimeLineManager;
@@ -33,6 +32,7 @@ use Bitrix\Tasks\Integration\Disk;
 use Bitrix\Tasks\Integration\Forum\Task\Topic;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
 use Bitrix\Tasks\Integration\Pull\PushService;
+use Bitrix\Tasks\Integration\SocialNetwork\Log;
 use Bitrix\Tasks\Integration\SocialNetwork\User;
 use Bitrix\Tasks\Internals\CacheConfig;
 use Bitrix\Tasks\Internals\Counter\CounterService;
@@ -41,7 +41,6 @@ use Bitrix\Tasks\Internals\Log\LogFacade;
 use Bitrix\Tasks\Internals\Notification\Controller;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\SearchIndex;
-use Bitrix\Tasks\Internals\Task\EO_Scenario;
 use Bitrix\Tasks\Internals\Task\FavoriteTable;
 use Bitrix\Tasks\Internals\Task\MemberTable;
 use Bitrix\Tasks\Internals\Task\ParameterTable;
@@ -319,7 +318,6 @@ class Task
 
 		$this->addLog();
 		$fields = $this->onTaskAdd($fields);
-		$this->handleFlow($task, [], 'add');
 		$this->setSearchIndex();
 		$this->resetCache();
 		$this->updateLastActivity();
@@ -413,7 +411,7 @@ class Task
 		$this->changes = $this->getChanges($fields);
 
 		$this->setStageId($task);
-		$this->setMembers($fields);
+		$this->setMembers($fields, $this->changes);
 		$this->setRegularParameters($fields);
 		$this->updateParameters($fields);
 		$this->saveFiles($fields);
@@ -443,7 +441,6 @@ class Task
 		$this->sendUpdatePush($updateComment);
 
 		$this->sendUpdateIntegrationEvent($fields, $taskBeforeUpdate);
-		$this->handleFlow($task, $fields, 'update');
 		$this->replicate();
 
 		return $task;
@@ -469,15 +466,15 @@ class Task
 		}
 		$this->taskId = $taskId;
 
-		$safeDelete = $this->proceedSafeDelete();
-
-		CounterService::getInstance()->collectData($this->taskId);
-
 		$taskData = $this->getFullTaskData();
 		if (!$taskData)
 		{
 			return false;
 		}
+
+		$safeDelete = $this->proceedSafeDelete($taskData);
+
+		CounterService::getInstance()->collectData($this->taskId);
 
 		if (!$this->onBeforeDelete())
 		{
@@ -823,6 +820,7 @@ class Task
 			'AUDITORS',
 			'DEADLINE',
 			'GROUP_ID',
+			'FLOW_ID',
 		];
 		$changesForUpdate = array_intersect_key($this->changes, array_flip($fieldsForComments));
 
@@ -1071,8 +1069,6 @@ class Task
 		$scenarioObject = $this->task->getScenario();
 		$fields['SCENARIO'] = is_null($scenarioObject) ? ScenarioTable::SCENARIO_DEFAULT
 			: $scenarioObject->getScenario();
-
-		$fields['FLOW_ID'] = $this->task->fillFlowTask()?->getFlowId();
 
 		return $fields;
 	}
@@ -1406,6 +1402,11 @@ class Task
 
 		Topic::delete($taskData["FORUM_TOPIC_ID"]);
 		$this->ufManager->Delete(Util\UserField\Task::getEntityCode(), $this->taskId);
+
+		if (Loader::includeModule('socialnetwork'))
+		{
+			Log::deleteLogByTaskId($this->taskId);
+		}
 	}
 
 	/**
@@ -1481,6 +1482,11 @@ class Task
 		{
 			CSearch::DeleteIndex("tasks", $this->taskId);
 		}
+
+		if (Loader::includeModule('socialnetwork'))
+		{
+			Log::hideLogByTaskId($this->taskId);
+		}
 	}
 
 	private function stopTimer(bool $force = false): void
@@ -1534,16 +1540,15 @@ class Task
 		return true;
 	}
 
-	private function proceedSafeDelete(): bool
+	private function proceedSafeDelete($taskData): bool
 	{
 		try
 		{
-			if (!Loader::includeModule('recyclebin'))
+			if (!$taskData)
 			{
 				return false;
 			}
-			$taskData = $this->getFullTaskData();
-			if (!$taskData)
+			if (!Loader::includeModule('recyclebin'))
 			{
 				return false;
 			}
@@ -1593,7 +1598,7 @@ class Task
 		{
 			$childrenCountDbResult = CTasks::GetChildrenCount([], $parentId);
 			$fetchedChildrenCount = $childrenCountDbResult->Fetch();
-			$childrenCount = $fetchedChildrenCount['CNT'];
+			$childrenCount = $fetchedChildrenCount ? $fetchedChildrenCount['CNT'] : 0;
 
 			if ($childrenCount == 1)
 			{
@@ -2161,10 +2166,10 @@ class Task
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	private function setMembers(array $fields): void
+	private function setMembers(array $fields, array $changes = []): void
 	{
 		$members = new Member($this->userId, $this->taskId);
-		$members->set($fields);
+		$members->set($fields, $changes);
 	}
 
 	private function addParameters(array $fields): void
@@ -2274,16 +2279,14 @@ class Task
 				'=TASK_ID' => $taskId,
 			],
 		])->fetchCollection();
-		if ($memberList->count() === 0)
+
+		$select = ['*', 'UTS_DATA', 'FLOW_TASK'];
+		if (!$memberList->isEmpty())
 		{
-			$select = ['select' => ['*', 'UTS_DATA']];
-		}
-		else
-		{
-			$select = ['select' => ['*', 'UTS_DATA', 'MEMBER_LIST']];
+			$select[] = 'MEMBER_LIST';
 		}
 
-		return TaskTable::getByPrimary($taskId, $select)->fetchObject()?->cacheCrmFields();
+		return TaskTable::getByPrimary($taskId, ['select' => $select])->fetchObject()?->cacheCrmFields();
 	}
 
 	/**
@@ -2584,6 +2587,8 @@ class Task
 			->prepareId()
 			->prepareIntegration();
 
+		$handler = new TariffFieldHandler($handler->getFields());
+
 		return $handler->getFields();
 	}
 
@@ -2756,37 +2761,6 @@ class Task
 				$status,
 				$fields['TASKS_ANALYTICS_PARAMS'] ?? [],
 			);
-		}
-	}
-
-	private function handleFlow(TaskObject $task, array $fields, string $action): void
-	{
-		if (!$task->onFlow())
-		{
-			return;
-		}
-
-		switch ($action)
-		{
-			case 'add':
-				(new NotificationService())->onTaskToFlowAdded($task->getId(), $task->getFlowId());
-				(new FlowService($this->userId))->upActivity($task->getFlowId());
-				break;
-			case 'update':
-				if (isset($fields['DEADLINE']))
-				{
-					(new NotificationService())->onTaskExpireTimeChange($task->getId());
-				}
-				if (isset($fields['STATUS']))
-				{
-					(new NotificationService())->onTaskStatusChanged($task->getId());
-
-					if (in_array($fields['STATUS'], \Bitrix\Tasks\Flow\Task\Status::STATUSES_CHANGING_ACTIVITY))
-					{
-						(new FlowService($this->userId))->upActivity($task->getFlowId());
-					}
-				}
-				break;
 		}
 	}
 }

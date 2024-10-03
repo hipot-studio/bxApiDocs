@@ -5,7 +5,6 @@ namespace Bitrix\BIConnector\Integration\Superset\Integrator\Request;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\Middleware\Queue\AfterRequestQueue;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\Middleware\Queue\BeforeRequestQueue;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Sender;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Request\Middleware;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 use Bitrix\Main\Result;
 
@@ -39,16 +38,29 @@ final class IntegratorRequest
 		$beforeResult = $this->beforeRequestMiddlewareQueue->execute($this);
 		if ($beforeResult)
 		{
+			if ($this->beforeRequestMiddlewareQueue->isSkipAfterMiddlewares())
+			{
+				return $beforeResult;
+			}
+
 			return $this->afterRequestMiddlewareQueue->execute($this, $beforeResult);
 		}
 
 		if ($this->isMultipart)
 		{
-			$result = $this->sender->performMultipartRequest($this->action, $this->requestParams, $this->user);
+			$result = $this->sender->performMultipartRequest(
+				$this->action,
+				$this->requestParams,
+				$this->user
+			);
 		}
 		else
 		{
-			$result = $this->sender->performRequest($this->action, $this->requestParams, $this->user);
+			$result = $this->sender->performRequest(
+				$this->action,
+				$this->requestParams,
+				$this->user
+			);
 		}
 
 		return $this->afterRequestMiddlewareQueue->execute($this, $this->unpackSenderResult($result));

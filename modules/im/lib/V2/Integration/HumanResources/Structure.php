@@ -124,4 +124,31 @@ class Structure
 
 		return Converter::convertToFinderCodes($entities);
 	}
+
+	public function getChatDepartments(): array
+	{
+		$departments = [];
+
+		if (!Loader::includeModule('humanresources'))
+		{
+			return $departments;
+		}
+
+		$nodeRelationService = Container::getNodeRelationService();
+
+		$links = $nodeRelationService->findAllRelationsByEntityTypeAndEntityId(
+			RelationEntityType::CHAT,
+			$this->chat->getId(),
+		);
+
+		foreach ($links as $link)
+		{
+			$departments[] = $link->withChildNodes
+				? str_replace('D', 'DR', $link->node->accessCode)
+				: $link->node->accessCode
+			;
+		}
+
+		return $departments;
+	}
 }

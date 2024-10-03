@@ -31,7 +31,14 @@ class RestrictedTracking extends \CBPTrackingService
 
 	private function getTemplateId($workflowId): int
 	{
-		return \CBPRuntime::getRuntime()->getWorkflow($workflowId, true)->getTemplateId();
+		try
+		{
+			return \CBPRuntime::getRuntime()->getWorkflow($workflowId, true)->getTemplateId();
+		}
+		catch (\Exception $e)
+		{
+			return 0;
+		}
 	}
 
 	private function isTemplateOff(int $templateId): bool

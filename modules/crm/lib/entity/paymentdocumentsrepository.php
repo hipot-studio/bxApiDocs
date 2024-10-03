@@ -100,24 +100,54 @@ class PaymentDocumentsRepository
 		return $result;
 	}
 
-	/**
-	 * @param array $filter
-	 * @param array $select
-	 * @param array $order
-	 * @return array
-	 */
+	public function doDocumentsExistForEntity(int $ownerTypeId, int $ownerId): bool
+	{
+		$this->ownerTypeId = $ownerTypeId;
+		$this->ownerId = $ownerId;
+
+		$paymentDocuments = $this->getPaymentDocumentsForEntityByFilter($this->ownerId, $this->ownerTypeId);
+		if (!empty($paymentDocuments))
+		{
+			return true;
+		}
+
+		$emptyDeliveryServiceId = Sale\Delivery\Services\EmptyDeliveryService::getEmptyDeliveryServiceId();
+		$shipments = $this->getDeliveriesForEntityByFilter($this->ownerId, $this->ownerTypeId, select: ['ID', 'DELIVERY_ID']);
+		$shipmentDocuments = array_filter($shipments, static function ($shipment) use ($emptyDeliveryServiceId) {
+			return (int)$shipment['DELIVERY_ID'] !== $emptyDeliveryServiceId;
+		});
+		if (!empty($shipmentDocuments))
+		{
+			return true;
+		}
+
+		$realizationDocuments = $this->getRealizationDocumentsIdsByShipments($shipments);
+		if (!empty($realizationDocuments))
+		{
+			return true;
+		}
+
+		$checkDocuments = $this->fetchCheckDocuments();
+		if (!empty($checkDocuments))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
 	public function getPaymentDocumentsForEntityByFilter(
 		int $ownerId,
 		int $ownerTypeId,
-		array $filter,
-		array $select,
-		array $order
+		array $filter = [],
+		array $select = ['ID'],
+		array $order = []
 	): array
 	{
 		$this->ownerTypeId = $ownerTypeId;
 		$this->ownerId = $ownerId;
 
-		if ($this->fetchEntity())
+		if ($this->doesEntityExist())
 		{
 			$this->fetchOrderIds();
 
@@ -138,24 +168,31 @@ class PaymentDocumentsRepository
 		return [];
 	}
 
-	/**
-	 * @param array $filter
-	 * @param array $select
-	 * @param array $order
-	 * @return array
-	 */
 	public function getDeliveryDocumentsForEntityByFilter(
 		int $ownerId,
 		int $ownerTypeId,
-		array $filter,
-		array $select,
-		array $order
+		array $filter = [],
+		array $select = ['ID'],
+		array $order = []
+	): array
+	{
+		$filter['!DELIVERY_ID'] = Sale\Delivery\Services\EmptyDeliveryService::getEmptyDeliveryServiceId();
+
+		return $this->getDeliveriesForEntityByFilter($ownerId, $ownerTypeId, $filter, $select, $order);
+	}
+
+	public function getDeliveriesForEntityByFilter(
+		int $ownerId,
+		int $ownerTypeId,
+		array $filter = [],
+		array $select = ['ID'],
+		array $order = []
 	): array
 	{
 		$this->ownerTypeId = $ownerTypeId;
 		$this->ownerId = $ownerId;
 
-		if ($this->fetchEntity())
+		if ($this->doesEntityExist())
 		{
 			$this->fetchOrderIds();
 
@@ -165,7 +202,6 @@ class PaymentDocumentsRepository
 			}
 
 			$filter = array_merge($filter, ['=ORDER_ID' => $this->orderIds]);
-			$filter['!DELIVERY_ID'] = Sale\Delivery\Services\EmptyDeliveryService::getEmptyDeliveryServiceId();
 			$filter['=SYSTEM'] = 'N';
 
 			$dbRes = Sale\Shipment::getList([
@@ -180,8 +216,47 @@ class PaymentDocumentsRepository
 		return [];
 	}
 
+	public function getRealizationDocumentsIdsByShipments(array $shipments): array
+	{
+		$result = [];
+
+		$shipmentIds = array_column($shipments, 'ID');
+
+		$shipmentRealizations = Crm\Order\Internals\ShipmentRealizationTable::getList([
+			'select' => ['SHIPMENT_ID'],
+			'filter' => [
+				'=SHIPMENT_ID' => $shipmentIds,
+				'=IS_REALIZATION' => 'Y',
+			],
+		]);
+		while ($shipmentRealization = $shipmentRealizations->fetch())
+		{
+			$result[] = (int)$shipmentRealization['SHIPMENT_ID'];
+		}
+
+		return $result;
+	}
+
+	private function doesEntityExist(): bool
+	{
+		$factory = Crm\Service\Container::getInstance()->getFactory($this->ownerTypeId);
+		$item = null;
+
+		if ($factory && $factory->isLinkWithProductsEnabled())
+		{
+			$item = $factory->getItem($this->ownerId, ['ID']);
+		}
+
+		return (bool)$item;
+	}
+
 	private function fetchEntity(): bool
 	{
+		if ((int)$this->ownerTypeId < 0 || (int)$this->ownerId < 0)
+		{
+			return false;
+		}
+
 		$factory = Crm\Service\Container::getInstance()->getFactory($this->ownerTypeId);
 		if ($factory && $factory->isLinkWithProductsEnabled())
 		{

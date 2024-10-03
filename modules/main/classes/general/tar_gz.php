@@ -1,9 +1,10 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2023 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
 
 IncludeModuleLangFile(__FILE__);
@@ -117,7 +118,7 @@ class CArchiver implements IBXArchive
 
 		if (is_array($arFileList) && !empty($arFileList))
 		{
-			$res = $this->_processFiles($arConvertedFileList, $this->add_path, $this->remove_path, $this->startFile);
+			$res = $this->_processFiles($arConvertedFileList, $this->add_path, $this->remove_path);
 		}
 
 		if ($res !== false && $res !== "continue")
@@ -1338,7 +1339,8 @@ class CArchiver implements IBXArchive
 			return false;
 		}
 
-		$v_header['filename'] = $v_filename;
+		$v_header['filename'] = \Bitrix\Main\IO\Path::normalize($v_filename);
+
 		return true;
 	}
 

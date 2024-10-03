@@ -63,7 +63,6 @@ class CUserHRXMLImport
 		CModule::IncludeModule('iblock');
 		$this->__user = new CUser();
 		$this->__element = new CIBlockElement();
-		$this->__section = new CIBlockSection();
 
 		$this->arParams = $arParams;
 		$this->arParams['DEFAULT_EMAIL'] = trim($this->arParams['DEFAULT_EMAIL']);
@@ -226,8 +225,9 @@ class CUserHRXMLImport
 		$arUsers = array();
 		define('INTR_SKIP_EVENT_ADD', 'Y');
 		$arSections = array();
-		$obSection = &$this->__section;
 		$this->STRUCTURE_ROOT = $this->GetStructureRoot();
+		$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
+			->departmentRepository();
 		foreach ($xml->IndicativeData as $data)
 		{
 			if (!isset ($data->IndicativePersonDossier))
@@ -286,54 +286,45 @@ class CUserHRXMLImport
 			else
 				$tempUserData['WORK_POSITION'] = '';
 
-			$last = $this->STRUCTURE_ROOT;
-			$lastXML_ID = '';
+			$lastDepartmentId = $this->STRUCTURE_ROOT;
+			$lastDepartment = null;
 
 			if (isset($data->IndicativeDeployment->DeploymentOrganization))
 			{
 				if (isset($data->IndicativeDeployment->DeploymentOrganization->OrganizationIdentifiers))
 				{
-					$departments = $data->IndicativeDeployment->DeploymentOrganization->OrganizationIdentifiers;
-					foreach ($departments as $department)
+					$xmlDepartments = $data->IndicativeDeployment->DeploymentOrganization->OrganizationIdentifiers;
+					foreach ($xmlDepartments as $xmlDepartment)
 					{
-						$arItem = array(
-							'XML_ID' => $this->GetGUID($department->OrganizationID),
-							'NAME' => (string)$department->OrganizationName,
-							'IBLOCK_ID' => $this->DEPARTMENTS_IBLOCK_ID,
-							'IBLOCK_SECTION_ID' => $last,
+						$department = new \Bitrix\Intranet\Entity\Department(
+							(string)$xmlDepartment->OrganizationName,
+							parentId: (int)$lastDepartmentId,
+							xmlId: $this->GetGUID($xmlDepartment->OrganizationID),
 						);
-						if (!array_key_exists($arItem['XML_ID'], $arSections))
+						if (!array_key_exists($department->getXmlId(), $arSections))
 						{
-							$res = CIBlockSection::GetList(
-								array(),
-								array(
-									'IBLOCK_ID' => $this->DEPARTMENTS_IBLOCK_ID,
-									'XML_ID' => $arItem['XML_ID'],
-									'SECTION_ID' => $last
-								),
-								false,
-								array('ID')
-							);
-							if ($arElement = $res->Fetch())
+							$extDepartment = $departmentRepository->findAllByXmlId($department->getXmlId())->first();
+
+							try
 							{
-								$secID = $obSection->Update($arElement['ID'], $arItem);
-								if ($secID > 0)
-									$arSections[$arItem['XML_ID']] = $arElement['ID'];
+								if ($extDepartment)
+								{
+									$department->setId($extDepartment->getId());
+								}
 								else
-									$GLOBALS['APPLICATION']->ThrowException($obSection->LAST_ERROR);
+								{
+									$department->setIsActive(true);
+								}
+								$department = $departmentRepository->save($department);
+								$arSections[$department->getXmlId()] = $department->getId();
 							}
-							else
+							catch (\Exception $exception)
 							{
-								$arItem['ACTIVE'] = 'Y';
-								$secID = $obSection->Add($arItem);
-								if ($secID > 0)
-									$arSections[$arItem['XML_ID']] = $secID;
-								else
-									$GLOBALS['APPLICATION']->ThrowException($obSection->LAST_ERROR);
+								$GLOBALS['APPLICATION']->ThrowException($exception->getMessage());
 							}
 						}
-						$last = $arSections[$arItem['XML_ID']];
-						$lastXML_ID = $arItem['XML_ID'];
+						$lastDepartmentId = $arSections[$department->getXmlId()];
+						$lastDepartment = $department;
 					}
 				}
 			}
@@ -365,7 +356,7 @@ class CUserHRXMLImport
 							'PERSON_ID' => $PersonID,
 							'DEPARTMENTS' => array(
 								$EmployeeID => array(
-									'DEPARTMENT' => $lastXML_ID,
+									'DEPARTMENT' => $lastDepartment?->getXmlId() ?? '', //$lastXML_ID,
 									'JOB' => base64_encode($tempUserData['WORK_POSITION']),
 								),
 							),
@@ -381,7 +372,7 @@ class CUserHRXMLImport
 			else
 			{
 				$arUser['UF_WORK_BINDING']['DEPARTMENTS'][$EmployeeID] = array(
-					'DEPARTMENT' => $lastXML_ID,
+					'DEPARTMENT' => $lastDepartment?->getXmlId() ?? '',
 					'JOB' => base64_encode($tempUserData['WORK_POSITION']),
 				);
 			}
@@ -402,10 +393,10 @@ class CUserHRXMLImport
 			$arUser['WORK_POSITION'] = array();
 			foreach ($arUser['UF_WORK_BINDING']['DEPARTMENTS'] as $value)
 			{
-				if (empty($value['DEPARTMENT']) || $value['DEPARTMENT'] == $lastXML_ID)
+				if (empty($value['DEPARTMENT']) || $value['DEPARTMENT'] == ($lastDepartment?->getXmlId() ?? ''))
 				{
-					if (!in_array($last, $arUser['UF_DEPARTMENT']))
-						$arUser['UF_DEPARTMENT'][] = $last;
+					if (!in_array($lastDepartmentId, $arUser['UF_DEPARTMENT']))
+						$arUser['UF_DEPARTMENT'][] = $lastDepartmentId;
 				}
 				elseif (array_key_exists($value['DEPARTMENT'], $arSections))
 				{
@@ -414,17 +405,14 @@ class CUserHRXMLImport
 				}
 				else
 				{
-					$res = CIBlockSection::GetList(
-						array(),
-						array('IBLOCK_ID' => $this->DEPARTMENTS_IBLOCK_ID, 'XML_ID' => $value['DEPARTMENT']),
-						false,
-						array('ID')
-					);
-					if ($arSection = $res->Fetch())
+					$department = $departmentRepository->findAllByXmlId($value['DEPARTMENT'])->first();
+					if ($department)
 					{
-						if (!in_array($arSection['ID'], $arUser['UF_DEPARTMENT']))
-							$arUser['UF_DEPARTMENT'] = $arSection['ID'];
-						$arSections[$value['DEPARTMENT']] = $arSection['ID'];
+						if (!in_array($department->getId(), $arUser['UF_DEPARTMENT']))
+						{
+							$arUser['UF_DEPARTMENT'] = $department->getId();
+						}
+						$arSections[$value['DEPARTMENT']] = $department->getId();
 					}
 				}
 				$value['JOB'] = base64_decode($value['JOB']);
@@ -444,7 +432,7 @@ class CUserHRXMLImport
 		foreach ($arUsers as $user)
 		{
 			$counter=array();
-			$result = $this->ImportUser($user, $counter);
+			$this->ImportUser($user, $counter);
 		}
 
 		return true;
@@ -501,71 +489,72 @@ class CUserHRXMLImport
 	{
 		$arSections = array();
 		$this->STRUCTURE_ROOT = $this->GetStructureRoot();
+		$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
+			->departmentRepository();
+		$xmlId = '';
 		foreach ($xml->OrganizationChart as $value)
 		{
-			$arUnitFields = array(
-				'IBLOCK_ID' => $this->DEPARTMENTS_IBLOCK_ID,
-				'XML_ID' => (string) $value->OrganizationUnit->OrganizationUnitID,
+			$departmentUnit = new \Bitrix\Intranet\Entity\Department(
+				$value->OrganizationUnit->OrganizationUnitName,
+				parentId: (int) $this->STRUCTURE_ROOT,
+				xmlId: (string) $value->OrganizationUnit->OrganizationUnitID
 			);
-			if (!array_key_exists($arUnitFields['XML_ID'], $arSections))
+			if (!array_key_exists($departmentUnit->getXmlId(), $arSections))
 			{
-				$rsUnit = CIBlockSection::GetList(array(), $arUnitFields, false, array('ID'));
-				if ($arUnit = $rsUnit->GetNext())
-					$arSections[$arUnitFields['XML_ID']] = $arUnit['ID'];
+				$department = $departmentRepository->findAllByXmlId($value['DEPARTMENT'])->first();
+				if ($department)
+				{
+					$arSections[$departmentUnit->getXmlId()] = $department->getId();
+				}
 			}
-			$arUnitFields['NAME'] = (string) $value->OrganizationUnit->OrganizationUnitName;
+
 			if (isset($value->OrganizationUnit->ParentOrganizationUnit))
 			{
-				$arFields = array(
-					'IBLOCK_ID' => $this->DEPARTMENTS_IBLOCK_ID,
-					'XML_ID' => (string) $value->OrganizationUnit->ParentOrganizationUnit->OrganizationUnitID
-				);
-				if (!array_key_exists($arFields['XML_ID'], $arSections) || empty($arSections[$arFields['XML_ID']]))
+				$xmlId = (string) $value->OrganizationUnit->ParentOrganizationUnit->OrganizationUnitID;
+				if (!array_key_exists($xmlId, $arSections) || empty($arSections[$xmlId]))
 				{
-					$rsParent = CIBlockSection::GetList(array(), $arFields, false, array('ID'));
-					if ($arParent = $rsParent->GetNext())
+					$department = $departmentRepository->findAllByXmlId($value['DEPARTMENT'])->first();
+					if ($department)
 					{
-						$arSections[$arFields['XML_ID']] = $arParent['ID'];
+						$arSections[$xmlId] = $department->getId();
 					}
 					else
 					{
-						$sec = new CIBlockSection;
-						$arFields['NAME'] = (string) $value->OrganizationUnit->ParentOrganizationUnit->OrganizationName;
-						$arFields['IBLOCK_SECTION_ID'] = $this->STRUCTURE_ROOT;
-						$id = $sec->Add($arFields);
-						if ($id)
-							$arSections[$arFields['XML_ID']] = $id;
+						$department = $departmentRepository->save(
+							new \Bitrix\Intranet\Entity\Department(
+								(string) $value->OrganizationUnit->ParentOrganizationUnit->OrganizationName,
+								parentId: (int) $this->STRUCTURE_ROOT,
+								xmlId: $xmlId
+							)
+						);
+						$departmentId = $department->getId();
+						if ($departmentId)
+						{
+							$arSections[$xmlId] = $departmentId;
+						}
 					}
 				}
-				$arUnitFields['IBLOCK_SECTION_ID'] = $arSections[$arFields['XML_ID']];
-			}
-			else
-			{
-				$arUnitFields['IBLOCK_SECTION_ID'] = $this->STRUCTURE_ROOT;
+				$departmentUnit->setParentId(isset($arSections[$xmlId]) ? (int)$arSections[$xmlId] : null);
 			}
 
-			$sec = new CIBlockSection;
-			if (array_key_exists($arUnitFields['XML_ID'], $arSections))
+			try
 			{
-				$sec->Update($arSections[$arUnitFields['XML_ID']], $arUnitFields);
-				if (!empty($sec->LAST_ERROR))
+				$willUpdate = array_key_exists($departmentUnit->getXmlId(), $arSections);
+				if ($willUpdate)
 				{
-					$this->warnings[] = GetMessage('IBLOCK_HR_NOT_UPDATED_DEPARTMENT').' "'
-						.$arUnitFields['NAME'].'"('.$arFields['XML_ID'].')'."\r\n".$sec->LAST_ERROR;
+					$departmentUnit->setId((int)$arSections[$departmentUnit->getXmlId()]);
 				}
+
+				$departmentUnit = $departmentRepository->save($departmentUnit);
+				$arSections[$departmentUnit->getXmlId()] = $departmentUnit->getId();
 			}
-			else
+			catch (\Exception $exception)
 			{
-				$id = $sec->Add($arUnitFields);
-				if (!empty($sec->LAST_ERROR))
-				{
-					$this->warnings[] = GetMessage('IBLOCK_HR_NOT_ADD_DEPARTMENT').' "'
-						.$arUnitFields['NAME'].'"('.$arFields['XML_ID'].')'."\r\n".$sec->LAST_ERROR;
-				}
-				else
-				{
-					$arSections[$arUnitFields['XML_ID']] = $id;
-				}
+				$message = $willUpdate
+					? GetMessage('IBLOCK_HR_NOT_UPDATED_DEPARTMENT')
+					: GetMessage('IBLOCK_HR_NOT_ADD_DEPARTMENT');
+				$this->warnings[] = $message.' "'
+					.$departmentUnit->getName().'"('.$xmlId.')'."\r\n".$exception->getMessage();
 			}
 		}
 	}
@@ -587,6 +576,8 @@ class CUserHRXMLImport
 		}
 		$obElement = &$this->__element;
 		$arAssignmentID = array();
+		$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
+			->departmentRepository();
 		foreach ($xml->StaffingAssignment as $assignment)
 		{
 			if (isset($assignment->ResourcePerson))
@@ -616,17 +607,29 @@ class CUserHRXMLImport
 				else
 					continue;
 
-				if (isset($assignment->ResourceDeployment->DeploymentOrganization->OrganizationIdentifiers->OrganizationID))
+				if (isset(
+					$assignment
+						->ResourceDeployment
+						->DeploymentOrganization
+						->OrganizationIdentifiers
+						->OrganizationID
+				))
 				{
-					$arOrgFields = array(
-						'IBLOCK_ID' => $this->DEPARTMENTS_IBLOCK_ID,
-						'XML_ID' => $this->GetGUID($assignment->ResourceDeployment->DeploymentOrganization->OrganizationIdentifiers->OrganizationID),
+					$xmlId = $this->GetGUID(
+						$assignment->ResourceDeployment
+						->DeploymentOrganization
+						->OrganizationIdentifiers
+						->OrganizationID
 					);
-					$rsOrg = CIBlockSection::GetList(array(), $arOrgFields, false, array('ID'));
-					if ($arItem = $rsOrg->Fetch())
-						$arHistoryPROP['DEPARTMENT'] = $arItem['ID'];
+					$department = $departmentRepository->findAllByXmlId($xmlId)->first();
+					if ($department)
+					{
+						$arHistoryPROP['DEPARTMENT'] = $department->getId();
+					}
 					else
+					{
 						$arHistoryPROP['DEPARTMENT'] = '';
+					}
 				}
 				$arHistoryRecord = array('IBLOCK_ID' => $this->STATE_HISTORY_IBLOCK_ID);
 				$arRecord = false;
@@ -936,9 +939,13 @@ class CUserHRXMLImport
 
 	private function GetStructureRoot()
 	{
-		$dbs = CIBlockSection::GetList(array(), array("IBLOCK_ID" => $this->DEPARTMENTS_IBLOCK_ID, "SECTION_ID" => 0));
-		if ($arRoot = $dbs->Fetch())
-			return $arRoot['ID'];
+		$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
+			->departmentRepository();
+		$department = $departmentRepository->getRootDepartment();
+		if ($department)
+		{
+			return (string)$department->getId();
+		}
 
 		$company_name = COption::GetOptionString("main", "site_name", "");
 		if ($company_name == '')
@@ -948,13 +955,18 @@ class CUserHRXMLImport
 				$company_name = $ars["NAME"];
 		}
 
-		$arFields = array(
-			"NAME" => $company_name,
-			"IBLOCK_ID" => $this->DEPARTMENTS_IBLOCK_ID
-		);
+		try
+		{
+			$department = $departmentRepository->save(new \Bitrix\Intranet\Entity\Department(
+				$company_name
+			));
 
-		$ss = new CIBlockSection();
-		return $ss->Add($arFields);
+			return (string)$department->getId();
+		}
+		catch (\Exception)
+		{
+			return false;
+		}
 	}
 	private function LoadUserCodes()
 	{

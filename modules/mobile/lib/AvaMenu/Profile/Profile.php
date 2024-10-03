@@ -6,11 +6,10 @@ use Bitrix\Main\Localization\Loc;
 
 class Profile
 {
-	public function getData(): array
+	public function getData($reloadFromDb = false): array
 	{
 		return [
-			'title' => $this->getTitle(),
-			'imageUrl' => $this->getImageUrl(),
+			...$this->getMainData($reloadFromDb),
 			'customData' => [
 				'entryParams' => $this->getEntryParams(),
 				'ahaMoment' => [
@@ -20,29 +19,56 @@ class Profile
 		];
 	}
 
-	private function getTitle(): string
+	public function getMainData($reloadFromDb = false): array
+	{
+		return [
+			'title' => $this->getTitle($reloadFromDb),
+			'imageUrl' => $this->getImageUrl($reloadFromDb),
+		];
+	}
+
+	private function getTitle($reloadFromDb = false): string
 	{
 		global $USER;
 
-		return \CUser::FormatName(
-			\CSite::GetNameFormat(false),
-			[
+		if ($reloadFromDb)
+		{
+			$res = \Bitrix\Main\UserTable::getList([
+				'filter' => [
+					'=ID' => $USER->getId(),
+				],
+				'select' => ['NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN'],
+			]);
+
+			if (!($userFields = $res->fetch()))
+			{
+				return '';
+			}
+		}
+		else
+		{
+			$userFields = [
 				"NAME" => $USER->GetFirstName(),
 				"LAST_NAME" => $USER->GetLastName(),
 				"SECOND_NAME" => $USER->GetSecondName(),
 				"LOGIN" => $USER->GetLogin(),
-			],
+			];
+		}
+
+		return \CUser::FormatName(
+			\CSite::GetNameFormat(false),
+			$userFields,
 			false,
 			false
 		);
 	}
 
-	private function getImageUrl(): string
+	private function getImageUrl($reloadFromDb = false): string
 	{
 		global $USER;
 
 		static $url = null;
-		if ($url !== null)
+		if ($url !== null && !$reloadFromDb)
 		{
 			return $url;
 		}

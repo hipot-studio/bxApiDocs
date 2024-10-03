@@ -74,11 +74,8 @@ class UserDataProvider extends EntityDataProvider
 
 		if ($result === null)
 		{
-			$allowInvitation = Option::get('bitrix24', 'allow_invite_users', 'N') === 'Y';
-			$userCanInvite = $allowInvitation && $USER->IsAuthorized();
-
 			$result = (
-			($USER->canDoOperation('edit_all_users') || $userCanInvite)
+				$USER->IsAuthorized()
 				&& (
 					!ModuleManager::isModuleInstalled('extranet')
 					|| Option::get("extranet", "extranet_site") == '' // master hasn't been run

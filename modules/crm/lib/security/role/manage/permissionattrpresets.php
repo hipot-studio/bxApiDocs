@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Security\Role\Manage;
 
-use Bitrix\Crm\Security\EntityPermission\ApproveCustomPermsToExistRole;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Add;
 use Bitrix\Crm\Security\Role\Manage\Permissions\MyCardView;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Automation;
@@ -52,13 +51,10 @@ class PermissionAttrPresets
 
 	public static function crmStageTransition(array $stages = []): array
 	{
-		$variants = array_merge(
-			[
-				'INHERIT' => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_TRANSITION_INHERITED'),
-				'ANY' => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_TRANSITION_ANY')
-			],
-			$stages,
-		);
+		$variants = [
+			'INHERIT' => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_TRANSITION_INHERITED'),
+			'ANY' => GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_TRANSITION_ANY')
+		] + $stages;
 
 		return [
 			new Transition($variants),

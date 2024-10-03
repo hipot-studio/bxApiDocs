@@ -21,4 +21,9 @@ interface IntegratorLogger
 	 * @return void
 	 */
 	public function logMethodInfo(string $method, string $status, string $message, array $params = []): void;
+
+
+	public function logInfo(string $message, array $params = []);
+
+	public function logErrors(array $errors);
 }

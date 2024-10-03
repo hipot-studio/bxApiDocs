@@ -32,6 +32,9 @@ class Search extends BaseTemplate
 			'page' => $this->page,
 			'show_categories' => 'Y',
 		];
+		if (!empty($this->filter)) {
+			$params['filter'] = $this->filter;
+		}
 		if (!empty($this->order)) {
 			$params['custom_sort'] = $this->order;
 		}
@@ -55,6 +58,7 @@ class Search extends BaseTemplate
 				$this->result['APPS'] = $response[Actions::METHOD_GET_SEARCH_ITEMS]['ITEMS'];
 				$this->result['PAGES'] = $response[Actions::METHOD_GET_SEARCH_ITEMS]['PAGES'];
 				$this->result['CUR_PAGE'] = $response[Actions::METHOD_GET_SEARCH_ITEMS]['CUR_PAGE'];
+				$this->result['RESULT_COUNT'] = $response[Actions::METHOD_GET_SEARCH_ITEMS]['RESULT_COUNT'];
 			}
 
 			if (isset($response[Actions::METHOD_GET_SEARCH_ITEMS]['SORT_INFO']) && is_array($response[Actions::METHOD_GET_SEARCH_ITEMS]['SORT_INFO'])) {

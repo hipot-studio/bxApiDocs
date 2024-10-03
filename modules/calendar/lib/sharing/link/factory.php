@@ -335,15 +335,20 @@ class Factory
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function getEventLinkByEventId(int $eventId): ?\Bitrix\Calendar\Core\Base\EntityInterface
+	public function getEventLinkByEventId(int $eventId, bool $searchActiveOnly = true): ?\Bitrix\Calendar\Core\Base\EntityInterface
 	{
-		$sharingLinkEO = SharingLinkTable::query()
+		$query = SharingLinkTable::query()
 			->setSelect(['*'])
 			->where('OBJECT_ID', $eventId)
 			->where('OBJECT_TYPE', Helper::EVENT_SHARING_TYPE)
-			->where('ACTIVE', 'Y')
-			->exec()->fetchObject()
 		;
+
+		if ($searchActiveOnly)
+		{
+			$query->where('ACTIVE', 'Y');
+		}
+
+		$sharingLinkEO = $query->exec()->fetchObject();
 
 		if ($sharingLinkEO === null)
 		{

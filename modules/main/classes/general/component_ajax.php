@@ -273,12 +273,6 @@ class CComponentAjax
 				return true;
 			}
 
-			$test_str = '/bitrix/urlrewrite.php?SEF_APPLICATION_CUR_PAGE_URL=';
-			if (strncmp($url, $test_str, 52) === 0)
-			{
-				$url = urldecode(mb_substr($url, 52));
-			}
-
 			$url = $this->__GetSEFRealUrl($url);
 
 			if ($url === false)

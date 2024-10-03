@@ -183,10 +183,7 @@ class ApacheSupersetDashboardSettingComponent
 			return $result;
 		}
 
-		if (
-			!Loader::includeModule('bitrix24')
-			|| !Feature::isFeatureEnabled('bi_constructor')
-		)
+		if (Loader::includeModule('bitrix24') && !Feature::isFeatureEnabled('bi_constructor'))
 		{
 			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_FEATURE_UNAVAILABLE')));
 
@@ -313,13 +310,23 @@ class ApacheSupersetDashboardSettingComponent
 			$dashboardObject->setDateFilterStart(null);
 			$dashboardObject->setDateFilterEnd(null);
 			$dashboardObject->setFilterPeriod(null);
+			$dashboardObject->setIncludeLastFilterDate(null);
 
 			$result['FILTER_PERIOD'] = EmbeddedFilter\DateTime::PERIOD_DEFAULT;
+		}
+		elseif ($data['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_NONE)
+		{
+			$dashboardObject->setDateFilterStart(null);
+			$dashboardObject->setDateFilterEnd(null);
+			$dashboardObject->setFilterPeriod(EmbeddedFilter\DateTime::PERIOD_NONE);
+
+			$result['FILTER_PERIOD'] = EmbeddedFilter\DateTime::PERIOD_NONE;
 		}
 		elseif ($data['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_RANGE)
 		{
 			$startTime = null;
 			$endTime = null;
+			$includeLastFilterDate = $data['INCLUDE_LAST_FILTER_DATE'] === 'Y' ? 'Y' : 'N';
 
 			try
 			{
@@ -337,9 +344,12 @@ class ApacheSupersetDashboardSettingComponent
 			$dashboardObject->setDateFilterStart($startTime);
 			$dashboardObject->setDateFilterEnd($endTime);
 			$dashboardObject->setFilterPeriod(EmbeddedFilter\DateTime::PERIOD_RANGE);
+			$dashboardObject->setIncludeLastFilterDate($includeLastFilterDate);
+
 			$result['DATE_FILTER_START'] = $startTime;
 			$result['DATE_FILTER_END'] = $endTime;
 			$result['FILTER_PERIOD'] = EmbeddedFilter\DateTime::PERIOD_RANGE;
+			$result['INCLUDE_LAST_FILTER_DATE'] = $includeLastFilterDate;
 		}
 		else
 		{

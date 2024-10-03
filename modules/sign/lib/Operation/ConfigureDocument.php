@@ -6,6 +6,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\PhoneNumber;
+use Bitrix\Sign\Compatibility\Document\Scheme;
 use Bitrix\Sign\Compatibility\Role;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Connector\MemberConnectorFactory;
@@ -44,6 +45,9 @@ class ConfigureDocument implements Contract\Operation
 	private Service\Cache\Memory\Sign\UserCache $userCache;
 	private MemberRepository $memberRepository;
 	private readonly RequiredFieldRepository $requiredFieldRepository;
+	private readonly Service\Api\Document\SigningService $apiDocumentSigningService;
+	private readonly Service\Sign\BlockService $signBlockService;
+	private readonly Service\Sign\Document\ProviderCodeService $providerCodeService;
 
 	public function __construct(
 		private readonly string $uid,
@@ -65,6 +69,9 @@ class ConfigureDocument implements Contract\Operation
 		$this->memberService->setProfileProviderCache($this->userCache);
 		$this->memberRepository = $memberRepository ?? $container->getMemberRepository();
 		$this->requiredFieldRepository = $requiredFieldRepository ?? $container->getRequiredFieldRepository();
+		$this->apiDocumentSigningService = $container->getApiDocumentSigningService();
+		$this->signBlockService = $container->getSignBlockService();
+		$this->providerCodeService = $container->getProviderCodeService();
 	}
 
 	public function launch(): Main\Result
@@ -79,7 +86,7 @@ class ConfigureDocument implements Contract\Operation
 			return (new Main\Result())->addError(new Main\Error('Document doesnt contains blank'));
 		}
 
-		if ($document->scenario === Type\DocumentScenario::SCENARIO_TYPE_B2E)
+		if (Type\DocumentScenario::isB2eScenarioByDocument($document))
 		{
 			if (!Storage::instance()->isB2eAvailable())
 			{
@@ -137,9 +144,11 @@ class ConfigureDocument implements Contract\Operation
 				&& $member->entityType === \Bitrix\Sign\Type\Member\EntityType::COMPANY
 			)
 			{
-				$company = Container::getInstance()
-					->getFactory(\CCrmOwnerType::Company)
-					->getItem($member->entityId)
+				$company = Main\Loader::includeModule('crm')
+					? Container::getInstance()
+						->getFactory(\CCrmOwnerType::Company)
+						->getItem($member->entityId)
+					: null
 				;
 
 				$owner = new Owner(
@@ -178,15 +187,14 @@ class ConfigureDocument implements Contract\Operation
 
 		$signersCount = $members->filterByRole(Type\Member\Role::SIGNER)->count();
 		if (
-			$document->scenario === Type\DocumentScenario::SCENARIO_TYPE_B2E
+			Type\DocumentScenario::isB2eScenarioByDocument($document)
 			&& B2eTariff::instance()->isB2eSignersCountRestricted($signersCount)
 		)
 		{
 			return (new Main\Result())->addError(B2eTariff::instance()->getSignersCountAccessError());
 		}
 
-		$memberFieldsCollection = Service\Container::instance()
-		   ->getSignBlockService()
+		$memberFieldsCollection = $this->signBlockService
 		   ->loadBlocksAndDataByDocument(
 			   document: $document,
 			   skipSecurity: true,
@@ -244,8 +252,17 @@ class ConfigureDocument implements Contract\Operation
 				$requestBlock,
 			);
 		}
+		$isB2eScenario = DocumentScenario::isB2eScenarioByDocument($document);
+		if ($isB2eScenario)
+		{
+			$result = $this->providerCodeService->loadByDocument($document);
+			if (!$result->isSuccess())
+			{
+				return $result;
+			}
+		}
 
-		$response = Service\Container::instance()->getApiDocumentSigningService()->configure(
+		$response = $this->apiDocumentSigningService->configure(
 			new ConfigureRequest(
 				documentUid: $document->uid,
 				title: $this->documentService->getComposedTitleByDocument($document),
@@ -261,8 +278,8 @@ class ConfigureDocument implements Contract\Operation
 				regionDocumentType: $document->regionDocumentType,
 				externalId: $document->externalId,
 				titleWithoutNumber: $document->title,
-				// schemes select is not available now
-				scheme: null,
+				// throw $document->scheme after \Bitrix\Sign\Agent\Converter\ConvertProviderSchemesAgent release
+				scheme: $isB2eScenario ? Scheme::createDefaultSchemeByProviderCode($document->providerCode) : null,
 				externalDateCreate: $document->externalDateCreate?->format('Y-m-d') ?? '',
 			),
 		);

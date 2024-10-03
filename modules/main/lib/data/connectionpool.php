@@ -48,6 +48,11 @@ class ConnectionPool
 	{
 		$className = $parameters['className'];
 
+		if (isset($parameters['module']))
+		{
+			\Bitrix\Main\Loader::includeModule($parameters['module']);
+		}
+
 		if (!class_exists($className))
 		{
 			throw new Config\ConfigurationException(sprintf(

@@ -352,13 +352,15 @@ class CIntranetNotify
 							}
 						}
 
-						$dbRes = CIBlockSection::GetList(array('ID' => 'ASC'), array('ID' => $arUser['UF_DEPARTMENT']));
-						if ($arSection = $dbRes->fetch())
+						$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
+							->departmentRepository();
+						$department = $departmentRepository->getById((int)$arUser['UF_DEPARTMENT']);
+						if ($department)
 						{
 							$arResult['CREATED_BY']['FORMATTED'] = (
 								$url <> ''
-									? '<a href="'.str_replace('#ID#', $arSection['ID'], $url).'">'.htmlspecialcharsEx($arSection['NAME']).'</a>'
-									: htmlspecialcharsEx($arSection['NAME'])
+									? '<a href="'.str_replace('#ID#', $department->getId(), $url).'">'.htmlspecialcharsEx($department->getName()).'</a>'
+									: htmlspecialcharsEx($department->getName())
 							);
 						}
 					}

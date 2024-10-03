@@ -9,7 +9,6 @@ use Bitrix\Main\Web\Uri;
 use Bitrix\Market\Categories;
 use Bitrix\Market\History;
 use Bitrix\Market\Loadable;
-use Bitrix\Market\NumberApps;
 use Bitrix\Market\PageRules;
 use Bitrix\Market\PricePolicy;
 use Bitrix\Market\Rest\Actions;
@@ -66,6 +65,9 @@ class MarketMain extends CBitrixComponent implements Controllerable, Loadable
 
 			$batch[Actions::METHOD_TOTAL_APPS] = [
 				Actions::METHOD_TOTAL_APPS,
+				[
+					'placement' => $this->request->get('placement'),
+				]
 			];
 		}
 
@@ -113,12 +115,8 @@ class MarketMain extends CBitrixComponent implements Controllerable, Loadable
 			$this->arResult['CATEGORIES'] = Categories::get();
 		}
 
-		if (isset($response[Actions::METHOD_TOTAL_APPS])) {
-			$this->arResult['TOTAL_APPS'] = NumberApps::get($response[Actions::METHOD_TOTAL_APPS]);
-			$this->arResult['SHOW_MARKET_ICON'] = $response[Actions::METHOD_TOTAL_APPS]['SHOW_MARKET_ICON'];
-			$this->arResult['ADDITIONAL_CONTENT'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_CONTENT'] ?? '';
-			$this->arResult['ADDITIONAL_MARKET_ACTION'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_MARKET_ACTION'] ?? '';
-			$this->arResult['ADDITIONAL_SEARCH_ACTION'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_SEARCH_ACTION'] ?? '';
+		if (is_array($response[Actions::METHOD_TOTAL_APPS])) {
+			$this->arResult = array_merge($this->arResult, Toolbar::getTotalAppsInfo($response[Actions::METHOD_TOTAL_APPS]));
 		}
 	}
 

@@ -30,6 +30,7 @@ class Activate extends Action
 		$this->data = [
 			'flowId' => $flow->getId(),
 			'demo' => $flow->isDemo(),
+			'isActive' => $flow->isActive(),
 		];
 	}
 }

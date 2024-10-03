@@ -22,9 +22,9 @@ class StorageElementIdsToAttachedObject
 {
 	use Singleton;
 
-	private const DONE = false;
+	private const DONE = true;
 
-	private const CONTINUE = true;
+	private const CONTINUE = false;
 
 	private const DEFAULT_LIMIT = 20;
 
@@ -68,6 +68,7 @@ class StorageElementIdsToAttachedObject
 			->whereNotNull('STORAGE_ELEMENT_IDS')
 			->setLimit($limit)
 			->where('ID', '>', $offset)
+			->setOrder(['ID' => 'ASC'])
 			->fetchAll();
 	}
 

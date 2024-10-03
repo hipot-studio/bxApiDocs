@@ -29,6 +29,11 @@ class EventEditAttendeesRule extends \Bitrix\Main\Access\Rule\AbstractRule
 			return true;
 		}
 
+		if ($item->getOwnerId() !== $this->user->getUserId())
+		{
+			return false;
+		}
+
 		$section = SectionModel::createFromEventModel($item);
 
 		return $this->controller->check(

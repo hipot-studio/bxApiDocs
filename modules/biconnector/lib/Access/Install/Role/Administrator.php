@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Access\Install\Role;
 
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\Main\UserGroupTable;
+use Bitrix\Main\Loader;
 
 class Administrator extends Base
 {
@@ -19,7 +20,10 @@ class Administrator extends Base
 
 	protected function getRelationUserGroups(): array
 	{
-		$groups = [];
+		if (!Loader::includeModule('bitrix24'))
+		{
+			return [];
+		}
 
 		$adminGroups = UserGroupTable::getList([
 			'filter' => [

@@ -31,7 +31,6 @@ use Bitrix\Crm\Security\PermissionToken;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Crm\UI\EntitySelector;
 use Bitrix\Currency\CurrencyTable;
-use Bitrix\Main\Error;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -55,6 +54,7 @@ class EditorAdapter
 	public const FIELD_CLIENT = 'CLIENT';
 	public const FIELD_PRODUCT_ROW_SUMMARY = 'PRODUCT_ROW_SUMMARY';
 	public const FIELD_OPPORTUNITY = 'OPPORTUNITY_WITH_CURRENCY';
+	public const FIELD_ACCOUNT_OPPORTUNITY = 'OPPORTUNITY_ACCOUNT_WITH_CURRENCY';
 	public const FIELD_UTM = 'UTM';
 	public const FIELD_FILES = 'FILES';
 	public const FIELD_CLIENT_DATA_NAME = 'CLIENT_DATA';
@@ -1853,6 +1853,10 @@ class EditorAdapter
 		);
 		$opportunityEntityData['FORMATTED_' . static::FIELD_OPPORTUNITY] = Money::format(
 			$item->getOpportunity(), $item->getCurrencyId()
+		);
+
+		$opportunityEntityData['FORMATTED_' . static::FIELD_ACCOUNT_OPPORTUNITY] = Money::format(
+			$item->getOpportunityAccount(), $item->getAccountCurrencyId()
 		);
 
 		$opportunityEntityData['IS_SALESCENTER_TOOL_ENABLED'] =

@@ -659,7 +659,7 @@ class Converter extends Stepper implements \Bitrix\Catalog\v2\Contractor\IConver
 
 	public static function runMigration(): void
 	{
-		self::bind(300);
+		self::bind(30);
 	}
 
 	public static function showMigrationProgress(): void

@@ -7,7 +7,6 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Mail\Address;
 use Bitrix\Main\Mail\Smtp\CloudOAuthRefreshData;
 use Bitrix\Main\Mail\Smtp\OAuthConfigPreparer;
@@ -16,8 +15,6 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Main\Mail\Internal;
 use Bitrix\Main\Mail\SenderSendCounter;
 use Bitrix\Main\Mail\Sender;
-use CIMNotify;
-use CModule;
 
 /**
  * Class Controller

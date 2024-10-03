@@ -4,9 +4,9 @@ namespace Bitrix\Tasks\Flow\Notification\Config;
 
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\Flow\Notification\Exception\InvalidPayload;
-use Bitrix\Tasks\ValueObject;
+use Bitrix\Tasks\ValueObjectInterface;
 
-class Recipient implements ValueObject
+class Recipient implements ValueObjectInterface
 {
 	public const FLOW_OWNER = 'flowOwner';
 

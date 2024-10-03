@@ -863,20 +863,24 @@ class CCrmEMail
 							$mailboxId,
 							\Bitrix\Main\Config\Option::get('intranet', 'path_mail_config', '/mail/', $mailbox['LID'])
 						);
+						$absoluteConfigUrl = CCrmUrlUtil::ToAbsoluteUrl($configUrl);
 
-						$internalMessage = getMessage('CRM_EMAIL_BAD_RESP_QUEUE', array(
-							'#EMAIL#'      => htmlspecialcharsbx($mailbox['NAME']),
-							'#CONFIG_URL#' => htmlspecialcharsbx($configUrl),
-						));
-						$externalMessage = getMessage('CRM_EMAIL_BAD_RESP_QUEUE', array(
-							'#EMAIL#'      => htmlspecialcharsbx($mailbox['NAME']),
-							'#CONFIG_URL#' => htmlspecialcharsbx(\CCrmUrlUtil::toAbsoluteUrl($configUrl)),
-						));
+						$getMessageCallback = static function (string $url) use ($mailbox) {
+							$code = 'CRM_EMAIL_BAD_RESP_QUEUE';
+							$replace = [
+								'#EMAIL#' => htmlspecialcharsbx($mailbox['NAME']),
+								'#CONFIG_URL#' => htmlspecialcharsbx($url),
+							];
+
+							return static fn (?string $languageId = null) =>
+								Loc::getMessage($code, $replace, $languageId)
+							;
+						};
 
 						\CCrmNotifier::notify(
 							$mailbox['USER_ID'],
-							$internalMessage,
-							$externalMessage,
+							$getMessageCallback($configUrl),
+							$getMessageCallback($absoluteConfigUrl),
 							0,
 							'email_resp_queue_ok_' . $mailboxId
 						);

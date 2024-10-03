@@ -8424,10 +8424,22 @@ class CCrmCurrencyRestProxy extends CCrmRestProxyBase
 
 	protected function resolveEntityID(&$arParams)
 	{
-		return isset($arParams['ID'])
-			? mb_strtoupper($arParams['ID'])
-			: (isset($arParams['id'])? mb_strtoupper($arParams['id']) : '')
-			;
+		$currencyId = '';
+		if (isset($arParams['ID']))
+		{
+			$currencyId = $arParams['ID'];
+		}
+		elseif (isset($arParams['id']))
+		{
+			$currencyId = $arParams['id'];
+		}
+
+		if (!is_string($currencyId))
+		{
+			throw new RestException('The parameter id is not string.');
+		}
+
+		return mb_strtoupper(trim($currencyId));
 	}
 
 	protected function checkEntityID($ID)
@@ -13601,9 +13613,9 @@ class CCrmAddressRestProxy extends CCrmRestProxyBase
 
 		$entity = self::getEntity();
 
-		$page = isset($navigation['iNumPage']) ? (int)$navigation['iNumPage'] : 1;
+		$page = isset($navigation['iNumPage']) ? (int)$navigation['iNumPage'] : false;
 		$limit = isset($navigation['nPageSize']) ? (int)$navigation['nPageSize'] : CCrmRestService::LIST_LIMIT;
-		$offset = $limit * $page;
+		$offset = $limit * ($page - 1);
 
 		if(!is_array($select))
 			$select = array();
@@ -13625,15 +13637,20 @@ class CCrmAddressRestProxy extends CCrmRestProxyBase
 			}
 		}
 
-		$result = $entity->getList(
-				array(
-						'order' => $order,
-						'filter' => $filter,
-						'select' => $select,
-						'offset' => $offset,
-						'count_total' => true
-				)
-		);
+		$listParams = [
+			'order' => $order,
+			'filter' => $filter,
+			'select' => $select,
+			'count_total' => true
+		];
+
+		if ($page !== false)
+		{
+			$listParams['limit'] = $limit;
+			$listParams['offset'] = $offset;
+		}
+
+		$result = $entity->getList($listParams);
 
 		if (is_object($result))
 		{
@@ -13644,6 +13661,12 @@ class CCrmAddressRestProxy extends CCrmRestProxyBase
 			$dbResult = new CDBResult();
 			$dbResult->InitFromArray(array());
 		}
+
+		if ($page === false)
+		{
+			$limit = $result->getSelectedRowsCount();
+		}
+
 		$dbResult->NavStart($limit, false, $page);
 
 		return $dbResult;

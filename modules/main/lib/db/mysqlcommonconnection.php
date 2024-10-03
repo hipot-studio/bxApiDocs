@@ -33,9 +33,9 @@ abstract class MysqlCommonConnection extends Connection
 			return false;
 		}
 
-		$result = $this->query("SHOW TABLES LIKE '".$this->getSqlHelper()->forSql($tableName)."'");
+		$result = $this->query("SHOW TABLES LIKE '" . $this->getSqlHelper()->forSql($tableName) . "'");
 
-		return (bool) $result->fetch();
+		return (bool)$result->fetch();
 	}
 
 	/**
@@ -59,13 +59,13 @@ abstract class MysqlCommonConnection extends Connection
 		$tableName = preg_replace("/[^a-z0-9_]+/i", "", $tableName);
 		$tableName = trim($tableName);
 
-		$rs = $this->query("SHOW INDEX FROM `".$this->getSqlHelper()->forSql($tableName)."`");
+		$rs = $this->query("SHOW INDEX FROM `" . $this->getSqlHelper()->forSql($tableName) . "`");
 		if (!$rs)
 		{
 			return null;
 		}
 
-		$indexes = array();
+		$indexes = [];
 		while ($ar = $rs->fetch())
 		{
 			$indexes[$ar["Key_name"]][$ar["Seq_in_index"] - 1] = $ar["Column_name"];
@@ -84,7 +84,7 @@ abstract class MysqlCommonConnection extends Connection
 			$this->connectInternal();
 
 			$sqlTableName = ($tableName[0] === '(')
-				? $tableName.' AS xyz' // subquery
+				? $tableName . ' AS xyz' // subquery
 				: $this->getSqlHelper()->quote($tableName); // regular table name
 
 			$query = $this->queryInternal("SELECT * FROM {$sqlTableName} LIMIT 0");
@@ -99,10 +99,10 @@ abstract class MysqlCommonConnection extends Connection
 	/**
 	 * @inheritDoc
 	 */
-	public function createTable($tableName, $fields, $primary = array(), $autoincrement = array())
+	public function createTable($tableName, $fields, $primary = [], $autoincrement = [])
 	{
-		$sql = 'CREATE TABLE IF NOT EXISTS '.$this->getSqlHelper()->quote($tableName).' (';
-		$sqlFields = array();
+		$sql = 'CREATE TABLE IF NOT EXISTS ' . $this->getSqlHelper()->quote($tableName) . ' (';
+		$sqlFields = [];
 
 		foreach ($fields as $columnName => $field)
 		{
@@ -118,8 +118,7 @@ abstract class MysqlCommonConnection extends Connection
 			$sqlFields[] = $this->getSqlHelper()->quote($realColumnName)
 				. ' ' . $this->getSqlHelper()->getColumnTypeByField($field)
 				. ($field->isNullable() ? '' : ' NOT NULL') // null for oracle if is not primary
-				. (in_array($columnName, $autoincrement, true) ? ' AUTO_INCREMENT' : '')
-			;
+				. (in_array($columnName, $autoincrement, true) ? ' AUTO_INCREMENT' : '');
 		}
 
 		$sql .= join(', ', $sqlFields);
@@ -132,14 +131,14 @@ abstract class MysqlCommonConnection extends Connection
 				$primaryColumn = $this->getSqlHelper()->quote($realColumnName);
 			}
 
-			$sql .= ', PRIMARY KEY('.join(', ', $primary).')';
+			$sql .= ', PRIMARY KEY(' . join(', ', $primary) . ')';
 		}
 
 		$sql .= ')';
 
 		if ($this->engine)
 		{
-			$sql .= ' Engine='.$this->engine;
+			$sql .= ' Engine=' . $this->engine;
 		}
 
 		$this->query($sql);
@@ -152,7 +151,7 @@ abstract class MysqlCommonConnection extends Connection
 	{
 		if (!is_array($columnNames))
 		{
-			$columnNames = array($columnNames);
+			$columnNames = [$columnNames];
 		}
 
 		$sqlHelper = $this->getSqlHelper();
@@ -171,7 +170,7 @@ abstract class MysqlCommonConnection extends Connection
 			$columnName = $sqlHelper->quote($columnName);
 			if ($maxLength > 0)
 			{
-				$columnName .= '('.$maxLength.')';
+				$columnName .= '(' . $maxLength . ')';
 			}
 		}
 		unset($columnName);
@@ -185,8 +184,8 @@ abstract class MysqlCommonConnection extends Connection
 			$indexTypeSql = strtoupper($indexType);
 		}
 
-		$sql = 'CREATE '.$indexTypeSql.' INDEX '.$sqlHelper->quote($indexName).' ON '.$sqlHelper->quote($tableName)
-			.' ('.join(', ', $columnNames).')';
+		$sql = 'CREATE ' . $indexTypeSql . ' INDEX ' . $sqlHelper->quote($indexName) . ' ON ' . $sqlHelper->quote($tableName)
+			. ' (' . join(', ', $columnNames) . ')';
 
 		try
 		{
@@ -209,7 +208,7 @@ abstract class MysqlCommonConnection extends Connection
 	 */
 	public function renameTable($currentName, $newName)
 	{
-		$this->query('RENAME TABLE '.$this->getSqlHelper()->quote($currentName).' TO '.$this->getSqlHelper()->quote($newName));
+		$this->query('RENAME TABLE ' . $this->getSqlHelper()->quote($currentName) . ' TO ' . $this->getSqlHelper()->quote($newName));
 	}
 
 	/**
@@ -217,7 +216,7 @@ abstract class MysqlCommonConnection extends Connection
 	 */
 	public function dropTable($tableName)
 	{
-		$this->query('DROP TABLE '.$this->getSqlHelper()->quote($tableName));
+		$this->query('DROP TABLE ' . $this->getSqlHelper()->quote($tableName));
 	}
 
 	/*********************************************************
@@ -329,7 +328,7 @@ abstract class MysqlCommonConnection extends Connection
 		$unique = \CMain::GetServerUniqID();
 
 		//64 characters max for mysql 5.7+
-		return md5($unique).md5($name);
+		return md5($unique) . md5($name);
 	}
 
 	/*********************************************************
@@ -357,17 +356,16 @@ abstract class MysqlCommonConnection extends Connection
 			// TODO: remove try-catch when mysql 5.7 will be minimal system requirement
 			try
 			{
-				$this->query("SET default_storage_engine = '".$this->engine."'");
+				$this->query("SET default_storage_engine = '" . $this->engine . "'");
 			}
 			catch (SqlQueryException)
 			{
 				try
 				{
-					$this->query("SET storage_engine = '".$this->engine."'");
+					$this->query("SET storage_engine = '" . $this->engine . "'");
 				}
 				catch (SqlQueryException)
 				{
-
 				}
 			}
 		}

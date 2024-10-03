@@ -45,7 +45,7 @@ class ConditionsChecker
 		")->fetch();
 	}
 
-	private static function doesProductWithQuantityExist(): bool
+	public static function doesProductWithQuantityExist(): bool
 	{
 		$connection = Application::getConnection();
 
@@ -75,7 +75,7 @@ class ConditionsChecker
 		return false;
 	}
 
-	private static function doesConductedDocumentExist(): bool
+	public static function doesConductedDocumentExist(): bool
 	{
 		$iterator = StoreDocumentTable::getList([
 			'select' => [

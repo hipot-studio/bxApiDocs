@@ -343,7 +343,12 @@ class Output extends Base\Output
 
 				$httpClient = $this->instanceHttpClient($waitResponse);
 
-				$response = $httpClient->post($this->controllerUrl, $params);
+				$url = $this->controllerUrl
+					. '?connector='. $this->connector
+					. '&command='. $command
+				;
+
+				$response = $httpClient->post($url, $params);
 
 				// Header 'x-bitrix-error' workaround.
 				$errorCode = $httpClient->getHeaders()->get('x-bitrix-error');
@@ -363,6 +368,7 @@ class Output extends Base\Output
 						));
 
 						$errors[] = 'url:'.$this->controllerUrl;
+						$errors[] = 'connector:'.$this->connector;
 						$systemException = new \Bitrix\Main\SystemException('Network connection error: '.implode('; ', $errors));
 						\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog($systemException);
 					}
@@ -461,8 +467,9 @@ class Output extends Base\Output
 			->setTimeout(20)
 			->setStreamTimeout(60)
 			->disableSslVerification() //TODO: Enable if you have not signed the certificate
-			->setHeader('User-Agent', 'Bitrix Connector Client')
+			->setHeader('User-Agent', 'Bitrix Connector Client '.$this->getPortalType())
 			->setHeader('x-bitrix-licence', $this->licenceCode)
+			->setHeader('Referer', $this->domain)
 		;
 
 		return $httpClient;

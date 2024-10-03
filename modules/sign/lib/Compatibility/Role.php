@@ -4,7 +4,7 @@ namespace Bitrix\Sign\Compatibility;
 
 final class Role
 {
-	public static function createByParty(int $party): ?string
+	public static function createByParty(?int $party): ?string
 	{
 		return match($party)
 		{

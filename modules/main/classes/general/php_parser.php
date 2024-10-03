@@ -315,6 +315,11 @@ class PHPParser
 		//mb_substr is catastrophic slow, so in UTF we use array of characters
 		$allChars = preg_split('//u', $scriptContent, -1, PREG_SPLIT_NO_EMPTY);
 
+		if ($allChars === false)
+		{
+			return [];
+		}
+
 		$scriptContentLength = mb_strlen($scriptContent);
 		$arAllStr = array();
 		$ind = -1;

@@ -6,11 +6,13 @@ use Bitrix\Main\ArgumentException;
 
 class Json
 {
+	public const DEFAULT_OPTIONS = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE;
+
 	/**
 	 * Returns a string containing the JSON representation of $data.
 	 *
 	 * @param mixed $data The value being encoded.
-	 * @param int | null $options Bitmasked options. Default is JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_UNESCAPED_UNICODE.
+	 * @param int | null $options Bitmasked options. Default is JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE.
 	 *
 	 * @return mixed
 	 * @throws ArgumentException
@@ -20,7 +22,7 @@ class Json
 	{
 		if ($options === null)
 		{
-			$options = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
+			$options = self::DEFAULT_OPTIONS;
 		}
 
 		try

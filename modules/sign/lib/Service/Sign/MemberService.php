@@ -22,6 +22,7 @@ use Bitrix\Sign\Type\DocumentScenario;
 use Bitrix\Sign\Type\Member\EntityType;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\MemberStatus;
+use function Amp\Iterator\map;
 
 class MemberService
 {
@@ -461,6 +462,11 @@ class MemberService
 		return $this->memberRepository->getById($memberId);
 	}
 
+	public function listByDocumentId(int $documentId): Item\MemberCollection
+	{
+		return $this->memberRepository->listByDocumentId($documentId);
+	}
+
 	private function prepareDefaultCrmRequisite(Item\Member $member): Main\ORM\Data\AddResult|Main\Result
 	{
 		$document = $this->documentRepository->getById($member->documentId);
@@ -676,6 +682,24 @@ class MemberService
 			EntityType::USER => $member->entityId,
 			default => null,
 		};
+	}
+
+	/**
+	 * @return list<int>
+	 */
+	public function getUserIdsForMembers(Item\MemberCollection $memberCollection, ?Item\Document $document = null): array
+	{
+		$result = [];
+		foreach ($memberCollection as $member)
+		{
+			$userId = $this->getUserIdForMember($member, $document);
+			if (is_int($userId))
+			{
+				$result[] = $userId;
+			}
+		}
+
+		return $result;
 	}
 
 	public function getCurrentParticipantFromCompanySide(Item\Document $document): ?Item\Member

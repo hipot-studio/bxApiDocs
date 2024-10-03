@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Landing;
 
+use Bitrix\Landing\Block\BlockRepo;
 use Bitrix\Landing\Internals\BlockTable;
 use \Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
@@ -89,7 +90,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	 * Landing's site code.
 	 * @var string
 	 */
-	protected static $siteCode = '';
+	protected static string $siteType = '';
 
 	/**
 	 * Set false if landing view as area.
@@ -286,7 +287,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 			 * @todo return if no access
 			 */
 			// get base data
-			self::$siteCode = $landing['SITE_TYPE'];
+			self::$siteType = (string)$landing['SITE_TYPE'];
 			$this->title = $landing['TITLE'];
 			$this->code = $landing['CODE'];
 			$this->xmlId = $landing['XML_ID'];
@@ -1181,21 +1182,21 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 		// assets
 		if ($editMode)
 		{
-			$options = array(
+			$options = [
 				'site_id' => $this->siteId,
 				'server_name' => $_SERVER['SERVER_NAME'],
 				'xml_id' => $this->xmlId,
-				'blocks' => Block::getRepository(),
+				'blocks' => (new BlockRepo())->getRepository(),
 				'style' => Block::getStyle(),
 				'attrs' => Block::getAttrs(),
 				'mainOptions' => [
 					'saveOriginalFileName' => Option::get('main', 'save_original_file_name') === 'Y'
 				],
-			);
+			];
 			// event for redefine $options
-			$event = new Event('landing', 'onLandingView', array(
+			$event = new Event('landing', 'onLandingView', [
 				'options' => $options
-			));
+			]);
 			$event->send();
 			foreach ($event->getResults() as $result)
 			{
@@ -1889,12 +1890,12 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
-	 * Get site id of current landing.
-	 * @return int
+	 * Get site type of current landing.
+	 * @return string
 	 */
-	public static function getSiteType()
+	public static function getSiteType(): string
 	{
-		return self::$siteCode;
+		return self::$siteType;
 	}
 
 	/**
@@ -2539,8 +2540,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	public function favoriteBlock(int $id, array $meta = []): ?int
 	{
 		$bewBlockId = $this->copyBlock($id, $id);
-
-		if ($bewBlockId > 0)
+		if ((int)$bewBlockId > 0)
 		{
 			if (
 				$this->blocks[$bewBlockId]->changeLanding(0) &&
@@ -2608,9 +2608,9 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	 * Copy/move other block to this landing.
 	 * @param int $block Block id.
 	 * @param array $params Params array.
-	 * @return int New Block id.
+	 * @return int|null New Block id.
 	 */
-	protected function changeParentOfBlock($block, $params)
+	protected function changeParentOfBlock(int $block, array $params): ?int
 	{
 		$block = intval($block);
 		$move = isset($params['MOVE']) && $params['MOVE'];
@@ -2619,6 +2619,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 		$fromLandingId = $fromLandingRow['LID'] ?? null;
 		$currentScopeId = Site\Type::getCurrentScopeId();
 		$same = $this->id == $fromLandingId;
+		$newBlock = null;
 
 		if ($currentScopeId !== $fromLandingRow['SITE_TYPE'])
 		{
@@ -2664,22 +2665,25 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 						'SOURCE_PARAMS' => $srcBlock->getDynamicParams(),
 						'PUBLIC' => 'N'
 				));
-				// we should save original content after all callbacks
-				$newBlock->saveContent(
-					$srcBlock->getContent()
-				);
-				$newBlock->save();
-				// copy files
 				if ($newBlock)
 				{
-					File::copyBlockFiles(
-						$srcBlock->getId(),
-						$newBlock->getId()
+					// we should save original content after all callbacks
+					$newBlock->saveContent(
+						$srcBlock->getContent()
 					);
+					$newBlock->save();
+					// copy files
+					if ($newBlock)
+					{
+						File::copyBlockFiles(
+							$srcBlock->getId(),
+							$newBlock->getId()
+						);
+					}
 				}
 			}
 			// add block to collection and resort
-			if (isset($newBlock) && $newBlock)
+			if ($newBlock)
 			{
 				if ($afterId > 0 && isset($this->blocks[$afterId]))
 				{
@@ -2721,21 +2725,21 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 			$this->touch();
 		}
 
-		return isset($newBlock) ? $newBlock->getId() : null;
+		return $newBlock ? $newBlock->getId() : null;
 	}
 
 	/**
 	 * Copy other block to this landing.
 	 * @param int $id Block id (from another landing).
 	 * @param int $afterId Put after this block id (in this landing).
-	 * @return int New Block id.
+	 * @return int|null New Block id.
 	 */
-	public function copyBlock($id, $afterId)
+	public function copyBlock(int $id, int $afterId): ?int
 	{
-		$blockId = $this->changeParentOfBlock($id, array(
+		$blockId = $this->changeParentOfBlock($id, [
 			'MOVE' => false,
 			'AFTER_ID' => $afterId
-		));
+		]);
 		if (!$blockId)
 		{
 			$this->error->addError(
@@ -2743,6 +2747,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 				Loc::getMessage('LANDING_BLOCK_NOT_FOUND')
 			);
 		}
+
 		return $blockId;
 	}
 
@@ -3083,14 +3088,14 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	 * Move other block to this landing.
 	 * @param int $id Block id (from another landing).
 	 * @param int $afterId Put after this block id (in this landing).
-	 * @return int New Block id.
+	 * @return int|null New Block id.
 	 */
-	public function moveBlock($id, $afterId)
+	public function moveBlock(int $id, int $afterId): ?int
 	{
-		$blockId = $this->changeParentOfBlock($id, array(
+		$blockId = $this->changeParentOfBlock($id, [
 			'MOVE' => true,
 			'AFTER_ID' => $afterId
-		));
+		]);
 		if (!$blockId)
 		{
 			$this->error->addError(
@@ -3098,6 +3103,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 				Loc::getMessage('LANDING_BLOCK_NOT_FOUND')
 			);
 		}
+
 		return $blockId;
 	}
 

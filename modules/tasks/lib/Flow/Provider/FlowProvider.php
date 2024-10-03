@@ -3,13 +3,16 @@
 namespace Bitrix\Tasks\Flow\Provider;
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
-use Bitrix\Tasks\Flow\Control\FlowService;
+use Bitrix\Tasks\Flow\Efficiency\Command\EfficiencyCommand;
 use Bitrix\Tasks\Flow\Efficiency\Efficiency;
+use Bitrix\Tasks\Flow\Efficiency\EfficiencyService;
 use Bitrix\Tasks\Flow\Efficiency\LastMonth;
 use Bitrix\Tasks\Flow\Flow;
 use Bitrix\Tasks\Flow\FlowCollection;
@@ -24,8 +27,10 @@ use Bitrix\Tasks\Flow\Provider\Query\FlowQuery;
 use Bitrix\Tasks\Flow\Provider\Query\FlowQueryBuilder;
 use Bitrix\Tasks\Flow\FlowRegistry;
 use Bitrix\Tasks\Flow\Provider\Query\FlowQueryEnrich;
+use Bitrix\Tasks\Internals\Log\Logger;
 use Bitrix\Tasks\Internals\Task\MemberTable;
 use Exception;
+use Throwable;
 
 final class FlowProvider
 {
@@ -135,11 +140,20 @@ final class FlowProvider
 			return [];
 		}
 
+		$taskAssigneeField = MemberTable::query()
+			->setSelect(['TASK_ID'])
+			->where('USER_ID', $userId)
+			->where('TYPE', MemberTable::MEMBER_TYPE_RESPONSIBLE);
+
 		$taskMembersField = (new ReferenceField(
-			'TASK_MEMBERS',
+			'TASK_ORIGINATOR',
 			MemberTable::getEntity(),
-			Join::on('this.TASK_ID', 'ref.TASK_ID')->where('ref.USER_ID', $userId)
+			Join::on('this.TASK_ID', 'ref.TASK_ID')
+				->where('ref.USER_ID', $userId)
+				->where('ref.TYPE', MemberTable::MEMBER_TYPE_ORIGINATOR)
+				->whereNotIn('ref.TASK_ID', new SqlExpression($taskAssigneeField->getQuery()))
 		))->configureJoinType(Join::TYPE_INNER);
+
 
 		$data = FlowTaskTable::query()
 			->addSelect('FLOW_ID')
@@ -147,7 +161,7 @@ final class FlowProvider
 			->setGroup(['FLOW_ID'])
 			->whereIn('TASK.STATUS', $statuses)
 			->whereIn('FLOW_ID', $flowIds)
-			->registerRuntimeField('TASK_MEMBERS', $taskMembersField)
+			->registerRuntimeField('TASK_ORIGINATOR', $taskMembersField)
 			->exec()
 			->fetchAll();
 
@@ -179,8 +193,25 @@ final class FlowProvider
 
 		if ($flow->getEfficiency() !== $currentEfficiency)
 		{
-			$userId = 0;
-			(new FlowService($userId))->onFlowEfficiencyChanged($flow->getId(), $currentEfficiency);
+			$command = (new EfficiencyCommand())
+				->setFlowId($flow->getId())
+				->setOldEfficiency($flow->getEfficiency())
+				->setNewEfficiency($currentEfficiency);
+
+			try
+			{
+				/** @var EfficiencyService $service */
+				$service = ServiceLocator::getInstance()->get('tasks.flow.efficiency.service');
+				$service->update($command);
+			}
+			catch (\Bitrix\Tasks\Flow\Control\Exception\FlowNotFoundException)
+			{
+
+			}
+			catch (Throwable $t)
+			{
+				Logger::logThrowable($t);
+			}
 		}
 
 		return $currentEfficiency;

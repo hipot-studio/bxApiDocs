@@ -119,12 +119,15 @@ final class TodoPingSettingsProvider
 		return array_column($filtered, 'offset');
 	}
 
+	private function isAllCategoriesSelected(): bool
+	{
+		return $this->categoryId === -1
+			|| (CCrmOwnerType::isPossibleDynamicTypeId($this->entityTypeId) && $this->categoryId === 0);
+	}
+
 	public function fetchAll(): array
 	{
-		$isAllCategoriesSelected = $this->categoryId === -1
-			|| (CCrmOwnerType::isPossibleDynamicTypeId($this->entityTypeId) && $this->categoryId === 0);
-
-		if ($isAllCategoriesSelected)
+		if ($this->isAllCategoriesSelected())
 		{
 			return [];
 		}
@@ -134,6 +137,26 @@ final class TodoPingSettingsProvider
 			'offsetList' => self::getDefaultOffsetList(),
 			'currentOffsets' => $this->getCurrentOffsets(),
 		];
+	}
+
+	public function fetchSelectedValues(): array
+	{
+		if ($this->isAllCategoriesSelected())
+		{
+			return [];
+		}
+
+		return $this->getCurrentOffsets();
+	}
+
+	public static function getValuesListForJsComponent(): array
+	{
+		$defaultOffsetList = self::getDefaultOffsetList();
+
+		return array_map(
+			static fn($item) => ['id' => (string)$item['offset'], 'title' => $item['title']],
+			$defaultOffsetList
+		);
 	}
 
 	/**

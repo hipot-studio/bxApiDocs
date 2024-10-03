@@ -67,6 +67,16 @@ class Settings
 			return false;
 		}
 
-		return \Bitrix\Im\V2\Chat\CopilotChat::isAvailable();
+		return \Bitrix\Im\V2\Chat\CopilotChat::isActive();
+	}
+
+	public static function planLimits(): ?array
+	{
+		if (!\Bitrix\Main\Loader::includeModule('im'))
+		{
+			return null;
+		}
+
+		return \Bitrix\Im\V2\TariffLimit\Limit::getInstance()->getRestrictions();
 	}
 }

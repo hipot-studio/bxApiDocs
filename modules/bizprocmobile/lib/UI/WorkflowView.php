@@ -57,6 +57,7 @@ class WorkflowView implements \JsonSerializable
 			'tasks' => $myTasks,
 			'authorId' => $this->workflow['STARTED_USER_INFO']['ID'],
 			'newCommentsCounter' => $this->newCommentsCounter,
+			'useWorkflowCounter' => class_exists('\Bitrix\Bizproc\Workflow\WorkflowUserCounters'),
 		];
 	}
 

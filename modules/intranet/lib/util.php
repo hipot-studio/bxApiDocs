@@ -22,6 +22,9 @@ use Bitrix\Main\Security\Random;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Intranet;
+use Bitrix\Main;
+use Bitrix\Bitrix24;
+use Bitrix\Extranet;
 
 Loc::loadMessages(__FILE__);
 
@@ -32,8 +35,6 @@ Loc::loadMessages(__FILE__);
 class Util
 {
 	const CP_BITRIX_PATH = 'https://bitrix24.team';
-
-	private static $USER_STATUS = null;
 
 	public static function getDepartmentEmployees($params)
 	{
@@ -290,40 +291,13 @@ class Util
 
 	public static function isExtranetUser(int $userId = null): bool
 	{
-		if (!\Bitrix\Main\Loader::includeModule('extranet'))
+		$userId = $userId ?? Intranet\CurrentUser::get()->getId();
+		if (Main\Loader::includeModule('extranet'))
 		{
-			return false;
+			return (new Extranet\User($userId))->isExtranet();
 		}
 
-		$extranetGroupId = (int)\Bitrix\Main\Config\Option::get('extranet', 'extranet_group', 0);
-		if (!$extranetGroupId)
-		{
-			return false;
-		}
-
-		if (is_null($userId))
-		{
-			global $USER;
-			$userId = $USER->GetID();
-			if ($userId <= 0)
-			{
-				return false;
-			}
-
-			$userGroups =  $USER->GetUserGroupArray();
-		}
-		else
-		{
-			if ($userId <= 0)
-			{
-				return false;
-			}
-
-			$userGroups = \Bitrix\Main\UserTable::getUserGroupIds($userId);
-		}
-		$userGroups = array_map('intval', $userGroups);
-
-		return in_array($extranetGroupId, $userGroups, true);
+		return false;
 	}
 
 	public static function getUserFieldListConfigUrl(string $moduleId, string $entityId = ''): Uri
@@ -636,6 +610,12 @@ class Util
 			return false;
 		}
 
+		if($userId > 0)
+		{
+			$deactivateUser = new User($userId);
+			Invitation::fullSyncCounterByUser($deactivateUser->fetchOriginatorUser());
+		}
+
 		return true;
 	}
 
@@ -677,6 +657,12 @@ class Util
 			return false;
 		}
 
+		if (!empty($updateFields['CONFIRM_CODE']) && $userId > 0)
+		{
+			$deactivateUser = new User($userId);
+			Invitation::fullSyncCounterByUser($deactivateUser->fetchOriginatorUser());
+		}
+
 		return true;
 	}
 
@@ -709,30 +695,66 @@ class Util
 		return [ $employeesGroupId, $portalAdminGroupId ];
 	}
 
-	public static function getUserStatus($id)
+	public static function getUserStatus($userId)
 	{
-		global $USER;
+		$status = '';
+		$currentUser = CurrentUser::get();
+		$isCurrentUser = $currentUser->getId() == $userId;
 
-		if (empty(self::$USER_STATUS))
+		if ($isCurrentUser)
 		{
-			$status = "";
+			$user = \CUser::getById($userId)->fetch();
+		}
+		else
+		{
+			$user = \Bitrix\Main\UserTable::query()
+				->setSelect(['ID', 'ACTIVE', 'CONFIRM_CODE', 'EXTERNAL_AUTH_ID', 'UF_DEPARTMENT'])
+				->where('ID', '=', $userId)
+				->fetch();
+		}
 
-			$result = \Bitrix\Main\UserTable::getList([
-				'select' => ['ID', 'ACTIVE', 'CONFIRM_CODE', 'EXTERNAL_AUTH_ID', 'UF_DEPARTMENT'],
-				'filter' => ['=ID' => $id],
-			]);
-
-			if ($user = $result->fetch())
+		if ($user)
+		{
+			if ($user['ACTIVE'] == 'N')
 			{
-				$groups = $USER->getUserGroup($id);
+				$status = 'fired';
+			}
+			else if (!empty($user['CONFIRM_CODE']))
+			{
+				$status = 'invited';
+			}
+			else if ($user["EXTERNAL_AUTH_ID"] === 'email')
+			{
+				$status = 'email';
+			}
+			elseif (in_array($user["EXTERNAL_AUTH_ID"], ['shop', 'sale', 'saleanonymous']))
+			{
+				$status = 'shop';
+			}
+			else if (Main\Loader::includeModule("bitrix24") && Bitrix24\Integrator::isIntegrator($userId))
+			{
+				$status = 'integrator';
+			}
+			else if ($isCurrentUser)
+			{
+				if ($currentUser->isAdmin())
+				{
+					$status = 'admin';
+				}
+				else if (self::isIntranetUser($userId))
+				{
+					$status = 'employee';
+				}
+				else
+				{
+					$status = 'extranet';
+				}
+			}
+			else
+			{
+				$groups = \CUser::getUserGroup($userId);
 
-				$extranetGroupId = (
-				Loader::includeModule('extranet')
-					? intval(\CExtranet::getExtranetUserGroupId())
-					: 0
-				);
-
-				if(in_array(1, $groups))
+				if (in_array(1, $groups))
 				{
 					$status = "admin";
 				}
@@ -740,53 +762,30 @@ class Util
 				{
 					$status = "employee";
 
-					if(
-						!is_array($user['UF_DEPARTMENT'])
+					if (empty($user['UF_DEPARTMENT'])
+						|| !is_array($user['UF_DEPARTMENT'])
 						|| empty($user['UF_DEPARTMENT'][0])
 					)
 					{
+						$extranetGroupId = (
+						Loader::includeModule('extranet')
+							? intval(\CExtranet::getExtranetUserGroupId())
+							: 0
+						);
+
 						if (
 							$extranetGroupId
 							&& in_array($extranetGroupId, $groups)
 						)
 						{
-							$status = "extranet";
+							$status = 'extranet';
 						}
 					}
 				}
-
-				if (Loader::includeModule("bitrix24") && \Bitrix\Bitrix24\Integrator::isIntegrator($user["ID"]))
-				{
-					$status = "integrator";
-				}
-
-				if($user["ACTIVE"] == "N")
-				{
-					$status = "fired";
-				}
-
-				if (
-					$user["ACTIVE"] == "Y"
-					&& !empty($user["CONFIRM_CODE"])
-				)
-				{
-					$status = "invited";
-				}
-
-				if (in_array($user["EXTERNAL_AUTH_ID"], [ 'email' ]))
-				{
-					$status = $user["EXTERNAL_AUTH_ID"];
-				}
-				elseif (in_array($user["EXTERNAL_AUTH_ID"], [ 'shop', 'sale', 'saleanonymous' ]))
-				{
-					$status = 'shop';
-				}
 			}
-
-			self::$USER_STATUS = $status;
 		}
 
-		return self::$USER_STATUS;
+		return $status;
 	}
 
 	public static function getAppsInstallationConfig(int $userId): array
@@ -799,10 +798,11 @@ class Util
 			'APP_ANDROID_INSTALLED' => \CUserOptions::GetOption('mobile', 'AndroidLastActivityDate', '', $userId),
 			'APP_LINUX_INSTALLED' => \CUserOptions::GetOption('im', 'LinuxLastActivityDate', '', $userId),
 		];
+		$appsActivityTimeout = self::getAppsActivityTimeout();
 
 		foreach ($appActivity as $key => $lastActivity)
 		{
-			if ((int)$lastActivity <= 0 || $lastActivity < time() - 6 * 30 * 24 * 60 * 60)
+			if ((int)$lastActivity <= 0 || $lastActivity < time() - $appsActivityTimeout)
 			{
 				$result[$key] = false;
 			}
@@ -813,6 +813,13 @@ class Util
 		}
 
 		return $result;
+	}
+
+	public static function getAppsActivityTimeout(): int
+	{
+		$defaultLastActivityTimeout = 30 * 24 * 60 * 60; // 30 days
+
+		return (int)Option::get('intranet', 'app_last_activity_ttl', $defaultLastActivityTimeout);
 	}
 }
 

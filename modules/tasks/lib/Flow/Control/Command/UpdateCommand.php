@@ -5,8 +5,9 @@ namespace Bitrix\Tasks\Flow\Control\Command;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Flow\Attribute\AccessCodes;
 use Bitrix\Tasks\Flow\Attribute\Instantiable;
-use Bitrix\Tasks\Flow\Control\AbstractCommand;
-use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
+use Bitrix\Tasks\AbstractCommand;
+use Bitrix\Tasks\Flow\Configuration;
+use Bitrix\Tasks\InvalidCommandException;
 use Bitrix\Tasks\Flow\Flow;
 use Bitrix\Tasks\Internals\Attribute\Department;
 use Bitrix\Tasks\Internals\Attribute\ExpectedNumeric;
@@ -17,6 +18,7 @@ use Bitrix\Tasks\Internals\Attribute\Max;
 use Bitrix\Tasks\Internals\Attribute\Nullable;
 use Bitrix\Tasks\Internals\Attribute\Parse;
 use Bitrix\Tasks\Internals\Attribute\Parse\UserFromAccess;
+use Bitrix\Tasks\Internals\Attribute\PositiveNumber;
 use Bitrix\Tasks\Internals\Attribute\Primary;
 use Bitrix\Tasks\Internals\Attribute\Required;
 use Bitrix\Tasks\Internals\Attribute\User;
@@ -39,26 +41,29 @@ use Bitrix\Tasks\Internals\Attribute\User;
  * @method self setResponsibleQueue(array $responsibleQueue)
  * @method self setTaskCreators(array $taskCreators)
  * @method bool hasId()
+ * @method bool hasOwnerId()
+ * @method bool hasValidOwnerId()
+ * @method bool hasValidCreatorId()
  */
 final class UpdateCommand extends AbstractCommand
 {
 	#[Required]
 	#[Primary]
-	#[Min(1)]
+	#[PositiveNumber]
 	public int $id;
 
 	#[Nullable]
-	#[Min(1)]
+	#[PositiveNumber]
 	#[User]
 	public ?int $creatorId = null;
 
 	#[Nullable]
-	#[Min(1)]
+	#[PositiveNumber]
 	#[User]
 	public ?int $ownerId = null;
 
 	#[Nullable]
-	#[Min(1)]
+	#[PositiveNumber]
 	public ?int $groupId = null;
 
 	#[Nullable]
@@ -75,7 +80,7 @@ final class UpdateCommand extends AbstractCommand
 	public ?bool $demo = null;
 
 	#[Nullable]
-	#[Min(0)]
+	#[Min(Configuration::MIN_PLANNED_COMPLETION_TIME)]
 	#[Max(2145398400)]
 	public ?int $plannedCompletionTime = null;
 
@@ -84,7 +89,7 @@ final class UpdateCommand extends AbstractCommand
 	public ?DateTime $activity = null;
 
 	#[Nullable]
-	#[Length(1, 255)]
+	#[Length(1, Configuration::MAX_NAME_LENGTH)]
 	public ?string $name = null;
 
 	#[Nullable]

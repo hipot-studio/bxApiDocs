@@ -1,5 +1,6 @@
 <?php
 IncludeModuleLangFile(__FILE__);
+//@codingStandardsIgnoreFile
 
 use Bitrix\Crm;
 use Bitrix\Crm\Binding\QuoteContactTable;
@@ -2491,69 +2492,14 @@ class CAllCrmQuote
 		return $queryBuilder->buildCompatible();
 	}
 
+	/**
+	 * @deprecated This method is useless. Remove its calls.
+	 *
+	 * @return true
+	 */
 	public static function LocalComponentCausedUpdater()
 	{
-		global $stackCacheManager;
-
-		$bResult = true;
-		$errMsg = array();
-		$bError = false;
-
-		// at first, check last update version
-		if (COption::GetOptionString('crm', '~CRM_QUOTE_14_1_11', 'N') === 'Y')
-			return $bResult;
-
-		try
-		{
-			// Copy perms from deals to quotes
-			$CCrmRole = new CCrmRole();
-			$dbRoles = $CCrmRole->GetList();
-
-			while($arRole = $dbRoles->Fetch())
-			{
-				$arPerms = $CCrmRole->GetRolePerms($arRole['ID']);
-
-				if(!isset($arPerms['QUOTE']) && is_array($arPerms['DEAL'] ?? null))
-				{
-					foreach ($arPerms['DEAL'] as $key => $value)
-					{
-						if(isset($value['-']))
-							$arPerms['QUOTE'][$key]['-'] = $value['-'];
-						else
-							$arPerms['QUOTE'][$key]['-'] = null;
-					}
-				}
-
-				$arFields = array('RELATION' => $arPerms);
-				$CCrmRole->Update($arRole['ID'], $arFields);
-			}
-
-			// Create default quote status list (if not exists)
-			$arStatus = CCrmStatus::GetStatus('QUOTE_STATUS');
-			if (empty($arStatus))
-			{
-				CCrmStatus::InstallDefault('QUOTE_STATUS');
-			}
-			unset($arStatus);
-		}
-		catch (Exception $e)
-		{
-			$errMsg[] = $e->getMessage();
-			$bError = true;
-		}
-
-		if (!$bError)
-		{
-			COption::SetOptionString('crm', '~CRM_QUOTE_14_1_11', 'Y');
-		}
-		else
-		{
-			$errString = implode('<br>', $errMsg);
-			ShowError($errString);
-			$bResult = false;
-		}
-
-		return $bResult;
+		return true;
 	}
 
 	public static function LoadProductRows($ID)
@@ -4632,5 +4578,10 @@ class CCrmQuoteStorageType
 	{
 		$typeID = intval($typeID);
 		return $typeID > self::Undefined && $typeID <= self::Last;
+	}
+
+	public function getLastError(): string
+	{
+		return (string)$this->LAST_ERROR;
 	}
 }

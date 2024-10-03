@@ -366,7 +366,7 @@ class Update extends Operation
 			->isStageTransitionAllowed(
 				$this->item->remindActual('STAGE_ID'),
 				$this->item->getStageId(),
-				new ItemIdentifier($this->item->getEntityTypeId(), $this->item->getId(), $this->item->getCategoryId())				,
+				ItemIdentifier::createByItem($this->item),
 			);
 	}
 

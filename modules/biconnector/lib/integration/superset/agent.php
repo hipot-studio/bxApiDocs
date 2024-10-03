@@ -13,6 +13,8 @@ use Bitrix\Rest;
 
 class Agent
 {
+	private const IS_ACCESS_ROLES_REINSTALLED_OPTION = 'is_access_roles_reinstalled';
+
 	public static function sendRestStatistic(): string
 	{
 		if (
@@ -115,7 +117,26 @@ class Agent
 	 */
 	public static function createDefaultRoles(): string
 	{
+		if (RoleTable::getCount() > 0)
+		{
+			return '';
+		}
+
 		AccessInstaller::install();
+
+		return '';
+	}
+
+	public static function reinstallRoles(): string
+	{
+		$isAccessRolesReinstalled = \Bitrix\Main\Config\Option::get('biconnector', self::IS_ACCESS_ROLES_REINSTALLED_OPTION, 'N');
+		if ($isAccessRolesReinstalled === 'Y')
+		{
+			return '';
+		}
+
+		\Bitrix\Main\Config\Option::set('biconnector', self::IS_ACCESS_ROLES_REINSTALLED_OPTION, 'Y');
+		AccessInstaller::reinstall();
 
 		return '';
 	}

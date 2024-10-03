@@ -28,7 +28,7 @@ class File
 			return;
 		}
 
-		if(is_int($file))
+		if(is_numeric($file))
 		{
 			$this->createByCFileId($file);
 		}

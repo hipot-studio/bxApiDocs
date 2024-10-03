@@ -3,6 +3,7 @@
 namespace Bitrix\Tasks\Integration\UI\EntitySelector;
 
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TemplateAccessController;
 use Bitrix\Tasks\Slider\Path\PathMaker;
@@ -226,5 +227,17 @@ class TaskTemplateProvider extends BaseProvider
 		}
 
 		return $result;
+	}
+
+	public static function getTemplateUrl(): string
+	{
+		$userId = (int)CurrentUser::get()->getId();
+
+		return (new TemplatePathMaker(0, PathMaker::DEFAULT_ACTION, $userId))->makePathForEntitySelector();
+	}
+
+	public static function getTemplateLinkTitle(): string
+	{
+		return Loc::getMessage('TASKS_UI_ENTITY_SELECTOR_TASK_TEMPLATE_PROVIDER_ITEM_LINK_TITLE');
 	}
 }

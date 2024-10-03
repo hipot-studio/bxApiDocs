@@ -6258,136 +6258,6 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 */
 	class EO_ItemChecklistTree_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\ProjectsTable:tasks/lib/projects.php */
-namespace Bitrix\Tasks {
-	/**
-	 * EO_Projects
-	 * @see \Bitrix\Tasks\ProjectsTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Tasks\EO_Projects setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getOrderNewTask()
-	 * @method \Bitrix\Tasks\EO_Projects setOrderNewTask(\string|\Bitrix\Main\DB\SqlExpression $orderNewTask)
-	 * @method bool hasOrderNewTask()
-	 * @method bool isOrderNewTaskFilled()
-	 * @method bool isOrderNewTaskChanged()
-	 * @method \string remindActualOrderNewTask()
-	 * @method \string requireOrderNewTask()
-	 * @method \Bitrix\Tasks\EO_Projects resetOrderNewTask()
-	 * @method \Bitrix\Tasks\EO_Projects unsetOrderNewTask()
-	 * @method \string fillOrderNewTask()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\EO_Projects set($fieldName, $value)
-	 * @method \Bitrix\Tasks\EO_Projects reset($fieldName)
-	 * @method \Bitrix\Tasks\EO_Projects unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\EO_Projects wakeUp($data)
-	 */
-	class EO_Projects {
-		/* @var \Bitrix\Tasks\ProjectsTable */
-		static public $dataClass = '\Bitrix\Tasks\ProjectsTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Tasks {
-	/**
-	 * EO_Projects_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getOrderNewTaskList()
-	 * @method \string[] fillOrderNewTask()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\EO_Projects $object)
-	 * @method bool has(\Bitrix\Tasks\EO_Projects $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\EO_Projects getByPrimary($primary)
-	 * @method \Bitrix\Tasks\EO_Projects[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\EO_Projects $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\EO_Projects_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\EO_Projects current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\EO_Projects_Collection merge(?\Bitrix\Tasks\EO_Projects_Collection $collection)
-	 * @method bool isEmpty()
-	 */
-	class EO_Projects_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\ProjectsTable */
-		static public $dataClass = '\Bitrix\Tasks\ProjectsTable';
-	}
-}
-namespace Bitrix\Tasks {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Projects_Result exec()
-	 * @method \Bitrix\Tasks\EO_Projects fetchObject()
-	 * @method \Bitrix\Tasks\EO_Projects_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Projects_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Tasks\EO_Projects fetchObject()
-	 * @method \Bitrix\Tasks\EO_Projects_Collection fetchCollection()
-	 */
-	class EO_Projects_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Tasks\EO_Projects createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\EO_Projects_Collection createCollection()
-	 * @method \Bitrix\Tasks\EO_Projects wakeUpObject($row)
-	 * @method \Bitrix\Tasks\EO_Projects_Collection wakeUpCollection($rows)
-	 */
-	class EO_Projects_Entity extends \Bitrix\Main\ORM\Entity {}
-}
 /* ORMENTITYANNOTATION:Bitrix\Tasks\Access\Role\TasksRoleTable:tasks/lib/access/role/tasksroletable.php */
 namespace Bitrix\Tasks\Access\Role {
 	/**
@@ -6660,6 +6530,172 @@ namespace Bitrix\Tasks\Access\Role {
 	 */
 	class EO_TasksRoleRelation_Entity extends \Bitrix\Main\ORM\Entity {}
 }
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable:tasks/lib/access/permission/taskstemplatepermissiontable.php */
+namespace Bitrix\Tasks\Access\Permission {
+	/**
+	 * TasksTemplatePermission
+	 * @see \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getTemplateId()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method bool hasTemplateId()
+	 * @method bool isTemplateIdFilled()
+	 * @method bool isTemplateIdChanged()
+	 * @method \int remindActualTemplateId()
+	 * @method \int requireTemplateId()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission resetTemplateId()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission unsetTemplateId()
+	 * @method \int fillTemplateId()
+	 * @method \string getAccessCode()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission setAccessCode(\string|\Bitrix\Main\DB\SqlExpression $accessCode)
+	 * @method bool hasAccessCode()
+	 * @method bool isAccessCodeFilled()
+	 * @method bool isAccessCodeChanged()
+	 * @method \string remindActualAccessCode()
+	 * @method \string requireAccessCode()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission resetAccessCode()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission unsetAccessCode()
+	 * @method \string fillAccessCode()
+	 * @method \string getPermissionId()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission setPermissionId(\string|\Bitrix\Main\DB\SqlExpression $permissionId)
+	 * @method bool hasPermissionId()
+	 * @method bool isPermissionIdFilled()
+	 * @method bool isPermissionIdChanged()
+	 * @method \string remindActualPermissionId()
+	 * @method \string requirePermissionId()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission resetPermissionId()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission unsetPermissionId()
+	 * @method \string fillPermissionId()
+	 * @method \int getValue()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission setValue(\int|\Bitrix\Main\DB\SqlExpression $value)
+	 * @method bool hasValue()
+	 * @method bool isValueFilled()
+	 * @method bool isValueChanged()
+	 * @method \int remindActualValue()
+	 * @method \int requireValue()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission resetValue()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission unsetValue()
+	 * @method \int fillValue()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission reset($fieldName)
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Tasks\Access\Permission\TasksTemplatePermission wakeUp($data)
+	 */
+	class EO_TasksTemplatePermission {
+		/* @var \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable */
+		static public $dataClass = '\Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Tasks\Access\Permission {
+	/**
+	 * TasksTemplatePermissionCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getTemplateIdList()
+	 * @method \int[] fillTemplateId()
+	 * @method \string[] getAccessCodeList()
+	 * @method \string[] fillAccessCode()
+	 * @method \string[] getPermissionIdList()
+	 * @method \string[] fillPermissionId()
+	 * @method \int[] getValueList()
+	 * @method \int[] fillValue()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Tasks\Access\Permission\TasksTemplatePermission $object)
+	 * @method bool has(\Bitrix\Tasks\Access\Permission\TasksTemplatePermission $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Access\Permission\TasksTemplatePermission $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionCollection merge(?\Bitrix\Tasks\Access\Permission\TasksTemplatePermissionCollection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_TasksTemplatePermission_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable */
+		static public $dataClass = '\Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable';
+	}
+}
+namespace Bitrix\Tasks\Access\Permission {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_TasksTemplatePermission_Result exec()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission fetchObject()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionCollection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_TasksTemplatePermission_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission fetchObject()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionCollection fetchCollection()
+	 */
+	class EO_TasksTemplatePermission_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionCollection createCollection()
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionCollection wakeUpCollection($rows)
+	 */
+	class EO_TasksTemplatePermission_Entity extends \Bitrix\Main\ORM\Entity {}
+}
 /* ORMENTITYANNOTATION:Bitrix\Tasks\Access\Permission\TasksPermissionTable:tasks/lib/access/permission/taskspermissiontable.php */
 namespace Bitrix\Tasks\Access\Permission {
 	/**
@@ -6813,172 +6849,6 @@ namespace Bitrix\Tasks\Access\Permission {
 	 * @method \Bitrix\Tasks\Access\Permission\EO_TasksPermission_Collection wakeUpCollection($rows)
 	 */
 	class EO_TasksPermission_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable:tasks/lib/access/permission/taskstemplatepermissiontable.php */
-namespace Bitrix\Tasks\Access\Permission {
-	/**
-	 * TasksTemplatePermission
-	 * @see \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getTemplateId()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
-	 * @method bool hasTemplateId()
-	 * @method bool isTemplateIdFilled()
-	 * @method bool isTemplateIdChanged()
-	 * @method \int remindActualTemplateId()
-	 * @method \int requireTemplateId()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission resetTemplateId()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission unsetTemplateId()
-	 * @method \int fillTemplateId()
-	 * @method \string getAccessCode()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission setAccessCode(\string|\Bitrix\Main\DB\SqlExpression $accessCode)
-	 * @method bool hasAccessCode()
-	 * @method bool isAccessCodeFilled()
-	 * @method bool isAccessCodeChanged()
-	 * @method \string remindActualAccessCode()
-	 * @method \string requireAccessCode()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission resetAccessCode()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission unsetAccessCode()
-	 * @method \string fillAccessCode()
-	 * @method \string getPermissionId()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission setPermissionId(\string|\Bitrix\Main\DB\SqlExpression $permissionId)
-	 * @method bool hasPermissionId()
-	 * @method bool isPermissionIdFilled()
-	 * @method bool isPermissionIdChanged()
-	 * @method \string remindActualPermissionId()
-	 * @method \string requirePermissionId()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission resetPermissionId()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission unsetPermissionId()
-	 * @method \string fillPermissionId()
-	 * @method \int getValue()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission setValue(\int|\Bitrix\Main\DB\SqlExpression $value)
-	 * @method bool hasValue()
-	 * @method bool isValueFilled()
-	 * @method bool isValueChanged()
-	 * @method \int remindActualValue()
-	 * @method \int requireValue()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission resetValue()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission unsetValue()
-	 * @method \int fillValue()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission reset($fieldName)
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Access\Permission\TasksTemplatePermission wakeUp($data)
-	 */
-	class EO_TasksTemplatePermission {
-		/* @var \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable */
-		static public $dataClass = '\Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Tasks\Access\Permission {
-	/**
-	 * EO_TasksTemplatePermission_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getTemplateIdList()
-	 * @method \int[] fillTemplateId()
-	 * @method \string[] getAccessCodeList()
-	 * @method \string[] fillAccessCode()
-	 * @method \string[] getPermissionIdList()
-	 * @method \string[] fillPermissionId()
-	 * @method \int[] getValueList()
-	 * @method \int[] fillValue()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Access\Permission\TasksTemplatePermission $object)
-	 * @method bool has(\Bitrix\Tasks\Access\Permission\TasksTemplatePermission $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Access\Permission\TasksTemplatePermission $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Access\Permission\EO_TasksTemplatePermission_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Access\Permission\EO_TasksTemplatePermission_Collection merge(?\Bitrix\Tasks\Access\Permission\EO_TasksTemplatePermission_Collection $collection)
-	 * @method bool isEmpty()
-	 */
-	class EO_TasksTemplatePermission_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable */
-		static public $dataClass = '\Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable';
-	}
-}
-namespace Bitrix\Tasks\Access\Permission {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_TasksTemplatePermission_Result exec()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission fetchObject()
-	 * @method \Bitrix\Tasks\Access\Permission\EO_TasksTemplatePermission_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_TasksTemplatePermission_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission fetchObject()
-	 * @method \Bitrix\Tasks\Access\Permission\EO_TasksTemplatePermission_Collection fetchCollection()
-	 */
-	class EO_TasksTemplatePermission_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Access\Permission\EO_TasksTemplatePermission_Collection createCollection()
-	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Access\Permission\EO_TasksTemplatePermission_Collection wakeUpCollection($rows)
-	 */
-	class EO_TasksTemplatePermission_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Tasks\Integration\Intranet\Internals\Runtime\UtmUserTable:tasks/lib/integration/intranet/internals/runtime/utmuser.php */
 namespace Bitrix\Tasks\Integration\Intranet\Internals\Runtime {
@@ -11083,6 +10953,193 @@ namespace Bitrix\Tasks\Internals\Task {
 	 */
 	class EO_Dependence_Entity extends \Bitrix\Main\ORM\Entity {}
 }
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Internals\Task\ViewedTable:tasks/lib/internals/task/viewed.php */
+namespace Bitrix\Tasks\Internals\Task {
+	/**
+	 * View
+	 * @see \Bitrix\Tasks\Internals\Task\ViewedTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getTaskId()
+	 * @method \Bitrix\Tasks\Internals\Task\View setTaskId(\int|\Bitrix\Main\DB\SqlExpression $taskId)
+	 * @method bool hasTaskId()
+	 * @method bool isTaskIdFilled()
+	 * @method bool isTaskIdChanged()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Tasks\Internals\Task\View setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \Bitrix\Main\Type\DateTime getViewedDate()
+	 * @method \Bitrix\Tasks\Internals\Task\View setViewedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $viewedDate)
+	 * @method bool hasViewedDate()
+	 * @method bool isViewedDateFilled()
+	 * @method bool isViewedDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualViewedDate()
+	 * @method \Bitrix\Main\Type\DateTime requireViewedDate()
+	 * @method \Bitrix\Tasks\Internals\Task\View resetViewedDate()
+	 * @method \Bitrix\Tasks\Internals\Task\View unsetViewedDate()
+	 * @method \Bitrix\Main\Type\DateTime fillViewedDate()
+	 * @method \Bitrix\Main\EO_User getUser()
+	 * @method \Bitrix\Main\EO_User remindActualUser()
+	 * @method \Bitrix\Main\EO_User requireUser()
+	 * @method \Bitrix\Tasks\Internals\Task\View setUser(\Bitrix\Main\EO_User $object)
+	 * @method \Bitrix\Tasks\Internals\Task\View resetUser()
+	 * @method \Bitrix\Tasks\Internals\Task\View unsetUser()
+	 * @method bool hasUser()
+	 * @method bool isUserFilled()
+	 * @method bool isUserChanged()
+	 * @method \Bitrix\Main\EO_User fillUser()
+	 * @method \Bitrix\Tasks\Internals\TaskObject getTask()
+	 * @method \Bitrix\Tasks\Internals\TaskObject remindActualTask()
+	 * @method \Bitrix\Tasks\Internals\TaskObject requireTask()
+	 * @method \Bitrix\Tasks\Internals\Task\View setTask(\Bitrix\Tasks\Internals\TaskObject $object)
+	 * @method \Bitrix\Tasks\Internals\Task\View resetTask()
+	 * @method \Bitrix\Tasks\Internals\Task\View unsetTask()
+	 * @method bool hasTask()
+	 * @method bool isTaskFilled()
+	 * @method bool isTaskChanged()
+	 * @method \Bitrix\Tasks\Internals\TaskObject fillTask()
+	 * @method \Bitrix\Tasks\Internals\Task\MemberObject getMembers()
+	 * @method \Bitrix\Tasks\Internals\Task\MemberObject remindActualMembers()
+	 * @method \Bitrix\Tasks\Internals\Task\MemberObject requireMembers()
+	 * @method \Bitrix\Tasks\Internals\Task\View setMembers(\Bitrix\Tasks\Internals\Task\MemberObject $object)
+	 * @method \Bitrix\Tasks\Internals\Task\View resetMembers()
+	 * @method \Bitrix\Tasks\Internals\Task\View unsetMembers()
+	 * @method bool hasMembers()
+	 * @method bool isMembersFilled()
+	 * @method bool isMembersChanged()
+	 * @method \Bitrix\Tasks\Internals\Task\MemberObject fillMembers()
+	 * @method \boolean getIsRealView()
+	 * @method \Bitrix\Tasks\Internals\Task\View setIsRealView(\boolean|\Bitrix\Main\DB\SqlExpression $isRealView)
+	 * @method bool hasIsRealView()
+	 * @method bool isIsRealViewFilled()
+	 * @method bool isIsRealViewChanged()
+	 * @method \boolean remindActualIsRealView()
+	 * @method \boolean requireIsRealView()
+	 * @method \Bitrix\Tasks\Internals\Task\View resetIsRealView()
+	 * @method \Bitrix\Tasks\Internals\Task\View unsetIsRealView()
+	 * @method \boolean fillIsRealView()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Tasks\Internals\Task\View set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Internals\Task\View reset($fieldName)
+	 * @method \Bitrix\Tasks\Internals\Task\View unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Tasks\Internals\Task\View wakeUp($data)
+	 */
+	class EO_Viewed {
+		/* @var \Bitrix\Tasks\Internals\Task\ViewedTable */
+		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ViewedTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Tasks\Internals\Task {
+	/**
+	 * EO_Viewed_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getTaskIdList()
+	 * @method \int[] getUserIdList()
+	 * @method \Bitrix\Main\Type\DateTime[] getViewedDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillViewedDate()
+	 * @method \Bitrix\Main\EO_User[] getUserList()
+	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection getUserCollection()
+	 * @method \Bitrix\Main\EO_User_Collection fillUser()
+	 * @method \Bitrix\Tasks\Internals\TaskObject[] getTaskList()
+	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection getTaskCollection()
+	 * @method \Bitrix\Tasks\Internals\TaskCollection fillTask()
+	 * @method \Bitrix\Tasks\Internals\Task\MemberObject[] getMembersList()
+	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection getMembersCollection()
+	 * @method \Bitrix\Tasks\Internals\Task\MemberCollection fillMembers()
+	 * @method \boolean[] getIsRealViewList()
+	 * @method \boolean[] fillIsRealView()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Tasks\Internals\Task\View $object)
+	 * @method bool has(\Bitrix\Tasks\Internals\Task\View $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Tasks\Internals\Task\View getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Internals\Task\View[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Internals\Task\View $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Tasks\Internals\Task\View current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection merge(?\Bitrix\Tasks\Internals\Task\EO_Viewed_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Viewed_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Internals\Task\ViewedTable */
+		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ViewedTable';
+	}
+}
+namespace Bitrix\Tasks\Internals\Task {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Viewed_Result exec()
+	 * @method \Bitrix\Tasks\Internals\Task\View fetchObject()
+	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Viewed_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Tasks\Internals\Task\View fetchObject()
+	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection fetchCollection()
+	 */
+	class EO_Viewed_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Tasks\Internals\Task\View createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection createCollection()
+	 * @method \Bitrix\Tasks\Internals\Task\View wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection wakeUpCollection($rows)
+	 */
+	class EO_Viewed_Entity extends \Bitrix\Main\ORM\Entity {}
+}
 /* ORMENTITYANNOTATION:Bitrix\Tasks\Internals\Task\RelatedTable:tasks/lib/internals/task/related.php */
 namespace Bitrix\Tasks\Internals\Task {
 	/**
@@ -11817,193 +11874,6 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_CheckList_Collection wakeUpCollection($rows)
 	 */
 	class EO_CheckList_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Internals\Task\ViewedTable:tasks/lib/internals/task/viewed.php */
-namespace Bitrix\Tasks\Internals\Task {
-	/**
-	 * EO_Viewed
-	 * @see \Bitrix\Tasks\Internals\Task\ViewedTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getTaskId()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed setTaskId(\int|\Bitrix\Main\DB\SqlExpression $taskId)
-	 * @method bool hasTaskId()
-	 * @method bool isTaskIdFilled()
-	 * @method bool isTaskIdChanged()
-	 * @method \int getUserId()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \Bitrix\Main\Type\DateTime getViewedDate()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed setViewedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $viewedDate)
-	 * @method bool hasViewedDate()
-	 * @method bool isViewedDateFilled()
-	 * @method bool isViewedDateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualViewedDate()
-	 * @method \Bitrix\Main\Type\DateTime requireViewedDate()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed resetViewedDate()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed unsetViewedDate()
-	 * @method \Bitrix\Main\Type\DateTime fillViewedDate()
-	 * @method \Bitrix\Main\EO_User getUser()
-	 * @method \Bitrix\Main\EO_User remindActualUser()
-	 * @method \Bitrix\Main\EO_User requireUser()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed setUser(\Bitrix\Main\EO_User $object)
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed resetUser()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed unsetUser()
-	 * @method bool hasUser()
-	 * @method bool isUserFilled()
-	 * @method bool isUserChanged()
-	 * @method \Bitrix\Main\EO_User fillUser()
-	 * @method \Bitrix\Tasks\Internals\TaskObject getTask()
-	 * @method \Bitrix\Tasks\Internals\TaskObject remindActualTask()
-	 * @method \Bitrix\Tasks\Internals\TaskObject requireTask()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed setTask(\Bitrix\Tasks\Internals\TaskObject $object)
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed resetTask()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed unsetTask()
-	 * @method bool hasTask()
-	 * @method bool isTaskFilled()
-	 * @method bool isTaskChanged()
-	 * @method \Bitrix\Tasks\Internals\TaskObject fillTask()
-	 * @method \Bitrix\Tasks\Internals\Task\MemberObject getMembers()
-	 * @method \Bitrix\Tasks\Internals\Task\MemberObject remindActualMembers()
-	 * @method \Bitrix\Tasks\Internals\Task\MemberObject requireMembers()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed setMembers(\Bitrix\Tasks\Internals\Task\MemberObject $object)
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed resetMembers()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed unsetMembers()
-	 * @method bool hasMembers()
-	 * @method bool isMembersFilled()
-	 * @method bool isMembersChanged()
-	 * @method \Bitrix\Tasks\Internals\Task\MemberObject fillMembers()
-	 * @method \boolean getIsRealView()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed setIsRealView(\boolean|\Bitrix\Main\DB\SqlExpression $isRealView)
-	 * @method bool hasIsRealView()
-	 * @method bool isIsRealViewFilled()
-	 * @method bool isIsRealViewChanged()
-	 * @method \boolean remindActualIsRealView()
-	 * @method \boolean requireIsRealView()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed resetIsRealView()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed unsetIsRealView()
-	 * @method \boolean fillIsRealView()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed reset($fieldName)
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Internals\Task\EO_Viewed wakeUp($data)
-	 */
-	class EO_Viewed {
-		/* @var \Bitrix\Tasks\Internals\Task\ViewedTable */
-		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ViewedTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Tasks\Internals\Task {
-	/**
-	 * EO_Viewed_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getTaskIdList()
-	 * @method \int[] getUserIdList()
-	 * @method \Bitrix\Main\Type\DateTime[] getViewedDateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillViewedDate()
-	 * @method \Bitrix\Main\EO_User[] getUserList()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection getUserCollection()
-	 * @method \Bitrix\Main\EO_User_Collection fillUser()
-	 * @method \Bitrix\Tasks\Internals\TaskObject[] getTaskList()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection getTaskCollection()
-	 * @method \Bitrix\Tasks\Internals\TaskCollection fillTask()
-	 * @method \Bitrix\Tasks\Internals\Task\MemberObject[] getMembersList()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection getMembersCollection()
-	 * @method \Bitrix\Tasks\Internals\Task\MemberCollection fillMembers()
-	 * @method \boolean[] getIsRealViewList()
-	 * @method \boolean[] fillIsRealView()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Internals\Task\EO_Viewed $object)
-	 * @method bool has(\Bitrix\Tasks\Internals\Task\EO_Viewed $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Internals\Task\EO_Viewed $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection merge(?\Bitrix\Tasks\Internals\Task\EO_Viewed_Collection $collection)
-	 * @method bool isEmpty()
-	 */
-	class EO_Viewed_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Internals\Task\ViewedTable */
-		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ViewedTable';
-	}
-}
-namespace Bitrix\Tasks\Internals\Task {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Viewed_Result exec()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed fetchObject()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Viewed_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed fetchObject()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection fetchCollection()
-	 */
-	class EO_Viewed_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection createCollection()
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection wakeUpCollection($rows)
-	 */
-	class EO_Viewed_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Tasks\Internals\Task\ParameterTable:tasks/lib/internals/task/parameter.php */
 namespace Bitrix\Tasks\Internals\Task {
@@ -13405,6 +13275,136 @@ namespace Bitrix\Tasks\Internals\Counter\Event {
 	 */
 	class EO_Event_Entity extends \Bitrix\Main\ORM\Entity {}
 }
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Kanban\ProjectsTable:tasks/lib/kanban/projects.php */
+namespace Bitrix\Tasks\Kanban {
+	/**
+	 * EO_Projects
+	 * @see \Bitrix\Tasks\Kanban\ProjectsTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getOrderNewTask()
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects setOrderNewTask(\string|\Bitrix\Main\DB\SqlExpression $orderNewTask)
+	 * @method bool hasOrderNewTask()
+	 * @method bool isOrderNewTaskFilled()
+	 * @method bool isOrderNewTaskChanged()
+	 * @method \string remindActualOrderNewTask()
+	 * @method \string requireOrderNewTask()
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects resetOrderNewTask()
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects unsetOrderNewTask()
+	 * @method \string fillOrderNewTask()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects reset($fieldName)
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Tasks\Kanban\EO_Projects wakeUp($data)
+	 */
+	class EO_Projects {
+		/* @var \Bitrix\Tasks\Kanban\ProjectsTable */
+		static public $dataClass = '\Bitrix\Tasks\Kanban\ProjectsTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Tasks\Kanban {
+	/**
+	 * EO_Projects_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getOrderNewTaskList()
+	 * @method \string[] fillOrderNewTask()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Tasks\Kanban\EO_Projects $object)
+	 * @method bool has(\Bitrix\Tasks\Kanban\EO_Projects $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Kanban\EO_Projects $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Tasks\Kanban\EO_Projects_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects_Collection merge(?\Bitrix\Tasks\Kanban\EO_Projects_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Projects_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Kanban\ProjectsTable */
+		static public $dataClass = '\Bitrix\Tasks\Kanban\ProjectsTable';
+	}
+}
+namespace Bitrix\Tasks\Kanban {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Projects_Result exec()
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects fetchObject()
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Projects_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects fetchObject()
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects_Collection fetchCollection()
+	 */
+	class EO_Projects_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects_Collection createCollection()
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Kanban\EO_Projects_Collection wakeUpCollection($rows)
+	 */
+	class EO_Projects_Entity extends \Bitrix\Main\ORM\Entity {}
+}
 /* ORMENTITYANNOTATION:Bitrix\Tasks\Kanban\StagesTable:tasks/lib/kanban/stages.php */
 namespace Bitrix\Tasks\Kanban {
 	/**
@@ -14245,6 +14245,184 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection wakeUpCollection($rows)
 	 */
 	class EO_FlowSearchIndex_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowRobotTable:tasks/lib/flow/internal/flowrobottable.php */
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * FlowRobot
+	 * @see \Bitrix\Tasks\Flow\Internal\FlowRobotTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
+	 * @method bool hasFlowId()
+	 * @method bool isFlowIdFilled()
+	 * @method bool isFlowIdChanged()
+	 * @method \int remindActualFlowId()
+	 * @method \int requireFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetFlowId()
+	 * @method \int fillFlowId()
+	 * @method \int getStageId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setStageId(\int|\Bitrix\Main\DB\SqlExpression $stageId)
+	 * @method bool hasStageId()
+	 * @method bool isStageIdFilled()
+	 * @method bool isStageIdChanged()
+	 * @method \int remindActualStageId()
+	 * @method \int requireStageId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetStageId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetStageId()
+	 * @method \int fillStageId()
+	 * @method \int getBizProcTemplateId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setBizProcTemplateId(\int|\Bitrix\Main\DB\SqlExpression $bizProcTemplateId)
+	 * @method bool hasBizProcTemplateId()
+	 * @method bool isBizProcTemplateIdFilled()
+	 * @method bool isBizProcTemplateIdChanged()
+	 * @method \int remindActualBizProcTemplateId()
+	 * @method \int requireBizProcTemplateId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetBizProcTemplateId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetBizProcTemplateId()
+	 * @method \int fillBizProcTemplateId()
+	 * @method \string getStageType()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setStageType(\string|\Bitrix\Main\DB\SqlExpression $stageType)
+	 * @method bool hasStageType()
+	 * @method bool isStageTypeFilled()
+	 * @method bool isStageTypeChanged()
+	 * @method \string remindActualStageType()
+	 * @method \string requireStageType()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetStageType()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetStageType()
+	 * @method \string fillStageType()
+	 * @method \string getRobot()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setRobot(\string|\Bitrix\Main\DB\SqlExpression $robot)
+	 * @method bool hasRobot()
+	 * @method bool isRobotFilled()
+	 * @method bool isRobotChanged()
+	 * @method \string remindActualRobot()
+	 * @method \string requireRobot()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetRobot()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetRobot()
+	 * @method \string fillRobot()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot reset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot wakeUp($data)
+	 */
+	class EO_FlowRobot {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowRobotTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowRobotTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * FlowRobotCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getFlowIdList()
+	 * @method \int[] fillFlowId()
+	 * @method \int[] getStageIdList()
+	 * @method \int[] fillStageId()
+	 * @method \int[] getBizProcTemplateIdList()
+	 * @method \int[] fillBizProcTemplateId()
+	 * @method \string[] getStageTypeList()
+	 * @method \string[] fillStageType()
+	 * @method \string[] getRobotList()
+	 * @method \string[] fillRobot()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Tasks\Flow\Internal\Entity\FlowRobot $object)
+	 * @method bool has(\Bitrix\Tasks\Flow\Internal\Entity\FlowRobot $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\Entity\FlowRobot $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection merge(?\Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_FlowRobot_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowRobotTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowRobotTable';
+	}
+}
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_FlowRobot_Result exec()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_FlowRobot_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection fetchCollection()
+	 */
+	class EO_FlowRobot_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection createCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection wakeUpCollection($rows)
+	 */
+	class EO_FlowRobot_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowMemberTable:tasks/lib/flow/internal/flowmembertable.php */
 namespace Bitrix\Tasks\Flow\Internal {

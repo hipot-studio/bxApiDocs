@@ -4,13 +4,19 @@ namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Disk\Folder;
 use Bitrix\Im\Model\ChatTable;
+use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Message\Send\MentionService;
+use Bitrix\Im\V2\Message\Send\SendingConfig;
+use Bitrix\Im\V2\Message\Send\SendingService;
 use Bitrix\Im\V2\Relation;
+use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Message;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Pull\Event;
 
 /**
@@ -20,6 +26,7 @@ class CommentChat extends GroupChat
 {
 	protected ?Chat $parentChat;
 	protected ?Message $parentMessage;
+	protected ?RelationCollection $parentRelations;
 
 	public static function get(Message $message, bool $createIfNotExists = true): Result
 	{
@@ -46,6 +53,11 @@ class CommentChat extends GroupChat
 		}
 
 		return static::create($message);
+	}
+
+	protected function getMentionService(SendingConfig $config): MentionService
+	{
+		return new Message\Send\Mention\CommentMentionService($config);
 	}
 
 	public static function create(Message $message): Result
@@ -101,6 +113,64 @@ class CommentChat extends GroupChat
 		return $role;
 	}
 
+	protected function onAfterMessageSend(Message $message, SendingService $sendingService): void
+	{
+		$this->subscribe(true, $message->getAuthorId());
+		$this->subscribeUsers(true, $message->getUserIdsFromMention(), $message->getPrevId());
+		Message\LastMessages::insert($message);
+
+		if (!$sendingService->getConfig()->skipCounterIncrements())
+		{
+			Recent::raiseChat($this->getParentChat(), $this->getParentRelations(), new DateTime());
+		}
+
+		parent::onAfterMessageSend($message, $sendingService);
+	}
+
+	protected function updateRecentAfterMessageSend(\Bitrix\Im\V2\Message $message, SendingConfig $config): Result
+	{
+		return new Result();
+	}
+
+	public function filterUsersToMention(array $userIds): array
+	{
+		return $this->getParentChat()->filterUsersToMention($userIds);
+	}
+
+	public function getRelations(): RelationCollection
+	{
+		$relations = parent::getRelations();
+		$userIds = $relations->getUserIds();
+		if (empty($userIds))
+		{
+			return $relations;
+		}
+
+		$parentRelations = $this->getParentChat()->getRelationsByUserIds($userIds);
+
+		return $relations->filter(
+			fn (Relation $relation) => $parentRelations->getByUserId($relation->getUserId(), $this->getParentChatId())
+		);
+	}
+
+	public function getRelationsForSendMessage(): RelationCollection
+	{
+		return parent::getRelationsForSendMessage()->filterNotifySubscribed();
+	}
+
+	protected function getParentRelations(): RelationCollection
+	{
+		if (isset($this->parentRelations))
+		{
+			return $this->parentRelations;
+		}
+
+		$userIds = parent::getRelations()->getUserIds();
+		$this->parentRelations = $this->getParentChat()->getRelationsByUserIds($userIds);
+
+		return $this->parentRelations;
+	}
+
 	public function subscribe(bool $subscribe = true, ?int $userId = null): Result
 	{
 		$userId ??= $this->getContext()->getUserId();
@@ -124,16 +194,16 @@ class CommentChat extends GroupChat
 		return $result;
 	}
 
-	protected function filterUsersToAdd(array $userIds): array
+	protected function resolveRelationConflicts(array $userIds, Relation\Reason $reason = Relation\Reason::DEFAULT): array
 	{
-		$userIds = parent::filterUsersToAdd($userIds);
+		$userIds = parent::resolveRelationConflicts($this->getValidUsersToAdd($userIds), $reason);
 
 		if (empty($userIds))
 		{
 			return $userIds;
 		}
 
-		return $this->getParentChat()->getRelations(['FILTER' => ['USER_ID' => $userIds]])->getUserIds();
+		return $this->getParentChat()->getRelationsByUserIds($userIds)->getUserIds();
 	}
 
 	public function subscribeUsers(bool $subscribe = true, array $userIds = [], ?int $lastId = null): Result
@@ -386,9 +456,11 @@ class CommentChat extends GroupChat
 		);
 	}
 
-	protected function checkAccessWithoutCaching(int $userId): bool
+	protected function checkAccessInternal(int $userId): Result
 	{
-		return $this->getParentMessage()?->hasAccess() ?? false;
+		return $this->getParentMessage()?->checkAccess($userId)
+			?? (new Result())->addError(new ChatError(ChatError::ACCESS_DENIED))
+		;
 	}
 
 	protected function addIndex(): Chat

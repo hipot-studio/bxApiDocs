@@ -22,7 +22,7 @@ final class GroupProvider
 		$avatarTypes = Loader::includeModule('socialnetwork') ? Workgroup::getAvatarTypes() : [];
 		$newGroupsData = SocialNetwork\Group::getData(
 			$groupIds,
-			['IMAGE_ID', 'AVATAR_TYPE'],
+			['IMAGE_ID', 'AVATAR_TYPE', 'PROJECT_DATE_START', 'PROJECT_DATE_FINISH'],
 			['MODE' => 'mobile']
 		);
 
@@ -58,6 +58,8 @@ final class GroupProvider
 				image: $originalImage,
 				resizedImage100: $resizedImage100,
 				additionalData: ($group['ADDITIONAL_DATA'] ?? []),
+				dateStart: $group['PROJECT_DATE_START']?->getTimestamp(),
+				dateFinish: $group['PROJECT_DATE_FINISH']?->getTimestamp(),
 			);
 		}
 

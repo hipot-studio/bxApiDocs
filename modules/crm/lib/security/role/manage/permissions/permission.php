@@ -2,9 +2,11 @@
 
 namespace Bitrix\Crm\Security\Role\Manage\Permissions;
 
+use Bitrix\Main\Access\Permission\PermissionDictionary;
+
 /**
  * Base class for permissions
- * Don't forget to add new permission to list self::permissionList
+ * Don't forget to add new permission to list RoleManagementModelBuilder::allPermissions
  */
 abstract class Permission
 {
@@ -46,7 +48,37 @@ abstract class Permission
 		return null;
 	}
 
+	public function getMaxAttributeValue(): ?string
+	{
+		return \Bitrix\Crm\Service\UserPermissions::PERMISSION_ALL;
+	}
+
+	public function getMinAttributeValue(): ?string
+	{
+		return \Bitrix\Crm\Service\UserPermissions::PERMISSION_NONE;
+	}
+
 	public function getDefaultSettings(): array
+	{
+		return [];
+	}
+
+	/**
+	 * control type define way how to draw this permission on the frontend and convert it value from/to frontend
+	 *
+	 * @return string
+	 */
+	public function controlType(): string
+	{
+		return PermissionDictionary::TYPE_VARIABLES;
+	}
+
+	public function getMaxSettingsValue(): array
+	{
+		return [];
+	}
+
+	public function getMinSettingsValue(): array
 	{
 		return [];
 	}

@@ -579,7 +579,7 @@ class Conference
 		}
 
 		//delete alias
-		$deleteAliasResult = AliasTable::delete($this->getAliasId());
+		$deleteAliasResult = Alias::delete($this->getAliasId());
 		if (!$deleteAliasResult->isSuccess())
 		{
 			return $result->addErrors($deleteAliasResult->getErrors());

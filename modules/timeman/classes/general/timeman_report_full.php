@@ -748,14 +748,14 @@ class CUserReportFull
 
 	private function calculateLastReportDate(int $lastEntriesDate, string $reportPeriod, $tmDay): int
 	{
-		$tmDayKey = is_numeric($tmDay) ? $this->days[$tmDay] : reset($this->days);
+		$lastReportDate = $lastEntriesDate - $this->oneDayTime;
 
-		$lastReportDate = $lastEntriesDate;
 		switch ($reportPeriod)
 		{
 			case 'WEEK':
 				$inputTmDay = date('w', $lastEntriesDate);
-				$inputTmDayKey = $this->days[$inputTmDay];
+				$tmDayKey = is_numeric($tmDay) ? $this->days[$tmDay - 1] : reset($this->days);
+				$inputTmDayKey = $this->days[$inputTmDay - 1];
 				if ($tmDayKey !== $inputTmDayKey)
 				{
 					if ($inputTmDay > $tmDay)
@@ -846,7 +846,7 @@ class CUserReportFull
 			["DATE_TO"=>"desc"],
 			[
 				"USER_ID" => $this->USER_ID,
-				"ACTIVE" => "Y",
+				"=ACTIVE" => "Y",
 			],
 			[
 				"DATE_FROM",
@@ -1118,8 +1118,8 @@ class CUserReportFull
 			$entriesInfo['REPORT_DATE_TO'] = MakeTimeStamp($currentReportInfo['DATE_TO'], $shortFormat);
 		}
 
-		$dateFrom = (($currentReportInfo['DATE_FROM']) ? $currentReportInfo['DATE_FROM'] : $savedReport['DATE_FROM']);
-		$dateTo = (($currentReportInfo['DATE_TO']) ? $currentReportInfo['DATE_TO'] : $savedReport['DATE_TO']);
+		$dateFrom = (($currentReportInfo['DATE_FROM']) ?: $savedReport['DATE_FROM']);
+		$dateTo = (($currentReportInfo['DATE_TO']) ?: $savedReport['DATE_TO']);
 
 		$entriesInfo = $this->preparePlannerData($entriesInfo);
 
@@ -1139,7 +1139,7 @@ class CUserReportFull
 
 		if (!in_array($entriesInfo["ID"], $entryIds))
 		{
-			$entriesInfo = $this->addCurrentReport($entriesInfo);
+			$entriesInfo = $this->addCurrentReport($entriesInfo, $dateFrom, $dateTo);
 		}
 
 		$entriesInfo = $this->clearEventsByCheckStatus($entriesInfo);
@@ -1416,11 +1416,24 @@ class CUserReportFull
 		return "<b>".$reportDate."</b><br>".nl2br(htmlspecialcharsbx($message))."<br>";
 	}
 
-	private function addCurrentReport(array $entriesInfo): array
+	private function addCurrentReport(array $entriesInfo, string $dateFrom, string $dateTo): array
 	{
+		$settings = $this->GetSettings();
+		$submitDayTime = CTimeman::MakeShortTS($settings['UF_TM_TIME']);
+
+		$dateTimeTo = new \Bitrix\Main\Type\DateTime($dateTo);
+		$dateTimeTo = \Bitrix\Main\Type\DateTime::createFromTimestamp(
+			$dateTimeTo->getTimestamp() + $submitDayTime
+		);
+
 		$queryObject = CTimeManReport::getList(
 			['ID' => 'ASC'],
-			['ENTRY_ID' => $entriesInfo['ID'], 'REPORT_TYPE' => 'REPORT']
+			[
+				'ENTRY_ID' => $entriesInfo['ID'],
+				'REPORT_TYPE' => 'REPORT',
+				'>=TIMESTAMP_X' => (new \Bitrix\Main\Type\Date($dateFrom))->format('Y-m-d'),
+				'<=TIMESTAMP_X' => $dateTimeTo->format('Y-m-d H:i:s'),
+			]
 		);
 		if ($currentReport = $queryObject->fetch())
 		{

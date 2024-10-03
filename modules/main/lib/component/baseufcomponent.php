@@ -359,18 +359,25 @@ abstract class BaseUfComponent extends CBitrixComponent
 	{
 		static $checkedTemplateFolders = [];
 
-		if(
-			!array_key_exists($this->getMode(), $checkedTemplateFolders)
-			||
-			$checkedTemplateFolders[$this->getMode()] === null
+		$name = $this->getName();
+		$mode = $this->getMode();
+
+		if (!isset($checkedTemplateFolders[$name]))
+		{
+			$checkedTemplateFolders[$name] = [];
+		}
+
+		if (
+			!array_key_exists($mode, $checkedTemplateFolders)
+			|| $checkedTemplateFolders[$name][$mode] === null
 		)
 		{
 			$this->setTemplateName($this->getTemplateNameFromMode());
 			$this->componentTemplate->Init($this);
-			$checkedTemplateFolders[$this->getMode()] = $this->componentTemplate->hasTemplate();
+			$checkedTemplateFolders[$name][$mode] = $this->componentTemplate->hasTemplate();
 		}
 
-		return $checkedTemplateFolders[$this->getMode()];
+		return $checkedTemplateFolders[$name][$mode];
 	}
 
 	/**

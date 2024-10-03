@@ -4,10 +4,10 @@ namespace Bitrix\Tasks\Flow\Control\Command;
 
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Event;
-use Bitrix\Tasks\Flow\Control\AbstractCommand;
+use Bitrix\Tasks\AbstractCommand;
 use Bitrix\Tasks\Flow\Control\Exception\FlowNotAddedException;
 use Bitrix\Tasks\Flow\Control\Exception\FlowNotFoundException;
-use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
+use Bitrix\Tasks\InvalidCommandException;
 use Bitrix\Tasks\Flow\Control\Mapper\FlowCommandMapper;
 use Bitrix\Tasks\Flow\Control\Middleware\Implementation\DepartmentMiddleware;
 use Bitrix\Tasks\Flow\Control\Middleware\Implementation\OriginalNameMiddleware;
@@ -19,6 +19,7 @@ use Bitrix\Tasks\Flow\Control\Observer\ResponsibleQueue;
 use Bitrix\Tasks\Flow\Control\Observer\Option;
 use Bitrix\Tasks\Flow\Control\Observer\Search;
 use Bitrix\Tasks\Flow\Control\Observer\Member;
+use Bitrix\Tasks\Flow\Control\Observer\Template;
 use Bitrix\Tasks\Flow\Flow;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
 use Throwable;
@@ -158,6 +159,8 @@ class AddCommandHandler extends CommandHandler
 		$this->addRequiredObserver(new Option\AddObserver());
 		$this->addRequiredObserver(new Member\AddObserver());
 		$this->addRequiredObserver(new Search\AddObserver());
+
+		$this->addExtraObserver(new Template\AddObserver());
 
 		$this->middleware = new OriginalNameMiddleware();
 

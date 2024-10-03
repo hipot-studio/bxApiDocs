@@ -180,15 +180,18 @@ abstract class EdnaUtils implements EdnaRu
 		$result = new Result();
 		foreach ($apiData as $cascade)
 		{
-			if ($cascade['status'] !== 'ACTIVE' || $cascade['stagesCount'] > 1)
+			if (is_array($cascade))
 			{
-				continue;
-			}
-			if ($subjectComparator($cascade['stages'][0]['subject'], $subject))
-			{
-				$result->setData(['cascadeId' => $cascade['id']]);
+				if ($cascade['status'] !== 'ACTIVE' || $cascade['stagesCount'] > 1)
+				{
+					continue;
+				}
+				if ($subjectComparator($cascade['stages'][0]['subject'], $subject))
+				{
+					$result->setData(['cascadeId' => $cascade['id']]);
 
-				return $result;
+					return $result;
+				}
 			}
 		}
 

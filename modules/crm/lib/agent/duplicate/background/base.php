@@ -213,7 +213,7 @@ abstract class Base
 
 		return $typeIds;
 	}
-	protected function getMessage($messageId): ?string
+	protected function getMessage(string $messageId, ?string $languageId = null): ?string
 	{
 		static $isMessagesLoaded = false;
 
@@ -223,7 +223,14 @@ abstract class Base
 			$isMessagesLoaded = true;
 		}
 
-		return Loc::getMessage($messageId);
+		return Loc::getMessage($messageId, null, $languageId);
+	}
+
+	protected function getMessageCallback(string $code): callable
+	{
+		return fn (?string $languageId = null) =>
+			$this->getMessage($code, $languageId)
+		;
 	}
 
 	protected function doRun(): bool
@@ -401,7 +408,7 @@ abstract class Base
 		);
 	}
 	abstract protected function getNotifyMessagePrefix();
-	protected function getNotifyMessage(int $percentage): string
+	protected function getNotifyMessage(int $percentage): string|callable
 	{
 		$message = '';
 
@@ -410,7 +417,8 @@ abstract class Base
 			$entityTypeName = CCrmOwnerType::ResolveName($this->getEntityTypeId());
 			$percentageString = sprintf('%03d', $percentage);
 			$messagePrefix = $this->getNotifyMessagePrefix();
-			$message = $this->getMessage("{$messagePrefix}_{$entityTypeName}_{$percentageString}");
+
+			$message = $this->getMessageCallback("{$messagePrefix}_{$entityTypeName}_{$percentageString}");
 		}
 
 		return $message;

@@ -773,7 +773,7 @@ class CBPSocnetBlogPostActivity extends CBPActivity
 
 	private function logDebug($title, $ownerId, $usersTo)
 	{
-		if (!method_exists($this, 'getDebugInfo'))
+		if (!$this->workflow->isDebug())
 		{
 			return;
 		}
@@ -792,7 +792,7 @@ class CBPSocnetBlogPostActivity extends CBPActivity
 
 	private function logDebugPost($url)
 	{
-		if (!method_exists($this, 'getDebugInfo'))
+		if (!$this->workflow->isDebug())
 		{
 			return;
 		}

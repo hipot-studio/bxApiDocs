@@ -8,6 +8,8 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Sender;
 
 abstract class Base
 {
+	private bool $skipAfterMiddlewares = false;
+
 	abstract public static function getMiddlewareId(): string;
 
 	/**
@@ -34,5 +36,19 @@ abstract class Base
 	public function afterRequest(IntegratorRequest $request, IntegratorResponse $response): IntegratorResponse
 	{
 		return $response;
+	}
+
+	protected function skipAfterMiddlewares(bool $skip = true): void
+	{
+		$this->skipAfterMiddlewares = $skip;
+	}
+
+	/**
+	 * If returns true - all after request middlewares will be skipped.
+	 * @return bool
+	 */
+	public function isSkippedAfterMiddlewares(): bool
+	{
+		return $this->skipAfterMiddlewares;
 	}
 }

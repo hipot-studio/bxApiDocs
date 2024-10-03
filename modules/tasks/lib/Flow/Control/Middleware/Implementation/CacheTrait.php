@@ -19,6 +19,6 @@ trait CacheTrait
 
 	private function has(int $id): bool
 	{
-		return static::$cache[$id];
+		return (static::$cache[$id] ?? false) === true;
 	}
 }

@@ -37,7 +37,7 @@ Loc::loadMessages(__FILE__);
 
 class Recent
 {
-	private const PINNED_CHATS_LIMIT = 25;
+	private const PINNED_CHATS_LIMIT = 45;
 
 	static private bool $limitError = false;
 
@@ -1448,7 +1448,7 @@ class Recent
 			'params' => $pull,
 			'extra' => Common::getPullExtra()
 		];
-		$events = (new PushService())->getEventGroups($event, $userIds, $chat->getId());
+		$events = PushService::getEventGroups($event, $userIds, $chat->getId());
 
 		foreach ($events as $event)
 		{
@@ -1461,7 +1461,34 @@ class Recent
 		RecentTable::multiplyMerge($fields, $update, ['USER_ID', 'ITEM_TYPE', 'ITEM_ID']);
 	}
 
-	public static function unread($dialogId, $unread, $userId = null, ?int $markedId = null)
+	public static function getUsersOutOfRecent(\Bitrix\Im\V2\Chat $chat): array
+	{
+		$relations = $chat->getRelations()->filterActive();
+		$users = $relations->getUserIds();
+		$usersAlreadyInRecentRows = RecentTable::query()
+			->setSelect(['USER_ID'])
+			->where('ITEM_CID', $chat->getId())
+			->whereIn('USER_ID', $users)
+			->fetchAll()
+		;
+		foreach ($usersAlreadyInRecentRows as $row)
+		{
+			$userId = (int)$row['USER_ID'];
+			$usersAlreadyInRecent[$userId] = $userId;
+		}
+		$usersToAdd = [];
+		foreach ($users as $userId)
+		{
+			if (!isset($usersAlreadyInRecent[$userId]))
+			{
+				$usersToAdd[$userId] = $userId;
+			}
+		}
+
+		return $usersToAdd;
+	}
+
+	public static function unread($dialogId, $unread, $userId = null, ?int $markedId = null, ?string $itemTypes = null)
 	{
 		$userId = \Bitrix\Im\Common::getUserId($userId);
 		if (!$userId)
@@ -1474,7 +1501,11 @@ class Recent
 		$id = $dialogId;
 		if (mb_substr($dialogId, 0, 4) === 'chat')
 		{
-			$itemTypes = \Bitrix\Im\Chat::getTypes();
+			if ($itemTypes === null)
+			{
+				$itemTypes = \Bitrix\Im\Chat::getTypes();
+			}
+
 			$id = mb_substr($dialogId, 4);
 		}
 		else

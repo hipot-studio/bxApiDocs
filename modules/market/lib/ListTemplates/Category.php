@@ -6,8 +6,8 @@ namespace Bitrix\Market\ListTemplates;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Market\Categories;
-use Bitrix\Market\NumberApps;
 use Bitrix\Market\Rest\Actions;
+use Bitrix\Market\Toolbar;
 use Bitrix\Market\Rest\Transport;
 
 Loc::loadMessages(__DIR__.'/../../install/components/bitrix/market.main/class.php');
@@ -84,12 +84,10 @@ class Category extends BaseTemplate
 
 		$this->result['TITLE'] = $title;
 		$this->result['CURRENT_APPS_CNT'] = $this->getAppsCount();
-		$this->result['TOTAL_APPS'] = NumberApps::get($response[Actions::METHOD_TOTAL_APPS]);
-		$this->result['SHOW_MARKET_ICON'] = $response[Actions::METHOD_TOTAL_APPS]['SHOW_MARKET_ICON'];
-		$this->result['ADDITIONAL_CONTENT'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_CONTENT'] ?? '';
-		$this->result['ADDITIONAL_MARKET_ACTION'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_MARKET_ACTION'] ?? '';
-		$this->result['ADDITIONAL_SEARCH_ACTION'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_SEARCH_ACTION'] ?? '';
-		$this->result['ADDITIONAL_HIT_ACTION'] = $response[Actions::METHOD_TOTAL_APPS]['ADDITIONAL_HIT_ACTION'] ?? '';
+
+		if (is_array($response[Actions::METHOD_TOTAL_APPS])) {
+			$this->result = array_merge($this->result, Toolbar::getTotalAppsInfo($response[Actions::METHOD_TOTAL_APPS]));
+		}
 
 		global $APPLICATION;
 		$APPLICATION->SetTitle($title);

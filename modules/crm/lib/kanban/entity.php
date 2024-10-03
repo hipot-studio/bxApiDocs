@@ -775,12 +775,14 @@ abstract class Entity
 		/** @var BaseComponent $component */
 		$component = new $componentClassName;
 
+		//@codingStandardsIgnoreStart
 		$component->initComponent($componentName);
 		$component->arResult = [
 			'READ_ONLY' => false,
 			'PATH_TO_USER_PROFILE' => '',
 		];
 		$component->setEntityID(0);
+		//@codingStandardsIgnoreEnd
 
 		return $component;
 	}
@@ -1124,6 +1126,10 @@ abstract class Entity
 	 */
 	public function fillStageTotalSums(array $filter, array $runtime, array &$stages): void
 	{
+		if ($this->factory && !$this->factory->isStagesSupported())
+		{
+			return;
+		}
 		$fieldName = $this->getCustomPriceFieldName();
 		if(!$fieldName)
 		{
@@ -1174,7 +1180,8 @@ abstract class Entity
 
 	public function havePermissionToDisplayColumnSum(string $stageId, CCrmPerms $userPermissions): bool
 	{
-		if (Container::getInstance()->getUserPermissions()->canWriteConfig())
+		$entityTypeId = $this->factory->getEntityTypeId();
+		if (Container::getInstance()->getUserPermissions()->isAdminForEntity($entityTypeId))
 		{
 			return true;
 		}
@@ -1264,7 +1271,7 @@ abstract class Entity
 		$listEntity = \Bitrix\Crm\ListEntity\Entity::getInstance($this->getTypeName());
 		if (!$listEntity)
 		{
-			throw new Exception('Wrong entity type name');
+			throw new ArgumentException('Wrong entity type name');
 		}
 
 		return $listEntity->getItems($parameters);
@@ -1432,11 +1439,13 @@ abstract class Entity
 			}
 			else
 			{
+				//@codingStandardsIgnoreStart
 				$errorText = (
 					empty($entity->LAST_ERROR)
 						? Loc::getMessage('CRM_KANBAN_ENTITY_COMMON_DELETION_ERROR')
 						: $entity->LAST_ERROR
 				);
+				//@codingStandardsIgnoreEnd
 				$result->addError(new Error($errorText, 0, ['id' => $id]));
 			}
 		}
@@ -1523,6 +1532,7 @@ abstract class Entity
 				$entity->update($id, $fields);
 			}
 
+			//@codingStandardsIgnoreStart
 			if (!empty($entity->LAST_ERROR))
 			{
 				$result->addError(new Error($entity->LAST_ERROR));
@@ -1531,6 +1541,7 @@ abstract class Entity
 			{
 				$this->runAutomationOnUpdate($id, $fields);
 			}
+			//@codingStandardsIgnoreEnd
 		}
 
 		return $result;
@@ -1560,6 +1571,7 @@ abstract class Entity
 		foreach($ids as $id)
 		{
 			$entity->update($id, $fields);
+			//@codingStandardsIgnoreStart
 			if (!empty($entity->LAST_ERROR))
 			{
 				$result->addError(new Error($entity->LAST_ERROR));
@@ -1568,6 +1580,7 @@ abstract class Entity
 			{
 				$this->runAutomationOnUpdate($id, $fields);
 			}
+			//@codingStandardsIgnoreEnd
 		}
 
 		return $result;

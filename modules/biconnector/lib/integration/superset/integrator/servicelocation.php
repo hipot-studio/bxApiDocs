@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Integration\Superset\Integrator;
 
+use Bitrix\BIConnector\Superset\Config\ConfigContainer;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 
@@ -21,7 +22,14 @@ final class ServiceLocation
 			return $supersetProxyOption;
 		}
 
-		return self::getServiceUrlByRegion(self::getCurrentDatacenterLocationRegion());
+		$currentRegion = ConfigContainer::getConfigContainer()->getProxyRegion();
+		if (!in_array($currentRegion, [self::DATACENTER_LOCATION_REGION_RU, self::DATACENTER_LOCATION_REGION_EN], true))
+		{
+			$currentRegion = self::getCurrentDatacenterLocationRegion();
+			ConfigContainer::getConfigContainer()->setProxyRegion($currentRegion);
+		}
+
+		return self::getServiceUrlByRegion($currentRegion);
 	}
 
 	public static function getCurrentDatacenterLocationRegion(): string

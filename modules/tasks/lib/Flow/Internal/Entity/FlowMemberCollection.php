@@ -12,6 +12,20 @@ class FlowMemberCollection extends EO_FlowMember_Collection implements Arrayable
 	use InsertIgnoreTrait;
 	use UniqueTrait;
 
+	public function getTaskCreators(): static
+	{
+		$collection = new static();
+		foreach ($this as  $object)
+		{
+			if ($object->getRole() === Role::TASK_CREATOR->value)
+			{
+				$collection->add($object);
+			}
+		}
+
+		return $collection;
+	}
+
 	public function getInsertFields(): array
 	{
 		return ['FLOW_ID', 'ACCESS_CODE', 'ENTITY_ID', 'ENTITY_TYPE', 'ROLE'];

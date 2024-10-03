@@ -1,7 +1,7 @@
 <?php
 namespace Bitrix\Main\Web\DOM;
 
-use \Bitrix\Main\Text\HtmlFilter;
+use Bitrix\Main\Text\HtmlFilter;
 
 class HtmlParser extends Parser
 {

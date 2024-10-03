@@ -74,7 +74,7 @@ class CalendarSharingMailComponent extends CBitrixComponent
 		$isCancelled = $status === self::MEETING_STATUS_CANCELLED;
 		$this->arResult['IS_EVENT_STATUS'] = in_array($status, self::EVENT_STATUSES, true);
 
-		$ownerStatus = $this->arParams['OWNER_STATUS'];
+		$ownerStatus = $this->arParams['OWNER_STATUS'] ?? null;
 
 		$this->arResult['SHOW_DETAIL_BUTTON'] = !empty($this->arParams['DETAIL_LINK']) && $status !== self::MEETING_STATUS_EVENT_CANCELLED;
 		$this->arResult['SHOW_CANCEL_LINK'] = !empty($this->arParams['CANCEL_LINK']);

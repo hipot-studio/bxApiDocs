@@ -296,8 +296,13 @@ class CBPWorkflowTemplateLoader
 			throw new Exception("id");
 		}
 
-		$instanceCnt = WorkflowInstanceTable::getCount(['=WORKFLOW_TEMPLATE_ID' => $id]);
-		if ($instanceCnt <= 0)
+		$hasInstance = (bool)WorkflowInstanceTable::getRow([
+			'select' => ['ID'],
+			'filter' => ['=WORKFLOW_TEMPLATE_ID' => $id],
+			'order' => ['DOCUMENT_ID' => 'DESC'],
+		]);
+
+		if (!$hasInstance)
 		{
 			WorkflowTemplateTable::delete($id);
 

@@ -12,9 +12,6 @@ use Bitrix\Main\Localization\Loc;
 
 class WorkflowAccessService
 {
-	private const PREFIX_LOC_ID = 'BIZPROC_LIB_API_WORKFLOW_ACCESS_SERVICE_';
-	private const RIGHTS_ERROR = 'START_WORKFLOW_RIGHTS_ERROR';
-
 	public function checkStartWorkflow(CheckStartWorkflowRequest $request): CheckAccessResponse
 	{
 		$hasAccess =
@@ -29,7 +26,9 @@ class WorkflowAccessService
 		$response = new CheckAccessResponse();
 		if (!$hasAccess)
 		{
-			$response->addError(new Error(Loc::getMessage(static::PREFIX_LOC_ID . static::RIGHTS_ERROR)));
+			$response->addError(new Error(Loc::getMessage(
+				'BIZPROC_LIB_API_WORKFLOW_ACCESS_SERVICE_START_WORKFLOW_RIGHTS_ERROR'
+			)));
 		}
 
 		return $response;
@@ -51,9 +50,7 @@ class WorkflowAccessService
 
 		if (!$workflowUser && !$this->canViewWorkflow($request->workflowId, $request->userId))
 		{
-			return CanViewTimelineResponse::createError(
-				new \Bitrix\Bizproc\Error(Loc::getMessage(static::PREFIX_LOC_ID . 'VIEW_TIMELINE_RIGHTS_ERROR_1'))
-			);
+			return CanViewTimelineResponse::createError(static::getViewAccessDeniedError());
 		}
 
 		return new CanViewTimelineResponse();
@@ -74,5 +71,12 @@ class WorkflowAccessService
 				]
 			)
 		);
+	}
+
+	public static function getViewAccessDeniedError(): \Bitrix\Bizproc\Error
+	{
+		return new \Bitrix\Bizproc\Error(Loc::getMessage(
+			'BIZPROC_LIB_API_WORKFLOW_ACCESS_SERVICE_VIEW_TIMELINE_RIGHTS_ERROR_MSGVER_1'
+		));
 	}
 }

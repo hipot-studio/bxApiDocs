@@ -337,7 +337,7 @@ class TasksInterfaceCountersComponent extends \CBitrixComponent
 			CounterDictionary::COUNTER_MUTED_NEW_COMMENTS,
 		];
 
-		if ($this->arParams['GROUP_ID'] > 0)
+		if ($this->arParams['GROUP_ID'] > 0 && Counter::isSonetEnable())
 		{
 			$defaultCounters[] = CounterDictionary::COUNTER_GROUP_EXPIRED;
 			$defaultCounters[] = CounterDictionary::COUNTER_GROUP_COMMENTS;
@@ -396,15 +396,30 @@ class TasksInterfaceCountersComponent extends \CBitrixComponent
 		{
 			$this->arParams['COUNTERS'] = $this->getDefaultCounters();
 		}
+
 		if (!is_array($this->arParams['COUNTERS']))
 		{
 			throw new SystemException(Loc::getMessage('TASKS_COUNTERS_SYSTEM_ERROR'));
 		}
 
+		$this->arParams['COUNTERS'] = $this->prepareCounters();
+
 		if (is_null($this->arParams['ROLE']))
 		{
 			$this->arParams['ROLE'] = Counter\Role::ALL;
 		}
+	}
+
+	private function prepareCounters()
+	{
+		$counters = $this->arParams['COUNTERS'];
+
+		if (!Counter::isSonetEnable())
+		{
+			$counters = array_diff($counters, CounterDictionary::MAP_SONET_OTHER);
+		}
+
+		return $counters;
 	}
 
 	/**

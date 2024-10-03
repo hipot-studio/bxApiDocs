@@ -19,7 +19,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\UserTable;
 use Bitrix\Tasks\Access\Model\UserModel;
 use Bitrix\Tasks\Access\Permission\PermissionDictionary;
-use Bitrix\Tasks\Access\Permission\TasksPermissionTable;
+use Bitrix\Tasks\Access\Permission\PermissionRegistry;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\Flow\Internal\FlowTable;
 use Bitrix\Tasks\Flow\Internal\FlowTaskTable;
@@ -86,7 +86,6 @@ class TaskQueryBuilder implements QueryBuilderInterface
 	public const ALIAS_TASK_SCENARIO = 'SCR';
 	public const ALIAS_TASK_REGULAR = 'REG';
 
-	private const DEFAULT_LIMIT = 50;
 	private TaskQuery $taskQuery;
 	private ?UserModel $user;
 	private Query $query;
@@ -95,7 +94,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 	private ?array $departmentMembers;
 	private array $runtimeFields = [];
 	private ?array $roles;
-	private ?array $permissions;
+	private ?array $permissions = null;
 	private static string $lastBuiltSql;
 
 	/**
@@ -312,28 +311,14 @@ class TaskQueryBuilder implements QueryBuilderInterface
 	 */
 	private function getPermissions(): array
 	{
-		if (!isset($this->permissions))
+		if (is_array($this->permissions))
 		{
-			$roles = $this->getUserRoles();
-			if (empty($roles))
-			{
-				return [];
-			}
-
-			$res = TasksPermissionTable::getList([
-				'select' => ['PERMISSION_ID'],
-				'filter' => [
-					'@ROLE_ID' => $roles,
-					'=VALUE' => PermissionDictionary::VALUE_YES
-				]
-			]);
-
-			$this->permissions = [];
-			foreach ($res as $row)
-			{
-				$this->permissions[$row['PERMISSION_ID']] = $row['PERMISSION_ID'];
-			}
+			return $this->permissions;
 		}
+
+		$roles = $this->getUserRoles();
+
+		$this->permissions = PermissionRegistry::getInstance()->getPermissions($roles);
 
 		return $this->permissions;
 	}
@@ -382,7 +367,8 @@ class TaskQueryBuilder implements QueryBuilderInterface
 	 */
 	private function buildLimit(): self
 	{
-		$limit = $this->taskQuery->getLimit() ?? self::DEFAULT_LIMIT;
+		$limit = $this->taskQuery->getLimit();
+		$limit = 0 === $limit ? null : $limit; // compatability with orm query
 		$offset = $this->taskQuery->getOffset();
 
 		$this->query

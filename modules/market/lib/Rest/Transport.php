@@ -20,7 +20,7 @@ if (!defined('REST_MARKETPLACE_URL'))
 class Transport
 {
 	private const VERSION = 1;
-	private const API_VERSION = 2;
+	private const API_VERSION = 3;
 
 	private string $serviceDomain;
 

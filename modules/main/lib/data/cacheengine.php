@@ -3,7 +3,6 @@ namespace Bitrix\Main\Data;
 
 use Bitrix\Main\Config;
 use Bitrix\Main\Application;
-use Bitrix\Main\Data\LocalStorage;
 
 abstract class CacheEngine implements CacheEngineInterface, CacheEngineStatInterface, LocalStorage\Storage\CacheEngineInterface
 {
@@ -414,7 +413,7 @@ abstract class CacheEngine implements CacheEngineInterface, CacheEngineStatInter
 
 		if (Cache::getShowCacheStat())
 		{
-			$this->read = mb_strlen(serialize($vars), '8bit');
+			$this->read = strlen(serialize($vars));
 			$this->path = $baseDir . $initDir . $filename;
 		}
 
@@ -469,7 +468,7 @@ abstract class CacheEngine implements CacheEngineInterface, CacheEngineStatInter
 
 		if (Cache::getShowCacheStat())
 		{
-			$this->written = mb_strlen(serialize($vars), '8bit');
+			$this->written = strlen(serialize($vars));
 			$this->path = $baseDir . $initDir . $filename;
 		}
 	}
@@ -521,7 +520,7 @@ abstract class CacheEngine implements CacheEngineInterface, CacheEngineStatInter
 		{
 			$keyPrefix = $this->sid . '|' .$dir . '|';
 			$partitionKeys = $this->getSet($initListKey);
-			
+
 			// A temporary optimization solution
 			if ($this->getConnectionName() != 'cache.redis')
 			{

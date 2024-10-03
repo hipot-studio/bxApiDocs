@@ -6,6 +6,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorRequest
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 
 
 class TariffRestriction extends Base
@@ -19,6 +20,11 @@ class TariffRestriction extends Base
 
 	public function beforeRequest(IntegratorRequest $request): ?IntegratorResponse
 	{
+		if (!Loader::includeModule('bitrix24'))
+		{
+			return null;
+		}
+
 		if (Feature::isFeatureEnabled('bi_constructor'))
 		{
 			return null;

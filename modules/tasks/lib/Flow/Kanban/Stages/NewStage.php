@@ -3,10 +3,7 @@
 namespace Bitrix\Tasks\Flow\Kanban\Stages;
 
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\Flow\Integration\BizProc\TriggerCommand;
 use Bitrix\Tasks\Flow\Kanban\AbstractStage;
-use Bitrix\Tasks\Integration\Bizproc\Document\Task;
-use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Kanban\Stage;
 use Bitrix\Tasks\Kanban\StagesTable;
 

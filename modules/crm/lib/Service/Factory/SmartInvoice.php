@@ -217,6 +217,10 @@ class SmartInvoice extends Dynamic
 				);
 				$oldInvoicePermissionEntity = $userPermissions::getPermissionEntityType(\CCrmOwnerType::Invoice);
 				$permissions = RolePermission::getByEntityId($oldInvoicePermissionEntity);
+				foreach ($permissions as $roleId => $rolePermissions)
+				{
+					$permissions[$roleId] = array_merge($rolePermissions, \CCrmRole::getBasePermissionSetForEntity(new \Bitrix\Crm\CategoryIdentifier(\CCrmOwnerType::SmartInvoice, $defaultCategoryId)));
+				}
 				$permissionsCopingResult = RolePermission::setByEntityId($smartInvoicePermissionEntity, $permissions);
 				if (!$permissionsCopingResult->isSuccess())
 				{

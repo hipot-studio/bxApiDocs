@@ -808,7 +808,7 @@ class RestService extends \IRestService
 
 		$workflowParameters = isset($params['PARAMETERS']) && is_array($params['PARAMETERS']) ? $params['PARAMETERS'] : [];
 
-		$workflowParameters[\CBPDocument::PARAM_TAGRET_USER] = self::getCurrentUserId();
+		$workflowParameters[\CBPDocument::PARAM_TAGRET_USER] = 'user_' . self::getCurrentUserId();
 
 		$errors = [];
 		$workflowId = \CBPDocument::startWorkflow($templateId, $documentId, $workflowParameters, $errors);
@@ -1824,7 +1824,7 @@ class RestService extends \IRestService
 
 			if ($fileFields)
 			{
-				return file_get_contents($fileFields['tmp_name']);
+				return \Bitrix\Main\IO\File::getFileContents($fileFields['tmp_name']);
 			}
 		}
 		throw new RestException('Incorrect field TEMPLATE_DATA!', self::ERROR_TEMPLATE_VALIDATION_FAILURE);

@@ -418,7 +418,7 @@ class CSocNetGroup extends CAllSocNetGroup
 				{
 					$chatId = $chatData[$ID];
 
-					$chat = new CIMChat();
+					$chat = new CIMChat(0);
 
 					if(!empty($arFields["NAME"]))
 					{

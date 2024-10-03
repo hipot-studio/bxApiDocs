@@ -4,6 +4,7 @@ use Bitrix\Catalog;
 use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\Access\Model\StoreDocumentElement;
+use Bitrix\Catalog\Document\DocumentFieldsManager;
 use Bitrix\Catalog\Document\StoreDocumentTableManager;
 use Bitrix\Catalog\Config\Feature;
 use Bitrix\Catalog\Config\State;
@@ -14,6 +15,7 @@ use Bitrix\Catalog\Url\InventoryManagementSourceBuilder;
 use Bitrix\Catalog\v2\Integration\UI\EntityEditor\StoreDocumentProvider;
 use Bitrix\Catalog\v2\IoC\ServiceContainer;
 use Bitrix\Main\Engine\Contract\Controllerable;
+use Bitrix\Main\Engine\Response\AjaxJson;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Sale\PriceMaths;
@@ -26,6 +28,7 @@ use Bitrix\Crm\Integration\DocumentGenerator\DataProvider\StoreDocumentMoving;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider\StoreDocumentDeduct;
 use Bitrix\Catalog\v2\Contractor;
 use Bitrix\Crm\Settings\EntityEditSettings;
+use Bitrix\Main\Config\Option;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -405,6 +408,14 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		;
 	}
 
+	private function checkDocumentCardEditRights(): bool
+	{
+		return
+			$this->checkDocumentBaseRights()
+			&& AccessController::getCurrent()->check(ActionDictionary::ACTION_STORE_DOCUMENT_CARD_EDIT)
+		;
+	}
+
 	private function checkDocumentConductRights(): bool
 	{
 		$documentType = $this->getDocumentType();
@@ -452,6 +463,54 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 	private function checkEditExtraPriceRights(): bool
 	{
 		return $this->accessController->check(ActionDictionary::ACTION_PRODUCT_PRICE_EXTRA_EDIT);
+	}
+
+	public function changeRequiredAction(string $documentType, string $fieldName, string $required): AjaxJson
+	{
+		$result = new Bitrix\Main\Result();
+		if (
+			!in_array(
+				$documentType,
+				[
+					StoreDocumentTable::TYPE_ARRIVAL,
+					StoreDocumentTable::TYPE_STORE_ADJUSTMENT,
+					StoreDocumentTable::TYPE_MOVING,
+					StoreDocumentTable::TYPE_DEDUCT
+				],
+				true
+			)
+		)
+		{
+			$result->addError(
+				new Main\Error(Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_DOC_TYPE_ERROR'))
+			);
+
+			return AjaxJson::createError($result->getErrorCollection());
+		}
+		$this->documentType = $documentType;
+
+		$result = $this->validateRequestBeforeAction();
+		if (!$result->isSuccess())
+		{
+			return AjaxJson::createError($result->getErrorCollection());
+		}
+
+		if (!$this->checkDocumentCardEditRights())
+		{
+			$result->addError(
+				new Main\Error(Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_CARD_NO_WRITE_RIGHTS_ERROR'))
+			);
+
+			return AjaxJson::createError($result->getErrorCollection());
+		}
+
+		$result =
+			$required === 'Y'
+				? DocumentFieldsManager::addRequiredField($documentType, $fieldName)
+				: DocumentFieldsManager::deleteRequiredField($documentType, $fieldName)
+		;
+
+		return $result->isSuccess() ? AjaxJson::createSuccess() : AjaxJson::createError($result->getErrorCollection());
 	}
 
 	public function saveAction($fields = []): array
@@ -547,7 +606,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 			|| $this->getDocumentType() ===	StoreDocumentTable::TYPE_STORE_ADJUSTMENT
 		)
 		{
-			$decodedProducts = $this->decodeProducts($fields['DOCUMENT_PRODUCTS']);
+			$decodedProducts = $this->decodeProducts($fields['DOCUMENT_PRODUCTS'] ?? null);
 			if (is_array($decodedProducts))
 			{
 				$this->updateBarcodes($decodedProducts);
@@ -955,7 +1014,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		$preparedFields['CREATED_BY'] = Main\Engine\CurrentUser::get()->getId();
 		$preparedFields['MODIFIED_BY'] = Main\Engine\CurrentUser::get()->getId();
 
-		if ($fields['DOCUMENT_PRODUCTS'])
+		if (array_key_exists('DOCUMENT_PRODUCTS', $fields))
 		{
 			$products = $this->decodeProducts($fields['DOCUMENT_PRODUCTS']);
 			$element = [];
@@ -1291,6 +1350,11 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 
 	private function decodeProducts($encodedProducts)
 	{
+		if ($encodedProducts === null || $encodedProducts === '')
+		{
+			return null;
+		}
+
 		return CUtil::JsObjectToPhp($encodedProducts);
 	}
 

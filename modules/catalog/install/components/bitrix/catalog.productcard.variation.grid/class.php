@@ -371,21 +371,21 @@ class CatalogProductVariationGridComponent
 
 	private function processGridActions(Request $request): void
 	{
-		$actionButton = 'action_button_'.$this->getGridId();
+		$actionButton = 'action_button_' . $this->getGridId();
 		$gridGroupAction = $request[$actionButton] ?? null;
 		$gridItemAction = $request['action'] ?? null;
 		$gridAction = $request['grid_action'] ?? null;
 
-		if ($gridGroupAction && $gridGroupAction === 'delete')
+		if ($gridGroupAction === 'delete')
 		{
 			$ids = $request['ID'] ?? [];
-			$actionAllRows = 'action_all_rows_'.$this->getGridId();
+			$actionAllRows = 'action_all_rows_' . $this->getGridId();
 			$allRows = ($request[$actionAllRows] ?? 'N') === 'Y';
 
 			$this->processGridDelete($ids, $allRows);
 			$this->checkGridStateCurrentPage();
 		}
-		elseif ($gridItemAction && $gridItemAction === 'deleteRow')
+		elseif ($gridItemAction === 'deleteRow')
 		{
 			$id = $request['id'] ?? null;
 
@@ -913,6 +913,10 @@ class CatalogProductVariationGridComponent
 			'SHOW_PAGESIZE' => true,
 			'SHOW_ACTION_PANEL' => !$this->getProduct()->isSimple() && !$isReadOnly,
 			'ENABLE_FIELDS_SEARCH' => 'Y',
+			'USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP' => \Bitrix\Main\ModuleManager::isModuleInstalled('ui'),
+			'CONFIG' => [
+				'popupWidth' => 800,
+			],
 		];
 	}
 

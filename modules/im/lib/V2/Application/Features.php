@@ -16,7 +16,8 @@ class Features
 	public function __construct(
 		public readonly bool $chatV2,
 		public readonly bool $chatDepartments,
-		public readonly bool $copilot,
+		public readonly bool $copilotActive,
+		public readonly bool $copilotAvailable,
 		public readonly bool $sidebarLinks,
 		public readonly bool $sidebarFiles,
 		public readonly bool $sidebarBriefs,
@@ -27,11 +28,10 @@ class Features
 
 	public static function get(): self
 	{
-
-
 		return new self(
 			!Settings::isLegacyChatActivated(),
 			Structure::isSyncAvailable(),
+			CopilotChat::isActive(),
 			CopilotChat::isAvailable(),
 			Option::get('im', 'im_link_url_migration', 'N') === 'Y',
 			Option::get('im', 'im_link_file_migration', 'N') === 'Y',

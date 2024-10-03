@@ -63,7 +63,13 @@ class AverageTimeProvider
 
 		foreach ($tasks as $task)
 		{
-			$duration = DatePresenter::get($now, $task[$this->getDateField()])->getSecondTotal();
+			$date = $task[$this->getDateField()] ?? null;
+			if ($date === null)
+			{
+				continue;
+			}
+
+			$duration = DatePresenter::get($now, $date)->getSecondTotal();
 			$sum += $duration;
 			++$count;
 		}

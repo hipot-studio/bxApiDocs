@@ -37,6 +37,7 @@ class Cookie extends Http\Cookie
 		if ($cookiePrefix === null)
 		{
 			$cookiePrefix = Config\Option::get("main", "cookie_name", "BITRIX_SM") . "_";
+			$cookiePrefix = static::normalizeName($cookiePrefix);
 		}
 		if (!str_starts_with($name, $cookiePrefix))
 		{
@@ -122,5 +123,16 @@ class Cookie extends Http\Cookie
 		$domain = '';
 
 		return $domain;
+	}
+
+	/**
+	 * Normalizes a name for a cookie.
+	 * @param string $name
+	 * @return string
+	 */
+	public static function normalizeName(string $name): string
+	{
+		// cookie name cannot contain "=", ",", ";", " ", "\t", "\r", "\n", "\013", or "\014"
+		return preg_replace("/[=,; \\t\\r\\n\\013\\014]/", '', $name);
 	}
 }

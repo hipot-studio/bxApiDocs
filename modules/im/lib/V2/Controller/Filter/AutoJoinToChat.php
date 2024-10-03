@@ -37,7 +37,7 @@ class AutoJoinToChat extends Base
 				return null;
 			}
 
-			if ($chat->hasAccess())
+			if ($chat->checkAccess()->isSuccess())
 			{
 				$chat->join(false);
 			}

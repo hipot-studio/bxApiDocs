@@ -95,7 +95,7 @@ class CCrmDocument
 		$ignoredUserTypes = array(
 			'string', 'double', 'boolean', 'integer', 'datetime', 'file', 'employee', 'enumeration', 'video',
 			'string_formatted', 'webdav_element_history', 'disk_version', 'disk_file', 'vote', 'url_preview', 'hlblock',
-			'mail_message',
+			'mail_message', 'snils',
 		);
 		$arTypes = $USER_FIELD_MANAGER->GetUserType();
 		foreach ($arTypes as $arType)
@@ -1292,7 +1292,7 @@ class CCrmDocument
 		$entityTypeId = CCrmOwnerType::ResolveID($arDocumentID['TYPE']);
 		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory($entityTypeId);
 
-		if (isset($factory) && ($factory->isAutomationEnabled() || $factory->isBizProcEnabled()))
+		if (isset($factory))
 		{
 			return new Crm\Integration\BizProc\Document\ValueCollection\Item(
 				$entityTypeId,
@@ -1853,7 +1853,7 @@ class CCrmDocument
 
 		if (!static::isDocumentExists($documentId))
 		{
-			throw new Exception(GetMessage('CRM_DOCUMENT_ELEMENT_IS_NOT_FOUND'));
+			throw new \Bitrix\Main\ArgumentException(GetMessage('CRM_DOCUMENT_ELEMENT_IS_NOT_FOUND'));
 		}
 
 		return $arDocumentID['TYPE'];
@@ -2385,7 +2385,7 @@ class CCrmDocument
 			&& !self::isResumeWorkflowAvailable($documentId, $rootActivity->getDocumentEventType())
 		)
 		{
-			throw new Exception(GetMessage('CRM_DOCUMENT_RESUME_RESTRICTED'));
+			throw new \Bitrix\Main\SystemException(GetMessage('CRM_DOCUMENT_RESUME_RESTRICTED'));
 		}
 
 		if ($status === CBPWorkflowStatus::Running && $rootActivity->workflow->isNew())

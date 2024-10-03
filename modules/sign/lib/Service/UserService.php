@@ -6,7 +6,7 @@ use Bitrix\Sign\Item\User;
 use CSite;
 use CUser;
 
-final class UserService
+class UserService
 {
 	public function getUserById(int $userId): ?User
 	{
@@ -44,5 +44,10 @@ final class UserService
 		}
 
 		return null;
+	}
+
+	public function getUserTimezoneOffsetRelativeToServer(int $userId, bool $forced = false): int
+	{
+		return \CTimeZone::GetOffset($userId, $forced);
 	}
 }

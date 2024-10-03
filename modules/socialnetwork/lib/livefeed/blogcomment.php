@@ -153,6 +153,6 @@ final class BlogComment extends Provider
 
 	public function getSuffix(): string
 	{
-		return '2';
+		return '3';
 	}
 }

@@ -252,6 +252,7 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 	{
 		return [
 			'PRICE' => 'PRICE',
+			'BASE_PRICE' => 'BASE_PRICE',
 			'VAT_INCLUDED' => 'VAT_INCLUDED',
 			'VAT_RATE' => 'VAT_RATE'
 		];

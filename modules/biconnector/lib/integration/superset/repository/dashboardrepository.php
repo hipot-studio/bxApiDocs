@@ -52,11 +52,15 @@ final class DashboardRepository
 				ormObject: $dashboard,
 				dashboardData: $dashboardData
 			);
-			$dashboardItem->setEditUrl(
-				$dashboardItem->getEditUrl()
-				. '?native_filters=' . $dashboardItem->getNativeFilter()
-				. '&form=y'
-			);
+
+			$editUrl = $dashboardItem->getEditUrl();
+			$nativeFilter = $dashboardItem->getNativeFilter();
+			if ($nativeFilter)
+			{
+				$editUrl .= '?native_filters=' . $nativeFilter;
+			}
+
+			$dashboardItem->setEditUrl($editUrl);
 			$dashboards[] = $dashboardItem;
 		}
 

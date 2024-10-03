@@ -51,6 +51,7 @@ final class AIManager
 	private const AI_COPILOT_FEATURE_NAME = 'crm_copilot';
 	private const AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME = 'AI_CALL_PROCESSING_ALLOWED_AUTO_V2';
 	private const AI_LOGGER_ENABLED_OPTION_NAME = 'USE_ADDM2LOG_FOR_AI';
+	private const AI_IGNORE_BAAS = 'AI_IGNORE_BAAS';
 	private const AI_LIMIT_SLIDERS_MAP = [
 		self::AI_LIMIT_CODE_DAILY => 'limit_copilot_max_number_daily_requests',
 		self::AI_LIMIT_CODE_MONTHLY => 'limit_copilot_requests',
@@ -75,6 +76,7 @@ final class AIManager
 	{
 		static $regionBlacklist = [
 			'ua',
+			'cn',
 		];
 
 		$region = Application::getInstance()->getLicense()->getRegion();
@@ -155,34 +157,44 @@ final class AIManager
 		;
 	}
 
+	public static function isBaasServiceIgnored(): bool
+	{
+		return (bool)Option::get('crm', self::AI_IGNORE_BAAS, false);
+	}
+
+	public static function setBaasServiceIgnored(bool $isAllowed): void
+	{
+		Option::set('crm', self::AI_IGNORE_BAAS, $isAllowed);
+	}
+
 	public static function isBaasServiceAvailable(): bool
 	{
-		if (!Loader::includeModule('baas'))
+		if (Loader::includeModule('baas'))
 		{
-			return false;
+			if (!self::$baasService)
+			{
+				self::$baasService = new BaasTokenService();
+			}
+
+			return self::$baasService->isAvailable();
 		}
 
-		if (!self::$baasService)
-		{
-			self::$baasService = new BaasTokenService();
-		}
-
-		return self::$baasService->isAvailable();
+		return self::isBaasServiceIgnored();
 	}
 
 	public static function isBaasServiceHasPackage(): bool
 	{
-		if (!Loader::includeModule('baas'))
+		if (Loader::includeModule('baas'))
 		{
-			return false;
+			if (!self::$baasService)
+			{
+				self::$baasService = new BaasTokenService();
+			}
+
+			return self::$baasService->hasPackage() && self::$baasService->canConsume();
 		}
 
-		if (!self::$baasService)
-		{
-			self::$baasService = new BaasTokenService();
-		}
-
-		return self::$baasService->hasPackage() && self::$baasService->canConsume();
+		return self::isBaasServiceIgnored();
 	}
 
 	public static function isAILicenceAccepted(int $userId = null): bool
@@ -607,30 +619,30 @@ final class AIManager
 		}
 		$fileId = max($storageElementIds);
 
-		$bFileId = null;
+		$fileIdFormBFile = null;
 		if ($storageTypeId === StorageType::Disk && \Bitrix\Main\Loader::includeModule('disk'))
 		{
-			$bFileId = \Bitrix\Disk\File::loadById($fileId)?->getFileId();
+			$fileIdFormBFile = \Bitrix\Disk\File::loadById($fileId)?->getFileId();
 		}
 		elseif ($storageTypeId === StorageType::File)
 		{
-			$bFileId = $fileId;
+			$fileIdFormBFile = $fileId;
 		}
 
-		if ($bFileId <= 0)
+		if ($fileIdFormBFile <= 0)
 		{
 			self::logger()->error(
 				'{date}: Error while check for suitable audios. Wrong bFileId {bFileId}' . PHP_EOL,
 				[
-					'bFileId' => $bFileId,
+					'bFileId' => $fileIdFormBFile,
 				]
 			);
-			$result->addError(new Error('Wrong bFileId', 'WRONG_BFILE_ID'));
+			$result->addError(new Error('Wrong fileIdFormBFile', 'WRONG_BFILE_ID'));
 
 			return $result;
 		}
 
-		$file = \CFile::GetFileArray($bFileId);
+		$file = \CFile::GetFileArray($fileIdFormBFile);
 		$fileExt = (string)\GetFileExtension($file['ORIGINAL_NAME'] ?? '');
 
 		// check if wrong extension:

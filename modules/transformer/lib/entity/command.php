@@ -71,6 +71,7 @@ class CommandTable extends Main\Entity\DataManager
 
 			(new StringField('GUID'))
 				->configureRequired()
+				->configureUnique()
 				->configureSize(32)
 			,
 
@@ -131,40 +132,58 @@ class CommandTable extends Main\Entity\DataManager
 	 */
 	public static function deleteOld(int $days = 22, $portion = 100): int
 	{
+		$query = self::query()
+			->setSelect(['ID'])
+			->where(
+				self::getOldRecordsFilter($days),
+			)
+			->addOrder('ID')
+			->setLimit($portion)
+		;
+
+		$ids = $query->fetchCollection()->getIdList();
+		if (empty($ids))
+		{
+			return 0;
+		}
+
+		$sql = new Main\DB\SqlExpression(
+			'DELETE FROM ?# WHERE ID IN (' . implode(',', $ids) . ')',
+			self::getTableName(),
+		);
+
+		Main\Application::getConnection()->query((string)$sql);
+
+		self::cleanCache();
+
+		return count($ids);
+	}
+
+	private static function getOldRecordsFilter(int $days): Main\ORM\Query\Filter\ConditionTree
+	{
 		$cleanTime = new Date();
 		$cleanTime->add("-{$days} day");
 
-		$query = static::query();
-		$filter = $query::filter()
+		return self::query()::filter()
 			->logic('or')
 			->whereNull('UPDATE_TIME')
 			->where('UPDATE_TIME', '<', $cleanTime)
 		;
-
-		$records = static::getList([
-			'select' => ['ID'],
-			'order' => ['ID' => 'ASC'],
-			'filter' => $filter,
-			'limit' => $portion,
-		]);
-
-		$deleted = 0;
-
-		while($record = $records->fetch())
-		{
-			$result = static::delete($record['ID']);
-			if($result->isSuccess())
-			{
-				$deleted++;
-			}
-		}
-
-		return $deleted;
 	}
 
 	public static function deleteOldAgent($days = 22, $portion = 100)
 	{
-		static::deleteOld($days, $portion);
+		$deletedCount = static::deleteOld($days, $portion);
+
+		$isThereMoreToClean = $deletedCount >= $portion;
+
+		if ($isThereMoreToClean)
+		{
+			global $pPERIOD;
+
+			// run this agent once again after 60 seconds
+			$pPERIOD = 60;
+		}
 
 		return "\\Bitrix\\Transformer\\Entity\\CommandTable::deleteOldAgent({$days}, {$portion});";
 	}

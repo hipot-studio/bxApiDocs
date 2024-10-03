@@ -52,16 +52,38 @@ class Scope
 	 */
 	public function getUserScopes(string $entityTypeId, ?string $moduleId = null): array
 	{
+		return $this->getScopes($entityTypeId, $moduleId);
+	}
+
+	public function getAllUserScopes(string $entityTypeId, ?string $moduleId = null): array
+	{
+		return $this->getScopes($entityTypeId, $moduleId, false);
+	}
+	private function getScopes(string $entityTypeId, ?string $moduleId = null, bool $excludeEmptyAccessCode = true): array
+	{
 		static $results = [];
 		$key = $entityTypeId . '-' . $moduleId;
 
 		if (!isset($results[$key]))
 		{
 			$result = [];
-			$scopeIds = $this->getScopesIdByUser($moduleId);
-			$entityTypeIds = ($this->getEntityTypeIdMap()[$entityTypeId] ?? [$entityTypeId]);
+			$isAdminForEntity = $moduleId
+				&& (
+					($scopeAccess = ScopeAccess::getInstance($moduleId))
+					&& $scopeAccess->isAdminForEntityTypeId($entityTypeId)
+				);
+			if (!$isAdminForEntity)
+			{
+				$filter['@ID'] = $this->getScopesIdByUser();
+			}
+			$filter['@ENTITY_TYPE_ID'] = ($this->getEntityTypeIdMap()[$entityTypeId] ?? [$entityTypeId]);
 
-			if (!empty($scopeIds))
+			if ($excludeEmptyAccessCode)
+			{
+				$filter['!=ACCESS_CODE'] = '';
+			}
+
+			if ($isAdminForEntity || !empty($filter['@ID']))
 			{
 				$scopes = EntityFormConfigTable::getList([
 					'select' => [
@@ -69,30 +91,30 @@ class Scope
 						'NAME',
 						'ACCESS_CODE' => '\Bitrix\Ui\EntityForm\EntityFormConfigAcTable:CONFIG.ACCESS_CODE'
 					],
-					'filter' => [
-						'@ID' => $scopeIds,
-						'@ENTITY_TYPE_ID' => $entityTypeIds
-					]
+					'filter' => $filter
 				]);
 				foreach ($scopes as $scope)
 				{
 					$result[$scope['ID']]['NAME'] = HtmlFilter::encode($scope['NAME']);
-					if (!isset($result[$scope['ID']]['ACCESS_CODES'][$scope['ACCESS_CODE']]))
+					if (!isset($result[$scope['ID']]['ACCESS_CODES'][$scope['ACCESS_CODE']]) && isset($scope['ACCESS_CODE']))
 					{
 						$accessCode = new AccessCode($scope['ACCESS_CODE']);
 						$member = (new DataProvider())->getEntity($accessCode->getEntityType(),
-							$accessCode->getEntityId());
+																  $accessCode->getEntityId());
 						$result[$scope['ID']]['ACCESS_CODES'][$scope['ACCESS_CODE']] = $scope['ACCESS_CODE'];
 						$result[$scope['ID']]['MEMBERS'][$scope['ACCESS_CODE']] = $member->getMetaData();
 					}
 				}
 			}
+
 			$results[$key] = $result;
 		}
-
 		return $results[$key];
 	}
 
+	/**
+	 * This method must return entityTypeId values that correspond to a single CRM entity only.
+	 */
 	protected function getEntityTypeIdMap(): array
 	{
 		return [
@@ -123,7 +145,7 @@ class Scope
 		return $this->user;
 	}
 
-	private function getScopesIdByUser(?string $moduleId = null): array
+	private function getScopesIdByUser(): array
 	{
 		$accessCodes = $this->getUser()->GetAccessCodes();
 		$this->prepareAccessCodes($accessCodes);
@@ -131,20 +153,11 @@ class Scope
 		$params = [
 			'select' => [
 				'CONFIG_ID'
+			],
+			'filter' => [
+				'@ACCESS_CODE' => $accessCodes
 			]
 		];
-
-		if(
-			!$moduleId
-			||
-			(
-				($scopeAccess = ScopeAccess::getInstance($moduleId))
-				&& !$scopeAccess->isAdmin()
-			)
-		)
-		{
-			$params['filter'] = ['@ACCESS_CODE' => $accessCodes];
-		}
 
 		$scopes = EntityFormConfigAcTable::getList($params)->fetchAll();
 

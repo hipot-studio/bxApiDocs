@@ -33,6 +33,7 @@ class CCloudSecurityService_HotBox
 
 	public function CreatePrefixKey($UserName, $Prefix)
 	{
+		$this->service->SetLocation($this->arBucket['LOCATION']);
 		$response = $this->service->SendRequest(
 			$this->arBucket['SETTINGS'],
 			'PUT',
@@ -98,6 +99,7 @@ class CCloudSecurityService_HotBox
 		$marker = '';
 		while (true)
 		{
+			$this->service->SetLocation($this->arBucket['LOCATION']);
 			$response = $this->service->SendRequest(
 				$this->arBucket['SETTINGS'],
 				'GET',
@@ -153,6 +155,7 @@ class CCloudSecurityService_HotBox
 
 	public function DeletePrefixKey($UserName, $prefix)
 	{
+		$this->service->SetLocation($this->arBucket['LOCATION']);
 		$this->service->SendRequest(
 			$this->arBucket['SETTINGS'],
 			'DELETE',

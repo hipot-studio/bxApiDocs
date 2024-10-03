@@ -2413,6 +2413,7 @@ class TaskFilterBuilder
 			switch ($filterKey)
 			{
 				case 'META::ID_OR_NAME':
+				case 'TITLE':
 					$filter[$filterKey] = '%' . $this->prepareForSprintf((string)$field) . '%';
 					break;
 

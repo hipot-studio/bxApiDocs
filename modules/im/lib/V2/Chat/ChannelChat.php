@@ -27,7 +27,7 @@ class ChannelChat extends GroupChat
 	protected function updateStateAfterUsersAdd(array $usersToAdd): Chat
 	{
 		$result = parent::updateStateAfterUsersAdd($usersToAdd);
-		Recent::raiseChat($this, $this->getRelations(['FILTER' => ['USER_ID' => $usersToAdd]]), new DateTime());
+		Recent::raiseChat($this, $this->getRelationsByUserIds($usersToAdd), new DateTime());
 
 		return $result;
 	}

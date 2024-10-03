@@ -138,7 +138,7 @@ class Migrator
 			'database' => $DBName,
 			'login' => $DBLogin,
 			'password' => $DBPassword,
-			'options' =>  ((!defined("DBPersistent") || DBPersistent) ? 1 : 0) | ((defined("DELAY_DB_CONNECT") && DELAY_DB_CONNECT === true) ? 2 : 0)
+			'options' =>  ((defined('DBPersistent') && DBPersistent) ? 1 : 0) | ((defined("DELAY_DB_CONNECT") && DELAY_DB_CONNECT === true) ? 2 : 0)
 		);
 		$ar['connections']['readonly'] = true;
 

@@ -619,13 +619,21 @@ class CAllCrmInvoice
 
 	public static function GetStatusList()
 	{
-		$result = array();
+		static $cache = null;
+
+		if ($cache !== null)
+		{
+			return $cache;
+		}
+
+		$result = [];
 
 		$dbRes = Bitrix\Crm\Invoice\InvoiceStatus::getList(['order' => ['SORT' => 'ASC']]);
 		while ($status = $dbRes->fetch())
 		{
 			$result[$status['STATUS_ID']] = $status;
 		}
+		$cache = $result;
 
 		return $result;
 	}
@@ -4382,7 +4390,26 @@ class CAllCrmInvoice
 		)
 		{
 			$url = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Invoice, $invoiceID);
+			$absoluteUrl = CCrmUrlUtil::ToAbsoluteUrl($url);
 			$topic = $arFields['ORDER_TOPIC'] ?? $invoiceID;
+
+			$messageCallback = static function (?string $languageId = null) use ($url, $topic) {
+				return Loc::getMessage(
+					'CRM_INVOICE_RESPONSIBLE_IM_NOTIFY',
+					[ '#title#' => '<a href="'.htmlspecialcharsbx($url).'">'.htmlspecialcharsbx($topic).'</a>' ],
+					$languageId,
+				);
+			};
+
+			$messageOutCallback = static function (?string $languageId = null) use ($absoluteUrl, $topic) {
+				$message = Loc::getMessage(
+					'CRM_INVOICE_RESPONSIBLE_IM_NOTIFY',
+					[ '#title#' => htmlspecialcharsbx($topic) ],
+					$languageId,
+				);
+
+				return "{$message} ({$absoluteUrl})";
+			};
 
 			CIMNotify::Add(
 				array(
@@ -4395,8 +4422,8 @@ class CAllCrmInvoice
 					'NOTIFY_EVENT' => 'changeAssignedBy',
 					'NOTIFY_TAG' => "CRM|INVOICE|{$invoiceID}",
 					'TO_USER_ID' => $responsibleID,
-					'NOTIFY_MESSAGE' => GetMessage('CRM_INVOICE_RESPONSIBLE_IM_NOTIFY', array('#title#' => '<a href="'.htmlspecialcharsbx($url).'">'.htmlspecialcharsbx($topic).'</a>')),
-					'NOTIFY_MESSAGE_OUT' => GetMessage('CRM_INVOICE_RESPONSIBLE_IM_NOTIFY', array('#title#' => htmlspecialcharsbx($topic)))." (".CCrmUrlUtil::ToAbsoluteUrl($url).")"
+					'NOTIFY_MESSAGE' => $messageCallback,
+					'NOTIFY_MESSAGE_OUT' => $messageOutCallback,
 				)
 			);
 		}
@@ -4405,6 +4432,11 @@ class CAllCrmInvoice
 	}
 	private static function SynchronizeLiveFeedEvent($invoiceID, $params)
 	{
+		if (!\Bitrix\Crm\Integration\Socialnetwork\Livefeed\AvailabilityHelper::isAvailable())
+		{
+			return;
+		}
+
 		$invoiceID = intval($invoiceID);
 		if($invoiceID <= 0)
 		{
@@ -4497,12 +4529,35 @@ class CAllCrmInvoice
 				);
 
 				$url = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Invoice, $invoiceID);
+				$absoluteUrl = CCrmUrlUtil::ToAbsoluteUrl($url);
+
+				$title = '<a href="'.htmlspecialcharsbx($url).'">'.htmlspecialcharsbx($topic).'</a>';
+				$titleOut = htmlspecialcharsbx($topic);
 
 				if($startResponsibleID > 0 && $startResponsibleID !== $userID)
 				{
 					$messageFields['TO_USER_ID'] = $startResponsibleID;
-					$messageFields['NOTIFY_MESSAGE'] = GetMessage('CRM_INVOICE_NOT_RESPONSIBLE_IM_NOTIFY', array('#title#' => '<a href="'.htmlspecialcharsbx($url).'">'.htmlspecialcharsbx($topic).'</a>'));
-					$messageFields['NOTIFY_MESSAGE_OUT'] = GetMessage('CRM_INVOICE_NOT_RESPONSIBLE_IM_NOTIFY', array('#title#' => htmlspecialcharsbx($topic)))." (".CCrmUrlUtil::ToAbsoluteUrl($url).")";
+					$messageFields['NOTIFY_MESSAGE'] = static fn (?string $languageId = null) =>
+						Loc::getMessage(
+							'CRM_INVOICE_NOT_RESPONSIBLE_IM_NOTIFY',
+							[ '#title#' => $title ],
+							$languageId,
+						)
+					;
+
+					$messageFields['NOTIFY_MESSAGE_OUT'] = static function (?string $languageId = null) use (
+						$absoluteUrl,
+						$titleOut,
+					)
+					{
+						$message = Loc::getMessage(
+							'CRM_INVOICE_NOT_RESPONSIBLE_IM_NOTIFY',
+							[ '#title#' => $titleOut ],
+							$languageId,
+						);
+
+						return "{$message} ({$absoluteUrl})";
+					};
 
 					CIMNotify::Add($messageFields);
 				}
@@ -4510,8 +4565,27 @@ class CAllCrmInvoice
 				if($finalResponsibleID > 0 && $finalResponsibleID !== $userID)
 				{
 					$messageFields['TO_USER_ID'] = $finalResponsibleID;
-					$messageFields['NOTIFY_MESSAGE'] = GetMessage('CRM_INVOICE_RESPONSIBLE_IM_NOTIFY', array('#title#' => '<a href="'.htmlspecialcharsbx($url).'">'.htmlspecialcharsbx($topic).'</a>'));
-					$messageFields['NOTIFY_MESSAGE_OUT'] = GetMessage('CRM_INVOICE_RESPONSIBLE_IM_NOTIFY', array('#title#' => htmlspecialcharsbx($topic)))." (".CCrmUrlUtil::ToAbsoluteUrl($url).")";
+
+					$messageFields['NOTIFY_MESSAGE'] = static fn (?string $languageId = null) =>
+						Loc::getMessage(
+							'CRM_INVOICE_RESPONSIBLE_IM_NOTIFY',
+							[ '#title#' => $title ],
+							$languageId,
+						)
+					;
+
+					$messageFields['NOTIFY_MESSAGE_OUT'] = static function (?string $languageId = null) use (
+						$absoluteUrl,
+						$titleOut,
+					) {
+						$message = Loc::getMessage(
+							'CRM_INVOICE_RESPONSIBLE_IM_NOTIFY',
+							[ '#title#' => $titleOut ],
+							$languageId,
+						);
+
+						return "{$message} ({$absoluteUrl})";
+					};
 
 					CIMNotify::Add($messageFields);
 				}
@@ -4521,7 +4595,10 @@ class CAllCrmInvoice
 	}
 	private static function UnregisterLiveFeedEvent($invoiceID)
 	{
-		if (\Bitrix\Crm\DbHelper::isPgSqlDb())
+		if (
+			\Bitrix\Crm\DbHelper::isPgSqlDb()
+			|| !\Bitrix\Crm\Integration\Socialnetwork\Livefeed\AvailabilityHelper::isAvailable()
+		)
 		{
 			return;
 		}
@@ -5746,6 +5823,7 @@ class CAllCrmInvoice
 	 */
 	public static function getPublicLink($invoiceId)
 	{
+		$invoiceId = (int)$invoiceId;
 		if ($invoiceId > 0)
 		{
 			$order = Invoice::load($invoiceId);

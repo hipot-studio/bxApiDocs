@@ -116,6 +116,11 @@ class Container
 		return self::getService('sign.service.api.mobile');
 	}
 
+	public function getExternalSignProviderService(): Api\B2e\ExternalSignProviderService
+	{
+		return self::getService('sign.service.api.external-sign-provider');
+	}
+
 	public function getSignBlankFileService(): Service\Sign\BlankFileService
 	{
 		return self::getService('sign.service.sign.blank.file');
@@ -156,9 +161,9 @@ class Container
 		return self::getService('sign.service.integration.im');
 	}
 
-	public function getChatService(): Service\ChatService
+	public function getHrBotMessageService(): Service\HrBotMessageService
 	{
-		return self::getService('sign.service.chat');
+		return self::getService('sign.service.hrbotmessage');
 	}
 
 	public function getEventHandlerService(): Service\Integration\Crm\EventHandlerService
@@ -221,6 +226,11 @@ class Container
 		return static::getService('sign.repository.service_user');
 	}
 
+	public function getImNotificationService(): Service\Integration\Im\NotificationService
+	{
+		return static::getService('sign.service.integration.im.notification');
+	}
+
 	public function getServiceUserService(): Service\Api\B2e\UserService
 	{
 		return static::getService('sign.service.api.b2e.user');
@@ -244,6 +254,11 @@ class Container
 	public function getB2eDocumentService(): Service\Integration\Crm\B2eDocumentService
 	{
 		return static::getService('sign.service.integration.crm.b2e.document');
+	}
+
+	public function getCrmKanbanB2eEntityService(): Service\Integration\Crm\Kanban\B2e\EntityService
+	{
+		return static::getService('sign.service.integration.crm.kanban.b2e.entity');
 	}
 
 	public function getUrlGeneratorService(): Service\Sign\UrlGeneratorService
@@ -322,5 +337,20 @@ class Container
 	public function getCacheManager(): Contract\Util\Cache
 	{
 		return static::getService('sign.util.cache');
+	}
+
+	public function getGroupChatService(): Service\Integration\Im\GroupChatService
+	{
+		return static::getService('sign.service.integration.im.groupChat');
+	}
+
+	public function getDocumentChatRepository(): Repository\DocumentChatRepository
+	{
+		return static::getService('sign.repository.documentChat');
+	}
+
+	public function getChatTypeConverterService(): Service\Sign\DocumentChat\ChatTypeConverterService
+	{
+		return static::getService('sign.service.sign.documentChat.chatTypeConverter');
 	}
 }

@@ -14,12 +14,17 @@ use Bitrix\Intranet\Counters\Synchronizations\WaitConfirmationSynchronization;
 use Bitrix\Intranet\Internals\InvitationTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentOutOfRangeException;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main;
+use Bitrix\Main\Result;
+use Bitrix\Main\UserTable;
+use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialservices\Network;
 
 class Invitation
@@ -33,6 +38,8 @@ class Invitation
 	const TYPE_PHONE = 'phone';
 	const PULL_MESSAGE_TAG = 'INTRANET_USER_INVITATIONS';
 
+	public const INTRANET_INVITE_REGISTER_ERROR = 'INTRANET_CONTROLLER_INVITE_REGISTER_ERROR';
+
 	protected static function getTypesAvailable()
 	{
 		return [
@@ -41,7 +48,7 @@ class Invitation
 		];
 	}
 
-	public static function isAllowed(): bool
+	protected static function isAvailable(): bool
 	{
 		if (
 			Loader::includeModule('bitrix24')
@@ -261,14 +268,14 @@ class Invitation
 
 	public static function getRegisterSharingMessage()
 	{
-		return Loc::getMessage('INTRANET_INVITATION_SHARING_MESSAGE');
+		return Loc::getMessage('INTRANET_INVITATION_SHARING_MESSAGE_MSGVER_1');
 	}
 
 	public static function canCurrentUserInvite(): bool
 	{
 		global $USER;
 
-		if (!self::isAllowed())
+		if (!self::isAvailable())
 		{
 			return false;
 		}
@@ -281,6 +288,21 @@ class Invitation
 			!ModuleManager::isModuleInstalled('bitrix24')
 			&& $USER->CanDoOperation('edit_all_users')
 		);
+	}
+
+	public static function canCurrentUserInviteByPhone(): bool
+	{
+		return
+			Loader::includeModule('bitrix24')
+			&& self::canCurrentUserInvite()
+			&& Option::get('bitrix24', 'phone_invite_allowed', 'N') === 'Y';
+	}
+
+	public static function canCurrentUserInviteByLink(): bool
+	{
+		return
+			self::canCurrentUserInvite()
+			&& self::getRegisterSettings()['REGISTER'] === 'Y';
 	}
 
 	public static function getRootStructureSectionId(): int
@@ -508,6 +530,59 @@ class Invitation
 		return true;
 	}
 
+	public static function onSocNetUserToGroupAddHandler($ID, $data)
+	{
+		if (!\Bitrix\Main\Loader::includeModule('socialnetwork'))
+		{
+			return true;
+		}
+
+		$userId = (int)$data['USER_ID'];
+		if ($userId <= 0 || !in_array($data['ROLE'], UserToGroupTable::getRolesMember()))
+		{
+			return true;
+		}
+		static::fullSyncCounterByUser(new User($userId));
+
+		return true;
+	}
+
+	public static function onSocNetUserToGroupUpdateHandler($ID, $changedData, $oldData)
+	{
+		if (!\Bitrix\Main\Loader::includeModule('socialnetwork'))
+		{
+			return true;
+		}
+		$userId = (int)$oldData['USER_ID'];
+		$changedRole = isset($changedData['ROLE'])
+			&& $changedData['ROLE'] !== $oldData['ROLE']
+			&& in_array($changedData['ROLE'], UserToGroupTable::getRolesMember());
+		if ($userId <= 0 || !$changedRole)
+		{
+			return true;
+		}
+		static::fullSyncCounterByUser(new User($userId));
+
+		return true;
+	}
+
+	public static function onSocNetUserToGroupDeleteHandler(Event $event)
+	{
+		if (!\Bitrix\Main\Loader::includeModule('socialnetwork'))
+		{
+			return true;
+		}
+		$userId = $event->getParameter('USER_ID');
+		if ($userId <= 0)
+		{
+			return true;
+		}
+
+		static::fullSyncCounterByUser(new User($userId));
+
+		return true;
+	}
+
 	public static function forceConfirmUser(int $userId, bool $isAccept): Main\Result
 	{
 		$result = new Main\Result();
@@ -582,5 +657,115 @@ class Invitation
 	{
 		$user = new User((int)$userId);
 		static::fullSyncCounterByUser($user);
+	}
+
+	public static function inviteUsers(array $fields): Main\Result
+	{
+		$result = new Main\Result();
+		$errorList = [];
+		$convertedPhoneNumbers = [];
+		$userList = [];
+		$userIdList = \CIntranetInviteDialog::registerNewUser(\CSite::getDefSite(), $fields, $errorList) ?? [];
+
+		if (!empty($errorList))
+		{
+			foreach ($errorList as $error)
+			{
+				if ($error instanceof Error)
+				{
+					$result->addError($error);
+				}
+				elseif (is_string($error) && !empty($error))
+				{
+					$result->addError(new Error($error, self::INTRANET_INVITE_REGISTER_ERROR));
+				}
+			}
+		}
+
+		if (!empty($userIdList))
+		{
+			\CIntranetInviteDialog::logAction(
+				$userIdList,
+				(
+				isset($fields['DEPARTMENT_ID'])
+				&& (int)$fields['DEPARTMENT_ID'] > 0
+					? 'intranet'
+					: 'extranet'
+				),
+				'invite_user',
+				(
+				!empty($fields['PHONE'])
+					? 'sms_dialog'
+					: 'invite_dialog'
+				),
+				(
+				!empty($fields['CONTEXT'])
+				&& $fields['CONTEXT'] === 'mobile'
+					? 'mobile'
+					: 'web'
+				)
+			);
+
+			$userQuery = UserTable::getList([
+				'select' => ['ID', 'NAME', 'LAST_NAME', 'PERSONAL_MOBILE', 'EMAIL'],
+				'filter' => ['@ID' => $userIdList]
+			]);
+
+			while($user = $userQuery->fetch())
+			{
+				$user["FULL_NAME"] = \CUser::FormatName(\CSite::GetNameFormat(), $user, true, false);
+				$userList[] = $user;
+				$convertedPhoneNumbers[] = $user['PERSONAL_MOBILE']; // TODO: PERSONAL_MOBILE_FORMATTED
+			}
+		}
+
+		return $result->setData([
+			'userList' => $userList,
+			'userIdList' => $userIdList,
+			'convertedPhoneNumbers' => $convertedPhoneNumbers,
+			'errors' => [],
+		]);
+	}
+
+	/**
+	 * @param array $phoneUsers phoneUser must contain fields ['PHONE', 'PHONE_COUNTRY'] and may contain fields ['NAME', 'LAST_NAME']
+	 * @param string $context 'web' or 'mobile'
+	 * @param int $departmentId
+	 * @return Result
+	 */
+	public static function inviteUsersByPhoneNumbers(array $phoneUsers, string $context = 'web', int $departmentId = 0): Main\Result
+	{
+		$fields = [
+			'PHONE' => $phoneUsers,
+			'CONTEXT' => $context,
+		];
+
+		if ($departmentId > 0)
+		{
+			$fields['DEPARTMENT_ID'] = $departmentId;
+		}
+
+		return self::inviteUsers($fields);
+	}
+
+	/**
+	 * @param array $emailUsers emailUser must contain fields ['EMAIL'] and may contain fields ['NAME', 'LAST_NAME']
+	 * @param string $context 'web' or 'mobile'
+	 * @param int $departmentId
+	 * @return Result
+	 */
+	public static function inviteUsersByEmails(array $emailUsers, string $context = 'web', int $departmentId = 0): Main\Result
+	{
+		$fields = [
+			'EMAIL' => $emailUsers,
+			'CONTEXT' => $context,
+		];
+
+		if ($departmentId > 0)
+		{
+			$fields['DEPARTMENT_ID'] = $departmentId;
+		}
+
+		return self::inviteUsers($fields);
 	}
 }

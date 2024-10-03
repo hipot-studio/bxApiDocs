@@ -5,12 +5,15 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Intranet\MainPage\Publisher;
 use Bitrix\Main\Loader;
 use Bitrix\Intranet;
+use Bitrix\Main\UI\Spotlight;
 use Bitrix\Security\Mfa\Otp;
 use Bitrix\Intranet\Settings\Widget\Requisite;
 use Bitrix\Main\Engine\Response\AjaxJson;
 use Bitrix\Bitrix24;
+use Bitrix\Intranet\MainPage;
 
 class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitrix\Main\Engine\Contract\Controllerable
 {
@@ -188,6 +191,11 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 		$result['THEME'] = Intranet\Integration\Templates\Bitrix24\ThemePicker::getInstance()->getCurrentTheme();
 		$result['OTP'] = $this->getOtpData();
 		$result['HOLDING'] = null;
+		$result['MAIN_PAGE'] = [
+			'isAvailable' => self::$cachedResult['IS_WIDGET_MENU_ITEM_SHOW'],
+			'isNew' => self::$cachedResult['IS_WIDGET_MENU_ITEM_SHOW'] && time() < mktime(23, 59, 59, 9, 30, 2024),
+			'settingsPath' => (new MainPage\Page)->getSettingsPath() . '&analyticContext=widget_settings_settings',
+		];
 
 		if ($this->isRequisiteAvailable)
 		{
@@ -240,6 +248,30 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 				self::$cachedResult['IS_ADMIN'] = $this->getUser()->isAdmin();
 				self::$cachedResult['IS_REQUISITE'] = $this->isRequisiteAvailable;
 				self::$cachedResult['IS_BITRIX24'] = $this->isBitrix24;
+				self::$cachedResult['SPOTLIGHT'] = false;
+				self::$cachedResult['SPOTLIGHT_AFTER_CREATE'] = false;
+				$mainPageAccess = new MainPage\Access();
+				self::$cachedResult['IS_MAIN_PAGE_AVAILABLE'] = $mainPageAccess->canEdit();
+				self::$cachedResult['IS_WIDGET_MENU_ITEM_SHOW'] = $mainPageAccess->canEdit(false);
+				$spotlight = new Spotlight('intranet-main-page');
+				$spotlightAfterFirstCreate = new Spotlight('intranet-main-page-after-create');
+
+				if (self::$cachedResult['IS_MAIN_PAGE_AVAILABLE'])
+				{
+					if ($spotlight->isAvailable())
+					{
+						self::$cachedResult['SPOTLIGHT'] = true;
+					}
+					if (
+						$spotlightAfterFirstCreate->isAvailable()
+						&& Loader::includeModule('landing')
+						&& (new Bitrix\Landing\Mainpage\Manager)->isReady()
+						&& !((new Publisher)->isPublished())
+					)
+					{
+						self::$cachedResult['SPOTLIGHT_AFTER_CREATE'] = true;
+					}
+				}
 			}
 		}
 

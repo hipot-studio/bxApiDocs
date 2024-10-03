@@ -4,11 +4,13 @@ namespace Bitrix\Intranet\Settings;
 
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Bitrix24\IpAccess\Rights;
+use Bitrix\Intranet\Service\MobileAppSettings;
 use Bitrix\Intranet\Settings\Controls\Section;
 use Bitrix\Intranet\Settings\Controls\Selector;
 use Bitrix\Intranet\Settings\Controls\Switcher;
 use Bitrix\Intranet\Settings\Search\SearchEngine;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
@@ -23,6 +25,7 @@ class SecuritySettings extends AbstractSettings
 
 	private bool $isCloud;
 	private array $deviceHistoryDays;
+	private MobileAppSettings $mobileAppService;
 
 	public function __construct(array $data = [])
 	{
@@ -42,6 +45,7 @@ class SecuritySettings extends AbstractSettings
 		{
 			$this->deviceHistoryDays[0] = Loc::getMessage('INTRANET_SETTINGS_SECURITY_UNLIMITED_DAYS');
 		}
+		$this->mobileAppService = ServiceLocator::getInstance()->get('intranet.option.mobile_app');
 	}
 
 	public function validate(): ErrorCollection
@@ -225,6 +229,35 @@ class SecuritySettings extends AbstractSettings
 			);
 		}
 
+		if ($this->mobileAppService->isReady())
+		{
+			$data['sectionMobileApp'] = new Section(
+				'settings-security-section-mobile_app',
+				Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_MOBILE_APP'),
+				'ui-icon-set --mobile-2',
+				false
+			);
+
+			$data['switcherDisableCopy'] = new Switcher(
+				'settings-employee-field-allow_register',
+				'disable_copy_text',
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_DISABLE_COPY'),
+				$this->mobileAppService->canCopyText() ? 'Y' : 'N',
+				[
+					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_DISABLE_COPY'),
+				]
+			);
+
+			$data['switcherDisableScreenshot'] = new Switcher(
+				'settings-employee-field-allow_screenshot',
+				'disable_copy_screenshot',
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_DISABLE_SCREENSHOT'),
+				$this->mobileAppService->canTakeScreenshot() ? 'Y' : 'N',
+				[
+					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_DISABLE_SCREENSHOT'),
+				]
+			);
+		}
 
 		return new static($data);
 	}
@@ -367,6 +400,16 @@ class SecuritySettings extends AbstractSettings
 		{
 			Option::set('intranet', 'send_otp_push', 'N');
 		}
+
+		if (isset($this->data['disable_copy_text']))
+		{
+			$this->mobileAppService->setAllowCopyText($this->data['disable_copy_text'] === 'Y');
+		}
+
+		if (isset($this->data['disable_copy_screenshot']))
+		{
+			$this->mobileAppService->setAllowScreenshot($this->data['disable_copy_screenshot'] === 'Y');
+		}
 	}
 
 	private function getIpAccessRights(): array
@@ -459,6 +502,9 @@ class SecuritySettings extends AbstractSettings
 			'SECURITY_IP_ACCESS_1_IP' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SELECT_ACCEPTED_IP'),
 			'settings-security-section-history' => Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_DEVICES_HISTORY'),
 			'settings-security-section-event_log' => Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_EVENT_LOG'),
+			'settings-security-section-mobile_app' => Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_MOBILE_APP'),
+			'disable_copy_screenshot' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_DISABLE_SCREENSHOT'),
+			'disable_copy_text' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_DISABLE_COPY'),
 		];
 		$otpData = $this->getOtpSettings();
 		if ($otpData['SECURITY_OTP_ENABLED'] ?? false)

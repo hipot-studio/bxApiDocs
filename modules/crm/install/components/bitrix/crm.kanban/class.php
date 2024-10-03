@@ -660,15 +660,21 @@ class CrmKanbanComponent extends \CBitrixComponent
 			if (isset($admins[$userId]))
 			{
 				$pathColumnEdit = '/crm/configs/status/?ACTIVE_TAB=status_tab_' . $this->getKanban()->getEntity()->getStatusEntityId();
+				$notifyMessageCallback = static fn (?string $languageId = null) =>
+					Loc::getMessage(
+						'CRM_ACCESS_NOTIFY_MESSAGE',
+						[ '#URL#' => $pathColumnEdit ],
+						$languageId,
+					)
+				;
+
 				\CIMNotify::Add([
 					'TO_USER_ID' => $userId,
 					'FROM_USER_ID' => $this->currentUserID,
 					'NOTIFY_TYPE' => IM_NOTIFY_FROM,
 					'NOTIFY_MODULE' => 'crm',
 					'NOTIFY_TAG' => 'CRM|NOTIFY_ADMIN|' . $userId . '|' . $this->currentUserID,
-					'NOTIFY_MESSAGE' => Loc::getMessage('CRM_ACCESS_NOTIFY_MESSAGE', [
-						'#URL#' => $pathColumnEdit,
-					]),
+					'NOTIFY_MESSAGE' => $notifyMessageCallback,
 				]);
 			}
 		}
@@ -703,6 +709,8 @@ class CrmKanbanComponent extends \CBitrixComponent
 		$afterColumnId = $this->request('afterColumnId');
 
 		$sort = 0;
+		$semanticId = null;
+
 		if ($afterColumnId !== null && (string)$afterColumnId === '0')
 		{
 			$sort = 0;
@@ -710,6 +718,10 @@ class CrmKanbanComponent extends \CBitrixComponent
 		elseif (isset($stages[$afterColumnId]))
 		{
 			$sort = $stages[$afterColumnId]['real_sort'];
+			if (($stages[$afterColumnId]['type'] ?? '') == 'LOOSE')
+			{
+				$semanticId = \Bitrix\Crm\PhaseSemantics::FAILURE;
+			}
 		}
 		elseif (isset($stages[$columnId]))
 		{
@@ -725,6 +737,10 @@ class CrmKanbanComponent extends \CBitrixComponent
 			'ENTITY_ID' => $this->getEntity()->getStatusEntityId(),
 			'SORT' => ++$sort,
 		];
+		if ($semanticId)
+		{
+			$fields['SEMANTICS'] = $semanticId;
+		}
 
 		if ($columnName)
 		{

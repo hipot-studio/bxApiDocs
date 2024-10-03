@@ -142,7 +142,7 @@ final class LogComment extends Provider
 			}
 		}
 
-		return '2';
+		return '3';
 	}
 
 	public function add($params = array())

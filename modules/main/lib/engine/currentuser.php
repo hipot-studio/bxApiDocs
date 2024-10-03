@@ -33,14 +33,18 @@ final class CurrentUser
 	public static function get(): self
 	{
 		global $USER;
+
 		$self = new self();
-		$self->cuser = $USER;
+		if ($USER instanceof \CUser)
+		{
+			$self->cuser = $USER;
+		}
 
 		return $self;
 	}
 
 	/**
-	 * @return int|null
+	 * @return string|int|null
 	 */
 	public function getId()
 	{

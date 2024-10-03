@@ -136,6 +136,13 @@ class User extends Base
 			return;
 		}
 
+		if ($this->isUserChatOwner($chat, $userId))
+		{
+			$chat->getRelationByUserId($userId)?->setReason(Reason::DEFAULT)->save();
+
+			return;
+		}
+
 		$chat
 			->withContextUser(0)
 			->deleteUser($userId, false, false,false, true)
@@ -152,5 +159,10 @@ class User extends Base
 	protected function isUserAddedManually(Chat $chat, int $userId): bool
 	{
 		return $chat->getRelations()->getByUserId($userId, $chat->getId())?->getReason() === Reason::DEFAULT;
+	}
+
+	protected function isUserChatOwner(Chat $chat, int $userId): bool
+	{
+		return $chat->getAuthorId() === $userId;
 	}
 }

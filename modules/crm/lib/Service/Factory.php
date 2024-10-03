@@ -31,7 +31,6 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Objectify\EntityObject;
-use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\UserField;
 
 abstract class Factory
@@ -428,7 +427,10 @@ abstract class Factory
 
 		if ($isFmInSelect && $this->isMultiFieldsEnabled())
 		{
-			Container::getInstance()->getMultifieldStorage()->warmupCache($this->getEntityTypeId(), $itemIds);
+			Container::getInstance()->getMultifieldStorage()->warmupCache(
+				$this->getEntityTypeId(),
+				array_map(fn(Item $item) => $item->getId(), $items),
+			);
 		}
 
 		return $items;

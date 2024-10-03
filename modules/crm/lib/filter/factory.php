@@ -309,7 +309,7 @@ class Factory
 		}
 
 		$factory = Crm\Service\Container::getInstance()->getFactory($entityTypeId);
-		if ($factory && $factory->isCategoriesEnabled())
+		if ($factory && $factory->isCategoriesSupported())
 		{
 			if (in_array($entityTypeId, [\CCrmOwnerType::Contact, \CCrmOwnerType::Company]))
 				// category = 0 should be used by default in contacts and companies only

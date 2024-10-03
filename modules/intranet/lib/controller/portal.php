@@ -4,6 +4,7 @@ namespace Bitrix\Intranet\Controller;
 
 
 use Bitrix\Intranet\ActionFilter\UserType;
+use Bitrix\Main\Config\Option;
 
 class Portal extends \Bitrix\Main\Engine\Controller
 {
@@ -20,9 +21,18 @@ class Portal extends \Bitrix\Main\Engine\Controller
 	public function getLogoAction(): array
 	{
 		$settings = \Bitrix\Intranet\Portal::getInstance()->getSettings();
-		$result['title'] = $settings->getTitle();
+
+		// to bypass default value
+		$result['title'] = Option::get('bitrix24', 'site_title', null, SITE_ID) ??
+			Option::get('bitrix24', 'site_title', null) ?? '';
+
 		$result['logo'] = $settings->getLogo();
 		$result['logo24'] = $settings->getLogo24();
+
+		if (empty($result['title']) && empty($result['logo']))
+		{
+			$result['defaultLogo'] = $settings->getDefaultLogo();
+		}
 
 		return $result;
 	}

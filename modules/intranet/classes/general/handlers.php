@@ -48,19 +48,12 @@ class CIntranetEventHandlers
 
 			if ($arFields['ACTIVE'] == 'N')
 			{
-				$obs = new CIBlockSection();
-				$dbRes = $obs->getList(
-					array(),
-					array(
-						'IBLOCK_ID' => (int) \Bitrix\Main\Config\Option::get('intranet', 'iblock_structure'),
-						'UF_HEAD' => $arFields['ID'],
-					),
-					false,
-					array('ID')
-				);
-				while ($arSection = $dbRes->Fetch())
+				$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
+					->departmentRepository();
+				$departmentCollection = $departmentRepository->getDepartmentByHeadId((int)$arFields['ID']);
+				foreach ($departmentCollection as $department)
 				{
-					$obs->Update($arSection['ID'], array('UF_HEAD' => null));
+					$departmentRepository->unsetHead($department->getId());
 				}
 			}
 		}
@@ -441,6 +434,14 @@ class CIntranetEventHandlers
 	RegisterModuleDependences("iblock", "OnBeforeIBlockSectionUpdate", "intranet", "CIntranetEventHandlers", "OnBeforeIBlockSectionUpdate");
 	RegisterModuleDependences("iblock", "OnBeforeIBlockSectionAdd", "intranet", "CIntranetEventHandlers", "OnBeforeIBlockSectionAdd");
 */
+	/**
+	 * @Deprecated
+	 *
+	 * Will be deleted after transferring department data to the "humanresources" module
+	 *
+	 * @param $arParams
+	 * @return false|void
+	 */
 	public static function OnBeforeIBlockSectionAdd($arParams)
 	{
 		global $APPLICATION;
@@ -461,6 +462,14 @@ class CIntranetEventHandlers
 		}
 	}
 
+	/**
+	 * @Deprecated
+	 *
+	 * Will be deleted after transferring department data to the "humanresources" module
+	 *
+	 * @param $arParams
+	 * @return false|void
+	 */
 	public static function OnBeforeIBlockSectionUpdate($arParams)
 	{
 		global $APPLICATION;
@@ -972,19 +981,14 @@ class CIntranetEventHandlers
 			}
 		}
 
-		if (CModule::IncludeModule('iblock'))
+		$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
+			->departmentRepository();
+		$departmentCollection = $departmentRepository->getDepartmentByHeadId((int)$USER_ID);
+		foreach ($departmentCollection as $department)
 		{
-			$IBLOCK_ID = COption::GetOptionInt('intranet', 'iblock_structure');
-			if ($IBLOCK_ID > 0)
-			{
-				$dbRes = CIBlockSection::GetList(array(), array('IBLOCK_ID' => $IBLOCK_ID, 'UF_HEAD' => $USER_ID), false, array('ID', 'IBLOCK_ID'));
-				$obSection = new CIBlockSection();
-				while ($arRes = $dbRes->Fetch())
-				{
-					$obSection->Update($arRes['ID'], array('UF_HEAD' => ''));
-				}
-			}
+			$departmentRepository->unsetHead($department->getId());
 		}
+
 	}
 
 	public static function OnAfterUserInitialize($userId)

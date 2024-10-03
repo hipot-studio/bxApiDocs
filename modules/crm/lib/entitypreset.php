@@ -101,9 +101,11 @@ class EntityPreset
 
 			if (self::$countryCodes === null)
 			{
+				//@codingStandardsIgnoreStart
 				include($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/countries.php");
 				/** @var array $arCounries */
 				self::$countryCodes = array_flip($arCounries);
+				//@codingStandardsIgnoreEnd
 			}
 
 			foreach (self::getCountryList() as $id => $title)
@@ -149,9 +151,11 @@ class EntityPreset
 
 		if (self::$countryCodes === null)
 		{
+			//@codingStandardsIgnoreStart
 			include($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/countries.php");
 			/** @var array $arCounries */
 			self::$countryCodes = array_flip($arCounries);
+			//@codingStandardsIgnoreEnd
 		}
 
 		if(isset(self::$countryCodes[$countryId]))
@@ -857,6 +861,14 @@ class EntityPreset
 
 	public function getSettingsFieldsOfPresets($entityTypeId, $type = 'all', $options = array())
 	{
+		static $cache = [];
+		$cacheKey = hash('crc32b', $entityTypeId . '_' . $type . '_' . serialize($options));
+
+		if (isset($cache[$cacheKey]))
+		{
+			return $cache[$cacheKey];
+		}
+
 		$result = array();
 
 		if (!is_array($options))
@@ -1007,6 +1019,8 @@ class EntityPreset
 			}
 			unset($iResult);
 		}
+
+		$cache[$cacheKey] = $result;
 
 		return $result;
 	}

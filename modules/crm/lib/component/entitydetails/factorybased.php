@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Component\EntityDetails;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Component\ComponentError;
+use Bitrix\Crm\Component\EntityDetails\Files\CopyFilesOnItemClone;
 use Bitrix\Crm\Controller\Entity;
 use Bitrix\Crm\EO_Status;
 use Bitrix\Crm\Field;
@@ -27,6 +28,7 @@ use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Service\ParentFieldManager;
+use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\Response\Json;
@@ -41,6 +43,7 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserField\Dispatcher;
 use Bitrix\Main\UserField\Types\DateTimeType;
 use Bitrix\Main\UserField\Types\DoubleType;
+use Bitrix\Main\UserField\Types\FileType;
 use Bitrix\Main\Web\Uri;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar\ButtonLocation;
@@ -80,6 +83,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 	private bool $isSearchHistoryEnabled = true;
 
+	//@codingStandardsIgnoreStart
 	public function onPrepareComponentParams($arParams): array
 	{
 		$arParams['ENTITY_TYPE_ID'] = (int)($arParams['ENTITY_TYPE_ID'] ?? \CCrmOwnerType::Undefined);
@@ -126,6 +130,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		$this->userFields = null;
 		$this->userFieldInfos = null;
 	}
+	//@codingStandardsIgnoreEnd
 
 	public function enableSearchHistory($enable): void
 	{
@@ -153,8 +158,9 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		}
 
 		$this->entityTypeId = $entityTypeId;
-
+		//@codingStandardsIgnoreStart
 		$id = (int) $this->arParams['ENTITY_ID'];
+		//@codingStandardsIgnoreEnd
 
 		if( ($id <= 0) || ($this->isCopyMode()) )
 		{
@@ -183,7 +189,9 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		{
 			if($this->item->isNew())
 			{
+				//@codingStandardsIgnoreStart
 				$categoryId = $this->arParams['categoryId'] ?? $this->categoryId;
+				//@codingStandardsIgnoreEnd
 				if($categoryId > 0)
 				{
 					$this->category = $this->factory->getCategory($categoryId);
@@ -277,13 +285,14 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		{
 			return true;
 		}
-
+		//@codingStandardsIgnoreStart
 		if (!empty($this->arParams['COMPONENT_MODE']))
 		{
 			$this->mode = $this->arParams['COMPONENT_MODE'];
 
 			return true;
 		}
+		//@codingStandardsIgnoreEnd
 
 		return parent::tryToDetectMode();
 	}
@@ -310,8 +319,14 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		return $select;
 	}
 
+	//@codingStandardsIgnoreStart
 	protected function executeBaseLogic(): void
 	{
+		if ($this->isCopyMode())
+		{
+			CopyFilesOnItemClone::getInstance()->execute($this->item, $this->factory);
+		}
+
 		$this->getApplication()->SetTitle(htmlspecialcharsbx($this->getTitle()));
 
 		$this->initializeEditorAdapter();
@@ -345,7 +360,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 				$jsParamStage = $converter->toJson($stage);
 				$jsParamStage['stagesToMove'] = $stagePermissions->getPermissionsByStatusId($stage->getStatusId());
-				$jsParamStage['allowMoveToAnyStage'] = $canWriteConfig;
+				$jsParamStage['allowMoveToAnyStage'] =  $canWriteConfig || UserPermissions::isAlwaysAllowedEntity($this->getEntityTypeID());
 
 				$this->arResult['jsParams']['stages'][] = $jsParamStage;
 			}
@@ -369,6 +384,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			);
 		}
 	}
+	//@codingStandardsIgnoreEnd
 
 	protected function checkIfEntityExists(): bool
 	{
@@ -493,11 +509,13 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		];
 	}
 
+	//@codingStandardsIgnoreStart
 	protected function getTimelineHistoryStubMessage(): ?string
 	{
 		return $this->arParams['CRM_TIMELINE_HISTORY_STUB_MESSAGE']
 			?? Loc::getMessage('CRM_COMPONENT_FACTORYBASED_TIMELINE_HISTORY_STUB');
 	}
+	//@codingStandardsIgnoreEnd
 
 	protected function getEntityInfo(): array
 	{
@@ -1103,7 +1121,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 	public function getEditorConfig(): array
 	{
 		$userFieldEntityId = $this->getUserFieldEntityId();
-		$isUserFieldCreationEnabled = Container::getInstance()->getUserPermissions()->canWriteConfig();
+		$isUserFieldCreationEnabled = Container::getInstance()->getUserPermissions($this->userID)->isAdminForEntity($this->entityTypeId);
 		$editorGuid = $this->getEditorGuid();
 
 		/** @var \Bitrix\Crm\Integration\Analytics\Builder\BuilderContract $analyticsBuilder */
@@ -1205,8 +1223,9 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			'type' => 'section',
 			'elements' => [],
 		];
-
+		//@codingStandardsIgnoreStart
 		$skipFields = ($this->arParams['skipFields'] ?? []);
+		//@codingStandardsIgnoreEnd
 		if ($this->factory->isStagesEnabled() && !in_array(Item::FIELD_NAME_STAGE_ID, $skipFields, true))
 		{
 			$sectionMain['elements'][] = ['name' => Item::FIELD_NAME_STAGE_ID];
@@ -1309,7 +1328,9 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 	public function saveAction(array $data): ?array
 	{
+		//@codingStandardsIgnoreStart
 		$this->arParams['categoryId'] = $data['CATEGORY_ID'] ?? null;
+		//@codingStandardsIgnoreEnd
 		$this->mode = isset($data['MODE']) ? (int)$data['MODE'] : $this->mode;
 
 		$sourceEntityTypeId = (int)($data['CONVERSION_SOURCE']['entityTypeId'] ?? 0);
@@ -1590,6 +1611,21 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 						}
 					}
 				}
+
+				if ($userType === FileType::USER_TYPE_ID && $this->isCopyMode())
+				{
+					if (is_array($value) && $field->isMultiple())
+					{
+						foreach ($value as $singleValue)
+						{
+							CopyFilesOnItemClone::removeFileFromNotUsedCleanQueue($singleValue);
+						}
+					}
+					elseif(is_numeric($value))
+					{
+						CopyFilesOnItemClone::removeFileFromNotUsedCleanQueue($value);
+					}
+				}
 			}
 
 			$setData[$name] = $value;
@@ -1614,9 +1650,11 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		}
 		if($action === 'SAVE')
 		{
+			//@codingStandardsIgnoreStart
 			// it would be better to use signedParameters, but processing is encapsulated in Engine\Controller
 			$this->arParams['ENTITY_TYPE_ID'] = $entityTypeId;
 			$this->arParams['ENTITY_ID'] = $entityId;
+			//@codingStandardsIgnoreEnd
 
 			$data = array_intersect_key($requestData, [
 				Item::FIELD_NAME_TITLE => true,
@@ -1817,6 +1855,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		{
 			$context['CATEGORY_ID'] = $this->category->getId();
 		}
+		//@codingStandardsIgnoreStart
 		if(
 			!empty($this->arParams['parentTypeId'])
 			&& !empty($this->arParams['parentId'])
@@ -1827,6 +1866,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			$context[EditorAdapter::CONTEXT_PARENT_TYPE_NAME] = \CCrmOwnerType::ResolveName($context['PARENT_TYPE_ID']);
 			$context[EditorAdapter::CONTEXT_PARENT_ID] = (int)$this->arParams['parentId'];
 		}
+		//@codingStandardsIgnoreEnd
 
 		foreach ($this->parseParentIdsFromRequest() as $fieldName => $parentIdentifier)
 		{

@@ -69,18 +69,6 @@ class StringUserDataProvider extends EntityDataProvider
 				'VALUE' => $gridFilter['GENDER'] ?? null
 			],
 			[
-				'FILTER_FIELD_NAME' => 'PHONE_MOBILE',
-				'FIELD_NAME' => 'PERSONAL_MOBILE',
-				'OPERATION' => '%',
-				'VALUE' => $gridFilter['PHONE_MOBILE'] ?? null
-			],
-			[
-				'FILTER_FIELD_NAME' => 'PHONE',
-				'FIELD_NAME' => 'PERSONAL_PHONE',
-				'OPERATION' => '%',
-				'VALUE' => $gridFilter['PHONE'] ?? null
-			],
-			[
 				'FILTER_FIELD_NAME' => 'PERSONAL_CITY',
 				'FIELD_NAME' => 'PERSONAL_CITY',
 				'OPERATION' => '%',
@@ -139,12 +127,6 @@ class StringUserDataProvider extends EntityDataProvider
 				'FIELD_NAME' => 'WORK_MAILBOX',
 				'OPERATION' => '%',
 				'VALUE' => $gridFilter['WORK_MAILBOX'] ?? null
-			],
-			[
-				'FILTER_FIELD_NAME' => 'WORK_PHONE',
-				'FIELD_NAME' => 'WORK_PHONE',
-				'OPERATION' => '%',
-				'VALUE' => $gridFilter['WORK_PHONE'] ?? null
 			],
 			[
 				'FILTER_FIELD_NAME' => 'POSITION',

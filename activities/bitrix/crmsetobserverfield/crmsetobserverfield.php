@@ -97,13 +97,12 @@ class CBPCrmSetObserverField extends CBPActivity
 	protected function setItemObservers(int $typeId, int $entityId, array $observerIds)
 	{
 		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory($typeId);
-		if (is_null($factory) || !$factory->isAutomationEnabled())
+		if (is_null($factory))
 		{
 			return;
 		}
 
 		$item = $factory->getItem($entityId);
-
 		switch ($this->ActionOnObservers)
 		{
 			case self::ACTION_ADD_OBSERVERS:

@@ -28,12 +28,17 @@ class CBPWebHookActivity extends CBPActivity
 		}
 
 		$handler = $this->Handler;
+		if (is_array($handler))
+		{
+			$handler = CBPHelper::flatten($handler)[0] ?? null;
+		}
 
 		if ($handler)
 		{
 			$handlerData = parse_url($handler);
 
 			if (is_array($handlerData)
+				&& isset($handlerData['host'])
 				&& $handlerData['host'] <> ''
 				&& mb_strpos($handlerData['host'], '.') > 0
 				&& ($handlerData['scheme'] == 'http' || $handlerData['scheme'] == 'https')

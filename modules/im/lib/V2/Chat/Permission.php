@@ -5,7 +5,6 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Entity\BooleanField;
-use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Query\Query;
@@ -26,13 +25,13 @@ class Permission
 	public const ACTION_CHANGE_COLOR = 'COLOR';
 	public const ACTION_CHANGE_DESCRIPTION = 'DESCRIPTION';
 	public const ACTION_CHANGE_RIGHTS = 'RIGHT';
-	public const ACTION_OPEN_EDIT = 'EDIT';
 	public const ACTION_CHANGE_OWNER = 'CHANGE_OWNER';
 	public const ACTION_CHANGE_MANAGERS = 'CHANGE_MANAGERS';
 	public const ACTION_PIN_MESSAGE = 'PIN_MESSAGE';
 	public const ACTION_CREATE_TASK = 'CREATE_TASK';
 	public const ACTION_CREATE_MEETING = 'CREATE_MEETING';
 	public const ACTION_DELETE_OTHERS_MESSAGE = 'DELETE_OTHERS_MESSAGE';
+	public const ACTION_UPDATE = 'UPDATE';
 
 	public const TYPE_DEFAULT = 'DEFAULT';
 	public const TYPE_PRIVATE = 'PRIVATE';
@@ -41,12 +40,11 @@ class Permission
 	public const TYPE_CHANNEL = 'CHANNEL';
 	public const TYPE_OPEN_CHANNEL = 'OPEN_CHANNEL';
 	public const TYPE_COMMENT = 'COMMENT';
-	public const TYPE_SONET = EntityLink::TYPE_SONET;
-	public const TYPE_TASKS = EntityLink::TYPE_TASKS;
-	public const TYPE_CRM = EntityLink::TYPE_CRM;
-	public const TYPE_CALL = EntityLink::TYPE_CALL;
 	public const TYPE_ANNOUNCEMENT = 'ANNOUNCEMENT';
 	public const TYPE_COPILOT = 'COPILOT';
+	public const TYPE_GROUP_CHAT = 'CHAT';
+	public const TYPE_OPEN_CHAT = 'OPEN';
+	public const TYPE_VIDEOCONF = 'VIDEOCONF';
 
 	public const GROUP_MANAGE_UI = 'MANAGE_UI';
 	public const GROUP_MANAGE_USERS_ADD = 'MANAGE_USERS_ADD';
@@ -64,7 +62,6 @@ class Permission
 	public const ACTIONS_MANAGE_USERS_DELETE = [self::ACTION_KICK];
 	public const ACTIONS_MANAGE_SETTINGS = [
 		self::ACTION_CHANGE_RIGHTS,
-		self::ACTION_OPEN_EDIT,
 		self::ACTION_CHANGE_OWNER,
 		self::ACTION_CHANGE_MANAGERS,
 	];
@@ -136,6 +133,7 @@ class Permission
 			self::ACTION_CREATE_TASK => Chat::ROLE_MEMBER,
 			self::ACTION_CREATE_MEETING => Chat::ROLE_MEMBER,
 			self::ACTION_DELETE_OTHERS_MESSAGE => Chat::ROLE_NONE,
+			self::ACTION_UPDATE => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[self::TYPE_DEFAULT] = $default;
@@ -186,6 +184,7 @@ class Permission
 			self::ACTION_CREATE_TASK => Chat::ROLE_NONE,
 			self::ACTION_CREATE_MEETING => Chat::ROLE_NONE,
 			self::ACTION_DELETE_OTHERS_MESSAGE => Chat::ROLE_MANAGER,
+			self::ACTION_UPDATE => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[self::TYPE_OPEN_CHANNEL] = [
@@ -193,6 +192,7 @@ class Permission
 			self::ACTION_CREATE_TASK => Chat::ROLE_NONE,
 			self::ACTION_CREATE_MEETING => Chat::ROLE_NONE,
 			self::ACTION_DELETE_OTHERS_MESSAGE => Chat::ROLE_MANAGER,
+			self::ACTION_UPDATE => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[self::TYPE_COMMENT] = [
@@ -201,69 +201,63 @@ class Permission
 			self::ACTION_DELETE_OTHERS_MESSAGE => Chat::ROLE_MANAGER,
 		];
 
-		if (Loader::includeModule('imbot'))
-		{
-			self::$permissionsByChatTypes[\Bitrix\ImBot\Service\Notifier::CHAT_ENTITY_TYPE] = [
-				self::ACTION_CHANGE_AVATAR => Chat::ROLE_NONE,
-				self::ACTION_RENAME => Chat::ROLE_NONE,
-				self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
-			];
+		self::$permissionsByChatTypes[EntityLink::TYPE_SUPPORT24_NOTIFIER] = [
+			self::ACTION_CHANGE_AVATAR => Chat::ROLE_NONE,
+			self::ACTION_RENAME => Chat::ROLE_NONE,
+			self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
+		];
 
-			self::$permissionsByChatTypes[\Bitrix\ImBot\Bot\Support24::CHAT_ENTITY_TYPE] = [
-				self::ACTION_CHANGE_AVATAR => Chat::ROLE_NONE,
-				self::ACTION_EXTEND => Chat::ROLE_NONE,
-				self::ACTION_CALL => Chat::ROLE_NONE,
-				self::ACTION_MUTE => Chat::ROLE_NONE,
-				self::ACTION_LEAVE => Chat::ROLE_NONE,
-				self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
-				self::ACTION_USER_LIST => Chat::ROLE_NONE,
-			];
+		self::$permissionsByChatTypes[EntityLink::TYPE_SUPPORT24_QUESTION] = [
+			self::ACTION_CHANGE_AVATAR => Chat::ROLE_NONE,
+			self::ACTION_EXTEND => Chat::ROLE_NONE,
+			self::ACTION_CALL => Chat::ROLE_NONE,
+			self::ACTION_MUTE => Chat::ROLE_NONE,
+			self::ACTION_LEAVE => Chat::ROLE_NONE,
+			self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
+			self::ACTION_USER_LIST => Chat::ROLE_NONE,
+		];
 
-			self::$permissionsByChatTypes[\Bitrix\ImBot\Bot\Network::CHAT_ENTITY_TYPE] =
-				self::$permissionsByChatTypes[\Bitrix\ImBot\Bot\Support24::CHAT_ENTITY_TYPE]
-			;
-		}
+		self::$permissionsByChatTypes[EntityLink::TYPE_NETWORK_DIALOG] =
+			self::$permissionsByChatTypes[EntityLink::TYPE_SUPPORT24_QUESTION]
+		;
 
-		if (Loader::includeModule('socialnetwork'))
-		{
-			self::$permissionsByChatTypes[self::TYPE_SONET] = [
-				self::ACTION_CHANGE_AVATAR => Chat::ROLE_NONE,
-				self::ACTION_RENAME => Chat::ROLE_NONE,
-				self::ACTION_EXTEND => Chat::ROLE_NONE,
-				self::ACTION_LEAVE => Chat::ROLE_NONE,
-				self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
-			];
-		}
+		self::$permissionsByChatTypes[EntityLink::TYPE_SONET] = [
+			self::ACTION_CHANGE_AVATAR => Chat::ROLE_NONE,
+			self::ACTION_RENAME => Chat::ROLE_NONE,
+			self::ACTION_EXTEND => Chat::ROLE_NONE,
+			self::ACTION_LEAVE => Chat::ROLE_NONE,
+			self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
+		];
 
-		if (Loader::includeModule('tasks'))
-		{
-			self::$permissionsByChatTypes[self::TYPE_TASKS] = $default;
-		}
+		self::$permissionsByChatTypes[EntityLink::TYPE_TASKS] = $default;
 
-		if (Loader::includeModule('calendar'))
-		{
-			self::$permissionsByChatTypes[\CCalendar::CALENDAR_CHAT_ENTITY_TYPE] = $default;
-		}
+		self::$permissionsByChatTypes[EntityLink::TYPE_CALENDAR] = $default;
 
-		if (\Bitrix\Main\Loader::includeModule('crm'))
-		{
-			self::$permissionsByChatTypes[self::TYPE_CRM] = [
-				self::ACTION_CHANGE_AVATAR => Chat::ROLE_NONE,
-				self::ACTION_RENAME => Chat::ROLE_NONE,
-				self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
-			];
-		}
+		self::$permissionsByChatTypes[EntityLink::TYPE_CRM] = [
+			self::ACTION_CHANGE_AVATAR => Chat::ROLE_NONE,
+			self::ACTION_RENAME => Chat::ROLE_NONE,
+			self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
+		];
 
-		if (\Bitrix\Main\Loader::includeModule('voximplant'))
-		{
-			self::$permissionsByChatTypes[self::TYPE_CALL] = [
-				self::ACTION_EXTEND => Chat::ROLE_NONE,
-				self::ACTION_CALL => Chat::ROLE_NONE,
-				self::ACTION_MUTE => Chat::ROLE_NONE,
-				self::ACTION_LEAVE => Chat::ROLE_NONE,
-				self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
-			];
-		}
+		self::$permissionsByChatTypes[EntityLink::TYPE_CALL] = [
+			self::ACTION_EXTEND => Chat::ROLE_NONE,
+			self::ACTION_CALL => Chat::ROLE_NONE,
+			self::ACTION_MUTE => Chat::ROLE_NONE,
+			self::ACTION_LEAVE => Chat::ROLE_NONE,
+			self::ACTION_LEAVE_OWNER => Chat::ROLE_NONE,
+		];
+
+		self::$permissionsByChatTypes[self::TYPE_GROUP_CHAT] = [
+			self::ACTION_UPDATE => Chat::ROLE_OWNER,
+		];
+
+		self::$permissionsByChatTypes[self::TYPE_OPEN_CHAT] = [
+			self::ACTION_UPDATE => Chat::ROLE_OWNER,
+		];
+
+		self::$permissionsByChatTypes[self::TYPE_VIDEOCONF] = [
+			self::ACTION_UPDATE => Chat::ROLE_OWNER,
+		];
 
 		foreach (self::$permissionsByChatTypes as $code => $value)
 		{
@@ -315,6 +309,33 @@ class Permission
 		}
 
 		return $defaultPermissionsByTypes;
+	}
+
+	public static function specifyAction(string $actionName, Chat $targetChat, mixed $target): string
+	{
+		if ($actionName !== self::ACTION_KICK)
+		{
+			return $actionName;
+		}
+
+		if (!is_int($target))
+		{
+			return $actionName;
+		}
+
+		$currentUserId = $targetChat->getContext()->getUserId();
+
+		if ($target === $currentUserId)
+		{
+			if ($currentUserId === $targetChat->getAuthorId())
+			{
+				return self::ACTION_LEAVE_OWNER;
+			}
+
+			return self::ACTION_LEAVE;
+		}
+
+		return self::ACTION_KICK;
 	}
 
 	public static function compareRole(string $userRole, string $needRole): bool

@@ -74,11 +74,10 @@ class MobileService
 			&& !MemberStatus::isFinishForSigning($member->status)
 		)
 		{
-			(new SyncMemberStatus($member, $document))	->launch();
+			(new SyncMemberStatus($member, $document))->launch();
 		}
 
-		$memberService = Container::instance()->getMemberService();
-		$result = $memberService->getLinkForSigning($member);
+		$result = $this->memberService->getLinkForSigning($member);
 
 		if (!$result->isSuccess())
 		{
@@ -94,18 +93,28 @@ class MobileService
 
 		$url = $this->addMobileUrlParams($url);
 
-		return (new LinkResult())->setLink(
-			new Link(
-				url: $url,
-				documentTitle: $document->title,
-				memberId: $member->id,
-				role: $member->role,
-				status: $member->status,
-				documentStatus: $document->status,
-				providerCode: $document->providerCode,
-				readyForDownload: false,
-			)
+		$link = new Link(
+			url: $url,
+			documentTitle: $document->title,
+			memberId: $member->id,
+			role: $member->role,
+			status: $member->status,
+			documentStatus: $document->status,
+			providerCode: $document->providerCode,
+			readyForDownload: false,
 		);
+
+		if (
+			$document->providerCode === ProviderCode::GOS_KEY
+			&& $member->status === MemberStatus::READY
+			&& $member->role === Role::ASSIGNEE
+			&& $this->memberService->countWaitingSigners($document->id) === 0
+		)
+		{
+			$link->setGoskeyAssigneeAlmostDone();
+		}
+
+		return (new LinkResult())->setLink($link);
 	}
 
 	private function getLinkForFinishedSigning(Member $member): LinkResult

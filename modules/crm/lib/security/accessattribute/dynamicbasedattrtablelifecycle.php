@@ -42,6 +42,7 @@ class DynamicBasedAttrTableLifecycle
 			$this->createIndex($entity->getDBTableName(), '6', ['ENTITY_ID', 'IS_ALWAYS_READABLE'], false);
 			$this->createIndex($entity->getDBTableName(), '7', ['CATEGORY_ID', 'ENTITY_ID'], false);
 			$this->createIndex($entity->getDBTableName(), '8', ['ENTITY_ID', 'CATEGORY_ID', 'USER_ID'], false);
+			$this->createIndex($entity->getDBTableName(), '9', ['CATEGORY_ID' ,'USER_ID', 'ENTITY_ID'], false);
 		}
 		catch (SystemException $e)
 		{

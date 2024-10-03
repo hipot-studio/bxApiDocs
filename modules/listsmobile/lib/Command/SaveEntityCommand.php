@@ -378,7 +378,11 @@ final class SaveEntityCommand extends Command
 
 	private function toWebMoney($value): string
 	{
-		if (isset($value['currency'], $value['amount']))
+		if (
+			isset($value['currency'], $value['amount'])
+			&& ($value['amount'] !== '' && $value['amount'] !== 'null')
+			&& $value['currency'] !== ''
+		)
 		{
 			return $value['amount'] . '|' . $value['currency'];
 		}

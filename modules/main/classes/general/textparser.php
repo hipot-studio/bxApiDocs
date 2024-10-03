@@ -174,19 +174,22 @@ class CTextParser
 					'width' => intval($row['IMAGE_WIDTH']),
 					'height' => intval($row['IMAGE_HEIGHT']),
 					'descriptionDecode' => $row['DESCRIPTION_DECODE'] == 'Y',
-					'imageDefinition' => $row['IMAGE_DEFINITION'] ?: CSmile::IMAGE_SD
+					'imageDefinition' => $row['IMAGE_DEFINITION'] ?: CSmile::IMAGE_SD,
 				];
 			}
 		}
 		usort($this->smilePatterns, function($a, $b) { return (mb_strlen($a) > mb_strlen($b) ? -1 : 1); });
 	}
 
-	public function convertText($text)
+	// Added $attributes for links
+	public function convertText($text, $attributes = [])
 	{
 		if (!is_string($text) || $text == '')
 		{
 			return '';
 		}
+
+		$attributes = is_array($attributes) ? $attributes : [];
 
 		$text = preg_replace(["#([?&;])PHPSESSID=([0-9a-zA-Z]{32})#i", "/\\x{00A0}/u"], ["\\1PHPSESSID1=", " "], $text);
 
@@ -226,7 +229,7 @@ class CTextParser
 			$text = preg_replace_callback(
 				[
 					"#(\\[code(?:\\s+[^]]*]|]))(.+?)(\\[/code(?:\\s+[^]]*]|]))#isu",
-					"#(<code(?:\\s+[^>]*>|>))(.+?)(</code(?:\\s+[^>]*>|>))#isu"
+					"#(<code(?:\\s+[^>]*>|>))(.+?)(</code(?:\\s+[^>]*>|>))#isu",
 				],
 				[$this, 'convertCode'],
 				$text
@@ -244,7 +247,7 @@ class CTextParser
 				$text = preg_replace(
 					[
 						"#<a[^>]+href\\s*=\\s*(['\"])(.+?)(?:\\1)[^>]*>(.*?)</a[^>]*>#isu",
-						"#<a[^>]+href(\\s*=\\s*)([^'\">]+)>(.*?)</a[^>]*>#isu"
+						"#<a[^>]+href(\\s*=\\s*)([^'\">]+)>(.*?)</a[^>]*>#isu",
 					],
 					"[url=\\2]\\3[/url]", $text
 				);
@@ -405,7 +408,11 @@ class CTextParser
 			)+
 			)\\s*\\](.*?)\\[\\/url\\]/ixsu";
 
-			$text = preg_replace_callback($patt, [$this, 'preconvertAnchor'], $text);
+			$text = preg_replace_callback(
+				$patt,
+				fn($matches) => $this->preconvertAnchor($matches, $attributes['ANCHOR'] ?? []),
+				$text,
+			);
 
 			if (($this->allow['TEXT_ANCHOR'] ?? 'Y') == 'Y')
 			{
@@ -430,7 +437,11 @@ class CTextParser
 
 				$patt[] = "/(?<=^|[" . $this->wordSeparator . "])(?<!\\[nomodify\\]|<nomodify>)((((" . $schemes . "):\\/\\/)|www\\.)[._:a-z0-9@-].*?)(?=[\\s\"{}]|&quot;|\$)/isu";
 
-				$text = preg_replace_callback($patt, [$this, 'preconvertUrl'], $text);
+				$text = preg_replace_callback(
+					$patt,
+					fn($matches) => $this->preconvertUrl($matches, $attributes['TEXT_ANCHOR'] ?? []),
+					$text,
+				);
 			}
 		}
 		elseif (!empty($patt))
@@ -447,11 +458,11 @@ class CTextParser
 				$text = preg_replace(
 					[
 						"/\\[(cut|spoiler)(([^]])*)]/isu",
-						"/\\[\\/(cut|spoiler)]/isu"
+						"/\\[\\/(cut|spoiler)]/isu",
 					],
 					[
 						"\001\\2\002",
-						"\003"
+						"\003",
 					],
 					$text
 				);
@@ -465,12 +476,12 @@ class CTextParser
 					[
 						"/\001([^\002]+)\002/",
 						"/\001\002/",
-						"/\003/"
+						"/\003/",
 					],
 					[
 						"[spoiler\\1]",
 						"[spoiler]",
-						"[/spoiler]"
+						"[/spoiler]",
 					],
 					$text
 				);
@@ -582,8 +593,8 @@ class CTextParser
 					{
 						$text = preg_replace_callback(
 							$arUrlPatterns,
-							[$this, 'convertAnchor'],
-							$text
+							fn($matches) => $this->convertAnchor($matches, $attributes['ANCHOR'] ?? []),
+							$text,
 						);
 					}
 					else
@@ -1637,11 +1648,11 @@ class CTextParser
 				{
 					$res = \Bitrix\Intranet\UserTable::getList([
 						'filter' => [
-							'ID' => $userId
+							'ID' => $userId,
 						],
 						'select' => [
-							'USER_TYPE'
-						]
+							'USER_TYPE',
+						],
 					]);
 
 					if ($userFields = $res->fetch())
@@ -1989,12 +2000,12 @@ class CTextParser
 		return $matches[1];
 	}
 
-	public function convertAnchor($matches)
+	public function convertAnchor($matches, $attributes = [])
 	{
-		return $this->convert_anchor_tag($matches[1], (!empty($matches[2]) ? $matches[2] : $matches[1]));
+		return $this->convert_anchor_tag($matches[1], (!empty($matches[2]) ? $matches[2] : $matches[1]), $attributes);
 	}
 
-	public function convert_anchor_tag($url, $text)
+	public function convert_anchor_tag($url, $text, $attributes = [])
 	{
 		$url = trim(str_replace(['[nomodify]', '[/nomodify]'], '', $url));
 		$text = trim(str_replace(['[nomodify]', '[/nomodify]'], '', $text));
@@ -2076,7 +2087,7 @@ class CTextParser
 
 			$noFollowAttribute = $this->parser_nofollow == 'Y'? ' rel="nofollow"': '';
 
-			$link = '<a href="' . $url . '" target="' . $this->link_target . '"' . $noFollowAttribute . '>' . $text . '</a>';
+			$link = '<a href="' . $url . '" target="' . $this->link_target . '"' . $noFollowAttribute . $this->convertAttributes($attributes) . ' >' . $text . '</a>';
 
 			if ($noFollowAttribute)
 			{
@@ -2087,17 +2098,38 @@ class CTextParser
 		return $link . $postfix;
 	}
 
-	private function preconvertUrl($matches)
+	protected function convertAttributes($attributes)
 	{
-		return $this->pre_convert_anchor_tag($matches[0], $matches[0], '[url]' . $matches[0] . '[/url]');
+		$result = '';
+		if (!is_array($attributes))
+		{
+			return $result;
+		}
+
+		foreach ($attributes as $key => $value)
+		{
+			if (preg_match('#[^a-zA-Z\d-]#', $key))
+			{
+				continue;
+			}
+
+			$result .= ' ' . $key . '="' . htmlspecialcharsbx(\Bitrix\Main\Web\Json::encode($value)). '"';
+		}
+
+		return $result;
 	}
 
-	public function preconvertAnchor($matches)
+	private function preconvertUrl($matches, $attributes = [])
 	{
-		return $this->pre_convert_anchor_tag($matches[1], $matches[2] ?? '', $matches[0] ?? '');
+		return $this->pre_convert_anchor_tag($matches[0], $matches[0], '[url]' . $matches[0] . '[/url]', $attributes);
 	}
 
-	public function pre_convert_anchor_tag($url, $text = '', $str = '')
+	public function preconvertAnchor($matches, $attributes = [])
+	{
+		return $this->pre_convert_anchor_tag($matches[1], $matches[2] ?? '', $matches[0] ?? '', $attributes);
+	}
+
+	public function pre_convert_anchor_tag($url, $text = '', $str = '', $attributes = [])
 	{
 		if (stripos($str, '[url') !== 0)
 		{
@@ -2119,7 +2151,7 @@ class CTextParser
 		}
 		else
 		{
-			$tag = "<\x18#" . count($this->defended_urls) . ">";
+			$tag = "<\x18#" . count($this->defended_urls) . " " . $this->convertAttributes($attributes) . " " . ">";
 			$this->defended_urls[$url] = $tag;
 
 			return $tag;

@@ -2,8 +2,10 @@
 
 namespace Bitrix\BIConnector\Integration\Superset\Integrator;
 
+use Bitrix\BIConnector\Superset\Config\ConfigContainer;
 use Bitrix\Main\Error;
 use Bitrix\Main\IO\File;
+use Bitrix\Main\IO\FileOpenException;
 use Bitrix\Main\Result;
 use Bitrix\Main\Service\MicroService;
 use Bitrix\Main\Service\MicroService\Client;
@@ -30,25 +32,30 @@ class Sender extends MicroService\BaseSender
 	 */
 	public function performRequest($action, array $parameters = [], Dto\User $user = null): Result
 	{
-		$httpClient = $this->buildHttpClient();
-
 		$url = $this->getServiceUrl() . $this->getProxyPath() . $action;
 
 		$request = [
-			"action" => $action,
-			"serializedParameters" => base64_encode(gzencode(Json::encode($parameters))),
+			'action' => $action,
+			'serializedParameters' => base64_encode(gzencode(Json::encode($parameters))),
 		];
 
-		$request["BX_TYPE"] = Client::getPortalType();
-		$request["BX_LICENCE"] = Client::getLicenseCode();
-		$request["SERVER_NAME"] = Client::getServerName();
+		$request['BX_TYPE'] = Client::getPortalType();
+		$request['BX_LICENCE'] = Client::getLicenseCode();
+		$request['SERVER_NAME'] = self::getServerName();
 		if ($user && $user->clientId)
 		{
-			$request["BX_CLIENT_ID"] = $user->clientId;
+			$request['BX_CLIENT_ID'] = $user->clientId;
 		}
-		$request["BX_VERSION"] = self::API_VERSION;
-		$request["BX_HASH"] = Client::signRequest($request);
+		$request['BX_VERSION'] = self::API_VERSION;
 
+		$portalId = ConfigContainer::getConfigContainer()->getPortalId();
+		if (!empty($portalId))
+		{
+			$request['BX_PORTAL_ID'] = $portalId;
+		}
+		$request['BX_HASH'] = Client::signRequest($request);
+
+		$httpClient = $this->buildHttpClient();
 		$result = $httpClient->query(HttpClient::HTTP_POST, $url, $request);
 
 		return $this->buildResult($httpClient, $result);
@@ -56,7 +63,6 @@ class Sender extends MicroService\BaseSender
 
 	public function performMultipartRequest($action, array $parameters = [], Dto\User $user = null): Result
 	{
-		$httpClient = $this->buildHttpClient();
 		$url = $this->getServiceUrl() . $this->getProxyPath() . $action;
 		$filePath = $parameters['filePath'] ?? '';
 		if (!$filePath)
@@ -67,18 +73,35 @@ class Sender extends MicroService\BaseSender
 			return $result;
 		}
 		$file = new File($filePath);
-		$fileData = $file->open('r');
+		try
+		{
+			$fileData = $file->open('r');
+		}
+		catch (FileOpenException $e)
+		{
+			$result = new Result();
+			$result->addError(new Error('Error performing multipart request: ' . $e->getMessage() . '. File path: ' . $filePath));
+
+			return $result;
+		}
+
 		unset($parameters['filePath']);
 
 		$data = $parameters + [
-			'BX_TYPE' => Client::getPortalType(),
-			'BX_LICENCE' => Client::getLicenseCode(),
-			'SERVER_NAME' => Client::getServerName(),
-		];
+				'BX_TYPE' => Client::getPortalType(),
+				'BX_LICENCE' => Client::getLicenseCode(),
+				'SERVER_NAME' => self::getServerName(),
+			];
 
 		if ($user && $user->clientId)
 		{
 			$data['BX_CLIENT_ID'] = $user->clientId;
+		}
+
+		$portalId = ConfigContainer::getConfigContainer()->getPortalId();
+		if (!empty($portalId))
+		{
+			$data['BX_PORTAL_ID'] = $portalId;
 		}
 
 		$data['BX_VERSION'] = self::API_VERSION;
@@ -88,6 +111,8 @@ class Sender extends MicroService\BaseSender
 			'filename' => $file->getName(),
 		];
 		$body = new MultipartStream($data);
+
+		$httpClient = $this->buildHttpClient();
 		$httpClient->setHeader('Content-Type', 'multipart/form-data; boundary=' . $body->getBoundary());
 
 		$result = $httpClient->query(HttpClient::HTTP_POST, $url, $body);
@@ -155,5 +180,24 @@ class Sender extends MicroService\BaseSender
 		}
 
 		return $result;
+	}
+
+	private static function getServerName(): string
+	{
+		if (defined('BX24_HOST_NAME'))
+		{
+			return "https://" . BX24_HOST_NAME;
+		}
+
+		if (\Bitrix\Main\Context::getCurrent()->getRequest()->isHttps())
+		{
+			$scheme = "https://";
+		}
+		else
+		{
+			$scheme = "http://";
+		}
+
+		return $scheme . \Bitrix\Main\Config\Option::get("main", "server_name");
 	}
 }

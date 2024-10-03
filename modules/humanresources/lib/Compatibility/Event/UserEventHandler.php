@@ -5,12 +5,15 @@ namespace Bitrix\HumanResources\Compatibility\Event;
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Config\Storage;
 use Bitrix\HumanResources\Enum\EventName;
+use Bitrix\HumanResources\Enum\LoggerEntityType;
+use Bitrix\HumanResources\Exception\CreationFailedException;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Web\Json;
 
 class UserEventHandler
 {
@@ -128,6 +131,16 @@ class UserEventHandler
 					$node = Container::getNodeRepository()
 						->getById($link->nodeId)
 					;
+
+					if (!$node)
+					{
+						Container::getNodeMemberRepository()
+							->remove($link);
+						$currentLinks->remove($link);
+
+						continue;
+					}
+
 					if (!$node->accessCode)
 					{
 						continue;
@@ -156,13 +169,33 @@ class UserEventHandler
 						nodeId: $nodeId
 					);
 
-					Container::getNodeMemberRepository()
-						->create($nodeMember)
-					;
+					try
+					{
+						Container::getNodeMemberRepository()
+							->create($nodeMember)
+						;
+					}
+					catch (CreationFailedException $exception)
+					{
+						$message = $exception->getErrors()->getValues()[0] ?? null;
+						Container::getStructureLogger()
+							->write(
+								[
+									'message' => 'Node member create failure: '
+										. $message?->getMessage()
+										. ' ' . Json::encode($nodeMember)
+									,
+									'entityType' => LoggerEntityType::MEMBER_USER->name,
+									'entityId' => $userId,
+									'userId' => \Bitrix\Main\Engine\CurrentUser::get()->getId(),
+								],
+							)
+						;
+					}
 				}
 			}
 		}
-		catch (ObjectPropertyException|ArgumentException|SystemException $e)
+		catch (ObjectPropertyException|ArgumentException|SystemException)
 		{
 		}
 	}

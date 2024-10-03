@@ -79,6 +79,11 @@ class Rest extends \IRestService
 			'STATUS' => $tmUser->State(),
 		);
 
+		if (!is_array($currentInfo))
+		{
+			return $result;
+		}
+
 		$userOffset = $tmUser->getDayStartOffset($currentInfo) + date('Z');
 		static::setCurrentTimezoneOffset($userOffset);
 

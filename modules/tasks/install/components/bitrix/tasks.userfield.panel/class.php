@@ -6,7 +6,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Localization\LanguageTable;
 use Bitrix\Main\UserField\Types\DateTimeType;
 use Bitrix\Main\UserField\Types\DateType;
-use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\UserFieldLimit;
+use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
 use Bitrix\Tasks\Util\Result;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
@@ -131,7 +131,7 @@ class TasksUserFieldPanelComponent extends TasksBaseComponent
 		}
 		if (
 			!Restriction::canManage($ufController->getEntityCode())
-			&& UserFieldLimit::isLimitExceeded()
+			&& TaskLimit::isLimitExceeded()
 		)
 		{
 			$this->errorCollection->add('ACTION_RESTRICTED', Loc::getMessage('TASKS_TUFE_UF_MANAGING_RESTRICTED'));
@@ -446,7 +446,7 @@ class TasksUserFieldPanelComponent extends TasksBaseComponent
 			'USE' => Restriction::canUse($entityCode, $this->userId),
 			'MANAGE' => Restriction::canManage($entityCode, $this->userId),
 			'CREATE_MANDATORY' => Restriction::canCreateMandatory($entityCode, $this->userId),
-			'TASK_LIMIT_EXCEEDED' => UserFieldLimit::isLimitExceeded(),
+			'TASK_LIMIT_EXCEEDED' => TaskLimit::isLimitExceeded(),
 		];
 	}
 

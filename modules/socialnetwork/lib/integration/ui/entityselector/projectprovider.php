@@ -15,6 +15,7 @@ use Bitrix\Socialnetwork\EO_Workgroup;
 use Bitrix\Socialnetwork\EO_Workgroup_Collection;
 use Bitrix\Socialnetwork\FeaturePermTable;
 use Bitrix\Socialnetwork\FeatureTable;
+use Bitrix\Socialnetwork\Helper\Feature;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\WorkgroupSiteTable;
 use Bitrix\Socialnetwork\WorkgroupTable;
@@ -57,6 +58,12 @@ class ProjectProvider extends BaseProvider
 		{
 			$this->options['features'] = $options['features'];
 		}
+		
+		$this->options['checkFeatureForCreate'] = false;
+		if (isset($options['checkFeatureForCreate']) && is_bool($options['checkFeatureForCreate']))
+		{
+			$this->options['checkFeatureForCreate'] = $options['checkFeatureForCreate'];
+		}
 
 		$this->options['fillRecentTab'] = null; // auto
 		if (isset($options['fillRecentTab']) && is_bool($options['fillRecentTab']))
@@ -68,6 +75,18 @@ class ProjectProvider extends BaseProvider
 		if (isset($options['createProjectLink']) && is_bool($options['createProjectLink']))
 		{
 			$this->options['createProjectLink'] = $options['createProjectLink'];
+		}
+
+		$this->options['lockProjectLinkFeatureId'] = '';
+		if (isset($options['lockProjectLinkFeatureId']) && is_string($options['lockProjectLinkFeatureId']))
+		{
+			$this->options['lockProjectLinkFeatureId'] = $options['lockProjectLinkFeatureId'];
+		}
+
+		$this->options['lockProjectLink'] = false;
+		if (isset($options['lockProjectLink']) && is_bool($options['lockProjectLink']))
+		{
+			$this->options['lockProjectLink'] = $options['lockProjectLink'];
 		}
 
 		if (isset($options['projectId']))
@@ -106,6 +125,12 @@ class ProjectProvider extends BaseProvider
 		if (isset($options['searchLimit']) && is_int($options['searchLimit']))
 		{
 			$this->options['searchLimit'] = max(1, min($options['searchLimit'], static::SEARCH_LIMIT));
+		}
+
+		$this->options['shouldSelectProjectDates'] = false;
+		if (isset($options['shouldSelectProjectDates']) && is_bool($options['shouldSelectProjectDates']))
+		{
+			$this->options['shouldSelectProjectDates'] = (bool)$options['shouldSelectProjectDates'];
 		}
 	}
 
@@ -193,6 +218,14 @@ class ProjectProvider extends BaseProvider
 			($this->options['createProjectLink'] !== false && $onlyProjectsMode)
 		;
 
+		if (
+			$this->options['checkFeatureForCreate']
+			&& !Feature::isFeatureEnabled(Feature::PROJECTS_GROUPS)
+		)
+		{
+			$createProjectLink = false;
+		}
+		
 		if ($createProjectLink && self::canCreateProject())
 		{
 			$footerOptions = [];
@@ -200,6 +233,12 @@ class ProjectProvider extends BaseProvider
 			{
 				// Footer could be set from UserProvider
 				$footerOptions = $dialog->getFooterOptions() ?? [];
+			}
+
+			if ($this->options['lockProjectLink'])
+			{
+				$footerOptions['lockProjectLink'] = true;
+				$footerOptions['lockProjectLinkFeatureId'] = $this->options['lockProjectLinkFeatureId'] ?? '';
 			}
 
 			$footerOptions['createProjectLink'] = self::getCreateProjectUrl(UserProvider::getCurrentUserId());
@@ -247,20 +286,29 @@ class ProjectProvider extends BaseProvider
 		}
 
 		$query = WorkgroupTable::query();
-		$query->setSelect(
-			[
-				'ID',
-				'NAME',
-				'ACTIVE',
-				'PROJECT',
-				'CLOSED',
-				'VISIBLE',
-				'OPENED',
-				'IMAGE_ID',
-				'AVATAR_TYPE',
-				'LANDING'
-			]
-		);
+		$selectFields = [
+			'ID',
+			'NAME',
+			'ACTIVE',
+			'PROJECT',
+			'CLOSED',
+			'VISIBLE',
+			'OPENED',
+			'IMAGE_ID',
+			'AVATAR_TYPE',
+			'LANDING',
+		];
+
+		if (
+			isset($options['shouldSelectProjectDates'])
+			&& is_bool(isset($options['shouldSelectProjectDates']))
+			&& $options['shouldSelectProjectDates']
+		)
+		{
+			$selectFields[] = 'PROJECT_DATE_START';
+			$selectFields[] = 'PROJECT_DATE_FINISH';
+		}
+		$query->setSelect($selectFields);
 
 		if (isset($options['visible']) && is_bool(isset($options['visible'])))
 		{
@@ -878,6 +926,10 @@ class ProjectProvider extends BaseProvider
 					'closed' => $project->getClosed(),
 					'open' => $project->getOpened(),
 					'project' => $project->getProject(),
+					'datePlan' => [
+						'dateStart' => $project->getProjectDateStart()?->getTimestamp(),
+						'dateFinish' => $project->getProjectDateFinish()?->getTimestamp(),
+					],
 				],
 			]
 		);

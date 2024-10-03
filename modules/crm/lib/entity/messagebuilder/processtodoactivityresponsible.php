@@ -46,4 +46,9 @@ final class ProcessToDoActivityResponsible extends ProcessEntity
 	public const NO_LONGER_EMPTY_SUBJECT = 'NO_LONGER_RESPONSIBLE_EMPTY_SUBJECT';
 
 	protected const MESSAGE_BASE_PREFIX = 'CRM_ACTIVITY_TODO';
+
+	public static function getFilePath(): string
+	{
+		return __FILE__;
+	}
 }

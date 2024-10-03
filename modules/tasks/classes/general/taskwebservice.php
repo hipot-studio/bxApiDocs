@@ -237,7 +237,28 @@ class CTasksWebService extends IWebService
 
 		$obRow->setAttribute('ows_Priority', $arRes["PRIORITY"]);
 
-		$obRow->setAttribute('ows_Status', in_array($arRes["REAL_STATUS"], $this->arNotChoiceStatuses) ? GetMessage("TASKS_STATUS_".$arRes["REAL_STATUS"]) : $arRes["REAL_STATUS"]);
+		if (in_array($arRes['REAL_STATUS'], $this->arNotChoiceStatuses))
+		{
+			$hasNewVersion = GetMessage('TASKS_STATUS_' . $arRes['REAL_STATUS'] . '_MSGVER_1');
+			if ($hasNewVersion)
+			{
+				$obRow->setAttribute(
+					'ows_Status',
+					GetMessage('TASKS_STATUS_' . $arRes['REAL_STATUS'] . '_MSGVER_1')
+				);
+			}
+			else
+			{
+				$obRow->setAttribute(
+					'ows_Status',
+					GetMessage('TASKS_STATUS_' . $arRes['REAL_STATUS'])
+				);
+			}
+		}
+		else
+		{
+			$obRow->setAttribute('ows_Status', $arRes["REAL_STATUS"]);
+		}
 
 		$obRow->setAttribute('ows_MetaInfo_DateComplete', $this->__makeDateTime(MakeTimeStamp($arRes['CLOSED_DATE'])));
 

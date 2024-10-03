@@ -9,8 +9,10 @@ use Bitrix\Main\ObjectException;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Tasks\Control\Handler\Exception\TaskFieldValidateException;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\Flow\Provider\FlowProvider;
-use Bitrix\Tasks\Flow\Responsible\Distributor;
+use Bitrix\Tasks\Flow\Control\Task\Exception\FlowTaskException;
+use Bitrix\Tasks\Flow\Control\Task\Field\FlowFieldHandler;
+use Bitrix\Tasks\Flow\Provider\Exception\FlowNotFoundException;
+use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Integration\Intranet\Department;
 use Bitrix\Tasks\Internals\Helper\Task\Dependence;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
@@ -27,7 +29,6 @@ use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Replication\Task\Regularity\Exception\RegularityException;
 use Bitrix\Tasks\Replication\Task\Regularity\Time\Service\DeadlineRegularityService;
 use Bitrix\Tasks\Replication\Repository\TaskRepository;
-use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
@@ -59,51 +60,26 @@ class TaskFieldHandler
 		return $this;
 	}
 
+	/**
+	 * @throws TaskFieldValidateException
+	 */
 	public function prepareFlow(): self
 	{
-		if ($this->isExistingTask())
+		if ($this->skipModifyByFlow())
 		{
 			return $this;
 		}
 
-		$flowId = (int) ($this->fields['FLOW_ID'] ?? 0);
-		if (!$flowId)
+		$flowId = (int)($this->fields['FLOW_ID'] ?? 0);
+		$handler = new FlowFieldHandler($flowId, $this->userId);
+
+		try
 		{
-			return $this;
+			$handler->modify($this->fields);
 		}
-
-		$flowProvider = new FlowProvider();
-		$flow = $flowProvider->getFlow($flowId, ['*', 'OPTIONS']);
-
-		if (!\Bitrix\Tasks\Flow\FlowFeature::isFeatureEnabled())
+		catch (FlowTaskException|FlowNotFoundException $e)
 		{
-			throw new TaskFieldValidateException('You cannot run a task without flow feature');
-		}
-
-		if (!$flow->isActive())
-		{
-			throw new TaskFieldValidateException('You cannot run a task on an inactive flow');
-		}
-
-		$distributor = new Distributor();
-		$responsible = $distributor->generateResponsible($flow);
-
-		$this->fields['RESPONSIBLE_ID'] = $responsible->getId();
-
-		$deadline = $this->getDeadlineMatchWorkTimeWithTZOffset(
-			$flow->getPlannedCompletionTime(),
-			$flow->getMatchWorkTime()
-		);
-
-		$this->fields['MATCH_WORK_TIME'] = $flow->getMatchWorkTime();
-		$this->fields['DEADLINE'] = UI::formatDateTime($deadline->convertToLocalTime()->getTimestamp());
-		$this->fields['GROUP_ID'] = $flow->getGroupId();
-		$this->fields['TASK_CONTROL'] = $flow->getTaskControl();
-		$this->fields['ALLOW_CHANGE_DEADLINE'] = $flow->canResponsibleChangeDeadline();
-
-		if (!empty($this->fields['SE_PROJECT']))
-		{
-			$this->fields['SE_PROJECT']['ID'] = $flow->getGroupId();
+			throw new TaskFieldValidateException($e->getMessage());
 		}
 
 		return $this;
@@ -1261,48 +1237,33 @@ class TaskFieldHandler
 		return in_array($field, $this->skipTimeZoneFields, true);
 	}
 
-	private function getDeadlineMatchWorkTimeWithTZOffset(
-		int $offsetInSeconds,
-		bool $matchWorkTime = false
-	): DateTime
-	{
-		$currentDate = DateTime::createFromUserTimeGmt((new Util\Type\DateTime()))->disableUserTime();
-
-		$deadline = $currentDate->add(($offsetInSeconds) . ' seconds');
-
-		if (!$matchWorkTime)
-		{
-			return $deadline;
-		}
-
-		$calendar = Util\Calendar::getInstance();
-		$isWorkTime = $calendar->isWorkTime($deadline);
-
-		if ($isWorkTime)
-		{
-			$closestWorkTime = $deadline;
-		}
-		else
-		{
-			$closestWorkTime = $calendar->getClosestWorkTime($deadline);
-
-			$endTimeHour = $calendar->getEndHour();
-			$endTimeMinute = $calendar->getEndMinute();
-
-			$endDateTime = (new Util\Type\DateTime())
-				->setDate($currentDate->getYear(), $currentDate->getMonth(), $currentDate->getDay())
-				->setTime($endTimeHour, $endTimeMinute);
-
-			$restSeconds = abs($endDateTime->getTimestamp() - $currentDate->getTimestamp());
-
-			$closestWorkTime->add($restSeconds . ' seconds');
-		}
-
-		return $closestWorkTime;
-	}
-
 	private function isExistingTask(): bool
 	{
 		return isset($this->taskId) && $this->taskId > 0;
+	}
+
+	protected function skipModifyByFlow(): bool
+	{
+		$flowId = (int)($this->fields['FLOW_ID'] ?? 0);
+		if ($flowId <= 0)
+		{
+			return true;
+		}
+
+		if ($this->isNewTask())
+		{
+			return false;
+		}
+
+		if ($this->isExistingTask())
+		{
+			$currentFlowId = (int)($this->taskData['FLOW_ID'] ?? 0);
+			if ($currentFlowId === $flowId)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

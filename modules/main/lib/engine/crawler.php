@@ -2,10 +2,8 @@
 
 namespace Bitrix\Main\Engine;
 
-
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Context;
-use Bitrix\Main\Loader;
 
 final class Crawler
 {

@@ -65,8 +65,14 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 
 	protected function findEntityId(): int
 	{
-		$targetDocumentType = CCrmBizProcHelper::ResolveDocumentType($this->DynamicTypeId);
-		$factory = Container::getInstance()->getFactory($this->DynamicTypeId);
+		$dynamicTypeId = $this->DynamicTypeId;
+		if (!$dynamicTypeId)
+		{
+			return 0;
+		}
+
+		$targetDocumentType = CCrmBizProcHelper::ResolveDocumentType($dynamicTypeId);
+		$factory = Container::getInstance()->getFactory($dynamicTypeId);
 		$items = [];
 		if (isset($factory))
 		{
@@ -107,8 +113,8 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 		$document = static::getDocumentService()->GetDocument($complexDocumentId);
 		foreach ($this->ReturnFields as $fieldId)
 		{
-			$this->arProperties[$fieldId] = $document[$fieldId];
-			$this->preparedProperties[$fieldId] = $document[$fieldId];
+			$this->arProperties[$fieldId] = $document[$fieldId] ?? null;
+			$this->preparedProperties[$fieldId] = $document[$fieldId] ?? null;
 		}
 		$this->setPropertiesTypes($this->DynamicEntityFields);
 
@@ -222,7 +228,8 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 				'FieldName' => 'dynamic_type_id',
 				'Type' => FieldType::SELECT,
 				'Options' => $showOnlyDynamicEntities ? static::getOnlyDynamicEntities($typeNames) : $typeNames,
-				'Required' => true
+				'Required' => true,
+				'AllowSelection' => false,
 			],
 			'ReturnFields' => [
 				'Name' => Loc::getMessage('CRM_GDIA_RETURN_FIELDS_SELECTION'),

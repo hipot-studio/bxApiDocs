@@ -2,7 +2,7 @@
 
 namespace Bitrix\Intranet\Settings\Tools;
 
-use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Localization\Loc;
 
 class BIConstructor extends Tool
@@ -19,7 +19,7 @@ class BIConstructor extends Tool
 
 	public function isAvailable(): bool
 	{
-		return Loader::includeModule('bitrix24');
+		return ModuleManager::isModuleInstalled('biconnector');
 	}
 
 	public function getSubgroupsIds(): array

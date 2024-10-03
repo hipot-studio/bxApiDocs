@@ -71,6 +71,11 @@ final class Settings
 		\CUserOptions::SetOption('tasksmobile', Settings::IS_BETA_ACTIVE, false, false, $this->userId);
 	}
 
+	public function isNewFeaturesPoliticEnabled(): bool
+	{
+		return Option::get('bitrix24', 'new-features-politic-2024', 'N', '-') === 'Y';
+	}
+
 	public function isTaskFlowAvailable(): bool
 	{
 		return FlowFeature::isOn() && $this->clientHasApiVersion(54);

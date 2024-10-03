@@ -11,6 +11,7 @@ use Bitrix\Main\ModuleManager;
 
 class Crm extends Tool
 {
+	private ?bool $isBiAnalyticsAvailable = null;
 	private const CRM_SUBGROUPS_ID = [
 		'crm' => 'menu_crm_favorite',
 		'marketing' => 'menu_marketing',
@@ -43,7 +44,9 @@ class Crm extends Tool
 
 	private function isBiAnalyticsAvailable(): bool
 	{
-		return !Loader::includeModule('bitrix24') || Feature::isFeatureEnabled('biconnector');
+		$this->isBiAnalyticsAvailable ??= !Loader::includeModule('bitrix24') || Feature::isFeatureEnabled('biconnector');
+
+		return $this->isBiAnalyticsAvailable;
 	}
 
 	public function getSettingsPath(): ?string

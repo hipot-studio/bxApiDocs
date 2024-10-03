@@ -36,7 +36,7 @@ class Google extends Base
 	 */
 	protected function checkService(): bool
 	{
-		return \CCalendar::IsCalDAVEnabled() && \CCalendar::isGoogleApiEnabled();
+		return \CCalendar::isGoogleApiEnabled();
 	}
 
 	/**

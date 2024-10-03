@@ -68,6 +68,11 @@ class CommonActions extends BaseObject
 		return $this->move($object, $toFolder);
 	}
 
+	public function copyToAction(Disk\BaseObject $object, Disk\Folder $toFolder)
+	{
+		return $this->copyTo($object, $toFolder);
+	}
+
 	public function markDeletedAction(Disk\BaseObject $object)
 	{
 		$this->markDeleted($object);

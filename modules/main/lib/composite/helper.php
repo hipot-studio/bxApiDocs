@@ -693,7 +693,13 @@ class Helper
 		}
 
 		$fileName = self::getSizeFilePath();
-		if (($handle = @fopen($fileName, "c+")) === false)
+
+		if (!file_exists($fileName))
+		{
+			return;
+		}
+
+		if (($handle = fopen($fileName, "c+")) === false)
 		{
 			return;
 		}

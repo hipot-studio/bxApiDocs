@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Tasks\Scrum\Service;
 
 use Bitrix\Main\Engine\Response\Component;
@@ -8,6 +9,7 @@ use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\RandomSequence;
 use Bitrix\Tasks\CheckList\CheckListFacade;
+use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Scrum\Checklist\TypeChecklistFacade;
 use Bitrix\Tasks\Util\Result;
 
@@ -32,7 +34,7 @@ class DefinitionOfDoneService implements Errorable
 
 		foreach ($items as $id => $item)
 		{
-			$item['ID'] = ((int) ($item['ID'] ?? null) === 0 ? null : (int) $item['ID']);
+			$item['ID'] = ((int)($item['ID'] ?? null) === 0 ? null : (int)$item['ID']);
 			$item['IS_COMPLETE'] = ($item['IS_COMPLETE'] === "true");
 			$item['IS_IMPORTANT'] = ($item['IS_IMPORTANT'] === "true");
 
@@ -49,7 +51,7 @@ class DefinitionOfDoneService implements Errorable
 		$facade::deleteByEntityId($entityId, $this->executiveUserId);
 	}
 
-	public function getComponent(int $entityId, string $entityType, array $items): Component
+	public function getComponent(int $entityId, string $entityType, ?array $items): Component
 	{
 		$randomGenerator = new RandomSequence(rand());
 
@@ -93,16 +95,16 @@ class DefinitionOfDoneService implements Errorable
 			$result = TypeChecklistFacade::add($entityId, $this->executiveUserId, [
 				'TITLE' => Loc::getMessage('TASKS_SCRUM_DEFINITION_OF_DONE_NEW_0'),
 				'IS_COMPLETE' => 'N',
-				'PARENT_ID' => 0
+				'PARENT_ID' => 0,
 			]);
 			$newItem = $result->getData()['ITEM'];
 			$newItemId = $newItem->getFields()['ID'];
 			for ($i = 1; $i <= 3; $i++)
 			{
 				TypeChecklistFacade::add($entityId, $this->executiveUserId, [
-					'TITLE' => Loc::getMessage('TASKS_SCRUM_DEFINITION_OF_DONE_NEW_'.$i),
+					'TITLE' => Loc::getMessage('TASKS_SCRUM_DEFINITION_OF_DONE_NEW_' . $i),
 					'IS_COMPLETE' => 'N',
-					'PARENT_ID' => $newItemId
+					'PARENT_ID' => $newItemId,
 				]);
 			}
 		}
@@ -129,6 +131,57 @@ class DefinitionOfDoneService implements Errorable
 				)
 			);
 		}
+	}
+
+	public function isNecessary(int $groupId, int $taskId): bool
+	{
+		$taskService = new TaskService($this->executiveUserId);
+
+		$task = current($taskService->getTasksInfo([$taskId]));
+		if (!$task)
+		{
+			return false;
+		}
+
+		$parentId = (int)$task['PARENT_ID'];
+
+		if ($parentId)
+		{
+			$queryObject = TaskTable::getList([
+				'filter' => [
+					'ID' => $parentId,
+					'GROUP_ID' => $groupId,
+				],
+				'select' => ['ID'],
+			]);
+			if ($queryObject->fetch())
+			{
+				return false;
+			}
+		}
+
+		if (self::existsDod($groupId))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	public static function existsDod(int $groupId): bool
+	{
+		$typeService = new TypeService();
+		$backlogService = new BacklogService();
+
+		$backlog = $backlogService->getBacklogByGroupId($groupId);
+
+		$types = [];
+		foreach ($typeService->getTypes($backlog->getId()) as $type)
+		{
+			$types[] = $type->toArray();
+		}
+
+		return (!empty($types));
 	}
 
 	public function getErrors()

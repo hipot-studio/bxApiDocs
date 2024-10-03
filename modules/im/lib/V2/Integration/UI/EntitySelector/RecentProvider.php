@@ -43,6 +43,7 @@ class RecentProvider extends BaseProvider
 	private const ENTITY_TYPE_CHAT = 'im-chat';
 	private const WITH_CHAT_BY_USERS_OPTION = 'withChatByUsers';
 	private const ONLY_WITH_MANAGE_MESSAGES_RIGHT_OPTION = 'onlyWithManageMessagesRight';
+	private const EXCLUDE_FROM_RECENT_OPTION = 'excludeFromRecent';
 	private const INCLUDE_ONLY_OPTION = 'includeOnly';
 	private const EXCLUDE_OPTION = 'exclude';
 	private const SEARCH_FLAGS_OPTION = 'searchFlags';
@@ -74,6 +75,10 @@ class RecentProvider extends BaseProvider
 		if (isset($options[self::ONLY_WITH_MANAGE_MESSAGES_RIGHT_OPTION]) && is_bool($options[self::ONLY_WITH_MANAGE_MESSAGES_RIGHT_OPTION]))
 		{
 			$this->options[self::ONLY_WITH_MANAGE_MESSAGES_RIGHT_OPTION] = $options[self::ONLY_WITH_MANAGE_MESSAGES_RIGHT_OPTION];
+		}
+		if (isset($options[self::EXCLUDE_FROM_RECENT_OPTION]) && is_array($options[self::EXCLUDE_FROM_RECENT_OPTION]))
+		{
+			$this->options[self::EXCLUDE_FROM_RECENT_OPTION] = $options[self::EXCLUDE_FROM_RECENT_OPTION];
 		}
 		$this->prepareSearchFlags($options);
 		parent::__construct();
@@ -159,14 +164,16 @@ class RecentProvider extends BaseProvider
 
 	private function setUserAndChatIds(array $ids): void
 	{
+		$needExcludeChats = isset($this->options[self::EXCLUDE_FROM_RECENT_OPTION][self::FLAG_CHATS]);
+		$needExcludeUsers = isset($this->options[self::EXCLUDE_FROM_RECENT_OPTION][self::FLAG_USERS]);
 		foreach ($ids as $id)
 		{
-			if ($this->isChatId($id))
+			if ($this->isChatId($id) && !$needExcludeChats)
 			{
 				$chatId = substr($id, 4);
 				$this->chatIds[$chatId] = $chatId;
 			}
-			else
+			elseif (!$needExcludeUsers)
 			{
 				$this->userIds[$id] = $id;
 			}

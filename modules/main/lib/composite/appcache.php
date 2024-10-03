@@ -576,7 +576,7 @@ JS;
 		$cache = new \CPHPCache();
 		$cachePath = self::getCachePath($manifestId);
 
-		return $cache->CleanDir($cachePath);
+		$cache->CleanDir($cachePath);
 	}
 
 	/**

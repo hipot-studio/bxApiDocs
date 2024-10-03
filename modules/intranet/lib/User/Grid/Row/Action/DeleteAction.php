@@ -2,7 +2,6 @@
 
 namespace Bitrix\Intranet\User\Grid\Row\Action;
 
-use Bitrix\Intranet\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 
 class DeleteAction extends JsGridAction
@@ -25,7 +24,8 @@ class DeleteAction extends JsGridAction
 	public function isAvailable(array $rawFields): bool
 	{
 		return !empty($rawFields['CONFIRM_CODE'])
-			&& $rawFields['ID'] !== CurrentUser::get()->getId()
+			&& $this->isCurrentUserAdmin()
+			&& (int)$rawFields['ID'] !== $this->getSettings()->getCurrentUserId()
 			&& $rawFields['ACTIVE'] === 'Y';
 	}
 

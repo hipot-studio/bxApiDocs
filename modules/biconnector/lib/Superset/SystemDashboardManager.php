@@ -7,6 +7,7 @@ use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\UserGroupTable;
 use Bitrix\Main\Web\Json;
 
 final class SystemDashboardManager
@@ -81,20 +82,19 @@ final class SystemDashboardManager
 		if ($list === null)
 		{
 			$adminIds = [];
-			$users = \CUser::GetList(
-				'ID',
-				'ASC',
-				[
-					'GROUPS_ID' => 1,
-					'ACTIVE' => 'Y',
+			$users = UserGroupTable::getList([
+				'filter' => [
+					'=GROUP_ID' => 1,
+					'=DATE_ACTIVE_TO' => null,
+					'=USER.ACTIVE' => 'Y',
+					'=USER.IS_REAL_USER' => 'Y',
 				],
-				[
-					'FIELDS' => 'ID',
-				]
-			);
+				'select' => [ 'USER_ID' ]
+			]);
+
 			while ($user = $users->Fetch())
 			{
-				$adminIds[] = $user['ID'];
+				$adminIds[] = $user['USER_ID'];
 			}
 
 			return $adminIds;

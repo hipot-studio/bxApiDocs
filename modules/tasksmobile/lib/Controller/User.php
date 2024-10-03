@@ -10,33 +10,28 @@ class User extends Base
 	protected function getQueryActionNames(): array
 	{
 		return [
-			'getUsersData',
-			'getUsersDataLegacy',
+			'getCurrentUserData',
+			'getCurrentUserDataLegacy',
 		];
 	}
 
-	public function getUsersDataAction(array $userIds): array
+	public function getCurrentUserDataAction(): array
 	{
-		return UserRepository::getByIds($userIds);
+		return UserRepository::getByIds([$this->getCurrentUser()->getId()]);
 	}
 
-	public function getUsersDataLegacyAction(array $userIds): array
+	public function getCurrentUserDataLegacyAction(): array
 	{
-		if (empty($userIds))
-		{
-			return [];
-		}
+		$currentUserId = (int)$this->getCurrentUser()->getId();
 
-		$users = [];
 		$userResult = \CUser::GetList(
 			'id',
 			'asc',
-			['ID' => implode('|', $userIds)],
+			['ID' => $currentUserId],
 			['FIELDS' => ['ID', 'NAME', 'SECOND_NAME', 'LAST_NAME', 'LOGIN', 'PERSONAL_PHOTO', 'WORK_POSITION']]
 		);
-		while ($user = $userResult->Fetch())
+		if ($user = $userResult->Fetch())
 		{
-			$userId = (int)$user['ID'];
 			$userName = \CUser::FormatName(
 				\CSite::GetNameFormat(),
 				[
@@ -46,17 +41,17 @@ class User extends Base
 					'SECOND_NAME' => $user['SECOND_NAME'],
 				],
 				true,
-				false
+				false,
 			);
 
-			$users[$userId] = [
-				'id' => $userId,
+			return [
+				'id' => $currentUserId,
 				'name' => $userName,
 				'icon' => Avatar::getPerson($user['PERSONAL_PHOTO']),
 				'workPosition' => $user['WORK_POSITION'],
 			];
 		}
 
-		return $users;
+		return [];
 	}
 }

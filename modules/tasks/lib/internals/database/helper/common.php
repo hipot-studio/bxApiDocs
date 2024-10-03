@@ -284,7 +284,7 @@ abstract class Common
 	 *
 	 * todo: refactor this, get rid of 'if condition'
 	 */
-	public static function insertBatch($tableName, array $items)
+	public static function insertBatch($tableName, array $items, bool $ignore = false)
 	{
 		$connection = Application::getConnection();
 		$sqlHelper = $connection->getSqlHelper();
@@ -298,15 +298,34 @@ abstract class Common
 			$query .= ($query? ', ' : ' ') . '(' . $values . ')';
 			if(mb_strlen($query) > 2048)
 			{
-				$connection->queryExecute("INSERT INTO {$tableName} ({$prefix}) VALUES {$query}");
+				$sqlQuery = "INSERT INTO {$tableName} ({$prefix}) VALUES {$query}";
+				if ($ignore)
+				{
+					$sqlQuery = $sqlHelper->getInsertIgnore(
+						$tableName,
+						" ({$prefix})",
+						" VALUES {$query}"
+					);
+				}
+				$connection->queryExecute($sqlQuery);
 				$query = '';
 			}
 		}
 		unset($item);
 
+		$sqlQuery = "INSERT INTO {$tableName} ({$prefix}) VALUES {$query}";
+		if ($ignore)
+		{
+			$sqlQuery = $sqlHelper->getInsertIgnore(
+				$tableName,
+				" ({$prefix})",
+				" VALUES {$query}"
+			);
+		}
+
 		if ($query && $prefix)
 		{
-			$connection->queryExecute("INSERT INTO {$tableName} ({$prefix}) VALUES {$query}");
+			$connection->queryExecute($sqlQuery);
 		}
 	}
 

@@ -6,9 +6,11 @@ use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\Config\State;
 use Bitrix\Catalog\v2\Integration\Landing\ShopManager;
+use Bitrix\Crm\Integration\Sale\Reservation\Config\EntityFactory;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Crm\Integration\Sale\Reservation\Config\Entity\Deal;
 
 class OnecEnabler extends Enabler
 {
@@ -40,6 +42,7 @@ class OnecEnabler extends Enabler
 		ProductDisabler::disable();
 		(new ShopManager())->unpublishShops();
 		State::setIsExternalCatalog(true);
+		self::setDealReservationAutoMode();
 
 		return $result;
 	}
@@ -55,5 +58,18 @@ class OnecEnabler extends Enabler
 		State::setIsExternalCatalog(false);
 
 		return $r;
+	}
+
+	private static function setDealReservationAutoMode(): void
+	{
+		$dealConfig = EntityFactory::make(Deal::CODE);
+
+		$values = $dealConfig->getValues();
+		if ($values[Deal::RESERVATION_MODE_CODE] !== Deal::RESERVATION_MODE_OPTION_ON_ADD_TO_DOCUMENT)
+		{
+			$values[Deal::RESERVATION_MODE_CODE] = Deal::RESERVATION_MODE_OPTION_ON_ADD_TO_DOCUMENT;
+			$dealConfig->setValues($values);
+			$dealConfig->save();
+		}
 	}
 }

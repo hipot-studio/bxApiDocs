@@ -2,21 +2,26 @@
 
 namespace Bitrix\Intranet\User;
 
+use Bitrix\Intranet\User\Filter\ExtranetUserSettings;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
 use Bitrix\Intranet\User\Filter\Presets\FilterPreset;
+use Bitrix\Intranet\User\Filter\Provider\ExtranetUserDataProvider;
 use Bitrix\Intranet\User\Filter\Provider\IntegerUserDataProvider;
 use Bitrix\Intranet\User\Filter\Provider\IntranetUserDataProvider;
+use Bitrix\Intranet\User\Filter\Provider\PhoneUserDataProvider;
+use Bitrix\Intranet\User\Filter\Provider\StringUserDataProvider;
 use Bitrix\Intranet\User\Filter\UserFilter;
 use Bitrix\Intranet\UserTable;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Filter\UserDataProvider;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 
 final class UserManager
 {
 	public const SORT_STRUCTURE = ['STRUCTURE_SORT' => 'DESC'];
-	public const SORT_INVITATION = ['DATE_REGISTER' => 'DESC'];
+	public const SORT_INVITATION = ['INVITATION_DATE_SORT' => 'DESC'];
 	public const SORT_APH = ['NAME' => 'ASC'];
 	public const SORT_INVITED = ['INVITED_SORT' => 'ASC'];
 	public const SORT_WAITING_CONFIRMATION = ['WAITING_CONFIRMATION_SORT' => 'ASC'];
@@ -32,13 +37,24 @@ final class UserManager
 			'ID' => $filterId,
 		]);
 
+		$extraProviders = [
+			new IntranetUserDataProvider($filterSettings),
+			new IntegerUserDataProvider($filterSettings),
+			new PhoneUserDataProvider($filterSettings),
+		];
+
+		if (ModuleManager::isModuleInstalled('extranet'))
+		{
+			$extranetSettings = new ExtranetUserSettings([
+				'ID' => $filterId,
+			]);
+			$extraProviders[] = new \Bitrix\Intranet\User\Filter\Provider\ExtranetUserDataProvider($extranetSettings);
+		}
+
 		$this->filter = new UserFilter(
 			$filterId,
 			new UserDataProvider($filterSettings),
-			[
-				new IntranetUserDataProvider($filterSettings),
-				new IntegerUserDataProvider($filterSettings),
-			],
+			$extraProviders,
 			[
 				'FILTER_SETTINGS' => $filterSettings,
 			],

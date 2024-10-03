@@ -1,7 +1,6 @@
 <?
 namespace Bitrix\Main\Composite;
 
-use Bitrix\Main;
 use Bitrix\Main\Composite\Debug\Logger;
 
 /**

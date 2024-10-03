@@ -1,6 +1,12 @@
 <?php
 
+use Bitrix\HumanResources\Compatibility\Adapter\StructureBackwardAdapter;
+use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
+use Bitrix\HumanResources\Config\Storage;
+use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\Main\Application;
+use Bitrix\Intranet\MainPage;
+use Bitrix\Main\Loader;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -11,6 +17,12 @@ class CIntranetUtils
 	private static $SECTIONS_SETTINGS_CACHE = null;
 	private static $SECTIONS_SETTINGS_WITHOUT_EMPLOYEE_CACHE = null;
 
+	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Repository\NodeMemberRepository::findAllByEntityIdAndEntityType instead
+	 * @param int $userId
+	 *
+	 * @return mixed|null
+	 */
 	public static function GetUserDepartments(int $userId)
 	{
 		if (!isset(self::$cache[$userId])
@@ -27,8 +39,12 @@ class CIntranetUtils
 		return self::$cache[$userId] ?? null;
 	}
 
-
 	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Repository\NodeRepository::getChildOf instead
+	 *
+	 * @param int $departmentId
+	 *
+	 * @return array|null
 	 * return null (for wrong department) or array of IDs of immediate sub-departments
 	 */
 	public static function getSubDepartments($departmentId = 0): null|array
@@ -49,12 +65,48 @@ class CIntranetUtils
 		return ($arDepartmentsIdentifiers);
 	}
 
-
+	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Repository\NodeRepository::getChildOfNodeCollection instead
+	 *
+	 * @param $arSections
+	 *
+	 * @return array
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\LoaderException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+ 	*/
 	public static function GetIBlockSectionChildren($arSections)
 	{
 		if (!is_array($arSections))
 		{
 			$arSections = [ $arSections ];
+		}
+
+		if (
+			Loader::includeModule('humanresources')
+			&& Storage::instance()->isIntranetUtilsDisabled())
+		{
+			$departments = [];
+			array_walk(
+				$arSections, function($department) use (&$departments) {
+				$departments[] = DepartmentBackwardAccessCode::makeById((int)$department);
+			}
+			);
+			$nodes = \Bitrix\HumanResources\Service\Container::getNodeRepository()->findAllByAccessCodes($departments);
+			$childNodes = \Bitrix\HumanResources\Service\Container::getNodeRepository()->getChildOfNodeCollection(
+				$nodes,
+				DepthLevel::FULL,
+			);
+
+			$result = [];
+			foreach ($childNodes as $node)
+			{
+				$result[] = DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode);
+			}
+
+			sort($result);
+			return $result;
 		}
 
 		$dbRes = CIBlockSection::GetList(
@@ -107,6 +159,16 @@ class CIntranetUtils
 			return $SECTION_ID;
 	}
 
+	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Repository\NodeRepository::findAllByAccessCodes instead
+	 * @param $arDepartments
+	 *
+	 * @return array|false
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\LoaderException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
 	public static function GetDepartmentsData($arDepartments)
 	{
 		global $INTR_DEPARTMENTS_CACHE, $INTR_DEPARTMENTS_CACHE_VALUE;
@@ -125,12 +187,36 @@ class CIntranetUtils
 
 		if (count($arNewDep) > 0)
 		{
-			$dbRes = CIBlockSection::GetList(array('SORT' => 'ASC'), array('ID' => $arNewDep));
-			while ($arSect = $dbRes->Fetch())
+			if (
+				Loader::includeModule('humanresources')
+				&& Storage::instance()->isIntranetUtilsDisabled())
 			{
-				$arParams['IBLOCK_ID'][] = $arSect['IBLOCK_ID'];
-				$INTR_DEPARTMENTS_CACHE[] = $arSect['ID'];
-				$INTR_DEPARTMENTS_CACHE_VALUE[$arSect['ID']] = $arSect['NAME'];
+				$departments = [];
+				array_walk(
+					$arDepartments, function($department) use (&$departments) {
+						$departments[] = DepartmentBackwardAccessCode::makeById((int)$department);
+					}
+				);
+				$nodes = \Bitrix\HumanResources\Service\Container::getNodeRepository()
+					->findAllByAccessCodes($departments);
+
+				foreach ($nodes as $node)
+				{
+					$sectionId = DepartmentBackwardAccessCode::extractIdFromCode($node->accessCode);
+					$INTR_DEPARTMENTS_CACHE[] = $sectionId;
+					$INTR_DEPARTMENTS_CACHE_VALUE[$sectionId] = $node->name;
+				}
+			}
+			else
+			{
+				$dbRes = CIBlockSection::GetList(array('SORT' => 'ASC'), array('ID' => $arNewDep));
+
+				while ($arSect = $dbRes->Fetch())
+				{
+					$arParams['IBLOCK_ID'][] = $arSect['IBLOCK_ID'];
+					$INTR_DEPARTMENTS_CACHE[] = $arSect['ID'];
+					$INTR_DEPARTMENTS_CACHE_VALUE[$arSect['ID']] = $arSect['NAME'];
+				}
 			}
 		}
 
@@ -572,7 +658,7 @@ class CIntranetUtils
 	{
 		global $USER;
 
-		if (!\Bitrix\Main\Loader::includeModule('webservice'))
+		if (!Loader::includeModule('webservice'))
 		{
 			return sprintf("alert('%s')", CUtil::jsEscape(getMessage('INTR_SYNC_OUTLOOK_NOWEBSERVICE')));
 		}
@@ -838,8 +924,11 @@ class CIntranetUtils
 	}
 
 	/**
-	 * @param $section_id
-	 * @param $bFlat
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Repository\NodeRepository::getAllByStructureId
+	 * @param int $section_id
+	 * @param bool $bFlat
+	 * @param bool $supportNew
+	 *
 	 * @return array
 	 */
 	public static function GetDeparmentsTree($section_id = 0, $bFlat = false, $supportNew = true): array
@@ -884,6 +973,14 @@ class CIntranetUtils
 		return is_array($arSections) ? $arSections : array();
 	}
 
+	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Repository\NodeRepository::getChildOf instead
+	 * @param $sectionId
+	 * @param $depth
+	 *
+	 * @return mixed|void
+	 * @throws \Bitrix\Main\LoaderException
+	 */
 	public static function getSubStructure($sectionId, $depth = false)
 	{
 		global $CACHE_MANAGER;
@@ -892,6 +989,24 @@ class CIntranetUtils
 
 		if (empty($structures[intval($sectionId)][intval($depth)]))
 		{
+			if (
+				Loader::includeModule('humanresources')
+				&& Storage::instance()->isIntranetUtilsDisabled())
+			{
+				$subStructure = StructureBackwardAdapter::getStructureWithoutEmployee($sectionId, (int)$depth);
+
+				if (!empty($subStructure) && !empty($subStructure['DATA']))
+				{
+					if (!is_array($structures))
+						$structures = array();
+					if (!isset($structures[intval($sectionId)]) || !is_array($structures[intval($sectionId)]))
+						$structures[intval($sectionId)] = array();
+					$structures[intval($sectionId)][intval($depth)] = $subStructure;
+				}
+
+				return $structures[intval($sectionId)][intval($depth)];
+			}
+
 			$iblockId = COption::GetOptionInt('intranet', 'iblock_structure', false);
 			if ($iblockId <= 0)
 				return;
@@ -994,6 +1109,12 @@ class CIntranetUtils
 		return $structures[intval($sectionId)][intval($depth)];
 	}
 
+	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Repository\NodeRepository::getAllByStructureId instead
+	 * @param bool $supportNew
+	 *
+	 * @return null
+	 */
 	public static function GetStructure(bool $supportNew = true)
 	{
 		if (null == self::$SECTIONS_SETTINGS_CACHE)
@@ -1003,6 +1124,9 @@ class CIntranetUtils
 	}
 
 	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Repository\NodeRepository::getAllByStructureId instead
+	 * @param bool $supportNew
+	 *
 	 * @return array|null
 	 */
 	public static function GetStructureWithoutEmployees(bool $supportNew = true): array|null
@@ -1016,8 +1140,10 @@ class CIntranetUtils
 	}
 
 	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Service\NodeMemberService::getDefaultHeadRoleEmployees instead
 	 * @param $section_id
-	 * @return int
+	 *
+	 * @return int|null
 	 */
 	public static function GetDepartmentManagerID($section_id): null|int
 	{
@@ -1030,9 +1156,11 @@ class CIntranetUtils
 	}
 
 	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Service\NodeMemberService::getDefaultHeadRoleEmployees instead
 	 * @param $arDepartments
 	 * @param $skipUserId
 	 * @param $bRecursive
+	 *
 	 * @return array
 	 */
 	public static function GetDepartmentManager($arDepartments, $skipUserId=false, $bRecursive=false)
@@ -1087,6 +1215,14 @@ class CIntranetUtils
 		return $arManagers;
 	}
 
+	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Service\NodeMemberService::getPagedEmployees instead
+	 * @param $section_id
+	 * @param $amount
+	 * @param $arAccessUsers
+	 *
+	 * @return int
+	 */
 	public static function GetEmployeesCountForSorting($section_id = 0, $amount = 0, $arAccessUsers = false)
 	{
 		if (null == self::$SECTIONS_SETTINGS_CACHE)
@@ -1134,6 +1270,15 @@ class CIntranetUtils
 		return $amount > 0 ? intval($cnt/$amount)+($cnt%$amount>0?1:0) : $cnt;
 	}
 
+	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Service\NodeMemberService::getPagedEmployees instead
+	 * @param $page
+	 * @param $amount
+	 * @param $section_id
+	 * @param $arAccessUsers
+	 *
+	 * @return array
+	 */
 	public static function GetEmployeesForSorting($page = 1, $amount = 50, $section_id = 0, $arAccessUsers = false)
 	{
 		if (null == self::$SECTIONS_SETTINGS_CACHE)
@@ -1224,9 +1369,9 @@ class CIntranetUtils
 	{
 		global $CACHE_MANAGER, $DB;
 
-		if ($supportNew && \Bitrix\Main\Loader::includeModule('humanresources'))
+		if ($supportNew && Loader::includeModule('humanresources'))
 		{
-			$structure = \Bitrix\HumanResources\Compatibility\Adapter\StructureBackwardAdapter::getStructure();
+			$structure = StructureBackwardAdapter::getStructure();
 
 			if (!empty($structure) && !empty($structure['DATA']))
 			{
@@ -1313,13 +1458,19 @@ class CIntranetUtils
 	}
 
 	/**
+	 * @param bool $supportNew
+	 *
 	 * @return void
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\LoaderException
+	 * @throws \Bitrix\Main\SystemException
 	 */
 	private static function _GetDeparmentsTreeWithoutEmployee(bool $supportNew = true): void
 	{
-		if ($supportNew && \Bitrix\Main\Loader::includeModule('humanresources'))
+		if ($supportNew
+			&& Loader::includeModule('humanresources'))
 		{
-			$structure = \Bitrix\HumanResources\Compatibility\Adapter\StructureBackwardAdapter::getStructureWithoutEmployee();
+			$structure = StructureBackwardAdapter::getStructureWithoutEmployee();
 
 			if (!empty($structure) && !empty($structure['DATA']))
 			{
@@ -1404,6 +1555,16 @@ class CIntranetUtils
 		return new CDBResult();
 	}
 
+	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Service\NodeMemberService::getPagedEmployees instead
+	 * @param $arDepartments
+	 * @param $bRecursive
+	 * @param $bSkipSelf
+	 * @param $onlyActive
+	 * @param $arSelect
+	 *
+	 * @return CDBResult|false
+	 */
 	public static function getDepartmentEmployees($arDepartments, $bRecursive = false, $bSkipSelf = false, $onlyActive = 'Y', $arSelect = null)
 	{
 		if (empty($arDepartments))
@@ -1423,9 +1584,14 @@ class CIntranetUtils
 	}
 
 	/**
-	 * @param $USER_ID
-	 * @param $bRecursive
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Repository\NodeRepository::findAllByUserIdAndRoleId instead
+	 * @param null $USER_ID
+	 * @param bool $bRecursive
+	 *
 	 * @return array
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\LoaderException
+	 * @throws \Bitrix\Main\SystemException
 	 */
 	public static function GetSubordinateDepartments($USER_ID = null, $bRecursive = false): array
 	{
@@ -1463,6 +1629,12 @@ class CIntranetUtils
 		return $arSections;
 	}
 
+	/**
+	 * @deprecated Use \Bitrix\HumanResources\Contract\Repository\NodeRepository::findAllByUserIdAndRoleId instead
+	 * @param $USER_ID
+	 *
+	 * @return CIBlockResult
+	 */
 	public static function GetSubordinateDepartmentsList($USER_ID)
 	{
 		return CIBlockSection::GetList(
@@ -1931,7 +2103,7 @@ class CIntranetUtils
 	{
 		$params = 'c='.self::getHostName();
 
-		if (\Bitrix\Main\Loader::includeModule('bitrix24'))
+		if (Loader::includeModule('bitrix24'))
 		{
 			$pid = (int) COption::getOptionInt('bitrix24', 'partner_id', 0);
 			$isNfr = \CBitrix24::IsNfrLicense();
@@ -1963,15 +2135,26 @@ class CIntranetUtils
 	{
 		global $USER;
 
-		$firstPagePath = CUserOptions::GetOption("intranet", "left_menu_first_page_".SITE_ID);
+		$mainPage = new MainPage\Page();
+
+		if ($mainPage->enabled())
+		{
+			$firstPagePath = $mainPage->getLink();
+		}
+		else
+		{
+			$firstPagePath = CUserOptions::GetOption("intranet", "left_menu_first_page_".SITE_ID);
+		}
+
 		$firstPagePath = ltrim($firstPagePath);
+
 		if (empty($firstPagePath))
 		{
 			$firstPagePath = COption::GetOptionString("intranet", "left_menu_first_page", "");
 
 			if (
 				preg_match("~^".SITE_DIR."crm~i", $firstPagePath)
-				&& \Bitrix\Main\Loader::includeModule("crm")
+				&& Loader::includeModule("crm")
 			)
 			{
 				if (!CCrmPerms::IsAccessEnabled())
@@ -1984,7 +2167,7 @@ class CIntranetUtils
 		}
 
 		if (
-			\Bitrix\Main\Loader::includeModule("crm")
+			Loader::includeModule("crm")
 			&& preg_match("~^".SITE_DIR."crm/lead/~i", $firstPagePath)
 			&& !\Bitrix\Crm\Settings\LeadSettings::isEnabled()
 		)
@@ -2051,6 +2234,12 @@ class CIntranetUtils
 		}
 	}
 
+	/**
+	 * @see \Bitrix\Main\Application::getLicense
+	 * @see \Bitrix\Main\License::getRegion
+	 * @deprecated Use Application::getInstance()->getLicense()->getRegion() instead.
+	 * @return string
+	 */
 	public static function getPortalZone()
 	{
 		$portalZone = COption::GetOptionString("main", "vendor", "1c_bitrix_portal");

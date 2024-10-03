@@ -30,7 +30,7 @@ class PushService
 
 		if ($chat->getType() === IM_MESSAGE_PRIVATE)
 		{
-			$pullParams['params']['toUserId'] = $chat->getCompanion()->getId();
+			$pullParams['params']['toUserId'] = $chat->getCompanion($message->getAuthorId())->getId();
 			$pullParams['params']['fromUserId'] = $message->getAuthorId();
 		}
 		else

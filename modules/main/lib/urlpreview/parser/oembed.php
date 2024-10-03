@@ -78,7 +78,12 @@ class Oembed extends Parser
 
 			if($document->getImage() == '' && !empty($parsedMetadata['thumbnail_url']))
 			{
-				$document->setImage($parsedMetadata['thumbnail_url']);
+				$image = $parsedMetadata['thumbnail_url'];
+				if (is_array($image))
+				{
+					$image = reset($image);
+				}
+				$document->setImage($image);
 			}
 
 			if($document->getEmdbed() == '' && !empty($parsedMetadata['html']))

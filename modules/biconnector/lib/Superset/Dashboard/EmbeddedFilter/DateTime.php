@@ -12,6 +12,7 @@ class DateTime extends UrlFilter
 	public const CONFIG_PERIOD_OPTION_NAME = 'bi_superset_dashboard_period';
 	public const CONFIG_DATE_START_OPTION_NAME = 'bi_superset_dashboard_default_date_start';
 	public const CONFIG_DATE_END_OPTION_NAME = 'bi_superset_dashboard_default_date_end';
+	public const CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME = 'bi_superset_dashboard_default_include_last_filter_date';
 
 	public const PERIOD_RANGE = 'range';
 
@@ -25,11 +26,13 @@ class DateTime extends UrlFilter
 	public const PERIOD_CURRENT_YEAR = 'current_year';
 
 	public const PERIOD_DEFAULT = 'default';
+	public const PERIOD_NONE = 'none';
 
 	private ?string $period;
 	private bool $hasDefaultPeriod = false;
 	private ?Date $from;
 	private ?Date $to;
+	private bool $needIncludeLastFilterDate = false;
 
 	public function __construct(private readonly Dashboard $dashboard)
 	{
@@ -52,6 +55,16 @@ class DateTime extends UrlFilter
 			if ($this->to === null)
 			{
 				$this->to = self::getDefaultDateEnd();
+			}
+
+			$includeLastFilterDate = $dashboard->getOrmObject()->getIncludeLastFilterDate();
+			if ($includeLastFilterDate)
+			{
+				$this->needIncludeLastFilterDate = $includeLastFilterDate === 'Y';
+			}
+			else
+			{
+				$this->needIncludeLastFilterDate = self::needIncludeDefaultLastFilterDate();
 			}
 		}
 		elseif ($this->isCurrentRange())
@@ -86,6 +99,11 @@ class DateTime extends UrlFilter
 			}
 
 			$this->to->add('+1 day');
+		}
+		elseif ($this->isNone())
+		{
+			$this->from = null;
+			$this->to = null;
 		}
 		else
 		{
@@ -138,6 +156,11 @@ class DateTime extends UrlFilter
 		]);
 	}
 
+	private function isNone(): bool
+	{
+		return $this->period === self::PERIOD_NONE;
+	}
+
 	public function getCode(): string
 	{
 		$config = $this->dashboard->getNativeFiltersConfig();
@@ -149,10 +172,19 @@ class DateTime extends UrlFilter
 
 	public function getFormatted(): string
 	{
+		if ($this->isNone())
+		{
+			return '';
+		}
+
 		$from = clone($this->from);
 		$from = $from->format('Y-m-d');
 
 		$to = clone($this->to);
+		if ($this->isRange() && $this->needIncludeLastFilterDate())
+		{
+			$to->add('+1 day');
+		}
 		$to = $to->format('Y-m-d');
 
 		$urlTemplateFilter = '(
@@ -190,14 +222,19 @@ class DateTime extends UrlFilter
 		return Loc::getMessage("BICONNECTOR_SUPERSET_EMBEDDED_FILTER_RANGE_{$name}") ?? '';
 	}
 
-	public function getDateEnd(): string
+	public function getDateEnd(): ?string
 	{
 		return $this->to;
 	}
 
-	public function getDateStart(): string
+	public function getDateStart(): ?string
 	{
 		return $this->from;
+	}
+
+	public function needIncludeLastFilterDate(): bool
+	{
+		return $this->needIncludeLastFilterDate;
 	}
 
 	public static function getDefaultPeriod(): string
@@ -242,6 +279,11 @@ class DateTime extends UrlFilter
 		return $value;
 	}
 
+	public static function needIncludeDefaultLastFilterDate(): bool
+	{
+		return Option::get('biconnector', self::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME, 'N') === 'Y';
+	}
+
 	public static function isAvailablePeriod(string $period): bool
 	{
 		return in_array(
@@ -256,6 +298,7 @@ class DateTime extends UrlFilter
 				self::PERIOD_CURRENT_WEEK,
 				self::PERIOD_CURRENT_MONTH,
 				self::PERIOD_CURRENT_YEAR,
+				self::PERIOD_NONE,
 			],
 		true
 		);

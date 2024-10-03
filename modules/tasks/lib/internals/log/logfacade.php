@@ -15,9 +15,9 @@ final class LogFacade
 		self::getLogger($marker)->collect($data);
 	}
 
-	public static function logThrowable(Throwable $throwable): void
+	public static function logThrowable(Throwable $throwable, string $marker = Log::DEFAULT_MARKER): void
 	{
-		self::getLogger()->collect([
+		self::getLogger($marker)->collect([
 			'message' => $throwable->getMessage(),
 			'file' => $throwable->getFile(),
 			'line' => $throwable->getLine(),

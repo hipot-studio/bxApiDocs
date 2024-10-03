@@ -4,7 +4,6 @@ namespace Bitrix\Main\Html;
 
 use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\Web\Json;
-use CUtil;
 
 /**
  * HTML attributes.

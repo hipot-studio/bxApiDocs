@@ -12,6 +12,7 @@ use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Search\MapBuilder;
+use Bitrix\Main\Text\Emoji;
 
 
 /**
@@ -93,8 +94,9 @@ class ChatTable extends Entity\DataManager
 			'DESCRIPTION' => array(
 				'data_type' => 'text',
 				//'title' => Loc::getMessage('CHAT_ENTITY_DESCRIPTION_FIELD'),
-				'save_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getSaveModificator'),
+				'save_data_modification' => array('\Bitrix\Im\Model\ChatTable', 'getSaveModificator'),
 				'fetch_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getFetchModificator'),
+				'nullable' => true,
 			),
 			'COLOR' => array(
 				'data_type' => 'string',
@@ -512,5 +514,24 @@ class ChatTable extends Entity\DataManager
 			'SEARCH_CONTENT' => MapBuilder::create()->addText(self::generateSearchContent($index))->build(),
 			'SEARCH_TITLE' => MapBuilder::create()->addText(self::generateSearchTitle($index))->build(),
 		];
+	}
+
+	public static function getSaveModificator()
+	{
+		return array(
+			array(__CLASS__, 'encode')
+		);
+	}
+
+	public static function encode($text)
+	{
+		if ($text === null)
+		{
+			return null;
+		}
+
+		return Emoji::replace($text, function ($m) {
+			return ":".bin2hex($m[0]).":";
+		});
 	}
 }

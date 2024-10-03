@@ -1,9 +1,10 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2016 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
 
 namespace Bitrix\Main\ORM;
@@ -24,7 +25,7 @@ use Bitrix\Main\Text\StringHelper;
  */
 class Entity
 {
-	/** @var DataManager */
+	/** @var string | DataManager */
 	protected $className;
 
 	protected
@@ -243,8 +244,6 @@ class Entity
 	 * Can be useful for complex inheritance with cloning.
 	 *
 	 * @param $className
-	 *
-	 * @throws Main\SystemException
 	 */
 	public function reinitialize($className)
 	{
@@ -504,7 +503,7 @@ class Entity
 
 			$newFieldInfo = array(
 				'data_type' => 'Bitrix\Iblock\Section',
-				'reference' => array($localFieldName, 'ID')
+				'reference' => array($localFieldName, 'ID'),
 			);
 
 			$newRefField = new Reference($refFieldName, $newFieldInfo['data_type'], $newFieldInfo['reference'][0], $newFieldInfo['reference'][1]);
@@ -701,7 +700,6 @@ class Entity
 
 	/**
 	 * @return Main\DB\Connection
-	 * @throws Main\SystemException
 	 */
 	public function getConnection()
 	{
@@ -1034,7 +1032,7 @@ class Entity
 			));
 		}
 
-		/** @var DataManager $fullEntityName */
+		/** @var string | DataManager $fullEntityName */
 		$fullEntityName = $entityName;
 
 		// namespace configuration
@@ -1076,7 +1074,7 @@ class Entity
 			$classCode .= 'public static function setDefaultScope($query){'.$parameters['default_scope'].'}';
 		}
 
-		if (isset($parameters['parent_map']) && $parameters['parent_map'] == false)
+		if (isset($parameters['parent_map']) && !$parameters['parent_map'])
 		{
 			$classCode .= 'public static function getMap(){return [];}';
 		}
@@ -1140,7 +1138,7 @@ class Entity
 		foreach ($unique as $fieldName)
 		{
 			$connection->createIndex($this->getDBTableName(), $fieldName, [$fieldName], null,
-				Main\DB\MysqlCommonConnection::INDEX_UNIQUE);
+				Main\DB\Connection::INDEX_UNIQUE);
 		}
 
 		// stop collecting queries
@@ -1308,7 +1306,6 @@ class Entity
 	 * @param bool   $countTotal Whether to read total count from the cache.
 	 *
 	 * @return Main\DB\ArrayResult|null
-	 * @throws Main\SystemException
 	 */
 	public function readFromCache($ttl, $cacheId, $countTotal = false)
 	{
@@ -1381,6 +1378,12 @@ class Entity
 	 */
 	public function getCacheTtl($ttl)
 	{
+		if (!$this->className::isCacheable())
+		{
+			// cache is disabled in the tablet
+			return 0;
+		}
+
 		$table = $this->getDBTableName();
 		$cacheFlags = Main\Config\Configuration::getValue("cache_flags");
 		if(isset($cacheFlags[$table."_min_ttl"]))

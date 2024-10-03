@@ -453,7 +453,7 @@ class SharingAjax extends \Bitrix\Main\Engine\Controller
 		}
 
 		$eventData = Sharing\SharingEventManager::getCrmEventDataFromRequest($request);
-		$eventData['eventName'] = Sharing\SharingEventManager::getSharingEventNameByUserName($userName);
+		$eventData['eventName'] = Sharing\SharingEventManager::getSharingEventNameByDealId($crmDealLink->getEntityId());
 
 		$event = Sharing\SharingEventManager::prepareEventForSave($eventData, $userId, $crmDealLink);
 

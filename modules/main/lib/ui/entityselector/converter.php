@@ -126,7 +126,7 @@ class Converter
 
 					$entityType = is_callable($closure)
 						? $closure($matches['prefix'], $matches['itemId'])
-						: (int)$matches['itemId'];
+						: $matches['itemId'];
 
 					$result[] = [$entityId, $entityType];
 				}

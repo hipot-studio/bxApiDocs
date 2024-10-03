@@ -93,6 +93,10 @@ class IntranetUserProfileButton extends \CBitrixComponent implements Controllera
 		$this->arResult['MASK'] = $this->getUserMaskData($this->arResult['USER_PHOTO_ID']);
 		$this->arResult['OTP'] = $this->getOtpData();
 		$this->arResult['BINDINGS'] = $this->getBindingData($this->arResult['USER_STATUS']);
+		$this->arResult['DESKTOP_DOWNLOAD_LINKS'] = array_map(
+			fn($link) => htmlspecialcharsbx($link),
+			\Bitrix\Intranet\Portal::getInstance()->getSettings()->getDesktopDownloadLinks()
+		);
 	}
 
 	protected function getUserPhotoSrc(?int $userPhotoId): string
@@ -159,8 +163,8 @@ class IntranetUserProfileButton extends \CBitrixComponent implements Controllera
 		$data = [
 			'url' => Intranet\Site\Sections\TimemanSection::getUserLoginHistoryUrl(),
 			'isCloud' => $this->isCloud,
-			'isHide' => $this->isCloud && (\CBitrix24::getPortalZone() === 'ua')
-				|| \Bitrix\Intranet\Util::isExtranetUser($this->userId),
+			'isHide' => ($this->isCloud && (\CBitrix24::getPortalZone() === 'ua'))
+				|| !\Bitrix\Intranet\Util::isIntranetUser($this->userId),
 		];
 
 		if ($this->isCloud)

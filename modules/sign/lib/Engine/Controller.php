@@ -4,6 +4,7 @@ namespace Bitrix\Sign\Engine;
 
 use Bitrix\Main;
 use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
+use Bitrix\Sign\Service\Container;
 use ReflectionClass;
 use ReflectionMethod;
 use Bitrix\Sign\Attribute;
@@ -12,6 +13,14 @@ use Bitrix\Intranet;
 
 class Controller extends \Bitrix\Main\Engine\Controller
 {
+	protected readonly Container $container;
+
+	public function __construct(Main\Request $request = null)
+	{
+		parent::__construct($request);
+		$this->container = Container::instance();
+	}
+
 	/**
 	 * Returns default pre-filters for action.
 	 * @return array

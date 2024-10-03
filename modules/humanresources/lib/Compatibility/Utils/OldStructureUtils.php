@@ -5,6 +5,7 @@ namespace Bitrix\HumanResources\Compatibility\Utils;
 use Bitrix\HumanResources\Exception\UpdateFailedException;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
+use Bitrix\Main\LoaderException;
 
 final class OldStructureUtils
 {
@@ -19,7 +20,7 @@ final class OldStructureUtils
 		if (!Loader::includeModule('iblock'))
 		{
 			throw (new UpdateFailedException())->addError(
-				new Main\Error('Module iblock is not installed')
+				new Main\Error('Module iblock is not installed'),
 			);
 		}
 
@@ -41,7 +42,7 @@ final class OldStructureUtils
 		}
 
 		throw (new UpdateFailedException())->addError(
-			new Main\Error($iBlockSection->LAST_ERROR)
+			new Main\Error($iBlockSection->LAST_ERROR),
 		);
 	}
 
@@ -57,7 +58,7 @@ final class OldStructureUtils
 		if (!Loader::includeModule('iblock'))
 		{
 			throw (new UpdateFailedException())->addError(
-				new Main\Error('Module iblock is not installed')
+				new Main\Error('Module iblock is not installed'),
 			);
 		}
 
@@ -66,7 +67,7 @@ final class OldStructureUtils
 		if (!$department)
 		{
 			throw (new UpdateFailedException())->addError(
-				new Main\Error('Department not found')
+				new Main\Error('Department not found'),
 			);
 		}
 
@@ -106,7 +107,7 @@ final class OldStructureUtils
 		if(!$iBlockSection->Update($department['ID'], $updatedFields))
 		{
 			throw (new UpdateFailedException())->addError(
-				new Main\Error($iBlockSection->LAST_ERROR)
+				new Main\Error($iBlockSection->LAST_ERROR),
 			);
 		}
 	}
@@ -123,7 +124,7 @@ final class OldStructureUtils
 		if (!Loader::includeModule('iblock'))
 		{
 			throw (new UpdateFailedException())->addError(
-				new Main\Error('Module iblock is not installed')
+				new Main\Error('Module iblock is not installed'),
 			);
 		}
 
@@ -132,7 +133,7 @@ final class OldStructureUtils
 		if (!$department)
 		{
 			throw (new UpdateFailedException())->addError(
-				new Main\Error('Department not found')
+				new Main\Error('Department not found'),
 			);
 		}
 
@@ -140,7 +141,7 @@ final class OldStructureUtils
 		if(!$iBlockSection->Delete($department['ID']))
 		{
 			throw (new UpdateFailedException())->addError(
-				new Main\Error($iBlockSection->LAST_ERROR)
+				new Main\Error($iBlockSection->LAST_ERROR),
 			);
 		}
 	}
@@ -161,7 +162,7 @@ final class OldStructureUtils
 				'ID' => $id,
 				'IBLOCK_ID' => self::getOldDepartmentIblockId(),
 			],
-			arSelect: ['ID', 'NAME', 'UF_HEAD']
+			arSelect: ['ID', 'NAME', 'UF_HEAD'],
 		);
 
 		$department = $result->Fetch();
@@ -184,7 +185,7 @@ final class OldStructureUtils
 		if (!Loader::includeModule('iblock'))
 		{
 			throw (new UpdateFailedException())->addError(
-				new Main\Error('Module iblock is not installed')
+				new Main\Error('Module iblock is not installed'),
 			);
 		}
 
@@ -202,6 +203,44 @@ final class OldStructureUtils
 		}
 
 		return null;
+	}
+
+	/**
+	 * @param list<int> $ids
+	 *
+	 * @return array|null
+	 * @throws LoaderException
+	 * @throws UpdateFailedException
+	 */
+	public static function getListByIds(array $ids): ?array
+	{
+		if (empty($ids))
+		{
+			return null;
+		}
+
+		if (!Loader::includeModule('iblock'))
+		{
+			throw (new UpdateFailedException())->addError(
+				new Main\Error('Module iblock is not installed'),
+			);
+		}
+
+		$result = \CIBlockSection::GetList(
+			arFilter: [
+				'ID' => $ids,
+				'IBLOCK_ID' => self::getOldDepartmentIblockId(),
+			],
+			arSelect: ['ID', 'NAME', 'SORT', 'IBLOCK_SECTION_ID', 'UF_HEAD'],
+		);
+
+		$departments = [];
+		while($department = $result->Fetch())
+		{
+			$departments[$department['ID']] = $department;
+		}
+
+		return $departments;
 	}
 
 	private static function getOldDepartmentIblockId(): int

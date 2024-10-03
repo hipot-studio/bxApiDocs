@@ -2,11 +2,8 @@
 
 namespace Bitrix\Main\Web\WebPacker;
 
-use Bitrix\Main\Context;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Text\Encoding;
-use Bitrix\Main\Web\Json;
 
 /**
  * Class Converter

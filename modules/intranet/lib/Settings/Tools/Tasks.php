@@ -25,7 +25,10 @@ class Tasks extends Tool
 
 	private function isTasksPermissionsEnabled(): bool
 	{
-		return !Loader::includeModule('bitrix24') || Feature::isFeatureEnabled('tasks_permissions');
+		return (
+			!Loader::includeModule('bitrix24')
+			|| Feature::isFeatureEnabled('tasks_access_permissions')
+		);
 	}
 
 	public function getSubgroupSettingsPath(): array
@@ -45,7 +48,7 @@ class Tasks extends Tool
 
 	public function getInfoHelperSlider(): ?string
 	{
-		return 'limit_task_access_permissions';
+		return 'limit_tasks_access_permissions';
 	}
 
 	public function getSettingsTitle(): ?string

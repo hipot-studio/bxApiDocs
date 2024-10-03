@@ -140,7 +140,7 @@ class DeleteService
 				$this->fireEventAfterMessageDelete($message, true);
 				break;
 			default:
-				return (new Result())->addError(new Message\MessageError(Message\MessageError::MESSAGE_ACCESS_ERROR));
+				return (new Result())->addError(new Message\MessageError(Message\MessageError::ACCESS_DENIED));
 		}
 
 		if (Option::get('im', 'message_history_index'))
@@ -173,7 +173,7 @@ class DeleteService
 			return self::DELETE_COMPLETE;
 		}
 
-		if (!$this->chat->hasAccess($this->getContext()->getUserId()))
+		if (!$this->chat->checkAccess($this->getContext()->getUserId())->isSuccess())
 		{
 			return self::DELETE_NONE;
 		}
@@ -450,7 +450,7 @@ class DeleteService
 			;
 		}
 
-		return (new Message\Send\PushService())->getEventByCounterGroup($events);
+		return Message\Send\PushService::getEventByCounterGroup($events);
 	}
 
 	private function deleteLinks()
@@ -476,8 +476,8 @@ class DeleteService
 		}
 
 		(new \Bitrix\Im\V2\Link\Favorite\FavoriteService())->unmarkMessageAsFavoriteForAll($this->message);
-		(new \Bitrix\Im\V2\Message\ReadService())->deleteByMessageId(
-			$this->message->getMessageId(),
+		(new \Bitrix\Im\V2\Message\ReadService())->deleteByMessage(
+			$this->message,
 			$this->chat->getRelations()->getUserIds()
 		);
 		$this->message->unpin();
@@ -506,16 +506,20 @@ class DeleteService
 
 		// delete unused rows in db
 		$tablesToDeleteRow = [
-			'b_im_message_uuid',
-			'b_im_message_favorite',
-			'b_im_message_disappearing',
-			'b_im_message_index',
-			'b_im_link_reminder',
-			'b_imconnectors_delivery_mark',
+			'b_im_message_uuid' => 'im',
+			'b_im_message_favorite' => 'im',
+			'b_im_message_disappearing' => 'im',
+			'b_im_message_index' => 'im',
+			'b_im_link_reminder' => 'im',
+			'b_imconnectors_delivery_mark' => 'imconnector',
 		];
 
-		foreach ($tablesToDeleteRow as $table)
+		foreach ($tablesToDeleteRow as $table => $module)
 		{
+			if ($module !== 'im' && !Loader::includeModule($module))
+			{
+				continue;
+			}
 			$connection->query("DELETE FROM " . $table . " WHERE MESSAGE_ID = " . $this->message->getId());
 		}
 	}
@@ -583,7 +587,8 @@ class DeleteService
 
 			if ($this->chat instanceof Chat\PrivateChat || $this->chat->getType() === Chat::IM_TYPE_PRIVATE)
 			{
-				$userId = $this->getContext()->getUserId();
+				$userIds = array_values($this->chat->getRelations()->getUserIds());
+				$userId = $userIds[0];
 				$opponentId = $this->chat->getCompanion($userId)->getId();
 				RecentTable::updateByFilter(
 					[

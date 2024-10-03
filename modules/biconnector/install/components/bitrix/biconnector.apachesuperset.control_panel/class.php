@@ -26,12 +26,16 @@ class ApacheSupersetControlPanel extends CBitrixComponent
 
 	private function prepareMenuItems(): void
 	{
+		\Bitrix\Main\UI\Extension::load('biconnector.apache-superset-market-manager');
+		$isMarketExists = Loader::includeModule('market') ? 'true' : 'false';
+		$marketUrl = CUtil::JSEscape(MarketDashboardManager::getMarketCollectionUrl());
+
 		$menuItems = [
 			...$this->getDashboardsForTopMenu(),
 			[
 				'ID' => 'MARKET',
 				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_MARKET'),
-				'ON_CLICK' => UIHelper::getOpenMarketScript(MarketDashboardManager::getMarketCollectionUrl(), 'menu'),
+				'ON_CLICK' => "BX.BIConnector.ApacheSupersetMarketManager.openMarket({$isMarketExists}, '{$marketUrl}', 'menu')",
 				'IS_DISABLED' => false,
 			],
 			[

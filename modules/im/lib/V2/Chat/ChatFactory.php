@@ -2,6 +2,8 @@
 
 namespace Bitrix\Im\V2\Chat;
 
+use Bitrix\Im\Model\ChatTable;
+use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Result;
@@ -403,7 +405,7 @@ class ChatFactory
 				return $result->setResult($this->filterNonCachedFields($cachedChat));
 			}
 
-			$chat = \Bitrix\Im\Model\ChatTable::getByPrimary((int)$params['CHAT_ID'])->fetch();
+			$chat = $this->getRawById($chatId);
 
 			if ($chat)
 			{
@@ -469,6 +471,24 @@ class ChatFactory
 		return $chat;
 	}
 
+	private function getRawById(int $id): ?array
+	{
+		$chat = ChatTable::query()
+			->setSelect(['*', '_ALIAS' => 'ALIAS.ALIAS'])
+			->where('ID', $id)
+			->fetch()
+		;
+
+		if (!$chat)
+		{
+			return null;
+		}
+
+		$chat['ALIAS'] = $chat['_ALIAS'];
+
+		return $chat;
+	}
+
 	//endregion
 
 	//region Add new chat
@@ -501,6 +521,9 @@ class ChatFactory
 				$params['SEARCHABLE'] = 'N';
 			}
 		}
+
+		$analytics = new ChatAnalytics();
+		$analytics->blockSingleUserEvents();
 
 		switch ($params['ENTITY_TYPE'])
 		{
@@ -559,6 +582,11 @@ class ChatFactory
 				}
 		}
 
+		if ($addResult->hasResult())
+		{
+			$analytics->addSubmitCreateNew($addResult);
+		}
+
 		return $addResult;
 	}
 
@@ -588,7 +616,7 @@ class ChatFactory
 	{
 		$cacheSubDir = $id % 100;
 
-		return "/bx/imc/chatdata/5/{$cacheSubDir}/{$id}";
+		return "/bx/imc/chatdata/6/{$cacheSubDir}/{$id}";
 	}
 
 	//endregion

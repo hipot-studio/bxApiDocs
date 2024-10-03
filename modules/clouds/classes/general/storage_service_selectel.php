@@ -15,7 +15,7 @@ class CCloudStorageService_Selectel extends CCloudStorageService_OpenStackStorag
 
 	public function GetName()
 	{
-		return 'Selectel';
+		return 'Selectel (OpenStack deprecated)';
 	}
 
 	public function GetSettingsHTML($arBucket, $bServiceSet, $cur_SERVICE_ID, $bVarsFromForm)

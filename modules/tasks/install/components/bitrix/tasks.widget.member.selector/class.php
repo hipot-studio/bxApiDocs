@@ -9,6 +9,7 @@ use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
+use Bitrix\Tasks\Internals\Log\LogFacade;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Ui\Avatar;
 use Bitrix\Tasks\Util\Type;
@@ -70,6 +71,12 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 		$this->arParams['ATTRIBUTE_PASS'] = array_intersect($this->arParams['ATTRIBUTE_PASS'], $supportedAttributes);
 
 		$this->arResult['TASK_LIMIT_EXCEEDED'] = static::tryParseBooleanParameter($this->arParams['TASK_LIMIT_EXCEEDED']);
+		$this->arResult['taskMailUserIntegrationEnabled'] = static::tryParseBooleanParameter($this->arParams['taskMailUserIntegrationEnabled'], true);
+		$this->arResult['taskMailUserIntegrationFeatureId'] = static::tryParseStringParameterStrict($this->arParams['taskMailUserIntegrationFeatureId'], '');
+		$this->arResult['viewSelectorEnabled'] = static::tryParseBooleanParameter($this->arParams['viewSelectorEnabled'], true);
+
+		$this->arResult['isProjectLimitExceeded'] = static::tryParseBooleanParameter($this->arParams['isProjectLimitExceeded']);
+		$this->arResult['projectFeatureId'] = static::tryParseStringParameterStrict($this->arParams['projectFeatureId'], '');
 
 		return $this->errors->checkNoFatals();
 	}
@@ -746,6 +753,7 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 		}
 		catch (TasksException $e)
 		{
+			LogFacade::logThrowable($e, 'TASKS_DEBUG_MEMBER_SELECTOR');
 			$messages = @unserialize($e->getMessage(), ['allowed_classes' => false]);
 			if (is_array($messages))
 			{
@@ -757,6 +765,7 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 		}
 		catch (\Exception $e)
 		{
+			LogFacade::logThrowable($e, 'TASKS_DEBUG_MEMBER_SELECTOR');
 			$this->errorCollection->add('UNKNOWN_EXCEPTION', Loc::getMessage('TASKS_WMS_UNEXPECTED_ERROR'), false, ['ui' => 'notification']);
 		}
 	}

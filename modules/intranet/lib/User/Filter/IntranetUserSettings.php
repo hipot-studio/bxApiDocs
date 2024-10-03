@@ -7,6 +7,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Filter\UserSettings;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Socialnetwork\UserToGroupTable;
 
 class IntranetUserSettings extends UserSettings
 {
@@ -36,6 +37,16 @@ class IntranetUserSettings extends UserSettings
 		return $this->getFilterAvailability()[$filterField] ?? true;
 	}
 
+	public function isCurrentUserAdmin(): bool
+	{
+		return CurrentUser::get()->isAdmin();
+	}
+
+	public function getCurrentUserId(): int
+	{
+		return CurrentUser::get()->getId();
+	}
+
 	private function initFilterAvailability(): void
 	{
 		$isExtranetSite = Loader::includeModule('extranet') && \CExtranet::isExtranetSite();
@@ -60,19 +71,9 @@ class IntranetUserSettings extends UserSettings
 			&& !$isExtranetSite;
 
 		$this->filterAvailability[self::INVITED_FIELD] =
-			(
-				$canEditAllUsers
-				|| (
-					CurrentUser::get()->IsAuthorized()
-					&& ModuleManager::isModuleInstalled('bitrix24')
-					&& Option::get('bitrix24', 'allow_invite_users', 'N') === 'Y'
-				)
-			)
-			&& (
-				!ModuleManager::isModuleInstalled('extranet')
-				|| Option::get('extranet', 'extranet_site') == ''
-				|| !$isExtranetSite
-			);
+			!ModuleManager::isModuleInstalled('extranet')
+			|| Option::get('extranet', 'extranet_site') == ''
+			|| !$isExtranetSite;
 
 		$this->filterAvailability[self::WAIT_CONFIRMATION_FIELD] =
 			ModuleManager::isModuleInstalled('bitrix24')

@@ -5,7 +5,7 @@ use Bitrix\Main\ModuleTable;
 
 class CSiteCheckerTest
 {
-	const MIN_PHP_VER = '8.0.0';
+	const MIN_PHP_VER = '8.1.0';
 
 	public $arTestVars;
 	public $percent;
@@ -502,7 +502,6 @@ class CSiteCheckerTest
 		$arMods = [
 			'fsockopen' => GetMessage("SC_SOCKET_F"),
 			'xml_parser_create' => GetMessage("SC_MOD_XML"),
-			'preg_match' => GetMessage("SC_MOD_PERL_REG"),
 			'imagettftext' => "Free Type Text",
 			'gzcompress' => "Zlib",
 			'imagecreatetruecolor' => GetMessage("SC_MOD_GD"),
@@ -701,22 +700,16 @@ class CSiteCheckerTest
 
 	function check_mail($big = false)
 	{
-		$body = "Test message.\nDelete it.";
+		$eol = \Bitrix\Main\Mail\Mail::getMailEol();
+		$body = "Test message. Delete it.{$eol}";
 		if ($big)
 		{
-			$str = file_get_contents(__FILE__);
-			if (!$str)
-			{
-				return $this->Result(false, GetMessage('SC_CHECK_FILES'));
-			}
-
-			$body = str_repeat($str, 2);
+			$body = str_repeat($body, 8000);
 		}
 
 		$startTime = microtime(true);
 		if ($big)
 		{
-			$eol = \Bitrix\Main\Mail\Mail::getMailEol();
 			$val = mail("hosting_test@bitrixsoft.com", "Bitrix site checker" . $eol . "\tmultiline subject", $body, 'BCC: noreply@bitrixsoft.com');
 		}
 		else
@@ -2039,10 +2032,16 @@ class CSiteCheckerTest
 
 	function check_security()
 	{
-		$strError = '';
 		if (function_exists('apache_get_modules'))
 		{
 			$arLoaded = apache_get_modules();
+
+			if (!in_array('mod_rewrite', $arLoaded))
+			{
+				return $this->Result(false, GetMessage('SC_WARN_MOD_REWRITE') . "<br>");
+			}
+
+			$strError = '';
 			if (in_array('mod_security', $arLoaded))
 			{
 				$strError .= GetMessage('SC_WARN_SECURITY') . "<br>";
@@ -2051,12 +2050,12 @@ class CSiteCheckerTest
 			{
 				$strError .= GetMessage('SC_WARN_DAV') . "<br>";
 			}
+			if ($strError)
+			{
+				return $this->Result(null, $strError);
+			}
 		}
 
-		if ($strError)
-		{
-			return $this->Result(null, $strError);
-		}
 		return $this->Result(true, GetMessage("MAIN_SC_NO_CONFLICT"));
 	}
 
@@ -2305,9 +2304,10 @@ class CSiteCheckerTest
 	function check_pgsql_db_charset()
 	{
 		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
 		$strError = '';
 
-		$f = $connection->query('SHOW LC_CTYPE')->fetch();
+		$f = $connection->query('select datctype as LC_CTYPE from pg_database where datname = \'' . $helper->forSql($connection->getDatabase()) . '\'')->fetch();
 		$collation_database = $f['LC_CTYPE'];
 
 		if (!preg_match('/\.(UTF-8|UTF8)$/i', $collation_database))
@@ -3185,7 +3185,7 @@ class CSiteCheckerTest
 				{
 					if (!in_array($ix, $arIndexes))
 					{
-						if ($arIndexes[$name])
+						if (!empty($arIndexes[$name]))
 						{
 							if ($name == 'PRIMARY') // dropping primary is not supported
 							{
@@ -3285,7 +3285,11 @@ class CSiteCheckerTest
 							continue;
 						}
 
-						$sql = $name == 'PRIMARY' ? 'ALTER TABLE ' . $DB->quote($table) . ' ADD PRIMARY KEY (' . $ix . ')' : 'CREATE ' . ($arFT[$name] ? 'FULLTEXT ' : '') . 'INDEX ' . $DB->quote($name) . ' ON ' . $DB->quote($table) . ' (' . $ix . ')';
+						$sql = (
+							$name == 'PRIMARY'
+							? 'ALTER TABLE ' . $DB->quote($table) . ' ADD PRIMARY KEY (' . $ix . ')'
+							: 'CREATE ' . (!empty($arFT[$name]) ? 'FULLTEXT ' : '') . 'INDEX ' . $DB->quote($name) . ' ON ' . $DB->quote($table) . ' (' . $ix . ')'
+						);
 						if ($this->fix_mode)
 						{
 							if (!$DB->Query($sql, true))
@@ -3711,7 +3715,7 @@ function InitPureDB()
 	 * @var $DBDebug
 	 * @var $DBDebugToFile
 	 */
-	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/php_interface/dbconn.php");
+	require_once $_SERVER["DOCUMENT_ROOT"] . getLocalPath('php_interface/dbconn.php', BX_PERSONAL_ROOT);
 
 	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/constants.php");
 

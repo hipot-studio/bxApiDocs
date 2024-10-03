@@ -254,6 +254,16 @@ class CMainUIGrid extends CBitrixComponent
 			""
 		);
 
+		$this->arParams["NAV_COMPONENT"] = Grid\Params::prepareString(
+			[$this->arParams["NAV_COMPONENT"] ?? null],
+			"bitrix:main.pagenavigation"
+		);
+
+		$this->arParams["NAV_COMPONENT_TEMPLATE"] = Grid\Params::prepareString(
+			[$this->arParams["NAV_COMPONENT_TEMPLATE"] ?? null],
+			"grid"
+		);
+
 		$this->arParams["ACTIONS_LIST"] = Grid\Params::prepareArray(
 			[
 				$this->arParams["ACTIONS_LIST"] ?? null,
@@ -1069,12 +1079,12 @@ class CMainUIGrid extends CBitrixComponent
 					ob_start();
 
 					$APPLICATION->IncludeComponent(
-						"bitrix:main.pagenavigation",
-						"grid",
+						$this->arParams['NAV_COMPONENT'],
+						$this->arParams['NAV_COMPONENT_TEMPLATE'],
 						$params,
 						false,
 						array(
-							"HIDE_ICONS" => "Y",
+							'HIDE_ICONS' => 'Y',
 						)
 					);
 
@@ -1084,7 +1094,7 @@ class CMainUIGrid extends CBitrixComponent
 				{
 					/** @var CDBResult $nav */
 					$nav->nPageWindow = 5;
-					$this->arResult["NAV_STRING"] = $nav->GetPageNavStringEx($dummy, "", "grid", true, null, $this->arParams["~NAV_PARAMS"]);
+					$this->arResult["NAV_STRING"] = $nav->GetPageNavStringEx($dummy, "", $this->arParams['NAV_COMPONENT_TEMPLATE'], true, null, $this->arParams["~NAV_PARAMS"]);
 				}
 			}
 		}
@@ -2067,8 +2077,10 @@ class CMainUIGrid extends CBitrixComponent
 				],
 				"counter" => [
 					"class" => " " . Grid\Counter\Color::DANGER,
+					"secondaryClass" => " " . Grid\Counter\Color::DANGER,
 					"attributes" => "",
 				],
+                "isDouble" => false,
 			];
 			if (!empty($row["counters"][$columnId]) && is_array($row["counters"][$columnId]))
 			{
@@ -2122,16 +2134,31 @@ class CMainUIGrid extends CBitrixComponent
 				{
 					$counter["counter"]["class"] .= " " . $counterOptions["size"];
 				}
+
 				if (isset($counterOptions["events"]) && is_array($counterOptions["events"]))
 				{
 					$counter["counter"]["attributes"] = static::stringifyAttrs([
 						"data-events" => $counterOptions["events"],
 					]);
 				}
+
 				if (isset($counterOptions["class"]) && is_string($counterOptions["class"]))
 				{
 					$counter["counter"]["class"] .= " " . $counterOptions["class"];
 				}
+
+				if (
+					!empty($counterOptions["secondaryColor"])
+					&& is_string($counterOptions["secondaryColor"])
+				)
+				{
+					$counter["counter"]["secondaryClass"] = " " . $counterOptions["secondaryColor"];
+				}
+
+                if (isset($counterOptions["isDouble"]) && is_bool($counterOptions["isDouble"]))
+                {
+                    $counter["counter"]["isDouble"] = $counterOptions["isDouble"];
+                }
 			}
 			else if ($column->getLayout()->isHasLeftAlignedCounter())
 			{

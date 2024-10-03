@@ -263,7 +263,10 @@ class BizprocAutomationComponent extends \Bitrix\Bizproc\Automation\Component\Ba
 		{
 			$template = new \Bitrix\Bizproc\Automation\Engine\Template($documentType);
 
-			$dialog = $template->getRobotSettingsDialog($this->arParams['~ROBOT_DATA']);
+			$dialog = $template->getRobotSettingsDialog(
+				$this->arParams['~ROBOT_DATA'],
+				contextRobots: $this->arParams['~CONTEXT_ROBOTS'] ?? null
+			);
 
 			if ($dialog === '')
 			{

@@ -1,5 +1,6 @@
 <?php
 IncludeModuleLangFile(__FILE__);
+//@codingStandardsIgnoreFile
 
 use Bitrix\Crm;
 use Bitrix\Crm\Binding\EntityBinding;
@@ -1519,12 +1520,17 @@ class CAllCrmLead
 				: Bitrix\Crm\Security\EntityPermissionType::UNDEFINED
 		);
 
-		if(!isset($arFields['STATUS_ID']) || (string)$arFields['STATUS_ID'] === '')
+		$arFields['STATUS_ID'] ??= null;
+
+		$viewMode = ($options['ITEM_OPTIONS']['VIEW_MODE'] ?? null);
+
+		if (
+			$viewMode !== ViewMode::MODE_ACTIVITIES
+			&& !self::IsStatusExists($arFields['STATUS_ID'])
+		)
 		{
 			$arFields['STATUS_ID'] = self::GetStartStatusID($permissionTypeId);
 		}
-
-		$viewMode = ($options['ITEM_OPTIONS']['VIEW_MODE'] ?? null);
 
 		$viewModeActivitiesStatusId = null;
 		if ($viewMode === ViewMode::MODE_ACTIVITIES)
@@ -2137,9 +2143,18 @@ class CAllCrmLead
 
 		if (!empty($arFields['STATUS_ID']) && $arFields['STATUS_ID'] !== $arRow['STATUS_ID'])
 		{
-			self::EnsureStatusesLoaded();
-			if (in_array($arFields['STATUS_ID'], self::$LEAD_STATUSES_BY_GROUP['FINISHED']))
-				$arFields['~DATE_CLOSED'] = $DB->CurrentTimeFunction();
+			if (self::IsStatusExists($arFields['STATUS_ID'] ?? null))
+			{
+				self::EnsureStatusesLoaded();
+				if (in_array($arFields['STATUS_ID'], self::$LEAD_STATUSES_BY_GROUP['FINISHED']))
+				{
+					$arFields['~DATE_CLOSED'] = $DB->CurrentTimeFunction();
+				}
+			}
+			else
+			{
+				unset($arFields['STATUS_ID']); // not change status if new status is invalid
+			}
 		}
 
 		if(isset($arFields['ASSIGNED_BY_ID']) && $arFields['ASSIGNED_BY_ID'] <= 0)
@@ -2961,7 +2976,7 @@ class CAllCrmLead
 					)
 					{
 						$url = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Lead, $ID);
-						$serverName = (CMain::IsHTTPS() ? "https" : "http")."://".((defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> '') ? SITE_SERVER_NAME : COption::GetOptionString("main", "server_name", ""));
+						$absoluteUrl = CCrmUrlUtil::ToAbsoluteUrl($url);
 
 						if ($sonetEvent['TYPE'] === CCrmLiveFeedEvent::Responsible)
 						{
@@ -2993,6 +3008,50 @@ class CAllCrmLead
 								&& array_key_exists($sonetEventFields['PARAMS']['FINAL_STATUS_ID'], $infos)
 							)
 							{
+								$messageTitle = "<a href=\"" . $url . "\" class=\"bx-notifier-item-action\">" . htmlspecialcharsbx($title) . "</a>";
+								$messageTitleOut = htmlspecialcharsbx($title);
+								$startStatusTitle = htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['START_STATUS_ID']]['NAME']);
+								$finalStatusTitle = htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['FINAL_STATUS_ID']]['NAME']);
+
+								$notifyMessage = static function (?string $languageId = null) use (
+									$messageTitle,
+									$startStatusTitle,
+									$finalStatusTitle,
+								) {
+									$replace = [
+										"#title#" => $messageTitle,
+										"#start_status_title#" => $startStatusTitle,
+										"#final_status_title#" => $finalStatusTitle,
+									];
+
+									return Loc::getMessage(
+										'CRM_LEAD_PROGRESS_IM_NOTIFY_MSGVER_1',
+										$replace,
+										$languageId,
+									);
+								};
+
+								$notifyMessageOut = static function (?string $languageId = null) use (
+									$messageTitleOut,
+									$startStatusTitle,
+									$finalStatusTitle,
+									$absoluteUrl,
+								){
+									$replace = [
+										"#title#" => $messageTitleOut,
+										"#start_status_title#" => $startStatusTitle,
+										"#final_status_title#" => $finalStatusTitle,
+									];
+
+									$message = Loc::getMessage(
+										'CRM_LEAD_PROGRESS_IM_NOTIFY_MSGVER_1',
+										$replace,
+										$languageId,
+									);
+
+									return "{$message} ({$absoluteUrl})";
+								};
+
 								$arMessageFields = array(
 									"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
 									"TO_USER_ID" => $assignedByID,
@@ -3003,16 +3062,8 @@ class CAllCrmLead
 									//"NOTIFY_EVENT" => "lead_update",
 									"NOTIFY_EVENT" => "changeStage",
 									"NOTIFY_TAG" => "CRM|LEAD_PROGRESS|".$ID,
-									"NOTIFY_MESSAGE" => GetMessage("CRM_LEAD_PROGRESS_IM_NOTIFY_MSGVER_1", Array(
-										"#title#" => "<a href=\"".$url."\" class=\"bx-notifier-item-action\">".htmlspecialcharsbx($title)."</a>",
-										"#start_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['START_STATUS_ID']]['NAME']),
-										"#final_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['FINAL_STATUS_ID']]['NAME'])
-									)),
-									"NOTIFY_MESSAGE_OUT" => GetMessage("CRM_LEAD_PROGRESS_IM_NOTIFY_MSGVER_1", Array(
-											"#title#" => htmlspecialcharsbx($title),
-											"#start_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['START_STATUS_ID']]['NAME']),
-											"#final_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['FINAL_STATUS_ID']]['NAME'])
-										))." (".$serverName.$url.")"
+									"NOTIFY_MESSAGE" => $notifyMessage,
+									"NOTIFY_MESSAGE_OUT" => $notifyMessageOut,
 								);
 
 								CIMNotify::Add($arMessageFields);
@@ -5128,5 +5179,10 @@ class CAllCrmLead
 		{
 			$connection->query("UPDATE {$tableName} SET COMPANY_ID = {$newId} WHERE COMPANY_ID = {$oldId}");
 		}
+	}
+
+	public function getLastError(): string
+	{
+		return (string)$this->LAST_ERROR;
 	}
 }

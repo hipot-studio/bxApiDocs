@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2\Controller\Chat;
 
+use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\Controller\Filter\ChatTypeFilter;
@@ -67,6 +68,8 @@ class Comment extends BaseController
 
 			return null;
 		}
+
+		(new ChatAnalytics())->addFollowComments($chat, $flag);
 
 		return ['result' => true];
 	}

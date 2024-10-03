@@ -2224,7 +2224,10 @@ class Rest extends \IRestService
 			return Chat::getChatIdBySession((int)$params['SESSION_ID']);
 		}
 
-		if (isset($params['USER_CODE']))
+		if (
+			isset($params['USER_CODE'])
+			&& (is_string($params['USER_CODE']) || is_numeric($params['USER_CODE']))
+		)
 		{
 			if (mb_strpos($params['USER_CODE'], 'imol|') === 0)
 			{

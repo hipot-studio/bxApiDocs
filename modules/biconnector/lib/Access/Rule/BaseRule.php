@@ -63,7 +63,12 @@ class BaseRule extends AbstractRule
 	 */
 	protected function isRightsFeatureEnabled(): bool
 	{
-		return Loader::includeModule('bitrix24') && Feature::isFeatureEnabled('bi_constructor_rights');
+		if (!Loader::includeModule('bitrix24'))
+		{
+			return true;
+		}
+
+		return Feature::isFeatureEnabled('bi_constructor_rights');
 	}
 
 	/**

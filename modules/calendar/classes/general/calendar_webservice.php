@@ -119,7 +119,7 @@ class CCalendarWebService extends IWebService
 			);
 		}
 
-		$listName = ToUpper(CIntranetUtils::makeGUID($listName_original));
+		$listName = mb_strtoupper(CIntranetUtils::makeGUID($listName_original));
 		$arSections = CCalendarSect::GetList(
 			array(
 				'arFilter' => array('XML_ID' => mb_strtolower($listName_original))
@@ -841,17 +841,17 @@ class CCalendarWebService extends IWebService
 
 	public static function ClearOutlookHtml($html)
 	{
-		$q = tolower($html);
+		$q = mb_strtolower($html);
 		if (($pos = mb_strrpos($q, '</head>')) !== false)
 		{
 			$html = mb_substr($html, $pos + 7);
-			$q = tolower($html);
+			$q = mb_strtolower($html);
 		}
 
 		if (str_contains($q, '<body'))
 		{
 			$html = preg_replace("/((\s|\S)*)<body[^>]*>((\s|\S)*)/is", "$3", $html);
-			$q = tolower($html);
+			$q = mb_strtolower($html);
 		}
 
 		if (($pos = mb_strrpos($q, '</body>')) !== false)
@@ -879,7 +879,15 @@ class CCalendarWebService extends IWebService
 			return false;
 		}
 
-		$dateTimeZone = new DateTimeZone($timezone);
+		try
+		{
+			$dateTimeZone = new DateTimeZone($timezone);
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+
 		$dateTime = new DateTime('15.06.2024', $dateTimeZone);
 		$transitions = $dateTimeZone->getTransitions($dateTime->getTimestamp(), $dateTime->getTimestamp());
 

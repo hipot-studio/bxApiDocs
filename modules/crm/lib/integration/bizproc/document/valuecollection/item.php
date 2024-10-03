@@ -56,11 +56,19 @@ class Item extends Base
 		$factory = Crm\Service\Container::getInstance()->getFactory($this->typeId);
 		if (isset($factory))
 		{
+			$fieldMap = $factory->getFieldsMap();
 			foreach ($factory->getFieldsInfo() as $fieldId => $field)
 			{
-				if ($field['TYPE'] === Crm\Field::TYPE_USER && isset($this->document[$fieldId]))
+				if ($field['TYPE'] === Crm\Field::TYPE_USER)
 				{
-					$this->document[$fieldId] = 'user_' . $this->document[$fieldId];
+					if (isset($this->document[$fieldId]))
+					{
+						$this->document[$fieldId] = 'user_' . $this->document[$fieldId];
+					}
+					elseif (isset($this->document[$fieldMap[$fieldId]]))
+					{
+						$this->document[$fieldMap[$fieldId]] = 'user_' . $this->document[$fieldMap[$fieldId]];
+					}
 				}
 			}
 		}

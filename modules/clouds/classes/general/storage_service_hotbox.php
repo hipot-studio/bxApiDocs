@@ -38,7 +38,8 @@ class CCloudStorageService_HotBox extends CCloudStorageService_S3
 	public function GetLocationList()
 	{
 		return [
-			'' => 'hb.bizmrg.com',
+			'ru-msk' => 'ru',
+			'kz-ast' => 'kz',
 		];
 	}
 
@@ -141,6 +142,17 @@ class CCloudStorageService_HotBox extends CCloudStorageService_S3
 		)
 		{
 			return $bucket . $match[2];
+		}
+		elseif ($this->location && $this->location !== 'ru-msk')
+		{
+			if ($bucket !== '')
+			{
+				return $bucket . '.hb.' . $this->location . '.bizmrg.com';
+			}
+			else
+			{
+				return 'hb.' . $this->location . '.bizmrg.com';
+			}
 		}
 		else
 		{

@@ -13,6 +13,7 @@ use Bitrix\Main\ORM\Query\Result;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\UserTable;
+use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Integration\Intranet\Settings;
 use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Internals\Task\Status;
@@ -89,9 +90,10 @@ class TasksDepartmentsOverviewComponent extends TasksBaseComponent
 		$this->updateManagerCounter($counters);
 
 		$users = [];
-		$taskLimitExceeded = TaskLimit::isLimitExceeded();
 
-		if (!$taskLimitExceeded)
+		$taskSuperVisorExceeded = !Bitrix24::checkFeatureEnabled(Bitrix24\FeatureDictionary::TASK_SUPERVISOR_VIEW);
+
+		if (!$taskSuperVisorExceeded)
 		{
 			$usersResult = $this->getUsersResultWithNavigation();
 			$users = $usersResult->fetchAll();
@@ -100,7 +102,7 @@ class TasksDepartmentsOverviewComponent extends TasksBaseComponent
 		}
 
 		$this->arResult['GRID']['DATA'] = $users;
-		$this->arResult['TASK_LIMIT_EXCEEDED'] = $taskLimitExceeded;
+		$this->arResult['TASK_LIMIT_EXCEEDED'] = $taskSuperVisorExceeded;
 		$this->arResult['SUMMARY'] = [
 			'RESPONSIBLE' => [
 				'ALL' => 0,

@@ -1,15 +1,17 @@
 <?
 namespace Bitrix\Main\UI\Uploader;
+
 use Bitrix\Main\AccessDeniedException;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\NotImplementedException;
-use \Bitrix\Main\UI\FileInputUtility;
-use \Bitrix\Main\Web\Json;
-use \Bitrix\Main\Context;
-use \Bitrix\Main\Loader;
-use \Bitrix\Main\Localization\Loc;
-use \Bitrix\Main;
+use Bitrix\Main\UI\FileInputUtility;
+use Bitrix\Main\Web\Json;
+use Bitrix\Main\Context;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main;
+
 Loc::loadMessages(__FILE__);
 Loader::registerAutoLoadClasses(
 	"main",

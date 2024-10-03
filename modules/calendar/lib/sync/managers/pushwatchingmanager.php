@@ -333,6 +333,7 @@ class PushWatchingManager
 			&& $sectionLink->isActive()
 			&& ($sectionLink->getConnection() !== null)
 			&& !$sectionLink->getConnection()->isDeleted()
+			&& $sectionLink->getConnection()?->getOwner() !== null
 		)
 		{
 			/** @var FactoryInterface $vendorFactory */
@@ -390,7 +391,11 @@ class PushWatchingManager
 	{
 		/** @var Connection $connection */
 		$connection = $this->getConnectionMapper()->getById($pushChannel->getEntityId());
-		if ($connection !== null && !$connection->isDeleted())
+		if (
+			$connection !== null
+			&& !$connection->isDeleted()
+			&& $connection->getOwner() !== null
+		)
 		{
 			/** @var FactoryInterface $vendorFactory */
 			$vendorFactory = $this->getFactoryByConnection($connection);

@@ -35,14 +35,6 @@ class Helper
 			$keyLock = self::LOCK_KEY_NAME . $params['ID'];
 			if (Application::getConnection()->lock($keyLock))
 			{
-				$raw = CustomConnectorsTable::getList([
-					'select' => ['ID'],
-					'filter' => [
-						'=ID_CONNECTOR' => $params['ID'],
-						'=REST_APP_ID' => $params['REST_APP_ID']
-					]
-				]);
-
 				$changeParams = [
 					'ID_CONNECTOR' => mb_strtolower($params['ID']),
 					'NAME' => $params['NAME'],
@@ -99,6 +91,12 @@ class Helper
 					$changeParams['REST_PLACEMENT_ID'] = $placementId;
 				}
 
+				$raw = CustomConnectorsTable::getList([
+					'select' => ['ID'],
+					'filter' => [
+						'=ID_CONNECTOR' => $changeParams['ID_CONNECTOR'],
+					]
+				]);
 				if ($row = $raw->fetch())
 				{
 					$result = CustomConnectorsTable::update($row['ID'], $changeParams)->isSuccess();

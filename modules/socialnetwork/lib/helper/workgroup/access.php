@@ -127,6 +127,11 @@ class Access
 		return static::canModify($params);
 	}
 
+	public static function canDelete(array $params = []): bool
+	{
+		return static::canModify($params);
+	}
+
 	public static function canSetOwner(array $params = []): bool
 	{
 		$groupId = (int)($params['groupId'] ?? 0);

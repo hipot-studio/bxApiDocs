@@ -13,7 +13,7 @@ use CCrmOwnerType;
  *
  * @package Bitrix\Tasks\Grid\Task
  */
-class Grid extends \Bitrix\Tasks\Grid
+class Grid extends \Bitrix\Tasks\Grid\Grid
 {
 	public function prepareHeaders(): array
 	{

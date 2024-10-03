@@ -49,7 +49,7 @@ use Bitrix\Tasks\Replication\Replicator\RegularTemplateTaskReplicator;
 use Bitrix\Tasks\Scrum\Form\EntityForm;
 use Bitrix\Tasks\Scrum\Internal\EntityTable;
 use Bitrix\Tasks\Scrum\Internal\ItemTable;
-use Bitrix\Tasks\Util\Replicator;
+use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
 use Bitrix\Tasks\Util\Type;
 use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\Access\ActionDictionary;
@@ -1094,7 +1094,7 @@ class CTasks
 							);
 						}
 
-						if (MakeTimeStamp($val['END']))
+						if (MakeTimeStamp($val['END'] ?? null))
 						{
 							$strDateEnd = Db::charToDateFunction(
 								$DB->ForSql(
@@ -5483,23 +5483,26 @@ class CTasks
 			return 'CTasks::RepeatTaskByTemplateId(' . $templateId . ');';
 		}
 
-		if (RegularTemplateTaskReplicator::isEnabled())
+		$taskLimitExceeded = TaskLimit::isLimitExceeded();
+		$taskRecurrentRestrict = !(Integration\Bitrix24::checkFeatureEnabled(
+			Integration\Bitrix24\FeatureDictionary::TASK_RECURRING_TASKS
+		));
+		if ($taskRecurrentRestrict)
 		{
-			$replicator = new RegularTemplateTaskReplicator();
-			return (string)$replicator->replicate($templateId)->getPayload();
+			\Bitrix\Tasks\Internals\Log\Logger::log(['templateId' => $templateId], 'TASKS_REPLICATION_RESTRICTED');
+			return '';
 		}
 
-		return Replicator\Task\FromTemplate::repeatTask(
-			$templateId,
-			[
-				// todo: get rid of use of CTasks one day...
-				'AGENT_NAME_TEMPLATE' => 'CTasks::RepeatTaskByTemplateId(#ID#);',
-				'RESULT' => &$debugHere,
-			]
-		);
+		/** @var RegularTemplateTaskReplicator $replicator */
+		$replicator = Main\DI\ServiceLocator::getInstance()->get('tasks.regular.replicator');
+
+		return (string)$replicator->replicate($templateId)->getPayload();
 	}
 
 	/**
+	 * @deprecated
+	 * @see RegularTemplateTaskReplicator::getNextTimeByTemplateId()
+	 *
 	 * @param $arParams
 	 * @param bool $template
 	 * @param integer $agentTime Time in server timezone
@@ -5531,7 +5534,11 @@ class CTasks
 		{
 			$templateData = [];
 		}
-		return (new RegularTemplateTaskReplicator())->getNextTimeByTemplateId((int)$templateData['ID']);
+
+		/** @var RegularTemplateTaskReplicator $replicator */
+		$replicator = Main\DI\ServiceLocator::getInstance()->get('tasks.regular.replicator');
+
+		return $replicator->getNextTimeByTemplateId((int)$templateData['ID']);
 	}
 
 	public static function CanGivenUserDelete($userId, $taskCreatedBy, $taskGroupId,

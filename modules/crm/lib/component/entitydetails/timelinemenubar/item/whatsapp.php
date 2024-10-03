@@ -39,9 +39,14 @@ final class WhatsApp extends Sms
 
 	public function isAvailable(): bool
 	{
-		return parent::isAvailable()
+		return
+			parent::isAvailable()
 			&& Ednaru::isSupported()
-			&& Settings\Crm::isWhatsAppScenarioEnabled()
+			&& !in_array($this->getEntityTypeId(), [
+				\CCrmOwnerType::Order,
+				\CCrmOwnerType::SmartDocument,
+				\CCrmOwnerType::SmartB2eDocument,
+			], true)
 			&& DocumentGeneratorManager::getInstance()->isEnabled()
 		;
 	}

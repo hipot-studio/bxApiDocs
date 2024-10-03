@@ -2,19 +2,40 @@
 
 namespace Bitrix\Tasks\Flow\Internal\Event\Task;
 
+use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\ObjectNotFoundException;
+use Bitrix\Main\Type\DateTime;
+use Bitrix\Tasks\Flow\Control\Command\UpdateCommand;
+use Bitrix\Tasks\Flow\Control\Exception\CommandNotFoundException;
+use Bitrix\Tasks\Flow\Control\Exception\FlowNotFoundException;
+use Bitrix\Tasks\Flow\Control\Exception\FlowNotUpdatedException;
+use Bitrix\Tasks\Flow\Control\FlowService;
 use Bitrix\Tasks\Flow\Internal\FlowTaskTable;
+use Bitrix\Tasks\Flow\Internal\Link\FlowLink;
+use Bitrix\Tasks\Flow\Notification\NotificationService;
+use Bitrix\Tasks\Flow\Task\Status;
+use Bitrix\Tasks\InvalidCommandException;
 use Exception;
+use Psr\Container\NotFoundExceptionInterface;
 
 class FlowTaskEventHandler
 {
-	private int $flowId = 0;
+	private int $currentFlowId = 0;
+	private int $previousFlowId = 0;
 	private int $taskId = 0;
-	private array $fields = [];
+	private array $changedFields = [];
 	private array $previousFields = [];
 
-	public function withFlowId(int $flowId): static
+	public function withCurrentFlowId(int $currentFlowId): static
 	{
-		$this->flowId = $flowId;
+		$this->currentFlowId = $currentFlowId;
+		return $this;
+	}
+
+	public function withPreviousFlowId(int $previousFlowId): static
+	{
+		$this->previousFlowId = $previousFlowId;
 		return $this;
 	}
 
@@ -24,9 +45,9 @@ class FlowTaskEventHandler
 		return $this;
 	}
 
-	public function withFields(array $fields): static
+	public function withChangedFields(array $changedFields): static
 	{
-		$this->fields = $fields;
+		$this->changedFields = $changedFields;
 		return $this;
 	}
 
@@ -38,31 +59,158 @@ class FlowTaskEventHandler
 
 	/**
 	 * @throws Exception
+	 * @throws NotFoundExceptionInterface
 	 */
 	public function onTaskAdd(): void
 	{
-		FlowTaskTable::add([
-			'FLOW_ID' => $this->flowId,
-			'TASK_ID' => $this->taskId,
-		]);
+		FlowLink::link($this->currentFlowId, $this->taskId);
+
+		$this->sendAddNotification();
+		$this->upActivity();
 	}
 
+	/**
+	 * @throws Exception
+	 * @throws NotFoundExceptionInterface
+	 */
 	public function onTaskUpdate(): void
 	{
-		$groupId = (isset($this->fields['GROUP_ID']) ? (int)$this->fields['GROUP_ID'] : null);
-		$previousGroupId = (isset($this->previousFields['GROUP_ID']) ? (int)$this->previousFields['GROUP_ID'] : null);
-
-		$isGroupChanged = (($groupId && $groupId !== $previousGroupId)
-			|| ($groupId === 0 && $previousGroupId > 0));
-
-		if ($isGroupChanged)
+		if ($this->isLinkDeleted())
 		{
-			FlowTaskTable::deleteRelation($this->taskId);
+			FlowLink::unlink($this->taskId);
+		}
+		elseif ($this->isLinkChanged())
+		{
+			FlowLink::unlink($this->taskId);
+			FlowLink::link($this->currentFlowId, $this->taskId);
+
+			$this->sendOnFlowChangedNotification();
+			$this->upActivity();
+		}
+		elseif ($this->isLinkAdded())
+		{
+			FlowLink::link($this->currentFlowId, $this->taskId);
+
+			$this->sendOnFlowChangedNotification();
+			$this->upActivity();
+		}
+		elseif ($this->isGroupChanged())
+		{
+			FlowLink::unlink($this->taskId);
 		}
 	}
 
 	public function onTaskDelete(): void
 	{
-		FlowTaskTable::deleteRelation($this->taskId);
+		FlowLink::unlink($this->taskId);
+	}
+
+	/**
+	 * @throws NotFoundExceptionInterface
+	 * @throws FlowNotUpdatedException
+	 * @throws ObjectNotFoundException
+	 * @throws SqlQueryException
+	 * @throws CommandNotFoundException
+	 * @throws FlowNotFoundException
+	 * @throws InvalidCommandException
+	 */
+	public function onFlowTaskUpdate(): void
+	{
+		$this->sendUpdateNotification();
+
+		if ($this->isStatusChanged())
+		{
+			$this->upActivity();
+		}
+	}
+
+	/**
+	 * @throws NotFoundExceptionInterface
+	 * @throws ObjectNotFoundException
+	 */
+	private function sendUpdateNotification(): void
+	{
+		/** @var NotificationService $notificationService */
+		$notificationService = ServiceLocator::getInstance()->get('tasks.flow.notification.service');
+
+		if (isset($this->changedFields['DEADLINE']))
+		{
+			$notificationService->onTaskExpireTimeChange($this->taskId);
+		}
+
+		if (isset($this->changedFields['STATUS']))
+		{
+			$notificationService->onTaskStatusChanged($this->taskId);
+		}
+	}
+
+	private function sendOnFlowChangedNotification(): void
+	{
+		/** @var NotificationService $notificationService */
+		$notificationService = ServiceLocator::getInstance()->get('tasks.flow.notification.service');
+
+		$notificationService->onTaskToFlowAdded($this->taskId, $this->currentFlowId);
+	}
+
+	/**
+	 * @throws NotFoundExceptionInterface
+	 * @throws ObjectNotFoundException
+	 */
+	private function sendAddNotification(): void
+	{
+		/** @var NotificationService $notificationService */
+		$notificationService = ServiceLocator::getInstance()->get('tasks.flow.notification.service');
+		$notificationService->onTaskToFlowAdded($this->taskId, $this->currentFlowId);
+	}
+
+	/**
+	 * @throws NotFoundExceptionInterface
+	 * @throws FlowNotUpdatedException
+	 * @throws ObjectNotFoundException
+	 * @throws SqlQueryException
+	 * @throws CommandNotFoundException
+	 * @throws FlowNotFoundException
+	 * @throws InvalidCommandException
+	 */
+	private function upActivity(): void
+	{
+		/** @var FlowService $flowService */
+		$flowService = ServiceLocator::getInstance()->get('tasks.flow.service');
+
+		$updateCommand = (new UpdateCommand())
+			->setId($this->currentFlowId)
+			->setActivity(new DateTime());
+
+		$flowService->update($updateCommand);
+	}
+
+	private function isGroupChanged(): bool
+	{
+		$groupId = (isset($this->changedFields['GROUP_ID']) ? (int)$this->changedFields['GROUP_ID'] : null);
+		$previousGroupId = (isset($this->previousFields['GROUP_ID']) ? (int)$this->previousFields['GROUP_ID'] : null);
+
+		return (($groupId && $groupId !== $previousGroupId)
+			|| ($groupId === 0 && $previousGroupId > 0));
+	}
+
+	private function isStatusChanged(): bool
+	{
+		return isset($this->changedFields['STATUS'])
+			&& in_array((int)$this->changedFields['STATUS'], Status::STATUSES_CHANGING_ACTIVITY, true);
+	}
+
+	private function isLinkAdded(): bool
+	{
+		return $this->previousFlowId === 0 && $this->currentFlowId > 0;
+	}
+
+	private function isLinkChanged(): bool
+	{
+		return $this->previousFlowId > 0 && $this->currentFlowId > 0;
+	}
+
+	private function isLinkDeleted(): bool
+	{
+		return $this->currentFlowId === 0 && $this->previousFlowId > 0;
 	}
 }

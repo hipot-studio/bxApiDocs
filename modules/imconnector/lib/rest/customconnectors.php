@@ -501,6 +501,7 @@ if (Loader::includeModule('rest'))
 		 * @throws ArgumentTypeException
 		 * @throws ArgumentException
 		 * @throws AuthTypeException
+		 * @throws RestException
 		 */
 		public static function sendMessages($params, $n, \CRestServer $server): array
 		{
@@ -557,6 +558,14 @@ if (Loader::includeModule('rest'))
 			}
 			else
 			{
+				if (!empty($resultSend->getErrors()))
+				{
+					foreach ($resultSend->getErrors() as $error)
+					{
+						throw new RestException($error->getMessage(), $error->getCode(), \CRestServer::STATUS_WRONG_REQUEST);
+					}
+				}
+
 				$result['SUCCESS'] = false;
 			}
 
@@ -572,6 +581,7 @@ if (Loader::includeModule('rest'))
 		 * @return array
 		 * @throws ArgumentNullException
 		 * @throws AuthTypeException
+		 * @throws RestException
 		 */
 		public static function updateMessages($params, $n, \CRestServer $server): array
 		{
@@ -610,6 +620,14 @@ if (Loader::includeModule('rest'))
 			}
 			else
 			{
+				if (!empty($resultSend->getErrors()))
+				{
+					foreach ($resultSend->getErrors() as $error)
+					{
+						throw new RestException($error->getMessage(), $error->getCode(), \CRestServer::STATUS_WRONG_REQUEST);
+					}
+				}
+
 				$result['SUCCESS'] = false;
 			}
 
@@ -625,6 +643,7 @@ if (Loader::includeModule('rest'))
 		 * @return array
 		 * @throws ArgumentNullException
 		 * @throws AuthTypeException
+		 * @throws RestException
 		 */
 		public static function deleteMessages($params, $n, \CRestServer $server): array
 		{
@@ -663,6 +682,14 @@ if (Loader::includeModule('rest'))
 			}
 			else
 			{
+				if (!empty($resultSend->getErrors()))
+				{
+					foreach ($resultSend->getErrors() as $error)
+					{
+						throw new RestException($error->getMessage(), $error->getCode(), \CRestServer::STATUS_WRONG_REQUEST);
+					}
+				}
+
 				$result['SUCCESS'] = false;
 			}
 
@@ -678,6 +705,7 @@ if (Loader::includeModule('rest'))
 		 * @return array
 		 * @throws ArgumentNullException
 		 * @throws AuthTypeException
+		 * @throws RestException
 		 */
 		public static function sendStatusDelivery($params, $n, \CRestServer $server): array
 		{
@@ -716,6 +744,14 @@ if (Loader::includeModule('rest'))
 			}
 			else
 			{
+				if (!empty($resultSend->getErrors()))
+				{
+					foreach ($resultSend->getErrors() as $error)
+					{
+						throw new RestException($error->getMessage(), $error->getCode(), \CRestServer::STATUS_WRONG_REQUEST);
+					}
+				}
+
 				$result['SUCCESS'] = false;
 			}
 
@@ -731,6 +767,7 @@ if (Loader::includeModule('rest'))
 		 * @return array
 		 * @throws ArgumentNullException
 		 * @throws AuthTypeException
+		 * @throws RestException
 		 */
 		public static function sendStatusReading($params, $n, \CRestServer $server): array
 		{
@@ -769,6 +806,14 @@ if (Loader::includeModule('rest'))
 			}
 			else
 			{
+				if (!empty($resultSend->getErrors()))
+				{
+					foreach ($resultSend->getErrors() as $error)
+					{
+						throw new RestException($error->getMessage(), $error->getCode(), \CRestServer::STATUS_WRONG_REQUEST);
+					}
+				}
+
 				$result['SUCCESS'] = false;
 			}
 
@@ -784,6 +829,7 @@ if (Loader::includeModule('rest'))
 		 * @return array
 		 * @throws ArgumentNullException
 		 * @throws AuthTypeException
+		 * @throws RestException
 		 */
 		public static function setErrorConnector($params, $n, \CRestServer $server): array
 		{
@@ -814,6 +860,14 @@ if (Loader::includeModule('rest'))
 			}
 			else
 			{
+				if (!empty($resultSend->getErrors()))
+				{
+					foreach ($resultSend->getErrors() as $error)
+					{
+						throw new RestException($error->getMessage(), $error->getCode(), \CRestServer::STATUS_WRONG_REQUEST);
+					}
+				}
+
 				$result['SUCCESS'] = false;
 			}
 

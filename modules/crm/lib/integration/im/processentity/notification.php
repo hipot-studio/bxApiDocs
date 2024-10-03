@@ -51,6 +51,11 @@ abstract class Notification
 			->setFromUserId($fromUserId)
 		;
 
+		if (!$fromUserId)
+		{
+			$notifyDto->setNotifyType(IM_NOTIFY_SYSTEM);
+		}
+
 		$receivers = $this->getReceivers();
 		foreach ($receivers as $receiver)
 		{
@@ -154,7 +159,7 @@ abstract class Notification
 
 	abstract protected function getMessageBuilder(): ProcessEntity;
 
-	protected function getMessage(?string $type): string
+	protected function getMessage(?string $type, ?string $url = null): callable
 	{
 		if ($type !== null)
 		{
@@ -162,11 +167,11 @@ abstract class Notification
 		}
 
 		return $this->messageBuilder
-			->getMessage([
+			->getMessageCallback([
 				'#TITLE#' => htmlspecialcharsbx(
 					$this->difference->getCurrentValue($this->getTitleFieldName()),
 				),
-				'#URL#' => '#URL#',
+				'#URL#' => $url ?? '',
 			])
 		;
 	}
@@ -179,18 +184,14 @@ abstract class Notification
 		;
 	}
 
-	protected function getNotifyMessage(?string $type): string
+	protected function getNotifyMessage(?string $type): callable
 	{
-		$message = $this->getMessage($type);
-
-		return str_replace('#URL#', $this->getUrl(), $message);
+		return $this->getMessage($type, $this->getUrl());
 	}
 
-	protected function getNotifyMessageOut(?string $type): string
+	protected function getNotifyMessageOut(?string $type): callable
 	{
-		$message = $this->getMessage($type);
-
-		return str_replace('#URL#', $this->getAbsoluteUrl(), $message);
+		return $this->getMessage($type, $this->getAbsoluteUrl());
 	}
 
 	protected function getUrl(): Uri

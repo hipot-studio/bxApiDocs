@@ -15,8 +15,7 @@ class Slider extends BaseProvider
 		$requestHelpdesk = new Helpdesk\Request(self::PATH_HELPDESK, [
 			'url' => $this->configuration->currentUrl,
 			'featurePromoterVersion' => 2,
-			'isPromoEditionAvailable' => Loader::includeModule('bitrix24')
-				&& Bitrix24\Feature::isPromoEditionAvailableByFeature($this->configuration->featureId ?? ''),
+			'isPromoEditionAvailable' => $this->isPromoEditionAvailable(),
 		]);
 
 		return [
@@ -35,5 +34,20 @@ class Slider extends BaseProvider
 		}
 
 		return [];
+	}
+
+	private function isPromoEditionAvailable(): bool
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			if (Loader::includeModule('extranet') && !\CExtranet::isIntranetUser())
+			{
+				return false;
+			}
+
+			return Bitrix24\Feature::isPromoEditionAvailableByFeature($this->configuration->featureId ?? '');
+		}
+
+		return false;
 	}
 }

@@ -1,9 +1,10 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2013 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
 
 use Bitrix\Main;
@@ -209,7 +210,7 @@ class CTimeZone
 		{
 			$timeZone = '';
 
-			if ($USER_ID !== null)
+			if ($USER_ID !== null && $USER?->GetID() != $USER_ID)
 			{
 				$dbUser = CUser::GetList('id', 'asc', ['ID_EQUAL_EXACT' => $USER_ID], ['FIELDS' => ['AUTO_TIME_ZONE', 'TIME_ZONE', 'TIME_ZONE_OFFSET']]);
 				if (($arUser = $dbUser->Fetch()))

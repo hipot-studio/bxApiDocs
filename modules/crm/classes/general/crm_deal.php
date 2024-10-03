@@ -1,5 +1,6 @@
 <?php
 IncludeModuleLangFile(__FILE__);
+//@codingStandardsIgnoreFile
 
 use Bitrix\Crm;
 use Bitrix\Crm\Binding\DealContactTable;
@@ -928,6 +929,7 @@ class CAllCrmDeal
 	// GetList with navigation support
 	public static function GetListEx($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array(), $arOptions = array())
 	{
+		global $USER;
 		if(!is_array($arOptions))
 		{
 			$arOptions = array();
@@ -947,22 +949,55 @@ class CAllCrmDeal
 
 		if($checkPermissions)
 		{
-			$ID = isset($arFilter['ID']) && is_numeric($arFilter['ID']) ? (int)$arFilter['ID'] : 0;
-			if($ID <= 0)
+			if (isset($arFilter['ID']) && is_array($arFilter['ID']) && count($arFilter['ID']) > 0)
 			{
-				$ID = isset($arFilter['=ID']) && is_numeric($arFilter['=ID']) ? (int)$arFilter['=ID'] : 0;
-			}
+				$ids = array_filter(array_map('intval', $arFilter['ID']), fn($id) => (int)$id > 0);
+				$idsFilteredByPerms = [];
 
-			if($ID > 0)
-			{
-				if(!self::CheckReadPermission($ID))
+				if (!empty($ids))
 				{
+					$idsFilteredByPerms = self::filterIdsByReadPermission($ids, $USER->GetID());
+				}
+
+				if(empty($idsFilteredByPerms)) // hasn't access to any ID in the filter
+				{
+					if(is_array($arGroupBy) && count($arGroupBy) == 0)
+					{
+						return 0;
+					}
+
 					$dbResult = new CDBResult();
 					$dbResult->InitFromArray(array());
 					return $dbResult;
 				}
 
+				$arFilter['ID'] = $idsFilteredByPerms;
 				$arFilter['CHECK_PERMISSIONS'] = 'N';
+			}
+			else
+			{
+				$ID = isset($arFilter['ID']) && is_numeric($arFilter['ID']) ? (int)$arFilter['ID'] : 0;
+				if($ID <= 0)
+				{
+					$ID = isset($arFilter['=ID']) && is_numeric($arFilter['=ID']) ? (int)$arFilter['=ID'] : 0;
+				}
+
+				if($ID > 0)
+				{
+					if(!self::CheckReadPermission($ID))
+					{
+						if(is_array($arGroupBy) && count($arGroupBy) == 0)
+						{
+							return 0;
+						}
+
+						$dbResult = new CDBResult();
+						$dbResult->InitFromArray(array());
+						return $dbResult;
+					}
+
+					$arFilter['CHECK_PERMISSIONS'] = 'N';
+				}
 			}
 		}
 
@@ -1809,12 +1844,17 @@ class CAllCrmDeal
 					: Bitrix\Crm\Security\EntityPermissionType::UNDEFINED
 			);
 
-			if (!isset($arFields['STAGE_ID']) || (string)$arFields['STAGE_ID'] === '')
+			$arFields['STAGE_ID'] ??= '';
+
+			$viewMode = ($options['ITEM_OPTIONS']['VIEW_MODE'] ?? null);
+
+			if (
+				( empty($arFields['STAGE_ID']) || !self::IsStageExists($arFields['STAGE_ID'], $categoryID) )
+				&& $viewMode !== ViewMode::MODE_ACTIVITIES
+			)
 			{
 				$arFields['STAGE_ID'] = self::GetStartStageID($categoryID, $permissionTypeId);
 			}
-
-			$viewMode = ($options['ITEM_OPTIONS']['VIEW_MODE'] ?? null);
 
 			$viewModeActivitiesStageId = null;
 			if ($viewMode === ViewMode::MODE_ACTIVITIES)
@@ -2834,6 +2874,14 @@ class CAllCrmDeal
 		else
 		{
 			//region Category, SemanticID and IsNew
+			if (
+				isset($arFields['STAGE_ID'])
+				&& !self::IsStageExists($arFields['STAGE_ID'], $arRow['CATEGORY_ID'])
+			)
+			{
+				// Ignore if the received stage_id is not exists
+				unset($arFields['STAGE_ID']);
+			}
 
 			//Semantic ID depends on Stage ID and can't be assigned directly
 			$syncStageSemantics = isset($options['SYNCHRONIZE_STAGE_SEMANTICS']) && $options['SYNCHRONIZE_STAGE_SEMANTICS'];
@@ -3541,7 +3589,7 @@ class CAllCrmDeal
 					)
 					{
 						$url = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Deal, $ID);
-						$serverName = (CMain::IsHTTPS() ? "https" : "http")."://".((defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> '') ? SITE_SERVER_NAME : COption::GetOptionString("main", "server_name", ""));
+						$absoluteUrl = CCrmUrlUtil::ToAbsoluteUrl($url);
 
 						if ($sonetEvent['TYPE'] === CCrmLiveFeedEvent::Responsible)
 						{
@@ -3573,6 +3621,50 @@ class CAllCrmDeal
 								&& isset($infos[$sonetEventFields['PARAMS']['FINAL_STATUS_ID']])
 							)
 							{
+								$title = "<a href=\"" . $url . "\" class=\"bx-notifier-item-action\">" . htmlspecialcharsbx($title) . "</a>";
+								$titleOut = htmlspecialcharsbx($title);
+								$startStatusTitle = htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['START_STATUS_ID']]['NAME']);
+								$finalStatusTitle = htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['FINAL_STATUS_ID']]['NAME']);
+
+								$notifyMessage = static function (?string $languageId = null) use (
+									$title,
+									$startStatusTitle,
+									$finalStatusTitle,
+								) {
+									$replace = [
+										"#title#" => $title,
+										"#start_status_title#" => $startStatusTitle,
+										"#final_status_title#" => $finalStatusTitle,
+									];
+
+									return Loc::getMessage(
+										"CRM_DEAL_PROGRESS_IM_NOTIFY_2",
+										$replace,
+										$languageId,
+									);
+								};
+
+								$notifyMessageOut = static function (?string $languageId = null) use (
+									$absoluteUrl,
+									$titleOut,
+									$startStatusTitle,
+									$finalStatusTitle
+								) {
+									$replace = [
+										"#title#" => $titleOut,
+										"#start_status_title#" => $startStatusTitle,
+										"#final_status_title#" => $finalStatusTitle,
+									];
+
+									$message = Loc::getMessage(
+										"CRM_DEAL_PROGRESS_IM_NOTIFY_2",
+										$replace,
+										$languageId,
+									);
+
+									return "{$message} ({$absoluteUrl})";
+								};
+
 								$arMessageFields = array(
 									"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
 									"TO_USER_ID" => $assignedByID,
@@ -3583,16 +3675,8 @@ class CAllCrmDeal
 									//"NOTIFY_EVENT" => "deal_update",
 									"NOTIFY_EVENT" => "changeStage",
 									"NOTIFY_TAG" => "CRM|DEAL_PROGRESS|".$ID,
-									"NOTIFY_MESSAGE" => GetMessage("CRM_DEAL_PROGRESS_IM_NOTIFY_2", Array(
-										"#title#" => "<a href=\"".$url."\" class=\"bx-notifier-item-action\">".htmlspecialcharsbx($title)."</a>",
-										"#start_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['START_STATUS_ID']]['NAME']),
-										"#final_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['FINAL_STATUS_ID']]['NAME'])
-									)),
-									"NOTIFY_MESSAGE_OUT" => GetMessage("CRM_DEAL_PROGRESS_IM_NOTIFY_2", Array(
-										"#title#" => htmlspecialcharsbx($title),
-										"#start_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['START_STATUS_ID']]['NAME']),
-										"#final_status_title#" => htmlspecialcharsbx($infos[$sonetEventFields['PARAMS']['FINAL_STATUS_ID']]['NAME'])
-									))." (".$serverName.$url.")"
+									"NOTIFY_MESSAGE" => $notifyMessage,
+									"NOTIFY_MESSAGE_OUT" => $notifyMessageOut,
 								);
 
 								CIMNotify::Add($arMessageFields);
@@ -5146,10 +5230,14 @@ class CAllCrmDeal
 			return DealCategoryChangeError::RESPONSIBLE_NOT_FOUND;
 		}
 
-		$stageID = isset($fields['STAGE_ID']) ? $fields['STAGE_ID'] : '';
-		if($stageID === '')
+		$stageID = $fields['STAGE_ID'] ?? '';
+		if(empty($stageID))
 		{
-			return DealCategoryChangeError::STAGE_NOT_FOUND;
+			$stageID = self::GetStartStageID($newCategoryID);
+			if (empty($stageID))
+			{
+				return DealCategoryChangeError::STAGE_NOT_FOUND;
+			}
 		}
 
 		$checkRunningBizProcess = !isset($options['ENABLE_WORKFLOW_CHECK']) || $options['ENABLE_WORKFLOW_CHECK'] === true;
@@ -5994,5 +6082,58 @@ class CAllCrmDeal
 		}
 
 		return $result;
+	}
+
+	public function getLastError(): string
+	{
+		return (string)$this->LAST_ERROR;
+	}
+
+	public static function filterIdsByReadPermission(array $ids, int $userId): array
+	{
+		if (empty($ids))
+		{
+			return [];
+		}
+
+		$userPermissions = Container::getInstance()->getUserPermissions($userId);
+		if ($userPermissions->isAdmin())
+		{
+			return $ids;
+		}
+
+		$entityTypeIds = [];
+		$categoryIDs = DealCategory::getAllIDs();
+		foreach ($categoryIDs as $curCategoryID) {
+			$entityTypeIds[] = DealCategory::convertToPermissionEntityType($curCategoryID);
+		}
+
+		$queryBuilderFactory = \Bitrix\Crm\Security\QueryBuilderFactory::getInstance();
+
+		$qb = $queryBuilderFactory->make(
+			$entityTypeIds,
+			$userPermissions,
+		);
+
+		$builderResult = $qb->build();
+
+		if (!$builderResult->hasAccess())
+		{
+			return [];
+		}
+
+		$query = \Bitrix\Crm\DealTable::query()
+			->setSelect(['ID'])
+			->registerRuntimeField('permission',
+				new \Bitrix\Main\Entity\ReferenceField(
+					'ENTITY',
+					$builderResult->getEntity(),
+					$builderResult->getOrmConditions(),
+					['join_type' => 'INNER']
+				)
+			)
+			->whereIn('ID', $ids);
+
+		return array_column($query->fetchAll(), 'ID');
 	}
 }

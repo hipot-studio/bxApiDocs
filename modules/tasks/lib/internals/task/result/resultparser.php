@@ -59,10 +59,10 @@ class ResultParser extends \CTextParser
 		return $this;
 	}
 
-	public function convertText($text)
+	public function convertText($text, $attributes = [])
 	{
 		$this->setAllow();
-		return parent::convertText($text);
+		return parent::convertText($text, $attributes);
 	}
 
 	/**

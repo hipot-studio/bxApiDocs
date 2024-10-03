@@ -613,12 +613,20 @@ class CatalogProductVariationDetailsComponent
 
 		if (!$this->getForm()->isPricesEditable())
 		{
-			unset($fields['VAT_ID'], $fields['VAT_INCLUDED'], $fields['PURCHASING_PRICE']);
+			unset(
+				$fields['VAT_ID'],
+				$fields['VAT_INCLUDED'],
+				$fields['PURCHASING_PRICE'],
+				$fields['PURCHASING_CURRENCY'],
+			);
 		}
 
 		if (State::isUsedInventoryManagement() || !$this->getForm()->isPurchasingPriceAllowed())
 		{
-			unset($fields['PURCHASING_PRICE']);
+			unset(
+				$fields['PURCHASING_PRICE'],
+				$fields['PURCHASING_CURRENCY'],
+			);
 		}
 
 		foreach ($fields as $name => $field)
@@ -707,9 +715,18 @@ class CatalogProductVariationDetailsComponent
 					$this->prepareCatalogFields($fields);
 					$this->prepareDateFields($fields);
 
-					if (isset($fields['PURCHASING_PRICE']) && $fields['PURCHASING_PRICE'] === '')
+					if (isset($fields['PURCHASING_PRICE']))
 					{
-						$fields['PURCHASING_PRICE'] = null;
+						if (is_string($fields['PURCHASING_PRICE']))
+						{
+							$fields['PURCHASING_PRICE'] = str_replace(
+								',', '.', trim($fields['PURCHASING_PRICE'])
+							);
+						}
+						if ($fields['PURCHASING_PRICE'] === '')
+						{
+							$fields['PURCHASING_PRICE'] = null;
+						}
 					}
 
 					$variation->setFields($fields);

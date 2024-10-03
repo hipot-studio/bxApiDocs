@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Mail\Helper\AttachmentHelper;
 use Bitrix\Mail\Helper\MailContact;
 use Bitrix\Mail\MailMessageTable;
 use Bitrix\Main\Application;
@@ -1205,38 +1206,55 @@ class CMailHeader
 
 		if($p < mb_strlen($full_content_type))
 		{
-			$add = mb_substr($full_content_type, $p + 1);
-			if(preg_match("'name=([^;]+)'i", $full_content_type, $res))
-				$this->filename = trim($res[1], '"');
-		}
-
-		$cd = isset($this->arHeader["CONTENT-DISPOSITION"]) ? $this->arHeader["CONTENT-DISPOSITION"] : '';
-		if ($cd <> '')
-		{
-			if (preg_match("'filename=([^;]+)'i", $cd, $res))
+			if(preg_match("'name\s*=\s*([^;]+)'i", $full_content_type, $res))
 			{
 				$this->filename = trim($res[1], '"');
 			}
-			else if (preg_match("'filename\*=([^;]+)'i", $cd, $res))
+		}
+
+		$cd = $this->arHeader["CONTENT-DISPOSITION"] ?? '';
+		if ($cd <> '')
+		{
+			if (preg_match("'filename\s*=\s*([^;]+)'i", $cd, $res))
 			{
+				// Handles the case where the filename is specified directly.
+				// Example: Content-Disposition: attachment; filename  =  "example.txt"
+
+				$this->filename = trim($res[1], '"');
+			}
+			else if (preg_match("'filename\s*\*=\s*([^;]+)'i", $cd, $res))
+			{
+				// Handles the case where the filename is encoded with a specified charset.
+				// Example: Content-Disposition: attachment; filename *= UTF-8''example.txt
+
 				[$fncharset, $fnstr] = preg_split("/'[^']*'/", trim($res[1], '"'));
 				$this->filename = CMailUtil::ConvertCharset(rawurldecode($fnstr), $fncharset, $charset);
 			}
-			else if (preg_match("'filename\*0=([^;]+)'i", $cd, $res))
+			else if (preg_match("'filename\s*\*0=\s*([^;]+)'i", $cd, $res))
 			{
+				// Handles the case where the filename is split into multiple parts.
+				// Example: Content-Disposition: attachment; filename *0= "example"; filename*1=".txt"
+
 				$this->filename = trim($res[1], '"');
 
 				$i = 0;
-				while (preg_match("'filename\*".(++$i)."=([^;]+)'i", $cd, $res))
+				while (preg_match("'filename\s*\*".(++$i)."=\s*([^;]+)'i", $cd, $res))
+				{
 					$this->filename .= trim($res[1], '"');
+				}
 			}
-			else if (preg_match("'filename\*0\*=([^;]+)'i", $cd, $res))
+			else if (preg_match("'filename\s*\*0\*=\s*([^;]+)'i", $cd, $res))
 			{
+				// Handles the case where the filename is split into multiple parts and encoded with a specified charset.
+				// Example: Content-Disposition: attachment; filename*0*=UTF-8''example; filename *1* =UTF-8''file.txt
+
 				$fnstr = trim($res[1], '"');
 
 				$i = 0;
-				while (preg_match("'filename\*".(++$i)."\*?=([^;]+)'i", $cd, $res))
+				while (preg_match("'filename\s*\*".(++$i)."\*?\s*=([^;]+)'i", $cd, $res))
+				{
 					$fnstr .= trim($res[1], '"');
+				}
 
 				[$fncharset, $fnstr] = preg_split("/'[^']*'/", $fnstr);
 				if (!empty($fnstr))
@@ -2299,10 +2317,11 @@ class CAllMailMessage
 		$n = intval($dbr_arr["ATTACHMENTS"])+1;
 		if (empty($arFields['FILE_NAME']))
 		{
-			$arFields['FILE_NAME'] = sprintf(
-				'%u-%u-%u.%s',
-				$dbr_arr['MAILBOX_ID'], $dbr_arr['ID'], $n,
-				mb_strpos($arFields['CONTENT_TYPE'], 'message/') === 0 ? 'msg' : 'file'
+			$arFields['FILE_NAME'] = AttachmentHelper::generateFileName(
+				$dbr_arr['MAILBOX_ID'],
+				$dbr_arr['ID'],
+				$n,
+				$arFields['CONTENT_TYPE'],
 			);
 		}
 

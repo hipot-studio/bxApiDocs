@@ -157,20 +157,6 @@ class CleaningManager
 						}
 					}
 				)
-				->addJob(
-					new class extends Cleaner\Job {
-						public function run(Options $options): Result
-						{
-							$identifier = new ItemIdentifier($options->getEntityTypeId(), $options->getEntityId());
-
-							\CCrmLiveFeed::deleteUserCrmConnection(
-								\Bitrix\Crm\UserField\Types\ElementType::getValueByIdentifier($identifier),
-							);
-
-							return new Result();
-						}
-					}
-				)
 			;
 		}
 

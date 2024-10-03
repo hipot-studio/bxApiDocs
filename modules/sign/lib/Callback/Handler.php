@@ -63,6 +63,7 @@ class Handler
 					return new Main\Result();
 				}
 
+				// FIXME there is no initiatorUid for some scenarios
 				return (new ChangeDocumentStatus(
 					$document,
 					$message->getStatus(),
@@ -365,16 +366,16 @@ class Handler
 
 		$this->sendChatOnSendTimelineEvent($document, $member, $message);
 
-		$chatService = Container::instance()->getChatService();
-		if ($chatService->isAvailable())
+		$hrBotMessageService = Container::instance()->getHrBotMessageService();
+		if ($hrBotMessageService->isAvailable())
 		{
 			if ($message->isSecondarySigning() && $member->role === Type\Member\Role::ASSIGNEE)
 			{
-				$resultSendToChat = $chatService->repeatSigningOnErrors($document, $member);
+				$resultSendToChat = $hrBotMessageService->repeatSigningOnErrors($document, $member);
 			}
 			else
 			{
-				$resultSendToChat = $chatService->sendInviteMessage($document, $member, $message->getProvider());
+				$resultSendToChat = $hrBotMessageService->sendInviteMessage($document, $member, $message->getProvider());
 			}
 
 			$this->sendChatMessageDeliveredTimelineEvent($resultSendToChat->isSuccess(), $document, $member, $message);

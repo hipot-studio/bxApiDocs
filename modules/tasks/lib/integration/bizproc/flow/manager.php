@@ -7,6 +7,7 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Tasks\Flow\Notification\Config\Item;
 use Bitrix\Tasks\Integration\Bizproc\Flow\Robot\Factory;
 use Bitrix\Tasks\Integration\Bizproc\Exception\SmartProcessException;
+use Bitrix\Tasks\Internals\Log\LogFacade;
 
 class Manager
 {
@@ -23,8 +24,10 @@ class Manager
 
 		if (!$result->isSuccess())
 		{
-			$message = 'Tasks\Integration\Bizproc\AutoTask:Failed running smart proc: ' . Json::encode($result->getErrorMessages());
-			throw new SmartProcessException($message, $result->getData());
+			LogFacade::log(
+				'Flow: Failed running smart proc: ' . Json::encode($result->getErrorMessages()),
+				'TASKS_FLOW_BIZPROC_RUN'
+			);
 		}
 	}
 
@@ -36,6 +39,9 @@ class Manager
 		}
 	}
 
+	/**
+	 * @throws SmartProcessException
+	 */
 	public function addSmartProcess(Item $item): int
 	{
 		$userId = 1;
@@ -45,7 +51,10 @@ class Manager
 
 		if (empty($robots))
 		{
-			AddMessage2Log('Tasks\Integration\Bizproc\AutoTask:Unknown robot type: ' . $item->getChannel());
+			LogFacade::log(
+				'Flow: Unknown robot type: ' . $item->getChannel(),
+				'TASKS_FLOW_BIZPROC_RUN_ADD'
+			);
 
 			return 0;
 		}
@@ -75,8 +84,10 @@ class Manager
 			$userId
 		);
 
-		if (!$result->isSuccess()) {
-			$message = 'Tasks\Integration\Bizproc\AutoTask:Failed creating new smart proc: ' . Json::encode($result->getErrorMessages());
+		if (!$result->isSuccess())
+		{
+			$message = 'Flow: Failed creating new smart proc: ' . Json::encode($result->getErrorMessages());
+
 			throw new SmartProcessException($message, $result->getData());
 		}
 

@@ -320,7 +320,7 @@ class CAllSite
 
 	public function Add($arFields)
 	{
-		global $DB, $DOCUMENT_ROOT, $CACHE_MANAGER;
+		global $DB, $CACHE_MANAGER;
 
 		if (!$this->CheckFields($arFields))
 		{
@@ -359,7 +359,7 @@ class CAllSite
 
 		if (isset($arFields["DIR"]))
 		{
-			CheckDirPath($DOCUMENT_ROOT . $arFields["DIR"]);
+			CheckDirPath($_SERVER["DOCUMENT_ROOT"] . $arFields["DIR"]);
 		}
 
 		if (isset($arFields["DOMAINS"]))

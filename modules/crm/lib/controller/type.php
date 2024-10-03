@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Controller;
 
-use Bitrix\Crm\Engine\ActionFilter\CheckWriteConfigPermission;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Integration\Intranet\CustomSection;
 use Bitrix\Crm\Model\Dynamic;
@@ -24,14 +23,6 @@ class Type extends Base
 {
 	/** @var CustomSection[] | null $customSections */
 	protected ?array $customSections = null;
-
-	public function getDefaultPreFilters(): array
-	{
-		$preFilters = parent::getDefaultPreFilters();
-		$preFilters[] = new CheckWriteConfigPermission();
-
-		return $preFilters;
-	}
 
 	public function getAutoWiredParameters(): array
 	{
@@ -60,6 +51,12 @@ class Type extends Base
 
 	public function fieldsAction(): ?array
 	{
+		$userPermissions = Container::getInstance()->getUserPermissions($this->getCurrentUser()->getId());
+		if (!$userPermissions->isCrmAdmin())
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
+			return null;
+		}
 		$fieldsInfo = TypeTable::getFieldsInfo();
 
 		return [
@@ -69,6 +66,12 @@ class Type extends Base
 
 	public function getAction(Dynamic\Type $type): ?array
 	{
+		$userPermissions = Container::getInstance()->getUserPermissions($this->getCurrentUser()->getId());
+		if (!$userPermissions->isAdminForEntity($type->getEntityTypeId()) && !$userPermissions->isCrmAdmin())
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
+			return null;
+		}
 		return [
 			'type' => $type->jsonSerialize(),
 		];
@@ -76,6 +79,12 @@ class Type extends Base
 
 	public function listAction(array $order = null, array $filter = null, PageNavigation $pageNavigation = null): ?Page
 	{
+		$userPermissions = Container::getInstance()->getUserPermissions($this->getCurrentUser()->getId());
+		if (!$userPermissions->isCrmAdmin())
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
+			return null;
+		}
 		$parameters = [];
 
 		$parameters['filter'] = $this->removeDotsFromKeys($this->convertKeysToUpper((array)$filter));
@@ -126,9 +135,15 @@ class Type extends Base
 
 	public function addAction(array $fields): ?array
 	{
+		$entityTypeId = $fields['entityTypeId'] ?? 0;
+		$userPermissions = Container::getInstance()->getUserPermissions($this->getCurrentUser()->getId());
+		if (!$userPermissions->isCrmAdmin())
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
+			return null;
+		}
 		$dataClass = Container::getInstance()->getDynamicTypeDataClass();
 		$fields['name'] = $dataClass::generateName($fields['title']);
-		$entityTypeId = $fields['entityTypeId'] ?? 0;
 		if (
 			!empty($entityTypeId)
 			&& in_array((int)$entityTypeId, \CCrmOwnerType::getDynamicTypeBasedStaticEntityTypeIds(), true)
@@ -150,6 +165,12 @@ class Type extends Base
 		{
 			return null;
 		}
+		$userPermissions = Container::getInstance()->getUserPermissions($this->getCurrentUser()->getId());
+		if (!$userPermissions->isAdminForEntity($type->getEntityTypeId()) && !$userPermissions->isCrmAdmin())
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
+			return null;
+		}
 		$originalFields = $fields;
 		$fields = $this->convertKeysToUpper($fields);
 		$fieldKeysToUnset = ['ID', 'IS_EXTERNAL', 'CREATED_TIME', 'CREATED_BY', 'UPDATED_TIME', 'UPDATED_BY'];
@@ -166,6 +187,13 @@ class Type extends Base
 		if (!$isNew && $restriction->isTypeSettingsRestricted($type->getEntityTypeId()))
 		{
 			$this->addError($restriction->getUpdateTypeRestrictedError());
+			return null;
+		}
+
+		$isAdmin = Container::getInstance()->getUserPermissions($this->getCurrentUser()->getId())->isCrmAdmin();
+		if ($type->getCustomSectionId() !== (int)$fields['CUSTOM_SECTION_ID'] && !$isAdmin)
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
 			return null;
 		}
 
@@ -242,6 +270,12 @@ class Type extends Base
 	{
 		if($type === null)
 		{
+			return null;
+		}
+		$userPermissions = Container::getInstance()->getUserPermissions($this->getCurrentUser()->getId());
+		if (!$userPermissions->isAdminForEntity($type->getEntityTypeId()) && !$userPermissions->isCrmAdmin())
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
 			return null;
 		}
 

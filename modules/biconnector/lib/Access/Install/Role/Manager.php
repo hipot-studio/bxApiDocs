@@ -19,6 +19,11 @@ class Manager extends Base
 
 	protected function getRelationUserGroups(): array
 	{
+		if (!Loader::includeModule('bitrix24'))
+		{
+			return [];
+		}
+
 		if ($this->isNewPortal)
 		{
 			return [AccessCode::ACCESS_EMPLOYEE . '0'];

@@ -454,31 +454,17 @@ class UserList extends \CBitrixComponent implements Controllerable, Errorable
 		{
 			switch ($action)
 			{
-//				case 'delete':
-//					$user = new \CUser;
-//					$result = $user->delete($userId);
-//					if (!$result)
-//					{
-//						if (!empty($user->LAST_ERROR))
-//						{
-//							$error = $user->LAST_ERROR;
-//						}
-//						else
-//						{
-//							$ex = $APPLICATION->getException();
-//							$error = $ex->getString();
-//						}
-//						$this->addError(new Error($error));
-//
-//						return false;
-//					}
-//					break;
 				case 'restore':
 					$result = Util::activateUser([
 						'userId' => $userId,
 						'currentUserId' => $USER->getId(),
 						'isCurrentUserAdmin' => $USER->isAdmin()
 					]);
+					if ($result && $userId > 0)
+					{
+						$deactivateUser = new User($userId);
+						Invitation::fullSyncCounterByUser($deactivateUser->fetchOriginatorUser());
+					}
 					break;
 				case 'deactivate':
 				case 'deactivateInvited':
@@ -487,14 +473,6 @@ class UserList extends \CBitrixComponent implements Controllerable, Errorable
 						'currentUserId' => $USER->getId(),
 						'isCurrentUserAdmin' => $USER->isAdmin()
 					]);
-					if ($result)
-					{
-						if ($userId > 0)
-						{
-							$deactivateUser = new User($userId);
-							Invitation::fullSyncCounterByUser($deactivateUser->fetchOriginatorUser());
-						}
-					}
 					break;
 			}
 		}

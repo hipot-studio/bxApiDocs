@@ -87,6 +87,13 @@ class Call
 	{
 		return $this->provider;
 	}
+	/**
+	+	 * @return int
+	+	 */
+	public function getType(): int
+	{
+		return (int)$this->type;
+	}
 
 	/**
 	 * @return int
@@ -873,13 +880,6 @@ class Call
 		$isEnabled = Option::get('im', 'call_beta_ios', 'N');
 
 		return $isEnabled === 'Y';
-	}
-
-	public static function isNewCallLayoutEnabled(): bool
-	{
-		//$isEnabled = Option::get('im', 'new_call_layout_enabled', 'N');
-
-		return true;
 	}
 
 	protected function getCurrentUserId() : int

@@ -14,6 +14,7 @@ final class ProviderCode
 	public const TAXCOM = 'TAXCOM';
 	public const SES_RU = 'SES_RU';
 	public const SES_COM = 'SES_COM';
+	public const EXTERNAL = 'EXTERNAL';
 
 	/**
 	 * @return array<self::*>
@@ -25,6 +26,7 @@ final class ProviderCode
 			self::TAXCOM,
 			self::SES_RU,
 			self::SES_COM,
+			self::EXTERNAL,
 		];
 	}
 

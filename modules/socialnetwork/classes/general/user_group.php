@@ -1,6 +1,8 @@
 <?php
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventManager;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Main;
@@ -235,6 +237,9 @@ class CAllSocNetUserToGroup
 
 		CSocNetGroup::SetStat($relationFields["GROUP_ID"]);
 		CSocNetSearch::OnUserRelationsChange($relationFields["USER_ID"]);
+
+		$event = new Event('socialnetwork', 'OnAfterSocNetUserToGroupDelete', $relationFields);
+		$event->send();
 
 		$roleCacheKey = $relationFields['USER_ID'] . '_' . $relationFields['GROUP_ID'];
 		if (isset(self::$roleCache[$roleCacheKey]))

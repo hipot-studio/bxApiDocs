@@ -157,7 +157,7 @@ class MemberCollection implements Contract\Item, Contract\ItemCollection, Iterat
 	}
 
 	/**
-	 * @return array<?int>
+	 * @return list<?int>
 	 */
 	final public function getIds(): array
 	{

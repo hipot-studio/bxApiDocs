@@ -333,7 +333,6 @@ abstract class SqlHelper
 
 		$tableFields = $this->connection->getTableFields($tableName);
 
-		// one registry
 		$tableFields = array_change_key_case($tableFields, CASE_UPPER);
 		$fields = array_change_key_case($fields, CASE_UPPER);
 
@@ -835,6 +834,22 @@ abstract class SqlHelper
 	 * @return string
 	 */
 	public function getRegexpOperator($field, $regexp)
+	{
+		throw new Main\NotImplementedException('Method should be implemented in a child class.');
+	}
+
+	/**
+	 * Returns case insensitive like expression.
+	 * <p>
+	 * All parameters are SQL unsafe.
+	 *
+	 * @abstract
+	 * @param string $field Database field or expression.
+	 * @param string $value String to match.
+	 *
+	 * @return string
+	 */
+	public function getIlikeOperator($field, $value)
 	{
 		throw new Main\NotImplementedException('Method should be implemented in a child class.');
 	}

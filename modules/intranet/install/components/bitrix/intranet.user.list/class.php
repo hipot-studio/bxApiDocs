@@ -1438,7 +1438,13 @@ class CIntranetUserListComponent extends UserList
 		]);
 
 		$this->grid = new \Bitrix\Intranet\User\Grid\UserGrid($settings);
-		$this->grid->initPagination(\Bitrix\Intranet\UserTable::getCount($this->grid->getOrmFilter()));
+		$this->grid->initPagination(
+			count(\Bitrix\Intranet\UserTable::query()
+			->setSelect(['ID'])
+			->setFilter($this->grid->getOrmFilter())
+			->setDistinct(true)
+			->fetchAll())
+		);
 		$this->grid->getPagination()->setCurrentPage(1);
 		$this->grid->processRequest();
 		$params = $this->grid->getOrmParams();
@@ -1456,6 +1462,10 @@ class CIntranetUserListComponent extends UserList
 		}
 
 		$this->grid->setRawRows($query->fetchAll());
+
+		$result['IS_DEFAULT_SORT'] = $this->grid->getOrmOrder() === [
+			'STRUCTURE_SORT' => 'DESC',
+			];
 
 		$result['GRID_PARAMS'] = \Bitrix\Main\Grid\Component\ComponentParams::get($this->grid);
 		$result['GRID_FILTER'] = $this->grid->getFilter();

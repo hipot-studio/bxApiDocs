@@ -111,6 +111,7 @@ class CBPCrmConvertDocumentActivity extends CBPActivity
 		$conversionResult = $converter->execute([
 			'USER_ID' => $responsibleId,
 			'RESPONSIBLE_ID' => $responsibleId,
+			'CHECK_TRANSITION_ACCESS_ENABLED' => 'N',
 		]);
 
 		\Bitrix\Crm\Automation\Factory::registerConversionResult($entityTypeId, $entityId, $conversionResult);

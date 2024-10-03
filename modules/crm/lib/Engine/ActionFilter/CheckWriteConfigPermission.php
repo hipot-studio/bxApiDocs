@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Engine\ActionFilter;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Main\Application;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;

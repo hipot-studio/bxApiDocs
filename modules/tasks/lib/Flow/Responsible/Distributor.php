@@ -2,11 +2,9 @@
 
 namespace Bitrix\Tasks\Flow\Responsible;
 
+use Bitrix\Tasks\Flow\Distribution\FlowDistributionServicesFactory;
 use Bitrix\Tasks\Flow\Flow;
 use Bitrix\Tasks\Flow\Responsible\Distributor\DistributorStrategyInterface;
-use Bitrix\Tasks\Flow\Responsible\Distributor\ManualDistributorStrategy;
-use Bitrix\Tasks\Flow\Responsible\Distributor\NullDistributorStrategy;
-use Bitrix\Tasks\Flow\Responsible\Distributor\QueueDistributorStrategy;
 
 class Distributor
 {
@@ -20,11 +18,8 @@ class Distributor
 
 	private function getDistributorStrategy(Flow $flow): DistributorStrategyInterface
 	{
-		return match ($flow->getDistributionType())
-		{
-			Flow::DISTRIBUTION_TYPE_MANUALLY => new ManualDistributorStrategy(),
-			Flow::DISTRIBUTION_TYPE_QUEUE => new QueueDistributorStrategy(),
-			default => new NullDistributorStrategy(),
-		};
+		$flowType = $flow->getDistributionType();
+
+		return (new FlowDistributionServicesFactory($flowType))->getDistributorStrategy();
 	}
 }

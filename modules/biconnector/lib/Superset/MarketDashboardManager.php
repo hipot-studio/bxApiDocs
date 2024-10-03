@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Superset;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
@@ -45,7 +46,13 @@ final class MarketDashboardManager
 
 	public static function getMarketCollectionUrl(): string
 	{
-		return '/market/collection/' . self::MARKET_COLLECTION_ID . '/';
+		$marketPrefix = '/marketplace/';
+		if (Loader::includeModule('intranet'))
+		{
+			$marketPrefix = \Bitrix\Intranet\Binding\Marketplace::getMainDirectory();
+		}
+
+		return $marketPrefix . 'collection/' . self::MARKET_COLLECTION_ID . '/';
 	}
 
 	/**
@@ -193,8 +200,10 @@ final class MarketDashboardManager
 				{
 					$dateStart = new Date($periodSetting['DATE_FILTER_START']);
 					$dateEnd = new Date($periodSetting['DATE_FILTER_END']);
+					$includeLastFilterDate = $periodSetting['INCLUDE_LAST_FILTER_DATE'] ?? null;
 					$dashboard->setDateFilterStart($dateStart);
 					$dashboard->setDateFilterEnd($dateEnd);
+					$dashboard->setIncludeLastFilterDate($includeLastFilterDate);
 					$dashboard->setFilterPeriod(EmbeddedFilter\DateTime::PERIOD_RANGE);
 				}
 				catch (\Bitrix\Main\ObjectException)
@@ -552,18 +561,14 @@ final class MarketDashboardManager
 			return true;
 		}
 
-		global $USER;
-
-		if (Loader::includeModule('bitrix24'))
+		if (
+			Loader::includeModule('bitrix24')
+			&& !Feature::isFeatureEnabled(self::DASHBOARD_EXPORT_FEATURE_NAME)
+		)
 		{
-			if (isset($USER) && $USER instanceof \CUser)
-			{
-				$isAdmin = $USER->isAdmin() || \CBitrix24::IsPortalAdmin($USER->getId());
-
-				return $isAdmin && Feature::isFeatureEnabled(self::DASHBOARD_EXPORT_FEATURE_NAME);
-			}
+			return false;
 		}
 
-		return false;
+		return BIConnector\Manager::isAdmin();
 	}
 }

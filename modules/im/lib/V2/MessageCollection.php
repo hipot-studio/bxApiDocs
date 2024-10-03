@@ -9,12 +9,12 @@ use Bitrix\Im\V2\Entity\File\FilePopupItem;
 use Bitrix\Im\V2\Entity\Url\UrlCollection;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
-use Bitrix\Im\V2\Link\Reminder\ReminderPopupItem;
 use Bitrix\Im\V2\Message\AdditionalMessagePopupItem;
 use Bitrix\Im\V2\Message\Reaction\ReactionMessages;
 use Bitrix\Im\V2\Message\Reaction\ReactionPopupItem;
 use Bitrix\Im\V2\Message\ReadService;
-use Bitrix\Im\V2\Message\ViewedService;
+use Bitrix\Im\V2\TariffLimit\DateFilterable;
+use Bitrix\Im\V2\TariffLimit\FilterResult;
 use Bitrix\Imbot\Bot\CopilotChatBot;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Query\Query;
@@ -29,15 +29,15 @@ use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
 use Bitrix\Im\V2\Rest\RestConvertible;
 use Bitrix\Im\V2\Service\Context;
-use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Im\V2\Message\Params;
+use Bitrix\Main\Type\DateTime;
 
 /**
  * @extends Collection<Message>
  * @method self filter(callable $predicate)
  * @method Message offsetGet($key)
  */
-class MessageCollection extends Collection implements RestConvertible, PopupDataAggregatable
+class MessageCollection extends Collection implements RestConvertible, PopupDataAggregatable, DateFilterable
 {
 	use ContextCustomer;
 
@@ -169,6 +169,22 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 	public static function getRestEntityName(): string
 	{
 		return 'messages';
+	}
+
+	/**
+	 * @param DateTime $date
+	 * @return FilterResult<static>
+	 */
+	public function filterByDate(DateTime $date): FilterResult
+	{
+		$filtered = $this->filter(static fn (Message $message) => $message->getDateCreate()?->getTimestamp() > $date->getTimestamp());
+
+		return (new FilterResult())->setResult($filtered)->setFiltered($this->count() !== $filtered->count());
+	}
+
+	public function getRelatedChatId(): ?int
+	{
+		return $this->getCommonChatId();
 	}
 
 	//endregion
@@ -564,7 +580,7 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		$popup = [
 			new UserPopupItem($this->getUserIds()),
 			new FilePopupItem($this->getFiles()),
-			new ReminderPopupItem($this->getReminders()),
+			//new ReminderPopupItem($this->getReminders()),
 			new AdditionalMessagePopupItem($this->getReplayedMessageIds()),
 			new CopilotPopupItem($this->getCopilotRoles(), CopilotPopupItem::ENTITIES['messageCollection']),
 		];

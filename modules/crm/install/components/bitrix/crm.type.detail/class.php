@@ -55,7 +55,7 @@ class CrmTypeDetailComponent extends Base
 			return;
 		}
 
-		$userPermissions = Service\Container::getInstance()->getUserPermissions();
+		$userPermissions = $this->userPermissions;
 		$entityTypeId = (int) $this->arParams['entityTypeId'];
 		if($entityTypeId > 0)
 		{
@@ -155,6 +155,7 @@ class CrmTypeDetailComponent extends Base
 		$this->arResult['isCustomSectionsAvailable'] = Integration\IntranetManager::isCustomSectionsAvailable();
 		$this->arResult['linkedUserFields'] = $this->getLinkedUserFields();
 		$this->arResult['isExternal'] = $this->request->get('isExternal') === 'Y';
+		$this->arResult['isCrmAdmin'] = $this->userPermissions->isCrmAdmin();
 		$this->initializeRestrictionValues();
 
 		$this->arResult['activeTabId'] = $this->arParams['activeTabId'] ?? null;

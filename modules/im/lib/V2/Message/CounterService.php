@@ -3,8 +3,6 @@
 namespace Bitrix\Im\V2\Message;
 
 use Bitrix\Im\Model\ChatTable;
-use Bitrix\Im\Model\EO_MessageUnread;
-use Bitrix\Im\Model\EO_MessageUnread_Collection;
 use Bitrix\Im\Model\MessageTable;
 use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\RecentTable;
@@ -13,13 +11,12 @@ use Bitrix\Im\V2\Chat\NotifyChat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Counter\CounterOverflowService;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Service\Context;
-use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
-use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Type\DateTime;
@@ -80,28 +77,27 @@ class CounterService
 		return $totalUnreadMessages + count($unreadUnmutedChats);
 	}
 
-	public function getByChatForEachUsers(int $chatId, ?array $userIds = null, ?int $maxCounter = null): array
+	public function getByChatForEachUsers(int $chatId, array $userIds): array
 	{
 		$result = [];
-		$countForEachUsers = $this->getCountUnreadMessagesByChatIdForEachUsers($chatId, $userIds);
+		$overflowService = new CounterOverflowService($chatId);
+		$overflowInfo = $overflowService->getOverflowInfo($userIds);
+
+		$countForEachUsers = $this->getCountUnreadMessagesByChatIdForEachUsers($chatId, $overflowInfo->getUsersWithoutOverflow());
 
 		foreach ($countForEachUsers as $countForUser)
 		{
-			$count = (int)$countForUser['COUNT'];
-			if (isset($maxCounter))
-			{
-				$count = min($maxCounter, $count);
-			}
-			$result[(int)$countForUser['USER_ID']] = $count;
+			$result[(int)$countForUser['USER_ID']] = (int)$countForUser['COUNT'];
 		}
 
-		if ($userIds === null)
-		{
-			return $result;
-		}
+		$overflowService->insertOverflowed($result);
 
 		foreach ($userIds as $userId)
 		{
+			if ($overflowInfo->hasOverflow($userId))
+			{
+				$result[$userId] = CounterOverflowService::getOverflowValue();
+			}
 			if (!isset($result[$userId]))
 			{
 				$result[$userId] = 0;
@@ -274,11 +270,13 @@ class CounterService
 	{
 		MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatId, '=USER_ID' => $this->getContext()->getUserId()]);
 		static::clearCache($this->getContext()->getUserId());
+		(new CounterOverflowService($chatId))->delete($this->getContext()->getUserId());
 	}
 
 	public static function deleteByChatIdForAll(int $chatId): void
 	{
 		MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatId]);
+		CounterOverflowService::deleteByChatIdForAll($chatId);
 	}
 
 	public function deleteByChatIds(array $chatIds): void
@@ -290,6 +288,7 @@ class CounterService
 
 		MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatIds, '=USER_ID' => $this->getContext()->getUserId()]);
 		static::clearCache($this->getContext()->getUserId());
+		CounterOverflowService::deleteByChatIds($chatIds, $this->getContext()->getUserId());
 	}
 
 	/*public function deleteByChatIdForAll(int $chatId): void
@@ -309,6 +308,7 @@ class CounterService
 
 		MessageUnreadTable::deleteByFilter($filter);
 		static::clearCache($this->getContext()->getUserId());
+		CounterOverflowService::deleteAllByUserId($this->getContext()->getUserId());
 	}
 
 	public static function getChildrenWithCounters(Chat $parentChat, ?int $userId = null): array
@@ -405,14 +405,15 @@ class CounterService
 		static::clearCache($this->getContext()->getUserId());
 	}
 
-	public function deleteByMessageIdForAll(int $messageId, ?array $invalidateCacheUsers = null): void
+	public function deleteByMessageForAll(Message $message, ?array $invalidateCacheUsers = null): void
 	{
-		if (empty($messageId))
+		if (empty($message->getId()))
 		{
 			return;
 		}
 
-		MessageUnreadTable::deleteByFilter(['=MESSAGE_ID' => $messageId]); //todo add index
+		MessageUnreadTable::deleteByFilter(['=MESSAGE_ID' => $message->getId()]);
+		CounterOverflowService::deleteByChatIdForAll($message->getChatId());
 
 		if (!isset($invalidateCacheUsers))
 		{
@@ -427,9 +428,23 @@ class CounterService
 		}
 	}
 
-	public function deleteByMessageIdsForAll(array $messageIds, ?array $invalidateCacheUsers = null): void
+	public function deleteByMessagesForAll(MessageCollection $messages, ?array $invalidateCacheUsers = null): void
 	{
-		MessageUnreadTable::deleteByFilter(['=MESSAGE_ID' => $messageIds]); //todo add index
+		$messageIds = $messages->getIds();
+		$chatIds = [];
+		if (empty($messageIds))
+		{
+			return;
+		}
+
+		foreach ($messages as $message)
+		{
+			$chatId = $message->getChatId();
+			$chatIds[$chatId] = $chatId;
+		}
+
+		MessageUnreadTable::deleteByFilter(['=MESSAGE_ID' => $messageIds]);
+		CounterOverflowService::deleteByChatIds($chatIds);
 
 		if (!isset($invalidateCacheUsers))
 		{
@@ -447,7 +462,12 @@ class CounterService
 	public function deleteTo(Message $message): void
 	{
 		$userId = $this->getContext()->getUserId();
-		MessageUnreadTable::deleteByFilter(['<=MESSAGE_ID' => $message->getMessageId(), '=CHAT_ID' => $message->getChatId(), '=USER_ID' => $userId]);
+		MessageUnreadTable::deleteByFilter([
+			'<=MESSAGE_ID' => $message->getMessageId(),
+			'=CHAT_ID' => $message->getChatId(),
+			'=USER_ID' => $userId
+		]);
+		(new CounterOverflowService($message->getChatId()))->delete($userId);
 		static::clearCache($userId);
 	}
 

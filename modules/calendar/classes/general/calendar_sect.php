@@ -600,7 +600,7 @@ class CCalendarSect
 				$strLimit";
 
 		$result = [];
-		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 
 		while ($sect = $res->Fetch())
 		{
@@ -783,7 +783,7 @@ class CCalendarSect
 						$sqlSearch
 					))";
 
-			$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$res = $DB->Query($strSql);
 
 			while($arRes = $res->Fetch())
 			{
@@ -832,7 +832,7 @@ class CCalendarSect
 						CS.CAL_TYPE='user'
 					)";
 
-				$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$res = $DB->Query($strSql);
 			}
 
 			while($arRes = $res->Fetch())
@@ -1148,7 +1148,7 @@ class CCalendarSect
 				AND (CE.DELETED='N' and CE.DELETED is not null)";
 		}
 
-		$res = $DB->Query($strSql , false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$res = $DB->Query($strSql );
 		while($ev = $res->Fetch())
 		{
 			if ((int)$ev['ID'] === (int)$ev['PARENT_ID'])
@@ -1175,7 +1175,7 @@ class CCalendarSect
 
 		if (!empty($meetingIds))
 		{
-			$DB->Query("DELETE from b_calendar_event WHERE PARENT_ID in (".implode(',', $meetingIds).")", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query("DELETE from b_calendar_event WHERE PARENT_ID in (".implode(',', $meetingIds).")");
 		}
 
 		//delete section in services
@@ -1186,11 +1186,11 @@ class CCalendarSect
 		// Del link from table
 		if (!Util::isSectionStructureConverted())
 		{
-			$DB->Query("DELETE FROM b_calendar_event_sect WHERE SECT_ID=".$id, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+			$DB->Query("DELETE FROM b_calendar_event_sect WHERE SECT_ID=".$id);
 		}
 
 		// Del from
-		$DB->Query("DELETE FROM b_calendar_section WHERE ID=".$id, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+		$DB->Query("DELETE FROM b_calendar_section WHERE ID=".$id);
 
 		CCalendarEvent::DeleteEmpty($id);
 		self::CleanAccessTable($id);
@@ -1292,7 +1292,7 @@ class CCalendarSect
 	public static function SavePermissions($sectId, $taskPerm)
 	{
 		global $DB;
-		$DB->Query("DELETE FROM b_calendar_access WHERE SECT_ID='".(int)$sectId."'", false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+		$DB->Query("DELETE FROM b_calendar_access WHERE SECT_ID='".(int)$sectId."'");
 
 		if (is_array($taskPerm))
 		{
@@ -1312,7 +1312,7 @@ class CCalendarSect
 					]
 				);
 				$strSql = "INSERT INTO b_calendar_access(".$insert[0].") VALUES(".$insert[1].")";
-				$DB->Query($strSql , false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql );
 			}
 		}
 	}
@@ -1347,8 +1347,8 @@ class CCalendarSect
 			LEFT JOIN b_calendar_access CAP ON CAP.SECT_ID = '.$helper->castToChar('SC.ID').'
 			WHERE SC.ID in ('.$s.')'
 		;
-		
-		$res = $DB->Query($strSql , false, "File: ".__FILE__."<br>Line: ".__LINE__);
+
+		$res = $DB->Query($strSql );
 		while($arRes = $res->Fetch())
 		{
 			if ($arRes['ID'] > 0)
@@ -1489,7 +1489,7 @@ class CCalendarSect
 		$strIds = implode(',', $strIds);
 
 		$strSql = "SELECT ID, CAL_DAV_CON FROM b_calendar_section WHERE ID in (".$strIds.")";
-		$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$res = $DB->Query($strSql);
 
 		while ($arRes = $res->Fetch())
 		{
@@ -1890,8 +1890,6 @@ class CCalendarSect
 		}
 
 		$res .= 'END:VCALENDAR';
-		if (!defined('BX_UTF') || BX_UTF !== true)
-			$res = $APPLICATION->ConvertCharset($res, LANG_CHARSET, 'UTF-8');
 
 		return $res;
 	}
@@ -1920,7 +1918,7 @@ class CCalendarSect
 				SELECT ".$DB->DateToCharFunction("CS.TIMESTAMP_X")." as TIMESTAMP_X
 				FROM b_calendar_section CS
 				WHERE ID=".$sectionId;
-			$res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$res = $DB->Query($strSql);
 
 			if($sect = $res->Fetch())
 				return $sect['TIMESTAMP_X'];
@@ -1953,7 +1951,7 @@ class CCalendarSect
 			"UPDATE b_calendar_section SET ".
 				$DB->PrepareUpdate("b_calendar_section", array('TIMESTAMP_X' => FormatDate(CCalendar::DFormat(true), time()))).
 			" WHERE ID in (".$strIds.")";
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query($strSql);
 		}
 	}
 
@@ -2031,6 +2029,11 @@ class CCalendarSect
 		$sectionId = false;
 		$autoCreated = false;
 
+		if (empty($type))
+		{
+			$type = 'user';
+		}
+
 		$res = self::GetList([
 			'arFilter' => [
 				'CAL_TYPE' => $type,
@@ -2063,7 +2066,11 @@ class CCalendarSect
 			$sectionId = $section['ID'];
 		}
 
-		return array('sectionId' => $sectionId, 'autoCreated' => $autoCreated, 'section' => $section);
+		return [
+			'sectionId' => $sectionId,
+			'autoCreated' => $autoCreated,
+			'section' => $section
+		];
 	}
 
 	public static function HandlePermission($section = [])
@@ -2108,8 +2115,7 @@ class CCalendarSect
 
 		global $DB;
 
-		$DB->Query("DELETE FROM b_calendar_access WHERE SECT_ID = '" . $sectionId  . "'", false,
-			"FILE: ".__FILE__."<br> LINE: ".__LINE__);
+		$DB->Query("DELETE FROM b_calendar_access WHERE SECT_ID = '" . $sectionId  . "'");
 	}
 
 	/**
@@ -2130,7 +2136,7 @@ class CCalendarSect
 	{
 		global $DB;
 		$count = 0;
-		$res = $DB->Query('select count(*) as c  from b_calendar_section', false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$res = $DB->Query('select count(*) as c  from b_calendar_section');
 
 		if($res = $res->Fetch())
 		{
@@ -2276,9 +2282,6 @@ class CCalendarSect
 		{
 			if (!in_array((int)$section['ID'], $sectionIdList))
 			{
-				// if ($isNotInternalUser)
-
-
 				if (in_array($section['ID'], $followedSectionList))
 				{
 					$section['SUPERPOSED'] = true;

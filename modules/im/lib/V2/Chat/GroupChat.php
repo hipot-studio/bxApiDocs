@@ -2,35 +2,29 @@
 
 namespace Bitrix\Im\V2\Chat;
 
-use Bitrix\Im\User;
 use Bitrix\Im\Notify;
 use Bitrix\Im\Color;
-use Bitrix\Im\Model\RelationTable;
+use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Copilot\CopilotPopupItem;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
-use Bitrix\Im\V2\Link\Url\UrlService;
 use Bitrix\Im\V2\Message;
-use Bitrix\Im\V2\Message\MessageError;
-use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Message\Send\PushService;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
-use Bitrix\Im\V2\Message\Send\SendingService;
-use Bitrix\Im\V2\Message\Send\MentionService;
-use Bitrix\Im\V2\MessageCollection;
-use Bitrix\Im\V2\Message\ReadService;
-use Bitrix\Im\V2\Bot\BotService;
+use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Imbot\Bot\CopilotChatBot;
+use Bitrix\ImBot\Bot\Network;
+use Bitrix\ImBot\Bot\Support24;
+use Bitrix\ImBot\Bot\SupportBox;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Pull\Event;
-use CPullWatch;
 
 class GroupChat extends Chat implements PopupDataAggregatable
 {
@@ -60,13 +54,16 @@ class GroupChat extends Chat implements PopupDataAggregatable
 		return !$this->getEntityType();
 	}
 
-	protected function checkAccessWithoutCaching(int $userId): bool
+	protected function checkAccessInternal(int $userId): Result
 	{
-		$options = [
-			'FILTER' => ['USER_ID' => $userId],
-		];
+		$result = new Result();
 
-		return $this->getRelations($options)->hasUser($userId, $this->getChatId());
+		if ($this->getRelationByUserId($userId) === null)
+		{
+			$result->addError(new ChatError(ChatError::ACCESS_DENIED));
+		}
+
+		return $result;
 	}
 
 	public function linkToStructureNodes(array $structureNodes): void
@@ -113,7 +110,7 @@ class GroupChat extends Chat implements PopupDataAggregatable
 			return $result->addError(new ChatError(ChatError::CREATION_ERROR));
 		}
 
-		$usersToInvite = $chat->filterUsersToAdd($chat->getUserIds());
+		$usersToInvite = $chat->resolveRelationConflicts($this->getValidUsersToAdd($chat->getUserIds()));
 		$addedUsers = $usersToInvite;
 		if ($chat->getAuthorId())
 		{
@@ -271,17 +268,17 @@ class GroupChat extends Chat implements PopupDataAggregatable
 		parent::addUsersToRelation($usersToAdd, $managerIds, $hideHistory ?? \CIMSettings::GetStartChatMessage() == \CIMSettings::START_MESSAGE_LAST, $reason);
 	}
 
-	public function addManagers(array $userIds): self
+	public function addManagers(array $userIds, bool $sendPush = true): self
 	{
-		return $this->changeManagers($userIds, true);
+		return $this->changeManagers($userIds, true, $sendPush);
 	}
 
-	public function deleteManagers(array $userIds): self
+	public function deleteManagers(array $userIds, bool $sendPush = true): self
 	{
-		return $this->changeManagers($userIds, false);
+		return $this->changeManagers($userIds, false, $sendPush);
 	}
 
-	protected function changeManagers(array $userIds, bool $isManager): self
+	protected function changeManagers(array $userIds, bool $isManager, bool $sendPush = true): self
 	{
 		$relations = $this->getRelations();
 
@@ -294,10 +291,19 @@ class GroupChat extends Chat implements PopupDataAggregatable
 			}
 
 			$relation->setManager($isManager);
+
+			if ($this->chatId !== null)
+			{
+				(new ChatAnalytics())->addEditPermissions($this->chatId);
+			}
 		}
 
 		$relations->save(true);
-		$this->sendPushManagersChange();
+
+		if ($sendPush)
+		{
+			$this->sendPushManagersChange();
+		}
 
 		return $this;
 	}
@@ -315,6 +321,11 @@ class GroupChat extends Chat implements PopupDataAggregatable
 			'extra' => \Bitrix\Im\Common::getPullExtra()
 		];
 		\Bitrix\Pull\Event::add($this->getRelations()->getUserIds(), $push);
+	}
+
+	protected function getPushService(Message $message, SendingConfig $config): PushService
+	{
+		return new Message\Send\Push\GroupPushService($message, $config);
 	}
 
 	public function checkTitle(): Result
@@ -375,8 +386,8 @@ class GroupChat extends Chat implements PopupDataAggregatable
 
 	public function sendPushUpdateMessage(Message $message): void
 	{
-		$pushFormat = new Message\PushFormat();
-		$push = $pushFormat->formatMessageUpdate($message);
+		$pushFormat = new Message\PushFormat($message);
+		$push = $pushFormat->formatMessageUpdate();
 		$push['params']['dialogId'] = $this->getDialogId();
 		if ($this->getType() === self::IM_TYPE_COMMENT)
 		{
@@ -541,232 +552,58 @@ class GroupChat extends Chat implements PopupDataAggregatable
 		]);
 	}
 
-	/**
-	 * Provides message sending process.
-	 *
-	 * @param Message|string|array $message
-	 * @param SendingConfig|array|null $sendingConfig
-	 * @return Result
-	 */
-	public function sendMessage($message, $sendingConfig = null): Result
+	protected function prepareMessage(Message $message): void
 	{
-		$result = new Result;
+		parent::prepareMessage($message);
 
-		if (!$this->getChatId())
-		{
-			return $result->addError(new ChatError(ChatError::WRONG_TARGET_CHAT));
-		}
-
-		if (is_string($message))
-		{
-			$message = (new Message)->setMessage($message);
-		}
-		elseif (!$message instanceof Message)
-		{
-			$message = new Message($message);
-		}
-
-		$message
-			->setRegistry($this->messageRegistry)
-			->setContext($this->context)
-			->setChatId($this->getChatId())
-			->setNotifyModule('im')
-			->setNotifyEvent(Notify::EVENT_GROUP)
-		;
-
-		// config for sending process
-		if ($sendingConfig instanceof SendingConfig)
-		{
-			$sendingServiceConfig = $sendingConfig;
-		}
-		else
-		{
-			$sendingServiceConfig = new SendingConfig();
-			if (is_array($sendingConfig))
-			{
-				$sendingServiceConfig->fill($sendingConfig);
-			}
-		}
-		// sending process
-		$sendService = new SendingService($sendingServiceConfig);
-		$sendService->setContext($this->context);
-
-
-		// check duplication by UUID
-		if (
-			!$message->isSystem()
-			&& $message->getUuid()
-		)
-		{
-			$checkUuidResult = $sendService->checkDuplicateByUuid($message);
-			if (!$checkUuidResult->isSuccess())
-			{
-				return $result->addErrors($checkUuidResult->getErrors());
-			}
-			$data = $checkUuidResult->getResult();
-			if (!empty($data['messageId']))
-			{
-				return $result->setResult($checkUuidResult->getResult());
-			}
-		}
-
-		// author from current context
-		if (
-			!$message->getAuthorId()
-			&& !$message->isSystem()
-		)
+		if (!$message->getAuthorId() && !$message->isSystem())
 		{
 			$message->setAuthorId($this->getContext()->getUserId());
 		}
 
-		// Extranet cannot send system
-		if (
-			$message->isSystem()
-			&& $message->getAuthorId()
-			&& User::getInstance($message->getAuthorId())->isExtranet()
-		)
+		if ($message->isSystem())
 		{
-			$message->markAsSystem(false);
+			$message->setAuthorId(0);
 		}
 
-		// permissions
-		if (
-			!$sendingServiceConfig->skipUserCheck()
-			&& !$sendingServiceConfig->convertMode()
-			&& !$message->isSystem()
-		)
+		$message->setNotifyModule('im')->setNotifyEvent(Notify::EVENT_GROUP);
+	}
+
+	public function getMultidialogData(): array
+	{
+		if (!Loader::includeModule('imbot'))
 		{
-			if (!$this->hasAccess($message->getAuthorId()))
-			{
-				return $result->addError(new ChatError(ChatError::ACCESS_DENIED));
-			}
+			return [];
 		}
 
-		// fire event `im:OnBeforeChatMessageAdd` before message send
-		$eventResult = $sendService->fireEventBeforeMessageSend($this, $message);
-		if (!$eventResult->isSuccess())
+		if ($this->getEntityType() !== Support24::CHAT_ENTITY_TYPE && $this->getEntityType() !== Network::CHAT_ENTITY_TYPE)
 		{
-			// cancel sending by event
-			return $result->addErrors($eventResult->getErrors());
+			return [];
 		}
 
-		// check for empty message
-		if (
-			!$message->getMessage()
-			&& !$message->hasFiles()
-			&& !$message->getParams()->isSet(Params::ATTACH)
-		)
-		{
-			return $result->addError(new MessageError(MessageError::EMPTY_MESSAGE));
-		}
-
-		if ($sendingServiceConfig->keepConnectorSilence())
-		{
-			$message->getParams()->get(Params::STYLE_CLASS)->setValue('bx-messenger-content-item-system');
-		}
-
-
-		// Replacements / DateLink
-		if ($sendingServiceConfig->generateUrlPreview())
-		{
-			$message->parseDates();
-		}
-
-		// Emoji
-		$message->checkEmoji();
-
-		// BB codes with disk files
-		$message->uploadFileFromText();
-
-		// Format attached files
-		$message->formatFilesMessageOut();
-
-		// Save + Save Params
-		$saveResult = $message->save();
-		if (!$saveResult->isSuccess())
-		{
-			return $result->addErrors($saveResult->getErrors());
-		}
-
-		$sendService->updateMessageUuid($message);
-
-		// Unread
-		$readService = new ReadService($message->getAuthorId());
-		$readService->markMessageUnread($message, $this->getRelations());
-
-		// Chat message counter
-		$this
-			->setLastMessageId($message->getMessageId())
-			->incrementMessageCount()
-			->save()
+		$userId = $this
+			->getRelations()
+			->filter(fn (Relation $relation) => !$relation->getUser()->isBot())
+			->getAny()
+			?->getUserId() ?? 0
 		;
 
-		// Recent
-		if ($sendingServiceConfig->addRecent())
+		if ($this->getEntityType() === Support24::CHAT_ENTITY_TYPE)
 		{
-			$readService->markRecentUnread($message);
+			if (Loader::includeModule('bitrix24') && Support24::isEnabled())
+			{
+				return Support24::getMultidialog($this->getId(), $this->getAuthorId(), $userId) ?? [];
+			}
+
+			return SupportBox::getMultidialog($this->getId(), $this->getAuthorId(), $userId) ?? [];
 		}
 
-		// Counters
-		$counters = [];
-		if ($sendingServiceConfig->sendPush())
+		if ($this->getEntityType() === Network::CHAT_ENTITY_TYPE)
 		{
-			$counters = $readService->getCountersForUsers($message, $this->getRelations());
+			return Network::getMultidialog($this->getId(), $this->getAuthorId(), $userId) ?? [];
 		}
 
-		// fire event `im:OnAfterMessagesAdd`
-		$sendService->fireEventAfterMessageSend($this, $message);
-
-		// Recent
-		if (
-			$sendingServiceConfig->addRecent()
-			&& !$sendingServiceConfig->skipAuthorAddRecent()// Do not add author into recent list in case of self message chat.
-		)
-		{
-			$this->riseInRecent($message);
-		}
-
-		// Rich
-		if ($sendingServiceConfig->generateUrlPreview())
-		{
-			// generate preview or set bg job
-			$message->generateUrlPreview();
-		}
-
-		if ($this->getParentMessageId())
-		{
-			$this->updateParentMessageCount();
-		}
-
-		// send Push
-		if ($sendingServiceConfig->sendPush())
-		{
-			$pushService = new PushService($sendingServiceConfig);
-			$pushService->sendPushGroupChat($this, $message, $counters);
-		}
-
-		// Mentions
-		if (!$message->isSystem())
-		{
-			$mentionService = new MentionService($sendingServiceConfig);
-			$mentionService->setContext($this->context);
-			$mentionService->sendMentions($this, $message);
-		}
-
-		// Run message command
-		$botService = new BotService($sendingServiceConfig);
-		$botService->setContext($this->context);
-		$botService->runMessageCommand($this, $message);
-
-		// Links
-		(new UrlService())->saveUrlsFromMessage($message);
-
-		// search
-		$message->updateSearchIndex();
-
-		$result->setResult(['messageId' => $message->getMessageId()]);
-
-		return $result;
+		return [];
 	}
 
 	protected function sendDescriptionMessage(?int $authorId = null): void

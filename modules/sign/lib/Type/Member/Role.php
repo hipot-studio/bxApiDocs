@@ -17,6 +17,24 @@ final class Role
 	];
 
 	/**
+	 * @return array<self::*, int>
+	 */
+	public static function toIntMap(): array
+	{
+		return [
+			self::SIGNER => 0,
+			self::ASSIGNEE => 1,
+			self::REVIEWER => 2,
+			self::EDITOR => 3,
+		];
+	}
+
+	public static function tryFromInt(int $number): ?string
+	{
+		return array_flip(static::toIntMap())[$number] ?? null;
+	}
+
+	/**
 	 * @return array<self::*>
 	 */
 	public static function getAll(): array

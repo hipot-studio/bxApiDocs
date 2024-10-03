@@ -1,5 +1,6 @@
 <?php
 IncludeModuleLangFile(__FILE__);
+//@codingStandardsIgnoreFile
 
 use Bitrix\Crm;
 use Bitrix\Crm\Binding\ContactCompanyTable;
@@ -2972,9 +2973,6 @@ class CAllCrmContact
 				ExecuteModuleEventEx($arEvent, array($ID));
 			}
 
-			$identifier = new Crm\ItemIdentifier(\CCrmOwnerType::Contact, (int)$ID);
-			CCrmLiveFeed::DeleteUserCrmConnection(\Bitrix\Crm\UserField\Types\ElementType::getValueByIdentifier($identifier));
-
 			$fieldsContextEntity = EntityFactory::getInstance()->getEntity(CCrmOwnerType::Contact);
 			if ($fieldsContextEntity)
 			{
@@ -3985,5 +3983,10 @@ class CAllCrmContact
 		}
 
 		return mb_strpos($name, self::GetDefaultTitle('')) === 0;
+	}
+
+	public function getLastError(): string
+	{
+		return (string)$this->LAST_ERROR;
 	}
 }

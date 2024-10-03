@@ -11,7 +11,9 @@ use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
+use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
 use Bitrix\Im\V2\Rest\RestEntity;
@@ -63,6 +65,19 @@ class FileItem implements RestEntity, PopupDataAggregatable
 		}
 
 		return new static($diskFile, $chatId);
+	}
+
+	public static function getDiskFileIdsFromBbCodesInText(string $text): array
+	{
+		$matches = [];
+		preg_match_all("/\[DISK=([0-9]+)\]/i", $text, $matches);
+
+		return $matches[1];
+	}
+
+	public static function removeDiskBbCodesFromText(string $text): string
+	{
+		return preg_replace("/\[DISK\=([0-9]+)\]/i", '', $text);
 	}
 
 	public function setDiskFile(File $diskFile): self
@@ -193,9 +208,26 @@ class FileItem implements RestEntity, PopupDataAggregatable
 		return new PopupData([new UserPopupItem([$this->getDiskFile()->getCreatedBy()])], $excludedList);
 	}
 
+	public function getMessageOut(): string
+	{
+		Message::loadPhrases();
+		$diskFile = $this->getDiskFile();
+
+		if (!$diskFile)
+		{
+			return '';
+		}
+
+		return $diskFile->getName() . ' (' . \CFile::formatSize($diskFile->getSize()) . ')'
+			. "\n" . Loc::getMessage('IM_MESSAGE_FILE_DOWN')
+			. ' ' . $this->getDownloadLink()
+			. "\n";
+	}
+
 	public function toRestFormat(array $option = []): array
 	{
 		$diskFile = $this->getDiskFile();
+		$author = User::getInstance((int)$diskFile->getCreatedBy());
 		return [
 			'id' => (int)$diskFile->getId(),
 			'chatId' => (int)$this->getChatId(),
@@ -208,7 +240,7 @@ class FileItem implements RestEntity, PopupDataAggregatable
 			'status' => $diskFile->getGlobalContentVersion() > 1? 'done': 'upload',
 			'progress' => $diskFile->getGlobalContentVersion() > 1? 100: -1,
 			'authorId' => (int)$diskFile->getCreatedBy(),
-			'authorName' => \Bitrix\Im\User::formatFullNameFromDatabase($diskFile->getCreateUser()),
+			'authorName' => $author->getName(),
 			'urlPreview' => $this->getPreviewLink(),
 			'urlShow' => $this->getShowLink(),
 			'urlDownload' => $this->getDownloadLink(),

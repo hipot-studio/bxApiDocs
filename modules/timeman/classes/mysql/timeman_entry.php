@@ -188,17 +188,30 @@ FROM
 	{
 		global $DB;
 
-		return $DB->TopSql('
-SELECT
-	E.*,
-	'.$DB->DateToCharFunction("TIMESTAMP_X", "FULL").' TIMESTAMP_X,
-	'.$DB->DateToCharFunction("DATE_START", "FULL").' DATE_START,
-	'.$DB->DateToCharFunction("DATE_FINISH", "FULL").' DATE_FINISH
-FROM b_timeman_entries E
-WHERE USER_ID=\''.intval($USER_ID).'\'
-ORDER BY ID DESC
-', 1);
-	}
+		$sqlGetLastId = '
+			SELECT ID
+			FROM b_timeman_entries
+			WHERE USER_ID = \''.(int)$USER_ID.'\'
+			ORDER BY ID DESC
+			LIMIT 1
+		';
 
+		$result = $DB->Query($sqlGetLastId);
+		if ($row = $result->fetch())
+		{
+			$lastId = (int)$row['ID'];
+
+			return '
+				SELECT
+					E.*,
+					'.$DB->DateToCharFunction("TIMESTAMP_X", "FULL").' TIMESTAMP_X,
+					'.$DB->DateToCharFunction("DATE_START", "FULL").' DATE_START,
+					'.$DB->DateToCharFunction("DATE_FINISH", "FULL").' DATE_FINISH
+				FROM b_timeman_entries E
+				WHERE ID = '.$lastId.'
+			';
+		}
+
+		return null;
+	}
 }
-?>

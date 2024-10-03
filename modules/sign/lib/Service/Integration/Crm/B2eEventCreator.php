@@ -101,6 +101,18 @@ final class B2eEventCreator
 				$this->executeTriggerOnStart($documentData->getDocumentId(), $itemIdentifier->getEntityId());
 				$this->notifyActivityChange($crmController, $itemIdentifier);
 				break;
+			case EventData::TYPE_ON_READY_BY_REVIEWER_OR_EDITOR:
+				$crmController->onSignStarted($itemIdentifier, $documentData);
+				CoordinationAndFillingTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+				break;
+			case EventData::TYPE_ON_READY_BY_REVIEWER:
+				$crmController->onSignStarted($itemIdentifier, $documentData);
+				CoordinationTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+				break;
+			case EventData::TYPE_ON_READY_BY_EDITOR:
+				$crmController->onSignStarted($itemIdentifier, $documentData);
+				FillingTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+				break;
 			case EventData::TYPE_ON_DELIVERED:
 				$crmController->onMessageDelivered($itemIdentifier, $documentData, $messageData);
 				$this->notifyActivityChange($crmController, $itemIdentifier);
@@ -163,11 +175,7 @@ final class B2eEventCreator
 	{
 		$hasEditor = Container::instance()->getMemberRepository()->isDocumentHasEditor($documentId);
 
-		if ($hasEditor)
-		{
-			FillingTrigger::executeBySmartDocumentId($entityId);
-		}
-		else
+		if ($hasEditor === false)
 		{
 			SigningTrigger::executeBySmartDocumentId($entityId);
 		}
@@ -178,19 +186,7 @@ final class B2eEventCreator
 		$hasReviewer = Container::instance()->getMemberRepository()->isDocumentHasReviewer($documentId);
 		$hasEditor = Container::instance()->getMemberRepository()->isDocumentHasEditor($documentId);
 
-		if ($hasReviewer || $hasEditor)
-		{
-			CoordinationAndFillingTrigger::executeBySmartDocumentId($entityId);
-			if($hasReviewer)
-			{
-				CoordinationTrigger::executeBySmartDocumentId($entityId);
-			}
-			else
-			{
-				FillingTrigger::executeBySmartDocumentId($entityId);
-			}
-		}
-		else
+		if ($hasReviewer === false && $hasEditor === false)
 		{
 			SigningTrigger::executeBySmartDocumentId($entityId);
 		}

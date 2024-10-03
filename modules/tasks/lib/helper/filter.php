@@ -1263,17 +1263,19 @@ class Filter extends Common
 		$rowId = $row['id'];
 		$equalSign = ($this->getFilterFieldData("{$rowId}_numsel") === 'range' ? '=' : '');
 
-		if ($from = $this->getFilterFieldData("{$rowId}_from"))
+		$from = $this->getFilterFieldData("{$rowId}_from");
+		if ($from || $from === '0')
 		{
 			$filter[">{$equalSign}{$rowId}"] = $from;
 		}
 
-		if ($to = $this->getFilterFieldData("{$rowId}_to"))
+		$to = $this->getFilterFieldData("{$rowId}_to");
+		if ($to || $to === '0')
 		{
 			$filter["<{$equalSign}{$rowId}"] = $to;
 		}
 
-		if ($from && $to && $from == $to) // values of type double may be here
+		if (isset($from, $to) && $from == $to) // values of type double may be here
 		{
 			unset(
 				$filter[">{$equalSign}{$rowId}"],

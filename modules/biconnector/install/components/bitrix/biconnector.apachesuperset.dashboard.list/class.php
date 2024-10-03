@@ -19,6 +19,7 @@ use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\UI\UIHelper;
 use Bitrix\Main\Entity\Base;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
@@ -186,10 +187,11 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 	private function initCreateButton(): void
 	{
-		$openMarketScript = UIHelper::getOpenMarketScript(
-			MarketDashboardManager::getMarketCollectionUrl(),
-			'grid'
-		);
+		\Bitrix\Main\UI\Extension::load('biconnector.apache-superset-market-manager');
+		$isMarketExists = Loader::includeModule('market') ? 'true' : 'false';
+		$marketUrl = CUtil::JSEscape(MarketDashboardManager::getMarketCollectionUrl());
+		$openMarketScript = "BX.BIConnector.ApacheSupersetMarketManager.openMarket({$isMarketExists}, '{$marketUrl}', 'menu')";
+
 		$splitButton = new Buttons\Split\CreateButton([
 			'dataset' => [
 				'toolbar-collapsed-icon' => Buttons\Icon::ADD,

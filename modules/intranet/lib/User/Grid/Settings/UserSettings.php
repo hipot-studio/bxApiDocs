@@ -3,17 +3,22 @@
 namespace Bitrix\Intranet\User\Grid\Settings;
 
 use Bitrix\Intranet\Component\UserList;
+use Bitrix\Intranet\CurrentUser;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
 
-final class UserSettings extends \Bitrix\Main\Grid\Settings
+class UserSettings extends \Bitrix\Main\Grid\Settings
 {
 	private array $userFields;
 	private string $extensionName;
 	private string $extensionLoadName;
 	private array $adminIdList = [];
+	private ?array $integratorIdList = null;
 	private array $viewFields;
 	private ?array $filterFields = null;
+	private ?bool $isInvitationAvailable = null;
+	private int $userId;
 
 	public function __construct(array $params)
 	{
@@ -21,10 +26,11 @@ final class UserSettings extends \Bitrix\Main\Grid\Settings
 
 		global $USER_FIELD_MANAGER;
 
+		$this->userId = CurrentUser::get()->getId();
 		$this->userFields = $USER_FIELD_MANAGER->getUserFields(\Bitrix\Main\UserTable::getUfId(), 0, LANGUAGE_ID, false);
 		$this->initViewFields();
 
-		$this->extensionName = $params['extensionName'] ?? 'Intranet.Grid.UserGrid';
+		$this->extensionName = $params['extensionName'] ?? 'Intranet.UserList';
 		$this->extensionLoadName = $params['extensionLoadName'] ?? 'intranet.grid.user-grid';
 	}
 
@@ -53,6 +59,21 @@ final class UserSettings extends \Bitrix\Main\Grid\Settings
 		return in_array($userId, $this->getAdminIdList());
 	}
 
+	public function isCurrentUserAdmin(): bool
+	{
+		return $this->isUserAdmin($this->getCurrentUserId());
+	}
+
+	public function isUserIntegrator($userId): bool
+	{
+		return in_array($userId, $this->getIntegratorIdList());
+	}
+
+	public function getCurrentUserId(): int
+	{
+		return $this->userId;
+	}
+
 	public function getViewFields(): array
 	{
 		return $this->viewFields;
@@ -66,6 +87,22 @@ final class UserSettings extends \Bitrix\Main\Grid\Settings
 	public function setFilterFields(array $filterFields): void
 	{
 		$this->filterFields = $filterFields;
+	}
+
+	public function isInvitationAvailable(): bool
+	{
+		if (!isset($this->isInvitationAvailable))
+		{
+			$this->isInvitationAvailable = (
+				CurrentUser::get()->canDoOperation('edit_all_users')
+				|| (
+					ModuleManager::isModuleInstalled('bitrix24')
+					&& Option::get('bitrix24', 'allow_invite_users', 'N') === 'Y'
+				)
+			);
+		}
+
+		return $this->isInvitationAvailable;
 	}
 
 	private function initViewFields(): void
@@ -101,5 +138,18 @@ final class UserSettings extends \Bitrix\Main\Grid\Settings
 		}
 
 		return $this->adminIdList;
+	}
+
+	private function getIntegratorIdList(): array
+	{
+		if (is_null($this->integratorIdList))
+		{
+			$this->integratorIdList =
+				\Bitrix\Main\Loader::includeModule('bitrix24')
+					? \Bitrix\Bitrix24\Integrator::getIntegratorsId()
+					: [];
+		}
+
+		return $this->integratorIdList;
 	}
 }

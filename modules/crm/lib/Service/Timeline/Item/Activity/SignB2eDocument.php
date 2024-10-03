@@ -96,7 +96,7 @@ final class SignB2eDocument extends Activity
 	{
 		$action = $this->getShowSigningProcessAction();
 		$logo = Layout\Common\Logo::getInstance($this->getLogoCode())->createLogo();
-		if ($this->isSignDocumentDraft())
+		if ($this->isSignDocumentDraft() || $this->isSignDocumentSending())
 		{
 			$logo
 				->setIconType(Layout\Body\Logo::ICON_TYPE_SECONDARY)
@@ -281,7 +281,6 @@ final class SignB2eDocument extends Activity
 
 		if ($this->isSignDocumentSigning()
 			&& $this->isSignFeatureSenderStopAvailable()
-			&& method_exists($this->documentService, 'isCurrentUserCanEditDocument')
 			&& $this->documentService->isCurrentUserCanEditDocument($this->getSignDocument()))
 		{
 			$items['cancel'] = (new Layout\Menu\MenuItem((string)Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_SIGNING_CANCEL')))
@@ -297,7 +296,12 @@ final class SignB2eDocument extends Activity
 		return (int)$this->getAssociatedEntityModel()->get('ASSOCIATED_ENTITY_ID');
 	}
 
-	private function getEntityTypeId(): int
+	private function getOwnerEntityId(): int
+	{
+		return (int)$this->getAssociatedEntityModel()->get('OWNER_ID');
+	}
+
+	private function getOwnerEntityTypeId(): int
 	{
 		return (int)$this->getAssociatedEntityModel()->get('OWNER_TYPE_ID');
 	}
@@ -306,49 +310,18 @@ final class SignB2eDocument extends Activity
 	{
 		if (!$this->document)
 		{
-			$factory = Container::getInstance()->getFactory($this->getEntityTypeId());
+			$factory = Container::getInstance()->getFactory($this->getOwnerEntityTypeId());
 			if (!$factory)
 			{
 				return null;
 			}
 
-			$documentId = $this->getDocumentId();
+			$documentId = $this->getOwnerEntityId();
 
 			$this->document = $factory->getItem($documentId);
 		}
 
 		return $this->document;
-	}
-
-	private function getMyCompanyCaption(): string
-	{
-		$link = EntityLink::getByEntity($this->getEntityTypeId(), $this->getDocumentId());
-		if ($link)
-		{
-			$requisiteId = $link['MC_REQUISITE_ID'] ?? null;
-			$linkedRequisiteId = ((int)$requisiteId > 0) ? (int)$requisiteId : null;
-		}
-
-		$document = $this->getDocument();
-		if (!empty($linkedRequisiteId))
-		{
-			$requisites = EntityRequisite::getSingleInstance()->getById($linkedRequisiteId);
-		}
-		elseif ($document && isset($document->getData()['MYCOMPANY_ID']) && $document->getMycompanyId() > 0)
-		{
-			$defaultRequisite = new DefaultRequisite(
-				new ItemIdentifier(\CCrmOwnerType::Company, $document->getMycompanyId())
-			);
-
-			$requisites = $defaultRequisite->get();
-		}
-
-		if (!empty($requisites))
-		{
-			$myCompanyCaption = \Bitrix\Crm\Format\Requisite::formatOrganizationName($requisites);
-		}
-
-		return $myCompanyCaption ?? Loc::getMessage('CRM_COMMON_EMPTY_VALUE');
 	}
 
 	private function getSignDocument(): ?\Bitrix\Sign\Item\Document
@@ -407,6 +380,10 @@ final class SignB2eDocument extends Activity
 		;
 	}
 
+	/**
+	 * @return MemberCollection
+	 * @deprecated only for old sign module version
+	 */
 	private function getMembers(): MemberCollection
 	{
 		if (isset($this->members))
@@ -459,8 +436,12 @@ final class SignB2eDocument extends Activity
 		return in_array($this->getSignDocument()?->status, [
 				DocumentStatus::NEW,
 				DocumentStatus::UPLOADED,
-				DocumentStatus::READY
 			], true);
+	}
+
+	private function isSignDocumentSending(): bool
+	{
+		return $this->getSignDocument()?->status === DocumentStatus::READY;
 	}
 
 	private function isSignDocumentFill(): bool
@@ -487,7 +468,8 @@ final class SignB2eDocument extends Activity
 
 	private function isFirstUserWithRoleReady(string $role): bool
 	{
-		foreach ($this->getMembers() as $member)
+		$members = $this->memberRepository->listByDocumentIdWithRole($this->getSignDocumentId(), $role);
+		foreach ($members as $member)
 		{
 			if ($member->role === $role)
 			{
@@ -527,6 +509,11 @@ final class SignB2eDocument extends Activity
 			return (string)Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_STATUS_DRAFT');
 		}
 
+		if ($this->isSignDocumentSending())
+		{
+			return (string)Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_STATUS_SENDING');
+		}
+
 		if ($this->isSignDocumentStopped())
 		{
 			return (string)Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_STATUS_STOPPED');
@@ -562,7 +549,7 @@ final class SignB2eDocument extends Activity
 			return Layout\Common\Logo::DOCUMENT_SIGNED;
 		}
 
-		if ($this->isSignDocumentDraft())
+		if ($this->isSignDocumentDraft() || $this->isSignDocumentSending())
 		{
 			return Layout\Common\Logo::DOCUMENT_DRAFT;
 		}
@@ -572,10 +559,17 @@ final class SignB2eDocument extends Activity
 
 	private function getCompanyMember(): ?Member
 	{
-		return $this->getMembers()->findFirstByRole(Role::ASSIGNEE);
+		return $this->memberRepository
+			->listByDocumentIdWithRole($this->getSignDocument()->id, Role::ASSIGNEE, 1)
+			->getFirst()
+		;
 	}
 
-	private function getUsersBlock(?string $title, array $userIds): ?Layout\Body\ContentBlock\ContentBlockWithTitle
+	private function getUsersBlockWithCount(
+		?string $title,
+		array $userIds,
+		int $userCount,
+	): ?Layout\Body\ContentBlock\ContentBlockWithTitle
 	{
 		if (empty($userIds))
 		{
@@ -583,7 +577,6 @@ final class SignB2eDocument extends Activity
 		}
 
 		$lineOfTextBlocks = new Layout\Body\ContentBlock\LineOfTextBlocks();
-		$userCount = count($userIds);
 		$num = 0;
 		foreach ($userIds as $userId)
 		{
@@ -613,40 +606,42 @@ final class SignB2eDocument extends Activity
 
 	private function getSignersWaitBlock(): ?Layout\Body\ContentBlock\ContentBlockWithTitle
 	{
-		$userIds = $this->getSignersByStatuesUserIds()[MemberStatus::WAIT] ?? [];
+		[$userIds, $count] = $this->getSignersUserIdsAndCountForBlock([MemberStatus::WAIT]);
 
 		$title = Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_FIELD_SIGNER_WAIT');
 
-		return $this->getUsersBlock($title, $userIds);
+		return $this->getUsersBlockWithCount($title, $userIds, $count);
 	}
 
 	private function getSignersReadyBlock(): ?Layout\Body\ContentBlock\ContentBlockWithTitle
 	{
-		$userIds = $this->getSignersByStatuesUserIds()[MemberStatus::READY] ?? [];
+		[$userIds, $count] = $this->getSignersUserIdsAndCountForBlock([MemberStatus::READY]);
 
 		$title = Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_FIELD_SIGNER_READY');
 
-		return $this->getUsersBlock($title, $userIds);
+		return $this->getUsersBlockWithCount($title, $userIds, $count);
 	}
 
 	private function getSignersCanceledBlock(): ?Layout\Body\ContentBlock\ContentBlockWithTitle
 	{
-		$refused = $this->getSignersByStatuesUserIds()[MemberStatus::REFUSED] ?? [];
-		$stopped = $this->getSignersByStatuesUserIds()[MemberStatus::STOPPED] ?? [];
-		$userIds = array_merge($refused, $stopped);
+		$statuses = [
+			MemberStatus::REFUSED,
+			MemberStatus::STOPPED,
+		];
+		[$userIds, $count] = $this->getSignersUserIdsAndCountForBlock($statuses);
 
 		$title = Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_TITLE_STOPPED');
 
-		return $this->getUsersBlock($title, $userIds);
+		return $this->getUsersBlockWithCount($title, $userIds, $count);
 	}
 
 	private function getSignersDoneBlock(): ?Layout\Body\ContentBlock\ContentBlockWithTitle
 	{
-		$userIds = $this->getSignersByStatuesUserIds()[MemberStatus::DONE] ?? [];
+		[$userIds, $count] = $this->getSignersUserIdsAndCountForBlock([MemberStatus::DONE]);
 
 		$title = Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_FIELD_SIGNER_DONE');
 
-		return $this->getUsersBlock($title, $userIds);
+		return $this->getUsersBlockWithCount($title, $userIds, $count);
 	}
 
 	private function getRepresentativeBlock(): ?Layout\Body\ContentBlock\ContentBlockWithTitle
@@ -659,19 +654,21 @@ final class SignB2eDocument extends Activity
 
 		$title = Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_FIELD_REPRESENTATIVE');
 
-		return $this->getUsersBlock($title, [$userId]);
+		return $this->getUsersBlockWithCount($title, [$userId], 1);
 	}
 
 	private function getSignersBlock(): ?Layout\Body\ContentBlock\ContentBlockWithTitle
 	{
-		$userIds = array_merge(...array_values($this->getSignersByStatuesUserIds()));
+		[$userIds, $count] = $this->getSignersUserIdsAndCountForBlock();
 
 		$title = Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_FIELD_SIGNER');
 
-		return $this->getUsersBlock($title, $userIds);
+		return $this->getUsersBlockWithCount($title, $userIds, $count);
 	}
 
 	/**
+	 * @deprecated only for old sign module version
+	 *
 	 * @return array<MemberStatus::*, array<int>>
 	 */
 	private function getSignersByStatuesUserIds(): array
@@ -728,6 +725,47 @@ final class SignB2eDocument extends Activity
 	{
 		return isset($this->documentService)
 			&& method_exists($this->documentService, 'isCurrentUserCanEditDocument');
+	}
+
+	private function getSignDocumentId(): int
+	{
+		return (int)$this->getSignDocument()->id;
+	}
+
+	/**
+	 * @param list<\Bitrix\Sign\Type\MemberStatus::*> $statuses
+	 *
+	 * @return list{list<int>, int}
+	 */
+	private function getSignersUserIdsAndCountForBlock(array $statuses = []): array
+	{
+		if (method_exists($this->memberRepository, 'countMembersByDocumentIdAndRoleAndStatus'))
+		{
+			$limit = self::MAX_USER_IN_LINE + 1;
+			$documentId = $this->getSignDocumentId();
+			$members = $this->memberRepository
+				->listByDocumentIdAndRoleAndStatus($documentId, Role::SIGNER, $limit, $statuses)
+			;
+			$userIds = array_map(fn(Member $member): int => $member->entityId, $members->toArray());
+			$count = count($userIds);
+			if ($count >= $limit)
+			{
+				$count = $this->memberRepository->countMembersByDocumentIdAndRoleAndStatus($documentId, $statuses);
+			}
+
+			return [$userIds, $count];
+		}
+
+		$userIds = [];
+		foreach ($this->getSignersByStatuesUserIds() as $status => $statusUserIds)
+		{
+			if (empty($statuses) || in_array($status, $statuses, true))
+			{
+				$userIds = array_merge($userIds, $statusUserIds);
+			}
+		}
+
+		return [$userIds, count($userIds)];
 	}
 
 }

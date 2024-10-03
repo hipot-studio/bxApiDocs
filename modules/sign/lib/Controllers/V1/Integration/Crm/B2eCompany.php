@@ -143,7 +143,11 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 						(int)($provider['date'] ?? null),
 						(bool)($provider['virtual'] ?? false),
 						(bool)($provider['autoRegister'] ?? false),
+						(string)($provider['name'] ?? ''),
+						(string)($provider['description'] ?? ''),
+						(string)($provider['iconUrl'] ?? ''),
 						is_numeric($provider['expires'] ?? null) ? (int)$provider['expires'] : null,
+						(string)($provider['externalProviderId'] ?? ''),
 					);
 				}
 			}
@@ -185,13 +189,17 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 	}
 
 	#[Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)]
-	public function registerAction(string $taxId, string $providerCode): array
+	public function registerAction(
+		string $taxId,
+		string $providerCode,
+		int $companyId,
+		string $externalProviderId = '',
+	): array
 	{
-		$providerData = [];
-		if ($this->isTaxIdIsCompanyId())
-		{
-			$providerData['companyName'] = Connector\Crm\MyCompany::getById($taxId)?->name;
-		}
+		$providerData = [
+			'providerUid' => $externalProviderId,
+			'companyName' => Connector\Crm\MyCompany::getById($companyId)?->name,
+		];
 
 		$result = Container::instance()->getApiService()
 			->post('v1/b2e.company.registerByClient', [

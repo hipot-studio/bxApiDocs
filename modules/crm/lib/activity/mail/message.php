@@ -160,6 +160,7 @@ class Message
 		}
 
 		$result->addError(new Error(Loc::getMessage('CRM_LIB_ACTIVITY_PERMISSION_DENIED', 'access_denied')));
+
 		return $result;
 	}
 
@@ -570,6 +571,12 @@ class Message
 					}
 				}
 				$header[$key] = $contactsFromField;
+
+				if ($key === 'from' && count($header[$key]) === 1)
+				{
+					$header[$key][0]['senderName'] = (new Address($value))->getName();
+				}
+
 				if (!empty($contactsFromField))
 				{
 					$foundContacts[] = $contactsFromField;
@@ -604,9 +611,10 @@ class Message
 
 	public static function getMessageBody($id): Main\Result
 	{
-		if (!self::checkModules())
+		$checkModules = self::checkModules();
+		if (!$checkModules->isSuccess())
 		{
-			return new Main\Result();
+			return (new Main\Result())->addErrors($checkModules->getErrors());
 		}
 
 		$body = [
@@ -623,18 +631,21 @@ class Message
 			]
 		);
 
-		if (!self::checkActivityPermission(self::PERMISSION_READ, $activities))
+		$checkActivities = self::checkActivityPermission(self::PERMISSION_READ, $activities);
+		if (!$checkActivities->isSuccess())
 		{
-			return new Main\Result();
+			return (new Main\Result())->addErrors($checkActivities->getErrors());
 		}
 
 		$activity = $activities[0];
 
-		Email::uncompressActivity($activity);
-
-		if ($activity)
+		if (is_array($activity))
 		{
-			$body['HTML'] = $activity['DESCRIPTION'];
+			Email::uncompressActivity($activity);
+			if (isset($activity['DESCRIPTION']))
+			{
+				$body['HTML'] = $activity['DESCRIPTION'];
+			}
 		}
 
 		return (new Main\Result())->setData($body);

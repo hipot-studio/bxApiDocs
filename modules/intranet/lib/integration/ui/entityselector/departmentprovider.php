@@ -4,6 +4,7 @@ namespace Bitrix\Intranet\Integration\UI\EntitySelector;
 
 use Bitrix\Iblock\EO_Section_Collection;
 use Bitrix\Iblock\SectionTable;
+use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -94,13 +95,27 @@ class DepartmentProvider extends BaseProvider
 		return [
 			self::MODE_DEPARTMENTS_ONLY,
 			self::MODE_USERS_ONLY,
-			self::MODE_USERS_AND_DEPARTMENTS
+			self::MODE_USERS_AND_DEPARTMENTS,
 		];
 	}
 
 	public function getLimit(): int
 	{
 		return $this->limit;
+	}
+
+	protected function getUserOptions(Dialog $dialog): array
+	{
+		if (isset($this->getOptions()['userOptions']) && is_array($this->getOptions()['userOptions']))
+		{
+			return $this->getOptions()['userOptions'];
+		}
+		elseif ($dialog->getEntity('user') && is_array($dialog->getEntity('user')->getOptions()))
+		{
+			return $dialog->getEntity('user')->getOptions();
+		}
+
+		return [];
 	}
 
 	public function isAvailable(): bool
@@ -199,7 +214,7 @@ class DepartmentProvider extends BaseProvider
 					'selected' => str_replace('ABB1B8', 'fff', $icon),
 					//'default' => '/bitrix/js/intranet/entity-selector/src/images/department-tab-icon.svg',
 					//'selected' => '/bitrix/js/intranet/entity-selector/src/images/department-tab-icon-selected.svg'
-				]
+				],
 			]));
 		}
 
@@ -382,28 +397,8 @@ class DepartmentProvider extends BaseProvider
 	public function getChildren(Item $parentItem, Dialog $dialog): void
 	{
 		$departmentId = (int)$parentItem->getId();
-		$structureIBlockId = self::getStructureIBlockId();
-		if ($structureIBlockId <= 0)
-		{
-			return;
-		}
-
-		// SectionTable cannot select UF_HEAD
-		$department = \CIBlockSection::getList(
-			[],
-			[
-				'ID' => $departmentId,
-				'IBLOCK_ID' => $structureIBlockId,
-				'ACTIVE' => 'Y',
-			],
-			false,
-			['UF_HEAD']
-		)->fetch();
-
-		if (!$department)
-		{
-			return;
-		}
+		$departmentRepository = ServiceContainer::getInstance()->departmentRepository();
+		$departmentHead = $departmentRepository->getDepartmentHead($departmentId);
 
 		$departments = $this->getStructure(['parentId' => $departmentId]);
 		$this->fillDepartments($dialog, $departments);
@@ -413,24 +408,17 @@ class DepartmentProvider extends BaseProvider
 		}
 
 		$headId = 0;
-		if (isset($department['UF_HEAD']))
+
+		if ($departmentHead)
 		{
-			$headId = is_array($department['UF_HEAD']) ? (int)$department['UF_HEAD'][0] : (int)$department['UF_HEAD'];
+			$headId = $departmentHead->getId();
 		}
 
-		$userOptions = [];
-		if (isset($this->getOptions()['userOptions']) && is_array($this->getOptions()['userOptions']))
-		{
-			$userOptions = $this->getOptions()['userOptions'];
-		}
-		elseif ($dialog->getEntity('user') && is_array($dialog->getEntity('user')->getOptions()))
-		{
-			$userOptions = $dialog->getEntity('user')->getOptions();
-		}
+		$userOptions = $this->getUserOptions($dialog);
 
 		$items = UserProvider::makeItems(
 			UserProvider::getUsers(['departmentId' => $departmentId] + $userOptions),
-			$userOptions
+			$userOptions,
 		);
 
 		usort(

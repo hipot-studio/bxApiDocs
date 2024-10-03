@@ -11,15 +11,23 @@ abstract class JsGridAction extends \Bitrix\Main\Grid\Row\Action\BaseAction
 	private string $extensionName;
 	private string $gridId;
 
+	private UserSettings $settings;
+
 	public function __construct(UserSettings $settings)
 	{
 		$this->extensionMethod = $this->getExtensionMethod();
 		$this->extensionName = $settings->getExtensionName();
 		$this->gridId = $settings->getID();
+		$this->settings = $settings;
 	}
 
 	abstract public function getExtensionMethod(): string;
 	abstract protected function getActionParams(array $rawFields): array;
+
+	protected function isCurrentUserAdmin(): bool
+	{
+		return $this->getSettings()->isUserAdmin($this->getSettings()->getCurrentUserId());
+	}
 
 	public function isAvailable(array $rawFields): bool
 	{
@@ -40,5 +48,10 @@ abstract class JsGridAction extends \Bitrix\Main\Grid\Row\Action\BaseAction
 		}
 
 		return null;
+	}
+
+	public function getSettings(): UserSettings
+	{
+		return $this->settings;
 	}
 }

@@ -2391,6 +2391,12 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 			return $this->proceedActionFavorite($arActionArguments);
 		}
 
+		if ($actionId === ActionDictionary::ACTION_TASK_REMOVE)
+		{
+			$this->proceedActionRemove($arActionArguments);
+			return;
+		}
+
 		try
 		{
 			$arTaskData = $this->getData($bSpecialChars = false, [], !$skipAccessControl);
@@ -2402,13 +2408,10 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 
 		$arNewFields = null;
 
-		if ($actionId === ActionDictionary::ACTION_TASK_REMOVE)
+		if ($actionId === ActionDictionary::ACTION_TASK_EDIT)
 		{
-			return $this->proceedActionRemove($arActionArguments);
-		}
-		elseif ($actionId === ActionDictionary::ACTION_TASK_EDIT)
-		{
-			return $this->proceedActionEdit($arActionArguments, $arTaskData);
+			$this->proceedActionEdit($arActionArguments, $arTaskData);
+			return;
 		}
 
 		switch ($actionId)
@@ -4246,13 +4249,13 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 	 */
 	public function addDependOn($parentId, $linkType = DependenceTable::LINK_TYPE_FINISH_START)
 	{
-		return $this->addProjectDependence($parentId, $linkType);
+		$this->addProjectDependence($parentId, $linkType);
 	}
 	/**
 	 * @deprecated
 	 */
 	public function deleteDependOn($parentId)
 	{
-		return $this->deleteProjectDependence($parentId);
+		$this->deleteProjectDependence($parentId);
 	}
 }

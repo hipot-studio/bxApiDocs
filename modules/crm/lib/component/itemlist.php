@@ -56,7 +56,9 @@ abstract class ItemList extends Base
 			return;
 		}
 
+		//@codingStandardsIgnoreStart
 		$entityTypeId = (int)$this->arParams['entityTypeId'];
+		//@codingStandardsIgnoreEnd
 		$type = Service\Container::getInstance()->getTypeByEntityTypeId($entityTypeId);
 		if (!$type && \CCrmOwnerType::isDynamicTypeBasedStaticEntity($entityTypeId))
 		{
@@ -161,7 +163,9 @@ abstract class ItemList extends Base
 	 */
 	protected function initCategory(): ?Category
 	{
+		//@codingStandardsIgnoreStart
 		$categoryId = (int) ($this->arParams['categoryId'] ?? null);
+		//@codingStandardsIgnoreEnd
 		$optionName = 'current_' . mb_strtolower($this->factory->getEntityName()) . '_category';
 
 		if ($categoryId <= 0)
@@ -192,6 +196,7 @@ abstract class ItemList extends Base
 		return $category;
 	}
 
+	//@codingStandardsIgnoreStart
 	public function onPrepareComponentParams($arParams): array
 	{
 		$this->fillParameterFromRequest('categoryId', $arParams);
@@ -199,6 +204,7 @@ abstract class ItemList extends Base
 
 		return parent::onPrepareComponentParams($arParams);
 	}
+	//@codingStandardsIgnoreEnd
 
 	protected function getCategoryId(): ?int
 	{
@@ -340,6 +346,7 @@ abstract class ItemList extends Base
 			$buttons[Toolbar\ButtonLocation::RIGHT][] = $settingsButton;
 		}
 
+		//@codingStandardsIgnoreStart
 		$parameters = [
 			'buttons' => $buttons,
 			'filter' => $this->prepareFilter(),
@@ -350,6 +357,7 @@ abstract class ItemList extends Base
 			'categoryId' => $this->arResult['categoryId'],
 			'pathToEntityList' => '/crm/type/' . $this->entityTypeId,
 		];
+		//@codingStandardsIgnoreEnd
 
 		return array_merge(parent::getToolbarParameters(), $parameters);
 	}
@@ -371,17 +379,17 @@ abstract class ItemList extends Base
 	protected function getToolbarSettingsItems(): array
 	{
 		$settingsItems = [];
-		$userPermissions = Container::getInstance()->getUserPermissions();
-		if ($userPermissions->canWriteConfig())
+		$userPermissions = $this->userPermissions;
+		if ($userPermissions->canUpdateType((int)$this->entityTypeId))
 		{
-			if ($userPermissions->canUpdateType($this->entityTypeId))
-			{
-				$settingsItems[] = [
-					'text' => Loc::getMessage('CRM_TYPE_TYPE_SETTINGS'),
-					'href' => $this->router->getTypeDetailUrl($this->entityTypeId),
-					'onclick' => new Buttons\JsHandler('BX.Crm.Router.Instance.closeSettingsMenu'),
-				];
-			}
+			$settingsItems[] = [
+				'text' => Loc::getMessage('CRM_TYPE_TYPE_SETTINGS'),
+				'href' => $this->router->getTypeDetailUrl($this->entityTypeId),
+				'onclick' => new Buttons\JsHandler('BX.Crm.Router.Instance.closeSettingsMenu'),
+			];
+		}
+		if ($userPermissions->isAdminForEntity((int)$this->entityTypeId))
+		{
 			$dynamicTypesLimit = RestrictionManager::getDynamicTypesLimitRestriction();
 			$isTypeSettingsRestricted = $dynamicTypesLimit->isTypeSettingsRestricted($this->entityTypeId);
 			if ($isTypeSettingsRestricted)
@@ -404,6 +412,7 @@ abstract class ItemList extends Base
 		return $settingsItems;
 	}
 
+	//@codingStandardsIgnoreStart
 	protected function prepareFilter(): array
 	{
 		$limits = null;
@@ -439,6 +448,7 @@ abstract class ItemList extends Base
 			'RESTRICTED_FIELDS' => $this->arResult['restrictedFields'] ?? [],
 		];
 	}
+	//@codingStandardsIgnoreEnd
 
 	protected function getDefaultFilterFields(): array
 	{
@@ -592,7 +602,7 @@ abstract class ItemList extends Base
 		if ($this->counterPanelViewHtml === null)
 		{
 			ob_start();
-
+			//@codingStandardsIgnoreStart
 			$this->getApplication()->IncludeComponent(
 				'bitrix:crm.entity.counter.panel',
 				'',
@@ -603,6 +613,7 @@ abstract class ItemList extends Base
 					'RETURN_AS_HTML_MODE' => true
 				]
 			);
+			//@codingStandardsIgnoreEnd
 			$this->counterPanelViewHtml = ob_get_clean();
 		}
 		return $this->counterPanelViewHtml;
@@ -630,7 +641,7 @@ abstract class ItemList extends Base
 			}
 		}
 
-		if ($this->userPermissions->canWriteConfig())
+		if ($this->userPermissions->isAdminForEntity($this->entityTypeId))
 		{
 			$menu[] = [
 				'delimiter' => true,
@@ -733,6 +744,7 @@ abstract class ItemList extends Base
 		return $btnParameters;
 	}
 
+	//@codingStandardsIgnoreStart
 	protected function configureAnalyticsEventBuilder(AbstractBuilder $builder): void
 	{
 		if ($this->isEmbedded())
@@ -767,6 +779,7 @@ abstract class ItemList extends Base
 			$builder->setP2WithValueNormalization('category', $this->category->getCode());
 		}
 	}
+	//@codingStandardsIgnoreEnd
 
 	protected function isDeadlinesModeSupported(): bool
 	{

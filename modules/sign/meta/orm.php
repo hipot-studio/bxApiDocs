@@ -1,6 +1,6 @@
 <?php
 
-/* ORMENTITYANNOTATION:Bitrix\Sign\Access\Permission\PermissionTable:sign/lib/Access/Permission/PermissionTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Sign\Access\Permission\PermissionTable:sign/lib/access/permission/permissiontable.php */
 namespace Bitrix\Sign\Access\Permission {
 	/**
 	 * Permission
@@ -153,684 +153,6 @@ namespace Bitrix\Sign\Access\Permission {
 	 * @method \Bitrix\Sign\Access\Permission\EO_Permission_Collection wakeUpCollection($rows)
 	 */
 	class EO_Permission_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Sign\Internal\FileTable:sign/lib/internal/filetable.php */
-namespace Bitrix\Sign\Internal {
-	/**
-	 * File
-	 * @see \Bitrix\Sign\Internal\FileTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Sign\Internal\File setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getEntityTypeId()
-	 * @method \Bitrix\Sign\Internal\File setEntityTypeId(\int|\Bitrix\Main\DB\SqlExpression $entityTypeId)
-	 * @method bool hasEntityTypeId()
-	 * @method bool isEntityTypeIdFilled()
-	 * @method bool isEntityTypeIdChanged()
-	 * @method \int remindActualEntityTypeId()
-	 * @method \int requireEntityTypeId()
-	 * @method \Bitrix\Sign\Internal\File resetEntityTypeId()
-	 * @method \Bitrix\Sign\Internal\File unsetEntityTypeId()
-	 * @method \int fillEntityTypeId()
-	 * @method \int getEntityId()
-	 * @method \Bitrix\Sign\Internal\File setEntityId(\int|\Bitrix\Main\DB\SqlExpression $entityId)
-	 * @method bool hasEntityId()
-	 * @method bool isEntityIdFilled()
-	 * @method bool isEntityIdChanged()
-	 * @method \int remindActualEntityId()
-	 * @method \int requireEntityId()
-	 * @method \Bitrix\Sign\Internal\File resetEntityId()
-	 * @method \Bitrix\Sign\Internal\File unsetEntityId()
-	 * @method \int fillEntityId()
-	 * @method \int getCode()
-	 * @method \Bitrix\Sign\Internal\File setCode(\int|\Bitrix\Main\DB\SqlExpression $code)
-	 * @method bool hasCode()
-	 * @method bool isCodeFilled()
-	 * @method bool isCodeChanged()
-	 * @method \int remindActualCode()
-	 * @method \int requireCode()
-	 * @method \Bitrix\Sign\Internal\File resetCode()
-	 * @method \Bitrix\Sign\Internal\File unsetCode()
-	 * @method \int fillCode()
-	 * @method \int getFileId()
-	 * @method \Bitrix\Sign\Internal\File setFileId(\int|\Bitrix\Main\DB\SqlExpression $fileId)
-	 * @method bool hasFileId()
-	 * @method bool isFileIdFilled()
-	 * @method bool isFileIdChanged()
-	 * @method \int remindActualFileId()
-	 * @method \int requireFileId()
-	 * @method \Bitrix\Sign\Internal\File resetFileId()
-	 * @method \Bitrix\Sign\Internal\File unsetFileId()
-	 * @method \int fillFileId()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Sign\Internal\File set($fieldName, $value)
-	 * @method \Bitrix\Sign\Internal\File reset($fieldName)
-	 * @method \Bitrix\Sign\Internal\File unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Sign\Internal\File wakeUp($data)
-	 */
-	class EO_File {
-		/* @var \Bitrix\Sign\Internal\FileTable */
-		static public $dataClass = '\Bitrix\Sign\Internal\FileTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Sign\Internal {
-	/**
-	 * FileCollection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getEntityTypeIdList()
-	 * @method \int[] fillEntityTypeId()
-	 * @method \int[] getEntityIdList()
-	 * @method \int[] fillEntityId()
-	 * @method \int[] getCodeList()
-	 * @method \int[] fillCode()
-	 * @method \int[] getFileIdList()
-	 * @method \int[] fillFileId()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Sign\Internal\File $object)
-	 * @method bool has(\Bitrix\Sign\Internal\File $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Sign\Internal\File getByPrimary($primary)
-	 * @method \Bitrix\Sign\Internal\File[] getAll()
-	 * @method bool remove(\Bitrix\Sign\Internal\File $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Sign\Internal\FileCollection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Sign\Internal\File current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Sign\Internal\FileCollection merge(?\Bitrix\Sign\Internal\FileCollection $collection)
-	 * @method bool isEmpty()
-	 */
-	class EO_File_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Sign\Internal\FileTable */
-		static public $dataClass = '\Bitrix\Sign\Internal\FileTable';
-	}
-}
-namespace Bitrix\Sign\Internal {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_File_Result exec()
-	 * @method \Bitrix\Sign\Internal\File fetchObject()
-	 * @method \Bitrix\Sign\Internal\FileCollection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_File_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Sign\Internal\File fetchObject()
-	 * @method \Bitrix\Sign\Internal\FileCollection fetchCollection()
-	 */
-	class EO_File_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Sign\Internal\File createObject($setDefaultValues = true)
-	 * @method \Bitrix\Sign\Internal\FileCollection createCollection()
-	 * @method \Bitrix\Sign\Internal\File wakeUpObject($row)
-	 * @method \Bitrix\Sign\Internal\FileCollection wakeUpCollection($rows)
-	 */
-	class EO_File_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Sign\Internal\BlankTable:sign/lib/internal/blanktable.php */
-namespace Bitrix\Sign\Internal {
-	/**
-	 * Blank
-	 * @see \Bitrix\Sign\Internal\BlankTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Sign\Internal\Blank setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getTitle()
-	 * @method \Bitrix\Sign\Internal\Blank setTitle(\string|\Bitrix\Main\DB\SqlExpression $title)
-	 * @method bool hasTitle()
-	 * @method bool isTitleFilled()
-	 * @method bool isTitleChanged()
-	 * @method \string remindActualTitle()
-	 * @method \string requireTitle()
-	 * @method \Bitrix\Sign\Internal\Blank resetTitle()
-	 * @method \Bitrix\Sign\Internal\Blank unsetTitle()
-	 * @method \string fillTitle()
-	 * @method \int getExternalId()
-	 * @method \Bitrix\Sign\Internal\Blank setExternalId(\int|\Bitrix\Main\DB\SqlExpression $externalId)
-	 * @method bool hasExternalId()
-	 * @method bool isExternalIdFilled()
-	 * @method bool isExternalIdChanged()
-	 * @method \int remindActualExternalId()
-	 * @method \int requireExternalId()
-	 * @method \Bitrix\Sign\Internal\Blank resetExternalId()
-	 * @method \Bitrix\Sign\Internal\Blank unsetExternalId()
-	 * @method \int fillExternalId()
-	 * @method \string getHost()
-	 * @method \Bitrix\Sign\Internal\Blank setHost(\string|\Bitrix\Main\DB\SqlExpression $host)
-	 * @method bool hasHost()
-	 * @method bool isHostFilled()
-	 * @method bool isHostChanged()
-	 * @method \string remindActualHost()
-	 * @method \string requireHost()
-	 * @method \Bitrix\Sign\Internal\Blank resetHost()
-	 * @method \Bitrix\Sign\Internal\Blank unsetHost()
-	 * @method \string fillHost()
-	 * @method \string getStatus()
-	 * @method \Bitrix\Sign\Internal\Blank setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
-	 * @method bool hasStatus()
-	 * @method bool isStatusFilled()
-	 * @method bool isStatusChanged()
-	 * @method \string remindActualStatus()
-	 * @method \string requireStatus()
-	 * @method \Bitrix\Sign\Internal\Blank resetStatus()
-	 * @method \Bitrix\Sign\Internal\Blank unsetStatus()
-	 * @method \string fillStatus()
-	 * @method array getFileId()
-	 * @method \Bitrix\Sign\Internal\Blank setFileId(array|\Bitrix\Main\DB\SqlExpression $fileId)
-	 * @method bool hasFileId()
-	 * @method bool isFileIdFilled()
-	 * @method bool isFileIdChanged()
-	 * @method array remindActualFileId()
-	 * @method array requireFileId()
-	 * @method \Bitrix\Sign\Internal\Blank resetFileId()
-	 * @method \Bitrix\Sign\Internal\Blank unsetFileId()
-	 * @method array fillFileId()
-	 * @method \string getConverted()
-	 * @method \Bitrix\Sign\Internal\Blank setConverted(\string|\Bitrix\Main\DB\SqlExpression $converted)
-	 * @method bool hasConverted()
-	 * @method bool isConvertedFilled()
-	 * @method bool isConvertedChanged()
-	 * @method \string remindActualConverted()
-	 * @method \string requireConverted()
-	 * @method \Bitrix\Sign\Internal\Blank resetConverted()
-	 * @method \Bitrix\Sign\Internal\Blank unsetConverted()
-	 * @method \string fillConverted()
-	 * @method \int getScenario()
-	 * @method \Bitrix\Sign\Internal\Blank setScenario(\int|\Bitrix\Main\DB\SqlExpression $scenario)
-	 * @method bool hasScenario()
-	 * @method bool isScenarioFilled()
-	 * @method bool isScenarioChanged()
-	 * @method \int remindActualScenario()
-	 * @method \int requireScenario()
-	 * @method \Bitrix\Sign\Internal\Blank resetScenario()
-	 * @method \Bitrix\Sign\Internal\Blank unsetScenario()
-	 * @method \int fillScenario()
-	 * @method \int getCreatedById()
-	 * @method \Bitrix\Sign\Internal\Blank setCreatedById(\int|\Bitrix\Main\DB\SqlExpression $createdById)
-	 * @method bool hasCreatedById()
-	 * @method bool isCreatedByIdFilled()
-	 * @method bool isCreatedByIdChanged()
-	 * @method \int remindActualCreatedById()
-	 * @method \int requireCreatedById()
-	 * @method \Bitrix\Sign\Internal\Blank resetCreatedById()
-	 * @method \Bitrix\Sign\Internal\Blank unsetCreatedById()
-	 * @method \int fillCreatedById()
-	 * @method \int getModifiedById()
-	 * @method \Bitrix\Sign\Internal\Blank setModifiedById(\int|\Bitrix\Main\DB\SqlExpression $modifiedById)
-	 * @method bool hasModifiedById()
-	 * @method bool isModifiedByIdFilled()
-	 * @method bool isModifiedByIdChanged()
-	 * @method \int remindActualModifiedById()
-	 * @method \int requireModifiedById()
-	 * @method \Bitrix\Sign\Internal\Blank resetModifiedById()
-	 * @method \Bitrix\Sign\Internal\Blank unsetModifiedById()
-	 * @method \int fillModifiedById()
-	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
-	 * @method \Bitrix\Sign\Internal\Blank setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
-	 * @method bool hasDateCreate()
-	 * @method bool isDateCreateFilled()
-	 * @method bool isDateCreateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
-	 * @method \Bitrix\Sign\Internal\Blank resetDateCreate()
-	 * @method \Bitrix\Sign\Internal\Blank unsetDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime getDateModify()
-	 * @method \Bitrix\Sign\Internal\Blank setDateModify(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateModify)
-	 * @method bool hasDateModify()
-	 * @method bool isDateModifyFilled()
-	 * @method bool isDateModifyChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateModify()
-	 * @method \Bitrix\Main\Type\DateTime requireDateModify()
-	 * @method \Bitrix\Sign\Internal\Blank resetDateModify()
-	 * @method \Bitrix\Sign\Internal\Blank unsetDateModify()
-	 * @method \Bitrix\Main\Type\DateTime fillDateModify()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Sign\Internal\Blank set($fieldName, $value)
-	 * @method \Bitrix\Sign\Internal\Blank reset($fieldName)
-	 * @method \Bitrix\Sign\Internal\Blank unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Sign\Internal\Blank wakeUp($data)
-	 */
-	class EO_Blank {
-		/* @var \Bitrix\Sign\Internal\BlankTable */
-		static public $dataClass = '\Bitrix\Sign\Internal\BlankTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Sign\Internal {
-	/**
-	 * BlankCollection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getTitleList()
-	 * @method \string[] fillTitle()
-	 * @method \int[] getExternalIdList()
-	 * @method \int[] fillExternalId()
-	 * @method \string[] getHostList()
-	 * @method \string[] fillHost()
-	 * @method \string[] getStatusList()
-	 * @method \string[] fillStatus()
-	 * @method array[] getFileIdList()
-	 * @method array[] fillFileId()
-	 * @method \string[] getConvertedList()
-	 * @method \string[] fillConverted()
-	 * @method \int[] getScenarioList()
-	 * @method \int[] fillScenario()
-	 * @method \int[] getCreatedByIdList()
-	 * @method \int[] fillCreatedById()
-	 * @method \int[] getModifiedByIdList()
-	 * @method \int[] fillModifiedById()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateModifyList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateModify()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Sign\Internal\Blank $object)
-	 * @method bool has(\Bitrix\Sign\Internal\Blank $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Sign\Internal\Blank getByPrimary($primary)
-	 * @method \Bitrix\Sign\Internal\Blank[] getAll()
-	 * @method bool remove(\Bitrix\Sign\Internal\Blank $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Sign\Internal\BlankCollection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Sign\Internal\Blank current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Sign\Internal\BlankCollection merge(?\Bitrix\Sign\Internal\BlankCollection $collection)
-	 * @method bool isEmpty()
-	 */
-	class EO_Blank_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Sign\Internal\BlankTable */
-		static public $dataClass = '\Bitrix\Sign\Internal\BlankTable';
-	}
-}
-namespace Bitrix\Sign\Internal {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Blank_Result exec()
-	 * @method \Bitrix\Sign\Internal\Blank fetchObject()
-	 * @method \Bitrix\Sign\Internal\BlankCollection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Blank_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Sign\Internal\Blank fetchObject()
-	 * @method \Bitrix\Sign\Internal\BlankCollection fetchCollection()
-	 */
-	class EO_Blank_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Sign\Internal\Blank createObject($setDefaultValues = true)
-	 * @method \Bitrix\Sign\Internal\BlankCollection createCollection()
-	 * @method \Bitrix\Sign\Internal\Blank wakeUpObject($row)
-	 * @method \Bitrix\Sign\Internal\BlankCollection wakeUpCollection($rows)
-	 */
-	class EO_Blank_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Sign\Internal\BlockTable:sign/lib/internal/blocktable.php */
-namespace Bitrix\Sign\Internal {
-	/**
-	 * Block
-	 * @see \Bitrix\Sign\Internal\BlockTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Sign\Internal\Block setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getCode()
-	 * @method \Bitrix\Sign\Internal\Block setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
-	 * @method bool hasCode()
-	 * @method bool isCodeFilled()
-	 * @method bool isCodeChanged()
-	 * @method \string remindActualCode()
-	 * @method \string requireCode()
-	 * @method \Bitrix\Sign\Internal\Block resetCode()
-	 * @method \Bitrix\Sign\Internal\Block unsetCode()
-	 * @method \string fillCode()
-	 * @method null|\string getType()
-	 * @method \Bitrix\Sign\Internal\Block setType(null|\string|\Bitrix\Main\DB\SqlExpression $type)
-	 * @method bool hasType()
-	 * @method bool isTypeFilled()
-	 * @method bool isTypeChanged()
-	 * @method null|\string remindActualType()
-	 * @method null|\string requireType()
-	 * @method \Bitrix\Sign\Internal\Block resetType()
-	 * @method \Bitrix\Sign\Internal\Block unsetType()
-	 * @method null|\string fillType()
-	 * @method \int getBlankId()
-	 * @method \Bitrix\Sign\Internal\Block setBlankId(\int|\Bitrix\Main\DB\SqlExpression $blankId)
-	 * @method bool hasBlankId()
-	 * @method bool isBlankIdFilled()
-	 * @method bool isBlankIdChanged()
-	 * @method \int remindActualBlankId()
-	 * @method \int requireBlankId()
-	 * @method \Bitrix\Sign\Internal\Block resetBlankId()
-	 * @method \Bitrix\Sign\Internal\Block unsetBlankId()
-	 * @method \int fillBlankId()
-	 * @method array getPosition()
-	 * @method \Bitrix\Sign\Internal\Block setPosition(array|\Bitrix\Main\DB\SqlExpression $position)
-	 * @method bool hasPosition()
-	 * @method bool isPositionFilled()
-	 * @method bool isPositionChanged()
-	 * @method array remindActualPosition()
-	 * @method array requirePosition()
-	 * @method \Bitrix\Sign\Internal\Block resetPosition()
-	 * @method \Bitrix\Sign\Internal\Block unsetPosition()
-	 * @method array fillPosition()
-	 * @method array getStyle()
-	 * @method \Bitrix\Sign\Internal\Block setStyle(array|\Bitrix\Main\DB\SqlExpression $style)
-	 * @method bool hasStyle()
-	 * @method bool isStyleFilled()
-	 * @method bool isStyleChanged()
-	 * @method array remindActualStyle()
-	 * @method array requireStyle()
-	 * @method \Bitrix\Sign\Internal\Block resetStyle()
-	 * @method \Bitrix\Sign\Internal\Block unsetStyle()
-	 * @method array fillStyle()
-	 * @method array getData()
-	 * @method \Bitrix\Sign\Internal\Block setData(array|\Bitrix\Main\DB\SqlExpression $data)
-	 * @method bool hasData()
-	 * @method bool isDataFilled()
-	 * @method bool isDataChanged()
-	 * @method array remindActualData()
-	 * @method array requireData()
-	 * @method \Bitrix\Sign\Internal\Block resetData()
-	 * @method \Bitrix\Sign\Internal\Block unsetData()
-	 * @method array fillData()
-	 * @method \int getPart()
-	 * @method \Bitrix\Sign\Internal\Block setPart(\int|\Bitrix\Main\DB\SqlExpression $part)
-	 * @method bool hasPart()
-	 * @method bool isPartFilled()
-	 * @method bool isPartChanged()
-	 * @method \int remindActualPart()
-	 * @method \int requirePart()
-	 * @method \Bitrix\Sign\Internal\Block resetPart()
-	 * @method \Bitrix\Sign\Internal\Block unsetPart()
-	 * @method \int fillPart()
-	 * @method \int getCreatedById()
-	 * @method \Bitrix\Sign\Internal\Block setCreatedById(\int|\Bitrix\Main\DB\SqlExpression $createdById)
-	 * @method bool hasCreatedById()
-	 * @method bool isCreatedByIdFilled()
-	 * @method bool isCreatedByIdChanged()
-	 * @method \int remindActualCreatedById()
-	 * @method \int requireCreatedById()
-	 * @method \Bitrix\Sign\Internal\Block resetCreatedById()
-	 * @method \Bitrix\Sign\Internal\Block unsetCreatedById()
-	 * @method \int fillCreatedById()
-	 * @method \int getModifiedById()
-	 * @method \Bitrix\Sign\Internal\Block setModifiedById(\int|\Bitrix\Main\DB\SqlExpression $modifiedById)
-	 * @method bool hasModifiedById()
-	 * @method bool isModifiedByIdFilled()
-	 * @method bool isModifiedByIdChanged()
-	 * @method \int remindActualModifiedById()
-	 * @method \int requireModifiedById()
-	 * @method \Bitrix\Sign\Internal\Block resetModifiedById()
-	 * @method \Bitrix\Sign\Internal\Block unsetModifiedById()
-	 * @method \int fillModifiedById()
-	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
-	 * @method \Bitrix\Sign\Internal\Block setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
-	 * @method bool hasDateCreate()
-	 * @method bool isDateCreateFilled()
-	 * @method bool isDateCreateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
-	 * @method \Bitrix\Sign\Internal\Block resetDateCreate()
-	 * @method \Bitrix\Sign\Internal\Block unsetDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime getDateModify()
-	 * @method \Bitrix\Sign\Internal\Block setDateModify(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateModify)
-	 * @method bool hasDateModify()
-	 * @method bool isDateModifyFilled()
-	 * @method bool isDateModifyChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateModify()
-	 * @method \Bitrix\Main\Type\DateTime requireDateModify()
-	 * @method \Bitrix\Sign\Internal\Block resetDateModify()
-	 * @method \Bitrix\Sign\Internal\Block unsetDateModify()
-	 * @method \Bitrix\Main\Type\DateTime fillDateModify()
-	 * @method null|\int getRole()
-	 * @method \Bitrix\Sign\Internal\Block setRole(null|\int|\Bitrix\Main\DB\SqlExpression $role)
-	 * @method bool hasRole()
-	 * @method bool isRoleFilled()
-	 * @method bool isRoleChanged()
-	 * @method null|\int remindActualRole()
-	 * @method null|\int requireRole()
-	 * @method \Bitrix\Sign\Internal\Block resetRole()
-	 * @method \Bitrix\Sign\Internal\Block unsetRole()
-	 * @method null|\int fillRole()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Sign\Internal\Block set($fieldName, $value)
-	 * @method \Bitrix\Sign\Internal\Block reset($fieldName)
-	 * @method \Bitrix\Sign\Internal\Block unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Sign\Internal\Block wakeUp($data)
-	 */
-	class EO_Block {
-		/* @var \Bitrix\Sign\Internal\BlockTable */
-		static public $dataClass = '\Bitrix\Sign\Internal\BlockTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Sign\Internal {
-	/**
-	 * BlockCollection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getCodeList()
-	 * @method \string[] fillCode()
-	 * @method null|\string[] getTypeList()
-	 * @method null|\string[] fillType()
-	 * @method \int[] getBlankIdList()
-	 * @method \int[] fillBlankId()
-	 * @method array[] getPositionList()
-	 * @method array[] fillPosition()
-	 * @method array[] getStyleList()
-	 * @method array[] fillStyle()
-	 * @method array[] getDataList()
-	 * @method array[] fillData()
-	 * @method \int[] getPartList()
-	 * @method \int[] fillPart()
-	 * @method \int[] getCreatedByIdList()
-	 * @method \int[] fillCreatedById()
-	 * @method \int[] getModifiedByIdList()
-	 * @method \int[] fillModifiedById()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateModifyList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateModify()
-	 * @method null|\int[] getRoleList()
-	 * @method null|\int[] fillRole()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Sign\Internal\Block $object)
-	 * @method bool has(\Bitrix\Sign\Internal\Block $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Sign\Internal\Block getByPrimary($primary)
-	 * @method \Bitrix\Sign\Internal\Block[] getAll()
-	 * @method bool remove(\Bitrix\Sign\Internal\Block $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Sign\Internal\BlockCollection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Sign\Internal\Block current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Sign\Internal\BlockCollection merge(?\Bitrix\Sign\Internal\BlockCollection $collection)
-	 * @method bool isEmpty()
-	 */
-	class EO_Block_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Sign\Internal\BlockTable */
-		static public $dataClass = '\Bitrix\Sign\Internal\BlockTable';
-	}
-}
-namespace Bitrix\Sign\Internal {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Block_Result exec()
-	 * @method \Bitrix\Sign\Internal\Block fetchObject()
-	 * @method \Bitrix\Sign\Internal\BlockCollection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Block_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Sign\Internal\Block fetchObject()
-	 * @method \Bitrix\Sign\Internal\BlockCollection fetchCollection()
-	 */
-	class EO_Block_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Sign\Internal\Block createObject($setDefaultValues = true)
-	 * @method \Bitrix\Sign\Internal\BlockCollection createCollection()
-	 * @method \Bitrix\Sign\Internal\Block wakeUpObject($row)
-	 * @method \Bitrix\Sign\Internal\BlockCollection wakeUpCollection($rows)
-	 */
-	class EO_Block_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Sign\Internal\DocumentTable:sign/lib/internal/documenttable.php */
 namespace Bitrix\Sign\Internal {
@@ -1310,6 +632,518 @@ namespace Bitrix\Sign\Internal {
 	 */
 	class EO_Document_Entity extends \Bitrix\Main\ORM\Entity {}
 }
+/* ORMENTITYANNOTATION:Bitrix\Sign\Internal\BlockTable:sign/lib/internal/blocktable.php */
+namespace Bitrix\Sign\Internal {
+	/**
+	 * Block
+	 * @see \Bitrix\Sign\Internal\BlockTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Sign\Internal\Block setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getCode()
+	 * @method \Bitrix\Sign\Internal\Block setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\Sign\Internal\Block resetCode()
+	 * @method \Bitrix\Sign\Internal\Block unsetCode()
+	 * @method \string fillCode()
+	 * @method null|\string getType()
+	 * @method \Bitrix\Sign\Internal\Block setType(null|\string|\Bitrix\Main\DB\SqlExpression $type)
+	 * @method bool hasType()
+	 * @method bool isTypeFilled()
+	 * @method bool isTypeChanged()
+	 * @method null|\string remindActualType()
+	 * @method null|\string requireType()
+	 * @method \Bitrix\Sign\Internal\Block resetType()
+	 * @method \Bitrix\Sign\Internal\Block unsetType()
+	 * @method null|\string fillType()
+	 * @method \int getBlankId()
+	 * @method \Bitrix\Sign\Internal\Block setBlankId(\int|\Bitrix\Main\DB\SqlExpression $blankId)
+	 * @method bool hasBlankId()
+	 * @method bool isBlankIdFilled()
+	 * @method bool isBlankIdChanged()
+	 * @method \int remindActualBlankId()
+	 * @method \int requireBlankId()
+	 * @method \Bitrix\Sign\Internal\Block resetBlankId()
+	 * @method \Bitrix\Sign\Internal\Block unsetBlankId()
+	 * @method \int fillBlankId()
+	 * @method array getPosition()
+	 * @method \Bitrix\Sign\Internal\Block setPosition(array|\Bitrix\Main\DB\SqlExpression $position)
+	 * @method bool hasPosition()
+	 * @method bool isPositionFilled()
+	 * @method bool isPositionChanged()
+	 * @method array remindActualPosition()
+	 * @method array requirePosition()
+	 * @method \Bitrix\Sign\Internal\Block resetPosition()
+	 * @method \Bitrix\Sign\Internal\Block unsetPosition()
+	 * @method array fillPosition()
+	 * @method array getStyle()
+	 * @method \Bitrix\Sign\Internal\Block setStyle(array|\Bitrix\Main\DB\SqlExpression $style)
+	 * @method bool hasStyle()
+	 * @method bool isStyleFilled()
+	 * @method bool isStyleChanged()
+	 * @method array remindActualStyle()
+	 * @method array requireStyle()
+	 * @method \Bitrix\Sign\Internal\Block resetStyle()
+	 * @method \Bitrix\Sign\Internal\Block unsetStyle()
+	 * @method array fillStyle()
+	 * @method array getData()
+	 * @method \Bitrix\Sign\Internal\Block setData(array|\Bitrix\Main\DB\SqlExpression $data)
+	 * @method bool hasData()
+	 * @method bool isDataFilled()
+	 * @method bool isDataChanged()
+	 * @method array remindActualData()
+	 * @method array requireData()
+	 * @method \Bitrix\Sign\Internal\Block resetData()
+	 * @method \Bitrix\Sign\Internal\Block unsetData()
+	 * @method array fillData()
+	 * @method \int getPart()
+	 * @method \Bitrix\Sign\Internal\Block setPart(\int|\Bitrix\Main\DB\SqlExpression $part)
+	 * @method bool hasPart()
+	 * @method bool isPartFilled()
+	 * @method bool isPartChanged()
+	 * @method \int remindActualPart()
+	 * @method \int requirePart()
+	 * @method \Bitrix\Sign\Internal\Block resetPart()
+	 * @method \Bitrix\Sign\Internal\Block unsetPart()
+	 * @method \int fillPart()
+	 * @method \int getCreatedById()
+	 * @method \Bitrix\Sign\Internal\Block setCreatedById(\int|\Bitrix\Main\DB\SqlExpression $createdById)
+	 * @method bool hasCreatedById()
+	 * @method bool isCreatedByIdFilled()
+	 * @method bool isCreatedByIdChanged()
+	 * @method \int remindActualCreatedById()
+	 * @method \int requireCreatedById()
+	 * @method \Bitrix\Sign\Internal\Block resetCreatedById()
+	 * @method \Bitrix\Sign\Internal\Block unsetCreatedById()
+	 * @method \int fillCreatedById()
+	 * @method \int getModifiedById()
+	 * @method \Bitrix\Sign\Internal\Block setModifiedById(\int|\Bitrix\Main\DB\SqlExpression $modifiedById)
+	 * @method bool hasModifiedById()
+	 * @method bool isModifiedByIdFilled()
+	 * @method bool isModifiedByIdChanged()
+	 * @method \int remindActualModifiedById()
+	 * @method \int requireModifiedById()
+	 * @method \Bitrix\Sign\Internal\Block resetModifiedById()
+	 * @method \Bitrix\Sign\Internal\Block unsetModifiedById()
+	 * @method \int fillModifiedById()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Sign\Internal\Block setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Sign\Internal\Block resetDateCreate()
+	 * @method \Bitrix\Sign\Internal\Block unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime getDateModify()
+	 * @method \Bitrix\Sign\Internal\Block setDateModify(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateModify)
+	 * @method bool hasDateModify()
+	 * @method bool isDateModifyFilled()
+	 * @method bool isDateModifyChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateModify()
+	 * @method \Bitrix\Main\Type\DateTime requireDateModify()
+	 * @method \Bitrix\Sign\Internal\Block resetDateModify()
+	 * @method \Bitrix\Sign\Internal\Block unsetDateModify()
+	 * @method \Bitrix\Main\Type\DateTime fillDateModify()
+	 * @method null|\int getRole()
+	 * @method \Bitrix\Sign\Internal\Block setRole(null|\int|\Bitrix\Main\DB\SqlExpression $role)
+	 * @method bool hasRole()
+	 * @method bool isRoleFilled()
+	 * @method bool isRoleChanged()
+	 * @method null|\int remindActualRole()
+	 * @method null|\int requireRole()
+	 * @method \Bitrix\Sign\Internal\Block resetRole()
+	 * @method \Bitrix\Sign\Internal\Block unsetRole()
+	 * @method null|\int fillRole()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Sign\Internal\Block set($fieldName, $value)
+	 * @method \Bitrix\Sign\Internal\Block reset($fieldName)
+	 * @method \Bitrix\Sign\Internal\Block unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Sign\Internal\Block wakeUp($data)
+	 */
+	class EO_Block {
+		/* @var \Bitrix\Sign\Internal\BlockTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\BlockTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Sign\Internal {
+	/**
+	 * BlockCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method null|\string[] getTypeList()
+	 * @method null|\string[] fillType()
+	 * @method \int[] getBlankIdList()
+	 * @method \int[] fillBlankId()
+	 * @method array[] getPositionList()
+	 * @method array[] fillPosition()
+	 * @method array[] getStyleList()
+	 * @method array[] fillStyle()
+	 * @method array[] getDataList()
+	 * @method array[] fillData()
+	 * @method \int[] getPartList()
+	 * @method \int[] fillPart()
+	 * @method \int[] getCreatedByIdList()
+	 * @method \int[] fillCreatedById()
+	 * @method \int[] getModifiedByIdList()
+	 * @method \int[] fillModifiedById()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateModifyList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateModify()
+	 * @method null|\int[] getRoleList()
+	 * @method null|\int[] fillRole()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Sign\Internal\Block $object)
+	 * @method bool has(\Bitrix\Sign\Internal\Block $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Sign\Internal\Block getByPrimary($primary)
+	 * @method \Bitrix\Sign\Internal\Block[] getAll()
+	 * @method bool remove(\Bitrix\Sign\Internal\Block $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Sign\Internal\BlockCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Sign\Internal\Block current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Sign\Internal\BlockCollection merge(?\Bitrix\Sign\Internal\BlockCollection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Block_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Sign\Internal\BlockTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\BlockTable';
+	}
+}
+namespace Bitrix\Sign\Internal {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Block_Result exec()
+	 * @method \Bitrix\Sign\Internal\Block fetchObject()
+	 * @method \Bitrix\Sign\Internal\BlockCollection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Block_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Sign\Internal\Block fetchObject()
+	 * @method \Bitrix\Sign\Internal\BlockCollection fetchCollection()
+	 */
+	class EO_Block_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Sign\Internal\Block createObject($setDefaultValues = true)
+	 * @method \Bitrix\Sign\Internal\BlockCollection createCollection()
+	 * @method \Bitrix\Sign\Internal\Block wakeUpObject($row)
+	 * @method \Bitrix\Sign\Internal\BlockCollection wakeUpCollection($rows)
+	 */
+	class EO_Block_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Sign\Internal\BlankTable:sign/lib/internal/blanktable.php */
+namespace Bitrix\Sign\Internal {
+	/**
+	 * Blank
+	 * @see \Bitrix\Sign\Internal\BlankTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Sign\Internal\Blank setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getTitle()
+	 * @method \Bitrix\Sign\Internal\Blank setTitle(\string|\Bitrix\Main\DB\SqlExpression $title)
+	 * @method bool hasTitle()
+	 * @method bool isTitleFilled()
+	 * @method bool isTitleChanged()
+	 * @method \string remindActualTitle()
+	 * @method \string requireTitle()
+	 * @method \Bitrix\Sign\Internal\Blank resetTitle()
+	 * @method \Bitrix\Sign\Internal\Blank unsetTitle()
+	 * @method \string fillTitle()
+	 * @method \int getExternalId()
+	 * @method \Bitrix\Sign\Internal\Blank setExternalId(\int|\Bitrix\Main\DB\SqlExpression $externalId)
+	 * @method bool hasExternalId()
+	 * @method bool isExternalIdFilled()
+	 * @method bool isExternalIdChanged()
+	 * @method \int remindActualExternalId()
+	 * @method \int requireExternalId()
+	 * @method \Bitrix\Sign\Internal\Blank resetExternalId()
+	 * @method \Bitrix\Sign\Internal\Blank unsetExternalId()
+	 * @method \int fillExternalId()
+	 * @method \string getHost()
+	 * @method \Bitrix\Sign\Internal\Blank setHost(\string|\Bitrix\Main\DB\SqlExpression $host)
+	 * @method bool hasHost()
+	 * @method bool isHostFilled()
+	 * @method bool isHostChanged()
+	 * @method \string remindActualHost()
+	 * @method \string requireHost()
+	 * @method \Bitrix\Sign\Internal\Blank resetHost()
+	 * @method \Bitrix\Sign\Internal\Blank unsetHost()
+	 * @method \string fillHost()
+	 * @method \string getStatus()
+	 * @method \Bitrix\Sign\Internal\Blank setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \string remindActualStatus()
+	 * @method \string requireStatus()
+	 * @method \Bitrix\Sign\Internal\Blank resetStatus()
+	 * @method \Bitrix\Sign\Internal\Blank unsetStatus()
+	 * @method \string fillStatus()
+	 * @method array getFileId()
+	 * @method \Bitrix\Sign\Internal\Blank setFileId(array|\Bitrix\Main\DB\SqlExpression $fileId)
+	 * @method bool hasFileId()
+	 * @method bool isFileIdFilled()
+	 * @method bool isFileIdChanged()
+	 * @method array remindActualFileId()
+	 * @method array requireFileId()
+	 * @method \Bitrix\Sign\Internal\Blank resetFileId()
+	 * @method \Bitrix\Sign\Internal\Blank unsetFileId()
+	 * @method array fillFileId()
+	 * @method \string getConverted()
+	 * @method \Bitrix\Sign\Internal\Blank setConverted(\string|\Bitrix\Main\DB\SqlExpression $converted)
+	 * @method bool hasConverted()
+	 * @method bool isConvertedFilled()
+	 * @method bool isConvertedChanged()
+	 * @method \string remindActualConverted()
+	 * @method \string requireConverted()
+	 * @method \Bitrix\Sign\Internal\Blank resetConverted()
+	 * @method \Bitrix\Sign\Internal\Blank unsetConverted()
+	 * @method \string fillConverted()
+	 * @method \int getScenario()
+	 * @method \Bitrix\Sign\Internal\Blank setScenario(\int|\Bitrix\Main\DB\SqlExpression $scenario)
+	 * @method bool hasScenario()
+	 * @method bool isScenarioFilled()
+	 * @method bool isScenarioChanged()
+	 * @method \int remindActualScenario()
+	 * @method \int requireScenario()
+	 * @method \Bitrix\Sign\Internal\Blank resetScenario()
+	 * @method \Bitrix\Sign\Internal\Blank unsetScenario()
+	 * @method \int fillScenario()
+	 * @method \int getCreatedById()
+	 * @method \Bitrix\Sign\Internal\Blank setCreatedById(\int|\Bitrix\Main\DB\SqlExpression $createdById)
+	 * @method bool hasCreatedById()
+	 * @method bool isCreatedByIdFilled()
+	 * @method bool isCreatedByIdChanged()
+	 * @method \int remindActualCreatedById()
+	 * @method \int requireCreatedById()
+	 * @method \Bitrix\Sign\Internal\Blank resetCreatedById()
+	 * @method \Bitrix\Sign\Internal\Blank unsetCreatedById()
+	 * @method \int fillCreatedById()
+	 * @method \int getModifiedById()
+	 * @method \Bitrix\Sign\Internal\Blank setModifiedById(\int|\Bitrix\Main\DB\SqlExpression $modifiedById)
+	 * @method bool hasModifiedById()
+	 * @method bool isModifiedByIdFilled()
+	 * @method bool isModifiedByIdChanged()
+	 * @method \int remindActualModifiedById()
+	 * @method \int requireModifiedById()
+	 * @method \Bitrix\Sign\Internal\Blank resetModifiedById()
+	 * @method \Bitrix\Sign\Internal\Blank unsetModifiedById()
+	 * @method \int fillModifiedById()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Sign\Internal\Blank setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Sign\Internal\Blank resetDateCreate()
+	 * @method \Bitrix\Sign\Internal\Blank unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime getDateModify()
+	 * @method \Bitrix\Sign\Internal\Blank setDateModify(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateModify)
+	 * @method bool hasDateModify()
+	 * @method bool isDateModifyFilled()
+	 * @method bool isDateModifyChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateModify()
+	 * @method \Bitrix\Main\Type\DateTime requireDateModify()
+	 * @method \Bitrix\Sign\Internal\Blank resetDateModify()
+	 * @method \Bitrix\Sign\Internal\Blank unsetDateModify()
+	 * @method \Bitrix\Main\Type\DateTime fillDateModify()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Sign\Internal\Blank set($fieldName, $value)
+	 * @method \Bitrix\Sign\Internal\Blank reset($fieldName)
+	 * @method \Bitrix\Sign\Internal\Blank unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Sign\Internal\Blank wakeUp($data)
+	 */
+	class EO_Blank {
+		/* @var \Bitrix\Sign\Internal\BlankTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\BlankTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Sign\Internal {
+	/**
+	 * BlankCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getTitleList()
+	 * @method \string[] fillTitle()
+	 * @method \int[] getExternalIdList()
+	 * @method \int[] fillExternalId()
+	 * @method \string[] getHostList()
+	 * @method \string[] fillHost()
+	 * @method \string[] getStatusList()
+	 * @method \string[] fillStatus()
+	 * @method array[] getFileIdList()
+	 * @method array[] fillFileId()
+	 * @method \string[] getConvertedList()
+	 * @method \string[] fillConverted()
+	 * @method \int[] getScenarioList()
+	 * @method \int[] fillScenario()
+	 * @method \int[] getCreatedByIdList()
+	 * @method \int[] fillCreatedById()
+	 * @method \int[] getModifiedByIdList()
+	 * @method \int[] fillModifiedById()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateModifyList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateModify()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Sign\Internal\Blank $object)
+	 * @method bool has(\Bitrix\Sign\Internal\Blank $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Sign\Internal\Blank getByPrimary($primary)
+	 * @method \Bitrix\Sign\Internal\Blank[] getAll()
+	 * @method bool remove(\Bitrix\Sign\Internal\Blank $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Sign\Internal\BlankCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Sign\Internal\Blank current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Sign\Internal\BlankCollection merge(?\Bitrix\Sign\Internal\BlankCollection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Blank_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Sign\Internal\BlankTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\BlankTable';
+	}
+}
+namespace Bitrix\Sign\Internal {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Blank_Result exec()
+	 * @method \Bitrix\Sign\Internal\Blank fetchObject()
+	 * @method \Bitrix\Sign\Internal\BlankCollection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Blank_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Sign\Internal\Blank fetchObject()
+	 * @method \Bitrix\Sign\Internal\BlankCollection fetchCollection()
+	 */
+	class EO_Blank_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Sign\Internal\Blank createObject($setDefaultValues = true)
+	 * @method \Bitrix\Sign\Internal\BlankCollection createCollection()
+	 * @method \Bitrix\Sign\Internal\Blank wakeUpObject($row)
+	 * @method \Bitrix\Sign\Internal\BlankCollection wakeUpCollection($rows)
+	 */
+	class EO_Blank_Entity extends \Bitrix\Main\ORM\Entity {}
+}
 /* ORMENTITYANNOTATION:Bitrix\Sign\Internal\Integration\FormTable:sign/lib/internal/integration/form.php */
 namespace Bitrix\Sign\Internal\Integration {
 	/**
@@ -1512,39 +1346,59 @@ namespace Bitrix\Sign\Internal\Integration {
 	 */
 	class EO_Form_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Sign\Internal\Blank\ResourceTable:sign/lib/internal/blank/resourcetable.php */
-namespace Bitrix\Sign\Internal\Blank {
+/* ORMENTITYANNOTATION:Bitrix\Sign\Internal\FileTable:sign/lib/internal/filetable.php */
+namespace Bitrix\Sign\Internal {
 	/**
-	 * Resource
-	 * @see \Bitrix\Sign\Internal\Blank\ResourceTable
+	 * File
+	 * @see \Bitrix\Sign\Internal\FileTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Sign\Internal\Blank\Resource setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Sign\Internal\File setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \int getBlankId()
-	 * @method \Bitrix\Sign\Internal\Blank\Resource setBlankId(\int|\Bitrix\Main\DB\SqlExpression $blankId)
-	 * @method bool hasBlankId()
-	 * @method bool isBlankIdFilled()
-	 * @method bool isBlankIdChanged()
-	 * @method \int remindActualBlankId()
-	 * @method \int requireBlankId()
-	 * @method \Bitrix\Sign\Internal\Blank\Resource resetBlankId()
-	 * @method \Bitrix\Sign\Internal\Blank\Resource unsetBlankId()
-	 * @method \int fillBlankId()
+	 * @method \int getEntityTypeId()
+	 * @method \Bitrix\Sign\Internal\File setEntityTypeId(\int|\Bitrix\Main\DB\SqlExpression $entityTypeId)
+	 * @method bool hasEntityTypeId()
+	 * @method bool isEntityTypeIdFilled()
+	 * @method bool isEntityTypeIdChanged()
+	 * @method \int remindActualEntityTypeId()
+	 * @method \int requireEntityTypeId()
+	 * @method \Bitrix\Sign\Internal\File resetEntityTypeId()
+	 * @method \Bitrix\Sign\Internal\File unsetEntityTypeId()
+	 * @method \int fillEntityTypeId()
+	 * @method \int getEntityId()
+	 * @method \Bitrix\Sign\Internal\File setEntityId(\int|\Bitrix\Main\DB\SqlExpression $entityId)
+	 * @method bool hasEntityId()
+	 * @method bool isEntityIdFilled()
+	 * @method bool isEntityIdChanged()
+	 * @method \int remindActualEntityId()
+	 * @method \int requireEntityId()
+	 * @method \Bitrix\Sign\Internal\File resetEntityId()
+	 * @method \Bitrix\Sign\Internal\File unsetEntityId()
+	 * @method \int fillEntityId()
+	 * @method \int getCode()
+	 * @method \Bitrix\Sign\Internal\File setCode(\int|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \int remindActualCode()
+	 * @method \int requireCode()
+	 * @method \Bitrix\Sign\Internal\File resetCode()
+	 * @method \Bitrix\Sign\Internal\File unsetCode()
+	 * @method \int fillCode()
 	 * @method \int getFileId()
-	 * @method \Bitrix\Sign\Internal\Blank\Resource setFileId(\int|\Bitrix\Main\DB\SqlExpression $fileId)
+	 * @method \Bitrix\Sign\Internal\File setFileId(\int|\Bitrix\Main\DB\SqlExpression $fileId)
 	 * @method bool hasFileId()
 	 * @method bool isFileIdFilled()
 	 * @method bool isFileIdChanged()
 	 * @method \int remindActualFileId()
 	 * @method \int requireFileId()
-	 * @method \Bitrix\Sign\Internal\Blank\Resource resetFileId()
-	 * @method \Bitrix\Sign\Internal\Blank\Resource unsetFileId()
+	 * @method \Bitrix\Sign\Internal\File resetFileId()
+	 * @method \Bitrix\Sign\Internal\File unsetFileId()
 	 * @method \int fillFileId()
 	 *
 	 * Common methods:
@@ -1561,9 +1415,9 @@ namespace Bitrix\Sign\Internal\Blank {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Sign\Internal\Blank\Resource set($fieldName, $value)
-	 * @method \Bitrix\Sign\Internal\Blank\Resource reset($fieldName)
-	 * @method \Bitrix\Sign\Internal\Blank\Resource unset($fieldName)
+	 * @method \Bitrix\Sign\Internal\File set($fieldName, $value)
+	 * @method \Bitrix\Sign\Internal\File reset($fieldName)
+	 * @method \Bitrix\Sign\Internal\File unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -1571,27 +1425,31 @@ namespace Bitrix\Sign\Internal\Blank {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Sign\Internal\Blank\Resource wakeUp($data)
+	 * @method static \Bitrix\Sign\Internal\File wakeUp($data)
 	 */
-	class EO_Resource {
-		/* @var \Bitrix\Sign\Internal\Blank\ResourceTable */
-		static public $dataClass = '\Bitrix\Sign\Internal\Blank\ResourceTable';
+	class EO_File {
+		/* @var \Bitrix\Sign\Internal\FileTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\FileTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
 		public function __construct($setDefaultValues = true) {}
 	}
 }
-namespace Bitrix\Sign\Internal\Blank {
+namespace Bitrix\Sign\Internal {
 	/**
-	 * ResourceCollection
+	 * FileCollection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int[] getIdList()
-	 * @method \int[] getBlankIdList()
-	 * @method \int[] fillBlankId()
+	 * @method \int[] getEntityTypeIdList()
+	 * @method \int[] fillEntityTypeId()
+	 * @method \int[] getEntityIdList()
+	 * @method \int[] fillEntityId()
+	 * @method \int[] getCodeList()
+	 * @method \int[] fillCode()
 	 * @method \int[] getFileIdList()
 	 * @method \int[] fillFileId()
 	 *
@@ -1599,60 +1457,214 @@ namespace Bitrix\Sign\Internal\Blank {
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Sign\Internal\Blank\Resource $object)
-	 * @method bool has(\Bitrix\Sign\Internal\Blank\Resource $object)
+	 * @method void add(\Bitrix\Sign\Internal\File $object)
+	 * @method bool has(\Bitrix\Sign\Internal\File $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Sign\Internal\Blank\Resource getByPrimary($primary)
-	 * @method \Bitrix\Sign\Internal\Blank\Resource[] getAll()
-	 * @method bool remove(\Bitrix\Sign\Internal\Blank\Resource $object)
+	 * @method \Bitrix\Sign\Internal\File getByPrimary($primary)
+	 * @method \Bitrix\Sign\Internal\File[] getAll()
+	 * @method bool remove(\Bitrix\Sign\Internal\File $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Sign\Internal\Blank\ResourceCollection wakeUp($data)
+	 * @method static \Bitrix\Sign\Internal\FileCollection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Sign\Internal\Blank\Resource current() Iterator
+	 * @method \Bitrix\Sign\Internal\File current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Sign\Internal\Blank\ResourceCollection merge(?\Bitrix\Sign\Internal\Blank\ResourceCollection $collection)
+	 * @method \Bitrix\Sign\Internal\FileCollection merge(?\Bitrix\Sign\Internal\FileCollection $collection)
 	 * @method bool isEmpty()
 	 */
-	class EO_Resource_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Sign\Internal\Blank\ResourceTable */
-		static public $dataClass = '\Bitrix\Sign\Internal\Blank\ResourceTable';
+	class EO_File_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Sign\Internal\FileTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\FileTable';
 	}
 }
-namespace Bitrix\Sign\Internal\Blank {
+namespace Bitrix\Sign\Internal {
 	/**
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_Resource_Result exec()
-	 * @method \Bitrix\Sign\Internal\Blank\Resource fetchObject()
-	 * @method \Bitrix\Sign\Internal\Blank\ResourceCollection fetchCollection()
+	 * @method EO_File_Result exec()
+	 * @method \Bitrix\Sign\Internal\File fetchObject()
+	 * @method \Bitrix\Sign\Internal\FileCollection fetchCollection()
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 */
-	class EO_Resource_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_File_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Sign\Internal\Blank\Resource fetchObject()
-	 * @method \Bitrix\Sign\Internal\Blank\ResourceCollection fetchCollection()
+	 * @method \Bitrix\Sign\Internal\File fetchObject()
+	 * @method \Bitrix\Sign\Internal\FileCollection fetchCollection()
 	 */
-	class EO_Resource_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_File_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Sign\Internal\Blank\Resource createObject($setDefaultValues = true)
-	 * @method \Bitrix\Sign\Internal\Blank\ResourceCollection createCollection()
-	 * @method \Bitrix\Sign\Internal\Blank\Resource wakeUpObject($row)
-	 * @method \Bitrix\Sign\Internal\Blank\ResourceCollection wakeUpCollection($rows)
+	 * @method \Bitrix\Sign\Internal\File createObject($setDefaultValues = true)
+	 * @method \Bitrix\Sign\Internal\FileCollection createCollection()
+	 * @method \Bitrix\Sign\Internal\File wakeUpObject($row)
+	 * @method \Bitrix\Sign\Internal\FileCollection wakeUpCollection($rows)
 	 */
-	class EO_Resource_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_File_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Sign\Internal\DocumentChatTable:sign/lib/internal/documentchattable.php */
+namespace Bitrix\Sign\Internal {
+	/**
+	 * DocumentChat
+	 * @see \Bitrix\Sign\Internal\DocumentChatTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Sign\Internal\DocumentChat setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getChatId()
+	 * @method \Bitrix\Sign\Internal\DocumentChat setChatId(\int|\Bitrix\Main\DB\SqlExpression $chatId)
+	 * @method bool hasChatId()
+	 * @method bool isChatIdFilled()
+	 * @method bool isChatIdChanged()
+	 * @method \int remindActualChatId()
+	 * @method \int requireChatId()
+	 * @method \Bitrix\Sign\Internal\DocumentChat resetChatId()
+	 * @method \Bitrix\Sign\Internal\DocumentChat unsetChatId()
+	 * @method \int fillChatId()
+	 * @method \int getDocumentId()
+	 * @method \Bitrix\Sign\Internal\DocumentChat setDocumentId(\int|\Bitrix\Main\DB\SqlExpression $documentId)
+	 * @method bool hasDocumentId()
+	 * @method bool isDocumentIdFilled()
+	 * @method bool isDocumentIdChanged()
+	 * @method \int remindActualDocumentId()
+	 * @method \int requireDocumentId()
+	 * @method \Bitrix\Sign\Internal\DocumentChat resetDocumentId()
+	 * @method \Bitrix\Sign\Internal\DocumentChat unsetDocumentId()
+	 * @method \int fillDocumentId()
+	 * @method \int getType()
+	 * @method \Bitrix\Sign\Internal\DocumentChat setType(\int|\Bitrix\Main\DB\SqlExpression $type)
+	 * @method bool hasType()
+	 * @method bool isTypeFilled()
+	 * @method bool isTypeChanged()
+	 * @method \int remindActualType()
+	 * @method \int requireType()
+	 * @method \Bitrix\Sign\Internal\DocumentChat resetType()
+	 * @method \Bitrix\Sign\Internal\DocumentChat unsetType()
+	 * @method \int fillType()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Sign\Internal\DocumentChat set($fieldName, $value)
+	 * @method \Bitrix\Sign\Internal\DocumentChat reset($fieldName)
+	 * @method \Bitrix\Sign\Internal\DocumentChat unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Sign\Internal\DocumentChat wakeUp($data)
+	 */
+	class EO_DocumentChat {
+		/* @var \Bitrix\Sign\Internal\DocumentChatTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\DocumentChatTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Sign\Internal {
+	/**
+	 * EO_DocumentChat_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getChatIdList()
+	 * @method \int[] fillChatId()
+	 * @method \int[] getDocumentIdList()
+	 * @method \int[] fillDocumentId()
+	 * @method \int[] getTypeList()
+	 * @method \int[] fillType()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Sign\Internal\DocumentChat $object)
+	 * @method bool has(\Bitrix\Sign\Internal\DocumentChat $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Sign\Internal\DocumentChat getByPrimary($primary)
+	 * @method \Bitrix\Sign\Internal\DocumentChat[] getAll()
+	 * @method bool remove(\Bitrix\Sign\Internal\DocumentChat $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Sign\Internal\EO_DocumentChat_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Sign\Internal\DocumentChat current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Sign\Internal\EO_DocumentChat_Collection merge(?\Bitrix\Sign\Internal\EO_DocumentChat_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_DocumentChat_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Sign\Internal\DocumentChatTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\DocumentChatTable';
+	}
+}
+namespace Bitrix\Sign\Internal {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_DocumentChat_Result exec()
+	 * @method \Bitrix\Sign\Internal\DocumentChat fetchObject()
+	 * @method \Bitrix\Sign\Internal\EO_DocumentChat_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_DocumentChat_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Sign\Internal\DocumentChat fetchObject()
+	 * @method \Bitrix\Sign\Internal\EO_DocumentChat_Collection fetchCollection()
+	 */
+	class EO_DocumentChat_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Sign\Internal\DocumentChat createObject($setDefaultValues = true)
+	 * @method \Bitrix\Sign\Internal\EO_DocumentChat_Collection createCollection()
+	 * @method \Bitrix\Sign\Internal\DocumentChat wakeUpObject($row)
+	 * @method \Bitrix\Sign\Internal\EO_DocumentChat_Collection wakeUpCollection($rows)
+	 */
+	class EO_DocumentChat_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Sign\Internal\MemberTable:sign/lib/internal/membertable.php */
 namespace Bitrix\Sign\Internal {
@@ -1948,6 +1960,56 @@ namespace Bitrix\Sign\Internal {
 	 * @method \Bitrix\Sign\Internal\Member resetRole()
 	 * @method \Bitrix\Sign\Internal\Member unsetRole()
 	 * @method null|\int fillRole()
+	 * @method null|\int getReminderType()
+	 * @method \Bitrix\Sign\Internal\Member setReminderType(null|\int|\Bitrix\Main\DB\SqlExpression $reminderType)
+	 * @method bool hasReminderType()
+	 * @method bool isReminderTypeFilled()
+	 * @method bool isReminderTypeChanged()
+	 * @method null|\int remindActualReminderType()
+	 * @method null|\int requireReminderType()
+	 * @method \Bitrix\Sign\Internal\Member resetReminderType()
+	 * @method \Bitrix\Sign\Internal\Member unsetReminderType()
+	 * @method null|\int fillReminderType()
+	 * @method null|\Bitrix\Main\Type\DateTime getReminderLastSendDate()
+	 * @method \Bitrix\Sign\Internal\Member setReminderLastSendDate(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $reminderLastSendDate)
+	 * @method bool hasReminderLastSendDate()
+	 * @method bool isReminderLastSendDateFilled()
+	 * @method bool isReminderLastSendDateChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualReminderLastSendDate()
+	 * @method null|\Bitrix\Main\Type\DateTime requireReminderLastSendDate()
+	 * @method \Bitrix\Sign\Internal\Member resetReminderLastSendDate()
+	 * @method \Bitrix\Sign\Internal\Member unsetReminderLastSendDate()
+	 * @method null|\Bitrix\Main\Type\DateTime fillReminderLastSendDate()
+	 * @method null|\Bitrix\Main\Type\DateTime getReminderPlannedNextSendDate()
+	 * @method \Bitrix\Sign\Internal\Member setReminderPlannedNextSendDate(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $reminderPlannedNextSendDate)
+	 * @method bool hasReminderPlannedNextSendDate()
+	 * @method bool isReminderPlannedNextSendDateFilled()
+	 * @method bool isReminderPlannedNextSendDateChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualReminderPlannedNextSendDate()
+	 * @method null|\Bitrix\Main\Type\DateTime requireReminderPlannedNextSendDate()
+	 * @method \Bitrix\Sign\Internal\Member resetReminderPlannedNextSendDate()
+	 * @method \Bitrix\Sign\Internal\Member unsetReminderPlannedNextSendDate()
+	 * @method null|\Bitrix\Main\Type\DateTime fillReminderPlannedNextSendDate()
+	 * @method \boolean getReminderCompleted()
+	 * @method \Bitrix\Sign\Internal\Member setReminderCompleted(\boolean|\Bitrix\Main\DB\SqlExpression $reminderCompleted)
+	 * @method bool hasReminderCompleted()
+	 * @method bool isReminderCompletedFilled()
+	 * @method bool isReminderCompletedChanged()
+	 * @method \boolean remindActualReminderCompleted()
+	 * @method \boolean requireReminderCompleted()
+	 * @method \Bitrix\Sign\Internal\Member resetReminderCompleted()
+	 * @method \Bitrix\Sign\Internal\Member unsetReminderCompleted()
+	 * @method \boolean fillReminderCompleted()
+	 * @method null|\Bitrix\Main\Type\DateTime getReminderStartDate()
+	 * @method \Bitrix\Sign\Internal\Member setReminderStartDate(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $reminderStartDate)
+	 * @method bool hasReminderStartDate()
+	 * @method bool isReminderStartDateFilled()
+	 * @method bool isReminderStartDateChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualReminderStartDate()
+	 * @method null|\Bitrix\Main\Type\DateTime requireReminderStartDate()
+	 * @method \Bitrix\Sign\Internal\Member resetReminderStartDate()
+	 * @method \Bitrix\Sign\Internal\Member unsetReminderStartDate()
+	 * @method null|\Bitrix\Main\Type\DateTime fillReminderStartDate()
 	 * @method null|\int getConfigured()
 	 * @method \Bitrix\Sign\Internal\Member setConfigured(null|\int|\Bitrix\Main\DB\SqlExpression $configured)
 	 * @method bool hasConfigured()
@@ -2059,6 +2121,16 @@ namespace Bitrix\Sign\Internal {
 	 * @method \string[] fillUid()
 	 * @method null|\int[] getRoleList()
 	 * @method null|\int[] fillRole()
+	 * @method null|\int[] getReminderTypeList()
+	 * @method null|\int[] fillReminderType()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getReminderLastSendDateList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillReminderLastSendDate()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getReminderPlannedNextSendDateList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillReminderPlannedNextSendDate()
+	 * @method \boolean[] getReminderCompletedList()
+	 * @method \boolean[] fillReminderCompleted()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getReminderStartDateList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillReminderStartDate()
 	 * @method null|\int[] getConfiguredList()
 	 * @method null|\int[] fillConfigured()
 	 *
@@ -2120,6 +2192,290 @@ namespace Bitrix\Sign\Internal {
 	 * @method \Bitrix\Sign\Internal\MemberCollection wakeUpCollection($rows)
 	 */
 	class EO_Member_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Sign\Internal\ServiceUser\ServiceUserTable:sign/lib/internal/serviceuser/serviceusertable.php */
+namespace Bitrix\Sign\Internal\ServiceUser {
+	/**
+	 * ServiceUser
+	 * @see \Bitrix\Sign\Internal\ServiceUser\ServiceUserTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getUserId()
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \string getUid()
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser setUid(\string|\Bitrix\Main\DB\SqlExpression $uid)
+	 * @method bool hasUid()
+	 * @method bool isUidFilled()
+	 * @method bool isUidChanged()
+	 * @method \string remindActualUid()
+	 * @method \string requireUid()
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser resetUid()
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser unsetUid()
+	 * @method \string fillUid()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser resetDateCreate()
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser set($fieldName, $value)
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser reset($fieldName)
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Sign\Internal\ServiceUser\ServiceUser wakeUp($data)
+	 */
+	class EO_ServiceUser {
+		/* @var \Bitrix\Sign\Internal\ServiceUser\ServiceUserTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\ServiceUser\ServiceUserTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Sign\Internal\ServiceUser {
+	/**
+	 * ServiceUserCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getUserIdList()
+	 * @method \string[] getUidList()
+	 * @method \string[] fillUid()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Sign\Internal\ServiceUser\ServiceUser $object)
+	 * @method bool has(\Bitrix\Sign\Internal\ServiceUser\ServiceUser $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser getByPrimary($primary)
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser[] getAll()
+	 * @method bool remove(\Bitrix\Sign\Internal\ServiceUser\ServiceUser $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection merge(?\Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_ServiceUser_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Sign\Internal\ServiceUser\ServiceUserTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\ServiceUser\ServiceUserTable';
+	}
+}
+namespace Bitrix\Sign\Internal\ServiceUser {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_ServiceUser_Result exec()
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser fetchObject()
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_ServiceUser_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser fetchObject()
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection fetchCollection()
+	 */
+	class EO_ServiceUser_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser createObject($setDefaultValues = true)
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection createCollection()
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser wakeUpObject($row)
+	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection wakeUpCollection($rows)
+	 */
+	class EO_ServiceUser_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Sign\Internal\Blank\ResourceTable:sign/lib/internal/blank/resourcetable.php */
+namespace Bitrix\Sign\Internal\Blank {
+	/**
+	 * Resource
+	 * @see \Bitrix\Sign\Internal\Blank\ResourceTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Sign\Internal\Blank\Resource setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getBlankId()
+	 * @method \Bitrix\Sign\Internal\Blank\Resource setBlankId(\int|\Bitrix\Main\DB\SqlExpression $blankId)
+	 * @method bool hasBlankId()
+	 * @method bool isBlankIdFilled()
+	 * @method bool isBlankIdChanged()
+	 * @method \int remindActualBlankId()
+	 * @method \int requireBlankId()
+	 * @method \Bitrix\Sign\Internal\Blank\Resource resetBlankId()
+	 * @method \Bitrix\Sign\Internal\Blank\Resource unsetBlankId()
+	 * @method \int fillBlankId()
+	 * @method \int getFileId()
+	 * @method \Bitrix\Sign\Internal\Blank\Resource setFileId(\int|\Bitrix\Main\DB\SqlExpression $fileId)
+	 * @method bool hasFileId()
+	 * @method bool isFileIdFilled()
+	 * @method bool isFileIdChanged()
+	 * @method \int remindActualFileId()
+	 * @method \int requireFileId()
+	 * @method \Bitrix\Sign\Internal\Blank\Resource resetFileId()
+	 * @method \Bitrix\Sign\Internal\Blank\Resource unsetFileId()
+	 * @method \int fillFileId()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Sign\Internal\Blank\Resource set($fieldName, $value)
+	 * @method \Bitrix\Sign\Internal\Blank\Resource reset($fieldName)
+	 * @method \Bitrix\Sign\Internal\Blank\Resource unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Sign\Internal\Blank\Resource wakeUp($data)
+	 */
+	class EO_Resource {
+		/* @var \Bitrix\Sign\Internal\Blank\ResourceTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\Blank\ResourceTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Sign\Internal\Blank {
+	/**
+	 * ResourceCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getBlankIdList()
+	 * @method \int[] fillBlankId()
+	 * @method \int[] getFileIdList()
+	 * @method \int[] fillFileId()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Sign\Internal\Blank\Resource $object)
+	 * @method bool has(\Bitrix\Sign\Internal\Blank\Resource $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Sign\Internal\Blank\Resource getByPrimary($primary)
+	 * @method \Bitrix\Sign\Internal\Blank\Resource[] getAll()
+	 * @method bool remove(\Bitrix\Sign\Internal\Blank\Resource $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Sign\Internal\Blank\ResourceCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Sign\Internal\Blank\Resource current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Sign\Internal\Blank\ResourceCollection merge(?\Bitrix\Sign\Internal\Blank\ResourceCollection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Resource_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Sign\Internal\Blank\ResourceTable */
+		static public $dataClass = '\Bitrix\Sign\Internal\Blank\ResourceTable';
+	}
+}
+namespace Bitrix\Sign\Internal\Blank {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Resource_Result exec()
+	 * @method \Bitrix\Sign\Internal\Blank\Resource fetchObject()
+	 * @method \Bitrix\Sign\Internal\Blank\ResourceCollection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Resource_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Sign\Internal\Blank\Resource fetchObject()
+	 * @method \Bitrix\Sign\Internal\Blank\ResourceCollection fetchCollection()
+	 */
+	class EO_Resource_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Sign\Internal\Blank\Resource createObject($setDefaultValues = true)
+	 * @method \Bitrix\Sign\Internal\Blank\ResourceCollection createCollection()
+	 * @method \Bitrix\Sign\Internal\Blank\Resource wakeUpObject($row)
+	 * @method \Bitrix\Sign\Internal\Blank\ResourceCollection wakeUpCollection($rows)
+	 */
+	class EO_Resource_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Sign\Internal\LegalLog\LegalLogTable:sign/lib/internal/legallog/legallogtable.php */
 namespace Bitrix\Sign\Internal\LegalLog {
@@ -2335,149 +2691,7 @@ namespace Bitrix\Sign\Internal\LegalLog {
 	 */
 	class EO_LegalLog_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Sign\Internal\ServiceUser\ServiceUserTable:sign/lib/internal/serviceuser/serviceusertable.php */
-namespace Bitrix\Sign\Internal\ServiceUser {
-	/**
-	 * ServiceUser
-	 * @see \Bitrix\Sign\Internal\ServiceUser\ServiceUserTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getUserId()
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \string getUid()
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser setUid(\string|\Bitrix\Main\DB\SqlExpression $uid)
-	 * @method bool hasUid()
-	 * @method bool isUidFilled()
-	 * @method bool isUidChanged()
-	 * @method \string remindActualUid()
-	 * @method \string requireUid()
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser resetUid()
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser unsetUid()
-	 * @method \string fillUid()
-	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
-	 * @method bool hasDateCreate()
-	 * @method bool isDateCreateFilled()
-	 * @method bool isDateCreateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser resetDateCreate()
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser unsetDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser set($fieldName, $value)
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser reset($fieldName)
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Sign\Internal\ServiceUser\ServiceUser wakeUp($data)
-	 */
-	class EO_ServiceUser {
-		/* @var \Bitrix\Sign\Internal\ServiceUser\ServiceUserTable */
-		static public $dataClass = '\Bitrix\Sign\Internal\ServiceUser\ServiceUserTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Sign\Internal\ServiceUser {
-	/**
-	 * ServiceUserCollection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getUserIdList()
-	 * @method \string[] getUidList()
-	 * @method \string[] fillUid()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Sign\Internal\ServiceUser\ServiceUser $object)
-	 * @method bool has(\Bitrix\Sign\Internal\ServiceUser\ServiceUser $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser getByPrimary($primary)
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser[] getAll()
-	 * @method bool remove(\Bitrix\Sign\Internal\ServiceUser\ServiceUser $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection merge(?\Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection $collection)
-	 * @method bool isEmpty()
-	 */
-	class EO_ServiceUser_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Sign\Internal\ServiceUser\ServiceUserTable */
-		static public $dataClass = '\Bitrix\Sign\Internal\ServiceUser\ServiceUserTable';
-	}
-}
-namespace Bitrix\Sign\Internal\ServiceUser {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_ServiceUser_Result exec()
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser fetchObject()
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_ServiceUser_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser fetchObject()
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection fetchCollection()
-	 */
-	class EO_ServiceUser_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser createObject($setDefaultValues = true)
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection createCollection()
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUser wakeUpObject($row)
-	 * @method \Bitrix\Sign\Internal\ServiceUser\ServiceUserCollection wakeUpCollection($rows)
-	 */
-	class EO_ServiceUser_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Sign\Model\SignDocumentGeneratorBlankTable:sign/lib/Model/SignDocumentGeneratorBlankTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Sign\Model\SignDocumentGeneratorBlankTable:sign/lib/model/signdocumentgeneratorblanktable.php */
 namespace Bitrix\Sign\Model {
 	/**
 	 * SignDocumentGeneratorBlank
@@ -2643,7 +2857,7 @@ namespace Bitrix\Sign\Model {
 	 */
 	class EO_SignDocumentGeneratorBlank_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Sign\Model\DocumentRequiredFieldTable:sign/lib/Model/DocumentRequiredFieldTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Sign\Model\DocumentRequiredFieldTable:sign/lib/model/documentrequiredfieldtable.php */
 namespace Bitrix\Sign\Model {
 	/**
 	 * EO_DocumentRequiredField

@@ -10,7 +10,7 @@ class PermissionModel
 		private string $field,
 		private ?string $filedValue,
 		private ?string $attribute = null,
-		private array $settings = [],
+		private ?array $settings = null,
 	)
 	{
 	}
@@ -40,7 +40,7 @@ class PermissionModel
 		return $this->attribute;
 	}
 
-	public function settings(): array
+	public function settings(): ?array
 	{
 		return $this->settings;
 	}

@@ -3,7 +3,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage intranet
- * @copyright 2001-2019 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
 
 namespace Bitrix\Intranet;
@@ -13,206 +13,20 @@ use Bitrix\Intranet\Counters\Counter;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\DB\SqlExpression;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ModuleManager;
-use Bitrix\Main\Entity\ExpressionField;
-use Bitrix\Main\ORM\Fields\DatetimeField;
-use Bitrix\Main\ORM\Fields\Relations\ManyToMany;
 use Bitrix\Main\UI\EntitySelector\EntityUsageTable;
 use Bitrix\Main\ObjectPropertyException;
-use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UserAccessTable;
-
-/**
- * Class UserTable
- *
- * DO NOT WRITE ANYTHING BELOW THIS
- *
- * <<< ORMENTITYANNOTATION
- * @method static EO_User_Query query()
- * @method static EO_User_Result getByPrimary($primary, array $parameters = array())
- * @method static EO_User_Result getById($id)
- * @method static EO_User_Result getList(array $parameters = array())
- * @method static EO_User_Entity getEntity()
- * @method static \Bitrix\Intranet\EO_User createObject($setDefaultValues = true)
- * @method static \Bitrix\Intranet\EO_User_Collection createCollection()
- * @method static \Bitrix\Intranet\EO_User wakeUpObject($row)
- * @method static \Bitrix\Intranet\EO_User_Collection wakeUpCollection($rows)
- */
-class UserTable extends \Bitrix\Main\UserTable
-{
-	public static function postInitialize(\Bitrix\Main\ORM\Entity $entity)
-	{
-		parent::postInitialize($entity);
-
-		// add intranet user type expression
-		$conditionList = [];
-		$externalUserTypesUsed = [];
-
-		if (ModuleManager::isModuleInstalled('sale'))
-		{
-			$conditionList[] = [
-				'PATTERN' => 'EXTERNAL_AUTH_ID',
-				'VALUE' => "WHEN %s IN ('sale', 'saleanonymous', 'shop') THEN 'sale'"
-			];
-			$externalUserTypesUsed[] = 'sale';
-			$externalUserTypesUsed[] = 'saleanonymous';
-			$externalUserTypesUsed[] = 'shop';
-		}
-		if (ModuleManager::isModuleInstalled('imconnector'))
-		{
-			$conditionList[] = [
-				'PATTERN' => 'EXTERNAL_AUTH_ID',
-				'VALUE' => "WHEN %s = 'imconnector' THEN 'imconnector'"
-			];
-			$externalUserTypesUsed[] = 'imconnector';
-		}
-		if (ModuleManager::isModuleInstalled('im'))
-		{
-			$conditionList[] = [
-				'PATTERN' => 'EXTERNAL_AUTH_ID',
-				'VALUE' => "WHEN %s = 'bot' THEN 'bot'"
-			];
-			$externalUserTypesUsed[] = 'bot';
-		}
-		if (ModuleManager::isModuleInstalled('mail'))
-		{
-			$conditionList[] = [
-				'PATTERN' => 'EXTERNAL_AUTH_ID',
-				'VALUE' => "WHEN %s = 'email' THEN 'email'"
-			];
-			$externalUserTypesUsed[] = 'email';
-		}
-
-		$externalUserTypes = \Bitrix\Main\UserTable::getExternalUserTypes();
-		$externalUserTypesAdditional = array_diff($externalUserTypes, $externalUserTypesUsed);
-		if (!empty($externalUserTypesAdditional))
-		{
-			$sqlHelper = \Bitrix\Main\Application::getInstance()->getConnection()->getSqlHelper();
-			foreach($externalUserTypesAdditional as $externalAuthId)
-			{
-				$value = $sqlHelper->convertToDbText($externalAuthId);
-				$conditionList[] = [
-					'PATTERN' => 'EXTERNAL_AUTH_ID',
-					'VALUE' => "WHEN %s = ".$value." THEN ".$value.""
-				];
-			}
-		}
-
-		// duplicate for inner join
-		$conditionListInner = $conditionList;
-
-		$extranetUserType = (
-			ModuleManager::isModuleInstalled('extranet')
-				? 'extranet'
-				: 'shop'
-		);
-
-		$serializedValue = serialize([]);
-
-		$conditionList[] = [
-			'PATTERN' => 'UF_DEPARTMENT',
-			'VALUE' => "WHEN %s = '".$serializedValue."' THEN '".$extranetUserType."'"
-		];
-		$conditionList[] = [
-			'PATTERN' => 'UF_DEPARTMENT',
-			'VALUE' => "WHEN %s IS NULL THEN '".$extranetUserType."'"
-		];
-		$conditionListInner[] = [
-			'PATTERN' => 'UTS_OBJECT_INNER.UF_DEPARTMENT',
-			'VALUE' => "WHEN %s = '".$serializedValue."' THEN '".$extranetUserType."'"
-		];
-		$conditionListInner[] = [
-			'PATTERN' => 'UTS_OBJECT_INNER.UF_DEPARTMENT',
-			'VALUE' => "WHEN %s IS NULL THEN '".$extranetUserType."'"
-		];
-
-		// add USER_TYPE with left join
-		$condition = "CASE ";
-		$patternList = [];
-
-		foreach($conditionList as $conditionFields)
-		{
-			$condition .= ' '.$conditionFields['VALUE'].' ';
-			$patternList[] = $conditionFields['PATTERN'];
-		}
-		$condition .= "ELSE 'employee' END";
-
-		$entity->addField(new ExpressionField('USER_TYPE',
-			$condition,
-			$patternList
-		));
-
-		if (Loader::includeModule('socialnetwork'))
-		{
-			$entity->addField(new \Bitrix\Main\ORM\Fields\Relations\OneToMany('TAGS', \Bitrix\Socialnetwork\UserTagTable::class, 'USER'));
-		}
-
-		// add USER_TYPE with inner join
-		$condition = "CASE ";
-		$patternList = [];
-
-		foreach($conditionListInner as $conditionFields)
-		{
-			$condition .= ' '.$conditionFields['VALUE'].' ';
-			$patternList[] = $conditionFields['PATTERN'];
-		}
-		$condition .= "ELSE 'employee' END";
-
-		$entity->addField(new ExpressionField('USER_TYPE_INNER',
-			$condition,
-			$patternList
-		));
-
-		// add other fields
-		$entity->addField(new ExpressionField('USER_TYPE_IS_EMPLOYEE',
-			"CASE WHEN %s = 'employee' THEN 1 ELSE 0 END",
-			'USER_TYPE_INNER'
-		));
-
-		$entity->addField(
-			new \Bitrix\Main\ORM\Fields\Relations\Reference(
-				'INVITATION',
-				\Bitrix\Intranet\Internals\InvitationTable::class,
-				\Bitrix\Main\ORM\Query\Join::on('this.ID', 'ref.USER_ID')
-			)
-		);
-
-		$entity->addField(new DatetimeField('CHECKWORD_TIME'));
-
-		$entity->addField(new ExpressionField(
-			'INVITED_SORT',
-			"CASE WHEN %s = 'Y' AND %s <> '' THEN 0 ELSE 1 END",
-			['ACTIVE', 'CONFIRM_CODE']
-		));
-
-		$entity->addField(new ExpressionField(
-			'WAITING_CONFIRMATION_SORT',
-			"CASE WHEN %s = 'N' AND %s <> '' THEN 0 ELSE 1 END",
-			['ACTIVE', 'CONFIRM_CODE']
-		));
-
-		$entity->addField(
-			(new \Bitrix\Main\ORM\Fields\Relations\Reference(
-			'UG',
-			\Bitrix\Socialnetwork\UserToGroupTable::class,
-			\Bitrix\Main\ORM\Query\Join::on('this.ID', 'ref.USER_ID'))
-			)->configureJoinType(\Bitrix\Main\ORM\Query\Join::TYPE_INNER)
-		);
-	}
-
-	public static function createInvitedQuery(): Query
-	{
-		return static::query()->addFilter('!CONFIRM_CODE', false)->where('IS_REAL_USER', true);
-	}
-}
+use Bitrix\Socialnetwork\UserToGroupTable;
 
 class User
 {
 	private CurrentUser $currentUser;
 	private int $userId;
+
+	private static array $cacheFields = [];
+	private static array $cacheAdmin = [];
 
 	/**
 	 * @throws ArgumentOutOfRangeException
@@ -240,6 +54,14 @@ class User
 		}
 
 		return $this->hasDepartment();
+	}
+
+	public function isEmail(): bool
+	{
+		$fields = $this->getFields();
+
+		return array_key_exists('EXTERNAL_AUTH_ID', $fields)
+			&& $fields['EXTERNAL_AUTH_ID'] === 'email';
 	}
 
 	private function hasDepartment(): bool
@@ -276,29 +98,188 @@ class User
 
 	public function isAdmin(): bool
 	{
-		if (
-			isset($GLOBALS['USER'])
-			&& $GLOBALS['USER'] instanceof \CAllUser
-			&& $this->currentUser->getId() === $this->userId)
+		if (array_key_exists($this->userId, self::$cacheAdmin))
 		{
-			return (
-					Loader::includeModule('bitrix24')
-					&& \CBitrix24::IsPortalAdmin($this->userId)
-				)
-				|| $this->currentUser->isAdmin();
+			return self::$cacheAdmin[$this->userId];
 		}
-		else
-		{
-			$groupIds = (new \CUser())->GetUserGroup($this->userId);
 
-			return in_array(1, $groupIds);
+		if ($this->currentUser->getId() === $this->userId && $this->currentUser->isAdmin())
+		{
+			self::$cacheAdmin[$this->userId] = true;
+
+			return self::$cacheAdmin[$this->userId];
 		}
+
+		$groups = $this->getGroups();
+		if (
+			in_array(1, $groups)
+			||
+			Loader::includeModule('bitrix24')
+			&&
+			\CBitrix24::IsPortalAdmin($this->userId)
+		)
+		{
+			self::$cacheAdmin[$this->userId] = true;
+
+			return self::$cacheAdmin[$this->userId];
+		}
+
+		self::$cacheAdmin[$this->userId] = false;
+
+		return self::$cacheAdmin[$this->userId];
 	}
 
 	public function getFields(): array
 	{
+		if (array_key_exists($this->userId, self::$cacheFields))
+		{
+			return self::$cacheFields[$this->userId];
+		}
+
 		$result = \CUser::GetById($this->userId)->fetch();
-		return is_array($result) ? $result : [];
+		self::$cacheFields[$this->userId] = is_array($result) ? $result : [];
+
+		return self::$cacheFields[$this->userId];
+	}
+
+	protected function createFilterForInvitedExtranetUser(): array
+	{
+		$result = [];
+		if (
+			Loader::includeModule('extranet')
+			&& !$this->isExtranetAdmin()
+			&& Loader::includeModule('socialnetwork')
+		)
+		{
+			$workgroupIdList = [];
+			$res = UserToGroupTable::getList([
+				'filter' => [
+					'=USER_ID' => $this->getId(),
+					'@ROLE' => UserToGroupTable::getRolesMember(),
+					'=GROUP.ACTIVE' => 'Y'
+				],
+				'select' => [ 'GROUP_ID' ]
+			]);
+
+			while ($userToGroupFields = $res->fetch())
+			{
+				$workgroupIdList[] = $userToGroupFields['GROUP_ID'];
+			}
+			$workgroupIdList = array_unique($workgroupIdList);
+
+			if ($this->isIntranet())
+			{
+				if (!empty($workgroupIdList))
+				{
+					$subQuery = new \Bitrix\Main\Entity\Query(UserToGroupTable::getEntity());
+					$subQuery->addSelect('USER_ID');
+					$subQuery->addFilter('@ROLE', [UserToGroupTable::ROLE_REQUEST, UserToGroupTable::ROLE_USER]);
+					$subQuery->addFilter('@GROUP_ID', $workgroupIdList);
+					$subQuery->addGroup('USER_ID');
+
+					$result[] = [
+						'LOGIC' => 'OR',
+						[
+							'!UF_DEPARTMENT' => false
+						],
+						[
+							'@ID' => new SqlExpression($subQuery->getQuery())
+						],
+					];
+				}
+				else
+				{
+					$result[] = ['!UF_DEPARTMENT' => false];
+				}
+			}
+			else
+			{
+				$publicUserIdList = [];
+				$userTypeFilter = [
+					'ENTITY_ID' => \Bitrix\Main\UserTable::getUfId(),
+					'FIELD_NAME' => 'UF_PUBLIC'
+				];
+
+				$userTypeResult = \CUserTypeEntity::GetList([], $userTypeFilter);
+				if ($userTypeResult->Fetch())
+				{
+					$res = \Bitrix\Main\UserTable::getList([
+						'filter' => [
+							'!UF_DEPARTMENT' => false,
+							'=UF_PUBLIC' => true,
+						],
+						'select' => [ 'ID' ]
+					]);
+
+					while($userFields = $res->fetch())
+					{
+						$publicUserIdList[] = (int)$userFields['ID'];
+					}
+				}
+
+				if (
+					empty($workgroupIdList)
+					&& empty($publicUserIdList)
+				)
+				{
+					$result[] = ['ID' => $this->getId()];
+				}
+				else if (!empty($workgroupIdList))
+				{
+					if (!empty($publicUserIdList))
+					{
+						$result[] = [
+							'LOGIC' => 'OR',
+							[
+								'<=UG.ROLE' => UserToGroupTable::ROLE_USER,
+								'@UG.GROUP_ID' => $workgroupIdList
+							],
+							[
+								'@ID' => $publicUserIdList
+							],
+						];
+					}
+					else
+					{
+						$result[] = ['<=UG.ROLE' => UserToGroupTable::ROLE_USER];
+						$result[] = ['@UG.GROUP_ID' => $workgroupIdList];
+					}
+				}
+				else
+				{
+					$result[] = ['@ID' => $publicUserIdList];
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	protected function isExtranetAdmin(): bool
+	{
+		if(!Loader::includeModule('extranet'))
+		{
+			return false;
+		}
+
+		$arGroups = (new \CUser())->GetUserGroup($this->getId());
+		$iExtGroups = \CExtranet::GetExtranetUserGroupID();
+
+		$arSubGroups = \CGroup::GetSubordinateGroups($arGroups) ?? [];
+		if (in_array($iExtGroups, $arSubGroups))
+		{
+			return true;
+		}
+
+		if (
+			Loader::includeModule('socialnetwork')
+			&& \CSocNetUser::IsUserModuleAdmin($this->getId())
+		)
+		{
+			return true;
+		}
+
+		return false;
 	}
 
 	public function numberOfInvitationsSent(): int
@@ -308,6 +289,11 @@ class User
 		if (!$this->isAdmin())
 		{
 			$query->addFilter('INVITATION.ORIGINATOR_ID', $this->userId);
+			$extFilter = $this->createFilterForInvitedExtranetUser();
+			if (!empty($extFilter))
+			{
+				$query->addFilter(null, $extFilter);
+			}
 		}
 
 		return $query->queryCountTotal();
@@ -406,5 +392,16 @@ class User
 	public function getWaitConfirmationCounterValue(): int
 	{
 		return (new Counter(Invitation::getWaitConfirmationCounterId()))->getValue($this);
+	}
+
+	private function getGroups(): array
+	{
+		global $USER;
+
+		$groups = ($USER instanceof \CUser && $USER->GetID() === $this->userId)
+			? $USER->GetUserGroupArray() : \CUser::GetUserGroup($this->userId)
+		;
+
+		return array_map('intval', is_array($groups) ? $groups : []);
 	}
 }

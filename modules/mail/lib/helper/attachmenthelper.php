@@ -10,6 +10,7 @@ use Bitrix\Mail\MailMessageUidTable;
 use Bitrix\Mail\Imap;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
+use Bitrix\Main\Web\MimeType;
 
 class AttachmentStructure
 {
@@ -30,6 +31,7 @@ class AttachmentStructure
 class MessageStructure
 {
 	public function __construct(
+		public int $mailboxId,
 		public string $dirPath,
 		public string $uid,
 		public int $id,
@@ -116,7 +118,7 @@ class AttachmentHelper
 
 			if (!is_null($dir))
 			{
-				$this->message = new MessageStructure($dir['PATH'], $message['MSG_UID'], (int) $message['MESSAGE_ID']);
+				$this->message = new MessageStructure($mailboxId, $dir['PATH'], $message['MSG_UID'], (int) $message['MESSAGE_ID']);
 			}
 		}
 
@@ -136,6 +138,21 @@ class AttachmentHelper
 		return new Imap\BodyStructure($structure['BODYSTRUCTURE']);
 	}
 
+	public static function generateFileName(int $mailboxId, int $messageId, int $attachmentIndex, ?string $attachmentType): string
+	{
+		$fileName = $mailboxId . '-' . $messageId . '-' . $attachmentIndex;
+
+		// @TODO: replace with "\Bitrix\Main\Web\MimeType::getExtensionByMimeType" when it comes out
+		$extension = array_search($attachmentType, MimeType::getMimeTypeList(), true);
+
+		if ($extension)
+		{
+			$fileName .= '.' . $extension;
+		}
+
+		return $fileName;
+	}
+
 	/**
 	 * @param MessageStructure $messageStructure
 	 * @return AttachmentStructure[]
@@ -153,12 +170,16 @@ class AttachmentHelper
 		$parts = $this->downloadMessageParts($messageStructure->dirPath, $messageStructure->uid, $bodyStructure, self::MESSAGE_PARTS_ATTACHMENT);
 
 		$bodyStructure->traverse(
-			function (Imap\BodyStructure $item) use (&$parts, &$attachments)
+			function (Imap\BodyStructure $item) use (&$parts, &$attachments, $messageStructure)
 			{
+				static $attachmentIndex = 0;
+
 				if ($item->isMultipart() || $item->isBodyText())
 				{
 					return;
 				}
+
+				$attachmentIndex++;
 
 				$attachment = \CMailMessage::decodeMessageBody(
 					\CMailMessage::parseHeader(
@@ -169,8 +190,15 @@ class AttachmentHelper
 					self::MAILBOX_ENCODING,
 				);
 
+				$fileName = $attachment['FILENAME'];
+
+				if (is_null($fileName))
+				{
+					$fileName = self::generateFileName($messageStructure->mailboxId, $messageStructure->id, $attachmentIndex, $attachment['CONTENT-TYPE']);
+				}
+
 				$attachments[] = new AttachmentStructure(
-					$attachment['FILENAME'],
+					$fileName,
 					strlen($attachment['BODY']),
 					mb_strtolower($attachment['CONTENT-TYPE']),
 					$attachment['BODY'],

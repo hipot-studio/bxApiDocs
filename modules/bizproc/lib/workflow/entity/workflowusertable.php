@@ -216,6 +216,7 @@ class WorkflowUserTable extends DataManager
 			]);
 		}
 
+		WorkflowUserCommentTable::deleteUsersByWorkflow($deleted, $workflowId);
 		WorkflowPush::pushDeleted($workflowId, $deleted);
 	}
 

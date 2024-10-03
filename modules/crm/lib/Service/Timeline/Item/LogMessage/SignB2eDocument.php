@@ -81,6 +81,7 @@ class SignB2eDocument extends LogMessage
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MEMBER_STOPPED_BY_ASSIGNEE => $this->getChannelIcon(),
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MEMBER_STOPPED_BY_REVIEWER => $this->getChannelIcon(),
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MEMBER_STOPPED_BY_EDITOR => $this->getChannelIcon(),
+			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_CONFIGURATION_ERROR => Icon::ATTENTION,
 			default => Icon::INFO,
 		};
 	}
@@ -110,6 +111,7 @@ class SignB2eDocument extends LogMessage
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MEMBER_STOPPED_BY_ASSIGNEE,
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MEMBER_STOPPED_BY_REVIEWER,
 			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_MEMBER_STOPPED_BY_EDITOR => Loc::getMessage('CRM_SERVICE_TIMELINE_LAYOUT_SIGNB2EDOCUMENT_EMPLOYEE_STOPPED'),
+			Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_CONFIGURATION_ERROR => Loc::getMessage('CRM_SERVICE_TIMELINE_LAYOUT_SIGNB2EDOCUMENT_CONFIGURE_ERROR_TITLE'),
 			default => null,
 		};
 	}
@@ -122,6 +124,13 @@ class SignB2eDocument extends LogMessage
 		if (!$document)
 		{
 			return $blocks;
+		}
+
+		if ($this->model->getTypeCategoryId() === Timeline\SignB2eDocument\Entry::TYPE_CATEGORY_CONFIGURATION_ERROR)
+		{
+			return array_filter([
+				'error' => $this->getErrorContentBlock()
+			]);
 		}
 
 		if ($this->isNeedDocumentNameBlock())
@@ -530,6 +539,20 @@ class SignB2eDocument extends LogMessage
 			Timeline\SignDocument\Channel::TYPE_SMS => Icon::SMS,
 			default => Icon::IM,
 		};
+	}
+
+	private function getErrorContentBlock(): ?Layout\Body\ContentBlock
+	{
+		$messageData = $this->loadMessageData();
+		if (!$messageData || empty($messageData->getError()?->getMessage()))
+		{
+			return null;
+		}
+
+		return (new Layout\Body\ContentBlock\Text())
+			->setValue($messageData->getError()?->getMessage())
+			->setIsMultiline()
+		;
 	}
 
 }

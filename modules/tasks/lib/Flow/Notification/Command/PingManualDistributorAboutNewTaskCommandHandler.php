@@ -2,7 +2,6 @@
 
 namespace Bitrix\Tasks\Flow\Notification\Command;
 
-use Bitrix\Tasks\Comments\Task\CommentPoster;
 use Bitrix\Tasks\Flow\Flow;
 use Bitrix\Tasks\Flow\FlowRegistry;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
@@ -33,9 +32,6 @@ class PingManualDistributorAboutNewTaskCommandHandler
 			return;
 		}
 
-		CommentPoster::getInstance($task->getId(), $task->getCreatedBy())
-			->postCommentOnTaskAddToFlowWithManualDistribution($task, $flow)
-		;
 		(new \Bitrix\Tasks\Internals\Notification\Controller())
 			->onTaskAddedToFlowWithManualDistribution($task, $flow)
 			->push()

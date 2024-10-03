@@ -6,9 +6,9 @@ use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TemplateAccessController;
-use Bitrix\Tasks\AnalyticLogger;
 use Bitrix\Tasks\CheckList\CheckListFacade;
 use Bitrix\Tasks\CheckList\Internals\CheckList;
+use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Internals\Task\Template\CheckList\MemberTable;
 use Bitrix\Tasks\Internals\Task\Template\CheckListTable;
 use Bitrix\Tasks\Item\Task\Template;
@@ -108,13 +108,12 @@ class TemplateCheckListFacade extends CheckListFacade
 	 * @throws NotImplementedException
 	 * @throws SystemException
 	 */
-	public static function getItemsForEntity($templateId, $userId, bool $skipAccessCheck = false): array
+	public static function getItemsForEntity($templateId, $userId): array
 	{
 		$items = [];
 		$template = new Template($templateId, $userId);
 
-		$canRead = $skipAccessCheck
-			|| TemplateAccessController::can(
+		$canRead = TemplateAccessController::can(
 				(int)$userId,
 				ActionDictionary::ACTION_TEMPLATE_READ,
 				(int)$templateId
@@ -218,7 +217,7 @@ class TemplateCheckListFacade extends CheckListFacade
 					$label = $value;
 				}
 
-				AnalyticLogger::logToFile($action, $tag, $label);
+				Analytics::getInstance()->logToFile($action, $tag, $label);
 			}
 		}
 	}

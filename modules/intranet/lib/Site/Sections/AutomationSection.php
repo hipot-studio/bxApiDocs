@@ -15,6 +15,9 @@ use Bitrix\Sign;
 
 class AutomationSection
 {
+	private const WORKFLOW_COUNTER_CODE = 'bp_workflow';
+	private const TASK_COUNTER_CODE = 'bp_tasks';
+
 	private static array $items;
 	private static array $bpSubMenu;
 
@@ -65,6 +68,8 @@ class AutomationSection
 			array_column($subMenu, 1)
 		);
 
+		$counterId = self::getCounterCode();
+
 		return [
 			'id' => 'bizproc',
 			'title' => Loc::getMessage('AUTOMATION_SECTION_BIZPROC_ITEM_TITLE'),
@@ -74,7 +79,7 @@ class AutomationSection
 			'iconClass' => 'ui-icon intranet-automation-bp-icon',
 			'menuData' => [
 				'real_link' => $urls[0] ?? (SITE_DIR . 'company/personal/bizproc/'),
-				'counter_id' => 'bp_tasks',
+				'counter_id' => $counterId,
 				'menu_item_id' => self::MENU_ITEMS_ID['bizproc_automation'],
 				'top_menu_id' => 'top_menu_id_bizproc',
 			],
@@ -96,7 +101,8 @@ class AutomationSection
 		);
 
 		$userId = \Bitrix\Main\Engine\CurrentUser::get()->getId();
-		$tasksCount = (int)\CUserCounter::getValue($userId, 'bp_tasks');
+		$counterId = self::getCounterCode();
+		$counter = (int)\CUserCounter::getValue($userId, $counterId);
 		$menu = [];
 
 		$menu[] = [
@@ -104,8 +110,8 @@ class AutomationSection
 			SITE_DIR . 'bizproc/userprocesses/',
 			[],
 			[
-				'counter_id' => 'bp_tasks',
-				'counter_num' => $tasksCount,
+				'counter_id' => $counterId,
+				'counter_num' => $counter,
 				'menu_item_id' => 'menu_processes_and_tasks',
 			],
 		];
@@ -700,6 +706,8 @@ class AutomationSection
 			}
 		}
 
+		$counterId = self::getCounterCode();
+
 		return [
 			Loc::getMessage('AUTOMATION_SECTION_ROOT_ITEM_TITLE'),
 			static::getPath(),
@@ -707,10 +715,20 @@ class AutomationSection
 			[
 				'menu_item_id' => 'menu_automation',
 				'top_menu_id' => 'top_menu_id_automation',
-				'counter_id' => 'bp_tasks',
+				'counter_id' => $counterId,
 				'first_item_url' => $firstItemUrl,
 			],
 			'',
 		];
+	}
+
+	private static function getCounterCode(): string
+	{
+		if (Loader::includeModule('bizproc') && class_exists('\Bitrix\Bizproc\Workflow\WorkflowUserCounters'))
+		{
+			return self::WORKFLOW_COUNTER_CODE;
+		}
+
+		return self::TASK_COUNTER_CODE;
 	}
 }

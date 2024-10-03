@@ -16,7 +16,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
-use Bitrix\Bitrix24;
+use Bitrix\BIConnector;
 use Bitrix\BIConnector\Controller;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -57,48 +57,6 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 			[$template, $variables] = $this->processSefMode($templateUrls);
 		}
 
-		if (Loader::includeModule('bitrix24'))
-		{
-			if (!\Bitrix\Bitrix24\Feature::isFeatureEnabled('bi_constructor'))
-			{
-				if (SupersetInitializer::isSupersetExist())
-				{
-					$this->initDeleteButton();
-				}
-				$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_TARIFF_ERROR');
-				$this->arResult['FEATURE_AVAILABLE'] = false;
-				$this->arResult['HELPER_CODE'] = 'limit_crm_BI_constructor';
-				$this->includeComponentTemplate($template);
-
-				return;
-			}
-
-			if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED)
-			{
-				$this->arResult['CAN_CREATE'] = Bitrix24\CurrentUser::get()->isAdmin();
-
-				$cleanTimestamp = (int)\Bitrix\Main\Config\Option::get('biconnector', Controller\Superset::SUPERSET_CLEAN_TIMESTAMP_OPTION, 0);
-				$day = 60 * 60 * 24;
-				$this->arResult['IS_ENABLE_TIME_REACHED'] = time() > ($cleanTimestamp + $day);
-				$this->arResult['ENABLE_DATE'] = \Bitrix\Main\Type\DateTime::createFromTimestamp($cleanTimestamp + $day)->toString();
-				$this->includeComponentTemplate('create_superset');
-
-				return;
-			}
-		}
-		else
-		{
-			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_BOX_ERROR');
-			$this->includeComponentTemplate($template);
-
-			return;
-		}
-
-		if (SupersetInitializer::isSupersetReady())
-		{
-			(new Synchronizer(CurrentUser::get()->getId()))->sync();
-		}
-
 		$this->arResult['VARIABLES'] = $variables;
 
 		$this->arResult['CAN_SEND_STARTUP_METRIC'] = self::canSendStartupSupersetMetric();
@@ -108,9 +66,36 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 		$this->arResult['TOOLS_AVAILABLE'] = true;
 		$this->arResult['HELPER_CODE'] = null;
 
+		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED)
+		{
+			$this->arResult['CAN_CREATE'] = BIConnector\Manager::isAdmin();
+
+			$AvailableToEnableTimestamp = SupersetInitializer::getAvailableToEnableSupersetTimestamp();
+			$this->arResult['IS_ENABLE_TIME_REACHED'] = time() > $AvailableToEnableTimestamp;
+			$this->arResult['ENABLE_DATE'] = \Bitrix\Main\Type\DateTime::createFromTimestamp($AvailableToEnableTimestamp)->toString();
+			$this->includeComponentTemplate('create_superset');
+
+			return;
+		}
+
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_ACCESS))
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_PERMISSION_ERROR');
+			$this->includeComponentTemplate($template);
+
+			return;
+		}
+
+		if (Loader::includeModule('bitrix24') && !\Bitrix\Bitrix24\Feature::isFeatureEnabled('bi_constructor'))
+		{
+			if (SupersetInitializer::isSupersetExist())
+			{
+				$this->initDeleteButton();
+			}
+
+			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_TARIFF_ERROR');
+			$this->arResult['FEATURE_AVAILABLE'] = false;
+			$this->arResult['HELPER_CODE'] = 'limit_crm_BI_constructor';
 			$this->includeComponentTemplate($template);
 
 			return;
@@ -124,6 +109,11 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_PERMISSION_ERROR');
 			$this->arResult['TOOLS_AVAILABLE'] = false;
 			$this->arResult['HELPER_CODE'] = 'limit_BI_off';
+		}
+
+		if (SupersetInitializer::isSupersetReady())
+		{
+			(new Synchronizer(CurrentUser::get()->getId()))->sync();
 		}
 
 		if (!DashboardOwner::isFinished())

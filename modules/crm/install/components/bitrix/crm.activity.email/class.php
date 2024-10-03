@@ -661,6 +661,11 @@ class CrmActivityEmailComponent extends CBitrixComponent
 					{
 						$result[] = $address->getEmail();
 					}
+
+					if ($field === 'from')
+					{
+						$activityEmailMeta['senderName'] = $address->getName();
+					}
 				}
 
 				$activityEmailMeta[$field] = $result;
@@ -709,7 +714,7 @@ class CrmActivityEmailComponent extends CBitrixComponent
 			{
 				$activity['ITEM_IMAGE'] = $author['IMAGE_URL'];
 
-				$activity['ITEM_FROM_TITLE'] = $author['NAME_FORMATTED'] ?: $activityEmailMeta['__email'];
+				$activity['ITEM_FROM_TITLE'] = $activityEmailMeta['senderName'] ?? $author['NAME_FORMATTED'] ?? $activityEmailMeta['__email'];
 				$activity['ITEM_FROM_EMAIL'] = $activityEmailMeta['__email'] != $activity['ITEM_FROM_TITLE']
 					? $activityEmailMeta['__email'] : null;
 				$activity['ITEM_FROM_URL']   = null;

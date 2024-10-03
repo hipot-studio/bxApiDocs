@@ -212,7 +212,7 @@ class Collection extends Dictionary
 
 	public function updateOne(array $conditions, $data)
 	{
-		return $this->update($conditions, $data, 1);
+		$this->update($conditions, $data, 1);
 	}
 
 	/**

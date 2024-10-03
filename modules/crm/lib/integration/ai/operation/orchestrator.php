@@ -332,7 +332,7 @@ final class Orchestrator
 					'@' . Item::FIELD_NAME_ID => $filteredBindings[$entityTypeId],
 				],
 				'order' => [
-					Item::FIELD_NAME_CREATED_TIME => 'DESC',
+					Item::FIELD_NAME_ID => 'DESC',
 				],
 				'limit' => 1,
 			]);

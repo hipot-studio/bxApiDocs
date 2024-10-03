@@ -2,6 +2,8 @@
 
 namespace Bitrix\Sign\Type;
 
+use Bitrix\Sign\Item;
+
 final class DocumentScenario
 {
 	public const SCENARIO_TYPE_B2B = 'b2b';
@@ -69,6 +71,11 @@ final class DocumentScenario
 			self::DSS_ONE_PARTY_MANY_MEMBERS,
 			self::DSS_SECOND_PARTY_MANY_MEMBERS,
 		];
+	}
+
+	public static function isB2eScenarioByDocument(?Item\Document $document): bool
+	{
+		return self::isB2eScenario($document?->scenario);
 	}
 
 	/**

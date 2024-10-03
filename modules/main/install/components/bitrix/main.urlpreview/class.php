@@ -1,7 +1,6 @@
 <?php
 
 use Bitrix\Main;
-use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UrlPreview\UrlMetadataTable;

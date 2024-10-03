@@ -2,8 +2,8 @@
 namespace Bitrix\Tasks\Integration\Bizproc\Automation;
 
 use Bitrix\Bizproc;
-use Bitrix\Bitrix24\Feature;
 use Bitrix\Tasks\Flow\FlowFeature;
+use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Integration\Bitrix24\FeatureDictionary;
 use Bitrix\Main\Loader;
 use Bitrix\Main\NotSupportedException;
@@ -217,7 +217,7 @@ class Factory
 		if ($enabled === null)
 		{
 			$enabled = Loader::includeModule('bitrix24')
-				? Feature::isFeatureEnabled(FeatureDictionary::TASKS_AUTOMATION)
+				? Bitrix24::checkFeatureEnabled(FeatureDictionary::TASK_ROBOTS)
 				: true;
 		}
 

@@ -323,12 +323,13 @@ function GetUrlFromArray($arr)
 
 function ShowAddFavorite($filterName=false, $btnName="set_filter", $module="statistic", $alt=false)
 {
-	global $QUERY_STRING, $SCRIPT_NAME, $sFilterID;
+	global $sFilterID;
+
 	if ($alt===false)
 		$alt=GetMessage("MAIN_ADD_TO_FAVORITES");
 	if ($filterName===false)
 		$filterName = $sFilterID;
-	$url = urlencode($SCRIPT_NAME."?".$QUERY_STRING. GetUrlFromArray(Application::getInstance()->getSession()["SESS_ADMIN"][$filterName])."&".$btnName."=Y");
+	$url = urlencode($_SERVER['SCRIPT_NAME'] . "?" . $_SERVER["QUERY_STRING"] . GetUrlFromArray(Application::getInstance()->getSession()["SESS_ADMIN"][$filterName])."&".$btnName."=Y");
 	$str = "<a target='_blank' href='".BX_ROOT."/admin/favorite_edit.php?lang=".LANG."&module=$module&url=$url'><img alt='".$alt."' src='".BX_ROOT."/images/main/add_favorite.gif' width='16' height='16' border=0></a>";
 	echo $str;
 }
@@ -367,8 +368,10 @@ function ShowFilterLogicHelp()
 function ShowLogicRadioBtn($FilterLogic="FILTER_logic")
 {
 	global $$FilterLogic;
+
 	$s_and = "checked";
-	if ($$FilterLogic=="or")
+	$s_or = '';
+	if ($$FilterLogic == "or")
 	{
 		$s_or = "checked";
 		$s_and = "";
@@ -583,7 +586,7 @@ function EndFilter($sID="")
 	return $s;
 }
 
-function BeginNote($sParams="")
+function BeginNote($sParams = '', $sMessParams = '')
 {
 	if (defined("PUBLIC_MODE") && PUBLIC_MODE == 1)
 	{
@@ -592,7 +595,7 @@ function BeginNote($sParams="")
 	}
 	else
 	{
-		return '<div class="adm-info-message-wrap" '.$sParams.'><div class="adm-info-message">';
+		return '<div class="adm-info-message-wrap" '.$sParams.'><div class="adm-info-message" '.$sMessParams.'>';
 	}
 }
 function EndNote()

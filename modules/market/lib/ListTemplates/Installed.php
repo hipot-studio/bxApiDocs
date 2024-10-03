@@ -11,9 +11,9 @@ use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Market\Application\Action;
 use Bitrix\Market\Application\License;
 use Bitrix\Market\Application\Versions;
-use Bitrix\Market\NumberApps;
 use Bitrix\Market\Rest\Actions;
 use Bitrix\Market\Rest\Transport;
+use Bitrix\Market\Toolbar;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Marketplace\Client;
@@ -190,12 +190,9 @@ class Installed extends BaseTemplate
 
 	private function setAdditionalInfo($response)
 	{
-		$this->result['TOTAL_APPS'] = NumberApps::get($response);
-		$this->result['SHOW_MARKET_ICON'] = $response['SHOW_MARKET_ICON'];
-		$this->result['ADDITIONAL_CONTENT'] = $response['ADDITIONAL_CONTENT'] ?? '';
-		$this->result['ADDITIONAL_MARKET_ACTION'] = $response['ADDITIONAL_MARKET_ACTION'] ?? '';
-		$this->result['ADDITIONAL_SEARCH_ACTION'] = $response['ADDITIONAL_SEARCH_ACTION'] ?? '';
-		$this->result['ADDITIONAL_HIT_ACTION'] = $response['ADDITIONAL_HIT_ACTION'] ?? '';
+		if (is_array($response)) {
+			$this->result = array_merge($this->result, Toolbar::getTotalAppsInfo($response));
+		}
 	}
 
 	private function getFilterTags(): array

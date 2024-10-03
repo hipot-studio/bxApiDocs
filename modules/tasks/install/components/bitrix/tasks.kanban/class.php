@@ -10,6 +10,7 @@ use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Errorable;
 use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\Config\Option;
+use Bitrix\Main\Type\Collection;
 use \Bitrix\Main\Type\DateTime;
 use \Bitrix\Main\Error;
 use \Bitrix\Main\Loader;
@@ -29,7 +30,7 @@ use Bitrix\Tasks\Internals\TaskTable;
 use \Bitrix\Tasks\Kanban\StagesTable;
 use \Bitrix\Tasks\Kanban\TaskStageTable;
 use \Bitrix\Tasks\Kanban\TimeLineTable;
-use \Bitrix\Tasks\ProjectsTable;
+use Bitrix\Tasks\Kanban\ProjectsTable;
 use \Bitrix\Tasks\Helper\Filter;
 use Bitrix\Tasks\Internals\Counter;
 use \Bitrix\Tasks\Internals\Task;
@@ -1083,7 +1084,8 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 	{
 		$deadline = new Bitrix\Tasks\Grid\Task\Row\Content\Date\Deadline($taskData);
 
-		$value = $deadline->formatDate($taskData['DEADLINE']);
+		$rawValue = $deadline->formatDate($taskData['DEADLINE']);
+		$value = $rawValue;
 		$color = '';
 		$fill = false;
 
@@ -1096,6 +1098,7 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 		}
 
 		return [
+			'rawValue' => $rawValue,
 			'value' => $value,
 			'color' => $color,
 			'fill' => $fill,
@@ -1513,13 +1516,29 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 		return $stages;
 	}
 
+	protected function getTasksByStages(int ...$stageIds): array
+	{
+		if ([] === $stageIds)
+		{
+			return [];
+		}
+
+		$stages = StagesTable::query()
+			->setSelect(['*']) // compatability
+			->whereIn('ID', $stageIds)
+			->exec()
+			->fetchAll();
+
+		return $this->getData(stages: $stages);
+	}
+
 	/**
 	 * Base method for getting data.
 	 * @param array $additionalFilter Additional filter.
 	 * @param bool $skipCommonFilter Skip merge with common filter.
 	 * @return array
 	 */
-	protected function getData(array $additionalFilter = [], $skipCommonFilter = false)
+	protected function getData(array $additionalFilter = [], $skipCommonFilter = false, array $stages = [])
 	{
 		$items = [];
 		$filteredStages = [];
@@ -1560,8 +1579,10 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 
 		$listParams['MAKE_ACCESS_FILTER'] = true;
 
+		$stages = [] === $stages ? StagesTable::getStages($this->arParams['STAGES_ENTITY_ID']) : $stages;
+
 		// get tasks by stages
-		foreach (StagesTable::getStages($this->arParams['STAGES_ENTITY_ID']) as $column)
+		foreach ($stages as $column)
 		{
 			$stageId = StagesTable::getStageIdByCode(
 				$column['ID'],
@@ -2287,12 +2308,14 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 		$this->arResult['MANDATORY_EXISTS'] = $this->mandatoryExists();
 
 		// if all right, get data
-		if ($this->checkViews() && $init)
+		if ($init && $this->checkViews())
 		{
+			$columns = $this->getColumns();
+
 			$this->arResult['DATA'] = array(
-				'columns' => $this->getColumns(),
+				'columns' => $columns,
 				'items' => $this->getData(),
-				'demo' => false
+				'demo' => false,
 			);
 		}
 
@@ -3294,6 +3317,7 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 		}
 
 		$columns = $this->getColumns();
+
 		$items = $this->getData();
 		$parentTasks = [];
 
@@ -3310,7 +3334,7 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 		return [
 			'columns' => $columns,
 			'items' => $items,
-			'parentTasks' => $parentTasks
+			'parentTasks' => $parentTasks,
 		];
 	}
 
@@ -4324,6 +4348,16 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 				Analytics::ELEMENT['complete_button'],
 			);
 		}
+	}
+	
+	private function getStageIdsWithTasks(array $stages): array
+	{
+		$stagesWithTasks = array_filter($stages, static fn (array $column): bool => (int)$column['total'] > 0 || $column['type'] === StagesTable::SYS_TYPE_NEW);
+		$stagesWithTasks = array_column($stagesWithTasks, 'id');
+
+		Collection::normalizeArrayValuesByInt($stagesWithTasks, false);
+		
+		return $stagesWithTasks;
 	}
 
 	public function configureActions(): array

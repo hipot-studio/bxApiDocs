@@ -30,6 +30,11 @@ class CAllTimeManEntry
 		}
 
 		$query = CTimeManEntry::_GetLastQuery($USER_ID);
+		if ($query === null)
+		{
+			return false;
+		}
+
 		$dbRes = $DB->Query($query);
 		$arRes = $dbRes->Fetch();
 
@@ -188,7 +193,10 @@ class CAllTimeManEntry
 			unset($arFields['TIME_LEAKS_ADD']);
 		}
 
-		$arFields['DURATION'] = self::correctDuration($arFields['DURATION'] ?? 0);
+		if (isset($arFields['DURATION']))
+		{
+			$arFields['DURATION'] = self::correctDuration($arFields['DURATION']);
+		}
 
 		unset($arFields['ID']);
 		unset($arFields['TIMESTAMP_X']);

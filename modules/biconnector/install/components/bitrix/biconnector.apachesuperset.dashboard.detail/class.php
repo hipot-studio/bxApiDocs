@@ -94,7 +94,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			return;
 		}
 
-		if (SupersetInitializer::isSupersetDoesntWork())
+		if (SupersetInitializer::isSupersetUnavailable())
 		{
 			$this->showStartupTemplate($dashboard, false);
 

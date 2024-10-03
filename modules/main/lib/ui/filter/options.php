@@ -1,4 +1,4 @@
-<?
+<?php
 
 namespace Bitrix\Main\UI\Filter;
 
@@ -556,7 +556,6 @@ class Options
 		return $this->options["default"];
 	}
 
-
 	/**
 	 * Gets current applied filter id
 	 * @return mixed
@@ -789,7 +788,7 @@ class Options
 				$result["PRESET_ID"] = $currentPresetId;
 				$result["FILTER_ID"] = $currentPresetId;
 				$result["FILTER_APPLIED"] = true;
-				$result["FIND"] = $this->getSearchString();
+				$result["FIND"] = $searchString;
 			}
 		}
 		return $result;

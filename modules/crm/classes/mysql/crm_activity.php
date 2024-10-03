@@ -1,4 +1,5 @@
 <?php
+//@codingStandardsIgnoreFile
 class CCrmActivity extends CAllCrmActivity
 {
 	const TABLE_NAME = 'b_crm_act';

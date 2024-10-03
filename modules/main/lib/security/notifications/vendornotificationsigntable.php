@@ -8,6 +8,22 @@ use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\Type\DateTime;
 
+/**
+ * Class VendorNotificationSignTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_VendorNotificationSign_Query query()
+ * @method static EO_VendorNotificationSign_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_VendorNotificationSign_Result getById($id)
+ * @method static EO_VendorNotificationSign_Result getList(array $parameters = [])
+ * @method static EO_VendorNotificationSign_Entity getEntity()
+ * @method static \Bitrix\Main\Security\Notifications\EO_VendorNotificationSign createObject($setDefaultValues = true)
+ * @method static \Bitrix\Main\Security\Notifications\EO_VendorNotificationSign_Collection createCollection()
+ * @method static \Bitrix\Main\Security\Notifications\EO_VendorNotificationSign wakeUpObject($row)
+ * @method static \Bitrix\Main\Security\Notifications\EO_VendorNotificationSign_Collection wakeUpCollection($rows)
+ */
 class VendorNotificationSignTable extends DataManager
 {
 	public static function getTableName()

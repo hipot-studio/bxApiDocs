@@ -143,9 +143,16 @@ class FavoriteChat extends PrivateChat
 
 	//region Access & Permissions
 
-	protected function checkAccessWithoutCaching(int $userId): bool
+	protected function checkAccessInternal(int $userId): Result
 	{
-		return $this->getAuthorId() === $userId;
+		$result = new Result();
+
+		if ($this->getAuthorId() !== $userId)
+		{
+			$result->addError(new ChatError(ChatError::ACCESS_DENIED));
+		}
+
+		return $result;
 	}
 
 	//endregion

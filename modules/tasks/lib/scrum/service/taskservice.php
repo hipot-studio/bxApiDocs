@@ -1166,6 +1166,7 @@ class TaskService implements Errorable
 					(new CacheService($taskId, CacheService::ITEM_TASKS))->clean();
 
 					self::deleteScrumItem($taskId);
+					self::deleteFromKanban($taskId, $previousGroupId);
 				}
 
 				return;
@@ -1789,6 +1790,16 @@ class TaskService implements Errorable
 		{
 			$itemService->removeItem($scrumItem, $pushService);
 		}
+	}
+
+	private static function deleteFromKanban(int $taskId, int $groupId): void
+	{
+		$sprintService = new SprintService();
+		$kanbanService = new KanbanService();
+
+		$sprint = $sprintService->getActiveSprintByGroupId($groupId);
+
+		$kanbanService->removeTasksFromKanban($sprint->getId(), [$taskId]);
 	}
 
 	private static function isTaskInActiveSprint(int $taskId, int $groupId): bool

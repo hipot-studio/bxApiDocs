@@ -8,16 +8,15 @@ use Bitrix\Catalog\ProductTable;
 use Bitrix\Catalog\StoreProductTable;
 use Bitrix\Catalog\StoreTable;
 use Bitrix\Main\Application;
-use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
-use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Catalog\Store\EnableWizard\Manager;
 
 final class StoreProduct extends Controller
 {
-	protected const ITEM = 'STORE_PRODUCT';
-	protected const LIST = 'STORE_PRODUCTS';
+	use ListAction; // default listAction realization
+	use GetAction; // default getAction realization
+	use CheckExists; // default implementation of existence check
 
 	private const BULK_SAVE_CHUNK_SIZE = 10000;
 	private const BULK_SAVE_PRODUCTS_CHUNK_SIZE = 1000;
@@ -25,43 +24,18 @@ final class StoreProduct extends Controller
 	//region Actions
 	public function getFieldsAction(): array
 	{
-		return [self::ITEM => $this->getViewFields()];
+		return [$this->getServiceItemName() => $this->getViewFields()];
 	}
 
-	public function listAction(PageNavigation $pageNavigation, array $select = [], array $filter = [], array $order = []): Page
-	{
-		$accessFilter = $this->accessController->getEntityFilter(
-			ActionDictionary::ACTION_STORE_VIEW,
-			get_class($this->getEntityTable())
-		);
-		if ($accessFilter)
-		{
-			$filter = [
-				$accessFilter,
-				$filter,
-			];
-		}
+	/**
+	 * public function listAction
+	 * @see listAction
+	 */
 
-		return new Page(
-			self::LIST,
-			$this->getList($select, $filter, $order, $pageNavigation),
-			$this->count($filter)
-		);
-	}
-
-	public function getAction($id)
-	{
-		$r = $this->exists($id);
-		if($r->isSuccess())
-		{
-			return [self::ITEM => $this->get($id)];
-		}
-		else
-		{
-			$this->addErrors($r->getErrors());
-			return null;
-		}
-	}
+	/**
+	 * public function getAction
+	 * @see GetAction::getAction
+	 */
 
 	public function bulkSaveAction(array $items)
 	{
@@ -187,17 +161,7 @@ final class StoreProduct extends Controller
 
 		return true;
 	}
-
 	//endregion
-
-	protected function exists($id)
-	{
-		$r = new Result();
-		if(isset($this->get($id)['ID']) == false)
-			$r->addError(new Error('Entity is not exists'));
-
-		return $r;
-	}
 
 	protected function getEntityTable()
 	{

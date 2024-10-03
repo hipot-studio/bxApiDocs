@@ -605,7 +605,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 
 		//region Attribute configuration
 		$this->arResult['ATTRIBUTE_CONFIG'] = null;
-		if(CCrmAuthorizationHelper::CheckConfigurationUpdatePermission())
+		if(self::isAdminForEntity($this->entityTypeID))
 		{
 			$arParamsAttributeConfig = $this->arParams['~ATTRIBUTE_CONFIG'] ?? null;
 			$this->arResult['ATTRIBUTE_CONFIG'] = is_array($arParamsAttributeConfig) ?
@@ -947,7 +947,10 @@ class CCrmEntityEditorComponent extends UIFormComponent
 		$userScopes = null;
 		if (isset($scopeConfigId))
 		{
-			$userScopes = Scope::getInstance()->getUserScopes($scopeConfigId, ($this->arParams['MODULE_ID'] ?? null));
+			$userScopes = method_exists(\Bitrix\Ui\EntityForm\Scope::class, 'getAllUserScopes')
+				? Scope::getInstance()->getAllUserScopes($scopeConfigId, ($this->arParams['MODULE_ID'] ?? null))
+				: Scope::getInstance()->getUserScopes($scopeConfigId, ($this->arParams['MODULE_ID'] ?? null))
+			;
 		}
 
 		$config = null;

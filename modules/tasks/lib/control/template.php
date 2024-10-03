@@ -283,6 +283,8 @@ class Template
 
 		$this->resetCache();
 
+		$this->sendUpdatePush($fields);
+
 		return $templateObject;
 	}
 
@@ -785,16 +787,26 @@ class Template
 
 	private function sendAddPush(array $fields): void
 	{
+		$this->sendPush(PushCommand::TEMPLATE_ADDED, $fields);
+	}
+
+	private function sendUpdatePush(array $fields): void
+	{
+		$this->sendPush(PushCommand::TEMPLATE_UPDATED, $fields);
+	}
+
+	private function sendPush(string $command, array $fields): void
+	{
 		$params = [
 			'TEMPLATE_ID' => $this->templateId,
-			'TEMPLATE_TITLE' => $fields['TITLE'],
+			'TEMPLATE_TITLE' => $fields['TITLE'] ?? null,
 		];
 
 		try
 		{
 			PushService::addEvent($this->userId, [
 				'module_id' => 'tasks',
-				'command' => PushCommand::TEMPLATE_ADDED,
+				'command' => $command,
 				'params' => $params,
 			]);
 		}

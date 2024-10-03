@@ -128,7 +128,8 @@ class Template implements Recyclebinable
 		return [
 			'LIMIT_DATA' => [
 				'RESTORE' => [
-					'DISABLE' => TaskLimit::isLimitExceeded() || !Bitrix24::checkFeatureEnabled(FeatureDictionary::TASKS_RECYCLEBIN),
+					'DISABLE' => !Bitrix24::checkFeatureEnabled(FeatureDictionary::TASK_RECYCLE_BIN_RESTORE),
+					'FEATURE_ID' => FeatureDictionary::TASK_RECYCLE_BIN_RESTORE,
 					'SLIDER_CODE' => 'limit_tasks_recycle_bin_restore',
 				],
 			],

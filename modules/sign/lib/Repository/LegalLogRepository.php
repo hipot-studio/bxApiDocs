@@ -40,7 +40,6 @@ class LegalLogRepository
 			->setCode($item->code)
 			->setDocumentId($item->documentId)
 			->setDocumentUid($item->documentUid)
-			->setDescription($item->description)
 			->setMemberId($item->memberId)
 			->setMemberUid($item->memberUid)
 			->setDescription($item->description)

@@ -101,6 +101,11 @@ class Result extends Base
 			$fileId = $pendingFile->getFileId();
 			$fileToken = $pendingFile->getId();
 
+			if (!$fileId)
+			{
+				continue;
+			}
+
 			$addingResult = TaskDisk::addFile($fileId);
 			if ($addingResult->isSuccess())
 			{

@@ -2,10 +2,13 @@
 
 namespace Bitrix\Tasks\Flow\Controllers\Trait;
 
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\Converter;
-use Bitrix\Main\Engine\Response\DataType\Page;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Tasks\Flow\Controllers\Task\Cache\TaskCountCache;
 use Bitrix\Tasks\Provider\Exception\TaskListException;
 use Bitrix\Tasks\Provider\TaskList;
 use Bitrix\Tasks\Provider\TaskQuery;
@@ -29,7 +32,7 @@ trait TaskTrait
 		PageNavigation $pageNavigation,
 		array $order,
 		Closure $modifier
-	): Page
+	): array
 	{
 		$query = (new TaskQuery($this->userId))
 			->skipAccessCheck()
@@ -50,11 +53,25 @@ trait TaskTrait
 			$modifier($task);
 		}
 
-		return new Page(
-			'tasks',
-			$this->converter->process($this->formatTasks($tasks)),
-			fn (): int => $this->provider->getCount($query),
-		);
+		return
+		[
+			'tasks' => $this->converter->process($this->formatTasks($tasks)),
+			'totalCount' => $this->getTaskTotalCount($filter, $pageNavigation),
+		];
+	}
+
+	/**
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 * @throws ArgumentException
+	 */
+	private function getTaskCount(array $filter): int
+	{
+		$query = (new TaskQuery($this->userId))
+			->skipAccessCheck()
+			->setWhere($filter);
+
+		return $this->provider->getCount($query);
 	}
 
 	private function formatTasks(array $tasks): array
@@ -77,6 +94,44 @@ trait TaskTrait
 		}
 
 		return $response;
+	}
+
+	/**
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 * @throws ArgumentException
+	 */
+	protected function getTaskTotalCount(
+		array $filter,
+		PageNavigation $pageNavigation
+	): int
+	{
+		$cache = new TaskCountCache();
+
+		$this->invalidateCacheIfFirstPage($pageNavigation, $cache, $filter);
+
+		$cachedTotalCount = $cache->get($filter);
+		if ($cachedTotalCount !== null)
+		{
+			return $cachedTotalCount;
+		}
+
+		$totalCount = $this->getTaskCount($filter);
+		$cache->store($filter, $totalCount);
+
+		return $totalCount;
+	}
+
+	private function invalidateCacheIfFirstPage(
+		PageNavigation $pageNavigation,
+		TaskCountCache $cache,
+		array $filter
+	): void
+	{
+		if ($pageNavigation->getCurrentPage() === 1)
+		{
+			$cache->invalidate($filter);
+		}
 	}
 
 	protected function init(): void

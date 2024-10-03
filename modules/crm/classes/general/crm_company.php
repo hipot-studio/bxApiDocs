@@ -1,5 +1,6 @@
 <?php
 IncludeModuleLangFile(__FILE__);
+//@codingStandardsIgnoreFile
 
 use Bitrix\Crm;
 use Bitrix\Crm\Binding\ContactCompanyTable;
@@ -3657,5 +3658,10 @@ class CAllCrmCompany
 		}
 
 		return $cache[$id];
+	}
+
+	public function getLastError(): string
+	{
+		return (string)$this->LAST_ERROR;
 	}
 }

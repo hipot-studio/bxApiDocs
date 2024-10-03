@@ -76,7 +76,7 @@ class Service
 	{
 		$addCommand->setGroupId(0);
 		$addCommand->setTemplateId($templateId);
-		$addCommand->setPlannedCompletionTime(0);
+		$addCommand->setPlannedCompletionTime(3600);
 
 		$addCommand->setCreatorId($this->creatorId);
 		$addCommand->setOwnerId($this->creatorId);

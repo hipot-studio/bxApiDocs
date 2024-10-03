@@ -134,7 +134,7 @@ abstract class Provider implements IProvider
 	 */
 	public static function runMigration(): void
 	{
-		Converter::bind(300);
+		Converter::bind(30);
 	}
 
 	public static function showMigrationProgress(): void

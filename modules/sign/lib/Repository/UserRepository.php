@@ -18,6 +18,7 @@ final class UserRepository
 	private function extractItemFromModel(EO_User $model): User
 	{
 		return new User(
+			$model->getId(),
 			$model->getName(),
 			$model->getLastName(),
 			$model->getSecondName(),

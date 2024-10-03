@@ -9,7 +9,13 @@ class CCrmNotifier
 {
 	protected static array $ERRORS = [];
 
-	public static function Notify($addresseeID, $internalMessage, $externalMessage, $schemeTypeID, $tag = ''): bool
+	public static function Notify(
+		$addresseeID,
+		$internalMessage,
+		$externalMessage,
+		$schemeTypeID,
+		$tag = '',
+	): bool
 	{
 		self::ClearErrors();
 
@@ -33,8 +39,8 @@ class CCrmNotifier
 			'FROM_USER_ID' => 0,
 			'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
 			'NOTIFY_MODULE' => 'crm',
-			'NOTIFY_MESSAGE' => (string)$internalMessage,
-			'NOTIFY_MESSAGE_OUT' => (string)$externalMessage,
+			'NOTIFY_MESSAGE' => $internalMessage,
+			'NOTIFY_MESSAGE_OUT' => $externalMessage,
 		];
 
 		$schemeTypeName = CCrmNotifierSchemeType::ResolveName($schemeTypeID);

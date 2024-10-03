@@ -6,7 +6,6 @@ use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Sign\File;
-use Bitrix\Sign\Type\MemberStatus;
 
 /**
  * Class MemberTable
@@ -161,6 +160,28 @@ class MemberTable extends Entity\DataManager
 			]),
 			'ROLE' => (new IntegerField('ROLE'))
 				->configureTitle('Role')
+				->configureNullable()
+			,
+			'REMINDER_TYPE' => (new IntegerField('REMINDER_TYPE'))
+				->configureTitle('Reminder type')
+				->configureNullable()
+			,
+			'REMINDER_LAST_SEND_DATE' => (new Entity\DatetimeField('REMINDER_LAST_SEND_DATE'))
+				->configureTitle('Reminder last send date')
+				->configureNullable()
+			,
+			'REMINDER_PLANNED_NEXT_SEND_DATE' => (new Entity\DatetimeField('REMINDER_PLANNED_NEXT_SEND_DATE'))
+				->configureTitle('Reminder planned next send date')
+				->configureNullable()
+			,
+			'REMINDER_COMPLETED' => (new Entity\BooleanField('REMINDER_COMPLETED'))
+				->configureTitle('Reminder completed')
+				->configureValues(0, 1)
+				->configureDefaultValue(false)
+				->configureNullable(false)
+			,
+			'REMINDER_START_DATE' => (new Entity\DatetimeField('REMINDER_START_DATE'))
+				->configureTitle('Reminder start date')
 				->configureNullable()
 			,
 			'CONFIGURED' => (new IntegerField('CONFIGURED'))

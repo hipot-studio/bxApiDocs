@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\BIConnector;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
@@ -38,7 +39,6 @@ use Bitrix\Main\Web\Json;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Buttons;
 use Bitrix\Bitrix24\Feature;
-use Bitrix\Bitrix24;
 
 Loader::includeModule("biconnector");
 
@@ -115,7 +115,7 @@ class ApacheSupersetSettingComponent
 			)
 			->addSection($this->getFilterSection())
 			->addSection($this->getNewDashboardNotificationSection())
-			// ->addSection($this->getClearCacheSection())
+			->addSection($this->getClearCacheSection())
 			->setAjaxData($ajaxData)
 		;
 
@@ -125,7 +125,7 @@ class ApacheSupersetSettingComponent
 			$settingsPanel->addSection($this->getSupersetKeySection());
 		}
 
-		if (Bitrix24\CurrentUser::get()->isAdmin())
+		if (BIConnector\Manager::isAdmin())
 		{
 			$settingsPanel->addSection($this->getDeleteSupersetSection());
 		}
@@ -142,10 +142,7 @@ class ApacheSupersetSettingComponent
 	{
 		$result = new Result();
 
-		if (
-			!Loader::includeModule('bitrix24')
-			|| !Feature::isFeatureEnabled('bi_constructor')
-		)
+		if (Loader::includeModule('bitrix24') && !Feature::isFeatureEnabled('bi_constructor'))
 		{
 			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_FEATURE_UNAVAILABLE')));
 
@@ -244,6 +241,8 @@ class ApacheSupersetSettingComponent
 
 		$startTime = null;
 		$endTime = null;
+		$includeLastFilterDate = null;
+
 		if ($data['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_RANGE)
 		{
 			try
@@ -258,6 +257,8 @@ class ApacheSupersetSettingComponent
 
 				return null;
 			}
+
+			$includeLastFilterDate = $data['INCLUDE_LAST_FILTER_DATE'] === 'Y' ? 'Y' : 'N';
 		}
 
 		$period = EmbeddedFilter\DateTime::getDefaultPeriod();
@@ -286,6 +287,15 @@ class ApacheSupersetSettingComponent
 			Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_DATE_END_OPTION_NAME]);
 		}
 
+		if ($includeLastFilterDate !== null)
+		{
+			Option::set('biconnector', EmbeddedFilter\DateTime::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME, $includeLastFilterDate);
+		}
+		else
+		{
+			Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME]);
+		}
+
 		$ids = $data['NOTIFICATION_SELECTOR'] ?? [];
 		$ids = !empty($ids) && is_array($ids) ? $ids : [];
 		Option::set('biconnector', SystemDashboardManager::OPTION_NEW_DASHBOARD_NOTIFICATION_LIST, Json::encode($ids));
@@ -295,6 +305,7 @@ class ApacheSupersetSettingComponent
 			'FILTER_PERIOD' => $period,
 			'DATE_FILTER_START' => $startTime,
 			'DATE_FILTER_END' => $endTime,
+			'INCLUDE_LAST_FILTER_DATE' => $includeLastFilterDate,
 		];
 	}
 

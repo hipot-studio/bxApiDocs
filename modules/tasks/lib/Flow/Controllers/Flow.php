@@ -12,8 +12,9 @@ use Bitrix\Tasks\Flow\Access\FlowModel;
 use Bitrix\Tasks\Flow\Control\Command\AddCommand;
 use Bitrix\Tasks\Flow\Control\Command\DeleteCommand;
 use Bitrix\Tasks\Flow\Control\Command\UpdateCommand;
+use Bitrix\Tasks\Flow\Control\Decorator\EmptyOwnerDecorator;
 use Bitrix\Tasks\Flow\Control\Decorator\ProjectProxyDecorator;
-use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
+use Bitrix\Tasks\InvalidCommandException;
 use Bitrix\Tasks\Flow\Controllers\Dto\FlowDto;
 use Bitrix\Tasks\Flow\Controllers\Trait\ControllerTrait;
 use Bitrix\Tasks\Flow\Controllers\Trait\MessageTrait;
@@ -133,7 +134,13 @@ class Flow extends Controller
 
 		try
 		{
-			$flow = (new ProjectProxyDecorator($this->service))->add($addCommand);
+			$service = new EmptyOwnerDecorator(
+				new ProjectProxyDecorator(
+					$this->service
+				)
+			);
+
+			$flow = $service->add($addCommand);
 
 			$flow->setTrialFeatureEnabled($trialFeatureEnabled);
 		}
@@ -202,11 +209,6 @@ class Flow extends Controller
 	 */
 	public function deleteAction(FlowDto $flowData): ?array
 	{
-		if (!FlowFeature::isFeatureEnabled())
-		{
-			return $this->buildErrorResponse($this->getAccessDeniedError());
-		}
-
 		$flowData->checkPrimary();
 
 		if (!FlowAccessController::can($this->userId, FlowAction::DELETE, $flowData->id))
@@ -279,7 +281,13 @@ class Flow extends Controller
 			$currentFlow = $this->provider->getFlow($flowData->id, ['CREATOR_ID']);
 			$updateCommand->setCreatorId($currentFlow->getCreatorId());
 
-			$flow = (new ProjectProxyDecorator($this->service))->update($updateCommand);
+			$service = new EmptyOwnerDecorator(
+				new ProjectProxyDecorator(
+					$this->service
+				)
+			);
+
+			$flow = $service->update($updateCommand);
 
 			$flow->setTrialFeatureEnabled($trialFeatureEnabled);
 		}

@@ -6,6 +6,7 @@ use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\StorageTable;
 use Bitrix\Disk\Internals\VersionTable;
+use Bitrix\Disk\ProxyType\Type;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlExpression;
@@ -24,7 +25,7 @@ use Bitrix\Main\SystemException;
 
 Loc::loadMessages(__FILE__);
 
-final class Storage extends Internals\Model
+final class Storage extends Internals\Model implements \JsonSerializable
 {
 	const ERROR_NOT_EXISTS_ROOT_OBJECT = 'DISK_ST_22001';
 	const ERROR_RENAME_ROOT_OBJECT     = 'DISK_ST_22002';
@@ -1134,5 +1135,17 @@ final class Storage extends Internals\Model
 		}
 
 		return parent::prepareGetListParameters($parameters);
+	}
+
+	public function jsonSerialize(): array
+	{
+		$type = Type::tryFromProxyType($this->getProxyType());
+
+		return [
+			'id' => (int)$this->getId(),
+			'name' => $this->getName(),
+			'rootObjectId' => (int)$this->getRootObjectId(),
+			'type' => $type->value,
+		];
 	}
 }

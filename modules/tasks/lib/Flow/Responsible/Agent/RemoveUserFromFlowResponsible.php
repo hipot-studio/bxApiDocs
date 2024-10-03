@@ -2,6 +2,7 @@
 
 namespace Bitrix\Tasks\Flow\Responsible\Agent;
 
+use Bitrix\Main\UserTable;
 use Bitrix\Tasks\Flow\Control\Command\UpdateCommand;
 use Bitrix\Tasks\Flow\Control\FlowService;
 use Bitrix\Tasks\Flow\Flow;
@@ -13,6 +14,7 @@ use Bitrix\Tasks\Flow\Option\OptionDictionary;
 use Bitrix\Tasks\Flow\Responsible\ResponsibleQueue\ResponsibleQueueProvider;
 use Bitrix\Tasks\Flow\Responsible\ResponsibleQueue\ResponsibleQueueService;
 use Bitrix\Tasks\Update\AgentInterface;
+use Bitrix\Tasks\Util\User;
 
 final class RemoveUserFromFlowResponsible implements AgentInterface
 {
@@ -103,11 +105,14 @@ final class RemoveUserFromFlowResponsible implements AgentInterface
 			return;
 		}
 
+		$owner = UserTable::getById($flow->getOwnerId())->fetchObject();
+		$newDistributorId = $owner?->getActive() === false ? User::getAdminId() : $flow->getOwnerId();
+
 		$command =
 			(new UpdateCommand())
 				->setId($flowId)
 				->setDistributionType(Flow::DISTRIBUTION_TYPE_MANUALLY)
-				->setManualDistributorId($flow->getOwnerId())
+				->setManualDistributorId($newDistributorId)
 		;
 		(new FlowService())->update($command);
 
@@ -160,11 +165,14 @@ final class RemoveUserFromFlowResponsible implements AgentInterface
 			return;
 		}
 
+		$owner = UserTable::getById($flow->getOwnerId())->fetchObject();
+		$newDistributorId = $owner?->getActive() === false ? User::getAdminId() : $flow->getOwnerId();
+
 		$command =
 			(new UpdateCommand())
 				->setId($flowId)
 				->setDistributionType(Flow::DISTRIBUTION_TYPE_MANUALLY)
-				->setManualDistributorId($flow->getOwnerId())
+				->setManualDistributorId($newDistributorId)
 		;
 		(new FlowService())->update($command);
 

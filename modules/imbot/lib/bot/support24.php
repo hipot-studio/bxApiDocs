@@ -1250,6 +1250,11 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 	 */
 	protected static function checkMessageRestriction(array $messageFields): bool
 	{
+		if (!self::isUserAdmin(self::getCurrentUser()->getId()) && !self::isUserIntegrator(self::getCurrentUser()->getId()))
+		{
+			return false;
+		}
+
 		$bot = Im\Bot::getCache($messageFields['BOT_ID']);
 		if (mb_substr($bot['CODE'], 0, 7) != parent::BOT_CODE)
 		{

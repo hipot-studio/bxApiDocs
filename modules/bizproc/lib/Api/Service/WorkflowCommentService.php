@@ -11,6 +11,7 @@ use Bitrix\Bizproc\Integration\Push\Dto\UserCounter;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable;
+use Bitrix\Bizproc\Workflow\WorkflowUserCounters;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Forum;
@@ -28,6 +29,7 @@ class WorkflowCommentService
 		if ($toIncrement)
 		{
 			WorkflowUserCommentTable::incrementUnreadCounter($comment->workflowId, $toIncrement);
+			$this->incrementUsersCounters($toIncrement);
 			$this->pushCounters($comment->workflowId, $toIncrement);
 		}
 	}
@@ -40,6 +42,7 @@ class WorkflowCommentService
 		}
 
 		$userIds = WorkflowUserCommentTable::decrementUnreadCounterByDate($comment->workflowId, $comment->created);
+		$this->decrementUsersCounters($userIds);
 		$this->pushCounters($comment->workflowId, $userIds);
 	}
 
@@ -58,6 +61,7 @@ class WorkflowCommentService
 				'WORKFLOW_ID' => $markRead->workflowId,
 				'USER_ID' => $markRead->userId,
 			]);
+			$this->updateUserCounters($markRead->userId);
 			$this->pushCounters($markRead->workflowId, [$markRead->userId]);
 		}
 	}
@@ -85,7 +89,7 @@ class WorkflowCommentService
 		);
 
 		if (!$feed->addServiceComment([
-			'POST_MESSAGE' => $comment->message
+			'POST_MESSAGE' => $comment->message,
 		]))
 		{
 			$response->addErrors($feed->getErrors());
@@ -97,6 +101,7 @@ class WorkflowCommentService
 				[$comment->authorId],
 				WorkflowUserCommentTable::COMMENT_TYPE_SYSTEM
 			);
+			$this->incrementUsersCounters([$comment->authorId]);
 			$this->pushCounters($comment->workflowId, [$comment->authorId]);
 		}
 
@@ -193,5 +198,29 @@ class WorkflowCommentService
 		}
 
 		WorkflowUserTable::touchWorkflowUsers($workflowId, $touchUserIds);
+	}
+
+	private function incrementUsersCounters(array $userIds): void
+	{
+		foreach ($userIds as $userId)
+		{
+			$userCounters = new WorkflowUserCounters($userId);
+			$userCounters->incrementComment();
+		}
+	}
+
+	private function decrementUsersCounters(array $userIds): void
+	{
+		foreach ($userIds as $userId)
+		{
+			$userCounters = new WorkflowUserCounters($userId);
+			$userCounters->decrementComment();
+		}
+	}
+
+	private function updateUserCounters(int $userId): void
+	{
+		$userCounters = new WorkflowUserCounters($userId);
+		$userCounters->setComment(WorkflowUserCommentTable::getCountUserUnread($userId));
 	}
 }

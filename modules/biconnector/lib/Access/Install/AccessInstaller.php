@@ -2,6 +2,9 @@
 
 namespace Bitrix\BIConnector\Access\Install;
 
+use Bitrix\BIConnector\Access\Permission\PermissionTable;
+use Bitrix\BIConnector\Access\Role\RoleRelationTable;
+use Bitrix\BIConnector\Access\Role\RoleTable;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
@@ -37,5 +40,18 @@ final class AccessInstaller
 		}
 
 		return $result;
+	}
+
+	public static function reinstall()
+	{
+		self::clearRelations();
+		self::install();
+	}
+
+	private static function clearRelations()
+	{
+		RoleRelationTable::deleteList(['>ID' => 0]);
+		RoleTable::deleteList(['>ID' => 0]);
+		PermissionTable::deleteList(['>ID' => 0]);
 	}
 }

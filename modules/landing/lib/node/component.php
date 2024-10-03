@@ -116,7 +116,6 @@ class Component extends \Bitrix\Landing\Node
 	 */
 	public static function saveNode(\Bitrix\Landing\Block $block, $selector, array $data)
 	{
-		//$data = array_pop($data);// we allow one type of component per block
 		$manifest = $block->getManifest();
 		if (isset($manifest['nodes'][$selector]['extra']))
 		{
@@ -292,7 +291,7 @@ class Component extends \Bitrix\Landing\Node
 					{
 						// change node manifest
 						$newExtra[$field] = $props[$field];
-						$newExtra[$field]['VALUE'] = $component['DATA']['PARAMS'][$field] ?? '';
+						$newExtra[$field]['VALUE'] = $component['DATA']['PARAMS'][$field] ?? null;
 						// add attr
 						if (!isset($manifestFull['attrs'][$componentName]))
 						{
@@ -309,6 +308,7 @@ class Component extends \Bitrix\Landing\Node
 								$newExtra[$field]['VALUE'],
 								$fieldItem
 							),
+							'default_value' => $newExtra[$field]['DEFAULT'] ?? null,
 							//'original_value' => $newExtra[$field]['VALUE'],
 							'allowInlineEdit' => false
 						) + $fieldItem, $newExtra[$field]);
@@ -401,13 +401,17 @@ class Component extends \Bitrix\Landing\Node
 				case 'CHECKBOX':
 				{
 					$item['type'] = 'checkbox';
-					$item['items'] = array(
-						array(
+					$item['items'] = [
+						[
 							'name' => $item['name'],
 							'value' => 'Y',
-							'checked' => $item['value'] == 'Y'
-						)
-					);
+							'checked' => (
+								(isset($item['value']) && $item['value'] !== '')
+									? $item['value']
+									: $prop['DEFAULT']
+								) == 'Y'
+						]
+					];
 					$item['compact'] = true;
 					unset($item['name']);
 					break;
@@ -479,6 +483,73 @@ class Component extends \Bitrix\Landing\Node
 					}
 					break;
 				}
+				case 'CUSTOM_initColorField':
+				{
+					$item['type'] = 'color';
+					$item['subtype'] = 'color';
+
+					break;
+				}
+				case 'CUSTOM_initIconField':
+				{
+					$item['type'] = 'icon';
+					$item['disableLink'] = 'true';
+					$item['value'] = is_array($item['value']) && !empty($item['value'])
+						? $item['value']
+						: $prop['DEFAULT']
+					;
+
+					break;
+				}
+				case 'CUSTOM_initImageField':
+				{
+
+					$item['type'] = 'image';
+					$item['disableLink'] = 'true';
+					$data = \Cutil::jsObjectToPhp($prop['JS_DATA'], true);
+					$item['dimensions'] = $data['dimensions'] ?? 'false';
+
+					break;
+				}
+
+				case 'CUSTOM_initUserSelectField':
+				{
+					$item['type'] = 'user-select';
+					$item['value'] = (int)$item['value'] > 0 ? $item['value'] : $prop['DEFAULT'];
+					$item['value'] = (int)$item['value'];
+
+					break;
+				}
+
+				case 'CUSTOM_initDynamicSource':
+				{
+					$item['type'] = 'dynamic_source';
+					$item['hideSort'] = 'true';
+					$data = \Cutil::jsObjectToPhp($prop['JS_DATA'], true);
+					if ($data['sources'] && is_array($data['sources']))
+					{
+						$item['sources'] = $data['sources'];
+					}
+					if ($data['title'] && is_string($data['title']))
+					{
+						$item['title'] = $data['title'];
+					}
+					if ($data['stubText'] && is_string($data['stubText']))
+					{
+						$item['stubText'] = $data['stubText'];
+					}
+					if ($data['useLink'] && is_string($data['useLink']))
+					{
+						$item['useLink'] = $data['useLink'];
+					}
+					if ($data['linkType'] && is_string($data['linkType']))
+					{
+						$item['linkType'] = $data['linkType'];
+					}
+
+					break;
+				}
+
 				default:
 				{
 					if (!isset($item['type']) || !$item['type'])

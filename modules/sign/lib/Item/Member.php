@@ -4,11 +4,16 @@ namespace Bitrix\Sign\Item;
 
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Sign\Contract;
+use Bitrix\Sign\Helper\CloneHelper;
+use Bitrix\Sign\Item\Member\Reminder;
+use Bitrix\Sign\Type\Member\Notification\ReminderType;
 use Bitrix\Sign\Type\MemberStatus;
 use Bitrix\Sign\Type\ProcessingStatus;
 
 class Member implements Contract\Item
 {
+	public Reminder $reminder;
+
 	public function __construct(
 		public ?int $documentId = null,
 		public ?int $party = null,
@@ -30,6 +35,25 @@ class Member implements Contract\Item
 		public ?int $stampFileId = null,
 		public ?string $role = null,
 		public ?int $configured = null,
+		?Reminder $reminder = null,
 	)
-	{}
+	{
+		$this->reminder = $reminder ?? new Reminder(
+			lastSendDate: null,
+			plannedNextSendDate: null,
+			completed: false,
+			type: ReminderType::NONE,
+			startDate: null,
+		);
+	}
+
+	public function __clone()
+	{
+		$this->dateSigned = CloneHelper::cloneIfNotNull($this->dateSigned);
+		$this->dateCreated = CloneHelper::cloneIfNotNull($this->dateCreated);
+		$this->reminder = clone $this->reminder;
+		$this->reminder->lastSendDate = CloneHelper::cloneIfNotNull($this->reminder->lastSendDate);
+		$this->reminder->plannedNextSendDate = CloneHelper::cloneIfNotNull($this->reminder->plannedNextSendDate);
+		$this->reminder->startDate = CloneHelper::cloneIfNotNull($this->reminder->startDate);
+	}
 }

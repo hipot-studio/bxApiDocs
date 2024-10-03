@@ -4,9 +4,9 @@ namespace Bitrix\Tasks\Flow\Control\Command;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
-use Bitrix\Tasks\Flow\Control\AbstractCommand;
+use Bitrix\Tasks\AbstractCommand;
 use Bitrix\Tasks\Flow\Control\Exception\FlowNotFoundException;
-use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
+use Bitrix\Tasks\InvalidCommandException;
 use Bitrix\Tasks\Flow\Control\Exception\MiddlewareException;
 use Bitrix\Tasks\Flow\Control\Middleware\MiddlewareInterface;
 use Bitrix\Tasks\Flow\Flow;
@@ -53,7 +53,7 @@ abstract class CommandHandler
 	 */
 	protected function loadFlow(int $id): Flow
 	{
-		$flowEntity = $this->flowRegistry->get($id);
+		$flowEntity = $this->flowRegistry->get($id, ['*', 'MEMBERS']);
 		if ($flowEntity === null)
 		{
 			throw new FlowNotFoundException("Unable to load flow {$id}");

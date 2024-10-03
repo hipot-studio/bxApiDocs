@@ -58,7 +58,7 @@ class Logger
 
 		if (!$this->isAlreadyPlanned)
 		{
-			Application::getInstance()->addBackgroundJob(fn () => $this->addDeferred());
+			Application::getInstance()->addBackgroundJob(fn () => $this->addDeferred(), [], Application::JOB_PRIORITY_LOW);
 			$this->isAlreadyPlanned = true;
 		}
 	}

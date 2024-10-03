@@ -13,6 +13,7 @@ use Bitrix\Main\Grid\Cell;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Context;
 use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\ORM\Query\Filter\Condition;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UI\PageNavigation;
@@ -542,7 +543,14 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 				$signed = [...$signed, MemberStatus::STOPPED, MemberStatus::WAIT, MemberStatus::STOPPABLE_READY, MemberStatus::PROCESSING];
 			}
 
-			$filter->where('ROLE', '=',  $this->memberRepository->convertRoleToInt(Role::SIGNER));
+			$roleCondition = array_filter(
+				$filter->getConditions(),
+				static fn(ConditionTree|Condition $item) => $item instanceof Condition && $item->getColumn() === 'ROLE'
+			);
+			if (empty($roleCondition))
+			{
+				$filter->where('ROLE', '=', $this->memberRepository->convertRoleToInt(Role::SIGNER));
+			}
 			$filter->whereIn('SIGNED', array_unique($signed));
 		}
 
@@ -787,11 +795,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 						->getMemberService()
 						->isUserLinksWithMember($member, $document, CurrentUser::get()->getId())
 				;
-				if (
-					MemberStatus::isReadyForSigning($member->status)
-					&& $isCurrentUserEqualsMember
-					&& !in_array($document->status, Type\DocumentStatus::getFinalStatuses(), true)
-				)
+				if ($isCurrentUserEqualsMember && $this->isSigningLinkAvailable($member, $document))
 				{
 					$memberData['ACTION'] = [
 						'TYPE' => 'link',
@@ -1327,7 +1331,8 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 
 	private function getCounterItems(Item\Document $document, ?ConditionTree $filter): array
 	{
-		$counters = $this->memberRepository->getMembersCountersByDocument($document, $filter);
+		$counters = $this->memberRepository->getMembersCountersByDocument($document, null);
+
 		return [
 			[
 				'id' => self::PREFIX_FOR_SHORT_FILTER_MEMBER_STATUS . MemberStatus::DONE,
@@ -1450,7 +1455,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 				return;
 			}
 		}
-		$this->arResult['BANNER_TEXT'] = Loc::getMessage('SIGN_DOCUMENT_GRID_BANNER_TEXT');
+		$this->arResult['BANNER_TEXT'] = Loc::getMessage('SIGN_DOCUMENT_GRID_BANNER_TEXT_MSGVER_1');
 	}
 
 	private function setBannerOptionCloseAction($type): void
@@ -1530,5 +1535,21 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			'COLOR' => $stageInfo['color'],
 			'IDENTIFIER' => 'sign_document_grid_label_id_' . $member->id,
 		];
+	}
+
+	private function isSigningLinkAvailable(Item\Member $member, Item\Document $document): bool
+	{
+		if (
+			$document->providerCode === Type\ProviderCode::GOS_KEY
+			&& $member->role === Role::SIGNER
+			&& $member->status === MemberStatus::READY
+		)
+		{
+			return true;
+		}
+
+		return MemberStatus::isReadyForSigning($member->status)
+			&& !in_array($document->status, Type\DocumentStatus::getFinalStatuses(), true)
+			;
 	}
 }

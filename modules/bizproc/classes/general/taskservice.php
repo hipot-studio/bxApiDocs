@@ -23,10 +23,14 @@ class CBPTaskService extends CBPRuntimeService
 
 		$taskId = (int)$taskId;
 		if ($taskId <= 0)
+		{
 			throw new Exception("id");
+		}
 		$userId = (int)$userId;
 		if ($userId <= 0)
+		{
 			throw new Exception("userId");
+		}
 		$status = (int)$status;
 
 		$DB->Query(
@@ -35,13 +39,12 @@ class CBPTaskService extends CBPRuntimeService
 			. " WHERE TASK_ID = " . $taskId . " AND USER_ID = " . $userId
 		);
 
-		CUserCounter::Decrement($userId, 'bp_tasks', '**');
-
+		self::decrementUserTaskCounter($userId);
 		self::onTaskChange(
 			$taskId,
 			[
 				'USERS_STATUSES' => [$userId => $status],
-				'COUNTERS_DECREMENTED' => [$userId]
+				'COUNTERS_DECREMENTED' => [$userId],
 			],
 			CBPTaskChangedStatus::Update
 		);
@@ -59,19 +62,23 @@ class CBPTaskService extends CBPRuntimeService
 		$taskId = array_map('intval', $taskId);
 		$taskId = array_filter($taskId);
 		if (sizeof($taskId) < 1)
+		{
 			throw new Exception("taskId");
+		}
 
 		$where = '';
 		foreach ($taskId as $id)
 		{
 			if ($where)
+			{
 				$where .= ' OR ';
+			}
 			$where .= ' TASK_ID = '.$id;
 		}
 
 		$dateUpdateSelect = $DB->DateToCharFunction('TU.DATE_UPDATE', 'FULL') . ' as DATE_UPDATE';
 
-		$users = array();
+		$users = [];
 		$iterator = $DB->Query(
 			'SELECT'
 			.' TU.ID, TU.USER_ID, TU.TASK_ID, TU.STATUS, TU.ORIGINAL_USER_ID, ' . $dateUpdateSelect . ','
@@ -97,6 +104,7 @@ class CBPTaskService extends CBPRuntimeService
 		{
 			$ids = array_column($taskUsers[$taskId], 'USER_ID');
 		}
+
 		return array_map('intval', $ids);
 	}
 
@@ -111,9 +119,11 @@ class CBPTaskService extends CBPRuntimeService
 		global $DB;
 
 		if ($workflowId == '')
+		{
 			throw new Exception('workflowId');
+		}
 
-		$users = array();
+		$users = [];
 		$iterator = $DB->Query('SELECT DISTINCT TU.USER_ID'
 			.' FROM b_bp_task_user TU'
 			.' INNER JOIN b_bp_task T ON (T.ID = TU.TASK_ID)'
@@ -124,6 +134,7 @@ class CBPTaskService extends CBPRuntimeService
 		{
 			$users[] = (int)$user['USER_ID'];
 		}
+
 		return $users;
 	}
 
@@ -163,7 +174,9 @@ class CBPTaskService extends CBPRuntimeService
 		$toUserId = (int)$toUserId;
 
 		if (!$taskId || !$fromUserId || !$toUserId)
+		{
 			return false;
+		}
 
 		$originalUserId = 0;
 
@@ -174,7 +187,9 @@ class CBPTaskService extends CBPRuntimeService
 		);
 		$row = $iterator->fetch();
 		if (!empty($row['ORIGINAL_USER_ID']))
+		{
 			$originalUserId = $row['ORIGINAL_USER_ID'];
+		}
 
 		// check USER_ID (USER_ID must be unique for task)
 		$iterator = $DB->Query('SELECT USER_ID'
@@ -183,7 +198,9 @@ class CBPTaskService extends CBPRuntimeService
 		);
 		$row = $iterator->fetch();
 		if (!empty($row['USER_ID']))
+		{
 			return false;
+		}
 
 		$DB->Query(
 			"UPDATE b_bp_task_user SET USER_ID = "
@@ -191,8 +208,8 @@ class CBPTaskService extends CBPRuntimeService
 			.(!$originalUserId? ', ORIGINAL_USER_ID = '.$fromUserId : '')
 			." WHERE TASK_ID = ".$taskId." AND USER_ID = ".$fromUserId
 		);
-		CUserCounter::Decrement($fromUserId, 'bp_tasks', '**');
-		CUserCounter::Increment($toUserId, 'bp_tasks', '**');
+		self::decrementUserTaskCounter($fromUserId);
+		self::incrementUserTaskCounter($toUserId);
 		self::onTaskChange(
 			$taskId,
 			[
@@ -208,6 +225,7 @@ class CBPTaskService extends CBPRuntimeService
 		{
 			ExecuteModuleEventEx($arEvent, array($taskId, $fromUserId, $toUserId));
 		}
+
 		return true;
 	}
 
@@ -225,6 +243,7 @@ class CBPTaskService extends CBPRuntimeService
 		{
 			return $row['ORIGINAL_USER_ID'] > 0 ? $row['ORIGINAL_USER_ID'] : $realUserId;
 		}
+
 		return false;
 	}
 
@@ -234,7 +253,9 @@ class CBPTaskService extends CBPRuntimeService
 
 		$id = intval($id);
 		if ($id <= 0)
+		{
 			throw new Exception("id");
+		}
 
 		$removedUsers = $decremented = [];
 		$dbRes = $DB->Query("SELECT USER_ID, STATUS FROM b_bp_task_user WHERE TASK_ID = ".intval($id)." ");
@@ -242,7 +263,7 @@ class CBPTaskService extends CBPRuntimeService
 		{
 			if ($arRes['STATUS'] == CBPTaskUserStatus::Waiting)
 			{
-				CUserCounter::Decrement($arRes["USER_ID"], 'bp_tasks', '**');
+				self::decrementUserTaskCounter((int)$arRes['USER_ID']);
 				$decremented[] = $arRes["USER_ID"];
 			}
 			$removedUsers[] = $arRes["USER_ID"];
@@ -254,7 +275,7 @@ class CBPTaskService extends CBPRuntimeService
 			$id,
 			[
 				'USERS_REMOVED' => $removedUsers,
-				'COUNTERS_DECREMENTED' => $decremented
+				'COUNTERS_DECREMENTED' => $decremented,
 			],
 			CBPTaskChangedStatus::Delete
 		);
@@ -270,7 +291,9 @@ class CBPTaskService extends CBPRuntimeService
 
 		$workflowId = trim($workflowId);
 		if ($workflowId == '')
+		{
 			throw new Exception("workflowId");
+		}
 
 		$dbRes = $DB->Query(
 			"SELECT ID ".
@@ -288,7 +311,7 @@ class CBPTaskService extends CBPRuntimeService
 			{
 				if ($arResUser['STATUS'] == CBPTaskUserStatus::Waiting)
 				{
-					CUserCounter::Decrement($arResUser["USER_ID"], 'bp_tasks', '**');
+					self::decrementUserTaskCounter((int)$arResUser['USER_ID']);
 					$decremented[] = $arResUser["USER_ID"];
 				}
 				$removedUsers[] = $arResUser['USER_ID'];
@@ -300,7 +323,7 @@ class CBPTaskService extends CBPRuntimeService
 				$taskId,
 				[
 					'USERS_REMOVED' => $removedUsers,
-					'COUNTERS_DECREMENTED' => $decremented
+					'COUNTERS_DECREMENTED' => $decremented,
 				],
 				CBPTaskChangedStatus::Delete
 			);
@@ -365,7 +388,9 @@ class CBPTaskService extends CBPRuntimeService
 			$iterator = CBPTaskService::GetList(array('ID'=>'DESC'), array('ID' => $taskId), false, false, array('WORKFLOW_ID'));
 			$row = $iterator->fetch();
 			if (!$row)
+			{
 				return false;
+			}
 			$workflowId = $row['WORKFLOW_ID'];
 			$taskData['WORKFLOW_ID'] = $workflowId;
 		}
@@ -373,11 +398,17 @@ class CBPTaskService extends CBPRuntimeService
 		//clean counters cache
 		$users = array();
 		if (!empty($taskData['USERS']))
+		{
 			$users = $taskData['USERS'];
+		}
 		if (!empty($taskData['USERS_REMOVED']))
+		{
 			$users = array_merge($users, $taskData['USERS_REMOVED']);
+		}
 		if (!empty($taskData['USERS_STATUSES']))
+		{
 			$users = array_merge($users, array_keys($taskData['USERS_STATUSES']));
+		}
 		self::cleanCountersCache($users);
 
 		self::setSearchContent($status, $taskId, $taskData);
@@ -565,7 +596,7 @@ class CBPTaskService extends CBPRuntimeService
 					"HTML" => '<span class="adm-informer-strong-text">'.GetMessage("BPTS_AI_EX_TASKS").'</span><br>'.GetMessage("BPTS_AI_TASKS_NUM").' '.$tasksCount,
 					"FOOTER" => '<a href="/bitrix/admin/bizproc_task_list.php?lang='.LANGUAGE_ID.'">'.GetMessage("BPTS_AI_TASKS_PERF").'</a>',
 					"COLOR" => "red",
-					"ALERT" => true
+					"ALERT" => true,
 				);
 
 				CAdminInformer::AddItem($bpAIParams);
@@ -600,17 +631,18 @@ class CBPTaskService extends CBPRuntimeService
 			$users = [];
 			foreach ($arFields["USERS"] as $userId)
 			{
-				$userId = intval($userId);
+				$userId = (int)($userId);
 				if (in_array($userId, $users))
+				{
 					continue;
+				}
 
 				$DB->Query(
 					"INSERT INTO b_bp_task_user (USER_ID, TASK_ID, ORIGINAL_USER_ID) ".
 					"VALUES (".intval($userId).", ".intval($taskId).", ".intval($userId).") "
 				);
 
-				CUserCounter::Increment($userId, 'bp_tasks', '**');
-
+				self::incrementUserTaskCounter($userId);
 				$users[] = $userId;
 			}
 
@@ -670,32 +702,36 @@ class CBPTaskService extends CBPRuntimeService
 				);
 
 				$incremented[] = $userId;
-				CUserCounter::Increment($userId, 'bp_tasks', '**');
+				self::incrementUserTaskCounter($userId);
 			}
 
 			$diff = array_diff($previousUserIds, $arFields['USERS']);
 			foreach ($diff as $removedUserId)
 			{
 				$decremented[] = $removedUserId;
-				CUserCounter::Decrement($removedUserId, 'bp_tasks', '**');
+				self::decrementUserTaskCounter($removedUserId);
 				$removedUsers[] = $removedUserId;
 				$DB->Query("DELETE FROM b_bp_task_user WHERE TASK_ID = {$id} AND USER_ID = {$removedUserId}");
 			}
 		}
 
-		$userStatuses = array();
+		$userStatuses = [];
 		if (isset($arFields['STATUS']) && $arFields['STATUS'] > CBPTaskStatus::Running)
 		{
 			$dbResUser = $DB->Query("SELECT USER_ID FROM b_bp_task_user WHERE TASK_ID = ".$id." AND STATUS = ".CBPTaskUserStatus::Waiting);
 			while ($userIterator = $dbResUser->Fetch())
 			{
 				$decremented[] = $userIterator["USER_ID"];
-				CUserCounter::Decrement($userIterator["USER_ID"], 'bp_tasks', '**');
+				self::decrementUserTaskCounter((int)$userIterator['USER_ID']);
 
 				if ($arFields['STATUS'] == CBPTaskStatus::Timeout)
+				{
 					$userStatuses[$userIterator["USER_ID"]] = CBPTaskUserStatus::No;
+				}
 				else
+				{
 					$removedUsers[] = $userIterator["USER_ID"];
+				}
 			}
 			if ($arFields['STATUS'] == CBPTaskStatus::Timeout)
 			{
@@ -709,7 +745,9 @@ class CBPTaskService extends CBPRuntimeService
 		}
 
 		foreach (GetModuleEvents("bizproc", "OnTaskUpdate", true) as $arEvent)
-			ExecuteModuleEventEx($arEvent, array($id, $arFields));
+		{
+			ExecuteModuleEventEx($arEvent, [$id, $arFields]);
+		}
 
 		if ($removedUsers)
 		{
@@ -874,6 +912,18 @@ class CBPTaskService extends CBPRuntimeService
 			//skip operation, empty search content
 		}
 	}
+
+	private static function incrementUserTaskCounter(int $userId): void
+	{
+		$userCounters = new Bizproc\Workflow\WorkflowUserCounters($userId);
+		$userCounters->incrementTask();
+	}
+
+	private static function decrementUserTaskCounter(int $userId): void
+	{
+		$userCounters = new Bizproc\Workflow\WorkflowUserCounters($userId);
+		$userCounters->decrementTask();
+	}
 }
 
 class CBPTaskResult extends CDBResult
@@ -885,7 +935,7 @@ class CBPTaskResult extends CDBResult
 		Main\Type\DateTime::class,
 		\DateTime::class,
 		\DateTimeZone::class,
-		Main\Web\Uri::class
+		Main\Web\Uri::class,
 	];
 
 	function fetch()
@@ -949,13 +999,13 @@ class CBPTaskResult extends CDBResult
 				"/\[b\](.+?)\[\/b\]/isu",
 				"/\[i\](.+?)\[\/i\]/isu",
 				"/\[s\](.+?)\[\/s\]/isu",
-				"/\[u\](.+?)\[\/u\]/isu"
+				"/\[u\](.+?)\[\/u\]/isu",
 			),
 			array(
 				"<b>\\1</b>",
 				"<i>\\1</i>",
 				"<s>\\1</s>",
-				"<u>\\1</u>"
+				"<u>\\1</u>",
 			),
 			$text
 		);

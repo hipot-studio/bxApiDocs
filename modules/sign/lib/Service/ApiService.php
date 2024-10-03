@@ -74,7 +74,7 @@ class ApiService
 		$result = new Main\Result;
 		$errorHandler = new ErrorHandler();
 
-		if ($errorHandler->isClientConnectionError($http))
+		if ($this->isClientConnectionError($http))
 		{
 			return $result->addError($this->getDefaultErrorWithCode('SIGN_CLIENT_CONNECTION_ERROR'));
 		}
@@ -197,5 +197,35 @@ class ApiService
 	public function getLogger(): LoggerInterface
 	{
 		return $this->logger ?: new NullLogger();
+	}
+
+	private function isClientConnectionError(Main\Web\HttpClient $httpClient): bool
+	{
+		if (in_array($httpClient->getStatus(), [0, 407]))
+		{
+			return true;
+		}
+
+		if (!$httpClient->getResult())
+		{
+			return true;
+		}
+
+		$response = $httpClient->getResponse();
+
+		if ($response === null)
+		{
+			return true;
+		}
+
+		if (
+			$response->hasHeader('Content-Length')
+			&& (int)$response->getHeader('Content-Length') === 0
+		)
+		{
+			return true;
+		}
+
+		return false;
 	}
 }

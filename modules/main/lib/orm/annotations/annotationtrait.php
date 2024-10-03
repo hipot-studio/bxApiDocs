@@ -17,6 +17,7 @@ use Bitrix\Main\ORM\Fields\Relations\OneToMany;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\ScalarField;
 use Bitrix\Main\ORM\Fields\UserTypeField;
+use Bitrix\Main\ORM\Objectify\Collection;
 use Bitrix\Main\ORM\Objectify\State;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Text\StringHelper;
@@ -146,7 +147,7 @@ trait AnnotationTrait
 			$code[] = "\t * @method void removeFrom(\$fieldName, \$value)";
 			$code[] = "\t * @method void removeAll(\$fieldName)";
 			$code[] = "\t * @method \\".Result::class." delete()";
-			$code[] = "\t * @method void fill(\$fields = \\".FieldTypeMask::class."::ALL) flag or array of field names";
+			$code[] = "\t * @method mixed fill(\$fields = \\".FieldTypeMask::class."::ALL) flag or array of field names";
 			$code[] = "\t * @method mixed[] collectValues(\$valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, \$fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)";
 			$code[] = "\t * @method \\".AddResult::class."|\\".UpdateResult::class."|\\".Result::class." save()";
 			$code[] = "\t * @method static {$objectClass} wakeUp(\$data)";
@@ -201,7 +202,7 @@ trait AnnotationTrait
 			$code[] = "\t * @method {$objectClass}[] getAll()";
 			$code[] = "\t * @method bool remove({$objectClass} \$object)";
 			$code[] = "\t * @method void removeByPrimary(\$primary)";
-			$code[] = "\t * @method void fill(\$fields = \\".FieldTypeMask::class."::ALL) flag or array of field names";
+			$code[] = "\t * @method array|\\".Collection::class."|null fill(\$fields = \\".FieldTypeMask::class."::ALL) flag or array of field names";
 			$code[] = "\t * @method static {$collectionClass} wakeUp(\$data)";
 			$code[] = "\t * @method \\".Result::class." save(\$ignoreEvents = false)";
 			$code[] = "\t * @method void offsetSet() ArrayAccess";

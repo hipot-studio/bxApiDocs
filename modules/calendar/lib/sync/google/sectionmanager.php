@@ -25,10 +25,9 @@ class SectionManager extends Manager implements SectionManagerInterface
 	/**
 	 * @param Core\Section\Section $section
 	 * @param SectionContext|null $context
-	 *
 	 * @return Result
-	 *
 	 * @throws ConflictException
+	 * @throws \Bitrix\Main\LoaderException
 	 */
 	public function create(Core\Section\Section $section, SectionContext $context = null): Result
 	{
@@ -83,12 +82,10 @@ class SectionManager extends Manager implements SectionManagerInterface
 		}
 		catch (ArgumentException $e)
 		{
-			AddMessage2Log($e->getMessage(), 'calendar', 2, true);
 			$result->addError(new Error('failed to create an section in google'));
 		}
 		catch (ObjectException $e)
 		{
-			AddMessage2Log($e->getMessage(), 'calendar', 2, true);
 			$result->addError(new Error('failed to convert section'));
 		}
 
@@ -150,7 +147,6 @@ class SectionManager extends Manager implements SectionManagerInterface
 		}
 		catch (ArgumentException $e)
 		{
-			AddMessage2Log($e->getMessage(), 'calendar', 2, true);
 			$result->addError(new Error('failed to update an section in google'));
 		}
 

@@ -140,7 +140,7 @@ class Template
 		return $this->template['PARAMETERS'] ?? [];
 	}
 
-	public function getRobotSettingsDialog(array $robot, $request = null)
+	public function getRobotSettingsDialog(array $robot, $request = null, ?array $contextRobots = null)
 	{
 		if (isset($robot['Properties']) && is_array($robot['Properties']))
 		{
@@ -150,7 +150,8 @@ class Template
 		unset($robot['Delay'], $robot['Condition']);
 
 		$copy = clone $this;
-		$copy->setRobots([$robot]);
+		$robots = $contextRobots ? [$robot, ...$contextRobots] : [$robot];
+		$copy->setRobots($robots);
 
 		return \CBPActivity::callStaticMethod(
 			$robot['Type'],

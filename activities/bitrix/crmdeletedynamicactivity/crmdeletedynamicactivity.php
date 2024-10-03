@@ -42,12 +42,12 @@ class CBPCrmDeleteDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 	{
 		$errors = parent::checkProperties();
 
-		$factory = Crm\Service\Container::getInstance()->getFactory($this->EntityTypeId);
+		$factory = $this->EntityTypeId ? Crm\Service\Container::getInstance()->getFactory($this->EntityTypeId) : null;
 		if (is_null($factory) || !CCrmBizProcHelper::ResolveDocumentName($this->EntityTypeId))
 		{
 			$errors->setError(new \Bitrix\Main\Error(Loc::getMessage('CRM_DDA_TYPE_ID_ERROR')));
 		}
-		elseif (is_null($factory->getItem($this->EntityId)))
+		elseif (is_null($this->EntityId) || is_null($factory->getItem($this->EntityId)))
 		{
 			$errors->setError(new \Bitrix\Main\Error(Loc::getMessage('CRM_DDA_ENTITY_ERROR')));
 		}
@@ -111,6 +111,7 @@ class CBPCrmDeleteDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 				'Type' => FieldType::SELECT,
 				'Options' => $showOnlyDynamicEntities ? static::getOnlyDynamicEntities($typeNames) : $typeNames,
 				'Required' => true,
+				'AllowSelection' => false,
 			],
 			'EntityId' => [
 				'Name' => Loc::getMessage('CRM_DDA_ELEMENT_ID'),

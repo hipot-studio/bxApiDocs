@@ -5,8 +5,6 @@ namespace Bitrix\TasksMobile\Provider;
 use Bitrix\Crm\Integration\UI\EntitySelector\DynamicMultipleProvider;
 use Bitrix\Crm\Service\Display;
 use Bitrix\Crm\Service\Display\Field;
-use Bitrix\Disk\Driver;
-use Bitrix\Disk\TypeFile;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\ExpressionField;
@@ -16,7 +14,6 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Mobile\Provider\UserRepository;
-use Bitrix\Socialnetwork\Helper\Workgroup;
 use Bitrix\Socialnetwork\Item\UserContentView;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Model\TaskModel;
@@ -52,7 +49,6 @@ use Bitrix\Tasks\Provider\Exception\TaskListException;
 use Bitrix\Tasks\Scrum\Service\TaskService;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Type\DateTime;
-use Bitrix\TasksMobile\Controller\Result;
 use Bitrix\TasksMobile\Dto\DiskFileDto;
 use Bitrix\TasksMobile\Dto\TaskDto;
 use Bitrix\TasksMobile\Dto\TaskRequestFilter;
@@ -160,7 +156,7 @@ final class TaskProvider
 		return [
 			'items' => $this->prepareItems($tasks),
 			'users' => $this->getUsersData($tasks),
-			'groups' => $this->getGroupsData($tasks),
+			'groups' => $this->getGroupsData($tasks, $projectId),
 			'flows' => $this->getFlowsData($tasks),
 			'tasks_stages' => $this->getStagesData($tasks, $workMode, $stageId, $projectId),
 		];
@@ -757,6 +753,7 @@ final class TaskProvider
 		foreach ($tasks as $id => $task)
 		{
 			$tasks[$id]['TIMER_IS_RUNNING_FOR_CURRENT_USER'] = 'N';
+			$tasks[$id]['TIMER_RUN_TIME'] = 0;
 
 			if (
 				is_array($runningTaskData)
@@ -765,6 +762,7 @@ final class TaskProvider
 			)
 			{
 				$tasks[$id]['TIMER_IS_RUNNING_FOR_CURRENT_USER'] = 'Y';
+				$tasks[$id]['TIMER_RUN_TIME'] = (int)$runningTaskData['RUN_TIME'];
 			}
 		}
 
@@ -1357,7 +1355,7 @@ final class TaskProvider
 				'parsedDescription' => $task['PARSED_DESCRIPTION'],
 				'groupId' => $task['GROUP_ID'],
 				'flowId' => $task['FLOW_ID'] ?? 0,
-				'timeElapsed' => $task['TIME_SPENT_IN_LOGS'],
+				'timeElapsed' => $task['TIME_SPENT_IN_LOGS'] + $task['TIMER_RUN_TIME'],
 				'timeEstimate' => $task['TIME_ESTIMATE'],
 				'commentsCount' => $task['COMMENTS_COUNT'],
 				'serviceCommentsCount' => $task['SERVICE_COMMENTS_COUNT'],
@@ -1445,15 +1443,21 @@ final class TaskProvider
 		return UserRepository::getByIds($userIds);
 	}
 
-	private function getGroupsData(array $tasks): array
+	private function getGroupsData(array $tasks, ?int $projectId = null): array
 	{
-		if (empty($tasks))
+		if (!empty($tasks))
 		{
-			return [];
-		}
-		$groupIds = array_column($tasks, 'GROUP_ID');
+			$groupIds = array_column($tasks, 'GROUP_ID');
 
-		return GroupProvider::loadByIds($groupIds);
+			return GroupProvider::loadByIds($groupIds);
+		}
+
+		if ($projectId && SocialNetwork\Group::canReadGroupTasks($this->userId, $projectId))
+		{
+			return GroupProvider::loadByIds([$projectId]);
+		}
+
+		return [];
 	}
 
 	private function getFlowsData(array $tasks): array
@@ -1729,7 +1733,7 @@ final class TaskProvider
 			return false;
 		}
 
-		return (new FlowProvider($this->userId))->getFeatureRestrictions()['isFlowTaskCreationProhibited'];
+		return TariffPlanRestrictionProvider::isFlowRestricted();
 	}
 
 	private function processMembers(array $fields): array

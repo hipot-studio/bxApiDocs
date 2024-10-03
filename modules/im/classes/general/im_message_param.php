@@ -791,6 +791,11 @@ class CIMMessageParamAttach
 		}
 	}
 
+	public function setColorToken($color): void
+	{
+		$this->result['COLOR_TOKEN'] = IM\V2\Message\Color\Color::validateColor($color);
+	}
+
 	public function AddUser($params)
 	{
 		$add = Array();
@@ -1058,6 +1063,8 @@ class CIMMessageParamAttach
 				$result['LINK'] = $grid['LINK'];
 			}
 
+			$result['COLOR_TOKEN'] = IM\V2\Message\Color\Color::validateColor($grid['COLOR_TOKEN'] ?? null);
+
 			$add[] = $result;
 		}
 		if (empty($add))
@@ -1190,6 +1197,7 @@ class CIMMessageParamAttach
 		$color = \CIMMessageParamAttach::CHAT;
 		$attach = null;
 		$description = '';
+		$colorToken = null;
 
 		if (isset($array['BLOCKS']))
 		{
@@ -1203,6 +1211,10 @@ class CIMMessageParamAttach
 			{
 				$description = $array['DESCRIPTION'];
 			}
+			if (isset($array['COLOR_TOKEN']))
+			{
+				$colorToken = $array['COLOR_TOKEN'];
+			}
 		}
 		else
 		{
@@ -1211,6 +1223,7 @@ class CIMMessageParamAttach
 
 		$attach = new CIMMessageParamAttach();
 		$attach->SetColor($color);
+		$attach->setColorToken($colorToken);
 		$attach->SetDescription($description);
 		foreach ($blocks as $data)
 		{

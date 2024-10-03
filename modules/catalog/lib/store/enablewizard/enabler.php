@@ -52,7 +52,7 @@ abstract class Enabler
 		}
 
 		self::enableOptions();
-		self::deleteDocumentsAndResetQuantities();
+		self::resetQuantities();
 		self::installRealizationDocumentTradingPlatform();
 		self::registerEventsHandlers();
 		self::showEntityProductGridColumns();
@@ -91,7 +91,8 @@ abstract class Enabler
 		}
 
 		self::disableOptions();
-		self::deleteDocumentsAndResetQuantities();
+		self::resetQuantities();
+		self::deleteDocuments();
 		self::uninstallRealizationDocumentTradingPlatform();
 		self::unRegisterEventsHandlers();
 
@@ -126,18 +127,27 @@ abstract class Enabler
 		Option::set('catalog', 'default_quantity_trace', 'N');
 	}
 
-	private static function deleteDocumentsAndResetQuantities(): void
+	private static function resetQuantities(): void
 	{
-		if (!ConditionsChecker::hasConductedDocumentsOrQuantities())
+		if (!ConditionsChecker::doesProductWithQuantityExist())
 		{
 			return;
 		}
 
 		self::resetQuantity();
 		self::resetQuantityTrace();
-		self::resetStoreBatch();
 		self::resetSaleReserve();
 		self::resetCrmReserve();
+	}
+
+	private static function deleteDocuments(): void
+	{
+		if (!ConditionsChecker::doesConductedDocumentExist())
+		{
+			return;
+		}
+
+		self::resetStoreBatch();
 		self::deleteStoreDocuments();
 		self::deleteRealizations();
 	}

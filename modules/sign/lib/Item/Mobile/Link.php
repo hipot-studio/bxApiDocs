@@ -27,6 +27,8 @@ class Link implements Item
 	public const ROLE_EDITOR = 'editor';
 	public const ROLE_REVIEWER = 'reviewer';
 
+	private bool $goskeyAssigneeAlmostDone = false;
+
 	public function __construct(
 		public ?string $url,
 		public ?string $documentTitle = null,
@@ -88,6 +90,8 @@ class Link implements Item
 			$this->documentStatus === DocumentStatus::STOPPED || $this->status === MemberStatus::STOPPED => self::STATE_DOCUMENT_STOPPED,
 			$this->status === MemberStatus::REFUSED => self::STATE_MEMBER_STOPPED,
 
+			$this->isGoskeyAssigneeAlmostDone() => self::STATE_MEMBER_ASSIGNEE_SIGNED,
+
 			!$this->isAvailableOnMobile() && $this->status !== MemberStatus::DONE => match ($this->role) {
 				Role::EDITOR => self::STATE_CONTINUE_WEB_EDITOR,
 				default => self::STATE_CONTINUE_WEB_ASSIGNEE,
@@ -102,6 +106,17 @@ class Link implements Item
 
 			default => null,
 		};
+	}
+
+	public function isGoskeyAssigneeAlmostDone(): bool
+	{
+		return $this->goskeyAssigneeAlmostDone;
+	}
+
+	public function setGoskeyAssigneeAlmostDone(): self
+	{
+		$this->goskeyAssigneeAlmostDone = true;
+		return $this;
 	}
 
 	private function isAvailableOnMobile(): bool

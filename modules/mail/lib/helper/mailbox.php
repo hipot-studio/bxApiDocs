@@ -1145,10 +1145,13 @@ abstract class Mailbox
 				$filterForCheck['@ID'] = '[hidden for the log]';
 			}
 
-			AddMessage2Log(array_merge($eventData,[
-				'filter' => $filterForCheck,
-				'message-data' => $messageForLog,
-			]));
+			/**
+			 * @TODO Enable logs by option on the portal.
+			 * AddMessage2Log(array_merge($eventData,[
+			 *		'filter' => $filterForCheck,
+			 *		'message-data' => $messageForLog,
+			 * ]));
+			 */
 
 			return false;
 		}

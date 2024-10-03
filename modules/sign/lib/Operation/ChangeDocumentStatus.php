@@ -2,12 +2,14 @@
 
 namespace Bitrix\Sign\Operation;
 
+use Bitrix\Sign\Operation\DocumentChat\AddMembersByStoppedDocument;
 use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Repository\MemberRepository;
-use Bitrix\Sign\Service\ChatService;
+use Bitrix\Sign\Service\HrBotMessageService;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Counter\B2e\UserToSignDocumentCounterService;
 use Bitrix\Sign\Service\Sign\LegalLogService;
+use Bitrix\Sign\Service\Sign\MemberService;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Contract;
 use Bitrix\Sign\Item;
@@ -21,8 +23,9 @@ final class ChangeDocumentStatus implements Contract\Operation
 	private DocumentRepository $documentRepository;
 	private EventHandlerService $eventHandlerService;
 	private PullService $pullService;
-	private ChatService $chatService;
+	private HrBotMessageService $hrBotMessageService;
 	private MemberRepository $memberRepository;
+	private readonly MemberService $memberService;
 	private LegalLogService $legalLogService;
 	private readonly UserToSignDocumentCounterService $b2eUserToSignDocumentCounterService;
 
@@ -36,10 +39,11 @@ final class ChangeDocumentStatus implements Contract\Operation
 		$this->documentRepository = Container::instance()->getDocumentRepository();
 		$this->eventHandlerService = Container::instance()->getEventHandlerService();
 		$this->pullService = Container::instance()->getPullService();
-		$this->chatService = Container::instance()->getChatService();
+		$this->hrBotMessageService = Container::instance()->getHrBotMessageService();
 		$this->memberRepository = Container::instance()->getMemberRepository();
 		$this->legalLogService = Container::instance()->getLegalLogService();
 		$this->b2eUserToSignDocumentCounterService = Container::instance()->getB2eUserToSignDocumentCounterService();
+		$this->memberService = Container::instance()->getMemberService();
 	}
 
 	public function launch(): Main\Result
@@ -51,6 +55,9 @@ final class ChangeDocumentStatus implements Contract\Operation
 			return $result->addError(new Main\Error('Empty document ID.'));
 		}
 
+		// status may be changed asynchronously
+		$this->document = $this->documentRepository->getById($this->document->id);
+
 		if (!in_array($this->document->status, Type\DocumentStatus::getAll()))
 		{
 			return $result->addError(new Main\Error("Unknown document status '{$this->document->status}'"));
@@ -58,7 +65,7 @@ final class ChangeDocumentStatus implements Contract\Operation
 
 		if ($this->document->status === $this->status)
 		{
-			return $result->addError(new Main\Error('Can\'t update document status.'));
+			return $result;
 		}
 
 		if ($this->status === Type\DocumentStatus::DONE)
@@ -78,7 +85,7 @@ final class ChangeDocumentStatus implements Contract\Operation
 		if (Type\DocumentScenario::isB2EScenario($this->document->scenario ?? ''))
 		{
 			$this->legalLogService->registerDocumentChangedStatus($this->document, $this->stopInitiatorMember);
-			$sendMessageResult = $this->chatService->handleDocumentStatusChangedMessage($this->document, $this->status, $this->stopInitiatorMember);
+			$sendMessageResult = $this->hrBotMessageService->handleDocumentStatusChangedMessage($this->document, $this->status, $this->stopInitiatorMember);
 			$result->addErrors($sendMessageResult->getErrors());
 			$this->eventHandlerService->handleCurrentDocumentStatus($this->document, $this->stopInitiatorMember);
 			$members = $this->memberRepository->listByDocumentId($this->document->id);
@@ -88,8 +95,50 @@ final class ChangeDocumentStatus implements Contract\Operation
 			}
 			if ($this->status === Type\DocumentStatus::STOPPED)
 			{
+				$addMembersResult = (new AddMembersByStoppedDocument($this->document))->launch();
+				if (!$addMembersResult->isSuccess())
+				{
+					return $result->addErrors($addMembersResult->getErrors());
+				}
 				$this->b2eUserToSignDocumentCounterService->updateByDocument($this->document);
+				if ($this->stopInitiatorMember)
+				{
+					$setDocumentStoppedByResult = $this->setDocumentStoppedBy();
+					if (!$setDocumentStoppedByResult->isSuccess())
+					{
+						return $setDocumentStoppedByResult;
+					}
+				}
 			}
+		}
+
+		return $result;
+	}
+
+	private function setDocumentStoppedBy(): Main\Result
+	{
+		$result = new Main\Result();
+
+		if ($this->stopInitiatorMember === null)
+		{
+			return $result->addError(new Main\Error('Empty member'));
+		}
+
+		$userId = $this->memberService->getUserIdForMember(
+			$this->stopInitiatorMember,
+			$this->document
+		);
+
+		if ($userId === null)
+		{
+			return $result->addError(new Main\Error('Can not find user'));
+		}
+
+		$this->document->stoppedById = $userId;
+		$updateResult = $this->documentRepository->update($this->document);
+		if (!$updateResult->isSuccess())
+		{
+			return $updateResult;
 		}
 
 		return $result;

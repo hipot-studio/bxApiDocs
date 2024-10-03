@@ -77,7 +77,14 @@ class HttpRequest extends Request
 		$headers = new HttpHeaders();
 		foreach ($this->fetchHeaders($server) as $headerName => $value)
 		{
-			$headers->add($headerName, $value);
+			try
+			{
+				$headers->add($headerName, $value);
+			}
+			catch (\InvalidArgumentException)
+			{
+				// ignore an invalid header
+			}
 		}
 
 		return $headers;
@@ -126,6 +133,10 @@ class HttpRequest extends Request
 		{
 			$this->setValuesNoDemand(array_merge($this->queryString->values, $this->postData->values));
 		}
+
+		// need to reinit
+		$this->requestedPage = null;
+		$this->requestedPageDirectory = null;
 	}
 
 	/**

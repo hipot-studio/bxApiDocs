@@ -92,11 +92,12 @@ class ForwardService
 		$messageConfig = [
 			'MESSAGE_TYPE' => $this->toChat->getType(),
 			'MESSAGE' => $forwardingMessage->getMessage() !== '' ? $forwardingMessage->getMessage() : null,
-			'PARAMS' => $paramsResult->getResult(),
+			'PARAMS' => $paramsResult->getResult()['PARAMS'] ?? [],
 			'TO_CHAT_ID' =>  $this->toChat->getChatId(),
 			'FROM_USER_ID' => $this->getContext()->getUserId(),
 			'URL_PREVIEW' => 'N',
-			'TEMPLATE_ID' => $forwardingMessage->getForwardUuid() ?? ''
+			'TEMPLATE_ID' => $forwardingMessage->getForwardUuid() ?? '',
+			'FILE_MODELS' => $paramsResult->getResult()['FILE_MODELS'] ?? [],
 		];
 
 		$result = new Result();
@@ -135,6 +136,8 @@ class ForwardService
 			}
 		}
 
+		$diskFiles = [];
+
 		if ($forwardingMessage->getParams()->isSet(Message\Params::FILE_ID))
 		{
 			$newFileIds = [];
@@ -144,6 +147,7 @@ class ForwardService
 				if ($copy instanceof FileItem)
 				{
 					$newFileIds[] = $copy->getId();
+					$diskFiles[] = $copy->getDiskFile();
 				}
 			}
 
@@ -160,7 +164,7 @@ class ForwardService
 			$newParams[Message\Params::COPILOT_ROLE] = $copilotRole ?? RoleManager::getDefaultRoleCode();
 		}
 
-		return $result->setResult($newParams);
+		return $result->setResult(['PARAMS' => $newParams, 'FILE_MODELS' => $diskFiles]);
 	}
 
 	/**
@@ -203,6 +207,6 @@ class ForwardService
 	{
 		$chat = $message->getChat();
 
-		return $chat->hasAccess($this->getContext()->getUserId()) && !($chat instanceof Chat\CommentChat);
+		return $chat->checkAccess($this->getContext()->getUserId())->isSuccess() && !($chat instanceof Chat\CommentChat);
 	}
 }

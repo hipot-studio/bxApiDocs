@@ -18,6 +18,7 @@ use Bitrix\Sign\Service\Cache\Memory\Sign\UserCache;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Type\DocumentStatus;
 use Bitrix\Sign\Type\Member\EntityType;
+use Bitrix\Sign\Type\Member\Notification\ReminderType;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\MemberStatus;
 
@@ -131,6 +132,13 @@ class MemberRepository
 			stampFileId: $model->getStampFileId(),
 			role: $role,
 			configured: $model->getConfigured(),
+			reminder: new Item\Member\Reminder(
+				lastSendDate: $model->getReminderLastSendDate(),
+				plannedNextSendDate: $model->getReminderPlannedNextSendDate(),
+				completed: $model->getReminderCompleted(),
+				type: ReminderType::tryFromInt($model->getReminderType()) ?? ReminderType::NONE,
+				startDate: $model->getReminderStartDate(),
+			),
 		);
 	}
 
@@ -194,6 +202,11 @@ class MemberRepository
 			->setSigned($item->status)
 			->setVerified('N')
 			->setConfigured($item->configured)
+			->setReminderStartDate($item->reminder->startDate)
+			->setReminderType($item->reminder->type->toInt())
+			->setReminderLastSendDate($item->reminder->lastSendDate)
+			->setReminderPlannedNextSendDate($item->reminder->plannedNextSendDate)
+			->setReminderCompleted($item->reminder->completed)
 		;
 	}
 
@@ -350,6 +363,19 @@ class MemberRepository
 		return !!$model->fetch();
 	}
 
+	public function listByDocumentIdListAndRoles(array $documentIds, array $roles): Item\MemberCollection
+	{
+		$roleIds = array_map(fn(string $role) => $this->convertRoleToInt($role), $roles);
+		$models = Internal\MemberTable
+			::query()
+			->addSelect('*')
+			->whereIn('DOCUMENT_ID', $documentIds)
+			->whereIn('ROLE', $roleIds)
+		;
+
+		return $this->extractItemCollectionFromModelCollection($models->fetchCollection());
+	}
+
 	public function getByDocumentIdWithParty(int $documentId, int $party, string $entityType, int $entityId): Item\Member
 	{
 		$models = Internal\MemberTable
@@ -411,6 +437,23 @@ class MemberRepository
 		;
 
 		return $this->extractItemCollectionFromModelCollection($models);
+	}
+
+	public function getHavingOldestReminderByDocumentId(int $documentId): ?Item\Member
+	{
+		$memberEntity = Internal\MemberTable
+			::query()
+			->addSelect('*')
+			->where('DOCUMENT_ID', $documentId)
+			->setOrder(['REMINDER_START_DATE' => 'DESC'])
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		return $memberEntity
+			? $this->extractItemFromModel($memberEntity)
+			: null
+		;
 	}
 
 	public function getByUid(string $uid): ?Item\Member
@@ -530,6 +573,27 @@ class MemberRepository
 			$member->setConfigured($item->configured);
 		}
 
+		if (isset($item->reminder->startDate))
+		{
+			$member->setReminderStartDate($item->reminder->startDate);
+		}
+		if (isset($item->reminder->lastSendDate))
+		{
+			$member->setReminderLastSendDate($item->reminder->lastSendDate);
+		}
+		if (isset($item->reminder->plannedNextSendDate))
+		{
+			$member->setReminderPlannedNextSendDate($item->reminder->plannedNextSendDate);
+		}
+		if (isset($item->reminder->completed))
+		{
+			$member->setReminderCompleted($item->reminder->completed);
+		}
+		if (isset($item->reminder->type))
+		{
+			$member->setReminderType($item->reminder->type->toInt());
+		}
+
 		return $member->save();
 	}
 
@@ -555,19 +619,59 @@ class MemberRepository
 		return $this->extractItemFromModel($model);
 	}
 
-	public function listWithFilter(ConditionTree $filter): Item\MemberCollection
+	public function listWithFilter(ConditionTree $filter, int $limit = 0): Item\MemberCollection
 	{
-		/** @var Internal\MemberCollection $models */
-		$models = Internal\MemberTable::query()
+		$query = Internal\MemberTable::query()
 			->addSelect('*')
 			->where($filter)
-			->fetchCollection()
 		;
+		if ($limit > 0)
+		{
+			$query->setLimit($limit);
+		}
+
+		/** @var Internal\MemberCollection $models */
+		$models = $query->fetchCollection();
 
 		return $models === null
 			? new Item\MemberCollection()
 			: $this->extractItemCollectionFromModelCollection($models)
 		;
+	}
+
+	/**
+	 * @param int $documentId
+	 * @param array<MemberStatus::*> $memberStatuses
+	 * @param ConditionTree $filter
+	 * @param int $limit
+	 *
+	 */
+	public function listByDocumentIdAndMemberStatusesAndCustomFilter(
+		int $documentId,
+		array $memberStatuses,
+		ConditionTree $filter,
+		int $limit = 0,
+	): Item\MemberCollection
+	{
+		if ($documentId <= 0)
+		{
+			return new Item\MemberCollection();
+		}
+
+		$query = Internal\MemberTable::query()
+			->addSelect('*')
+			->where('DOCUMENT_ID', $documentId)
+			->whereIn('SIGNED', $memberStatuses)
+			->where($filter)
+		;
+		if ($limit > 0)
+		{
+			$query->setLimit($limit);
+		}
+
+		$models = $query->fetchCollection();
+
+		return $this->extractItemCollectionFromModelCollection($models);
 	}
 
 	public function listSignersByUserIdIsDone(
@@ -597,7 +701,7 @@ class MemberRepository
 			->setQueryTotal((int)$query->queryCountTotal());
 	}
 
-	public function getAssigneeByDocumentId(int $documentId): Item\Member
+	public function getAssigneeByDocumentId(int $documentId): ?Item\Member
 	{
 		$model = Internal\MemberTable
 			::query()
@@ -608,7 +712,7 @@ class MemberRepository
 			->fetchObject()
 		;
 
-		return $this->extractItemFromModel($model);
+		return $model === null ? null : $this->extractItemFromModel($model);
 	}
 
 	public function getByPartyAndDocumentId(int $documentId, int $part): ?Item\Member
@@ -758,7 +862,7 @@ class MemberRepository
 			);
 		}
 
-		if ($filter !== null)
+		if ($filter?->hasConditions())
 		{
 			$query->where($filter);
 			$this->updateQueryByRefFields($filter, $query);
@@ -942,9 +1046,64 @@ class MemberRepository
 		;
 	}
 
+	public function listB2eMembersWithReadyStatusByDocumentIds(array $documentIds, int $entityId): Item\MemberCollection
+	{
+		$query = $this->getQueryForMemberCollectionReadyStatus($entityId)
+			->whereIn('DOCUMENT_ID', $documentIds)
+		;
+
+		return $this->extractItemCollectionFromModelCollection($query->fetchCollection())
+			->setQueryTotal((int)$query->queryCountTotal())
+		;
+	}
+
 	public function getCountForCurrentUserAction(int $entityId): int
 	{
 		return (int)$this->getQueryForMemberCollectionReadyStatus($entityId)->queryCountTotal();
+	}
+
+	public function listB2eSigningByDocumentIdAndStatuses(int $documentId, array $statuses, int $limit = 1): Item\MemberCollection
+	{
+		$result = Internal\MemberTable::query()
+			->addSelect('*')
+			->where('ENTITY_TYPE', EntityType::USER)
+			->whereIn('SIGNED', $statuses)
+			->where('DOCUMENT_ID', $documentId)
+			->where('ROLE', $this->convertRoleToInt(Role::SIGNER))
+			->setLimit($limit)
+		;
+
+		return $this->extractItemCollectionFromModelCollection($result->fetchCollection())
+			->setQueryTotal((int)$result->queryCountTotal())
+		;
+	}
+
+	public function listB2eStoppedByDocumentId(int $documentId, int $limit = 3): Item\MemberCollection
+	{
+		$filter = Query::filter()
+			->logic('or')
+			->where(
+				Query::filter()
+					->logic('and')
+					->whereIn('SIGNED', [MemberStatus::REFUSED, MemberStatus::STOPPED])
+			)->where(
+				Query::filter()
+					->logic('and')
+					->where('DOCUMENT.STATUS', DocumentStatus::STOPPED)
+					->whereNot('SIGNED', MemberStatus::DONE)
+			);
+
+		$result = Internal\MemberTable::query()
+			->addSelect('*')
+			->where('DOCUMENT_ID', $documentId)
+			->where('ROLE', $this->convertRoleToInt(Role::SIGNER))
+			->where($filter)
+			->setLimit($limit)
+		;
+
+		return $this->extractItemCollectionFromModelCollection($result->fetchCollection())
+			->setQueryTotal((int)$result->queryCountTotal())
+		;
 	}
 
 	private function getQueryForMemberCollectionReadyStatus(int $entityId): Query
@@ -955,21 +1114,39 @@ class MemberRepository
 				Query::filter()
 					->logic('and')
 					->where('ENTITY_TYPE', '=', EntityType::USER)
-					->where('ENTITY_ID', $entityId),
+					->where('ENTITY_ID', $entityId)
+					->whereIn('DOCUMENT.STATUS', [DocumentStatus::SIGNING, DocumentStatus::STOPPED])
+					->where(
+						Query::filter()
+							->logic('or')
+							->where(Query::filter()
+										 ->logic('and')
+										 ->where('SIGNED', MemberStatus::READY)
+										 ->where('DOCUMENT.PROVIDER_CODE', Type\ProviderCode::GOS_KEY)
+										 ->whereIn('DOCUMENT.STATUS', [DocumentStatus::SIGNING, DocumentStatus::STOPPED])
+							)
+							->where(Query::filter()
+										 ->logic('and')
+										 ->whereIn('SIGNED', MemberStatus::getReadyForSigning())
+										 ->where('DOCUMENT.STATUS', DocumentStatus::SIGNING)
+							)
+					)
+				,
 			)
 			->where(
 				Query::filter()
 					->logic('and')
 					->where('ENTITY_TYPE', '=', EntityType::COMPANY)
 					->where('ROLE', '=', $this->convertRoleToInt(Role::ASSIGNEE))
-					->where('DOCUMENT.REPRESENTATIVE_ID', '=', $entityId),
+					->where('DOCUMENT.REPRESENTATIVE_ID', '=', $entityId)
+					->where('DOCUMENT.STATUS', DocumentStatus::SIGNING)
+				,
 		);
 
 		return Internal\MemberTable
 			::query()
 			->addSelect('*')
 			->whereIn('SIGNED', MemberStatus::getReadyForSigning())
-			->where('DOCUMENT.STATUS', DocumentStatus::SIGNING)
 			->where('DOCUMENT.ENTITY_TYPE', '=', Type\Document\EntityType::SMART_B2E)
 			->where($filter)
 		;
@@ -1231,5 +1408,76 @@ class MemberRepository
 		$maxRelevance = max($relevance) + 1;
 
 		return "CASE %s {$conditionString} ELSE {$maxRelevance} END";
+	}
+
+	public function listByDocumentIdWithRoles(int $documentId, array $memberRoles): Item\MemberCollection
+	{
+		$roleIds = array_map(fn(string $role) => $this->convertRoleToInt($role), $memberRoles);
+		$models = Internal\MemberTable
+			::query()
+			->addSelect('*')
+			->where('DOCUMENT_ID', $documentId)
+			->whereIn('ROLE', $roleIds)
+			->fetchCollection()
+		;
+
+		return $this->extractItemCollectionFromModelCollection($models);
+	}
+
+	/**
+	 * @param int $documentId
+	 * @param list<Role> $memberRoles
+	 * @param list<MemberStatus::*> $memberStatuses
+	 */
+	public function listByDocumentIdWithRolesAndStatuses(int $documentId, array $memberRoles, array $memberStatuses): Item\MemberCollection
+	{
+		$roleIds = array_map(fn(string $role) => $this->convertRoleToInt($role), $memberRoles);
+		$models = Internal\MemberTable
+			::query()
+			->addSelect('*')
+			->where('DOCUMENT_ID', $documentId)
+			->whereIn('ROLE', $roleIds)
+			->whereIn('SIGNED', $memberStatuses)
+			->fetchCollection()
+		;
+
+		return $this->extractItemCollectionFromModelCollection($models);
+	}
+
+	public function existsByDocumentIdWithRoleAndStatus(int $documentId, string $role, string $status): bool
+	{
+		$roleInt = $this->convertRoleToInt($role);
+
+		$model = Internal\MemberTable::query()
+			->addSelect('*')
+			->where('DOCUMENT_ID', $documentId)
+			->where('ROLE', $roleInt)
+			->where('SIGNED', $status)
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		return $model !== null;
+	}
+
+	public function existsByDocumentIdWithReminderTypeNotEqual(int $documentId, ReminderType $reminderType): bool
+	{
+		$model = Internal\MemberTable::query()
+			->addSelect('*')
+			->where('DOCUMENT_ID', $documentId)
+			->whereNot('REMINDER_TYPE', $reminderType->toInt())
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		return $model !== null;
+	}
+
+	public function updateMembersReminderTypeByRole(int $documentId, string $memberRole, ReminderType $reminderType): Main\Result
+	{
+		$members = $this->listByDocumentIdWithRole($documentId, $memberRole);
+		$ids = $members->getIds();
+
+		return Internal\MemberTable::updateMulti($ids, ['REMINDER_TYPE' => $reminderType->toInt()]);
 	}
 }

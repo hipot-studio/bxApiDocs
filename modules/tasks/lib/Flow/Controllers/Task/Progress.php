@@ -3,7 +3,6 @@
 namespace Bitrix\Tasks\Flow\Controllers\Task;
 
 use Bitrix\Main\Engine\Controller;
-use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Tasks\Flow\Access\FlowAccessController;
@@ -23,7 +22,7 @@ class Progress extends Controller
 	/**
 	 * @restMethod tasks.flow.task.progress.list
 	 */
-	public function listAction(FlowDto $flowData, PageNavigation $pageNavigation): ?Page
+	public function listAction(FlowDto $flowData, PageNavigation $pageNavigation): ?array
 	{
 		if (!FlowAccessController::can($this->userId, FlowAction::READ, $flowData->id))
 		{

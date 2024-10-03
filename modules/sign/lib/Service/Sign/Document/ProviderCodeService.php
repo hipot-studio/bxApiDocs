@@ -8,6 +8,7 @@ use Bitrix\Sign\Item;
 use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Service;
+use Bitrix\Sign\Type\DocumentScenario;
 
 class ProviderCodeService
 {
@@ -29,6 +30,10 @@ class ProviderCodeService
 		if ($document->providerCode !== null)
 		{
 			return new Main\Result();
+		}
+		if (!DocumentScenario::isB2eScenarioByDocument($document))
+		{
+			return (new Main\Result())->addError(new Main\Error("Cant load provider info. Document is not B2E"));
 		}
 
 		$companyUid = $document->companyUid;

@@ -4,9 +4,9 @@ namespace Bitrix\Tasks\Flow\Notification\Config;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Flow\Notification\Exception\InvalidPayload;
-use Bitrix\Tasks\ValueObject;
+use Bitrix\Tasks\ValueObjectInterface;
 
-class Caption implements ValueObject
+class Caption implements ValueObjectInterface
 {
 	private string $text;
 

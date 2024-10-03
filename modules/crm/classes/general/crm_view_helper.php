@@ -13,6 +13,7 @@ use Bitrix\Crm\Order;
 use Bitrix\Crm\Security\StagePermissions;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline;
+use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Workflow\PaymentStage;
 use Bitrix\Main\UI\Extension;
 
@@ -3204,7 +3205,7 @@ class CCrmViewHelper
 				'color' => $status['COLOR'] ?? '',
 				'semantics' => $status['SEMANTICS'],
 				'stagesToMove' => $status['STAGES_TO_MOVE'] ?? [],
-				'allowMoveToAnyStage' => $canWriteConfig,
+				'allowMoveToAnyStage' => $canWriteConfig || UserPermissions::isAlwaysAllowedEntity($entityTypeId),
 			];
 
 			if ($status['SEMANTICS'] === 'F')

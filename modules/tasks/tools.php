@@ -1151,7 +1151,7 @@ function tasksGetLastSelected($arManagers, $bSubordinateOnly = false, $nameTempl
 		$arSubDeps = CTasks::GetSubordinateDeps();
 
 		$arLastSelected = CUserOptions::GetOption("tasks", "user_search", array());
-		if (is_array($arLastSelected) && $arLastSelected['last_selected'] <> '')
+		if (is_array($arLastSelected) && ($arLastSelected['last_selected'] ?? null) <> '')
 			$arLastSelected = array_unique(explode(',', $arLastSelected['last_selected']));
 		else
 			$arLastSelected = false;
@@ -1167,6 +1167,8 @@ function tasksGetLastSelected($arManagers, $bSubordinateOnly = false, $nameTempl
 		}
 		else
 		{
+			$arLastSelected = is_array($arLastSelected) ? $arLastSelected : [];
+
 			$arLastSelected[] = $userId;
 		}
 

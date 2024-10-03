@@ -30,32 +30,14 @@ final class IntranetConfigsComponent extends CBitrixComponent
 		if ($rootDepartmentId === null)
 		{
 			$rootDepartmentId = COption::GetOptionString("main", "wizard_departament", false, SITE_DIR, true);
-			if (
-				empty($rootDepartmentId)
-				&& Loader::includeModule('iblock')
-			)
+			if (empty($rootDepartmentId))
 			{
-				$iblockId = COption::GetOptionInt('intranet', 'iblock_structure', false);
-				if ($iblockId > 0)
+				$depapartmentRepository = Intranet\Service\ServiceContainer::getInstance()
+					->departmentRepository();
+				$rootDepartment = $depapartmentRepository->getRootDepartment();
+				if ($rootDepartment)
 				{
-					$res = \CIBlockSection::getList(
-						array(
-							'LEFT_MARGIN' => 'ASC',
-						),
-						array(
-							'IBLOCK_ID' => $iblockId,
-							'ACTIVE' => 'Y',
-						),
-						false,
-						array('ID')
-					);
-					if (
-						!empty($res)
-						&& ($rootSection = $res->fetch())
-					)
-					{
-						$rootDepartmentId = $rootSection['ID'];
-					}
+					$rootDepartmentId = $rootDepartment->getId();
 				}
 			}
 		}
@@ -306,14 +288,15 @@ final class IntranetConfigsComponent extends CBitrixComponent
 			{
 				Intranet\Portal::getInstance()->getSettings()->setName($_REQUEST["logo_name"]);
 				$iblockID = COption::GetOptionInt("intranet", "iblock_structure");
-				$db_up_department = CIBlockSection::GetList(Array(), Array("SECTION_ID"=>0, "IBLOCK_ID"=>$iblockID));
-				if ($ar_up_department = $db_up_department->Fetch())
+				$departmentRepository = Intranet\Service\ServiceContainer::getInstance()->departmentRepository();
+				$rootDepartment = $departmentRepository->getRootDepartment();
+				if ($rootDepartment)
 				{
-					$up_dep_id = $ar_up_department['ID'];
-					if (CIBlockRights::UserHasRightTo($iblockID, $up_dep_id, 'section_edit'))
+					//TODO: need check form the "humanresource" module
+					if (CIBlockRights::UserHasRightTo($iblockID, $rootDepartment->getId(), 'section_edit'))
 					{
-						$section = new CIBlockSection;
-						$res = $section->Update($up_dep_id, array("NAME" => $_REQUEST["logo_name"]));
+						$rootDepartment->setName($_REQUEST["logo_name"]);
+						$departmentRepository->save($rootDepartment);
 					}
 				}
 			}

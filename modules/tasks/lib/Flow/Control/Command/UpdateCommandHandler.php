@@ -4,10 +4,10 @@ namespace Bitrix\Tasks\Flow\Control\Command;
 
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Event;
-use Bitrix\Tasks\Flow\Control\AbstractCommand;
+use Bitrix\Tasks\AbstractCommand;
 use Bitrix\Tasks\Flow\Control\Exception\FlowNotFoundException;
 use Bitrix\Tasks\Flow\Control\Exception\FlowNotUpdatedException;
-use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
+use Bitrix\Tasks\InvalidCommandException;
 use Bitrix\Tasks\Flow\Control\Mapper\FlowCommandMapper;
 use Bitrix\Tasks\Flow\Control\Middleware\Implementation\DepartmentMiddleware;
 use Bitrix\Tasks\Flow\Control\Middleware\Implementation\OriginalNameMiddleware;
@@ -19,6 +19,8 @@ use Bitrix\Tasks\Flow\Control\Observer\UpdateObserverInterface;
 use Bitrix\Tasks\Flow\Control\Observer\ResponsibleQueue;
 use Bitrix\Tasks\Flow\Control\Observer\Option;
 use Bitrix\Tasks\Flow\Control\Observer\Member;
+use Bitrix\Tasks\Flow\Control\Observer\Robot;
+use Bitrix\Tasks\Flow\Control\Observer\Template;
 use Bitrix\Tasks\Flow\Flow;
 use Bitrix\Tasks\Flow\Internal\Entity\FlowEntity;
 use Bitrix\Tasks\Flow\Internal\FlowTable;
@@ -202,6 +204,9 @@ class UpdateCommandHandler extends CommandHandler
 		$this->addRequiredObserver(new Option\UpdateObserver());
 		$this->addRequiredObserver(new Member\UpdateObserver());
 		$this->addRequiredObserver(new Search\UpdateObserver());
+
+		$this->addExtraObserver(new Robot\UpdateObserver());
+		$this->addExtraObserver(new Template\UpdateObserver());
 
 		$this->middleware = new OriginalNameMiddleware();
 

@@ -44,6 +44,19 @@ class DocumentCollection implements ItemCollection, \Iterator, \Countable
 		return null;
 	}
 
+	public function getByEntityId(int $entityId): ?Document
+	{
+		foreach ($this->items as $item)
+		{
+			if ((int)$item->entityId === $entityId)
+			{
+				return $item;
+			}
+		}
+
+		return null;
+	}
+
 	public function toArray(): array
 	{
 		return $this->items;

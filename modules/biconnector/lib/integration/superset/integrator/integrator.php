@@ -9,8 +9,10 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Logger\IntegratorLogger;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorRequest;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\Middleware;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Integration\Superset\Registrar;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
+use Bitrix\BIConnector\Integration\Superset\SupersetStatusOptionContainer;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
@@ -21,6 +23,8 @@ use Bitrix\Main\Web\Json;
 
 final class Integrator
 {
+	private const PROXY_ACTION_REGISTER_PORTAL = '/portal/register';
+	private const PROXY_ACTION_VERIFY_PORTAL = '/portal/verify';
 	private const PROXY_ACTION_PING_SUPERSET = '/instance/ping';
 	private const PROXY_ACTION_START_SUPERSET = '/instance/start';
 	private const PROXY_ACTION_FREEZE_SUPERSET = '/instance/freeze';
@@ -67,14 +71,21 @@ final class Integrator
 
 	private function createDefaultRequest(string $action): IntegratorRequest
 	{
-		return
-			(new IntegratorRequest($this->sender))
-				->setAction($action)
-				->addBefore(new Middleware\TariffRestriction())
-				->addBefore(new Middleware\UserAccess())
-				->addAfter(new Middleware\Logger($this->logger))
-				->addAfter(new Middleware\StatusArbiter($this->logger))
+		$statusContainer = new SupersetStatusOptionContainer();
+
+		$registrarMiddleware = new Middleware\Registrar(Registrar::getRegistrar(), $this->logger);
+		$request = (new IntegratorRequest($this->sender))
+			->setAction($action)
+			->addBefore(new Middleware\TariffRestriction())
+			->addBefore($registrarMiddleware)
+			->addBefore(new Middleware\ReadyGate($statusContainer, $this->logger))
+			->addBefore(new Middleware\UserAccess())
+			->addAfter($registrarMiddleware)
+			->addAfter(new Middleware\Logger($this->logger))
+			->addAfter(new Middleware\StatusArbiter($this->logger))
 		;
+
+		return $request;
 	}
 
 	private static function getDefaultLogger(): IntegratorLogger
@@ -94,6 +105,59 @@ final class Integrator
 	}
 
 	// region Service methods
+
+	/**
+	 * Register new portal on proxy-server. On success - got unique portal ID for authentication in proxy.
+	 *
+	 * On request save unique ID from response to config by Client middleware,
+	 * after that portal make verify request to proxy-server, for verify this portal ID
+	 *
+	 * @see self::verifyPortal()
+	 *
+	 * @return IntegratorResponse<string>
+	 */
+	public function registerPortal(): IntegratorResponse
+	{
+		$response = $this
+			->createDefaultRequest(self::PROXY_ACTION_REGISTER_PORTAL)
+			->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+			->removeBefore(Middleware\Registrar::getMiddlewareId())
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
+			->perform()
+		;
+
+		if ($response->hasErrors())
+		{
+			return $response;
+		}
+
+		$clientId = $response->getData()['portalId'] ?? null;
+
+		return $response->setData($clientId);
+	}
+
+	/**
+	 * Verify portal ID on proxy-server, created by <b>registerPortal</b> action.
+	 *
+	 * On request proxy-server make verify request to verify.php endpoint and return verify result in this method
+	 *
+	 * Method for portal ID verify
+	 * @see install/public/bitrix/biconstructor/verify.php
+	 *
+	 * @return IntegratorResponse
+	 */
+	public function verifyPortal(): IntegratorResponse
+	{
+		return $this
+			->createDefaultRequest(self::PROXY_ACTION_VERIFY_PORTAL)
+			->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+			->removeBefore(Middleware\Registrar::getMiddlewareId())
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
+			->perform()
+		;
+	}
 
 	/**
 	 * Returns response with list of dashboards info on successful request.
@@ -491,6 +555,7 @@ final class Integrator
 		$response =
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_START_SUPERSET)
+				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
 				->setParams($requestParams)
 				->perform()
 		;
@@ -528,6 +593,7 @@ final class Integrator
 		return
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_FREEZE_SUPERSET)
+				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
 				->removeBefore(Middleware\TariffRestriction::getMiddlewareId())
 				->setParams($requestParams)
 				->perform()
@@ -553,6 +619,7 @@ final class Integrator
 		return
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_UNFREEZE_SUPERSET)
+				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
 				->removeBefore(Middleware\TariffRestriction::getMiddlewareId())
 				->setParams($requestParams)
 				->perform()
@@ -570,7 +637,10 @@ final class Integrator
 		return
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_DELETE_SUPERSET)
+				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
 				->removeBefore(Middleware\TariffRestriction::getMiddlewareId())
+				->removeBefore(Middleware\UserAccess::getMiddlewareId())
+				->removeBefore(Middleware\Registrar::getMiddlewareId())
 				->perform()
 		;
 	}
@@ -682,7 +752,11 @@ final class Integrator
 		static $isChecked = false;
 		if (!$isChecked)
 		{
-			$this->createDefaultRequest(self::PROXY_ACTION_PING_SUPERSET)->perform();
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_PING_SUPERSET)
+				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+				->perform()
+			;
 			$isChecked = true;
 		}
 

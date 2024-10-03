@@ -3,7 +3,8 @@
 namespace Bitrix\Tasks\Flow\Kanban;
 
 use Bitrix\Main\ORM\Data\Result;
-use Bitrix\Tasks\Flow\Integration\BizProc\Robot\RobotCommand;
+use Bitrix\Tasks\Flow\Integration\BizProc\Robot\RobotCommandCollection;
+use Bitrix\Tasks\Flow\Integration\BizProc\Robot\RobotStatusChangedCommand;
 use Bitrix\Tasks\Flow\Integration\BizProc\Robot\RobotService;
 use Bitrix\Tasks\Flow\Integration\BizProc\Trigger\TriggerCommand;
 use Bitrix\Tasks\Flow\Integration\BizProc\Trigger\TriggerService;
@@ -11,9 +12,19 @@ use Bitrix\Tasks\Kanban\Stage;
 
 abstract class AbstractStage
 {
-	protected int $id;
 	protected int $projectId;
-	protected int $userId;
+	protected int $ownerId;
+	protected int $flowId;
+	protected int $stageId;
+
+
+	public function __construct(int $projectId, int $ownerId, int $flowId, int $stageId = 0)
+	{
+		$this->projectId = $projectId;
+		$this->ownerId = $ownerId;
+		$this->flowId = $flowId;
+		$this->stageId = $stageId;
+	}
 
 	abstract protected function getInternalStage(): Stage;
 
@@ -23,17 +34,11 @@ abstract class AbstractStage
 	abstract protected function getTriggers(): array;
 
 	/**
-	 * @return RobotCommand[]
+	 * @return RobotStatusChangedCommand[]
 	 */
 	abstract protected function getRobots(): array;
 
-	public function __construct(int $projectId, int $userId)
-	{
-		$this->projectId = $projectId;
-		$this->userId = $userId;
-	}
-
-	public function save(): Result
+	public function create(): Result
 	{
 		$result = $this->getInternalStage()->save();
 		if (!$result->isSuccess())
@@ -41,7 +46,7 @@ abstract class AbstractStage
 			return $result;
 		}
 
-		$this->id = $result->getId();
+		$this->stageId = $result->getId();
 
 		$this->saveTriggers();
 
@@ -50,19 +55,19 @@ abstract class AbstractStage
 		return $result;
 	}
 
-	private function saveTriggers(): void
+	final protected function saveTriggers(): void
 	{
 		$triggers = $this->getTriggers();
-		$service = (new TriggerService($this->id, $this->projectId));
+		$service = (new TriggerService($this->stageId, $this->projectId));
 
 		$service->add(...$triggers);
 	}
 
-	private function saveRobots(): void
+	final public function saveRobots(): void
 	{
-		$robots = $this->getRobots();
-		$service = (new RobotService($this->id, $this->projectId, $this->userId));
+		$service = new RobotService($this->projectId, $this->ownerId, $this->flowId);
+		$robots = new RobotCommandCollection($this->stageId, $this->getInternalStage()->getSystemType(), ...$this->getRobots());
 
-		$service->add(...$robots);
+		$service->add($robots);
 	}
 }

@@ -283,15 +283,11 @@ final class UserSenderDataProvider
 				continue;
 			}
 
-			if (isset($sender['USER_ID']))
-			{
-				$sender['USER_ID'] = (int)$sender['USER_ID'];
-			}
-
-			$userFormattedName = self::getUserFormattedName($sender['USER_ID'] ?? $mailbox['USER_ID']);
-			$senderName = $mailbox['USERNAME'];
+			$userFormattedName = self::getUserFormattedName((int)($sender['USER_ID'] ?? $mailbox['USER_ID']));
+			$senderName = trim($mailbox['USERNAME'] ?? '');
 			if ($sender)
 			{
+				$sender['USER_ID'] = (int)$sender['USER_ID'];
 				if (empty($sender['NAME']) && empty($mailbox['USERNAME']))
 				{
 					$senderName = self::getUserFormattedName($sender['USER_ID']);
@@ -321,11 +317,20 @@ final class UserSenderDataProvider
 			}
 
 			if (
-				$userId !== (int)$mailbox['USER_ID']
-				&& self::getUserFormattedName((int)$mailbox['USER_ID']) === $senderName
+				empty($senderName)
+				|| (
+					$userId !== (int)$mailbox['USER_ID']
+					&& self::getUserFormattedName((int)$mailbox['USER_ID']) === $senderName
+				)
 			)
 			{
 				$senderName = $currentUserFormattedName ?? $senderName;
+			}
+
+			if (!empty($sender['USER_ID']))
+			{
+				$avatar = $userData[$sender['USER_ID']]['userAvatar'] ?? null;
+				$userUrl = $userData[$sender['USER_ID']]['userUrl'] ?? null;
 			}
 
 			$senders[] = [
@@ -338,8 +343,8 @@ final class UserSenderDataProvider
 				'canEdit' => $canEdit,
 				'isOwner' => $isOwner,
 				'editHref' => $canEdit ? self::getMailboxConfigPath($sender['PARENT_ID'] ?? $mailbox['ID']) : null,
-				'avatar' => $userData[$sender['USER_ID']]['userAvatar'] ?? null,
-				'userUrl' => $userData[$sender['USER_ID']]['userUrl'] ?? null,
+				'avatar' => $avatar ?? null,
+				'userUrl' => $userUrl ?? null,
 				'showEditHint' => empty($sender)
 			];
 		}

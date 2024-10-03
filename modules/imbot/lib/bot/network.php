@@ -1249,7 +1249,7 @@ class Network extends Base implements NetworkBot
 	 */
 	public static function clientMessageAdd(array $fields)
 	{
-		$user = static::getUserInfo((int)$fields['USER_ID']);
+		$user = static::getUserInfo((int)$fields['USER_ID'], $fields);
 
 		$portalTariff = 'box';
 		$portalTariffLevel = 'paid';
@@ -1375,7 +1375,7 @@ class Network extends Base implements NetworkBot
 			}
 		}
 
-		$user = static::getUserInfo((int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID']));
+		$user = static::getUserInfo((int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID']), $messageFields);
 
 		$http = self::instanceHttpClient();
 		$response = $http->query(
@@ -1403,7 +1403,7 @@ class Network extends Base implements NetworkBot
 	 */
 	protected static function clientMessageDelete($messageId, $messageFields)
 	{
-		$user = static::getUserInfo((int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID']));
+		$user = static::getUserInfo((int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID']), $messageFields);
 
 		$http = self::instanceHttpClient();
 		$response = $http->query(
@@ -3080,12 +3080,21 @@ class Network extends Base implements NetworkBot
 			}
 		}
 
+		$lastMessageId = $chat->getLastMessageId();
+		$lastMessage = $lastMessageId ? $chat->getMessage($lastMessageId) : null;
+		$dateLastMessage = $lastMessage ? $lastMessage->getDateCreate() : $chat->getDateCreate();
+
+		if ($dateLastMessage === null)
+		{
+			$dateLastMessage = new \DateTime();
+		}
+
 		return [
 			'status' => $session ? mb_strtolower($session['STATUS']) : mb_strtolower(self::MULTIDIALOG_STATUS_CLOSE),
 			'botId' => $botId,
 			'chatId' => $chat->getChatId(),
 			'dialogId' => $chat->getDialogId(),
-			'dateMessage' => $chat->getMessage($chat->getLastMessageId())->getDateCreate()->format('c'),
+			'dateMessage' => $dateLastMessage->format('c'),
 		];
 	}
 
@@ -3463,7 +3472,7 @@ class Network extends Base implements NetworkBot
 	 * ]
 	 * </pre>.
 	 */
-	protected static function getUserInfo(int $userId): array
+	protected static function getUserInfo(int $userId, array $params = []): array
 	{
 		$result = [];
 

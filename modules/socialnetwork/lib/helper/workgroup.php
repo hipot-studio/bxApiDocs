@@ -24,6 +24,7 @@ use Bitrix\Socialnetwork\EO_WorkgroupPin;
 use Bitrix\Socialnetwork\FeatureTable;
 use Bitrix\Socialnetwork\FeaturePermTable;
 use Bitrix\Socialnetwork\Integration\Pull\PushService;
+use Bitrix\Socialnetwork\Integration\Pull;
 use Bitrix\Socialnetwork\WorkgroupPinTable;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\UserToGroupTable;
@@ -534,13 +535,26 @@ class Workgroup
 
 	public static function isGroupCopyFeatureEnabled(): bool
 	{
-		return
-			!ModuleManager::isModuleInstalled('bitrix24')
-			|| (
-				Loader::includeModule('bitrix24')
-				&& \Bitrix\Bitrix24\Feature::isFeatureEnabled('socnet_group_copy')
-			)
-		;
+		$isB24Installed = ModuleManager::isModuleInstalled('bitrix24') && Loader::includeModule('bitrix24');
+		
+		if (!$isB24Installed)
+		{
+			return true;
+		}
+		
+		return Feature::isFeatureEnabled(Feature::PROJECTS_COPY);
+	}
+
+	public static function isProjectAccessFeatureEnabled(): bool
+	{
+		$isB24Installed = ModuleManager::isModuleInstalled('bitrix24') && Loader::includeModule('bitrix24');
+
+		if (!$isB24Installed)
+		{
+			return true;
+		}
+
+		return Feature::isFeatureEnabled(Feature::PROJECTS_ACCESS_PERMISSIONS);
 	}
 
 	public static function setArchive(array $fields = []): bool
@@ -1258,6 +1272,11 @@ class Workgroup
 
 			throw new \Exception($errorMessage, 100);
 		}
+
+		(new Pull\Unsubscribe())->resetByTags(
+			(new Pull\Tag())->getTasksProjects($groupId),
+			[$userId]
+		);
 
 		return true;
 	}

@@ -3,11 +3,14 @@
 namespace Bitrix\Disk\Controller;
 
 use Bitrix\Disk;
+use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\ZipNginx;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
+use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Main\Engine\Response;
 
 class Folder extends BaseObject
 {
@@ -52,6 +55,45 @@ class Folder extends BaseObject
 		return $data;
 	}
 
+	public function getChildrenAction(Disk\Folder $folder, string $search = null, PageNavigation $pageNavigation = null): ?Response\DataType\Page
+	{
+		$storage = $folder->getStorage();
+		if (!$storage)
+		{
+			$this->addError(new Error('Could not find storage for folder.'));
+
+			return null;
+		}
+
+		$filter = [];
+		if ($search)
+		{
+			$filter['%=NAME'] = str_replace('%', '', $search) . '%';
+		}
+
+		$limit = $pageNavigation?->getLimit() ?: 50;
+		$offset = $pageNavigation?->getOffset() ?: 0;
+
+		$securityContext = $storage->getSecurityContext($this->getCurrentUser()?->getId());
+		$children = $folder->getChildren($securityContext, [
+			'filter' => $filter,
+			'limit' => $limit,
+			'offset' => $offset,
+		]);
+
+		return new Response\DataType\Page('children', $children, 0);
+	}
+
+	public function copyToAction(Disk\Folder $folder, Disk\Folder $toFolder)
+	{
+		return $this->copyTo($folder, $toFolder);
+	}
+
+	public function moveToAction(Disk\Folder $folder, Disk\Folder $toFolder)
+	{
+		return $this->move($folder, $toFolder);
+	}
+
 	public function renameAction(Disk\Folder $folder, $newName, $autoCorrect = false)
 	{
 		return $this->rename($folder, $newName, $autoCorrect);
@@ -74,6 +116,13 @@ class Folder extends BaseObject
 
 	public function generateExternalLinkAction(Disk\Folder $folder)
 	{
+		if (!Bitrix24Manager::isFeatureEnabled('disk_manual_external_link'))
+		{
+			$this->addError(new Error('Could not generate external link. Feature is disabled by tarif.'));
+
+			return null;
+		}
+
 		return $this->generateExternalLink($folder);
 	}
 

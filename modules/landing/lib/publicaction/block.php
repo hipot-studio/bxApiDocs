@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Landing\PublicAction;
 
+use Bitrix\Landing\Block\BlockRepo;
 use Bitrix\Landing\History;
 use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\File;
@@ -481,11 +482,6 @@ class Block
 										foreach ($attrs as $attCode => &$attValue)
 										{
 											$attValue = $rawAttrs[$attCode];
-											$attValue = \Bitrix\Main\Text\Encoding::convertEncoding(
-												$attValue,
-												'utf-8',
-												SITE_CHARSET
-											);
 										}
 									}
 									unset($attValue);
@@ -1016,13 +1012,11 @@ class Block
 	/**
 	 * Get blocks from repository.
 	 * @param string $section Section code.
-	 * @param bool $withManifest Get repo with manifest.
-	 * @return \Bitrix\Landing\PublicActionResult
 	 */
-	public static function getRepository($section = null, $withManifest = false)
+	public static function getRepository($section = null)
 	{
 		$result = new PublicActionResult();
-		$repo = \Bitrix\Landing\Block::getRepository($withManifest);
+		$repo = (new BlockRepo())->getRepository();
 
 		if ($section === null)
 		{

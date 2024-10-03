@@ -777,9 +777,10 @@ class CBPRuntime
 	public function getRestRobots($lang = false, $documentType = null)
 	{
 		$result = array();
-		$iterator = RestActivityTable::getList(array(
-			'filter' => array('=IS_ROBOT' => 'Y')
-		));
+		$iterator = RestActivityTable::getList([
+			'filter' => ['=IS_ROBOT' => 'Y'],
+			'cache' => ['ttl' => 3600],
+		]);
 
 		while ($activity = $iterator->fetch())
 		{

@@ -41,6 +41,7 @@ use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Helper\Analytics;
 
 Loc::loadMessages(__FILE__);
 
@@ -873,6 +874,8 @@ class TasksTaskListComponent extends TasksBaseComponent
 		}
 
 		$rows = $request->get('rows');
+		Main\Type\Collection::normalizeArrayValuesByInt($rows, false);
+
 		$action = $controls['action_button_'.$this->arParams['GRID_ID']];
 
 		$allTasks = array_key_exists('action_all_rows_'.$this->arParams['GRID_ID'], $controls) &&
@@ -1043,6 +1046,7 @@ class TasksTaskListComponent extends TasksBaseComponent
 		return $errors->checkNoFatals();
 	}
 
+
 	protected function doPostAction()
 	{
 		$this->arResult['DEFAULT_PRESET_KEY'] = $this->filter->getDefaultPresetKey();
@@ -1100,12 +1104,7 @@ class TasksTaskListComponent extends TasksBaseComponent
 
 			if ($showFirstGridTaskTour)
 			{
-				\Bitrix\Tasks\AnalyticLogger::logToFile(
-					'markShowedStep',
-					'firstGridTaskCreation',
-					'0',
-					'tourGuide'
-				);
+				Analytics::getInstance()->onFirstTaskGridCreation();
 			}
 
 			$this->arResult['tours']['firstGridTaskCreation'] = [
@@ -1968,6 +1967,9 @@ class TasksTaskListComponent extends TasksBaseComponent
 					}
 					$this->arResult['LIST'] = $list;
 				}
+
+				$totalCount = Manager\Task::getCount($this->listParameters['filter'], $this->arParams['PROVIDER_PARAMETERS']);
+				$this->arResult['TOTAL_PAGES'] = (int) ceil($totalCount / $this->exportStep);
 				$this->IncludeComponentTemplate('export_' . mb_strtolower($this->exportAs));
 			}
 			else
@@ -2012,7 +2014,7 @@ class TasksTaskListComponent extends TasksBaseComponent
 
 		while ($row = $auditorRows->fetchObject())
 		{
-			$tasks[$row->getTaskId()][$memberType][] = $row->getUser()->getName() . ' ' . $row->getUser()->getLastName();
+			$tasks[$row->getTaskId()][$memberType][] = $row->getUser()?->getName() . ' ' . $row->getUser()?->getLastName();
 		}
 
 		return $tasks;

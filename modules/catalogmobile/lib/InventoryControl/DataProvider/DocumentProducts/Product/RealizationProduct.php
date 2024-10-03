@@ -69,7 +69,9 @@ final class RealizationProduct extends BaseProduct
 				'NAME' => $basketItem->getField('NAME'),
 				'STORE_FROM' => 0,
 				'ELEMENT_ID' => $basketItem->getProductId(),
+				'PRICE_WITH_VAT' => $basketItem->getPriceWithVat(),
 				'BASE_PRICE' => $basketItem->getPrice(),
+				'PRICE' => $basketItem->getPrice(),
 				'BASE_PRICE_EXTRA' => '',
 				'BASE_PRICE_EXTRA_RATE' => '',
 				'BASKET_ID' => $basketItem->getId(),
@@ -77,6 +79,9 @@ final class RealizationProduct extends BaseProduct
 				'AMOUNT' => 0,
 				'BARCODE' => '',
 				'CURRENCY' => $basketItem->getCurrency(),
+				'VAT_RATE' => $basketItem->getVatRate(),
+				'VAT_INCLUDED' => $basketItem->getField('VAT_INCLUDED'),
+				'VAT' => $basketItem->getVatUnit(false),
 			];
 
 			$shipmentItemStoreCollection = $shipmentItem->getShipmentItemStoreCollection();
@@ -143,8 +148,15 @@ final class RealizationProduct extends BaseProduct
 				'basketCode' => $documentProduct['BASKET_CODE'],
 				'price' => [
 					'sell' => [
-						'amount' => (float)$documentProduct['BASE_PRICE'],
+						'basePrice' => (float)$documentProduct['BASE_PRICE'],
+						'amount' => (float)$documentProduct['PRICE'],
 						'currency' => $documentProduct['CURRENCY'],
+					],
+					'vat' => [
+						'priceWithVat' => (float)$documentProduct['PRICE_WITH_VAT'],
+						'vatRate' => $documentProduct['VAT_RATE'],
+						'vatIncluded' => $documentProduct['VAT_INCLUDED'],
+						'vatValue' => $documentProduct['VAT'],
 					],
 				],
 				'barcode' => $documentProduct['BARCODE'],
@@ -278,6 +290,26 @@ final class RealizationProduct extends BaseProduct
 					?? 0
 				;
 
+				$priceWithVat = (float)$deliverableProduct['PRICE'];
+				$vatRate = null;
+				$vatValue = 0;
+
+				if ($deliverableProduct['VAT_RATE'] !== null)
+				{
+					$isVatInPrice = $deliverableProduct['VAT_INCLUDED'] === 'Y';
+					$vatRate = $deliverableProduct['VAT_RATE'];
+					$vatCalculator = new Sale\Tax\VatCalculator($vatRate);
+
+					$priceWithVat = $isVatInPrice
+						? $priceWithVat
+						: $vatCalculator->accrue($deliverableProduct['PRICE']);
+
+					$vatValue = $vatCalculator->calc(
+						$deliverableProduct['PRICE'],
+						$isVatInPrice
+					);
+				}
+
 				$records[] = DocumentProductRecord::make([
 					'id' => uniqid('bx_', true),
 					'documentId' => null,
@@ -291,8 +323,15 @@ final class RealizationProduct extends BaseProduct
 					'basketCode' => $deliverableProduct['BASKET_CODE'],
 					'price' => [
 						'sell' => [
-							'amount' => $deliverableProduct['BASE_PRICE'],
+							'basePrice' => $deliverableProduct['BASE_PRICE'],
+							'amount' => $deliverableProduct['PRICE'],
 							'currency' => $order->getCurrency(),
+						],
+						'vat' => [
+							'priceWithVat' => $priceWithVat,
+							'vatRate' => $vatRate,
+							'vatIncluded' => $deliverableProduct['VAT_INCLUDED'],
+							'vatValue' => $vatValue,
 						],
 					],
 				]);

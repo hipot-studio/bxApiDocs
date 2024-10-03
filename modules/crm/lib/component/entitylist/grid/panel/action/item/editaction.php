@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Event;
 use Bitrix\Crm\Data\EntityFieldsHelper;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Operation\TransactionWrapper;
@@ -84,6 +85,17 @@ final class EditAction extends \Bitrix\Main\Grid\Panel\Action\EditAction
 			{
 				$item->set($fieldName, $value);
 			}
+		}
+
+		if (
+			$item->getEntityTypeId() === \CCrmOwnerType::Lead
+			&& $item->isChanged(Item::FIELD_NAME_STAGE_ID)
+			&& is_string($item->remindActual(Item::FIELD_NAME_STAGE_ID))
+			&& $this->factory->getStageSemantics($item->remindActual(Item::FIELD_NAME_STAGE_ID)) === PhaseSemantics::SUCCESS
+		)
+		{
+			// we cant move a converted lead via group actions
+			$item->reset(Item::FIELD_NAME_STAGE_ID);
 		}
 
 		return $this->persistUpdatedItem($item);

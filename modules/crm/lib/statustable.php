@@ -104,6 +104,7 @@ class StatusTable extends Entity\DataManager
 		$result = new ORM\EventResult();
 		$fields = $event->getParameter('fields');
 		$sort = (int)$fields['SORT'];
+		$successStageSort = static::getSuccessStageSort($fields['ENTITY_ID']);
 
 		if (isset($fields['SEMANTICS']))
 		{
@@ -126,8 +127,7 @@ class StatusTable extends Entity\DataManager
 			}
 			else if ($fields['SEMANTICS'] === PhaseSemantics::FAILURE)
 			{
-				$maxFinalSort = static::getFinalStageMaxSort($fields['ENTITY_ID']);
-				if (isset($maxFinalSort) && $sort < $maxFinalSort)
+				if (isset($successStageSort) && $sort <= $successStageSort)
 				{
 					$result->addError(
 						new ORM\EntityError(Loc::getMessage('CRM_STATUS_INCORRECT_SEMANTIC_SORT_ERROR'))
@@ -139,6 +139,12 @@ class StatusTable extends Entity\DataManager
 				$result->modifyFields([
 					'SEMANTICS' => null,
 				]);
+				if (isset($successStageSort) && $sort >= $successStageSort)
+				{
+					$result->addError(
+						new ORM\EntityError(Loc::getMessage('CRM_STATUS_INCORRECT_PROCESS_SEMANTIC_SORT_ERROR'))
+					);
+				}
 			}
 			else
 			{
@@ -149,8 +155,8 @@ class StatusTable extends Entity\DataManager
 		}
 		else
 		{
-			$maxFinalSort = static::getFinalStageMaxSort($fields['ENTITY_ID']);
-			if (isset($maxFinalSort) && $sort > $maxFinalSort)
+			$successStageSort = static::getSuccessStageSort($fields['ENTITY_ID']);
+			if (isset($successStageSort) && $sort > $successStageSort)
 			{
 				$result->modifyFields([
 					'SEMANTICS' => PhaseSemantics::FAILURE,
@@ -467,18 +473,18 @@ class StatusTable extends Entity\DataManager
 		static::$statusesCache = [];
 	}
 
-	protected static function getFinalStageMaxSort(string $entityId): ?int
+	protected static function getSuccessStageSort(string $entityId): ?int
 	{
 		$statuses = static::getStatusesByEntityId($entityId);
 		$list = array_column(
 			array_filter(
 				$statuses,
-				static fn(array $row) => in_array($row['SEMANTICS'], [PhaseSemantics::FAILURE, PhaseSemantics::SUCCESS], true)
+				static fn(array $row) => in_array($row['SEMANTICS'], [PhaseSemantics::SUCCESS], true)
 			),
 			'SORT'
 		);
 
-		return empty($list) ? null : (int)max($list);
+		return empty($list) ? null : (int)min($list);
 	}
 
 	/**

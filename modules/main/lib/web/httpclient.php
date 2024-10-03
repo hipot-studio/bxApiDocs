@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2023 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
 
 namespace Bitrix\Main\Web;
@@ -811,7 +811,7 @@ class HttpClient implements Log\LoggerAwareInterface, ClientInterface, Http\Debu
 		$uri = $request->getUri();
 		$body = $request->getBody();
 
-		$punyUri = new Uri('http://' . $uri->getHost());
+		$punyUri = new Uri((string)$uri);
 		if (($punyHost = $punyUri->convertToPunycode()) != $uri->getHost())
 		{
 			$uri = $uri->withHost($punyHost);
@@ -907,7 +907,7 @@ class HttpClient implements Log\LoggerAwareInterface, ClientInterface, Http\Debu
 			return false;
 		}
 
-		$punyUri = new Uri('http://' . $uri->getHost());
+		$punyUri = new Uri((string)$uri);
 		$error = $punyUri->convertToPunycode();
 		if ($error instanceof \Bitrix\Main\Error)
 		{

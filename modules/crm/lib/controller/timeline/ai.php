@@ -31,6 +31,7 @@ use Bitrix\Main\NotSupportedException;
 use Bitrix\Main\UserField\Dispatcher;
 use CCrmOwnerType;
 use CUserOptions;
+use Bitrix\Main\ArgumentException;
 
 class AI extends Activity
 {
@@ -442,7 +443,7 @@ class AI extends Activity
 		{
 			CCrmOwnerType::Lead => 'lead_details',
 			CCrmOwnerType::Deal => 'deal_details',
-			default => throw new \Exception('Unknown entity type'),
+			default => throw new ArgumentException('Unknown entity type'),
 		};
 
 		return (new EditorHelper($entityTypeId))

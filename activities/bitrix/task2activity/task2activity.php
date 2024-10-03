@@ -186,7 +186,10 @@ class CBPTask2Activity extends CBPActivity implements
 			{
 				$parentIdModifiedProperty = $logMap['PARENT_ID'];
 				$parentIdModifiedProperty['BaseType'] = 'string';
-				$this->writeDebugInfo($this->getDebugInfo(['PARENT_ID' => $parentId], ['PARENT_ID' => $parentIdModifiedProperty]));
+				if ($this->workflow->isDebug())
+				{
+					$this->writeDebugInfo($this->getDebugInfo(['PARENT_ID' => $parentId], ['PARENT_ID' => $parentIdModifiedProperty]));
+				}
 
 				$this->WriteToTrackingService(
 					Loc::getMessage('BPTA1A_TASK_TASK_PRESENCE_ERROR', ['#TASK_ID#' => $parentId]),
@@ -300,12 +303,15 @@ class CBPTask2Activity extends CBPActivity implements
 
 		if (empty($arFieldsChecked['CREATED_BY']))
 		{
-			$this->writeDebugInfo(
-				$this->getDebugInfo(
-					['CREATED_BY' => $arFieldsChecked['CREATED_BY']],
-					['CREATED_BY' => $logMap['CREATED_BY']]
-				)
-			);
+			if ($this->workflow->isDebug())
+			{
+				$this->writeDebugInfo(
+					$this->getDebugInfo(
+						['CREATED_BY' => $arFieldsChecked['CREATED_BY']],
+						['CREATED_BY' => $logMap['CREATED_BY']]
+					)
+				);
+			}
 
 			$this->WriteToTrackingService(
 				Loc::getMessage("BPSA_CREATED_BY_ERROR"),
@@ -441,20 +447,19 @@ class CBPTask2Activity extends CBPActivity implements
 
 			if (count(array_filter($checkListItems)) === count($checkListItems))
 			{
-				$map = $this->getDebugInfo(
-					['CHECK_LIST_ITEMS' => $checkListItems],
-					[
-						"CHECK_LIST_ITEMS" => [
-							"Name" => Loc::getMessage("BPSA_CHECK_LIST_ITEMS"),
-							"Type" => "string",
-							"Required" => false,
-							"Multiple" => true,
-						],
-					]
-				);
-
 				if ($this->workflow->isDebug())
 				{
+					$map = $this->getDebugInfo(
+						['CHECK_LIST_ITEMS' => $checkListItems],
+						[
+							"CHECK_LIST_ITEMS" => [
+								"Name" => Loc::getMessage("BPSA_CHECK_LIST_ITEMS"),
+								"Type" => "string",
+								"Required" => false,
+								"Multiple" => true,
+							],
+						]
+					);
 					$this->writeDebugInfo($map);
 				}
 			}

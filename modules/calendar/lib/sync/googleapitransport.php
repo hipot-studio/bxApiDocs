@@ -516,10 +516,6 @@ final class GoogleApiTransport
 					$event['etag'] = $data['etag'];
 					$events[$id] = $event;
 				}
-				else
-				{
-					AddMessage2Log('Event sync error. ID: ' . $this->getId($partEvent[0]));
-				}
 			}
 		}
 

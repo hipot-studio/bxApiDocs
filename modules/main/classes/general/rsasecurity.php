@@ -137,7 +137,7 @@ top.BX.defer(top.rsasec_form_bind)('.Json::encode($arData).');
 		if(!$this->provider)
 			return self::ERROR_NO_LIBRARY; //no crypto library found
 
-		$data = $_REQUEST['__RSA_DATA'];
+		$data = $_REQUEST['__RSA_DATA'] ?? '';
 
 		unset($_POST['__RSA_DATA']);
 		unset($_REQUEST['__RSA_DATA']);

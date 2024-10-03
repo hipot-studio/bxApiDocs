@@ -2,8 +2,8 @@
 
 namespace Bitrix\Main\Mail\Smtp;
 
-use \Bitrix\Main;
-use \Bitrix\Mail;
+use Bitrix\Main;
+use Bitrix\Mail;
 
 class Config
 {

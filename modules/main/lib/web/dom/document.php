@@ -10,7 +10,7 @@ class Document extends Node
 	/** @var $queryEngine QueryEngine */
 	protected $queryEngine;
 
-	/*
+	/**
 	 * @return void
 	 */
 	public function __construct()
@@ -24,7 +24,7 @@ class Document extends Node
 		$this->setParser(Parser::getHtmlParser());
 	}
 
-	/*
+	/**
 	 * @param string $source
 	 * @return void
 	 */
@@ -33,7 +33,7 @@ class Document extends Node
 		$this->parser->parse($source, $this);
 	}
 
-	/*
+	/**
 	 * @param null|Node $node
 	 * @return string
 	 */
@@ -71,7 +71,7 @@ class Document extends Node
 		return $node->getOuterHTML();
 	}
 
-	/*
+	/**
 	 * @return QueryEngine
 	 */
 	public function getQueryEngine()
@@ -84,7 +84,7 @@ class Document extends Node
 		return $this->queryEngine;
 	}
 
-	/*
+	/**
 	 * @param QueryEngine $engine
 	 * @return void
 	 */
@@ -93,7 +93,7 @@ class Document extends Node
 		$this->queryEngine = $engine;
 	}
 
-	/*
+	/**
 	 * @return Parser
 	 */
 	public function getParser()
@@ -101,7 +101,7 @@ class Document extends Node
 		return $this->parser;
 	}
 
-	/*
+	/**
 	 * @param Parser $parser
 	 * @return void
 	 */
@@ -110,7 +110,7 @@ class Document extends Node
 		$this->parser = $parser;
 	}
 
-	/*
+	/**
 	 * Changes the ownerDocument of a node, its children, as well as the attached attribute nodes if there are any.
 	 * If the node has a parent it is first removed from its parent child list.
 	 * This effectively allows moving a subtree from one document to another.
@@ -144,7 +144,7 @@ class Document extends Node
 		}
 	}
 
-	/*
+	/**
 	 * @param string $tagName
 	 * @return Element
 	 */
@@ -182,7 +182,7 @@ class Document extends Node
 		return $node;
 	}
 
-	/*
+	/**
 	 * @param string $name
 	 * @param string $value
 	 * @return Attr
@@ -195,7 +195,7 @@ class Document extends Node
 		return $node;
 	}
 
-	/*
+	/**
 	 * @param string $comment
 	 * @return Comment
 	 */
@@ -207,7 +207,7 @@ class Document extends Node
 		return $node;
 	}
 
-	/*
+	/**
 	 * @param string $text
 	 * @return Text
 	 */
@@ -219,7 +219,7 @@ class Document extends Node
 		return $node;
 	}
 
-	/*
+	/**
 	 * @return null
 	 */
 	public function createDocumentFragment()
@@ -227,7 +227,7 @@ class Document extends Node
 		throw new DomException('Not implemented');
 	}
 
-	/*
+	/**
 	 * @return null|Node
 	 */
 	public function getElementById($id)
@@ -237,7 +237,7 @@ class Document extends Node
 		return (!empty($resultList)) ? current($resultList) : null;
 	}
 
-	/*
+	/**
 	 * @return null|Node
 	 */
 	public function getElementByClassName($className)
@@ -247,7 +247,7 @@ class Document extends Node
 		return (!empty($resultList)) ? current($resultList) : null;
 	}
 
-	/*
+	/**
 	 * @return array|NodeList
 	 */
 	public function getElementsByName($name)
@@ -260,7 +260,7 @@ class Document extends Node
 		return null;
 	}
 
-	/*
+	/**
 	 * @return array|NodeList
 	 */
 	public function getElementsByAttr($attrName, $attrValue = null, $limit = 0)
@@ -289,7 +289,7 @@ class Document extends Node
 		return new NodeList($nodeList);
 	}
 
-	/*
+	/**
 	 * @return array|NodeList
 	 */
 	public function getElementsByTagName($tagName)
@@ -310,7 +310,7 @@ class Document extends Node
 		return new NodeList($nodeList);
 	}
 
-	/*
+	/**
 	 * @return array|NodeList
 	 */
 	public function getElementsByClassName($className, $limit = 0)
@@ -330,7 +330,7 @@ class Document extends Node
 		return new NodeList($nodeList);
 	}
 
-	/*
+	/**
 	 * @return null|Element
 	 */
 	public function getDocumentElement()
@@ -347,7 +347,7 @@ class Document extends Node
 		return null;
 	}
 
-	/*
+	/**
 	 * Get HEAD element
 	 * @return null|Element
 	 */
@@ -370,7 +370,7 @@ class Document extends Node
 		return null;
 	}
 
-	/*
+	/**
 	 * Get BODY element
 	 * @return null|Element
 	 */

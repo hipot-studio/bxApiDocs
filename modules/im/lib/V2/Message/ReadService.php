@@ -104,7 +104,7 @@ class ReadService
 
 		$chatIds = array_keys($chatIds);
 
-		$this->counterService->deleteByMessageIdsForAll($messages->getIds(), $userByChatId);
+		$this->counterService->deleteByMessagesForAll($messages, $userByChatId);
 		$counters = $this->counterService->getForNotifyChats($chatIds);
 		$time = microtime(true);
 		//$this->viewedController->add($messages);
@@ -232,7 +232,8 @@ class ReadService
 	 */
 	public function markRecentUnread(Message $message): self
 	{
-		Recent::unread($message->getChat()->withContext($this->context)->getDialogId(), false, $this->getContext()->getUserId());
+		$chat = $message->getChat()->withContext($this->context);
+		Recent::unread($chat->getDialogId(), false, $this->getContext()->getUserId(), null, $chat->getType());
 		return $this;
 	}
 
@@ -280,10 +281,10 @@ class ReadService
 		return (new Result())->setResult(['COUNTER' => $counter]);
 	}
 
-	public function deleteByMessageId(int $messageId, ?array $invalidateCacheUsers = null): void
+	public function deleteByMessage(Message $message, ?array $invalidateCacheUsers = null): void
 	{
-		$this->counterService->deleteByMessageIdForAll($messageId, $invalidateCacheUsers);
-		$this->viewedService->deleteByMessageIdForAll($messageId);
+		$this->counterService->deleteByMessageForAll($message, $invalidateCacheUsers);
+		$this->viewedService->deleteByMessageIdForAll($message->getMessageId());
 	}
 
 	public function deleteByChatId(int $chatId): void

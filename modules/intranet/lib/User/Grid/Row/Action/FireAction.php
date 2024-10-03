@@ -2,7 +2,6 @@
 
 namespace Bitrix\Intranet\User\Grid\Row\Action;
 
-use Bitrix\Intranet\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 
 class FireAction extends JsGridAction
@@ -24,10 +23,15 @@ class FireAction extends JsGridAction
 
 	public function isAvailable(array $rawFields): bool
 	{
-		return CurrentUser::get()->isAdmin()
-			&& $rawFields['ID'] !== CurrentUser::get()->getId()
+		return $this->isCurrentUserAdmin()
+			&& (int)$rawFields['ID'] !== $this->getSettings()->getCurrentUserId()
 			&& $rawFields['ACTIVE'] === 'Y'
-			&& empty($rawFields['CONFIRM_CODE']);
+			&& empty($rawFields['CONFIRM_CODE'])
+			&& !(
+				$this->getSettings()->isUserIntegrator($this->getSettings()->getCurrentUserId())
+				&& $this->getSettings()->isUserAdmin($rawFields['ID'])
+				&& !$this->getSettings()->isUserIntegrator($rawFields['ID'])
+			);
 	}
 
 	public function getExtensionMethod(): string

@@ -3,6 +3,8 @@ use Bitrix\Socialnetwork\LogTable;
 
 class CSocNetLogRights
 {
+	private static array $state = [];
+
 	public static function Add($LOG_ID, $GROUP_CODE, $bShare = false, $followSet = true)
 	{
 		global $DB, $CACHE_MANAGER;
@@ -11,10 +13,17 @@ class CSocNetLogRights
 
 		if (is_array($GROUP_CODE))
 		{
+			// fill the current state
+			self::$state[(int)$LOG_ID]['current'] = $GROUP_CODE;
+
 			foreach($GROUP_CODE as $GROUP_CODE_TMP)
 			{
 				CSocNetLogRights::Add($LOG_ID, $GROUP_CODE_TMP, $bShare, $followSet);
 			}
+
+			self::unsubscribeExcludedUsers((int)$LOG_ID);
+			unset(self::$state[(int)$LOG_ID]);
+
 			return false;
 		}
 		else
@@ -223,6 +232,16 @@ class CSocNetLogRights
 	public static function DeleteByLogID($LOG_ID)
 	{
 		global $DB;
+
+		$LOG_ID = (int)$LOG_ID;
+
+		// fill the prev state
+		self::$state[$LOG_ID]['prev'] = [];
+		$res = self::GetList([], ['LOG_ID' => $LOG_ID]);
+		while ($row = $res->Fetch())
+		{
+			self::$state[$LOG_ID]['prev'][] = $row['GROUP_CODE'];
+		}
 
 		$LOG_ID = intval($LOG_ID);
 		$DB->Query("DELETE FROM b_sonet_log_right WHERE LOG_ID = ".$LOG_ID);
@@ -489,5 +508,76 @@ class CSocNetLogRights
 		return false;
 	}
 
+	private static function unsubscribeExcludedUsers(int $logId): void
+	{
+		$publicRights = ['AU', 'G2'];
+
+		if (empty(self::$state[$logId]['current']) || empty(self::$state[$logId]['prev']))
+		{
+			return;
+		}
+
+		foreach ($publicRights as $publicRight)
+		{
+			if (in_array($publicRight, self::$state[$logId]['current']))
+			{
+				// no need to unsubscribe anyone because it is already available for everyone
+				return;
+			}
+		}
+
+		$tags = (new \Bitrix\Socialnetwork\Integration\Pull\Tag())->getWatchingTagsByLogId($logId);
+		$unsubscribe = new \Bitrix\Socialnetwork\Integration\Pull\Unsubscribe();
+
+		$from = self::$state[$logId]['prev'] ?? [];
+		$to = self::$state[$logId]['current'] ?? [];
+
+		foreach ($publicRights as $publicRight)
+		{
+			if (in_array($publicRight, self::$state[$logId]['prev']))
+			{
+				// it was previously available for everyone but it no longer the case
+				// we need to unsubscribe from pull watch everyone except those in the list
+				$usersToIgnore = self::getUsersToIgnore($from, $to);
+				$unsubscribe->resetAllButIgnored($tags, $usersToIgnore);
+				return;
+			}
+		}
+
+		// at this point we need to unsubscribe those users who are excluded from the list
+		$unsubscribe->resetByTags($tags, self::getUsersToExclude($from, $to));
+	}
+
+	private static function getUsersToIgnore(array $from, array $to): array
+	{
+		$result = [];
+		$ignored = array_unique(array_diff($to, $from));
+		foreach ($ignored as $code)
+		{
+			$matches = [];
+			if (preg_match('/^U(\d+)$/', $code, $matches))
+			{
+				$result[] = (int)$matches[1];
+			}
+		}
+
+		return $result;
+	}
+
+	private static function getUsersToExclude(array $from ,array $to): array
+	{
+		$result = [];
+		$excluded = array_unique(array_diff($from, $to));
+		foreach ($excluded as $code)
+		{
+			$matches = [];
+			if (preg_match('/^U(\d+)$/', $code, $matches))
+			{
+				$result[] = (int)$matches[1];
+			}
+		}
+
+		return $result;
+	}
 }
 ?>

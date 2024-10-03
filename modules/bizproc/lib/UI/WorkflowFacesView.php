@@ -242,8 +242,7 @@ class WorkflowFacesView implements \JsonSerializable
 		{
 			return [
 				'id' => 0,
-				'avatar' => null,
-				'name' => '',
+				'avatarUrl' => null,
 			];
 		}
 

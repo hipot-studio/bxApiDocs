@@ -63,6 +63,7 @@ class ProductGridQuery extends Query
 			'inventoryControl' => [
 				'isAllowedReservation' => $this->isAllowedReservation(),
 				'isReservationRestrictedByPlan' => $this->isReservationRestrictedByPlan(),
+				'mode' => EnableWizard\Manager::getCurrentMode(),
 				'isOnecRestrictedByPlan' => EnableWizard\TariffChecker::isOnecInventoryManagementRestricted(),
 				'defaultDateReserveEnd' => ReservationService::getInstance()->getDefaultDateReserveEnd()->getTimestamp(),
 				'isCatalogHidden' => State::isExternalCatalog(),

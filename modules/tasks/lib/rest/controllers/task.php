@@ -20,12 +20,12 @@ use Bitrix\Pull\MobileCounter;
 use Bitrix\Socialnetwork\Helper\Workgroup;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
-use Bitrix\Tasks\AnalyticLogger;
 use Bitrix\Tasks\CheckList\Internals\CheckList;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
 use Bitrix\Tasks\Comments\Task\CommentPoster;
 use Bitrix\Tasks\FileUploader\TaskController;
 use Bitrix\Tasks\Helper\Filter;
+use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Integration\CRM;
 use Bitrix\Tasks\Integration\Disk;
 use Bitrix\Tasks\Integration\SocialNetwork;
@@ -34,7 +34,7 @@ use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Internals\Counter\Template\TaskCounter;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\SearchIndex;
-use Bitrix\Tasks\Internals\Task\LabelTable;
+use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Internals\Task\ParameterTable;
 use Bitrix\Tasks\Internals\Task\Result\ResultManager;
 use Bitrix\Tasks\Internals\Task\Result\ResultTable;
@@ -288,7 +288,7 @@ final class Task extends Base
 			$task = CTaskItem::add($fields, $this->getCurrentUser()->getId(), $params);
 			if (isset($params['PLATFORM']) && $params['PLATFORM'] === 'mobile')
 			{
-				AnalyticLogger::logToFile('addTask');
+				Analytics::getInstance()->logToFile('addTask');
 			}
 
 			return $this->getAction($task);
@@ -578,7 +578,7 @@ final class Task extends Base
 			$task->delegate((int)$userId, $params);
 			if ($params['PLATFORM'] === 'mobile')
 			{
-				AnalyticLogger::logToFile('delegateTask');
+				Analytics::getInstance()->logToFile('delegateTask');
 			}
 
 			return $this->getAction($task);
@@ -1819,13 +1819,17 @@ final class Task extends Base
 	 */
 	private function fillActionsForCheckListItems($taskId, array $checkListItems, bool $canAdd): array
 	{
+		$taskObserversParticipantsEnabled = Bitrix24::checkFeatureEnabled(
+			Bitrix24\FeatureDictionary::TASK_OBSERVERS_PARTICIPANTS
+		);
+
 		$canAddAccomplice = (
 			TaskAccessController::can(
 				$this->getCurrentUser()->getId(),
 				ActionDictionary::ACTION_TASK_EDIT,
 				$taskId
 			)
-			&& !TaskLimit::isLimitExceeded()
+			&& $taskObserversParticipantsEnabled
 		);
 
 		$checkListItems = TaskCheckListFacade::fillActionsForItems(

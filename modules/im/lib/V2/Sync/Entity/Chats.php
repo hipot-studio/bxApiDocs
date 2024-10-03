@@ -78,4 +78,9 @@ class Chats implements Entity
 
 		return $result;
 	}
+
+	public function getShortInfoChatIds(): array
+	{
+		return $this->shortInfoChatIds;
+	}
 }

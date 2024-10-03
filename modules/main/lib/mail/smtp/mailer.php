@@ -224,7 +224,7 @@ class Mailer extends PHPMailer
 		return $sendResult;
 	}
 
-	private function prepareCCRecipients($additional_headers)
+	private function prepareCCRecipients(&$additional_headers): void
 	{
 		preg_match(self::HEADER_CC_REGEX, $additional_headers, $matches);
 
@@ -244,7 +244,7 @@ class Mailer extends PHPMailer
 		}
 	}
 
-	private function prepareBCCRecipients($additional_headers)
+	private function prepareBCCRecipients(&$additional_headers): void
 	{
 		preg_match(self::HEADER_BCC_REGEX, $additional_headers, $matches);
 
@@ -262,6 +262,15 @@ class Mailer extends PHPMailer
 				$this->addBCC($to[0]['address'], $to[0]['name']);
 			}
 		}
+
+		$additional_headers = $this->removeHeader('bcc', $additional_headers);
+	}
+
+	private function removeHeader(string $headerName, $additional_headers): array|string|null
+	{
+		$headerRegex = '/^\s*' . preg_quote($headerName, '/') . ':(.*)\R?/im';
+
+		return preg_replace($headerRegex, '', $additional_headers);
 	}
 
 	/**

@@ -2,7 +2,7 @@
 
 namespace Bitrix\Imbot\Bot;
 
-use Bitrix\ImBot\Service\CopilotAnalytics;
+use Bitrix\Im\V2\Analytics\CopilotAnalytics;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Error;
@@ -328,16 +328,11 @@ class CopilotChatBot extends Base
 			$serviceRestrictionError = $serviceRestriction->getErrors()[0];
 			self::sendError($messageFields['DIALOG_ID'], $serviceRestrictionError->getMessage());
 
-			CopilotAnalytics::sendAnalyticsEvent(
+			(new CopilotAnalytics())->addGenerate(
 				$chat,
-				$engine,
-				$messageFields['PARAMS']['COPILOT_PROMPT_CODE'] ?? null);
-
-			CopilotAnalytics::sendAnalyticsEvent(
-				$chat,
+				$serviceRestriction,
 				$engine,
 				$messageFields['PARAMS']['COPILOT_PROMPT_CODE'] ?? null,
-				CopilotAnalytics::getCopilotStatusByResult($serviceRestriction)
 			);
 
 			return false;
@@ -534,8 +529,6 @@ class CopilotChatBot extends Base
 		$engine = AI\Engine::getByCode(isset($engineItem) ? $engineItem->getValue() : '', $context, AI\Engine::CATEGORIES['text']);
 		if ($engine instanceof AI\Engine)
 		{
-			CopilotAnalytics::sendAnalyticsEvent($params['CHAT'], $engine, $params['PROMPT_CODE']);
-
 			$payload = self::fillPayload($params);
 
 			if (self::isMemoryContextEnabled())
@@ -581,8 +574,12 @@ class CopilotChatBot extends Base
 			}
 		}
 
-		$copilotStatus = CopilotAnalytics::getCopilotStatusByResult($result);
-		CopilotAnalytics::sendAnalyticsEvent($params['CHAT'], $engine, $params['PROMPT_CODE'], $copilotStatus);
+		(new CopilotAnalytics())->addGenerate(
+			$params['CHAT'],
+			$result,
+			$engine,
+			$params['PROMPT_CODE'],
+		);
 
 		return $result;
 	}

@@ -637,7 +637,7 @@ class CCaptcha
 		for ($i = 0; $i < $this->codeLength; $i++)
 		{
 			$char = mb_substr($this->code, $i, 1);
-			$utf = \Bitrix\Main\Text\Encoding::convertEncoding($char, LANG_CHARSET, "utf-8");
+			$utf = $char;
 
 			$ttfFile = $_SERVER["DOCUMENT_ROOT"].$this->ttfFilesPath."/".$this->arTTFFiles[rand(1, count($this->arTTFFiles)) - 1];
 			$angle = rand($this->textAngleFrom, $this->textAngleTo);

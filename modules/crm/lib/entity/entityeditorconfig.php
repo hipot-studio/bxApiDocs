@@ -211,7 +211,9 @@ class EntityEditorConfig
 					{
 						$params['categoryId'] = $categoryId;
 					}
+					//@codingStandardsIgnoreStart
 					$component->arParams = $params;
+					//@codingStandardsIgnoreEnd
 					$component->init();
 					$optionName = $component->getEditorConfigId();
 

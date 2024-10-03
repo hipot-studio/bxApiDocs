@@ -368,6 +368,10 @@ class CCrmEntityPopupComponent extends CBitrixComponent
 			'skipPeriod' => (new \Bitrix\Crm\Activity\TodoCreateNotification($this->entityTypeID))->getCurrentSkipPeriod(),
 			'useTodoEditorV2' => \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled(),
 			'guid' => $this->guid,
+			'analytics' => [
+				'section' => $this->arParams['EXTRAS']['ANALYTICS']['c_section'] ?? '',
+				'subSection' => \Bitrix\Crm\Activity\Analytics\Dictionary::NOTIFICATION_POPUP_SUB_SECTION,
+			],
 		];
 	}
 

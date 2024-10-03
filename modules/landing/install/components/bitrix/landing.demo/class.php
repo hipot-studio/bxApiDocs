@@ -67,6 +67,7 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 		'PAGE' => 'page',
 		'STORE' => 'shop',
 		'KNOWLEDGE' => 'knowledgeBase',
+		'MAINPAGE' => 'mainpage',
 	];
 
 	protected const FILTER_ID = 'LANDING_FLT_DEMO';
@@ -1820,12 +1821,17 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 			// market checks
 			$marketPrefix = 'market';
 			$marketIdDelimiter = '/';
-			$isNeedMarket =
+			$typesUseMarket = [
+				'PAGE',
+				'MAINPAGE',
+			];
+			$useMarket =
 				($this->arParams['SKIP_REMOTE'] ?? 'N') !== 'Y'
 				&& (!$code || mb_strpos($code, $marketPrefix . $marketIdDelimiter) === 0)
-				&& $this->arParams['TYPE'] === 'PAGE'
+				&& in_array($this->arParams['TYPE'], $typesUseMarket)
 			;
-			if ($isNeedMarket)
+			$hasMarket = false;
+			if ($useMarket)
 			{
 				$hasMarket =
 					Loader::includeModule('rest')
@@ -1836,7 +1842,7 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 					$this->setErrors(new Bitrix\Main\Error(Loc::getMessage('LANDING_TPL_REPO_NOT_INSTALL')));
 				}
 			}
-			$cacheId .= ($isNeedMarket && $hasMarket) ? 'Market_v2' : 'NoMarket';
+			$cacheId .= ($useMarket && $hasMarket) ? 'Market_v2' : 'NoMarket';
 
 			// nfr - without cache
 			$cachePath = 'landing/demo';
@@ -1973,7 +1979,7 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 			// endregion
 
 			// region get from zip repository
-			if ($isNeedMarket && $hasMarket)
+			if ($useMarket && $hasMarket)
 			{
 				$query = [
 					'pageSize' => $navigation ? $navigation->getPageSize() : self::COUNT_PER_PAGE,

@@ -270,7 +270,6 @@ class NodeEventHandler
 		{
 			return false;
 		}
-		$fields['UF_HEAD'] ??= [];
 
 		foreach ($requiredKeys as $key)
 		{
@@ -328,6 +327,11 @@ class NodeEventHandler
 	 */
 	protected static function updateHead(Node $node, array $fields): void
 	{
+		if (!array_key_exists('UF_HEAD', $fields))
+		{
+			return;
+		}
+
 		$headRole = self::getRole('HEAD');
 		$employeeRole = self::getRole('EMPLOYEE');
 

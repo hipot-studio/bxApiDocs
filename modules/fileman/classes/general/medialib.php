@@ -1223,7 +1223,7 @@ ML_MESS.Save = '<?= GetMessageJS('ML_SAVE')?>';
 		?>
 
 <script>
-<?=self::AttachJSScripts();?>
+<? self::AttachJSScripts();?>
 if (!window.<?= $cid?>_onclick)
 {
 	window.<?= $cid?>_onclick = function (pEl)

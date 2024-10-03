@@ -19,7 +19,7 @@ class CTaskReport
 		$obUserFieldsSqlDepartment->SetEntity("USER", "T.RESPONSIBLE_ID");
 		$obUserFieldsSqlDepartment->SetSelect(array("UF_DEPARTMENT"));
 
-		if (!$arFilter["RESPONSIBLE_ID"])
+		if (!($arFilter["RESPONSIBLE_ID"] ?? null))
 		{
 			$arFilter["SUBORDINATE_TASKS"] = "Y";
 		}
@@ -121,7 +121,7 @@ class CTaskReport
 
 		if (isset($arNavParams["NAV_PARAMS"]) && is_array($arNavParams["NAV_PARAMS"]))
 		{
-			$nTopCount = (int) $arNavParams['NAV_PARAMS']['nTopCount'];
+			$nTopCount = (int) ($arNavParams['NAV_PARAMS']['nTopCount'] ?? null);
 
 			if ($nTopCount > 0)
 			{
@@ -165,7 +165,7 @@ class CTaskReport
 		$obUserFieldsSqlDepartment->SetEntity("USER", "T.RESPONSIBLE_ID");
 		$obUserFieldsSqlDepartment->SetSelect(array("UF_DEPARTMENT"));
 
-		if (!$arFilter["RESPONSIBLE_ID"])
+		if (!($arFilter["RESPONSIBLE_ID"] ?? null))
 		{
 			$arFilter["SUBORDINATE_TASKS"] = "Y";
 		}
@@ -274,15 +274,15 @@ class CTaskReport
 		{
 			$arPeriod["START"] = CDatabase::FormatDate($arPeriod["START"], FORMAT_DATETIME);
 		}
-		if ($arPeriod["END"])
+		if ($arPeriod["END"] ?? null)
 		{
 			$arPeriod["END"] =  CDatabase::FormatDate($arPeriod["END"], FORMAT_DATETIME);
 		}
 		$condition = "CASE WHEN ".
 			($arPeriod["START"] || $arPeriod["END"] ?
 				($arPeriod["START"] ? "T.".$field." >= ".\Bitrix\Tasks\Util\Db::charToDateFunction($arPeriod["START"]) : "").
-				($arPeriod["START"] && $arPeriod["END"] ? " AND " : "").
-				($arPeriod["END"] ? "T.".$field." <= ".\Bitrix\Tasks\Util\Db::charToDateFunction($arPeriod["END"]) : "").
+				($arPeriod["START"] && ($arPeriod["END"] ?? null) ? " AND " : "").
+				(($arPeriod["END"] ?? null) ? "T.".$field." <= ".\Bitrix\Tasks\Util\Db::charToDateFunction($arPeriod["END"] ?? null) : "").
 			" AND " :
 			"").
 			$extraCond." THEN 1 ELSE 0 END";

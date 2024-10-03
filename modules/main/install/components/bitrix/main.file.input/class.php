@@ -3,14 +3,11 @@
 // ALLOW_UPLOAD_EXT = comma-separated list of allowed file extensions (ALLOW_UPLOAD='F')
 
 use Bitrix\Main\Event;
-use \Bitrix\Main\Localization\Loc;
-use \Bitrix\Main\Application;
-use \Bitrix\Main\Web\Json;
-use \Bitrix\Main\ErrorCollection;
-use \Bitrix\Main\Error;
-use \Bitrix\Main\UI\Uploader\Uploader;
-use \Bitrix\Main\UI\FileInputUtility;
+use Bitrix\Main\ErrorCollection;
+use Bitrix\Main\Error;
+
 include_once(__DIR__."/file.php");
+
 class MFIComponent extends \CBitrixComponent
 {
 	/** @var ErrorCollection */

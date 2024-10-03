@@ -894,7 +894,7 @@ class CIMChat
 	public static function CanSendMessageToGeneralChat($userId = null)
 	{
 		$generalChat = IM\V2\Chat\ChatFactory::getInstance()->getGeneralChat();
-		if ($generalChat)
+		if ($generalChat instanceof Chat\GeneralChat)
 		{
 			return $generalChat->hasManageMessagesAccess($userId);
 		}
@@ -2398,7 +2398,7 @@ class CIMChat
 		{
 			$ar = CIMChat::GetRelationById($chatId, false, true, false);
 
-			if ($this->user_id !== 0 && !self::canDo($arRes, $ar, Chat\Permission::ACTION_RENAME))
+			if ($this->user_id !== 0 && $checkPermission && !self::canDo($arRes, $ar, Chat\Permission::ACTION_RENAME))
 			{
 				return false;
 			}
@@ -3067,6 +3067,7 @@ class CIMChat
 		{
 			\CIMContactList::CleanAllChatCache();
 		}
+		IM\V2\Relation\ChatRelations::getInstance($chatId)->cleanCache();
 
 		if (IM\V2\Integration\AI\AIHelper::containsCopilotBot($arUserId))
 		{
@@ -3206,10 +3207,17 @@ class CIMChat
 		}
 		if ($chat instanceof Chat\ChannelChat)
 		{
-			Recent::raiseChat($chat, $chat->getRelations(['FILTER' => ['USER_ID' => $arUserId]]), new DateTime());
+			Recent::raiseChat($chat, $chat->getRelationsByUserIds($arUserId), new DateTime());
 		}
 
 		IM\V2\Chat::cleanAccessCache($chatId);
+		IM\V2\Relation\ChatRelations::getInstance($chatId)->cleanCache();
+
+		$analytics = new Im\V2\Analytics\ChatAnalytics();
+		foreach ($arUserId as $uid)
+		{
+			$analytics->addAddUser($chat);
+		}
 
 		return true;
 	}
@@ -3294,10 +3302,9 @@ class CIMChat
 
 		$arOldRelation = CIMChat::GetRelationById($chatId, false, true, false);
 
-		$currentUser = IM\User::getInstance()->getId();
-		if ($userId !== $currentUser && !isset($additionalParams['SKIP_RIGHTS']))
+		if (!isset($additionalParams['SKIP_RIGHTS']) && $this->user_id !== 0)
 		{
-			if ($this->user_id !== 0 && !self::canDo($arRes, $arOldRelation, Chat\Permission::ACTION_KICK))
+			if (!self::canDo($arRes, $arOldRelation, Chat\Permission::ACTION_KICK, $userId))
 			{
 				$GLOBALS["APPLICATION"]->ThrowException(GetMessage("IM_CHAT_ACCESS_DENIED_KICK_USERS"), "ACCESS_DENIED_KICK");
 				return false;
@@ -3581,6 +3588,8 @@ class CIMChat
 		}
 
 		IM\V2\Chat::cleanAccessCache($chatId);
+		IM\V2\Relation\ChatRelations::getInstance($chatId)->cleanCache();
+		(new Im\V2\Analytics\ChatAnalytics())->addDeleteUser($chatId);
 
 		return true;
 
@@ -4094,11 +4103,11 @@ class CIMChat
 		return $dateCreate->getTimestamp() > $lastDay->getTimestamp();
 	}
 
-	public static function canDo(array $chatData, array $relations, string $action): bool
+	public static function canDo(array $chatData, array $relations, string $action, mixed $target = null): bool
 	{
 		$chatData['RELATIONS'] = new IM\V2\RelationCollection($relations);
 
-		return self::initChatByArray($chatData)->canDo($action);
+		return self::initChatByArray($chatData)->canDo($action, $target);
 	}
 
 	public static function initChatByArray(array $chatData): Chat

@@ -24,41 +24,10 @@ final class ErrorHandler
 		// there can be error logging
 		if (!empty($error['code']))
 		{
-			return $this->getErrorByCode((string)$error['code'], (array)($error['customData'] ?? []));
+			return $this->getErrorByCode((string)$error['message'], (string)$error['code'], (array)($error['customData'] ?? []));
 		}
 
 		return new Error($this->getDefaultError());
-	}
-
-
-	public function isClientConnectionError(Main\Web\HttpClient $httpClient): bool
-	{
-		if (in_array($httpClient->getStatus(), [0, 407]))
-		{
-			return true;
-		}
-
-		if (!$httpClient->getResult())
-		{
-			return true;
-		}
-
-		$response = $httpClient->getResponse();
-
-		if ($response === null)
-		{
-			return true;
-		}
-
-		if (
-			$response->hasHeader('Content-Length')
-			&& (int)$response->getHeader('Content-Length') === 0
-		)
-		{
-			return true;
-		}
-
-		return false;
 	}
 
 	/**
@@ -69,22 +38,23 @@ final class ErrorHandler
 	 *
 	 * @return Error
 	 */
-	private function getErrorByCode(string $code, array $customData): Error
+	private function getErrorByCode(string $message, string $code, array $customData): Error
 	{
-		$message = $this->getErrorMessageByCode($code, $customData);
-		$customData = $this->getErrorCustomDataByCode($code, $customData);
+		$message = $this->getErrorMessageByCode( $message, $code, $customData);
+		$customData = $this->getErrorCustomDataByCode( $message, $code, $customData);
 		return new Error($message, $code, $customData);
 	}
 
 	/**
 	 * Get error message by code
 	 *
+	 * @param string $message Error message
 	 * @param string $code Error code
 	 * @param array $customData Additional error data
 	 *
 	 * @return string
 	 */
-	private function getErrorMessageByCode(string $code, array $customData): string
+	private function getErrorMessageByCode(string $message, string $code, array $customData): string
 	{
 		return (string) match ($code)
 		{
@@ -107,15 +77,17 @@ final class ErrorHandler
 			'SMS_LIMIT_EXCEEDED' => Loc::getMessage('SIGN_SERVICE_ERROR_SMS_LIMIT_EXCEEDED'),
 			'MEMBERS_NOT_READY_FOR_RESEND' => Loc::getMessage('SIGN_SERVICE_ERROR_MEMBERS_NOT_READY_FOR_RESEND'),
 			'INCORRECT_TAX_ID', 'B2E_COMPANY_NAME_NOT_FOUND' => Loc::getMessage('SIGN_SERVICE_ERROR_INCORRECT_TAX_ID'),
+			'PROVIDER_ERROR' => $message, //bypass for rest
 			default => $this->getDefaultError($code),
 		};
 	}
 
-	private function getErrorCustomDataByCode(string $code, array $customData): array
+	private function getErrorCustomDataByCode(string $message, string $code, array $customData): array
 	{
 		return match ($code)
 		{
 			'MEMBER_INVALID_PHONE', 'MEMBER_PHONE_UNSUPPORTED_COUNTRY_CODE' => ['phone' => $customData['phone'] ?? ''],
+			'PROVIDER_ERROR' => $customData, //bypass for rest
 			default => [], // $customData
 		};
 	}

@@ -6,6 +6,7 @@ use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Driver;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatFactory;
+use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\Settings\Controls\Field;
 use Bitrix\Intranet\Settings\Controls\Section;
 use Bitrix\Intranet\Settings\Controls\Selector;
@@ -248,7 +249,7 @@ class CommunicationSettings extends AbstractSettings
 
 		if (isset($this->data["rating_text_like_y"]) && $this->data["rating_text_like_y"] !== '')
 		{
-			\COption::SetOptionString("main", "rating_text_like_y", htmlspecialcharsbx($this->data["rating_text_like_y"]));
+			\COption::SetOptionString("main", "rating_text_like_y", $this->data["rating_text_like_y"]);
 		}
 
 		if ($this->isBitrix24)
@@ -703,35 +704,9 @@ class CommunicationSettings extends AbstractSettings
 
 		if ($rootDepartmentId === null)
 		{
-			$rootDepartmentId = \COption::GetOptionString("main", "wizard_departament", false, SITE_DIR, true);
-			if (
-				empty($rootDepartmentId)
-				&& Loader::includeModule('iblock')
-			)
-			{
-				$iblockId = \COption::GetOptionInt('intranet', 'iblock_structure', false);
-				if ($iblockId > 0)
-				{
-					$res = \CIBlockSection::getList(
-						array(
-							'LEFT_MARGIN' => 'ASC',
-						),
-						array(
-							'IBLOCK_ID' => $iblockId,
-							'ACTIVE' => 'Y',
-						),
-						false,
-						array('ID')
-					);
-					if (
-						!empty($res)
-						&& ($rootSection = $res->fetch())
-					)
-					{
-						$rootDepartmentId = $rootSection['ID'];
-					}
-				}
-			}
+			$departmentRepository = ServiceContainer::getInstance()->departmentRepository();
+			$department = $departmentRepository->getRootDepartment();
+			$rootDepartmentId = $department->getId();
 		}
 
 		foreach($rightsList as $key => $value)

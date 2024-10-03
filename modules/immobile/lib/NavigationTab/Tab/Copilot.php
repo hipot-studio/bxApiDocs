@@ -12,7 +12,7 @@ class Copilot extends BaseRecent
 	
 	public function isAvailable(): bool
 	{
-		return CopilotChat::isAvailable();
+		return CopilotChat::isActive();
 	}
 	
 	protected function getParams(): array

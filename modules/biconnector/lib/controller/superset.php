@@ -7,20 +7,22 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Cache\CacheManager;
 use Bitrix\Main\Engine\Controller;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\BIConnector;
 
 class Superset extends Controller
 {
-	public const SUPERSET_CLEAN_TIMESTAMP_OPTION = 'superset_clean_timestamp';
-
 	public function getDefaultPreFilters()
 	{
-		return [
-			...parent::getDefaultPreFilters(),
-			new \Bitrix\Intranet\ActionFilter\IntranetUser(),
-		];
+		$prefilters = parent::getDefaultPreFilters();
+		if (Loader::includeModule('intranet'))
+		{
+			$prefilters[] = new \Bitrix\Intranet\ActionFilter\IntranetUser();
+		}
+
+		return $prefilters;
 	}
 
 	public function onStartupMetricSendAction()
@@ -29,15 +31,13 @@ class Superset extends Controller
 	}
 
 	/**
-	 * Clean action from user disabling superset due to tariff restrictions.
-	 *
-	 * @param CurrentUser $currentUser
+	 * Clean action from user to delete superset instance
 	 *
 	 * @return bool|null
 	 */
-	public function cleanAction(CurrentUser $currentUser): ?bool
+	public function cleanAction(): ?bool
 	{
-		if (!$currentUser->isAdmin() && !\CBitrix24::isPortalAdmin($currentUser->getId()))
+		if (!BIConnector\Manager::isAdmin())
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_DELETE_ERROR_RIGHTS')));
 
@@ -59,24 +59,26 @@ class Superset extends Controller
 			return null;
 		}
 
-		\Bitrix\Main\Config\Option::set('biconnector', self::SUPERSET_CLEAN_TIMESTAMP_OPTION, time());
 		SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DELETED);
 
 		return true;
 	}
 
-	public function enableAction(CurrentUser $currentUser): ?bool
+	/**
+	 * Enable superset action from user
+	 *
+	 * @return bool|null
+	 */
+	public function enableAction(): ?bool
 	{
-		if (!$currentUser->isAdmin() && !\CBitrix24::isPortalAdmin($currentUser->getId()))
+		if (!BIConnector\Manager::isAdmin())
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_START_ERROR_RIGHTS')));
 
 			return null;
 		}
 
-		$cleanTimestamp = (int)\Bitrix\Main\Config\Option::get('biconnector', self::SUPERSET_CLEAN_TIMESTAMP_OPTION, 0);
-		$day = 60 * 60 * 24;
-		if (($cleanTimestamp + $day) > time())
+		if (SupersetInitializer::getAvailableToEnableSupersetTimestamp() > time())
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_START_ERROR_START_TIMESTAMP')));
 
@@ -84,7 +86,7 @@ class Superset extends Controller
 		}
 
 		SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS);
-		SupersetInitializer::startupSuperset();
+		// SupersetInitializer::startupSuperset();
 
 		return true;
 	}

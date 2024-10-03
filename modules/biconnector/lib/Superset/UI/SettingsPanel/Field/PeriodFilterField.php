@@ -20,6 +20,7 @@ class PeriodFilterField extends EntityEditorField
 			'DATE_FILTER_START' => EmbeddedFilter\DateTime::getDefaultDateStart(),
 			'DATE_FILTER_END' => EmbeddedFilter\DateTime::getDefaultDateEnd(),
 			'FILTER_PERIOD' => EmbeddedFilter\DateTime::getDefaultPeriod(),
+			'INCLUDE_LAST_FILTER_DATE' => EmbeddedFilter\DateTime::needIncludeDefaultLastFilterDate(),
 		];
 	}
 
@@ -65,6 +66,7 @@ class PeriodFilterField extends EntityEditorField
 			'items' => static::getPeriodList(),
 			'dateStartFieldName' => 'DATE_FILTER_START',
 			'dateEndFieldName' => 'DATE_FILTER_END',
+			'includeLastFilterDate' => 'INCLUDE_LAST_FILTER_DATE',
 		];
 	}
 }

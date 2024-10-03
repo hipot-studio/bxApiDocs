@@ -207,6 +207,7 @@ class Mail extends Service
 					'name' => $organizerName,
 					'email' => $this->getOrganizerEmail(),
 				],
+				'attendees' => $this->getAttendees(),
 			]);
 		}
 		catch (\Exception)
@@ -226,6 +227,54 @@ class Mail extends Service
 		}
 
 		return 'no-reply@bitrix24.com';
+	}
+
+	protected function getAttendees(): ?array
+	{
+		$sharingAttendee = $this->getSharingUserAttendee();
+
+		if (!empty($sharingAttendee))
+		{
+			return [$sharingAttendee];
+		}
+
+		return null;
+	}
+
+	protected function getSharingUserAttendee(): ?array
+	{
+		$attendeesCollection = $this->event->getAttendeesCollection();
+		$attendeesCodes = $attendeesCollection?->getAttendeesCodes();
+
+		$result = [];
+
+		if (!empty($attendeesCodes))
+		{
+			$userIds = \CCalendar::GetDestinationUsers($attendeesCodes);
+			if (empty($userIds))
+			{
+				return $result;
+			}
+
+			$usersResult = Main\UserTable::query()
+				->setSelect(['PERSONAL_MAILBOX', 'EXTERNAL_AUTH_ID'])
+				->whereIn('ID', array_map('intval', $userIds))
+				->exec()
+			;
+
+			while ($user = $usersResult->fetch())
+			{
+				$isSharingUser = ($user['EXTERNAL_AUTH_ID'] ?? '') === Sharing\SharingUser::EXTERNAL_AUTH_ID;
+
+				if ($isSharingUser && !empty($user['PERSONAL_MAILBOX']))
+				{
+					$result['email'] = $user['PERSONAL_MAILBOX'];
+					break;
+				}
+			}
+		}
+
+		return $result;
 	}
 
 	protected function getAbuseLink(): ?string

@@ -3,6 +3,7 @@ namespace Bitrix\BIConnector;
 
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
 
 class Manager
 {
@@ -581,5 +582,16 @@ class Manager
 		}
 
 		return $items;
+	}
+
+
+	public static function isAdmin()
+	{
+		if (Loader::includeModule('intranet'))
+		{
+			return \Bitrix\Intranet\CurrentUser::get()->isAdmin();
+		}
+
+		return \Bitrix\Main\Engine\CurrentUser::get()->isAdmin();
 	}
 }

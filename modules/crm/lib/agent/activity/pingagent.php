@@ -148,13 +148,14 @@ class PingAgent extends AgentBase
 
 		$subject = ToDo::getActivityTitle($activity);
 
-		$message = (new ProcessTodoActivity($ownerTypeId))
-			->getMessage([
-				'#subject#' => htmlspecialcharsbx($subject),
-				'#url#' => '#url#',
-				'#title#' => htmlspecialcharsbx(trim($entityName)),
-				'#deadline#' => static::transformDateTime($activity['DEADLINE'] ?? null, $activity['RESPONSIBLE_ID'] ?? null),
-			])
+		$getMessageCallback = static fn (?Uri $url) =>
+			(new ProcessTodoActivity($ownerTypeId))
+				->getMessageCallback([
+					'#subject#' => htmlspecialcharsbx($subject),
+					'#url#' => $url,
+					'#title#' => htmlspecialcharsbx(trim($entityName)),
+					'#deadline#' => static::transformDateTime($activity['DEADLINE'] ?? null, $activity['RESPONSIBLE_ID'] ?? null),
+				])
 		;
 
 		CIMNotify::Add([
@@ -165,8 +166,8 @@ class PingAgent extends AgentBase
 			'NOTIFY_MODULE' => 'crm',
 			'NOTIFY_EVENT' => 'pingTodoActivity',
 			'NOTIFY_TAG' => 'CRM|PING_TODO_ACTIVITY|' . $activity['ID'],
-			'NOTIFY_MESSAGE' => str_replace('#url#', $url, $message),
-			'NOTIFY_MESSAGE_OUT' => str_replace('#url#', static::transformRelativeUrlToAbsolute($url), $message),
+			'NOTIFY_MESSAGE' => $getMessageCallback($url),
+			'NOTIFY_MESSAGE_OUT' => $getMessageCallback(static::transformRelativeUrlToAbsolute($url)),
 		]);
 	}
 

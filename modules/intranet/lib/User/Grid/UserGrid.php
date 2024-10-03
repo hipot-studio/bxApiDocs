@@ -2,10 +2,13 @@
 
 namespace Bitrix\Intranet\User\Grid;
 
+use Bitrix\Intranet\User\Filter\ExtranetUserSettings;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
 use Bitrix\Intranet\User\Filter\Provider\DateUserDataProvider;
+use Bitrix\Intranet\User\Filter\Provider\ExtranetUserDataProvider;
 use Bitrix\Intranet\User\Filter\Provider\IntegerUserDataProvider;
 use Bitrix\Intranet\User\Filter\Provider\IntranetUserDataProvider;
+use Bitrix\Intranet\User\Filter\Provider\PhoneUserDataProvider;
 use Bitrix\Intranet\User\Filter\Provider\StringUserDataProvider;
 use Bitrix\Intranet\User\Filter\UserFilter;
 use Bitrix\Intranet\User\Grid\Row\Assembler\UserRowAssembler;
@@ -15,6 +18,7 @@ use Bitrix\Main\Filter\UserDataProvider;
 use Bitrix\Main\Grid\Column\Columns;
 use Bitrix\Main\Grid\Grid;
 use Bitrix\Main\Grid\Row\Rows;
+use Bitrix\Main\ModuleManager;
 
 /**
  * @method UserSettings getSettings()
@@ -33,10 +37,18 @@ final class UserGrid extends Grid
 	public function getOrmParams(): array
 	{
 		$params = parent::getOrmParams();
-
 		array_push($params['select'], 'ID', 'ACTIVE', 'CONFIRM_CODE');
+		$selectedSortField = '';
 
-		if (empty($params['order']))
+		if (!empty($params['order']))
+		{
+			$selectedSortField = is_array($params['order']) ? array_key_first($params['order']) : $params['order'];
+		}
+
+		if (
+			empty($selectedSortField)
+			|| (str_starts_with($selectedSortField, 'UF_') && !in_array($selectedSortField, $this->getSettings()->getViewFields()))
+		)
 		{
 			$params['order'] = [
 				'STRUCTURE_SORT' => 'DESC'
@@ -131,21 +143,31 @@ final class UserGrid extends Grid
 
 	protected function createFilter(): ?Filter
 	{
-		$filterSettings = new IntranetUserSettings([
+		$params = [
 			'ID' => $this->getId(),
 			'WHITE_LIST' => $this->getSettings()->getViewFields()
-		]);
+		];
+		$filterSettings = new IntranetUserSettings($params);
+
+		$extraProviders = [
+			new \Bitrix\Main\Filter\UserUFDataProvider($filterSettings),
+			new \Bitrix\Intranet\User\Filter\Provider\IntranetUserDataProvider($filterSettings),
+			new \Bitrix\Intranet\User\Filter\Provider\IntegerUserDataProvider($filterSettings),
+			new \Bitrix\Intranet\User\Filter\Provider\StringUserDataProvider($filterSettings),
+			new \Bitrix\Intranet\User\Filter\Provider\DateUserDataProvider($filterSettings),
+			new PhoneUserDataProvider($filterSettings),
+		];
+
+		if (ModuleManager::isModuleInstalled('extranet'))
+		{
+			$extranetSettings = new ExtranetUserSettings($params);
+			$extraProviders[] = new \Bitrix\Intranet\User\Filter\Provider\ExtranetUserDataProvider($extranetSettings);
+		}
 
 		return new UserFilter(
 			$this->getId(),
 			new UserDataProvider($filterSettings),
-			[
-				new IntranetUserDataProvider($filterSettings),
-				new DateUserDataProvider($filterSettings),
-				new StringUserDataProvider($filterSettings),
-				new IntegerUserDataProvider($filterSettings),
-				new \Bitrix\Main\Filter\UserUFDataProvider($filterSettings)
-			],
+			$extraProviders,
 			[
 				'FILTER_SETTINGS' => $filterSettings,
 			]

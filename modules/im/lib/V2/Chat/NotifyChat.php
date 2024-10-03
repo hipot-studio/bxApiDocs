@@ -27,9 +27,9 @@ class NotifyChat extends Chat
 		return self::IM_TYPE_SYSTEM;
 	}
 
-	protected function checkAccessWithoutCaching(int $userId): bool
+	protected function checkAccessInternal(int $userId): Result
 	{
-		return false;
+		return (new Result())->addError(new ChatError(ChatError::ACCESS_DENIED));
 	}
 
 	/**
@@ -186,7 +186,8 @@ class NotifyChat extends Chat
 	 */
 	public function sendMessage($message, $sendingConfig = null): Result
 	{
-		$result = new Result;
+		return new Result();
+		/*$result = new Result;
 
 		if (!$this->getChatId())
 		{
@@ -250,7 +251,7 @@ class NotifyChat extends Chat
 
 
 		// fire event `im:OnBeforeMessageNotifyAdd` before message send
-		$eventResult = $sendService->fireEventBeforeNotifySend($this, $message);
+		//$eventResult = $sendService->fireEventBeforeNotifySend($this, $message);
 		if (!$eventResult->isSuccess())
 		{
 			// cancel sending by event
@@ -338,7 +339,7 @@ class NotifyChat extends Chat
 
 		$result->setResult(['messageId' => $message->getMessageId()]);
 
-		return $result;
+		return $result;*/
 	}
 
 	/**
@@ -550,5 +551,10 @@ class NotifyChat extends Chat
 	protected function updateIndex(): Chat
 	{
 		return $this;
+	}
+
+	protected function getPushService(Message $message, SendingConfig $config): PushService
+	{
+		return new Message\Send\Push\GroupPushService($message, $config);
 	}
 }

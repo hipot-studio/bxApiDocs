@@ -142,7 +142,8 @@ class CIMDisk
 			"SILENT_CONNECTOR" => $linesSilentMode?'Y':'N',
 			"PARAMS" => Array(
 				'FILE_ID' => $messageFileId
-			)
+			),
+			"FILE_MODELS" => $filesModels
 		);
 
 		$text = trim($text);
@@ -153,14 +154,6 @@ class CIMDisk
 		$messageId = \CIMMessage::Add($ar);
 		if ($messageId)
 		{
-			$message = new Bitrix\Im\V2\Message([
-				'ID' => $messageId,
-				'CHAT_ID' => $chatId,
-				'AUTHOR_ID' => self::GetUserId()
-			]);
-			$message->setParams($ar['PARAMS'] ?? []);
-			(new IM\V2\Link\File\FileService())->saveFilesFromMessage($filesModels, $message);
-			$result['MESSAGE_ID'] = $messageId;
 		}
 		else
 		{
@@ -495,13 +488,8 @@ class CIMDisk
 			return false;
 		}
 
-		$orm = \Bitrix\Im\Model\ChatTable::getList([
-			'filter'=>[
-				'=ID' => $chatId
-			]
-		]);
-		$chat = $orm->fetch();
-		if (!$chat)
+		$chat = IM\V2\Chat::getInstance($chatId);
+		if ($chat instanceof IM\V2\Chat\NullChat)
 		{
 			return false;
 		}
@@ -528,18 +516,18 @@ class CIMDisk
 		$asFile = isset($options['AS_FILE']) && $options['AS_FILE'] === 'Y';
 		$params = isset($options['PARAMS']) && is_array($options['PARAMS']) ? $options['PARAMS'] : null;
 
-		$chatRelation = \CIMChat::GetRelationById($chatId, false, true, false);
+		$chatRelation = $chat->getRelations();
 
-		if ($chat['ENTITY_TYPE'] !== 'LIVECHAT' && $userId > 0 && !$skipUserCheck)
+		if ($chat->getEntityType() !== 'LIVECHAT' && $userId > 0 && !$skipUserCheck)
 		{
-			if (!$chatRelation[$userId])
+			if (!$chatRelation->hasUser($userId, $chatId))
 			{
 				return false;
 			}
 
 			if (
-				$chat['ENTITY_TYPE'] === 'ANNOUNCEMENT'
-				&& $chatRelation[$userId]['MANAGER'] !== 'Y'
+				$chat->getEntityType() === 'ANNOUNCEMENT'
+				&& !$chatRelation->getByUserId($userId, $chatId)->getManager()
 			)
 			{
 				return false;
@@ -592,28 +580,28 @@ class CIMDisk
 				}
 				else if (!$skipUserCheck)
 				{
-					if ($chat['ENTITY_TYPE'] == 'LINES')
+					if ($chat->getEntityType() == 'LINES')
 					{
 						if ($userId)
 						{
 							\Bitrix\Disk\Driver::getInstance()->getRecentlyUsedManager()->push($userId, $newFile);
 						}
 					}
-					else if ($chat['ENTITY_TYPE'] != 'LIVECHAT')
+					else if ($chat->getEntityType() != 'LIVECHAT')
 					{
 						foreach ($chatRelation as $relation)
 						{
-							if ($relation['MESSAGE_TYPE'] != \IM_MESSAGE_PRIVATE)
+							if ($relation->getMessageType() != \IM_MESSAGE_PRIVATE)
 							{
 								break;
 							}
 
-							if ($userId == $relation['USER_ID'])
+							if ($userId == $relation->getUserId())
 							{
 								continue;
 							}
 
-							\Bitrix\Disk\Driver::getInstance()->getRecentlyUsedManager()->push($relation['USER_ID'], $newFile);
+							\Bitrix\Disk\Driver::getInstance()->getRecentlyUsedManager()->push($relation->getUserId(), $newFile);
 						}
 					}
 				}
@@ -633,16 +621,17 @@ class CIMDisk
 		$ar = [
 			"TO_CHAT_ID" => $chatId,
 			"FROM_USER_ID" => $userId,
-			"MESSAGE_TYPE" => $chat['TYPE'],
+			"MESSAGE_TYPE" => $chat->getType(),
 			"SILENT_CONNECTOR" => $linesSilentMode?'Y':'N',
-			"SKIP_USER_CHECK" => ($skipUserCheck || !$userId || $chat['ENTITY_TYPE'] == 'LIVECHAT'),
+			"SKIP_USER_CHECK" => ($skipUserCheck || !$userId || $chat->getEntityType() == 'LIVECHAT'),
 			"TEMPLATE_ID" => $templateId,
 			"FILE_TEMPLATE_ID" => $fileTemplateId,
+			"FILE_MODELS" => $result['FILE_MODELS'] ?? [],
 		];
 
-		if ($chat['ENTITY_TYPE'] == 'LIVECHAT')
+		if ($chat->getEntityType() == 'LIVECHAT')
 		{
-			[$lineId] = explode("|", $chat['ENTITY_ID']);
+			[$lineId] = explode("|", $chat->getEntityId());
 			$ar["EXTRA_PARAMS"] = [
 				"CONTEXT" => "LIVECHAT",
 				"LINE_ID" => $lineId
@@ -681,18 +670,10 @@ class CIMDisk
 
 		$result['MESSAGE_ID'] = $messageId;
 
-		$message = new IM\V2\Message([
-			'ID' => $messageId,
-			'CHAT_ID' => $chatId,
-			'AUTHOR_ID' => $userId,
-		]);
-		$message->setParams($params ?? []);
-		(new IM\V2\Link\File\FileService())->saveFilesFromMessage($result['FILE_MODELS'], $message);
-
 		if (
 			!$robot
 			&& !$linesSilentMode
-			&& ($chat['ENTITY_TYPE'] == 'LINES' || $chat['ENTITY_TYPE'] == 'LIVECHAT')
+			&& ($chat->getEntityType() == 'LINES' || $chat->getEntityType() == 'LIVECHAT')
 		)
 		{
 			$fileIds = array_map(function($item){
@@ -701,13 +682,13 @@ class CIMDisk
 
 			$uploadResult = false;
 
-			if ($chat['ENTITY_TYPE'] == 'LIVECHAT' && \Bitrix\Main\Loader::includeModule('imopenlines'))
+			if ($chat->getEntityType() == 'LIVECHAT' && \Bitrix\Main\Loader::includeModule('imopenlines'))
 			{
-				[$lineId, $clientUserId] = explode("|", $chat['ENTITY_ID']);
+				[$lineId, $clientUserId] = explode("|", $chat->getEntityId());
 
 				$session = new \Bitrix\Imopenlines\Session();
 				if ($session->load([
-					'USER_CODE' => 'livechat|'.$lineId.'|'.$chat['ID'].'|'.$clientUserId,
+					'USER_CODE' => 'livechat|'.$lineId.'|'.$chat->getId().'|'.$clientUserId,
 					'DEFERRED_JOIN' => 'Y',
 				]))
 				{
@@ -1624,6 +1605,7 @@ class CIMDisk
 		{
 			$contentType = 'audio';
 		}
+		$author = IM\V2\Entity\User\User::getInstance($fileModel->getCreatedBy());
 
 		$fileData = Array(
 			'id' => (int)$fileModel->getId(),
@@ -1637,7 +1619,7 @@ class CIMDisk
 			'status' => $fileModel->getGlobalContentVersion() > 1? 'done': 'upload',
 			'progress' => $fileModel->getGlobalContentVersion() > 1? 100: -1,
 			'authorId' => (int)$fileModel->getCreatedBy(),
-			'authorName' => \Bitrix\Im\User::formatFullNameFromDatabase($fileModel->getCreateUser()),
+			'authorName' => $author->getName(),
 			'urlPreview' => self::GetPublicPath(self::PATH_TYPE_PREVIEW, $fileModel),
 			'urlShow' => self::GetPublicPath(self::PATH_TYPE_SHOW, $fileModel),
 			'urlDownload' => self::GetPublicPath(self::PATH_TYPE_DOWNLOAD, $fileModel),
@@ -2481,33 +2463,13 @@ class CIMDisk
 	}
 
 	/**
-	 * @return false|string
+	 * @deprecated Use \Bitrix\Im\V2\Integration\HumanResources\Department\Department::getTopCode()
 	 */
-	public static function GetTopDepartmentCode()
+	public static function GetTopDepartmentCode(): false|string
 	{
-		if (!\Bitrix\Main\Loader::includeModule("iblock"))
-		{
-			return false;
-		}
+		$topCode = IM\V2\Integration\HumanResources\Department\Department::getInstance()->getTopCode();
 
-		$code = false;
-		$res = \CIBlock::GetList(array(), array("CODE" => "departments"));
-		if ($iblock = $res->Fetch())
-		{
-			$res = \CIBlockSection::GetList(
-				array(),
-				array(
-					"SECTION_ID" => 0,
-					"IBLOCK_ID" => $iblock["ID"]
-				)
-			);
-			if ($department = $res->Fetch())
-			{
-				$code = "DR".$department['ID'];
-			}
-		}
-
-		return $code;
+		return $topCode ?? false;
 	}
 
 	/**

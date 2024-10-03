@@ -20,6 +20,7 @@ use Bitrix\Sign\Item;
 use Bitrix\Sign\Type\Document\EntityType;
 use Bitrix\Sign\Type\Document\SchemeType;
 use Bitrix\Sign\Type\DocumentScenario;
+use Bitrix\Sign\Type\ProviderCode;
 
 class DocumentRepository
 {
@@ -438,6 +439,19 @@ class DocumentRepository
 		;
 	}
 
+	public function listByEntityIdsAndType(array $entityIds, string $entityType): Item\DocumentCollection
+	{
+		$models = Internal\DocumentTable::query()
+			->addSelect('*')
+			->whereIn('ENTITY_ID', $entityIds)
+			->where('ENTITY_TYPE', $entityType)
+			->fetchCollection()
+		;
+		return $models === null
+			? new Item\DocumentCollection()
+			: $this->extractItemCollectionByModelCollection($models);
+	}
+
 	public function getByEntityIdAndType(int $entityId, string $entityType): ?Item\Document
 	{
 		$document = Internal\DocumentTable::query()
@@ -476,5 +490,48 @@ class DocumentRepository
 		}
 
 		return Internal\DocumentTable::updateMulti($documentIds, ['PROVIDER_CODE' => $providerCode]);
+	}
+
+	/**
+	 * @param ProviderCode::* $providerCode
+	 * @param SchemeType::* $scheme
+	 *
+	 * @return list<int>
+	 */
+	public function listIdsByProviderCodeAndScheme(string $providerCode, string $scheme, int $limit): array
+	{
+		if ($limit < 1)
+		{
+			return [];
+		}
+
+		$result = Internal\DocumentTable::query()
+			->setSelect(['ID'])
+			->where('PROVIDER_CODE', $providerCode)
+			->where('SCHEME', $scheme)
+			->setLimit($limit)
+			->fetchAll()
+		;
+		$documentIds = array_column($result, "ID");
+
+		return $documentIds;
+	}
+
+	/**
+	 * @param array<int> $documentIds
+	 * @param string $newScheme
+	 *
+	 * @return Result
+	 */
+	public function updateSchemeToDocumentIds(array $documentIds, string $newScheme): Result
+	{
+		if (empty($documentIds))
+		{
+			return new Result();
+		}
+
+		$documentIds = array_unique($documentIds);
+
+		return Internal\DocumentTable::updateMulti($documentIds, ['SCHEME' => $this->getSchemeIdByType($newScheme)]);
 	}
 }

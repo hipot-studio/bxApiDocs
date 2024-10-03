@@ -334,7 +334,7 @@ final class Storage extends Base
 	 * @return Disk\Storage
 	 * @throws RestException
 	 */
-	private function getStorageById($id)
+	private function getStorageById(int $id)
 	{
 		$storage = Disk\Storage::getById($id);
 		if(!$storage)

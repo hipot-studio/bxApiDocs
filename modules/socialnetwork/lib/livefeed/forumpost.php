@@ -443,7 +443,7 @@ final class ForumPost extends Provider
 			return $defaultValue;
 		}
 
-		return '2';
+		return '3';
 	}
 
 	public function add($params = [])

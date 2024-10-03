@@ -15,7 +15,6 @@ final class UserProvider
 
 	public function __construct()
 	{
-		// todo: delete before prod
 		if (\Bitrix\Main\Loader::includeModule('tasks'))
 		{
 			$this->userManager = new UserManager('IntranetMobile/UserProvider/getByPage', []);
@@ -51,7 +50,7 @@ final class UserProvider
 
 	public function getPresets(): array
 	{
-		$presets = $this->userManager->getDefaultFilterPresets();
+		$presets = $this->userManager?->getDefaultFilterPresets();
 		$result = [];
 
 		foreach ($presets as $preset)
@@ -102,8 +101,6 @@ final class UserProvider
 		$filter ??= new FilterDto();
 		$sorting ??= new SortingDto();
 
-		$list = [];
-
 		$params = [
 			'select' => $select,
 			'limit' => $nav->getLimit(),
@@ -122,16 +119,12 @@ final class UserProvider
 				];
 		}
 
-		if ($this->userManager)
-		{
-			$list = $this->userManager->getList(
+		return $this->userManager
+			? $this->userManager->getList(
 				$params,
 				$filter->presetId,
 				$filter->searchString,
-			);
-		}
-
-		return $list;
+			) : [];
 	}
 
 	public function getUsersByIds(array $ids): array

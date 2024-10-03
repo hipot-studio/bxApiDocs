@@ -10,6 +10,7 @@ use Bitrix\Sign\Document\Entity\Dummy;
 use Bitrix\Sign\Document\Entity;
 use Bitrix\Sign\Document\Member;
 use Bitrix\Sign\Integration\CRM\Model\EventData;
+use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Type\DocumentStatus;
 
@@ -1000,6 +1001,8 @@ class Document extends \Bitrix\Sign\Internal\BaseTable
 	 * @param string $entityType Entity type.
 	 * @param int|null $entityId Entity id.
 	 * @return static|null
+	 * @deprecated
+	 * @see DocumentRepository::getByEntityIdAndType()
 	 */
 	public static function resolveByEntity(string $entityType, ?int $entityId): ?self
 	{

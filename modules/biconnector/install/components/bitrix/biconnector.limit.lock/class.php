@@ -104,7 +104,7 @@ class LimitLockComponent extends CBitrixComponent
 
 	private function getTitle(): string
 	{
-		if ($this->supersetLimit)
+		if ($this->supersetLimit && !$this->limitManager->isLimitByLicence())
 		{
 			if ($this->fullLock)
 			{
@@ -147,12 +147,17 @@ class LimitLockComponent extends CBitrixComponent
 			return Loc::getMessage('CC_BLL_LICENSE_BUTTON_CLOUD');
 		}
 
+		if ($this->supersetLimit && !$this->limitManager->isLimitByLicence())
+		{
+			return '';
+		}
+
 		return Loc::getMessage('CC_BLL_LICENSE_BUTTON_BOX');
 	}
 
 	private function getPopupContent(): string
 	{
-		if ($this->supersetLimit)
+		if ($this->supersetLimit && !$this->limitManager->isLimitByLicence())
 		{
 			if ($this->fullLock)
 			{

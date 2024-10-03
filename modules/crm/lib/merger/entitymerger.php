@@ -2848,7 +2848,7 @@ abstract class EntityMerger
 	 * @return array|null
 	 * @throws Main\NotImplementedException
 	 */
-	protected function prepareCollisionMessageFields(array &$collisions, array &$seed, array &$targ)
+	protected function prepareCollisionMessageFields(array &$collisions, array &$seed, array &$targ): array|null
 	{
 		throw new Main\NotImplementedException('Method setupRecoveryData must be overridden');
 	}

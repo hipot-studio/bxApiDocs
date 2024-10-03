@@ -85,6 +85,11 @@ class Efficiency extends Effective
 	 */
 	public function load(int ...$flowIds): void
 	{
+		if (empty($flowIds))
+		{
+			return;
+		}
+
 		$this->flowIds = $flowIds;
 
 		$this->countEfficiencies();

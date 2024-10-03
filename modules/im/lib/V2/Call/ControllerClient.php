@@ -75,6 +75,7 @@ class ControllerClient extends BaseSender
 		$action = 'callcontroller.InternalApi.createCall';
 		$data = [
 			'callType' => 'call',
+			'roomType' => $call->getType(),
 			'uuid' => $call->getUuid(),
 			'initiatorUserId' => $call->getInitiatorId(),
 			'callId' => $call->getId(),

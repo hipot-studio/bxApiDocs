@@ -739,7 +739,6 @@ HTML;
 
 	public function parseTemplate(array $res, array $arParams, $template)
 	{
-		global $USER;
 		static $extranetSiteId = null;
 
 		$todayString = ConvertTimeStamp();
@@ -1427,5 +1426,56 @@ HTML;
 			'DATETIME_FORMAT' => ($arFormatParams["DATE_TIME_FORMAT"] ?? false),
 			'DATETIME_FORMAT_WITHOUT_YEAR' => ($arFormatParams["DATE_TIME_FORMAT_WITHOUT_YEAR"] ?? false)
 		));
+	}
+
+	public function getAvatar()
+	{
+		global $USER;
+
+		static $avatar = null;
+
+		if ($avatar == null)
+		{
+			$avatar = '/bitrix/images/1.gif';
+			if ($USER?->IsAuthorized())
+			{
+				$u = CUser::GetByID($USER->GetID())->Fetch();
+				if (
+					intval($u["PERSONAL_PHOTO"]) <= 0
+					&& \Bitrix\Main\ModuleManager::isModuleInstalled('socialnetwork')
+				)
+				{
+					switch ($u["PERSONAL_GENDER"])
+					{
+						case "M":
+							$suffix = "male";
+							break;
+						case "F":
+							$suffix = "female";
+							break;
+						default:
+							$suffix = "unknown";
+					}
+					$u["PERSONAL_PHOTO"] = COption::GetOptionInt("socialnetwork", "default_user_picture_".$suffix, false, SITE_ID);
+				}
+
+				if ($u["PERSONAL_PHOTO"])
+				{
+					$res = CFile::ResizeImageGet(
+						$u["PERSONAL_PHOTO"],
+						array('width' => 100, 'height' => 100),
+						BX_RESIZE_IMAGE_EXACT,
+						false,
+						false,
+						true
+					);
+					if ($res["src"])
+					{
+						$avatar = $res["src"];
+					}
+				}
+			}
+		}
+		return $avatar;
 	}
 }

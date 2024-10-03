@@ -139,6 +139,7 @@ final class Dashboard
 			'FILTER_PERIOD' => $embeddedFilterFields['FILTER_PERIOD'],
 			'DATE_FILTER_START' => $embeddedFilterFields['DATE_FILTER_START'],
 			'DATE_FILTER_END' => $embeddedFilterFields['DATE_FILTER_END'],
+			'INCLUDE_LAST_FILTER_DATE' => $embeddedFilterFields['INCLUDE_LAST_FILTER_DATE'],
 		];
 	}
 
@@ -170,6 +171,7 @@ final class Dashboard
 			'FILTER_PERIOD' => $dateFilter->getPeriod(),
 			'DATE_FILTER_START' => $dateFilter->getDateStart(),
 			'DATE_FILTER_END' => $dateFilter->getDateEnd(),
+			'INCLUDE_LAST_FILTER_DATE' => $dateFilter->needIncludeLastFilterDate(),
 		];
 	}
 

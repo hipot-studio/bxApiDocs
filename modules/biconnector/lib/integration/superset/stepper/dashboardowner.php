@@ -143,20 +143,23 @@ class DashboardOwner extends Main\Update\Stepper
 
 	private function getAdminUserId(): ?int
 	{
-		$user = Main\UserTable::getList([
-			'select' => ['ID', 'GROUPS'],
+		$user = Main\UserGroupTable::getList([
+			'select' => ['USER_ID'],
 			'filter' => [
-				'=ACTIVE' => 'Y',
-				'=GROUPS.GROUP_ID' => 1,
-				'=IS_REAL_USER' => 'Y',
+				'=GROUP_ID' => 1,
+				'=DATE_ACTIVE_TO' => null,
+				'=USER.ACTIVE' => 'Y',
+				'=USER.IS_REAL_USER' => 'Y',
 			],
-			'order' => ['ID' => 'ASC'],
+			'order' => ['USER_ID' => 'ASC'],
 			'limit' => 1,
-		])->fetch();
+		])
+			->fetch()
+		;
 
 		if ($user)
 		{
-			return (int)$user['ID'];
+			return (int)$user['USER_ID'];
 		}
 
 		return null;

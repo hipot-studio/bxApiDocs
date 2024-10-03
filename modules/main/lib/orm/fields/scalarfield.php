@@ -7,8 +7,8 @@
  */
 
 namespace Bitrix\Main\ORM\Fields;
+
 use Bitrix\Main\DB\SqlExpression;
-use Bitrix\Main\ORM\Fields\FieldTypeMask;
 
 /**
  * Scalar entity field class for non-array and non-object data types

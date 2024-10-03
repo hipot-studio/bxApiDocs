@@ -7,7 +7,12 @@ use Bitrix\Main\Type\Contract\Arrayable;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Flow\Access\FlowModel;
 use Bitrix\Tasks\Flow\Access\SimpleFlowAccessController;
+use Bitrix\Tasks\Flow\Comment\CommentEvent;
+use Bitrix\Tasks\Flow\Comment\Task\FlowCommentFactory;
+use Bitrix\Tasks\Flow\Comment\Task\FlowCommentInterface;
 use Bitrix\Tasks\Flow\Internal\Entity\Role;
+use Bitrix\Tasks\Internals\TaskObject;
+use ReflectionClass;
 
 class Flow implements Arrayable
 {
@@ -329,6 +334,11 @@ class Flow implements Arrayable
 		];
 	}
 
+	public function getComment(CommentEvent $event, int $taskId): FlowCommentInterface
+	{
+		return FlowCommentFactory::get($this, $taskId, $event);
+	}
+
 	private function mapTaskCreators(array $members): void
 	{
 		$this->taskCreators = array_column(
@@ -354,5 +364,19 @@ class Flow implements Arrayable
 			$access = new AccessCode($accessCode);
 			$this->taskAssignees[] = $access->getEntityId();
 		}
+	}
+
+	/**
+	 * @return string[]
+	 */
+	public static function getDistributionTypesList(): array
+	{
+		$constants = (new ReflectionClass(__CLASS__))->getConstants();
+
+		return array_filter(
+			$constants,
+			static fn($value, $key): bool => str_starts_with($key, 'DISTRIBUTION_TYPE'),
+			ARRAY_FILTER_USE_BOTH
+		);
 	}
 }

@@ -88,6 +88,7 @@ class CBPViewHelper
 					'ACTIVITY_NAME',
 					'CREATED_DATE',
 					'DELEGATION_TYPE',
+					'OVERDUE_DATE',
 				],
 			);
 			while ($task = $taskIterator->getNext())

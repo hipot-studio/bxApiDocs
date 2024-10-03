@@ -84,15 +84,22 @@ class UiFormConfig extends CBitrixComponent
 		$pageNavigation = new PageNavigation($this->navParamName);
 		$pageNavigation->allowAllRecords(false)->setPageSize($pageSize)->initFromUri();
 
-		$list = Scope::getInstance()->getUserScopes(
-			$this->arParams['ENTITY_TYPE_ID'],
-			($this->arParams['MODULE_ID'] ?? null)
-		);
+		$entityTypeId = $this->arParams['ENTITY_TYPE_ID'] ?? null;
+
+		if ($entityTypeId)
+		{
+			$moduleId = $this->arParams['MODULE_ID'] ?? null;
+			$list = Scope::getInstance()->getAllUserScopes($entityTypeId, $moduleId);
+		}
+		else
+		{
+			$list = [];
+		}
 
 		$jsData = [];
 		$grid['ROWS'] = [];
 
-		if (count($list) > 0)
+		if (!empty($list))
 		{
 			foreach ($list as $scopeId => $scope)
 			{

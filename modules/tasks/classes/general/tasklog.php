@@ -48,6 +48,7 @@ class CTaskLog
 		'TASK_CONTROL' => 'bool',
 		'ALLOW_TIME_TRACKING' => 'bool',
 		'ALLOW_CHANGE_DEADLINE' => 'bool',
+		'FLOW_ID' => 'integer',
 	);
 
 	public static function getTrackedFields()

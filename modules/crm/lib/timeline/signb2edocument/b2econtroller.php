@@ -404,6 +404,7 @@ final class B2eController extends Timeline\Controller
 			Entry::TYPE_CATEGORY_MEMBER_STOPPED_BY_EDITOR => [TimelineEntry\Facade::SIGN_B2E_DOCUMENT_LOG,],
 			Entry::TYPE_CATEGORY_MEMBER_STOPPED_BY_ASSIGNEE => [TimelineEntry\Facade::SIGN_B2E_DOCUMENT_LOG,],
 			Entry::TYPE_CATEGORY_MEMBER_SIGNED_DELIVERED => [TimelineEntry\Facade::SIGN_B2E_DOCUMENT_LOG,],
+			Entry::TYPE_CATEGORY_CONFIGURATION_ERROR => [TimelineEntry\Facade::SIGN_B2E_DOCUMENT_LOG,],
 		];
 	}
 
@@ -435,5 +436,33 @@ final class B2eController extends Timeline\Controller
 		{
 			Timeline\ActivityController::getInstance()->notifyTimelinesAboutActivityUpdate($activity);
 		}
+	}
+
+	public function onSignConfigureError(
+		ItemIdentifier $identifier,
+		DocumentData $documentData,
+		MessageData $messageData
+	): array
+	{
+		return $this->handleSignEvent(
+			Entry::TYPE_CATEGORY_CONFIGURATION_ERROR,
+			$identifier,
+			$documentData,
+			$messageData,
+		);
+	}
+
+	public function onSending(
+		ItemIdentifier $identifier,
+		DocumentData $documentData,
+		MessageData $messageData
+	): array
+	{
+		return $this->handleSignEvent(
+			Entry::TYPE_CATEGORY_CONFIGURATION_ERROR,
+			$identifier,
+			$documentData,
+			$messageData,
+		);
 	}
 }

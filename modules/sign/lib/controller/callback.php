@@ -3,6 +3,7 @@
 namespace Bitrix\Sign\Controller;
 
 use Bitrix\Main;
+use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Engine;
 use Bitrix\Sign\Service;
 
@@ -35,7 +36,8 @@ class Callback extends Controller
 				}
 				$errorsRepresentedText = implode("\n", $errorsRepresentedTextLines);
 
-				AddMessage2Log("Callback handling end with errors. \n $errorsRepresentedText", 'sign');
+				$logger = Logger::getInstance();
+				$logger->error("Callback handling end with errors. \n $errorsRepresentedText");
 			}
 		});
 

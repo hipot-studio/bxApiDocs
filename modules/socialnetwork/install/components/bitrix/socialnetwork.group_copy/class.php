@@ -445,7 +445,7 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 			&& ModuleManager::isModuleInstalled('intranet')
 		)
 		{
-			$featureId = 'BLOG2';
+			$featureId = 'BLOG3';
 		}
 		return Loc::getMessage("SOCNET_GROUP_COPY_FEATURE_".$featureId);
 	}

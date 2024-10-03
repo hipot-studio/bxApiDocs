@@ -19,6 +19,14 @@ class PortalSettings extends AbstractSettings
 	private Intranet\PortalSettings $portalSettings;
 	private const LOGO_PRESETS = ['logo' => [222, 55], '2x' => [444, 110]];
 
+	private const EXAMPLE_DNS = [
+		'ns-1277.awsdns-31.org', 'ns-310.awsdns-38.com', 'ns-581.awsdns-08.net', 'ns-1613.awsdns-09.co.uk'
+	];
+
+	private const EXAMPLE_DNS_RU = [
+		'a.ns.selectel.ru', 'b.ns.selectel.ru', 'c.ns.selectel.ru', 'd.ns.selectel.ru'
+	];
+
 	public function __construct(array $data = [])
 	{
 		parent::__construct($data);
@@ -351,6 +359,7 @@ class PortalSettings extends AbstractSettings
 				'isCustomizable' => $domain->isCustomizable(),
 				'canUserEdit' => $domain->canCurrentUserEdit(),
 				'occupiedDomains' => $domain::RESERVED_SUBDOMAIN_NAME,
+				'exampleDns' => $this->getExampleDns(),
 			];
 
 			$data['sectionSiteDomain'] = new Intranet\Settings\Controls\Section(
@@ -432,5 +441,17 @@ class PortalSettings extends AbstractSettings
 		]);
 
 		return $searchEngine->find($query);
+	}
+
+	private function getExampleDns(): array
+	{
+		$license = \Bitrix\Main\Application::getInstance()->getLicense();
+
+		if (in_array($license->getRegion(), ['ru', 'by']))
+		{
+			return self::EXAMPLE_DNS_RU;
+		}
+
+		return self::EXAMPLE_DNS;
 	}
 }

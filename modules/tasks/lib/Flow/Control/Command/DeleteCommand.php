@@ -2,8 +2,8 @@
 
 namespace Bitrix\Tasks\Flow\Control\Command;
 
-use Bitrix\Tasks\Flow\Control\AbstractCommand;
-use Bitrix\Tasks\Internals\Attribute\Min;
+use Bitrix\Tasks\AbstractCommand;
+use Bitrix\Tasks\Internals\Attribute\PositiveNumber;
 use Bitrix\Tasks\Internals\Attribute\Primary;
 
 /**
@@ -12,6 +12,6 @@ use Bitrix\Tasks\Internals\Attribute\Primary;
 final class DeleteCommand extends AbstractCommand
 {
 	#[Primary]
-	#[Min(1)]
+	#[PositiveNumber]
 	public int $id;
 }

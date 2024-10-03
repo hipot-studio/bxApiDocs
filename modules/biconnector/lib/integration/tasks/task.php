@@ -196,6 +196,12 @@ class Task extends Dataset
 			) UFMC on UFMC.XML_ID = CONCAT('TASK_', {$this->getAliasFieldName('ID')})"
 		);
 
+		$flowJoin = $this->createJoin(
+			"TFT",
+			"INNER JOIN b_tasks_flow_task TFT ON TFT.TASK_ID = {$this->getAliasFieldName('ID')}",
+			"LEFT JOIN b_tasks_flow_task TFT ON TFT.TASK_ID = {$this->getAliasFieldName('ID')}",
+		);
+
 		$fieldsInfo = \CTasks::getFieldsInfo(false);
 
 		return [
@@ -558,6 +564,10 @@ class Task extends Dataset
 			(new IntegerField('COMMENTS_COUNT'))
 				->setName($commentsCountJoin->getJoinFieldName('COMMENTS_COUNT'))
 				->setJoin($commentsCountJoin)
+			,
+			(new IntegerField('FLOW_ID'))
+				->setName($flowJoin->getJoinFieldName('FLOW_ID'))
+				->setJoin($flowJoin)
 			,
 		];
 	}

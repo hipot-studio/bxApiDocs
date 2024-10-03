@@ -24,9 +24,13 @@ class DataPreparer
 			{
 				$this->prepareNumberTypeField($filter, $id);
 			}
-			elseif ($type === 'custom_entity' || $type === 'list')
+			elseif ($type === 'list')
 			{
 				$this->prepareListTypeField($filter, $id);
+			}
+			elseif ($type === 'custom_entity')
+			{
+				$this->prepareCustomEntityTypeField($filter, $id);
 			}
 			else
 			{
@@ -80,6 +84,14 @@ class DataPreparer
 	}
 
 	private function prepareListTypeField(array &$filter, string $id): void
+	{
+		if ($this->getFieldData($id))
+		{
+			$filter['@' . $id] = $this->getFieldData($id);
+		}
+	}
+
+	private function prepareCustomEntityTypeField(array &$filter, string $id): void
 	{
 		if ($this->getFieldData($id))
 		{

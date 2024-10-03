@@ -229,6 +229,11 @@ class CatalogProductStoreAmountComponent
 			'AJAX_OPTION_JUMP' => 'N',
 			'AJAX_OPTION_STYLE' => 'N',
 			'AJAX_OPTION_HISTORY' => 'N',
+			'USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP' => true,
+			'ENABLE_FIELDS_SEARCH' => 'Y',
+			'CONFIG' => [
+				'popupWidth' => 800,
+			],
 		];
 	}
 
@@ -285,6 +290,11 @@ class CatalogProductStoreAmountComponent
 			'SHOW_MORE_BUTTON'=> true,
 
 			'SHOW_ACTION_PANEL' => false,
+			'USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP' => true,
+			'ENABLE_FIELDS_SEARCH' => 'Y',
+			'CONFIG' => [
+				'popupWidth' => 800,
+			],
 		];
 	}
 

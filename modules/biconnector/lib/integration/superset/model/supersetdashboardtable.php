@@ -142,7 +142,9 @@ final class SupersetDashboardTable extends DataManager
 			(new Fields\Relations\ManyToMany('TAGS', SupersetTagTable::class))
 				->configureMediatorTableName('b_biconnector_superset_dashboard_tag')
 				->configureLocalPrimary('ID', 'DASHBOARD_ID')
-				->configureRemotePrimary('ID', 'TAG_ID'),
+				->configureRemotePrimary('ID', 'TAG_ID')
+				->configureCascadeDeletePolicy(Fields\Relations\CascadePolicy::FOLLOW)
+			,
 
 			(new Fields\Relations\OneToMany(
 				'SCOPE',
@@ -150,6 +152,11 @@ final class SupersetDashboardTable extends DataManager
 				'DASHBOARD',
 			))
 				->configureJoinType(Join::TYPE_LEFT)
+				->configureCascadeDeletePolicy(Fields\Relations\CascadePolicy::FOLLOW)
+			,
+			(new Fields\EnumField('INCLUDE_LAST_FILTER_DATE'))
+				->configureValues(['N', 'Y'])
+				->configureNullable()
 			,
 		];
 	}
@@ -159,21 +166,6 @@ final class SupersetDashboardTable extends DataManager
 		$dashboardId = (int)$event->getParameters()['primary']['ID'];
 		$service = new RolePermissionService();
 		$service->deletePermissionsByDashboard($dashboardId);
-
-		$tagBindings = SupersetDashboardTagTable::getList([
-			'filter' => ['=DASHBOARD_ID' => $dashboardId]
-		])
-			->fetchCollection()
-		;
-
-		foreach ($tagBindings as $tagBinding)
-		{
-			$tagDeleteResult = $tagBinding->delete();
-			if (!$tagDeleteResult->isSuccess())
-			{
-				Logger::logErrors($tagDeleteResult->getErrors(), ['Deleting tags of dashboard ' . $dashboardId]);
-			}
-		}
 
 		$topMenuDashboardsOptions = \CUserOptions::getList(
 			['ID' => 'ASC'],
@@ -222,20 +214,6 @@ final class SupersetDashboardTable extends DataManager
 					value: $pinnedDashboards,
 					user_id: $row['USER_ID'],
 				);
-			}
-		}
-
-		$scopeBindings = SupersetScopeTable::getList([
-			'filter' => ['=DASHBOARD_ID' => $dashboardId],
-		])
-			->fetchCollection()
-		;
-		foreach ($scopeBindings as $scopeBinding)
-		{
-			$scopeDeleteResult = $scopeBinding->delete();
-			if (!$scopeDeleteResult->isSuccess())
-			{
-				Logger::logErrors($scopeDeleteResult->getErrors(), ['Deleting scopes of dashboard ' . $dashboardId]);
 			}
 		}
 	}

@@ -13,7 +13,7 @@ final class FlowFeature
 	public const KEY = 'feature_flows_enabled';
 	public const LIMIT_CODE = 'limit_tasks_flows';
 
-	private const FEATURE_ID = 'tasks_flow';
+	public const FEATURE_ID = 'tasks_flow';
 	private const TRIAL_DAYS = 15;
 	private const DEMO_KEY = 'trialable_feature_enabled';
 

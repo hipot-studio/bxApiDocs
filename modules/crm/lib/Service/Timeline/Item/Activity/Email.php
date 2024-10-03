@@ -133,10 +133,14 @@ class Email extends Activity
 		if ($name)
 		{
 			$textOrLink = ContentBlockFactory::createTextOrLink($name, $url ? new Redirect($url) : null);
-			$lineOfTextBlock->addContentBlock('name',
-				($textOrLink)->setFontWeight(Text::FONT_WEIGHT_NORMAL)
-					->setColor(ContentBlock\Text::COLOR_BASE_70)
-					->setFontSize(Text::FONT_SIZE_SM));
+			$textOrLink->setFontWeight(Text::FONT_WEIGHT_NORMAL);
+			if (!$url)
+			{
+				$textOrLink->setColor(ContentBlock\Text::COLOR_BASE_70);
+			}
+			$textOrLink->setFontSize(Text::FONT_SIZE_SM);
+
+			$lineOfTextBlock->addContentBlock('name', $textOrLink);
 		}
 
 		return $lineOfTextBlock->addContentBlock('email',
@@ -185,10 +189,18 @@ class Email extends Activity
 	private function buildSenderBlock($withWrapper = true): ?ContentBlock
 	{
 		$header = $this->getHeader() ?? [];
-
 		if (empty($header['from']))
 		{
 			return null;
+		}
+
+		$direction = (int)$this->getAssociatedEntityModel()->get('DIRECTION');
+		if (
+			$direction === CCrmActivityDirection::Outgoing
+			&& count($header['from']) === 1
+			&& $header['from'][0]['senderName'])
+		{
+			$header['from'][0]['name'] = $header['from'][0]['senderName'];
 		}
 
 		return $this->buildContactsBlock(Loc::getMessage("CRM_TIMELINE_BLOCK_EMAIL_TITLE_SENDER"), $header['from'], $withWrapper);

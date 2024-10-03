@@ -13,6 +13,7 @@ use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\CheckList\CheckListFacade;
 use Bitrix\Tasks\CheckList\Internals\CheckList;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
+use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Internals\Task\CheckListTable;
 use Bitrix\Tasks\Internals\Task\CheckListTreeTable;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
@@ -177,7 +178,7 @@ final class ChecklistProvider
 				ActionDictionary::ACTION_TASK_CHANGE_ACCOMPLICES,
 				$taskId,
 			)
-			&& !TaskLimit::isLimitExceeded()
+			&& !TariffPlanRestrictionProvider::isAccompliceAuditorRestricted()
 		);
 
 		foreach ($checkListItems as $id => $item)

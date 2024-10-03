@@ -593,20 +593,16 @@ class CSqlUtil
 										{
 											if($strOperation === "LIKE")
 											{
-												if(is_array($val))
-													$arSqlSearch_tmp[] = "(".$fieldName." LIKE '%".implode("%' ESCAPE '!' OR ".$fieldName." LIKE '%", self::ForLike($val))."%' ESCAPE '!')";
-												elseif($val == '')
-													$arSqlSearch_tmp[] = $fieldName;
+												if($val == '')
+													$arSqlSearch_tmp[] = "({$fieldName} IS NULL OR {$fieldName} = '')";
 												else
 													$arSqlSearch_tmp[] = $fieldName." LIKE '%".self::ForLike($val)."%' ESCAPE '!'";
 
 											}
 											elseif($strOperation === "RLIKE" || $strOperation === "LLIKE")
 											{
-												if(is_array($val))
-													$arSqlSearch_tmp[] = "(".$fieldName." LIKE '".implode("' OR ". $fieldName." LIKE '", $DB->ForSql($val))."')";
-												elseif($val == '')
-													$arSqlSearch_tmp[] = $fieldName;
+												if($val == '')
+													$arSqlSearch_tmp[] = "({$fieldName} IS NULL OR {$fieldName} = '')";
 												else
 													$arSqlSearch_tmp[] = $fieldName." LIKE '".$DB->ForSql($val)."'";
 											}

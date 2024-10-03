@@ -109,7 +109,14 @@ class PushService
 		{
 			if (isset($event['TAG']) && $event['TAG'] !== '')
 			{
-				\CPullWatch::AddToStack($event['TAG'], $event['PARAMS']);
+				$eventName = $event['PARAMS']['params']['eventName'] ?? null;
+				$userId = $event['PARAMS']['params']['userId'] ?? null;
+				$isPullUnsubscribe = $eventName === PushCommand::TASK_PULL_UNSUBSCRIBE;
+
+				($isPullUnsubscribe && $userId)
+					? \CPullWatch::Delete($userId, $event['TAG'])
+					: \CPullWatch::AddToStack($event['TAG'], $event['PARAMS'])
+				;
 			}
 			else
 			{

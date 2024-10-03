@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Access\Install\Role;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\Main\Access\AccessCode;
+use Bitrix\Main\Loader;
 
 class Analyst extends Base
 {
@@ -25,6 +26,11 @@ class Analyst extends Base
 
 	protected function getRelationUserGroups(): array
 	{
+		if (!Loader::includeModule('bitrix24'))
+		{
+			return [];
+		}
+
 		if ($this->isNewPortal)
 		{
 			return [AccessCode::ACCESS_EMPLOYEE . '0'];

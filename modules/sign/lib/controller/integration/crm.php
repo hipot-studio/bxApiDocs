@@ -24,8 +24,8 @@ class Crm extends Controller
 					ActionFilter\Authentication::class,
 					ActionFilter\Csrf::class,
 					\Bitrix\Sign\Controller\ActionFilter\Extranet::class,
-				]
-			]
+				],
+			],
 		];
 	}
 
@@ -59,7 +59,7 @@ class Crm extends Controller
 
 				return [
 					'id' => $file->getId(),
-					'src' => $file->getUriPath()
+					'src' => $file->getUriPath(),
 				];
 			}
 			else
@@ -113,7 +113,7 @@ class Crm extends Controller
 
 				return [
 					'id' => $stamp->getId(),
-					'src' => $stamp->getUriPath()
+					'src' => $stamp->getUriPath(),
 				];
 			}
 			else

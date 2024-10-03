@@ -35,6 +35,9 @@ final class MemberStatus
 		];
 	}
 
+	/**
+	 * @return list<self::*>
+	 */
 	public static function getReadyForSigning(): array
 	{
 		return [
@@ -42,6 +45,17 @@ final class MemberStatus
 			self::STOPPABLE_READY,
 			self::PROCESSING
 		];
+	}
+
+	/**
+	 * @return list<self::*>
+	 */
+	public static function getStatusesNotDone(): array
+	{
+		return array_filter(
+			self::getAll(),
+			static fn ($status) => $status !== self::DONE
+		);
 	}
 
 	public static function isReadyForSigning(string $status): bool

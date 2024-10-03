@@ -2,21 +2,20 @@
 
 namespace Bitrix\Tasks\Flow\Integration\Socialnetwork;
 
-use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\Component\WorkgroupForm;
 use Bitrix\Socialnetwork\Helper\Workgroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
-use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
+use Bitrix\Tasks\InvalidCommandException;
 use Bitrix\Tasks\Flow\Integration\Socialnetwork\Exception\AutoCreationException;
-use Bitrix\Tasks\Flow\Kanban\KanbanCommand;
 use Bitrix\Tasks\Flow\Kanban\KanbanService;
+use CApplicationException;
 use CSocNetFeatures;
 use CSocNetGroup;
 use CSocNetGroupSubject;
 use CSocNetUserToGroup;
-use RuntimeException;
 
 class GroupService
 {
@@ -28,11 +27,14 @@ class GroupService
 		$this->init();
 	}
 
+	/**
+	 * @throws LoaderException
+	 */
 	public static function getDefaultSubjectId(): int
 	{
 		if (!Loader::includeModule('socialnetwork'))
 		{
-			throw new RuntimeException('Socialnetwork is not loaded');
+			throw new LoaderException('Socialnetwork is not loaded');
 		}
 
 		$subject = CSocNetGroupSubject::GetList(
@@ -46,11 +48,14 @@ class GroupService
 		return (int)($subject['ID'] ?? 0);
 	}
 
+	/**
+	 * @throws LoaderException
+	 */
 	public static function getDefaultAvatar(): string
 	{
 		if (!Loader::includeModule('socialnetwork'))
 		{
-			throw new RuntimeException('Socialnetwork is not loaded');
+			throw new LoaderException('Socialnetwork is not loaded');
 		}
 
 		return array_key_first(Workgroup::getDefaultAvatarTypes());
@@ -58,14 +63,14 @@ class GroupService
 
 	/**
 	 * @throws AutoCreationException
-	 * @throws RuntimeException
 	 * @throws InvalidCommandException
+	 * @throws LoaderException
 	 */
 	public function add(GroupCommand $command): int
 	{
 		if (!Loader::includeModule('socialnetwork'))
 		{
-			throw new RuntimeException('Socialnetwork is not loaded');
+			throw new LoaderException('Socialnetwork is not loaded');
 		}
 
 		$this->command = $command;
@@ -78,13 +83,12 @@ class GroupService
 
 		$this->saveFeatures();
 
-		$this->installStages();
-
 		return $this->command->id;
 	}
 
 	/**
 	 * @throws AutoCreationException
+	 * @throws LoaderException
 	 */
 	protected function saveGroup(): void
 	{
@@ -98,7 +102,19 @@ class GroupService
 
 		if ($groupId === false)
 		{
-			throw new AutoCreationException(Loc::getMessage('TASKS_FLOW_GROUP_SERVICE_CANNOT_AUTO_CREATE_GROUP'));
+			global $APPLICATION;
+			$exception = $APPLICATION->GetException();
+
+			if ($exception instanceof CApplicationException && is_string($exception->GetID()))
+			{
+				// ERROR_GROUP_NAME_EXISTS etc.
+				// that's because we need a DIFFERENT phrase. that's horrible, I'm so sorry
+				$message = Loc::getMessage('TASKS_FLOW_GROUP_SERVICE_' . $exception->GetID());
+			}
+
+			$message ??= Loc::getMessage('TASKS_FLOW_GROUP_SERVICE_CANNOT_AUTO_CREATE_GROUP');
+
+			throw new AutoCreationException($message);
 		}
 
 		$this->command->id = $groupId;
@@ -143,18 +159,6 @@ class GroupService
 				}
 			}
 		}
-	}
-
-	protected function installStages(): void
-	{
-		$kanbanCommand = new KanbanCommand(
-			$this->command->id,
-			$this->command->ownerId
-		);
-
-		/** @var KanbanService $service */
-		$service = ServiceLocator::getInstance()->get('tasks.flow.kanban.service');
-		$service->add($kanbanCommand);
 	}
 
 	protected function init(): void

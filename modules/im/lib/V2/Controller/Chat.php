@@ -2,9 +2,9 @@
 
 namespace Bitrix\Im\V2\Controller;
 
-use Bitrix\Im\Common;
 use Bitrix\Im\Dialog;
 use Bitrix\Im\Recent;
+use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Chat\ChatFactory;
@@ -15,28 +15,24 @@ use Bitrix\Im\V2\Chat\OpenChannelChat;
 use Bitrix\Im\V2\Chat\OpenChat;
 use Bitrix\Im\V2\Chat\OpenLineChat;
 use Bitrix\Im\V2\Chat\Param\Params;
-use Bitrix\Im\V2\Chat\PrivateChat;
+use Bitrix\Im\V2\Chat\Permission;
+use Bitrix\Im\V2\Chat\Update\UpdateFields;
 use Bitrix\Im\V2\Controller\Chat\Pin;
 use Bitrix\Im\V2\Controller\Filter\ChatTypeFilter;
-use Bitrix\Im\V2\Controller\Filter\CheckAvatarId;
-use Bitrix\Im\V2\Controller\Filter\CheckAvatarIdInFields;
+use Bitrix\Im\V2\Controller\Filter\CheckActionAccess;
 use Bitrix\Im\V2\Controller\Filter\CheckChatAccess;
-use Bitrix\Im\V2\Controller\Filter\CheckChatAddParams;
-use Bitrix\Im\V2\Controller\Filter\CheckChatManageMessages;
-use Bitrix\Im\V2\Controller\Filter\CheckChatManageUpdate;
-use Bitrix\Im\V2\Controller\Filter\CheckChatOwner;
-use Bitrix\Im\V2\Controller\Filter\CheckChatUpdate;
-use Bitrix\Im\V2\Controller\Filter\CheckDisappearingDuration;
+use Bitrix\Im\V2\Controller\Filter\CheckFileAccess;
 use Bitrix\Im\V2\Controller\Filter\ExtendPullWatchPrefilter;
 use Bitrix\Im\V2\Controller\Filter\UpdateStatus;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
-use Bitrix\Im\V2\Link\Pin\PinCollection;
 use Bitrix\Im\V2\Message;
-use Bitrix\Im\V2\Message\MessageService;
 use Bitrix\Im\V2\Rest\RestAdapter;
+use Bitrix\Im\V2\Chat\Update\UpdateService;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
+use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Engine\Response\Converter;
 
 class Chat extends BaseController
 {
@@ -46,127 +42,130 @@ class Chat extends BaseController
 			'add' => [
 				'+prefilters' => [
 					new IntranetUser(),
-					new CheckChatAddParams(),
-					new CheckAvatarIdInFields(),
+					new CheckFileAccess(['fields', 'avatar']),
 				],
 			],
 			'update' => [
 				'+prefilters' => [
 					new IntranetUser(),
-					new CheckChatAddParams(),
-					new CheckAvatarIdInFields(),
+					new CheckFileAccess(['fields', 'avatar']),
+					new CheckActionAccess(Permission::ACTION_UPDATE),
+					new ChatTypeFilter([GroupChat::class]),
+				],
+			],
+			'updateAvatar' => [
+				'+prefilters' => [
+					new IntranetUser(),
+					new CheckFileAccess(['avatar']),
+					new CheckActionAccess(Permission::ACTION_CHANGE_AVATAR),
 				],
 			],
 			'setOwner' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
-					new CheckChatOwner(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_OWNER),
 				]
 			],
 			'setTitle' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_RENAME),
 				]
 			],
 			'setDescription' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_DESCRIPTION),
 				]
 			],
 			'setColor' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_COLOR),
 				]
 			],
 			'setAvatarId' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
-					new CheckAvatarId(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_AVATAR),
+					new CheckFileAccess(['avatarId']),
 				]
 			],
 			'setAvatar' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_AVATAR),
 				]
 			],
 			'addUsers' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_EXTEND),
 				]
 			],
 			'deleteUser' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(
+						Permission::ACTION_KICK,
+						fn (Base $filter) => (int)($filter->getAction()->getArguments()['userId'] ?? 0)
+					),
 				]
 			],
 			'setManagers' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_MANAGERS),
 				]
 			],
 			'addManagers' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_MANAGERS),
 					new ChatTypeFilter([GroupChat::class]),
 				]
 			],
 			'deleteManagers' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_MANAGERS),
 					new ChatTypeFilter([GroupChat::class]),
 				]
 			],
 			'setManageUsersAdd' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatManageUpdate(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_RIGHTS),
 				]
 			],
 			'setManageUsersDelete' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatManageUpdate(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_RIGHTS),
 				]
 			],
 			'setManageUI' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatManageUpdate(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_RIGHTS),
 				]
 			],
 			'setManageSettings' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatManageUpdate(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_RIGHTS),
 				]
 			],
 			'setDisappearingDuration' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatUpdate(),
-					new CheckDisappearingDuration(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_RIGHTS),
 				]
 			],
 			'setManageMessages' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckChatManageMessages(),
-					new CheckChatUpdate(),
+					new CheckActionAccess(Permission::ACTION_CHANGE_RIGHTS),
 				]
 			],
 			'load' => [
@@ -395,128 +394,20 @@ class Chat extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.update
 	 */
-	public function updateAction(\Bitrix\Im\V2\Chat $chat, array $fields)
+	public function updateAction(GroupChat $chat, array $fields)
 	{
-		$currentUser = $this->getCurrentUser();
-		$userId = isset($currentUser) ? $currentUser->getId() : null;
-		$relation = $chat->getSelfRelation();
+		$converter = new Converter(Converter::TO_SNAKE | Converter::TO_UPPER | Converter::KEYS);
+		$updateService = new UpdateService($chat, UpdateFields::create($converter->process($fields)));
 
-		$changeSettings = false;
-		$changeUI = false;
-		if (!($chat instanceof PrivateChat))
-		{
-			if ($chat->getAuthorId() === (int)$userId)
-			{
-				$changeSettings = true;
-				$changeUI = true;
-			}
-			elseif ($relation->getManager())
-			{
-				if ($chat->getManageSettings() === \Bitrix\Im\V2\Chat::MANAGE_RIGHTS_MANAGERS)
-				{
-					$changeSettings = true;
-				}
-				if ($chat->getManageUI() === \Bitrix\Im\V2\Chat::MANAGE_RIGHTS_MANAGERS)
-				{
-					$changeUI = true;
-				}
-			}
-			else
-			{
-				if ($chat->getManageUI() === \Bitrix\Im\V2\Chat::MANAGE_RIGHTS_MEMBER)
-				{
-					$changeUI = true;
-				}
-			}
-		}
-
-		if ($changeSettings)
-		{
-			if (isset($fields['entityType']))
-			{
-				$chat->setEntityType($fields['entityType']);
-			}
-			if (isset($fields['entityId']))
-			{
-				$chat->setEntityId($fields['entityId']);
-			}
-			if (isset($fields['entityData1']))
-			{
-				$chat->setEntityData1($fields['entityData1']);
-			}
-			if (isset($fields['entityData2']))
-			{
-				$chat->setEntityData2($fields['entityData2']);
-			}
-			if (isset($fields['entityData3']))
-			{
-				$chat->setEntityData3($fields['entityData3']);
-			}
-			if (isset($fields['ownerId']))
-			{
-				$chat->setAuthorId($fields['ownerId']);
-			}
-			if (isset($fields['manageUsersAdd']))
-			{
-				$chat->setManageUsersAdd($fields['manageUsersAdd']);
-			}
-			if (isset($fields['manageUsersDelete']))
-			{
-				$chat->setManageUsersDelete($fields['manageUsersDelete']);
-			}
-			if (isset($fields['manageUI']))
-			{
-				$chat->setManageUI($fields['manageUI']);
-			}
-			if (isset($fields['manageSettings']))
-			{
-				$chat->setManageSettings($fields['manageSettings']);
-			}
-			if (isset($fields['manageMessages']))
-			{
-				$chat->setManageMessages($fields['manageMessages']);
-			}
-			if (isset($fields['managers']))
-			{
-				$chat->setManagers($fields['managers']);
-			}
-		}
-
-		if ($changeUI)
-		{
-			if (isset($fields['title']))
-			{
-				$chat->setTitle($fields['title']);
-			}
-			if (isset($fields['description']))
-			{
-				$chat->setDescription($fields['description']);
-			}
-			if (isset($fields['color']))
-			{
-				$chat->setColor($fields['color']);
-			}
-			if (isset($fields['avatar']) && $fields['avatar'])
-			{
-				if (is_numeric((string)$fields['avatar']))
-				{
-					$this->setAvatarIdAction($chat, $fields['avatar']);
-				}
-				else
-				{
-					$this->setAvatarAction($chat, $fields['avatar']);
-				}
-			}
-		}
-
-		$result = $chat->save();
-
+		$result = $updateService->updateChat();
 		if (!$result->isSuccess())
 		{
-			return $this->convertKeysToCamelCase($result->getErrors());
+			$this->addError($result->getErrors()[0]);
+
+			return null;
 		}
 
-		return $result->isSuccess();
+		return ['result' => true];
 	}
 
 	//region Manage Users
@@ -626,6 +517,30 @@ class Chat extends BaseController
 	}
 
 	/**
+	 * @restMethod im.v2.Chat.updateAvatar
+	 */
+	public function updateAvatarAction(\Bitrix\Im\V2\Chat $chat, string $avatar)
+	{
+		if (is_numeric($avatar))
+		{
+			$result = $chat->updateAvatarId((int)$avatar);
+		}
+		else
+		{
+			$result = $chat->updateAvatar($avatar);
+		}
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return ['result' => true];
+	}
+
+	/**
 	 * @restMethod im.v2.Chat.setAvatarId
 	 */
 	public function setAvatarIdAction(\Bitrix\Im\V2\Chat $chat, int $avatarId)
@@ -726,7 +641,7 @@ class Chat extends BaseController
 	 */
 	public function setManageUsersAddAction(\Bitrix\Im\V2\Chat $chat, string $rightsLevel)
 	{
-		$chat->setManageUsersAdd($rightsLevel);
+		$chat->setManageUsersAdd(mb_strtoupper($rightsLevel));
 		$result = $chat->save();
 		if (!$result->isSuccess())
 		{
@@ -741,7 +656,7 @@ class Chat extends BaseController
 	 */
 	public function setManageUsersDeleteAction(\Bitrix\Im\V2\Chat $chat, string $rightsLevel)
 	{
-		$chat->setManageUsersDelete($rightsLevel);
+		$chat->setManageUsersDelete(mb_strtoupper($rightsLevel));
 		$result = $chat->save();
 		if (!$result->isSuccess())
 		{
@@ -756,7 +671,7 @@ class Chat extends BaseController
 	 */
 	public function setManageUIAction(\Bitrix\Im\V2\Chat $chat, string $rightsLevel)
 	{
-		$chat->setManageUI($rightsLevel);
+		$chat->setManageUI(mb_strtoupper($rightsLevel));
 		$result = $chat->save();
 		if (!$result->isSuccess())
 		{
@@ -771,7 +686,7 @@ class Chat extends BaseController
 	 */
 	public function setManageSettingsAction(\Bitrix\Im\V2\Chat $chat, string $rightsLevel)
 	{
-		$chat->setManageSettings($rightsLevel);
+		$chat->setManageSettings(mb_strtoupper($rightsLevel));
 		$result = $chat->save();
 		if (!$result->isSuccess())
 		{
@@ -787,7 +702,7 @@ class Chat extends BaseController
 	 */
 	public function setManageMessagesAction(\Bitrix\Im\V2\Chat $chat, string $rightsLevel)
 	{
-		$chat->setManageMessages($rightsLevel);
+		$chat->setManageMessages(mb_strtoupper($rightsLevel));
 		$result = $chat->save();
 		if (!$result->isSuccess())
 		{

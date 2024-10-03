@@ -22,6 +22,35 @@ class CAllIMContactList
 		$this->user_id = $user_id;
 	}
 
+	private function getDepartments(): array
+	{
+		if (CModule::IncludeModule('extranet') && !CExtranet::IsIntranetUser())
+		{
+			return [];
+		}
+
+		$departments = [];
+		$departmentService = IM\V2\Integration\HumanResources\Department\Department::getInstance();
+		foreach ($departmentService->getList() as $department)
+		{
+			$departmentName = $department->name;
+			if (
+				$department->depthLevel > 0
+				&& isset($departments[$department->parent]['name'])
+			)
+			{
+				$departmentName .= ' / ' . $departments[$department->parent]['name'];
+			}
+
+			$departments[$department->id] = [
+				'id' => $department->id,
+				'name' => $departmentName,
+			];
+		}
+
+		return $departments;
+	}
+
 	function GetList($arParams = Array())
 	{
 		global $USER, $CACHE_MANAGER;
@@ -29,7 +58,7 @@ class CAllIMContactList
 		$bLoadUsers = isset($arParams['LOAD_USERS']) && $arParams['LOAD_USERS'] == 'N'? false: true;
 		$bLoadChats = isset($arParams['LOAD_CHATS']) && $arParams['LOAD_CHATS'] == 'N'? false: true;
 
-		$arGroups = array();
+		$arGroups = [];
 		if(defined("BX_COMP_MANAGED_CACHE"))
 			$ttl = 2592000;
 		else
@@ -38,68 +67,10 @@ class CAllIMContactList
 		$bBusShowAll = !IsModuleInstalled('intranet') && COption::GetOptionInt('im', 'contact_list_show_all_bus');
 
 		$bIntranetEnable = false;
-		if(CModule::IncludeModule('intranet') && CModule::IncludeModule('iblock'))
+		if(CModule::IncludeModule('intranet'))
 		{
 			$bIntranetEnable = true;
-			if (!(CModule::IncludeModule('extranet') && !CExtranet::IsIntranetUser()))
-			{
-				if(($iblock_id = COption::GetOptionInt('intranet', 'iblock_structure', 0)) > 0)
-				{
-					$cache_id = 'im_structure_'.$iblock_id;
-					$obIMCache = new CPHPCache;
-					$cache_dir = '/bx/imc/structure';
-
-					if($obIMCache->InitCache($ttl, $cache_id, $cache_dir))
-					{
-						$tmpVal = $obIMCache->GetVars();
-						$arStructureName = $tmpVal['STRUCTURE_NAME'];
-						unset($tmpVal);
-					}
-					else
-					{
-						if(defined("BX_COMP_MANAGED_CACHE"))
-							$CACHE_MANAGER->StartTagCache($cache_dir);
-
-						$arResult["Structure"] = array();
-						$sec = CIBlockSection::GetList(
-							Array("left_margin"=>"asc","SORT"=>"ASC"),
-							Array("ACTIVE"=>"Y","IBLOCK_ID"=>$iblock_id),
-							false,
-							Array('ID', 'NAME', 'DEPTH_LEVEL', 'IBLOCK_SECTION_ID')
-						);
-						$arStructureName = Array();
-						while($ar = $sec->GetNext(true, false))
-						{
-							if ($ar['DEPTH_LEVEL'] > 1)
-								$ar['NAME'] .= ' / '.$arStructureName[$ar['IBLOCK_SECTION_ID']];
-							$arStructureName[$ar['ID']] = $ar['NAME'];
-						}
-
-						if(defined("BX_COMP_MANAGED_CACHE"))
-						{
-							$CACHE_MANAGER->RegisterTag('iblock_id_'.$iblock_id);
-							$CACHE_MANAGER->EndTagCache();
-						}
-
-						if($obIMCache->StartDataCache())
-						{
-							$obIMCache->EndDataCache(array(
-								'STRUCTURE_NAME' => $arStructureName
-							));
-						}
-					}
-
-					unset($obIMCache);
-
-					foreach ($arStructureName as $key => $value)
-					{
-						if ($value <> '')
-						{
-							$arGroups[$key] = Array('id' => $key, 'name' => $value);
-						}
-					}
-				}
-			}
+			$arGroups = $this->getDepartments();
 		}
 
 		$arUserSG = array();

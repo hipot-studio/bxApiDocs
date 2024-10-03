@@ -11,6 +11,7 @@ abstract class PushCommand
 	public const TASK_TIMER_STARTED = 'task_timer_start';
 	public const TASK_TIMER_STOPPED = 'task_timer_stop';
 	public const TASK_STAGE_UPDATED = 'stage_change';
+	public const TASK_PULL_UNSUBSCRIBE = 'task_pull_unsubscribe';
 
 	public const TEMPLATE_ADDED = 'template_add';
 	public const TEMPLATE_UPDATED = 'template_update';

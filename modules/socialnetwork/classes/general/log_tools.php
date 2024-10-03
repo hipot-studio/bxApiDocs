@@ -623,7 +623,7 @@ class CSocNetLogTools
 			}
 		}
 		elseif (
-			$arFields["ENTITY_TYPE"] == SONET_SUBSCRIBE_ENTITY_GROUP
+			($arFields["ENTITY_TYPE"] ?? null) == SONET_SUBSCRIBE_ENTITY_GROUP
 			&& intval($arFields["ENTITY_ID"]) > 0
 		)
 		{
@@ -1535,7 +1535,7 @@ class CSocNetLogTools
 				static $parserLog = false;
 				if (!$parserLog)
 				{
-					$parserLog = new logTextParser(false, $arParams["PATH_TO_SMILE"]);
+					$parserLog = new logTextParser(false, ($arParams["PATH_TO_SMILE"] ?? null));
 				}
 				$arResult["EVENT_FORMATTED"]["SHORT_MESSAGE"] = $parserLog->html_cut(
 					$parserLog->convert(
@@ -6493,12 +6493,12 @@ class logTextParser extends CTextParser
 		return trim($text);
 	}
 
-	function convert_anchor_tag($url, $text, $pref="")
+	function convert_anchor_tag($url, $text, $attributes = [])
 	{
 		if ($this->allow["LOG_ANCHOR"] === "N")
 			return "[URL]".$text."[/URL]";
 		else
-			return parent::convert_anchor_tag($url, $text, $pref);
+			return parent::convert_anchor_tag($url, $text, $attributes);
 	}
 
 	function convert_image_tag($url = "", $params = "")

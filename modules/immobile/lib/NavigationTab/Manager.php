@@ -35,24 +35,24 @@ class Manager
 	public function __construct(Mobile\Context $context)
 	{
 		$this->context = $context;
-		
+
 		$this->messenger = new Tab\Messenger();
 		$this->copilot = new Tab\Copilot();
 		$this->openLines = new Tab\OpenLines($context);
 		$this->notifications = new Tab\Notifications($context);
 		$this->channel = new Tab\Channel();
 	}
-	
+
 	public static function getShortTitle()
 	{
 		return Loc::getMessage('IMMOBILE_NAVIGATION_TAB_SHORT_TITLE');
 	}
-	
+
 	public function isNextNavigation(): bool
 	{
 		return MobileApp\Mobile::getApiVersion() >= 41;
 	}
-	
+
 	public function getMessengerComponent(): array
 	{
 		/**
@@ -186,7 +186,7 @@ class Manager
 			$this->openLines,
 		];
 	}
-	
+
 	/**
 	 * @param Tab\TabInterface[] $tabs
 	 * @return array
@@ -274,10 +274,12 @@ class Manager
 				'FIRST_TAB_ID' => $firstTabId,
 				'HUMAN_RESOURCES_STRUCTURE_AVAILABLE' => $humanResourcesStructureAvailable ? 'Y' : 'N',
 				'ENABLE_DEV_WORKSPACE' => $enableDevWorkspace ? 'Y' : 'N',
+				'PLAN_LIMITS' => Settings::planLimits(),
+				'IS_LINKS_MIGRATED' => Option::get('im', 'im_link_url_migration', 'N') === 'Y',
+				'IS_FILES_MIGRATED' => Option::get('im', 'im_link_file_migration', 'N') === 'Y',
 			],
 			$this->getInvitationParams(),
 		);
-		
 	}
 
 	/**
@@ -289,7 +291,7 @@ class Manager
 			Loader::includeModule('intranet')
 			&& Invitation::canListDelete()
 		);
-		
+
 		$canInvite = (
 			Loader::includeModule('intranet')
 			&& Invitation::canCurrentUserInvite()

@@ -302,22 +302,10 @@ class PullManager
 	 */
 	protected function filterUserIdsWhoCanViewItem(array $item, array $userIds, string $eventName): array
 	{
-		$withoutPrefix = str_replace(self::EVENT_KANBAN_UPDATED . '_', '', $eventName);
-		$nameParts = (array)explode('_', $withoutPrefix);
-
-		if ($nameParts[0] === 'DYNAMIC' || $nameParts[0] === 'SMART')
-		{
-			// like 'DYNAMIC_128' or 'SMART_INVOICE'
-			$typeName = $nameParts[0] . '_' . $nameParts[1];
-		}
-		else
-		{
-			$typeName = $nameParts[0];
-		}
-
 		$result = [];
 
-		$entityTypeId = \CCrmOwnerType::ResolveID($typeName);
+		$entityTypeId = $this->getEntityTypeIdByEventName($eventName);
+
 		if (\CCrmOwnerType::IsEntity($entityTypeId))
 		{
 			foreach($userIds as $userId)
@@ -338,6 +326,26 @@ class PullManager
 		}
 
 		return $result;
+	}
+
+	private function getEntityTypeIdByEventName(string $eventName): int
+	{
+		$withoutPrefix = str_replace(self::EVENT_KANBAN_UPDATED . '_', '', $eventName);
+		$nameParts = explode('_', $withoutPrefix);
+		$index = count($nameParts);
+		while ($index > 0)
+		{
+			$typeName = implode('_', $nameParts);
+			$entityTypeId = \CCrmOwnerType::ResolveID($typeName);
+			if (\CCrmOwnerType::IsDefined($entityTypeId))
+			{
+				return $entityTypeId;
+			}
+
+			unset($nameParts[--$index]);
+		}
+
+		return \CCrmOwnerType::Undefined;
 	}
 
 	/**

@@ -39,7 +39,9 @@ class CTimeManUser
 
 	public function __construct($USER_ID = 0, $site_id = SITE_ID)
 	{
-		$this->USER_ID = (is_numeric($USER_ID) && $USER_ID > 0) ? $USER_ID : $GLOBALS['USER']->GetID();
+		global $USER;
+
+		$this->USER_ID = (is_numeric($USER_ID) && $USER_ID > 0) ? $USER_ID : (int)$USER?->GetID();
 		$this->SITE_ID = $site_id;
 		$this->bTasksEnabled = CModule::IncludeModule('tasks');
 	}
@@ -589,6 +591,11 @@ class CTimeManUser
 
 	public function getDayStartOffset($entry, $bTs = false)
 	{
+		if (!is_array($entry))
+		{
+			return 0;
+		}
+
 		$ts_start = $bTs ? $entry['DATE_START'] : (MakeTimeStamp($entry['DATE_START']) - CTimeZone::GetOffset());
 		$ts_start_day = MakeTimeStamp(ConvertTimeStamp($ts_start, 'SHORT'));
 

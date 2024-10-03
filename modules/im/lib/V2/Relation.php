@@ -15,7 +15,10 @@ use Bitrix\Main\Type\DateTime;
 class Relation implements ArrayAccess, RegistryEntry, ActiveRecord
 {
 	use FieldAccessImplementation;
-	use ActiveRecordImplementation;
+	use ActiveRecordImplementation
+	{
+		save as protected saveDefault;
+	}
 	use RegistryEntryImplementation;
 	use ContextCustomer;
 
@@ -27,6 +30,7 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord
 	protected ?int $unreadId = null;
 	protected ?int $lastId = null;
 	protected ?int $lastSendId = null;
+	protected ?int $lastSendMessageId = null;
 	protected ?int $lastFileId = null;
 	protected ?DateTime $lastRead = null;
 	protected ?int $status = null;
@@ -38,6 +42,7 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord
 	protected ?int $startCounter = null;
 	protected ?User $user = null;
 	protected Reason $reason = Reason::DEFAULT;
+	protected bool $isFake = false;
 
 	public function __construct($source = null)
 	{
@@ -108,6 +113,16 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord
 		return $this;
 	}
 
+	public function save(): Result
+	{
+		if ($this->isFake)
+		{
+			return new Result();
+		}
+
+		return $this->saveDefault();
+	}
+
 	/**
 	 * @return array<array>
 	 */
@@ -154,6 +169,11 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord
 				'field' => 'lastSendId',
 				'set' => 'setLastSendId', /** @see Relation::setLastSendId */
 				'get' => 'getLastSendId', /** @see Relation::getLastSendId */
+			],
+			'LAST_SEND_MESSAGE_ID' => [
+				'field' => 'lastSendMessageId',
+				'set' => 'setLastSendMessageId', /** @see Relation::setLastSendMessageId */
+				'get' => 'getLastSendMessageId', /** @see Relation::getLastSendMessageId */
 			],
 			'LAST_FILE_ID' => [
 				'field' => 'lastFileId',
@@ -300,6 +320,17 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord
 		return $this;
 	}
 
+	public function getLastSendMessageId(): ?int
+	{
+		return $this->lastSendMessageId;
+	}
+
+	public function setLastSendMessageId(?int $lastSendMessageId): Relation
+	{
+		$this->lastSendMessageId = $lastSendMessageId;
+		return $this;
+	}
+
 	public function getLastFileId(): ?int
 	{
 		return $this->lastFileId;
@@ -435,6 +466,13 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord
 	public function prepareReasonForSave(Reason $reason): string
 	{
 		return $reason->value;
+	}
+
+	public function markAsFake(): self
+	{
+		$this->isFake = true;
+
+		return $this;
 	}
 
 	//endregion

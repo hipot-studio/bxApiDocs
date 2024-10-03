@@ -43,7 +43,10 @@ final class CatalogSettings extends AbstractSettings
 	{
 		$result = new Result();
 
-		if (Loader::includeModule('crm'))
+		if (
+			Loader::includeModule('crm')
+			&& !Manager::isOnecMode()
+		)
 		{
 			if (is_array($this->data['reservationSettings']))
 			{

@@ -2315,7 +2315,40 @@ class CCrmLiveFeed
 				}
 
 				$url = str_replace(array("#log_id#"), array($arLogFields["ID"]), $arParams["PATH_TO_LOG_ENTRY"]);
-				$serverName = (CMain::IsHTTPS() ? "https" : "http")."://".((defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> '') ? SITE_SERVER_NAME : COption::GetOptionString("main", "server_name", ""));
+				$absoluteUrl = CCrmUrlUtil::ToAbsoluteUrl($url);
+
+				$notifyMessageCallback = static function (?string $languageId = null) use (
+					$title,
+					$url,
+					$genderSuffix,
+				){
+					$replace = [
+						'#title#' => "<a href=\"".$url."\" class=\"bx-notifier-item-action\">".htmlspecialcharsbx($title)."</a>",
+					];
+
+					return Loc::getMessage(
+						"CRM_LF_COMMENT_IM_NOTIFY{$genderSuffix}",
+						$replace,
+						$languageId,
+					);
+				};
+
+				$notifyMessageOutCallback = static function (?string $languageId = null) use (
+					$absoluteUrl,
+					$title,
+					$genderSuffix,
+				){
+					$replace = [
+						'#title#' => htmlspecialcharsbx($title),
+					];
+					$message = Loc::getMessage(
+						"CRM_LF_COMMENT_IM_NOTIFY{$genderSuffix}",
+						$replace,
+						$languageId,
+					);
+
+					return "{$message} ({$absoluteUrl})";
+				};
 
 				$arMessageFields = array(
 					"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
@@ -2327,9 +2360,10 @@ class CCrmLiveFeed
 					//"NOTIFY_EVENT" => "comment",
 					"NOTIFY_EVENT" => "mention",
 					"NOTIFY_TAG" => "CRM|LOG_COMMENT|".$arLogFields["ID"],
-					"NOTIFY_MESSAGE" => GetMessage("CRM_LF_COMMENT_IM_NOTIFY".$genderSuffix, Array("#title#" => "<a href=\"".$url."\" class=\"bx-notifier-item-action\">".htmlspecialcharsbx($title)."</a>")),
-					"NOTIFY_MESSAGE_OUT" => GetMessage("CRM_LF_COMMENT_IM_NOTIFY".$genderSuffix, Array("#title#" => htmlspecialcharsbx($title)))." (".$serverName.$url.")"
+					"NOTIFY_MESSAGE" => $notifyMessageCallback,
+					"NOTIFY_MESSAGE_OUT" => $notifyMessageOutCallback,
 				);
+
 				CIMNotify::Add($arMessageFields);
 			}
 		}
@@ -5222,16 +5256,18 @@ class CCrmLiveFeed
 			$previousStage = $factory->getStage($itemBeforeSave->remindActual(Item::FIELD_NAME_STAGE_ID));
 			$currentStage = $factory->getStage($item->getStageId());
 
-			$message = (new MessageBuilder\ProcessEntityStage($item->getEntityTypeId()))
-				->getMessage([
-					'#TITLE#' => htmlspecialcharsbx($item->getHeading()),
-					'#START_STAGE_CAPTION#' => $previousStage ? htmlspecialcharsbx($previousStage->getName()) : '',
-					'#FINAL_STAGE_CAPTION#' => $currentStage ? htmlspecialcharsbx($currentStage->getName()) : '',
-					'#URL#' => '#URL#',
-				])
+			$getMessageCallback = static fn (string $url) =>
+				(new MessageBuilder\ProcessEntityStage($item->getEntityTypeId()))
+					->getMessageCallback([
+						'#TITLE#' => htmlspecialcharsbx($item->getHeading()),
+						'#START_STAGE_CAPTION#' => $previousStage ? htmlspecialcharsbx($previousStage->getName()) : '',
+						'#FINAL_STAGE_CAPTION#' => $currentStage ? htmlspecialcharsbx($currentStage->getName()) : '',
+						'#URL#' => $url,
+					])
 			;
 
 			$url = Container::getInstance()->getRouter()->getItemDetailUrl($item->getEntityTypeId(), $item->getId());
+			$absoluteUrl = static::transformRelativeUrlToAbsolute($url);
 
 			\CIMNotify::Add([
 				'MESSAGE_TYPE' => IM_MESSAGE_SYSTEM,
@@ -5242,8 +5278,8 @@ class CCrmLiveFeed
 				//'NOTIFY_EVENT' => mb_strtolower($entityTypeName) . '_update',
 				'NOTIFY_EVENT' => 'changeStage',
 				'NOTIFY_TAG' => "CRM|{$entityTypeName}_PROGRESS|" . $item->getId(),
-				'NOTIFY_MESSAGE' => str_replace('#URL#', $url, $message),
-				'NOTIFY_MESSAGE_OUT' => str_replace('#URL#', static::transformRelativeUrlToAbsolute($url), $message),
+				'NOTIFY_MESSAGE' => $getMessageCallback($url),
+				'NOTIFY_MESSAGE_OUT' => $getMessageCallback($absoluteUrl),
 			]);
 		}
 	}
@@ -5382,7 +5418,7 @@ class CCrmLiveFeedComponent
 
 		if (!$this->fields)
 		{
-			throw new Exception("Empty fields");
+			throw new Main\ArgumentException("Empty fields");
 		}
 
 		$this->entityTypeID = CCrmLiveFeedEntity::ResolveEntityTypeID($this->fields["ENTITY_TYPE"]);

@@ -1183,7 +1183,8 @@ class CIMNotify
 			$needToUpdateRecent = $lastIdFromRecent === $id;
 		}
 
-		self::deleteInternal($id, (int)$notification['RELATION_USER_ID']);
+		$message = (new IM\V2\Message())->setMessageId($id)->setChatId((int)$notification['CHAT_ID']);
+		self::deleteInternal($message, (int)$notification['RELATION_USER_ID']);
 		$counter = self::GetRealCounter($notification['CHAT_ID']);
 		$chatId = (int)$notification['CHAT_ID'];
 		// update unread counter
@@ -1254,7 +1255,8 @@ class CIMNotify
 				continue;
 			}
 
-			self::deleteInternal($id, (int)$arRes['RELATION_USER_ID']);
+			$message = (new IM\V2\Message())->setMessageId($id)->setChatId((int)$arRes['CHAT_ID']);
+			self::deleteInternal($message, (int)$arRes['RELATION_USER_ID']);
 
 			foreach(GetModuleEvents("im", "OnAfterDeleteNotify", true) as $arEvent)
 			{
@@ -1370,11 +1372,11 @@ class CIMNotify
 		}
 	}
 
-	private static function deleteInternal(int $id, int $userId): void
+	private static function deleteInternal(IM\V2\Message $message, int $userId): void
 	{
-		CIMMessageParam::DeleteAll($id);
-		\Bitrix\Im\Model\MessageTable::delete($id);
-		(new IM\V2\Message\ReadService())->deleteByMessageId($id, [$userId]);
+		CIMMessageParam::DeleteAll($message->getId());
+		\Bitrix\Im\Model\MessageTable::delete($message->getId());
+		(new IM\V2\Message\ReadService())->deleteByMessage($message, [$userId]);
 	}
 
 	private static function getNotificationById(int $id): ?array

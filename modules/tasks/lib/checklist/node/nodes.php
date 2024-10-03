@@ -10,7 +10,7 @@ use IteratorAggregate;
 class Nodes implements IteratorAggregate, Arrayable, Countable
 {
 	/** @var Node[]  */
-	private array $nodes = [];
+	private array $nodes;
 
 	public static function createFromArray(array|Arrayable $data): static
 	{
@@ -22,8 +22,7 @@ class Nodes implements IteratorAggregate, Arrayable, Countable
 		$nodes = [];
 		foreach ($data as $nodeId => $item)
 		{
-			$node = Node::createFromArray($item)->setNodeId($nodeId);
-			$nodes[$node->nodeId] = $node;
+			$nodes[] = Node::createFromArray($item)->setNodeId($nodeId);
 		}
 
 		return new static(...$nodes);
@@ -31,16 +30,7 @@ class Nodes implements IteratorAggregate, Arrayable, Countable
 
 	public function __construct(Node ...$nodes)
 	{
-		foreach ($nodes as $node)
-		{
-			$this->nodes[] = $node;
-		}
-	}
-
-	public function add(Node $node): static
-	{
-		$this->nodes[$node->nodeId] = $node;
-		return $this;
+		$this->nodes = $nodes;
 	}
 
 	/** @return Node[] */

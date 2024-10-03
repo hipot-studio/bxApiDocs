@@ -1,7 +1,7 @@
 <?php
 namespace Bitrix\Tasks\Rest\Controllers;
 
-use Bitrix\Bizproc\BaseType\Value\DateTime;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Controller;
 
 class Export extends Controller\Export
@@ -34,9 +34,9 @@ class Export extends Controller\Export
 			$fileExt = 'xls';
 		}
 
-		$date = (new DateTime())->getTimestamp();
+		$date = (new DateTime())->format('Y-m-d_H:i:s');
 
-		return uniqid('tasks_'. $date. '_', false).'.'.$fileExt;
+		return 'tasks_' . $date . '.' . $fileExt;
 	}
 
 	private function isExcel(): bool

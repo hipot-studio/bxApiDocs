@@ -29,7 +29,7 @@ class Counter
 		$accountId = static::getAccountId();
 		$params = static::injectDataParams();
 
-		$host = Context::getCurrent()->getServer()->getHttpHost();
+		$host = Context::getCurrent()->getServer()->getHttpHost() ?? '';
 		$host = preg_replace("/:(80|443)$/", "", $host);
 		$host = \CUtil::JSEscape($host);
 

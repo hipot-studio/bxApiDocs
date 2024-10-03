@@ -752,7 +752,7 @@ class CUtil
 
 			if ('portal' == $wizard && Main\ModuleManager::isModuleInstalled('bitrix24'))
 			{
-				$list[$wizard] = Main\SiteTable::getByPrimary('s1')->fetchAll();
+				$list[$wizard] = Main\SiteTable::getByPrimary('s1', ['cache' => ['ttl' => 86400]])->fetchAll();
 			}
 			else
 			{

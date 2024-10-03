@@ -239,6 +239,21 @@ class UserSettings
 	public static function getTrackingGroups($userId = false, $params = [])
 	{
 		$res = [];
+
+		if (!Main\Loader::includeModule('socialnetwork'))
+		{
+			return $res;
+		}
+
+		$isProjectFeatureEnabled = \Bitrix\Socialnetwork\Helper\Feature::isFeatureEnabled(\Bitrix\Socialnetwork\Helper\Feature::PROJECTS_GROUPS)
+			|| \Bitrix\Socialnetwork\Helper\Feature::canTurnOnTrial(\Bitrix\Socialnetwork\Helper\Feature::PROJECTS_GROUPS)
+		;
+
+		if (!$isProjectFeatureEnabled)
+		{
+			return $res;
+		}
+
 		$str = \CUserOptions::getOption("calendar", "superpose_tracking_groups", false, $userId);
 
 		if ($str !== false && CheckSerializedData($str))
@@ -248,9 +263,9 @@ class UserSettings
 			{
 				foreach($ids as $id)
 				{
-					if (intval($id) > 0)
+					if ((int)$id > 0)
 					{
-						$res[] = intval($id);
+						$res[] = (int)$id;
 					}
 				}
 			}
@@ -360,12 +375,14 @@ class UserSettings
 	}
 
 
-	public static function getFollowedSectionIdList($userId = false)
+	public static function getFollowedSectionIdList($userId = false): array
 	{
 		$sectionIdList = [];
 		if ($userId)
 		{
-			$defaultFollowedSectionId = intval(\CUserOptions::GetOption("calendar", "superpose_displayed_default", 0, $userId));
+			$defaultFollowedSectionId = (int)\CUserOptions::GetOption(
+				"calendar", "superpose_displayed_default", 0, $userId
+			);
 			if ($defaultFollowedSectionId)
 			{
 				$sectionIdList[] = $defaultFollowedSectionId;
@@ -379,9 +396,9 @@ class UserSettings
 				{
 					foreach($idList as $id)
 					{
-						if (intval($id) > 0)
+						if ((int)$id > 0)
 						{
-							$sectionIdList[] = intval($id);
+							$sectionIdList[] = (int)$id;
 						}
 					}
 				}

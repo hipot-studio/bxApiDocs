@@ -91,6 +91,8 @@ class RestrictionManager
 	private static $inventoryControl1cRestriction;
 	/** @var Bitrix24AccessRestriction|null  */
 	private static $calendarSharingRestriction;
+	/** @var Bitrix24AccessRestriction */
+	private static $taskRestriction;
 
 	/**
 	 * @return SqlRestriction
@@ -738,7 +740,9 @@ class RestrictionManager
 					$permitted = $quota->checkDiskQuota(['size' => 0]);
 					if (!$permitted)
 					{
+						//@codingStandardsIgnoreStart
 						self::$diskQuotaRestriction->setErrorMessage((string)$quota->LAST_ERROR);
+						//@codingStandardsIgnoreEnd
 					}
 				}
 				self::$diskQuotaRestriction->permit($permitted);
@@ -1361,5 +1365,29 @@ class RestrictionManager
 		}
 
 		return new Bitrix24AccessRestriction('', true);
+	}
+
+	public static function getTaskRestriction(): Bitrix24AccessRestriction
+	{
+		if (is_null(static::$taskRestriction))
+		{
+			static::$taskRestriction = new Bitrix24AccessRestriction(
+				'tasks_crm_integration',
+				false,
+				null,
+				[
+					'ID' => 'limit_tasks_crm_integration',
+				],
+			);
+
+			if (!static::$taskRestriction->load())
+			{
+				static::$taskRestriction->permit(
+					Bitrix24Manager::isFeatureEnabled('tasks_crm_integration')
+				);
+			}
+		}
+
+		return static::$taskRestriction;
 	}
 }

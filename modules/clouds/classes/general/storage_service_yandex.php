@@ -87,6 +87,7 @@ class CCloudStorageService_Yandex extends CCloudStorageService_S3
 			<td><input type="hidden" name="SETTINGS[' . $htmlID . '][USE_HTTPS]" id="' . $htmlID . 'KEY" value="N"><input type="checkbox" name="SETTINGS[' . $htmlID . '][USE_HTTPS]" id="' . $htmlID . 'USE_HTTPS" value="Y" ' . ($useHttps == 'Y' ? 'checked="checked"' : '') . '></td>
 		</tr>
 		';
+
 		return $result;
 	}
 

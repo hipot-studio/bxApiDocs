@@ -2,7 +2,6 @@
 
 namespace Bitrix\Intranet\User\Grid\Row\Action;
 
-use Bitrix\Intranet\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 
 class ConfirmAction extends JsGridAction
@@ -24,10 +23,10 @@ class ConfirmAction extends JsGridAction
 
 	public function isAvailable(array $rawFields): bool
 	{
-		return CurrentUser::get()->isAdmin()
+		return $this->isCurrentUserAdmin()
+			&& (int)$rawFields['ID'] !== $this->getSettings()->getCurrentUserId()
 			&& $rawFields['ACTIVE'] === 'N'
-			&& !empty($rawFields['CONFIRM_CODE'])
-			&& $rawFields['ID'] !== CurrentUser::get()->getId();
+			&& !empty($rawFields['CONFIRM_CODE']);
 	}
 
 	public function getExtensionMethod(): string

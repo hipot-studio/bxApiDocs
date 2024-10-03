@@ -2,9 +2,13 @@
 
 namespace Bitrix\Intranet\User\Grid\Row\Assembler\Field\JsFields;
 
+use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\User\Grid\Settings\UserSettings;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Grid\Settings;
+use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
 
 /**
  * @method UserSettings getSettings()
@@ -33,8 +37,12 @@ class ActivityDateFieldAssembler extends JsExtensionFieldAssembler
 				? 'accept'
 				: 'invite',
 			'userId' => $rawValue['ID'],
-			'isExtranet' => empty($rawValue['UF_DEPARTMENT']),
 			'gridId' => $this->getSettings()->getID(),
+			'enabled' => $this->getSettings()->isInvitationAvailable(),
+			'email' => $rawValue['EMAIL'],
+			'phoneNumber' => $rawValue['PERSONAL_MOBILE'],
+			'isExtranet' => empty($rawValue['UF_DEPARTMENT']),
+			'isCloud' => Loader::includeModule('bitrix24')
 		];
 	}
 
@@ -45,7 +53,7 @@ class ActivityDateFieldAssembler extends JsExtensionFieldAssembler
 
 	protected function prepareColumnForExport($data): string
 	{
-		return $data['LAST_ACTIVITY_DATE'] ? FormatDateFromDB($data['LAST_ACTIVITY_DATE'], $this->dateFormat) : '';
+		return $data['LAST_ACTIVITY_DATE'] ? FormatDateFromDB($data['LAST_ACTIVITY_DATE'], $this->dateFormat, true) : '';
 	}
 
 	protected function prepareColumn($value): mixed
@@ -57,7 +65,7 @@ class ActivityDateFieldAssembler extends JsExtensionFieldAssembler
 
 		if ($value['LAST_ACTIVITY_DATE'])
 		{
-			return FormatDateFromDB($value['LAST_ACTIVITY_DATE'], $this->dateFormat);
+			return FormatDateFromDB($value['LAST_ACTIVITY_DATE'], $this->dateFormat, true);
 		}
 
 		return '';

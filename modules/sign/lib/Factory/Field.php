@@ -32,6 +32,12 @@ final class Field
 		BlockCode::MY_SIGN => FieldType::SIGNATURE,
 		BlockCode::SIGN => FieldType::SIGNATURE,
 	];
+
+	private const NOT_REQUIRED_FIELD_TYPES = [
+		FieldType::PATRONYMIC,
+		FieldType::POSITION,
+	];
+
 	private const ADDRESS_SUBFIELD_CODES = [
 		'ADDRESS_1',
 		'ADDRESS_2',
@@ -466,6 +472,7 @@ final class Field
 			FieldType::FIRST_NAME => FieldType::FIRST_NAME,
 			FieldType::LAST_NAME => FieldType::LAST_NAME,
 			FieldType::PATRONYMIC => FieldType::PATRONYMIC,
+			FieldType::POSITION => FieldType::POSITION,
 			FieldType::DATE, FieldType::DATETIME => FieldType::DATE,
 			FieldType::LIST, FieldType::ENUMERATION => FieldType::LIST,
 			FieldType::DOUBLE => FieldType::DOUBLE,
@@ -513,7 +520,7 @@ final class Field
 			name: $fieldName,
 			label: $fieldDescription['caption'] ?? '',
 			items: $itemCollection->isEmpty() ? null : $itemCollection,
-			required: $fieldType === FieldType::PATRONYMIC ? false : null,
+			required: in_array($fieldType, self::NOT_REQUIRED_FIELD_TYPES, true) ? false : null,
 		);
 
 		if ($field->type === FieldType::ADDRESS)

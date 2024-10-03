@@ -34,11 +34,8 @@ class SyncMemberStatus implements Operation
 		}
 
 		/** @var MemberWebStatusResult $result */
-		$isNeedToUpdateCounter = Type\DocumentScenario::isB2EScenario($this->document->scenario) &&
-			(Type\MemberStatus::isReadyForSigning($this->member->status) || Type\MemberStatus::isReadyForSigning($memberWebStatusResult->status))
-		;
 
-		$operation =  (new ChangeMemberStatus(
+		$operation = (new ChangeMemberStatus(
 			$this->member,
 			$this->document,
 			$memberWebStatusResult->status,
@@ -49,7 +46,20 @@ class SyncMemberStatus implements Operation
 		}
 		$result = $operation->launch();
 
-		if ($isNeedToUpdateCounter && $result->isSuccess())
+		if (!$result->isSuccess())
+		{
+			$errors = array_filter(
+				$result->getErrors(),
+				static fn(Main\Error $error): bool => $error->getCode() === ChangeMemberStatus::MEMBER_STATUS_ALREADY_SET_ERROR_CODE
+			);
+
+			if (empty($errors))
+			{
+				return $result;
+			}
+		}
+
+		if (Type\DocumentScenario::isB2EScenario($this->document->scenario))
 		{
 			$this->b2eUserToSignDocumentCounterService->updateByMember($this->member);
 		}

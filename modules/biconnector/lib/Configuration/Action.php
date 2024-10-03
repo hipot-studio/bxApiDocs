@@ -119,10 +119,7 @@ class Action
 	{
 		$result = null;
 
-		if (
-			!Loader::includeModule('bitrix24')
-			|| !Feature::isFeatureEnabled('bi_constructor')
-		)
+		if (Loader::includeModule('bitrix24') && !Feature::isFeatureEnabled('bi_constructor'))
 		{
 			return [
 				'ERROR_EXCEPTION' => [
@@ -195,10 +192,7 @@ class Action
 	{
 		$result = null;
 
-		if (
-			!Loader::includeModule('bitrix24')
-			|| !Feature::isFeatureEnabled('bi_constructor')
-		)
+		if (Loader::includeModule('bitrix24') && !Feature::isFeatureEnabled('bi_constructor'))
 		{
 			return [
 				'ERROR_EXCEPTION' => [

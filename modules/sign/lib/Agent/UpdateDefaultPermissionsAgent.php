@@ -6,6 +6,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Sign\Access\Permission\PermissionDictionary;
 use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
 use Bitrix\Sign\Access\Service\RolePermissionService;
+use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Service\Container;
 use CCrmPerms;
 
@@ -34,24 +35,25 @@ final class UpdateDefaultPermissionsAgent
 			return '';
 		}
 
+		$logger = Logger::getInstance();
 		$rolePermissionService = Container::instance()->getRolePermissionService();
 		if ($rolePermissionService === null)
 		{
-			AddMessage2Log('RolePermissionService not found. Cant update default permissions', 'sign');
+			$logger->notice('RolePermissionService not found. Cant update default permissions');
 			return '';
 		}
 
 		$isDefaultRolesExists = self::isDefaultRolesExists($rolePermissionService);
 		if (!$isDefaultRolesExists)
 		{
-			AddMessage2Log('Default roles doesnt exists', 'sign');
+			$logger->notice('Default roles doesnt exists');
 			return '';
 		}
 
 		$allPermissionsHasDefaultValues = self::isAllPermissionsHasDefaultValues($rolePermissionService);
 		if (!$allPermissionsHasDefaultValues)
 		{
-			AddMessage2Log('All permissions has default values', 'sign');
+			$logger->notice('All permissions has default values');
 			return '';
 		}
 

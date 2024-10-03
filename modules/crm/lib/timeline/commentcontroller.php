@@ -41,7 +41,9 @@ class CommentController extends EntityController
 			self::$parser = new \CTextParser();
 		}
 
+		//@codingStandardsIgnoreStart
 		self::$parser->arUserfields = array();
+		//@codingStandardsIgnoreEnd
 
 		return self::$parser;
 	}
@@ -155,12 +157,15 @@ class CommentController extends EntityController
 				{
 					$parser->LAZYLOAD = 'Y';
 				}
-
+				//@codingStandardsIgnoreStart
 				$parser->arUserfields = $fileFields;
+				//@codingStandardsIgnoreEnd
 			}
 		}
-		
+
+		//@codingStandardsIgnoreStart
 		$parser->bMobile = (($options['MOBILE'] ?? null) === 'Y');
+		//@codingStandardsIgnoreEnd
 		$data['TEXT'] = $parser::clearAllTags($data['COMMENT']);
 		if (self::$parser instanceof \blogTextParser)
 		{
@@ -321,9 +326,9 @@ class CommentController extends EntityController
 				$entityName = \CCrmOwnerType::ResolveName($data['ENTITY_TYPE_ID']);
 			}
 			$genderSuffix = "";
-			if ($arUser = $userDB->Fetch())
+			if ($user = $userDB->Fetch())
 			{
-				switch ($arUser["PERSONAL_GENDER"])
+				switch ($user["PERSONAL_GENDER"])
 				{
 					case "M":
 						$genderSuffix = "_M";
@@ -343,15 +348,33 @@ class CommentController extends EntityController
 			{
 				$phrase = "CRM_ENTITY_TITLE_" . \CCrmOwnerType::InvoiceName;
 			}
-			$entityTitle = Loc::getMessage($phrase, ["#ENTITY_NAME#" => $nameLink]);
-			if (!$entityTitle)
-			{
-				$entityTitle = Loc::getMessage($phrase . '_MSGVER_1', ["#ENTITY_NAME#" => $nameLink]);
-			}
-			$message = Loc::getMessage("CRM_COMMENT_IM_MENTION_POST" . $genderSuffix, [
-				"#COMMENT#" => $cuttedComment,
-				"#ENTITY_TITLE#" => $entityTitle
-			]);
+
+			$notifyMessageCallback = static function (?string $languageId = null) use (
+				$genderSuffix,
+				$nameLink,
+				$cuttedComment,
+				$phrase,
+			) {
+				$entityTitle = Loc::getMessage($phrase, ["#ENTITY_NAME#" => $nameLink], $languageId);
+				if (!$entityTitle)
+				{
+					$entityTitle = Loc::getMessage(
+						$phrase . '_MSGVER_1',
+						["#ENTITY_NAME#" => $nameLink],
+						$languageId,
+					);
+				}
+
+				return Loc::getMessage(
+					"CRM_COMMENT_IM_MENTION_POST" . $genderSuffix,
+					[
+						"#COMMENT#" => $cuttedComment,
+						"#ENTITY_TITLE#" => $entityTitle
+					],
+					$languageId,
+				);
+			};
+
 			$oldMentionList = $data['OLD_MENTION_LIST'] ?? [];
 			foreach ($mentionList as $mentionId)
 			{
@@ -366,7 +389,7 @@ class CommentController extends EntityController
 					'NOTIFY_MODULE' => 'crm',
 					'NOTIFY_EVENT' => 'mention',
 					'NOTIFY_TAG' => 'CRM|MESSAGE_TIMELINE_MENTION|' . $id,
-					'NOTIFY_MESSAGE' => $message
+					'NOTIFY_MESSAGE' => $notifyMessageCallback
 				));
 			}
 		}

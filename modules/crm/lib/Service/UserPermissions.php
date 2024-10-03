@@ -19,7 +19,6 @@ use Bitrix\Crm\Security\QueryBuilder\Result\JoinWithUnionSpecification;
 use Bitrix\Crm\Security\QueryBuilder\Result\RawQueryObserverUnionResult;
 use Bitrix\Crm\Security\QueryBuilderFactory;
 use Bitrix\Crm\Security\Role\Manage\Permissions\MyCardView;
-use Bitrix\Main\Config\Option;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Loader;
@@ -135,8 +134,8 @@ class UserPermissions
 			else
 			{
 				// Check user group 1 ('Portal admins')
-				$arGroups = $currentUser::GetUserGroup($this->getUserId());
-				$this->isAdmin = in_array(1, $arGroups, false);
+				$groups = $currentUser::GetUserGroup($this->getUserId());
+				$this->isAdmin = in_array(1, $groups, false);
 			}
 		}
 		catch (\Exception $exception)
@@ -198,6 +197,10 @@ class UserPermissions
 	 */
 	public function isAdminForEntity(int $entityTypeId): bool
 	{
+		if ($this->isAdmin())
+		{
+			return true;
+		}
 		if (\CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId))
 		{
 			$automatedSolutionId = Container::getInstance()->getTypeByEntityTypeId($entityTypeId)?->getCustomSectionId();
@@ -284,7 +287,7 @@ class UserPermissions
 			return false;
 		}
 
-		return $this->isCrmAdmin();
+		return $this->isAdminForEntity($entityTypeId) || $this->isCrmAdmin();
 	}
 
 	/**
@@ -1224,7 +1227,7 @@ class UserPermissions
 	}
 
 	//always allow for specific entities
-	private static function isAlwaysAllowedEntity(int $entityTypeId): bool
+	public static function isAlwaysAllowedEntity(int $entityTypeId): bool
 	{
 		return in_array($entityTypeId, [\CCrmOwnerType::SmartDocument, \CCrmOwnerType::SmartB2eDocument]);
 	}

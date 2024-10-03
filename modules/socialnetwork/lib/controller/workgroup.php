@@ -1200,6 +1200,40 @@ class Workgroup extends Base
 		];
 	}
 
+	/**
+	 * The method will enable trial mode for projects or scrum.
+	 *
+	 * @param bool $scrum If you need to create a trial for scrum.
+	 * @return bool
+	 */
+	public function turnOnTrialAction(bool $scrum = false): bool
+	{
+		if (!Helper\Workgroup\Access::canCreate())
+		{
+			$this->addError(new Error('Access denied'));
+
+			return false;
+		}
+
+		$feature = $scrum ? Helper\Feature::SCRUM_CREATE : Helper\Feature::PROJECTS_GROUPS;
+
+		if (
+			!Helper\Feature::isFeatureEnabled($feature)
+			&& Helper\Feature::canTurnOnTrial($feature)
+		)
+		{
+			Helper\Feature::turnOnTrial($feature);
+
+			return true;
+		}
+		else
+		{
+			$this->addError(new Error('Already included'));
+
+			return false;
+		}
+	}
+
 	private function getColoredDefaultAvatar(string $color): string
 	{
 		if (in_array($color, Helper\Workgroup::getAvatarColors(), true))

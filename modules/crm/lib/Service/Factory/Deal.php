@@ -504,7 +504,10 @@ final class Deal extends Factory
 			'order' => [
 				'SORT' => 'ASC',
 				'ID' => 'ASC',
-			]
+			],
+			'cache' => [
+				'ttl' => 84600,
+			],
 		])->fetchCollection();
 		foreach ($categories as $category)
 		{

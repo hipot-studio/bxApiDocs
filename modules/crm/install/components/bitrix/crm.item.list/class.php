@@ -128,17 +128,6 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 
 		$listFilter = $this->getListFilter();
 
-		FieldsTransform\UserBasedField::applyTransformWrapper($listFilter);
-
-		// transform ACTIVITY_COUNTER|ACTIVITY_RESPONSIBLE_IDS filter to real filter params
-		CCrmEntityHelper::applySubQueryBasedFiltersWrapper(
-			$this->entityTypeId,
-			$this->getGridId(),
-			\Bitrix\Crm\Counter\EntityCounter::internalizeExtras($_REQUEST),
-			$listFilter,
-			null
-		);
-
 		$this->fieldRestrictionManager->removeRestrictedFields($this->filterOptions, $this->gridOptions);
 
 		$pageNavigation = $this->getPageNavigation();
@@ -433,6 +422,17 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 		{
 			$filter = $this->category->getItemsFilter($filter);
 		}
+
+		FieldsTransform\UserBasedField::applyTransformWrapper($filter);
+
+		// transform ACTIVITY_COUNTER|ACTIVITY_RESPONSIBLE_IDS filter to real filter params
+		CCrmEntityHelper::applySubQueryBasedFiltersWrapper(
+			$this->entityTypeId,
+			$this->getGridId(),
+			\Bitrix\Crm\Counter\EntityCounter::internalizeExtras($_REQUEST),
+			$filter,
+			null
+		);
 
 		return $filter;
 	}
@@ -848,14 +848,24 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 		}
 		if ($userPermissions->canAddItem($item))
 		{
-			$copyUrl = clone $itemDetailUrl;
-			$copyUrl->addParams([
-				'copy' => '1',
-			]);
-
 			$analyticsEventBuilder = CopyOpenEvent::createDefault($this->entityTypeId);
 			$this->configureAnalyticsEventBuilder($analyticsEventBuilder);
 			$analyticsEventBuilder->setElement(\Bitrix\Crm\Integration\Analytics\Dictionary::ELEMENT_GRID_ROW_CONTEXT_MENU);
+
+			$copyUrlParams = [
+				'copy' => '1',
+			];
+
+			$parentEntityTypeId = (int)($this->arParams['parentEntityTypeId'] ?? 0);
+			$parentEntityId = (int)($this->arParams['parentEntityId'] ?? 0);
+			if ($parentEntityId > 0 && \CCrmOwnerType::IsDefined($parentEntityTypeId))
+			{
+				$copyUrlParams['parentTypeId'] = $parentEntityTypeId;
+				$copyUrlParams['parentId'] = $parentEntityId;
+			}
+
+			$copyUrl = clone $itemDetailUrl;
+			$copyUrl->addParams($copyUrlParams);
 
 			$actions[] = [
 				'TEXT' => Loc::getMessage('CRM_COMMON_ACTION_COPY'),
