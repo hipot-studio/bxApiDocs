@@ -305,48 +305,25 @@ class TimelineManager
 						continue;
 					}
 
-					$responsibleID = isset($fields['RESPONSIBLE_ID']) ? (int)$fields['RESPONSIBLE_ID'] : 0;
-					if ($checkPermissions)
-					{
-						$isPermitted =
-							($responsibleID === $userID)
-							|| \CCrmActivity::CheckReadPermission($fields['OWNER_TYPE_ID'], $fields['OWNER_ID'], $userPermissions)
-						;
-					}
-					else
-					{
-						$isPermitted = true;
-					}
-
 					$itemIDs = isset($entityInfos[$assocEntityID]['ITEM_IDS'])
 						? $entityInfos[$assocEntityID]['ITEM_IDS'] : array();
 
 					$note = $additionalData[$assocEntityID]['NOTE'] ?? null;
 					$restAppLayoutBlocks = $additionalData[$assocEntityID]['REST_APP_LAYOUT_BLOCKS'] ?? [];
 
-					if($isPermitted)
-					{
-						$fields = ActivityController::prepareEntityDataModel(
-							$assocEntityID,
-							$fields,
-							array('ENABLE_COMMUNICATIONS' => false)
-						);
+					$fields = ActivityController::prepareEntityDataModel(
+						$assocEntityID,
+						$fields,
+						array('ENABLE_COMMUNICATIONS' => false)
+					);
 
-						foreach($itemIDs as $itemID)
-						{
-							$items[$itemID]['ASSOCIATED_ENTITY'] = $fields;
-							$items[$itemID]['REST_APP_LAYOUT_BLOCKS'] = $restAppLayoutBlocks;
-							if ($note)
-							{
-								$items[$itemID]['NOTE'] = $note;
-							}
-						}
-					}
-					else
+					foreach($itemIDs as $itemID)
 					{
-						foreach($itemIDs as $itemID)
+						$items[$itemID]['ASSOCIATED_ENTITY'] = $fields;
+						$items[$itemID]['REST_APP_LAYOUT_BLOCKS'] = $restAppLayoutBlocks;
+						if ($note)
 						{
-							unset($items[$itemID]);
+							$items[$itemID]['NOTE'] = $note;
 						}
 					}
 				}

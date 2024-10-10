@@ -33,7 +33,7 @@ class DepartmentQueries
 		$userIds = [];
 		foreach ($nodes as $node)
 		{
-			$allEmp = $this->hrServiceLocator::getNodeMemberService()->getAllEmployees($node->id);
+			$allEmp = $this->hrServiceLocator::getNodeMemberService()->getAllEmployees($node->id, false, false);
 
 			foreach ($allEmp->getIterator() as $emp)
 			{

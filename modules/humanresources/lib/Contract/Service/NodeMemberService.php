@@ -26,12 +26,18 @@ interface NodeMemberService
 	 * @throws \Bitrix\Main\SystemException
 	 */
 	public function getMemberSubordination(int $memberId, int $targetMemberId): Type\MemberSubordinateRelationType;
-	public function getAllEmployees(int $nodeId, bool $withAllChildNodes = false): Item\Collection\NodeMemberCollection;
+	public function getAllEmployees(
+		int $nodeId,
+		bool $withAllChildNodes = false,
+		bool $onlyActive = true
+	): Item\Collection\NodeMemberCollection;
+
 	public function getPagedEmployees(
 		int $nodeId,
 		bool $withAllChildNodes = false,
 		int $offset = 0,
 		int $limit = 500,
+		bool $onlyActive = true,
 	):  Item\Collection\NodeMemberCollection;
 
 	public function getDefaultHeadRoleEmployees(int $nodeId): Item\Collection\NodeMemberCollection;

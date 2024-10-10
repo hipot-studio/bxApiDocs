@@ -29,7 +29,8 @@ interface NodeMemberRepository
 		MemberEntityType $entityType,
 		bool $withAllChildNodes = false,
 		int $limit = 100,
-		int $offset = 0
+		int $offset = 0,
+		bool $onlyActive = true,
 	): Item\Collection\NodeMemberCollection;
 
 	/**

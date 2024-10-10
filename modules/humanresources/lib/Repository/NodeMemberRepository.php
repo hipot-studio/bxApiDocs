@@ -271,19 +271,24 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 	private function getBaseQuery(
 		int $nodeId,
 		bool $withAllChildNodes = false,
-		?int $limit = 100,
-		?int $offset = 0
+		int $limit = 100,
+		int $offset = 0,
+		bool $onlyActive = true
 	): Query
 	{
 		$nodeMemberQuery =
 			Model\NodeMemberTable::query()
 				->setSelect(['*', 'ROLE'])
-				->where('ACTIVE', 'Y')
 				->setOffset($offset)
 				->setLimit($limit)
 				->setCacheTtl(self::CACHE_TTL)
 				->cacheJoins(true)
 		;
+
+		if ($onlyActive)
+		{
+			$nodeMemberQuery->where('ACTIVE', 'Y');
+		}
 
 		if ($withAllChildNodes)
 		{
@@ -617,6 +622,7 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		bool $withAllChildNodes = true,
 		int $limit = 100,
 		int $offset = 0,
+		bool $onlyActive = true,
 	): Item\Collection\NodeMemberCollection
 	{
 		$nodeMemberQuery = $this->getBaseQuery(
@@ -624,6 +630,7 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 			$withAllChildNodes,
 			$limit,
 			$offset,
+			$onlyActive,
 		);
 
 		$nodeMemberQuery->where('ENTITY_TYPE', $entityType->name);

@@ -141,8 +141,10 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 
 		if ($isMemberNodeAncestor)
 		{
-			$memberPriority = $memberPriorityCalculationService->getMemberAffectingChildPriority($member, $roleCollection);
-			$targetMemberPriority = $memberPriorityCalculationService->getMemberPriority($targetMember, $roleCollection);
+			$memberPriority =
+				$memberPriorityCalculationService->getMemberAffectingChildPriority($member, $roleCollection);
+			$targetMemberPriority =
+				$memberPriorityCalculationService->getMemberPriority($targetMember, $roleCollection);
 
 			if (!$memberPriority)
 			{
@@ -171,7 +173,8 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 
 		if ($isTargetMemberNodeAncestor)
 		{
-			$targetMemberPriority = $memberPriorityCalculationService->getMemberAffectingChildPriority($targetMember, $roleCollection);
+			$targetMemberPriority =
+				$memberPriorityCalculationService->getMemberAffectingChildPriority($targetMember, $roleCollection);
 			$memberPriority = $memberPriorityCalculationService->getMemberPriority($member, $roleCollection);
 
 			if (!$targetMemberPriority)
@@ -206,9 +209,17 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 	}
 
 	/**
+	 * @param int $nodeId
+	 * @param bool $withAllChildNodes
+	 * @param bool $onlyActive *
+	 *
 	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
 	 */
-	public function getAllEmployees(int $nodeId, bool $withAllChildNodes = false):  Item\Collection\NodeMemberCollection
+	public function getAllEmployees(
+		int $nodeId,
+		bool $withAllChildNodes = false,
+		bool $onlyActive = true,
+	): Item\Collection\NodeMemberCollection
 	{
 		$offset = 0;
 		$limit = 1000;
@@ -220,7 +231,9 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 				withAllChildNodes: $withAllChildNodes,
 				limit: $limit,
 				offset: $offset,
-			)) && !$memberCollection->empty())
+				onlyActive: $onlyActive
+			))
+			&& !$memberCollection->empty())
 		{
 			foreach ($memberCollection as $member)
 			{
@@ -238,7 +251,8 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 		bool $withAllChildNodes = false,
 		int $offset = 0,
 		int $limit = 500,
-	):  Item\Collection\NodeMemberCollection
+		bool $onlyActive = true,
+	): Item\Collection\NodeMemberCollection
 	{
 		return $this->nodeMemberRepository->findAllByNodeIdAndEntityType(
 			nodeId: $nodeId,
@@ -246,6 +260,7 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 			withAllChildNodes: $withAllChildNodes,
 			limit: $limit,
 			offset: $offset,
+			onlyActive: $onlyActive
 		);
 	}
 

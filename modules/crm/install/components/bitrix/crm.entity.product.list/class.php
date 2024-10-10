@@ -1028,7 +1028,10 @@ final class CCrmEntityProductListComponent
 
 		if (isset($this->arParams['~PRODUCTS']) && is_array($this->arParams['~PRODUCTS']))
 		{
-			$this->rows = $this->arParams['~PRODUCTS'];
+			$this->rows = array_filter(
+				$this->arParams['~PRODUCTS'],
+				fn($row) => !empty($row) && is_array($row)
+			);
 
 			foreach ($this->rows as $index => &$row)
 			{
