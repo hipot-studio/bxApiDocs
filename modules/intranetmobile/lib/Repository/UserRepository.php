@@ -2,6 +2,7 @@
 
 namespace Bitrix\IntranetMobile\Repository;
 
+use Bitrix\IntranetMobile\Dto\PhoneNumberDto;
 use Bitrix\IntranetMobile\Dto\UserDto;
 use Bitrix\Main\Type\DateTime;
 
@@ -19,29 +20,6 @@ class UserRepository
 			android: $installedApps['APP_ANDROID_INSTALLED'],
 		);
 
-		if ($user['ACTIVE'] === 'Y')
-		{
-			if ($user['CONFIRM_CODE'] === null || $user['CONFIRM_CODE'] === '')
-			{
-				$employeeStatus = UserDto::ACTIVE;
-			}
-			else
-			{
-				$employeeStatus = UserDto::INVITED;
-			}
-		}
-		else
-		{
-			if ($user['CONFIRM_CODE'] === null || $user['CONFIRM_CODE'] === '')
-			{
-				$employeeStatus = UserDto::FIRED;
-			}
-			else
-			{
-				$employeeStatus = UserDto::INVITE_AWAITING_APPROVE;
-			}
-		}
-
 		try
 		{
 			$timestamp = (new DateTime($user['DATE_REGISTER']))->getTimestamp();
@@ -52,15 +30,50 @@ class UserRepository
 		}
 
 		$userId = (int)$user['ID'];
+		$phoneNumber = !empty($user['PERSONAL_MOBILE']) ? new PhoneNumberDto($user['PERSONAL_MOBILE']) : null;
 
 		return new UserDto(
 			id: $userId,
 			department: $user['UF_DEPARTMENT'],
 			isExtranetUser: \Bitrix\Intranet\Util::isExtranetUser($userId),
 			installedApps: $installedAppsDto,
-			employeeStatus: $employeeStatus,
+			employeeStatus: self::getEmployeeStatus($user),
 			dateRegister: $timestamp,
 			actions: $user['ACTIONS'],
+			email: $user['EMAIL'],
+			phoneNumber: $phoneNumber,
 		);
+	}
+
+	public static function createUserPhoneStatusDto(array $user, PhoneNumberDto $phoneNumber): UserDto
+	{
+		$userId = $user['ID'] ? (int)$user['ID'] : 0;
+		$employeeStatus = $userId ? self::getEmployeeStatus($user) : UserDto::NOT_REGISTERED;
+
+		return new UserDto(
+			id: $userId,
+			employeeStatus: $employeeStatus,
+			phoneNumber: $phoneNumber,
+		);
+	}
+
+	private static function getEmployeeStatus(array $user): int
+	{
+		if ($user['ACTIVE'] === 'Y')
+		{
+			if ($user['CONFIRM_CODE'] === null || $user['CONFIRM_CODE'] === '')
+			{
+				return UserDto::ACTIVE;
+			}
+
+			return UserDto::INVITED;
+		}
+
+		if ($user['CONFIRM_CODE'] === null || $user['CONFIRM_CODE'] === '')
+		{
+			return UserDto::FIRED;
+		}
+
+		return UserDto::INVITE_AWAITING_APPROVE;
 	}
 }

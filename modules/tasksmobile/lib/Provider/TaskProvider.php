@@ -60,6 +60,7 @@ use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\Control\Task;
 use Bitrix\Tasks\Provider\TaskQuery;
 use Bitrix\Tasks\Provider\TaskList;
+use Bitrix\Main\Type\Collection;
 
 final class TaskProvider
 {
@@ -1097,6 +1098,9 @@ final class TaskProvider
 
 	public function updateParentIdToTaskIds(int $parentId, ?array $newSubTasks = [], ?array $deletedSubTasks = []): array
 	{
+		Collection::normalizeArrayValuesByInt($newSubTasks, false);
+		Collection::normalizeArrayValuesByInt($deletedSubTasks, false);
+
 		$updatedNewSubTasks = [];
 		$updatedDeletedSubTasks = [];
 
@@ -1165,6 +1169,9 @@ final class TaskProvider
 
 	public function updateRelatedTasks(int $taskId, ?array $newRelatedTasks = [], ?array $deletedRelatedTasks = []): array
 	{
+		Collection::normalizeArrayValuesByInt($newRelatedTasks, false);
+		Collection::normalizeArrayValuesByInt($deletedRelatedTasks, false);
+
 		$updatedNewRelatedTasks = [];
 		$updatedDeletedRelatedTasks = [];
 		$taskDependence = new \CTaskDependence();

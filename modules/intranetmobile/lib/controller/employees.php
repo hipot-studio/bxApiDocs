@@ -13,7 +13,7 @@ class Employees extends Base
 	public function configureActions(): array
 	{
 		return [
-			'getUserListAction' => [
+			'getUserList' => [
 				'+prefilters' => [
 					new CloseSession(),
 				],

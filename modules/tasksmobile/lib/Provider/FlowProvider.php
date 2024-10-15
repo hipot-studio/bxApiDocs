@@ -5,6 +5,7 @@ namespace Bitrix\TasksMobile\Provider;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\Type\Collection;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Mobile\Provider\UserRepository;
 use Bitrix\Tasks\Flow\Filter\Filter;
@@ -107,6 +108,8 @@ final class FlowProvider
 	 */
 	public function getFlowsById(array $ids = []): array
 	{
+		Collection::normalizeArrayValuesByInt($ids, false);
+
 		if (empty($ids))
 		{
 			return [];

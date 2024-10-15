@@ -188,6 +188,7 @@ class MobileApplication extends Bitrix\Main\Authentication\Application
 		"/bitrix/components/bitrix/main.file.input/",
 		"/mobileapp/",
 		"/rest/",
+		"/_analytics/",
 	];
 
 	public function __construct()

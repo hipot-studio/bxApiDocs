@@ -354,6 +354,24 @@ class Sender
 		}
 	}
 
+	public static function queueEvent($queryItem)
+	{
+		self::$queryData[] = $queryItem;
+		if (!static::$forkSet)
+		{
+			LoggerManager::getInstance()->getLogger()?->debug(
+				"\n{delimiter}\n"
+				. "{date} - {host}\n{delimiter}\n"
+				. "Manually registers the background job to send the event.\n"
+				. "count: {eventCount}", [
+				'eventCount' => count(static::$queryData),
+				'MESSAGE' => LogType::READY_ONLINE_EVENT_LIST->value,
+			]);
+			\Bitrix\Main\Application::getInstance()->addBackgroundJob(array(__CLASS__, "send"));
+			static::$forkSet = true;
+		}
+	}
+
 	/**
 	 * @return ProviderInterface
 	 */

@@ -354,7 +354,10 @@ class CIntranetNotify
 
 						$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
 							->departmentRepository();
-						$department = $departmentRepository->getById((int)$arUser['UF_DEPARTMENT']);
+						$departmentId = is_array($arUser['UF_DEPARTMENT'])
+							? (int)$arUser['UF_DEPARTMENT'][0]
+							: (int)$arUser['UF_DEPARTMENT'];
+						$department = $departmentRepository->getById($departmentId);
 						if ($department)
 						{
 							$arResult['CREATED_BY']['FORMATTED'] = (

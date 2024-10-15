@@ -66,6 +66,10 @@ class IblockDepartmentRepository implements DepartmentRepositoryContract
 		{
 			$rootDepartment = $this->getRootDepartment();
 		}
+		if (!$rootDepartment)
+		{
+			return new DepartmentCollection();
+		}
 		$depthLevelFilter = $this->convertDepartmentDepthFilter($depthLevel, $rootDepartment);
 		$departmentResult = \CIBlockSection::GetTreeList(
 			array_merge([

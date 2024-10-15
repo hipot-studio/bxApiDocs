@@ -6,6 +6,7 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\Integration\Disk\UserField;
 use Bitrix\Tasks\Util\UserField\Task\Template;
 
@@ -22,6 +23,8 @@ class DiskFileProvider
 	 */
 	public function getDiskFileAttachments(array $fileIds): array
 	{
+		Collection::normalizeArrayValuesByInt($fileIds, false);
+
 		if (!Loader::includeModule('disk') || empty($fileIds))
 		{
 			return [];

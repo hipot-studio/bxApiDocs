@@ -1862,7 +1862,7 @@ SQL;
 
 	public static function ShowPanel($FID, $TID=0, $bGetIcons=false)
 	{
-		global $APPLICATION, $REQUEST_URI, $USER;
+		global $APPLICATION, $USER;
 
 		if(!(($USER->IsAuthorized() || $APPLICATION->ShowPanel===true) && $APPLICATION->ShowPanel!==false))
 			return;

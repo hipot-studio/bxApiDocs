@@ -357,6 +357,7 @@ final class ForumCommentsComponent extends CBitrixComponent implements Main\Engi
 
 		$this->arParams["AJAX_MODE"] = $this->isAjaxRequest() ? "Y" : "N";
 		$this->arParams["index"] = $this->componentId;
+		$this->arParams["form_index"] =  str_pad($this->componentId, 5, "0", STR_PAD_LEFT);
 		$this->arParams["COMPONENT_ID"] = $this->componentId;
 		return $this;
 	}
@@ -601,7 +602,7 @@ final class ForumCommentsComponent extends CBitrixComponent implements Main\Engi
 			}
 			else if ($this->request["NOREDIRECT"] != "Y" && !$this->isAjaxRequest())
 			{
-				$strURL = $this->request["back_page"] ?: $this->getApplication()->GetCurPageParam("", array("MID", "ID", "SEF_APPLICATION_CUR_PAGE_URL", BX_AJAX_PARAM_ID, "result", "sessid", "bxajaxid"));
+				$strURL = $this->request["back_page"] ?: $this->getApplication()->GetCurPageParam("", array("MID", "ID", BX_AJAX_PARAM_ID, "result", "sessid", "bxajaxid"));
 				$strURL = ForumAddPageParams($strURL, array("MID" => $message["ID"], "result" => ($message["APPROVED"] == "Y" ? "reply" : "not_approved")));
 				LocalRedirect($strURL);
 			}
