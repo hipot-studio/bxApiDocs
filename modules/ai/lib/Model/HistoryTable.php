@@ -3,6 +3,7 @@
 namespace Bitrix\AI\Model;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\ArrayField;
 
 /**
@@ -23,6 +24,8 @@ use Bitrix\Main\ORM\Fields\ArrayField;
  */
 class HistoryTable extends Entity\DataManager
 {
+	use DeleteByFilterTrait;
+	
 	/**
 	 * Returns DB table name for entity.
 	 * @return string

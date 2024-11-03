@@ -268,6 +268,11 @@ class CounterService
 
 	public function deleteByChatId(int $chatId): void
 	{
+		if ($this->getContext()->getUserId() <= 0)
+		{
+			return;
+		}
+
 		MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatId, '=USER_ID' => $this->getContext()->getUserId()]);
 		static::clearCache($this->getContext()->getUserId());
 		(new CounterOverflowService($chatId))->delete($this->getContext()->getUserId());
@@ -281,7 +286,7 @@ class CounterService
 
 	public function deleteByChatIds(array $chatIds): void
 	{
-		if (empty($chatIds))
+		if (empty($chatIds) || $this->getContext()->getUserId() <= 0)
 		{
 			return;
 		}
@@ -299,6 +304,11 @@ class CounterService
 
 	public function deleteAll(bool $withNotify = false): void
 	{
+		if ($this->getContext()->getUserId() <= 0)
+		{
+			return;
+		}
+
 		$filter = ['=USER_ID' => $this->getContext()->getUserId()];
 
 		if (!$withNotify)
@@ -462,6 +472,11 @@ class CounterService
 	public function deleteTo(Message $message): void
 	{
 		$userId = $this->getContext()->getUserId();
+		if ($userId <= 0)
+		{
+			return;
+		}
+
 		MessageUnreadTable::deleteByFilter([
 			'<=MESSAGE_ID' => $message->getMessageId(),
 			'=CHAT_ID' => $message->getChatId(),

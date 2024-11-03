@@ -342,6 +342,9 @@ class Output extends Base\Output
 				}
 
 				$httpClient = $this->instanceHttpClient($waitResponse);
+				$httpClient
+					->setHeader('Connection', 'close')
+					->setHeader('Expect', ''); // to disable "100 Continue" behavior
 
 				$url = $this->controllerUrl
 					. '?connector='. $this->connector

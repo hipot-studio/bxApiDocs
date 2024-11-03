@@ -219,15 +219,22 @@ class Logger
 
 		if (is_int($users))
 		{
-			$users = [$users];
+			return [$users => $users];
 		}
 
-		if (!is_array($users))
+		if (is_array($users))
 		{
-			return [];
+			$result = [];
+
+			foreach ($users as $id)
+			{
+				$result[$id] = $id;
+			}
+
+			return $result;
 		}
 
-		return $users;
+		return [];
 	}
 
 	private function filterWithoutMobile(array $userIds): array

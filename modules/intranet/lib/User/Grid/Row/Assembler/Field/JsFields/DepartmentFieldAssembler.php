@@ -2,19 +2,24 @@
 
 namespace Bitrix\Intranet\User\Grid\Row\Assembler\Field\JsFields;
 
+use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
+use Bitrix\Intranet\Entity\Department;
+use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Grid\Settings;
 use CIBlock;
 
 class DepartmentFieldAssembler extends JsExtensionFieldAssembler
 {
-	private array $departmentsData;
+	private DepartmentCollection $departments;
 	private bool $canEdit;
 
 	public function __construct(array $columnIds, ?Settings $settings = null)
 	{
 		parent::__construct($columnIds, $settings);
-		$this->departmentsData = \CIntranetUtils::GetStructureWithoutEmployees()['DATA'];
+		$this->departments = ServiceContainer::getInstance()
+			->departmentRepository()
+			->getAllTree();
 
 		$iblockId = Option::get('intranet', 'iblock_structure', false);
 		$this->canEdit = CIBlock::GetPermission($iblockId) >= 'U';
@@ -29,25 +34,14 @@ class DepartmentFieldAssembler extends JsExtensionFieldAssembler
 	{
 		$departmentList = [];
 
-		if (is_array($rawValue['UF_DEPARTMENT']))
+		if (is_array($rawValue['UF_DEPARTMENT']) && !empty($rawValue['UF_DEPARTMENT']))
 		{
-			foreach($rawValue['UF_DEPARTMENT'] as $departmentId)
-			{
-				if (
-					!empty($this->departmentsData[$departmentId])
-					&& isset($this->departmentsData[$departmentId]['NAME'])
-					&& $this->departmentsData[$departmentId]['NAME'] <> ''
-				)
-				{
-					$departmentName = htmlspecialcharsbx($this->departmentsData[$departmentId]['NAME']);
-					$departmentUrl = htmlspecialcharsbx(str_replace(['#ID#', '#SITE_DIR#'], [$departmentId, SITE_DIR], $this->departmentsData[$departmentId]['SECTION_PAGE_URL']));
-					$departmentList[] = [
-						'id' => $departmentId,
-						'name' => $departmentName,
-						'url' => $departmentUrl,
-					];
-				}
-			}
+			$departmentList = $this->departments
+				->filterByUsersDepartmentIdList($rawValue['UF_DEPARTMENT'])
+				->map(fn(Department $department) => [
+					'id' => $department->getIblockSectionId(),
+					'name' => htmlspecialcharsbx($department->getName()),
+				]);
 		}
 
 		return [
@@ -62,19 +56,11 @@ class DepartmentFieldAssembler extends JsExtensionFieldAssembler
 	{
 		$departmentNameList = [];
 
-		if (is_array($data['UF_DEPARTMENT']))
+		if (is_array($data['UF_DEPARTMENT']) && !empty($data['UF_DEPARTMENT']))
 		{
-			foreach($data['UF_DEPARTMENT'] as $departmentId)
-			{
-				if (
-					!empty($this->departmentsData[$departmentId])
-					&& isset($this->departmentsData[$departmentId]['NAME'])
-					&& $this->departmentsData[$departmentId]['NAME'] <> ''
-				)
-				{
-					$departmentNameList[] = htmlspecialcharsbx($this->departmentsData[$departmentId]['NAME']);
-				}
-			}
+			$departmentNameList = $this->departments
+				->filterByUsersDepartmentIdList($data['UF_DEPARTMENT'])
+				->map(fn(Department $department) => htmlspecialcharsbx($department->getName()));
 		}
 
 		return implode(', ', $departmentNameList);

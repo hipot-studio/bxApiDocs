@@ -8,15 +8,20 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\Emoji;
+use Bitrix\StaffTrack\Controller\Trait\ErrorResponseTrait;
+use Bitrix\StaffTrack\Controller\Trait\IntranetUserTrait;
 use Bitrix\StaffTrack\Dictionary\Mute;
 use Bitrix\StaffTrack\Dictionary\Option;
 use Bitrix\StaffTrack\Feature;
+use Bitrix\StaffTrack\Helper\DateHelper;
 use Bitrix\Stafftrack\Integration\HumanResources\Structure;
 use Bitrix\StaffTrack\Integration\Im\MessageService;
 use Bitrix\StaffTrack\Integration\Location\GeoService;
+use Bitrix\StaffTrack\Integration\Timeman\WorkDayService;
 use Bitrix\StaffTrack\Internals\Exception\IntranetUserException;
 use Bitrix\StaffTrack\Internals\Exception\UserNotFoundException;
 use Bitrix\StaffTrack\Item\User;
@@ -33,6 +38,8 @@ use Bitrix\Stafftrack\Integration\Pull;
 class Shift extends Controller
 {
 	use CurrentUserTrait;
+	use ErrorResponseTrait;
+	use IntranetUserTrait;
 
 	/**
 	 * @return array[]
@@ -73,13 +80,13 @@ class Shift extends Controller
 
 			$result = [
 				'currentShift' => $provider->findByDate($date),
-				'enabledBySettings' => Feature::isCheckInEnabledBySettings(),
-				'isGeoByDefaultZone' => $this->isGeoByDefaultZone(),
-				'dialogInfo' => $this->getDialogInfo($userId),
+				'config' => $this->getConfig($userId, $date),
 				'options' => $this->getOptions($userId),
 				'userInfo' => $user?->toArray(),
-				'diskFolderId' => $this->getDiskFolderId($userId),
 				'counter' => $this->getCounter($userId),
+				'enabledBySettings' => Feature::isCheckInEnabledBySettings(),
+				'dialogInfo' => $this->getDialogInfo($userId),
+				'diskFolderId' => $this->getDiskFolderId($userId),
 				'departmentHeadId' => $this->getDepartmentHeadId($user),
 			];
 
@@ -101,18 +108,57 @@ class Shift extends Controller
 	private function getOptions(int $userId): array
 	{
 		$optionProvider = OptionProvider::getInstance();
-		$sendMessageOption = $optionProvider->getOption($userId, Option::SEND_MESSAGE)?->getValue();
-		$sendGeoOption = $optionProvider->getOption($userId, Option::SEND_GEO)?->getValue();
 
 		return [
 			'defaultMessage' => Emoji::decode($optionProvider->getOption($userId, Option::DEFAULT_MESSAGE)?->getValue()),
 			'defaultLocation' => Emoji::decode($optionProvider->getOption($userId, Option::DEFAULT_LOCATION)?->getValue()),
 			'defaultCustomLocation' => Emoji::decode($optionProvider->getOption($userId, Option::DEFAULT_CUSTOM_LOCATION)?->getValue()),
 			'isFirstHelpViewed' => $optionProvider->getOption($userId, Option::IS_FIRST_HELP_VIEWED)?->getValue() === 'Y',
-			'sendGeo' => !$sendGeoOption || $sendGeoOption === 'Y',
-			'sendMessage' => !$sendMessageOption || $sendMessageOption === 'Y',
 			'selectedDepartmentId' => $optionProvider->getOption($userId, Option::SELECTED_DEPARTMENT_ID)?->getValue(),
+			'sendGeo' => $this->getOptionWithDefaultEnabled($userId, Option::SEND_GEO),
+			'sendMessage' => $this->getOptionWithDefaultEnabled($userId, Option::SEND_MESSAGE),
+			'timemanIntegrationEnabled' => $this->getOptionWithDefaultEnabled($userId, Option::TIMEMAN_INTEGRATION_ENABLED),
 		];
+	}
+
+	/**
+	 * @param int $userId
+	 * @param string $date
+	 * @return array
+	 * @throws LoaderException
+	 * @throws SystemException
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 */
+	private function getConfig(int $userId, string $date): array
+	{
+		$workDayService = new WorkDayService();
+
+		return [
+			'enabledBySettings' => Feature::isCheckInEnabledBySettings(),
+			'isCheckInGeoEnabled' => Feature::isCheckInGeoEnabled(),
+			'diskFolderId' => $this->getDiskFolderId($userId),
+			'dialogInfo' => $this->getDialogInfo($userId),
+			'isNotWorkingDay' => $this->isNotWorkingDay($date),
+			'timemanAvailable' => $workDayService->isAvailable(),
+			'isTimemanDayExpired' => $workDayService->isDayExpired(),
+			'isTimemanDayOpened' => $workDayService->isDayOpened(),
+		];
+	}
+
+	/**
+	 * @param int $userId
+	 * @param Option $option
+	 * @return bool
+	 * @throws SystemException
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 */
+	private function getOptionWithDefaultEnabled(int $userId, Option $option): bool
+	{
+		$value = OptionProvider::getInstance()->getOption($userId, $option)?->getValue();
+
+		return !$value || $value === 'Y';
 	}
 
 	/**
@@ -157,17 +203,20 @@ class Shift extends Controller
 	}
 
 	/**
+	 * @param string $date
 	 * @return bool
+	 * @throws LoaderException
 	 */
-	private function isGeoByDefaultZone(): bool
+	private function isNotWorkingDay(string $date): bool
 	{
-		$portalZone = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?? 'en';
+		$dateTime = DateHelper::getInstance()->getServerDate($date);
 
-		return in_array($portalZone, ['ru', 'by', 'kz', 'br', 'in'], true);
+		return DateHelper::getInstance()->isNotWorkingDay($dateTime);
 	}
 
 	protected function getDepartmentHeadId(?User $user): int
 	{
+		// TODO: maybe remove or update later
 		$departments = $user?->departments?->getValues();
 		if (empty($departments))
 		{
@@ -284,39 +333,18 @@ class Shift extends Controller
 	}
 
 	/**
-	 * @return array
-	 */
-	public function handleFirstHelpViewAction(): array
-	{
-		$result = [];
-
-		$userId = CurrentUser::get()?->getId();
-		if ($userId === null)
-		{
-			$this->addError(new Error('User not found'));
-
-			return $result;
-		}
-
-		OptionService::getInstance()->save($userId, Option::IS_FIRST_HELP_VIEWED, 'Y');
-
-		return $result;
-	}
-
-	/**
 	 * @param int $muteStatus
 	 * @return array
+	 * @throws LoaderException
 	 */
 	public function muteCounterAction(int $muteStatus): array
 	{
 		$result = [];
 
-		$userId = CurrentUser::get()?->getId();
-		if ($userId === null)
+		$userId = (int)CurrentUser::get()->getId();
+		if (!$this->isIntranetUser($userId))
 		{
-			$this->addError(new Error('User not found'));
-
-			return $result;
+			return $this->buildErrorResponse('User not found');
 		}
 
 		$muteEnum = Mute::tryFrom($muteStatus) ?? Mute::DISABLED;

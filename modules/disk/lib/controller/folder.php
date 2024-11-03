@@ -6,9 +6,13 @@ use Bitrix\Disk;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\ZipNginx;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
+use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Engine\Response\DataType\Page;
+use Bitrix\Main\Result;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\Engine\Response;
 
@@ -55,8 +59,108 @@ class Folder extends BaseObject
 		return $data;
 	}
 
-	public function getChildrenAction(Disk\Folder $folder, string $search = null, PageNavigation $pageNavigation = null): ?Response\DataType\Page
+	/**
+	 * Creates new folder.
+	 * @param Disk\Folder $folder Destination folder to add new folder.
+	 * @param string $name Name of new folder.
+	 * @param CurrentUser $currentUser Current user, autowired automatically.
+	 * @param bool $generateUniqueName Should be true if you want to generate unique name for folder.
+	 * @return array|null
+	 * @throws ArgumentException
+	 * @throws ArgumentTypeException
+	 */
+	public function addSubFolderAction(
+		Disk\Folder $folder,
+		string $name,
+		CurrentUser $currentUser,
+		bool $generateUniqueName = false
+	): ?array
 	{
+		if (empty($name))
+		{
+			$this->addError(new Error('Could not create folder. Name is empty.'));
+
+			return null;
+		}
+
+		$storage = $folder->getStorage();
+		if (!$storage)
+		{
+			$this->addError(new Error('Could not find storage for folder.'));
+
+			return null;
+		}
+
+		$securityContext = $storage->getSecurityContext($currentUser->getId());
+		if (!$folder->canAdd($securityContext))
+		{
+			$this->addError(new Error('Could not create folder. Access denied.'));
+
+			return null;
+		}
+
+		$subFolder = $folder->addSubFolder([
+			'NAME' => $name,
+			'CREATED_BY' => $currentUser->getId(),
+		], generateUniqueName: $generateUniqueName);
+
+		if (!$subFolder)
+		{
+			$this->addError(new Error('Could not create folder.'));
+			$this->addErrors($folder->getErrors());
+
+			return null;
+		}
+
+		return $this->get($subFolder);
+	}
+
+	private function validateOrder(array $order): Result
+	{
+		$whitelistColumns = [
+			'NAME', 'CREATE_TIME', 'UPDATE_TIME', 'SIZE', 'ID',
+		];
+
+		$result = new Result();
+		foreach ($order as $column => $direction)
+		{
+			if (!\in_array($column, $whitelistColumns, true))
+			{
+				$result->addError(new Error("Column '{$column}' is not allowed for sorting."));
+			}
+			if (!\in_array($direction, ['ASC', 'DESC'], true))
+			{
+				$result->addError(new Error("Direction '{$direction}' is not allowed for sorting."));
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Returns children of folder.
+	 * @param Disk\Folder $folder Destination folder to get children.
+	 * @param string|null $search Search string.
+	 * @param array $order How to sort elements. For example: ['NAME' => 'ASC']
+	 * @param PageNavigation|null $pageNavigation Autowired automatically. Describe how to slice elements.
+	 * @return Page|null
+	 * @see \Bitrix\DiskMobile\Controller\Folder::getChildrenAction()
+	 */
+	public function getChildrenAction(
+		Disk\Folder $folder,
+		string $search = null,
+		array $order = [],
+		PageNavigation $pageNavigation = null
+	): ?Response\DataType\Page
+	{
+		$orderResult = $this->validateOrder($order);
+		if (!$orderResult->isSuccess())
+		{
+			$this->addErrors($orderResult->getErrors());
+
+			return null;
+		}
+
 		$storage = $folder->getStorage();
 		if (!$storage)
 		{
@@ -77,6 +181,7 @@ class Folder extends BaseObject
 		$securityContext = $storage->getSecurityContext($this->getCurrentUser()?->getId());
 		$children = $folder->getChildren($securityContext, [
 			'filter' => $filter,
+			'order' => $order,
 			'limit' => $limit,
 			'offset' => $offset,
 		]);

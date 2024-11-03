@@ -2131,75 +2131,12 @@ class CIntranetUtils
 		return 'https://'.self::getB24Host().'/?'.self::getB24Referral($src);
 	}
 
+	/**
+	 * @deprecated use FirstPage\Page::createInstance()->getLink()
+	 */
 	public static function getB24FirstPageLink()
 	{
-		global $USER;
-
-		$mainPage = new MainPage\Page();
-
-		if ($mainPage->enabled())
-		{
-			$firstPagePath = $mainPage->getLink();
-		}
-		else
-		{
-			$firstPagePath = CUserOptions::GetOption("intranet", "left_menu_first_page_".SITE_ID);
-		}
-
-		$firstPagePath = ltrim($firstPagePath);
-
-		if (empty($firstPagePath))
-		{
-			$firstPagePath = COption::GetOptionString("intranet", "left_menu_first_page", "");
-
-			if (
-				preg_match("~^".SITE_DIR."crm~i", $firstPagePath)
-				&& Loader::includeModule("crm")
-			)
-			{
-				if (!CCrmPerms::IsAccessEnabled())
-				{
-					$firstPagePath = SITE_DIR."company/personal/user/".$USER->GetID()."/tasks/";
-				}
-			}
-
-			$firstPagePath = str_replace("#USER_ID#", $USER->GetID(), $firstPagePath);
-		}
-
-		if (
-			Loader::includeModule("crm")
-			&& preg_match("~^".SITE_DIR."crm/lead/~i", $firstPagePath)
-			&& !\Bitrix\Crm\Settings\LeadSettings::isEnabled()
-		)
-		{
-			if (\Bitrix\Crm\Settings\DealSettings::getCurrent()->getCurrentListViewID() == \Bitrix\Crm\Settings\DealSettings::VIEW_KANBAN)
-				$firstPagePath = SITE_DIR."crm/deal/kanban/";
-			else
-				$firstPagePath = \CCrmOwnerType::GetListUrl(\CCrmOwnerType::Deal);
-		}
-
-		if (
-			empty($firstPagePath)
-			|| preg_match("~^(/(\\?.*)?|/index.php(\\?.*)?)$~i", $firstPagePath)
-			|| preg_match("~^(http|//|/company/personal/mail/)~i", $firstPagePath)
-		)
-		{
-			$firstPagePath = SITE_DIR."stream/";
-		}
-
-		if (!empty($_SERVER["QUERY_STRING"]))
-		{
-			if (mb_strrpos($firstPagePath, "?") === false)
-			{
-				$firstPagePath .= "?".$_SERVER["QUERY_STRING"];
-			}
-			else
-			{
-				$firstPagePath .= "&".$_SERVER["QUERY_STRING"];
-			}
-		}
-
-		return $firstPagePath;
+		return \Bitrix\Intranet\Portal\FirstPage::getInstance()->getLink();
 	}
 
 	public static function getCurrentDateTimeFormat($params = array())

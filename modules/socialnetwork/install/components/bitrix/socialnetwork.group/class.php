@@ -252,6 +252,8 @@ final class SocialnetworkGroup extends CBitrixComponent implements \Bitrix\Main\
 			&& CSocNetSubscription::isUserSubscribed($USER->getId(), 'SG'.$this->arParams['GROUP_ID'])
 		);
 
+		$result['canCreateGroup'] = \Bitrix\Socialnetwork\Helper\Workgroup\Access::canCreate();
+
 		$result['bUserCanRequestGroup'] = null;
 		if (
 			$result['Group']['VISIBLE'] === 'Y'

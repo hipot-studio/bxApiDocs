@@ -220,6 +220,21 @@ class CIBlockCMLImport
 		return false;
 	}
 
+	public function isTemporaryTablesExist(): bool
+	{
+		return $this->_xml_file->IsExistTemporaryTable();
+	}
+
+	public function isTemporaryTablesStructureCorrect(): bool
+	{
+		return $this->_xml_file->isTableStructureCorrect();
+	}
+
+	public function truncateTemporaryTables(): bool
+	{
+		return $this->_xml_file->truncateTemporaryTables();
+	}
+
 	function DropTemporaryTables()
 	{
 		return $this->_xml_file->DropTemporaryTables();
@@ -228,6 +243,11 @@ class CIBlockCMLImport
 	function CreateTemporaryTables()
 	{
 		return $this->_xml_file->CreateTemporaryTables();
+	}
+
+	function initializeTemporaryTables()
+	{
+		return $this->_xml_file->initializeTemporaryTables();
 	}
 
 	function IndexTemporaryTables()
@@ -2173,16 +2193,47 @@ class CIBlockCMLImport
 			if (!$hlblock)
 			{
 				$highBlockName = trim($arProperty["CODE"]);
-				$highBlockName = preg_replace("/([^A-Za-z0-9]+)/", "", $highBlockName);
-				if ($highBlockName == "")
-					return GetMessage("IBLOCK_XML2_HBLOCK_NAME_IS_INVALID");
+				$highBlockName = preg_replace('/([^A-Za-z0-9]+)/', '', $highBlockName);
+				$highBlockName = preg_replace('/(^[0-9]+)/', '', $highBlockName);
+				if ($highBlockName === '')
+				{
+					return GetMessage('IBLOCK_XML2_HBLOCK_NAME_IS_INVALID');
+				}
 
-				$highBlockName = strtoupper(substr($highBlockName, 0, 1)).substr($highBlockName, 1);
-				$data = array(
+				$highBlockName = ucfirst($highBlockName);
+				$data = [
 					'NAME' => $highBlockName,
 					'TABLE_NAME' => $tableName,
-				);
+				];
 				$result = Bitrix\Highloadblock\HighloadBlockTable::add($data);
+				if (!$result->isSuccess())
+				{
+					$errors = implode('. ', $result->getErrorMessages());
+					if ($errors === '')
+					{
+						$errors = GetMessage(
+							'IBLOCK_XML2_HBLOCK_CREATE_ERROR_UNKNOWN',
+							[
+								'#ID#' => $arProperty['ID'],
+								'#NAME#' => $arProperty['NAME'],
+							]
+						);
+					}
+					else
+					{
+						$errors = GetMessage(
+							'IBLOCK_XML2_HBLOCK_CREATE_ERROR',
+							[
+								'#ID#' => $arProperty['ID'],
+								'#NAME#' => $arProperty['NAME'],
+								'#ERRORS#' => $errors,
+							]
+						);
+					}
+
+					return $errors;
+				}
+
 				$highBlockID = $result->getId();
 
 				$arFieldsName = array(

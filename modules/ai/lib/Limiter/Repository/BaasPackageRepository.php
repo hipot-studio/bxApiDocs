@@ -2,36 +2,21 @@
 
 namespace Bitrix\AI\Limiter\Repository;
 
-use Bitrix\AI\Limiter\Model\BaasPackageField;
+use Bitrix\AI\BaseRepository;
 use Bitrix\AI\Limiter\Model\BaasPackageTable;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\ORM\Data\AddResult;
 
-/**
- * @property string ID
- * @property string DATE_START
- * @property string DATE_EXPIRED
- */
 class BaasPackageRepository extends BaseRepository
 {
-	public function getTableName(): string
-	{
-		return BaasPackageTable::getTableName();
-	}
-
-	public function getFieldEnum(): string
-	{
-		return BaasPackageField::class;
-	}
-
 	/**
 	 * Add new package
 	 */
 	public function addPackage(Date $startDate, Date $expiredDate): AddResult
 	{
 		return BaasPackageTable::add([
-			$this->DATE_START => $startDate,
-			$this->DATE_EXPIRED => $expiredDate,
+			'DATE_START' => $startDate,
+			'DATE_EXPIRED' => $expiredDate,
 		]);
 	}
 
@@ -42,9 +27,9 @@ class BaasPackageRepository extends BaseRepository
 	{
 		$data = BaasPackageTable::query()
 			->setSelect([
-				$this->DATE_EXPIRED
+				'DATE_EXPIRED'
 			])
-			->setOrder([$this->DATE_EXPIRED => 'DESC'])
+			->setOrder(['DATE_EXPIRED' => 'DESC'])
 			->setLimit(1)
 			->fetch()
 		;

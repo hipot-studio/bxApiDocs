@@ -40,8 +40,10 @@ class ElementType extends BaseType
 	}
 
 	/**
-	 * @param array $userField
-	 * @param array|null $additionalParameters
+	 * Render user field control.
+	 *
+	 * @param array $userField User field description.
+	 * @param array|null $additionalParameters Options, values, etc.
 	 * @return string
 	 */
 	public static function renderField(array $userField, ?array $additionalParameters = []): string
@@ -54,8 +56,8 @@ class ElementType extends BaseType
 	/**
 	 * This function is called when the property values are displayed in the public part of the site.
 	 *
-	 * @param array $userField
-	 * @param array|null $additionalParameters
+	 * @param array $userField User field description.
+	 * @param array|null $additionalParameters Options, values, etc.
 	 * @return string
 	 */
 	public static function renderView(array $userField, ?array $additionalParameters = []): string
@@ -74,8 +76,8 @@ class ElementType extends BaseType
 	/**
 	 * This function is called when editing property values in the public part of the site.
 	 *
-	 * @param array $userField
-	 * @param array|null $additionalParameters
+	 * @param array $userField User field description.
+	 * @param array|null $additionalParameters Options, values, etc.
 	 * @return string
 	 */
 	public static function renderEdit(array $userField, ?array $additionalParameters = []): string
@@ -91,6 +93,13 @@ class ElementType extends BaseType
 		return parent::renderEdit($userField, $additionalParameters);
 	}
 
+	/**
+	 * This function is called when editing user field settings.
+	 *
+	 * @param array $userField User field description.
+	 * @param array|null $additionalParameters Options, values, etc.
+	 * @return string
+	 */
 	public static function renderEditForm(array $userField, ?array $additionalParameters): string
 	{
 		$enum = call_user_func([$userField['USER_TYPE']['CLASS_NAME'], 'getlist'], $userField);
@@ -108,6 +117,13 @@ class ElementType extends BaseType
 		return parent::renderEditForm($userField, $additionalParameters);
 	}
 
+	/**
+	 * This function is called when show filter for user field.
+	 *
+	 * @param array $userField User field description.
+	 * @param array|null $additionalParameters Options, values, etc.
+	 * @return string
+	 */
 	public static function renderFilter(array $userField, ?array $additionalParameters): string
 	{
 		$enum = call_user_func([$userField['USER_TYPE']['CLASS_NAME'], 'getlist'], $userField);
@@ -124,6 +140,13 @@ class ElementType extends BaseType
 		return parent::renderFilter($userField, $additionalParameters);
 	}
 
+	/**
+	 * This function is called when viewing property values in the admin part of the site.
+	 *
+	 * @param array $userField User field description.
+	 * @param array|null $additionalParameters Options, values, etc.
+	 * @return string
+	 */
 	public static function renderAdminListView(array $userField, ?array $additionalParameters): string
 	{
 		static $cache = [];
@@ -153,6 +176,13 @@ class ElementType extends BaseType
 		return parent::renderAdminListView($userField, $additionalParameters);
 	}
 
+	/**
+	 * This function is called when editing property values in the admin part of the site.
+	 *
+	 * @param array $userField User field description.
+	 * @param array|null $additionalParameters Options, values, etc.
+	 * @return string
+	 */
 	public static function renderAdminListEdit(array $userField, ?array $additionalParameters): string
 	{
 		$enum = call_user_func([$userField['USER_TYPE']['CLASS_NAME'], 'getlist'], $userField);
@@ -170,6 +200,8 @@ class ElementType extends BaseType
 	}
 
 	/**
+	 * Returns database column type for user field.
+	 *
 	 * @return string
 	 */
 	public static function getDbColumnType(): string
@@ -180,8 +212,10 @@ class ElementType extends BaseType
 	}
 
 	/**
-	 * @param array $userField
-	 * @param string|array $value
+	 * Validate field value.
+	 *
+	 * @param array $userField User field description.
+	 * @param string|array $value Current value.
 	 * @return array
 	 */
 	public static function checkFields(array $userField, $value): array
@@ -190,7 +224,9 @@ class ElementType extends BaseType
 	}
 
 	/**
-	 * @param array $userField
+	 * Validate user field settings.
+	 *
+	 * @param array $userField User field description.
 	 * @return array
 	 */
 	public static function prepareSettings(array $userField): array
@@ -198,11 +234,14 @@ class ElementType extends BaseType
 		$height = (int)($userField['SETTINGS']['LIST_HEIGHT'] ?? 1);
 		$display = ($userField['SETTINGS']['DISPLAY'] ?? '');
 
-		if (
-			$display !== static::DISPLAY_CHECKBOX
-			&& $display !== static::DISPLAY_LIST
-			&& $display !== static::DISPLAY_UI
-		)
+		$availableDisplayVariants = [
+			static::DISPLAY_DIALOG,
+			static::DISPLAY_UI,
+			static::DISPLAY_LIST,
+			static::DISPLAY_CHECKBOX,
+		];
+
+		if (!in_array($display, $availableDisplayVariants, true))
 		{
 			$display = static::DISPLAY_UI;
 		}
@@ -233,7 +272,9 @@ class ElementType extends BaseType
 	}
 
 	/**
-	 * @param array $userField
+	 * Prepare data for search.
+	 *
+	 * @param array $userField User field description.
 	 * @return string|null
 	 */
 	public static function onSearchIndex(array $userField): ?string
@@ -277,8 +318,10 @@ class ElementType extends BaseType
 	}
 
 	/**
-	 * @param array $userField
-	 * @param array $additionalParameters
+	 * Returns values for filter.
+	 *
+	 * @param array $userField User field description.
+	 * @param array $additionalParameters Options, values, etc.
 	 * @return array
 	 */
 	public static function getFilterData(array $userField, array $additionalParameters): array
@@ -303,7 +346,9 @@ class ElementType extends BaseType
 	}
 
 	/**
-	 * @param array $userField
+	 * Returns iblock elements with filter.
+	 *
+	 * @param array $userField User field description.
 	 * @return bool|CDBResult
 	 */
 	public static function getList(array $userField)
@@ -401,8 +446,11 @@ class ElementType extends BaseType
 	}
 
 	/**
-	 * @param array $userField
-	 * @param array $additionalParameters
+	 * Returns values list.
+	 *
+	 * @param array $userField User field description.
+	 * @param array $additionalParameters Options, values, etc.
+	 * @return void
 	 */
 	public static function getEnumList(array &$userField, array $additionalParameters = []): void
 	{
@@ -505,7 +553,9 @@ class ElementType extends BaseType
 	}
 
 	/**
-	 * @param array $userField
+	 * Returns description for empty user field value.
+	 *
+	 * @param array $userField User field description.
 	 * @return string
 	 */
 	public static function getEmptyCaption(array $userField): string
@@ -519,8 +569,10 @@ class ElementType extends BaseType
 	}
 
 	/**
-	 * @param array $userField
-	 * @param array|null $additionalParameters
+	 * Returns multiply user field control for admin grid row.
+	 *
+	 * @param array $userField User field description.
+	 * @param array|null $additionalParameters Options, values, etc.
 	 * @return string
 	 */
 	public static function getAdminListEditHtmlMulty(array $userField, ?array $additionalParameters): string
@@ -528,17 +580,38 @@ class ElementType extends BaseType
 		return static::renderAdminListEdit($userField, $additionalParameters);
 	}
 
+	/**
+	 * Returns default value from user field settings.
+	 *
+	 * @param array $userField User field description.
+	 * @param array $additionalParameters Options, values, etc.
+	 * @return array|string|int|null
+	 */
 	public static function getDefaultValue(array $userField, array $additionalParameters = [])
 	{
 		$value = ($userField['SETTINGS']['DEFAULT_VALUE'] ?? '');
 		return ($userField['MULTIPLE'] === 'Y' ? [$value] : $value);
 	}
 
+	/**
+	 * Modify user field value before save to database.
+	 *
+	 * @param array $userField User field description.
+	 * @param array|string|int|false|null $value Raw user field value.
+	 * @return array|string|int|null
+	 */
 	public static function onBeforeSave($userField, $value)
 	{
 		return ($userField['MULTIPLE'] !== 'Y' && is_array($value)) ? array_shift($value) : $value;
 	}
 
+	/**
+	 * Returns current value for user field in form.
+	 *
+	 * @param array $userField User field description.
+	 * @param array $additionalParameters Options, values, etc.
+	 * @return array|int|string|null
+	 */
 	public static function getFieldValue(array $userField, array $additionalParameters = [])
 	{
 		$valueFromForm = ($additionalParameters['bVarsFromForm'] ?? false);
@@ -601,6 +674,8 @@ class ElementType extends BaseType
 		{
 			return false;
 		}
+
+		$additionalFilter['ACTIVE'] ??= false;
 
 		if ($iblockRights === Iblock\IblockTable::RIGHTS_SIMPLE)
 		{
@@ -698,5 +773,13 @@ class ElementType extends BaseType
 		]);
 
 		return ($iblock['RIGHTS_MODE'] ?? null);
+	}
+
+	/**
+	 * @internal
+	 */
+	public static function canUseDialogAndUiViews(): bool
+	{
+		return true;
 	}
 }

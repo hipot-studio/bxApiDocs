@@ -752,16 +752,16 @@ class CBPSocnetBlogPostActivity extends CBPActivity
 			&& class_exists(\Bitrix\Disk\Integration\Bizproc\File::class)
 		) {
 			$map['AttachmentType'] = [
-				'Name' => Loc::getMessage('SNBPA_POST_ATTACHMENT_TYPE'),
+				'Name' => Loc::getMessage('SNBPA_POST_ATTACHMENT_TYPE_1'),
 				'FieldName' => 'attachment_type',
 				'Type' => \Bitrix\Bizproc\FieldType::SELECT,
 				'Options' => [
-					static::ATTACHMENT_TYPE_FILE => Loc::getMessage('SNBPA_ATTACHMENT_FILE'),
+					static::ATTACHMENT_TYPE_FILE => Loc::getMessage('SNBPA_ATTACHMENT_FILE_1'),
 					static::ATTACHMENT_TYPE_DISK => Loc::getMessage('SNBPA_ATTACHMENT_DISK'),
 				],
 			];
 			$map['Attachment'] = [
-				'Name' => Loc::getMessage('SNBPA_POST_ATTACHMENT'),
+				'Name' => Loc::getMessage('SNBPA_POST_ATTACHMENT_1'),
 				'FieldName' => 'attachment',
 				'Type' => \Bitrix\Bizproc\FieldType::FILE,
 				'Multiple' => true,

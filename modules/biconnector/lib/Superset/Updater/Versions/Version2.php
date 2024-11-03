@@ -36,14 +36,15 @@ final class Version2 extends BaseVersion
 			return $result;
 		}
 
-		$user = Main\UserTable::getList([
-			'select' => ['ID', 'GROUPS'],
+		$user = Main\UserGroupTable::getList([
+			'select' => ['USER_ID'],
 			'filter' => [
-				'=ACTIVE' => 'Y',
-				'=GROUPS.GROUP_ID' => 1,
-				'=IS_REAL_USER' => 'Y',
+				'=GROUP_ID' => 1,
+				'=DATE_ACTIVE_TO' => null,
+				'=USER.ACTIVE' => 'Y',
+				'=USER.IS_REAL_USER' => 'Y',
 			],
-			'order' => ['ID' => 'ASC'],
+			'order' => ['USER_ID' => 'ASC'],
 			'limit' => 1,
 		])
 			->fetch()
@@ -55,7 +56,7 @@ final class Version2 extends BaseVersion
 
 			return $result;
 		}
-		$adminUserId = (int)$user['ID'];
+		$adminUserId = (int)$user['USER_ID'];
 		$user = (new SupersetUserRepository())->getById($adminUserId);
 
 		$deprecatedDashboards = SupersetDashboardTable::getList([

@@ -3750,7 +3750,7 @@ class CCalendarEvent
 			{
 				$res = CCalendar::SaveEventEx([
 					'arFields' => [
-						"ID" => $params['parentId']
+						'ID' => $params['parentId']
 					],
 					'silentErrorMode' => false,
 					'recursionEditMode' => $reccurentMode,
@@ -3758,7 +3758,6 @@ class CCalendarEvent
 					'checkPermission' => false,
 					'currentEventDateFrom' => $currentDateFrom,
 					'sendEditNotification' => false,
-					'editMeetingStatus' => $params,
 				]);
 
 				if (

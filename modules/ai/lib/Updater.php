@@ -3,13 +3,14 @@
 namespace Bitrix\AI;
 
 use Bitrix\AI\Facade\Bitrix24;
+use Bitrix\AI\Synchronization\Enum\SyncMode;
+use Bitrix\AI\Synchronization\ImageStylePromptSync;
 use Bitrix\AI\Synchronization\PlanSync;
 use Bitrix\AI\Synchronization\PromptSync;
 use Bitrix\AI\Synchronization\RoleIndustrySync;
 use Bitrix\AI\Synchronization\RoleSync;
 use Bitrix\AI\Synchronization\SectionSync;
 use Bitrix\Main\Application;
-use Bitrix\Main\IO\File;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
@@ -25,7 +26,13 @@ final class Updater
 	private const OPTION_CODE_EXPIRED_TIME = 'prompt_expired_time';
 	private const OPTION_CODE_CURRENT_VERSION = 'prompt_version';
 	private const OPTION_CODE_FORMAT_CURRENT_VERSION = 'format_version';
+	private const OPTION_CODE_FORMAT_CURRENT_SUBVERSION = 'format_subversion';
+
+	private const OPTION_JSON_DB_ETAG = 'option_json_db_etag';
+
 	private const CURRENT_JSON_FORMAT_VERSION = 2;
+
+	private const CURRENT_JSON_FORMAT_SUBVERSION = 2;
 
 	private const TTL_HOURS = 3;
 
@@ -38,14 +45,42 @@ final class Updater
 	{
 		$http = new HttpClient();
 		$http->setHeader('Content-Type', 'application/json');
-		$response = $http->get(self::getRemoteDbUri());
-		// @todo remove after creating real roles, industries and role's prompts
-		if (File::isFileExists(Application::getDocumentRoot() . '/upload/ai/world-demo.json'))
+		if (self::isCurrentFormatSubVersion())
 		{
-			$response = File::getFileContents(Application::getDocumentRoot() . '/upload/ai/world-demo.json');
+			$http->setHeader('If-None-Match', self::getJsonDbEtag());
+		}
+		$remoteDbUri = self::getRemoteDbUri();
+		$currentVersion = self::getVersion();
+		if ($currentVersion && self::isCurrentFormatSubVersion())
+		{
+			// try partition update
+			$remoteDbUriNextVersion = str_replace(
+				'.json',
+				'-' . $currentVersion + 1 . '.json',
+				$remoteDbUri
+			);
+			$responseNext = $http->get($remoteDbUriNextVersion);
+			$etag = $http->getHeaders()->get('Etag') ?? '';
+			if ($http->getStatus() === 304)
+			{
+				return;
+			}
+			if ($http->getStatus() === 200 && $http->getContentType() === 'application/json')
+			{
+				self::refreshFromJson($responseNext, $etag, SyncMode::Partitional);
+
+				return;
+			}
+		}
+		$response = $http->get($remoteDbUri);
+		$etag = $http->getHeaders()->get('Etag') ?? '';
+
+		if ($http->getStatus() === 304)
+		{
+			return;
 		}
 
-		self::refreshFromJson($response);
+		self::refreshFromJson($response, $etag);
 	}
 
 	/**
@@ -56,7 +91,7 @@ final class Updater
 	 */
 	public static function refreshFromLocalFile(string $jsonFile): void
 	{
-		self::refreshFromJson(Facade\File::getContents($jsonFile));
+		self::refreshFromJson(Facade\File::getContents($jsonFile), '');
 	}
 
 	private static function getRemoteDbUri(): string
@@ -75,9 +110,9 @@ final class Updater
 	 * @param string $rawJson JSON string.
 	 * @return void
 	 */
-	private static function refreshFromJson(string $rawJson): void
+	private static function refreshFromJson(string $rawJson, string $etag, SyncMode $mode = SyncMode::Standard): void
 	{
-		if (!Application::getConnection()->lock('ai_prompt_update', 30))
+		if (!Application::getConnection()->lock('ai_prompt_update'))
 		{
 			return;
 		}
@@ -101,16 +136,33 @@ final class Updater
 			$response['version'] = 1;
 		}
 
-		if ($response['version'] > self::getVersion() || $response['format_version'] > self::getFormatVersion())
+		if (
+			$response['version'] > self::getVersion()
+			|| $response['format_version'] > self::getFormatVersion()
+			|| self::getFormatSubVersion() !== self::CURRENT_JSON_FORMAT_SUBVERSION
+		)
 		{
-			(new RoleSync())->sync($response['roles'] ?? []);
-			(new RoleIndustrySync())->sync($response['industries'] ?? []);
-			(new PromptSync())->sync($response['abilities'] ?? [], ['=IS_SYSTEM' => 'Y']);
-			(new PlanSync())->sync($response['plans'] ?? []);
-			(new SectionSync())->sync($response['sections'] ?? []);
+			(new RoleSync())->sync($response['roles'] ?? [], [], $mode);
+			(new RoleIndustrySync())->sync($response['industries'] ?? [], [], $mode);
+			(new PromptSync())->sync($response['abilities'] ?? [], ['=IS_SYSTEM' => 'Y'], $mode);
+			(new PlanSync())->sync($response['plans'] ?? [], [], $mode);
+			(new SectionSync())->sync($response['sections'] ?? [], [], $mode);
+			(new ImageStylePromptSync())->sync($response['image_style_prompts'] ?? [], [], $mode);
+
+			if ($mode === SyncMode::Partitional && isset($response['deleted']))
+			{
+				(new RoleSync())->deleteByCodes($response['deleted']['roles'] ?? []);
+				(new RoleIndustrySync())->deleteByCodes($response['deleted']['industries'] ?? []);
+				(new PromptSync())->deleteByCodes($response['deleted']['abilities'] ?? []);
+				(new PlanSync())->deleteByCodes($response['deleted']['plans'] ?? []);
+				(new SectionSync())->deleteByCodes($response['deleted']['sections'] ?? []);
+				(new ImageStylePromptSync())->deleteByCodes($response['deleted']['image_style_prompts'] ?? []);
+			}
 
 			self::setVersion($response['version']);
 			self::setFormatVersion(self::CURRENT_JSON_FORMAT_VERSION);
+			self::setFormatSubVersion(self::CURRENT_JSON_FORMAT_SUBVERSION);
+			self::setJsonDbEtag($etag);
 		}
 
 		self::makeExpired(self::TTL_HOURS);
@@ -173,7 +225,7 @@ final class Updater
 	 */
 	public static function makeExpired(int $hours): void
 	{
-		Config::setOptionsValue(self::OPTION_CODE_EXPIRED_TIME, time() + $hours*3600);
+		Config::setOptionsValue(self::OPTION_CODE_EXPIRED_TIME, time() + $hours * 3600);
 	}
 
 	/**
@@ -230,12 +282,62 @@ final class Updater
 	}
 
 	/**
+	 * Sets new format subversion of Prompts' local DB.
+	 *
+	 * @param int $subVersion New subversion.
+	 * @return void
+	 */
+	public static function setFormatSubVersion(int $subVersion): void
+	{
+		Config::setOptionsValue(self::OPTION_CODE_FORMAT_CURRENT_SUBVERSION, $subVersion);
+	}
+
+	/**
+	 * Returns current format subVersion of local DB.
+	 *
+	 * @return int
+	 */
+	public static function getFormatSubVersion(): int
+	{
+		return (int)Config::getValue(self::OPTION_CODE_FORMAT_CURRENT_SUBVERSION);
+	}
+
+	/**
+	 * Return result of compare format subversion.
+	 *
+	 * @return bool
+	 */
+	private static function isCurrentFormatSubVersion(): bool
+	{
+		return self::getFormatSubVersion() === self::CURRENT_JSON_FORMAT_SUBVERSION;
+	}
+
+
+	/**
+	 * @return string
+	 */
+	private static function getJsonDbEtag(): string
+	{
+		return Config::getValue(self::OPTION_JSON_DB_ETAG) ?? '';
+	}
+
+	/**
+	 * @param string $etag
+	 *
+	 * @return void
+	 */
+	private static function setJsonDbEtag(string $etag): void
+	{
+		Config::setOptionsValue(self::OPTION_JSON_DB_ETAG, $etag);
+	}
+
+	/**
 	 * Decreases version of Prompts' local DB.
 	 *
 	 * @return void
 	 */
 	public static function decreaseVersion(): void
 	{
-		self::setVersion(max(0, self::getVersion()-1));
+		self::setVersion(max(0, self::getVersion() - 1));
 	}
 }

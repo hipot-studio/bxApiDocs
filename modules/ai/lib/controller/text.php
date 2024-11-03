@@ -2,14 +2,15 @@
 namespace Bitrix\AI\Controller;
 
 use Bitrix\AI\Config;
+use Bitrix\AI\Container;
 use Bitrix\AI\Context\Message;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Engine\IQueue;
 use Bitrix\AI\History;
-use Bitrix\AI\Payload;
 use Bitrix\AI\Result;
 use Bitrix\AI\Prompt\Role;
 use Bitrix\AI\Role\RoleManager;
+use Bitrix\AI\Services\PromptService;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Error;
 
@@ -58,16 +59,20 @@ class Text extends Controller
 			return [];
 		}
 
-		if (isset($prompt['code']))
+		/** @var PromptService $promptService */
+		$promptService = Container::init()->getItem(PromptService::class);
+		$payload = $promptService->getPayloadForTextPrompt(
+			$prompt,
+			(int)$this->getCurrentUser()->getId(),
+			$markers,
+			$parameters
+		);
+
+		if (empty($payload))
 		{
-			$payload = (new Payload\Prompt($prompt['code']))
-				->setMarkers($markers)
-				->setPromptCategory($parameters['promptCategory'] ?? '')
-			;
-		}
-		else
-		{
-			$payload = (new Payload\Text((string)$prompt))->setMarkers($markers);
+			$this->addError(new Error('Prompt not found'));
+
+			return [];
 		}
 
 		$isQueueable = $engine instanceof IQueue;

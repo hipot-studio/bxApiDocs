@@ -2,15 +2,17 @@
 
 namespace Bitrix\Socialnetwork\Integration\UI\EntitySelector;
 
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Filter;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Search\Content;
-use Bitrix\Main\Loader;
 use Bitrix\Socialnetwork\EO_Workgroup;
 use Bitrix\Socialnetwork\EO_Workgroup_Collection;
 use Bitrix\Socialnetwork\FeaturePermTable;
@@ -22,12 +24,10 @@ use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\WorkgroupViewTable;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
-use Bitrix\Main\ORM\Query\Filter;
 use Bitrix\UI\EntitySelector\Item;
 use Bitrix\UI\EntitySelector\RecentItem;
 use Bitrix\UI\EntitySelector\SearchQuery;
 use Bitrix\UI\EntitySelector\Tab;
-use Bitrix\Intranet\Settings\Tools\ToolsManager;
 
 class ProjectProvider extends BaseProvider
 {
@@ -58,7 +58,7 @@ class ProjectProvider extends BaseProvider
 		{
 			$this->options['features'] = $options['features'];
 		}
-		
+
 		$this->options['checkFeatureForCreate'] = false;
 		if (isset($options['checkFeatureForCreate']) && is_bool($options['checkFeatureForCreate']))
 		{
@@ -131,6 +131,12 @@ class ProjectProvider extends BaseProvider
 		if (isset($options['shouldSelectProjectDates']) && is_bool($options['shouldSelectProjectDates']))
 		{
 			$this->options['shouldSelectProjectDates'] = (bool)$options['shouldSelectProjectDates'];
+		}
+
+		$this->options['addProjectMetaUsers'] = false;
+		if (isset($options['addProjectMetaUsers']) && is_bool($options['addProjectMetaUsers']))
+		{
+			$this->options['addProjectMetaUsers'] = (bool)$options['addProjectMetaUsers'];
 		}
 	}
 
@@ -225,7 +231,7 @@ class ProjectProvider extends BaseProvider
 		{
 			$createProjectLink = false;
 		}
-		
+
 		if ($createProjectLink && self::canCreateProject())
 		{
 			$footerOptions = [];
@@ -937,6 +943,54 @@ class ProjectProvider extends BaseProvider
 		if (!empty($options['tabs']))
 		{
 			$item->addTab($options['tabs']);
+		}
+
+		if (isset($options['addProjectMetaUsers']) && $options['addProjectMetaUsers'] === true)
+		{
+			$item->addChild(new Item([
+				'id' => $project->getId() . ':A',
+				'title' => $project->getName() . '. ' . Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECTS_METAUSER_OWNER'),
+				'entityId' => static::ENTITY_ID,
+				'entityType' => 'project_metauser',
+				'nodeOptions' => [
+					'title' => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECTS_METAUSER_OWNER'),
+					'renderMode' => 'override',
+				],
+				'customData' => [
+					'projectId' => $project->getId(),
+					'metauser' => 'owner'
+				]
+			]));
+
+			$item->addChild(new Item([
+				'id' => $project->getId() . ':E',
+				'title' => $project->getName() . '. ' . Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECTS_METAUSER_MODERATOR'),
+				'entityType' => 'project_metauser',
+				'entityId' => static::ENTITY_ID,
+				'nodeOptions' => [
+					'title' => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECTS_METAUSER_MODERATOR'),
+					'renderMode' => 'override',
+				],
+				'customData' => [
+					'projectId' => $project->getId(),
+					'metauser' => 'moderator'
+				]
+			]));
+
+			$item->addChild(new Item([
+				'id' => $project->getId() . ':K',
+				'title' => $project->getName() . '. ' . Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECTS_METAUSER_ALL'),
+				'entityId' => static::ENTITY_ID,
+				'entityType' => 'project_metauser',
+				'nodeOptions' => [
+					'title' => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECTS_METAUSER_ALL'),
+					'renderMode' => 'override',
+				],
+				'customData' => [
+					'projectId' => $project->getId(),
+					'metauser' => 'all'
+				]
+			]));
 		}
 
 		return $item;

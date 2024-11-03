@@ -25,7 +25,7 @@ final class CopyAction extends BaseAction
 
 	protected function getText(): string
 	{
-		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_COPY');
+		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_COPY') ?? '';
 	}
 
 	public function getControl(array $rawFields): ?array

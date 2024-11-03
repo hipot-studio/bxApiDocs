@@ -2,15 +2,13 @@
 
 namespace Bitrix\Intranet\User\Filter;
 
-use Bitrix\Intranet\CurrentUser;
+use Bitrix\Intranet\Entity\Department;
+use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\User\Filter\Presets\FilterPresetManager;
-use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Filter\DataProvider;
 use Bitrix\Main\Filter\Filter;
-use Bitrix\Main\Loader;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Main\PhoneNumber;
-use Bitrix\Socialnetwork\UserToGroupTable;
 
 class UserFilter extends Filter
 {
@@ -147,16 +145,22 @@ class UserFilter extends Filter
 
 		if (isset($result['=UF_DEPARTMENT']))
 		{
-			$subDepartments = \CIntranetUtils::getSubStructure($result['=UF_DEPARTMENT']);
+			$selectedDepartment = ServiceContainer::getInstance()
+				->departmentRepository()
+				->getById((int)$result['=UF_DEPARTMENT']);
 
-			if (!empty($subDepartments))
+			// filter by all sub departments, as it was in old user grid
+			if ($selectedDepartment)
 			{
-				$subDepartmentsIds = [
-					$result['=UF_DEPARTMENT'],
-					...array_keys($subDepartments['DATA']),
-				];
-				$result['@UF_DEPARTMENT'] = $subDepartmentsIds;
-				unset($result['=UF_DEPARTMENT']);
+				$subDepartments = ServiceContainer::getInstance()
+					->departmentRepository()
+					->getAllTree($selectedDepartment);
+
+				if (!$subDepartments->empty())
+				{
+					$result['@UF_DEPARTMENT'] = $subDepartments->map(fn(Department $department) => $department->getId());
+					unset($result['=UF_DEPARTMENT']);
+				}
 			}
 		}
 

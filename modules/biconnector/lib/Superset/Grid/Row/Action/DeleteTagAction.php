@@ -22,7 +22,7 @@ final class DeleteTagAction extends BaseAction
 
 	protected function getText(): string
 	{
-		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_TAG_ACTION_DELETE');
+		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_TAG_ACTION_DELETE') ?? '';
 	}
 
 	public function getControl(array $rawFields): ?array

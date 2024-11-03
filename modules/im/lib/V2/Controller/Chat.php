@@ -53,6 +53,12 @@ class Chat extends BaseController
 					new ChatTypeFilter([GroupChat::class]),
 				],
 			],
+			'delete' => [
+				'+prefilters' => [
+					new IntranetUser(),
+					new CheckActionAccess(Permission::ACTION_DELETE),
+				],
+			],
 			'updateAvatar' => [
 				'+prefilters' => [
 					new IntranetUser(),
@@ -400,6 +406,26 @@ class Chat extends BaseController
 		$updateService = new UpdateService($chat, UpdateFields::create($converter->process($fields)));
 
 		$result = $updateService->updateChat();
+		if (!$result->isSuccess())
+		{
+			$this->addError($result->getErrors()[0]);
+
+			return null;
+		}
+
+		return ['result' => true];
+	}
+
+	//region Delete Chat
+
+	/**
+	 * @restMethod im.v2.Chat.delete
+	 * @throws \Exception
+	 */
+	public function deleteAction(\Bitrix\Im\V2\Chat $chat)
+	{
+		$result = $chat->deleteChat();
+
 		if (!$result->isSuccess())
 		{
 			$this->addError($result->getErrors()[0]);

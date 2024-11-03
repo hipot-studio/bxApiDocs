@@ -37,7 +37,6 @@ class Tooling extends Controller
 
 		$roleCode = $parameters['roleCode'] ?? User::getLastUsedRoleCode($category , $this->context->getModuleId());
 		$roleManager = new RoleManager(User::getCurrentUserId(), User::getUserLanguage());
-		$role = $roleManager->getRoleByCode($roleCode) ?? $roleManager->getRoleByCode($roleManager::getUniversalRoleCode());
 
 		return [
 			'engines' => Engine::getData($category, $this->context),
@@ -46,10 +45,10 @@ class Tooling extends Controller
 				'capacity' => History\Manager::getCapacity(),
 			],
 			'prompts' => isset($parameters['promptCategory'])
-				? Prompt\Manager::getCachedTree($parameters['promptCategory'], $roleCode)
+				? Prompt\Manager::getList($parameters['promptCategory'], $roleCode)
 				: null
 			,
-			'role' => $role,
+			'role' => $roleManager->getRoleByCodeOrUniversalRole($roleCode),
 			'permissions' => [
 				'can_edit_settings' => User::isAdmin(),
 			],

@@ -66,16 +66,22 @@ class BlockRepo
 	 * or disabled, see methods disableFilter and enableFilter.
 	 * Filters will be apply to getRepository() result
 	 */
-	public const FILTER_ALL = 'all';
+	public const FILTER_DEFAULTS = 'default';
+	public const FILTER_SKIP_COMMON_BLOCKS = 'skip_common_blocks';
 	public const FILTER_SKIP_SYSTEM_BLOCKS = 'skip_system_blocks';
 	public const FILTER_SKIP_HIDDEN_BLOCKS = 'skip_hidden_blocks';
-	public const AVAILABLE_FILTERS = [
+	private const AVAILABLE_FILTERS = [
+		self::FILTER_SKIP_COMMON_BLOCKS,
+		self::FILTER_SKIP_SYSTEM_BLOCKS,
+		self::FILTER_SKIP_HIDDEN_BLOCKS,
+	];
+	private const DEFAULT_ACTIVE_FILTERS = [
 		self::FILTER_SKIP_SYSTEM_BLOCKS,
 		self::FILTER_SKIP_HIDDEN_BLOCKS,
 	];
 
 	/** @var array active repository filters */
-	private array $filters = self::AVAILABLE_FILTERS;
+	private array $filters = self::DEFAULT_ACTIVE_FILTERS;
 
 	/**
 	 * List of sections with blocks
@@ -95,6 +101,8 @@ class BlockRepo
 		{
 			$this->setSiteType(Landing::getSiteType() ?: self::SITE_TYPE_DEFAULT);
 		}
+
+		$this->sendSetFiltersEvent();
 	}
 
 	/**
@@ -115,6 +123,35 @@ class BlockRepo
 		return $this;
 	}
 
+	private function sendSetFiltersEvent(): void
+	{
+		$event = new Event('landing', 'onBlockRepoSetFilters');
+		$event->send();
+
+		$enable = [];
+		$disable = [];
+
+		foreach ($event->getResults() as $result)
+		{
+			if ($result->getType() !== EventResult::ERROR)
+			{
+				$modified = $result->getModified();
+
+				$enable = array_merge($enable, (array)($modified['ENABLE'] ?? []));
+				$disable = array_merge($disable, (array)($modified['DISABLE'] ?? []));
+			}
+		}
+
+		foreach (array_unique($enable) as $filter)
+		{
+			$this->enableFilter($filter);
+		}
+		foreach (array_unique($disable) as $filter)
+		{
+			$this->disableFilter($filter);
+		}
+	}
+
 	/**
 	 * Activate some filter for getRepository result
 	 * @param string $filter - one of available filters (self::AVAILABLE_FILTERS)
@@ -122,9 +159,9 @@ class BlockRepo
 	 */
 	public function enableFilter(string $filter): BlockRepo
 	{
-		if ($filter === self::FILTER_ALL)
+		if ($filter === self::FILTER_DEFAULTS)
 		{
-			$this->filters = self::AVAILABLE_FILTERS;
+			$this->filters = self::DEFAULT_ACTIVE_FILTERS;
 		}
 		elseif (in_array($filter, self::AVAILABLE_FILTERS))
 		{
@@ -643,7 +680,6 @@ class BlockRepo
 
 		$filtered = [];
 
-		$skipCommonBlocks = !Type::canUseCommonBlocks();
 		$isStoreEnabled = Manager::isStoreEnabled();
 		$version = Manager::getVersion();
 		$license = Loader::includeModule('bitrix24') ? \CBitrix24::getLicenseType() : null;
@@ -653,8 +689,8 @@ class BlockRepo
 			$sectionTypes = $prepareType($section['type'] ?? []);
 
 			if (
-				empty($sectionTypes)
-				&& $skipCommonBlocks
+				$this->isFilterActive(self::FILTER_SKIP_COMMON_BLOCKS)
+				&& empty($sectionTypes)
 				&& $sectionCode !== self::SECTION_LAST
 			)
 			{
@@ -689,7 +725,10 @@ class BlockRepo
 			{
 				$blockTypes = $prepareType($block['type'] ?? []);
 
-				if (empty($blockTypes) && $skipCommonBlocks)
+				if (
+					$this->isFilterActive(self::FILTER_SKIP_COMMON_BLOCKS)
+					&& empty($blockTypes)
+				)
 				{
 					continue;
 				}

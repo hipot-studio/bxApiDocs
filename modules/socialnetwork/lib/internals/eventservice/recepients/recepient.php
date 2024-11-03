@@ -2,7 +2,7 @@
 
 namespace Bitrix\Socialnetwork\Internals\EventService\Recepients;
 
-use Bitrix\Socialnetwork\Access\User\UserModel;
+use Bitrix\Socialnetwork\Permission\User\UserModel;
 use Bitrix\Socialnetwork\Internals\Space\LiveWatch\LiveWatchService;
 
 class Recepient

@@ -5,6 +5,7 @@ use Bitrix\Landing\Block\BlockRepo;
 use Bitrix\Landing\Site\Scope;
 use Bitrix\Landing\Site\Type;
 use \Bitrix\Main\Page\Asset;
+use Bitrix\Main\UI\Extension;
 use \Bitrix\Main\Web\Json;
 use \Bitrix\Main\Web\DOM;
 use \Bitrix\Main\Localization\Loc;
@@ -229,9 +230,9 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 
 	/**
 	 * Allowed extensions for developers.
-	 * @var array
+	 * @var string[]
 	 */
-	protected $allowedExtensions = [
+	protected array $allowedExtensions = [
 		'landing_form',
 		'landing_carousel',
 		'landing_google_maps_new',
@@ -241,7 +242,11 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		'landing_chat',
 	];
 
-	protected $allowedRepoExtensions = [
+	/**
+	 * Extensions, allowed in rest-blocks
+	 * @var string[]
+	 */
+	protected array $allowedRepoExtensions = [
 		'landing.widgetvue',
 	];
 
@@ -684,7 +689,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 	 * @param array $data Additional data array.
 	 * @return Block|false
 	 */
-	public static function createFromRepository(Landing $landing, string $code, array $data = array())
+	public static function createFromRepository(Landing $landing, string $code, array $data = array()): bool|Block
 	{
 		$blockRepo = (new BlockRepo())->disableFilter(BlockRepo::FILTER_SKIP_SYSTEM_BLOCKS);
 		if (!$blockRepo->isBlockInRepo($code))
@@ -696,7 +701,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 
 			return false;
 		}
-		$blockRepo->enableFilter(BlockRepo::FILTER_ALL);
+		$blockRepo->enableFilter(BlockRepo::FILTER_DEFAULTS);
 
 		// get content and manifest
 		$filesFromContent = [];
@@ -1074,8 +1079,23 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		$id = intval($id);
 		$block = new self($id);
 		$extContent = '';
+		$lang = [];
 		if (($ext = $block->getExt()))
 		{
+			foreach ($ext as $extCode)
+			{
+				$extInfo =
+					\CJSCore::getExtInfo($extCode)
+					?? Extension::getConfig($extCode)
+				;
+
+				if (!empty($extInfo['lang']) && is_string($extInfo['lang']))
+				{
+					$messages = Loc::loadLanguageFile($_SERVER['DOCUMENT_ROOT'] . $extInfo['lang']);
+					$lang = array_merge($lang, $messages);
+				}
+			}
+
 			$extContent = \CUtil::initJSCore($ext, true);
 			$extContent = preg_replace(
 				'#<script(\sdata\-skip\-moving\="true")?>.*?</script>#is',
@@ -1117,7 +1137,10 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		if ($block->exist())
 		{
 			Manager::getApplication()->restartBuffer();
+
 			$availableJS = !$editMode || !$block->getRepoId();
+			$assetsManager = Assets\Manager::getInstance();
+
 			$manifest = $block->getManifest();
 			if (
 				!isset($manifest['requiredUserAction']) &&
@@ -1140,6 +1163,8 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 				'content_ext' => $extContent,
 				'css' => $block->getCSS(),
 				'js' => $availableJS ? $block->getJS() : array(),
+				'assetStrings' => $assetsManager->getStrings(),
+				'lang' => $lang,
 				'manifest' => $manifest,
 				'dynamicParams' => $block->dynamicParams
 			);
@@ -2194,7 +2219,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		{
 			return;
 		}
-		$blockRepo->enableFilter(BlockRepo::FILTER_ALL);
+		$blockRepo->enableFilter(BlockRepo::FILTER_DEFAULTS);
 
 		if ($this->dynamicParams)
 		{
@@ -3899,6 +3924,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 						$data[$selector]
 					);
 				}
+				$data[$selector] = array_filter($data[$selector], fn($value) => !is_null($value));
 				$dataSelector = $data[$selector];
 				$isFind = true;
 			}

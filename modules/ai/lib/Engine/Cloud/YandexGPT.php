@@ -150,4 +150,27 @@ final class YandexGPT extends CloudEngine implements IContext, IQueueOptional
 
 		return $region === 'ru' || $region === 'by';
 	}
+
+	/**
+	 * @inheritDoc
+	 */
+	protected function makeRequestParams(array $postParams = []): array
+	{
+		$postParams = $this->getPostParams();
+		$postParams = array_merge($this->getParameters(), $postParams);
+
+		$result = [
+			'model' => $postParams['model'] ?? self::MODEL,
+			'temperature' => $postParams['temperature'] ?? self::TEMPERATURE,
+			'modelUri' => $postParams['modelUri'] ?? self::MODEL,
+			'messages' => $postParams['messages'] ?? $this->getPreparedMessages()
+		];
+
+		if (isset($postParams['max_tokens']))
+		{
+			$result['max_tokens'] = $postParams['max_tokens'];
+		}
+
+		return $result;
+	}
 }

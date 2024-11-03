@@ -422,7 +422,7 @@ class Utils extends EdnaUtils
 		}
 
 		$activeTemplates = array_filter($templates, function ($template) use ($outdatedTemplates) {
-			return !isset($outdatedTemplates[$template['name']]);
+			return is_array($template) && isset($template['name']) && !isset($outdatedTemplates[$template['name']]);
 		});
 
 		return array_values($activeTemplates);

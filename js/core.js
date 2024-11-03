@@ -5874,7 +5874,7 @@ window._main_polyfill_core = true;
 	  }, {
 	    key: "isStringFilled",
 	    value: function isStringFilled(value) {
-	      return this.isString(value) && value !== '';
+	      return Type.isString(value) && value !== '';
 	    }
 	    /**
 	     * Checks that value is function
@@ -5992,7 +5992,7 @@ window._main_polyfill_core = true;
 	  }, {
 	    key: "isArrayFilled",
 	    value: function isArrayFilled(value) {
-	      return this.isArray(value) && value.length > 0;
+	      return Type.isArray(value) && value.length > 0;
 	    }
 	    /**
 	     * Checks that value is array like
@@ -6543,6 +6543,36 @@ window._main_polyfill_core = true;
 		default: debug
 	});
 
+	const extensionsStorage = new Map();
+
+	const ajaxController = 'main.bitrix.main.controller.loadext.getextensions';
+	function loadAssets(options) {
+	  return new Promise(resolve => {
+	    // eslint-disable-next-line
+	    BX.ajax.runAction(ajaxController, {
+	      data: options
+	    }).then(resolve);
+	  });
+	}
+
+	function fetchInlineScripts(acc, item) {
+	  if (item.isInternal) {
+	    acc.push(item.JS);
+	  }
+	  return acc;
+	}
+	function fetchExternalScripts(acc, item) {
+	  if (!item.isInternal) {
+	    acc.push(item.JS);
+	  }
+	  return acc;
+	}
+	function fetchExternalStyles(acc, item) {
+	  if (Type.isString(item) && item !== '') {
+	    acc.push(item);
+	  }
+	  return acc;
+	}
 	function fetchExtensionSettings(html) {
 	  if (Type.isStringFilled(html)) {
 	    const scripts = html.match(/<script type="extension\/settings" \b[^>]*>([\s\S]*?)<\/script>/g);
@@ -6558,121 +6588,8 @@ window._main_polyfill_core = true;
 	  }
 	  return [];
 	}
-
-	let Extension = /*#__PURE__*/function () {
-	  function Extension(options) {
-	    babelHelpers.classCallCheck(this, Extension);
-	    this.config = options.config || {};
-	    this.name = options.extension;
-	    this.state = 'scheduled';
-
-	    // eslint-disable-next-line
-	    const result = BX.processHTML(options.html || '');
-	    this.inlineScripts = result.SCRIPT.reduce(inlineScripts, []);
-	    this.externalScripts = result.SCRIPT.reduce(externalScripts, []);
-	    this.externalStyles = result.STYLE.reduce(externalStyles, []);
-	    this.settingsScripts = fetchExtensionSettings(result.HTML);
-	  }
-	  babelHelpers.createClass(Extension, [{
-	    key: "load",
-	    value: function load() {
-	      if (this.state === 'error') {
-	        this.loadPromise = this.loadPromise || Promise.resolve(this);
-	        console.warn('Extension', this.name, 'not found');
-	      }
-	      if (!this.loadPromise && this.state) {
-	        this.state = 'load';
-	        this.settingsScripts.forEach(entry => {
-	          const isLoaded = !!document.querySelector(`script[data-extension="${entry.extension}"]`);
-	          if (!isLoaded) {
-	            document.body.insertAdjacentHTML('beforeend', entry.script);
-	          }
-	        });
-	        this.inlineScripts.forEach(BX.evalGlobal);
-	        this.loadPromise = Promise.all([loadAll(this.externalScripts), loadAll(this.externalStyles)]).then(() => {
-	          this.state = 'loaded';
-	          if (Type.isPlainObject(this.config) && this.config.namespace) {
-	            return Reflection.getClass(this.config.namespace);
-	          }
-	          return window;
-	        });
-	      }
-	      return this.loadPromise;
-	    }
-	  }]);
-	  return Extension;
-	}();
-
-	const initialized = {};
-	const ajaxController = 'main.bitrix.main.controller.loadext.getextensions';
-
-	function makeIterable(value) {
-	  return Type.isArray(value) ? value : [value];
-	}
-	function isInitialized(extension) {
-	  return extension in initialized;
-	}
-	function getInitialized(extension) {
-	  return initialized[extension];
-	}
-	function isAllInitialized(extensions) {
-	  return extensions.every(isInitialized);
-	}
-	function loadExtensions(extensions) {
-	  return Promise.all(extensions.map(item => item.load()));
-	}
-	function mergeExports(exports) {
-	  return exports.reduce((acc, currentExports) => {
-	    if (Type.isObject(currentExports)) {
-	      return {
-	        ...currentExports
-	      };
-	    }
-	    return currentExports;
-	  }, {});
-	}
-	function inlineScripts(acc, item) {
-	  if (item.isInternal) {
-	    acc.push(item.JS);
-	  }
-	  return acc;
-	}
-	function externalScripts(acc, item) {
-	  if (!item.isInternal) {
-	    acc.push(item.JS);
-	  }
-	  return acc;
-	}
-	function externalStyles(acc, item) {
-	  if (Type.isString(item) && item !== '') {
-	    acc.push(item);
-	  }
-	  return acc;
-	}
-	function request(options) {
-	  return new Promise(resolve => {
-	    // eslint-disable-next-line
-	    BX.ajax.runAction(ajaxController, {
-	      data: options
-	    }).then(resolve);
-	  });
-	}
-	function prepareExtensions(response) {
-	  if (response.status !== 'success') {
-	    response.errors.map(console.warn);
-	    return [];
-	  }
-	  return response.data.map(item => {
-	    const initializedExtension = getInitialized(item.extension);
-	    if (initializedExtension) {
-	      return initializedExtension;
-	    }
-	    initialized[item.extension] = new Extension(item);
-	    return initialized[item.extension];
-	  });
-	}
 	function loadAll(items) {
-	  const itemsList = makeIterable(items);
+	  const itemsList = Type.isArray(items) ? items : [items];
 	  if (!itemsList.length) {
 	    return Promise.resolve();
 	  }
@@ -6682,21 +6599,120 @@ window._main_polyfill_core = true;
 	  });
 	}
 
-	/**
-	 * Loads extensions asynchronously
-	 * @param {string|Array<string>} extension
-	 * @return {Promise<Array<Extension>>}
-	 */
-	function loadExtension(extension) {
-	  const extensions = makeIterable(extension);
-	  const isAllInitialized$$1 = isAllInitialized(extensions);
-	  if (isAllInitialized$$1) {
-	    const initializedExtensions = extensions.map(getInitialized);
-	    return loadExtensions(initializedExtensions).then(mergeExports);
+	function _classPrivateFieldInitSpec(obj, privateMap, value) { _checkPrivateRedeclaration(obj, privateMap); privateMap.set(obj, value); }
+	function _checkPrivateRedeclaration(obj, privateCollection) { if (privateCollection.has(obj)) { throw new TypeError("Cannot initialize the same private elements twice on an object"); } }
+	const defaultOptions = {
+	  loaded: false
+	};
+	var _state = /*#__PURE__*/new WeakMap();
+	var _name = /*#__PURE__*/new WeakMap();
+	var _namespace = /*#__PURE__*/new WeakMap();
+	var _promise = /*#__PURE__*/new WeakMap();
+	let Extension = /*#__PURE__*/function () {
+	  function Extension(options) {
+	    babelHelpers.classCallCheck(this, Extension);
+	    _classPrivateFieldInitSpec(this, _state, {
+	      writable: true,
+	      value: Extension.State.LOADING
+	    });
+	    _classPrivateFieldInitSpec(this, _name, {
+	      writable: true,
+	      value: ''
+	    });
+	    _classPrivateFieldInitSpec(this, _namespace, {
+	      writable: true,
+	      value: ''
+	    });
+	    _classPrivateFieldInitSpec(this, _promise, {
+	      writable: true,
+	      value: null
+	    });
+	    const preparedOptions = {
+	      ...defaultOptions,
+	      ...options
+	    };
+	    babelHelpers.classPrivateFieldSet(this, _name, preparedOptions.name);
+	    babelHelpers.classPrivateFieldSet(this, _namespace, Type.isStringFilled(preparedOptions.namespace) ? preparedOptions.namespace : 'window');
+	    if (preparedOptions.loaded) {
+	      babelHelpers.classPrivateFieldSet(this, _state, Extension.State.LOADED);
+	    }
 	  }
-	  return request({
-	    extension: extensions
-	  }).then(prepareExtensions).then(loadExtensions).then(mergeExports);
+	  babelHelpers.createClass(Extension, [{
+	    key: "load",
+	    value: function load() {
+	      if (babelHelpers.classPrivateFieldGet(this, _state) === Extension.State.LOADED && !babelHelpers.classPrivateFieldGet(this, _promise)) {
+	        babelHelpers.classPrivateFieldSet(this, _promise, Promise.resolve(Reflection.getClass(babelHelpers.classPrivateFieldGet(this, _namespace))));
+	      }
+	      if (babelHelpers.classPrivateFieldGet(this, _promise)) {
+	        return babelHelpers.classPrivateFieldGet(this, _promise);
+	      }
+	      babelHelpers.classPrivateFieldSet(this, _state, Extension.State.LOADING);
+	      babelHelpers.classPrivateFieldSet(this, _promise, new Promise(resolve => {
+	        void loadAssets({
+	          extension: [babelHelpers.classPrivateFieldGet(this, _name)]
+	        }).then(assetsResult => {
+	          if (!Type.isArrayFilled(assetsResult.data)) {
+	            resolve(window);
+	          }
+	          const extensionData = assetsResult.data.at(0);
+	          if (Type.isPlainObject(extensionData.config) && Type.isStringFilled(extensionData.config.namespace)) {
+	            babelHelpers.classPrivateFieldSet(this, _namespace, extensionData.config.namespace);
+	          }
+	          const result = BX.processHTML(extensionData.html || '');
+	          const inlineScripts = result.SCRIPT.reduce(fetchInlineScripts, []);
+	          const externalScripts = result.SCRIPT.reduce(fetchExternalScripts, []);
+	          const externalStyles = result.STYLE.reduce(fetchExternalStyles, []);
+	          const settingsScripts = fetchExtensionSettings(result.HTML);
+	          settingsScripts.forEach(entry => {
+	            document.body.insertAdjacentHTML('beforeend', entry.script);
+	          });
+	          inlineScripts.forEach(script => {
+	            BX.evalGlobal(script);
+	          });
+	          void Promise.all([loadAll(externalScripts), loadAll(externalStyles)]).then(() => {
+	            babelHelpers.classPrivateFieldSet(this, _state, Extension.State.LOADED);
+	            if (babelHelpers.classPrivateFieldGet(this, _namespace)) {
+	              return Reflection.getClass(babelHelpers.classPrivateFieldGet(this, _namespace));
+	            }
+	            return window;
+	          }).then(exports => {
+	            resolve(exports);
+	          });
+	        });
+	      }));
+	      return babelHelpers.classPrivateFieldGet(this, _promise);
+	    }
+	  }]);
+	  return Extension;
+	}();
+	babelHelpers.defineProperty(Extension, "State", {
+	  LOADED: 'LOADED',
+	  LOADING: 'LOADING'
+	});
+
+	async function loadExtension(...extensionName) {
+	  const extensionNames = extensionName.flat();
+	  const result = extensionNames.map(name => {
+	    if (extensionsStorage.has(name)) {
+	      return extensionsStorage.get(name).load();
+	    }
+	    const extension = new Extension({
+	      name
+	    });
+	    extensionsStorage.set(name, extension);
+	    return extension.load();
+	  });
+	  return Promise.all(result).then(exports => {
+	    return exports.reduce((acc, currentExports) => {
+	      if (Type.isObject(currentExports)) {
+	        return {
+	          ...acc,
+	          ...currentExports
+	        };
+	      }
+	      return acc;
+	    }, {});
+	  });
 	}
 
 	const cloneableTags = ['[object Object]', '[object Array]', '[object RegExp]', '[object Arguments]', '[object Date]', '[object Error]', '[object Map]', '[object Set]', '[object ArrayBuffer]', '[object DataView]', '[object Float32Array]', '[object Float64Array]', '[object Int8Array]', '[object Int16Array]', '[object Int32Array]', '[object Uint8Array]', '[object Uint16Array]', '[object Uint32Array]', '[object Uint8ClampedArray]'];
@@ -6803,6 +6819,12 @@ window._main_polyfill_core = true;
 	  };
 	}
 
+	function registerExtension(options) {
+	  if (!extensionsStorage.has(options.name)) {
+	    extensionsStorage.set(options.name, new Extension(options));
+	  }
+	}
+
 	/**
 	 * @memberOf BX
 	 */
@@ -6853,9 +6875,9 @@ window._main_polyfill_core = true;
 
 	      // eslint-disable-next-line
 	      const parsedHtml = BX.processHTML(_html);
-	      const externalCss = parsedHtml.STYLE.reduce(externalStyles, []);
-	      const externalJs = parsedHtml.SCRIPT.reduce(externalScripts, []);
-	      const inlineJs = parsedHtml.SCRIPT.reduce(inlineScripts, []);
+	      const externalCss = parsedHtml.STYLE.reduce(fetchExternalStyles, []);
+	      const externalJs = parsedHtml.SCRIPT.reduce(fetchExternalScripts, []);
+	      const inlineJs = parsedHtml.SCRIPT.reduce(fetchInlineScripts, []);
 	      if (Type.isDomNode(node)) {
 	        if (params.htmlFirst || !externalJs.length && !externalCss.length) {
 	          if (params.useAdjacentHTML) {
@@ -6938,6 +6960,7 @@ window._main_polyfill_core = true;
 	}();
 	babelHelpers.defineProperty(Runtime, "debug", debug);
 	babelHelpers.defineProperty(Runtime, "loadExtension", loadExtension);
+	babelHelpers.defineProperty(Runtime, "registerExtension", registerExtension);
 	babelHelpers.defineProperty(Runtime, "clone", clone);
 
 	const _isError = Symbol.for('BX.BaseError.isError');
@@ -7391,6 +7414,12 @@ window._main_polyfill_core = true;
 	  }, {
 	    key: "subscribeFromOptions",
 	    value: function subscribeFromOptions(options, aliases, compatMode) {
+	      if (Type.isArrayFilled(options)) {
+	        options.forEach(events => {
+	          this.subscribeFromOptions(events);
+	        });
+	        return;
+	      }
 	      if (!Type.isPlainObject(options)) {
 	        return;
 	      }
@@ -8226,26 +8255,21 @@ window._main_polyfill_core = true;
 	// eslint-disable-next-line
 	exports.isReady = false;
 	function ready(handler) {
-	  switch (document.readyState) {
-	    case 'loading':
-	      stack.push(handler);
-	      break;
-	    case 'interactive':
-	    case 'complete':
-	      if (Type.isFunction(handler)) {
-	        handler();
-	      }
-	      exports.isReady = true;
-	      break;
-	    default:
-	      break;
+	  if (!Type.isFunction(handler)) {
+	    return;
+	  }
+	  if (exports.isReady) {
+	    handler();
+	  } else {
+	    stack.push(handler);
 	  }
 	}
-	document.addEventListener('readystatechange', () => {
-	  if (!exports.isReady) {
-	    stack.forEach(ready);
-	    stack = [];
-	  }
+	bindOnce(document, 'DOMContentLoaded', () => {
+	  exports.isReady = true;
+	  stack.forEach(handler => {
+	    handler();
+	  });
+	  stack = [];
 	});
 
 	/**
@@ -8658,7 +8682,7 @@ window._main_polyfill_core = true;
 	          return element;
 	        }
 	        if ('text' in data && !Type.isNil(data.text)) {
-	          element.innerText = data.text;
+	          element.textContent = data.text;
 	          return element;
 	        }
 	        if ('html' in data && !Type.isNil(data.html)) {
@@ -9876,7 +9900,7 @@ window._main_polyfill_core = true;
 	    }, Object.create(null))
 	  };
 	}
-	const urlExp = /^((\w+):)?(\/\/((\w+)?(:(\w+))?@)?([^\/\?:]+)(:(\d+))?)?(\/?([^\/\?#][^\?#]*)?)?(\?([^#]+))?(#(\w*))?/;
+	const urlExp = /^((\w+):)?(\/\/((\w+)?(:(\w+))?@)?([^\/\?:]+)(:(\d+))?)?(\/?([^\/\?#][^\?#]*)?)?(\?([^#]+))?(#((?:[\w-?/:@.~!$&'()*+,;=]|%\w{2})*))?/;
 	function parseUrl(url) {
 	  const result = url.match(urlExp);
 	  if (Type.isArray(result)) {
@@ -10415,6 +10439,7 @@ window._main_polyfill_core = true;
 	let Cache = function Cache() {
 	  babelHelpers.classCallCheck(this, Cache);
 	};
+	babelHelpers.defineProperty(Cache, "BaseCache", BaseCache);
 	babelHelpers.defineProperty(Cache, "MemoryCache", MemoryCache);
 	babelHelpers.defineProperty(Cache, "LocalStorageCache", LocalStorageCache);
 
@@ -10500,8 +10525,8 @@ window._main_polyfill_core = true;
 	}();
 
 	let _Symbol$iterator;
-	function _classPrivateMethodInitSpec(obj, privateSet) { _checkPrivateRedeclaration(obj, privateSet); privateSet.add(obj); }
-	function _checkPrivateRedeclaration(obj, privateCollection) { if (privateCollection.has(obj)) { throw new TypeError("Cannot initialize the same private elements twice on an object"); } }
+	function _classPrivateMethodInitSpec(obj, privateSet) { _checkPrivateRedeclaration$1(obj, privateSet); privateSet.add(obj); }
+	function _checkPrivateRedeclaration$1(obj, privateCollection) { if (privateCollection.has(obj)) { throw new TypeError("Cannot initialize the same private elements twice on an object"); } }
 	function _classPrivateMethodGet(receiver, privateSet, fn) { if (!privateSet.has(receiver)) { throw new TypeError("attempted to get private field on non-instance"); } return fn; }
 	var _searchIndexToInsert = /*#__PURE__*/new WeakSet();
 	_Symbol$iterator = Symbol.iterator;
@@ -10970,9 +10995,102 @@ window._main_polyfill_core = true;
 	}
 	babelHelpers.defineProperty(ZIndexManager, "stacks", new WeakMap());
 
+	function _classPrivateMethodInitSpec$1(obj, privateSet) { _checkPrivateRedeclaration$2(obj, privateSet); privateSet.add(obj); }
+	function _classPrivateFieldInitSpec$1(obj, privateMap, value) { _checkPrivateRedeclaration$2(obj, privateMap); privateMap.set(obj, value); }
+	function _checkPrivateRedeclaration$2(obj, privateCollection) { if (privateCollection.has(obj)) { throw new TypeError("Cannot initialize the same private elements twice on an object"); } }
+	function _classPrivateMethodGet$1(receiver, privateSet, fn) { if (!privateSet.has(receiver)) { throw new TypeError("attempted to get private field on non-instance"); } return fn; }
+
+	// eslint-disable-next-line @bitrix24/bitrix24-rules/no-typeof
+	const IS_WEAK_REF_SUPPORTED = typeof WeakRef !== 'undefined';
+	var _refs = /*#__PURE__*/new WeakMap();
+	var _registry = /*#__PURE__*/new WeakMap();
+	var _cleanupCallback = /*#__PURE__*/new WeakSet();
+	let WeakRefMap = /*#__PURE__*/function () {
+	  function WeakRefMap() {
+	    babelHelpers.classCallCheck(this, WeakRefMap);
+	    _classPrivateMethodInitSpec$1(this, _cleanupCallback);
+	    _classPrivateFieldInitSpec$1(this, _refs, {
+	      writable: true,
+	      value: new Map()
+	    });
+	    _classPrivateFieldInitSpec$1(this, _registry, {
+	      writable: true,
+	      value: null
+	    });
+	    if (IS_WEAK_REF_SUPPORTED) {
+	      babelHelpers.classPrivateFieldSet(this, _registry, new FinalizationRegistry(_classPrivateMethodGet$1(this, _cleanupCallback, _cleanupCallback2).bind(this)));
+	    }
+	  }
+	  babelHelpers.createClass(WeakRefMap, [{
+	    key: "clear",
+	    value: function clear() {
+	      if (!IS_WEAK_REF_SUPPORTED) {
+	        babelHelpers.classPrivateFieldGet(this, _refs).clear();
+	        return;
+	      }
+	      babelHelpers.classPrivateFieldGet(this, _refs).forEach((ref, key) => {
+	        const value = ref === null || ref === void 0 ? void 0 : ref.deref();
+	        if (!Type.isUndefined(value)) {
+	          babelHelpers.classPrivateFieldGet(this, _registry).unregister(value);
+	        }
+	      });
+	      babelHelpers.classPrivateFieldGet(this, _refs).clear();
+	    }
+	  }, {
+	    key: "delete",
+	    value: function _delete(key) {
+	      if (!IS_WEAK_REF_SUPPORTED) {
+	        return babelHelpers.classPrivateFieldGet(this, _refs).delete(key);
+	      }
+	      const value = this.get(key);
+	      if (!Type.isUndefined(value)) {
+	        babelHelpers.classPrivateFieldGet(this, _registry).unregister(value);
+	      }
+	      return babelHelpers.classPrivateFieldGet(this, _refs).delete(key);
+	    }
+	  }, {
+	    key: "get",
+	    value: function get(key) {
+	      var _babelHelpers$classPr;
+	      if (!IS_WEAK_REF_SUPPORTED) {
+	        return babelHelpers.classPrivateFieldGet(this, _refs).get(key);
+	      }
+	      return (_babelHelpers$classPr = babelHelpers.classPrivateFieldGet(this, _refs).get(key)) === null || _babelHelpers$classPr === void 0 ? void 0 : _babelHelpers$classPr.deref();
+	    }
+	  }, {
+	    key: "has",
+	    value: function has(key) {
+	      var _babelHelpers$classPr2;
+	      if (!IS_WEAK_REF_SUPPORTED) {
+	        return babelHelpers.classPrivateFieldGet(this, _refs).has(key);
+	      }
+	      return !Type.isUndefined((_babelHelpers$classPr2 = babelHelpers.classPrivateFieldGet(this, _refs).get(key)) === null || _babelHelpers$classPr2 === void 0 ? void 0 : _babelHelpers$classPr2.deref());
+	    }
+	  }, {
+	    key: "set",
+	    value: function set(key, value) {
+	      if (!IS_WEAK_REF_SUPPORTED) {
+	        babelHelpers.classPrivateFieldGet(this, _refs).set(key, value);
+	        return this;
+	      }
+	      babelHelpers.classPrivateFieldGet(this, _refs).set(key, new WeakRef(value));
+	      babelHelpers.classPrivateFieldGet(this, _registry).register(value, key, value);
+	      return this;
+	    }
+	  }]);
+	  return WeakRefMap;
+	}();
+	function _cleanupCallback2(key) {
+	  const ref = babelHelpers.classPrivateFieldGet(this, _refs).get(key);
+	  if (ref && !ref.deref()) {
+	    babelHelpers.classPrivateFieldGet(this, _refs).delete(key);
+	  }
+	}
+
 	var collections = {
 	  OrderedArray,
-	  SettingsCollection
+	  SettingsCollection,
+	  WeakRefMap
 	};
 
 	function getElement(element) {
@@ -13737,6 +13855,7 @@ window._main_polyfill_core = true;
 	const LOADING = 3;
 	const LOADED = 4;
 	const assets = {};
+	const loadingAssetCallbacks = {};
 
 	BX.load = function(items, callback, doc)
 	{
@@ -13828,6 +13947,18 @@ window._main_polyfill_core = true;
 			return;
 		}
 
+		if (asset.state === LOADING)
+		{
+			if (!BX.Type.isArray(loadingAssetCallbacks[asset.name]))
+			{
+				loadingAssetCallbacks[asset.name] = [];
+			}
+
+			loadingAssetCallbacks[asset.name].push(callback);
+
+			return;
+		}
+
 		asset.state = LOADING;
 
 		loadAsset(
@@ -13835,6 +13966,15 @@ window._main_polyfill_core = true;
 			function () {
 				asset.state = LOADED;
 				callback();
+				if (BX.Type.isArrayFilled(loadingAssetCallbacks[asset.name]))
+				{
+					for (const cb of loadingAssetCallbacks[asset.name])
+					{
+						cb();
+					}
+				}
+
+				delete loadingAssetCallbacks[asset.name];
 			},
 			doc
 		);
@@ -13846,6 +13986,8 @@ window._main_polyfill_core = true;
 
 		function error(event)
 		{
+			window.clearTimeout(asset.errorTimeout);
+			window.clearTimeout(asset.cssTimeout);
 			ele.onload = ele.onreadystatechange = ele.onerror = null;
 			callback();
 		}
@@ -15197,30 +15339,16 @@ window._main_polyfill_core = true;
 		return true;
 	}
 
-	/* garbage collector */
-	function Trash()
-	{
-		var i,len;
+	window.addEventListener('pagehide', () => {
+		garbageCollectors.forEach(({ callback, context = window }) => {
+			try
+			{
+				callback.apply(context);
+			} catch (err) {}
+		});
+	});
 
-		for (i = 0, len = garbageCollectors.length; i<len; i++)
-		{
-			try {
-				garbageCollectors[i].callback.apply(garbageCollectors[i].context || window);
-				delete garbageCollectors[i];
-				garbageCollectors[i] = null;
-			} catch (e) {}
-		}
-	}
-
-	if(window.attachEvent) // IE
-		window.attachEvent("onunload", Trash);
-	else if(window.addEventListener) // Gecko / W3C
-		window.addEventListener('unload', Trash, false);
-	else
-		window.onunload = Trash;
-	/* \garbage collector */
-
-// set empty ready handler
+	// set empty ready handler
 	BX(BX.DoNothing);
 	window.BX = BX;
 
@@ -15322,6 +15450,7 @@ window._main_polyfill_core = true;
 // some internal variables for new logic
 	var dataStorage = new BX.DataStorage();	// manager which BX.data() uses to keep data
 })(window.BX);
+
 
 ;(function(window)
 {
@@ -16658,6 +16787,31 @@ var buildAjaxPromiseToRestoreCsrf = function(config, withoutRestoringCsrf)
 		}
 
 		var assets = BX.prop.getObject(BX.prop.getObject(response, "data", {}), "assets", {});
+
+		var inlineScripts = [];
+		if (BX.Type.isArrayFilled(assets.string))
+		{
+			assets.string
+				.reduce(function(acc, item) {
+					if (String(item).length > 0 && !acc.includes(item))
+					{
+						acc.push(item);
+					}
+
+					return acc;
+				}, [])
+				.forEach(function(item) {
+					if (String(item).startsWith('<script type="extension/settings"'))
+					{
+						BX.html(document.head, item, { useAdjacentHTML: true });
+					}
+					else
+					{
+						inlineScripts.push(item);
+					}
+				});
+		}
+
 		var promise = new Promise(function(resolve, reject) {
 			var css = BX.prop.getArray(assets, "css", []);
 			BX.load(css, function(){
@@ -16667,9 +16821,9 @@ var buildAjaxPromiseToRestoreCsrf = function(config, withoutRestoringCsrf)
 				);
 			});
 		});
+
 		promise.then(function(){
-			var strings = BX.prop.getArray(assets, "string", []);
-			var stringAsset = strings.join('\n');
+			var stringAsset = inlineScripts.join('\n');
 			BX.html(document.head, stringAsset, { useAdjacentHTML: true }).then(function(){
 				assetsLoaded.fulfill(response);
 			});
@@ -16697,6 +16851,7 @@ var buildAjaxPromiseToRestoreCsrf = function(config, withoutRestoringCsrf)
  * @param {?string} [config.analytics.p3]
  * @param {?string} [config.analytics.p4]
  * @param {?string} [config.analytics.p5]
+ * @param {?('success' | 'error' | 'attempt' | 'cancel')} [config.analytics.status]
  * @param {string} [config.method='POST']
  * @param {Object} [config.data]
  * @param {?Object} [config.getParameters]
@@ -17227,52 +17382,138 @@ BX.userOptions = {
 
 BX.userOptions.setAjaxPath = function(url)
 {
-	BX.userOptions.path = url.indexOf('?') == -1? url+'?': url+'&';
-}
-BX.userOptions.save = function(sCategory, sName, sValName, sVal, bCommon)
+	// eslint-disable-next-line no-console
+	console.warn('BX.userOptions.setAjaxPath is deprecated. There is no way to change ajax path.');
+};
+BX.userOptions.save = function(category, name, valueName, value, common)
 {
-	if (null == BX.userOptions.options)
+	if (BX.userOptions.options === null)
+	{
 		BX.userOptions.options = {};
+	}
 
-	bCommon = !!bCommon;
-	BX.userOptions.options[sCategory+'.'+sName+'.'+sValName] = [sCategory, sName, sValName, sVal, bCommon];
+	common = Boolean(common);
+	BX.userOptions.options[`${category}.${name}.${valueName}`] = [category, name, valueName, value, common];
 
-	var sParam = BX.userOptions.__get();
-	if (sParam != '')
-		document.cookie = BX.message('COOKIE_PREFIX')+"_LAST_SETTINGS=" + encodeURIComponent(sParam) + "&sessid="+BX.bitrix_sessid()+"; expires=Thu, 31 Dec " + ((new Date()).getFullYear() + 1) + " 23:59:59 GMT; path=/;";
+	const stringPackedValue = BX.userOptions.__get();
+	if (stringPackedValue)
+	{
+		document.cookie = `${BX.message('COOKIE_PREFIX')}_LAST_SETTINGS=${encodeURIComponent(stringPackedValue)}&sessid=${BX.bitrix_sessid()}; expires=Thu, 31 Dec ${(new Date()).getFullYear() + 1} 23:59:59 GMT; path=/;`;
+	}
 
-	if(!BX.userOptions.bSend)
+	if (!BX.userOptions.bSend)
 	{
 		BX.userOptions.bSend = true;
-		setTimeout(function(){BX.userOptions.send(null)}, BX.userOptions.delay);
+		setTimeout(() => {
+			BX.userOptions.send(null);
+		}, BX.userOptions.delay);
 	}
 };
 
 BX.userOptions.send = function(callback)
 {
-	var sParam = BX.userOptions.__get();
+	const values = BX.userOptions.__get_values({ backwardCompatibility: true});
+
 	BX.userOptions.options = null;
 	BX.userOptions.bSend = false;
 
-	if (sParam != '')
+	if (values)
 	{
-		document.cookie = BX.message('COOKIE_PREFIX') + "_LAST_SETTINGS=; path=/;";
-		BX.ajax({
-			'method': 'GET',
-			'dataType': 'html',
-			'processData': false,
-			'cache': false,
-			'url': BX.userOptions.path+sParam+'&sessid='+BX.bitrix_sessid(),
-			'onsuccess': callback
+		document.cookie = `${BX.message('COOKIE_PREFIX')}_LAST_SETTINGS=; path=/;`;
+
+		BX.ajax.runAction(
+			'main.userOption.saveOptions',
+			{
+				json: {
+					newValues: values,
+				},
+			},
+		).then((response) => {
+			if (BX.type.isFunction(callback))
+			{
+				callback(response);
+			}
 		});
 	}
 };
 
-BX.userOptions.del = function(sCategory, sName, bCommon, callback)
+BX.userOptions.del = function(category, name, common, callback)
 {
-	BX.ajax.get(BX.userOptions.path+'action=delete&c='+sCategory+'&n='+sName+(bCommon == true? '&common=Y':'')+'&sessid='+BX.bitrix_sessid(), callback);
+	BX.ajax.runAction(
+		'main.userOption.deleteOption',
+		{
+			json: {
+				category,
+				name,
+				common,
+			},
+		},
+	).then((response) => {
+		if (BX.type.isFunction(callback))
+		{
+			callback(response);
+		}
+	});
 };
 
+BX.userOptions.__get_values = function({ backwardCompatibility })
+{
+	if (!BX.userOptions || !BX.Type.isPlainObject(BX.userOptions.options))
+	{
+		return null;
+	}
+
+	const CATEGORY = 0;
+	const NAME = 1;
+	const VALUE_NAME = 2;
+	const VALUE = 3;
+	const IS_DEFAULT = 4;
+
+	const packedValues = { p: [] };
+	let currentIndex = -1;
+	let previousOptionIdentifier = '';
+
+	Object.entries(BX.userOptions.options).forEach(([key, userOption]) => {
+		const category = userOption[CATEGORY];
+		const name = userOption[NAME];
+		const currentOptionIdentifier = `${category}.${name}`;
+
+		if (previousOptionIdentifier !== currentOptionIdentifier)
+		{
+			currentIndex++;
+			packedValues.p.push({
+				c: category,
+				n: name,
+				v: {},
+			});
+			if (userOption[IS_DEFAULT] === true)
+			{
+				packedValues.p[currentIndex].d = 'Y';
+			}
+			previousOptionIdentifier = currentOptionIdentifier;
+		}
+
+		if (userOption[VALUE_NAME] === null)
+		{
+			packedValues.p[currentIndex].v = userOption[VALUE];
+		}
+		else
+		{
+			let data = userOption[VALUE];
+			if (backwardCompatibility && Array.isArray(userOption[VALUE]))
+			{
+				data = userOption[VALUE].join(',');
+			}
+			packedValues.p[currentIndex].v[userOption[VALUE_NAME]] = data;
+		}
+	});
+
+	return packedValues.p.length > 0 ? packedValues.p : null;
+};
+
+/**
+ * @deprecated Use instead BX.userOptions.__get_values.
+ * */
 BX.userOptions.__get = function()
 {
 	if (!BX.userOptions.options) return '';

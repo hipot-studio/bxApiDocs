@@ -503,7 +503,8 @@ class StructureBackwardConverter
 
 			$employees = \CIntranetUtils::getDepartmentEmployees(
 				arDepartments: $oldDepartment['ID'],
-				arSelect: ['ID']
+				onlyActive: 'N',
+				arSelect: ['ID', 'ACTIVE'],
 			);
 			$ufHead = $oldDepartment['UF_HEAD'] ?? 0;
 
@@ -522,6 +523,7 @@ class StructureBackwardConverter
 							entityType: MemberEntityType::USER,
 							entityId: $employeeId,
 							nodeId: $node->id,
+							active: $employee['ACTIVE'] === 'Y',
 							role: $this->detectRole((int)$ufHead, $employeeId),
 						)
 					);

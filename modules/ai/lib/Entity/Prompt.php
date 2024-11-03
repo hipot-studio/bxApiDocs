@@ -11,18 +11,6 @@ class Prompt extends EO_Prompt
 	use TranslateTrait;
 
 	/**
-	 * Return industry name by langCode.
-	 *
-	 * @param string $langCode
-	 *
-	 * @return string
-	 */
-	public function getName(string $langCode): string
-	{
-		return self::translate($this->getTranslate(), $langCode);
-	}
-
-	/**
 	 * Return industry description by langCode.
 	 *
 	 * @param string $langCode

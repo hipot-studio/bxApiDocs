@@ -2,7 +2,7 @@
 
 namespace Bitrix\Intranet\UI\LeftMenu\MenuItem;
 
-use Bitrix\Intranet\MainPage;
+use Bitrix\Intranet\Site\FirstPage\MainFirstPage;
 
 class MainPageItem extends ItemSystem
 {
@@ -13,7 +13,7 @@ class MainPageItem extends ItemSystem
 
 	public function getId(): string
 	{
-		return (new MainPage\Page)->getMenuId();
+		return (new MainFirstPage())->getMenuId();
 	}
 
 	public function getSort(): ?int
@@ -23,6 +23,6 @@ class MainPageItem extends ItemSystem
 
 	public function getLink(): ?string
 	{
-		return (new MainPage\Page)->getLink();
+		return (new MainFirstPage())->getLink();
 	}
 }

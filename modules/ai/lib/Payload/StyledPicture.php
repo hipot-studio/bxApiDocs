@@ -2,11 +2,17 @@
 
 namespace Bitrix\AI\Payload;
 
+use Bitrix\AI\Facade\User;
+use Bitrix\AI\ImageStylePrompt\ImageStylePromptManager;
+
 class StyledPicture extends Payload implements IPayload
 {
+
 	public function __construct(
 		protected string $payload,
-	) {}
+	)
+	{
+	}
 
 	/**
 	 * @inheritDoc
@@ -19,7 +25,7 @@ class StyledPicture extends Payload implements IPayload
 
 		if (isset($this->markers['style']))
 		{
-			$data['style'] = $this->markers['style'];
+			$data['style'] = $this->prepareStylePrompt($this->markers['style']);
 		}
 
 		if (isset($this->markers['format']))
@@ -51,5 +57,14 @@ class StyledPicture extends Payload implements IPayload
 		$markers = $unpackedData['markers'] ?? [];
 
 		return (new self($prompt))->setMarkers($markers);
+	}
+
+	private function prepareStylePrompt(string $promptCode): string
+	{
+		$stylePromptManager = new ImageStylePromptManager(User::getUserLanguage());
+		$stylePrompt = $stylePromptManager->getByCode($promptCode)?->getPrompt() ?? '';
+		$formatter = new Formatter($stylePrompt, $this->engine);
+
+		return $formatter->format();
 	}
 }

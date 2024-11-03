@@ -63,7 +63,7 @@ class Category extends BaseTemplate
 			}
 
 			if (isset($response[Actions::METHOD_GET_FULL_CATEGORY]['SUB_CATEGORIES']) && is_array($response[Actions::METHOD_GET_FULL_CATEGORY]['SUB_CATEGORIES'])) {
-				$this->result['FILTER_TAGS'] = $this->prepareFilterTagsByCategory($response[Actions::METHOD_GET_FULL_CATEGORY]['SUB_CATEGORIES']);
+				$this->result['FILTER_CATEGORIES'] = $this->prepareFilterTagsByCategory($response[Actions::METHOD_GET_FULL_CATEGORY]['SUB_CATEGORIES']);
 			}
 
 			if (isset($response[Actions::METHOD_GET_FULL_CATEGORY]['DEVELOPER_TAGS']) && !empty($response[Actions::METHOD_GET_FULL_CATEGORY]['DEVELOPER_TAGS'])) {

@@ -15,19 +15,22 @@ class Item
 	private Collection $children;
 
 	public function __construct(
-		private int $id,
-		private ?string $section,
-		private string $code,
-		private ?string $type,
-		private ?string $appCode,
-		private ?string $icon,
-		private ?string $prompt,
-		private mixed $translate,
-		private mixed $textTranslate,
-		private ?array $settings,
-		private ?array $cacheCategory,
-		private array $category,
-		private bool $workWithResult = false,
+		private readonly int $id,
+		private readonly ?string $section,
+		private readonly ?string $sort,
+		private readonly string $code,
+		private readonly ?string $type,
+		private readonly ?string $appCode,
+		private readonly ?string $icon,
+		private readonly ?string $prompt,
+		private readonly string $title,
+		private readonly mixed $textTranslate,
+		private readonly ?array $settings,
+		private readonly ?array $cacheCategory,
+		private readonly bool $hasSystemCategory,
+		private readonly bool $workWithResult,
+		private readonly bool $isSystem,
+		private readonly bool $isFavorite,
 	)
 	{
 		$this->children = new Collection;
@@ -75,17 +78,7 @@ class Item
 
 	public function getTitle(): string
 	{
-		$lang = User::getUserLanguage();
-		if (isset($this->translate[$lang]))
-		{
-			return $this->translate[$lang];
-		}
-		if (isset($this->translate['en']))
-		{
-			return $this->translate['en'];
-		}
-
-		return $this->code;
+		return $this->title;
 	}
 
 	public function getText(): string
@@ -93,9 +86,9 @@ class Item
 		return self::translate($this->textTranslate, User::getUserLanguage());
 	}
 
-	public function getCategory(): array
+	public function hasSystemCategory(): bool
 	{
-		return is_array($this->category) ? $this->category : [];
+		return $this->hasSystemCategory;
 	}
 
 	public function getCacheCategory(): array
@@ -125,6 +118,11 @@ class Item
 
 	public function isRequiredOriginalMessage(): bool
 	{
+		if (!$this->isSystem && $this->type === PromptType::DEFAULT->name)
+		{
+			return true;
+		}
+
 		if ($this->prompt)
 		{
 			return str_contains($this->prompt, '{original_message}');
@@ -141,5 +139,20 @@ class Item
 	public function getChildren(): Collection
 	{
 		return $this->children;
+	}
+
+	public function isSystem(): bool
+	{
+		return $this->isSystem;
+	}
+
+	public function isFavorite(): bool
+	{
+		return $this->isFavorite;
+	}
+
+	public function getSort(): int
+	{
+		return (int)$this->sort;
 	}
 }

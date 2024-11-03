@@ -19,6 +19,7 @@ class Element implements Controllable, Errorable
 	const ERROR_ELEMENT_ALREADY_EXISTS = "ERROR_ELEMENT_ALREADY_EXISTS";
 	const ERROR_ELEMENT_NOT_FOUND = "ERROR_ELEMENT_NOT_FOUND";
 	const ERROR_ELEMENT_FIELD_VALUE = "ERROR_ELEMENT_FIELD_VALUE";
+	const ERROR_ELEMENT_PARAM_VALUE = "ERROR_ELEMENT_PARAM_VALUE";
 
 	private $param;
 	private $params = [];
@@ -55,13 +56,20 @@ class Element implements Controllable, Errorable
 		if ($this->param->hasErrors())
 		{
 			$this->errorCollection->add($this->param->getErrors());
+
+			return false;
+		}
+
+		$this->validateParams();
+		if ($this->hasErrors())
+		{
 			return false;
 		}
 
 		$filter = [
-			"ID" => $this->params["ELEMENT_ID"] ? $this->params["ELEMENT_ID"] : "",
+			"ID" => $this->params["ELEMENT_ID"] ?? "",
 			"IBLOCK_ID" => $this->iblockId,
-			"=CODE" => $this->params["ELEMENT_CODE"] ? $this->params["ELEMENT_CODE"] : "",
+			"=CODE" => $this->params["ELEMENT_CODE"] ?? "",
 			"CHECK_PERMISSIONS" => "N",
 		];
 		$queryObject = \CIBlockElement::getList([], $filter, false, false, ["ID"]);
@@ -82,7 +90,7 @@ class Element implements Controllable, Errorable
 				"IBLOCK_ID",
 				"ELEMENT_CODE",
 				[
-					"FIELDS" => ["NAME"]
+					"FIELDS" => ["NAME"],
 				],
 			]
 		);
@@ -96,6 +104,7 @@ class Element implements Controllable, Errorable
 
 		$this->setUrlTemplate();
 
+		$this->validateParams();
 		$this->validateFields();
 
 		$isEnabledBp = $this->isEnabledBizproc($this->params["IBLOCK_TYPE_ID"]);
@@ -184,6 +193,7 @@ class Element implements Controllable, Errorable
 			return false;
 		}
 
+		$this->validateParams();
 		$this->validateFields();
 
 		$isEnabledBp = $this->isEnabledBizproc($this->params["IBLOCK_TYPE_ID"]);
@@ -352,14 +362,14 @@ class Element implements Controllable, Errorable
 
 		foreach ($fields as $field)
 		{
-			if ($field["CODE"] <> '')
+			if (!empty($field["CODE"]))
 			{
 				$availableFields[] = "PROPERTY_".$field["CODE"];
 			}
 
 			if ($this->isFieldDateType($field["TYPE"]))
 			{
-				$callback = $field["PROPERTY_USER_TYPE"]["ConvertToDB"];
+				$callback = $field["PROPERTY_USER_TYPE"]["ConvertToDB"] ?? null;
 				$listCustomFields[$field["FIELD_ID"]] = function ($value) use ($callback) {
 					$regexDetectsIso8601 = '/^([\+-]?\d{4}(?!\d{2}\b))'
 						. '((-?)((0[1-9]|1[0-2])(\3([12]\d|0[1-9]|3[01]))?'
@@ -367,7 +377,7 @@ class Element implements Controllable, Errorable
 						. '|[12]\d{2}|3([0-5]\d|6[1-6])))([T\s]((([01]\d|2[0-3])'
 						. '((:?)[0-5]\d)?|24\:?00)([\.,]\d+(?!:))?)?(\17[0-5]\d'
 						. '([\.,]\d+)?)?([zZ]|([\+-])([01]\d|2[0-3]):?([0-5]\d)?)?)?)?$/';
-					if (preg_match($regexDetectsIso8601, $value) === 1)
+					if (is_string($value) && preg_match($regexDetectsIso8601, $value) === 1)
 					{
 						return \CRestUtil::unConvertDateTime($value);
 					}
@@ -415,7 +425,7 @@ class Element implements Controllable, Errorable
 			if (
 				empty($this->params["FIELDS"][$fieldId])
 				&& $fieldData["IS_REQUIRED"] === "Y"
-				&& !is_numeric($this->params["FIELDS"][$fieldId])
+				&& !is_numeric($this->params["FIELDS"][$fieldId] ?? null)
 			)
 			{
 				$this->errorCollection->setError(
@@ -453,13 +463,25 @@ class Element implements Controllable, Errorable
 		}
 	}
 
+	private function validateParams()
+	{
+		if (isset($this->params["ELEMENT_CODE"]) && !is_scalar($this->params["ELEMENT_CODE"]))
+		{
+			$this->errorCollection->setError(new Error(
+				'Value of the "ELEMENT_CODE" is not correct',
+				self::ERROR_ELEMENT_PARAM_VALUE
+				)
+			);
+		}
+	}
+
 	private function getElementFields($elementId, array $values)
 	{
 		$elementFields = [
 			"IBLOCK_ID" => $this->iblockId,
-			"CODE" => $this->params["ELEMENT_CODE"],
+			"CODE" => $this->params["ELEMENT_CODE"] ?? '',
 			"ID" => $elementId,
-			"PROPERTY_VALUES" => []
+			"PROPERTY_VALUES" => [],
 		];
 
 		$fields = $this->listObject->getFields();
@@ -807,7 +829,7 @@ class Element implements Controllable, Errorable
 					$documentType,
 					[
 						"AllUserGroups" => $currentUserGroups,
-						"DocumentStates" => $documentStates
+						"DocumentStates" => $documentStates,
 					]
 				);
 			}
@@ -819,7 +841,7 @@ class Element implements Controllable, Errorable
 					$documentId,
 					[
 						"AllUserGroups" => $currentUserGroups,
-						"DocumentStates" => $documentStates
+						"DocumentStates" => $documentStates,
 					]
 				);
 			}
@@ -890,7 +912,7 @@ class Element implements Controllable, Errorable
 			"IBLOCK_TYPE" => $this->params["IBLOCK_TYPE_ID"],
 			"IBLOCK_ID" => $this->iblockId,
 			"ID" => $this->elementId,
-			"CHECK_PERMISSIONS" => "N"
+			"CHECK_PERMISSIONS" => "N",
 		];
 		$queryObject = \CIBlockElement::getList([], $filter, false, false, $elementSelect);
 		if ($result = $queryObject->fetch())
@@ -946,7 +968,7 @@ class Element implements Controllable, Errorable
 			if ($this->listObject->is_field($fieldId))
 				$elementSelect[] = $fieldId;
 			else
-				$propertyFields[] = $fieldId;
+				$propertyFields[$field['ID']] = $fieldId;
 
 			if ($fieldId == "CREATED_BY")
 				$elementSelect[] = "CREATED_USER_NAME";
@@ -959,15 +981,26 @@ class Element implements Controllable, Errorable
 			}
 		}
 
+		$elementSelect = array_unique($elementSelect);
+		if (is_array($this->params['SELECT'] ?? null))
+		{
+			$elementSelect = array_intersect($elementSelect, $this->params['SELECT']);
+			$propertyFields = array_intersect($propertyFields, $this->params['SELECT']);
+			if (empty($elementSelect))
+			{
+				$elementSelect = ['ID'];
+			}
+		}
+
 		$order = $this->getOrder($availableFieldsIdForSort);
 
 		$filter = [
 			"=IBLOCK_TYPE" => $this->params["IBLOCK_TYPE_ID"],
 			"IBLOCK_ID" => $this->iblockId,
-			"ID" => $this->params["ELEMENT_ID"] ? $this->params["ELEMENT_ID"] : "",
-			"=CODE" => $this->params["ELEMENT_CODE"] ? $this->params["ELEMENT_CODE"] : "",
+			"ID" => $this->params["ELEMENT_ID"] ?? "",
+			"=CODE" => $this->params["ELEMENT_CODE"] ?? "",
 			"SHOW_NEW" => (!empty($this->params["CAN_FULL_EDIT"]) && $this->params["CAN_FULL_EDIT"] == "Y" ? "Y" : "N"),
-			"CHECK_PERMISSIONS" => "Y"
+			"CHECK_PERMISSIONS" => "Y",
 		];
 		$filter = $this->getInputFilter($filter);
 		$queryObject = \CIBlockElement::getList($order, $filter, false, $navData, $elementSelect);
@@ -980,7 +1013,11 @@ class Element implements Controllable, Errorable
 				$queryProperty = \CIBlockElement::getProperty(
 					$this->iblockId,
 					$result["ID"], "SORT", "ASC",
-					array("ACTIVE" => "Y", "EMPTY" => "N")
+					[
+						"ACTIVE" => "Y",
+						"EMPTY" => "N",
+						'ID' => array_keys($propertyFields),
+					]
 				);
 				while ($property = $queryProperty->fetch())
 				{
@@ -998,9 +1035,8 @@ class Element implements Controllable, Errorable
 	{
 		$order = [];
 
-		if (is_array($this->params["ELEMENT_ORDER"]))
+		if (is_array($this->params["ELEMENT_ORDER"] ?? null))
 		{
-
 			$orderList = ["nulls,asc", "asc,nulls", "nulls,desc", "desc,nulls", "asc", "desc"];
 			foreach ($this->params["ELEMENT_ORDER"] as $fieldId => $orderParam)
 			{
@@ -1023,12 +1059,12 @@ class Element implements Controllable, Errorable
 
 	private function getInputFilter(array $filter)
 	{
-		if (is_array($this->params["FILTER"]))
+		if (is_array($this->params["FILTER"] ?? null))
 		{
 			foreach ($this->resultSanitizeFilter as $key => $value)
 			{
 				$key = str_replace(["ACTIVE_FROM", "ACTIVE_TO"], ["DATE_ACTIVE_FROM", "DATE_ACTIVE_TO"], $key);
-				$filter[$key] = $value;
+				$filter[$key] = $value === '' ? false : $value;
 			}
 		}
 

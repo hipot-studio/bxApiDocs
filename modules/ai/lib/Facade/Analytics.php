@@ -31,7 +31,7 @@ class Analytics
 			$section = ($engine->getPayload() instanceof Prompt) ? $engine->getPayload()->getPromptCategory() : '';
 			$promptCode = ($engine->getPayload() instanceof Prompt) ? 'prompt_' . $converter->process($engine->getPayload()->getPromptCode()) : '';
 			$p3 = ($engine->getPayload()->getRole() !== null) ? 'role_' . $converter->process($engine->getPayload()->getRole()->getCode()) : '';
-			if ($engine->getPayload() instanceof Prompt && in_array('system', $engine->getPayload()->getPromptCategories(), true))
+			if ($engine->getPayload() instanceof Prompt && $engine->getPayload()->hasSystemCategory())
 			{
 				$section = 'system';
 			}

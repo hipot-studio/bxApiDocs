@@ -125,10 +125,7 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 			return $existedMember;
 		}
 
-		if (isset($nodeMember->active))
-		{
-			$nodeMemberEntity->setActive($nodeMember->active);
-		}
+		$nodeMemberEntity->setActive($nodeMember->active === true);
 
 		if (!isset($nodeMember->role))
 		{

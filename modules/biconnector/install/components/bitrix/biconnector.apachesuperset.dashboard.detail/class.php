@@ -11,10 +11,14 @@ use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Integrator\ServiceLocation;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardUrlParameterTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Manager;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -30,6 +34,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 	{
 		$arParams['DASHBOARD_ID'] = (int)($arParams['DASHBOARD_ID'] ?? 0);
 		$arParams['CODE'] = $arParams['CODE'] ?? '';
+		$arParams['URL_PARAMS'] = $arParams['URL_PARAMS'] ?? [];
 
 		return parent::onPrepareComponentParams($arParams);
 	}
@@ -56,19 +61,26 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			'MARKET_COLLECTION_URL' => MarketDashboardManager::getMarketCollectionUrl(),
 			'SUPERSET_SERVICE_LOCATION' => ServiceLocation::getCurrentDatacenterLocationRegion(),
 		];
+
+		$embeddedDebugMode = Option::get('biconnector', 'embedded_debug_mode', 'N');
+		$this->arResult['EMBEDDED_DEBUG_MODE'] = $embeddedDebugMode === 'Y';
+
+		$pdfExportEnabled = Option::get('biconnector', 'pdf_export_enabled', 'N');
+		$this->arResult['PDF_EXPORT_ENABLED'] = $pdfExportEnabled === 'Y';
 	}
 
 	public function executeComponent()
 	{
 		$dashboardId = (int)$this->arParams['DASHBOARD_ID'];
-		$dashboard = SupersetDashboardTable::getByPrimary($dashboardId)->fetch();
-		if (!$dashboard)
+		if (!$this->initDashboard())
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_DETAIL_NOT_FOUND');
 			$this->includeComponentTemplate();
+
 			return;
 		}
 
+		$dashboard = $this->dashboard->getOrmObject()->collectValues();
 		$accessItem = DashboardAccessItem::createFromArray([
 			'ID' => $dashboardId,
 			'TYPE' => $dashboard['TYPE'],
@@ -84,9 +96,8 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		}
 
 		$this->prepareResult();
-		$this->initDashboard();
 
-		if (SupersetInitializer::isSupersetLoad())
+		if (SupersetInitializer::isSupersetLoading())
 		{
 			$dashboard['STATUS'] = SupersetDashboardTable::DASHBOARD_STATUS_LOAD;
 			$this->showStartupTemplate($dashboard);
@@ -103,7 +114,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 
 		if (
-			$dashboard['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_READY
+			$this->dashboard->isAvailableDashboard()
 			&& SupersetInitializer::isSupersetReady()
 			&& !$this->dashboard->isSupersetDashboardDataLoaded()
 		)
@@ -133,6 +144,8 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->prepareEmbeddedCredentials();
 		$this->prepareNativeFilters();
 
+		$this->prepareUrlParams();
+
 		$this->includeComponentTemplate();
 	}
 
@@ -141,7 +154,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->arResult['DASHBOARD_TITLE'] = $dashboard['TITLE'];
 		$this->arResult['DASHBOARD_ID'] = $dashboard['ID'];
 		$this->arResult['DASHBOARD_STATUS'] =
-			$dashboard['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_READY
+			$this->dashboard->isAvailableDashboard()
 				? SupersetDashboardTable::DASHBOARD_STATUS_LOAD
 				: $dashboard['STATUS']
 		;
@@ -154,8 +167,24 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 	private function initDashboard(): bool
 	{
 		$superset = $this->getSupersetController();
-		$this->dashboard = $superset->getDashboardRepository()->getById((int)$this->arParams['DASHBOARD_ID']);
-		if (!$this->dashboard?->isSupersetDashboardDataLoaded())
+		$this->dashboard = $superset->getDashboardRepository()->getById((int)$this->arParams['DASHBOARD_ID'], true);
+
+		if (!$this->dashboard)
+		{
+			return false;
+		}
+
+		$this->dashboard->loadCredentials();
+		if (!$this->dashboard->isSupersetDashboardDataLoaded())
+		{
+			return false;
+		}
+
+		if (
+			!Manager::isAdmin()
+			&& $this->dashboard->getStatus() === SupersetDashboardTable::DASHBOARD_STATUS_DRAFT
+			&& $this->dashboard->getOrmObject()->getOwnerId() !== CurrentUser::get()->getId()
+		)
 		{
 			return false;
 		}
@@ -180,13 +209,40 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->arResult['NATIVE_FILTERS'] = $this->dashboard->getNativeFilter();
 	}
 
+	private function prepareUrlParams(): void
+	{
+		$this->arResult['URL_PARAMS'] = [];
+		$this->arResult['PARAMS_COMPATIBLE'] = true;
+
+		$uriVariables = SupersetDashboardUrlParameterTable::getList([
+				'filter' => ['=DASHBOARD_ID' => $this->dashboard->getId()],
+				'select' => ['ID', 'CODE'],
+			])
+			->fetchCollection()
+		;
+
+		$existedCodes = [];
+		foreach ($uriVariables as $uriVariable)
+		{
+			$existedCodes[$uriVariable->getCode()] = $uriVariable->getId();
+		}
+
+		foreach ($existedCodes as $code => $id)
+		{
+			if (isset($this->arParams['URL_PARAMS'][$code]))
+			{
+				$this->arResult['URL_PARAMS'][$code] = $this->arParams['URL_PARAMS'][$code];
+			}
+			else
+			{
+				$this->arResult['PARAMS_COMPATIBLE'] = false;
+			}
+		}
+	}
+
 	private function prepareAccessParams(): void
 	{
-		$accessItem = DashboardAccessItem::createFromArray([
-			'ID' => $this->dashboard->getId(),
-			'TYPE' => $this->dashboard->getType(),
-			'OWNER_ID' => $this->dashboard->getField('OWNER_ID'),
-		]);
+		$accessItem = DashboardAccessItem::createFromEntity($this->dashboard);
 		$accessController = AccessController::getCurrent();
 
 		$canExport = $accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_EXPORT, $accessItem);

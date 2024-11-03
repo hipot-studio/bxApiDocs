@@ -17,7 +17,6 @@ use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\BIConnector;
-use Bitrix\BIConnector\Controller;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -96,6 +95,8 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_TARIFF_ERROR');
 			$this->arResult['FEATURE_AVAILABLE'] = false;
 			$this->arResult['HELPER_CODE'] = 'limit_crm_BI_constructor';
+
+
 			$this->includeComponentTemplate($template);
 
 			return;
@@ -124,6 +125,12 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 
 		$superset = new SupersetController(Integrator::getInstance());
 		$superset->initializeOrCheckSupersetStatus();
+
+		$this->arResult['URL_PARAMS'] =
+			$this->request->get('params') && is_string($this->request->get('params'))
+				? Superset\Dashboard\UrlParameter\Service::decode($this->request->get('params'))
+				: null
+		;
 
 		$this->includeComponentTemplate($template);
 	}

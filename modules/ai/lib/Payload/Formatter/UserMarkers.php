@@ -9,12 +9,14 @@ class UserMarkers extends Formatter implements IFormatter
 	 */
 	public function format(array $additionalMarkers = []): string
 	{
-		foreach ($this->getCurrentUserData() as $key => $val)
+		$userId = $this->engine->getContext()->getUserId();
+
+		foreach ($this->getUserDataById($userId) as $key => $val)
 		{
 			if (!is_array($val))
 			{
 				$key = mb_strtolower($key);
-				$this->text = str_replace('{user.'.$key.'}', $val, $this->text);
+				$this->text = str_replace('{user.' . $key . '}', $val, $this->text);
 			}
 		}
 

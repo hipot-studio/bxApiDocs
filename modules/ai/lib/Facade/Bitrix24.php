@@ -85,21 +85,13 @@ class Bitrix24
 	}
 
 	/**
-	 * Returns code of portal's zone. Otherwise, language id.
+	 * Returns code of portal's zone.
 	 *
 	 * @return string
 	 */
 	public static function getPortalZone(): string
 	{
-		if (Loader::includeModule('bitrix24'))
-		{
-			return CBitrix24::getPortalZone();
-		}
-
-		// todo: fixme
-		// we forced zone 'ru' because in several places we check that zone is ru or by
-		return 'ru';
-		//return LANGUAGE_ID;
+		return Application::getInstance()->getLicense()->getRegion() ?? 'ru';
 	}
 
 	/**

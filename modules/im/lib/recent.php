@@ -37,6 +37,7 @@ Loc::loadMessages(__FILE__);
 
 class Recent
 {
+	private static array $unreadElementCache = [];
 	private const PINNED_CHATS_LIMIT = 45;
 
 	static private bool $limitError = false;
@@ -1498,29 +1499,8 @@ class Recent
 
 		$unread = $unread === true? 'Y': 'N';
 
-		$id = $dialogId;
-		if (mb_substr($dialogId, 0, 4) === 'chat')
-		{
-			if ($itemTypes === null)
-			{
-				$itemTypes = \Bitrix\Im\Chat::getTypes();
-			}
+		$element = self::getUnreadElement($userId, $itemTypes, $dialogId);
 
-			$id = mb_substr($dialogId, 4);
-		}
-		else
-		{
-			$itemTypes = IM_MESSAGE_PRIVATE;
-		}
-
-		$element = \Bitrix\Im\Model\RecentTable::getList([
-			'select' => ['USER_ID', 'ITEM_TYPE', 'ITEM_ID', 'UNREAD', 'MUTED' => 'RELATION.NOTIFY_BLOCK', 'ITEM_CID', 'MARKED_ID'],
-			'filter' => [
-				'=USER_ID' => $userId,
-				'=ITEM_TYPE' => $itemTypes,
-				'=ITEM_ID' => $id
-			]
-		])->fetch();
 		if (!$element)
 		{
 			return false;
@@ -1529,6 +1509,8 @@ class Recent
 		{
 			return true;
 		}
+
+		self::$unreadElementCache[$userId][$dialogId] = null;
 
 		$updatedFields = [
 			'UNREAD' => $unread,
@@ -1591,6 +1573,40 @@ class Recent
 		}
 
 		return true;
+	}
+
+	private static function getUnreadElement(int $userId, ?string $itemTypes, $dialogId): array|false
+	{
+		if (self::$unreadElementCache[$userId][$dialogId] !== null)
+		{
+			return self::$unreadElementCache[$userId][$dialogId];
+		}
+
+		$id = $dialogId;
+		if (mb_substr($dialogId, 0, 4) === 'chat')
+		{
+			if ($itemTypes === null)
+			{
+				$itemTypes = \Bitrix\Im\Chat::getTypes();
+			}
+
+			$id = mb_substr($dialogId, 4);
+		}
+		else
+		{
+			$itemTypes = IM_MESSAGE_PRIVATE;
+		}
+
+		self::$unreadElementCache[$userId][$dialogId] = \Bitrix\Im\Model\RecentTable::getList([
+			'select' => ['USER_ID', 'ITEM_TYPE', 'ITEM_ID', 'UNREAD', 'MUTED' => 'RELATION.NOTIFY_BLOCK', 'ITEM_CID', 'MARKED_ID'],
+			'filter' => [
+				'=USER_ID' => $userId,
+				'=ITEM_TYPE' => $itemTypes,
+				'=ITEM_ID' => $id
+			]
+		])->fetch();
+
+		return self::$unreadElementCache[$userId][$dialogId];
 	}
 
 	public static function readAll(int $userId): void
@@ -1964,7 +1980,7 @@ class Recent
 
 			$rows[$key]['COUNTER'] = $counters[$chatId] ?? 0;
 			$rows[$key]['CHAT_LAST_MESSAGE_STATUS'] = $boolStatus === 'Y' ? \IM_MESSAGE_STATUS_DELIVERED : \IM_MESSAGE_STATUS_RECEIVED;
-			$rows[$key]['MESSAGE_CODE'] = $params[$messageId]['CODE'] ?? null;
+			$rows[$key]['MESSAGE_CODE'] = $rows[$key]['MESSAGE_CODE'] ?? $params[$messageId]['CODE'] ?? null;
 			$rows[$key]['MESSAGE_ATTACH'] = $params[$messageId]['ATTACH']['VALUE'] ?? null;
 			$rows[$key]['MESSAGE_ATTACH_JSON'] = $params[$messageId]['ATTACH']['JSON'] ?? null;
 			$rows[$key]['MESSAGE_FILE'] = $params[$messageId]['MESSAGE_FILE'] ?? false;

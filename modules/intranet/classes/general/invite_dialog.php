@@ -21,6 +21,7 @@ use Bitrix\Main\Engine\Router;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Bitrix24\Integration;
+use Bitrix\Main\Web\Uri;
 
 Loc::loadMessages(__FILE__);
 
@@ -326,15 +327,13 @@ class CIntranetInviteDialog
 
 					if ($bitrix24Installed && Loader::includeModule('socialservices'))
 					{
-						$b24NetworkTransport = new CBitrix24NetOAuthInterface();
-						$uri = new \Bitrix\Main\Web\Uri(defined('B24NETWORK_NODE') ? B24NETWORK_NODE : 'https://www.bitrix24.net');
-
-						$uri->setPath('/invite/');
+						$uri = new Uri(
+							(new CBitrix24NetOAuthInterface)->getInviteUrl(
+								$ID_ADDED,
+								$arUser["B24NETWORK_CHECKWORD"],
+							)
+						);
 						$uri->addParams([
-							'user_lang' => LANGUAGE_ID,
-							'client_id' => $b24NetworkTransport->getAppID(),
-							'profile_id' => $ID_ADDED,
-							'checkword' => $arUser["B24NETWORK_CHECKWORD"],
 							'accepted' => 'yes'
 						]);
 						$url = $uri->getLocator();

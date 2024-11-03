@@ -72,7 +72,26 @@ class ElementDetails extends \Bitrix\Main\Engine\Controller
 
 		$description = $iBlock->getDescription() ?? '';
 		$parser = new \CTextParser();
-		$bbDescription = $parser->convertHTMLToBB($description);
+		$bbDescription = $parser->convertHTMLToBB(
+			$description,
+			[
+				'ANCHOR' => 'Y',
+				'BIU' => 'Y',
+				'FONT' => 'Y',
+				'LIST' => 'Y',
+				'NL2BR' => 'Y',
+
+				'HTML' => 'N',
+				'IMG' => 'N',
+				'QUOTE' => 'N',
+				'CODE' => 'N',
+				'SMILES' => 'N',
+				'VIDEO' => 'N',
+				'TABLE' => 'N',
+				'ALIGN' => 'N',
+				'P' => 'N',
+			]
+		);
 
 		$result = [
 			'perms' => [

@@ -301,4 +301,10 @@ abstract class EdnaUtils implements EdnaRu
 
 		return $result;
 	}
+
+	public function clearCache(string $key): void
+	{
+		$cacheManager = new Providers\CacheManager($this->providerId);
+		$cacheManager->deleteValue($key);
+	}
 }

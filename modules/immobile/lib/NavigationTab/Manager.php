@@ -41,6 +41,7 @@ class Manager
 		$this->openLines = new Tab\OpenLines($context);
 		$this->notifications = new Tab\Notifications($context);
 		$this->channel = new Tab\Channel();
+		// $this->collab = new Tab\Collab();
 	}
 
 	public static function getShortTitle()
@@ -83,9 +84,9 @@ class Manager
 				'title' => Loc::getMessage('MD_COMPONENT_IM_RECENT'),
 				'componentCode' => 'im.navigation',
 				'scriptPath' => MobileApp\Janative\Manager::getComponentPath('im:im.navigation'),
-				'params' => [
+				'params' => array_merge([
 					'firstTabId' => $items[0]->getId(),
-				],
+				], $sharedParams),
 				'rootWidget' => [
 					'name' => 'tabs',
 					'settings' => [
@@ -161,6 +162,7 @@ class Manager
 			$this->messenger,
 			$this->notifications,
 			$this->copilot,
+			// $this->collab,
 			$this->channel,
 		];
 	}
@@ -172,6 +174,7 @@ class Manager
 			$this->openLines,
 			$this->notifications,
 			$this->copilot,
+			// $this->collab,
 			$this->channel,
 		];
 	}
@@ -181,6 +184,7 @@ class Manager
 		return [
 			$this->messenger,
 			$this->copilot,
+			// $this->collab,
 			$this->notifications,
 			$this->channel,
 			$this->openLines,

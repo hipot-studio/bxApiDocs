@@ -83,6 +83,26 @@ class DepartmentProvider extends BaseProvider
 		{
 			$this->options['depthLevel'] = $options['depthLevel'];
 		}
+
+		$this->options['shouldCountSubdepartments'] = false;
+		if (isset($options['shouldCountSubdepartments']) && is_bool($options['shouldCountSubdepartments']))
+		{
+			$this->options['shouldCountSubdepartments'] = $options['shouldCountSubdepartments']
+				&& (
+					$this->options['selectMode'] === self::MODE_DEPARTMENTS_ONLY
+					|| $this->options['selectMode'] === self::MODE_USERS_AND_DEPARTMENTS
+				);
+		}
+
+		$this->options['shouldCountUsers'] = false;
+		if (isset($options['shouldCountUsers']) && is_bool($options['shouldCountUsers']))
+		{
+			$this->options['shouldCountUsers'] = $options['shouldCountUsers']
+				&& (
+					$this->options['selectMode'] === self::MODE_USERS_ONLY
+					|| $this->options['selectMode'] === self::MODE_USERS_AND_DEPARTMENTS
+				);
+		}
 	}
 
 	public function getSelectMode()
@@ -295,6 +315,19 @@ class DepartmentProvider extends BaseProvider
 				continue;
 			}
 
+			$subdepartmentsCount = null;
+			if ($this->options['shouldCountSubdepartments'])
+			{
+				$subdepartmentsCount = $this->getSubdepartmentsCount($department->getId());
+			}
+
+			$usersCount = null;
+			if ($this->options['shouldCountUsers'])
+			{
+				$usersOptions = $this->getUserOptions($dialog);
+				$usersCount = UserProvider::getUsers(['departmentId' => $department->getId()] + $usersOptions)->count();
+			}
+
 			$item = new Item([
 				'id' => $department->getId(),
 				'entityId' => 'department',
@@ -302,6 +335,10 @@ class DepartmentProvider extends BaseProvider
 				'tabs' => 'departments',
 				'searchable' => $availableInRecentTab,
 				'availableInRecentTab' => $availableInRecentTab,
+				'customData' => [
+					'subdepartmentsCount' => $subdepartmentsCount,
+					'usersCount' => $usersCount,
+				],
 				'nodeOptions' => [
 					'dynamic' => is_bool($forceDynamic) ? $forceDynamic : true,
 					'open' => $isRootDepartment,
@@ -583,6 +620,16 @@ class DepartmentProvider extends BaseProvider
 				'order' => ['LEFT_MARGIN' => 'asc'],
 				'limit' => $limit,
 		])->fetchCollection();
+	}
+
+	protected function getSubdepartmentsCount($departmentId, ?int $limit = null)
+	{
+		return SectionTable::getList([
+			'select' => [],
+			'filter' => ['=IBLOCK_SECTION_ID' => $departmentId],
+			'order' => [],
+			'limit' => $limit ?? $this->getLimit(),
+		])->fetchCollection()->count();
 	}
 
 	public static function getStructureIBlockId(): int

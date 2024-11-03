@@ -138,6 +138,7 @@ class Context
 			'contextId' => $this->getContextId(),
 			'userId' => $this->getUserId(),
 			'parameters' => $this->getParameters(),
+			'languageCode'=> $this->getLanguage()?->getCode()
 		]);
 	}
 
@@ -154,6 +155,7 @@ class Context
 			'contextId' => $contextId,
 			'userId' => $userId,
 			'parameters' => $parameters,
+			'languageCode' => $languageCode,
 		] = json_decode($packedData, true);
 
 		$context = new self(
@@ -162,6 +164,10 @@ class Context
 			$userId,
 		);
 		$context->setParameters($parameters);
+		if ($languageCode !== null)
+		{
+			$context->setLanguage($languageCode);
+		}
 
 		return $context;
 	}

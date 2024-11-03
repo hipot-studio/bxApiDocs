@@ -233,6 +233,11 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 
 	public static function shouldTreatImageAsFile(array $fileData): bool
 	{
+		if (empty($fileData['FILE_SIZE']))
+		{
+			return false;
+		}
+
 		$controller = new static([]);
 		$config = $controller->getConfiguration();
 

@@ -188,21 +188,20 @@ class CIMDisk
 			return false;
 		}
 
-		$chat = \Bitrix\Im\Chat::getById($chatId, ['CHECK_ACCESS' => 'Y']);
-		if (!$chat)
+		$chat =\Bitrix\Im\V2\Chat::getInstance($chatId);
+		if (!$chat->isExist())
 		{
 			$error = Loc::getMessage('IM_DISK_ERR_UPLOAD').' (E101)';
 			return false;
 		}
 
-		$chatRelation = \CIMChat::GetRelationById($chatId, false, true, false);
-		if (!$chatRelation[self::GetUserId()])
+		if (!$chat->checkAccess()->isSuccess())
 		{
 			$error = Loc::getMessage('IM_DISK_ERR_UPLOAD').' (E102)';
 			return false;
 		}
 
-		if ($chat['ENTITY_TYPE'] === 'ANNOUNCEMENT' && $chatRelation[self::GetUserId()]['MANAGER'] !== 'Y')
+		if (!$chat->canDo(IM\V2\Chat\Permission::ACTION_SEND))
 		{
 			$error = Loc::getMessage('IM_DISK_ERR_UPLOAD').' (E103)';
 			return false;

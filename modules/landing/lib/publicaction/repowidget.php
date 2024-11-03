@@ -18,6 +18,40 @@ class RepoWidget extends Repo
 {
 	private const SUBTYPE_WIDGET = 'widgetvue';
 
+
+
+
+	// tmp hide
+	public static function register(string $code, array $fields, array $manifest = []): PublicActionResult
+	{
+		$result = new PublicActionResult();
+		$error = new \Bitrix\Landing\Error;
+		$error->addError(
+			'ILLEGAL_METHOD',
+			Loc::getMessage('LANDING_WIDGET_METHOD_NOT_AVAILABLE')
+		);
+		$result->setError($error);
+
+		return $result;
+	}
+
+	// tmp hide
+	public static function unregister($code)
+	{
+		$result = new PublicActionResult();
+		$error = new \Bitrix\Landing\Error;
+		$error->addError(
+			'ILLEGAL_METHOD',
+			Loc::getMessage('LANDING_WIDGET_METHOD_NOT_AVAILABLE')
+		);
+		$result->setError($error);
+
+		return $result;
+	}
+
+
+
+
 	/**
 	 * Some fixes in fields and manifest, specific by scope (mainpage widget or any)
 	 * @param array $fields
@@ -62,6 +96,19 @@ class RepoWidget extends Repo
 	 */
 	public static function fetchData(int $blockId, array $params = []): PublicActionResult
 	{
+		// tmp hide
+		$result = new PublicActionResult();
+		$error = new \Bitrix\Landing\Error;
+		$error->addError(
+			'ILLEGAL_METHOD',
+			Loc::getMessage('LANDING_WIDGET_METHOD_NOT_AVAILABLE')
+		);
+		$result->setError($error);
+
+		return $result;
+
+
+
 		$result = new PublicActionResult();
 		$result->setResult(false);
 		$error = new Landing\Error;

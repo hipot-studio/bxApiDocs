@@ -95,6 +95,10 @@ final class ShiftDto extends AbstractDto
 		{
 			$this->shiftDate = DateHelper::getInstance()->getServerDate($value);
 		}
+		else if (is_string($value) && $property->getName() === 'skipTm')
+		{
+			$this->skipTm = $value === 'true';
+		}
 		else
 		{
 			parent::setValue($property, $value);

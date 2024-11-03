@@ -297,7 +297,7 @@ final class SupersetInitializer
 		return self::getSupersetStatus() === self::SUPERSET_STATUS_DELETED;
 	}
 
-	public static function isSupersetLoad(): bool
+	public static function isSupersetLoading(): bool
 	{
 		return self::getSupersetStatus() === self::SUPERSET_STATUS_LOAD;
 	}

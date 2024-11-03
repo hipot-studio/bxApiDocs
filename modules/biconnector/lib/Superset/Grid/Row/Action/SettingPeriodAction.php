@@ -22,7 +22,7 @@ final class SettingPeriodAction extends BaseAction
 
 	protected function getText(): string
 	{
-		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_SETTING_PERIOD');
+		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_SETTING_PERIOD') ?? '';
 	}
 
 	public function getControl(array $rawFields): ?array

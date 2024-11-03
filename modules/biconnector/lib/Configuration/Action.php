@@ -157,7 +157,7 @@ class Action
 					if ($importResult->isSuccess())
 					{
 						$dashboard = $importResult->getData()['dashboard'];
-						if ($dashboard instanceof Model\EO_SupersetDashboard)
+						if ($dashboard instanceof Model\SupersetDashboard)
 						{
 							$manager->applyDashboardSettings($dashboard, $content['DATA']['dashboardSettings'] ?? []);
 						}

@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action;
 
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\Main\Grid\Row\Action\DataProvider;
 
@@ -24,6 +25,8 @@ class DashboardDataProvider extends DataProvider
 			new EditAction(),
 			new CopyAction(),
 			new DeleteAction(),
+			new PublishAction(),
+			new SetDraftAction(),
 			new OpenSettingsAction(),
 			new ExportAction(),
 			new AddToTopMenuAction(),
@@ -38,6 +41,7 @@ class DashboardDataProvider extends DataProvider
 		$settings = $this->getSettings();
 		if (
 			($settings !== null && !$settings->isSupersetAvailable())
+			|| SupersetInitializer::isSupersetLoading()
 			|| $rawFields["STATUS"] === SupersetDashboardTable::DASHBOARD_STATUS_LOAD
 		)
 		{

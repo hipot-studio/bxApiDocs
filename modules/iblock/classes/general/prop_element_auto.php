@@ -436,6 +436,9 @@ class CIBlockPropertyElementAutoComplete
 						$viewMode = 'ELEMENT_TEMPLATE';
 						$resultKey = '~NAME';
 						break;
+					case 'BIZPROC':
+						$viewMode = 'BIZPROC';
+						break;
 				}
 			}
 			if (!isset($cache[$arValue['VALUE']]))

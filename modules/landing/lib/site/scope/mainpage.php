@@ -1,11 +1,14 @@
 <?php
 namespace Bitrix\Landing\Site\Scope;
 
-use \Bitrix\Landing\Role;
-use \Bitrix\Landing\Manager;
-use \Bitrix\Landing\Domain;
-use \Bitrix\Landing\Site\Scope;
-use Bitrix\Landing\Site\Type;
+use Bitrix\Landing\Block\BlockRepo;
+use Bitrix\Landing\Role;
+use Bitrix\Landing\Manager;
+use Bitrix\Landing\Domain;
+use Bitrix\Landing\Site\Scope;
+use Bitrix\Main\Entity;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventManager;
 
 /**
  * Scope for Main page (welcome)
@@ -21,6 +24,22 @@ class Mainpage extends Scope
 	{
 		parent::init($params);
 		Role::setExpectedType(self::$currentScopeId);
+
+		$eventManager = EventManager::getInstance();
+		$eventManager->addEventHandler(
+			'landing',
+			'onBlockRepoSetFilters',
+			function(Event $event)
+			{
+				$result = new Entity\EventResult();
+				$result->modifyFields([
+					'ENABLE' => BlockRepo::FILTER_SKIP_COMMON_BLOCKS,
+					'DISABLE' => BlockRepo::FILTER_SKIP_HIDDEN_BLOCKS,
+				]);
+
+				return $result;
+			}
+		);
 	}
 
 	/**
@@ -91,15 +110,6 @@ class Mainpage extends Scope
 			'YACOUNTER',
 			'COOKIES',
 		];
-	}
-
-	/**
-	 * Check is current scope can use blocks (and sections) without type definition.
-	 * @return bool
-	 */
-	public static function canUseCommonBlocks(): bool
-	{
-		return false;
 	}
 
 	/**

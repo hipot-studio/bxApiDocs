@@ -108,20 +108,11 @@ class DoD extends Controller
 	 */
 	public function getSettingsAction(int $groupId, int $taskId = 0, string $saveRequest = 'Y'): array
 	{
-		$typeService = new TypeService();
-		$backlogService = new BacklogService();
-
-		$backlog = $backlogService->getBacklogByGroupId($groupId);
-
-		$itemType = $this->getItemType($taskId);
+		$definitionOfDoneService = new DefinitionOfDoneService(User::getId());
+		$itemType = $definitionOfDoneService->getItemType($taskId);
 
 		$activeTypeId = 0;
-		$types = [];
-
-		foreach ($typeService->getTypes($backlog->getId()) as $type)
-		{
-			$types[] = $type->toArray();
-		}
+		$types = $definitionOfDoneService->getTypes($groupId);
 
 		if (!$itemType->isEmpty())
 		{
@@ -449,8 +440,10 @@ class DoD extends Controller
 		foreach ($typeItems as $typeItem)
 		{
 			$items[$typeItem['NODE_ID']] = [
+				'COPIED_ID' => $typeItem['COPIED_ID'],
 				'ITEM_ID' => $itemId,
 				'NODE_ID' => $typeItem['NODE_ID'],
+				'PARENT_ID' => $typeItem['PARENT_ID'],
 				'PARENT_NODE_ID' => (
 				isset($typeItems[$typeItem['PARENT_ID']])
 					? $typeItems[$typeItem['PARENT_ID']]['NODE_ID']

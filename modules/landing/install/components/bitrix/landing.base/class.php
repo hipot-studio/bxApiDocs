@@ -326,7 +326,7 @@ class LandingBaseComponent extends \CBitrixComponent
 					['zones' => ['de'], 'id' => 2771, 'lang' => 'de', 'sec' => '0wz58m'],
 					['zones' => ['la', 'co', 'mx'], 'id' => 2772, 'lang' => 'es', 'sec' => 'g50y3x'],
 					['zones' => ['pl'], 'id' => 2773, 'lang' => 'pl', 'sec' => 'q0vn83'],
-					['zones' => ['com.br'], 'id' => 2774, 'lang' => 'br', 'sec' => 'bglwot'],
+					['zones' => ['br'], 'id' => 2774, 'lang' => 'br', 'sec' => 'bglwot'],
 					['zones' => ['it'], 'id' => 2775, 'lang' => 'it', 'sec' => 'ct7o1m'],
 					['zones' => ['fr'], 'id' => 2776, 'lang' => 'fr', 'sec' => 'fxqhd2'],
 					['zones' => ['tr'], 'id' => 2777, 'lang' => 'tr', 'sec' => '7mn6x4'],

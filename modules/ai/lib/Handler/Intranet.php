@@ -5,6 +5,7 @@ namespace Bitrix\AI\Handler;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Integration;
 use Bitrix\Main;
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
@@ -22,7 +23,11 @@ class Intranet
 	 */
 	public static function onSettingsProvidersCollect(Main\Event $event): void
 	{
-		$zone = Loader::includeModule('bitrix24') ? Bitrix24::getPortalZone() : LANGUAGE_ID;
+		$zone = Loader::includeModule('bitrix24')
+			? Bitrix24::getPortalZone()
+			:(Application::getInstance()->getLicense()->getRegion() ?? 'ru')
+		;
+
 		if (in_array($zone, ['cn'], true))
 		{
 			return;

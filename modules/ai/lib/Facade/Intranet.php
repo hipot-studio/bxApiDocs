@@ -2,6 +2,7 @@
 
 namespace Bitrix\AI\Facade;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use CIntranetUtils;
@@ -22,16 +23,9 @@ class Intranet
 
 	/**
 	 * @return string
-	 *
-	 * @throws LoaderException
 	 */
 	public static function getPortalZone(): string
 	{
-		if (Loader::includeModule('intranet'))
-		{
-			return CIntranetUtils::getPortalZone();
-		}
-
-		return 'ru';
+		return Application::getInstance()->getLicense()->getRegion() ?? 'ru';
 	}
 }

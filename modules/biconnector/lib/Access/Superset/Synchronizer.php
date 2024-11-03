@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Access\Superset;
 
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\Main;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Access\AccessController;
@@ -96,7 +97,7 @@ final class Synchronizer
 	private static function getDashboardExternalIdList(array $filter = []): array
 	{
 		$filter += [
-			'=STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_READY,
+			'=STATUS' => SupersetDashboard::getActiveDashboardStatuses(),
 			'=TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM,
 		];
 

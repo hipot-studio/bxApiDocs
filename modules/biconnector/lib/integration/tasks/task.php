@@ -520,7 +520,6 @@ class Task extends Dataset
 			(new IntegerField('TIME_ESTIMATE')),
 			(new StringField('MATCH_WORK_TIME')),
 			(new IntegerField('DURATION_PLAN')),
-			(new IntegerField('DURATION_FACT')),
 			(new StringField('DURATION_TYPE'))
 				->setDictionary([
 					TimeUnitType::SECOND => $this->getMessage('TASK_FIELD_DURATION_TYPE_VALUE_TYPE_SECOND'),

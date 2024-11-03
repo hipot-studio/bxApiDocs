@@ -4,6 +4,11 @@ declare(strict_types = 1);
 
 namespace Bitrix\AI\Synchronization;
 
+use Bitrix\AI\Enum\RuleName;
+use Bitrix\AI\Synchronization\Dto\RuleDto;
+use Bitrix\AI\Synchronization\Enum\SyncMode;
+use Bitrix\AI\Synchronization\Repository\BaseDisplayRuleRepository;
+use Bitrix\Main\Application;
 use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\UpdateResult;
@@ -14,6 +19,7 @@ use Bitrix\Main\Type\DateTime;
 abstract class BaseSync implements SyncInterface
 {
 	protected DataManager $dataManager;
+	protected string $region;
 
 	/**
 	 * Return DataManager
@@ -65,9 +71,19 @@ abstract class BaseSync implements SyncInterface
 	 *
 	 * @return AddResult|UpdateResult
 	 */
-	protected function addOrUpdate(array $fields): AddResult|UpdateResult
+	protected function addOrUpdate(array $fields, ?array $rules = null): AddResult|UpdateResult
 	{
 		$fields = array_change_key_case($fields, CASE_UPPER);
+		if (is_null($rules))
+		{
+			$rules = $this->getRules($fields['RULES'] ?? []);
+		}
+
+		if (array_key_exists('RULES', $fields))
+		{
+			unset($fields['RULES']);
+		}
+
 		$filterExists = [];
 		$exists = null;
 
@@ -81,9 +97,20 @@ abstract class BaseSync implements SyncInterface
 			$exists = $this->getByFilter($filterExists);
 		}
 
+		if (!array_key_exists('RULE', $fields))
+		{
+			unset($fields['RULES']);
+		}
+
 		if (is_null($exists))
 		{
-			return $this->add($fields);
+			$result = $this->add($fields);
+			if ($result->isSuccess())
+			{
+				$this->updateRules((int)$result->getId(), $rules);
+			}
+
+			return $result;
 		}
 
 		if ($exists['HASH'] === ($fields['HASH'] ?? null))
@@ -93,7 +120,13 @@ abstract class BaseSync implements SyncInterface
 
 		$fields['DATE_MODIFY'] = new DateTime();
 
-		return $this->update($exists['ID'], $fields);
+		$result = $this->update($exists['ID'], $fields);
+		if ($result->isSuccess())
+		{
+			$this->updateRules((int)$exists['ID'], $rules, true);
+		}
+
+		return $result;
 	}
 
 	protected function getFakeUpdateResult(string $id): UpdateResult
@@ -129,13 +162,23 @@ abstract class BaseSync implements SyncInterface
 	 * @return void
 	 * @throws \Exception
 	 */
-	public function sync(array $items, array $filter = []): void
+	public function sync(array $items, array $filter = [], SyncMode $mode = SyncMode::Standard): void
 	{
-		$oldIds = $this->getIdsByFilter($filter);
+		if ($mode !== SyncMode::Partitional)
+		{
+			$oldIds = $this->getIdsByFilter($filter);
+		}
+
 		$currentIds = [];
 		foreach ($items as $item)
 		{
-			$result = $this->addOrUpdate($item);
+			$rules = $this->getRules($item['rules'] ?? []);
+			if ($this->hasRuleForHidden($rules, $item))
+			{
+				continue;
+			}
+
+			$result = $this->addOrUpdate($item, $rules);
 			if ($result->isSuccess())
 			{
 				$currentIds[] = $result->getId();
@@ -146,10 +189,166 @@ abstract class BaseSync implements SyncInterface
 			}
 		}
 
+		if ($mode === SyncMode::Partitional)
+		{
+			return;
+		}
+
 		$idsForDelete = array_diff($oldIds, $currentIds);
 		foreach ($idsForDelete as $id)
 		{
 			$this->delete($id);
 		}
+	}
+
+	/**
+	 * @param array $codes
+	 *
+	 * @return void
+	 */
+	public function deleteByCodes(array $codes): void
+	{
+		if (empty($codes))
+		{
+			return;
+		}
+
+		$items = $this->getDataManager()::query()->setSelect(['ID'])->whereIn('CODE', $codes)->fetchAll();
+		foreach ($items as $item)
+		{
+			$this->delete($item['ID']);
+		}
+	}
+
+	/**
+	 * @param int $entityId
+	 * @param RuleDto[] $rules
+	 * @param bool $needDeleteOld
+	 * @return void
+	 */
+	protected function updateRules(int $entityId, array $rules, bool $needDeleteOld = false): void
+	{
+		$repository = $this->getDisplayRuleRepository();
+		if (empty($repository))
+		{
+			return;
+		}
+
+		if ($needDeleteOld)
+		{
+			$repository->deleteByEntityId($entityId);
+		}
+
+		if (empty($rules))
+		{
+			return;
+		}
+
+		$repository
+			->addRulesForEntityId(
+				$entityId,
+				array_filter($rules, fn($rule) => $rule->getRuleName() == RuleName::Lang)
+			)
+		;
+	}
+
+	/**
+	 * @param $rules
+	 * @return RuleDto[]
+	 */
+	protected function getRules($rules): array
+	{
+		if (empty($rules))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($rules as $rule)
+		{
+			if (
+				!array_key_exists('IS_CHECK_INVERT', $rule)
+				|| !array_key_exists('NAME', $rule)
+				|| !array_key_exists('VALUES', $rule)
+			)
+			{
+				continue;
+			}
+
+			$ruleName = RuleName::tryFrom($rule['NAME']);
+			if (empty($rule['VALUES']) || is_null($ruleName))
+			{
+				continue;
+			}
+
+			foreach ($rule['VALUES'] as $value)
+			{
+				$result[] = new RuleDto((bool)$rule['IS_CHECK_INVERT'], $ruleName, (string)$value);
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param RuleDto[] $rules
+	 * @param array $item
+	 * @return bool
+	 */
+	protected function hasRuleForHidden(array $rules, array $item = []): bool
+	{
+		if (empty($rules))
+		{
+			return false;
+		}
+
+		$hasRuleForShow = false;
+		$hasRuleWithForCheck = false;
+		foreach ($rules as $rule)
+		{
+			if ($rule->getRuleName() !== RuleName::Region)
+			{
+				continue;
+			}
+
+			$hasRuleWithForCheck = true;
+			if ($rule->isCheckInvert())
+			{
+				if ($rule->getValue() === $this->getRegion())
+				{
+					return true;
+				}
+
+				$hasRuleForShow = true;
+				continue;
+			}
+
+			if (!$hasRuleForShow && ($rule->getValue() === $this->getRegion()))
+			{
+				$hasRuleForShow = true;
+			}
+		}
+
+		if (!$hasRuleWithForCheck)
+		{
+			return false;
+		}
+
+		return !$hasRuleForShow;
+	}
+
+	protected function getRegion(): ?string
+	{
+		if (empty($this->region))
+		{
+			$this->region = Application::getInstance()->getLicense()->getRegion();
+		}
+
+		return $this->region;
+	}
+
+	protected function getDisplayRuleRepository(): ?BaseDisplayRuleRepository
+	{
+		return null;
 	}
 }

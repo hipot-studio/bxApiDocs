@@ -8,6 +8,7 @@ use Bitrix\BIConnector\Access\Model\UserAccessItem;
 use Bitrix\BIConnector\Access\Rule\BaseRule;
 use Bitrix\BIConnector\Access\Rule\Factory\BIConstructorRuleFactory;
 use Bitrix\BIConnector\Access\Rule\VariableRule;
+use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Main\Access\Exception\UnknownActionException;
 use Bitrix\Main\Access\User\AccessibleUser;
@@ -24,6 +25,14 @@ final class AccessController extends BaseAccessController
 		$this->filterFactory = new BIConstructorFilterFactory();
 	}
 
+	/**
+	 * If Model/Dashboard object is available, use DashboardAccessItem::createFromEntity
+	 * and pass the access item to check method without unnessesary DB queries.
+	 *
+	 * @param int|null $itemId
+	 *
+	 * @return AccessibleItem|null
+	 */
 	protected function loadItem(int $itemId = null): ?AccessibleItem
 	{
 		if ($itemId)
@@ -76,6 +85,20 @@ final class AccessController extends BaseAccessController
 		}
 
 		return parent::check($action, $item, $params);
+	}
+
+	/**
+	 * @param string $action
+	 * @param Dashboard $dashboard
+	 * @param null $params
+	 *
+	 * @return bool
+	 */
+	public function checkByEntity(string $action, Dashboard $dashboard, $params = null): bool
+	{
+		$accessItem = DashboardAccessItem::createFromEntity($dashboard);
+
+		return $this->check($action, $accessItem, $params);
 	}
 
 	/**

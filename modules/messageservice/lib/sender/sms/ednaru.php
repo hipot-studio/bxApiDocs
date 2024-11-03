@@ -140,6 +140,7 @@ class Ednaru extends Sender\BaseConfigurable
 	public function refreshFromList(): void
 	{
 		$this->utils->updateSavedChannelList($this->initiator->getChannelType());
+		$this->utils->clearCache(Providers\CacheManager::CHANNEL_CACHE_ENTITY_ID);
 	}
 
 	public static function resolveStatus($serviceStatus): ?int
@@ -147,9 +148,9 @@ class Ednaru extends Sender\BaseConfigurable
 		return (new WhatsApp\StatusResolver())->resolveStatus($serviceStatus);
 	}
 
-	public function getLineId(): ?int
+	public function getLineId(?int $subjectId = null): ?int
 	{
-		return (new WhatsApp\ConnectorLine($this->utils))->getLineId();
+		return (new WhatsApp\ConnectorLine($this->utils))->getLineId($subjectId);
 	}
 
 	public function getCallbackUrl(): string
@@ -282,6 +283,11 @@ class Ednaru extends Sender\BaseConfigurable
 		{
 			$templates = $listTemplatesResult->getData();
 			$sender = Sender\SmsManager::getSenderById(self::ID);
+			if (!$sender::isSupported() || !$sender->isRegistered())
+			{
+				return '';
+			}
+
 			foreach ($templates as $template)
 			{
 				$template['EXAMPLES'] = is_array($template['EXAMPLES']) ? $template['EXAMPLES'] : [];

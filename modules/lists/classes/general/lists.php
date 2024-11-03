@@ -1434,6 +1434,7 @@ class CLists
 	private static function createSeachableContentForProperty($fields)
 	{
 		$searchableContent = '';
+		$userIds = [];
 
 		global $DB;
 		$properties = array();
@@ -1591,13 +1592,9 @@ class CLists
 						}
 						case "employee":
 						{
-							$siteNameFormat = CSite::getNameFormat(false);
 							foreach($properties[$propertyId] as $value)
 							{
-								$user = new CUser();
-								$userDetails = $user->getByID($value)->fetch();
-								if(is_array($userDetails))
-									$propertyValues[] = CUser::formatName($siteNameFormat, $userDetails,true,false);
+								$userIds[] = $value;
 							}
 							break;
 						}
@@ -1740,6 +1737,21 @@ class CLists
 				}
 				foreach($propertyValues as $propertyValue)
 					$searchableContent .= "\r\n".$propertyValue;
+			}
+		}
+
+		if ($userIds)
+		{
+			$siteNameFormat = CSite::getNameFormat(false);
+			$userResult = \Bitrix\Main\UserTable::getList([
+				'filter' => ['@ID' => $userIds],
+				'select' => ['ID', 'NAME', 'SECOND_NAME', 'LAST_NAME', 'LOGIN', 'TITLE', 'EMAIL'],
+				'cache' => ['ttl' => 3600],
+			]);
+
+			foreach($userResult as $user)
+			{
+				$searchableContent .= "\r\n" . CUser::formatName($siteNameFormat, $user,true,false);
 			}
 		}
 

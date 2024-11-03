@@ -36,20 +36,20 @@ class RegistrationService
 			'NAME' => $user->getName() ?? null,
 			'LAST_NAME' => $user->getLastName() ?? null,
 			'GROUP_ID' => $user->getGroupIds(),
-			'LID' => SITE_ID,
+			'LID' => $siteIdByDepartmentId,
 			'UF_DEPARTMENT' => empty($user->getDepartmetnsIds()) ? [] : $user->getDepartmetnsIds(),
-			'LANGUAGE_ID' => ($site = \CSite::GetArrayByID(SITE_ID)) ? $site['LANGUAGE_ID'] : LANGUAGE_ID,
+			'LANGUAGE_ID' => ($site = \CSite::GetArrayByID($siteIdByDepartmentId)) ? $site['LANGUAGE_ID'] : LANGUAGE_ID,
 		];
 
-		if ($user->getPhoneNamber())
+		if ($user->getPhoneNumber())
 		{
-			$arUser['PHONE_NUMBER'] = $user->getPhoneNamber();
-			$arUser['PERSONAL_MOBILE'] = $user->getPhoneNamber();
+			$arUser['PHONE_NUMBER'] = $user->getPhoneNumber();
+			$arUser['PERSONAL_MOBILE'] = $user->getPhoneNumber();
 		}
 
 		if ($user->getActive())
 		{
-			$arUser['ACTIVE'] = $user->getPhoneNamber() ? 'Y' : 'N';
+			$arUser['ACTIVE'] = $user->getPhoneNumber() ? 'Y' : 'N';
 		}
 
 		if($user->getXmlId())

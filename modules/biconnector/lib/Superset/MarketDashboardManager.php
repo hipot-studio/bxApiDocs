@@ -10,6 +10,7 @@ use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\BIConnector\Superset\UI\DashboardManager;
+use \Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
@@ -173,12 +174,12 @@ final class MarketDashboardManager
 	/**
 	 * Sets dashboard settings contained in archive. Sets period, scopes, etc.
 	 *
-	 * @param Model\EO_SupersetDashboard $dashboard
+	 * @param Model\SupersetDashboard $dashboard
 	 * @param array $dashboardSettings
 	 *
 	 * @return void
 	 */
-	public function applyDashboardSettings(Model\EO_SupersetDashboard $dashboard, array $dashboardSettings = []): void
+	public function applyDashboardSettings(Model\SupersetDashboard $dashboard, array $dashboardSettings = []): void
 	{
 		if (!$dashboardSettings)
 		{
@@ -221,14 +222,24 @@ final class MarketDashboardManager
 			}
 		}
 
+		$dashboard->save();
+
 		if (is_array($dashboardSettings['scope'] ?? null))
 		{
 			$scopes = ScopeService::getInstance()->getDashboardScopes($dashboard->getId());
 			$scopesToSave = array_unique([...$scopes, ...$dashboardSettings['scope']]);
 			ScopeService::getInstance()->saveDashboardScopes($dashboard->getId(), $scopesToSave);
-		}
 
-		$dashboard->save();
+			if (is_array($dashboardSettings['urlParameters'] ?? null) && !empty($dashboardSettings['urlParameters']))
+			{
+				(new UrlParameter\Service($dashboard))
+					->saveDashboardParams(
+						$dashboardSettings['urlParameters'],
+						$scopesToSave
+					)
+				;
+			}
+		}
 	}
 
 	/**
@@ -352,38 +363,37 @@ final class MarketDashboardManager
 	{
 		$result = new Result();
 
-		$installedDashboardsIterator = SupersetDashboardTable::getList([
+		$installedDashboards = SupersetDashboardTable::getList([
 			'select' => ['ID', 'EXTERNAL_ID', 'APP_ID', 'TYPE', 'SOURCE_ID', 'APP.ID'],
 			'filter' => [
 				'=APP_ID' => $appCode,
 			],
-		]);
+			'order' => ['DATE_CREATE' => 'DESC'],
+		])->fetchCollection();
 
-		$originalExternalDashboardId = 0;
-		$originalDashboardId = 0;
-		while ($row = $installedDashboardsIterator->fetch())
+		$originalDashboard = null;
+		foreach ($installedDashboards as $dashboard)
 		{
-			if ($row['TYPE'] === SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM)
+			if ($dashboard->getType() === SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM)
 			{
 				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_SYSTEM_DASHBOARD')));
 
 				return $result;
 			}
 
-			if ($row['SOURCE_ID'] !== null)
+			if ($dashboard->getSourceId() > 0)
 			{
 				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_HAS_COPIES')));
 
 				return $result;
 			}
 
-			$originalExternalDashboardId = (int)$row['EXTERNAL_ID'];
-			$originalDashboardId = (int)$row['ID'];
+			$originalDashboard = $dashboard;
 		}
 
-		if ($originalExternalDashboardId > 0)
+		if ($originalDashboard)
 		{
-			$response = $this->integrator->deleteDashboard([$originalExternalDashboardId]);
+			$response = $this->integrator->deleteDashboard([$originalDashboard->getExternalId()]);
 			if ($response->hasErrors())
 			{
 				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_DELETE_PROXY')));
@@ -391,7 +401,7 @@ final class MarketDashboardManager
 				return $result;
 			}
 
-			SupersetDashboardTable::delete($originalDashboardId);
+			$originalDashboard->delete();
 		}
 
 		return $result;

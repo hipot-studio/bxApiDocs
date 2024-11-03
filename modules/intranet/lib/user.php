@@ -394,6 +394,11 @@ class User
 		return (new Counter(Invitation::getWaitConfirmationCounterId()))->getValue($this);
 	}
 
+	public function getGender(): string
+	{
+		return $this->getFields()['PERSONAL_GENDER'] ?? '';
+	}
+
 	private function getGroups(): array
 	{
 		global $USER;

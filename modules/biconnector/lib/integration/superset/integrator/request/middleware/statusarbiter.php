@@ -26,7 +26,7 @@ final class StatusArbiter extends Base
 	{
 		if ($response->getStatus() === IntegratorResponse::STATUS_FROZEN)
 		{
-			if (SupersetInitializer::isSupersetLoad())
+			if (SupersetInitializer::isSupersetLoading())
 			{
 				return parent::afterRequest($request, $response);
 			}
@@ -37,7 +37,7 @@ final class StatusArbiter extends Base
 			return parent::afterRequest($request, $response);
 		}
 
-		if (SupersetInitializer::isSupersetLoad())
+		if (SupersetInitializer::isSupersetLoading())
 		{
 			return parent::afterRequest($request, $response);
 		}

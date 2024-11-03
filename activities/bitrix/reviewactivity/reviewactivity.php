@@ -182,7 +182,10 @@ class CBPReviewActivity extends CBPCompositeActivity implements IBPEventActivity
 		if (!$this->IsPropertyExists("SetStatusMessage") || $this->SetStatusMessage == "Y")
 		{
 			$totalCount = $this->TotalCount;
-			$message = ($this->IsPropertyExists("StatusMessage") && $this->StatusMessage <> '') ? $this->StatusMessage : GetMessage("BPAR_ACT_INFO");
+			$message = (!empty($this->StatusMessage) && is_string($this->StatusMessage))
+				? $this->StatusMessage
+				: GetMessage("BPAR_ACT_INFO")
+			;
 			$this->SetStatusTitle(str_replace(
 				array("#PERC#", "#PERCENT#", "#REV#", "#REVIEWED#", "#TOT#", "#TOTAL#", "#REVIEWERS#"),
 				array(0, 0, 0, 0, $totalCount, $totalCount, ""),

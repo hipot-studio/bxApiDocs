@@ -22,7 +22,7 @@ final class EditTagAction extends BaseAction
 
 	protected function getText(): string
 	{
-		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_TAG_ACTION_RENAME');
+		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_TAG_ACTION_RENAME') ?? '';
 	}
 
 	public function getControl(array $rawFields): ?array

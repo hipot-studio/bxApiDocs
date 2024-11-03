@@ -1300,7 +1300,7 @@ class CIMRestService extends IRestService
 		{
 			if (is_string($arParams['USERS']))
 			{
-				$arParams['USERS'] = \CUtil::JsObjectToPhp($arParams['USERS']);
+				$arParams['USERS'] = \CUtil::JsObjectToPhp($arParams['USERS'], true);
 			}
 			if (!is_array($arParams['USERS']))
 			{
@@ -3629,14 +3629,22 @@ class CIMRestService extends IRestService
 			$arParams['TYPE'] = 'USER';
 		}
 
-		$arParams['MESSAGE'] = trim($arParams['MESSAGE']);
+		$arParams['MESSAGE'] = isset($arParams['MESSAGE']) && is_string($arParams['MESSAGE'])
+			? trim($arParams['MESSAGE'])
+			: ''
+		;
+
 		if ($arParams['MESSAGE'] == '')
 		{
 			throw new Bitrix\Rest\RestException("Message can't be empty", "MESSAGE_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
 		}
 
 		$messageOut = "";
-		$arParams['MESSAGE_OUT'] = trim($arParams['MESSAGE_OUT']);
+		$arParams['MESSAGE_OUT'] = isset($arParams['MESSAGE_OUT']) && is_string($arParams['MESSAGE_OUT'])
+			? trim($arParams['MESSAGE_OUT'])
+			: ''
+		;
+
 		if ($arParams['TYPE'] == 'SYSTEM')
 		{
 			$fromUserId = 0;
@@ -6935,7 +6943,13 @@ class CIMRestService extends IRestService
 
 		//4. add to dialog
 		$chat = new CIMChat(0);
-		$chat->AddUser($aliasData['ENTITY_ID'], $userData['ID']);
+		$chat->AddUser(
+			chatId: $aliasData['ENTITY_ID'],
+			userId: $userData['ID'],
+			hideHistory: null,
+			skipMessage: true,
+			skipRecent: true
+		);
 		if ($exception = $APPLICATION->GetException())
 		{
 			if ($exception->GetID() !== 'NOTHING_TO_ADD')
@@ -6989,8 +7003,18 @@ class CIMRestService extends IRestService
 		}
 
 		$params = array_change_key_case($params, CASE_UPPER);
+		if (empty($params['NAME']))
+		{
+			throw new Bitrix\Rest\RestException("User NAME can't be empty", "USER_NAME_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
+		}
 
+		/** @var \CUser $USER */
 		global $USER;
+
+		if ($USER->GetParam("NAME") == $params['NAME'])
+		{
+			return;
+		}
 
 		$userManager = new \CUser;
 		$userManager->Update($USER->GetID(), [
@@ -7251,7 +7275,13 @@ class CIMRestService extends IRestService
 			if ($currentUserId && !$isUserInChat)
 			{
 				$chat = new \CIMChat(0);
-				$addingResult = $chat->AddUser($conference->getChatId(), $currentUserId);
+				$addingResult = $chat->AddUser(
+					chatId: $conference->getChatId(),
+					userId: $currentUserId,
+					hideHistory: null,
+					skipMessage: true,
+					skipRecent: true
+				);
 				if (!$addingResult)
 				{
 					throw new Bitrix\Rest\RestException("Error during adding user to chat", "ADDING_TO_CHAT_ERROR", CRestServer::STATUS_WRONG_REQUEST);

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2\Entity\User;
 
+use Bitrix\Im\Integration\Socialnetwork\Extranet;
 use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Result;
 
@@ -31,7 +32,12 @@ class UserExtranet extends User
 			return $result;
 		}
 
-		$inGroup = \Bitrix\Im\Integration\Socialnetwork\Extranet::isUserInGroup($this->getId(), $otherUser->getId());
+		$inGroup = Extranet::isUserInGroup(
+			$this->getId(),
+			$otherUser->getId(),
+			false
+		);
+
 		if ($inGroup)
 		{
 			return $result;

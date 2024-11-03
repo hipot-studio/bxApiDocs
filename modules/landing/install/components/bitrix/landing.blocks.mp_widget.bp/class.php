@@ -160,9 +160,7 @@ class LandingBlocksMainpageWidgetBP extends LandingBlocksMainpageWidgetBase
 			$service = ServiceFactory::getServiceByIBlockTypeId($iBlockTypeId, $currentUserId);
 			if ($service)
 			{
-				$sefFolder = '/bizproc/processes/';
-				$sefUrlList = '#list_id#/element/#section_id#/#section_id#/';
-				$urlPath = $sefFolder . $sefUrlList;
+				$sefFolder = '/bitrix/components/bitrix/lists.element.creation_guide/?iBlockTypeId=bitrix_processes&iBlockId=';
 				$checkPermissionResult = $service->checkIBlockTypePermission();
 				$lists_perm = $checkPermissionResult->getPermission();
 				if ($lists_perm > CListPermissions::ACCESS_DENIED && $checkPermissionResult->isSuccess())
@@ -176,8 +174,7 @@ class LandingBlocksMainpageWidgetBP extends LandingBlocksMainpageWidgetBase
 							$businessProcess = [];
 							$businessProcess['ID'] = $iBlock['ID'];
 							$businessProcess['NAME'] = $iBlock['NAME'];
-							$uri = new Uri(str_replace(['#list_id#', '#section_id#'], [$iBlock['ID'], '0'], $urlPath));
-							$businessProcess['URL'] = $uri->getUri();
+							$businessProcess['URL'] = $sefFolder . $iBlock['ID'];
 							$businessProcess['IS_SHOW_LIVE_FEED'] = CLists::getLiveFeed($iBlock['ID']);
 							$businessProcess['AVERAGE_TIME'] = null;
 							if (Loader::includeModule('bizproc'))

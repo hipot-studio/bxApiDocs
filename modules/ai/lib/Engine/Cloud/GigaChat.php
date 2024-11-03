@@ -167,4 +167,19 @@ final class GigaChat extends CloudEngine implements IContext, IQueueOptional
 
 		return $region === 'ru' || $region === 'by';
 	}
+
+	/**
+	 * @inheritDoc
+	 */
+	protected function makeRequestParams(array $postParams = []): array
+	{
+		if (empty($postParams))
+		{
+			$postParams = parent::makeRequestParams();
+		}
+
+		$postParams['n'] = $postParams['n'] ?? self::VARIANTS;
+
+		return $postParams;
+	}
 }

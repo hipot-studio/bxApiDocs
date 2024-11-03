@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Access\Model;
 
+use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\Main\Access\AccessibleItem;
 
@@ -34,34 +35,59 @@ final class DashboardAccessItem implements AccessibleItem
 		return $this->ownerId;
 	}
 
-	public static function createFromId(int $itemId): DashboardAccessItem
+	/**
+	 * Creates Access item from dashboard id to use in Access check.
+	 * If Model/Dashboard object is available use createFromEntity method to avoid unnessesary DB queries.
+	 * @see self::createFromEntity
+	 *
+	 * @param int $itemId Dashboard id.
+	 *
+	 * @return self
+	 */
+	public static function createFromId(int $itemId): self
 	{
-		$dashboard = SupersetDashboardTable::getById($itemId)->fetchObject();
-		$item = new static($itemId);
-		if ($dashboard)
+		$ormObject = SupersetDashboardTable::getById($itemId)->fetchObject();
+		if (!$ormObject)
 		{
-			$item->type = $dashboard->getType();
-			$item->ownerId = $dashboard->getOwnerId();
+			return new self($itemId);
 		}
 
-		return $item;
+		return self::createFromEntity(new Dashboard($ormObject));
 	}
 
 	/**
-	 * Creates Dashboard object to use in Access check.
+	 * Creates Access item from dashboard fields to use in Access check.
 	 *
-	 * @param array $fields Fields: ID, TYPE, OWNER_ID.
+	 * @param array{ID: int, TYPE: string, OWNER_ID: string} $fields Fields: ID, TYPE, OWNER_ID.
 	 *
-	 * @return DashboardAccessItem
+	 * @return self
 	 */
-	public static function createFromArray(array $fields): DashboardAccessItem
+	public static function createFromArray(array $fields): self
 	{
-		$dashboard = new static(
+		$accessItem = new self(
 			(int)($fields['ID'] ?? 0)
 		);
-		$dashboard->type = $fields['TYPE'] ?? null;
-		$dashboard->ownerId = $fields['OWNER_ID'] ?? null;
+		$accessItem->type = $fields['TYPE'] ?? null;
+		$accessItem->ownerId = $fields['OWNER_ID'] ?? null;
 
-		return $dashboard;
+		return $accessItem;
+	}
+
+	/**
+	 * Creates Access item from Model/Dashboard to use in Access check.
+	 *
+	 * @param Dashboard $dashboard Dashboard entity.
+	 *
+	 * @return self
+	 */
+	public static function createFromEntity(Dashboard $dashboard): self
+	{
+		$accessItem = new self(
+			$dashboard->getId()
+		);
+		$accessItem->type = $dashboard->getType();
+		$accessItem->ownerId = $dashboard->getField('OWNER_ID');
+
+		return $accessItem;
 	}
 }

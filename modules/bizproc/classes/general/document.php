@@ -563,6 +563,8 @@ class CBPDocument
 
 		\CBPHistoryService::DeleteByDocument($documentId);
 
+		Bizproc\Workflow\Entity\WorkflowUserTable::onDocumentDelete($documentId);
+
 		// Deferred deletion
 		Bizproc\Workflow\Entity\WorkflowStateTable::maskAsZombie($documentId);
 

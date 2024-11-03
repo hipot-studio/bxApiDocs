@@ -32,6 +32,7 @@ class Permission
 	public const ACTION_CREATE_MEETING = 'CREATE_MEETING';
 	public const ACTION_DELETE_OTHERS_MESSAGE = 'DELETE_OTHERS_MESSAGE';
 	public const ACTION_UPDATE = 'UPDATE';
+	public const ACTION_DELETE = 'DELETE';
 
 	public const TYPE_DEFAULT = 'DEFAULT';
 	public const TYPE_PRIVATE = 'PRIVATE';
@@ -134,6 +135,7 @@ class Permission
 			self::ACTION_CREATE_MEETING => Chat::ROLE_MEMBER,
 			self::ACTION_DELETE_OTHERS_MESSAGE => Chat::ROLE_NONE,
 			self::ACTION_UPDATE => Chat::ROLE_NONE,
+			self::ACTION_DELETE => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[self::TYPE_DEFAULT] = $default;
@@ -172,6 +174,7 @@ class Permission
 
 		self::$permissionsByChatTypes[self::TYPE_COPILOT] = [
 			self::ACTION_CALL => Chat::ROLE_NONE,
+			self::ACTION_DELETE => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[self::TYPE_ANNOUNCEMENT] = [
@@ -185,6 +188,7 @@ class Permission
 			self::ACTION_CREATE_MEETING => Chat::ROLE_NONE,
 			self::ACTION_DELETE_OTHERS_MESSAGE => Chat::ROLE_MANAGER,
 			self::ACTION_UPDATE => Chat::ROLE_OWNER,
+			self::ACTION_DELETE => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[self::TYPE_OPEN_CHANNEL] = [
@@ -193,12 +197,14 @@ class Permission
 			self::ACTION_CREATE_MEETING => Chat::ROLE_NONE,
 			self::ACTION_DELETE_OTHERS_MESSAGE => Chat::ROLE_MANAGER,
 			self::ACTION_UPDATE => Chat::ROLE_OWNER,
+			self::ACTION_DELETE => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[self::TYPE_COMMENT] = [
 			self::ACTION_CALL => Chat::ROLE_NONE,
 			self::ACTION_EXTEND => Chat::ROLE_NONE,
 			self::ACTION_DELETE_OTHERS_MESSAGE => Chat::ROLE_MANAGER,
+			self::ACTION_DELETE => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[EntityLink::TYPE_SUPPORT24_NOTIFIER] = [
@@ -249,14 +255,17 @@ class Permission
 
 		self::$permissionsByChatTypes[self::TYPE_GROUP_CHAT] = [
 			self::ACTION_UPDATE => Chat::ROLE_OWNER,
+			self::ACTION_DELETE => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[self::TYPE_OPEN_CHAT] = [
 			self::ACTION_UPDATE => Chat::ROLE_OWNER,
+			self::ACTION_DELETE => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[self::TYPE_VIDEOCONF] = [
 			self::ACTION_UPDATE => Chat::ROLE_OWNER,
+			self::ACTION_DELETE => Chat::ROLE_OWNER,
 		];
 
 		foreach (self::$permissionsByChatTypes as $code => $value)

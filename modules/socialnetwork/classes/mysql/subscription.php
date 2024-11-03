@@ -11,7 +11,11 @@ class CSocNetSubscription extends CAllSocNetSubscription
 		$arFields1 = \Bitrix\Socialnetwork\Util::getEqualityFields($arFields);
 
 		if (!CSocNetSubscription::CheckFields("ADD", $arFields))
+		{
 			return false;
+		}
+
+		$connection = \Bitrix\Main\Application::getConnection();
 
 		$arInsert = $DB->PrepareInsert("b_sonet_subscription", $arFields);
 		\Bitrix\Socialnetwork\Util::processEqualityFieldsToInsert($arFields1, $arInsert);
@@ -19,12 +23,15 @@ class CSocNetSubscription extends CAllSocNetSubscription
 		$ID = false;
 		if ($arInsert[0] <> '')
 		{
-			$strSql =
-				"INSERT INTO b_sonet_subscription(".$arInsert[0].") ".
-				"VALUES(".$arInsert[1].")";
-			$DB->Query($strSql);
+			$sql = $connection->getSqlHelper()->getInsertIgnore(
+				'b_sonet_subscription',
+				"(".$arInsert[0].")",
+				"VALUES(".$arInsert[1].")"
+			);
 
-			$ID = intval($DB->LastID());
+			$connection->query($sql);
+
+			$ID = (int)$connection->getInsertedId();
 		}
 
 		if(defined("BX_COMP_MANAGED_CACHE"))

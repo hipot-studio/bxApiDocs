@@ -50,7 +50,6 @@ class OptionProvider
 
 		$optionCollection = OptionTable::query()
 			->setSelect(['*'])
-			->setLimit(10)
 			->where('USER_ID', $userId)
 			->exec()->fetchCollection()
 		;

@@ -1,6 +1,8 @@
 <?php
 namespace Bitrix\Landing\Node;
 
+use Bitrix\Landing\Block;
+use Bitrix\Landing\History;
 use \Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
 
@@ -52,6 +54,9 @@ class Component extends \Bitrix\Landing\Node
 			if ($component['DATA']['COMPONENT_NAME'] == $code)
 			{
 				$params = array_merge($component['DATA']['PARAMS'], $params);
+				$params = array_filter($params, function ($param) {
+					return $param !== null;
+				});
 				$componentCode = ($component['DATA']['VARIABLE'] ? $component['DATA']['VARIABLE'] . '=' : '') .
 					'$APPLICATION->IncludeComponent(' . PHP_EOL .
 					"\t" . '"' . $component['DATA']['COMPONENT_NAME'] . '", ' . PHP_EOL .
@@ -109,18 +114,35 @@ class Component extends \Bitrix\Landing\Node
 
 	/**
 	 * Save data for this node.
-	 * @param \Bitrix\Landing\Block $block Block instance.
+	 * @param Block $block Block instance.
 	 * @param string $selector Selector.
 	 * @param array $data Data array.
 	 * @return void
 	 */
-	public static function saveNode(\Bitrix\Landing\Block $block, $selector, array $data)
+	public static function saveNode(Block $block, $selector, array $data): void
 	{
-		$manifest = $block->getManifest();
-		if (isset($manifest['nodes'][$selector]['extra']))
+		if (empty($data))
 		{
-			$updateProps = array();
+			return;
+		}
+
+		$manifest = $block->getManifest();
+		if (isset ($manifest['nodes'][$selector]['extra']))
+		{
+			$updateProps = [];
 			$allowedProps = $manifest['nodes'][$selector]['extra'];
+			$propsBefore = [];
+			if (History::isActive())
+			{
+				foreach ($allowedProps as $code => $prop)
+				{
+					$propsBefore[$code] = self::transformPropValue(
+						$prop['VALUE'],
+						$prop
+					);
+				}
+			}
+
 			foreach ($data as $code => $val)
 			{
 				if (isset($allowedProps[$code]))
@@ -158,18 +180,31 @@ class Component extends \Bitrix\Landing\Node
 				}
 				// and load new content
 				$doc->loadHTML($newContent);
+
+				if (History::isActive())
+				{
+					$propsAfter = array_merge($propsBefore, $updateProps);
+					$history = new History($block->getLandingId(), History::ENTITY_TYPE_LANDING);
+					$history->push('EDIT_COMPONENT', [
+						'block' => $block,
+						'selector' => $selector,
+						'position' => 0,
+						'valueBefore' => $propsBefore,
+						'valueAfter' => $propsAfter,
+					]);
+				}
 			}
 		}
 	}
 
 	/**
 	 * Prepare item-node of manifest.
-	 * @param \Bitrix\Landing\Block $block Block instance.
+	 * @param Block $block Block instance.
 	 * @param array $manifest Manifest of current node.
 	 * @param array &$manifestFull Full manifest of block (by ref).
 	 * @return array|null Return null for delete from manifest.
 	 */
-	public static function prepareManifest(\Bitrix\Landing\Block $block, array $manifest, array &$manifestFull = array())
+	public static function prepareManifest(Block $block, array $manifest, array &$manifestFull = array())
 	{
 		if (
 			!isset($manifest['extra']['editable']) ||
@@ -780,11 +815,11 @@ class Component extends \Bitrix\Landing\Node
 
 	/**
 	 * Get data for this node.
-	 * @param \Bitrix\Landing\Block $block Block instance.
+	 * @param Block $block Block instance.
 	 * @param string $selector Selector.
 	 * @return array
 	 */
-	public static function getNode(\Bitrix\Landing\Block $block, $selector)
+	public static function getNode(Block $block, $selector)
 	{
 		$data = array();
 		$manifest = $block->getManifest();

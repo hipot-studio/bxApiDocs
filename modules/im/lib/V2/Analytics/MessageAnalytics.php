@@ -88,48 +88,6 @@ class MessageAnalytics extends ChatAnalytics
 
 	/**
 	 * @param int $chatId
-	 * @param Message[]|MessageCollection $messages
-	 * @return void
-	 */
-	public function addReadMessages(int $chatId, iterable $messages): void
-	{
-		$currentUserId = User::getCurrent()->getId();
-
-		$this->async(function () use ($chatId, $messages, $currentUserId)
-		{
-			try
-			{
-				$chat = $this->getChat($chatId);
-				$messages->fillParams();
-
-				foreach ($messages as $message)
-				{
-					if ($message->isSystem())
-					{
-						continue; // not needed
-					}
-
-					if ($message->getAuthorId() === $currentUserId)
-					{
-						continue; // not needed
-					}
-
-					$this
-						->createChatEvent('read_message', $chat)
-						->setType((new MessageContent($message))->getComponentName())
-						->send()
-					;
-				}
-			}
-			catch (ArgumentException $e)
-			{
-				$this->logException($e);
-			}
-		});
-	}
-
-	/**
-	 * @param int $chatId
 	 * @param string $reaction
 	 * @return void
 	 */
@@ -167,6 +125,31 @@ class MessageAnalytics extends ChatAnalytics
 				$this
 					->createChatEvent('share_message', $chat)
 					->setType((new MessageContent($message))->getComponentName())
+					->send()
+				;
+
+			}
+			catch (ArgumentException $e)
+			{
+				$this->logException($e);
+			}
+		});
+	}
+
+	/**
+	 * @param Chat $chat
+	 * @param string $messageType
+	 * @return void
+	 */
+	public function addDeleteMessage(Chat $chat, string $messageType): void
+	{
+		$this->async(function () use ($chat, $messageType)
+		{
+			try
+			{
+				$this
+					->createChatEvent('delete_message', $chat, false)
+					->setType($messageType)
 					->send()
 				;
 

@@ -194,50 +194,51 @@ class CBPRestActivity extends CBPActivity implements
 
 		$this->eventId = \Bitrix\Main\Security\Random::getString(32, true);
 
-		$queryItems = [
-			Sqs::queryItem(
-				$activityData['APP_ID'],
-				$activityData['HANDLER'],
-				[
-					'workflow_id' => $this->getWorkflowInstanceId(),
-					'code' => $activityData['CODE'],
-					'document_id' => $this->GetDocumentId(),
-					'document_type' => $this->GetDocumentType(),
-					'event_token' => self::generateToken($this->getWorkflowInstanceId(), $this->name, $this->eventId),
-					'properties' => $propertiesValues,
-					'use_subscription' => $this->UseSubscription,
-					'timeout_duration' => $this->CalculateTimeoutDuration(),
-					'ts' => time(),
-				],
-				$auth,
-				[
-					"sendAuth" => true,
-					"sendRefreshToken" => true,
-					"category" => Sqs::CATEGORY_BIZPROC,
-				]
-			),
-		];
+		$queryItem = Sqs::queryItem(
+			$activityData['APP_ID'],
+			$activityData['HANDLER'],
+			[
+				'workflow_id' => $this->getWorkflowInstanceId(),
+				'code' => $activityData['CODE'],
+				'document_id' => $this->GetDocumentId(),
+				'document_type' => $this->GetDocumentType(),
+				'event_token' => self::generateToken($this->getWorkflowInstanceId(), $this->name, $this->eventId),
+				'properties' => $propertiesValues,
+				'use_subscription' => $this->UseSubscription,
+				'timeout_duration' => $this->CalculateTimeoutDuration(),
+				'ts' => time(),
+			],
+			$auth,
+			[
+				"sendAuth" => true,
+				"sendRefreshToken" => true,
+				"category" => Sqs::CATEGORY_BIZPROC,
+			]
+		);
 
-		\Bitrix\Rest\OAuthService::getEngine()->getClient()->sendEvent($queryItems);
-
-		if (is_callable(['\Bitrix\Rest\UsageStatTable', 'logRobot']))
+		if ($activityData['IS_ROBOT'] === 'Y')
 		{
-			if ($activityData['IS_ROBOT'] === 'Y')
-			{
-				\Bitrix\Rest\UsageStatTable::logRobot($activityData['APP_ID'], $activityData['CODE']);
-			}
-			else
-			{
-				\Bitrix\Rest\UsageStatTable::logActivity($activityData['APP_ID'], $activityData['CODE']);
-			}
+			\Bitrix\Rest\UsageStatTable::logRobot($activityData['APP_ID'], $activityData['CODE']);
+		}
+		else
+		{
+			\Bitrix\Rest\UsageStatTable::logActivity($activityData['APP_ID'], $activityData['CODE']);
+		}
 
+		if (is_callable([\Bitrix\Rest\Event\Sender::class, 'queueEvent']))
+		{
+			\Bitrix\Rest\Event\Sender::queueEvent($queryItem);
+		}
+		else
+		{
+			\Bitrix\Rest\OAuthService::getEngine()->getClient()->sendEvent([$queryItem]);
 			\Bitrix\Rest\UsageStatTable::finalize();
 		}
 
 		if ($this->SetStatusMessage === 'Y')
 		{
 			$message = $this->StatusMessage;
-			if (empty($message))
+			if (empty($message) || !is_string($message))
 			{
 				$message = Loc::getMessage('BPRA_DEFAULT_STATUS_MESSAGE');
 			}

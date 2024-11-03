@@ -21,7 +21,8 @@ class Service
 	{
 		self::$hitId = $this->generateHid();
 		$this->enableJob();
-		$this->handleLostEvents();
+		// TODO: spaces stub
+		// $this->handleLostEvents();
 	}
 
 	/**
@@ -43,14 +44,17 @@ class Service
 	 */
 	public static function addEvent(string $type, array $data): void
 	{
+		self::getInstance()->pushEvent($type, $data);
 		// TODO: spaces stub
 		return;
 
-		self::getInstance()->storeEvent($type, $data);
+		// self::getInstance()->storeEvent($type, $data);
 	}
 
 	public static function proceedEvents(): void
 	{
+		(new EventService\Processors\WorkGroupEventProcessor())->process();
+
 		// TODO: spaces stub
 		return;
 
@@ -62,7 +66,6 @@ class Service
 
 		$service = self::getInstance();
 
-		(new EventService\Processors\WorkGroupEventProcessor())->process();
 		(new EventService\Processors\SpaceEventPreProcessor())->process();
 		(new EventService\Processors\SpaceEventProcessor())->process();
 
@@ -84,6 +87,23 @@ class Service
 
 		$eventId = $this->saveToDb($event);
 		$event->setId($eventId);
+
+		$this->getEventCollection()->push($event);
+	}
+
+	private function pushEvent(string $type, array $data = []): void
+	{
+		if (!in_array($type, EventDictionary::WORKGROUP_EVENTS_SUPPORTED, true))
+		{
+			return;
+		}
+
+		$event = EventService\Event\Factory::buildEvent(self::$hitId, $type, $data);
+
+		if ($this->getEventCollection()->isDuplicate($event))
+		{
+			return;
+		}
 
 		$this->getEventCollection()->push($event);
 	}

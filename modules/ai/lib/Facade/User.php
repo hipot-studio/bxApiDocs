@@ -13,14 +13,16 @@ class User
 	private const PREFIX_OPTION_CODE_LAST_ENGINE = 'last_engine_in_';
 	private const PREFIX_OPTION_CODE_LAST_ROLE = 'last_role_in_';
 
+	private const DEFAULT_LANG = 'en';
+
 	/**
 	 * Returns main module's USER instance.
 	 *
 	 * @return CUser
 	 */
-	public static function getInstance(): CUser
+	public static function getInstance(): ?CUser
 	{
-		return $GLOBALS['USER'];
+		return $GLOBALS['USER'] ?? null;
 	}
 
 	/**
@@ -30,19 +32,25 @@ class User
 	 */
 	public static function getCurrentUserId(): int
 	{
-		return self::getInstance()->getId();
+		$userInstance = self::getInstance();
+		if (empty($userInstance))
+		{
+			return 0;
+		}
+
+		return $userInstance->getId();
 	}
 
 	/**
-	 * Returns current user data.
+	 * Returns user data by userId.
 	 *
 	 * @return array
 	 */
-	public static function getCurrentUserData(): array
+	public static function getUserDataById(int $userId): array
 	{
 		$user = UserTable::query()
-			->setSelect(['*'])
-			->where('ID', self::getInstance()->getId())
+			->setSelect(['NAME','LAST_NAME','PERSONAL_GENDER'])
+			->where('ID', $userId)
 			->setLimit(1)
 			->fetch()
 		;
@@ -58,6 +66,10 @@ class User
 	public static function isAdmin(): bool
 	{
 		$user = self::getInstance();
+		if (empty($user))
+		{
+			return false;
+		}
 
 		if (ModuleManager::isModuleInstalled('bitrix24'))
 		{
@@ -76,7 +88,7 @@ class User
 	 */
 	public static function getUserLanguage(): string
 	{
-		return LANGUAGE_ID;
+		return LANGUAGE_ID ?? static::DEFAULT_LANG;
 	}
 
 	/**

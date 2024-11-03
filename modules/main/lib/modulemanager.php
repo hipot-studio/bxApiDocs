@@ -29,43 +29,54 @@ class ModuleManager
 	 *
 	 * @return array
 	 */
-	public static function getModulesFromDisk()
+	public static function getModulesFromDisk($withLocal = true)
 	{
 		$modules = [];
 
-		$folder = "/bitrix/modules";
-		$folderPath = $_SERVER["DOCUMENT_ROOT"] . $folder;
+		$folders = [
+			"/bitrix/modules"
+		];
 
-		if (is_dir($folderPath) && is_readable($folderPath))
+		if ($withLocal)
 		{
-			$handle = opendir($folderPath);
+			$folders[] = "/local/modules";
 		}
 
-		if (!empty($handle))
+		foreach ($folders as $folder)
 		{
-			while (false !== ($dir = readdir($handle)))
+			$folderPath = $_SERVER["DOCUMENT_ROOT"] . $folder;
+			$handle = null;
+
+			if (is_dir($folderPath) && is_readable($folderPath))
 			{
-				if (
-					!isset($modules[$dir])
-					&& is_dir($folderPath . "/" . $dir)
-					&& !in_array($dir, ['.', '..'], true)
-					&& !str_contains($dir, ".")
-				)
-				{
-					if ($info = \CModule::CreateModuleObject($dir))
-					{
-						$modules[$dir]["id"] = $info->MODULE_ID;
-						$modules[$dir]["name"] = $info->MODULE_NAME;
-						$modules[$dir]["description"] = $info->MODULE_DESCRIPTION;
-						$modules[$dir]["version"] = $info->MODULE_VERSION;
-						$modules[$dir]["versionDate"] = $info->MODULE_VERSION_DATE;
-						$modules[$dir]["sort"] = $info->MODULE_SORT;
-						$modules[$dir]["isInstalled"] = $info->IsInstalled();
-					}
-				}
+				$handle = opendir($folderPath);
 			}
 
-			closedir($handle);
+			if (!empty($handle))
+			{
+				while (false !== ($dir = readdir($handle)))
+				{
+					if (
+						!isset($modules[$dir])
+						&& is_dir($folderPath . "/" . $dir)
+						&& !in_array($dir, ['.', '..'], true)
+					)
+					{
+						if ($info = \CModule::CreateModuleObject($dir))
+						{
+							$modules[$dir]["id"] = $info->MODULE_ID;
+							$modules[$dir]["name"] = $info->MODULE_NAME;
+							$modules[$dir]["description"] = $info->MODULE_DESCRIPTION;
+							$modules[$dir]["version"] = $info->MODULE_VERSION;
+							$modules[$dir]["versionDate"] = $info->MODULE_VERSION_DATE;
+							$modules[$dir]["sort"] = $info->MODULE_SORT;
+							$modules[$dir]["isInstalled"] = $info->IsInstalled();
+						}
+					}
+				}
+
+				closedir($handle);
+			}
 		}
 
 		return $modules;

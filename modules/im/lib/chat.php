@@ -35,7 +35,15 @@ class Chat
 
 	public static function getTypes()
 	{
-		return Array(self::TYPE_GROUP, self::TYPE_OPEN_LINE, self::TYPE_OPEN, self::TYPE_THREAD, \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT, \Bitrix\Im\V2\Chat::IM_TYPE_CHANNEL, \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_CHANNEL);
+		return [
+			self::TYPE_GROUP,
+			self::TYPE_OPEN_LINE,
+			self::TYPE_OPEN,
+			self::TYPE_THREAD,
+			\Bitrix\Im\V2\Chat::IM_TYPE_COPILOT,
+			\Bitrix\Im\V2\Chat::IM_TYPE_CHANNEL,
+			\Bitrix\Im\V2\Chat::IM_TYPE_OPEN_CHANNEL,
+		];
 	}
 
 	public static function getType($chatData, bool $camelCase = true)

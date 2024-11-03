@@ -92,7 +92,21 @@ class TaskElapsedTime extends Dataset
 				)
 				->setJoin($authorJoin)
 			,
-			(new DateTimeField('DATE_START')),
+			(new DateTimeField('DATE_START'))
+				->setName($this->getAliasFieldName('CREATED_DATE'))
+			,
+			(new StringField('COMMENT_TEXT'))
+				->setCallback(
+					static function($value) {
+						if (empty($value))
+						{
+							return '';
+						}
+
+						return strlen($value) > 100 ? mb_substr($value, 0, 100) . '...' : $value;
+					}
+				)
+			,
 			(new IntegerField('ELAPSED_TIME'))
 				->setName($this->getAliasFieldName('SECONDS'))
 			,

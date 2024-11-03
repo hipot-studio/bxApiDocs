@@ -137,13 +137,18 @@ final class QueueJob
 				return null;
 			}
 
-			if (isset($row['ENGINE_CUSTOM_SETTINGS']['JSON_RESPONSE_MODE']))
+			$engineCustomSettings = $row['ENGINE_CUSTOM_SETTINGS'] ?? [];
+			if (isset($engineCustomSettings['JSON_RESPONSE_MODE']))
 			{
-				$engine->setResponseJsonMode((bool)$row['ENGINE_CUSTOM_SETTINGS']['JSON_RESPONSE_MODE']);
+				$engine->setResponseJsonMode((bool)$engineCustomSettings['JSON_RESPONSE_MODE']);
 			}
-			if (isset($row['ENGINE_CUSTOM_SETTINGS']['ANALYTIC_DATA']))
+			if (isset($engineCustomSettings['ANALYTIC_DATA']))
 			{
-				$engine->setAnalyticData($row['ENGINE_CUSTOM_SETTINGS']['ANALYTIC_DATA']);
+				$engine->setAnalyticData($engineCustomSettings['ANALYTIC_DATA']);
+			}
+			if (isset($engineCustomSettings['SHOULD_SKIP_AGREEMENT']) && $engineCustomSettings['SHOULD_SKIP_AGREEMENT'])
+			{
+				$engine->skipAgreement();
 			}
 
 			$engine->setPayload($payload);
@@ -190,6 +195,7 @@ final class QueueJob
 			'ENGINE_CUSTOM_SETTINGS' => [
 				'JSON_RESPONSE_MODE' => $this->engine->getResponseJsonMode(),
 				'ANALYTIC_DATA' => $this->engine->getAnalyticData(),
+				'SHOULD_SKIP_AGREEMENT' => $this->engine->shouldSkipAgreement(),
 			],
 		];
 		$cacheHash = md5(serialize($data));
@@ -421,7 +427,7 @@ final class QueueJob
 						'message' => $this->error->getMessage(),
 					] : null,
 					'data' => [
-						'result' => $result->getPrettifiedData(),
+						'result' => $this->engine->getResponseJsonMode() ? $result->getJsonData() : $result->getPrettifiedData(),
 						'last' => $this->engine->shouldWriteHistory()
 							? Manager::getLastItem($this->context)
 							: Manager::getFakeItem($result->getPrettifiedData(), $this->engine)

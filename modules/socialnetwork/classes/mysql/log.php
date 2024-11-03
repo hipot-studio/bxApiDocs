@@ -74,6 +74,8 @@ class CSocNetLog extends CAllSocNetLog
 		$ID = false;
 		if ($arInsert[0] <> '')
 		{
+			$connection = \Bitrix\Main\Application::getConnection();
+
 			$strSql =
 				"INSERT INTO b_sonet_log(".$arInsert[0].") ".
 				"VALUES(".$arInsert[1].")";
@@ -98,12 +100,13 @@ class CSocNetLog extends CAllSocNetLog
 
 				if (!empty($arSiteID))
 				{
-					$DB->Query("
-					INSERT INTO b_sonet_log_site(LOG_ID, SITE_ID)
-					SELECT ".$ID.", LID
-					FROM b_lang
-					WHERE LID IN ('".implode("', '", $arSiteID)."')
-				");
+					$sql = $connection->getSqlHelper()->getInsertIgnore(
+						'b_sonet_log_site',
+						' (LOG_ID, SITE_ID) ',
+						"SELECT ".$ID.", LID FROM b_lang WHERE LID IN ('".implode("', '", $arSiteID)."')"
+					);
+
+					$connection->query($sql);
 				}
 
 				if (isset($arFields["TAG"]))

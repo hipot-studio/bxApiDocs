@@ -20,6 +20,7 @@ use Bitrix\StaffTrack\Access\Model\ShiftModel;
 use Bitrix\StaffTrack\Access\ShiftAccessController;
 use Bitrix\StaffTrack\Access\ShiftAction;
 use Bitrix\StaffTrack\Controller\Trait\ErrorResponseTrait;
+use Bitrix\StaffTrack\Controller\Trait\IntranetUserTrait;
 use Bitrix\StaffTrack\Helper\DateHelper;
 use Bitrix\StaffTrack\Internals\Exception\InvalidDtoException;
 use Bitrix\StaffTrack\Model;
@@ -32,6 +33,7 @@ use Bitrix\StaffTrack\Shift\ShiftRegistry;
 class Shift extends Controller
 {
 	use ErrorResponseTrait;
+	use IntranetUserTrait;
 
 	private int $userId;
 
@@ -75,7 +77,7 @@ class Shift extends Controller
 	 */
 	public function getAction(?Model\Shift $shift): array
 	{
-		if (!$this->isIntranetUser())
+		if (!$this->isIntranetUser($this->userId))
 		{
 			return $this->buildErrorResponse('Access denied');
 		}
@@ -116,7 +118,7 @@ class Shift extends Controller
 		int $limit = 0
 	): array
 	{
-		if (!$this->isIntranetUser())
+		if (!$this->isIntranetUser($this->userId))
 		{
 			return $this->buildErrorResponse('Access denied');
 		}
@@ -141,7 +143,7 @@ class Shift extends Controller
 	 */
 	public function addAction(ShiftDto $shiftDto): array
 	{
-		if (!$this->isIntranetUser())
+		if (!$this->isIntranetUser($this->userId))
 		{
 			return $this->buildErrorResponse('Access denied');
 		}
@@ -223,7 +225,7 @@ class Shift extends Controller
 	 */
 	public function updateAction(?Model\Shift $shift, ShiftDto $shiftDto): array
 	{
-		if (!$this->isIntranetUser())
+		if (!$this->isIntranetUser($this->userId))
 		{
 			return $this->buildErrorResponse('Access denied');
 		}
@@ -268,7 +270,7 @@ class Shift extends Controller
 	 */
 	public function deleteAction(?Model\Shift $shift): array
 	{
-		if (!$this->isIntranetUser())
+		if (!$this->isIntranetUser($this->userId))
 		{
 			return $this->buildErrorResponse('Access denied');
 		}
@@ -293,24 +295,5 @@ class Shift extends Controller
 		return [
 			'isSuccess' => $deleteResult->isSuccess(),
 		];
-	}
-
-	/**
-	 * @return bool
-	 * @throws Main\LoaderException
-	 */
-	protected function isIntranetUser(): bool
-	{
-		if (empty($this->userId))
-		{
-			return false;
-		}
-
-		if (Main\Loader::includeModule('intranet') && !\Bitrix\Intranet\Util::isIntranetUser())
-		{
-			return false;
-		}
-
-		return true;
 	}
 }

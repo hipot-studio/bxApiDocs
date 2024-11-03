@@ -320,6 +320,27 @@ class WorkflowUserTable extends DataManager
 		return array_keys($stored);
 	}
 
+	public static function onDocumentDelete(array $docId): void
+	{
+		$stateIds = WorkflowStateTable::getIdsByDocument($docId, 1000);
+
+		if (!$stateIds)
+		{
+			return;
+		}
+
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$tableName = $sqlHelper->forSql(static::getTableName());
+		$sqlQuery = sprintf(
+			'DELETE from %s WHERE WORKFLOW_ID IN(%s)',
+			$tableName,
+			implode(',', array_map(fn($id) => "'{$id}'", $stateIds))
+		);
+
+		$connection->queryExecute($sqlQuery);
+	}
+
 	public static function convertUserProcesses(int $userId): void
 	{
 		$connection = Application::getConnection();

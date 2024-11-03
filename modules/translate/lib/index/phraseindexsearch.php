@@ -608,6 +608,7 @@ class PhraseIndexSearch
 				{
 					$likeStr = "%%" . \preg_replace("/\W+/iu", "%%", $str) . "%%";
 				}
+				$likeStr = str_replace('%%%%', '%%', $likeStr);
 
 				if (self::allowICURegularExpression())
 				{
@@ -649,6 +650,7 @@ class PhraseIndexSearch
 						$regStr = \preg_replace("/\s+/iu", '[[:blank:]]+', $regStr);
 					}
 				}
+				$regStr = str_replace('%', '%%', $regStr);
 
 				$regExpStart = '';
 				$regExpEnd = '';

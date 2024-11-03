@@ -84,6 +84,12 @@ abstract class CListField
 
 	private function _clear_cache()
 	{
+		if (CACHED_b_lists_field !== false)
+		{
+			$cache = Bitrix\Main\Data\Cache::createInstance();
+			$cache->clean(CACHED_b_lists_field_prefix . $this->_iblock_id, 'b_lists_field');
+		}
+
 		if(isset(self::$prop_cache[$this->_iblock_id]))
 			unset(self::$prop_cache[$this->_iblock_id]);
 	}

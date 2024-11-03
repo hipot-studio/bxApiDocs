@@ -369,8 +369,7 @@ class Connector
 								foreach ($botsInLine as $botUserId)
 								{
 									$relation = $relations->getByUserId($botUserId, (int)$session->getData('CHAT_ID'));
-									$relation->setManager(true);
-									$relation->save();
+									$relation?->setManager(true)->save();
 								}
 							}
 							else

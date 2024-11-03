@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\LimitManager;
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Json;
 
 class ActionFieldAssembler extends FieldAssembler
 {
@@ -45,7 +46,7 @@ class ActionFieldAssembler extends FieldAssembler
 			return '';
 		}
 
-		$params = \CUtil::PhpToJSObject([
+		$params = Json::encode([
 			'dashboardId' => (int)$value['ID'],
 			'type' => $value['TYPE'],
 			'editUrl' => $value['EDIT_URL'],

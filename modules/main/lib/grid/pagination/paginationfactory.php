@@ -9,16 +9,15 @@ final class PaginationFactory
 {
 	public function __construct(
 		private Grid $grid,
-		private PageNavigationStorage $storage,
+		private ?PageNavigationStorage $storage,
 	)
 	{}
 
 	public function create(): PageNavigation
 	{
-		$navId ??= $this->grid->getId() . '_nav';
+		$navId = $this->grid->getId() . '_nav';
 		$navParams = $this->grid->getOptions()->GetNavParams();
-
-		$pageSizes ??= [
+		$pageSizes = [
 			5,
 			10,
 			20,
@@ -31,12 +30,6 @@ final class PaginationFactory
 		$pagination->setPageSize($navParams['nPageSize']);
 		$pagination->setPageSizes($pageSizes);
 		$pagination->setCurrentPage(1);
-
-		$storage = $this->storage;
-		if ($storage instanceof PageNavigationStorage)
-		{
-			$storage->fill($pagination);
-		}
 
 		return $pagination;
 	}

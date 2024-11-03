@@ -123,9 +123,10 @@ class CatalogStoreDocumentControlPanelComponent extends \CBitrixComponent
 			|| $this->accessController->check(ActionDictionary::ACTION_CATALOG_VIEW)
 		)
 		{
-			$buttons[] = $this->getPanelButtonAnalytics();
+			array_push($buttons, ... $this->getPanelButtonAnalytics());
 		}
 
+		array_push($buttons, ... $this->getPanelButtonBiBuilder());
 		array_push($buttons, ... $this->getPanelButtonsSettings());
 		array_push($buttons, ... $this->getPanelButtonsOther());
 
@@ -252,8 +253,10 @@ class CatalogStoreDocumentControlPanelComponent extends \CBitrixComponent
 		return $result;
 	}
 
-	private function getPanelButtonAnalytics(): ?array
+	private function getPanelButtonAnalytics(): array
 	{
+		$buttons = [];
+
 		$sliderPath = \CComponentEngine::makeComponentPath('bitrix:catalog.store.enablewizard');
 		$sliderPath = getLocalPath('components' . $sliderPath . '/slider.php');
 
@@ -271,7 +274,7 @@ class CatalogStoreDocumentControlPanelComponent extends \CBitrixComponent
 				$allowedDashboards = DashboardManager::getManager()->getAllowedDashboards();
 				if (!$allowedDashboards)
 				{
-					return null;
+					return [];
 				}
 
 				$linkKey = '';
@@ -285,7 +288,7 @@ class CatalogStoreDocumentControlPanelComponent extends \CBitrixComponent
 				}
 
 				$url = '/report/analytics/?analyticBoardKey=' . $linkKey;
-				return [
+				$buttons[] = [
 					'ID' => 'analytics',
 					'TEXT' => Loc::getMessage('STORE_DOCUMENTS_ANALYTICS_BUTTON_TITLE'),
 					'URL' => $url,
@@ -295,7 +298,7 @@ class CatalogStoreDocumentControlPanelComponent extends \CBitrixComponent
 			}
 			else
 			{
-				return [
+				$buttons[] = [
 					'ID' => 'analytics',
 					'TEXT' => Loc::getMessage('STORE_DOCUMENTS_ANALYTICS_BUTTON_TITLE'),
 					'SORT' => 45,
@@ -304,7 +307,29 @@ class CatalogStoreDocumentControlPanelComponent extends \CBitrixComponent
 			}
 		}
 
-		return null;
+		return $buttons;
+	}
+
+	private function getPanelButtonBiBuilder(): array
+	{
+		$buttons = [];
+
+		if (
+			Main\Loader::includeModule('biconnector')
+			&& class_exists('\Bitrix\BIConnector\Superset\Scope\ScopeService')
+		)
+		{
+			/** @see \Bitrix\BIConnector\Superset\Scope\MenuItem\MenuItemCreatorStore::getMenuItemData */
+			$menuItem = \Bitrix\BIConnector\Superset\Scope\ScopeService::getInstance()->prepareScopeMenuItem(
+				\Bitrix\BIConnector\Superset\Scope\ScopeService::BIC_SCOPE_STORE
+			);
+			if ($menuItem)
+			{
+				$buttons[] = $menuItem;
+			}
+		}
+
+		return $buttons;
 	}
 
 	private function getPanelButtonsSettings(): array

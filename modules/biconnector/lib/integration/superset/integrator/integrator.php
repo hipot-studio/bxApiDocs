@@ -8,6 +8,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Logger\IntegratorEventLog
 use Bitrix\BIConnector\Integration\Superset\Integrator\Logger\IntegratorLogger;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorRequest;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\Middleware;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Registrar;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
@@ -221,10 +222,10 @@ final class Integrator
 			$dashboards[] = new Dto\Dashboard(
 				id: $dashboardData['id'],
 				title: $dashboardData['title'],
-				dashboardStatus: $dashboardData['status'] ?? '',
 				url: $dashboardData['url'] ?? '',
 				editUrl: $dashboardData['edit_url'] ?? '',
 				isEditable: $dashboardData['is_editable'] ?? false,
+				published: $dashboardData['published'] ?? true,
 				nativeFilterConfig: $jsonMetadata['native_filter_configuration'] ?? [],
 				dateModify: $dateModify,
 			);
@@ -264,7 +265,7 @@ final class Integrator
 		$dashboard = null;
 		if ($dashboardData)
 		{
-			$jsonMetadata = Json::decode($dashboardData['json_metadata']) ?? [];
+			$jsonMetadata = $this->decode($dashboardData['json_metadata']) ?? [];
 			$dateModify = null;
 			if (isset($dashboardData['timestamp_modify']))
 			{
@@ -274,10 +275,10 @@ final class Integrator
 			$dashboard = new Dto\Dashboard(
 				id: $dashboardData['id'],
 				title: $dashboardData['title'],
-				dashboardStatus: $dashboardData['status'] ?? '',
 				url: $dashboardData['url'] ?? '',
 				editUrl: $dashboardData['edit_url'] ?? '',
 				isEditable: $dashboardData['is_editable'] ?? false,
+				published: $dashboardData['published'] ?? true,
 				nativeFilterConfig: $jsonMetadata['native_filter_configuration'] ?? [],
 				dateModify: $dateModify,
 			);
@@ -590,13 +591,11 @@ final class Integrator
 			$requestParams['reason'] = $params['reason'];
 		}
 
-		return
-			$this
-				->createDefaultRequest(self::PROXY_ACTION_FREEZE_SUPERSET)
-				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
-				->removeBefore(Middleware\TariffRestriction::getMiddlewareId())
-				->setParams($requestParams)
-				->perform()
+		return (new IntegratorRequest($this->sender))
+			->setAction(self::PROXY_ACTION_FREEZE_SUPERSET)
+			->setParams($requestParams)
+			->addAfter(new Middleware\Logger($this->logger))
+			->perform()
 		;
 	}
 
@@ -616,13 +615,11 @@ final class Integrator
 			$requestParams['reason'] = $params['reason'];
 		}
 
-		return
-			$this
-				->createDefaultRequest(self::PROXY_ACTION_UNFREEZE_SUPERSET)
-				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
-				->removeBefore(Middleware\TariffRestriction::getMiddlewareId())
-				->setParams($requestParams)
-				->perform()
+		return (new IntegratorRequest($this->sender))
+			->setAction(self::PROXY_ACTION_UNFREEZE_SUPERSET)
+			->setParams($requestParams)
+			->addAfter(new Middleware\Logger($this->logger))
+			->perform()
 		;
 	}
 
@@ -634,14 +631,10 @@ final class Integrator
 	 */
 	public function deleteSuperset(): IntegratorResponse
 	{
-		return
-			$this
-				->createDefaultRequest(self::PROXY_ACTION_DELETE_SUPERSET)
-				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
-				->removeBefore(Middleware\TariffRestriction::getMiddlewareId())
-				->removeBefore(Middleware\UserAccess::getMiddlewareId())
-				->removeBefore(Middleware\Registrar::getMiddlewareId())
-				->perform()
+		return (new IntegratorRequest($this->sender))
+			->setAction(self::PROXY_ACTION_DELETE_SUPERSET)
+			->addAfter(new Middleware\Logger($this->logger))
+			->perform()
 		;
 	}
 
@@ -793,6 +786,8 @@ final class Integrator
 	 */
 	public function createEmptyDashboard(array $fields): IntegratorResponse
 	{
+		$fields['published'] = false;
+
 		return
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_CREATE_EMPTY_DASHBOARD)
@@ -832,7 +827,7 @@ final class Integrator
 		$dashboards = SupersetDashboardTable::getList([
 			'select' => ['EXTERNAL_ID'],
 			'filter' => [
-				'=STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_READY,
+				'=STATUS' => SupersetDashboard::getActiveDashboardStatuses(),
 				'=TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM,
 			],
 			'cache' => ['ttl' => 3600],

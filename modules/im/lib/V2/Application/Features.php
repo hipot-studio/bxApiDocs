@@ -24,6 +24,7 @@ class Features
 		public readonly bool $zoomActive,
 		public readonly bool $zoomAvailable,
 		public readonly bool $giphyAvailable,
+		public readonly bool $collabAvailable,
 	){}
 
 	public static function get(): self
@@ -39,6 +40,7 @@ class Features
 			Zoom::isActive(),
 			Zoom::isAvailable(),
 			self::isGiphyAvailable(),
+			false,
 		);
 	}
 

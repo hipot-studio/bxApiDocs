@@ -57,6 +57,8 @@ class Manager
 	{
 		$event = new Event('ai', 'onTuningLoad');
 		$event->send();
+
+		$storage = json_decode(Config::getValue(self::CONFIG_EXTERNAL_CODE) ?? "", true) ?: [];
 		foreach ($event->getResults() as $result)
 		{
 			if (!$result instanceof Orm\EventResult)
@@ -77,7 +79,6 @@ class Manager
 				}
 			}
 
-			$storage = json_decode(Config::getValue(self::CONFIG_EXTERNAL_CODE), true) ?: [];
 			foreach ($result->getModified()['items'] ?? [] as $code => $raw)
 			{
 				$groupCode = $raw['group'] ?? Defaults::GROUP_DEFAULT;

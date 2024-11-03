@@ -209,6 +209,20 @@ interface IEngine
 	public function getAgreement(): ?Agreement;
 
 	/**
+	 * Set skip agreement mode.
+	 *
+	 * @return void
+	 */
+	public function skipAgreement():void;
+
+	/**
+	 * Returns current skip agreement mode.
+	 *
+	 * @return bool
+	 */
+	public function shouldSkipAgreement(): bool;
+
+	/**
 	 * Checks that current Engine is available in the current tariff.
 	 *
 	 * @return bool

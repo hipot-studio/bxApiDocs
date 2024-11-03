@@ -84,6 +84,11 @@ class UserSettings extends \Bitrix\Main\Grid\Settings
 		return $this->filterFields;
 	}
 
+	public function isCloud(): bool
+	{
+		return ModuleManager::isModuleInstalled('bitrix24');
+	}
+
 	public function setFilterFields(array $filterFields): void
 	{
 		$this->filterFields = $filterFields;

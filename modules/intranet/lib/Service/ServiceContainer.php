@@ -10,6 +10,7 @@ use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectNotFoundException;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
+use Bitrix\Intranet\Contract\Repository\UserRepository as UserRepositoryContract;
 
 class ServiceContainer implements ContainerInterface
 {
@@ -63,5 +64,20 @@ class ServiceContainer implements ContainerInterface
 	public function invitationRepository(): InvitationRepository
 	{
 		return $this->get('repository.invitation');
+	}
+
+	public function registrationService(): RegistrationService
+	{
+		return $this->get('service.registration');
+	}
+
+	public function userRepository(): UserRepositoryContract
+	{
+		return $this->get('repository.user');
+	}
+
+	public function inviteService(): InviteService
+	{
+		return $this->get('service.invitation');
 	}
 }

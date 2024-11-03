@@ -52,13 +52,16 @@ class DashboardRowAssembler extends RowAssembler
 			new Field\ScopeFieldAssembler([
 				'SCOPE',
 			]),
+			new Field\UrlParamsFieldAssembler([
+				'URL_PARAMS',
+			]),
 			new Field\BasedOnFieldAssembler([
 				'SOURCE_ID',
 			]),
 			new Field\FilterPeriodFieldAssembler([
 				'FILTER_PERIOD',
 			]),
-			new Field\ExternalIdFieldAssembler([
+			new Field\IdFieldAssembler([
 				'ID',
 			]),
 			new Field\DateFieldAssembler([

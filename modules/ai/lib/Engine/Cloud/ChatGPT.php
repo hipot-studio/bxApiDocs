@@ -201,6 +201,6 @@ final class ChatGPT extends CloudEngine implements IContext, IQueueOptional
 	{
 		$region = Application::getInstance()->getLicense()->getRegion();
 
-		return $region !== 'ru' && $region !== 'by';
+		return !in_array($region, ['ru', 'by', 'cn']);
 	}
 }

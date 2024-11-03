@@ -6,6 +6,7 @@ use Bitrix\Main\Filter\EntityDataProvider;
 use Bitrix\Main\Filter\Settings;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 
 class DashboardDataProvider extends EntityDataProvider
 {
@@ -16,6 +17,11 @@ class DashboardDataProvider extends EntityDataProvider
 	public function getSettings(): Settings
 	{
 		return $this->settings;
+	}
+
+	protected function getFieldName($fieldID)
+	{
+		return $fieldID;
 	}
 
 	public function prepareFields(): array
@@ -57,6 +63,12 @@ class DashboardDataProvider extends EntityDataProvider
 			]),
 			'TYPE' => $this->createField('TYPE', [
 				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TITLE_TYPE'),
+				'default' => true,
+				'type' => 'list',
+				'partial' => true,
+			]),
+			'STATUS' => $this->createField('STATUS', [
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TITLE_STATUS'),
 				'default' => true,
 				'type' => 'list',
 				'partial' => true,
@@ -106,6 +118,21 @@ class DashboardDataProvider extends EntityDataProvider
 					'SYSTEM' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TYPE_SYSTEM'),
 					'MARKET' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TYPE_MARKET'),
 					'CUSTOM' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TYPE_CUSTOM'),
+				],
+			];
+		}
+
+		if ($fieldID === 'STATUS')
+		{
+			return [
+				'params' => [
+					'multiple' => 'Y',
+				],
+				'items' => [
+					SupersetDashboardTable::DASHBOARD_STATUS_READY => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_STATUS_READY'),
+					SupersetDashboardTable::DASHBOARD_STATUS_DRAFT => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_STATUS_DRAFT'),
+					SupersetDashboardTable::DASHBOARD_STATUS_LOAD => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_STATUS_LOAD'),
+					SupersetDashboardTable::DASHBOARD_STATUS_FAILED => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_STATUS_FAILED'),
 				],
 			];
 		}

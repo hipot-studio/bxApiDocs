@@ -5,6 +5,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Grid\Options;
 use Bitrix\Main\Grid\Panel\Actions;
 use Bitrix\Main\Grid\Panel\Snippet;
@@ -50,6 +51,17 @@ class UiFormConfig extends CBitrixComponent
 					if (!empty($row['NAME']) && $scopeAccess->canUpdate($scopeId))
 					{
 						Scope::getInstance()->updateScopeName($scopeId, $row['NAME']);
+					}
+					if (!empty($row['AUTO_APPLY_SCOPE']) && $scopeAccess->canUpdate($scopeId))
+					{
+						$autoApplyScope = ($row['AUTO_APPLY_SCOPE'] === 'Y');
+						Scope::getInstance()->updateScopeAutoApplyScope($scopeId, $autoApplyScope);
+						if ($row['AUTO_APPLY_SCOPE'] === 'Y')
+						{
+							Application::getInstance()->addBackgroundJob(
+								static fn() => Scope::getInstance()->setScopeForEligibleUsers($scopeId)
+							);
+						}
 					}
 				}
 			}
@@ -108,7 +120,8 @@ class UiFormConfig extends CBitrixComponent
 					'data' => [
 						'ID' => $scopeId,
 						'NAME' => $scope['NAME'],
-						'USERS' => '<div class="ui-editor-config" id="ui-editor-config-' . $scopeId . '"></div>'
+						'USERS' => '<div class="ui-editor-config" id="ui-editor-config-' . $scopeId . '"></div>',
+						'AUTO_APPLY_SCOPE' => $scope['AUTO_APPLY_SCOPE'],
 					]
 				];
 				$jsData[] = [
@@ -178,14 +191,21 @@ class UiFormConfig extends CBitrixComponent
 			],
 			[
 				'id' => 'NAME',
-				'name' => Loc::getMessage('UI_FORM_CONFIG_SCOPE'),
+				'name' => Loc::getMessage('UI_FORM_CONFIG_SCOPE_MSGVER_1'),
 				'default' => true,
 				'editable' => true,
 			],
 			[
 				'id' => 'USERS',
-				'name' => Loc::getMessage('UI_FORM_CONFIG_MEMBERS'),
+				'name' => Loc::getMessage('UI_FORM_CONFIG_MEMBERS_MSGVER_1'),
 				'default' => true,
+			],
+			[
+				'id' => 'AUTO_APPLY_SCOPE',
+				'name' => Loc::getMessage('UI_FORM_CONFIG_AUTO_APPLY_SCOPE'),
+				'type' => \Bitrix\Main\Grid\Types::GRID_CHECKBOX,
+				'default' => true,
+				'editable' => true,
 			],
 		];
 	}

@@ -9,15 +9,26 @@ trait TranslateTrait
 	 *
 	 * @param array $translates
 	 * @param string $langCode
+	 * @param string $defaultTitle
 	 * @return string
 	 */
-	static private function translate(array $translates, string $langCode): string
+	static private function translate(array $translates, string $langCode, string $defaultTitle = ''): string
 	{
-		if (array_key_exists($langCode, $translates))
+		if (empty($translates))
+		{
+			return $defaultTitle;
+		}
+
+		if (isset($translates[$langCode]))
 		{
 			return $translates[$langCode];
 		}
 
-		return $translates['en'] ?? '';
+		if (isset($translates['en']))
+		{
+			return $translates['en'];
+		}
+
+		return $translates[array_key_first($translates)];
 	}
 }

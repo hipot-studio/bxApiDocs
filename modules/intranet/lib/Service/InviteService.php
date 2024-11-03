@@ -2,39 +2,37 @@
 
 namespace Bitrix\Intranet\Service;
 
+use Bitrix\Intranet\Command\AddToGroupCommand;
 use Bitrix\Intranet\CurrentUser;
+use Bitrix\Intranet\Entity\Collection\EmailCollection;
 use Bitrix\Intranet\Entity\Collection\InvitationCollection;
+use Bitrix\Intranet\Entity\Collection\PhoneCollection;
+use Bitrix\Intranet\Entity\Type\Email;
+use Bitrix\Intranet\Entity\Type\InvitationsContainer;
+use Bitrix\Intranet\Entity\Type\Phone;
+use Bitrix\Intranet\Entity\Type\PhoneInvitation;
 use Bitrix\Intranet\Entity\Invitation;
 use Bitrix\Intranet\Entity\User;
+use Bitrix\Intranet\Enum\InvitationStatus;
 use Bitrix\Intranet\Enum\InvitationType;
+use Bitrix\Intranet\Repository\UserRepository;
+use Bitrix\Intranet\Contract\Repository\UserRepository as UserRepositoryContract;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Result;
+use Bitrix\Main\SystemException;
+use Bitrix\Main\Error;
+use Bitrix\Intranet\Invitation\Register;
 
 class InviteService
 {
-	public function massInvite(array $invite)
-	{
-		$processedUserIdList = $invitationCollection->getUserIds();
-		if (!empty($processedUserIdList))
-		{
-			$event = new Event(
-				'intranet',
-				'onUserInvited',
-				[
-					'originatorId' => $invitation->getOriginatorId(),
-					'userId' => $processedUserIdList,
-					'type' => $invitation->getType()?->value ?? InvitationType::EMAIL->value
-				]
-			);
-			$event->send();
-		}
-	}
+	private UserRepositoryContract $userRepository;
 
-	public function invite()
+	public function __construct()
 	{
-
+		$this->userRepository = ServiceContainer::getInstance()->userRepository();
 	}
 
 	public function inviteUser(User $user, InvitationType $type, string $formType): Invitation
@@ -54,68 +52,87 @@ class InviteService
 		));
 	}
 
-	public function sendInvite(User $user, $messageText)
+	public function inviteUsersToGroup(int $groupId, InvitationsContainer $inviteData): Result
 	{
-		$bExtranet = $user->isExtranet();
-		$isCloud = Loader::includeModule('bitrix24');
+		$result = new Result();
 
-		if ($isCloud && $user->getId() !== null)
+		if (!Loader::includeModule('socialnetwork'))
 		{
-			$networkEmail = (new \Bitrix\Bitrix24\Integration\Network\Invitation())->getEmailByUserId($user->getId());
-			$emailTo = $networkEmail ?? $user->getEmail();
-		}
-		else
-		{
-			$emailTo = $user->getEmail();
+			throw new SystemException('Module "socialnetwork" is not installed');
 		}
 
-		$siteIdByDepartmentId = \CIntranetInviteDialog::getUserSiteId([
-			"UF_DEPARTMENT" => $user->getDepartmetnsIds(),
-			"SITE_ID" => SITE_ID
-		]);
+		if (\CSocNetUserToGroup::GetById($groupId) === false)
+		{
+			$result->addError(new Error('', 'socnetgroup_not_found'));
 
-		if ($bExtranet)
-		{
-			$messageId = \CIntranetInviteDialog::getMessageId("EXTRANET_INVITATION", $siteIdByDepartmentId, LANGUAGE_ID);
-			$eventName = 'EXTRANET_INVITATION';
-			$params = [
-				"USER_ID" => $user->getId(),
-				"USER_ID_FROM" => CurrentUser::get()->getId(),
-				"CHECKWORD" => $user->getConfirmCode(),
-				"EMAIL" => $emailTo,
-				"USER_TEXT" => $messageText
-			];
-		}
-		elseif ($isCloud)
-		{
-			$messageId = \CIntranetInviteDialog::getMessageId("BITRIX24_USER_INVITATION", $siteIdByDepartmentId, LANGUAGE_ID);
-			$eventName = 'BITRIX24_USER_INVITATION';
-			$params = [
-				"EMAIL_FROM" => CurrentUser::get()->getEmail(),//$USER->GetEmail(),
-				"USER_ID_FROM" => CurrentUser::get()->getId(),
-				"EMAIL_TO" => $emailTo,
-				"LINK" => \CIntranetInviteDialog::getInviteLink(['ID' => $user->getId(), 'CONFIRM_CODE' => $user->getConfirmCode()], $siteIdByDepartmentId),
-				"USER_TEXT" => $messageText,
-			];
-		}
-		else
-		{
-			$messageId = \CIntranetInviteDialog::getMessageId("INTRANET_USER_INVITATION", $siteIdByDepartmentId, LANGUAGE_ID);
-			$eventName = 'INTRANET_USER_INVITATION';
-			$params = [
-				"EMAIL_TO" => $emailTo,
-				"USER_ID_FROM" => CurrentUser::get()->getId(),
-				"LINK" => \CIntranetInviteDialog::getInviteLink(['ID' => $user->getId(), 'CONFIRM_CODE' => $user->getConfirmCode()], $siteIdByDepartmentId),
-				"USER_TEXT" => $messageText,
-			];
+			return $result;
 		}
 
-		\CEvent::SendImmediate(
-			$eventName,
-			$siteIdByDepartmentId,
-			$params,
-			null,
-			$messageId
+		$result = Register::inviteNewUsers(
+			SITE_ID,
+			$inviteData->backwardsCompatibility(),
+			'email'
 		);
+
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		$userCollection = $this->userRepository->findUsersByIds($result->getData());
+//		\CSocNetUserToGroup::addUniqueUsersToGroup($groupId, $result->getData());
+		(new AddToGroupCommand($groupId, $userCollection))->execute();
+
+		$result->setData($userCollection->all());
+
+		return $result;
+	}
+
+	public function checkInvitationsStatusByEmailCollection(EmailCollection $emailCollection): Result
+	{
+		$userCollection = $this->userRepository->findUsersByEmails(
+			$emailCollection->map(fn(Email $email) => $email->toLogin())
+		);
+
+		$statuses = $emailCollection->map(
+			function(Email $email) use ($userCollection)
+			{
+				$user = $userCollection->filter(
+					fn (User $user) => mb_strtolower($user->getEmail()) === mb_strtolower($email->toLogin())
+
+				)
+					->first()
+				;
+				return [
+					'email' => $email,
+					'user' => $user,
+				];
+			}
+		);
+
+		return (new Result())->setData($statuses);
+	}
+
+	public function checkInvitationsStatusByPhoneCollection(PhoneCollection $phoneCollection): Result
+	{
+		$userCollection = $this->userRepository->findUsersByPhoneNumbers(
+			$phoneCollection->map(fn(Phone $phone) => $phone->defaultFormat())
+		);
+
+		$statuses = $phoneCollection->map(
+			function(Phone $phone) use ($userCollection)
+			{
+				$user = $userCollection
+					->filter(fn(User $user) => $user->getAuthPhoneNumber() === $phone->defaultFormat())
+					->first();
+
+				return [
+					'phone' => $phone,
+					'user' => $user,
+				];
+			}
+		);
+
+		return (new Result())->setData($statuses);
 	}
 }

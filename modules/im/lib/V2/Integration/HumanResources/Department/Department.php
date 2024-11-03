@@ -92,6 +92,11 @@ class Department extends BaseDepartment
 		}
 
 		$rootNode = $this->nodeRepository->getRootNodeByStructureId($structure->id);
+		if ($rootNode === null)
+		{
+			return  [];
+		}
+
 		$nodes = $this->nodeRepository->getChildOf($rootNode, DepthLevel::FULL, NodeActiveFilter::ONLY_ACTIVE);
 
 		foreach ($nodes as $node)

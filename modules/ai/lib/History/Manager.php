@@ -11,7 +11,6 @@ use Bitrix\AI\Facade\User;
 use Bitrix\AI\Payload\IPayload;
 use Bitrix\AI\Result;
 use Bitrix\AI\Model\HistoryTable;
-use Bitrix\Main\Text\Encoding;
 use Bitrix\Main\Type\DateTime;
 use ReflectionClass;
 
@@ -70,7 +69,12 @@ class Manager
 
 		if (($GLOBALS['USER'] instanceof \CUser) && (int)$GLOBALS['USER']->getId() === $userId)
 		{
-			$userAccessCodes = User::getInstance()->getAccessCodes();
+			$userAccessCodes = [];
+			$user = User::getInstance();
+			if (!empty($user))
+			{
+				$userAccessCodes = $user->getAccessCodes();
+			}
 		}
 		else
 		{
@@ -263,9 +267,11 @@ class Manager
 			->where('CREATED_BY_ID', $context->getUserId())
 			->whereIn('GROUP_ID', [-1, 0])
 			->setOrder(['ID' => 'DESC'])
+			->setLimit(1100)
 			->fetchAll()
 		;
 
+		$itemsForDelete = [];
 		$groupsForDel = [];
 		$offset = 0;
 		foreach ($items as $item)
@@ -278,23 +284,22 @@ class Manager
 			{
 				$groupsForDel[] = $item['ID'];
 			}
-			HistoryTable::delete($item['ID'])->isSuccess();
+			$itemsForDelete[] = $item['ID'];
+		}
+
+		if (count($itemsForDelete) > 0)
+		{
+			HistoryTable::deleteByFilter(['ID' => $itemsForDelete]);
 		}
 
 		if (count($groupsForDel) > 0)
 		{
-			$groupItems = HistoryTable::query()
-				->setSelect(['ID', 'GROUP_ID'])
-				->where('CONTEXT_MODULE', $context->getModuleId())
-				->where('CONTEXT_ID', $context->getContextId())
-				->where('CREATED_BY_ID', $context->getUserId())
-				->whereIn('GROUP_ID', $groupsForDel)
-				->fetchAll()
-			;
-			foreach ($groupItems as $groupItem)
-			{
-				HistoryTable::delete($groupItem['ID'])->isSuccess();
-			}
+			HistoryTable::deleteByFilter([
+				'GROUP_ID' => $groupsForDel,
+				'=CONTEXT_MODULE' => $context->getModuleId(),
+				'=CONTEXT_ID' => $context->getContextId(),
+				'=CREATED_BY_ID' => $context->getUserId(),
+			]);
 		}
 	}
 

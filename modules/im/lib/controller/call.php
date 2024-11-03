@@ -18,7 +18,7 @@ use Bitrix\Main\Localization\Loc;
 
 class Call extends Engine\Controller
 {
-	protected const LOCK_TTL = 15; // in seconds
+	protected const LOCK_TTL = 10; // in seconds
 
 	/**
 	 * @restMethod im.call.create
@@ -34,15 +34,29 @@ class Call extends Engine\Controller
 	{
 		$currentUserId = $this->getCurrentUser()->getId();
 
+		$call = null;
+
 		$lockName = static::getLockNameWithEntityId($entityType, $entityId, $currentUserId);
-		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+		if (!Application::getConnection()->lock($lockName, 3))
 		{
-			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
-			return null;
+			if ($joinExisting)
+			{
+				$call = CallFactory::searchActive($type, $provider, $entityType, $entityId, $currentUserId);
+			}
+
+			if (!$call)
+			{
+				$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
+				return null;
+			}
 		}
 
-		$call = $joinExisting ? CallFactory::searchActive($type, $provider, $entityType, $entityId, $currentUserId) : false;
+		if (!$call && $joinExisting)
+		{
+			$call = CallFactory::searchActive($type, $provider, $entityType, $entityId, $currentUserId);
+		}
 
+		$isNew = false;
 		try
 		{
 			if ($call)
@@ -61,7 +75,6 @@ class Call extends Engine\Controller
 					return null;
 				}
 
-				$isNew = false;
 				if (!$call->hasUser($currentUserId))
 				{
 					$addedUser = $call->addUser($currentUserId);
@@ -122,6 +135,20 @@ class Call extends Engine\Controller
 			return null;
 		}
 
+		Application::getConnection()->unlock($lockName);
+
+		return $this->formatCallResponse($call, 0, $isNew);
+	}
+
+	/**
+	 * @param \Bitrix\Im\Call\Call $call
+	 * @param bool $isNew
+	 * @return array{call: array, connectionData: array, users: array, userData: array, publicChannels: array, logToken: string, isNew: bool}
+	 */
+	protected function formatCallResponse(\Bitrix\Im\Call\Call $call, int $initiatorId = 0, bool $isNew = false): array
+	{
+		$currentUserId = $this->getCurrentUser()->getId();
+
 		$users = $call->getUsers();
 		$publicChannels = Loader::includeModule('pull')
 			? \Bitrix\Pull\Channel::getPublicIds([
@@ -132,17 +159,20 @@ class Call extends Engine\Controller
 			: []
 		;
 
-		Application::getConnection()->unlock($lockName);
-
-		return [
-			'call' => $call->toArray(),
+		$response = [
+			'call' => $call->toArray($initiatorId),
 			'connectionData' => $call->getConnectionData($currentUserId),
-			'isNew' => $isNew,
 			'users' => $users,
 			'userData' => Util::getUsers($users),
 			'publicChannels' => $publicChannels,
 			'logToken' => $call->getLogToken($currentUserId),
 		];
+		if ($isNew)
+		{
+			$response['isNew'] = $isNew;
+		}
+
+		return $response;
 	}
 
 	/**
@@ -212,9 +242,7 @@ class Call extends Engine\Controller
 		$call = CallFactory::searchActive($type, $provider, $entityType, $entityId, $currentUserId);
 		if (!$call)
 		{
-			return [
-				'success' => false
-			];
+			return ['success' => false];
 		}
 
 		if ($call->hasErrors())
@@ -240,12 +268,10 @@ class Call extends Engine\Controller
 			$call->getSignaling()->sendUsersJoined($currentUserId, [$currentUserId]);
 		}
 
-		return [
-			'success' => true,
-			'call' => $call->toArray(),
-			'connectionData' => $call->getConnectionData($currentUserId),
-			'logToken' => $call->getLogToken($currentUserId)
-		];
+		return array_merge(
+			['success' => true],
+			$this->formatCallResponse($call)
+		);
 	}
 
 	/**
@@ -269,7 +295,7 @@ class Call extends Engine\Controller
 			return null;
 		}
 
-		$call->finish();
+		$call->setActionUserId($currentUserId)->finish();
 
 		return [
 			'call' => $call->toArray($currentUserId),
@@ -299,15 +325,7 @@ class Call extends Engine\Controller
 			return null;
 		}
 
-		$users = $call->getUsers();
-
-		return [
-			'call' => $call->toArray($currentUserId),
-			'connectionData' => $call->getConnectionData($currentUserId),
-			'users' => $users,
-			'userData' => Util::getUsers($users),
-			'logToken' => $call->getLogToken($currentUserId)
-		];
+		return $this->formatCallResponse($call, $currentUserId);
 	}
 
 	/**
@@ -326,6 +344,7 @@ class Call extends Engine\Controller
 		$isShow = ($show === "Y");
 		$isLegacyMobile = ($legacyMobile === "Y");
 		$isRepeated = ($repeated === "Y");
+		$userIds = array_map('intVal', $userIds);
 
 		$call = Registry::getCallWithId($callId);
 		if (!$call)
@@ -351,7 +370,7 @@ class Call extends Engine\Controller
 			'IS_MOBILE' => ($isLegacyMobile ? 'Y' : 'N')
 		]);
 
-		$lockName = static::getLockNameWithCallId($callId);
+		$lockName = static::getLockNameWithCallId('invite', $callId);
 		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
 		{
 			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
@@ -368,6 +387,7 @@ class Call extends Engine\Controller
 	protected function inviteUsers(\Bitrix\Im\Call\Call $call, $userIds, $isLegacyMobile, $isVideo, $isShow, $isRepeated): void
 	{
 		$usersToInvite = [];
+		$existingUsers = [];
 		foreach ($userIds as $userId)
 		{
 			$userId = (int)$userId;
@@ -384,7 +404,7 @@ class Call extends Engine\Controller
 			}
 			else if ($isRepeated === false && $call->getAssociatedEntity())
 			{
-				$call->getAssociatedEntity()->onExistingUserInvite($userId);
+				$existingUsers[] = $userId;
 			}
 			$usersToInvite[] = $userId;
 			$callUser = $call->getUser($userId);
@@ -392,6 +412,11 @@ class Call extends Engine\Controller
 			{
 				$callUser->updateState(CallUser::STATE_CALLING);
 			}
+		}
+
+		if (!empty($existingUsers))
+		{
+			$call->getAssociatedEntity()->onExistingUsersInvite($existingUsers);
 		}
 
 		if (count($usersToInvite) === 0)
@@ -472,25 +497,24 @@ class Call extends Engine\Controller
 		}
 
 		$callUser = $call->getUser($currentUserId);
-
-		$lockName = static::getLockNameWithCallId($callId);
-		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
-		{
-			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
-			return null;
-		}
-
 		if ($callUser)
 		{
+			$lockName = static::getLockNameWithCallId('user'.$currentUserId, $callId);
+			if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+			{
+				$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
+				return null;
+			}
+
 			$callUser->update([
 				'STATE' => CallUser::STATE_READY,
 				'LAST_SEEN' => new DateTime(),
-				'FIRST_JOINED' => $callUser->getFirstJoined() ? $callUser->getFirstJoined() : new DateTime(),
+				'FIRST_JOINED' => $callUser->getFirstJoined() ?: new DateTime(),
 				'IS_MOBILE' => $isLegacyMobile ? 'Y' : 'N',
 			]);
-		}
 
-		Application::getConnection()->unlock($lockName);
+			Application::getConnection()->unlock($lockName);
+		}
 
 		$call->getSignaling()->sendAnswer($currentUserId, $callInstanceId, $isLegacyMobile);
 	}
@@ -517,25 +541,23 @@ class Call extends Engine\Controller
 			return null;
 		}
 
-		$lockName = static::getLockNameWithCallId($callId);
-		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
-		{
-			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
-			return null;
-		}
-
 		$callUser = $call->getUser($currentUserId);
 		if (!$callUser)
 		{
 			$this->addError(new Error("User is not part of the call", "unknown_call_user"));
-			Application::getConnection()->unlock($lockName);
 			return null;
 		}
 
 		if ($callUser->getState() === CallUser::STATE_READY)
 		{
 			$this->addError(new Error("Can not decline in {$callUser->getState()} user state", "wrong_user_state"));
-			Application::getConnection()->unlock($lockName);
+			return null;
+		}
+
+		$lockName = static::getLockNameWithCallId('user'.$currentUserId, $callId);
+		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+		{
+			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
 			return null;
 		}
 
@@ -549,15 +571,15 @@ class Call extends Engine\Controller
 		}
 		$callUser->updateLastSeen(new DateTime());
 
+		Application::getConnection()->unlock($lockName);
+
 		$userIds = $call->getUsers();
 		$call->getSignaling()->sendHangup($currentUserId, $userIds, $callInstanceId, $code);
 
 		if (!$call->hasActiveUsers())
 		{
-			$call->finish();
+			$call->setActionUserId($currentUserId)->finish();
 		}
-
-		Application::getConnection()->unlock($lockName);
 	}
 
 	/**
@@ -592,7 +614,10 @@ class Call extends Engine\Controller
 			}
 		}
 
-		if ($retransmit)
+		if (
+			is_bool($retransmit) && $retransmit===true
+			|| is_string($retransmit) && in_array($retransmit, ['true', 'Y', '1'], true)
+		)
 		{
 			$call->getSignaling()->sendPing($currentUserId, $requestId);
 		}
@@ -688,8 +713,6 @@ class Call extends Engine\Controller
 		}
 
 		$call->getSignaling()->sendNegotiationNeeded($currentUserId, $userId, $restart);
-
-		return true;
 	}
 
 	/**
@@ -723,8 +746,6 @@ class Call extends Engine\Controller
 		}
 
 		$call->getSignaling()->sendConnectionOffer($currentUserId, $userId, $connectionId, $sdp, $userAgent);
-
-		return true;
 	}
 
 	/**
@@ -758,8 +779,6 @@ class Call extends Engine\Controller
 		}
 
 		$call->getSignaling()->sendConnectionAnswer($currentUserId, $userId, $connectionId, $sdp, $userAgent);
-
-		return true;
 	}
 
 	/**
@@ -790,8 +809,6 @@ class Call extends Engine\Controller
 		}
 
 		$call->getSignaling()->sendIceCandidates($currentUserId, $userId, $connectionId, $candidates);
-
-		return true;
 	}
 
 	/**
@@ -803,13 +820,6 @@ class Call extends Engine\Controller
 	 */
 	public function hangupAction($callId, $callInstanceId, $retransmit = true)
 	{
-		$lockName = static::getLockNameWithCallId($callId);
-		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
-		{
-			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
-			return null;
-		}
-
 		$call = Registry::getCallWithId($callId);
 		if (!$call)
 		{
@@ -823,6 +833,12 @@ class Call extends Engine\Controller
 			return null;
 		}
 
+		$lockName = static::getLockNameWithCallId('user'.$currentUserId, $callId);
+		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+		{
+			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
+			return null;
+		}
 
 		$callUser = $call->getUser($currentUserId);
 		if ($callUser)
@@ -831,17 +847,20 @@ class Call extends Engine\Controller
 			$callUser->updateLastSeen(new DateTime());
 		}
 
-		if (!$call->hasActiveUsers())
+		if (
+			is_bool($retransmit) && $retransmit===true
+			|| is_string($retransmit) && in_array($retransmit, ['true', 'Y', '1'], true)
+		)
 		{
-			$call->finish();
+			$userIds = $call->getUsers();
+			$call->getSignaling()->sendHangup($currentUserId, $userIds, $callInstanceId);
 		}
 
 		Application::getConnection()->unlock($lockName);
 
-		if ($retransmit)
+		if (!$call->hasActiveUsers())
 		{
-			$userIds = $call->getUsers();
-			$call->getSignaling()->sendHangup($currentUserId, $userIds, $callInstanceId);
+			$call->setActionUserId($currentUserId)->finish();
 		}
 	}
 
@@ -939,22 +958,12 @@ class Call extends Engine\Controller
 			$userId = $currentUserId;
 		}
 
-		$lockName = static::getLockNameWithCallId($callId);
-		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
-		{
-			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
-			return null;
-		}
-
 		$callUser = $call->getUser($userId);
 		if (!$callUser)
 		{
 			$this->addError(new Error("User is not part of the call", "unknown_call_user"));
-			Application::getConnection()->unlock($lockName);
 			return null;
 		}
-
-		Application::getConnection()->unlock($lockName);
 
 		return $callUser->toArray();
 	}
@@ -1005,12 +1014,12 @@ class Call extends Engine\Controller
 		return "call_entity_{$entityType}_{$entityId}";
 	}
 
-	protected static function getLockNameWithCallId($callId): string
+	protected static function getLockNameWithCallId(string $prefix, $callId): string
 	{
 		//TODO: int|string after switching to php 8
 		if (is_string($callId) || is_numeric($callId))
 		{
-			return "im_call_{$callId}";
+			return "{$prefix}_call_{$callId}";
 		}
 
 		return '';

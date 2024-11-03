@@ -57,6 +57,8 @@ abstract class Engine
 		'c_sub_section' => '',
 	];
 
+	private bool $shouldSkipAgreement = false;
+
 	public function __construct(
 		protected Context $context,
 		mixed $data = null
@@ -455,7 +457,7 @@ abstract class Engine
 
 	/**
 	 * Return prepared post.
-	 * 
+	 *
 	 * @param array $additionalParams
 	 * @return array
 	 */
@@ -554,30 +556,18 @@ abstract class Engine
 		$engineCode = strtolower(static::SHARD_PREFIX);
 		$shardZone = Bitrix24::getShardZone();
 
-		$token = trim(str_replace('Bearer', '', $header));
-		$tokens = Config::getValue("{$engineCode}_{$shardZone}");
-
-		if (empty($tokens))
-		{
-			return null;
-		}
-
-		$tokens = array_column($tokens, 0);
-		$tokens = array_flip($tokens);
-
-		if (!array_key_exists($token, $tokens))
-		{
-			return null;
-		}
+		$tokensByZone = Config::getValue("{$engineCode}_{$shardZone}") ?: [];
+		$countServers = \count($tokensByZone) ?: 1;
 
 		$queueUrl = Config::getValue("{$engineCode}_queue")[$shardZone] ?? null;
-
 		if (empty($queueUrl))
 		{
 			return null;
 		}
 
-		return sprintf($queueUrl, $tokens[$token] + 1);
+		$randomIndex = random_int(1, $countServers);
+
+		return sprintf($queueUrl, $randomIndex);
 	}
 
 	/**
@@ -627,8 +617,6 @@ abstract class Engine
 		$this->queueJob = QueueJob::createWithinFromEngine($this)->register();
 
 		$url = $this->getCompletionsQueueUrl() . self::URL_COMPLETIONS_QUEUE_PATH;
-		$postParams = $this->getPostParams();
-		$postParams = array_merge($this->getParameters(), $postParams);
 
 		$cacheManager = new EngineResultCache($this->queueJob->getCacheHash());
 
@@ -646,7 +634,7 @@ abstract class Engine
 			'callbackUrl' => $this->queueJob->getCallbackUrl(),
 			'errorCallbackUrl' => $this->queueJob->getErrorCallbackUrl(),
 			'url' => $this->getCompletionsUrl(),
-			'params' => $this->getClearPostParams($postParams),
+			'params' => $this->makeRequestParams(),
 			'authorization' => $this->getAuthorizationHeader(),
 		]));
 
@@ -672,16 +660,35 @@ abstract class Engine
 	}
 
 	/**
-	 * Delete from post params unknown parameters
+	 *  Returns only necessary parameters to make request to AI engine
+	 *
+	 * @param array $postParams
+	 * @return array
 	 */
-	protected function getClearPostParams(array $params): array
+	protected function makeRequestParams(array $postParams = []): array
 	{
-		if (key_exists(static::PARAM_CONSUMPTION_ID, $params))
+		if (empty($postParams))
 		{
-			unset($params[static::PARAM_CONSUMPTION_ID]);
+			$postParams = $this->getPostParams();
+			$postParams = array_merge($this->getParameters(), $postParams);
 		}
 
-		return $params;
+		$returnArray = [
+			'model' => $postParams['model'] ?? $this->getSystemParameters()['model'],
+			'temperature' => $postParams['temperature'] ?? static::TEMPERATURE,
+			'messages' => $postParams['messages'] ?? $this->getPostParams()['messages'],
+		];
+
+		if (isset($postParams['max_tokens']))
+		{
+			$returnArray['max_tokens'] = $postParams['max_tokens'];
+		}
+		if (isset($postParams['response_format']))
+		{
+			$returnArray['response_format']['type'] = $postParams['response_format']['type'];
+		}
+
+		return $returnArray;
 	}
 
 	/**
@@ -711,7 +718,27 @@ abstract class Engine
 	 */
 	public function getAgreement(): ?Agreement
 	{
+		if ($this->shouldSkipAgreement)
+		{
+			return null;
+		}
+
 		return Agreement::get(static::AGREEMENT_CODE);
+	}
+
+	/**
+	 * Skips User Agreement (in fact just accept agreement by current Context's user).
+	 *
+	 * @return self
+	 */
+	public function skipAgreement(): void
+	{
+		$this->shouldSkipAgreement = true;
+	}
+
+	public function shouldSkipAgreement(): bool
+	{
+		return $this->shouldSkipAgreement;
 	}
 
 	/**

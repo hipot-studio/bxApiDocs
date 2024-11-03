@@ -10,11 +10,12 @@ class Search extends Controller
 {
 	private array $result = [];
 
-	public function getAppsAction(string $text, int $page, string $area): AjaxJson
+	public function getAppsAction(string $text, int $page, string $area, array $order = []): AjaxJson
 	{
 		$template = new \Bitrix\Market\ListTemplates\Search();
 		$template->setSearchText($text);
 		$template->setFilter(['area' => $area]);
+		$template->setOrder($order);
 		$template->setPage($page);
 		$template->setResult(true);
 		$this->result = $template->getInfo();
@@ -25,6 +26,7 @@ class Search extends Controller
 			'pages' => $this->result['PAGES'],
 			'cur_page' => $this->result['CUR_PAGE'],
 			'result_count' => $this->result['RESULT_COUNT'],
+			'sort_info' => $this->result['SORT_INFO'],
 		]);
 	}
 

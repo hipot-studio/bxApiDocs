@@ -2,10 +2,10 @@
 
 namespace Bitrix\AI\Prompt;
 
+use Bitrix\AI\Facade\User;
 use Bitrix\AI\Model\RoleTable;
 use Bitrix\AI\Role\RoleManager;
-use Bitrix\Main\ORM\Data\AddResult;
-use Bitrix\Main\ORM\Data\UpdateResult;
+use Bitrix\AI\Services\AvailableRuleService;
 use Bitrix\Main\Type\DateTime;
 
 class Role
@@ -92,6 +92,7 @@ class Role
 	 */
 	public static function get(?string $code): ?self
 	{
+		/** @var static[] $roles */
 		static $roles = [];
 
 		if (!$code)
@@ -104,24 +105,32 @@ class Role
 			return $roles[$code];
 		}
 
-		$roles[$code] = RoleTable::query()
-			->setSelect(['CODE', 'INSTRUCTION', 'INDUSTRY_CODE', 'DATE_MODIFY'])
+		$role = RoleTable::query()
+			->setSelect(['ID', 'CODE', 'INSTRUCTION', 'INDUSTRY_CODE', 'DATE_MODIFY', 'RULES'])
 			->where('CODE', $code)
 			->setLimit(1)
-			->fetch() ?: null
+			->fetchObject()
 		;
 
-		if ($roles[$code])
+		if (empty($role))
+		{
+			return null;
+		}
+
+		if (
+			($role->getCode()) == RoleManager::getUniversalRoleCode()
+			|| static::getAvailableRuleService()->isAvailableRules($role->getRules(), User::getUserLanguage())
+		)
 		{
 			$roles[$code] = new self(
-				$roles[$code]['CODE'],
-				$roles[$code]['INSTRUCTION'],
-				$roles[$code]['INDUSTRY_CODE'],
-				$roles[$code]['DATE_MODIFY'],
+				$role->getCode(),
+				$role->getInstruction(),
+				$role->getIndustryCode(),
+				$role->getDateModify(),
 			);
 		}
 
-		return $roles[$code];
+		return $roles[$code] ?? null;
 	}
 
 	/**
@@ -149,5 +158,16 @@ class Role
 		{
 			RoleTable::delete($row['ID'])->isSuccess();
 		}
+	}
+
+	private static function getAvailableRuleService(): AvailableRuleService
+	{
+		static $service;
+
+		if (empty($service)) {
+			$service = new AvailableRuleService();
+		}
+
+		return $service;
 	}
 }

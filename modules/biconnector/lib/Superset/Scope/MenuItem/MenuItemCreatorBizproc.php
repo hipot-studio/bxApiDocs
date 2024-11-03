@@ -12,7 +12,7 @@ final class MenuItemCreatorBizproc extends BaseMenuItemCreator
 		return ScopeService::BIC_SCOPE_BIZPROC;
 	}
 
-	public function getMenuItemData(EO_SupersetDashboard_Collection $dashboards): array
+	public function getMenuItemData(EO_SupersetDashboard_Collection $dashboards, array $params = []): array
 	{
 		$menuItems = [];
 		foreach ($dashboards as $dashboard)
@@ -20,7 +20,11 @@ final class MenuItemCreatorBizproc extends BaseMenuItemCreator
 			$menuItems[] = [
 				'ID' => "BIC_DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),
-				'URL' => "/bi/dashboard/detail/{$dashboard->getId()}/?openFrom=menu",
+				'URL' => $this->getDetailUrl(
+					$dashboard,
+					$params,
+					['openFrom' => 'menu']
+				),
 			];
 		}
 

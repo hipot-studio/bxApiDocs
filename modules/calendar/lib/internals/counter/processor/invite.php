@@ -66,8 +66,8 @@ class Invite implements Base
 			'arFilter' => [
 				'CAL_TYPE' => 'user',
 				'OWNER_ID' => $userIds,
-				'FROM_LIMIT' => date('d.m.Y', strtotime('now')),
-				'TO_LIMIT' => date('d.m.Y', strtotime('+90 days')),
+				'FROM_LIMIT' => \CCalendar::Date(time(), false),
+				'TO_LIMIT' => \CCalendar::Date(time() + \CCalendar::DAY_LENGTH * 90, false),
 				'IS_MEETING' => 1,
 				'MEETING_STATUS' => 'Q',
 				'DELETED' => 'N',

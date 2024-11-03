@@ -57,13 +57,13 @@ class Prompt extends Text implements IPayload
 	}
 
 	/**
-	 * return prompt categories
+	 * return information on the availability of system category
 	 *
-	 * @return array
+	 * @return bool
 	 */
-	public function getPromptCategories(): array
+	public function hasSystemCategory(): bool
 	{
-		return $this->promptItem?->getCategory() ?? [];
+		return $this->promptItem?->hasSystemCategory() ?? false;
 	}
 
 	/**

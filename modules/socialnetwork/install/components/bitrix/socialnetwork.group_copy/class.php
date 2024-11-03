@@ -249,12 +249,7 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 			$group = CSocNetGroup::getByID($groupId);
 			if ($group && $group['ACTIVE'] === 'Y')
 			{
-				$currentUserPerms = \Bitrix\Socialnetwork\Helper\Workgroup::getPermissions([
-					'userId' => $userId,
-					'groupId' => $groupId,
-				]);
-
-				if (!$currentUserPerms["UserCanModifyGroup"])
+				if (!\Bitrix\Socialnetwork\Helper\Workgroup\Access::canCreate())
 				{
 					throw new AccessDeniedException();
 				}

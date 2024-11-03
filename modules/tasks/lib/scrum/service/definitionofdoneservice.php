@@ -11,6 +11,7 @@ use Bitrix\Main\Type\RandomSequence;
 use Bitrix\Tasks\CheckList\CheckListFacade;
 use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Scrum\Checklist\TypeChecklistFacade;
+use Bitrix\Tasks\Scrum\Form\TypeForm;
 use Bitrix\Tasks\Util\Result;
 
 class DefinitionOfDoneService implements Errorable
@@ -28,6 +29,13 @@ class DefinitionOfDoneService implements Errorable
 		$this->errorCollection = new ErrorCollection;
 	}
 
+	public static function existsDod(int $groupId): bool
+	{
+		$types = (new DefinitionOfDoneService())->getTypes($groupId);
+
+		return (!empty($types));
+	}
+
 	public function mergeList(string $facade, int $entityId, array $items): Result
 	{
 		$result = new Result();
@@ -35,8 +43,17 @@ class DefinitionOfDoneService implements Errorable
 		foreach ($items as $id => $item)
 		{
 			$item['ID'] = ((int)($item['ID'] ?? null) === 0 ? null : (int)$item['ID']);
-			$item['IS_COMPLETE'] = ($item['IS_COMPLETE'] === "true");
-			$item['IS_IMPORTANT'] = ($item['IS_IMPORTANT'] === "true");
+
+			$item['IS_COMPLETE'] = (
+				($item['IS_COMPLETE'] === true)
+				|| ((int)$item['IS_COMPLETE'] > 0)
+				|| ($item['IS_COMPLETE'] === "true")
+			);
+			$item['IS_IMPORTANT'] = (
+				($item['IS_IMPORTANT'] === true)
+				|| ((int)$item['IS_IMPORTANT'] > 0)
+				|| ($item['IS_IMPORTANT'] === "true")
+			);
 
 			$items[$item['NODE_ID']] = $item;
 			unset($items[$id]);
@@ -168,7 +185,7 @@ class DefinitionOfDoneService implements Errorable
 		return false;
 	}
 
-	public static function existsDod(int $groupId): bool
+	public function getTypes(int $groupId): array
 	{
 		$typeService = new TypeService();
 		$backlogService = new BacklogService();
@@ -181,7 +198,17 @@ class DefinitionOfDoneService implements Errorable
 			$types[] = $type->toArray();
 		}
 
-		return (!empty($types));
+		return $types;
+	}
+
+	public function getItemType(int $taskId): TypeForm
+	{
+		$itemService = new ItemService();
+		$typeService = new TypeService();
+
+		$item = $itemService->getItemBySourceId($taskId);
+
+		return $typeService->getType($item->getTypeId());
 	}
 
 	public function getErrors()

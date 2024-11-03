@@ -473,12 +473,13 @@ abstract class ServiceFactory
 		);
 
 		$response->addErrors($averageTimeResult->getErrors());
-		if ($averageTimeResult->isSuccess() && $averageTimeResult->getAverageDuration())
+
+		if ($averageTimeResult->isSuccess() && $averageTimeResult->getAverageDuration() !== null)
 		{
 			$response->setAverageDuration(
 				$averageTimeResult->getAverageDuration()
 			);
-			if (method_exists($averageTimeResult, 'getRoundedAverageDuration'))
+			if ($request->isNeedRound && method_exists($averageTimeResult, 'getRoundedAverageDuration'))
 			{
 				$response->setAverageDuration($averageTimeResult->getRoundedAverageDuration());
 			}

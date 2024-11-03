@@ -22,19 +22,19 @@ final class UserAccess extends Base
 
 	public function beforeRequest(IntegratorRequest $request): ?IntegratorResponse
 	{
-		if ($request->getUser())
-		{
-			return null;
-		}
+		$user = $request->getUser();
 
-		$userId = CurrentUser::get()->getId();
-		if ($userId)
+		if (!$user)
 		{
-			$user = (new SupersetUserRepository())->getById($userId);
-		}
-		else
-		{
-			$user = (new SupersetUserRepository())->getAdmin();
+			$userId = CurrentUser::get()->getId();
+			if ($userId)
+			{
+				$user = (new SupersetUserRepository())->getById($userId);
+			}
+			else
+			{
+				$user = (new SupersetUserRepository())->getAdmin();
+			}
 		}
 
 		if (!$user && Integrator::isUserRequired($request->getAction()))

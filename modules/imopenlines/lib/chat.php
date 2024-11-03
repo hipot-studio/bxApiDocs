@@ -151,9 +151,13 @@ class Chat
 			$orderDirection = 'ASC';
 
 			$configId = (int)self::parseLinesChatEntityId($chat['ENTITY_ID'])['lineId'];
-			$configManager = new Config();
-			$config = $configManager->get($configId);
-			if ($config['SEND_WELCOME_EACH_SESSION'] === 'Y')
+			$config = ConfigTable::getRow([
+				'select' => ['SEND_WELCOME_EACH_SESSION'],
+				'filter' => [
+					'=ID' => $configId,
+				],
+			]);
+			if (is_array($config) && $config['SEND_WELCOME_EACH_SESSION'] === 'Y')
 			{
 				$orderDirection = 'DESC';
 			}

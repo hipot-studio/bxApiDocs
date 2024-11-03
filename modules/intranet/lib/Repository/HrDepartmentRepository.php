@@ -376,6 +376,7 @@ class HrDepartmentRepository implements DepartmentRepositoryContract
 			isActive: $node->active,
 			isGlobalActive: $node->globalActive,
 			depth: $node->depth,
+			accessCode: $node->accessCode,
 		);
 	}
 

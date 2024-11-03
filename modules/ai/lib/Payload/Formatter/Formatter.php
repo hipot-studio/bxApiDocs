@@ -16,20 +16,19 @@ abstract class Formatter
 	){}
 
 	/**
-	 * Retrieves user data and stores it to the static cache.
+	 * Retrieves user data by ID and stores it to the static cache.
 	 *
 	 * @return array
 	 */
-	protected function getCurrentUserData(): array
+	protected function getUserDataById(int $userId): array
 	{
-		static $data = [];
+		static $user = null;
 
-		$engineId = spl_object_id($this->engine);
-		if (!array_key_exists($engineId, $data))
+		if ($user === null)
 		{
-			$data[$engineId] = User::getCurrentUserData();
+			$user = User::getUserDataById($userId);
 		}
 
-		return $data[$engineId];
+		return $user;
 	}
 }

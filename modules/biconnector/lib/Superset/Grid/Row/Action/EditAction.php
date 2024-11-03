@@ -11,6 +11,7 @@ use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Main\Web\Json;
 
 final class EditAction extends BaseAction
 {
@@ -27,7 +28,7 @@ final class EditAction extends BaseAction
 
 	protected function getText(): string
 	{
-		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_EDIT');
+		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_EDIT') ?? '';
 	}
 
 	public function getControl(array $rawFields): ?array
@@ -63,7 +64,7 @@ final class EditAction extends BaseAction
 			return null;
 		}
 
-		$params = \CUtil::PhpToJSObject([
+		$params =  Json::encode([
 			'dashboardId' => (int)$rawFields['ID'],
 			'type' => $rawFields['TYPE'],
 			'editUrl' => $rawFields['EDIT_URL'],

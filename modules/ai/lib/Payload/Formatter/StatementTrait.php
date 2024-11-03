@@ -43,7 +43,9 @@ trait StatementTrait
 			$this->conditionsData["marker.$key"] = $value;
 		}
 
-		foreach ($this->getCurrentUserData() as $key => $value)
+		$userId = $this->engine->getContext()->getUserId();
+
+		foreach ($this->getUserDataById($userId) as $key => $value)
 		{
 			if (!is_array($value))
 			{

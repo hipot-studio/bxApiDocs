@@ -269,7 +269,7 @@ class CBPApproveActivity extends CBPCompositeActivity implements IBPEventActivit
 		{
 			$totalCount = $this->TotalCount;
 			$message =
-				($this->isPropertyExists('StatusMessage') && $this->StatusMessage <> '')
+				(!empty($this->StatusMessage) && is_string($this->StatusMessage))
 					? $this->StatusMessage
 					: Loc::getMessage('BPAA_ACT_INFO')
 			;

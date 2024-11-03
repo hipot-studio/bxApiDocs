@@ -13,4 +13,9 @@ class DepartmentCollection extends BaseCollection
 	{
 		return Department::class;
 	}
+
+	public function filterByUsersDepartmentIdList(array $departmentIds): DepartmentCollection
+	{
+		return $this->filter(fn (Department $department) => in_array($department->getIblockSectionId(), $departmentIds));
+	}
 }

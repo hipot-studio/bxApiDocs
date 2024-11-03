@@ -120,6 +120,16 @@ protected function listKeysSignedParameters()
 					$arTemplate["DOCUMENT_TYPE"]
 				);
 
+				if (!CBPHelper::isEqualDocument(
+					[MODULE_ID, ENTITY, $documentType],
+					$arTemplate["DOCUMENT_TYPE"],
+				))
+				{
+					ShowError(Loc::getMessage("BIZPROC_WFEDIT_ERROR_COMPLEX_TYPE"));
+
+					return;
+				}
+
 				$documentType = $arTemplate["DOCUMENT_TYPE"][2];
 
 				$workflowTemplateName = $arTemplate["NAME"];

@@ -179,27 +179,34 @@ class CSocNetLogFollow
 			$type = "N";
 		}
 
+		$connection = \Bitrix\Main\Application::getConnection();
+
 		$ref_id = (preg_match('/(\d+)/', $code, $matches) ? intval($matches[1]) : 0);
 
-		$strSQL = "INSERT INTO b_sonet_log_follow 
-			(USER_ID, CODE, REF_ID, TYPE, FOLLOW_DATE, BY_WF)
-			VALUES(".intval($user_id).", '".$DB->forSql($code)."', ".$ref_id.", '".$DB->forSql($type)."', ".($follow_date ? $DB->CharToDateFunction($follow_date) : $DB->CurrentTimeFunction()).", ".($bByWF ? "'Y'" : "null").")";
+		$sql = $connection->getSqlHelper()->getInsertIgnore(
+			'b_sonet_log_follow',
+			' (USER_ID, CODE, REF_ID, TYPE, FOLLOW_DATE, BY_WF) ',
+			"VALUES("
+				. intval($user_id) . ", '"
+				. $DB->forSql($code) . "', "
+				. $ref_id . ", '"
+				. $DB->forSql($type) . "', "
+				. ($follow_date ? $DB->CharToDateFunction($follow_date) : $DB->CurrentTimeFunction()) . ", "
+				. ($bByWF ? "'Y'" : "null") . ")"
+		);
 
-		if ($DB->Query($strSQL))
+		$connection->query($sql);
+
+		if (
+			defined("BX_COMP_MANAGED_CACHE")
+			&& intval($user_id) > 0
+			&& $code === "**"
+		)
 		{
-			if (
-				defined("BX_COMP_MANAGED_CACHE") 
-				&& intval($user_id) > 0 
-				&& $code === "**"
-			)
-			{
-				$CACHE_MANAGER->ClearByTag("SONET_LOG_FOLLOW_".$user_id);
-			}
-
-			return true;
+			$CACHE_MANAGER->ClearByTag("SONET_LOG_FOLLOW_".$user_id);
 		}
-		else
-			return false;
+
+		return true;
 	}
 
 	public static function Update($user_id, $code, $type, $follow_date = false, $bByWF = false)
@@ -606,7 +613,7 @@ class CSocNetLogFollow
 				{
 					if (CModule::IncludeModule('im'))
 					{
-						$locCode = \Bitrix\Main\ModuleManager::isModuleInstalled('intranet') ? "SONET_LF_UNFOLLOW_IM_MESSAGE2" : "SONET_LF_UNFOLLOW_IM_MESSAGE";
+						$locCode = \Bitrix\Main\ModuleManager::isModuleInstalled('intranet') ? "SONET_LF_UNFOLLOW_IM_MESSAGE3" : "SONET_LF_UNFOLLOW_IM_MESSAGE";
 						$arMessageFields2Send = array(
 							"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
 							"NOTIFY_TYPE" => IM_NOTIFY_CONFIRM,

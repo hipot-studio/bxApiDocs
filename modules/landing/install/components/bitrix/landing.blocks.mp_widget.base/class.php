@@ -27,8 +27,7 @@ class LandingBlocksMainpageWidgetBase extends CBitrixComponent
 	 */
 	public function executeComponent(): void
 	{
-		Extension::load(['landing.widget']);
-
+		Asset::getInstance()->addJS('/bitrix/components/bitrix/landing.blocks.mp_widget.base/templates/.default/script.js');
 		Asset::getInstance()->addCSS('/bitrix/components/bitrix/landing.blocks.mp_widget.base/templates/.default/style.css');
 
 		foreach (self::BASE_CSS_VAR_PROPERTIES as $property => $cssVar)

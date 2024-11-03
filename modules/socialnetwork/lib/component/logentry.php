@@ -23,8 +23,14 @@ class LogEntry extends \CBitrixComponent implements \Bitrix\Main\Engine\Contract
 	protected const STATUS_DENIED = 'denied';
 	protected const STATUS_ERROR = 'error';
 
-	/** @var ErrorCollection errorCollection */
-	protected $errorCollection;
+	protected ErrorCollection $errorCollection;
+
+	public function __construct($component = null)
+	{
+		parent::__construct($component);
+
+		$this->errorCollection = new ErrorCollection();
+	}
 
 	public function getErrorByCode($code)
 	{

@@ -2,148 +2,127 @@
 
 namespace Bitrix\AI\Prompt;
 
-use Bitrix\AI\Cache;
-use Bitrix\AI\Entity\Prompt;
+use Bitrix\AI\Container;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\Model\PromptTable;
-use Bitrix\AI\Model\RoleTable;
-use Bitrix\AI\Role\Industry;
-use Bitrix\AI\Role\RoleManager;
+use Bitrix\AI\SharePrompt\Repository\PromptRepository;
+use Bitrix\AI\SharePrompt\Service\PromptService;
 use Bitrix\AI\Updater;
-use Bitrix\Main\Error;
-use Bitrix\Main\ORM\Data\AddResult;
-use Bitrix\Main\ORM\Data\UpdateResult;
-use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Type\Collection as TypeCollection;
 
 class Manager
 {
-	private const CACHE_DIR = 'ai.prompt';
-
 	/**
 	 * Returns Prompt Item by code.
 	 *
-	 * @param string $code Prompt's code.
+	 * @param string $promptCode Prompt's code.
 	 * @return Item|null
 	 */
-	public static function getByCode(string $code): ?Item
+	public static function getByCode(string $promptCode): ?Item
 	{
 		static $prompts = [];
 
-		if (array_key_exists($code, $prompts))
+		if (array_key_exists($promptCode, $prompts))
 		{
-			return $prompts[$code];
+			return $prompts[$promptCode];
 		}
 
-		$prompt = PromptTable::query()
-			->setSelect(['*'])
-			->where('CODE', $code)
-			->setLimit(1)
-			->fetchObject()
-		;
+		$prompts[$promptCode] = self::getPromptService()->getAccessiblePrompt(
+			User::getCurrentUserId(),
+			User::getUserLanguage(),
+			$promptCode
+		);
 
-		$prompts[$code] = $prompt ? self::getItemFromRow($prompt) : null;
-		return $prompts[$code];
+		return $prompts[$promptCode];
 	}
 
 	/**
 	 * Returns Prompts by category in Tree mode from cache.
-	 *
-	 * @param string $category Prompt's category.
-	 * @param string|null $roleCode Role code.
-	 * @return array|null
+	 * @deprecated Use static::getList()
 	 */
 	public static function getCachedTree(string $category, ?string $roleCode = null): ?array
 	{
-		$cacheId = $category . $roleCode . User::getUserLanguage();
-		return Cache::getDynamic(self::CACHE_DIR, $cacheId, fn() => self::getTree($category, $roleCode));
+		return static::getList($category, $roleCode);
 	}
 
-	/**
-	 * Returns Prompts by category in Tree mode.
-	 *
-	 * @param string $category Prompt's category.
-	 * @param string|null $roleCode Role code.
-	 * @return array|null
-	 */
-	public static function getTree(string $category, ?string $roleCode): ?array
+	public static function getList(string $category, ?string $roleCode = null): ?array
 	{
-		$prompts = self::getByCategory($category, $roleCode);
-		if (!$prompts->isEmpty())
+		$result = static::preparePromptCollection(
+			self::getByCategory($category, $roleCode)
+		);
+
+		return static::sortBySection($result);
+	}
+
+	public static function sortBySection(array $result): array
+	{
+		TypeCollection::sortByColumn($result, 'section');
+
+		return $result;
+	}
+
+	public static function preparePromptCollection(Collection $prompts, bool $needSections = true): ?array
+	{
+		if ($prompts->isEmpty())
 		{
-			$result = [];
-			$prevPromptSection = null;
-
-			foreach ($prompts as $prompt)
-			{
-				$children = [];
-				foreach ($prompt->getChildren() as $child)
-				{
-					$children[] = [
-						'code' => $child->getCode(),
-						'type' => $prompt->getType(),
-						'icon' => $child->getIcon(),
-						'title' => $child->getTitle(),
-						'text' => $prompt->getText(),
-						'required' => [
-							'user_message' => $child->isRequiredUserMessage(),
-							'context_message' => $child->isRequiredOriginalMessage(),
-						],
-					];
-				}
-
-				if ($prompt->getSectionCode() && $prompt->getSectionCode() !== $prevPromptSection)
-				{
-					$result[] = [
-						'separator' => true,
-						'title' => $prompt->getSectionTitle(),
-						'section' => $prompt->getSectionCode(),
-					];
-				}
-
-				$result[] = [
-					'section' => $prompt->getSectionCode(),
-					'code' => $prompt->getCode(),
-					'type' => $prompt->getType(),
-					'icon' => $prompt->getIcon(),
-					'title' => $prompt->getTitle(),
-					'text' => $prompt->getText(),
-					'workWithResult' => $prompt->isWorkWithResult(),
-					'children' => $children,
-					'required' => [
-						'user_message' => $prompt->isRequiredUserMessage(),
-						'context_message' => $prompt->isRequiredOriginalMessage(),
-					],
-				];
-
-				$prevPromptSection = $prompt->getSectionCode();
-			}
-
-			// sort by section
-			usort($result, function($a, $b)
-			{
-				if ($a['section'] === $b['section'])
-				{
-					return 0;
-				}
-				return $a['section'] > $b['section'];
-			});
-
-			return $result;
+			return [];
 		}
 
-		return null;
+		$result = [];
+		$prevPromptSection = null;
+
+		foreach ($prompts as $prompt)
+		{
+			$children = [];
+			foreach ($prompt->getChildren() as $child)
+			{
+				$children[] = [
+					'code' => $child->getCode(),
+					'type' => $prompt->getType(),
+					'icon' => $child->getIcon(),
+					'title' => $child->getTitle(),
+					'text' => $prompt->getText(),
+					'required' => [
+						'user_message' => $child->isRequiredUserMessage(),
+						'context_message' => $child->isRequiredOriginalMessage(),
+					],
+				];
+			}
+
+			if ($needSections && $prompt->getSectionCode() && $prompt->getSectionCode() !== $prevPromptSection)
+			{
+				$result[] = [
+					'separator' => true,
+					'title' => $prompt->getSectionTitle(),
+					'section' => $prompt->getSectionCode(),
+				];
+			}
+
+			$result[] = [
+				'section' => $prompt->getSectionCode(),
+				'code' => $prompt->getCode(),
+				'type' => $prompt->getType(),
+				'icon' => $prompt->getIcon(),
+				'title' => $prompt->getTitle(),
+				'text' => $prompt->getText(),
+				'isFavorite' => $prompt->isFavorite(),
+				'workWithResult' => $prompt->isWorkWithResult(),
+				'children' => $children,
+				'required' => [
+					'user_message' => $prompt->isRequiredUserMessage(),
+					'context_message' => $prompt->isRequiredOriginalMessage(),
+				],
+			];
+
+			$prevPromptSection = $prompt->getSectionCode();
+		}
+
+		return $result;
 	}
 
-	/**
-	 * Deletes all Prompts by filter.
-	 *
-	 * @param array $filterToDelete Query's filter to delete.
-	 * @return bool
-	 */
 	public static function deleteByFilter(array $filterToDelete): bool
 	{
 		$result = true;
-		$dataExists = false;
 
 		$prompts = PromptTable::query()
 			->setSelect(['ID'])
@@ -151,52 +130,33 @@ class Manager
 		;
 		foreach ($prompts->fetchAll() as $prompt)
 		{
-			$dataExists = true;
 			$result = self::deleteByFilter(['PARENT_ID' => $prompt['ID']])
-						&& PromptTable::delete($prompt['ID'])->isSuccess()
-						&& $result;
-		}
-
-		if ($dataExists && $result)
-		{
-			self::clearCache();
+				&& PromptTable::delete($prompt['ID'])->isSuccess()
+				&& $result;
 		}
 
 		return $result;
 	}
 
-	/**
-	 * Removes cached data.
-	 *
-	 * @return void
-	 */
-	public static function clearCache(): void
-	{
-		Cache::remove(self::CACHE_DIR);
-	}
-
-	/**
-	 * Create Prompt's Item from table object.
-	 *
-	 * @param Prompt $data Raw data.
-	 * @return Item
-	 */
-	private static function getItemFromRow(Prompt $data): Item
+	public static function getItemFromRawRow(array $data): Item
 	{
 		return new Item(
-			$data->getId(),
-			$data->getSection(),
-			$data->getCode(),
-			$data->getType(),
-			$data->getAppCode(),
-			$data->getIcon(),
-			$data->getPrompt(),
-			$data->getTranslate(),
-			$data->getTextTranslates(),
-			$data->getSettings(),
-			$data->getCacheCategory(),
-			$data->getCategory(),
-			$data->getWorkWithResult() === 'Y',
+			$data['ID'],
+			$data['SECTION'],
+			$data['SORT'],
+			$data['CODE'],
+			$data['TYPE'],
+			$data['APP_CODE'],
+			$data['ICON'],
+			$data['PROMPT'],
+			$data['TITLE'],
+			$data['TEXT_TRANSLATES'],
+			$data['SETTINGS'],
+			$data['CACHE_CATEGORY'],
+			$data['HAS_SYSTEM_CATEGORY'],
+			$data['WORK_WITH_RESULT'] === PromptRepository::IS_WORK_WITH_RESULT,
+			!empty($data['IS_SYSTEM']) && ($data['IS_SYSTEM'] === PromptRepository::IS_SYSTEM),
+			!empty($data['IS_FAVORITE']) && (int)$data['IS_FAVORITE'],
 		);
 	}
 
@@ -209,46 +169,11 @@ class Manager
 	 */
 	private static function getByCategory(string $code, ?string $roleCode): Collection
 	{
-		$role = RoleTable::query()->setFilter(['CODE' => ($roleCode ?? RoleManager::getUniversalRoleCode())])->fetchObject();
-
-		$collection = [];
-		$select = ['*', 'ROLES.ID', 'ROLES.CODE'];
-		$order = ['SORT' => 'asc'];
-
-		// first retrieve root categories
-		$rootPrompts = PromptTable::query()
-			->setSelect($select)
-			->where('PARENT_ID', null)
-			->setOrder($order)
-			->fetchCollection()
-		;
-		foreach ($rootPrompts as $rootPrompt)
-		{
-			if (
-				in_array($code, (array)$rootPrompt->getCategory(), true)
-				&& ($rootPrompt->getType() === null || ($role && $rootPrompt->getRoles()->has($role)))
+		return new Collection(
+			array_values(
+				self::getPromptService()->getSystemsPromptsByCategory($code, User::getUserLanguage(), $roleCode)
 			)
-			{
-				$collection[$rootPrompt->getId()] = self::getItemFromRow($rootPrompt);
-			}
-		}
-
-		// then retrieve all child prompts
-		$childPrompts = PromptTable::query()
-			->setSelect($select)
-			->setFilter(['PARENT_ID' => array_keys($collection)])
-			->setOrder($order)
-			->fetchCollection()
-		;
-
-		foreach ($childPrompts as $childPrompt)
-		{
-			$collection[$childPrompt->getParentId()]->addChild(
-				self::getItemFromRow($childPrompt)
-			);
-		}
-
-		return new Collection(array_values($collection));
+		);
 	}
 
 	/**
@@ -259,5 +184,10 @@ class Manager
 	public static function clearAndRefresh(): void
 	{
 		Updater::refreshFromRemote();
+	}
+
+	private static function getPromptService(): PromptService
+	{
+		return Container::init()->getItem(PromptService::class);
 	}
 }

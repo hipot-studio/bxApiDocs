@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Integration\Superset\Stepper;
 
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\Main;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
@@ -184,7 +185,7 @@ class DashboardOwner extends Main\Update\Stepper
 			'order' => ['ID' => 'ASC'],
 			'cache' => ['ttl' => 3600],
 			'count_total' => true,
-			'filter' => ['=STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_READY],
+			'filter' => ['=STATUS' => SupersetDashboard::getActiveDashboardStatuses()],
 		];
 
 		if ($filter)

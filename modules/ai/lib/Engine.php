@@ -9,13 +9,14 @@ use Bitrix\AI\Engine\IQueue;
 use Bitrix\AI\Engine\IQueueOptional;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Facade\User;
+use Bitrix\AI\Guard\ShowCopilotGuard;
 use Bitrix\AI\Limiter\Enums\ErrorLimit;
 use Bitrix\AI\Limiter\LimitControlService;
 use Bitrix\AI\Limiter\ReserveRequest;
 use Bitrix\AI\Limiter\Usage;
 use Bitrix\AI\Payload\IPayload;
-use Bitrix\AI\ThirdParty;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
@@ -200,23 +201,34 @@ class Engine
 		}
 
 		$engines = [];
-		$lastEngineCode = User::getLastUsedEngineCode($category, $context->getModuleId())
-			? : Config::getValue(
-				self::getConfigCode($category)
-			);
+		$lastEngineCode = User::getLastUsedEngineCode($category, $context->getModuleId());
+		if ($lastEngineCode !== '')
+		{
+			$lastEngine = Engine::getByCode($lastEngineCode, $context, $category);
+		}
 
+		if ($lastEngineCode === '' || $lastEngine === null)
+		{
+			$lastEngineCode =  Config::getValue(self::getConfigCode($category));
+		}
+
+		$hasSelectedEngine = false;
 		foreach (Engine::getList($category, $context) as $engine)
 		{
-			if (!$lastEngineCode)
-			{
-				$lastEngineCode = $engine->getCode();
-			}
-
 			if (!$engine->isAvailable())
 			{
 				continue;
 			}
 
+			if (!$lastEngineCode)
+			{
+				$lastEngineCode = $engine->getCode();
+			}
+
+			if ($engine->getCode() === $lastEngineCode)
+			{
+				$hasSelectedEngine = true;
+			}
 			$agreement = $engine->getAgreement();
 			$engines[] = [
 				'code' => $engine->getCode(),
@@ -234,6 +246,10 @@ class Engine
 					]
 					: [],
 			];
+		}
+		if (!$hasSelectedEngine && !empty($engines))
+		{
+			$engines[0]['selected'] = true;
 		}
 
 		return $engines;
@@ -289,6 +305,13 @@ class Engine
 	 */
 	public static function getByCategory(string $category, Context $context, ?Quality $quality = null): ?self
 	{
+		/** @var ShowCopilotGuard $showCopilotGuard */
+		$showCopilotGuard = Container::init()->getItem(ShowCopilotGuard::class);
+		if (!$showCopilotGuard->hasAccess(CurrentUser::get()->getId()))
+		{
+			return null;
+		}
+
 		self::loadThirdParty();
 
 		$selectedEngine = Config::getValue(self::getConfigCode($category, $quality));
@@ -653,7 +676,8 @@ class Engine
 	 */
 	public function skipAgreement(): self
 	{
-		$this->engine->getAgreement()?->acceptByContext($this->engine->getContext());
+		$this->engine->skipAgreement();
+
 		return $this;
 	}
 

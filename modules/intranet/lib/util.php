@@ -610,12 +610,6 @@ class Util
 			return false;
 		}
 
-		if($userId > 0)
-		{
-			$deactivateUser = new User($userId);
-			Invitation::fullSyncCounterByUser($deactivateUser->fetchOriginatorUser());
-		}
-
 		return true;
 	}
 

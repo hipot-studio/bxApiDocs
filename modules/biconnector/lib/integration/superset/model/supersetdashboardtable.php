@@ -37,9 +37,9 @@ use Bitrix\Rest\AppTable;
  * @method static EO_SupersetDashboard_Result getById($id)
  * @method static EO_SupersetDashboard_Result getList(array $parameters = [])
  * @method static EO_SupersetDashboard_Entity getEntity()
- * @method static \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard createObject($setDefaultValues = true)
+ * @method static \Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard createObject($setDefaultValues = true)
  * @method static \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection createCollection()
- * @method static \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard wakeUpObject($row)
+ * @method static \Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard wakeUpObject($row)
  * @method static \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection wakeUpCollection($rows)
  */
 
@@ -51,7 +51,13 @@ final class SupersetDashboardTable extends DataManager
 
 	public const DASHBOARD_STATUS_LOAD = 'L';
 	public const DASHBOARD_STATUS_READY = 'R';
+	public const DASHBOARD_STATUS_DRAFT = 'D';
 	public const DASHBOARD_STATUS_FAILED = 'F';
+
+	public static function getObjectClass()
+	{
+		return SupersetDashboard::class;
+	}
 
 	/**
 	 * Returns DB table name for entity.
@@ -80,6 +86,7 @@ final class SupersetDashboardTable extends DataManager
 				->configureValues([
 					self::DASHBOARD_STATUS_LOAD,
 					self::DASHBOARD_STATUS_READY,
+					self::DASHBOARD_STATUS_DRAFT,
 					self::DASHBOARD_STATUS_FAILED,
 				])
 				->configureDefaultValue(self::DASHBOARD_STATUS_READY)
@@ -104,7 +111,8 @@ final class SupersetDashboardTable extends DataManager
 					self::DASHBOARD_TYPE_CUSTOM,
 					self::DASHBOARD_TYPE_MARKET,
 				])
-				->configureDefaultValue(self::DASHBOARD_TYPE_CUSTOM),
+				->configureDefaultValue(self::DASHBOARD_TYPE_CUSTOM)
+			,
 
 			(new Fields\StringField('FILTER_PERIOD')),
 
@@ -157,6 +165,15 @@ final class SupersetDashboardTable extends DataManager
 			(new Fields\EnumField('INCLUDE_LAST_FILTER_DATE'))
 				->configureValues(['N', 'Y'])
 				->configureNullable()
+			,
+
+			(new Fields\Relations\OneToMany(
+				'URL_PARAMS',
+				SupersetDashboardUrlParameterTable::class,
+				'DASHBOARD',
+			))
+				->configureJoinType(Join::TYPE_LEFT)
+				->configureCascadeDeletePolicy(Fields\Relations\CascadePolicy::FOLLOW)
 			,
 		];
 	}
@@ -214,6 +231,48 @@ final class SupersetDashboardTable extends DataManager
 					value: $pinnedDashboards,
 					user_id: $row['USER_ID'],
 				);
+			}
+		}
+
+		$scopes = SupersetScopeTable::getList([
+				'filter' => ['=DASHBOARD_ID' => $dashboardId],
+			])
+			->fetchCollection()
+		;
+		foreach ($scopes as $scopeBinding)
+		{
+			$deleteResult = $scopeBinding->delete();
+			if (!$deleteResult->isSuccess())
+			{
+				Logger::logErrors($deleteResult->getErrors(), ['Deleting scopes of dashboard ' . $dashboardId]);
+			}
+		}
+
+		$tags = SupersetDashboardTagTable::getList([
+				'filter' => ['=DASHBOARD_ID' => $dashboardId],
+			])
+			->fetchCollection()
+		;
+		foreach ($tags as $tagBinding)
+		{
+			$deleteResult = $tagBinding->delete();
+			if (!$deleteResult->isSuccess())
+			{
+				Logger::logErrors($deleteResult->getErrors(), ['Deleting tags of dashboard ' . $dashboardId]);
+			}
+		}
+
+		$urlParams = SupersetDashboardUrlParameterTable::getList([
+				'filter' => ['=DASHBOARD_ID' => $dashboardId],
+			])
+			->fetchCollection()
+		;
+		foreach ($urlParams as $paramBinding)
+		{
+			$deleteResult = $paramBinding->delete();
+			if (!$deleteResult->isSuccess())
+			{
+				Logger::logErrors($deleteResult->getErrors(), ['Deleting url params of dashboard ' . $dashboardId]);
 			}
 		}
 	}

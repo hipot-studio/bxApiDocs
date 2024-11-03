@@ -2408,7 +2408,7 @@ class Workgroup
 
 		foreach ($features as $feature)
 		{
-			$activeFeaturesList = \CSocNetFeatures::isActiveFeature(SONET_ENTITY_GROUP, $ids, $feature);
+			$activeFeaturesList = (array)\CSocNetFeatures::isActiveFeature(SONET_ENTITY_GROUP, $ids, $feature);
 			$filteredIds = array_keys(array_filter($activeFeaturesList, static function($val) { return $val; }));
 
 			if (

@@ -8,10 +8,14 @@ class UserProfile extends Controller
 {
 	public function isNeedToShowMiniProfileAction(): bool
 	{
-		$isNeedToShow = \CUserOptions::GetOption('intranetmobile', 'isNeedToShowMiniProfile', false) ?? false;
+		$isNeedToShow = (
+			\CUserOptions::GetOption('intranetmobile', 'isNeedToShowMiniProfile', false) ?? false)
+			&& !(\CUserOptions::GetOption('intranetmobile', 'isMiniProfileShowed', false) ?? false)
+		;
 
 		if ($isNeedToShow)
 		{
+			\CUserOptions::SetOption('intranetmobile', 'isMiniProfileShowed', true);
 			\CUserOptions::DeleteOption('intranetmobile', 'isNeedToShowMiniProfile');
 		}
 

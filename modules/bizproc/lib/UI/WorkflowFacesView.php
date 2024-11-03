@@ -348,7 +348,7 @@ class WorkflowFacesView implements \JsonSerializable
 			$finishTaskTimestamp = $this->getDateTimeTimestamp($completedTask['MODIFIED'] ?? null);
 
 			return (
-				$finishWorkflowTimestamp && $finishTaskTimestamp
+				$finishWorkflowTimestamp && $finishTaskTimestamp && ($finishWorkflowTimestamp > $finishTaskTimestamp)
 					? $finishWorkflowTimestamp - $finishTaskTimestamp
 					: null
 			);

@@ -499,6 +499,7 @@ class Register
 
 		if (
 			empty($resPhone["PHONE_TO_REGISTER"])
+			&& empty($resPhone["PHONE_TO_REINVITE"])
 			&& empty($resEmail["EMAIL_TO_REGISTER"])
 			&& empty($resEmail["EMAIL_TO_REINVITE"])
 			&& empty($resEmail["TRANSFER_USER"])

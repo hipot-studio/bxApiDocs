@@ -9,6 +9,8 @@ use Bitrix\Im\Model\MessageIndexTable;
 use Bitrix\Im\Model\MessageTable;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\Recent;
+use Bitrix\Im\V2\Analytics\MessageAnalytics;
+use Bitrix\Im\V2\Analytics\MessageContent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Link\Calendar\CalendarItem;
@@ -120,6 +122,8 @@ class DeleteService
 
 		$files = $this->message->getFiles();
 
+		$messageType = (new MessageContent($this->message))->getComponentName();
+
 		switch ($this->mode)
 		{
 			case self::DELETE_SOFT:
@@ -152,6 +156,11 @@ class DeleteService
 		foreach ($files as $file)
 		{
 			$file->getDiskFile()->delete(SystemUser::SYSTEM_USER_ID);
+		}
+
+		if ($result->isSuccess())
+		{
+			(new MessageAnalytics())->addDeleteMessage($this->chat, $messageType);
 		}
 
 		return $result;
@@ -305,7 +314,7 @@ class DeleteService
 
 		if ($this->chat instanceof Chat\PrivateChat)
 		{
-			$userId = $this->message->getAuthorId();
+			$userId = $this->chat->getAuthorId();
 			$companionUserId = $this->chat->getCompanion($userId)->getId();
 			$this->sendPullMessagePrivate($userId, $companionUserId, $pullMessage, $completeDelete);
 			$this->sendPullMessagePrivate($companionUserId, $userId, $pullMessage, $completeDelete);
@@ -521,6 +530,12 @@ class DeleteService
 				continue;
 			}
 			$connection->query("DELETE FROM " . $table . " WHERE MESSAGE_ID = " . $this->message->getId());
+		}
+
+		$resultGetComment = Chat\CommentChat::get($this->message, false);
+		if ($resultGetComment->isSuccess())
+		{
+			$resultGetComment->getResult()?->deleteChat();
 		}
 	}
 

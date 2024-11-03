@@ -846,10 +846,12 @@ function ImportXMLFile($file_name, $iblock_type="-", $site_id='', $section_actio
 	}
 	else
 	{
-		$obCatalog->DropTemporaryTables();
+		$result = $obCatalog->initializeTemporaryTables();
 
-		if(!$obCatalog->CreateTemporaryTables())
-			return GetMessage("IBLOCK_XML2_TABLE_CREATE_ERROR");
+		if (!$result)
+		{
+			return GetMessage("IBLOCK_XML2_TABLE_PREPARE_ERROR");
+		}
 
 		$obCatalog->ReadXMLToDatabase($fp, $NS, 0, 1024);
 

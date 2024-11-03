@@ -2,7 +2,7 @@
 
 namespace Bitrix\Intranet\Entity;
 
-use Bitrix\Intranet\User;
+use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\Main\Type\DateTime;
 
 class Department
@@ -19,6 +19,7 @@ class Department
 		private ?bool $isActive = true,
 		private ?bool $isGlobalActive = true,
 		private ?int $depth = null,
+		private ?string $accessCode = null,
 	)
 	{}
 
@@ -130,6 +131,34 @@ class Department
 	public function setXmlId(?string $xmlId): void
 	{
 		$this->xmlId = $xmlId;
+	}
+
+	/**
+	 * @return string|null
+	 */
+	public function getAccessCode(): ?string
+	{
+		return $this->accessCode;
+	}
+
+	/**
+	 * @param string|null $accessCode
+	 */
+	public function setAccessCode(?string $accessCode): void
+	{
+		$this->accessCode = $accessCode;
+	}
+
+	/**
+	 * TODO: remove after remove UF_DEPARTMENT
+	 * Only for migrated structures
+	 * @return int|null
+	 */
+	public function getIblockSectionId(): ?int
+	{
+		return (new \Bitrix\Intranet\Service\IntranetOption)->get('humanresources_enabled') === 'Y'
+			? DepartmentBackwardAccessCode::extractIdFromCode($this->accessCode)
+			: $this->getId();
 	}
 
 	public function toIblockArray(): array

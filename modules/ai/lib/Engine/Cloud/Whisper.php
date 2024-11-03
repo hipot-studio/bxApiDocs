@@ -37,7 +37,7 @@ final class Whisper extends CloudEngine implements IQueueOptional
 	{
 		$region = Application::getInstance()->getLicense()->getRegion();
 
-		return $region !== 'ru' && $region !== 'by';
+		return !in_array($region, ['ru', 'by', 'cn']);
 	}
 
 	/**
@@ -83,5 +83,20 @@ final class Whisper extends CloudEngine implements IQueueOptional
 	public function hasQuality(Quality $quality): bool
 	{
 		return true;
+	}
+
+	protected function makeRequestParams(array $postParams = []): array
+	{
+		if (empty($postParams))
+		{
+			$postParams = $this->getPostParams();
+			$postParams = array_merge($this->getParameters(), $postParams);
+		}
+
+		return [
+			'audioUrl' => $postParams['audioUrl'] ?? '',
+			'audioContentType' => $postParams['audioContentType'] ?? '',
+			'prompt' => $postParams['prompt'] ?? '',
+		];
 	}
 }

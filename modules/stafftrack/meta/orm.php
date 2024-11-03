@@ -296,6 +296,148 @@ namespace Bitrix\StaffTrack\Model {
 	 */
 	class EO_ShiftGeo_Entity extends \Bitrix\Main\ORM\Entity {}
 }
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\ShiftMessageTable:stafftrack/lib/model/shiftmessagetable.php */
+namespace Bitrix\StaffTrack\Model {
+	/**
+	 * EO_ShiftMessage
+	 * @see \Bitrix\StaffTrack\Model\ShiftMessageTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getShiftId()
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage setShiftId(\int|\Bitrix\Main\DB\SqlExpression $shiftId)
+	 * @method bool hasShiftId()
+	 * @method bool isShiftIdFilled()
+	 * @method bool isShiftIdChanged()
+	 * @method \int remindActualShiftId()
+	 * @method \int requireShiftId()
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage resetShiftId()
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage unsetShiftId()
+	 * @method \int fillShiftId()
+	 * @method \int getMessageId()
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage setMessageId(\int|\Bitrix\Main\DB\SqlExpression $messageId)
+	 * @method bool hasMessageId()
+	 * @method bool isMessageIdFilled()
+	 * @method bool isMessageIdChanged()
+	 * @method \int remindActualMessageId()
+	 * @method \int requireMessageId()
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage resetMessageId()
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage unsetMessageId()
+	 * @method \int fillMessageId()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage set($fieldName, $value)
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage reset($fieldName)
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\StaffTrack\Model\EO_ShiftMessage wakeUp($data)
+	 */
+	class EO_ShiftMessage {
+		/* @var \Bitrix\StaffTrack\Model\ShiftMessageTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Model\ShiftMessageTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\StaffTrack\Model {
+	/**
+	 * EO_ShiftMessage_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getShiftIdList()
+	 * @method \int[] fillShiftId()
+	 * @method \int[] getMessageIdList()
+	 * @method \int[] fillMessageId()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\StaffTrack\Model\EO_ShiftMessage $object)
+	 * @method bool has(\Bitrix\StaffTrack\Model\EO_ShiftMessage $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage getByPrimary($primary)
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage[] getAll()
+	 * @method bool remove(\Bitrix\StaffTrack\Model\EO_ShiftMessage $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\StaffTrack\Model\EO_ShiftMessage_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage_Collection merge(?\Bitrix\StaffTrack\Model\EO_ShiftMessage_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_ShiftMessage_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\StaffTrack\Model\ShiftMessageTable */
+		static public $dataClass = '\Bitrix\StaffTrack\Model\ShiftMessageTable';
+	}
+}
+namespace Bitrix\StaffTrack\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_ShiftMessage_Result exec()
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage fetchObject()
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_ShiftMessage_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage fetchObject()
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage_Collection fetchCollection()
+	 */
+	class EO_ShiftMessage_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage createObject($setDefaultValues = true)
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage_Collection createCollection()
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage wakeUpObject($row)
+	 * @method \Bitrix\StaffTrack\Model\EO_ShiftMessage_Collection wakeUpCollection($rows)
+	 */
+	class EO_ShiftMessage_Entity extends \Bitrix\Main\ORM\Entity {}
+}
 /* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\ShiftCancellationTable:stafftrack/lib/model/shiftcancellationtable.php */
 namespace Bitrix\StaffTrack\Model {
 	/**

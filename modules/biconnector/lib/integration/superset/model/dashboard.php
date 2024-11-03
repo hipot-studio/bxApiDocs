@@ -14,15 +14,10 @@ final class Dashboard
 	private ?Dto\DashboardEmbeddedCredentials $embeddedCredentials = null;
 
 	public function __construct(
-		private EO_SupersetDashboard $ormObject,
+		private SupersetDashboard $ormObject,
 		private ?Dto\Dashboard $dashboardData = null
 	)
 	{
-	}
-
-	public function setDashboardCredentials(Dto\DashboardEmbeddedCredentials $embeddedCredentials): void
-	{
-		$this->embeddedCredentials = $embeddedCredentials;
 	}
 
 	public function getId(): int
@@ -69,6 +64,11 @@ final class Dashboard
 		return $this->getType() === SupersetDashboardTable::DASHBOARD_TYPE_MARKET;
 	}
 
+	public function isAvailableDashboard(): bool
+	{
+		return in_array($this->getStatus(), SupersetDashboard::getActiveDashboardStatuses(), true);
+	}
+
 	public function getUrl(): string
 	{
 		return $this->dashboardData?->url ?? '';
@@ -99,7 +99,7 @@ final class Dashboard
 		return $this->ormObject->get($fieldName) ?? null;
 	}
 
-	public function getOrmObject(): EO_SupersetDashboard
+	public function getOrmObject(): SupersetDashboard
 	{
 		return $this->ormObject;
 	}
@@ -126,6 +126,7 @@ final class Dashboard
 			'EXTERNAL_ID' => $this->getExternalId(),
 			'STATUS' => $this->getStatus(),
 			'URL' => $this->getUrl() ?? '',
+			'DETAIL_URL' => $this->ormObject->getDetailUrl()->getUri() ?? '',
 			'EDIT_URL' => $this->getEditUrl() ?? '',
 			'TITLE' => $this->getTitle() ?? '',
 			'SOURCE_ID' => $this->ormObject->getSourceId(),
@@ -217,5 +218,81 @@ final class Dashboard
 		$this->ormObject->save();
 
 		return $result;
+	}
+
+	/**
+	 * Publish or make draft dashboard.
+	 *
+	 * @param bool $published
+	 * @return Result
+	 */
+	public function toggleDraft(bool $published): Result
+	{
+		$result = new Result();
+
+		if ($this->ormObject->getType() !== SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM)
+		{
+			return $result->addError(new Error("Changing publish property is available only for custom dashboard"));
+		}
+
+		$externalId = $this->getOrmObject()->getExternalId();
+		if ($externalId <= 0)
+		{
+			return $result->addError(new Error("Cannot change publish property without external id"));
+		}
+
+		$response = Integrator::getInstance()->updateDashboard($externalId, ['published' => $published]);
+		if ($response->getStatus() !== IntegratorResponse::STATUS_OK || $response->hasErrors())
+		{
+			return $result->addError(new Error("Error while changing publish property in superset"));
+		}
+
+		$changedFields = $response->getData();
+		if (!isset($changedFields['published']))
+		{
+			return $result->addError(new Error("Published property didn`t change while update fields"));
+		}
+
+		$status =
+			$published
+				? SupersetDashboardTable::DASHBOARD_STATUS_READY
+				: SupersetDashboardTable::DASHBOARD_STATUS_DRAFT
+		;
+
+		$this->ormObject->setStatus($status);
+		$this->ormObject->save();
+
+		return $result;
+	}
+
+	public function loadCredentials(): self
+	{
+		$integrator = Integrator::getInstance();
+		$credentialsResponse = $integrator->getDashboardEmbeddedCredentials($this->getExternalId());
+
+		$credentials = $credentialsResponse->getData();
+		if (!empty($credentials))
+		{
+			$this->embeddedCredentials = $credentials;
+		}
+
+		return $this;
+	}
+
+	public function loadProxyData(): self
+	{
+		$integrator = Integrator::getInstance();
+		$integratorResult = $integrator->getDashboardById($this->getExternalId());
+		if ($integratorResult->hasErrors())
+		{
+			return $this;
+		}
+		$dashboardData = $integratorResult->getData();
+		if (!empty($dashboardData))
+		{
+			$this->dashboardData = $dashboardData;
+		}
+
+		return $this;
 	}
 }

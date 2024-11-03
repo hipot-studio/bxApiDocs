@@ -26,8 +26,10 @@ class Call
 	const STATE_ANSWERED = 'answered';
 	const STATE_FINISHED = 'finished';
 
-	const TYPE_INSTANT = 1;
-	const TYPE_PERMANENT = 2;
+	public const
+		TYPE_INSTANT = 1,
+		TYPE_PERMANENT = 2,
+		TYPE_LANGE = 3;
 
 	const RECORD_TYPE_VIDEO = 'video';
 	const RECORD_TYPE_AUDIO = 'audio';
@@ -59,6 +61,7 @@ class Call
 	protected $associatedEntity = null;
 	/** @var CallUser[] */
 	protected $users;
+	protected $userData;
 
 	/** @var Signaling */
 	protected $signaling;
@@ -81,18 +84,19 @@ class Call
 	}
 
 	/**
+	 * @return int
+	 */
+	public function getType(): int
+	{
+		return (int)$this->type;
+	}
+
+	/**
 	 * @return string
 	 */
 	public function getProvider(): string
 	{
 		return $this->provider;
-	}
-	/**
-	+	 * @return int
-	+	 */
-	public function getType(): int
-	{
-		return (int)$this->type;
 	}
 
 	/**
@@ -192,6 +196,20 @@ class Call
 	}
 
 	/**
+	 * Returns arrays of information about the users currently participating in the call.
+	 * @return array
+	 */
+	public function getUserData(): array
+	{
+		if (!isset($this->userData))
+		{
+			$this->userData = Util::getUsers($this->getUsers());
+		}
+
+		return $this->userData;
+	}
+
+	/**
 	 * Return true if a user is the part of the call.
 	 *
 	 * @param int $userId Id of the user.
@@ -229,6 +247,7 @@ class Call
 			'LAST_SEEN' => null
 		]);
 		$this->users[$newUserId]->save();
+		unset($this->userData);
 
 		if ($this->associatedEntity)
 		{
@@ -245,6 +264,7 @@ class Call
 		{
 			CallUser::delete($this->id, $userId);
 			unset($this->users[$userId]);
+			unset($this->userData[$userId]);
 		}
 	}
 
@@ -259,12 +279,12 @@ class Call
 		$this->loadUsers();
 		$states = [];
 
-		foreach ($this->users as $userId => $user)
+		foreach ($this->users as $user)
 		{
 			$userState = $user->getState();
 			$states[$userState] = isset($states[$userState]) ? $states[$userState] + 1 : 1;
 		}
-		if ($this->type == static::TYPE_PERMANENT || !$strict)
+		if (in_array($this->type, [static::TYPE_PERMANENT, static::TYPE_LANGE]) || !$strict)
 		{
 			 return $states[CallUser::STATE_READY] >= 1;
 		}

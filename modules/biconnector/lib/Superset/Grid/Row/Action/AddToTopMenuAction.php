@@ -21,7 +21,7 @@ final class AddToTopMenuAction extends BaseAction
 
 	protected function getText(): string
 	{
-		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_ADD_TO_TOP_MENU');
+		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_ADD_TO_TOP_MENU') ?? '';
 	}
 
 	public function getControl(array $rawFields): ?array

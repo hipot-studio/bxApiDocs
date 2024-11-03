@@ -81,7 +81,7 @@ class SupersetDashboardProvider extends BaseProvider
 			$ormParams['filter'],
 		];
 
-		$elements = $superset->getDashboardRepository()->getList($ormParams);
+		$elements = $superset->getDashboardRepository()->getList($ormParams, true);
 		foreach ($elements as $element)
 		{
 			if ($element->isSupersetDashboardDataLoaded())

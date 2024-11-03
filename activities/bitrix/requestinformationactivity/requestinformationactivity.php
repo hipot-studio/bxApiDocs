@@ -160,7 +160,7 @@ class CBPRequestInformationActivity extends CBPCompositeActivity implements
 		if (!$this->isPropertyExists("SetStatusMessage") || $this->SetStatusMessage === "Y")
 		{
 			$message =
-				($this->isPropertyExists("StatusMessage") && $this->StatusMessage <> '')
+				(!empty($this->StatusMessage) && is_string($this->StatusMessage))
 					? $this->StatusMessage
 					: Loc::getMessage("BPRIA_ACT_INFO")
 			;

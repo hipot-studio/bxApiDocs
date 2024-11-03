@@ -10,6 +10,19 @@ use Bitrix\Main\ORM\Query\Join;
 /**
  * Class RecentRoleTable
  *
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_RoleFavorite_Query query()
+ * @method static EO_RoleFavorite_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_RoleFavorite_Result getById($id)
+ * @method static EO_RoleFavorite_Result getList(array $parameters = [])
+ * @method static EO_RoleFavorite_Entity getEntity()
+ * @method static \Bitrix\AI\Model\EO_RoleFavorite createObject($setDefaultValues = true)
+ * @method static \Bitrix\AI\Model\EO_RoleFavorite_Collection createCollection()
+ * @method static \Bitrix\AI\Model\EO_RoleFavorite wakeUpObject($row)
+ * @method static \Bitrix\AI\Model\EO_RoleFavorite_Collection wakeUpCollection($rows)
  */
 class RoleFavoriteTable extends Entity\DataManager
 {

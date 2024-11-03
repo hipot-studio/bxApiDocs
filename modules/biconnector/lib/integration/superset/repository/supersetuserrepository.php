@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Integration\Superset\Repository;
 
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\UserTable;
+use Bitrix\Main\UserGroupTable;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\User;
@@ -62,20 +63,23 @@ final class SupersetUserRepository
 
 	public function getAdmin(): ?User
 	{
-		$user = UserTable::getList([
-			'select' => ['ID', 'GROUPS'],
+		$user = UserGroupTable::getList([
+			'select' => ['USER_ID'],
 			'filter' => [
-				'=ACTIVE' => 'Y',
-				'=GROUPS.GROUP_ID' => 1,
-				'=IS_REAL_USER' => 'Y',
+				'=GROUP_ID' => 1,
+				'=DATE_ACTIVE_TO' => null,
+				'=USER.ACTIVE' => 'Y',
+				'=USER.IS_REAL_USER' => 'Y',
 			],
-			'order' => ['ID' => 'ASC'],
+			'order' => ['USER_ID' => 'ASC'],
 			'limit' => 1,
-		])->fetch();
+		])
+			->fetch()
+		;
 
 		if ($user)
 		{
-			return $this->getById((int)$user['ID']);
+			return $this->getById((int)$user['USER_ID']);
 		}
 
 		return null;

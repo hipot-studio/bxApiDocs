@@ -4,6 +4,8 @@ declare(strict_types = 1);
 
 namespace Bitrix\AI\Role;
 
+use Bitrix\AI\Container;
+use Bitrix\AI\Entity\TranslateTrait;
 use Bitrix\AI\Prompt;
 use Bitrix\AI\Dto\PromptDto;
 use Bitrix\AI\Dto\PromptType;
@@ -13,11 +15,15 @@ use Bitrix\AI\Model\RoleFavoriteTable;
 use Bitrix\AI\Model\RoleIndustryTable;
 use Bitrix\AI\Model\RecentRoleTable;
 use Bitrix\AI\Model\RoleTable;
+use Bitrix\AI\Repository\PromptRepository;
+use Bitrix\AI\Services\AvailableRuleService;
 use Bitrix\Main\Application;
 use Bitrix\Main\Type\DateTime;
 
 class RoleManager
 {
+	use TranslateTrait;
+
 	private const UNIVERSAL_ROLE_CODE = 'copilot_assistant';
 	private const RECENT_ROLE_LIMIT = 10;
 
@@ -43,9 +49,13 @@ class RoleManager
 	 */
 	public function getRolesByCode(array $roleCodes): array
 	{
-		$roles = RoleTable::query()->setSelect(['*'])->setFilter(['=CODE' => $roleCodes])->fetchCollection();
+		$roles = RoleTable::query()
+			->setSelect(['*', 'RULES'])
+			->setFilter(['=CODE' => $roleCodes])
+			->fetchCollection()
+		;
 
-		return $this->convertRolesCollectionToArray($roles);
+		return $this->convertToArrayOnlyAvailableRoles($roles);
 	}
 
 	/**
@@ -57,8 +67,13 @@ class RoleManager
 	 */
 	public function getRoleByCode(string $roleCode): array|null
 	{
-		$role = RoleTable::query()->setSelect(['*'])->setFilter(['=CODE' => $roleCode])->fetchObject();
-		if (!$role)
+		$role = RoleTable::query()
+			->setSelect(['*', 'RULES'])
+			->setFilter(['=CODE' => $roleCode])
+			->fetchObject()
+		;
+
+		if (!$role || !$this->getAvailableRuleService()->isAvailableRules($role->getRules(), $this->languageCode))
 		{
 			return null;
 		}
@@ -75,7 +90,7 @@ class RoleManager
 	{
 		$result = [];
 		$industries = RoleIndustryTable::query()
-			->setSelect(['CODE', 'NAME_TRANSLATES', 'ROLES', 'IS_NEW'])
+			->setSelect(['CODE', 'NAME_TRANSLATES', 'ROLES', 'IS_NEW', 'ROLES.RULES'])
 			->setOrder(['SORT' => 'ASC', 'ROLES.IS_NEW' => 'DESC', 'ROLES.SORT' => 'ASC'])
 			->fetchCollection()
 		;
@@ -85,7 +100,7 @@ class RoleManager
 			$result[] = [
 				'code' => $industry->getCode(),
 				'name' => $industry->getName($this->languageCode),
-				'roles' => $this->convertRolesCollectionToArray($industry->getRoles()),
+				'roles' => $this->convertToArrayOnlyAvailableRoles($industry->getRoles()),
 				'isNew' => $industry->getIsNew(),
 			];
 		}
@@ -108,14 +123,14 @@ class RoleManager
 		}
 
 		$roles = RoleTable::query()
-	  		->setSelect(['*'])
+	  		->setSelect(['*', 'RULES'])
 			->setFilter(['IS_RECOMMENDED' => true])
 			->setOrder(['IS_NEW' => 'DESC', 'SORT' => 'ASC'])
 			->setLimit($limit)
 			->fetchCollection()
 		;
 
-		return $this->convertRolesCollectionToArray($roles);
+		return $this->convertToArrayOnlyAvailableRoles($roles);
 	}
 
 	/**
@@ -139,17 +154,46 @@ class RoleManager
 	}
 
 	/**
+	 * Returned role by role code or universal role
+	 *
+	 * @param string $roleCode
+	 * @return array|null
+	 */
+	public function getRoleByCodeOrUniversalRole(string $roleCode): array|null
+	{
+		if (!empty($roleCode))
+		{
+			$role = $this->getRoleByCode($roleCode);
+		}
+
+		if (empty($role))
+		{
+			return $this->getRoleByCode(self::getUniversalRoleCode());
+		}
+
+		return $role;
+	}
+
+	/**
 	 * Convert roles collection to array.
 	 *
 	 * @param EO_Role_Collection $roles
 	 * @return array
 	 */
-	private function convertRolesCollectionToArray(EO_Role_Collection $roles): array
+	private function convertToArrayOnlyAvailableRoles(EO_Role_Collection $roles): array
 	{
+		$availableRuleService = static::getAvailableRuleService();
+
 		$items = [];
 		foreach ($roles as $role)
 		{
-			$items[] = $this->convertRoleToArray($role);
+			if (
+				$role->getCode() === self::UNIVERSAL_ROLE_CODE
+				|| $availableRuleService->isAvailableRules($role->getRules(), $this->languageCode)
+			)
+			{
+				$items[] = $this->convertRoleToArray($role);
+			}
 		}
 
 		return $items;
@@ -203,8 +247,6 @@ class RoleManager
 		{
 			Application::getConnection()->query($merge[0]);
 		}
-
-		$this->deleteRecentWithProbability();
 	}
 
 	/**
@@ -216,18 +258,24 @@ class RoleManager
 	{
 		$recentsRoles = RecentRoleTable::query()
 			->setSelect([
-				'ROLE',
+				'ROLE', 'ROLE.RULES',
 			])
 			->setFilter(['USER_ID' => $this->userId, '!=ROLE.CODE' => [self::UNIVERSAL_ROLE_CODE, 'copilot_assistant_chat']])
 			->setOrder(['DATE_TOUCH' => 'DESC'])
-			->setLimit(self::RECENT_ROLE_LIMIT)
 			->fetchCollection()
 		;
+
+		$availableRuleService = static::getAvailableRuleService();
 
 		$roles = [];
 		foreach ($recentsRoles as $role)
 		{
-			$roles[] = $this->convertRoleToArray($role->getRole());
+			$roleItem = $role->getRole();
+			if ($availableRuleService->isAvailableRules($roleItem->getRules(), $this->languageCode))
+			{
+				$roles[] = $this->convertRoleToArray($roleItem);
+			}
+
 		}
 
 		return $roles;
@@ -285,16 +333,24 @@ class RoleManager
 	public function getFavoriteRoles(): array
 	{
 		$favoriteRoles = RoleFavoriteTable::query()
-			->setSelect(['ROLE'])
+			->setSelect([
+				'ROLE', 'ROLE.RULES'
+			])
 			->setFilter(['USER_ID' => $this->userId])
 			->setOrder(['DATE_CREATE' => 'DESC'])
-			->setLimit(self::RECENT_ROLE_LIMIT)
 			->fetchCollection()
 		;
+
+		$availableRuleService = static::getAvailableRuleService();
 
 		$roles = [];
 		foreach ($favoriteRoles as $role)
 		{
+			if (!$availableRuleService->isAvailableRules($role->getRole()->getRules(), $this->languageCode))
+			{
+				continue;
+			}
+
 			$roles[] = $this->convertRoleToArray($role->getRole());
 		}
 
@@ -313,69 +369,89 @@ class RoleManager
 	{
 		$prompts = [];
 		$role = RoleTable::query()
-			->setSelect(['PROMPTS'])
+			->setSelect(['RULES'])
 			->setFilter(['=CODE' => $roleCode])
-			->setOrder(['PROMPTS.IS_NEW' => 'DESC', 'SORT' => 'ASC'])
 			->fetchObject()
 		;
 
-		if($role === null)
+		if(
+			$role === null
+			|| !$this->getAvailableRuleService()->isAvailableRules($role->getRules(), $this->languageCode)
+		)
 		{
 			return $prompts;
 		}
 
-		$result = $role->getPrompts();
+		$prompts = $this->getPromptRepository()->getPromptsByRoleCodes(
+			$category,
+			$roleCode,
+			$this->languageCode
+		);
 
-		foreach ($result as $prompt)
+		if (empty($prompts))
 		{
-			if (!in_array($category, $prompt->getCategory(), true))
+			return [];
+		}
+
+		$result = [];
+		foreach ($prompts as $promptData)
+		{
+			try
+			{
+				/** @var PromptType $promptType */
+				$promptType = (new \ReflectionEnum(PromptType::class))
+					->getCase($promptData['TYPE'])
+					->getValue()
+				;
+			}
+			catch (\Exception $exception)
 			{
 				continue;
 			}
 
-			$prompts[] = new PromptDto(
-				$prompt->getCode(),
-				(new \ReflectionEnum(PromptType::class))->getCase($prompt->getType())->getValue(),
-				$prompt->getName($this->languageCode),
-				$prompt->getText($this->languageCode),
-				$prompt->getIsNew(),
+			$prompt = $this->preparePrompt($promptData);
+
+			$result[] = new PromptDto(
+				$prompt['CODE'],
+				$promptType,
+				$prompt['TITLE'],
+				$prompt['TRANSLATE'],
+				$prompt['IS_NEW'] == 1,
 			);
 		}
 
-		return $prompts;
+		return $result;
 	}
 
-	/**
-	 * Run delete with probability
-	 *
-	 * @return void
-	 */
-	public function deleteRecentWithProbability(): void
+	protected function preparePrompt(array $prompt): array
 	{
-		if (mt_rand(0,100) < 10)
+		$prompt['TRANSLATE'] = '';
+		if (!empty($prompt['TEXT_TRANSLATES']))
 		{
-			$this->deleteRecentOverLimit();
+			$prompt['TRANSLATE'] = self::translate($prompt['TEXT_TRANSLATES'], $this->languageCode);
 		}
+
+		$prompt['TITLE'] = '';
+		if (!empty($prompt['TITLE_DEFAULT']))
+		{
+			$prompt['TITLE'] = $prompt['TITLE_DEFAULT'];
+		}
+
+		if (!empty($prompt['TITLE_FOR_USER']))
+		{
+			$prompt['TITLE'] = $prompt['TITLE_FOR_USER'];
+		}
+
+		return $prompt;
 	}
 
-	/**
-	 * delete recent items over limit.
-	 *
-	 * @return void
-	 */
-	private function deleteRecentOverLimit(): void
+	private function getPromptRepository(): PromptRepository
 	{
-		$items = RecentRoleTable::query()
-			->setSelect(['ID'])
-			->setFilter(['USER_ID' => $this->userId])
-			->setOrder(['DATE_TOUCH' => 'DESC'])
-			->fetchAll()
-		;
+		return Container::init()->getItem(PromptRepository::class);
+	}
 
-		if(count($items) > self::RECENT_ROLE_LIMIT)
-		{
-			$itemsForDelete = array_slice($items, self::RECENT_ROLE_LIMIT);
-			RecentRoleTable::deleteByFilter(['ID' => $itemsForDelete]);
-		}
+	private function getAvailableRuleService(): AvailableRuleService
+	{
+		return Container::init()->getItem(AvailableRuleService::class);
 	}
 }

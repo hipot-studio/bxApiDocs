@@ -1,11 +1,12 @@
 <?php
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Event;
-use Bitrix\Main\EventManager;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Main;
+use Bitrix\Main\Type\Collection;
 use Bitrix\Socialnetwork\Helper\Path;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
@@ -22,6 +23,8 @@ Loc::loadMessages(__FILE__);
 class CAllSocNetUserToGroup
 {
 	protected static $roleCache = array();
+
+	protected const LOCK_TIMEOUT = 15;
 
 	/***************************************/
 	/********  DATA MODIFICATION  **********/
@@ -422,6 +425,36 @@ class CAllSocNetUserToGroup
 		}
 
 		return UserToGroupTable::addMulti($users, true);
+	}
+
+	public static function addUniqueUsersToGroup(int $groupId, array $userIds): void
+	{
+		$connection = Application::getConnection();
+		$lockName = 'socnet_update_group_users_lock_' . $groupId;
+
+		if (!$connection->lock($lockName, static::LOCK_TIMEOUT))
+		{
+			return;
+		}
+
+		try
+		{
+			$oldUsers = self::GetGroupUsers($groupId);
+			$oldUserIds = array_map('intval', array_column($oldUsers, 'USER_ID'));
+
+			$newUserIds = array_map('intval', $userIds);
+			$usersToAdd = array_diff($newUserIds, $oldUserIds);
+			Collection::normalizeArrayValuesByInt($usersToAdd);
+
+			self::AddUsersToGroup($groupId, $usersToAdd);
+		}
+		catch (Throwable)
+		{
+		}
+		finally
+		{
+			$connection->unlock($lockName);
+		}
 	}
 
 	/***************************************/

@@ -6,7 +6,6 @@ namespace Bitrix\AI\Dto;
 
 class PromptDto
 {
-
 	public function __construct(
 		public readonly string $code,
 		public readonly PromptType $promptType,

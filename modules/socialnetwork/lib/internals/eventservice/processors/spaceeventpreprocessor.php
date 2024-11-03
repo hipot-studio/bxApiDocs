@@ -23,6 +23,9 @@ class SpaceEventPreProcessor
 	 */
 	public function process(): void
 	{
+		// TODO spaces stub
+		return;
+
 		if (!EventPreProcessingOption::isEnabled())
 		{
 			return;

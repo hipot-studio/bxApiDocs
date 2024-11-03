@@ -4,8 +4,10 @@ declare(strict_types=1);
 namespace Bitrix\AI\Controller\Integration;
 
 use Bitrix\AI\Cloud;
+use Bitrix\AI\Cloud\Agent;
 use Bitrix\AI\Engine;
 use Bitrix\AI\QueueJob;
+use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\ActionFilter;
@@ -204,6 +206,11 @@ class B24CloudAi extends Controller
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
+		}
+
+		if ($result->isSuccess())
+		{
+			Application::getInstance()->addBackgroundJob(fn () => Agent\PropertiesSync::retrieveModels());
 		}
 	}
 

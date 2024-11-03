@@ -15,8 +15,9 @@ use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Superset\ActionFilter\BIConstructorAccess;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Superset\Dashboard\ScreenshotExporter;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
-use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
+use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
@@ -25,7 +26,6 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
@@ -83,7 +83,7 @@ class Dashboard extends Controller
 
 	public function copyAction(Model\Dashboard $dashboard): ?array
 	{
-		if (!AccessController::getCurrent()->checkByItemId(ActionDictionary::ACTION_BIC_DASHBOARD_COPY, $dashboard->getId()))
+		if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_COPY, $dashboard))
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_COPY')));
 
@@ -93,7 +93,7 @@ class Dashboard extends Controller
 		$integrator = Integrator::getInstance();
 		$superset = new SupersetController($integrator);
 		$externalId = $dashboard->getExternalId();
-		$dashboardId = $dashboard->getId();
+
 		if ((int)$externalId <= 0)
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ERROR_NOT_FOUND')));
@@ -157,7 +157,7 @@ class Dashboard extends Controller
 		$afterCopyEvent = new Event('biconnector', 'onAfterCopyDashboard', $eventData);
 		$afterCopyEvent->send();
 
-		$newDashboard = $superset->getDashboardRepository()->getById($copiedDashboardId);
+		$newDashboard = $superset->getDashboardRepository()->getById($copiedDashboardId, true);
 		if ($newDashboard)
 		{
 			foreach ($dashboard->getOrmObject()->fillTags() as $tag)
@@ -170,7 +170,17 @@ class Dashboard extends Controller
 			$scopes = ScopeService::getInstance()->getDashboardScopes($dashboard->getId());
 			ScopeService::getInstance()->saveDashboardScopes($copiedDashboardId, $scopes);
 
-			$gridRow = $this->prepareGridRow($newDashboard);
+			if (!$dashboard->getOrmObject()->isUrlParamsFilled())
+			{
+				$dashboard->getOrmObject()->fillUrlParams();
+			}
+
+			$paramCodes = $dashboard->getOrmObject()->getUrlParams()->getCodeList();
+			(new UrlParameter\Service($newDashboard->getOrmObject()))
+				->saveDashboardParams($paramCodes, $scopes)
+			;
+
+			$gridRow = DashboardGrid::prepareRowData($newDashboard);
 			$data['id'] = $copiedDashboardId;
 			$data['detail_url'] = "/bi/dashboard/detail/{$copiedDashboardId}/";
 			$data['columns'] = $gridRow['columns'];
@@ -191,7 +201,7 @@ class Dashboard extends Controller
 			return null;
 		}
 
-		if (!AccessController::getCurrent()->checkByItemId(ActionDictionary::ACTION_BIC_DASHBOARD_EXPORT, $dashboard->getId()))
+		if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EXPORT, $dashboard))
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_EXPORT')));
 
@@ -233,6 +243,12 @@ class Dashboard extends Controller
 				->getScopeCodeList()
 			;
 			$dashboardSettings['scope'] = $dashboardScopes;
+			if (!$dashboard->getOrmObject()->isUrlParamsFilled())
+			{
+				$dashboard->getOrmObject()->fillUrlParams();
+			}
+
+			$dashboardSettings['urlParameters'] = $dashboard->getOrmObject()->getUrlParams()->getCodeList();
 		}
 
 		$response = $integrator->exportDashboard($externalDashboardId, $dashboardSettings);
@@ -264,14 +280,14 @@ class Dashboard extends Controller
 
 	public function deleteAction(Model\Dashboard $dashboard): ?bool
 	{
-		$dashboardId = $dashboard->getId();
-		if (!AccessController::getCurrent()->checkByItemId(ActionDictionary::ACTION_BIC_DASHBOARD_DELETE, $dashboardId))
+		if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_DELETE, $dashboard))
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_DELETE')));
 
 			return null;
 		}
 
+		$dashboardId = $dashboard->getId();
 		$hasCopiedDashboards = SupersetDashboardTable::getList([
 			'select' => ['SOURCE_ID'],
 			'filter' => [
@@ -314,7 +330,7 @@ class Dashboard extends Controller
 			{
 				if ($response->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
 				{
-					SupersetDashboardTable::delete($dashboardId);
+					$dashboard->getOrmObject()->delete();
 
 					return true;
 				}
@@ -323,7 +339,7 @@ class Dashboard extends Controller
 				return null;
 			}
 
-			SupersetDashboardTable::delete($dashboardId);
+			$dashboard->getOrmObject()->delete();
 		}
 
 		return true;
@@ -348,23 +364,17 @@ class Dashboard extends Controller
 		];
 	}
 
-	public function getDashboardEmbeddedDataAction(Model\Dashboard $dashboard): ?array
+	public function getDashboardEmbeddedDataAction(Model\Dashboard $dashboard, array $urlParams = []): ?array
 	{
 		$accessController = AccessController::getCurrent();
-		if (!$accessController->checkByItemId(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW, $dashboard->getId()))
+		if (!$accessController->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW, $dashboard))
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_VIEW')));
 
 			return null;
 		}
 
-		$accessItem = DashboardAccessItem::createFromArray([
-			'ID' => $dashboard->getId(),
-			'TYPE' => $dashboard->getType(),
-			'OWNER_ID' => $dashboard->getField('OWNER_ID'),
-		]);
-
-		$canExport = $accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_EXPORT, $accessItem);
+		$canExport = $accessController->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EXPORT, $dashboard);
 
 		$canEdit = false;
 		if (
@@ -372,11 +382,32 @@ class Dashboard extends Controller
 			|| $dashboard->getType() === SupersetDashboardTable::DASHBOARD_TYPE_MARKET
 		)
 		{
-			$canEdit = $accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_COPY, $accessItem);
+			$canEdit = $accessController->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_COPY, $dashboard);
 		}
 		else if ($dashboard->getType() === SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM)
 		{
-			$canEdit = $accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem);
+			$canEdit = $accessController->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $dashboard);
+		}
+		$dashboard->loadCredentials();
+		$dashboard->loadProxyData();
+
+		$paramsService = new UrlParameter\Service($dashboard->getOrmObject());
+		$dashboardParamCodes = array_map(static fn($param) => $param->code(), $paramsService->getUrlParameters());
+		$paramsCompatible = true;
+		if ($paramsService->isExistScopeParams())
+		{
+			$incomingParams = array_keys($urlParams);
+			foreach ($dashboardParamCodes as $dashboardParamCode)
+			{
+				if (!in_array($dashboardParamCode, $incomingParams, true))
+				{
+					$paramsCompatible = false;
+				}
+			}
+		}
+		else
+		{
+			$urlParams = $paramsService->getGlobalValues();
 		}
 
 		return [
@@ -388,12 +419,50 @@ class Dashboard extends Controller
 				'guestToken' => $dashboard->getEmbeddedCredentials()->guestToken,
 				'supersetDomain' => $dashboard->getEmbeddedCredentials()->supersetDomain,
 				'editUrl' => $dashboard->getEditUrl(),
-				'dashboardUrl' => "/bi/dashboard/detail/{$dashboard->getId()}/",
+				'dashboardUrl' => $dashboard->getOrmObject()->getDetailUrl(),
+				'embeddedUrl' => $paramsService->getEmbeddedUrl($urlParams),
 				'appId' => $dashboard->getAppId(),
 				'nativeFilters' => $dashboard->getNativeFilter(),
-				'canExport' => $canExport ? 'Y' : 'N',
-				'canEdit' => $canEdit ? 'Y' : 'N',
+				'canExport' => $canExport,
+				'canEdit' => $canEdit,
+				'paramsCompatible' => $paramsCompatible,
+				'urlParams' => $urlParams,
 			],
+		];
+	}
+
+	/**
+	 * @param Model\Dashboard $dashboard
+	 *
+	 * @return array[]|null
+	 */
+	public function getDashboardUrlParametersAction(Model\Dashboard $dashboard): ?array
+	{
+		$accessItem = DashboardAccessItem::createFromArray([
+			'ID' => $dashboard->getId(),
+			'TYPE' => $dashboard->getType(),
+			'OWNER_ID' => $dashboard->getField('OWNER_ID'),
+		]);
+
+		$accessController = AccessController::getCurrent();
+		if (!$accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_VIEW')));
+
+			return null;
+		}
+
+		$result = [];
+		foreach ($dashboard->getOrmObject()->fillUrlParams() as $parameter)
+		{
+			$result[] = [
+				'code' => $parameter->getCode(),
+				'defaultValue' => '',
+			];
+		}
+
+		return [
+			'urlParameters' =>	$result,
 		];
 	}
 
@@ -450,104 +519,17 @@ class Dashboard extends Controller
 		return true;
 	}
 
-	public function createEmptyDashboardAction(): ?array
-	{
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_CREATE))
-		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_CREATE')));
-
-			return null;
-		}
-
-		$name = Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_EMPTY_DASHBOARD_NAME');
-
-		$dashboard = SupersetDashboardTable::getRow([
-			'select' => ['TITLE'],
-			'filter' => ['%TITLE' => $name],
-			'order' => ['ID' => 'DESC'],
-		]);
-		if ($dashboard)
-		{
-			$number = 0;
-
-			$currentTitle = $dashboard['TITLE'];
-			preg_match_all('/\d+/', $currentTitle, $matches);
-			if (!empty($matches[0]))
-			{
-				$number = (int)$matches[0][0];
-			}
-
-			$number++;
-			$name .= " ($number)";
-		}
-
-		$integrator = Integrator::getInstance();
-		$response = $integrator->createEmptyDashboard([
-			'name' => $name,
-		]);
-
-		if ($response->getErrors())
-		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_CREATE_EMPTY_ERROR')));
-
-			return null;
-		}
-
-		$data = $response->getData();
-		if (empty($data['body']))
-		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_CREATE_EMPTY_ERROR')));
-
-			return null;
-		}
-
-		$addDashboardResult = SupersetDashboardTable::add([
-			'EXTERNAL_ID' => $data['body']['id'],
-			'TITLE' => $data['body']['result']['dashboard_title'],
-			'TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM,
-			'CREATED_BY_ID' => $this->getCurrentUser()?->getId(),
-			'OWNER_ID' => $this->getCurrentUser()?->getId(),
-		]);
-		if (!$addDashboardResult->isSuccess())
-		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_CREATE_EMPTY_ERROR')));
-
-			return null;
-		}
-
-		$data = [];
-		$superset = new SupersetController(Integrator::getInstance());
-		$dashboard = $superset->getDashboardRepository()->getById($addDashboardResult->getId());
-		if ($dashboard)
-		{
-			$gridRow = $this->prepareGridRow($dashboard);
-
-			$data['id'] = $addDashboardResult->getId();
-			$data['title'] = $dashboard->getTitle();
-
-			$data['columns'] = $gridRow['columns'];
-			$data['actions'] = $gridRow['actions'];
-
-
-			return ['dashboard' => $data];
-		}
-
-		return null;
-	}
-
 	/**
 	 * @example BX.ajax.runAction('biconnector.dashboard.getEditUrl', {data: {editUrl: '', dashboardId: 192}});
 	 *
-	 * @param int $dashboardId
+	 * @param Model\Dashboard $dashboard
 	 * @param string $editUrl
 	 *
 	 * @return string|null
 	 */
-	public function getEditUrlAction(int $dashboardId, string $editUrl): ?string
+	public function getEditUrlAction(Model\Dashboard $dashboard, string $editUrl): ?string
 	{
-		$accessItem = DashboardAccessItem::createFromId($dashboardId);
-
-		$canEdit = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem);
+		$canEdit = AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $dashboard);
 		if (!$canEdit)
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_EDIT')));
@@ -570,52 +552,9 @@ class Dashboard extends Controller
 		return $editUrl;
 	}
 
-	private function prepareGridRow(Model\Dashboard $dashboard): array
-	{
-		$supersetController = new SupersetController(Integrator::getInstance());
-
-		$settings = new DashboardSettings([
-			'ID' => 'biconnector_superset_dashboard_grid',
-			'IS_SUPERSET_AVAILABLE' => $supersetController->isExternalServiceAvailable(),
-		]);
-
-		$grid = new DashboardGrid($settings);
-
-		$dashboardFields = $dashboard->toArray();
-		$tagList = [];
-		$tags = $dashboard->getOrmObject()->fillTags();
-		foreach ($tags->getAll() as $tag)
-		{
-			$tagList[] = [
-				'ID' => $tag->getId(),
-				'TITLE' => $tag->getTitle(),
-			];
-		}
-		$dashboardFields['TAGS'] = $tagList;
-		$dashboardFields['SCOPE'] = ScopeService::getInstance()->getDashboardScopes($dashboard->getId());
-
-		$result = $grid->getRows()->prepareRows([$dashboardFields]);
-		$result = current($result);
-		if (is_array($result))
-		{
-			$converter = new Converter(Converter::OUTPUT_JSON_FORMAT);
-			$result['actions'] = $converter->process($result['actions']);
-
-			return $result;
-		}
-
-		return [];
-	}
-
 	public function renameAction(Model\Dashboard $dashboard, string $title): void
 	{
-		$accessItem = DashboardAccessItem::createFromArray([
-			'ID' => $dashboard->getId(),
-			'TYPE' => $dashboard->getType(),
-			'OWNER_ID' => $dashboard->getField('OWNER_ID'),
-		]);
-
-		$canEdit = AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem);
+		$canEdit = AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $dashboard);
 		if (!$canEdit)
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_EDIT')));
@@ -631,6 +570,7 @@ class Dashboard extends Controller
 			return;
 		}
 
+		$dashboard->loadProxyData();
 		$editTitleResult = $this->editDashboardTitle($dashboard, $title);
 		if (!$editTitleResult->isSuccess())
 		{
@@ -657,7 +597,7 @@ class Dashboard extends Controller
 			return $result->addError(new Error($errorMsg));
 		}
 
-		if ($dashboard->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_READY)
+		if (!$dashboard->isAvailableDashboard())
 		{
 			$errorMsg = Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_RENAME_ERROR_CANNOT_EDIT_TITLE_NOT_READY');
 
@@ -719,6 +659,39 @@ class Dashboard extends Controller
 		);
 
 		return true;
+	}
+
+	/**
+	 * Publish or make draft dashboards
+	 *
+	 * @param Model\Dashboard $dashboard
+	 * @param bool $publish
+	 *
+	 * @return bool|null
+	 * @throws \Bitrix\Main\Access\Exception\UnknownActionException
+	 */
+	public function toggleDraftAction(Model\Dashboard $dashboard, bool $publish): ?bool
+	{
+		$accessItem = DashboardAccessItem::createFromEntity($dashboard);
+		$accessController = AccessController::getCurrent();
+		if (!$accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_EDIT')));
+
+			return null;
+		}
+
+		if (
+			($publish && $dashboard->getStatus() === SupersetDashboardTable::DASHBOARD_STATUS_READY)
+			|| (!$publish && $dashboard->getStatus() === SupersetDashboardTable::DASHBOARD_STATUS_DRAFT)
+		)
+		{
+			return null;
+		}
+
+		$result = $dashboard->toggleDraft($publish);
+
+		return $result->isSuccess() ? true : null;
 	}
 
 	public function deleteFromTopMenuAction(int $dashboardId, CurrentUser $user): ?bool
@@ -808,13 +781,7 @@ class Dashboard extends Controller
 
 	public function getExportDataAction(Model\Dashboard $dashboard): ?array
 	{
-		$accessItem = DashboardAccessItem::createFromArray([
-			'ID' => $dashboard->getId(),
-			'TYPE' => $dashboard->getType(),
-			'OWNER_ID' => $dashboard->getField('OWNER_ID'),
-		]);
-
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EXPORT, $accessItem))
+		if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EXPORT, $dashboard))
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_EXPORT')));
 
@@ -880,13 +847,47 @@ class Dashboard extends Controller
 		$scopeNamesToExport = ScopeService::getInstance()->getScopeNameList(array_column($scopesToExport, 'SCOPE_CODE'));
 		$scopeNamesNotToExport = ScopeService::getInstance()->getScopeNameList(array_column($scopesNotToExport, 'SCOPE_CODE'));
 
+		if (!$dashboard->getOrmObject()->isUrlParamsFilled())
+		{
+			$dashboard->getOrmObject()->fillUrlParams();
+		}
+
+		$urlParams = [];
+		foreach ($dashboard->getOrmObject()->getUrlParams()->getCodeList() as $code)
+		{
+			$parameter = UrlParameter\Parameter::tryFrom($code);
+			if ($parameter)
+			{
+				$urlParams[] = $parameter->title();
+			}
+		}
+
 		return [
 			'title' => htmlspecialcharsbx($dashboard->getTitle()),
 			'period' => $period,
 			'scopesToExport' => htmlspecialcharsbx(implode(', ', $scopeNamesToExport)),
 			'scopesNotToExport' => htmlspecialcharsbx(implode(', ', $scopeNamesNotToExport)),
+			'urlParams' => htmlspecialcharsbx(implode(', ', $urlParams)),
 			'type' => $dashboard->getType(),
 			'appId' => $dashboard->getAppId(),
+		];
+	}
+
+	public function saveScreenshotAction(Model\Dashboard $dashboard, string $content, string $fileType): ?array
+	{
+		$result = ScreenshotExporter::saveDashboardScreenshot($dashboard, $content, $fileType);
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		$filePath = $result->getData()['filePath'];
+
+		return [
+			'filePath' => $filePath,
 		];
 	}
 }

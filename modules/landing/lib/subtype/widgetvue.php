@@ -5,11 +5,10 @@ namespace Bitrix\Landing\Subtype;
 use Bitrix\Landing\Assets\Manager;
 use Bitrix\Landing\Block;
 use Bitrix\Landing\Repo;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Web\DOM\Document;
+use Bitrix\Main\UI\Extension;
+use Bitrix\Main\Web\DOM;
 use Bitrix\Main\Web\Json;
-use Bitrix\Rest\UsageStatTable;
 
 /**
  * Block with Vue library
@@ -35,31 +34,34 @@ class WidgetVue
 			'ext' => ['landing.widgetvue'],
 		];
 
-		// todo: create manifest by white list
-		// todo: which style?
 		$manifest['style'] = [
 			'block' => [
 				'type' => ['widget'],
 			],
 		];
 
-		$script = self::getVueScript($block, $params);
-		if ($script)
-		{
-			$assets = Manager::getInstance();
-			$assets->addString(
-				"<script>{$script}</script>",
-			);
-		}
+		$assets = Manager::getInstance();
 
-		// todo: or add inline to block? not in callback, always
-		$langScript = self::getLangScript($block, $params);
-		if ($langScript)
+		$vueScript = self::getVueScript($block, $params);
+		$assets->addString(
+			"<script>{$vueScript}</script>",
+		);
+
+		Extension::load('main.loader');
+		$loaderScript = self::getLoaderScript($block, $params);
+		$assets->addString(
+			"<script>{$loaderScript}</script>",
+		);
+
+		$loaderStyle = self::getLoaderStyle($block);
+		$assets->addString(
+			"<style>{$loaderStyle}</style>",
+		);
+
+		$widgetStyle = $params['style'] ?? null;
+		if ($widgetStyle)
 		{
-			$assets = Manager::getInstance();
-			$assets->addString(
-				"<script>{$langScript}</script>",
-			);
+			$assets->addAsset($widgetStyle);
 		}
 
 		// add callbacks
@@ -69,7 +71,7 @@ class WidgetVue
 				$content = $block->getContent();
 				$protected = self::protectVueContentBeforeParse($content);
 
-				$doc = new Document();
+				$doc = new DOM\Document();
 				try
 				{
 					$doc->loadHTML($content);
@@ -80,11 +82,14 @@ class WidgetVue
 				if (!$rootNode)
 				{
 					return;
-					// todo: error or what?
 				}
 
-				$newId = 'mp_widget' . $block->getId();
+				$newId = WidgetVue::getRootNodeId($block);
 				$rootNode->setAttribute('id', $newId);
+				$rootNode->setInnerHTML('');
+
+				$parentNode = $rootNode->getParentNode();
+				$parentNode->setChildNodesArray([$rootNode]);
 
 				$contentAfter = $doc->saveHTML();
 				self::returnVueContentAfterParse($contentAfter, $protected);
@@ -95,6 +100,14 @@ class WidgetVue
 		];
 
 		return $manifest;
+	}
+
+	private static function getRootNodeId(Block $block, bool $loader = false): string
+	{
+		$id = $loader ? 'mp_widget_loader' : 'mp_widget';
+		$id .= $block->getId();
+
+		return $id;
 	}
 
 	private static function checkParams (?Block $block, array $params): bool
@@ -113,28 +126,12 @@ class WidgetVue
 		return true;
 	}
 
-	private static function getLangScript(Block $block, array $params): string
-	{
-		$script = '';
-		$lang = Loc::getCurrentLang();
-		if (
-			is_array($params['lang'])
-			&& isset($params['lang'][$lang])
-			&& is_array($params['lang'][$lang])
-		)
-		{
-			$phrases = Json::encode($params['lang'][$lang]);
-			$script = "BX.message({$phrases});";
-		}
-
-		return $script;
-	}
-
 	private static function getVueScript(Block $block, array $params): string
 	{
 		$vueParams = [
 			'blockId' => $block->getId(),
-			'rootNode' => '#mp_widget' . $block->getId(),
+			'rootNode' => '#' . WidgetVue::getRootNodeId($block),
+			'lang' => self::getLangPhrases($params),
 		];
 
 		if ($block->getRepoId())
@@ -144,13 +141,16 @@ class WidgetVue
 			{
 				$vueParams['appId'] = (int)$app['ID'];
 
-				$vueParams['allowedByTariff'] = true;
+				$vueParams['appAllowedByTariff'] = true;
 				if ($app['PAYMENT_ALLOW'] !== 'Y')
 				{
-					$vueParams['allowedByTariff'] = false;
+					$vueParams['appAllowedByTariff'] = false;
 				}
 			}
 		}
+
+		$content = Block::getContentFromRepository($block->getCode());
+		$vueParams['template'] = $content ?? '';
 
 		if (
 			is_array($params['data'])
@@ -169,14 +169,71 @@ class WidgetVue
 			$vueParams['fetchable'] = true;
 		}
 
-		$vueParams= Json::encode($vueParams);
+		$vueParams = Json::encode($vueParams);
 
 		return "
-			BX.ready(function() {
+			BX.ready(() => {
 				(new BX.Landing.WidgetVue(
 					{$vueParams}
 				)).mount();
 			});
+		";
+	}
+
+	private static function getLangPhrases(array $params): array
+	{
+		$phrases = '{}';
+
+		$lang = Loc::getCurrentLang();
+		$defaultLang = 'en';
+
+		if (is_array($params['lang']))
+		{
+			if (
+				isset($params['lang'][$lang])
+				|| isset($params['lang'][$defaultLang])
+			)
+			{
+				$lang = isset($params['lang'][$lang]) ? $lang : $defaultLang;
+				$phrases = $params['lang'][$lang];
+			}
+		}
+
+		return $phrases;
+	}
+
+	private static function getLoaderScript(Block $block): string
+	{
+		$rootNodeId = WidgetVue::getRootNodeId($block);
+		$loaderNodeId = WidgetVue::getRootNodeId($block, true);
+
+		return "
+			BX.ready(() => {
+				const rootNode = BX('$rootNodeId');
+				if (rootNode)
+				{
+					const loaderNode = document.createElement('div');
+					loaderNode.id = '{$loaderNodeId}';
+					BX.Dom.append(loaderNode, rootNode.parentElement);
+				
+					(new BX.Loader({
+						target: loaderNode,
+					})).show();
+				}
+			});
+		";
+	}
+
+	protected static function getLoaderStyle(Block $block): string
+	{
+		$id = '#' . self::getRootNodeId($block, true);
+
+		// todo: need loader style?
+		return "
+			$id {
+				height: 200px;
+				position: relative;
+			}
 		";
 	}
 

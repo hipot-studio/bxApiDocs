@@ -147,7 +147,7 @@ class CIntranetRestService extends IRestService
 				$department = new \Bitrix\Intranet\Entity\Department(
 					$params['NAME'] ?? '',
 					parentId: $params['PARENT'] ?? null,
-					sort: $params['SORT'] ?? null,
+					sort: (int)$params['SORT'] > 0 ? (int)$params['SORT'] : null,
 				);
 				$department = $departmentRepository->save($department);
 				if (isset($params['UF_HEAD']) && (int)$params['UF_HEAD'] > 0)
@@ -186,7 +186,7 @@ class CIntranetRestService extends IRestService
 					$params['NAME'] ?? $oldDepartment->getName(),
 					id: $oldDepartment->getId(),
 					parentId: $params['PARENT'] ?? $oldDepartment->getParentId(),
-					sort: $params['SORT'] ?? null,
+					sort: (int)$params['SORT'] > 0 ? (int)$params['SORT'] : null,
 				);
 				$departmentRepository = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
 					->departmentRepository();

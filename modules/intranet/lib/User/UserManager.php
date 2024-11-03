@@ -2,6 +2,9 @@
 
 namespace Bitrix\Intranet\User;
 
+use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
+use Bitrix\Intranet\Entity\Department;
+use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\User\Filter\ExtranetUserSettings;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
 use Bitrix\Intranet\User\Filter\Presets\FilterPreset;
@@ -27,6 +30,8 @@ final class UserManager
 	public const SORT_WAITING_CONFIRMATION = ['WAITING_CONFIRMATION_SORT' => 'ASC'];
 
 	private UserFilter $filter;
+
+	private ?DepartmentCollection $departmentCollection = null;
 
 	/**
 	 * @param string $filterId ID of filter for getting last saved filter preset
@@ -153,7 +158,9 @@ final class UserManager
 		{
 			if (!empty($user['UF_DEPARTMENT']))
 			{
-				$user['UF_DEPARTMENT'] = \CIntranetUtils::GetDepartmentsData($user['UF_DEPARTMENT']);
+				$user['UF_DEPARTMENT'] = $this->getDepartmentCollection()
+					->filterByUsersDepartmentIdList($user['UF_DEPARTMENT'])
+					->map(fn(Department $department) => htmlspecialcharsbx($department->getName()));
 			}
 
 			$userId = $user['ID'];
@@ -162,6 +169,15 @@ final class UserManager
 		}
 
 		return $result;
+	}
+
+	private function getDepartmentCollection(): DepartmentCollection
+	{
+		$this->departmentCollection ??= ServiceContainer::getInstance()
+			->departmentRepository()
+			->getAllTree();
+
+		return $this->departmentCollection;
 	}
 
 	/**

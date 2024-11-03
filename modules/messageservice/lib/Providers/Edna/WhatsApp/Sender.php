@@ -2,6 +2,7 @@
 
 namespace Bitrix\MessageService\Providers\Edna\WhatsApp;
 
+use Bitrix\Disk\File;
 use Bitrix\ImConnector\Library;
 use Bitrix\ImOpenLines\Im;
 use Bitrix\ImOpenLines\Session;
@@ -13,16 +14,19 @@ use Bitrix\MessageService\Providers\Constants\InternalOption;
 
 class Sender extends Providers\Edna\Sender
 {
-	public const EXCLUDE_CONTENT_TYPES = [
-		'image/gif',
-		'audio/wav',
-		'audio/x-wav',
-		'video/avi',
-		'video/msvideo',
-		'video/x-msvideo',
-		'video/x-matroska',
-		'application/x-troff-msvideo',
+	public const AVAILABLE_CONTENT_TYPES = [
+		'image/jpeg' => 5 * 1024 * 1024,
+		'image/png' => 5 * 1024 * 1024,
+		'audio/aac' => 16 * 1024 * 1024,
+		'audio/mp4' => 16 * 1024 * 1024,
+		'audio/amr' => 16 * 1024 * 1024,
+		'audio/mpeg' => 16 * 1024 * 1024,
+		'audio/ogg' => 16 * 1024 * 1024,
+		'video/mp4' => 16 * 1024 * 1024,
+		'video/3gpp' => 16 * 1024 * 1024,
 	];
+
+	public const DOCUMENT_MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 	protected Providers\OptionManager $optionManager;
 	protected Providers\SupportChecker $supportChecker;
@@ -179,13 +183,11 @@ class Sender extends Providers\Edna\Sender
 	private function getSimpleMessageContent(array $messageFields): array
 	{
 		$contentType = Constants::CONTENT_TYPE_TEXT;
+		$messageBody = $messageFields['MESSAGE_BODY'];
 
-		if (
-			Loader::includeModule('disk')
-			&& preg_match('/^http.+~.+$/', trim($messageFields['MESSAGE_BODY']))
-		)
+		if (Loader::includeModule('disk') && preg_match('/^http.+~.+$/', trim($messageBody)))
 		{
-			$fileUri = \CBXShortUri::GetUri($messageFields['MESSAGE_BODY']);
+			$fileUri = \CBXShortUri::GetUri($messageBody);
 			if ($fileUri)
 			{
 				$parsedUrl = parse_url($fileUri['URI']);
@@ -196,13 +198,8 @@ class Sender extends Providers\Edna\Sender
 					$diskFile = \Bitrix\Disk\File::getById((int)$queryParams['FILE_ID']);
 					if ($diskFile)
 					{
-						if (
-							!$this->isExcludedContentType($diskFile->getFile())
-							&& isset(Constants::CONTENT_TYPE_MAP[$diskFile->getTypeFile()]))
-						{
-							$contentType = Constants::CONTENT_TYPE_MAP[$diskFile->getTypeFile()];
-							$messageFields['MESSAGE_BODY'] = $fileUri['URI'];
-						}
+						$contentType = $this->determineContentType($diskFile);
+						$messageBody = $fileUri['URI'];
 					}
 				}
 			}
@@ -218,29 +215,43 @@ class Sender extends Providers\Edna\Sender
 			case Constants::CONTENT_TYPE_VIDEO:
 			case Constants::CONTENT_TYPE_DOCUMENT:
 				$content['attachment'] = [
-					'url' => $messageFields['MESSAGE_BODY']
+					'url' => $messageBody
 				];
 				break;
 			case Constants::CONTENT_TYPE_TEXT:
 			default:
-				$content['text'] = $messageFields['MESSAGE_BODY'];
+				$content['text'] = $messageBody;
 		}
 
 		return $content;
 	}
 
-	private function isExcludedContentType(?array $file): bool
+	private function determineContentType(File $diskFile): string
 	{
-		if (
-			is_array($file)
-			&& isset($file['CONTENT_TYPE'])
-			&& in_array($file['CONTENT_TYPE'], self::EXCLUDE_CONTENT_TYPES, true)
-		)
+		$contentType = Constants::CONTENT_TYPE_TEXT;
+		$file = $diskFile->getFile();
+
+		if (is_array($file) && isset($file['CONTENT_TYPE']))
 		{
-			return true;
+			if (isset(self::AVAILABLE_CONTENT_TYPES[$file['CONTENT_TYPE']]))
+			{
+				$maxSize = self::AVAILABLE_CONTENT_TYPES[$file['CONTENT_TYPE']];
+				if ($diskFile->getSize() <= $maxSize)
+				{
+					$contentType = Constants::CONTENT_TYPE_MAP[$diskFile->getTypeFile()] ?? Constants::CONTENT_TYPE_DOCUMENT;
+				}
+				elseif ($diskFile->getSize() <= self::DOCUMENT_MAX_FILE_SIZE)
+				{
+					$contentType = Constants::CONTENT_TYPE_DOCUMENT;
+				}
+			}
+			elseif ($diskFile->getSize() <= self::DOCUMENT_MAX_FILE_SIZE)
+			{
+				$contentType = Constants::CONTENT_TYPE_DOCUMENT;
+			}
 		}
 
-		return false;
+		return $contentType;
 	}
 
 	protected function sendHSMtoChat(array $messageFields): Result
@@ -258,7 +269,7 @@ class Sender extends Providers\Edna\Sender
 		}
 
 		$from = $messageFields['MESSAGE_FROM'];
-		$lineId = $this->connectorLine->getLineId();
+		$lineId = $this->connectorLine->getLineId((int)$from);
 		$userSessionCode = $this->getSessionUserCode($lineId, $externalChatId, $from, $userId);
 		$chatId = $this->getOpenedSessionChatId($userSessionCode);
 		if (!$chatId)

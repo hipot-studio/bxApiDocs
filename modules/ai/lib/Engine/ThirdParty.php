@@ -12,7 +12,9 @@ use Bitrix\AI\Result;
 use Bitrix\AI\ThirdParty\Item;
 use Bitrix\AI\ThirdParty\Manager;
 use Bitrix\AI\Tokenizer\GPT;
+use Bitrix\Main\Application;
 use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\Encoding;
 use Bitrix\Main\Web\HttpClient;
@@ -114,7 +116,9 @@ class ThirdParty extends Engine implements IEngine, IQueue, IContext
 	 */
 	public function isAvailable(): bool
 	{
-		return true;
+		$region = Application::getInstance()->getLicense()->getRegion();
+
+		return $region !== 'cn';
 	}
 
 	/**
@@ -303,5 +307,34 @@ class ThirdParty extends Engine implements IEngine, IQueue, IContext
 		}
 
 		return true;
+	}
+
+	/**
+	 * Get the supported image formats.
+	 *
+	 * @return array The supported image formats with their respective dimensions.
+	 */
+	public function getImageFormats(): array
+	{
+		return [
+			'square' => [
+				'code' => 'square',
+				'name' => Loc::getMessage('AI_IMAGE_ENGINE_THIRDPARTY_FORMAT_SQUARE') ?? 'square (1:1)',
+				'width' => 1024,
+				'height' => 1024,
+			],
+			'portrait' => [
+				'code' => 'portrait',
+				'name' => Loc::getMessage('AI_IMAGE_ENGINE_THIRDPARTY_FORMAT_PORTRAIT') ?? 'portrait (9:16)',
+				'width' => 1024,
+				'height' => 1792,
+			],
+			'landscape' => [
+				'code' => 'landscape',
+				'name' => Loc::getMessage('AI_IMAGE_ENGINE_THIRDPARTY_FORMAT_LANDSCAPE') ?? 'landscape (16:9)',
+				'width' => 1792,
+				'height' => 1024,
+			],
+		];
 	}
 }

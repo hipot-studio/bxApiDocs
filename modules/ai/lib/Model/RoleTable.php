@@ -11,6 +11,8 @@ use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\Fields\ArrayField;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\Relations\ManyToMany;
+use Bitrix\Main\ORM\Fields\Relations\OneToMany;
+use Bitrix\Main\ORM\Query\Join;
 
 /**
  * Class RoleTable
@@ -51,39 +53,52 @@ class RoleTable extends Entity\DataManager
 	public static function getMap(): array
 	{
 		return [
-			new Entity\IntegerField('ID', [
-				'primary' => true,
-				'autocomplete' => true,
-			]),
-			new Entity\StringField('CODE', [
-				'required' => true,
-			]),
-			(new ArrayField('NAME_TRANSLATES', [
-				'default_value' => '',
-			]))->configureSerializationJson(),
-			(new ArrayField('DESCRIPTION_TRANSLATES', [
-				'default_value' => '',
-			]))->configureSerializationJson(),
+			(new Entity\IntegerField('ID'))
+				->configureAutocomplete()
+				->configurePrimary(),
+
+			(new Entity\StringField('CODE'))
+				->configureRequired(),
+
+			(new ArrayField('NAME_TRANSLATES'))
+				->configureDefaultValue('')
+				->configureSerializationJson(),
+
+			(new ArrayField('DESCRIPTION_TRANSLATES'))
+				->configureDefaultValue('')
+				->configureSerializationJson(),
+
 			new Entity\StringField('INDUSTRY_CODE'),
+
 			new Entity\ReferenceField(
 				'INDUSTRY', RoleIndustry::class, ['=this.INDUSTRY_CODE' => 'ref.CODE']
 			),
-			new Entity\StringField('HASH', [
-				'required' => true,
-			]),
-			new Entity\StringField('INSTRUCTION', [
-				'required' => true,
-			]),
+
+			(new Entity\StringField('HASH'))
+				->configureRequired(),
+
+			(new Entity\StringField('INSTRUCTION'))
+				->configureRequired(),
+
 			(new ManyToMany('PROMPTS', PromptTable::class))
 				->configureTableName('b_ai_role_prompt'),
+
+			(new OneToMany('RULES', RoleDisplayRuleTable::class, 'ROLE'))
+				->configureJoinType(Join::TYPE_LEFT),
+
+
 			(new ArrayField('AVATAR'))->configureSerializationJson(),
+
 			(new BooleanField('IS_NEW'))
 				->configureValues(0, 1)
 				->configureDefaultValue(0),
+
 			(new BooleanField('IS_RECOMMENDED'))
 				->configureValues(0, 1)
 				->configureDefaultValue(0),
+
 			new Entity\IntegerField('SORT'),
+
 			new Entity\DatetimeField('DATE_MODIFY'),
 		];
 	}

@@ -265,24 +265,6 @@ class Type
 	}
 
 	/**
-	 * Check is current scope can use blocks (and sections) without type definition.
-	 * If false - get blocks only with current type
-	 * @return bool
-	 */
-	public static function canUseCommonBlocks(): bool
-	{
-		if (
-			self::$currentScopeClass !== null
-			&& is_callable([self::$currentScopeClass, 'canUseCommonBlocks'])
-		)
-		{
-			return self::$currentScopeClass::canUseCommonBlocks();
-		}
-
-		return true;
-	}
-
-	/**
 	 * Change manifest field by special conditions of site type
 	 * @param array $manifest
 	 * @return array prepared manifest

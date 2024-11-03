@@ -13,6 +13,12 @@ class CallFactory
 	 */
 	protected static function getProviderClass(string $provider, int $type)
 	{
+		if (false && $type == Call::TYPE_LANGE)
+		{
+			\Bitrix\Main\Loader::includeModule('call');
+			return \Bitrix\Call\Call\LargeCall::class;
+		}
+
 		if ($type == Call::TYPE_PERMANENT)
 		{
 			return ConferenceCall::class;
@@ -94,14 +100,17 @@ class CallFactory
 			$currentUserId = \Bitrix\Im\User::getInstance()->getId();
 		}
 		$query = CallTable::query()
-			->addSelect("*")
-			->where("TYPE", $type)
-			->where("PROVIDER", $provider)
-			->where("ENTITY_TYPE", $entityType)
-			->whereNull("END_DATE")
-			->setOrder(["ID" => "DESC"])
-			->setLimit(1);
+			->addSelect('*')
+			->where('TYPE', $type)
+			->where('PROVIDER', $provider)
+			->where('ENTITY_TYPE', $entityType)
+			->where('ENTITY_ID', $entityId)
+			->whereNull('END_DATE')
+			->setOrder(['ID' => 'DESC'])
+			->setLimit(1)
+		;
 
+		/*
 		if ($entityType === EntityType::CHAT && strpos($entityId, "chat") !== 0)
 		{
 			$query->where('INITIATOR_ID', $currentUserId);
@@ -111,6 +120,7 @@ class CallFactory
 		{
 			$query->where("ENTITY_ID", $entityId);
 		}
+		*/
 
 		$callFields = $query->exec()->fetch();
 

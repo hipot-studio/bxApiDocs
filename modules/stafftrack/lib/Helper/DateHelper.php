@@ -5,6 +5,7 @@ namespace Bitrix\StaffTrack\Helper;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\StaffTrack\Dictionary\Option;
+use Bitrix\Stafftrack\Integration\Calendar\SettingsProvider;
 use Bitrix\StaffTrack\Provider\OptionProvider;
 use Bitrix\StaffTrack\Trait\Singleton;
 
@@ -69,6 +70,42 @@ class DateHelper
 	}
 
 	/**
+	 * @param DateTime $dateTime
+	 * @return bool
+	 * @throws \Bitrix\Main\LoaderException
+	 */
+	public function isNotWorkingDay(DateTime $dateTime): bool
+	{
+		return $this->isHoliday($dateTime) || $this->isWeekend($dateTime);
+	}
+
+	/**
+	 * @param DateTime $dateTime
+	 * @return bool
+	 * @throws \Bitrix\Main\LoaderException
+	 */
+	public function isWeekend(DateTime $dateTime): bool
+	{
+		$dayIndex = (int)$dateTime->format('w');
+		$weekHolidays = SettingsProvider::getInstance()->getWeekHolidays();
+
+		return in_array($dayIndex, $weekHolidays, true);
+	}
+
+	/**
+	 * @param DateTime $dateTime
+	 * @return bool
+	 * @throws \Bitrix\Main\LoaderException
+	 */
+	public function isHoliday(DateTime $dateTime): bool
+	{
+		$formatDate = $dateTime->format('j.m');
+		$yearHolidays = SettingsProvider::getInstance()->getYearHolidays();
+
+		return in_array($formatDate, $yearHolidays, true);
+	}
+
+	/**
 	 * @param int $userId
 	 * @return DateTime
 	 * @throws ObjectException
@@ -120,4 +157,6 @@ class DateHelper
 
 		return $this->serverOffset;
 	}
+
+
 }

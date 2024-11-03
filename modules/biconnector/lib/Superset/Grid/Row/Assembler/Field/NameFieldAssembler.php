@@ -9,7 +9,9 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\Main\Grid\Row\FieldAssembler;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
+use Bitrix\Main\Web\Json;
 
 class NameFieldAssembler extends FieldAssembler
 {
@@ -27,10 +29,26 @@ class NameFieldAssembler extends FieldAssembler
 
 		$pinButton = $this->getPinButton($id, $isPinned);
 
+		if (empty($value['HAS_ZONE_URL_PARAMS']))
+		{
+			$link = "<a href='{$value['DETAIL_URL']}'>{$title}</a>";
+		}
+		else
+		{
+			$link = "
+				<a 
+					style='cursor: pointer' 
+					onclick='BX.BIConnector.SupersetDashboardGridManager.Instance.showLockedByParamsPopup()'
+				>
+					{$title}
+				</a>
+			";
+		}
+
 		return <<<HTML
 			<div class="dashboard-title-wrapper">
 				<div class="dashboard-title-wrapper__item dashboard-title-preview">
-					<a href='/bi/dashboard/detail/{$id}/'>{$title}</a>
+					{$link}
 					<div class="dashboard-title-buttons">
 						{$editButton}
 						{$pinButton}
@@ -107,22 +125,21 @@ class NameFieldAssembler extends FieldAssembler
 	protected function canEditTitle(array $dashboardData): bool
 	{
 		$supersetController = new SupersetController(Integrator::getInstance());
-		if (!$supersetController->isSupersetEnabled() || !$supersetController->isExternalServiceAvailable())
+		if (
+			!$supersetController->isSupersetEnabled()
+			|| !$supersetController->isExternalServiceAvailable()
+			|| !($dashboardData['IS_AVAILABLE_DASHBOARD'] ?? true)
+		)
 		{
 			return false;
 		}
 
-		if ($dashboardData['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_READY)
-		{
-			$accessItem = DashboardAccessItem::createFromArray([
-				'ID' => (int)$dashboardData['ID'],
-				'TYPE' => $dashboardData['TYPE'],
-				'OWNER_ID' => $dashboardData['OWNER_ID'],
-			]);
+		$accessItem = DashboardAccessItem::createFromArray([
+			'ID' => (int)$dashboardData['ID'],
+			'TYPE' => $dashboardData['TYPE'],
+			'OWNER_ID' => $dashboardData['OWNER_ID'],
+		]);
 
-			return AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem);
-		}
-
-		return false;
+		return AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem);
 	}
 }

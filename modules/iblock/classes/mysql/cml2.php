@@ -95,6 +95,48 @@ class CIBlockXMLFile
 		return $ar["MID"];
 	}
 
+	public function initializeTemporaryTables(): bool
+	{
+		$initResult = true;
+		$isNeedCreate = false;
+
+		if ($this->IsExistTemporaryTable())
+		{
+			if ($this->isTableStructureCorrect())
+			{
+				$this->truncateTemporaryTables();
+			}
+			else
+			{
+				$this->DropTemporaryTables();
+				$isNeedCreate = true;
+			}
+		}
+		else
+		{
+			$isNeedCreate = true;
+		}
+
+		if ($isNeedCreate)
+		{
+			$initResult = $this->CreateTemporaryTables();
+		}
+
+		return $initResult;
+	}
+
+	public function truncateTemporaryTables(): bool
+	{
+		$connection = Main\Application::getConnection();
+
+		if ($connection->isTableExists($this->_table_name))
+		{
+			$connection->truncateTable($this->_table_name);
+		}
+
+		return true;
+	}
+
 	/*
 	This function have to called once at the import start.
 
@@ -186,6 +228,30 @@ class CIBlockXMLFile
 
 			return $connection->isTableExists($this->_table_name);
 		}
+	}
+
+	public function isTableStructureCorrect($withSessId = false): bool
+	{
+		$connection = Main\Application::getConnection();
+
+		$tableFields = $connection->getTableFields($this->_table_name);
+
+		if (
+			empty($tableFields['ID'])
+			|| ($withSessId && empty($tableFields['SESS_ID']))
+			|| empty($tableFields['PARENT_ID'])
+			|| empty($tableFields['LEFT_MARGIN'])
+			|| empty($tableFields['RIGHT_MARGIN'])
+			|| empty($tableFields['DEPTH_LEVEL'])
+			|| empty($tableFields['NAME'])
+			|| empty($tableFields['VALUE'])
+			|| empty($tableFields['ATTRIBUTES'])
+		)
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	function GetCountItemsWithParent($parentID)
@@ -523,14 +589,14 @@ class CIBlockXMLFile
 			{
 				$this->buf = fread($fp, $this->read_size);
 				$this->buf_position = 0;
-				$this->buf_len = mb_strlen($this->buf, 'latin1');
+				$this->buf_len = strlen($this->buf);
 			}
 			else
 				return false;
 		}
 
 		//Skip line delimiters (ltrim)
-		$xml_position = mb_strpos($this->buf, "<", $this->buf_position, 'latin1');
+		$xml_position = strpos($this->buf, "<", $this->buf_position);
 		while($xml_position === $this->buf_position)
 		{
 			$this->buf_position++;
@@ -542,12 +608,12 @@ class CIBlockXMLFile
 				{
 					$this->buf = fread($fp, $this->read_size);
 					$this->buf_position = 0;
-					$this->buf_len = mb_strlen($this->buf, 'latin1');
+					$this->buf_len = strlen($this->buf);
 				}
 				else
 					return false;
 			}
-			$xml_position = mb_strpos($this->buf, "<", $this->buf_position, 'latin1');
+			$xml_position = strpos($this->buf, "<", $this->buf_position);
 		}
 
 		//Let's find next line delimiter
@@ -558,20 +624,20 @@ class CIBlockXMLFile
 			if(!feof($fp))
 			{
 				$this->buf .= fread($fp, $this->read_size);
-				$this->buf_len = mb_strlen($this->buf, 'latin1');
+				$this->buf_len = strlen($this->buf);
 			}
 			else
 				break;
 
 			//Let's find xml tag start
-			$xml_position = mb_strpos($this->buf, "<", $next_search, 'latin1');
+			$xml_position = strpos($this->buf, "<", $next_search);
 		}
 		if($xml_position===false)
 			$xml_position = $this->buf_len+1;
 
 		$len = $xml_position-$this->buf_position;
 		$this->file_position += $len;
-		$result = mb_substr($this->buf, $this->buf_position, $len, 'latin1');
+		$result = substr($this->buf, $this->buf_position, $len);
 		$this->buf_position = $xml_position;
 
 		return $result;

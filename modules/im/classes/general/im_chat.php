@@ -3214,9 +3214,12 @@ class CIMChat
 		IM\V2\Relation\ChatRelations::getInstance($chatId)->cleanCache();
 
 		$analytics = new Im\V2\Analytics\ChatAnalytics();
-		foreach ($arUserId as $uid)
+		if (!$skipRelation)
 		{
-			$analytics->addAddUser($chat);
+			foreach ($arUserId as $uid)
+			{
+				$analytics->addAddUser($chat);
+			}
 		}
 
 		return true;

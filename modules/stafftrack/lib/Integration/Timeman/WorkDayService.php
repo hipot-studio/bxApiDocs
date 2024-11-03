@@ -52,6 +52,38 @@ class WorkDayService
 
 	/**
 	 * @return bool
+	 * @throws LoaderException
+	 */
+	public function isDayOpened(): bool
+	{
+		if (!$this->isAvailable())
+		{
+			return false;
+		}
+
+		$this->timeManUser ??= \CTimeManUser::instance();
+
+		return $this->timeManUser->isDayOpenedToday();
+	}
+
+	/**
+	 * @return bool
+	 * @throws LoaderException
+	 */
+	public function isDayExpired(): bool
+	{
+		if (!$this->isAvailable())
+		{
+			return false;
+		}
+
+		$this->timeManUser ??= \CTimeManUser::instance();
+
+		return $this->timeManUser->isDayOpen() && $this->timeManUser->isDayExpired();
+	}
+
+	/**
+	 * @return bool
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\SystemException
 	 */
@@ -165,7 +197,7 @@ class WorkDayService
 		return (bool)$this->timeManUser->closeDay($endTime, $this->getCloseReason());
 	}
 
-	private function getCloseReason()
+	private function getCloseReason(): string
 	{
 		return Loc::getMessage('STAFFTRACK_INTEGRATION_TIMEMAN_CLOSE_DAY_REASON');
 	}
@@ -174,7 +206,7 @@ class WorkDayService
 	 * @return bool
 	 * @throws \Bitrix\Main\LoaderException
 	 */
-	private function isAvailable(): bool
+	public function isAvailable(): bool
 	{
 		return Loader::includeModule('timeman');
 	}

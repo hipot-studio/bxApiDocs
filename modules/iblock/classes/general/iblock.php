@@ -936,6 +936,7 @@ class CAllIBlock
 			$CACHE_MANAGER->Clean($cache_id, "b_iblock");
 		}
 		Iblock\IblockTable::cleanCache();
+		Iblock\IblockSiteTable::cleanCache();
 	}
 
 	///////////////////////////////////////////////////////////////////
@@ -1089,14 +1090,14 @@ class CAllIBlock
 			{
 				$DB->Query("
 					DELETE FROM b_iblock_site WHERE IBLOCK_ID = ".$ID."
-				", false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+				");
 
 				$DB->Query("
 					INSERT INTO b_iblock_site(IBLOCK_ID, SITE_ID)
 					SELECT ".$ID.", LID
 					FROM b_lang
 					WHERE LID IN ('".implode("', '", $arLID)."')
-				", false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+				");
 			}
 
 			if($arFields["VERSION"] == 2)
@@ -1311,14 +1312,14 @@ class CAllIBlock
 			if(!empty($arLID))
 			{
 				$strSql = "DELETE FROM b_iblock_site WHERE IBLOCK_ID=".$ID;
-				$DB->Query($strSql, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+				$DB->Query($strSql);
 
 				$strSql =
 					"INSERT INTO b_iblock_site(IBLOCK_ID, SITE_ID) ".
 					"SELECT ".$ID.", LID ".
 					"FROM b_lang ".
 					"WHERE LID IN (".$str_LID.") ";
-				$DB->Query($strSql, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+				$DB->Query($strSql);
 			}
 
 			if(CModule::IncludeModule("search"))
@@ -1352,7 +1353,6 @@ class CAllIBlock
 	///////////////////////////////////////////////////////////////////
 	public static function Delete($ID)
 	{
-		$err_mess = "FILE: ".__FILE__."<br>LINE: ";
 		/** @global CDatabase $DB */
 		global $DB;
 		/** @global CMain $APPLICATION */
@@ -1428,29 +1428,29 @@ class CAllIBlock
 
 		CIBlockSectionPropertyLink::DeleteByIBlock($ID);
 
-		$DB->Query("delete from b_iblock_offers_tmp where PRODUCT_IBLOCK_ID=".$ID, false, $err_mess.__LINE__);
-		$DB->Query("delete from b_iblock_offers_tmp where OFFERS_IBLOCK_ID=".$ID, false, $err_mess.__LINE__);
+		$DB->Query("delete from b_iblock_offers_tmp where PRODUCT_IBLOCK_ID=".$ID);
+		$DB->Query("delete from b_iblock_offers_tmp where OFFERS_IBLOCK_ID=".$ID);
 
-		if(!$DB->Query("DELETE FROM b_iblock_messages WHERE IBLOCK_ID = ".$ID, false, $err_mess.__LINE__))
+		if(!$DB->Query("DELETE FROM b_iblock_messages WHERE IBLOCK_ID = ".$ID))
 			return false;
 
-		if(!$DB->Query("DELETE FROM b_iblock_fields WHERE IBLOCK_ID = ".$ID, false, $err_mess.__LINE__))
+		if(!$DB->Query("DELETE FROM b_iblock_fields WHERE IBLOCK_ID = ".$ID))
 			return false;
 
 		$USER_FIELD_MANAGER->OnEntityDelete("IBLOCK_".$ID."_SECTION");
 
-		if(!$DB->Query("DELETE FROM b_iblock_group WHERE IBLOCK_ID=".$ID, false, $err_mess.__LINE__))
+		if(!$DB->Query("DELETE FROM b_iblock_group WHERE IBLOCK_ID=".$ID))
 			return false;
-		if(!$DB->Query("DELETE FROM b_iblock_rss WHERE IBLOCK_ID=".$ID, false, $err_mess.__LINE__))
+		if(!$DB->Query("DELETE FROM b_iblock_rss WHERE IBLOCK_ID=".$ID))
 			return false;
-		if(!$DB->Query("DELETE FROM b_iblock_site WHERE IBLOCK_ID=".$ID, false, $err_mess.__LINE__))
+		if(!$DB->Query("DELETE FROM b_iblock_site WHERE IBLOCK_ID=".$ID))
 			return false;
-		if(!$DB->Query("DELETE FROM b_iblock WHERE ID=".$ID, false, $err_mess.__LINE__))
+		if(!$DB->Query("DELETE FROM b_iblock WHERE ID=".$ID))
 			return false;
 
-		$DB->DDL("DROP TABLE IF EXISTS b_iblock_element_prop_s".$ID, true, $err_mess.__LINE__);
-		$DB->DDL("DROP TABLE IF EXISTS b_iblock_element_prop_m".$ID, true, $err_mess.__LINE__);
-		$DB->DDL("DROP SEQUENCE IF EXISTS sq_b_iblock_element_prop_m".$ID, true, $err_mess.__LINE__);
+		$DB->DDL("DROP TABLE IF EXISTS b_iblock_element_prop_s".$ID, true);
+		$DB->DDL("DROP TABLE IF EXISTS b_iblock_element_prop_m".$ID, true);
+		$DB->DDL("DROP SEQUENCE IF EXISTS sq_b_iblock_element_prop_m".$ID, true);
 
 		CIBlock::CleanCache($ID);
 
@@ -1690,7 +1690,7 @@ class CAllIBlock
 			SELECT GROUP_ID, PERMISSION
 			FROM b_iblock_group
 			WHERE IBLOCK_ID = ".$IBLOCK_ID."
-		", false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		");
 		while($ar = $rs->Fetch())
 		{
 			$group_id = (int)$ar["GROUP_ID"];
@@ -1711,7 +1711,7 @@ class CAllIBlock
 				DELETE FROM b_iblock_group
 				WHERE IBLOCK_ID = ".$IBLOCK_ID."
 				AND GROUP_ID in (".implode(", ", $arToDelete).")
-			", false, "File: ".__FILE__."<br>Line: ".__LINE__); //And this should be deleted
+			"); //And this should be deleted
 		}
 
 		if(!empty($arToInsert))

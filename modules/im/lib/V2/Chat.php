@@ -1023,11 +1023,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 
 		$this->sendEventRead($startId, $lastId, $counter, $byEvent);
 
-		if (isset($messages) && count($messages) > 0)
-		{
-			(new MessageAnalytics())->addReadMessages($this->chatId, $messages);
-		}
-
 		return $result->setResult([
 			'CHAT_ID' => $this->chatId,
 			'LAST_ID' => $lastId,
@@ -3595,45 +3590,24 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 		return $users;
 	}
 
+	/**
+	 * @throws \Exception
+	 */
 	public function deleteChat(): Result
 	{
 		$result = new Result();
 
-		if (!$this->getChatId())
+		if (!$this->chatId)
 		{
 			return $result->addError(new ChatError(ChatError::NOT_FOUND));
 		}
 
-		$this->hideChat();
+		$currentUserId = Entity\User\User::getCurrent()->getId();
 
-		$this->getRelations()->delete();
-
-		$chatId = $this->getChatId();
-		$chatFolderId = $this->getDiskFolderId();
-		$this->delete();
-
-		$messageCollection = MessageCollection::find(['CHAT_ID' => $chatId], []);
-		$messageIds = $messageCollection->getIds();
-		$messageCollection->delete();
-
-		foreach (array_chunk($messageIds, self::CHUNK_SIZE) as $messageIdsChunk)
-		{
-			Im\Model\MessageParamTable::deleteBatch([
-				'=MESSAGE_ID' => $messageIdsChunk,
-			]);
-		}
-
-		Im\V2\Link\Url\UrlCollection::deleteByChatsIds([$chatId]);
-		Im\V2\Chat::cleanCache($chatId);
-
-		if ($chatFolderId)
-		{
-			$folderModel = \Bitrix\Disk\Folder::getById($chatFolderId);
-			if ($folderModel)
-			{
-				$folderModel->deleteTree(\Bitrix\Disk\SystemUser::SYSTEM_USER_ID);
-			}
-		}
+		Application::getInstance()->addBackgroundJob(
+			fn () => (new Im\V2\Chat\Cleanup\ChatContentCollector($this->chatId))
+				->deleteChat($currentUserId)
+		);
 
 		return $result;
 	}

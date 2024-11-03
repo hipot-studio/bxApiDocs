@@ -120,7 +120,7 @@ class CIBlockPropertyEnum
 			$strSqlOrder
 		";
 
-		$rs = $DB->Query($strSql, false, "FILE: ".__FILE__."<br> LINE: ".__LINE__);
+		$rs = $DB->Query($strSql);
 		return new CIBlockPropertyEnumResult($rs);
 	}
 

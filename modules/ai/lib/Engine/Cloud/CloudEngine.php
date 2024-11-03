@@ -8,6 +8,7 @@ use Bitrix\AI\Cache\EngineResultCache;
 use Bitrix\AI\Cloud;
 use Bitrix\AI\Engine\IEngine;
 use Bitrix\AI\Payload\Prompt;
+use Bitrix\AI\Payload\Text;
 use Bitrix\AI\QueueJob;
 use Bitrix\AI\Result;
 use Bitrix\Main\Error;
@@ -32,19 +33,23 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 	{
 		$data = [
 			'moduleId' => $this->getContext()->getModuleId(),
+			'userId' => $this->getContext()->getUserId(),
 		];
 		try
 		{
 			$payload = $this->getPayload();
-			if ($payload instanceof Prompt)
+			if ($payload instanceof Text)
 			{
-				$data['promptCode'] = $payload->getPromptCode();
-				$data['promptCategory'] = $payload->getPromptCategory();
 				$role = $payload->getRole();
 				if ($role)
 				{
 					$data['role'] = $role->getCode();
 				}
+			}
+			if ($payload instanceof Prompt)
+			{
+				$data['promptCode'] = $payload->getPromptCode();
+				$data['promptCategory'] = $payload->getPromptCategory();
 			}
 		}
 		catch (SystemException)
@@ -61,9 +66,6 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 			$this->setCache(true);
 		}
 		$this->queueJob = QueueJob::createWithinFromEngine($this)->register();
-
-		$postParams = $this->getPostParams();
-		$postParams = array_merge($this->getParameters(), $postParams);
 
 		$cacheManager = new EngineResultCache($this->queueJob->getCacheHash());
 
@@ -100,7 +102,7 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 			'callbackUrl' => $this->queueJob->getCallbackUrl(),
 			'errorCallbackUrl' => $this->queueJob->getErrorCallbackUrl(),
 			'url' => $this->getCompletionsUrl(),
-			'params' => $this->getClearPostParams($postParams),
+			'params' => $this->makeRequestParams(),
 		]);
 		if ($responseResult->isSuccess())
 		{

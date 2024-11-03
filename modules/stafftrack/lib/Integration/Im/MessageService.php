@@ -11,6 +11,7 @@ use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\StaffTrack\Dictionary\Location;
+use Bitrix\StaffTrack\Model\ShiftMessageTable;
 use Bitrix\StaffTrack\Shift\ShiftDto;
 
 class MessageService
@@ -131,6 +132,50 @@ class MessageService
 
 
 	/**
+	 * @param string|null $dialogId
+	 * @return array|null[]
+	 * @throws LoaderException
+	 */
+	public function getDialogInfo(?string $dialogId): array
+	{
+		$defaultResult = [
+			'dialogId' => null,
+			'dialogName' => null,
+		];
+
+		if (!$this->isAvailable())
+		{
+			return $defaultResult;
+		}
+
+		if (empty($dialogId))
+		{
+			return $defaultResult;
+		}
+
+		if (Common::isChatId($dialogId))
+		{
+			$dialogName = Dialog::getTitle($dialogId, $this->userId);
+		}
+		else
+		{
+			$chatId = \CIMMessage::GetChatId($dialogId, $this->userId);
+			if (!$chatId)
+			{
+				return $defaultResult;
+			}
+
+			$dialogName = User::getInstance($dialogId)->getFullName(false);
+		}
+
+		return [
+			'dialogId' => $dialogId,
+			'dialogName' => $dialogName,
+		];
+	}
+
+
+	/**
 	 * @return void
 	 */
 	private function handleBaseStartMessage(): void
@@ -187,7 +232,7 @@ class MessageService
 			;
 		}
 
-		\CIMChat::AddMessage([
+		$messageId = \CIMChat::AddMessage([
 			'DIALOG_ID' => $this->shiftDto->dialogId,
 			'FROM_USER_ID' => $this->userId,
 			'MESSAGE' => $this->shiftDto->message,
@@ -199,6 +244,11 @@ class MessageService
 				'COMPONENT_PARAMS' => $componentParams,
 			],
 		]);
+
+		if (!empty($messageId))
+		{
+			$this->createShiftMessageConnection($messageId);
+		}
 	}
 
 	/**
@@ -222,47 +272,16 @@ class MessageService
 		return Loader::includeModule('im');
 	}
 
-
 	/**
-	 * @param string|null $dialogId
-	 * @return array|null[]
-	 * @throws LoaderException
+	 * @param int $messageId
+	 * @return void
+	 * @throws \Exception
 	 */
-	public function getDialogInfo(?string $dialogId): array
+	private function createShiftMessageConnection(int $messageId): void
 	{
-		$defaultResult = [
-			'dialogId' => null,
-			'dialogName' => null,
-		];
-
-		if (!$this->isAvailable())
-		{
-			return $defaultResult;
-		}
-
-		if (empty($dialogId))
-		{
-			return $defaultResult;
-		}
-
-		if (Common::isChatId($dialogId))
-		{
-			$dialogName = Dialog::getTitle($dialogId, $this->userId);
-		}
-		else
-		{
-			$chatId = \CIMMessage::GetChatId($dialogId, $this->userId);
-			if (!$chatId)
-			{
-				return $defaultResult;
-			}
-
-			$dialogName = User::getInstance($dialogId)->getFullName(false);
-		}
-
-		return [
-			'dialogId' => $dialogId,
-			'dialogName' => $dialogName,
-		];
+		ShiftMessageTable::add([
+			'SHIFT_ID' => $this->shiftDto->id,
+			'MESSAGE_ID' => $messageId,
+		]);
 	}
 }

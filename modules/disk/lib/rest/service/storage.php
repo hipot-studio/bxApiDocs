@@ -301,7 +301,7 @@ final class Storage extends Base
 			return null;
 		}
 
-		$storage = $this->getStorageById($id);
+		$storage = $this->getStorageById((int)$id);
 		$securityContext = $storage->getCurrentUserSecurityContext();
 		if(!$storage->getRootObject()->canAdd($securityContext))
 		{

@@ -191,24 +191,33 @@ class CBPTrackingService extends CBPRuntimeService
 		$sqlInterval = $helper->addDaysToDateTime(-90);
 
 		$strSql = "SELECT ID FROM b_bp_tracking t WHERE t.MODIFIED < {$sqlInterval} LIMIT {$limit}";
-		$ids = $connection->query($strSql)->fetchAll();
+		$result = $connection->query($strSql);
+		$ids = $result->fetchAll();
 
-		if (!$ids)
+		if ($ids)
 		{
-			return true;
+			while ($partIds = array_splice($ids, 0, $partLimit))
+			{
+				$connection->query(
+					sprintf(
+						'DELETE from b_bp_tracking WHERE ID IN(%s)',
+						implode(',', array_column($partIds, 'ID'))
+					)
+				);
+			}
 		}
 
-		while ($partIds = array_splice($ids, 0, $partLimit))
+		global $pPERIOD;
+		if ($result->getSelectedRowsCount() === $limit)
 		{
-			$connection->query(
-				sprintf(
-					'DELETE from b_bp_tracking WHERE ID IN(%s)',
-					implode(',', array_column($partIds, 'ID'))
-				)
-			);
+			$pPERIOD = 3600;
+		}
+		else
+		{
+			$pPERIOD = strtotime('tomorrow 01:00') - time();
 		}
 
-		return false;
+		return true;
 	}
 
 	public static function parseStringParameter($string, $documentType = null, $htmlSpecialChars = true)

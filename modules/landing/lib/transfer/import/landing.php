@@ -15,6 +15,8 @@ use \Bitrix\Landing\Repo;
 use \Bitrix\Landing\Block;
 use \Bitrix\Landing\Node;
 use \Bitrix\Main\Event;
+use Bitrix\Main\Entity;
+use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use \Bitrix\Rest\AppTable;
 use \Bitrix\Rest\Configuration;
@@ -836,7 +838,29 @@ class Landing
 		$data = self::deleteCopyrightBlock($data, $event);
 		$data = self::fixContactDataAndCountdown($data);
 
+		self::enableHiddenBlocksForCreatingPage();
+
 		return $data;
+	}
+
+	/**
+	 * Pass filters to block repository for enable add blocks with type 'null' (hidden from list)
+	 * @return void
+	 */
+	protected static function enableHiddenBlocksForCreatingPage(): void
+	{
+		$eventManager = EventManager::getInstance();
+		$eventManager->addEventHandler('landing', 'onBlockRepoSetFilters',
+			function(Event $event)
+			{
+				$result = new Entity\EventResult();
+				$result->modifyFields([
+					'DISABLE' => Block\BlockRepo::FILTER_SKIP_HIDDEN_BLOCKS,
+				]);
+
+				return $result;
+			}
+		);
 	}
 
 	/**

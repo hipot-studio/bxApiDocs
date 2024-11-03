@@ -755,4 +755,9 @@ class Dialog implements \JsonSerializable
 
 		return $json;
 	}
+
+	public function removeTab(string $id): void
+	{
+		unset($this->tabs[$id]);
+	}
 }

@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Entity\User;
 
 use Bitrix\Im\Common;
+use Bitrix\Im\Integration\Socialnetwork\Extranet;
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\Model\StatusTable;
 use Bitrix\Im\V2\Chat\ChatError;
@@ -220,7 +221,12 @@ class User implements RestEntity
 
 		if ($otherUser->isExtranet())
 		{
-			$inGroup = \Bitrix\Im\Integration\Socialnetwork\Extranet::isUserInGroup($this->getId(), $otherUser->getId());
+			$inGroup = Extranet::isUserInGroup(
+				$this->getId(),
+				$otherUser->getId(),
+				false
+			);
+
 			if (!$inGroup)
 			{
 				$result->addError(new ChatError(ChatError::ACCESS_DENIED));
@@ -700,7 +706,7 @@ class User implements RestEntity
 		foreach ($adminIds as $adminId)
 		{
 			$user = User::getInstance((int)$adminId);
-			if (!$user->isExtranet())
+			if (!$user->isExtranet() && $user->isActive())
 			{
 				$resultAdminIds[] = (int)$adminId;
 			}

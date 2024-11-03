@@ -83,7 +83,6 @@ class IblockDepartmentRepository implements DepartmentRepositoryContract
 		return $this->makeDepartmentCollectionFromIBlockResult($departmentResult);
 	}
 
-
 	/**
 	 * @throws ArgumentOutOfRangeException
 	 */

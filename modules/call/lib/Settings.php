@@ -20,4 +20,9 @@ class Settings
 			'callBetaIosEnabled' => Im\Call\Call::isIosBetaEnabled(),
 		];
 	}
+
+	public static function isConferenceChatEnabled(): bool
+	{
+		return (bool)Option::get("call", "conference_chat_enabled", true);
+	}
 }

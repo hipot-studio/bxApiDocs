@@ -26,7 +26,7 @@ final class ExportAction extends BaseAction
 
 	protected function getText(): string
 	{
-		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_EXPORT');
+		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_EXPORT') ?? '';
 	}
 
 	public function getControl(array $rawFields): ?array

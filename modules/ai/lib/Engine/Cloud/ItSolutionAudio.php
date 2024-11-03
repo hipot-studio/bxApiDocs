@@ -79,4 +79,19 @@ final class ItSolutionAudio extends CloudEngine implements IQueueOptional
 	{
 		return true;
 	}
+
+	protected function makeRequestParams(array $postParams = []): array
+	{
+		if (empty($postParams))
+		{
+			$postParams = $this->getPostParams();
+			$postParams = array_merge($this->getParameters(), $postParams);
+		}
+
+		return [
+			'audioUrl' => $postParams['audioUrl'] ?? '',
+			'audioContentType' => $postParams['audioContentType'] ?? '',
+			'prompt' => $postParams['prompt'] ?? '',
+		];
+	}
 }

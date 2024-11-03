@@ -33,6 +33,14 @@ class DashboardViewFilter extends AbstractAccessFilter
 		{
 			$dashboards = SupersetDashboardTable::getList([
 				'select' => ['ID', 'TYPE', 'OWNER_ID'],
+				'filter' => [
+					'LOGIC' => 'OR',
+					'!STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_DRAFT,
+					[
+						'STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_DRAFT,
+						'OWNER_ID' => $this->user->getUserId(),
+					]
+				],
 				'cache' => ['ttl' => 3600],
 			])->fetchAll();
 			$allowedDashboardIds = array_filter(

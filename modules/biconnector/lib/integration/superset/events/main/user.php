@@ -18,11 +18,45 @@ class User
 {
 	private static ?array $currentUserFields = null;
 
+	private static array $changableFields = [
+		'ACTIVE',
+		'EMAIL',
+		'NAME',
+		'LAST_NAME',
+	];
+
 	public static function onBeforeUserUpdate(array $fields): void
 	{
-		if (isset($fields['ID']) && ((int)$fields['ID']) > 0)
+		if (
+			isset($fields['ID'])
+			&& (int)$fields['ID'] > 0
+			&& array_intersect(self::$changableFields, array_keys($fields))
+		)
 		{
-			$userData = UserTable::getById((int)$fields['ID'])->fetch();
+			global $USER;
+			$userData = [];
+
+			$currentUserId = (isset($USER) && $USER instanceof \CUser) ? (int)$USER->GetID() : 0;
+			if ((int)$fields['ID'] === $currentUserId)
+			{
+				$userData = [
+					'ACTIVE' => 'Y',
+					'EMAIL' => $USER->GetParam('EMAIL'),
+					'NAME' => $USER->GetParam('FIRST_NAME'),
+					'LAST_NAME' => $USER->GetParam('LAST_NAME'),
+					'LOGIN' => $USER->GetParam('LOGIN'),
+				];
+			}
+			else
+			{
+				$userData = UserTable::getRow([
+					'select' => array_merge(self::$changableFields, ['LOGIN']),
+					'filter' => [
+						'=ID' => (int)$fields['ID'],
+					],
+				]);
+			}
+
 			if ($userData)
 			{
 				self::$currentUserFields = $userData;
@@ -76,25 +110,44 @@ class User
 		$isChangedLastName = isset($fields['LAST_NAME']) && $fields['LAST_NAME'] !== self::$currentUserFields['LAST_NAME'];
 		if ($isChangedName || $isChangedLastName || $isChangedEmail)
 		{
+			// login
 			$login = self::$currentUserFields['LOGIN'];
 			if (!empty($fields['LOGIN']))
 			{
 				$login = $fields['LOGIN'];
 			}
 
+			// email
 			$email = ($login . '@bitrix.bi');
+			if (!empty(self::$currentUserFields['EMAIL']))
+			{
+				$email = self::$currentUserFields['EMAIL'];
+			}
+
 			if (!empty($fields['EMAIL']))
 			{
 				$email = $fields['EMAIL'];
 			}
 
+			// name
 			$name = $login;
+			if (!empty(self::$currentUserFields['NAME']))
+			{
+				$name = self::$currentUserFields['NAME'];
+			}
+
 			if (!empty($fields['NAME']))
 			{
 				$name = $fields['NAME'];
 			}
 
+			// last name
 			$lastName = $login;
+			if (!empty(self::$currentUserFields['LAST_NAME']))
+			{
+				$lastName = self::$currentUserFields['LAST_NAME'];
+			}
+
 			if (!empty($fields['LAST_NAME']))
 			{
 				$lastName = $fields['LAST_NAME'];
@@ -107,6 +160,8 @@ class User
 				$lastName
 			);
 		}
+
+		self::$currentUserFields = null;
 	}
 
 	private static function changeActivity(Dto\User $user, bool $isActive): void

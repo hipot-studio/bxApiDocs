@@ -1017,7 +1017,8 @@ class CIntranetEventHandlers
 			]);
 
 			(new \Bitrix\Main\Event('intranet', 'onUserFirstInitialization', [
-				'invitationFields' => $invitationFields
+				'invitationFields' => $invitationFields,
+				'userId' => $userId
 			]))->send();
 		}
 	}

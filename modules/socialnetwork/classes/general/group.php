@@ -253,7 +253,11 @@ class CAllSocNetGroup
 			}
 		}
 
-		$arGroup = CSocNetGroup::GetByID($ID);
+		$queryObject = \Bitrix\Socialnetwork\WorkgroupTable::getList([
+			'filter' => ['ID' => $ID],
+			'select' => ['IMAGE_ID', 'NAME', 'PROJECT'],
+		]);
+		$arGroup = $queryObject->fetch();
 		if (!$arGroup)
 		{
 			$APPLICATION->ThrowException(GetMessage("SONET_NO_GROUP"), "ERROR_NO_GROUP");
@@ -286,9 +290,11 @@ class CAllSocNetGroup
 
 		if ($bSuccess)
 		{
-			Bitrix\Socialnetwork\Integration\Im\Chat\Workgroup::unlinkChat(array(
-				'group_id' => $ID
-			));
+			Bitrix\Socialnetwork\Integration\Im\Chat\Workgroup::unlinkChat([
+				'group_id' => $ID,
+				'group_name' => $arGroup['NAME'],
+				'group_project' => $arGroup['PROJECT'],
+			]);
 
 			$bSuccessTmp = true;
 			$dbResult = CSocNetFeatures::GetList(

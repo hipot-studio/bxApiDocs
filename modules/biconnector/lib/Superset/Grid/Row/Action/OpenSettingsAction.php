@@ -21,7 +21,7 @@ final class OpenSettingsAction extends BaseAction
 
 	protected function getText(): string
 	{
-		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_OPEN_SETTINGS');
+		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_OPEN_SETTINGS') ?? '';
 	}
 
 	public function getControl(array $rawFields): ?array

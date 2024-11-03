@@ -2,7 +2,7 @@
 
 namespace Bitrix\ImMobile\Controller;
 
-class Settings extends \Bitrix\Main\Engine\Controller
+class Settings extends BaseController
 {
 	public function getAction(): array
 	{

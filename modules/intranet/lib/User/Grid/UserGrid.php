@@ -4,12 +4,7 @@ namespace Bitrix\Intranet\User\Grid;
 
 use Bitrix\Intranet\User\Filter\ExtranetUserSettings;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
-use Bitrix\Intranet\User\Filter\Provider\DateUserDataProvider;
-use Bitrix\Intranet\User\Filter\Provider\ExtranetUserDataProvider;
-use Bitrix\Intranet\User\Filter\Provider\IntegerUserDataProvider;
-use Bitrix\Intranet\User\Filter\Provider\IntranetUserDataProvider;
 use Bitrix\Intranet\User\Filter\Provider\PhoneUserDataProvider;
-use Bitrix\Intranet\User\Filter\Provider\StringUserDataProvider;
 use Bitrix\Intranet\User\Filter\UserFilter;
 use Bitrix\Intranet\User\Grid\Row\Assembler\UserRowAssembler;
 use Bitrix\Intranet\User\Grid\Settings\UserSettings;
@@ -17,14 +12,20 @@ use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Filter\UserDataProvider;
 use Bitrix\Main\Grid\Column\Columns;
 use Bitrix\Main\Grid\Grid;
+use Bitrix\Main\Grid\Pagination\PaginationFactory;
+use Bitrix\Main\Grid\Pagination\LazyLoadTotalCount;
 use Bitrix\Main\Grid\Row\Rows;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Intranet\User\Grid\Panel;
+use Bitrix\Main\UI\PageNavigation;
 
 /**
  * @method UserSettings getSettings()
  */
 final class UserGrid extends Grid
 {
+	use LazyLoadTotalCount;
+
 	private \Bitrix\Main\UI\Filter\Options $filterOptions;
 
 	protected function createColumns(): Columns
@@ -184,5 +185,17 @@ final class UserGrid extends Grid
 		$this->filterOptions = new \Bitrix\Main\UI\Filter\Options($this->getId());
 
 		return $this->filterOptions;
+	}
+
+	protected function createPagination(): ?PageNavigation
+	{
+		return (new PaginationFactory($this, $this->getPaginationStorage()))->create();
+	}
+
+	protected function createPanel(): \Bitrix\Main\Grid\Panel\Panel
+	{
+		return new \Bitrix\Main\Grid\Panel\Panel(
+			new Panel\Action\UserDataProvider($this->getSettings())
+		);
 	}
 }

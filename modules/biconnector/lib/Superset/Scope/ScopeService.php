@@ -23,8 +23,12 @@ final class ScopeService
 {
 	public const BIC_SCOPE_CRM = 'crm';
 	public const BIC_SCOPE_BIZPROC = 'bizproc';
+	public const BIC_SCOPE_BIZPROC_TEMPLATE_ITEM = 'bizproc_template_item';
 	public const BIC_SCOPE_TASKS = 'tasks';
 	public const BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX = 'automated_solution_';
+	public const BIC_SCOPE_PROFILE = 'profile';
+	public const BIC_SCOPE_SHOP = 'shop';
+	public const BIC_SCOPE_STORE = 'store';
 
 	private static ?ScopeService $instance = null;
 	private static array $scopeNameMap = [];
@@ -135,13 +139,15 @@ final class ScopeService
 		);
 
 		return SupersetDashboardTable::getList([
-			'select' => ['*', 'SCOPE' => 'SCOPE'],
-			'filter' => [
-				...$accessFilter,
-				'=SCOPE.SCOPE_CODE' => $scopeCode,
-			],
-			'cache' => ['ttl' => 86400],
-		])->fetchCollection();
+				'select' => ['*', 'SCOPE', 'URL_PARAMS'],
+				'filter' => [
+					...$accessFilter,
+					'=SCOPE.SCOPE_CODE' => $scopeCode,
+				],
+				'cache' => ['ttl' => 86400],
+			])
+			->fetchCollection()
+		;
 	}
 
 	/**
@@ -150,10 +156,10 @@ final class ScopeService
 	 *
 	 * @return array
 	 */
-	public function prepareScopeMenuItem(string $scopeCode): array
+	public function prepareScopeMenuItem(string $scopeCode, array $urlParams = []): array
 	{
 		$menuItemCreator = MenuItemCreatorFactory::getMenuItemCreator($scopeCode);
-		$menuItem = $menuItemCreator?->createMenuItem();
+		$menuItem = $menuItemCreator?->createMenuItem($urlParams);
 
 		return $menuItem ?? [];
 	}
@@ -173,6 +179,12 @@ final class ScopeService
 		])
 			->fetchObject()
 		;
+
+		if (!$result)
+		{
+			return [];
+		}
+
 		$scopeCode = self::BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX . $result->getId();
 
 		return $this->prepareScopeMenuItem($scopeCode);
@@ -189,6 +201,10 @@ final class ScopeService
 			self::BIC_SCOPE_BIZPROC,
 			self::BIC_SCOPE_CRM,
 			self::BIC_SCOPE_TASKS,
+//			self::BIC_SCOPE_BIZPROC_TEMPLATE_ITEM,
+			self::BIC_SCOPE_PROFILE,
+			self::BIC_SCOPE_SHOP,
+			self::BIC_SCOPE_STORE,
 		];
 
 		if (Loader::includeModule('crm'))

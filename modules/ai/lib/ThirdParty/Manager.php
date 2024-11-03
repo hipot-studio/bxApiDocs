@@ -4,17 +4,10 @@ namespace Bitrix\AI\ThirdParty;
 
 use Bitrix\AI\Cache;
 use Bitrix\AI\Facade\Rest;
-use Bitrix\AI\Engine;
 use Bitrix\AI\Model\EngineTable;
-use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ObjectPropertyException;
-use Bitrix\Main\SystemException;
+use Bitrix\AI\ThirdParty\Service\ThirdPartyRegisterService;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Main\Web\HttpClient;
 use Bitrix\Rest\RestException;
-
-Loc::loadMessages(__FILE__);
 
 class Manager
 {
@@ -23,103 +16,38 @@ class Manager
 	/**
 	 * Registers new custom Engine.
 	 *
-	 * @param array $data Array contains fields: ['name', 'code', 'category', 'completions_url', 'settings'].
+	 * @param array{name: string, code: string, category: string, completions_url: string, settings: array|null} $data
 	 * @param mixed $service During REST executes.
 	 * @param mixed $server During REST executes.
 	 * @return int
+	 * @throws RestException
+	 * @throws \Exception
 	 */
 	public static function register(array $data, mixed $service = null, mixed $server = null): int
 	{
-		$data = array_change_key_case($data);
+		$registerService = self::getRegisterService();
 
-		// check common errors
-		foreach (['name', 'code', 'category', 'completions_url'] as $code)
-		{
-			$data[$code] = $data[$code] ?? '';
-			if (!is_string($data[$code]) || !mb_strlen(trim($data[$code])))
-			{
-				$codeUp = mb_strtoupper($code);
-				throw new RestException(
-					Loc::getMessage("AI_REST_ENGINE_REGISTER_ERROR_$codeUp"),
-					"ENGINE_REGISTER_ERROR_$codeUp"
-				);
-			}
-		}
+		$dto = $registerService->getValidatedData(
+			$data,
+			Rest::getApplicationCode($server?->getClientId())
+		);
 
-		$data['code'] = trim($data['code']);
+		$result = $registerService->save($dto);
 
-		// code format validation
-		if (!preg_match('/^[A-Za-z0-9-_]+$/', $data['code']))
+		if (!$result->isSuccess())
 		{
-			throw new RestException(
-				Loc::getMessage('AI_REST_ENGINE_REGISTER_ERROR_CODE_FORMAT'),
-				'ENGINE_REGISTER_ERROR_CODE_FORMAT'
-			);
-		}
-
-		// category validation
-		$categories = Engine::getCategories();
-		if (!in_array($data['category'], $categories))
-		{
-			throw new RestException(
-				Loc::getMessage('AI_REST_ENGINE_REGISTER_ERROR_CATEGORY_FORMAT', ['{categories}' => implode(', ', $categories)]),
-				'ENGINE_REGISTER_ERROR_CATEGORY_FORMAT'
-			);
-		}
-
-		// code unique validation
-		if (Engine::isExistByCode($data['category'], $data['code']))
-		{
-			throw new RestException(
-				Loc::getMessage('AI_REST_ENGINE_REGISTER_ERROR_CODE_UNIQUE'),
-				'ENGINE_REGISTER_ERROR_CODE_UNIQUE'
-			);
-		}
-
-		// ping url
-		$http = new HttpClient();
-		$http->get($data['completions_url']);
-		if ($http->getStatus() !== 200)
-		{
-			throw new RestException(
-				Loc::getMessage('AI_REST_ENGINE_REGISTER_ERROR_COMPLETIONS_URL_FAIL'),
-				'ENGINE_REGISTER_ERROR_COMPLETIONS_URL_FAIL'
-			);
-		}
-
-		// Application code (for REST executions)
-		$data['app_code'] = Rest::getApplicationCode($server?->getClientId());
-
-		// check Engine is exists
-		$existing = EngineTable::query()
-			->setSelect(['ID'])
-			->where('code', $data['code'])
-			->where('app_code', $data['app_code'])
-			->setLimit(1)
-			->fetch()
-		;
-		// update existing or add new
-		if ($existing)
-		{
-			$res = EngineTable::update($existing['ID'], $data);
-		}
-		else
-		{
-			$data['date_create'] = new DateTime;
-			$res = EngineTable::add($data);
-		}
-
-		// return result
-		if ($res->isSuccess())
-		{
-			Cache::remove(self::CACHE_DIR);
-			return $res->getId();
-		}
-		else
-		{
-			$error = $res->getErrors()[0];
+			$error = $result->getErrors()[0];
 			throw new RestException($error->getMessage(), $error->getCode());
 		}
+
+		Cache::remove(self::CACHE_DIR);
+
+		return $result->getId();
+	}
+
+	private static function getRegisterService(): ThirdPartyRegisterService
+	{
+		return new ThirdPartyRegisterService();
 	}
 
 	/**
@@ -236,11 +164,15 @@ class Manager
 		$collection = [];
 		$engines = empty($data)
 			? Cache::get(self::CACHE_DIR, fn() => self::getList($data))
-			: self::getList($data)
-		;
+			: self::getList($data);
 
 		foreach ($engines as $engine)
 		{
+			if (!self::isValidData($engine))
+			{
+				continue;
+			}
+
 			$collection[] = new Item(
 				$engine['id'],
 				$engine['name'],
@@ -248,12 +180,40 @@ class Manager
 				$engine['app_code'],
 				$engine['category'],
 				$engine['completions_url'],
-				$engine['settings'],
+				$engine['settings'] ?? [],
 				DateTime::createFromTimestamp($engine['date_create']),
 			);
 		}
 
 		return new Collection($collection);
+	}
+
+	private static function isValidData(array $engine): bool
+	{
+		foreach (['name', 'code', 'category', 'completions_url'] as $field)
+		{
+			if (!isset($engine[$field]) || !is_string($engine[$field]))
+			{
+				return false;
+			}
+		}
+
+		if (!empty($engine['settings']) && !is_array($engine['settings']))
+		{
+			return false;
+		}
+
+		if (!is_string($engine['app_code']) && $engine['app_code'] !== null)
+		{
+			return false;
+		}
+
+		if (!is_int($engine['date_create']))
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	/**

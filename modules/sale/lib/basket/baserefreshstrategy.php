@@ -119,22 +119,6 @@ abstract class BaseRefreshStrategy
 						continue;
 					}
 
-					// For the case of BASE_PRICE recalculation when the VAT_INCLUDED parameter is changed
-					$basketCode = $item->getBasketCode();
-					if (
-						isset($productData['PRICE_LIST'][$basketCode])
-						&&
-						(
-							$item->getField('VAT_INCLUDED') !== $productData['PRICE_LIST'][$basketCode]['VAT_INCLUDED']
-							||
-							$item->getBasePrice() !== $productData['PRICE_LIST'][$basketCode]['BASE_PRICE']
-						)
-					)
-					{
-						$item->markFieldCustom('BASE_PRICE');
-						$item->markFieldCustom('VAT_INCLUDED');
-					}
-
 					$r = $this->updateBasketItem($item, $productData);
 					if (!$r->isSuccess())
 					{
@@ -143,7 +127,7 @@ abstract class BaseRefreshStrategy
 
 					if ($this->isBasketItemChanged($item))
 					{
-						$changedBasketItems[] = $basketCode;
+						$changedBasketItems[] = $item->getBasketCode();
 					}
 				}
 			}

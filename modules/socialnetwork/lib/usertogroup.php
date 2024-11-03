@@ -12,6 +12,7 @@ use Bitrix\Main\Entity;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Socialnetwork\Space\Member;
 
 /**
  * Class UserToGroupTable
@@ -24,9 +25,9 @@ use Bitrix\Main\ORM\Query\Join;
  * @method static EO_UserToGroup_Result getById($id)
  * @method static EO_UserToGroup_Result getList(array $parameters = [])
  * @method static EO_UserToGroup_Entity getEntity()
- * @method static \Bitrix\Socialnetwork\EO_UserToGroup createObject($setDefaultValues = true)
+ * @method static \Bitrix\Socialnetwork\Space\Member createObject($setDefaultValues = true)
  * @method static \Bitrix\Socialnetwork\EO_UserToGroup_Collection createCollection()
- * @method static \Bitrix\Socialnetwork\EO_UserToGroup wakeUpObject($row)
+ * @method static \Bitrix\Socialnetwork\Space\Member wakeUpObject($row)
  * @method static \Bitrix\Socialnetwork\EO_UserToGroup_Collection wakeUpCollection($rows)
  */
 class UserToGroupTable extends Entity\DataManager
@@ -51,6 +52,11 @@ class UserToGroupTable extends Entity\DataManager
 
 	/** @see SONET_INITIATED_BY_GROUP */
 	public const INITIATED_BY_GROUP = 'G';
+
+	public static function getObjectClass(): string
+	{
+		return Member::class;
+	}
 
 	/**
 	 * Returns DB table name for entity
@@ -130,13 +136,13 @@ class UserToGroupTable extends Entity\DataManager
 			),
 			'AUTO_MEMBER' => array(
 				'data_type' => 'boolean',
-				'values' => array('N','Y')
+				'values' => array('N','Y'),
 			),
 			'DATE_CREATE' => array(
-				'data_type' => 'datetime'
+				'data_type' => 'datetime',
 			),
 			'DATE_UPDATE' => array(
-				'data_type' => 'datetime'
+				'data_type' => 'datetime',
 			),
 			'INITIATED_BY_TYPE' => array(
 				'data_type' => 'enum',
@@ -151,7 +157,7 @@ class UserToGroupTable extends Entity\DataManager
 			),
 			'MESSAGE' => array(
 				'data_type' => 'text',
-			)
+			),
 		);
 	}
 

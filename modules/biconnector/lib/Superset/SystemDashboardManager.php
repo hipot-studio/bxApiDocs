@@ -2,7 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset;
 
-use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -104,7 +104,7 @@ final class SystemDashboardManager
 
 		return is_array($list) ? $list : [];
 	}
-	public static function notifyUserDashboardModification(EO_SupersetDashboard $dashboard, bool $isModification): void
+	public static function notifyUserDashboardModification(SupersetDashboard $dashboard, bool $isModification): void
 	{
 		if (Loader::includeModule('im'))
 		{
