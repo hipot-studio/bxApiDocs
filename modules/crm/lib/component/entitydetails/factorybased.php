@@ -457,7 +457,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		{
 			$params['categoryId'] = $this->categoryId;
 			$params['categories'] = $this->getToolbarCategories(
-				Container::getInstance()->getUserPermissions()->filterAvailableForReadingCategories(
+				Container::getInstance()->getUserPermissions()->filterAvailableForAddingCategories(
 					$this->factory->getCategories()
 				)
 			);
@@ -745,7 +745,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 							'BUILDER_CONTEXT' => ProductBuilder::TYPE_ID,
 							'ANALYTICS' => [
 								// we dont know where from this component was opened from - it could be anywhere on portal
-								// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::getType($this->factory->getEntityTypeId()) . '_section',
+								'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::getAnalyticsEntityType($this->factory->getEntityTypeId()) . '_section',
 								'c_sub_section' => Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 							],
 						], 'crm.order.list')
@@ -979,12 +979,17 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			$this->item->getId(),
 		);
 		$userPermissions = Container::getInstance()->getUserPermissions();
-		if ($itemCopyUrl && $userPermissions->canAddItem($this->item))
+		if ($itemCopyUrl && $userPermissions->canUpdateItem($this->item))
 		{
 			$analyticsEventBuilder = \Bitrix\Crm\Integration\Analytics\Builder\Entity\CopyOpenEvent::createDefault($this->getEntityTypeID())
 				->setSubSection(\Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS)
 				->setElement(\Bitrix\Crm\Integration\Analytics\Dictionary::ELEMENT_SETTINGS_BUTTON)
 			;
+			if (!empty(\Bitrix\Crm\Integration\Analytics\Dictionary::getAnalyticsEntityType($this->getEntityTypeID())))
+			{
+				$analyticsEventBuilder
+					->setSection(\Bitrix\Crm\Integration\Analytics\Dictionary::getAnalyticsEntityType($this->getEntityTypeID()).'_section');
+			}
 
 			$items[] = [
 				'text' => Loc::getMessage('CRM_COMMON_ACTION_COPY'),
@@ -1212,7 +1217,26 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 	public function getInlineEditorEntityConfig(): array
 	{
-		return $this->getEditorEntityConfig();
+		$editorConfig = $this->getEditorEntityConfig();
+
+		foreach ($editorConfig as &$section)
+		{
+			if (empty($section['elements']))
+			{
+				continue;
+			}
+
+			foreach ($section['elements'] as $index => $element)
+			{
+				if ($element['name'] === EditorAdapter::FIELD_PRODUCT_ROW_SUMMARY)
+				{
+					unset($section['elements'][$index]);
+				}
+			}
+		}
+		unset($section);
+
+		return $editorConfig;
 	}
 
 	public function getEditorEntityConfig(): array

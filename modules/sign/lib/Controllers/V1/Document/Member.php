@@ -2,6 +2,7 @@
 
 namespace Bitrix\Sign\Controllers\V1\Document;
 
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -9,11 +10,11 @@ use Bitrix\Main\Request;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Attribute;
 use Bitrix\Sign\Item\MemberCollection;
-use Bitrix\Sign\Serializer\ItemPropertyJsonSerializer;
 use Bitrix\Sign\Service;
-use Bitrix\Sign\Type\Member\EntityType;
 use Bitrix\Sign\Type\Access\AccessibleItemType;
+use Bitrix\Sign\Type\Member\EntityType;
 use Bitrix\Sign\Type\Member\Role;
+use Bitrix\Sign\Type\MemberStatus;
 use Bitrix\Sign\Ui\Member\Stage;
 
 class Member extends \Bitrix\Sign\Engine\Controller
@@ -434,5 +435,30 @@ class Member extends \Bitrix\Sign\Engine\Controller
 		}
 
 		return Stage::createInstance($member, $document)->getInfo();
+	}
+
+	public function getAction(string $uid): array
+	{
+		$currentUserId = CurrentUser::get()->getId();
+		$userService = $this->container->getSignMemberUserService();
+		$member = $this->memberService->getByUid($uid);
+		if (!$member)
+		{
+			$this->addError(new Error('Member not found'));
+
+			return [];
+		}
+		if (!$userService->checkAccessToMember($member, $currentUserId))
+		{
+			$this->addError(new Error('Member not found'));
+
+			return [];
+		}
+
+		return [
+			'id' => $member->id,
+			'uid' => $member->uid,
+			'status' => MemberStatus::toPresentedView($member->status),
+		];
 	}
 }

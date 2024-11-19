@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Settings;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Crm\Feature;
 
 class ActivitySettings
 {
@@ -271,12 +272,7 @@ class ActivitySettings
 
 	public static function areOutdatedCalendarActivitiesEnabled(): bool
 	{
-		if (!Crm::isUniversalActivityScenarioEnabled())
-		{
-			return true;
-		}
-
-		return (bool)self::getValue(self::USE_OUTDATED_CALENDAR_ACTIVITIES) ;
+		return Feature::enabled(Feature\OutdatedMeetingsAndCalls::class);
 	}
 	/**
 	 * Include language file

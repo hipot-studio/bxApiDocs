@@ -6,9 +6,12 @@ use Bitrix\Crm\Integration\Analytics\Builder\AbstractBuilder;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
+use CCrmOwnerType;
 
 abstract class AIBaseEvent extends AbstractBuilder
 {
+	private string $tool = Dictionary::TOOL_AI;
+	private string $category = Dictionary::CATEGORY_CRM_OPERATIONS;
 	private string $type = Dictionary::TYPE_MANUAL;
 
 	private ?DateTime $createdTime = null;
@@ -17,9 +20,23 @@ abstract class AIBaseEvent extends AbstractBuilder
 	private ?int $activityOwnerTypeId = null;
 	private ?int $activityId = null;
 
+	final public function setTool(string $tool): self
+	{
+		$this->tool = $tool;
+
+		return $this;
+	}
+
+	final public function setCategory(string $category): self
+	{
+		$this->category = $category;
+
+		return $this;
+	}
+
 	final protected function getTool(): string
 	{
-		return Dictionary::TOOL_AI;
+		return $this->tool;
 	}
 
 	final protected function customValidate(): Result
@@ -40,7 +57,7 @@ abstract class AIBaseEvent extends AbstractBuilder
 			);
 		}
 
-		if (!\CCrmOwnerType::IsDefined($this->activityOwnerTypeId))
+		if (!CCrmOwnerType::IsDefined($this->activityOwnerTypeId))
 		{
 			$result->addError(
 				\Bitrix\Crm\Controller\ErrorCode::getRequiredArgumentMissingError('activityOwnerTypeId'),
@@ -71,7 +88,7 @@ abstract class AIBaseEvent extends AbstractBuilder
 
 		return [
 			'type' => $this->type,
-			'category' => Dictionary::CATEGORY_CRM_OPERATIONS,
+			'category' => $this->category,
 			'event' => $this->getEvent(),
 		];
 	}

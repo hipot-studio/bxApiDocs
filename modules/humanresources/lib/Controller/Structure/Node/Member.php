@@ -2,6 +2,9 @@
 
 namespace Bitrix\HumanResources\Controller\Structure\Node;
 
+use Bitrix\HumanResources\Access\StructureAccessController;
+use Bitrix\HumanResources\Access\StructureActionDictionary;
+use Bitrix\HumanResources\Attribute;
 use Bitrix\HumanResources\Engine\Controller;
 use Bitrix\HumanResources\Contract\Repository\NodeMemberRepository;
 use Bitrix\HumanResources\Exception\CreationFailedException;
@@ -9,10 +12,13 @@ use Bitrix\HumanResources\Exception\UpdateFailedException;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Contract\Service\NodeMemberService;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Type\AccessibleItemType;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Error;
 use Bitrix\Main\Request;
 use Bitrix\Main\SystemException;
 
@@ -35,6 +41,11 @@ final class Member extends Controller
 	 * @throws SystemException
 	 * @throws CreationFailedException
 	 */
+	#[Attribute\StructureActionAccess(
+		permission: StructureActionDictionary::ACTION_EMPLOYEE_ADD_TO_DEPARTMENT,
+		itemType: AccessibleItemType::NODE,
+		itemIdRequestKey: 'nodeId',
+	)]
 	public function addAction(
 		Item\NodeMember $nodeMember,
 		Item\Node $node,
@@ -46,6 +57,16 @@ final class Member extends Controller
 		return [];
 	}
 
+	#[Attribute\StructureActionAccess(
+		permission: StructureActionDictionary::ACTION_EMPLOYEE_ADD_TO_DEPARTMENT,
+		itemType: AccessibleItemType::NODE,
+		itemIdRequestKey: 'nodeId',
+	)]
+	#[Attribute\StructureActionAccess(
+		permission: StructureActionDictionary::ACTION_EMPLOYEE_REMOVE_FROM_DEPARTMENT,
+		itemType: AccessibleItemType::NODE_MEMBER,
+		itemIdRequestKey: 'nodeMemberId',
+	)]
 	public function moveAction(
 		Item\NodeMember $nodeMember,
 		Item\Node $node,
@@ -63,6 +84,11 @@ final class Member extends Controller
 		return [];
 	}
 
+	#[Attribute\StructureActionAccess(
+		permission: StructureActionDictionary::ACTION_STRUCTURE_VIEW,
+		itemType: AccessibleItemType::NODE,
+		itemIdRequestKey: 'nodeId',
+	)]
 	public function getUserMemberAction(
 		Item\User $user,
 		Item\Node $node,
@@ -87,6 +113,11 @@ final class Member extends Controller
 		];
 	}
 
+	#[Attribute\StructureActionAccess(
+		permission: StructureActionDictionary::ACTION_EMPLOYEE_REMOVE_FROM_DEPARTMENT,
+		itemType: AccessibleItemType::NODE_MEMBER,
+		itemIdRequestKey: 'nodeMemberId',
+	)]
 	public function deleteAction(
 		Item\NodeMember $member,
 	): array
@@ -96,6 +127,7 @@ final class Member extends Controller
 		];
 	}
 
+	#[Attribute\StructureActionAccess(StructureActionDictionary::ACTION_STRUCTURE_VIEW)]
 	public function countAction(
 		Item\Structure $structure,
 	): array

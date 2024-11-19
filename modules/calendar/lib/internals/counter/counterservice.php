@@ -44,12 +44,13 @@ class CounterService
 
 	public static function proceedEvents(): void
 	{
-		$events = (EventCollection::getInstance())->list();
+		$events = EventCollection::getInstance()->list();
 		if (empty($events))
 		{
 			return;
 		}
 
+		(new Processor\OpenEvent())->process();
 		(new Processor\Invite())->process();
 		(new Processor\Sync())->process();
 		(new Processor\Total())->process();
@@ -67,9 +68,6 @@ class CounterService
 		$this->getEventCollection()->push($event);
 	}
 
-	/**
-	 *
-	 */
 	private function enableJob(): void
 	{
 		if (self::$jobOn)
@@ -79,9 +77,9 @@ class CounterService
 
 		$application = Application::getInstance();
 		$application && $application->addBackgroundJob(
-			['\Bitrix\Calendar\Internals\Counter\CounterService', 'proceedEvents'],
+			[self::class, 'proceedEvents'],
 			[],
-			Application::JOB_PRIORITY_LOW - 2
+			Application::JOB_PRIORITY_LOW - 2,
 		);
 
 		self::$jobOn = true;

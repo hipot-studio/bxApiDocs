@@ -6,6 +6,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\MobileApp\Mobile;
 use Bitrix\Tasks\Flow\FlowFeature;
+use Bitrix\Tasks\Ui\Filter\Task;
 
 final class Settings
 {
@@ -71,11 +72,6 @@ final class Settings
 		\CUserOptions::SetOption('tasksmobile', Settings::IS_BETA_ACTIVE, false, false, $this->userId);
 	}
 
-	public function isNewFeaturesPoliticEnabled(): bool
-	{
-		return Option::get('bitrix24', 'new-features-politic-2024', 'N', '-') === 'Y';
-	}
-
 	public function isTaskFlowAvailable(): bool
 	{
 		return FlowFeature::isOn() && $this->clientHasApiVersion(54);
@@ -83,10 +79,10 @@ final class Settings
 
 	public function getDashboardSelectedView(int $projectId = 0): string
 	{
-		\Bitrix\Tasks\Ui\Filter\Task::setUserId($this->userId);
-		\Bitrix\Tasks\Ui\Filter\Task::setGroupId($projectId);
+		Task::setUserId($this->userId);
+		Task::setGroupId($projectId);
 
-		$listState = \Bitrix\Tasks\Ui\Filter\Task::getListStateInstance()->getState();
+		$listState = Task::getListStateInstance()->getState();
 		$selectedView = $listState['VIEW_SELECTED']['CODENAME'];
 		$map = [
 			'VIEW_MODE_LIST' => 'LIST',

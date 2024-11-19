@@ -220,6 +220,7 @@ class OccupancyChecker
 			'DATE_FROM',
 			'DATE_TO',
 			'PARENT_ID',
+			'CAL_TYPE',
 			'TZ_FROM',
 			'TZ_TO',
 			'TZ_OFFSET_FROM',
@@ -232,6 +233,7 @@ class OccupancyChecker
 			'MEETING_HOST',
 			'MEETING_STATUS',
 			'IMPORTANCE',
+			'PRIVATE_EVENT',
 		];
 
 		$toLimit = $this->getCheckLimit($event);

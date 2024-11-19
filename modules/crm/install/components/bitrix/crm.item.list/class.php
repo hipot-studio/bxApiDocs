@@ -346,6 +346,24 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 			;
 
 			$toolbar['id'] = $this->getGridId() . '_toolbar';
+
+			if ($this->arParams['ADD_EVENT_NAME'])
+			{
+				$analyticsBuilder = \Bitrix\Crm\Integration\Analytics\Builder\Entity\AddOpenEvent::createDefault($this->entityTypeId)
+					->setSection(
+						!empty($arParams['ANALYTICS']['c_section']) && is_string($arParams['ANALYTICS']['c_section'])
+						? $arParams['ANALYTICS']['c_section']
+						: null
+					)
+					->setSubSection(
+						!empty($arParams['ANALYTICS']['c_sub_section']) && is_string($arParams['ANALYTICS']['c_sub_section'])
+							? $arParams['ANALYTICS']['c_sub_section']
+							: null
+					)
+					->setElement(\Bitrix\Crm\Integration\Analytics\Dictionary::ELEMENT_CREATE_LINKED_ENTITY_BUTTON);
+				$url = $analyticsBuilder->buildUri($url)->getUri();
+			}
+
 			$addButton = [
 				'TEXT' => $entityTypeDescription,
 				'TITLE' => Loc::getMessage(
@@ -846,7 +864,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList
 				'HREF' => $editUrl,
 			];
 		}
-		if ($userPermissions->canAddItem($item))
+		if ($userPermissions->canUpdateItem($item))
 		{
 			$analyticsEventBuilder = CopyOpenEvent::createDefault($this->entityTypeId);
 			$this->configureAnalyticsEventBuilder($analyticsEventBuilder);

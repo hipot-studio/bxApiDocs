@@ -85,4 +85,19 @@ final class MemberStatus
 			static fn ($status) => !in_array($status, self::getStatusesIsFinished(), true)
 		);
 	}
+
+	public static function toPresentedView(string $status): string
+	{
+		return match ($status)
+		{
+			self::DONE => 'signed',
+			self::WAIT => 'waiting',
+			self::READY => 'ready',
+			self::REFUSED => 'refused',
+			self::STOPPED => 'stopped',
+			self::STOPPABLE_READY => 'stoppable_ready',
+			self::PROCESSING => 'processing',
+			default => '',
+		};
+	}
 }

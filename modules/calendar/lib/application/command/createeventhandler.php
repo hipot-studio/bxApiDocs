@@ -4,14 +4,18 @@ namespace Bitrix\Calendar\Application\Command;
 
 use Bitrix\Calendar\Access\ActionDictionary;
 use Bitrix\Calendar\Access\EventAccessController;
+use Bitrix\Calendar\Access\EventCategoryAccessController;
 use Bitrix\Calendar\Access\Model\EventModel;
 use Bitrix\Calendar\Application\AttendeeService;
 use Bitrix\Calendar\Core\Builders\EventBuilderFromArray;
 use Bitrix\Calendar\Core\Event\Event;
+use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Mappers\Factory;
 use Bitrix\Calendar\Core\Section\Section;
+use Bitrix\Calendar\Event\Event\AfterCalendarEventCreated;
 use Bitrix\Calendar\Integration\Intranet\UserService;
 use Bitrix\Calendar\Internals\Exception\AttendeeBusy;
+use Bitrix\Calendar\Internals\Exception\EditException;
 use Bitrix\Calendar\Internals\Exception\ExtranetPermissionDenied;
 use Bitrix\Calendar\Internals\Exception\LocationBusy;
 use Bitrix\Calendar\Internals\Exception\PermissionDenied;
@@ -22,11 +26,11 @@ use Bitrix\Main\DI\ServiceLocator;
 class CreateEventHandler implements CommandHandler
 {
 	/**
-	 * @throws PermissionDenied
-	 * @throws LocationBusy
-	 * @throws SectionNotFound
-	 * @throws ExtranetPermissionDenied
 	 * @throws AttendeeBusy
+	 * @throws ExtranetPermissionDenied
+	 * @throws LocationBusy
+	 * @throws PermissionDenied
+	 * @throws SectionNotFound
 	 */
 	public function __invoke(CreateEventCommand $command): Event
 	{
@@ -35,10 +39,15 @@ class CreateEventHandler implements CommandHandler
 		$section = $this->getSection($mapperFactory, $command);
 
 		// check if the current user has access to create event operation
-		$this->checkPermissions($command->getUserId(), $section);
+		$this->checkPermissions($command->getUserId(), $section, $command->getCategory());
 
 		// convert array into domain Event
 		$event = (new EventBuilderFromArray($this->getEventFields($command, $section)))->build();
+		if ($event->isOpenEvent())
+		{
+			$event->setAttendeesCollection(null);
+			$event->setOwner(null);
+		}
 
 		// save Event
 		$createdEvent = $mapperFactory->getEvent()->create($event, [
@@ -51,13 +60,20 @@ class CreateEventHandler implements CommandHandler
 			'checkLocationOccupancy' => $command->isCheckLocationOccupancy(),
 		]);
 
+		if ($createdEvent === null)
+		{
+			throw new EditException();
+		}
+
+		(new AfterCalendarEventCreated($createdEvent->getId(), $command))->emit();
+
 		return $createdEvent;
 	}
 
 	/**
 	 * @throws PermissionDenied
 	 */
-	private function checkPermissions(int $userId, Section $section): void
+	private function checkPermissions(int $userId, Section $section, ?int $categoryId = null): void
 	{
 		$eventAccessController = new EventAccessController($userId);
 		$eventModel = $this->getEventModel($section);
@@ -65,6 +81,21 @@ class CreateEventHandler implements CommandHandler
 		if (!$canAdd)
 		{
 			throw new PermissionDenied();
+		}
+
+		// check permission for open_event
+		if ($categoryId !== null)
+		{
+			$canPostAtCategory = EventCategoryAccessController::can(
+				$userId,
+				ActionDictionary::ACTION_EVENT_CATEGORY_POST,
+				$categoryId
+			);
+
+			if (!$canPostAtCategory)
+			{
+				throw new PermissionDenied();
+			}
 		}
 	}
 
@@ -94,7 +125,7 @@ class CreateEventHandler implements CommandHandler
 			'RRULE' => $command->getRrule(),
 			'REMIND' => $command->getRemindList(),
 			'SECTION_CAL_TYPE' => $section->getType(),
-			'SECTION_OWNER_ID' => $section->getOwner(),
+			'SECTION_OWNER_ID' => $section->getOwner()?->getId(),
 			'MEETING_HOST' => $meetingHostId,
 			'OWNER_ID' => $command->getUserId(),
 			'MEETING' => [
@@ -119,11 +150,24 @@ class CreateEventHandler implements CommandHandler
 		$entryFields['ATTENDEES'] = $attendeesAndCodes['attendees'];
 		$entryFields['IS_MEETING'] = $isMeeting;
 
-		if ($isMeeting && $command->isPlannerFeatureEnabled())
+		$additionalExcludeUsers = [];
+		if (
+			$section->getType() === Dictionary::CALENDAR_TYPE['user']
+			&& $section->getOwner()?->getId()
+			&& $section->getOwner()?->getId() !== $meetingHostId
+		)
 		{
-			$attendeeService->checkBusyAttendees($command, $attendeesAndCodes['attendees']);
+			$additionalExcludeUsers[] = $section->getOwner()?->getId();
 		}
 
+		if ($isMeeting && $command->isPlannerFeatureEnabled())
+		{
+			$attendeeService->checkBusyAttendees(
+				command: $command,
+				paramAttendees: $attendeesAndCodes['attendees'],
+				additionalExcludeUsers: $additionalExcludeUsers,
+			);
+		}
 
 		// Location
 		$entryFields['LOCATION'] = $command->getLocation();

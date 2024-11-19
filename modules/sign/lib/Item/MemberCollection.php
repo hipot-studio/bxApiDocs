@@ -5,6 +5,7 @@ namespace Bitrix\Sign\Item;
 use ArrayIterator;
 use Bitrix\Sign\Contract;
 use Bitrix\Sign\Helper\IterationHelper;
+use Bitrix\Sign\Type\Member\Role;
 use Closure;
 use Countable;
 use Iterator;
@@ -83,7 +84,7 @@ class MemberCollection implements Contract\Item, Contract\ItemCollection, Iterat
 
 	/**
 	 * @param Closure(Member): bool $rule
-	 * @return MemberCollection
+	 * @return static
 	 */
 	public function filter(Closure $rule): static
 	{
@@ -143,7 +144,7 @@ class MemberCollection implements Contract\Item, Contract\ItemCollection, Iterat
 		return null;
 	}
 
-	final public function findFirstByRole(string $role): ?Member
+	final public function findFirstByRole(?string $role): ?Member
 	{
 		foreach ($this as $item)
 		{
@@ -186,6 +187,21 @@ class MemberCollection implements Contract\Item, Contract\ItemCollection, Iterat
 	public function filterByRole(string $role): static
 	{
 		return $this->filter(static fn(Member $member) => $member->role === $role);
+	}
+
+	/**
+	 * @param Role::* ...$roles
+	 *
+	 * @return $this
+	 */
+	public function filterByRoles(string... $roles): static
+	{
+		return $this->filter(static fn(Member $member): bool => in_array($member->role, $roles, true));
+	}
+
+	public function filterExcludeRoles(string... $roles): static
+	{
+		return $this->filter(static fn(Member $member): bool => !in_array($member->role, $roles, true));
 	}
 
 	public function setQueryTotal(int $total): static

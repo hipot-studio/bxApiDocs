@@ -65,6 +65,8 @@ class NodeEventHandler
 			return;
 		}
 
+		Container::getEventSenderService()->removeEventHandlers('humanresources', EventName::NODE_DELETED->name);
+
 		$sectionId = (int) $sectionId;
 		if ($sectionId < 1)
 		{

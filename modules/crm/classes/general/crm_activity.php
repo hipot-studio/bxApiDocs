@@ -953,6 +953,10 @@ class CAllCrmActivity
 				{
 					$arCurEntity['BINDINGS'] = $arBindings;
 
+					if (!empty($arFields['SECTION_ID']))
+					{
+						$arCurEntity['SECTION_ID'] = $arFields['SECTION_ID'];
+					}
 					if (isset($arFields['ATTENDEES_CODES']) && is_array($arFields['ATTENDEES_CODES']))
 					{
 						$arCurEntity['ATTENDEES_CODES'] = $arFields['ATTENDEES_CODES'];
@@ -4802,16 +4806,9 @@ class CAllCrmActivity
 
 			if($isNew)
 			{
-				if (\Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled())
-				{
-					$arFields['TYPE_ID'] = CCrmActivityType::Provider;
-					$arFields['PROVIDER_ID'] = ToDo::PROVIDER_ID;
-				}
-				else
-				{
-					$arFields['TYPE_ID'] = CCrmActivityType::Meeting;
-					$arFields['ASSOCIATED_ENTITY_ID'] = $eventID;
-				}
+				$arFields['TYPE_ID'] = CCrmActivityType::Provider;
+				$arFields['PROVIDER_ID'] = ToDo::PROVIDER_ID;
+
 				//Not completed for new activities. Do not change existed activities.
 				$arFields['COMPLETED'] = 'N';
 			}
@@ -4899,6 +4896,11 @@ class CAllCrmActivity
 						$arFields['NOTIFY_VALUE'] = $remindValue;
 					}
 				}
+			}
+
+			if (isset($arEventFields['SECTION_ID'], $arFields['SETTINGS']['CALENDAR_SECTION_ID']))
+			{
+				$arFields['SETTINGS']['CALENDAR_SECTION_ID'] = (int) $arEventFields['SECTION_ID'];
 			}
 		}
 		else
@@ -5473,6 +5475,18 @@ class CAllCrmActivity
 					$oldText = \CCalendar::GetTextLocation($oldText);
 					$newText = \CCalendar::GetTextLocation($newText);
 				}
+				elseif($fieldName === 'DESCRIPTION')
+				{
+					$parser = new CTextParser();
+					if ($arOldRow['DESCRIPTION_TYPE'] == CCrmContentType::BBCode)
+					{
+						$oldText = $parser->convertText($oldText);
+					}
+					if ($arNewRow['DESCRIPTION_TYPE'] == CCrmContentType::BBCode)
+					{
+						$newText = $parser->convertText($newText);
+					}
+				}
 			}
 		}
 
@@ -5606,6 +5620,11 @@ class CAllCrmActivity
 		}
 
 		$description = $arRow['DESCRIPTION'] ?? '';
+		if ($arRow['DESCRIPTION_TYPE'] == CCrmContentType::BBCode)
+		{
+			$parser = new \CTextParser();
+			$description = $parser->convertText($description);
+		}
 		if ($providerID === ToDo::getId())
 		{
 			$name = ToDo::getActivityTitle($arRow);
@@ -6913,6 +6932,20 @@ class CAllCrmActivity
 			'SKIP_TIME' => false,
 		];
 
+		if (!empty($arFields['SECTION_ID']))
+		{
+			if (self::isCalendarSectionAvailable((int)$arFields['AUTHOR_ID'], (int)$arFields['SECTION_ID']))
+			{
+				$arCalEventFields['SECTION_ID'] = (int)$arFields['SECTION_ID'];
+			}
+
+			unset($arFields['SECTION_ID']);
+		}
+		elseif (!empty($arFields['SETTINGS']['CALENDAR_SECTION_ID']))
+		{
+			$arCalEventFields['SECTION_ID'] = (int)$arFields['SETTINGS']['CALENDAR_SECTION_ID'];
+		}
+
 		if (isset($arFields['ATTENDEES_CODES']))
 		{
 			if (is_array($arFields['ATTENDEES_CODES']))
@@ -7135,6 +7168,20 @@ class CAllCrmActivity
 		}
 		self::$IGNORE_CALENDAR_EVENTS = false;
 		return $result;
+	}
+
+	protected static function isCalendarSectionAvailable(int $userId, int $sectionId): bool
+	{
+		$availableSections = \Bitrix\Crm\Integration\Calendar::getSectionListAvailableForUser($userId);
+		foreach ($availableSections as $section)
+		{
+			if ((int)$section['ID'] === $sectionId)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public static function SetCalendarEventId($eventId, $activityId)

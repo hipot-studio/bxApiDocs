@@ -363,10 +363,11 @@ abstract class Base
 
 		$this->configureOnce();
 		$result = $this->controller->build();
+		$result->setData($this->getWebpackPrimary());
+		$this->onAfterBuild($result);
 		if ($result->isSuccess())
 		{
 			$this->fileId = $result->getId();
-
 			Internals\WebpackTable::delete($this->getWebpackPrimary());
 			$data = $this->getWebpackPrimary();
 			$data['FILE_ID'] = $this->fileId;
@@ -454,4 +455,6 @@ abstract class Base
 		$type = basename($this::$type);
 		return rtrim(\CTempFile::GetAbsoluteRoot(), '/') . "/crm_webpack_{$type}_{$this->id}.lock";
 	}
+
+	public function onAfterBuild(WebPacker\Output\Result $result): void {}
 }

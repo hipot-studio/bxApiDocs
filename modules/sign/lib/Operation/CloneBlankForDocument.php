@@ -12,9 +12,8 @@ use Bitrix\Sign\Type\DocumentScenario;
 
 class CloneBlankForDocument implements Contract\Operation
 {
-
 	public function __construct(
-		private Item\Document $document,
+		private readonly Item\Document $document,
 		private ?Repository\DocumentRepository $documentRepository = null,
 		private ?Repository\BlankRepository $blankRepository = null,
 		private ?Repository\BlockRepository $blockRepository = null,
@@ -59,6 +58,7 @@ class CloneBlankForDocument implements Contract\Operation
 			$blank->title = $this->document->title;
 		}
 
+		$blank->forTemplate = $blank->forTemplate || $this->document->isTemplated();
 		//TODO: add all resources later
 		$result = $this->blankRepository->clone($blank);
 		if (!$result->isSuccess())
@@ -105,6 +105,7 @@ class CloneBlankForDocument implements Contract\Operation
 		}
 
 		$this->document->blankId = $blank->id;
+
 		return $this->documentRepository->update($this->document);
 	}
 }

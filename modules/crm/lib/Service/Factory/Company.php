@@ -533,4 +533,9 @@ final class Company extends Service\Factory
 	{
 		return true;
 	}
+
+	public function isCommunicationRoutingSupported(): bool
+	{
+		return true;
+	}
 }

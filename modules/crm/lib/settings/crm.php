@@ -20,7 +20,6 @@ class Crm
 	private const LF_GENERATION_OPTION_NAME = 'LIVE_FEED_RECORDS_GENERATION_ENABLED';
 	private const WHATSAPP_SCENARIO_OPTION_NAME = 'WHATSAPP_SCENARIO_ENABLED';
 	private const AUTOMATED_SOLUTION_LIST_OPTION_NAME = 'AUTOMATED_SOLUTION_LIST_ENABLED';
-	private const TIMELINE_TODO_USE_V2_OPTION_NAME = 'TIMELINE_TODO_USE_V2_ENABLED';
 	private const WHATSAPP_GOTOCHAT_OPTION_NAME = 'WHATSAPP_GOTOCHAT_ENABLED';
 
 	public static function wasInitiated(): bool
@@ -177,26 +176,6 @@ class Crm
 	public static function setLiveFeedRecordsGenerationEnabled(bool $isEnabled): void
 	{
 		\Bitrix\Main\Config\Option::set(self::OPTION_MODULE, self::LF_GENERATION_OPTION_NAME, $isEnabled);
-	}
-
-	/**
-	 * @deprecated Do not use, will be removed soon
-	 */
-	public static function isTimelineToDoUseV2Enabled(): bool
-	{
-		return true;
-	}
-
-	/**
-	 * @deprecated Do not use, will be removed soon
-	 */
-	public static function setTimelineToDoUseV2Enabled(bool $value): void
-	{
-		\Bitrix\Main\Config\Option::set(
-			self::OPTION_MODULE,
-			self::TIMELINE_TODO_USE_V2_OPTION_NAME,
-			$value
-		);
 	}
 
 	/**

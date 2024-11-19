@@ -23,5 +23,6 @@ class Node implements Item
 		public ?bool $active = true,
 		public ?bool $globalActive = true,
 		public ?int $sort = 500,
+		public ?string $description = null,
 	) {}
 }

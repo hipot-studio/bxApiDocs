@@ -440,6 +440,8 @@ class TimelineManager
 								'SUM',
 								'CURRENCY',
 								'CASHBOX_NAME' => 'CASHBOX.NAME',
+								'STATUS',
+								'ERROR_MESSAGE',
 							]
 						)
 					);

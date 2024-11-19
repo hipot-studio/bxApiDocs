@@ -112,9 +112,10 @@ class Block extends \Bitrix\Sign\Engine\Controller
 				$this->addError(new Main\Error("Block style has invalid data"));
 				return [];
 			}
+			$frontendBlockService = $this->container->getFrontendBlockService();
 
 			$blockCollection->add(new Item\Block(
-				party: FrontendBlockParty::getMemberParty((int)$party, $document->parties),
+				party: $frontendBlockService->calculateMemberParty((int)$party, $document),
 				type: (new Factory())->getTypeByCode($code),
 				code: $code,
 				blankId: $document->blankId,
@@ -122,7 +123,7 @@ class Block extends \Bitrix\Sign\Engine\Controller
 				data: $data,
 				id: null,
 				style: $style,
-				role: FrontendBlockParty::getRole($party)
+				role: $frontendBlockService->getRole($party)
 			));
 		}
 
@@ -169,13 +170,14 @@ class Block extends \Bitrix\Sign\Engine\Controller
 		$blockFactory = new Factory();
 
 		$result = [];
+		$frontendBlockService = $this->container->getFrontendBlockService();
 		foreach ($blocks as $block)
 		{
 			$frontendParty = $block['part'] ?? 0;
 			$item = $blockFactory->makeItem(
 				document: $document,
 				code: $block['code'] ?? '',
-				party: FrontendBlockParty::getMemberParty($frontendParty, $document->parties),
+				party: $frontendBlockService->calculateMemberParty((int)$frontendParty, $document),
 				data: $block['data'] ?? null,
 			);
 
@@ -228,12 +230,13 @@ class Block extends \Bitrix\Sign\Engine\Controller
 				$block->data['text'] = '';
 			}
 
+			$frontendBlockService = $this->container->getFrontendBlockService();
 			$result[] = [
 				'id' => $block->id,
 				'code' => $block->code,
 				'data' => $block->data,
 				'type' => $block->type,
-				'party' => FrontendBlockParty::getByRole($block->role),
+				'party' => $frontendBlockService->getByRole($block->role),
 				'style' => $block->style !== null ? $this->itemPropertyJsonSerializer->serialize($block->style) : null,
 				'position' => $block->position !== null ? $this->itemPropertyJsonSerializer->serialize($block->position) : null,
 			];

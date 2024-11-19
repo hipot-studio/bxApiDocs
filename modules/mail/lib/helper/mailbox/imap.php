@@ -4,6 +4,7 @@ namespace Bitrix\Mail\Helper\Mailbox;
 
 use Bitrix\Mail;
 use Bitrix\Mail\Helper\MailboxDirectoryHelper;
+use Bitrix\Mail\Helper\Message\MessageInternalDateHandler;
 use Bitrix\Mail\MailboxDirectory;
 use Bitrix\Main;
 use Bitrix\Main\Text\Emoji;
@@ -1070,7 +1071,12 @@ class Imap extends Mail\Helper\Mailbox
 
 		while ($range = $this->getSyncRange($dir->getPath(), $uidtoken, $intervalSynchronizationAttempts))
 		{
-			$reverse = $range[0] > $range[1];
+			$syncDown = $range[0] > $range[1];
+
+			if ($syncDown)
+			{
+				MessageInternalDateHandler::clearStartInternalDate($dir->getMailboxId(), $dir->getDirMd5());
+			}
 
 			sort($range);
 
@@ -1121,7 +1127,7 @@ class Imap extends Mail\Helper\Mailbox
 				$intervalSynchronizationAttempts = 0;
 			}
 
-			$reverse ? krsort($messages) : ksort($messages);
+			$syncDown ? krsort($messages) : ksort($messages);
 
 			$this->parseHeaders($messages);
 

@@ -1023,21 +1023,6 @@ abstract class Operation
 
 		return $this;
 	}
-
-	public function isCheckTransitionAccessEnabled(): bool
-	{
-		return $this->settings->isCheckTransitionAccessEnabled();
-	}
-
-	public function disableCheckTransitionAccess(): void
-	{
-		$this->settings->disableCheckTransitionAccess();
-	}
-
-	public function enableCheckTransitionAccess(): void
-	{
-		$this->settings->enableCheckTransitionAccess();
-	}
 	//endregion
 
 	protected function saveToHistory(): Result

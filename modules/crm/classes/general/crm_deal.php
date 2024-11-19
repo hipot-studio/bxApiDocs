@@ -3,6 +3,8 @@ IncludeModuleLangFile(__FILE__);
 //@codingStandardsIgnoreFile
 
 use Bitrix\Crm;
+use Bitrix\Crm\Activity\Entity;
+use Bitrix\Crm\Activity\Provider\ToDo;
 use Bitrix\Crm\Binding\DealContactTable;
 use Bitrix\Crm\Binding\EntityBinding;
 use Bitrix\Crm\Category\DealCategory;
@@ -2321,11 +2323,8 @@ class CAllCrmDeal
 
 					if ($deadline)
 					{
-						\Bitrix\Crm\Activity\Entity\ToDo::createWithDefaultSubjectAndDescription(
-							\CCrmOwnerType::Deal,
-							$ID,
-							$deadline
-						);
+						(new Entity\ToDo(new Crm\ItemIdentifier(\CCrmOwnerType::Deal, $ID), new ToDo\ToDo()))
+							->createWithDefaultSubjectAndDescription($deadline);
 					}
 				}
 
@@ -2926,7 +2925,7 @@ class CAllCrmDeal
 			$stageId = $arFields['STAGE_ID'] ?? $arRow['STAGE_ID'];
 			$categoryID = isset($arRow['CATEGORY_ID']) ? (int)$arRow['CATEGORY_ID'] : 0;
 			if (
-				($options['CHECK_TRANSITION_ACCESS_ENABLED'] ?? 'Y') !== 'N'
+				$this->bCheckPermission
 				&& $stageId !== $arRow['STAGE_ID']
 				&& !Container::getInstance()->getUserPermissions($userID)->isStageTransitionAllowed(
 					$arRow['STAGE_ID'],

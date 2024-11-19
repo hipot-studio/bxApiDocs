@@ -195,10 +195,11 @@ class CCrmCompanyDetailsComponent
 
 		$this->arResult['CATEGORY_ID'] = $this->getCategoryId();
 		$this->arResult['ANALYTICS'] = $this->arParams['EXTRAS']['ANALYTICS'] ?? [];
-		if ($this->isMyCompany())
-		{
-			$this->arResult['ANALYTICS']['c_section'] = Crm\Integration\Analytics\Dictionary::SECTION_MYCOMPANY;
-		}
+		$this->arResult['ANALYTICS']['c_sub_section'] = Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS;
+		$this->arResult['ANALYTICS']['c_section'] = $this->isMyCompany() ?
+			Crm\Integration\Analytics\Dictionary::SECTION_MYCOMPANY :
+			Crm\Integration\Analytics\Dictionary::SECTION_COMPANY
+		;
 
 		//region Permissions check
 		$this->initializeMode();
@@ -314,7 +315,7 @@ class CCrmCompanyDetailsComponent
 									'ADD_EVENT_NAME' => 'CrmCreateDealFromCompany',
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
-										// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
+										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
 										'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 									],
 								], 'crm.deal.list')
@@ -356,7 +357,7 @@ class CCrmCompanyDetailsComponent
 									'ADD_EVENT_NAME' => 'CrmCreateQuoteFromCompany',
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
-										// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
+										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
 										'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 									],
 								], 'crm.quote.list'),
@@ -409,7 +410,7 @@ class CCrmCompanyDetailsComponent
 									'ADD_EVENT_NAME' => 'CrmCreateInvoiceFromCompany',
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
-										// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
+										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
 										'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 									],
 								], 'crm.invoice.list'),
@@ -460,7 +461,7 @@ class CCrmCompanyDetailsComponent
 									'BUILDER_CONTEXT' => Crm\Product\Url\ProductBuilder::TYPE_ID,
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
-										// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
+										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
 										'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 									],
 								], 'crm.order.list')

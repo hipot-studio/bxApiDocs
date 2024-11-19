@@ -9,6 +9,7 @@ use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Attribute;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
+use Bitrix\Sign\Item\Document\Template;
 use Bitrix\Sign\Operation;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Type;
@@ -24,17 +25,12 @@ class Document extends \Bitrix\Sign\Engine\Controller
 		$this->documentService = Service\Container::instance()->getDocumentService();
 	}
 
-	/**
-	 * @param int $blankId
-	 * @param string $type
-	 *
-	 * @return array{uid: string}
-	 */
 	#[Attribute\ActionAccess(ActionDictionary::ACTION_DOCUMENT_ADD)]
 	#[Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_ADD)]
 	public function registerAction(
 		int $blankId,
 		?string $scenarioType = null,
+		bool $asTemplate = false,
 	): array
 	{
 		$scenarioType ??= Type\DocumentScenario::SCENARIO_TYPE_B2B;
@@ -68,19 +64,29 @@ class Document extends \Bitrix\Sign\Engine\Controller
 		$result = $this->documentService->register(
 			blankId: $blankId,
 			entityType: Type\Document\EntityType::getByScenarioType($scenarioType),
+			asTemplate: $asTemplate,
 		);
+		$resultData = $result->getData();
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
-			if ($docId = ($result->getData()['documentId'] ?? null))
+			if ($docId = ($resultData['documentId'] ?? null))
 			{
 				$this->documentService->rollbackDocument($docId);
 			}
 			return [];
 		}
+		$template = $resultData['template'] ?? null;
+		if ($template !== null && !$template instanceof Template)
+		{
+			$this->addErrorByMessage('Template not found');
+
+			return [];
+		}
 
 		return [
-			'uid' => $result->getData()['document']->uid,
+			'uid' => $resultData['document']->uid,
+			'templateUid' => $template?->uid,
 		];
 	}
 

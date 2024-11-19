@@ -438,7 +438,7 @@ class CCrmSaleHelper
 
 		self::addToCacheAccess($userId, $role, true);
 
-		if (!self::isDbAccess($userId, $role))
+		if (!self::isDbAccess($role))
 		{
 			self::addShopAccessByUserId($userId);
 		}
@@ -531,8 +531,10 @@ class CCrmSaleHelper
 		return (in_array($userId, $listUserId));
 	}
 
-	private static function isDbAccess($userId, $role): bool
+	private static function isDbAccess($role): bool
 	{
+		global $USER;
+
 		$shopGroupIds = [];
 		if ($role)
 		{
@@ -544,14 +546,7 @@ class CCrmSaleHelper
 			$shopGroupIds[] = self::getShopGroupIdByType('manager');
 		}
 
-		$currentUserGroupIds = [];
-		$groupListObject = CUser::getUserGroupList($userId);
-		while ($groupList = $groupListObject->fetch())
-		{
-			$currentUserGroupIds[] = (int)$groupList['GROUP_ID'];
-		}
-
-		return !empty(array_intersect($currentUserGroupIds, $shopGroupIds));
+		return !empty(array_intersect($USER->GetUserGroupArray(), $shopGroupIds));
 	}
 
 	private static function getShopRole($userId): string

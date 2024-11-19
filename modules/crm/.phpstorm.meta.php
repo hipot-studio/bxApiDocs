@@ -179,5 +179,6 @@ namespace PHPSTORM_META
 		'crm.activity.actcounterlighttimerepo' => \Bitrix\Crm\Activity\LightCounter\ActCounterLightTimeRepo::class,
 		'crm.summary.summaryFactory' => \Bitrix\Crm\Summary\SummaryFactory::class,
 		'crm.binding.clientBinder' => \Bitrix\Crm\Binding\ClientBinder::class,
+		'crm.service.communication.rankingFactory' => \Bitrix\Crm\Service\Communication\Search\Ranking\RankingFactory::class,
 	]));
 }

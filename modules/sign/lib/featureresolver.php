@@ -5,7 +5,10 @@ namespace Bitrix\Sign;
 final class FeatureResolver
 {
 	/** @var list<string> */
-	private const FEATURE_CODES = ['createDocumentChat'];
+	private const FEATURE_CODES = [
+		'createDocumentChat',
+		'sendByEmployee',
+	];
 	private static self $instance;
 
 	private function __construct()

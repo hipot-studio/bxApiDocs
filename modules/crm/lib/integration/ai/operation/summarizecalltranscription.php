@@ -12,6 +12,7 @@ use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\SummaryEvent;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\AI\Call\Controller;
 
@@ -58,7 +59,11 @@ class SummarizeCallTranscription extends AbstractOperation
 	{
 		return (new \Bitrix\Main\Result())->setData([
 			'payload' => (new \Bitrix\AI\Payload\Prompt('summarize_transcript'))
-				->setMarkers(['original_message' => $this->transcription])
+				->setMarkers([
+					'original_message' => $this->transcription,
+					'company_name' => Container::getInstance()->getCompanyBroker()->getTitle(EntityLink::getDefaultMyCompanyId()),
+					'manager_name' => Container::getInstance()->getUserBroker()->getName($this->userId),
+				])
 			,
 		]);
 	}
@@ -128,6 +133,7 @@ class SummarizeCallTranscription extends AbstractOperation
 					$activityId,
 					[
 						'OPERATION_TYPE_ID' => self::TYPE_ID,
+						'ENGINE_ID' => self::$engineId,
 						'ERRORS' => $result->getErrorMessages(),
 					],
 					$result->getUserId(),

@@ -21,7 +21,7 @@ final class CommentsHelper
 	{
 	}
 
-	public static function normalizeComment($commentContent): string
+	public static function normalizeComment($commentContent, array $extraWhiteList = []): string
 	{
 		// current html editor sends ' symbol as html entity to backend
 		// convert it back for consistency with other html special symbols
@@ -30,6 +30,7 @@ final class CommentsHelper
 		$result = TextHelper::sanitizeBbCode(
 			TextHelper::convertHtmlToBbCode($commentContent),
 			['user', 'disk file id'],
+			$extraWhiteList,
 		);
 
 		// special handling of [ and ] html entities
@@ -88,7 +89,16 @@ final class CommentsHelper
 
 			if ($contentTypeId === \CCrmContentType::BBCode)
 			{
-				$row[$singleField] = TextHelper::sanitizeHtml(TextHelper::convertBbCodeToHtml($rawValue));
+				$hasParagraph = preg_match('/\[p]/i', $rawValue) === 1;
+				$useTypography = $hasParagraph;
+
+				$content = TextHelper::sanitizeHtml(TextHelper::convertBbCodeToHtml($rawValue, $useTypography));
+				if ($useTypography)
+				{
+					$content = "<div class='crm-bbcode-container'>{$content}</div>";
+				}
+
+				$row[$singleField] = $content;
 			}
 			else
 			{
@@ -124,8 +134,7 @@ final class CommentsHelper
 		return [
 			'name' => $field,
 			'title' => $factory ? $factory->getFieldCaption($field) : $field,
-			'type' => 'bb',
-			// 'type' => 'bbcode', // Uncomment these line to use a new text editor
+			'type' => 'bbcode',
 			'editable' => true,
 			'data' => [
 				'editorOptions' => [
@@ -155,7 +164,7 @@ final class CommentsHelper
 
 			if ($contentTypeId === \CCrmContentType::BBCode)
 			{
-				$bb = $fields[$fieldName];
+				$bb = htmlspecialcharsback($fields[$fieldName]);
 				$html = TextHelper::convertBbCodeToHtml($fields[$fieldName]);
 			}
 			else
@@ -179,6 +188,8 @@ final class CommentsHelper
 			{
 				continue;
 			}
+
+			$fields[$fieldName] = htmlspecialcharsback($fields[$fieldName]);
 
 			/*
 			 * EditorAdapter fetches comments from Item, and Item always returns bb code

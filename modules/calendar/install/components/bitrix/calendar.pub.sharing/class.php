@@ -17,7 +17,12 @@ IncludeModuleLangFile($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/calendar/class
 
 class CalendarPubSharingComponent extends CBitrixComponent
 {
-	protected array $allowedActions = [Sharing\Helper::CANCEL, Sharing\Helper::CONFERENCE, Sharing\Helper::ICS];
+	protected array $allowedActions = [
+		Sharing\Helper::CANCEL,
+		Sharing\Helper::CONFERENCE,
+		Sharing\Helper::ICS,
+		Sharing\Helper::OPENED,
+	];
 
 	protected ?Sharing\Link\Factory $factory = null;
 
@@ -90,6 +95,7 @@ class CalendarPubSharingComponent extends CBitrixComponent
 
 		$link = $this->getLinkInfo($this->arParams['HASH']);
 		$this->arResult['LINK'] = $link;
+		$this->arResult['ACTION'] = $this->getAction();
 
 		if (!$link)
 		{
@@ -253,7 +259,6 @@ class CalendarPubSharingComponent extends CBitrixComponent
 	{
 		$this->arResult['EVENT'] = $this->getEventById($link);
 		$this->arResult['SHARING_USER'] = $this->getSharingUserInfo($link['ownerId']);
-		$this->arResult['ACTION'] = $this->getAction();
 		$this->arResult['PAGE_TITLE'] = $this->getPageTitle(
 			$this->arResult['OWNER'],
 			Loc::getMessage('CALENDAR_SHARING_COMPONENT_CLASS_EVENT_TITLE')

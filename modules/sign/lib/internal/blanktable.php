@@ -97,7 +97,11 @@ class BlankTable extends Entity\DataManager
 			'DATE_MODIFY' => new Entity\DatetimeField('DATE_MODIFY', [
 				'title' => 'Modified on',
 				'required' => true
-			])
+			]),
+			'FOR_TEMPLATE' => (new Entity\BooleanField('FOR_TEMPLATE'))
+				->configureValues(0, 1)
+				->configureDefaultValue(false)
+			,
 		];
 	}
 

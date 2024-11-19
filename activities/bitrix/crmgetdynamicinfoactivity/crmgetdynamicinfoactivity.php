@@ -76,8 +76,8 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 		$items = [];
 		if (isset($factory))
 		{
-            $conditionGroup = new ConditionGroup($this->DynamicFilterFields);
-            $conditionGroup->internalizeValues($targetDocumentType);
+			$conditionGroup = new ConditionGroup($this->DynamicFilterFields);
+			$conditionGroup->internalizeValues($targetDocumentType);
 
 			$items = $factory->getItems([
 				'select' => ['ID'],
@@ -119,6 +119,19 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 		$this->setPropertiesTypes($this->DynamicEntityFields);
 
 		return $errors;
+	}
+
+	protected function reInitialize()
+	{
+		parent::reInitialize();
+		if (is_array($this->ReturnFields))
+		{
+			foreach ($this->ReturnFields as $fieldId)
+			{
+				$this->arProperties[$fieldId] = null;
+				$this->preparedProperties[$fieldId] = null;
+			}
+		}
 	}
 
 	protected static function getFileName(): string

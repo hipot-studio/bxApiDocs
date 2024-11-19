@@ -6,6 +6,7 @@ use Bitrix\Main;
 
 use Bitrix\Sign\Contract;
 use Bitrix\Sign\Item\B2e\RequiredFieldsCollection;
+use Bitrix\Sign\Type\Document\InitiatedByType;
 
 class Document implements Contract\Item, Contract\Item\ItemWithOwner, Contract\Item\ItemWithCrmId
 {
@@ -35,6 +36,9 @@ class Document implements Contract\Item, Contract\Item\ItemWithOwner, Contract\I
 		public ?int $stoppedById = null,
 		public ?Main\Type\DateTime $externalDateCreate = null,
 		public ?string $providerCode = null,
+		public ?int $templateId = null,
+		public ?int $createdFromDocumentId = null,
+		public InitiatedByType $initiatedByType = InitiatedByType::COMPANY,
 	) {}
 
 	public function getCrmId(): int
@@ -50,5 +54,10 @@ class Document implements Contract\Item, Contract\Item\ItemWithOwner, Contract\I
 	public function getOwnerId(): int
 	{
 		return (int)$this->createdById;
+	}
+
+	public function isTemplated(): bool
+	{
+		return $this->templateId !== null;
 	}
 }

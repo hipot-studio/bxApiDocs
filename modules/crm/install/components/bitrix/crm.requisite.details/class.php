@@ -6,6 +6,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Crm\Attribute\FieldAttributeManager;
+use Bitrix\Crm\Integration\BankDetailResolver;
 use Bitrix\Crm\Integrity\DuplicateControl;
 use Bitrix\Crm\Component\EntityDetails\Config\Scope;
 use Bitrix\Crm\Restriction\RestrictionManager;
@@ -1358,10 +1359,31 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 	{
 		$fields = [];
 
+		$isAutocompleteEnabled = (
+			$this->presetCountryId === 1    // ru
+			&& RestrictionManager::isDetailsSearchByInnPermitted()
+			&& BankDetailResolver::isGetByBicAvailable()
+		);
+
+		$bankDetaiAutocompleteData =
+			CCrmComponentHelper::getBankDetailsAutocompleteFieldInfoData($this->presetCountryId)
+		;
+
+		if (!$isAutocompleteEnabled)
+		{
+			$isAutocompleteEnabled = (
+				isset($bankDetaiAutocompleteData['clientResolverPlacementParams'])
+				&& is_array($bankDetaiAutocompleteData['clientResolverPlacementParams'])
+				&& isset($bankDetaiAutocompleteData['clientResolverPlacementParams']['numberOfPlacements'])
+				&& $bankDetaiAutocompleteData['clientResolverPlacementParams']['numberOfPlacements'] > 0
+			);
+		}
+
 		if (
 			$this->presetCountryId === 1    // ru
 			&& RestrictionManager::isDetailsSearchByInnPermitted()
-			&& \Bitrix\Crm\Integration\ClientResolver::isGetByBicAvailable()
+			&& BankDetailResolver::isGetByBicAvailable()
+			|| $isAutocompleteEnabled
 		)
 		{
 			$fields[] = [
@@ -1376,7 +1398,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 				'enabledMenu' => false,
 				'data' => array_merge(
 					['presetId' => $this->presetId],
-					CCrmComponentHelper::getBankDetailsAutocompleteFieldInfoData($this->presetCountryId)
+					$bankDetaiAutocompleteData
 				),
 			];
 		}
@@ -1595,6 +1617,8 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 				'fields' => $bankDetailFields,
 				'nextIndex' => $this->getNextBankDetailIndex(),
 				'config' => $this->prepareBankDetailsFormConfig($bankDetailFields),
+				'resolverProperty'=>
+					BankDetailResolver::getClientResolverPropertyWithPlacements($this->presetCountryId),
 			],
 		];
 
@@ -2104,6 +2128,11 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 			{
 				foreach ($value as $addressTypeId => $addressFields)
 				{
+					if (!EntityAddressType::isDefined($addressTypeId) || !is_array($addressFields))
+					{
+						continue;
+					}
+
 					$isDeleted = (
 						is_array($addressFields)
 						&& isset($addressFields['DELETED'])

@@ -543,7 +543,7 @@ abstract class Factory
 					{
 						$filter = [
 							0 => $filter,
-							'@CATEGORY_ID' => $availableCategoriesIds
+							'@CATEGORY_ID' => $availableCategoriesIds,
 						];
 					}
 					else
@@ -1628,6 +1628,19 @@ abstract class Factory
 
 		return PhaseSemantics::isDefined($semantics) ? $semantics : PhaseSemantics::PROCESS;
 	}
+
+	final public function getSuccessfulStage(?int $categoryId = null): ?EO_Status
+	{
+		foreach ($this->getStages($categoryId) as $stage)
+		{
+			if (PhaseSemantics::isSuccess($stage->getSemantics()))
+			{
+				return $stage;
+			}
+		}
+
+		return null;
+	}
 	//endregion
 
 	/**
@@ -1993,7 +2006,7 @@ abstract class Factory
 			'select' => [Item::FIELD_NAME_CATEGORY_ID],
 			'filter' => [
 				'=ID' => $id,
-			]
+			],
 		]);
 		if (!empty($items))
 		{
@@ -2065,6 +2078,25 @@ abstract class Factory
 			}
 		}
 
+		return false;
+	}
+
+	public function checkIfTotalItemsCountExceeded(int $limit, array $filter = []): bool
+	{
+		$count = $this->getDataClass()::query()
+			->setSelect(['ID'])
+			->setFilter($filter)
+			->setLimit($limit + 1)
+			->countTotal(true)
+			->exec()
+			->getCount()
+		;
+
+		return $count > $limit;
+	}
+
+	public function isCommunicationRoutingSupported(): bool
+	{
 		return false;
 	}
 }

@@ -76,6 +76,11 @@ class Container
 		return static::getService('sign.repository.document');
 	}
 
+	public function getDocumentTemplateService(): Service\Sign\Document\TemplateService
+	{
+		return static::getService('sign.service.document.template');
+	}
+
 	public function getEntityFileRepository(): Repository\EntityFileRepository
 	{
 		return static::getService('sign.repository.entity.file');
@@ -246,7 +251,7 @@ class Container
 		return static::getService('sign.service.provider.profile');
 	}
 
-	public function getServiceSignMemberUser(): Service\Sign\Member\UserService
+	public function getSignMemberUserService(): Service\Sign\Member\UserService
 	{
 		return static::getService('sign.service.sign.member.user');
 	}
@@ -344,6 +349,11 @@ class Container
 		return static::getService('sign.service.integration.im.groupChat');
 	}
 
+	public function getFrontendBlockService(): Service\Sign\Block\FrontendBlockService
+	{
+		return static::getService('sign.service.block.frontendBlock');
+	}
+
 	public function getDocumentChatRepository(): Repository\DocumentChatRepository
 	{
 		return static::getService('sign.repository.documentChat');
@@ -352,5 +362,15 @@ class Container
 	public function getChatTypeConverterService(): Service\Sign\DocumentChat\ChatTypeConverterService
 	{
 		return static::getService('sign.service.sign.documentChat.chatTypeConverter');
+	}
+
+	public function getDocumentTemplateRepository(): Repository\Document\TemplateRepository
+	{
+		return static::getService('sign.repository.document.template');
+	}
+
+	public function getCrmMyCompanyService(): Service\Integration\Crm\MyCompanyService
+	{
+		return static::getService('sign.service.integration.crm.myCompany');
 	}
 }

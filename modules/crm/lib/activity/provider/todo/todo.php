@@ -3,15 +3,16 @@
 namespace Bitrix\Crm\Activity\Provider\ToDo;
 
 use Bitrix\Crm\Activity\Provider\Base;
+use Bitrix\Crm\Activity\Provider\EventRegistrarInterface;
 use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\Model\ActivityPingOffsetsTable;
-use Bitrix\Crm\Settings\Crm;
+use Bitrix\Crm\Service\Communication\Channel\Event\ChannelEventRegistrar;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
-class ToDo extends Base
+class ToDo extends Base implements EventRegistrarInterface
 {
 	public const PROVIDER_ID = 'CRM_TODO';
 	public const PROVIDER_TYPE_ID_DEFAULT = 'TODO';
@@ -136,6 +137,7 @@ class ToDo extends Base
 	protected static function getPreparedDescription(array $arFields): string
 	{
 		$description = $arFields['DESCRIPTION'] ?? '';
+		$description = \Bitrix\Crm\Entity\CommentsHelper::normalizeComment($description);
 		$additionalDescriptionData = $arFields['CALENDAR_ADDITIONAL_DESCRIPTION_DATA'] ?? null;
 
 		$descriptionItemsStr = '';
@@ -228,7 +230,7 @@ class ToDo extends Base
 
 	public static function canUseCalendarEvents($providerTypeId = null): bool
 	{
-		return Crm::isTimelineToDoUseV2Enabled();
+		return true;
 	}
 
 	public static function skipCalendarSync(array $activityFields, array $options = []): bool
@@ -285,10 +287,7 @@ class ToDo extends Base
 
 	public static function getActivityTitle(array $activity): string
 	{
-		if (
-			!empty($activity['SUBJECT'])
-			|| !\Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled()
-		)
+		if (!empty($activity['SUBJECT']))
 		{
 			return parent::getActivityTitle($activity);
 		}
@@ -314,5 +313,11 @@ class ToDo extends Base
 	public static function needSynchronizePingQueue(array $activity): bool
 	{
 		return empty($activity['CALENDAR_EVENT_ID']);
+	}
+
+	public function createActivityFromChannelEvent(ChannelEventRegistrar $eventRegistrar): Result
+	{
+		// @todo support event creating from channel event
+		return new Result();
 	}
 }

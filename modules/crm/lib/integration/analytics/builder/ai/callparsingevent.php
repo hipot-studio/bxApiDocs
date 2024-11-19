@@ -8,6 +8,8 @@ use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Integration\Analytics\Builder\AbstractBuilder;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Main\Result;
+use CCrmActivityDirection;
+use CCrmOwnerType;
 
 /**
  * It has a bit of copy-paste from
@@ -17,6 +19,8 @@ use Bitrix\Main\Result;
  */
 final class CallParsingEvent extends AbstractBuilder
 {
+	private string $tool = Dictionary::TOOL_AI;
+	private string $category = Dictionary::CATEGORY_CRM_OPERATIONS;
 	private string $type = Dictionary::TYPE_MANUAL;
 
 	private ?int $activityOwnerTypeId = null;
@@ -24,16 +28,30 @@ final class CallParsingEvent extends AbstractBuilder
 	private ?int $activityDirection = null;
 	private ?int $totalScenarioDuration = null;
 
+	public function setTool(string $tool): self
+	{
+		$this->tool = $tool;
+
+		return $this;
+	}
+
+	public function setCategory(string $category): self
+	{
+		$this->category = $category;
+
+		return $this;
+	}
+
 	protected function getTool(): string
 	{
-		return Dictionary::TOOL_AI;
+		return $this->tool;
 	}
 
 	protected function customValidate(): Result
 	{
 		$result = new Result();
 
-		if (!\CCrmOwnerType::IsDefined($this->activityOwnerTypeId))
+		if (!CCrmOwnerType::IsDefined($this->activityOwnerTypeId))
 		{
 			$result->addError(
 				\Bitrix\Crm\Controller\ErrorCode::getRequiredArgumentMissingError('activityOwnerTypeId'),
@@ -47,7 +65,7 @@ final class CallParsingEvent extends AbstractBuilder
 			);
 		}
 
-		if (!\CCrmActivityDirection::IsDefined($this->activityDirection))
+		if (!CCrmActivityDirection::IsDefined($this->activityDirection))
 		{
 			$result->addError(
 				\Bitrix\Crm\Controller\ErrorCode::getRequiredArgumentMissingError('activityDirection'),
@@ -61,7 +79,7 @@ final class CallParsingEvent extends AbstractBuilder
 	{
 		$this->setSection(Dictionary::SECTION_CRM);
 		$this->setSubSection(Dictionary::getAnalyticsEntityType($this->activityOwnerTypeId));
-		$this->setP2('callDirection', mb_strtolower(\CCrmActivityDirection::ResolveName($this->activityDirection)));
+		$this->setP2('callDirection', mb_strtolower(CCrmActivityDirection::ResolveName($this->activityDirection)));
 		$this->setP5('idCall', (string)$this->activityId);
 
 		if ($this->totalScenarioDuration !== null)
@@ -71,7 +89,7 @@ final class CallParsingEvent extends AbstractBuilder
 
 		return [
 			'type' => $this->type,
-			'category' => Dictionary::CATEGORY_CRM_OPERATIONS,
+			'category' => $this->category,
 			'event' => Dictionary::EVENT_CALL_PARSING,
 		];
 	}

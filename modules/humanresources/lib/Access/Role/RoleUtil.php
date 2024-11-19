@@ -33,9 +33,9 @@ class RoleUtil extends \Bitrix\Main\Access\Role\RoleUtil
 	public static function getDefaultMap(): array
 	{
 		return [
-			RoleDictionary::ROLE_ADMIN => (new Role\System\Admin)->getMap(),
 			RoleDictionary::ROLE_DIRECTOR => (new Role\System\Director())->getMap(),
 			RoleDictionary::ROLE_EMPLOYEE => (new Role\System\Employee())->getMap(),
+			RoleDictionary::ROLE_ADMIN => (new Role\System\Admin)->getMap(),
 		];
 	}
 }

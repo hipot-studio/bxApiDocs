@@ -4,6 +4,8 @@ namespace Bitrix\Crm\Component\EntityList\Grid\Row\Action\AutomatedSolution;
 
 use Bitrix\Crm\AutomatedSolution\AutomatedSolutionManager;
 use Bitrix\Crm\Controller\ErrorCode;
+use Bitrix\Crm\Integration\Analytics\Builder\Automation\AutomatedSolution\DeleteEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Grid\Row\Action\BaseAction;
@@ -35,13 +37,48 @@ final class DeleteAction extends BaseAction
 			return null;
 		}
 
-		$result = new Result();
-		if (!$this->userPermissions->canWriteConfig())
+		$analyticsBuilder =
+			(new DeleteEvent())
+				->setSection(Dictionary::SECTION_AUTOMATION)
+				->setElement(Dictionary::ELEMENT_GRID_ROW_CONTEXT_MENU)
+				->setId($id)
+		;
+
+		$analyticsBuilder
+			->setStatus(Dictionary::STATUS_ATTEMPT)
+			->buildEvent()
+			->send()
+		;
+
+		$result = $this->delete($id);
+		if ($result->isSuccess())
 		{
-			return $result->addError(ErrorCode::getAccessDeniedError());
+			$analyticsBuilder
+				->setStatus(Dictionary::STATUS_SUCCESS)
+				->buildEvent()
+				->send()
+			;
+		}
+		else
+		{
+			$analyticsBuilder
+				->setStatus(Dictionary::STATUS_ERROR)
+				->buildEvent()
+				->send()
+			;
 		}
 
-		return $this->automatedSolutionManager->deleteAutomatedSolution($id);
+		return $result;
+	}
+
+	private function delete(int $automatedSolutionId): Result
+	{
+		if (!$this->userPermissions->canWriteConfig())
+		{
+			return (new Result())->addError(ErrorCode::getAccessDeniedError());
+		}
+
+		return $this->automatedSolutionManager->deleteAutomatedSolution($automatedSolutionId);
 	}
 
 	protected function getText(): string

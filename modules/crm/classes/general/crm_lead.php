@@ -3,6 +3,8 @@ IncludeModuleLangFile(__FILE__);
 //@codingStandardsIgnoreFile
 
 use Bitrix\Crm;
+use Bitrix\Crm\Activity\Entity;
+use Bitrix\Crm\Activity\Provider\ToDo;
 use Bitrix\Crm\Binding\EntityBinding;
 use Bitrix\Crm\Binding\LeadContactTable;
 use Bitrix\Crm\Comparer\ComparerBase;
@@ -1967,11 +1969,8 @@ class CAllCrmLead
 
 				if ($deadline)
 				{
-					\Bitrix\Crm\Activity\Entity\ToDo::createWithDefaultSubjectAndDescription(
-						\CCrmOwnerType::Lead,
-						$ID,
-						$deadline
-					);
+					(new Entity\ToDo(new Crm\ItemIdentifier(\CCrmOwnerType::Lead, $ID), new ToDo\ToDo()))
+						->createWithDefaultSubjectAndDescription($deadline);
 				}
 			}
 
@@ -2187,7 +2186,7 @@ class CAllCrmLead
 
 
 			if (
-				($options['CHECK_TRANSITION_ACCESS_ENABLED'] ?? 'Y') !== 'N'
+				$this->bCheckPermission
 				&& $statusID !== $arRow['STATUS_ID']
 				&& !Container::getInstance()->getUserPermissions($iUserId)->isStageTransitionAllowed(
 					$arRow['STATUS_ID'],
@@ -4203,7 +4202,16 @@ class CAllCrmLead
 			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
 		}
 
-		$canEdit = CCrmAuthorizationHelper::CheckUpdatePermission(self::$TYPE_NAME, $ID, $userPermissions);
+		$canTransitionLeadToFinalStage = (
+			$ID <= 0 // backwards compatibility
+			|| self::canTransitionItemToFinalStage((int)$ID, $userPermissions->GetUserID())
+		);
+
+		$canEdit =
+			CCrmAuthorizationHelper::CheckUpdatePermission(self::$TYPE_NAME, $ID, $userPermissions)
+			&& $canTransitionLeadToFinalStage
+		;
+
 		$canCreateContact = CCrmContact::CheckCreatePermission($userPermissions);
 		$canCreateCompany = CCrmCompany::CheckCreatePermission($userPermissions);
 		$canCreateDeal = CCrmDeal::CheckCreatePermission($userPermissions);
@@ -4218,6 +4226,38 @@ class CAllCrmLead
 		{
 			$params['CAN_CONVERT'] = false;
 		}
+	}
+
+	private static function canTransitionItemToFinalStage(int $entityId, int $userId): bool
+	{
+		$factory = Container::getInstance()->getFactory(\CCrmOwnerType::Lead);
+		if (!$factory)
+		{
+			return false;
+		}
+
+		$items = $factory->getItems([
+			'select' => [Item::FIELD_NAME_ID, Item::FIELD_NAME_STAGE_ID],
+			'filter' => ['=ID' => $entityId],
+			'limit' => 1,
+		]);
+		$item = array_shift($items);
+		if (!$item)
+		{
+			return false;
+		}
+
+		$successfulStageId = $factory->getSuccessfulStage()?->getStatusId();
+		if (!$successfulStageId)
+		{
+			return false;
+		}
+
+		return Crm\Service\Container::getInstance()->getUserPermissions($userId)->isStageTransitionAllowed(
+			$item->getStageId(),
+			$successfulStageId,
+			Crm\ItemIdentifier::createByItem($item),
+		);
 	}
 
 	public static function PrepareFilter(&$arFilter, $arFilter2Logic = null)

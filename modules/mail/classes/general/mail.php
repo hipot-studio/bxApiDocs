@@ -1832,11 +1832,10 @@ class CAllMailMessage
 				MessageClosureTable::insertIgnoreFromSql(sprintf('VALUES (%1$u, %1$u)', $message_id));
 
 				/**
-				 * We find the parents(in the standard case there should be one) of this message and create a chain.
 				 * If the id of the parent (IN_REPLY_TO) matches the id of the message itself(MSG_ID),
-				 * then nothing will happen(INSERT IGNORE), since such a chain was created in the step above.
+				 * skip the chain creation step.
 				 * */
-				if ($arFields['IN_REPLY_TO'])
+				if (isset($arFields['IN_REPLY_TO']) && isset($arFields['MSG_ID']) && (string)isset($arFields['IN_REPLY_TO']) !== $arFields['MSG_ID'])
 				{
 					self::makeMessageClosureChain($message_id, $mailbox_id, (string)$arFields['IN_REPLY_TO']);
 				}
@@ -2004,9 +2003,8 @@ class CAllMailMessage
 	}
 
 	/**
-	 * We find the parents(in the standard case there should be one) of this message and create a chain.
-	 * If the id of the parent (IN_REPLY_TO) matches the id of the message itself(MSG_ID),
-	 * then nothing will happen(INSERT IGNORE), since such a chain was created in the step above.
+	 * We find all the ancestors(by IN_REPLY_TO) of this message(by MSG_ID) (parent of parent, etc.)
+	 * to create an unbroken chain (if one link is deleted, the chain is not broken).
 	 *
 	 * @param int $messageId Mail message ID
 	 * @param int $mailboxId Mailbox ID
@@ -2351,7 +2349,7 @@ class CAllMailMessage
 			'MODULE_ID' => 'mail'
 		);
 
-		if (!($file_id = CFile::saveFile($file, 'mail/attachment')))
+		if (!($file_id = CFile::saveFile($file, AttachmentHelper::generateMessageAttachmentPath())))
 		{
 			\CMail::option('attachment_failure', true);
 			return false;

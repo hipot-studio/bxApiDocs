@@ -57,6 +57,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 			->setActive($node->active)
 			->setGlobalActive($node->globalActive)
 			->setSort($node->sort)
+			->setDescription($node->description)
 		;
 	}
 
@@ -79,6 +80,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 			active: $node->getActive(),
 			globalActive: $node->getGlobalActive(),
 			sort: $node->getSort(),
+			description: $node->getDescription(),
 		);
 	}
 
@@ -99,6 +101,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 			active: $node['ACTIVE'] === 'Y',
 			globalActive: $node['GLOBAL_ACTIVE'] === 'Y',
 			sort: $node['SORT'],
+			description: $node['DESCRIPTION'],
 		);
 	}
 
@@ -172,7 +175,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 		if ($node->name && $node->name !== $nodeCache->name)
 		{
 			$nodeCache->name = $node->name;
-			$updatedField[] = 'name';
+			$updatedField['name'] = $node->name;
 		}
 
 		if ($node->type && $node->type !== $nodeCache->type)
@@ -182,7 +185,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 		}
 
 		$parentChanged = false;
-		if ($node->parentId && $node->parentId !== $nodeCache->parentId)
+		if ($node->parentId !== $nodeCache->parentId)
 		{
 			$nodeCache->parentId = $node->parentId;
 			$updatedField['parentId'] = $node->parentId;
@@ -249,6 +252,11 @@ class NodeRepository implements Contract\Repository\NodeRepository
 		{
 			$nodeCache->sort = $node->sort;
 			$updatedField['sort'] = $node->sort;
+		}
+
+		if ($node->description && $node->description !== $nodeCache->description)
+		{
+			$nodeCache->description = $node->description;
 		}
 
 		if (!empty($updatedField))
@@ -322,22 +330,13 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	 */
 	public function getById(int $nodeId, bool $needDepth = false): ?Item\Node
 	{
-		$nodeCacheKey = sprintf(self::NODE_ENTITY_CACHE_KEY, $nodeId);
-
-		$nodeCache = $this->cacheManager->getData($nodeCacheKey);
-		if ($nodeCache)
-		{
-			$nodeCache['type'] = NodeEntityType::tryFrom($nodeCache['type']);
-			$nodeCache['createdAt'] = null;
-			$nodeCache['updatedAt'] = null;
-			return new Item\Node(...$nodeCache);
-		}
-
 		$query =
 			NodeTable::query()
 			->setSelect(['*', 'ACCESS_CODE',])
 			->where('ID', $nodeId)
 			->setLimit(1)
+			->setCacheTtl(self::DEFAULT_TTL)
+			->cacheJoins(true)
 		;
 		if ($needDepth)
 		{
@@ -348,15 +347,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 		}
 		$node = $query->fetchObject();
 
-		$convertedNode = $node !== null ? $this->convertModelToItem($node) : null;
-		if ($convertedNode)
-		{
-			$this->cacheManager->setData($nodeCacheKey, $convertedNode);
-
-			return $convertedNode;
-		}
-
-		return null;
+		return $node !== null ? $this->convertModelToItem($node) : null;
 	}
 
 	private function removeNodeCache(int $nodeId): void
@@ -641,7 +632,11 @@ class NodeRepository implements Contract\Repository\NodeRepository
 
 	public function isAncestor(Item\Node $node, Item\Node $targetNode): bool
 	{
-		if ($node->depth >= $targetNode->depth)
+		if (
+			!is_null($node->depth)
+			&& !is_null($targetNode->depth)
+			&& $node->depth >= $targetNode->depth
+		)
 		{
 			return false;
 		}

@@ -18,6 +18,7 @@ class Blank implements Contract\Item, Contract\Item\ItemWithOwner
 		public ?BlockCollection $blockCollection = null,
 		public ?string $scenario = null,
 		public ?int $createdById = null,
+		public bool $forTemplate = false,
 	) {}
 
 	public function getId(): int

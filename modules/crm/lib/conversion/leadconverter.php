@@ -805,8 +805,6 @@ class LeadConverter extends EntityConverter
 						new Crm\ItemIdentifier(\CCrmOwnerType::Company, $companyID);
 				}
 
-				$entityUpdateOptions['CHECK_TRANSITION_ACCESS_ENABLED'] = $this->getContextData()['CHECK_TRANSITION_ACCESS_ENABLED'] ?? 'Y';
-
 				if(!empty($fields))
 				{
 					$entity = new \CCrmLead(false);

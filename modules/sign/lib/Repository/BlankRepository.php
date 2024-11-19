@@ -54,6 +54,7 @@ class BlankRepository
 			->setScenario(BlankScenario::getMap()[$item->scenario] ?? BlankScenario::B2B)
 			->setDateCreate(new DateTime())
 			->setDateModify(new DateTime())
+			->setForTemplate($item->forTemplate)
 			->save()
 		;
 		if ($result->isSuccess())
@@ -79,7 +80,8 @@ class BlankRepository
 			return (new UpdateResult())->addError(new Error('Blank not found'));
 		}
 		$blank = Internal\BlankTable::getById($item->id)
-			->fetchObject();
+			->fetchObject()
+		;
 
 		if (!$blank)
 		{
@@ -124,10 +126,11 @@ class BlankRepository
 	 */
 	public function getById(int $blankId): ?Item\Blank
 	{
-		$document = Internal\BlankTable::getById($blankId)
-			->fetchObject();
+		$model = Internal\BlankTable::getById($blankId)
+			->fetchObject()
+		;
 
-		return $document === null ? null : $this->extractItemFromModel($document);
+		return $model === null ? null : $this->extractItemFromModel($model);
 	}
 
 	public function getByIdAndValidatePermissions(int $blankId): ?Item\Blank
@@ -137,7 +140,7 @@ class BlankRepository
 			return null;
 		}
 
-		$document = Internal\BlankTable::query()
+		$model = Internal\BlankTable::query()
 			->setSelect(['*'])
 			->setFilter($this->getFilterForBlankByPermissions(CurrentUser::get()->getId()))
 			->addFilter('ID', $blankId)
@@ -145,7 +148,7 @@ class BlankRepository
 			->fetchObject()
 		;
 
-		return $document === null ? null : $this->extractItemFromModel($document);
+		return $model === null ? null : $this->extractItemFromModel($model);
 	}
 
 	private function extractItemFromModel(Internal\Blank $model): Item\Blank
@@ -156,8 +159,9 @@ class BlankRepository
 			status: $model->getStatus(),
 			id: $model->getId(),
 			dateCreate: $model->getDateCreate(),
-			createdById: $model->getCreatedById(),
 			scenario: BlankScenario::getScenarioById($model->getScenario()),
+			createdById: $model->getCreatedById(),
+			forTemplate:  $model->getForTemplate() ?? false,
 		);
 
 		foreach ($model->getFileId() ?? [] as $fileId)
@@ -178,7 +182,7 @@ class BlankRepository
 		return $item;
 	}
 
-	public  function getPublicList(int $limit = 10, int $offset = 0, string $scenario = BlankScenario::B2B): Item\BlankCollection
+	public function getPublicList(int $limit = 10, int $offset = 0, string $scenario = BlankScenario::B2B): Item\BlankCollection
 	{
 		if (!Loader::includeModule('crm'))
 		{
@@ -191,6 +195,7 @@ class BlankRepository
 		);
 
 		$filter['=SCENARIO'] = BlankScenario::getMap()[$scenario];
+		$filter['=FOR_TEMPLATE'] = 0;
 
 		$collection = Internal\BlankTable::query()
 			->setSelect(['TITLE', 'STATUS', 'DATE_CREATE', 'SCENARIO', 'CREATED_BY_ID'])
@@ -198,7 +203,8 @@ class BlankRepository
 			->setOffset($offset)
 			->setFilter($filter)
 			->addOrder('ID', 'desc')
-			->fetchCollection();
+			->fetchCollection()
+		;
 
 		return $this->extractItemCollectionFromModelCollection($collection);
 	}
@@ -225,6 +231,7 @@ class BlankRepository
 			->setDateModify($now)
 			->setFileId($blankModel->getFileId())
 			->setScenario($blankModel->getScenario())
+			->setForTemplate($blankItem->forTemplate)
 			->save()
 		;
 

@@ -1,5 +1,7 @@
 <?php
+
 namespace Bitrix\Crm\Merger;
+
 use Bitrix\Main;
 
 class EntityMergerFactory
@@ -52,6 +54,18 @@ class EntityMergerFactory
 		elseif($entityTypeID === \CCrmOwnerType::Company)
 		{
 			return new CompanyMerger($currentUserID, $enablePermissionCheck);
+		}
+		elseif (
+			$entityTypeID === \CCrmOwnerType::Quote
+			|| $entityTypeID === \CCrmOwnerType::SmartInvoice
+			|| \CCrmOwnerType::isPossibleDynamicTypeId($entityTypeID)
+		)
+		{
+			return new FactoryBasedMerger(
+				$entityTypeID,
+				$currentUserID,
+				$enablePermissionCheck,
+			);
 		}
 		else
 		{

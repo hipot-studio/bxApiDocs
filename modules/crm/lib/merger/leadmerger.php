@@ -98,7 +98,7 @@ class LeadMerger extends EntityMerger
 		}
 	}
 
-	protected static function getFieldConflictResolver(string $fieldId, string $type): ConflictResolver\Base
+	protected function getFieldConflictResolver(string $fieldId, string $type): ConflictResolver\Base
 	{
 		$userDefinedResolver = static::getUserDefinedConflictResolver(
 			\CCrmOwnerType::Lead,
@@ -135,9 +135,10 @@ class LeadMerger extends EntityMerger
 
 			case 'OPPORTUNITY':
 				//Crutch for Opportunity Field. It can be ignored if ProductRows are not empty. We will recalculate Opportunity after merging of ProductRows. See DealMerger::innerMergeBoundEntities.
-				$resolver = new Crm\Merger\ConflictResolver\OpportunityField($fieldId);
-				$resolver->setEntityTypeId(\CCrmOwnerType::Lead);
-				return $resolver;
+				return new Crm\Merger\ConflictResolver\OpportunityField(
+					$fieldId,
+					\CCrmOwnerType::Lead,
+				);
 
 			case 'TAX_VALUE':
 				//Crutch for TaxValue Field. It can be ignored. We will recalculate TaxValue after merging of ProductRows. See DealMerger::innerMergeBoundEntities.
@@ -565,7 +566,7 @@ class LeadMerger extends EntityMerger
 			\CCrmOwnerType::Lead, $targID
 		);
 
-		Crm\Relation\EntityRelationTable::rebind(
+		Crm\Relation\EntityRelationTable::rebindWhereItemIsChild(
 			new Crm\ItemIdentifier(\CCrmOwnerType::Lead, $seedID),
 			new Crm\ItemIdentifier(\CCrmOwnerType::Lead, $targID)
 		);

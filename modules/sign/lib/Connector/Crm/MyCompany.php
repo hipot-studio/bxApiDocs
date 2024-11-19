@@ -9,7 +9,10 @@ use Bitrix\Sign\Item\Integration\Crm\MyCompanyCollection;
 
 final class MyCompany extends Company
 {
-	public static function listItems(?int $itemsAmount = null): MyCompanyCollection
+	/**
+	 * @param list<int> $inIds
+	 */
+	public static function listItems(?int $itemsAmount = null, array $inIds = []): MyCompanyCollection
 	{
 		$result = new Item\Integration\Crm\MyCompanyCollection();
 		if (!Loader::includeModule('crm'))
@@ -19,11 +22,16 @@ final class MyCompany extends Company
 
 		$crmContainer = Container::getInstance();
 		$limitFilter = !$itemsAmount ? ['limit' => $itemsAmount] : [];
+		$filter = ['IS_MY_COMPANY' => 'Y'];
+		if (!empty($inIds))
+		{
+			$filter['@ID'] = $inIds;
+		}
 
 		$items = $crmContainer->getFactory(\CCrmOwnerType::Company)?->getItems(
 			[
 				'select' => ['ID'],
-				'filter' => ['IS_MY_COMPANY' => 'Y'],
+				'filter' => $filter,
 			] + $limitFilter
 		);
 

@@ -238,7 +238,7 @@ class CCrmTax
 
 		if ($value === null)
 		{
-			return Loc::getMessage('CRM_VAT_EMPTY_VALUE');
+			return Loc::getMessage('CRM_VAT_EMPTY_VALUE_MSGVER_1');
 		}
 
 		return "{$value}%";

@@ -22,7 +22,8 @@ class Storage
 	private const STRUCT_CONVERTED_OPTION_NAME = 'company_structure_converted';
 	private const STRUCT_EMPLOYEES_OPTION_NAME = 'company_employees_transferred';
 	private const STRUCT_DISABLE_INTRANET_UTILS = 'disable_intranet_utilities';
-	
+	private const STRUCT_PUBLIC_IS_AVAILABLE_OPTION_NAME = 'public_structure_is_available';
+
 	public function isCompanyStructureConverted(bool $checkIsEmployeesTransferred = true): bool
 	{
 		$result = Main\Config\Option::get(self::MODULE_NAME, self::STRUCT_CONVERTED_OPTION_NAME, false);
@@ -82,5 +83,10 @@ class Storage
 	public function isIntranetUtilsDisabled(): bool
 	{
 		return Main\Config\Option::get(self::MODULE_NAME, self::STRUCT_DISABLE_INTRANET_UTILS, false);
+	}
+
+	public function isPublicStructureAvailable(): bool
+	{
+		return Main\Config\Option::get(self::MODULE_NAME, self::STRUCT_PUBLIC_IS_AVAILABLE_OPTION_NAME, false);
 	}
 }

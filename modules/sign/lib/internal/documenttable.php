@@ -5,6 +5,7 @@ use Bitrix\Main\Entity;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\Security\Random;
 use Bitrix\Sign\File;
+use Bitrix\Sign\Type\Document\InitiatedByType;
 use Bitrix\Sign\Type\DocumentStatus;
 
 /**
@@ -174,6 +175,19 @@ class DocumentTable extends Entity\DataManager
 				->configureTitle("Provider code")
 				->configureSize(255)
 				->configureNullable()
+			,
+			(new IntegerField('TEMPLATE_ID'))
+				->configureTitle('Template ID')
+				->configureNullable()
+			,
+			(new IntegerField('CREATED_FROM_DOCUMENT_ID'))
+				->configureTitle('Created from document ID')
+				->configureNullable()
+			,
+			(new IntegerField('INITIATED_BY_TYPE'))
+				->configureTitle('Initiated by type')
+				->configureRequired()
+				->configureDefaultValue(InitiatedByType::COMPANY->toInt())
 			,
 		];
 	}

@@ -2,51 +2,72 @@
 
 namespace Bitrix\Crm\Integration\Analytics\Builder\AI;
 
+use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Integration\Analytics\Builder\AbstractBuilder;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Main\Error;
 use Bitrix\Main\Result;
+use CCrmActivityDirection;
+use CCrmOwnerType;
 
 final class CallActivityWithAudioRecordingEvent extends AbstractBuilder
 {
+	private string $tool = Dictionary::TOOL_AI;
+	private string $category = Dictionary::CATEGORY_CRM_OPERATIONS;
+
 	private ?int $activityOwnerTypeId = null;
 	private ?int $activityId = null;
 	private ?int $activityDirection = null;
 	private ?int $callDuration = null;
 
+	public function setTool(string $tool): self
+	{
+		$this->tool = $tool;
+
+		return $this;
+	}
+
+	public function setCategory(string $category): self
+	{
+		$this->category = $category;
+
+		return $this;
+	}
+
 	protected function getTool(): string
 	{
-		return Dictionary::TOOL_AI;
+		return $this->tool;
 	}
 
 	protected function customValidate(): Result
 	{
 		$result = new Result();
 
-		if (!\CCrmOwnerType::IsDefined($this->activityOwnerTypeId))
+		if (!CCrmOwnerType::IsDefined($this->activityOwnerTypeId))
 		{
 			$result->addError(
-				\Bitrix\Crm\Controller\ErrorCode::getRequiredArgumentMissingError('activityOwnerTypeId')
+				ErrorCode::getRequiredArgumentMissingError('activityOwnerTypeId')
 			);
 		}
 
 		if ($this->activityId <= 0)
 		{
 			$result->addError(
-				\Bitrix\Crm\Controller\ErrorCode::getRequiredArgumentMissingError('activityId'),
+				ErrorCode::getRequiredArgumentMissingError('activityId'),
 			);
 		}
 
 		if ($this->callDuration === null)
 		{
 			$result->addError(
-				\Bitrix\Crm\Controller\ErrorCode::getRequiredArgumentMissingError('callDuration'),
+				ErrorCode::getRequiredArgumentMissingError('callDuration'),
 			);
 		}
 
-		if (!\CCrmActivityDirection::IsDefined($this->activityDirection))
+		if ($this->activityDirection !== null && !CCrmActivityDirection::IsDefined($this->activityDirection))
 		{
 			$result->addError(
-				\Bitrix\Crm\Controller\ErrorCode::getRequiredArgumentMissingError('activityDirection'),
+				new Error('Unknown activity direction', ErrorCode::INVALID_ARG_VALUE),
 			);
 		}
 
@@ -62,9 +83,12 @@ final class CallActivityWithAudioRecordingEvent extends AbstractBuilder
 		$this->setP5('idCall', (string)$this->activityId);
 
 		return [
-			'category' => Dictionary::CATEGORY_CRM_OPERATIONS,
+			'category' => $this->category,
 			'event' => Dictionary::EVENT_CALL_ACTIVITY_WITH_AUDIO_RECORDING,
-			'type' => mb_strtolower(\CCrmActivityDirection::ResolveName($this->activityDirection))
+			'type' => CCrmActivityDirection::IsDefined($this->activityDirection)
+				? mb_strtolower(CCrmActivityDirection::ResolveName($this->activityDirection))
+				: null
+			,
 		];
 	}
 

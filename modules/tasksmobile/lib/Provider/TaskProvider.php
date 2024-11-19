@@ -9,12 +9,15 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Loader;
+use Bitrix\Tasks\Util\User;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Mobile\Provider\UserRepository;
 use Bitrix\Socialnetwork\Item\UserContentView;
+use Bitrix\Tasks\Integration\SocialNetwork\Group;
+use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
@@ -46,6 +49,7 @@ use Bitrix\Tasks\Kanban\StagesTable;
 use Bitrix\Tasks\Kanban\TaskStageTable;
 use Bitrix\Tasks\Manager;
 use Bitrix\Tasks\Provider\Exception\TaskListException;
+use Bitrix\Tasks\Scrum\Service\DefinitionOfDoneService;
 use Bitrix\Tasks\Scrum\Service\TaskService;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Type\DateTime;
@@ -518,12 +522,27 @@ final class TaskProvider
 		return $this->prepareItems([$task])[0];
 	}
 
-	public function getFullTask(int $taskId): array
+	public function getFullTask(int $taskId, string $workMode, ?int $kanbanOwnerId): array
 	{
 		$task = $this->getTaskData($taskId, true);
 
+		$projectId = !empty($task['GROUP_ID']) ? (int)$task['GROUP_ID'] : 0;
 		$relatedTaskIds = $this->getRelatedTaskIds($taskId);
 		$allTasks = $this->getTaskHierarchy($relatedTaskIds, $taskId, (int)$task['PARENT_ID']);
+
+		$taskStage = [];
+		$kanban = [];
+		if ($kanbanOwnerId)
+		{
+			$taskStageProvider = new TasksStagesProvider($workMode, null, $projectId, $kanbanOwnerId);
+			$taskStage = $taskStageProvider->getStages([$taskId => $task]);
+
+			$searchParams = new TaskRequestFilter();
+			$searchParams->ownerId = $kanbanOwnerId;
+
+			$stageProvider = new StageProvider($this->userId, $searchParams);
+			$kanban = $stageProvider->getKanbanInfoByWorkMode($projectId, $taskId, $workMode)->getData();
+		}
 
 		$allTasks[] = $task;
 
@@ -533,7 +552,57 @@ final class TaskProvider
 			'groups' => $this->getGroupsData($allTasks),
 			'flows' => $this->getFlowsData($allTasks),
 			'relatedTaskIds' => $relatedTaskIds,
+			'taskStage' => $taskStage,
+			'kanban' => $kanban,
 		];
+	}
+
+	public function areAllScrumSubtasksCompleted(int $parentTaskId, int $groupId, int $excludeSubtaskId = 0): bool
+	{
+		if ($parentTaskId === 0 || $groupId === 0)
+		{
+			return false;
+		}
+
+		$group = WorkGroup::getById($groupId);
+		$isScrumProject = $group && $group->isScrumProject();
+		if (!$isScrumProject)
+		{
+			return false;
+		}
+
+		$query = new TaskQuery($this->userId);
+		$query->setSelect([
+			'ID',
+			'STATUS',
+		]);
+
+		if ($excludeSubtaskId > 0)
+		{
+			$query->setWhere([
+				'::LOGIC' => 'AND',
+				['=PARENT_ID' => $parentTaskId],
+				['!=ID' => $excludeSubtaskId]
+			]);
+		}
+		else
+		{
+			$query->setWhere([
+				['=PARENT_ID' => $parentTaskId],
+			]);
+		}
+
+		$tasks = (new TaskList())->getList($query);
+
+		foreach ($tasks as $task)
+		{
+			if ((int)$task['STATUS'] !== Status::COMPLETED)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private function getRelatedTaskIds(int $taskId): array
@@ -574,10 +643,12 @@ final class TaskProvider
 		$query = new TaskQuery($this->userId);
 		$query->setSelect($select);
 
+		$shouldFillDodData = false;
 		$taskIds = $relatedTaskIds;
 		if ($parentId > 0 && !in_array($parentId, $relatedTaskIds, false))
 		{
 			$taskIds[] = $parentId;
+			$shouldFillDodData = true;
 		}
 
 		if (!empty($taskIds))
@@ -604,7 +675,7 @@ final class TaskProvider
 
 		$tasks = array_column($tasks, null, 'ID');
 
-		return $this->fillDataForTasks($tasks);
+		return $this->fillDataForTasks($tasks, false, $shouldFillDodData);
 	}
 
 	private function getTaskData(int $taskId, bool $isFullData = false): array|TaskDto
@@ -618,7 +689,7 @@ final class TaskProvider
 		return $tasks[$task['ID']];
 	}
 
-	private function fillDataForTasks(array $tasks, bool $isFullData = false): array
+	private function fillDataForTasks(array $tasks, bool $isFullData = false, bool $shouldFillDodData = true): array
 	{
 		$tasks = $this->fillCountersData($tasks);
 		$tasks = $this->fillResultData($tasks);
@@ -629,12 +700,17 @@ final class TaskProvider
 		$tasks = $this->fillDiskFilesData($tasks);
 		$tasks = $this->fillFormattedDescription($tasks);
 		$tasks = $this->fillActionData($tasks);
-//		$tasks = $this->fillViewsCount($tasks);
+
+		if ($shouldFillDodData)
+		{
+			$tasks = $this->fillDodData($tasks);
+		}
+
+		//		$tasks = $this->fillViewsCount($tasks);
 
 		if ($isFullData)
 		{
 			$tasks = $this->fillChecklistFullData($tasks);
-
 			// todo: relatedTasks, subTasks, parentTask
 		}
 		else
@@ -1008,6 +1084,56 @@ final class TaskProvider
 		return $tasks;
 	}
 
+	private function fillDodData(array $tasks): array
+	{
+		if (empty($tasks))
+		{
+			return [];
+		}
+
+		foreach ($tasks as $id => $task)
+		{
+			if ($task["PARENT_ID"] > 0)
+			{
+				continue;
+			}
+
+			$isDodNecessary = $this->isDodNecessary($task['ID'], $task['GROUP_ID']);
+			if ($isDodNecessary)
+			{
+				$tasks[$id]['DOD'] = $this->getDodTypes($task['ID'], $task['GROUP_ID']);
+			}
+
+			$tasks[$id]['DOD']['IS_NECESSARY'] = $isDodNecessary;
+		}
+
+		return $tasks;
+	}
+
+	private function isDodNecessary(int $taskId, int $groupId): bool
+	{
+		$userId = User::getId();
+		if (!Group::canReadGroupTasks($userId, $groupId))
+		{
+			return false;
+		}
+
+		return (new DefinitionOfDoneService($userId))->isNecessary($groupId, $taskId);
+	}
+
+	private function getDodTypes(int $taskId, int $groupId): array
+	{
+		$definitionOfDoneService = new DefinitionOfDoneService(User::getId());
+		$dodTypes = $definitionOfDoneService->getTypes($groupId);
+		$itemType = $definitionOfDoneService->getItemType($taskId);
+		$activeTypeId = $itemType->isEmpty() ? $dodTypes[0]['id'] : $itemType->getId();
+
+		return [
+			'TYPES' => $dodTypes,
+			'ACTIVE_TYPE_ID' => (int)$activeTypeId,
+		];
+	}
+
 	/**
 	 * @param array $actions
 	 * @return array
@@ -1096,7 +1222,11 @@ final class TaskProvider
 		return $tasks;
 	}
 
-	public function updateParentIdToTaskIds(int $parentId, ?array $newSubTasks = [], ?array $deletedSubTasks = []): array
+	public function updateParentIdToTaskIds(
+		int $parentId,
+		?array $newSubTasks = [],
+		?array $deletedSubTasks = []
+	): array
 	{
 		Collection::normalizeArrayValuesByInt($newSubTasks, false);
 		Collection::normalizeArrayValuesByInt($deletedSubTasks, false);
@@ -1114,7 +1244,8 @@ final class TaskProvider
 				if (TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_EDIT, $taskId))
 				{
 					$result = $handler->update($taskId, ['PARENT_ID' => $parentId]);
-					if (!$result) {
+					if (!$result)
+					{
 						throw new TaskUpdateException($handler->getErrors());
 					}
 					$updatedNewSubTasks[] = (int)$taskId;
@@ -1131,7 +1262,8 @@ final class TaskProvider
 		{
 			$updatedNewSubTasksQuery = (new TaskQuery($this->userId))
 				->setSelect($this->getSelect())
-				->setWhere(['ID' => $updatedNewSubTasks]);
+				->setWhere(['ID' => $updatedNewSubTasks])
+			;
 
 			$updatedNewSubTasksData = $this->getTasksByQuery($updatedNewSubTasksQuery);
 		}
@@ -1167,7 +1299,11 @@ final class TaskProvider
 		];
 	}
 
-	public function updateRelatedTasks(int $taskId, ?array $newRelatedTasks = [], ?array $deletedRelatedTasks = []): array
+	public function updateRelatedTasks(
+		int $taskId,
+		?array $newRelatedTasks = [],
+		?array $deletedRelatedTasks = []
+	): array
 	{
 		Collection::normalizeArrayValuesByInt($newRelatedTasks, false);
 		Collection::normalizeArrayValuesByInt($deletedRelatedTasks, false);
@@ -1197,7 +1333,8 @@ final class TaskProvider
 		{
 			$newTasksQuery = (new TaskQuery($this->userId))
 				->setSelect($this->getSelect())
-				->setWhere(['ID' => $updatedNewRelatedTasks]);
+				->setWhere(['ID' => $updatedNewRelatedTasks])
+			;
 			$updatedNewRelatedTasksData = $this->getTasksByQuery($newTasksQuery);
 		}
 
@@ -1389,9 +1526,12 @@ final class TaskProvider
 				// 'subTasks' => $task['SUB_TASKS'] ?? [],
 
 				'crm' => $task['CRM'] ?? [],
+				'dodTypes' => $task['DOD']['TYPES'] ?? [],
+				'activeDodTypeId' => $task['DOD']['ACTIVE_TYPE_ID'] ?? [],
 				'tags' => $task['TAGS'] ?? [],
 				'files' => $task['FILES'] ?? [],
 
+				'isDodNecessary' => $task['DOD']['IS_NECESSARY'],
 				'isMuted' => ($task['IS_MUTED'] === 'Y'),
 				'isPinned' => ($task['IS_PINNED'] === 'Y'),
 				'isInFavorites' => ($task['FAVORITE'] === 'Y'),

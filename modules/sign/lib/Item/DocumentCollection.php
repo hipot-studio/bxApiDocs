@@ -130,4 +130,27 @@ class DocumentCollection implements ItemCollection, \Iterator, \Countable
 		}
 		return $documents;
 	}
+
+	public function findByTemplateId(?int $id): ?Document
+	{
+		foreach ($this->items as $item)
+		{
+			if ($item->templateId === $id)
+			{
+				return $item;
+			}
+		}
+
+		return null;
+	}
+
+	public function sortByTemplateIdsDesc(): static
+	{
+		$items = $this->items;
+		usort($items, static function (Document $a, Document $b) {
+			return $b->templateId <=> $a->templateId;
+		});
+
+		return new static(...$items);
+	}
 }

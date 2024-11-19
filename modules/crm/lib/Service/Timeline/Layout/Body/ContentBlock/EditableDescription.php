@@ -21,6 +21,7 @@ class EditableDescription extends ContentBlock
 	protected ?bool $copied = false;
 	protected string $height = self::HEIGHT_LONG;
 	protected array $copilotSettings = [];
+	protected ?bool $useBBCodeEditor = null;
 
 	public function getRendererName(): string
 	{
@@ -68,6 +69,11 @@ class EditableDescription extends ContentBlock
 		return $this->height;
 	}
 
+	public function getUseBBCodeEditor(): ?bool
+	{
+		return $this->useBBCodeEditor;
+	}
+
 	public function setHeight(string $height): self
 	{
 		$this->height = $height;
@@ -99,6 +105,13 @@ class EditableDescription extends ContentBlock
 		return $this;
 	}
 
+	public function setUseBBCodeEditor(bool $useBBCodeEditor): self
+	{
+		$this->useBBCodeEditor = $useBBCodeEditor;
+
+		return $this;
+	}
+
 	protected function getProperties(): array
 	{
 		return [
@@ -109,6 +122,7 @@ class EditableDescription extends ContentBlock
 			'height' => $this->getHeight(),
 			'backgroundColor' => $this->getBackgroundColor(),
 			'copilotSettings' => $this->getCopilotSettings(),
+			'useBBCodeEditor' => $this->getUseBBCodeEditor(),
 		];
 	}
 }

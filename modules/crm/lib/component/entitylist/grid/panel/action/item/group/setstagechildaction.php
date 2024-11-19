@@ -75,6 +75,7 @@ final class SetStageChildAction extends GroupChildAction
 			$stagesList[] = [
 				'NAME' => $stage->getName(),
 				'VALUE' => $stage->getStatusId(),
+				'SEMANTICS' => $stage->getSemantics(),
 			];
 		}
 

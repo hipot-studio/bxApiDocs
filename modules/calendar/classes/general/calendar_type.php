@@ -215,7 +215,7 @@ class CCalendarType
 
 		//return $APPLICATION->ThrowException(GetMessage("EC_ACCESS_DENIED"));
 
-		$access = $arFields['ACCESS'];
+		$access = $arFields['ACCESS'] ?? null;
 		unset($arFields['ACCESS']);
 
 		if (count($arFields) > 1) // We have not only XML_ID

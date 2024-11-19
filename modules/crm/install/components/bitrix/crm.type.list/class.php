@@ -187,7 +187,9 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 				$isTypeSettingsRestricted = RestrictionManager::getDynamicTypesLimitRestriction()->isTypeSettingsRestricted($item['ENTITY_TYPE_ID']);
 				$editAction = [
 					'TEXT' => Loc::getMessage('CRM_COMMON_ACTION_EDIT'),
-					'HREF' => Container::getInstance()->getRouter()->getTypeDetailUrl($item['ENTITY_TYPE_ID']),
+					'HREF' => Container::getInstance()->getRouter()->getTypeDetailUrl($item['ENTITY_TYPE_ID'])->addParams([
+						'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::ELEMENT_GRID_ROW_CONTEXT_MENU,
+					]),
 				];
 				$fieldsAction = null;
 				if (!$isTypeSettingsRestricted)

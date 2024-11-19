@@ -29,8 +29,9 @@ class Total implements Base
 
 		foreach ($userIds as $userId)
 		{
+			// total counter (left menu, top menu, etc.)
 			$value = Counter::getInstance($userId)->get(CounterDictionary::COUNTER_TOTAL);
-			if (!$this->isSameValueCached($value, $userId))
+			if (!$this->isSameValueCached($value, $userId, CounterDictionary::COUNTER_TOTAL))
 			{
 				\CUserCounter::Set(
 					$userId,
@@ -39,10 +40,34 @@ class Total implements Base
 					'**',
 				);
 			}
+
+			// my calendar counter (top menu etc.)
+			$value = Counter::getInstance($userId)->get(CounterDictionary::COUNTER_MY);
+			if (!$this->isSameValueCached($value, $userId, CounterDictionary::COUNTER_MY))
+			{
+				\CUserCounter::Set(
+					$userId,
+					CounterDictionary::COUNTER_MY,
+					$value,
+					'**',
+				);
+			}
+
+			// open events total (top menu etc.)
+			$value = Counter::getInstance($userId)->get(CounterDictionary::COUNTER_OPEN_EVENTS);
+			if (!$this->isSameValueCached($value, $userId, CounterDictionary::COUNTER_OPEN_EVENTS))
+			{
+				\CUserCounter::Set(
+					$userId,
+					CounterDictionary::COUNTER_OPEN_EVENTS,
+					$value,
+					'**',
+				);
+			}
 		}
 	}
 
-	private function isSameValueCached(int $value, int $userId): bool
+	private function isSameValueCached(int $value, int $userId, string $code): bool
 	{
 		global $CACHE_MANAGER;
 
@@ -55,7 +80,7 @@ class Total implements Base
 		foreach ($cache as $item)
 		{
 			if (
-				$item['CODE'] === CounterDictionary::COUNTER_TOTAL
+				$item['CODE'] === $code
 				&& $item['SITE_ID'] === '**'
 				&& (int)$item['CNT'] === $value
 			)

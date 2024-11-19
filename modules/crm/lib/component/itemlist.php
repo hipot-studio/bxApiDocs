@@ -257,7 +257,7 @@ abstract class ItemList extends Base
 			);
 			if (
 				count($categories) > 1
-				|| Container::getInstance()->getUserPermissions()->canWriteConfig()
+				|| Container::getInstance()->getUserPermissions()->isAdminForEntity($this->entityTypeId)
 			)
 			{
 				$buttonConfig = [
@@ -384,7 +384,9 @@ abstract class ItemList extends Base
 		{
 			$settingsItems[] = [
 				'text' => Loc::getMessage('CRM_TYPE_TYPE_SETTINGS'),
-				'href' => $this->router->getTypeDetailUrl($this->entityTypeId),
+				'href' => $this->router->getTypeDetailUrl($this->entityTypeId)->addParams([
+					'c_sub_section' => Integration\Analytics\Dictionary::ELEMENT_SETTINGS_BUTTON,
+				]),
 				'onclick' => new Buttons\JsHandler('BX.Crm.Router.Instance.closeSettingsMenu'),
 			];
 		}

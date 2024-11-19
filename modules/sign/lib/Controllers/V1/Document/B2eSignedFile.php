@@ -7,10 +7,9 @@ use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Security\Sign\BadSignatureException;
 use Bitrix\Main\Security\Sign\Signer;
-use Bitrix\Main\UserTable;
-use Bitrix\Sign\Type;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Operation\GetSignedB2eFileUrl;
+use Bitrix\Sign\Type\EntityFileCode;
 use Bitrix\Sign\Util\Request\File;
 
 class B2eSignedFile extends \Bitrix\Sign\Engine\Controller
@@ -33,9 +32,15 @@ class B2eSignedFile extends \Bitrix\Sign\Engine\Controller
 	 * @throws ObjectNotFoundException
 	 * @throws BadSignatureException
 	 */
-	public function downloadAction(int $entityTypeId, int $entityId, string $sign): Main\Engine\Response\BFile | array
+	public function downloadAction(int $entityTypeId, int $entityId, string $sign, int $fileCode): Main\Engine\Response\BFile | array
 	{
+		if (!in_array($fileCode, EntityFileCode::getAll(), true))
+		{
+			return [];
+		}
+
 		$signer = new Signer();
+
 		if ($signer->unsign($sign, GetSignedB2eFileUrl::B2eFileSalt) !== "$entityTypeId$entityId")
 		{
 			$this->addError(new Main\Error(
@@ -63,7 +68,7 @@ class B2eSignedFile extends \Bitrix\Sign\Engine\Controller
 		$entity = Service\Container::instance()->getEntityFileRepository()->getOne(
 			$entityTypeId,
 			$entityId,
-			\Bitrix\Sign\Type\EntityFileCode::SIGNED
+			$fileCode,
 		);
 
 		if (!$entity)
@@ -96,7 +101,7 @@ class B2eSignedFile extends \Bitrix\Sign\Engine\Controller
 
 		return Main\Engine\Response\BFile::createByFileId($entity->fileId, $name)
 			->showInline(false)
-		;
+			;
 	}
 
 	private function getFileExtension(\Bitrix\Sign\Item\EntityFile $entity): string

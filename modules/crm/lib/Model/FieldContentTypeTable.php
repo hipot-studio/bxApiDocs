@@ -8,6 +8,7 @@ use Bitrix\Main\ORM\Fields\EnumField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\Result;
+use Bitrix\Main\DB\SqlQueryException;
 
 /**
  * Class FieldContentTypeTable
@@ -178,10 +179,20 @@ final class FieldContentTypeTable extends \Bitrix\Main\ORM\Data\DataManager
 		/** @var EO_FieldContentType $entityObject */
 		foreach ($toSave as $entityObject)
 		{
-			$saveResult = $entityObject->save();
-			if (!$saveResult->isSuccess())
+			try
 			{
-				$result->addErrors($saveResult->getErrors());
+				$saveResult = $entityObject->save();
+				if (!$saveResult->isSuccess())
+				{
+					$result->addErrors($saveResult->getErrors());
+				}
+			}
+			catch (SqlQueryException $e)
+			{
+				if (mb_strpos($e->getMessage(), 'Duplicate entry') === false)
+				{
+					throw $e;
+				}
 			}
 		}
 

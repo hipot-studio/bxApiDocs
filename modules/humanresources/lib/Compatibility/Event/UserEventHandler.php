@@ -35,10 +35,7 @@ class UserEventHandler
 			self::updateNodeMemberLink($fields);
 		}
 
-		if (self::isActiveChanged($fields))
-		{
-			self::updateNodeMemberActive($fields);
-		}
+		self::updateNodeMemberActive($fields);
 	}
 
 	public static function onAfterUserDelete($id): void
@@ -202,6 +199,9 @@ class UserEventHandler
 
 	private static function updateNodeMemberActive(array $fields): void
 	{
+		$user = \CUser::GetByID($fields['ID'])->Fetch();
+
+		$fields['ACTIVE'] = $user['ACTIVE'];
 		$activeValue = $fields['ACTIVE'];
 		if (!in_array($activeValue, ['Y', 'N'], true))
 		{

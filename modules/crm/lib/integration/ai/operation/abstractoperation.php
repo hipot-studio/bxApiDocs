@@ -43,13 +43,15 @@ abstract class AbstractOperation
 	public const TYPE_ID = 0;
 	public const CONTEXT_ID = '';
 
+	protected static int $engineId = 0;
+
 	/** @var class-string<Dto> */
 	protected const PAYLOAD_CLASS = Dto::class;
 	protected const ENGINE_CATEGORY = 'text';
 	protected const ENGINE_CODE = EventHandler::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_TEXT_CODE;
 
 	private bool $isManualLaunch = true;
-	private ?string $contextLanguageId = null;
+	private ?string $contextLanguageId;
 
 	public function __construct(
 		protected ItemIdentifier $target,
@@ -176,7 +178,7 @@ abstract class AbstractOperation
 
 			$result->addError(ErrorCode::getAIDisabledError(['sliderCode' => AIManager::AI_DISABLED_SLIDER_CODE]));
 
-			static::notifyAboutJobError($result, false,);
+			static::notifyAboutJobError($result, false);
 
 			return $result;
 		}
@@ -476,6 +478,7 @@ abstract class AbstractOperation
 			'RETRY_COUNT' => new SqlExpression('?# + 1', 'RETRY_COUNT'),
 			'IS_MANUAL_LAUNCH' => $this->isManualLaunch,
 			'LANGUAGE_ID' => $this->contextLanguageId,
+			'ENGINE_ID' => self::$engineId,
 		];
 	}
 
@@ -489,6 +492,7 @@ abstract class AbstractOperation
 			'PARENT_ID' => (int)$this->parentJobId,
 			'IS_MANUAL_LAUNCH' => $this->isManualLaunch,
 			'LANGUAGE_ID' => $this->contextLanguageId,
+			'ENGINE_ID' => self::$engineId,
 		];
 	}
 
@@ -527,11 +531,18 @@ abstract class AbstractOperation
 			return null;
 		}
 
-		return Engine::getByCode(
+		$engine = Engine::getByCode(
 			$item->getValue(),
 			$context,
 			static::ENGINE_CATEGORY,
 		);
+
+		if ($engine && $engine->getIEngine()->isThirdParty())
+		{
+			self::$engineId = $engine->getIEngine()->getRestItem()->getId();
+		}
+
+		return $engine;
 	}
 
 	private function isAiMarketplaceAppsExist(): bool
@@ -676,11 +687,20 @@ abstract class AbstractOperation
 			static::notifyAboutJobError($result, true, false);
 		}
 
-		self::constructJobFinishEventBuilder($job)
+		$builder = self::constructJobFinishEventBuilder($job)
 			?->setStatus($result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR)
-			->buildEvent()
-			->send()
 		;
+		if ($builder)
+		{
+			$builder->buildEvent()->send();
+			// send the same analytics only with different TOOL and CATEGORY
+			$builder
+				->setTool(Dictionary::TOOL_CRM)
+				->setCategory(Dictionary::CATEGORY_AI_OPERATIONS)
+				->buildEvent()
+				->send()
+			;
+		}
 
 		AIManager::logger()->debug(
 			'{date}: {class}: Job for target {hash} finished with result {result}' . PHP_EOL,
@@ -730,11 +750,19 @@ abstract class AbstractOperation
 			);
 		}
 
-		self::constructJobFinishEventBuilder($job)
-			?->setStatus(Dictionary::STATUS_ERROR)
-			->buildEvent()
-			->send()
-		;
+		$builder = self::constructJobFinishEventBuilder($job)
+			?->setStatus(Dictionary::STATUS_ERROR);
+		if ($builder)
+		{
+			$builder->buildEvent()->send();
+			// send the same analytics only with different TOOL and CATEGORY
+			$builder
+				->setTool(Dictionary::TOOL_CRM)
+				->setCategory(Dictionary::CATEGORY_AI_OPERATIONS)
+				->buildEvent()
+				->send()
+			;
+		}
 
 		return $result;
 	}
@@ -998,7 +1026,7 @@ abstract class AbstractOperation
 			return;
 		}
 
-		(new CallParsingEvent())
+		$builder = (new CallParsingEvent())
 			->setIsManualLaunch($result->isManualLaunch())
 			->setActivityOwnerTypeId($owner->getEntityTypeId())
 			->setActivityId($activityId)
@@ -1006,6 +1034,12 @@ abstract class AbstractOperation
 			->setTotalScenarioDuration($totalScenarioDuration)
 			->setElement(Dictionary::ELEMENT_COPILOT_BUTTON)
 			->setStatus(CallParsingEvent::resolveStatusByJobResult($result))
+		;
+		$builder->buildEvent()->send();
+		// send the same analytics only with different TOOL and CATEGORY
+		$builder
+			->setTool(Dictionary::TOOL_CRM)
+			->setCategory(Dictionary::CATEGORY_AI_OPERATIONS)
 			->buildEvent()
 			->send()
 		;

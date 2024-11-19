@@ -1478,8 +1478,16 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 			if (!empty($inputOptions["params"]))
 			{
 				$ajaxOptions["data"] = $inputOptions["params"];
-				$ajaxOptions["data"]["selfFolder"] = $this->getSignedParameters() ?
-					$this->arParams["SEF_FOLDER"] : $inputOptions["params"]["selfFolder"];
+				if ($this->getSignedParameters())
+				{
+					$ajaxOptions["data"]["selfFolder"] = $this->arParams["SEF_FOLDER"] ?? '';
+				}
+				else
+				{
+					$ajaxOptions["data"]["selfFolder"] = $inputOptions["params"]["selfFolder"] ?? '';
+				}
+/*				$ajaxOptions["data"]["selfFolder"] = $this->getSignedParameters() ?
+					$this->arParams["SEF_FOLDER"] : $inputOptions["params"]["selfFolder"]; */
 			}
 		}
 

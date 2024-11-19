@@ -2,19 +2,19 @@
 
 namespace Bitrix\Crm\Activity\Mail;
 
-use Bitrix\Main;
-use Bitrix\Main\Loader;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Uf\FileUserType;
+use Bitrix\Main;
+use Bitrix\Main\Loader;
 
 final class MailEntitiesDiskHelper
 {
 	/**
 	 * @var array<int, int>
 	 */
-	private array $arFileIds = [];
+	private array $fileIdsArray = [];
 	/**
 	 * @var array<int, int>
 	 */
@@ -76,7 +76,7 @@ final class MailEntitiesDiskHelper
 			$forkedArFileIds,
 			$this->attachToFileIds,
 		] = $this->copyFiles($shouldForkOldFiles, $fileToAttachObjectIds, $folder, $userId);
-		$this->arFileIds = array_replace($this->arFileIds, $forkedArFileIds);
+		$this->fileIdsArray = array_replace($this->fileIdsArray, $forkedArFileIds);
 
 		if ($this->saveAsTemplate)
 		[
@@ -119,17 +119,32 @@ final class MailEntitiesDiskHelper
 				$securityContext = $file->getStorage()->getSecurityContext($userId);
 				$moduleId = $file->getStorage()->getModuleId();
 
-				if (
-					!in_array($value, $this->filesWithoutPermissionCheck, true)
-					&& $moduleId !== 'documentgenerator'
-					&& !$file->canRead($securityContext)
-				)
+				if (in_array($value, $this->filesWithoutPermissionCheck, true))
+				{
+					$shouldSkipReadPermissionsCheck = true;
+				}
+				//todo remove this if-branch when documentgenerator update is out
+				elseif ($moduleId === 'documentgenerator')
+				{
+					$canReadWorksCorrectlyOnDocuments =
+						Loader::includeModule('documentgenerator')
+						&& class_exists('\Bitrix\DocumentGenerator\Integration\Disk\SecurityContext')
+					;
+
+					$shouldSkipReadPermissionsCheck = !$canReadWorksCorrectlyOnDocuments;
+				}
+				else
+				{
+					$shouldSkipReadPermissionsCheck = false;
+				}
+
+				if (!$shouldSkipReadPermissionsCheck && !$file->canRead($securityContext))
 				{
 					continue;
 				}
 
 				$fileId = (int)$file->getId();
-				$this->arFileIds[$fileId] = $fileId;
+				$this->fileIdsArray[$fileId] = $fileId;
 
 				if (!$this->saveAsTemplate)
 				{
@@ -189,7 +204,7 @@ final class MailEntitiesDiskHelper
 	 */
 	private function copyFiles(array $shouldForkFiles, array $fileToAttachObjectIds, Folder $folder, int $userId): array
 	{
-		$arFileIds = [];
+		$fileIdsArray = [];
 		$attachToFileIds = [];
 
 		foreach ($shouldForkFiles as $file)
@@ -202,14 +217,14 @@ final class MailEntitiesDiskHelper
 
 			$fileId = (int)$file->getId();
 			$forkedFileId = (int)$forkedFile->getId();
-			$arFileIds[$fileId] = $forkedFileId;
+			$fileIdsArray[$fileId] = $forkedFileId;
 			if (isset($fileToAttachObjectIds[$fileId]))
 			{
 				$attachToFileIds[$forkedFileId] = $fileToAttachObjectIds[$fileId];
 			}
 		}
 
-		return [$arFileIds, $attachToFileIds];
+		return [$fileIdsArray, $attachToFileIds];
 	}
 
 
@@ -219,7 +234,7 @@ final class MailEntitiesDiskHelper
 	 */
 	public function getArFileIds(): array
 	{
-		return $this->arFileIds;
+		return $this->fileIdsArray;
 	}
 
 	/**

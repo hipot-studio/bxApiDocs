@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Ldap\EncryptionType;
 use Bitrix\Ldap\Internal\Security\Password;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Authentication\ApplicationPasswordTable;
@@ -8,7 +9,7 @@ use Bitrix\Main\Authentication\ApplicationPasswordTable;
  * Bitrix Framework
  * @package bitrix
  * @subpackage ldap
- * @copyright 2001-2020 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
 
 class CLDAP
@@ -20,8 +21,19 @@ class CLDAP
 	protected $arGroupMaps;
 	protected $groupsLists = array();
 
+	/**
+	 * @deprecated use Bitrix\Ldap\EncryptionType instead
+	 */
 	const CONNECTION_TYPE_SIMPLE = 0;
+
+	/**
+	 * @deprecated use Bitrix\Ldap\EncryptionType instead
+	 */
 	const CONNECTION_TYPE_SSL = 1;
+
+	/**
+	 * @deprecated use Bitrix\Ldap\EncryptionType instead
+	 */
 	const CONNECTION_TYPE_TLS = 2;
 
 	protected $isTlsStarted = false;
@@ -35,7 +47,13 @@ class CLDAP
 	{
 		global $APPLICATION;
 
-		if($this->conn = @ldap_connect($this->arFields["SERVER"], $this->arFields['PORT']))
+		$encryptionType = EncryptionType::tryFrom((int)$this->arFields['CONNECTION_TYPE']) ?? EncryptionType::None;
+		$port = (int)$this->arFields['PORT'] > 0 ? (int)$this->arFields['PORT'] : $encryptionType->port();
+		$host = str_starts_with($this->arFields['SERVER'], 'ldap://') || str_starts_with($this->arFields['SERVER'], 'ldaps://')
+			? $this->arFields['SERVER']
+			: $encryptionType->scheme() . '://' . $this->arFields['SERVER'];
+
+		if ($this->conn = @ldap_connect("$host:$port"))
 		{
 			$ldapOptTimelimit = isset($this->arFields["LDAP_OPT_TIMELIMIT"]) ? (int)$this->arFields["LDAP_OPT_TIMELIMIT"] : 100;
 			$ldapOptTimeout = isset($this->arFields["LDAP_OPT_TIMEOUT"]) ? (int)$this->arFields["LDAP_OPT_TIMEOUT"] : 5;
@@ -48,8 +66,8 @@ class CLDAP
 			@ldap_set_option($this->conn, LDAP_OPT_TIMEOUT, $ldapOptTimeout);
 			@ldap_set_option($this->conn, LDAP_OPT_NETWORK_TIMEOUT, $ldapOptNetworkTimeout);
 
-			$login = isset($this->arFields["~ADMIN_LOGIN"]) ? $this->arFields["~ADMIN_LOGIN"] : $this->arFields["ADMIN_LOGIN"];
-			$pass = isset($this->arFields["~ADMIN_PASSWORD"]) ? $this->arFields["~ADMIN_PASSWORD"] : $this->arFields["ADMIN_PASSWORD"];
+			$login = $this->arFields["~ADMIN_LOGIN"] ?? $this->arFields["ADMIN_LOGIN"];
+			$pass = $this->arFields["~ADMIN_PASSWORD"] ?? $this->arFields["ADMIN_PASSWORD"];
 
 			return $this->Bind($login, $pass);
 		}
@@ -67,8 +85,8 @@ class CLDAP
 			return false;
 
 		return $this->Bind(
-			(isset($this->arFields["~ADMIN_LOGIN"])?$this->arFields["~ADMIN_LOGIN"]:$this->arFields["ADMIN_LOGIN"]),
-			(isset($this->arFields["~ADMIN_PASSWORD"])?$this->arFields["~ADMIN_PASSWORD"]:$this->arFields["ADMIN_PASSWORD"])
+			($this->arFields["~ADMIN_LOGIN"] ?? $this->arFields["ADMIN_LOGIN"]),
+			($this->arFields["~ADMIN_PASSWORD"] ?? $this->arFields["ADMIN_PASSWORD"])
 		);
 	}
 
@@ -82,7 +100,7 @@ class CLDAP
 		if(mb_strpos($password, "\0") !== false || $password == '')
 			return false;
 
-		if(intval($this->arFields["CONNECTION_TYPE"]) == CLDAP::CONNECTION_TYPE_TLS)
+		if(intval($this->arFields["CONNECTION_TYPE"]) === EncryptionType::Tls->value)
 			if(!$this->startTls())
 				return false;
 
@@ -118,9 +136,9 @@ class CLDAP
 	}
 
 	/**
-	 * @return array
+	 * @return string[]
 	 */
-	public function RootDSE()
+	public function RootDSE(): array
 	{
 		$values = $this->_RootDSE('namingcontexts');
 		if (!$values)
@@ -133,7 +151,9 @@ class CLDAP
 			return [];
 		}
 
-		return $this->WorkAttr($values);
+		unset($values['count']);
+
+		return $values;
 	}
 
 	/**
@@ -142,7 +162,7 @@ class CLDAP
 	 */
 	public function _RootDSE($filtr)
 	{
-		$sr = ldap_read($this->conn, '', 'objectClass=*', Array($filtr), 0);
+		$sr = ldap_read($this->conn, '', 'objectClass=*', Array($filtr));
 		if ($sr === false)
 		{
 			return false;
@@ -286,7 +306,7 @@ class CLDAP
 
 	protected function setFieldAsAttr(array $attrArray, $fieldName)
 	{
-		$field = isset($this->arFields["~".$fieldName]) ? $this->arFields["~".$fieldName] : $this->arFields[$fieldName];
+		$field = $this->arFields["~" . $fieldName] ?? $this->arFields[$fieldName];
 		$field = mb_strtolower($field);
 
 		if(!in_array($field, $attrArray))
@@ -473,7 +493,7 @@ class CLDAP
 				// user AD parameters are queried here, inside FindUser function
 				if($arLdapUser)
 				{
-					$userId = (int)$xLDAP->SetUser(
+					$userId = $xLDAP->SetUser(
 						$arLdapUser,
 						(COption::GetOptionString("ldap", "add_user_when_auth", "Y") === "Y")
 					);
@@ -650,7 +670,7 @@ class CLDAP
 			{
 				if($arLdapUser = $serv->FindUser($login))
 				{
-					$userId = (int)$serv->SetUser(
+					$userId = $serv->SetUser(
 						$arLdapUser,
 						(COption::GetOptionString("ldap", "add_user_when_auth", "Y") === "Y")
 					);
@@ -693,7 +713,7 @@ class CLDAP
 			$arParams = array(array(&$arFields, &$arLdapUser));
 			if(ExecuteModuleEventEx($arEvent, $arParams)===false)
 			{
-				if(!($err = $APPLICATION->GetException()))
+				if(!$APPLICATION->GetException())
 					$APPLICATION->ThrowException("Unknown error");
 				return false;
 			}
@@ -713,8 +733,8 @@ class CLDAP
 					$departmentCache[$username] = $arDepartment;
 
 				// this is not final assignment
-				// $arFields['UF_DEPARTMENT'] sould contain array of department ids
-				// but somehow we have to return an information whether this user is a department head
+				// $arFields['UF_DEPARTMENT'] sould contain array of department ids,
+				// but somehow we have to return an information whether this user is a department head,
 				// so we'll save this data here temporarily
 				$arFields['UF_DEPARTMENT'] = $arDepartment;
 			}
@@ -813,7 +833,7 @@ class CLDAP
 				return false;
 
 			// get structure's iblock id
-			$iblockId=COption::GetOptionInt("intranet", "iblock_structure",  false, false);
+			$iblockId=COption::GetOptionInt("intranet", "iblock_structure",  false);
 			if (!$iblockId)
 				return false;
 
@@ -846,7 +866,7 @@ class CLDAP
 					$mgrDepartment = $possibleManager[$this->arFields['USER_DEPARTMENT_ATTR']];
 					if ($mgrDepartment && trim($mgrDepartment)!='')
 					{
-						// if manager's department name is set - then get it's id
+						// if manager's department name is set - then get its id
 						$mgrManagerDN = $possibleManager[$this->arFields['USER_MANAGER_ATTR']];
 						$mgrUserName = $possibleManager[$this->arFields['USER_ID_ATTR']];
 						$arManagerDep = $this->GetDepartmentIdForADUser($mgrDepartment, $mgrManagerDN, $mgrUserName, $cache, $iblockId, $names);
@@ -890,13 +910,13 @@ class CLDAP
 			}
 			else
 			{
-				// if have no manager's department and no own department:
+				// if no manager's department and no own department:
 				// - use default as our department and root as parent section if default is set
 				// - or just root if default has empty value
 				// - or return false, if setting of default department is turned off
 				if ($this->arFields['STRUCT_HAVE_DEFAULT'] && $this->arFields['STRUCT_HAVE_DEFAULT'] == "Y")
 				{
-					// if can use default department
+					// can use default department
 					$department = $this->arFields['DEFAULT_DEPARTMENT_NAME'];
 					if ($department && trim($department)!='')
 					{
@@ -911,7 +931,7 @@ class CLDAP
 				}
 				else
 				{
-					// if have no department in AD and no default - then do not set a department
+					// if no department in AD and no default - then do not set a department
 					return false;
 				}
 			}
@@ -927,9 +947,9 @@ class CLDAP
 		$dbExistingSections = GetIBlockSectionList(
 			$iblockId,
 			($parentSectionId >= 0 ? $parentSectionId : false),
-			$arOrder = Array("left_margin" => "asc"),
-			$cnt = 0,
-			$arFilter = Array('NAME' => $department)
+			Array("left_margin" => "asc"),
+			0,
+			Array('NAME' => $department)
 		);
 
 		$departmentId = false;
@@ -945,7 +965,7 @@ class CLDAP
 			);
 			if ($parentSectionId>=0)
 				$arNewSectFields["IBLOCK_SECTION_ID"] = $parentSectionId;
-			// and get it's Id
+			// and get its ID
 			$departmentId = $bs->Add($arNewSectFields);
 		}
 
@@ -978,14 +998,12 @@ class CLDAP
 
 				case 'GROUP_DN':
 					$temp = '';
-					$temp_cnt = 0;
 					if(!is_array($value))
 						$value = array($value);
 					foreach($value as $group)
 					{
 						if($group == '')
 							continue;
-						$temp_cnt++;
 						$temp .= '('.$this->arFields['USER_GROUP_ATTR'].'='.$this->specialchars($group).')';
 					}
 					$query .= '(|'.$temp.')';
@@ -1071,7 +1089,7 @@ class CLDAP
 			}
 			else
 			{
-				$DEF_DOMAIN_ID = intval(COption::GetOptionInt('ldap', 'ntlm_default_server', 0));
+				$DEF_DOMAIN_ID = COption::GetOptionInt('ldap', 'ntlm_default_server', 0);
 				if($DEF_DOMAIN_ID > 0)
 					$arFilterServer['ID'] = $DEF_DOMAIN_ID;
 				else
@@ -1159,7 +1177,7 @@ class CLDAP
 		$dbRes = CUser::GetById($uid);
 		$arUser = $dbRes->Fetch();
 
-		if(!isset($arUser["PERSONAL_PHOTO"]) || is_null($arUser["PERSONAL_PHOTO"]))
+		if(!isset($arUser["PERSONAL_PHOTO"]))
 			return false;
 
 		if($arLdapUser["PERSONAL_PHOTO"] == "")
@@ -1229,7 +1247,7 @@ class CLDAP
 				{
 					if($arLdapUser["EMAIL"] == '')
 					{
-						$arLdapUser["EMAIL"] = COption::GetOptionString("ldap", "default_email", 'no@email');
+						$arLdapUser["EMAIL"] = COption::GetOptionString("ldap", "default_email", 'no@email.test');
 					}
 
 					$arLdapUser['PASSWORD'] = (string)(new Password());
@@ -1336,4 +1354,3 @@ class CLDAP
 		);
 	}
 }
-

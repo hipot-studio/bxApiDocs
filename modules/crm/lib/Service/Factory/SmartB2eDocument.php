@@ -45,11 +45,6 @@ class SmartB2eDocument extends Dynamic
 		return false;
 	}
 
-	public function isPaymentsEnabled(): bool
-	{
-		return false;
-	}
-
 	public function isLinkWithProductsEnabled(): bool
 	{
 		return false;
@@ -326,5 +321,10 @@ class SmartB2eDocument extends Dynamic
 		);
 
 		return $operation;
+	}
+
+	public function isCommunicationRoutingSupported(): bool
+	{
+		return false;
 	}
 }

@@ -169,7 +169,10 @@ final class AIManager
 
 	public static function isBaasServiceAvailable(): bool
 	{
-		if (Loader::includeModule('baas'))
+		if (
+			Loader::includeModule('ai')
+			&& Loader::includeModule('baas')
+		)
 		{
 			if (!self::$baasService)
 			{
@@ -184,7 +187,10 @@ final class AIManager
 
 	public static function isBaasServiceHasPackage(): bool
 	{
-		if (Loader::includeModule('baas'))
+		if (
+			Loader::includeModule('ai')
+			&& Loader::includeModule('baas')
+		)
 		{
 			if (!self::$baasService)
 			{

@@ -26,7 +26,6 @@ class GoToWeb extends AbstractMenuItem
 	{
 		return [
 			'type' => 'qrauth',
-			'title' => Loc::getMessage('TO_LOGIN_ON_DESKTOP'),
 			'showHint' => false,
 		];
 	}

@@ -42,6 +42,7 @@ class CrmItemDeadlinesComponent extends Bitrix\Crm\Component\ItemList
 		$this->arResult['categoryId'] = $this->category->getId();
 		$this->arResult['entityTypeDescription'] = $this->factory->getEntityDescription();
 		$this->arResult['isCountersEnabled'] = $this->factory->getCountersSettings()->isCountersEnabled();
+		$this->arResult['pathToMerge'] = $this->router->getEntityMergeUrl($this->entityTypeId);
 
 		$section = Dictionary::getAnalyticsEntityType($this->entityTypeId) . '_section';
 		$this->arResult['analytics'] = [

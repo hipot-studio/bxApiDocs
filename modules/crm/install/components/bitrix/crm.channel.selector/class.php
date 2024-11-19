@@ -162,7 +162,7 @@ class CrmChannelSelectorComponent extends Base
 			}
 		}
 
-		foreach (Integration\SmsManager::getSenderInfoList() as $senderInfo)
+		foreach (Integration\SmsManager::getSenderInfoList(true) as $senderInfo)
 		{
 			// template based providers can not send links
 			if ($senderInfo['isTemplatesBased'])
@@ -170,14 +170,31 @@ class CrmChannelSelectorComponent extends Base
 				continue;
 			}
 
-			$channels[] = [
-				'type' => Phone::ID,
-				'title' => $senderInfo['name'],
-				'canBeShown' => $senderInfo['canUse'],
-				'isAvailable' => $senderInfo['canUse'] && !empty($communications[Phone::ID]),
-				'id' => $senderInfo['id'],
-				'categoryTitle' => Loc::getMessage('CRM_CHANNEL_SELECTOR_CATEGORY_SMS'),
-			];
+			if ($senderInfo['fromList'])
+			{
+				foreach ($senderInfo['fromList'] as $provider)
+				{
+					$channels[] = [
+						'type' => Phone::ID,
+						'title' => $provider['name'],
+						'canBeShown' => $senderInfo['canUse'],
+						'isAvailable' => $senderInfo['canUse'] && !empty($communications[Phone::ID]),
+						'id' => $provider['id'],
+						'categoryTitle' => Loc::getMessage('CRM_CHANNEL_SELECTOR_CATEGORY_SMS'),
+					];
+				}
+			}
+			else
+			{
+				$channels[] = [
+					'type' => Phone::ID,
+					'title' => $senderInfo['name'],
+					'canBeShown' => $senderInfo['canUse'],
+					'isAvailable' => $senderInfo['canUse'] && !empty($communications[Phone::ID]),
+					'id' => $senderInfo['id'],
+					'categoryTitle' => Loc::getMessage('CRM_CHANNEL_SELECTOR_CATEGORY_SMS'),
+				];
+			}
 		}
 
 		return $channels;

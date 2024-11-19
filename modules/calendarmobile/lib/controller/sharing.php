@@ -227,12 +227,15 @@ class Sharing extends Controller
 
 		$linkInfo = $this->getLinkInfoCrm($entityId, $ownerId);
 
+		$sharing = new \Bitrix\Calendar\Sharing\Sharing(\CCalendar::GetCurUserId());
+
 		return Dto\Sharing::make([
 			'isEnabled' => true,
 			'shortUrl' => $linkInfo['url'],
 			'isRestriction' => false,
 			'isPromo' => false,
 			'settings' => $this->getSettings($linkInfo),
+			'userInfo' => $sharing->getUserInfo(),
 		]);
 	}
 

@@ -47,7 +47,7 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 		);
 
 		$requisiteId = $this->getRequisiteId($requisiteSettings);
-		$bankDetailId = $this->getBankDetailId($requisiteSettings, $requisiteId, $this->RequisitePresetId);
+		$bankDetailId = $this->getBankDetailId($requisiteSettings, $requisiteId, $this->getRequisitePresetId());
 
 		$this->updateRequisite($requisiteId, $bankDetailId, $fieldsValues);
 
@@ -64,7 +64,7 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 		$requisiteFieldValues = $requisiteValues['RequisiteFields'];
 		$addressFieldValues = $requisiteValues['RequisiteFields'][EntityRequisite::ADDRESS][$this->AddressTypeId] ?? [];
 		unset($requisiteFieldValues['RequisiteFields'][EntityRequisite::ADDRESS]);
-		$countryId = EntityRequisite::getSingleInstance()->getCountryIdByPresetId($this->RequisitePresetId);
+		$countryId = EntityRequisite::getSingleInstance()->getCountryIdByPresetId($this->getRequisitePresetId());
 
 		$debugValues = array_merge($requisiteFieldValues, $addressFieldValues, $requisiteValues['BankDetailFields']);
 
@@ -87,7 +87,7 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 	{
 		$requisiteFieldsIds = EntityRequisite::getSingleInstance()->getRqFields();
 		$presetFieldsIds = array_column(
-			EntityPreset::getSingleInstance()->getById($this->RequisitePresetId)['SETTINGS']['FIELDS'],
+			EntityPreset::getSingleInstance()->getById($this->getRequisitePresetId())['SETTINGS']['FIELDS'],
 			null,
 			'FIELD_NAME'
 		);

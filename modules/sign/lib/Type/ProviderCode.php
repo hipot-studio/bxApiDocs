@@ -55,4 +55,16 @@ final class ProviderCode
 
 		return self::isValid($convertedProviderCode) ? $convertedProviderCode : null;
 	}
+
+	public static function toRepresentativeString(string $providerCode): string
+	{
+		return match ($providerCode)
+		{
+			self::GOS_KEY => 'goskey',
+			self::TAXCOM => 'taxcom',
+			self::SES_RU => 'ses-ru',
+			self::SES_COM => 'ses-com',
+			default => '',
+		};
+	}
 }

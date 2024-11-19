@@ -765,4 +765,9 @@ final class Deal extends Factory
 	{
 		return true;
 	}
+
+	public function isCommunicationRoutingSupported(): bool
+	{
+		return true;
+	}
 }

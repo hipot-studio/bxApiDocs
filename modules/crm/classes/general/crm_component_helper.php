@@ -7,8 +7,10 @@ use Bitrix\Crm\EntityAddressType;
 use Bitrix\Crm\EntityBankDetail;
 use Bitrix\Crm\EntityPreset;
 use Bitrix\Crm\EntityRequisite;
+use Bitrix\Crm\Integration\BankDetailResolver;
 use Bitrix\Crm\Integration\ClientResolver;
 use Bitrix\Crm\Integration\OpenLineManager;
+use Bitrix\Crm\Integration\Rest\AppPlacement;
 use Bitrix\Crm\Integrity\DuplicateControl;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Restriction\RestrictionManager;
@@ -478,7 +480,6 @@ class CCrmComponentHelper
 	public static function getRequisiteAutocompleteFieldInfoData(int $countryId): array
 	{
 		$clientResolverPropertyType = ClientResolver::getClientResolverPropertyWithPlacements($countryId);
-		$placementParams = ClientResolver::getClientResolverPlacementParams($countryId);
 		$featureRestriction = ClientResolver::getRestriction($countryId);
 
 		return [
@@ -488,52 +489,19 @@ class CCrmComponentHelper
 			,
 			'placeholder' => ClientResolver::getClientResolverPlaceholderText($countryId),
 			'feedback_form' => EntityRequisite::getRequisiteFeedbackFormParams(),
-			'clientResolverPlacementParams' => $placementParams
+			'clientResolverPlacementParams' => ClientResolver::getClientResolverPlacementParams($countryId),
 		];
 	}
 
 	public static function getBankDetailsAutocompleteFieldInfoData(int $countryId): array
 	{
-		$enabled = false;
-		$title = '';
-
-		if (
-			$countryId === 1    // ru
-			&& RestrictionManager::isDetailsSearchByInnPermitted()
-		)
-		{
-			$enabled = true;
-			$bankDetailsEntity = new EntityBankDetail();
-			$titles = $bankDetailsEntity->getFieldsTitles($countryId);
-			$title = $titles['RQ_BIK'];
-		}
-
-		/*$featureRestriction = ClientResolver::getRestriction($countryId);*/
+		$clientResolverPropertyType = BankDetailResolver::getClientResolverPropertyWithPlacements($countryId);
 
 		return [
-			'enabled' => $enabled,
-			'featureRestrictionCallback' =>/*
-				$featureRestriction ? $featureRestriction->prepareInfoHelperScript() :*/ ''
-			,
-			'placeholder' => ClientResolver::getClientResolverPlaceholderTextByTitle($title),
-			/*'feedback_form' => EntityRequisite::getBankDetailsFeedbackFormParams(),*/
-			'clientResolverProperty' => [
-				'VALUE' => ClientResolver::PROP_BIC,
-				'TITLE' => $title,
-				'IS_PLACEMENT' => 'N',
-				'COUNTRY_ID' => $countryId,
-			],
-			'clientResolverPlacementParams' => [
-				'isPlacement' => false,
-				'numberOfPlacements' => 0,
-				'countryId' => $countryId,
-				'defaultAppInfo' => [
-					'code' => '',
-					'title' => '',
-					'isAvailable' => 'N',
-					'isInstalled' => 'N',
-				],
-			],
+			'enabled' => !!$clientResolverPropertyType,
+			'featureRestrictionCallback' => '',
+			'placeholder' => BankDetailResolver::getClientResolverPlaceholderText($countryId),
+			'clientResolverPlacementParams' => BankDetailResolver::getClientResolverPlacementParams($countryId),
 		];
 	}
 

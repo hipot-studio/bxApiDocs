@@ -5,9 +5,12 @@ namespace Bitrix\Crm\Controller\Autorun;
 use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\SetCategoryPreparedData;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Operation\TransactionWrapper;
 use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
 final class SetCategory extends Base
@@ -67,6 +70,16 @@ final class SetCategory extends Base
 		if (!($data instanceof SetCategoryPreparedData))
 		{
 			throw new ArgumentTypeException('data', SetCategoryPreparedData::class);
+		}
+
+		$permissions = Container::getInstance()->getUserPermissions();
+
+		if (!(
+			!$item->isNew() && $permissions->checkAddPermissions($item->getEntityTypeId(), $data->categoryId)
+			)
+		)
+		{
+			return (new Result())->addError(new Error(Loc::getMessage('CRM_COMMON_ERROR_ACCESS_DENIED')));
 		}
 
 		$item->setCategoryId($data->categoryId);

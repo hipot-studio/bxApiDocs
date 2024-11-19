@@ -323,7 +323,7 @@ class CCrmContactDetailsComponent
 								'ADD_EVENT_NAME' => 'CrmCreateDealFromContact',
 								'ANALYTICS' => [
 									// we dont know where from this component was opened from - it could be anywhere on portal
-									// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CONTACT,
+									'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CONTACT,
 									'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 								],
 							], 'crm.deal.list')
@@ -355,7 +355,7 @@ class CCrmContactDetailsComponent
 								'ADD_EVENT_NAME' => 'CrmCreateQuoteFromContact',
 								'ANALYTICS' => [
 									// we dont know where from this component was opened from - it could be anywhere on portal
-									// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CONTACT,
+									'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CONTACT,
 									'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 								],
 							], 'crm.quote.list'),
@@ -407,7 +407,7 @@ class CCrmContactDetailsComponent
 								'ADD_EVENT_NAME' => 'CrmCreateInvoiceFromContact',
 								'ANALYTICS' => [
 									// we dont know where from this component was opened from - it could be anywhere on portal
-									// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CONTACT,
+									'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CONTACT,
 									'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 								],
 							], 'crm.invoice.list'),
@@ -458,7 +458,7 @@ class CCrmContactDetailsComponent
 								'BUILDER_CONTEXT' => Crm\Product\Url\ProductBuilder::TYPE_ID,
 								'ANALYTICS' => [
 									// we dont know where from this component was opened from - it could be anywhere on portal
-									// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CONTACT,
+									'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CONTACT,
 									'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 								],
 							], 'crm.order.list')

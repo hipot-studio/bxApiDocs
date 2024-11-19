@@ -20,6 +20,7 @@ use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Controllers\V1\Document\B2eSignedFile;
 use Bitrix\Sign\Operation\GetSignedB2eFileUrl;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Type\EntityFileCode;
 use Bitrix\Sign\Type\EntityType;
 use CCrmPerms;
 use CRestServer;
@@ -64,7 +65,8 @@ final class MySafe extends IRestService
 			$result = $controller->downloadAction(
 				EntityType::MEMBER,
 				$id = (int)($query['id'] ?? 0),
-				(new Signer())->sign(EntityType::MEMBER . '' . $id, GetSignedB2eFileUrl::B2eFileSalt)
+				(new Signer())->sign(EntityType::MEMBER . '' . $id, GetSignedB2eFileUrl::B2eFileSalt),
+				(int)($query['fileCode'] ?? EntityFileCode::SIGNED),
 			);
 		}
 		catch (\Exception $error)

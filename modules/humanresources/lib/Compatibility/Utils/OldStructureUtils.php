@@ -31,7 +31,7 @@ final class OldStructureUtils
 			'ACTIVE' => $params['ACTIVE'] ?? 'Y',
 			'SORT' => $params['SORT'] ?? null,
 			'IBLOCK_SECTION_ID' => $params['PARENT'] ?? null,
-			'UF_HEAD' => $params['UF_HEAD'] ?? null
+			'UF_HEAD' => $params['UF_HEAD'] ?? null,
 		];
 
 		$iBlockSection = new \CIBlockSection();
@@ -84,7 +84,7 @@ final class OldStructureUtils
 
 		if (array_key_exists('PARENT', $params))
 		{
-			$updatedFields['PARENT'] = $params['PARENT'];
+			$updatedFields['IBLOCK_SECTION_ID'] = $params['PARENT'];
 		}
 
 		if (array_key_exists('UF_HEAD', $params))

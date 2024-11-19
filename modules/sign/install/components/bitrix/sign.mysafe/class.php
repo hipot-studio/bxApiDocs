@@ -23,7 +23,6 @@ use Bitrix\Main\UserTable;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Sign\Access\AccessController;
 use Bitrix\Sign\Access\ActionDictionary;
-use Bitrix\Sign\Access\Permission\PermissionDictionary;
 use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
 use Bitrix\Sign\Access\Service\RolePermissionService;
 use Bitrix\Sign\Document;

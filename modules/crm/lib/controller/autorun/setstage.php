@@ -4,7 +4,11 @@ namespace Bitrix\Crm\Controller\Autorun;
 
 use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\SetStagePreparedData;
+use Bitrix\Crm\Integration\Analytics\Builder\Entity\CloseEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\PhaseSemantics;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Operation\TransactionWrapper;
 use Bitrix\Main\ArgumentTypeException;
@@ -77,5 +81,49 @@ final class SetStage extends Base
 		$operation = $factory->getUpdateOperation($item);
 
 		return (new TransactionWrapper($operation))->launch();
+	}
+
+	protected function sendAnalyticsData(PreparedData $data, array $response): void
+	{
+		/** @var SetStagePreparedData $data */
+		$stageSemantic = Container::getInstance()
+			->getFactory($data->entityTypeId)
+			?->getStageSemantics($data->stageId);
+
+		if (!PhaseSemantics::isFinal($stageSemantic))
+		{
+			return;
+		}
+
+		$element = Dictionary::ELEMENT_GRID_GROUP_ACTIONS_LOSE_STAGE;
+		if ($stageSemantic === PhaseSemantics::SUCCESS)
+		{
+			$element = Dictionary::ELEMENT_GRID_GROUP_ACTIONS_WON_STAGE;
+		}
+
+		$builder = CloseEvent::createDefault($data->entityTypeId)
+			->setSection(Dictionary::getAnalyticsEntityType($data->entityTypeId) . '_section')
+			->setSubSection(Dictionary::SUB_SECTION_LIST)
+			->setElement($element);
+
+		if ($this->progress->hasSuccessIds())
+		{
+			$successStatus = $builder
+				->setP2('ids', implode(',', $this->progress->getSuccessIds()))
+				->setStatus(Dictionary::STATUS_SUCCESS)
+			;
+
+			$successStatus->buildEvent()->send();
+		}
+
+		if ($this->progress->hasErrorIds())
+		{
+			$errorStatus = $builder
+				->setP2('ids', implode(',', $this->progress->getErrorIds()))
+				->setStatus(Dictionary::STATUS_ERROR)
+			;
+
+			$errorStatus->buildEvent()->send();
+		}
 	}
 }

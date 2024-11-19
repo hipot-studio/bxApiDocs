@@ -2,12 +2,10 @@
 
 namespace Bitrix\Sign\Operation;
 
-use Bitrix\Sign\File;
 use Bitrix\Sign\Service;
-use Bitrix\Sign\Type;
-use Bitrix\Sign\Item;
 use Bitrix\Sign\Repository;
 use Bitrix\Sign\Contract;
+use Bitrix\Main\Web\Uri;
 
 use Bitrix\Main;
 
@@ -56,12 +54,17 @@ class GetSignedB2eFileUrl implements Contract\Operation
 			$data['ext'] = $file->type === 'application/zip' ? 'zip' : 'pdf';
 			$signer = new Main\Security\Sign\Signer();
 			$sign= $signer->sign("$this->entityTypeId$this->entityId", self::B2eFileSalt);
-			$data['url'] = self::AJAX_PATH . '?'
-				. 'action=sign.api_v1.Document.B2eSignedFile.download'
-				. '&entityTypeId=' . $this->entityTypeId
-				. '&entityId=' . $this->entityId
-				. '&sign=' . $sign
-			;
+
+			$uri = new Uri(self::AJAX_PATH);
+			$uri->addParams([
+				'action' => 'sign.api_v1.Document.B2eSignedFile.download',
+				'entityTypeId' => $this->entityTypeId,
+				'entityId' => $this->entityId,
+				'sign' => $sign,
+				'fileCode' => $this->code
+			]);
+
+			$data['url'] = $uri->getUri();
 			$this->ready = true;
 			$result->setData($data);
 		}

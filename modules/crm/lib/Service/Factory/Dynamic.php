@@ -631,4 +631,9 @@ class Dynamic extends Service\Factory
 	{
 		return CustomSectionProvider::hasCustomSection($this);
 	}
+
+	public function isCommunicationRoutingSupported(): bool
+	{
+		return true;
+	}
 }

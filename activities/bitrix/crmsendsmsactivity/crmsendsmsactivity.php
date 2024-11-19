@@ -539,32 +539,37 @@ class CBPCrmSendSmsActivity extends CBPActivity
 			'application_token' => \CRestUtil::getApplicationToken($application),
 		];
 
-		$queryItems = [
-			\Bitrix\Rest\Sqs::queryItem(
-				$provider['APP_ID'],
-				$provider['HANDLER'],
-				[
-					'workflow_id' => $this->getWorkflowInstanceId(),
-					'type' => $provider['TYPE'],
-					'code' => $provider['CODE'],
-					'document_id' => $this->GetDocumentId(),
-					'document_type' => $this->GetDocumentType(),
-					'properties' => [
-						'phone_number' => $phoneNumber,
-						'message_text' => $messageText,
-					],
-					'ts' => time(),
+		$queryItem = \Bitrix\Rest\Sqs::queryItem(
+			$provider['APP_ID'],
+			$provider['HANDLER'],
+			[
+				'workflow_id' => $this->getWorkflowInstanceId(),
+				'type' => $provider['TYPE'],
+				'code' => $provider['CODE'],
+				'document_id' => $this->GetDocumentId(),
+				'document_type' => $this->GetDocumentType(),
+				'properties' => [
+					'phone_number' => $phoneNumber,
+					'message_text' => $messageText,
 				],
-				$auth,
-				[
-					"sendAuth" => true,
-					"sendRefreshToken" => false,
-					"category" => \Bitrix\Rest\Sqs::CATEGORY_BIZPROC,
-				]
-			),
-		];
+				'ts' => time(),
+			],
+			$auth,
+			[
+				"sendAuth" => true,
+				"sendRefreshToken" => false,
+				"category" => \Bitrix\Rest\Sqs::CATEGORY_BIZPROC,
+			],
+		);
 
-		\Bitrix\Rest\OAuthService::getEngine()->getClient()->sendEvent($queryItems);
+		if (is_callable([\Bitrix\Rest\Event\Sender::class, 'queueEvent']))
+		{
+			\Bitrix\Rest\Event\Sender::queueEvent($queryItem);
+		}
+		else
+		{
+			\Bitrix\Rest\OAuthService::getEngine()->getClient()->sendEvent([$queryItem]);
+		}
 
 		return true;
 	}

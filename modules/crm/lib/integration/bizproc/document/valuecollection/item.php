@@ -46,6 +46,7 @@ class Item extends Base
 
 		$this->appendDefaultUserPrefixes();
 		$this->loadFmValues();
+		$this->normalizeEntityBindings(['COMPANY_ID', 'CONTACT_ID']);
 		$this->loadUserFieldValues();
 
 		$this->document = Crm\Entity\CommentsHelper::prepareFieldsFromBizProc($this->typeId, $this->id, $this->document);

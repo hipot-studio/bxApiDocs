@@ -3,6 +3,7 @@
 namespace Bitrix\Calendar\Application;
 
 use Bitrix\Calendar\Application\Command\BusyAttendees;
+use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Managers\Accessibility;
 use Bitrix\Calendar\Core\Section\Section;
 use Bitrix\Calendar\Internals\Exception\AttendeeBusy;
@@ -26,7 +27,7 @@ class AttendeeService
 		$calType = $section->getType() ?? '';
 
 		return $accessCodes !== ['U'.$userId]
-			|| in_array($calType, ['group', 'company_calendar'], true);
+			|| in_array($calType, ['group', 'company_calendar', Dictionary::CALENDAR_TYPE['open_event']], true);
 	}
 
 	public function excludeAttendees(array $attendees, array $attendeesCodes, ?string $paramExcludeUsers): array
@@ -62,7 +63,7 @@ class AttendeeService
 	/**
 	 * @throws AttendeeBusy
 	 */
-	public function checkBusyAttendees(BusyAttendees $command, ?array $paramAttendees, ?int $eventId = null): void
+	public function checkBusyAttendees(BusyAttendees $command, ?array $paramAttendees, ?int $eventId = null, array $additionalExcludeUsers = []): void
 	{
 		$attendees = [];
 		$eventId = $eventId ?? 0;
@@ -88,7 +89,7 @@ class AttendeeService
 			$timestampTo += \CCalendar::GetDayLen();
 		}
 
-		$busyUsers = $this->getBusyUsersIds($attendees, $eventId, $timestampFrom, $timestampTo);
+		$busyUsers = $this->getBusyUsersIds($attendees, $eventId, $timestampFrom, $timestampTo, $additionalExcludeUsers);
 		if (!empty($busyUsers))
 		{
 			$busyUsersList = \CCalendarEvent::getUsersDetails($busyUsers);
@@ -100,9 +101,9 @@ class AttendeeService
 		}
 	}
 
-	private function getBusyUsersIds(array $attendees, int $curEventId, int $fromTs, int $toTs): array
+	private function getBusyUsersIds(array $attendees, int $curEventId, int $fromTs, int $toTs, array $additionalExcludeUsers): array
 	{
-		$usersToCheck = $this->getUsersToCheck($attendees);
+		$usersToCheck = $this->getUsersToCheck($attendees, $additionalExcludeUsers);
 		if (empty($usersToCheck))
 		{
 			return [];
@@ -114,17 +115,18 @@ class AttendeeService
 			->getBusyUsersIds($usersToCheck, $fromTs, $toTs);
 	}
 
-	private function getUsersToCheck(array $attendees): array
+	private function getUsersToCheck(array $attendees, array $additionalExcludeUsers): array
 	{
 		$usersToCheck = [];
 		foreach ($attendees as $attId)
 		{
-			if ((int)$attId !== \CCalendar::GetUserId())
+			$attendeeId = (int)$attId;
+			if ($attendeeId !== \CCalendar::GetUserId() && !in_array($attendeeId, $additionalExcludeUsers, true))
 			{
-				$userSettings = UserSettings::get((int)$attId);
+				$userSettings = UserSettings::get($attendeeId);
 				if ($userSettings && $userSettings['denyBusyInvitation'])
 				{
-					$usersToCheck[] = (int)$attId;
+					$usersToCheck[] = $attendeeId;
 				}
 			}
 		}

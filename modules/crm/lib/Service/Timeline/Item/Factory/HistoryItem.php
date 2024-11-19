@@ -364,6 +364,11 @@ class HistoryItem
 		{
 			if ($typeCategoryId === TimelineType::MARK)
 			{
+				if ($model->getHistoryItemModel()?->get('PRINTING') === 'Y')
+				{
+					return new Item\LogMessage\OrderCheckPrinting($context, $model);
+				}
+
 				return new Item\LogMessage\OrderCheckSent($context, $model);
 			}
 

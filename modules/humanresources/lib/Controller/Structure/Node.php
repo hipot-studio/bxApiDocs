@@ -2,6 +2,10 @@
 
 namespace Bitrix\HumanResources\Controller\Structure;
 
+use Bitrix\HumanResources\Access\Rule\StructureBaseRule;
+use Bitrix\HumanResources\Access\StructureAccessController;
+use Bitrix\HumanResources\Access\StructureActionDictionary;
+use Bitrix\HumanResources\Attribute;
 use Bitrix\HumanResources\Exception\CreationFailedException;
 use Bitrix\HumanResources\Exception\DeleteFailedException;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
@@ -9,11 +13,12 @@ use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Engine\Controller;
 use Bitrix\HumanResources\Contract\Service\NodeService;
 use Bitrix\HumanResources\Item;
+use Bitrix\HumanResources\Type\AccessibleItemType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Request;
 use Bitrix\Main\SystemException;
 
@@ -27,19 +32,25 @@ final class Node extends Controller
 		parent::__construct($request);
 	}
 
+	#[Attribute\StructureActionAccess(
+		permission: StructureActionDictionary::ACTION_DEPARTMENT_CREATE,
+		itemType: AccessibleItemType::NODE,
+		itemParentIdRequestKey: 'parentId',
+	)]
 	public function addAction(
 		string $nodeName,
 		int $parentId,
 		Item\Structure $structure,
+		NodeEntityType $entityType = NodeEntityType::DEPARTMENT,
 	): array
 	{
-		// @ToDo support other NodeEntityType
 		$node = new Item\Node(
 			name: $nodeName,
-			type: NodeEntityType::DEPARTMENT,
+			type: $entityType,
 			structureId: $structure->id,
 			parentId: $parentId,
 		);
+
 		try
 		{
 			$this->nodeService->insertNode($node);
@@ -59,6 +70,11 @@ final class Node extends Controller
 		return [];
 	}
 
+	#[Attribute\StructureActionAccess(
+		permission: StructureActionDictionary::ACTION_DEPARTMENT_DELETE,
+		itemType: AccessibleItemType::NODE,
+		itemIdRequestKey: 'nodeId',
+	)]
 	public function deleteAction(Item\Node $node): array
 	{
 		try
@@ -77,10 +93,16 @@ final class Node extends Controller
 		return [];
 	}
 
+	#[Attribute\StructureActionAccess(
+		permission: StructureActionDictionary::ACTION_DEPARTMENT_EDIT,
+		itemType: AccessibleItemType::NODE,
+		itemIdRequestKey: 'nodeId',
+		itemParentIdRequestKey: 'parentId',
+	)]
 	public function updateAction(
 		Item\Node $node,
-		?string $nodeName,
-		?int $parentId,
+		?string $nodeName = null,
+		?int $parentId = null,
 	): array
 	{
 		if ($nodeName)

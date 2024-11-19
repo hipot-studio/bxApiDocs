@@ -76,7 +76,6 @@ class LeadTarget extends BaseTarget
 			'DISABLE_USER_FIELD_CHECK' => true,
 			'REGISTER_SONET_EVENT' => true,
 			'CURRENT_USER' => $executeBy ?? 0, //System user
-			'CHECK_TRANSITION_ACCESS_ENABLED' => 'N',
 		]);
 
 		return $result;

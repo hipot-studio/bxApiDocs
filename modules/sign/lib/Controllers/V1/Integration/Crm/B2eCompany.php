@@ -35,11 +35,11 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 			return [];
 		}
 
-		$companies = $this->getCrmMyCompanies();
-		$this->appendRequisites($companies);
+		$myCompanyService = $this->container->getCrmMyCompanyService();
+		$companies = $myCompanyService->listWithTaxIds();
 
 		return [
-			'showTaxId' => !$this->isTaxIdIsCompanyId(),
+			'showTaxId' => !$myCompanyService->isTaxIdIsCompanyId(),
 			'companies' => $this->getFilledRegisteredCompanies($companies)
 				->sortProviders()
 				->toArray(),
@@ -56,49 +56,6 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 		$this->addErrorsFromResult($result);
 
 		return [];
-	}
-
-	private function appendRequisites(MyCompanyCollection $myCompanies): void
-	{
-		if (!$myCompanies->count())
-		{
-			return;
-		}
-
-		if ($this->isTaxIdIsCompanyId())
-		{
-			foreach ($myCompanies as $company)
-			{
-				$company->taxId = (string)$company->id;
-			}
-
-			return;
-		}
-
-		foreach ($myCompanies as $company)
-		{
-			$defaultRequisite = new DefaultRequisite(
-				new ItemIdentifier(\CCrmOwnerType::Company, $company->id)
-			);
-			$requisite = $defaultRequisite->get();
-			$company->taxId = $requisite['RQ_INN'] ?? null;
-		}
-	}
-
-	private function isTaxIdIsCompanyId(): bool
-	{
-		return Application::getInstance()->getLicense()->getRegion() !== 'ru';
-	}
-
-
-	/**
-	 * Get crm my companies
-	 *
-	 * @return MyCompanyCollection
-	 */
-	private function getCrmMyCompanies(): MyCompanyCollection
-	{
-		return Connector\Crm\MyCompany::listItems();
 	}
 
 	private function getFilledRegisteredCompanies(MyCompanyCollection $myCompanies): CompanyCollection

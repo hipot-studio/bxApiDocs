@@ -11,6 +11,7 @@ class Mail extends Service
 {
 	public const MEETING_STATUS_CREATED = 'created';
 	public const MEETING_STATUS_CANCELLED = 'cancelled';
+	public const STATUS_INVITE_LINK = 'invite_link';
 
 	/**
 	 * @param string $to
@@ -89,6 +90,42 @@ class Mail extends Service
 		return $this->sendMessage($to, $arParams, $subject);
 	}
 
+	public function sendInviteLink(string $to): bool
+	{
+		if ($this->crmDealLink === null)
+		{
+			return false;
+		}
+
+		Sharing\Helper::setSiteLanguage();
+
+		$subject = $this->getInviteLinkSubject();
+		$arParams = $this->getInviteLinkParams($this->crmDealLink);
+
+		return $this->sendMessage($to, $arParams, $subject);
+	}
+
+	public function getInviteLinkSubject(): string
+	{
+		return Loc::getMessage('EC_CALENDAR_SHARING_MAIL_SUBJECT_INVITE_LINK');
+	}
+
+	public function getInviteLinkParams(Sharing\Link\CrmDealLink $crmDealLink): array
+	{
+		$ownerId = $crmDealLink->getOwnerId();
+		$owner = Sharing\Helper::getOwnerInfo($ownerId);
+
+		return [
+			'STATUS' => self::STATUS_INVITE_LINK,
+			'OWNER_AVATAR' => $owner['photo'] ?? '',
+			'OWNER_NAME' => "{$owner['name']} {$owner['lastName']}",
+			'AVATARS' => $this->getAvatars($crmDealLink),
+			'CALENDAR_LINK' => $crmDealLink->getUrl() . Sharing\Helper::ACTION_OPENED,
+			'ABUSE_LINK' => Sharing\Helper::getEmailAbuseLink($ownerId, $crmDealLink->getUrl()),
+			'BITRIX24_LINK' => $this->getBitrix24Link(),
+		];
+	}
+
 	public function notifyAboutSharingEventEdit(string $to): bool
 	{
 		//TODO waiting for mail template
@@ -153,19 +190,25 @@ class Mail extends Service
 			'TZ_TO' => $this->event->getEndTimeZone()?->getTimeZone()->getName(),
 			'ABUSE_LINK' => $this->getAbuseLink(),
 			'BITRIX24_LINK' => $this->getBitrix24Link(),
+			'AVATARS' => $this->getAvatars($this->getParentLink()),
 		];
 
-		$parentLink = $this->getParentLink();
+		return $arParams;
+	}
+
+	protected function getAvatars(?Sharing\Link\Joint\JointLink $parentLink): array
+	{
+		$avatars = [];
+
 		if (!is_null($parentLink))
 		{
-			$arParams['AVATARS'] = [];
 			foreach ($parentLink->getMembers() as $member)
 			{
-				$arParams['AVATARS'][] = $member->getAvatar();
+				$avatars[] = empty($member->getAvatar()) ? '/bitrix/images/1.gif' : $member->getAvatar();
 			}
 		}
 
-		return $arParams;
+		return $avatars;
 	}
 
 	protected function getParentLink(): ?Sharing\Link\Joint\JointLink

@@ -496,7 +496,16 @@ class PushWatchingManager
 
 		while ($row = $query->Fetch())
 		{
-			$manager = $this->getOutgoingManager($row['CONNECTION_ID']);
+			/** @var Connection $connection */
+			$connection = $this->mapperFactory->getConnection()->getById($row['CONNECTION_ID']);
+			if ($connection === null || $connection->getOwner()?->getId() === null)
+			{
+				SectionConnectionTable::delete($row['ID']);
+
+				continue;
+			}
+
+			$manager = $this->getOutgoingManager($connection);
 			/** @var SectionConnection $link */
 			$link = $this->mapperFactory->getSectionConnection()->getById($row['ID']);
 			try
@@ -549,7 +558,14 @@ class PushWatchingManager
 		{
 			try
 			{
-				$manager = $this->getOutgoingManager($row['ID']);
+				/** @var Connection $connection */
+				$connection = $this->mapperFactory->getConnection()->getById($row['ID']);
+				if ($connection === null || $connection->getOwner()?->getId() === null)
+				{
+					return;
+				}
+
+				$manager = $this->getOutgoingManager($connection);
 				$manager->subscribeConnection();
 			}
 			catch (Exception $e)
@@ -562,21 +578,18 @@ class PushWatchingManager
 	}
 
 	/**
-	 * @param $connectionId
-	 *
+	 * @param Connection $connection
 	 * @return OutgoingManager
 	 *
-	 * @throws ArgumentException
 	 * @throws ObjectNotFoundException
 	 */
-	private function getOutgoingManager($connectionId): OutgoingManager
+	private function getOutgoingManager(Connection $connection): OutgoingManager
 	{
-		if (empty(static::$outgoingManagersCache[$connectionId]))
+		if (empty(static::$outgoingManagersCache[$connection->getId()]))
 		{
-			$connection = $this->mapperFactory->getConnection()->getById($connectionId);
-			static::$outgoingManagersCache[$connectionId] = new OutgoingManager($connection);
+			static::$outgoingManagersCache[$connection->getId()] = new OutgoingManager($connection);
 		}
 
-		return static::$outgoingManagersCache[$connectionId];
+		return static::$outgoingManagersCache[$connection->getId()];
 	}
 }

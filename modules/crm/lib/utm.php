@@ -122,12 +122,28 @@ class UtmTable extends Entity\DataManager
 
 			if ($isAdd)
 			{
-				$addFields = $primary;
-				$addFields['VALUE'] = $fields[$code];
-				$resultDb = static::add($addFields);
+				try
+				{
+					if (static::getRowById($primary))
+					{
+						$resultDb = static::update($primary, ['VALUE' => $fields[$code]]);
+					}
+					else
+					{
+						$addFields = $primary;
+						$addFields['VALUE'] = $fields[$code];
+						$resultDb = static::add($addFields);
+					}
+				}
+				catch (\Exception)
+				{
+				}
 			}
 
-			$resultDb->isSuccess();
+			if (isset($resultDb))
+			{
+				$resultDb->isSuccess();
+			}
 		}
 
 		self::invalidateEntityUtmCache($entityTypeId, $entityId);

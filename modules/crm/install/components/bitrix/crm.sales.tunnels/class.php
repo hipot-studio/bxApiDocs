@@ -325,19 +325,22 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 
 	private function isCategoryEditable()
 	{
-		return Crm\Service\Container::getInstance()->getUserPermissions()->canWriteConfig()
-			&& $this->factory->getEntityTypeId() !== \CCrmOwnerType::Lead;
+		$entityTypeId = $this->factory->getEntityTypeId();
+		return Crm\Service\Container::getInstance()->getUserPermissions()->isAdminForEntity($entityTypeId)
+			&& $entityTypeId !== \CCrmOwnerType::Lead;
 	}
 
 	private function isCategoryCreatable()
 	{
-		return Crm\Service\Container::getInstance()->getUserPermissions()->canWriteConfig()
-			&& $this->factory->getEntityTypeId() !== \CCrmOwnerType::Lead;
+		$entityTypeId = $this->factory->getEntityTypeId();
+		return Crm\Service\Container::getInstance()->getUserPermissions()->isAdminForEntity($entityTypeId)
+			&& $entityTypeId !== \CCrmOwnerType::Lead;
 	}
 
 	private function areStagesEditable()
 	{
-		return Crm\Service\Container::getInstance()->getUserPermissions()->canWriteConfig();
+		$entityTypeId = $this->factory->getEntityTypeId();
+		return Crm\Service\Container::getInstance()->getUserPermissions()->isAdminForEntity($entityTypeId);
 	}
 
 	private function isAutomationEnabled()

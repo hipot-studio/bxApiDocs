@@ -9,12 +9,14 @@ use Bitrix\Crm\Filter;
 use Bitrix\Crm\Filter\ItemDataProvider;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Kanban;
+use Bitrix\Crm\Merger\EntityMergerFactory;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Search\SearchEnvironment;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\UI\Filter\Options;
 use CCrmPerms;
@@ -124,11 +126,13 @@ class Dynamic extends Kanban\Entity
 		{
 			return null;
 		}
+		//@codingStandardsIgnoreStart
 		$component->arParams = [
 			'ENTITY_TYPE_ID' => $this->factory->getEntityTypeId(),
 			'ENTITY_ID' => 0,
 			'categoryId' => $this->getCategoryId(),
 		];
+		//@codingStandardsIgnoreEnd
 
 		$component->init();
 		if ($component->getErrors())
@@ -521,11 +525,8 @@ class Dynamic extends Kanban\Entity
 		{
 			return $result->addError(new Error('Category not found'));
 		}
-		if (!Service\Container::getInstance()->getUserPermissions()->canViewItemsInCategory($category))
-		{
-			return $result->addError(new Error('Access Denied'));
-		}
 
+		$permissions = Container::getInstance()->getUserPermissions();
 		foreach($ids as $id)
 		{
 			$item = $this->factory->getItem($id);
@@ -533,6 +534,15 @@ class Dynamic extends Kanban\Entity
 			{
 				continue;
 			}
+
+			if (!(
+				!$item->isNew() > 0 && $permissions->checkAddPermissions($this->getTypeId(), $categoryId)
+			))
+			{
+				$result->addError(new Error(Loc::getMessage('CRM_COMMON_ERROR_ACCESS_DENIED')));
+				continue;
+			}
+
 			$item->setCategoryId($categoryId);
 			$operation = $this->factory->getUpdateOperation($item);
 			$updateResult = $operation->launch();
@@ -568,6 +578,7 @@ class Dynamic extends Kanban\Entity
 				'showPersonalSetStatusNotCompletedText' => true,
 				'useFactoryBasedApproach' => true,
 				'isRecyclebinEnabled' => $this->factory->isRecyclebinEnabled(),
+				'canUseMergeInPanel' => EntityMergerFactory::isEntityTypeSupported($this->factory->getEntityTypeId()),
 			]
 		);
 	}
@@ -619,5 +630,29 @@ class Dynamic extends Kanban\Entity
 			'HIDE_SUM',
 			["STAGE_ID{$stageId}"]
 		);
+	}
+
+	public function getCategoriesWithAddPermissions(\CCrmPerms $permissions): array
+	{
+		$result = [];
+		if (!$this->factory->isCategoriesSupported())
+		{
+			return $result;
+		}
+
+		$router = Container::getInstance()->getRouter();
+		$categories = $this->factory->getCategories();
+		$permissions = Container::getInstance()->getUserPermissions();
+		foreach ($categories as $category)
+		{
+			$categoryId = $category->getId();
+			if ($permissions->checkAddPermissions($this->getTypeId(), $categoryId))
+			{
+				$result[$categoryId] = $category->getData();
+				$result[$categoryId]['url'] = $router->getKanbanUrl($this->getTypeId(), $categoryId);
+			}
+		}
+
+		return $result;
 	}
 }

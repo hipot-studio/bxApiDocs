@@ -35,17 +35,15 @@ class ToDo extends Item
 		$options = \CUserOptions::getOption('crm', 'todo', []);
 		$isTourViewedInWeb = (bool)($options['isTimelineTourViewedInWeb'] ?? false);
 		$isHideAllTours = (Option::get('crm.tour', 'HIDE_ALL_TOURS', 'N') === 'Y');
-		$useTodoEditorV2 = \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled();
 
 		return [
 			'currentUser' => $this->getCurrentUser(),
 			'pingSettings' => $this->getPingSettings(),
 			'copilotSettings' => $this->getCopilotSettings(),
-			'colorSettings' => $useTodoEditorV2 ? $this->getColorSettings() : null,
+			'colorSettings' => $this->getColorSettings(),
 			'calendarSettings' => $this->getCalendarSettings(),
 			'actionMenuSettings' => $this->getActionMenuSettings(),
-			'useTodoEditorV2' => $useTodoEditorV2,
-			'isTourViewed' => $isTourViewedInWeb || $isHideAllTours || !$useTodoEditorV2,
+			'isTourViewed' => $isTourViewedInWeb || $isHideAllTours,
 		];
 	}
 

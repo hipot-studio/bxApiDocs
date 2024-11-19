@@ -1341,7 +1341,7 @@ class EntityBankDetail
 	public function getFormFieldsTypes()
 	{
 		return array(
-			'AUTOCOMPLETE' => 'requisite_qutocomplete',
+			'AUTOCOMPLETE' => 'requisite_autocomplete',
 			'RQ_BANK_ADDR' => 'textarea',
 			'COMMENTS' => 'textarea'
 		);

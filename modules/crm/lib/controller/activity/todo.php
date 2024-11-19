@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Controller\Activity;
 
+use Bitrix\Calendar\UserSettings;
 use Bitrix\Crm\Activity\Entity;
 use Bitrix\Crm\Activity\Provider;
 use Bitrix\Crm\Activity\Provider\ToDo\Block\Calendar;
@@ -15,21 +16,106 @@ use Bitrix\Crm\Controller\Base;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Entity\MessageBuilder\ProcessToDoActivityResponsible;
 use Bitrix\Crm\Integration\Disk\HiddenStorage;
-use Bitrix\Crm\Item;
 use Bitrix\Crm\Integration\Im\ProcessEntity\ToDoResponsibleNotification;
+use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Multifield\Type\Phone;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
-use Bitrix\Crm\Settings\Crm;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\PhoneNumber\Parser;
 use CCrmOwnerType;
 
 class ToDo extends Base
 {
+	public function getCalendarConfigAction(ItemIdentifier $itemIdentifier, ?int $activityId = null): ?array
+	{
+		if (!Loader::includeModule('calendar'))
+		{
+			$this->addError(new Error(Loc::getMessage('CRM_ACTIVITY_TODO_CALENDAR_MODULE_NOT_INSTALLED')));
+
+			return null;
+		}
+
+		if (!Container::getInstance()->getUserPermissions()->checkReadPermissions(
+			$itemIdentifier->getEntityTypeId(),
+			$itemIdentifier->getEntityId())
+		)
+		{
+			$this->setAccessDenied();
+
+			return null;
+		}
+
+		$userId = $this->getCurrentUserId();
+		$calendarOwnerId = null;
+		if ($activityId)
+		{
+			$activity = \CCrmActivity::GetByID($activityId);
+
+			if (!$activity)
+			{
+				$this->addError(ErrorCode::getNotFoundError());
+
+				return null;
+			}
+
+			$authorId = $activity['AUTHOR_ID'];
+			$readOnly = $userId !== (int)$authorId;
+			$crmSectionId = \Bitrix\Crm\Integration\Calendar::getCrmSectionId($authorId);
+			$availableSections = \Bitrix\Crm\Integration\Calendar::getSectionListAvailableForUser($authorId);
+
+			$calendarOwnerId = $authorId;
+		}
+		else
+		{
+			$readOnly = false;
+			$crmSectionId = \Bitrix\Crm\Integration\Calendar::getCrmSectionId($userId);
+			$availableSections = \Bitrix\Crm\Integration\Calendar::getSectionListAvailableForUser($userId);
+
+			$calendarOwnerId = $userId;
+		}
+
+		if (empty($availableSections))
+		{
+			$defaultUserCalendar = \Bitrix\Crm\Integration\Calendar::createDefault([
+				'type' => 'user',
+				'ownerId' => $calendarOwnerId,
+			]);
+
+			if ($defaultUserCalendar)
+			{
+				$availableSections[] = $defaultUserCalendar;
+				$crmSectionId = $defaultUserCalendar['ID'];
+			}
+		}
+
+		$trackingUsersList = UserSettings::getTrackingUsers($userId);
+
+		$sections = [];
+		foreach ($availableSections as $section)
+		{
+			$sections[] = [
+				'ID' => (int)$section['ID'],
+				'NAME' => $section['NAME'],
+				'COLOR' => $section['COLOR'],
+				'OWNER_ID' => (int)$section['OWNER_ID'],
+				'CAL_TYPE' => $section['CAL_TYPE'],
+				'PERM' => $section['PERM'],
+				'DEFAULT' => (int)$section['ID'] === $crmSectionId,
+			];
+		}
+
+		return [
+			'sections' => $sections,
+			'trackingUsersList' => $trackingUsersList,
+			'readOnly' => $readOnly,
+		];
+	}
+
 	public function bindClientAction(Factory $factory, Item $entity, int $clientId, int $clientTypeId): ?array
 	{
 		$clientIdentifier = new ItemIdentifier($clientTypeId, $clientId);
@@ -189,7 +275,7 @@ class ToDo extends Base
 	{
 		$itemIdentifier = new ItemIdentifier($ownerTypeId, $ownerId);
 
-		$todo = Entity\ToDo::loadNearest($itemIdentifier);
+		$todo = (new Entity\ToDo($itemIdentifier, new Provider\ToDo\ToDo()))->loadNearest();
 		if (!$todo)
 		{
 			return null;
@@ -232,7 +318,7 @@ class ToDo extends Base
 			return null;
 		}
 
-		$todo = new Entity\ToDo($identifier);
+		$todo = new Entity\ToDo($identifier, new Provider\ToDo\ToDo());
 
 		$todo = $this->getPreparedEntity(
 			$todo,
@@ -281,7 +367,7 @@ class ToDo extends Base
 			return null;
 		}
 
-		$currentUserId = Container::getInstance()->getContext()->getUserId();
+		$currentUserId = $this->getCurrentUserId();
 		if (isset($responsibleId) && $responsibleId !== $currentUserId)
 		{
 			$this->notifyResponsibleAboutAdd($todo);
@@ -335,11 +421,9 @@ class ToDo extends Base
 			return null;
 		}
 
-		$currentStorageElementIds = $todo->getStorageElementIds() ?? [];
-		if (
-			!empty($fileTokens)
-			|| (!Crm::isTimelineToDoUseV2Enabled() && !empty($currentStorageElementIds)))
+		if (!empty($fileTokens))
 		{
+			$currentStorageElementIds = $todo->getStorageElementIds() ?? [];
 			$storageElementIds = $this->saveFilesToStorage(
 				$ownerTypeId,
 				$ownerId,
@@ -587,36 +671,6 @@ class ToDo extends Base
 		return $result;
 	}
 
-	public function updatePingOffsetsAction(int $ownerTypeId, int $ownerId, int $id, array $value = []): ?array
-	{
-		$todo = $this->loadEntity($ownerTypeId, $ownerId, $id);
-		if (!$todo)
-		{
-			return null;
-		}
-
-		if ($todo->isCompleted())
-		{
-			$this->addError(new Error( Loc::getMessage('CRM_ACTIVITY_TODO_UPDATE_PING_OFFSETS_ERROR')));
-
-			return null;
-		}
-
-		$filteredValue = TodoPingSettingsProvider::filterOffsets($value);
-		if (!empty($value) && empty($filteredValue))
-		{
-			$this->addError(new Error( Loc::getMessage('CRM_ACTIVITY_TODO_WRONG_PING_OFFSETS_FORMAT')));
-
-			return null; // nothing to do - wrong input
-		}
-
-		$todo->setAdditionalFields(['PING_OFFSETS' => $filteredValue]);
-
-		$todo = (BlocksManager::createFromEntity($todo))->enrichEntityWithBlocks(null, true);
-
-		return $this->saveTodo($todo, [], true);
-	}
-
 	public function updateColorAction(int $ownerTypeId, int $ownerId, int $id, string $colorId): ?array
 	{
 		$todo = $this->loadEntity($ownerTypeId, $ownerId, $id);
@@ -649,7 +703,7 @@ class ToDo extends Base
 	protected function loadEntity(int $ownerTypeId, int $ownerId, int $id): ?Entity\ToDo
 	{
 		$itemIdentifier = new ItemIdentifier($ownerTypeId, $ownerId);
-		$todo = Entity\ToDo::load($itemIdentifier, $id);
+		$todo = (new Entity\ToDo($itemIdentifier, new Provider\ToDo\ToDo()))->load($id);
 
 		if (!$todo)
 		{
@@ -794,7 +848,7 @@ class ToDo extends Base
 
 	private function notifyResponsibleAboutAdd(Entity\ToDo $todo): void
 	{
-		$currentUserId = Container::getInstance()->getContext()->getUserId();
+		$currentUserId = $this->getCurrentUserId();
 
 		$this->getToDoResponsibleNotification($todo)
 			->sendWhenAdd($currentUserId, $todo->getResponsibleId())
@@ -803,7 +857,7 @@ class ToDo extends Base
 
 	private function notifyResponsibleAboutUpdate(Entity\ToDo $todo, int $prevResponsibleId): void
 	{
-		$currentUserId = Container::getInstance()->getContext()->getUserId();
+		$currentUserId = $this->getCurrentUserId();
 
 		$this->getToDoResponsibleNotification($todo)
 			->sendWhenUpdate(
@@ -820,5 +874,10 @@ class ToDo extends Base
 		$messageBuilder = new ProcessToDoActivityResponsible($entityTypeId);
 
 		return new ToDoResponsibleNotification($todo, $messageBuilder);
+	}
+
+	private function getCurrentUserId(): int
+	{
+		return $this->getCurrentUser()?->getId() ?? Container::getInstance()->getContext()->getUserId();
 	}
 }

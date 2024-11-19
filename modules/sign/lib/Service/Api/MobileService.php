@@ -133,4 +133,45 @@ class MobileService
 
 		return $response;
 	}
+
+	public function getExternalSigningUrl(
+		Item\Api\Mobile\Signing\ExternalUrlRequest $request
+	): Item\Api\Mobile\Signing\ExternalUrlResponse
+	{
+		$response = new Item\Api\Mobile\Signing\ExternalUrlResponse();
+
+		if (empty($request->documentUid))
+		{
+			$response->addError(new Main\Error('Request: field `documentUid` is empty'));
+		}
+
+		if (empty($request->memberUid))
+		{
+			$response->addError(new Main\Error('Request: field `memberUid` is empty'));
+		}
+
+		if (!$response->isSuccess())
+		{
+			return $response;
+		}
+
+		$result = $this->api->post(
+			"v1/b2e.provider.signing.signer.mobile.start/$request->documentUid/$request->memberUid/",
+		);
+
+		if (!$result->isSuccess())
+		{
+			$response->addErrors($result->getErrors());
+
+			return $response;
+		}
+
+		$response->url = (string)($result->getData()['url'] ?? '');
+		if (empty($response->url))
+		{
+			$response->addError(new Main\Error('Response: url is empty'));
+		}
+
+		return $response;
+	}
 }

@@ -6,7 +6,6 @@ use Bitrix\Crm\Activity\ToDo\CalendarSettings\CalendarSettingsProvider;
 use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\ItemIdentifier;
-use Bitrix\Crm\Settings;
 use CCrmViewHelper;
 use CUtil;
 
@@ -81,22 +80,12 @@ abstract class FrontIntegration
 
 	protected function colorSettings(): ?array
 	{
-		if ($this->isUseTodoEditorV2())
-		{
-			return (new ColorSettingsProvider())->fetchForJsComponent();
-		}
-
-		return null;
+		return (new ColorSettingsProvider())->fetchForJsComponent();
 	}
 
 	protected function calendarSettings(): array
 	{
 		return (new CalendarSettingsProvider())->fetchForJsComponent();
-	}
-
-	protected function isUseTodoEditorV2(): bool
-	{
-		return Settings\Crm::isTimelineToDoUseV2Enabled();
 	}
 
 	protected  function getCurrentUserInfo(): string

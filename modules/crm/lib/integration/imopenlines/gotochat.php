@@ -88,7 +88,7 @@ class GoToChat
 
 		$this->checkOwner();
 
-		if ($lineId === null)
+		if ($lineId <= 0)
 		{
 			$lineId = $this->getFirstAvailableLineId();
 		}
@@ -142,7 +142,7 @@ class GoToChat
 			return null;
 		}
 
-		$statuses = Status::getInstanceAllLine(self::TELEGRAM_BOT_CONNECTOR_ID);
+		$statuses = Status::getInstanceAllLine($this->connectorId);
 
 		foreach ($statuses as $lineId => $status)
 		{

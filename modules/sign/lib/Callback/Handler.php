@@ -13,6 +13,7 @@ use Bitrix\Sign\Item;
 use Bitrix\Sign\Operation\FillFields;
 use Bitrix\Sign\Operation\SyncMemberStatus;
 use Bitrix\Sign\Repository\DocumentRepository;
+use Bitrix\Sign\Repository\EntityFileRepository;
 use Bitrix\Sign\Repository\MemberRepository;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Counter\B2e\UserToSignDocumentCounterService;
@@ -32,6 +33,7 @@ class Handler
 	private MemberService $memberService;
 	private LegalLogService $legalLogService;
 	private readonly UserToSignDocumentCounterService $b2eUserToSignDocumentCounterService;
+	private EntityFileRepository $entityFileRepository;
 
 	public function __construct(
 		private readonly DocumentRepository $documentRepository,
@@ -41,6 +43,7 @@ class Handler
 		$this->memberService = Container::instance()->getMemberService();
 		$this->legalLogService = Container::instance()->getLegalLogService();
 		$this->b2eUserToSignDocumentCounterService = Container::instance()->getB2eUserToSignDocumentCounterService();
+		$this->entityFileRepository = Container::instance()->getEntityFileRepository();
 	}
 
 	public function execute(array $payload): Main\Result
@@ -134,6 +137,12 @@ class Handler
 			{
 				/** @var Messages\Member\MemberResultFile $message */
 				$this->processSaveResultFileForMember($message, $result);
+				break;
+			}
+			case Messages\Member\MemberPrintVersionFile::Type:
+			{
+				/** @var Messages\Member\MemberPrintVersionFile $message */
+				$this->processSavePrintVersionFileForMember($message, $result);
 				break;
 			}
 			case Messages\ResultFile::Type:
@@ -256,15 +265,11 @@ class Handler
 
 		$member = $this->memberRepository->getByUid($message->getMemberUid());
 
-		$fileRepository = Container::instance()->getEntityFileRepository();
-		$fileItem = new Item\EntityFile(
-			id: null,
-			entityTypeId: Type\EntityType::MEMBER,
-			entityId: $member->id,
-			code: Type\EntityFileCode::SIGNED,
-			fileId: $fsFile->id,
+		$isDone = $this->addFileItem(
+			$member,
+			$fsFile,
+			Type\EntityFileCode::SIGNED
 		);
-		$isDone = $fileRepository->add($fileItem);
 
 		if (!$isDone->isSuccess())
 		{
@@ -272,17 +277,116 @@ class Handler
 
 			return;
 		}
+
 		$documentItem = $this->documentRepository->getByUid($document->getUid());
-		if ($documentItem)
+
+		$this->logMemberFileSaved(
+			$documentItem,
+			$member,
+			$fsFile,
+		);
+
+		$this->updateMemberDateSigned($member);
+	}
+
+	private function processSavePrintVersionFileForMember(
+		Messages\Member\MemberPrintVersionFile $message,
+		Main\Result $result
+	): void
+	{
+		$member = $this->memberRepository->getByUid($message->getMemberUid());
+		$document = $this->documentRepository->getByUid($message->getDocumentUid());
+
+		if (!$member)
 		{
-			$this->legalLogService->registerMemberFileSaved($documentItem, $member, $fsFile->id);
+			$result->addError(new Main\Error('Member not found'));
+
+			return;
 		}
 
+		if (!$document)
+		{
+			$result->addError(new Main\Error('Document not found'));
+
+			return;
+		}
+
+		if ($member->documentId !== $document->id)
+		{
+			$result->addError(new Main\Error('Document id mismatch'));
+
+			return;
+		}
+
+		if (!isset($message->getData()['file']))
+		{
+			$result->addError(new Main\Error('Invalid file data'));
+
+			return;
+		}
+
+		$file = new File($message->getData()['file']);
+		$fsFile = \Bitrix\Sign\Item\Fs\File::createByLegacyFile($file);
+		$fsFile->dir = '';
+
+		$fsRepo = Container::instance()->getFileRepository();
+		$saveResult = $fsRepo->put($fsFile);
+
+		if (!$saveResult->isSuccess())
+		{
+			$result->addErrors($saveResult->getErrors());
+
+			return;
+		}
+
+		$isDone = $this->addFileItem(
+			$member,
+			$fsFile,
+			Type\EntityFileCode::PRINT_VERSION,
+		);
+
+		if (!$isDone->isSuccess())
+		{
+			$result->addError(new Main\Error('Failed to save file'));
+		}
+	}
+
+	private function logMemberFileSaved(
+		?Item\Document $document,
+		?Item\Member $member,
+		Item\Fs\File $fsFile,
+	): void
+	{
+		if ($document && $member)
+		{
+			$this->legalLogService->registerMemberFileSaved($document, $member, $fsFile->id);
+		}
+	}
+
+	private function updateMemberDateSigned(?Item\Member $member): void
+	{
 		if ($member !== null && $member->dateSigned === null)
 		{
 			$member->dateSigned = new Main\Type\DateTime();
 			$this->memberRepository->update($member);
 		}
+	}
+
+	private function addFileItem(
+		?Item\Member $member,
+		?Item\Fs\File $fsFile,
+		int $code,
+	): Main\Result
+	{
+		$fileItem = new Item\EntityFile(
+			id: null,
+			entityTypeId: Type\EntityType::MEMBER,
+			entityId: $member->id,
+			code: $code,
+			fileId: $fsFile->id,
+		);
+
+		return $this->entityFileRepository->add($fileItem);
 	}
 
 	private function processDocumentOperation(Messages\DocumentOperation $message, Main\Result $result): void
@@ -375,7 +479,11 @@ class Handler
 			}
 			else
 			{
-				$resultSendToChat = $hrBotMessageService->sendInviteMessage($document, $member, $message->getProvider());
+				$resultSendToChat = new Main\Result();
+				if (!$this->memberService->skipChatInvitationForMember($member, $document))
+				{
+					$resultSendToChat = $hrBotMessageService->sendInviteMessage($document, $member, $message->getProvider());
+				}
 			}
 
 			$this->sendChatMessageDeliveredTimelineEvent($resultSendToChat->isSuccess(), $document, $member, $message);
@@ -385,6 +493,7 @@ class Handler
 			}
 
 			$this->legalLogService->registerChatInviteDelivered($document, $member);
+			$this->pullService->sendMemberInvitedToSign($document, $member);
 		}
 		else
 		{

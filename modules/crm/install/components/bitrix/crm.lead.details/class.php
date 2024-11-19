@@ -254,19 +254,20 @@ class CCrmLeadDetailsComponent
 		$this->arResult['ENABLE_PROGRESS_CHANGE'] = !$this->arResult['READ_ONLY'];
 
 		$this->arResult['CONVERSION_TYPE_ID'] = LeadConversionDispatcher::resolveTypeID($this->entityData);
+		$config = LeadConversionDispatcher::getConfiguration(array('FIELDS' => $this->entityData));
+		$schemeID = $config->getSchemeID();
+
+		// always prepare a scheme. we need it for correct rendering of termination control
+		$this->arResult['CONVERSION_SCHEME'] = array(
+			'ORIGIN_URL' => $APPLICATION->GetCurPage(),
+			'SCHEME_ID' => $schemeID,
+			'SCHEME_NAME' => LeadConversionScheme::resolveName($schemeID),
+			'SCHEME_DESCRIPTION' => LeadConversionScheme::getDescription($schemeID),
+			'SCHEME_CAPTION' => GetMessage('CRM_LEAD_CREATE_ON_BASIS')
+		);
+
 		if($this->arResult['CAN_CONVERT'])
 		{
-			$config = LeadConversionDispatcher::getConfiguration(array('FIELDS' => $this->entityData));
-			$schemeID = $config->getSchemeID();
-
-			$this->arResult['CONVERSION_SCHEME'] = array(
-				'ORIGIN_URL' => $APPLICATION->GetCurPage(),
-				'SCHEME_ID' => $schemeID,
-				'SCHEME_NAME' => LeadConversionScheme::resolveName($schemeID),
-				'SCHEME_DESCRIPTION' => LeadConversionScheme::getDescription($schemeID),
-				'SCHEME_CAPTION' => GetMessage('CRM_LEAD_CREATE_ON_BASIS')
-			);
-
 			$this->arResult['CONVERSION_CONFIG'] = $config;
 
 			$this->arResult['CONVERTER_ID'] = $this->guid;
@@ -371,7 +372,7 @@ class CCrmLeadDetailsComponent
 							'ADD_EVENT_NAME' => 'CrmCreateQuoteFromLead',
 							'ANALYTICS' => [
 								// we dont know where from this component was opened from - it could be anywhere on portal
-								// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_LEAD,
+								'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_LEAD,
 								'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 							],
 						], 'crm.quote.list'),

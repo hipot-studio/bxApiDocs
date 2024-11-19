@@ -5,6 +5,7 @@ namespace Bitrix\Calendar\Core\Managers;
 use Bitrix\Calendar\Access\ActionDictionary;
 use Bitrix\Calendar\Access\EventAccessController;
 use Bitrix\Calendar\Access\Model\EventModel;
+use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Sharing\Helper;
 use Bitrix\Calendar\Util;
 use Bitrix\Main\Localization\Loc;
@@ -113,7 +114,10 @@ class Accessibility
 			'arFilter' => [
 				'FROM_LIMIT' => $from,
 				'TO_LIMIT' => $to,
-				'CAL_TYPE' => 'user',
+				'CAL_TYPE' => [
+					Dictionary::CALENDAR_TYPE['user'],
+					Dictionary::CALENDAR_TYPE['open_event'],
+				],
 				'OWNER_ID' => $userIds,
 				'ACTIVE_SECTION' => 'Y'
 			],

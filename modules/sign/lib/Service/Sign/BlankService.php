@@ -47,7 +47,7 @@ class BlankService
 	 * @throws SystemException
 	 * @throws ArgumentException
 	 */
-	public function createFromFile(FileCollection $fileCollection, string $scenario = BlankScenario::B2B): AddResult
+	public function createFromFile(FileCollection $fileCollection, string $scenario = BlankScenario::B2B, bool $forTemplate = false): AddResult
 	{
 		if (!in_array($scenario, BlankScenario::getAll(), true))
 		{
@@ -95,6 +95,7 @@ class BlankService
 				title: $firstFile->name,
 				fileCollection: new FileCollection($firstFile),
 				scenario: $scenario,
+				forTemplate: $forTemplate,
 			),
 		);
 		$files = $fileCollection->toArray();
@@ -126,7 +127,7 @@ class BlankService
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function createFromFileIds(array $files, string $scenario = BlankScenario::B2B): AddResult
+	public function createFromFileIds(array $files, string $scenario = BlankScenario::B2B, bool $forTemplate = false): AddResult
 	{
 		if (!in_array($scenario, BlankScenario::getAll(), true))
 		{
@@ -167,7 +168,7 @@ class BlankService
 			);
 		}
 
-		return $this->createFromFile($fileCollection, $scenario);
+		return $this->createFromFile($fileCollection, $scenario, $forTemplate);
 	}
 
 	public function changeBlankTitleByDocument(Document $document, string $title): Result

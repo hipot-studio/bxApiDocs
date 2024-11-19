@@ -3,8 +3,8 @@ namespace Bitrix\Crm\Automation\Target;
 
 use Bitrix\Crm\Automation\Factory;
 use Bitrix\Crm\Category\DealCategory;
-use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\DealTable;
+use Bitrix\Crm\PhaseSemantics;
 
 class DealTarget extends BaseTarget
 {
@@ -84,7 +84,6 @@ class DealTarget extends BaseTarget
 			'DISABLE_USER_FIELD_CHECK' => true,
 			'REGISTER_SONET_EVENT' => true,
 			'CURRENT_USER' => $executeBy ?? 0, //System user
-			'CHECK_TRANSITION_ACCESS_ENABLED' => 'N',
 		]);
 
 		return $updateResult;

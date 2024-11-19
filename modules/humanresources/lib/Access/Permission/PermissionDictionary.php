@@ -61,9 +61,39 @@ class PermissionDictionary extends Main\Access\Permission\PermissionDictionary
 		);
 	}
 
-
 	public static function getVariables(): array
 	{
 		return PermissionVariablesDictionary::getVariables();
+	}
+
+	public static function isNodeAccessCheckNeeded(int $permissionId): bool
+	{
+		return in_array(
+			$permissionId,
+			[
+				self::HUMAN_RESOURCES_STRUCTURE_VIEW,
+				self::HUMAN_RESOURCES_DEPARTMENT_DELETE,
+				self::HUMAN_RESOURCES_DEPARTMENT_EDIT,
+				self::HUMAN_RESOURCES_EMPLOYEE_ADD_TO_DEPARTMENT,
+				self::HUMAN_RESOURCES_EMPLOYEE_REMOVE_FROM_DEPARTMENT,
+				self::HUMAN_RESOURCES_CHAT_BIND_TO_STRUCTURE,
+				self::HUMAN_RESOURCES_CHANEL_BIND_TO_STRUCTURE,
+				self::HUMAN_RESOURCES_CHAT_UNBIND_TO_STRUCTURE,
+				self::HUMAN_RESOURCES_CHANEL_UNBIND_TO_STRUCTURE,
+			],
+			true,
+		);
+	}
+
+	public static function isParentAccessCheckNeeded(int $permissionId): bool
+	{
+		return in_array(
+			$permissionId,
+			[
+				self::HUMAN_RESOURCES_DEPARTMENT_CREATE,
+				self::HUMAN_RESOURCES_DEPARTMENT_EDIT,
+			],
+			true,
+		);
 	}
 }

@@ -10,6 +10,7 @@ use Bitrix\Sign\Access\Model\UserModel;
 use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
 use Bitrix\Sign\Access\Service\RolePermissionService;
 use Bitrix\Sign\Blank;
+use Bitrix\Sign\Config\Feature;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Document;
 use Bitrix\Sign\Error;
@@ -35,6 +36,8 @@ class SignMasterComponent extends SignBaseComponent
 	const SES_COM_AGREEMENT_DATE_YEAR = 2024;
 	const SES_COM_AGREEMENT_DATE_DAY = 1;
 	const SES_COM_AGREEMENT_DATE_MONTH = 3;
+	private const MODE_TEMPLATE = 'template';
+	private const MODE_DOCUMENT = 'document';
 
 	/**
 	 * Required params of component.
@@ -117,6 +120,7 @@ class SignMasterComponent extends SignBaseComponent
 		$this->setResult('SCENARIO', $this->getScenario());
 		$this->setResult('WIZARD_CONFIG', $this->getWizardConfig());
 		$this->setResult('STAGE_ID', $document?->getStageId());
+		$this->setResult('DOCUMENT_MODE', $this->getDocumentMode());
 		$this->setResult('BLANKS', $this->getBlanks());
 		$this->setResult('IS_MASTER_PERMISSIONS_FOR_USER_DENIED', $this->isMasterPermissionsForUserDenied($document));
 		$isSesComAgreementAccepted = $this->isSesComAgreementAccepted();
@@ -325,5 +329,24 @@ class SignMasterComponent extends SignBaseComponent
 			&& isset($agreementOptions['decision'])
 			&& $agreementOptions['decision'] === 'Y'
 		;
+	}
+
+	private function getDocumentMode(): string
+	{
+		$mode = self::MODE_DOCUMENT;
+
+		if (!Feature::instance()->isSendDocumentByEmployeeEnabled())
+		{
+			return $mode;
+		}
+
+		$modeFromRequest = (string)$this->getRequest('mode');
+
+		if (in_array($modeFromRequest, [self::MODE_TEMPLATE, self::MODE_DOCUMENT], true))
+		{
+			$mode = $modeFromRequest;
+		}
+
+		return $mode;
 	}
 }

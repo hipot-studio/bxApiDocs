@@ -2,8 +2,8 @@
 
 namespace Bitrix\Crm\Component\EntityList\NearestActivity\FrontIntegration;
 
-use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Activity\Provider;
+use Bitrix\Crm\ItemIdentifier;
 use CCrmActivityType;
 
 class ItemListFrontendIntegration extends FrontIntegration
@@ -29,7 +29,7 @@ class ItemListFrontendIntegration extends FrontIntegration
 			$itemIdentifier->getEntityId(),
 			$this->getCurrentUserInfo(),
 			$this->getSettings($itemIdentifier),
-			$this->isUseTodoEditorV2(),
+			true,
 		);
 	}
 

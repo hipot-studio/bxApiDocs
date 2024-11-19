@@ -9,6 +9,7 @@ use Bitrix\Crm\Service\Factory\SmartDocument;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Sign\Access\ActionDictionary;
+use Bitrix\Sign\Config\Feature;
 
 \CBitrixComponent::includeComponentClass('bitrix:sign.base');
 
@@ -39,6 +40,7 @@ class SignStartComponent extends SignBaseComponent
 		'list' => 'list/',
 		'mysafe' => 'mysafe/',
 		'b2e_mysafe' => 'b2e/mysafe/',
+		'b2e_employee_template_list' => 'b2e/employee/templates',
 		'contact' => 'contact/',
 		'b2e_kanban' => 'b2e/',
 		'b2e_list' => 'b2e/list/',
@@ -63,6 +65,7 @@ class SignStartComponent extends SignBaseComponent
 		'b2e_kanban' => [],
 		'b2e_list' => [],
 		'b2e_mysafe' => [],
+		'b2e_employee_template_list' => [],
 		'b2e_current' => [],
 		'contact' => [],
 		'config_permissions' => [],
@@ -347,6 +350,7 @@ class SignStartComponent extends SignBaseComponent
 				'COUNTER_ID' => 'sign_mysafe',
 			];
 		}
+
 		if (
 			$contactCategoryId
 			&& $canReadSmartDocumentContact
@@ -413,6 +417,18 @@ class SignStartComponent extends SignBaseComponent
 				'ID' => 'sign_b2e_mysafe',
 				'COUNTER' => 0,
 				'COUNTER_ID' => 'sign_b2e_mysafe',
+			];
+		}
+
+		if (
+			Feature::instance()->isSendDocumentByEmployeeEnabled()
+			&& $this->accessController->check(ActionDictionary::ACTION_B2E_DOCUMENT_READ)
+		)
+		{
+			$items[] = [
+				'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_EMPLOYEE_TEMPLATE_LIST'),
+				'URL' => $this->arParams['PAGE_URL_B2E_EMPLOYEE_TEMPLATE_LIST'] ?? '',
+				'ID' => 'sign_b2e_employee_template_list'
 			];
 		}
 

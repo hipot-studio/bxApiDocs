@@ -9,6 +9,7 @@ class LineOfTextBlocks extends ContentBlock
 {
 	protected array $blocks = [];
 	protected ?string $delimiter = null;
+	protected ?LineOfTextBlocksButton $button = null;
 
 	public function getRendererName(): string
 	{
@@ -109,11 +110,19 @@ class LineOfTextBlocks extends ContentBlock
 		return $this;
 	}
 
+	public function setButton(?LineOfTextBlocksButton $button): self
+	{
+		$this->button = $button;
+
+		return $this;
+	}
+
 	protected function getProperties(): array
 	{
 		return [
 			'blocks' => $this->getContentBlocks(),
 			'delimiter' => $this->delimiter,
+			'button' => $this->button,
 		];
 	}
 }

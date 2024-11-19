@@ -2,6 +2,9 @@
 
 namespace Bitrix\Calendar\Internals;
 
+use Bitrix\Calendar\Internals\Counter\Provider\OpenEvent;
+use Bitrix\Calendar\Internals\Counter\State\Loader;
+use Bitrix\Calendar\Internals\Counter\State\State;
 use Bitrix\Main;
 use Bitrix\Calendar\Internals\Counter\CounterDictionary;
 use Bitrix\Calendar\Internals\Counter\Provider\Invite;
@@ -16,6 +19,7 @@ class Counter
 {
 	private static $instance = [];
 	private int $userId;
+	private State $state;
 
 	/**
 	 * @param $userId
@@ -48,6 +52,7 @@ class Counter
 	private function __construct($userId)
 	{
 		$this->userId = (int)$userId;
+		$this->state = new State($this->userId, new Loader($this->userId));
 	}
 
 	/**
@@ -57,22 +62,17 @@ class Counter
 	 */
 	public function get(string $name, int $entityId = 0): int
 	{
-		$value = 0;
-
-		switch ($name)
-		{
-			case CounterDictionary::COUNTER_TOTAL:
-				$value = $this->get(CounterDictionary::COUNTER_INVITES, $entityId)
-					+ $this->get(CounterDictionary::COUNTER_SYNC_ERRORS, $entityId);
-				break;
-			case CounterDictionary::COUNTER_INVITES:
-				$value = (new Invite($this->userId, $entityId))->getValue();
-				break;
-			case CounterDictionary::COUNTER_SYNC_ERRORS:
-				$value = (new Sync($this->userId, $entityId))->getValue();
-				break;
-		}
-
-		return $value;
+		return match ($name) {
+			CounterDictionary::COUNTER_TOTAL => $this->get(CounterDictionary::COUNTER_INVITES, $entityId)
+				+ $this->get(CounterDictionary::COUNTER_SYNC_ERRORS, $entityId)
+				+ $this->get(CounterDictionary::COUNTER_OPEN_EVENTS),
+			CounterDictionary::COUNTER_MY => $this->get(CounterDictionary::COUNTER_INVITES, $entityId)
+				+ $this->get(CounterDictionary::COUNTER_SYNC_ERRORS, $entityId),
+			CounterDictionary::COUNTER_INVITES => (new Invite($this->userId, $entityId))->getValue(),
+			CounterDictionary::COUNTER_SYNC_ERRORS => (new Sync($this->userId, $entityId))->getValue(),
+			CounterDictionary::COUNTER_OPEN_EVENTS => (new OpenEvent($this->state, $entityId))->getValue(),
+			CounterDictionary::COUNTER_NEW_EVENT => $this->state->get(CounterDictionary::META_PROP_NEW_EVENTS)[$entityId] ?? 0,
+			default => 0,
+		};
 	}
 }

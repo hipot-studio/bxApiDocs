@@ -17,6 +17,8 @@ class ProviderManager
 	private static array|null $providers = null;
 
 	private static array|null $allProviders = null;
+	private static array|null $allProvidersEntities = null;
+
 	/**
 	 * @return Base[] - List of providers.
 	 */
@@ -327,5 +329,22 @@ class ProviderManager
 				);
 			}
 		);
+	}
+
+	public static function getProviderEntity(string $providerId): ?string
+	{
+		if (self::$allProvidersEntities === null)
+		{
+			self::$allProvidersEntities = self::prepareProviderEntityList(false);
+		}
+
+		return self::$allProvidersEntities[$providerId] ?? null;
+	}
+
+	private static function prepareProviderEntityList(): array
+	{
+		return [
+			ToDo::getId() => \Bitrix\Crm\Activity\Entity\ToDo::class,
+		];
 	}
 }

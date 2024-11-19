@@ -19,6 +19,7 @@ use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Sender\Group\AddItemsToSeg
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Sender\Group\AddLetterChildAction;
 use Bitrix\Crm\Exclusion;
 use Bitrix\Crm\Merger\EntityMergerFactory;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\UserField\UserFieldManager;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\ModuleManager;
@@ -106,7 +107,10 @@ final class ItemGroupAction extends BaseItemGroupAction
 			&& EntityMergerFactory::isEntityTypeSupported($this->factory->getEntityTypeId())
 		)
 		{
-			$actions[] = new MergeChildAction($this->factory->getEntityTypeId());
+			$entityTypeId = $this->factory->getEntityTypeId();
+			$mergerUrl = Container::getInstance()->getRouter()->getEntityMergeUrl($entityTypeId);
+
+			$actions[] = new MergeChildAction($entityTypeId, $mergerUrl);
 		}
 
 		if (

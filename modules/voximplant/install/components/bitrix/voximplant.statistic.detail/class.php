@@ -443,6 +443,7 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 				$filter["<ID"] = (int)$this->arParams['STEXPORT_LAST_EXPORTED_ID'];
 			}
 
+			\CTimeZone::Disable();
 			$idRows = Voximplant\StatisticTable::getList([
 				"select" => ["ID"],
 				"runtime" => $this->getRuntimeFields($this->arResult['FILTER']),
@@ -450,6 +451,7 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 				"order" => ['ID' => 'DESC'],
 				"limit" => $this->pageSize
 			])->fetchAll();
+			\CTimeZone::Enable();
 
 			$this->arResult['LAST_EXPORTED_ID'] = $idRows[(count($idRows) - 1)]["ID"];
 			$this->arResult['PROCESSED_ITEMS'] = count($idRows);
@@ -458,6 +460,7 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 			{
 				$this->arResult['FIRST_EXPORT_PAGE'] = true;
 
+				\CTimeZone::Disable();
 				$rowsCountRecord = Voximplant\StatisticTable::getList([
 					"select" => [
 						"CNT" => Query::expr()->count("ID")
@@ -465,6 +468,7 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 					"runtime" => $this->getRuntimeFields($this->arResult['FILTER']),
 					"filter" => $filter,
 				])->fetch();
+				\CTimeZone::Enable();
 
 				$this->arResult['TOTAL_ITEMS'] = $rowsCountRecord["CNT"];
 
@@ -484,6 +488,7 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 		{
 			if (!$this->isExternalFilter)
 			{
+				\CTimeZone::Disable();
 				$idRows = Voximplant\StatisticTable::getList(
 					[
 						"select" => ["ID"],
@@ -494,6 +499,7 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 						"limit" => $nav->getLimit() + 1
 					]
 				)->fetchAll();
+				\CTimeZone::Enable();
 			}
 			else
 			{
@@ -1141,6 +1147,7 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 		if (!$this->isExternalFilter)
 		{
 			$filterDefinition = $this->getFilterDefinition();
+			\CTimeZone::Disable();
 			$cursor = Voximplant\StatisticTable::getList([
 				"select" => [
 					"CNT" => Query::expr()->count("ID")
@@ -1148,6 +1155,7 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 				"runtime" => $this->getRuntimeFields($filterDefinition),
 				"filter" => $this->getFilter($filterDefinition),
 			]);
+			\CTimeZone::Enable();
 			$row = $cursor->fetch();
 		}
 		else

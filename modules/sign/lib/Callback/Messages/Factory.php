@@ -4,6 +4,7 @@ namespace Bitrix\Sign\Callback\Messages;
 
 use Bitrix\Sign\Callback\Message;
 use Bitrix\Sign\Callback\Messages\Member\InviteToSign;
+use Bitrix\Sign\Callback\Messages\Member\MemberPrintVersionFile;
 use Bitrix\Sign\Callback\Messages\Member\MemberResultFile;
 use Bitrix\Sign\Callback\Messages\Member\MemberStatusChanged;
 use Bitrix\Sign\Callback\Messages\Mobile\SigningConfirm;
@@ -23,6 +24,7 @@ class Factory
 			InviteToSign::Type => new InviteToSign(),
 			MemberStatusChanged::Type => new MemberStatusChanged(),
 			MemberResultFile::Type => new MemberResultFile(),
+			MemberPrintVersionFile::Type => new MemberPrintVersionFile(),
 			SigningConfirm::Type => new SigningConfirm(),
 			default => new Message(),
 		};

@@ -538,6 +538,7 @@ class Manager
 			'CAL_TYPE' => self::TYPE,
 			'OWNER_ID' => 0,
 			'ADDITIONAL_IDS' => $followedSectionList,
+			'getPermissions' => false,
 		]);
 		$sectionList = array_merge($sectionList, \CCalendar::getSectionListAvailableForUser($userId));
 

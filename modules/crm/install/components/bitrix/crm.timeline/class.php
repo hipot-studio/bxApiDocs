@@ -208,18 +208,9 @@ class CCrmTimelineComponent extends CBitrixComponent
 		$this->arResult['CALENDAR_SETTINGS'] = (new Crm\Activity\ToDo\CalendarSettings\CalendarSettingsProvider())
 			->fetchForJsComponent()
 		;
-
-		$useTodoEditorV2 = \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled();
-		if ($useTodoEditorV2)
-		{
-			$this->arResult['COLOR_SETTINGS'] = (new Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider())
-				->fetchForJsComponent()
-			;
-		}
-		else
-		{
-			$this->arResult['COLOR_SETTINGS'] = null;
-		}
+		$this->arResult['COLOR_SETTINGS'] = (new Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider())
+			->fetchForJsComponent()
+		;
 
 		$this->prepareScheduleItems();
 		$this->prepareHistoryFilter();

@@ -73,6 +73,14 @@ abstract class Base extends Controller
 					return Container::getInstance()->getType($typeId);
 				}
 			),
+			new ExactParameter(
+				ItemIdentifier::class,
+				'itemIdentifier',
+				static function($className, $entityTypeId, $entityId)
+				{
+					return new $className($entityTypeId, $entityId);
+				}
+			),
 		];
 	}
 

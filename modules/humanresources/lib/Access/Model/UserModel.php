@@ -4,9 +4,9 @@ namespace Bitrix\HumanResources\Access\Model;
 
 use Bitrix\HumanResources\Service\Container;
 
-class UserModel extends \Bitrix\Main\Access\User\UserModel
+final class UserModel extends \Bitrix\Main\Access\User\UserModel
 {
-	private array $permissions;
+	private array $permissions = [];
 
 	/**
 	 * returns user roles in system
@@ -60,6 +60,7 @@ class UserModel extends \Bitrix\Main\Access\User\UserModel
 
 			$this->permissions = Container::getAccessPermissionRepository()->getPermissionsByRoleIds($rolesIds);
 		}
+
 		return $this->permissions;
 	}
 }

@@ -72,10 +72,9 @@ class SmartInvoice extends Dynamic
 		$settings[Item\SmartInvoice::FIELD_NAME_COMMENTS] = [
 			'TYPE' => Field::TYPE_TEXT,
 			'VALUE_TYPE' => Field::VALUE_TYPE_BB,
-			// Uncomment these line to use a new text editor
-			// 'SETTINGS' => [
-			// 	'isFlexibleContentType' => true,
-			// ],
+			'SETTINGS' => [
+				'isFlexibleContentType' => true,
+			],
 			'CLASS' => Field\Comments::class,
 		];
 		$settings[Item\SmartInvoice::FIELD_NAME_ACCOUNT_NUMBER] = [
@@ -393,5 +392,4 @@ class SmartInvoice extends Dynamic
 
 		return $hasTable;
 	}
-
 }

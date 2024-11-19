@@ -4,6 +4,7 @@ use Bitrix\Calendar\Access\ActionDictionary;
 use Bitrix\Calendar\Access\Model\SectionModel;
 use Bitrix\Calendar\Access\SectionAccessController;
 use Bitrix\Calendar\Internals\EventTable;
+use Bitrix\Calendar\Internals\SectionConnectionTable;
 use Bitrix\Calendar\Internals\SectionTable;
 use Bitrix\Calendar\Sync\Factories\FactoriesCollection;
 use Bitrix\Calendar\Sync\Factories\FactoryInterface;
@@ -16,6 +17,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
+use Bitrix\Calendar\OpenEvents;
 use Bitrix\Calendar\Util;
 use Bitrix\Calendar\Rooms;
 use Bitrix\Main\Localization\Loc;
@@ -36,6 +38,8 @@ class CCalendarSect
 	public const OPERATION_EDIT_ACCESS = 'calendar_edit_access';
 
 	public static $sendPush = true;
+	public static $sectionConnectionCache = [];
+	public static $sectionAccessCache = [];
 
 	private static
 		$sections,
@@ -202,7 +206,7 @@ class CCalendarSect
 
 				$section['EXPORT'] = [
 					'ALLOW' => true,
-					'LINK' => self::GetExportLink($section['ID'], $sectionType, $section['OWNER_ID'])
+					'LINK' => self::GetExportLink($section['ID'], $sectionType, $section['OWNER_ID'] ?? null)
 				];
 
 				if ($sectionType === 'user')
@@ -414,8 +418,8 @@ class CCalendarSect
 
 		while ($section = $query->fetch())
 		{
-			$section['COLOR'] = CCalendar::Color($section['COLOR']);
-			$section['NAME'] = Emoji::decode($section['NAME']);
+			$section['COLOR'] = CCalendar::Color($section['COLOR'] ?? '');
+			$section['NAME'] = Emoji::decode($section['NAME'] ?? '');
 
 			if (!empty($section['DATE_CREATE']))
 			{
@@ -442,6 +446,18 @@ class CCalendarSect
 			return [];
 		}
 
+		$noCacheForSectionIds = array_diff($sectionIdList, array_keys(self::$sectionAccessCache));
+		if (!$noCacheForSectionIds)
+		{
+			$result = [];
+			foreach ($sectionIdList as $sectionId)
+			{
+				$result[$sectionId] = self::$sectionAccessCache[$sectionId];
+			}
+
+			return $result;
+		}
+
 		$accessQuery = \Bitrix\Calendar\Internals\AccessTable::query()
 			->setSelect([
 				'ACCESS_CODE',
@@ -460,6 +476,12 @@ class CCalendarSect
 			}
 
 			$sections[$access['SECT_ID']]['ACCESS'][$access['ACCESS_CODE']] = (int)$access['TASK_ID'];
+		}
+
+		foreach ($sectionIdList as $sectionId)
+		{
+			unset(self::$sectionAccessCache[$sectionId]);
+			self::$sectionAccessCache[$sectionId] = $sections[$sectionId];
 		}
 
 		return $sections;
@@ -2221,7 +2243,7 @@ class CCalendarSect
 				->registerRuntimeField(
 					new \Bitrix\Main\Entity\ReferenceField(
 						'LINK',
-						\Bitrix\Calendar\Internals\SectionConnectionTable::class,
+						SectionConnectionTable::class,
 						['=this.ID' => 'ref.SECTION_ID'],
 						['join_type' => 'INNER']
 					),
@@ -2264,6 +2286,15 @@ class CCalendarSect
 			}
 		}
 
+		if (
+			in_array($type, ['user', \Bitrix\Calendar\Core\Event\Tools\Dictionary::CALENDAR_TYPE['open_event']], true)
+			&& OpenEvents\Feature::getInstance()->isAvailable()
+		)
+		{
+			$type = ['user', \Bitrix\Calendar\Core\Event\Tools\Dictionary::CALENDAR_TYPE['open_event']];
+			$ownerId = [$ownerId, 0];
+		}
+
 		$sectionList = CCalendar::getSectionList([
 			'CAL_TYPE' => $type,
 			'OWNER_ID' => $ownerId,
@@ -2297,6 +2328,52 @@ class CCalendarSect
 		}
 
 		return $sections;
+	}
+
+	/**
+	 * @param array $sectionIdList
+	 * @return array
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public static function getSectionConnectionList(array $sectionIdList): array
+	{
+		$noCacheForSectionIds = array_diff($sectionIdList, array_keys(self::$sectionConnectionCache));
+
+		if (!$noCacheForSectionIds)
+		{
+			$result = [];
+			foreach ($sectionIdList as $sectionId)
+			{
+				$result = [...$result, ...self::$sectionConnectionCache[$sectionId]];
+			}
+
+			return $result;
+		}
+
+		$sectionConnections = SectionConnectionTable::query()
+			->setSelect([
+				'SECTION_ID',
+				'CONNECTION_ID',
+				'ACTIVE',
+				'IS_PRIMARY',
+			])
+			->whereIn('SECTION_ID', $sectionIdList)
+			->fetchCollection()
+		;
+
+		foreach ($sectionIdList as $sectionId)
+		{
+			self::$sectionConnectionCache[$sectionId] = [];
+		}
+
+		foreach ($sectionConnections as $sectionConnection)
+		{
+			self::$sectionConnectionCache[$sectionConnection->getSectionId()][] = $sectionConnection;
+		}
+
+		return $sectionConnections->getAll();
 	}
 }
 ?>

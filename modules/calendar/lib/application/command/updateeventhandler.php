@@ -11,7 +11,9 @@ use Bitrix\Calendar\Core\Event\Event;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Mappers\Factory;
 use Bitrix\Calendar\Core\Section\Section;
+use Bitrix\Calendar\Event\Event\AfterCalendarEventEdited;
 use Bitrix\Calendar\Integration\Intranet\UserService;
+use Bitrix\Calendar\Internals\Exception\EditException;
 use Bitrix\Calendar\Internals\Exception\EventNotFound;
 use Bitrix\Calendar\Internals\Exception\ExtranetPermissionDenied;
 use Bitrix\Calendar\Internals\Exception\LocationBusy;
@@ -68,10 +70,17 @@ class UpdateEventHandler implements CommandHandler
 			'userId' => \CCalendar::GetUserId(),
 		]);
 
+		if ($updatedEvent === null)
+		{
+			throw new EditException();
+		}
+
 		if ($updatedEvent && $updatedEvent->isMeeting())
 		{
 			$this->notifyEventAuthor($mapperFactory, $updatedEvent, $command->getUserId(), $currentFields);
 		}
+
+		(new AfterCalendarEventEdited($event->getId(), $command))->emit();
 
 		return $updatedEvent;
 	}
@@ -134,10 +143,21 @@ class UpdateEventHandler implements CommandHandler
 		$entryFields['ATTENDEES'] = $attendeesAndCodes['attendees'];
 		$entryFields['IS_MEETING'] = $isMeeting;
 
+		$additionalExcludeUsers = [];
+		if (
+			$section->getType() === Dictionary::CALENDAR_TYPE['user']
+			&& $section->getOwner()?->getId()
+			&& $section->getOwner()?->getId() !== (int)$entryFields['MEETING_HOST']
+		)
+		{
+			$additionalExcludeUsers[] = $section->getOwner()?->getId();
+		}
+
+
 		if ($isMeeting && $command->isPlannerFeatureEnabled())
 		{
 			$attendeesToCheck = array_diff($attendeesAndCodes['attendees'], [$entryFields['MEETING_HOST']]);
-			$attendeeService->checkBusyAttendees($command, $attendeesToCheck, $eventId);
+			$attendeeService->checkBusyAttendees($command, $attendeesToCheck, $eventId, $additionalExcludeUsers);
 		}
 
 		return $entryFields;

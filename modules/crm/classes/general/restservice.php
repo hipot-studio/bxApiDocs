@@ -14,6 +14,7 @@ use Bitrix\Crm\EntityPreset;
 use Bitrix\Crm\EntityRequisite;
 use Bitrix\Crm\Integration\Bitrix24Manager;
 use Bitrix\Crm\Integration\DiskManager;
+use Bitrix\Crm\Integration\Rest\AppPlacement;
 use Bitrix\Crm\Integration\StorageFileType;
 use Bitrix\Crm\Integration\StorageType;
 use Bitrix\Crm\Requisite;
@@ -442,15 +443,22 @@ final class CCrmRestService extends IRestService
 				$bindings[$name] = $callback;
 			}
 
-			$allActivityPlacementsCodes = \Bitrix\Crm\Integration\Rest\AppPlacement::getAllDetailActivityCodes();
+			$allActivityPlacementsCodes = AppPlacement::getAllDetailActivityCodes();
 			$bindings[\CRestUtil::PLACEMENTS] = [];
-			foreach(\Bitrix\Crm\Integration\Rest\AppPlacement::getAll() as $name)
+			foreach(AppPlacement::getAll() as $name)
 			{
-				if ($name === 'CRM_REQUISITE_AUTOCOMPLETE')
+				if (
+					$name === AppPlacement::REQUISITE_AUTOCOMPLETE
+					|| $name === AppPlacement::BANK_DETAIL_AUTOCOMPLETE
+				)
 				{
-					$bindings[\CRestUtil::PLACEMENTS][$name] = ['options' => ['countries' => 'string']];
+					$bindings[\CRestUtil::PLACEMENTS][$name] = [
+						'options' => [
+							'countries' => 'string',
+						],
+					];
 				}
-				if (in_array($name, $allActivityPlacementsCodes, true))
+				elseif (in_array($name, $allActivityPlacementsCodes, true))
 				{
 					$bindings[\CRestUtil::PLACEMENTS][$name] = [
 						'options' => [
@@ -8710,6 +8718,21 @@ class CCrmStatusRestProxy extends CCrmRestProxyBase
 		if(empty($order))
 		{
 			$order['sort'] = 'asc';
+		}
+
+		$stringOnlyFields = [
+			'ENTITY_ID',
+			'STATUS_ID',
+			'SORT',
+			'SEMANTICS',
+		];
+		foreach ($stringOnlyFields as $stringOnlyField)
+		{
+			if (is_array($filter[$stringOnlyField] ?? null))
+			{
+				$errors[] = "Filter by {$stringOnlyField} must be a string";
+				return false;
+			}
 		}
 
 		$results = array();

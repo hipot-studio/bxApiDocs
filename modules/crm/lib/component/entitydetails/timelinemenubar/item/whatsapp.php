@@ -5,7 +5,6 @@ namespace Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Communications;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Integration\SmsManager;
-use Bitrix\Crm\Settings;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\MessageService\Sender\Sms\Ednaru;
 use CCrmOwnerType;
@@ -90,10 +89,9 @@ final class WhatsApp extends Sms
 			return []; // tour feature is disabled
 		}
 
-		$useTodoEditorV2 = Settings\Crm::isTimelineToDoUseV2Enabled();
 		$todoOptions = CUserOptions::getOption('crm', 'todo', []);
 		$isTodoTourViewedInWeb = (bool)($todoOptions['isTimelineTourViewedInWeb'] ?? false);
-		if ($useTodoEditorV2 && !$isTodoTourViewedInWeb)
+		if (!$isTodoTourViewedInWeb)
 		{
 			return []; // show tour after other tour about "ToDo"
 		}

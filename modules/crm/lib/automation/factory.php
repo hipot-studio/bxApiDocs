@@ -602,9 +602,8 @@ class Factory
 			$converter->setTargetItem($itemTypeId, $itemOptions);
 		}
 
-		$contextData = [
-			'CHECK_TRANSITION_ACCESS_ENABLED' => 'N',
-		];
+		$contextData = [];
+
 		$userId = \CCrmOwnerType::GetResponsibleID(\CCrmOwnerType::Lead, $entityId, false);
 		if ($userId > 0)
 		{

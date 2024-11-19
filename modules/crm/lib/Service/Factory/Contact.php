@@ -559,4 +559,9 @@ class Contact extends Service\Factory
 	{
 		return new Statistics\OperationFacade\Contact();
 	}
+
+	public function isCommunicationRoutingSupported(): bool
+	{
+		return true;
+	}
 }

@@ -1429,7 +1429,10 @@ class CCrmPaySystem
 				'SORT' => "ASC",
 				'NAME' => 'ASC'
 			],
-			'cache' => ['ttl' => 864000]
+			'cache' => [
+				'ttl' => 864000,
+				'cache_joins' => true
+			]
 		]);
 
 		while ($arPT = $dbRes->fetch())

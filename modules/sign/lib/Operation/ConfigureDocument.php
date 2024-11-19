@@ -4,14 +4,13 @@ namespace Bitrix\Sign\Operation;
 
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\PhoneNumber;
 use Bitrix\Sign\Compatibility\Document\Scheme;
 use Bitrix\Sign\Compatibility\Role;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Connector\MemberConnectorFactory;
-use Bitrix\Sign\Connector\MemberDataPicker;
 use Bitrix\Sign\Contract;
+use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Factory;
 use Bitrix\Sign\Helper\Field\NameHelper;
 use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
@@ -25,8 +24,8 @@ use Bitrix\Sign\Item\Api\Property\Request\Signing\Configure\Member;
 use Bitrix\Sign\Item\Api\Property\Request\Signing\Configure\MemberCollection;
 use Bitrix\Sign\Item\Api\Property\Request\Signing\Configure\Owner;
 use Bitrix\Sign\Item\Field;
-use Bitrix\Sign\Repository\RequiredFieldRepository;
 use Bitrix\Sign\Repository\MemberRepository;
+use Bitrix\Sign\Repository\RequiredFieldRepository;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Type\BlockCode;
@@ -48,10 +47,10 @@ class ConfigureDocument implements Contract\Operation
 	private readonly Service\Api\Document\SigningService $apiDocumentSigningService;
 	private readonly Service\Sign\BlockService $signBlockService;
 	private readonly Service\Sign\Document\ProviderCodeService $providerCodeService;
+	private readonly Logger $logger;
 
 	public function __construct(
 		private readonly string $uid,
-		?MemberConnectorFactory $memberConnectorFactory = null,
 		?Service\Sign\DocumentService $documentService = null,
 		?Service\Sign\MemberService $memberService = null,
 		?MemberRepository $memberRepository = null,
@@ -72,6 +71,7 @@ class ConfigureDocument implements Contract\Operation
 		$this->apiDocumentSigningService = $container->getApiDocumentSigningService();
 		$this->signBlockService = $container->getSignBlockService();
 		$this->providerCodeService = $container->getProviderCodeService();
+		$this->logger = Logger::getInstance();
 	}
 
 	public function launch(): Main\Result
@@ -220,8 +220,9 @@ class ConfigureDocument implements Contract\Operation
 
 		foreach ($blocks as $block)
 		{
+			$memberWithBlockRole = $members->findFirstByRole($block->role);
 			$requestBlock = new Block(
-				party: $block->party,
+				party: $memberWithBlockRole?->party ?? 0,
 				type: $block->type,
 				blockPosition: Block\BlockPosition::createFromBlockItemPosition($block->position),
 			);
@@ -229,13 +230,12 @@ class ConfigureDocument implements Contract\Operation
 				? null
 				: Block\BlockStyle::createFromBlockItemStyle($block->style)
 			;
-			$memberByParty = $members->findFirst(fn (Item\Member $member) => $member->party === $block->party);
-			if ($memberByParty === null && $block->party !== 0)
+			if ($memberWithBlockRole === null && $block->party !== 0)
 			{
 				return (new Main\Result())->addError(new Main\Error("Block has party: `{$block->party}` but member with party: `{$block->party}` doesnt exist"));
 			}
 
-			$fields = $this->createFields($block, $memberByParty);
+			$fields = $this->createFields($block, $memberWithBlockRole);
 			foreach ($fields as $field)
 			{
 				$requestBlock->addFieldNames($field->name);
@@ -262,7 +262,7 @@ class ConfigureDocument implements Contract\Operation
 			}
 		}
 
-		$response = $this->apiDocumentSigningService->configure(
+			$response = $this->apiDocumentSigningService->configure(
 			new ConfigureRequest(
 				documentUid: $document->uid,
 				title: $this->documentService->getComposedTitleByDocument($document),
@@ -278,8 +278,7 @@ class ConfigureDocument implements Contract\Operation
 				regionDocumentType: $document->regionDocumentType,
 				externalId: $document->externalId,
 				titleWithoutNumber: $document->title,
-				// throw $document->scheme after \Bitrix\Sign\Agent\Converter\ConvertProviderSchemesAgent release
-				scheme: $isB2eScenario ? Scheme::createDefaultSchemeByProviderCode($document->providerCode) : null,
+				scheme: $this->getDocumentScheme($document),
 				externalDateCreate: $document->externalDateCreate?->format('Y-m-d') ?? '',
 			),
 		);
@@ -500,5 +499,28 @@ class ConfigureDocument implements Contract\Operation
 		catch (Main\ArgumentException|Main\ArgumentOutOfRangeException $e)
 		{
 		}
+	}
+
+	private function getDocumentScheme(Item\Document $document): ?string
+	{
+		if (!DocumentScenario::isB2eScenarioByDocument($document))
+		{
+			return null;
+		}
+
+		$result = $this->providerCodeService->loadByDocument($document);
+		if (!$result->isSuccess())
+		{
+			$this->logger->error(
+				'Failed to load provider code by configuration. Errors: {errorsText}',
+				[
+					'errorsText' => implode('| ', $result->getErrorMessages()),
+				],
+			);
+
+			return Type\Document\SchemeType::DEFAULT;
+		}
+
+		return $document->scheme ?? Scheme::createDefaultSchemeByProviderCode($document->providerCode);
 	}
 }

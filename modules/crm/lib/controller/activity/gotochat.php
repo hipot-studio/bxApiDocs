@@ -200,7 +200,7 @@ class GoToChat extends Base
 	{
 		foreach ($channels as $channel)
 		{
-			if ($channel['default'])
+			if ($channel['default'] && $channel['canUse'])
 			{
 				return $channel['id'];
 			}

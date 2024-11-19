@@ -10,6 +10,7 @@ use Bitrix\HumanResources\Contract\Repository\NodeMemberRepository;
 use Bitrix\HumanResources\Contract\Repository\StructureRepository;
 use Bitrix\Main\DI\ServiceLocator;
 use \Bitrix\HumanResources\Contract;
+use \Bitrix\HumanResources\Util;
 
 class Container
 {
@@ -150,5 +151,15 @@ class Container
 	public static function getUserRepository(): Contract\Repository\UserRepository
 	{
 		return self::getService('humanresources.repository.user');
+	}
+
+	public static function getNodeMemberCounterHelper(): Util\NodeMemberCounterHelper
+	{
+		return self::getService('humanresources.helper.node.member.counter');
+	}
+
+	public static function getAccessNodeRepository(): Contract\Repository\Access\AccessNodeRepository
+	{
+		return self::getService('humanresources.repository.access.accessNodeRepository');
 	}
 }

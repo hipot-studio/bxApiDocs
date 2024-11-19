@@ -19,6 +19,7 @@ final class Link extends \Bitrix\Sign\Engine\Controller
 {
 	const SHOW_MEMBER_INFO = false;
 
+
 	public function getLinkForSigningAction(int $memberId): ?array
 	{
 		if (!Storage::instance()->isB2eAvailable())
@@ -27,9 +28,8 @@ final class Link extends \Bitrix\Sign\Engine\Controller
 			return [];
 		}
 
-		$member = Service\Container::instance()
-			->getMemberRepository()
-			->getById($memberId);
+		$memberRepository = $this->container->getMemberRepository();
+		$member = $memberRepository->getById($memberId);
 
 		if (!$member)
 		{
@@ -39,8 +39,8 @@ final class Link extends \Bitrix\Sign\Engine\Controller
 
 		$currentUserId = (int)\Bitrix\Main\Engine\CurrentUser::get()->getId();
 		if (
-			!Service\Container::instance()
-				->getServiceSignMemberUser()
+			!$this->container
+				->getSignMemberUserService()
 				->checkAccessToMember($member, $currentUserId)
 		)
 		{
@@ -51,7 +51,7 @@ final class Link extends \Bitrix\Sign\Engine\Controller
 			return [];
 		}
 
-		$result = Service\Container::instance()
+		$result = $this->container
 			->getMemberService()
 			->getLinkForSigning($member)
 		;
@@ -97,7 +97,7 @@ final class Link extends \Bitrix\Sign\Engine\Controller
 		if (self::SHOW_MEMBER_INFO)
 		{
 			$avatar = Service\Container::instance()
-				->getServiceSignMemberUser()
+				->getSignMemberUserService()
 				->getAvatarByMemberUid($member->uid);
 
 			$userModel = UserTable::getById($userIdForMember)->fetchObject();

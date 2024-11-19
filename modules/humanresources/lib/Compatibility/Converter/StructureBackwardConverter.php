@@ -23,13 +23,9 @@ use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Contract\Util\Logger;
 use Bitrix\HumanResources\Config;
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ObjectPropertyException;
-use Bitrix\Main\SystemException;
 
 class StructureBackwardConverter
 {
@@ -50,6 +46,7 @@ class StructureBackwardConverter
 	private static array $roles;
 
 	private const MODULE_NAME = 'humanresources';
+	private const DEPUTY_HEAD_ROLE_NAME = 'DEPUTY_HEAD';
 
 	public function __construct(
 		?NodeService $nodeService = null,
@@ -58,7 +55,7 @@ class StructureBackwardConverter
 		?RoleRepository $roleRepository = null,
 		?NodeRepository $nodeRepository = null,
 		?StructureWalkerService $structureWalkerService = null,
-		?Logger $logger = null
+		?Logger $logger = null,
 	)
 	{
 		$this->nodeService = $nodeService ?? Container::getNodeService();
@@ -161,6 +158,7 @@ class StructureBackwardConverter
 					priority: 0,
 				),
 			);
+			self::addDeputyHeadRole();
 		}
 		catch (\Bitrix\Main\DB\SqlQueryException | CreationFailedException)
 		{}
@@ -197,7 +195,7 @@ class StructureBackwardConverter
 		);
 
 		$foundedNode = $this->nodeRepository->getByAccessCode(
-			DepartmentBackwardAccessCode::makeById((int)$oldDepartment['ID'])
+			DepartmentBackwardAccessCode::makeById((int)$oldDepartment['ID']),
 		);
 
 		if ($foundedNode)
@@ -224,6 +222,8 @@ class StructureBackwardConverter
 		$this->clearOldStructureCache();
 		$intranet = new \ReflectionClass(\CIntranetUtils::class);
 		$refProp = $intranet->getProperty('SECTIONS_SETTINGS_CACHE');
+		$refProp->setValue(null, []);
+		$refProp = $intranet->getProperty('SECTIONS_SETTINGS_WITHOUT_EMPLOYEE_CACHE');
 		$refProp->setValue(null, []);
 
 		$info = [];
@@ -401,7 +401,7 @@ class StructureBackwardConverter
 			try
 			{
 				$found = $this->nodeRepository->getByAccessCode(
-					DepartmentBackwardAccessCode::makeById($oldStructParentId)
+					DepartmentBackwardAccessCode::makeById($oldStructParentId),
 				);
 			}
 			catch (\Exception)
@@ -506,6 +506,7 @@ class StructureBackwardConverter
 				onlyActive: 'N',
 				arSelect: ['ID', 'ACTIVE'],
 			);
+
 			$ufHead = $oldDepartment['UF_HEAD'] ?? 0;
 
 			while ($employee = $employees->Fetch())
@@ -525,7 +526,7 @@ class StructureBackwardConverter
 							nodeId: $node->id,
 							active: $employee['ACTIVE'] === 'Y',
 							role: $this->detectRole((int)$ufHead, $employeeId),
-						)
+						),
 					);
 				}
 				catch (SqlQueryException)
@@ -550,7 +551,7 @@ class StructureBackwardConverter
 				[
 					'ID',
 					'UF_HEAD',
-				]
+				],
 			);
 			return $dbRes->Fetch();
 		}
@@ -624,5 +625,150 @@ class StructureBackwardConverter
 		}
 
 		return '';
+	}
+
+	public static function installDeputyHeadRole(): string
+	{
+		try
+		{
+			self::addDeputyHeadRole();
+		}
+		catch (\Bitrix\Main\DB\SqlQueryException | CreationFailedException)
+		{
+			return 'Bitrix\HumanResources\Compatibility\Converter\StructureBackwardConverter::installDeputyHeadRole();';
+		}
+
+		return '';
+	}
+
+	private static function addDeputyHeadRole(): void
+	{
+		$roleRepository = Container::getRoleRepository();
+		$role = $roleRepository->findByXmlId(NodeMember::DEFAULT_ROLE_XML_ID['DEPUTY_HEAD']);
+		if (!$role)
+		{
+			$roleRepository->create(
+				new \Bitrix\HumanResources\Item\Role(
+					name: self::DEPUTY_HEAD_ROLE_NAME,
+					xmlId: NodeMember::DEFAULT_ROLE_XML_ID[self::DEPUTY_HEAD_ROLE_NAME],
+					entityType: \Bitrix\HumanResources\Type\RoleEntityType::MEMBER,
+					childAffectionType: \Bitrix\HumanResources\Type\RoleChildAffectionType::AFFECTING,
+					priority: 90,
+				),
+			);
+		}
+	}
+
+	public function reSyncStructureTree(): void
+	{
+		$this->disableEvents();
+
+		$structure = Container::getStructureRepository()->getByXmlId(Structure::DEFAULT_STRUCTURE_XML_ID);
+
+		if (!$structure)
+		{
+			return;
+		}
+
+		$oldStructure = \CIntranetUtils::GetStructureWithoutEmployees(false);
+
+		foreach ($oldStructure['DATA'] as $department)
+		{
+			$parent =
+				$this->checkParent(
+					$department['IBLOCK_SECTION_ID'],
+					$oldStructure,
+					$structure
+				);
+
+			$node = Container::getNodeRepository()->getByAccessCode(
+				DepartmentBackwardAccessCode::makeById((int)$department['ID']),
+			);
+
+			if (!$node)
+			{
+				$node = Container::getNodeService()->insertNode(
+					new Node(
+						name: $department['NAME'],
+						type: NodeEntityType::DEPARTMENT,
+						structureId: $structure->id,
+						parentId: $parent?->id,
+					),
+				);
+				$this->createBackwardAccessCode($node, (int)$department['ID']);
+
+				continue;
+			}
+
+			$node->parentId = $parent?->id;
+			$node->name = $department['NAME'];
+
+			try
+			{
+				Container::getNodeRepository()->update($node);
+			}
+			catch (\Exception $e)
+			{
+				Container::getStructureLogger()->write([
+					'entityType' => LoggerEntityType::STRUCTURE->name,
+					'entityId' => $structure->id,
+					'message' => 'Failed to rebuild structure',
+					'userId' => CurrentUser::get()->getId(),
+				]);
+			}
+		}
+
+		$rebuildResult = Container::getStructureWalkerService()->rebuildStructure($structure->id);
+		if (!$rebuildResult->isSuccess())
+		{
+			Container::getStructureLogger()->write([
+				'entityType' => LoggerEntityType::STRUCTURE->name,
+				'entityId' => $structure->id,
+				'message' => 'Failed to rebuild structure',
+				'userId' => CurrentUser::get()->getId(),
+			]);
+		}
+	}
+
+	/**
+	 * @param $oldDepartmentId
+	 * @param $oldStructure
+	 * @param Structure|null $structure
+	 *
+	 * @return Node|null
+	 * @throws CreationFailedException
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function checkParent($oldDepartmentId, $oldStructure, ?Structure $structure): ?Node
+	{
+		$parent = Container::getNodeRepository()->getByAccessCode(
+			DepartmentBackwardAccessCode::makeById((int)$oldDepartmentId),
+		);
+
+		if (!$parent && (int)$oldDepartmentId > 0)
+		{
+			$ownParentId = $oldStructure['DATA'][$oldDepartmentId]['IBLOCK_SECTION_ID'];
+			$ownParent = $this->checkParent(
+				$ownParentId,
+				$oldStructure,
+				$structure,
+			);
+
+			$currentDepartment = $oldStructure['DATA'][$oldDepartmentId];
+			$parent = Container::getNodeService()->insertNode(
+				new Node(
+					name: $currentDepartment['NAME'],
+					type: NodeEntityType::DEPARTMENT,
+					structureId: $structure->id,
+					parentId: $ownParent?->id,
+				),
+			);
+
+			$this->createBackwardAccessCode($parent, (int)$oldDepartmentId);
+		}
+
+		return $parent;
 	}
 }

@@ -112,7 +112,7 @@ class CrmDocumentViewComponent extends ViewComponent
 			}
 		}
 		$this->arResult['isDisplayTransformationErrors'] =
-			\Bitrix\Main\Config\Option::get('crm', 'display_transformation_errors_in_document_slider', 'N') === 'Y'
+			\Bitrix\Main\Config\Option::get('crm', 'display_transformation_errors_in_document_slider', 'Y') === 'Y'
 		;
 		if ($isNewDocument)
 		{

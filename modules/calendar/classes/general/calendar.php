@@ -19,6 +19,7 @@ use Bitrix\Calendar\Sync;
 use Bitrix\Calendar\Sync\Factories\FactoriesCollection;
 use Bitrix\Calendar\Sync\Google;
 use Bitrix\Calendar\Core\Event\Tools\UidGenerator;
+use Bitrix\Calendar\OpenEvents;
 use Bitrix\Calendar\Sync\Managers\Synchronization;
 use Bitrix\Calendar\Sync\Util\Context;
 use Bitrix\Calendar\Ui\CountersManager;
@@ -33,7 +34,6 @@ use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type;
 use Bitrix\Calendar\Integration\Bitrix24Manager;
 use Bitrix\Calendar\Rooms;
-use Bitrix\Calendar\Internals\SectionConnectionTable;
 use Bitrix\Calendar\Sharing;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Provider\TaskList;
@@ -575,9 +575,17 @@ class CCalendar
 		}
 		else
 		{
+			$owners = [self::$ownerId];
+			$types = [self::$type];
+			if (self::$type === 'user' && OpenEvents\Feature::getInstance()->isAvailable())
+			{
+				$types[] = Core\Event\Tools\Dictionary::CALENDAR_TYPE['open_event'];
+				$owners[] = 0;
+			}
+
 			$sectionList = self::getSectionList([
-				'CAL_TYPE' => self::$type,
-				'OWNER_ID' => self::$ownerId,
+				'CAL_TYPE' => $types,
+				'OWNER_ID' => $owners,
 				'ACTIVE' => 'Y',
 				'ADDITIONAL_IDS' => $followedSectionList,
 				'checkPermissions' => true,
@@ -1552,6 +1560,11 @@ class CCalendar
 			: 75
 		;
 
+		if ($type === 'user' && OpenEvents\Feature::getInstance()->isAvailable())
+		{
+			$type = ['user', Core\Event\Tools\Dictionary::CALENDAR_TYPE['open_event']];
+		}
+
 		$arFilter = array(
 			'CAL_TYPE' => $type,
 			'FROM_LIMIT' => $params['fromLimit'],
@@ -2089,11 +2102,6 @@ class CCalendar
 				}
 			}
 
-			if (!$bChangeMeeting)
-			{
-				$arFields['IS_MEETING'] = $curEvent['IS_MEETING'];
-			}
-
 			if ($arFields['IS_MEETING'] && !$bPersonal && $arFields['CAL_TYPE'] === 'user')
 			{
 				$arFields['SECTION_ID'] = $curEvent['SECT_ID'];
@@ -2450,7 +2458,6 @@ class CCalendar
 
 				// 2. Copy event with new changes, but without recursion
 				$newParams = $params;
-				$newParams['sendEditNotification'] = false;
 
 				if (!($newParams['arFields']['MEETING']['REINVITE'] ?? null))
 				{
@@ -2458,7 +2465,7 @@ class CCalendar
 				}
 
 				$newParams['arFields']['RECURRENCE_ID'] = $curEvent['RECURRENCE_ID'] ?: $newParams['arFields']['ID'];
-				$newParams['arFields']['ORIGINAL_RECURSION_ID'] = (int)($curEvent['ORIGINAL_RECURSION_ID'] ?: $newParams['arFields']['ID']);
+				$newParams['arFields']['ORIGINAL_RECURSION_ID'] = (int)($curEvent['ORIGINAL_RECURSION_ID'] ?? $newParams['arFields']['ID']);
 
 				unset(
 					$newParams['arFields']['ID'],
@@ -2484,7 +2491,7 @@ class CCalendar
 				}
 
 				$instanceDate = !isset($newParams['arFields']['DATE_FROM'])
-					||self::Date(self::Timestamp($curEvent['DATE_FROM']), false) === self::Date($currentFromTs, false);
+					|| self::Date(self::Timestamp($curEvent['DATE_FROM']), false) === self::Date($currentFromTs, false);
 
 				if ($newParams['arFields']['SKIP_TIME'])
 				{
@@ -2516,10 +2523,12 @@ class CCalendar
 				$commentXmlId = CCalendarEvent::GetEventCommentXmlId($eventMod);
 				$newParams['arFields']['RELATIONS'] = array('COMMENT_XML_ID' => $commentXmlId);
 				$newParams['editInstance'] = true;
+				$newParams['sendEditNotification'] = true;
+
 				//original instance date start
 				$newParams['arFields']['ORIGINAL_DATE_FROM'] = self::GetOriginalDate(
 					$params['currentEvent']['DATE_FROM'],
-					$eventMod['DATE_FROM'] ?? $newParams['currentEventDateFrom'],
+					$eventMod['DATE_FROM'],
 					$newParams['arFields']['TZ_FROM']
 				);
 				$newParams['originalDavXmlId'] = $params['currentEvent']['G_EVENT_ID'];
@@ -2528,6 +2537,19 @@ class CCalendar
 				$newParams['parentDateTo'] = $params['currentEvent']['DATE_TO'];
 				$newParams['requestUid'] = $params['requestUid'] ?? null;
 				$newParams['sendInvitesToDeclined'] = $params['sendInvitesToDeclined'] ?? null;
+
+				// check instance changes from original recurrent event
+				$eventMod['DATE_FROM'] = $newParams['arFields']['ORIGINAL_DATE_FROM'];
+				$eventMod['DATE_TO'] = self::Date(
+					self::Timestamp($eventMod['DATE_FROM'], false) + $curEvent['DT_LENGTH']
+				);
+				unset($eventMod['RRULE']);
+
+				$instanceChanges = CCalendarEvent::CheckEntryChanges($newParams['arFields'], $eventMod);
+				if (!empty($instanceChanges))
+				{
+					$newParams['instanceChanges'] = $instanceChanges;
+				}
 
 				$result['recEventId'] = self::SaveEvent($newParams);
 				(new Core\Managers\EventOriginalRecursion())->add(
@@ -2857,7 +2879,7 @@ class CCalendar
 				$UFs = $params['UF'] ?? null;
 				if(!empty($UFs) && is_array($UFs))
 				{
-					CCalendarEvent::UpdateUserFields($id, $UFs);
+					CCalendarEvent::UpdateUserFields($id, $UFs, false);
 
 					if (!empty($arFields['IS_MEETING']) && !empty($UFs['UF_WEBDAV_CAL_EVENT']))
 					{
@@ -2868,6 +2890,10 @@ class CCalendar
 							$UF['UF_WEBDAV_CAL_EVENT'] ?? null
 						);
 					}
+
+					CCalendarEvent::updateSearchIndex((int)$id, [
+						'updateAllByParent' => true,
+					]);
 				}
 			}
 
@@ -3400,6 +3426,7 @@ class CCalendar
 		$eventsList = CCalendarEvent::GetList([
 			'arSelect' => [
 				'ID',
+				'CAL_TYPE',
 				'PARENT_ID',
 				'RECURRENCE_ID',
 				'DATE_TO',
@@ -4579,7 +4606,9 @@ class CCalendar
 			'work_time_end' => COption::GetOptionString('calendar', 'work_time_end', 19),
 			'year_holidays' => COption::GetOptionString('calendar', 'year_holidays', Loc::getMessage('EC_YEAR_HOLIDAYS_DEFAULT')),
 			'year_workdays' => COption::GetOptionString('calendar', 'year_workdays', Loc::getMessage('EC_YEAR_WORKDAYS_DEFAULT')),
-			'week_holidays' => explode('|', COption::GetOptionString('calendar', 'week_holidays', 'SA|SU')),
+			'week_holidays' => array_filter(
+				explode('|', COption::GetOptionString('calendar', 'week_holidays', 'SA|SU'))
+			),
 			'week_start' => COption::GetOptionString('calendar', 'week_start', 'MO'),
 			'user_name_template' => self::GetUserNameTemplate($params['getDefaultForEmpty']),
 			'sync_by_push' => COption::GetOptionString('calendar', 'sync_by_push', false),
@@ -5699,7 +5728,10 @@ class CCalendar
 			'getPermissions' => ($params['getPermissions'] ?? null),
 		]);
 
-		if ($type === 'user')
+		if (
+			$type === 'user'
+			|| (is_array($type) && in_array(Core\Event\Tools\Dictionary::CALENDAR_TYPE['user'], $type, true))
+		)
 		{
 			$sectionIdList = [];
 			foreach ($sectionList as $section)
@@ -5707,17 +5739,7 @@ class CCalendar
 				$sectionIdList[] = (int)$section['ID'];
 			}
 
-			$sectionLinkList = SectionConnectionTable::getList([
-				'select' => [
-					'SECTION_ID',
-					'CONNECTION_ID',
-					'ACTIVE',
-					'IS_PRIMARY',
-				],
-				'filter' => [
-					'=SECTION_ID' => $sectionIdList,
-				],
-			])->fetchAll();
+			$sectionLinkList = !empty($sectionIdList) ? CCalendarSect::getSectionConnectionList($sectionIdList) : [];
 
 			if (!empty($sectionLinkList))
 			{
@@ -5726,12 +5748,12 @@ class CCalendar
 					$sectionList[$i]['connectionLinks'] = [];
 					foreach ($sectionLinkList as $sectionLink)
 					{
-						if ((int)$sectionLink['SECTION_ID'] === (int)$section['ID'])
+						if ($sectionLink->getSectionId() === (int)$section['ID'])
 						{
 							$sectionList[$i]['connectionLinks'][] = [
-								'id' => $sectionLink['CONNECTION_ID'],
-								'active' => $sectionLink['ACTIVE'],
-								'isPrimary' => $sectionLink['IS_PRIMARY'],
+								'id' => $sectionLink->getConnectionId(),
+								'active' => $sectionLink->getActive() ? 'Y' : 'N',
+								'isPrimary' => $sectionLink->getIsPrimary() ? 'Y' : 'N',
 							];
 						}
 					}

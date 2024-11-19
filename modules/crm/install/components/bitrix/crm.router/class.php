@@ -104,7 +104,11 @@ class CrmRouterComponent extends Bitrix\Crm\Component\Base
 		$isAvailable = false;
 		$sliderCode = ToolsManager::CRM_SLIDER_CODE;
 
-		if ($entityTypeId)
+		if ($this->isCheckOnlyCrmAvailability($componentName))
+		{
+			$isAvailable = $toolsManager->checkCrmAvailability();
+		}
+		elseif (\CCrmOwnerType::IsDefined($entityTypeId))
 		{
 			$factory = Container::getInstance()->getFactory($entityTypeId);
 			if ($factory && $factory->isInCustomSection())
@@ -215,5 +219,15 @@ class CrmRouterComponent extends Bitrix\Crm\Component\Base
 			str_starts_with($this->router->getRoot(), '/automation')
 			|| isset($componentParams['isExternal']) && $componentParams['isExternal'] === true
 		);
+	}
+
+	private function isCheckOnlyCrmAvailability(string $componentName): bool
+	{
+		$components = [
+			'bitrix:crm.config.perms.wrapper',
+			'bitrix:crm.router.default.root',
+		];
+
+		return in_array($componentName, $components, true);
 	}
 }

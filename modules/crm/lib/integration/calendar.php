@@ -5,6 +5,7 @@ use Bitrix\Crm\Entity\EntityEditorConfigScope;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
+use CCalendarSect;
 
 class Calendar
 {
@@ -49,19 +50,19 @@ class Calendar
 	public static function showCalendarSpotlight()
 	{
 		global $USER;
-		$user_id = false;
+		$userId = false;
 		if (is_object($USER) && ((get_class($USER) === 'CUser') || ($USER instanceof CUser)))
 		{
-			$user_id = intval($USER->GetID());
+			$userId = intval($USER->GetID());
 		}
 
-		if (!self::isResourceBookingEnabled() || !$user_id)
+		if (!self::isResourceBookingEnabled() || !$userId)
 		{
 			return;
 		}
 
 		$spotlight = new \Bitrix\Main\UI\Spotlight("CRM_CALENDAR_VIEW");
-		if(!$spotlight->isViewed($user_id))
+		if(!$spotlight->isViewed($userId))
 		{
 			\CJSCore::init("spotlight");
 
@@ -101,19 +102,19 @@ class Calendar
 	public static function showViewModeCalendarSpotlight($entityName)
 	{
 		global $USER;
-		$user_id = false;
+		$userId = false;
 		if (is_object($USER) && ((get_class($USER) === 'CUser') || ($USER instanceof CUser)))
 		{
-			$user_id = intval($USER->GetID());
+			$userId = intval($USER->GetID());
 		}
 
-		if (!self::isResourceBookingEnabled() || !$user_id)
+		if (!self::isResourceBookingEnabled() || !$userId)
 		{
 			return;
 		}
 
 		$spotlight = new \Bitrix\Main\UI\Spotlight("CRM_CALENDAR_VIEW_MODE_SELECTOR_".$entityName);
-		if(!$spotlight->isViewed($user_id))
+		if(!$spotlight->isViewed($userId))
 		{
 			\CJSCore::init("spotlight");
 			$message = $entityName == 'LEAD'
@@ -414,5 +415,42 @@ class Calendar
 		}
 
 		return self::$calendarEvents[$id] ?? null;
+	}
+
+	public static function getSectionListAvailableForUser(int $userId): array
+	{
+		if (!Loader::includeModule('calendar'))
+		{
+			return [];
+		}
+
+		return \CCalendar::getSectionListAvailableForUser($userId);
+	}
+
+	public static function getCrmSectionId(int $userId, bool $autoCreate = false): ?int
+	{
+		if (!Loader::includeModule('calendar'))
+		{
+			return null;
+		}
+
+		$crmSection = \CCalendar::GetCrmSection($userId, $autoCreate);
+
+		return is_string($crmSection) ? (int)$crmSection : null;
+	}
+
+	public static function createDefault(array $params = []): ?array
+	{
+		if (!Loader::includeModule('calendar'))
+		{
+			return null;
+		}
+
+		$result = CCalendarSect::CreateDefault([
+			'type' => $params['type'] ?? null,
+			'ownerId' => $params['ownerId'] ?? null,
+		]);
+
+		return is_array($result) ? $result : null;
 	}
 }

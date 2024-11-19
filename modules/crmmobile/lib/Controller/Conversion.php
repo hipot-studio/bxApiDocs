@@ -2,14 +2,12 @@
 
 namespace Bitrix\CrmMobile\Controller;
 
-use Bitrix\Crm\Item;
-use Bitrix\Main\Engine\ActionFilter\CloseSession;
-use \Bitrix\Crm\Settings\Mode;
-use Bitrix\Crm\Service\Container;
-use Bitrix\CrmMobile\Controller\Base;
-use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Crm\Conversion\ConversionManager;
 use Bitrix\Crm\Engine\ActionFilter\CheckReadPermission;
+use Bitrix\Crm\Item;
+use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Settings\Mode;
+use Bitrix\Main\Engine\ActionFilter;
 
 class Conversion extends Base
 {
@@ -39,7 +37,16 @@ class Conversion extends Base
 
 		$existActiveLeads = false;
 
-		$dbResult = \CCrmLead::GetListEx([], ["STATUS_SEMANTIC_ID" => \Bitrix\Crm\PhaseSemantics::PROCESS], false, ["nTopCount" => 1], ["ID"]);
+		$dbResult = \CCrmLead::GetListEx(
+			[],
+			[
+				"STATUS_SEMANTIC_ID" => \Bitrix\Crm\PhaseSemantics::PROCESS,
+				'CHECK_PERMISSIONS' => 'N'
+			],
+			false,
+			["nTopCount" => 1],
+			["ID"]
+		);
 		if ($dbResult->Fetch())
 		{
 			$existActiveLeads = true;

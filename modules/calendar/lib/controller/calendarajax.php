@@ -6,14 +6,20 @@ use Bitrix\Calendar\Access\Model\SectionModel;
 use Bitrix\Calendar\Access\Model\TypeModel;
 use Bitrix\Calendar\Access\SectionAccessController;
 use Bitrix\Calendar\Access\TypeAccessController;
+use Bitrix\Calendar\Core\Event\Event;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
+use Bitrix\Calendar\Core\Mappers\Factory;
 use Bitrix\Calendar\Integration\Bitrix24\FeatureDictionary;
+use Bitrix\Calendar\OpenEvents\Service\DefaultCategoryService;
+use Bitrix\Calendar\OpenEvents\Service\OpenEventAttendeeService;
 use Bitrix\Calendar\Internals\SectionTable;
+use Bitrix\Calendar\OpenEvents\Controller\Request\OpenEvent\SetEventAttendeeStatusDto;
 use Bitrix\Calendar\Rooms;
 use Bitrix\Calendar\Sharing;
 use Bitrix\Calendar\Ui\CalendarFilter;
 use Bitrix\Calendar\Util;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -415,10 +421,18 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			$responseParams['timezoneHint'] = !empty($entry) ? Util::getTimezoneHint($userId, $entry) : '';
 			$responseParams['timezoneList'] = \CCalendar::GetTimezoneList();
 			$responseParams['formSettings'] = UserSettings::getFormSettings($formType);
+			$isOpenEvent = $type === Dictionary::CALENDAR_TYPE['open_event'];
 
 			if ($type)
 			{
-				if (($type === 'user' && $ownerId !== $userId) || $type !== 'user')
+				$sectionList = [];
+				if ($isOpenEvent)
+				{
+					$sectionList = \CCalendar::getSectionList([
+						'CAL_TYPE' => Dictionary::CALENDAR_TYPE['open_event'],
+					]);
+				}
+				else if (($type === 'user' && $ownerId !== $userId) || $type !== 'user')
 				{
 					$sectionList = \CCalendar::getSectionList([
 						'CAL_TYPE' => $type,
@@ -427,13 +441,17 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 						'checkPermissions' => true,
 						'getPermissions' => true
 					]);
-
-					foreach ($sectionList as $section)
+				}
+				foreach ($sectionList as $section)
+				{
+					if ($section['CAL_TYPE'] === Dictionary::CALENDAR_TYPE['open_event'])
 					{
-						if ($section['PERM']['edit'] || $section['PERM']['add'])
-						{
-							$sections[] = $section;
-						}
+						$section['PERM']['edit'] = true;
+					}
+
+					if ($section['PERM']['edit'] || $section['PERM']['add'])
+					{
+						$sections[] = $section;
 					}
 				}
 
@@ -447,10 +465,13 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 					\CCalendarSect::setClearOperationCache();
 				}
 			}
-			$sections = array_merge(
-				$sections,
-				\CCalendar::getSectionListAvailableForUser($userId, (array)($entry['SECTION_ID'] ?? null))
-			);
+			if (!$isOpenEvent)
+			{
+				$sections = array_merge(
+					$sections,
+					\CCalendar::getSectionListAvailableForUser($userId, (array)($entry['SECTION_ID'] ?? null))
+				);
+			}
 
 			$responseParams['sections'] = [];
 			foreach ($sections as $section)
@@ -493,6 +514,20 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			}
 			$responseParams['eventWithEmailGuestEnabled'] = Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_EVENTS_WITH_EMAIL_GUESTS);
 
+			if ($isOpenEvent)
+			{
+				$responseParams['defaultCategoryId'] = DefaultCategoryService::getInstance()->getCategoryId();
+			}
+
+			if (Loader::includeModule('socialnetwork'))
+			{
+				$projectLimitFeatureId = \Bitrix\Socialnetwork\Helper\Feature::PROJECTS_GROUPS;
+
+				$responseParams['projectFeatureEnabled'] = \Bitrix\Socialnetwork\Helper\Feature::isFeatureEnabled($projectLimitFeatureId)
+					|| \Bitrix\Socialnetwork\Helper\Feature::canTurnOnTrial($projectLimitFeatureId)
+				;
+			}
+
 			return new \Bitrix\Main\Engine\Response\Component(
 				'bitrix:calendar.edit.slider',
 				'',
@@ -500,12 +535,13 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 					'id' => $uniqueId,
 					'event' => $entry,
 					'formType' => $formType,
-					'type' => \CCalendar::GetType(),
+					'type' => $isOpenEvent ? Dictionary::CALENDAR_TYPE['open_event'] : \CCalendar::GetType(),
 					'bIntranet' => \CCalendar::IsIntranetEnabled(),
 					'bSocNet' => \CCalendar::IsSocNet(),
 					'AVATAR_SIZE' => 21,
 					'ATTENDEES_CODES' => $userCodes,
 					'hiddenFields' => $this->getEventEditFormHiddenFields($entry),
+					'sections' => $responseParams['sections'],
 				],
 				$responseParams
 			);
@@ -678,22 +714,32 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		}
 
 		$codes = [];
-		if (isset($request['entityList']) && is_array($request['entityList']))
+		// open event need only location planner, so ignore entityList
+		if ($type !== Dictionary::CALENDAR_TYPE['open_event'])
 		{
-			$codes = Util::convertEntitiesToCodes($request['entityList']);
-		}
-		elseif (isset($request['codes']) && is_array($request['codes']))
-		{
-			$codes = $request['codes'];
+			if (isset($request['entityList']) && is_array($request['entityList']))
+			{
+				$codes = Util::convertEntitiesToCodes($request['entityList']);
+			}
+			elseif (isset($request['codes']) && is_array($request['codes']))
+			{
+				$codes = $request['codes'];
+			}
+
+			if ($entryId > 0 && empty($codes))
+			{
+				$codes[] = 'U' . $hostId;
+			}
+			if ($request['add_cur_user_to_list'] === 'Y' || empty($codes))
+			{
+				$codes[] = 'U' . $userId;
+			}
 		}
 
-		if ($entryId > 0 && empty($codes))
+		$entryType = $request['entry']['data']['CAL_TYPE'] ?? null;
+		if ($entryType === Dictionary::CALENDAR_TYPE['open_event'])
 		{
-			$codes[] = 'U' . $hostId;
-		}
-		if ($request['add_cur_user_to_list'] === 'Y' || empty($codes))
-		{
-			$codes[] = 'U' . $userId;
+			$codes = ['U' . $userId];
 		}
 
 		$prevUserList = is_array($request['prevUserList']) ? $request['prevUserList'] : [];
@@ -893,14 +939,32 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		$request = $this->getRequest();
 		$response = [];
 
-		\CCalendarEvent::SetMeetingStatusEx([
-			'attendeeId' => $userId,
-			'eventId' => (int)$request->getPost('entryId'),
-			'parentId' => (int)$request->getPost('entryParentId'),
-			'status' => $request->getPost('status'),
-			'reccurentMode' => $request->getPost('recursionMode'),
-			'currentDateFrom' => $request->getPost('currentDateFrom')
-		]);
+		$entryId = (int)$request->getPost('entryId');
+		/** @var Factory $mapperFactory */
+		$mapperFactory = ServiceLocator::getInstance()->get('calendar.service.mappers.factory');
+		/** @var Event $event */
+		$event = $mapperFactory->getEvent()->getById($entryId);
+		if ($event->isOpenEvent())
+		{
+			OpenEventAttendeeService::getInstance()->setEventAttendeeStatus(
+				$userId,
+				new SetEventAttendeeStatusDto(
+					$event->getId(),
+					$request->getPost('status') === 'Y'
+				)
+			);
+		}
+		else
+		{
+			\CCalendarEvent::SetMeetingStatusEx([
+				'attendeeId' => $userId,
+				'eventId' => (int)$request->getPost('entryId'),
+				'parentId' => (int)$request->getPost('entryParentId'),
+				'status' => $request->getPost('status'),
+				'reccurentMode' => $request->getPost('recursionMode'),
+				'currentDateFrom' => $request->getPost('currentDateFrom')
+			]);
+		}
 
 		\CCalendar::UpdateCounter([$userId]);
 		$response['counters'] = CountersManager::getValues($userId);

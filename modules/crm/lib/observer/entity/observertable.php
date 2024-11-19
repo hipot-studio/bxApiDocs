@@ -85,6 +85,13 @@ class ObserverTable extends DataManager
 		];
 	}
 
+	public static function cleanCache(): void
+	{
+		parent::cleanCache();
+
+		\Bitrix\Crm\Observer\ObserverManager::resetBulkObserverIDsCache();
+	}
+
 	public static function upsert(array $data)
 	{
 		$entityTypeID = isset($data['ENTITY_TYPE_ID']) ? (int)$data['ENTITY_TYPE_ID'] : \CCrmOwnerType::Undefined;

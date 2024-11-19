@@ -57,6 +57,7 @@ final class Calendar extends Base
 				'from' => $from * $milliseconds,
 				'to' => $to * $milliseconds,
 				'duration' => $eventData['DT_LENGTH'] * $milliseconds,
+				'sectionId' => $this->activityData['settings']['CALENDAR_SECTION_ID'] ?? null,
 			];
 
 			if (
@@ -112,6 +113,16 @@ final class Calendar extends Base
 				$fields['SETTINGS'] = $settings;
 
 				$this->addLocationToEventDescription($fields, $location);
+			}
+
+			$sectionId = $this->blockData['sectionId'] ?? null;
+			if (!empty($sectionId))
+			{
+				$fields['SECTION_ID'] = $sectionId;
+
+				$settings = $fields['SETTINGS'] ?? [];
+				$settings['CALENDAR_SECTION_ID'] = $sectionId;
+				$fields['SETTINGS'] = $settings;
 			}
 
 			$entity->appendAdditionalFields($fields);

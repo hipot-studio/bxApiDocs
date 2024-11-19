@@ -12,6 +12,7 @@ class NodeMember implements Item
 	public const DEFAULT_ROLE_XML_ID = [
 		'HEAD' => 'MEMBER_HEAD',
 		'EMPLOYEE' => 'MEMBER_EMPLOYEE',
+		'DEPUTY_HEAD' => 'MEMBER_DEPUTY_HEAD',
 	];
 
 	public function __construct(

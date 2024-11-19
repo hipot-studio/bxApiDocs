@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage;
 
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item\LogMessage;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockFactory;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Date;
@@ -52,6 +53,13 @@ class TodoCreated extends LogMessage
 		if ($calendarEventId)
 		{
 			$duration = $activityData['DURATION'] ?? null;
+		}
+
+		// Temporarily removes [p] for mobile compatibility
+		$descriptionType = (int)$this->getHistoryItemModel()?->get('ASSOCIATED_ENTITY')['DESCRIPTION_TYPE'] ?? null;
+		if ($this->getContext()->getType() === Context::MOBILE && $descriptionType === \CCrmContentType::BBCode)
+		{
+			$description = \Bitrix\Crm\Entity\CommentsHelper::normalizeComment($description);
 		}
 
 		$result = [];
@@ -111,7 +119,9 @@ class TodoCreated extends LogMessage
 			$result['description'] = (new EditableDescription())
 				->setText($description)
 				->setEditable(false)
-				->setHeight(EditableDescription::HEIGHT_SHORT);
+				->setHeight(EditableDescription::HEIGHT_SHORT)
+				->setUseBBCodeEditor(true)
+			;
 		}
 
 		return $result;

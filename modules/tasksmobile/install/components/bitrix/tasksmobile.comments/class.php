@@ -75,7 +75,6 @@ class TasksMobileCommentsComponent extends CBitrixComponent
 		}
 
 		$taskId = (int)$taskData['ID'];
-
 		$this->arResult['TASK'] = $taskData;
 		$this->arResult['FORUM_ID'] = ($taskData['FORUM_ID'] ?: CTasksTools::getForumIdForIntranet());
 		$this->arResult['LOG_ID'] = $this->getLogId($taskId);

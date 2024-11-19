@@ -29,13 +29,21 @@ class EventHandler
 		$result['crm_smart_proc'] = DynamicTypeMapping::getMapping();
 		$result['crm_stages'] = StagesMapping::getMapping($helper, $languageId);
 		$result['crm_entity_relation'] = EntityRelationMapping::getMapping();
+		$result['crm_quote'] = QuoteMapping::getMapping();
+		$result['crm_quote_product_row'] = QuoteProductMapping::getMapping($helper);
 		$result = array_merge(
 			$result,
 			AutomatedSolutionMapping::getMapping($languageId),
 			DynamicItemsProductMapping::getMapping($helper, $languageId),
 		);
 
-		self::addDescriptions(['crm_smart_proc', 'crm_stages', 'crm_entity_relation'], $result, $languageId);
+		self::addDescriptions([
+			'crm_smart_proc',
+			'crm_stages',
+			'crm_entity_relation',
+			'crm_quote',
+			'crm_quote_product_row',
+		], $result, $languageId);
 	}
 
 	private static function addDescriptions(array $keys, array &$mapping, ?string $languageId): void

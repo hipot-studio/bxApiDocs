@@ -7,6 +7,7 @@ if (!CModule::IncludeModule('bizproc'))
 
 use Bitrix\Crm;
 use \Bitrix\Crm\Service;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
 
 class CCrmDocument
@@ -1622,6 +1623,7 @@ class CCrmDocument
 
 		$permissionEntity = static::ResolvePermissionEntity($arDocumentID, $arParameters);
 		$userPermissions = CCrmPerms::GetUserPermissions($userId);
+		$entityTypeId = CCrmOwnerType::ResolveID($documentType);
 
 		if (
 			$operation == \CBPCanUserOperateOperation::CreateWorkflow
@@ -1633,19 +1635,26 @@ class CCrmDocument
 
 		if ($operation == \CBPCanUserOperateOperation::CreateAutomation)
 		{
-			if (isset($arParameters['DocumentCategoryId']) && $arParameters['DocumentCategoryId'] > 0)
-			{
-				$documentType .= '_C' . $arParameters['DocumentCategoryId'];
-			}
+			$categoryId = (
+				isset($arParameters['DocumentCategoryId'])
+				&& is_numeric($arParameters['DocumentCategoryId'])
+				&& (int)$arParameters['DocumentCategoryId'] >= 0
+			)
+				? (int)$arParameters['DocumentCategoryId']
+				: null;
 
-			return \CCrmAuthorizationHelper::CheckAutomationCreatePermission($documentType, $userPermissions);
+			return Service\Container::getInstance()->getUserPermissions($userId)->canEditAutomation($entityTypeId, $categoryId);
 		}
 
 		if( $operation === CBPCanUserOperateOperation::ViewWorkflow
 			|| $operation === CBPCanUserOperateOperation::ReadDocument
 		)
 		{
-			return CCrmAuthorizationHelper::CheckReadPermission($permissionEntity, 0, $userPermissions);
+			return
+				Container::getInstance()
+							->getUserPermissions($userId)
+							->canReadType(CCrmOwnerType::ResolveID($documentType))
+				;
 		}
 
 		return CCrmAuthorizationHelper::CheckCreatePermission($permissionEntity, $userPermissions);
@@ -2231,6 +2240,16 @@ class CCrmDocument
 		self::ExtractEntityMultiFieldData($srcData, $dstData, $typeName === 'IM' ? 'OTHER' : 'WORK');
 		$arFields['FM'][$typeName] = $dstData;
 		unset($arFields[$typeName]);
+	}
+
+	public static function prepareEntityMultiFieldsValue(&$fields, $typeName): void
+	{
+		self::PrepareEntityMultiFields($fields, $typeName);
+		if (isset($fields['FM']) && isset($fields['FM'][$typeName]))
+		{
+			$fields[$typeName] = $fields['FM'][$typeName];
+			unset($fields['FM'][$typeName]);
+		}
 	}
 
 	public static function prepareCrmUserTypeValueView($value, $defaultTypeName = '')

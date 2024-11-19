@@ -13,6 +13,7 @@ use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Upload\BlankUploadController;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Item;
+use Bitrix\Sign\Util\Query\Db\Paginator;
 
 class Blank extends \Bitrix\Sign\Engine\Controller
 {
@@ -33,7 +34,8 @@ class Blank extends \Bitrix\Sign\Engine\Controller
 	 */
 	public function createAction(
 		array $files,
-		?string $scenario = null
+		?string $scenario = null,
+		bool $forTemplate = false,
 	): array
 	{
 		/** @var array<int> $fileIds */
@@ -63,7 +65,7 @@ class Blank extends \Bitrix\Sign\Engine\Controller
 			$fileIds[] = $persistentFileId;
 		}
 		$scenario ??= Type\BlankScenario::B2B;
-		$result = Container::instance()->getSignBlankService()->createFromFileIds($fileIds, $scenario);
+		$result = Container::instance()->getSignBlankService()->createFromFileIds($fileIds, $scenario, $forTemplate);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
@@ -147,7 +149,7 @@ class Blank extends \Bitrix\Sign\Engine\Controller
 			return [];
 		}
 
-		[$limit, $offset] = \Bitrix\Sign\Util\Query\Db\Paginator::getLimitAndOffset($countPerPage, $page);
+		[$limit, $offset] = Paginator::getLimitAndOffset($countPerPage, $page);
 
 		$data = Container::instance()
 			->getBlankRepository()

@@ -65,6 +65,11 @@ class Link implements Item
 		return $this->providerCode === ProviderCode::GOS_KEY;
 	}
 
+	public function isExternal(): bool
+	{
+		return $this->providerCode === ProviderCode::EXTERNAL;
+	}
+
 	/**
 	 * Used to display texts by role
 	 */

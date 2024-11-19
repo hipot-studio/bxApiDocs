@@ -268,7 +268,10 @@ class EventHandlerService
 
 		$type = match ($member->channelType) {
 			ChannelType::PHONE => Crm\Timeline\SignDocument\Channel::TYPE_SMS,
-			ChannelType::IDLE => Crm\Timeline\SignDocument\Channel::TYPE_CHAT,
+			ChannelType::IDLE => $this->memberService->skipChatInvitationForMember($member, $document)
+				? Crm\Timeline\SignDocument\Channel::TYPE_B24
+				: Crm\Timeline\SignDocument\Channel::TYPE_CHAT
+			,
 			default => Crm\Timeline\SignDocument\Channel::TYPE_EMAIL,
 		};
 

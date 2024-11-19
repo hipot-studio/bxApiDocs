@@ -10,7 +10,6 @@ use Bitrix\Tasks\Flow\FlowFeature;
 use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Integration\Bitrix24\FeatureDictionary;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\FilterLimit;
-use Bitrix\TasksMobile\Settings;
 
 final class TariffPlanRestrictionProvider
 {
@@ -188,10 +187,6 @@ final class TariffPlanRestrictionProvider
 
 	private static function isFeaturePromo(string $featureId): bool
 	{
-		return (
-			Loader::includeModule('bitrix24')
-			&& Settings::getInstance()->isNewFeaturesPoliticEnabled()
-			&& Feature::isPromoEditionAvailableByFeature($featureId)
-		);
+		return Loader::includeModule('bitrix24') && Feature::isPromoEditionAvailableByFeature($featureId);
 	}
 }

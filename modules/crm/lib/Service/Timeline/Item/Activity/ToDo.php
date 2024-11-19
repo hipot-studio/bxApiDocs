@@ -28,7 +28,6 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\PingSelector;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
 use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemFactory;
-use Bitrix\Crm\Settings\Crm;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -47,16 +46,11 @@ class ToDo extends Activity
 
 	public function canUseColorSelector(): bool
 	{
-		return Crm::isTimelineToDoUseV2Enabled();
+		return true;
 	}
 
 	final public function getColor(): ?array
 	{
-		if (!\Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled())
-		{
-			return null;
-		}
-
 		$settings = $this->getAssociatedEntityModel()?->get('SETTINGS') ?? [];
 		$color = $settings['COLOR'] ?? ColorSettingsProvider::getDefaultColorId();
 
@@ -70,14 +64,11 @@ class ToDo extends Activity
 
 	public function getTitle(): string
 	{
-		if (Crm::isTimelineToDoUseV2Enabled())
-		{
-			$subject = $this->getAssociatedEntityModel()?->get('SUBJECT');
+		$subject = $this->getAssociatedEntityModel()?->get('SUBJECT');
 
-			if ($subject !== null && $subject !== '')
-			{
-				return $subject;
-			}
+		if ($subject !== null && $subject !== '')
+		{
+			return $subject;
 		}
 
 		if ($this->isScheduled())
@@ -203,24 +194,21 @@ class ToDo extends Activity
 		$buttons = [];
 		if (!$this->isScheduled())
 		{
-			if (Crm::isTimelineToDoUseV2Enabled())
-			{
-				$repeatButton = new Layout\Footer\Button(
-					Loc::getMessage('CRM_TIMELINE_ITEM_TODO_REPEAT'),
-					Layout\Footer\Button::TYPE_SECONDARY,
-				);
-				$repeatAction = (new Layout\Action\JsEvent('Activity:ToDo:Repeat'))
-					->addActionParamInt('activityId', $this->getActivityId())
-					->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
-					->addActionParamInt('ownerId', $this->getContext()->getEntityId())
-				;
+			$repeatButton = new Layout\Footer\Button(
+				Loc::getMessage('CRM_TIMELINE_ITEM_TODO_REPEAT'),
+				Layout\Footer\Button::TYPE_SECONDARY,
+			);
+			$repeatAction = (new Layout\Action\JsEvent('Activity:ToDo:Repeat'))
+				->addActionParamInt('activityId', $this->getActivityId())
+				->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+				->addActionParamInt('ownerId', $this->getContext()->getEntityId())
+			;
 
-				$buttons['repeat'] = $repeatButton
-					->setAction($repeatAction)
-					->setScopeWeb()
-					->setHideIfReadonly()
-				;
-			}
+			$buttons['repeat'] = $repeatButton
+				->setAction($repeatAction)
+				->setScopeWeb()
+				->setHideIfReadonly()
+			;
 
 			return $buttons;
 		}
@@ -232,33 +220,21 @@ class ToDo extends Activity
 			)
 		)->setAction($this->getCompleteAction())->setHideIfReadonly();
 
-		if (Crm::isTimelineToDoUseV2Enabled())
-		{
-			$updateButton = new Layout\Footer\Button(
-				Loc::getMessage('CRM_TIMELINE_ITEM_TODO_UPDATE'),
-				Layout\Footer\Button::TYPE_SECONDARY,
-			);
-			$updateAction = (new Layout\Action\JsEvent('Activity:ToDo:Update'))
-				->addActionParamInt('activityId', $this->getActivityId())
-				->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
-				->addActionParamInt('ownerId', $this->getContext()->getEntityId())
-			;
+		$updateButton = new Layout\Footer\Button(
+			Loc::getMessage('CRM_TIMELINE_ITEM_TODO_UPDATE'),
+			Layout\Footer\Button::TYPE_SECONDARY,
+		);
+		$updateAction = (new Layout\Action\JsEvent('Activity:ToDo:Update'))
+			->addActionParamInt('activityId', $this->getActivityId())
+			->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+			->addActionParamInt('ownerId', $this->getContext()->getEntityId())
+		;
 
-			$buttons['update'] = $updateButton
-				->setAction($updateAction)
-				->setScopeWeb()
-				->setHideIfReadonly()
-			;
-		}
-		elseif ($this->canPostpone())
-		{
-			$buttons['postpone'] = (
-				new Layout\Footer\Button(
-					Loc::getMessage('CRM_TIMELINE_ITEM_TODO_POSTPONE'),
-					Layout\Footer\Button::TYPE_SECONDARY,
-				)
-			)->setAction(new Layout\Action\ShowMenu($this->getPostponeMenu($this->getActivityId())))->setHideIfReadonly();
-		}
+		$buttons['update'] = $updateButton
+			->setAction($updateAction)
+			->setScopeWeb()
+			->setHideIfReadonly()
+		;
 
 		return $buttons;
 	}
@@ -293,18 +269,6 @@ class ToDo extends Activity
 				)
 			;
 		}
-
-		// @temporary disabled
-		/*if (\Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled())
-		{
-			$items['repeat'] = MenuItemFactory::createRepeatMenuItem()
-				->setAction((new Layout\Action\JsEvent('Activity:ToDo:Repeat'))
-					->addActionParamInt('ownerTypeId', $ownerTypeId)
-					->addActionParamInt('ownerId', $ownerId)
-					->addActionParamInt('activityId', $this->getActivityId())
-				)
-			;
-		}*/
 
 		return $items;
 	}
@@ -486,16 +450,7 @@ class ToDo extends Activity
 	{
 		if ($this->isScheduled() && $this->hasUpdatePermission())
 		{
-			if (\Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled())
-			{
-				return $this->buildChangeablePingSelectorItem();
-			}
-
-			return $this->buildChangeableItemSelectorItem(
-				null,
-				null,
-				true
-			);
+			return $this->buildChangeablePingSelectorItem();
 		}
 
 		return $this->buildReadonlyPingSelectorItem();
@@ -526,7 +481,7 @@ class ToDo extends Activity
 				array_values($result)
 			))
 			->setAction(
-				(new Layout\Action\RunAjaxAction('crm.activity.todo.updatePingOffsets'))
+				(new Layout\Action\RunAjaxAction('crm.activity.ping.updateOffsets'))
 					->addActionParamInt('ownerTypeId', $identifier->getEntityTypeId())
 					->addActionParamInt('ownerId', $identifier->getEntityId())
 					->addActionParamInt('id', $this->getActivityId())
@@ -576,7 +531,7 @@ class ToDo extends Activity
 				TodoPingSettingsProvider::getDefaultOffsetList()
 			))
 			->setAction(
-				(new Layout\Action\RunAjaxAction('crm.activity.todo.updatePingOffsets'))
+				(new Layout\Action\RunAjaxAction('crm.activity.ping.updateOffsets'))
 					->addActionParamInt('ownerTypeId', $identifier->getEntityTypeId())
 					->addActionParamInt('ownerId', $identifier->getEntityId())
 					->addActionParamInt('id', $this->getActivityId())
@@ -660,9 +615,17 @@ class ToDo extends Activity
 		}
 		$description = trim($description);
 
+		// Temporarily removes [p] for mobile compatibility
+		$descriptionType = (int)$this->getAssociatedEntityModel()?->get('DESCRIPTION_TYPE');
+		if ($this->getContext()->getType() === Context::MOBILE && $descriptionType === \CCrmContentType::BBCode)
+		{
+			$description = \Bitrix\Crm\Entity\CommentsHelper::normalizeComment($description);
+		}
+
 		$editableDescriptionBlock = (new EditableDescription())
 			->setText($description)
 			->setEditable(false)
+			->setUseBBCodeEditor(true)
 		;
 
 		if (!$this->isScheduled() && $this->getContext()->getType() === Context::MOBILE)

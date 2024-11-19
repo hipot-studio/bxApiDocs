@@ -11,10 +11,14 @@ use Bitrix\Main\Grid\Panel\Snippet\Onchange;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Main\Web\Uri;
 
 final class MergeChildAction extends GroupChildAction
 {
-	public function __construct(private int $entityTypeId)
+	public function __construct(
+		private readonly int $entityTypeId,
+		private readonly ?Uri $mergerUrl = null,
+	)
 	{
 	}
 
@@ -53,6 +57,7 @@ final class MergeChildAction extends GroupChildAction
 							'JS' =>
 								(new Event('BatchManager:executeMerge'))
 									->addEntityTypeId($this->entityTypeId)
+									->addParam('mergerUrl', $this->mergerUrl)
 									->buildJsCallback()
 							,
 						]

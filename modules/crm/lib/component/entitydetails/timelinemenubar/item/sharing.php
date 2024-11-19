@@ -6,7 +6,6 @@ use Bitrix\Calendar;
 use Bitrix\Calendar\Sharing\Link;
 use Bitrix\Crm;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
-use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Main\Loader;
@@ -45,9 +44,6 @@ class Sharing extends Item
 	public function prepareSettings(): array
 	{
 		return [
-			'config' => [
-				'isResponsible' => $this->isResponsible(),
-			],
 			'isAvailable' => \Bitrix\Crm\Restriction\RestrictionManager::getCalendarSharingRestriction()->hasPermission(),
 		];
 	}
@@ -60,14 +56,15 @@ class Sharing extends Item
 		}
 
 		$settings = \CCalendar::GetSettings();
+		$userId = $this->getUserId();
 
 		return [
 			'config' => [
 				'isResponsible' => $this->isResponsible(),
 				'link' => $this->prepareLink(),
-				'contacts' => $this->getPhoneContacts(),
 				'selectedChannelId' => $this->getSelectedChannelId(),
 				'communicationChannels' => $this->getCommunicationChannels(),
+				'contacts' => $this->getContacts(),
 				'isNotificationsAvailable' => $this->isNotificationsAvailable(),
 				'areCommunicationChannelsAvailable' => $this->areCommunicationChannelsAvailable(),
 				'calendarSettings' => [
@@ -76,6 +73,11 @@ class Sharing extends Item
 					'workTimeStart' => $settings['work_time_start'],
 					'workTimeEnd' => $settings['work_time_end'],
 				],
+				'userInfo' => [
+					'id' => $userId,
+					'name' => \CCalendar::GetUserName($userId),
+					'avatar' => \CCalendar::GetUserAvatarSrc($userId),
+				],
 			],
 			'isAvailable' => \Bitrix\Crm\Restriction\RestrictionManager::getCalendarSharingRestriction()->hasPermission(),
 		];
@@ -83,8 +85,7 @@ class Sharing extends Item
 
 	protected function isResponsible(): bool
 	{
-		$currentUserId = (new Context())->getUserId();
-		return $this->getAssignedId() === $currentUserId;
+		return $this->getAssignedId() === $this->getUserId();
 	}
 
 	protected function getAssignedId(): ?int
@@ -141,42 +142,6 @@ class Sharing extends Item
 		];
 	}
 
-	protected function getPhoneContacts(): array
-	{
-		$communications = $this->getCommunications();
-		return array_map(static function ($communication) {
-			return [
-				'entityId' => (int)$communication['entityId'],
-				'entityTypeId' => (int)$communication['entityTypeId'],
-				'name' => $communication['caption'],
-				'phone' => $communication['phones'][0]['value'] ?? null,
-			];
-		}, $communications) ?? [];
-	}
-
-	protected function getContact(?int $contactId): ?array
-	{
-		if (is_null($contactId))
-		{
-			return null;
-		}
-
-		$communications = $this->getCommunications();
-		return array_filter($communications, static function ($communication) use ($contactId) {
-			return $communication['entityId'] === $contactId;
-		})[0];
-	}
-
-	public function getCommunications(): array
-	{
-		if ($this->communications === null)
-		{
-			$this->communications = SmsManager::getEntityPhoneCommunications($this->getEntityTypeId(), $this->getEntityId());
-		}
-
-		return $this->communications ?? [];
-	}
-
 	protected function areCommunicationChannelsAvailable(): bool
 	{
 		$result = false;
@@ -186,6 +151,7 @@ class Sharing extends Item
 			$entity = new Crm\ItemIdentifier($this->getEntityTypeId(), $this->getEntityId());
 			$result = Crm\Integration\Calendar\Notification\NotificationService::canSendMessage($entity)
 				|| Crm\Integration\Calendar\Notification\SmsService::canSendMessage($entity)
+				|| Crm\Integration\Calendar\Notification\MailService::canSendMessage($entity)
 			;
 		}
 
@@ -196,13 +162,41 @@ class Sharing extends Item
 	{
 		$result = null;
 
+		$lastSentCrmDealLink = $this->getLastSentCrmDealLink();
+		if ($lastSentCrmDealLink !== null && !empty($lastSentCrmDealLink->getChannelId()))
+		{
+			return $lastSentCrmDealLink->getChannelId();
+		}
+
 		if ($this->getEntityId() > 0 && $this->getEntityTypeId() > 0)
 		{
 			$entity = new Crm\ItemIdentifier($this->getEntityTypeId(), $this->getEntityId());
-			$result = Crm\Integration\Calendar\Notification\Manager::getOptimalChannelId($entity);
+			$result = Crm\Integration\Calendar\Notification\Manager::getOptimalChannelId($entity, $this->getUserId());
 		}
 
 		return $result;
+	}
+
+	protected function getLastSentCrmDealLink(): ?Link\CrmDealLink
+	{
+		$broker = Container::getInstance()->getEntityBroker($this->getEntityTypeId());
+		if (!$broker)
+		{
+			return null;
+		}
+
+		$deal = $broker->getById($this->getEntityId());
+		if (!$deal)
+		{
+			return null;
+		}
+
+		$ownerId = $deal->getAssignedById();
+
+		/** @var Link\CrmDealLink $lastSentCrmDealLink */
+		$lastSentCrmDealLink = (new Calendar\Sharing\Link\Factory())->getLastSentCrmDealLink($ownerId);
+
+		return $lastSentCrmDealLink;
 	}
 
 	protected function getCommunicationChannels(): array
@@ -218,8 +212,26 @@ class Sharing extends Item
 		return $result;
 	}
 
+	protected function getContacts(): array
+	{
+		$result = [];
+
+		if ($this->getEntityId() > 0 && $this->getEntityTypeId() > 0)
+		{
+			$entity = new Crm\ItemIdentifier($this->getEntityTypeId(), $this->getEntityId());
+			$result = Crm\Integration\Calendar\Notification\Manager::getContacts($entity);
+		}
+
+		return $result;
+	}
+
 	protected function isNotificationsAvailable(): bool
 	{
 		return Loader::includeModule('bitrix24') && $this->context->getRegion() === 'ru';
+	}
+
+	protected function getUserId(): int
+	{
+		return (new Context())->getUserId();
 	}
 }

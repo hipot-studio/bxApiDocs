@@ -19,7 +19,7 @@ class CBPCrmChangeDynamicCategoryActivity extends CBPCrmCopyDynamicActivity
 	{
 		$this->preparedProperties = [
 			'CategoryId' => (int)$this->CategoryId,
-			'StageId' => $this->StageId,
+			'StageId' => CBPHelper::stringify($this->StageId),
 		];
 	}
 

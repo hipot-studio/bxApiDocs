@@ -193,13 +193,12 @@ final class ChecklistProvider
 		return $checkListItems;
 	}
 
-	private function buildTreeStructure($checkListItems): CheckList
+	public function buildTreeStructure($checkListItems): CheckList
 	{
 		$nodeId = 0;
 		$sortIndex = 0;
 
 		$result = new CheckList($nodeId, $this->userId, $this->facade);
-
 		$arrayTreeStructure = $this->facade::getArrayStructuredRoots(
 			$checkListItems,
 			$this->getKeyToSort($checkListItems),
@@ -208,7 +207,7 @@ final class ChecklistProvider
 		{
 			$nodeId++;
 			$result->add(
-				$this->makeTree($nodeId, $root, $sortIndex, false),
+				$this->makeTree($root['NODE_ID'] ?? $nodeId, $root, $sortIndex, false),
 			);
 			$sortIndex++;
 		}
@@ -234,6 +233,7 @@ final class ChecklistProvider
 
 	private function makeTree($nodeId, $root, $sortIndex, $displaySortIndex): CheckList
 	{
+
 		$root['SORT_INDEX'] = $sortIndex;
 		$root['DISPLAY_SORT_INDEX'] = htmlspecialcharsbx($displaySortIndex);
 
@@ -243,13 +243,13 @@ final class ChecklistProvider
 		foreach ($root['SUB_TREE'] as $item)
 		{
 			++$localSortIndex;
-
+			$nodeId = is_int($nodeId) ? ++$nodeId : $item['NODE_ID'];
 			$nextDisplaySortIndex = (
 			($displaySortIndex === false) ? $localSortIndex : "$displaySortIndex.$localSortIndex"
 			);
 
 			$tree->add(
-				$this->makeTree(++$nodeId, $item, $localSortIndex - 1, $nextDisplaySortIndex),
+				$this->makeTree($nodeId, $item, $localSortIndex - 1, $nextDisplaySortIndex),
 			);
 		}
 

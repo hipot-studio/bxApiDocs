@@ -49,6 +49,7 @@ class CrmItemKanbanComponent extends Bitrix\Crm\Component\ItemList
 		$this->arResult['entityTypeDescription'] = $this->factory->getEntityDescription();
 		$this->arResult['isCountersEnabled'] = $this->factory->getCountersSettings()->isCountersEnabled();
 		$this->arResult['performance'] = $this->arParams['performance'] ?? [];
+		$this->arResult['pathToMerge'] = $this->router->getEntityMergeUrl($this->entityTypeId);
 
 		$addOperationRestriction = RestrictionManager::getAddOperationRestriction($this->factory->getEntityTypeId());
 		$this->arResult['addItemPermittedByTariff'] = $addOperationRestriction->hasPermission();

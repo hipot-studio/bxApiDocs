@@ -14,6 +14,7 @@ use Bitrix\Crm\Model\Dynamic\Type;
 use Bitrix\Crm\Model\Dynamic\TypeTable;
 use Bitrix\Crm\Relation\Registrar;
 use Bitrix\Crm\Relation\RelationManager;
+use Bitrix\Crm\Service\Communication\Search\Ranking\RankingFactory;
 use Bitrix\Crm\Service\Factory\Dynamic;
 use Bitrix\Crm\Service\Integration\Sign\Kanban\PullService;
 use Bitrix\Crm\Service\Sale\Shipment\ProductService;
@@ -632,5 +633,10 @@ class Container
 	public function getClientBinder(): ClientBinder
 	{
 		return ServiceLocator::getInstance()->get('crm.binding.clientBinder');
+	}
+
+	public function getCommunicationRankingFactory(): RankingFactory
+	{
+		return ServiceLocator::getInstance()->get('crm.service.communication.rankingFactory');
 	}
 }

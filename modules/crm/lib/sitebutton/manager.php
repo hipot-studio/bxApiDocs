@@ -361,8 +361,11 @@ class Manager
 				$buttonData['PAGES_USE_DISPLAY'] = Loc::getMessage('CRM_BUTTON_MANAGER_PAGES_USE_DISPLAY_ALL');
 			}
 
-
-			$buttonData['LOCATION_DISPLAY'] = $locationList[$buttonData['LOCATION']];
+			$buttonData['LOCATION_DISPLAY'] = null;
+			if (isset($buttonData['LOCATION']))
+			{
+				$buttonData['LOCATION_DISPLAY'] = $locationList[$buttonData['LOCATION']] ?? null;
+			}
 			$buttonData['PATH_EDIT'] = $domain . str_replace(
 				'#id#',
 				$buttonData['ID'],

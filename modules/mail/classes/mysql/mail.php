@@ -39,6 +39,8 @@ class CMailbox extends CAllMailBox
 				break;
 		}
 
+		\Bitrix\Mail\Helper\Message\MessageInternalDateHandler::clearStartInternalDate();
+
 		return "CMailbox::CleanUp();";
 	}
 }

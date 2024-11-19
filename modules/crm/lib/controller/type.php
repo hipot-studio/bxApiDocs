@@ -3,10 +3,10 @@
 namespace Bitrix\Crm\Controller;
 
 use Bitrix\Crm\Integration;
-use Bitrix\Crm\Integration\Intranet\CustomSection;
 use Bitrix\Crm\Model\Dynamic;
 use Bitrix\Crm\Model\Dynamic\TypeTable;
 use Bitrix\Crm\Relation;
+use Bitrix\Crm\Relation\Collection;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
@@ -21,9 +21,6 @@ use Bitrix\Main\UI\PageNavigation;
 
 class Type extends Base
 {
-	/** @var CustomSection[] | null $customSections */
-	protected ?array $customSections = null;
-
 	public function getAutoWiredParameters(): array
 	{
 		$params = parent::getAutoWiredParameters();
@@ -105,7 +102,10 @@ class Type extends Base
 		if(is_array($order))
 		{
 			$parameters['order'] = $this->convertKeysToUpper($order);
-			$parameters['order'] = $this->convertValuesToUpper($parameters['order'], Converter::TO_UPPER | Converter::VALUES);
+			$parameters['order'] = $this->convertValuesToUpper(
+				$parameters['order'],
+				Converter::TO_UPPER | Converter::VALUES,
+			);
 			if (!$this->validateOrder($parameters['order'], $allowedFields))
 			{
 				return null;
@@ -121,7 +121,6 @@ class Type extends Base
 		$types = [];
 
 		$list = $typeTable::getList($parameters);
-		/** @var Dynamic\Type $type */
 		while($type = $list->fetchObject())
 		{
 			$types[] = $type->jsonSerialize(false);
@@ -134,6 +133,48 @@ class Type extends Base
 	}
 
 	public function addAction(array $fields): ?array
+	{
+		$builder = (new Integration\Analytics\Builder\Automation\Type\CreateEvent())
+			->setSection(Integration\Analytics\Dictionary::SECTION_REST)
+		;
+
+		if ($this->isRest())
+		{
+			$builder
+				->setStatus(Integration\Analytics\Dictionary::STATUS_ATTEMPT)
+				->buildEvent()
+				->send()
+			;
+		}
+
+		$result = $this->add($fields);
+
+		if ($this->isRest())
+		{
+			if (isset($result['type']['id']))
+			{
+				$builder->setId($result['type']['id']);
+			}
+
+			if ($this->getErrors())
+			{
+				$builder->setStatus(Integration\Analytics\Dictionary::STATUS_ERROR);
+			}
+			else
+			{
+				$builder->setStatus(Integration\Analytics\Dictionary::STATUS_SUCCESS);
+			}
+
+			$builder
+				->buildEvent()
+				->send()
+			;
+		}
+
+		return $result;
+	}
+
+	private function add(array $fields): ?array
 	{
 		$entityTypeId = $fields['entityTypeId'] ?? 0;
 		$userPermissions = Container::getInstance()->getUserPermissions($this->getCurrentUser()->getId());
@@ -156,10 +197,51 @@ class Type extends Base
 
 		$type = $dataClass::createObject();
 
-		return $this->updateAction($type, $fields);
+		return $this->update($type, $fields);
 	}
 
 	public function updateAction(?Dynamic\Type $type = null, array $fields = []): ?array
+	{
+		$builder = (new Integration\Analytics\Builder\Automation\Type\EditEvent())
+			->setSection(Integration\Analytics\Dictionary::SECTION_REST)
+		;
+		if ($type)
+		{
+			$builder->setId($type->getId());
+		}
+
+		if ($this->isRest())
+		{
+			$builder
+				->setStatus(Integration\Analytics\Dictionary::STATUS_ATTEMPT)
+				->buildEvent()
+				->send()
+			;
+		}
+
+		$result = $this->update($type, $fields);
+
+		if ($this->isRest())
+		{
+			if ($this->getErrors())
+			{
+				$builder->setStatus(Integration\Analytics\Dictionary::STATUS_ERROR);
+			}
+			else
+			{
+				$builder->setStatus(Integration\Analytics\Dictionary::STATUS_SUCCESS);
+			}
+
+			$builder
+				->buildEvent()
+				->send()
+			;
+		}
+
+		return $result;
+	}
+
+	private function update(?Dynamic\Type $type = null, array $fields = []): ?array
 	{
 		if($type === null)
 		{
@@ -201,7 +283,9 @@ class Type extends Base
 		$isCustomSectionSelected = isset($fields['CUSTOM_SECTION_ID']) && $fields['CUSTOM_SECTION_ID'] !== '0';
 		if ($isExternal && $isNew && !$isCustomSectionSelected)
 		{
-			$this->addError(new Error(Loc::getMessage('CRM_CONTROLLER_TYPE_EXTERNAL_TYPE_WITHOUT_CUSTOM_SECTION_ERROR')));
+			$this->addError(
+				new Error(Loc::getMessage('CRM_CONTROLLER_TYPE_EXTERNAL_TYPE_WITHOUT_CUSTOM_SECTION_ERROR')),
+			);
 
 			return null;
 		}
@@ -267,6 +351,47 @@ class Type extends Base
 	}
 
 	public function deleteAction(?Dynamic\Type $type = null): ?array
+	{
+		$builder = (new Integration\Analytics\Builder\Automation\Type\DeleteEvent())
+			->setSection(Integration\Analytics\Dictionary::SECTION_REST)
+		;
+		if ($type)
+		{
+			$builder->setId($type->getId());
+		}
+
+		if ($this->isRest())
+		{
+			$builder
+				->setStatus(Integration\Analytics\Dictionary::STATUS_ATTEMPT)
+				->buildEvent()
+				->send()
+			;
+		}
+
+		$result = $this->delete($type);
+
+		if ($this->isRest())
+		{
+			if ($this->getErrors())
+			{
+				$builder->setStatus(Integration\Analytics\Dictionary::STATUS_ERROR);
+			}
+			else
+			{
+				$builder->setStatus(Integration\Analytics\Dictionary::STATUS_SUCCESS);
+			}
+
+			$builder
+				->buildEvent()
+				->send()
+			;
+		}
+
+		return $result;
+	}
+
+	private function delete(?Dynamic\Type $type = null): ?array
 	{
 		if($type === null)
 		{
@@ -339,12 +464,6 @@ class Type extends Base
 				);
 			}
 		}
-	}
-
-	protected function normalizeTypes(array $types): array
-	{
-		$arrayOfIntegers = array_map('intval', $types);
-		return array_filter($arrayOfIntegers);
 	}
 
 	protected function saveRelations(int $entityTypeId, array $fields): Result
@@ -430,9 +549,10 @@ class Type extends Base
 	 * If there is not data
 	 * - if relation exists - remove it
 	 *
-	 * @param Relation\RelationManager $relationManager
+	 * @param Collection $relations
 	 * @param RelationIdentifier $identifier
 	 * @param array|null $relationData
+	 *
 	 * @return Result
 	 */
 	protected function processRelation(

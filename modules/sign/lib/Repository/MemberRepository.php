@@ -339,6 +339,11 @@ class MemberRepository
 		return $this->extractItemCollectionFromModelCollection($models->fetchCollection());
 	}
 
+	public function getByDocumentIdWithRole(int $documentId, string $role): ?Item\Member
+	{
+		return $this->listByDocumentIdWithRole($documentId, $role, 1)->getFirst();
+	}
+
 	public function isDocumentHasReviewer(int $documentId): bool
 	{
 		return $this->isDocumentHasMemberWithRoles($documentId, [Role::REVIEWER]);
@@ -427,6 +432,25 @@ class MemberRepository
 		return $this->extractItemCollectionFromModelCollection($models);
 	}
 
+	/**
+	 * @param int $documentId
+	 * @param Role::* $roles
+	 *
+	 * @return \Bitrix\Sign\Item\MemberCollection
+	 */
+	public function listByDocumentIdExcludeRoles(int $documentId, string... $roles): Item\MemberCollection
+	{
+		$roleIds = array_map($this->convertRoleToInt(...), $roles);
+		$models = Internal\MemberTable::query()
+			->addSelect('*')
+			->where('DOCUMENT_ID', $documentId)
+			->whereNotIn('ROLE', $roleIds)
+			->fetchCollection()
+		;
+
+		return $this->extractItemCollectionFromModelCollection($models);
+	}
+
 	public function listByDocumentId(int $documentId): Item\MemberCollection
 	{
 		$models = Internal\MemberTable
@@ -498,6 +522,7 @@ class MemberRepository
 
 		return $fetchData !== false;
 	}
+
 	private function generateUid(): string
 	{
 		return Random::getStringByAlphabet(32, Random::ALPHABET_ALPHALOWER | Random::ALPHABET_NUM);
@@ -898,6 +923,7 @@ class MemberRepository
 					Internal\FileTable::getEntity(),
 					Main\ORM\Query\Join::on("this.ID", 'ref.ENTITY_ID')
 						->where('ref.ENTITY_TYPE_ID', \Bitrix\Sign\Type\EntityType::MEMBER)
+						->where('ref.CODE', Type\EntityFileCode::SIGNED)
 					,
 					[
 						'join_type' => Main\ORM\Query\Join::TYPE_INNER,
@@ -1122,6 +1148,7 @@ class MemberRepository
 							->where(Query::filter()
 										 ->logic('and')
 										 ->where('SIGNED', MemberStatus::READY)
+										 ->where('ROLE', '=', $this->convertRoleToInt(Role::SIGNER))
 										 ->where('DOCUMENT.PROVIDER_CODE', Type\ProviderCode::GOS_KEY)
 										 ->whereIn('DOCUMENT.STATUS', [DocumentStatus::SIGNING, DocumentStatus::STOPPED])
 							)
@@ -1477,7 +1504,24 @@ class MemberRepository
 	{
 		$members = $this->listByDocumentIdWithRole($documentId, $memberRole);
 		$ids = $members->getIds();
+		if (empty($ids))
+		{
+			return new Main\Result();
+		}
 
 		return Internal\MemberTable::updateMulti($ids, ['REMINDER_TYPE' => $reminderType->toInt()]);
+	}
+
+	public function getByDocumentAndEntityType(int $id, string $entityType): ?Item\Member
+	{
+		$model = Internal\MemberTable::query()
+			->addSelect('*')
+			->where('DOCUMENT_ID', $id)
+			->where('ENTITY_TYPE', $entityType)
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		return $model !== null ? $this->extractItemFromModel($model) : null;
 	}
 }

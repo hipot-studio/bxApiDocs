@@ -5,7 +5,6 @@ namespace Bitrix\Crm\Controller\Autorun;
 use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\Progress;
 use Bitrix\Crm\Controller\ErrorCode;
-use Bitrix\Crm\Filter;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ListEntity;
 use Bitrix\Crm\Service\Container;
@@ -30,6 +29,8 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 
 	private SessionLocalStorage $dataStorage;
 	private SessionLocalStorage $progressStorage;
+	protected Progress $progress;
+	private PreparedData $data;
 
 	final protected function getDefaultPreFilters(): array
 	{
@@ -186,28 +187,29 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 			return null;
 		}
 
-		[$data, $progress] = $this->initDataAndProgressByHash($hash);
-		if (!$data || !$progress)
+		if (!$this->initProcessDataByHash($hash))
 		{
 			return null;
 		}
 
-		$factory = Container::getInstance()->getFactory($data->entityTypeId);
-		if (!$factory || !\CCrmOwnerType::isUseFactoryBasedApproach($data->entityTypeId))
+		$factory = Container::getInstance()->getFactory($this->data->entityTypeId);
+		if (!$factory || !\CCrmOwnerType::isUseFactoryBasedApproach($this->data->entityTypeId))
 		{
 			throw new InvalidOperationException(
-				"Factory not found for type {$data->entityTypeId}. It seems that 'prepare' action added invalid data",
+				"Factory not found for type {$this->data->entityTypeId}. It seems that 'prepare' action added invalid data",
 			);
 		}
 
-		if ($progress->totalCount === null)
+		$this->initProgressByHash($hash);
+
+		if ($this->progress->totalCount === null)
 		{
-			$progress->totalCount = $this->getItemsCount($factory, $data);
+			$this->progress->totalCount = $this->getItemsCount($factory);
 		}
 
-		$itemsToProcess = $this->getItemsToProcess($factory, $data, $progress);
+		$itemsToProcess = $this->getItemsToProcess($factory);
 
-		$errors = $this->processItems($factory, $itemsToProcess, $data, $progress);
+		$this->processItems($factory, $itemsToProcess);
 
 		$isCompleted = count($itemsToProcess) < self::STEP_LIMIT;
 		if ($isCompleted)
@@ -217,19 +219,21 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 		}
 		else
 		{
-			$this->progressStorage->set($hash, $progress->toArray());
+			$this->progressStorage->set($hash, $this->progress->toArray());
 		}
 
 		$response = [
 			'status' => $isCompleted ? 'COMPLETED' : 'PROGRESS',
-			'processedItems' => $progress->processedCount,
-			'totalItems' => $progress->totalCount,
+			'processedItems' => $this->progress->processedCount,
+			'totalItems' => $this->progress->totalCount,
 		];
 
-		if (!empty($errors))
+		if ($this->progress->hasErrors())
 		{
-			$response['errors'] = $errors;
+			$response['errors'] = $this->progress->getErrors();
 		}
+
+		$this->sendAnalyticsData($this->data, $response);
 
 		return $response;
 	}
@@ -237,27 +241,27 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 	/**
 	 * @param string $hash
 	 *
-	 * @return array{0: ?PreparedData, 1: ?Progress}
+	 * @return bool
 	 * @throws InvalidOperationException
 	 */
-	private function initDataAndProgressByHash(string $hash): array
+	private function initProcessDataByHash(string $hash): bool
 	{
 		$dataArray = $this->dataStorage->get($hash);
 		if (!is_array($dataArray))
 		{
 			$this->addError(ErrorCode::getNotFoundError());
 
-			return [null, null];
+			return false;
 		}
 
 		$class = $this->getPreparedDataDtoClass();
-		/** @var Dto\PreparedData $data */
-		$data = new $class($dataArray);
-		if ($data->hasValidationErrors())
+
+		$this->data = new $class($dataArray);
+		if ($this->data->hasValidationErrors())
 		{
 			$errorMessages = array_map(
 				fn(Error $error) => $error->getMessage(),
-				$data->getValidationErrors()->toArray(),
+				$this->data->getValidationErrors()->toArray(),
 			);
 
 			throw new InvalidOperationException(
@@ -265,25 +269,28 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 			);
 		}
 
-		$progress = new Dto\Progress($this->progressStorage->get($hash));
-		if ($progress->hasValidationErrors())
+		return true;
+	}
+
+	private function initProgressByHash(string $hash): void
+	{
+		$this->progress = new Dto\Progress($this->progressStorage->get($hash));
+		if ($this->progress->hasValidationErrors())
 		{
 			$errorMessages = array_map(
 				fn(Error $error) => $error->getMessage(),
-				$progress->getValidationErrors()->toArray(),
+				$this->progress->getValidationErrors()->toArray(),
 			);
 
 			throw new InvalidOperationException(
 				'Invalid progress data in session: ' . implode('|', $errorMessages),
 			);
 		}
-
-		return [$data, $progress];
 	}
 
-	private function getItemsCount(Factory $factory, PreparedData $data): int
+	private function getItemsCount(Factory $factory): int
 	{
-		$filter = $data->filter->filter;
+		$filter = $this->data->filter->filter;
 
 		if ($this->isUseOrmApproach($factory))
 		{
@@ -298,12 +305,12 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 		return \CCrmOwnerType::isUseDynamicTypeBasedApproach($factory->getEntityTypeId());
 	}
 
-	private function getItemsToProcess(Factory $factory, PreparedData $data, Progress $progress): array
+	private function getItemsToProcess(Factory $factory): array
 	{
-		$filter = $data->filter->filter;
-		if ($progress->lastId > 0)
+		$filter = $this->data->filter->filter;
+		if ($this->progress->lastId > 0)
 		{
-			$filter['>ID'] = $progress->lastId;
+			$filter['>ID'] = $this->progress->lastId;
 		}
 
 		if ($this->isUseOrmApproach($factory))
@@ -360,15 +367,14 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 		]);
 	}
 
-	private function processItems(Factory $factory, array $itemsToProcess, PreparedData $data, Progress $progress): array
+	private function processItems(Factory $factory, array $itemsToProcess): void
 	{
-		$itemsThatShouldBeProcessed = $this->filterOutSkippableItems($factory, $itemsToProcess, $data);
+		$itemsThatShouldBeProcessed = $this->filterOutSkippableItems($factory, $itemsToProcess, $this->data);
 
-		$errors = [];
 		foreach ($itemsToProcess as $item)
 		{
-			$progress->processedCount++;
-			$progress->lastId = $item->getId();
+			$this->progress->processedCount++;
+			$this->progress->lastId = $item->getId();
 
 			if (!in_array($item, $itemsThatShouldBeProcessed, true))
 			{
@@ -380,7 +386,12 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 				$this->connection->startTransaction();
 			}
 
-			$result = $this->processItem($factory, $item, $data);
+			$result = $this->processItem($factory, $item, $this->data);
+
+			if ($result->isSuccess())
+			{
+				$this->progress->addSuccessId($item->getId());
+			}
 
 			if ($result->isSuccess() && $this->isWrapItemProcessingInTransaction())
 			{
@@ -393,23 +404,25 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 					$this->connection->rollbackTransaction();
 				}
 
+				$this->progress->addErrorId($item->getId());
+
 				foreach ($result->getErrors() as $error)
 				{
-					$errors[] = new Error(
-						$error->getMessage(),
-						$error->getCode(),
-						[
-							'info' => [
-								'title' => $item->getHeading(),
-								'showUrl' => $this->router->getItemDetailUrl($item->getEntityTypeId(), $item->getId()),
+					$this->progress->addError(
+						new Error(
+							$error->getMessage(),
+							$error->getCode(),
+							[
+								'info' => [
+									'title' => $item->getHeading(),
+									'showUrl' => $this->router->getItemDetailUrl($item->getEntityTypeId(), $item->getId()),
+								],
 							],
-						],
+						)
 					);
 				}
 			}
 		}
-
-		return $errors;
 	}
 
 	protected function filterOutSkippableItems(Factory $factory, array $itemsToProcess, PreparedData $data): array
@@ -468,5 +481,9 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 		unset($this->dataStorage[$hash], $this->progressStorage[$hash]);
 
 		return [ 'hash' => $hash ];
+	}
+
+	protected function sendAnalyticsData(PreparedData $data, array $response): void
+	{
 	}
 }

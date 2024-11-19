@@ -247,7 +247,10 @@ class ObserverManager
 		return $entityID;
 	}
 
-	private static function resetBulkObserverIDsCache(): void
+	/**
+	 * @internal
+	 */
+	final public static function resetBulkObserverIDsCache(): void
 	{
 		self::$bulkObserverIDsCache = [];
 	}

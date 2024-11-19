@@ -2,6 +2,7 @@
 
 namespace Bitrix\HumanResources\Service\Access;
 
+use Bitrix\HumanResources\Access\Role\RoleDictionary;
 use Bitrix\Main\Access\AccessCode;
 use Bitrix\Main\Access\Permission\PermissionDictionary as PermissionDictionaryAlias;
 use Bitrix\Main\DB\SqlQueryException;
@@ -152,7 +153,7 @@ class RolePermissionService implements \Bitrix\HumanResources\Contract\Service\A
 		{
 			$roles[] = [
 				'id' => (int)$row['ID'],
-				'title' => $row['NAME'],
+				'title' => RoleDictionary::getTitle($row['NAME']),
 				'accessRights' => $this->getRoleAccessRights((int)$row['ID']),
 				'members' => $this->getRoleMembers((int)$row['ID'])
 			];

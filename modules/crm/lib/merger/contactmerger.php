@@ -97,7 +97,7 @@ class ContactMerger extends EntityMerger
 		}
 	}
 
-	protected static function getFieldConflictResolver(string $fieldId, string $type): ConflictResolver\Base
+	protected function getFieldConflictResolver(string $fieldId, string $type): ConflictResolver\Base
 	{
 		$userDefinedResolver = static::getUserDefinedConflictResolver(
 			\CCrmOwnerType::Contact,

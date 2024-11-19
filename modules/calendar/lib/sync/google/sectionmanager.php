@@ -273,8 +273,13 @@ class SectionManager extends Manager implements SectionManagerInterface
 	 */
 	private function updateSectionColor(Sync\Entities\SyncSection $syncSection): void
 	{
+		if (empty($syncSection->getSectionConnection()?->getVendorSectionId()))
+		{
+			return;
+		}
+
 		$this->httpClient->put(
-			$this->createCalendarListUpdateUrl($syncSection->getSectionConnection()->getVendorSectionId()),
+			$this->createCalendarListUpdateUrl($syncSection->getSectionConnection()?->getVendorSectionId()),
 			$this->prepareUpdateColorParams($syncSection)
 		);
 	}

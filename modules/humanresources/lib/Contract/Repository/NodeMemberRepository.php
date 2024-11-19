@@ -120,6 +120,11 @@ interface NodeMemberRepository
 		int $nodeId
 	): ?Item\NodeMember;
 
+	/**
+	 * @param \Bitrix\HumanResources\Item\Structure $structure
+	 *
+	 * @return array<int, int>
+	 */
 	public function countAllByStructureAndGroupByNode(Item\Structure $structure): array;
 
 	/**

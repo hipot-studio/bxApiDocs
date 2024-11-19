@@ -207,7 +207,6 @@ class Item extends \CCrmDocument implements \IBPWorkflowDocument
 		$item->setFromCompatibleData($fieldCaster->externalize($fields));
 
 		$updateOperation = $factory->getUpdateOperation($item, static::getContext($modifiedBy));
-		$updateOperation->disableCheckTransitionAccess();
 
 		$result = static::launchOperation($updateOperation);
 		$errorMessages = $result->getErrorMessages();

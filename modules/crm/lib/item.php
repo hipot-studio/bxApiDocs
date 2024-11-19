@@ -1096,16 +1096,9 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 			$sortIndex++;
 		}
 
-		$pullManager = Container::getInstance()->getPullManager();
 		foreach ($removed as $removedObserver)
 		{
 			$this->entityObject->removeFrom($entityFieldName, $removedObserver);
-
-			$pullManager->unSubscribeUserPullEvents(
-				$removedObserver->getUserId(),
-				$this->getEntityTypeId(),
-				$this->getId()
-			);
 		}
 
 		return $this;
@@ -1592,14 +1585,14 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		return Container::getInstance()->getItemConverter()->toJson($this);
 	}
 
-	public function offsetExists($offset): bool
+	public function offsetExists(mixed $offset): bool
 	{
 		$commonFieldName = (string)$offset;
 
 		return $this->hasField($commonFieldName) && $this->get($commonFieldName) !== null;
 	}
 
-	public function offsetGet($offset)
+	public function offsetGet(mixed $offset): mixed
 	{
 		$commonFieldName = (string)$offset;
 
@@ -1613,14 +1606,14 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		return $this->entityObject->offsetGet($entityFieldName);
 	}
 
-	public function offsetSet($offset, $value): void
+	public function offsetSet(mixed $offset, mixed $value): void
 	{
 		$commonFieldName = (string)$offset;
 
 		$this->set($commonFieldName, $value);
 	}
 
-	public function offsetUnset($offset): void
+	public function offsetUnset(mixed $offset): void
 	{
 		$commonFieldName = (string)$offset;
 

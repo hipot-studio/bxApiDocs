@@ -146,6 +146,10 @@ final class QueueTable extends DataManager
 				->configureSize(2)
 				->configureNullable()
 			,
+			(new IntegerField('ENGINE_ID'))
+				->configureRequired()
+				->configureDefaultValue(0)
+			,
 		];
 	}
 

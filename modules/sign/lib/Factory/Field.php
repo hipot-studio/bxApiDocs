@@ -169,12 +169,13 @@ final class Field
 
 		if (BlockCode::isCommon($block->code))
 		{
-			$fieldName = NameHelper::create($block->code, $fieldType, $block->party);
+			$party = $member?->party ?? 0;
+			$fieldName = NameHelper::create($block->code, $fieldType, $party);
 
 			return new Item\FieldCollection(
 				new Item\Field(
 					0,
-					$block->party,
+					$party,
 					$fieldType,
 					$fieldName,
 					label: null, // simple blocks doesnt contains label because it not include in form
@@ -211,7 +212,7 @@ final class Field
 		if (BlockCode::isSignature($block->code))
 		{
 			$signField = $registeredFields->findFirst(
-				fn(Item\Field $field) => $field->type === FieldType::SIGNATURE && $field->party === $block->party,
+				fn(Item\Field $field) => $field->type === FieldType::SIGNATURE && $field->party === $member->party,
 			);
 			if ($signField !== null)
 			{
@@ -221,7 +222,7 @@ final class Field
 		elseif (BlockCode::isStamp($block->code))
 		{
 			$stampField = $registeredFields->findFirst(
-				fn(Item\Field $field) => $field->type === FieldType::STAMP && $field->party === $block->party,
+				fn(Item\Field $field) => $field->type === FieldType::STAMP && $field->party === $member->party,
 			);
 			if ($stampField !== null)
 			{
@@ -239,12 +240,12 @@ final class Field
 			}
 		}
 
-		$fieldName = NameHelper::create($block->code, $fieldType, $block->party);
+		$fieldName = NameHelper::create($block->code, $fieldType, $member->party);
 
 		return new Item\FieldCollection(
 			new Item\Field(
 				0,
-				$block->party,
+				$member->party,
 				$fieldType,
 				$fieldName,
 				label: null, // simple blocks doesnt contains label because it not include in form
@@ -290,7 +291,7 @@ final class Field
 			}
 		}
 
-		$fieldName = NameHelper::create($block->code, $fieldType, $block->party, $fieldCode->getCode());
+		$fieldName = NameHelper::create($block->code, $fieldType, $member->party, $fieldCode->getCode());
 
 		$field = $registeredFields->findFirst(
 			static fn(Item\Field $field) => $field->name === $fieldName,
@@ -303,7 +304,7 @@ final class Field
 
 		$field = new Item\Field(
 			0,
-			$block->party,
+			$member->party,
 			$fieldType,
 			$fieldName,
 			$fieldDescription['CAPTION'] ?? null,
@@ -374,6 +375,10 @@ final class Field
 			}
 
 			$fieldName = NameHelper::create($block->code, $fieldType, $member->party, $requisiteField->name);
+			$fieldEntityType = $fieldCode->getEntityTypeName() === \CCrmOwnerType::SmartDocumentName
+				? EntityType::DOCUMENT
+				: EntityType::MEMBER
+			;
 			$field = new Item\Field(
 				0,
 				$member->party,
@@ -382,9 +387,7 @@ final class Field
 				$requisiteField->label,
 				ConnectorType::REQUISITE,
 				// todo: dont use \CCrmOwnerType
-				$fieldCode->getEntityTypeName() === \CCrmOwnerType::SmartDocumentName
-					? EntityType::DOCUMENT
-					: EntityType::MEMBER,
+				$fieldEntityType,
 				items: $items,
 			);
 
@@ -487,7 +490,7 @@ final class Field
 		}
 
 		$fieldCode = self::USER_FIELD_CODE_PREFIX . $fieldCode;
-		$fieldName = NameHelper::create($block->code, $fieldType, $block->party, $fieldCode);
+		$fieldName = NameHelper::create($block->code, $fieldType, $member->party, $fieldCode);
 
 		$field = $registeredFields->findFirst(
 			static fn(Item\Field $field) => $field->name === $fieldName,
@@ -515,7 +518,7 @@ final class Field
 
 		$field = new Item\Field(
 			blankId: 0,
-			party: $block->party,
+			party: $member->party,
 			type: $fieldType,
 			name: $fieldName,
 			label: $fieldDescription['caption'] ?? '',
@@ -559,6 +562,7 @@ final class Field
 				party: $firstByRole->party,
 				data: ['field' => $legalField->name],
 				skipSecurity: true,
+				role: $requiredField->role,
 			);
 
 			return $this->createByBlocks(new Item\BlockCollection($block), $firstByRole)->getFirst();

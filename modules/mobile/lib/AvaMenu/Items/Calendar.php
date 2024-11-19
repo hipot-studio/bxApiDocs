@@ -49,7 +49,7 @@ class Calendar extends AbstractMenuItem
 
 	public function getIconId(): string
 	{
-		return 'calendar';
+		return 'calendar_with_slots';
 	}
 
 	private function getCounter(): string

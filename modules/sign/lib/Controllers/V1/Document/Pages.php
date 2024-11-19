@@ -15,12 +15,12 @@ use Bitrix\Sign\Type\Access\AccessibleItemType;
 class Pages extends \Bitrix\Sign\Engine\Controller
 {
 	#[Attribute\ActionAccess(
-		permission: ActionDictionary::ACTION_DOCUMENT_EDIT,
+		permission: ActionDictionary::ACTION_B2E_DOCUMENT_READ,
 		itemType: AccessibleItemType::DOCUMENT,
 		itemIdRequestKey: 'uid'
 	)]
 	#[Attribute\ActionAccess(
-		permission: ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+		permission: ActionDictionary::ACTION_B2E_DOCUMENT_READ,
 		itemType: AccessibleItemType::DOCUMENT,
 		itemIdRequestKey: 'uid'
 	)]

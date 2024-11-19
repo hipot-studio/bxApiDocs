@@ -1368,13 +1368,7 @@ abstract class Kanban
 		$lastActivityInfo = $this->getEntity()->prepareMultipleItemsLastActivity($rows);
 		$pingSettingsInfo = $this->getEntity()->prepareMultipleItemsPingSettings($this->entity->getTypeId());
 		$calendarSettings = (new CalendarSettingsProvider())->fetchForJsComponent();
-
-		$useTodoEditorV2 = \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled();
-		$colorSettings = (
-			$useTodoEditorV2
-				? (new ColorSettingsProvider())->fetchForJsComponent()
-				: null
-		);
+		$colorSettings = (new ColorSettingsProvider())->fetchForJsComponent();
 
 		$activeAutomationDebugEntityIds = \CCrmBizProcHelper::getActiveDebugEntityIds($this->entity->getTypeId());
 
@@ -1528,7 +1522,6 @@ abstract class Kanban
 				'pingSettings' => isset($row['CATEGORY_ID']) ? $pingSettingsInfo[$row['CATEGORY_ID']] : null,
 				'colorSettings' => $colorSettings,
 				'calendarSettings' => $calendarSettings,
-				'useTodoEditorV2' => $useTodoEditorV2,
 				'draggable' => (bool)($row['DRAGGABLE'] ?? true),
 			];
 

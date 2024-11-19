@@ -213,6 +213,19 @@ class UserPermissions
 		return $this->isCrmAdmin();
 	}
 
+	public function canEditAutomation(int $entityTypeId, ?int $categoryId = null): bool
+	{
+		if ($this->isAdminForEntity($entityTypeId))
+		{
+			return true;
+		}
+
+		$categoryId = $categoryId ?? 0;
+		$documentType = static::getPermissionEntityType($entityTypeId, $categoryId);
+
+		return \CCrmAuthorizationHelper::CheckAutomationCreatePermission($documentType, $this->getCrmPermissions());
+	}
+
 	public function canWriteConfig(): bool
 	{
 		return $this->getCrmPermissions()->havePerm('CONFIG', static::PERMISSION_CONFIG, static::OPERATION_UPDATE);
@@ -775,6 +788,14 @@ class UserPermissions
 	public function filterAvailableForReadingCategories(array $categories): array
 	{
 		return array_values(array_filter($categories, [$this, 'canViewItemsInCategory']));
+	}
+
+	/**
+	 * @return Category[]
+	 */
+	public function filterAvailableForAddingCategories(array $categories): array
+	{
+		return array_values(array_filter($categories, [$this, 'canAddItemsInCategory']));
 	}
 
 	public function getPermissionType(Item $item, string $operationType = self::OPERATION_READ): string

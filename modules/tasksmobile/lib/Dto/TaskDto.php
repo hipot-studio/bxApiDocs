@@ -38,8 +38,8 @@ final class TaskDto extends Dto
 	/** @var int[] */
 	public array $auditors = [];
 
-//	public array $relatedTasks = [];
-//	public array $subTasks = [];
+	//	public array $relatedTasks = [];
+	//	public array $subTasks = [];
 
 	/** @var TaskTagDto[] */
 	public array $tags = [];
@@ -52,6 +52,7 @@ final class TaskDto extends Dto
 	public bool $isInFavorites;
 	public bool $isResultRequired;
 	public bool $isResultExists;
+	public bool $isDodNecessary;
 	public bool $isOpenResultExists;
 	public bool $isMatchWorkTime;
 	public bool $allowChangeDeadline;
@@ -65,6 +66,7 @@ final class TaskDto extends Dto
 	public ?int $endDatePlan = null;
 	public ?int $startDate = null;
 	public ?int $endDate = null;
+	public ?int $activeDodTypeId = null;
 
 	public ChecklistSummaryDto $checklist;
 
@@ -75,6 +77,9 @@ final class TaskDto extends Dto
 
 	/** @var RelatedCrmItemDto[] */
 	public array $crm = [];
+
+	/** @var DodTypesDto[] */
+	public array $dodTypes = [];
 
 	/** @var array<string, boolean> */
 	public array $actions = [];
@@ -87,6 +92,7 @@ final class TaskDto extends Dto
 			'tags' => Type::collection(TaskTagDto::class),
 			'files' => Type::collection(DiskFileDto::class),
 			'crm' => Type::collection(RelatedCrmItemDto::class),
+			'dodTypes' => Type::collection(DodTypesDto::class),
 			'checklistDetails' => Type::collection(ChecklistDetailsDto::class),
 		];
 	}

@@ -23,6 +23,7 @@ use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Timeline\Config;
 use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
@@ -31,7 +32,6 @@ use Bitrix\Main\NotSupportedException;
 use Bitrix\Main\UserField\Dispatcher;
 use CCrmOwnerType;
 use CUserOptions;
-use Bitrix\Main\ArgumentException;
 
 class AI extends Activity
 {
@@ -680,11 +680,6 @@ class AI extends Activity
 			self::OPTION_NAME_NUMBER_OF_MANUAL_STARTS,
 			0
 		);
-
-		if (!AIManager::isBaasServiceHasPackage())
-		{
-			return $numberOfManualStarts;
-		}
 
 		$newNumberOfManualStarts = $numberOfManualStarts + 1;
 

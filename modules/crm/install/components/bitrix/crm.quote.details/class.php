@@ -319,6 +319,7 @@ class CrmQuoteDetailsComponent extends FactoryBased
 						'cancelButton' => Loc::getMessage('CRM_COMMON_CANCEL'),
 					],
 					'analytics' => [
+						'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_QUOTE,
 						'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 					],
 				],
@@ -594,7 +595,7 @@ class CrmQuoteDetailsComponent extends FactoryBased
 							'ADD_EVENT_NAME' => 'CrmCreateDealFrom'.mb_convert_case($this->getEntityName(), MB_CASE_TITLE),
 							'ANALYTICS' => [
 								// we dont know where from this component was opened from - it could be anywhere on portal
-								// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_QUOTE,
+								'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_QUOTE,
 								'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 							],
 						], 'crm.deal.list')
@@ -629,7 +630,7 @@ class CrmQuoteDetailsComponent extends FactoryBased
 								. mb_convert_case($this->getEntityName(), MB_CASE_TITLE),
 							'ANALYTICS' => [
 								// we dont know where from this component was opened from - it could be anywhere on portal
-								// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_QUOTE,
+								'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_QUOTE,
 								'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 							],
 						], 'crm.invoice.list'),

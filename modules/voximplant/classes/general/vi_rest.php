@@ -40,6 +40,10 @@ class CVoxImplantRestService extends IRestService
 				'voximplant.user.getDefaultLineId' => [__CLASS__, 'getUserDefaultLineId'],
 				'voximplant.user.activatePhone' => [__CLASS__, 'activatePhone'],
 				'voximplant.user.deactivatePhone' => [__CLASS__, 'deactivatePhone'],
+				'voximplant.user.getNode' => [
+					'callback' => [__CLASS__, 'getNode'],
+					'options' => ['private' => true]
+				],
 				'voximplant.authorization.get' => [
 					'callback' => [__CLASS__, 'getAuthorization'],
 					'options' => ['private' => true]
@@ -858,6 +862,14 @@ class CVoxImplantRestService extends IRestService
 		$user->SetPhoneActive($userId, true);
 
 		return 1;
+	}
+
+	public static function getNode(): string
+	{
+		$ViHttp = new CVoxImplantHttp();
+		$accountNode = $ViHttp->GetAccountNode();
+
+		return $accountNode->node;
 	}
 
 

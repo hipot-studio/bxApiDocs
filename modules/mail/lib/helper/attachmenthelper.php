@@ -90,6 +90,11 @@ class AttachmentHelper
 		);
 	}
 
+	public static function generateMessageAttachmentPath(): string
+	{
+		return 'mail/message_attachment/'.date('Y-m-d');
+	}
+
 	public function __construct(int $mailboxId, int $messageId = null, int $messageUid = null)
 	{
 		$message = MailMessageUidTable::getMessage(
@@ -225,7 +230,7 @@ class AttachmentHelper
 				'content' => $attachment->content,
 				'MODULE_ID' => 'mail'
 			],
-			'mail/message_attachment/'.date('Y-m-d'),
+			self::generateMessageAttachmentPath(),
 		);
 
 		if (!is_int($fileId))

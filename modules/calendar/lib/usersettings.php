@@ -1,5 +1,6 @@
 <?php
 namespace Bitrix\Calendar;
+use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Main;
 use \Bitrix\Main\Web\Json;
 
@@ -137,16 +138,25 @@ class UserSettings
 		return $resSettings;
 	}
 
-	public static function getFormSettings($formType, $userId = false)
+	public static function getFormSettings($formType, $userId = false, ?string $entryType = null)
 	{
 		if (!$userId)
 		{
 			$userId = \CCalendar::getUserId();
 		}
 
+		$defaultPinnedFields = ['location', 'rrule', 'section'];
+		if ($entryType === Dictionary::CALENDAR_TYPE['open_event'])
+		{
+			$pinnedFields = [...$defaultPinnedFields, 'description'];
+		}
+		else
+		{
+			$pinnedFields = $defaultPinnedFields;
+		}
 		$defaultValues = [
 			'slider_main' => [
-				'pinnedFields' => implode(',', ['location', 'rrule', 'section'])
+				'pinnedFields' => implode(',', $pinnedFields),
 			]
 		];
 		if (!isset($defaultValues[$formType]))
@@ -154,7 +164,8 @@ class UserSettings
 			$defaultValues[$formType] = false;
 		}
 		//\CUserOptions::DeleteOption("calendar", $formType);
-		$settings = \CUserOptions::getOption("calendar", $formType, $defaultValues[$formType], $userId);
+		$userOptionName = $entryType ?  sprintf('%s-%s', $formType, $entryType) : $formType;
+		$settings = \CUserOptions::getOption("calendar", $userOptionName, $defaultValues[$formType], $userId);
 		if (!is_array($settings['pinnedFields']))
 		{
 			$settings['pinnedFields'] = explode(',', $settings['pinnedFields']);

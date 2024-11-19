@@ -18,6 +18,7 @@ use Bitrix\Sign\Document;
 use Bitrix\Sign\Internal;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Type\Document\EntityType;
+use Bitrix\Sign\Type\Document\InitiatedByType;
 use Bitrix\Sign\Type\Document\SchemeType;
 use Bitrix\Sign\Type\DocumentScenario;
 use Bitrix\Sign\Type\ProviderCode;
@@ -77,6 +78,9 @@ class DocumentRepository
 			->setParties($item->parties ?? self::DOCUMENT_DEFAULT_PARTIES_COUNT)
 			->setScheme($schemeId)
 			->setProviderCode($item->providerCode)
+			->setTemplateId($item->templateId)
+			->setCreatedFromDocumentId($item->createdFromDocumentId)
+			->setInitiatedByType($item->initiatedByType->toInt())
 			->save()
 		;
 
@@ -213,6 +217,21 @@ class DocumentRepository
 			$document->setProviderCode($item->providerCode);
 		}
 
+		if (isset($item->templateId))
+		{
+			$document->setTemplateId($item->templateId);
+		}
+
+		if (isset($item->createdFromDocumentId))
+		{
+			$document->setCreatedFromDocumentId($item->createdFromDocumentId);
+		}
+
+		if (isset($item->initiatedByType))
+		{
+			$document->setInitiatedByType($item->initiatedByType->toInt());
+		}
+
 		$document->setMeta($this->getModelMetaByItem($item));
 
 		return $document->save()
@@ -329,6 +348,9 @@ class DocumentRepository
 			stoppedById: $model->getStoppedById(),
 			externalDateCreate: $model->getExternalDateCreate(),
 			providerCode: $model->getProviderCode(),
+			templateId: $model->getTemplateId(),
+			createdFromDocumentId: $model->getCreatedFromDocumentId(),
+			initiatedByType: InitiatedByType::tryFromInt($model->getInitiatedByType()) ?? InitiatedByType::COMPANY,
 		);
 	}
 
@@ -533,5 +555,36 @@ class DocumentRepository
 		$documentIds = array_unique($documentIds);
 
 		return Internal\DocumentTable::updateMulti($documentIds, ['SCHEME' => $this->getSchemeIdByType($newScheme)]);
+	}
+
+	/**
+	 * @param array<int> $templateIds
+	 */
+	public function listByTemplateIds(array $templateIds): Item\DocumentCollection
+	{
+		if (empty($templateIds))
+		{
+			return new Item\DocumentCollection();
+		}
+
+		$models = Internal\DocumentTable::query()
+			->setSelect(['*'])
+			->whereIn('TEMPLATE_ID', $templateIds)
+			->fetchCollection()
+		;
+
+		return $this->extractItemCollectionByModelCollection($models);
+	}
+
+	public function getByTemplateId(int $id): ?Item\Document
+	{
+		$document = Internal\DocumentTable::query()
+			->setSelect(['*'])
+			->where('TEMPLATE_ID', $id)
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		return $document === null ? null : $this->extractItemFromModel($document);
 	}
 }

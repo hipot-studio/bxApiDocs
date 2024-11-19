@@ -707,7 +707,7 @@ class CCrmDealDetailsComponent
 									'ADD_EVENT_NAME' => 'CrmCreateQuoteFromDeal',
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
-										// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_DEAL,
+										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_DEAL,
 										'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 									],
 								], 'crm.quote.list'),
@@ -760,7 +760,7 @@ class CCrmDealDetailsComponent
 									'ADD_EVENT_NAME' => 'CrmCreateInvoiceFromDeal',
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
-										// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_DEAL,
+										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_DEAL,
 										'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 									],
 								], 'crm.invoice.list'),
@@ -809,7 +809,7 @@ class CCrmDealDetailsComponent
 									'BUILDER_CONTEXT' => Crm\Product\Url\ProductBuilder::TYPE_ID,
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
-										// 'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_DEAL,
+										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_DEAL,
 										'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 									],
 								], 'crm.order.list')

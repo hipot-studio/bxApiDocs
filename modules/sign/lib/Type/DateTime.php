@@ -19,6 +19,16 @@ class DateTime extends Main\Type\DateTime
 		return static::createFromPhp($dateTime->value);
 	}
 
+	public static function createFromMainDateTimeOrNull(?Main\Type\DateTime $dateTime): ?static
+	{
+		if ($dateTime === null)
+		{
+			return null;
+		}
+
+		return static::createFromMainDateTime($dateTime);
+	}
+
 	public function withAdd($interval): static
 	{
 		$clone = clone $this;

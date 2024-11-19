@@ -2,43 +2,45 @@
 
 namespace Bitrix\Sign\Service\Sign;
 
+use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Context;
 use Bitrix\Main\IO\Path;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
-use Bitrix\Sign\Compatibility\Document\Scheme;
+use Bitrix\Sign\Access\Permission\PermissionDictionary;
 use Bitrix\Sign\Document;
 use Bitrix\Sign\Integration\CRM\Model\EventData;
-use Bitrix\Sign\Item\Blank;
+use Bitrix\Sign\Item;
 use Bitrix\Sign\Main\User;
+use Bitrix\Sign\Operation\CheckDocumentAccess;
 use Bitrix\Sign\Operation\ConfigureFillAndStart;
 use Bitrix\Sign\Operation\Result\ConfigureResult;
 use Bitrix\Sign\Repository\BlankRepository;
+use Bitrix\Sign\Repository\Document\TemplateRepository;
 use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Repository\MemberRepository;
-use Bitrix\Sign\Service\Container;
-use Bitrix\Sign\Item;
+use Bitrix\Sign\Result\Service\Sign\Document\CreateTemplateResult;
 use Bitrix\Sign\Service;
-use Bitrix\Sign\Operation;
+use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Type;
-
-use Bitrix\Main;
 use Bitrix\Sign\Type\Document\EntityType;
 use Bitrix\Sign\Type\DocumentStatus;
-use Bitrix\Sign\Access\Permission\PermissionDictionary;
-use Bitrix\Sign\Operation\CheckDocumentAccess;
 
 class DocumentService
 {
 	private const DOCUMENT_NAME_LENGTH_LIMIT = 100;
+
 	private DocumentRepository $documentRepository;
 	private BlankRepository $blankRepository;
 	private BlankService $blankService;
 	private Service\Integration\Crm\EventHandlerService $eventHandlerService;
 	private Document\Entity\Factory $documentEntityFactory;
 	private readonly Service\Sign\Document\ProviderCodeService $providerCodeService;
+	private readonly TemplateRepository $documentTemplateRepository;
+	private readonly Service\Sign\Document\TemplateService $documentTemplateService;
+	private readonly MemberRepository $memberRepository;
 
 	public function __construct(
 		?DocumentRepository $documentRepository = null,
@@ -47,6 +49,9 @@ class DocumentService
 		?Service\Integration\Crm\EventHandlerService $eventHandlerService = null,
 		private bool $checkPermission = true,
 		?Service\Sign\Document\ProviderCodeService $providerCodeService = null,
+		?TemplateRepository $documentTemplateRepository = null,
+		?Service\Sign\Document\TemplateService $documentTemplateService = null,
+		?MemberRepository $memberRepository = null,
 	)
 	{
 		$container = Container::instance();
@@ -57,6 +62,9 @@ class DocumentService
 		$this->eventHandlerService = $eventHandlerService ?? $container->getEventHandlerService();
 		$this->documentEntityFactory = new Document\Entity\Factory();
 		$this->providerCodeService = $providerCodeService ?? $container->getProviderCodeService();
+		$this->documentTemplateRepository = $documentTemplateRepository ?? $container->getDocumentTemplateRepository();
+		$this->documentTemplateService = $documentTemplateService ?? $container->getDocumentTemplateService();
+		$this->memberRepository = $memberRepository ?? $container->getMemberRepository();
 	}
 
 	/**
@@ -82,6 +90,7 @@ class DocumentService
 		string $title = '',
 		?int $entityId = null,
 		?string $entityType = null,
+		bool $asTemplate = false,
 	): Main\Result
 	{
 		$result = new Main\Result();
@@ -110,6 +119,21 @@ class DocumentService
 
 		$documentItem = new Item\Document(entityType: $entityType, entityId: $entityId);
 
+		$template = null;
+		if ($asTemplate)
+		{
+			$createTemplateResult = $this->makeTemplateForDocument(
+				$documentItem,
+				$title,
+				createdByUserId: Main\Engine\CurrentUser::get()->getId(),
+			);
+			if (!$createTemplateResult instanceof CreateTemplateResult)
+			{
+				return $createTemplateResult;
+			}
+			$template = $createTemplateResult->template;
+		}
+
 		$result = $this->insertToDB($title, $blank, $documentItem);
 
 		if (!$result->isSuccess())
@@ -137,7 +161,9 @@ class DocumentService
 
 		$documentItem->uid = $documentRegisterResponse->uid;
 
-		return $this->documentRepository->update($documentItem);
+		$result = $this->documentRepository->update($documentItem);
+
+		return $result->setData([...$result->getData(), 'template' => $template]);
 	}
 
 	/**
@@ -177,6 +203,17 @@ class DocumentService
 		{
 			$this->blankService->changeBlankTitleByDocument($document, $document->title);
 			$result->setData(['blankTitle' => $document->title]);
+		}
+		if (
+			Type\DocumentScenario::isB2EScenario($document->scenario)
+			&& $document->isTemplated()
+		)
+		{
+			$updateResult = $this->documentTemplateService->updateTitle($document->templateId, $title);
+			if (!$updateResult->isSuccess())
+			{
+				return $updateResult;
+			}
 		}
 
 		$smartDocument = $this->documentEntityFactory->getByDocument($document);
@@ -384,7 +421,7 @@ class DocumentService
 		}
 
 		if (
-			($documentItem->entityId === null || $documentItem->entityId === 0)
+			($documentItem->entityId === null || $documentItem->entityId === 0) && !$documentItem->isTemplated()
 		)
 		{
 			$result = $this->documentEntityFactory->createNewEntity($documentItem, $this->checkPermission);
@@ -396,21 +433,22 @@ class DocumentService
 			$documentItem->entityId = $result->getId();
 		}
 
-		$entity = $this->documentEntityFactory->getByDocument($documentItem);
-		if ($entity === null && $documentItem->entityType)
+		$entity = null;
+		if (!$documentItem->isTemplated())
 		{
-			return (new Main\Result())->addError(new Main\Error("Document doesnt contains linked entity"));
+			$entity = $this->documentEntityFactory->getByDocument($documentItem);
+			if ($entity === null && $documentItem->entityType)
+			{
+				return (new Main\Result())->addError(new Main\Error("Document doesnt contains linked entity"));
+			}
 		}
 
-		$documentTitle = $title !== ''
-			? $title
-			: $this->makeDocNameFromBlank($blank, $entity)
-		;
+		$documentTitle = $this->makeDocumentTitle($title, $blank, $entity);
 
 		// linked smart-document also needs to be renamed
-		if ($documentTitle !== $entity->getTitle())
+		if ($documentTitle !== $entity?->getTitle())
 		{
-			$entity->setTitle($documentTitle);
+			$entity?->setTitle($documentTitle);
 		}
 
 		$notB2e = $documentItem->entityType !== Type\Document\EntityType::SMART_B2E;
@@ -438,16 +476,21 @@ class DocumentService
 			return $addResult;
 		}
 
-		$eventData = new EventData();
-		$eventData->setEventType(EventData::TYPE_ON_REGISTER)
-			->setDocumentItem($documentItem);
+		if (!$documentItem->isTemplated())
+		{
+			$eventData = new EventData();
+			$eventData
+				->setEventType(EventData::TYPE_ON_REGISTER)
+				->setDocumentItem($documentItem)
+			;
 
-		try
-		{
-			$this->eventHandlerService->createTimelineEvent($eventData);
-		}
-		catch (ArgumentException|Main\ArgumentOutOfRangeException $e)
-		{
+			try
+			{
+				$this->eventHandlerService->createTimelineEvent($eventData);
+			}
+			catch (ArgumentException|Main\ArgumentOutOfRangeException $e)
+			{
+			}
 		}
 
 		return $addResult;
@@ -915,5 +958,73 @@ class DocumentService
 	public function getSignDocumentBySmartDocumentId(int $entityId): ?Item\Document
 	{
 		return $this->resolveDocumentByCrmEntity(EntityType::SMART, $entityId);
+	}
+
+	private function makeTemplateForDocument(Item\Document $document, string $title, int $createdByUserId): Result|CreateTemplateResult
+	{
+		$template = new Item\Document\Template($title ?: 'Template title', $createdByUserId);
+		$result = $this->documentTemplateRepository->add($template);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		$document->initiatedByType = Type\Document\InitiatedByType::EMPLOYEE;
+		$document->templateId = $template->id;
+
+		return new CreateTemplateResult($template);
+	}
+
+	/**
+	 * @param string $title
+	 * @param Item\Blank $blank
+	 * @param Document\Entity\Dummy|null $entity
+	 *
+	 * @return string
+	 */
+	public function makeDocumentTitle(string $title, Item\Blank $blank, ?Document\Entity\Dummy $entity): string
+	{
+		return $title !== ''
+			? $title
+			: $this->makeDocNameFromBlank($blank, $entity)
+		;
+	}
+
+	public function getMyCompanyIdByDocument(Item\Document $document): ?int
+	{
+		if ($document->id === null)
+		{
+			return null;
+		}
+
+		$companyMember = $this->memberRepository->getByDocumentAndEntityType(
+			$document->id,
+			Type\Member\EntityType::COMPANY,
+		);
+
+		return $companyMember?->entityId;
+	}
+
+	/**
+	 * @return list<int, int> Document id to company id
+	 */
+	public function listMyCompanyIdsForDocuments(Item\DocumentCollection $documents): array
+	{
+		$companyIds = [];
+		foreach ($documents as $document)
+		{
+			if ($document->id === null)
+			{
+				continue;
+			}
+
+			$companyId = $this->getMyCompanyIdByDocument($document);
+			if ($companyId !== null)
+			{
+				$companyIds[$document->id] = $companyId;
+			}
+		}
+
+		return $companyIds;
 	}
 }

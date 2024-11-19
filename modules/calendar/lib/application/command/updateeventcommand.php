@@ -38,6 +38,7 @@ class UpdateEventCommand implements Command, BusyAttendees
 	private int $sectionId;
 	private int $userId;
 	private int $id;
+	private ?int $maxAttendees;
 
 	public function __construct(
 		int $id,
@@ -74,6 +75,7 @@ class UpdateEventCommand implements Command, BusyAttendees
 		bool $sendInvitesAgain,
 		int $requestUid,
 		bool $checkLocationOccupancy,
+		?int $maxAttendees,
 	)
 	{
 		$this->id = $id;
@@ -110,6 +112,7 @@ class UpdateEventCommand implements Command, BusyAttendees
 		$this->sendInvitesAgain = $sendInvitesAgain;
 		$this->requestUid = $requestUid;
 		$this->checkLocationOccupancy = $checkLocationOccupancy;
+		$this->maxAttendees = $maxAttendees;
 	}
 
 	public function isCheckLocationOccupancy(): bool
@@ -280,5 +283,10 @@ class UpdateEventCommand implements Command, BusyAttendees
 	public function getId(): int
 	{
 		return $this->id;
+	}
+
+	public function getMaxAttendees(): ?int
+	{
+		return $this->maxAttendees;
 	}
 }

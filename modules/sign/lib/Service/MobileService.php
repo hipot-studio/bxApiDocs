@@ -8,6 +8,8 @@ use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Sign\Item\Api\Mobile\Confirmation\AcceptRequest;
 use Bitrix\Sign\Item\Api\Mobile\Confirmation\PostponeRequest;
+use Bitrix\Sign\Item\Api\Mobile\Signing\ExternalUrlRequest;
+use Bitrix\Sign\Item\Api\Mobile\Signing\ExternalUrlResponse;
 use Bitrix\Sign\Item\Api\Mobile\Signing\RefuseRequest;
 use Bitrix\Sign\Item\Api\Mobile\Signing\SignRequest;
 use Bitrix\Sign\Item\Member;
@@ -15,6 +17,7 @@ use Bitrix\Sign\Item\Mobile\Link;
 use Bitrix\Sign\Main\Application;
 use Bitrix\Sign\Operation\ChangeMemberStatus;
 use Bitrix\Sign\Operation\SyncMemberStatus;
+use Bitrix\Sign\Result\Service\ExternalSigningUrlResult;
 use Bitrix\Sign\Service\Result\Mobile\LinkResult;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\MemberStatus;
@@ -152,7 +155,7 @@ class MobileService
 				documentStatus: $document->status,
 				providerCode: $document->providerCode,
 				readyForDownload: $url !== null,
-			)
+			),
 		);
 	}
 
@@ -167,7 +170,7 @@ class MobileService
 	public function getNextSigningIfExists(int $userId): LinkResult
 	{
 		$member = Container::instance()
-			->getServiceSignMemberUser()
+			->getSignMemberUserService()
 			->getMemberForSigning($userId, [Role::SIGNER, Role::REVIEWER])
 		;
 
@@ -227,7 +230,7 @@ class MobileService
 
 		$response = Container::instance()->getApiMobileService()
 			->acceptSigning(
-				new SignRequest(documentUid: $document->uid, memberUid: $member->uid)
+				new SignRequest(documentUid: $document->uid, memberUid: $member->uid),
 			)
 		;
 
@@ -269,7 +272,7 @@ class MobileService
 
 		$response = Container::instance()->getApiMobileService()
 			->refuseSigning(
-				new RefuseRequest(documentUid: $document->uid, memberUid: $member->uid)
+				new RefuseRequest(documentUid: $document->uid, memberUid: $member->uid),
 			)
 		;
 
@@ -303,7 +306,7 @@ class MobileService
 		}
 
 		$response = Container::instance()->getApiMobileService()->acceptConfirmation(
-			new AcceptRequest(documentUid: $document->uid, memberUid: $member->uid)
+			new AcceptRequest(documentUid: $document->uid, memberUid: $member->uid),
 		);
 
 		if (!$response->isSuccess())
@@ -325,11 +328,11 @@ class MobileService
 			if ($document)
 			{
 				$response = Container::instance()->getApiMobileService()->postponeConfirmation(
-					new PostponeRequest(documentUid: $document->uid, memberUid: $member->uid)
+					new PostponeRequest(documentUid: $document->uid, memberUid: $member->uid),
 				);
 
 				return (new Result())->addErrors(
-					$response->getErrors()
+					$response->getErrors(),
 				);
 			}
 		}
@@ -343,15 +346,46 @@ class MobileService
 
 		if (
 			!$member
-			|| !Container::instance()->getServiceSignMemberUser()->checkAccessToMember($member, $userId))
+			|| !Container::instance()->getSignMemberUserService()->checkAccessToMember($member, $userId))
 		{
 			return (new Result())->addError(new Error(
 				'access denied',
-				'ACCESS_DENIED'
+				'ACCESS_DENIED',
 			));
 		}
 
 		return new Result();
+	}
+
+	public function getExternalSigningUrl(int $memberId): Result|ExternalSigningUrlResult
+	{
+		$member = $this->memberService->getById($memberId);
+
+		if (!$member)
+		{
+			return (new Result())->addError(new Error('member not found'));
+		}
+
+		$document = $this->documentService->getById($member->documentId);
+
+		if (!$document)
+		{
+			return (new Result())->addError(new Error('document not found'));
+		}
+
+		$response = Container::instance()
+			->getApiMobileService()
+			->getExternalSigningUrl(
+				new ExternalUrlRequest($document->uid, $member->uid)
+			)
+		;
+
+		if (!$response->isSuccess())
+		{
+			return $response->createResult();
+		}
+
+		return new ExternalSigningUrlResult($response->url);
 	}
 
 	private function getUrlForSignedFile(Result $result): ?string

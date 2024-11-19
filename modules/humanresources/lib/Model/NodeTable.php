@@ -96,6 +96,11 @@ class NodeTable extends ORM\Data\DataManager
 				->configureTitle('SORT')
 				->configureDefaultValue('500')
 			,
+			(new ORM\Fields\StringField('DESCRIPTION'))
+				->configureTitle('DESCRIPTION')
+				->configureDefaultValue(null)
+				->configureNullable()
+			,
 			(new ORM\Fields\Relations\OneToMany(
 			'ACCESS_CODE',
 				NodeBackwardAccessCodeTable::class,

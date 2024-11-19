@@ -29,7 +29,7 @@ class CommonFrontIntegration extends FrontIntegration
 			$itemIdentifier->getEntityId(),
 			$this->getCurrentUserInfo(),
 			$this->getSettings($itemIdentifier),
-			$this->isUseTodoEditorV2(),
+			true,
 		);
 	}
 

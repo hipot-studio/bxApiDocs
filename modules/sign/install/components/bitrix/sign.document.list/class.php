@@ -339,7 +339,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			],
 			'download' => [
 				'id' => 'DOWNLOAD_DOCUMENT',
-				'name' => Loc::getMessage('SIGN_DOCUMENT_LIST_COLUMN_NAME_DOWNLOAD'),
+				'name' => Loc::getMessage('SIGN_DOCUMENT_LIST_COLUMN_NAME_DOWNLOAD_ACTION_MSGVER_1'),
 				'default' => false,
 				'editable' => false,
 				'gridSort' => 0,
@@ -934,7 +934,13 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		$data = $this->getDownloadResultFileUrl(
 			\Bitrix\Sign\Type\EntityType::MEMBER,
 			$member->id,
-			EntityFileCode::SIGNED
+			EntityFileCode::SIGNED,
+		);
+
+		$dataPrinted = $this->getDownloadResultFileUrl(
+			\Bitrix\Sign\Type\EntityType::MEMBER,
+			$member->id,
+			EntityFileCode::PRINT_VERSION,
 		);
 
 		if ($data === null)
@@ -945,6 +951,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		return [
 			'EXTENSION' => $data['ext'],
 			'DOWNLOAD_URL' => $data['url'],
+			'DOWNLOAD_URL_PRINTED' => $dataPrinted['url'] ?? null,
 		];
 	}
 

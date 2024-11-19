@@ -698,25 +698,27 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		$nodeRelationTableName = Model\NodeRelationTable::getTableName();
 		$nodeMemberTableName = Model\NodeMemberTable::getTableName();
 
-		$query = <<<SQL
-SELECT DISTINCT nm.ENTITY_ID as USER
-FROM $nodeMemberTableName nm
-INNER JOIN (
-	select distinct n.ID
-	from $nodeTableName n
-		INNER JOIN $nodePathTableName np ON np.CHILD_ID = n.ID
-		INNER JOIN $nodeRelationTableName nr ON (
-		nr.WITH_CHILD_NODES = 'Y' AND (np.PARENT_ID = nr.NODE_ID OR nr.NODE_ID = n.ID)
-		or
-		nr.WITH_CHILD_NODES = 'N' AND nr.NODE_ID = n.ID
-		)
-		WHERE nr.ENTITY_TYPE = '$relationEntityType'
-		AND nr.ENTITY_ID = $entityId
-) as relation ON relation.ID = nm.NODE_ID
-WHERE nm.ENTITY_ID IN ($users)
-AND nm.ENTITY_TYPE = '$memberEntityType'
-AND nm.ACTIVE = 'Y' 
-SQL;
+		$query =
+			<<<SQL
+				SELECT DISTINCT nm.ENTITY_ID as USER
+				FROM $nodeMemberTableName nm
+				INNER JOIN (
+					SELECT DISTINCT n.ID
+					FROM $nodeTableName n
+						INNER JOIN $nodePathTableName np ON np.CHILD_ID = n.ID
+						INNER JOIN $nodeRelationTableName nr ON (
+						nr.WITH_CHILD_NODES = 'Y' AND (np.PARENT_ID = nr.NODE_ID OR nr.NODE_ID = n.ID)
+						OR
+						nr.WITH_CHILD_NODES = 'N' AND nr.NODE_ID = n.ID
+						)
+						WHERE nr.ENTITY_TYPE = '$relationEntityType'
+						AND nr.ENTITY_ID = $entityId
+				) as relation ON relation.ID = nm.NODE_ID
+				WHERE nm.ENTITY_ID IN ($users)
+				AND nm.ENTITY_TYPE = '$memberEntityType'
+				AND nm.ACTIVE = 'Y'
+			SQL;
+
 		$result = $connection->query($query);
 
 		return array_column($result->fetchAll(), 'USER');
@@ -807,39 +809,7 @@ SQL;
 	 */
 	public function countAllByByNodeId(int $nodeId): int
 	{
-		static $count = [];
-
-		if (isset($count[$nodeId]))
-		{
-			return $count[$nodeId];
-		}
-
-		try
-		{
-			$countQuery =
-				Model\NodeMemberTable::query()
-					->setSelect(['CNT'])
-					->registerRuntimeField(
-						'',
-						new ExpressionField(
-							'CNT',
-							'COUNT(*)',
-						),
-					)
-					->where('NODE_ID', $nodeId)
-					->where('ACTIVE', 'Y')
-					->setCacheTtl(self::CACHE_TTL)
-			;
-			$result = $countQuery->fetch();
-		}
-		catch (\Exception $e)
-		{
-			return 0;
-		}
-
-		$count[$nodeId] = $result['CNT'] ?? 0;
-
-		return $count[$nodeId];
+		return Container::getNodeMemberCounterHelper()->countByNodeId($nodeId);
 	}
 
 	/**

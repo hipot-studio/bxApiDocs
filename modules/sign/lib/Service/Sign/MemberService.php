@@ -211,17 +211,10 @@ class MemberService
 		$signers = $memberCollection->filter(fn(Item\Member $member) => $member->role === Type\Member\Role::SIGNER);
 		$assignee = $noneSignerMembers->findFirstByRole(Type\Member\Role::ASSIGNEE);
 
-		foreach ($noneSignerMembers as $noneSignerMember)
-		{
-			if ($maxParty === $noneSignerMember->party)
-			{
-				return $result->addError(new Main\Error("Only signer member can be last in signing. Member party: {$noneSignerMember->party}, result parties: `{$maxParty}`"));
-			}
-		}
 		foreach (range(1, $maxParty - 1) as $party)
 		{
 			$membersInPartyAmount = $memberCollection->filterByParty($party)->count();
-			if ($membersInPartyAmount !== 1)
+			if ($membersInPartyAmount > 1)
 			{
 				return $result->addError(new Main\Error("Only last party can has multiple members"));
 			}
@@ -233,11 +226,6 @@ class MemberService
 		if ($assignee->entityType !== EntityType::COMPANY)
 		{
 			return $result->addError(new Main\Error('`entityType` of assignee must be `company`'));
-		}
-
-		if ($signers->isEmpty())
-		{
-			return $result->addError(new Main\Error('Signers is required'));
 		}
 
 		foreach ($signers as $member)
@@ -309,7 +297,14 @@ class MemberService
 		}
 
 		$companyMember = $assignee;
-		$this->b2eDocumentService->setMyCompany($document, $companyMember->entityId);
+		if (!$document->isTemplated())
+		{
+			$result = $this->b2eDocumentService->setMyCompany($document, $companyMember->entityId);
+			if (!$result->isSuccess())
+			{
+				return $result;
+			}
+		}
 
 		if ($document->parties !== $maxParty)
 		{
@@ -832,5 +827,33 @@ class MemberService
 		$this->profileProvider->setCache($userCache);
 
 		return $this;
+	}
+
+	/**
+	 * Skip invitation if initiator signs immediately after document creation.
+	 *
+	 * @todo if part > 1, check userId for reviewer/editor parties
+	 *
+	 * @param Item\Member $member
+	 * @param Item\Document $document
+	 *
+	 * @return bool
+	 */
+	public function skipChatInvitationForMember(Item\Member $member, Item\Document $document): bool
+	{
+		// crm 24.800.0 dependency
+		if (
+			! Main\Loader::includeModule('crm')
+			|| !defined('\Bitrix\Crm\Timeline\SignDocument\Channel::TYPE_B24')
+		)
+		{
+			return false;
+		}
+
+		return
+			$member->role === Role::ASSIGNEE
+			&& $member->party === 1
+			&& $this->getUserIdForMember($member) === $document->createdById
+		;
 	}
 }

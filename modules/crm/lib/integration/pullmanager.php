@@ -201,7 +201,23 @@ class PullManager
 		{
 			$entityType .= '_' . (int)$params['CATEGORY_ID'];
 		}
+
 		return static::getEventName(static::EVENT_KANBAN_UPDATED, $entityType);
+	}
+
+	public function getAdditionalPullTags(string $entityType, ?array $params = null): array
+	{
+		$categoryId = $params['CATEGORY_ID'] ?? -1;
+		if ($categoryId === -1)
+		{
+			$entityType .= '_' . $categoryId;
+
+			return [
+				static::getEventName(static::EVENT_KANBAN_UPDATED, $entityType),
+			];
+		}
+
+		return [];
 	}
 
 	/**

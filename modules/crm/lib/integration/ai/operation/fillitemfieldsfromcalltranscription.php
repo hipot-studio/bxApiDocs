@@ -550,12 +550,18 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 					$activityId,
 					[
 						'OPERATION_TYPE_ID' => self::TYPE_ID,
+						'ENGINE_ID' => self::$engineId,
 						'ERRORS' => $result->getErrorMessages(),
 					],
 					$result->getUserId(),
 				);
 
-				self::syncBadges($activityId, Badge\Type\AiCallFieldsFillingResult::ERROR_PROCESS_VALUE);
+				self::syncBadges(
+					$activityId,
+					self::$engineId === 0
+						? Badge\Type\AiCallFieldsFillingResult::ERROR_PROCESS_VALUE
+						: Badge\Type\AiCallFieldsFillingResult::ERROR_PROCESS_THIRDPARTY_VALUE
+				);
 			}
 
 			self::notifyTimelinesAboutActivityUpdate($activityId);

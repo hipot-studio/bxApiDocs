@@ -55,12 +55,23 @@ class Factory
 		};
 	}
 
+	/**
+	 * @param Item\Document $document
+	 * @param string $code
+	 * @param int $party
+	 * @param array|null $data
+	 * @param bool $skipSecurity
+	 * @param Type\Member\Role::*|null $role
+	 *
+	 * @return Item\Block
+	 */
 	public function makeItem(
 		Item\Document $document,
 		string $code,
 		int $party,
 		?array $data = null,
 		bool $skipSecurity = false,
+		?string $role = null,
 	): Item\Block
 	{
 		$configuration = $this->getConfigurationByCode($code, $skipSecurity);
@@ -70,7 +81,7 @@ class Factory
 			type: $this->getTypeByCode($code),
 			code: $code,
 			data: $data ?? [],
-			role: Role::createForBlock($party, $document->parties),
+			role: $role ?? Role::createForBlock($party, $document->parties),
 		);
 		// we need only first member, and other to check that count is more that 1
 		$membersByParty = $this->memberRepository->listByDocumentIdWithParty($document->id, $party, 2);

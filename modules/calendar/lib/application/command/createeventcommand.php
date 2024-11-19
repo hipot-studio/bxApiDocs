@@ -37,6 +37,8 @@ class CreateEventCommand implements Command, BusyAttendees
 	private bool $sendInvitesAgain;
 	private int $requestUid;
 	private bool $checkLocationOccupancy;
+	private ?int $category;
+	private ?int $maxAttendees;
 
 	public function __construct(
 		int $userId,
@@ -72,6 +74,8 @@ class CreateEventCommand implements Command, BusyAttendees
 		bool $sendInvitesAgain,
 		int $requestUid,
 		bool $checkLocationOccupancy,
+		?int $maxAttendees,
+		?int $category,
 	)
 	{
 		$this->userId = $userId;
@@ -107,6 +111,8 @@ class CreateEventCommand implements Command, BusyAttendees
 		$this->sendInvitesAgain = $sendInvitesAgain;
 		$this->requestUid = $requestUid;
 		$this->checkLocationOccupancy = $checkLocationOccupancy;
+		$this->category = $category;
+		$this->maxAttendees = $maxAttendees;
 	}
 
 	public function isCheckLocationOccupancy(): bool
@@ -272,5 +278,15 @@ class CreateEventCommand implements Command, BusyAttendees
 	public function isSendInvitesAgain(): bool
 	{
 		return $this->sendInvitesAgain;
+	}
+
+	public function getCategory(): ?int
+	{
+		return $this->category;
+	}
+
+	public function getMaxAttendees(): ?int
+	{
+		return $this->maxAttendees;
 	}
 }

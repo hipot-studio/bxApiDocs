@@ -22,10 +22,11 @@ final class UserNameListField extends BaseUserListField
 	protected function prepareResultHtml(string $userListBlock, string $counterBlock, string $url): string
 	{
 		return sprintf(
-			'<a class="crm-kanban-item-fields-item-value-name" href="%s">%s%s</a>',
+			'<a class="crm-kanban-item-fields-item-value-name" href="%s">%s%s</a>%s',
 			$url,
 			$userListBlock,
-			$counterBlock
+			$counterBlock,
+			$this->prepareGroupChatHtml(),
 		);
 	}
 

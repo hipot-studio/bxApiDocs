@@ -52,7 +52,7 @@ class Member extends Controller
 		}
 
 		$file = Service\Container::instance()
-			->getServiceSignMemberUser()
+			->getSignMemberUserService()
 			->getAvatarByMemberUid($uid)
 		;
 

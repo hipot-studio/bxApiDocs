@@ -64,7 +64,7 @@ class CBPCrmChangeDealCategoryActivity extends CBPActivity
 			[
 				'ENABLE_WORKFLOW_CHECK' => false,
 				'USER_ID' => $sourceFields['ASSIGNED_BY_ID'],
-				'PREFERRED_STAGE_ID' => $this->StageId,
+				'PREFERRED_STAGE_ID' => CBPHelper::stringify($this->StageId),
 			]
 		);
 
@@ -76,6 +76,7 @@ class CBPCrmChangeDealCategoryActivity extends CBPActivity
 			$instanceIds[] = $this->GetWorkflowInstanceId();
 			$instanceIds = array_unique($instanceIds);
 
+			$errors = [];
 			foreach ($instanceIds as $instanceId)
 			{
 				\CBPDocument::TerminateWorkflow(

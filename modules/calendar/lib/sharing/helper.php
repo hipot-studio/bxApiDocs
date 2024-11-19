@@ -29,10 +29,12 @@ class Helper
 	public const ICS = 'ics';
 	public const CANCEL = 'cancel';
 	public const CONFERENCE = 'videoconference';
+	public const OPENED = 'opened';
 	public const OWNER_CREATED = 'ownerCreated';
 	public const ACTION_ICS = '?'.self::ACTION.'='.self::ICS;
 	public const ACTION_CANCEL = '?'.self::ACTION.'='.self::CANCEL;
 	public const ACTION_CONFERENCE = '?'.self::ACTION.'='.self::CONFERENCE;
+	public const ACTION_OPENED = '?'.self::ACTION.'='.self::OPENED;
 
 	protected const ABUSE_SENDER_PAGE = 'page';
 	protected const ABUSE_SENDER_EMAIL = 'email';

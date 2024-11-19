@@ -56,9 +56,7 @@ class OutgoingManager
 	public function __construct(Connection $connection)
 	{
 		$this->connection = $connection;
-		$context = new Context([
-			'connection' => $connection,
-		]);
+		$context = new Context(['connection' => $connection]);
 		$this->factory = FactoryBuilder::create($connection->getVendor()->getCode(), $connection, $context);
 		$this->syncManager = new VendorSynchronization($this->factory);
 		$this->mapperFactory = ServiceLocator::getInstance()->get('calendar.service.mappers.factory');

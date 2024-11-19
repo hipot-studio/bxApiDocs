@@ -2,11 +2,14 @@
 
 namespace Bitrix\Crm\Service\Display\Field\Sign\B2e;
 
+use Bitrix\Crm\Item\SmartB2eDocument;
 use Bitrix\Crm\Kanban\Entity\Dto\Sign\B2e\UserListDto;
 use Bitrix\Crm\Service\Display\Field\UserField;
 use Bitrix\Crm\Service\Display\Options;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Sign\FeatureResolver;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\MemberStatus;
 
@@ -200,7 +203,7 @@ abstract class BaseUserListField extends UserField
 		{
 			return;
 		}
-		
+
 		$fieldType = $this->getType();
 		foreach ($fieldValue->userIdList as $userId)
 		{
@@ -212,5 +215,29 @@ abstract class BaseUserListField extends UserField
 			$linkedEntities[$fieldType]['FIELD'][$itemId][$fieldId][$value] = $value;
 			$linkedEntities[$fieldType]['ID'][$value] = $value;
 		}
+	}
+
+	protected function prepareGroupChatHtml(): string
+	{
+		$chatType =
+			match ($this->id)
+			{
+				SmartB2eDocument::FIELD_NAME_NOT_SIGNED_COMPANY_LIST => 1,
+				SmartB2eDocument::FIELD_NAME_NOT_SIGNED_EMPLOYER_LIST => 2,
+				SmartB2eDocument::FIELD_NAME_SIGN_CANCELLED_MEMBER_LIST => 3,
+				default => null,
+			};
+		if (class_exists(FeatureResolver::class))
+		{
+			$featureResolver = FeatureResolver::instance();
+			if ($chatType !== null && $featureResolver->released('createDocumentChat'))
+			{
+				$createGroupChatTitle = Loc::getMessage('CRM_FIELD_SIGN_B2E_CREATE_GROUP_CHAT');
+
+				return "<span onclick=\"KanbanEntityCreateGroupChat.onCreateGroupChatButtonClickHandler(event)\" title=\"$createGroupChatTitle\" class=\"crm-kanban-create-group-chat\" chat-type=\"$chatType\"></span>";
+			}
+		}
+
+		return '';
 	}
 }

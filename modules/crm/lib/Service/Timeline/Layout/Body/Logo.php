@@ -13,6 +13,7 @@ class Logo extends Base
 	public const ICON_TYPE_FAILURE = 'failure';
 	public const ICON_TYPE_SUCCESS = 'success';
 	public const ICON_TYPE_PURPLE = 'purple';
+	public const ICON_TYPE_ORANGE = 'orange';
 	public const ICON_TYPE_SECONDARY = 'secondary';
 
 	public const ADDITIONAL_ICON_CODE_PROGRESS = 'progress';

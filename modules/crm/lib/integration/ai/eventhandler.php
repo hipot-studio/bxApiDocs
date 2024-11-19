@@ -13,6 +13,7 @@ use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\CallActivityWithAudioRecordingEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Main\Event;
@@ -258,8 +259,14 @@ final class EventHandler
 			->setActivityDirection($nullSafeInt($activityFields, 'DIRECTION'))
 			->setCallDuration(VoxImplantManager::getCallDuration($callId) ?? 0)
 		;
-
 		$builder->buildEvent()->send();
+		// send the same analytics only with different TOOL and CATEGORY
+		$builder
+			->setTool(Dictionary::TOOL_CRM)
+			->setCategory(Dictionary::CATEGORY_AI_OPERATIONS)
+			->buildEvent()
+			->send()
+		;
 	}
 
 	public static function onAfterCallActivityUpdate(array $changedFields, array $oldFields, array $newFields): void

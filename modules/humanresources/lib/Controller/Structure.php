@@ -2,11 +2,14 @@
 
 namespace Bitrix\HumanResources\Controller;
 
+use Bitrix\HumanResources\Access\StructureActionDictionary;
+use Bitrix\HumanResources\Contract\Repository\NodeMemberRepository;
 use Bitrix\HumanResources\Contract\Service\NodeMemberService;
 use Bitrix\HumanResources\Contract\Service\UserService;
 use Bitrix\HumanResources\Engine\Controller;
+use Bitrix\HumanResources\Attribute;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
-Use Bitrix\HumanResources\Item;
+use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\Main\ArgumentException;
@@ -19,15 +22,18 @@ final class Structure extends Controller
 	private readonly NodeRepository $nodeRepository;
 	private readonly NodeMemberService $nodeMemberService;
 	private readonly UserService $userService;
+	private readonly NodeMemberRepository $nodeMemberRepository;
 
 	public function __construct(Request $request = null)
 	{
 		$this->nodeMemberService = Container::getNodeMemberService();
 		$this->userService = Container::getUserService();
 		$this->nodeRepository = Container::getNodeRepository();
+		$this->nodeMemberRepository = Container::getNodeMemberRepository();
 		parent::__construct($request);
 	}
 
+	#[Attribute\StructureActionAccess(StructureActionDictionary::ACTION_STRUCTURE_VIEW)]
 	public function getAction(Item\Structure $structure): ?array
 	{
 		try
@@ -66,6 +72,7 @@ final class Structure extends Controller
 				'parentId' => $node->parentId,
 				'name' => $node->name,
 				'headUsers' => $headUsers,
+				'employeesCount' => $this->nodeMemberRepository->countAllByByNodeId($node->id),
 			];
 		}
 

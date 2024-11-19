@@ -639,14 +639,8 @@ class CCrmViewHelper
 							$entityTypeId,
 							$categoryId
 						))->fetchForJsComponent();
-
 						$calendarSettings = (new CalendarSettingsProvider())->fetchForJsComponent();
-						$useTodoEditorV2 = \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled();
-						$colorSettings = (
-							$useTodoEditorV2
-								? (new ColorSettingsProvider())->fetchForJsComponent()
-								: null
-						);
+						$colorSettings = (new ColorSettingsProvider())->fetchForJsComponent();
 
 						$settings = CUtil::PhpToJSObject([
 							'pingSettings' => $pingSettings,
@@ -654,7 +648,7 @@ class CCrmViewHelper
 							'colorSettings' => $colorSettings,
 						]);
 
-						$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $settings . ", " . $useTodoEditorV2 . ");";
+						$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $settings . ");";
 					}
 					else
 					{
@@ -728,14 +722,7 @@ class CCrmViewHelper
 						$categoryId
 					))->fetchForJsComponent();
 					$calendarSettings = (new CalendarSettingsProvider())->fetchForJsComponent();
-
-					$useTodoEditorV2 = \Bitrix\Crm\Settings\Crm::isTimelineToDoUseV2Enabled();
-
-					$colorSettings = (
-						$useTodoEditorV2
-							? (new ColorSettingsProvider())->fetchForJsComponent()
-							: null
-					);
+					$colorSettings = (new ColorSettingsProvider())->fetchForJsComponent();
 
 					$settings = CUtil::PhpToJSObject([
 						'pingSettings' => $pingSettings,
@@ -743,7 +730,7 @@ class CCrmViewHelper
 						'colorSettings' => $colorSettings,
 					]);
 
-					$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $settings . ", " . $useTodoEditorV2 . ");";
+					$jsOnClick = "BX.CrmUIGridExtension.showActivityAddingPopup(this, '" . $preparedGridId . "', " . (int)$entityTypeId . ", " . (int)$entityID . ", " . $currentUser . ", " . $settings . ");";
 				}
 				else
 				{

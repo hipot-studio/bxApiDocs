@@ -52,8 +52,8 @@ class Router
 	protected $isSefMode;
 	protected $siteData;
 	protected $customRoots = [];
-	protected $defaultComponent = 'bitrix:crm.type.list';
-	protected $defaultComponentParameters = [];
+	protected string $defaultComponent = 'bitrix:crm.router.default.root';
+	protected array $defaultComponentParameters = [];
 
 	public function __construct()
 	{
@@ -133,7 +133,14 @@ class Router
 	{
 		if ($this->siteData === null || (is_array($this->siteData) && $this->siteData['LID'] !== $this->siteId))
 		{
-			$data = $this->siteId ? SiteTable::getById($this->siteId)->fetch() : null;
+			$data = null;
+			if ($this->siteId)
+			{
+				$data = SiteTable::getByPrimary($this->siteId, ['cache' => ['ttl' => 86400]])
+					->fetch()
+				;
+			}
+
 			if (!$data)
 			{
 				$data = null;
@@ -167,6 +174,7 @@ class Router
 			'bitrix:crm.item.details' => 'type/#ENTITY_TYPE_ID#/details/#ENTITY_ID#/',
 			'bitrix:crm.item.kanban' => 'type/#entityTypeId#/kanban/category/#categoryId#/',
 			'bitrix:crm.type.detail' => 'type/detail/#entityTypeId#/',
+			'bitrix:crm.type.merge.resolver' => 'type/#entityTypeId#/merge/',
 			'bitrix:crm.type.list' => 'type/',
 			'bitrix:crm.item.list' => 'type/#entityTypeId#/list/category/#categoryId#/',
 			'bitrix:crm.sales.tunnels' => 'type/#entityTypeId#/categories/',
@@ -200,10 +208,11 @@ class Router
 		}
 
 		$entityTypeId = isset($map[$componentName]) ? (int)$map[$componentName] : \CCrmOwnerType::Undefined;
+		$entityTypeIdFromComponentParams = $componentParams['ENTITY_TYPE_ID'] ?? $componentParams['entityTypeId'] ?? null;
 
-		if (!\CCrmOwnerType::IsDefined($entityTypeId) && isset($componentParams['ENTITY_TYPE_ID']))
+		if ($entityTypeIdFromComponentParams !== null && !\CCrmOwnerType::IsDefined($entityTypeId))
 		{
-			$entityTypeId = (int)$componentParams['ENTITY_TYPE_ID'];
+			$entityTypeId = (int)$entityTypeIdFromComponentParams;
 		}
 
 		return $entityTypeId;
@@ -494,6 +503,31 @@ class Router
 		}
 
 		return $this->getItemListUrlWithOldRouting($entityTypeId, $categoryId);
+	}
+
+	public function getEntityMergeUrl(int $entityTypeId): ?Uri
+	{
+		$url = match($entityTypeId){
+			\CCrmOwnerType::Deal => new Uri('/crm/deal/merge/'),
+			\CCrmOwnerType::Lead => new Uri('/crm/lead/merge/'),
+			\CCrmOwnerType::Contact => new Uri('/crm/contact/merge/'),
+			\CCrmOwnerType::Company => new Uri('/crm/company/merge/'),
+			\CCrmOwnerType::SmartInvoice,
+			\CCrmOwnerType::Quote => new Uri("/crm/type/{$entityTypeId}/merge/"),
+			default => null,
+		};
+
+		if ($url !== null)
+		{
+			return $url;
+		}
+
+		if (\CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId))
+		{
+			return new Uri("/crm/type/{$entityTypeId}/merge/");
+		}
+
+		return null;
 	}
 
 	public function getItemListUrlIntoCustomSection(string $customSectionCode, int $entityTypeId, ?int $categoryId = null): ?Uri
@@ -1079,6 +1113,36 @@ class Router
 	protected function getQuotePaymentUrl(int $quoteId): Uri
 	{
 		return new Uri("/crm/quote/payment/$quoteId/?ncc=1");
+	}
+
+	public function checkAndUpdateCurrentListView(
+		string $desiredListView,
+		int $entityTypeId,
+		int $categoryId = null
+	): void
+	{
+		if (!in_array($desiredListView, $this->getAllListViews(), true))
+		{
+			return;
+		}
+
+		$currentListView = $this->getCurrentListView($entityTypeId);
+
+		if ($desiredListView !== $currentListView)
+		{
+			$this->setCurrentListView($entityTypeId, $desiredListView);
+		}
+	}
+
+	protected function getAllListViews(): array
+	{
+		return [
+			static::LIST_VIEW_KANBAN,
+			static::LIST_VIEW_LIST,
+			static::LIST_VIEW_CALENDAR,
+			static::LIST_VIEW_ACTIVITY,
+			static::LIST_VIEW_DEADLINES,
+		];
 	}
 
 	public function getItemListUrlInCurrentView(int $entityTypeId, int $categoryId = null): ?Uri

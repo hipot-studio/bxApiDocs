@@ -99,6 +99,7 @@ final class TranscribeCallRecording extends AbstractOperation
 
 	private function getFileInfo(int $storageTypeId, int $fileId): array
 	{
+		//@codingStandardsIgnoreStart
 		if ($fileId <= 0)
 		{
 			return ['', '', ''];
@@ -127,6 +128,7 @@ final class TranscribeCallRecording extends AbstractOperation
 		{
 			return ['', '', ''];
 		}
+		//@codingStandardsIgnoreEnd
 
 		$uri = new Uri($file['SRC']);
 		if (empty($uri->getHost()))
@@ -224,6 +226,7 @@ final class TranscribeCallRecording extends AbstractOperation
 					$activityId,
 					[
 						'OPERATION_TYPE_ID' => self::TYPE_ID,
+						'ENGINE_ID' => self::$engineId,
 						'ERRORS' => $result->getErrorMessages(),
 					],
 					$result->getUserId(),

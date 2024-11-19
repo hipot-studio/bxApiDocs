@@ -497,7 +497,7 @@ class CrmKanbanComponent extends \CBitrixComponent
 
 			if ($this->getEntity()->isCategoriesSupported())
 			{
-				$this->arResult['CATEGORIES'] = $this->getEntity()->getCategories($userPermissions);
+				$this->arResult['CATEGORIES'] = $this->getEntity()->getCategoriesWithAddPermissions($userPermissions);
 			}
 		}
 
@@ -1222,6 +1222,12 @@ class CrmKanbanComponent extends \CBitrixComponent
 			return $result;
 		}
 
+		// order synchronization
+		if ($this->getEntity()->getTypeId() === \CCrmOwnerType::Deal)
+		{
+			(new \Bitrix\Crm\Order\OrderDealSynchronizer)->updateOrderFromDeal($id);
+		}
+
 		$this->needPrepareColumns = true;
 
 		return $result;
@@ -1307,7 +1313,16 @@ class CrmKanbanComponent extends \CBitrixComponent
 		}
 		$categoryId = (int)$this->request('category');
 		$userPermissions = $this->getKanban()->getCurrentUserPermissions();
-		$this->getEntity()->updateItemsCategory($ids, $categoryId, $userPermissions);
+		$result = $this->getEntity()->updateItemsCategory($ids, $categoryId, $userPermissions);
+
+		if (!$result->isSuccess())
+		{
+			$errorMessages = $result->getErrorMessages();
+
+			return [
+				'ERROR' => reset($errorMessages),
+			];
+		}
 
 		return [];
 	}

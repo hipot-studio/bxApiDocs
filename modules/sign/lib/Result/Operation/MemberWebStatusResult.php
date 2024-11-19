@@ -2,9 +2,9 @@
 
 namespace Bitrix\Sign\Result\Operation;
 
-use Bitrix\Sign\Result\Base;
+use Bitrix\Sign\Result\SuccessResult;
 
-class MemberWebStatusResult extends Base
+class MemberWebStatusResult extends SuccessResult
 {
 	public function __construct(
 		public string $status

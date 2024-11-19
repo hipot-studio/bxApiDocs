@@ -4,14 +4,13 @@ namespace Bitrix\Calendar\Controller;
 use Bitrix\Calendar\Access\ActionDictionary;
 use Bitrix\Calendar\Access\EventAccessController;
 use Bitrix\Calendar\Access\Model\EventModel;
-use Bitrix\Calendar\Core\Event\Event;
-use Bitrix\Calendar\Core\Mappers;
 use Bitrix\Calendar\Application\Command\CreateEventCommand;
 use Bitrix\Calendar\Application\Command\CreateEventHandler;
 use Bitrix\Calendar\Application\Command\UpdateEventCommand;
 use Bitrix\Calendar\Application\Command\UpdateEventHandler;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Managers\Accessibility;
+use Bitrix\Calendar\OpenEvents\Exception\MaxAttendeesReachedException;
 use Bitrix\Calendar\Relation\Item\Relation;
 use Bitrix\Calendar\Relation\RelationProvider;
 use Bitrix\Calendar\Integration\Tasks\TaskQueryParameter;
@@ -601,10 +600,16 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 
 		try
 		{
-			$event = (!$id)
-				? (new CreateEventHandler())($this->getCreateCommand($request))
-				: (new UpdateEventHandler())($this->getUpdateCommand($request))
-			;
+			if ($id)
+			{
+				$command = $this->getUpdateCommand($request);
+				$event = (new UpdateEventHandler())($command);
+			}
+			else
+			{
+				$command = $this->getCreateCommand($request);
+				$event = (new CreateEventHandler())($command);
+			}
 			$newId = $event->getId();
 			$response['reload'] = true;
 		}
@@ -635,11 +640,24 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 			);
 			$response['busyUsersList'] = $e->getBusyUsersList();
 		}
+		catch (Internals\Exception\EditException)
+		{
+			$this->addError(new Error(Loc::getMessage('EC_JS_EV_SAVE_ERR'), 'edit_entry_save'));
+		}
+		catch (Internals\Exception\EventNotFound)
+		{
+			$this->addError(new Error('Event not found', 'edit_entry_event_not_found'));
+		}
 		catch (Rooms\OccupancyCheckerException $e)
 		{
 			$this->addError(new Error(Loc::getMessage('EC_LOCATION_BUSY_RECURRENCE'), 'edit_entry_location_busy_recurrence'));
 			$this->addError(new Error($e->getMessage(), 'edit_entry_location_repeat_busy'));
 		}
+		catch (MaxAttendeesReachedException)
+		{
+			$this->addError(new Error('MAX ATTENDEES_REACHED', 'edit_entry_max_attendees_reached'));
+		}
+
 
 		// Exit if any error
 		if (!empty($this->getErrors()))
@@ -828,6 +846,8 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 			($request['sendInvitesAgain'] ?? 'N') === 'Y',
 			$requestUid,
 			($request['doCheckOccupancy'] ?? 'N') === 'Y',
+			(int)($request['max_attendees'] ?? 0),
+			$request['category'] !== null ? (int)$request['category'] : null,
 		];
 	}
 

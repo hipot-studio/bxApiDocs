@@ -32,7 +32,6 @@ class Settings
 	protected $isActivitiesAutocompletionEnabled = true;
 	/** @var string[] */
 	protected $activityProvidersToAutocomplete = [];
-	protected $isCheckTransitionAccessEnabled = true;
 
 	/**
 	 * Settings constructor.
@@ -92,7 +91,7 @@ class Settings
 			->disableCheckAccess()
 			->disableCheckFields()
 			->disableCheckRequiredUserFields()
-			->disableCheckTransitionAccess();
+		;
 	}
 
 	/**
@@ -563,39 +562,5 @@ class Settings
 		$this->activityProvidersToAutocomplete = $providersIds;
 
 		return $this;
-	}
-
-	/**
-	 * Enables user transition permission check in an Operation
-	 *
-	 * @return $this
-	 */
-	public function enableCheckTransitionAccess(): self
-	{
-		$this->isCheckTransitionAccessEnabled = true;
-
-		return $this;
-	}
-
-	/**
-	 * Disables user transition permission check in an Operation
-	 *
-	 * @return $this
-	 */
-	public function disableCheckTransitionAccess(): self
-	{
-		$this->isCheckTransitionAccessEnabled = false;
-
-		return $this;
-	}
-
-	/**
-	 * Returns true if user transition permission check is enabled
-	 *
-	 * @return bool
-	 */
-	public function isCheckTransitionAccessEnabled(): bool
-	{
-		return $this->isCheckTransitionAccessEnabled;
 	}
 }

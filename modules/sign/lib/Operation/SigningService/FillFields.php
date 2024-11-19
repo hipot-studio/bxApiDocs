@@ -114,10 +114,10 @@ final class FillFields implements Contract\Operation
 
 		foreach ($members as $member)
 		{
-			$partyBlocks = $blocks->filterByParty($member->party);
+			$roleBlocks = $blocks->filterByRole($member->role);
 
 			$requestFields = new Item\Api\Property\Request\Field\Fill\FieldCollection();
-			foreach ($partyBlocks as $block)
+			foreach ($roleBlocks as $block)
 			{
 				$fields = $this->fieldFactory->createByBlocks(new Item\BlockCollection($block), $member, $this->document);
 				foreach ($fields as $field)

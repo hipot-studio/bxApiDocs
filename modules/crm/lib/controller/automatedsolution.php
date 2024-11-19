@@ -5,12 +5,16 @@ namespace Bitrix\Crm\Controller;
 use Bitrix\Crm\AutomatedSolution\Action\Read\Fetch;
 use Bitrix\Crm\AutomatedSolution\AutomatedSolutionManager;
 use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
-use Bitrix\Crm\Engine\ActionFilter\CheckWriteConfigPermission;
 use Bitrix\Crm\Field;
+use Bitrix\Crm\Integration\Analytics\Builder\Automation\AutomatedSolution\CreateEvent;
+use Bitrix\Crm\Integration\Analytics\Builder\Automation\AutomatedSolution\DeleteEvent;
+use Bitrix\Crm\Integration\Analytics\Builder\Automation\AutomatedSolution\EditEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Converter;
 use Bitrix\Crm\Service\DynamicTypesMap;
+use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\ArrayHelper;
@@ -18,6 +22,7 @@ use Bitrix\Main\UI\PageNavigation;
 
 final class AutomatedSolution extends Base
 {
+	private UserPermissions $userPermissions;
 	private AutomatedSolutionManager $manager;
 	private DynamicTypesMap $dynamicTypesMap;
 	private Converter\AutomatedSolution $converter;
@@ -26,22 +31,31 @@ final class AutomatedSolution extends Base
 	{
 		parent::init();
 
+		$this->userPermissions = Container::getInstance()->getUserPermissions();
 		$this->manager = Container::getInstance()->getAutomatedSolutionManager();
 		$this->dynamicTypesMap = Container::getInstance()->getDynamicTypesMap();
 		$this->converter = Container::getInstance()->getAutomatedSolutionConverter();
 	}
 
-	protected function getDefaultPreFilters(): array
+	private function checkPermissions(): bool
 	{
-		$prefilters = parent::getDefaultPreFilters();
+		if (!$this->userPermissions->canWriteConfig())
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
 
-		$prefilters[] = new CheckWriteConfigPermission();
+			return false;
+		}
 
-		return $prefilters;
+		return true;
 	}
 
-	public function fieldsAction(): array
+	public function fieldsAction(): ?array
 	{
+		if (!$this->checkPermissions())
+		{
+			return null;
+		}
+
 		return $this->prepareFieldsInfo($this->getFieldsInfo());
 	}
 
@@ -76,6 +90,11 @@ final class AutomatedSolution extends Base
 
 	public function getAction(int $id): ?array
 	{
+		if (!$this->checkPermissions())
+		{
+			return null;
+		}
+
 		$solution = $this->manager->getAutomatedSolution($id);
 		if (!$solution)
 		{
@@ -91,6 +110,57 @@ final class AutomatedSolution extends Base
 
 	public function addAction(array $fields = []): ?array
 	{
+		$builder = (new CreateEvent())
+			->setSection(Dictionary::SECTION_REST)
+		;
+
+		if ($this->isRest())
+		{
+			$builder
+				->setStatus(Dictionary::STATUS_ATTEMPT)
+				->buildEvent()
+				->send()
+			;
+		}
+
+		$result = $this->add($fields);
+
+		if ($this->isRest())
+		{
+			if (isset($result['automatedSolution']['id']))
+			{
+				$builder->setId($result['automatedSolution']['id']);
+			}
+			if (isset($result['automatedSolution']['typeIds']))
+			{
+				$builder->setTypeIds($result['automatedSolution']['typeIds']);
+			}
+
+			if ($this->getErrors())
+			{
+				$builder->setStatus(Dictionary::STATUS_ERROR);
+			}
+			else
+			{
+				$builder->setStatus(Dictionary::STATUS_SUCCESS);
+			}
+
+			$builder
+				->buildEvent()
+				->send()
+			;
+		}
+
+		return $result;
+	}
+
+	private function add(array $fields = []): ?array
+	{
+		if (!$this->checkPermissions())
+		{
+			return null;
+		}
+
 		$limitCheckResult = RestrictionManager::getAutomatedSolutionLimitRestriction()->check();
 		if (!$limitCheckResult->isSuccess())
 		{
@@ -122,6 +192,54 @@ final class AutomatedSolution extends Base
 
 	public function updateAction(int $id, array $fields = []): ?array
 	{
+		$builder = (new EditEvent())
+			->setSection(Dictionary::SECTION_REST)
+			->setId($id)
+		;
+
+		if ($this->isRest())
+		{
+			$builder
+				->setStatus(Dictionary::STATUS_ATTEMPT)
+				->buildEvent()
+				->send()
+			;
+		}
+
+		$result = $this->update($id, $fields);
+
+		if ($this->isRest())
+		{
+			if (isset($result['automatedSolution']['typeIds']))
+			{
+				$builder->setTypeIds($result['automatedSolution']['typeIds']);
+			}
+
+			if ($this->getErrors())
+			{
+				$builder->setStatus(Dictionary::STATUS_ERROR);
+			}
+			else
+			{
+				$builder->setStatus(Dictionary::STATUS_SUCCESS);
+			}
+
+			$builder
+				->buildEvent()
+				->send()
+			;
+		}
+
+		return $result;
+	}
+
+	private function update(int $id, array $fields = []): ?array
+	{
+		if (!$this->checkPermissions())
+		{
+			return null;
+		}
+
 		$currentAutomatedSolutionResponse = $this->getAction($id);
 		if (!is_array($currentAutomatedSolutionResponse) || !empty($this->getErrors()))
 		{
@@ -150,6 +268,47 @@ final class AutomatedSolution extends Base
 
 	public function deleteAction(int $id): void
 	{
+		$analyticsBuilder = (new DeleteEvent())
+			->setSection(Dictionary::SECTION_REST)
+			->setId($id)
+		;
+
+		if ($this->isRest())
+		{
+			$analyticsBuilder
+				->setStatus(Dictionary::STATUS_ATTEMPT)
+				->buildEvent()
+				->send()
+			;
+		}
+
+		$this->delete($id);
+
+		if ($this->isRest())
+		{
+			if ($this->getErrors())
+			{
+				$analyticsBuilder->setStatus(Dictionary::STATUS_ERROR);
+			}
+			else
+			{
+				$analyticsBuilder->setStatus(Dictionary::STATUS_SUCCESS);
+			}
+
+			$analyticsBuilder
+				->buildEvent()
+				->send()
+			;
+		}
+	}
+
+	private function delete(int $id): void
+	{
+		if (!$this->checkPermissions())
+		{
+			return;
+		}
+
 		$deleteResult = $this->manager->deleteAutomatedSolution($id);
 
 		if (!$deleteResult->isSuccess())
@@ -213,6 +372,11 @@ final class AutomatedSolution extends Base
 
 	public function listAction(array $order = null, array $filter = null, PageNavigation $pageNavigation = null): ?Page
 	{
+		if (!$this->checkPermissions())
+		{
+			return null;
+		}
+
 		$order ??= ['id' => 'ASC'];
 		if (!$this->validateOrder($order, ['id', 'title']))
 		{

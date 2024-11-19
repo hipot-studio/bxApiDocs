@@ -3007,4 +3007,9 @@ abstract class Entity
 	{
 		// may implement in child class
 	}
+
+	public function getCategoriesWithAddPermissions(CCrmPerms $permissions): array
+	{
+		return [];
+	}
 }

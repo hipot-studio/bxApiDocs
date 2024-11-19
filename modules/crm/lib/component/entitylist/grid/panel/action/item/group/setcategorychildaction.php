@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group;
 
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Event;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Grid\Panel\Action\Group\GroupChildAction;
@@ -57,12 +58,16 @@ final class SetCategoryChildAction extends GroupChildAction
 		$dropdownValueId = $dropdownContainerId . '_control';
 
 		$categoriesList = [];
+		$permissions = Container::getInstance()->getUserPermissions();
 		foreach ($this->factory->getCategories() as $category)
 		{
-			$categoriesList[] = [
-				'NAME' => $category->getName(),
-				'VALUE' => $category->getId(),
-			];
+			if ($permissions->checkAddPermissions($this->factory->getEntityTypeId(), $category->getId()))
+			{
+				$categoriesList[] = [
+					'NAME' => $category->getName(),
+					'VALUE' => $category->getId(),
+				];
+			}
 		}
 
 		$onchange->addAction([

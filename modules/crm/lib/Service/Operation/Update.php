@@ -362,12 +362,11 @@ class Update extends Operation
 			return true;
 		}
 
-		return Container::getInstance()->getUserPermissions($this->getContext()->getUserId())
-			->isStageTransitionAllowed(
-				$this->item->remindActual('STAGE_ID'),
-				$this->item->getStageId(),
-				ItemIdentifier::createByItem($this->item),
-			);
+		return Container::getInstance()->getUserPermissions($this->getContext()->getUserId())->isStageTransitionAllowed(
+			$this->item->remindActual('STAGE_ID'),
+			$this->item->getStageId(),
+			ItemIdentifier::createByItem($this->item),
+		);
 	}
 
 	protected function preSaveChecks(): ?Result
@@ -378,17 +377,14 @@ class Update extends Operation
 			return $checkResult;
 		}
 
-		$userId = $this->getContext()->getUserId();
-
-		if (
-			Container::getInstance()->getUserPermissions($userId)->isAdmin()
-			|| Container::getInstance()->getUserPermissions($userId)->isCrmAdmin()
-		)
+		if (!$this->isCheckAccessEnabled())
 		{
 			return null;
 		}
 
-		if (!$this->isCheckTransitionAccessEnabled())
+		$userPermissions = Container::getInstance()->getUserPermissions($this->getContext()->getUserId());
+
+		if ($userPermissions->isAdminForEntity($this->item->getEntityTypeId()))
 		{
 			return null;
 		}

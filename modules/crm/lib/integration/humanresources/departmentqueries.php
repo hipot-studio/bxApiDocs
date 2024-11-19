@@ -4,6 +4,8 @@ namespace Bitrix\Crm\Integration\HumanResources;
 
 use Bitrix\Crm\Traits\Singleton;
 use Bitrix\HumanResources;
+use Bitrix\HumanResources\Item\NodeMember;
+use Bitrix\HumanResources\Service\Container;
 use Bitrix\Main\Loader;
 
 Loader::requireModule('humanresources');
@@ -19,29 +21,37 @@ class DepartmentQueries
 		$this->hrServiceLocator = HumanResources\Service\Container::instance();
 	}
 
-	public function queryUserIdsByDepartments(array $departmentAccessCodes): array
+	public function queryUserIdsByDepartments(array $departmentAccessCodes, bool $excludeHead = false): array
 	{
-		$departmentAccessCodes = array_map(function ($code) {
-			if (is_numeric($code))
-			{
-				$code = 'D' . $code;
-			}
+		$departmentAccessCodes = array_map(
+			static fn($code) => is_numeric($code) ? 'D' . $code : $code,
+			$departmentAccessCodes
+		);
 
-			return $code;
-		}, $departmentAccessCodes);
+		$headRole = Container::getRoleRepository()->findByXmlId(NodeMember::DEFAULT_ROLE_XML_ID['HEAD'])?->id;
+
 		$nodes = $this->hrServiceLocator::getNodeRepository()->findAllByAccessCodes($departmentAccessCodes);
 		$userIds = [];
+		$headIds = [];
 		foreach ($nodes as $node)
 		{
 			$allEmp = $this->hrServiceLocator::getNodeMemberService()->getAllEmployees($node->id, false, false);
-
 			foreach ($allEmp->getIterator() as $emp)
 			{
+				if ($excludeHead && in_array($headRole, $emp->roles, true))
+				{
+					$headIds[] = $node->entityId;
+
+					continue;
+				}
+
 				$userIds[] = $emp->entityId;
 			}
+
+			$userIds = array_diff($userIds, $headIds);
 		}
 
-		return $userIds;
+		return array_values(array_unique($userIds));
 	}
 
 	/**

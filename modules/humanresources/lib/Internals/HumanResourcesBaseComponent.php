@@ -3,8 +3,7 @@
 namespace Bitrix\HumanResources\Internals;
 
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main;
-use Bitrix\Main\Application;
+use Bitrix\HumanResources;
 
 Loc::loadMessages(__FILE__);
 
@@ -57,13 +56,6 @@ abstract class HumanResourcesBaseComponent extends \CBitrixComponent
 
 	private function isAvailable(): bool
 	{
-		$option = Main\Config\Configuration::getInstance('humanresources')->get('humanresources_pages');
-
-		if (!$option)
-		{
-			return false;
-		}
-
-		return $option['enabled'] ?? false;
+		return HumanResources\Config\Storage::instance()->isPublicStructureAvailable();
 	}
 }

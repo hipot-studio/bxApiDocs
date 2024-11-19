@@ -169,6 +169,7 @@ class Quote extends Entity
 				'canUseCallListInPanel' => true,
 				'showPersonalSetStatusNotCompletedText' => true,
 				'kanbanItemClassName' => 'crm-kanban-item',
+				'canUseMergeInPanel' => true,
 			]
 		);
 	}

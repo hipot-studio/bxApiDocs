@@ -667,16 +667,16 @@ class CBPCrmSendEmailActivity extends CBPActivity
 				'Default' => 0
 			],
 			'AttachmentType' => [
-				'Name' => GetMessage('CRM_SEMA_ATTACHMENT_TYPE'),
+				'Name' => GetMessage('CRM_SEMA_ATTACHMENT_TYPE_1'),
 				'FieldName' => 'attachment_type',
 				'Type' => 'select',
 				'Options' => [
-					static::ATTACHMENT_TYPE_FILE => GetMessage('CRM_SEMA_ATTACHMENT_FILE_1'),
+					static::ATTACHMENT_TYPE_FILE => GetMessage('CRM_SEMA_ATTACHMENT_FILE_2'),
 					static::ATTACHMENT_TYPE_DISK => GetMessage('CRM_SEMA_ATTACHMENT_DISK')
 				]
 			],
 			'Attachment' => [
-				'Name' => GetMessage('CRM_SEMA_ATTACHMENT'),
+				'Name' => GetMessage('CRM_SEMA_ATTACHMENT_1'),
 				'FieldName' => 'attachment',
 				'Type' => 'file',
 				'Multiple' => true

@@ -13,10 +13,13 @@ use Bitrix\Crm\Service\Timeline\Item\Model;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action\Redirect;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
+use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockWithTitle;
 use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
+use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Sign\FeatureResolver;
 use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Item\MemberCollection;
 use Bitrix\Sign\Repository\DocumentRepository;
@@ -25,6 +28,7 @@ use Bitrix\Sign\Service\Sign\DocumentService;
 use Bitrix\Sign\Service\Sign\MemberService;
 use Bitrix\Sign\Type\Document\EntityType;
 use Bitrix\Sign\Type\DocumentStatus;
+use Bitrix\Sign\Type\Integration\Im\DocumentChatType;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\MemberStatus;
 
@@ -42,7 +46,12 @@ final class SignB2eDocument extends Activity
 	private ?bool $isSignDocumentReview = null;
 	private ?array $signersByStatuses = null;
 
+	private const WAIT_DOCUMENT_CHAT = 1;
+	private const READY_DOCUMENT_CHAT = 2;
+	private const STOPPED_DOCUMENT_CHAT = 3;
+
 	private const MAX_USER_IN_LINE = 3;
+	private ?Member $companyMember = null;
 
 	public function __construct(Context $context, Model $model)
 	{
@@ -211,7 +220,10 @@ final class SignB2eDocument extends Activity
 		}
 		elseif ($this->isRepresentativeSigningStage())
 		{
-			$blocks['signersWait'] = $this->getSignersWaitBlock();
+			if (!$this->isCompanyDone())
+			{
+				$blocks['signersWait'] = $this->getSignersWaitBlock();
+			}
 			$blocks['signersReady'] = $this->getSignersReadyBlock();
 			$blocks['signersCanceled'] = $this->getSignersCanceledBlock();
 		}
@@ -368,7 +380,24 @@ final class SignB2eDocument extends Activity
 		;
 	}
 
-	private function getUserMoreLink(int $moreUserCount):Layout\Body\ContentBlock\Link
+	/**
+	 * @param value-of<DocumentChatType> $chatType
+	 */
+	private function getDocumentChatButton(int $chatType): ContentBlock\LineOfTextBlocksButton
+	{
+		$action = (new Layout\Action\JsEvent($this->getType() . ':CreateDocumentChat'))
+			->addActionParamInt('chatType', $chatType)
+			->addActionParamInt('documentId', $this->signDocument->getId())
+		;
+
+		return (new Layout\Body\ContentBlock\LineOfTextBlocksButton())
+			->setAction($action)
+			->setIcon('chat')
+			->setTitle(Loc::getMessage('CRM_TIMELINE_ACTIVITY_CREATE_CHAT'))
+		;
+	}
+
+	private function getUserMoreLink(int $moreUserCount): Layout\Body\ContentBlock\Link
 	{
 		$text = Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_FIELD_MORE_USERS', [
 			'#USER_COUNT#' => $moreUserCount,
@@ -559,16 +588,25 @@ final class SignB2eDocument extends Activity
 
 	private function getCompanyMember(): ?Member
 	{
-		return $this->memberRepository
-			->listByDocumentIdWithRole($this->getSignDocument()->id, Role::ASSIGNEE, 1)
-			->getFirst()
-		;
+		if (!isset($this->companyMember))
+		{
+			$this->companyMember = $this->memberRepository
+				->listByDocumentIdWithRole($this->getSignDocument()->id, Role::ASSIGNEE, 1)
+				->getFirst()
+			;
+		}
+
+		return $this->companyMember;
 	}
 
+	/**
+	 * @param value-of<DocumentChatType>|null $chatType
+	 */
 	private function getUsersBlockWithCount(
 		?string $title,
 		array $userIds,
 		int $userCount,
+		?int $chatType = null,
 	): ?Layout\Body\ContentBlock\ContentBlockWithTitle
 	{
 		if (empty($userIds))
@@ -592,6 +630,15 @@ final class SignB2eDocument extends Activity
 			$link = $this->getUserProfileLink($userId, $num !== $userCount);
 			$lineOfTextBlocks->addContentBlock("roleUser_$userId", $link);
 		}
+		if (class_exists(FeatureResolver::class))
+		{
+			$featureResolver = FeatureResolver::instance();
+			if ($chatType !== null && $featureResolver->released('createDocumentChat'))
+			{
+				$link = $this->getDocumentChatButton($chatType);
+				$lineOfTextBlocks->setButton($link);
+			}
+		}
 
 		if ($lineOfTextBlocks->isEmpty())
 		{
@@ -610,16 +657,19 @@ final class SignB2eDocument extends Activity
 
 		$title = Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_FIELD_SIGNER_WAIT');
 
-		return $this->getUsersBlockWithCount($title, $userIds, $count);
+		return $this->getUsersBlockWithCount($title, $userIds, $count, self::WAIT_DOCUMENT_CHAT);
 	}
 
 	private function getSignersReadyBlock(): ?Layout\Body\ContentBlock\ContentBlockWithTitle
 	{
-		[$userIds, $count] = $this->getSignersUserIdsAndCountForBlock([MemberStatus::READY]);
+		$statuses = method_exists(MemberStatus::class, 'getReadyForSigning')
+			? MemberStatus::getReadyForSigning()
+			: [MemberStatus::READY];
+		[$userIds, $count] = $this->getSignersUserIdsAndCountForBlock($statuses);
 
 		$title = Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_FIELD_SIGNER_READY');
 
-		return $this->getUsersBlockWithCount($title, $userIds, $count);
+		return $this->getUsersBlockWithCount($title, $userIds, $count, self::READY_DOCUMENT_CHAT);
 	}
 
 	private function getSignersCanceledBlock(): ?Layout\Body\ContentBlock\ContentBlockWithTitle
@@ -632,7 +682,7 @@ final class SignB2eDocument extends Activity
 
 		$title = Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_TITLE_STOPPED');
 
-		return $this->getUsersBlockWithCount($title, $userIds, $count);
+		return $this->getUsersBlockWithCount($title, $userIds, $count, self::STOPPED_DOCUMENT_CHAT);
 	}
 
 	private function getSignersDoneBlock(): ?Layout\Body\ContentBlock\ContentBlockWithTitle
@@ -768,4 +818,8 @@ final class SignB2eDocument extends Activity
 		return [$userIds, count($userIds)];
 	}
 
+	private function isCompanyDone(): bool
+	{
+		return $this->getCompanyMember()?->status === MemberStatus::DONE;
+	}
 }

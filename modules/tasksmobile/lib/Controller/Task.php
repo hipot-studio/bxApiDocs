@@ -12,9 +12,12 @@ use Bitrix\TasksMobile\Dto\TaskDto;
 use Bitrix\TasksMobile\Dto\TaskRequestFilter;
 use Bitrix\TasksMobile\Provider\ChecklistProvider;
 use Bitrix\TasksMobile\Provider\KanbanFieldsProvider;
+use Bitrix\TasksMobile\Provider\StageProvider;
 use Bitrix\TasksMobile\Provider\TaskProvider;
 use Bitrix\TasksMobile\Provider\TasksMoveStageProvider;
 use Bitrix\TasksMobile\Settings;
+use Bitrix\Tasks\Kanban\StagesTable;
+use Bitrix\Tasks\Internals\Task\Status;
 
 class Task extends Base
 {
@@ -274,7 +277,15 @@ class Task extends Base
 			$userId = $this->getCurrentUser()?->getId();
 
 			$provider = new TaskProvider($userId);
-			$getResult = $provider->getFullTask($taskId);
+			$workMode = is_string($params['WORK_MODE']) && StagesTable::checkWorkMode($params['WORK_MODE'])
+				? $params['WORK_MODE']
+				: StagesTable::WORK_MODE_GROUP;
+			$kanbanOwnerId = isset($params['KANBAN_OWNER_ID']) && (int)$params['KANBAN_OWNER_ID'] !== 0
+				? (int)$params['KANBAN_OWNER_ID']
+				: null;
+
+			$getResult = $provider->getFullTask($taskId, $workMode, $kanbanOwnerId);
+
 
 			if (($params['WITH_RESULT_DATA'] ?? 'Y') === 'Y')
 			{
@@ -332,14 +343,14 @@ class Task extends Base
 		}
 	}
 
-	public function updateAction(int $taskId, array $fields): ?array
+	public function updateAction(int $taskId, array $fields, ?string $withStageData): ?array
 	{
 		try
 		{
 			$provider = new TaskProvider($this->getCurrentUser()?->getId());
 			$updateResult = $provider->update($taskId, $fields);
 
-			return $this->prepareActionResult($updateResult, $taskId);
+			return $this->prepareUpdateActionResult($updateResult, $taskId, $withStageData === 'Y');
 		}
 		catch (\Exception $exception)
 		{
@@ -516,7 +527,7 @@ class Task extends Base
 			$provider = new TaskProvider($this->getCurrentUser()?->getId());
 			$completeResult = $provider->complete($taskId);
 
-			return $this->prepareActionResult($completeResult, $taskId);
+			return $this->prepareCompleteActionResult($completeResult, $taskId);
 		}
 		catch (\Exception $exception)
 		{
@@ -533,7 +544,7 @@ class Task extends Base
 			$provider = new TaskProvider($this->getCurrentUser()?->getId());
 			$renewResult = $provider->renew($taskId);
 
-			return $this->prepareActionResult($renewResult, $taskId);
+			return $this->prepareRenewActionResult($renewResult, $taskId);
 		}
 		catch (\Exception $exception)
 		{
@@ -721,6 +732,95 @@ class Task extends Base
 		{
 			$provider = new TaskProvider($this->getCurrentUser()?->getId());
 			$result['task'] = $provider->getTask($taskId);
+		}
+
+		return $result;
+	}
+
+	private function prepareCompleteActionResult(bool $isSuccess, int $taskId = null): array
+	{
+		$result = ['isSuccess' => $isSuccess];
+
+		if ($taskId)
+		{
+			$provider = new TaskProvider($this->getCurrentUser()?->getId());
+			$task = $provider->getTask($taskId);
+			$result['task'] = $provider->getTask($taskId);
+
+			$parentId = $task->parentId ?? 0;
+			if ($parentId > 0)
+			{
+				$parentTask = $provider->getTask($parentId);
+				$result['parentTask'] = $parentTask;
+
+				if (
+					$task->status === Status::COMPLETED
+					&& $parentTask->status !== Status::COMPLETED
+					&& (
+						(
+							$parentTask->isResultRequired
+							&& (
+								$parentTask->isOpenResultExists
+								|| $parentTask->creator === $this->getCurrentUser()?->getId()
+							)
+						)
+						|| !$parentTask->isResultRequired
+					)
+				)
+				{
+					$groupId = $task->groupId ?? 0;
+					$result['areAllSubtasksCompleted'] = $provider->areAllScrumSubtasksCompleted($parentId, $groupId);
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	private function prepareRenewActionResult(bool $isSuccess, int $taskId = null): array
+	{
+		$result = ['isSuccess' => $isSuccess];
+
+		if ($taskId)
+		{
+			$provider = new TaskProvider($this->getCurrentUser()?->getId());
+			$task = $provider->getTask($taskId);
+			$result['task'] = $provider->getTask($taskId);
+
+			$parentId = $task->parentId ?? 0;
+			if ($parentId > 0)
+			{
+				$parentTask = $provider->getTask($parentId);
+				$result['parentTask'] = $parentTask;
+
+				if ($parentTask->status === Status::COMPLETED)
+				{
+					$groupId = $task->groupId ?? 0;
+					$result['allSubtasksWereCompleted'] = $provider->areAllScrumSubtasksCompleted($parentId, $groupId, $taskId);
+					$result['parentTask'] = $parentTask;
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	private function prepareUpdateActionResult(bool $isSuccess, int $taskId = null, bool $withStageData = false): array
+	{
+		$result = ['isSuccess' => $isSuccess];
+
+		if ($taskId)
+		{
+			$provider = new TaskProvider($this->getCurrentUser()?->getId());
+			$result['task'] = $provider->getTask($taskId);
+
+			$projectId = !empty($result['task']->groupId) ? (int)$result['task']->groupId : 0;
+			if ($projectId !== 0 && $withStageData)
+			{
+				$stagesProvider = new StageProvider($this->getCurrentUser()?->getId());
+				$result['stageId'] = $stagesProvider->getProjectTaskStageId($taskId, $projectId);
+				$result['kanban'] =  $stagesProvider->getProjectStages($projectId, $taskId)->getData();
+			}
 		}
 
 		return $result;
