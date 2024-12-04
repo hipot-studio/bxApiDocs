@@ -156,6 +156,9 @@ class Library
 		EVENT_UPDATE_MESSAGE_CUSTOM_CONNECTOR = 'OnUpdateMessageCustom',
 		EVENT_SEND_MESSAGE_CUSTOM_CONNECTOR = 'OnSendMessageCustom',
 
+		EVENT_DIALOG_START = 'OnImConnectorDialogStart',
+		EVENT_DIALOG_FINISH = 'OnImConnectorDialogFinish',
+
 		EVENT_DELETE_LINE = 'OnDeleteLine'
 	;
 

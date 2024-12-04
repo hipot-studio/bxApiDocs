@@ -355,7 +355,7 @@ class SmsAssistentBy extends Sender\BaseConfigurable
 			'headers' => method_exists($httpClient, 'getRequestHeaders') ? $httpClient->getRequestHeaders()->toArray() : [],
 			'body' => $params,
 		]));
-		$answer = [];
+		$answer = 0;
 
 		if ($httpClient->query(HttpClient::HTTP_POST, $url, $params) && $httpClient->getStatus() == '200')
 		{

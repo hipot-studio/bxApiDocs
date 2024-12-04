@@ -234,7 +234,7 @@ abstract class EdnaUtils implements EdnaRu
 						'SENDER_ID' => $this->providerId,
 						'EXTERNAL_ID' => $channel['subjectId'],
 						'TYPE' => $channelType,
-						'NAME' => $channel['name'],
+						'NAME' => $channel['name'] ?? '',
 						'ADDITIONAL_PARAMS' => [
 							'channelAttribute' => $channel['channelAttribute'] ?? ''
 						],

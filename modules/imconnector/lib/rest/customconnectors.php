@@ -128,6 +128,22 @@ if (Loader::includeModule('rest'))
 								"category" => RestSqs::CATEGORY_DEFAULT,
 							]
 						],
+						'OnImConnectorDialogStart' => [
+							'imconnector',
+							Library::EVENT_DIALOG_START,
+							[__CLASS__, 'OnStartDialog'],
+							[
+								"category" => RestSqs::CATEGORY_DEFAULT,
+							]
+						],
+						'OnImConnectorDialogFinish' => [
+							'imconnector',
+							Library::EVENT_DIALOG_FINISH,
+							[__CLASS__, 'OnFinishDialog'],
+							[
+								"category" => RestSqs::CATEGORY_DEFAULT,
+							]
+						],
 					],
 					\CRestUtil::PLACEMENTS => [
 						Helper::PLACEMENT_SETTING_CONNECTOR => [],
@@ -146,6 +162,52 @@ if (Loader::includeModule('rest'))
 			$parameters = $params[0]->getParameters();
 
 			return $parameters['LINE_ID'];
+		}
+
+		/**
+		 * @param $params
+		 * @param $arHandler
+		 * @return mixed
+		 */
+		public static function OnStartDialog($params, $arHandler)
+		{
+			$appId = null;
+			$parameters = $params[0]->getParameters();
+
+			if (!empty($parameters['CONNECTOR']))
+			{
+				$appId = Helper::getAppRestConnector($parameters['CONNECTOR']);
+			}
+
+			if (empty($appId) || ($arHandler['APP_ID'] != $appId && $arHandler['APP_CODE'] != $appId))
+			{
+				throw new RestException('Wrong app!', "WRONG_APP_ID", \CRestServer::STATUS_WRONG_REQUEST);
+			}
+
+			return $parameters;
+		}
+
+		/**
+		 * @param $params
+		 * @param $arHandler
+		 * @return mixed
+		 */
+		public static function OnFinishDialog($params, $arHandler)
+		{
+			$appId = null;
+			$parameters = $params[0]->getParameters();
+
+			if (!empty($parameters['CONNECTOR']))
+			{
+				$appId = Helper::getAppRestConnector($parameters['CONNECTOR']);
+			}
+
+			if (empty($appId) || ($arHandler['APP_ID'] != $appId && $arHandler['APP_CODE'] != $appId))
+			{
+				throw new RestException('Wrong app!', "WRONG_APP_ID", \CRestServer::STATUS_WRONG_REQUEST);
+			}
+
+			return $parameters;
 		}
 
 		/**
@@ -569,7 +631,24 @@ if (Loader::includeModule('rest'))
 				$result['SUCCESS'] = false;
 			}
 
-			$result['DATA'] = $resultSend->getData();
+			$resultsData = $resultSend->getData();
+			foreach ($resultsData['RESULT'] as $keyData => $resultData)
+			{
+				foreach ($resultData['eventResult'] as $eventResult)
+				{
+					/** @var \Bitrix\Main\EventResult $eventResult */
+					if ($eventResult->getModuleId() === 'imopenlines')
+					{
+						$parameters = $eventResult->getParameters();
+						if (isset($parameters['SESSION']))
+						{
+							$resultsData['RESULT'][$keyData]['session'] = $parameters['SESSION'];
+						}
+					}
+				}
+				unset($resultsData['RESULT'][$keyData]['eventResult']);
+			}
+			$result['DATA'] = $resultsData;
 
 			return $result;
 		}
