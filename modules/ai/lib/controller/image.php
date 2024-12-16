@@ -103,7 +103,7 @@ class Image extends Controller
 	public function getParamsAction(string $engineCode, array $parameters = []): array
 	{
 		$engine = Engine::getByCode($engineCode, $this->context, $this->category);
-		if ($engine === null || !$engine->getIEngine() instanceof Engine\Image)
+		if ($engine === null || $engine->getIEngine()->getCategory() !== $this->category)
 		{
 			$this->addError(new Error('Engine not found'));
 

@@ -3,7 +3,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2022 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
 
 namespace Bitrix\Main\UI;
@@ -69,7 +69,7 @@ class Copyright
 			->setVendorName(Loc::getMessage("EPILOG_ADMIN_URL_MAIN_TEXT_".$vendor))
 			->setVendorUrl(Loc::getMessage("EPILOG_ADMIN_URL_MAIN_".$vendor))
 			->setSupportUrl(Loc::getMessage("EPILOG_ADMIN_URL_SUPPORT_".$vendor))
-			->setLicenceUrl("/bitrix/legal/license.php");
+			->setLicenceUrl(\CUpdateClient::getLicenseTextPath());
 	}
 
 	/**

@@ -1595,6 +1595,66 @@ EOS;
 		return false;
 	}
 
+	public function onWorkflowCommentAdded($parameterDocumentId, string $workflowId, int $authorId): void
+	{
+		$isAvailable = (bool)\Bitrix\Main\Config\Option::get('bizproc', 'release_preview_2024', 0);
+		if ($isAvailable)
+		{
+			$documentId = CBPHelper::ParseDocumentId($parameterDocumentId);
+			[$moduleId, $entity] = $documentId;
+
+			if ($moduleId)
+			{
+				CModule::IncludeModule($moduleId);
+			}
+
+			if (class_exists($entity) && method_exists($entity, "onWorkflowCommentAdded"))
+			{
+				call_user_func_array([$entity, "onWorkflowCommentAdded"], [$documentId, $workflowId, $authorId]);
+			}
+		}
+	}
+
+	public function onWorkflowCommentDeleted($parameterDocumentId, string $workflowId, int $authorId): void
+	{
+		$isAvailable = (bool)\Bitrix\Main\Config\Option::get('bizproc', 'release_preview_2024', 0);
+		if ($isAvailable)
+		{
+			$documentId = CBPHelper::ParseDocumentId($parameterDocumentId);
+			[$moduleId, $entity] = $documentId;
+
+			if ($moduleId)
+			{
+				CModule::IncludeModule($moduleId);
+			}
+
+			if (class_exists($entity) && method_exists($entity, "onWorkflowCommentDeleted"))
+			{
+				call_user_func_array([$entity, "onWorkflowCommentDeleted"], [$documentId, $workflowId, $authorId]);
+			}
+		}
+	}
+
+	public function onWorkflowAllCommentViewed($parameterDocumentId, string $workflowId, int $authorId): void
+	{
+		$isAvailable = (bool)\Bitrix\Main\Config\Option::get('bizproc', 'release_preview_2024', 0);
+		if ($isAvailable)
+		{
+			$documentId = CBPHelper::ParseDocumentId($parameterDocumentId);
+			[$moduleId, $entity] = $documentId;
+
+			if ($moduleId)
+			{
+				CModule::IncludeModule($moduleId);
+			}
+
+			if (class_exists($entity) && method_exists($entity, "onWorkflowAllCommentViewed"))
+			{
+				call_user_func_array([$entity, "onWorkflowAllCommentViewed"], [$documentId, $workflowId, $authorId]);
+			}
+		}
+	}
+
 	public function onDebugSessionDocumentStatusChanged(array $parameterDocumentId, int $userId, string $status)
 	{
 		[$moduleId, $entity, $documentId] = CBPHelper::ParseDocumentId($parameterDocumentId);

@@ -3,6 +3,8 @@
 use Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
+use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType;
+use Bitrix\Bizproc\Workflow\Template\Tpl;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Localization\Loc;
@@ -141,10 +143,10 @@ class CBPWorkflowTemplateLoader
 		$updateMode = ($id > 0 ? true : false);
 		$addMode = !$updateMode;
 
-		if ($addMode && !is_set($arFields, "DOCUMENT_TYPE"))
+		if ($addMode && !isset($arFields["DOCUMENT_TYPE"]))
 			throw new CBPArgumentNullException("DOCUMENT_TYPE");
 
-		if (is_set($arFields, "DOCUMENT_TYPE"))
+		if (isset($arFields["DOCUMENT_TYPE"]))
 		{
 			$arDocumentType = CBPHelper::ParseDocumentId($arFields["DOCUMENT_TYPE"]);
 
@@ -159,17 +161,17 @@ class CBPWorkflowTemplateLoader
 			unset($arFields["DOCUMENT_TYPE"]);
 		}
 
-		if (is_set($arFields, "NAME") || $addMode)
+		if (isset($arFields["NAME"]) || $addMode)
 		{
 			$arFields["NAME"] = trim($arFields["NAME"]);
 			if ($arFields["NAME"] == '')
 				throw new CBPArgumentNullException("NAME");
 		}
 
-		if ($addMode && !is_set($arFields, "TEMPLATE"))
+		if ($addMode && !isset($arFields["TEMPLATE"]))
 			throw new CBPArgumentNullException("TEMPLATE");
 
-		if (is_set($arFields, "TEMPLATE"))
+		if (isset($arFields["TEMPLATE"]))
 		{
 			if (!is_array($arFields["TEMPLATE"]))
 			{
@@ -219,7 +221,7 @@ class CBPWorkflowTemplateLoader
 
 		foreach (array('PARAMETERS', 'VARIABLES', 'CONSTANTS') as $field)
 		{
-			if (is_set($arFields, $field))
+			if (isset($arFields[$field]))
 			{
 				if ($arFields[$field] == null)
 				{
@@ -239,13 +241,23 @@ class CBPWorkflowTemplateLoader
 			}
 		}
 
-		if(is_set($arFields, "ACTIVE") && $arFields["ACTIVE"] != 'N')
+		if (isset($arFields['SETTINGS']))
+		{
+			$arFields['SETTINGS'] = $this->getSerializedSettings($arFields['SETTINGS']);
+		}
+
+		$enumValues = array_column(WorkflowTemplateType::cases(), 'value');
+		if (isset($arFields['TYPE']) && !in_array($arFields['TYPE'], $enumValues, true)) {
+			$arFields['TYPE'] = WorkflowTemplateType::Default->value;
+		}
+
+		if (isset($arFields["ACTIVE"]) && $arFields["ACTIVE"] != 'N')
 			$arFields["ACTIVE"] = 'Y';
 
-		if(is_set($arFields, "IS_SYSTEM") && $arFields["IS_SYSTEM"] != 'Y')
+		if (isset($arFields["IS_SYSTEM"]) && $arFields["IS_SYSTEM"] != 'Y')
 			$arFields["IS_SYSTEM"] = 'N';
 
-		if(is_set($arFields, "IS_MODIFIED") && $arFields["IS_MODIFIED"] != 'N')
+		if (isset($arFields["IS_MODIFIED"]) && $arFields["IS_MODIFIED"] != 'N')
 			$arFields["IS_MODIFIED"] = 'Y';
 
 		unset($arFields["MODIFIED"]);
@@ -254,22 +266,86 @@ class CBPWorkflowTemplateLoader
 	public static function add($arFields, $systemImport = false)
 	{
 		$loader = CBPWorkflowTemplateLoader::GetLoader();
+		$loader->setTypeWithSettingsBeforeAdd($arFields);
+
 		return $loader->AddTemplate($arFields, $systemImport);
 	}
 
 	public static function update($id, $arFields, $systemImport = false, $validationRequired = true)
 	{
 		$loader = CBPWorkflowTemplateLoader::GetLoader();
+		$loader->setTypeWithSettingsBeforeUpdate($arFields);
+
 		if (isset($arFields['TEMPLATE']) && !$systemImport)
+		{
 			$arFields['IS_MODIFIED'] = 'Y';
+		}
+
 		$returnId = $loader->UpdateTemplate($id, $arFields, $systemImport, $validationRequired);
 		self::cleanTemplateCache($returnId);
+
 		return $returnId;
+	}
+
+	public function setTypeWithSettingsBeforeUpdate(array &$arFields): void
+	{
+		if (array_key_exists('AUTO_EXECUTE', $arFields) && array_key_exists('TEMPLATE', $arFields))
+		{
+			$type = 'default';
+			if (
+				(int)$arFields['AUTO_EXECUTE'] === \CBPDocumentEventType::Automation
+				|| (int)$arFields['AUTO_EXECUTE'] === \CBPDocumentEventType::Script
+			)
+			{
+				$type = 'robots';
+				if ($this->isExternalModified($arFields))
+				{
+					$type = 'custom_robots';
+					if ($arFields['TYPE'] !== 'custom_robots')
+					{
+						$arFields['SETTINGS']['SHOW_IN_TIMELINE'] = 'Y';
+					}
+				}
+				else
+				{
+					$arFields['SETTINGS']['SHOW_IN_TIMELINE'] = 'N';
+				}
+			}
+
+			$arFields['TYPE'] = $type;
+		}
+	}
+
+	public function setTypeWithSettingsBeforeAdd(array &$arFields): void
+	{
+		if (array_key_exists('AUTO_EXECUTE', $arFields) && array_key_exists('TEMPLATE', $arFields))
+		{
+			$arFields['TYPE'] = 'default';
+			$arFields['SETTINGS'] = ['SHOW_IN_TIMELINE' => 'Y'];
+			if (
+				(int)$arFields['AUTO_EXECUTE'] === \CBPDocumentEventType::Automation
+				|| (int)$arFields['AUTO_EXECUTE'] === \CBPDocumentEventType::Script
+			)
+			{
+				$arFields['TYPE'] = 'robots';
+				$arFields['SETTINGS'] = ['SHOW_IN_TIMELINE' => 'N'];
+				if ($this->isExternalModified($arFields))
+				{
+					$arFields['TYPE'] = 'custom_robots';
+					$arFields['SETTINGS'] = ['SHOW_IN_TIMELINE' => 'Y'];
+				}
+			}
+		}
 	}
 
 	private function getSerializedForm($arTemplate)
 	{
 		return WorkflowTemplateTable::toSerializedForm($arTemplate);
+	}
+
+	private function getSerializedSettings($arTemplate)
+	{
+		return WorkflowTemplateTable::encodeJson($arTemplate);
 	}
 
 	public static function delete($id)
@@ -1035,7 +1111,7 @@ class CBPWorkflowTemplateLoader
 		{
 			$arSelectFields = ["ID", "MODULE_ID", "ENTITY", "DOCUMENT_TYPE", "DOCUMENT_STATUS", "AUTO_EXECUTE",
 				"NAME", "DESCRIPTION", "TEMPLATE", "PARAMETERS", "VARIABLES", "CONSTANTS", "MODIFIED", "USER_ID",
-				"ACTIVE", "IS_MODIFIED", "IS_SYSTEM", 'SORT'];
+				"ACTIVE", "IS_MODIFIED", "IS_SYSTEM", 'SORT', 'SETTINGS', 'TYPE'];
 		}
 
 		if (count(array_intersect($arSelectFields, array("MODULE_ID", "ENTITY", "DOCUMENT_TYPE"))) > 0)
@@ -1096,6 +1172,8 @@ class CBPWorkflowTemplateLoader
 			"IS_MODIFIED" => Array("FIELD" => "T.IS_MODIFIED", "TYPE" => "string"),
 			"IS_SYSTEM" => Array("FIELD" => "T.IS_SYSTEM", "TYPE" => "string"),
 			"SORT" => Array("FIELD" => "T.SORT", "TYPE" => "int"),
+			"SETTINGS" => Array("FIELD" => "T.SETTINGS", "TYPE" => "string"),
+			"TYPE" => Array("FIELD" => "T.TYPE", "TYPE" => "string"),
 
 			"USER_NAME" => Array("FIELD" => "U.NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_user U ON (T.USER_ID = U.ID)"),
 			"USER_LAST_NAME" => Array("FIELD" => "U.LAST_NAME", "TYPE" => "string", "FROM" => "LEFT JOIN b_user U ON (T.USER_ID = U.ID)"),
@@ -1255,6 +1333,24 @@ class CBPWorkflowTemplateLoader
 
 		return $result;
 	}
+
+	private function prepareFieldsForTemplate(array $fields): array
+	{
+		unset($fields['MODIFIER_USER']);
+		[$moduleId, $entity, $documentType] = $fields['DOCUMENT_TYPE'];
+		$fields['MODULE_ID'] = $moduleId;
+		$fields['ENTITY'] = $entity;
+		$fields['DOCUMENT_TYPE'] = $documentType;
+
+		return $fields;
+	}
+
+	private function isExternalModified(array $fields): bool
+	{
+		$tpl = new Tpl($this->prepareFieldsForTemplate($fields));
+
+		return \Bitrix\Bizproc\Automation\Engine\Template::createByTpl($tpl)->isExternalModified();
+	}
 }
 
 class CBPWorkflowTemplateResult extends CDBResult
@@ -1270,6 +1366,11 @@ class CBPWorkflowTemplateResult extends CDBResult
 	private function getFromSerializedForm($value)
 	{
 		return WorkflowTemplateTable::getFromSerializedForm($value);
+	}
+
+	private function getFromSerializedSettings($value)
+	{
+		return WorkflowTemplateTable::decodeJson($value);
 	}
 
 	function fetch()
@@ -1301,6 +1402,11 @@ class CBPWorkflowTemplateResult extends CDBResult
 			if (array_key_exists("PARAMETERS", $res) && !is_array($res["PARAMETERS"]))
 			{
 				$res["PARAMETERS"] = $this->GetFromSerializedForm($res["PARAMETERS"]);
+			}
+
+			if (array_key_exists('SETTINGS', $res) && !is_array($res['SETTINGS']))
+			{
+				$res['SETTINGS'] = $this->getFromSerializedSettings($res['SETTINGS']);
 			}
 		}
 

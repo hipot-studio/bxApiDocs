@@ -678,6 +678,8 @@ class UIFormComponent extends \CBitrixComponent
 
 		$config = $this->initializeConfigWithColumns($config);
 
+		$this->arResult['ENTITY_AVAILABLE_FIELDS_INFO'] = $fieldsInfo['available'];
+
 		$scheme = $this->processScheme($config, $defaultConfig, $configScope, $fieldsInfo);
 
 		$this->arResult['ENTITY_CONFIG_SCOPE'] = $configScope;
@@ -689,6 +691,7 @@ class UIFormComponent extends \CBitrixComponent
 		$this->arResult['ENTITY_BB_FIELD_NAMES'] = $fieldsInfo['bb'];
 		$this->arResult['HAS_BBCODE_FIELDS'] = $fieldsInfo['hasBBCodeFields'] ?? false;
 		$this->arResult['DISABLED_HTML_CONTROLS'] = $this->arParams['DISABLED_HTML_CONTROLS'] ?? [];
+		$this->arResult['CHTML_EDITOR_PARAMS'] = $this->arParams['CHTML_EDITOR_PARAMS'] ?? [];
 	}
 
 	protected function loadLanguages(): array

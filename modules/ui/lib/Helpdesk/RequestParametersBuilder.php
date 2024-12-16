@@ -111,6 +111,11 @@ class RequestParametersBuilder
 		if (Loader::includeModule('intranet'))
 		{
 			$this->parameters['user_date_register'] = \Bitrix\Intranet\CurrentUser::get()->getDateRegister()?->getTimestamp();
+
+			if (method_exists(Intranet\User::class, 'getUserRole'))
+			{
+				$this->parameters['user_type'] = (new Intranet\User())->getUserRole()->value;
+			}
 		}
 	}
 

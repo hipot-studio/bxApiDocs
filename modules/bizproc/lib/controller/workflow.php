@@ -2,12 +2,14 @@
 
 namespace Bitrix\Bizproc\Controller;
 
+use Bitrix\Main\Loader;
 use Bitrix\Bizproc\Api\Data\UserService\UsersToGet;
 use Bitrix\Bizproc\Api\Request\WorkflowStateService\GetAverageWorkflowDurationRequest;
 use Bitrix\Bizproc\Api\Request\WorkflowStateService\GetTimelineRequest;
 use Bitrix\Bizproc\Api\Service\UserService;
 use Bitrix\Bizproc\Api\Service\WorkflowStateService;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Bizproc;
 
 class Workflow extends Base
 {
@@ -34,14 +36,14 @@ class Workflow extends Base
 
 		$request = new GetTimelineRequest(workflowId: $workflowId, userId: CurrentUser::get()->getId());
 		$response = $workflowStateService->getTimeline($request);
-		if (!$response->isSuccess())
+		$timeline = $response->getTimeline();
+
+		if (!$timeline || !$response->isSuccess())
 		{
 			$this->addErrors($response->getErrors());
 
 			return null;
 		}
-
-		$timeline = $response->getTimeline();
 
 		$workflowState = $timeline->getWorkflowState();
 
@@ -56,28 +58,74 @@ class Workflow extends Base
 		$request = new UsersToGet($userIds);
 		$response = $userService->getUsersView($request);
 
-		if ($response->isSuccess())
-		{
-			$data = $timeline->jsonSerialize();
-			$data['users'] = $response->getUserViews();
-
-			$data['stats'] = [
-				'averageDuration' => $duration = $workflowStateService->getAverageWorkflowDuration(
-					new GetAverageWorkflowDurationRequest($workflowState->getWorkflowTemplateId())
-				)->getAverageDuration(),
-				'efficiency' => $this->getWorkflowEfficiency(
-					$timeline->getExecutionTime() ?? 0,
-					$duration
-				),
-			];
-
-			return $data;
-		}
-		else
+		if (!$response->isSuccess())
 		{
 			$this->addErrors($response->getErrors());
 
 			return null;
 		}
+
+		$data = $timeline->jsonSerialize();
+		$data['users'] = $response->getUserViews();
+
+		$data['stats'] = [
+			'averageDuration' => $duration = $workflowStateService->getAverageWorkflowDuration(
+				new GetAverageWorkflowDurationRequest($workflowState->getWorkflowTemplateId())
+			)->getAverageDuration(),
+			'efficiency' => $this->getWorkflowEfficiency(
+				$timeline->getExecutionTime() ?? 0,
+				$duration
+			),
+		];
+
+		$data['biMenu'] = $this->getBiMenu($workflowState->getWorkflowTemplateId());
+
+		return $data;
+	}
+
+	private function getBiMenu(int $workflowTemplateId): ?array
+	{
+		if (!Loader::includeModule('biconnector'))
+		{
+			return null;
+		}
+
+		if (!defined('\Bitrix\BIConnector\Superset\Scope\ScopeService::BIC_SCOPE_WORKFLOW_TEMPLATE'))
+		{
+			return null;
+		}
+
+		$menu = \Bitrix\BIConnector\Superset\Scope\ScopeService::getInstance()->prepareScopeMenuItem(
+			\Bitrix\BIConnector\Superset\Scope\ScopeService::BIC_SCOPE_WORKFLOW_TEMPLATE,
+			[
+				'workflow_template_id' => $workflowTemplateId,
+			]
+		);
+
+		return $menu ?: null;
+	}
+
+	public function terminateAction(string $workflowId): bool
+	{
+		$currentUserId = $this->getCurrentUser()?->getId();
+
+		$workflowService = new \Bitrix\Bizproc\Api\Service\WorkflowService(
+			accessService: new \Bitrix\Bizproc\Api\Service\WorkflowAccessService(),
+		);
+
+		$request = new Bizproc\Api\Request\WorkflowService\TerminateWorkflowRequest(
+			workflowId: $workflowId,
+			userId: $currentUserId,
+		);
+
+		$result = $workflowService->terminateWorkflow($request);
+		if ($result->isSuccess())
+		{
+			return true;
+		}
+
+		$this->addErrors($result->getErrors());
+
+		return false;
 	}
 }

@@ -6,6 +6,7 @@ use Bitrix\Bizproc\Api\Request\WorkflowAccessService\CheckStartWorkflowRequest;
 use Bitrix\Bizproc\Api\Request\WorkflowService\StartWorkflowRequest;
 use Bitrix\Bizproc\Api\Response\Error;
 use Bitrix\Bizproc\Api\Response\WorkflowService\StartWorkflowResponse;
+use Bitrix\Bizproc\Api\Response\WorkflowService\TerminateWorkflowResponse;
 use Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Localization\Loc;
@@ -87,6 +88,56 @@ class WorkflowService
 			}
 
 			$response->setWorkflowId($instanceId);
+		}
+
+		return $response;
+	}
+
+	public function terminateWorkflow($request): TerminateWorkflowResponse
+	{
+		$errors = [];
+		$response = new TerminateWorkflowResponse();
+
+		$documentId = \CBPStateService::getStateDocumentId($request->workflowId);
+		if (!$documentId)
+		{
+			return $response->addError(new \Bitrix\Main\Error(
+				Loc::getMessage('BIZPROC_LIB_API_WORKFLOW_SERVICE_COMPLETED')
+			));
+		}
+
+		$documentStates = \CBPDocument::getActiveStates($documentId);
+		if (empty($documentStates[$request->workflowId]))
+		{
+			return $response->addError(new \Bitrix\Main\Error(
+				Loc::getMessage('BIZPROC_LIB_API_WORKFLOW_SERVICE_COMPLETED')
+			));
+		}
+
+		$canTerminate = \CBPDocument::CanUserOperateDocument(
+			\CBPCanUserOperateOperation::StartWorkflow,
+			$request->userId,
+			$documentId,
+			['DocumentStates' => $documentStates]
+		);
+
+		if (!$canTerminate)
+		{
+			$response->addError(new \Bitrix\Main\Error(
+				Loc::getMessage('BIZPROC_LIB_API_WORKFLOW_SERVICE_NO_ACCESS')
+			));
+
+			return $response;
+		}
+
+		\CBPDocument::TerminateWorkflow($request->workflowId, $documentId, $errors);
+
+		if (!empty($errors))
+		{
+			foreach ($errors as $error)
+			{
+				$response->addError(new Error($error['message'], $error['code']));
+			}
 		}
 
 		return $response;

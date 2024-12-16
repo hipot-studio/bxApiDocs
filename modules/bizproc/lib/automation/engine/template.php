@@ -402,6 +402,7 @@ class Template
 
 		$this->setRobots($robots);
 		$updateFields = [
+			'AUTO_EXECUTE' => $this->template['AUTO_EXECUTE'],
 			'TEMPLATE' => $this->template['TEMPLATE'],
 			'PARAMETERS' => $this->template['PARAMETERS'],
 			'VARIABLES' => [],
@@ -413,6 +414,19 @@ class Template
 		if (isset($this->template['NAME']))
 		{
 			$updateFields['NAME'] = $this->template['NAME'];
+		}
+
+		if (
+			isset($this->template['MODULE_ID'])
+			&& isset($this->template['ENTITY'])
+			&& isset($this->template['DOCUMENT_TYPE'])
+		)
+		{
+			$updateFields['DOCUMENT_TYPE'] = [
+				$this->template['MODULE_ID'],
+				$this->template['ENTITY'],
+				$this->template['DOCUMENT_TYPE']
+			];
 		}
 
 		try

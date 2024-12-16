@@ -110,11 +110,6 @@ class Prompt extends Text implements IPayload
 	{
 		$promptCode = $this->promptItem?->getCode();
 
-		if ($promptCode === self::SPEC_CODES['set_ai_session_name'])
-		{
-			return 0;
-		}
-
 		if (!empty(self::SPEC_CODES[$promptCode]) && Bitrix24::isDemoLicense())
 		{
 			return self::DEFAULT_USAGE_COST_DEMO_PLAN;

@@ -655,7 +655,7 @@ class RestService extends \IRestService
 		self::checkAdminPermissions();
 		$params = array_change_key_case($params, CASE_UPPER);
 
-		$fields = array(
+		$fields = [
 			'ID' => 'ID',
 			'MODIFIED' => 'MODIFIED',
 			'OWNED_UNTIL' => 'OWNED_UNTIL',
@@ -665,30 +665,36 @@ class RestService extends \IRestService
 			'STARTED' => 'STARTED',
 			'STARTED_BY' => 'STARTED_BY',
 			'TEMPLATE_ID' => 'WORKFLOW_TEMPLATE_ID',
-		);
+		];
 
-		$select = static::getSelect($params['SELECT'], $fields, array('ID', 'MODIFIED', 'OWNED_UNTIL'));
-		$filter = static::getFilter($params['FILTER'], $fields, array('MODIFIED', 'OWNED_UNTIL'));
-		$order = static::getOrder($params['ORDER'], $fields, array('MODIFIED' => 'DESC'));
+		$select = static::getSelect($params['SELECT'], $fields, ['ID', 'MODIFIED', 'OWNED_UNTIL']);
+		$filter = static::getFilter($params['FILTER'], $fields, ['MODIFIED', 'OWNED_UNTIL', 'STARTED']);
+		$order = static::getOrder($params['ORDER'], $fields, ['MODIFIED' => 'DESC']);
 
-		$iterator = WorkflowInstanceTable::getList(array(
+		$iterator = WorkflowInstanceTable::getList([
 			'select' => $select,
 			'filter' => $filter,
 			'order' => $order,
 			'limit' => static::LIST_LIMIT,
-			'offset' => (int) $n,
+			'offset' => (int)$n,
 			'count_total' => true,
-		));
+		]);
 
-		$result = array();
+		$result = [];
 		while ($row = $iterator->fetch())
 		{
 			if (isset($row['MODIFIED']))
+			{
 				$row['MODIFIED'] = \CRestUtil::convertDateTime($row['MODIFIED']);
+			}
 			if (isset($row['STARTED']))
+			{
 				$row['STARTED'] = \CRestUtil::convertDateTime($row['STARTED']);
+			}
 			if (isset($row['OWNED_UNTIL']))
+			{
 				$row['OWNED_UNTIL'] = \CRestUtil::convertDateTime($row['OWNED_UNTIL']);
+			}
 			$result[] = $row;
 		}
 
@@ -1492,7 +1498,9 @@ class RestService extends \IRestService
 					if (in_array($operation, static::$allowedOperations, true) && isset($fields[$field]))
 					{
 						if (in_array($field, $datetimeFieldsList))
+						{
 							$value = \CRestUtil::unConvertDateTime($value);
+						}
 
 						$filter[$operation.$fields[$field]] = $value;
 					}

@@ -141,6 +141,8 @@ protected function listKeysSignedParameters()
 				$arWorkflowParameters = $arTemplate["PARAMETERS"];
 				$arWorkflowVariables = $arTemplate["VARIABLES"];
 				$arWorkflowConstants = $arTemplate["CONSTANTS"];
+				$workflowTemplateShowInTimeline = $arTemplate['SETTINGS']['SHOW_IN_TIMELINE'];
+				$workflowTemplateType = $arTemplate['TYPE'];
 			}
 			else
 			{
@@ -166,6 +168,8 @@ protected function listKeysSignedParameters()
 			$workflowTemplateAutostart = 1;
 			$workflowTemplateIsSystem = 'N';
 			$workflowTemplateSort = 10;
+			$workflowTemplateShowInTimeline = 'Y';
+			$workflowTemplateType = 'default';
 
 			if (isset($_GET['init']) && $_GET['init'] == 'statemachine')
 			{
@@ -240,16 +244,18 @@ protected function listKeysSignedParameters()
 				"VARIABLES" 	=> $_POST["arWorkflowVariables"],
 				"CONSTANTS" 	=> $_POST["arWorkflowConstants"],
 				"IS_SYSTEM" 	=> $_POST["workflowTemplateIsSystem"] ?? 'N',
-				"SORT" 	=> $_POST["workflowTemplateSort"] ?? 10,
+				"SORT" 	        => $_POST["workflowTemplateSort"] ?? 10,
 				"USER_ID"		=> intval($USER->GetID()),
 				"MODIFIER_USER" => new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser),
+				'SETTINGS' 	    => ['SHOW_IN_TIMELINE' => $_POST['workflowTemplateShowInTimeline'] ?? 'N'],
+				'TYPE' 	    	=> $workflowTemplateType,
 			];
 
-			if(!is_array($arFields["VARIABLES"]))
+			if (!is_array($arFields["VARIABLES"]))
 			{
 				$arFields["VARIABLES"] = [];
 			}
-			if(!is_array($arFields["CONSTANTS"]))
+			if (!is_array($arFields["CONSTANTS"]))
 			{
 				$arFields["CONSTANTS"] = [];
 			}
@@ -492,6 +498,8 @@ protected function listKeysSignedParameters()
 		$this->arResult['TEMPLATE_DESC'] = $workflowTemplateDescription;
 		$this->arResult['TEMPLATE_AUTOSTART'] = $workflowTemplateAutostart;
 		$this->arResult['TEMPLATE_IS_SYSTEM'] = $workflowTemplateIsSystem;
+		$this->arResult['TEMPLATE_SHOW_IN_TIMELINE'] = $workflowTemplateShowInTimeline;
+		$this->arResult['TEMPLATE_TYPE'] = $workflowTemplateType;
 		$this->arResult['TEMPLATE_SORT'] = $workflowTemplateSort;
 		$this->arResult['TEMPLATE'] = $arWorkflowTemplate;
 		$this->arResult['TEMPLATE_CHECK_STATUS'] = CBPWorkflowTemplateLoader::checkTemplateActivities($arWorkflowTemplate);

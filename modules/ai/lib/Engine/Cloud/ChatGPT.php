@@ -7,6 +7,7 @@ use Bitrix\AI\Context\Message;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Engine\IContext;
 use Bitrix\AI\Engine\IQueueOptional;
+use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Result;
 use Bitrix\AI\Tokenizer\GPT;
@@ -202,5 +203,24 @@ final class ChatGPT extends CloudEngine implements IContext, IQueueOptional
 		$region = Application::getInstance()->getLicense()->getRegion();
 
 		return !in_array($region, ['ru', 'by', 'cn']);
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function isPreferredForQuality(?Quality $quality = null): bool
+	{
+		$zone = Bitrix24::getPortalZone();
+		if (\in_array($zone, ['ru', 'by', 'cn'], true))
+		{
+			return false;
+		}
+
+		$prefer = [
+			Quality::QUALITIES['translate'],
+			Quality::QUALITIES['fields_highlight'],
+		];
+
+		return $quality === null || !empty(array_intersect($quality->getRequired(), $prefer));
 	}
 }

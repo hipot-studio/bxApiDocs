@@ -32,6 +32,7 @@ class Engine
 		'text' => 'text',
 		'image' => 'image',
 		'audio' => 'audio',
+		'call' => 'call',
 	];
 
 	private const CONFIG_PREFIX = 'engine_';
