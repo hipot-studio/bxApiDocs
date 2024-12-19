@@ -85,6 +85,7 @@ class MemberService
 		int $presetId = 0,
 		?int $representativeId = null,
 		?string $role = null,
+		Type\Member\Notification\ReminderType $reminderType = Type\Member\Notification\ReminderType::NONE,
 	): Main\Result
 	{
 		$document = $this->documentRepository->getByUid($documentUid);
@@ -124,6 +125,11 @@ class MemberService
 			entityId: $entityId,
 			presetId: $presetId,
 			role: $role,
+			reminder: new Item\Member\Reminder(
+				lastSendDate: null,
+				plannedNextSendDate: null,
+				type: $reminderType,
+			),
 		));
 
 		if (!$addResult->isSuccess())
@@ -278,6 +284,7 @@ class MemberService
 					presetId: $member->presetId ?? 0,
 					representativeId: $representativeId,
 					role: $member->role,
+					reminderType: $member->reminder->type,
 				);
 
 				if (!$result->isSuccess())

@@ -129,8 +129,7 @@ final class ChangeMemberStatus implements Contract\Operation
 				$this->onStatusChangedMessageTimelineEvent();
 			}
 
-			$memberCollection = $this->memberRepository->listByDocumentId($this->document->id);
-			$this->pullService->sendMemberStatusChanged($this->document, $this->member, $memberCollection);
+			$this->pullService->sendMemberStatusChanged($this->document, $this->member);
 		}
 
 		$updateReminderSettingsResult = $this->updateReminderSettings($this->document, $this->member);

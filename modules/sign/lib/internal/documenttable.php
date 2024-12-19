@@ -2,6 +2,7 @@
 namespace Bitrix\Sign\Internal;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\Security\Random;
 use Bitrix\Sign\File;
@@ -26,6 +27,8 @@ use Bitrix\Sign\Type\DocumentStatus;
  */
 class DocumentTable extends Entity\DataManager
 {
+	use DeleteByFilterTrait;
+
 	public static function getObjectClass()
 	{
 		return Document::class;

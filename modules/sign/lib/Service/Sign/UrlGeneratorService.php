@@ -29,4 +29,17 @@ class UrlGeneratorService
 		]);
 		return $uri->getUri();
 	}
+
+	public function makeEditTemplateLink(int $templateId): string
+	{
+		$uri = new Uri('/sign/b2e/doc/0/');
+		$uri->addParams([
+			'templateId' => $templateId,
+			'stepId' => 'changePartner',
+			'noRedirect' => 'Y',
+			'mode' => 'template',
+		]);
+
+		return $uri->getUri();
+	}
 }

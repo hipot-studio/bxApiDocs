@@ -27,6 +27,16 @@ class MemberRepository
 	public const SIGN_DOCUMENT_LIST_QUERY_REF_FIELD_NAME_COMPANY = 'REF_COMPANY';
 
 	private ?UserCache $userCache = null;
+	/**
+	 * @var list<string>
+	 */
+	private array $userCacheFields = [
+		'ID',
+		'NAME',
+		'SECOND_NAME',
+		'LAST_NAME',
+		'LOGIN',
+	];
 
 	/**
 	 * @param \Bitrix\Sign\Item\Member $item
@@ -163,6 +173,7 @@ class MemberRepository
 
 		$users = $this->getUserModels($modelCollection);
 		$this->userCache?->setCache($users);
+		$this->userCache?->setCachedFields($this->userCacheFields);
 
 		$items = array_map(
 			fn(Internal\Member $member) => $this->extractItemFromModel($member,$users[$member->getEntityId()] ?? null),
@@ -1199,13 +1210,7 @@ class MemberRepository
 
 		$userModels = Main\UserTable::query()
 			->whereIn('ID', $userIds)
-			->setSelect([
-				'ID',
-				'NAME',
-				'SECOND_NAME',
-				'LAST_NAME',
-				'LOGIN',
-			])
+			->setSelect($this->userCacheFields)
 			->fetchCollection()
 		;
 

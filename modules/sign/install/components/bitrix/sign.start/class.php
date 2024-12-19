@@ -50,6 +50,7 @@ class SignStartComponent extends SignBaseComponent
 		'b2e_document' => 'b2e/doc/#doc_id#/',
 		'edit' => 'edit/#doc_id#/',
 		'b2e_settings' => 'b2e/settings/',
+		'b2e_member_dynamic_settings' => 'b2e/member_dynamic_settings/',
 		'b2e_preview' => 'b2e/preview/#doc_id#/',
 	];
 
@@ -73,6 +74,7 @@ class SignStartComponent extends SignBaseComponent
 		'b2e_document' => ['doc_id'],
 		'edit' => ['doc_id'],
 		'b2e_settings' => [],
+		'b2e_member_dynamic_settings' => [],
 		'b2e_preview' => ['doc_id'],
 	];
 
@@ -432,16 +434,15 @@ class SignStartComponent extends SignBaseComponent
 			];
 		}
 
-		if ($this->accessController->check(ActionDictionary::ACTION_B2E_PROFILE_FIELDS_DELETE))
+		if ($settingsSubitems = $this->getB2eSettingsItems())
 		{
 			$items[] = [
-				'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_SETTINGS'),
-				'URL' => $this->arParams['PAGE_URL_B2E_SETTINGS'],
-				'ID' => 'sign_b2e_settings',
-				'COUNTER' => 0,
-				'COUNTER_ID' => 'sign_b2e_settings',
+				'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_SETTINGS_MSGVER_1'),
+				'ID' => 'sign_b2e_settings_sub',
+				'ITEMS' => $settingsSubitems,
 			];
 		}
+
 		if ($this->accessController->check(ActionDictionary::ACTION_ACCESS_RIGHTS))
 		{
 			$items[] = [
@@ -459,5 +460,35 @@ class SignStartComponent extends SignBaseComponent
 	private function hasB2eKanbanMenuItem(array $items): bool
 	{
 		return !empty(array_filter($items, static fn (array $item): bool => $item['ID'] === 'sign_b2e_kanban'));
+	}
+
+	private function getB2eSettingsItems(): array
+	{
+		$items = [];
+
+		if ($this->accessController->check(ActionDictionary::ACTION_B2E_PROFILE_FIELDS_DELETE))
+		{
+			$items[] = [
+				'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_LEGAL_SETTINGS'),
+				'URL' => $this->arParams['PAGE_URL_B2E_SETTINGS'],
+				'ID' => 'sign_b2e_settings',
+				'COUNTER' => 0,
+				'COUNTER_ID' => 'sign_b2e_settings',
+			];
+		}
+
+		if (
+			Feature::instance()->isSendDocumentByEmployeeEnabled()
+			&& $this->accessController->check(ActionDictionary::ACTION_B2E_DOCUMENT_ADD)
+		)
+		{
+			$items[] = [
+				'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_MEMBER_DYNAMIC_SETTINGS'),
+				'URL' => $this->arParams['PAGE_URL_B2E_MEMBER_DYNAMIC_SETTINGS'] ?? '',
+				'ID' => 'sign_b2e_member_dynamic_settings',
+			];
+		}
+
+		return $items;
 	}
 }

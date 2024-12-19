@@ -373,4 +373,14 @@ class Container
 	{
 		return static::getService('sign.service.integration.crm.myCompany');
 	}
+
+	public function getMemberDynamicFieldProvider(): Service\Providers\MemberDynamicFieldInfoProvider
+	{
+		return static::getService('sign.service.provider.memberDynamic');
+	}
+
+	public function getFieldValueRepository(): Repository\FieldValueRepository
+	{
+		return static::getService('sign.repository.fieldValue');
+	}
 }

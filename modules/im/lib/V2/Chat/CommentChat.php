@@ -24,6 +24,7 @@ use Bitrix\Pull\Event;
  */
 class CommentChat extends GroupChat
 {
+	protected const LOCK_TIMEOUT = 3;
 	protected ?Chat $parentChat;
 	protected ?Message $parentMessage;
 	protected ?RelationCollection $parentRelations;
@@ -70,7 +71,11 @@ class CommentChat extends GroupChat
 			return $result->addError(new ChatError(ChatError::WRONG_PARENT_CHAT));
 		}
 
-		Application::getConnection()->lock(self::getLockName($message->getId()));
+		$isLocked = Application::getConnection()->lock(self::getLockName($message->getId()), self::LOCK_TIMEOUT);
+		if (!$isLocked)
+		{
+			return $result->addError(new ChatError(ChatError::CREATION_ERROR));
+		}
 
 		$chat = Chat::getInstance(static::getIdByMessage($message));
 		if ($chat instanceof self)

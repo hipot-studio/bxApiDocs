@@ -8,6 +8,7 @@ use Bitrix\Sign\Engine\Controller;
 use Bitrix\Main;
 use Bitrix\Crm;
 use Bitrix\Sign\Service;
+use Bitrix\Sign\Service\Providers\MemberDynamicFieldInfoProvider;
 
 class Fields extends Controller
 {
@@ -23,7 +24,8 @@ class Fields extends Controller
 		$crmFieldsData = (new Crm\Controller\Form\Fields\Selector())->getDataAction($options);
 		$crmFieldsData['fields'] = array_merge(
 			$crmFieldsData['fields'],
-			Service\Container::instance()->getServiceProfileProvider()->getFieldsForSelector()
+			Service\Container::instance()->getServiceProfileProvider()->getFieldsForSelector(),
+			Service\Container::instance()->getMemberDynamicFieldProvider()->getFieldsForSelector(),
 		);
 
 		return $crmFieldsData;

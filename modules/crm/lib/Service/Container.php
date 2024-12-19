@@ -630,6 +630,11 @@ class Container
 		return ServiceLocator::getInstance()->get('crm.service.integration.sign.kanban.pull');
 	}
 
+	public function getSignB2eIntegrationTypeService(): \Bitrix\Crm\Service\Integration\Sign\B2e\TypeService
+	{
+		return ServiceLocator::getInstance()->get('crm.service.integration.sign.b2e.type');
+	}
+
 	public function getClientBinder(): ClientBinder
 	{
 		return ServiceLocator::getInstance()->get('crm.binding.clientBinder');

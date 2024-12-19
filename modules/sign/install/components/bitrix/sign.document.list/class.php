@@ -845,7 +845,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 				$memberData['MEMBER_STATUS'] = self::calculateStatus($member, $document);
 			}
 
-			if (isset($this->arResult['COLUMNS']['dateSign']))
+			if (isset($this->arResult['COLUMNS']['dateSign']) && $this->isMemberSignDateAllowedToShow($member))
 			{
 				$memberData['DATE_SIGN_INFO'] = $this->getDateSignWithInfo($member->dateSigned, $currentCulture);
 			}
@@ -1558,5 +1558,15 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		return MemberStatus::isReadyForSigning($member->status)
 			&& !in_array($document->status, Type\DocumentStatus::getFinalStatuses(), true)
 			;
+	}
+
+	private function isMemberSignDateAllowedToShow(Item\Member $member): bool
+	{
+		if ($member->role === Role::ASSIGNEE && $member->status !== MemberStatus::DONE)
+		{
+			return false;
+		}
+
+		return true;
 	}
 }

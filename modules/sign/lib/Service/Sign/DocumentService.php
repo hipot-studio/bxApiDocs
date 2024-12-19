@@ -27,6 +27,7 @@ use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Type\Document\EntityType;
 use Bitrix\Sign\Type\DocumentStatus;
+use Bitrix\Sign\Type\Template\Visibility;
 
 class DocumentService
 {
@@ -125,8 +126,9 @@ class DocumentService
 			$createTemplateResult = $this->makeTemplateForDocument(
 				$documentItem,
 				$title,
-				createdByUserId: Main\Engine\CurrentUser::get()->getId(),
+				Main\Engine\CurrentUser::get()->getId(),
 			);
+
 			if (!$createTemplateResult instanceof CreateTemplateResult)
 			{
 				return $createTemplateResult;
@@ -251,7 +253,7 @@ class DocumentService
 
 	public function getComposedTitleByDocument(Item\Document $item): string
 	{
-		if (!Type\DocumentScenario::isB2EScenario($item->scenario))
+		if (!Type\DocumentScenario::isB2EScenario($item->scenario) || $item->externalId === null)
 		{
 			return (string)$item->title;
 		}
@@ -960,9 +962,18 @@ class DocumentService
 		return $this->resolveDocumentByCrmEntity(EntityType::SMART, $entityId);
 	}
 
-	private function makeTemplateForDocument(Item\Document $document, string $title, int $createdByUserId): Result|CreateTemplateResult
+	private function makeTemplateForDocument(
+		Item\Document $document,
+		string $title,
+		int $currentUserId,
+	): Result|CreateTemplateResult
 	{
-		$template = new Item\Document\Template($title ?: 'Template title', $createdByUserId);
+		$template = new Item\Document\Template(
+			title: $title ?: 'Template title',
+			createdById: $currentUserId,
+			modifiedById: $currentUserId,
+			visibility: Visibility::INVISIBLE,
+		);
 		$result = $this->documentTemplateRepository->add($template);
 		if (!$result->isSuccess())
 		{
@@ -1026,5 +1037,22 @@ class DocumentService
 		}
 
 		return $companyIds;
+	}
+
+	public function getLastCreatedEmployeeDocumentFromDocuments(int $creatorUserId, Item\DocumentCollection $documents): ?Item\Document
+	{
+		$documentIds = $documents->listIdsWithoutNull();
+		if (empty($documentIds))
+		{
+			return null;
+		}
+
+		$lastDocument = $this->documentRepository->getByCreatedFromDocumentIdsAndInitiatedByTypeAndCreatedByIdOrderedByDateCreateDesc(
+			$documentIds,
+			Type\Document\InitiatedByType::EMPLOYEE,
+			$creatorUserId,
+		);
+
+		return $lastDocument;
 	}
 }

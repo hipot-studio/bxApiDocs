@@ -262,7 +262,9 @@ class ConfigureDocument implements Contract\Operation
 			}
 		}
 
-			$response = $this->apiDocumentSigningService->configure(
+		$culture = Main\Application::getInstance()->getContext()->getCulture();
+
+		$response = $this->apiDocumentSigningService->configure(
 			new ConfigureRequest(
 				documentUid: $document->uid,
 				title: $this->documentService->getComposedTitleByDocument($document),
@@ -280,6 +282,9 @@ class ConfigureDocument implements Contract\Operation
 				titleWithoutNumber: $document->title,
 				scheme: $this->getDocumentScheme($document),
 				externalDateCreate: $document->externalDateCreate?->format('Y-m-d') ?? '',
+				dateFormat: $culture?->getDateFormat(),
+				dateTimeFormat: $culture?->getDateTimeFormat(),
+				weekStart: $culture?->getWeekStart(),
 			),
 		);
 
@@ -452,16 +457,22 @@ class ConfigureDocument implements Contract\Operation
 		{
 			return $modelFromCache;
 		}
-
-		$model = Main\UserTable::query()
-			->where('ID', $userId)
-			->setSelect([
+		$cachedFields = $this->userCache->getCachedFields();
+		if (empty($cachedFields))
+		{
+			$cachedFields = [
 				'ID',
 				'NAME',
 				'SECOND_NAME',
 				'LAST_NAME',
 				'LOGIN',
-			])
+			];
+			$this->userCache->setCachedFields($cachedFields);
+		}
+
+		$model = Main\UserTable::query()
+			->where('ID', $userId)
+			->setSelect($cachedFields)
 			->fetchObject()
 		;
 		if ($model === null)

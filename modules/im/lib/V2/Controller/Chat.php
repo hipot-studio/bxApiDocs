@@ -4,7 +4,6 @@ namespace Bitrix\Im\V2\Controller;
 
 use Bitrix\Im\Dialog;
 use Bitrix\Im\Recent;
-use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Chat\ChatFactory;
@@ -23,7 +22,6 @@ use Bitrix\Im\V2\Controller\Filter\CheckActionAccess;
 use Bitrix\Im\V2\Controller\Filter\CheckChatAccess;
 use Bitrix\Im\V2\Controller\Filter\CheckFileAccess;
 use Bitrix\Im\V2\Controller\Filter\ExtendPullWatchPrefilter;
-use Bitrix\Im\V2\Controller\Filter\UpdateStatus;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Rest\RestAdapter;
@@ -178,16 +176,10 @@ class Chat extends BaseController
 				'+prefilters' => [
 					new ExtendPullWatchPrefilter(),
 				],
-				'+postfilters' => [
-					new UpdateStatus(),
-				],
 			],
 			'loadInContext' => [
 				'+prefilters' => [
 					new ExtendPullWatchPrefilter(),
-				],
-				'+postfilters' => [
-					new UpdateStatus(),
 				],
 			],
 			'join' => [
@@ -198,16 +190,6 @@ class Chat extends BaseController
 			'extendPullWatch' => [
 				'+prefilters' => [
 					new ChatTypeFilter([OpenChat::class, OpenLineChat::class, ChannelChat::class]),
-				],
-			],
-			'read' => [
-				'+postfilters' => [
-					new UpdateStatus(),
-				],
-			],
-			'readAll' => [
-				'+postfilters' => [
-					new UpdateStatus(),
 				],
 			],
 		];

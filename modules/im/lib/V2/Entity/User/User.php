@@ -300,6 +300,7 @@ class User implements RestEntity
 				'id' => $this->getId(),
 				'name' => $this->getName(),
 				'avatar' => $this->getAvatar(),
+				'color' => $this->getColor(),
 			];
 		}
 
@@ -349,6 +350,11 @@ class User implements RestEntity
 	{
 		$option['FOR_REST'] = false;
 		$userData = $this->toRestFormat($option);
+
+		if ($option['USER_SHORT_FORMAT'])
+		{
+			return $userData;
+		}
 
 		$converter = new Converter(Converter::TO_SNAKE | Converter::TO_UPPER | Converter::KEYS);
 		$userData = $converter->process($userData);

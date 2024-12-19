@@ -292,6 +292,24 @@ class DocumentRepository
 		return 0;
 	}
 
+	public function listLastB2eFromCompanyByUserCreateId(int $id, int $limit = 10): Item\DocumentCollection
+	{
+		/** @var Internal\DocumentCollection $models */
+		$models = Internal\DocumentTable::query()
+			->addSelect('*')
+			->where('CREATED_BY_ID', $id)
+			->where('ENTITY_TYPE', EntityType::SMART_B2E)
+			->where('INITIATED_BY_TYPE', InitiatedByType::COMPANY->toInt())
+			->setLimit($limit)
+			->addOrder('DATE_CREATE', 'DESC')
+			->fetchCollection()
+		;
+		return $models === null
+			? new Item\DocumentCollection()
+			: $this->extractItemCollectionByModelCollection($models)
+		;
+	}
+
 	public function listLastByUserCreateId(int $id, int $limit = 10): Item\DocumentCollection
 	{
 		/** @var Internal\DocumentCollection $models */
@@ -586,5 +604,56 @@ class DocumentRepository
 		;
 
 		return $document === null ? null : $this->extractItemFromModel($document);
+	}
+
+	/**
+	 * @param array<int> $createdFromDocumentIds
+	 */
+	public function getByCreatedFromDocumentIdsAndInitiatedByTypeAndCreatedByIdOrderedByDateCreateDesc(
+		array $createdFromDocumentIds,
+		InitiatedByType $initiatedByType,
+		int $createdById,
+	): ?Item\Document
+	{
+		if (empty($createdFromDocumentIds))
+		{
+			return null;
+		}
+
+		$model = Internal\DocumentTable::query()
+			->setSelect(['*'])
+			->whereIn('CREATED_FROM_DOCUMENT_ID', $createdFromDocumentIds)
+			->where('INITIATED_BY_TYPE', $initiatedByType->toInt())
+			->where('CREATED_BY_ID', $createdById)
+			->addOrder('DATE_CREATE', 'DESC')
+			->fetchObject()
+		;
+
+		return $model === null
+			? null
+			: $this->extractItemFromModel($model)
+			;
+	}
+
+	public function deleteByTemplateId(int $id): Result
+	{
+		Internal\DocumentTable::deleteByFilter(
+			[
+				'=TEMPLATE_ID' => $id,
+			],
+		);
+
+		return new Result();
+	}
+
+	public function existAnyDocument(): bool
+	{
+		$document = Internal\DocumentTable::query()
+			->setSelect(['ID'])
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		return $document !== null;
 	}
 }

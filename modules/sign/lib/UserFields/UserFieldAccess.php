@@ -4,18 +4,21 @@ namespace Bitrix\Sign\UserFields;
 
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Sign\Config\LegalInfo;
+use Bitrix\Sign\Service\Providers\MemberDynamicFieldInfoProvider;
 
 class UserFieldAccess extends \Bitrix\Main\UserField\UserFieldAccess
 {
 	protected function getAvailableEntityIds(): array
 	{
+		$ids = [
+			MemberDynamicFieldInfoProvider::USER_FIELD_ENTITY_ID,
+		];
+
 		if (LegalInfo::canEdit(CurrentUser::get()->getId()))
 		{
-			return [
-				LegalInfo::USER_FIELD_ENTITY_ID,
-			];
+			$ids[] = LegalInfo::USER_FIELD_ENTITY_ID;
 		}
 
-		return [];
+		return $ids;
 	}
 }

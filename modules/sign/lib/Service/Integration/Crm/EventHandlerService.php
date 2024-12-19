@@ -334,6 +334,7 @@ class EventHandlerService
 		return match ($member->status)
 		{
 			Sign\Type\MemberStatus::STOPPED => EventData::TYPE_ON_CANCELED_BY_RESPONSIBILITY_PERSON,
+			Sign\Type\MemberStatus::DONE => EventData::TYPE_ON_ASSIGNEE_DONE,
 			default => null,
 		};
 	}

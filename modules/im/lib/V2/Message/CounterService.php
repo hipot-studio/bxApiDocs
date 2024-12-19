@@ -16,9 +16,12 @@ use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Service\Context;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
+use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use CTimeZone;
 
@@ -302,23 +305,17 @@ class CounterService
 		static::clearCache();
 	}*/
 
+	/**
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 * @throws ArgumentException
+	 */
 	public function deleteAll(bool $withNotify = false): void
 	{
-		if ($this->getContext()->getUserId() <= 0)
-		{
-			return;
-		}
-
-		$filter = ['=USER_ID' => $this->getContext()->getUserId()];
-
-		if (!$withNotify)
-		{
-			$filter['!=CHAT_TYPE'] = \IM_MESSAGE_SYSTEM; // todo: add index
-		}
-
-		MessageUnreadTable::deleteByFilter($filter);
-		static::clearCache($this->getContext()->getUserId());
-		CounterOverflowService::deleteAllByUserId($this->getContext()->getUserId());
+		Message\CounterService\CounterServiceAgent::deleteAllViaAgent(
+			$this->getContext()->getUserId(),
+			$withNotify,
+		);
 	}
 
 	public static function getChildrenWithCounters(Chat $parentChat, ?int $userId = null): array

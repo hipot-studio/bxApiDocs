@@ -29,6 +29,7 @@ class GeneralChat extends GroupChat
 	protected static ?self $instance = null;
 	protected static bool $wasSearched = false;
 	protected static Result $resultFind;
+	protected static int $idStaticCache;
 
 	protected function getDefaultType(): string
 	{
@@ -117,13 +118,20 @@ class GeneralChat extends GroupChat
 			return 0;
 		}
 
+		if (isset(self::$idStaticCache))
+		{
+			return self::$idStaticCache;
+		}
+
 		$cache = static::getCache(self::ID_CACHE_ID);
 
 		$cachedId = $cache->getVars();
 
 		if ($cachedId !== false)
 		{
-			return $cachedId ?? 0;
+			self::$idStaticCache = $cachedId ?? 0;
+
+			return self::$idStaticCache;
 		}
 
 		$result = ChatTable::query()
@@ -133,11 +141,11 @@ class GeneralChat extends GroupChat
 			->fetch() ?: []
 		;
 
-		$chatId = $result['ID'] ?? 0;
+		self::$idStaticCache = $result['ID'] ?? 0;
 		$cache->startDataCache();
-		$cache->endDataCache($chatId);
+		$cache->endDataCache(self::$idStaticCache);
 
-		return $chatId;
+		return self::$idStaticCache;
 	}
 
 	public function setManagers(array $managerIds): Chat

@@ -6,7 +6,6 @@ use Bitrix\Im\V2\Analytics\MessageAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\Controller\Filter\CheckActionAccess;
-use Bitrix\Im\V2\Controller\Filter\UpdateStatus;
 use Bitrix\Im\V2\Entity\View\ViewCollection;
 use Bitrix\Im\V2\Message\Delete\DisappearService;
 use Bitrix\Im\V2\Message\Forward\ForwardService;
@@ -20,7 +19,6 @@ use Bitrix\Im\V2\Message\MessageService;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\Engine\Response\Converter;
 
 class Message extends BaseController
 {
@@ -116,26 +114,6 @@ class Message extends BaseController
 	public function configureActions()
 	{
 		return [
-			'read' => [
-				'+postfilters' => [
-					new UpdateStatus(),
-				],
-			],
-			'list' => [
-				'+postfilters' => [
-					new UpdateStatus(),
-				],
-			],
-			'getContext' => [
-				'+postfilters' => [
-					new UpdateStatus(),
-				],
-			],
-			'tail' => [
-				'+postfilters' => [
-					new UpdateStatus(),
-				],
-			],
 			'send' => [
 				'+prefilters' => [
 					new CheckActionAccess(Chat\Permission::ACTION_SEND),

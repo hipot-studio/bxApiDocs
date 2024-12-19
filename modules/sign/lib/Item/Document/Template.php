@@ -16,6 +16,7 @@ class Template implements Item
 		public ?string $uid = null,
 		public ?Type\DateTime $dateModify = null,
 		public ?int $modifiedById = null,
+		public Type\Template\Visibility $visibility = Type\Template\Visibility::VISIBLE,
 	)
 	{
 	}

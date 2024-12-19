@@ -59,5 +59,19 @@ final class SignB2eKanbanComponent extends SignBaseComponent
 		$this->arResult['ENTITY_TYPE_ID'] = \Bitrix\Sign\Document\Entity\SmartB2e::getEntityTypeId();
 		$this->arResult['SHOW_TARIFF_SLIDER'] = $this->accessController->check(ActionDictionary::ACTION_B2E_DOCUMENT_READ)
 			&& B2eTariff::instance()->isB2eRestrictedInCurrentTariff();
+		$this->arResult['SIGN_OPEN_HELPDESK_CODE'] = 20338910;
+		$this->arResult['SHOW_TOUR_BTN_CREATE'] = !$this->isCurrentUserCreatedB2eDocuments();
+	}
+
+	private function isCurrentUserCreatedB2eDocuments(): bool
+	{
+		return (bool)\Bitrix\Sign\Service\Container::instance()
+			->getDocumentRepository()
+			->listLastB2eFromCompanyByUserCreateId(
+				\Bitrix\Main\Engine\CurrentUser::get()->getId(),
+				1,
+			)
+			->count()
+		;
 	}
 }

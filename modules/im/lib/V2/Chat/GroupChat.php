@@ -102,7 +102,7 @@ class GroupChat extends Chat implements PopupDataAggregatable
 		}
 
 		$chat = new static($params);
-		$chat->setExtranet($chat->checkIsExtranet())->setContext($context);
+		$chat->onBeforeAdd();
 		$chat->save();
 
 		if (!$chat->getChatId())
@@ -110,8 +110,7 @@ class GroupChat extends Chat implements PopupDataAggregatable
 			return $result->addError(new ChatError(ChatError::CREATION_ERROR));
 		}
 
-		$usersToInvite = $chat->resolveRelationConflicts($this->getValidUsersToAdd($chat->getUserIds()));
-		$addedUsers = $usersToInvite;
+		$addedUsers = $usersToInvite = $chat->getUserIds() ?? [];
 		if ($chat->getAuthorId())
 		{
 			$addedUsers[$chat->getAuthorId()] = $chat->getAuthorId();
@@ -148,6 +147,13 @@ class GroupChat extends Chat implements PopupDataAggregatable
 		$chat->onUserAddAfterChatCreate($usersToInvite);
 
 		return $result;
+	}
+
+	protected function onBeforeAdd(?Context $context = null): void
+	{
+		$this->setExtranet($this->checkIsExtranet())->setContext($context);
+		$this->setUserIds($this->resolveRelationConflicts($this->getValidUsersToAdd($this->getUserIds())));
+		$this->setUserCount(count($this->getUserIds()));
 	}
 
 	protected function onUserAddAfterChatCreate(array $addedUsers): void
@@ -630,7 +636,7 @@ class GroupChat extends Chat implements PopupDataAggregatable
 	{
 		if (
 			Loader::includeModule('imbot')
-			&& in_array(CopilotChatBot::getBotId(), $this->getRelations()->getUserIds(), true)
+			&& $this->getRelationFacade()?->getByUserId(CopilotChatBot::getBotId()) !== null
 		)
 		{
 			$copilotRoles = (new RoleManager())->getMainRole($this->getChatId());

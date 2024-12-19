@@ -16,7 +16,7 @@ use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\DocumentCollection;
 use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Item\MemberCollection;
-use Bitrix\Sign\Service\Container AS SignContainer;
+use Bitrix\Sign\Service\Container as SignContainer;
 use Bitrix\Sign\Service\Integration\Crm\Kanban\B2e\EntityService;
 use Bitrix\Sign\Type\DocumentStatus;
 use Bitrix\Sign\Type\MemberStatus;
@@ -33,7 +33,7 @@ final class SmartB2eDocument extends Dynamic
 	{
 		parent::__construct();
 		$this->entityService = Loader::includeModule('sign') && method_exists(
-			SignContainer::instance(), 'getCrmKanbanB2eEntityService'
+			SignContainer::instance(), 'getCrmKanbanB2eEntityService',
 		) ? SignContainer::instance()->getCrmKanbanB2eEntityService() : null;
 	}
 
@@ -46,87 +46,97 @@ final class SmartB2eDocument extends Dynamic
 			],
 			Item\SmartB2eDocument::FIELD_NAME_ASSIGNEE_MEMBER => [
 				'title' => Loc::getMessage('CRM_KANBAN_SMART_B2E_DOCUMENT_FIELD_NAME_ASSIGNEE_MEMBER'),
-				'field' => (Service\Display\Field::createByType(
+				'field' => Service\Display\Field::createByType(
 					Field::TYPE_USER,
-					Item\SmartB2eDocument::FIELD_NAME_ASSIGNEE_MEMBER
-				))->addDisplayParams([
-					'AS_ARRAY' => true
+					Item\SmartB2eDocument::FIELD_NAME_ASSIGNEE_MEMBER,
+				)->addDisplayParams([
+					'AS_ARRAY' => true,
 				]),
 			],
 			Item\SmartB2eDocument::FIELD_NAME_SIGN_CANCELLED_MEMBER => [
 				'title' => Loc::getMessage('CRM_KANBAN_SMART_B2E_DOCUMENT_FIELD_NAME_SIGN_CANCELLED_MEMBER'),
-				'field' => (Service\Display\Field::createByType(
+				'field' => Service\Display\Field::createByType(
 					Field::TYPE_USER,
-					Item\SmartB2eDocument::FIELD_NAME_SIGN_CANCELLED_MEMBER
-				))->addDisplayParams([
-					'AS_ARRAY' => true
+					Item\SmartB2eDocument::FIELD_NAME_SIGN_CANCELLED_MEMBER,
+				)->addDisplayParams([
+					'AS_ARRAY' => true,
 				]),
 			],
 			Item\SmartB2eDocument::FIELD_NAME_REVIEWER_MEMBER_LIST => [
 				'title' => Loc::getMessage('CRM_KANBAN_SMART_B2E_DOCUMENT_FIELD_NAME_REVIEWER_MEMBER_LIST'),
-				'field' => (Service\Display\Field::createByType(
+				'field' => Service\Display\Field::createByType(
 					Field::TYPE_USER,
-					Item\SmartB2eDocument::FIELD_NAME_REVIEWER_MEMBER_LIST
-				))->addDisplayParams([
-					'AS_ARRAY' => true
+					Item\SmartB2eDocument::FIELD_NAME_REVIEWER_MEMBER_LIST,
+				)->addDisplayParams([
+					'AS_ARRAY' => true,
 				]),
 			],
 			Item\SmartB2eDocument::FIELD_NAME_EDITOR_MEMBER_LIST => [
 				'title' => Loc::getMessage('CRM_KANBAN_SMART_B2E_DOCUMENT_FIELD_NAME_EDITOR_MEMBER_LIST'),
-				'field' => (Service\Display\Field::createByType(
+				'field' => Service\Display\Field::createByType(
 					Field::TYPE_USER,
-					Item\SmartB2eDocument::FIELD_NAME_EDITOR_MEMBER_LIST
-				))->addDisplayParams([
-					'AS_ARRAY' => true
+					Item\SmartB2eDocument::FIELD_NAME_EDITOR_MEMBER_LIST,
+				)->addDisplayParams([
+					'AS_ARRAY' => true,
 				]),
 			],
 			Item\SmartB2eDocument::FIELD_NAME_NOT_SIGNED_EMPLOYER_LIST => [
 				'title' => Loc::getMessage('CRM_KANBAN_SMART_B2E_DOCUMENT_FIELD_NAME_NOT_SIGNED_EMPLOYER_LIST'),
-				'field' => (Service\Display\Field::createByType(
+				'field' => Service\Display\Field::createByType(
 					UserNameListField::TYPE,
-					Item\SmartB2eDocument::FIELD_NAME_NOT_SIGNED_EMPLOYER_LIST
-				))->setVisibleCount(1)
+					Item\SmartB2eDocument::FIELD_NAME_NOT_SIGNED_EMPLOYER_LIST,
+				)->setVisibleCount(1)
 					->setFilterMemberStatus([MemberStatus::READY]),
 			],
 			Item\SmartB2eDocument::FIELD_NAME_NOT_SIGNED_COMPANY_LIST => [
 				'title' => Loc::getMessage('CRM_KANBAN_SMART_B2E_DOCUMENT_FIELD_NAME_NOT_SIGNED_COMPANY_LIST'),
-				'field' => (Service\Display\Field::createByType(
+				'field' => Service\Display\Field::createByType(
 					UserNameListField::TYPE,
-					Item\SmartB2eDocument::FIELD_NAME_NOT_SIGNED_COMPANY_LIST
-				))->setVisibleCount(1)
+					Item\SmartB2eDocument::FIELD_NAME_NOT_SIGNED_COMPANY_LIST,
+				)->setVisibleCount(1)
 					->setFilterMemberStatus([MemberStatus::WAIT]),
 			],
 			Item\SmartB2eDocument::FIELD_NAME_EMPLOYER_LIST => [
 				'title' => Loc::getMessage(
-					'CRM_KANBAN_SMART_B2E_DOCUMENT_FIELD_NAME_EMPLOYER_LIST'
+					'CRM_KANBAN_SMART_B2E_DOCUMENT_FIELD_NAME_EMPLOYER_LIST',
 				),
-				'field' => (Service\Display\Field::createByType(
+				'field' => Service\Display\Field::createByType(
 					UserNameListField::TYPE,
-					Item\SmartB2eDocument::FIELD_NAME_EMPLOYER_LIST
-				))->setVisibleCount(1)
+					Item\SmartB2eDocument::FIELD_NAME_EMPLOYER_LIST,
+				)->setVisibleCount(1)
 					->setFilterMemberStatus([MemberStatus::WAIT]),
 			],
 			Item\SmartB2eDocument::FIELD_NAME_SIGN_CANCELLED_MEMBER_LIST => [
 				'title' => Loc::getMessage('CRM_KANBAN_SMART_B2E_DOCUMENT_FIELD_NAME_SIGN_CANCELLED_MEMBER_LIST'),
-				'field' => (Service\Display\Field::createByType(
+				'field' => Service\Display\Field::createByType(
 					UserListField::TYPE,
-					Item\SmartB2eDocument::FIELD_NAME_SIGN_CANCELLED_MEMBER_LIST
-				))->setVisibleCount(4)
+					Item\SmartB2eDocument::FIELD_NAME_SIGN_CANCELLED_MEMBER_LIST,
+				)->setVisibleCount(4)
 					->setFilterMemberStatus([
-					MemberStatus::READY,
-					MemberStatus::WAIT,
-					MemberStatus::STOPPED,
-					MemberStatus::REFUSED,
-				]),
+						MemberStatus::READY,
+						MemberStatus::WAIT,
+						MemberStatus::STOPPED,
+						MemberStatus::REFUSED,
+					]),
 			],
 			Item\SmartB2eDocument::FIELD_NAME_SIGN_RESULT_STATUS => [
 				'title' => Loc::getMessage('CRM_KANBAN_SMART_B2E_DOCUMENT_FIELD_NAME_SIGN_RESULT_STATUS'),
-				'field' => (Service\Display\Field::createByType(
+				'field' => Service\Display\Field::createByType(
 					ResultStatusField::TYPE,
-					Item\SmartB2eDocument::FIELD_NAME_SIGN_RESULT_STATUS
-				)),
+					Item\SmartB2eDocument::FIELD_NAME_SIGN_RESULT_STATUS,
+				),
 			],
 		];
+	}
+
+	public function getFilterPresets(): array
+	{
+		return (new \Bitrix\Crm\Filter\Preset\SmartB2EDocument())
+			->setDefaultValues($this->getFilter()->getDefaultFieldIDs())
+			->setStagesEnabled($this->factory->isStagesEnabled())
+			->setCategoryId($this->categoryId)
+			->getDefaultPresets()
+		;
 	}
 
 	protected function getDefaultAdditionalSelectFields(): array
@@ -185,8 +195,8 @@ final class SmartB2eDocument extends Dynamic
 				static fn(Member $member): bool => in_array(
 					$member->status,
 					[MemberStatus::READY, MemberStatus::WAIT],
-					true
-				)
+					true,
+				),
 			);
 			$this->currentUserReadyForSignMemberCollection = $this->getReadyForSignMemberList($this->documentCollection);
 		}
@@ -237,7 +247,7 @@ final class SmartB2eDocument extends Dynamic
 		}
 
 		$documentIds = [];
-		foreach ($documentCollection AS $document)
+		foreach ($documentCollection as $document)
 		{
 			if ($document?->status === DocumentStatus::SIGNING)
 			{
@@ -298,22 +308,22 @@ final class SmartB2eDocument extends Dynamic
 			{
 				$isShowAssignee = true;
 				$itemData[Item\SmartB2eDocument::FIELD_NAME_NOT_SIGNED_EMPLOYER_LIST] = $this->getSigningReadyUserList(
-					$document
+					$document,
 				);
 				$itemData[Item\SmartB2eDocument::FIELD_NAME_NOT_SIGNED_COMPANY_LIST] = $this->getSigningWaitUserList(
-					$document
+					$document,
 				);
 			}
 			else
 			{
 				$itemData[Item\SmartB2eDocument::FIELD_NAME_EMPLOYER_LIST] = $this->getSigningWaitUserList(
-					$document
+					$document,
 				);
 				$reviewerUserId = $this->getReviewerUserId($document);
 
 				$itemData[Item\SmartB2eDocument::FIELD_NAME_REVIEWER_MEMBER_LIST] = $reviewerUserId;
 				$itemData[Item\SmartB2eDocument::FIELD_NAME_EDITOR_MEMBER_LIST] = $reviewerUserId ? null : $this->getEditorUserId(
-					$document
+					$document,
 				);
 			}
 		}
@@ -324,7 +334,7 @@ final class SmartB2eDocument extends Dynamic
 			if($document->status === DocumentStatus::DONE)
 			{
 				$itemData[Item\SmartB2eDocument::FIELD_NAME_SIGN_CANCELLED_MEMBER_LIST] = $this->getStoppedUserList(
-					$document
+					$document,
 				);
 			}
 			$itemData[Item\SmartB2eDocument::FIELD_NAME_SIGN_RESULT_STATUS] = $document->status;
@@ -348,7 +358,7 @@ final class SmartB2eDocument extends Dynamic
 	private function isReviewOrEditCompleted(int $documentId): bool
 	{
 		$result = $this->notCompletedReviewOrEditMemberCollection?->filter(
-			fn(Member $member): bool => $member->documentId === $documentId
+			fn(Member $member): bool => $member->documentId === $documentId,
 		);
 
 		return $result && $result->count() === 0;
@@ -358,7 +368,7 @@ final class SmartB2eDocument extends Dynamic
 	{
 		$documentId = (int)$document->id;
 		$memberCollection = $this->entityService?->getStoppedUserListByDocumentId(
-			$documentId
+			$documentId,
 		);
 
 		return $this->getUserListDto($memberCollection);
@@ -380,7 +390,7 @@ final class SmartB2eDocument extends Dynamic
 				}
 			}
 
-			$total = $memberCollection->getQueryTotal()?: $memberCollection->count();
+			$total = $memberCollection->getQueryTotal() ?: $memberCollection->count();
 		}
 
 		return new UserListDto([
@@ -393,7 +403,7 @@ final class SmartB2eDocument extends Dynamic
 	{
 		$documentId = (int)$document->id;
 		$memberCollection = $this->entityService?->getSigningReadyUserListByDocumentId(
-			$documentId
+			$documentId,
 		);
 
 		return $this->getUserListDto($memberCollection);
@@ -403,7 +413,7 @@ final class SmartB2eDocument extends Dynamic
 	{
 		$documentId = (int)$document->id;
 		$memberCollection = $this->entityService?->getSigningWaitUserListByDocumentId(
-			$documentId
+			$documentId,
 		);
 
 		return $this->getUserListDto($memberCollection);
@@ -414,11 +424,11 @@ final class SmartB2eDocument extends Dynamic
 		$documentId = (int)$document->id;
 		$memberCollection = $this->entityService?->getReviewerMemberList(
 			$documentId,
-			$this->reviewerAndEditorMemberCollection
+			$this->reviewerAndEditorMemberCollection,
 		);
 
 		$readyMember = $memberCollection->findFirst(
-			fn(Member $member): bool => $member->status === MemberStatus::READY
+			fn(Member $member): bool => $member->status === MemberStatus::READY,
 		);
 
 		if ($readyMember === null)
@@ -436,7 +446,7 @@ final class SmartB2eDocument extends Dynamic
 		$documentId = (int)$document->id;
 		$reviewMemberCollection = $this->entityService?->getReviewerMemberList(
 			$documentId,
-			$this->notCompletedReviewOrEditMemberCollection
+			$this->notCompletedReviewOrEditMemberCollection,
 		);
 
 		return $reviewMemberCollection?->getFirst()?->entityId;
@@ -448,7 +458,7 @@ final class SmartB2eDocument extends Dynamic
 
 		$memberCollection = $this->entityService?->getEditorMemberList(
 			$documentId,
-			$this->notCompletedReviewOrEditMemberCollection
+			$this->notCompletedReviewOrEditMemberCollection,
 		);
 
 		return $memberCollection?->getFirst()?->entityId;
@@ -495,13 +505,13 @@ final class SmartB2eDocument extends Dynamic
 					{
 						$configurationSection['elements'] = array_merge(
 							$elements,
-							$this->getCustomFieldsForConfig()
+							$this->getCustomFieldsForConfig(),
 						);
 					}
 
 					return $configurationSection;
 				},
-				$configuration
+				$configuration,
 			);
 		}
 
@@ -516,7 +526,7 @@ final class SmartB2eDocument extends Dynamic
 		{
 			$result = array_merge(
 				$result,
-				$this->getCustomFieldsForPopup()
+				$this->getCustomFieldsForPopup(),
 			);
 		}
 
@@ -540,20 +550,20 @@ final class SmartB2eDocument extends Dynamic
 				$editorItem = null;
 				$signItem = null;
 				$memberId = null;
-				$isDocumentCompleted = in_array($document?->status, [ DocumentStatus::DONE, DocumentStatus::STOPPED]);
+				$isDocumentCompleted = in_array($document?->status, [DocumentStatus::DONE, DocumentStatus::STOPPED]);
 
 				if ($document?->status === DocumentStatus::SIGNING)
 				{
 					$reviewerItem = $this->entityService->findCurrentUserReviewerItemByDocumentId(
 						$document?->id,
-						$this->notCompletedReviewOrEditMemberCollection
+						$this->notCompletedReviewOrEditMemberCollection,
 					);
 					$memberId = $reviewerItem?->id;
 					if ($memberId === null)
 					{
 						$editorItem = $this->entityService->findCurrentUserEditorItemByDocumentId(
 							$document?->id,
-							$this->notCompletedReviewOrEditMemberCollection
+							$this->notCompletedReviewOrEditMemberCollection,
 						);
 						$memberId = $editorItem?->id;
 					}
@@ -561,7 +571,7 @@ final class SmartB2eDocument extends Dynamic
 					if ($memberId === null)
 					{
 						$signItem = $this?->currentUserReadyForSignMemberCollection->findFirst(
-							fn(Member $member): bool => $member->documentId === $document?->id
+							fn(Member $member): bool => $member->documentId === $document?->id,
 						);
 
 						$memberId = $signItem?->id;

@@ -60,15 +60,14 @@ abstract class RolePermissionService
 			;
 
 			$smartDocumentCategory = $smartDocumentFactory->getDefaultCategory();
-			$smartB2eDocumentCategory = $smartB2eDocumentFactory->getDefaultCategory();
+			$smartB2eDocumentCategories = $smartB2eDocumentFactory->getCategories();
 
-			if (!$smartDocumentCategory || !$smartB2eDocumentCategory)
+			if (!$smartDocumentCategory || empty($smartB2eDocumentCategories))
 			{
 				continue;
 			}
 
 			$smartDocumentCategoryId = $smartDocumentCategory->getId();
-			$smartB2eDocumentCategoryId = $smartB2eDocumentCategory->getId();
 
 			$contactEntityName = CCrmOwnerType::ContactName;
 			$smartDocumentEntityName = CCrmOwnerType::SmartDocumentName;
@@ -87,10 +86,18 @@ abstract class RolePermissionService
 				$this->getPermissionEntity(CCrmOwnerType::SmartDocument, $smartDocumentCategoryId);
 			$rolePerms[$smartDocumentPermissionEntity] = $preparedValues[$smartDocumentEntityName];
 
-			$smartB2eDocumentPermissionEntity =
-				$this->getPermissionEntity(CCrmOwnerType::SmartB2eDocument, $smartB2eDocumentCategoryId);
-			$rolePerms[$smartB2eDocumentPermissionEntity] = $preparedValues[$smartB2eDocumentEntityName];
+			foreach($smartB2eDocumentCategories as $category)
+			{
+				$smartB2eDocumentCategoryId = $category->getId();
+				if ($smartB2eDocumentCategoryId === null)
+				{
+					continue;
+				}
 
+				$smartB2eDocumentPermissionEntity =
+					$this->getPermissionEntity(CCrmOwnerType::SmartB2eDocument, $smartB2eDocumentCategoryId);
+				$rolePerms[$smartB2eDocumentPermissionEntity] = $preparedValues[$smartB2eDocumentEntityName];
+			}
 			$fields = [
 				'RELATION' => $rolePerms,
 				'NAME' => $roleTitle,

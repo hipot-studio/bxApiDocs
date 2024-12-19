@@ -3459,18 +3459,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 
 	protected function getManagerList(): array
 	{
-		$userIds = [];
-		$relations = $this->getRelations();
-
-		foreach ($relations as $relation)
-		{
-			if ($relation->getManager() ?? false)
-			{
-				$userIds[] = $relation->getUserId();
-			}
-		}
-
-		return $userIds;
+		return array_values($this->getRelationFacade()?->getManagerOnly()->getUserIds() ?? []);
 	}
 
 	protected function getMuteList(bool $fullList = false): array

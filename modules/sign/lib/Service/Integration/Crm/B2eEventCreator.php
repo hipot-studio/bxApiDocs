@@ -166,6 +166,7 @@ final class B2eEventCreator
 				}
 				break;
 			case EventData::TYPE_ON_SENDING:
+			case EventData::TYPE_ON_ASSIGNEE_DONE:
 				$this->notifyActivityChange($crmController, $itemIdentifier);
 				break;
 		}

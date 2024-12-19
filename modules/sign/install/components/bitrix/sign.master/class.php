@@ -20,11 +20,14 @@ use Bitrix\Sign\Item\Api\Client\DomainRequest;
 use Bitrix\Sign\Main\Application;
 use Bitrix\Sign\Main\User;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Type\Document\InitiatedByType;
 
 \CBitrixComponent::includeComponentClass('bitrix:sign.base');
 
 class SignMasterComponent extends SignBaseComponent
 {
+	private const TEMPLATE_ID_URL_PARAMETER_NAME = 'templateId';
+
 	/**
 	 * Restricted size for images.
 	 */
@@ -66,20 +69,44 @@ class SignMasterComponent extends SignBaseComponent
 	 */
 	protected function beforeActions(): void
 	{
-		$document = $this->getResult('DOCUMENT');
-
-		if (!$document)
-		{
-			$entityType = $this->getStringParam('ENTITY_TYPE_ID');
-			$entityId = $this->getRequest($this->getStringParam('VAR_DOC_ID'));
-			if ($entityId)
-			{
-				$document = Document::resolveByEntity($entityType, $entityId);
-				$this->setResult('DOCUMENT', $document);
-			}
-		}
+		$document = $this->getDocument();
+		$this->setResult('DOCUMENT', $document);
+		$this->setResult('TEMPLATE_UID', $this->getTemplateUid());
 
 		$this->setResult('RESPONSIBLE_NAME', $this->getResponsibleName($document));
+	}
+
+	private function getDocument(): ?Document
+	{
+		$document = $this->getResult('DOCUMENT');
+		if ($document !== null)
+		{
+			return $document;
+		}
+
+		$entityType = $this->getStringParam('ENTITY_TYPE_ID');
+		$entityId = (int)$this->getRequest($this->getStringParam('VAR_DOC_ID'));
+
+		$document = $entityId ? Document::resolveByEntity($entityType, $entityId) : null;
+		if ($document !== null)
+		{
+			return $document;
+		}
+
+		$templateId = (int)$this->getRequest(self::TEMPLATE_ID_URL_PARAMETER_NAME);
+		if ($templateId < 1)
+		{
+			return null;
+		}
+
+		$documentRepository = Container::instance()->getDocumentRepository();
+		$document = $documentRepository->getByTemplateId((int)$templateId);
+		if ($document?->id === null)
+		{
+			return null;
+		}
+
+		return Document::getById($document->id);
 	}
 
 	/**
@@ -121,6 +148,7 @@ class SignMasterComponent extends SignBaseComponent
 		$this->setResult('WIZARD_CONFIG', $this->getWizardConfig());
 		$this->setResult('STAGE_ID', $document?->getStageId());
 		$this->setResult('DOCUMENT_MODE', $this->getDocumentMode());
+		$this->setResult('INITIATED_BY_TYPE', $this->getInitiatedByType()->value);
 		$this->setResult('BLANKS', $this->getBlanks());
 		$this->setResult('IS_MASTER_PERMISSIONS_FOR_USER_DENIED', $this->isMasterPermissionsForUserDenied($document));
 		$isSesComAgreementAccepted = $this->isSesComAgreementAccepted();
@@ -348,5 +376,26 @@ class SignMasterComponent extends SignBaseComponent
 		}
 
 		return $mode;
+	}
+
+	private function getInitiatedByType(): InitiatedByType
+	{
+		return $this->getDocumentMode() === self::MODE_TEMPLATE
+			? InitiatedByType::EMPLOYEE
+			: InitiatedByType::COMPANY
+		;
+	}
+
+	private function getTemplateUid(): ?string
+	{
+		$templateId = (int)$this->getRequest(self::TEMPLATE_ID_URL_PARAMETER_NAME);
+		if ($templateId < 1)
+		{
+			return null;
+		}
+
+		$template = Container::instance()->getDocumentTemplateRepository()->getById((int)$templateId);
+
+		return $template?->uid;
 	}
 }

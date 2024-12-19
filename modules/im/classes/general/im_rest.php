@@ -6790,29 +6790,32 @@ class CIMRestService extends IRestService
 	private static function bindEvent($appId, $appCode, $bitrixEventModule, $bitrixEventName, $restEventName, $restEventHandler)
 	{
 		$res = \Bitrix\Rest\EventTable::getList(array(
-													'filter' => array(
-														'=EVENT_NAME' => mb_strtoupper($restEventName),
-														"=APPLICATION_TOKEN" => $appCode,
-														'=APP_ID' => $appId,
-													),
-													'select' => array('ID')
-												));
+			'filter' => array(
+				'=EVENT_NAME' => mb_strtoupper($restEventName),
+				'=APPLICATION_TOKEN' => $appCode,
+				'=APP_ID' => $appId,
+			),
+			'select' => array('ID')
+		));
+
 		if ($handler = $res->fetch())
 		{
 			return true;
 		}
 
-		$result = \Bitrix\Rest\EventTable::add(array(
-												   "APP_ID" => $appId,
-												   "EVENT_NAME" => mb_strtoupper($restEventName),
-												   "EVENT_HANDLER" => $restEventHandler,
-												   "APPLICATION_TOKEN" => $appCode,
-												   "USER_ID" => 0,
-											   ));
-		if($result->isSuccess())
-		{
-			\Bitrix\Rest\Event\Sender::bind($bitrixEventModule, $bitrixEventName);
-		}
+		$updateFields = [
+			'APP_ID' => $appId,
+			'EVENT_NAME' => mb_strtoupper($restEventName),
+			'EVENT_HANDLER' => $restEventHandler,
+			'APPLICATION_TOKEN' => $appCode,
+		];
+		$insertFields = [
+			...$updateFields,
+			'USER_ID' => 0,
+		];
+
+		\Bitrix\Rest\EventTable::merge($insertFields, $updateFields);
+		\Bitrix\Rest\Event\Sender::bind($bitrixEventModule, $bitrixEventName);
 
 		return true;
 	}
