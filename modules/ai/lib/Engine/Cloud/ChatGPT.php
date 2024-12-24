@@ -23,7 +23,7 @@ final class ChatGPT extends CloudEngine implements IContext, IQueueOptional
 
 	protected const CATEGORY_CODE = Engine::CATEGORIES['text'];
 	protected const ENGINE_NAME = 'gpt-3.5-turbo';
-	protected const ENGINE_CODE = 'ChatGPT';
+	public const ENGINE_CODE = 'ChatGPT';
 
 	protected const URL_COMPLETIONS = 'https://api.openai.com/v1/chat/completions';
 
@@ -175,11 +175,14 @@ final class ChatGPT extends CloudEngine implements IContext, IQueueOptional
 	public function getResultFromRaw(mixed $rawResult, bool $cached = false): Result
 	{
 		$text = $rawResult['choices'][0]['message']['content'] ?? null;
-		$dataJson =  null;
+		$dataJson = null;
+
+		$text = $this->restoreReplacements($text);
+		$rawResult['choices'][0]['message']['content'] = $text;
 
 		if ($text && $this->isModeResponseJson)
 		{
-			$dataJson = json_decode($rawResult['choices'][0]['message']['content'], true) ?? null;
+			$dataJson = json_decode($text, true) ?? null;
 		}
 
 		return new Result($rawResult, $text, $cached, $dataJson);

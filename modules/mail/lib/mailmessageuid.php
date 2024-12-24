@@ -7,9 +7,10 @@ use Bitrix\Mail\Helper\MessageEventManager;
 use Bitrix\Mail\Internals\MessageUploadQueueTable;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\Entity;
-use Bitrix\Main\ORM\EntityError;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Localization;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
 
 Localization\Loc::loadMessages(__FILE__);
 
@@ -471,6 +472,12 @@ class MailMessageUidTable extends Entity\DataManager
 			'DELETE_TIME' => array(
 				'data_type' => 'integer',
 				'default' => 0,
+			),
+			new Reference(
+				'MESSAGE_TABLE',
+				MailMessageTable::class,
+				Join::on('this.MESSAGE_ID', 'ref.ID')
+					->whereColumn('this.MAILBOX_ID', 'ref.MAILBOX_ID')
 			),
 		);
 	}

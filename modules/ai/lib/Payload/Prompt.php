@@ -72,7 +72,19 @@ class Prompt extends Text implements IPayload
 	public function getData(): string
 	{
 		$prompt = $this->promptItem ? $this->promptItem->getPrompt() : $this->payload;
-		return (new Formatter($prompt, $this->engine))->format($this->markers);
+
+		$markers = $this->getMarkers();
+		if ($markers && $this->hasHiddenTokens())
+		{
+			$markersWithHiddenTokens = [];
+			foreach ($markers as $key => $marker)
+			{
+				$markersWithHiddenTokens[$key] = $this->hideTokens($marker);
+			}
+			$markers = $markersWithHiddenTokens;
+		}
+
+		return (new Formatter($prompt, $this->engine))->format($markers);
 	}
 
 	/**

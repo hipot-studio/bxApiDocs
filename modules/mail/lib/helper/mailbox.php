@@ -3,14 +3,18 @@
 namespace Bitrix\Mail\Helper;
 
 use Bitrix\Mail;
+use Bitrix\Mail\Internals\MessageUploadQueueTable;
 use Bitrix\Mail\MailboxTable;
+use Bitrix\Mail\MailMessageUidTable;
 use Bitrix\Mail\MailServicesTable;
 use Bitrix\Main;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Mail\Helper;
 use Bitrix\Mail\MailMessageTable;
+use Bitrix\Main\ORM\Query\Result;
 
 abstract class Mailbox
 {
@@ -445,7 +449,7 @@ abstract class Mailbox
 		$resyncTime = new Main\Type\DateTime();
 		$resyncTime->add('- '.static::MESSAGE_RESYNCHRONIZATION_TIME.' seconds');
 
-		return Mail\MailMessageUidTable::getList([
+		return MailMessageUidTable::getList([
 			'select' => array(
 				'MSG_UID',
 				'DIR_MD5',
@@ -563,7 +567,7 @@ abstract class Mailbox
 			When folders are successfully resynchronized,
 			allow messages that were left to be moved to be deleted
 			*/
-			Mail\MailMessageUidTable::updateList(
+			MailMessageUidTable::updateList(
 				[
 					'=MAILBOX_ID' => $this->mailbox['ID'],
 					'=MSG_UID' => 0,
@@ -716,7 +720,7 @@ abstract class Mailbox
 
 		$result = true;
 
-		$entity = Mail\MailMessageUidTable::getEntity();
+		$entity = MailMessageUidTable::getEntity();
 		$connection = $entity->getConnection();
 
 		$whereConditionForOldMessages = sprintf(
@@ -840,7 +844,7 @@ abstract class Mailbox
 
 		$minSyncTime = Mail\MailboxDirectory::getMinSyncTime($this->mailbox['ID']);
 
-		Mail\MailMessageUidTable::deleteList(
+		MailMessageUidTable::deleteList(
 			[
 				'=MAILBOX_ID'  => $this->mailbox['ID'],
 				'>DELETE_TIME' => 0,
@@ -924,14 +928,37 @@ abstract class Mailbox
 
 		$params['filter'] = $filter;
 
-		$result = Mail\MailMessageUidTable::getList($params);
+		$result = MailMessageUidTable::getList($params);
 
 		return $fetch ? $result->fetchAll() : $result;
 	}
 
-	protected function registerMessage(&$fields, $replaces = null, $isOutgoing = false)
+	protected function findMessageInUploadQueue(
+		$idFromHeaderMessage,
+	): Result
+	{
+		return MessageUploadQueueTable::getList([
+			'select' => [
+				'ID',
+				'MESSAGE_ID' => 'UID_TABLE.MESSAGE_ID',
+			],
+			'filter'=> [
+				'=SYNC_STAGE' => -1,
+				'=SYNC_LOCK' => 0,
+				'=MAILBOX_ID'=> $this->mailbox['ID'],
+				'=UID_TABLE.IS_OLD' => MailMessageUidTable::DOWNLOADED,
+				'=UID_TABLE.DELETE_TIME' => 0,
+				'=UID_TABLE.MESSAGE_TABLE.MSG_ID' => $idFromHeaderMessage,
+			],
+			'limit' => 1,
+		]);
+	}
+
+	protected function registerMessage(&$fields, $replaces = null, $isOutgoing = false, string $idFromHeaderMessage = ''): bool
 	{
 		$now = new Main\Type\DateTime();
+
+		$replacingMessageFromQueue = false;
 
 		if (!empty($replaces))
 		{
@@ -948,7 +975,7 @@ abstract class Mailbox
 					];
 				}
 
-				$exists = Mail\MailMessageUidTable::getList([
+				$exists = MailMessageUidTable::getList([
 					'select' => [
 						'ID',
 						'MESSAGE_ID',
@@ -968,12 +995,24 @@ abstract class Mailbox
 				];
 			}
 		}
+		else if ($isOutgoing && $idFromHeaderMessage !== '')
+		{
+			/*
+			 * Find and link an message if the unloading of outgoing emails to the "Sent" folder
+			 * on the service is disabled and the service itself created the email in this folder.
+			 */
+			$exists = $this->findMessageInUploadQueue(
+				$idFromHeaderMessage,
+			)->fetch();
+
+			$replacingMessageFromQueue = true;
+		}
 
 		if (!empty($exists))
 		{
 			$fields['MESSAGE_ID'] = $exists['MESSAGE_ID'];
 
-			$result = (bool) Mail\MailMessageUidTable::updateList(
+			$result = (bool) MailMessageUidTable::updateList(
 				array(
 					'=ID' => $exists['ID'],
 					'=MAILBOX_ID' => $this->mailbox['ID'],
@@ -992,6 +1031,14 @@ abstract class Mailbox
 					)
 				)
 			);
+
+			if ($replacingMessageFromQueue && $result)
+			{
+				Mail\Internals\MessageUploadQueueTable::delete(array(
+					'ID' => $exists['ID'],
+					'MAILBOX_ID' => (int) $this->mailbox['ID'],
+				));
+			}
 		}
 		else
 		{
@@ -1010,13 +1057,13 @@ abstract class Mailbox
 				]
 			);
 
-			Mail\MailMessageUidTable::checkFields($checkResult, null, $addFields);
+			MailMessageUidTable::checkFields($checkResult, null, $addFields);
 			if (!$checkResult->isSuccess())
 			{
 				return false;
 			}
 
-			Mail\MailMessageUidTable::mergeData($addFields, [
+			MailMessageUidTable::mergeData($addFields, [
 				'MSG_UID' => $addFields['MSG_UID'],
 				'HEADER_MD5' => $addFields['HEADER_MD5'],
 				'SESSION_ID' => $addFields['SESSION_ID'],
@@ -1031,7 +1078,7 @@ abstract class Mailbox
 
 	protected function updateMessagesRegistry(array $filter, array $fields, $mailData = array())
 	{
-		return Mail\MailMessageUidTable::updateList(
+		return MailMessageUidTable::updateList(
 			array_merge(
 				$filter,
 				array(
@@ -1054,7 +1101,7 @@ abstract class Mailbox
 		{
 			$filterForCheck = array_merge(
 				$filter,
-				Mail\MailMessageUidTable::getPresetRemoveFilters(),
+				MailMessageUidTable::getPresetRemoveFilters(),
 				[
 					'=MAILBOX_ID' => $this->mailbox['ID'],
 					/*
@@ -1067,7 +1114,7 @@ abstract class Mailbox
 				]
 			);
 
-			$messagesForRemove = Mail\MailMessageUidTable::getList([
+			$messagesForRemove = MailMessageUidTable::getList([
 				'select' => [
 					'ID',
 					'MAILBOX_ID',
@@ -1105,7 +1152,7 @@ abstract class Mailbox
 
 		if($messageExistInTheOriginalMailbox === false)
 		{
-			return Mail\MailMessageUidTable::deleteListSoft(
+			return MailMessageUidTable::deleteListSoft(
 				array_merge(
 					$filter,
 					[
@@ -1159,7 +1206,7 @@ abstract class Mailbox
 
 	protected function linkMessage($uid, $id)
 	{
-		$result = Mail\MailMessageUidTable::update(
+		$result = MailMessageUidTable::update(
 			array(
 				'ID' => $uid,
 				'MAILBOX_ID' => $this->mailbox['ID'],
@@ -1431,9 +1478,13 @@ abstract class Mailbox
 				'Cc'         => $excerpt['__FIELD_CC'],
 				'Bcc'        => $excerpt['__FIELD_BCC'],
 				'Message-Id' => sprintf('<%s>', $excerpt['__MSG_ID']),
-				'X-Bitrix-Mail-Message-UID' => $excerpt['ID'],
 			],
 		];
+
+		if (Option::get('mail', 'embed_local_id_in_outgoing_message_header', 'Y') == 'Y')
+		{
+			$outgoingParams['HEADER']['X-Bitrix-Mail-Message-UID'] = $excerpt['ID'];
+		}
 
 		if(isset($excerpt['__IN_REPLY_TO']))
 		{

@@ -486,7 +486,7 @@ abstract class Engine
 		}
 
 		Analytics::engineGenerateResultEvent(
-			($cached) ? ' generate_reusage' : 'generate',
+			($cached) ? 'generate_reusage' : 'generate',
 			$this,
 			$this->analyticData
 		);
@@ -796,5 +796,16 @@ abstract class Engine
 	{
 		$quality = new Quality(['json_response_mode']);
 		$this->isModeResponseJson = $this->hasQuality($quality) && $enable;
+	}
+
+	protected function restoreReplacements(mixed $value): mixed
+	{
+		$processedReplacements = $this->getPayload()?->getProcessedReplacements();
+		if ($processedReplacements && \is_string($value))
+		{
+			$value = strtr($value, array_flip($processedReplacements));
+		}
+
+		return $value;
 	}
 }

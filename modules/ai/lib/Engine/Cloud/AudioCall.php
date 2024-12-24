@@ -13,7 +13,7 @@ final class AudioCall extends CloudEngine implements IQueueOptional
 {
 	protected const CATEGORY_CODE = Engine::CATEGORIES['call'];
 	protected const ENGINE_NAME = 'AudioCall';
-	protected const ENGINE_CODE = 'AudioCall';
+	public const ENGINE_CODE = 'AudioCall';
 	protected const URL_COMPLETIONS = 'https://b24ai.bitrix.info/v1/call/transcriptions';
 
 	public function getName(): string

@@ -13,7 +13,7 @@ use Bitrix\Main\Web\Json;
 class Kandinsky extends ImageCloudEngine implements IContext, IQueueOptional
 {
 	protected const ENGINE_NAME = 'Kandinsky';
-	protected const ENGINE_CODE = 'Kandinsky';
+	public const ENGINE_CODE = 'Kandinsky';
 
 	protected const URL_COMPLETIONS = 'https://api-key.fusionbrain.ai/key/api/v1/';
 	protected const URL_COMPLETIONS_QUEUE_PATH = '/api/v1/kandinsky/image/generation';

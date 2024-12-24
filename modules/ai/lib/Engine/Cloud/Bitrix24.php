@@ -16,6 +16,7 @@ final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 {
 	protected const CATEGORY_CODE = Engine::CATEGORIES['text'];
 	protected const ENGINE_NAME = 'BitrixGPT 4x';
+
 	public const ENGINE_CODE = 'b24ai';
 
 	protected const URL_COMPLETIONS = 'https://b24ai.bitrix.info/v1/chat/completions';
@@ -132,9 +133,12 @@ final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 		$text = $rawResult['choices'][0]['message']['content'] ?? null;
 		$dataJson = null;
 
+		$text = $this->restoreReplacements($text);
+		$rawResult['choices'][0]['message']['content'] = $text;
+
 		if ($text && $this->isModeResponseJson)
 		{
-			$dataJson = json_decode($rawResult['choices'][0]['message']['content'], true) ?? null;
+			$dataJson = json_decode($text, true) ?? null;
 		}
 
 		return new Result($rawResult, $text, $cached, $dataJson);
@@ -142,6 +146,16 @@ final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 
 	public function hasQuality(Quality $quality): bool
 	{
+		if (array_intersect($quality->getRequired(), [Quality::QUALITIES['give_advice']]))
+		{
+			return false;
+		}
+
+		if (array_intersect($quality->getRequired(), [Quality::QUALITIES['meeting_processing']]))
+		{
+			return false;
+		}
+
 		return true;
 	}
 

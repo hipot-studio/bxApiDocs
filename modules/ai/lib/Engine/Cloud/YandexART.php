@@ -15,7 +15,7 @@ use CFile;
 class YandexART extends ImageCloudEngine implements IContext, IQueueOptional
 {
 	protected const ENGINE_NAME = 'YandexART';
-	protected const ENGINE_CODE = 'YandexART';
+	public const ENGINE_CODE = 'YandexART';
 
 	protected const URL_COMPLETIONS = 'https://llm.api.cloud.yandex.net/foundationModels/v1/imageGenerationAsync';
 	protected const URL_COMPLETIONS_QUEUE_PATH = '/api/v1/image/generation';
