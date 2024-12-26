@@ -182,6 +182,7 @@ class WorkflowFacesView implements \JsonSerializable
 		}
 
 		$result = [
+			'workflowId' => $this->workflowId,
 			'steps' => $steps,
 			'timeStep' => $data->getTimeStep()?->getData(),
 			'isWorkflowFinished' => $data->getIsWorkflowFinished(),
@@ -341,12 +342,15 @@ class WorkflowFacesView implements \JsonSerializable
 			$totalDuration = $authorDuration + $completedDuration + $doneDuration;
 		}
 
+		$currentDuration = $this->getCurrentDuration();
+
 		return [
 			'author' => $authorDuration,
 			'running' => $runningDuration,
 			'completed' => $completedDuration,
 			'done' => $doneDuration,
 			'total' => $totalDuration !== null ? DurationFormatter::roundUpTimeInSeconds($totalDuration) : null,
+			'current' => $currentDuration !== null ? DurationFormatter::roundUpTimeInSeconds($currentDuration) : null,
 		];
 	}
 
@@ -422,6 +426,13 @@ class WorkflowFacesView implements \JsonSerializable
 				? ($finishWorkflowTimestamp - $startWorkflowTimestamp)
 				: null
 		);
+	}
+
+	private function getCurrentDuration(): ?int
+	{
+		$startWorkflowTimestamp = $this->getDateTimeTimestamp($this->workflow?->getStarted());
+
+		return $startWorkflowTimestamp ? time() - $startWorkflowTimestamp : null;
 	}
 
 	private function getRunningTask(): array|false

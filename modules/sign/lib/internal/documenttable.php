@@ -183,6 +183,10 @@ class DocumentTable extends Entity\DataManager
 				->configureTitle('Template ID')
 				->configureNullable()
 			,
+			(new IntegerField('CHAT_ID'))
+				->configureTitle('Chat ID')
+				->configureNullable()
+			,
 			(new IntegerField('CREATED_FROM_DOCUMENT_ID'))
 				->configureTitle('Created from document ID')
 				->configureNullable()
@@ -191,6 +195,14 @@ class DocumentTable extends Entity\DataManager
 				->configureTitle('Initiated by type')
 				->configureRequired()
 				->configureDefaultValue(InitiatedByType::COMPANY->toInt())
+			,
+			(new IntegerField('HCMLINK_COMPANY_ID'))
+				->configureTitle('HcmLink Company ID')
+				->configureNullable()
+			,
+			(new Entity\DatetimeField('DATE_STATUS_CHANGED'))
+				->configureTitle('Status changed date')
+				->configureNullable()
 			,
 		];
 	}

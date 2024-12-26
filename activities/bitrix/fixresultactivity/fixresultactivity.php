@@ -30,7 +30,6 @@ class CBPFixResultActivity extends BaseActivity
 	public const ALL_PARTICIPANTS = 2;
 	public const SELECTED_USERS = 3;
 
-
 	public function __construct($name)
 	{
 		parent::__construct($name);

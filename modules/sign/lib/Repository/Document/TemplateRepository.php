@@ -7,7 +7,6 @@ use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Result;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Sign\Internal\Document\EO_Template_Query;
 use Bitrix\Sign\Internal\Document\Template as TemplateModel;
 use Bitrix\Sign\Internal\Document\TemplateCollection as TemplateCollectionModel;
 use Bitrix\Sign\Internal\Document\TemplateTable;

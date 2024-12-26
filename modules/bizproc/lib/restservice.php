@@ -1068,7 +1068,14 @@ class RestService extends \IRestService
 			throw new RestException("You can delete ONLY templates created by current application");
 		}
 
-		\CBPWorkflowTemplateLoader::Delete($tpl['ID']);
+		try
+		{
+			\CBPWorkflowTemplateLoader::Delete($tpl['ID']);
+		}
+		catch (\CBPInvalidOperationException $e)
+		{
+			throw new RestException($e->getMessage());
+		}
 	}
 
 	/**

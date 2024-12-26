@@ -9,16 +9,26 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
+use Bitrix\Sign\Type\Field\FrontFieldCategory;
 use Bitrix\Sign\Type\FieldType;
 
 final class MemberDynamicFieldInfoProvider extends InfoProvider
 {
 	public const USER_FIELD_ENTITY_ID = 'SIGN_MEMBER_DYNAMIC';
 
+	/**
+	 * @return array{DINAMYC_MEMBER: array{
+	 *     CAPTION: string,
+	 *     FIELDS: array,
+	 *     MODULE_ID: string,
+	 *     DYNAMIC_ID: string,
+	 * 	}
+	 *	}
+	 */
 	public function getFieldsForSelector(): array
 	{
 		return [
-			'DYNAMIC_MEMBER' => [
+			FrontFieldCategory::DYNAMIC_MEMBER->value => [
 				'CAPTION' => Loc::getMessage('SIGN_SERVICE_PROVIDER_TEMPLATE_DYNAMIC_CAPTION'),
 				'FIELDS' => parent::getFieldsForSelector(),
 				'MODULE_ID' => 'sign',

@@ -8,10 +8,9 @@ use Bitrix\Location\Service\FormatService;
 use Bitrix\Sign\Helper\Field\NameHelper;
 use Bitrix\Sign\Integration\CRM;
 use Bitrix\Sign\Service\Container;
-use Bitrix\Sign\Service\Providers\LegalInfoProvider;
+use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkFieldService;
 use Bitrix\Sign\Service\Providers\MemberDynamicFieldInfoProvider;
 use Bitrix\Sign\Service\Providers\ProfileProvider;
-use Bitrix\Sign\Service\Sign\MemberService;
 use Bitrix\Sign\Type\BlockCode;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Type\FieldType;
@@ -22,25 +21,24 @@ use CCrmOwnerType;
 
 class FieldValue
 {
-	private array $legalFieldsByType;
 	private readonly ProfileProvider $profileProvider;
-	private readonly MemberService $memberService;
 	/**
 	 * @var array<int, <string, array>>
 	 */
 	private array $fieldSetMemoryCacheByMemberId = [];
 	private readonly MemberDynamicFieldInfoProvider $memberDynamicFieldProvider;
+	private readonly HcmLinkFieldService $hcmLinkFieldService;
 
 	public function __construct(
 		?ProfileProvider $profileProvider = null,
-		?MemberService $memberService = null,
 		?MemberDynamicFieldInfoProvider $memberDynamicFieldProvider = null,
+		?HcmLinkFieldService $hcmLinkFieldService = null,
 	)
 	{
 		$container = Container::instance();
 		$this->profileProvider = $profileProvider ?? $container->getServiceProfileProvider();
-		$this->memberService = $memberService ?? $container->getMemberService();
 		$this->memberDynamicFieldProvider = $memberDynamicFieldProvider ?? $container->getMemberDynamicFieldProvider();
+		$this->hcmLinkFieldService = $hcmLinkFieldService ?? $container->getHcmLinkFieldService();
 	}
 
 	public function createByBlock(
@@ -71,6 +69,7 @@ class FieldValue
 			BlockCode::isRequisites($block->code) => $this->getRequisitesFieldValue($field, $member),
 			BlockCode::isB2eReference($block->code) => $this->getB2eReferenceFieldValue($block, $field, $member, $document),
 			BlockCode::isMemberDynamic($block->code) => $this->getMemberDynamicFieldValue($field, $member),
+			BlockCode::isHcmLinkReference($block->code) => $this->getHcmLinkFieldValue($field, $member, $document),
 			default => null,
 		};
 	}
@@ -343,53 +342,6 @@ class FieldValue
 		return null;
 	}
 
-	public function createProfileFieldDataByRequired(
-		Item\B2e\RequiredField $requiredField,
-		Item\Member $member,
-		?Item\Document $document = null,
-	): ?Item\B2e\Provider\ProfileFieldData
-	{
-		$legalField = $this->getLegalInfoFieldByType($requiredField->type);
-		if (!$legalField)
-		{
-			return null;
-		}
-
-		$userId = $this->memberService->getUserIdForMember($member, $document);
-
-		return $this->profileProvider->loadFieldData($userId, $legalField->name);
-	}
-
-	public function createByRequired(
-		Item\B2e\RequiredField $requiredField,
-		Item\Member $member,
-		?Item\Document $document = null,
-	): ?Item\Field\Value
-	{
-		$profileFieldData = $this->createProfileFieldDataByRequired($requiredField, $member, $document);
-
-		if ($profileFieldData === null || $profileFieldData->value === '')
-		{
-			return null;
-		}
-
-		return new Item\Field\Value(0, text: $profileFieldData->value, trusted: $profileFieldData->isLegal);
-	}
-
-	private function getLegalInfoFieldByType(string $type): ?Item\B2e\LegalInfoField
-	{
-		if (!isset($this->legalFieldsByType))
-		{
-			$this->legalFieldsByType = [];
-			foreach ((new LegalInfoProvider())->getFieldsItems() as $field)
-			{
-				$this->legalFieldsByType[$field->type] = $field;
-			}
-		}
-
-		return $this->legalFieldsByType[$type] ?? null;
-	}
-
 	private function getMemberDynamicFieldValue(Item\Field $field, Item\Member $member): ?Item\Field\Value
 	{
 		if ($member->id === null)
@@ -412,5 +364,45 @@ class FieldValue
 		}
 
 		return new Item\Field\Value(0, text: $value, trusted: true);
+	}
+
+	private function getHcmLinkFieldValue(
+		Item\Field $field,
+		Item\Member $member,
+		Item\Document $document,
+	): ?Item\Field\Value
+	{
+		if ($member->employeeId === null)
+		{
+			return null;
+		}
+
+		if (!$this->hcmLinkFieldService->isAvailable())
+		{
+			return null;
+		}
+
+		['fieldCode' => $fieldCode] = NameHelper::parse($field->name);
+		$parsedName = $this->hcmLinkFieldService->parseName($fieldCode);
+		if (!$parsedName)
+		{
+			return null;
+		}
+		if ($parsedName->integrationId !== $document->hcmLinkCompanyId)
+		{
+			return null;
+		}
+
+		$valueId = new Item\Field\HcmLink\HcmLinkFieldValueId(
+			fieldId: $parsedName->id,
+			employeeId: $member->employeeId,
+		);
+
+		return new Item\Field\Value(
+			fieldId: 0,
+			text: '',
+			trusted: true,
+			hcmLinkFieldValueId: $valueId,
+		);
 	}
 }

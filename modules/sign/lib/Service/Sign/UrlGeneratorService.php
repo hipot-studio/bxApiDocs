@@ -8,6 +8,8 @@ use Bitrix\Sign\Item;
 class UrlGeneratorService
 {
 	private const AJAX_ENDPOINT = "/bitrix/services/main/ajax.php";
+	public const B2E_KANBAN_URL = '/sign/b2e/';
+	public const B2E_LIST_URL = '/sign/b2e/list/';
 
 	public function makeMemberAvatarLoadUrl(Item\Member $member): string
 	{
@@ -17,6 +19,17 @@ class UrlGeneratorService
 	public function makeSigningUrl(Item\Member $member): string
 	{
 		return '/sign/link/member/' . $member->id . '/';
+	}
+
+	public function makeMySafeUrl(): string
+	{
+		return '/sign/b2e/mysafe/';
+	}
+
+	public function makeProfileSafeUrl(int $userId): string
+	{
+		// TODO update for new grid
+		return '/company/personal/user/'.$userId.'/sign';
 	}
 
 	public function getSigningProcessLink(Item\Document $document): string
@@ -41,5 +54,27 @@ class UrlGeneratorService
 		]);
 
 		return $uri->getUri();
+	}
+
+	public function makeB2eKanbanCategoryUrl(int $categoryId): string
+	{
+		$url = new Uri(self::B2E_KANBAN_URL);
+		if ($categoryId > 0)
+		{
+			$url->addParams(['categoryId' => $categoryId]);
+		}
+
+		return $url->getUri();
+	}
+
+	public function makeB2eListCategoryUrl(int $categoryId): string
+	{
+		$url = new Uri(self::B2E_LIST_URL);
+		if ($categoryId > 0)
+		{
+			$url->addParams(['categoryId' => $categoryId]);
+		}
+
+		return $url->getUri();
 	}
 }

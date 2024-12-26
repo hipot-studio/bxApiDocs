@@ -96,6 +96,13 @@ class GeneralChat extends GroupChat
 		return $this->getRelationFacade()->getManagerOnly()->getUserIds();
 	}
 
+	protected function changeManagers(array $userIds, bool $isManager, bool $sendPush = true): self
+	{
+		self::cleanGeneralChatCache(self::MANAGERS_CACHE_ID);
+
+		return parent::changeManagers($userIds, $isManager, $sendPush);
+	}
+
 	public static function get(): ?GeneralChat
 	{
 		if (self::$wasSearched)
@@ -496,11 +503,11 @@ class GeneralChat extends GroupChat
 		return $generalChat->deleteChat();
 	}
 
-	protected function sendMessageUsersAdd(array $usersToAdd, bool $skipRecent = false): void
+	protected function sendMessageUsersAdd(array $usersToAdd, Relation\AddUsersConfig $config): void
 	{
 		if ($this->getContext()->getUserId() > 0)
 		{
-			parent::sendMessageUsersAdd($usersToAdd, $skipRecent);
+			parent::sendMessageUsersAdd($usersToAdd, $config);
 
 			return;
 		}
@@ -533,7 +540,7 @@ class GeneralChat extends GroupChat
 			"MESSAGE" => $messageText,
 			"FROM_USER_ID" => $this->getContext(),
 			"SYSTEM" => 'Y',
-			"RECENT_ADD" => $skipRecent ? 'N' : 'Y',
+			"RECENT_ADD" => $config->skipRecent() ? 'N' : 'Y',
 			"PARAMS" => [
 				"CODE" => 'CHAT_JOIN',
 				"NOTIFY" => $this->getEntityType() === self::ENTITY_TYPE_LINE? 'Y': 'N',

@@ -79,8 +79,11 @@ class DocumentRepository
 			->setScheme($schemeId)
 			->setProviderCode($item->providerCode)
 			->setTemplateId($item->templateId)
+			->setChatId($item->chatId)
 			->setCreatedFromDocumentId($item->createdFromDocumentId)
 			->setInitiatedByType($item->initiatedByType->toInt())
+			->setHcmlinkCompanyId($item->hcmLinkCompanyId)
+			->setDateStatusChanged($item->dateStatusChanged)
 			->save()
 		;
 
@@ -222,6 +225,11 @@ class DocumentRepository
 			$document->setTemplateId($item->templateId);
 		}
 
+		if (isset($item->chatId))
+		{
+			$document->setChatId($item->chatId);
+		}
+
 		if (isset($item->createdFromDocumentId))
 		{
 			$document->setCreatedFromDocumentId($item->createdFromDocumentId);
@@ -232,6 +240,18 @@ class DocumentRepository
 			$document->setInitiatedByType($item->initiatedByType->toInt());
 		}
 
+		if (isset($item->hcmLinkCompanyId))
+		{
+			$document->setHcmlinkCompanyId(
+				empty($item->hcmLinkCompanyId) ? null : $item->hcmLinkCompanyId,
+			);
+		}
+
+		if (isset($item->dateStatusChanged))
+		{
+			$document->setDateStatusChanged($item->dateStatusChanged);
+		}
+
 		$document->setMeta($this->getModelMetaByItem($item));
 
 		return $document->save()
@@ -239,11 +259,23 @@ class DocumentRepository
 		;
 	}
 
-	/**
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
+	public function unsetEntityId(Item\Document $item): Result
+	{
+		if (!$item->id)
+		{
+			return (new UpdateResult())->addError(new Error('Document not found'));
+		}
+
+		$document = Internal\DocumentTable::getById($item->id)->fetchObject();
+
+		if (!$document)
+		{
+			return (new UpdateResult())->addError(new Error('Document not found'));
+		}
+
+		return $document->setEntityId(0)->save();
+	}
+
 	public function getByUid(string $uid): ?Item\Document
 	{
 		$document = Internal\DocumentTable::query()
@@ -341,34 +373,37 @@ class DocumentRepository
 		$scenario = $scenarioId === null ? $scenarioId : $this->getScenarioNameById($scenarioId);
 
 		return new Item\Document(
-			scenario: $scenario,
-			parties: $model->getParties() ?? self::DOCUMENT_DEFAULT_PARTIES_COUNT,
-			id: $model->getId(),
-			title: $model->getTitle(),
-			uid: $model->getUid(),
-			blankId: $model->getBlankId(),
-			langId: $model->getLangId(),
-			status: $model->getStatus(),
-			initiator: $meta['initiatorName'] ?? null,
-			entityType: $model->getEntityType(),
-			entityTypeId: EntityType::getEntityTypeIdByType($model->getEntityType()),
-			entityId: $model->getEntityId(),
-			resultFileId: $model->getResultFileId(),
-			version: $model->getVersion(),
-			createdById: $model->getCreatedById(),
-			companyUid: $model->getCompanyUid(),
-			representativeId: $model->getRepresentativeId(),
-			scheme: $this->getSchemeTypeById($model->getScheme()),
-			dateCreate: $model->getDateCreate(),
-			dateSign: $model->getDateSign(),
-			regionDocumentType: $model->getRegionDocumentType(),
-			externalId: $model->getExternalId(),
-			stoppedById: $model->getStoppedById(),
-			externalDateCreate: $model->getExternalDateCreate(),
-			providerCode: $model->getProviderCode(),
-			templateId: $model->getTemplateId(),
+			scenario:              $scenario,
+			parties:               $model->getParties() ?? self::DOCUMENT_DEFAULT_PARTIES_COUNT,
+			id:                    $model->getId(),
+			title:                 $model->getTitle(),
+			uid:                   $model->getUid(),
+			blankId:               $model->getBlankId(),
+			langId:                $model->getLangId(),
+			status:                $model->getStatus(),
+			initiator:             $meta['initiatorName'] ?? null,
+			entityType:            $model->getEntityType(),
+			entityTypeId:          EntityType::getEntityTypeIdByType($model->getEntityType()),
+			entityId:              $model->getEntityId(),
+			resultFileId:          $model->getResultFileId(),
+			version:               $model->getVersion(),
+			createdById:           $model->getCreatedById(),
+			companyUid:            $model->getCompanyUid(),
+			representativeId:      $model->getRepresentativeId(),
+			scheme:                $this->getSchemeTypeById($model->getScheme()),
+			dateCreate:            $model->getDateCreate(),
+			dateSign:              $model->getDateSign(),
+			regionDocumentType:    $model->getRegionDocumentType(),
+			externalId:            $model->getExternalId(),
+			stoppedById:           $model->getStoppedById(),
+			externalDateCreate:    $model->getExternalDateCreate(),
+			providerCode:          $model->getProviderCode(),
+			templateId:            $model->getTemplateId(),
+			chatId:          	   $model->getChatId(),
 			createdFromDocumentId: $model->getCreatedFromDocumentId(),
-			initiatedByType: InitiatedByType::tryFromInt($model->getInitiatedByType()) ?? InitiatedByType::COMPANY,
+			initiatedByType:       InitiatedByType::tryFromInt($model->getInitiatedByType()) ?? InitiatedByType::COMPANY,
+			hcmLinkCompanyId:      $model->getHcmlinkCompanyId(),
+			dateStatusChanged:     $model->getDateStatusChanged(),
 		);
 	}
 
@@ -655,5 +690,19 @@ class DocumentRepository
 		;
 
 		return $document !== null;
+	}
+
+	public function listByBlankId(int $id): Item\DocumentCollection
+	{
+		$models = Internal\DocumentTable::query()
+			->setSelect(['*'])
+			->where('BLANK_ID', $id)
+			->fetchCollection()
+		;
+
+		return $models === null
+			? new Item\DocumentCollection()
+			: $this->extractItemCollectionByModelCollection($models)
+		;
 	}
 }

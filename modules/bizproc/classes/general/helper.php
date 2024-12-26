@@ -2335,7 +2335,17 @@ class CBPHelper
 
 	public static function decodeTemplatePostData(&$data)
 	{
-		$jsonParams = ['arWorkflowTemplate', 'arWorkflowParameters', 'arWorkflowGlobalVariables', 'arWorkflowVariables', 'arWorkflowGlobalConstants', 'arWorkflowConstants', 'USER_PARAMS'];
+		$jsonParams = [
+			'arWorkflowTemplate',
+			'arWorkflowParameters',
+			'arWorkflowGlobalVariables',
+			'arWorkflowVariables',
+			'arWorkflowGlobalConstants',
+			'arWorkflowConstants',
+			'USER_PARAMS',
+			'documentCategories',
+			'workflowTemplateSettings'
+		];
 
 		foreach ($jsonParams as $k)
 		{

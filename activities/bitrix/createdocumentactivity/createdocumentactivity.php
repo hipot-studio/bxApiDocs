@@ -58,7 +58,7 @@ class CBPCreateDocumentActivity extends CBPActivity
 			$this->ErrorMessage = $e->getMessage();
 		}
 
-		if ($this->ItemId && (bool)\Bitrix\Main\Config\Option::get('bizproc', 'release_preview_2024'))
+		if ($this->ItemId)
 		{
 			$this->fixResult($this->makeResultFromId($this->ItemId));
 		}

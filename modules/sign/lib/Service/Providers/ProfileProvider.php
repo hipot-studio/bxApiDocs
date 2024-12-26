@@ -12,6 +12,7 @@ use Bitrix\Sign\Factory\Field;
 use Bitrix\Sign\Item\B2e\LegalInfoField;
 use Bitrix\Sign\Item\B2e\Provider\ProfileFieldData;
 use Bitrix\Sign\Service\Cache\Memory\Sign\UserCache;
+use Bitrix\Sign\Type\Field\FrontFieldCategory;
 use Bitrix\Sign\Type\FieldType;
 
 final class ProfileProvider
@@ -173,10 +174,13 @@ final class ProfileProvider
 		return $result;
 	}
 
+	/**
+	 * @return array{PROFILE: array{CAPTION: string, FIELDS: array, MODULE_ID: string}}
+	 */
 	public function getFieldsForSelector(): array
 	{
 		return [
-			'PROFILE' => [
+			FrontFieldCategory::PROFILE->value => [
 				'CAPTION' => Loc::getMessage('SIGN_SERVICE_PROVIDER_PROFILE_CAPTION'),
 				'FIELDS' => (new LegalInfoProvider())->getFieldsForSelector(),
 				'MODULE_ID' => 'sign',

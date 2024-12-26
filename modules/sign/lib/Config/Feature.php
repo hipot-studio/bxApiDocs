@@ -7,6 +7,7 @@ use Bitrix\Main;
 
 final class Feature
 {
+	public const SIGN_COLLAB_INTEGRATION_ENABLED_OPTION = 'SIGN_COLLAB_INTEGRATION_ENABLED';
 	private static ?self $instance = null;
 
 	public static function instance(): self
@@ -35,10 +36,25 @@ final class Feature
 			return false;
 		}
 
+		return Storage::instance()->isB2eAvailable();
+	}
+
+	public function isCollabIntegrationEnabled(): bool
+	{
 		return
-			Option::get('sign', 'SIGN_SEND_DOCUMENT_BY_EMPLOYEE_ENABLED', false)
-			&& Storage::instance()->isB2eAvailable()
+			Option::get('sign', self::SIGN_COLLAB_INTEGRATION_ENABLED_OPTION, true)
+			&& Storage::instance()->isAvailable()
 		;
+	}
+
+	public function enableOption(string $name): void
+	{
+		Option::set('sign', $name, true);
+	}
+
+	public function disableOption(string $name): void
+	{
+		Option::set('sign', $name, false);
 	}
 
 	private function read(string $name): mixed

@@ -297,7 +297,7 @@ class CBPRequestInformationActivity extends CBPCompositeActivity implements
 			return;
 		}
 
-		if (($arEventParameters['SchedulerService'] ?? null) === 'OnAgent')
+		if (($eventParameters['SchedulerService'] ?? null) === 'OnAgent')
 		{
 			$this->IsTimeout = 1;
 			$this->taskStatus = CBPTaskStatus::Timeout;

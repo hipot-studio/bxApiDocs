@@ -16,6 +16,7 @@ use Bitrix\Im\V2\Message\Update\UpdateService;
 use Bitrix\Im\V2\Message\Delete\DeleteService;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Message\MessageService;
+use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\CurrentUser;
@@ -23,7 +24,6 @@ use Bitrix\Main\Engine\CurrentUser;
 class Message extends BaseController
 {
 	protected const MAX_MESSAGES_COUNT = 100;
-	protected const MAX_MESSAGES_COUNT_FOR_FORWARD = 20;
 	protected const MESSAGE_ON_PAGE_COUNT = 50;
 	private const ALLOWED_FIELDS_UPDATE = [
 		'MESSAGE',
@@ -43,6 +43,7 @@ class Message extends BaseController
 		'REPLY_ID',
 		'BOT_ID',
 		'COPILOT',
+		'SILENT_CONNECTOR',
 	];
 
 	public function getPrimaryAutoWiredParameter()
@@ -116,17 +117,17 @@ class Message extends BaseController
 		return [
 			'send' => [
 				'+prefilters' => [
-					new CheckActionAccess(Chat\Permission::ACTION_SEND),
+					new CheckActionAccess(Action::Send),
 				],
 			],
 			'pin' => [
 				'+prefilters' => [
-					new CheckActionAccess(Chat\Permission::ACTION_PIN_MESSAGE),
+					new CheckActionAccess(Action::PinMessage),
 				],
 			],
 			'unpin' => [
 				'+prefilters' => [
-					new CheckActionAccess(Chat\Permission::ACTION_PIN_MESSAGE),
+					new CheckActionAccess(Action::PinMessage),
 				],
 			],
 		];
@@ -284,6 +285,7 @@ class Message extends BaseController
 	public function disappearAction(\Bitrix\Im\V2\Message $message, int $hours): ?bool
 	{
 		$deleteService = new DeleteService($message);
+
 		if ($deleteService->canDelete() < DeleteService::DELETE_HARD)
 		{
 			$this->addError(new MessageError(MessageError::ACCESS_DENIED));
@@ -346,7 +348,7 @@ class Message extends BaseController
 
 			foreach ($forwardMessages as $message)
 			{
-				(new MessageAnalytics())->addShareMessage($chat, $message);
+				(new MessageAnalytics($message))->addShareMessage();
 			}
 		}
 
@@ -487,7 +489,7 @@ class Message extends BaseController
 	{
 		$result = new Result();
 
-		if ($messages->count() > self::MAX_MESSAGES_COUNT_FOR_FORWARD)
+		if ($messages->count() > MessageService::getMultipleActionMessageLimit())
 		{
 			return $result->addError(new MessageError(MessageError::TOO_MANY_MESSAGES));
 		}

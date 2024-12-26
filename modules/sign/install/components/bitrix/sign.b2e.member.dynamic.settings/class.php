@@ -41,7 +41,7 @@ class SignB2eMemberDynamicSettingsComponent extends \CBitrixComponent
 		}
 
 		$this->accessController = new AccessController(\Bitrix\Main\Engine\CurrentUser::get()->getId());
-		if (!$this->accessController->check(ActionDictionary::ACTION_B2E_DOCUMENT_ADD))
+		if (!$this->accessController->check(ActionDictionary::ACTION_B2E_MEMBER_DYNAMIC_FIELDS_DELETE))
 		{
 			showError('access denied');
 
@@ -121,7 +121,7 @@ class SignB2eMemberDynamicSettingsComponent extends \CBitrixComponent
 
 	protected function handleAction(): void
 	{
-		if (!$this->accessController->check(ActionDictionary::ACTION_B2E_DOCUMENT_ADD))
+		if (!$this->accessController->check(ActionDictionary::ACTION_B2E_MEMBER_DYNAMIC_FIELDS_DELETE))
 		{
 			return;
 		}

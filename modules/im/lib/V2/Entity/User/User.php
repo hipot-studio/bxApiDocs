@@ -282,6 +282,12 @@ class User implements RestEntity
 		$this->setOnlineData($statusData, $withStatus);
 	}
 
+	public function unsetOnlineData(): void
+	{
+		$this->isOnlineDataFilled = false;
+		$this->isOnlineDataWithStatusFilled = false;
+	}
+
 	public function getId(): ?int
 	{
 		return isset($this->userData['ID']) ? (int)$this->userData['ID'] : null;
@@ -301,6 +307,7 @@ class User implements RestEntity
 				'name' => $this->getName(),
 				'avatar' => $this->getAvatar(),
 				'color' => $this->getColor(),
+				'type' => $this->getType()->value,
 			];
 		}
 
@@ -343,6 +350,7 @@ class User implements RestEntity
 			'departments' => $this->getDepartmentIds(),
 			'phones' => empty($this->getPhones()) ? false : $this->getPhones(),
 			'botData' => null,
+			'type' => $this->getType()->value,
 		];
 	}
 
@@ -368,6 +376,11 @@ class User implements RestEntity
 		{
 			$converter = new Converter(Converter::TO_SNAKE | Converter::TO_LOWER | Converter::KEYS);
 			$userData['BOT_DATA'] = $converter->process($userData['BOT_DATA']);
+		}
+
+		if (($option['JSON'] ?? 'N') === 'Y')
+		{
+			$userData = \Bitrix\Im\User::formatLegacyJson($userData);
 		}
 
 		return $userData;
@@ -616,6 +629,11 @@ class User implements RestEntity
 		return $this->desktopLastDate;
 	}
 
+	public function getType(): UserType
+	{
+		return UserType::USER;
+	}
+
 	public function isAdmin(): bool
 	{
 		if ($this->isAdmin !== null)
@@ -719,5 +737,10 @@ class User implements RestEntity
 		}
 
 		return !empty($resultAdminIds) ? (int)min($resultAdminIds) : 0;
+	}
+
+	public static function clearStaticCache(int $id): void
+	{
+		unset(self::$userStaticCache[$id]);
 	}
 }

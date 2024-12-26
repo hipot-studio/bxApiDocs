@@ -2,6 +2,7 @@
 
 namespace Bitrix\Sign\Operation\Document\Template;
 
+use Bitrix\Main\Error;
 use Bitrix\Main;
 use Bitrix\Sign\Contract;
 use Bitrix\Sign\Helper\Field\NameHelper;
@@ -28,6 +29,8 @@ use Bitrix\Sign\Type\Member\Role;
 final class Send implements Contract\Operation
 {
 	private const TRIES_TO_CONFIGURE_AND_START_SIGNING = 10;
+	private const TRIES_TO_CONFIGURE_AND_START_SIGNING_TIMEOUT = 2;
+	private const DOCUMENT_INCORRECT_STATE_ERROR_CODE = 'DOCUMENT_INCORRECT_STATE';
 
 	private readonly DocumentService $documentService;
 	private readonly DocumentRepository $documentRepository;
@@ -84,35 +87,122 @@ final class Send implements Contract\Operation
 		{
 			return $result;
 		}
+
 		$newDocument = $result->document;
+
+		if ($newDocument->id === null)
+		{
+			return Result::createByErrorData(message: 'Document is not created.');
+		}
+
 		$newDocument->title = $this->template->title;
 		$result = $this->documentRepository->update($newDocument);
 		if (!$result->isSuccess())
 		{
+			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
+			if (!$rollbackResult->isSuccess())
+			{
+				return $rollbackResult;
+			}
+
 			return $result;
 		}
 
 		$result = $this->updateMembers($newDocument);
 		if (!$result->isSuccess())
 		{
+			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
+			if (!$rollbackResult->isSuccess())
+			{
+				return $rollbackResult;
+			}
+
 			return $result;
 		}
 
 		$result = $this->fillFields($newDocument->id);
 		if (!$result->isSuccess())
 		{
+			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
+			if (!$rollbackResult->isSuccess())
+			{
+				return $rollbackResult;
+			}
+
 			return $result;
 		}
 
 		$result = $this->configureAndStart($newDocument);
 		if (!$result->isSuccess())
 		{
+			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
+			if (!$rollbackResult->isSuccess())
+			{
+				return $rollbackResult;
+			}
+
 			return $result;
 		}
 
-		$employeeMember = $this->memberRepository->getByDocumentIdWithRole($newDocument->id, Role::SIGNER);
+		$setSmartDocumentAssignedByIdResult = $this->setSmartDocumentAssignedById($newDocument);
+		if (!$setSmartDocumentAssignedByIdResult->isSuccess())
+		{
+			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
+			if (!$rollbackResult->isSuccess())
+			{
+				return $rollbackResult;
+			}
 
-		return new SendResult($document, $employeeMember);
+			return $setSmartDocumentAssignedByIdResult;
+		}
+
+		$employeeMember = $this->memberRepository->getByDocumentIdWithRole($newDocument->id, Role::SIGNER);
+		if ($employeeMember === null)
+		{
+			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
+			if (!$rollbackResult->isSuccess())
+			{
+				return $rollbackResult;
+			}
+
+			return (new Result())->addError(new Error('Employee member not found'));
+		}
+
+		return new SendResult($newDocument, $employeeMember);
+	}
+
+	private function setSmartDocumentAssignedById(Document $document): Main\Result
+	{
+		$result = new Main\Result();
+		$entity = $this->documentService->getDocumentEntity($document);
+		if ($entity === null)
+		{
+			return $result->addError(new Error('Entity not found'));
+		}
+
+		$assignee = $this->memberService->getAssignee($document);
+		if (!$assignee)
+		{
+			return $result->addError(new Error('Assignee not found'));
+		}
+
+		$assigneeUserId = $this->memberService->getUserIdForMember($assignee, $document);
+		if ($assigneeUserId === null)
+		{
+			return $result->addError(new Error('Assignee user not found'));
+		}
+
+		if (!$entity->setAssignedById($assigneeUserId))
+		{
+			return $result->addError(new Error('Cannot set assignee user'));
+		}
+
+		if (!$entity->addObserver($assigneeUserId))
+		{
+			return $result->addError(new Error('Cannot add observer user'));
+		}
+
+		return $result;
 	}
 
 	private function updateMembers(Document $document): Main\Result
@@ -143,23 +233,49 @@ final class Send implements Contract\Operation
 
 	private function configureAndStart(Document $newDocument): Main\Result
 	{
-		for ($i = 0; $i < self::TRIES_TO_CONFIGURE_AND_START_SIGNING; $i++)
+		$result = new Main\Result();
+		$tries = 1;
+
+		for ($i = 1; $i <= self::TRIES_TO_CONFIGURE_AND_START_SIGNING; $i++)
 		{
-			$result = $this->documentService->configureAndStart($newDocument->uid);
-			if (!$result->isSuccess())
+			$configureResult = $this->documentService->configureAndStart($newDocument->uid);
+
+			if (!$configureResult->isSuccess())
 			{
-				return $result;
+				$result->addErrors($configureResult->getErrors());
+				if (!$this->isDocumentIncorrectStateInErrors($configureResult->getErrors()))
+				{
+					$tries = $i;
+					break;
+				}
+
+				sleep(self::TRIES_TO_CONFIGURE_AND_START_SIGNING_TIMEOUT);
+				continue;
 			}
 
-			if ($result instanceof ConfigureResult && $result->completed)
+			if ($configureResult instanceof ConfigureResult && $configureResult->completed)
 			{
 				return new Main\Result();
 			}
 		}
 
-		$tries = self::TRIES_TO_CONFIGURE_AND_START_SIGNING;
+		return $result->addError(new Main\Error("Signing to started after `$tries` tries"));
+	}
 
-		return Result::createByErrorData(message: "Signing to started after `$tries` tries");
+	/**
+	 * @param Main\Error[] $errors
+	 */
+	private function isDocumentIncorrectStateInErrors(array $errors): bool
+	{
+		foreach ($errors as $error)
+		{
+			if ($error->getCode() === self::DOCUMENT_INCORRECT_STATE_ERROR_CODE)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function fillFields(int $documentId): Main\Result

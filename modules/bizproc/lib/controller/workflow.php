@@ -3,6 +3,8 @@
 namespace Bitrix\Bizproc\Controller;
 
 use Bitrix\Main\Loader;
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\Api\Data\UserService\UsersToGet;
 use Bitrix\Bizproc\Api\Request\WorkflowStateService\GetAverageWorkflowDurationRequest;
 use Bitrix\Bizproc\Api\Request\WorkflowStateService\GetTimelineRequest;
@@ -67,11 +69,12 @@ class Workflow extends Base
 
 		$data = $timeline->jsonSerialize();
 		$data['users'] = $response->getUserViews();
+		$duration = $workflowStateService->getAverageWorkflowDuration(
+			new GetAverageWorkflowDurationRequest($workflowState->getWorkflowTemplateId())
+		)->getAverageDuration();
 
 		$data['stats'] = [
-			'averageDuration' => $duration = $workflowStateService->getAverageWorkflowDuration(
-				new GetAverageWorkflowDurationRequest($workflowState->getWorkflowTemplateId())
-			)->getAverageDuration(),
+			'averageDuration' => $duration,
 			'efficiency' => $this->getWorkflowEfficiency(
 				$timeline->getExecutionTime() ?? 0,
 				$duration
@@ -127,5 +130,79 @@ class Workflow extends Base
 		$this->addErrors($result->getErrors());
 
 		return false;
+	}
+
+	public function terminateByTemplateAction(int $templateId, string $signedDocument): bool
+	{
+		$currentUserId = $this->getCurrentUser()?->getId();
+
+		$workflowService = new \Bitrix\Bizproc\Api\Service\WorkflowService(
+			new \Bitrix\Bizproc\Api\Service\WorkflowAccessService(),
+		);
+
+		[$documentType, $documentCategoryId, $documentId] = \CBPDocument::unSignParameters($signedDocument);
+		$complexDocumentId = [$documentType[0], $documentType[1], $documentId];
+
+		$request = new Bizproc\Api\Request\WorkflowService\TerminateByTemplateRequest(
+			$templateId,
+			$complexDocumentId,
+			$currentUserId,
+		);
+
+		$result = $workflowService->terminateWorkflowsByTemplate($request);
+		if ($result->isSuccess())
+		{
+			return true;
+		}
+
+		$this->addErrors($result->getErrors());
+
+		return false;
+	}
+
+	public function getTemplateInstancesAction(int $templateId): ?array
+	{
+		$template = Bizproc\Workflow\Template\Entity\WorkflowTemplateTable::getById($templateId)->fetchObject();
+		$hasPermission = false;
+
+		if ($template)
+		{
+			$hasPermission = \CBPDocument::canUserOperateDocumentType(
+				\CBPCanUserOperateOperation::StartWorkflow,
+				$this->getCurrentUser()->getId(),
+				$template->getDocumentComplexType(),
+			);
+		}
+
+		if (!$hasPermission)
+		{
+			$this->addError(new Error(Loc::getMessage('BIZPROC_CONTROLLER_WORKFLOW_TEMPLATE_NO_PRERMISSIONS')));
+
+			return null;
+		}
+
+		$query = Bizproc\Workflow\Entity\WorkflowInstanceTable::query();
+		$query->addFilter('WORKFLOW_TEMPLATE_ID', $templateId)
+			->addSelect('ID')
+			->setOrder(['STARTED' => 'DESC'])
+			->setLimit(20)
+			//->setCacheTtl(3600)
+		;
+		$result = $query->exec();
+		$ids = array_column($result->fetchAll(), 'ID');
+
+		if (!$ids)
+		{
+			$this->addError(new Error(Loc::getMessage('BIZPROC_CONTROLLER_WORKFLOW_TEMPLATE_NO_LIST')));
+
+			return null;
+		}
+
+		return [
+			'list' => array_map(
+				static fn($id) => new Bizproc\UI\WorkflowFacesView($id),
+				$ids,
+			),
+		];
 	}
 }

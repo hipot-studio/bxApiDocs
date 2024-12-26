@@ -2,36 +2,40 @@
 
 namespace Bitrix\Bizproc\Worker\Template;
 
-use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
+use Bitrix\Bizproc\WorkflowTemplateTable;
 use Bitrix\Main;
 
 class FillTypesWithSettingsValuesStepper extends Main\Update\Stepper
 {
 	protected static $moduleId = 'bizproc';
-	private static $delay = 0;
 	private const STEP_ROWS_LIMIT = 100;
 
 	public function execute(array &$option)
 	{
-		$found = false;
+		$lastId = (int)($this->getOuterParams()[0] ?? 0);
+		$newLastId = null;
+
 		$result = \CBPWorkflowTemplateLoader::getList(
-			['SORT'=>'ASC','NAME'=>'ASC'],
-			['SETTINGS' => false],
+			['ID'=>'ASC'],
+			['>ID' => $lastId],
 			false,
 			['nTopCount' => self::STEP_ROWS_LIMIT],
 			['ID', 'AUTO_EXECUTE', 'TEMPLATE', 'MODULE_ID', 'ENTITY', 'DOCUMENT_TYPE']
 		);
 
+		$loader = \CBPWorkflowTemplateLoader::GetLoader();
+
 		while ($row = $result->fetch())
 		{
-			$found = true;
 			try
 			{
-				$loader = \CBPWorkflowTemplateLoader::GetLoader();
-				$loader->setTypeWithSettingsBeforeAdd($row);
+				$newLastId = (int)$row['ID'];
+				$loader->getTemplateType($row);
+				$loader->setTemplateType($row);
+
 				WorkflowTemplateTable::update(
 					$row['ID'],
-					['TYPE' => $row['TYPE'], 'SETTINGS' => $row['SETTINGS']],
+					['TYPE' => $row['TYPE']],
 				);
 			}
 			catch (\Throwable $e)
@@ -40,8 +44,10 @@ class FillTypesWithSettingsValuesStepper extends Main\Update\Stepper
 			}
 		}
 
-		if ($found)
+		if ($newLastId && $newLastId !== $lastId)
 		{
+			$this->setOuterParams([$newLastId]);
+
 			return self::CONTINUE_EXECUTION;
 		}
 

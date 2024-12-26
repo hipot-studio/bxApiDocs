@@ -32,11 +32,17 @@ Localization\Loc::loadMessages(__FILE__);
  */
 class MailMessageUidTable extends Entity\DataManager
 {
-	const OLD = 'Y';
-	const RECENT = 'N';
-	const DOWNLOADED = 'D';
-	const MOVING = 'M';
-	const REMOTE = 'R';
+	public const OLD = 'Y';
+	public const RECENT = 'N';
+	public const DOWNLOADED = 'D';
+	public const MOVING = 'M';
+	public const REMOTE = 'R';
+
+	public const EXCLUDED_COUNTER_STATUSES = [
+		self::MOVING,
+		self::REMOTE,
+		self::OLD,
+	];
 
 	public static function getFilePath()
 	{
@@ -491,19 +497,32 @@ class MailMessageUidTable extends Entity\DataManager
 		$parameters = $event->getParameters();
 		if ($parameters['primary'] && is_set($parameters['fields']['IS_OLD']))
 		{
-			$message = self::getById($parameters['primary'])->fetch();
+			$message = self::getByPrimary($parameters['primary'], [
+				'select' => [
+					'MAILBOX_ID',
+					'DIR_MD5',
+					'INTERNALDATE'
+				],
+			])->fetch();
+
 			if (!$message)
 			{
 				return $result;
 			}
 
+			$internalDate = $message['INTERNALDATE'];
 			$mailboxId = (int)$message['MAILBOX_ID'];
 			$dirMd5 = $message['DIR_MD5'];
 
-			$updateResult = MessageInternalDateHandler::clearStartInternalDate($mailboxId, $dirMd5);
-			if (!$updateResult->isSuccess())
+			$startInternalDate = MessageInternalDateHandler::getStartInternalDateForDir($mailboxId, dirMd5: $dirMd5);
+
+			if (!is_null($startInternalDate) && $internalDate <= $startInternalDate)
 			{
-				$result->setErrors($updateResult->getErrors());
+				$updateResult = MessageInternalDateHandler::clearStartInternalDate($mailboxId, $dirMd5);
+				if (!$updateResult->isSuccess())
+				{
+					$result->setErrors($updateResult->getErrors());
+				}
 			}
 		}
 

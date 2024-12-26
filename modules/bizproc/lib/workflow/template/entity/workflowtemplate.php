@@ -5,6 +5,7 @@ namespace Bitrix\Bizproc\Workflow\Template\Entity;
 use Bitrix\Bizproc\Workflow\Template\Tpl;
 use Bitrix\Main;
 use Bitrix\Main\Web\Json;
+use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType;
 
 /**
  * Class WorkflowTemplateTable
@@ -131,14 +132,14 @@ class WorkflowTemplateTable extends Main\Entity\DataManager
 			],
 			'TYPE' => [
 				'data_type' => 'enum',
-				'values' => ['default', 'robots', 'custom_robots'],
+				'values' => array_column(WorkflowTemplateType::cases(), 'value'),
 				'default_value' => 'default',
 			],
-			'SETTINGS' => (
-				(new Main\ORM\Fields\ArrayField('SETTINGS'))
-					->configureSerializeCallback([self::class, 'encodeJson'])
-					->configureUnserializeCallback([self::class, 'decodeJson'])
-			),
+			new \Bitrix\Main\ORM\Fields\Relations\OneToMany(
+				'TEMPLATE_SETTINGS',
+				\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateSettingsTable::class,
+				'TEMPLATE'
+			)
 		];
 	}
 

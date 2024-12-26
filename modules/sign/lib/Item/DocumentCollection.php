@@ -102,6 +102,11 @@ class DocumentCollection implements ItemCollection, \Iterator, \Countable
 		return IterationHelper::all($this->items, $rule);
 	}
 
+	public function any(\Closure $rule): bool
+	{
+		return IterationHelper::any($this->items, $rule);
+	}
+
 	public function filter(\Closure $rule): DocumentCollection
 	{
 		$result = new static();

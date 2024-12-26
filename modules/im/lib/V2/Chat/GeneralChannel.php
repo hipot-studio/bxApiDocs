@@ -7,7 +7,8 @@ use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
-use Bitrix\Im\V2\Relation;
+use Bitrix\Im\V2\Relation\AddUsersConfig;
+use Bitrix\Im\V2\Relation\Reason;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Intranet\Settings\CommunicationSettings;
@@ -153,14 +154,7 @@ class GeneralChannel extends OpenChannelChat
 		return null;
 	}
 
-	public function addUsers(
-		array $userIds,
-		array $managerIds = [],
-		?bool $hideHistory = null,
-		bool $withMessage = true,
-		bool $skipRecent = false,
-		Relation\Reason $reason = Relation\Reason::DEFAULT
-	): self
+	public function addUsers(array $userIds, AddUsersConfig $config = new AddUsersConfig()): self
 	{
 		$managerIds = [];
 		foreach ($userIds as $userId)
@@ -186,8 +180,14 @@ class GeneralChannel extends OpenChannelChat
 		}
 
 		$managerIds = array_unique($managerIds);
+		$config->setManagerIds($managerIds);
 
-		return parent::addUsers($userIds, $managerIds, $hideHistory, $withMessage, $skipRecent, $reason);
+		return parent::addUsers($userIds, $config);
+	}
+
+	protected function sendMessageUsersAdd(array $usersToAdd, AddUsersConfig $config): void
+	{
+		return;
 	}
 
 	protected function getCompanyStructureId(): ?string

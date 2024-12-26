@@ -1731,4 +1731,21 @@ class CBPDocument
 
 		return $templates;
 	}
+
+	public static function getUserGroups(array $parameterDocumentType, array $parameterDocumentId, int $userId)
+	{
+		[$moduleId, $entity, $documentType] = CBPHelper::ParseDocumentId($parameterDocumentType);
+
+		if ($moduleId)
+		{
+			\Bitrix\Main\Loader::includeModule($moduleId);
+		}
+
+		if (class_exists($entity) && method_exists($entity, 'GetUserGroups'))
+		{
+			return call_user_func([$entity, 'GetUserGroups'], $parameterDocumentType, $parameterDocumentId, $userId);
+		}
+
+		return null;
+	}
 }

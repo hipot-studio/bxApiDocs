@@ -352,13 +352,10 @@ class CBPReviewActivity extends CBPCompositeActivity implements IBPEventActivity
 		{
 			$this->WriteToTrackingService(GetMessage("BPAR_ACT_REVIEWED"));
 
-			if ((bool)\Bitrix\Main\Config\Option::get('bizproc', 'release_preview_2024'))
+			$result = $this->getResult();
+			if ($result)
 			{
-				$result = $this->getResult();
-				if ($result)
-				{
-					$this->fixResult($result);
-				}
+				$this->fixResult($result);
 			}
 
 			$this->taskStatus = CBPTaskStatus::CompleteOk;

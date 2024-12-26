@@ -2,31 +2,27 @@
 
 namespace Bitrix\Sign\Controllers\V1\B2e\Document;
 
-use Bitrix\Main\Error;
-use Bitrix\Sign\Type;
-use Bitrix\Crm\ItemIdentifier;
-use Bitrix\Crm\Requisite\DefaultRequisite;
 use Bitrix\Main;
-use Bitrix\Main\Application;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\Security\Random;
-use Bitrix\Sign\Connector;
+use Bitrix\Sign\Access\ActionDictionary;
+use Bitrix\Sign\Attribute\ActionAccess;
+use Bitrix\Sign\Config\Storage;
+use Bitrix\Sign\Operation\Document\ExportBlank;
+use Bitrix\Sign\Operation\Document\UnserializePortableBlank;
+use Bitrix\Sign\Operation\Document\Template\ImportTemplate;
 use Bitrix\Sign\Engine\Controller;
-use Bitrix\Sign\Item\Document\TemplateCollection;
-use Bitrix\Sign\Item\DocumentCollection;
-use Bitrix\Sign\Item\Integration\Crm\MyCompanyCollection;
-use Bitrix\Sign\Item\Member;
+use Bitrix\Sign\Operation;
+use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
 use Bitrix\Sign\Operation\Document\Template\Send;
 use Bitrix\Sign\Result\Operation\Document\Template\SendResult;
+use Bitrix\Sign\Result\Operation\Document\ExportBlankResult;
+use Bitrix\Sign\Result\Operation\Document\UnserializePortableBlankResult;
 use Bitrix\Sign\Serializer\MasterFieldSerializer;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Type\Access\AccessibleItemType;
 use Bitrix\Sign\Type\DocumentScenario;
-use Bitrix\Sign\Type\Member\EntityType;
-use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\Template\Status;
-use Bitrix\Sign\Operation;
 use Bitrix\Sign\Type\Template\Visibility;
-
 
 class Template extends Controller
 {
@@ -52,14 +48,17 @@ class Template extends Controller
 			return [];
 		}
 
-		$companies = $this->container->getCrmMyCompanyService()->listWithTaxIds(inIds: $companyIds);
+		$companies = $this->container->getCrmMyCompanyService()->listWithTaxIds(
+			inIds: $companyIds,
+			checkRequisitePermissions: false,
+		);
 		$result = [];
 		$documents = $documents->sortByTemplateIdsDesc();
 		foreach ($documents as $document)
 		{
 			$companyId = $companyIds[$document->id];
 			$company = $companies->findById($companyId);
-			if ($company === null)
+			if ($company === null || $company->taxId === null || $company->taxId === '')
 			{
 				continue;
 			}
@@ -70,6 +69,7 @@ class Template extends Controller
 			}
 
 			$result[] = [
+				'id' => $template->id,
 				'uid' => $template->uid,
 				'title' => $template->title,
 				'company' => [
@@ -98,6 +98,13 @@ class Template extends Controller
 			return [];
 		}
 
+		if (B2eTariff::instance()->isB2eRestrictedInCurrentTariff())
+		{
+			$this->addB2eTariffRestrictedError();
+
+			return [];
+		}
+
 		$result = (new Send(
 			template: $template,
 			sendFromUserId: $user->getId(),
@@ -111,15 +118,24 @@ class Template extends Controller
 		}
 
 		$employeeMember = $result->employeeMember;
+		$document = $result->newDocument;
 
 		return [
 			'employeeMember' => [
 				'id' => $employeeMember->id,
 				'uid' => $employeeMember->uid,
 			],
+			'document' => [
+				'id' => $document->id,
+			],
 		];
 	}
 
+	#[ActionAccess(
+		permission: ActionDictionary::ACTION_B2E_TEMPLATE_EDIT,
+		itemType: AccessibleItemType::TEMPLATE,
+		itemIdOrUidRequestKey: 'uid',
+	)]
 	public function completeAction(string $uid): array
 	{
 		$templateRepository = Container::instance()->getDocumentTemplateRepository();
@@ -134,9 +150,18 @@ class Template extends Controller
 		$result = (new Operation\Document\Template\Complete($template))->launch();
 		$this->addErrorsFromResult($result);
 
-		return [];
+		return [
+			'template' => [
+				'id' => $template->id,
+			],
+		];
 	}
 
+	#[ActionAccess(
+		permission: ActionDictionary::ACTION_B2E_TEMPLATE_EDIT,
+		itemType: AccessibleItemType::TEMPLATE,
+		itemIdOrUidRequestKey: 'templateId',
+	)]
 	public function changeVisibilityAction(int $templateId, string $visibility): array
 	{
 		$visibility = Visibility::tryFrom($visibility);
@@ -173,6 +198,11 @@ class Template extends Controller
 		return [];
 	}
 
+	#[ActionAccess(
+		permission: ActionDictionary::ACTION_B2E_TEMPLATE_DELETE,
+		itemType: AccessibleItemType::TEMPLATE,
+		itemIdOrUidRequestKey: 'templateId',
+	)]
 	public function deleteAction(int $templateId): array
 	{
 		$template = Container::instance()->getDocumentTemplateRepository()->getById($templateId);
@@ -222,5 +252,92 @@ class Template extends Controller
 		return [
 			'fields' => (new MasterFieldSerializer())->serialize($fields),
 		];
+	}
+
+	#[ActionAccess(
+		permission: ActionDictionary::ACTION_B2E_TEMPLATE_READ,
+		itemType: AccessibleItemType::TEMPLATE,
+		itemIdOrUidRequestKey: 'templateId',
+	)]
+	public function exportAction(int $templateId): array
+	{
+		if (!Storage::instance()->isBlankExportAllowed())
+		{
+			$this->addError(new Main\Error('Blank export is not allowed'));
+
+			return [];
+		}
+
+		$template = Container::instance()->getDocumentTemplateRepository()->getById($templateId);
+		if ($template === null)
+		{
+			$this->addError(new Main\Error('Template not found'));
+
+			return [];
+		}
+
+		$document = Container::instance()->getDocumentRepository()->getByTemplateId($template->id);
+		if ($document === null)
+		{
+			$this->addError(new Main\Error('Document not found'));
+
+			return [];
+		}
+
+		if ($document->blankId === null)
+		{
+			$this->addError(new Main\Error('No blankId in document'));
+
+			return [];
+		}
+
+		$result = (new ExportBlank($document->blankId))->launch();
+		if ($result instanceof ExportBlankResult)
+		{
+			$result->blank->title = $template->title;
+
+			return [
+				'json' => Main\Web\Json::encode($result->blank),
+				'filename' => "$template->title.json",
+			];
+		}
+
+		$this->addErrorsFromResult($result);
+
+		return [];
+	}
+
+	#[ActionAccess(
+		permission: ActionDictionary::ACTION_B2E_TEMPLATE_ADD,
+	)]
+	public function importAction(string $serializedTemplate): array
+	{
+		if (!Storage::instance()->isBlankExportAllowed())
+		{
+			$this->addError(new Main\Error('Blank export/import is not allowed'));
+
+			return [];
+		}
+
+		$result = Container::instance()->getB2eTariffRestrictionService()->check();
+		if (!$result->isSuccess())
+		{
+			$this->addErrorsFromResult($result);
+
+			return [];
+		}
+
+		$result = (new UnserializePortableBlank($serializedTemplate))->launch();
+		if (!$result instanceof UnserializePortableBlankResult)
+		{
+			$this->addErrorsFromResult($result);
+
+			return [];
+		}
+
+		$result = (new ImportTemplate($result->blank))->launch();
+		$this->addErrorsFromResult($result);
+
+		return [];
 	}
 }

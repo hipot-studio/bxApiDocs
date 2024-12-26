@@ -1478,10 +1478,6 @@ abstract class CBPActivity
 
 	protected function fixResult(Bitrix\Bizproc\Result\ResultDto $result): void
 	{
-		if (!(bool)\Bitrix\Main\Config\Option::get('bizproc', 'release_preview_2024'))
-		{
-			return;
-		}
 		$workflowId = $this->getWorkflowInstanceId();
 		try
 		{

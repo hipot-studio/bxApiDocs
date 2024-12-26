@@ -5,16 +5,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Main\Context;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Sign\Access\Model\UserModel;
-use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
-use Bitrix\Sign\Access\Service\RolePermissionService;
-use Bitrix\Sign\Blank;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Sign\Config\Feature;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Document;
-use Bitrix\Sign\Error;
-use Bitrix\Sign\File;
 use Bitrix\Sign\Internal\DocumentTable;
 use Bitrix\Sign\Item\Api\Client\DomainRequest;
 use Bitrix\Sign\Main\Application;
@@ -54,6 +48,8 @@ class SignMasterComponent extends SignBaseComponent
 		'OPEN_URL_AFTER_CLOSE'
 	];
 
+	private int $userId;
+
 	/**
 	 * Returns true if SMS is allowed by tariff.
 	 * @return bool
@@ -64,16 +60,27 @@ class SignMasterComponent extends SignBaseComponent
 	}
 
 	/**
+	 * @return bool
+	 */
+	private function isHcmlinkAvailable(): bool
+	{
+		return $this->getInitiatedByType() !== InitiatedByType::EMPLOYEE
+			&& \Bitrix\Sign\Service\Container::instance()->getHcmLinkService()->isAvailable()
+		;
+	}
+
+	/**
 	 * Executing before actions.
 	 * @return void
 	 */
 	protected function beforeActions(): void
 	{
+		$this->userId = (int)(\Bitrix\Main\Engine\CurrentUser::get()->getId() ?? 0);
 		$document = $this->getDocument();
 		$this->setResult('DOCUMENT', $document);
 		$this->setResult('TEMPLATE_UID', $this->getTemplateUid());
-
 		$this->setResult('RESPONSIBLE_NAME', $this->getResponsibleName($document));
+		$this->setResult('CHAT_ID', $this->getChatId());
 	}
 
 	private function getDocument(): ?Document
@@ -153,6 +160,7 @@ class SignMasterComponent extends SignBaseComponent
 		$this->setResult('IS_MASTER_PERMISSIONS_FOR_USER_DENIED', $this->isMasterPermissionsForUserDenied($document));
 		$isSesComAgreementAccepted = $this->isSesComAgreementAccepted();
 		$this->setResult('IS_SES_COM_AGREEMENT_ACCEPTED', $isSesComAgreementAccepted);
+		$this->setResult('ANALYTIC_CONTEXT', $this->getAnalyticContext());
 		if (!$isSesComAgreementAccepted)
 		{
 			$dateFormat = \Bitrix\Main\Application::getInstance()->getContext()->getCulture()->getDateFormat();
@@ -164,6 +172,14 @@ class SignMasterComponent extends SignBaseComponent
 		}
 
 		$this->resetParamsAsString(self::$requiredParams);
+
+		if (
+			$this->isHcmlinkAvailable()
+			&& \Bitrix\Main\Loader::includeModule('pull')
+		)
+		{
+			\CPullWatch::Add($this->userId, 'humanresources_person_mapping');
+		}
 	}
 
 	private function getWizardConfig(): array
@@ -179,7 +195,12 @@ class SignMasterComponent extends SignBaseComponent
 		);
 
 		$b2eTariffInstance = \Bitrix\Sign\Integration\Bitrix24\B2eTariff::instance();
+		$b2eFeatureConfig = [
+			'hcmLinkAvailable' => $this->isHcmlinkAvailable(),
+		];
+
 		return [
+			'b2eFeatureConfig' => $b2eFeatureConfig,
 			'blankSelectorConfig' => $blankSelectorConfig,
 			'documentSendConfig' => [
 				'region' => $regionCode,
@@ -283,7 +304,7 @@ class SignMasterComponent extends SignBaseComponent
 			? Container::instance()->getDocumentRepository()->getByUid($document->getUid())
 			: null;
 
-		foreach ($this->getRequiredPermissions() as $permission)
+		foreach ($this->getRequiredPermissions($this->getScenario(), $this->getDocumentMode()) as $permission)
 		{
 			$passed = $item ? $accessController->checkByItem($permission, $item) : $accessController->check($permission);
 			if (!$passed)
@@ -306,22 +327,28 @@ class SignMasterComponent extends SignBaseComponent
 	/**
 	 * @return array
 	 */
-	public function getRequiredPermissions(): array
+	public function getRequiredPermissions(string $scenario, string $documentMode = self::MODE_DOCUMENT): array
 	{
-		if ($this->getScenario() === \Bitrix\Sign\Type\BlankScenario::B2B)
+		if ($scenario === \Bitrix\Sign\Type\BlankScenario::B2B)
 		{
 			return [
 				\Bitrix\Sign\Access\ActionDictionary::ACTION_DOCUMENT_ADD,
 				\Bitrix\Sign\Access\ActionDictionary::ACTION_DOCUMENT_EDIT,
 			];
 		}
-		else
+
+		return match ($documentMode)
 		{
-			return [
+			self::MODE_DOCUMENT => [
 				\Bitrix\Sign\Access\ActionDictionary::ACTION_B2E_DOCUMENT_ADD,
 				\Bitrix\Sign\Access\ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
-			];
-		}
+			],
+			self::MODE_TEMPLATE => [
+				\Bitrix\Sign\Access\ActionDictionary::ACTION_B2E_TEMPLATE_ADD,
+				\Bitrix\Sign\Access\ActionDictionary::ACTION_B2E_TEMPLATE_EDIT,
+			],
+			default => [],
+		};
 	}
 
 	protected function getB2eRegionDocumentTypes(): array
@@ -394,8 +421,47 @@ class SignMasterComponent extends SignBaseComponent
 			return null;
 		}
 
-		$template = Container::instance()->getDocumentTemplateRepository()->getById((int)$templateId);
+		$template = Container::instance()->getDocumentTemplateRepository()->getById($templateId);
 
 		return $template?->uid;
+	}
+
+	private function getChatId(): int
+	{
+		if (!Feature::instance()->isCollabIntegrationEnabled())
+		{
+			return 0;
+		}
+
+		$imService = Container::instance()->getImService();
+		$chatIdFromRequest = $this->getChatIdFromRequest();
+		if ($chatIdFromRequest < 1)
+		{
+			return 0;
+		}
+
+		$collabChat = $imService->getCollabById($chatIdFromRequest);
+		$userId = (int)CurrentUser::get()->getId();
+		if ($collabChat && $imService->isUserHaveAccessToChat($collabChat, $userId))
+		{
+			return (int)$collabChat->getId();
+		}
+
+		return 0;
+	}
+
+	private function getChatIdFromRequest(): int
+	{
+		return (int)$this->getRequest('chat_id');
+	}
+
+	private function getAnalyticContext(): array
+	{
+		if ( $this->getDocumentMode() === self::MODE_TEMPLATE)
+		{
+			return ['c_section' => 'sign', 'category' => 'templates', 'c_sub_section' => 'templates'];
+		}
+
+		return ['c_section' => 'sign', 'type' => 'from_company', 'category' => 'documents'];
 	}
 }

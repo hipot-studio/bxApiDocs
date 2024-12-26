@@ -2,13 +2,13 @@
 
 namespace Bitrix\Sign\Controllers\V1\Integration\Crm;
 
-use Bitrix\Crm\ItemIdentifier;
-use Bitrix\Crm\Requisite\DefaultRequisite;
-use Bitrix\Main\Application;
+use Bitrix\Main\Context;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Web\Uri;
 use Bitrix\Sign\Access\ActionDictionary;
-use Bitrix\Sign\Attribute;
+use Bitrix\Sign\Attribute\Access\LogicOr;
+use Bitrix\Sign\Attribute\ActionAccess;
 use Bitrix\Sign\Connector;
 use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
 use Bitrix\Sign\Item\CompanyCollection;
@@ -20,7 +20,10 @@ use Bitrix\Sign\Type\Document\InitiatedByType;
 
 class B2eCompany extends \Bitrix\Sign\Engine\Controller
 {
-	#[Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)]
+	#[LogicOr(
+		new ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT),
+		new ActionAccess(ActionDictionary::ACTION_B2E_TEMPLATE_EDIT),
+	)]
 	public function listAction(
 		?string $forDocumentInitiatedByType = null,
 	): array
@@ -58,7 +61,7 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 		];
 	}
 
-	#[Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)]
+	#[ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)]
 	public function deleteAction(string $id): array
 	{
 		$result = Container::instance()->getApiService()
@@ -96,6 +99,14 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 			if (!empty($registeredByTaxId['register_url']) && is_string($registeredByTaxId['register_url']))
 			{
 				$company->registerUrl = $registeredByTaxId['register_url'];
+				$contextLang = Context::getCurrent()->getLanguage();
+				if ($contextLang)
+				{
+					$company->registerUrl = (new Uri($company->registerUrl))
+						->addParams(['lang' => Context::getCurrent()->getLanguage()])
+						->getUri()
+					;
+				}
 			}
 			if (empty($registeredByTaxId['providers']) || !is_array($registeredByTaxId['providers']))
 			{
@@ -167,7 +178,7 @@ class B2eCompany extends \Bitrix\Sign\Engine\Controller
 		return [];
 	}
 
-	#[Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)]
+	#[ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)]
 	public function registerAction(
 		string $taxId,
 		string $providerCode,

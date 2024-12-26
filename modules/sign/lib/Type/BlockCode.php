@@ -23,6 +23,7 @@ final class BlockCode
 	public const B2E_REFERENCE = 'b2ereference';
 	public const B2E_MY_REFERENCE = 'myb2ereference';
 	public const EMPLOYEE_DYNAMIC = 'employeedynamic';
+	public const B2E_HCMLINK_REFERENCE = 'hcmlinkreference';
 
 	/**
 	 * @return array<self::*>
@@ -45,6 +46,7 @@ final class BlockCode
 			self::B2E_REFERENCE,
 			self::B2E_MY_REFERENCE,
 			self::EMPLOYEE_DYNAMIC,
+			self::B2E_HCMLINK_REFERENCE,
 		];
 	}
 
@@ -128,5 +130,10 @@ final class BlockCode
 	public static function isMemberDynamic(string $code): bool
 	{
 		return $code === self::EMPLOYEE_DYNAMIC;
+	}
+
+	public static function isHcmLinkReference(string $code): bool
+	{
+		return $code === self::B2E_HCMLINK_REFERENCE;
 	}
 }

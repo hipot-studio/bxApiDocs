@@ -3,6 +3,7 @@
 use Bitrix\Bizproc\Result\RenderedResult;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Bizproc\Result\Entity\ResultTable;
+use Bitrix\Main\Type\DateTime;
 
 class CBPViewHelper
 {
@@ -370,9 +371,13 @@ class CBPViewHelper
 
 	public static function getWorkflowResult(string $workflowId, int $userId): ?array
 	{
-		if (!(bool)\Bitrix\Main\Config\Option::get('bizproc', 'release_preview_2024'))
+		static $cache = [];
+
+		$cacheKey = $workflowId . '|' . $userId;
+
+		if (array_key_exists($cacheKey, $cache))
 		{
-			return null;
+			return $cache[$cacheKey];
 		}
 
 		$result = ResultTable::getList([
@@ -421,5 +426,23 @@ class CBPViewHelper
 		}
 
 		return null;
+	}
+
+	public static function formatDateTime(?DateTime $date): string
+	{
+		if (!$date)
+		{
+			return '';
+		}
+
+		$thisYear = $date->format('Y') === date('Y');
+		$culture = \Bitrix\Main\Application::getInstance()->getContext()->getCulture();
+		$df = $thisYear
+			? $culture?->getDayMonthFormat() ?? 'j F'
+			: $culture?->getLongDateFormat() ?? 'j F Y'
+		;
+		$tf = $culture?->getShortTimeFormat() ?? 'H:i';
+
+		return \FormatDate("$df, $tf", $date->toUserTime());
 	}
 }

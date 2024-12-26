@@ -13,7 +13,7 @@ use Bitrix\Sign\Item;
 use Bitrix\Sign\Operation\GetRequiredFieldsWithCache;
 use Bitrix\Sign\Repository\BlockRepository;
 use Bitrix\Sign\Service\Container;
-use Bitrix\Sign\Service\Providers\LegalInfoProvider;
+use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkFieldService;
 use Bitrix\Sign\Service\Providers\MemberDynamicFieldInfoProvider;
 use Bitrix\Sign\Service\Result\Sign\Block\B2eRequiredFieldsResult;
 use Bitrix\Sign\Type;
@@ -61,14 +61,20 @@ final class Field
 	private MemberConnectorFactory $memberConnectorFactory;
 	private readonly BlockRepository $blockRepository;
 	private readonly FieldValue $fieldValueFactory;
+	private readonly HcmLinkFieldService $hcmLinkFieldService;
+	private readonly \Bitrix\Sign\Blanks\Block\Factory $blockFactory;
 
 	public function __construct(
 		?BlockRepository $blockRepository = null,
+		?HcmLinkFieldService $hcmLinkFieldService = null,
+		?\Bitrix\Sign\Blanks\Block\Factory $blockFactory = null,
 	)
 	{
 		$this->memberConnectorFactory = new MemberConnectorFactory();
 		$this->blockRepository = $blockRepository ?? Container::instance()->getBlockRepository();
 		$this->fieldValueFactory = new FieldValue();
+		$this->hcmLinkFieldService = $hcmLinkFieldService ?? Container::instance()->getHcmLinkFieldService();
+		$this->blockFactory = $blockFactory ?? new \Bitrix\Sign\Blanks\Block\Factory();
 	}
 
 	/**
@@ -229,6 +235,12 @@ final class Field
 					$document,
 					$registeredFields,
 				),
+				BlockCode::B2E_HCMLINK_REFERENCE => $this->createHcmLinkFields(
+					$block,
+					$member,
+					$document,
+					$registeredFields,
+				),
 			};
 		}
 
@@ -290,6 +302,11 @@ final class Field
 
 		$fieldCode = new CRM\FieldCode($fieldCode);
 		$fieldDescription = $fieldCode->getDescription($member->presetId);
+		if (empty($fieldDescription))
+		{
+			return new Item\FieldCollection();
+		}
+
 		$fieldType = match ($fieldDescription['TYPE'] ?? '')
 		{
 			FieldType::DATE, FieldType::DATETIME => FieldType::DATE,
@@ -316,10 +333,7 @@ final class Field
 
 		$fieldName = NameHelper::create($block->code, $fieldType, $member->party, $fieldCode->getCode());
 
-		$field = $registeredFields->findFirst(
-			static fn(Item\Field $field) => $field->name === $fieldName,
-		);
-
+		$field = $registeredFields->getFirstFieldByName($fieldName);
 		if ($field !== null)
 		{
 			return new Item\FieldCollection($field);
@@ -517,35 +531,19 @@ final class Field
 		Item\B2e\RequiredField $requiredField,
 	): ?Item\Field
 	{
-		$blockFactory = new \Bitrix\Sign\Blanks\Block\Factory();
-		$legalInfoFields = (new LegalInfoProvider())->getFieldsItems();
-		foreach ($legalInfoFields as $legalField)
+		$firstByRole = $members->findFirstByRole($requiredField->role);
+		if (!$firstByRole)
 		{
-			if ($legalField->type !== $requiredField->type)
-			{
-				continue;
-			}
-
-			$code = BlockCode::getB2eReferenceCodeByRole($requiredField->role);
-			$firstByRole = $members->findFirstByRole($requiredField->role);
-			if (!$firstByRole)
-			{
-				return null;
-			}
-
-			$block = $blockFactory->makeItem(
-				document: $document,
-				code: $code,
-				party: $firstByRole->party,
-				data: ['field' => $legalField->name],
-				skipSecurity: true,
-				role: $requiredField->role,
-			);
-
-			return $this->createByBlocks(new Item\BlockCollection($block), $firstByRole)->getFirst();
+			return null;
 		}
 
-		return null;
+		$block = $this->blockFactory->makeStubBlockByRequiredField($document, $requiredField, $firstByRole->party);
+		if (!$block)
+		{
+			return null;
+		}
+
+		return $this->createByBlocks(new Item\BlockCollection($block), $firstByRole, $document)->getFirst();
 	}
 
 	public function createDocumentMemberFields(
@@ -575,18 +573,24 @@ final class Field
 
 		foreach ($this->getB2eRequiredFields($document) as $requiredField)
 		{
-			$field = $this->getFieldForRequired($requiredField, $member, $document);
-			if (!$field instanceof Item\Field || isset($fieldNameKeyMap[$field->name]))
+			if ($member->role !== $requiredField->role)
 			{
 				continue;
 			}
 
-			$fieldNameKeyMap[$field->name] = $field;
-			if ($withValues)
+			$block = $this->blockFactory->makeStubBlockByRequiredField($document, $requiredField, $member->party);
+			$fields = $this->createByBlocks(new Item\BlockCollection($block), $member, $document);
+			foreach ($fields as $field)
 			{
-				$field->replaceValueIfPresent(
-					$this->fieldValueFactory->createByRequired($requiredField, $member, $document),
-				);
+				if (isset($fieldNameKeyMap[$field->name]))
+				{
+					continue;
+				}
+				$fieldNameKeyMap[$field->name] = $field;
+				if ($withValues)
+				{
+					$this->createAndAppendValueToFieldWithSubfields($block, $field, $member, $document);
+				}
 			}
 		}
 
@@ -627,20 +631,6 @@ final class Field
 		$result = $operation->launch();
 
 		return $result instanceof B2eRequiredFieldsResult ? $result->collection : new Item\B2e\RequiredFieldsCollection();
-	}
-
-	private function getFieldForRequired(
-		Item\B2e\RequiredField $requiredField,
-		Item\Member $member,
-		Item\Document $document,
-	): ?Item\Field
-	{
-		if ($requiredField->role !== $member->role)
-		{
-			return null;
-		}
-
-		return $this->createByRequired($document, new Item\MemberCollection($member), $requiredField);
 	}
 
 	public function createDocumentFutureSignerFields(
@@ -754,9 +744,7 @@ final class Field
 		Item\FieldCollection $registeredFields,
 	): Item\FieldCollection
 	{
-		$field = $registeredFields->findFirst(
-			static fn(Item\Field $field) => $field->name === $fieldName,
-		);
+		$field = $registeredFields->getFirstFieldByName($fieldName);
 		if ($field !== null)
 		{
 			return new Item\FieldCollection($field);
@@ -769,7 +757,7 @@ final class Field
 			name: $fieldName,
 			label: $fieldDescription['caption'] ?? '',
 			items: $this->convertUserFieldItems($fieldDescription),
-			required: in_array($fieldType, self::NOT_REQUIRED_FIELD_TYPES, true) ? false : null,
+			required: $this->getFieldRequiredByType($fieldType),
 		);
 
 		if ($field->type === FieldType::ADDRESS)
@@ -778,5 +766,67 @@ final class Field
 		}
 
 		return new Item\FieldCollection($field);
+	}
+
+	private function createHcmLinkFields(
+		Item\Block $block,
+		Item\Member $member,
+		Item\Document $document,
+		Item\FieldCollection $registeredFields,
+	): Item\FieldCollection
+	{
+		if (!Type\DocumentScenario::isB2EScenario($document->scenario))
+		{
+			return new Item\FieldCollection();
+		}
+
+		$fieldCode = $block->data['field'] ?? '';
+		if (!is_string($fieldCode))
+		{
+			return new Item\FieldCollection();
+		}
+
+		if (!$this->hcmLinkFieldService->isAvailable())
+		{
+			return new Item\FieldCollection();
+		}
+
+		$parsedName = $this->hcmLinkFieldService->parseName($fieldCode);
+		if (!$parsedName || $parsedName->integrationId !== $document->hcmLinkCompanyId)
+		{
+			return new Item\FieldCollection();
+		}
+
+		$fieldType = $this->hcmLinkFieldService->getFieldTypeByName($fieldCode);
+		$fieldName = NameHelper::create($block->code, $fieldType, $member->party, $fieldCode);
+
+		$field = $registeredFields->getFirstFieldByName($fieldName);
+		if ($field !== null)
+		{
+			return new Item\FieldCollection($field);
+		}
+
+		$hcmField = $this->hcmLinkFieldService->getFieldById($parsedName->id);
+
+		$field = new Item\Field(
+			blankId: 0,
+			party: $member->party,
+			type: $fieldType,
+			name: $fieldName,
+			label: $hcmField->title ?? '',
+			required: $this->getFieldRequiredByType($fieldType),
+		);
+
+		if ($field->type === FieldType::ADDRESS)
+		{
+			$field->subfields = $this->createAddressSubfieldsByField($field);
+		}
+
+		return new Item\FieldCollection($field);
+	}
+
+	private function getFieldRequiredByType(string $fieldType): ?bool
+	{
+		return in_array($fieldType, self::NOT_REQUIRED_FIELD_TYPES, true) ? false : null;
 	}
 }

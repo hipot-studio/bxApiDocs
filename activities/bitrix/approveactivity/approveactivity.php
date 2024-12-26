@@ -377,13 +377,10 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 
 		$this->writeToTrackingService(Loc::getMessage('BPAA_ACT_APPROVE'));
 
-		if ((bool)\Bitrix\Main\Config\Option::get('bizproc', 'release_preview_2024'))
+		$result = $this->getResult();
+		if ($result)
 		{
-			$result = $this->getResult();
-			if ($result)
-			{
-				$this->fixResult($result);
-			}
+			$this->fixResult($result);
 		}
 
 		$activity = $this->arActivities[0];

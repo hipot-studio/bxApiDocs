@@ -25,6 +25,7 @@ final class SmartB2eDocument extends Dynamic
 {
 	private readonly ?EntityService $entityService;
 	private ?DocumentCollection $documentCollection = null;
+	private ?MemberCollection $readyForActionReviewOrEditMemberCollection = null;
 	private ?MemberCollection $notCompletedReviewOrEditMemberCollection = null;
 	private ?MemberCollection $reviewerAndEditorMemberCollection = null;
 	private ?MemberCollection $currentUserReadyForSignMemberCollection = null;
@@ -197,6 +198,9 @@ final class SmartB2eDocument extends Dynamic
 					[MemberStatus::READY, MemberStatus::WAIT],
 					true,
 				),
+			);
+			$this->readyForActionReviewOrEditMemberCollection = $this->notCompletedReviewOrEditMemberCollection?->filter(
+				static fn(Member $member): bool => $member->status === MemberStatus::READY,
 			);
 			$this->currentUserReadyForSignMemberCollection = $this->getReadyForSignMemberList($this->documentCollection);
 		}
@@ -556,14 +560,14 @@ final class SmartB2eDocument extends Dynamic
 				{
 					$reviewerItem = $this->entityService->findCurrentUserReviewerItemByDocumentId(
 						$document?->id,
-						$this->notCompletedReviewOrEditMemberCollection,
+						$this->readyForActionReviewOrEditMemberCollection,
 					);
 					$memberId = $reviewerItem?->id;
 					if ($memberId === null)
 					{
 						$editorItem = $this->entityService->findCurrentUserEditorItemByDocumentId(
 							$document?->id,
-							$this->notCompletedReviewOrEditMemberCollection,
+							$this->readyForActionReviewOrEditMemberCollection,
 						);
 						$memberId = $editorItem?->id;
 					}

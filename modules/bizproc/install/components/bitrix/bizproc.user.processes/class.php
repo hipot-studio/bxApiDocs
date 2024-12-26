@@ -528,20 +528,7 @@ class BizprocUserProcesses
 
 	private function formatDate(?DateTime $date): string
 	{
-		if (!$date)
-		{
-			return '';
-		}
-
-		$thisYear = $date->format('Y') === date('Y');
-		$culture = \Bitrix\Main\Application::getInstance()->getContext()->getCulture();
-		$df = $thisYear
-			? $culture?->getDayMonthFormat() ?? 'j F'
-			: $culture?->getLongDateFormat() ?? 'j F Y'
-		;
-		$tf = $culture?->getShortTimeFormat() ?? 'H:i';
-
-		return \FormatDate("$df, $tf", $date->toUserTime());
+		return \CBPViewHelper::formatDateTime($date);
 	}
 
 	private function formatName($user): string

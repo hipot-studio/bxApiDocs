@@ -286,11 +286,36 @@ abstract class Mailbox
 			$filter = array('=ID' => (int) $filter);
 		}
 
-		$mailbox = Mail\MailboxTable::getList(array(
-			'filter' => $filter,
-			'select' => array('*', 'LANG_CHARSET' => 'SITE.CULTURE.CHARSET'),
-			'limit' => 1,
-		))->fetch() ?: array();
+		static $cachedMailboxes = [];
+
+		$cacheKey = null;
+
+		//For additional security purposes
+		if (isset($filter['=ID']))
+		{
+			$cacheKey = md5(serialize($filter)).'-'.$filter['=ID'];
+		}
+
+		if (is_null($cacheKey) || !isset($cachedMailboxes[$cacheKey]))
+		{
+			$mailbox = Mail\MailboxTable::getList([
+				'filter' => $filter,
+				'select' => [
+					'*',
+					'LANG_CHARSET' => 'SITE.CULTURE.CHARSET'
+				],
+				'limit' => 1,
+			])->fetch() ?: [];
+
+			if (!is_null($cacheKey))
+			{
+				$cachedMailboxes[$cacheKey] = $mailbox;
+			}
+		}
+		else
+		{
+			$mailbox = $cachedMailboxes[$cacheKey];
+		}
 
 		if (!empty($mailbox))
 		{
@@ -506,7 +531,7 @@ abstract class Mailbox
 			Setting a new time for an attempt to synchronize the mailbox
 			through the agent for users with a free tariff
 		*/
-		if (!LicenseManager::isSyncAvailable() || !LicenseManager::checkTheMailboxForSyncAvailability($this->mailbox['ID']))
+		if (!LicenseManager::isSyncAvailable() || !LicenseManager::checkTheMailboxForSyncAvailability((int)$this->mailbox['ID'], (int)$this->mailbox['USER_ID']))
 		{
 			$this->mailbox['OPTIONS']['next_sync'] = time() + 3600 * 24;
 
@@ -1954,7 +1979,23 @@ abstract class Mailbox
 
 			if ($newMessageId > 0 && $count === 1)
 			{
-				$message = Mail\MailMessageTable::getByPrimary($newMessageId)->fetch();
+				$message = Mail\MailMessageTable::getByPrimary(
+					$newMessageId,
+					[
+						'select' => [
+							'ID',
+							'HEADER',
+							'FIELD_FROM',
+							'FIELD_REPLY_TO',
+							'FIELD_TO',
+							'FIELD_CC',
+							'FIELD_BCC',
+							'BODY_HTML',
+							'SUBJECT',
+						],
+						'limit' => 1,
+					],
+				)->fetch();
 
 				if (!empty($message))
 				{

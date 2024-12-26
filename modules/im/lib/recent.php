@@ -7,8 +7,10 @@ use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Chat\Copilot\CopilotPopupItem;
 use Bitrix\Im\V2\Chat\EntityLink;
-use Bitrix\Im\V2\Chat\Permission;
+use Bitrix\Im\V2\Message\Counter\CounterType;
+use Bitrix\Im\V2\Permission;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
+use Bitrix\Im\V2\Integration\Socialnetwork\Group;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Entity\File\FileCollection;
@@ -245,6 +247,7 @@ class Recent
 		$canManageMessagesOption = $options['CAN_MANAGE_MESSAGES'] ?? null;
 		$skipChatOption = $options['SKIP_CHAT'] ?? null;
 		$skipDialogOption = $options['SKIP_DIALOG'] ?? null;
+		$skipCollabOption = $options['SKIP_COLLAB'] ?? null;
 		$lastMessageDateOption = $options['LAST_MESSAGE_DATE'] ?? null;
 		$withoutCommonUsers = !$viewCommonUsers || $onlyOpenlinesOption === 'Y';
 		$unreadOnly = isset($options['UNREAD_ONLY']) && $options['UNREAD_ONLY'] === 'Y';
@@ -302,6 +305,10 @@ class Recent
 			{
 				$skipTypes[] = IM_MESSAGE_PRIVATE;
 			}
+			if ($skipCollabOption === 'Y')
+			{
+				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_COLLAB;
+			}
 			if (!empty($skipTypes))
 			{
 				$ormParams['filter'][] = [
@@ -347,7 +354,7 @@ class Recent
 
 		if ($canManageMessagesOption === 'Y')
 		{
-			$ormParams = Permission::getRoleGetListFilter($ormParams, 'MANAGE_MESSAGES', 'RELATION', 'CHAT');
+			$ormParams = Permission::getRoleGetListFilter($ormParams, Permission\ActionGroup::ManageMessages, 'RELATION', 'CHAT');
 		}
 
 		$orm = \Bitrix\Im\Model\RecentTable::getList($ormParams);
@@ -592,7 +599,8 @@ class Recent
 	{
 		$userId = (int)$params['USER_ID'];
 		$showOpenlines = \Bitrix\Main\Loader::includeModule('imopenlines') && $params['SHOW_OPENLINES'] !== false;
-		$isIntranet = \Bitrix\Main\Loader::includeModule('intranet') && \Bitrix\Intranet\Util::isIntranetUser($userId);
+		$isIntranetInstalled = \Bitrix\Main\Loader::includeModule('intranet');
+		$isIntranet = $isIntranetInstalled && \Bitrix\Intranet\Util::isIntranetUser($userId);
 		$withoutCommonUsers = $params['WITHOUT_COMMON_USERS'] === true || !$isIntranet;
 		$unreadOnly = isset($params['UNREAD_ONLY']) && $params['UNREAD_ONLY'] === true;
 		$shortInfo = isset($params['SHORT_INFO']) && $params['SHORT_INFO'] === true;
@@ -722,6 +730,19 @@ class Recent
 		else
 		{
 			$filter = ['@USER_ID' => [$userId, 0]];
+		}
+
+		if ($isIntranetInstalled && !$isIntranet)
+		{
+			$subQuery = Group::getExtranetAccessibleUsersQuery($userId);
+			if ($subQuery !== null)
+			{
+				$filter[] = [
+					'LOGIC' => 'OR',
+					['!=ITEM_TYPE' => 'P'],
+					['@USER.ID' => new SqlExpression($subQuery->getQuery())],
+				];
+			}
 		}
 
 		if ($unreadOnly)
@@ -1524,6 +1545,7 @@ class Recent
 		]);
 		$pull['chat'] = $chat->toPullFormat();
 		$pull['lastActivityDate'] = $lastCommentDate;
+		$pull['counterType'] = $chat->getCounterType()->value;
 
 		$event = [
 			'module_id' => 'im',
@@ -1648,6 +1670,7 @@ class Recent
 						'counter' => $counter,
 						'markedId' => $markedId ?? $element['MARKED_ID'],
 						'lines' => $element['ITEM_TYPE'] === IM_MESSAGE_OPEN_LINE,
+						'counterType' => CounterType::tryFromType($element['ITEM_TYPE'])->value,
 					],
 					'extra' => \Bitrix\Im\Common::getPullExtra()
 				]

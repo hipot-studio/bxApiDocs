@@ -14,7 +14,7 @@ class UserFieldAccess extends \Bitrix\Main\UserField\UserFieldAccess
 			MemberDynamicFieldInfoProvider::USER_FIELD_ENTITY_ID,
 		];
 
-		if (LegalInfo::canEdit(CurrentUser::get()->getId()))
+		if (LegalInfo::canAdd(CurrentUser::get()->getId()))
 		{
 			$ids[] = LegalInfo::USER_FIELD_ENTITY_ID;
 		}
