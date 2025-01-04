@@ -2636,7 +2636,7 @@ class CSiteCheckerTest
 				TABLE_SCHEMA = '" . $DB->ForSql($DB->DBName) . "'
 				and TABLE_TYPE = 'BASE TABLE'
 				and TABLE_NAME like 'b\_%'
-				and CREATE_OPTIONS <> 'row_format=DYNAMIC'
+				and CREATE_OPTIONS <> _ascii'row_format=DYNAMIC'
 				and (
 					UPPER(ROW_FORMAT) in ('REDUNDANT', 'COMPACT')
 					or ENGINE <> 'InnoDB'

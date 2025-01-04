@@ -1002,7 +1002,11 @@ class CIntranetUtils
 				Loader::includeModule('humanresources')
 				&& Storage::instance()->isIntranetUtilsDisabled())
 			{
-				$subStructure = StructureBackwardAdapter::getStructureWithoutEmployee($sectionId, (int)$depth);
+				$subStructure = StructureBackwardAdapter::getStructureWithoutEmployee($sectionId,
+					$depth === false
+					? null
+					: (int) $depth
+				);
 
 				if (!empty($subStructure) && !empty($subStructure['DATA']))
 				{

@@ -52,7 +52,10 @@ class ExtranetUserDataProvider extends EntityDataProvider
 		}
 
 		$result = $rawFilterValue;
-		$this->checkExtranetField($result);
+		if (\CExtranet::getExtranetUserGroupId())
+		{
+			$this->checkExtranetField($result);
+		}
 		$this->checkCollaberField($result);
 
 		if (
@@ -167,7 +170,6 @@ class ExtranetUserDataProvider extends EntityDataProvider
 			!empty($filterValue[ExtranetUserSettings::EXTRANET_FIELD])
 			&& $this->getSettings()->isFilterAvailable(ExtranetUserSettings::EXTRANET_FIELD)
 			&& $filterValue[ExtranetUserSettings::EXTRANET_FIELD] === 'Y'
-			&& \CExtranet::getExtranetUserGroupId()
 		)
 		{
 			$filterValue['UF_DEPARTMENT'] = false;
