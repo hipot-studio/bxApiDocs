@@ -2,6 +2,7 @@
 
 namespace Bitrix\Ui\EntityForm;
 
+use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\Main\Access\AccessCode;
 use Bitrix\Main\Application;
@@ -557,6 +558,12 @@ class Scope
 			if (empty($fields['USER_ID']) || empty($fields['GROUP_ID']))
 			{
 				$userToGroup = UserToGroupTable::getById($id)->fetchObject();
+
+				if (!$userToGroup)
+				{
+					return;
+				}
+
 				$memberId = $userToGroup->getUserId();
 				$socialGroupId = $userToGroup->getGroupId();
 			}
@@ -589,9 +596,22 @@ class Scope
 
 	private function getScopesByDepartment(int $departmentId, bool $onlyAutoApplyView = false): array
 	{
-		$accessCode = 'DR' . $departmentId;
+		$accessCodes = [];
+		$nodeRepository = Container::getNodeRepository();
+		$node = $nodeRepository->getById($departmentId);
+		if (!$node)
+		{
+			return $accessCodes;
+		}
 
-		return $this->getScopesByAccessCode($accessCode, $onlyAutoApplyView);
+		$parentNodes = $nodeRepository->getParentOf($node, DepthLevel::FULL);
+		foreach ($parentNodes as $node)
+		{
+			$accessCode = str_replace('D', 'DR', $node->accessCode);
+			$accessCodes = array_merge($accessCodes, $this->getScopesByAccessCode($accessCode, $onlyAutoApplyView));
+		}
+
+		return $accessCodes;
 	}
 
 	private function getScopesBySocialGroupId(int $socialGroupId, bool $onlyAutoApplyView = false): array
@@ -745,7 +765,7 @@ class Scope
 			return $userIds;
 		}
 
-		$allEmp = $hrServiceLocator::getNodeMemberService()->getAllEmployees($node->id);
+		$allEmp = $hrServiceLocator::getNodeMemberService()->getAllEmployees($node->id, true);
 		foreach ($allEmp->getIterator() as $emp)
 		{
 			$userIds[] = $emp->entityId;
