@@ -139,6 +139,11 @@
       <option name="PHP" value="true" />
     </context>
   </template>
+  <template name="CANONICAL_PAGE_URL" value="CANONICAL_PAGE_URL" description="Каноничная страница элемента (доступен только для чтения)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
   <template name="SHOW_COUNTER" value="SHOW_COUNTER" description="Количество показов элемента (изменяется при вызове функции CIBlockElement::CounterInc)." toReformat="false" toShortenFQNames="true">
     <context>
       <option name="PHP" value="true" />
