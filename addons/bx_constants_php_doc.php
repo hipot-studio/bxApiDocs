@@ -952,3 +952,8 @@ define("CACHE_MODULE_PERMISSIONS", "SESSION");
 define("CACHED_b_sale_order", 3600);
 define('CURRENCY_SKIP_CACHE', false);
 define('CURRENCY_CACHE_TIME', 3600);
+
+
+define('TIMELIMIT_EDITION', 'Y');
+define('DEMO', 'Y');
+define('ENCODE', 'Y');
