@@ -12,76 +12,76 @@ use Bitrix\UI\Util;
 
 final class AhaMomentCounterLightTime extends Base
 {
-	private const PORTAL_CREATION_DATE_THRESHOLD = '2024-03-01';
+    public const OPTION_NAME = 'aha-moment-counter-lightdate';
+    private const PORTAL_CREATION_DATE_THRESHOLD = '2024-03-01';
 
-	public const OPTION_NAME = 'aha-moment-counter-lightdate';
+    protected function canShow(): bool
+    {
+        return !$this->isUserSeenTour()
+            && $this->isPortalCreationDateBeforeFeatureRelease()
+            && $this->isUserHasUncompletedAction();
+    }
 
-	protected function canShow(): bool
-	{
-		return !$this->isUserSeenTour()
-			&& $this->isPortalCreationDateBeforeFeatureRelease()
-			&& $this->isUserHasUncompletedAction();
-	}
+    protected function getSteps(): array
+    {
+        Loader::includeModule('ui');
 
-	protected function getSteps(): array
-	{
-		Loader::includeModule('ui');
-		return [
-			[
-				'id' => 'step1',
-				'target' => '#counter_panel_container',
-				'title' =>  Loc::getMessage('CRM_TOUR_AHA_LIGHT_COUNTER_TIME_TITLE'),
-				'text' =>  Loc::getMessage(
-					'CRM_TOUR_AHA_LIGHT_COUNTER_TIME_BODY',
-					['#HELPDESK_URL#' => Util::getArticleUrlByCode('17359558')]
-				),
-			],
-		];
-	}
+        return [
+            [
+                'id' => 'step1',
+                'target' => '#counter_panel_container',
+                'title' => Loc::getMessage('CRM_TOUR_AHA_LIGHT_COUNTER_TIME_TITLE'),
+                'text' => Loc::getMessage(
+                    'CRM_TOUR_AHA_LIGHT_COUNTER_TIME_BODY',
+                    ['#HELPDESK_URL#' => Util::getArticleUrlByCode('17359558')]
+                ),
+            ],
+        ];
+    }
 
-	protected function getOptions(): array
-	{
-		return [
-			'steps' => [
-				'popup' => [
-					'width' => 380,
-				],
-			],
-		];
-	}
+    protected function getOptions(): array
+    {
+        return [
+            'steps' => [
+                'popup' => [
+                    'width' => 380,
+                ],
+            ],
+        ];
+    }
 
-	private function isPortalCreationDateBeforeFeatureRelease(): bool
-	{
-		$user = UserTable::getRow([
-			'select' => ['DATE_REGISTER'],
-			'filter' => ['ID' => 1],
-			'cache'=> [
-				'ttl' => 86400,
-			],
-		]);
+    private function isPortalCreationDateBeforeFeatureRelease(): bool
+    {
+        $user = UserTable::getRow([
+            'select' => ['DATE_REGISTER'],
+            'filter' => ['ID' => 1],
+            'cache' => [
+                'ttl' => 86_400,
+            ],
+        ]);
 
-		if (!$user)
-		{
-			return false;
-		}
+        if (!$user) {
+            return false;
+        }
 
-		$portalDate = Date::createFromTimestamp($user['DATE_REGISTER']->getTimestamp());
-		$releaseDate = new Date(self::PORTAL_CREATION_DATE_THRESHOLD, 'Y-m-d');
+        $portalDate = Date::createFromTimestamp($user['DATE_REGISTER']->getTimestamp());
+        $releaseDate = new Date(self::PORTAL_CREATION_DATE_THRESHOLD, 'Y-m-d');
 
-		return $portalDate < $releaseDate;
-	}
+        return $portalDate < $releaseDate;
+    }
 
-	private function isUserHasUncompletedAction(): bool
-	{
-		$userId = Container::getInstance()->getContext()->getUserId();
+    private function isUserHasUncompletedAction(): bool
+    {
+        $userId = Container::getInstance()->getContext()->getUserId();
 
-		$row = EntityCountableActivityTable::query()
-			->addSelect('ID')
-			->where('ENTITY_ASSIGNED_BY_ID', '=', $userId)
-			->setLimit(1)
-			->setCacheTtl(60)
-			->fetch();
+        $row = EntityCountableActivityTable::query()
+            ->addSelect('ID')
+            ->where('ENTITY_ASSIGNED_BY_ID', '=', $userId)
+            ->setLimit(1)
+            ->setCacheTtl(60)
+            ->fetch()
+        ;
 
-		return $row !== false;
-	}
+        return false !== $row;
+    }
 }

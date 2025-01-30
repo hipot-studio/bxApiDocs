@@ -1,176 +1,141 @@
 <?php
+
 namespace Bitrix\Main\DB;
 
-use Bitrix\Main\Diag;
+use Bitrix\Main\Diag\SqlTrackerQuery;
 
-class MysqlConnection extends MysqlCommonConnection
+class mysqlconnection extends MysqlCommonConnection
 {
-	/**********************************************************
-	 * SqlHelper
-	 **********************************************************/
+    /**
+     * Disconnects from the database.
+     * Does nothing if there was no connection established.
+     */
+    public function disconnectInternal()
+    {
+        if (!$this->isConnected) {
+            return;
+        }
 
-	/**
-	 * @inheritDoc
-	 */
-	protected function createSqlHelper()
-	{
-		return new MysqlSqlHelper($this);
-	}
+        mysql_close($this->resource);
 
-	/***********************************************************
-	 * Connection and disconnection
-	 ***********************************************************/
+        $this->isConnected = false;
+    }
 
-	/**
-	 * Establishes a connection to the database.
-	 * Includes php_interface/after_connect_d7.php on success.
-	 * Throws exception on failure.
-	 *
-	 * @return void
-	 * @throws \Bitrix\Main\DB\ConnectionException
-	 */
-	protected function connectInternal()
-	{
-		if($this->isConnected)
-		{
-			return;
-		}
+    public function getInsertedId()
+    {
+        $this->connectInternal();
 
-		if(($this->options & self::PERSISTENT) != 0)
-		{
-			$connection = mysql_pconnect($this->host, $this->login, $this->password);
-		}
-		else
-		{
-			$connection = mysql_connect($this->host, $this->login, $this->password, true);
-		}
+        return mysql_insert_id($this->resource);
+    }
 
-		if(!$connection)
-		{
-			throw new ConnectionException('Mysql connect error ['.$this->host.', '.gethostbyname($this->host).']', mysql_error());
-		}
+    public function getAffectedRowsCount()
+    {
+        return mysql_affected_rows($this->getResource());
+    }
 
-		if($this->database !== null)
-		{
-			if(!mysql_select_db($this->database, $connection))
-			{
-				throw new ConnectionException('Mysql select db error ['.$this->database.']', mysql_error($connection));
-			}
-		}
+    // Type, version, cache, etc.
 
-		$this->resource = $connection;
-		$this->isConnected = true;
+    public function getVersion()
+    {
+        if (null === $this->version) {
+            $version = $this->queryScalar('SELECT VERSION()');
+            if (null !== $version) {
+                $version = trim($version);
+                preg_match('#[0-9]+\\.[0-9]+\\.[0-9]+#', $version, $ar);
+                $this->version = $ar[0];
+            }
+        }
 
-		$this->afterConnected();
-	}
+        return [$this->version, null];
+    }
 
-	/**
-	 * Disconnects from the database.
-	 * Does nothing if there was no connection established.
-	 *
-	 * @return void
-	 */
-	public function disconnectInternal()
-	{
-		if (!$this->isConnected)
-			return;
+    /**
+     * Selects the default database for database queries.
+     *
+     * @param string $database database name
+     *
+     * @return bool
+     */
+    public function selectDatabase($database)
+    {
+        return mysql_select_db($database, $this->resource);
+    }
+    // SqlHelper
 
-		mysql_close($this->resource);
+    protected function createSqlHelper()
+    {
+        return new MysqlSqlHelper($this);
+    }
 
-		$this->isConnected = false;
-	}
+    // Connection and disconnection
 
-	/*********************************************************
-	 * Query
-	 *********************************************************/
+    /**
+     * Establishes a connection to the database.
+     * Includes php_interface/after_connect_d7.php on success.
+     * Throws exception on failure.
+     *
+     * @throws ConnectionException
+     */
+    protected function connectInternal()
+    {
+        if ($this->isConnected) {
+            return;
+        }
 
-	/**
-	 * @inheritDoc
-	 */
-	protected function queryInternal($sql, array $binds = null, \Bitrix\Main\Diag\SqlTrackerQuery $trackerQuery = null)
-	{
-		$this->connectInternal();
+        if (($this->options & self::PERSISTENT) !== 0) {
+            $connection = mysql_pconnect($this->host, $this->login, $this->password);
+        } else {
+            $connection = mysql_connect($this->host, $this->login, $this->password, true);
+        }
 
-		if ($trackerQuery != null)
-			$trackerQuery->startQuery($sql, $binds);
+        if (!$connection) {
+            throw new ConnectionException('Mysql connect error ['.$this->host.', '.gethostbyname($this->host).']', mysql_error());
+        }
 
-		$result = mysql_query($sql, $this->resource);
+        if (null !== $this->database) {
+            if (!mysql_select_db($this->database, $connection)) {
+                throw new ConnectionException('Mysql select db error ['.$this->database.']', mysql_error($connection));
+            }
+        }
 
-		if ($trackerQuery != null)
-			$trackerQuery->finishQuery();
+        $this->resource = $connection;
+        $this->isConnected = true;
 
-		$this->lastQueryResult = $result;
+        $this->afterConnected();
+    }
 
-		if (!$result)
-			throw new SqlQueryException('Mysql query error', mysql_error($this->resource), $sql);
+    // Query
 
-		return $result;
-	}
+    protected function queryInternal($sql, ?array $binds = null, ?SqlTrackerQuery $trackerQuery = null)
+    {
+        $this->connectInternal();
 
-	/**
-	 * @inheritDoc
-	 */
-	protected function createResult($result, \Bitrix\Main\Diag\SqlTrackerQuery $trackerQuery = null)
-	{
-		return new MysqlResult($result, $this, $trackerQuery);
-	}
+        if (null !== $trackerQuery) {
+            $trackerQuery->startQuery($sql, $binds);
+        }
 
-	/**
-	 * @inheritDoc
-	 */
-	public function getInsertedId()
-	{
-		$this->connectInternal();
-		return mysql_insert_id($this->resource);
-	}
+        $result = mysql_query($sql, $this->resource);
 
-	/**
-	 * @inheritDoc
-	 */
-	public function getAffectedRowsCount()
-	{
-		return mysql_affected_rows($this->getResource());
-	}
+        if (null !== $trackerQuery) {
+            $trackerQuery->finishQuery();
+        }
 
-	/*********************************************************
-	 * Type, version, cache, etc.
-	 *********************************************************/
+        $this->lastQueryResult = $result;
 
-	/**
-	 * @inheritDoc
-	 */
-	public function getVersion()
-	{
-		if ($this->version == null)
-		{
-			$version = $this->queryScalar("SELECT VERSION()");
-			if ($version != null)
-			{
-				$version = trim($version);
-				preg_match("#[0-9]+\\.[0-9]+\\.[0-9]+#", $version, $ar);
-				$this->version = $ar[0];
-			}
-		}
+        if (!$result) {
+            throw new SqlQueryException('Mysql query error', mysql_error($this->resource), $sql);
+        }
 
-		return array($this->version, null);
-	}
+        return $result;
+    }
 
-	/**
-	 * @inheritDoc
-	 */
-	protected function getErrorMessage()
-	{
-		return sprintf("[%s] %s", mysql_errno($this->resource), mysql_error($this->resource));
-	}
+    protected function createResult($result, ?SqlTrackerQuery $trackerQuery = null)
+    {
+        return new MysqlResult($result, $this, $trackerQuery);
+    }
 
-	/**
-	 * Selects the default database for database queries.
-	 *
-	 * @param string $database Database name.
-	 * @return bool
-	 */
-	public function selectDatabase($database)
-	{
-		return mysql_select_db($database, $this->resource);
-	}
+    protected function getErrorMessage()
+    {
+        return \sprintf('[%s] %s', mysql_errno($this->resource), mysql_error($this->resource));
+    }
 }

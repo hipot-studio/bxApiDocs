@@ -1,293 +1,275 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Bitrix\CrmMobile\Controller\Action\Terminal;
 
+use Bitrix\Crm;
+use Bitrix\CrmMobile\Controller\Action;
+use Bitrix\CrmMobile\Terminal\GetPaymentQuery;
 use Bitrix\CrmMobile\Terminal\LocHelper;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale;
-use Bitrix\Crm;
-use Bitrix\CrmMobile\Controller\Action;
-use Bitrix\CrmMobile\Terminal\GetPaymentQuery;
 
 LocHelper::loadMessages();
 
 class CreatePaymentAction extends Action
 {
-	public function run(
-		float $sum,
-		string $currency,
-		string $phoneNumber = null,
-		?array $client = null,
-		?string $clientName = null
-	)
-	{
-		$order = $this->createOrder($currency);
-		$this->setTerminalPlatform($order);
+    public function run(
+        float $sum,
+        string $currency,
+        ?string $phoneNumber = null,
+        ?array $client = null,
+        ?string $clientName = null
+    ) {
+        $order = $this->createOrder($currency);
+        $this->setTerminalPlatform($order);
 
-		$product = $this->prepareBasketProduct($sum, $currency);
-		$basket = $this->createBasket($product);
-		$setBasketResult = $order->setBasket($basket);
-		if (!$setBasketResult->isSuccess())
-		{
-			$this->addErrors($setBasketResult->getErrors());
-			return null;
-		}
+        $product = $this->prepareBasketProduct($sum, $currency);
+        $basket = $this->createBasket($product);
+        $setBasketResult = $order->setBasket($basket);
+        if (!$setBasketResult->isSuccess()) {
+            $this->addErrors($setBasketResult->getErrors());
 
-		if ($phoneNumber)
-		{
-			$this->setProperties($order, $phoneNumber);
-		}
+            return null;
+        }
 
-		$payment = $this->createPayment($order);
+        if ($phoneNumber) {
+            $this->setProperties($order, $phoneNumber);
+        }
 
-		$setContactCompanyResult = null;
-		if ($client)
-		{
-			$setContactCompanyResult = $this->setContactCompany($order, $client);
-		}
-		elseif ($clientName || $phoneNumber)
-		{
-			$contactCompanyResult = $this->createContactCompany($phoneNumber, $clientName);
-			if ($contactCompanyResult->isSuccess())
-			{
-				$setContactCompanyResult = $this->setContactCompany(
-					$order,
-					[
-						'entityTypeId' => \CCrmOwnerType::Contact,
-						'id' => $contactCompanyResult->getId()
-					]
-				);
-			}
-			else
-			{
-				$this->addErrors($contactCompanyResult->getErrors());
-				return null;
-			}
-		}
+        $payment = $this->createPayment($order);
 
-		if ($setContactCompanyResult && !$setContactCompanyResult->isSuccess())
-		{
-			$this->addErrors($setContactCompanyResult->getErrors());
-			return null;
-		}
+        $setContactCompanyResult = null;
+        if ($client) {
+            $setContactCompanyResult = $this->setContactCompany($order, $client);
+        } elseif ($clientName || $phoneNumber) {
+            $contactCompanyResult = $this->createContactCompany($phoneNumber, $clientName);
+            if ($contactCompanyResult->isSuccess()) {
+                $setContactCompanyResult = $this->setContactCompany(
+                    $order,
+                    [
+                        'entityTypeId' => \CCrmOwnerType::Contact,
+                        'id' => $contactCompanyResult->getId(),
+                    ]
+                );
+            } else {
+                $this->addErrors($contactCompanyResult->getErrors());
 
-		$hasMeaningfulFields = $order->hasMeaningfulField();
-		$finalActionResult = $order->doFinalAction($hasMeaningfulFields);
-		if (!$finalActionResult->isSuccess())
-		{
-			$this->addErrors($finalActionResult->getErrors());
-			return null;
-		}
+                return null;
+            }
+        }
 
-		$result = $order->save();
-		if (!$result->isSuccess())
-		{
-			$this->addErrors($result->getErrors());
-			return null;
-		}
+        if ($setContactCompanyResult && !$setContactCompanyResult->isSuccess()) {
+            $this->addErrors($setContactCompanyResult->getErrors());
 
-		return [
-			'payment' => (new GetPaymentQuery($payment->getId()))->execute(),
-		];
-	}
+            return null;
+        }
 
-	private function createOrder(string $currency): Crm\Order\Order
-	{
-		$registry = $this->getRegistry();
+        $hasMeaningfulFields = $order->hasMeaningfulField();
+        $finalActionResult = $order->doFinalAction($hasMeaningfulFields);
+        if (!$finalActionResult->isSuccess()) {
+            $this->addErrors($finalActionResult->getErrors());
 
-		/** @var Crm\Order\Order $orderClassName */
-		$orderClassName = $registry->getOrderClassName();
+            return null;
+        }
 
-		$userId = (int)\CSaleUser::GetAnonymousUserID();
-		/** @var Crm\Order\Order $order */
-		$order = $orderClassName::create(SITE_ID, $userId, $currency);
+        $result = $order->save();
+        if (!$result->isSuccess()) {
+            $this->addErrors($result->getErrors());
 
-		$order->setPersonTypeId(Crm\Order\PersonType::getContactPersonTypeId());
+            return null;
+        }
 
-		$responsibleId = (int)$this->getCurrentUser()->getId();
-		$order->setField('RESPONSIBLE_ID', $responsibleId);
+        return [
+            'payment' => (new GetPaymentQuery($payment->getId()))->execute(),
+        ];
+    }
 
-		$this->disableContactAutoCreationMode($order);
+    private function createOrder(string $currency): Crm\Order\Order
+    {
+        $registry = $this->getRegistry();
 
-		return $order;
-	}
+        /** @var Crm\Order\Order $orderClassName */
+        $orderClassName = $registry->getOrderClassName();
 
-	private function createBasket(array $product): Sale\BasketBase
-	{
-		$basket = Sale\Basket::create(SITE_ID);
+        $userId = (int) \CSaleUser::GetAnonymousUserID();
 
-		$item = $basket->createItem('', $product['PRODUCT_ID']);
-		unset($product['PRODUCT_ID']);
-		$item->setFields($product);
+        /** @var Crm\Order\Order $order */
+        $order = $orderClassName::create(SITE_ID, $userId, $currency);
 
-		return $basket;
-	}
+        $order->setPersonTypeId(Crm\Order\PersonType::getContactPersonTypeId());
 
-	private function setTerminalPlatform(Crm\Order\Order $order): Sale\Result
-	{
-		$tradeBindingCollection = $order->getTradeBindingCollection();
-		/** @var Sale\TradeBindingEntity $binding */
-		$binding = $tradeBindingCollection->createItem();
+        $responsibleId = (int) $this->getCurrentUser()->getId();
+        $order->setField('RESPONSIBLE_ID', $responsibleId);
 
-		return $binding->setFields([
-			'TRADING_PLATFORM_ID' => $this->getTerminalPlatformId(),
-		]);
-	}
+        $this->disableContactAutoCreationMode($order);
 
-	private function prepareBasketProduct(float $sum, string $currency): array
-	{
-		$basketProductFields = [
-			'PRODUCT_ID' => 0,
-			'NAME' => Loc::getMessage('M_CRM_TL_BASKET_ITEM_NAME'),
-			'CUSTOM_PRICE' => 'Y',
-			'PRICE' => $sum,
-			'CURRENCY' => $currency,
-			'QUANTITY' => 1,
-		];
+        return $order;
+    }
 
-		if (Main\Loader::includeModule('catalog'))
-		{
-			$measure = [];
-			$measureResult = \CCatalogMeasure::getList(
-				[],
-				['CODE' => \CCatalogMeasure::DEFAULT_MEASURE_CODE],
-				false,
-				false,
-				['CODE', 'SYMBOL_RUS']
-			);
-			if ($measureResult->SelectedRowsCount())
-			{
-				$measure = $measureResult->Fetch();
-			}
-			else
-			{
-				$measure = \CCatalogMeasure::getDefaultMeasure(true);
-			}
+    private function createBasket(array $product): Sale\BasketBase
+    {
+        $basket = Sale\Basket::create(SITE_ID);
 
-			if ($measure)
-			{
-				$basketProductFields['MEASURE_CODE'] = $measure['CODE'];
-				$basketProductFields['MEASURE_NAME'] = $measure['SYMBOL_RUS'];
-			}
-		}
+        $item = $basket->createItem('', $product['PRODUCT_ID']);
+        unset($product['PRODUCT_ID']);
+        $item->setFields($product);
 
-		return $basketProductFields;
-	}
+        return $basket;
+    }
 
-	private function createPayment(Crm\Order\Order $order): Sale\Payment
-	{
-		$paymentCollection = $order->getPaymentCollection();
-		$payment = $paymentCollection->createItem(
-			Sale\PaySystem\Manager::getObjectById(
-				Sale\PaySystem\Manager::getInnerPaySystemId()
-			)
-		);
+    private function setTerminalPlatform(Crm\Order\Order $order): Sale\Result
+    {
+        $tradeBindingCollection = $order->getTradeBindingCollection();
 
-		$payment->setField('SUM', $order->getPrice());
-		$payment->setField('CURRENCY', $order->getCurrency());
-		$payment->setField('RESPONSIBLE_ID', $order->getField('RESPONSIBLE_ID'));
+        /** @var Sale\TradeBindingEntity $binding */
+        $binding = $tradeBindingCollection->createItem();
 
-		return $payment;
-	}
+        return $binding->setFields([
+            'TRADING_PLATFORM_ID' => $this->getTerminalPlatformId(),
+        ]);
+    }
 
-	private function setContactCompany(Crm\Order\Order $order, $existingClient): Sale\Result
-	{
-		$result = new Sale\Result();
+    private function prepareBasketProduct(float $sum, string $currency): array
+    {
+        $basketProductFields = [
+            'PRODUCT_ID' => 0,
+            'NAME' => Loc::getMessage('M_CRM_TL_BASKET_ITEM_NAME'),
+            'CUSTOM_PRICE' => 'Y',
+            'PRICE' => $sum,
+            'CURRENCY' => $currency,
+            'QUANTITY' => 1,
+        ];
 
-		$clientCollection = $order->getContactCompanyCollection();
+        if (Main\Loader::includeModule('catalog')) {
+            $measure = [];
+            $measureResult = \CCatalogMeasure::getList(
+                [],
+                ['CODE' => \CCatalogMeasure::DEFAULT_MEASURE_CODE],
+                false,
+                false,
+                ['CODE', 'SYMBOL_RUS']
+            );
+            if ($measureResult->SelectedRowsCount()) {
+                $measure = $measureResult->Fetch();
+            } else {
+                $measure = \CCatalogMeasure::getDefaultMeasure(true);
+            }
 
-		$entityTypeId = (int)$existingClient['entityTypeId'];
-		if ($entityTypeId === \CCrmOwnerType::Company)
-		{
-			/** @var Crm\Order\ContactCompanyEntity $contactCompanyEntity */
-			$contactCompanyEntity = $clientCollection->createCompany();
-		}
-		elseif ($entityTypeId === \CCrmOwnerType::Contact)
-		{
-			/** @var Crm\Order\ContactCompanyEntity $contactCompanyEntity */
-			$contactCompanyEntity = $clientCollection->createContact();
-		}
+            if ($measure) {
+                $basketProductFields['MEASURE_CODE'] = $measure['CODE'];
+                $basketProductFields['MEASURE_NAME'] = $measure['SYMBOL_RUS'];
+            }
+        }
 
-		if (isset($contactCompanyEntity))
-		{
-			return $contactCompanyEntity->setFields([
-				'ENTITY_ID' => $existingClient['id'],
-				'IS_PRIMARY' => 'Y'
-			]);
-		}
+        return $basketProductFields;
+    }
 
-		return $result;
-	}
+    private function createPayment(Crm\Order\Order $order): Sale\Payment
+    {
+        $paymentCollection = $order->getPaymentCollection();
+        $payment = $paymentCollection->createItem(
+            Sale\PaySystem\Manager::getObjectById(
+                Sale\PaySystem\Manager::getInnerPaySystemId()
+            )
+        );
 
-	private function createContactCompany(?string $phone, ?string $name): Sale\Result
-	{
-		$result = new Sale\Result();
+        $payment->setField('SUM', $order->getPrice());
+        $payment->setField('CURRENCY', $order->getCurrency());
+        $payment->setField('RESPONSIBLE_ID', $order->getField('RESPONSIBLE_ID'));
 
-		$userId = (int)$this->getCurrentUser()->getId();
-		$fields = [
-			'NAME' => $name ?? '',
-			'ASSIGNED_BY_ID' => $userId,
-			'TYPE_ID' => 'CLIENT',
-			'SOURCE_ID' => 'STORE',
-			'FM' => [
-				'PHONE' => [
-					'n1' => [
-						'VALUE_TYPE' => 'MOBILE',
-						'VALUE' => $phone ?? '',
-					],
-				],
-			],
-		];
+        return $payment;
+    }
 
-		$options = [
-			'DISABLE_REQUIRED_USER_FIELD_CHECK' => true,
-			'REGISTER_SONET_EVENT' => true,
-		];
+    private function setContactCompany(Crm\Order\Order $order, $existingClient): Sale\Result
+    {
+        $result = new Sale\Result();
 
-		$contact = new \CCrmContact(false);
-		$id = (int)$contact->Add($fields, true, $options);
+        $clientCollection = $order->getContactCompanyCollection();
 
-		if ($id > 0)
-		{
-			$result->setId($id);
-		}
-		else
-		{
-			$result->addError(new Main\Error($contact->LAST_ERROR));
-		}
+        $entityTypeId = (int) $existingClient['entityTypeId'];
+        if (\CCrmOwnerType::Company === $entityTypeId) {
+            /** @var Crm\Order\ContactCompanyEntity $contactCompanyEntity */
+            $contactCompanyEntity = $clientCollection->createCompany();
+        } elseif (\CCrmOwnerType::Contact === $entityTypeId) {
+            /** @var Crm\Order\ContactCompanyEntity $contactCompanyEntity */
+            $contactCompanyEntity = $clientCollection->createContact();
+        }
 
-		return $result;
-	}
+        if (isset($contactCompanyEntity)) {
+            return $contactCompanyEntity->setFields([
+                'ENTITY_ID' => $existingClient['id'],
+                'IS_PRIMARY' => 'Y',
+            ]);
+        }
 
-	private function setProperties(Crm\Order\Order $order, string $phone)
-	{
-		$propertyValue = $order->getPropertyCollection()->createItem(
-			Crm\Terminal\OrderProperty::getTerminalProperty()
-		);
-		$propertyValue->setValue($phone);
-	}
+        return $result;
+    }
 
-	private function getTerminalPlatformId(): int
-	{
-		return (int)Crm\Order\TradingPlatform\Terminal::getInstanceByCode(
-			Crm\Order\TradingPlatform\Terminal::TRADING_PLATFORM_CODE
-		)->getIdIfInstalled();
-	}
+    private function createContactCompany(?string $phone, ?string $name): Sale\Result
+    {
+        $result = new Sale\Result();
 
-	private function getRegistry(): Sale\Registry
-	{
-		return Sale\Registry::getInstance(Sale\Registry::REGISTRY_TYPE_ORDER);
-	}
+        $userId = (int) $this->getCurrentUser()->getId();
+        $fields = [
+            'NAME' => $name ?? '',
+            'ASSIGNED_BY_ID' => $userId,
+            'TYPE_ID' => 'CLIENT',
+            'SOURCE_ID' => 'STORE',
+            'FM' => [
+                'PHONE' => [
+                    'n1' => [
+                        'VALUE_TYPE' => 'MOBILE',
+                        'VALUE' => $phone ?? '',
+                    ],
+                ],
+            ],
+        ];
 
-	private function disableContactAutoCreationMode(Crm\Order\Order $order): void
-	{
-		$contactCompanyCollection = $order->getContactCompanyCollection();
-		if ($contactCompanyCollection)
-		{
-			$contactCompanyCollection->disableAutoCreationMode();
-		}
-	}
+        $options = [
+            'DISABLE_REQUIRED_USER_FIELD_CHECK' => true,
+            'REGISTER_SONET_EVENT' => true,
+        ];
+
+        $contact = new \CCrmContact(false);
+        $id = (int) $contact->Add($fields, true, $options);
+
+        if ($id > 0) {
+            $result->setId($id);
+        } else {
+            $result->addError(new Main\Error($contact->LAST_ERROR));
+        }
+
+        return $result;
+    }
+
+    private function setProperties(Crm\Order\Order $order, string $phone)
+    {
+        $propertyValue = $order->getPropertyCollection()->createItem(
+            Crm\Terminal\OrderProperty::getTerminalProperty()
+        );
+        $propertyValue->setValue($phone);
+    }
+
+    private function getTerminalPlatformId(): int
+    {
+        return (int) Crm\Order\TradingPlatform\Terminal::getInstanceByCode(
+            Crm\Order\TradingPlatform\Terminal::TRADING_PLATFORM_CODE
+        )->getIdIfInstalled();
+    }
+
+    private function getRegistry(): Sale\Registry
+    {
+        return Sale\Registry::getInstance(Sale\Registry::REGISTRY_TYPE_ORDER);
+    }
+
+    private function disableContactAutoCreationMode(Crm\Order\Order $order): void
+    {
+        $contactCompanyCollection = $order->getContactCompanyCollection();
+        if ($contactCompanyCollection) {
+            $contactCompanyCollection->disableAutoCreationMode();
+        }
+    }
 }

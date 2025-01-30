@@ -6,44 +6,43 @@ use Bitrix\Disk\Driver;
 use Bitrix\Main\Loader;
 use Bitrix\Pull;
 
-class Event
+class event
 {
-	/** @var string */
-	private $category;
-	/** @var array */
-	private $data;
+    /** @var string */
+    private $category;
 
-	public function __construct(string $category, array $data = [])
-	{
-		$this->category = $category;
-		$this->data = $data;
-	}
+    /** @var array */
+    private $data;
 
-	protected function resolveRecipients(array $recipients): array
-	{
-		return $recipients;
-	}
+    public function __construct(string $category, array $data = [])
+    {
+        $this->category = $category;
+        $this->data = $data;
+    }
 
-	final public function send(array $recipients): void
-	{
-		if (!Loader::includeModule('pull'))
-		{
-			return;
-		}
+    final public function send(array $recipients): void
+    {
+        if (!Loader::includeModule('pull')) {
+            return;
+        }
 
-		$recipients = array_filter(array_unique($recipients));
-		$recipients = $this->resolveRecipients($recipients);
-		if (empty($recipients))
-		{
-			return;
-		}
+        $recipients = array_filter(array_unique($recipients));
+        $recipients = $this->resolveRecipients($recipients);
+        if (empty($recipients)) {
+            return;
+        }
 
-		$message = [
-			'module_id' => Driver::INTERNAL_MODULE_ID,
-			'command' => $this->category,
-			'params' => $this->data,
-		];
+        $message = [
+            'module_id' => Driver::INTERNAL_MODULE_ID,
+            'command' => $this->category,
+            'params' => $this->data,
+        ];
 
-		Pull\Event::add($recipients, $message);
-	}
+        Pull\Event::add($recipients, $message);
+    }
+
+    protected function resolveRecipients(array $recipients): array
+    {
+        return $recipients;
+    }
 }

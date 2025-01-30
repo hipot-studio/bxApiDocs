@@ -8,14 +8,13 @@ use Bitrix\Main\Type;
 
 class DateCreateFieldAssembler extends FieldAssembler
 {
-	protected function prepareColumn($value)
-	{
-		if ($value instanceof Type\Date)
-		{
-			$userCulture = Context::getCurrent()?->getCulture();
-			$value = $value->toString($userCulture);
-		}
+    protected function prepareColumn($value)
+    {
+        if ($value instanceof Type\Date) {
+            $userCulture = Context::getCurrent()?->getCulture();
+            $value = $value->toString($userCulture);
+        }
 
-		return $value;
-	}
+        return $value;
+    }
 }

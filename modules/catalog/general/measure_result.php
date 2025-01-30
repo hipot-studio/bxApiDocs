@@ -1,40 +1,41 @@
-<?
+<?php
+
 /**
- * Class CCatalogMeasureAdminResult
+ * Class CCatalogMeasureAdminResult.
  */
 class CCatalogMeasureAdminResult extends CAdminResult
 {
-	protected $measureResult;
+    protected $measureResult;
 
-	public function __construct($res, $table_id)
-	{
-		parent::__construct($res, $table_id);
-		$this->measureResult = new CCatalogMeasureResult($this);
-	}
+    public function __construct($res, $table_id)
+    {
+        parent::__construct($res, $table_id);
+        $this->measureResult = new CCatalogMeasureResult($this);
+    }
 
-	/**
-	 * @return array
-	 */
-	public function Fetch()
-	{
-		return $this->measureResult->Fetch();
-	}
+    /**
+     * @return array
+     */
+    public function Fetch()
+    {
+        return $this->measureResult->Fetch();
+    }
 }
 class CCatalogMeasureAdminUiResult extends CAdminUiResult
 {
-	protected $measureResult;
+    protected $measureResult;
 
-	public function __construct($res, $table_id)
-	{
-		parent::__construct($res, $table_id);
-		$this->measureResult = new CCatalogMeasureResult($this);
-	}
+    public function __construct($res, $table_id)
+    {
+        parent::__construct($res, $table_id);
+        $this->measureResult = new CCatalogMeasureResult($this);
+    }
 
-	/**
-	 * @return array
-	 */
-	public function Fetch()
-	{
-		return $this->measureResult->Fetch();
-	}
+    /**
+     * @return array
+     */
+    public function Fetch()
+    {
+        return $this->measureResult->Fetch();
+    }
 }

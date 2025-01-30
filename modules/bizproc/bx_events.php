@@ -1,98 +1,95 @@
-<?
-/**
- * 
- * Класс-контейнер событий модуля <b>bizproc</b>
- * 
- */
-class _CEventsBizproc {
-/**
- * перед добавлением записи в историю.
- * <i>Вызывается в методе:</i><br>
- * CBPHistoryService::AddHistory<br><br>
- * 
- * 
- * @link http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
- * @author Bitrix
- */
-	public static function OnAddToHistory(){}
+<?php
 
 /**
- * перед удалением файла из истории.
- * <i>Вызывается в методе:</i><br>
- * CBPAllHistoryService::DeleteHistory<br><br>
- * 
- * 
- * @link http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
- * @author Bitrix
+ * Класс-контейнер событий модуля <b>bizproc</b>.
  */
-	public static function OnBeforeDeleteFileFromHistory(){}
+class bx_events
+{
+    /**
+     * перед добавлением записи в историю.
+     * <i>Вызывается в методе:</i><br>
+     * CBPHistoryService::AddHistory<br><br>.
+     *
+     * @see http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
+     *
+     * @author Bitrix
+     */
+    public static function OnAddToHistory() {}
 
-/**
- * при создании экземпляра бизнес-процесса.
- * <i>Вызывается в методе:</i><br>
- * CBPRuntime::CreateWorkflow<br><br>
- * 
- * 
- * @link http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
- * @author Bitrix
- */
-	public static function OnCreateWorkflow(){}
+    /**
+     * перед удалением файла из истории.
+     * <i>Вызывается в методе:</i><br>
+     * CBPAllHistoryService::DeleteHistory<br><br>.
+     *
+     * @see http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
+     *
+     * @author Bitrix
+     */
+    public static function OnBeforeDeleteFileFromHistory() {}
 
-/**
- * при создании задания бизнес-процесса.
- * <i>Вызывается в методе:</i><br>
- * CBPTaskService::Add<br><br>
- * 
- * 
- * @link http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
- * @author Bitrix
- */
-	public static function OnTaskAdd(){}
+    /**
+     * при создании экземпляра бизнес-процесса.
+     * <i>Вызывается в методе:</i><br>
+     * CBPRuntime::CreateWorkflow<br><br>.
+     *
+     * @see http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
+     *
+     * @author Bitrix
+     */
+    public static function OnCreateWorkflow() {}
 
-/**
- * при удалении задания бизнес-процесса.
- * <i>Вызывается в методе:</i><br>
- * CBPAllTaskService::DeleteByWorkflow<br><br>
- * 
- * 
- * @link http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
- * @author Bitrix
- */
-	public static function OnTaskDelete(){}
+    /**
+     * при создании задания бизнес-процесса.
+     * <i>Вызывается в методе:</i><br>
+     * CBPTaskService::Add<br><br>.
+     *
+     * @see http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
+     *
+     * @author Bitrix
+     */
+    public static function OnTaskAdd() {}
 
-/**
- * после того, как производится удаление записи о задании пользователя. Если в БП несколько заданий (для разных пользователей) событие вызовется несколько раз.
- * <i>Вызывается в методе:</i><br>
- * CBPAllTaskService::MarkCompleted<br><br>
- * 
- * 
- * @link http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
- * @author Bitrix
- */
-	public static function OnTaskMarkCompleted(){}
+    /**
+     * при удалении задания бизнес-процесса.
+     * <i>Вызывается в методе:</i><br>
+     * CBPAllTaskService::DeleteByWorkflow<br><br>.
+     *
+     * @see http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
+     *
+     * @author Bitrix
+     */
+    public static function OnTaskDelete() {}
 
-/**
- * при обновлении задания бизнес-процесса.
- * <i>Вызывается в методе:</i><br>
- * CBPTaskService::Update<br><br>
- * 
- * 
- * @link http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
- * @author Bitrix
- */
-	public static function OnTaskUpdate(){}
+    /**
+     * после того, как производится удаление записи о задании пользователя. Если в БП несколько заданий (для разных пользователей) событие вызовется несколько раз.
+     * <i>Вызывается в методе:</i><br>
+     * CBPAllTaskService::MarkCompleted<br><br>.
+     *
+     * @see http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
+     *
+     * @author Bitrix
+     */
+    public static function OnTaskMarkCompleted() {}
 
-/**
- * при делегировании задачи.
- * <i>Вызывается в методе:</i><br>
- * CBPTaskService::delegateTask<br><br>
- * 
- * 
- * @link http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
- * @author Bitrix
- */
-	public static function OnTaskDelegate(){}
+    /**
+     * при обновлении задания бизнес-процесса.
+     * <i>Вызывается в методе:</i><br>
+     * CBPTaskService::Update<br><br>.
+     *
+     * @see http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
+     *
+     * @author Bitrix
+     */
+    public static function OnTaskUpdate() {}
 
-
+    /**
+     * при делегировании задачи.
+     * <i>Вызывается в методе:</i><br>
+     * CBPTaskService::delegateTask<br><br>.
+     *
+     * @see http://dev.1c-bitrix.ru/api_help/bizproc/events/index.php
+     *
+     * @author Bitrix
+     */
+    public static function OnTaskDelegate() {}
 }
-?>

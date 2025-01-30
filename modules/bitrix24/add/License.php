@@ -7,8 +7,8 @@ namespace Bitrix\Bitrix24;
  */
 class License
 {
-	public static function getCurrent(): self
-	{
-		return new self();
-	}
+    public static function getCurrent(): self
+    {
+        return new self();
+    }
 }

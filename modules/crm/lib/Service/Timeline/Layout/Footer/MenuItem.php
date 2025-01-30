@@ -2,29 +2,31 @@
 
 namespace Bitrix\Crm\Service\Timeline\Layout\Footer;
 
-class MenuItem extends \Bitrix\Crm\Service\Timeline\Layout\Button
+use Bitrix\Crm\Service\Timeline\Layout\Button;
+
+class MenuItem extends Button
 {
-	protected ?string $icon = null;
+    protected ?string $icon = null;
 
-	public function getIcon(): ?string
-	{
-		return $this->icon;
-	}
+    public function getIcon(): ?string
+    {
+        return $this->icon;
+    }
 
-	public function setIcon(string $icon): self
-	{
-		$this->icon = $icon;
+    public function setIcon(string $icon): self
+    {
+        $this->icon = $icon;
 
-		return $this;
-	}
+        return $this;
+    }
 
-	public function toArray(): array
-	{
-		return array_merge(
-			parent::toArray(),
-			[
-				'icon' => $this->getIcon(),
-			]
-		);
-	}
+    public function toArray(): array
+    {
+        return array_merge(
+            parent::toArray(),
+            [
+                'icon' => $this->getIcon(),
+            ]
+        );
+    }
 }

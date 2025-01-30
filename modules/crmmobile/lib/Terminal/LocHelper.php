@@ -6,10 +6,10 @@ use Bitrix\Main;
 
 final class LocHelper
 {
-	private const PATH = '/bitrix/modules/crmmobile/lib/Terminal/Terminal.php';
+    private const PATH = '/bitrix/modules/crmmobile/lib/Terminal/Terminal.php';
 
-	public static function loadMessages()
-	{
-		Main\Localization\Loc::loadMessages(Main\Application::getDocumentRoot() . self::PATH);
-	}
+    public static function loadMessages()
+    {
+        Main\Localization\Loc::loadMessages(Main\Application::getDocumentRoot().self::PATH);
+    }
 }

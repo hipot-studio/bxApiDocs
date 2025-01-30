@@ -1,79 +1,89 @@
-<?
-class CBlogSoNetPost
+<?php
+
+class sonet
 {
-	public static function CanUserDeletePost($ID, $userID, $blogOwnerID, $groupOwnerID)
-	{
-		$ID = IntVal($ID);
-		$userID = IntVal($userID);
-		$blogOwnerID = IntVal($blogOwnerID);
-		$groupOwnerID = IntVal($groupOwnerID);
+    public static function CanUserDeletePost($ID, $userID, $blogOwnerID, $groupOwnerID)
+    {
+        $ID = (int) $ID;
+        $userID = (int) $userID;
+        $blogOwnerID = (int) $blogOwnerID;
+        $groupOwnerID = (int) $groupOwnerID;
 
-		$blogModulePermissions = $GLOBALS["APPLICATION"]->GetGroupRight("blog");
-		if ($blogModulePermissions >= "W")
-			return True;
-	
-		$arPost = CBlogPost::GetByID($ID);
+        $blogModulePermissions = $GLOBALS['APPLICATION']->GetGroupRight('blog');
+        if ($blogModulePermissions >= 'W') {
+            return true;
+        }
 
-		if (empty($arPost))
-			return False;
-			
-		if($groupOwnerID > 0)
-		{
-			$arBlogUser = CBlogUser::GetByID($userID, BLOG_BY_USER_ID);
-			if ($arBlogUser && $arBlogUser["ALLOW_POST"] != "Y")
-				return False;
+        $arPost = CBlogPost::GetByID($ID);
 
-			$perms = BLOG_PERMS_DENY;
-			if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_GROUP, $groupOwnerID, "blog", "view_post"))
-				$perms = BLOG_PERMS_READ;
-			if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_GROUP, $groupOwnerID, "blog", "write_post"))
-				$perms = BLOG_PERMS_WRITE;
-			if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_GROUP, $groupOwnerID, "blog", "full_post"))
-				$perms = BLOG_PERMS_FULL;
+        if (empty($arPost)) {
+            return false;
+        }
 
-			if($perms >= BLOG_PERMS_WRITE  && $arPost["AUTHOR_ID"] == $userID)
-				return true;
+        if ($groupOwnerID > 0) {
+            $arBlogUser = CBlogUser::GetByID($userID, BLOG_BY_USER_ID);
+            if ($arBlogUser && 'Y' !== $arBlogUser['ALLOW_POST']) {
+                return false;
+            }
 
-			if($perms > BLOG_PERMS_WRITE)
-				return true;
-		
-		}
-		else
-		{
-			$arBlog = CBlog::GetByID($arPost["BLOG_ID"]);
+            $perms = BLOG_PERMS_DENY;
+            if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_GROUP, $groupOwnerID, 'blog', 'view_post')) {
+                $perms = BLOG_PERMS_READ;
+            }
+            if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_GROUP, $groupOwnerID, 'blog', 'write_post')) {
+                $perms = BLOG_PERMS_WRITE;
+            }
+            if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_GROUP, $groupOwnerID, 'blog', 'full_post')) {
+                $perms = BLOG_PERMS_FULL;
+            }
 
-			$arBlogUser = CBlogUser::GetByID($userID, BLOG_BY_USER_ID);
-			if ($arBlogUser && $arBlogUser["ALLOW_POST"] != "Y")
-				return False;
+            if ($perms >= BLOG_PERMS_WRITE && $arPost['AUTHOR_ID'] === $userID) {
+                return true;
+            }
 
-			$perms = BLOG_PERMS_DENY;
-			if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_USER, $blogOwnerID, "blog", "view_post"))
-				$perms = BLOG_PERMS_READ;
-			if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_USER, $blogOwnerID, "blog", "write_post"))
-				$perms = BLOG_PERMS_WRITE;
-			if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_USER, $blogOwnerID, "blog", "full_post"))
-				$perms = BLOG_PERMS_FULL;
+            if ($perms > BLOG_PERMS_WRITE) {
+                return true;
+            }
+        } else {
+            $arBlog = CBlog::GetByID($arPost['BLOG_ID']);
 
-			if($perms >= BLOG_PERMS_WRITE  && $arPost["AUTHOR_ID"] == $userID)
-				return true;
+            $arBlogUser = CBlogUser::GetByID($userID, BLOG_BY_USER_ID);
+            if ($arBlogUser && 'Y' !== $arBlogUser['ALLOW_POST']) {
+                return false;
+            }
 
-			if($perms > BLOG_PERMS_WRITE)
-				return true;
-		}
-		
-		return False;
-	}
-	
-	public static function OnGroupDelete($ID)
-	{
-		$ID = IntVal($ID);
-		if($ID <= 0)
-			return false;
-		$arBlog = CBlog::GetBySocNetGroupID($ID);
-		if(!empty($arBlog))
-		{
-			CBlog::Delete($arBlog["ID"]);
-		}
-	}
+            $perms = BLOG_PERMS_DENY;
+            if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_USER, $blogOwnerID, 'blog', 'view_post')) {
+                $perms = BLOG_PERMS_READ;
+            }
+            if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_USER, $blogOwnerID, 'blog', 'write_post')) {
+                $perms = BLOG_PERMS_WRITE;
+            }
+            if (CSocNetFeaturesPerms::CanPerformOperation($userID, SONET_ENTITY_USER, $blogOwnerID, 'blog', 'full_post')) {
+                $perms = BLOG_PERMS_FULL;
+            }
+
+            if ($perms >= BLOG_PERMS_WRITE && $arPost['AUTHOR_ID'] === $userID) {
+                return true;
+            }
+
+            if ($perms > BLOG_PERMS_WRITE) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static function OnGroupDelete($ID)
+    {
+        $ID = (int) $ID;
+        if ($ID <= 0) {
+            return false;
+        }
+        $arBlog = CBlog::GetBySocNetGroupID($ID);
+        if (!empty($arBlog)) {
+            CBlog::Delete($arBlog['ID']);
+        }
+    }
 }
-?>

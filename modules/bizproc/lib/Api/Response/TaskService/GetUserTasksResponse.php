@@ -6,8 +6,8 @@ use Bitrix\Bizproc\Result;
 
 class GetUserTasksResponse extends Result
 {
-	public function getTasks(): ?array
-	{
-		return $this->data['tasks'] ?? null;
-	}
+    public function getTasks(): ?array
+    {
+        return $this->data['tasks'] ?? null;
+    }
 }

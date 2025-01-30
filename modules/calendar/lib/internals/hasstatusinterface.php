@@ -2,10 +2,7 @@
 
 namespace Bitrix\Calendar\Internals;
 
-interface HasStatusInterface
+interface hasstatusinterface
 {
-	/**
-	 * @return ObjectStatus
-	 */
-	public function getStatus(): ObjectStatus;
+    public function getStatus(): ObjectStatus;
 }

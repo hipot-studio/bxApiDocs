@@ -9,113 +9,109 @@ use Bitrix\UI\EntitySelector\Item;
 use Bitrix\UI\EntitySelector\SearchQuery;
 use Bitrix\UI\EntitySelector\Tab;
 
-class SiteGroupsProvider extends BaseProvider
+class sitegroupsprovider extends BaseProvider
 {
-	public const ENTITY_ID = 'site_groups';
+    public const ENTITY_ID = 'site_groups';
 
-	private const SEARCH_ITEMS_LIMIT = 20;
+    private const SEARCH_ITEMS_LIMIT = 20;
 
-	public function __construct(array $options = [])
-	{
-		parent::__construct();
+    public function __construct(array $options = [])
+    {
+        parent::__construct();
 
-		$this->options['dynamicLoad'] = true;
-	}
+        $this->options['dynamicLoad'] = true;
+    }
 
-	public function isAvailable(): bool
-	{
-		return true;
-	}
+    public function isAvailable(): bool
+    {
+        return true;
+    }
 
-	public function fillDialog(Dialog $dialog): void
-	{
-		$siteGroupsRecent = $dialog->getRecentItems()->getEntityItems(self::ENTITY_ID);
-		$recentIds = array_keys($siteGroupsRecent);
-		$items = $this->getItems($recentIds);
+    public function fillDialog(Dialog $dialog): void
+    {
+        $siteGroupsRecent = $dialog->getRecentItems()->getEntityItems(self::ENTITY_ID);
+        $recentIds = array_keys($siteGroupsRecent);
+        $items = $this->getItems($recentIds);
 
-		array_walk(
-			$items,
-			static function (Item $item, int $index) use ($dialog) {
-				if (empty($dialog->getContext()))
-				{
-					$item->setSort($index);
-				}
-				$dialog->addRecentItem($item);
-			}
-		);
+        array_walk(
+            $items,
+            static function (Item $item, int $index) use ($dialog) {
+                if (empty($dialog->getContext())) {
+                    $item->setSort($index);
+                }
+                $dialog->addRecentItem($item);
+            }
+        );
 
-		$dialog->addTab(new Tab([
-			'id' => 'site_groups',
-			'title' => GetMessage('CRM_SITE_GROUP_PROVIDER_TITLE'),
-			'stub' => true,
-			'icon' => [
-				 'default' => '',
-				'selected' => str_replace('ABB1B8', 'fff', ''),
-			]
-		]));
-	}
+        $dialog->addTab(new Tab([
+            'id' => 'site_groups',
+            'title' => GetMessage('CRM_SITE_GROUP_PROVIDER_TITLE'),
+            'stub' => true,
+            'icon' => [
+                'default' => '',
+                'selected' => str_replace('ABB1B8', 'fff', ''),
+            ],
+        ]));
+    }
 
-	public function getItems(array $ids): array
-	{
-		if (empty($ids))
-		{
-			return [];
-		}
+    public function getItems(array $ids): array
+    {
+        if (empty($ids)) {
+            return [];
+        }
 
-		$result = [];
+        $result = [];
 
+        $ids = array_map(static function (string $id) {
+            if (str_starts_with($id, 'G')) {
+                $id = preg_replace('/^G/', '', $id);
+            }
 
-		$ids = array_map(function (string $id) {
-			if (str_starts_with($id, 'G'))
-			{
-				$id = preg_replace('/^G/', '', $id);
-			}
+            return (int) $id;
+        }, $ids);
 
-			return (int)$id;
-		}, $ids);
+        $groupItems = GroupTable::query()
+            ->setSelect(['ID', 'NAME'])
+            ->where('ANONYMOUS', 'N')
+            ->whereNotNull('NAME')
+            ->whereIn('ID', $ids)
+            ->fetchAll()
+        ;
 
-		$groupItems = GroupTable::query()
-			->setSelect(['ID', 'NAME'])
-			->where('ANONYMOUS', 'N')
-			->whereNotNull('NAME')
-			->whereIn('ID', $ids)
-			->fetchAll();
+        foreach ($groupItems as $groupItem) {
+            $itemOptions = [
+                'id' => 'G'.$groupItem['ID'],
+                'entityId' => static::ENTITY_ID,
+                'title' => $groupItem['NAME'],
+            ];
 
-		foreach ($groupItems as $groupItem)
-		{
-			$itemOptions = [
-				'id' => 'G'.$groupItem['ID'],
-				'entityId' => static::ENTITY_ID,
-				'title' => $groupItem['NAME'],
-			];
+            $item = new Item($itemOptions);
 
-			$item = new Item($itemOptions);
+            $item->addTab(['site_groups']);
 
-			$item->addTab(['site_groups']);
+            $result[] = $item;
+        }
 
-			$result[] = $item;
-		}
+        return $result;
+    }
 
-		return $result;
-	}
+    public function doSearch(SearchQuery $searchQuery, Dialog $dialog): void
+    {
+        $items = GroupTable::query()
+            ->setSelect(['ID', 'NAME'])
+            ->where('ANONYMOUS', 'N')
+            ->whereNotNull('NAME')
+            ->whereLike('NAME', $searchQuery->getQuery())
+            ->setLimit(self::SEARCH_ITEMS_LIMIT)
+            ->fetchAll()
+        ;
 
-	public function doSearch(SearchQuery $searchQuery, Dialog $dialog): void
-	{
-		$items = GroupTable::query()
-			->setSelect(['ID', 'NAME'])
-			->where('ANONYMOUS', 'N')
-			->whereNotNull('NAME')
-			->whereLike('NAME', $searchQuery->getQuery())
-			->setLimit(self::SEARCH_ITEMS_LIMIT)
-			->fetchAll();
-
-		foreach ($items as $item)
-		{
-			$dialog->addItem(new Item([
-				'id' => $item['ID'],
-				'entityId' => self::ENTITY_ID,
-				'title' => $item['NAME'],
-			]));
-		}
-	}
+        foreach ($items as $item) {
+            $dialog->addItem(new Item([
+                'id' => $item['ID'],
+                'entityId' => self::ENTITY_ID,
+                'title' => $item['NAME'],
+            ]));
+        }
+    }
 }

@@ -4,39 +4,35 @@ namespace Bitrix\Disk\Document\Online;
 
 use Bitrix\Disk\BaseObject;
 
-final class ObjectEvent extends Event
+final class objectevent extends Event
 {
-	/** @var BaseObject */
-	private $baseObject;
+    /** @var BaseObject */
+    private $baseObject;
 
-	public function __construct(BaseObject $baseObject, string $category, array $data = [])
-	{
-		$this->baseObject = $baseObject;
-		parent::__construct($category, $data);
-	}
+    public function __construct(BaseObject $baseObject, string $category, array $data = [])
+    {
+        $this->baseObject = $baseObject;
+        parent::__construct($category, $data);
+    }
 
-	protected function resolveRecipients(array $recipients): array
-	{
-		$resolved = [];
-		foreach ($recipients as $recipient)
-		{
-			if ($recipient instanceof ObjectChannel)
-			{
-				$resolved[] = $recipient->getPullModel();
-			}
-			else
-			{
-				$resolved[] = $recipient;
-			}
+    public function sendToObjectChannel(): void
+    {
+        $objectChannel = new ObjectChannel($this->baseObject->getRealObjectId());
 
-		}
-		return $resolved;
-	}
+        $this->send([$objectChannel]);
+    }
 
-	public function sendToObjectChannel(): void
-	{
-		$objectChannel = new ObjectChannel($this->baseObject->getRealObjectId());
+    protected function resolveRecipients(array $recipients): array
+    {
+        $resolved = [];
+        foreach ($recipients as $recipient) {
+            if ($recipient instanceof ObjectChannel) {
+                $resolved[] = $recipient->getPullModel();
+            } else {
+                $resolved[] = $recipient;
+            }
+        }
 
-		$this->send([$objectChannel]);
-	}
+        return $resolved;
+    }
 }

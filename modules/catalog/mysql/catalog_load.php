@@ -1,7 +1,5 @@
-<?
-require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/catalog/general/catalog_load.php");
+<?php
 
-class CCatalogLoad extends CAllCatalogLoad
-{
-}
-?>
+require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/catalog/general/catalog_load.php';
+
+class catalog_load extends CAllCatalogLoad {}

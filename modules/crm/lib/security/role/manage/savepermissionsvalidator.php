@@ -2,28 +2,27 @@
 
 namespace Bitrix\Crm\Security\Role\Manage;
 
-class SavePermissionsValidator
+class savepermissionsvalidator
 {
-	private array $errors = [];
+    private array $errors = [];
 
-	public function validate(array $data): bool
-	{
-		$result = true;
-		if (($data['NAME'] ?? null) === null)
-		{
-			$result = false;
-		}
+    public function validate(array $data): bool
+    {
+        $result = true;
+        if (($data['NAME'] ?? null) === null) {
+            $result = false;
+        }
 
-		return $result;
-	}
+        return $result;
+    }
 
-	public function getErrors(): array
-	{
-		return $this->errors;
-	}
+    public function getErrors(): array
+    {
+        return $this->errors;
+    }
 
-	public function getLastError(): string|false
-	{
-		return end($this->errors);
-	}
+    public function getLastError(): false|string
+    {
+        return end($this->errors);
+    }
 }

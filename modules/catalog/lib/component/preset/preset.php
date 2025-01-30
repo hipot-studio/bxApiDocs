@@ -2,9 +2,11 @@
 
 namespace Bitrix\Catalog\Component\Preset;
 
-interface Preset
+interface preset
 {
-	public function enable();
-	public function disable();
-	public function isOn(): bool;
+    public function enable();
+
+    public function disable();
+
+    public function isOn(): bool;
 }

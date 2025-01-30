@@ -1,4 +1,6 @@
-<?php declare(strict_types=1);
+<?php
+
+declare(strict_types=1);
 
 namespace Bitrix\AI\Limiter\Repository;
 
@@ -9,44 +11,41 @@ use Bitrix\Main\SystemException;
 
 abstract class BaseRepository
 {
-	private SqlHelper $sqlHelper;
-	private Connection $connection;
+    private SqlHelper $sqlHelper;
+    private Connection $connection;
 
-	abstract public function getTableName(): string;
+    public function __get(string $name): string
+    {
+        $enumClass = $this->getFieldEnum();
+        $fieldEnum = $enumClass::tryFrom($name);
+        if (null === $fieldEnum) {
+            throw new SystemException(
+                "No found field {$name} in {$this->getTableName()} Error in ".__CLASS__
+            );
+        }
 
-	abstract public function getFieldEnum(): string;
+        return $fieldEnum->value;
+    }
 
-	public function __get(string $name): string
-	{
-		$enumClass = $this->getFieldEnum();
-		$fieldEnum = $enumClass::tryFrom($name);
-		if (is_null($fieldEnum))
-		{
-			throw new SystemException(
-				"No found field $name in {$this->getTableName()} Error in " . __CLASS__
-			);
-		}
+    abstract public function getTableName(): string;
 
-		return $fieldEnum->value;
-	}
+    abstract public function getFieldEnum(): string;
 
-	protected function getConnection(): Connection
-	{
-		if (empty($this->connection))
-		{
-			$this->connection = Application::getConnection();
-		}
+    protected function getConnection(): Connection
+    {
+        if (empty($this->connection)) {
+            $this->connection = Application::getConnection();
+        }
 
-		return $this->connection;
-	}
+        return $this->connection;
+    }
 
-	protected function getSqlHelper()
-	{
-		if (empty($this->sqlHelper))
-		{
-			$this->sqlHelper = $this->getConnection()->getSqlHelper();
-		}
+    protected function getSqlHelper()
+    {
+        if (empty($this->sqlHelper)) {
+            $this->sqlHelper = $this->getConnection()->getSqlHelper();
+        }
 
-		return $this->sqlHelper;
-	}
+        return $this->sqlHelper;
+    }
 }

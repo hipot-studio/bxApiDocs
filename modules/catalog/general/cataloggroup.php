@@ -1,325 +1,305 @@
-<?
-use Bitrix\Main\Application,
-	Bitrix\Main,
-	Bitrix\Catalog;
+<?php
+
+use Bitrix\Catalog;
+use Bitrix\Main;
+use Bitrix\Main\Application;
 
 IncludeModuleLangFile(__FILE__);
 
-class CAllCatalogGroup
+class cataloggroup
 {
-	protected static $arBaseGroupCache = array();
+    protected static $arBaseGroupCache = [];
 
-	public static function CheckFields($ACTION, &$arFields, $ID = 0)
-	{
-		global $APPLICATION;
-		global $USER;
-		global $DB;
+    public static function CheckFields($ACTION, &$arFields, $ID = 0)
+    {
+        global $APPLICATION;
+        global $USER;
+        global $DB;
 
-		$boolResult = true;
-		$arMsg = array();
+        $boolResult = true;
+        $arMsg = [];
 
-		$ACTION = mb_strtoupper($ACTION);
-		if ('UPDATE' != $ACTION && 'ADD' != $ACTION)
-			return false;
+        $ACTION = mb_strtoupper($ACTION);
+        if ('UPDATE' !== $ACTION && 'ADD' !== $ACTION) {
+            return false;
+        }
 
-		if (array_key_exists("NAME", $arFields) || $ACTION=="ADD")
-		{
-			$arFields["NAME"] = trim($arFields["NAME"]);
-			if ('' == $arFields["NAME"])
-			{
-				$arMsg[] = array('id' => 'NAME', 'text' => GetMessage('BT_MOD_CAT_GROUP_ERR_EMPTY_NAME'));
-				$boolResult = false;
-			}
-		}
+        if (array_key_exists('NAME', $arFields) || 'ADD' === $ACTION) {
+            $arFields['NAME'] = trim($arFields['NAME']);
+            if ('' === $arFields['NAME']) {
+                $arMsg[] = ['id' => 'NAME', 'text' => GetMessage('BT_MOD_CAT_GROUP_ERR_EMPTY_NAME')];
+                $boolResult = false;
+            }
+        }
 
-		if ((array_key_exists("BASE", $arFields) || $ACTION=="ADD") && $arFields["BASE"] != "Y")
-		{
-			$arFields["BASE"] = "N";
-		}
+        if ((array_key_exists('BASE', $arFields) || 'ADD' === $ACTION) && 'Y' !== $arFields['BASE']) {
+            $arFields['BASE'] = 'N';
+        }
 
-		if (array_key_exists("SORT", $arFields) || $ACTION=="ADD")
-		{
-			$arFields["SORT"] = intval($arFields["SORT"]);
-			if (0 >= $arFields["SORT"])
-				$arFields["SORT"] = 100;
-		}
+        if (array_key_exists('SORT', $arFields) || 'ADD' === $ACTION) {
+            $arFields['SORT'] = (int) $arFields['SORT'];
+            if (0 >= $arFields['SORT']) {
+                $arFields['SORT'] = 100;
+            }
+        }
 
-		$intUserID = 0;
-		$boolUserExist = CCatalog::IsUserExists();
-		if ($boolUserExist)
-			$intUserID = intval($USER->GetID());
-		$strDateFunction = $DB->GetNowFunction();
-		if (array_key_exists('TIMESTAMP_X', $arFields))
-			unset($arFields['TIMESTAMP_X']);
-		if (array_key_exists('DATE_CREATE', $arFields))
-			unset($arFields['DATE_CREATE']);
-		$arFields['~TIMESTAMP_X'] = $strDateFunction;
-		if (array_key_exists('MODIFIED_BY', $arFields))
-		{
-			if ($arFields['MODIFIED_BY'] !== false)
-			{
-				$arFields['MODIFIED_BY'] = (int)$arFields['MODIFIED_BY'];
-				if ($arFields['MODIFIED_BY'] <= 0)
-				{
-					unset($arFields['MODIFIED_BY']);
-				}
-			}
-		}
-		if (!isset($arFields['MODIFIED_BY']) && $boolUserExist)
-		{
-			$arFields["MODIFIED_BY"] = $intUserID;
-		}
-		if ('ADD' == $ACTION)
-		{
-			$arFields['~DATE_CREATE'] = $strDateFunction;
-			if (array_key_exists('CREATED_BY', $arFields))
-			{
-				if ($arFields['CREATED_BY'] !== false)
-				{
-					$arFields['CREATED_BY'] = (int)$arFields['CREATED_BY'];
-					if ($arFields['CREATED_BY'] <= 0)
-					{
-						unset($arFields['CREATED_BY']);
-					}
-				}
-			}
-			if (!isset($arFields['CREATED_BY']) && $boolUserExist)
-			{
-				$arFields["CREATED_BY"] = $intUserID;
-			}
-		}
-		if ('UPDATE' == $ACTION)
-		{
-			if (array_key_exists('CREATED_BY', $arFields))
-				unset($arFields['CREATED_BY']);
-		}
+        $intUserID = 0;
+        $boolUserExist = CCatalog::IsUserExists();
+        if ($boolUserExist) {
+            $intUserID = (int) $USER->GetID();
+        }
+        $strDateFunction = $DB->GetNowFunction();
+        if (array_key_exists('TIMESTAMP_X', $arFields)) {
+            unset($arFields['TIMESTAMP_X']);
+        }
+        if (array_key_exists('DATE_CREATE', $arFields)) {
+            unset($arFields['DATE_CREATE']);
+        }
+        $arFields['~TIMESTAMP_X'] = $strDateFunction;
+        if (array_key_exists('MODIFIED_BY', $arFields)) {
+            if (false !== $arFields['MODIFIED_BY']) {
+                $arFields['MODIFIED_BY'] = (int) $arFields['MODIFIED_BY'];
+                if ($arFields['MODIFIED_BY'] <= 0) {
+                    unset($arFields['MODIFIED_BY']);
+                }
+            }
+        }
+        if (!isset($arFields['MODIFIED_BY']) && $boolUserExist) {
+            $arFields['MODIFIED_BY'] = $intUserID;
+        }
+        if ('ADD' === $ACTION) {
+            $arFields['~DATE_CREATE'] = $strDateFunction;
+            if (array_key_exists('CREATED_BY', $arFields)) {
+                if (false !== $arFields['CREATED_BY']) {
+                    $arFields['CREATED_BY'] = (int) $arFields['CREATED_BY'];
+                    if ($arFields['CREATED_BY'] <= 0) {
+                        unset($arFields['CREATED_BY']);
+                    }
+                }
+            }
+            if (!isset($arFields['CREATED_BY']) && $boolUserExist) {
+                $arFields['CREATED_BY'] = $intUserID;
+            }
+        }
+        if ('UPDATE' === $ACTION) {
+            if (array_key_exists('CREATED_BY', $arFields)) {
+                unset($arFields['CREATED_BY']);
+            }
+        }
 
-		if (is_set($arFields, 'USER_GROUP') || $ACTION=="ADD")
-		{
-			if (!is_array($arFields['USER_GROUP']) || empty($arFields['USER_GROUP']))
-			{
-				$arMsg[] = array('id' => 'USER_GROUP', 'text' => GetMessage('BT_MOD_CAT_GROUP_ERR_EMPTY_USER_GROUP'));
-				$boolResult = false;
-			}
-			else
-			{
-				$arValid = array();
-				foreach ($arFields['USER_GROUP'] as &$intValue)
-				{
-					$intValue = intval($intValue);
-					if (0 < $intValue)
-						$arValid[] = $intValue;
-				}
-				if (isset($intValue))
-					unset($intValue);
-				if (!empty($arValid))
-				{
-					$arFields['USER_GROUP'] = array_values(array_unique($arValid));
-				}
-				else
-				{
-					$arMsg[] = array('id' => 'USER_GROUP', 'text' => GetMessage('BT_MOD_CAT_GROUP_ERR_EMPTY_USER_GROUP'));
-					$boolResult = false;
-				}
-			}
-		}
+        if (is_set($arFields, 'USER_GROUP') || 'ADD' === $ACTION) {
+            if (!is_array($arFields['USER_GROUP']) || empty($arFields['USER_GROUP'])) {
+                $arMsg[] = ['id' => 'USER_GROUP', 'text' => GetMessage('BT_MOD_CAT_GROUP_ERR_EMPTY_USER_GROUP')];
+                $boolResult = false;
+            } else {
+                $arValid = [];
+                foreach ($arFields['USER_GROUP'] as &$intValue) {
+                    $intValue = (int) $intValue;
+                    if (0 < $intValue) {
+                        $arValid[] = $intValue;
+                    }
+                }
+                if (isset($intValue)) {
+                    unset($intValue);
+                }
+                if (!empty($arValid)) {
+                    $arFields['USER_GROUP'] = array_values(array_unique($arValid));
+                } else {
+                    $arMsg[] = ['id' => 'USER_GROUP', 'text' => GetMessage('BT_MOD_CAT_GROUP_ERR_EMPTY_USER_GROUP')];
+                    $boolResult = false;
+                }
+            }
+        }
 
-		if (is_set($arFields, 'USER_GROUP_BUY') || $ACTION=="ADD")
-		{
-			if (!is_array($arFields['USER_GROUP_BUY']) || empty($arFields['USER_GROUP_BUY']))
-			{
-				$arMsg[] = array('id' => 'USER_GROUP_BUY', 'text' => GetMessage('BT_MOD_CAT_GROUP_ERR_EMPTY_USER_GROUP_BUY'));
-				$boolResult = false;
-			}
-			else
-			{
-				$arValid = array();
-				foreach ($arFields['USER_GROUP_BUY'] as &$intValue)
-				{
-					$intValue = intval($intValue);
-					if (0 < $intValue)
-						$arValid[] = $intValue;
-				}
-				if (isset($intValue))
-					unset($intValue);
-				if (!empty($arValid))
-				{
-					$arFields['USER_GROUP_BUY'] = array_values(array_unique($arValid));
-				}
-				else
-				{
-					$arMsg[] = array('id' => 'USER_GROUP_BUY', 'text' => GetMessage('BT_MOD_CAT_GROUP_ERR_EMPTY_USER_GROUP_BUY'));
-					$boolResult = false;
-				}
-			}
-		}
+        if (is_set($arFields, 'USER_GROUP_BUY') || 'ADD' === $ACTION) {
+            if (!is_array($arFields['USER_GROUP_BUY']) || empty($arFields['USER_GROUP_BUY'])) {
+                $arMsg[] = ['id' => 'USER_GROUP_BUY', 'text' => GetMessage('BT_MOD_CAT_GROUP_ERR_EMPTY_USER_GROUP_BUY')];
+                $boolResult = false;
+            } else {
+                $arValid = [];
+                foreach ($arFields['USER_GROUP_BUY'] as &$intValue) {
+                    $intValue = (int) $intValue;
+                    if (0 < $intValue) {
+                        $arValid[] = $intValue;
+                    }
+                }
+                if (isset($intValue)) {
+                    unset($intValue);
+                }
+                if (!empty($arValid)) {
+                    $arFields['USER_GROUP_BUY'] = array_values(array_unique($arValid));
+                } else {
+                    $arMsg[] = ['id' => 'USER_GROUP_BUY', 'text' => GetMessage('BT_MOD_CAT_GROUP_ERR_EMPTY_USER_GROUP_BUY')];
+                    $boolResult = false;
+                }
+            }
+        }
 
-		if (!$boolResult)
-		{
-			$obError = new CAdminException($arMsg);
-			$APPLICATION->ResetException();
-			$APPLICATION->ThrowException($obError);
-		}
-		return $boolResult;
-	}
+        if (!$boolResult) {
+            $obError = new CAdminException($arMsg);
+            $APPLICATION->ResetException();
+            $APPLICATION->ThrowException($obError);
+        }
 
-	public static function GetGroupsPerms($arUserGroups = array(), $arCatalogGroupsFilter = array())
-	{
-		global $USER;
+        return $boolResult;
+    }
 
-		if (!is_array($arUserGroups))
-			$arUserGroups = array($arUserGroups);
+    public static function GetGroupsPerms($arUserGroups = [], $arCatalogGroupsFilter = [])
+    {
+        global $USER;
 
-		if (empty($arUserGroups))
-			$arUserGroups = (CCatalog::IsUserExists() ? $USER->GetUserGroupArray() : array(2));
-		Main\Type\Collection::normalizeArrayValuesByInt($arUserGroups);
+        if (!is_array($arUserGroups)) {
+            $arUserGroups = [$arUserGroups];
+        }
 
-		if (!is_array($arCatalogGroupsFilter))
-			$arCatalogGroupsFilter = array($arCatalogGroupsFilter);
-		Main\Type\Collection::normalizeArrayValuesByInt($arCatalogGroupsFilter);
-		if (!empty($arCatalogGroupsFilter))
-			$arCatalogGroupsFilter = array_fill_keys($arCatalogGroupsFilter, true);
+        if (empty($arUserGroups)) {
+            $arUserGroups = (CCatalog::IsUserExists() ? $USER->GetUserGroupArray() : [2]);
+        }
+        Main\Type\Collection::normalizeArrayValuesByInt($arUserGroups);
 
-		$result = array(
-			'view' => array(),
-			'buy' => array()
-		);
+        if (!is_array($arCatalogGroupsFilter)) {
+            $arCatalogGroupsFilter = [$arCatalogGroupsFilter];
+        }
+        Main\Type\Collection::normalizeArrayValuesByInt($arCatalogGroupsFilter);
+        if (!empty($arCatalogGroupsFilter)) {
+            $arCatalogGroupsFilter = array_fill_keys($arCatalogGroupsFilter, true);
+        }
 
-		if (empty($arUserGroups))
-			return $result;
+        $result = [
+            'view' => [],
+            'buy' => [],
+        ];
 
-		if (defined('CATALOG_SKIP_CACHE') && CATALOG_SKIP_CACHE)
-		{
-			$priceTypeIterator = CCatalogGroup::GetGroupsList(array('@GROUP_ID' => $arUserGroups));
-			while ($priceType = $priceTypeIterator->Fetch())
-			{
-				$priceTypeId = (int)$priceType['CATALOG_GROUP_ID'];;
-				$key = ($priceType['BUY'] == 'Y' ? 'buy' : 'view');
-				if ($key == 'view' && !empty($arCatalogGroupsFilter) && !isset($arCatalogGroupsFilter[$priceTypeId]))
-					continue;
-				$result[$key][$priceTypeId] = $priceTypeId;
-				unset($key, $priceTypeId);
-			}
-			unset($priceType, $priceTypeIterator);
-			if (!empty($result['view']))
-				$result['view'] = array_values($result['view']);
-			if (!empty($result['buy']))
-				$result['buy'] = array_values($result['buy']);
+        if (empty($arUserGroups)) {
+            return $result;
+        }
 
-			return $result;
-		}
+        if (defined('CATALOG_SKIP_CACHE') && CATALOG_SKIP_CACHE) {
+            $priceTypeIterator = CCatalogGroup::GetGroupsList(['@GROUP_ID' => $arUserGroups]);
+            while ($priceType = $priceTypeIterator->Fetch()) {
+                $priceTypeId = (int) $priceType['CATALOG_GROUP_ID'];
+                $key = ('Y' === $priceType['BUY'] ? 'buy' : 'view');
+                if ('view' === $key && !empty($arCatalogGroupsFilter) && !isset($arCatalogGroupsFilter[$priceTypeId])) {
+                    continue;
+                }
+                $result[$key][$priceTypeId] = $priceTypeId;
+                unset($key, $priceTypeId);
+            }
+            unset($priceType, $priceTypeIterator);
+            if (!empty($result['view'])) {
+                $result['view'] = array_values($result['view']);
+            }
+            if (!empty($result['buy'])) {
+                $result['buy'] = array_values($result['buy']);
+            }
 
-		$data = array();
-		$cacheTime = (int)(defined('CATALOG_CACHE_TIME') ? CATALOG_CACHE_TIME : CATALOG_CACHE_DEFAULT_TIME);
-		$managedCache = Application::getInstance()->getManagedCache();
-		if ($managedCache->read($cacheTime, 'catalog_group_perms'))
-		{
-			$data = $managedCache->get('catalog_group_perms');
-		}
-		else
-		{
-			$priceTypeIterator = CCatalogGroup::GetGroupsList();
-			while ($priceType = $priceTypeIterator->Fetch())
-			{
-				$priceTypeId = (int)$priceType['CATALOG_GROUP_ID'];
-				$groupId = (int)($priceType['GROUP_ID']);
-				$key = ($priceType['BUY'] == 'Y' ? 'buy' : 'view');
+            return $result;
+        }
 
-				if (!isset($data[$groupId]))
-					$data[$groupId] = array(
-						'view' => array(),
-						'buy' => array()
-					);
-				$data[$groupId][$key][$priceTypeId] = $priceTypeId;
-				unset($key, $groupId, $priceTypeId);
-			}
-			unset($priceType, $priceTypeIterator);
-			if (!empty($data))
-			{
-				foreach ($data as &$groupData)
-				{
-					if (!empty($groupData['view']))
-						$groupData['view'] = array_values($groupData['view']);
-					if (!empty($groupData['buy']))
-						$groupData['buy'] = array_values($groupData['buy']);
-				}
-				unset($groupData);
-			}
-			$managedCache->set('catalog_group_perms', $data);
-		}
+        $data = [];
+        $cacheTime = (int) (defined('CATALOG_CACHE_TIME') ? CATALOG_CACHE_TIME : CATALOG_CACHE_DEFAULT_TIME);
+        $managedCache = Application::getInstance()->getManagedCache();
+        if ($managedCache->read($cacheTime, 'catalog_group_perms')) {
+            $data = $managedCache->get('catalog_group_perms');
+        } else {
+            $priceTypeIterator = CCatalogGroup::GetGroupsList();
+            while ($priceType = $priceTypeIterator->Fetch()) {
+                $priceTypeId = (int) $priceType['CATALOG_GROUP_ID'];
+                $groupId = (int) $priceType['GROUP_ID'];
+                $key = ('Y' === $priceType['BUY'] ? 'buy' : 'view');
 
-		foreach ($arUserGroups as &$groupId)
-		{
-			if (!isset($data[$groupId]))
-				continue;
-			if (!empty($data[$groupId]['view']))
-			{
-				$priceTypeList = $data[$groupId]['view'];
-				foreach ($priceTypeList as &$priceTypeId)
-				{
-					if (!empty($arCatalogGroupsFilter) && !isset($arCatalogGroupsFilter[$priceTypeId]))
-						continue;
-					$result['view'][$priceTypeId] = $priceTypeId;
-				}
-				unset($priceTypeId, $priceTypeList);
-			}
-			if (!empty($data[$groupId]['buy']))
-			{
-				$priceTypeList = $data[$groupId]['buy'];
-				foreach ($priceTypeList as &$priceTypeId)
-					$result['buy'][$priceTypeId] = $priceTypeId;
-				unset($priceTypeId, $priceTypeList);
-			}
-		}
-		unset($groupId);
+                if (!isset($data[$groupId])) {
+                    $data[$groupId] = [
+                        'view' => [],
+                        'buy' => [],
+                    ];
+                }
+                $data[$groupId][$key][$priceTypeId] = $priceTypeId;
+                unset($key, $groupId, $priceTypeId);
+            }
+            unset($priceType, $priceTypeIterator);
+            if (!empty($data)) {
+                foreach ($data as &$groupData) {
+                    if (!empty($groupData['view'])) {
+                        $groupData['view'] = array_values($groupData['view']);
+                    }
+                    if (!empty($groupData['buy'])) {
+                        $groupData['buy'] = array_values($groupData['buy']);
+                    }
+                }
+                unset($groupData);
+            }
+            $managedCache->set('catalog_group_perms', $data);
+        }
 
-		if (!empty($result['view']))
-			$result['view'] = array_values($result['view']);
-		if (!empty($result['buy']))
-			$result['buy'] = array_values($result['buy']);
+        foreach ($arUserGroups as &$groupId) {
+            if (!isset($data[$groupId])) {
+                continue;
+            }
+            if (!empty($data[$groupId]['view'])) {
+                $priceTypeList = $data[$groupId]['view'];
+                foreach ($priceTypeList as &$priceTypeId) {
+                    if (!empty($arCatalogGroupsFilter) && !isset($arCatalogGroupsFilter[$priceTypeId])) {
+                        continue;
+                    }
+                    $result['view'][$priceTypeId] = $priceTypeId;
+                }
+                unset($priceTypeId, $priceTypeList);
+            }
+            if (!empty($data[$groupId]['buy'])) {
+                $priceTypeList = $data[$groupId]['buy'];
+                foreach ($priceTypeList as &$priceTypeId) {
+                    $result['buy'][$priceTypeId] = $priceTypeId;
+                }
+                unset($priceTypeId, $priceTypeList);
+            }
+        }
+        unset($groupId);
 
-		return $result;
-	}
+        if (!empty($result['view'])) {
+            $result['view'] = array_values($result['view']);
+        }
+        if (!empty($result['buy'])) {
+            $result['buy'] = array_values($result['buy']);
+        }
 
-	/**
-	 * @deprecated
-	 * @see Catalog\GroupTable::getTypeList()
-	 *
-	 * @return array
-	 */
-	public static function GetListArray(): array
-	{
-		return Catalog\GroupTable::getTypeList();
-	}
+        return $result;
+    }
 
-	/**
-	 * @deprecated
-	 * @see Catalog\GroupTable::getBasePriceType()
-	 *
-	 * @return array|false
-	 */
-	public static function GetBaseGroup()
-	{
-		$group = Catalog\GroupTable::getBasePriceType();
-		if (!empty($group))
-		{
-			$group['NAME_LANG'] = (string)$group['NAME_LANG'];
-			$group['XML_ID'] = (string)$group['XML_ID'];
+    /**
+     * @deprecated
+     * @see Catalog\GroupTable::getTypeList()
+     */
+    public static function GetListArray(): array
+    {
+        return Catalog\GroupTable::getTypeList();
+    }
 
-			return $group;
-		}
+    /**
+     * @deprecated
+     * @see Catalog\GroupTable::getBasePriceType()
+     *
+     * @return array|false
+     */
+    public static function GetBaseGroup()
+    {
+        $group = Catalog\GroupTable::getBasePriceType();
+        if (!empty($group)) {
+            $group['NAME_LANG'] = (string) $group['NAME_LANG'];
+            $group['XML_ID'] = (string) $group['XML_ID'];
 
-		return false;
-	}
+            return $group;
+        }
 
-	/**
-	 * @deprecated
-	 * @see Catalog\GroupTable::getBasePriceTypeId()
-	 *
-	 * @return int|null
-	 */
-	public static function GetBaseGroupId(): ?int
-	{
-		return Catalog\GroupTable::getBasePriceTypeId();
-	}
+        return false;
+    }
+
+    /**
+     * @deprecated
+     * @see Catalog\GroupTable::getBasePriceTypeId()
+     */
+    public static function GetBaseGroupId(): ?int
+    {
+        return Catalog\GroupTable::getBasePriceTypeId();
+    }
 }

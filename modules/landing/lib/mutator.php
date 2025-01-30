@@ -1,1 +1,329 @@
-<? namespace Bitrix\Landing;$GLOBALS['____843409193']= array(base64_decode('ZGV'.'maW5l'),base64_decode(''.'aW5'.'fYXJyYX'.'k='),base64_decode('cH'.'J'.'lZ19'.'tYXRjaF9hbG'.'w='),base64_decode(''.'Y'.'XJy'.'YXlfbWVyZ2'.'U='),base64_decode('YXJ'.'yYXlfdmFsdWVz'),base64_decode('Y'.'XJ'.'yYXlfd'.'W5pcXVl'),base64_decode('c3Vic3Ry'),base64_decode('aW5'.'fYXJy'.'YXk='),base64_decode('Z'.'Xhwb'.'G9kZQ'.'=='),base64_decode('c'.'G'.'F'.'jaw=='),base64_decode('bWQ1'),base64_decode('Y29uc3RhbnQ='),base64_decode('aGF'.'zaF9'.'obWFj'),base64_decode('c3RyY21w'),base64_decode('Z'.'Xh'.'wbG'.'9k'.'ZQ='.'='),base64_decode('bWt'.'0aW1l'),base64_decode('dG'.'ltZ'.'Q=='),base64_decode('ZXhwbG9kZQ'.'='.'='),base64_decode('cGFj'.'aw=='),base64_decode('bWQ1'),base64_decode('Y'.'29uc'.'3R'.'h'.'bnQ='),base64_decode('aG'.'F'.'za'.'F9obW'.'F'.'j'),base64_decode('c3RyY21'.'w'),base64_decode('ZXhwbG9'.'kZQ'.'=='),base64_decode('b'.'Wt0aW1l'),base64_decode('dG'.'ltZQ=='),base64_decode('aW5fYXJyYXk='),base64_decode('cHJlZ1'.'9yZ'.'XBsYWNlX2NhbGxiYW'.'Nr'),base64_decode('bWJf'.'c3RydG9sb3dlcg=='),base64_decode('c'.'HJl'.'Z19yZXBsYW'.'NlX'.'2NhbGxiYWNr'),base64_decode('cHJ'.'lZ1'.'9yZ'.'XBsY'.'WNlX2N'.'hbGxiYWNr'),base64_decode('bWJf'.'c3Ry'.'dG9sb3dlcg=='),base64_decode('c3RyX3Jlc'.'GxhY'.'2U='),base64_decode(''.'c'.'HJlZ'.'19tYXRjaA='.'='),base64_decode(''.'cH'.'Jl'.'Z19'.'yZXBsYWNlX2'.'Nh'.'bGxiYWNr'));if(!function_exists(__NAMESPACE__.'\\___442204658')){function ___442204658($_862018398){static $_666912996= false; if($_666912996 == false) $_666912996=array('TEFOREl'.'O'.'R'.'19NVVRBVE9S'.'X01P'.'REU=','cnU=','Ynk=','a'.'3o'.'=','UEhPTkVfTk'.'9UX0NPTk'.'ZJU'.'k1F'.'RA='.'=','T'.'EFORElO'.'R19QS'.'E9ORV9'.'OT'.'1RfQ09'.'ORklSTUVE','RU1'.'BSUxfTk9U'.'X0NPTkZ'.'JU'.'k1FRA'.'==','TEFORElOR19'.'FT'.'UF'.'JT'.'F9OT'.'1RfQ09OR'.'klSTUVE','YWx'.'s'.'b3d'.'fc2tp'.'cF'.'9wa'.'G9uZ'.'V9'.'2Z'.'X'.'JpZmljYXRpb24=','WQ'.'='.'=',''.'Ym'.'l'.'0cml4MjQ=','bGFuZ'.'Glu'.'Z'.'19za2lw'.'X3B'.'ob25lX3Zlcml'.'m'.'a'.'WNhdGl'.'vbg==','YWxsb3dfc2'.'tpcF9lbWF'.'pbF9'.'2ZX'.'J'.'p'.'Zm'.'l'.'jYXRpb'.'24=','WQ'.'==','b'.'GFuZGl'.'uZw==','b25'.'MYW5k'.'a'.'W5'.'nU3Rhc'.'nRQdWJsa'.'WNhdGlvbg==','aWQ=',''.'YmxvY2tJZ'.'A==','c2l0ZUlk','bGFuZGl'.'uZ191cmxjaGVja2VyX2tleQ==','c2V'.'s'.'ZWN0','Q09'.'OVE'.'VO'.'VA==','Zml'.'sd'.'GVy','TElE','PURFTEV'.'URUQ=','T'.'g='.'=','PUFDVElWRQ==','WQ'.'==','PV'.'BVQk'.'x'.'J'.'Qw='.'=','Tg==','Iyg'.'oaHR0cHxmdHB'.'8aHR0cHMpOi'.'8vW'.'1'.'4nI'.'lxzPF0rKSNpcw'.'==','Q'.'09OV'.'EVOVA==','L3Rvb2xzL3'.'Vy'.'bGNo'.'ZW'.'NrZXIu'.'cGhw','a2V5','d'.'X'.'J'.'s','aH'.'R0'.'cF9o'.'b3'.'N0','SFRUUF9IT1NU','T0'.'s=','VVJMQ0hFQ0tFUl9G'.'QUlM','T'.'EF'.'OR'.'E'.'lOR1'.'9VU'.'kx'.'DSEVDS'.'0'.'VSX0ZBSUw=','Zmls'.'dGVy','I'.'UlE','UFVCTEl'.'DX1B'.'BR'.'0'.'V'.'fUk'.'VBQ0hFRA==','bGltaXRf'.'c'.'2l0ZXNf'.'bnVtY'.'mV'.'yX3'.'BhZ2U=','SU5J'.'V'.'E'.'lBVE9SX0FQUF'.'9DT'.'0RF','cmV'.'z'.'dA='.'=','ZmlsdGVy',''.'P'.'UN'.'P'.'R'.'E'.'U=','S'.'U5JVE'.'l'.'BVE9S'.'X0FQUF9'.'DT'.'0'.'RF','','UEFZTUVO'.'V'.'F'.'9BTEx'.'PV'.'w='.'=','WQ='.'=',''.'TEFO'.'RE'.'lOR19QQVlNRU'.'5UX'.'0ZBS'.'UxFRA==','bGFuZ'.'G'.'lu'.'Z19wYXltZ'.'W'.'50X2ZhaW'.'xlZF8'.'y','c2V'.'sZ'.'WN0',''.'Q09ERQ==','ZmlsdGVy','TElE','PU'.'FDVElWR'.'Q==',''.'WQ==',''.'PUR'.'FTEVU'.'RUQ=','Tg==','PVBV'.'QkxJQw==','Tg='.'=','JT'.'1DT0RF','cmVwb18l','Q'.'09E'.'RQ'.'==','UEFZT'.'UVOVF9BT'.'ExPVw==','WQ==','WQ='.'=',''.'TE'.'FOREl'.'O'.'R'.'19'.'QQV'.'lN'.'RU5UX0ZBSUxFRF9C'.'T'.'E9DSw==','b'.'G'.'FuZGluZ'.'19wYXlt'.'Z'.'W50X2Zha'.'WxlZF9i'.'bG9j'.'a'.'w='.'=','c2V'.'sZWN'.'0','S'.'UQ=','VFlQRQ='.'=','Zm'.'lsdG'.'V'.'y','SUQ'.'=','PVNQR'.'UNJQUw=','T'.'g==','Q0hF'.'Q0tfU'.'EVSTUl'.'TU0lPTl'.'M=','Tg==','ZmlsdGVy','IUlE','SU'.'Q=',''.'dHlwZQ==',''.'VFlQRQ==',''.'V'.'F'.'lQRQ==','UFVCTE'.'lDX1'.'NJ'.'V'.'EVfUk'.'VBQ0h'.'FRF9GU'.'kVF','UFVCTE'.'lDX1N'.'JVEVfUkVBQ0hFRA==','VF'.'lQRQ==','bGltaXRfc2'.'l0ZXNf'.'b'.'nVtYmVy'.'X'.'2ZyZWU=','b'.'GltaX'.'Rfc2l0ZXNfbn'.'VtYmVy','c'.'2VsZWN0','SU'.'Q=','Zmls'.'dG'.'Vy','U0'.'lURV9JR'.'A'.'==','Q0'.'hFQ0t'.'fUEVSTUlTU0lPT'.'l'.'M=','T'.'g='.'=','SU'.'Q=',''.'c2V'.'sZWN'.'0','SUQ=','RU'.'5USVR'.'Z'.'X1'.'R'.'ZU'.'EU=','RU'.'5'.'USVRZ'.'X0lE','Zm'.'ls'.'dG'.'Vy','TE9HSUM=','T1I=','P'.'U'.'V'.'OVElU'.'WV9U'.'W'.'VBF','RU5'.'USVRZX0lE','PU'.'VOV'.'ElUWV9UWVBF','RU5U'.'SVRZX0l'.'E','PUh'.'P'.'T0s=','SEVBRE'.'JM'.'T0NL','PUN'.'PRE'.'U=','VVNF',''.'PVZBTFVF',''.'W'.'Q'.'==',''.'bGltaXQ'.'=',''.'UFVCTEl'.'D'.'X0hU'.'TUxf'.'RElTQU'.'xMT'.'1d'.'FR'.'Fs'.'=','RU5USVRZX1RZ'.'U'.'EU'.'=',''.'RU5USVRZX'.'0lE','X'.'Q='.'=','bGltaX'.'R'.'f'.'c2l0Z'.'XNfaHRtbF9qcw==','bGFu'.'Z'.'GluZ'.'w==','b2'.'5M'.'YW'.'5kaW5nUHVib'.'GljYXRp'.'b'.'24=',''.'aW'.'Q=','Y'.'mxvY2tJZA==','d'.'HBs'.'Q'.'29'.'kZ'.'Q==',''.'V'.'FB'.'M'.'X0NPR'.'E'.'U=',''.'Yml0cm'.'l4Mj'.'Q=',''.'REI=','U0VMRUNU'.'IFZBTFVFIEZ'.'S'.'T00g'.'Yl9'.'vcHRp'.'b24'.'gV0h'.'FUkUgTkFNR'.'T0nf'.'lBBUkF'.'NX'.'0ZJT'.'k'.'l'.'TSF9EQVRFJyBBTkQg'.'TU9EVUxFX0'.'lEPSdtY'.'WluJw==','VkF'.'MVUU=','L'.'g==','SCo'.'=','Yml0cml4','T'.'E'.'l'.'DR'.'U5TRV9L'.'RVk=','c2'.'hhM'.'j'.'U2','M'.'jAxOC0wMS0'.'wMQ==','M'.'jA'.'xOC0wMS0wMQ==','L'.'Q'.'==','TElDRU5'.'T'.'R'.'V9FWFBJUkVE',''.'TEFOREl'.'O'.'R19MSU'.'N'.'FTlNFX0VYUElSR'.'UQ=','Yml0c'.'ml4Mj'.'Q=','REI=','U0VM'.'R'.'UNUIFZBTFVFIE'.'ZS'.'T'.'00gYl9'.'vcHR'.'pb24'.'g'.'V0hFUkUgTkF'.'N'.'RT0n'.'flB'.'BU'.'kFNX0Z'.'JT'.'k'.'lTSF9EQVRF'.'JyBBTkQ'.'gTU9E'.'VUxFX0'.'lEPS'.'dtY'.'Wlu'.'J'.'w==',''.'VkF'.'MVUU=',''.'Lg==','S'.'Co=','Yml0c'.'ml4',''.'TE'.'lDR'.'U5TR'.'V9LRV'.'k=',''.'c2h'.'hMj'.'U2','MjAxOC0wMS0wMQ='.'=',''.'MjAxOC0wMS0wMQ==','L'.'Q='.'=','TEl'.'DRU'.'5TRV'.'9FWFBJUkVE',''.'T'.'EFO'.'RElOR19MS'.'UNFT'.'lNFX0'.'VY'.'UElSRUQ=','Q'.'U'.'NUSV'.'ZF','W'.'Q==',''.'UFVC'.'TElD','WQ==','REFUR'.'V9QVUJMSUM'.'=','RE'.'FU'.'RV'.'9NT0'.'RJ'.'R'.'lk'.'=','QUNU'.'SVZF',''.'WQ'.'==','Ly'.'h'.'bXDsiXXswLDF9KSN'.'ibG9ja'.'yhb'.'XGRd'.'KykoW1wmIl'.'17MC'.'w'.'x'.'fS'.'kva'.'X'.'M=','TE'.'lE','PURFTEVURU'.'Q=','Tg==','SUQ'.'=','c2Vs'.'ZWN0','S'.'U'.'Q=','UEF'.'SRU5UX0'.'lE','Zmlsd'.'GVy','SUQ=','S'.'UQ'.'=','S'.'UQ=','UEF'.'SR'.'U5UX0lE',''.'c2VsZWN'.'0','S'.'UQ=',''.'UFVCT'.'El'.'D','UEFS'.'RU5UX0l'.'E','Q'.'09ERQ==','U09SV'.'A==',''.'Q'.'UN'.'U'.'S'.'VZF','QU5DSE9'.'S','QUND'.'R'.'VNT','Q0'.'9OVE'.'VOVA==','U0'.'VBUkNIX0N'.'PTl'.'RFTlQ'.'=',''.'U'.'09VUkNFX1BBUk'.'FNU'.'w==','Q'.'VN'.'TRVRT','WE'.'1MX0lE','RE'.'VTSUdORU'.'Q=','Z'.'mlsdGV'.'y','SU'.'Q=','UF'.'V'.'CT'.'ElD','WQ==','Q0'.'9O'.'VEVOVA==','L'.'2hyZWY9Iihw'.'cm9kdWN0O'.'i'.'k/I2'.'NhdGFsb2co'.'RWxlbWVud'.'Hx'.'T'.'ZWN'.'0aW9uKShbX'.'GRdKyk'.'iL2k=','aH'.'J'.'lZj0i',''.'Ig==',''.'Q09OVEVOV'.'A==','Q09OVEV'.'OV'.'A'.'==','L'.'yhkYXRhLXBzZ'.'XVk'.'by11cmw9In'.'t'.'c'.'Uy'.'oo'.'cHJvZH'.'VjdDop'.'PyNjYX'.'RhbG9nKEVsZW'.'1lbnR8U2VjdGl'.'vb'.'ikoW1x'.'kXSsp'.'KShcUyp'.'9'.'Ii'.'k'.'vaQ'.'==','Lyhwc'.'m9kdWN0'.'Oik'.'/'.'I2NhdGFsb2c'.'oRWx'.'l'.'bWVudH'.'xTZ'.'WN0aW9uK'.'S'.'hbXGRdKykva'.'Q'.'==','Q0'.'9'.'OVEV'.'OVA==','Q09'.'OVEVOVA==','Q09OVE'.'VOVA'.'==','Q09'.'OVEV'.'O'.'VA==','Y29udGVud'.'GVkaXR'.'hYmx'.'lP'.'SJ0cnVlIg==','','Q'.'0'.'9OVEVOVA='.'=','UE'.'FSRU5U'.'X'.'0lE','UE'.'FSRU5UX0lE',''.'S'.'UQ=','U09S'.'VA==','U09S'.'V'.'A==','QUNUSVZF','QUNUS'.'VZF',''.'QU'.'5DSE9'.'S','QU5'.'DSE9S','WE1MX0lE','WE1'.'MX'.'0lE','Q'.'U'.'NDR'.'VNT','Q'.'UNDRVNT','R'.'EVT'.'SU'.'dORU'.'Q'.'=',''.'RE'.'VTSU'.'dORU'.'Q=','U09VUkNF'.'X'.'1B'.'BU'.'kFNUw'.'='.'=','U'.'09VU'.'k'.'NFX1BBUk'.'FNUw==','Q09OVEVOV'.'A==',''.'Q09'.'O'.'V'.'EVOVA='.'=','U0VBUkNIX'.'0'.'N'.'P'.'TlRFTlQ=','U0VB'.'Uk'.'N'.'I'.'X'.'0NPTlRFTlQ'.'=','Q'.'V'.'NTRVR'.'T','Q'.'VNT'.'RVRT','UE'.'FSRU5U'.'X'.'0lE','Q09OV'.'E'.'VOV'.'A'.'==','TElE','Q09'.'E'.'RQ'.'==','Q09'.'ERQ==','U'.'09SV'.'A='.'=','U09S'.'VA==',''.'QU'.'5DSE'.'9S','QU5DSE9S','Yg='.'=','WE1MX0lE','WE1M'.'X'.'0lE','QUNU'.'SVZF','Q'.'UN'.'U'.'SVZ'.'F','QU'.'N'.'DR'.'VNT','QUNDRVNT',''.'RE'.'VTS'.'U'.'d'.'ORUQ=','REVTSUdOR'.'UQ=','U0'.'9V'.'UkNF'.'X'.'1BB'.'UkFNUw==',''.'U09V'.'UkNFX1BBUkFNUw==','Q09OV'.'EVO'.'V'.'A==','Q09'.'OVEVOVA==','U0VBUkNIX0NP'.'TlRFT'.'lQ'.'=','U'.'0VB'.'U'.'k'.'NIX0'.'NP'.'T'.'lR'.'FTlQ=','Q'.'V'.'N'.'TRV'.'R'.'T','QVNT'.'RVRT',''.'UEFSRU5UX'.'0lE','Q09OV'.'EV'.'OVA==','Q'.'09OVE'.'VOVA'.'==',''.'Q'.'09OVEVOVA'.'==','Q09O'.'VE'.'VOVA==','I2Jsb'.'2N'.'r','I2J'.'sb2Nr',''.'Q09OVEVOV'.'A'.'==');return base64_decode($_666912996[$_862018398]);}}; use Bitrix\Bitrix24\Feature; use Bitrix\Landing\Assets; use Bitrix\Landing\Block\Cache; use Bitrix\Landing\Internals\HookDataTable as HookData; use Bitrix\Landing\Restriction; use Bitrix\Rest\AppTable; use Bitrix\Main\Config\Configuration; use Bitrix\Main\Event; use Bitrix\Main\EventResult; use Bitrix\Main\Localization\Loc; use Bitrix\Main\Web\HttpClient; Loc::loadMessages(__FILE__); $GLOBALS['____843409193'][0](___442204658(0), true); class Mutator{  public static function checkSiteVerification(int $_530825246, Error $_780694482): bool{ $_1548224827= Manager::getZone();  if(!$GLOBALS['____843409193'][1]($_1548224827,[___442204658(1), ___442204658(2), ___442204658(3)]) &&!self::__987988921()){ if(!Restriction\Site::isPhoneConfirmed($_530825246)){ $_780694482->addError( ___442204658(4), Loc::getMessage(___442204658(5))); return false;}}  else if(!self::__909396365()){ if(!Restriction\Site::isEmailConfirmed($_530825246)){ $_780694482->addError( ___442204658(6), Loc::getMessage(___442204658(7))); return false;}} return true;}  private static function __987988921(): bool{ if(Manager::getOption(___442204658(8)) === ___442204658(9)){ return true;} if(!\Bitrix\Main\Loader::includeModule(___442204658(10))){ return true;} return Feature::isFeatureEnabled(___442204658(11));}  private static function __909396365(): bool{ if(Manager::getOption(___442204658(12)) === ___442204658(13)){ return true;} return false;}  public static function landingPublication(Landing $landing, $_1329100686= null, bool $_1722653099= false): bool{ static $_1799949398=[]; static $_1425184923=[]; Manager::disableAllFeaturesTmp(); if(!$landing->exist()){ return false;}  $_1395115988= new Event(___442204658(14), ___442204658(15), array( ___442204658(16) => $landing->getId(), ___442204658(17) => $_1329100686, ___442204658(18) => $landing->getSiteId())); $_1395115988->send(); foreach($_1395115988->getResults() as $_399803483){ if($_399803483->getType() == EventResult::ERROR){ foreach($_399803483->getErrors() as $_780694482){ $landing->getError()->addError( $_780694482->getCode(), $_780694482->getMessage());} return false;}}  if(min(244,0,81.333333333333))  if($_2101281660= Configuration::getValue(___442204658(19))){ $_782317109=[]; $_1519749599= Block::getList([ ___442204658(20) =>[ ___442204658(21)], ___442204658(22) =>[ ___442204658(23) => $landing->getId(), ___442204658(24) => ___442204658(25), ___442204658(26) => ___442204658(27), ___442204658(28) => ___442204658(29)]]); while($_1165835923= $_1519749599->fetch()){ if($GLOBALS['____843409193'][2](___442204658(30), $_1165835923[___442204658(31)], $_748005298)){ $_782317109= $GLOBALS['____843409193'][3]($_782317109, $_748005298[round(0+0.25+0.25+0.25+0.25)]);}} $_782317109= $GLOBALS['____843409193'][4]($GLOBALS['____843409193'][5]($_782317109)); $_559807253= new HttpClient; if($_782317109){ $_434587564= $_559807253->post(Manager::getPreviewHost(). ___442204658(32),[ ___442204658(33) => $_2101281660, ___442204658(34) => $_782317109, ___442204658(35) => \Bitrix\Main\Application::getInstance()->getContext()->getServer()->get(___442204658(36))]); if($_434587564 && $_434587564 !== ___442204658(37)){ $landing->getError()->addError( ___442204658(38), Loc::getMessage(___442204658(39))); return false;}}}  if(!Manager::checkFeature( Manager::FEATURE_PUBLICATION_PAGE, array( ___442204658(40) => array( ___442204658(41) => $landing->getId())))){ $landing->getError()->addError( ___442204658(42), Restriction\Manager::getSystemErrorMessage(___442204658(43))); return false;}  $_639479610= $landing->getMeta(); if( isset($_639479610[___442204658(44)]) && \Bitrix\Main\Loader::includeModule(___442204658(45))){ $_1519749599= AppTable::getList([ ___442204658(46) =>[ ___442204658(47) => $_639479610[___442204658(48)]]]); if($_1165835923= $_1519749599->fetch()){ $_1808866083= AppTable::getAppStatusInfo($_1165835923, ___442204658(49)); if($_1808866083[___442204658(50)] != ___442204658(51)){ $landing->getError()->addError( ___442204658(52), Restriction\Manager::getSystemErrorMessage(___442204658(53))); return false;}}}  $_1386097863=[]; $_1519749599= Block::getList([ ___442204658(54) =>[ ___442204658(55)], ___442204658(56) =>[ ___442204658(57) => $landing->getId(), ___442204658(58) => ___442204658(59), ___442204658(60) => ___442204658(61), ___442204658(62) => ___442204658(63), ___442204658(64) => ___442204658(65)]]); while($_1165835923= $_1519749599->fetch()){ $_1386097863[]= $GLOBALS['____843409193'][6]($_1165835923[___442204658(66)], round(0+5));} if(!empty($_1386097863)){ foreach(Repo::getAppInfo($_1386097863) as $_300542055){ if(($_300542055[___442204658(67)] ?? ___442204658(68)) !== ___442204658(69)){ $landing->getError()->addError( ___442204658(70), Restriction\Manager::getSystemErrorMessage(___442204658(71))); return false;}}}  if(!$GLOBALS['____843409193'][7]($landing->getSiteId(), $_1425184923)){ $_1425184923[]= $landing->getSiteId(); $_1519749599= Site::getList(array( ___442204658(72) => array( ___442204658(73), ___442204658(74)), ___442204658(75) => array( ___442204658(76) => $landing->getSiteId(), ___442204658(77) => ___442204658(78), ___442204658(79) => ___442204658(80)))); if($_1165835923= $_1519749599->fetch()){ if(!Manager::checkFeature( Manager::FEATURE_PUBLICATION_SITE,[ ___442204658(81) =>[ ___442204658(82) => $_1165835923[___442204658(83)]], ___442204658(84) => $_1165835923[___442204658(85)]])){ $_1564910575= Manager::licenseIsFreeSite($_1165835923[___442204658(86)]) &&!Manager::isFreePublicAllowed()? ___442204658(87): ___442204658(88); $_546276867= Manager::licenseIsFreeSite($_1165835923[___442204658(89)]) &&!Manager::isFreePublicAllowed()? ___442204658(90): ___442204658(91); $landing->getError()->addError( $_1564910575, Restriction\Manager::getSystemErrorMessage($_546276867)); return false;}}}  if(\Bitrix\Landing\Hook\Page\HeadBlock::isLockedFeature()){ $_135235365=[$landing->getId()];  $_1519749599= Landing::getList([ ___442204658(92) =>[ ___442204658(93)], ___442204658(94) =>[ ___442204658(95) => $landing->getSiteId(), ___442204658(96) => ___442204658(97)]]); while($_1165835923= $_1519749599->fetch()){ $_135235365[]= $_1165835923[___442204658(98)];} $_1519749599= HookData::getList([ ___442204658(99) =>[ ___442204658(100), ___442204658(101), ___442204658(102)], ___442204658(103) =>[[ ___442204658(104) => ___442204658(105),[ ___442204658(106) => Hook::ENTITY_TYPE_SITE, ___442204658(107) => $landing->getSiteId()],[ ___442204658(108) => Hook::ENTITY_TYPE_LANDING, ___442204658(109) => $_135235365]], ___442204658(110) => ___442204658(111), ___442204658(112) => ___442204658(113), ___442204658(114) => ___442204658(115)], ___442204658(116) => round(0+0.5+0.5)]); if($_1165835923= $_1519749599->fetch()){ $landing->getError()->addError( ___442204658(117). $_1165835923[___442204658(118)]. $_1165835923[___442204658(119)]. ___442204658(120), Restriction\Manager::getSystemErrorMessage(___442204658(121))); return false;}} if(!self::checkSiteVerification($landing->getSiteId(), $landing->getError())){ return false;}  $_1395115988= new Event(___442204658(122), ___442204658(123), array( ___442204658(124) => $landing->getId(), ___442204658(125) => $_1329100686, ___442204658(126) => $_639479610[___442204658(127)],)); $_1395115988->send(); foreach($_1395115988->getResults() as $_399803483){ if($_399803483->getResultType() == EventResult::ERROR){ foreach($_399803483->getErrors() as $_780694482){ $landing->getError()->addError( $_780694482->getCode(), $_780694482->getMessage());} return false;}} if($_1722653099){ return true;} if(!\Bitrix\Main\ModuleManager::isModuleInstalled(___442204658(128))){ $_2093328194= $GLOBALS[___442204658(129)]->Query(___442204658(130), true); if($_1519749599= $_2093328194->Fetch()){ $_208223601= $_1519749599[___442204658(131)]; list($_842048387, $_1691119328)= $GLOBALS['____843409193'][8](___442204658(132), $_208223601); $_672505992= $GLOBALS['____843409193'][9](___442204658(133), $_842048387); $_2043482201= ___442204658(134).$GLOBALS['____843409193'][10]($GLOBALS['____843409193'][11](___442204658(135))); $_171907104= $GLOBALS['____843409193'][12](___442204658(136), $_1691119328, $_2043482201, true); if($GLOBALS['____843409193'][13]($_171907104, $_672505992) !==(1140/2-570)){ $_1691119328= ___442204658(137);}} else{ $_1691119328= ___442204658(138);} if(!empty($_1691119328)){ $_1974412205= $GLOBALS['____843409193'][14](___442204658(139), $_1691119328); $_633112747= $GLOBALS['____843409193'][15]((1384/2-692),(196*2-392),(892-2*446), $_1974412205[round(0+0.33333333333333+0.33333333333333+0.33333333333333)], $_1974412205[round(0+0.66666666666667+0.66666666666667+0.66666666666667)], $_1974412205[(958-2*479)]); if($_633112747 <= $GLOBALS['____843409193'][16]()){ $landing->getError()->addError( ___442204658(140), Loc::getMessage(___442204658(141))); return false;}}}if(!\Bitrix\Main\ModuleManager::isModuleInstalled(___442204658(142))){ $_2093328194= $GLOBALS[___442204658(143)]->Query(___442204658(144), true); if($_1519749599= $_2093328194->Fetch()){ $_208223601= $_1519749599[___442204658(145)]; list($_842048387, $_1691119328)= $GLOBALS['____843409193'][17](___442204658(146), $_208223601); $_672505992= $GLOBALS['____843409193'][18](___442204658(147), $_842048387); $_2043482201= ___442204658(148).$GLOBALS['____843409193'][19]($GLOBALS['____843409193'][20](___442204658(149))); $_171907104= $GLOBALS['____843409193'][21](___442204658(150), $_1691119328, $_2043482201, true); if($GLOBALS['____843409193'][22]($_171907104, $_672505992) !==(250*2-500)){ $_1691119328= ___442204658(151);}} else{ $_1691119328= ___442204658(152);} if(!empty($_1691119328)){ $_1974412205= $GLOBALS['____843409193'][23](___442204658(153), $_1691119328); $_633112747= $GLOBALS['____843409193'][24]((1376/2-688),(946-2*473), min(84,0,28), $_1974412205[round(0+0.2+0.2+0.2+0.2+0.2)], $_1974412205[round(0+1+1)], $_1974412205[(247*2-494)]); if($_633112747 <= $GLOBALS['____843409193'][25]()){ $landing->getError()->addError( ___442204658(154), Loc::getMessage(___442204658(155))); return false;}}} if($landing->getFolderId()){ Site::publicationFolder($landing->getFolderId());} if(!$_1329100686){ Hook::setEditMode(); Hook::publicationSite($landing->getSiteId()); Hook::publicationLanding($landing->getId());} Assets\Manager::rebuildWebpackForLanding($landing->getId());  self::blocksPublication($landing, $_1329100686); $_999494683= new \Bitrix\Main\Type\DateTime; $_165131169=[ ___442204658(156) => ___442204658(157), ___442204658(158) => ___442204658(159), ___442204658(160) => $_999494683, ___442204658(161) => false]; $_1519749599= Landing::update($landing->getId(), $_165131169); $landing->setMetaData($_165131169);  if($_1519749599->isSuccess()){ if(!$GLOBALS['____843409193'][26]($landing->getSiteId(), $_1799949398)){ $_1799949398[]= $landing->getSiteId(); $_1519749599= Site::update($landing->getSiteId(), array( ___442204658(162) => ___442204658(163))); if(!$_1519749599->isSuccess()){ $landing->getError()->addFromResult( $_1519749599); return false;}} return true;} else{ $landing->getError()->addFromResult( $_1519749599);} return false;}  public static function blocksPublication(\Bitrix\Landing\Landing $landing, $_1329100686= null): void{ if($landing->exist()){ $_1845256786= $landing->getId();  $_660753813= array(); $_1279134725= array(); $_1996210589= array(); $_804674450= ___442204658(164); $_1417868090=[ ___442204658(165) => $landing->getId(), ___442204658(166) => ___442204658(167)]; if($_1329100686){  $_1417868090[___442204658(168)]= $_1329100686; $_1519749599= Block::getList([ ___442204658(169) =>[ ___442204658(170), ___442204658(171)], ___442204658(172) => $_1417868090]); $_1417868090[___442204658(173)]= (array)$_1417868090[___442204658(174)]; while($_1165835923= $_1519749599->fetch()){ $_1417868090[___442204658(175)][]= $_1165835923[___442204658(176)];}} $_1519749599= Block::getList([ ___442204658(177) =>[ ___442204658(178), ___442204658(179), ___442204658(180), ___442204658(181), ___442204658(182), ___442204658(183), ___442204658(184), ___442204658(185), ___442204658(186), ___442204658(187), ___442204658(188), ___442204658(189), ___442204658(190), ___442204658(191)], ___442204658(192) => $_1417868090]); while($_1165835923= $_1519749599->fetch()){ $_660753813[$_1165835923[___442204658(193)]]= $_1165835923;}  foreach($_660753813 as $_1998393742 => $_967272749){ if($_967272749[___442204658(194)] != ___442204658(195)){  $_967272749[___442204658(196)]= $GLOBALS['____843409193'][27]( ___442204658(197), function($_818427038){ return ___442204658(198). PublicAction\Utils::getIblockURL( $_818427038[round(0+1.5+1.5)], $GLOBALS['____843409193'][28]($_818427038[round(0+0.66666666666667+0.66666666666667+0.66666666666667)])). ___442204658(199);}, $_967272749[___442204658(200)]);  $_967272749[___442204658(201)]= $GLOBALS['____843409193'][29]( ___442204658(202), function($_818427038){ $_818427038[round(0+0.25+0.25+0.25+0.25)]= $GLOBALS['____843409193'][30]( ___442204658(203), function($_484552987){ return PublicAction\Utils::getIblockURL( $_484552987[round(0+1+1+1)], $GLOBALS['____843409193'][31]($_484552987[round(0+0.4+0.4+0.4+0.4+0.4)]));}, $_818427038[round(0+0.2+0.2+0.2+0.2+0.2)]); return $_818427038[round(0+0.33333333333333+0.33333333333333+0.33333333333333)]. $_818427038[round(0+5)];}, $_967272749[___442204658(204)]);  $_967272749[___442204658(205)]= Subtype\Form::prepareFormsToPublication( $_967272749[___442204658(206)]);  $_967272749[___442204658(207)]= $GLOBALS['____843409193'][32]( ___442204658(208), ___442204658(209), $_967272749[___442204658(210)]); $_1290320006= isset($_660753813[$_967272749[___442204658(211)]])? $_660753813[$_967272749[___442204658(212)]][___442204658(213)]: min(110,0,36.666666666667); if($_1290320006){ Cache::clear($_1290320006); $_1519749599= Block::update($_1290320006, array( ___442204658(214) => $_967272749[___442204658(215)], ___442204658(216) => $_967272749[___442204658(217)], ___442204658(218) => $_967272749[___442204658(219)], ___442204658(220) => $_967272749[___442204658(221)], ___442204658(222) => $_967272749[___442204658(223)], ___442204658(224) => $_967272749[___442204658(225)], ___442204658(226) => $_967272749[___442204658(227)], ___442204658(228) => $_967272749[___442204658(229)], ___442204658(230) => $_967272749[___442204658(231)], ___442204658(232) => $_967272749[___442204658(233)])); $_1519749599->isSuccess(); unset($_660753813[$_967272749[___442204658(234)]]);  File::replaceInBlock( $_1290320006, File::getFilesFromBlockContent( $_1998393742, $_967272749[___442204658(235)]));} else{ $_1519749599= Block::add(array( ___442204658(236) => $_1845256786, ___442204658(237) => $_967272749[___442204658(238)], ___442204658(239) => $_967272749[___442204658(240)], ___442204658(241) => $_967272749[___442204658(242)]?: ___442204658(243). $_1998393742, ___442204658(244) => $_967272749[___442204658(245)], ___442204658(246) => $_967272749[___442204658(247)], ___442204658(248) => $_967272749[___442204658(249)], ___442204658(250) => $_967272749[___442204658(251)], ___442204658(252) => $_967272749[___442204658(253)], ___442204658(254) => $_967272749[___442204658(255)], ___442204658(256) => $_967272749[___442204658(257)], ___442204658(258) => $_967272749[___442204658(259)])); if($_1519749599->isSuccess()){ $_1290320006= $_1519749599->getId(); $_1519749599= Block::update($_1998393742, array( ___442204658(260) => $_1290320006)); $_1519749599->isSuccess();  File::addToBlock( $_1290320006, File::getFilesFromBlockContent( $_1998393742, $_967272749[___442204658(261)]));}} if($_1290320006){ $_1184009604= new Block($_1290320006); Assets\PreProcessing::blockPublicationProcessing($_1184009604); $_967272749[___442204658(262)]= $_1184009604->getContent(); unset($_1184009604);} if($GLOBALS['____843409193'][33]($_804674450, $_967272749[___442204658(263)])){ $_1279134725[$_1290320006]= $_967272749[___442204658(264)];} $_1996210589[$_1998393742]= $_1290320006; unset($_660753813[$_1998393742]);}}  foreach($_660753813 as $_1998393742 => $_967272749){ $_1519749599= Block::delete($_1998393742); $_1519749599->isSuccess();}  foreach($_1279134725 as $_1998393742 => $_1709621186){ $_1709621186= $GLOBALS['____843409193'][34]( $_804674450, function($_685138299) use($_1996210589){ if(isset($_1996210589[$_685138299[round(0+0.4+0.4+0.4+0.4+0.4)]])){ return $_685138299[round(0+1)]. ___442204658(265). $_1996210589[$_685138299[round(0+1+1)]]. $_685138299[round(0+3)];} else{ return $_685138299[round(0+0.2+0.2+0.2+0.2+0.2)]. ___442204658(266). $_685138299[round(0+0.4+0.4+0.4+0.4+0.4)]. $_685138299[round(0+0.6+0.6+0.6+0.6+0.6)];}}, $_1709621186); $_1519749599= Block::update($_1998393742, array( ___442204658(267) => $_1709621186)); $_1519749599->isSuccess();}}}}?>
+<? namespace Bitrix\Landing;
+$GLOBALS['____843409193'] = array(
+	base64_decode('ZGV' . 'maW5l'), base64_decode('' . 'aW5' . 'fYXJyYX' . 'k='), base64_decode('cH' . 'J' . 'lZ19' . 'tYXRjaF9hbG' . 'w='), base64_decode('' . 'Y' . 'XJy' . 'YXlfbWVyZ2' . 'U='), base64_decode('YXJ' . 'yYXlfdmFsdWVz'), base64_decode('Y' . 'XJ' . 'yYXlfd' . 'W5pcXVl'), base64_decode('c3Vic3Ry'), base64_decode('aW5' . 'fYXJy' . 'YXk='), base64_decode('Z' . 'Xhwb' . 'G9kZQ' . '=='), base64_decode('c' . 'G' . 'F' . 'jaw=='), base64_decode('bWQ1'), base64_decode('Y29uc3RhbnQ='), base64_decode('aGF' . 'zaF9' . 'obWFj'), base64_decode('c3RyY21w'), base64_decode('Z' . 'Xh' . 'wbG' . '9k' . 'ZQ=' . '='), base64_decode('bWt' . '0aW1l'), base64_decode('dG' . 'ltZ' . 'Q=='), base64_decode('ZXhwbG9kZQ' . '=' . '='), base64_decode('cGFj' . 'aw=='), base64_decode('bWQ1'), base64_decode('Y' . '29uc' . '3R' . 'h' . 'bnQ='), base64_decode('aG' . 'F' . 'za' . 'F9obW' . 'F' . 'j'), base64_decode('c3RyY21' . 'w'), base64_decode('ZXhwbG9' . 'kZQ' . '=='), base64_decode('b' . 'Wt0aW1l'), base64_decode('dG' . 'ltZQ=='), base64_decode('aW5fYXJyYXk='), base64_decode('cHJlZ1' . '9yZ' . 'XBsYWNlX2NhbGxiYW' . 'Nr'), base64_decode('bWJf' . 'c3RydG9sb3dlcg=='), base64_decode('c' . 'HJl' . 'Z19yZXBsYW' . 'NlX' . '2NhbGxiYWNr'), base64_decode('cHJ' . 'lZ1' . '9yZ' . 'XBsY' . 'WNlX2N' . 'hbGxiYWNr'), base64_decode('bWJf' . 'c3Ry' . 'dG9sb3dlcg=='), base64_decode('c3RyX3Jlc' . 'GxhY' . '2U='), base64_decode('' . 'c' . 'HJlZ' . '19tYXRjaA=' . '='), base64_decode('' . 'cH' . 'Jl' . 'Z19' . 'yZXBsYWNlX2' . 'Nh' . 'bGxiYWNr')
+);
+if (!function_exists(__NAMESPACE__ . '\\___442204658')) {
+	function ___442204658($_862018398)
+	{
+		static $_666912996 = false;
+		if ($_666912996 == false) $_666912996 = array(
+			'TEFOREl' . 'O' . 'R' . '19NVVRBVE9S' . 'X01P' . 'REU=', 'cnU=', 'Ynk=', 'a' . '3o' . '=', 'UEhPTkVfTk' . '9UX0NPTk' . 'ZJU' . 'k1F' . 'RA=' . '=', 'T' . 'EFORElO' . 'R19QS' . 'E9ORV9' . 'OT' . '1RfQ09' . 'ORklSTUVE', 'RU1' . 'BSUxfTk9U' . 'X0NPTkZ' . 'JU' . 'k1FRA' . '==', 'TEFORElOR19' . 'FT' . 'UF' . 'JT' . 'F9OT' . '1RfQ09OR' . 'klSTUVE', 'YWx' . 's' . 'b3d' . 'fc2tp' . 'cF' . '9wa' . 'G9uZ' . 'V9' . '2Z' . 'X' . 'JpZmljYXRpb24=', 'WQ' . '=' . '=', '' . 'Ym' . 'l' . '0cml4MjQ=', 'bGFuZ' . 'Glu' . 'Z' . '19za2lw' . 'X3B' . 'ob25lX3Zlcml' . 'm' . 'a' . 'WNhdGl' . 'vbg==', 'YWxsb3dfc2' . 'tpcF9lbWF' . 'pbF9' . '2ZX' . 'J' . 'p' . 'Zm' . 'l' . 'jYXRpb' . '24=', 'WQ' . '==', 'b' . 'GFuZGl' . 'uZw==', 'b25' . 'MYW5k' . 'a' . 'W5' . 'nU3Rhc' . 'nRQdWJsa' . 'WNhdGlvbg==', 'aWQ=', '' . 'YmxvY2tJZ' . 'A==', 'c2l0ZUlk', 'bGFuZGl' . 'uZ191cmxjaGVja2VyX2tleQ==', 'c2V' . 's' . 'ZWN0', 'Q09' . 'OVE' . 'VO' . 'VA==', 'Zml' . 'sd' . 'GVy', 'TElE', 'PURFTEV' . 'URUQ=', 'T' . 'g=' . '=', 'PUFDVElWRQ==', 'WQ' . '==', 'PV' . 'BVQk' . 'x' . 'J' . 'Qw=' . '=', 'Tg==', 'Iyg' . 'oaHR0cHxmdHB' . '8aHR0cHMpOi' . '8vW' . '1' . '4nI' . 'lxzPF0rKSNpcw' . '==', 'Q' . '09OV' . 'EVOVA==', 'L3Rvb2xzL3' . 'Vy' . 'bGNo' . 'ZW' . 'NrZXIu' . 'cGhw', 'a2V5', 'd' . 'X' . 'J' . 's', 'aH' . 'R0' . 'cF9o' . 'b3' . 'N0', 'SFRUUF9IT1NU', 'T0' . 's=', 'VVJMQ0hFQ0tFUl9G' . 'QUlM', 'T' . 'EF' . 'OR' . 'E' . 'lOR1' . '9VU' . 'kx' . 'DSEVDS' . '0' . 'VSX0ZBSUw=', 'Zmls' . 'dGVy', 'I' . 'UlE', 'UFVCTEl' . 'DX1B' . 'BR' . '0' . 'V' . 'fUk' . 'VBQ0hFRA==', 'bGltaXRf' . 'c' . '2l0ZXNf' . 'bnVtY' . 'mV' . 'yX3' . 'BhZ2U=', 'SU5J' . 'V' . 'E' . 'lBVE9SX0FQUF' . '9DT' . '0RF', 'cmV' . 'z' . 'dA=' . '=', 'ZmlsdGVy', '' . 'P' . 'UN' . 'P' . 'R' . 'E' . 'U=', 'S' . 'U5JVE' . 'l' . 'BVE9S' . 'X0FQUF9' . 'DT' . '0' . 'RF', '', 'UEFZTUVO' . 'V' . 'F' . '9BTEx' . 'PV' . 'w=' . '=', 'WQ=' . '=', '' . 'TEFO' . 'RE' . 'lOR19QQVlNRU' . '5UX' . '0ZBS' . 'UxFRA==', 'bGFuZ' . 'G' . 'lu' . 'Z19wYXltZ' . 'W' . '50X2ZhaW' . 'xlZF8' . 'y', 'c2V' . 'sZ' . 'WN0', '' . 'Q09ERQ==', 'ZmlsdGVy', 'TElE', 'PU' . 'FDVElWR' . 'Q==', '' . 'WQ==', '' . 'PUR' . 'FTEVU' . 'RUQ=', 'Tg==', 'PVBV' . 'QkxJQw==', 'Tg=' . '=', 'JT' . '1DT0RF', 'cmVwb18l', 'Q' . '09E' . 'RQ' . '==', 'UEFZT' . 'UVOVF9BT' . 'ExPVw==', 'WQ==', 'WQ=' . '=', '' . 'TE' . 'FOREl' . 'O' . 'R' . '19' . 'QQV' . 'lN' . 'RU5UX0ZBSUxFRF9C' . 'T' . 'E9DSw==', 'b' . 'G' . 'FuZGluZ' . '19wYXlt' . 'Z' . 'W50X2Zha' . 'WxlZF9i' . 'bG9j' . 'a' . 'w=' . '=', 'c2V' . 'sZWN' . '0', 'S' . 'UQ=', 'VFlQRQ=' . '=', 'Zm' . 'lsdG' . 'V' . 'y', 'SUQ' . '=', 'PVNQR' . 'UNJQUw=', 'T' . 'g==', 'Q0hF' . 'Q0tfU' . 'EVSTUl' . 'TU0lPTl' . 'M=', 'Tg==', 'ZmlsdGVy', 'IUlE', 'SU' . 'Q=', '' . 'dHlwZQ==', '' . 'VFlQRQ==', '' . 'V' . 'F' . 'lQRQ==', 'UFVCTE' . 'lDX1' . 'NJ' . 'V' . 'EVfUk' . 'VBQ0h' . 'FRF9GU' . 'kVF', 'UFVCTE' . 'lDX1N' . 'JVEVfUkVBQ0hFRA==', 'VF' . 'lQRQ==', 'bGltaXRfc2' . 'l0ZXNf' . 'b' . 'nVtYmVy' . 'X' . '2ZyZWU=', 'b' . 'GltaX' . 'Rfc2l0ZXNfbn' . 'VtYmVy', 'c' . '2VsZWN0', 'SU' . 'Q=', 'Zmls' . 'dG' . 'Vy', 'U0' . 'lURV9JR' . 'A' . '==', 'Q0' . 'hFQ0t' . 'fUEVSTUlTU0lPT' . 'l' . 'M=', 'T' . 'g=' . '=', 'SU' . 'Q=', '' . 'c2V' . 'sZWN' . '0', 'SUQ=', 'RU' . '5USVR' . 'Z' . 'X1' . 'R' . 'ZU' . 'EU=', 'RU' . '5' . 'USVRZ' . 'X0lE', 'Zm' . 'ls' . 'dG' . 'Vy', 'TE9HSUM=', 'T1I=', 'P' . 'U' . 'V' . 'OVElU' . 'WV9U' . 'W' . 'VBF', 'RU5' . 'USVRZX0lE', 'PU' . 'VOV' . 'ElUWV9UWVBF', 'RU5U' . 'SVRZX0l' . 'E', 'PUh' . 'P' . 'T0s=', 'SEVBRE' . 'JM' . 'T0NL', 'PUN' . 'PRE' . 'U=', 'VVNF', '' . 'PVZBTFVF', '' . 'W' . 'Q' . '==', '' . 'bGltaXQ' . '=', '' . 'UFVCTEl' . 'D' . 'X0hU' . 'TUxf' . 'RElTQU' . 'xMT' . '1d' . 'FR' . 'Fs' . '=', 'RU5USVRZX1RZ' . 'U' . 'EU' . '=', '' . 'RU5USVRZX' . '0lE', 'X' . 'Q=' . '=', 'bGltaX' . 'R' . 'f' . 'c2l0Z' . 'XNfaHRtbF9qcw==', 'bGFu' . 'Z' . 'GluZ' . 'w==', 'b2' . '5M' . 'YW' . '5kaW5nUHVib' . 'GljYXRp' . 'b' . '24=', '' . 'aW' . 'Q=', 'Y' . 'mxvY2tJZA==', 'd' . 'HBs' . 'Q' . '29' . 'kZ' . 'Q==', '' . 'V' . 'FB' . 'M' . 'X0NPR' . 'E' . 'U=', '' . 'Yml0cm' . 'l4Mj' . 'Q=', '' . 'REI=', 'U0VMRUNU' . 'IFZBTFVFIEZ' . 'S' . 'T00g' . 'Yl9' . 'vcHRp' . 'b24' . 'gV0h' . 'FUkUgTkFNR' . 'T0nf' . 'lBBUkF' . 'NX' . '0ZJT' . 'k' . 'l' . 'TSF9EQVRFJyBBTkQg' . 'TU9EVUxFX0' . 'lEPSdtY' . 'WluJw==', 'VkF' . 'MVUU=', 'L' . 'g==', 'SCo' . '=', 'Yml0cml4', 'T' . 'E' . 'l' . 'DR' . 'U5TRV9L' . 'RVk=', 'c2' . 'hhM' . 'j' . 'U2', 'M' . 'jAxOC0wMS0' . 'wMQ==', 'M' . 'jA' . 'xOC0wMS0wMQ==', 'L' . 'Q' . '==', 'TElDRU5' . 'T' . 'R' . 'V9FWFBJUkVE', '' . 'TEFOREl' . 'O' . 'R19MSU' . 'N' . 'FTlNFX0VYUElSR' . 'UQ=', 'Yml0c' . 'ml4Mj' . 'Q=', 'REI=', 'U0VM' . 'R' . 'UNUIFZBTFVFIE' . 'ZS' . 'T' . '00gYl9' . 'vcHR' . 'pb24' . 'g' . 'V0hFUkUgTkF' . 'N' . 'RT0n' . 'flB' . 'BU' . 'kFNX0Z' . 'JT' . 'k' . 'lTSF9EQVRF' . 'JyBBTkQ' . 'gTU9E' . 'VUxFX0' . 'lEPS' . 'dtY' . 'Wlu' . 'J' . 'w==', '' . 'VkF' . 'MVUU=', '' . 'Lg==', 'S' . 'Co=', 'Yml0c' . 'ml4', '' . 'TE' . 'lDR' . 'U5TR' . 'V9LRV' . 'k=', '' . 'c2h' . 'hMj' . 'U2', 'MjAxOC0wMS0wMQ=' . '=', '' . 'MjAxOC0wMS0wMQ==', 'L' . 'Q=' . '=', 'TEl' . 'DRU' . '5TRV' . '9FWFBJUkVE', '' . 'T' . 'EFO' . 'RElOR19MS' . 'UNFT' . 'lNFX0' . 'VY' . 'UElSRUQ=', 'Q' . 'U' . 'NUSV' . 'ZF', 'W' . 'Q==', '' . 'UFVC' . 'TElD', 'WQ==', 'REFUR' . 'V9QVUJMSUM' . '=', 'RE' . 'FU' . 'RV' . '9NT0' . 'RJ' . 'R' . 'lk' . '=', 'QUNU' . 'SVZF', '' . 'WQ' . '==', 'Ly' . 'h' . 'bXDsiXXswLDF9KSN' . 'ibG9ja' . 'yhb' . 'XGRd' . 'KykoW1wmIl' . '17MC' . 'w' . 'x' . 'fS' . 'kva' . 'X' . 'M=', 'TE' . 'lE', 'PURFTEVURU' . 'Q=', 'Tg==', 'SUQ' . '=', 'c2Vs' . 'ZWN0', 'S' . 'U' . 'Q=', 'UEF' . 'SRU5UX0' . 'lE', 'Zmlsd' . 'GVy', 'SUQ=', 'S' . 'UQ' . '=', 'S' . 'UQ=', 'UEF' . 'SR' . 'U5UX0lE', '' . 'c2VsZWN' . '0', 'S' . 'UQ=', '' . 'UFVCT' . 'El' . 'D', 'UEFS' . 'RU5UX0l' . 'E', 'Q' . '09ERQ==', 'U09SV' . 'A==', '' . 'Q' . 'UN' . 'U' . 'S' . 'VZF', 'QU5DSE9' . 'S', 'QUND' . 'R' . 'VNT', 'Q0' . '9OVE' . 'VOVA==', 'U0' . 'VBUkNIX0N' . 'PTl' . 'RFTlQ' . '=', '' . 'U' . '09VUkNFX1BBUk' . 'FNU' . 'w==', 'Q' . 'VN' . 'TRVRT', 'WE' . '1MX0lE', 'RE' . 'VTSUdORU' . 'Q=', 'Z' . 'mlsdGV' . 'y', 'SU' . 'Q=', 'UF' . 'V' . 'CT' . 'ElD', 'WQ==', 'Q0' . '9O' . 'VEVOVA==', 'L' . '2hyZWY9Iihw' . 'cm9kdWN0O' . 'i' . 'k/I2' . 'NhdGFsb2co' . 'RWxlbWVud' . 'Hx' . 'T' . 'ZWN' . '0aW9uKShbX' . 'GRdKyk' . 'iL2k=', 'aH' . 'J' . 'lZj0i', '' . 'Ig==', '' . 'Q09OVEVOV' . 'A==', 'Q09OVEV' . 'OV' . 'A' . '==', 'L' . 'yhkYXRhLXBzZ' . 'XVk' . 'by11cmw9In' . 't' . 'c' . 'Uy' . 'oo' . 'cHJvZH' . 'VjdDop' . 'PyNjYX' . 'RhbG9nKEVsZW' . '1lbnR8U2VjdGl' . 'vb' . 'ikoW1x' . 'kXSsp' . 'KShcUyp' . '9' . 'Ii' . 'k' . 'vaQ' . '==', 'Lyhwc' . 'm9kdWN0' . 'Oik' . '/' . 'I2NhdGFsb2c' . 'oRWx' . 'l' . 'bWVudH' . 'xTZ' . 'WN0aW9uK' . 'S' . 'hbXGRdKykva' . 'Q' . '==', 'Q0' . '9' . 'OVEV' . 'OVA==', 'Q09' . 'OVEVOVA==', 'Q09OVE' . 'VOVA' . '==', 'Q09' . 'OVEV' . 'O' . 'VA==', 'Y29udGVud' . 'GVkaXR' . 'hYmx' . 'lP' . 'SJ0cnVlIg==', '', 'Q' . '0' . '9OVEVOVA=' . '=', 'UE' . 'FSRU5U' . 'X' . '0lE', 'UE' . 'FSRU5UX0lE', '' . 'S' . 'UQ=', 'U09S' . 'VA==', 'U09S' . 'V' . 'A==', 'QUNUSVZF', 'QUNUS' . 'VZF', '' . 'QU' . '5DSE9' . 'S', 'QU5' . 'DSE9S', 'WE1MX0lE', 'WE1' . 'MX' . '0lE', 'Q' . 'U' . 'NDR' . 'VNT', 'Q' . 'UNDRVNT', 'R' . 'EVT' . 'SU' . 'dORU' . 'Q' . '=', '' . 'RE' . 'VTSU' . 'dORU' . 'Q=', 'U09VUkNF' . 'X' . '1B' . 'BU' . 'kFNUw' . '=' . '=', 'U' . '09VU' . 'k' . 'NFX1BBUk' . 'FNUw==', 'Q09OVEVOV' . 'A==', '' . 'Q09' . 'O' . 'V' . 'EVOVA=' . '=', 'U0VBUkNIX' . '0' . 'N' . 'P' . 'TlRFTlQ=', 'U0VB' . 'Uk' . 'N' . 'I' . 'X' . '0NPTlRFTlQ' . '=', 'Q' . 'V' . 'NTRVR' . 'T', 'Q' . 'VNT' . 'RVRT', 'UE' . 'FSRU5U' . 'X' . '0lE', 'Q09OV' . 'E' . 'VOV' . 'A' . '==', 'TElE', 'Q09' . 'E' . 'RQ' . '==', 'Q09' . 'ERQ==', 'U' . '09SV' . 'A=' . '=', 'U09S' . 'VA==', '' . 'QU' . '5DSE' . '9S', 'QU5DSE9S', 'Yg=' . '=', 'WE1MX0lE', 'WE1M' . 'X' . '0lE', 'QUNU' . 'SVZF', 'Q' . 'UN' . 'U' . 'SVZ' . 'F', 'QU' . 'N' . 'DR' . 'VNT', 'QUNDRVNT', '' . 'RE' . 'VTS' . 'U' . 'd' . 'ORUQ=', 'REVTSUdOR' . 'UQ=', 'U0' . '9V' . 'UkNF' . 'X' . '1BB' . 'UkFNUw==', '' . 'U09V' . 'UkNFX1BBUkFNUw==', 'Q09OV' . 'EVO' . 'V' . 'A==', 'Q09' . 'OVEVOVA==', 'U0VBUkNIX0NP' . 'TlRFT' . 'lQ' . '=', 'U' . '0VB' . 'U' . 'k' . 'NIX0' . 'NP' . 'T' . 'lR' . 'FTlQ=', 'Q' . 'V' . 'N' . 'TRV' . 'R' . 'T', 'QVNT' . 'RVRT', '' . 'UEFSRU5UX' . '0lE', 'Q09OV' . 'EV' . 'OVA==', 'Q' . '09OVE' . 'VOVA' . '==', '' . 'Q' . '09OVEVOVA' . '==', 'Q09O' . 'VE' . 'VOVA==', 'I2Jsb' . '2N' . 'r', 'I2J' . 'sb2Nr', '' . 'Q09OVEVOV' . 'A' . '=='
+		);
+		return base64_decode($_666912996[$_862018398]);
+	}
+};
+
+use Bitrix\Bitrix24\Feature;
+use Bitrix\Landing\Assets;
+use Bitrix\Landing\Block\Cache;
+use Bitrix\Landing\Internals\HookDataTable as HookData;
+use Bitrix\Landing\Restriction;
+use Bitrix\Rest\AppTable;
+use Bitrix\Main\Config\Configuration;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\HttpClient;
+
+Loc::loadMessages(__FILE__);
+$GLOBALS['____843409193'][0](___442204658(0), true);
+
+class Mutator
+{
+	public static function checkSiteVerification(int $_530825246, Error $_780694482): bool
+	{
+		$_1548224827 = Manager::getZone();
+		if (!$GLOBALS['____843409193'][1]($_1548224827, [___442204658(1), ___442204658(2), ___442204658(3)]) && !self::__987988921()) {
+			if (!Restriction\Site::isPhoneConfirmed($_530825246)) {
+				$_780694482->addError(___442204658(4), Loc::getMessage(___442204658(5)));
+				return false;
+			}
+		} else if (!self::__909396365()) {
+			if (!Restriction\Site::isEmailConfirmed($_530825246)) {
+				$_780694482->addError(___442204658(6), Loc::getMessage(___442204658(7)));
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static function __987988921(): bool
+	{
+		if (Manager::getOption(___442204658(8)) === ___442204658(9)) {
+			return true;
+		}
+		if (!\Bitrix\Main\Loader::includeModule(___442204658(10))) {
+			return true;
+		}
+		return Feature::isFeatureEnabled(___442204658(11));
+	}
+
+	private static function __909396365(): bool
+	{
+		if (Manager::getOption(___442204658(12)) === ___442204658(13)) {
+			return true;
+		}
+		return false;
+	}
+
+	public static function landingPublication(Landing $landing, $_1329100686 = null, bool $_1722653099 = false): bool
+	{
+		static $_1799949398 = [];
+		static $_1425184923 = [];
+		Manager::disableAllFeaturesTmp();
+		if (!$landing->exist()) {
+			return false;
+		}
+		$_1395115988 = new Event(___442204658(14), ___442204658(15), array(___442204658(16) => $landing->getId(), ___442204658(17) => $_1329100686, ___442204658(18) => $landing->getSiteId()));
+		$_1395115988->send();
+		foreach ($_1395115988->getResults() as $_399803483) {
+			if ($_399803483->getType() == EventResult::ERROR) {
+				foreach ($_399803483->getErrors() as $_780694482) {
+					$landing->getError()->addError($_780694482->getCode(), $_780694482->getMessage());
+				}
+				return false;
+			}
+		}
+		if (min(244, 0, 81.333333333333)) if ($_2101281660 = Configuration::getValue(___442204658(19))) {
+			$_782317109  = [];
+			$_1519749599 = Block::getList([___442204658(20) => [___442204658(21)], ___442204658(22) => [___442204658(23) => $landing->getId(), ___442204658(24) => ___442204658(25), ___442204658(26) => ___442204658(27), ___442204658(28) => ___442204658(29)]]);
+			while ($_1165835923 = $_1519749599->fetch()) {
+				if ($GLOBALS['____843409193'][2](___442204658(30), $_1165835923[___442204658(31)], $_748005298)) {
+					$_782317109 = $GLOBALS['____843409193'][3]($_782317109, $_748005298[round(0 + 0.25 + 0.25 + 0.25 + 0.25)]);
+				}
+			}
+			$_782317109 = $GLOBALS['____843409193'][4]($GLOBALS['____843409193'][5]($_782317109));
+			$_559807253 = new HttpClient;
+			if ($_782317109) {
+				$_434587564 = $_559807253->post(Manager::getPreviewHost() . ___442204658(32), [___442204658(33) => $_2101281660, ___442204658(34) => $_782317109, ___442204658(35) => \Bitrix\Main\Application::getInstance()->getContext()->getServer()->get(___442204658(36))]);
+				if ($_434587564 && $_434587564 !== ___442204658(37)) {
+					$landing->getError()->addError(___442204658(38), Loc::getMessage(___442204658(39)));
+					return false;
+				}
+			}
+		}
+		if (!Manager::checkFeature(Manager::FEATURE_PUBLICATION_PAGE, array(___442204658(40) => array(___442204658(41) => $landing->getId())))) {
+			$landing->getError()->addError(___442204658(42), Restriction\Manager::getSystemErrorMessage(___442204658(43)));
+			return false;
+		}
+		$_639479610 = $landing->getMeta();
+		if (isset($_639479610[___442204658(44)]) && \Bitrix\Main\Loader::includeModule(___442204658(45))) {
+			$_1519749599 = AppTable::getList([___442204658(46) => [___442204658(47) => $_639479610[___442204658(48)]]]);
+			if ($_1165835923 = $_1519749599->fetch()) {
+				$_1808866083 = AppTable::getAppStatusInfo($_1165835923, ___442204658(49));
+				if ($_1808866083[___442204658(50)] != ___442204658(51)) {
+					$landing->getError()->addError(___442204658(52), Restriction\Manager::getSystemErrorMessage(___442204658(53)));
+					return false;
+				}
+			}
+		}
+		$_1386097863 = [];
+		$_1519749599 = Block::getList([___442204658(54) => [___442204658(55)], ___442204658(56) => [___442204658(57) => $landing->getId(), ___442204658(58) => ___442204658(59), ___442204658(60) => ___442204658(61), ___442204658(62) => ___442204658(63), ___442204658(64) => ___442204658(65)]]);
+		while ($_1165835923 = $_1519749599->fetch()) {
+			$_1386097863[] = $GLOBALS['____843409193'][6]($_1165835923[___442204658(66)], round(0 + 5));
+		}
+		if (!empty($_1386097863)) {
+			foreach (Repo::getAppInfo($_1386097863) as $_300542055) {
+				if (($_300542055[___442204658(67)] ?? ___442204658(68)) !== ___442204658(69)) {
+					$landing->getError()->addError(___442204658(70), Restriction\Manager::getSystemErrorMessage(___442204658(71)));
+					return false;
+				}
+			}
+		}
+		if (!$GLOBALS['____843409193'][7]($landing->getSiteId(), $_1425184923)) {
+			$_1425184923[] = $landing->getSiteId();
+			$_1519749599   = Site::getList(array(___442204658(72) => array(___442204658(73), ___442204658(74)), ___442204658(75) => array(___442204658(76) => $landing->getSiteId(), ___442204658(77) => ___442204658(78), ___442204658(79) => ___442204658(80))));
+			if ($_1165835923 = $_1519749599->fetch()) {
+				if (!Manager::checkFeature(Manager::FEATURE_PUBLICATION_SITE, [___442204658(81) => [___442204658(82) => $_1165835923[___442204658(83)]], ___442204658(84) => $_1165835923[___442204658(85)]])) {
+					$_1564910575 = Manager::licenseIsFreeSite($_1165835923[___442204658(86)]) && !Manager::isFreePublicAllowed() ? ___442204658(87) : ___442204658(88);
+					$_546276867  = Manager::licenseIsFreeSite($_1165835923[___442204658(89)]) && !Manager::isFreePublicAllowed() ? ___442204658(90) : ___442204658(91);
+					$landing->getError()->addError($_1564910575, Restriction\Manager::getSystemErrorMessage($_546276867));
+					return false;
+				}
+			}
+		}
+		if (\Bitrix\Landing\Hook\Page\HeadBlock::isLockedFeature()) {
+			$_135235365  = [$landing->getId()];
+			$_1519749599 = Landing::getList([___442204658(92) => [___442204658(93)], ___442204658(94) => [___442204658(95) => $landing->getSiteId(), ___442204658(96) => ___442204658(97)]]);
+			while ($_1165835923 = $_1519749599->fetch()) {
+				$_135235365[] = $_1165835923[___442204658(98)];
+			}
+			$_1519749599 = HookData::getList([___442204658(99) => [___442204658(100), ___442204658(101), ___442204658(102)], ___442204658(103) => [[___442204658(104) => ___442204658(105), [___442204658(106) => Hook::ENTITY_TYPE_SITE, ___442204658(107) => $landing->getSiteId()], [___442204658(108) => Hook::ENTITY_TYPE_LANDING, ___442204658(109) => $_135235365]], ___442204658(110) => ___442204658(111), ___442204658(112) => ___442204658(113), ___442204658(114) => ___442204658(115)], ___442204658(116) => round(0 + 0.5 + 0.5)]);
+			if ($_1165835923 = $_1519749599->fetch()) {
+				$landing->getError()->addError(___442204658(117) . $_1165835923[___442204658(118)] . $_1165835923[___442204658(119)] . ___442204658(120), Restriction\Manager::getSystemErrorMessage(___442204658(121)));
+				return false;
+			}
+		}
+		if (!self::checkSiteVerification($landing->getSiteId(), $landing->getError())) {
+			return false;
+		}
+		$_1395115988 = new Event(___442204658(122), ___442204658(123), array(___442204658(124) => $landing->getId(), ___442204658(125) => $_1329100686, ___442204658(126) => $_639479610[___442204658(127)],));
+		$_1395115988->send();
+		foreach ($_1395115988->getResults() as $_399803483) {
+			if ($_399803483->getResultType() == EventResult::ERROR) {
+				foreach ($_399803483->getErrors() as $_780694482) {
+					$landing->getError()->addError($_780694482->getCode(), $_780694482->getMessage());
+				}
+				return false;
+			}
+		}
+		if ($_1722653099) {
+			return true;
+		}
+		if (!\Bitrix\Main\ModuleManager::isModuleInstalled(___442204658(128))) {
+			$_2093328194 = $GLOBALS[___442204658(129)]->Query(___442204658(130), true);
+			if ($_1519749599 = $_2093328194->Fetch()) {
+				$_208223601 = $_1519749599[___442204658(131)];
+				list($_842048387, $_1691119328) = $GLOBALS['____843409193'][8](___442204658(132), $_208223601);
+				$_672505992  = $GLOBALS['____843409193'][9](___442204658(133), $_842048387);
+				$_2043482201 = ___442204658(134) . $GLOBALS['____843409193'][10]($GLOBALS['____843409193'][11](___442204658(135)));
+				$_171907104  = $GLOBALS['____843409193'][12](___442204658(136), $_1691119328, $_2043482201, true);
+				if ($GLOBALS['____843409193'][13]($_171907104, $_672505992) !== (1140 / 2 - 570)) {
+					$_1691119328 = ___442204658(137);
+				}
+			} else {
+				$_1691119328 = ___442204658(138);
+			}
+			if (!empty($_1691119328)) {
+				$_1974412205 = $GLOBALS['____843409193'][14](___442204658(139), $_1691119328);
+				$_633112747  = $GLOBALS['____843409193'][15]((1384 / 2 - 692), (196 * 2 - 392), (892 - 2 * 446), $_1974412205[round(0 + 0.33333333333333 + 0.33333333333333 + 0.33333333333333)], $_1974412205[round(0 + 0.66666666666667 + 0.66666666666667 + 0.66666666666667)], $_1974412205[(958 - 2 * 479)]);
+				if ($_633112747 <= $GLOBALS['____843409193'][16]()) {
+					$landing->getError()->addError(___442204658(140), Loc::getMessage(___442204658(141)));
+					return false;
+				}
+			}
+		}
+		if (!\Bitrix\Main\ModuleManager::isModuleInstalled(___442204658(142))) {
+			$_2093328194 = $GLOBALS[___442204658(143)]->Query(___442204658(144), true);
+			if ($_1519749599 = $_2093328194->Fetch()) {
+				$_208223601 = $_1519749599[___442204658(145)];
+				list($_842048387, $_1691119328) = $GLOBALS['____843409193'][17](___442204658(146), $_208223601);
+				$_672505992  = $GLOBALS['____843409193'][18](___442204658(147), $_842048387);
+				$_2043482201 = ___442204658(148) . $GLOBALS['____843409193'][19]($GLOBALS['____843409193'][20](___442204658(149)));
+				$_171907104  = $GLOBALS['____843409193'][21](___442204658(150), $_1691119328, $_2043482201, true);
+				if ($GLOBALS['____843409193'][22]($_171907104, $_672505992) !== (250 * 2 - 500)) {
+					$_1691119328 = ___442204658(151);
+				}
+			} else {
+				$_1691119328 = ___442204658(152);
+			}
+			if (!empty($_1691119328)) {
+				$_1974412205 = $GLOBALS['____843409193'][23](___442204658(153), $_1691119328);
+				$_633112747  = $GLOBALS['____843409193'][24]((1376 / 2 - 688), (946 - 2 * 473), min(84, 0, 28), $_1974412205[round(0 + 0.2 + 0.2 + 0.2 + 0.2 + 0.2)], $_1974412205[round(0 + 1 + 1)], $_1974412205[(247 * 2 - 494)]);
+				if ($_633112747 <= $GLOBALS['____843409193'][25]()) {
+					$landing->getError()->addError(___442204658(154), Loc::getMessage(___442204658(155)));
+					return false;
+				}
+			}
+		}
+		if ($landing->getFolderId()) {
+			Site::publicationFolder($landing->getFolderId());
+		}
+		if (!$_1329100686) {
+			Hook::setEditMode();
+			Hook::publicationSite($landing->getSiteId());
+			Hook::publicationLanding($landing->getId());
+		}
+		Assets\Manager::rebuildWebpackForLanding($landing->getId());
+		self::blocksPublication($landing, $_1329100686);
+		$_999494683  = new \Bitrix\Main\Type\DateTime;
+		$_165131169  = [___442204658(156) => ___442204658(157), ___442204658(158) => ___442204658(159), ___442204658(160) => $_999494683, ___442204658(161) => false];
+		$_1519749599 = Landing::update($landing->getId(), $_165131169);
+		$landing->setMetaData($_165131169);
+		if ($_1519749599->isSuccess()) {
+			if (!$GLOBALS['____843409193'][26]($landing->getSiteId(), $_1799949398)) {
+				$_1799949398[] = $landing->getSiteId();
+				$_1519749599   = Site::update($landing->getSiteId(), array(___442204658(162) => ___442204658(163)));
+				if (!$_1519749599->isSuccess()) {
+					$landing->getError()->addFromResult($_1519749599);
+					return false;
+				}
+			}
+			return true;
+		} else {
+			$landing->getError()->addFromResult($_1519749599);
+		}
+		return false;
+	}
+
+	public static function blocksPublication(\Bitrix\Landing\Landing $landing, $_1329100686 = null): void
+	{
+		if ($landing->exist()) {
+			$_1845256786 = $landing->getId();
+			$_660753813  = array();
+			$_1279134725 = array();
+			$_1996210589 = array();
+			$_804674450  = ___442204658(164);
+			$_1417868090 = [___442204658(165) => $landing->getId(), ___442204658(166) => ___442204658(167)];
+			if ($_1329100686) {
+				$_1417868090[___442204658(168)] = $_1329100686;
+				$_1519749599                    = Block::getList([___442204658(169) => [___442204658(170), ___442204658(171)], ___442204658(172) => $_1417868090]);
+				$_1417868090[___442204658(173)] = (array)$_1417868090[___442204658(174)];
+				while ($_1165835923 = $_1519749599->fetch()) {
+					$_1417868090[___442204658(175)][] = $_1165835923[___442204658(176)];
+				}
+			}
+			$_1519749599 = Block::getList([___442204658(177) => [___442204658(178), ___442204658(179), ___442204658(180), ___442204658(181), ___442204658(182), ___442204658(183), ___442204658(184), ___442204658(185), ___442204658(186), ___442204658(187), ___442204658(188), ___442204658(189), ___442204658(190), ___442204658(191)], ___442204658(192) => $_1417868090]);
+			while ($_1165835923 = $_1519749599->fetch()) {
+				$_660753813[$_1165835923[___442204658(193)]] = $_1165835923;
+			}
+			foreach ($_660753813 as $_1998393742 => $_967272749) {
+				if ($_967272749[___442204658(194)] != ___442204658(195)) {
+					$_967272749[___442204658(196)] = $GLOBALS['____843409193'][27](___442204658(197), function ($_818427038) {
+						return ___442204658(198) . PublicAction\Utils::getIblockURL($_818427038[round(0 + 1.5 + 1.5)], $GLOBALS['____843409193'][28]($_818427038[round(0 + 0.66666666666667 + 0.66666666666667 + 0.66666666666667)])) . ___442204658(199);
+					}, $_967272749[___442204658(200)]);
+					$_967272749[___442204658(201)] = $GLOBALS['____843409193'][29](___442204658(202), function ($_818427038) {
+						$_818427038[round(0 + 0.25 + 0.25 + 0.25 + 0.25)] = $GLOBALS['____843409193'][30](___442204658(203), function ($_484552987) {
+							return PublicAction\Utils::getIblockURL($_484552987[round(0 + 1 + 1 + 1)], $GLOBALS['____843409193'][31]($_484552987[round(0 + 0.4 + 0.4 + 0.4 + 0.4 + 0.4)]));
+						}, $_818427038[round(0 + 0.2 + 0.2 + 0.2 + 0.2 + 0.2)]);
+						return $_818427038[round(0 + 0.33333333333333 + 0.33333333333333 + 0.33333333333333)] . $_818427038[round(0 + 5)];
+					}, $_967272749[___442204658(204)]);
+					$_967272749[___442204658(205)] = Subtype\Form::prepareFormsToPublication($_967272749[___442204658(206)]);
+					$_967272749[___442204658(207)] = $GLOBALS['____843409193'][32](___442204658(208), ___442204658(209), $_967272749[___442204658(210)]);
+					$_1290320006                   = isset($_660753813[$_967272749[___442204658(211)]]) ? $_660753813[$_967272749[___442204658(212)]][___442204658(213)] : min(110, 0, 36.666666666667);
+					if ($_1290320006) {
+						Cache::clear($_1290320006);
+						$_1519749599 = Block::update($_1290320006, array(___442204658(214) => $_967272749[___442204658(215)], ___442204658(216) => $_967272749[___442204658(217)], ___442204658(218) => $_967272749[___442204658(219)], ___442204658(220) => $_967272749[___442204658(221)], ___442204658(222) => $_967272749[___442204658(223)], ___442204658(224) => $_967272749[___442204658(225)], ___442204658(226) => $_967272749[___442204658(227)], ___442204658(228) => $_967272749[___442204658(229)], ___442204658(230) => $_967272749[___442204658(231)], ___442204658(232) => $_967272749[___442204658(233)]));
+						$_1519749599->isSuccess();
+						unset($_660753813[$_967272749[___442204658(234)]]);
+						File::replaceInBlock($_1290320006, File::getFilesFromBlockContent($_1998393742, $_967272749[___442204658(235)]));
+					} else {
+						$_1519749599 = Block::add(array(___442204658(236) => $_1845256786, ___442204658(237) => $_967272749[___442204658(238)], ___442204658(239) => $_967272749[___442204658(240)], ___442204658(241) => $_967272749[___442204658(242)] ?: ___442204658(243) . $_1998393742, ___442204658(244) => $_967272749[___442204658(245)], ___442204658(246) => $_967272749[___442204658(247)], ___442204658(248) => $_967272749[___442204658(249)], ___442204658(250) => $_967272749[___442204658(251)], ___442204658(252) => $_967272749[___442204658(253)], ___442204658(254) => $_967272749[___442204658(255)], ___442204658(256) => $_967272749[___442204658(257)], ___442204658(258) => $_967272749[___442204658(259)]));
+						if ($_1519749599->isSuccess()) {
+							$_1290320006 = $_1519749599->getId();
+							$_1519749599 = Block::update($_1998393742, array(___442204658(260) => $_1290320006));
+							$_1519749599->isSuccess();
+							File::addToBlock($_1290320006, File::getFilesFromBlockContent($_1998393742, $_967272749[___442204658(261)]));
+						}
+					}
+					if ($_1290320006) {
+						$_1184009604 = new Block($_1290320006);
+						Assets\PreProcessing::blockPublicationProcessing($_1184009604);
+						$_967272749[___442204658(262)] = $_1184009604->getContent();
+						unset($_1184009604);
+					}
+					if ($GLOBALS['____843409193'][33]($_804674450, $_967272749[___442204658(263)])) {
+						$_1279134725[$_1290320006] = $_967272749[___442204658(264)];
+					}
+					$_1996210589[$_1998393742] = $_1290320006;
+					unset($_660753813[$_1998393742]);
+				}
+			}
+			foreach ($_660753813 as $_1998393742 => $_967272749) {
+				$_1519749599 = Block::delete($_1998393742);
+				$_1519749599->isSuccess();
+			}
+			foreach ($_1279134725 as $_1998393742 => $_1709621186) {
+				$_1709621186 = $GLOBALS['____843409193'][34]($_804674450, function ($_685138299) use ($_1996210589) {
+					if (isset($_1996210589[$_685138299[round(0 + 0.4 + 0.4 + 0.4 + 0.4 + 0.4)]])) {
+						return $_685138299[round(0 + 1)] . ___442204658(265) . $_1996210589[$_685138299[round(0 + 1 + 1)]] . $_685138299[round(0 + 3)];
+					} else {
+						return $_685138299[round(0 + 0.2 + 0.2 + 0.2 + 0.2 + 0.2)] . ___442204658(266) . $_685138299[round(0 + 0.4 + 0.4 + 0.4 + 0.4 + 0.4)] . $_685138299[round(0 + 0.6 + 0.6 + 0.6 + 0.6 + 0.6)];
+					}
+				}, $_1709621186);
+				$_1519749599 = Block::update($_1998393742, array(___442204658(267) => $_1709621186));
+				$_1519749599->isSuccess();
+			}
+		}
+	}
+} ?>

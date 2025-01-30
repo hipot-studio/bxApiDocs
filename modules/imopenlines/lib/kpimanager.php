@@ -258,24 +258,37 @@ class KpiManager
 					$sessionObject = new Session();
 					$sessionObject->loadByArray($sessionFields, $config, $chat);
 
-					$isWorktime = (new AutomaticAction\WorkTime($sessionObject))->isWorkTimeLine();
-					if ($isWorktime)
+					$interval = null;
+					if (
+						$addFields['IS_FIRST_MESSAGE'] == 'Y'
+						&& intval($config['KPI_FIRST_ANSWER_TIME']) > 0
+					)
 					{
-						if ($addFields['IS_FIRST_MESSAGE'] == 'Y')
-						{
-							if (intval($config['KPI_FIRST_ANSWER_TIME']) > 0)
-							{
-								$addFields['TIME_EXPIRED'] = DateTime::createFromTimestamp(time() + $config['KPI_FIRST_ANSWER_TIME']);
-							}
-						}
-						else
-						{
-							if (intval($config['KPI_FURTHER_ANSWER_TIME']) > 0)
-							{
-								$addFields['TIME_EXPIRED'] = DateTime::createFromTimestamp(time() + $config['KPI_FURTHER_ANSWER_TIME']);
-							}
-						}
+						$interval = $config['KPI_FIRST_ANSWER_TIME'];
 					}
+					elseif (intval($config['KPI_FURTHER_ANSWER_TIME']) > 0)
+					{
+						$interval = $config['KPI_FURTHER_ANSWER_TIME'];
+					}
+
+					if (!$interval)
+					{
+						return false;
+					}
+
+					$nextWorkdayStart = time();
+
+					$workTime = new AutomaticAction\WorkTime($sessionObject);
+					if (!$workTime->isWorkTimeLine())
+					{
+						$nextWorkdayStart = $workTime->getNextWorkDayStart()->getTimestamp();
+					}
+
+					if ($interval)
+					{
+						$addFields['TIME_EXPIRED'] = DateTime::createFromTimestamp($nextWorkdayStart + $interval);
+					}
+
 				}
 			}
 

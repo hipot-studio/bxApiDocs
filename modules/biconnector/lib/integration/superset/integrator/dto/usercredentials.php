@@ -2,10 +2,10 @@
 
 namespace Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 
-final class UserCredentials
+final class usercredentials
 {
-	public function __construct(
-		public string $login,
-		public string $password,
-	){}
+    public function __construct(
+        public string $login,
+        public string $password,
+    ) {}
 }

@@ -401,6 +401,16 @@ class Container
 		return static::getService('sign.service.integration.crm.myCompany');
 	}
 
+	public function getDocumentGroupRepository(): Repository\Document\GroupRepository
+	{
+		return static::getService('sign.repository.document.group');
+	}
+
+	public function getDocumentGroupService(): Service\Sign\Document\GroupService
+	{
+		return static::getService('sign.service.document.group');
+	}
+
 	public function getMemberDynamicFieldProvider(): Service\Providers\MemberDynamicFieldInfoProvider
 	{
 		return static::getService('sign.service.provider.memberDynamic');

@@ -2,21 +2,17 @@
 
 namespace Bitrix\Calendar\Internals;
 
-trait ObjectStatusTrait
+trait objectstatustrait
 {
-	/** @var ObjectStatus */
-	protected $objectStatus;
+    /** @var ObjectStatus */
+    protected $objectStatus;
 
-	/**
-	 * @return ObjectStatus
-	 */
-	public function getStatus(): ObjectStatus
-	{
-		if (!$this->objectStatus)
-		{
-			$this->objectStatus = new ObjectStatus();
-		}
+    public function getStatus(): ObjectStatus
+    {
+        if (!$this->objectStatus) {
+            $this->objectStatus = new ObjectStatus();
+        }
 
-		return $this->objectStatus;
-	}
+        return $this->objectStatus;
+    }
 }

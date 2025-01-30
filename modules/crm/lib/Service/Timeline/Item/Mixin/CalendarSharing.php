@@ -9,288 +9,267 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockFactory;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Date;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\LineOfTextBlocks;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
-use Bitrix\Main;
+use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 
-Loc::loadMessages(__DIR__ . '/./CalendarSharing.php');
+Loc::loadMessages(__DIR__.'/./CalendarSharing.php');
 
 /**
  * @mixin \Bitrix\Crm\Service\Timeline\Item\Configurable
  */
 trait CalendarSharing
 {
-	public function getSendedContactContentBlock(): ContentBlock
-	{
-		$result = new LineOfTextBlocks();
+    public function getSendedContactContentBlock(): ContentBlock
+    {
+        $result = new LineOfTextBlocks();
 
-		$result->addContentBlock(
-			'title',
-			ContentBlockFactory::createTitle(
-				$this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_SENT')
-			)
-				->setColor(Text::COLOR_BASE_70)
-		);
+        $result->addContentBlock(
+            'title',
+            ContentBlockFactory::createTitle(
+                $this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_SENT')
+            )
+                ->setColor(Text::COLOR_BASE_70)
+        );
 
-		$contactName = $this->getContactName();
-		$contactUrl = $this->getContactUrl();
+        $contactName = $this->getContactName();
+        $contactUrl = $this->getContactUrl();
 
-		$result->addContentBlock(
-			'contactInfo',
-			ContentBlockFactory::createTextOrLink(
-				$contactName, $contactUrl ? new Redirect($contactUrl) : null
-			)
-		);
+        $result->addContentBlock(
+            'contactInfo',
+            ContentBlockFactory::createTextOrLink(
+                $contactName,
+                $contactUrl ? new Redirect($contactUrl) : null
+            )
+        );
 
-		$date = $this->getDateContent();
-		$result->addContentBlock(
-			'linkCreationDate',
-			(new Date())
-				->setDate($date)
-				->setColor(Text::COLOR_BASE_90)
-		);
+        $date = $this->getDateContent();
+        $result->addContentBlock(
+            'linkCreationDate',
+            (new Date())
+                ->setDate($date)
+                ->setColor(Text::COLOR_BASE_90)
+        );
 
-		return $result;
-	}
+        return $result;
+    }
 
-	public function getPlannedEventContentBlock(): ContentBlock
-	{
-		$result = new LineOfTextBlocks();
+    public function getPlannedEventContentBlock(): ContentBlock
+    {
+        $result = new LineOfTextBlocks();
 
-		if ($this->hasContact())
-		{
-			$contactName = $this->getContactName();
-			$contactUrl = $this->getContactUrl();
-		}
-		else
-		{
-			$activity = $this->getAssociatedEntityModel();
-			$settings = $activity ? $activity->get('SETTINGS') : [];
-			$contactName = !empty($settings['GUEST_NAME'])
-				? $settings['GUEST_NAME']
-				: $this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_GUEST')
-			;
-			$contactUrl = false;
-		}
+        if ($this->hasContact()) {
+            $contactName = $this->getContactName();
+            $contactUrl = $this->getContactUrl();
+        } else {
+            $activity = $this->getAssociatedEntityModel();
+            $settings = $activity ? $activity->get('SETTINGS') : [];
+            $contactName = !empty($settings['GUEST_NAME'])
+                ? $settings['GUEST_NAME']
+                : $this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_GUEST');
+            $contactUrl = false;
+        }
 
+        $result->addContentBlock(
+            'title',
+            ContentBlockFactory::createTitle(
+                $this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_MEETING_PLANNED')
+            )
+                ->setColor(Text::COLOR_BASE_70)
+        );
 
-		$result->addContentBlock(
-			'title',
-			ContentBlockFactory::createTitle(
-				$this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_MEETING_PLANNED')
-			)
-				->setColor(Text::COLOR_BASE_70)
-		);
+        $result->addContentBlock(
+            'contactInfo',
+            ContentBlockFactory::createTextOrLink(
+                $contactName,
+                $contactUrl ? new Redirect($contactUrl) : null
+            )
+        );
 
-		$result->addContentBlock(
-			'contactInfo',
-			ContentBlockFactory::createTextOrLink(
-				$contactName, $contactUrl ? new Redirect($contactUrl) : null
-			)
-		);
+        return $result;
+    }
 
-		return $result;
-	}
+    public function getEventStartDateBlock(): ContentBlock
+    {
+        $result = new LineOfTextBlocks();
 
-	public function getEventStartDateBlock(): ContentBlock
-	{
-		$result = new LineOfTextBlocks();
+        $result->addContentBlock(
+            'title',
+            ContentBlockFactory::createTitle(
+                $this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_DATE_AND_TIME_EVENT').':'
+            )
+        );
 
-		$result->addContentBlock('title',
-			ContentBlockFactory::createTitle(
-				$this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_DATE_AND_TIME_EVENT') . ':'
-			)
-		);
+        $date = $this->getDateContent();
+        $result->addContentBlock(
+            'linkCreationDate',
+            (new Date())
+                ->setDate($date)
+                ->setColor(Text::COLOR_BASE_90)
+        );
 
-		$date = $this->getDateContent();
-		$result->addContentBlock(
-			'linkCreationDate',
-			(new Date())
-				->setDate($date)
-				->setColor(Text::COLOR_BASE_90)
-		);
+        return $result;
+    }
 
-		return $result;
-	}
+    public function getDateContent(): DateTime
+    {
+        $timestamp = $this->getModel()->getSettings()['TIMESTAMP'] ?? null;
 
-	public function getDateContent(): DateTime
-	{
-		$timestamp = $this->getModel()->getSettings()['TIMESTAMP'] ?? null;
+        return ($timestamp && !\CCrmDateTimeHelper::IsMaxDatabaseDate($timestamp))
+            ? DateTime::createFromTimestamp($timestamp)
+            : new DateTime();
+    }
 
-		return ($timestamp && !\CCrmDateTimeHelper::IsMaxDatabaseDate($timestamp))
-			? DateTime::createFromTimestamp($timestamp)
-			: new DateTime()
-		;
-	}
+    public function getContactName(): ?string
+    {
+        $contactTypeId = $this->getModel()->getSettings()['CONTACT_TYPE_ID'] ?? null;
+        $contactId = $this->getModel()->getSettings()['CONTACT_ID'] ?? null;
 
-	public function getContactName(): ?string
-	{
-		$contactTypeId = $this->getModel()->getSettings()['CONTACT_TYPE_ID'] ?? null;
-		$contactId = $this->getModel()->getSettings()['CONTACT_ID'] ?? null;
+        $result = false;
+        if ($contactId && $contactTypeId) {
+            $contactData = Container::getInstance()
+                ->getEntityBroker($contactTypeId)
+                ->getById($contactId)
+            ;
 
-		$result = false;
-		if ($contactId && $contactTypeId)
-		{
-			$contactData = Container::getInstance()
-				->getEntityBroker($contactTypeId)
-				->getById($contactId)
-			;
+            if ($contactData) {
+                if (\CCrmOwnerType::Contact === $contactTypeId) {
+                    $result = $contactData->getFullName();
+                } elseif (\CCrmOwnerType::Company === $contactTypeId) {
+                    $result = $contactData->getTitle();
+                }
+            }
+        }
 
-			if ($contactData)
-			{
-				if ($contactTypeId === \CCrmOwnerType::Contact)
-				{
-					$result = $contactData->getFullName();
-				}
-				else if ($contactTypeId === \CCrmOwnerType::Company)
-				{
-					$result = $contactData->getTitle();
-				}
-			}
-		}
+        return $result ?: $this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_GUEST');
+    }
 
-		return $result ?: $this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_GUEST');
-	}
+    public function getContactUrl(): ?Uri
+    {
+        $result = null;
 
-	public function getContactUrl(): ?Uri
-	{
-		$result = null;
+        $detailUrl = Container::getInstance()
+            ->getRouter()
+            ->getItemDetailUrl(
+                $this->getModel()->getSettings()['CONTACT_TYPE_ID'] ?? null,
+                $this->getModel()->getSettings()['CONTACT_ID'] ?? null
+            )
+        ;
+        if ($detailUrl) {
+            $result = new Uri($detailUrl);
+        }
 
-		$detailUrl = Container::getInstance()
-			->getRouter()
-			->getItemDetailUrl(
-				$this->getModel()->getSettings()['CONTACT_TYPE_ID'] ?? null,
-				$this->getModel()->getSettings()['CONTACT_ID'] ?? null
-			)
-		;
-		if ($detailUrl)
-		{
-			$result = new Uri($detailUrl);
-		}
+        return $result;
+    }
 
-		return $result;
-	}
+    public function getLinkUrl(): ?Uri
+    {
+        $result = null;
+        $linkHash = $this->getModel()->getSettings()['LINK_HASH'] ?? null;
 
-	public function getLinkUrl(): ?Uri
-	{
-		$result = null;
-		$linkHash = $this->getModel()->getSettings()['LINK_HASH'] ?? null;
+        if (!$linkHash) {
+            $historyItemModel = $this->getModel()->getHistoryItemModel();
+            if ($historyItemModel) {
+                $linkHash = $historyItemModel->get('LINK_HASH');
+            }
+        }
 
-		if (!$linkHash)
-		{
-			$historyItemModel = $this->getModel()->getHistoryItemModel();
-			if ($historyItemModel)
-			{
-				$linkHash = $historyItemModel->get('LINK_HASH');
-			}
-		}
+        if ($linkHash) {
+            $result = new Uri($this->getSharingLinkUrl($linkHash));
+        }
 
-		if ($linkHash)
-		{
-			$result = new Uri($this->getSharingLinkUrl($linkHash));
-		}
+        return $result;
+    }
 
-		return $result;
-	}
+    public function getLinkRule(): array
+    {
+        $linkRuleArray = $this->getModel()->getSettings()['LINK_RULE'] ?? null;
 
-	public function getLinkRule(): array
-	{
-		$linkRuleArray = $this->getModel()->getSettings()['LINK_RULE'] ?? null;
+        if (!$linkRuleArray) {
+            $historyItemModel = $this->getModel()->getHistoryItemModel();
+            if ($historyItemModel) {
+                $linkRuleArray = $historyItemModel->get('LINK_RULE');
+            }
+        }
 
-		if (!$linkRuleArray)
-		{
-			$historyItemModel = $this->getModel()->getHistoryItemModel();
-			if ($historyItemModel)
-			{
-				$linkRuleArray = $historyItemModel->get('LINK_RULE');
-			}
-		}
+        // for compatibility
+        if (!$linkRuleArray) {
+            $linkRuleArray = [
+                'ranges' => [
+                    [
+                        'from' => 540,
+                        'to' => 1_080,
+                        'weekdays' => [1, 2, 3, 4, 5],
+                        'weekdaysTitle' => $this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_WORKDAYS_MSGVER_1'),
+                    ],
+                ],
+                'slotSize' => 60,
+            ];
+        }
 
-		// for compatibility
-		if (!$linkRuleArray)
-		{
-			$linkRuleArray = [
-				'ranges' => [
-					[
-						'from' => 540,
-						'to' => 1080,
-						'weekdays' => [1, 2, 3, 4, 5],
-						'weekdaysTitle' => $this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_WORKDAYS_MSGVER_1'),
-					],
-				],
-				'slotSize' => 60,
-			];
-		}
+        return $linkRuleArray;
+    }
 
-		return $linkRuleArray;
-	}
+    public function hasContact(): bool
+    {
+        return
+            ($this->getModel()->getSettings()['CONTACT_ID'] ?? null)
+            && ($this->getModel()->getSettings()['CONTACT_TYPE_ID'] ?? null);
+    }
 
-	private function getSharingLinkUrl(string $hash): string
-	{
-		$sharingPublicPath = '/pub/calendar-sharing/';
-		$context = \Bitrix\Main\Application::getInstance()->getContext();
-		$scheme = $context->getRequest()->isHttps() ? 'https' : 'http';
-		$server = $context->getServer();
-		$domain = $server->getServerName() ?: \COption::getOptionString('main', 'server_name', '');
+    public function formatTime(int $minutes): string
+    {
+        $now = time();
+        $dayStart = $now - $now % 86_400 - FormatDate('Z');
 
-		if (preg_match('/^(?<domain>.+):(?<port>\d+)$/', $domain, $matches))
-		{
-			$domain = $matches['domain'];
-			$port = (int)$matches['port'];
-		}
-		else
-		{
-			$port = (int)$server->getServerPort();
-		}
+        $culture = Application::getInstance()->getContext()->getCulture();
+        $timeFormat = $culture->get('SHORT_TIME_FORMAT');
 
-		$port = in_array($port, [80, 443], true) ? '' : ':'.$port;
-		$serverPath = $scheme . '://' . $domain . $port;
-		$url = $serverPath . $sharingPublicPath . $hash . '/';
+        return FormatDate($timeFormat, $dayStart + $minutes * 60);
+    }
 
-		return $serverPath . \CBXShortUri::getShortUri($url);
-	}
+    public function formatDuration(int $diffMinutes): string
+    {
+        $now = time();
+        $hours = (int) ($diffMinutes / 60);
+        $minutes = $diffMinutes % 60;
 
-	public function hasContact(): bool
-	{
-		return
-			($this->getModel()->getSettings()['CONTACT_ID'] ?? null)
-			&& ($this->getModel()->getSettings()['CONTACT_TYPE_ID'] ?? null)
-		;
-	}
+        $hint = FormatDate('idiff', $now - $minutes * 60);
+        if ($hours > 0) {
+            $hint = FormatDate('Hdiff', $now - $hours * 60 * 60);
+            if ($minutes > 0) {
+                $hint .= ' '.FormatDate('idiff', $now - $minutes * 60);
+            }
+        }
 
-	public function formatTime(int $minutes): string
-	{
-		$now = time();
-		$dayStart = $now - $now % 86400 - FormatDate('Z');
+        return $hint;
+    }
 
-		$culture = Main\Application::getInstance()->getContext()->getCulture();
-		$timeFormat = $culture->get('SHORT_TIME_FORMAT');
+    protected function getMessage(string $messageCode): string
+    {
+        return Loc::getMessage($messageCode);
+    }
 
-		return FormatDate($timeFormat, $dayStart + $minutes * 60);
-	}
+    private function getSharingLinkUrl(string $hash): string
+    {
+        $sharingPublicPath = '/pub/calendar-sharing/';
+        $context = Application::getInstance()->getContext();
+        $scheme = $context->getRequest()->isHttps() ? 'https' : 'http';
+        $server = $context->getServer();
+        $domain = $server->getServerName() ?: \COption::getOptionString('main', 'server_name', '');
 
-	public function formatDuration(int $diffMinutes): string
-	{
-		$now = time();
-		$hours = (int)($diffMinutes / 60);
-		$minutes = $diffMinutes % 60;
+        if (preg_match('/^(?<domain>.+):(?<port>\d+)$/', $domain, $matches)) {
+            $domain = $matches['domain'];
+            $port = (int) $matches['port'];
+        } else {
+            $port = (int) $server->getServerPort();
+        }
 
-		$hint = FormatDate('idiff', $now - $minutes * 60);
-		if ($hours > 0)
-		{
-			$hint = FormatDate('Hdiff', $now - $hours * 60 * 60);
-			if ($minutes > 0)
-			{
-				$hint .= ' ' . FormatDate('idiff', $now - $minutes * 60);
-			}
-		}
+        $port = \in_array($port, [80, 443], true) ? '' : ':'.$port;
+        $serverPath = $scheme.'://'.$domain.$port;
+        $url = $serverPath.$sharingPublicPath.$hash.'/';
 
-		return $hint;
-	}
-
-	protected function getMessage(string $messageCode): string
-	{
-		return Loc::getMessage($messageCode);
-	}
+        return $serverPath.\CBXShortUri::getShortUri($url);
+    }
 }

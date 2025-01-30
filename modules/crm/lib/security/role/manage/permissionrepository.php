@@ -13,113 +13,102 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\Result;
-use CCrmRole;
 
-class PermissionRepository
+class permissionrepository
 {
-	use Singleton;
+    use Singleton;
 
-	public function getRole(int $roleId): ?RoleDTO
-	{
-		$obRes = CCrmRole::GetList(array(), array('ID' => $roleId));
-		$roleRow = $obRes->Fetch();
+    public function getRole(int $roleId): ?RoleDTO
+    {
+        $obRes = \CCrmRole::GetList([], ['ID' => $roleId]);
+        $roleRow = $obRes->Fetch();
 
-		if ($roleRow)
-		{
-			return RoleDTO::createFromDbRow($roleRow);
-		}
+        if ($roleRow) {
+            return RoleDTO::createFromDbRow($roleRow);
+        }
 
-		return null;
-	}
+        return null;
+    }
 
-	public function getRoleAssignedPermissions(int $roleId)
-	{
-		$ct = new ConditionTree();
-		$ct->logic(ConditionTree::LOGIC_OR);
-		$ct->where('ATTR', '<>', '');
-		$ct->where('FIELD_VALUE', '<>', '');
-		$ct->where('SETTINGS', '<>', '');
+    public function getRoleAssignedPermissions(int $roleId)
+    {
+        $ct = new ConditionTree();
+        $ct->logic(ConditionTree::LOGIC_OR);
+        $ct->where('ATTR', '<>', '');
+        $ct->where('FIELD_VALUE', '<>', '');
+        $ct->where('SETTINGS', '<>', '');
 
+        $query = RolePermissionTable::query()
+            ->setSelect(['ENTITY', 'PERM_TYPE', 'FIELD', 'FIELD_VALUE', 'ATTR', 'SETTINGS'])
+            ->where('ROLE_ID', $roleId)
+            ->where($ct)
+        ;
 
-		$query = RolePermissionTable::query()
-			->setSelect(['ENTITY', 'PERM_TYPE', 'FIELD', 'FIELD_VALUE', 'ATTR', 'SETTINGS'])
-			->where('ROLE_ID', $roleId)
-			->where($ct)
-		;
+        return $query->fetchAll();
+    }
 
-		return $query->fetchAll();
-	}
+    /**
+     * @param EntityDTO[] $permissionEntities
+     */
+    public function getDefaultRoleAssignedPermissions(array $permissionEntities): array
+    {
+        $result = [];
 
-	/**
-	 * @param EntityDTO[] $permissionEntities
-	 * @return array
-	 */
-	public function getDefaultRoleAssignedPermissions(array $permissionEntities): array
-	{
-		$result = [];
+        foreach ($permissionEntities as $entity) {
+            foreach ($entity->permissions() as $permission) {
+                $attr = $permission->getDefaultAttribute();
+                $settings = $permission->getDefaultSettings();
+                if (null === $attr && empty($settings)) {
+                    continue;
+                }
 
-		foreach ($permissionEntities as $entity)
-		{
-			foreach ($entity->permissions() as $permission)
-			{
-				$attr = $permission->getDefaultAttribute();
-				$settings = $permission->getDefaultSettings();
-				if ($attr === null && empty($settings))
-				{
-					continue;
-				}
+                $result[] = [
+                    'ENTITY' => $entity->code(),
+                    'PERM_TYPE' => $permission->code(),
+                    'FIELD' => '-',
+                    'FIELD_VALUE' => null,
+                    'ATTR' => $attr,
+                    'SETTINGS' => $settings,
+                ];
+            }
+        }
 
-				$result[] = [
-					'ENTITY' => $entity->code(),
-					'PERM_TYPE' => $permission->code(),
-					'FIELD' => '-',
-					'FIELD_VALUE' => null,
-					'ATTR' => $attr,
-					'SETTINGS' => $settings,
-				];
-			}
-		}
+        return $result;
+    }
 
-		return $result;
-	}
+    public function getTariffRestrictions(): Restrictions
+    {
+        $restriction = RestrictionManager::getPermissionControlRestriction();
 
-	public function getTariffRestrictions(): Restrictions
-	{
-		$restriction = RestrictionManager::getPermissionControlRestriction();
+        $hasPermission = $restriction->hasPermission();
 
-		$hasPermission = $restriction->hasPermission();
+        return new Restrictions(
+            $hasPermission,
+            $hasPermission ? null : $restriction->prepareInfoHelperScript(),
+        );
+    }
 
-		return new Restrictions(
-			$hasPermission,
-			$hasPermission ? null : $restriction->prepareInfoHelperScript(),
-		);
-	}
+    /**
+     * @param PermissionModel[] $removedPerms
+     * @param PermissionModel[] $changedPerms
+     */
+    public function applyRolePermissionData(int $roleId, array $removedPerms, array $changedPerms): Result
+    {
+        $result = new Result();
+        $connection = Application::getConnection();
 
-	/**
-	 * @param int $roleId
-	 * @param PermissionModel[] $removedPerms
-	 * @param PermissionModel[] $changedPerms
-	 * @return Result
-	 */
-	public function applyRolePermissionData(int $roleId, array $removedPerms, array $changedPerms): Result
-	{
-		$result = new Result();
-		$connection = Application::getConnection();
+        $connection->startTransaction();
 
-		$connection->startTransaction();
+        try {
+            RolePermissionTable::removePermissions($roleId, $removedPerms);
+            RolePermissionTable::appendPermissions($roleId, $changedPerms);
 
-		try {
-			RolePermissionTable::removePermissions($roleId, $removedPerms);
-			RolePermissionTable::appendPermissions($roleId, $changedPerms);
+            $connection->commitTransaction();
+        } catch (\Exception $e) {
+            $connection->rollbackTransaction();
+            $result->addError(new Error($e->getMessage()));
+        }
 
-			$connection->commitTransaction();
-		}
-		catch (\Exception $e)
-		{
-			$connection->rollbackTransaction();
-			$result->addError(new Error($e->getMessage()));
-		}
-
-		return $result;
-	}
+        return $result;
+    }
 }

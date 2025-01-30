@@ -9,18 +9,17 @@ use Bitrix\Main\UI\Extension;
 
 class TagTitleFieldAssembler extends FieldAssembler
 {
-	protected function prepareColumn($value): string
-	{
-		$id = (int)$value['ID'];
-		$title = htmlspecialcharsbx($value['TITLE']);
+    protected function prepareColumn($value): string
+    {
+        $id = (int) $value['ID'];
+        $title = htmlspecialcharsbx($value['TITLE']);
 
-		$editButton = '';
-		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_TAG_MODIFY))
-		{
-			$editButton = $this->getEditButton($id);
-		}
+        $editButton = '';
+        if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_TAG_MODIFY)) {
+            $editButton = $this->getEditButton($id);
+        }
 
-		return <<<HTML
+        return <<<HTML
 			<div class="tag-title-wrapper">
 				<div class="tag-title-wrapper__item tag-title-preview">
 					<span>{$title}</span>
@@ -28,13 +27,13 @@ class TagTitleFieldAssembler extends FieldAssembler
 				</div>
 			</div>
 		HTML;
-	}
+    }
 
-	protected function getEditButton(int $tagId): string
-	{
-		Extension::load('ui.design-tokens');
+    protected function getEditButton(int $tagId): string
+    {
+        Extension::load('ui.design-tokens');
 
-		return <<<HTML
+        return <<<HTML
 			<a
 				onclick="event.stopPropagation(); BX.BIConnector.SupersetDashboardTagGridManager.Instance.renameTag({$tagId})"
 			>
@@ -44,33 +43,28 @@ class TagTitleFieldAssembler extends FieldAssembler
 				></i>
 			</a>
 		HTML;
-	}
+    }
 
-	protected function prepareRow(array $row): array
-	{
-		if (empty($this->getColumnIds()))
-		{
-			return $row;
-		}
+    protected function prepareRow(array $row): array
+    {
+        if (empty($this->getColumnIds())) {
+            return $row;
+        }
 
-		$row['columns'] ??= [];
+        $row['columns'] ??= [];
 
-		foreach ($this->getColumnIds() as $columnId)
-		{
-			if ($row['data'][$columnId])
-			{
-				$value = [
-					'TITLE' => $row['data']['TITLE'],
-					'ID' => $row['data']['ID'],
-				];
-			}
-			else
-			{
-				$value = [];
-			}
-			$row['columns'][$columnId] = $this->prepareColumn($value);
-		}
+        foreach ($this->getColumnIds() as $columnId) {
+            if ($row['data'][$columnId]) {
+                $value = [
+                    'TITLE' => $row['data']['TITLE'],
+                    'ID' => $row['data']['ID'],
+                ];
+            } else {
+                $value = [];
+            }
+            $row['columns'][$columnId] = $this->prepareColumn($value);
+        }
 
-		return $row;
-	}
+        return $row;
+    }
 }

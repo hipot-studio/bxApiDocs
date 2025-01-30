@@ -1,259 +1,237 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
-$GLOBALS["BLOG_USER_GROUP"] = Array();
+$GLOBALS['BLOG_USER_GROUP'] = [];
 
-class CAllBlogUserGroup
+class blog_user_group
 {
-	/*************** ADD, UPDATE, DELETE *****************/
-	public static function CheckFields($ACTION, &$arFields, $ID = 0)
-	{
-		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && strlen($arFields["NAME"]) <= 0)
-		{
-			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("BLG_GUG_EMPTY_NAME"), "EMPTY_NAME");
-			return false;
-		}
+    // ADD, UPDATE, DELETE
+    public static function CheckFields($ACTION, &$arFields, $ID = 0)
+    {
+        if ((is_set($arFields, 'NAME') || 'ADD' === $ACTION) && '' === $arFields['NAME']) {
+            $GLOBALS['APPLICATION']->ThrowException(GetMessage('BLG_GUG_EMPTY_NAME'), 'EMPTY_NAME');
 
-		if ((is_set($arFields, "BLOG_ID") || $ACTION=="ADD") && IntVal($arFields["BLOG_ID"]) <= 0)
-		{
-			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("BLG_GUG_EMPTY_BLOG_ID"), "EMPTY_BLOG_ID");
-			return false;
-		}
-		elseif (is_set($arFields, "BLOG_ID"))
-		{
-			$arResult = CBlog::GetByID($arFields["BLOG_ID"]);
-			if (!$arResult)
-			{
-				$GLOBALS["APPLICATION"]->ThrowException(str_replace("#ID#", $arFields["BLOG_ID"], GetMessage("BLG_GUG_ERROR_NO_BLOG")), "ERROR_NO_BLOG");
-				return false;
-			}
-		}
+            return false;
+        }
 
-		return True;
-	}
+        if ((is_set($arFields, 'BLOG_ID') || 'ADD' === $ACTION) && (int) $arFields['BLOG_ID'] <= 0) {
+            $GLOBALS['APPLICATION']->ThrowException(GetMessage('BLG_GUG_EMPTY_BLOG_ID'), 'EMPTY_BLOG_ID');
 
-	public static function Delete($ID)
-	{
-		global $DB;
+            return false;
+        }
+        if (is_set($arFields, 'BLOG_ID')) {
+            $arResult = CBlog::GetByID($arFields['BLOG_ID']);
+            if (!$arResult) {
+                $GLOBALS['APPLICATION']->ThrowException(str_replace('#ID#', $arFields['BLOG_ID'], GetMessage('BLG_GUG_ERROR_NO_BLOG')), 'ERROR_NO_BLOG');
 
-		$ID = IntVal($ID);
-		if ($ID == 1 || $ID == 2)
-			return False;
+                return false;
+            }
+        }
 
-		$arGroup = CBlogUserGroup::GetByID($ID);
-		if ($arGroup)
-		{
-			$dbResult = CBlogUserGroupPerms::GetList(
-				array(),
-				array("USER_GROUP_ID" => $ID, "BLOG_ID" => $arGroup["BLOG_ID"]),
-				false,
-				false,
-				array("ID")
-			);
-			if ($arResult = $dbResult->Fetch())
-			{
-				if (!CBlogUserGroupPerms::Delete($arResult["ID"]))
-					return False;
-			}
+        return true;
+    }
 
-			$DB->Query("DELETE FROM b_blog_user2user_group WHERE USER_GROUP_ID = ".$ID."", true);
+    public static function Delete($ID)
+    {
+        global $DB;
 
-			unset($GLOBALS["BLOG_USER_GROUP"]["BLOG_USER_GROUP_CACHE_".$ID]);
+        $ID = (int) $ID;
+        if (1 === $ID || 2 === $ID) {
+            return false;
+        }
 
-			return $DB->Query("DELETE FROM b_blog_user_group WHERE ID = ".$ID."", true);
-		}
+        $arGroup = CBlogUserGroup::GetByID($ID);
+        if ($arGroup) {
+            $dbResult = CBlogUserGroupPerms::GetList(
+                [],
+                ['USER_GROUP_ID' => $ID, 'BLOG_ID' => $arGroup['BLOG_ID']],
+                false,
+                false,
+                ['ID']
+            );
+            if ($arResult = $dbResult->Fetch()) {
+                if (!CBlogUserGroupPerms::Delete($arResult['ID'])) {
+                    return false;
+                }
+            }
 
-		return True;
-	}
+            $DB->Query('DELETE FROM b_blog_user2user_group WHERE USER_GROUP_ID = '.$ID.'', true);
 
-	public static function SetGroupPerms($ID, $blogID, $postID = 0, $permission = BLOG_PERMS_DENY, $permsType = BLOG_PERMS_POST)
-	{
-		global $DB;
+            unset($GLOBALS['BLOG_USER_GROUP']['BLOG_USER_GROUP_CACHE_'.$ID]);
 
-		$ID = IntVal($ID);
-		$blogID = IntVal($blogID);
-		$postID = IntVal($postID);
+            return $DB->Query('DELETE FROM b_blog_user_group WHERE ID = '.$ID.'', true);
+        }
 
-		$arAvailPerms = array_keys($GLOBALS["AR_BLOG_PERMS"]);
-		if (!in_array($permission, $arAvailPerms))
-			$permission = $arAvailPerms[0];
+        return true;
+    }
 
-		$permsType = (($permsType == BLOG_PERMS_COMMENT) ? BLOG_PERMS_COMMENT : BLOG_PERMS_POST);
+    public static function SetGroupPerms($ID, $blogID, $postID = 0, $permission = BLOG_PERMS_DENY, $permsType = BLOG_PERMS_POST)
+    {
+        global $DB;
 
-		$bSuccess = True;
+        $ID = (int) $ID;
+        $blogID = (int) $blogID;
+        $postID = (int) $postID;
 
-		$arUserGroup = CBlogUserGroup::GetByID($ID);
-		if (!$arUserGroup)
-		{
-			$GLOBALS["APPLICATION"]->ThrowException(str_replace("#ID#", $ID, GetMessage("BLG_GUG_ERROR_NO_USER_GROUP")), "ERROR_NO_USER_GROUP");
-			$bSuccess = False;
-		}
+        $arAvailPerms = array_keys($GLOBALS['AR_BLOG_PERMS']);
+        if (!in_array($permission, $arAvailPerms, true)) {
+            $permission = $arAvailPerms[0];
+        }
 
-		if ($bSuccess)
-		{
-			$arBlog = CBlog::GetByID($blogID);
-			if (!$arBlog)
-			{
-				$GLOBALS["APPLICATION"]->ThrowException(str_replace("#ID#", $blogID, GetMessage("BLG_GUG_ERROR_NO_BLOG")), "ERROR_NO_BLOG");
-				$bSuccess = False;
-			}
-		}
+        $permsType = ((BLOG_PERMS_COMMENT === $permsType) ? BLOG_PERMS_COMMENT : BLOG_PERMS_POST);
 
-		if ($bSuccess)
-		{
-			if ($postID > 0)
-			{
-				$arPost = CBlogPost::GetByID($postID);
-				if (!$arPost)
-				{
-					$GLOBALS["APPLICATION"]->ThrowException(str_replace("#ID#", $postID, GetMessage("BLG_GUG_ERROR_NO_POST")), "ERROR_NO_POST");
-					$bSuccess = False;
-				}
-			}
-		}
+        $bSuccess = true;
 
-		if ($bSuccess)
-		{
-			$oldGroupPerms = CBlogUserGroup::GetGroupPerms(1, $blogID, 0, BLOG_PERMS_POST);
+        $arUserGroup = CBlogUserGroup::GetByID($ID);
+        if (!$arUserGroup) {
+            $GLOBALS['APPLICATION']->ThrowException(str_replace('#ID#', $ID, GetMessage('BLG_GUG_ERROR_NO_USER_GROUP')), 'ERROR_NO_USER_GROUP');
+            $bSuccess = false;
+        }
 
-			$currentPerms = CBlogUserGroup::GetGroupPerms($ID, $blogID, $postID, $permsType);
-			if ($currentPerms)
-			{
-				if ($currentPerms != $permission)
-				{
-					if ($postID > 0)
-						$DB->Query(
-							"UPDATE b_blog_user_group_perms SET ".
-							"	PERMS = '".$DB->ForSql($permission)."' ".
-							"WHERE BLOG_ID = ".$blogID." ".
-							"	AND POST_ID = ".$postID." ".
-							"	AND USER_GROUP_ID = ".$ID."".
-							"	AND PERMS_TYPE = '".$DB->ForSql($permsType)."'"
-						);
-					else
-						$DB->Query(
-							"UPDATE b_blog_user_group_perms SET ".
-							"	PERMS = '".$DB->ForSql($permission)."' ".
-							"WHERE BLOG_ID = ".$blogID." ".
-							"	AND USER_GROUP_ID = ".$ID." ".
-							"	AND PERMS_TYPE = '".$DB->ForSql($permsType)."'".
-							"	AND POST_ID IS NULL "
-						);
-				}
-			}
-			else
-			{
-				if ($postID > 0)
-					$DB->Query(
-						"INSERT INTO b_blog_user_group_perms (BLOG_ID, USER_GROUP_ID, PERMS_TYPE, POST_ID, PERMS) ".
-						"VALUES (".$blogID.", ".$ID.", '".$DB->ForSql($permsType)."', ".$postID.", '".$DB->ForSql($permission)."') "
-					);
-				else
-					$DB->Query(
-						"INSERT INTO b_blog_user_group_perms (BLOG_ID, USER_GROUP_ID, PERMS_TYPE, POST_ID, PERMS) ".
-						"VALUES (".$blogID.", ".$ID.", '".$DB->ForSql($permsType)."', null, '".$DB->ForSql($permission)."') "
-					);
-			}
+        if ($bSuccess) {
+            $arBlog = CBlog::GetByID($blogID);
+            if (!$arBlog) {
+                $GLOBALS['APPLICATION']->ThrowException(str_replace('#ID#', $blogID, GetMessage('BLG_GUG_ERROR_NO_BLOG')), 'ERROR_NO_BLOG');
+                $bSuccess = false;
+            }
+        }
 
-			unset($GLOBALS["BLOG_USER_GROUP"]["BLOG_GROUP_PERMS_CACHE_".$blogID."_".$postID."_".$permsType."_".$ID]);
-			unset($GLOBALS["BLOG_USER_GROUP"]["BLOG_USER_PERMS_CACHE_".$blogID."_".$postID."_".$permsType]);
-		}
+        if ($bSuccess) {
+            if ($postID > 0) {
+                $arPost = CBlogPost::GetByID($postID);
+                if (!$arPost) {
+                    $GLOBALS['APPLICATION']->ThrowException(str_replace('#ID#', $postID, GetMessage('BLG_GUG_ERROR_NO_POST')), 'ERROR_NO_POST');
+                    $bSuccess = false;
+                }
+            }
+        }
 
-		if ($bSuccess)
-		{
-			if (CModule::IncludeModule("search"))
-			{
-				$newGroupPerms = CBlogUserGroup::GetGroupPerms(1, $blogID, 0, BLOG_PERMS_POST);
-				if ($oldGroupPerms >= BLOG_PERMS_READ && $newGroupPerms < BLOG_PERMS_READ)
-				{
-					CSearch::DeleteIndex("blog", false, $blogID);
-				}
-				elseif ($oldGroupPerms < BLOG_PERMS_READ && $newGroupPerms >= BLOG_PERMS_READ)
-				{
-				}
-			}
-		}
+        if ($bSuccess) {
+            $oldGroupPerms = CBlogUserGroup::GetGroupPerms(1, $blogID, 0, BLOG_PERMS_POST);
 
-		return $bSuccess;
-	}
+            $currentPerms = CBlogUserGroup::GetGroupPerms($ID, $blogID, $postID, $permsType);
+            if ($currentPerms) {
+                if ($currentPerms !== $permission) {
+                    if ($postID > 0) {
+                        $DB->Query(
+                            'UPDATE b_blog_user_group_perms SET '.
+                            "	PERMS = '".$DB->ForSql($permission)."' ".
+                            'WHERE BLOG_ID = '.$blogID.' '.
+                            '	AND POST_ID = '.$postID.' '.
+                            '	AND USER_GROUP_ID = '.$ID.''.
+                            "	AND PERMS_TYPE = '".$DB->ForSql($permsType)."'"
+                        );
+                    } else {
+                        $DB->Query(
+                            'UPDATE b_blog_user_group_perms SET '.
+                                "	PERMS = '".$DB->ForSql($permission)."' ".
+                                'WHERE BLOG_ID = '.$blogID.' '.
+                                '	AND USER_GROUP_ID = '.$ID.' '.
+                                "	AND PERMS_TYPE = '".$DB->ForSql($permsType)."'".
+                                '	AND POST_ID IS NULL '
+                        );
+                    }
+                }
+            } else {
+                if ($postID > 0) {
+                    $DB->Query(
+                        'INSERT INTO b_blog_user_group_perms (BLOG_ID, USER_GROUP_ID, PERMS_TYPE, POST_ID, PERMS) '.
+                        'VALUES ('.$blogID.', '.$ID.", '".$DB->ForSql($permsType)."', ".$postID.", '".$DB->ForSql($permission)."') "
+                    );
+                } else {
+                    $DB->Query(
+                        'INSERT INTO b_blog_user_group_perms (BLOG_ID, USER_GROUP_ID, PERMS_TYPE, POST_ID, PERMS) '.
+                            'VALUES ('.$blogID.', '.$ID.", '".$DB->ForSql($permsType)."', null, '".$DB->ForSql($permission)."') "
+                    );
+                }
+            }
 
-	//*************** SELECT *********************/
-	public static function GetByID($ID)
-	{
-		global $DB;
+            unset($GLOBALS['BLOG_USER_GROUP']['BLOG_GROUP_PERMS_CACHE_'.$blogID.'_'.$postID.'_'.$permsType.'_'.$ID], $GLOBALS['BLOG_USER_GROUP']['BLOG_USER_PERMS_CACHE_'.$blogID.'_'.$postID.'_'.$permsType]);
+        }
 
-		$ID = IntVal($ID);
+        if ($bSuccess) {
+            if (CModule::IncludeModule('search')) {
+                $newGroupPerms = CBlogUserGroup::GetGroupPerms(1, $blogID, 0, BLOG_PERMS_POST);
+                if ($oldGroupPerms >= BLOG_PERMS_READ && $newGroupPerms < BLOG_PERMS_READ) {
+                    CSearch::DeleteIndex('blog', false, $blogID);
+                } elseif ($oldGroupPerms < BLOG_PERMS_READ && $newGroupPerms >= BLOG_PERMS_READ) {
+                }
+            }
+        }
 
-		if (isset($GLOBALS["BLOG_USER_GROUP"]["BLOG_USER_GROUP_CACHE_".$ID]) && is_array($GLOBALS["BLOG_USER_GROUP"]["BLOG_USER_GROUP_CACHE_".$ID]) && is_set($GLOBALS["BLOG_USER_GROUP"]["BLOG_USER_GROUP_CACHE_".$ID], "ID"))
-		{
-			return $GLOBALS["BLOG_USER_GROUP"]["BLOG_USER_GROUP_CACHE_".$ID];
-		}
-		else
-		{
-			$strSql =
-				"SELECT G.ID, G.BLOG_ID, G.NAME ".
-				"FROM b_blog_user_group G ".
-				"WHERE G.ID = ".$ID."";
-			$dbResult = $DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
-			if ($arResult = $dbResult->Fetch())
-			{
-				$GLOBALS["BLOG_USER_GROUP"]["BLOG_USER_GROUP_CACHE_".$ID] = $arResult;
-				return $arResult;
-			}
-		}
+        return $bSuccess;
+    }
 
-		return False;
-	}
+    // *************** SELECT *********************/
+    public static function GetByID($ID)
+    {
+        global $DB;
 
-	public static function GetGroupPerms($ID, $blogID, $postID = 0, $permsType = BLOG_PERMS_POST)
-	{
-		global $DB;
+        $ID = (int) $ID;
 
-		$ID = IntVal($ID);
-		$blogID = IntVal($blogID);
-		$postID = IntVal($postID);
-		$permsType = (($permsType == BLOG_PERMS_COMMENT) ? BLOG_PERMS_COMMENT : BLOG_PERMS_POST);
+        if (isset($GLOBALS['BLOG_USER_GROUP']['BLOG_USER_GROUP_CACHE_'.$ID]) && is_array($GLOBALS['BLOG_USER_GROUP']['BLOG_USER_GROUP_CACHE_'.$ID]) && is_set($GLOBALS['BLOG_USER_GROUP']['BLOG_USER_GROUP_CACHE_'.$ID], 'ID')) {
+            return $GLOBALS['BLOG_USER_GROUP']['BLOG_USER_GROUP_CACHE_'.$ID];
+        }
 
-		$varName = "BLOG_GROUP_PERMS_CACHE_".$blogID."_".$postID."_".$permsType."_";
+        $strSql =
+            'SELECT G.ID, G.BLOG_ID, G.NAME '.
+            'FROM b_blog_user_group G '.
+            'WHERE G.ID = '.$ID.'';
+        $dbResult = $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+        if ($arResult = $dbResult->Fetch()) {
+            $GLOBALS['BLOG_USER_GROUP']['BLOG_USER_GROUP_CACHE_'.$ID] = $arResult;
 
-		if (isset($GLOBALS["BLOG_USER_GROUP"][$varName.$ID]) && is_array($GLOBALS["BLOG_USER_GROUP"][$varName.$ID]))
-		{
-			return $GLOBALS["BLOG_USER_GROUP"][$varName.$ID];
-		}
-		else
-		{
-			if ($postID > 0)
-			{
-				$strSql =
-					"SELECT P.PERMS ".
-					"FROM b_blog_user_group_perms P ".
-					"WHERE P.BLOG_ID = ".$blogID." ".
-					"	AND P.POST_ID = ".$postID." ".
-					"	AND P.USER_GROUP_ID = ".$ID." ".
-					"	AND P.PERMS_TYPE = '".$DB->ForSql($permsType)."' ";
-				$dbResult = $DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
-				if ($arResult = $dbResult->Fetch())
-				{
-					$GLOBALS["BLOG_USER_GROUP"][$varName.$ID] = $arResult["PERMS"];
-					return $arResult["PERMS"];
-				}
-			}
+            return $arResult;
+        }
 
-			$strSql =
-				"SELECT P.PERMS ".
-				"FROM b_blog_user_group_perms P ".
-				"WHERE P.BLOG_ID = ".$blogID." ".
-				"	AND P.POST_ID IS NULL ".
-				"	AND P.USER_GROUP_ID = ".$ID." ".
-				"	AND P.PERMS_TYPE = '".$DB->ForSql($permsType)."' ";
-			$dbResult = $DB->Query($strSql, False, "File: ".__FILE__."<br>Line: ".__LINE__);
-			if ($arResult = $dbResult->Fetch())
-			{
-				$GLOBALS["BLOG_USER_GROUP"][$varName.$ID] = $arResult["PERMS"];
-				return $arResult["PERMS"];
-			}
-		}
+        return false;
+    }
 
-		return False;
-	}
+    public static function GetGroupPerms($ID, $blogID, $postID = 0, $permsType = BLOG_PERMS_POST)
+    {
+        global $DB;
+
+        $ID = (int) $ID;
+        $blogID = (int) $blogID;
+        $postID = (int) $postID;
+        $permsType = ((BLOG_PERMS_COMMENT === $permsType) ? BLOG_PERMS_COMMENT : BLOG_PERMS_POST);
+
+        $varName = 'BLOG_GROUP_PERMS_CACHE_'.$blogID.'_'.$postID.'_'.$permsType.'_';
+
+        if (isset($GLOBALS['BLOG_USER_GROUP'][$varName.$ID]) && is_array($GLOBALS['BLOG_USER_GROUP'][$varName.$ID])) {
+            return $GLOBALS['BLOG_USER_GROUP'][$varName.$ID];
+        }
+
+        if ($postID > 0) {
+            $strSql =
+                'SELECT P.PERMS '.
+                'FROM b_blog_user_group_perms P '.
+                'WHERE P.BLOG_ID = '.$blogID.' '.
+                '	AND P.POST_ID = '.$postID.' '.
+                '	AND P.USER_GROUP_ID = '.$ID.' '.
+                "	AND P.PERMS_TYPE = '".$DB->ForSql($permsType)."' ";
+            $dbResult = $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+            if ($arResult = $dbResult->Fetch()) {
+                $GLOBALS['BLOG_USER_GROUP'][$varName.$ID] = $arResult['PERMS'];
+
+                return $arResult['PERMS'];
+            }
+        }
+
+        $strSql =
+            'SELECT P.PERMS '.
+            'FROM b_blog_user_group_perms P '.
+            'WHERE P.BLOG_ID = '.$blogID.' '.
+            '	AND P.POST_ID IS NULL '.
+            '	AND P.USER_GROUP_ID = '.$ID.' '.
+            "	AND P.PERMS_TYPE = '".$DB->ForSql($permsType)."' ";
+        $dbResult = $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+        if ($arResult = $dbResult->Fetch()) {
+            $GLOBALS['BLOG_USER_GROUP'][$varName.$ID] = $arResult['PERMS'];
+
+            return $arResult['PERMS'];
+        }
+
+        return false;
+    }
 }
-?>

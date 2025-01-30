@@ -9,118 +9,110 @@ use Bitrix\Main\Result;
 
 abstract class Base
 {
-	protected AutomatedSolutionManager $manager;
-	protected ?string $customSectionId;
-	protected ?int $realCustomSectionId;
-	protected Result $result;
-	protected ?array $customSections;
+    protected AutomatedSolutionManager $manager;
+    protected ?string $customSectionId;
+    protected ?int $realCustomSectionId;
+    protected Result $result;
+    protected ?array $customSections;
 
-	public function __construct(protected Type $type, protected array $fields)
-	{
-		$this->manager = new AutomatedSolutionManager();
-	}
+    public function __construct(protected Type $type, protected array $fields)
+    {
+        $this->manager = new AutomatedSolutionManager();
+    }
 
-	public function execute(): Result
-	{
-		$this->prepare();
+    public function execute(): Result
+    {
+        $this->prepare();
 
-		if (!$this->isAvailable())
-		{
-			return $this->result;
-		}
+        if (!$this->isAvailable()) {
+            return $this->result;
+        }
 
-		$customSectionsArrays = $this->getCustomSectionsArrays();
+        $customSectionsArrays = $this->getCustomSectionsArrays();
 
-		if ($customSectionsArrays === null)
-		{
-			$this->deleteCustomSectionItems();
+        if (null === $customSectionsArrays) {
+            $this->deleteCustomSectionItems();
 
-			return $this->result;
-		}
+            return $this->result;
+        }
 
-		$this->prepareCustomSections($customSectionsArrays);
-		$this->deleteUnnecessaryCustomSections();
-		$this->updateCustomSections();
-		$this->updateCustomSectionPages();
+        $this->prepareCustomSections($customSectionsArrays);
+        $this->deleteUnnecessaryCustomSections();
+        $this->updateCustomSections();
+        $this->updateCustomSectionPages();
 
-		return $this->result;
-	}
+        return $this->result;
+    }
 
-	protected function prepare(): void
-	{
-		$this->result = new Result();
-		$this->result->setData(['isCustomSectionChanged' => false]);
+    abstract public function deleteCustomSectionItems(): void;
 
-		$this->realCustomSectionId = null;
-		$this->customSectionId = $this->fields['CUSTOM_SECTION_ID'] ?? 0;
+    public function getFields(): array
+    {
+        return $this->fields;
+    }
 
-		if (!empty($this->customSectionId) && !str_starts_with($this->customSectionId, 'new'))
-		{
-			$this->realCustomSectionId = (int)$this->customSectionId;
-		}
+    protected function prepare(): void
+    {
+        $this->result = new Result();
+        $this->result->setData(['isCustomSectionChanged' => false]);
 
-		$this->customSections = null;
-	}
+        $this->realCustomSectionId = null;
+        $this->customSectionId = $this->fields['CUSTOM_SECTION_ID'] ?? 0;
 
-	protected function isAvailable(): bool
-	{
-		return IntranetManager::isCustomSectionsAvailable();
-	}
+        if (!empty($this->customSectionId) && !str_starts_with($this->customSectionId, 'new')) {
+            $this->realCustomSectionId = (int) $this->customSectionId;
+        }
 
-	protected function getCustomSectionsArrays(): ?array
-	{
-		$customSectionsArrays = $this->fields['CUSTOM_SECTIONS'] ?? null;
+        $this->customSections = null;
+    }
 
-		if ($customSectionsArrays === null)
-		{
-			return null;
-		}
+    protected function isAvailable(): bool
+    {
+        return IntranetManager::isCustomSectionsAvailable();
+    }
 
-		if (!is_array($customSectionsArrays))
-		{
-			$customSectionsArrays = [];
-		}
+    protected function getCustomSectionsArrays(): ?array
+    {
+        $customSectionsArrays = $this->fields['CUSTOM_SECTIONS'] ?? null;
 
-		return $customSectionsArrays;
-	}
+        if (null === $customSectionsArrays) {
+            return null;
+        }
 
-	abstract public function deleteCustomSectionItems(): void;
+        if (!\is_array($customSectionsArrays)) {
+            $customSectionsArrays = [];
+        }
 
-	protected function getPageSettingsValue(): string
-	{
-		return IntranetManager::preparePageSettingsForItemsList($this->type->getEntityTypeId());
-	}
+        return $customSectionsArrays;
+    }
 
-	protected function prepareCustomSections(array $customSectionsArrays): void
-	{
-		if ($this->customSections !== null)
-		{
-			return;
-		}
+    protected function getPageSettingsValue(): string
+    {
+        return IntranetManager::preparePageSettingsForItemsList($this->type->getEntityTypeId());
+    }
 
-		$this->customSections = [];
-		foreach ($customSectionsArrays as $customSectionsArray)
-		{
-			$this->customSections[$customSectionsArray['ID']] = $this->getPreparedCustomSectionData($customSectionsArray);
-		}
-	}
+    protected function prepareCustomSections(array $customSectionsArrays): void
+    {
+        if (null !== $this->customSections) {
+            return;
+        }
 
-	protected function getPreparedCustomSectionData(array $data): mixed
-	{
-		return $data;
-	}
+        $this->customSections = [];
+        foreach ($customSectionsArrays as $customSectionsArray) {
+            $this->customSections[$customSectionsArray['ID']] = $this->getPreparedCustomSectionData($customSectionsArray);
+        }
+    }
 
-	abstract protected function deleteUnnecessaryCustomSections(): void;
+    protected function getPreparedCustomSectionData(array $data): mixed
+    {
+        return $data;
+    }
 
-	abstract protected function getExistingCustomSections(): array;
+    abstract protected function deleteUnnecessaryCustomSections(): void;
 
-	abstract protected function updateCustomSections(): void;
+    abstract protected function getExistingCustomSections(): array;
 
-	abstract protected function updateCustomSectionPages(): void;
+    abstract protected function updateCustomSections(): void;
 
-	public function getFields(): array
-	{
-		return $this->fields;
-	}
+    abstract protected function updateCustomSectionPages(): void;
 }
-

@@ -4,35 +4,34 @@ namespace Bitrix\Calendar\Internals;
 
 use Bitrix\Calendar\Core\Base\BaseException;
 
-trait SingletonTrait
+trait singletontrait
 {
-	/**
-	 * @var static|null
-	 */
-	protected static $instance = null;
+    /**
+     * @var null|static
+     */
+    protected static $instance;
 
-	/**
-	 * @return static
-	 */
-	public static function getInstance()
-	{
-		if (static::$instance === null)
-		{
-			static::$instance = new static();
-		}
+    protected function __construct() {}
 
-		return static::$instance;
-	}
+    /**
+     * @throws BaseException
+     */
+    public function __wakeup()
+    {
+        throw new BaseException('Trying to wake singleton up');
+    }
 
+    protected function __clone() {}
 
-	protected function __construct(){}
+    /**
+     * @return static
+     */
+    public static function getInstance()
+    {
+        if (null === static::$instance) {
+            static::$instance = new static();
+        }
 
-	/**
-	 * @throws BaseException
-	 */
-	public function __wakeup()
-	{
-		throw new BaseException("Trying to wake singleton up");
-	}
-	protected function __clone(){}
+        return static::$instance;
+    }
 }

@@ -2,81 +2,71 @@
 
 namespace Bitrix\Conversion;
 
-class SplitReportContext extends ReportContext
+class splitreportcontext extends ReportContext
 {
-	protected function getCounters(array $splits, array $filter = array(), $step = null)
-	{
-		$result = array();
+    public function getRates(array $splits, array $rateClasses, array $filter = [], $step = null)
+    {
+        $filter['=NAME'] = RateManager::getCounters($rateClasses);
 
-		$totalCounters = parent::getCounters($filter, $step);
-		$otherCounters = $totalCounters;
+        $splitCounters = $this->getCounters($splits, $filter, $step);
 
-		foreach ($splits as $splitKey => $attribute)
-		{
-			if ($attribute['NAME'])
-			{
-				$this->setAttribute($attribute['NAME'], $attribute['VALUE']);
+        $result = [];
 
-				$counters = parent::getCounters($filter, $step);
+        foreach ($splitCounters as $split => $counters) {
+            $result[$split] = parent::getRatesCommon($rateClasses, $counters, $step);
+        }
 
-				$result[$splitKey] = $counters;
+        return $result;
+    }
 
-				self::subtructCounters($otherCounters, $counters);
+    protected function getCounters(array $splits, array $filter = [], $step = null)
+    {
+        $result = [];
 
-				$this->unsetAttribute($attribute['NAME'], $attribute['VALUE']);
-			}
-		}
+        $totalCounters = parent::getCounters($filter, $step);
+        $otherCounters = $totalCounters;
 
-		$result['other'] = $otherCounters;
-		$result['total'] = $totalCounters;
+        foreach ($splits as $splitKey => $attribute) {
+            if ($attribute['NAME']) {
+                $this->setAttribute($attribute['NAME'], $attribute['VALUE']);
 
-		return $result;
-	}
+                $counters = parent::getCounters($filter, $step);
 
-	private static function subtructCounters(array & $one, array $two)
-	{
-		// TODO first STEPS than loop
+                $result[$splitKey] = $counters;
 
-		foreach ($one as $key => & $value)
-		{
-			if ($key == 'STEPS')
-			{
-				if ($twoSteps = $two['STEPS'])
-				{
-					self::subtructDayCounters($value, $twoSteps);
-				}
-			}
-			else
-			{
-				$value -= $two[$key];
-			}
-		}
-	}
+                self::subtructCounters($otherCounters, $counters);
 
-	private static function subtructDayCounters(array & $one, array $two)
-	{
-		foreach ($one as $day => & $oneDay)
-		{
-			if ($twoDay = $two[$day])
-			{
-				self::subtructCounters($oneDay, $twoDay, false);
-			}
-		}
-	}
+                $this->unsetAttribute($attribute['NAME'], $attribute['VALUE']);
+            }
+        }
 
-	public function getRates(array $splits, array $rateClasses, array $filter = array(), $step = null)
-	{
-		$filter['=NAME'] = RateManager::getCounters($rateClasses);
+        $result['other'] = $otherCounters;
+        $result['total'] = $totalCounters;
 
-		$splitCounters = $this->getCounters($splits, $filter, $step);
+        return $result;
+    }
 
-		$result = array();
+    private static function subtructCounters(array &$one, array $two)
+    {
+        // TODO first STEPS than loop
 
-		foreach ($splitCounters as $split => $counters)
-		{
-			$result[$split] = parent::getRatesCommon($rateClasses, $counters, $step);
-		}
+        foreach ($one as $key => &$value) {
+            if ('STEPS' === $key) {
+                if ($twoSteps = $two['STEPS']) {
+                    self::subtructDayCounters($value, $twoSteps);
+                }
+            } else {
+                $value -= $two[$key];
+            }
+        }
+    }
 
-		return $result;
-	}
+    private static function subtructDayCounters(array &$one, array $two)
+    {
+        foreach ($one as $day => &$oneDay) {
+            if ($twoDay = $two[$day]) {
+                self::subtructCounters($oneDay, $twoDay, false);
+            }
+        }
+    }
 }

@@ -1,187 +1,181 @@
-<?
-use Bitrix\Main\Localization\Loc;
+<?php
+
 use Bitrix\Catalog;
+use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
-class CAllExtra
+class extra
 {
-	protected static $arExtraCache = array();
+    protected static $arExtraCache = [];
 
-	public static function ClearCache()
-	{
-		self::$arExtraCache = array();
-	}
+    public static function ClearCache()
+    {
+        self::$arExtraCache = [];
+    }
 
-	public static function GetByID($ID)
-	{
-		global $DB;
+    public static function GetByID($ID)
+    {
+        global $DB;
 
-		$ID = (int)$ID;
-		if ($ID <= 0)
-			return false;
+        $ID = (int) $ID;
+        if ($ID <= 0) {
+            return false;
+        }
 
-		if (isset(self::$arExtraCache[$ID]))
-		{
-			return self::$arExtraCache[$ID];
-		}
-		else
-		{
-			$strSql = "SELECT ID, NAME, PERCENTAGE FROM b_catalog_extra WHERE ID = ".$ID;
-			$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-			$res = $db_res->Fetch();
-			if (!empty($res))
-				return $res;
-		}
-		return false;
-	}
+        if (isset(self::$arExtraCache[$ID])) {
+            return self::$arExtraCache[$ID];
+        }
 
-	public static function SelectBox($sFieldName, $sValue, $sDefaultValue = "", $JavaChangeFunc = "", $sAdditionalParams = "")
-	{
-		if (empty(self::$arExtraCache))
-		{
-			self::$arExtraCache = Catalog\ExtraTable::getExtraList();
-		}
-		$s = '<select name="'.$sFieldName.'"';
-		if (!empty($JavaChangeFunc))
-			$s .= ' onchange="'.$JavaChangeFunc.'"';
-		if (!empty($sAdditionalParams))
-			$s .= ' '.$sAdditionalParams.' ';
-		$s .= '>';
-		$sValue = intval($sValue);
-		$boolFound = isset(self::$arExtraCache[$sValue]);
-		if (!empty($sDefaultValue))
-			$s .= '<option value="0"'.($boolFound ? '' : ' selected').'>'.htmlspecialcharsex($sDefaultValue).'</option>';
+        $strSql = 'SELECT ID, NAME, PERCENTAGE FROM b_catalog_extra WHERE ID = '.$ID;
+        $db_res = $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+        $res = $db_res->Fetch();
+        if (!empty($res)) {
+            return $res;
+        }
 
-		foreach (self::$arExtraCache as &$arExtra)
-		{
-			$s .= '<option value="'.$arExtra['ID'].'"'.($arExtra['ID'] == $sValue ? ' selected' : '').'>'.htmlspecialcharsex($arExtra['NAME']).' ('.htmlspecialcharsex($arExtra['PERCENTAGE']).'%)</option>';
-		}
-		if (isset($arExtra))
-			unset($arExtra);
-		return $s.'</select>';
-	}
+        return false;
+    }
 
-	public static function Update($ID, $arFields)
-	{
-		global $DB;
+    public static function SelectBox($sFieldName, $sValue, $sDefaultValue = '', $JavaChangeFunc = '', $sAdditionalParams = '')
+    {
+        if (empty(self::$arExtraCache)) {
+            self::$arExtraCache = Catalog\ExtraTable::getExtraList();
+        }
+        $s = '<select name="'.$sFieldName.'"';
+        if (!empty($JavaChangeFunc)) {
+            $s .= ' onchange="'.$JavaChangeFunc.'"';
+        }
+        if (!empty($sAdditionalParams)) {
+            $s .= ' '.$sAdditionalParams.' ';
+        }
+        $s .= '>';
+        $sValue = (int) $sValue;
+        $boolFound = isset(self::$arExtraCache[$sValue]);
+        if (!empty($sDefaultValue)) {
+            $s .= '<option value="0"'.($boolFound ? '' : ' selected').'>'.htmlspecialcharsex($sDefaultValue).'</option>';
+        }
 
-		$ID = (int)$ID;
-		if ($ID <= 0)
-			return false;
-		if (!static::CheckFields('UPDATE', $arFields, $ID))
-			return false;
+        foreach (self::$arExtraCache as &$arExtra) {
+            $s .= '<option value="'.$arExtra['ID'].'"'.($arExtra['ID'] === $sValue ? ' selected' : '').'>'.htmlspecialcharsex($arExtra['NAME']).' ('.htmlspecialcharsex($arExtra['PERCENTAGE']).'%)</option>';
+        }
+        if (isset($arExtra)) {
+            unset($arExtra);
+        }
 
-		$strUpdate = $DB->PrepareUpdate("b_catalog_extra", $arFields);
-		if (!empty($strUpdate))
-		{
-			$strSql = "UPDATE b_catalog_extra SET ".$strUpdate." WHERE ID = ".$ID;
-			$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+        return $s.'</select>';
+    }
 
-			if (isset($arFields['RECALCULATE']) && 'Y' == $arFields['RECALCULATE'])
-			{
-				CPrice::ReCalculate('EXTRA', $ID, $arFields['PERCENTAGE']);
-			}
-			static::ClearCache();
-			Catalog\ExtraTable::cleanCache();
-			Catalog\Model\Price::clearSettings();
-		}
+    public static function Update($ID, $arFields)
+    {
+        global $DB;
 
-		return true;
-	}
+        $ID = (int) $ID;
+        if ($ID <= 0) {
+            return false;
+        }
+        if (!static::CheckFields('UPDATE', $arFields, $ID)) {
+            return false;
+        }
 
-	public static function Delete($ID)
-	{
-		global $DB;
-		$ID = (int)$ID;
-		if ($ID <= 0)
-			return false;
-		$DB->Query("UPDATE b_catalog_price SET EXTRA_ID = NULL WHERE EXTRA_ID = ".$ID);
-		static::ClearCache();
-		Catalog\ExtraTable::cleanCache();
-		Catalog\Model\Price::clearSettings();
+        $strUpdate = $DB->PrepareUpdate('b_catalog_extra', $arFields);
+        if (!empty($strUpdate)) {
+            $strSql = 'UPDATE b_catalog_extra SET '.$strUpdate.' WHERE ID = '.$ID;
+            $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
 
-		return $DB->Query("DELETE FROM b_catalog_extra WHERE ID = ".$ID, true);
-	}
+            if (isset($arFields['RECALCULATE']) && 'Y' === $arFields['RECALCULATE']) {
+                CPrice::ReCalculate('EXTRA', $ID, $arFields['PERCENTAGE']);
+            }
+            static::ClearCache();
+            Catalog\ExtraTable::cleanCache();
+            Catalog\Model\Price::clearSettings();
+        }
 
-	public static function CheckFields($strAction, &$arFields, $ID = 0)
-	{
-		global $APPLICATION;
+        return true;
+    }
 
-		$arMsg = array();
-		$boolResult = true;
+    public static function Delete($ID)
+    {
+        global $DB;
+        $ID = (int) $ID;
+        if ($ID <= 0) {
+            return false;
+        }
+        $DB->Query('UPDATE b_catalog_price SET EXTRA_ID = NULL WHERE EXTRA_ID = '.$ID);
+        static::ClearCache();
+        Catalog\ExtraTable::cleanCache();
+        Catalog\Model\Price::clearSettings();
 
-		$strAction = mb_strtoupper($strAction);
+        return $DB->Query('DELETE FROM b_catalog_extra WHERE ID = '.$ID, true);
+    }
 
-		$ID = (int)$ID;
-		if ('UPDATE' == $strAction && 0 >= $ID)
-		{
-			$arMsg[] = array('id' => 'ID', 'text' => Loc::getMessage('CAT_EXTRA_ERR_UPDATE_NOT_ID'));
-			$boolResult = false;
-		}
-		if (array_key_exists('ID', $arFields))
-		{
-			unset($arFields['ID']);
-		}
+    public static function CheckFields($strAction, &$arFields, $ID = 0)
+    {
+        global $APPLICATION;
 
-		if ('ADD' == $strAction)
-		{
-			if (!array_key_exists('NAME', $arFields))
-			{
-				$arMsg[] = array('id' => 'NAME', 'text' => Loc::getMessage('CAT_EXTRA_ERROR_NONAME'));
-				$boolResult = false;
-			}
-			if (!array_key_exists('PERCENTAGE', $arFields))
-			{
-				$arMsg[] = array('id' => 'PERCENTAGE', 'text' => Loc::getMessage('CAT_EXTRA_ERROR_NOPERCENTAGE'));
-				$boolResult = false;
-			}
-		}
+        $arMsg = [];
+        $boolResult = true;
 
-		if ($boolResult)
-		{
-			if (array_key_exists('NAME', $arFields))
-			{
-				$arFields["NAME"] = trim($arFields["NAME"]);
-				if ('' == $arFields["NAME"])
-				{
-					$arMsg[] = array('id' => 'NAME', 'text' => Loc::getMessage('CAT_EXTRA_ERROR_NONAME'));
-					$boolResult = false;
-				}
-			}
-			if (array_key_exists('PERCENTAGE', $arFields))
-			{
-				$arFields["PERCENTAGE"] = trim($arFields["PERCENTAGE"]);
-				if ('' == $arFields["PERCENTAGE"])
-				{
-					$arMsg[] = array('id' => 'PERCENTAGE', 'text' => Loc::getMessage('CAT_EXTRA_ERROR_NOPERCENTAGE'));
-					$boolResult = false;
-				}
-				else
-				{
-					$arFields["PERCENTAGE"] = doubleval($arFields["PERCENTAGE"]);
-				}
-			}
-		}
+        $strAction = mb_strtoupper($strAction);
 
-		if (!$boolResult)
-		{
-			$obError = new CAdminException($arMsg);
-			$APPLICATION->ResetException();
-			$APPLICATION->ThrowException($obError);
-		}
-		return $boolResult;
-	}
+        $ID = (int) $ID;
+        if ('UPDATE' === $strAction && 0 >= $ID) {
+            $arMsg[] = ['id' => 'ID', 'text' => Loc::getMessage('CAT_EXTRA_ERR_UPDATE_NOT_ID')];
+            $boolResult = false;
+        }
+        if (array_key_exists('ID', $arFields)) {
+            unset($arFields['ID']);
+        }
 
-	/**
-	 * @deprecated deprecated since catalog 12.5.6
-	 *
-	 * @param array $arFields
-	 * @param int $intID
-	 * @return false
-	 */
-	public static function PrepareInsert(&$arFields, &$intID)
-	{
-		return false;
-	}
+        if ('ADD' === $strAction) {
+            if (!array_key_exists('NAME', $arFields)) {
+                $arMsg[] = ['id' => 'NAME', 'text' => Loc::getMessage('CAT_EXTRA_ERROR_NONAME')];
+                $boolResult = false;
+            }
+            if (!array_key_exists('PERCENTAGE', $arFields)) {
+                $arMsg[] = ['id' => 'PERCENTAGE', 'text' => Loc::getMessage('CAT_EXTRA_ERROR_NOPERCENTAGE')];
+                $boolResult = false;
+            }
+        }
+
+        if ($boolResult) {
+            if (array_key_exists('NAME', $arFields)) {
+                $arFields['NAME'] = trim($arFields['NAME']);
+                if ('' === $arFields['NAME']) {
+                    $arMsg[] = ['id' => 'NAME', 'text' => Loc::getMessage('CAT_EXTRA_ERROR_NONAME')];
+                    $boolResult = false;
+                }
+            }
+            if (array_key_exists('PERCENTAGE', $arFields)) {
+                $arFields['PERCENTAGE'] = trim($arFields['PERCENTAGE']);
+                if ('' === $arFields['PERCENTAGE']) {
+                    $arMsg[] = ['id' => 'PERCENTAGE', 'text' => Loc::getMessage('CAT_EXTRA_ERROR_NOPERCENTAGE')];
+                    $boolResult = false;
+                } else {
+                    $arFields['PERCENTAGE'] = (float) $arFields['PERCENTAGE'];
+                }
+            }
+        }
+
+        if (!$boolResult) {
+            $obError = new CAdminException($arMsg);
+            $APPLICATION->ResetException();
+            $APPLICATION->ThrowException($obError);
+        }
+
+        return $boolResult;
+    }
+
+    /**
+     * @deprecated deprecated since catalog 12.5.6
+     *
+     * @param array $arFields
+     * @param int   $intID
+     *
+     * @return false
+     */
+    public static function PrepareInsert(&$arFields, &$intID)
+    {
+        return false;
+    }
 }

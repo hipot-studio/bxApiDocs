@@ -21,104 +21,99 @@ use Bitrix\Crm\Security\Role\Manage\Entity\WebForm;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Add;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Automation;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Delete;
-use Bitrix\Crm\Security\Role\Manage\Permissions\MyCardView;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Export;
 use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Import;
+use Bitrix\Crm\Security\Role\Manage\Permissions\MyCardView;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Read;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Write;
 use Bitrix\Crm\Traits\Singleton;
 
-class EntitiesBuilder
+class entitiesbuilder
 {
-	use Singleton;
+    use Singleton;
 
-	private ?array $entities = null;
+    private ?array $entities = null;
 
-	/**
-	 * @return PermissionEntity[]
-	 */
-	public function entities(): array
-	{
-		if ($this->entities === null)
-		{
-			$this->entities = self::allEntities();
-		}
+    /**
+     * @return PermissionEntity[]
+     */
+    public function entities(): array
+    {
+        if (null === $this->entities) {
+            $this->entities = self::allEntities();
+        }
 
-		return $this->entities;
-	}
+        return $this->entities;
+    }
 
-	public function getEntityNamesWithPermissionClass(DefaultPermission $defaultPermission): array
-	{
-		$result = [];
+    public function getEntityNamesWithPermissionClass(DefaultPermission $defaultPermission): array
+    {
+        $result = [];
 
-		$entities = $this->create();
-		foreach ($entities as $entity)
-		{
-			$permissions = $entity->permissions();
-			foreach ($permissions as $permission)
-			{
-				if ($permission::class === $defaultPermission->getPermissionClass())
-				{
-					$result[] = $entity->code();
-					break;
-				}
-			}
-		}
+        $entities = $this->create();
+        foreach ($entities as $entity) {
+            $permissions = $entity->permissions();
+            foreach ($permissions as $permission) {
+                if ($permission::class === $defaultPermission->getPermissionClass()) {
+                    $result[] = $entity->code();
 
-		return $result;
-	}
+                    break;
+                }
+            }
+        }
 
-	/**
-	 * @return EntityDTO[]
-	 */
-	public function create(): array
-	{
-		$result = [];
-		foreach ($this->entities() as $permEntity)
-		{
-			foreach ($permEntity->make() as $entity)
-			{
-				$result[] = $entity;
-			}
-		}
+        return $result;
+    }
 
-		return $result;
-	}
+    /**
+     * @return EntityDTO[]
+     */
+    public function create(): array
+    {
+        $result = [];
+        foreach ($this->entities() as $permEntity) {
+            foreach ($permEntity->make() as $entity) {
+                $result[] = $entity;
+            }
+        }
 
-	public static function allEntities(): array
-	{
-		return [
-			new Contact(),
-			new Company(),
-			new Deal(),
-			new Lead(),
-			new Quote(),
-			new OldInvoice(),
-			new SmartInvoice(),
-			new Order(),
-			new WebForm(),
-			new Button(),
-			new SaleTarget(),
-			new Exclusion(),
-			new DynamicItem(),
-		];
-	}
+        return $result;
+    }
 
-	public static function allPermissions(): array
-	{
-		return [
-			new Read([]),
-			new Add([]),
-			new Write([]),
-			new Delete([]),
-			new Export([]),
-			new Import([]),
-			new Automation([]),
-			new HideSum([]),
-			new MyCardView([]),
-			new Transition([]),
-		];
-	}
+    public static function allEntities(): array
+    {
+        return [
+            new Contact(),
+            new Company(),
+            new Deal(),
+            new Lead(),
+            new Quote(),
+            new OldInvoice(),
+            new SmartInvoice(),
+            new Order(),
+            new WebForm(),
+            new Button(),
+            new SaleTarget(),
+            new Exclusion(),
+            new DynamicItem(),
+        ];
+    }
+
+    public static function allPermissions(): array
+    {
+        return [
+            new Read([]),
+            new Add([]),
+            new Write([]),
+            new Delete([]),
+            new Export([]),
+            new Import([]),
+            new Automation([]),
+            new HideSum([]),
+            new MyCardView([]),
+            new Transition([]),
+        ];
+    }
 }

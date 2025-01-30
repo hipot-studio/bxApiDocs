@@ -2,235 +2,209 @@
 
 namespace Bitrix\Crm\Reservation\EventsHandler;
 
-use Bitrix\Main;
-use Bitrix\Crm;
 use Bitrix\Catalog;
+use Bitrix\Crm;
 use Bitrix\Crm\Service\Sale\BasketService;
 use Bitrix\Crm\Service\Sale\Reservation\ReservationService;
+use Bitrix\Main;
 use Bitrix\Sale;
-use CCrmOwnerType;
-use CCrmSaleHelper;
 
 Main\Localization\Loc::loadLanguageFile(__FILE__);
 
 final class Deal
 {
-	private static $isProcessInventoryManagementExecuting = false;
-	private static $isReservationAfterCrmDealProductRowsSave = true;
+    private static $isProcessInventoryManagementExecuting = false;
+    private static $isReservationAfterCrmDealProductRowsSave = true;
 
-	/**
-	 * Enable process reservation product rows on event `OnAfterCrmDealProductRowsSave`.
-	 *
-	 * @return void
-	 */
-	public static function enableReservationAfterCrmDealProductRowsSave(): void
-	{
-		self::$isReservationAfterCrmDealProductRowsSave = true;
-	}
+    /**
+     * Enable process reservation product rows on event `OnAfterCrmDealProductRowsSave`.
+     */
+    public static function enableReservationAfterCrmDealProductRowsSave(): void
+    {
+        self::$isReservationAfterCrmDealProductRowsSave = true;
+    }
 
-	/**
-	 * Disable process reservation product rows on event `OnAfterCrmDealProductRowsSave`.
-	 *
-	 * @return void
-	 */
-	public static function disableReservationAfterCrmDealProductRowsSave(): void
-	{
-		self::$isReservationAfterCrmDealProductRowsSave = false;
-	}
+    /**
+     * Disable process reservation product rows on event `OnAfterCrmDealProductRowsSave`.
+     */
+    public static function disableReservationAfterCrmDealProductRowsSave(): void
+    {
+        self::$isReservationAfterCrmDealProductRowsSave = false;
+    }
 
-	/**
-	 * @param array $dealFields
-	 * @return Main\Result
-	 */
-	public static function processInventoryManagement(array $dealFields): Main\Result
-	{
-		$result = new Main\Result();
+    public static function processInventoryManagement(array $dealFields): Main\Result
+    {
+        $result = new Main\Result();
 
-		if (!self::isProcessInventoryManagementAvailable())
-		{
-			return $result;
-		}
+        if (!self::isProcessInventoryManagementAvailable()) {
+            return $result;
+        }
 
-		if (self::$isProcessInventoryManagementExecuting)
-		{
-			$result->setData([
-				'IS_EXECUTING' => self::$isProcessInventoryManagementExecuting,
-			]);
-			return $result;
-		}
+        if (self::$isProcessInventoryManagementExecuting) {
+            $result->setData([
+                'IS_EXECUTING' => self::$isProcessInventoryManagementExecuting,
+            ]);
 
-		$dealId = $dealFields['ID'];
+            return $result;
+        }
 
-		$currentStage = self::getCurrentStage($dealId);
-		$currentSemanticId = \CCrmDeal::GetSemanticID($currentStage);
-		if (
-			empty($currentSemanticId)
-			|| $currentSemanticId === Crm\PhaseSemantics::SUCCESS
-			|| $currentSemanticId === Crm\PhaseSemantics::FAILURE
-		)
-		{
-			return $result;
-		}
+        $dealId = $dealFields['ID'];
 
-		self::$isProcessInventoryManagementExecuting = true;
-		$result = new Main\Result();
-		$result->setData([
-			'IS_EXECUTING' => self::$isProcessInventoryManagementExecuting,
-		]);
+        $currentStage = self::getCurrentStage($dealId);
+        $currentSemanticId = \CCrmDeal::GetSemanticID($currentStage);
+        if (
+            empty($currentSemanticId)
+            || Crm\PhaseSemantics::SUCCESS === $currentSemanticId
+            || Crm\PhaseSemantics::FAILURE === $currentSemanticId
+        ) {
+            return $result;
+        }
 
-		$stageId = $dealFields['STAGE_ID'] ?? '';
-		$semanticId = \CCrmDeal::GetSemanticID($stageId);
+        self::$isProcessInventoryManagementExecuting = true;
+        $result = new Main\Result();
+        $result->setData([
+            'IS_EXECUTING' => self::$isProcessInventoryManagementExecuting,
+        ]);
 
-		$processInventoryManagementResult = null;
-		if ($semanticId === Crm\PhaseSemantics::SUCCESS)
-		{
-			$processInventoryManagementResult = self::ship($dealId);
-			if ($processInventoryManagementResult->isSuccess())
-			{
-				$processInventoryManagementResult = self::unReserve($dealId);
-			}
-		}
-		elseif ($semanticId === Crm\PhaseSemantics::FAILURE)
-		{
-			$processInventoryManagementResult = self::unReserve($dealId);
-		}
+        $stageId = $dealFields['STAGE_ID'] ?? '';
+        $semanticId = \CCrmDeal::GetSemanticID($stageId);
 
-		if ($processInventoryManagementResult && !$processInventoryManagementResult->isSuccess())
-		{
-			Crm\Activity\Provider\StoreDocument::addActivity($dealId);
+        $processInventoryManagementResult = null;
+        if (Crm\PhaseSemantics::SUCCESS === $semanticId) {
+            $processInventoryManagementResult = self::ship($dealId);
+            if ($processInventoryManagementResult->isSuccess()) {
+                $processInventoryManagementResult = self::unReserve($dealId);
+            }
+        } elseif (Crm\PhaseSemantics::FAILURE === $semanticId) {
+            $processInventoryManagementResult = self::unReserve($dealId);
+        }
 
-			$result->addError(
-				new Main\Error(
-					Main\Localization\Loc::getMessage('CRM_RESERVATION_DEAL_CLOSE_ERROR')
-				)
-			);
-		}
+        if ($processInventoryManagementResult && !$processInventoryManagementResult->isSuccess()) {
+            Crm\Activity\Provider\StoreDocument::addActivity($dealId);
 
-		self::$isProcessInventoryManagementExecuting = false;
-		$result->setData([
-			'IS_EXECUTING' => self::$isProcessInventoryManagementExecuting,
-		]);
+            $result->addError(
+                new Main\Error(
+                    Main\Localization\Loc::getMessage('CRM_RESERVATION_DEAL_CLOSE_ERROR')
+                )
+            );
+        }
 
-		return $result;
-	}
+        self::$isProcessInventoryManagementExecuting = false;
+        $result->setData([
+            'IS_EXECUTING' => self::$isProcessInventoryManagementExecuting,
+        ]);
 
-	private static function ship(int $dealId): Main\Result
-	{
-		$entityBuilder = new Crm\Reservation\Entity\EntityBuilder();
-		$entityBuilder->setOwnerTypeId(\CCrmOwnerType::Deal);
-		$entityBuilder->setOwnerId($dealId);
+        return $result;
+    }
 
-		$dealProducts = self::getDealProducts($dealId);
-		$dealProductsToBasketItems = BasketService::getInstance()->getRowIdsToBasketIdsByEntity(CCrmOwnerType::Deal, $dealId);
+    public static function OnAfterCrmDealProductRowsSave(int $dealId)
+    {
+        if (self::$isReservationAfterCrmDealProductRowsSave) {
+            ReservationService::getInstance()->reservationProductsByDeal($dealId);
+        }
+    }
 
-		$basketReservation = new Crm\Reservation\BasketReservation();
-		$basketReservation->addProducts($dealProducts);
-		$reservedProducts = $basketReservation->getReservedProducts();
+    private static function ship(int $dealId): Main\Result
+    {
+        $entityBuilder = new Crm\Reservation\Entity\EntityBuilder();
+        $entityBuilder->setOwnerTypeId(\CCrmOwnerType::Deal);
+        $entityBuilder->setOwnerId($dealId);
 
-		$defaultStore = Catalog\StoreTable::getDefaultStoreId();
-		foreach ($dealProducts as $product)
-		{
-			$reservedProduct = $reservedProducts[$product['ID']] ?? null;
-			$storeId = $reservedProduct ? $reservedProduct['STORE_ID'] : $defaultStore;
+        $dealProducts = self::getDealProducts($dealId);
+        $dealProductsToBasketItems = BasketService::getInstance()->getRowIdsToBasketIdsByEntity(\CCrmOwnerType::Deal, $dealId);
 
-			$basketItemId = null;
-			if ($reservedProduct)
-			{
-				$basketReservationData = Sale\Reservation\Internals\BasketReservationTable::getById(
-					$reservedProduct['RESERVE_ID']
-				)->fetch();
-				if ($basketReservationData)
-				{
-					$basketItemId = $basketReservationData['BASKET_ID'];
-				}
-			}
+        $basketReservation = new Crm\Reservation\BasketReservation();
+        $basketReservation->addProducts($dealProducts);
+        $reservedProducts = $basketReservation->getReservedProducts();
 
-			if (!$basketItemId && isset($dealProductsToBasketItems[$product['ID']]))
-			{
-				$basketItemId = $dealProductsToBasketItems[$product['ID']];
-			}
+        $defaultStore = Catalog\StoreTable::getDefaultStoreId();
+        foreach ($dealProducts as $product) {
+            $reservedProduct = $reservedProducts[$product['ID']] ?? null;
+            $storeId = $reservedProduct ? $reservedProduct['STORE_ID'] : $defaultStore;
 
-			$xmlId = null;
-			if ($basketItemId)
-			{
-				$basketItem = Sale\Repository\BasketItemRepository::getInstance()->getById($basketItemId);
-				if ($basketItem)
-				{
-					$xmlId = $basketItem->getField('XML_ID');
-				}
-			}
+            $basketItemId = null;
+            if ($reservedProduct) {
+                $basketReservationData = Sale\Reservation\Internals\BasketReservationTable::getById(
+                    $reservedProduct['RESERVE_ID']
+                )->fetch();
+                if ($basketReservationData) {
+                    $basketItemId = $basketReservationData['BASKET_ID'];
+                }
+            }
 
-			$entityBuilder->addProduct(
-				new Crm\Reservation\Product($product['ID'], $product['QUANTITY'], $storeId, $xmlId)
-			);
-		}
+            if (!$basketItemId && isset($dealProductsToBasketItems[$product['ID']])) {
+                $basketItemId = $dealProductsToBasketItems[$product['ID']];
+            }
 
-		$entity = $entityBuilder->build();
+            $xmlId = null;
+            if ($basketItemId) {
+                $basketItem = Sale\Repository\BasketItemRepository::getInstance()->getById($basketItemId);
+                if ($basketItem) {
+                    $xmlId = $basketItem->getField('XML_ID');
+                }
+            }
 
-		return (new Crm\Reservation\Manager($entity))->ship();
-	}
+            $entityBuilder->addProduct(
+                new Crm\Reservation\Product($product['ID'], $product['QUANTITY'], $storeId, $xmlId)
+            );
+        }
 
-	private static function unReserve(int $dealId): Main\Result
-	{
-		$entityBuilder = new Crm\Reservation\Entity\EntityBuilder();
-		$entityBuilder
-			->setOwnerTypeId(\CCrmOwnerType::Deal)
-			->setOwnerId($dealId)
-		;
+        $entity = $entityBuilder->build();
 
-		$entity = $entityBuilder->build();
+        return (new Crm\Reservation\Manager($entity))->ship();
+    }
 
-		return (new Crm\Reservation\Manager($entity))->unReserve();
-	}
+    private static function unReserve(int $dealId): Main\Result
+    {
+        $entityBuilder = new Crm\Reservation\Entity\EntityBuilder();
+        $entityBuilder
+            ->setOwnerTypeId(\CCrmOwnerType::Deal)
+            ->setOwnerId($dealId)
+        ;
 
-	private static function isUsedInventoryManagement(): bool
-	{
-		if (Main\Loader::includeModule('catalog'))
-		{
-			return Catalog\Config\State::isUsedInventoryManagement();
-		}
+        $entity = $entityBuilder->build();
 
-		return false;
-	}
+        return (new Crm\Reservation\Manager($entity))->unReserve();
+    }
 
-	private static function isInventoryManagementIntegrationRestricted(): bool
-	{
-		return !Crm\Restriction\RestrictionManager::getInventoryControlIntegrationRestriction()->hasPermission();
-	}
+    private static function isUsedInventoryManagement(): bool
+    {
+        if (Main\Loader::includeModule('catalog')) {
+            return Catalog\Config\State::isUsedInventoryManagement();
+        }
 
-	private static function getDealProducts(int $dealId): array
-	{
-		$dealProducts = [];
+        return false;
+    }
 
-		foreach (\CCrmDeal::LoadProductRows($dealId) as $dealProduct)
-		{
-			$dealProducts[$dealProduct['ID']] = $dealProduct;
-		}
+    private static function isInventoryManagementIntegrationRestricted(): bool
+    {
+        return !Crm\Restriction\RestrictionManager::getInventoryControlIntegrationRestriction()->hasPermission();
+    }
 
-		return $dealProducts;
-	}
+    private static function getDealProducts(int $dealId): array
+    {
+        $dealProducts = [];
 
-	private static function getCurrentStage(int $dealId): string
-	{
-		$deal = \CCrmDeal::GetByID($dealId, false);
-		return $deal['STAGE_ID'] ?? '';
-	}
+        foreach (\CCrmDeal::LoadProductRows($dealId) as $dealProduct) {
+            $dealProducts[$dealProduct['ID']] = $dealProduct;
+        }
 
-	private static function isProcessInventoryManagementAvailable(): bool
-	{
-		return (
-			self::isUsedInventoryManagement()
-			&& !self::isInventoryManagementIntegrationRestricted()
-			&& Crm\Settings\LayoutSettings::getCurrent()->isSliderEnabled()
-			&& !\CCrmSaleHelper::isWithOrdersMode()
-		);
-	}
+        return $dealProducts;
+    }
 
-	public static function OnAfterCrmDealProductRowsSave(int $dealId)
-	{
-		if (self::$isReservationAfterCrmDealProductRowsSave)
-		{
-			ReservationService::getInstance()->reservationProductsByDeal($dealId);
-		}
-	}
+    private static function getCurrentStage(int $dealId): string
+    {
+        $deal = \CCrmDeal::GetByID($dealId, false);
+
+        return $deal['STAGE_ID'] ?? '';
+    }
+
+    private static function isProcessInventoryManagementAvailable(): bool
+    {
+        return
+            self::isUsedInventoryManagement()
+            && !self::isInventoryManagementIntegrationRestricted()
+            && Crm\Settings\LayoutSettings::getCurrent()->isSliderEnabled()
+            && !\CCrmSaleHelper::isWithOrdersMode();
+    }
 }

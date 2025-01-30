@@ -1,146 +1,149 @@
-<?
-class CCatalogDiscountConvertTmp
+<?php
+
+class discount_convert
 {
-	public static $strTableName = 'b_catalog_dsc_tmp';
-	public static $strMainTableName = 'b_catalog_discount';
-	public static $boolError = false;
-	public static $arErrors = false;
+    public static $strTableName = 'b_catalog_dsc_tmp';
+    public static $strMainTableName = 'b_catalog_discount';
+    public static $boolError = false;
+    public static $arErrors = false;
 
-	public static function CreateTable()
-	{
-		global $DB;
+    public static function CreateTable()
+    {
+        global $DB;
 
-		if (self::$boolError)
-			return false;
+        if (self::$boolError) {
+            return false;
+        }
 
-		$strSql = "SHOW TABLES LIKE '".$DB->ForSql(self::$strTableName)."'";
-		$dbResult = $DB->Query($strSql);
-		if (!($arResult = $dbResult->Fetch()))
-		{
-			$strSql = "CREATE TABLE ".self::$strTableName." (
+        $strSql = "SHOW TABLES LIKE '".$DB->ForSql(self::$strTableName)."'";
+        $dbResult = $DB->Query($strSql);
+        if (!($arResult = $dbResult->Fetch())) {
+            $strSql = 'CREATE TABLE '.self::$strTableName.' (
 						ID INT NOT NULL,
 						PRIMARY KEY (ID)
-						)";
-			$result = $DB->Query($strSql, true);
+						)';
+            $result = $DB->Query($strSql, true);
 
-			if (!$result)
-			{
-				self::$boolError = true;
-				if (!is_array(self::$arErrors))
-					self::$arErrors = array();
-				self::$arErrors[] = $DB->db_Error;
-				return false;
-			}
-		}
-		return true;
-	}
+            if (!$result) {
+                self::$boolError = true;
+                if (!is_array(self::$arErrors)) {
+                    self::$arErrors = [];
+                }
+                self::$arErrors[] = $DB->db_Error;
 
-	public static function DropTable()
-	{
-		global $DB;
+                return false;
+            }
+        }
 
-		if (self::$boolError)
-			return false;
+        return true;
+    }
 
-		$strSql = "DROP TABLE IF EXISTS ".self::$strTableName;
-		$result = $DB->Query($strSql, true);
+    public static function DropTable()
+    {
+        global $DB;
 
-		if (!$result)
-		{
-			self::$boolError = true;
-			if (!is_array(self::$arErrors))
-				self::$arErrors = array();
-			self::$arErrors[] = $DB->db_Error;
-			return false;
-		}
-		return true;
-	}
+        if (self::$boolError) {
+            return false;
+        }
 
-	public static function IsExistID($intID)
-	{
-		if (self::$boolError)
-			return false;
+        $strSql = 'DROP TABLE IF EXISTS '.self::$strTableName;
+        $result = $DB->Query($strSql, true);
 
-		$intID = intval($intID);
-		if (0 >= $intID)
-			return false;
+        if (!$result) {
+            self::$boolError = true;
+            if (!is_array(self::$arErrors)) {
+                self::$arErrors = [];
+            }
+            self::$arErrors[] = $DB->db_Error;
 
-		global $DB;
+            return false;
+        }
 
-		$strSql = "SELECT COUNT(ID) as CNT FROM ".self::$strTableName." WHERE ID = ".$intID;
-		$rsCounts = $DB->Query($strSql, true);
-		if ($arCount = $rsCounts->Fetch())
-		{
-			return (0 < intval($arCount['CNT']) ? 1 : 0);
-		}
-		else
-		{
-			return false;
-		}
-	}
+        return true;
+    }
 
-	public static function GetLastID()
-	{
-		if (self::$boolError)
-			return false;
+    public static function IsExistID($intID)
+    {
+        if (self::$boolError) {
+            return false;
+        }
 
-		global $DB;
+        $intID = (int) $intID;
+        if (0 >= $intID) {
+            return false;
+        }
 
-		$strSql = "SELECT ID FROM ".self::$strTableName." WHERE 1 = 1 ORDER BY ID DESC LIMIT 1";
-		$rsLasts = $DB->Query($strSql, true);
-		if ($arLast = $rsLasts->Fetch())
-		{
-			return intval($arLast['ID']);
-		}
-		else
-		{
-			return 0;
-		}
-	}
+        global $DB;
 
-	public static function SetID($intID)
-	{
-		if (self::$boolError)
-			return false;
+        $strSql = 'SELECT COUNT(ID) as CNT FROM '.self::$strTableName.' WHERE ID = '.$intID;
+        $rsCounts = $DB->Query($strSql, true);
+        if ($arCount = $rsCounts->Fetch()) {
+            return 0 < (int) ($arCount['CNT']) ? 1 : 0;
+        }
 
-		$intID = intval($intID);
-		if (0 >= $intID)
-			return false;
+        return false;
+    }
 
-		global $DB;
+    public static function GetLastID()
+    {
+        if (self::$boolError) {
+            return false;
+        }
 
-		$strSql = "INSERT INTO ".self::$strTableName."(ID) VALUES(".$intID.")";
-		$rsRes = $DB->Query($strSql, true);
-		return (!(false === $rsRes));
-	}
+        global $DB;
 
-	public static function GetNeedConvert($intMinProduct)
-	{
-		if (self::$boolError)
-			return false;
+        $strSql = 'SELECT ID FROM '.self::$strTableName.' WHERE 1 = 1 ORDER BY ID DESC LIMIT 1';
+        $rsLasts = $DB->Query($strSql, true);
+        if ($arLast = $rsLasts->Fetch()) {
+            return (int) $arLast['ID'];
+        }
 
-		global $DB;
+        return 0;
+    }
 
-		$intMinProduct = intval($intMinProduct);
-		if (0 >= $intMinProduct)
-			$intMinProduct = 0;
+    public static function SetID($intID)
+    {
+        if (self::$boolError) {
+            return false;
+        }
 
-		$strSql = "SELECT COUNT(CD.ID) as CNT FROM ".self::$strMainTableName." CD WHERE
-			CD.TYPE = ".CCatalogDiscount::ENTITY_ID." AND CD.VERSION = ".CCatalogDiscount::CURRENT_FORMAT."
-			AND CD.ID NOT IN (SELECT CDT.ID FROM ".self::$strTableName." CDT WHERE 1=1)";
-		if (0 < $intMinProduct)
-		{
-			$strSql .= " AND CD.ID > ".$intMinProduct;
-		}
-		$rsCounts = $DB->Query($strSql, true);
-		if ($arCount = $rsCounts->Fetch())
-		{
-			return intval($arCount['CNT']);
-		}
-		else
-		{
-			return false;
-		}
-	}
+        $intID = (int) $intID;
+        if (0 >= $intID) {
+            return false;
+        }
+
+        global $DB;
+
+        $strSql = 'INSERT INTO '.self::$strTableName.'(ID) VALUES('.$intID.')';
+        $rsRes = $DB->Query($strSql, true);
+
+        return !(false === $rsRes);
+    }
+
+    public static function GetNeedConvert($intMinProduct)
+    {
+        if (self::$boolError) {
+            return false;
+        }
+
+        global $DB;
+
+        $intMinProduct = (int) $intMinProduct;
+        if (0 >= $intMinProduct) {
+            $intMinProduct = 0;
+        }
+
+        $strSql = 'SELECT COUNT(CD.ID) as CNT FROM '.self::$strMainTableName.' CD WHERE
+			CD.TYPE = '.CCatalogDiscount::ENTITY_ID.' AND CD.VERSION = '.CCatalogDiscount::CURRENT_FORMAT.'
+			AND CD.ID NOT IN (SELECT CDT.ID FROM '.self::$strTableName.' CDT WHERE 1=1)';
+        if (0 < $intMinProduct) {
+            $strSql .= ' AND CD.ID > '.$intMinProduct;
+        }
+        $rsCounts = $DB->Query($strSql, true);
+        if ($arCount = $rsCounts->Fetch()) {
+            return (int) $arCount['CNT'];
+        }
+
+        return false;
+    }
 }
-?>

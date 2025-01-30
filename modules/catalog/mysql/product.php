@@ -1,292 +1,287 @@
-<?
+<?php
+
 /** @global CMain $APPLICATION */
-use Bitrix\Main,
-	Bitrix\Main\Config\Option,
-	Bitrix\Catalog;
+use Bitrix\Catalog;
+use Bitrix\Main;
+use Bitrix\Main\Config\Option;
 
-require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/catalog/general/product.php");
+require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/catalog/general/product.php';
 
-class CCatalogProduct extends CAllCatalogProduct
+class product extends CAllCatalogProduct
 {
-	/**
-	 * @deprecated deprecated since catalog 17.6.0
-	 * @see Catalog\Model\Product::getList or Catalog\ProductTable::getList
-	 *
-	 * @param array $arOrder
-	 * @param array $arFilter
-	 * @param bool|array $arGroupBy
-	 * @param bool|array $arNavStartParams
-	 * @param array $arSelectFields
-	 * @return bool|CDBResult
-	 */
-	public static function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
-	{
-		global $DB;
+    /**
+     * @deprecated deprecated since catalog 17.6.0
+     * @see Catalog\Model\Product::getList or Catalog\ProductTable::getList
+     *
+     * @param array      $arOrder
+     * @param array      $arFilter
+     * @param array|bool $arGroupBy
+     * @param array|bool $arNavStartParams
+     * @param array      $arSelectFields
+     *
+     * @return bool|CDBResult
+     */
+    public static function GetList($arOrder = [], $arFilter = [], $arGroupBy = false, $arNavStartParams = false, $arSelectFields = [])
+    {
+        global $DB;
 
-		$entityResult = new CCatalogResult('\Bitrix\Catalog\Model\Product');
+        $entityResult = new CCatalogResult('\Bitrix\Catalog\Model\Product');
 
-		if (!is_array($arOrder) && !is_array($arFilter))
-		{
-			$arOrder = (string)$arOrder;
-			$arFilter = (string)$arFilter;
-			$arOrder = ($arOrder != '' && $arFilter != '' ? array($arOrder => $arFilter) : array());
-			$arFilter = (is_array($arGroupBy) ? $arGroupBy : array());
-			$arGroupBy = false;
-		}
+        if (!is_array($arOrder) && !is_array($arFilter)) {
+            $arOrder = (string) $arOrder;
+            $arFilter = (string) $arFilter;
+            $arOrder = ('' !== $arOrder && '' !== $arFilter ? [$arOrder => $arFilter] : []);
+            $arFilter = (is_array($arGroupBy) ? $arGroupBy : []);
+            $arGroupBy = false;
+        }
 
-		$defaultQuantityTrace = ((string)Option::get('catalog', 'default_quantity_trace') == 'Y' ? 'Y' : 'N');
-		$defaultCanBuyZero = ((string)Option::get('catalog', 'default_can_buy_zero') == 'Y' ? 'Y' : 'N');
-		$defaultNegativeAmount = ((string)Option::get('catalog', 'allow_negative_amount') == 'Y' ? 'Y' : 'N');
-		$defaultSubscribe = ((string)Option::get('catalog', 'default_subscribe') == 'N' ? 'N' : 'Y');
+        $defaultQuantityTrace = ('Y' === (string) Option::get('catalog', 'default_quantity_trace') ? 'Y' : 'N');
+        $defaultCanBuyZero = ('Y' === (string) Option::get('catalog', 'default_can_buy_zero') ? 'Y' : 'N');
+        $defaultNegativeAmount = ('Y' === (string) Option::get('catalog', 'allow_negative_amount') ? 'Y' : 'N');
+        $defaultSubscribe = ('N' === (string) Option::get('catalog', 'default_subscribe') ? 'N' : 'Y');
 
-		$arFields = array(
-			"ID" => array("FIELD" => "CP.ID", "TYPE" => "int"),
-			"QUANTITY" => array("FIELD" => "CP.QUANTITY", "TYPE" => "double"),
-			"QUANTITY_RESERVED" => array("FIELD" => "CP.QUANTITY_RESERVED", "TYPE" => "double"),
-			"QUANTITY_TRACE_ORIG" => array("FIELD" => "CP.QUANTITY_TRACE", "TYPE" => "char"),
-			"CAN_BUY_ZERO_ORIG" => array("FIELD" => "CP.CAN_BUY_ZERO", "TYPE" => "char"),
-			"NEGATIVE_AMOUNT_TRACE_ORIG" => array("FIELD" => "CP.NEGATIVE_AMOUNT_TRACE", "TYPE" => "char"),
-			"QUANTITY_TRACE" => array("FIELD" => "IF (CP.QUANTITY_TRACE = 'D', '".$defaultQuantityTrace."', CP.QUANTITY_TRACE)", "TYPE" => "char"),
-			"CAN_BUY_ZERO" => array("FIELD" => "IF (CP.CAN_BUY_ZERO = 'D', '".$defaultCanBuyZero."', CP.CAN_BUY_ZERO)", "TYPE" => "char"),
-			"NEGATIVE_AMOUNT_TRACE" => array("FIELD" => "IF (CP.NEGATIVE_AMOUNT_TRACE = 'D', '".$defaultNegativeAmount."', CP.NEGATIVE_AMOUNT_TRACE)", "TYPE" => "char"),
-			"SUBSCRIBE_ORIG" => array("FIELD" => "CP.SUBSCRIBE", "TYPE" => "char"),
-			"SUBSCRIBE" => array("FIELD" => "IF (CP.SUBSCRIBE = 'D', '".$defaultSubscribe."', CP.SUBSCRIBE)", "TYPE" => "char"),
-			"AVAILABLE" => array("FIELD" => "CP.AVAILABLE", "TYPE" => "char"),
-			"BUNDLE" => array("FIELD" => "CP.BUNDLE", "TYPE" => "char"),
-			"WEIGHT" => array("FIELD" => "CP.WEIGHT", "TYPE" => "double"),
-			"WIDTH" => array("FIELD" => "CP.WIDTH", "TYPE" => "double"),
-			"LENGTH" => array("FIELD" => "CP.LENGTH", "TYPE" => "double"),
-			"HEIGHT" => array("FIELD" => "CP.HEIGHT", "TYPE" => "double"),
-			"TIMESTAMP_X" => array("FIELD" => "CP.TIMESTAMP_X", "TYPE" => "datetime"),
-			"PRICE_TYPE" => array("FIELD" => "CP.PRICE_TYPE", "TYPE" => "char"),
-			"RECUR_SCHEME_TYPE" => array("FIELD" => "CP.RECUR_SCHEME_TYPE", "TYPE" => "char"),
-			"RECUR_SCHEME_LENGTH" => array("FIELD" => "CP.RECUR_SCHEME_LENGTH", "TYPE" => "int"),
-			"TRIAL_PRICE_ID" => array("FIELD" => "CP.TRIAL_PRICE_ID", "TYPE" => "int"),
-			"WITHOUT_ORDER" => array("FIELD" => "CP.WITHOUT_ORDER", "TYPE" => "char"),
-			"SELECT_BEST_PRICE" => array("FIELD" => "CP.SELECT_BEST_PRICE", "TYPE" => "char"),
-			"VAT_ID" => array("FIELD" => "CP.VAT_ID", "TYPE" => "int"),
-			"VAT_INCLUDED" => array("FIELD" => "CP.VAT_INCLUDED", "TYPE" => "char"),
-			"TMP_ID" => array("FIELD" => "CP.TMP_ID", "TYPE" => "char"),
-			"PURCHASING_PRICE" => array("FIELD" => "CP.PURCHASING_PRICE", "TYPE" => "double"),
-			"PURCHASING_CURRENCY" => array("FIELD" => "CP.PURCHASING_CURRENCY", "TYPE" => "string"),
-			"BARCODE_MULTI" => array("FIELD" => "CP.BARCODE_MULTI", "TYPE" => "char"),
-			"MEASURE" => array("FIELD" => "CP.MEASURE", "TYPE" => "int"),
-			"TYPE" => array("FIELD" => "CP.TYPE", "TYPE" => "int"),
-			"ELEMENT_IBLOCK_ID" => array("FIELD" => "I.IBLOCK_ID", "TYPE" => "int", "FROM" => "INNER JOIN b_iblock_element I ON (CP.ID = I.ID)"),
-			"ELEMENT_XML_ID" => array("FIELD" => "I.XML_ID", "TYPE" => "string", "FROM" => "INNER JOIN b_iblock_element I ON (CP.ID = I.ID)"),
-			"ELEMENT_NAME" => array("FIELD" => "I.NAME", "TYPE" => "string", "FROM" => "INNER JOIN b_iblock_element I ON (CP.ID = I.ID)")
-		);
+        $arFields = [
+            'ID' => ['FIELD' => 'CP.ID', 'TYPE' => 'int'],
+            'QUANTITY' => ['FIELD' => 'CP.QUANTITY', 'TYPE' => 'double'],
+            'QUANTITY_RESERVED' => ['FIELD' => 'CP.QUANTITY_RESERVED', 'TYPE' => 'double'],
+            'QUANTITY_TRACE_ORIG' => ['FIELD' => 'CP.QUANTITY_TRACE', 'TYPE' => 'char'],
+            'CAN_BUY_ZERO_ORIG' => ['FIELD' => 'CP.CAN_BUY_ZERO', 'TYPE' => 'char'],
+            'NEGATIVE_AMOUNT_TRACE_ORIG' => ['FIELD' => 'CP.NEGATIVE_AMOUNT_TRACE', 'TYPE' => 'char'],
+            'QUANTITY_TRACE' => ['FIELD' => "IF (CP.QUANTITY_TRACE = 'D', '".$defaultQuantityTrace."', CP.QUANTITY_TRACE)", 'TYPE' => 'char'],
+            'CAN_BUY_ZERO' => ['FIELD' => "IF (CP.CAN_BUY_ZERO = 'D', '".$defaultCanBuyZero."', CP.CAN_BUY_ZERO)", 'TYPE' => 'char'],
+            'NEGATIVE_AMOUNT_TRACE' => ['FIELD' => "IF (CP.NEGATIVE_AMOUNT_TRACE = 'D', '".$defaultNegativeAmount."', CP.NEGATIVE_AMOUNT_TRACE)", 'TYPE' => 'char'],
+            'SUBSCRIBE_ORIG' => ['FIELD' => 'CP.SUBSCRIBE', 'TYPE' => 'char'],
+            'SUBSCRIBE' => ['FIELD' => "IF (CP.SUBSCRIBE = 'D', '".$defaultSubscribe."', CP.SUBSCRIBE)", 'TYPE' => 'char'],
+            'AVAILABLE' => ['FIELD' => 'CP.AVAILABLE', 'TYPE' => 'char'],
+            'BUNDLE' => ['FIELD' => 'CP.BUNDLE', 'TYPE' => 'char'],
+            'WEIGHT' => ['FIELD' => 'CP.WEIGHT', 'TYPE' => 'double'],
+            'WIDTH' => ['FIELD' => 'CP.WIDTH', 'TYPE' => 'double'],
+            'LENGTH' => ['FIELD' => 'CP.LENGTH', 'TYPE' => 'double'],
+            'HEIGHT' => ['FIELD' => 'CP.HEIGHT', 'TYPE' => 'double'],
+            'TIMESTAMP_X' => ['FIELD' => 'CP.TIMESTAMP_X', 'TYPE' => 'datetime'],
+            'PRICE_TYPE' => ['FIELD' => 'CP.PRICE_TYPE', 'TYPE' => 'char'],
+            'RECUR_SCHEME_TYPE' => ['FIELD' => 'CP.RECUR_SCHEME_TYPE', 'TYPE' => 'char'],
+            'RECUR_SCHEME_LENGTH' => ['FIELD' => 'CP.RECUR_SCHEME_LENGTH', 'TYPE' => 'int'],
+            'TRIAL_PRICE_ID' => ['FIELD' => 'CP.TRIAL_PRICE_ID', 'TYPE' => 'int'],
+            'WITHOUT_ORDER' => ['FIELD' => 'CP.WITHOUT_ORDER', 'TYPE' => 'char'],
+            'SELECT_BEST_PRICE' => ['FIELD' => 'CP.SELECT_BEST_PRICE', 'TYPE' => 'char'],
+            'VAT_ID' => ['FIELD' => 'CP.VAT_ID', 'TYPE' => 'int'],
+            'VAT_INCLUDED' => ['FIELD' => 'CP.VAT_INCLUDED', 'TYPE' => 'char'],
+            'TMP_ID' => ['FIELD' => 'CP.TMP_ID', 'TYPE' => 'char'],
+            'PURCHASING_PRICE' => ['FIELD' => 'CP.PURCHASING_PRICE', 'TYPE' => 'double'],
+            'PURCHASING_CURRENCY' => ['FIELD' => 'CP.PURCHASING_CURRENCY', 'TYPE' => 'string'],
+            'BARCODE_MULTI' => ['FIELD' => 'CP.BARCODE_MULTI', 'TYPE' => 'char'],
+            'MEASURE' => ['FIELD' => 'CP.MEASURE', 'TYPE' => 'int'],
+            'TYPE' => ['FIELD' => 'CP.TYPE', 'TYPE' => 'int'],
+            'ELEMENT_IBLOCK_ID' => ['FIELD' => 'I.IBLOCK_ID', 'TYPE' => 'int', 'FROM' => 'INNER JOIN b_iblock_element I ON (CP.ID = I.ID)'],
+            'ELEMENT_XML_ID' => ['FIELD' => 'I.XML_ID', 'TYPE' => 'string', 'FROM' => 'INNER JOIN b_iblock_element I ON (CP.ID = I.ID)'],
+            'ELEMENT_NAME' => ['FIELD' => 'I.NAME', 'TYPE' => 'string', 'FROM' => 'INNER JOIN b_iblock_element I ON (CP.ID = I.ID)'],
+        ];
 
-		$arSelectFields = $entityResult->prepareSelect($arSelectFields);
+        $arSelectFields = $entityResult->prepareSelect($arSelectFields);
 
-		$arSqls = CCatalog::PrepareSql($arFields, $arOrder, $arFilter, $arGroupBy, $arSelectFields);
+        $arSqls = CCatalog::PrepareSql($arFields, $arOrder, $arFilter, $arGroupBy, $arSelectFields);
 
-		$arSqls["SELECT"] = str_replace("%%_DISTINCT_%%", "", $arSqls["SELECT"]);
+        $arSqls['SELECT'] = str_replace('%%_DISTINCT_%%', '', $arSqls['SELECT']);
 
-		if (empty($arGroupBy) && is_array($arGroupBy))
-		{
-			$strSql = "SELECT ".$arSqls["SELECT"]." FROM b_catalog_product CP ".$arSqls["FROM"];
-			if (!empty($arSqls["WHERE"]))
-				$strSql .= " WHERE ".$arSqls["WHERE"];
-			if (!empty($arSqls["GROUPBY"]))
-				$strSql .= " GROUP BY ".$arSqls["GROUPBY"];
+        if (empty($arGroupBy) && is_array($arGroupBy)) {
+            $strSql = 'SELECT '.$arSqls['SELECT'].' FROM b_catalog_product CP '.$arSqls['FROM'];
+            if (!empty($arSqls['WHERE'])) {
+                $strSql .= ' WHERE '.$arSqls['WHERE'];
+            }
+            if (!empty($arSqls['GROUPBY'])) {
+                $strSql .= ' GROUP BY '.$arSqls['GROUPBY'];
+            }
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-			if ($arRes = $dbRes->Fetch())
-				return $arRes["CNT"];
-			else
-				return false;
-		}
+            $dbRes = $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+            if ($arRes = $dbRes->Fetch()) {
+                return $arRes['CNT'];
+            }
 
-		$strSql = "SELECT ".$arSqls["SELECT"]." FROM b_catalog_product CP ".$arSqls["FROM"];
-		if (!empty($arSqls["WHERE"]))
-			$strSql .= " WHERE ".$arSqls["WHERE"];
-		if (!empty($arSqls["GROUPBY"]))
-			$strSql .= " GROUP BY ".$arSqls["GROUPBY"];
-		if (!empty($arSqls["ORDERBY"]))
-			$strSql .= " ORDER BY ".$arSqls["ORDERBY"];
+            return false;
+        }
 
-		$intTopCount = 0;
-		$boolNavStartParams = (!empty($arNavStartParams) && is_array($arNavStartParams));
-		if ($boolNavStartParams && isset($arNavStartParams['nTopCount']))
-			$intTopCount = (int)$arNavStartParams['nTopCount'];
+        $strSql = 'SELECT '.$arSqls['SELECT'].' FROM b_catalog_product CP '.$arSqls['FROM'];
+        if (!empty($arSqls['WHERE'])) {
+            $strSql .= ' WHERE '.$arSqls['WHERE'];
+        }
+        if (!empty($arSqls['GROUPBY'])) {
+            $strSql .= ' GROUP BY '.$arSqls['GROUPBY'];
+        }
+        if (!empty($arSqls['ORDERBY'])) {
+            $strSql .= ' ORDER BY '.$arSqls['ORDERBY'];
+        }
 
-		if ($boolNavStartParams && $intTopCount <= 0)
-		{
-			$strSql_tmp = "SELECT COUNT('x') as CNT FROM b_catalog_product CP ".$arSqls["FROM"];
-			if (!empty($arSqls["WHERE"]))
-				$strSql_tmp .= " WHERE ".$arSqls["WHERE"];
-			if (!empty($arSqls["GROUPBY"]))
-				$strSql_tmp .= " GROUP BY ".$arSqls["GROUPBY"];
+        $intTopCount = 0;
+        $boolNavStartParams = (!empty($arNavStartParams) && is_array($arNavStartParams));
+        if ($boolNavStartParams && isset($arNavStartParams['nTopCount'])) {
+            $intTopCount = (int) $arNavStartParams['nTopCount'];
+        }
 
-			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-			$cnt = 0;
-			if (empty($arSqls["GROUPBY"]))
-			{
-				if ($arRes = $dbRes->Fetch())
-					$cnt = $arRes["CNT"];
-			}
-			else
-			{
-				$cnt = $dbRes->SelectedRowsCount();
-			}
+        if ($boolNavStartParams && $intTopCount <= 0) {
+            $strSql_tmp = "SELECT COUNT('x') as CNT FROM b_catalog_product CP ".$arSqls['FROM'];
+            if (!empty($arSqls['WHERE'])) {
+                $strSql_tmp .= ' WHERE '.$arSqls['WHERE'];
+            }
+            if (!empty($arSqls['GROUPBY'])) {
+                $strSql_tmp .= ' GROUP BY '.$arSqls['GROUPBY'];
+            }
 
-			$dbRes = new CDBResult();
-			$dbRes->NavQuery($strSql, $cnt, $arNavStartParams);
-		}
-		else
-		{
-			if ($boolNavStartParams && $intTopCount > 0)
-				$strSql .= " LIMIT ".$intTopCount;
+            $dbRes = $DB->Query($strSql_tmp, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+            $cnt = 0;
+            if (empty($arSqls['GROUPBY'])) {
+                if ($arRes = $dbRes->Fetch()) {
+                    $cnt = $arRes['CNT'];
+                }
+            } else {
+                $cnt = $dbRes->SelectedRowsCount();
+            }
 
-			$entityResult->setResult($DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__));
+            $dbRes = new CDBResult();
+            $dbRes->NavQuery($strSql, $cnt, $arNavStartParams);
+        } else {
+            if ($boolNavStartParams && $intTopCount > 0) {
+                $strSql .= ' LIMIT '.$intTopCount;
+            }
 
-			$dbRes = $entityResult;
-		}
+            $entityResult->setResult($DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__));
 
-		return $dbRes;
-	}
+            $dbRes = $entityResult;
+        }
 
-	/**
-	* @deprecated deprecated since catalog 8.5.1
-	* @see CCatalogProduct::GetList()
-	 *
-	 * @param array $arOrder
-	 * @param array $arFilter
-	 *
-	 * @return false
-	 *
-	*/
-	public static function GetListEx($arOrder=array("SORT"=>"ASC"), $arFilter=array())
-	{
-		return false;
-	}
+        return $dbRes;
+    }
 
-	/**
-	 * @deprecated deprecated since catalog 17.6.3
-	 * @see CCatalogProduct::GetVATDataByID
-	 *
-	 * @param int $PRODUCT_ID
-	 * @return false|CDBResult
-	 */
-	public static function GetVATInfo($PRODUCT_ID)
-	{
-		$vat = self::GetVATDataByID($PRODUCT_ID);
-		if (empty($vat))
-			$vat = [];
-		else
-			$vat = [0 => $vat];
-		$result = new CDBResult();
-		$result->InitFromArray($vat);
-		unset($vat);
+    /**
+     * @deprecated deprecated since catalog 8.5.1
+     * @see CCatalogProduct::GetList()
+     *
+     * @param array $arOrder
+     * @param array $arFilter
+     *
+     * @return false
+     */
+    public static function GetListEx($arOrder = ['SORT' => 'ASC'], $arFilter = [])
+    {
+        return false;
+    }
 
-		return $result;
-	}
+    /**
+     * @deprecated deprecated since catalog 17.6.3
+     * @see CCatalogProduct::GetVATDataByID
+     *
+     * @param int $PRODUCT_ID
+     *
+     * @return CDBResult|false
+     */
+    public static function GetVATInfo($PRODUCT_ID)
+    {
+        $vat = self::GetVATDataByID($PRODUCT_ID);
+        if (empty($vat)) {
+            $vat = [];
+        } else {
+            $vat = [0 => $vat];
+        }
+        $result = new CDBResult();
+        $result->InitFromArray($vat);
+        unset($vat);
 
-	/**
-	 * @param array $list
-	 *
-	 * @return array
-	 */
-	public static function GetVATDataByIDList(array $list): array
-	{
-		$output = [];
-		if (empty($list))
-			return $output;
-		Main\Type\Collection::normalizeArrayValuesByInt($list, true);
-		if (empty($list))
-			return $output;
-		return self::loadVatInfoFromDB($list);
-	}
+        return $result;
+    }
 
-	/**
-	 * @param $id
-	 *
-	 * @return false|array
-	 */
-	public static function GetVATDataByID($id)
-	{
-		$id = (int)$id;
-		if ($id <= 0)
-			return false;
-		$result = self::loadVatInfoFromDB([$id]);
-		return ($result[$id] ?? false);
-	}
+    public static function GetVATDataByIDList(array $list): array
+    {
+        $output = [];
+        if (empty($list)) {
+            return $output;
+        }
+        Main\Type\Collection::normalizeArrayValuesByInt($list, true);
+        if (empty($list)) {
+            return $output;
+        }
 
-	/**
-	 * @param array $list
-	 *
-	 * @return array
-	 */
-	private static function loadVatInfoFromDB(array $list): array
-	{
-		$result = array_fill_keys($list, false);
-		$ids = [];
-		foreach ($list as $id)
-		{
-			if (isset(static::$vatCache[$id]))
-			{
-				$result[$id] = static::$vatCache[$id];
-			}
-			else
-			{
-				$ids[] = $id;
-				static::$vatCache[$id] = false;
-			}
-		}
-		if (!empty($ids))
-		{
-			$conn = Main\Application::getConnection();
-			$iterator = $conn->query(
-				"
+        return self::loadVatInfoFromDB($list);
+    }
+
+    /**
+     * @return array|false
+     */
+    public static function GetVATDataByID($id)
+    {
+        $id = (int) $id;
+        if ($id <= 0) {
+            return false;
+        }
+        $result = self::loadVatInfoFromDB([$id]);
+
+        return $result[$id] ?? false;
+    }
+
+    /**
+     * @deprecated deprecated since catalog 17.6.0
+     * @see Catalog\Model\Product::update
+     *
+     * @param int $intID
+     * @param int $intTypeID
+     *
+     * @return bool
+     */
+    public static function SetProductType($intID, $intTypeID)
+    {
+        $intID = (int) $intID;
+        if ($intID <= 0) {
+            return false;
+        }
+        $intTypeID = (int) $intTypeID;
+        if (Catalog\ProductTable::TYPE_PRODUCT !== $intTypeID && Catalog\ProductTable::TYPE_SET !== $intTypeID) {
+            return false;
+        }
+
+        $result = Catalog\Model\Product::update($intID, ['TYPE' => $intTypeID]);
+
+        return $result->isSuccess();
+    }
+
+    private static function loadVatInfoFromDB(array $list): array
+    {
+        $result = array_fill_keys($list, false);
+        $ids = [];
+        foreach ($list as $id) {
+            if (isset(static::$vatCache[$id])) {
+                $result[$id] = static::$vatCache[$id];
+            } else {
+                $ids[] = $id;
+                static::$vatCache[$id] = false;
+            }
+        }
+        if (!empty($ids)) {
+            $conn = Main\Application::getConnection();
+            $iterator = $conn->query(
+                '
 	select CAT_PR.ID as PRODUCT_ID, CAT_VAT.*, CAT_PR.VAT_INCLUDED
 	from b_catalog_product CAT_PR
 	left join b_iblock_element BE on (BE.ID = CAT_PR.ID)
 	left join b_catalog_iblock CAT_IB on ((CAT_PR.VAT_ID is null or CAT_PR.VAT_ID = 0) and CAT_IB.IBLOCK_ID = BE.IBLOCK_ID)
 	left join b_catalog_vat CAT_VAT on (CAT_VAT.ID = IF((CAT_PR.VAT_ID is null or CAT_PR.VAT_ID = 0), CAT_IB.VAT_ID, CAT_PR.VAT_ID))
-	where CAT_PR.ID in (".implode(', ', $ids).")
+	where CAT_PR.ID in ('.implode(', ', $ids).")
 	and CAT_VAT.ACTIVE='Y'
 	"
-			);
-			while ($row = $iterator->fetch())
-			{
-				$productId = (int)$row['PRODUCT_ID'];
-				if (isset($row['TIMESTAMP_X']) && $row['TIMESTAMP_X'] instanceof Main\Type\DateTime)
-				{
-					$row['TIMESTAMP_X'] = $row['TIMESTAMP_X']->toString();
-				}
-				if ($row['RATE'] !== null)
-				{
-					$row['RATE'] = (float)$row['RATE'];
-				}
-				static::$vatCache[$productId] = $row;
-				$result[$productId] = $row;
-			}
-			unset($productId, $row, $iterator);
-			unset($conn);
-		}
-		unset($ids);
+            );
+            while ($row = $iterator->fetch()) {
+                $productId = (int) $row['PRODUCT_ID'];
+                if (isset($row['TIMESTAMP_X']) && $row['TIMESTAMP_X'] instanceof Main\Type\DateTime) {
+                    $row['TIMESTAMP_X'] = $row['TIMESTAMP_X']->toString();
+                }
+                if (null !== $row['RATE']) {
+                    $row['RATE'] = (float) $row['RATE'];
+                }
+                static::$vatCache[$productId] = $row;
+                $result[$productId] = $row;
+            }
+            unset($productId, $row, $iterator, $conn);
+        }
+        unset($ids);
 
-		return $result;
-	}
-
-	/**
-	 * @deprecated deprecated since catalog 17.6.0
-	 * @see Catalog\Model\Product::update
-	 * @param int $intID
-	 * @param int $intTypeID
-	 * @return bool
-	 */
-	public static function SetProductType($intID, $intTypeID)
-	{
-		$intID = (int)$intID;
-		if ($intID <= 0)
-			return false;
-		$intTypeID = (int)$intTypeID;
-		if ($intTypeID != Catalog\ProductTable::TYPE_PRODUCT && $intTypeID != Catalog\ProductTable::TYPE_SET)
-			return false;
-
-		$result = Catalog\Model\Product::update($intID, ['TYPE' => $intTypeID]);
-		return $result->isSuccess();
-	}
+        return $result;
+    }
 }

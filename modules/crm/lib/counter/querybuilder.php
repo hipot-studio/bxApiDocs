@@ -7,136 +7,123 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\ReferenceField;
+use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
 
-abstract class QueryBuilder
+abstract class querybuilder
 {
-	public const SELECT_TYPE_QUANTITY = 'QTY';
-	public const SELECT_TYPE_ENTITIES = 'ENTY';
+    public const SELECT_TYPE_QUANTITY = 'QTY';
+    public const SELECT_TYPE_ENTITIES = 'ENTY';
 
-	protected int $entityTypeId;
-	/**
-	 * @var int[]
-	 */
-	protected array $userIds;
-	protected string $selectType = self::SELECT_TYPE_QUANTITY;
-	protected bool $useDistinct = true;
+    protected int $entityTypeId;
 
-	public function __construct(int $entityTypeId, array $userIds = [])
-	{
-		$this->entityTypeId = $entityTypeId;
-		$this->userIds = array_values(array_unique(array_map('intval', $userIds)));
-	}
+    /**
+     * @var int[]
+     */
+    protected array $userIds;
+    protected string $selectType = self::SELECT_TYPE_QUANTITY;
+    protected bool $useDistinct = true;
 
-	public function getSelectType(): string
-	{
-		return $this->selectType;
-	}
+    public function __construct(int $entityTypeId, array $userIds = [])
+    {
+        $this->entityTypeId = $entityTypeId;
+        $this->userIds = array_values(array_unique(array_map('intval', $userIds)));
+    }
 
-	public function setSelectType(string $selectType): self
-	{
-		$this->selectType = $selectType;
+    public function getSelectType(): string
+    {
+        return $this->selectType;
+    }
 
-		return $this;
-	}
+    public function setSelectType(string $selectType): self
+    {
+        $this->selectType = $selectType;
 
-	/**
-	 * @deprecated Should be used only if $this->isCompatibilityMode() return true;
-	 *
-	 * @return bool
-	 */
-	public function isUseDistinct(): bool
-	{
-		return $this->useDistinct;
-	}
+        return $this;
+    }
 
-	/**
-	 * @deprecated Should be used only if $this->isCompatibilityMode() return true;
-	 * @param bool $useDistinct
-	 */
-	public function setUseDistinct(bool $useDistinct): self
-	{
-		$this->useDistinct = $useDistinct;
+    /**
+     * @deprecated Should be used only if $this->isCompatibilityMode() return true;
+     */
+    public function isUseDistinct(): bool
+    {
+        return $this->useDistinct;
+    }
 
-		return $this;
-	}
+    /**
+     * @deprecated Should be used only if $this->isCompatibilityMode() return true;
+     */
+    public function setUseDistinct(bool $useDistinct): self
+    {
+        $this->useDistinct = $useDistinct;
 
-	protected function applyResponsibleFilter(\Bitrix\Main\ORM\Query\Query $query, string $responsibleFieldName)
-	{
-		if(!empty($this->userIds))
-		{
-			if(count($this->userIds) > 1)
-			{
-				$query->whereIn($responsibleFieldName, $this->userIds);
-			}
-			else
-			{
-				$query->where($responsibleFieldName, $this->userIds[0]);
-			}
-		}
-	}
+        return $this;
+    }
 
-	/**
-	 * Compatibility mode used while \Bitrix\Crm\Activity\Entity\EntityUncompletedActivityTable is not completely filled with data
-	 * @return bool
-	 */
-	protected function isCompatibilityMode(): bool
-	{
-		return Option::get('crm', 'enable_entity_uncompleted_act', 'Y') !== 'Y';
-	}
+    public function build(Query $query): Query
+    {
+        if ($this->isCompatibilityMode()) {
+            return $this->buildCompatible($query);
+        }
+        $referenceFilter = [
+            '=ref.ENTITY_ID' => 'this.ID',
+            '=ref.ENTITY_TYPE_ID' => new SqlExpression($this->entityTypeId),
+        ];
 
-	public function build(\Bitrix\Main\ORM\Query\Query $query): \Bitrix\Main\ORM\Query\Query
-	{
-		if ($this->isCompatibilityMode())
-		{
-			return $this->buildCompatible($query);
-		}
-		$referenceFilter = [
-			'=ref.ENTITY_ID' => 'this.ID',
-			'=ref.ENTITY_TYPE_ID' => new SqlExpression($this->entityTypeId),
-		];
+        $this->applyReferenceFilter($referenceFilter);
 
-		$this->applyReferenceFilter($referenceFilter);
+        $query->registerRuntimeField(
+            '',
+            new ReferenceField(
+                'B',
+                EntityUncompletedActivityTable::getEntity(),
+                $referenceFilter,
+                ['join_type' => $this->getJoinType()]
+            )
+        );
 
-		$query->registerRuntimeField(
-			'',
-			new ReferenceField('B',
-				EntityUncompletedActivityTable::getEntity(),
-				$referenceFilter,
-				['join_type' => $this->getJoinType()]
-			)
-		);
+        $this->applyCounterTypeFilter($query);
 
-		$this->applyCounterTypeFilter($query);
+        if (self::SELECT_TYPE_ENTITIES === $this->getSelectType()) {
+            $query->addSelect('ID', 'ENTY');
+            if (\count($this->userIds) > 1) {
+                $query->addGroup('B.ENTITY_ID');
+            }
+        } else {
+            $query->registerRuntimeField('', new ExpressionField('QTY', 'COUNT(DISTINCT %s)', 'ID'));
+            $query->addSelect('QTY');
+        }
 
-		if($this->getSelectType() === self::SELECT_TYPE_ENTITIES)
-		{
-			$query->addSelect('ID', 'ENTY');
-			if(count($this->userIds) > 1)
-			{
-				$query->addGroup('B.ENTITY_ID');
-			}
-		}
-		else
-		{
-			$query->registerRuntimeField('', new ExpressionField('QTY', 'COUNT(DISTINCT %s)', 'ID'));
-			$query->addSelect('QTY');
-		}
+        return $query;
+    }
 
-		return $query;
-	}
+    protected function applyResponsibleFilter(Query $query, string $responsibleFieldName)
+    {
+        if (!empty($this->userIds)) {
+            if (\count($this->userIds) > 1) {
+                $query->whereIn($responsibleFieldName, $this->userIds);
+            } else {
+                $query->where($responsibleFieldName, $this->userIds[0]);
+            }
+        }
+    }
 
-	protected function getJoinType(): string
-	{
-		return \Bitrix\Main\ORM\Query\Join::TYPE_INNER;
-	}
+    /**
+     * Compatibility mode used while \Bitrix\Crm\Activity\Entity\EntityUncompletedActivityTable is not completely filled with data.
+     */
+    protected function isCompatibilityMode(): bool
+    {
+        return 'Y' !== Option::get('crm', 'enable_entity_uncompleted_act', 'Y');
+    }
 
-	protected function applyReferenceFilter(array &$referenceFilter): void
-	{
-	}
+    protected function getJoinType(): string
+    {
+        return Join::TYPE_INNER;
+    }
 
-	protected function applyCounterTypeFilter(\Bitrix\Main\ORM\Query\Query $query): void
-	{
-	}
+    protected function applyReferenceFilter(array &$referenceFilter): void {}
 
-	abstract protected function buildCompatible(\Bitrix\Main\ORM\Query\Query $query): \Bitrix\Main\ORM\Query\Query;
+    protected function applyCounterTypeFilter(Query $query): void {}
+
+    abstract protected function buildCompatible(Query $query): Query;
 }

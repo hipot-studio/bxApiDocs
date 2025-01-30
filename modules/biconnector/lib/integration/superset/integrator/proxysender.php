@@ -11,149 +11,135 @@ use Bitrix\Main\Web\Http\MultipartStream;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
 
-final class ProxySender extends MicroService\BaseSender
+final class proxysender extends MicroService\BaseSender
 {
-	private const API_VERSION = 2;
+    private const API_VERSION = 2;
 
-	protected function getServiceUrl(): string
-	{
-		return SupersetServiceLocation::getCurrentServiceUrl();
-	}
+    public function performRequest($action, array $parameters = [], ?Dto\User $user = null): Result
+    {
+        $httpClient = $this->buildHttpClient();
 
-	protected function getProxyPath(): string
-	{
-		return "/api/v1";
-	}
+        $url = $this->getServiceUrl().$this->getProxyPath().$action;
 
-	/**
-	 * @inheritDoc
-	 */
-	public function performRequest($action, array $parameters = [], Dto\User $user = null): Result
-	{
-		$httpClient = $this->buildHttpClient();
+        $request = [
+            'action' => $action,
+            'serializedParameters' => base64_encode(gzencode(Json::encode($parameters))),
+        ];
 
-		$url = $this->getServiceUrl() . $this->getProxyPath() . $action;
+        $request['BX_TYPE'] = Client::getPortalType();
+        $request['BX_LICENCE'] = Client::getLicenseCode();
+        $request['SERVER_NAME'] = Client::getServerName();
+        if ($user && $user->clientId) {
+            $request['BX_CLIENT_ID'] = $user->clientId;
+        }
+        $request['BX_VERSION'] = self::API_VERSION;
+        $request['BX_HASH'] = Client::signRequest($request);
 
-		$request = [
-			"action" => $action,
-			"serializedParameters" => base64_encode(gzencode(Json::encode($parameters))),
-		];
+        $result = $httpClient->query(HttpClient::HTTP_POST, $url, $request);
 
-		$request["BX_TYPE"] = Client::getPortalType();
-		$request["BX_LICENCE"] = Client::getLicenseCode();
-		$request["SERVER_NAME"] = Client::getServerName();
-		if ($user && $user->clientId)
-		{
-			$request["BX_CLIENT_ID"] = $user->clientId;
-		}
-		$request["BX_VERSION"] = self::API_VERSION;
-		$request["BX_HASH"] = Client::signRequest($request);
+        return $this->buildResult($httpClient, $result);
+    }
 
-		$result = $httpClient->query(HttpClient::HTTP_POST, $url, $request);
+    public function performMultipartRequest($action, array $parameters = [], ?Dto\User $user = null): Result
+    {
+        $httpClient = $this->buildHttpClient();
+        $url = $this->getServiceUrl().$this->getProxyPath().$action;
+        $filePath = $parameters['filePath'] ?? '';
+        if (!$filePath) {
+            $result = new Result();
+            $result->addError(new Error('File path is empty.'));
 
-		return $this->buildResult($httpClient, $result);
-	}
+            return $result;
+        }
+        $file = new File($filePath);
+        $fileData = $file->open('r');
+        unset($parameters['filePath']);
 
-	public function performMultipartRequest($action, array $parameters = [], Dto\User $user = null): Result
-	{
-		$httpClient = $this->buildHttpClient();
-		$url = $this->getServiceUrl() . $this->getProxyPath() . $action;
-		$filePath = $parameters['filePath'] ?? '';
-		if (!$filePath)
-		{
-			$result = new Result();
-			$result->addError(new Error('File path is empty.'));
+        $data = $parameters + [
+            'BX_TYPE' => Client::getPortalType(),
+            'BX_LICENCE' => Client::getLicenseCode(),
+            'SERVER_NAME' => Client::getServerName(),
+        ];
 
-			return $result;
-		}
-		$file = new File($filePath);
-		$fileData = $file->open('r');
-		unset($parameters['filePath']);
+        if ($user && $user->clientId) {
+            $data['BX_CLIENT_ID'] = $user->clientId;
+        }
 
-		$data = $parameters + [
-			'BX_TYPE' => Client::getPortalType(),
-			'BX_LICENCE' => Client::getLicenseCode(),
-			'SERVER_NAME' => Client::getServerName(),
-		];
+        $data['BX_VERSION'] = self::API_VERSION;
+        $data['BX_HASH'] = Client::signRequest($data);
+        $data[] = [
+            'resource' => $fileData,
+            'filename' => $file->getName(),
+        ];
+        $body = new MultipartStream($data);
+        $httpClient->setHeader('Content-Type', 'multipart/form-data; boundary='.$body->getBoundary());
 
-		if ($user && $user->clientId)
-		{
-			$data['BX_CLIENT_ID'] = $user->clientId;
-		}
+        $result = $httpClient->query(HttpClient::HTTP_POST, $url, $body);
+        $file->close();
 
-		$data['BX_VERSION'] = self::API_VERSION;
-		$data['BX_HASH'] = Client::signRequest($data);
-		$data[] = [
-			'resource' => $fileData,
-			'filename' => $file->getName(),
-		];
-		$body = new MultipartStream($data);
-		$httpClient->setHeader('Content-Type', 'multipart/form-data; boundary=' . $body->getBoundary());
+        return $this->buildResult($httpClient, $result);
+    }
 
-		$result = $httpClient->query(HttpClient::HTTP_POST, $url, $body);
-		$file->close();
+    protected function getServiceUrl(): string
+    {
+        return SupersetServiceLocation::getCurrentServiceUrl();
+    }
 
-		return $this->buildResult($httpClient, $result);
-	}
+    protected function getProxyPath(): string
+    {
+        return '/api/v1';
+    }
 
-	protected function createAnswerForJsonResponse($queryResult, $response, $errors, $status): Result
-	{
-		$result = new Result();
+    protected function createAnswerForJsonResponse($queryResult, $response, $errors, $status): Result
+    {
+        $result = new Result();
 
-		if(!$queryResult)
-		{
-			foreach ($errors as $code => $message)
-			{
-				$result->addError(new Error($message, $code));
-			}
+        if (!$queryResult) {
+            foreach ($errors as $code => $message) {
+                $result->addError(new Error($message, $code));
+            }
 
-			return $result;
-		}
+            return $result;
+        }
 
+        $resultBody = [
+            'status' => $status,
+            'data' => null,
+        ];
 
-		$resultBody = [
-			'status' => $status,
-			'data' => null,
-		];
+        if ('' !== $response) {
+            $parseResult = self::parseJsonResponse($response);
+            $result->addErrors($parseResult->getErrors());
 
-		if ($response !==  "")
-		{
-			$parseResult = self::parseJsonResponse($response);
-			$result->addErrors($parseResult->getErrors());
+            $data = $parseResult->getData();
+            $resultBody['data'] = $data;
+        }
 
-			$data = $parseResult->getData();
-			$resultBody['data'] = $data;
-		}
+        $result->setData($resultBody);
 
-		$result->setData($resultBody);
-		return $result;
-	}
+        return $result;
+    }
 
-	protected static function parseJsonResponse(string $jsonResponse): Result
-	{
-		$result = new Result();
-		try
-		{
-			$parsedResponse = Json::decode($jsonResponse);
-		}
-		catch (\Exception $e)
-		{
-			$result->addError(new Error("Could not parse server response. Raw response: " . $jsonResponse));
-			return $result;
-		}
+    protected static function parseJsonResponse(string $jsonResponse): Result
+    {
+        $result = new Result();
 
-		if($parsedResponse["status"] === "error")
-		{
-			foreach ($parsedResponse["errors"] as $error)
-			{
-				$result->addError(new Error($error["message"], $error["code"], $error["customData"]));
-			}
-		}
-		else if(is_array($parsedResponse["data"]))
-		{
-			$result->setData($parsedResponse["data"]);
-		}
+        try {
+            $parsedResponse = Json::decode($jsonResponse);
+        } catch (\Exception $e) {
+            $result->addError(new Error('Could not parse server response. Raw response: '.$jsonResponse));
 
-		return $result;
-	}
+            return $result;
+        }
+
+        if ('error' === $parsedResponse['status']) {
+            foreach ($parsedResponse['errors'] as $error) {
+                $result->addError(new Error($error['message'], $error['code'], $error['customData']));
+            }
+        } elseif (\is_array($parsedResponse['data'])) {
+            $result->setData($parsedResponse['data']);
+        }
+
+        return $result;
+    }
 }

@@ -4,11 +4,12 @@
 	<meta http-equiv="X-UA-Compatible" content="IE=edge"/>
 
 	<?php
-	/** @var CMain $APPLICATION */
-	use Bitrix\Main\Localization\Loc;
-	Loc::loadMessages(__FILE__);
+    /** @var CMain $APPLICATION */
+    use Bitrix\Main\Localization\Loc;
 
-	CJSCore::Init(array('ajax', 'viewer'));
+    Loc::loadMessages(__FILE__);
+
+	CJSCore::Init(['ajax', 'viewer']);
 	$APPLICATION->ShowHead();
 	?>
 </head>
@@ -45,7 +46,7 @@
 		BX.ajax({
 			'method': 'POST',
 			'dataType': 'json',
-			'url': '<?= CUtil::JSEscape($url) ?>',
+			'url': '<?php echo CUtil::JSEscape($url); ?>',
 			'data':  {
 				SITE_ID: BX.message('SITE_ID'),
 				sessid: BX.bitrix_sessid()
@@ -101,7 +102,7 @@
 	});
 	</script>
 	<div id="loader" style="display: table;width:  100%;height: 100%;">
-		<div style="display: table-cell; vertical-align: middle;text-align: center;"><div class="bx-viewer-wrap-loading"></div><?= Loc::getMessage('DISK_START_PAGE_LOADING_DOC') ?></div>
+		<div style="display: table-cell; vertical-align: middle;text-align: center;"><div class="bx-viewer-wrap-loading"></div><?php echo Loc::getMessage('DISK_START_PAGE_LOADING_DOC'); ?></div>
 	</div>
 	<div id="error" style="display: none;width:  100%;height: 100%;">
 		<div style="display: table-cell; vertical-align: middle;text-align: center;"><span id="error-text"></span></div>

@@ -8,56 +8,53 @@ use Bitrix\UI\EntitySelector\SearchQuery;
 
 class IblockElementXmlProvider extends IblockElementProvider
 {
-	protected const ENTITY_ID = 'iblock-element-xml';
+    protected const ENTITY_ID = 'iblock-element-xml';
 
-	public function doSearch(SearchQuery $searchQuery, Dialog $dialog): void
-	{
-		$filter = [];
+    public function doSearch(SearchQuery $searchQuery, Dialog $dialog): void
+    {
+        $filter = [];
 
-		$query = $searchQuery->getQuery();
-		if ($query !== '')
-		{
-			$filter = $this->getQueryFilter($query);
-		}
+        $query = $searchQuery->getQuery();
+        if ('' !== $query) {
+            $filter = $this->getQueryFilter($query);
+        }
 
-		$elements = $this->getElements($filter, self::ELEMENTS_LIMIT);
-		if (count($elements) === self::ELEMENTS_LIMIT)
-		{
-			$searchQuery->setCacheable(false);
-		}
-		foreach ($elements as $element)
-		{
-			$dialog->addItem(
-				$this->makeItem($element)
-			);
-		}
-	}
+        $elements = $this->getElements($filter, self::ELEMENTS_LIMIT);
+        if (self::ELEMENTS_LIMIT === \count($elements)) {
+            $searchQuery->setCacheable(false);
+        }
+        foreach ($elements as $element) {
+            $dialog->addItem(
+                $this->makeItem($element)
+            );
+        }
+    }
 
-	private function getQueryFilter(string $query): array
-	{
-		return [
-			[
-				'LOGIC' => 'OR',
-				'%XML_ID' => $query,
-				'*SEARCHABLE_CONTENT' => $query,
-			],
-		];
-	}
+    protected function makeItem(array $element, string $propertyType = ''): Item
+    {
+        $itemParams = [
+            'id' => $element['ID'] ?? null,
+            'entityId' => self::ENTITY_ID,
+            'title' => $element['NAME'] ?? null,
+            'subtitle' => $element['XML_ID'] ?? null,
+            'description' => $element['DETAIL_TEXT'] ?? null,
+            'avatar' => $element['PREVIEW_PICTURE'] ?? null,
+            'customData' => [
+                'xmlId' => $element['XML_ID'] ?? null,
+            ],
+        ];
 
-	protected function makeItem(array $element, string $propertyType = ''): Item
-	{
-		$itemParams = [
-			'id' => $element['ID'] ?? null,
-			'entityId' => self::ENTITY_ID,
-			'title' => $element['NAME'] ?? null,
-			'subtitle' => $element['XML_ID'] ?? null,
-			'description' => $element['DETAIL_TEXT'] ?? null,
-			'avatar' => $element['PREVIEW_PICTURE'] ?? null,
-			'customData' => [
-				'xmlId' => $element['XML_ID'] ?? null,
-			],
-		];
+        return new Item($itemParams);
+    }
 
-		return new Item($itemParams);
-	}
+    private function getQueryFilter(string $query): array
+    {
+        return [
+            [
+                'LOGIC' => 'OR',
+                '%XML_ID' => $query,
+                '*SEARCHABLE_CONTENT' => $query,
+            ],
+        ];
+    }
 }

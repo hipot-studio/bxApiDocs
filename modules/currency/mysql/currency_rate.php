@@ -1,17 +1,18 @@
-<?
+<?php
+
 use Bitrix\Currency;
 
-require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/currency/general/currency_rate.php");
+require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/currency/general/currency_rate.php';
 
-class CCurrencyRates extends CAllCurrencyRates
+class currency_rate extends CAllCurrencyRates
 {
-	public static function _get_last_rates($valDate, $cur)
-	{
-		global $DB;
+    public static function _get_last_rates($valDate, $cur)
+    {
+        global $DB;
 
-		$baseCurrency = Currency\CurrencyManager::getBaseCurrency();
+        $baseCurrency = Currency\CurrencyManager::getBaseCurrency();
 
-		$strSql = $DB->TopSql("
+        $strSql = $DB->TopSql("
 			SELECT C.AMOUNT, C.AMOUNT_CNT, CR.RATE, CR.RATE_CNT
 			FROM
 				b_catalog_currency C
@@ -23,7 +24,8 @@ class CCurrencyRates extends CAllCurrencyRates
 			ORDER BY
 				DATE_RATE DESC
 		", 1);
-		$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-		return $db_res->Fetch();
-	}
+        $db_res = $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+
+        return $db_res->Fetch();
+    }
 }

@@ -6,32 +6,29 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\UI\Extension;
 use Bitrix\Rest;
-use CRestUtil;
-use CUserOptions;
 
-final class EInvoiceAppInstallerSlider
+final class einvoiceappinstallerslider
 {
-	private const MODULE_ID = 'crm';
-	private const USER_SEEN_COUNT_OPTION = 'einvoice_installer_slider_user_seen_count';
-	private const USER_SEEN_COUNT_OPTION_VALUE_NAME = 'count';
-	private const MAX_USER_SEEN_COUNT = 3;
+    private const MODULE_ID = 'crm';
+    private const USER_SEEN_COUNT_OPTION = 'einvoice_installer_slider_user_seen_count';
+    private const USER_SEEN_COUNT_OPTION_VALUE_NAME = 'count';
+    private const MAX_USER_SEEN_COUNT = 3;
 
-	public function build(): string
-	{
-		if (!$this->canShow())
-		{
-			return '';
-		}
+    public function build(): string
+    {
+        if (!$this->canShow()) {
+            return '';
+        }
 
-		$moduleId = 'crm';
-		$optionName = self::USER_SEEN_COUNT_OPTION;
-		$optionValName = self::USER_SEEN_COUNT_OPTION_VALUE_NAME;
+        $moduleId = 'crm';
+        $optionName = self::USER_SEEN_COUNT_OPTION;
+        $optionValName = self::USER_SEEN_COUNT_OPTION_VALUE_NAME;
 
-		$incrementedUserSeenCount = $this->getUserSeenCount() + 1;
+        $incrementedUserSeenCount = $this->getUserSeenCount() + 1;
 
-		Extension::load('sidepanel');
+        Extension::load('sidepanel');
 
-		return "
+        return "
 			<script>
 				BX.ready(() => {
 					const onLoad = () => {
@@ -41,7 +38,7 @@ final class EInvoiceAppInstallerSlider
 					BX.SidePanel.Instance.open(
 						'{$this->getEinvoiceUrl()}',
 						{
-							width: 575, 
+							width: 575,
 							allowChangeHistory: false,
 							events: {
 								onLoad,
@@ -51,70 +48,64 @@ final class EInvoiceAppInstallerSlider
 				});
 			</script>
 		";
-	}
+    }
 
-	private function canShow(): bool
-	{
-		if (!$this->isAvailable())
-		{
-			return false;
-		}
+    public function getEinvoiceUrl(): string
+    {
+        $newEinvoicePath = '/marketplace/einvoice/index.php';
+        if (file_exists(Application::getDocumentRoot().$newEinvoicePath)) {
+            return '/marketplace/einvoice/';
+        }
 
-		if ($this->isInstalled())
-		{
-			return false;
-		}
+        return '/einvoice/install/';
+    }
 
-		return $this->getUserSeenCount() <= self::MAX_USER_SEEN_COUNT;
-	}
+    private function canShow(): bool
+    {
+        if (!$this->isAvailable()) {
+            return false;
+        }
 
-	private function isRestEInvoiceExists(): bool
-	{
-		return
-			Loader::includeModule('rest')
-			&& class_exists(Rest\EInvoice::class)
-		;
-	}
+        if ($this->isInstalled()) {
+            return false;
+        }
 
-	private function isAvailable(): bool
-	{
-		return
-			$this->isRestEInvoiceExists()
-			&& Rest\EInvoice::isAvailable()
-			&& !empty(Rest\EInvoice::getApplicationList())
-			&& CRestUtil::canInstallApplication()
-		;
-	}
+        return $this->getUserSeenCount() <= self::MAX_USER_SEEN_COUNT;
+    }
 
-	private function isInstalled(): bool
-	{
-		return
-			$this->isRestEInvoiceExists()
-			&& !empty(Rest\EInvoice::getInstalledApplications())
-		;
-	}
+    private function isRestEInvoiceExists(): bool
+    {
+        return
+            Loader::includeModule('rest')
+            && class_exists(Rest\EInvoice::class);
+    }
 
-	private function getUserSeenCount(): int
-	{
-		$userSeenCountOption = CUserOptions::GetOption(
-			self::MODULE_ID,
-			self::USER_SEEN_COUNT_OPTION,
-			[self::USER_SEEN_COUNT_OPTION_VALUE_NAME => null],
-		);
+    private function isAvailable(): bool
+    {
+        return
+            $this->isRestEInvoiceExists()
+            && Rest\EInvoice::isAvailable()
+            && !empty(Rest\EInvoice::getApplicationList())
+            && \CRestUtil::canInstallApplication();
+    }
 
-		$userSeenCount = $userSeenCountOption[self::USER_SEEN_COUNT_OPTION_VALUE_NAME] ?? 0;
+    private function isInstalled(): bool
+    {
+        return
+            $this->isRestEInvoiceExists()
+            && !empty(Rest\EInvoice::getInstalledApplications());
+    }
 
-		return (int)$userSeenCount;
-	}
+    private function getUserSeenCount(): int
+    {
+        $userSeenCountOption = \CUserOptions::GetOption(
+            self::MODULE_ID,
+            self::USER_SEEN_COUNT_OPTION,
+            [self::USER_SEEN_COUNT_OPTION_VALUE_NAME => null],
+        );
 
-	public function getEinvoiceUrl(): string
-	{
-		$newEinvoicePath = '/marketplace/einvoice/index.php';
-		if (file_exists(Application::getDocumentRoot() . $newEinvoicePath))
-		{
-			return '/marketplace/einvoice/';
-		}
+        $userSeenCount = $userSeenCountOption[self::USER_SEEN_COUNT_OPTION_VALUE_NAME] ?? 0;
 
-		return '/einvoice/install/';
-	}
+        return (int) $userSeenCount;
+    }
 }
