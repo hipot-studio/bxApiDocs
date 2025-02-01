@@ -1,1 +1,91 @@
-<? namespace Bitrix\Main\UpdateSystem;$GLOBALS['____1730364984']= array(base64_decode('Zn'.'VuY3R'.'pb25'.'fZXhpc3Rz'),base64_decode('Z'.'GVmaW5'.'l'.'ZA=='),base64_decode(''.'c'.'GhwdmVyc2lvbg='.'='),base64_decode('Y2xh'.'c3'.'NfZX'.'hpc3Rz'));if(!function_exists(__NAMESPACE__.'\\___1935848856')){function ___1935848856($_287815321){static $_1747505006= false; if($_1747505006 == false) $_1747505006=array(''.'TEl'.'DRU'.'5TRV9LRVk=','bGFuZw==',''.'dX'.'Rm','WQ==','c3RhYmxl',''.'bW'.'Fpbg==','c'.'3RhYmxlX3Z'.'lcn'.'Npb25zX29'.'ubHk=','WQ'.'==','Q'.'0F'.'O'.'R'.'1p'.'J'.'UA'.'='.'=','Z3pjb'.'21wc'.'mV'.'zcw'.'==','WQ==',''.'T'.'g==','U1V'.'QR'.'F'.'9E'.'QlM=',''.'WEU=','WQ==','Tg==','U1VQR'.'F'.'9VU'.'lM=','Q0xJRU5UX1NJV'.'EU=','U'.'0VSVkVSX0'.'5B'.'TUU=','c3Bk','bWFp'.'bg==','Y3JjX'.'2NvZGU=','','ZGJ2','U1V'.'QRF'.'9WRVI=','V'.'VBEQVRF'.'X1NZU'.'1RFTV9WR'.'VJT'.'SU'.'9OX0'.'E=','','U1V'.'QR'.'F9TUl'.'M=',''.'Ul'.'U'.'=','U1VQRF'.'9DTVA=','T'.'g'.'==','U1'.'VQRF9TVFM=',''.'UkE=','TE'.'lDRU'.'5TRV'.'9TS'.'U'.'dORUQ'.'=',''.'Q0xJ'.'R'.'U5UX1'.'BIUFZF'.'Ug==','Tkd'.'J'.'Tlg=','bWFpbg==','dXBk'.'Y'.'XRlX'.'3VzZV9uZ2l'.'ueA='.'=',''.'WQ='.'=','U01E','bWF'.'pbg==','dXB'.'kYX'.'R'.'lX'.'3NhZm'.'V'.'fbW9kZ'.'Q='.'=','Tg'.'==','VkVSU'.'0'.'lPTg==','VFlQRU5'.'D','Q'.'0hIQg==','SFRUUF'.'9IT1NU','Q1NBQg'.'==',''.'U0VSVkV'.'SX0'.'FERFI=',''.'U1VJRA'.'==','QVB'.'QTEl'.'DQVR'.'J'.'T04=','',''.'Y2x1c3Rlcg==',''.'Q0N'.'s'.'dXN0ZXI=','PU'.'FD'.'V'.'ElWRQ==','WQ==','L2Jp'.'dHJpe'.'C'.'9'.'t'.'b2R'.'1bG'.'VzL'.'21haW'.'4'.'vY2x'.'hc3Nlcy9nZW5lcmFsL3'.'VwZ'.'GF0ZV9'.'j'.'bGllbnQ'.'ucGhw',''.'L'.'Q==','bWFpbg==','T'.'g==','RA==','RQ==','VA==','Rg==','L'.'2JpdHJ'.'peC'.'9t'.'b2'.'R1bG'.'Vz'.'L21haW4v'.'Y2xhc3Nl'.'cy9nZW5'.'lcmFsL3VwZGF0ZV9'.'jbGll'.'bnQucG'.'hw','','L2Jp'.'dHJpeC9tb'.'2'.'R'.'1bGVzL2'.'1h'.'aW4vY'.'2xhc3N'.'lcy9nZ'.'W5lcmF'.'sL3VwZGF'.'0ZV9jbGll'.'bnQucGhw','');return base64_decode($_1747505006[$_287815321]);}}; use Bitrix\Main\Application; use Bitrix\Main\License; use Bitrix\Main\Loader; use Bitrix\Main\SystemException; use Bitrix\Main\SiteTable; class PortalInfo{ private License $_1953244723; public function __construct(){ $this->_1953244723= Application::getInstance()->getLicense();} public function common(): array{ global $DB; return[ ___1935848856(0) => $this->_1953244723->getHashLicenseKey(), ___1935848856(1) => LANGUAGE_ID, ___1935848856(2) => ___1935848856(3), ___1935848856(4) => \COption::GetOptionString(___1935848856(5), ___1935848856(6), ___1935848856(7)), ___1935848856(8) => $GLOBALS['____1730364984'][0](___1935848856(9))? ___1935848856(10): ___1935848856(11), ___1935848856(12) => $DB->type, ___1935848856(13) =>(isset($DB->_593443655) && $DB->_593443655)? ___1935848856(14): ___1935848856(15), ___1935848856(16) => $this->_1953244723->getActiveUsersCount(), ___1935848856(17) => $_SERVER[___1935848856(18)], ___1935848856(19) => \COption::GetOptionString(___1935848856(20), ___1935848856(21), ___1935848856(22)), ___1935848856(23) => $this->__1273681288(), ___1935848856(24) => $GLOBALS['____1730364984'][1](___1935848856(25))? UPDATE_SYSTEM_VERSION_A: ___1935848856(26), ___1935848856(27) => $this->__2014184289() ?? ___1935848856(28), ___1935848856(29) => ___1935848856(30), ___1935848856(31) => $this->__1292707509() ?? ___1935848856(32), ___1935848856(33) => $this->__1853504303(), ___1935848856(34) => $GLOBALS['____1730364984'][2](), ___1935848856(35) => \COption::GetOptionString(___1935848856(36), ___1935848856(37), ___1935848856(38)), ___1935848856(39) => \COption::GetOptionString(___1935848856(40), ___1935848856(41), ___1935848856(42)), ___1935848856(43) => SM_VERSION, ___1935848856(44) => $this->getLicenseType(), ___1935848856(45) => $_SERVER[___1935848856(46)], ___1935848856(47) => $_SERVER[___1935848856(48)], ___1935848856(49) => $GLOBALS[___1935848856(50)]->GetServerUniqID(),];} private function __1273681288(): string{ global $DB; $_1038629042= $DB->GetVersion(); return $_1038629042 !== false? $_1038629042: ___1935848856(51);} private function __2014184289():?int{ if(Loader::includeModule(___1935848856(52)) && $GLOBALS['____1730364984'][3](___1935848856(53))){ return \CCluster::getServersCount();} return null;} private function __1292707509():?int{ return SiteTable::getCount([___1935848856(54) => ___1935848856(55)]);} private function __1853504303(): string{ require_once(Application::getDocumentRoot(). ___1935848856(56)); $_282391392= \CUpdateClient::getNewLicenseSignedKey(); return $_282391392.___1935848856(57).\COption::GetOptionString(___1935848856(58), $_282391392, ___1935848856(59));} public function getLicenseType(): string{ if($this->_1953244723->isDemo()){ return ___1935848856(60);} elseif($this->_1953244723->isEncoded()){ return ___1935848856(61);} elseif($this->_1953244723->isTimeBound()){ return ___1935848856(62);} else{ return ___1935848856(63);}} public function getModules(): array{ require_once(Application::getDocumentRoot(). ___1935848856(64)); $_997149111= ___1935848856(65); $_939492339= \CUpdateClient::GetCurrentModules($_997149111); $_1893466875=(\CUpdateExpertMode::isEnabled() && \CUpdateExpertMode::isCorrectModulesStructure([])); if($_1893466875){ $_939492339= \CUpdateExpertMode::processModulesFrom([], $_939492339);} if(!empty($_997149111)){ throw new SystemException($_997149111);} return $_939492339;} public function getLanguages(): array{ require_once(Application::getDocumentRoot(). ___1935848856(66)); $_997149111= ___1935848856(67); $_294351698= \CUpdateClient::GetCurrentLanguages($_997149111); if(!empty($_997149111)){ throw new SystemException($_997149111);} return $_294351698;}}?>
+<? namespace Bitrix\Main\UpdateSystem;
+
+use Bitrix\Main\Application;
+use Bitrix\Main\License;
+use Bitrix\Main\Loader;
+use Bitrix\Main\SystemException;
+use Bitrix\Main\SiteTable;
+
+class PortalInfo
+{
+	private License $_1953244723;
+
+	public function __construct()
+	{
+		$this->_1953244723 = Application::getInstance()->getLicense();
+	}
+
+	public function common(): array
+	{
+		global $DB;
+		return [
+			"LICENSE_KEY" => $this->_1953244723->getHashLicenseKey(), "lang" => LANGUAGE_ID, "utf" => "Y", "stable" => \COption::GetOptionString("main", "stable_versions_only", "Y"), "CANGZIP" => function_exists("gzcompress") ? "Y" : "N", "SUPD_DBS" => $DB->type, "XE" => (isset($DB->_593443655) && $DB->_593443655) ? "Y" : "N", "SUPD_URS" => $this->_1953244723->getActiveUsersCount(), "CLIENT_SITE" => $_SERVER["SERVER_NAME"], "spd" => \COption::GetOptionString("main", "crc_code", ""), "dbv" => $this->__1273681288(), "SUPD_VER" => defined("UPDATE_SYSTEM_VERSION_A") ? UPDATE_SYSTEM_VERSION_A : "", "SUPD_SRS" => $this->__2014184289() ?? "RU", "SUPD_CMP" => "N", "SUPD_STS" => $this->__1292707509() ?? "RA", "LICENSE_SIGNED" => $this->__1853504303(), "CLIENT_PHPVER" => phpversion(), "NGINX" => \COption::GetOptionString("main", "update_use_nginx", "Y"), "SMD" => \COption::GetOptionString("main", "update_safe_mode", "N"), "VERSION" => SM_VERSION, "TYPENC" => $this->getLicenseType(), "CHHB" => $_SERVER["HTTP_HOST"], "CSAB" => $_SERVER["SERVER_ADDR"], "SUID" => $GLOBALS["APPLICATION"]->GetServerUniqID(),
+		];
+	}
+
+	private function __1273681288(): string
+	{
+		global $DB;
+		$_1038629042 = $DB->GetVersion();
+		return $_1038629042 !== false ? $_1038629042 : "";
+	}
+
+	private function __2014184289(): ?int
+	{
+		if (Loader::includeModule("cluster") && class_exists("CCluster")) {
+			return \CCluster::getServersCount();
+		}
+		return null;
+	}
+
+	private function __1292707509(): ?int
+	{
+		return SiteTable::getCount(["=ACTIVE" => "Y"]);
+	}
+
+	private function __1853504303(): string
+	{
+		require_once(Application::getDocumentRoot() . "/bitrix/modules/main/classes/general/update_client.php");
+		$_282391392 = \CUpdateClient::getNewLicenseSignedKey();
+		return $_282391392 . "-" . \COption::GetOptionString("main", $_282391392, "N");
+	}
+
+	public function getLicenseType(): string
+	{
+		if ($this->_1953244723->isDemo()) {
+			return "D";
+		} elseif ($this->_1953244723->isEncoded()) {
+			return "E";
+		} elseif ($this->_1953244723->isTimeBound()) {
+			return "T";
+		} else {
+			return "F";
+		}
+	}
+
+	public function getModules(): array
+	{
+		require_once(Application::getDocumentRoot() . "/bitrix/modules/main/classes/general/update_client.php");
+		$_997149111  = "";
+		$_939492339  = \CUpdateClient::GetCurrentModules($_997149111);
+		$_1893466875 = (\CUpdateExpertMode::isEnabled() && \CUpdateExpertMode::isCorrectModulesStructure([]));
+		if ($_1893466875) {
+			$_939492339 = \CUpdateExpertMode::processModulesFrom([], $_939492339);
+		}
+		if (!empty($_997149111)) {
+			throw new SystemException($_997149111);
+		}
+		return $_939492339;
+	}
+
+	public function getLanguages(): array
+	{
+		require_once(Application::getDocumentRoot() . "/bitrix/modules/main/classes/general/update_client.php");
+		$_997149111 = "";
+		$_294351698 = \CUpdateClient::GetCurrentLanguages($_997149111);
+		if (!empty($_997149111)) {
+			throw new SystemException($_997149111);
+		}
+		return $_294351698;
+	}
+} ?>

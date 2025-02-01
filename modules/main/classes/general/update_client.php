@@ -1,1 +1,2806 @@
-<? $GLOBALS['_____1328095636']= array(base64_decode('S'.'W5'.'jbHV'.'kZU1vZ'.'HVsZ'.'Uxhbm'.'d'.'GaWxl'),base64_decode('R2V0'.'TW'.'9kdWx'.'lR'.'XZ'.'lbn'.'R'.'z'),base64_decode('RXhlY'.'3V0'.'ZU'.'1vZHVsZUV2ZW50RXg'.'='),base64_decode('R'.'2V0TW'.'9kdWxl'.'RXZlb'.'nRz'),base64_decode('RXhlY'.'3'.'V0ZU1'.'vZHVsZUV2Z'.'W50R'.'Xg'.'='),base64_decode('R2V0TW9'.'kdWxlR'.'X'.'Zl'.'b'.'n'.'R'.'z'),base64_decode('RXhlY3V'.'0'.'ZU1'.'vZ'.'HV'.'s'.'ZUV'.'2ZW50'.'RXg='));$GLOBALS['____1209379637']= array(base64_decode('ZGVmaW5lZA='.'='),base64_decode('ZG'.'VmaW5l'),base64_decode('ZGVmaW5lZA=='),base64_decode('ZGVmaW5l'),base64_decode('ZG'.'VmaW5lZA='.'='),base64_decode('ZGVmaW5l'),base64_decode('ZX'.'h0ZW5za'.'W9uX2xv'.'YWRl'.'ZA=='),base64_decode('Z'.'nVuY3Rpb2'.'5f'.'ZXhpc3Rz'),base64_decode('Z'.'nVuY3Rpb2'.'5fZXh'.'pc3Rz'),base64_decode('ZnVuY'.'3Rp'.'b2'.'5fZXh'.'p'.'c3'.'Rz'),base64_decode('aH'.'R'.'tbHNwZ'.'WNpYW'.'xjaGFycw'.'=='),base64_decode('ZG'.'Vma'.'W5lZA=='),base64_decode('Z'.'GVmaW'.'5lZA=='),base64_decode('ZGV'.'ma'.'W5l'),base64_decode('Z'.'G'.'Vm'.'aW5lZA=='),base64_decode('Z'.'GVmaW5l'),base64_decode('ZG'.'Vma'.'W5l'.'ZA'.'='.'='),base64_decode('ZGVma'.'W'.'5l'),base64_decode('d'.'XJsZW5jb2R'.'l'),base64_decode('dXJsZW5j'.'b2Rl'),base64_decode('dXJsZW'.'5jb2Rl'),base64_decode('aW1wbG9kZQ'.'='.'='),base64_decode('ZmlsZ'.'V9'.'l'.'e'.'GlzdHM='),base64_decode('Z'.'mlsZV9leGlzdH'.'M='),base64_decode('Zm'.'ls'.'ZV9'.'leG'.'l'.'zdHM='),base64_decode('c'.'H'.'JlZ19yZ'.'XBs'.'YWNl'),base64_decode('aW1'.'w'.'bG9k'.'ZQ=='),base64_decode('YX'.'JyYXlfc2xpY2U'.'='),base64_decode('YX'.'J'.'yYXlfbWFw'),base64_decode(''.'Z'.'Xhw'.'bG9kZQ'.'='.'='),base64_decode('ZG'.'F'.'0ZQ=='),base64_decode('dmFy'.'X2V4cG9ydA='.'='),base64_decode('Zml'.'sZ'.'V'.'9'.'wdXRfY29'.'udGVudHM='),base64_decode('Y2xh'.'c'.'3NfZXhpc3'.'Rz'),base64_decode(''.'Z'.'ml'.'s'.'Z'.'V'.'9l'.'e'.'G'.'lzd'.'HM='),base64_decode('cHJl'.'Z19yZXBsYWNl'),base64_decode('ZGF0'.'ZQ=='),base64_decode('ZGF0ZQ=='),base64_decode('dmFyX2V4cG9'.'y'.'dA=='),base64_decode('ZmlsZV9wdXRfY29udGVud'.'HM='),base64_decode('bWlj'.'cm90'.'a'.'W1l'),base64_decode(''.'a'.'XN'.'fc3R'.'y'.'aW5n'),base64_decode(''.'aXNf'.'c3R'.'yaW'.'5n'),base64_decode('aW50dmFs'),base64_decode('dXJsZW5'.'jb'.'2Rl'),base64_decode(''.'c'.'HJlZ19yZXBsYWNl'),base64_decode('cm91b'.'mQ='),base64_decode(''.'bWljcm90aW1l'),base64_decode('b'.'WV0aG9kX2V4aXN0cw=='),base64_decode(''.'Y3JjMzI='),base64_decode('Y3JjM'.'z'.'I='),base64_decode('Y291bnQ='),base64_decode('aX'.'NfYXJyYXk='),base64_decode(''.'cHJlZ19yZ'.'XB'.'sYW'.'Nl'),base64_decode('bWlj'.'cm9'.'0aW1'.'l'),base64_decode('cm'.'91bmQ='),base64_decode(''.'bW'.'ljcm'.'9'.'0'.'aW'.'1l'),base64_decode(''.'a'.'XNfY'.'X'.'JyYXk'.'='),base64_decode('Y291b'.'nQ='),base64_decode(''.'c'.'HJl'.'Z19yZX'.'BsYWNl'),base64_decode('bWljcm90a'.'W1l'),base64_decode('cm91bmQ='),base64_decode('bWljcm90aW1'.'l'),base64_decode('aXN'.'fYXJyYX'.'k'.'='),base64_decode('Y29'.'1b'.'n'.'Q='),base64_decode('aXNfYXJyYX'.'k='),base64_decode('YXJ'.'yYXlfa2V5'.'X'.'2V4aX'.'N0cw=='),base64_decode(''.'YXJy'.'YXlfa'.'2'.'V5X'.'2V'.'4aX'.'N0cw=='),base64_decode('Zm9'.'wZ'.'W4='),base64_decode('ZndyaXRl'),base64_decode('Zm'.'Ns'.'b'.'3Nl'),base64_decode('aW50'.'dm'.'Fs'),base64_decode('a'.'W50d'.'m'.'Fs'),base64_decode('a'.'W5'.'0'.'dmFs'),base64_decode('c3Vic3Ry'),base64_decode('c3Vic'.'3Ry'),base64_decode('YXJyYXlfa2V5'.'X'.'2V4'.'aXN'.'0'.'cw=='),base64_decode('YmFzZTY0X2RlY29kZQ=='),base64_decode('dW5z'.'ZXJpY'.'Wx'.'p'.'emU='),base64_decode('aXNfY'.'XJy'.'YXk='),base64_decode(''.'ZXhwb'.'G9k'.'ZQ=='),base64_decode('YXJyYXlfa'.'2V'.'5cw=='),base64_decode('aW5'.'fY'.'XJy'.'Y'.'X'.'k'.'='),base64_decode('c2'.'VyaWFsaXpl'),base64_decode('YmFzZTY0X2Vu'.'Y'.'29kZQ='.'='),base64_decode('Y'.'XJyYXl'.'fa2V5'.'X'.'2V4aXN0cw=='),base64_decode('Z'.'X'.'hwbG9kZ'.'Q=='),base64_decode('c2'.'VyaWFs'.'aXpl'),base64_decode('Y'.'m'.'Fz'.'Z'.'T'.'Y0X2V'.'uY'.'29kZ'.'Q=='),base64_decode('cHJlZ'.'1'.'9yZ'.'XBsYWNl'),base64_decode(''.'bWl'.'jcm'.'90aW1l'),base64_decode('c'.'m'.'91b'.'mQ'.'='),base64_decode('bW'.'ljcm90aW1l'),base64_decode('Zm9wZW4='),base64_decode('c3Ry'.'X'.'3Jlc'.'G'.'xh'.'Y'.'2U='),base64_decode('Znd'.'yaXRl'),base64_decode('c3Ry'.'X'.'3Jlc'.'G'.'xhY2U='),base64_decode('ZmNsb'.'3Nl'),base64_decode('Z'.'mlsZV9leGlzd'.'HM='),base64_decode('aXNfZml'.'sZQ'.'=='),base64_decode('c3RyX3JlcGxhY2U='),base64_decode('aX'.'N'.'fcmVhZG'.'FibGU='),base64_decode('c3RyX3JlcGxh'.'Y2U'.'='),base64_decode('Zml'.'s'.'Z'.'V9nZ'.'X'.'R'.'fY29udGVudH'.'M='),base64_decode('aXNfYX'.'JyYX'.'k'.'='),base64_decode('Y2'.'91bn'.'Q='),base64_decode('Zmls'.'Z'.'V'.'9le'.'Glz'.'dH'.'M='),base64_decode('aXNfZGly'),base64_decode('c3R'.'yX3JlcGxhY2U='),base64_decode('aXNfd3Jp'.'dGF'.'ibGU='),base64_decode(''.'c'.'3RyX3'.'Jlc'.'G'.'xhY2U='),base64_decode('cH'.'JlZ19y'.'ZXBsYW'.'N'.'l'),base64_decode('bWlj'.'cm'.'90aW1l'),base64_decode('cm91bmQ='),base64_decode('bWl'.'j'.'cm90aW1l'),base64_decode('Zm'.'9'.'wZW4'.'='),base64_decode('c3RyX3'.'JlcGx'.'h'.'Y2U='),base64_decode('Zndy'.'aX'.'R'.'l'),base64_decode('Zm'.'Nsb3Nl'),base64_decode('cHJ'.'lZ1'.'9yZXBsY'.'WNl'),base64_decode('bWljcm90a'.'W'.'1l'),base64_decode('cm91bmQ='),base64_decode('b'.'Wlj'.'cm9'.'0aW1l'),base64_decode('Zm9'.'wZW4'.'='),base64_decode('c3Ry'.'X3JlcG'.'xh'.'Y2U'.'='),base64_decode('ZndyaXRl'),base64_decode('Zm'.'Nsb3Nl'),base64_decode('cHJ'.'lZ19yZX'.'BsYWNl'),base64_decode('bWljcm90aW1'.'l'),base64_decode('cm9'.'1bmQ='),base64_decode('bWljcm'.'90aW1l'),base64_decode(''.'Zm'.'9wZW4='),base64_decode('c'.'3RyX3'.'Jl'.'cG'.'xh'.'Y'.'2U'.'='),base64_decode('Zndya'.'XRl'),base64_decode('c3RyX3Jl'.'cGxhY2U='),base64_decode(''.'ZmNsb3Nl'),base64_decode('Z'.'mlsZV'.'9leGlzdHM'.'='),base64_decode('aXNfZ'.'m'.'lsZQ='.'='),base64_decode('c3R'.'yX3JlcG'.'xhY2U='),base64_decode('aXNf'.'c'.'mVhZGFibGU='),base64_decode('c3Ry'.'X'.'3JlcGx'.'hY2U='),base64_decode('Z'.'ml'.'sZV'.'9nZXRfY2'.'9'.'udG'.'Vud'.'HM='),base64_decode(''.'aX'.'NfY'.'XJyY'.'Xk='),base64_decode('Y'.'291bnQ='),base64_decode('Zm'.'lsZ'.'V'.'9leGlz'.'dHM'.'='),base64_decode('aXN'.'fZmlsZQ=='),base64_decode('ZmlsZ'.'XNpe'.'mU='),base64_decode(''.'a'.'W50dm'.'F'.'s'),base64_decode(''.'aW'.'50dmFs'),base64_decode('aXNfd3Jp'.'dGVhYmx'.'l'),base64_decode('c3Ry'.'X'.'3'.'J'.'l'.'cGxhY2U='),base64_decode('Y29'.'weQ=='),base64_decode('Y'.'2htb'.'2Q='),base64_decode('ZG'.'VjaGV4'),base64_decode(''.'Y3J'.'jMzI='),base64_decode('ZmlsZV9nZXRf'.'Y'.'29u'.'dG'.'VudHM='),base64_decode('ZGVjaG'.'V'.'4'),base64_decode('Y3JjMz'.'I='),base64_decode('ZmlsZV9'.'n'.'ZX'.'Rf'.'Y29udGVudHM='),base64_decode('c3'.'RyX3Jlc'.'Gxh'.'Y2U='),base64_decode('cHJlZ19yZXBsY'.'WNl'),base64_decode('dXJ'.'s'.'Z'.'W5j'.'b2Rl'),base64_decode(''.'bW'.'ljcm90a'.'W1l'),base64_decode('cm91bm'.'Q'.'='),base64_decode('bWljc'.'m'.'9'.'0a'.'W'.'1l'),base64_decode('aXNfYX'.'JyYXk='),base64_decode('Y291'.'bn'.'Q='),base64_decode(''.'cHJ'.'l'.'Z19'.'yZX'.'B'.'sYW'.'Nl'),base64_decode('bWljc'.'m'.'90a'.'W1'.'l'),base64_decode('cm91bm'.'Q'.'='),base64_decode('bWlj'.'cm9'.'0aW1l'),base64_decode('Zm9'.'w'.'ZW4='),base64_decode('c3RyX3JlcGx'.'hY2U='),base64_decode('Zndya'.'XRl'),base64_decode('ZmNsb3Nl'),base64_decode(''.'cHJlZ'.'19y'.'ZX'.'B'.'sY'.'WNl'),base64_decode('bWljcm'.'90aW1l'),base64_decode('cm91'.'bmQ='),base64_decode('b'.'W'.'ljcm'.'90a'.'W1'.'l'),base64_decode('Zm'.'9wZW4='),base64_decode('c3Ry'.'X3JlcGxh'.'Y2'.'U='),base64_decode('ZndyaX'.'Rl'),base64_decode('Z'.'mNsb3Nl'),base64_decode(''.'Z'.'mls'.'Z'.'V9leGl'.'z'.'dHM='),base64_decode('Zm'.'lsZV9nZXR'.'fY'.'29u'.'dG'.'V'.'udH'.'M='),base64_decode('Zml'.'sZV9'.'leGl'.'zdHM'.'='),base64_decode('dW'.'5saW5r'),base64_decode('ZmlsZV9leGlzdH'.'M='),base64_decode('d'.'W5saW5r'),base64_decode(''.'cHJlZ19'.'yZ'.'XBsYWNl'),base64_decode(''.'b'.'Wl'.'jcm90aW1l'),base64_decode('c'.'m91bmQ='),base64_decode('b'.'Wlj'.'cm9'.'0a'.'W1'.'l'),base64_decode(''.'Y291bnQ='),base64_decode('Zm9wZ'.'W4'.'='),base64_decode('c3'.'RyX3J'.'lcGx'.'hY2'.'U='),base64_decode('Zndya'.'XRl'),base64_decode('ZmNsb'.'3N'.'l'),base64_decode('d'.'W5saW5r'),base64_decode(''.'aW50dmFs'),base64_decode(''.'b'.'Wljc'.'m90aW'.'1l'),base64_decode('ZnNvY'.'2tv'.'cGVu'),base64_decode('Ym'.'FzZTY0X2'.'VuY29kZQ=='),base64_decode(''.'dXJsZW5jb'.'2'.'Rl'),base64_decode('d'.'XJsZW5jb2R'.'l'),base64_decode('ZG'.'VmaW5'.'l'.'Z'.'A=='),base64_decode(''.'dXJsZ'.'W5'.'jb2'.'Rl'),base64_decode('Z'.'m'.'lsZV9leG'.'lz'.'dHM='),base64_decode('Zml'.'sZXN'.'p'.'em'.'U'.'='),base64_decode('c3'.'Ryb'.'GVu'),base64_decode('ZnB'.'1dHM='),base64_decode('Z'.'m'.'dldHM='),base64_decode('cHJ'.'l'.'Z19z'.'cGxpdA'.'=='),base64_decode('Y291'.'bnQ='),base64_decode('c3R'.'ycG'.'9z'),base64_decode(''.'c'.'3'.'R'.'ycG9z'),base64_decode('aW'.'50dmFs'),base64_decode('dHJp'.'bQ=='),base64_decode('c'.'3Vic3R'.'y'),base64_decode('c3R'.'ybGVu'),base64_decode('dW5'.'s'.'a'.'W5r'),base64_decode('ZmlsZV9le'.'G'.'lzdHM='),base64_decode('cmVuYW1l'),base64_decode('Zm9wZW4='),base64_decode(''.'Zm9wZW4='),base64_decode('Z'.'nJ'.'lYWQ='),base64_decode('Zn'.'dyaXRl'),base64_decode('ZmN'.'sb3Nl'),base64_decode('dW'.'5'.'sa'.'W'.'5r'),base64_decode('Zm9wZ'.'W4='),base64_decode('b'.'Wljcm'.'90aW1l'),base64_decode('ZnJ'.'lYWQ'.'='),base64_decode(''.'ZndyaXR'.'l'),base64_decode('ZmNsb3Nl'),base64_decode(''.'ZmNsb'.'3'.'Nl'),base64_decode('bWl'.'jcm90'.'aW1l'),base64_decode(''.'ZmlsZV9leGlzd'.'HM='),base64_decode('Zm'.'lsZXNpemU='),base64_decode('dW5'.'saW'.'5r'),base64_decode('cmVuYW1l'),base64_decode('d'.'W5saW'.'5r'),base64_decode('a'.'W50dm'.'F'.'s'),base64_decode('bW'.'ljcm9'.'0aW1l'),base64_decode('Zml'.'sZ'.'V9leGlzdHM='),base64_decode('Zm'.'lsZX'.'Npem'.'U='),base64_decode(''.'ZnNvY2tvcGVu'),base64_decode('YmFzZTY0X2Vu'.'Y29'.'kZQ=='),base64_decode('Z'.'nd'.'yaXR'.'l'),base64_decode('Z'.'mdl'.'dHM='),base64_decode('cHJlZ19zc'.'Gxp'.'dA=='),base64_decode('cHJlZ19tYX'.'RjaA='.'='),base64_decode('aW5'.'0dmFs'),base64_decode('c'.'3Vic3Ry'),base64_decode(''.'c3Ryc'.'G'.'9z'),base64_decode('c3RybGVu'),base64_decode(''.'c'.'3R'.'ybGVu'),base64_decode('c3Ry'.'cG9z'),base64_decode('Y2'.'91'.'bnQ'.'='),base64_decode('c3RycG9z'),base64_decode('dHJpbQ=='),base64_decode('c3Vic3'.'Ry'),base64_decode('c'.'3RycG'.'9z'),base64_decode('c'.'3Ry'.'bGVu'),base64_decode('c3Ryc'.'G9z'),base64_decode(''.'c3R'.'yc'.'G9'.'z'),base64_decode('ZG9'.'1Ym'.'xl'.'dmFs'),base64_decode('d'.'HJp'.'bQ=='),base64_decode('c3V'.'ic3Ry'),base64_decode('c3Ry'.'cG9z'),base64_decode('c3RybG'.'Vu'),base64_decode('c3R'.'ycG9z'),base64_decode('c'.'H'.'JlZ19tYXRja'.'A=='),base64_decode(''.'ZG91YmxldmFs'),base64_decode('Z'.'G9'.'1Ymx'.'ldm'.'Fs'),base64_decode('Z'.'G91'.'YmxldmFs'),base64_decode('dW'.'5'.'saW5'.'r'),base64_decode('Zm9wZW4='),base64_decode('bWlj'.'c'.'m90aW1l'),base64_decode(''.'Zn'.'JlY'.'WQ='),base64_decode(''.'ZndyaXRl'),base64_decode('ZmNsb3Nl'),base64_decode('Z'.'mNsb3'.'Nl'),base64_decode('Y2x'.'l'.'YXJz'.'d'.'G'.'F0Y2Fj'.'a'.'GU='),base64_decode('ZmlsZV9l'.'eG'.'lzdHM='),base64_decode('ZmlsZXNp'.'emU'.'='),base64_decode('dW5saW5'.'r'),base64_decode(''.'cmVuYW1'.'l'),base64_decode('dW'.'5saW5r'),base64_decode(''.'ZmlsZV9leGlzdHM='),base64_decode(''.'Zmls'.'ZV9nZXRf'.'Y29udGVudHM'.'='),base64_decode('Z'.'m'.'l'.'sZV9leGlzdHM='),base64_decode('dW'.'5saW5r'),base64_decode(''.'Zm'.'lsZV'.'9l'.'eGlzdHM'.'='),base64_decode('dW'.'5'.'saW5r'),base64_decode('cHJlZ'.'19yZXBsYWN'.'l'),base64_decode('bWljcm90aW1l'),base64_decode('cm91bmQ='),base64_decode(''.'b'.'Wljcm90aW1'.'l'),base64_decode(''.'Y291bnQ='),base64_decode('Zm'.'9'.'wZW4='),base64_decode('c3R'.'yX3Jlc'.'GxhY2U='),base64_decode('Znd'.'yaX'.'Rl'),base64_decode('ZmNsb3Nl'),base64_decode('d'.'W5sa'.'W5r'),base64_decode('cHJlZ19yZXBsYWNl'),base64_decode('bWljcm9'.'0aW1l'),base64_decode('cm'.'91bm'.'Q'.'='),base64_decode('bWlj'.'cm90'.'aW'.'1'.'l'),base64_decode('Zm9'.'wZW4='),base64_decode('c'.'3RyX3Jlc'.'GxhY2U='),base64_decode(''.'Znd'.'yaXRl'),base64_decode('ZmNsb'.'3Nl'),base64_decode('bWljcm90aW1l'),base64_decode(''.'ZmlsZ'.'V9l'.'eGlzd'.'HM='),base64_decode('aXN'.'fZ'.'mlsZQ=='),base64_decode('c3R'.'yX3JlcGxh'.'Y'.'2U='),base64_decode(''.'aXNfcmVh'.'ZGFibGU'.'='),base64_decode('c3R'.'yX'.'3JlcGxhY2U='),base64_decode('d'.'GltZ'.'Q=='),base64_decode('Z'.'ml'.'sZV9'.'leG'.'lzdHM='),base64_decode('aXNfZ'.'Gly'),base64_decode('c3RyX3JlcGxh'.'Y2U='),base64_decode('aXNfd'.'3JpdGFibGU='),base64_decode('c'.'3Ry'.'X3JlcGx'.'hY2U='),base64_decode(''.'Z'.'m'.'9wZW4'.'='),base64_decode('ZnJlY'.'W'.'Q='),base64_decode('c3R'.'ybGV'.'u'),base64_decode('Z'.'m'.'Ns'.'b3Nl'),base64_decode('ZnVuY3Rpb2'.'5f'.'ZXhp'.'c3R'.'z'),base64_decode('Z'.'3pv'.'cG'.'V'.'u'),base64_decode('Zm9wZW'.'4='),base64_decode(''.'c3Ry'.'X'.'3J'.'l'.'c'.'GxhY2U='),base64_decode('Z3pyZWFk'),base64_decode('c3RybGV'.'u'),base64_decode(''.'ZnJlY'.'W'.'Q='),base64_decode(''.'c3R'.'ybGVu'),base64_decode(''.'c3R'.'yX'.'3'.'JlcGxhY2U'.'='),base64_decode('Z3'.'p'.'jbG9'.'zZQ'.'=='),base64_decode('Zm'.'Nsb3Nl'),base64_decode('Z3p'.'yZWFk'),base64_decode('Zn'.'JlYWQ='),base64_decode('dHJpbQ=='),base64_decode('a'.'W'.'50dmF'.'s'),base64_decode('aW50'.'dmFs'),base64_decode('aW5'.'0dmFs'),base64_decode('c'.'3RyX3JlcGxhY2U='),base64_decode('Z3'.'pyZWFk'),base64_decode('ZnJ'.'lYW'.'Q='),base64_decode('ZXh'.'wbG9k'.'ZQ=='),base64_decode(''.'Y2'.'91b'.'nQ='),base64_decode('c3RyX3J'.'l'.'cGxhY2U='),base64_decode(''.'aW'.'50d'.'mFs'),base64_decode('Z3'.'p'.'yZW'.'Fk'),base64_decode('ZnJlYWQ='),base64_decode(''.'ZGVjaGV4'),base64_decode('Y3JjMzI='),base64_decode('c'.'3RyX3JlcGx'.'hY2U='),base64_decode('Zm'.'9w'.'ZW4='),base64_decode('c3RyX'.'3J'.'lcGxhY2U'.'='),base64_decode('Z'.'ndyaXRl'),base64_decode('c'.'3RyX3J'.'l'.'cGx'.'hY2U'.'='),base64_decode('ZmNs'.'b3N'.'l'),base64_decode('ZmN'.'sb3Nl'),base64_decode('Z'.'GV'.'jaGV4'),base64_decode(''.'Y3JjMzI'.'='),base64_decode('ZmlsZV9nZXRfY29udGVudH'.'M='),base64_decode(''.'c3RyX3JlcGxhY'.'2U='),base64_decode('Z3p'.'jbG9zZQ'.'='.'='),base64_decode('Zm'.'Nsb3Nl'),base64_decode('dW5sa'.'W'.'5r'),base64_decode('cm'.'91bmQ='),base64_decode('bW'.'l'.'jcm90aW1l'),base64_decode('ZmlsZ'.'V9leGl'.'zdHM='),base64_decode('aX'.'NfZ'.'Gly'),base64_decode('c3RyX3J'.'lc'.'GxhY2U='),base64_decode('aX'.'N'.'fc'.'m'.'V'.'hZGF'.'ibG'.'U='),base64_decode(''.'c'.'3Ry'.'X3'.'Jlc'.'G'.'x'.'hY2U='),base64_decode('b3Blb'.'mR'.'pcg=='),base64_decode('cmVhZGRp'.'cg'.'=='),base64_decode(''.'aXNf'.'Z'.'G'.'ly'),base64_decode(''.'a'.'XNfZ'.'mlsZQ='.'='),base64_decode(''.'c'.'3V'.'ic3Ry'),base64_decode('c3R'.'ycG9z'),base64_decode('ZmlsZV9leGlzdHM='),base64_decode('aXNfd3J'.'pd'.'GV'.'hYmxl'),base64_decode('c3RyX3'.'J'.'lcG'.'xh'.'Y2U='),base64_decode('c'.'3Vic3Ry'),base64_decode('c'.'3Ry'.'b'.'GVu'),base64_decode('c'.'nR'.'yaW0='),base64_decode(''.'ZmlsZV9leG'.'l'.'zdHM'.'='),base64_decode('aXNf'.'Z'.'Gly'),base64_decode('a'.'XNf'.'d3Jp'.'d'.'GF'.'i'.'bGU'.'='),base64_decode('c3RyX3J'.'lcGx'.'h'.'Y2U'.'='),base64_decode('c3Vic'.'3Ry'),base64_decode('Y2x'.'v'.'c2V'.'ka'.'XI='),base64_decode('Zmls'.'ZV'.'9leGl'.'zdH'.'M='),base64_decode(''.'aXNf'.'ZG'.'l'.'y'),base64_decode('c3RyX3'.'J'.'lcGxhY2U='),base64_decode('a'.'XNfcmVh'.'ZG'.'Fib'.'GU='),base64_decode(''.'c3'.'RyX'.'3'.'Jl'.'cGxh'.'Y'.'2U='),base64_decode(''.'Zmls'.'ZV9'.'leGl'.'zdHM='),base64_decode('aXNfZmlsZQ=='),base64_decode('c3RyX3'.'JlcG'.'xhY2U='),base64_decode('aX'.'NfcmVhZ'.'GFi'.'bGU='),base64_decode('c3RyX'.'3'.'JlcGxhY'.'2U='),base64_decode('ZmlsZV9nZXRfY29udG'.'Vu'.'dHM='),base64_decode(''.'aXNfYXJyY'.'X'.'k='),base64_decode(''.'bWljcm90aW'.'1l'),base64_decode('b'.'3'.'Bl'.'b'.'mRpcg=='),base64_decode('cm'.'Vh'.'ZGRpc'.'g=='),base64_decode('a'.'XNfZGl'.'y'),base64_decode('Y'.'2xvc2VkaXI='),base64_decode('aXNfY'.'XJyYXk='),base64_decode('Zmls'.'ZV9leGlzdHM='),base64_decode('a'.'XNf'.'ZGly'),base64_decode('c3'.'R'.'y'.'X3JlcGx'.'hY2'.'U='),base64_decode('aXN'.'f'.'cm'.'VhZGFib'.'GU='),base64_decode('c3RyX3'.'JlcGxhY2U'.'='),base64_decode(''.'Zmls'.'Z'.'V9leGlz'.'dHM='),base64_decode(''.'aXN'.'f'.'ZGly'),base64_decode('c3RyX3J'.'lcGxhY'.'2U='),base64_decode(''.'aX'.'Nf'.'d3Jpd'.'GF'.'i'.'b'.'G'.'U'.'='),base64_decode(''.'c3'.'RyX3'.'Jl'.'cG'.'x'.'hY2U='),base64_decode('Y291bnQ='),base64_decode('ZmlsZV9leG'.'lzdHM='),base64_decode('a'.'X'.'N'.'fZG'.'ly'),base64_decode('c'.'3RyX3JlcG'.'xhY2U'.'='),base64_decode('aXNfcmV'.'hZ'.'G'.'FibG'.'U='),base64_decode('c3RyX3'.'JlcGx'.'hY2U='),base64_decode('Zmls'.'ZV9le'.'Glz'.'dHM='),base64_decode('Zm'.'lsZV9l'.'eGlzdHM='),base64_decode(''.'c3R'.'yX3JlcG'.'x'.'hY'.'2U='),base64_decode(''.'ZmlsZV9'.'leGl'.'zdHM='),base64_decode(''.'cm'.'VuYW'.'1l'),base64_decode('c'.'3RyX3Jlc'.'GxhY2U='),base64_decode('Zm'.'lsZV9leGlzdHM='),base64_decode('a'.'XNfZGly'),base64_decode(''.'c3RyX3JlcG'.'xhY'.'2'.'U='),base64_decode('a'.'XNfd3JpdGF'.'i'.'b'.'GU='),base64_decode(''.'c3RyX3JlcGxhY2U='),base64_decode('Zml'.'s'.'Z'.'V9leG'.'l'.'zdHM='),base64_decode(''.'cm91bmQ='),base64_decode('bWlj'.'cm90aW1l'),base64_decode('bWljcm90aW1l'),base64_decode('Zmls'.'ZV9leG'.'lzdHM='),base64_decode('aXNf'.'ZGl'.'y'),base64_decode('c3R'.'yX3Jl'.'cGxhY'.'2U='),base64_decode('b3BlbmRpc'.'g=='),base64_decode(''.'cmVhZG'.'Rp'.'c'.'g=='),base64_decode(''.'aXN'.'fZGly'),base64_decode('Y2'.'xvc2VkaXI='),base64_decode('aXNf'.'YXJyYXk='),base64_decode('aXNfcmVhZGFibGU='),base64_decode('c3RyX3Jl'.'cGxhY2U='),base64_decode('ZmlsZ'.'V9l'.'eGl'.'zdHM='),base64_decode('aXNfZGly'),base64_decode('c3'.'Ry'.'X3JlcGxhY2U='),base64_decode(''.'aXNfd3JpdGFibGU='),base64_decode('c3RyX3JlcG'.'xhY2U='),base64_decode(''.'Zmls'.'ZV9leG'.'lzdHM'.'='),base64_decode('aXNf'.'Z'.'Gly'),base64_decode('c3RyX3Jl'.'cGx'.'hY2U='),base64_decode('aXNfd'.'3Jpd'.'GF'.'ibGU'.'='),base64_decode('c3'.'R'.'yX3'.'JlcGx'.'h'.'Y2U='),base64_decode('b'.'3Blb'.'mRpcg'.'='.'='),base64_decode('c'.'m'.'VhZGRp'.'cg='.'='),base64_decode('aXNfZGly'),base64_decode('aX'.'N'.'fd3JpdGFibGU='),base64_decode('c3'.'RyX3Jlc'.'G'.'xhY2'.'U'.'='),base64_decode('ZmlsZ'.'V9l'.'eGlz'.'dHM='),base64_decode(''.'aXNfd3JpdGFibGU='),base64_decode(''.'c3RyX3JlcGxhY2'.'U='),base64_decode(''.'Y2xvc'.'2'.'VkaXI='),base64_decode(''.'b3Blbm'.'R'.'pc'.'g=='),base64_decode('cm'.'V'.'hZGR'.'pcg='.'='),base64_decode(''.'a'.'XNfZGly'),base64_decode('aXNfd3Jp'.'dGFi'.'bGU='),base64_decode('c3R'.'yX3Jl'.'cGxh'.'Y2U='),base64_decode('Zml'.'sZV9'.'le'.'GlzdHM='),base64_decode('aXNfd3Jp'.'d'.'GFibGU='),base64_decode('c3'.'RyX3JlcG'.'xh'.'Y2U='),base64_decode('Y2x'.'v'.'c2VkaXI='),base64_decode('Y291b'.'n'.'Q'.'='),base64_decode('Z'.'mlsZV9le'.'Glzd'.'H'.'M'.'='),base64_decode('aX'.'N'.'fZGly'),base64_decode(''.'c3RyX3JlcGxh'.'Y2U='),base64_decode('aXNfc'.'m'.'VhZ'.'GFibGU='),base64_decode(''.'c'.'3R'.'yX3JlcGxhY2U='),base64_decode('b3BlbmRpcg'.'=='),base64_decode(''.'c'.'mVhZGRp'.'cg=='),base64_decode('aXNfZGly'),base64_decode('Z'.'mlsZV'.'9le'.'Gl'.'zdHM='),base64_decode('b'.'3BlbmRp'.'cg'.'='.'='),base64_decode('cmVhZGRpcg=='),base64_decode('aXNfZGly'),base64_decode(''.'aW5fYXJyYXk'.'='),base64_decode('Y2'.'xvc2'.'Vk'.'aXI='),base64_decode('aW5fYXJyY'.'Xk='),base64_decode('Y2xvc2Vk'.'aXI='),base64_decode('cm91b'.'mQ'.'='),base64_decode('bWljcm90'.'aW1l'),base64_decode('Zml'.'s'.'ZV9leGlzdHM='),base64_decode('aX'.'Nfc'.'mVh'.'Z'.'GFib'.'GU='),base64_decode('b3B'.'l'.'bmR'.'pcg=='),base64_decode(''.'cmVhZGRp'.'cg=='),base64_decode('aXNfZGly'),base64_decode('c3Ry'.'cG9z'),base64_decode('Y2xvc2VkaXI='),base64_decode('ZmlsZV9le'.'GlzdHM'.'='),base64_decode('aX'.'NfcmVhZ'.'GFib'.'G'.'U='),base64_decode(''.'b3Blbm'.'R'.'pc'.'g'.'=='),base64_decode(''.'cmVhZGR'.'p'.'cg=='),base64_decode('aXNfZ'.'Gly'),base64_decode('c3Vic3Ry'.'X'.'2NvbXBhcmU='),base64_decode('ZmlsZ'.'V9le'.'Gl'.'zd'.'HM='),base64_decode('aXNfZG'.'l'.'y'),base64_decode(''.'aX'.'Nfd'.'3JpdG'.'F'.'i'.'b'.'G'.'U'.'='),base64_decode(''.'Y2xvc2'.'V'.'kaXI='),base64_decode('Z'.'GVmaW5l'.'ZA=='),base64_decode(''.'bWl'.'j'.'cm9'.'0'.'aW1l'),base64_decode('ZmlsZV9leGlzdHM'.'='),base64_decode('Z'.'m'.'lsZV9leG'.'lz'.'dHM='),base64_decode('ZmlsZV9'.'l'.'eGlz'.'dHM='),base64_decode('Zm'.'l'.'s'.'Z'.'V9leGl'.'z'.'dHM'.'='),base64_decode(''.'ZmlsZV9leGlzdHM='),base64_decode('aXNfZGly'),base64_decode('c3RyX3J'.'lcG'.'xhY2'.'U='),base64_decode('aXNfcmVhZGFibGU='),base64_decode(''.'c3RyX3'.'J'.'l'.'cGxhY2U='),base64_decode('b3Blbm'.'Rpc'.'g=='),base64_decode(''.'cmVhZG'.'Rp'.'cg'.'=='),base64_decode('aXNf'.'ZGl'.'y'),base64_decode('Y2xvc2VkaXI='),base64_decode('aX'.'N'.'f'.'YX'.'JyYX'.'k'.'='),base64_decode(''.'Y29'.'1bn'.'Q='),base64_decode(''.'ZmlsZV9l'.'e'.'GlzdHM='),base64_decode('aXN'.'fZGly'),base64_decode('c'.'3'.'RyX3'.'JlcGx'.'hY2U='),base64_decode('aXNfd3'.'JpdG'.'FibGU='),base64_decode('c3R'.'yX3J'.'lcGxhY2U='),base64_decode('Z'.'mlsZV9leGl'.'z'.'dHM='),base64_decode('a'.'XNfZG'.'ly'),base64_decode('c'.'3'.'R'.'y'.'X'.'3J'.'lcG'.'x'.'h'.'Y'.'2U='),base64_decode('aXNfc'.'mVhZGFi'.'bGU'.'='),base64_decode('c3RyX3'.'JlcGx'.'hY2U='),base64_decode('b3B'.'l'.'bmR'.'pcg=='),base64_decode('c'.'m'.'V'.'hZG'.'R'.'pcg=='),base64_decode('c3Vic3'.'R'.'y'),base64_decode('aX'.'NfZ'.'mlsZQ=='),base64_decode('c3'.'Vic3R'.'y'),base64_decode('c3Ry'.'bGV'.'u'),base64_decode('c3Vic3'.'R'.'y'),base64_decode('c3R'.'ybG'.'Vu'),base64_decode('c3Vic3Ry'),base64_decode('c3'.'RybG'.'V'.'u'),base64_decode('dH'.'Jpb'.'Q=='),base64_decode('Z'.'m'.'lsZV9leGlzdH'.'M='),base64_decode('c3Vic'.'3Ry'),base64_decode(''.'c3Vic3Ry'),base64_decode('c3Ry'.'bGVu'),base64_decode('c'.'3Vic'.'3Ry'),base64_decode('c3'.'RybG'.'Vu'),base64_decode('dHJ'.'pbQ=='),base64_decode('Y2'.'xvc2'.'VkaX'.'I='),base64_decode('Y'.'291bnQ='),base64_decode(''.'c3RydG9sb3d'.'lcg=='),base64_decode('ZGV'.'maW5lZA=='),base64_decode('Y291'.'bnQ'.'='),base64_decode(''.'c3'.'RyX3'.'JlcGxhY2'.'U='),base64_decode('c3RyX3JlcGx'.'hY2U='),base64_decode(''.'c3RyX'.'3JlcGxh'.'Y2U='),base64_decode('Y291bnQ='),base64_decode(''.'c3RyX3JlcGxhY'.'2U='),base64_decode('c3Ry'.'X3Jl'.'cGxh'.'Y2'.'U='),base64_decode('c3R'.'y'.'X'.'3JlcGxhY2U='),base64_decode('cm'.'91bmQ'.'='),base64_decode('b'.'Wlj'.'cm90aW1l'),base64_decode('Zn'.'VuY3Rpb25fZ'.'Xhpc3Rz'),base64_decode(''.'c3RyX3'.'JlcGxhY2U='),base64_decode('ZGlybmFtZQ=='),base64_decode(''.'c3Vic3'.'Ry'),base64_decode('c3RybGVu'),base64_decode(''.'dH'.'JpbQ'.'='.'='),base64_decode('c3Vic'.'3Ry'),base64_decode(''.'c3'.'RybG'.'Vu'),base64_decode(''.'aX'.'NfYXJyYXk='),base64_decode('aW1'.'wbG9kZQ'.'=='),base64_decode('dHJpbQ=='),base64_decode('dHJpbQ=='),base64_decode('ZX'.'hw'.'bG9kZQ=='),base64_decode('ZXhwbG9kZQ=='),base64_decode('a'.'W50dmFs'),base64_decode(''.'aW50dm'.'Fs'),base64_decode('a'.'W50d'.'mFs'),base64_decode('aW'.'50'.'d'.'m'.'Fs'),base64_decode('aW50'.'dmFs'),base64_decode('aW5'.'0dmFs'),base64_decode('aW5'.'0dmFs'),base64_decode(''.'a'.'W50dmFs'),base64_decode('aW50dmFs'),base64_decode('aW50d'.'mFs'),base64_decode('aW50dmF'.'s'),base64_decode('aW5'.'0'.'dmFs'),base64_decode('aW50'.'dm'.'Fs'),base64_decode('aW50d'.'mFs'),base64_decode('aW50dmF'.'s'),base64_decode('aW'.'5'.'0d'.'mFs'),base64_decode('a'.'W50'.'dmFs'),base64_decode('aW5'.'0dmFs'),base64_decode('Zml'.'s'.'ZV9nZ'.'XRfY2'.'9'.'udGVu'.'dHM='),base64_decode('c3'.'Ry'.'cG9z'),base64_decode('c3RycG'.'9z'),base64_decode(''.'c3'.'Vic3'.'Ry'),base64_decode('c3'.'R'.'ycG9z'),base64_decode(''.'c3Vi'.'c3Ry'),base64_decode(''.'c3Vic3Ry'),base64_decode(''.'YmFzZTY0X2VuY29kZQ=='),base64_decode('bWQ1'),base64_decode('c3Vic3R'.'y'),base64_decode(''.'c3Ryb'.'GV'.'u'),base64_decode(''.'bW'.'Q'.'1'),base64_decode(''.'cH'.'JlZ19yZXB'.'sYWNl'),base64_decode('bWlj'.'cm90aW1l'),base64_decode('cm9'.'1bmQ='),base64_decode(''.'bWljcm90'.'aW1l'),base64_decode('aXN'.'fYXJyYXk='),base64_decode('aXNfYXJyYXk'.'='),base64_decode('aXN'.'fYXJyYXk='),base64_decode('ZmlsZV9leG'.'lzdHM='),base64_decode('dW5saW5'.'r'),base64_decode('Zml'.'sZV9'.'leGlzdHM'.'='),base64_decode('d'.'W5'.'saW5r'),base64_decode('Zn'.'NvY2t'.'vcGVu'),base64_decode('Y'.'mFzZTY0'.'X2VuY'.'29kZQ=='),base64_decode('d'.'XJsZW5j'.'b'.'2'.'Rl'),base64_decode('ZGV'.'maW5lZA'.'='.'='),base64_decode('dXJsZW5j'.'b2Rl'),base64_decode('dX'.'Js'.'Z'.'W'.'5'.'j'.'b2R'.'l'),base64_decode('dXJ'.'sZ'.'W'.'5jb2Rl'),base64_decode('c'.'3R'.'ybGVu'),base64_decode('ZnB1'.'d'.'HM='),base64_decode('ZmVvZ'.'g='.'='),base64_decode('Zmd'.'ldHM='),base64_decode('c'.'HJlZ19tYXRj'.'a'.'A=='),base64_decode('ZmdldHM='),base64_decode('c'.'3R'.'ydG9sb3d'.'lcg'.'=='),base64_decode('c3'.'RybGV'.'u'),base64_decode('aW5'.'fY'.'XJ'.'y'.'YXk='),base64_decode('aGV4ZGVj'),base64_decode('Zn'.'JlYWQ='),base64_decode('c3Ryb'.'GVu'),base64_decode(''.'Zmdl'.'dHM='),base64_decode(''.'Zmd'.'ldHM'.'='),base64_decode('c'.'3Ry'.'dG9s'.'b3dlcg=='),base64_decode('c3RybGV'.'u'),base64_decode('aW5fYXJyYXk='),base64_decode(''.'aGV4ZG'.'Vj'),base64_decode('Z'.'nJlYWQ='),base64_decode('ZmNsb3Nl'),base64_decode('Y2xhc3N'.'fZXhpc3R'.'z'),base64_decode('bWV0aG'.'9kX2V'.'4aXN'.'0cw='.'='),base64_decode('ZGV'.'maW'.'5'.'lZA=='),base64_decode('Y2xhc3'.'NfZXhp'.'c3Rz'),base64_decode('c3RycG9z'),base64_decode('cGFjaw=='),base64_decode('c3Vic3Ry'),base64_decode('c'.'3'.'RycG9z'),base64_decode('ZGVmaW5lZA'.'='.'='),base64_decode('ZGVm'.'a'.'W5'.'lZA=='),base64_decode('c3Vic3R'.'y'),base64_decode('c3'.'RybGVu'),base64_decode('Z3p1b'.'m'.'NvbXByZXNz'),base64_decode(''.'c'.'3Vic'.'3Ry'),base64_decode('c3RybG'.'V'.'u'),base64_decode('c'.'3Vic3Ry'),base64_decode('aXNfYXJy'.'YXk='),base64_decode('a'.'XNfY'.'XJyY'.'X'.'k='),base64_decode('aXNfbnVtZX'.'J'.'pYw=='),base64_decode('a'.'W50'.'dmFs'),base64_decode('dXJsZW5jb2Rl'),base64_decode(''.'bWQ1'),base64_decode('d'.'X'.'JsZW5j'.'b2Rl'),base64_decode('dXJs'.'ZW5jb'.'2Rl'),base64_decode('dXJs'.'Z'.'W5jb2Rl'),base64_decode('ZGVmaW5l'.'Z'.'A=='),base64_decode('ZGV'.'maW5lZA=='),base64_decode('Z'.'GVmaW'.'5lZ'.'A'.'=='),base64_decode('dXJsZ'.'W5jb'.'2'.'R'.'l'),base64_decode('dXJ'.'sZW5j'.'b2Rl'),base64_decode('dXJs'.'ZW5j'.'b2Rl'),base64_decode(''.'dXJs'.'ZW5j'.'b'.'2'.'Rl'),base64_decode('dXJsZW'.'5jb2Rl'),base64_decode('dXJsZW5jb'.'2Rl'),base64_decode('dXJ'.'sZW5jb'.'2Rl'),base64_decode('dXJsZW5jb2'.'Rl'),base64_decode('dXJsZW'.'5jb2R'.'l'),base64_decode('dX'.'JsZW5'.'jb2Rl'),base64_decode('dXJsZW'.'5jb2Rl'),base64_decode('cGhwdm'.'V'.'yc2lvbg=='),base64_decode('dXJsZW5j'.'b2Rl'),base64_decode('dX'.'JsZW5jb2'.'Rl'),base64_decode(''.'aW'.'5pX2d'.'l'.'d'.'A=='),base64_decode('dXJsZW5'.'j'.'b2Rl'),base64_decode('d'.'XJsZW5jb2'.'Rl'),base64_decode('d'.'XJ'.'sZ'.'W5'.'jb'.'2Rl'),base64_decode('dXJsZW'.'5jb2R'.'l'),base64_decode('anN'.'vbl9'.'lbmNvZGU='),base64_decode('YXJ'.'yYXlfa2V5cw=='),base64_decode('Y291b'.'nQ='),base64_decode('dXJsZW5j'.'b2Rl'),base64_decode('Y291bn'.'Q='),base64_decode('dXJsZW5jb2R'.'l'),base64_decode('Y291bnQ='),base64_decode('d'.'XJs'.'ZW5jb2Rl'),base64_decode('Z'.'GVma'.'W5lZA=='),base64_decode('Y29'.'uc3'.'Rh'.'bnQ'.'='),base64_decode('Z'.'GVmaW5lZA=='),base64_decode('Y29uc'.'3Rh'.'bnQ='),base64_decode(''.'Ym'.'F'.'zZTY'.'0X2RlY29kZQ=='),base64_decode('dW5z'.'Z'.'XJpYWxpemU='),base64_decode('a'.'XNfYXJyYX'.'k'.'='),base64_decode('dXJsZW5jb2R'.'l'),base64_decode('ZGVmaW5'.'l'.'ZA=='),base64_decode('Y29uc3RhbnQ='),base64_decode('YmFzZT'.'Y0'.'X2'.'RlY29kZQ=='),base64_decode(''.'dW5z'.'ZX'.'J'.'pY'.'WxpemU='),base64_decode('aXN'.'f'.'YXJyYX'.'k='),base64_decode('dXJsZW5jb2Rl'),base64_decode(''.'aW1'.'wbG9k'.'Z'.'Q'.'=='),base64_decode('Y'.'2'.'xh'.'c3NfZXhpc3Rz'),base64_decode('dXJsZW5jb2Rl'),base64_decode(''.'dX'.'JsZW5'.'jb'.'2'.'Rl'),base64_decode('b'.'WV0a'.'G9kX2V'.'4aXN'.'0cw=='),base64_decode('bWV'.'0aG9kX2V'.'4aX'.'N0cw=='),base64_decode('d'.'XJsZW5jb2Rl'),base64_decode('dX'.'JsZW5jb2Rl'),base64_decode('d'.'XJsZW'.'5'.'jb2R'.'l'),base64_decode(''.'dX'.'JsZW5jb'.'2R'.'l'),base64_decode('dXJ'.'sZW'.'5j'.'b2Rl'),base64_decode('a'.'XNfYXJyYXk='),base64_decode(''.'dX'.'J'.'sZW5'.'j'.'b2R'.'l'),base64_decode('ZnVuY'.'3R'.'p'.'b25fZX'.'hpc3R'.'z'),base64_decode('b3'.'BlbmRpc'.'g=='),base64_decode('aXNfYX'.'Jy'.'Y'.'Xk='),base64_decode('aW5'.'fYXJyYXk'.'='),base64_decode('ZmlsZV9leGlzdHM='),base64_decode('aXN'.'fZmlsZQ=='),base64_decode('Zml'.'sZ'.'V9nZX'.'RfY'.'29udGV'.'ud'.'HM='),base64_decode('c'.'HJl'.'Z19tYXR'.'jaA='.'='),base64_decode('cmVhZGRp'.'cg='.'='),base64_decode('aXNfZGl'.'y'),base64_decode('c3R'.'yc'.'G'.'9'.'z'),base64_decode('aXN'.'fYXJyYXk='),base64_decode('aW5fYXJ'.'y'.'YXk='),base64_decode('ZmlsZV9leGlzd'.'HM'.'='),base64_decode('c3R'.'yX3JlcGxhY'.'2U='),base64_decode('c'.'3RyX3'.'JlcGxh'.'Y2U='),base64_decode(''.'Y2xvc2V'.'kaXI='),base64_decode('Y2xhc3NfZXhpc3Rz'),base64_decode('b'.'3BlbmR'.'pcg=='),base64_decode('c'.'mVhZ'.'GR'.'p'.'cg='.'='),base64_decode('aXNf'.'ZGly'),base64_decode('aX'.'NfYXJ'.'y'.'YX'.'k'.'='),base64_decode('aW5fYX'.'Jy'.'YXk='),base64_decode('ZmlsZV9leGlzdHM'.'='),base64_decode(''.'Z'.'mlsZV9nZXRfY29udGVu'.'dHM='),base64_decode('cHJlZ19y'.'ZXBsYWNl'),base64_decode('c3RybGVu'),base64_decode('c3R'.'yX3'.'Jlc'.'GxhY2U='),base64_decode('c'.'3Ry'.'X3JlcGxh'.'Y2'.'U'.'='),base64_decode(''.'Y'.'2xvc2'.'Vk'.'aXI='),base64_decode('Y2xhc3NfZXhpc3Rz'),base64_decode('Y2'.'xhc3NfZXh'.'pc3'.'Rz'),base64_decode('a'.'XNfYXJyYXk='),base64_decode('a'.'W5fYXJy'.'YXk='),base64_decode('YXJyYXlfa2V5X2'.'V'.'4'.'aXN0cw=='),base64_decode('bWV'.'0'.'a'.'G9k'.'X2V4'.'aXN0cw'.'=='),base64_decode('b3Blb'.'mRpcg=='),base64_decode('cmVh'.'ZGRpc'.'g=='),base64_decode('aXN'.'fZGly'),base64_decode('aX'.'NfYX'.'JyY'.'Xk='),base64_decode('aW5fYXJy'.'YX'.'k='),base64_decode('ZmlsZ'.'V9l'.'e'.'G'.'lzdHM'.'='),base64_decode('ZmlsZ'.'V'.'9nZ'.'XR'.'f'.'Y29u'.'d'.'GV'.'udHM='),base64_decode('cHJlZ19yZXBsYWNl'),base64_decode(''.'c3RybGV'.'u'),base64_decode('c3'.'RyX3Jl'.'cGxhY2U'.'='),base64_decode('c'.'3Ry'.'X3Jlc'.'GxhY2U='),base64_decode('Y2xvc2Vk'.'aXI='),base64_decode('Y2xhc3NfZXhpc3Rz'),base64_decode('Y2xh'.'c'.'3NfZ'.'X'.'hpc3Rz'),base64_decode(''.'aXN'.'fYXJy'.'Y'.'Xk='),base64_decode('aW5'.'fY'.'X'.'JyYX'.'k='),base64_decode('YX'.'Jy'.'Y'.'Xl'.'f'.'a2V5X2'.'V4'.'aXN'.'0cw=='),base64_decode(''.'aWdu'.'b'.'3J'.'l'.'X3VzZXJ'.'f'.'YWJ'.'vc'.'nQ='),base64_decode('Zm'.'lsZV9'.'leGlz'.'dH'.'M'.'='),base64_decode(''.'Z'.'m'.'lsZ'.'XNpe'.'mU'.'='),base64_decode('aW50dmFs'),base64_decode(''.'Zm9wZ'.'W4'.'='),base64_decode('aWd'.'ub3'.'JlX'.'3V'.'z'.'ZX'.'JfYWJvcnQ='),base64_decode('Zm9wZW4'.'='),base64_decode('aW'.'dub3'.'JlX'.'3V'.'zZ'.'X'.'JfYWJvcnQ='),base64_decode('aW50dmFs'),base64_decode('ZnNlZW'.'s='),base64_decode(''.'ZnJlYWQ='),base64_decode(''.'Znd'.'yaX'.'Rl'),base64_decode('ZmNsb3Nl'),base64_decode(''.'ZmN'.'s'.'b3'.'Nl'),base64_decode('Y'.'29'.'weQ=='),base64_decode('dW'.'5saW'.'5r'),base64_decode('Y2'.'xlYXJzdGF'.'0Y2FjaGU='),base64_decode('Zm9'.'w'.'Z'.'W4='),base64_decode('ZmxvY2s'.'='),base64_decode(''.'Z'.'ndy'.'a'.'XRl'),base64_decode('ZGF0ZQ=='),base64_decode(''.'ZmZsdXNo'),base64_decode('Z'.'mxv'.'Y2s='),base64_decode('Z'.'mNsb3'.'Nl'),base64_decode('aWdub3JlX3Vz'.'ZXJf'.'YWJvcn'.'Q'.'='),base64_decode('c3RyX3Jl'.'cGxh'.'Y2'.'U='),base64_decode(''.'c3'.'RyX3Jlc'.'GxhY2U='),base64_decode('c3Ry'.'bG'.'Vu'),base64_decode('c3Vic3Ry'),base64_decode('c3RybGV'.'u'),base64_decode('c3Ry'.'bGVu'),base64_decode('c3Vi'.'c3Ry'),base64_decode('c3'.'Ry'.'bGVu'),base64_decode('Zm'.'lsZ'.'V9leGlzdHM='),base64_decode('aX'.'N'.'fZGly'),base64_decode('aX'.'Nfd3JpdGFibGU='),base64_decode('Y2htb'.'2Q'.'='),base64_decode('c3'.'Vic3R'.'y'),base64_decode('c3V'.'ic3R'.'y'),base64_decode('Y291bnQ'.'='),base64_decode('bWt'.'kaXI='),base64_decode('c3Ry'.'bGVu'),base64_decode('c'.'3R'.'yb'.'GVu'),base64_decode('c'.'3Vic3'.'Ry'),base64_decode('c3Ryb'.'GVu'),base64_decode('c'.'3R'.'ybGVu'),base64_decode('c3RybGVu'),base64_decode('c'.'3Vic3Ry'),base64_decode(''.'c3Ry'.'bGVu'),base64_decode('c3RycG9z'),base64_decode('ZmlsZV9l'.'eGlzdHM'.'='),base64_decode('c3RyX'.'3J'.'l'.'cGxh'.'Y2U='),base64_decode('aXNf'.'ZGly'),base64_decode('ZmlsZV9leG'.'l'.'zdH'.'M='),base64_decode(''.'aXNfZGly'),base64_decode('c3RyX3Jlc'.'GxhY2U='),base64_decode('aXN'.'fd3J'.'p'.'d'.'GFi'.'b'.'GU='),base64_decode('c'.'3RyX3Jl'.'cGxhY2U='),base64_decode(''.'b3BlbmRpc'.'g=='),base64_decode(''.'cmVhZGRp'.'c'.'g=='),base64_decode('c3V'.'ic3Ry'),base64_decode('c3R'.'ybGVu'),base64_decode('c3Vic3Ry'),base64_decode(''.'c3R'.'y'.'b'.'G'.'Vu'),base64_decode('aW5fY'.'XJyYXk='),base64_decode('c'.'3'.'Vic'.'3'.'R'.'y'),base64_decode('c3'.'Vic3'.'Ry'),base64_decode('c'.'3R'.'ycG9z'),base64_decode('a'.'XNf'.'ZGly'),base64_decode('aXN'.'fZmls'.'Z'.'Q=='),base64_decode('Z'.'mlsZV9l'.'eGlzdHM='),base64_decode(''.'aX'.'N'.'fd3JpdGF'.'ibGU='),base64_decode('c3'.'R'.'yX3J'.'lcGxhY2U='),base64_decode('ZGV'.'jaGV4'),base64_decode(''.'Y3JjMzI='),base64_decode('ZmlsZV9nZXR'.'fY29udG'.'Vud'.'HM'.'='),base64_decode('Y2'.'9'.'weQ=='),base64_decode('Y'.'2'.'htb2Q='),base64_decode('ZGV'.'jaGV4'),base64_decode(''.'Y3JjMzI'.'='),base64_decode('ZmlsZ'.'V'.'9nZXRf'.'Y29udG'.'V'.'ud'.'HM='),base64_decode('c3R'.'y'.'X3JlcG'.'xh'.'Y2U'.'='),base64_decode(''.'Y2'.'xvc2Vk'.'aX'.'I'.'='),base64_decode('c3Vic3'.'Ry'),base64_decode(''.'ZmlsZV9leG'.'l'.'zdHM='),base64_decode('aXNfZGly'),base64_decode('c3Ry'.'X'.'3J'.'l'.'cGx'.'hY2U='),base64_decode('aX'.'Nfd3'.'JpdGFibGU='),base64_decode('c'.'3'.'R'.'y'.'X3JlcGxh'.'Y2U='),base64_decode(''.'Z'.'GVja'.'GV4'),base64_decode('Y3JjMz'.'I'.'='),base64_decode(''.'ZmlsZV'.'9n'.'ZX'.'RfY2'.'9udGV'.'udH'.'M='),base64_decode('Y'.'29'.'weQ=='),base64_decode(''.'Y2'.'ht'.'b2'.'Q='),base64_decode('ZG'.'V'.'jaGV4'),base64_decode('Y3JjMzI'.'='),base64_decode('Zml'.'sZ'.'V'.'9'.'nZ'.'X'.'RfY29'.'udGVudHM'.'='),base64_decode('c3'.'RyX'.'3Jl'.'cGxhY2U='),base64_decode('ZmlsZV9leGlzdHM='),base64_decode('aXNfZ'.'mlsZQ=='),base64_decode('dW5sa'.'W5r'),base64_decode('b3'.'BlbmRp'.'cg=='),base64_decode('cm'.'VhZGRpcg='.'='),base64_decode(''.'aXNfZ'.'Gly'),base64_decode('d'.'W5saW5r'),base64_decode(''.'Y2x'.'vc2Vk'.'aXI='),base64_decode('cm1k'.'aXI'.'='),base64_decode(''.'c3Ryc'.'G9z'),base64_decode(''.'c3'.'R'.'y'.'cmV2'),base64_decode('c3R'.'yc'.'mV2'),base64_decode('c'.'3'.'Ryb'.'GVu'),base64_decode(''.'c3'.'Ry'.'bGVu'),base64_decode('Zmls'.'ZV9'.'nZXRfY29ud'.'GVudHM='),base64_decode('c3Ry'.'X'.'3Jlc'.'Gx'.'h'.'Y2U'.'='),base64_decode('aXNfYXJy'.'YXk='),base64_decode('Y'.'X'.'Jy'.'Y'.'X'.'lfa2V5X'.'2V4aXN0cw=='),base64_decode(''.'dG91Y2g='),base64_decode('aX'.'NfYXJ'.'yYX'.'k'.'='),base64_decode('YXJyYXlfa2V5X2V'.'4aXN0cw'.'=='),base64_decode('ZXh'.'w'.'bG9'.'kZ'.'Q='.'='),base64_decode(''.'YXJyYXl'.'fc2VhcmNo'),base64_decode('c3RyX'.'3'.'Jlc'.'GxhY2'.'U'.'='),base64_decode('Z'.'GVma'.'W'.'5lZ'.'A=='),base64_decode(''.'ZGVmaW5'.'l'.'ZA=='),base64_decode('Z'.'mls'.'ZV9'.'le'.'Gl'.'zdHM'.'='),base64_decode('bWlj'.'cm90aW1l'),base64_decode('Y2x'.'hc3'.'N'.'fZ'.'Xhpc3Rz'),base64_decode(''.'bWV0aG9k'.'X2V4'.'aXN'.'0cw'.'=='),base64_decode('aW5'.'0dmFs'),base64_decode('aW'.'50dm'.'Fs'),base64_decode('ZnV'.'uY'.'3Rpb25'.'fZXhpc3Rz'),base64_decode(''.'ZnVuY3Rpb2'.'5fZXhpc3'.'R'.'z'),base64_decode('Y291'.'bnQ='),base64_decode('a'.'XNfYXJyYXk='),base64_decode('Y291bnQ='),base64_decode('a'.'XNfYX'.'JyYXk'.'='),base64_decode('Y291'.'bnQ='),base64_decode(''.'ZGVma'.'W5'.'l'),base64_decode(''.'b2Jfc3Rh'.'cnQ='),base64_decode('b2JfZ2V'.'0X2Nv'.'bn'.'RlbnR'.'z'),base64_decode(''.'b2J'.'fZ'.'W5kX2NsZWFu'),base64_decode('Z'.'GV'.'maW'.'5'.'l'),base64_decode('b2Jfc3R'.'hcnQ='),base64_decode('b2J'.'fZ2V0X2N'.'v'.'bnRlbnRz'),base64_decode(''.'b2J'.'fZ'.'W5kX2Ns'.'ZWF'.'u'),base64_decode('dW5'.'saW5r'),base64_decode('c'.'2V'.'0X3R'.'pbWVfbG'.'lta'.'X'.'Q='),base64_decode('aW5pX3Nld'.'A='.'='),base64_decode('aWdu'.'b3Jl'.'X3VzZ'.'XJfYWJ'.'vc'.'nQ='),base64_decode('d'.'HJp'.'bQ=='),base64_decode('c3Vi'.'c3R'.'y'),base64_decode('c'.'3Vic3'.'Ry'),base64_decode('c3V'.'ic3R'.'y'),base64_decode('c3'.'Vic3Ry'),base64_decode('c'.'3Vic3'.'Ry'),base64_decode('c3Vic3Ry'),base64_decode('c3Vic3Ry'),base64_decode('c3Vic3Ry'),base64_decode('c3V'.'ic3Ry'),base64_decode(''.'c3'.'Vic3Ry'),base64_decode(''.'c3Vic3'.'Ry'),base64_decode(''.'c3'.'V'.'ic'.'3Ry'),base64_decode(''.'c3'.'Vic'.'3Ry'),base64_decode('c'.'3V'.'ic3'.'Ry'),base64_decode('dW5saW'.'5r'),base64_decode('Zm9'.'w'.'ZW4='),base64_decode('Zndy'.'a'.'XRl'),base64_decode('ZndyaXRl'),base64_decode('Znd'.'yaX'.'Rl'),base64_decode(''.'ZndyaXRl'),base64_decode('Zndya'.'XRl'),base64_decode(''.'Zm'.'N'.'sb3Nl'),base64_decode(''.'dmVyc2'.'lvb'.'l9jb21wYX'.'Jl'),base64_decode(''.'cGhw'.'dmVyc2lvb'.'g=='),base64_decode(''.'ZG'.'Vm'.'aW'.'5l'.'ZA'.'='.'='),base64_decode('a'.'X'.'NfYXJyYXk'.'='),base64_decode(''.'YXJyYXlfa2V5'.'cw=='),base64_decode('YXJyYX'.'lfa2'.'V5cw='.'='),base64_decode('cmVzZXQ'.'='),base64_decode('aXNfYXJyYXk'.'='),base64_decode('aXNf'.'c3Rya'.'W'.'5'.'n'),base64_decode('aXNfYXJ'.'yY'.'X'.'k='),base64_decode('a'.'XNfYXJyY'.'Xk='),base64_decode('aXNfY'.'XJy'.'YXk='));if(!function_exists(__NAMESPACE__.'\\___1004537982')){function ___1004537982($_99189392){static $_1561826342= false; if($_1561826342 == false) $_1561826342=array(''.'VVBEQV'.'RFX'.'1NZU'.'1RFT'.'V9WRVJTS'.'U'.'9'.'OX0E=','VVBEQV'.'RFX'.'1NZU1RFTV9'.'WRVJTSU9'.'OX0E=',''.'MjQuMjAwL'.'j'.'MwMA==','Ql'.'hf'.'RElSX1B'.'FUk1'.'JU'.'1NJT'.'0'.'5T','Qlh'.'fRE'.'lSX1BF'.'Uk1J'.'U1N'.'JT05T','REVGQ'.'VVMV'.'F9VUERBV'.'E'.'VfU0VSV'.'kVS','REVGQ'.'V'.'VMVF9VU'.'ERBVEVfU0V'.'SVkVS','d3d'.'3'.'LmJp'.'dHJpeHNvZnQuY2'.'9t',''.'em'.'xpYg='.'=','Z'.'3pvcG'.'V'.'u','Z3pvcG'.'VuNjQ=','a'.'HR'.'t'.'b'.'HNwZWNpY'.'WxjaGFyc2J4','Qlhf'.'VVR'.'G','VVRG'.'LTg=','SVNPL'.'Tg4NTktMQ==','VVNf'.'U0h'.'BUkV'.'EX0'.'tF'.'U'.'k'.'5FTF9'.'QQVRI','V'.'V'.'NfU0'.'h'.'BUk'.'VEX'.'0tFUk'.'5FT'.'F9QQVR'.'I','L2JpdHJpeA==',''.'VVN'.'fQ'.'0'.'FMTF9UWV'.'B'.'F','VVNfQ0FMT'.'F'.'9UWVBF','QUx'.'M','VVNfQkFTRV9N'.'T0RVTEU'.'=','VVN'.'fQk'.'F'.'T'.'RV'.'9NT'.'0RVTEU=','bWFpbg'.'==','VVBE'.'QVRFX1N'.'UUk'.'9OR19VU'.'ER'.'BVEVfQ'.'0hFQ0s=','','Q0F'.'DSEU'.'0VVBEQVRFU'.'1lTX'.'0xJQ0V'.'OU0'.'VfS0V'.'Z','','RE9DVU1FTlRfUk9PVA==','L2Jp'.'d'.'HJ'.'p'.'eC9tb2'.'R1bG'.'Vz'.'L21'.'haW4v'.'Y2xh'.'c3Nlc'.'y'.'9nZW5lc'.'mFs'.'L3V'.'wZGF0Z'.'V9'.'jb'.'GFz'.'cy5w'.'aHA'.'=','c29'.'ydA==','Y'.'XN'.'j',''.'QUNUSVZF',''.'WQ'.'==','TEl'.'E','b'.'W'.'Fpbg==','dXBkYXRlX3NpdGU=','bW'.'Fpbg==','d'.'m'.'VuZG9y','','dX'.'BkYXRlc'.'2Vyd'.'m'.'VybGlna'.'H'.'Q=','MWNfY'.'ml'.'0cml4X3BvcnRhbA'.'==','MWN'.'fYml'.'0c'.'m'.'l4','d'.'3d'.'3LjFjLWJpdH'.'Jpe'.'C'.'5ydQ'.'==','Ly'.'8=',''.'L2Jp'.'dHJp'.'eC91'.'cGRh'.'dGV'.'zL'.'2xpY2Vu'.'c2UucGhwP2l'.'udHJhbm'.'V0PQ==','aW50'.'cmFu'.'ZXQ=','WQ='.'=','Tg==','J'.'mxh'.'bmc9','JnZl'.'bmRvcj0=','JmxhbmdzPQ==','LA'.'==','aW50cmFuZX'.'Q=','RE9DVU1FTlRfU'.'k9PV'.'A==','L2'.'J'.'pd'.'HJp'.'e'.'C'.'9tb2R1'.'bGVzL21haW'.'4vbG'.'Fu'.'Zy9ydQ==',''.'fm'.'5ld1'.'9'.'sa'.'WNlbn'.'NlMThfMF'.'9'.'zaWd'.'u','RE9DVU1FT'.'lRfUk9PVA'.'==','L2'.'Jpd'.'HJ'.'peC9'.'tb2R1'.'bGVzL'.'2'.'1haW4vbGFuZ'.'y'.'9ydQ==','fm5ld1'.'9'.'s'.'aWNlbn'.'NlMjRfNDAw'.'X3NpZ2'.'4'.'=','fm5ld19s'.'aWNl'.'bnNlMj'.'RfN'.'DAw'.'X3'.'NpZ24=','L'.'1teY'.'S16Q'.'S1a'.'MC05Ll8t'.'XS8=','','QA='.'=','TkFNRQ==','Lg'.'==','a'.'W'.'50dmFs','Lg==','QA'.'='.'=','VkF'.'MV'.'UU=','Iw==','Iw==','bW9kd'.'W'.'xlcw==','bW9kdWxlcw==','bW9'.'kd'.'Wx'.'lcw'.'==','WS1t'.'LWQgSDppOnM=',''.'PA==','P3B'.'ocApyZX'.'R1'.'cm4g',''.'O'.'wo=',''.'Qml0'.'cml'.'4'.'XE1haW5cRG'.'F'.'0YVxDYW'.'NoZ'.'UVuZ2luZUZpbGV'.'z',''.'L'.'2NhY2hl',''.'L2'.'Nz'.'cy8'.'=','L2'.'NhY'.'2h'.'l','L2pzL'.'w==',''.'L'.'21'.'hbmFnZW'.'RfY'.'2Fja'.'GUv'.'TV'.'lTUU'.'w=','L2Nzcy'.'8=','L'.'21'.'hbmFnZ'.'WRfY'.'2'.'FjaG'.'UvTVlTUUw=','L2'.'p'.'z'.'L'.'w==',''.'bWF'.'pbg==',''.'T25GaW5p'.'c2hNb2R1'.'bGVV'.'cGRhdGU=','Q'.'lhfU'.'kVB'.'TF9'.'VUERBVEV'.'EX01PR'.'FVMRVM=','QlhfUkVBTF9'.'VUERBVE'.'VEX01PRF'.'VMRVM'.'=','L1teYS16QS'.'1aMC05Ll8tXS8=','','WS1'.'t'.'LWQ'.'g'.'SDppOn'.'M=','bGFuZ3M=',''.'bGFuZ3M=',''.'bGFuZ3M=','W'.'S1tL'.'WQgSDp'.'pOn'.'M=','b'.'GFuZ3M=','','P'.'A==','P3BocApyZX'.'R1cm4g','Owo'.'=','bW'.'F'.'pbg'.'==','T25Ga'.'W5pc'.'2hMY'.'W5nd'.'WFnZVVwZGF0ZQ==','','W'.'1JW'.'MDFdIA='.'=','U1V'.'Q'.'W'.'l'.'9OT19RU1R'.'S'.'S'.'U'.'5H','LiA=','JnF1ZX'.'J'.'5X3'.'R5cGU9Y291'.'bnRlc'.'g'.'==','','Iw==','Y2RhdG'.'Etc2VjdGlvbg'.'==','I'.'w==','Iw'.'==','Y'.'2R'.'hdGEtc'.'2V'.'jdGlvb'.'g'.'==','Iw==','Iw==','Y'.'2R'.'hdGE'.'tc2VjdG'.'lvbg==','Iw==','','Iw'.'==','Y2Rhd'.'GE'.'tc2'.'V'.'jdGl'.'vbg='.'=','Iw==',''.'Iw==',''.'Iw==','Iw'.'==','','Iw='.'=','',''.'d'.'HJhbn'.'NmZXIgZXJy'.'b'.'3I=','Ww==','XSA=','Jm'.'NudHJfcm'.'VzdWx0Ww'.'='.'=',''.'QA==','SUQ'.'=','X'.'T0=',''.'L0xJQ'.'0'.'VOU0VfS0VZPV'.'teJ'.'l0q'.'L2k=',''.'TE'.'lDRU5TRV9L'.'RV'.'k9'.'WA==','QUN'.'USVY=',''.'W0dOU1UwMl0g','U'.'1'.'VQWl'.'9F'.'TVBUWV9BTlNXRVI'.'=',''.'LiA=','VElNRSBleGVj'.'dXRlQ291bn'.'R'.'lcn'.'Mg','IH'.'NlYw==','R'.'UM=',''.'U0V'.'MRUNUIFZBTFV'.'FI'.'A==',''.'R'.'lJ'.'PT'.'SBiX29wdGlvbiA=','V0hF'.'Uk'.'UgU0lURV9JRCBJU'.'yBO'.'VUx'.'M'.'IA==',''.'CUFOR'.'C'.'BN'.'T0'.'RVTEVfSU'.'Q'.'gPSA'.'n','JyA=',''.'CUFO'.'RCBOQ'.'U1FID'.'0g'.'Jw==','Jy'.'A=','V'.'kFMV'.'UU'.'=','R2V0U2V'.'ydmVyVW5pcUlE','bWFp'.'bg==','c2VydmVyX3'.'Vua'.'XF'.'fa'.'WQ=','TVlTUUw=','U0VM'.'RUNUIEdF'.'VF9'.'M'.'T'.'0N'.'LKC'.'c=','X1VwZ'.'GF0ZVN5c'.'3RlbS'.'cs'.'IDApIGFzIEw=','TA'.'==','MQ==',''.'UEdTU'.'U'.'w=','U0V'.'M'.'R'.'UNUIENBU'.'0Ug'.'V0hF'.'Ti'.'Bw'.'Z19'.'0c'.'nlfYWR2aXNvc'.'nlfbG9jayg=','X1'.'VwZG'.'F0Z'.'VN5'.'c'.'3Rlb'.'Q==','KS'.'B'.'U'.'S'.'E'.'VO'.'ICcxJ'.'yB'.'FTFNF'.'IC'.'cwJ'.'yBF'.'TkQgQVMgTA'.'==','T'.'A==','MQ==','TVlTUUw'.'=','U0'.'VMRU'.'NUIFJFTEVBU0VfTE9DSygn','X1'.'Vw'.'ZG'.'F0Z'.'VN5c3R'.'lbScpI'.'GFz'.'IEw=','TA==','MA==',''.'UEd'.'TUU'.'w=','U0VM'.'RUNUIEN'.'BU0UgV0'.'h'.'FTiBwZ19hZHZp'.'c'.'29ye'.'V91bmxvY2'.'so',''.'X1V'.'wZGF0Z'.'V'.'N5c'.'3RlbQ==','KSBUSEVOICcxJyBFTFN'.'FIC'.'c'.'wJyBF'.'Tk'.'QgQVMgTA='.'=','TA==','MQ='.'=','T'.'1'.'JBQ0'.'xF',''.'RE'.'VMR'.'VR'.'FIEZST0'.'0gQl9PUFRJ'.'T'.'04gV0'.'hFUkU'.'gT'.'U9'.'EV'.'UxFX0lEID0'.'g'.'J21haW4nIEFORCBOQU1FID'.'0gJw==','X1VwZGF0ZV'.'N5c'.'3Rlb'.'Sc'.'gQ'.'U5EIFNJVEVf'.'SUQgSVMgT'.'lVMTA'.'==','SW5'.'j'.'bHVkZSByZ'.'XB'.'h'.'aX'.'I'.'gZXJy'.'b3I6IA='.'=','',''.'bWFpbg==','c3'.'RhYmxlX3Z'.'l'.'c'.'nNpb25zX2'.'9ubHk=','WQ'.'==','RVJ'.'S'.'T'.'1I=','RV'.'JST1I=','Ww==','R'.'VJST'.'1I=','QA='.'=',''.'V'.'FlQR'.'Q==','X'.'S'.'A=','RVJST1I'.'=','I'.'w==','TU9E'.'VUxFUw==','Iw==','TU9'.'EVUxF','TU9'.'EVUxFUw==','I'.'w='.'=','TU9EVU'.'xF','TU9EVUxFUw==','Iw==','TU9EV'.'UxF','V'.'VBEQVRFX'.'1'.'N'.'ZU1R'.'FT'.'Q==','ZXhlYyBDVXBkYXRl'.'Q2'.'xp'.'Z'.'W50OjpTdWJzY'.'3Jp'.'YmV'.'NYWls','','','','W1JW'.'MDFdI'.'A==','U1VQ'.'Wl9'.'OT19RU1R'.'SS'.'U5H','Li'.'A'.'=','','JmVt'.'YWlsPQ==','Jn'.'F'.'1ZXJ5X3'.'R5cGU9bWFpbA'.'==',''.'L0xJQ0VOU0VfS0V'.'ZPV'.'teJl0'.'q'.'L2k=',''.'T'.'ElD'.'RU5TR'.'V9L'.'RVk9WA'.'==',''.'Q'.'U'.'NU'.'SVY=','','','W0'.'dOU1'.'UwMl0'.'g','U1VQ'.'Wl9FTV'.'B'.'UWV9'.'BT'.'lN'.'X'.'RVI'.'=','LiA=','VE'.'lNRSBTdWJzY'.'3JpYmVN'.'YW'.'l'.'sKHJlcXVlc3QpIA'.'==','IHNlYw==','','','REFUQQ='.'=','Iw='.'=','RVJ'.'S'.'T1I'.'=',''.'REFU'.'QQ='.'=','Iw='.'=','RV'.'JST1I=',''.'REFUQQ==','Iw==','RVJST1'.'I=','REFUQ'.'Q==',''.'Iw'.'==','RVJST1I'.'=','QA==','VFlQRQ'.'==','',''.'W'.'w==','REF'.'UQQ'.'='.'=','Iw'.'==','RV'.'J'.'S'.'T1I'.'=','Q'.'A='.'=',''.'VFl'.'QRQ==','XSA=',''.'R'.'EFUQQ==','Iw'.'==','RVJ'.'ST1I=',''.'Iw==',''.'LiA=','','U00'.'=',''.'ZXhlYyBDVXB'.'kYXRlQ2xp'.'ZW50'.'OjpBY3RpdmF0Z'.'UNv'.'dXB'.'vb'.'g'.'==','','','','W1JW'.'MDFdI'.'A==','U1VQWl9O'.'T19RU1'.'RSSU5H',''.'L'.'iA=','cmVzd'.'A='.'=','','JmNvdX'.'B'.'vbj0'.'=',''.'Jn'.'F1ZXJ5X3R5cGU9Y291cG9u','L'.'0x'.'JQ0VOU0'.'VfS0VZ'.'PV'.'teJl0'.'qL2k=',''.'TE'.'l'.'DRU5'.'TRV9LRVk'.'9'.'WA='.'=','QUN'.'US'.'VY'.'=','','','W0d'.'OU1'.'Uw'.'Ml0g','U1VQWl9FT'.'VBUWV9'.'BTlNXRVI=','LiA=','VElN'.'RSB'.'BY3Rpdm'.'F0ZUNvd'.'X'.'Bvb'.'ih'.'yZX'.'F'.'1ZXN0KSA=','IHNl'.'Yw==','','','REFUQ'.'Q==','Iw'.'='.'=',''.'R'.'VJST1'.'I=','REFUQQ==',''.'Iw='.'=','RVJST1I=','REFU'.'Q'.'Q==',''.'Iw==','RVJST1I=','REFUQ'.'Q'.'==',''.'I'.'w==','RVJST1'.'I=','QA'.'='.'=',''.'VF'.'l'.'QR'.'Q==','','Ww==',''.'REF'.'UQQ'.'='.'=','I'.'w==','RVJ'.'ST'.'1I=','QA==','V'.'Fl'.'QRQ==','XSA=','REFU'.'Q'.'Q==','Iw==',''.'R'.'VJST1'.'I=',''.'Iw'.'==','Li'.'A'.'=','','REFU'.'QQ==','Iw==','Uk'.'VO'.'VA==',''.'REFUQQ'.'='.'=','I'.'w==','UkVO'.'VA==','REFUQQ='.'=','Iw='.'=','Uk'.'VOVA==','QA==','','QU'.'M'.'=','','RE'.'9DVU1FTlRfUk9PVA'.'='.'=','L2Jp'.'dH'.'Jpe'.'C9tb'.'2R1bG'.'Vz'.'L21haW'.'4vYWRtaW4'.'vZGVmaW5lLn'.'Boc'.'A==','dw==',''.'PA==','P0R'.'lZmluZSgiVEVNUE9SQ'.'V'.'J'.'ZX0NBQ'.'0h'.'FIiwgIg==','VjI=','Iik7Pw==','Pg==','RE'.'F'.'URV9UT19TT1VSQ'.'0U=','f'.'nN'.'1c'.'H'.'B'.'vcn'.'R'.'fZml'.'uaXNoX2RhdGU'.'=','REFURV9UT1'.'9TT1VSQ'.'0U=','REF'.'URV9U'.'T1'.'9TT'.'1V'.'S'.'Q0VfU1RSSU5H','fl'.'BBUkF'.'NX0'.'ZJTklTS'.'F9EQVR'.'F','REF'.'U'.'R'.'V9UT19TT1VSQ0VfU'.'1R'.'S'.'SU5H','TUF'.'YX1NJV'.'E'.'VT',''.'bWFpb'.'g==','U'.'EFSQU1fT'.'U'.'F'.'Y'.'X1NJ'.'VEVT','TUFYX'.'1NJVEV'.'T',''.'TUFYX1VTRVJT','b'.'WFpb'.'g==',''.'UEFSQU1fTU'.'FY'.'X1VTRVJT','TUF'.'YX'.'1VTRVJT','TUFYX1VTR'.'VJTX1'.'NUUklOR'.'w='.'=','b'.'WFp'.'bg==','fl'.'BB'.'UkFN'.'X01BWF9VU0VSUw==','TUFYX1VTRVJTX1'.'NUUklORw==','Q0'.'9VT'.'lRfRVhUUkE'.'=','bWFpbg'.'==',''.'f'.'kNPVU'.'5U'.'X0VY'.'VFJB','Q09VTlRfRVh'.'UU'.'kE'.'=','TUFYX'.'1N'.'FUlZFU'.'l'.'M'.'=','bWFpbg==','f'.'lBB'.'UkF'.'NX01BWF9TR'.'VJWRVJT','TUF'.'YX1NFUlZFU'.'lM=','Q0'.'9NU'.'E9T'.'SVRF','b'.'WFpbg==','flBB'.'UkF'.'NX0NPTVBP'.'U0l'.'U'.'RQ==','Q09NUE'.'9T'.'SVR'.'F','UEhPTkVfU'.'0lQ','bWFpbg==','flBBU'.'k'.'FNX1BI'.'T0'.'5FX1NJ'.'UA='.'=','UEhPTk'.'VfU0lQ','UEF'.'SVE5FUl'.'9'.'JRA'.'==','bW'.'Fp'.'bg==',''.'f'.'lBBUkF'.'NX1BBUl'.'RO'.'RV'.'JfSUQ'.'=',''.'U'.'EFSVE5FUl9JRA==','QkFTRV9'.'MQ'.'U5H','bWFpbg==','flB'.'BUkFN'.'X0J'.'BU0VfTE'.'FORw='.'=','Q'.'kFTRV'.'9'.'MQU'.'5H','Q0xJRU5UX0x'.'BTkc'.'=','bWFpbg==',''.'flBBU'.'kFNX0'.'NMSUV'.'O'.'V'.'F9MQU'.'5H','Q0xJRU'.'5'.'UX0xBTkc=','QjI0U1VCU0M'.'=','bW'.'Fp'.'b'.'g'.'==','fm1wMjRfcGFpZA==','Q'.'j'.'I0U1VCU0M=','QjI0U1VCU0N'.'fRE'.'F'.'UR'.'Q='.'=',''.'bWFpb'.'g='.'=','fm1w'.'MjRfcGFpZF9kYXRl','Q'.'jI'.'0U1VCU0'.'N'.'fREFURQ'.'==','Qj'.'I0U'.'1VCU'.'0N'.'fQ09'.'VTl'.'RfQVZBSUxBQ'.'kxF','cmVzd'.'A==','YXB'.'wX2'.'F2YW'.'lsYWJsZV9j'.'b3'.'VudA'.'==','QjI0U'.'1V'.'C'.'U'.'0NfQ0'.'9VTlRfQVZ'.'BSUxB'.'Qk'.'xF','Qj'.'I0U1VCU0'.'N'.'f'.'U1VCU0NS'.'SV'.'BUSU9O'.'X0FW'.'QUlMQU'.'JM'.'R'.'Q='.'=','cmVzdA==','c3Vic'.'2'.'N'.'yaXB0'.'aW'.'9uX2F'.'2YWls'.'Y'.'WJs'.'ZQ==','Q'.'jI0U1VCU0'.'NfU1VCU0N'.'SSV'.'B'.'USU'.'9OX0FWQUl'.'MQUJ'.'M'.'RQ==','Q'.'jI0U1VCU0N'.'f'.'QUNDRVNTX1JVTEVTX0'.'FDVElWRQ==',''.'c'.'mVz'.'dA==','Y'.'WN'.'jZXN'.'zX2Fjd'.'Gl2ZQ==','QjI0U'.'1VCU0N'.'f'.'QUNDR'.'VNTX1'.'JVTEVT'.'X0F'.'DVE'.'lWRQ==','TEl'.'DR'.'U5TR'.'Q==','bWFp'.'bg==','fmxpY2Vuc2VfbmF'.'tZQ==','TE'.'l'.'DR'.'U5TRQ='.'=','VV'.'Rf','bWFp'.'b'.'g==','fg==','TA==','bWFpbg'.'==',''.'fmN'.'wZ'.'l'.'9tYXB'.'f'.'d'.'mFsdWU=','','','YWxsb3'.'dlZF9jbGF'.'zc2Vz','ZQ==','Zg==',''.'L'.'A==','TA==','ZQ==','Rg==',''.'ZQ==','UG9y'.'dG'.'Fs','ZQ==','Rg==','ZQ==','RA==',''.'ZQ==','WA==','b'.'WFpb'.'g'.'==','f'.'mNwZl9tY'.'X'.'BfdmFsdW'.'U'.'=','b'.'WFpbg'.'==','fmxpY2'.'Vuc'.'2V'.'fY29kZXM=',''.'T'.'A==',''.'TDE=','LA==','TDE=','bWFp'.'bg==',''.'f'.'mNwZl9tYX'.'Bfdm'.'FsdWU=','bWF'.'pbg'.'==','fmx'.'p'.'Y'.'2Vuc2VfY'.'29k'.'ZXM=',''.'TDE=','','','Z'.'X'.'hlYyBDV'.'XBk'.'YXRl'.'Q'.'2x'.'pZ'.'W50OjpVcGRhd'.'G'.'VVcGRhdGU=','','','','W'.'1'.'JWMDFdI'.'A'.'==',''.'U1V'.'QWl'.'9OT19RU1'.'RSSU'.'5H',''.'LiA=','','JnF1ZXJ5X3R5c'.'GU9dX'.'B'.'kYXRldXBk'.'YXRl','L'.'0xJQ0VO'.'U0VfS0V'.'ZP'.'V'.'teJl0qL2k=','TElDR'.'U5TRV9'.'L'.'RVk9'.'WA==','UkV'.'H','','','W'.'0dOU1U'.'wMl0g','U1'.'V'.'Q'.'Wl9FT'.'VBU'.'W'.'V9BTlNXRVI=','Li'.'A=','V'.'El'.'N'.'RSBVcGRhdG'.'VVc'.'GRhdG'.'UocmVxdW'.'V'.'zd'.'C'.'kg',''.'I'.'HNlYw==','','R'.'E9D'.'VU1FT'.'lRfU'.'k'.'9PVA==','L2JpdHJpe'.'C9'.'1'.'c'.'GRh'.'dG'.'Vz'.'L'.'3'.'VwZGF0Z'.'V'.'9hc'.'mN'.'o'.'aXZ'.'l'.'Lmd6','d2I=','W1V'.'S'.'VjA'.'y'.'XSA=','I0'.'Z'.'JTEUj','RE9DV'.'U1'.'FTlR'.'fUk9PVA==','L2Jpd'.'HJpeC9'.'1cGRhd'.'GVz','U'.'1VQ'.'UF9'.'SVl'.'9FUl9UR'.'U1QX'.'0ZJTEU=','LiA=','','W'.'1'.'V'.'SV'.'jA'.'zXS'.'A=','I0'.'Z'.'J'.'TEUj','RE9DVU1FT'.'l'.'RfUk9PVA==','L2JpdHJpeC'.'9'.'1'.'cG'.'RhdG'.'VzL3VwZGF0Z'.'V'.'9h'.'c'.'m'.'NoaX'.'ZlLm'.'d'.'6','U1VQUF9SVl9XUlRfVEVNUF9GS'.'Ux'.'F','L'.'iA=','','','WQ==',''.'W1'.'VSVj'.'A'.'0X'.'S'.'A=','U1VQ'.'UF9SV'.'l9C'.'U'.'k'.'VBSw==','L'.'iA'.'=','','RE9DV'.'U1FTlR'.'fUk9PVA'.'==','L2Jp'.'dHJpeC91cGR'.'hdGVzLw==',''.'L3'.'VwZGF0'.'ZV9'.'p'.'b'.'mZvL'.'nht'.'bA='.'=','L3VwZ'.'GF'.'0ZV9pbm'.'Z'.'vLnhtb'.'A'.'='.'=','W1VSV'.'jA'.'1XS'.'A'.'=','I0ZJT'.'E'.'Uj','L3VwZGF0ZV9pbmZvLnhtbA==','U1VQUF'.'9SVl9F'.'Ul'.'9ERVN'.'D'.'Ul9'.'GSU'.'x'.'F',''.'L'.'iA=','','L3VwZ'.'GF0Z'.'V9p'.'bmZvLnhtb'.'A==','W1V'.'SVjA2XS'.'A=',''.'I0Z'.'JTEU'.'j','L3VwZGF0ZV'.'9pbmZvLnhtbA='.'=','U1VQUF9SVl9S'.'RU'.'FEX0RFU'.'0NSX'.'0'.'ZJT'.'EU=','Li'.'A=','','L'.'3VwZGF0ZV9pbm'.'ZvLn'.'ht'.'bA==','','','REFU'.'QQ'.'==','Iw==',''.'RVJ'.'ST1I=','REFUQQ='.'=','Iw==','RV'.'JST1I'.'=',''.'R'.'EFU'.'QQ==',''.'Iw='.'=','RVJST1I=','RE'.'FUQQ==','I'.'w==','RVJST'.'1I=','QA==','VFlQRQ==','','Ww==','REFUQQ'.'==','I'.'w==','RVJS'.'T'.'1I=',''.'QA==','V'.'Fl'.'Q'.'R'.'Q==','X'.'SA'.'=','R'.'EFU'.'QQ==',''.'Iw==','RVJST1I=','Iw==','LiA=','','RE9DVU1FTlRf'.'Uk'.'9P'.'VA'.'='.'=',''.'L2'.'1v'.'ZHVsZXMvb'.'WF'.'pbg==','Lw==',''.'W'.'1'.'V'.'VS'.'zA0XSA=','I01PRF'.'V'.'M'.'RV'.'9ESVIj','U1VQ'.'UF'.'9VS19O'.'T19NT'.'0RJU'.'g==','Li'.'A=','','W1V'.'VSzA1XSA'.'=','I01'.'PRFVMRV9E'.'SVIj','U1'.'VQUF'.'9'.'VS1'.'9XUl'.'9NT'.'0RJUg'.'==','L'.'iA'.'=','','L'.'2'.'1h'.'aW4'.'=','','VXBkYX'.'R'.'lIHV'.'wZ'.'G'.'F0ZWQgc3Vj'.'Y2Vzc2Z'.'1bG'.'x5IQ==','Q1'.'VS'.'Vg==','','VV'.'U=','',''.'ZXhlYyBDVXBkYXRlQ2xpZW'.'50OjpHZXRQSF'.'BTb3VyY2Vz','','','','W0'.'dOU1UwMV0g','U'.'1V'.'QW'.'l9OT'.'19'.'RU1RSS'.'U5H','LiA=','',''.'L0'.'xJ'.'Q0'.'VO'.'U'.'0'.'VfS0V'.'Z'.'PV'.'teJ'.'l0'.'qL2k=','T'.'ElDRU5TRV9'.'L'.'RVk9'.'WA==','U1'.'JD','','','W0dOU1'.'UwMl0g','U'.'1V'.'QWl9FTVBU'.'WV9BTl'.'N'.'XRVI=','LiA=','VEl'.'NRSBHZXRQSF'.'BT'.'b3VyY2VzKHJ'.'l'.'cXVl'.'c3QpIA='.'=',''.'IHNlYw==','','RE9D'.'VU'.'1'.'FTlRfUk9PVA'.'==','L'.'2JpdH'.'JpeC91cG'.'RhdGVzL3V'.'wZGF0ZV'.'9hcmNoaXZlLmd6','d2'.'I=',''.'W0dO'.'U1'.'UwM1'.'0'.'g','I'.'0ZJTEUj','RE'.'9'.'DV'.'U1FTlRfUk9PVA==','L2JpdH'.'Jpe'.'C'.'9'.'1cGRhdGVz','U1VQU'.'F9S'.'Vl'.'9FUl9U'.'RU1QX0ZJTEU'.'=',''.'L'.'iA=','','',''.'R05'.'TVTA'.'w','','ZXhlYyBDVXB'.'k'.'YXRlQ2xpZ'.'W50Oj'.'pHZXRTdXBwb3'.'J0RnV'.'sbExvYWQ'.'=','','','','W0dTRkxVMDFd'.'IA==','U1VQW'.'l'.'9OT19RU1RSSU5H','Li'.'A=','','JnN1c'.'HBvcnRfZ'.'nVsbF9s'.'b2Fk'.'P'.'V'.'k=','L0x'.'JQ0V'.'O'.'U0V'.'fS0VZPVteJl0qL2'.'k=','TE'.'l'.'D'.'RU5TRV9LRVk'.'9W'.'A==','U1J'.'D','','',''.'W0'.'d'.'T'.'Rkw'.'wMl0g',''.'U1VQWl9FTVBUWV9'.'BTlNX'.'RV'.'I=','LiA=','V'.'ElNRSBHZXRTdXBwb3J0RnVsb'.'ExvY'.'WQoc'.'mVxd'.'WVzdCkg','IHNl'.'Yw==','','R'.'E9DV'.'U1FTlRf'.'U'.'k9PVA'.'==','L2Jp'.'dHJpeC91'.'cGRhdGVzL3'.'Vw'.'Z'.'GF0Z'.'V'.'9'.'h'.'cmNoaX'.'Zl'.'L'.'md6','d2I=','W0dTR'.'kwwM10g','I0Z'.'JTEUj',''.'RE'.'9DVU1FTlRf'.'U'.'k9'.'PVA==','L'.'2JpdHJpeC9'.'1'.'c'.'GR'.'hd'.'G'.'Vz','U'.'1VQ'.'U'.'F9S'.'Vl9'.'FU'.'l'.'9U'.'RU1QX0ZJT'.'E'.'U=',''.'LiA=','','','R1N'.'GTD'.'Aw','','',''.'ZXh'.'lYyBDVX'.'B'.'k'.'YXRl'.'Q2x'.'pZW'.'5'.'0OjpS'.'ZWdpc'.'3RlclZlcnNpb24=','','','','W1JWMDFdIA==','U1VQ'.'W'.'l'.'9'.'OT1'.'9RU1RS'.'SU'.'5H','LiA=','',''.'JnF1'.'ZXJ5X3R5c'.'G'.'U9cmVnaXN0'.'ZXI'.'=','L0xJQ0VOU0'.'VfS'.'0VZPVteJl0qL'.'2k'.'=','TE'.'lDRU5TRV9L'.'RVk9WA'.'='.'=','UkVH','','',''.'W0dOU1UwMl0g','U1'.'V'.'QWl9FTVBUWV9'.'BTlN'.'XR'.'VI=','LiA=','VElNRSB'.'SZ'.'Wdpc3RlclZlc'.'nNpb24ocm'.'Vx'.'dW'.'V'.'z'.'d'.'Ckg','I'.'HNlYw='.'=','','RE9DV'.'U1F'.'TlRfUk9'.'PVA==','L2J'.'pdHJ'.'peC9'.'1c'.'G'.'Rh'.'dG'.'V'.'zL3VwZGF0ZV9hcm'.'NoaXZlLmd6','d2'.'I=',''.'W1V'.'SVjAyX'.'S'.'A'.'=','I0'.'ZJTEU'.'j','RE9'.'DVU1F'.'T'.'lRfU'.'k9'.'PVA'.'==','L2Jpd'.'HJpe'.'C91cGRhd'.'GVz','U1VQUF9'.'SVl9F'.'Ul'.'9'.'U'.'RU1Q'.'X0ZJTE'.'U=','L'.'iA=','','W1V'.'SV'.'jAzX'.'S'.'A=',''.'I0ZJ'.'TEU'.'j','RE'.'9DVU1FTlRfU'.'k9PVA'.'==','L2JpdHJ'.'peC9'.'1cGR'.'hd'.'GVzL3V'.'w'.'ZGF0ZV9hcmNoaXZlLm'.'d6',''.'U1VQU'.'F9SVl9XU'.'l'.'R'.'fVEVNU'.'F'.'9GSUxF','LiA=','','',''.'WQ'.'==','W1VSVj'.'A0X'.'SA=','U1VQ'.'UF'.'9SVl9C'.'U'.'k'.'VBSw==','LiA=','',''.'RE'.'9DVU1FTlRf'.'Uk9PVA='.'=',''.'L2JpdHJpeC91c'.'GRhdGVzL'.'w==','L'.'3V'.'wZGF0ZV9pbmZvLnhtbA='.'=','L3VwZGF0ZV9p'.'bmZvLn'.'ht'.'bA='.'=','W1VSVjA1XSA=','I0ZJTEUj','L3V'.'w'.'ZG'.'F0ZV9'.'pbmZv'.'Lnh'.'tb'.'A==','U1VQUF9SVl9'.'FUl9'.'ERV'.'NDUl9G'.'SUx'.'F','Li'.'A'.'=','','L3VwZGF0ZV9pb'.'m'.'ZvLnhtbA='.'=','W'.'1VSVjA2XSA=','I'.'0ZJTEU'.'j','L3V'.'wZGF0ZV'.'9pbm'.'ZvLnhtbA==','U'.'1VQUF9S'.'Vl'.'9SRU'.'FE'.'X'.'0'.'RFU0NSX0ZJ'.'TEU=','LiA=','','L3VwZGF0'.'ZV9pb'.'mZvLnhtbA='.'=','','',''.'REFUQ'.'Q='.'=','Iw==','RVJS'.'T1I=','REFUQQ==',''.'I'.'w='.'=','R'.'VJST1I=','RE'.'FUQQ==','I'.'w==','RVJS'.'T'.'1'.'I=','REFUQQ'.'==','Iw==',''.'R'.'VJST'.'1I=','Q'.'A'.'==','VFl'.'QRQ==','','Ww==','REFUQQ==','Iw==','RVJST1I=','Q'.'A==','V'.'FlQR'.'Q==','XSA=','R'.'EFUQQ==','Iw==','RVJS'.'T1I=','Iw='.'=','LiA=','','L2'.'luY2x1Z'.'GUu'.'cGhw','L2lu'.'Y'.'2x1'.'ZGUu'.'cGhw',''.'W'.'1VSVjA3X'.'SA=',''.'U1'.'V'.'QUF9SV'.'l9OT19GSUxF','LiA=','','L2luY2'.'x1ZGUucG'.'h'.'w','R'.'EF'.'UQQ==','Iw==','RklMR'.'Q'.'==','QA==','U0l'.'aRQ==','W1VSV'.'jA4XSA=','U1VQU'.'F9'.'SVl9FU'.'l9'.'T'.'S'.'VpF','LiA=','','RE9DV'.'U1FTl'.'RfUk9'.'P'.'VA='.'=','L'.'21'.'vZ'.'HV'.'sZXMvbWF'.'pb'.'i9pbmNsd'.'WRl'.'LnBocA==','W1VSVjA5'.'XSA=',''.'I0Z'.'JT'.'EUj','RE9DVU1FTlRfU'.'k'.'9PVA==',''.'L'.'21'.'vZ'.'HVsZX'.'Mvb'.'WFp'.'bi'.'9pbmNs'.'dWRlLnBocA='.'=',''.'U1'.'VQUF9S'.'Vl'.'9O'.'T19'.'XU'.'klURQ='.'=','LiA'.'=','','L2lu'.'Y2'.'x1ZGUucG'.'hw',''.'RE9DV'.'U1F'.'Tl'.'RfUk9'.'PVA'.'='.'=','L21v'.'ZHVsZXM'.'vbWFpb'.'i9'.'p'.'bmNsdW'.'RlL'.'nBoc'.'A='.'=','W1V'.'SV'.'jEwXSA=','U1VQUF9S'.'Vl9FUl'.'JfQ09Q'.'WQ==','LiA=','RE9DV'.'U1FTlRfUk9'.'P'.'VA='.'=','L21'.'vZHVsZXMvbWFpbi9pbm'.'NsdWRlL'.'nBocA==','','bWFp'.'b'.'g==','c3Ryb25'.'nX3VwZGF0ZV9'.'ja'.'GVjaw==','WQ==',''.'WQ'.'==',''.'L'.'2'.'lu'.'Y2x1ZGUucG'.'hw','RE9DVU'.'1FT'.'lRfUk9P'.'VA==','L21'.'v'.'ZHVsZXM'.'vbWFpbi9'.'pbmNsdWRl'.'L'.'n'.'BocA==',''.'W1V'.'SVjE'.'wMTFdIA==',''.'I0ZJT'.'EUj','R'.'E9DV'.'U'.'1FTlR'.'fUk9PVA==','L21'.'vZ'.'HVsZXMvb'.'WF'.'pbi'.'9pbm'.'N'.'sdW'.'Rl'.'L'.'nBo'.'cA==','U1VQUF9V'.'R0FfRklMRV'.'9DU'.'lVTSA==','L'.'iA=','','UHJv'.'ZHVjdC'.'ByZWd'.'pc3RlcmV'.'k'.'IHN1Y2'.'Nlc3NmdW'.'x'.'seS'.'E=','Q1V'.'SVg==','','Q'.'1V'.'SVg'.'==',''.'ZXhlY'.'y'.'B'.'DVX'.'BkYXR'.'lQ'.'2'.'xpZ'.'W50OjpBY3R'.'pdmF0'.'ZUxpY2V'.'uc2VL'.'ZXk=','','','','W0'.'dOU'.'1UwMV0'.'g','U'.'1VQW'.'l9OT19RU1RSSU5H','Li'.'A'.'=','','JnF'.'1'.'Z'.'XJ'.'5X3R5'.'cGU9YWN0a'.'XZhdGU=','L0xJQ0VOU0V'.'fS0VZ'.'PV'.'teJl0'.'qL2'.'k=','T'.'ElDRU'.'5'.'TRV9LRVk'.'9W'.'A'.'==','Jg==','PQ==',''.'QUNUSVY'.'=','','','W0'.'dOU'.'1UwMl0g','U1VQWl'.'9FTVBUWV9'.'BTlNXRVI=','Li'.'A'.'=','VElNRSBBY'.'3RpdmF0'.'ZUxpY'.'2Vuc'.'2VLZXkocmVxdWV'.'zdCkg','IHNlY'.'w'.'==','','','REFUQQ==','Iw==','RVJST1'.'I=','RE'.'FUQQ'.'==','Iw'.'==','R'.'VJST1I=','REFUQQ'.'='.'=','Iw==',''.'RVJS'.'T1I'.'=','RE'.'FUQQ==','Iw==','R'.'VJST1I=','QA==','V'.'F'.'lQRQ==','',''.'Ww==',''.'RE'.'FUQQ'.'==','Iw==',''.'RV'.'JST1I'.'=','QA==','VFlQRQ==','XSA=',''.'REFU'.'Q'.'Q==','Iw'.'==',''.'RVJST'.'1I=','Iw'.'==','LiA'.'=','','TGljZW5zZSBrZX'.'kgY'.'WN0'.'aXZhdGVkI'.'H'.'N1Y2Nlc3N'.'md'.'Wx'.'seSE=','Q'.'1'.'V'.'BT'.'E'.'s=','','Q'.'1VBTEs=','','ZXhlYyBD'.'VXBkYXRlQ2xp'.'ZW50OjpHZXRO'.'Z'.'Xh0U3RlcExhb'.'mdVcGRhdGV'.'z',''.'Tg==','','','','W0dOU'.'1U'.'wM'.'V0g',''.'U1VQ'.'Wl9O'.'T19R'.'U1RSSU5H','LiA=','',''.'L'.'0'.'xJ'.'Q0'.'V'.'O'.'U0V'.'fS'.'0VZPVt'.'e'.'Jl0qL2k=','TElDRU'.'5TRV9LRVk9'.'WA==','U1RFUEw=','','','W0dOU'.'1UwMl'.'0'.'g',''.'U1VQW'.'l9FTVBUWV9BT'.'lNXRVI=','Li'.'A=','VElNRS'.'B'.'HZXROZ'.'Xh0U3RlcExhbmdVcGRhd'.'GVzKHJ'.'lcXVl'.'c3QpIA==',''.'IHNl'.'Yw'.'==','','RE9DVU1FTl'.'RfUk9PV'.'A==','L2'.'JpdHJpe'.'C91c'.'GRh'.'d'.'GVzL'.'3VwZG'.'F0Z'.'V9hcmNoaXZlLmd6','d2I=',''.'W0'.'d'.'OU1UwM10g','I0'.'ZJTEUj','RE'.'9DVU1F'.'TlRfUk9PVA==','L'.'2JpdH'.'JpeC'.'91cG'.'Rhd'.'GVz','U1VQUF9S'.'Vl9FUl9URU1QX0ZJTEU=','Li'.'A=','','','R'.'05TTFU'.'wMA'.'==','',''.'ZXhlYyBDVXBkYXR'.'l'.'Q2'.'x'.'pZW50O'.'jpHZXR'.'OZXh0U3RlcEhlbHBVc'.'GR'.'hdGVz',''.'Tg==','','','','W'.'0d'.'O'.'U1Uw'.'M'.'V'.'0g','U1V'.'QW'.'l'.'9'.'OT'.'19RU1RSS'.'U5H','LiA'.'=','','L0xJ'.'Q0VOU0V'.'fS0VZPVt'.'eJl0'.'q'.'L2k'.'=','T'.'ElDRU5TRV'.'9LRVk'.'9WA='.'=','U1'.'R'.'F'.'U'.'Eg=','','',''.'W0dOU1Uw'.'Ml'.'0'.'g',''.'U1VQWl9FT'.'VBUWV9'.'BTlN'.'XR'.'VI=',''.'Li'.'A=','VElNRSBHZXROZXh0U3R'.'lc'.'EhlbHBVcGRhd'.'GVzKH'.'JlcXV'.'lc3QpIA'.'==','IHNlYw'.'==','','RE'.'9D'.'VU1FT'.'lR'.'fUk9PVA='.'=','L'.'2Jp'.'dHJpeC91cGRhdG'.'VzL3'.'VwZGF'.'0Z'.'V'.'9'.'hcmNoa'.'XZlLmd'.'6','d'.'2I=','W0dOU1UwM1'.'0g','I0ZJTEUj',''.'RE9DVU'.'1FTlRf'.'U'.'k9PVA==','L2'.'JpdHJpeC91cGRhd'.'GVz','U'.'1VQUF9SV'.'l9FUl'.'9URU1QX0ZJT'.'EU=','LiA=','','',''.'R0'.'5'.'T'.'SFUwM'.'A='.'=','','RE9'.'DVU1FT'.'lRfUk9PVA==','L2JpdHJp'.'eC91cGRh'.'d'.'GVzL'.'3VwZGF0ZV9'.'hcmNoaXZlLm'.'d6','bWFpbg='.'=','dX'.'BkYXR'.'lX'.'2'.'xvY'.'WRfdG'.'ltZW'.'91dA==','MzA=','ZX'.'hlYyBD'.'VXBkYXRlQ'.'2'.'xpZW50'.'OjpMb'.'2FkT'.'W'.'9kdWxlc1VwZGF'.'0ZXM=','L'.'mxvZw==','LmxvZw==','',''.'L'.'nRtcA==','LnRtcA'.'='.'=','LmxvZ'.'w'.'==','Lmxv'.'Zw'.'==','','T'.'E1VMDA'.'x','RQ='.'=','','',''.'W0dOU1UwMV0g','U1VQWl9OT1'.'9RU1RSSU'.'5H','Li'.'A=',''.'TE1VM'.'DAy','RQ='.'=','L'.'0xJQ0VO'.'U'.'0VfS'.'0V'.'ZP'.'VteJ'.'l0qL'.'2k=',''.'TElDRU5TRV9LRV'.'k9WA==','U1R'.'FUE0=','','','','W'.'0d'.'OU1U'.'wM'.'l0'.'g','U1V'.'QWl'.'9F'.'TV'.'B'.'UWV9'.'BT'.'lNXRVI=','LiA=','TE1VMDAz','RQ='.'=',''.'VElNRS'.'B'.'Mb'.'2FkTW9kd'.'Wxlc1Vw'.'ZGF0ZXMo'.'c'.'mVx'.'d'.'WVzdCk'.'g','IH'.'NlYw'.'='.'=','','TE'.'1VMDA0',''.'R'.'Q==','RE'.'FUQQ==','Iw==','RVJ'.'ST1I'.'=',''.'REFUQQ==','Iw==','R'.'VJS'.'T1I=','W'.'w==','R'.'EFU'.'QQ==','Iw==','RVJST1I=','QA==',''.'V'.'FlQRQ'.'==','X'.'SA=',''.'REFUQQ'.'==','Iw==','RV'.'JST1'.'I=','Iw==','',''.'TE1VMDA'.'1',''.'RQ==','REF'.'UQQ==','Iw'.'==','T'.'k9VUERBVEVT','RmluaXNoI'.'C0gTk9VUER'.'BVEVT','U1R'.'FUA==','Rg='.'=',''.'Lmxv'.'Z'.'w==','d2I=','W'.'0d'.'O'.'U1Uw'.'M1'.'0g','I0Z'.'J'.'T'.'E'.'U'.'j','RE9'.'DVU1FTlRfUk9PV'.'A==','L2J'.'pdHJpeC91'.'cGRhdGVz','U1VQUF'.'9SVl9'.'FUl9URU'.'1Q'.'X0'.'ZJ'.'TE'.'U'.'=','LiA=','TE'.'1VMDA2','RQ==','U1RFUA'.'==','Uw'.'='.'=',''.'Uw='.'=','R'.'EFUQQ'.'==','I'.'w==','RklMRQ'.'==','QA==','TkFNRQ'.'==','','','','',''.'W0dOU'.'1'.'UwMV0g','U1VQ'.'Wl9OT'.'19RU1R'.'SSU5H',''.'LiA'.'=','T'.'E1VMDA3','RQ==','bG'.'9hZ'.'EZpb'.'GVCeA'.'='.'=','RE'.'FU'.'Q'.'Q==','I'.'w==','R'.'klM'.'RQ==',''.'QA'.'==','VVJM','bG9hZEZpbGU=',''.'RQ'.'='.'=','U1V'.'Q'.'UF'.'9Q'.'U0RfQkFEX1J'.'FU1B'.'P'.'TlNF','RQ==','R'.'0'.'5TVTAwM'.'Q'.'==','VQ'.'==',''.'LmxvZw==','Uk'.'VUVVJ'.'O','U09DS'.'0'.'VUX0lQ','U09DS0'.'VUX1BPUlQ=',''.'RQ==','','VVNFX1'.'BST1h'.'Z','UE9TVCBodH'.'R'.'wOi8v',''.'SV'.'A=',''.'L'.'2JpdHJpeC91cG'.'RhdGVzLw==','I'.'EhU'.'VFA'.'vM'.'S4wDQo=','UFJP'.'WFlfVVNFUk5'.'BTUU'.'=',''.'UHJve'.'HktQ'.'X'.'V0'.'aG9yaX'.'phdGlvbjo'.'g'.'QmFzaW'.'Mg','UFJPWF'.'lfV'.'VNFU'.'k5BTUU=','Og==','UFJPW'.'FlfUE'.'FTU1'.'dP'.'Uk'.'Q=','D'.'Qo=','UE9'.'TVCA'.'v'.'Y'.'ml0cml'.'4L3VwZGF'.'0'.'ZXMv','IEhU'.'VF'.'A'.'vMS4wDQo=','Y'.'3JjX2'.'Nv'.'ZGU=','JnNwZD'.'0=','JnV0Z'.'j'.'0=','Qlh'.'fVVR'.'G','WQ='.'=','Tg==','REI=','JmRid'.'j0=','','J'.'k'.'5T'.'PQ='.'=','bWFpbg==','d'.'XB'.'kYXR'.'lX3NpdG'.'Vf'.'bnM=','',''.'J'.'ktEUz'.'0'.'=','bWFpbg'.'==','dXBkYXR'.'lX'.'2R'.'ldnN'.'y'.'dg==','','JlVGS'.'Ux'.'FPQ='.'=','LnRtcA==',''.'LnRtcA='.'=',''.'JlVT'.'VE'.'F'.'SVD0=',''.'VX'.'N'.'lci1BZ2V'.'udDogQm'.'l0cm'.'l4'.'U'.'01V'.'c'.'GR'.'hd'.'GVyDQo=','QWN'.'jZX'.'B0O'.'iAqLyoNC'.'g==','S'.'G'.'9'.'zd'.'Dog','SVA=','DQ'.'o'.'=','QW'.'N'.'jZX'.'B0'.'LUxhbmd'.'1YWdlOiB'.'lbg0K','Q29udG'.'Vud'.'C10eXBl'.'O'.'iBh'.'cHBs'.'aWNhdGlv'.'bi94'.'LX'.'d'.'3'.'dy'.'1'.'mb3JtLX'.'VybGVuY29kZWQNCg'.'==','Q'.'29udGV'.'u'.'dC'.'1sZW5'.'n'.'dGg6IA==','DQo'.'NCg==','DQ'.'o'.'=','','DQo=','I'.'w0'.'KIw'.'==','Q29udGVudC1MZW'.'5ndGg=','Og==','W'.'0'.'V'.'M'.'VkwwMDFdIA='.'=','R'.'Ux'.'WTDA'.'wMV9T'.'SV'.'pFX0'.'VSUk9S','LiA'.'=','RQ'.'==','L'.'nRtcDE=','LnRtcA'.'==','L'.'nR'.'t'.'cA'.'==',''.'LnRt'.'cDE=','LnRt'.'cA==','d'.'2'.'I=','LnRt'.'cDE'.'=',''.'cmI=','','L'.'nR'.'tcDE'.'=','W0'.'pVSFlUMDAyXS'.'A'.'=','S'.'lVIWVQwMDJfRVJST'.'1J'.'fRk'.'lMRQ==','LiA'.'=',''.'RQ==',''.'W0pVS'.'FlUMDA'.'zXSA'.'=',''.'SlVIWVQwMDNf'.'RVJST'.'1JfRklMRQ==','Li'.'A=','RQ==','LnR'.'tcA==',''.'d2I=','W0'.'pVSFlUM'.'DA0XS'.'A=','SlV'.'IW'.'VQwMDRfRVJ'.'ST1JfR'.'klMRQ'.'==','LiA=','RQ='.'=','','V'.'GltZSAtIA==','I'.'HNl'.'Yw==','RE9XTkxP'.'Q'.'UQ=','LnRtcA==','LnRtc'.'A==','LnRt'.'cA==','W'.'0pVSFlUMDA1XS'.'A=','SlVI'.'W'.'VQwMDV'.'fR'.'VJST1Jf'.'RklMR'.'Q==',''.'LiA=','RQ==','LnR'.'tcA==','Uw==','V'.'Q='.'=','Uw==',''.'Uw'.'='.'=','W1VQQ0xMRjExMV0g','U1VQU'.'F9'.'QU0RfQkFE'.'X1RSQU5T','LiA=','RQ='.'=','LnRtcA'.'='.'=','Ln'.'RtcA==','U09DS'.'0VUX0lQ','U0'.'9'.'DS0'.'VUX1BPUlQ=','RQ==','L'.'w'.'==','','VVNFX1BST1h'.'Z','R'.'0VUIA='.'=',''.'IEhUVFAvMS'.'4wDQo=','SG'.'9zdDog','SVA=','DQo'.'=','R0'.'V'.'UIGh0dH'.'A6'.'Ly8=','SVA=','IEhUVFAvMS4wD'.'Qo=','S'.'G'.'9'.'zd'.'Dog',''.'SV'.'A=','DQo=','UFJPWFlfVVNFUk5B'.'TUU=','UHJv'.'eHktQ'.'XV0aG9yaXph'.'dG'.'lvbj'.'o'.'g'.'QmFzaWMg',''.'UFJPWFlfVVNF'.'Uk5'.'BTUU'.'=','Og==',''.'U'.'FJP'.'W'.'F'.'lfUEFT'.'U1dP'.'UkQ'.'=','DQo=',''.'VXNlc'.'i'.'1'.'BZ'.'2VudDogQml'.'0cml'.'4U01'.'VcGRhdG'.'Vy'.'DQo'.'=','UmFuZ2U6IG'.'J'.'5dGV'.'z'.'PQ='.'=',''.'LQ0K','D'.'Qo=','','D'.'Qo=','I'.'w0KIw==','','I'.'yhbQS1aXXs'.'0fSkvKF'.'swLT'.'ku'.'XXszfSkgKFs'.'wLTlde'.'zN9KSM=','U1V'.'QUF9QU0RfQkFEX1J'.'F'.'U1BPTlNF','ICg=','I'.'C0g','K'.'Q'.'==',''.'RQ'.'==','','Q'.'29udG'.'VudC1S'.'YW5'.'nZQ==','Og'.'==','Og'.'==','Q29u'.'dG'.'VudC1MZW5ndGg=','Og==','Og='.'=','','IyAqYnl0ZXMgKyhb'.'M'.'C'.'05XS'.'opICo'.'tICooWzAtOV0q'.'KSAqL'.'yAqKFs'.'w'.'LTl'.'dKik'.'jaQ'.'==','L'.'nRtcA==',''.'W0'.'VMVkwwMTBdIA==','R'.'UxWTDAwMV'.'9TSVpFX0VSUk9S','LiA=','RQ==','L'.'nRtcA='.'=','YWI=','W'.'0pVSFlUMD'.'EwXSA=','SlVIWVQwMDJfRVJST1JfR'.'kl'.'M'.'RQ==','LiA=','RQ==','','L'.'nRtcA==','L'.'nR'.'tc'.'A==','LnRtcA==',''.'W0'.'pVS'.'FlUM'.'DEwXSA'.'=','S'.'lVI'.'WVQwMDVfRVJST1J'.'fRklMR'.'Q'.'==','LiA'.'=','RQ==',''.'Ln'.'Rt'.'cA==','Uw==',''.'V'.'Q==','',''.'RE9'.'DVU1FTl'.'RfUk9PVA'.'==','L2JpdH'.'JpeC9'.'1cGRhdGVzL3Vw'.'ZGF0ZV9'.'hcmNo'.'a'.'XZl'.'L'.'m'.'d'.'6',''.'b'.'WFpb'.'g==','d'.'XBkYX'.'RlX2xvYWRfd'.'GltZW91'.'dA==','M'.'zA'.'=','ZXhlYyBDVXBkYXR'.'lQ2x'.'pZW50OjpM'.'b'.'2'.'FkTGF'.'uZ3NVc'.'GRhdG'.'Vz','LmxvZw==','LmxvZw==','','LnRtcA==','LnRtcA==','LmxvZw==','LmxvZw==','','T'.'E1'.'VTDAwM'.'Q==',''.'RQ==','','',''.'W0dO'.'U1UwMV0'.'g','U1V'.'QW'.'l'.'9OT'.'19R'.'U'.'1RSSU5H','LiA=',''.'TE1VTDA'.'w'.'Mg'.'==','RQ==',''.'L0x'.'J'.'Q0V'.'OU0VfS0VZPVt'.'eJl0qL2k'.'=','TElDRU5'.'TRV9LRV'.'k9WA='.'=','U1'.'R'.'FUEw=','','','',''.'W0dOU1UwMl0g','U'.'1VQ'.'W'.'l'.'9FTVBU'.'WV9B'.'TlN'.'XRVI=','LiA=',''.'TE1VTDAwMw='.'=','RQ==','VElNRSB'.'Mb2FkTGFuZ3NVcG'.'RhdGV'.'z'.'KH'.'Jl'.'cXVl'.'c3QpIA==','IH'.'NlYw==','',''.'TE1VTDAwNA==','RQ==','REFUQ'.'Q='.'=','I'.'w='.'=','RVJST1I=','R'.'EFUQQ='.'=','I'.'w==','R'.'VJS'.'T'.'1I'.'=','Ww='.'=','REFUQ'.'Q==',''.'Iw==','RVJS'.'T1I=','QA'.'==','VFlQRQ==',''.'XSA=','REFUQQ==','Iw==','RV'.'JS'.'T1I=',''.'Iw==','','TE1VMD'.'A1','RQ==','REFU'.'QQ==','Iw==',''.'Tk9'.'VUER'.'BVEVT','Rml'.'u'.'a'.'XNoIC0'.'gTk9VUERBVE'.'VT',''.'U1RF'.'UA==','Rg==',''.'Lmx'.'vZw==','d'.'2I'.'=','W0d'.'OU1V'.'MM'.'DNdIA='.'=','I'.'0'.'ZJ'.'TEU'.'j','RE9D'.'V'.'U1FTlR'.'fUk9PVA==','L2'.'Jp'.'dHJ'.'peC91'.'cGR'.'h'.'d'.'G'.'Vz','U1VQUF9S'.'Vl9FUl9URU'.'1'.'QX0Z'.'JTEU=','L'.'iA=','TE1VMDA2','RQ'.'==','U1RFUA='.'=',''.'Uw==','Uw==','REFUQ'.'Q==','I'.'w==','Rkl'.'MRQ='.'=','Q'.'A==','T'.'k'.'FNRQ==','','','','W0'.'dOU1VMMDF'.'dI'.'A==',''.'U1VQ'.'Wl9OT19RU1RS'.'SU5'.'H',''.'LiA'.'=','TE1VT'.'DAw'.'Nw==','RQ==','b'.'G9hZ'.'ExhbmdGaW'.'xlQng=','REFUQQ==','Iw==','R'.'klMRQ'.'==',''.'QA==','V'.'V'.'JM','b'.'G9hZEZpbGU=','RQ='.'=','U1'.'VQUF9'.'QU0Rf'.'QkFEX1'.'JF'.'U1BPT'.'l'.'NF','RQ==','R05TVUwwMDE=','VQ==','L'.'mxv'.'Zw==','Uk'.'VUVVJO','','Z'.'XhlYyB'.'DV'.'X'.'BkYX'.'RlQ2xpZW5'.'0O'.'jpHZ'.'X'.'R'.'OZXh0U3'.'Rl'.'cFVwZGF0ZXM=','','','','W0d'.'OU1'.'UwM'.'V0g','U1V'.'QWl9OT19RU1R'.'SSU5'.'H','LiA=','','L0'.'xJQ0VO'.'U0VfS0VZPV'.'teJl'.'0qL2k=','TElDRU5TRV9L'.'R'.'V'.'k9WA==',''.'U1RFUE0=','','','W'.'0dOU1U'.'wMl0g','U'.'1'.'VQWl9FTVBU'.'WV'.'9BTlNXRVI=','LiA=','VElN'.'RSB'.'HZ'.'XROZXh0U3Rlc'.'F'.'V'.'wZ'.'GF'.'0Z'.'XMocm'.'V'.'xdWVzdCkg','IHNl'.'Yw='.'=','','RE9'.'DVU1FT'.'l'.'R'.'f'.'Uk'.'9PVA==','L'.'2JpdHJpeC'.'91'.'cGRh'.'dGVzL3VwZGF0ZV9hcmNoaXZlLmd6','d2I=',''.'W0dOU1UwM10'.'g','I0ZJTEU'.'j','RE9'.'DVU1FTlRfUk9PVA='.'=','L2J'.'p'.'dHJpeC91cGRhdG'.'Vz','U1V'.'QUF9'.'SVl9FUl'.'9U'.'RU1QX'.'0ZJTEU=','LiA=','','','R0'.'5T'.'VTAw','','ZX'.'h'.'lYyBDVXBkYXRlQ2xp'.'ZW50OjpVbkd6aXBBcmN'.'o'.'aXZl',''.'RE'.'9DVU1'.'FTlRfUk9'.'P'.'V'.'A'.'==','L2J'.'p'.'d'.'HJ'.'pe'.'C9'.'1c'.'GRh'.'dGV'.'zL'.'3VwZGF0ZV9hcm'.'NoaXZl'.'Lm'.'d6','W1VVR1p'.'BMDFdIA==',''.'I0ZJTEU'.'j',''.'U1VQU'.'F9VR'.'0'.'FfTk9fV'.'E1QX0'.'ZJTEU=',''.'L'.'iA=','','W1'.'VVR1pBMDJ'.'dIA==','I'.'0ZJT'.'EUj','U1'.'VQU'.'F9VR0Ff'.'Tk9fU'.'k'.'VB'.'RF9GSUxF',''.'LiA=','','d'.'XBkY'.'XRlX20=',''.'RE9'.'DVU1FTl'.'RfUk9PV'.'A==','L'.'2'.'JpdHJpeC91c'.'GRhdG'.'Vz'.'Lw==','Lw==','W1VVR1pBM'.'DNdIA==','I0'.'ZJTEUj','U'.'1VQU'.'F9VR0FfTk9fVE1QX0NBVA==','LiA=',''.'W'.'1VVR1pB'.'MDRdIA==','I'.'0ZJ'.'TE'.'Uj','U1'.'VQ'.'U'.'F9'.'VR0Ff'.'V1JUX'.'1R'.'NU'.'F9D'.'Q'.'VQ=','LiA=','','cmI=',''.'QklUUklY','QklUUkl'.'Y','',''.'Z3pvc'.'GV'.'u','','cmI5Zg==',''.'c'.'mI=','W1VVR1pBMDVdIA==','I0ZJTEUj','U1VQUF9VR'.'0FfQ0FOVF'.'9PU'.'EVO','Li'.'A=','',''.'Q'.'klUUklY','QklUUk'.'l'.'Y','QklUUklY','W1VVR1pBMDZdI'.'A==','I0ZJTEUj','U1VQU'.'F9V'.'R'.'0FfQkFE'.'X0'.'ZPUk1BVA'.'==','L'.'iA=','','bWF'.'p'.'bg==','c3Ryb25n'.'X3VwZGF0'.'ZV9jaGVj'.'aw'.'==','WQ==',''.'IQ==','IQ==','UlRJ'.'QkU=',''.'W1V'.'VR1pBM'.'DcxXS'.'A=','I0Z'.'JTEUj','U1VQUF9V'.'R0FfQkFE'.'X0ZP'.'Uk1BVA==','L'.'iA=','f'.'A==','W1VVR1p'.'B'.'MDcyXSA=','I0Z'.'J'.'TEUj','U1VQU'.'F'.'9'.'VR0FfQkFEX0Z'.'PUk1'.'BVA='.'=','Li'.'A=','',''.'W1V'.'VR'.'1'.'p'.'B'.'MD'.'czXSA'.'=','I0ZJTEUj','U1VQ'.'UF9VR0FfRk'.'lMRV9DUlVTS'.'A==',''.'LiA=','d'.'2I=','W1'.'VVR1pBMDc'.'0XS'.'A=','I'.'0ZJ'.'TEUj','U1VQUF9VR'.'0Ff'.'Q0FOV'.'F9PUEVOX'.'1dS','LiA=','','W'.'1VV'.'R1'.'pBMDc1XSA=',''.'I0ZJTEUj','U1'.'VQUF'.'9VR0FfQ0'.'FOV'.'F9'.'XU'.'klURV'.'9G','LiA=','WQ'.'==',''.'W1VV'.'R'.'1pBMDc2M'.'V0g','I0'.'Z'.'J'.'TEUj','U'.'1VQUF9VR0FfRklM'.'RV9DUl'.'VTSA'.'==','L'.'iA=','','VEl'.'N'.'RSBVbk'.'d6'.'aX'.'B'.'BcmNo'.'aXZ'.'lIA==','IHNlYw==','','Q1V'.'VR1pB','RE9DVU1'.'FTlRfUk9PVA='.'=',''.'L'.'2'.'Jpd'.'HJ'.'p'.'eC91'.'c'.'GRhd'.'GVzLw==',''.'W1VDVTAx'.'XS'.'A'.'=','I0ZJTE'.'Uj','U1VQUF9DV'.'V9'.'OT19UTV'.'BfQ0FU','LiA'.'=','','W1VDVTAyXSA'.'=','I0ZJTEUj','U1'.'V'.'QUF9DVV'.'9SRF'.'9UTVBfQ0'.'FU',''.'LiA=','Lg==',''.'Li'.'4=','Lw'.'==','Lw==','Lw==',''.'RE9DVU'.'1FTlRfUk9PV'.'A==','L21v'.'Z'.'HVsZXMv','Lw==','Lw==',''.'Lw='.'=','W1VD'.'VTAzX'.'S'.'A=',''.'I'.'0ZJTEUj','U1'.'V'.'QUF9D'.'VV9NQUlO'.'X'.'0'.'VSUl9GSU'.'xF',''.'Li'.'A=','Lw==',''.'Lw='.'=','Lw'.'==','W1V'.'DVTA0XS'.'A=','I'.'0ZJ'.'TEU'.'j','U1VQUF9DVV9NQU'.'lOX0V'.'SUl9'.'DQV'.'Q=','LiA=',''.'Lw'.'==','',''.'Q1VDV'.'Q==','','ZX'.'hlYyBD'.'V'.'X'.'BkYXRlQ'.'2xp'.'ZW50OjpHZXR'.'T'.'dGVwVXBkYXR'.'lSW5mbw='.'=','RE9'.'DVU1FTlRfUk9'.'PVA==','L2'.'Jp'.'dHJpeC91cGRhd'.'GVzLw==','W'.'1VHTE1'.'VMDFdIA='.'=','I0ZJTE'.'Uj','U1VQUF9DVV9OT19'.'UT'.'VBfQ0F'.'U','LiA=','',''.'W1VHTE1'.'VMD'.'JdIA==','I0ZJT'.'EUj','U1VQUF9DVV9S'.'R'.'F9UTVBfQ0FU','LiA=','','L3VwZGF'.'0ZV9p'.'bmZvLn'.'ht'.'bA==','L3'.'V'.'w'.'ZGF0ZV9pbm'.'ZvLnhtb'.'A==','W1VH'.'TE1VMDNd'.'IA==','I0ZJTEUj','L3VwZGF0ZV9pbm'.'Z'.'vLnh'.'tbA==','U1'.'VQ'.'UF9SVl'.'9FUl9ERVNDUl9GSUxF','LiA=','','L'.'3VwZGF0ZV9pbmZv'.'Ln'.'h'.'t'.'bA==','W1'.'V'.'HTE1'.'VM'.'DRdIA='.'=','I'.'0'.'ZJTEUj','L3VwZGF0ZV'.'9pb'.'mZ'.'vL'.'nhtbA='.'=','U1VQUF9SVl'.'9SRU'.'F'.'EX0RFU0NS'.'X'.'0ZJTEU=','LiA'.'=','','L3V'.'wZGF0ZV9pb'.'m'.'Z'.'vLnhtbA==','','','REFU'.'QQ==','REFUQQ==','W1'.'VHU'.'01'.'VMD'.'Fd'.'IA==','U'.'1V'.'QUF'.'9'.'HQ'.'V'.'V'.'UX1N'.'ZU'.'0VSUg'.'==','LiA=','','Q1VHTE1'.'V','Z'.'Xhl'.'YyB'.'DVXB'.'kYXRlQ2xpZW50'.'Oj'.'pVcGRhdG'.'VIZWxw',''.'R'.'E'.'9DVU1FTlRfU'.'k9PVA'.'==','L'.'2J'.'p'.'dHJpe'.'C91'.'c'.'GRhd'.'GVzL'.'w==','RE'.'9DVU1FT'.'lRfUk9'.'PV'.'A'.'==',''.'L2hlbHA'.'=',''.'Lg==','Li4=',''.'Lw==','W1V'.'V'.'SDAwX'.'SA=','U1'.'VQUF'.'9V'.'SF9OT19MQU5H','LiA'.'=','W1VVSDAxX'.'SA=','I0Z'.'JTEU'.'j',''.'U'.'1'.'VQUF9DV'.'V'.'9O'.'T19UTVBfQ0FU','L'.'iA'.'=','',''.'W1VVSDAzXSA=',''.'I0ZJTEUj',''.'U1VQUF9DVV9SRF9U'.'TVBf'.'Q0'.'FU','L'.'iA'.'=','','Lw==',''.'W1VVS'.'DA'.'yX'.'SA'.'=','I'.'0'.'Z'.'JTEUj','U1VQUF9'.'VSF9OT'.'19IRUxQX0'.'NBVA==',''.'Li'.'A=',''.'W1V'.'VS'.'DAzXSA=','I0ZJ'.'TEUj','U1V'.'Q'.'U'.'F9'.'V'.'SF9OT19XUlRfS'.'EVMUA==','Li'.'A'.'=','','','Lw==','W1VV'.'SDA0X'.'SA=','I0ZJTEUj',''.'U1VQUF9VTF9'.'OT19UTVB'.'fT'.'EFOR'.'w==','LiA=','','W1V'.'V'.'S'.'DA1XSA=','I0Z'.'JT'.'EUj','U1VQU'.'F9VTF9OT19SRUF'.'EX'.'0xBTkc=',''.'Li'.'A'.'=','','Lw==','X3RtcA==',''.'Lw==',''.'X'.'3'.'R'.'tcA==',''.'Lw==','X3RtcA==','W1VVSDA'.'2XS'.'A=','I0ZJ'.'T'.'EUj','Lw'.'==',''.'X'.'3RtcA==',''.'U'.'1VQU'.'F'.'9V'.'SF9DQU'.'5UX'.'0R'.'FTA='.'=','LiA=','',''.'Lw==','Lw==','L'.'w==','X3Rtc'.'A'.'==',''.'W1V'.'VSDA3XSA'.'=','I'.'0Z'.'J'.'TEUj','L'.'w==','U1V'.'QUF'.'9VSF'.'9DQ'.'U'.'5UX'.'1J'.'FTkFNRQ==','LiA=','','Lw==','Lw==','L'.'w==','Lw==','W1VVSDA4XSA=','I0'.'ZJTEUj','Lw==','U'.'1VQ'.'UF9VSF9DQU5U'.'X0NSRUFURQ'.'='.'=',''.'LiA=',''.'Lw==','W1VVS'.'DA5X'.'SA=','I0ZJT'.'EUj','Lw==','U1VQUF9VS'.'F'.'9DQU5'.'UX1dSSVR'.'F',''.'LiA'.'=','','Lw='.'=','',''.'Lw==','X3Rtc'.'A==','Lw==','X'.'3RtcA==','VElNRSBV'.'c'.'GRhdGVIZW'.'xwIA==','I'.'HNlYw'.'='.'=','',''.'VVNI','','RE9DVU'.'1'.'FTl'.'RfUk9'.'PVA='.'=',''.'L2J'.'p'.'dHJpeC91'.'cGRhdGVzLw==','W'.'1V'.'VTDAx'.'XSA=','I0ZJTEUj','U'.'1'.'VQUF9DV'.'V9'.'OT19UTVBfQ0FU',''.'LiA=','',''.'Lg==','Li4=','Lw==','W1V'.'V'.'TDAyXSA=','U1VQU'.'F9VTF'.'9OT19M'.'QU5'.'HUw==','LiA=','','W1'.'VVTD'.'A'.'zXSA=',''.'I0ZJTE'.'Uj','U1'.'VQUF9D'.'V'.'V9SRF9UT'.'VBfQ'.'0F'.'U','L'.'iA=','Y29tcG9u'.'ZW50','R'.'E9DVU1FTlRf'.'Uk9P'.'VA==','L'.'2Nvb'.'X'.'BvbmVud'.'HMvY'.'ml0cml4','YWN'.'0'.'aXZp'.'dGllcw'.'='.'=','RE9'.'DVU1FTlRfUk'.'9PV'.'A==','L'.'2Fjd'.'Gl2aXRpZXMv'.'Yml'.'0cml4','Z2FkZ2'.'V0cw==',''.'RE9'.'DV'.'U1'.'FTlRfUk9PVA==','L'.'2dhZ'.'G'.'dldHM'.'v'.'Yml'.'0cml'.'4','d2l6Y'.'XJkcw==','RE'.'9D'.'VU1'.'FTlRfUk9PV'.'A='.'=','L3dp'.'emFy'.'ZHMvYml0'.'c'.'ml4','dGV'.'tcG'.'xhdGU=','R'.'E9DVU1F'.'TlR'.'fUk9PVA'.'==','L3RlbX'.'BsYXRlcw'.'==',''.'Ym'.'xvY'.'2t'.'z','R'.'E9DVU1'.'FTl'.'R'.'fUk9'.'PV'.'A==','L2Js'.'b2Nrc'.'y9ia'.'X'.'RyaXg=','Y29tcG9u'.'ZW50','L'.'2'.'luc3RhbGwvY29'.'tcG9uZW50cy9i'.'a'.'X'.'RyaXg'.'=','Y'.'W'.'N0a'.'X'.'ZpdGllc'.'w==','L2luc3R'.'hbGwvYWN0aXZpdGllcy9i'.'a'.'XRyaXg=','Z2FkZ2V'.'0cw='.'=',''.'L2lu'.'c3RhbGwv'.'Z2FkZ2V0cy9iaXRyaXg=','d'.'2l6YXJkcw==',''.'L2l'.'u'.'c3Rhb'.'G'.'wvd2'.'l'.'6YXJkcy9iaX'.'Rya'.'Xg=','dGV'.'t'.'cGxhdG'.'U=','L'.'2luc3RhbGwvdGV'.'t'.'cG'.'xh'.'dG'.'Vz','Y'.'m'.'xvY2'.'t'.'z','L2luc3R'.'hbGwv'.'YmxvY2tzL2JpdHJp'.'eA==','',''.'Lw'.'==','W1VVTDA0XS'.'A=','I0'.'ZJTEUj',''.'U'.'1'.'VQ'.'UF9'.'VTF'.'9DQVQ=',''.'LiA=','W'.'1V'.'VTD'.'A1'.'XSA'.'=','I0ZJ'.'T'.'EUj','U1VQU'.'F9V'.'TF9O'.'T19XUlRfQ0FU','LiA=','','R'.'E9D'.'VU1FTl'.'RfUk'.'9P'.'VA'.'='.'=','L21vZHV'.'sZXM=','L'.'w==','W1VVT'.'DA'.'0'.'XSA=','I'.'0ZJ'.'TEUj','U1'.'VQUF9VTF9D'.'QVQ'.'=','LiA=','W1VV'.'TDA1XSA=',''.'I0ZJTE'.'U'.'j','U'.'1V'.'QUF'.'9'.'VTF9O'.'T19'.'XUlRfQ'.'0'.'FU','L'.'iA'.'=','','Lw='.'=','Lg==',''.'Li4=','Lw==','W1VVTDA1MV0g','I0'.'ZJ'.'TEUj','Lw==','U1VQ'.'UF9VTF'.'9OT1'.'9X'.'UlRf'.'Q0'.'FU','LiA=','Lw==','L2xhbmc=','Lw'.'='.'=','L2'.'x'.'hbmc=',''.'W1VVT'.'D'.'A1M'.'l'.'0g',''.'I'.'0ZJ'.'TEU'.'j','Lw'.'==',''.'L2xhbmc=','U1VQUF'.'9VTF'.'9OT19XUlRfQ0FU',''.'LiA=','','Lw==',''.'Lg'.'='.'=','Li'.'4=','Lw==','W1V'.'VTD'.'A1MV0g','I0ZJT'.'E'.'Uj','L'.'w==','U1V'.'QUF9VTF'.'9OT19XUlR'.'fQ0'.'FU',''.'LiA'.'=','Lw==','L2x'.'hbmc=','Lw==',''.'L2xhbmc'.'=','W1V'.'VTD'.'A1M'.'l0g','I'.'0ZJ'.'TEUj','Lw==','L2xhbmc=',''.'U'.'1V'.'QUF9VTF9OT19XUlRfQ0F'.'U',''.'LiA'.'=','','','Lw==','W1VVTDA2XSA'.'=','I0ZJTEUj','U1'.'VQUF'.'9VT'.'F9'.'OT'.'1'.'9UTV'.'BfT'.'EF'.'ORw==','LiA=','',''.'W1VVT'.'DA3XSA=','I0ZJTE'.'Uj','U1VQUF9VTF9O'.'T1'.'9SRUFEX0xBT'.'kc'.'=','LiA'.'=','','L'.'w==',''.'Lg==',''.'Li4'.'=','Lw='.'=','Lw'.'==','Lw==','Lw==','L'.'g'.'='.'=',''.'Li'.'4'.'=','Lw==','Lw==',''.'Lw==','RE'.'9DVU1F'.'TlRfUk9PVA==','Lw==','Lw==','','','V'.'ElNRSBVcGRhdGVMYW5ncy'.'A'.'=','IH'.'NlYw='.'=','','VVN'.'M','Lg==',''.'Li4'.'=','Lw='.'=','Lw'.'==','L2luc3RhbG'.'wv','Lw==',''.'Lw==',''.'Lw==','Lg'.'==',''.'Li'.'4'.'=','Lw==','L2xhbm'.'c=','','Lw==',''.'Lw==','Lw==','','VVNf'.'U0FWRV'.'9V'.'UERBVEVSU19ESVI=','','RE'.'9DVU1F'.'TlRfUk9'.'PVA==','L'.'2JpdHJpeC9tb'.'2R1'.'bGVzL21ha'.'W4'.'vb'.'GFu'.'Zy91YQ='.'=',''.'dWE=','RE'.'9D'.'VU1F'.'T'.'lR'.'fUk'.'9P'.'VA==','L2'.'JpdHJ'.'peC9'.'t'.'b2'.'R1bGVzL21ha'.'W4v'.'bG'.'FuZy9k'.'ZQ==','Z'.'G'.'U=','R'.'E9D'.'VU1'.'FTl'.'RfUk9PV'.'A==','L'.'2J'.'pdHJp'.'eC9'.'tb2R'.'1bGVz'.'L21haW4vb'.'G'.'F'.'uZy9lbg==','ZW4'.'=',''.'RE9DVU1'.'FTlRfUk9PVA='.'=','L2Jpd'.'H'.'JpeC9tb2R'.'1bGV'.'zL21'.'haW4vb'.'G'.'FuZy9'.'ydQ==',''.'cn'.'U=','RE9DVU1FT'.'lRfUk9'.'PVA==','L2JpdHJ'.'peC91cGRhdGVzL'.'w==','W1VVSz'.'AxXSA'.'=',''.'I0ZJTEU'.'j',''.'U1VQUF9DVV9OT1'.'9UTVBf'.'Q0'.'FU','LiA=','',''.'W1'.'VVSzAzXSA'.'=','I'.'0ZJTEUj',''.'U1VQ'.'UF9DVV9SRF'.'9U'.'TV'.'BfQ0F'.'U','Li'.'A=','','Lg==','Li'.'4=','Lw==',''.'W1VVSz'.'AyXSA=','U1V'.'QUF9VS1'.'9'.'OT1'.'9N'.'T0R'.'T','LiA=','','','L'.'w==',''.'RE9'.'DVU1'.'FTlRfU'.'k9PVA==','L21v'.'ZHV'.'sZXMv','Lw==','W1'.'VVSzA0X'.'S'.'A=','I01PRFVM'.'R'.'V9E'.'S'.'VIj','U1'.'VQUF9'.'V'.'S19OT'.'19NT0'.'RJUg==','LiA=','',''.'W1'.'VV'.'S'.'zA1'.'XSA'.'=','I01PRFVMRV9ESVIj','U1VQUF9VS19XU'.'l9NT0R'.'JUg==','LiA=','','W1VVSzA2'.'XSA=',''.'I0RJ'.'UiM=','U1VQUF9VS'.'19'.'OT1'.'9GR'.'ElS','LiA=','','W1'.'VVS'.'zA'.'3XSA=','I0R'.'JUiM=',''.'U1VQ'.'UF'.'9VS'.'19'.'S'.'RUFEX0ZE'.'S'.'VI'.'=',''.'Li'.'A'.'=','','dXB'.'kYXRlcg==','Tg'.'==','L'.'w'.'==','X3B'.'vc3QucGhw',''.'WQ==','Lw==','Lw==',''.'L'.'2'.'l'.'u'.'ZGV4LnBocA'.'==','X3B'.'vc3'.'Q'.'=','WQ'.'==','Lw==','L'.'2'.'luZ'.'GV4Ln'.'Boc'.'A==',''.'Lw==','RE9DVU1FTlRf'.'U'.'k9'.'P'.'VA==','Lw==','Lw'.'==','','bXlzcWw=','TVlT'.'UUxfV'.'EFCTEVfV'.'FlQRQ'.'==','','U'.'0VUI'.'HN'.'0b3'.'JhZ2VfZW5na'.'W'.'5l'.'I'.'D'.'0'.'gJw='.'=','Jw==','','Tg==','','L'.'2Jp'.'dHJpeC'.'91cGRhdG'.'VzLw'.'='.'=','Lw==','','I0'.'1'.'PRFVMRS'.'M=','I1Z'.'F'.'Ui'.'M=','U1V'.'Q'.'UF9V'.'S19VUE'.'ROX0V'.'SUg==','OiA=',''.'LiA=',''.'I01PRFVMRSM=','U1'.'VQUF9V'.'S19VUEROX0VSUl9CU'.'k'.'VBSw==','IA='.'=','','','WQ'.'='.'=','','L2'.'JpdHJ'.'peC9'.'1cGR'.'hdGVz'.'Lw='.'=','Lw==','','I01PRFVMRS'.'M=','I1ZF'.'U'.'iM=','U1VQUF9VS19VUE'.'RZX0VSUg==','OiA=','LiA=','I01PR'.'FVMR'.'S'.'M=','U1VQ'.'U'.'F9VS19VU'.'EROX0VS'.'Ul9'.'C'.'UkVBS'.'w==','IA==','','VElNR'.'SB'.'V'.'cGRhdGVTdGVwTW9kd'.'WxlcyA=','IHNlYw==','','VVN'.'N','QlhfUkV'.'B'.'TF9V'.'U'.'ERBVEVEX'.'01PRFVM'.'RVM'.'=','RXh'.'lY3V0ZU1'.'vZ'.'HV'.'sZ'.'UV2ZW50RXg=','bW'.'Fpbg==','T25'.'Nb2R'.'1'.'b'.'GVVc'.'GRhdG'.'U=','VVBEQVRFX1NUUk9O'.'R'.'1'.'9'.'VU'.'ER'.'BVE'.'VfQ0h'.'FQ0'.'s=','VVB'.'EQVRFX1N'.'UUk'.'9OR'.'1'.'9'.'V'.'U'.'ERB'.'VEVfQ'.'0hFQ0s=','W'.'Q==',''.'VVB'.'EQ'.'VRFX'.'1N'.'U'.'Uk'.'9OR'.'1'.'9'.'VUER'.'BVEVfQ0'.'hFQ0s=',''.'Tg='.'=',''.'V'.'VBEQ'.'VRFX1NUU'.'k9OR19VUER'.'B'.'VEVfQ0h'.'FQ0'.'s=','REI=','bWF'.'pbg==','c3Ryb25'.'nX'.'3'.'VwZGF0ZV'.'9jaGVjaw'.'==','WQ='.'=','W'.'Q==',''.'V'.'VBEQVRFX1NUUk9OR19V'.'UERBVEVfQ0hF'.'Q'.'0s=','RE9DV'.'U1'.'F'.'TlRfUk9P'.'VA='.'=','XA==','Lw='.'=','RE9DVU1FTlR'.'fUk9PVA==','IAkK'.'DQALL1w'.'=','','Lw==','R'.'E9D'.'VU1'.'FTl'.'RfUk9PVA'.'==',''.'UnVuIHVwZGF0ZXIgJw==','Jw==',''.'Q1NVUlV'.'TM'.'Q==','','',''.'Cg==','L'.'g==',''.'Lg'.'='.'=','LypaRFV5Wm'.'1a','L'.'y'.'oqLw='.'=',''.'Ki8=',''.'PD8gJEdMT0JBTF'.'NbJ19fX19'.'f','P'.'D8gJ'.'E'.'dMT0JBTFNbJ'.'19'.'fX19'.'f','Y2hlY2s=','M'.'zFlYTMxMmR'.'lMT'.'AwN'.'j'.'c3MWYw'.'YTRlNW'.'IyNWE5MDk'.'zMmM=',''.'ZXh'.'lYyBDV'.'XBkYX'.'R'.'lQ'.'2xpZ'.'W50'.'OjpHZXRVc'.'GRhdGV'.'zTGlzdA==','','','RW1wdH'.'kg'.'cXVlcnkgbGlz'.'dA='.'=','R1VMMD'.'E=','L0'.'xJQ'.'0VO'.'U'.'0VfS0'.'VZ'.'PVteJl0qL2k'.'=','TEl'.'DRU'.'5T'.'RV9LRVk9WA==','TElTVA==','VEl'.'NRSBHZXRVcGR'.'h'.'dG'.'Vz'.'TGlzd'.'C'.'hyZXF1ZXN0'.'KS'.'A=','IH'.'NlYw==','','','REFUQQ'.'==','REFUQ'.'Q='.'=','W1VH'.'QVVUMDFdIA==',''.'U'.'1VQ'.'UF9'.'HQVV'.'UX1'.'NZ'.'U0V'.'SUg==','LiA=','','REFUQQ==','Iw==',''.'Q0xJR'.'U5U',''.'Q0xJRU'.'5'.'U','RVJST1I=','RVJ'.'ST1I=','W1VH'.'Q'.'V'.'VUMDFdIA='.'=','U'.'1'.'VQUF9HQ'.'VVU'.'X1NZU'.'0VSUg==','L'.'i'.'A=','R'.'E9'.'DVU1FTlRf'.'Uk'.'9PVA==','L2J'.'pdHJ'.'peC9'.'1c'.'GRhdG'.'Vz'.'L3VwZ'.'GF0ZV9'.'hcmNoa'.'X'.'Z'.'lL'.'md'.'6','RE9D'.'VU1FTlRfUk9'.'PVA='.'=','L2JpdHJpeC91cGRhdGVzL3'.'VwZGF'.'0'.'ZV9hcmNoaXZlLmd6L'.'mxvZw'.'='.'=','','R1VMM'.'DI=',''.'ZXh'.'lY'.'y'.'B'.'DVXBkYXRlQ2x'.'pZW50Ojp'.'HZ'.'XRIVF'.'RQ'.'U'.'GF'.'nZQ==','TEl'.'TVA==','dXN'.'fdXBkYXRl'.'cl9saXN0'.'LnB'.'ocA==','U1RFUE0'.'=','dX'.'NfdXB'.'kY'.'XR'.'l'.'cl9tb2R'.'1bGVz'.'LnBo'.'cA='.'=','U1'.'R'.'FU'.'Ew=',''.'d'.'X'.'N'.'fdXBk'.'YX'.'Rlcl9sYW5nc'.'y'.'5waH'.'A=','U1RFUEg=','d'.'XNf'.'dXBkYX'.'Rlcl9oZWxwcy'.'5waH'.'A=','Q'.'UNUS'.'VY=','dXNf'.'dX'.'BkYXRlcl9hY3Rp'.'b'.'25'.'zL'.'nBocA==','Uk'.'VH','dXNf'.'dX'.'BkYXRl'.'cl'.'9yZWdpc3'.'Rlci5waHA=','U'.'1JD','dXNfdXBkYXRlcl9z'.'b3Vy'.'Y2Vz'.'Ln'.'BocA==','U0'.'9DS0VUX0lQ','U09'.'DS'.'0VUX1B'.'PUlQ=','',''.'V'.'V'.'NFX1BST1hZ','UE'.'9TVCB'.'odHRwOi8v','SVA=','L2JpdHJpeC'.'91c'.'GRhdGVz'.'L'.'w==','IEh'.'UV'.'FA'.'v'.'MS4wDQo=',''.'UFJPWF'.'lfV'.'VNFUk5BTUU=','','U'.'HJveHktQXV0aG9'.'yaXp'.'hdG'.'lvbjog'.'Qm'.'FzaWM'.'g','UF'.'JPWFlfVV'.'NFUk5BTUU'.'=','Og'.'==','UF'.'JPWFl'.'fU'.'EFTU1dPUkQ=','D'.'Qo=','UE9TVCAvYml0cml'.'4'.'L3VwZG'.'F0'.'ZXMv',''.'IE'.'hU'.'VFAvMS4wD'.'Qo'.'=','Y3JjX'.'2NvZGU'.'=','JnNwZD0'.'=','QlhfVV'.'RG','J'.'nV'.'0Zj'.'0=','WQ==','Jn'.'V0'.'Zj0=','Tg==','JmRidj'.'0=','','Jk5TPQ='.'=','bWFpb'.'g='.'=','d'.'XBkYXRl'.'X'.'3NpdG'.'V'.'fb'.'nM=','','JktEU'.'z'.'0=','bWF'.'pbg='.'=','dX'.'BkY'.'XRlX2RldnNydg='.'=','','VXN'.'lci1BZ'.'2V'.'udDogQml'.'0cml'.'4U0'.'1VcGRhdGVyDQo=',''.'QWNjZX'.'B0'.'OiA'.'q'.'LyoNCg==','SG9zdDog','SVA=',''.'D'.'Qo=','Q'.'WNjZXB0LUxhbmd1Y'.'Wdl'.'OiBlbg0K','Q'.'29udGVudC10e'.'X'.'BlOiBhc'.'HBs'.'aW'.'Nh'.'dGlv'.'b'.'i94LXd'.'3dy'.'1mb3J'.'tL'.'XVybGVuY2'.'9kZ'.'WQN'.'Cg'.'==','Q29u'.'dG'.'V'.'udC1s'.'ZW5'.'nd'.'Gg6IA==','DQoN'.'Cg==',''.'DQo=',''.'DQo'.'=','L1R'.'y'.'YW5zZmVyLUV'.'uY29kaW5'.'nOiArY2h1b'.'mt'.'lZC9p','','','MA==','MQ'.'='.'=','Mg='.'=','Mw='.'=','N'.'A==','N'.'Q==',''.'Ng='.'=',''.'Nw==','O'.'A'.'==','OQ==','YQ==',''.'Y'.'g==','Yw='.'=',''.'ZA==','ZQ==','Zg==','','MA==','MQ==','Mg='.'=','Mw==','N'.'A='.'=','NQ==','Ng='.'=','Nw'.'==','OA==','OQ==','Y'.'Q==','Yg='.'=','Yw='.'=','ZA='.'=',''.'Z'.'Q==','Zg='.'=','','Q1V0a'.'Ww=','Q1V0a'.'Ww=','Q'.'29udmVydFRvTG'.'FuZ0NoYXJ'.'z'.'Z'.'XQ=','U'.'1V'.'Q'.'UF9HSFRUUF9'.'FU'.'g==','O'.'iB'.'b','X'.'SA=','LiA=','U1VQ'.'UF9'.'HS'.'FRUUF9F'.'Ul9ER'.'UY=','IA='.'=','RX'.'Jyb3IgY29ubmVjd'.'GluZ'.'y'.'B0byA=','U09D'.'S0VUX'.'0lQ','OiBb','XSA=','RVJSQ'.'0'.'9OTg='.'=','Q'.'A==','QA==',''.'Iw'.'='.'=','I'.'w==','Iw'.'==','Iw==',''.'Iw==','Ql'.'hfV'.'VRG','XF'.'NpbXBsZ'.'V'.'hNTE'.'V'.'sZW1lbnQ=','Q0N'.'D','PD8=','PA==',''.'P'.'3ht'.'bCB2ZXJzaW'.'9uP'.'Sc'.'xLjAnIGV'.'uY29kaW5nPSc'.'=','Ql'.'h'.'f'.'VVR'.'G','dXRmLTg=','d2luZG93cy0xMjUx','Jy'.'BzdG'.'FuZGF'.'sb25'.'lPSd5ZXM'.'n'.'P'.'w==','Pgo=',''.'REFU'.'QQ'.'='.'=','REFUQ'.'Q==','Q'.'lhfVVRG',''.'dXRm'.'L'.'Tg'.'=','d2luZ'.'G93cy0xMj'.'Ux','Z'.'XhlY'.'yBDVXBkYXRlQ2xpZ'.'W'.'50OjpQYXJ'.'zZVNlcnZ'.'l'.'ck'.'RhdG'.'E'.'=','','W1VQU0'.'Q'.'wMV'.'0g',''.'U1VQUF'.'9BU19'.'F'.'TVBUWV9'.'S'.'RVNQ','LiA'.'=','','PE'.'RB'.'VEE+',''.'PERBVEE+','PERBV'.'EE+','PE'.'RBV'.'E'.'E'.'+','VV'.'BTRD'.'Ay',''.'W1VQU'.'0'.'QwMl0g','U1VQUF9QU0RfQkF'.'EX1JFU'.'1BPTlNF','LiA=','',''.'REFUQQ'.'='.'=',''.'REFU'.'QQ'.'==','W1V'.'QU0Q'.'wM'.'10g',''.'U1VQUF9QU0RfQkFE'.'X'.'1RSQ'.'U5'.'T',''.'LiA=','','REFUQQ='.'=','Iw==','UkVTUE9OU0U=','REF'.'UQQ==',''.'Iw==','Uk'.'VTUE9OU0U=','Q'.'A==',''.'Q1JDX0NP'.'R'.'E'.'U=','','Y3'.'JjX'.'2NvZGU=',''.'REFUQQ==','I'.'w==','Q0xJ'.'R'.'U'.'5U',''.'REFUQQ'.'==','Iw==','Q0xJRU5'.'U','QA==','',''.'REFUQQ='.'=',''.'I'.'w='.'=','Q09'.'V'.'TlRFUg'.'==','REFU'.'QQ='.'=','Iw==','Q0'.'9VTlRFUg'.'='.'=','',''.'Q1'.'VQU0Q'.'=','Tg==','T'.'g='.'=','WQ'.'==',''.'ZXhlYyBD'.'VXBkYXRlQ2xpZW50OjpDb2xsZWN0UmVxdWVzd'.'ERh'.'dGE=','RE9D'.'VU'.'1FT'.'lR'.'fUk9PV'.'A==',''.'L2'.'JpdH'.'J'.'peC9'.'1'.'c'.'GRhdGVz'.'Lw='.'=','','R'.'EI=',''.'TElD'.'R'.'U5TRV9LRVk9','Jm'.'xhbmc'.'9',''.'JlN'.'VUE'.'RfVkV'.'SPQ='.'=','JlZFUlNJT049','JlR'.'ZUEVOQz0=','REVNTw==','WQ==','RA='.'=','RU5'.'DT0RF','WQ==',''.'RQ='.'=','VElN'.'RUx'.'JTUlU'.'X0VESVR'.'JT'.'04=',''.'WQ==',''.'VA'.'='.'=','Rg==',''.'JlNVUE'.'RfU1RTPQ='.'=','JlNVUERfVVJT'.'P'.'Q='.'=',''.'JlNVU'.'ERfREJTP'.'Q==',''.'R'.'E'.'I=','JlhFP'.'Q'.'='.'=','R'.'EI'.'=',''.'REI=','W'.'Q='.'=',''.'Tg==','J'.'kNMSUV'.'OVF'.'9'.'T'.'SVRFPQ='.'=','U0V'.'SVkVSX05BTUU=','JlNFUlZF'.'U'.'l9OQ'.'U1FP'.'Q==','Jk'.'NISEI'.'9',''.'SFR'.'UUF9IT1NU','JkN'.'T'.'QUI9','U0VSVkVSX0F'.'ERFI=','JlNVSUQ'.'9','Jk'.'NBTkdaSV'.'A9',''.'WQ==','Tg'.'==','J'.'kNMSUV'.'OVF9QSFB'.'WRVI9','Jn'.'N'.'0YWJsZT0=','Jm1'.'iZ'.'m8'.'9','bW'.'JzdHJpbm'.'cuZn'.'V'.'uY'.'19vd'.'mVybG9hZA==',''.'Jk5HS'.'U5'.'YPQ==','bWFp'.'b'.'g'.'==',''.'dXB'.'kYXR'.'l'.'X3VzZV'.'9uZ'.'2'.'lueA==','WQ='.'=','J'.'lNNRD0'.'=','bW'.'Fpbg='.'=','dXBkYXR'.'lX3N'.'hZmVfbW9kZQ'.'==','T'.'g==','JnJl'.'cmVyZT0=','WQ==','Tg==','Jg==','Yml'.'0bV'.'8=',''.'Jg==','Yml0b'.'F8=','','J'.'mV4cGVyd'.'F9yZXF1'.'ZXN0Z'.'WR'.'fb'.'W'.'9k'.'d'.'Wxl'.'cz0'.'=','JmV'.'4c'.'GVyd'.'F9p'.'b'.'mNsd'.'WRlX'.'3Rtc'.'F91'.'cGRh'.'dGVzP'.'Xk'.'=','','LA==','','JnJlcXVl'.'c'.'3RlZF9t'.'b2R1bGVzPQ==','','',''.'LA==','','Jn'.'JlcX'.'Vl'.'c'.'3RlZF9sYW5n'.'cz0'.'=','','',''.'LA==','','JnJlcX'.'Vlc3RlZF9oZ'.'Wxwcz0=','R'.'klS'.'U1Rf'.'RUR'.'JVElPTg==','Rk'.'l'.'SU1RfRURJV'.'ElPTg==',''.'WQ='.'=','aWJs'.'b2Nr','Q0hFQ0tfUEVST'.'UlTU0lP'.'TlM=','Tg==','J'.'lN'.'VUERfUE'.'lCQz0=','J'.'lN'.'V'.'UE'.'R'.'f'.'UFV'.'DPQ==','','',''.'JlNVUERfUFNDPQ==',''.'SU5U'.'UkFORVRf'.'RURJV'.'ElPTg==','SU5UUkFORVRfRUR'.'JVElPTg='.'=','WQ==','b'.'WFpbg'.'==','fmNwZl9'.'t'.'YXBfd'.'mFs'.'dW'.'U=','','','YWxsb3dlZF9j'.'b'.'GFzc2V'.'z','Z'.'Q==',''.'Zg'.'==','','Z'.'Q==','Rg='.'=','RA==','','LA'.'='.'=','Og==','Og='.'=','',''.'JlN'.'VU'.'ERfT0ZD'.'P'.'Q==',''.'Ql'.'VT'.'SU5FU'.'1N'.'fRURJVElP'.'Tg==','QlVT'.'SU'.'5FU'.'1NfRU'.'RJVElPT'.'g='.'=','WQ==','b'.'WFpbg==','f'.'mNwZ'.'l9'.'t'.'Y'.'XBf'.'dm'.'F'.'s'.'dWU=','','','Y'.'W'.'xsb3dlZF9j'.'bGF'.'zc2Vz','U2'.'1h'.'bGw=','U21hb'.'Gw'.'=',''.'JlN'.'VUERfT0ZDP'.'Q'.'==','LA'.'==','Y2x1c3Rlcg='.'=',''.'Q0N'.'sdXN0'.'ZXI=','JlNVUERf'.'U'.'1'.'JTPQ'.'==','J'.'lNVUERfU'.'1JTPQ==','Ul'.'U'.'=',''.'Q0h'.'UTUxQY'.'Wd'.'lc0NhY2'.'hl','SXNP'.'b'.'g'.'==','Q0hUTUxQ'.'YWdl'.'c0'.'NhY2h'.'l','SXNDb21wb3'.'N'.'pd'.'GVFbmFib'.'GV'.'k',''.'JlN'.'VUER'.'fQ01QPQ='.'=','WQ==','J'.'lNVUERfQ0'.'1QPQ==','Tg='.'=','Yl9'.'zYWxlX29'.'yZGVy','Ql9TQUxFX'.'09SREVS','JlNB'.'TEVf'.'MTU'.'9','bWFp'.'b'.'g'.'==','fnNhbGV'.'f'.'Y'.'29udmVydG'.'VkXzE1','T'.'g==','WQ==',''.'WQ==','Tg'.'==','JlNB'.'T'.'EVfMTU9','WQ='.'=','J'.'kxJQ0V'.'OU'.'0VfU'.'0lH'.'TkVEPQ='.'=','LQ='.'=','bWFp'.'bg==','Tg==','T'.'k'.'N'.'SRDA'.'x','','Jg==',''.'PQ==','c2'.'VsZW'.'N0I'.'FNFUlZFUl'.'9OQ'.'U1'.'FIGZyb20'.'g'.'Yl'.'9sY'.'W5nI'.'Hdo'.'Z'.'XJlIERFRiA9ICdZJw'.'==',''.'U0VSVkV'.'S'.'X'.'05'.'BTUU=','','U'.'0VSVkVSX05BTUU=',''.'b'.'W'.'Fpbg==','c2Vy'.'dmV'.'yX'.'25'.'hbWU'.'=','R'.'E9'.'DVU1'.'FTl'.'Rf'.'U'.'k9PVA='.'=','L2'.'1v'.'ZHVsZX'.'M=','bWFp'.'bg==','RE9D'.'VU'.'1FT'.'lRfU'.'k9P'.'VA==','L'.'21vZHVsZXMvbWFpbi9'.'jb'.'GF'.'zc2VzL2dl'.'bmVyYWwvdmVyc2lvbi5w'.'aH'.'A'.'=','RE9DVU1FT'.'l'.'RfUk9PVA==','L'.'21'.'vZ'.'H'.'V'.'sZXMvbWFpb'.'i9jbG'.'F'.'zc2VzL2dlbmVyYW'.'wvdmVyc2lvbi'.'5waH'.'A=','RE9DVU1FT'.'lRfUk9'.'PV'.'A==','L2'.'1vZHVsZXMv'.'bWF'.'pbi9jb'.'GF'.'zc2Vz'.'L2dlbmVyYWw'.'v'.'dmV'.'y'.'c2'.'lvb'.'i5'.'w'.'a'.'HA=','L'.'2RlZm'.'lu'.'ZV'.'xzKlwo'.'XH'.'Mq'.'IlNNX1ZFUl'.'NJ'.'T04iXHMqL'.'Fxz'.'KiIo'.'XGQ'.'r'.'X'.'C5'.'c'.'Z'.'CtcLlxkKyk'.'iX'.'HMqXCl'.'ccyovaW0=',''.'bWF'.'pbg'.'='.'=','bWFpbg==','',''.'U'.'1VQ'.'UF9HTV'.'9FUlJ'.'fRE1BSU'.'4=','VXg'.'wOQ='.'=','W1V4MDldI'.'A==','U1'.'VQUF9HTV9FUlJf'.'RE1'.'B'.'SU4=','LiA=','RE'.'9'.'DV'.'U1F'.'TlRfUk9P'.'VA==','L'.'21v'.'ZHVsZ'.'XM'.'v','Lg==','Li'.'4=','bWFpbg'.'==','Lg='.'=','R'.'E9DV'.'U1F'.'TlR'.'fU'.'k'.'9'.'PVA'.'==',''.'L21vZHVs'.'Z'.'X'.'Mv','L2lu'.'c3RhbGwvaW5kZXgucGhw','VkV'.'S'.'U0lPTg='.'=','VkVSU0lPTg==','','I01'.'PRFV'.'MRS'.'M=','U'.'1VQ'.'UF9H'.'TV'.'9F'.'UlJfRE1'.'PRA==','VX'.'gxM'.'Q==','W1'.'V'.'4MTFdIA==','I01PR'.'FV'.'M'.'RS'.'M'.'=','U1'.'VQU'.'F'.'9HTV9'.'FUlJf'.'RE1'.'PRA'.'='.'=',''.'LiA=','VkV'.'SU0lPTg==','U1VQ'.'UF9HTV9O'.'T1'.'9LRVJOR'.'U'.'w=','V'.'XgxNQ==',''.'W1V4MTVd'.'IA==','U'.'1'.'VQUF9HTV'.'9'.'OT19LRVJORUw=','LiA=','','QUNUSVZ'.'F','WQ==','R'.'E9'.'DVU1FTlRfU'.'k9PV'.'A='.'=','L'.'21vZHV'.'sZXM'.'vb'.'W'.'Fpbi9s'.'YW'.'5'.'n','L'.'w'.'='.'=','Lg==','L'.'i4'.'=','','Lw='.'=',''.'L'.'3'.'N1c'.'GRfb'.'G'.'F'.'u'.'Z19kYXRlLm'.'RhdA==',''.'L'.'w==','L3'.'N1c'.'G'.'Rfb'.'GFuZ19'.'kYXRlLmRhdA==','L1xEKy8'.'=','','I'.'0xB'.'Tkc'.'j','U1VQUF9HT'.'F9FUlJ'.'fRExBTkc=',''.'VUdMMDE=','W1VH'.'TDA'.'xXSA=','I'.'0'.'xBT'.'k'.'cj','U1VQUF9H'.'TF9FUl'.'JfRExBTkc=','Li'.'A'.'=','','c29y'.'dA==','YXNj','Q0xhb'.'md'.'1YW'.'dl','QUNUSVZF','WQ==','Q'.'0'.'xhbmc=','QUNUSV'.'ZF','WQ==','U1VQUF9HTF9'.'X'.'S'.'EVSRV9M'.'QU5HUw==','VUdMM'.'DA=','W'.'1'.'VHTD'.'A'.'wXSA=',''.'U1VQUF9HTF9XSE'.'V'.'SRV'.'9MQU5HUw==',''.'L'.'iA=',''.'TElE','TEl'.'E','T'.'ElE','',''.'U'.'1V'.'QUF9'.'H'.'T'.'F'.'9O'.'T19'.'TSVRF'.'X0xBTk'.'dT','VUdMMDI=','W'.'1VHT'.'DAyXS'.'A=','U1'.'VQUF9HTF9OT19TSVRFX'.'0xBTk'.'dT','L'.'i'.'A=','aW50cmFu'.'Z'.'XQ=','U0VMRUNUIE'.'NPVU5UKFUuSUQ'.'p'.'IGFzIEMgRlJPT'.'SBiX3VzZ'.'XIgVSBXSEVSR'.'SBVLkFD'.'VElWRSA9IC'.'dZJ'.'yBB'.'Tk'.'Q'.'g'.'VS5MQVNUX0xP'.'R0'.'lOIE'.'lTIE5P'.'VCBO'.'VUxMIEFORCBF'.'W'.'ElTVFMoU'.'0VMRUNUI'.'Cd4'.'J'.'yBGUk9NIGJfdXR'.'tX3Vz'.'ZXIgVUYs'.'IGJ'.'fdXNlcl9m'.'aWV'.'sZ'.'CBGIFdIR'.'VJF'.'I'.'EYuRU5U'.'S'.'VRZ'.'X'.'0lEID0gJ1VTRV'.'InIE'.'FOR'.'CBGLkZJ'.'RUxEX05'.'BTU'.'Ug'.'PSAnVUZf'.'REVQQ'.'VJUT'.'U'.'VOVCcgQU5EIFVGLkZJRUx'.'EX0'.'lEID0gRi5'.'JR'.'CBB'.'TkQgV'.'U'.'YuV'.'kF'.'MVUV'.'fSU'.'Qg'.'PSBVLklEIEF'.'ORC'.'B'.'V'.'R'.'i5W'.'QUxVRV9JTl'.'Qg'.'SVMgTk'.'9'.'UI'.'E5VTEwgQ'.'U'.'5'.'E'.'IFVGLlZ'.'BTF'.'VFX0lOVCA8'.'PiAwKQ==','RE'.'I=','Qw==','RE9'.'DVU1FTlRf'.'Uk9P'.'V'.'A'.'==',''.'L2'.'hlbH'.'A=','L'.'w==',''.'L'.'g='.'=','Li4=','',''.'L'.'w'.'==','L3N'.'1c'.'G'.'RfbGFuZ1'.'9kY'.'XRlLmR'.'hd'.'A='.'=',''.'L'.'w==','L'.'3N1c'.'GRfbGFuZ19kY'.'X'.'Rl'.'LmRhdA==','L1x'.'EKy'.'8=','',''.'I0hF'.'TFAj','U1VQUF9HSF'.'9FU'.'l'.'JfREhF'.'TFA=','V'.'U'.'d'.'IMDE=',''.'W1VHSD'.'AxXSA=','I'.'0hFT'.'FAj','U'.'1V'.'Q'.'UF'.'9HSF'.'9F'.'UlJfREhFTFA=','LiA=','','c29ydA==','YXNj',''.'Q0xhb'.'md1'.'YWdl',''.'QUN'.'US'.'VZF','WQ='.'=','Q0xhbmc=','QUN'.'USV'.'Z'.'F','WQ='.'=','U1VQUF'.'9HTF9X'.'SE'.'VSRV'.'9'.'MQU5HUw='.'=','V'.'UdIMDA'.'=',''.'W'.'1V'.'HSDAwXSA'.'=','U1V'.'QUF9H'.'TF9X'.'S'.'E'.'VSRV9MQU5HUw'.'==','L'.'iA=',''.'TEl'.'E','TElE',''.'TElE','','U'.'1VQU'.'F9HT'.'F9OT19TS'.'VRFX0x'.'BTkdT','VUdIMDI'.'=',''.'W1V'.'H'.'SDAyXS'.'A=','U1V'.'QU'.'F'.'9HTF9OT1'.'9'.'TSVRFX'.'0xBTkdT','Li'.'A=',''.'RE9DVU1FTlR'.'fUk9PVA==','L21'.'vZHVsZXMvd'.'XBkYX'.'R'.'lci5sb2c=','RE9'.'DV'.'U1FTl'.'RfU'.'k9PVA==',''.'L21vZHVsZXMv'.'dXBk'.'YXRlcl90bX'.'AxLmxv'.'Zw==','','',''.'cmI=',''.'d2'.'I=','','YWIr','WS1t'.'LWQgSDppOnM'.'=','IC'.'0g','IC0'.'g','Cg==',''.'X'.'A'.'==','Lw==',''.'Ly8=','Lw==','L'.'w'.'==','Lw'.'==','Lw==','Lw='.'=','Lw==','Lw==','Lw==','Lw==','Lw==','L'.'w==','W1VDREYwMV0g','U1'.'V'.'QU'.'F9DR'.'E'.'Z'.'fU'.'0'.'VMRl9D'.'T'.'1BZ','LiA=','','W'.'1VDREYwM'.'l0g','I0Z'.'JTEUj','U1VQUF9DREZfT'.'k9fUEF'.'USA==','LiA=','',''.'bWFp'.'bg==',''.'c3R'.'yb2'.'5n'.'X3'.'VwZGF0Z'.'V9jaGVja'.'w==','WQ==','Lw==',''.'W1VDRE'.'YwM'.'10g','I'.'0ZJ'.'TEUj','U1VQUF9DREZfQ0F'.'OV'.'F'.'9D'.'UkVBVEU=',''.'LiA=',''.'W1VDRE'.'YwN'.'F0g',''.'I0Z'.'JTE'.'Uj','U1V'.'QUF'.'9D'.'RE'.'ZfQ'.'0'.'FOVF9'.'XUkl'.'URQ==',''.'LiA=','','Lg='.'=','Li4'.'=','dXBkYXR'.'lcg'.'==','dXBkYXRl'.'c'.'g='.'=','ZGVz'.'Y3JpcHR'.'p'.'b2'.'4=','ZG'.'VzY3JpcHRpb24=',''.'Ln'.'J1','LmRl','LmVu','LnVh','Lm'.'Z1bG'.'w=','Lw='.'=','Lw==',''.'L2xh'.'b'.'mc'.'v',''.'L'.'w==',''.'Lw'.'='.'=',''.'Lw==','L'.'w'.'==','L'.'w==','Lw==','Lw==','W'.'1VDR'.'EYwNV0g',''.'I0ZJTEUj','Lw==','U1'.'VQUF9DR'.'EZfQ'.'0FOVF9G'.'SUxF','LiA=','W'.'Q'.'==','Lw'.'==','Lw==','L'.'w==',''.'Lw==',''.'WQ'.'==','Lw==','W1'.'V'.'DREYwNjF'.'d'.'IA==',''.'I'.'0ZJTEU'.'j','L'.'w'.'==',''.'U1VQ'.'UF9V'.'R0FfRk'.'lMRV9DUlVTSA==','LiA=','Lw==','Lw'.'='.'=','W1VDREYwN'.'l0g',''.'I'.'0'.'Z'.'J'.'TEUj','U1VQUF'.'9'.'DREZfQ'.'0FOVF9'.'GT0'.'x'.'ER'.'VI'.'=','L'.'iA=','W1'.'VD'.'REYwN'.'10g',''.'I'.'0ZJTEUj','U1VQUF9'.'DREZfQ0F'.'OVF9'.'G'.'T0xE'.'RV'.'JfV'.'1'.'I=','LiA=','',''.'WQ==',''.'WQ='.'=','W1VD'.'REYwNj'.'ExXSA=',''.'I0ZJTEUj','U1'.'VQUF9VR0FfRkl'.'MRV9'.'DU'.'lVTSA==','LiA=','','Q1VDRE'.'Y=','Lg='.'=','Li4'.'=','Lw==','Lw==','L'.'w==','L2'.'l'.'uc3Rhb'.'G'.'w'.'vd'.'mVyc'.'2lv'.'bi5waHA=','V'.'kVSU0l'.'PT'.'g='.'=','L2luc3RhbGwvdmVyc2'.'lv'.'bi'.'5wa'.'HA'.'=','L2l'.'uc'.'3Rhb'.'Gwv'.'dmVyc'.'2lvbi5'.'waHA=','V'.'k'.'VSU0lPTg==','L2l'.'uc3R'.'hbGwvaW5kZXgucGhw',''.'Lw'.'==',''.'bW9kdWxlcw'.'==',''.'Lg='.'=',''.'Xw='.'=','VkVSU0lPTg'.'==',''.'VkVS'.'U0lPTl9EQVR'.'F','T'.'ElDRU5TRV9L'.'RVk=','Q'.'0FDSEU0VVBEQVRFU1lT'.'X0xJQ'.'0VO'.'U0VfS0'.'VZ','Q0FD'.'S'.'EU0VVB'.'EQVR'.'FU1'.'lTX0xJ'.'Q0VOU'.'0'.'VfS0VZ','','ZGVtbw==','RE9DV'.'U1FTlR'.'fUk9PVA==','L2'.'J'.'pdHJ'.'p'.'eC9saW'.'N'.'lbnNlX2tl'.'eS5w'.'aHA=',''.'RE9DVU1FTlRfUk9PVA==',''.'L2JpdHJ'.'peC'.'9saWNlbnNl'.'X2tle'.'S5waHA=','Q0FD'.'SEU0'.'V'.'VBEQ'.'V'.'R'.'FU1lTX0xJQ0'.'VOU'.'0Vf'.'S'.'0VZ','Q0FDSEU0VVBEQVRFU1lTX'.'0x'.'JQ0VOU'.'0VfS0V'.'Z','U'.'1VQ'.'UF9HSFRUUF9FU'.'g==','OiBb','X'.'SA=',''.'LiA=','U'.'1VQUF9HSFRUUF9FU'.'l'.'9ERUY=',''.'IA==',''.'RXJy'.'b'.'3IgY29ubmVjdGluZyAyI'.'A==','U'.'09'.'DS'.'0VUX0'.'lQ','OiBb','X'.'S'.'A=','RV'.'J'.'SQ09OTjE=','bWFpbg='.'=','d'.'X'.'BkYXR'.'lX3V'.'zZ'.'V9odHRwcw==','Tg==','WQ'.'='.'=',''.'bWF'.'p'.'b'.'g==','dXBkYXRl'.'X3'.'NpdG'.'VfcHJv'.'eHlfY'.'W'.'Rkcg==','','bWF'.'pbg==','dXB'.'kYX'.'RlX'.'3'.'N'.'pdGVfc'.'HJ'.'veH'.'lfcG'.'9yd'.'A==','','b'.'WF'.'pbg'.'='.'=','dXBkY'.'XR'.'lX3NpdGVfcHJveHlfdXNlcg='.'=','','bWFpbg==',''.'dXBkYXRl'.'X3N'.'pd'.'GVfc'.'HJveHlfcGFzcw==','','','','VVNFX1B'.'ST1hZ','S'.'V'.'A=',''.'U09DS'.'0VUX'.'0'.'lQ','dGxzOi8v','',''.'U09DS'.'0V'.'UX1'.'B'.'PUlQ=','U09'.'DS'.'0'.'VUX0lQ','U09DS'.'0'.'VU'.'X1BP'.'UlQ=','UF'.'JP'.'WF'.'lfV'.'V'.'NFUk5BTUU'.'=',''.'UFJPWFlfUE'.'FT'.'U1dPUk'.'Q=',''.'Y'.'WN'.'jZ'.'WxlcmF'.'0b3'.'JfcmV'.'zZXQ=','b'.'WFpbg==','c3'.'RhYm'.'xlX3'.'Zlcn'.'Npb25zX2'.'9'.'u'.'bHk=','WQ==','U1VQWkN'.'fTk9fQ'.'09OT'.'kVDV'.'A==',''.'LiA=','RVJS'.'T1I=','RVJST'.'1I=','Ww'.'='.'=','RVJST1I=',''.'Q'.'A==',''.'VFlQ'.'RQ='.'=',''.'X'.'S'.'A'.'=',''.'R'.'VJST1'.'I=','Iw==','','RV'.'JST1I'.'=','VVBE'.'QV'.'RFX1NZU1RF'.'TQ==','VV'.'BEU1'.'lT','','TU9E'.'VUxFUw==',''.'Iw==','TU9E'.'VU'.'xF',''.'TU9'.'EVUxFUw==',''.'Iw'.'==','TU9EVUxF','TU9EVUxFUw==','Iw='.'=','TU'.'9E'.'VUx'.'F','TEFOR1M=','Iw='.'=','SU'.'5T'.'VA==',''.'Iw'.'==','TEFORw==','TEFOR1M'.'=','Iw='.'=',''.'SU5'.'TV'.'A='.'=','Iw==','TEFOR'.'w='.'=',''.'TEFOR1M=','I'.'w'.'='.'=','SU'.'5TVA='.'=',''.'I'.'w==','T'.'EF'.'ORw==','VV'.'B'.'EQ'.'VR'.'F','TUw=','V'.'VBE'.'QVRF','TQ==','VV'.'BEQVR'.'F',''.'TA==','Rk'.'lOSVNI','',''.'cXVlcn'.'lfdHlwZQ==','RE'.'9DVU'.'1FTl'.'RfUk9'.'PV'.'A==','L'.'2'.'J'.'pdHJ'.'peC'.'9tb2R1bG'.'VzL21haW4vYWRt'.'aW'.'4v'.'dXBkYX'.'Rl'.'X3'.'N5c3R'.'lb'.'V9jY'.'W'.'xs'.'L'.'nB'.'ocA==',''.'cXVlcnlfdHlw'.'ZQ==',''.'dXB'.'kYX'.'R'.'ldX'.'BkYXR'.'l','RE9DVU1'.'FTlRfU'.'k9'.'PVA==','L2'.'JpdHJpeC9tb2R1bGV'.'z'.'L21haW4vYWRtaW4'.'v'.'dXBkYXR'.'lX'.'3N5c3Rl'.'bV9hY3'.'Quc'.'G'.'h'.'w',''.'d'.'HJhY2'.'tfZX'.'Jy'.'b3J'.'z','MQ'.'==','','Q'.'0hL','RVJST1I=','RVJSfA'.'==',''.'RklOSVNI','RklO','VV'.'B'.'EU1lT',''.'VVB'.'T','VV'.'BEQVRF','U'.'1RQ','RVJ'.'Sf'.'A==',''.'VU'.'5LM'.'Q==','V'.'VBT',''.'WQ==','Q0hL','RVJSfA==','U1RQ','TUw=','RklO',''.'U1RQ','TA==','RVJS','RV'.'JSfA==','U'.'1RQ','U1'.'R'.'Q',''.'TUw=','fA==','RV'.'J'.'SfA==',''.'V'.'U5'.'LMDE=','TQ==','RklO','RklO','RVJ'.'S','RV'.'JS'.'f'.'A==','U1RQ',''.'U1RQ',''.'TQ==',''.'fA'.'==','RVJSfA==',''.'VU5LMDI=','TA==','R'.'k'.'l'.'O','RklO','RVJS','RVJSf'.'A==','U1RQ','U'.'1RQ','TA==','fA==',''.'RVJS'.'fA==','VU5LMDM=','RVJ'.'SfA'.'==','V'.'U5LMg==','RVJSfA==','V'.'U'.'5L'.'Mw==','RklO','','',''.'dw==','PA==','Pwo=',''.'JG'.'FyVmVyc2l'.'vbnMgPSBhcnJheSgK','C'.'S'.'I=','I'.'iA9Pi'.'A'.'i','IiwK','KTsK','Pw='.'=','Pg==','dG8=','dG'.'8=','Z'.'nJv'.'bQ==','Z'.'nJvbQ='.'=','ZnJvbQ==','d'.'G8=','dG8'.'=');return base64_decode($_1561826342[$_99189392]);}};     if(!$GLOBALS['____1209379637'][0](___1004537982(0))){ $GLOBALS['____1209379637'][1](___1004537982(1), ___1004537982(2));} if(!$GLOBALS['____1209379637'][2](___1004537982(3))) $GLOBALS['____1209379637'][3](___1004537982(4), round(0+164.33333333333+164.33333333333+164.33333333333)); if(!$GLOBALS['____1209379637'][4](___1004537982(5))){ $GLOBALS['____1209379637'][5](___1004537982(6), ___1004537982(7));} $GLOBALS['_____1328095636'][0](__FILE__);  if($GLOBALS['____1209379637'][6](___1004537982(8))){ if(!$GLOBALS['____1209379637'][7](___1004537982(9)) && $GLOBALS['____1209379637'][8](___1004537982(10))){ function gzopen($_906972647, $_563707371, $_313577720= 0){ return gzopen64($_906972647, $_563707371, $_313577720);}}} if(!$GLOBALS['____1209379637'][9](___1004537982(11))){ function htmlspecialcharsbx($_1296951786, $_1302320733=ENT_COMPAT){  return $GLOBALS['____1209379637'][10]($_1296951786, $_1302320733,($GLOBALS['____1209379637'][11](___1004537982(12))? ___1004537982(13): ___1004537982(14)));}} if(!$GLOBALS['____1209379637'][12](___1004537982(15))) $GLOBALS['____1209379637'][13](___1004537982(16), ___1004537982(17)); if(!$GLOBALS['____1209379637'][14](___1004537982(18))) $GLOBALS['____1209379637'][15](___1004537982(19), ___1004537982(20)); if(!$GLOBALS['____1209379637'][16](___1004537982(21))) $GLOBALS['____1209379637'][17](___1004537982(22), ___1004537982(23)); $GLOBALS[___1004537982(24)]= ___1004537982(25); $GLOBALS[___1004537982(26)]= ___1004537982(27); require_once($_SERVER[___1004537982(28)].___1004537982(29)); class CUpdateClient{ public static function getLicenseTextPath(){ $_1377042919= array(); $_326250928= ___1004537982(30); $_1938863488= ___1004537982(31); $_719560041= CLanguage::GetList($_326250928, $_1938863488, array(___1004537982(32) => ___1004537982(33))); while($_1390141975= $_719560041->Fetch()){ $_1377042919[]= $_1390141975[___1004537982(34)];} $_1023785319= COption::GetOptionString(___1004537982(35), ___1004537982(36), DEFAULT_UPDATE_SERVER); $_1940603258= COption::GetOptionString(___1004537982(37), ___1004537982(38), ___1004537982(39)); if(IsModuleInstalled(___1004537982(40))){ if($_1940603258 == ___1004537982(41) || $_1940603258 == ___1004537982(42)){ $_1023785319= ___1004537982(43);} else{ $_1023785319= DEFAULT_UPDATE_SERVER;}} return ___1004537982(44).$_1023785319.___1004537982(45).(IsModuleInstalled(___1004537982(46))? ___1004537982(47):___1004537982(48)).___1004537982(49).$GLOBALS['____1209379637'][18](LANGUAGE_ID).___1004537982(50).$GLOBALS['____1209379637'][19]($_1940603258).___1004537982(51).$GLOBALS['____1209379637'][20]($GLOBALS['____1209379637'][21](___1004537982(52), $_1377042919));} public static function getNewLicenseSignedKey(){ $_1178254619= "~new_license17_5_sign"; if(!IsModuleInstalled(___1004537982(53))){ if($GLOBALS['____1209379637'][22]($_SERVER[___1004537982(54)].___1004537982(55))){ $_1178254619= ___1004537982(56);}} else{ if($GLOBALS['____1209379637'][23]($_SERVER[___1004537982(57)].___1004537982(58))){ $_1178254619= ___1004537982(59);} else{  $_1178254619= ___1004537982(60);}} return $_1178254619;} public static function finalizeModuleUpdate($_1675966945){ $_1455832098= $_SERVER["DOCUMENT_ROOT"].US_SHARED_KERNEL_PATH."/modules/updater_versions.php"; $_1342175707= array(); if($GLOBALS['____1209379637'][24]($_1455832098)) $_1342175707= include($_1455832098); $_1533037351= array(); $_753089015= array(); foreach($_1675966945 as $_1373643817){ $_139629394= $GLOBALS['____1209379637'][25](___1004537982(61), ___1004537982(62), $_1373643817[___1004537982(63)][___1004537982(64)]); $_1706943504= $GLOBALS['____1209379637'][26](___1004537982(65), $GLOBALS['____1209379637'][27]($GLOBALS['____1209379637'][28](___1004537982(66), $GLOBALS['____1209379637'][29](___1004537982(67), $_1373643817[___1004537982(68)][___1004537982(69)])), min(136,0,45.333333333333), round(0+1.5+1.5))); if(isset($_1533037351[$_139629394.___1004537982(70).$_1706943504])) continue; $_1533037351[$_139629394.___1004537982(71).$_1706943504]= true; if(!isset($_753089015[$_139629394])) $_753089015[$_139629394]= array(); $_753089015[$_139629394][]= $_1706943504; if(!isset($_1342175707[___1004537982(72)][$_139629394])) $_1342175707[___1004537982(73)][$_139629394]= array(); $_1342175707[___1004537982(74)][$_139629394][]= array($_1706943504, $GLOBALS['____1209379637'][30](___1004537982(75)));} $_685670079= $GLOBALS['____1209379637'][31]($_1342175707, true); $GLOBALS['____1209379637'][32]($_1455832098, ___1004537982(76).___1004537982(77).$_685670079.___1004537982(78)); if($GLOBALS['____1209379637'][33](___1004537982(79))){ $_282031458= new Bitrix\Main\Data\CacheEngineFiles(); $_282031458->clean(BX_PERSONAL_ROOT.___1004537982(80), ___1004537982(81)); $_282031458->clean(BX_PERSONAL_ROOT.___1004537982(82), ___1004537982(83)); $_282031458->clean(BX_PERSONAL_ROOT.___1004537982(84), ___1004537982(85)); $_282031458->clean(BX_PERSONAL_ROOT.___1004537982(86), ___1004537982(87));} foreach($GLOBALS['_____1328095636'][1](___1004537982(88), ___1004537982(89), true) as $_1599781934){ $GLOBALS['_____1328095636'][2]($_1599781934, array($_753089015, $_1342175707, isset($GLOBALS[___1004537982(90)])? $GLOBALS[___1004537982(91)]: array()));}} public static function finalizeLanguageUpdate($_2054273693){ $_1455832098= $_SERVER["DOCUMENT_ROOT"].US_SHARED_KERNEL_PATH."/modules/updater_versions.php"; $_1342175707= array(); if($GLOBALS['____1209379637'][34]($_1455832098)) $_1342175707= include($_1455832098); $_250896991= array(); foreach($_2054273693 as $_339216575 => $_139629394){ $_339216575= $GLOBALS['____1209379637'][35](___1004537982(92), ___1004537982(93), $_339216575); $_250896991[$_339216575]= array($_139629394, $GLOBALS['____1209379637'][36](___1004537982(94))); if(!isset($_1342175707[___1004537982(95)][$_339216575])) $_1342175707[___1004537982(96)][$_339216575]= array(); $_1342175707[___1004537982(97)][$_339216575][]= $GLOBALS['____1209379637'][37](___1004537982(98));}  unset($_1342175707[___1004537982(99)][___1004537982(100)]); $_685670079= $GLOBALS['____1209379637'][38]($_1342175707, true); $GLOBALS['____1209379637'][39]($_1455832098, ___1004537982(101).___1004537982(102).$_685670079.___1004537982(103)); foreach($GLOBALS['_____1328095636'][3](___1004537982(104), ___1004537982(105), true) as $_1599781934){ $GLOBALS['_____1328095636'][4]($_1599781934, array($_250896991, $_1342175707));}} private static function __328632251($_321435640){ CUpdateClient::AddMessage2Log("exec CUpdateClient::executeCounters"); $_418914584= $GLOBALS['____1209379637'][40](true); if(empty($_321435640)) return false; $_1015571134= ___1004537982(106); $_1622907824= CUpdateClient::CollectRequestData($_1015571134); if(empty($_1622907824) && empty($_1015571134)) $_1015571134= ___1004537982(107).GetMessage(___1004537982(108)).___1004537982(109); if(empty($_1015571134)){ $_1622907824 .= ___1004537982(110); foreach($_321435640 as $_1982206509){ $_869020157= ___1004537982(111); if( isset($_1982206509[___1004537982(112)][___1004537982(113)][(982-2*491)][___1004537982(114)]) && $GLOBALS['____1209379637'][41]($_1982206509[___1004537982(115)][___1004537982(116)][(1376/2-688)][___1004537982(117)]) &&($_1982206509[___1004537982(118)][___1004537982(119)][(157*2-314)][___1004537982(120)] !== ___1004537982(121))){ $_869020157= $_1982206509[___1004537982(122)][___1004537982(123)][(226*2-452)][___1004537982(124)];} elseif(isset($_1982206509[___1004537982(125)]) && $GLOBALS['____1209379637'][42]($_1982206509[___1004537982(126)]) &&($_1982206509[___1004537982(127)] !== ___1004537982(128))){ $_869020157= $_1982206509[___1004537982(129)];} try{ if($_869020157 !== ___1004537982(130)) $_1760501310= eval($_869020157); else $_1760501310= ___1004537982(131);} catch(Exception $_1038958414){ $_1760501310= ___1004537982(132).$_1038958414->getCode().___1004537982(133).$_1038958414->getMessage();} $_1622907824 .= ___1004537982(134).$GLOBALS['____1209379637'][43]($_1982206509[___1004537982(135)][___1004537982(136)]).___1004537982(137).$GLOBALS['____1209379637'][44]($_1760501310);}} if(empty($_1015571134)){ CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][45](___1004537982(138), ___1004537982(139), $_1622907824)); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(140), $_1622907824, $_1015571134); if(empty($_1596961748) && empty($_1015571134)) $_1015571134= ___1004537982(141).GetMessage(___1004537982(142)).___1004537982(143);} CUpdateClient::AddMessage2Log(___1004537982(144).$GLOBALS['____1209379637'][46]($GLOBALS['____1209379637'][47](true)- $_418914584, round(0+3)).___1004537982(145)); if(!empty($_1015571134)){ CUpdateClient::AddMessage2Log($_1015571134, ___1004537982(146)); return false;} else return true;} private static function __416130040($_1310272241, $_139629394, $_1538520438= ""){ global $DB; $_463479575= $DB->Query( ___1004537982(147). ___1004537982(148). ___1004537982(149). ___1004537982(150).$DB->ForSql($_1310272241).___1004537982(151). ___1004537982(152).$DB->ForSql($_139629394).___1004537982(153)); if($_1139428298= $_463479575->Fetch()) return $_1139428298[___1004537982(154)]; return $_1538520438;} protected static function GetUniqueId(){ global $APPLICATION; if($GLOBALS['____1209379637'][48]($APPLICATION, ___1004537982(155))){ return $APPLICATION->GetServerUniqID();} return COption::GetOptionString(___1004537982(156), ___1004537982(157));} public static function Lock(){ global $DB; $_916521942= CUpdateClient::GetUniqueId(); if($DB->type == ___1004537982(158)){ $_775996342= $DB->Query(___1004537982(159).$DB->ForSql($_916521942).___1004537982(160)); $_1727367214= $_775996342->Fetch(); if($_1727367214[___1004537982(161)] == ___1004537982(162)) return true;} elseif($DB->type == ___1004537982(163)){ $_775996342= $DB->Query(___1004537982(164). $GLOBALS['____1209379637'][49]($_916521942. ___1004537982(165)). ___1004537982(166)); $_1727367214= $_775996342->Fetch(); if($_1727367214[___1004537982(167)] == ___1004537982(168)) return true;} return false;} public static function UnLock(){ global $DB; $_916521942= CUpdateClient::GetUniqueId(); if($DB->type == ___1004537982(169)){ $_775996342= $DB->Query(___1004537982(170).$DB->ForSql($_916521942).___1004537982(171)); $_1727367214= $_775996342->Fetch(); if($_1727367214[___1004537982(172)] == ___1004537982(173)){ return false;} return true;} elseif($DB->type == ___1004537982(174)){ $_775996342= $DB->Query(___1004537982(175). $GLOBALS['____1209379637'][50]($_916521942. ___1004537982(176)). ___1004537982(177)); $_1727367214= $_775996342->Fetch(); if($_1727367214[___1004537982(178)] == ___1004537982(179)) return true; else return false;} elseif($DB->type == ___1004537982(180)){ return true;} else{ $DB->Query(___1004537982(181).$DB->ForSql($_916521942).___1004537982(182)); return true;}} public static function Repair($type, $_1474158358, $_1530138095= false){ if($type == "include"){ if(CUpdateClient::RegisterVersion($errorMessage, $_1530138095, $_1474158358)) CUpdateClient::AddMessage2Log("Include repaired"); else CUpdateClient::AddMessage2Log(___1004537982(183).$errorMessage);}} public static function IsUpdateAvailable(&$_171681707, &$_753204024){ $_171681707= array(); $_753204024= ___1004537982(184); $_1474158358= COption::GetOptionString(___1004537982(185), ___1004537982(186), ___1004537982(187)); $_1278724601= CUpdateClient::GetUpdatesList($_753204024, LANG, $_1474158358); if(!$_1278724601) return false; if(isset($_1278724601[___1004537982(188)])){ for($_443696004=(1240/2-620), $_1167463684= $GLOBALS['____1209379637'][51]($_1278724601[___1004537982(189)]); $_443696004< $_1167463684; $_443696004++) $_753204024 .= ___1004537982(190).$_1278724601[___1004537982(191)][$_443696004][___1004537982(192)][___1004537982(193)].___1004537982(194).$_1278724601[___1004537982(195)][$_443696004][___1004537982(196)]; return false;} if( isset($_1278724601[___1004537982(197)][(966-2*483)][___1004537982(198)][___1004537982(199)]) && $GLOBALS['____1209379637'][52]($_1278724601[___1004537982(200)][(1012/2-506)][___1004537982(201)][___1004537982(202)])){ $_171681707= $_1278724601[___1004537982(203)][min(12,0,4)][___1004537982(204)][___1004537982(205)]; return true;} if(isset($_1278724601[___1004537982(206)])) return true; return false;} public static function SubscribeMail($_802145321, &$_753204024, $_1530138095= false, $_1474158358= "Y"){ $_2136808367= ""; CUpdateClient::AddMessage2Log(___1004537982(207)); $_1622907824= CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358); if($_1622907824 == ___1004537982(208) || $_2136808367 <> ___1004537982(209)){ if($_2136808367 == ___1004537982(210)) $_2136808367= ___1004537982(211).GetMessage(___1004537982(212)).___1004537982(213);} if($_2136808367 == ___1004537982(214)){ $_1622907824 .= ___1004537982(215).UrlEncode($_802145321).___1004537982(216); CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][53](___1004537982(217), ___1004537982(218), $_1622907824));  $_418914584= $GLOBALS['____1209379637'][54](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(219), $_1622907824, $_2136808367); if($_1596961748 == ___1004537982(220)){ if($_2136808367 == ___1004537982(221)) $_2136808367= ___1004537982(222).GetMessage(___1004537982(223)).___1004537982(224);} CUpdateClient::AddMessage2Log(___1004537982(225).$GLOBALS['____1209379637'][55]($GLOBALS['____1209379637'][56](true)- $_418914584, round(0+1.5+1.5)).___1004537982(226));} if($_2136808367 == ___1004537982(227)){ $_187816114= Array(); CUpdateClient::__1244221643($_1596961748, $_187816114, $_2136808367);} if($_2136808367 == ___1004537982(228)){ if(!empty($_187816114[___1004537982(229)][___1004537982(230)][___1004537982(231)]) && $GLOBALS['____1209379637'][57]($_187816114[___1004537982(232)][___1004537982(233)][___1004537982(234)])){ for($_443696004=(217*2-434), $_346373140= $GLOBALS['____1209379637'][58]($_187816114[___1004537982(235)][___1004537982(236)][___1004537982(237)]); $_443696004< $_346373140; $_443696004++){ if($_187816114[___1004537982(238)][___1004537982(239)][___1004537982(240)][$_443696004][___1004537982(241)][___1004537982(242)] <> ___1004537982(243)) $_2136808367 .= ___1004537982(244).$_187816114[___1004537982(245)][___1004537982(246)][___1004537982(247)][$_443696004][___1004537982(248)][___1004537982(249)].___1004537982(250); $_2136808367 .= $_187816114[___1004537982(251)][___1004537982(252)][___1004537982(253)][$_443696004][___1004537982(254)].___1004537982(255);}}} if($_2136808367 <> ___1004537982(256)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(257)); $_753204024 .= $_2136808367; return false;} else return true;} public static function ActivateCoupon($_148013943, &$_753204024, $_1530138095= false, $_1474158358= "Y"){ $_2136808367= ""; CUpdateClient::AddMessage2Log(___1004537982(258)); $_1622907824= CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358); if($_1622907824 == ___1004537982(259) || $_2136808367 <> ___1004537982(260)){ if($_2136808367 == ___1004537982(261)) $_2136808367= ___1004537982(262).GetMessage(___1004537982(263)).___1004537982(264);} if(CModule::IncludeModule(___1004537982(265)) &&!\Bitrix\Rest\OAuthService::getEngine()->isRegistered()){ try{ \Bitrix\Rest\OAuthService::register(); \Bitrix\Rest\OAuthService::getEngine()->getClient()->getApplicationList();} catch(\Bitrix\Main\SystemException $_1038958414){}} if($_2136808367 == ___1004537982(266)){ $_1622907824 .= ___1004537982(267).UrlEncode($_148013943).___1004537982(268); CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][59](___1004537982(269), ___1004537982(270), $_1622907824));  $_418914584= $GLOBALS['____1209379637'][60](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(271), $_1622907824, $_2136808367); if($_1596961748 == ___1004537982(272)){ if($_2136808367 == ___1004537982(273)) $_2136808367= ___1004537982(274).GetMessage(___1004537982(275)).___1004537982(276);} CUpdateClient::AddMessage2Log(___1004537982(277).$GLOBALS['____1209379637'][61]($GLOBALS['____1209379637'][62](true)- $_418914584, round(0+3)).___1004537982(278));} if($_2136808367 == ___1004537982(279)){ $_187816114= Array(); CUpdateClient::__1244221643($_1596961748, $_187816114, $_2136808367);} if($_2136808367 == ___1004537982(280)){ if(!empty($_187816114[___1004537982(281)][___1004537982(282)][___1004537982(283)]) && $GLOBALS['____1209379637'][63]($_187816114[___1004537982(284)][___1004537982(285)][___1004537982(286)])){ for($_443696004= min(224,0,74.666666666667), $_346373140= $GLOBALS['____1209379637'][64]($_187816114[___1004537982(287)][___1004537982(288)][___1004537982(289)]); $_443696004< $_346373140; $_443696004++){ if($_187816114[___1004537982(290)][___1004537982(291)][___1004537982(292)][$_443696004][___1004537982(293)][___1004537982(294)] <> ___1004537982(295)) $_2136808367 .= ___1004537982(296).$_187816114[___1004537982(297)][___1004537982(298)][___1004537982(299)][$_443696004][___1004537982(300)][___1004537982(301)].___1004537982(302); $_2136808367 .= $_187816114[___1004537982(303)][___1004537982(304)][___1004537982(305)][$_443696004][___1004537982(306)].___1004537982(307);}}} if($_2136808367 == ___1004537982(308)){ if(isset($_187816114[___1004537982(309)][___1004537982(310)][___1004537982(311)]) && $GLOBALS['____1209379637'][65]($_187816114[___1004537982(312)][___1004537982(313)][___1004537982(314)])){ CUpdateClient::__ApplyLicenseInfo($_187816114[___1004537982(315)][___1004537982(316)][___1004537982(317)][min(238,0,79.333333333333)][___1004537982(318)]);}} if($_2136808367 <> ___1004537982(319)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(320)); $_753204024 .= $_2136808367; return false;} else{ $_473116890= ___1004537982(321); CUpdateClient::RegisterVersion($_473116890); return true;}}  public static function __ApplyLicenseInfo($_12549049){ if($GLOBALS['____1209379637'][66]("V1", $_12549049) && $GLOBALS['____1209379637'][67]("V2", $_12549049)){ COption::SetOptionString('main', 'admin_passwordh', $_12549049["V1"]); $_1733016191= $GLOBALS['____1209379637'][68]($_SERVER[___1004537982(322)].___1004537982(323), ___1004537982(324)); $GLOBALS['____1209379637'][69]($_1733016191, ___1004537982(325).___1004537982(326).$_12549049[___1004537982(327)].___1004537982(328).___1004537982(329)); $GLOBALS['____1209379637'][70]($_1733016191);} if(isset($_12549049[___1004537982(330)])){ COption::SetOptionString(US_BASE_MODULE, ___1004537982(331), $_12549049[___1004537982(332)]);} if(isset($_12549049[___1004537982(333)])){ COption::SetOptionString(US_BASE_MODULE, ___1004537982(334), $_12549049[___1004537982(335)]);} if(isset($_12549049[___1004537982(336)])){ COption::SetOptionString(___1004537982(337), ___1004537982(338), $GLOBALS['____1209379637'][71]($_12549049[___1004537982(339)]));} if(isset($_12549049[___1004537982(340)])){ COption::SetOptionString(___1004537982(341), ___1004537982(342), $GLOBALS['____1209379637'][72]($_12549049[___1004537982(343)]));} if(isset($_12549049[___1004537982(344)])){ COption::SetOptionString(___1004537982(345), ___1004537982(346), $_12549049[___1004537982(347)]);} if(isset($_12549049[___1004537982(348)])){ COption::SetOptionString(___1004537982(349), ___1004537982(350), $_12549049[___1004537982(351)]);} if(isset($_12549049[___1004537982(352)])){ COption::SetOptionString(___1004537982(353), ___1004537982(354), $GLOBALS['____1209379637'][73]($_12549049[___1004537982(355)]));} if(isset($_12549049[___1004537982(356)])){ COption::SetOptionString(___1004537982(357), ___1004537982(358), $_12549049[___1004537982(359)]);} if(isset($_12549049[___1004537982(360)])){ COption::SetOptionString(___1004537982(361), ___1004537982(362), $_12549049[___1004537982(363)]);} if(isset($_12549049[___1004537982(364)])){ COption::SetOptionString(___1004537982(365), ___1004537982(366), $_12549049[___1004537982(367)]);} if(isset($_12549049[___1004537982(368)])){ COption::SetOptionString(___1004537982(369), ___1004537982(370), $_12549049[___1004537982(371)]);} if(isset($_12549049[___1004537982(372)])){ COption::SetOptionString(___1004537982(373), ___1004537982(374), $_12549049[___1004537982(375)]);} if(isset($_12549049[___1004537982(376)])){ COption::SetOptionString(___1004537982(377), ___1004537982(378), $_12549049[___1004537982(379)]);} if(isset($_12549049[___1004537982(380)])){ COption::SetOptionString(___1004537982(381), ___1004537982(382), $_12549049[___1004537982(383)]);} if(isset($_12549049[___1004537982(384)])){ COption::SetOptionString(___1004537982(385), ___1004537982(386), $_12549049[___1004537982(387)]);} if(isset($_12549049[___1004537982(388)])){ COption::SetOptionString(___1004537982(389), ___1004537982(390), $_12549049[___1004537982(391)]);} if(isset($_12549049[___1004537982(392)])){ COption::SetOptionString(___1004537982(393), ___1004537982(394), $_12549049[___1004537982(395)]);} if(isset($_12549049[___1004537982(396)])){ COption::SetOptionString(___1004537982(397), ___1004537982(398), $_12549049[___1004537982(399)]);} foreach($_12549049 as $_1307000183 => $_593850248){ if($GLOBALS['____1209379637'][74]($_1307000183, min(14,0,4.6666666666667), round(0+0.75+0.75+0.75+0.75)) == ___1004537982(400)){ COption::SetOptionString(___1004537982(401), ___1004537982(402).$GLOBALS['____1209379637'][75]($_1307000183, round(0+1.5+1.5)), $_593850248);}} if($GLOBALS['____1209379637'][76](___1004537982(403), $_12549049)){ $_872232418= array(); $_969985619= COption::GetOptionString(___1004537982(404), ___1004537982(405), ___1004537982(406)); if($_969985619 <> ___1004537982(407)){ $_969985619= $GLOBALS['____1209379637'][77]($_969985619); $_872232418= $GLOBALS['____1209379637'][78]($_969985619, array(___1004537982(408) => false)); if(!$GLOBALS['____1209379637'][79]($_872232418)) $_872232418= array();} if(empty($_872232418)) $_872232418= array(___1004537982(409) => array(), ___1004537982(410) => array()); $_795365505= $GLOBALS['____1209379637'][80](___1004537982(411), $_12549049[___1004537982(412)]); foreach($_795365505 as $_593850248) $_872232418[___1004537982(413)][$_593850248]= array(___1004537982(414)); $_525707952= $GLOBALS['____1209379637'][81]($_872232418[___1004537982(415)]); foreach($_525707952 as $_489120050){ if($GLOBALS['____1209379637'][82]($_489120050, $_795365505) || $_489120050 == ___1004537982(416)){ $_872232418[___1004537982(417)][$_489120050]= array(___1004537982(418));} else{ if($_872232418[___1004537982(419)][$_489120050][(870-2*435)] != ___1004537982(420)) $_872232418[___1004537982(421)][$_489120050]= array(___1004537982(422));}} $_969985619= $GLOBALS['____1209379637'][83]($_872232418); $_969985619= $GLOBALS['____1209379637'][84]($_969985619); COption::SetOptionString(___1004537982(423), ___1004537982(424), $_969985619); COption::SetOptionString(___1004537982(425), ___1004537982(426), $_12549049[___1004537982(427)]);} elseif($GLOBALS['____1209379637'][85](___1004537982(428), $_12549049)){ $_872232418= array(); $_795365505= $GLOBALS['____1209379637'][86](___1004537982(429), $_12549049[___1004537982(430)]); foreach($_795365505 as $_593850248) $_872232418[]= $_593850248; $_969985619= $GLOBALS['____1209379637'][87]($_872232418); $_969985619= $GLOBALS['____1209379637'][88]($_969985619); COption::SetOptionString(___1004537982(431), ___1004537982(432), $_969985619); COption::SetOptionString(___1004537982(433), ___1004537982(434), $_12549049[___1004537982(435)]);}} public static function UpdateUpdate(&$_753204024, $_1530138095= false, $_1474158358= "Y"){ $_2136808367= ''; $_1596961748= ___1004537982(436); $_1370972511= ___1004537982(437); CUpdateClient::AddMessage2Log(___1004537982(438)); $_1622907824= CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358); if($_1622907824 == ___1004537982(439) || $_2136808367 <> ___1004537982(440)){ if($_2136808367 == ___1004537982(441)) $_2136808367= ___1004537982(442).GetMessage(___1004537982(443)).___1004537982(444);} if($_2136808367 == ___1004537982(445)){ $_1622907824 .= ___1004537982(446); CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][89](___1004537982(447), ___1004537982(448), $_1622907824)); $_418914584= $GLOBALS['____1209379637'][90](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(449), $_1622907824, $_2136808367); if($_1596961748 == ___1004537982(450)){ if($_2136808367 == ___1004537982(451)) $_2136808367= ___1004537982(452).GetMessage(___1004537982(453)).___1004537982(454);} CUpdateClient::AddMessage2Log(___1004537982(455).$GLOBALS['____1209379637'][91]($GLOBALS['____1209379637'][92](true)- $_418914584, round(0+0.75+0.75+0.75+0.75)).___1004537982(456));} if($_2136808367 == ___1004537982(457)){ if(!($_1069261324= $GLOBALS['____1209379637'][93]($_SERVER[___1004537982(458)].___1004537982(459), ___1004537982(460)))) $_2136808367 .= ___1004537982(461).$GLOBALS['____1209379637'][94](___1004537982(462), $_SERVER[___1004537982(463)].___1004537982(464), GetMessage(___1004537982(465))).___1004537982(466);} if($_2136808367 == ___1004537982(467)){ if(!$GLOBALS['____1209379637'][95]($_1069261324, $_1596961748)) $_2136808367 .= ___1004537982(468).$GLOBALS['____1209379637'][96](___1004537982(469), $_SERVER[___1004537982(470)].___1004537982(471), GetMessage(___1004537982(472))).___1004537982(473);@$GLOBALS['____1209379637'][97]($_1069261324);} if($_2136808367 == ___1004537982(474)){ $_154269357= ___1004537982(475); if(!CUpdateClient::UnGzipArchive($_154269357, $_2136808367, ___1004537982(476))) $_2136808367 .= ___1004537982(477).GetMessage(___1004537982(478)).___1004537982(479);} if($_2136808367 == ___1004537982(480)){ $_1370972511= $_SERVER[___1004537982(481)].___1004537982(482).$_154269357; if(!$GLOBALS['____1209379637'][98]($_1370972511.___1004537982(483)) ||!$GLOBALS['____1209379637'][99]($_1370972511.___1004537982(484))) $_2136808367 .= ___1004537982(485).$GLOBALS['____1209379637'][100](___1004537982(486), $_1370972511.___1004537982(487), GetMessage(___1004537982(488))).___1004537982(489);} if($_2136808367 == ___1004537982(490)){ if(!$GLOBALS['____1209379637'][101]($_1370972511.___1004537982(491))) $_2136808367 .= ___1004537982(492).$GLOBALS['____1209379637'][102](___1004537982(493), $_1370972511.___1004537982(494), GetMessage(___1004537982(495))).___1004537982(496);} if($_2136808367 == ___1004537982(497)) $_1596961748= $GLOBALS['____1209379637'][103]($_1370972511.___1004537982(498)); if($_2136808367 == ___1004537982(499)){ $_187816114= Array(); CUpdateClient::__1244221643($_1596961748, $_187816114, $_2136808367);} if($_2136808367 == ___1004537982(500)){ if(!empty($_187816114[___1004537982(501)][___1004537982(502)][___1004537982(503)]) && $GLOBALS['____1209379637'][104]($_187816114[___1004537982(504)][___1004537982(505)][___1004537982(506)])){ for($_443696004=(1100/2-550), $_346373140= $GLOBALS['____1209379637'][105]($_187816114[___1004537982(507)][___1004537982(508)][___1004537982(509)]); $_443696004< $_346373140; $_443696004++){ if($_187816114[___1004537982(510)][___1004537982(511)][___1004537982(512)][$_443696004][___1004537982(513)][___1004537982(514)] <> ___1004537982(515)) $_2136808367 .= ___1004537982(516).$_187816114[___1004537982(517)][___1004537982(518)][___1004537982(519)][$_443696004][___1004537982(520)][___1004537982(521)].___1004537982(522); $_2136808367 .= $_187816114[___1004537982(523)][___1004537982(524)][___1004537982(525)][$_443696004][___1004537982(526)].___1004537982(527);}}} if($_2136808367 == ___1004537982(528)){ $_1590613717= $_SERVER[___1004537982(529)].US_SHARED_KERNEL_PATH.___1004537982(530); CUpdateClient::CheckDirPath($_1590613717.___1004537982(531)); if(!$GLOBALS['____1209379637'][106]($_1590613717) ||!$GLOBALS['____1209379637'][107]($_1590613717)) $_2136808367 .= ___1004537982(532).$GLOBALS['____1209379637'][108](___1004537982(533), $_1590613717, GetMessage(___1004537982(534))).___1004537982(535); if($_2136808367 == ___1004537982(536)) if(!$GLOBALS['____1209379637'][109]($_1590613717)) $_2136808367 .= ___1004537982(537).$GLOBALS['____1209379637'][110](___1004537982(538), $_1590613717, GetMessage(___1004537982(539))).___1004537982(540);} if($_2136808367 == ___1004537982(541)){ CUpdateClient::CopyDirFiles($_1370972511.___1004537982(542), $_1590613717, $_2136808367);} if($_2136808367 == ___1004537982(543)){ CUpdateClient::AddMessage2Log(___1004537982(544), ___1004537982(545)); CUpdateClient::DeleteDirFilesEx($_1370972511); CUpdateClient::resetAccelerator();} if($_2136808367 <> ___1004537982(546)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(547)); $_753204024 .= $_2136808367; return false;} else return true;} public static function GetPHPSources(&$_753204024, $_1530138095, $_1474158358, $_2142182691){ $_2136808367= ''; $_1596961748= ___1004537982(548); CUpdateClient::AddMessage2Log(___1004537982(549)); $_1622907824= CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358, $_2142182691); if($_1622907824 == ___1004537982(550) || $_2136808367 <> ___1004537982(551)){ if($_2136808367 == ___1004537982(552)) $_2136808367= ___1004537982(553).GetMessage(___1004537982(554)).___1004537982(555);} if($_2136808367 == ___1004537982(556)){ CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][111](___1004537982(557), ___1004537982(558), $_1622907824)); $_418914584= $GLOBALS['____1209379637'][112](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(559), $_1622907824, $_2136808367); if($_1596961748 == ___1004537982(560)){ if($_2136808367 == ___1004537982(561)) $_2136808367= ___1004537982(562).GetMessage(___1004537982(563)).___1004537982(564);} CUpdateClient::AddMessage2Log(___1004537982(565).$GLOBALS['____1209379637'][113]($GLOBALS['____1209379637'][114](true)- $_418914584, round(0+3)).___1004537982(566));} if($_2136808367 == ___1004537982(567)){ if(!($_1069261324= $GLOBALS['____1209379637'][115]($_SERVER[___1004537982(568)].___1004537982(569), ___1004537982(570)))) $_2136808367= ___1004537982(571).$GLOBALS['____1209379637'][116](___1004537982(572), $_SERVER[___1004537982(573)].___1004537982(574), GetMessage(___1004537982(575))).___1004537982(576);} if($_2136808367 == ___1004537982(577)){ $GLOBALS['____1209379637'][117]($_1069261324, $_1596961748); $GLOBALS['____1209379637'][118]($_1069261324);} if($_2136808367 <> ___1004537982(578)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(579)); $_753204024 .= $_2136808367; return false;} else return true;} public static function GetSupportFullLoad(&$_753204024, $_1530138095, $_1474158358, $_2142182691){ $_2136808367= ''; $_1596961748= ___1004537982(580); CUpdateClient::AddMessage2Log(___1004537982(581)); $_1622907824= CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358, $_2142182691); if($_1622907824 == ___1004537982(582) || $_2136808367 <> ___1004537982(583)){ if($_2136808367 == ___1004537982(584)) $_2136808367= ___1004537982(585).GetMessage(___1004537982(586)).___1004537982(587);} if($_2136808367 == ___1004537982(588)){ $_1622907824 .= ___1004537982(589); CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][119](___1004537982(590), ___1004537982(591), $_1622907824)); $_418914584= $GLOBALS['____1209379637'][120](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(592), $_1622907824, $_2136808367); if($_1596961748 == ___1004537982(593)){ if($_2136808367 == ___1004537982(594)) $_2136808367= ___1004537982(595).GetMessage(___1004537982(596)).___1004537982(597);} CUpdateClient::AddMessage2Log(___1004537982(598).$GLOBALS['____1209379637'][121]($GLOBALS['____1209379637'][122](true)- $_418914584, round(0+1+1+1)).___1004537982(599));} if($_2136808367 == ___1004537982(600)){ if(!($_1069261324= $GLOBALS['____1209379637'][123]($_SERVER[___1004537982(601)].___1004537982(602), ___1004537982(603)))) $_2136808367= ___1004537982(604).$GLOBALS['____1209379637'][124](___1004537982(605), $_SERVER[___1004537982(606)].___1004537982(607), GetMessage(___1004537982(608))).___1004537982(609);} if($_2136808367 == ___1004537982(610)){ $GLOBALS['____1209379637'][125]($_1069261324, $_1596961748); $GLOBALS['____1209379637'][126]($_1069261324);} if($_2136808367 <> ___1004537982(611)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(612)); $_753204024 .= $_2136808367; return false;} else return true;} public static function RegisterVersion(&$_753204024, $_1530138095= false, $_1474158358= "Y"){ $_2136808367= ''; $_1596961748= ___1004537982(613); $_1370972511= ___1004537982(614); CUpdateClient::AddMessage2Log(___1004537982(615)); $_1622907824= CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358); if($_1622907824 == ___1004537982(616) || $_2136808367 <> ___1004537982(617)){ if($_2136808367 == ___1004537982(618)) $_2136808367= ___1004537982(619).GetMessage(___1004537982(620)).___1004537982(621);} if($_2136808367 == ___1004537982(622)){ $_1622907824 .= ___1004537982(623); CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][127](___1004537982(624), ___1004537982(625), $_1622907824)); $_418914584= $GLOBALS['____1209379637'][128](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(626), $_1622907824, $_2136808367); if($_1596961748 == ___1004537982(627)){ if($_2136808367 == ___1004537982(628)) $_2136808367= ___1004537982(629).GetMessage(___1004537982(630)).___1004537982(631);} CUpdateClient::AddMessage2Log(___1004537982(632).$GLOBALS['____1209379637'][129]($GLOBALS['____1209379637'][130](true)- $_418914584, round(0+3)).___1004537982(633));} if($_2136808367 == ___1004537982(634)){ if(!($_1069261324= $GLOBALS['____1209379637'][131]($_SERVER[___1004537982(635)].___1004537982(636), ___1004537982(637)))) $_2136808367 .= ___1004537982(638).$GLOBALS['____1209379637'][132](___1004537982(639), $_SERVER[___1004537982(640)].___1004537982(641), GetMessage(___1004537982(642))).___1004537982(643);} if($_2136808367 == ___1004537982(644)){ if(!$GLOBALS['____1209379637'][133]($_1069261324, $_1596961748)) $_2136808367 .= ___1004537982(645).$GLOBALS['____1209379637'][134](___1004537982(646), $_SERVER[___1004537982(647)].___1004537982(648), GetMessage(___1004537982(649))).___1004537982(650);@$GLOBALS['____1209379637'][135]($_1069261324);} if($_2136808367 == ___1004537982(651)){ $_154269357= ___1004537982(652); if(!CUpdateClient::UnGzipArchive($_154269357, $_2136808367, ___1004537982(653))) $_2136808367 .= ___1004537982(654).GetMessage(___1004537982(655)).___1004537982(656);} if($_2136808367 == ___1004537982(657)){ $_1370972511= $_SERVER[___1004537982(658)].___1004537982(659).$_154269357; if(!$GLOBALS['____1209379637'][136]($_1370972511.___1004537982(660)) ||!$GLOBALS['____1209379637'][137]($_1370972511.___1004537982(661))) $_2136808367 .= ___1004537982(662).$GLOBALS['____1209379637'][138](___1004537982(663), $_1370972511.___1004537982(664), GetMessage(___1004537982(665))).___1004537982(666);} if($_2136808367 == ___1004537982(667)){ if(!$GLOBALS['____1209379637'][139]($_1370972511.___1004537982(668))) $_2136808367 .= ___1004537982(669).$GLOBALS['____1209379637'][140](___1004537982(670), $_1370972511.___1004537982(671), GetMessage(___1004537982(672))).___1004537982(673);} if($_2136808367 == ___1004537982(674)) $_1596961748= $GLOBALS['____1209379637'][141]($_1370972511.___1004537982(675)); $_187816114= Array(); if($_2136808367 == ___1004537982(676)){ CUpdateClient::__1244221643($_1596961748, $_187816114, $_2136808367);} if($_2136808367 == ___1004537982(677)){ if(!empty($_187816114[___1004537982(678)][___1004537982(679)][___1004537982(680)]) && $GLOBALS['____1209379637'][142]($_187816114[___1004537982(681)][___1004537982(682)][___1004537982(683)])){ for($_443696004=(205*2-410), $_346373140= $GLOBALS['____1209379637'][143]($_187816114[___1004537982(684)][___1004537982(685)][___1004537982(686)]); $_443696004< $_346373140; $_443696004++){ if($_187816114[___1004537982(687)][___1004537982(688)][___1004537982(689)][$_443696004][___1004537982(690)][___1004537982(691)] <> ___1004537982(692)) $_2136808367 .= ___1004537982(693).$_187816114[___1004537982(694)][___1004537982(695)][___1004537982(696)][$_443696004][___1004537982(697)][___1004537982(698)].___1004537982(699); $_2136808367 .= $_187816114[___1004537982(700)][___1004537982(701)][___1004537982(702)][$_443696004][___1004537982(703)].___1004537982(704);}}} if($_2136808367 == ___1004537982(705)){ if(!$GLOBALS['____1209379637'][144]($_1370972511.___1004537982(706)) ||!$GLOBALS['____1209379637'][145]($_1370972511.___1004537982(707))) $_2136808367 .= ___1004537982(708).GetMessage(___1004537982(709)).___1004537982(710);} if($_2136808367 == ___1004537982(711)){ $_1198134144=@$GLOBALS['____1209379637'][146]($_1370972511.___1004537982(712)); if($GLOBALS['____1209379637'][147]($_1198134144) != $GLOBALS['____1209379637'][148]($_187816114[___1004537982(713)][___1004537982(714)][___1004537982(715)][(990-2*495)][___1004537982(716)][___1004537982(717)])) $_2136808367 .= ___1004537982(718).GetMessage(___1004537982(719)).___1004537982(720);} if($_2136808367 == ___1004537982(721)){ if(!$GLOBALS['____1209379637'][149]($_SERVER[___1004537982(722)].US_SHARED_KERNEL_PATH.___1004537982(723))) $_2136808367 .= ___1004537982(724).$GLOBALS['____1209379637'][150](___1004537982(725), $_SERVER[___1004537982(726)].US_SHARED_KERNEL_PATH.___1004537982(727), GetMessage(___1004537982(728))).___1004537982(729);} if($_2136808367 == ___1004537982(730)){ if(!$GLOBALS['____1209379637'][151]($_1370972511.___1004537982(731), $_SERVER[___1004537982(732)].US_SHARED_KERNEL_PATH.___1004537982(733))) $_2136808367 .= ___1004537982(734).GetMessage(___1004537982(735)).___1004537982(736);@$GLOBALS['____1209379637'][152]($_SERVER[___1004537982(737)].US_SHARED_KERNEL_PATH.___1004537982(738), BX_FILE_PERMISSIONS);} if($_2136808367 == ___1004537982(739)){ $strongUpdateCheck= COption::GetOptionString(___1004537982(740), ___1004537982(741), ___1004537982(742)); if($strongUpdateCheck == ___1004537982(743)){ $_1941078078= $GLOBALS['____1209379637'][153]($GLOBALS['____1209379637'][154]($GLOBALS['____1209379637'][155]($_1370972511.___1004537982(744)))); $_1620366633= $GLOBALS['____1209379637'][156]($GLOBALS['____1209379637'][157]($GLOBALS['____1209379637'][158]($_SERVER[___1004537982(745)].US_SHARED_KERNEL_PATH.___1004537982(746)))); if($_1620366633 != $_1941078078) $_2136808367 .= ___1004537982(747).$GLOBALS['____1209379637'][159](___1004537982(748), $_SERVER[___1004537982(749)].US_SHARED_KERNEL_PATH.___1004537982(750), GetMessage(___1004537982(751))).___1004537982(752);}} if($_2136808367 == ___1004537982(753)){ CUpdateClient::AddMessage2Log(___1004537982(754), ___1004537982(755)); CUpdateClient::DeleteDirFilesEx($_1370972511);} if($_2136808367 <> ___1004537982(756)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(757)); $_753204024 .= $_2136808367; return false;} else return true;} public static function ActivateLicenseKey($_1962644474, &$_753204024, $_1530138095= false, $_1474158358= "Y"){ $_2136808367= ""; CUpdateClient::AddMessage2Log(___1004537982(758)); $_1622907824= CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358); if($_1622907824 == ___1004537982(759) || $_2136808367 <> ___1004537982(760)){ if($_2136808367 == ___1004537982(761)) $_2136808367= ___1004537982(762).GetMessage(___1004537982(763)).___1004537982(764);} if($_2136808367 == ___1004537982(765)){ $_1622907824 .= ___1004537982(766); CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][160](___1004537982(767), ___1004537982(768), $_1622907824)); foreach($_1962644474 as $_489120050 => $_1706943504) $_1622907824 .= ___1004537982(769).$_489120050.___1004537982(770).$GLOBALS['____1209379637'][161]($_1706943504); $_418914584= $GLOBALS['____1209379637'][162](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(771), $_1622907824, $_2136808367); if($_1596961748 == ___1004537982(772)){ if($_2136808367 == ___1004537982(773)) $_2136808367= ___1004537982(774).GetMessage(___1004537982(775)).___1004537982(776);} CUpdateClient::AddMessage2Log(___1004537982(777).$GLOBALS['____1209379637'][163]($GLOBALS['____1209379637'][164](true)- $_418914584, round(0+3)).___1004537982(778));} if($_2136808367 == ___1004537982(779)){ $_187816114= Array(); CUpdateClient::__1244221643($_1596961748, $_187816114, $_2136808367);} if($_2136808367 == ___1004537982(780)){ if(!empty($_187816114[___1004537982(781)][___1004537982(782)][___1004537982(783)]) && $GLOBALS['____1209379637'][165]($_187816114[___1004537982(784)][___1004537982(785)][___1004537982(786)])){ for($_443696004= min(160,0,53.333333333333), $_346373140= $GLOBALS['____1209379637'][166]($_187816114[___1004537982(787)][___1004537982(788)][___1004537982(789)]); $_443696004< $_346373140; $_443696004++){ if($_187816114[___1004537982(790)][___1004537982(791)][___1004537982(792)][$_443696004][___1004537982(793)][___1004537982(794)] <> ___1004537982(795)) $_2136808367 .= ___1004537982(796).$_187816114[___1004537982(797)][___1004537982(798)][___1004537982(799)][$_443696004][___1004537982(800)][___1004537982(801)].___1004537982(802); $_2136808367 .= $_187816114[___1004537982(803)][___1004537982(804)][___1004537982(805)][$_443696004][___1004537982(806)].___1004537982(807);}}} if($_2136808367 == ___1004537982(808)) CUpdateClient::AddMessage2Log(___1004537982(809), ___1004537982(810)); if($_2136808367 <> ___1004537982(811)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(812)); $_753204024 .= $_2136808367; return false;} else return true;} public static function GetNextStepLangUpdates(&$_753204024, $_1530138095= false, $_1523107763= array()){ $_2136808367= ''; $_1596961748= ___1004537982(813); CUpdateClient::AddMessage2Log(___1004537982(814)); $_1622907824= CUpdateClient::CollectRequestData($_2136808367, $_1530138095, ___1004537982(815), array(), $_1523107763); if($_1622907824 == ___1004537982(816) || $_2136808367 <> ___1004537982(817)){ if($_2136808367 == ___1004537982(818)) $_2136808367= ___1004537982(819).GetMessage(___1004537982(820)).___1004537982(821);} if($_2136808367 == ___1004537982(822)){ CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][167](___1004537982(823), ___1004537982(824), $_1622907824)); $_418914584= $GLOBALS['____1209379637'][168](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(825), $_1622907824, $_2136808367); if($_1596961748 == ___1004537982(826)){ if($_2136808367 == ___1004537982(827)) $_2136808367= ___1004537982(828).GetMessage(___1004537982(829)).___1004537982(830);} CUpdateClient::AddMessage2Log(___1004537982(831).$GLOBALS['____1209379637'][169]($GLOBALS['____1209379637'][170](true)- $_418914584, round(0+3)).___1004537982(832));} if($_2136808367 == ___1004537982(833)){ if(!($_1069261324= $GLOBALS['____1209379637'][171]($_SERVER[___1004537982(834)].___1004537982(835), ___1004537982(836)))) $_2136808367= ___1004537982(837).$GLOBALS['____1209379637'][172](___1004537982(838), $_SERVER[___1004537982(839)].___1004537982(840), GetMessage(___1004537982(841))).___1004537982(842);} if($_2136808367 == ___1004537982(843)){ $GLOBALS['____1209379637'][173]($_1069261324, $_1596961748); $GLOBALS['____1209379637'][174]($_1069261324);} if($_2136808367 <> ___1004537982(844)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(845)); $_753204024 .= $_2136808367; return false;} else return true;} public static function GetNextStepHelpUpdates(&$_753204024, $_1530138095= false, $_164957727= array()){ $_2136808367= ''; $_1596961748= ___1004537982(846); CUpdateClient::AddMessage2Log(___1004537982(847)); $_1622907824= CUpdateClient::CollectRequestData($_2136808367, $_1530138095, ___1004537982(848), array(), array(), $_164957727); if($_1622907824 == ___1004537982(849) || $_2136808367 <> ___1004537982(850)){ if($_2136808367 == ___1004537982(851)) $_2136808367= ___1004537982(852).GetMessage(___1004537982(853)).___1004537982(854);} if($_2136808367 == ___1004537982(855)){ CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][175](___1004537982(856), ___1004537982(857), $_1622907824)); $_418914584= $GLOBALS['____1209379637'][176](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(858), $_1622907824, $_2136808367); if($_1596961748 == ___1004537982(859)){ if($_2136808367 == ___1004537982(860)) $_2136808367= ___1004537982(861).GetMessage(___1004537982(862)).___1004537982(863);} CUpdateClient::AddMessage2Log(___1004537982(864).$GLOBALS['____1209379637'][177]($GLOBALS['____1209379637'][178](true)- $_418914584, round(0+1.5+1.5)).___1004537982(865));} if($_2136808367 == ___1004537982(866)){ if(!($_1069261324= $GLOBALS['____1209379637'][179]($_SERVER[___1004537982(867)].___1004537982(868), ___1004537982(869)))) $_2136808367= ___1004537982(870).$GLOBALS['____1209379637'][180](___1004537982(871), $_SERVER[___1004537982(872)].___1004537982(873), GetMessage(___1004537982(874))).___1004537982(875);} if($_2136808367 == ___1004537982(876)){ $GLOBALS['____1209379637'][181]($_1069261324, $_1596961748); $GLOBALS['____1209379637'][182]($_1069261324);} if($_2136808367 <> ___1004537982(877)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(878)); $_753204024 .= $_2136808367; return false;} else return true;} public static function getSpd(){ return self::__416130040(US_BASE_MODULE, "crc_code");} public static function setSpd($_593850248){ if($_593850248 != "") COption::SetOptionString(US_BASE_MODULE, "crc_code", $_593850248);} public static function LoadModulesUpdates(&$errorMessage, &$_1934218753, $_1530138095= false, $_1474158358= "Y", $_2142182691= array()){ $_1934218753= array(); $_1622907824= ___1004537982(879); $_906972647= $_SERVER[___1004537982(880)].___1004537982(881); $_1574650516= COption::GetOptionString(___1004537982(882), ___1004537982(883), ___1004537982(884)); if($_1574650516< round(0+5)) $_1574650516= round(0+1.6666666666667+1.6666666666667+1.6666666666667); CUpdateClient::AddMessage2Log(___1004537982(885)); if($GLOBALS['____1209379637'][183]($_906972647.___1004537982(886))){ $_1596961748= $GLOBALS['____1209379637'][184]($_906972647.___1004537982(887)); CUpdateClient::__1244221643($_1596961748, $_1934218753, $errorMessage);} if(empty($_1934218753) || $errorMessage <> ___1004537982(888)){ $_1934218753= array(); if($GLOBALS['____1209379637'][185]($_906972647.___1004537982(889)))@$GLOBALS['____1209379637'][186]($_906972647.___1004537982(890)); if($GLOBALS['____1209379637'][187]($_906972647.___1004537982(891)))@$GLOBALS['____1209379637'][188]($_906972647.___1004537982(892)); if($errorMessage <> ___1004537982(893)){ CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(894)); return ___1004537982(895);}} if(empty($_1934218753)){ $_1622907824= CUpdateClient::CollectRequestData( $errorMessage, $_1530138095, $_1474158358, $_2142182691); if(empty($_1622907824) || $errorMessage <> ___1004537982(896)){ if($errorMessage == ___1004537982(897)) $errorMessage= ___1004537982(898).GetMessage(___1004537982(899)).___1004537982(900); CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(901)); return ___1004537982(902);} CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][189](___1004537982(903), ___1004537982(904), $_1622907824)); $_418914584= $GLOBALS['____1209379637'][190](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(905), $_1622907824, $errorMessage); if($_1596961748 == ___1004537982(906) || $errorMessage <> ___1004537982(907)){ if($errorMessage == ___1004537982(908)) $errorMessage= ___1004537982(909).GetMessage(___1004537982(910)).___1004537982(911); CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(912)); return ___1004537982(913);} CUpdateClient::AddMessage2Log(___1004537982(914).$GLOBALS['____1209379637'][191]($GLOBALS['____1209379637'][192](true)- $_418914584, round(0+0.75+0.75+0.75+0.75)).___1004537982(915)); CUpdateClient::__1244221643($_1596961748, $_1934218753, $errorMessage); if($errorMessage <> ___1004537982(916)){ CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(917)); return ___1004537982(918);} if(isset($_1934218753[___1004537982(919)][___1004537982(920)][___1004537982(921)])){ for($_443696004=(792-2*396), $_1167463684= $GLOBALS['____1209379637'][193]($_1934218753[___1004537982(922)][___1004537982(923)][___1004537982(924)]); $_443696004< $_1167463684; $_443696004++) $errorMessage .= ___1004537982(925).$_1934218753[___1004537982(926)][___1004537982(927)][___1004537982(928)][$_443696004][___1004537982(929)][___1004537982(930)].___1004537982(931).$_1934218753[___1004537982(932)][___1004537982(933)][___1004537982(934)][$_443696004][___1004537982(935)];} if($errorMessage <> ___1004537982(936)){ CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(937)); return ___1004537982(938);} if(isset($_1934218753[___1004537982(939)][___1004537982(940)][___1004537982(941)])){ CUpdateClient::AddMessage2Log(___1004537982(942), ___1004537982(943)); return ___1004537982(944);} $_971647376= $GLOBALS['____1209379637'][194]($_906972647.___1004537982(945), ___1004537982(946)); if(!$_971647376){ $errorMessage= ___1004537982(947).$GLOBALS['____1209379637'][195](___1004537982(948), $_SERVER[___1004537982(949)].___1004537982(950), GetMessage(___1004537982(951))).___1004537982(952); CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(953)); return ___1004537982(954);} $GLOBALS['____1209379637'][196]($_971647376, $_1596961748); $GLOBALS['____1209379637'][197]($_971647376); CUpdateClient::AddMessage2Log(___1004537982(955), ___1004537982(956)); return ___1004537982(957);} if(isset($_1934218753[___1004537982(958)][___1004537982(959)][___1004537982(960)][(1028/2-514)][___1004537982(961)][___1004537982(962)])){ if($_1622907824 == ___1004537982(963)){ $_1622907824= CUpdateClient::CollectRequestData($errorMessage, $_1530138095, $_1474158358, $_2142182691); if($_1622907824 == ___1004537982(964) || $errorMessage <> ___1004537982(965)){ if($errorMessage == ___1004537982(966)) $errorMessage= ___1004537982(967).GetMessage(___1004537982(968)).___1004537982(969); CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(970)); return ___1004537982(971);}} CUpdateClient::AddMessage2Log(___1004537982(972)); $_837377958= static::__1442847736( $_1934218753["DATA"]["#"]["FILE"][0]["@"]["NAME"], $_1934218753["DATA"]["#"]["FILE"][0]["@"]["SIZE"], $_906972647, $_1574650516, $_1622907824, $errorMessage, "us_updater_modules.php");} elseif($_1934218753[___1004537982(973)][___1004537982(974)][___1004537982(975)][(848-2*424)][___1004537982(976)][___1004537982(977)]){ CUpdateClient::AddMessage2Log(___1004537982(978)); $_837377958= static::__1019404210( $_1934218753["DATA"]["#"]["FILE"][0]["@"]["URL"], $_1934218753["DATA"]["#"]["FILE"][0]["@"]["SIZE"], $_906972647, $_1574650516, $errorMessage);} else{ $_837377958= ___1004537982(979); $errorMessage .= GetMessage(___1004537982(980));} if($_837377958 == ___1004537982(981)){ CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(982)); $errorMessage .= $errorMessage;} elseif($_837377958 == ___1004537982(983)){@$GLOBALS['____1209379637'][198]($_906972647.___1004537982(984));} CUpdateClient::AddMessage2Log(___1004537982(985), $_837377958); return $_837377958;} private static function __1442847736($_1380031857, $_1140816158, $_1190315246, $_1574650516, $_1347706658, &$errorMessage, $_1691362932){ $_1574650516= $GLOBALS['____1209379637'][199]($_1574650516); $_1079794597= min(50,0,16.666666666667); if($_1574650516>(214*2-428)) $_1079794597= $GLOBALS['____1209379637'][200](true); $_1399279890= static::__690101446(); $_1469713035= $GLOBALS['____1209379637'][201]($_1399279890[___1004537982(986)], $_1399279890[___1004537982(987)], $_1216130077, $_1198456226, round(0+7.5+7.5+7.5+7.5)); if(!$_1469713035){ $errorMessage .= static::__1863373792($_1198456226, $_1216130077, $_1399279890); return ___1004537982(988);} $_841631328= ___1004537982(989); if($_1399279890[___1004537982(990)]){ $_841631328 .= ___1004537982(991).$_1399279890[___1004537982(992)].___1004537982(993).$_1691362932.___1004537982(994); if($_1399279890[___1004537982(995)]) $_841631328 .= ___1004537982(996).$GLOBALS['____1209379637'][202]( $_1399279890[___1004537982(997)].___1004537982(998).$_1399279890[___1004537982(999)]).___1004537982(1000);} else{ $_841631328 .= ___1004537982(1001).$_1691362932.___1004537982(1002);} $_1019784326= self::__416130040(US_BASE_MODULE, ___1004537982(1003)); $_1347706658 .= ___1004537982(1004).$GLOBALS['____1209379637'][203]($_1019784326); $_1347706658 .= ___1004537982(1005).$GLOBALS['____1209379637'][204]($GLOBALS['____1209379637'][205](___1004537982(1006))? ___1004537982(1007): ___1004537982(1008)); $_1152618521= $GLOBALS[___1004537982(1009)]->GetVersion(); $_1347706658 .= ___1004537982(1010).$GLOBALS['____1209379637'][206]($_1152618521? $_1152618521: ___1004537982(1011)); $_1347706658 .= ___1004537982(1012).COption::GetOptionString(___1004537982(1013), ___1004537982(1014), ___1004537982(1015)); $_1347706658 .= ___1004537982(1016).COption::GetOptionString(___1004537982(1017), ___1004537982(1018), ___1004537982(1019)); $_1347706658 .= ___1004537982(1020).$_1380031857; $_825092131=($GLOBALS['____1209379637'][207]($_1190315246.___1004537982(1021))? $GLOBALS['____1209379637'][208]($_1190315246.___1004537982(1022)): min(132,0,44)); $_1347706658 .= ___1004537982(1023).$_825092131; $_841631328 .= ___1004537982(1024); $_841631328 .= ___1004537982(1025); $_841631328 .= ___1004537982(1026).$_1399279890[___1004537982(1027)].___1004537982(1028); $_841631328 .= ___1004537982(1029); $_841631328 .= ___1004537982(1030); $_841631328 .= ___1004537982(1031).$GLOBALS['____1209379637'][209]($_1347706658).___1004537982(1032); $_841631328 .= $_1347706658; $_841631328 .= ___1004537982(1033); $GLOBALS['____1209379637'][210]($_1469713035, $_841631328); $_1478001394= ___1004537982(1034); while(($_1760501310= $GLOBALS['____1209379637'][211]($_1469713035, round(0+819.2+819.2+819.2+819.2+819.2))) && $_1760501310 != ___1004537982(1035)) $_1478001394 .= $_1760501310; $_598040559= $GLOBALS['____1209379637'][212](___1004537982(1036), $_1478001394); $_143847565=(230*2-460); for($_443696004=(147*2-294), $_1167463684= $GLOBALS['____1209379637'][213]($_598040559); $_443696004< $_1167463684; $_443696004++){ if($GLOBALS['____1209379637'][214]($_598040559[$_443696004], ___1004537982(1037)) !== false){ $_246160386= $GLOBALS['____1209379637'][215]($_598040559[$_443696004], ___1004537982(1038)); $_143847565= $GLOBALS['____1209379637'][216]($GLOBALS['____1209379637'][217]($GLOBALS['____1209379637'][218]($_598040559[$_443696004], $_246160386+ round(0+0.2+0.2+0.2+0.2+0.2), $GLOBALS['____1209379637'][219]($_598040559[$_443696004])- $_246160386+ round(0+0.25+0.25+0.25+0.25))));}} if(($_143847565+ $_825092131) != $_1140816158){ $errorMessage .= ___1004537982(1039).GetMessage(___1004537982(1040)).___1004537982(1041); return ___1004537982(1042);}@$GLOBALS['____1209379637'][220]($_1190315246.___1004537982(1043)); if($GLOBALS['____1209379637'][221]($_1190315246.___1004537982(1044))){ if(@$GLOBALS['____1209379637'][222]($_1190315246.___1004537982(1045), $_1190315246.___1004537982(1046))){ $_971647376= $GLOBALS['____1209379637'][223]($_1190315246.___1004537982(1047), ___1004537982(1048)); if($_971647376){ $_1839065228= $GLOBALS['____1209379637'][224]($_1190315246.___1004537982(1049), ___1004537982(1050)); do{ $_1667599631= $GLOBALS['____1209379637'][225]($_1839065228, round(0+2730.6666666667+2730.6666666667+2730.6666666667)); if($_1667599631 == ___1004537982(1051)) break; $GLOBALS['____1209379637'][226]($_971647376, $_1667599631);} while(true); $GLOBALS['____1209379637'][227]($_1839065228);@$GLOBALS['____1209379637'][228]($_1190315246.___1004537982(1052));} else{ $errorMessage .= ___1004537982(1053).GetMessage(___1004537982(1054)).___1004537982(1055); return ___1004537982(1056);}} else{ $errorMessage .= ___1004537982(1057).GetMessage(___1004537982(1058)).___1004537982(1059); return ___1004537982(1060);}} else{ $_971647376= $GLOBALS['____1209379637'][229]($_1190315246.___1004537982(1061), ___1004537982(1062)); if(!$_971647376){ $errorMessage .= ___1004537982(1063).GetMessage(___1004537982(1064)).___1004537982(1065); return ___1004537982(1066);}} $_1040648691= true; while(true){ if($_1574650516>(215*2-430) &&($GLOBALS['____1209379637'][230](true)- $_1079794597)> $_1574650516){ $_1040648691= false; break;} $_1760501310= $GLOBALS['____1209379637'][231]($_1469713035, round(0+40960)); if($_1760501310 == ___1004537982(1067)) break; $GLOBALS['____1209379637'][232]($_971647376, $_1760501310);} $GLOBALS['____1209379637'][233]($_971647376); $GLOBALS['____1209379637'][234]($_1469713035); CUpdateClient::AddMessage2Log(___1004537982(1068).($GLOBALS['____1209379637'][235](true)- $_1079794597).___1004537982(1069), ___1004537982(1070)); $_1238427860=($GLOBALS['____1209379637'][236]($_1190315246.___1004537982(1071))? $GLOBALS['____1209379637'][237]($_1190315246.___1004537982(1072)):(1160/2-580)); if($_1238427860 == $_1140816158){ $_1040648691= true;} if($_1040648691){@$GLOBALS['____1209379637'][238]($_1190315246); if(!@$GLOBALS['____1209379637'][239]($_1190315246.___1004537982(1073), $_1190315246)){ $errorMessage .= ___1004537982(1074).GetMessage(___1004537982(1075)).___1004537982(1076); return ___1004537982(1077);}@$GLOBALS['____1209379637'][240]($_1190315246.___1004537982(1078));} else{ return ___1004537982(1079);} return ___1004537982(1080);} private static function __1019404210($_1380031857, $_1140816158, $_1190315246, $_1574650516, &$errorMessage){ $_804267775= 0; $_1760501310= null; while($_804267775< round(0+2.5+2.5+2.5+2.5)){ $_804267775++; $_1760501310= static::__427015786($_1380031857, $_1140816158, $_1190315246, $_1574650516, $errorMessage); if($_1760501310 === ___1004537982(1081)){ continue;} break;} if($_1760501310 === ___1004537982(1082)){ $errorMessage= ___1004537982(1083).GetMessage(___1004537982(1084)).___1004537982(1085); $_1760501310= ___1004537982(1086);} return $_1760501310;} private static function __427015786($_1380031857, $_1140816158, $_1190315246, $_1574650516, &$errorMessage){ $_1574650516= $GLOBALS['____1209379637'][241]($_1574650516); $_1079794597=(1152/2-576); if($_1574650516>(752-2*376)) $_1079794597= $GLOBALS['____1209379637'][242](true); $_825092131= $GLOBALS['____1209379637'][243]($_1190315246.___1004537982(1087))? $GLOBALS['____1209379637'][244]($_1190315246.___1004537982(1088)):(1000-2*500); $_1399279890= static::__690101446(); $_1469713035= $GLOBALS['____1209379637'][245]($_1399279890[___1004537982(1089)], $_1399279890[___1004537982(1090)], $_1216130077, $_1198456226, round(0+10+10+10)); if(!$_1469713035){ $errorMessage .= static::__1863373792($_1198456226, $_1216130077, $_1399279890); return ___1004537982(1091);} if(!$_1380031857) $_1380031857= ___1004537982(1092); $_841631328= ___1004537982(1093); if(!$_1399279890[___1004537982(1094)]){ $_841631328 .= ___1004537982(1095).$_1380031857.___1004537982(1096); $_841631328 .= ___1004537982(1097).$_1399279890[___1004537982(1098)].___1004537982(1099);} else{ $_841631328 .= ___1004537982(1100).$_1399279890[___1004537982(1101)].$_1380031857.___1004537982(1102); $_841631328 .= ___1004537982(1103).$_1399279890[___1004537982(1104)].___1004537982(1105); if($_1399279890[___1004537982(1106)]) $_841631328 .= ___1004537982(1107).$GLOBALS['____1209379637'][246]($_1399279890[___1004537982(1108)].___1004537982(1109).$_1399279890[___1004537982(1110)]).___1004537982(1111);} $_841631328 .= ___1004537982(1112); if($_825092131> min(102,0,34)) $_841631328 .= ___1004537982(1113).$_825092131.___1004537982(1114); $_841631328 .= ___1004537982(1115);  $GLOBALS['____1209379637'][247]($_1469713035, $_841631328); $_1478001394= ___1004537982(1116); while(($_1760501310= $GLOBALS['____1209379637'][248]($_1469713035, round(0+1365.3333333333+1365.3333333333+1365.3333333333))) && $_1760501310!=___1004537982(1117)) $_1478001394 .= $_1760501310;  $_598040559= $GLOBALS['____1209379637'][249](___1004537982(1118), $_1478001394); $_469676813=(206*2-412); $_2133439420= ___1004537982(1119); if($GLOBALS['____1209379637'][250](___1004537982(1120), $_598040559[(1340/2-670)], $_1979923803)){ $_469676813= $GLOBALS['____1209379637'][251]($_1979923803[round(0+0.6+0.6+0.6+0.6+0.6)]); $_2133439420= $GLOBALS['____1209379637'][252]($_598040559[(862-2*431)], $GLOBALS['____1209379637'][253]($_598040559[(206*2-412)], $_469676813)+ $GLOBALS['____1209379637'][254]($_469676813)+ round(0+0.5+0.5), $GLOBALS['____1209379637'][255]($_598040559[(1152/2-576)])- $GLOBALS['____1209379637'][256]($_598040559[(1288/2-644)], $_469676813)+ round(0+0.2+0.2+0.2+0.2+0.2));} if($_469676813 != round(0+50+50+50+50) && $_469676813 != round(0+51+51+51+51) && $_469676813 != round(0+100.66666666667+100.66666666667+100.66666666667) && $_469676813 != round(0+103+103)){ $errorMessage .= GetMessage(___1004537982(1121)).___1004537982(1122).$_469676813.___1004537982(1123).$_2133439420.___1004537982(1124); return ___1004537982(1125);} $_425404911= ___1004537982(1126); $_1889349419= min(154,0,51.333333333333); for($_443696004= round(0+1); $_443696004< $GLOBALS['____1209379637'][257]($_598040559); $_443696004++){ if($GLOBALS['____1209379637'][258]($_598040559[$_443696004], ___1004537982(1127)) !== false) $_425404911= $GLOBALS['____1209379637'][259]($GLOBALS['____1209379637'][260]($_598040559[$_443696004], $GLOBALS['____1209379637'][261]($_598040559[$_443696004], ___1004537982(1128))+ round(0+0.2+0.2+0.2+0.2+0.2), $GLOBALS['____1209379637'][262]($_598040559[$_443696004])- $GLOBALS['____1209379637'][263]($_598040559[$_443696004], ___1004537982(1129))+ round(0+0.5+0.5))); elseif($GLOBALS['____1209379637'][264]($_598040559[$_443696004], ___1004537982(1130)) !== false) $_1889349419= $GLOBALS['____1209379637'][265]($GLOBALS['____1209379637'][266]($GLOBALS['____1209379637'][267]($_598040559[$_443696004], $GLOBALS['____1209379637'][268]($_598040559[$_443696004], ___1004537982(1131))+ round(0+0.2+0.2+0.2+0.2+0.2), $GLOBALS['____1209379637'][269]($_598040559[$_443696004])- $GLOBALS['____1209379637'][270]($_598040559[$_443696004], ___1004537982(1132))+ round(0+0.33333333333333+0.33333333333333+0.33333333333333))));} $_450159475= true; if($_425404911 <> ___1004537982(1133)){ if($GLOBALS['____1209379637'][271](___1004537982(1134), $_425404911, $_1979923803)){ $_1002897392= $GLOBALS['____1209379637'][272]($_1979923803[round(0+1)]); $_1605817621= $GLOBALS['____1209379637'][273]($_1979923803[round(0+0.5+0.5+0.5+0.5)]); $_408133725= $GLOBALS['____1209379637'][274]($_1979923803[round(0+0.75+0.75+0.75+0.75)]); if(($_1002897392 == $_825092131) &&($_1605817621 ==($_1140816158- round(0+0.2+0.2+0.2+0.2+0.2))) &&($_408133725 == $_1140816158)){ $_450159475= false;}}} if($_450159475){@$GLOBALS['____1209379637'][275]($_1190315246.___1004537982(1135)); $_825092131=(204*2-408);}  if(($_1889349419+ $_825092131) != $_1140816158){ $errorMessage .= ___1004537982(1136).GetMessage(___1004537982(1137)).___1004537982(1138); return ___1004537982(1139);} $_971647376= $GLOBALS['____1209379637'][276]($_1190315246.___1004537982(1140), ___1004537982(1141)); if(!$_971647376){ $errorMessage .= ___1004537982(1142).GetMessage(___1004537982(1143)).___1004537982(1144); return ___1004537982(1145);} while(true){ if($_1574650516> min(232,0,77.333333333333) &&($GLOBALS['____1209379637'][277](true)- $_1079794597)> $_1574650516){ break;} $_1760501310= $GLOBALS['____1209379637'][278]($_1469713035, round(0+51.2+51.2+51.2+51.2+51.2)* round(0+512+512)); if($_1760501310 == ___1004537982(1146)){ break;} $GLOBALS['____1209379637'][279]($_971647376, $_1760501310);} $GLOBALS['____1209379637'][280]($_971647376); $GLOBALS['____1209379637'][281]($_1469713035); $GLOBALS['____1209379637'][282](); $_1238427860=($GLOBALS['____1209379637'][283]($_1190315246.___1004537982(1147))? $GLOBALS['____1209379637'][284]($_1190315246.___1004537982(1148)):(754-2*377));  if((int)$_1238427860 === (int)$_1140816158){@$GLOBALS['____1209379637'][285]($_1190315246); if(!@$GLOBALS['____1209379637'][286]($_1190315246.___1004537982(1149), $_1190315246)){ $errorMessage .= ___1004537982(1150).GetMessage(___1004537982(1151)).___1004537982(1152); return ___1004537982(1153);}@$GLOBALS['____1209379637'][287]($_1190315246.___1004537982(1154));} else{ return ___1004537982(1155);} return ___1004537982(1156);} public static function LoadLangsUpdates(&$errorMessage, &$_1934218753, $_1530138095= false, $_1474158358= "Y", $_1523107763= array()){ $_1934218753= array(); $_1622907824= ___1004537982(1157); $_906972647= $_SERVER[___1004537982(1158)].___1004537982(1159); $_1574650516= COption::GetOptionString(___1004537982(1160), ___1004537982(1161), ___1004537982(1162)); if($_1574650516< round(0+5)) $_1574650516= round(0+2.5+2.5); CUpdateClient::AddMessage2Log(___1004537982(1163)); if($GLOBALS['____1209379637'][288]($_906972647.___1004537982(1164))){ $_1596961748= $GLOBALS['____1209379637'][289]($_906972647.___1004537982(1165)); CUpdateClient::__1244221643($_1596961748, $_1934218753, $errorMessage);} if(empty($_1934218753) || $errorMessage <> ___1004537982(1166)){ $_1934218753= array(); if($GLOBALS['____1209379637'][290]($_906972647.___1004537982(1167)))@$GLOBALS['____1209379637'][291]($_906972647.___1004537982(1168)); if($GLOBALS['____1209379637'][292]($_906972647.___1004537982(1169)))@$GLOBALS['____1209379637'][293]($_906972647.___1004537982(1170)); if($errorMessage <> ___1004537982(1171)){ CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(1172)); return ___1004537982(1173);}} if(empty($_1934218753)){ $_1622907824= CUpdateClient::CollectRequestData( $errorMessage, $_1530138095, $_1474158358, array(), $_1523107763); if(empty($_1622907824) || $errorMessage <> ___1004537982(1174)){ if($errorMessage == ___1004537982(1175)) $errorMessage= ___1004537982(1176).GetMessage(___1004537982(1177)).___1004537982(1178); CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(1179)); return ___1004537982(1180);} CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][294](___1004537982(1181), ___1004537982(1182), $_1622907824)); $_418914584= $GLOBALS['____1209379637'][295](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(1183), $_1622907824, $errorMessage); if($_1596961748 == ___1004537982(1184) || $errorMessage <> ___1004537982(1185)){ if($errorMessage == ___1004537982(1186)) $errorMessage= ___1004537982(1187).GetMessage(___1004537982(1188)).___1004537982(1189); CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(1190)); return ___1004537982(1191);} CUpdateClient::AddMessage2Log(___1004537982(1192).$GLOBALS['____1209379637'][296]($GLOBALS['____1209379637'][297](true)- $_418914584, round(0+1+1+1)).___1004537982(1193)); CUpdateClient::__1244221643($_1596961748, $_1934218753, $errorMessage); if($errorMessage <> ___1004537982(1194)){ CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(1195)); return ___1004537982(1196);} if(isset($_1934218753[___1004537982(1197)][___1004537982(1198)][___1004537982(1199)])){ for($_443696004=(126*2-252), $_1167463684= $GLOBALS['____1209379637'][298]($_1934218753[___1004537982(1200)][___1004537982(1201)][___1004537982(1202)]); $_443696004< $_1167463684; $_443696004++) $errorMessage .= ___1004537982(1203).$_1934218753[___1004537982(1204)][___1004537982(1205)][___1004537982(1206)][$_443696004][___1004537982(1207)][___1004537982(1208)].___1004537982(1209).$_1934218753[___1004537982(1210)][___1004537982(1211)][___1004537982(1212)][$_443696004][___1004537982(1213)];} if($errorMessage <> ___1004537982(1214)){ CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(1215)); return ___1004537982(1216);} if(isset($_1934218753[___1004537982(1217)][___1004537982(1218)][___1004537982(1219)])){ CUpdateClient::AddMessage2Log(___1004537982(1220), ___1004537982(1221)); return ___1004537982(1222);} $_971647376= $GLOBALS['____1209379637'][299]($_906972647.___1004537982(1223), ___1004537982(1224)); if(!$_971647376){ $errorMessage= ___1004537982(1225).$GLOBALS['____1209379637'][300](___1004537982(1226), $_SERVER[___1004537982(1227)].___1004537982(1228), GetMessage(___1004537982(1229))).___1004537982(1230); CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(1231)); return ___1004537982(1232);} $GLOBALS['____1209379637'][301]($_971647376, $_1596961748); $GLOBALS['____1209379637'][302]($_971647376); CUpdateClient::AddMessage2Log(___1004537982(1233), ___1004537982(1234)); return ___1004537982(1235);} if(isset($_1934218753[___1004537982(1236)][___1004537982(1237)][___1004537982(1238)][(208*2-416)][___1004537982(1239)][___1004537982(1240)])){ if($_1622907824 == ___1004537982(1241)){ $_1622907824= CUpdateClient::CollectRequestData( $errorMessage, $_1530138095, $_1474158358, array(), $_1523107763); if(empty($_1622907824) || $errorMessage <> ___1004537982(1242)){ if($errorMessage == ___1004537982(1243)) $errorMessage= ___1004537982(1244).GetMessage(___1004537982(1245)).___1004537982(1246); CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(1247)); return ___1004537982(1248);}} CUpdateClient::AddMessage2Log(___1004537982(1249)); $_837377958= static::__1442847736( $_1934218753["DATA"]["#"]["FILE"][0]["@"]["NAME"], $_1934218753["DATA"]["#"]["FILE"][0]["@"]["SIZE"], $_906972647, $_1574650516, $_1622907824, $errorMessage, "us_updater_langs.php");} elseif($_1934218753[___1004537982(1250)][___1004537982(1251)][___1004537982(1252)][min(242,0,80.666666666667)][___1004537982(1253)][___1004537982(1254)]){ CUpdateClient::AddMessage2Log(___1004537982(1255)); $_837377958= static::__1019404210( $_1934218753["DATA"]["#"]["FILE"][0]["@"]["URL"], $_1934218753["DATA"]["#"]["FILE"][0]["@"]["SIZE"], $_906972647, $_1574650516, $errorMessage);} else{ $_837377958= ___1004537982(1256); $errorMessage .= GetMessage(___1004537982(1257));} if($_837377958 == ___1004537982(1258)){ CUpdateClient::AddMessage2Log($errorMessage, ___1004537982(1259)); $errorMessage .= $errorMessage;} elseif($_837377958 == ___1004537982(1260)){@$GLOBALS['____1209379637'][303]($_906972647.___1004537982(1261));} CUpdateClient::AddMessage2Log(___1004537982(1262), $_837377958); return $_837377958;} public static function GetNextStepUpdates(&$_753204024, $_1530138095= false, $_1474158358= "Y", $_2142182691= array()){ $_2136808367= ''; $_1596961748= ___1004537982(1263); CUpdateClient::AddMessage2Log(___1004537982(1264)); $_1622907824= CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358, $_2142182691); if($_1622907824 == ___1004537982(1265) || $_2136808367 <> ___1004537982(1266)){ if($_2136808367 == ___1004537982(1267)) $_2136808367= ___1004537982(1268).GetMessage(___1004537982(1269)).___1004537982(1270);} if($_2136808367 == ___1004537982(1271)){ CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][304](___1004537982(1272), ___1004537982(1273), $_1622907824)); $_418914584= $GLOBALS['____1209379637'][305](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(1274), $_1622907824, $_2136808367); if($_1596961748 == ___1004537982(1275)){ if($_2136808367 == ___1004537982(1276)) $_2136808367= ___1004537982(1277).GetMessage(___1004537982(1278)).___1004537982(1279);} CUpdateClient::AddMessage2Log(___1004537982(1280).$GLOBALS['____1209379637'][306]($GLOBALS['____1209379637'][307](true)- $_418914584, round(0+3)).___1004537982(1281));} if($_2136808367 == ___1004537982(1282)){ if(!($_1069261324= $GLOBALS['____1209379637'][308]($_SERVER[___1004537982(1283)].___1004537982(1284), ___1004537982(1285)))) $_2136808367= ___1004537982(1286).$GLOBALS['____1209379637'][309](___1004537982(1287), $_SERVER[___1004537982(1288)].___1004537982(1289), GetMessage(___1004537982(1290))).___1004537982(1291);} if($_2136808367 == ___1004537982(1292)){ $GLOBALS['____1209379637'][310]($_1069261324, $_1596961748); $GLOBALS['____1209379637'][311]($_1069261324);} if($_2136808367 <> ___1004537982(1293)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(1294)); $_753204024 .= $_2136808367; return false;} else return true;} public static function UnGzipArchive(&$_426046905, &$_753204024, $_1479349593= true){ $_2136808367= ''; $_1370972511= ___1004537982(1295); CUpdateClient::AddMessage2Log(___1004537982(1296)); $_418914584= $GLOBALS['____1209379637'][312](true); $_1913215604= $_SERVER[___1004537982(1297)].___1004537982(1298); if(!$GLOBALS['____1209379637'][313]($_1913215604) ||!$GLOBALS['____1209379637'][314]($_1913215604)) $_2136808367 .= ___1004537982(1299).$GLOBALS['____1209379637'][315](___1004537982(1300), $_1913215604, GetMessage(___1004537982(1301))).___1004537982(1302); if($_2136808367 == ___1004537982(1303)){ if(!$GLOBALS['____1209379637'][316]($_1913215604)) $_2136808367 .= ___1004537982(1304).$GLOBALS['____1209379637'][317](___1004537982(1305), $_1913215604, GetMessage(___1004537982(1306))).___1004537982(1307);} if($_2136808367 == ___1004537982(1308)){ $_426046905= ___1004537982(1309).$GLOBALS['____1209379637'][318](); $_1370972511= $_SERVER[___1004537982(1310)].___1004537982(1311).$_426046905; CUpdateClient::CheckDirPath($_1370972511.___1004537982(1312)); if(!$GLOBALS['____1209379637'][319]($_1370972511) ||!$GLOBALS['____1209379637'][320]($_1370972511)) $_2136808367 .= ___1004537982(1313).$GLOBALS['____1209379637'][321](___1004537982(1314), $_1370972511, GetMessage(___1004537982(1315))).___1004537982(1316); elseif(!$GLOBALS['____1209379637'][322]($_1370972511)) $_2136808367 .= ___1004537982(1317).$GLOBALS['____1209379637'][323](___1004537982(1318), $_1370972511, GetMessage(___1004537982(1319))).___1004537982(1320);} if($_2136808367 == ___1004537982(1321)){ $_975063846= true; $_237833530= $GLOBALS['____1209379637'][324]($_1913215604, ___1004537982(1322)); $_1161027315= $GLOBALS['____1209379637'][325]($_237833530, $GLOBALS['____1209379637'][326](___1004537982(1323))); $GLOBALS['____1209379637'][327]($_237833530); if($_1161027315 == ___1004537982(1324)) $_975063846= false;} if($_2136808367 == ___1004537982(1325)){ if($_975063846 &&!$GLOBALS['____1209379637'][328](___1004537982(1326))) $_975063846= false;} if($_2136808367 == ___1004537982(1327)){ if($_975063846) $_1125224425= $GLOBALS['____1209379637'][329]($_1913215604, ___1004537982(1328)); else $_1125224425= $GLOBALS['____1209379637'][330]($_1913215604, ___1004537982(1329)); if(!$_1125224425) $_2136808367 .= ___1004537982(1330).$GLOBALS['____1209379637'][331](___1004537982(1331), $_1913215604, GetMessage(___1004537982(1332))).___1004537982(1333);} if($_2136808367 == ___1004537982(1334)){ if($_975063846) $_1161027315= $GLOBALS['____1209379637'][332]($_1125224425, $GLOBALS['____1209379637'][333](___1004537982(1335))); else $_1161027315= $GLOBALS['____1209379637'][334]($_1125224425, $GLOBALS['____1209379637'][335](___1004537982(1336))); if($_1161027315 != ___1004537982(1337)){ $_2136808367 .= ___1004537982(1338).$GLOBALS['____1209379637'][336](___1004537982(1339), $_1913215604, GetMessage(___1004537982(1340))).___1004537982(1341); if($_975063846) $GLOBALS['____1209379637'][337]($_1125224425); else $GLOBALS['____1209379637'][338]($_1125224425);}} if($_2136808367 == ___1004537982(1342)){ $strongUpdateCheck= COption::GetOptionString(___1004537982(1343), ___1004537982(1344), ___1004537982(1345)); while(true){ if($_975063846) $_2071982622= $GLOBALS['____1209379637'][339]($_1125224425, round(0+1.25+1.25+1.25+1.25)); else $_2071982622= $GLOBALS['____1209379637'][340]($_1125224425, round(0+1+1+1+1+1)); $_2071982622= $GLOBALS['____1209379637'][341]($_2071982622); if($GLOBALS['____1209379637'][342]($_2071982622)> min(154,0,51.333333333333) && $GLOBALS['____1209379637'][343]($_2071982622).___1004537982(1346)==$_2071982622.___1004537982(1347)){ $_2071982622= $GLOBALS['____1209379637'][344]($_2071982622);} else{ if($_2071982622 != ___1004537982(1348)) $_2136808367 .= ___1004537982(1349).$GLOBALS['____1209379637'][345](___1004537982(1350), $_1913215604, GetMessage(___1004537982(1351))).___1004537982(1352); break;} if($_975063846) $_1678941771= $GLOBALS['____1209379637'][346]($_1125224425, $_2071982622); else $_1678941771= $GLOBALS['____1209379637'][347]($_1125224425, $_2071982622); $_1750538859= $GLOBALS['____1209379637'][348](___1004537982(1353), $_1678941771); if($GLOBALS['____1209379637'][349]($_1750538859) != round(0+1+1+1)){ $_2136808367 .= ___1004537982(1354).$GLOBALS['____1209379637'][350](___1004537982(1355), $_1913215604, GetMessage(___1004537982(1356))).___1004537982(1357); break;} $_1993631613= $_1750538859[(1432/2-716)]; $_925801086= $_1750538859[round(0+0.2+0.2+0.2+0.2+0.2)]; $_126958015= $_1750538859[round(0+0.5+0.5+0.5+0.5)]; $_11445862= ___1004537982(1358); if($GLOBALS['____1209379637'][351]($_1993631613)>(1176/2-588)){ if($_975063846) $_11445862= $GLOBALS['____1209379637'][352]($_1125224425, $_1993631613); else $_11445862= $GLOBALS['____1209379637'][353]($_1125224425, $_1993631613);} $_1620366633= $GLOBALS['____1209379637'][354]($GLOBALS['____1209379637'][355]($_11445862)); if($_1620366633 !== $_126958015){ $_2136808367 .= ___1004537982(1359).$GLOBALS['____1209379637'][356](___1004537982(1360), $_925801086, GetMessage(___1004537982(1361))).___1004537982(1362); break;} else{ CUpdateClient::CheckDirPath($_1370972511.$_925801086); if(!($_1069261324= $GLOBALS['____1209379637'][357]($_1370972511.$_925801086, ___1004537982(1363)))){ $_2136808367 .= ___1004537982(1364).$GLOBALS['____1209379637'][358](___1004537982(1365), $_1370972511.$_925801086, GetMessage(___1004537982(1366))).___1004537982(1367); break;} if($_11445862 <> ___1004537982(1368) &&!$GLOBALS['____1209379637'][359]($_1069261324, $_11445862)){ $_2136808367 .= ___1004537982(1369).$GLOBALS['____1209379637'][360](___1004537982(1370), $_1370972511.$_925801086, GetMessage(___1004537982(1371))).___1004537982(1372);@$GLOBALS['____1209379637'][361]($_1069261324); break;} $GLOBALS['____1209379637'][362]($_1069261324); if($strongUpdateCheck == ___1004537982(1373)){ $_1620366633= $GLOBALS['____1209379637'][363]($GLOBALS['____1209379637'][364]($GLOBALS['____1209379637'][365]($_1370972511.$_925801086))); if($_1620366633 !== $_126958015){ $_2136808367 .= ___1004537982(1374).$GLOBALS['____1209379637'][366](___1004537982(1375), $_925801086, GetMessage(___1004537982(1376))).___1004537982(1377); break;}}}} if($_975063846) $GLOBALS['____1209379637'][367]($_1125224425); else $GLOBALS['____1209379637'][368]($_1125224425);} if($_2136808367 == ___1004537982(1378)){ if($_1479349593)@$GLOBALS['____1209379637'][369]($_1913215604);} CUpdateClient::AddMessage2Log(___1004537982(1379).$GLOBALS['____1209379637'][370]($GLOBALS['____1209379637'][371](true)-$_418914584, round(0+0.6+0.6+0.6+0.6+0.6)).___1004537982(1380)); if($_2136808367 <> ___1004537982(1381)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(1382)); $_753204024 .= $_2136808367; return false;} else return true;} public static function CheckUpdatability($_426046905, &$_753204024){ $_2136808367= ""; $_1370972511= $_SERVER[___1004537982(1383)].___1004537982(1384).$_426046905; if(!$GLOBALS['____1209379637'][372]($_1370972511) ||!$GLOBALS['____1209379637'][373]($_1370972511)) $_2136808367 .= ___1004537982(1385).$GLOBALS['____1209379637'][374](___1004537982(1386), $_1370972511, GetMessage(___1004537982(1387))).___1004537982(1388); if($_2136808367 == ___1004537982(1389)) if(!$GLOBALS['____1209379637'][375]($_1370972511)) $_2136808367 .= ___1004537982(1390).$GLOBALS['____1209379637'][376](___1004537982(1391), $_1370972511, GetMessage(___1004537982(1392))).___1004537982(1393); if($_1177408942=@$GLOBALS['____1209379637'][377]($_1370972511)){ while(($_292314395= $GLOBALS['____1209379637'][378]($_1177408942)) !== false){ if($_292314395 == ___1004537982(1394) || $_292314395 == ___1004537982(1395)) continue; if($GLOBALS['____1209379637'][379]($_1370972511.___1004537982(1396).$_292314395)){ CUpdateClient::CheckUpdatability($_426046905.___1004537982(1397).$_292314395, $_2136808367);} elseif($GLOBALS['____1209379637'][380]($_1370972511.___1004537982(1398).$_292314395)){ $_1163746080= $_SERVER[___1004537982(1399)].US_SHARED_KERNEL_PATH.___1004537982(1400).$GLOBALS['____1209379637'][381]($_426046905.___1004537982(1401).$_292314395, $GLOBALS['____1209379637'][382]($_426046905.___1004537982(1402).$_292314395, ___1004537982(1403))); if($GLOBALS['____1209379637'][383]($_1163746080)){ if(!$GLOBALS['____1209379637'][384]($_1163746080)) $_2136808367 .= ___1004537982(1404).$GLOBALS['____1209379637'][385](___1004537982(1405), $_1163746080, GetMessage(___1004537982(1406))).___1004537982(1407);} else{ $_700691280= CUpdateClient::bxstrrpos($_1163746080, ___1004537982(1408)); $_1163746080= $GLOBALS['____1209379637'][386]($_1163746080,(766-2*383), $_700691280); if($GLOBALS['____1209379637'][387]($_1163746080)> round(0+0.25+0.25+0.25+0.25)) $_1163746080= $GLOBALS['____1209379637'][388]($_1163746080, ___1004537982(1409)); $_700691280= CUpdateClient::bxstrrpos($_1163746080, ___1004537982(1410)); while($_700691280> min(24,0,8)){ if($GLOBALS['____1209379637'][389]($_1163746080) && $GLOBALS['____1209379637'][390]($_1163746080)){ if(!$GLOBALS['____1209379637'][391]($_1163746080)) $_2136808367 .= ___1004537982(1411).$GLOBALS['____1209379637'][392](___1004537982(1412), $_1163746080, GetMessage(___1004537982(1413))).___1004537982(1414); break;} $_1163746080= $GLOBALS['____1209379637'][393]($_1163746080,(752-2*376), $_700691280); $_700691280= CUpdateClient::bxstrrpos($_1163746080, ___1004537982(1415));}}}}@$GLOBALS['____1209379637'][394]($_1177408942);} if($_2136808367 <> ___1004537982(1416)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(1417)); $_753204024 .= $_2136808367; return false;} else return true;} public static function GetStepUpdateInfo($_426046905, &$_753204024){ $_1139428298= array(); $_2136808367= ___1004537982(1418); CUpdateClient::AddMessage2Log(___1004537982(1419)); $_1370972511= $_SERVER[___1004537982(1420)].___1004537982(1421).$_426046905; if(!$GLOBALS['____1209379637'][395]($_1370972511) ||!$GLOBALS['____1209379637'][396]($_1370972511)) $_2136808367 .= ___1004537982(1422).$GLOBALS['____1209379637'][397](___1004537982(1423), $_1370972511, GetMessage(___1004537982(1424))).___1004537982(1425); if($_2136808367 == ___1004537982(1426)) if(!$GLOBALS['____1209379637'][398]($_1370972511)) $_2136808367 .= ___1004537982(1427).$GLOBALS['____1209379637'][399](___1004537982(1428), $_1370972511, GetMessage(___1004537982(1429))).___1004537982(1430); if($_2136808367 == ___1004537982(1431)) if(!$GLOBALS['____1209379637'][400]($_1370972511.___1004537982(1432)) ||!$GLOBALS['____1209379637'][401]($_1370972511.___1004537982(1433))) $_2136808367 .= ___1004537982(1434).$GLOBALS['____1209379637'][402](___1004537982(1435), $_1370972511.___1004537982(1436), GetMessage(___1004537982(1437))).___1004537982(1438); if($_2136808367 == ___1004537982(1439)) if(!$GLOBALS['____1209379637'][403]($_1370972511.___1004537982(1440))) $_2136808367 .= ___1004537982(1441).$GLOBALS['____1209379637'][404](___1004537982(1442), $_1370972511.___1004537982(1443), GetMessage(___1004537982(1444))).___1004537982(1445); if($_2136808367 == ___1004537982(1446)) $_1596961748= $GLOBALS['____1209379637'][405]($_1370972511.___1004537982(1447)); if($_2136808367 == ___1004537982(1448)){ $_1139428298= Array(); CUpdateClient::__1244221643($_1596961748, $_1139428298, $_2136808367);} if($_2136808367 == ___1004537982(1449)){ if(!isset($_1139428298[___1004537982(1450)]) ||!$GLOBALS['____1209379637'][406]($_1139428298[___1004537982(1451)])) $_2136808367 .= ___1004537982(1452).GetMessage(___1004537982(1453)).___1004537982(1454);} if($_2136808367 <> ___1004537982(1455)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(1456)); $_753204024 .= $_2136808367; return false;} else return $_1139428298;} public static function UpdateStepHelps($_426046905, &$_753204024){ $_2136808367= ""; CUpdateClient::AddMessage2Log(___1004537982(1457)); $_418914584= $GLOBALS['____1209379637'][407](true); $_1370972511= $_SERVER[___1004537982(1458)].___1004537982(1459).$_426046905; $_1919044642= $_SERVER[___1004537982(1460)].US_SHARED_KERNEL_PATH.___1004537982(1461); $_1601956098= array(); $_1177408942=@$GLOBALS['____1209379637'][408]($_1370972511); if($_1177408942){ while(false !==($_239640225= $GLOBALS['____1209379637'][409]($_1177408942))){ if($_239640225 == ___1004537982(1462) || $_239640225 == ___1004537982(1463)) continue; if($GLOBALS['____1209379637'][410]($_1370972511.___1004537982(1464).$_239640225)) $_1601956098[]= $_239640225;} $GLOBALS['____1209379637'][411]($_1177408942);} if(!$GLOBALS['____1209379637'][412]($_1601956098) || empty($_1601956098)) $_2136808367 .= ___1004537982(1465).GetMessage(___1004537982(1466)).___1004537982(1467); if(!$GLOBALS['____1209379637'][413]($_1370972511) ||!$GLOBALS['____1209379637'][414]($_1370972511)) $_2136808367 .= ___1004537982(1468).$GLOBALS['____1209379637'][415](___1004537982(1469), $_1370972511, GetMessage(___1004537982(1470))).___1004537982(1471); if($_2136808367 == ___1004537982(1472)) if(!$GLOBALS['____1209379637'][416]($_1370972511)) $_2136808367 .= ___1004537982(1473).$GLOBALS['____1209379637'][417](___1004537982(1474), $_1370972511, GetMessage(___1004537982(1475))).___1004537982(1476); if($_2136808367 == ___1004537982(1477)){ CUpdateClient::CheckDirPath($_1919044642.___1004537982(1478)); if(!$GLOBALS['____1209379637'][418]($_1919044642) ||!$GLOBALS['____1209379637'][419]($_1919044642)) $_2136808367 .= ___1004537982(1479).$GLOBALS['____1209379637'][420](___1004537982(1480), $_1919044642, GetMessage(___1004537982(1481))).___1004537982(1482); elseif(!$GLOBALS['____1209379637'][421]($_1919044642)) $_2136808367 .= ___1004537982(1483).$GLOBALS['____1209379637'][422](___1004537982(1484), $_1919044642, GetMessage(___1004537982(1485))).___1004537982(1486);} if($_2136808367 == ___1004537982(1487)){ for($_443696004=(810-2*405), $_346373140= $GLOBALS['____1209379637'][423]($_1601956098); $_443696004< $_346373140; $_443696004++){ $_1123571860= ___1004537982(1488); $_361977632= $_1370972511.___1004537982(1489).$_1601956098[$_443696004]; if(!$GLOBALS['____1209379637'][424]($_361977632) ||!$GLOBALS['____1209379637'][425]($_361977632)) $_1123571860 .= ___1004537982(1490).$GLOBALS['____1209379637'][426](___1004537982(1491), $_361977632, GetMessage(___1004537982(1492))).___1004537982(1493); if($_1123571860 == ___1004537982(1494)) if(!$GLOBALS['____1209379637'][427]($_361977632)) $_1123571860 .= ___1004537982(1495).$GLOBALS['____1209379637'][428](___1004537982(1496), $_361977632, GetMessage(___1004537982(1497))).___1004537982(1498); if($_1123571860 == ___1004537982(1499)){ if($GLOBALS['____1209379637'][429]($_1919044642.___1004537982(1500).$_1601956098[$_443696004].___1004537982(1501))) CUpdateClient::DeleteDirFilesEx($_1919044642.___1004537982(1502).$_1601956098[$_443696004].___1004537982(1503)); if($GLOBALS['____1209379637'][430]($_1919044642.___1004537982(1504).$_1601956098[$_443696004].___1004537982(1505))) $_1123571860 .= ___1004537982(1506).$GLOBALS['____1209379637'][431](___1004537982(1507), $_1919044642.___1004537982(1508).$_1601956098[$_443696004].___1004537982(1509), GetMessage(___1004537982(1510))).___1004537982(1511);} if($_1123571860 == ___1004537982(1512)){ if($GLOBALS['____1209379637'][432]($_1919044642.___1004537982(1513).$_1601956098[$_443696004])) if(!$GLOBALS['____1209379637'][433]($_1919044642.___1004537982(1514).$_1601956098[$_443696004], $_1919044642.___1004537982(1515).$_1601956098[$_443696004].___1004537982(1516))) $_1123571860 .= ___1004537982(1517).$GLOBALS['____1209379637'][434](___1004537982(1518), $_1919044642.___1004537982(1519).$_1601956098[$_443696004], GetMessage(___1004537982(1520))).___1004537982(1521);} if($_1123571860 == ___1004537982(1522)){ CUpdateClient::CheckDirPath($_1919044642.___1004537982(1523).$_1601956098[$_443696004].___1004537982(1524)); if(!$GLOBALS['____1209379637'][435]($_1919044642.___1004537982(1525).$_1601956098[$_443696004]) ||!$GLOBALS['____1209379637'][436]($_1919044642.___1004537982(1526).$_1601956098[$_443696004])) $_1123571860 .= ___1004537982(1527).$GLOBALS['____1209379637'][437](___1004537982(1528), $_1919044642.___1004537982(1529).$_1601956098[$_443696004], GetMessage(___1004537982(1530))).___1004537982(1531); elseif(!$GLOBALS['____1209379637'][438]($_1919044642.___1004537982(1532).$_1601956098[$_443696004])) $_1123571860 .= ___1004537982(1533).$GLOBALS['____1209379637'][439](___1004537982(1534), $_1919044642.___1004537982(1535).$_1601956098[$_443696004], GetMessage(___1004537982(1536))).___1004537982(1537);} if($_1123571860 == ___1004537982(1538)) CUpdateClient::CopyDirFiles($_361977632, $_1919044642.___1004537982(1539).$_1601956098[$_443696004], $_1123571860); if($_1123571860 <> ___1004537982(1540)){ $_2136808367 .= $_1123571860;} else{ if($GLOBALS['____1209379637'][440]($_1919044642.___1004537982(1541).$_1601956098[$_443696004].___1004537982(1542))) CUpdateClient::DeleteDirFilesEx($_1919044642.___1004537982(1543).$_1601956098[$_443696004].___1004537982(1544));}} CUpdateClient::ClearUpdateFolder($_1370972511);} CUpdateClient::AddMessage2Log(___1004537982(1545).$GLOBALS['____1209379637'][441]($GLOBALS['____1209379637'][442](true)-$_418914584, round(0+0.75+0.75+0.75+0.75)).___1004537982(1546)); if($_2136808367 <> ___1004537982(1547)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(1548)); $_753204024 .= $_2136808367; return false;} else return true;} public static function UpdateStepLangs($_426046905, &$_753204024){ $_2136808367= ''; $_1590613717= ___1004537982(1549); $_418914584= $GLOBALS['____1209379637'][443](true); $_1370972511= $_SERVER[___1004537982(1550)].___1004537982(1551).$_426046905; if(!$GLOBALS['____1209379637'][444]($_1370972511) ||!$GLOBALS['____1209379637'][445]($_1370972511)) $_2136808367 .= ___1004537982(1552).$GLOBALS['____1209379637'][446](___1004537982(1553), $_1370972511, GetMessage(___1004537982(1554))).___1004537982(1555); $_757086976= array(); if($_2136808367 == ___1004537982(1556)){ $_1177408942=@$GLOBALS['____1209379637'][447]($_1370972511); if($_1177408942){ while(false !==($_239640225= $GLOBALS['____1209379637'][448]($_1177408942))){ if($_239640225 == ___1004537982(1557) || $_239640225 == ___1004537982(1558)) continue; if($GLOBALS['____1209379637'][449]($_1370972511.___1004537982(1559).$_239640225)) $_757086976[]= $_239640225;} $GLOBALS['____1209379637'][450]($_1177408942);}} if(!$GLOBALS['____1209379637'][451]($_757086976) || empty($_757086976)) $_2136808367 .= ___1004537982(1560).GetMessage(___1004537982(1561)).___1004537982(1562); if($_2136808367 == ___1004537982(1563)) if(!$GLOBALS['____1209379637'][452]($_1370972511)) $_2136808367 .= ___1004537982(1564).$GLOBALS['____1209379637'][453](___1004537982(1565), $_1370972511, GetMessage(___1004537982(1566))).___1004537982(1567); $_1290774310= array( ___1004537982(1568) => $_SERVER[___1004537982(1569)].US_SHARED_KERNEL_PATH.___1004537982(1570), ___1004537982(1571) => $_SERVER[___1004537982(1572)].US_SHARED_KERNEL_PATH.___1004537982(1573), ___1004537982(1574) => $_SERVER[___1004537982(1575)].US_SHARED_KERNEL_PATH.___1004537982(1576), ___1004537982(1577) => $_SERVER[___1004537982(1578)].US_SHARED_KERNEL_PATH.___1004537982(1579), ___1004537982(1580) => $_SERVER[___1004537982(1581)].US_SHARED_KERNEL_PATH.___1004537982(1582), ___1004537982(1583) => $_SERVER[___1004537982(1584)].US_SHARED_KERNEL_PATH.___1004537982(1585)); $_784276436= array( ___1004537982(1586) => ___1004537982(1587), ___1004537982(1588) => ___1004537982(1589), ___1004537982(1590) => ___1004537982(1591), ___1004537982(1592) => ___1004537982(1593), ___1004537982(1594) => ___1004537982(1595), ___1004537982(1596) => ___1004537982(1597),); if($_2136808367 == ___1004537982(1598)){ foreach($_1290774310 as $_1630931493){ CUpdateClient::CheckDirPath($_1630931493.___1004537982(1599)); if(!$GLOBALS['____1209379637'][454]($_1630931493) ||!$GLOBALS['____1209379637'][455]($_1630931493)) $_2136808367 .= ___1004537982(1600).$GLOBALS['____1209379637'][456](___1004537982(1601), $_1630931493, GetMessage(___1004537982(1602))).___1004537982(1603); elseif(!$GLOBALS['____1209379637'][457]($_1630931493)) $_2136808367 .= ___1004537982(1604).$GLOBALS['____1209379637'][458](___1004537982(1605), $_1630931493, GetMessage(___1004537982(1606))).___1004537982(1607);}} if($_2136808367 == ___1004537982(1608)){ $_1590613717= $_SERVER[___1004537982(1609)].US_SHARED_KERNEL_PATH.___1004537982(1610); CUpdateClient::CheckDirPath($_1590613717.___1004537982(1611)); if(!$GLOBALS['____1209379637'][459]($_1590613717) ||!$GLOBALS['____1209379637'][460]($_1590613717)) $_2136808367 .= ___1004537982(1612).$GLOBALS['____1209379637'][461](___1004537982(1613), $_1590613717, GetMessage(___1004537982(1614))).___1004537982(1615); elseif(!$GLOBALS['____1209379637'][462]($_1590613717)) $_2136808367 .= ___1004537982(1616).$GLOBALS['____1209379637'][463](___1004537982(1617), $_1590613717, GetMessage(___1004537982(1618))).___1004537982(1619);} $_628558867= array(); if($_2136808367 == ___1004537982(1620)){ foreach($_1290774310 as $_1947975612 => $_1630931493){ $_1690130272=@$GLOBALS['____1209379637'][464]($_1630931493); if($_1690130272){ while(false !==($_1097333674= $GLOBALS['____1209379637'][465]($_1690130272))){ if($GLOBALS['____1209379637'][466]($_1630931493.___1004537982(1621).$_1097333674) && $_1097333674 != ___1004537982(1622) && $_1097333674 != ___1004537982(1623)){ if(!$GLOBALS['____1209379637'][467]($_1630931493.___1004537982(1624).$_1097333674)) $_2136808367 .= ___1004537982(1625).$GLOBALS['____1209379637'][468](___1004537982(1626), $_1630931493.___1004537982(1627).$_1097333674, GetMessage(___1004537982(1628))).___1004537982(1629); if($GLOBALS['____1209379637'][469]($_1630931493.___1004537982(1630).$_1097333674.___1004537982(1631)) &&!$GLOBALS['____1209379637'][470]($_1630931493.___1004537982(1632).$_1097333674.___1004537982(1633))) $_2136808367 .= ___1004537982(1634).$GLOBALS['____1209379637'][471](___1004537982(1635), $_1630931493.___1004537982(1636).$_1097333674.___1004537982(1637), GetMessage(___1004537982(1638))).___1004537982(1639); $_628558867[$_1947975612][]= $_1097333674;}} $GLOBALS['____1209379637'][472]($_1690130272);}}} if($_2136808367 == ___1004537982(1640)){ $_613112957= array(); $_1177408942=@$GLOBALS['____1209379637'][473]($_1590613717); if($_1177408942){ while(false !==($_239640225= $GLOBALS['____1209379637'][474]($_1177408942))){ if($GLOBALS['____1209379637'][475]($_1590613717.___1004537982(1641).$_239640225) && $_239640225!=___1004537982(1642) && $_239640225!=___1004537982(1643)){ if(!$GLOBALS['____1209379637'][476]($_1590613717.___1004537982(1644).$_239640225)) $_2136808367 .= ___1004537982(1645).$GLOBALS['____1209379637'][477](___1004537982(1646), $_1590613717.___1004537982(1647).$_239640225, GetMessage(___1004537982(1648))).___1004537982(1649); if($GLOBALS['____1209379637'][478]($_1590613717.___1004537982(1650).$_239640225.___1004537982(1651)) &&!$GLOBALS['____1209379637'][479]($_1590613717.___1004537982(1652).$_239640225.___1004537982(1653))) $_2136808367 .= ___1004537982(1654).$GLOBALS['____1209379637'][480](___1004537982(1655), $_1590613717.___1004537982(1656).$_239640225.___1004537982(1657), GetMessage(___1004537982(1658))).___1004537982(1659); $_613112957[]= $_239640225;}} $GLOBALS['____1209379637'][481]($_1177408942);}} if($_2136808367 == ___1004537982(1660)){ for($_443696004=(786-2*393), $_346373140= $GLOBALS['____1209379637'][482]($_757086976); $_443696004< $_346373140; $_443696004++){ $_1123571860= ___1004537982(1661); $_361977632= $_1370972511.___1004537982(1662).$_757086976[$_443696004]; if(!$GLOBALS['____1209379637'][483]($_361977632) ||!$GLOBALS['____1209379637'][484]($_361977632)) $_1123571860 .= ___1004537982(1663).$GLOBALS['____1209379637'][485](___1004537982(1664), $_361977632, GetMessage(___1004537982(1665))).___1004537982(1666); if($_1123571860 == ___1004537982(1667)) if(!$GLOBALS['____1209379637'][486]($_361977632)) $_1123571860 .= ___1004537982(1668).$GLOBALS['____1209379637'][487](___1004537982(1669), $_361977632, GetMessage(___1004537982(1670))).___1004537982(1671); if($_1123571860 == ___1004537982(1672)){ $_1690130272=@$GLOBALS['____1209379637'][488]($_361977632); if($_1690130272){ while(false !==($_1097333674= $GLOBALS['____1209379637'][489]($_1690130272))){ if(!$GLOBALS['____1209379637'][490]($_361977632.___1004537982(1673).$_1097333674) || $_1097333674 == ___1004537982(1674) || $_1097333674 == ___1004537982(1675)) continue; foreach($_784276436 as $_1947975612 => $_1630931493){ if(empty($_628558867[$_1947975612])){ continue;} if(!$GLOBALS['____1209379637'][491]($_361977632.___1004537982(1676).$_1097333674.$_1630931493)) continue; $_2026545294=@$GLOBALS['____1209379637'][492]($_361977632.___1004537982(1677).$_1097333674.$_1630931493); if($_2026545294){ while(false !==($_744002689= $GLOBALS['____1209379637'][493]($_2026545294))){ if(!$GLOBALS['____1209379637'][494]($_361977632.___1004537982(1678).$_1097333674.$_1630931493.___1004537982(1679).$_744002689) || $_744002689 == ___1004537982(1680) || $_744002689 == ___1004537982(1681)) continue; if(!$GLOBALS['____1209379637'][495]($_744002689, $_628558867[$_1947975612])) continue; CUpdateClient::CopyDirFiles($_361977632.___1004537982(1682).$_1097333674.$_1630931493.___1004537982(1683).$_744002689, $_1290774310[$_1947975612].___1004537982(1684).$_744002689, $_1123571860);} $GLOBALS['____1209379637'][496]($_2026545294);}} CUpdateClient::__451329904( $_757086976[$_443696004], $_361977632, $_1097333674, $_SERVER[___1004537982(1685)].US_SHARED_KERNEL_PATH, $_784276436); if($GLOBALS['____1209379637'][497]($_1097333674, $_613112957)) CUpdateClient::CopyDirFiles($_361977632.___1004537982(1686).$_1097333674, $_1590613717.___1004537982(1687).$_1097333674, $_1123571860);} $GLOBALS['____1209379637'][498]($_1690130272);}} if($_1123571860 <> ___1004537982(1688)) $_2136808367 .= $_1123571860;}} if($_2136808367 == ___1004537982(1689)) CUpdateClient::ClearUpdateFolder($_1370972511); CUpdateClient::resetAccelerator(); CUpdateClient::AddMessage2Log(___1004537982(1690).$GLOBALS['____1209379637'][499]($GLOBALS['____1209379637'][500](true)-$_418914584, round(0+0.6+0.6+0.6+0.6+0.6)).___1004537982(1691)); if($_2136808367 <> ___1004537982(1692)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(1693)); $_753204024 .= $_2136808367; return false;} else return true;} private static function __451329904($_1530138095, $_1396374947, $_395671902, $_419232152, $_2141308421= array()){ $_1497327601= $_1396374947."/".$_395671902."/install"; if(!$GLOBALS['____1209379637'][501]($_1497327601) ||!$GLOBALS['____1209379637'][502]($_1497327601)) return; $_483938071=@$GLOBALS['____1209379637'][503]($_1497327601); if($_483938071){ while(false !==($_376327103= $GLOBALS['____1209379637'][504]($_483938071))){ if($_376327103 === ___1004537982(1694) || $_376327103 === ___1004537982(1695) ||!$GLOBALS['____1209379637'][505]($_1497327601.___1004537982(1696).$_376327103)) continue; foreach($_2141308421 as $_30946448){ if($GLOBALS['____1209379637'][506]($_30946448.___1004537982(1697), ___1004537982(1698).$_376327103.___1004537982(1699)) ===(1424/2-712)) continue 2;} self::__560785366($_1530138095, $_1497327601.___1004537982(1700).$_376327103, $_419232152.___1004537982(1701).$_376327103);} $GLOBALS['____1209379637'][507]($_483938071);}} private static function __560785366($_1530138095, $_1396374947, $_419232152, $_335072875= ""){ $_1478323267= $_1396374947.$_335072875; if(!$GLOBALS['____1209379637'][508]($_1478323267) ||!$GLOBALS['____1209379637'][509]($_1478323267)) return; $_483938071=@$GLOBALS['____1209379637'][510]($_1478323267); if($_483938071){ while(false !==($_376327103= $GLOBALS['____1209379637'][511]($_483938071))){ if($_376327103 === ___1004537982(1702) || $_376327103 === ___1004537982(1703) ||!$GLOBALS['____1209379637'][512]($_1478323267.___1004537982(1704).$_376327103)) continue; if($_376327103 === $_1530138095){ if($GLOBALS['____1209379637'][513]($_1478323267, ___1004537982(1705),-round(0+2.5+2.5)) ===(890-2*445)){ if($GLOBALS['____1209379637'][514]($_419232152.$_335072875) && $GLOBALS['____1209379637'][515]($_419232152.$_335072875) && $GLOBALS['____1209379637'][516]($_419232152.$_335072875)){ $_790523439= ___1004537982(1706); self::CopyDirFiles($_1478323267.___1004537982(1707).$_376327103, $_419232152.$_335072875.___1004537982(1708).$_376327103, $_790523439);} continue;}} self::__560785366($_1530138095, $_1396374947, $_419232152, $_335072875.___1004537982(1709).$_376327103);} $GLOBALS['____1209379637'][517]($_483938071);}} public static function UpdateStepModules($_426046905, &$_753204024, $_1311398460= false){ global $DB; $_2136808367= ___1004537982(1710); if(!$GLOBALS['____1209379637'][518](___1004537982(1711)) || US_SAVE_UPDATERS_DIR == ___1004537982(1712)) $_1311398460= false; $_418914584= $GLOBALS['____1209379637'][519](true); $_193561183= array(); if(!$GLOBALS['____1209379637'][520]($_SERVER[___1004537982(1713)].___1004537982(1714))) $_193561183[]= ___1004537982(1715); if(!$GLOBALS['____1209379637'][521]($_SERVER[___1004537982(1716)].___1004537982(1717))) $_193561183[]= ___1004537982(1718); if(!$GLOBALS['____1209379637'][522]($_SERVER[___1004537982(1719)].___1004537982(1720))) $_193561183[]= ___1004537982(1721); if(!$GLOBALS['____1209379637'][523]($_SERVER[___1004537982(1722)].___1004537982(1723))) $_193561183[]= ___1004537982(1724); $_1370972511= $_SERVER[___1004537982(1725)].___1004537982(1726).$_426046905; if(!$GLOBALS['____1209379637'][524]($_1370972511) ||!$GLOBALS['____1209379637'][525]($_1370972511)) $_2136808367 .= ___1004537982(1727).$GLOBALS['____1209379637'][526](___1004537982(1728), $_1370972511, GetMessage(___1004537982(1729))).___1004537982(1730); if($_2136808367 == ___1004537982(1731)) if(!$GLOBALS['____1209379637'][527]($_1370972511)) $_2136808367 .= ___1004537982(1732).$GLOBALS['____1209379637'][528](___1004537982(1733), $_1370972511, GetMessage(___1004537982(1734))).___1004537982(1735); $_196288623= array(); if($_2136808367 == ___1004537982(1736)){ $_1177408942=@$GLOBALS['____1209379637'][529]($_1370972511); if($_1177408942){ while(false !==($_239640225= $GLOBALS['____1209379637'][530]($_1177408942))){ if($_239640225 == ___1004537982(1737) || $_239640225 == ___1004537982(1738)) continue; if($GLOBALS['____1209379637'][531]($_1370972511.___1004537982(1739).$_239640225)) $_196288623[]= $_239640225;} $GLOBALS['____1209379637'][532]($_1177408942);}} if(!$GLOBALS['____1209379637'][533]($_196288623) || empty($_196288623)) $_2136808367 .= ___1004537982(1740).GetMessage(___1004537982(1741)).___1004537982(1742); if($_2136808367 == ___1004537982(1743)){ for($_443696004=(870-2*435), $_1167463684= $GLOBALS['____1209379637'][534]($_196288623); $_443696004< $_1167463684; $_443696004++){ $_1123571860= ___1004537982(1744); $_361977632= $_1370972511.___1004537982(1745).$_196288623[$_443696004]; $_1590613717= $_SERVER[___1004537982(1746)].US_SHARED_KERNEL_PATH.___1004537982(1747).$_196288623[$_443696004]; CUpdateClient::CheckDirPath($_1590613717.___1004537982(1748)); if(!$GLOBALS['____1209379637'][535]($_1590613717) ||!$GLOBALS['____1209379637'][536]($_1590613717)) $_1123571860 .= ___1004537982(1749).$GLOBALS['____1209379637'][537](___1004537982(1750), $_1590613717, GetMessage(___1004537982(1751))).___1004537982(1752); if($_1123571860 == ___1004537982(1753)) if(!$GLOBALS['____1209379637'][538]($_1590613717)) $_1123571860 .= ___1004537982(1754).$GLOBALS['____1209379637'][539](___1004537982(1755), $_1590613717, GetMessage(___1004537982(1756))).___1004537982(1757); if($_1123571860 == ___1004537982(1758)) if(!$GLOBALS['____1209379637'][540]($_361977632) ||!$GLOBALS['____1209379637'][541]($_361977632)) $_1123571860 .= ___1004537982(1759).$GLOBALS['____1209379637'][542](___1004537982(1760), $_361977632, GetMessage(___1004537982(1761))).___1004537982(1762); if($_1123571860 == ___1004537982(1763)) if(!$GLOBALS['____1209379637'][543]($_361977632)) $_1123571860 .= ___1004537982(1764).$GLOBALS['____1209379637'][544](___1004537982(1765), $_361977632, GetMessage(___1004537982(1766))).___1004537982(1767); $_1305681727= array(); if($_1123571860 == ___1004537982(1768)){ $_1177408942=@$GLOBALS['____1209379637'][545]($_361977632); if($_1177408942){ while(false !==($_239640225= $GLOBALS['____1209379637'][546]($_1177408942))){ if($GLOBALS['____1209379637'][547]($_239640225, min(140,0,46.666666666667), round(0+3.5+3.5)) == ___1004537982(1769)){ $_352437796= ___1004537982(1770); if($GLOBALS['____1209379637'][548]($_361977632.___1004537982(1771).$_239640225)){ $_705722731= $GLOBALS['____1209379637'][549]($_239640225, round(0+1.4+1.4+1.4+1.4+1.4), $GLOBALS['____1209379637'][550]($_239640225)- round(0+11)); if($GLOBALS['____1209379637'][551]($_239640225, $GLOBALS['____1209379637'][552]($_239640225)- round(0+3+3+3)) == ___1004537982(1772)){ $_352437796= ___1004537982(1773); $_705722731= $GLOBALS['____1209379637'][553]($_239640225, round(0+1.4+1.4+1.4+1.4+1.4), $GLOBALS['____1209379637'][554]($_239640225)- round(0+8+8));} $_1305681727[]= array(___1004537982(1774).$_239640225, $GLOBALS['____1209379637'][555]($_705722731), $_352437796);} elseif($GLOBALS['____1209379637'][556]($_361977632.___1004537982(1775).$_239640225.___1004537982(1776))){ $_705722731= $GLOBALS['____1209379637'][557]($_239640225, round(0+7)); if($GLOBALS['____1209379637'][558]($_239640225, $GLOBALS['____1209379637'][559]($_239640225)- round(0+1.6666666666667+1.6666666666667+1.6666666666667)) == ___1004537982(1777)){ $_352437796= ___1004537982(1778); $_705722731= $GLOBALS['____1209379637'][560]($_239640225, round(0+7), $GLOBALS['____1209379637'][561]($_239640225)- round(0+12));} $_1305681727[]= array(___1004537982(1779).$_239640225.___1004537982(1780), $GLOBALS['____1209379637'][562]($_705722731), $_352437796);} if($_1311398460) CUpdateClient::CopyDirFiles($_361977632.___1004537982(1781).$_239640225, $_SERVER[___1004537982(1782)].US_SAVE_UPDATERS_DIR.___1004537982(1783).$_196288623[$_443696004].___1004537982(1784).$_239640225, $_1123571860, false);}} $GLOBALS['____1209379637'][563]($_1177408942);} $_346373140= $GLOBALS['____1209379637'][564]($_1305681727); for($_1118145356=(128*2-256); $_1118145356< $_346373140- round(0+0.2+0.2+0.2+0.2+0.2); $_1118145356++){ for($_1341177660= $_1118145356+ round(0+0.5+0.5); $_1341177660< $_346373140; $_1341177660++){ if(CUpdateClient::CompareVersions($_1305681727[$_1118145356][round(0+0.25+0.25+0.25+0.25)], $_1305681727[$_1341177660][round(0+1)])>(888-2*444)){ $_816185724= $_1305681727[$_1118145356]; $_1305681727[$_1118145356]= $_1305681727[$_1341177660]; $_1305681727[$_1341177660]= $_816185724;}}}} if($_1123571860 == ___1004537982(1785)){ if($GLOBALS['____1209379637'][565]($DB->type) == ___1004537982(1786) && $GLOBALS['____1209379637'][566](___1004537982(1787)) && MYSQL_TABLE_TYPE <> ___1004537982(1788)){ $DB->Query(___1004537982(1789).MYSQL_TABLE_TYPE.___1004537982(1790), true);}} if($_1123571860 == ___1004537982(1791)){ for($_1118145356=(886-2*443), $_346373140= $GLOBALS['____1209379637'][567]($_1305681727); $_1118145356< $_346373140; $_1118145356++){ if($_1305681727[$_1118145356][round(0+1+1)] == ___1004537982(1792)){ $_897742753= ___1004537982(1793); CUpdateClient::RunUpdaterScript($_361977632.$_1305681727[$_1118145356][(884-2*442)], $_897742753, ___1004537982(1794).$_426046905.___1004537982(1795).$_196288623[$_443696004], $_196288623[$_443696004]); if($_897742753 <> ___1004537982(1796)){ $_1123571860 .= $GLOBALS['____1209379637'][568](___1004537982(1797), $_196288623[$_443696004], $GLOBALS['____1209379637'][569](___1004537982(1798), $_1305681727[$_1118145356][round(0+0.25+0.25+0.25+0.25)], GetMessage(___1004537982(1799)))).___1004537982(1800). $_897742753.___1004537982(1801); $_1123571860 .= $GLOBALS['____1209379637'][570](___1004537982(1802), $_196288623[$_443696004], GetMessage(___1004537982(1803))).___1004537982(1804); break;}}}} if($_1123571860 == ___1004537982(1805)) CUpdateClient::CopyDirFiles($_361977632, $_1590613717, $_1123571860, true, $_193561183); if($_1123571860 == ___1004537982(1806)){ for($_1118145356=(1196/2-598), $_346373140= $GLOBALS['____1209379637'][571]($_1305681727); $_1118145356< $_346373140; $_1118145356++){ if($_1305681727[$_1118145356][round(0+0.66666666666667+0.66666666666667+0.66666666666667)]==___1004537982(1807)){ $_897742753= ___1004537982(1808); CUpdateClient::RunUpdaterScript($_361977632.$_1305681727[$_1118145356][(838-2*419)], $_897742753, ___1004537982(1809).$_426046905.___1004537982(1810).$_196288623[$_443696004], $_196288623[$_443696004]); if($_897742753 <> ___1004537982(1811)){ $_1123571860 .= $GLOBALS['____1209379637'][572](___1004537982(1812), $_196288623[$_443696004], $GLOBALS['____1209379637'][573](___1004537982(1813), $_1305681727[$_1118145356][round(0+0.25+0.25+0.25+0.25)], GetMessage(___1004537982(1814)))).___1004537982(1815). $_897742753.___1004537982(1816); $_1123571860 .= $GLOBALS['____1209379637'][574](___1004537982(1817), $_196288623[$_443696004], GetMessage(___1004537982(1818))).___1004537982(1819); break;}}}} if($_1123571860 <> ___1004537982(1820)) $_2136808367 .= $_1123571860;} CUpdateClient::ClearUpdateFolder($_1370972511);} CUpdateClient::AddMessage2Log(___1004537982(1821).$GLOBALS['____1209379637'][575]($GLOBALS['____1209379637'][576](true)-$_418914584, round(0+0.75+0.75+0.75+0.75)).___1004537982(1822)); if($_2136808367 <> ___1004537982(1823)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(1824)); $_753204024 .= $_2136808367; return false;} else{ $GLOBALS[___1004537982(1825)]= $_196288623; if($GLOBALS['____1209379637'][577](___1004537982(1826))){ foreach($GLOBALS['_____1328095636'][5](___1004537982(1827), ___1004537982(1828), true) as $_1599781934){ $GLOBALS['_____1328095636'][6]($_1599781934, $_196288623);}} return true;}} public static function ClearUpdateFolder($_1370972511){ CUpdateClient::DeleteDirFilesEx($_1370972511); CUpdateClient::resetAccelerator();} public static function RunUpdaterScript($_2036567828, &$_753204024, $_361977632, $_944152425){ global $DBType, $DB, $APPLICATION, $USER; if(!isset($GLOBALS[___1004537982(1829)]) ||($GLOBALS[___1004537982(1830)] != ___1004537982(1831) && $GLOBALS[___1004537982(1832)] != ___1004537982(1833))){ $GLOBALS[___1004537982(1834)]=((US_CALL_TYPE != ___1004537982(1835))? COption::GetOptionString(___1004537982(1836), ___1004537982(1837), ___1004537982(1838)): ___1004537982(1839));} $strongUpdateCheck= $GLOBALS[___1004537982(1840)]; $DOCUMENT_ROOT= $_SERVER[___1004537982(1841)]; $_2036567828= $GLOBALS['____1209379637'][578](___1004537982(1842), ___1004537982(1843), $_2036567828); $updaterPath= $GLOBALS['____1209379637'][579]($_2036567828); $updaterPath= $GLOBALS['____1209379637'][580]($updaterPath, $GLOBALS['____1209379637'][581]($_SERVER[___1004537982(1844)])); $updaterPath= $GLOBALS['____1209379637'][582]($updaterPath,___1004537982(1845)); if($updaterPath <> ___1004537982(1846)) $updaterPath= ___1004537982(1847).$updaterPath; $updaterName= $GLOBALS['____1209379637'][583]($_2036567828, $GLOBALS['____1209379637'][584]($_SERVER[___1004537982(1848)])); CUpdateClient::AddMessage2Log(___1004537982(1849).$updaterName.___1004537982(1850), ___1004537982(1851)); $updater= new CUpdater(); $updater->Init($updaterPath, $DB->type, $updaterName, $_361977632, $_944152425, US_CALL_TYPE); $errorMessage= ___1004537982(1852); include($_2036567828); if($errorMessage <> ___1004537982(1853)) $_753204024 .= $errorMessage; if($GLOBALS['____1209379637'][585]($updater->errorMessage) &&!empty($updater->errorMessage)) $_753204024 .= $GLOBALS['____1209379637'][586](___1004537982(1854), $updater->errorMessage); unset($updater);}     public static function CompareVersions($_1932684487, $_637012980){ $_1932684487= $GLOBALS['____1209379637'][587]($_1932684487); $_637012980= $GLOBALS['____1209379637'][588]($_637012980); if($_1932684487 == $_637012980) return min(74,0,24.666666666667); $_539918193= $GLOBALS['____1209379637'][589](___1004537982(1855), $_1932684487); $_964074558= $GLOBALS['____1209379637'][590](___1004537982(1856), $_637012980); if($GLOBALS['____1209379637'][591]($_539918193[(182*2-364)])> $GLOBALS['____1209379637'][592]($_964074558[min(80,0,26.666666666667)]) || $GLOBALS['____1209379637'][593]($_539918193[min(82,0,27.333333333333)]) == $GLOBALS['____1209379637'][594]($_964074558[(1068/2-534)]) && $GLOBALS['____1209379637'][595]($_539918193[round(0+0.2+0.2+0.2+0.2+0.2)])> $GLOBALS['____1209379637'][596]($_964074558[round(0+0.25+0.25+0.25+0.25)]) || $GLOBALS['____1209379637'][597]($_539918193[(862-2*431)]) == $GLOBALS['____1209379637'][598]($_964074558[min(146,0,48.666666666667)]) && $GLOBALS['____1209379637'][599]($_539918193[round(0+0.25+0.25+0.25+0.25)]) == $GLOBALS['____1209379637'][600]($_964074558[round(0+0.2+0.2+0.2+0.2+0.2)]) && $GLOBALS['____1209379637'][601]($_539918193[round(0+0.4+0.4+0.4+0.4+0.4)])> $GLOBALS['____1209379637'][602]($_964074558[round(0+0.5+0.5+0.5+0.5)])){ return round(0+1);} if($GLOBALS['____1209379637'][603]($_539918193[min(238,0,79.333333333333)]) == $GLOBALS['____1209379637'][604]($_964074558[(163*2-326)]) && $GLOBALS['____1209379637'][605]($_539918193[round(0+0.5+0.5)]) == $GLOBALS['____1209379637'][606]($_964074558[round(0+0.2+0.2+0.2+0.2+0.2)]) && $GLOBALS['____1209379637'][607]($_539918193[round(0+0.5+0.5+0.5+0.5)]) == $GLOBALS['____1209379637'][608]($_964074558[round(0+1+1)])){ return(242*2-484);} return-round(0+0.25+0.25+0.25+0.25);} public static function checkValid(){ $_1596961748= $GLOBALS['____1209379637'][609]($_SERVER["DOCUMENT_ROOT"].'/bitrix/modules/main/include.php'); $_246160386= $GLOBALS['____1209379637'][610]($_1596961748, ___1004537982(1857)); if($_246160386 !== false){ $_1525768972= $GLOBALS['____1209379637'][611]($_1596961748, ___1004537982(1858), $_246160386); if($_1525768972 !== false){ $_1596961748= $GLOBALS['____1209379637'][612]($_1596961748, $_246160386, $_1525768972- $_246160386); $_2091664644= $GLOBALS['____1209379637'][613]($_1596961748, ___1004537982(1859)); if($_2091664644 !== false){ $_466179878= $GLOBALS['____1209379637'][614]($_1596961748, round(0+1.8+1.8+1.8+1.8+1.8), $_2091664644- round(0+4.5+4.5)); $_1596961748= $GLOBALS['____1209379637'][615]($_1596961748, $_2091664644+ round(0+2)); $_996201139= $GLOBALS['____1209379637'][616]($GLOBALS['____1209379637'][617]($_1596961748)); if($_466179878 === $_996201139) return true;}}} if($GLOBALS['____1209379637'][618]($_1596961748,(222*2-444), $GLOBALS['____1209379637'][619](___1004537982(1860))) === ___1004537982(1861)) return true; if($GLOBALS['____1209379637'][620](CUpdateClient::GetLicenseKey().___1004537982(1862)) === ___1004537982(1863)) return true; return false;} public static function GetUpdatesList(&$_753204024, $_1530138095= false, $_1474158358= "Y"){ $_2136808367= ""; CUpdateClient::AddMessage2Log(___1004537982(1864)); $_1622907824= CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358); if($_1622907824 == ___1004537982(1865) || $_2136808367 <> ___1004537982(1866)){ $_753204024 .= $_2136808367; CUpdateClient::AddMessage2Log(___1004537982(1867), ___1004537982(1868)); return false;} CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][621](___1004537982(1869), ___1004537982(1870), $_1622907824)); $_418914584= $GLOBALS['____1209379637'][622](true); $_1596961748= CUpdateClient::GetHTTPPage(___1004537982(1871), $_1622907824, $_2136808367); CUpdateClient::AddMessage2Log(___1004537982(1872).$GLOBALS['____1209379637'][623]($GLOBALS['____1209379637'][624](true)- $_418914584, round(0+1.5+1.5)).___1004537982(1873)); $_1139428298= Array(); if($_2136808367 == ___1004537982(1874)) CUpdateClient::__1244221643($_1596961748, $_1139428298, $_2136808367);  if($_2136808367 == ___1004537982(1875)){ if(!isset($_1139428298[___1004537982(1876)]) ||!$GLOBALS['____1209379637'][625]($_1139428298[___1004537982(1877)])) $_2136808367 .= ___1004537982(1878).GetMessage(___1004537982(1879)).___1004537982(1880);} if($_2136808367 == ___1004537982(1881)){ $_1139428298= $_1139428298[___1004537982(1882)][___1004537982(1883)]; if((!isset($_1139428298[___1004537982(1884)]) ||!$GLOBALS['____1209379637'][626]($_1139428298[___1004537982(1885)])) &&(!isset($_1139428298[___1004537982(1886)]) ||!$GLOBALS['____1209379637'][627]($_1139428298[___1004537982(1887)]))){ $_2136808367 .= ___1004537982(1888).GetMessage(___1004537982(1889)).___1004537982(1890);} $_798512439= $_SERVER[___1004537982(1891)].___1004537982(1892); if($GLOBALS['____1209379637'][628]($_798512439)){@$GLOBALS['____1209379637'][629]($_798512439);} $_773946775= $_SERVER[___1004537982(1893)].___1004537982(1894); if($GLOBALS['____1209379637'][630]($_773946775)){@$GLOBALS['____1209379637'][631]($_773946775);}} if($_2136808367 <> ___1004537982(1895)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(1896)); $_753204024 .= $_2136808367; return false;} else return $_1139428298;} public static function GetHTTPPage($_554151431, $_1085691492, &$_753204024){ global $DB; CUpdateClient::AddMessage2Log(___1004537982(1897)); if($_554151431 == ___1004537982(1898)) $_554151431= ___1004537982(1899); elseif($_554151431 == ___1004537982(1900)) $_554151431= ___1004537982(1901); elseif($_554151431 == ___1004537982(1902)) $_554151431= ___1004537982(1903); elseif($_554151431 == ___1004537982(1904)) $_554151431= ___1004537982(1905); elseif($_554151431 == ___1004537982(1906)) $_554151431= ___1004537982(1907); elseif($_554151431 == ___1004537982(1908)) $_554151431= ___1004537982(1909); elseif($_554151431 == ___1004537982(1910)) $_554151431= ___1004537982(1911); $_1399279890= static::__690101446(); $_2059576749=@$GLOBALS['____1209379637'][632]($_1399279890[___1004537982(1912)], $_1399279890[___1004537982(1913)], $_2106056148, $_1116920530, round(0+30+30+30+30)); if($_2059576749){ $_358206942= ___1004537982(1914); if($_1399279890[___1004537982(1915)]){ $_358206942 .= ___1004537982(1916).$_1399279890[___1004537982(1917)].___1004537982(1918).$_554151431.___1004537982(1919); if($_1399279890[___1004537982(1920)] <> ___1004537982(1921)) $_358206942 .= ___1004537982(1922).$GLOBALS['____1209379637'][633]($_1399279890[___1004537982(1923)].___1004537982(1924).$_1399279890[___1004537982(1925)]).___1004537982(1926);} else{ $_358206942 .= ___1004537982(1927).$_554151431.___1004537982(1928);} $_946673907= self::__416130040(US_BASE_MODULE, ___1004537982(1929)); $_1085691492 .= ___1004537982(1930).$GLOBALS['____1209379637'][634]($_946673907); if($GLOBALS['____1209379637'][635](___1004537982(1931))) $_1085691492 .= ___1004537982(1932).$GLOBALS['____1209379637'][636](___1004537982(1933)); else $_1085691492 .= ___1004537982(1934).$GLOBALS['____1209379637'][637](___1004537982(1935)); $_1152618521= $DB->GetVersion(); $_1085691492 .= ___1004537982(1936).$GLOBALS['____1209379637'][638]($_1152618521? $_1152618521: ___1004537982(1937)); $_1085691492 .= ___1004537982(1938).COption::GetOptionString(___1004537982(1939), ___1004537982(1940), ___1004537982(1941)); $_1085691492 .= ___1004537982(1942).COption::GetOptionString(___1004537982(1943), ___1004537982(1944), ___1004537982(1945)); $_358206942 .= ___1004537982(1946); $_358206942 .= ___1004537982(1947); $_358206942 .= ___1004537982(1948).$_1399279890[___1004537982(1949)].___1004537982(1950); $_358206942 .= ___1004537982(1951); $_358206942 .= ___1004537982(1952); $_358206942 .= ___1004537982(1953).$GLOBALS['____1209379637'][639]($_1085691492).___1004537982(1954); $_358206942 .="$_1085691492"; $_358206942 .= ___1004537982(1955); $GLOBALS['____1209379637'][640]($_2059576749, $_358206942); $_475355530= false; while(!$GLOBALS['____1209379637'][641]($_2059576749)){ $_1907623322= $GLOBALS['____1209379637'][642]($_2059576749, round(0+819.2+819.2+819.2+819.2+819.2)); if($_1907623322 != ___1004537982(1956)){ if($GLOBALS['____1209379637'][643](___1004537982(1957), $_1907623322)) $_475355530= true;} else{ break;}} $_1596961748= ___1004537982(1958); if($_475355530){ $_1220677881= round(0+1365.3333333333+1365.3333333333+1365.3333333333); $_460270920= min(16,0,5.3333333333333); $_1907623322= $GLOBALS['____1209379637'][644]($_2059576749, $_1220677881); $_1907623322= $GLOBALS['____1209379637'][645]($_1907623322); $_1816171785= ___1004537982(1959); $_443696004=(245*2-490); while($_443696004< $GLOBALS['____1209379637'][646]($_1907623322) && $GLOBALS['____1209379637'][647]($_1907623322[$_443696004], array(___1004537982(1960), ___1004537982(1961), ___1004537982(1962), ___1004537982(1963), ___1004537982(1964), ___1004537982(1965), ___1004537982(1966), ___1004537982(1967), ___1004537982(1968), ___1004537982(1969), ___1004537982(1970), ___1004537982(1971), ___1004537982(1972), ___1004537982(1973), ___1004537982(1974), ___1004537982(1975)))){ $_1816171785 .= $_1907623322[$_443696004]; $_443696004++;} $_1251326892= $GLOBALS['____1209379637'][648]($_1816171785); while($_1251326892>(1152/2-576)){ $_132240663=(1272/2-636); $_1001548312=(($_1251326892> $_1220677881)? $_1220677881: $_1251326892); while($_1001548312>(234*2-468) && $_1907623322= $GLOBALS['____1209379637'][649]($_2059576749, $_1001548312)){ $_1596961748 .= $_1907623322; $_132240663 += $GLOBALS['____1209379637'][650]($_1907623322); $_1100949267= $_1251326892- $_132240663; $_1001548312=(($_1100949267> $_1220677881)? $_1220677881: $_1100949267);} $_460270920 += $_1251326892; $_1907623322= $GLOBALS['____1209379637'][651]($_2059576749, $_1220677881); $_1907623322= $GLOBALS['____1209379637'][652]($_2059576749, $_1220677881); $_1907623322= $GLOBALS['____1209379637'][653]($_1907623322); $_1816171785= ___1004537982(1976); $_443696004= min(40,0,13.333333333333); while($_443696004< $GLOBALS['____1209379637'][654]($_1907623322) && $GLOBALS['____1209379637'][655]($_1907623322[$_443696004], array(___1004537982(1977), ___1004537982(1978), ___1004537982(1979), ___1004537982(1980), ___1004537982(1981), ___1004537982(1982), ___1004537982(1983), ___1004537982(1984), ___1004537982(1985), ___1004537982(1986), ___1004537982(1987), ___1004537982(1988), ___1004537982(1989), ___1004537982(1990), ___1004537982(1991), ___1004537982(1992)))){ $_1816171785 .= $_1907623322[$_443696004]; $_443696004++;} $_1251326892= $GLOBALS['____1209379637'][656]($_1816171785);}} else{ while($_1907623322= $GLOBALS['____1209379637'][657]($_2059576749, round(0+819.2+819.2+819.2+819.2+819.2))) $_1596961748 .= $_1907623322;} $GLOBALS['____1209379637'][658]($_2059576749);} else{ $_1596961748= ___1004537982(1993); if($GLOBALS['____1209379637'][659](___1004537982(1994)) && $GLOBALS['____1209379637'][660](___1004537982(1995), ___1004537982(1996))) $_1116920530= CUtil::ConvertToLangCharset($_1116920530); $_753204024 .= GetMessage(___1004537982(1997)).___1004537982(1998).$_2106056148.___1004537982(1999).$_1116920530.___1004537982(2000); if($_2106056148 <=(904-2*452)) $_753204024 .= GetMessage(___1004537982(2001)).___1004537982(2002); CUpdateClient::AddMessage2Log(___1004537982(2003).$_1399279890[___1004537982(2004)].___1004537982(2005).$_2106056148.___1004537982(2006).$_1116920530, ___1004537982(2007));} return $_1596961748;} private static function __1706490244(&$_1760501310, $_761780272){  $_28696865= $_761780272->getName(); if(!isset($_1760501310[$_28696865])) $_1760501310[$_28696865]= array(); $_2046167719= array(___1004537982(2008) => array()); foreach($_761780272->attributes() as $_834432614 => $_613861993){ $_2046167719[___1004537982(2009)][$_834432614]= (string)$_613861993;} foreach($_761780272->children() as $_1561229535){ if(!isset($_2046167719[___1004537982(2010)])) $_2046167719[___1004537982(2011)]= array(); self::__1706490244($_2046167719[___1004537982(2012)], $_1561229535);} if(!isset($_2046167719[___1004537982(2013)])) $_2046167719[___1004537982(2014)]= (string)$_761780272; $_1760501310[$_28696865][]= $_2046167719;} private static function __1521549544($_1522976280){ $_1760501310= array(); if(!$GLOBALS['____1209379637'][661](___1004537982(2015)) ||!$GLOBALS['____1209379637'][662](___1004537982(2016))){ $_33757510= new CUpdatesXML(); if($_33757510->LoadString($_1522976280) && $_33757510->GetTree()) $_1760501310= $_33757510->GetArray(); return $_1760501310;}  if($GLOBALS['____1209379637'][663]($_1522976280, $GLOBALS['____1209379637'][664](___1004537982(2017), round(0+47.8+47.8+47.8+47.8+47.8), round(0+187), round(0+95.5+95.5))) === min(188,0,62.666666666667)) $_1522976280= $GLOBALS['____1209379637'][665]($_1522976280, round(0+3)); if($GLOBALS['____1209379637'][666]($_1522976280, ___1004537982(2018)) !==(1452/2-726)) $_1522976280= ___1004537982(2019).___1004537982(2020).($GLOBALS['____1209379637'][667](___1004537982(2021))? ___1004537982(2022): ___1004537982(2023)).___1004537982(2024).___1004537982(2025).$_1522976280; $_761780272= new \SimpleXMLElement($_1522976280); self::__1706490244($_1760501310, $_761780272); $_1760501310[___1004537982(2026)]= $_1760501310[___1004537982(2027)][(826-2*413)]; if(!$GLOBALS['____1209379637'][668](___1004537982(2028))) $_1760501310= \Bitrix\Main\Text\Encoding::convertEncoding($_1760501310, ___1004537982(2029), ___1004537982(2030)); return $_1760501310;} private static function __1244221643(&$_242112568, &$_187816114, &$_753204024){ $_2136808367= ""; $_187816114= array(); CUpdateClient::AddMessage2Log(___1004537982(2031)); if($_242112568 == ___1004537982(2032)) $_2136808367 .= ___1004537982(2033).GetMessage(___1004537982(2034)).___1004537982(2035); if($_2136808367 == ___1004537982(2036)){ if($GLOBALS['____1209379637'][669]($_242112568,(836-2*418), $GLOBALS['____1209379637'][670](___1004537982(2037))) != ___1004537982(2038) && CUpdateClient::IsGzipInstalled()) $_242112568=@$GLOBALS['____1209379637'][671]($_242112568); if($GLOBALS['____1209379637'][672]($_242112568,(982-2*491), $GLOBALS['____1209379637'][673](___1004537982(2039))) != ___1004537982(2040)){ CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][674]($_242112568,(1100/2-550), round(0+25+25+25+25)), ___1004537982(2041)); $_2136808367 .= ___1004537982(2042).GetMessage(___1004537982(2043)).___1004537982(2044);}} if($_2136808367 == ___1004537982(2045)){ $_187816114= self::__1521549544($_242112568); if(!$GLOBALS['____1209379637'][675]($_187816114) ||!isset($_187816114[___1004537982(2046)]) ||!$GLOBALS['____1209379637'][676]($_187816114[___1004537982(2047)])) $_2136808367 .= ___1004537982(2048).GetMessage(___1004537982(2049)).___1004537982(2050);} if($_2136808367 == ___1004537982(2051)){ if(isset($_187816114[___1004537982(2052)][___1004537982(2053)][___1004537982(2054)])){ $_946673907= $_187816114[___1004537982(2055)][___1004537982(2056)][___1004537982(2057)][min(30,0,10)][___1004537982(2058)][___1004537982(2059)]; if($_946673907 <> ___1004537982(2060)) COption::SetOptionString(US_BASE_MODULE, ___1004537982(2061), $_946673907);} if(isset($_187816114[___1004537982(2062)][___1004537982(2063)][___1004537982(2064)])){ CUpdateClient::__ApplyLicenseInfo($_187816114[___1004537982(2065)][___1004537982(2066)][___1004537982(2067)][min(36,0,12)][___1004537982(2068)]);}} if($_2136808367 == ___1004537982(2069)){ if(isset($_187816114[___1004537982(2070)][___1004537982(2071)][___1004537982(2072)])) CUpdateClient::__328632251($_187816114[___1004537982(2073)][___1004537982(2074)][___1004537982(2075)]);} if($_2136808367 <> ___1004537982(2076)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(2077)); $_753204024 .= $_2136808367; return false;} else return true;} public static function CollectRequestData(&$_753204024, $_1530138095= false, $_1474158358= "Y", $_2142182691= array(), $_1523107763= array(), $_164957727= array()){ $_2136808367= ""; if($_1530138095 === false){ $_1530138095= LANGUAGE_ID;} $_1474158358=($GLOBALS['____1209379637'][677]($_1474158358)? $GLOBALS['____1209379637'][678]($_1474158358):(($_1474158358 == ___1004537982(2078))? ___1004537982(2079): ___1004537982(2080))); CUpdateClient::AddMessage2Log(___1004537982(2081)); CUpdateClient::CheckDirPath($_SERVER[___1004537982(2082)].___1004537982(2083)); $_1450490487= CUpdateClient::GetCurrentModules($_2136808367); $_546637926= CUpdateClient::GetCurrentLanguages($_2136808367); $_1133438944=(CUpdateExpertMode::isEnabled() && CUpdateExpertMode::isCorrectModulesStructure($_2142182691)); if($_1133438944){ $_1450490487= CUpdateExpertMode::processModulesFrom($_2142182691, $_1450490487);} if($_2136808367 == ___1004537982(2084)){ $GLOBALS[___1004537982(2085)]->GetVersion(); $_522224472= ___1004537982(2086).$GLOBALS['____1209379637'][679]($GLOBALS['____1209379637'][680](CUpdateClient::GetLicenseKey())). ___1004537982(2087).$GLOBALS['____1209379637'][681]($_1530138095). ___1004537982(2088).$GLOBALS['____1209379637'][682](UPDATE_SYSTEM_VERSION_A). ___1004537982(2089).$GLOBALS['____1209379637'][683](SM_VERSION). ___1004537982(2090).(($GLOBALS['____1209379637'][684](___1004537982(2091)) && DEMO==___1004537982(2092))? ___1004537982(2093):(($GLOBALS['____1209379637'][685](___1004537982(2094)) && ENCODE==___1004537982(2095))? ___1004537982(2096):(($GLOBALS['____1209379637'][686](___1004537982(2097)) && TIMELIMIT_EDITION==___1004537982(2098))? ___1004537982(2099): ___1004537982(2100)))). ___1004537982(2101).$GLOBALS['____1209379637'][687](CUpdateClient::__GetFooPath()). ___1004537982(2102).$GLOBALS['____1209379637'][688](CUpdateClient::__GetFooPath1()). ___1004537982(2103).$GLOBALS['____1209379637'][689]($GLOBALS[___1004537982(2104)]->type). ___1004537982(2105).$GLOBALS['____1209379637'][690]((isset($GLOBALS[___1004537982(2106)]->XE) && $GLOBALS[___1004537982(2107)]->XE)? ___1004537982(2108): ___1004537982(2109)). ___1004537982(2110).$GLOBALS['____1209379637'][691]($_SERVER[___1004537982(2111)]). ___1004537982(2112).$GLOBALS['____1209379637'][692](self::GetServerName()). ___1004537982(2113).$GLOBALS['____1209379637'][693]($_SERVER[___1004537982(2114)]). ___1004537982(2115).$GLOBALS['____1209379637'][694]($_SERVER[___1004537982(2116)]). ___1004537982(2117).$GLOBALS['____1209379637'][695](CUpdateClient::GetUniqueId()). ___1004537982(2118).$GLOBALS['____1209379637'][696]((CUpdateClient::IsGzipInstalled())? ___1004537982(2119): ___1004537982(2120)). ___1004537982(2121).$GLOBALS['____1209379637'][697]($GLOBALS['____1209379637'][698]()). ___1004537982(2122).$GLOBALS['____1209379637'][699]($_1474158358). ___1004537982(2123).$GLOBALS['____1209379637'][700]((int)$GLOBALS['____1209379637'][701](___1004537982(2124))). ___1004537982(2125).$GLOBALS['____1209379637'][702](COption::GetOptionString(___1004537982(2126), ___1004537982(2127), ___1004537982(2128))). ___1004537982(2129).$GLOBALS['____1209379637'][703](COption::GetOptionString(___1004537982(2130), ___1004537982(2131), ___1004537982(2132))). ___1004537982(2133).$GLOBALS['____1209379637'][704](CUpdateClient::checkValid()? ___1004537982(2134): ___1004537982(2135)). ___1004537982(2136).CUpdateClient::ModulesArray2Query($_1450490487, ___1004537982(2137)). ___1004537982(2138).CUpdateClient::ModulesArray2Query($_546637926, ___1004537982(2139)); $_1874476756= ___1004537982(2140); if($_1133438944){ $_1627630432= CUpdateExpertMode::extractModulesTo($_2142182691); $_522224472 .= ___1004537982(2141).$GLOBALS['____1209379637'][705]($GLOBALS['____1209379637'][706]($_1627630432)); $_2142182691= $GLOBALS['____1209379637'][707]($_1627630432);} if(CUpdateExpertMode::isIncludeTmpUpdatesEnabled()){ $_522224472 .= ___1004537982(2142);} if(!empty($_2142182691)){ for($_443696004=(142*2-284), $_1167463684= $GLOBALS['____1209379637'][708]($_2142182691); $_443696004< $_1167463684; $_443696004++){ if($_1874476756 <> ___1004537982(2143)) $_1874476756 .= ___1004537982(2144); $_1874476756 .= $_2142182691[$_443696004];}} if($_1874476756 <> ___1004537982(2145)){ $_522224472 .= ___1004537982(2146).$GLOBALS['____1209379637'][709]($_1874476756);} $_1874476756= ___1004537982(2147); if(!empty($_1523107763)){ for($_443696004=(848-2*424), $_1167463684= $GLOBALS['____1209379637'][710]($_1523107763); $_443696004< $_1167463684; $_443696004++){ if($_1874476756 <> ___1004537982(2148)) $_1874476756 .= ___1004537982(2149); $_1874476756 .= $_1523107763[$_443696004];}} if($_1874476756 <> ___1004537982(2150)) $_522224472 .= ___1004537982(2151).$GLOBALS['____1209379637'][711]($_1874476756); $_1874476756= ___1004537982(2152); if(!empty($_164957727)){ for($_443696004= min(226,0,75.333333333333), $_1167463684= $GLOBALS['____1209379637'][712]($_164957727); $_443696004< $_1167463684; $_443696004++){ if($_1874476756 <> ___1004537982(2153)) $_1874476756 .= ___1004537982(2154); $_1874476756 .= $_164957727[$_443696004];}} if($_1874476756 <> ___1004537982(2155)) $_522224472 .= ___1004537982(2156).$GLOBALS['____1209379637'][713]($_1874476756); if($GLOBALS['____1209379637'][714](___1004537982(2157)) && $GLOBALS['____1209379637'][715](___1004537982(2158)) == ___1004537982(2159)){ $_1167463684= round(0+0.5+0.5); if(CModule::IncludeModule(___1004537982(2160))){ $_1167463684=(212*2-424); $_10329247= CIBlock::GetList(array(), array(___1004537982(2161) => ___1004537982(2162))); while($_10329247->Fetch()) $_1167463684++;} $_522224472 .= ___1004537982(2163).$_1167463684; $_522224472 .= ___1004537982(2164).CUser::GetCount(); $_1167463684=(848-2*424); $_1754704762= ___1004537982(2165); $_1536162850= ___1004537982(2166); $_837377958= CSite::GetList($_1754704762, $_1536162850, array()); while($_837377958->Fetch()) $_1167463684++; $_522224472 .= ___1004537982(2167).$_1167463684;} if($GLOBALS['____1209379637'][716](___1004537982(2168)) && $GLOBALS['____1209379637'][717](___1004537982(2169)) == ___1004537982(2170)){ $_1645043615= array(); $_969985619= COption::GetOptionString(___1004537982(2171), ___1004537982(2172), ___1004537982(2173)); if($_969985619 <> ___1004537982(2174)){ $_969985619= $GLOBALS['____1209379637'][718]($_969985619); $_1645043615= $GLOBALS['____1209379637'][719]($_969985619, array(___1004537982(2175) => false)); if(!$GLOBALS['____1209379637'][720]($_1645043615)) $_1645043615= array();} if(empty($_1645043615)) $_1645043615= array(___1004537982(2176) => array(), ___1004537982(2177) => array()); $_836364742= ___1004537982(2178); foreach($_1645043615[___1004537982(2179)] as $_1813017612 => $_1561559754){ if($_1561559754[(832-2*416)] == ___1004537982(2180) || $_1561559754[(1172/2-586)] == ___1004537982(2181)){ if($_836364742 <> ___1004537982(2182)) $_836364742 .= ___1004537982(2183); $_836364742 .= $_1813017612. ___1004537982(2184). $_1561559754[(179*2-358)]. ___1004537982(2185).(isset($_1561559754[round(0+0.33333333333333+0.33333333333333+0.33333333333333)])? $_1561559754[round(0+0.25+0.25+0.25+0.25)]: ___1004537982(2186));}} $_522224472 .= ___1004537982(2187).$GLOBALS['____1209379637'][721]($_836364742);} if($GLOBALS['____1209379637'][722](___1004537982(2188)) && $GLOBALS['____1209379637'][723](___1004537982(2189)) == ___1004537982(2190)){ $_998125995= array(); $_969985619= COption::GetOptionString(___1004537982(2191), ___1004537982(2192), ___1004537982(2193)); if($_969985619 <> ___1004537982(2194)){ $_969985619= $GLOBALS['____1209379637'][724]($_969985619); $_998125995= $GLOBALS['____1209379637'][725]($_969985619, array(___1004537982(2195) => false)); if(!$GLOBALS['____1209379637'][726]($_998125995)) $_998125995= array(___1004537982(2196));} if(empty($_998125995)) $_998125995= array(___1004537982(2197)); $_522224472 .= ___1004537982(2198).$GLOBALS['____1209379637'][727]($GLOBALS['____1209379637'][728](___1004537982(2199), $_998125995));} if(CModule::IncludeModule(___1004537982(2200)) && $GLOBALS['____1209379637'][729](___1004537982(2201))) $_522224472 .= ___1004537982(2202).$GLOBALS['____1209379637'][730](CCluster::getServersCount()); else $_522224472 .= ___1004537982(2203).$GLOBALS['____1209379637'][731](___1004537982(2204)); if($GLOBALS['____1209379637'][732](___1004537982(2205), ___1004537982(2206)) && $GLOBALS['____1209379637'][733](___1004537982(2207), ___1004537982(2208)) && CHTMLPagesCache::IsOn() && CHTMLPagesCache::IsCompositeEnabled()) $_522224472 .= ___1004537982(2209).$GLOBALS['____1209379637'][734](___1004537982(2210)); else $_522224472 .= ___1004537982(2211).$GLOBALS['____1209379637'][735](___1004537982(2212)); global $DB; if($DB->TableExists(___1004537982(2213)) || $DB->TableExists(___1004537982(2214))) $_522224472 .= ___1004537982(2215).$GLOBALS['____1209379637'][736]((COption::GetOptionString(___1004537982(2216), ___1004537982(2217), ___1004537982(2218)) == ___1004537982(2219)? ___1004537982(2220): ___1004537982(2221))); else $_522224472 .= ___1004537982(2222).$GLOBALS['____1209379637'][737](___1004537982(2223)); $_1178254619= CUpdateClient::getNewLicenseSignedKey(); $_522224472 .= ___1004537982(2224).$GLOBALS['____1209379637'][738]($_1178254619.___1004537982(2225).COption::GetOptionString(___1004537982(2226), $_1178254619, ___1004537982(2227))); return $_522224472;} CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(2228)); $_753204024 .= $_2136808367; return false;} public static function ModulesArray2Query($_1450490487, $_1890671657= "bitm_"){ $_510667792= ""; if($GLOBALS['____1209379637'][739]($_1450490487)){ foreach($_1450490487 as $_489120050 => $_1706943504){ if($_510667792 <> ___1004537982(2229)) $_510667792 .= ___1004537982(2230); $_510667792 .= $_1890671657.$_489120050.___1004537982(2231).$GLOBALS['____1209379637'][740]($_1706943504);}} return $_510667792;} protected static function GetServerName(){ global $DB; $_322260007= $DB->Query(___1004537982(2232)); if($_322260007 &&($_347104408= $_322260007->Fetch()) && $_347104408[___1004537982(2233)] != ___1004537982(2234)){ return $_347104408[___1004537982(2235)];} return self::__416130040(___1004537982(2236), ___1004537982(2237));} public static function IsGzipInstalled(){ if($GLOBALS['____1209379637'][741]("gzcompress")) return COption::GetOptionString("main", "update_is_gzip_installed", "Y") == "Y"; return false;} public static function GetCurrentModules(&$_753204024, $_922511211= false){ $_1450490487= array(); $_1177408942=@$GLOBALS['____1209379637'][742]($_SERVER[___1004537982(2238)].US_SHARED_KERNEL_PATH.___1004537982(2239)); if($_1177408942){ if($_922511211 === false || $GLOBALS['____1209379637'][743]($_922511211) && $GLOBALS['____1209379637'][744](___1004537982(2240), $_922511211)){ if($GLOBALS['____1209379637'][745]($_SERVER[___1004537982(2241)].US_SHARED_KERNEL_PATH.___1004537982(2242)) && $GLOBALS['____1209379637'][746]($_SERVER[___1004537982(2243)].US_SHARED_KERNEL_PATH.___1004537982(2244))){ $_700691280= $GLOBALS['____1209379637'][747]($_SERVER[___1004537982(2245)].US_SHARED_KERNEL_PATH.___1004537982(2246)); $GLOBALS['____1209379637'][748](___1004537982(2247), $_700691280, $_1699432342); $_1450490487[___1004537982(2248)]= $_1699432342[round(0+0.2+0.2+0.2+0.2+0.2)];} if($_1450490487[___1004537982(2249)] == ___1004537982(2250)){ CUpdateClient::AddMessage2Log(GetMessage(___1004537982(2251)), ___1004537982(2252)); $_753204024 .= ___1004537982(2253).GetMessage(___1004537982(2254)).___1004537982(2255);}} while(false !==($_239640225= $GLOBALS['____1209379637'][749]($_1177408942))){ if($GLOBALS['____1209379637'][750]($_SERVER[___1004537982(2256)].US_SHARED_KERNEL_PATH.___1004537982(2257).$_239640225) && $_239640225 != ___1004537982(2258) && $_239640225 != ___1004537982(2259) && $_239640225 != ___1004537982(2260) && $GLOBALS['____1209379637'][751]($_239640225, ___1004537982(2261)) === false){ if($_922511211 === false || $GLOBALS['____1209379637'][752]($_922511211) && $GLOBALS['____1209379637'][753]($_239640225, $_922511211)){ $_1162295015= $_SERVER[___1004537982(2262)].US_SHARED_KERNEL_PATH.___1004537982(2263).$_239640225; if($GLOBALS['____1209379637'][754]($_1162295015.___1004537982(2264))){ $_1546447603= CUpdateClient::GetModuleInfo($_1162295015); if(!isset($_1546447603[___1004537982(2265)]) || $_1546447603[___1004537982(2266)] == ___1004537982(2267)){ CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][755](___1004537982(2268), $_239640225, GetMessage(___1004537982(2269))), ___1004537982(2270)); $_753204024 .= ___1004537982(2271).$GLOBALS['____1209379637'][756](___1004537982(2272), $_239640225, GetMessage(___1004537982(2273))).___1004537982(2274);} else{ $_1450490487[$_239640225]= $_1546447603[___1004537982(2275)];}}}}} $GLOBALS['____1209379637'][757]($_1177408942);} else{ CUpdateClient::AddMessage2Log(GetMessage(___1004537982(2276)), ___1004537982(2277)); $_753204024 .= ___1004537982(2278).GetMessage(___1004537982(2279)).___1004537982(2280);} return $_1450490487;} public static function __GetFooPath(){ if(!$GLOBALS['____1209379637'][758]("CLang")){ return "RA";} else{ $_1167463684=(203*2-406); $_326250928= $_1938863488= ___1004537982(2281); $_2036567828= CLang::GetList($_326250928, $_1938863488, array(___1004537982(2282)=>___1004537982(2283))); while($_2036567828->Fetch()) $_1167463684++; return $_1167463684;}} public static function GetCurrentNumberOfUsers(){ return CUpdateClient::__GetFooPath1();} public static function GetCurrentLanguages(&$_753204024, $_922511211= false){ $_651413951= array(); $_1438931728= $_SERVER[___1004537982(2284)].US_SHARED_KERNEL_PATH.___1004537982(2285); $_1177408942=@$GLOBALS['____1209379637'][759]($_1438931728); if($_1177408942){ while(false !==($_239640225= $GLOBALS['____1209379637'][760]($_1177408942))){ if($GLOBALS['____1209379637'][761]($_1438931728.___1004537982(2286).$_239640225) && $_239640225!=___1004537982(2287) && $_239640225!=___1004537982(2288)){ if($_922511211===false || $GLOBALS['____1209379637'][762]($_922511211) && $GLOBALS['____1209379637'][763]($_239640225, $_922511211)){ $_1957310088= ___1004537982(2289); if($GLOBALS['____1209379637'][764]($_1438931728.___1004537982(2290).$_239640225.___1004537982(2291))){ $_1957310088= $GLOBALS['____1209379637'][765]($_1438931728.___1004537982(2292).$_239640225.___1004537982(2293)); $_1957310088= $GLOBALS['____1209379637'][766](___1004537982(2294), ___1004537982(2295), $_1957310088); if($GLOBALS['____1209379637'][767]($_1957310088) != round(0+2.6666666666667+2.6666666666667+2.6666666666667)){ CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][768](___1004537982(2296), $_239640225, GetMessage(___1004537982(2297))), ___1004537982(2298)); $_753204024 .= ___1004537982(2299).$GLOBALS['____1209379637'][769](___1004537982(2300), $_239640225, GetMessage(___1004537982(2301))).___1004537982(2302); $_1957310088= ___1004537982(2303);}} $_651413951[$_239640225]= $_1957310088;}}} $GLOBALS['____1209379637'][770]($_1177408942);} $_161636322= false; $_326250928= ___1004537982(2304); $_1938863488= ___1004537982(2305); if($GLOBALS['____1209379637'][771](___1004537982(2306))) $_161636322= CLanguage::GetList($_326250928, $_1938863488, array(___1004537982(2307)=>___1004537982(2308))); elseif($GLOBALS['____1209379637'][772](___1004537982(2309))) $_161636322= CLang::GetList($_326250928, $_1938863488, array(___1004537982(2310)=>___1004537982(2311))); if($_161636322===false){ CUpdateClient::AddMessage2Log(GetMessage(___1004537982(2312)), ___1004537982(2313)); $_753204024 .= ___1004537982(2314).GetMessage(___1004537982(2315)).___1004537982(2316);} else{ while($_1200678719= $_161636322->Fetch()){ if($_922511211===false || $GLOBALS['____1209379637'][773]($_922511211) && $GLOBALS['____1209379637'][774]($_1200678719[___1004537982(2317)], $_922511211)){ if(!$GLOBALS['____1209379637'][775]($_1200678719[___1004537982(2318)], $_651413951)){ $_651413951[$_1200678719[___1004537982(2319)]]= ___1004537982(2320);}}} if($_922511211===false && empty($_651413951)){ CUpdateClient::AddMessage2Log(GetMessage(___1004537982(2321)), ___1004537982(2322)); $_753204024 .= ___1004537982(2323).GetMessage(___1004537982(2324)).___1004537982(2325);}} return $_651413951;} public static function __GetFooPath1(){ if($GLOBALS['____1209379637'][776]('\Bitrix\Main\License', 'getActiveUsersCount')){ $_1662546114= new \Bitrix\Main\License(); return $_1662546114->getActiveUsersCount();} elseif(IsModuleInstalled(___1004537982(2326))){ $_783774585= ___1004537982(2327); $_1150149515= $GLOBALS[___1004537982(2328)]->Query($_783774585, true); if($_1150149515 &&($_187816114= $_1150149515->Fetch())){ return $_187816114[___1004537982(2329)];}} return min(80,0,26.666666666667);} public static function GetCurrentHelps(&$_753204024, $_922511211= false){ $_1519468821= array(); $_1796617134= $_SERVER[___1004537982(2330)].US_SHARED_KERNEL_PATH.___1004537982(2331); $_1177408942=@$GLOBALS['____1209379637'][777]($_1796617134); if($_1177408942){ while(false !==($_239640225= $GLOBALS['____1209379637'][778]($_1177408942))){ if($GLOBALS['____1209379637'][779]($_1796617134.___1004537982(2332).$_239640225) && $_239640225!=___1004537982(2333) && $_239640225!=___1004537982(2334)){ if($_922511211===false || $GLOBALS['____1209379637'][780]($_922511211) && $GLOBALS['____1209379637'][781]($_239640225, $_922511211)){ $_613961841= ___1004537982(2335); if($GLOBALS['____1209379637'][782]($_1796617134.___1004537982(2336).$_239640225.___1004537982(2337))){ $_613961841= $GLOBALS['____1209379637'][783]($_1796617134.___1004537982(2338).$_239640225.___1004537982(2339)); $_613961841= $GLOBALS['____1209379637'][784](___1004537982(2340), ___1004537982(2341), $_613961841); if($GLOBALS['____1209379637'][785]($_613961841)!=round(0+2.6666666666667+2.6666666666667+2.6666666666667)){ CUpdateClient::AddMessage2Log($GLOBALS['____1209379637'][786](___1004537982(2342), $_239640225, GetMessage(___1004537982(2343))), ___1004537982(2344)); $_753204024 .= ___1004537982(2345).$GLOBALS['____1209379637'][787](___1004537982(2346), $_239640225, GetMessage(___1004537982(2347))).___1004537982(2348); $_613961841= ___1004537982(2349);}} $_1519468821[$_239640225]= $_613961841;}}} $GLOBALS['____1209379637'][788]($_1177408942);} $_161636322= false; $_326250928= ___1004537982(2350); $_1938863488= ___1004537982(2351); if($GLOBALS['____1209379637'][789](___1004537982(2352))) $_161636322= CLanguage::GetList($_326250928, $_1938863488, array(___1004537982(2353)=>___1004537982(2354))); elseif($GLOBALS['____1209379637'][790](___1004537982(2355))) $_161636322= CLang::GetList($_326250928, $_1938863488, array(___1004537982(2356)=>___1004537982(2357))); if($_161636322===false){ CUpdateClient::AddMessage2Log(GetMessage(___1004537982(2358)), ___1004537982(2359)); $_753204024 .= ___1004537982(2360).GetMessage(___1004537982(2361)).___1004537982(2362);} else{ while($_1200678719= $_161636322->Fetch()){ if($_922511211===false || $GLOBALS['____1209379637'][791]($_922511211) && $GLOBALS['____1209379637'][792]($_1200678719[___1004537982(2363)], $_922511211)){ if(!$GLOBALS['____1209379637'][793]($_1200678719[___1004537982(2364)], $_1519468821)){ $_1519468821[$_1200678719[___1004537982(2365)]]= ___1004537982(2366);}}} if($_922511211===false && empty($_1519468821)){ CUpdateClient::AddMessage2Log(GetMessage(___1004537982(2367)), ___1004537982(2368)); $_753204024 .= ___1004537982(2369).GetMessage(___1004537982(2370)).___1004537982(2371);}} return $_1519468821;} public static function AddMessage2Log($_843066608, $_1484137941= ""){ $_692453237= 1000000; $_379278512= round(0+2000+2000+2000+2000); $_1920643663= $_SERVER[___1004537982(2372)].US_SHARED_KERNEL_PATH.___1004537982(2373); $_120280461= $_SERVER[___1004537982(2374)].US_SHARED_KERNEL_PATH.___1004537982(2375); if($_843066608 <> ___1004537982(2376) || $_1484137941 <> ___1004537982(2377)){ $_991151899= $GLOBALS['____1209379637'][794](true); if($GLOBALS['____1209379637'][795]($_1920643663)){ $_1011234688=@$GLOBALS['____1209379637'][796]($_1920643663); $_1011234688= $GLOBALS['____1209379637'][797]($_1011234688); if($_1011234688> $_692453237){ if(!($_1733016191=@$GLOBALS['____1209379637'][798]($_1920643663, ___1004537982(2378)))){ $GLOBALS['____1209379637'][799]($_991151899); return false;} if(!($_1069261324=@$GLOBALS['____1209379637'][800]($_120280461, ___1004537982(2379)))){ $GLOBALS['____1209379637'][801]($_991151899); return false;} $_221577973= $GLOBALS['____1209379637'][802]($_1011234688-$_692453237/2.0); $GLOBALS['____1209379637'][803]($_1733016191, $_221577973); do{ $_1667599631= $GLOBALS['____1209379637'][804]($_1733016191, $_379278512); if($_1667599631 == ___1004537982(2380)) break;@$GLOBALS['____1209379637'][805]($_1069261324, $_1667599631);} while(true);@$GLOBALS['____1209379637'][806]($_1733016191);@$GLOBALS['____1209379637'][807]($_1069261324);@$GLOBALS['____1209379637'][808]($_120280461, $_1920643663);@$GLOBALS['____1209379637'][809]($_120280461);} $GLOBALS['____1209379637'][810]();} if($_1733016191=@$GLOBALS['____1209379637'][811]($_1920643663, ___1004537982(2381))){ if($GLOBALS['____1209379637'][812]($_1733016191, LOCK_EX)){@$GLOBALS['____1209379637'][813]($_1733016191, $GLOBALS['____1209379637'][814](___1004537982(2382)).___1004537982(2383).$_1484137941.___1004537982(2384).$_843066608.___1004537982(2385));@$GLOBALS['____1209379637'][815]($_1733016191);@$GLOBALS['____1209379637'][816]($_1733016191, LOCK_UN);@$GLOBALS['____1209379637'][817]($_1733016191);}} $GLOBALS['____1209379637'][818]($_991151899);} return true;} public static function CheckDirPath($_2036567828, $_1230914372= true){ $_1189235069= Array(); $_2036567828= $GLOBALS['____1209379637'][819](___1004537982(2386), ___1004537982(2387), $_2036567828); $_2036567828= $GLOBALS['____1209379637'][820](___1004537982(2388), ___1004537982(2389), $_2036567828); if($_2036567828[$GLOBALS['____1209379637'][821]($_2036567828)-round(0+0.33333333333333+0.33333333333333+0.33333333333333)] != ___1004537982(2390)){ $_700691280= CUpdateClient::bxstrrpos($_2036567828, ___1004537982(2391)); $_2036567828= $GLOBALS['____1209379637'][822]($_2036567828,(1188/2-594), $_700691280);} while($GLOBALS['____1209379637'][823]($_2036567828)>round(0+0.25+0.25+0.25+0.25) && $_2036567828[$GLOBALS['____1209379637'][824]($_2036567828)-round(0+1)]==___1004537982(2392)) $_2036567828= $GLOBALS['____1209379637'][825]($_2036567828,(162*2-324), $GLOBALS['____1209379637'][826]($_2036567828)-round(0+0.25+0.25+0.25+0.25)); $_700691280= CUpdateClient::bxstrrpos($_2036567828, ___1004537982(2393)); while($_700691280>(928-2*464)){ if($GLOBALS['____1209379637'][827]($_2036567828) && $GLOBALS['____1209379637'][828]($_2036567828)){ if($_1230914372){ if(!$GLOBALS['____1209379637'][829]($_2036567828))@$GLOBALS['____1209379637'][830]($_2036567828, BX_DIR_PERMISSIONS);} break;} $_1189235069[]= $GLOBALS['____1209379637'][831]($_2036567828, $_700691280+round(0+0.5+0.5)); $_2036567828= $GLOBALS['____1209379637'][832]($_2036567828,(1108/2-554), $_700691280); $_700691280= CUpdateClient::bxstrrpos($_2036567828, ___1004537982(2394));} for($_443696004= $GLOBALS['____1209379637'][833]($_1189235069)-round(0+0.5+0.5); $_443696004>=(990-2*495); $_443696004--){ $_2036567828= $_2036567828.___1004537982(2395).$_1189235069[$_443696004];@$GLOBALS['____1209379637'][834]($_2036567828, BX_DIR_PERMISSIONS);}} public static function CopyDirFiles($_1244707243, $_800682851, &$_753204024, $_116010718= true, $_193561183= array()){ $_2136808367= ""; while($GLOBALS['____1209379637'][835]($_1244707243)> round(0+0.33333333333333+0.33333333333333+0.33333333333333) && $_1244707243[$GLOBALS['____1209379637'][836]($_1244707243)-round(0+0.33333333333333+0.33333333333333+0.33333333333333)] == ___1004537982(2396)) $_1244707243= $GLOBALS['____1209379637'][837]($_1244707243,(974-2*487), $GLOBALS['____1209379637'][838]($_1244707243)-round(0+0.25+0.25+0.25+0.25)); while($GLOBALS['____1209379637'][839]($_800682851)> round(0+0.33333333333333+0.33333333333333+0.33333333333333) && $_800682851[$GLOBALS['____1209379637'][840]($_800682851)-round(0+0.25+0.25+0.25+0.25)] == ___1004537982(2397)) $_800682851= $GLOBALS['____1209379637'][841]($_800682851, min(112,0,37.333333333333), $GLOBALS['____1209379637'][842]($_800682851)-round(0+0.2+0.2+0.2+0.2+0.2)); if($GLOBALS['____1209379637'][843]($_800682851.___1004537982(2398), $_1244707243.___1004537982(2399)) ===(1488/2-744)) $_2136808367 .= ___1004537982(2400).GetMessage(___1004537982(2401)).___1004537982(2402); if($_2136808367 == ___1004537982(2403)){ if(!$GLOBALS['____1209379637'][844]($_1244707243)) $_2136808367 .= ___1004537982(2404).$GLOBALS['____1209379637'][845](___1004537982(2405), $_1244707243, GetMessage(___1004537982(2406))).___1004537982(2407);} if($_2136808367 == ___1004537982(2408)){ $strongUpdateCheck= COption::GetOptionString(___1004537982(2409), ___1004537982(2410), ___1004537982(2411)); if($GLOBALS['____1209379637'][846]($_1244707243)){ CUpdateClient::CheckDirPath($_800682851.___1004537982(2412)); if(!$GLOBALS['____1209379637'][847]($_800682851) ||!$GLOBALS['____1209379637'][848]($_800682851)) $_2136808367 .= ___1004537982(2413).$GLOBALS['____1209379637'][849](___1004537982(2414), $_800682851, GetMessage(___1004537982(2415))).___1004537982(2416); elseif(!$GLOBALS['____1209379637'][850]($_800682851)) $_2136808367 .= ___1004537982(2417).$GLOBALS['____1209379637'][851](___1004537982(2418), $_800682851, GetMessage(___1004537982(2419))).___1004537982(2420); if($_2136808367 == ___1004537982(2421)){ if($_1177408942=@$GLOBALS['____1209379637'][852]($_1244707243)){ while(($_292314395= $GLOBALS['____1209379637'][853]($_1177408942)) !== false){ if($_292314395 == ___1004537982(2422) || $_292314395 == ___1004537982(2423)) continue; if($_116010718 && $GLOBALS['____1209379637'][854]($_292314395,(808-2*404), $GLOBALS['____1209379637'][855](___1004537982(2424))) == ___1004537982(2425)) continue; if($_116010718 &&($GLOBALS['____1209379637'][856]($_292314395,(154*2-308), $GLOBALS['____1209379637'][857](___1004537982(2426))) === ___1004537982(2427)) &&( $GLOBALS['____1209379637'][858]($GLOBALS['____1209379637'][859]($_292314395,-round(0+1.5+1.5)), array(___1004537982(2428), ___1004537982(2429), ___1004537982(2430), ___1004537982(2431))) || $GLOBALS['____1209379637'][860]($_292314395,-round(0+1.6666666666667+1.6666666666667+1.6666666666667)) == ___1004537982(2432))){ continue;} if(!empty($_193561183)){ $_276770789= false; foreach($_193561183 as $_1468469529){ if($GLOBALS['____1209379637'][861]($_1244707243.___1004537982(2433).$_292314395.___1004537982(2434), ___1004537982(2435).$_1468469529.___1004537982(2436)) !== false){ $_276770789= true; break;}} if($_276770789) continue;} if($GLOBALS['____1209379637'][862]($_1244707243.___1004537982(2437).$_292314395)){ CUpdateClient::CopyDirFiles($_1244707243.___1004537982(2438).$_292314395, $_800682851.___1004537982(2439).$_292314395, $_2136808367, false, $_193561183);} elseif($GLOBALS['____1209379637'][863]($_1244707243.___1004537982(2440).$_292314395)){ if($GLOBALS['____1209379637'][864]($_800682851.___1004537982(2441).$_292314395) &&!$GLOBALS['____1209379637'][865]($_800682851.___1004537982(2442).$_292314395)){ $_2136808367 .= ___1004537982(2443).$GLOBALS['____1209379637'][866](___1004537982(2444), $_800682851.___1004537982(2445).$_292314395, GetMessage(___1004537982(2446))).___1004537982(2447);} else{ if($strongUpdateCheck == ___1004537982(2448)) $_1941078078= $GLOBALS['____1209379637'][867]($GLOBALS['____1209379637'][868]($GLOBALS['____1209379637'][869]($_1244707243.___1004537982(2449).$_292314395)));@$GLOBALS['____1209379637'][870]($_1244707243.___1004537982(2450).$_292314395, $_800682851.___1004537982(2451).$_292314395);@$GLOBALS['____1209379637'][871]($_800682851.___1004537982(2452).$_292314395, BX_FILE_PERMISSIONS); if($strongUpdateCheck == ___1004537982(2453)){ $_1620366633= $GLOBALS['____1209379637'][872]($GLOBALS['____1209379637'][873]($GLOBALS['____1209379637'][874]($_800682851.___1004537982(2454).$_292314395))); if($_1620366633 !== $_1941078078){ $_2136808367 .= ___1004537982(2455).$GLOBALS['____1209379637'][875](___1004537982(2456), $_800682851.___1004537982(2457).$_292314395, GetMessage(___1004537982(2458))).___1004537982(2459);}}}}}@$GLOBALS['____1209379637'][876]($_1177408942);}}} else{ $_700691280= CUpdateClient::bxstrrpos($_800682851, ___1004537982(2460)); $_102313621= $GLOBALS['____1209379637'][877]($_800682851,(188*2-376), $_700691280); CUpdateClient::CheckDirPath($_102313621.___1004537982(2461)); if(!$GLOBALS['____1209379637'][878]($_102313621) ||!$GLOBALS['____1209379637'][879]($_102313621)) $_2136808367 .= ___1004537982(2462).$GLOBALS['____1209379637'][880](___1004537982(2463), $_102313621, GetMessage(___1004537982(2464))).___1004537982(2465); elseif(!$GLOBALS['____1209379637'][881]($_102313621)) $_2136808367 .= ___1004537982(2466).$GLOBALS['____1209379637'][882](___1004537982(2467), $_102313621, GetMessage(___1004537982(2468))).___1004537982(2469); if($_2136808367 == ___1004537982(2470)){ if($strongUpdateCheck == ___1004537982(2471)) $_1941078078= $GLOBALS['____1209379637'][883]($GLOBALS['____1209379637'][884]($GLOBALS['____1209379637'][885]($_1244707243)));@$GLOBALS['____1209379637'][886]($_1244707243, $_800682851);@$GLOBALS['____1209379637'][887]($_800682851, BX_FILE_PERMISSIONS); if($strongUpdateCheck == ___1004537982(2472)){ $_1620366633= $GLOBALS['____1209379637'][888]($GLOBALS['____1209379637'][889]($GLOBALS['____1209379637'][890]($_800682851))); if($_1620366633 !== $_1941078078){ $_2136808367 .= ___1004537982(2473).$GLOBALS['____1209379637'][891](___1004537982(2474), $_800682851, GetMessage(___1004537982(2475))).___1004537982(2476);}}}}} if($_2136808367 <> ___1004537982(2477)){ CUpdateClient::AddMessage2Log($_2136808367, ___1004537982(2478)); $_753204024 .= $_2136808367; return false;} else return true;} public static function DeleteDirFilesEx($_2036567828){ if(!$GLOBALS['____1209379637'][892]($_2036567828)) return false; if($GLOBALS['____1209379637'][893]($_2036567828)){@$GLOBALS['____1209379637'][894]($_2036567828); return true;} if($_1177408942=@$GLOBALS['____1209379637'][895]($_2036567828)){ while(($_292314395= $GLOBALS['____1209379637'][896]($_1177408942)) !== false){ if($_292314395 == ___1004537982(2479) || $_292314395 == ___1004537982(2480)) continue; if($GLOBALS['____1209379637'][897]($_2036567828.___1004537982(2481).$_292314395)){ CUpdateClient::DeleteDirFilesEx($_2036567828.___1004537982(2482).$_292314395);} else{@$GLOBALS['____1209379637'][898]($_2036567828.___1004537982(2483).$_292314395);}}}@$GLOBALS['____1209379637'][899]($_1177408942);@$GLOBALS['____1209379637'][900]($_2036567828); return true;} public static function bxstrrpos($_681521238, $_1822690654){ $_1913562229= $GLOBALS['____1209379637'][901]($GLOBALS['____1209379637'][902]($_681521238), $GLOBALS['____1209379637'][903]($_1822690654)); if($_1913562229 === false){ return false;} $_1913562229= $GLOBALS['____1209379637'][904]($_681521238)- $GLOBALS['____1209379637'][905]($_1822690654)- $_1913562229; return $_1913562229;} public static function GetModuleInfo($_2036567828){ $arModuleVersion= array(); $_836364742= $GLOBALS['____1209379637'][906]($_2036567828.___1004537982(2484)); if($_836364742 !== false){@eval($GLOBALS['____1209379637'][907](array('<?php', '<?', '?>'), '', $_836364742)); if($GLOBALS['____1209379637'][908]($arModuleVersion) && $GLOBALS['____1209379637'][909](___1004537982(2485), $arModuleVersion)) return $arModuleVersion;} $GLOBALS['____1209379637'][910]($_2036567828.___1004537982(2486)); include($_2036567828.___1004537982(2487)); if($GLOBALS['____1209379637'][911]($arModuleVersion) && $GLOBALS['____1209379637'][912](___1004537982(2488), $arModuleVersion)) return $arModuleVersion; include_once($_2036567828.___1004537982(2489)); $_2046167719= $GLOBALS['____1209379637'][913](___1004537982(2490), $_2036567828); $_443696004= $GLOBALS['____1209379637'][914](___1004537982(2491), $_2046167719); $_845073196= $_2046167719[$_443696004+round(0+0.33333333333333+0.33333333333333+0.33333333333333)]; $_845073196= $GLOBALS['____1209379637'][915](___1004537982(2492), ___1004537982(2493), $_845073196); $_179704299= new $_845073196; return array( ___1004537982(2494) => $_179704299->MODULE_VERSION, ___1004537982(2495) => $_179704299->MODULE_VERSION_DATE,);} public static function GetLicenseKey(){ if($GLOBALS['____1209379637'][916]("US_LICENSE_KEY")) return US_LICENSE_KEY; if($GLOBALS['____1209379637'][917](___1004537982(2496))) return LICENSE_KEY; if(!isset($GLOBALS[___1004537982(2497)]) || $GLOBALS[___1004537982(2498)]==___1004537982(2499)){ $LICENSE_KEY= ___1004537982(2500); if($GLOBALS['____1209379637'][918]($_SERVER[___1004537982(2501)].___1004537982(2502))) include($_SERVER[___1004537982(2503)].___1004537982(2504)); $GLOBALS[___1004537982(2505)]= $LICENSE_KEY;} return $GLOBALS[___1004537982(2506)];}  public static function getmicrotime(){ return $GLOBALS['____1209379637'][919](true);} private static function __1863373792($_1116920530, $_2106056148, $_1399279890){ if($GLOBALS['____1209379637'][920]('CUtil') && $GLOBALS['____1209379637'][921]('CUtil', 'ConvertToLangCharset')) $_1116920530= CUtil::ConvertToLangCharset($_1116920530); $_1015571134= GetMessage(___1004537982(2507)).___1004537982(2508).$_2106056148.___1004537982(2509).$_1116920530.___1004537982(2510); if($GLOBALS['____1209379637'][922]($_2106056148) <= min(236,0,78.666666666667)) $_1015571134 .= GetMessage(___1004537982(2511)).___1004537982(2512); CUpdateClient::AddMessage2Log( ___1004537982(2513).$_1399279890[___1004537982(2514)].___1004537982(2515).$_2106056148.___1004537982(2516).$_1116920530, ___1004537982(2517)); return $_1015571134;} private static function __690101446(){ $_1023785319= COption::GetOptionString("main", "update_site", DEFAULT_UPDATE_SERVER); $_1726963472= COption::GetOptionString(___1004537982(2518), ___1004537982(2519), ___1004537982(2520)) == ___1004537982(2521); $_1038998234= COption::GetOptionString(___1004537982(2522), ___1004537982(2523), ___1004537982(2524)); $_1431866772= COption::GetOptionString(___1004537982(2525), ___1004537982(2526), ___1004537982(2527)); $_108662072= COption::GetOptionString(___1004537982(2528), ___1004537982(2529), ___1004537982(2530)); $_387915335= COption::GetOptionString(___1004537982(2531), ___1004537982(2532), ___1004537982(2533)); $_1831003445=($_1038998234 <> ___1004537982(2534) && $_1431866772 <> ___1004537982(2535)); $_1760501310= array( ___1004537982(2536) => $_1831003445, ___1004537982(2537) => $_1023785319, ___1004537982(2538) =>($_1726963472? ___1004537982(2539): ___1004537982(2540)). $_1023785319, ___1004537982(2541) =>($_1726963472? round(0+147.66666666667+147.66666666667+147.66666666667): round(0+40+40)),); if($_1831003445){ $_1431866772= $GLOBALS['____1209379637'][923]($_1431866772); if($_1431866772 <=(1372/2-686)) $_1431866772= round(0+40+40); $_1760501310[___1004537982(2542)]= $_1038998234; $_1760501310[___1004537982(2543)]= $_1431866772; $_1760501310[___1004537982(2544)]= $_108662072; $_1760501310[___1004537982(2545)]= $_387915335;} return $_1760501310;} protected static function resetAccelerator(){ if($GLOBALS['____1209379637'][924]("opcache_reset")){ opcache_reset();} elseif($GLOBALS['____1209379637'][925](___1004537982(2546))){ accelerator_reset();}}} class CUpdateControllerSupport{ public static function CheckUpdates(){ $errorMessage= ""; $_1474158358= COption::GetOptionString(___1004537982(2547), ___1004537982(2548), ___1004537982(2549)); if(!($_1278724601= CUpdateClient::GetUpdatesList($errorMessage, LANG, $_1474158358))) $errorMessage .= GetMessage(___1004537982(2550)).___1004537982(2551); if($_1278724601){ if(isset($_1278724601[___1004537982(2552)])){ for($_443696004=(1080/2-540), $_1167463684= $GLOBALS['____1209379637'][926]($_1278724601[___1004537982(2553)]); $_443696004< $_1167463684; $_443696004++) $errorMessage .= ___1004537982(2554).$_1278724601[___1004537982(2555)][$_443696004][___1004537982(2556)][___1004537982(2557)].___1004537982(2558).$_1278724601[___1004537982(2559)][$_443696004][___1004537982(2560)];}} if($errorMessage <> ___1004537982(2561)) return array(___1004537982(2562), $errorMessage); if(isset($_1278724601[___1004537982(2563)])) return array(___1004537982(2564), ___1004537982(2565)); $_146588115= min(142,0,47.333333333333); if(isset($_1278724601[___1004537982(2566)][min(48,0,16)][___1004537982(2567)][___1004537982(2568)]) && $GLOBALS['____1209379637'][927]($_1278724601[___1004537982(2569)][(1132/2-566)][___1004537982(2570)][___1004537982(2571)])) $_146588115= $GLOBALS['____1209379637'][928]($_1278724601[___1004537982(2572)][(780-2*390)][___1004537982(2573)][___1004537982(2574)]); $_808523184=(946-2*473); if(isset($_1278724601[___1004537982(2575)][min(78,0,26)][___1004537982(2576)][___1004537982(2577)][(1184/2-592)][___1004537982(2578)][___1004537982(2579)]) && $GLOBALS['____1209379637'][929]($_1278724601[___1004537982(2580)][(766-2*383)][___1004537982(2581)][___1004537982(2582)][min(70,0,23.333333333333)][___1004537982(2583)][___1004537982(2584)])) $_808523184= $GLOBALS['____1209379637'][930]($_1278724601[___1004537982(2585)][(219*2-438)][___1004537982(2586)][___1004537982(2587)][(153*2-306)][___1004537982(2588)][___1004537982(2589)]); if($_808523184> min(170,0,56.666666666667) && $_146588115>(1308/2-654)) return array(___1004537982(2590), ___1004537982(2591)); elseif($_808523184 <=(1424/2-712) && $_146588115>(221*2-442)) return array(___1004537982(2592), ___1004537982(2593)); elseif($_808523184>(1160/2-580) && $_146588115 <=(1024/2-512)) return array(___1004537982(2594), ___1004537982(2595)); else return array(___1004537982(2596), ___1004537982(2597));} public static function UpdateModules(){ return CUpdateControllerSupport::__UpdateKernel("M");} public static function UpdateLangs(){ return CUpdateControllerSupport::__UpdateKernel("L");} public static function __UpdateKernel($_869801936){ $GLOBALS['____1209379637'][931]("UPD_INTERNAL_CALL", "Y"); $_REQUEST[___1004537982(2598)]= $_869801936; $GLOBALS['____1209379637'][932](); include($_SERVER[___1004537982(2599)].___1004537982(2600)); $_1760501310= $GLOBALS['____1209379637'][933](); $GLOBALS['____1209379637'][934](); return $_1760501310;} public static function UpdateUpdate(){ $GLOBALS['____1209379637'][935]("UPD_INTERNAL_CALL", "Y"); $_REQUEST[___1004537982(2601)]= ___1004537982(2602); $GLOBALS['____1209379637'][936](); include($_SERVER[___1004537982(2603)].___1004537982(2604)); $_1760501310= $GLOBALS['____1209379637'][937](); $GLOBALS['____1209379637'][938](); return $_1760501310;} public static function Finish(){@$GLOBALS['____1209379637'][939]($_SERVER["DOCUMENT_ROOT"].US_SHARED_KERNEL_PATH."/modules/versions.php");} public static function Update($_1667599631= ""){@$GLOBALS['____1209379637'][940](0); $GLOBALS['____1209379637'][941](___1004537982(2605), ___1004537982(2606)); $GLOBALS['____1209379637'][942](true); $_1667599631= $GLOBALS['____1209379637'][943]($_1667599631); if($_1667599631 == ___1004537982(2607) || $_1667599631 == ___1004537982(2608)){ $_1139428298= CUpdateControllerSupport::CheckUpdates(); if($_1139428298[(144*2-288)] == ___1004537982(2609)){ $_522224472= ___1004537982(2610).$_1139428298[round(0+0.2+0.2+0.2+0.2+0.2)];} elseif($_1139428298[(888-2*444)] == ___1004537982(2611)){ $_522224472= ___1004537982(2612);} elseif($_1139428298[(940-2*470)] == ___1004537982(2613)){ $_522224472= ___1004537982(2614);} elseif($_1139428298[(858-2*429)] == ___1004537982(2615)){ $_522224472= ___1004537982(2616).$_1139428298[round(0+0.25+0.25+0.25+0.25)];} else{ $_522224472= ___1004537982(2617).___1004537982(2618);}} else{ if($_1667599631 == ___1004537982(2619)){ $_322260007= CUpdateControllerSupport::UpdateUpdate(); if($_322260007 == ___1004537982(2620)) $_522224472= ___1004537982(2621); else $_522224472= ___1004537982(2622).$_322260007;} elseif($GLOBALS['____1209379637'][944]($_1667599631,(1388/2-694), round(0+0.75+0.75+0.75+0.75)) == ___1004537982(2623)){ $_1277027716= $GLOBALS['____1209379637'][945]($_1667599631, round(0+3)); if($_1277027716 == ___1004537982(2624)){ $_322260007= CUpdateControllerSupport::UpdateModules(); if($_322260007 == ___1004537982(2625)) $_522224472= ___1004537982(2626).___1004537982(2627); elseif($GLOBALS['____1209379637'][946]($_322260007, min(118,0,39.333333333333), round(0+1+1+1)) == ___1004537982(2628)) $_522224472= ___1004537982(2629).$GLOBALS['____1209379637'][947]($_322260007, round(0+0.6+0.6+0.6+0.6+0.6)); elseif($GLOBALS['____1209379637'][948]($_322260007,(886-2*443), round(0+1.5+1.5)) == ___1004537982(2630)) $_522224472= ___1004537982(2631).___1004537982(2632).___1004537982(2633).$GLOBALS['____1209379637'][949]($_322260007, round(0+3)); else $_522224472= ___1004537982(2634).___1004537982(2635);} elseif($_1277027716 == ___1004537982(2636)){ $_322260007= CUpdateControllerSupport::UpdateModules(); if($_322260007 == ___1004537982(2637)) $_522224472= ___1004537982(2638); elseif($GLOBALS['____1209379637'][950]($_322260007,(168*2-336), round(0+0.75+0.75+0.75+0.75)) == ___1004537982(2639)) $_522224472= ___1004537982(2640).$GLOBALS['____1209379637'][951]($_322260007, round(0+3)); elseif($GLOBALS['____1209379637'][952]($_322260007,(232*2-464), round(0+3)) == ___1004537982(2641)) $_522224472= ___1004537982(2642).___1004537982(2643).___1004537982(2644).$GLOBALS['____1209379637'][953]($_322260007, round(0+1+1+1)); else $_522224472= ___1004537982(2645).___1004537982(2646);} elseif($_1277027716 == ___1004537982(2647)){ $_322260007= CUpdateControllerSupport::UpdateLangs(); if($_322260007 == ___1004537982(2648)) $_522224472= ___1004537982(2649); elseif($GLOBALS['____1209379637'][954]($_322260007, min(186,0,62), round(0+0.75+0.75+0.75+0.75)) == ___1004537982(2650)) $_522224472= ___1004537982(2651).$GLOBALS['____1209379637'][955]($_322260007, round(0+3)); elseif($GLOBALS['____1209379637'][956]($_322260007,(1084/2-542), round(0+0.75+0.75+0.75+0.75)) == ___1004537982(2652)) $_522224472= ___1004537982(2653).___1004537982(2654).___1004537982(2655).$GLOBALS['____1209379637'][957]($_322260007, round(0+1+1+1)); else $_522224472= ___1004537982(2656).___1004537982(2657);} else{ $_522224472= ___1004537982(2658).___1004537982(2659);}} else{ $_522224472= ___1004537982(2660).___1004537982(2661);}} if($_522224472 == ___1004537982(2662)) CUpdateControllerSupport::Finish(); return $_522224472;} public static function CollectVersionsFile(){ $_1329480955= $_SERVER["DOCUMENT_ROOT"].US_SHARED_KERNEL_PATH."/modules/versions.php";@$GLOBALS['____1209379637'][958]($_1329480955); $errorMessage= ___1004537982(2663); $_1573213927= CUpdateClient::GetCurrentModules($errorMessage); if($errorMessage == ___1004537982(2664)){ $_1518328039= $GLOBALS['____1209379637'][959]($_1329480955, ___1004537982(2665)); $GLOBALS['____1209379637'][960]($_1518328039, ___1004537982(2666).___1004537982(2667)); $GLOBALS['____1209379637'][961]($_1518328039, ___1004537982(2668)); foreach($_1573213927 as $_944152425 => $_163546139) $GLOBALS['____1209379637'][962]($_1518328039, ___1004537982(2669).htmlspecialcharsbx($_944152425).___1004537982(2670).htmlspecialcharsbx($_163546139).___1004537982(2671)); $GLOBALS['____1209379637'][963]($_1518328039, ___1004537982(2672)); $GLOBALS['____1209379637'][964]($_1518328039, ___1004537982(2673).___1004537982(2674)); $GLOBALS['____1209379637'][965]($_1518328039);}}} class CUpdateExpertMode{ const OPTION_NAME= 'update_system_expert_mode'; public static function isAvailable(){ return( $GLOBALS['____1209379637'][966]($GLOBALS['____1209379637'][967](), '7.0.0') >= 0 && $GLOBALS['____1209379637'][968]('UPDATE_SYSTEM_EXPERT_MODE_ENABLED') && UPDATE_SYSTEM_EXPERT_MODE_ENABLED === true);} public static function isEnabled(){ return( static::isAvailable() && COption::GetOptionString('main', 'update_system_expert_mode', 'N') === 'Y');} public static function enable(){ COption::SetOptionString('main', 'update_system_expert_mode', 'Y');} public static function disable(){ COption::SetOptionString('main', 'update_system_expert_mode', 'N');} public static function isCorrectModulesStructure($_405564040){ if(!$GLOBALS['____1209379637'][969]($_405564040)){ return false;} $_525707952= $GLOBALS['____1209379637'][970]($_405564040); if($_525707952 === $GLOBALS['____1209379637'][971]($_525707952)){  return false;} $_2062014989= $GLOBALS['____1209379637'][972]($_405564040); if($GLOBALS['____1209379637'][973]($_2062014989) && isset($_2062014989[___1004537982(2675)]) && $GLOBALS['____1209379637'][974]($_2062014989[___1004537982(2676)])){ return true;} return false;} public static function processModulesFrom($_405564040, $_1503380714){ if(!$GLOBALS['____1209379637'][975]($_1503380714)){ return array();} if(!$GLOBALS['____1209379637'][976]($_405564040)){ return $_1503380714;} foreach($_1503380714 as $_1310272241 => $_932962422){ if(!isset($_405564040[$_1310272241][___1004537982(2677)])){ continue;} if(CUpdateClient::CompareVersions($_932962422, $_405564040[$_1310272241][___1004537982(2678)])>(892-2*446)){ $_1503380714[$_1310272241]= $_405564040[$_1310272241][___1004537982(2679)];}} return $_1503380714;} public static function extractModulesTo($_405564040){ if(!$GLOBALS['____1209379637'][977]($_405564040)){ return array();} $_1491357081= array(); foreach($_405564040 as $_1310272241 => $_2138824924){ if(isset($_2138824924[___1004537982(2680)])){ $_1491357081[$_1310272241]= $_2138824924[___1004537982(2681)];}} return $_1491357081;} public static function isIncludeTmpUpdatesEnabled(){ return static::isEnabled() && COption::GetOptionString('main', 'update_system_expert_mode_include_tmp_updates', 'N') === 'Y';} public static function enableIncludeTmpUpdates(){ COption::SetOptionString('main', 'update_system_expert_mode_include_tmp_updates', 'Y');} public static function disableIncludeTmpUpdates(){ COption::SetOptionString('main', 'update_system_expert_mode_include_tmp_updates', 'N');}}?>
+<? /** @noinspection MagicMethodsValidityInspection */
+if (!defined("UPDATE_SYSTEM_VERSION_A")) {
+	define("UPDATE_SYSTEM_VERSION_A", "24.200.300");
+}
+if (!defined("BX_DIR_PERMISSIONS")) define("BX_DIR_PERMISSIONS", 493);
+if (!defined("DEFAULT_UPDATE_SERVER")) {
+	define("DEFAULT_UPDATE_SERVER", "www.bitrixsoft.com");
+}
+
+IncludeModuleLangFile(__FILE__);
+
+if (extension_loaded("zlib")) {
+	if (!function_exists("gzopen") && function_exists("gzopen64")) {
+		function gzopen($_906972647, $_563707371, $_313577720 = 0)
+		{
+			return gzopen64($_906972647, $_563707371, $_313577720);
+		}
+	}
+}
+if (!function_exists("htmlspecialcharsbx")) {
+	function htmlspecialcharsbx($_1296951786, $_1302320733 = ENT_COMPAT)
+	{
+		return htmlspecialchars($_1296951786, $_1302320733, (defined("BX_UTF") ? "UTF-8" : "ISO-8859-1"));
+	}
+}
+
+if (!defined("US_SHARED_KERNEL_PATH"))
+	define("US_SHARED_KERNEL_PATH", "/bitrix");
+if (!defined("US_CALL_TYPE"))
+	define("US_CALL_TYPE", "ALL");
+if (!defined("US_BASE_MODULE")) define("US_BASE_MODULE", "main");
+
+$GLOBALS["UPDATE_STRONG_UPDATE_CHECK"]  = "";
+$GLOBALS["CACHE4UPDATESYS_LICENSE_KEY"] = "";
+
+require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/classes/general/update_class.php");
+
+class CUpdateClient
+{
+	public static function getLicenseTextPath()
+	{
+		$_1377042919 = array();
+		$_326250928  = "sort";
+		$_1938863488 = "asc";
+		$_719560041  = CLanguage::GetList($_326250928, $_1938863488, array("ACTIVE" => "Y"));
+		while ($_1390141975 = $_719560041->Fetch()) {
+			$_1377042919[] = $_1390141975["LID"];
+		}
+		$_1023785319 = COption::GetOptionString("main", "update_site", DEFAULT_UPDATE_SERVER);
+		$_1940603258 = COption::GetOptionString("main", "vendor", "");
+		if (IsModuleInstalled("updateserverlight")) {
+			if ($_1940603258 == "1c_bitrix_portal" || $_1940603258 == "1c_bitrix") {
+				$_1023785319 = "www.1c-bitrix.ru";
+			} else {
+				$_1023785319 = DEFAULT_UPDATE_SERVER;
+			}
+		}
+		return "//" . $_1023785319 . "/bitrix/updates/license.php?intranet=" . (IsModuleInstalled("intranet") ? "Y" : "N") . "&lang=" . urlencode(LANGUAGE_ID) . "&vendor=" . urlencode($_1940603258) . "&langs=" . urlencode(implode(",", $_1377042919));
+	}
+
+	public static function getNewLicenseSignedKey()
+	{
+		$_1178254619 = "~new_license17_5_sign";
+		if (!IsModuleInstalled("intranet")) {
+			if (file_exists($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/lang/ru")) {
+				$_1178254619 = "~new_license18_0_sign";
+			}
+		} else {
+			if (file_exists($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/lang/ru")) {
+				$_1178254619 = "~new_license24_400_sign";
+			} else {
+				$_1178254619 = "~new_license24_400_sign";
+			}
+		}
+		return $_1178254619;
+	}
+
+	public static function finalizeModuleUpdate($_1675966945)
+	{
+		$_1455832098 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/updater_versions.php";
+		$_1342175707 = array();
+		if (file_exists($_1455832098))
+			$_1342175707 = include($_1455832098);
+		$_1533037351 = array();
+		$_753089015  = array();
+		foreach ($_1675966945 as $_1373643817) {
+			$_139629394  = preg_replace("/[^a-zA-Z0-9._-]/", "", $_1373643817["@"]["NAME"]);
+			$_1706943504 = implode(".", array_slice(array_map("intval", explode(".", $_1373643817["@"]["VALUE"])), 0, 3));
+			if (isset($_1533037351[$_139629394 . "#" . $_1706943504]))
+				continue;
+			$_1533037351[$_139629394 . "#" . $_1706943504] = true;
+			if (!isset($_753089015[$_139629394]))
+				$_753089015[$_139629394] = array();
+			$_753089015[$_139629394][] = $_1706943504;
+			if (!isset($_1342175707["modules"][$_139629394]))
+				$_1342175707["modules"][$_139629394] = array();
+			$_1342175707["modules"][$_139629394][] = array($_1706943504, date("Y-m-d H:i:s"));
+		}
+
+		$_685670079 = var_export($_1342175707, true);
+		file_put_contents($_1455832098, "<" . "?php return " . $_685670079 . ";");
+		if (class_exists("Bitrix\Main\Data\CacheEngineFiles")) {
+			$_282031458 = new Bitrix\Main\Data\CacheEngineFiles();
+			$_282031458->clean(BX_PERSONAL_ROOT . "/cache", "/css/");
+			$_282031458->clean(BX_PERSONAL_ROOT . "/cache", "/js/");
+			$_282031458->clean(BX_PERSONAL_ROOT . "/managed_cache/MYSQL", "/css/");
+			$_282031458->clean(BX_PERSONAL_ROOT . "/managed_cache/MYSQL", "/js/");
+		}
+		foreach (GetModuleEvents("main", "OnFinishModuleUpdate", true) as $_1599781934) {
+			ExecuteModuleEventEx($_1599781934, array($_753089015, $_1342175707, isset($GLOBALS["BX_REAL_UPDATED_MODULES"]) ? $GLOBALS["BX_REAL_UPDATED_MODULES"] : array()));
+		}
+	}
+
+	public static function finalizeLanguageUpdate($_2054273693)
+	{
+		$_1455832098 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/updater_versions.php";
+		$_1342175707 = array();
+		if(file_exists($_1455832098)) $_1342175707 = include($_1455832098);
+		$_250896991                               = array();
+		foreach ($_2054273693 as $_339216575 => $_139629394) {
+			$_339216575              = preg_replace("/[^a-zA-Z0-9._-]/", "", $_339216575);
+			$_250896991[$_339216575] = array($_139629394, date("Y-m-d H:i:s"));
+			if (!isset($_1342175707["langs"][$_339216575])) $_1342175707["langs"][$_339216575] = array();
+			$_1342175707["langs"][$_339216575][] = date("Y-m-d H:i:s");
+		}
+		unset($_1342175707["langs"][""]);
+		$_685670079 = var_export($_1342175707, true);
+		file_put_contents($_1455832098, "<" . "?php return " . $_685670079 . ";");
+
+		foreach (GetModuleEvents("main", "OnFinishLanguageUpdate", true) as $_1599781934) {
+			ExecuteModuleEventEx($_1599781934, array($_250896991, $_1342175707));
+		}
+	}
+
+	private static function __328632251($_321435640)
+	{
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::executeCounters");
+		$_418914584 = microtime(true);
+		if (empty($_321435640)) return false;
+		$_1015571134 = "";
+		$_1622907824 = CUpdateClient::CollectRequestData($_1015571134);
+		if (empty($_1622907824) && empty($_1015571134)) $_1015571134 = "[RV01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+		if (empty($_1015571134)) {
+			$_1622907824 .= "&query_type=counter";
+			foreach ($_321435640 as $_1982206509) {
+				$_869020157 = "";
+				if (isset($_1982206509["#"]["cdata-section"][0]["#"]) && is_string($_1982206509["#"]["cdata-section"][0]["#"]) && ($_1982206509["#"]["cdata-section"][0]["#"] !== "")) {
+					$_869020157 = $_1982206509["#"]["cdata-section"][0]["#"];
+				} elseif (isset($_1982206509["#"]) && is_string($_1982206509["#"]) && ($_1982206509["#"] !== "")) {
+					$_869020157 = $_1982206509["#"];
+				}
+				try {
+					if ($_869020157 !== "") $_1760501310 = eval($_869020157); else $_1760501310 = "transfer error";
+				} catch (Exception $_1038958414) {
+					$_1760501310 = "[" . $_1038958414->getCode() . "] " . $_1038958414->getMessage();
+				}
+				$_1622907824 .= "&cntr_result[" . intval($_1982206509["@"]["ID"]) . "]=" . urlencode($_1760501310);
+			}
+		}
+		if (empty($_1015571134)) {
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_1596961748 = CUpdateClient::GetHTTPPage("ACTIV", $_1622907824, $_1015571134);
+			if (empty($_1596961748) && empty($_1015571134)) $_1015571134 = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+		}
+		CUpdateClient::AddMessage2Log("TIME executeCounters " . round(microtime(true) - $_418914584, 3) . " sec");
+		if (!empty($_1015571134)) {
+			CUpdateClient::AddMessage2Log($_1015571134, "EC");
+			return false;
+		} else return true;
+	}
+
+	private static function __416130040($_1310272241, $_139629394, $_1538520438 = "")
+	{
+		global $DB;
+		$_463479575 = $DB->Query("SELECT VALUE " . "FROM b_option " . "WHERE SITE_ID IS NULL " . "	AND MODULE_ID = '" . $DB->ForSql($_1310272241) . "' " . "	AND NAME = '" . $DB->ForSql($_139629394) . "' ");
+		if ($_1139428298 = $_463479575->Fetch()) return $_1139428298["VALUE"];
+		return $_1538520438;
+	}
+
+	protected static function GetUniqueId()
+	{
+		global $APPLICATION;
+		if (method_exists($APPLICATION, "GetServerUniqID")) {
+			return $APPLICATION->GetServerUniqID();
+		}
+		return COption::GetOptionString("main", "server_uniq_id");
+	}
+
+	public static function Lock()
+	{
+		global $DB;
+		$_916521942 = CUpdateClient::GetUniqueId();
+		if ($DB->type == "MYSQL") {
+			$_775996342  = $DB->Query("SELECT GET_LOCK('" . $DB->ForSql($_916521942) . "_UpdateSystem', 0) as L");
+			$_1727367214 = $_775996342->Fetch();
+			if ($_1727367214["L"] == "1") return true;
+		} elseif ($DB->type == "PGSQL") {
+			$_775996342  = $DB->Query("SELECT CASE WHEN pg_try_advisory_lock(" . crc32($_916521942 . "_UpdateSystem") . ") THEN '1' ELSE '0' END AS L");
+			$_1727367214 = $_775996342->Fetch();
+			if ($_1727367214["L"] == "1") return true;
+		}
+		return false;
+	}
+
+	public static function UnLock()
+	{
+		global $DB;
+		$_916521942 = CUpdateClient::GetUniqueId();
+		if ($DB->type == "MYSQL") {
+			$_775996342  = $DB->Query("SELECT RELEASE_LOCK('" . $DB->ForSql($_916521942) . "_UpdateSystem') as L");
+			$_1727367214 = $_775996342->Fetch();
+			if ($_1727367214["L"] == "0") {
+				return false;
+			}
+			return true;
+		} elseif ($DB->type == "PGSQL") {
+			$_775996342  = $DB->Query("SELECT CASE WHEN pg_advisory_unlock(" . crc32($_916521942 . "_UpdateSystem") . ") THEN '1' ELSE '0' END AS L");
+			$_1727367214 = $_775996342->Fetch();
+			if ($_1727367214["L"] == "1") return true; else return false;
+		} elseif ($DB->type == "ORACLE") {
+			return true;
+		} else {
+			$DB->Query("DELETE FROM B_OPTION WHERE MODULE_ID = 'main' AND NAME = '" . $DB->ForSql($_916521942) . "_UpdateSystem' AND SITE_ID IS NULL");
+			return true;
+		}
+	}
+
+	public static function Repair($type, $_1474158358, $_1530138095 = false)
+	{
+		if ($type == "include") {
+			if (CUpdateClient::RegisterVersion($errorMessage, $_1530138095, $_1474158358)) CUpdateClient::AddMessage2Log("Include repaired"); else CUpdateClient::AddMessage2Log("Include repair error: " . $errorMessage);
+		}
+	}
+
+	public static function IsUpdateAvailable(&$_171681707, &$_753204024)
+	{
+		$_171681707  = array();
+		$_753204024  = "";
+		$_1474158358 = COption::GetOptionString("main", "stable_versions_only", "Y");
+		$_1278724601 = CUpdateClient::GetUpdatesList($_753204024, LANG, $_1474158358);
+		if (!$_1278724601) return false;
+		if (isset($_1278724601["ERROR"])) {
+			for ($_443696004 = 0, $_1167463684 = count($_1278724601["ERROR"]); $_443696004 < $_1167463684; $_443696004++) $_753204024 .= "[" . $_1278724601["ERROR"][$_443696004]["@"]["TYPE"] . "] " . $_1278724601["ERROR"][$_443696004]["#"];
+			return false;
+		}
+		if (isset($_1278724601["MODULES"][0]["#"]["MODULE"]) && is_array($_1278724601["MODULES"][0]["#"]["MODULE"])) {
+			$_171681707 = $_1278724601["MODULES"][0]["#"]["MODULE"];
+			return true;
+		}
+		if (isset($_1278724601["UPDATE_SYSTEM"])) return true;
+		return false;
+	}
+
+	public static function SubscribeMail($_802145321, &$_753204024, $_1530138095 = false, $_1474158358 = "Y")
+	{
+		$_2136808367 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::SubscribeMail");
+		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358);
+		if ($_1622907824 == "" || $_2136808367 <> "") {
+			if ($_2136808367 == "") $_2136808367 = "[RV01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+		}
+		if ($_2136808367 == "") {
+			$_1622907824 .= "&email=" . UrlEncode($_802145321) . "&query_type=mail";
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("ACTIV", $_1622907824, $_2136808367);
+			if ($_1596961748 == "") {
+				if ($_2136808367 == "") $_2136808367 = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+			}
+			CUpdateClient::AddMessage2Log("TIME SubscribeMail(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+		}
+		if ($_2136808367 == "") {
+			$_187816114 = array();
+			CUpdateClient::__1244221643($_1596961748, $_187816114, $_2136808367);
+		}
+		if ($_2136808367 == "") {
+			if (!empty($_187816114["DATA"]["#"]["ERROR"]) && is_array($_187816114["DATA"]["#"]["ERROR"])) {
+				for ($_443696004 = 0, $_346373140 = count($_187816114["DATA"]["#"]["ERROR"]); $_443696004 < $_346373140; $_443696004++) {
+					if ($_187816114["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] <> "") $_2136808367 .= "[" . $_187816114["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] . "] ";
+					$_2136808367 .= $_187816114["DATA"]["#"]["ERROR"][$_443696004]["#"] . ". ";
+				}
+			}
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "SM");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function ActivateCoupon($_148013943, &$_753204024, $_1530138095 = false, $_1474158358 = "Y")
+	{
+		$_2136808367 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::ActivateCoupon");
+		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358);
+		if ($_1622907824 == "" || $_2136808367 <> "") {
+			if ($_2136808367 == "") $_2136808367 = "[RV01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+		}
+		if (CModule::IncludeModule("rest") && !\Bitrix\Rest\OAuthService::getEngine()->isRegistered()) {
+			try {
+				\Bitrix\Rest\OAuthService::register();
+				\Bitrix\Rest\OAuthService::getEngine()->getClient()->getApplicationList();
+			} catch (\Bitrix\Main\SystemException $_1038958414) {
+			}
+		}
+		if ($_2136808367 == "") {
+			$_1622907824 .= "&coupon=" . UrlEncode($_148013943) . "&query_type=coupon";
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("ACTIV", $_1622907824, $_2136808367);
+			if ($_1596961748 == "") {
+				if ($_2136808367 == "") $_2136808367 = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+			}
+			CUpdateClient::AddMessage2Log("TIME ActivateCoupon(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+		}
+		if ($_2136808367 == "") {
+			$_187816114 = array();
+			CUpdateClient::__1244221643($_1596961748, $_187816114, $_2136808367);
+		}
+		if ($_2136808367 == "") {
+			if (!empty($_187816114["DATA"]["#"]["ERROR"]) && is_array($_187816114["DATA"]["#"]["ERROR"])) {
+				for ($_443696004 = 0, $_346373140 = count($_187816114["DATA"]["#"]["ERROR"]); $_443696004 < $_346373140; $_443696004++) {
+					if ($_187816114["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] <> "") $_2136808367 .= "[" . $_187816114["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] . "] ";
+					$_2136808367 .= $_187816114["DATA"]["#"]["ERROR"][$_443696004]["#"] . ". ";
+				}
+			}
+		}
+		if ($_2136808367 == "") {
+			if (isset($_187816114["DATA"]["#"]["RENT"]) && is_array($_187816114["DATA"]["#"]["RENT"])) {
+				CUpdateClient::__ApplyLicenseInfo($_187816114["DATA"]["#"]["RENT"][0]["@"]);
+			}
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "AC");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else {
+			$_473116890 = "";
+			CUpdateClient::RegisterVersion($_473116890);
+			return true;
+		}
+	}
+
+	public static function __ApplyLicenseInfo($_12549049)
+	{
+		if (array_key_exists("V1", $_12549049) && array_key_exists("V2", $_12549049)) {
+			COption::SetOptionString('main', 'admin_passwordh', $_12549049["V1"]);
+			$_1733016191 = fopen($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/admin/define.php", "w");
+			fwrite($_1733016191, "<" . "?Define(\"TEMPORARY_CACHE\", \"".$_12549049["V2"]."\");?" . ">"); fclose($_1733016191);}
+		if (isset($_12549049["DATE_TO_SOURCE"])) {
+			COption::SetOptionString(US_BASE_MODULE, "~support_finish_date", $_12549049["DATE_TO_SOURCE"]);
+		}
+		if (isset($_12549049["DATE_TO_SOURCE_STRING"])) {
+			COption::SetOptionString(US_BASE_MODULE, "~PARAM_FINISH_DATE", $_12549049["DATE_TO_SOURCE_STRING"]);
+		}
+		if (isset($_12549049["MAX_SITES"])) {
+			COption::SetOptionString("main", "PARAM_MAX_SITES", intval($_12549049["MAX_SITES"]));
+		}
+		if (isset($_12549049["MAX_USERS"])) {
+			COption::SetOptionString("main", "PARAM_MAX_USERS", intval($_12549049["MAX_USERS"]));
+		}
+		if (isset($_12549049["MAX_USERS_STRING"])) {
+			COption::SetOptionString("main", "~PARAM_MAX_USERS", $_12549049["MAX_USERS_STRING"]);
+		}
+		if (isset($_12549049["COUNT_EXTRA"])) {
+			COption::SetOptionString("main", "~COUNT_EXTRA", $_12549049["COUNT_EXTRA"]);
+		}
+		if (isset($_12549049["MAX_SERVERS"])) {
+			COption::SetOptionString("main", "~PARAM_MAX_SERVERS", intval($_12549049["MAX_SERVERS"]));
+		}
+		if (isset($_12549049["COMPOSITE"])) {
+			COption::SetOptionString("main", "~PARAM_COMPOSITE", $_12549049["COMPOSITE"]);
+		}
+		if (isset($_12549049["PHONE_SIP"])) {
+			COption::SetOptionString("main", "~PARAM_PHONE_SIP", $_12549049["PHONE_SIP"]);
+		}
+		if (isset($_12549049["PARTNER_ID"])) {
+			COption::SetOptionString("main", "~PARAM_PARTNER_ID", $_12549049["PARTNER_ID"]);
+		}
+		if (isset($_12549049["BASE_LANG"])) {
+			COption::SetOptionString("main", "~PARAM_BASE_LANG", $_12549049["BASE_LANG"]);
+		}
+		if (isset($_12549049["CLIENT_LANG"])) {
+			COption::SetOptionString("main", "~PARAM_CLIENT_LANG", $_12549049["CLIENT_LANG"]);
+		}
+		if (isset($_12549049["B24SUBSC"])) {
+			COption::SetOptionString("main", "~mp24_paid", $_12549049["B24SUBSC"]);
+		}
+		if (isset($_12549049["B24SUBSC_DATE"])) {
+			COption::SetOptionString("main", "~mp24_paid_date", $_12549049["B24SUBSC_DATE"]);
+		}
+		if (isset($_12549049["B24SUBSC_COUNT_AVAILABLE"])) {
+			COption::SetOptionString("rest", "app_available_count", $_12549049["B24SUBSC_COUNT_AVAILABLE"]);
+		}
+		if (isset($_12549049["B24SUBSC_SUBSCRIPTION_AVAILABLE"])) {
+			COption::SetOptionString("rest", "subscription_available", $_12549049["B24SUBSC_SUBSCRIPTION_AVAILABLE"]);
+		}
+		if (isset($_12549049["B24SUBSC_ACCESS_RULES_ACTIVE"])) {
+			COption::SetOptionString("rest", "access_active", $_12549049["B24SUBSC_ACCESS_RULES_ACTIVE"]);
+		}
+		if (isset($_12549049["LICENSE"])) {
+			COption::SetOptionString("main", "~license_name", $_12549049["LICENSE"]);
+		}
+		foreach ($_12549049 as $_1307000183 => $_593850248) {
+			if (substr($_1307000183, 0, 3) == "UT_") {
+				COption::SetOptionString("main", "~" . substr($_1307000183, 3), $_593850248);
+			}
+		}
+		if (array_key_exists("L", $_12549049)) {
+			$_872232418 = array();
+			$_969985619 = COption::GetOptionString("main", "~cpf_map_value", "");
+			if ($_969985619 <> "") {
+				$_969985619 = base64_decode($_969985619);
+				$_872232418 = unserialize($_969985619, array("allowed_classes" => false));
+				if (!is_array($_872232418)) $_872232418 = array();
+			}
+			if (empty($_872232418)) $_872232418 = array("e" => array(), "f" => array());
+			$_795365505 = explode(",", $_12549049["L"]);
+			foreach ($_795365505 as $_593850248) $_872232418["e"][$_593850248] = array("F");
+			$_525707952 = array_keys($_872232418["e"]);
+			foreach ($_525707952 as $_489120050) {
+				if (in_array($_489120050, $_795365505) || $_489120050 == "Portal") {
+					$_872232418["e"][$_489120050] = array("F");
+				} else {
+					if ($_872232418["e"][$_489120050][0] != "D") $_872232418["e"][$_489120050] = array("X");
+				}
+			}
+			$_969985619 = serialize($_872232418);
+			$_969985619 = base64_encode($_969985619);
+			COption::SetOptionString("main", "~cpf_map_value", $_969985619);
+			COption::SetOptionString("main", "~license_codes", $_12549049["L"]);
+		} elseif (array_key_exists("L1", $_12549049)) {
+			$_872232418 = array();
+			$_795365505 = explode(",", $_12549049["L1"]);
+			foreach ($_795365505 as $_593850248) $_872232418[] = $_593850248;
+			$_969985619 = serialize($_872232418);
+			$_969985619 = base64_encode($_969985619);
+			COption::SetOptionString("main", "~cpf_map_value", $_969985619);
+			COption::SetOptionString("main", "~license_codes", $_12549049["L1"]);
+		}
+	}
+
+	public static function UpdateUpdate(&$_753204024, $_1530138095 = false, $_1474158358 = "Y")
+	{
+		$_2136808367 = '';
+		$_1596961748 = "";
+		$_1370972511 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::UpdateUpdate");
+		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358);
+		if ($_1622907824 == "" || $_2136808367 <> "") {
+			if ($_2136808367 == "") $_2136808367 = "[RV01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+		}
+		if ($_2136808367 == "") {
+			$_1622907824 .= "&query_type=updateupdate";
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("REG", $_1622907824, $_2136808367);
+			if ($_1596961748 == "") {
+				if ($_2136808367 == "") $_2136808367 = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+			}
+			CUpdateClient::AddMessage2Log("TIME UpdateUpdate(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+		}
+		if ($_2136808367 == "") {
+			if (!($_1069261324 = fopen($_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz", "wb"))) $_2136808367 .= "[URV02] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates", GetMessage("SUPP_RV_ER_TEMP_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			if (!fwrite($_1069261324, $_1596961748)) $_2136808367 .= "[URV03] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz", GetMessage("SUPP_RV_WRT_TEMP_FILE")) . ". ";
+			@fclose($_1069261324);
+		}
+		if ($_2136808367 == "") {
+			$_154269357 = "";
+			if (!CUpdateClient::UnGzipArchive($_154269357, $_2136808367, "Y")) $_2136808367 .= "[URV04] " . GetMessage("SUPP_RV_BREAK") . ". ";
+		}
+		if ($_2136808367 == "") {
+			$_1370972511 = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/" . $_154269357;
+			if (!file_exists($_1370972511 . "/update_info.xml") || !is_file($_1370972511 . "/update_info.xml")) $_2136808367 .= "[URV05] " . str_replace("#FILE#", $_1370972511 . "/update_info.xml", GetMessage("SUPP_RV_ER_DESCR_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			if (!is_readable($_1370972511 . "/update_info.xml")) $_2136808367 .= "[URV06] " . str_replace("#FILE#", $_1370972511 . "/update_info.xml", GetMessage("SUPP_RV_READ_DESCR_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") $_1596961748 = file_get_contents($_1370972511 . "/update_info.xml");
+		if ($_2136808367 == "") {
+			$_187816114 = array();
+			CUpdateClient::__1244221643($_1596961748, $_187816114, $_2136808367);
+		}
+		if ($_2136808367 == "") {
+			if (!empty($_187816114["DATA"]["#"]["ERROR"]) && is_array($_187816114["DATA"]["#"]["ERROR"])) {
+				for ($_443696004 = 0, $_346373140 = count($_187816114["DATA"]["#"]["ERROR"]); $_443696004 < $_346373140; $_443696004++) {
+					if ($_187816114["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] <> "") $_2136808367 .= "[" . $_187816114["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] . "] ";
+					$_2136808367 .= $_187816114["DATA"]["#"]["ERROR"][$_443696004]["#"] . ". ";
+				}
+			}
+		}
+		if ($_2136808367 == "") {
+			$_1590613717 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main";
+			CUpdateClient::CheckDirPath($_1590613717 . "/");
+			if (!file_exists($_1590613717) || !is_dir($_1590613717)) $_2136808367 .= "[UUK04] " . str_replace("#MODULE_DIR#", $_1590613717, GetMessage("SUPP_UK_NO_MODIR")) . ". ";
+			if ($_2136808367 == "") if (!is_writable($_1590613717)) $_2136808367 .= "[UUK05] " . str_replace("#MODULE_DIR#", $_1590613717, GetMessage("SUPP_UK_WR_MODIR")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			CUpdateClient::CopyDirFiles($_1370972511 . "/main", $_1590613717, $_2136808367);
+		}
+		if ($_2136808367 == "") {
+			CUpdateClient::AddMessage2Log("Update updated successfully!", "CURV");
+			CUpdateClient::DeleteDirFilesEx($_1370972511);
+			CUpdateClient::resetAccelerator();
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "UU");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function GetPHPSources(&$_753204024, $_1530138095, $_1474158358, $_2142182691)
+	{
+		$_2136808367 = '';
+		$_1596961748 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::GetPHPSources");
+		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358, $_2142182691);
+		if ($_1622907824 == "" || $_2136808367 <> "") {
+			if ($_2136808367 == "") $_2136808367 = "[GNSU01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+		}
+		if ($_2136808367 == "") {
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("SRC", $_1622907824, $_2136808367);
+			if ($_1596961748 == "") {
+				if ($_2136808367 == "") $_2136808367 = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+			}
+			CUpdateClient::AddMessage2Log("TIME GetPHPSources(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+		}
+		if ($_2136808367 == "") {
+			if (!($_1069261324 = fopen($_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz", "wb"))) $_2136808367 = "[GNSU03] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates", GetMessage("SUPP_RV_ER_TEMP_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			fwrite($_1069261324, $_1596961748);
+			fclose($_1069261324);
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "GNSU00");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function GetSupportFullLoad(&$_753204024, $_1530138095, $_1474158358, $_2142182691)
+	{
+		$_2136808367 = '';
+		$_1596961748 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::GetSupportFullLoad");
+		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358, $_2142182691);
+		if ($_1622907824 == "" || $_2136808367 <> "") {
+			if ($_2136808367 == "") $_2136808367 = "[GSFLU01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+		}
+		if ($_2136808367 == "") {
+			$_1622907824 .= "&support_full_load=Y";
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("SRC", $_1622907824, $_2136808367);
+			if ($_1596961748 == "") {
+				if ($_2136808367 == "") $_2136808367 = "[GSFL02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+			}
+			CUpdateClient::AddMessage2Log("TIME GetSupportFullLoad(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+		}
+		if ($_2136808367 == "") {
+			if (!($_1069261324 = fopen($_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz", "wb"))) $_2136808367 = "[GSFL03] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates", GetMessage("SUPP_RV_ER_TEMP_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			fwrite($_1069261324, $_1596961748);
+			fclose($_1069261324);
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "GSFL00");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function RegisterVersion(&$_753204024, $_1530138095 = false, $_1474158358 = "Y")
+	{
+		$_2136808367 = '';
+		$_1596961748 = "";
+		$_1370972511 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::RegisterVersion");
+		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358);
+		if ($_1622907824 == "" || $_2136808367 <> "") {
+			if ($_2136808367 == "") $_2136808367 = "[RV01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+		}
+		if ($_2136808367 == "") {
+			$_1622907824 .= "&query_type=register";
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("REG", $_1622907824, $_2136808367);
+			if ($_1596961748 == "") {
+				if ($_2136808367 == "") $_2136808367 = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+			}
+			CUpdateClient::AddMessage2Log("TIME RegisterVersion(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+		}
+		if ($_2136808367 == "") {
+			if (!($_1069261324 = fopen($_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz", "wb"))) $_2136808367 .= "[URV02] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates", GetMessage("SUPP_RV_ER_TEMP_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			if (!fwrite($_1069261324, $_1596961748)) $_2136808367 .= "[URV03] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz", GetMessage("SUPP_RV_WRT_TEMP_FILE")) . ". ";
+			@fclose($_1069261324);
+		}
+		if ($_2136808367 == "") {
+			$_154269357 = "";
+			if (!CUpdateClient::UnGzipArchive($_154269357, $_2136808367, "Y")) $_2136808367 .= "[URV04] " . GetMessage("SUPP_RV_BREAK") . ". ";
+		}
+		if ($_2136808367 == "") {
+			$_1370972511 = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/" . $_154269357;
+			if (!file_exists($_1370972511 . "/update_info.xml") || !is_file($_1370972511 . "/update_info.xml")) $_2136808367 .= "[URV05] " . str_replace("#FILE#", $_1370972511 . "/update_info.xml", GetMessage("SUPP_RV_ER_DESCR_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			if (!is_readable($_1370972511 . "/update_info.xml")) $_2136808367 .= "[URV06] " . str_replace("#FILE#", $_1370972511 . "/update_info.xml", GetMessage("SUPP_RV_READ_DESCR_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") $_1596961748 = file_get_contents($_1370972511 . "/update_info.xml");
+		$_187816114 = array();
+		if ($_2136808367 == "") {
+			CUpdateClient::__1244221643($_1596961748, $_187816114, $_2136808367);
+		}
+		if ($_2136808367 == "") {
+			if (!empty($_187816114["DATA"]["#"]["ERROR"]) && is_array($_187816114["DATA"]["#"]["ERROR"])) {
+				for ($_443696004 = 0, $_346373140 = count($_187816114["DATA"]["#"]["ERROR"]); $_443696004 < $_346373140; $_443696004++) {
+					if ($_187816114["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] <> "") $_2136808367 .= "[" . $_187816114["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] . "] ";
+					$_2136808367 .= $_187816114["DATA"]["#"]["ERROR"][$_443696004]["#"] . ". ";
+				}
+			}
+		}
+		if ($_2136808367 == "") {
+			if (!file_exists($_1370972511 . "/include.php") || !is_file($_1370972511 . "/include.php")) $_2136808367 .= "[URV07] " . GetMessage("SUPP_RV_NO_FILE") . ". ";
+		}
+		if ($_2136808367 == "") {
+			$_1198134144 = @filesize($_1370972511 . "/include.php");
+			if (intval($_1198134144) != intval($_187816114["DATA"]["#"]["FILE"][0]["@"]["SIZE"])) $_2136808367 .= "[URV08] " . GetMessage("SUPP_RV_ER_SIZE") . ". ";
+		}
+		if ($_2136808367 == "") {
+			if (!is_writeable($_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main/include.php")) $_2136808367 .= "[URV09] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main/include.php", GetMessage("SUPP_RV_NO_WRITE")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			if (!copy($_1370972511 . "/include.php", $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main/include.php")) $_2136808367 .= "[URV10] " . GetMessage("SUPP_RV_ERR_COPY") . ". ";
+			@chmod($_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main/include.php", BX_FILE_PERMISSIONS);
+		}
+		if ($_2136808367 == "") {
+			$strongUpdateCheck = COption::GetOptionString("main", "strong_update_check", "Y");
+			if ($strongUpdateCheck == "Y") {
+				$_1941078078 = dechex(crc32(file_get_contents($_1370972511 . "/include.php")));
+				$_1620366633 = dechex(crc32(file_get_contents($_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main/include.php")));
+				if ($_1620366633 != $_1941078078) $_2136808367 .= "[URV1011] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main/include.php", GetMessage("SUPP_UGA_FILE_CRUSH")) . ". ";
+			}
+		}
+		if ($_2136808367 == "") {
+			CUpdateClient::AddMessage2Log("Product registered successfully!", "CURV");
+			CUpdateClient::DeleteDirFilesEx($_1370972511);
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "CURV");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function ActivateLicenseKey($_1962644474, &$_753204024, $_1530138095 = false, $_1474158358 = "Y")
+	{
+		$_2136808367 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::ActivateLicenseKey");
+		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358);
+		if ($_1622907824 == "" || $_2136808367 <> "") {
+			if ($_2136808367 == "") $_2136808367 = "[GNSU01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+		}
+		if ($_2136808367 == "") {
+			$_1622907824 .= "&query_type=activate";
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			foreach ($_1962644474 as $_489120050 => $_1706943504) $_1622907824 .= "&" . $_489120050 . "=" . urlencode($_1706943504);
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("ACTIV", $_1622907824, $_2136808367);
+			if ($_1596961748 == "") {
+				if ($_2136808367 == "") $_2136808367 = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+			}
+			CUpdateClient::AddMessage2Log("TIME ActivateLicenseKey(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+		}
+		if ($_2136808367 == "") {
+			$_187816114 = array();
+			CUpdateClient::__1244221643($_1596961748, $_187816114, $_2136808367);
+		}
+		if ($_2136808367 == "") {
+			if (!empty($_187816114["DATA"]["#"]["ERROR"]) && is_array($_187816114["DATA"]["#"]["ERROR"])) {
+				for ($_443696004 = 0, $_346373140 = count($_187816114["DATA"]["#"]["ERROR"]); $_443696004 < $_346373140; $_443696004++) {
+					if ($_187816114["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] <> "") $_2136808367 .= "[" . $_187816114["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] . "] ";
+					$_2136808367 .= $_187816114["DATA"]["#"]["ERROR"][$_443696004]["#"] . ". ";
+				}
+			}
+		}
+		if ($_2136808367 == "") CUpdateClient::AddMessage2Log("License key activated successfully!", "CUALK");
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "CUALK");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function GetNextStepLangUpdates(&$_753204024, $_1530138095 = false, $_1523107763 = array())
+	{
+		$_2136808367 = '';
+		$_1596961748 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::GetNextStepLangUpdates");
+		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, "N", array(), $_1523107763);
+		if ($_1622907824 == "" || $_2136808367 <> "") {
+			if ($_2136808367 == "") $_2136808367 = "[GNSU01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+		}
+		if ($_2136808367 == "") {
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("STEPL", $_1622907824, $_2136808367);
+			if ($_1596961748 == "") {
+				if ($_2136808367 == "") $_2136808367 = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+			}
+			CUpdateClient::AddMessage2Log("TIME GetNextStepLangUpdates(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+		}
+		if ($_2136808367 == "") {
+			if (!($_1069261324 = fopen($_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz", "wb"))) $_2136808367 = "[GNSU03] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates", GetMessage("SUPP_RV_ER_TEMP_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			fwrite($_1069261324, $_1596961748);
+			fclose($_1069261324);
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "GNSLU00");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function GetNextStepHelpUpdates(&$_753204024, $_1530138095 = false, $_164957727 = array())
+	{
+		$_2136808367 = '';
+		$_1596961748 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::GetNextStepHelpUpdates");
+		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, "N", array(), array(), $_164957727);
+		if ($_1622907824 == "" || $_2136808367 <> "") {
+			if ($_2136808367 == "") $_2136808367 = "[GNSU01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+		}
+		if ($_2136808367 == "") {
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("STEPH", $_1622907824, $_2136808367);
+			if ($_1596961748 == "") {
+				if ($_2136808367 == "") $_2136808367 = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+			}
+			CUpdateClient::AddMessage2Log("TIME GetNextStepHelpUpdates(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+		}
+		if ($_2136808367 == "") {
+			if (!($_1069261324 = fopen($_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz", "wb"))) $_2136808367 = "[GNSU03] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates", GetMessage("SUPP_RV_ER_TEMP_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			fwrite($_1069261324, $_1596961748);
+			fclose($_1069261324);
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "GNSHU00");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function getSpd()
+	{
+		return self::__416130040(US_BASE_MODULE, "crc_code");
+	}
+
+	public static function setSpd($_593850248)
+	{
+		if ($_593850248 != "") COption::SetOptionString(US_BASE_MODULE, "crc_code", $_593850248);
+	}
+
+	public static function LoadModulesUpdates(&$errorMessage, &$_1934218753, $_1530138095 = false, $_1474158358 = "Y", $_2142182691 = array())
+	{
+		$_1934218753 = array();
+		$_1622907824 = "";
+		$_906972647  = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz";
+		$_1574650516 = COption::GetOptionString("main", "update_load_timeout", "30");
+		if ($_1574650516 < 5) $_1574650516 = 5;
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::LoadModulesUpdates");
+		if (file_exists($_906972647 . ".log")) {
+			$_1596961748 = file_get_contents($_906972647 . ".log");
+			CUpdateClient::__1244221643($_1596961748, $_1934218753, $errorMessage);
+		}
+		if (empty($_1934218753) || $errorMessage <> "") {
+			$_1934218753 = array();
+			if (file_exists($_906972647 . ".tmp")) @unlink($_906972647 . ".tmp");
+			if (file_exists($_906972647 . ".log")) @unlink($_906972647 . ".log");
+			if ($errorMessage <> "") {
+				CUpdateClient::AddMessage2Log($errorMessage, "LMU001");
+				return "E";
+			}
+		}
+		if (empty($_1934218753)) {
+			$_1622907824 = CUpdateClient::CollectRequestData($errorMessage, $_1530138095, $_1474158358, $_2142182691);
+			if (empty($_1622907824) || $errorMessage <> "") {
+				if ($errorMessage == "") $errorMessage = "[GNSU01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+				CUpdateClient::AddMessage2Log($errorMessage, "LMU002");
+				return "E";
+			}
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("STEPM", $_1622907824, $errorMessage);
+			if ($_1596961748 == "" || $errorMessage <> "") {
+				if ($errorMessage == "") $errorMessage = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+				CUpdateClient::AddMessage2Log($errorMessage, "LMU003");
+				return "E";
+			}
+			CUpdateClient::AddMessage2Log("TIME LoadModulesUpdates(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+			CUpdateClient::__1244221643($_1596961748, $_1934218753, $errorMessage);
+			if ($errorMessage <> "") {
+				CUpdateClient::AddMessage2Log($errorMessage, "LMU004");
+				return "E";
+			}
+			if (isset($_1934218753["DATA"]["#"]["ERROR"])) {
+				for ($_443696004 = 0, $_1167463684 = count($_1934218753["DATA"]["#"]["ERROR"]); $_443696004 < $_1167463684; $_443696004++) $errorMessage .= "[" . $_1934218753["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] . "] " . $_1934218753["DATA"]["#"]["ERROR"][$_443696004]["#"];
+			}
+			if ($errorMessage <> "") {
+				CUpdateClient::AddMessage2Log($errorMessage, "LMU005");
+				return "E";
+			}
+			if (isset($_1934218753["DATA"]["#"]["NOUPDATES"])) {
+				CUpdateClient::AddMessage2Log("Finish - NOUPDATES", "STEP");
+				return "F";
+			}
+			$_971647376 = fopen($_906972647 . ".log", "wb");
+			if (!$_971647376) {
+				$errorMessage = "[GNSU03] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates", GetMessage("SUPP_RV_ER_TEMP_FILE")) . ". ";
+				CUpdateClient::AddMessage2Log($errorMessage, "LMU006");
+				return "E";
+			}
+			fwrite($_971647376, $_1596961748);
+			fclose($_971647376);
+			CUpdateClient::AddMessage2Log("STEP", "S");
+			return "S";
+		}
+		if (isset($_1934218753["DATA"]["#"]["FILE"][0]["@"]["NAME"])) {
+			if ($_1622907824 == "") {
+				$_1622907824 = CUpdateClient::CollectRequestData($errorMessage, $_1530138095, $_1474158358, $_2142182691);
+				if ($_1622907824 == "" || $errorMessage <> "") {
+					if ($errorMessage == "") $errorMessage = "[GNSU01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+					CUpdateClient::AddMessage2Log($errorMessage, "LMU007");
+					return "E";
+				}
+			}
+			CUpdateClient::AddMessage2Log("loadFileBx");
+			$_837377958 = static::__1442847736($_1934218753["DATA"]["#"]["FILE"][0]["@"]["NAME"], $_1934218753["DATA"]["#"]["FILE"][0]["@"]["SIZE"], $_906972647, $_1574650516, $_1622907824, $errorMessage, "us_updater_modules.php");
+		} elseif ($_1934218753["DATA"]["#"]["FILE"][0]["@"]["URL"]) {
+			CUpdateClient::AddMessage2Log("loadFile");
+			$_837377958 = static::__1019404210($_1934218753["DATA"]["#"]["FILE"][0]["@"]["URL"], $_1934218753["DATA"]["#"]["FILE"][0]["@"]["SIZE"], $_906972647, $_1574650516, $errorMessage);
+		} else {
+			$_837377958   = "E";
+			$errorMessage .= GetMessage("SUPP_PSD_BAD_RESPONSE");
+		}
+		if ($_837377958 == "E") {
+			CUpdateClient::AddMessage2Log($errorMessage, "GNSU001");
+			$errorMessage .= $errorMessage;
+		} elseif ($_837377958 == "U") {
+			@unlink($_906972647 . ".log");
+		}
+		CUpdateClient::AddMessage2Log("RETURN", $_837377958);
+		return $_837377958;
+	}
+
+	private static function __1442847736($_1380031857, $_1140816158, $_1190315246, $_1574650516, $_1347706658, &$errorMessage, $_1691362932)
+	{
+		$_1574650516 = intval($_1574650516);
+		$_1079794597 = 0;
+		if ($_1574650516 > 0) $_1079794597 = microtime(true);
+		$_1399279890 = static::__690101446();
+		$_1469713035 = fsockopen($_1399279890["SOCKET_IP"], $_1399279890["SOCKET_PORT"], $_1216130077, $_1198456226, 30);
+		if (!$_1469713035) {
+			$errorMessage .= static::__1863373792($_1198456226, $_1216130077, $_1399279890);
+			return "E";
+		}
+		$_841631328 = "";
+		if ($_1399279890["USE_PROXY"]) {
+			$_841631328 .= "POST http://" . $_1399279890["IP"] . "/bitrix/updates/" . $_1691362932 . " HTTP/1.0
+";
+			if ($_1399279890["PROXY_USERNAME"]) $_841631328 .= "Proxy-Authorization: Basic " . base64_encode($_1399279890["PROXY_USERNAME"] . ":" . $_1399279890["PROXY_PASSWORD"]) . "
+";
+		} else {
+			$_841631328 .= "POST /bitrix/updates/" . $_1691362932 . " HTTP/1.0
+";
+		}
+		$_1019784326 = self::__416130040(US_BASE_MODULE, "crc_code");
+		$_1347706658 .= "&spd=" . urlencode($_1019784326);
+		$_1347706658 .= "&utf=" . urlencode(defined("BX_UTF") ? "Y" : "N");
+		$_1152618521 = $GLOBALS["DB"]->GetVersion();
+		$_1347706658 .= "&dbv=" . urlencode($_1152618521 ? $_1152618521 : "");
+		$_1347706658 .= "&NS=" . COption::GetOptionString("main", "update_site_ns", "");
+		$_1347706658 .= "&KDS=" . COption::GetOptionString("main", "update_devsrv", "");
+		$_1347706658 .= "&UFILE=" . $_1380031857;
+		$_825092131  = (file_exists($_1190315246 . ".tmp") ? filesize($_1190315246 . ".tmp") : 0);
+		$_1347706658 .= "&USTART=" . $_825092131;
+		$_841631328  .= "User-Agent: BitrixSMUpdater
+";
+		$_841631328  .= "Accept: */*
+";
+		$_841631328  .= "Host: " . $_1399279890["IP"] . "
+";
+		$_841631328  .= "Accept-Language: en
+";
+		$_841631328  .= "Content-type: application/x-www-form-urlencoded
+";
+		$_841631328  .= "Content-length: " . strlen($_1347706658) . "
+
+";
+		$_841631328  .= $_1347706658;
+		$_841631328  .= "
+";
+		fputs($_1469713035, $_841631328);
+		$_1478001394 = "";
+		while (($_1760501310 = fgets($_1469713035, 4096)) && $_1760501310 != "
+") $_1478001394 .= $_1760501310;
+		$_598040559 = preg_split("#
+#", $_1478001394);
+		$_143847565 = 0;
+		for ($_443696004 = 0, $_1167463684 = count($_598040559); $_443696004 < $_1167463684; $_443696004++) {
+			if (strpos($_598040559[$_443696004], "Content-Length") !== false) {
+				$_246160386 = strpos($_598040559[$_443696004], ":");
+				$_143847565 = intval(trim(substr($_598040559[$_443696004], $_246160386 + 1, strlen($_598040559[$_443696004]) - $_246160386 + 1)));
+			}
+		}
+		if (($_143847565 + $_825092131) != $_1140816158) {
+			$errorMessage .= "[ELVL001] " . GetMessage("ELVL001_SIZE_ERROR") . ". ";
+			return "E";
+		}
+		@unlink($_1190315246 . ".tmp1");
+		if (file_exists($_1190315246 . ".tmp")) {
+			if (@rename($_1190315246 . ".tmp", $_1190315246 . ".tmp1")) {
+				$_971647376 = fopen($_1190315246 . ".tmp", "wb");
+				if ($_971647376) {
+					$_1839065228 = fopen($_1190315246 . ".tmp1", "rb");
+					do {
+						$_1667599631 = fread($_1839065228, 8192);
+						if ($_1667599631 == "") break;
+						fwrite($_971647376, $_1667599631);
+					} while (true);
+					fclose($_1839065228);
+					@unlink($_1190315246 . ".tmp1");
+				} else {
+					$errorMessage .= "[JUHYT002] " . GetMessage("JUHYT002_ERROR_FILE") . ". ";
+					return "E";
+				}
+			} else {
+				$errorMessage .= "[JUHYT003] " . GetMessage("JUHYT003_ERROR_FILE") . ". ";
+				return "E";
+			}
+		} else {
+			$_971647376 = fopen($_1190315246 . ".tmp", "wb");
+			if (!$_971647376) {
+				$errorMessage .= "[JUHYT004] " . GetMessage("JUHYT004_ERROR_FILE") . ". ";
+				return "E";
+			}
+		}
+		$_1040648691 = true;
+		while (true) {
+			if ($_1574650516 > 0 && (microtime(true) - $_1079794597) > $_1574650516) {
+				$_1040648691 = false;
+				break;
+			}
+			$_1760501310 = fread($_1469713035, 40960);
+			if ($_1760501310 == "") break;
+			fwrite($_971647376, $_1760501310);
+		}
+		fclose($_971647376);
+		fclose($_1469713035);
+		CUpdateClient::AddMessage2Log("Time - " . (microtime(true) - $_1079794597) . " sec", "DOWNLOAD");
+		$_1238427860 = (file_exists($_1190315246 . ".tmp") ? filesize($_1190315246 . ".tmp") : 0);
+		if ($_1238427860 == $_1140816158) {
+			$_1040648691 = true;
+		}
+		if ($_1040648691) {
+			@unlink($_1190315246);
+			if (!@rename($_1190315246 . ".tmp", $_1190315246)) {
+				$errorMessage .= "[JUHYT005] " . GetMessage("JUHYT005_ERROR_FILE") . ". ";
+				return "E";
+			}
+			@unlink($_1190315246 . ".tmp");
+		} else {
+			return "S";
+		}
+		return "U";
+	}
+
+	private static function __1019404210($_1380031857, $_1140816158, $_1190315246, $_1574650516, &$errorMessage)
+	{
+		$_804267775  = 0;
+		$_1760501310 = null;
+		while ($_804267775 < 10) {
+			$_804267775++;
+			$_1760501310 = static::__427015786($_1380031857, $_1140816158, $_1190315246, $_1574650516, $errorMessage);
+			if ($_1760501310 === "S") {
+				continue;
+			}
+			break;
+		}
+		if ($_1760501310 === "S") {
+			$errorMessage = "[UPCLLF111] " . GetMessage("SUPP_PSD_BAD_TRANS") . ". ";
+			$_1760501310  = "E";
+		}
+		return $_1760501310;
+	}
+
+	private static function __427015786($_1380031857, $_1140816158, $_1190315246, $_1574650516, &$errorMessage)
+	{
+		$_1574650516 = intval($_1574650516);
+		$_1079794597 = 0;
+		if ($_1574650516 > 0) $_1079794597 = microtime(true);
+		$_825092131  = file_exists($_1190315246 . ".tmp") ? filesize($_1190315246 . ".tmp") : 0;
+		$_1399279890 = static::__690101446();
+		$_1469713035 = fsockopen($_1399279890["SOCKET_IP"], $_1399279890["SOCKET_PORT"], $_1216130077, $_1198456226, 30);
+		if (!$_1469713035) {
+			$errorMessage .= static::__1863373792($_1198456226, $_1216130077, $_1399279890);
+			return "E";
+		}
+		if (!$_1380031857) $_1380031857 = "/";
+		$_841631328 = "";
+		if (!$_1399279890["USE_PROXY"]) {
+			$_841631328 .= "GET " . $_1380031857 . " HTTP/1.0
+";
+			$_841631328 .= "Host: " . $_1399279890["IP"] . "
+";
+		} else {
+			$_841631328 .= "GET http://" . $_1399279890["IP"] . $_1380031857 . " HTTP/1.0
+";
+			$_841631328 .= "Host: " . $_1399279890["IP"] . "
+";
+			if ($_1399279890["PROXY_USERNAME"]) $_841631328 .= "Proxy-Authorization: Basic " . base64_encode($_1399279890["PROXY_USERNAME"] . ":" . $_1399279890["PROXY_PASSWORD"]) . "
+";
+		}
+		$_841631328 .= "User-Agent: BitrixSMUpdater
+";
+		if ($_825092131 > 0) $_841631328 .= "Range: bytes=" . $_825092131 . "-
+";
+		$_841631328 .= "
+";
+		fwrite($_1469713035, $_841631328);
+		$_1478001394 = "";
+		while (($_1760501310 = fgets($_1469713035, 4096)) && $_1760501310 != "
+") $_1478001394 .= $_1760501310;
+		$_598040559  = preg_split("#
+#", $_1478001394);
+		$_469676813  = 0;
+		$_2133439420 = "";
+		if (preg_match("#([A-Z]{4})/([0-9.]{3}) ([0-9]{3})#", $_598040559[0], $_1979923803)) {
+			$_469676813  = intval($_1979923803[3]);
+			$_2133439420 = substr($_598040559[0], strpos($_598040559[0], $_469676813) + strlen($_469676813) + 1, strlen($_598040559[0]) - strpos($_598040559[0], $_469676813) + 1);
+		}
+		if ($_469676813 != 200 && $_469676813 != 204 && $_469676813 != 302 && $_469676813 != 206) {
+			$errorMessage .= GetMessage("SUPP_PSD_BAD_RESPONSE") . " (" . $_469676813 . " - " . $_2133439420 . ")";
+			return "E";
+		}
+		$_425404911  = "";
+		$_1889349419 = 0;
+		for ($_443696004 = 1; $_443696004 < count($_598040559); $_443696004++) {
+			if (strpos($_598040559[$_443696004], "Content-Range") !== false) $_425404911 = trim(substr($_598040559[$_443696004], strpos($_598040559[$_443696004], ":") + 1, strlen($_598040559[$_443696004]) - strpos($_598040559[$_443696004], ":") + 1)); elseif (strpos($_598040559[$_443696004], "Content-Length") !== false) $_1889349419 = doubleval(trim(substr($_598040559[$_443696004], strpos($_598040559[$_443696004], ":") + 1, strlen($_598040559[$_443696004]) - strpos($_598040559[$_443696004], ":") + 1)));
+		}
+		$_450159475 = true;
+		if ($_425404911 <> "") {
+			if (preg_match("# *bytes +([0-9]*) *- *([0-9]*) */ *([0-9]*)#i", $_425404911, $_1979923803)) {
+				$_1002897392 = doubleval($_1979923803[1]);
+				$_1605817621 = doubleval($_1979923803[2]);
+				$_408133725  = doubleval($_1979923803[3]);
+				if (($_1002897392 == $_825092131) && ($_1605817621 == ($_1140816158 - 1)) && ($_408133725 == $_1140816158)) {
+					$_450159475 = false;
+				}
+			}
+		}
+		if ($_450159475) {
+			@unlink($_1190315246 . ".tmp");
+			$_825092131 = 0;
+		}
+		if (($_1889349419 + $_825092131) != $_1140816158) {
+			$errorMessage .= "[ELVL010] " . GetMessage("ELVL001_SIZE_ERROR") . ". ";
+			return "E";
+		}
+		$_971647376 = fopen($_1190315246 . ".tmp", "ab");
+		if (!$_971647376) {
+			$errorMessage .= "[JUHYT010] " . GetMessage("JUHYT002_ERROR_FILE") . ". ";
+			return "E";
+		}
+		while (true) {
+			if ($_1574650516 > 0 && (microtime(true) - $_1079794597) > $_1574650516) {
+				break;
+			}
+			$_1760501310 = fread($_1469713035, 256 * 1024);
+			if ($_1760501310 == "") {
+				break;
+			}
+			fwrite($_971647376, $_1760501310);
+		}
+		fclose($_971647376);
+		fclose($_1469713035);
+		clearstatcache();
+		$_1238427860 = (file_exists($_1190315246 . ".tmp") ? filesize($_1190315246 . ".tmp") : 0);
+		if ((int)$_1238427860 === (int)$_1140816158) {
+			@unlink($_1190315246);
+			if (!@rename($_1190315246 . ".tmp", $_1190315246)) {
+				$errorMessage .= "[JUHYT010] " . GetMessage("JUHYT005_ERROR_FILE") . ". ";
+				return "E";
+			}
+			@unlink($_1190315246 . ".tmp");
+		} else {
+			return "S";
+		}
+		return "U";
+	}
+
+	public static function LoadLangsUpdates(&$errorMessage, &$_1934218753, $_1530138095 = false, $_1474158358 = "Y", $_1523107763 = array())
+	{
+		$_1934218753 = array();
+		$_1622907824 = "";
+		$_906972647  = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz";
+		$_1574650516 = COption::GetOptionString("main", "update_load_timeout", "30");
+		if ($_1574650516 < 5) $_1574650516 = 5;
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::LoadLangsUpdates");
+		if (file_exists($_906972647 . ".log")) {
+			$_1596961748 = file_get_contents($_906972647 . ".log");
+			CUpdateClient::__1244221643($_1596961748, $_1934218753, $errorMessage);
+		}
+		if (empty($_1934218753) || $errorMessage <> "") {
+			$_1934218753 = array();
+			if (file_exists($_906972647 . ".tmp")) @unlink($_906972647 . ".tmp");
+			if (file_exists($_906972647 . ".log")) @unlink($_906972647 . ".log");
+			if ($errorMessage <> "") {
+				CUpdateClient::AddMessage2Log($errorMessage, "LMUL001");
+				return "E";
+			}
+		}
+		if (empty($_1934218753)) {
+			$_1622907824 = CUpdateClient::CollectRequestData($errorMessage, $_1530138095, $_1474158358, array(), $_1523107763);
+			if (empty($_1622907824) || $errorMessage <> "") {
+				if ($errorMessage == "") $errorMessage = "[GNSU01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+				CUpdateClient::AddMessage2Log($errorMessage, "LMUL002");
+				return "E";
+			}
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("STEPL", $_1622907824, $errorMessage);
+			if ($_1596961748 == "" || $errorMessage <> "") {
+				if ($errorMessage == "") $errorMessage = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+				CUpdateClient::AddMessage2Log($errorMessage, "LMUL003");
+				return "E";
+			}
+			CUpdateClient::AddMessage2Log("TIME LoadLangsUpdates(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+			CUpdateClient::__1244221643($_1596961748, $_1934218753, $errorMessage);
+			if ($errorMessage <> "") {
+				CUpdateClient::AddMessage2Log($errorMessage, "LMUL004");
+				return "E";
+			}
+			if (isset($_1934218753["DATA"]["#"]["ERROR"])) {
+				for ($_443696004 = 0, $_1167463684 = count($_1934218753["DATA"]["#"]["ERROR"]); $_443696004 < $_1167463684; $_443696004++) $errorMessage .= "[" . $_1934218753["DATA"]["#"]["ERROR"][$_443696004]["@"]["TYPE"] . "] " . $_1934218753["DATA"]["#"]["ERROR"][$_443696004]["#"];
+			}
+			if ($errorMessage <> "") {
+				CUpdateClient::AddMessage2Log($errorMessage, "LMU005");
+				return "E";
+			}
+			if (isset($_1934218753["DATA"]["#"]["NOUPDATES"])) {
+				CUpdateClient::AddMessage2Log("Finish - NOUPDATES", "STEP");
+				return "F";
+			}
+			$_971647376 = fopen($_906972647 . ".log", "wb");
+			if (!$_971647376) {
+				$errorMessage = "[GNSUL03] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates", GetMessage("SUPP_RV_ER_TEMP_FILE")) . ". ";
+				CUpdateClient::AddMessage2Log($errorMessage, "LMU006");
+				return "E";
+			}
+			fwrite($_971647376, $_1596961748);
+			fclose($_971647376);
+			CUpdateClient::AddMessage2Log("STEP", "S");
+			return "S";
+		}
+		if (isset($_1934218753["DATA"]["#"]["FILE"][0]["@"]["NAME"])) {
+			if ($_1622907824 == "") {
+				$_1622907824 = CUpdateClient::CollectRequestData($errorMessage, $_1530138095, $_1474158358, array(), $_1523107763);
+				if (empty($_1622907824) || $errorMessage <> "") {
+					if ($errorMessage == "") $errorMessage = "[GNSUL01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+					CUpdateClient::AddMessage2Log($errorMessage, "LMUL007");
+					return "E";
+				}
+			}
+			CUpdateClient::AddMessage2Log("loadLangFileBx");
+			$_837377958 = static::__1442847736($_1934218753["DATA"]["#"]["FILE"][0]["@"]["NAME"], $_1934218753["DATA"]["#"]["FILE"][0]["@"]["SIZE"], $_906972647, $_1574650516, $_1622907824, $errorMessage, "us_updater_langs.php");
+		} elseif ($_1934218753["DATA"]["#"]["FILE"][0]["@"]["URL"]) {
+			CUpdateClient::AddMessage2Log("loadFile");
+			$_837377958 = static::__1019404210($_1934218753["DATA"]["#"]["FILE"][0]["@"]["URL"], $_1934218753["DATA"]["#"]["FILE"][0]["@"]["SIZE"], $_906972647, $_1574650516, $errorMessage);
+		} else {
+			$_837377958   = "E";
+			$errorMessage .= GetMessage("SUPP_PSD_BAD_RESPONSE");
+		}
+		if ($_837377958 == "E") {
+			CUpdateClient::AddMessage2Log($errorMessage, "GNSUL001");
+			$errorMessage .= $errorMessage;
+		} elseif ($_837377958 == "U") {
+			@unlink($_906972647 . ".log");
+		}
+		CUpdateClient::AddMessage2Log("RETURN", $_837377958);
+		return $_837377958;
+	}
+
+	public static function GetNextStepUpdates(&$_753204024, $_1530138095 = false, $_1474158358 = "Y", $_2142182691 = array())
+	{
+		$_2136808367 = '';
+		$_1596961748 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::GetNextStepUpdates");
+		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358, $_2142182691);
+		if ($_1622907824 == "" || $_2136808367 <> "") {
+			if ($_2136808367 == "") $_2136808367 = "[GNSU01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
+		}
+		if ($_2136808367 == "") {
+			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			$_418914584  = microtime(true);
+			$_1596961748 = CUpdateClient::GetHTTPPage("STEPM", $_1622907824, $_2136808367);
+			if ($_1596961748 == "") {
+				if ($_2136808367 == "") $_2136808367 = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
+			}
+			CUpdateClient::AddMessage2Log("TIME GetNextStepUpdates(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+		}
+		if ($_2136808367 == "") {
+			if (!($_1069261324 = fopen($_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz", "wb"))) $_2136808367 = "[GNSU03] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates", GetMessage("SUPP_RV_ER_TEMP_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			fwrite($_1069261324, $_1596961748);
+			fclose($_1069261324);
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "GNSU00");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function UnGzipArchive(&$_426046905, &$_753204024, $_1479349593 = true)
+	{
+		$_2136808367 = '';
+		$_1370972511 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::UnGzipArchive");
+		$_418914584  = microtime(true);
+		$_1913215604 = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz";
+		if (!file_exists($_1913215604) || !is_file($_1913215604)) $_2136808367 .= "[UUGZA01] " . str_replace("#FILE#", $_1913215604, GetMessage("SUPP_UGA_NO_TMP_FILE")) . ". ";
+		if ($_2136808367 == "") {
+			if (!is_readable($_1913215604)) $_2136808367 .= "[UUGZA02] " . str_replace("#FILE#", $_1913215604, GetMessage("SUPP_UGA_NO_READ_FILE")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			$_426046905  = "update_m" . time();
+			$_1370972511 = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/" . $_426046905;
+			CUpdateClient::CheckDirPath($_1370972511 . "/");
+			if (!file_exists($_1370972511) || !is_dir($_1370972511)) $_2136808367 .= "[UUGZA03] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_UGA_NO_TMP_CAT")) . ". "; elseif (!is_writable($_1370972511)) $_2136808367 .= "[UUGZA04] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_UGA_WRT_TMP_CAT")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			$_975063846  = true;
+			$_237833530  = fopen($_1913215604, "rb");
+			$_1161027315 = fread($_237833530, strlen("BITRIX"));
+			fclose($_237833530);
+			if ($_1161027315 == "BITRIX") $_975063846 = false;
+		}
+		if ($_2136808367 == "") {
+			if ($_975063846 && !function_exists("gzopen")) $_975063846 = false;
+		}
+		if ($_2136808367 == "") {
+			if ($_975063846) $_1125224425 = gzopen($_1913215604, "rb9f"); else $_1125224425 = fopen($_1913215604, "rb");
+			if (!$_1125224425) $_2136808367 .= "[UUGZA05] " . str_replace("#FILE#", $_1913215604, GetMessage("SUPP_UGA_CANT_OPEN")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			if ($_975063846) $_1161027315 = gzread($_1125224425, strlen("BITRIX")); else $_1161027315 = fread($_1125224425, strlen("BITRIX"));
+			if ($_1161027315 != "BITRIX") {
+				$_2136808367 .= "[UUGZA06] " . str_replace("#FILE#", $_1913215604, GetMessage("SUPP_UGA_BAD_FORMAT")) . ". ";
+				if ($_975063846) gzclose($_1125224425); else fclose($_1125224425);
+			}
+		}
+		if ($_2136808367 == "") {
+			$strongUpdateCheck = COption::GetOptionString("main", "strong_update_check", "Y");
+			while (true) {
+				if ($_975063846) $_2071982622 = gzread($_1125224425, 5); else $_2071982622 = fread($_1125224425, 5);
+				$_2071982622 = trim($_2071982622);
+				if (intval($_2071982622) > 0 && intval($_2071982622) . "!" == $_2071982622 . "!") {
+					$_2071982622 = intval($_2071982622);
+				} else {
+					if ($_2071982622 != "RTIBE") $_2136808367 .= "[UUGZA071] " . str_replace("#FILE#", $_1913215604, GetMessage("SUPP_UGA_BAD_FORMAT")) . ". ";
+					break;
+				}
+				if ($_975063846) $_1678941771 = gzread($_1125224425, $_2071982622); else $_1678941771 = fread($_1125224425, $_2071982622);
+				$_1750538859 = explode("|", $_1678941771);
+				if (count($_1750538859) != 3) {
+					$_2136808367 .= "[UUGZA072] " . str_replace("#FILE#", $_1913215604, GetMessage("SUPP_UGA_BAD_FORMAT")) . ". ";
+					break;
+				}
+				$_1993631613 = $_1750538859[0];
+				$_925801086  = $_1750538859[1];
+				$_126958015  = $_1750538859[2];
+				$_11445862   = "";
+				if (intval($_1993631613) > 0) {
+					if ($_975063846) $_11445862 = gzread($_1125224425, $_1993631613); else $_11445862 = fread($_1125224425, $_1993631613);
+				}
+				$_1620366633 = dechex(crc32($_11445862));
+				if ($_1620366633 !== $_126958015) {
+					$_2136808367 .= "[UUGZA073] " . str_replace("#FILE#", $_925801086, GetMessage("SUPP_UGA_FILE_CRUSH")) . ". ";
+					break;
+				} else {
+					CUpdateClient::CheckDirPath($_1370972511 . $_925801086);
+					if (!($_1069261324 = fopen($_1370972511 . $_925801086, "wb"))) {
+						$_2136808367 .= "[UUGZA074] " . str_replace("#FILE#", $_1370972511 . $_925801086, GetMessage("SUPP_UGA_CANT_OPEN_WR")) . ". ";
+						break;
+					}
+					if ($_11445862 <> "" && !fwrite($_1069261324, $_11445862)) {
+						$_2136808367 .= "[UUGZA075] " . str_replace("#FILE#", $_1370972511 . $_925801086, GetMessage("SUPP_UGA_CANT_WRITE_F")) . ". ";
+						@fclose($_1069261324);
+						break;
+					}
+					fclose($_1069261324);
+					if ($strongUpdateCheck == "Y") {
+						$_1620366633 = dechex(crc32(file_get_contents($_1370972511 . $_925801086)));
+						if ($_1620366633 !== $_126958015) {
+							$_2136808367 .= "[UUGZA0761] " . str_replace("#FILE#", $_925801086, GetMessage("SUPP_UGA_FILE_CRUSH")) . ". ";
+							break;
+						}
+					}
+				}
+			}
+			if ($_975063846) gzclose($_1125224425); else fclose($_1125224425);
+		}
+		if ($_2136808367 == "") {
+			if ($_1479349593) @unlink($_1913215604);
+		}
+		CUpdateClient::AddMessage2Log("TIME UnGzipArchive " . round(microtime(true) - $_418914584, 3) . " sec");
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "CUUGZA");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function CheckUpdatability($_426046905, &$_753204024)
+	{
+		$_2136808367 = "";
+		$_1370972511 = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/" . $_426046905;
+		if (!file_exists($_1370972511) || !is_dir($_1370972511)) $_2136808367 .= "[UCU01] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_CU_NO_TMP_CAT")) . ". ";
+		if ($_2136808367 == "") if (!is_readable($_1370972511)) $_2136808367 .= "[UCU02] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_CU_RD_TMP_CAT")) . ". ";
+		if ($_1177408942 = @opendir($_1370972511)) {
+			while (($_292314395 = readdir($_1177408942)) !== false) {
+				if ($_292314395 == "." || $_292314395 == "..") continue;
+				if (is_dir($_1370972511 . "/" . $_292314395)) {
+					CUpdateClient::CheckUpdatability($_426046905 . "/" . $_292314395, $_2136808367);
+				} elseif (is_file($_1370972511 . "/" . $_292314395)) {
+					$_1163746080 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/" . substr($_426046905 . "/" . $_292314395, strpos($_426046905 . "/" . $_292314395, "/"));
+					if (file_exists($_1163746080)) {
+						if (!is_writeable($_1163746080)) $_2136808367 .= "[UCU03] " . str_replace("#FILE#", $_1163746080, GetMessage("SUPP_CU_MAIN_ERR_FILE")) . ". ";
+					} else {
+						$_700691280  = CUpdateClient::bxstrrpos($_1163746080, "/");
+						$_1163746080 = substr($_1163746080, 0, $_700691280);
+						if (strlen($_1163746080) > 1) $_1163746080 = rtrim($_1163746080, "/");
+						$_700691280 = CUpdateClient::bxstrrpos($_1163746080, "/");
+						while ($_700691280 > 0) {
+							if (file_exists($_1163746080) && is_dir($_1163746080)) {
+								if (!is_writable($_1163746080)) $_2136808367 .= "[UCU04] " . str_replace("#FILE#", $_1163746080, GetMessage("SUPP_CU_MAIN_ERR_CAT")) . ". ";
+								break;
+							}
+							$_1163746080 = substr($_1163746080, 0, $_700691280);
+							$_700691280  = CUpdateClient::bxstrrpos($_1163746080, "/");
+						}
+					}
+				}
+			}
+			@closedir($_1177408942);
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "CUCU");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function GetStepUpdateInfo($_426046905, &$_753204024)
+	{
+		$_1139428298 = array();
+		$_2136808367 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::GetStepUpdateInfo");
+		$_1370972511 = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/" . $_426046905;
+		if (!file_exists($_1370972511) || !is_dir($_1370972511)) $_2136808367 .= "[UGLMU01] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_CU_NO_TMP_CAT")) . ". ";
+		if ($_2136808367 == "") if (!is_readable($_1370972511)) $_2136808367 .= "[UGLMU02] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_CU_RD_TMP_CAT")) . ". ";
+		if ($_2136808367 == "") if (!file_exists($_1370972511 . "/update_info.xml") || !is_file($_1370972511 . "/update_info.xml")) $_2136808367 .= "[UGLMU03] " . str_replace("#FILE#", $_1370972511 . "/update_info.xml", GetMessage("SUPP_RV_ER_DESCR_FILE")) . ". ";
+		if ($_2136808367 == "") if (!is_readable($_1370972511 . "/update_info.xml")) $_2136808367 .= "[UGLMU04] " . str_replace("#FILE#", $_1370972511 . "/update_info.xml", GetMessage("SUPP_RV_READ_DESCR_FILE")) . ". ";
+		if ($_2136808367 == "") $_1596961748 = file_get_contents($_1370972511 . "/update_info.xml");
+		if ($_2136808367 == "") {
+			$_1139428298 = array();
+			CUpdateClient::__1244221643($_1596961748, $_1139428298, $_2136808367);
+		}
+		if ($_2136808367 == "") {
+			if (!isset($_1139428298["DATA"]) || !is_array($_1139428298["DATA"])) $_2136808367 .= "[UGSMU01] " . GetMessage("SUPP_GAUT_SYSERR") . ". ";
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "CUGLMU");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return $_1139428298;
+	}
+
+	public static function UpdateStepHelps($_426046905, &$_753204024)
+	{
+		$_2136808367 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::UpdateHelp");
+		$_418914584  = microtime(true);
+		$_1370972511 = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/" . $_426046905;
+		$_1919044642 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/help";
+		$_1601956098 = array();
+		$_1177408942 = @opendir($_1370972511);
+		if ($_1177408942) {
+			while (false !== ($_239640225 = readdir($_1177408942))) {
+				if ($_239640225 == "." || $_239640225 == "..") continue;
+				if (is_dir($_1370972511 . "/" . $_239640225)) $_1601956098[] = $_239640225;
+			}
+			closedir($_1177408942);
+		}
+		if (!is_array($_1601956098) || empty($_1601956098)) $_2136808367 .= "[UUH00] " . GetMessage("SUPP_UH_NO_LANG") . ". ";
+		if (!file_exists($_1370972511) || !is_dir($_1370972511)) $_2136808367 .= "[UUH01] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_CU_NO_TMP_CAT")) . ". ";
+		if ($_2136808367 == "") if (!is_readable($_1370972511)) $_2136808367 .= "[UUH03] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_CU_RD_TMP_CAT")) . ". ";
+		if ($_2136808367 == "") {
+			CUpdateClient::CheckDirPath($_1919044642 . "/");
+			if (!file_exists($_1919044642) || !is_dir($_1919044642)) $_2136808367 .= "[UUH02] " . str_replace("#FILE#", $_1919044642, GetMessage("SUPP_UH_NO_HELP_CAT")) . ". "; elseif (!is_writable($_1919044642)) $_2136808367 .= "[UUH03] " . str_replace("#FILE#", $_1919044642, GetMessage("SUPP_UH_NO_WRT_HELP")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			for ($_443696004 = 0, $_346373140 = count($_1601956098); $_443696004 < $_346373140; $_443696004++) {
+				$_1123571860 = "";
+				$_361977632  = $_1370972511 . "/" . $_1601956098[$_443696004];
+				if (!file_exists($_361977632) || !is_dir($_361977632)) $_1123571860 .= "[UUH04] " . str_replace("#FILE#", $_361977632, GetMessage("SUPP_UL_NO_TMP_LANG")) . ". ";
+				if ($_1123571860 == "") if (!is_readable($_361977632)) $_1123571860 .= "[UUH05] " . str_replace("#FILE#", $_361977632, GetMessage("SUPP_UL_NO_READ_LANG")) . ". ";
+				if ($_1123571860 == "") {
+					if (file_exists($_1919044642 . "/" . $_1601956098[$_443696004] . "_tmp")) CUpdateClient::DeleteDirFilesEx($_1919044642 . "/" . $_1601956098[$_443696004] . "_tmp");
+					if (file_exists($_1919044642 . "/" . $_1601956098[$_443696004] . "_tmp")) $_1123571860 .= "[UUH06] " . str_replace("#FILE#", $_1919044642 . "/" . $_1601956098[$_443696004] . "_tmp", GetMessage("SUPP_UH_CANT_DEL")) . ". ";
+				}
+				if ($_1123571860 == "") {
+					if (file_exists($_1919044642 . "/" . $_1601956098[$_443696004])) if (!rename($_1919044642 . "/" . $_1601956098[$_443696004], $_1919044642 . "/" . $_1601956098[$_443696004] . "_tmp")) $_1123571860 .= "[UUH07] " . str_replace("#FILE#", $_1919044642 . "/" . $_1601956098[$_443696004], GetMessage("SUPP_UH_CANT_RENAME")) . ". ";
+				}
+				if ($_1123571860 == "") {
+					CUpdateClient::CheckDirPath($_1919044642 . "/" . $_1601956098[$_443696004] . "/");
+					if (!file_exists($_1919044642 . "/" . $_1601956098[$_443696004]) || !is_dir($_1919044642 . "/" . $_1601956098[$_443696004])) $_1123571860 .= "[UUH08] " . str_replace("#FILE#", $_1919044642 . "/" . $_1601956098[$_443696004], GetMessage("SUPP_UH_CANT_CREATE")) . ". "; elseif (!is_writable($_1919044642 . "/" . $_1601956098[$_443696004])) $_1123571860 .= "[UUH09] " . str_replace("#FILE#", $_1919044642 . "/" . $_1601956098[$_443696004], GetMessage("SUPP_UH_CANT_WRITE")) . ". ";
+				}
+				if ($_1123571860 == "") CUpdateClient::CopyDirFiles($_361977632, $_1919044642 . "/" . $_1601956098[$_443696004], $_1123571860);
+				if ($_1123571860 <> "") {
+					$_2136808367 .= $_1123571860;
+				} else {
+					if (file_exists($_1919044642 . "/" . $_1601956098[$_443696004] . "_tmp")) CUpdateClient::DeleteDirFilesEx($_1919044642 . "/" . $_1601956098[$_443696004] . "_tmp");
+				}
+			}
+			CUpdateClient::ClearUpdateFolder($_1370972511);
+		}
+		CUpdateClient::AddMessage2Log("TIME UpdateHelp " . round(microtime(true) - $_418914584, 3) . " sec");
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "USH");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function UpdateStepLangs($_426046905, &$_753204024)
+	{
+		$_2136808367 = '';
+		$_1590613717 = "";
+		$_418914584  = microtime(true);
+		$_1370972511 = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/" . $_426046905;
+		if (!file_exists($_1370972511) || !is_dir($_1370972511)) $_2136808367 .= "[UUL01] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_CU_NO_TMP_CAT")) . ". ";
+		$_757086976 = array();
+		if ($_2136808367 == "") {
+			$_1177408942 = @opendir($_1370972511);
+			if ($_1177408942) {
+				while (false !== ($_239640225 = readdir($_1177408942))) {
+					if ($_239640225 == "." || $_239640225 == "..") continue;
+					if (is_dir($_1370972511 . "/" . $_239640225)) $_757086976[] = $_239640225;
+				}
+				closedir($_1177408942);
+			}
+		}
+		if (!is_array($_757086976) || empty($_757086976)) $_2136808367 .= "[UUL02] " . GetMessage("SUPP_UL_NO_LANGS") . ". ";
+		if ($_2136808367 == "") if (!is_readable($_1370972511)) $_2136808367 .= "[UUL03] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_CU_RD_TMP_CAT")) . ". ";
+		$_1290774310 = array("component" => $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/components/bitrix", "activities" => $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/activities/bitrix", "gadgets" => $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/gadgets/bitrix", "wizards" => $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/wizards/bitrix", "template" => $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/templates", "blocks" => $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/blocks/bitrix");
+		$_784276436  = array("component" => "/install/components/bitrix", "activities" => "/install/activities/bitrix", "gadgets" => "/install/gadgets/bitrix", "wizards" => "/install/wizards/bitrix", "template" => "/install/templates", "blocks" => "/install/blocks/bitrix",);
+		if ($_2136808367 == "") {
+			foreach ($_1290774310 as $_1630931493) {
+				CUpdateClient::CheckDirPath($_1630931493 . "/");
+				if (!file_exists($_1630931493) || !is_dir($_1630931493)) $_2136808367 .= "[UUL04] " . str_replace("#FILE#", $_1630931493, GetMessage("SUPP_UL_CAT")) . ". "; elseif (!is_writable($_1630931493)) $_2136808367 .= "[UUL05] " . str_replace("#FILE#", $_1630931493, GetMessage("SUPP_UL_NO_WRT_CAT")) . ". ";
+			}
+		}
+		if ($_2136808367 == "") {
+			$_1590613717 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules";
+			CUpdateClient::CheckDirPath($_1590613717 . "/");
+			if (!file_exists($_1590613717) || !is_dir($_1590613717)) $_2136808367 .= "[UUL04] " . str_replace("#FILE#", $_1590613717, GetMessage("SUPP_UL_CAT")) . ". "; elseif (!is_writable($_1590613717)) $_2136808367 .= "[UUL05] " . str_replace("#FILE#", $_1590613717, GetMessage("SUPP_UL_NO_WRT_CAT")) . ". ";
+		}
+		$_628558867 = array();
+		if ($_2136808367 == "") {
+			foreach ($_1290774310 as $_1947975612 => $_1630931493) {
+				$_1690130272 = @opendir($_1630931493);
+				if ($_1690130272) {
+					while (false !== ($_1097333674 = readdir($_1690130272))) {
+						if (is_dir($_1630931493 . "/" . $_1097333674) && $_1097333674 != "." && $_1097333674 != "..") {
+							if (!is_writable($_1630931493 . "/" . $_1097333674)) $_2136808367 .= "[UUL051] " . str_replace("#FILE#", $_1630931493 . "/" . $_1097333674, GetMessage("SUPP_UL_NO_WRT_CAT")) . ". ";
+							if (file_exists($_1630931493 . "/" . $_1097333674 . "/lang") && !is_writable($_1630931493 . "/" . $_1097333674 . "/lang")) $_2136808367 .= "[UUL052] " . str_replace("#FILE#", $_1630931493 . "/" . $_1097333674 . "/lang", GetMessage("SUPP_UL_NO_WRT_CAT")) . ". ";
+							$_628558867[$_1947975612][] = $_1097333674;
+						}
+					}
+					closedir($_1690130272);
+				}
+			}
+		}
+		if ($_2136808367 == "") {
+			$_613112957  = array();
+			$_1177408942 = @opendir($_1590613717);
+			if ($_1177408942) {
+				while (false !== ($_239640225 = readdir($_1177408942))) {
+					if (is_dir($_1590613717 . "/" . $_239640225) && $_239640225 != "." && $_239640225 != "..") {
+						if (!is_writable($_1590613717 . "/" . $_239640225)) $_2136808367 .= "[UUL051] " . str_replace("#FILE#", $_1590613717 . "/" . $_239640225, GetMessage("SUPP_UL_NO_WRT_CAT")) . ". ";
+						if (file_exists($_1590613717 . "/" . $_239640225 . "/lang") && !is_writable($_1590613717 . "/" . $_239640225 . "/lang")) $_2136808367 .= "[UUL052] " . str_replace("#FILE#", $_1590613717 . "/" . $_239640225 . "/lang", GetMessage("SUPP_UL_NO_WRT_CAT")) . ". ";
+						$_613112957[] = $_239640225;
+					}
+				}
+				closedir($_1177408942);
+			}
+		}
+		if ($_2136808367 == "") {
+			for ($_443696004 = 0, $_346373140 = count($_757086976); $_443696004 < $_346373140; $_443696004++) {
+				$_1123571860 = "";
+				$_361977632  = $_1370972511 . "/" . $_757086976[$_443696004];
+				if (!file_exists($_361977632) || !is_dir($_361977632)) $_1123571860 .= "[UUL06] " . str_replace("#FILE#", $_361977632, GetMessage("SUPP_UL_NO_TMP_LANG")) . ". ";
+				if ($_1123571860 == "") if (!is_readable($_361977632)) $_1123571860 .= "[UUL07] " . str_replace("#FILE#", $_361977632, GetMessage("SUPP_UL_NO_READ_LANG")) . ". ";
+				if ($_1123571860 == "") {
+					$_1690130272 = @opendir($_361977632);
+					if ($_1690130272) {
+						while (false !== ($_1097333674 = readdir($_1690130272))) {
+							if (!is_dir($_361977632 . "/" . $_1097333674) || $_1097333674 == "." || $_1097333674 == "..") continue;
+							foreach ($_784276436 as $_1947975612 => $_1630931493) {
+								if (empty($_628558867[$_1947975612])) {
+									continue;
+								}
+								if (!file_exists($_361977632 . "/" . $_1097333674 . $_1630931493)) continue;
+								$_2026545294 = @opendir($_361977632 . "/" . $_1097333674 . $_1630931493);
+								if ($_2026545294) {
+									while (false !== ($_744002689 = readdir($_2026545294))) {
+										if (!is_dir($_361977632 . "/" . $_1097333674 . $_1630931493 . "/" . $_744002689) || $_744002689 == "." || $_744002689 == "..") continue;
+										if (!in_array($_744002689, $_628558867[$_1947975612])) continue;
+										CUpdateClient::CopyDirFiles($_361977632 . "/" . $_1097333674 . $_1630931493 . "/" . $_744002689, $_1290774310[$_1947975612] . "/" . $_744002689, $_1123571860);
+									}
+									closedir($_2026545294);
+								}
+							}
+							CUpdateClient::__451329904($_757086976[$_443696004], $_361977632, $_1097333674, $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH, $_784276436);
+							if (in_array($_1097333674, $_613112957)) CUpdateClient::CopyDirFiles($_361977632 . "/" . $_1097333674, $_1590613717 . "/" . $_1097333674, $_1123571860);
+						}
+						closedir($_1690130272);
+					}
+				}
+				if ($_1123571860 <> "") $_2136808367 .= $_1123571860;
+			}
+		}
+		if ($_2136808367 == "") CUpdateClient::ClearUpdateFolder($_1370972511);
+		CUpdateClient::resetAccelerator();
+		CUpdateClient::AddMessage2Log("TIME UpdateLangs " . round(microtime(true) - $_418914584, 3) . " sec");
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "USL");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	private static function __451329904($_1530138095, $_1396374947, $_395671902, $_419232152, $_2141308421 = array())
+	{
+		$_1497327601 = $_1396374947 . "/" . $_395671902 . "/install";
+		if (!file_exists($_1497327601) || !is_readable($_1497327601)) return;
+		$_483938071 = @opendir($_1497327601);
+		if ($_483938071) {
+			while (false !== ($_376327103 = readdir($_483938071))) {
+				if ($_376327103 === "." || $_376327103 === ".." || !is_dir($_1497327601 . "/" . $_376327103)) continue;
+				foreach ($_2141308421 as $_30946448) {
+					if (strpos($_30946448 . "/", "/install/" . $_376327103 . "/") === 0) continue 2;
+				}
+				self::__560785366($_1530138095, $_1497327601 . "/" . $_376327103, $_419232152 . "/" . $_376327103);
+			}
+			closedir($_483938071);
+		}
+	}
+
+	private static function __560785366($_1530138095, $_1396374947, $_419232152, $_335072875 = "")
+	{
+		$_1478323267 = $_1396374947 . $_335072875;
+		if (!file_exists($_1478323267) || !is_readable($_1478323267)) return;
+		$_483938071 = @opendir($_1478323267);
+		if ($_483938071) {
+			while (false !== ($_376327103 = readdir($_483938071))) {
+				if ($_376327103 === "." || $_376327103 === ".." || !is_dir($_1478323267 . "/" . $_376327103)) continue;
+				if ($_376327103 === $_1530138095) {
+					if (substr_compare($_1478323267, "/lang", -5) === 0) {
+						if (file_exists($_419232152 . $_335072875) && is_dir($_419232152 . $_335072875) && is_writable($_419232152 . $_335072875)) {
+							$_790523439 = "";
+							self::CopyDirFiles($_1478323267 . "/" . $_376327103, $_419232152 . $_335072875 . "/" . $_376327103, $_790523439);
+						}
+						continue;
+					}
+				}
+				self::__560785366($_1530138095, $_1396374947, $_419232152, $_335072875 . "/" . $_376327103);
+			}
+			closedir($_483938071);
+		}
+	}
+
+	public static function UpdateStepModules($_426046905, &$_753204024, $_1311398460 = false)
+	{
+		global $DB;
+		$_2136808367 = "";
+		if (!defined("US_SAVE_UPDATERS_DIR") || US_SAVE_UPDATERS_DIR == "") $_1311398460 = false;
+		$_418914584 = microtime(true);
+		$_193561183 = array();
+		if (!file_exists($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/lang/ua")) $_193561183[] = "ua";
+		if (!file_exists($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/lang/de")) $_193561183[] = "de";
+		if (!file_exists($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/lang/en")) $_193561183[] = "en";
+		if (!file_exists($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/lang/ru")) $_193561183[] = "ru";
+		$_1370972511 = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/" . $_426046905;
+		if (!file_exists($_1370972511) || !is_dir($_1370972511)) $_2136808367 .= "[UUK01] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_CU_NO_TMP_CAT")) . ". ";
+		if ($_2136808367 == "") if (!is_readable($_1370972511)) $_2136808367 .= "[UUK03] " . str_replace("#FILE#", $_1370972511, GetMessage("SUPP_CU_RD_TMP_CAT")) . ". ";
+		$_196288623 = array();
+		if ($_2136808367 == "") {
+			$_1177408942 = @opendir($_1370972511);
+			if ($_1177408942) {
+				while (false !== ($_239640225 = readdir($_1177408942))) {
+					if ($_239640225 == "." || $_239640225 == "..") continue;
+					if (is_dir($_1370972511 . "/" . $_239640225)) $_196288623[] = $_239640225;
+				}
+				closedir($_1177408942);
+			}
+		}
+		if (!is_array($_196288623) || empty($_196288623)) $_2136808367 .= "[UUK02] " . GetMessage("SUPP_UK_NO_MODS") . ". ";
+		if ($_2136808367 == "") {
+			for ($_443696004 = 0, $_1167463684 = count($_196288623); $_443696004 < $_1167463684; $_443696004++) {
+				$_1123571860 = "";
+				$_361977632  = $_1370972511 . "/" . $_196288623[$_443696004];
+				$_1590613717 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/" . $_196288623[$_443696004];
+				CUpdateClient::CheckDirPath($_1590613717 . "/");
+				if (!file_exists($_1590613717) || !is_dir($_1590613717)) $_1123571860 .= "[UUK04] " . str_replace("#MODULE_DIR#", $_1590613717, GetMessage("SUPP_UK_NO_MODIR")) . ". ";
+				if ($_1123571860 == "") if (!is_writable($_1590613717)) $_1123571860 .= "[UUK05] " . str_replace("#MODULE_DIR#", $_1590613717, GetMessage("SUPP_UK_WR_MODIR")) . ". ";
+				if ($_1123571860 == "") if (!file_exists($_361977632) || !is_dir($_361977632)) $_1123571860 .= "[UUK06] " . str_replace("#DIR#", $_361977632, GetMessage("SUPP_UK_NO_FDIR")) . ". ";
+				if ($_1123571860 == "") if (!is_readable($_361977632)) $_1123571860 .= "[UUK07] " . str_replace("#DIR#", $_361977632, GetMessage("SUPP_UK_READ_FDIR")) . ". ";
+				$_1305681727 = array();
+				if ($_1123571860 == "") {
+					$_1177408942 = @opendir($_361977632);
+					if ($_1177408942) {
+						while (false !== ($_239640225 = readdir($_1177408942))) {
+							if (substr($_239640225, 0, 7) == "updater") {
+								$_352437796 = "N";
+								if (is_file($_361977632 . "/" . $_239640225)) {
+									$_705722731 = substr($_239640225, 7, strlen($_239640225) - 11);
+									if (substr($_239640225, strlen($_239640225) - 9) == "_post.php") {
+										$_352437796 = "Y";
+										$_705722731 = substr($_239640225, 7, strlen($_239640225) - 16);
+									}
+									$_1305681727[] = array("/" . $_239640225, trim($_705722731), $_352437796);
+								} elseif (file_exists($_361977632 . "/" . $_239640225 . "/index.php")) {
+									$_705722731 = substr($_239640225, 7);
+									if (substr($_239640225, strlen($_239640225) - 5) == "_post") {
+										$_352437796 = "Y";
+										$_705722731 = substr($_239640225, 7, strlen($_239640225) - 12);
+									}
+									$_1305681727[] = array("/" . $_239640225 . "/index.php", trim($_705722731), $_352437796);
+								}
+								if ($_1311398460) CUpdateClient::CopyDirFiles($_361977632 . "/" . $_239640225, $_SERVER["DOCUMENT_ROOT"] . US_SAVE_UPDATERS_DIR . "/" . $_196288623[$_443696004] . "/" . $_239640225, $_1123571860, false);
+							}
+						}
+						closedir($_1177408942);
+					}
+					$_346373140 = count($_1305681727);
+					for ($_1118145356 = 0; $_1118145356 < $_346373140 - 1; $_1118145356++) {
+						for ($_1341177660 = $_1118145356 + 1; $_1341177660 < $_346373140; $_1341177660++) {
+							if (CUpdateClient::CompareVersions($_1305681727[$_1118145356][1], $_1305681727[$_1341177660][1]) > 0) {
+								$_816185724                = $_1305681727[$_1118145356];
+								$_1305681727[$_1118145356] = $_1305681727[$_1341177660];
+								$_1305681727[$_1341177660] = $_816185724;
+							}
+						}
+					}
+				}
+				if ($_1123571860 == "") {
+					if (strtolower($DB->type) == "mysql" && defined("MYSQL_TABLE_TYPE") && MYSQL_TABLE_TYPE <> "") {
+						$DB->Query("SET storage_engine = '" . MYSQL_TABLE_TYPE . "'", true);
+					}
+				}
+				if ($_1123571860 == "") {
+					for ($_1118145356 = 0, $_346373140 = count($_1305681727); $_1118145356 < $_346373140; $_1118145356++) {
+						if ($_1305681727[$_1118145356][2] == "N") {
+							$_897742753 = "";
+							CUpdateClient::RunUpdaterScript($_361977632 . $_1305681727[$_1118145356][0], $_897742753, "/bitrix/updates/" . $_426046905 . "/" . $_196288623[$_443696004], $_196288623[$_443696004]);
+							if ($_897742753 <> "") {
+								$_1123571860 .= str_replace("#MODULE#", $_196288623[$_443696004], str_replace("#VER#", $_1305681727[$_1118145356][1], GetMessage("SUPP_UK_UPDN_ERR"))) . ": " . $_897742753 . ". ";
+								$_1123571860 .= str_replace("#MODULE#", $_196288623[$_443696004], GetMessage("SUPP_UK_UPDN_ERR_BREAK")) . " ";
+								break;
+							}
+						}
+					}
+				}
+				if ($_1123571860 == "") CUpdateClient::CopyDirFiles($_361977632, $_1590613717, $_1123571860, true, $_193561183);
+				if ($_1123571860 == "") {
+					for ($_1118145356 = 0, $_346373140 = count($_1305681727); $_1118145356 < $_346373140; $_1118145356++) {
+						if ($_1305681727[$_1118145356][2] == "Y") {
+							$_897742753 = "";
+							CUpdateClient::RunUpdaterScript($_361977632 . $_1305681727[$_1118145356][0], $_897742753, "/bitrix/updates/" . $_426046905 . "/" . $_196288623[$_443696004], $_196288623[$_443696004]);
+							if ($_897742753 <> "") {
+								$_1123571860 .= str_replace("#MODULE#", $_196288623[$_443696004], str_replace("#VER#", $_1305681727[$_1118145356][1], GetMessage("SUPP_UK_UPDY_ERR"))) . ": " . $_897742753 . ". ";
+								$_1123571860 .= str_replace("#MODULE#", $_196288623[$_443696004], GetMessage("SUPP_UK_UPDN_ERR_BREAK")) . " ";
+								break;
+							}
+						}
+					}
+				}
+				if ($_1123571860 <> "") $_2136808367 .= $_1123571860;
+			}
+			CUpdateClient::ClearUpdateFolder($_1370972511);
+		}
+		CUpdateClient::AddMessage2Log("TIME UpdateStepModules " . round(microtime(true) - $_418914584, 3) . " sec");
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "USM");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else {
+			$GLOBALS["BX_REAL_UPDATED_MODULES"] = $_196288623;
+			if (function_exists("ExecuteModuleEventEx")) {
+				foreach (GetModuleEvents("main", "OnModuleUpdate", true) as $_1599781934) {
+					ExecuteModuleEventEx($_1599781934, $_196288623);
+				}
+			}
+			return true;
+		}
+	}
+
+	public static function ClearUpdateFolder($_1370972511)
+	{
+		CUpdateClient::DeleteDirFilesEx($_1370972511);
+		CUpdateClient::resetAccelerator();
+	}
+
+	public static function RunUpdaterScript($_2036567828, &$_753204024, $_361977632, $_944152425)
+	{
+		global $DBType, $DB, $APPLICATION, $USER;
+		if (!isset($GLOBALS["UPDATE_STRONG_UPDATE_CHECK"]) || ($GLOBALS["UPDATE_STRONG_UPDATE_CHECK"] != "Y" && $GLOBALS["UPDATE_STRONG_UPDATE_CHECK"] != "N")) {
+			$GLOBALS["UPDATE_STRONG_UPDATE_CHECK"] = ((US_CALL_TYPE != "DB") ? COption::GetOptionString("main", "strong_update_check", "Y") : "Y");
+		}
+		$strongUpdateCheck = $GLOBALS["UPDATE_STRONG_UPDATE_CHECK"];
+		$DOCUMENT_ROOT     = $_SERVER["DOCUMENT_ROOT"];
+		$_2036567828       = str_replace("\\", "/", $_2036567828);
+		$updaterPath       = dirname($_2036567828);
+		$updaterPath       = substr($updaterPath, strlen($_SERVER["DOCUMENT_ROOT"]));
+		$updaterPath       = trim($updaterPath, " /\"");
+		if ($updaterPath <> "")
+			$updaterPath = "/" . $updaterPath;
+		$updaterName = substr($_2036567828, strlen($_SERVER["DOCUMENT_ROOT"]));
+
+		CUpdateClient::AddMessage2Log("Run updater '" . $updaterName . "'", "CSURUS1");
+		$updater = new CUpdater();
+
+		$updater->Init($updaterPath, $DB->type, $updaterName, $_361977632, $_944152425, US_CALL_TYPE);
+		$errorMessage = "";
+		include($_2036567828);
+		if ($errorMessage <> "")
+			$_753204024 .= $errorMessage;
+		if (is_array($updater->errorMessage) && !empty($updater->errorMessage))
+			$_753204024 .= implode("\n", $updater->errorMessage);
+		unset($updater);
+	}
+
+	public static function CompareVersions($_1932684487, $_637012980)
+	{
+		$_1932684487 = trim($_1932684487);
+		$_637012980  = trim($_637012980);
+		if ($_1932684487 == $_637012980) return 0;
+		$_539918193 = explode(".", $_1932684487);
+		$_964074558 = explode(".", $_637012980);
+		if (intval($_539918193[0]) > intval($_964074558[0]) || intval($_539918193[0]) == intval($_964074558[0]) && intval($_539918193[1]) > intval($_964074558[1]) || intval($_539918193[0]) == intval($_964074558[0]) && intval($_539918193[1]) == intval($_964074558[1])
+			&& intval($_539918193[2]) > intval($_964074558[2])) {
+			return 1;
+		}
+		if (intval($_539918193[0]) == intval($_964074558[0]) && intval($_539918193[1]) == intval($_964074558[1]) && intval($_539918193[2]) == intval($_964074558[2])) {
+			return 0;
+		}
+		return -1;
+	}
+
+	public static function checkValid()
+	{
+		$_1596961748 = file_get_contents($_SERVER["DOCUMENT_ROOT"] . '/bitrix/modules/main/include.php');
+		$_246160386  = strpos($_1596961748, "/*ZDUyZmZ");
+		if ($_246160386 !== false) {
+			$_1525768972 = strpos($_1596961748, "/**/", $_246160386);
+			if ($_1525768972 !== false) {
+				$_1596961748 = substr($_1596961748, $_246160386, $_1525768972 - $_246160386);
+				$_2091664644 = strpos($_1596961748, "*/");
+				if ($_2091664644 !== false) {
+					$_466179878  = substr($_1596961748, 9, $_2091664644 - 9);
+					$_1596961748 = substr($_1596961748, $_2091664644 + 2);
+					$_996201139  = base64_encode(md5($_1596961748));
+					if ($_466179878 === $_996201139) return true;
+				}
+			}
+		}
+		if (substr($_1596961748, 0, strlen("<? \$GLOBALS['_____\")) === \"<? \$GLOBALS['_____")))
+			return true;
+
+		if (md5(CUpdateClient::GetLicenseKey() . "check") === "31ea312de1006771f0a4e5b25a90932c")
+			return true;
+		return false;
+	}
+
+	public static function GetUpdatesList(&$_753204024, $_1530138095 = false, $_1474158358 = "Y")
+	{
+		$_2136808367 = "";
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::GetUpdatesList");
+		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, $_1474158358);
+		if ($_1622907824 == "" || $_2136808367 <> "") {
+			$_753204024 .= $_2136808367;
+			CUpdateClient::AddMessage2Log("empty query list", "GUL01");
+			return false;
+		}
+		CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+		$_418914584  = microtime(true);
+		$_1596961748 = CUpdateClient::GetHTTPPage("list", $_1622907824, $_2136808367);
+		CUpdateClient::AddMessage2Log("TIME GetUpdatesList(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+		$_1139428298 = array();
+		if ($_2136808367 == "")
+			CUpdateClient::__1244221643($_1596961748, $_1139428298, $_2136808367);
+		if ($_2136808367 == "") {
+			if (!isset($_1139428298["DATA"]) || !is_array($_1139428298["DATA"]))
+				$_2136808367 .= "[UGAUT01] " . GetMessage("SUPP_GAUT_SYSERR") . ". ";
+		}
+		if ($_2136808367 == "") {
+			$_1139428298 = $_1139428298["DATA"]["#"];
+			if ((!isset($_1139428298["CLIENT"]) || !is_array($_1139428298["CLIENT"])) && (!isset($_1139428298["ERROR"]) || !is_array($_1139428298["ERROR"]))) {
+				$_2136808367 .= "[UGAUT01] " . GetMessage("SUPP_GAUT_SYSERR") . ". ";
+			}
+			$_798512439 = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz";
+			if (file_exists($_798512439)) {
+				@unlink($_798512439);
+			}
+			$_773946775 = $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz.log";
+			if (file_exists($_773946775)) {
+				@unlink($_773946775);
+			}
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "GUL02");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return $_1139428298;
+	}
+
+	public static function GetHTTPPage($_554151431, $_1085691492, &$_753204024)
+	{
+		global $DB;
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::GetHTTPPage");
+		if ($_554151431 == "LIST") $_554151431 = "us_updater_list.php"; elseif ($_554151431 == "STEPM") $_554151431 = "us_updater_modules.php";
+		elseif ($_554151431 == "STEPL") $_554151431 = "us_updater_langs.php";
+		elseif ($_554151431 == "STEPH") $_554151431 = "us_updater_helps.php";
+		elseif ($_554151431 == "ACTIV") $_554151431 = "us_updater_actions.php";
+		elseif ($_554151431 == "REG") $_554151431 = "us_updater_register.php";
+		elseif ($_554151431 == "SRC") $_554151431 = "us_updater_sources.php";
+		$_1399279890 = static::__690101446();
+		$_2059576749 = @fsockopen($_1399279890["SOCKET_IP"], $_1399279890["SOCKET_PORT"], $_2106056148, $_1116920530, 120);
+		if ($_2059576749) {
+			$_358206942 = "";
+			if ($_1399279890["USE_PROXY"]) {
+				$_358206942 .= "POST http://" . $_1399279890["IP"] . "/bitrix/updates/" . $_554151431 . " HTTP/1.0";
+				if ($_1399279890["PROXY_USERNAME"] <> "") $_358206942 .= "Proxy-Authorization: Basic " . base64_encode($_1399279890["PROXY_USERNAME"] . ":" . $_1399279890["PROXY_PASSWORD"]) . "";
+			} else {
+				$_358206942 .= "POST /bitrix/updates/" . $_554151431 . " HTTP/1.0";
+			}
+			$_946673907  = self::__416130040(US_BASE_MODULE, "crc_code");
+			$_1085691492 .= "&spd=" . urlencode($_946673907);
+			if (defined("BX_UTF")) $_1085691492 .= "&utf=" . urlencode("Y"); else $_1085691492 .= "&utf=" . urlencode("N");
+			$_1152618521 = $DB->GetVersion();
+			$_1085691492 .= "&dbv=" . urlencode($_1152618521 ? $_1152618521 : "");
+			$_1085691492 .= "&NS=" . COption::GetOptionString("main", "update_site_ns", "");
+			$_1085691492 .= "&KDS=" . COption::GetOptionString("main", "update_devsrv", "");
+			$_358206942  .= "User-Agent: BitrixSMUpdater";
+			$_358206942  .= "Accept: */*";
+			$_358206942  .= "Host: " . $_1399279890["IP"] . "";
+			$_358206942  .= "Accept-Language: en";
+			$_358206942  .= "Content-type: application/x-www-form-urlencoded";
+			$_358206942  .= "Content-length: " . strlen($_1085691492) . "";
+			$_358206942  .= "$_1085691492";
+			$_358206942  .= "";
+			fputs($_2059576749, $_358206942);
+			$_475355530 = false;
+
+			while (!feof($_2059576749)) {
+				$_1907623322 = fgets($_2059576749, 4096);
+				if ($_1907623322 != "") {
+					if (preg_match("/Transfer-Encoding: +chunked/i", $_1907623322)) $_475355530 = true;
+				} else {
+					break;
+				}
+			}
+			$_1596961748 = "";
+			if ($_475355530) {
+				$_1220677881 = 4096;
+				$_460270920  = 0;
+				$_1907623322 = fgets($_2059576749, $_1220677881);
+				$_1907623322 = strtolower($_1907623322);
+				$_1816171785 = "";
+				$_443696004  = 0;
+				while ($_443696004 < strlen($_1907623322) && in_array($_1907623322[$_443696004], array("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"))) {
+					$_1816171785 .= $_1907623322[$_443696004];
+					$_443696004++;
+				}
+				$_1251326892 = hexdec($_1816171785);
+				while ($_1251326892 > 0) {
+					$_132240663  = 0;
+					$_1001548312 = (($_1251326892 > $_1220677881) ? $_1220677881 : $_1251326892);
+					while ($_1001548312 > 0 && $_1907623322 = fread($_2059576749, $_1001548312)) {
+						$_1596961748 .= $_1907623322;
+						$_132240663  += strlen($_1907623322);
+						$_1100949267 = $_1251326892 - $_132240663;
+						$_1001548312 = (($_1100949267 > $_1220677881) ? $_1220677881 : $_1100949267);
+					}
+					$_460270920  += $_1251326892;
+					$_1907623322 = fgets($_2059576749, $_1220677881);
+					$_1907623322 = fgets($_2059576749, $_1220677881);
+					$_1907623322 = strtolower($_1907623322);
+					$_1816171785 = "";
+					$_443696004  = 0;
+					while ($_443696004 < strlen($_1907623322) && in_array($_1907623322[$_443696004], array("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"))) {
+						$_1816171785 .= $_1907623322[$_443696004];
+						$_443696004++;
+					}
+					$_1251326892 = hexdec($_1816171785);
+				}
+			} else {
+				while ($_1907623322 = fread($_2059576749, 4096)) $_1596961748 .= $_1907623322;
+			}
+			fclose($_2059576749);
+		} else {
+			$_1596961748 = "";
+			if (class_exists("CUtil") && method_exists("CUtil", "ConvertToLangCharset")) $_1116920530 = CUtil::ConvertToLangCharset($_1116920530);
+			$_753204024 .= GetMessage("SUPP_GHTTP_ER") . ": [" . $_2106056148 . "] " . $_1116920530 . ". ";
+			if ($_2106056148 <= 0) $_753204024 .= GetMessage("SUPP_GHTTP_ER_DEF") . " ";
+			CUpdateClient::AddMessage2Log("Error connecting to " . $_1399279890["SOCKET_IP"] . ": [" . $_2106056148 . "] " . $_1116920530, "ERRCONN");
+		}
+		return $_1596961748;
+	}
+
+
+	private static function __1706490244(&$_1760501310, $_761780272)
+	{
+		$_28696865 = $_761780272->getName();
+		if (!isset($_1760501310[$_28696865])) $_1760501310[$_28696865] = array();
+		$_2046167719 = array("@" => array());
+		foreach ($_761780272->attributes() as $_834432614 => $_613861993) {
+			$_2046167719["@"][$_834432614] = (string)$_613861993;
+		}
+		foreach ($_761780272->children() as $_1561229535) {
+			if (!isset($_2046167719["#"])) $_2046167719["#"] = array();
+			self::__1706490244($_2046167719["#"], $_1561229535);
+		}
+		if (!isset($_2046167719["#"])) $_2046167719["#"] = (string)$_761780272;
+		$_1760501310[$_28696865][] = $_2046167719;
+	}
+
+	private static function __1521549544($_1522976280)
+	{
+		$_1760501310 = array();
+		if (!defined("BX_UTF") || !class_exists("\SimpleXMLElement")) {
+			$_33757510 = new CUpdatesXML();
+			if ($_33757510->LoadString($_1522976280) && $_33757510->GetTree()) $_1760501310 = $_33757510->GetArray();
+			return $_1760501310;
+		}
+		if (strpos($_1522976280, pack("CCC", 239, 187, 191)) === 0) $_1522976280 = substr($_1522976280, 3);
+		if (strpos($_1522976280, "<?") !== 0) $_1522976280 = "<" . "?xml version='1.0' encoding='" . (defined("BX_UTF") ? "utf-8" : "windows-1251") . "' standalone='yes'?" . ">
+	" . $_1522976280;
+		$_761780272 = new \SimpleXMLElement($_1522976280);
+		self::__1706490244($_1760501310, $_761780272);
+		$_1760501310["DATA"] = $_1760501310["DATA"][0];
+		if (!defined("BX_UTF")) $_1760501310 = \Bitrix\Main\Text\Encoding::convertEncoding($_1760501310, "utf-8", "windows-1251");
+		return $_1760501310;
+	}
+
+	private static function __1244221643(&$_242112568, &$_187816114, &$_753204024)
+	{
+		$_2136808367 = "";
+		$_187816114  = array();
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::ParseServerData");
+		if ($_242112568 == "") $_2136808367 .= "[UPSD01] " . GetMessage("SUPP_AS_EMPTY_RESP") . ". ";
+		if ($_2136808367 == "") {
+			if (substr($_242112568, 0, strlen("<DATA>")) != "<DATA>" && CUpdateClient::IsGzipInstalled()) $_242112568 = @gzuncompress($_242112568);
+			if (substr($_242112568, 0, strlen("<DATA>")) != "<DATA>") {
+				CUpdateClient::AddMessage2Log(substr($_242112568, 0, 100), "UPSD02");
+				$_2136808367 .= "[UPSD02] " . GetMessage("SUPP_PSD_BAD_RESPONSE") . ". ";
+			}
+		}
+		if ($_2136808367 == "") {
+			$_187816114 = self::__1521549544($_242112568);
+			if (!is_array($_187816114) || !isset($_187816114["DATA"]) || !is_array($_187816114["DATA"])) $_2136808367 .= "[UPSD03] " . GetMessage("SUPP_PSD_BAD_TRANS") . ". ";
+		}
+		if ($_2136808367 == "") {
+			if (isset($_187816114["DATA"]["#"]["RESPONSE"])) {
+				$_946673907 = $_187816114["DATA"]["#"]["RESPONSE"][0]["@"]["CRC_CODE"];
+				if ($_946673907 <> "") COption::SetOptionString(US_BASE_MODULE, "crc_code", $_946673907);
+			}
+			if (isset($_187816114["DATA"]["#"]["CLIENT"])) {
+				CUpdateClient::__ApplyLicenseInfo($_187816114["DATA"]["#"]["CLIENT"][0]["@"]);
+			}
+		}
+		if ($_2136808367 == "") {
+			if (isset($_187816114["DATA"]["#"]["COUNTER"])) CUpdateClient::__328632251($_187816114["DATA"]["#"]["COUNTER"]);
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "CUPSD");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function CollectRequestData(&$_753204024, $_1530138095 = false, $_1474158358 = "Y", $_2142182691 = array(), $_1523107763 = array(), $_164957727 = array())
+	{
+		$_2136808367 = "";
+		if ($_1530138095 === false) {
+			$_1530138095 = LANGUAGE_ID;
+		}
+		$_1474158358 = (is_numeric($_1474158358) ? intval($_1474158358) : (($_1474158358 == "N") ? "N" : "Y"));
+		CUpdateClient::AddMessage2Log("exec CUpdateClient::CollectRequestData");
+		CUpdateClient::CheckDirPath($_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/");
+		$_1450490487 = CUpdateClient::GetCurrentModules($_2136808367);
+		$_546637926  = CUpdateClient::GetCurrentLanguages($_2136808367);
+		$_1133438944 = (CUpdateExpertMode::isEnabled() && CUpdateExpertMode::isCorrectModulesStructure($_2142182691));
+		if ($_1133438944) {
+			$_1450490487 = CUpdateExpertMode::processModulesFrom($_2142182691, $_1450490487);
+		}
+		if ($_2136808367 == "") {
+			$GLOBALS["DB"]->GetVersion();
+			$_522224472  = "LICENSE_KEY=" . urlencode(md5(CUpdateClient::GetLicenseKey())) . "&lang=" . urlencode($_1530138095) . "&SUPD_VER=" . urlencode(UPDATE_SYSTEM_VERSION_A) . "&VERSION=" . urlencode(SM_VERSION) . "&TYPENC=" . ((defined("DEMO") && DEMO == "Y") ? "D" : ((defined("ENCODE") && ENCODE == "Y") ? "E" : ((defined("TIMELIMIT_EDITION") && TIMELIMIT_EDITION == "Y") ? "T" : "F"))) . "&SUPD_STS=" . urlencode(CUpdateClient::__GetFooPath()) . "&SUPD_URS=" . urlencode(CUpdateClient::__GetFooPath1()) . "&SUPD_DBS=" . urlencode($GLOBALS["DB"]->type) . "&XE=" . urlencode((isset($GLOBALS["DB"]->XE) && $GLOBALS["DB"]->XE) ? "Y" : "N") . "&CLIENT_SITE=" . urlencode($_SERVER["SERVER_NAME"]) . "&SERVER_NAME=" . urlencode(self::GetServerName()) . "&CHHB=" . urlencode($_SERVER["HTTP_HOST"]) . "&CSAB=" . urlencode($_SERVER["SERVER_ADDR"]) . "&SUID=" . urlencode(CUpdateClient::GetUniqueId()) . "&CANGZIP=" . urlencode((CUpdateClient::IsGzipInstalled()) ? "Y" : "N") . "&CLIENT_PHPVER=" . urlencode(phpversion()) . "&stable=" . urlencode($_1474158358) . "&mbfo=" . urlencode((int)ini_get("mbstring.func_overload")) . "&NGINX=" . urlencode(COption::GetOptionString("main", "update_use_nginx", "Y")) . "&SMD=" . urlencode(COption::GetOptionString("main", "update_safe_mode", "N")) . "&rerere=" . urlencode(CUpdateClient::checkValid() ? "Y" : "N") . "&" . CUpdateClient::ModulesArray2Query($_1450490487, "bitm_") . "&" . CUpdateClient::ModulesArray2Query($_546637926, "bitl_");
+			$_1874476756 = "";
+			if ($_1133438944) {
+				$_1627630432 = CUpdateExpertMode::extractModulesTo($_2142182691);
+				$_522224472  .= "&expert_requested_modules=" . urlencode(json_encode($_1627630432));
+				$_2142182691 = array_keys($_1627630432);
+			}
+			if (CUpdateExpertMode::isIncludeTmpUpdatesEnabled()) {
+				$_522224472 .= "&expert_include_tmp_updates=y";
+			}
+			if (!empty($_2142182691)) {
+				for ($_443696004 = 0, $_1167463684 = count($_2142182691); $_443696004 < $_1167463684; $_443696004++) {
+					if ($_1874476756 <> "") $_1874476756 .= ",";
+					$_1874476756 .= $_2142182691[$_443696004];
+				}
+			}
+			if ($_1874476756 <> "") {
+				$_522224472 .= "&requested_modules=" . urlencode($_1874476756);
+			}
+			$_1874476756 = "";
+			if (!empty($_1523107763)) {
+				for ($_443696004 = 0, $_1167463684 = count($_1523107763); $_443696004 < $_1167463684; $_443696004++) {
+					if ($_1874476756 <> "") $_1874476756 .= ",";
+					$_1874476756 .= $_1523107763[$_443696004];
+				}
+			}
+			if ($_1874476756 <> "") $_522224472 .= "&requested_langs=" . urlencode($_1874476756);
+			$_1874476756 = "";
+			if (!empty($_164957727)) {
+				for ($_443696004 = 0, $_1167463684 = count($_164957727); $_443696004 < $_1167463684; $_443696004++) {
+					if ($_1874476756 <> "") $_1874476756 .= ",";
+					$_1874476756 .= $_164957727[$_443696004];
+				}
+			}
+			if ($_1874476756 <> "") $_522224472 .= "&requested_helps=" . urlencode($_1874476756);
+			if (defined("FIRST_EDITION") && constant("FIRST_EDITION") == "Y") {
+				$_1167463684 = 1;
+				if (CModule::IncludeModule("iblock")) {
+					$_1167463684 = 0;
+					$_10329247   = CIBlock::GetList(array(), array("CHECK_PERMISSIONS" => "N"));
+					while ($_10329247->Fetch()) $_1167463684++;
+				}
+				$_522224472  .= "&SUPD_PIBC=" . $_1167463684;
+				$_522224472  .= "&SUPD_PUC=" . CUser::GetCount();
+				$_1167463684 = 0;
+				$_1754704762 = "";
+				$_1536162850 = "";
+				$_837377958  = CSite::GetList($_1754704762, $_1536162850, array());
+				while ($_837377958->Fetch()) $_1167463684++;
+				$_522224472 .= "&SUPD_PSC=" . $_1167463684;
+			}
+			if (defined("INTRANET_EDITION") && constant("INTRANET_EDITION") == "Y") {
+				$_1645043615 = array();
+				$_969985619  = COption::GetOptionString("main", "~cpf_map_value", "");
+				if ($_969985619 <> "") {
+					$_969985619  = base64_decode($_969985619);
+					$_1645043615 = unserialize($_969985619, array("allowed_classes" => false));
+					if (!is_array($_1645043615)) $_1645043615 = array();
+				}
+				if (empty($_1645043615)) $_1645043615 = array("e" => array(), "f" => array());
+				$_836364742 = "";
+				foreach ($_1645043615["e"] as $_1813017612 => $_1561559754) {
+					if ($_1561559754[0] == "F" || $_1561559754[0] == "D") {
+						if ($_836364742 <> "") $_836364742 .= ",";
+						$_836364742 .= $_1813017612 . ":" . $_1561559754[0] . ":" . (isset($_1561559754[1]) ? $_1561559754[1] : "");
+					}
+				}
+				$_522224472 .= "&SUPD_OFC=" . urlencode($_836364742);
+			}
+			if (defined("BUSINESS_EDITION") && constant("BUSINESS_EDITION") == "Y") {
+				$_998125995 = array();
+				$_969985619 = COption::GetOptionString("main", "~cpf_map_value", "");
+				if ($_969985619 <> "") {
+					$_969985619 = base64_decode($_969985619);
+					$_998125995 = unserialize($_969985619, array("allowed_classes" => false));
+					if (!is_array($_998125995)) $_998125995 = array("Small");
+				}
+				if (empty($_998125995)) $_998125995 = array("Small");
+				$_522224472 .= "&SUPD_OFC=" . urlencode(implode(",", $_998125995));
+			}
+			if (CModule::IncludeModule("cluster") && class_exists("CCluster")) $_522224472 .= "&SUPD_SRS=" . urlencode(CCluster::getServersCount()); else $_522224472 .= "&SUPD_SRS=" . urlencode("RU");
+			if (method_exists("CHTMLPagesCache", "IsOn") && method_exists("CHTMLPagesCache", "IsCompositeEnabled") && CHTMLPagesCache::IsOn() && CHTMLPagesCache::IsCompositeEnabled()) $_522224472 .= "&SUPD_CMP=" . urlencode("Y"); else $_522224472 .= "&SUPD_CMP=" . urlencode("N");
+			global $DB;
+			if ($DB->TableExists("b_sale_order") || $DB->TableExists("B_SALE_ORDER")) $_522224472 .= "&SALE_15=" . urlencode((COption::GetOptionString("main", "~sale_converted_15", "N") == "Y" ? "Y" : "N")); else $_522224472 .= "&SALE_15=" . urlencode("Y");
+			$_1178254619 = CUpdateClient::getNewLicenseSignedKey();
+			$_522224472  .= "&LICENSE_SIGNED=" . urlencode($_1178254619 . "-" . COption::GetOptionString("main", $_1178254619, "N"));
+			return $_522224472;
+		}
+		CUpdateClient::AddMessage2Log($_2136808367, "NCRD01");
+		$_753204024 .= $_2136808367;
+		return false;
+	}
+
+	public static function ModulesArray2Query($_1450490487, $_1890671657 = "bitm_")
+	{
+		$_510667792 = "";
+		if (is_array($_1450490487)) {
+			foreach ($_1450490487 as $_489120050 => $_1706943504) {
+				if ($_510667792 <> "") $_510667792 .= "&";
+				$_510667792 .= $_1890671657 . $_489120050 . "=" . urlencode($_1706943504);
+			}
+		}
+		return $_510667792;
+	}
+
+	protected static function GetServerName()
+	{
+		global $DB;
+		$_322260007 = $DB->Query("select SERVER_NAME from b_lang where DEF = 'Y'");
+		if ($_322260007 && ($_347104408 = $_322260007->Fetch()) && $_347104408["SERVER_NAME"] != "") {
+			return $_347104408["SERVER_NAME"];
+		}
+		return self::__416130040("main", "server_name");
+	}
+
+	public static function IsGzipInstalled()
+	{
+		if (function_exists("gzcompress")) return COption::GetOptionString("main", "update_is_gzip_installed", "Y") == "Y";
+		return false;
+	}
+
+	public static function GetCurrentModules(&$_753204024, $_922511211 = false)
+	{
+		$_1450490487 = array();
+		$_1177408942 = @opendir($_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules");
+		if ($_1177408942) {
+			if ($_922511211 === false || is_array($_922511211) && in_array("main", $_922511211)) {
+				if (file_exists($_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main/classes/general/version.php") && is_file($_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main/classes/general/version.php")) {
+					$_700691280 = file_get_contents($_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main/classes/general/version.php");
+					preg_match("/define\s*\(\s*\"SM_VERSION\"\s*,\s*\"(\d + \.\d + \.\d +)\"\s*\)\s*/im", $_700691280, $_1699432342);
+					$_1450490487["main"] = $_1699432342[1];
+				}
+				if ($_1450490487["main"] == "") {
+					CUpdateClient::AddMessage2Log(GetMessage("SUPP_GM_ERR_DMAIN"), "Ux09");
+					$_753204024 .= "[Ux09] " . GetMessage("SUPP_GM_ERR_DMAIN") . ". ";
+				}
+			}
+			while (false !== ($_239640225 = readdir($_1177408942))) {
+				if (is_dir($_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/" . $_239640225) && $_239640225 != "." && $_239640225 != ".." && $_239640225 != "main" && strpos($_239640225, ".") === false) {
+					if ($_922511211 === false || is_array($_922511211) && in_array($_239640225, $_922511211)) {
+						$_1162295015 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/" . $_239640225;
+						if (file_exists($_1162295015 . "/install/index.php")) {
+							$_1546447603 = CUpdateClient::GetModuleInfo($_1162295015);
+							if (!isset($_1546447603["VERSION"]) || $_1546447603["VERSION"] == "") {
+								CUpdateClient::AddMessage2Log(str_replace("#MODULE#", $_239640225, GetMessage("SUPP_GM_ERR_DMOD")), "Ux11");
+								$_753204024 .= "[Ux11] " . str_replace("#MODULE#", $_239640225, GetMessage("SUPP_GM_ERR_DMOD")) . ". ";
+							} else {
+								$_1450490487[$_239640225] = $_1546447603["VERSION"];
+							}
+						}
+					}
+				}
+			}
+			closedir($_1177408942);
+		} else {
+			CUpdateClient::AddMessage2Log(GetMessage("SUPP_GM_NO_KERNEL"), "Ux15");
+			$_753204024 .= "[Ux15] " . GetMessage("SUPP_GM_NO_KERNEL") . ". ";
+		}
+		return $_1450490487;
+	}
+
+	public static function __GetFooPath()
+	{
+		if (!class_exists("CLang")) {
+			return "RA";
+		} else {
+			$_1167463684 = 0;
+			$_326250928  = $_1938863488 = "";
+			$_2036567828 = CLang::GetList($_326250928, $_1938863488, array("ACTIVE" => "Y"));
+			while ($_2036567828->Fetch()) $_1167463684++;
+			return $_1167463684;
+		}
+	}
+
+	public static function GetCurrentNumberOfUsers()
+	{
+		return CUpdateClient::__GetFooPath1();
+	}
+
+	public static function GetCurrentLanguages(&$_753204024, $_922511211 = false)
+	{
+		$_651413951  = array();
+		$_1438931728 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main/lang";
+		$_1177408942 = @opendir($_1438931728);
+		if ($_1177408942) {
+			while (false !== ($_239640225 = readdir($_1177408942))) {
+				if (is_dir($_1438931728 . "/" . $_239640225) && $_239640225 != "." && $_239640225 != "..") {
+					if ($_922511211 === false || is_array($_922511211) && in_array($_239640225, $_922511211)) {
+						$_1957310088 = "";
+						if (file_exists($_1438931728 . "/" . $_239640225 . "/supd_lang_date.dat")) {
+							$_1957310088 = file_get_contents($_1438931728 . "/" . $_239640225 . "/supd_lang_date.dat");
+							$_1957310088 = preg_replace("/\D+/", "", $_1957310088);
+							if (strlen($_1957310088) != 8) {
+								CUpdateClient::AddMessage2Log(str_replace("#LANG#", $_239640225, GetMessage("SUPP_GL_ERR_DLANG")), "UGL01");
+								$_753204024  .= "[UGL01] " . str_replace("#LANG#", $_239640225, GetMessage("SUPP_GL_ERR_DLANG")) . ". ";
+								$_1957310088 = "";
+							}
+						}
+						$_651413951[$_239640225] = $_1957310088;
+					}
+				}
+			}
+			closedir($_1177408942);
+		}
+		$_161636322  = false;
+		$_326250928  = "sort";
+		$_1938863488 = "asc";
+		if (class_exists("CLanguage")) $_161636322 = CLanguage::GetList($_326250928, $_1938863488, array("ACTIVE" => "Y")); elseif (class_exists("CLang")) $_161636322 = CLang::GetList($_326250928, $_1938863488, array("ACTIVE" => "Y"));
+		if ($_161636322 === false) {
+			CUpdateClient::AddMessage2Log(GetMessage("SUPP_GL_WHERE_LANGS"), "UGL00");
+			$_753204024 .= "[UGL00] " . GetMessage("SUPP_GL_WHERE_LANGS") . ". ";
+		} else {
+			while ($_1200678719 = $_161636322->Fetch()) {
+				if ($_922511211 === false || is_array($_922511211) && in_array($_1200678719["LID"], $_922511211)) {
+					if (!array_key_exists($_1200678719["LID"], $_651413951)) {
+						$_651413951[$_1200678719["LID"]] = "";
+					}
+				}
+			}
+			if ($_922511211 === false && empty($_651413951)) {
+				CUpdateClient::AddMessage2Log(GetMessage("SUPP_GL_NO_SITE_LANGS"), "UGL02");
+				$_753204024 .= "[UGL02] " . GetMessage("SUPP_GL_NO_SITE_LANGS") . ". ";
+			}
+		}
+		return $_651413951;
+	}
+
+	public static function __GetFooPath1()
+	{
+		if (method_exists('\Bitrix\Main\License', 'getActiveUsersCount')) {
+			$_1662546114 = new \Bitrix\Main\License();
+			return $_1662546114->getActiveUsersCount();
+		} elseif (IsModuleInstalled("intranet")) {
+			$_783774585  = "SELECT COUNT(U.ID) as C FROM b_user U WHERE U.ACTIVE = 'Y' AND U.LAST_LOGIN IS NOT NULL AND EXISTS(SELECT 'x' FROM b_utm_user UF, b_user_field F WHERE F.ENTITY_ID = 'USER' AND F.FIELD_NAME = 'UF_DEPARTMENT' AND UF.FIELD_ID = F.ID AND UF.VALUE_ID = U.ID AND UF.VALUE_INT IS NOT NULL AND UF.VALUE_INT <> 0)";
+			$_1150149515 = $GLOBALS["DB"]->Query($_783774585, true);
+			if ($_1150149515 && ($_187816114 = $_1150149515->Fetch())) {
+				return $_187816114["C"];
+			}
+		}
+		return 0;
+	}
+
+	public static function GetCurrentHelps(&$_753204024, $_922511211 = false)
+	{
+		$_1519468821 = array();
+		$_1796617134 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/help";
+		$_1177408942 = @opendir($_1796617134);
+		if ($_1177408942) {
+			while (false !== ($_239640225 = readdir($_1177408942))) {
+				if (is_dir($_1796617134 . "/" . $_239640225) && $_239640225 != "." && $_239640225 != "..") {
+					if ($_922511211 === false || is_array($_922511211) && in_array($_239640225, $_922511211)) {
+						$_613961841 = "";
+						if (file_exists($_1796617134 . "/" . $_239640225 . "/supd_lang_date.dat")) {
+							$_613961841 = file_get_contents($_1796617134 . "/" . $_239640225 . "/supd_lang_date.dat");
+							$_613961841 = preg_replace("/\D+/", "", $_613961841);
+							if (strlen($_613961841) != 8) {
+								CUpdateClient::AddMessage2Log(str_replace("#HELP#", $_239640225, GetMessage("SUPP_GH_ERR_DHELP")), "UGH01");
+								$_753204024 .= "[UGH01] " . str_replace("#HELP#", $_239640225, GetMessage("SUPP_GH_ERR_DHELP")) . ". ";
+								$_613961841 = "";
+							}
+						}
+						$_1519468821[$_239640225] = $_613961841;
+					}
+				}
+			}
+			closedir($_1177408942);
+		}
+		$_161636322  = false;
+		$_326250928  = "sort";
+		$_1938863488 = "asc";
+		if (class_exists("CLanguage")) $_161636322 = CLanguage::GetList($_326250928, $_1938863488, array("ACTIVE" => "Y")); elseif (class_exists("CLang")) $_161636322 = CLang::GetList($_326250928, $_1938863488, array("ACTIVE" => "Y"));
+		if ($_161636322 === false) {
+			CUpdateClient::AddMessage2Log(GetMessage("SUPP_GL_WHERE_LANGS"), "UGH00");
+			$_753204024 .= "[UGH00] " . GetMessage("SUPP_GL_WHERE_LANGS") . ". ";
+		} else {
+			while ($_1200678719 = $_161636322->Fetch()) {
+				if ($_922511211 === false || is_array($_922511211) && in_array($_1200678719["LID"], $_922511211)) {
+					if (!array_key_exists($_1200678719["LID"], $_1519468821)) {
+						$_1519468821[$_1200678719["LID"]] = "";
+					}
+				}
+			}
+			if ($_922511211 === false && empty($_1519468821)) {
+				CUpdateClient::AddMessage2Log(GetMessage("SUPP_GL_NO_SITE_LANGS"), "UGH02");
+				$_753204024 .= "[UGH02] " . GetMessage("SUPP_GL_NO_SITE_LANGS") . ". ";
+			}
+		}
+		return $_1519468821;
+	}
+
+	public static function AddMessage2Log($_843066608, $_1484137941 = "")
+	{
+		$_692453237  = 1000000;
+		$_379278512  = 8000;
+		$_1920643663 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/updater.log";
+		$_120280461  = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/updater_tmp1.log";
+		if ($_843066608 <> "" || $_1484137941 <> "") {
+			$_991151899 = ignore_user_abort(true);
+			if (file_exists($_1920643663)) {
+				$_1011234688 = @filesize($_1920643663);
+				$_1011234688 = intval($_1011234688);
+				if ($_1011234688 > $_692453237) {
+					if (!($_1733016191 = @fopen($_1920643663, "rb"))) {
+						ignore_user_abort($_991151899);
+						return false;
+					}
+					if (!($_1069261324 = @fopen($_120280461, "wb"))) {
+						ignore_user_abort($_991151899);
+						return false;
+					}
+					$_221577973 = intval($_1011234688 - $_692453237 / 2.0);
+					fseek($_1733016191, $_221577973);
+					do {
+						$_1667599631 = fread($_1733016191, $_379278512);
+						if ($_1667599631 == "") break;
+						@fwrite($_1069261324, $_1667599631);
+					} while (true);
+					@fclose($_1733016191);
+					@fclose($_1069261324);
+					@copy($_120280461, $_1920643663);
+					@unlink($_120280461);
+				}
+				clearstatcache();
+			}
+			if ($_1733016191 = @fopen($_1920643663, "ab+")) {
+				if (flock($_1733016191, LOCK_EX)) {
+					@fwrite($_1733016191, date("Y-m-d H:i:s") . " - " . $_1484137941 . " - " . $_843066608 . "");
+					@fflush($_1733016191);
+					@flock($_1733016191, LOCK_UN);
+					@fclose($_1733016191);
+				}
+			}
+			ignore_user_abort($_991151899);
+		}
+		return true;
+	}
+
+
+	public static function CheckDirPath($_2036567828, $_1230914372 = true)
+	{
+		$_1189235069 = array();
+		$_2036567828 = str_replace("\\", "/", $_2036567828);
+		$_2036567828 = str_replace("//", "/", $_2036567828);
+		if ($_2036567828[strlen($_2036567828) - 1] != "/") {
+			$_700691280  = CUpdateClient::bxstrrpos($_2036567828, "/");
+			$_2036567828 = substr($_2036567828, 0, $_700691280);
+		}
+		while (strlen($_2036567828) > 1 && $_2036567828[strlen($_2036567828) - 1] == "/") $_2036567828 = substr($_2036567828, 0, strlen($_2036567828) - 1);
+		$_700691280 = CUpdateClient::bxstrrpos($_2036567828, "/");
+		while ($_700691280 > 0) {
+			if (file_exists($_2036567828) && is_dir($_2036567828)) {
+				if ($_1230914372) {
+					if (!is_writable($_2036567828)) @chmod($_2036567828, BX_DIR_PERMISSIONS);
+				}
+				break;
+			}
+			$_1189235069[] = substr($_2036567828, $_700691280 + 1);
+			$_2036567828   = substr($_2036567828, 0, $_700691280);
+			$_700691280    = CUpdateClient::bxstrrpos($_2036567828, "/");
+		}
+		for ($_443696004 = count($_1189235069) - 1; $_443696004 >= 0; $_443696004--) {
+			$_2036567828 = $_2036567828 . "/" . $_1189235069[$_443696004];
+			@mkdir($_2036567828, BX_DIR_PERMISSIONS);
+		}
+	}
+
+	public static function CopyDirFiles($_1244707243, $_800682851, &$_753204024, $_116010718 = true, $_193561183 = array())
+	{
+		$_2136808367 = "";
+		while (strlen($_1244707243) > 1 && $_1244707243[strlen($_1244707243) - 1] == "/") $_1244707243 = substr($_1244707243, 0, strlen($_1244707243) - 1);
+		while (strlen($_800682851) > 1 && $_800682851[strlen($_800682851) - 1] == "/") $_800682851 = substr($_800682851, 0, strlen($_800682851) - 1);
+		if (strpos($_800682851 . "/", $_1244707243 . "/") === 0) $_2136808367 .= "[UCDF01] " . GetMessage("SUPP_CDF_SELF_COPY") . ". ";
+		if ($_2136808367 == "") {
+			if (!file_exists($_1244707243)) $_2136808367 .= "[UCDF02] " . str_replace("#FILE#", $_1244707243, GetMessage("SUPP_CDF_NO_PATH")) . ". ";
+		}
+		if ($_2136808367 == "") {
+			$strongUpdateCheck = COption::GetOptionString("main", "strong_update_check", "Y");
+			if (is_dir($_1244707243)) {
+				CUpdateClient::CheckDirPath($_800682851 . "/");
+				if (!file_exists($_800682851) || !is_dir($_800682851)) $_2136808367 .= "[UCDF03] " . str_replace("#FILE#", $_800682851, GetMessage("SUPP_CDF_CANT_CREATE")) . ". "; elseif (!is_writable($_800682851)) $_2136808367 .= "[UCDF04] " . str_replace("#FILE#", $_800682851, GetMessage("SUPP_CDF_CANT_WRITE")) . ". ";
+				if ($_2136808367 == "") {
+					if ($_1177408942 = @opendir($_1244707243)) {
+						while (($_292314395 = readdir($_1177408942)) !== false) {
+							if ($_292314395 == "." || $_292314395 == "..") continue;
+							if ($_116010718 && substr($_292314395, 0, strlen("updater")) == "updater") continue;
+							if ($_116010718 && (substr($_292314395, 0, strlen("description")) === "description") && (in_array(substr($_292314395, -3), array(".ru", ".de", ".en", ".ua")) || substr($_292314395, -5) == ".full")) {
+								continue;
+							}
+							if (!empty($_193561183)) {
+								$_276770789 = false;
+								foreach ($_193561183 as $_1468469529) {
+									if (strpos($_1244707243 . "/" . $_292314395 . "/", "/lang/" . $_1468469529 . "/") !== false) {
+										$_276770789 = true;
+										break;
+									}
+								}
+								if ($_276770789) continue;
+							}
+							if (is_dir($_1244707243 . "/" . $_292314395)) {
+								CUpdateClient::CopyDirFiles($_1244707243 . "/" . $_292314395, $_800682851 . "/" . $_292314395, $_2136808367, false, $_193561183);
+							} elseif (is_file($_1244707243 . "/" . $_292314395)) {
+								if (file_exists($_800682851 . "/" . $_292314395) && !is_writable($_800682851 . "/" . $_292314395)) {
+									$_2136808367 .= "[UCDF05] " . str_replace("#FILE#", $_800682851 . "/" . $_292314395, GetMessage("SUPP_CDF_CANT_FILE")) . ". ";
+								} else {
+									if ($strongUpdateCheck == "Y") $_1941078078 = dechex(crc32(file_get_contents($_1244707243 . "/" . $_292314395)));
+									@copy($_1244707243 . "/" . $_292314395, $_800682851 . "/" . $_292314395);
+									@chmod($_800682851 . "/" . $_292314395, BX_FILE_PERMISSIONS);
+									if ($strongUpdateCheck == "Y") {
+										$_1620366633 = dechex(crc32(file_get_contents($_800682851 . "/" . $_292314395)));
+										if ($_1620366633 !== $_1941078078) {
+											$_2136808367 .= "[UCDF061] " . str_replace("#FILE#", $_800682851 . "/" . $_292314395, GetMessage("SUPP_UGA_FILE_CRUSH")) . ". ";
+										}
+									}
+								}
+							}
+						}
+						@closedir($_1177408942);
+					}
+				}
+			} else {
+				$_700691280 = CUpdateClient::bxstrrpos($_800682851, "/");
+				$_102313621 = substr($_800682851, 0, $_700691280);
+				CUpdateClient::CheckDirPath($_102313621 . "/");
+				if (!file_exists($_102313621) || !is_dir($_102313621)) $_2136808367 .= "[UCDF06] " . str_replace("#FILE#", $_102313621, GetMessage("SUPP_CDF_CANT_FOLDER")) . ". "; elseif (!is_writable($_102313621)) $_2136808367 .= "[UCDF07] " . str_replace("#FILE#", $_102313621, GetMessage("SUPP_CDF_CANT_FOLDER_WR")) . ". ";
+				if ($_2136808367 == "") {
+					if ($strongUpdateCheck == "Y") $_1941078078 = dechex(crc32(file_get_contents($_1244707243)));
+					@copy($_1244707243, $_800682851);
+					@chmod($_800682851, BX_FILE_PERMISSIONS);
+					if ($strongUpdateCheck == "Y") {
+						$_1620366633 = dechex(crc32(file_get_contents($_800682851)));
+						if ($_1620366633 !== $_1941078078) {
+							$_2136808367 .= "[UCDF0611] " . str_replace("#FILE#", $_800682851, GetMessage("SUPP_UGA_FILE_CRUSH")) . ". ";
+						}
+					}
+				}
+			}
+		}
+		if ($_2136808367 <> "") {
+			CUpdateClient::AddMessage2Log($_2136808367, "CUCDF");
+			$_753204024 .= $_2136808367;
+			return false;
+		} else return true;
+	}
+
+	public static function DeleteDirFilesEx($_2036567828)
+	{
+		if (!file_exists($_2036567828)) return false;
+		if (is_file($_2036567828)) {
+			@unlink($_2036567828);
+			return true;
+		}
+		if ($_1177408942 = @opendir($_2036567828)) {
+			while (($_292314395 = readdir($_1177408942)) !== false) {
+				if ($_292314395 == "." || $_292314395 == "..") continue;
+				if (is_dir($_2036567828 . "/" . $_292314395)) {
+					CUpdateClient::DeleteDirFilesEx($_2036567828 . "/" . $_292314395);
+				} else {
+					@unlink($_2036567828 . "/" . $_292314395);
+				}
+			}
+		}
+		@closedir($_1177408942);
+		@rmdir($_2036567828);
+		return true;
+	}
+
+	public static function bxstrrpos($_681521238, $_1822690654)
+	{
+		$_1913562229 = strpos(strrev($_681521238), strrev($_1822690654));
+		if ($_1913562229 === false) {
+			return false;
+		}
+		$_1913562229 = strlen($_681521238) - strlen($_1822690654) - $_1913562229;
+		return $_1913562229;
+	}
+
+	public static function GetModuleInfo($_2036567828)
+	{
+		$arModuleVersion = array();
+		$_836364742      = file_get_contents($_2036567828 . "/install/version.php");
+		if ($_836364742 !== false) {
+			@eval(str_replace(array('<?php', '<?', '?>'), '', $_836364742));
+			if (is_array($arModuleVersion) && array_key_exists("VERSION", $arModuleVersion)) return $arModuleVersion;
+		}
+		touch($_2036567828 . "/install/version.php");
+		include($_2036567828 . "/install/version.php");
+		if (is_array($arModuleVersion) && array_key_exists("VERSION", $arModuleVersion)) return $arModuleVersion;
+		include_once($_2036567828 . "/install/index.php");
+		$_2046167719 = explode("/", $_2036567828);
+		$_443696004  = array_search("modules", $_2046167719);
+		$_845073196  = $_2046167719[$_443696004 + 1];
+		$_845073196  = str_replace(".", "_", $_845073196);
+		$_179704299  = new $_845073196;
+		return array("VERSION" => $_179704299->MODULE_VERSION, "VERSION_DATE" => $_179704299->MODULE_VERSION_DATE,);
+	}
+
+	public static function GetLicenseKey()
+	{
+		if (defined("US_LICENSE_KEY")) return US_LICENSE_KEY;
+		if (defined("LICENSE_KEY")) return LICENSE_KEY;
+		if (!isset($GLOBALS["CACHE4UPDATESYS_LICENSE_KEY"]) || $GLOBALS["CACHE4UPDATESYS_LICENSE_KEY"] == "") {
+			$LICENSE_KEY = "demo";
+			if (file_exists($_SERVER["DOCUMENT_ROOT"] . "/bitrix/license_key.php")) include($_SERVER["DOCUMENT_ROOT"] . "/bitrix/license_key.php");
+			$GLOBALS["CACHE4UPDATESYS_LICENSE_KEY"] = $LICENSE_KEY;
+		}
+		return $GLOBALS["CACHE4UPDATESYS_LICENSE_KEY"];
+	}
+
+	public static function getmicrotime()
+	{
+		return microtime(true);
+	}
+
+	private static function __1863373792($_1116920530, $_2106056148, $_1399279890)
+	{
+		if (class_exists('CUtil') && method_exists('CUtil', 'ConvertToLangCharset')) $_1116920530 = CUtil::ConvertToLangCharset($_1116920530);
+		$_1015571134 = GetMessage("SUPP_GHTTP_ER") . ": [" . $_2106056148 . "] " . $_1116920530 . ". ";
+		if (intval($_2106056148) <= 0) $_1015571134 .= GetMessage("SUPP_GHTTP_ER_DEF") . " ";
+		CUpdateClient::AddMessage2Log("Error connecting 2 " . $_1399279890["SOCKET_IP"] . ": [" . $_2106056148 . "] " . $_1116920530, "ERRCONN1");
+		return $_1015571134;
+	}
+
+	private static function __690101446()
+	{
+		$_1023785319 = COption::GetOptionString("main", "update_site", DEFAULT_UPDATE_SERVER);
+		$_1726963472 = COption::GetOptionString("main", "update_use_https", "N") == "Y";
+		$_1038998234 = COption::GetOptionString("main", "update_site_proxy_addr", "");
+		$_1431866772 = COption::GetOptionString("main", "update_site_proxy_port", "");
+		$_108662072  = COption::GetOptionString("main", "update_site_proxy_user", "");
+		$_387915335  = COption::GetOptionString("main", "update_site_proxy_pass", "");
+		$_1831003445 = ($_1038998234 <> "" && $_1431866772 <> "");
+		$_1760501310 = array("USE_PROXY" => $_1831003445, "IP" => $_1023785319, "SOCKET_IP" => ($_1726963472 ? "tls://" : "") . $_1023785319, "SOCKET_PORT" => ($_1726963472 ? 443 : 80),);
+		if ($_1831003445) {
+			$_1431866772 = intval($_1431866772);
+			if ($_1431866772 <= 0) $_1431866772 = 80;
+			$_1760501310["SOCKET_IP"]      = $_1038998234;
+			$_1760501310["SOCKET_PORT"]    = $_1431866772;
+			$_1760501310["PROXY_USERNAME"] = $_108662072;
+			$_1760501310["PROXY_PASSWORD"] = $_387915335;
+		}
+		return $_1760501310;
+	}
+
+	protected static function resetAccelerator()
+	{
+		if (function_exists("opcache_reset")) {
+			opcache_reset();
+		} elseif (function_exists("accelerator_reset")) {
+			accelerator_reset();
+		}
+	}
+}
+
+class CUpdateControllerSupport
+{
+	public static function CheckUpdates()
+	{
+		$errorMessage = "";
+		$_1474158358  = COption::GetOptionString("main", "stable_versions_only", "Y");
+		if (!($_1278724601 = CUpdateClient::GetUpdatesList($errorMessage, LANG, $_1474158358))) $errorMessage .= GetMessage("SUPZC_NO_CONNECT") . ". ";
+		if ($_1278724601) {
+			if (isset($_1278724601["ERROR"])) {
+				for ($_443696004 = 0, $_1167463684 = count($_1278724601["ERROR"]); $_443696004 < $_1167463684; $_443696004++) $errorMessage .= "[" . $_1278724601["ERROR"][$_443696004]["@"]["TYPE"] . "] " . $_1278724601["ERROR"][$_443696004]["#"];
+			}
+		}
+		if ($errorMessage <> "") return array("ERROR", $errorMessage);
+		if (isset($_1278724601["UPDATE_SYSTEM"])) return array("UPDSYS", "");
+		$_146588115 = 0;
+		if (isset($_1278724601["MODULES"][0]["#"]["MODULE"]) && is_array($_1278724601["MODULES"][0]["#"]["MODULE"])) $_146588115 = count($_1278724601["MODULES"][0]["#"]["MODULE"]);
+		$_808523184 = 0;
+		if (isset($_1278724601["LANGS"][0]["#"]["INST"][0]["#"]["LANG"]) && is_array($_1278724601["LANGS"][0]["#"]["INST"][0]["#"]["LANG"])) $_808523184 = count($_1278724601["LANGS"][0]["#"]["INST"][0]["#"]["LANG"]);
+		if ($_808523184 > 0 && $_146588115 > 0) return array("UPDATE", "ML"); elseif ($_808523184 <= 0 && $_146588115 > 0) return array("UPDATE", "M");
+		elseif ($_808523184 > 0 && $_146588115 <= 0) return array("UPDATE", "L");
+		else return array("FINISH", "");
+	}
+
+	public static function UpdateModules()
+	{
+		return CUpdateControllerSupport::__UpdateKernel("M");
+	}
+
+	public static function UpdateLangs()
+	{
+		return CUpdateControllerSupport::__UpdateKernel("L");
+	}
+
+	public static function __UpdateKernel($_869801936)
+	{
+		define("UPD_INTERNAL_CALL", "Y");
+		$_REQUEST["query_type"] = $_869801936;
+		ob_start();
+		include($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/admin/update_system_call.php");
+		$_1760501310 = ob_get_contents();
+		ob_end_clean();
+		return $_1760501310;
+	}
+
+	public static function UpdateUpdate()
+	{
+		define("UPD_INTERNAL_CALL", "Y");
+		$_REQUEST["query_type"] = "updateupdate";
+		ob_start();
+		include($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/admin/update_system_act.php");
+		$_1760501310 = ob_get_contents();
+		ob_end_clean();
+		return $_1760501310;
+	}
+
+	public static function Finish()
+	{
+		@unlink($_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/versions.php");
+	}
+
+	public static function Update($_1667599631 = "")
+	{
+		@set_time_limit(0);
+		ini_set("track_errors", "1");
+		ignore_user_abort(true);
+		$_1667599631 = trim($_1667599631);
+		if ($_1667599631 == "" || $_1667599631 == "CHK") {
+			$_1139428298 = CUpdateControllerSupport::CheckUpdates();
+			if ($_1139428298[0] == "ERROR") {
+				$_522224472 = "ERR|" . $_1139428298[1];
+			} elseif ($_1139428298[0] == "FINISH") {
+				$_522224472 = "FIN";
+			} elseif ($_1139428298[0] == "UPDSYS") {
+				$_522224472 = "UPS";
+			} elseif ($_1139428298[0] == "UPDATE") {
+				$_522224472 = "STP" . $_1139428298[1];
+			} else {
+				$_522224472 = "ERR|" . "UNK1";
+			}
+		} else {
+			if ($_1667599631 == "UPS") {
+				$_322260007 = CUpdateControllerSupport::UpdateUpdate();
+				if ($_322260007 == "Y") $_522224472 = "CHK"; else $_522224472 = "ERR|" . $_322260007;
+			} elseif (substr($_1667599631, 0, 3) == "STP") {
+				$_1277027716 = substr($_1667599631, 3);
+				if ($_1277027716 == "ML") {
+					$_322260007 = CUpdateControllerSupport::UpdateModules();
+					if ($_322260007 == "FIN") $_522224472 = "STP" . "L"; elseif (substr($_322260007, 0, 3) == "ERR") $_522224472 = "ERR|" . substr($_322260007, 3);
+					elseif (substr($_322260007, 0, 3) == "STP") $_522224472 = "STP" . "ML" . "|" . substr($_322260007, 3);
+					else $_522224472 = "ERR|" . "UNK01";
+				} elseif ($_1277027716 == "M") {
+					$_322260007 = CUpdateControllerSupport::UpdateModules();
+					if ($_322260007 == "FIN") $_522224472 = "FIN"; elseif (substr($_322260007, 0, 3) == "ERR") $_522224472 = "ERR|" . substr($_322260007, 3);
+					elseif (substr($_322260007, 0, 3) == "STP") $_522224472 = "STP" . "M" . "|" . substr($_322260007, 3);
+					else $_522224472 = "ERR|" . "UNK02";
+				} elseif ($_1277027716 == "L") {
+					$_322260007 = CUpdateControllerSupport::UpdateLangs();
+					if ($_322260007 == "FIN") $_522224472 = "FIN"; elseif (substr($_322260007, 0, 3) == "ERR") $_522224472 = "ERR|" . substr($_322260007, 3);
+					elseif (substr($_322260007, 0, 3) == "STP") $_522224472 = "STP" . "L" . "|" . substr($_322260007, 3);
+					else $_522224472 = "ERR|" . "UNK03";
+				} else {
+					$_522224472 = "ERR|" . "UNK2";
+				}
+			} else {
+				$_522224472 = "ERR|" . "UNK3";
+			}
+		}
+		if ($_522224472 == "FIN") CUpdateControllerSupport::Finish();
+		return $_522224472;
+	}
+
+	public static function CollectVersionsFile()
+	{
+		$_1329480955 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/versions.php";
+		@unlink($_1329480955);
+		$errorMessage = "";
+		$_1573213927  = CUpdateClient::GetCurrentModules($errorMessage);
+		if ($errorMessage == "") {
+			$_1518328039 = fopen($_1329480955, "w");
+			fwrite($_1518328039, "<" . "?");
+			fwrite($_1518328039, "\$arVersions = array(");
+			foreach ($_1573213927 as $_944152425 => $_163546139)
+				fwrite($_1518328039, "	\"".htmlspecialcharsbx($_944152425)."\" => \"".htmlspecialcharsbx($_163546139)."\",");
+			fwrite($_1518328039, ");");
+			fwrite($_1518328039, "?" . ">");
+			fclose($_1518328039);
+		}
+	}
+}
+
+class CUpdateExpertMode
+{
+	const OPTION_NAME = 'update_system_expert_mode';
+
+	public static function isAvailable()
+	{
+		return (version_compare(phpversion(), '7.0.0') >= 0 && defined('UPDATE_SYSTEM_EXPERT_MODE_ENABLED') && UPDATE_SYSTEM_EXPERT_MODE_ENABLED === true);
+	}
+
+	public static function isEnabled()
+	{
+		return (static::isAvailable() && COption::GetOptionString('main', 'update_system_expert_mode', 'N') === 'Y');
+	}
+
+	public static function enable()
+	{
+		COption::SetOptionString('main', 'update_system_expert_mode', 'Y');
+	}
+
+	public static function disable()
+	{
+		COption::SetOptionString('main', 'update_system_expert_mode', 'N');
+	}
+
+	public static function isCorrectModulesStructure($_405564040)
+	{
+		if (!is_array($_405564040)) {
+			return false;
+		}
+		$_525707952 = array_keys($_405564040);
+		if ($_525707952 === array_keys($_525707952)) {
+			return false;
+		}
+		$_2062014989 = reset($_405564040);
+		if (is_array($_2062014989) && isset($_2062014989["to"]) && is_string($_2062014989["to"])) {
+			return true;
+		}
+		return false;
+	}
+
+	public static function processModulesFrom($_405564040, $_1503380714)
+	{
+		if (!is_array($_1503380714)) {
+			return array();
+		}
+		if (!is_array($_405564040)) {
+			return $_1503380714;
+		}
+		foreach ($_1503380714 as $_1310272241 => $_932962422) {
+			if (!isset($_405564040[$_1310272241]["from"])) {
+				continue;
+			}
+			if (CUpdateClient::CompareVersions($_932962422, $_405564040[$_1310272241]["from"]) > 0) {
+				$_1503380714[$_1310272241] = $_405564040[$_1310272241]["from"];
+			}
+		}
+		return $_1503380714;
+	}
+
+	public static function extractModulesTo($_405564040)
+	{
+		if (!is_array($_405564040)) {
+			return array();
+		}
+		$_1491357081 = array();
+		foreach ($_405564040 as $_1310272241 => $_2138824924) {
+			if (isset($_2138824924["to"])) {
+				$_1491357081[$_1310272241] = $_2138824924["to"];
+			}
+		}
+		return $_1491357081;
+	}
+
+	public static function isIncludeTmpUpdatesEnabled()
+	{
+		return static::isEnabled() && COption::GetOptionString('main', 'update_system_expert_mode_include_tmp_updates', 'N') === 'Y';
+	}
+
+	public static function enableIncludeTmpUpdates()
+	{
+		COption::SetOptionString('main', 'update_system_expert_mode_include_tmp_updates', 'Y');
+	}
+
+	public static function disableIncludeTmpUpdates()
+	{
+		COption::SetOptionString('main', 'update_system_expert_mode_include_tmp_updates', 'N');
+	}
+} ?>

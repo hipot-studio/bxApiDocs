@@ -1,1 +1,41 @@
-<? namespace Bitrix\Main\UpdateSystem;$GLOBALS['____2062978049']= array(base64_decode(''.'Y'.'mFzZT'.'Y0X2RlY'.'29kZ'.'Q=='),base64_decode('dW5zZ'.'X'.'JpYWxpemU='),base64_decode(''.'b3'.'Blb'.'nNzbF92ZXJpZ'.'n'.'k'.'='),base64_decode('d'.'W'.'5zZXJp'.'Y'.'W'.'xpemU='));if(!function_exists(__NAMESPACE__.'\\___225703991')){function ___225703991($_344043504){static $_919564789= false; if($_919564789 == false) $_919564789=array(''.'YW'.'xsb3'.'dlZ'.'F9jbGF'.'zc2Vz',''.'aW5mb'.'w==','c2lnbmF0dX'.'Jl','c2hhMj'.'U2V2l'.'0aF'.'J'.'T'.'Q'.'UVu'.'Y3J5cHRpb24=','a'.'W'.'5mbw'.'='.'=','YWxsb3d'.'lZF9jbGFzc2Vz','RXJy'.'b3'.'IgdmVyaW'.'Z5IG'.'9'.'wZ'.'W5zc2wgW'.'0hDUFAwMV0=',''.'LS0'.'tLS1'.'CR'.'UdJTi'.'BQVU'.'J'.'MSUM'.'gS0V'.'ZLS0tLS0K'.'T'.'U'.'lJ'.'QklqQU5CZ2txaGtpRzl'.'3M'.'EJ'.'BUUV'.'GQ'.'U'.'FPQ0F'.'ROEFNSUlCQ2'.'d'.'L'.'Q0'.'FRRUE'.'2aGN'.'4SX'.'F'.'paXRVWlJ'.'Nd1'.'lpdWt'.'TVQpoOXhh'.'N'.'WZFRFls'.'Y'.'2N'.'iVzN2a'.'j'.'h'.'B'.'dmE'.'zNXZLc'.'V'.'ZO'.'NG'.'lC'.'OX'.'Rx'.'Q1g3alU4NnFBYTJ2MzdtYlRGNnBjWTZ'.'I'.'R1BBaFJ'.'GCmJwbndY'.'T1'.'k3WU'.'d4QjFuU0tadk'.'Ur'.'a'.'kFSYmlMTEJnWj'.'FjRzZaMGR'.'1dTVpM'.'VhocE'.'lSTDFjTj'.'BIaDVmZXpwa'.'l'.'hDN'.'k8'.'K'.'WXhZ'.'cTBuVG9IVGp5UmIxeWN6d3Rta'.'VJ'.'3'.'WXF'.'1ZFhnL3hXeHBwcXdGMHRVbGQz'.'UUJyM2'.'k2OEI4anFNb'.'StU'.'amRlQ'.'Qp1'.'L2ZnMUowSkd'.'0U'.'jQveks0RzdZSk'.'52aG11aHJSR2t5'.'Q'.'VFWM'.'FRWdTV'.'MR'.'X'.'Vn'.'U3hq'.'QXB'.'SbUlKUU5'.'IUU1LM'.'E'.'Vo'.'OTN3C'.'k'.'1ab'.'0ZvUH'.'A5U2d'.'KN0dhRlU4'.'a3pTK'.'0'.'V'.'RY250WX'.'h'.'iMU5I'.'VUpVSXZUZG'.'l1UlVl'.'RktseVRk'.'e'.'ElySDZDTC8'.'v'.'YXBNSDMKRndJ'.'R'.'EFRQUIK'.'L'.'S'.'0tLS1FTkQgUFVCTElDIEt'.'FWS'.'0'.'tLS0t');return base64_decode($_919564789[$_344043504]);}}; use Bitrix\Main\Application; use Bitrix\Main\Security\Cipher; use Bitrix\Main\Security\SecurityException; class HashCodeParser{ private string $_1996961862; public function __construct(string $_1996961862){ $this->_1996961862= $_1996961862;}  public function parse(){ $_1990700997= $GLOBALS['____2062978049'][0]($this->_1996961862); $_1990700997= $GLOBALS['____2062978049'][1]($_1990700997,[___225703991(0) => false]); if($GLOBALS['____2062978049'][2]($_1990700997[___225703991(1)], $_1990700997[___225703991(2)], $this->__643200814(), ___225703991(3)) == round(0+1)){ $_1135403189= Application::getInstance()->getLicense()->getHashLicenseKey(); $_988395176= new Cipher(); $_1133361788= $_988395176->decrypt($_1990700997[___225703991(4)], $_1135403189); return $GLOBALS['____2062978049'][3]($_1133361788,[___225703991(5) => false]);} throw new SecurityException(___225703991(6));} private function __643200814(): string{ return ___225703991(7);}}?>
+<? namespace Bitrix\Main\UpdateSystem;
+
+use Bitrix\Main\Application;
+use Bitrix\Main\Security\Cipher;
+use Bitrix\Main\Security\SecurityException;
+
+class HashCodeParser
+{
+	private string $_1996961862;
+
+	public function __construct(string $_1996961862)
+	{
+		$this->_1996961862 = $_1996961862;
+	}
+
+	public function parse()
+	{
+		$_1990700997 = base64_decode($this->_1996961862);
+		$_1990700997 = unserialize($_1990700997, ["allowed_classes" => false]);
+		if (openssl_verify($_1990700997["info"], $_1990700997["signature"], $this->__643200814(), "sha256WithRSAEncryption") == 1) {
+			$_1135403189 = Application::getInstance()->getLicense()->getHashLicenseKey();
+			$_988395176  = new Cipher();
+			$_1133361788 = $_988395176->decrypt($_1990700997["info"], $_1135403189);
+			return unserialize($_1133361788, ["allowed_classes" => false]);
+		}
+		throw new SecurityException("Error verify openssl [HCPP01]");
+	}
+
+	private function __643200814(): string
+	{
+		return "-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6hcxIqiitUZRMwYiukSU
+h9xa5fEDYlccbW3vj8Ava35vKqVN4iB9tqCX7jU86qAa2v37mbTF6pcY6HGPAhRF
+bpnwXOY7YGxB1nSKZvE+jARbiLLBgZ1cG6Z0duu5i1XhpIRL1cN0Hh5fezpjXC6O
+YxYq0nToHTjyRb1yczwtmiRwYqudXg/xWxppqwF0tUld3QBr3i68B8jqMm+TjdeA
+u/fg1J0JGtR4/zK4G7YJNvhmuhrRGkyAQV0TVu5LEugSxjApRmIJQNHQMK0Eh93w
+MZoFoPp9SgJ7GaFU8kzS+EQcntYxb1NHUJUIvTdiuRUeFKlyTdxIrH6CL//apMH3
+FwIDAQAB
+-----END PUBLIC KEY-----";
+	}
+} ?>
