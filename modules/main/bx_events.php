@@ -2548,6 +2548,37 @@ class _CEventsMain
 	public static function OnLocalRedirect()
 	{
 	}
-}
 
+	/**
+	 * @param $updatedModules
+	 * @param $currentModulesData
+	 * @param $BX_REAL_UPDATED_MODULES
+	 *
+	 * @return void
+	 * @see \CUpdateClient::finalizeModuleUpdate()
+	 */
+	public static function OnFinishModuleUpdate($updatedModules, $currentModulesData, $BX_REAL_UPDATED_MODULES)
+	{
+	}
+
+	/**
+	 * @param $modules
+	 *
+	 * @return void
+	 * @see \CUpdateClient::UpdateStepModules()
+	 */
+	public static function OnModuleUpdate($modules)
+	{
+	}
+
+	/**
+	 * @param $normalizedUpdates
+	 * @param $versionsData
+	 * @see \CUpdateClient::finalizeLanguageUpdate()
+	 * @return void
+	 */
+	public static function OnFinishLanguageUpdate($normalizedUpdates, $versionsData)
+	{
+	}
+}
 ?>

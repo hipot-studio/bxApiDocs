@@ -75,41 +75,68 @@ class CUpdateClient
 		return $_1178254619;
 	}
 
-	public static function finalizeModuleUpdate($_1675966945)
+	public static function finalizeModuleUpdate($modules)
 	{
-		$_1455832098 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/updater_versions.php";
-		$_1342175707 = array();
-		if (file_exists($_1455832098))
-			$_1342175707 = include($_1455832098);
-		$_1533037351 = array();
-		$_753089015  = array();
-		foreach ($_1675966945 as $_1373643817) {
-			$_139629394  = preg_replace("/[^a-zA-Z0-9._-]/", "", $_1373643817["@"]["NAME"]);
-			$_1706943504 = implode(".", array_slice(array_map("intval", explode(".", $_1373643817["@"]["VALUE"])), 0, 3));
-			if (isset($_1533037351[$_139629394 . "#" . $_1706943504]))
-				continue;
-			$_1533037351[$_139629394 . "#" . $_1706943504] = true;
-			if (!isset($_753089015[$_139629394]))
-				$_753089015[$_139629394] = array();
-			$_753089015[$_139629394][] = $_1706943504;
-			if (!isset($_1342175707["modules"][$_139629394]))
-				$_1342175707["modules"][$_139629394] = array();
-			$_1342175707["modules"][$_139629394][] = array($_1706943504, date("Y-m-d H:i:s"));
+		$updaterFilePath = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/updater_versions.php";
+		$currentModulesData = [];
+
+		// Загрузка существующих модулей, если файл уже существует
+		if (file_exists($updaterFilePath)) {
+			$currentModulesData = include $updaterFilePath;
 		}
 
-		$_685670079 = var_export($_1342175707, true);
-		file_put_contents($_1455832098, "<" . "?php return " . $_685670079 . ";");
-		if (class_exists("Bitrix\Main\Data\CacheEngineFiles")) {
-			$_282031458 = new Bitrix\Main\Data\CacheEngineFiles();
-			$_282031458->clean(BX_PERSONAL_ROOT . "/cache", "/css/");
-			$_282031458->clean(BX_PERSONAL_ROOT . "/cache", "/js/");
-			$_282031458->clean(BX_PERSONAL_ROOT . "/managed_cache/MYSQL", "/css/");
-			$_282031458->clean(BX_PERSONAL_ROOT . "/managed_cache/MYSQL", "/js/");
+		$processedVersions = [];
+		$updatedModules = [];
+
+		foreach ($modules as $moduleInfo) {
+			$moduleName = preg_replace("/[^a-zA-Z0-9._-]/", "", $moduleInfo["@"]["NAME"]);
+			$moduleVersion = implode(".", array_slice(array_map("intval", explode(".", $moduleInfo["@"]["VALUE"])), 0, 3));
+
+			// Не обрабатываем, если модуль с этой версией уже добавлен
+			$moduleKey = $moduleName . "#" . $moduleVersion;
+			if (isset($processedVersions[$moduleKey])) {
+				continue;
+			}
+
+			$processedVersions[$moduleKey] = true;
+
+			// Инициализация обновлённого модуля
+			if (!isset($updatedModules[$moduleName])) {
+				$updatedModules[$moduleName] = [];
+			}
+			$updatedModules[$moduleName][] = $moduleVersion;
+
+			// Информация о версиях модуля
+			if (!isset($currentModulesData["modules"][$moduleName])) {
+				$currentModulesData["modules"][$moduleName] = [];
+			}
+			$currentModulesData["modules"][$moduleName][] = [$moduleVersion, date("Y-m-d H:i:s")];
 		}
-		foreach (GetModuleEvents("main", "OnFinishModuleUpdate", true) as $_1599781934) {
-			ExecuteModuleEventEx($_1599781934, array($_753089015, $_1342175707, isset($GLOBALS["BX_REAL_UPDATED_MODULES"]) ? $GLOBALS["BX_REAL_UPDATED_MODULES"] : array()));
+
+		// Сохранение обобщённых данных о модулях
+		$exportedData = var_export($currentModulesData, true);
+		file_put_contents($updaterFilePath, "<?php return " . $exportedData . ";");
+
+		// Очистка кэшей, если определён класс `Bitrix\Main\Data\CacheEngineFiles`
+		if (class_exists("Bitrix\Main\Data\CacheEngineFiles")) {
+			$cacheEngine = new Bitrix\Main\Data\CacheEngineFiles();
+
+			$cacheEngine->clean(BX_PERSONAL_ROOT . "/cache", "/css/");
+			$cacheEngine->clean(BX_PERSONAL_ROOT . "/cache", "/js/");
+			$cacheEngine->clean(BX_PERSONAL_ROOT . "/managed_cache/MYSQL", "/css/");
+			$cacheEngine->clean(BX_PERSONAL_ROOT . "/managed_cache/MYSQL", "/js/");
+		}
+
+		// Генерация событий
+		foreach (GetModuleEvents("main", "OnFinishModuleUpdate", true) as $event) {
+			ExecuteModuleEventEx($event, [
+				$updatedModules,
+				$currentModulesData,
+				$GLOBALS["BX_REAL_UPDATED_MODULES"] ?? []
+			]);
 		}
 	}
+
 
 	public static function finalizeLanguageUpdate($_2054273693)
 	{
