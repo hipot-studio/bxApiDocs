@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main;
+use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale;
 use Bitrix\Sale\Internals;
@@ -1084,8 +1086,8 @@ class CAllSaleOrder
 			$arSelectFields = $arGroupBy;
 			foreach ($arGroupBy as $key => $val)
 			{
-				$val = ToUpper($val);
-				$key = ToUpper($key);
+				$val = mb_strtoupper($val);
+				$key = mb_strtoupper($key);
 				if (array_key_exists($val, $arFields) && !in_array($key, $arGroupByFunct))
 				{
 					if ($strSqlGroupBy != '')
@@ -1137,14 +1139,14 @@ class CAllSaleOrder
 
 					if ($arFields[$arFieldsKeys[$i]]["TYPE"] == "datetime")
 					{
-						if ((ToUpper($DB->type)=="ORACLE" || ToUpper($DB->type)=="MSSQL") && (array_key_exists($arFieldsKeys[$i], $arOrder)))
+						if ((mb_strtoupper($DB->type)=="ORACLE" || mb_strtoupper($DB->type)=="MSSQL") && (array_key_exists($arFieldsKeys[$i], $arOrder)))
 							$strSqlSelect .= $arFields[$arFieldsKeys[$i]]["FIELD"]." as ".$arFieldsKeys[$i]."_X1, ";
 
 						$strSqlSelect .= $DB->DateToCharFunction($arFields[$arFieldsKeys[$i]]["FIELD"], "FULL")." as ".$arFieldsKeys[$i];
 					}
 					elseif ($arFields[$arFieldsKeys[$i]]["TYPE"] == "date")
 					{
-						if ((ToUpper($DB->type)=="ORACLE" || ToUpper($DB->type)=="MSSQL") && (array_key_exists($arFieldsKeys[$i], $arOrder)))
+						if ((mb_strtoupper($DB->type)=="ORACLE" || mb_strtoupper($DB->type)=="MSSQL") && (array_key_exists($arFieldsKeys[$i], $arOrder)))
 							$strSqlSelect .= $arFields[$arFieldsKeys[$i]]["FIELD"]." as ".$arFieldsKeys[$i]."_X1, ";
 
 						$strSqlSelect .= $DB->DateToCharFunction($arFields[$arFieldsKeys[$i]]["FIELD"], "SHORT")." as ".$arFieldsKeys[$i];
@@ -1167,8 +1169,8 @@ class CAllSaleOrder
 			{
 				foreach ($arSelectFields as $key => $val)
 				{
-					$val = ToUpper($val);
-					$key = ToUpper($key);
+					$val = mb_strtoupper($val);
+					$key = mb_strtoupper($key);
 					if (array_key_exists($val, $arFields))
 					{
 						if ($strSqlSelect <> '')
@@ -1182,14 +1184,14 @@ class CAllSaleOrder
 						{
 							if ($arFields[$val]["TYPE"] == "datetime")
 							{
-								if ((ToUpper($DB->type)=="ORACLE" || ToUpper($DB->type)=="MSSQL") && (array_key_exists($val, $arOrder)))
+								if ((mb_strtoupper($DB->type)=="ORACLE" || mb_strtoupper($DB->type)=="MSSQL") && (array_key_exists($val, $arOrder)))
 									$strSqlSelect .= $arFields[$val]["FIELD"]." as ".$val."_X1, ";
 
 								$strSqlSelect .= $DB->DateToCharFunction($arFields[$val]["FIELD"], "FULL")." as ".$val;
 							}
 							elseif ($arFields[$val]["TYPE"] == "date")
 							{
-								if ((ToUpper($DB->type)=="ORACLE" || ToUpper($DB->type)=="MSSQL") && (array_key_exists($val, $arOrder)))
+								if ((mb_strtoupper($DB->type)=="ORACLE" || mb_strtoupper($DB->type)=="MSSQL") && (array_key_exists($val, $arOrder)))
 									$strSqlSelect .= $arFields[$val]["FIELD"]." as ".$val."_X1, ";
 
 								$strSqlSelect .= $DB->DateToCharFunction($arFields[$val]["FIELD"], "SHORT")." as ".$val;
@@ -1268,7 +1270,8 @@ class CAllSaleOrder
 							{
 								array_walk(
 									$vals,
-									function (&$item) {
+									function (&$item)
+									{
 										$item = (int)$item;
 									}
 								);
@@ -1300,7 +1303,8 @@ class CAllSaleOrder
 							{
 								array_walk(
 									$vals,
-									function (&$item) {
+									function (&$item)
+									{
 										$item = "'".$GLOBALS["DB"]->ForSql($item)."'";
 									}
 								);
@@ -1316,7 +1320,8 @@ class CAllSaleOrder
 							{
 								array_walk(
 									$vals,
-									function (&$item) {
+									function (&$item)
+									{
 										$item = $GLOBALS["DB"]->CharToDateFunction($item, "FULL");
 									}
 								);
@@ -1332,7 +1337,8 @@ class CAllSaleOrder
 							{
 								array_walk(
 									$vals,
-									function (&$item) {
+									function (&$item)
+									{
 										$item = $GLOBALS["DB"]->CharToDateFunction($item, "SHORT");
 									}
 								);
@@ -1478,8 +1484,8 @@ class CAllSaleOrder
 			$arOrder = array();
 		foreach ($arOrder as $by => $order)
 		{
-			$by = ToUpper($by);
-			$order = ToUpper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 
 			if ($order != "ASC")
 				$order = "DESC";
@@ -1522,7 +1528,7 @@ class CAllSaleOrder
 			$order = (mb_substr($arSqlOrder[$i], -3) == "ASC") ? "ASC" : "DESC";
 			if (!$nullsLast)
 			{
-				if(ToUpper($DB->type)=="ORACLE")
+				if(mb_strtoupper($DB->type)=="ORACLE")
 				{
 					if($order === "ASC")
 						$strSqlOrderBy .= $arSqlOrder[$i]." NULLS FIRST";
@@ -1535,14 +1541,14 @@ class CAllSaleOrder
 			else
 			{
 				$field = mb_substr($arSqlOrder[$i], 0, -mb_strlen($order) - 1);
-				if(ToUpper($DB->type) === "MYSQL")
+				if(mb_strtoupper($DB->type) === "MYSQL")
 				{
 					if($order === 'ASC')
 						$strSqlOrderBy .= '(CASE WHEN ISNULL('.$field.') THEN 1 ELSE 0 END) '.$order.', '.$field." ".$order;
 					else
 						$strSqlOrderBy .= $field." ".$order;
 				}
-				elseif(ToUpper($DB->type) === "MSSQL")
+				elseif(mb_strtoupper($DB->type) === "MSSQL")
 				{
 					if($order === 'ASC')
 						$strSqlOrderBy .= '(CASE WHEN '.$field.' IS NULL THEN 1 ELSE 0 END) '.$order.', '.$field." ".$order;
@@ -1550,7 +1556,7 @@ class CAllSaleOrder
 						$strSqlOrderBy .= $field." ".$order;
 
 				}
-				elseif(ToUpper($DB->type) === "ORACLE")
+				elseif(mb_strtoupper($DB->type) === "ORACLE")
 				{
 					if($order === 'DESC')
 						$strSqlOrderBy .= $field." ".$order." NULLS LAST";
@@ -1602,7 +1608,7 @@ class CAllSaleOrder
 					"FROM b_sale_order O ".
 					"WHERE O.ID = ".$ID."";
 
-				$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$db_res = $DB->Query($strSql);
 			}
 
 			if ($res = $db_res->Fetch())
@@ -1729,8 +1735,8 @@ class CAllSaleOrder
 		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
 
-		$NO_CHANGE_STATUS = "N";
-		if (is_set($arAdditionalFields["NOT_CHANGE_STATUS"]) && $arAdditionalFields["NOT_CHANGE_STATUS"] == "Y")
+		$NO_CHANGE_STATUS = 'N';
+		if (isset($arAdditionalFields['NOT_CHANGE_STATUS']) && $arAdditionalFields['NOT_CHANGE_STATUS'] === 'Y')
 		{
 			$NO_CHANGE_STATUS = "Y";
 			unset($arAdditionalFields["NOT_CHANGE_STATUS"]);
@@ -1779,11 +1785,13 @@ class CAllSaleOrder
 			}
 		}
 
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
 
 			$arFields = array(
 				"PAYED" => $val,
-				"=DATE_PAYED" => $DB->GetNowFunction(),
-				"EMP_PAYED_ID" => ( intval($USER->GetID())>0 ? intval($USER->GetID()) : false ),
+				"=DATE_PAYED" => $helper->getCurrentDateTimeFunction(),
+				"EMP_PAYED_ID" => ((int)$USER->GetID() > 0 ? (int)$USER->GetID() : false),
 				"SUM_PAID" => 0
 			);
 			if (count($arAdditionalFields) > 0)
@@ -1929,7 +1937,7 @@ class CAllSaleOrder
 		$isOrderConverted = \Bitrix\Main\Config\Option::get("main", "~sale_converted_15", 'Y');
 
 		$NO_CHANGE_STATUS = "N";
-		if (is_set($arAdditionalFields["NOT_CHANGE_STATUS"]) && $arAdditionalFields["NOT_CHANGE_STATUS"] == "Y")
+		if (isset($arAdditionalFields['NOT_CHANGE_STATUS']) && $arAdditionalFields['NOT_CHANGE_STATUS'] === 'Y')
 		{
 			$NO_CHANGE_STATUS = "Y";
 			unset($arAdditionalFields["NOT_CHANGE_STATUS"]);
@@ -2536,13 +2544,39 @@ class CAllSaleOrder
 
 	public static function IsLocked($ID, &$lockedBY, &$dateLock)
 	{
-		$ID = intval($ID);
+		$ID = (int)$ID;
 
-		$lockStatus = CSaleOrder::GetLockStatus($ID, $lockedBY, $dateLock);
-		if ($lockStatus == "red")
-			return true;
+		return static::GetLockStatus($ID, $lockedBY, $dateLock) === 'red';
+	}
 
-		return false;
+	public static function GetLockStatus($ID, &$lockedBY, &$dateLock)
+	{
+		$ID = (int)$ID;
+		if ($ID <= 0)
+		{
+			return 'green';
+		}
+
+		$order = Sale\Internals\OrderTable::getRow([
+			'select' => [
+				'LOCKED_BY',
+				'LOCK_STATUS',
+				'DATE_LOCK',
+			],
+			'filter' => [
+				'=ID' => $ID,
+			],
+		]);
+
+		if ($order === null)
+		{
+			return 'green';
+		}
+
+		$lockedBY = $order['LOCKED_BY'];
+		$dateLock = $order['DATE_LOCK'] instanceof Main\Type\DateTime ? $order['DATE_LOCK']->toString() : $order['DATE_LOCK'];
+
+		return $order['LOCK_STATUS'];
 	}
 
 	public static function RemindPayment()
@@ -3009,7 +3043,7 @@ class CAllSaleOrder
 
 		if (is_array($arGroupBy) && count($arGroupBy) == 0)
 		{
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			if ($arRes = $dbRes->Fetch())
 				return $arRes["CNT"];
 			else
@@ -3024,7 +3058,7 @@ class CAllSaleOrder
 			if ($arSqls["GROUPBY"] <> '')
 				$strSql_tmp .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
-			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql_tmp);
 			$cnt = 0;
 			if ($arSqls["GROUPBY"] == '')
 			{
@@ -3046,7 +3080,7 @@ class CAllSaleOrder
 				$strSql = $DB->TopSql($strSql, $arNavStartParams["nTopCount"]);
 			}
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 		}
 
 		return $dbRes;
@@ -3097,7 +3131,7 @@ class CAllSaleOrder
 	/**
 	* Sets order account number
 	* Use OnBeforeOrderAccountNumberSet event to generate custom account number.
-	* Account number value must be unique! By default order ID is used if generated value is incorrect
+	* Account number value must be unique! By default, order ID is used if generated value is incorrect
 	*
 	* @param int $ID - order ID
 	* @return bool - true if account number is set successfully
@@ -3290,12 +3324,12 @@ class CAllSaleOrder
 		/** @var Sale\Order $orderClass */
 		$orderClass = $registry->getOrderClassName();
 
-		$res = $orderClass::getList(array(
-		   'filter' => array(
-			   '=ID' => $list
-		   ),
-		   'select' => $selectOrder
-	   ));
+		$res = $orderClass::getList([
+			'filter' => [
+				'=ID' => $list,
+			],
+			'select' => $selectOrder,
+		]);
 		while($orderData = $res->fetch())
 		{
 			if (!in_array($orderData['LID'], array_keys($siteList)))

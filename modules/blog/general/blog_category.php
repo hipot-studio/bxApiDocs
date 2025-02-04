@@ -1,96 +1,108 @@
 <?php
 
 IncludeModuleLangFile(__FILE__);
-$GLOBALS['BLOG_CATEGORY'] = [];
 
-class blog_category
+$GLOBALS["BLOG_CATEGORY"] = Array();
+
+class CAllBlogCategory
 {
-    // ADD, UPDATE, DELETE
-    public static function CheckFields($ACTION, &$arFields, $ID = 0)
-    {
-        if ((is_set($arFields, 'NAME') || 'ADD' === $ACTION) && '' === $arFields['NAME']) {
-            $GLOBALS['APPLICATION']->ThrowException(GetMessage('BLG_GCT_EMPTY_NAME'), 'EMPTY_NAME');
+	/*************** ADD, UPDATE, DELETE *****************/
+	public static function CheckFields($ACTION, &$arFields, $ID = 0)
+	{
+		if ((is_set($arFields, "NAME") || $ACTION=="ADD") && $arFields["NAME"] == '')
+		{
+			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("BLG_GCT_EMPTY_NAME"), "EMPTY_NAME");
+			return false;
+		}
 
-            return false;
-        }
+		if ((is_set($arFields, "BLOG_ID") || $ACTION=="ADD") && intval($arFields["BLOG_ID"]) <= 0)
+		{
+			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("BLG_GCT_EMPTY_BLOG_ID"), "EMPTY_BLOG_ID");
+			return false;
+		}
+		elseif (is_set($arFields, "BLOG_ID"))
+		{
+			$arResult = CBlog::GetByID($arFields["BLOG_ID"]);
+			if (!$arResult)
+			{
+				$GLOBALS["APPLICATION"]->ThrowException(str_replace("#ID#", $arFields["BLOG_ID"], GetMessage("BLG_GCT_ERROR_NO_BLOG")), "ERROR_NO_BLOG");
+				return false;
+			}
+		}
+		
+		if(is_set($arFields, "NAME"))
+		{
+			if(intval($arFields["BLOG_ID"])>0)
+			{
+				$blogID = $arFields["BLOG_ID"];
+			}
+			elseif(intval($ID)>0)
+			{
+				$arCat = CBlogCategory::GetByID($ID);
+				$blogID = $arCat["BLOG_ID"];
+			}
+			else
+			{
+				$GLOBALS["APPLICATION"]->ThrowException(GetMessage("BLG_GCT_EMPTY_BLOG_ID"), "EMPTY_BLOG_ID");
+				return false;
+			}
 
-        if ((is_set($arFields, 'BLOG_ID') || 'ADD' === $ACTION) && (int) $arFields['BLOG_ID'] <= 0) {
-            $GLOBALS['APPLICATION']->ThrowException(GetMessage('BLG_GCT_EMPTY_BLOG_ID'), 'EMPTY_BLOG_ID');
+			if(mb_strlen($arFields["NAME"]) > 255)
+			{
+				$arFields["NAME"] = mb_substr($arFields["NAME"], 0, 255);
+			}
+			$dbCategory = CBlogCategory::GetList(array(), array("BLOG_ID" => $blogID, "NAME" => $arFields["NAME"]));
+			while($arCategory = $dbCategory->Fetch())
+			{
+				if ($ID != $arCategory["ID"])
+				{
+					$GLOBALS["APPLICATION"]->ThrowException(GetMessage("BLG_ALREADY_EXIST"), "ALREADY_EXIST");
+					return false;
+				}
+			}
+		}
 
-            return false;
-        }
-        if (is_set($arFields, 'BLOG_ID')) {
-            $arResult = CBlog::GetByID($arFields['BLOG_ID']);
-            if (!$arResult) {
-                $GLOBALS['APPLICATION']->ThrowException(str_replace('#ID#', $arFields['BLOG_ID'], GetMessage('BLG_GCT_ERROR_NO_BLOG')), 'ERROR_NO_BLOG');
+		return True;
+	}
 
-                return false;
-            }
-        }
+	public static function Delete($ID)
+	{
+		global $DB;
 
-        if (is_set($arFields, 'NAME')) {
-            if ((int) $arFields['BLOG_ID'] > 0) {
-                $blogID = $arFields['BLOG_ID'];
-            } elseif ((int) $ID > 0) {
-                $arCat = CBlogCategory::GetByID($ID);
-                $blogID = $arCat['BLOG_ID'];
-            } else {
-                $GLOBALS['APPLICATION']->ThrowException(GetMessage('BLG_GCT_EMPTY_BLOG_ID'), 'EMPTY_BLOG_ID');
+		$ID = intval($ID);
 
-                return false;
-            }
+		$DB->Query("UPDATE b_blog_post SET CATEGORY_ID = null WHERE CATEGORY_ID = ".$ID."", true);
 
-            if (strlen($arFields['NAME']) > 255) {
-                $arFields['NAME'] = substr($arFields['NAME'], 0, 255);
-            }
-            $dbCategory = CBlogCategory::GetList([], ['BLOG_ID' => $blogID, 'NAME' => $arFields['NAME']]);
-            while ($arCategory = $dbCategory->Fetch()) {
-                if ($ID !== $arCategory['ID']) {
-                    $GLOBALS['APPLICATION']->ThrowException(GetMessage('BLG_ALREADY_EXIST'), 'ALREADY_EXIST');
+		unset($GLOBALS["BLOG_CATEGORY"]["BLOG_CATEGORY_CACHE_".$ID]);
 
-                    return false;
-                }
-            }
-        }
+		return $DB->Query("DELETE FROM b_blog_category WHERE ID = ".$ID."", true);
+	}
 
-        return true;
-    }
+	//*************** SELECT *********************/
+	public static function GetByID($ID)
+	{
+		global $DB;
 
-    public static function Delete($ID)
-    {
-        global $DB;
+		$ID = intval($ID);
 
-        $ID = (int) $ID;
+		if (isset($GLOBALS["BLOG_CATEGORY"]["BLOG_CATEGORY_CACHE_".$ID]) && is_array($GLOBALS["BLOG_CATEGORY"]["BLOG_CATEGORY_CACHE_".$ID]) && is_set($GLOBALS["BLOG_CATEGORY"]["BLOG_CATEGORY_CACHE_".$ID], "ID"))
+		{
+			return $GLOBALS["BLOG_CATEGORY"]["BLOG_CATEGORY_CACHE_".$ID];
+		}
+		else
+		{
+			$strSql =
+				"SELECT C.ID, C.BLOG_ID, C.NAME ".
+				"FROM b_blog_category C ".
+				"WHERE C.ID = ".$ID."";
+			$dbResult = $DB->Query($strSql);
+			if ($arResult = $dbResult->Fetch())
+			{
+				$GLOBALS["BLOG_CATEGORY"]["BLOG_CATEGORY_CACHE_".$ID] = $arResult;
+				return $arResult;
+			}
+		}
 
-        $DB->Query('UPDATE b_blog_post SET CATEGORY_ID = null WHERE CATEGORY_ID = '.$ID.'', true);
-
-        unset($GLOBALS['BLOG_CATEGORY']['BLOG_CATEGORY_CACHE_'.$ID]);
-
-        return $DB->Query('DELETE FROM b_blog_category WHERE ID = '.$ID.'', true);
-    }
-
-    // *************** SELECT *********************/
-    public static function GetByID($ID)
-    {
-        global $DB;
-
-        $ID = (int) $ID;
-
-        if (isset($GLOBALS['BLOG_CATEGORY']['BLOG_CATEGORY_CACHE_'.$ID]) && is_array($GLOBALS['BLOG_CATEGORY']['BLOG_CATEGORY_CACHE_'.$ID]) && is_set($GLOBALS['BLOG_CATEGORY']['BLOG_CATEGORY_CACHE_'.$ID], 'ID')) {
-            return $GLOBALS['BLOG_CATEGORY']['BLOG_CATEGORY_CACHE_'.$ID];
-        }
-
-        $strSql =
-            'SELECT C.ID, C.BLOG_ID, C.NAME '.
-            'FROM b_blog_category C '.
-            'WHERE C.ID = '.$ID.'';
-        $dbResult = $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
-        if ($arResult = $dbResult->Fetch()) {
-            $GLOBALS['BLOG_CATEGORY']['BLOG_CATEGORY_CACHE_'.$ID] = $arResult;
-
-            return $arResult;
-        }
-
-        return false;
-    }
+		return False;
+	}
 }

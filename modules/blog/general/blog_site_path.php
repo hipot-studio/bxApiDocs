@@ -1,139 +1,143 @@
 <?php
 
 IncludeModuleLangFile(__FILE__);
-$GLOBALS['BLOG_SITE_PATH'] = [];
 
-class blog_site_path
+$GLOBALS["BLOG_SITE_PATH"] = Array();
+
+class CAllBlogSitePath
 {
-    // ADD, UPDATE, DELETE
-    public static function CheckFields($ACTION, &$arFields, $ID = 0)
-    {
-        /*
-                if ((is_set($arFields, "TYPE") || $ACTION=="ADD") && strlen($arFields["TYPE"]) <= 0)
-                {
-                    $GLOBALS["APPLICATION"]->ThrowException(GetMessage("BLG_GSP_EMPTY_TYPE"), "EMPTY_TYPE");
-                    return false;
-                }
-        */
-        if ((is_set($arFields, 'PATH') || 'ADD' === $ACTION) && '' === $arFields['PATH']) {
-            $GLOBALS['APPLICATION']->ThrowException(GetMessage('BLG_GSP_EMPTY_PATH'), 'EMPTY_PATH');
+	/*************** ADD, UPDATE, DELETE *****************/
+	public static function CheckFields($ACTION, &$arFields, $ID = 0)
+	{
+		if ((is_set($arFields, "PATH") || $ACTION=="ADD") && $arFields["PATH"] == '')
+		{
+			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("BLG_GSP_EMPTY_PATH"), "EMPTY_PATH");
+			return false;
+		}
+		elseif (is_set($arFields, "PATH"))
+		{
+			$arFields["PATH"] = trim(str_replace("\\", "/", $arFields["PATH"]));
+		}
 
-            return false;
-        }
-        if (is_set($arFields, 'PATH')) {
-            $arFields['PATH'] = trim(str_replace('\\', '/', $arFields['PATH']));
-        }
+		if ((is_set($arFields, "SITE_ID") || $ACTION=="ADD") && $arFields["SITE_ID"] == '')
+		{
+			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("BLG_GSP_EMPTY_SITE_ID"), "EMPTY_SITE_ID");
+			return false;
+		}
+		elseif (is_set($arFields, "SITE_ID"))
+		{
+			$dbResult = CSite::GetByID($arFields["SITE_ID"]);
+			if (!$dbResult->Fetch())
+			{
+				$GLOBALS["APPLICATION"]->ThrowException(str_replace("#ID#", $arFields["SITE_ID"], GetMessage("BLG_GSP_ERROR_NO_SITE")), "ERROR_NO_SITE");
+				return false;
+			}
+		}
 
-        if ((is_set($arFields, 'SITE_ID') || 'ADD' === $ACTION) && '' === $arFields['SITE_ID']) {
-            $GLOBALS['APPLICATION']->ThrowException(GetMessage('BLG_GSP_EMPTY_SITE_ID'), 'EMPTY_SITE_ID');
+		if(is_set($arFields, "SITE_ID") && $arFields["SITE_ID"] <> '' && is_set($arFields, "TYPE") && $arFields["TYPE"] <> '')
+		{
+			$dbPath = CBlogSitePath::GetList(array(), array("SITE_ID" => $arFields["SITE_ID"], "TYPE" => $arFields["TYPE"]));
+			if($dbPath->Fetch())
+			{
+				$GLOBALS["APPLICATION"]->ThrowException(GetMessage("BLG_GSP_ERROR_DUPLICATE"), "ERROR_DUPLICATE");
+				return false;
 
-            return false;
-        }
-        if (is_set($arFields, 'SITE_ID')) {
-            $dbResult = CSite::GetByID($arFields['SITE_ID']);
-            if (!$dbResult->Fetch()) {
-                $GLOBALS['APPLICATION']->ThrowException(str_replace('#ID#', $arFields['SITE_ID'], GetMessage('BLG_GSP_ERROR_NO_SITE')), 'ERROR_NO_SITE');
+			}
+		}
 
-                return false;
-            }
-        }
+		return True;
+	}
 
-        if (is_set($arFields, 'SITE_ID') && '' !== $arFields['SITE_ID'] && is_set($arFields, 'TYPE') && '' !== $arFields['TYPE']) {
-            $dbPath = CBlogSitePath::GetList([], ['SITE_ID' => $arFields['SITE_ID'], 'TYPE' => $arFields['TYPE']]);
-            if ($dbPath->Fetch()) {
-                $GLOBALS['APPLICATION']->ThrowException(GetMessage('BLG_GSP_ERROR_DUPLICATE'), 'ERROR_DUPLICATE');
+	public static function Delete($ID)
+	{
+		global $DB;
 
-                return false;
-            }
-        }
+		$ID = intval($ID);
 
-        return true;
-    }
+		$arPath = CBlogSitePath::GetByID($ID);
+		if ($arPath)
+			unset($GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH1_CACHE_".$arPath["SITE_ID"]]);
 
-    public static function Delete($ID)
-    {
-        global $DB;
+		unset($GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH_CACHE_".$ID]);
 
-        $ID = (int) $ID;
+		return $DB->Query("DELETE FROM b_blog_site_path WHERE ID = ".$ID."", true);
+	}
 
-        $arPath = CBlogSitePath::GetByID($ID);
-        if ($arPath) {
-            unset($GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH1_CACHE_'.$arPath['SITE_ID']], $GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH_CACHE_'.$ID]);
-        }
+	//*************** SELECT *********************/
+	public static function GetByID($ID)
+	{
+		global $DB;
 
-        return $DB->Query('DELETE FROM b_blog_site_path WHERE ID = '.$ID.'', true);
-    }
+		$ID = intval($ID);
 
-    // *************** SELECT *********************/
-    public static function GetByID($ID)
-    {
-        global $DB;
+		if (isset($GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH_CACHE_".$ID]) && is_array($GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH_CACHE_".$ID]) && is_set($GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH_CACHE_".$ID], "ID"))
+		{
+			return $GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH_CACHE_".$ID];
+		}
+		else
+		{
+			$strSql =
+				"SELECT P.ID, P.SITE_ID, P.PATH, P.TYPE ".
+				"FROM b_blog_site_path P ".
+				"WHERE P.ID = ".$ID."";
+			$dbResult = $DB->Query($strSql);
+			if ($arResult = $dbResult->Fetch())
+			{
+				$GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH_CACHE_".$ID] = $arResult;
+				$GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH1_CACHE_".$arResult["SITE_ID"]] = $arResult;
+				return $arResult;
+			}
+		}
 
-        $ID = (int) $ID;
+		return False;
+	}
 
-        if (isset($GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH_CACHE_'.$ID]) && is_array($GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH_CACHE_'.$ID]) && is_set($GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH_CACHE_'.$ID], 'ID')) {
-            return $GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH_CACHE_'.$ID];
-        }
+	public static function GetBySiteID($siteID)
+	{
+		global $DB;
 
-        $strSql =
-            'SELECT P.ID, P.SITE_ID, P.PATH, P.TYPE '.
-            'FROM b_blog_site_path P '.
-            'WHERE P.ID = '.$ID.'';
-        $dbResult = $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
-        if ($arResult = $dbResult->Fetch()) {
-            $GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH_CACHE_'.$ID] = $arResult;
-            $GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH1_CACHE_'.$arResult['SITE_ID']] = $arResult;
+		$siteID = Trim($siteID);
+		if ($siteID == '')
+			return False;
 
-            return $arResult;
-        }
+		if (isset($GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH1_CACHE_".$siteID]) && is_array($GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH1_CACHE_".$siteID]) && is_set($GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH1_CACHE_".$siteID], "ID"))
+		{
+			return $GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH1_CACHE_".$siteID];
+		}
+		else
+		{
+			$strSql =
+				"SELECT P.ID, P.SITE_ID, P.PATH, P.TYPE ".
+				"FROM b_blog_site_path P ".
+				"WHERE P.SITE_ID = '".$DB->ForSql($siteID)."' AND P.TYPE is null";
+			$dbResult = $DB->Query($strSql);
+			while($arResult = $dbResult->Fetch())
+			{
+				$GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH1_CACHE_".$siteID] = $arResult;
+				$GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH_CACHE_".$arResult["ID"]] = $arResult;
+				return $arResult;
+			}
+		}
 
-        return false;
-    }
+		return False;
+	}
+	
+	public static function DeleteBySiteID($siteID)
+	{
+		global $DB;
 
-    public static function GetBySiteID($siteID)
-    {
-        global $DB;
+		$siteID = Trim($siteID);
+		if ($siteID == '')
+			return False;
 
-        $siteID = trim($siteID);
-        if ('' === $siteID) {
-            return false;
-        }
-
-        if (isset($GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH1_CACHE_'.$siteID]) && is_array($GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH1_CACHE_'.$siteID]) && is_set($GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH1_CACHE_'.$siteID], 'ID')) {
-            return $GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH1_CACHE_'.$siteID];
-        }
-
-        $strSql =
-            'SELECT P.ID, P.SITE_ID, P.PATH, P.TYPE '.
-            'FROM b_blog_site_path P '.
-            "WHERE P.SITE_ID = '".$DB->ForSql($siteID)."' AND P.TYPE is null";
-        $dbResult = $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
-        while ($arResult = $dbResult->Fetch()) {
-            $GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH1_CACHE_'.$siteID] = $arResult;
-            $GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH_CACHE_'.$arResult['ID']] = $arResult;
-
-            return $arResult;
-        }
-
-        return false;
-    }
-
-    public static function DeleteBySiteID($siteID)
-    {
-        global $DB;
-
-        $siteID = trim($siteID);
-        if ('' === $siteID) {
-            return false;
-        }
-
-        $dbPath = CBlogSitePath::GetList([], ['SITE_ID' => $siteID]);
-        while ($arPath = $dbPath->Fetch()) {
-            unset($GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH1_CACHE_'.$arPath['SITE_ID']], $GLOBALS['BLOG_SITE_PATH']['BLOG_SITE_PATH_CACHE_'.$arPath['ID']]);
-
-            return $DB->Query('DELETE FROM b_blog_site_path WHERE ID = '.$arPath['ID'].'', true);
-        }
-
-        return true;
-    }
+		$dbPath = CBlogSitePath::GetList(Array(), Array("SITE_ID" => $siteID));
+		while($arPath = $dbPath -> Fetch())
+		{
+			unset($GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH1_CACHE_".$arPath["SITE_ID"]]);
+			unset($GLOBALS["BLOG_SITE_PATH"]["BLOG_SITE_PATH_CACHE_".$arPath["ID"]]);
+			return $DB->Query("DELETE FROM b_blog_site_path WHERE ID = ".$arPath["ID"]."", true);
+		}
+		
+		return true;
+	}
 }

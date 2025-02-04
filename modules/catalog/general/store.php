@@ -1,444 +1,531 @@
 <?php
 
+use Bitrix\Main;
 use Bitrix\Catalog;
 use Bitrix\Iblock;
-use Bitrix\Main;
 
 IncludeModuleLangFile(__FILE__);
 
-class store
+class CAllCatalogStore
 {
-    public static function Update($id, $arFields)
-    {
-        global $DB;
-        $id = (int) $id;
-        if ($id <= 0) {
-            return false;
-        }
+	protected static function CheckFields($action, &$arFields)
+	{
+		global $DB;
+		global $USER;
 
-        $store = Catalog\StoreTable::getRow([
-            'select' => [
-                'ID',
-                'IMAGE_ID',
-                'ACTIVE',
-            ],
-            'filter' => [
-                '=ID' => $id,
-            ],
-        ]);
-        if (empty($store)) {
-            return false;
-        }
+		if ($action !== 'ADD' && $action !== 'UPDATE')
+		{
+			return false;
+		}
 
-        if (null !== $store['IMAGE_ID']) {
-            $store['IMAGE_ID'] = (int) $store['IMAGE_ID'];
-        }
+		$currentUserId = false;
+		if (isset($USER) && $USER instanceof CUser)
+		{
+			$currentUserId = (int)$USER->GetID();
+			if ($currentUserId <= 0)
+			{
+				$currentUserId = false;
+			}
+		}
 
-        foreach (GetModuleEvents('catalog', 'OnBeforeCatalogStoreUpdate', true) as $arEvent) {
-            if (false === ExecuteModuleEventEx($arEvent, [$id, &$arFields])) {
-                return false;
-            }
-        }
+		if ($action === 'ADD')
+		{
+			$arFields += [
+				'ACTIVE' => 'Y',
+				'IMAGE_ID' => false,
+				'LOCATION_ID' => false,
+				'ISSUING_CENTER' => 'N',
+				'SHIPPING_CENTER' => 'N',
+				'SITE_ID' => false,
+				'CODE' => false,
+				'IS_DEFAULT' => 'N',
+			];
 
-        if (!self::CheckFields('UPDATE', $arFields)) {
-            return false;
-        }
+			$allowList = [
+				'TITLE' => true,
+				'ACTIVE' => true,
+				'ADDRESS' => true,
+				'DESCRIPTION' => true,
+				'GPS_N' => true,
+				'GPS_S' => true,
+				'IMAGE_ID' => true,
+				'LOCATION_ID' => true,
+				'USER_ID' => true,
+				'MODIFIED_BY' => true,
+				'PHONE' => true,
+				'SCHEDULE' => true,
+				'XML_ID' => true,
+				'SORT' => true,
+				'EMAIL' => true,
+				'ISSUING_CENTER' => true,
+				'SHIPPING_CENTER' => true,
+				'SITE_ID' => true,
+				'CODE' => true,
+				'IS_DEFAULT' => true,
+			];
+		}
+		else
+		{
+			$allowList = [
+				'TITLE' => true,
+				'ACTIVE' => true,
+				'ADDRESS' => true,
+				'DESCRIPTION' => true,
+				'GPS_N' => true,
+				'GPS_S' => true,
+				'IMAGE_ID' => true,
+				'LOCATION_ID' => true,
+				'MODIFIED_BY' => true,
+				'PHONE' => true,
+				'SCHEDULE' => true,
+				'XML_ID' => true,
+				'SORT' => true,
+				'EMAIL' => true,
+				'ISSUING_CENTER' => true,
+				'SHIPPING_CENTER' => true,
+				'SITE_ID' => true,
+				'CODE' => true,
+				'IS_DEFAULT' => true,
+			];
+		}
 
-        if (isset($arFields['IMAGE_ID'])) {
-            if (is_array($arFields['IMAGE_ID'])) {
-                $arFields['IMAGE_ID']['old_file'] = $store['IMAGE_ID'];
-                CFile::SaveForDB($arFields, 'IMAGE_ID', 'catalog');
-            } elseif (null !== $store['IMAGE_ID']) {
-                CFile::Delete($store['IMAGE_ID']);
-            }
-        }
-        $strUpdate = $DB->PrepareUpdate('b_catalog_store', $arFields);
+		$arFields = array_intersect_key($arFields, $allowList);
+		$arFields['~DATE_MODIFY'] = $DB->GetNowFunction();
+		$arFields['MODIFIED_BY'] = $arFields['MODIFIED_BY'] ?? $currentUserId;
+		if ($action === 'ADD')
+		{
+			$arFields['~DATE_CREATE'] = $DB->GetNowFunction();
+			$arFields['USER_ID'] = $arFields['USER_ID'] ?? $currentUserId;
+		}
 
-        $bNeedConversion = false;
-        if (!empty($strUpdate)) {
-            if (isset($arFields['ACTIVE'])) {
-                $bNeedConversion = ($store['ACTIVE'] !== $arFields['ACTIVE']);
-            }
+		if (array_key_exists("ADDRESS", $arFields) && (string)$arFields["ADDRESS"] == '')
+		{
+			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("CS_EMPTY_ADDRESS"));
+			return false;
+		}
 
-            $strSql = 'update b_catalog_store set '.$strUpdate.' where ID = '.$id;
-            if (!$DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__)) {
-                return false;
-            }
-            CCatalogStoreControlUtil::clearStoreName($id);
+		if (array_key_exists('IMAGE_ID', $arFields))
+		{
+			self::prepareImage($arFields, 'IMAGE_ID');
+		}
 
-            Catalog\StoreTable::cleanCache();
-        }
+		if(isset($arFields["ISSUING_CENTER"]) && ($arFields["ISSUING_CENTER"]) !== 'Y')
+		{
+			$arFields["ISSUING_CENTER"] = 'N';
+		}
+		if(isset($arFields["SHIPPING_CENTER"]) && ($arFields["SHIPPING_CENTER"]) !== 'Y')
+		{
+			$arFields["SHIPPING_CENTER"] = 'N';
+		}
+		if(isset($arFields["SITE_ID"]) && ($arFields["SITE_ID"] === '0' || $arFields["SITE_ID"] === ''))
+		{
+			$arFields["SITE_ID"] = false;
+		}
+		if (isset($arFields['CODE']) && $arFields['CODE'] === '')
+		{
+			$arFields['CODE'] = false;
+		}
+		if (isset($arFields['IS_DEFAULT']) && ($arFields['IS_DEFAULT']) !== 'Y')
+		{
+			$arFields['IS_DEFAULT'] = 'N';
+		}
 
-        if ($bNeedConversion) {
-            self::recalculateStoreBalances($id);
-        }
+		return true;
+	}
 
-        foreach (GetModuleEvents('catalog', 'OnCatalogStoreUpdate', true) as $arEvent) {
-            ExecuteModuleEventEx($arEvent, [$id, $arFields]);
-        }
+	private static function prepareImage(array &$fields, $fieldName): void
+	{
+		if (
+			$fields[$fieldName] === null
+			|| $fields[$fieldName] === 'null'
+			|| $fields[$fieldName] === ''
+			|| $fields[$fieldName] === false
+		)
+		{
+			$fields[$fieldName] = false;
+		}
+		elseif (
+			is_string($fields[$fieldName])
+			|| is_int($fields[$fieldName])
+		)
+		{
+			$fields[$fieldName] = (int)$fields[$fieldName];
+			if ($fields[$fieldName] <= 0)
+			{
+				unset($fields[$fieldName]);
+			}
+		}
+		elseif (is_array($fields[$fieldName]))
+		{
+			self::prepareImageArray($fields, $fieldName);
+		}
+		else
+		{
+			unset($fields[$fieldName]);
+		}
+	}
 
-        return $id;
-    }
+	private static function prepareImageArray(array &$fields, $fieldName): void
+	{
+		if (empty($fields[$fieldName]))
+		{
+			unset($fields[$fieldName]);
 
-    public static function Delete($id)
-    {
-        global $DB, $USER_FIELD_MANAGER;
-        $id = (int) $id;
-        if ($id > 0) {
-            $store = Catalog\StoreTable::getRow([
-                'select' => [
-                    'ID',
-                    'IMAGE_ID',
-                ],
-                'filter' => [
-                    '=ID' => $id,
-                ],
-            ]);
-            if (empty($store)) {
-                return false;
-            }
+			return;
+		}
 
-            if (null !== $store['IMAGE_ID']) {
-                $store['IMAGE_ID'] = (int) $store['IMAGE_ID'];
-            }
+		if (!isset($fields[$fieldName]['name']) && !isset($fields[$fieldName]['del']))
+		{
+			unset($fields[$fieldName]);
 
-            foreach (GetModuleEvents('catalog', 'OnBeforeCatalogStoreDelete', true) as $arEvent) {
-                if (false === ExecuteModuleEventEx($arEvent, [$id])) {
-                    return false;
-                }
-            }
+			return;
+		}
 
-            $dbDocs = $DB->Query('select ID from b_catalog_docs_element where STORE_FROM = '.$id.' or STORE_TO = '.$id, true);
-            if ($bStoreHaveDocs = $dbDocs->Fetch()) {
-                $GLOBALS['APPLICATION']->ThrowException(GetMessage('CS_STORE_HAVE_DOCS'));
+		$fields[$fieldName]['MODULE_ID'] = 'catalog';
+	}
 
-                return false;
-            }
+	public static function Update($id, $arFields)
+	{
+		global $DB;
+		$id = (int)$id;
+		if ($id <= 0)
+			return false;
 
-            $DB->Query('delete from b_catalog_store_product where STORE_ID = '.$id, true);
-            $DB->Query('delete from b_catalog_store where ID = '.$id, true);
-            if (null !== $store['IMAGE_ID']) {
-                CFile::Delete($store['IMAGE_ID']);
-            }
+		$store = Catalog\StoreTable::getRow([
+			'select' => [
+				'ID',
+				'IMAGE_ID',
+				'ACTIVE',
+			],
+			'filter' => [
+				'=ID' => $id,
+			]
+		]);
+		if (empty($store))
+		{
+			return false;
+		}
 
-            $USER_FIELD_MANAGER->Delete(Catalog\StoreTable::getUfId(), $id);
+		if ($store['IMAGE_ID'] !== null)
+		{
+			$store['IMAGE_ID'] = (int)$store['IMAGE_ID'];
+			if ($store['IMAGE_ID'] <= 0)
+			{
+				$store['IMAGE_ID'] = null;
+			}
+		}
 
-            Catalog\StoreTable::cleanCache();
+		foreach (GetModuleEvents("catalog", "OnBeforeCatalogStoreUpdate", true) as $arEvent)
+		{
+			if (ExecuteModuleEventEx($arEvent, array($id, &$arFields))===false)
+				return false;
+		}
 
-            foreach (GetModuleEvents('catalog', 'OnCatalogStoreDelete', true) as $arEvent) {
-                ExecuteModuleEventEx($arEvent, [$id]);
-            }
+		if (!self::CheckFields('UPDATE', $arFields))
+			return false;
 
-            self::recalculateStoreBalances($id);
-            CCatalogStoreControlUtil::clearStoreName($id);
+		if (isset($arFields['IMAGE_ID']))
+		{
+			if (is_array($arFields['IMAGE_ID']))
+			{
+				$arFields['IMAGE_ID']['old_file'] = $store['IMAGE_ID'];
+				CFile::SaveForDB($arFields, 'IMAGE_ID', 'catalog');
+			}
+			elseif ($store['IMAGE_ID'] !== null)
+			{
+				CFile::Delete($store['IMAGE_ID']);
+			}
+		}
+		$strUpdate = $DB->PrepareUpdate("b_catalog_store", $arFields);
 
-            return true;
-        }
+		$bNeedConversion = false;
+		if (!empty($strUpdate))
+		{
+			if (isset($arFields['ACTIVE']))
+			{
+				$bNeedConversion = ($store['ACTIVE'] !== $arFields['ACTIVE']);
+			}
 
-        return false;
-    }
+			$strSql = "update b_catalog_store set ".$strUpdate." where ID = ".$id;
+			if(!$DB->Query($strSql))
+				return false;
+			CCatalogStoreControlUtil::clearStoreName($id);
 
-    /**
-     * Recalculate quantity for store.
-     *
-     * @param int $storeId store id
-     *
-     * @return bool
-     *
-     * @throws Main\ArgumentException
-     * @throws Main\Db\SqlQueryException
-     */
-    public static function recalculateStoreBalances($storeId)
-    {
-        $storeId = (int) $storeId;
-        if ($storeId <= 0) {
-            return false;
-        }
+			Catalog\StoreTable::cleanCache();
+		}
 
-        if (!Catalog\Config\State::isUsedInventoryManagement()) {
-            return true;
-        }
+		if($bNeedConversion)
+		{
+			self::recalculateStoreBalances($id);
+		}
 
-        $iterator = Catalog\StoreTable::getList([
-            'select' => ['ID'],
-            'filter' => ['=ID' => $storeId],
-        ]);
-        $row = $iterator->fetch();
-        unset($iterator);
-        if (empty($row)) {
-            return false;
-        }
-        unset($row);
+		foreach(GetModuleEvents("catalog", "OnCatalogStoreUpdate", true) as $arEvent)
+			ExecuteModuleEventEx($arEvent, array($id, $arFields));
 
-        $errors = [];
+		return $id;
+	}
 
-        $connection = Main\Application::getConnection();
+	public static function Delete($id)
+	{
+		global $DB, $USER_FIELD_MANAGER;
+		$id = (int)$id;
+		if ($id > 0)
+		{
+			$store = Catalog\StoreTable::getRow([
+				'select' => [
+					'ID',
+					'IMAGE_ID'
+				],
+				'filter' => [
+					'=ID' => $id,
+				]
+			]);
+			if (empty($store))
+			{
+				return false;
+			}
 
-        Iblock\PropertyIndex\Manager::enableDeferredIndexing();
-        Catalog\Product\Sku::enableDeferredCalculation();
+			if ($store['IMAGE_ID'] !== null)
+			{
+				$store['IMAGE_ID'] = (int)$store['IMAGE_ID'];
+				if ($store['IMAGE_ID'] <= 0)
+				{
+					$store['IMAGE_ID'] = null;
+				}
+			}
 
-        $iblockIds = [];
+			foreach (GetModuleEvents("catalog", "OnBeforeCatalogStoreDelete", true) as $arEvent)
+			{
+				if(ExecuteModuleEventEx($arEvent, array($id))===false)
+					return false;
+			}
 
-        $startId = 0;
-        do {
-            $found = false;
-            $productIds = [];
+			$dbDocs = $DB->Query("select ID from b_catalog_docs_element where STORE_FROM = ".$id." or STORE_TO = ".$id, true);
+			if($bStoreHaveDocs = $dbDocs->Fetch())
+			{
+				$GLOBALS["APPLICATION"]->ThrowException(GetMessage("CS_STORE_HAVE_DOCS"));
+				return false;
+			}
 
-            $iterator = Catalog\StoreProductTable::getList([
-                'select' => ['ID', 'PRODUCT_ID'],
-                'filter' => ['>ID' => $startId, '=STORE_ID' => $storeId, '!=AMOUNT' => 0],
-                'order' => ['ID' => 'ASC'],
-                'limit' => 200,
-            ]);
-            while ($row = $iterator->fetch()) {
-                $found = true;
-                $startId = (int) $row['ID'];
-                $productIds[] = (int) $row['PRODUCT_ID'];
-            }
-            unset($row, $iterator);
-            if (!empty($productIds)) {
-                Main\Type\Collection::normalizeArrayValuesByInt($productIds, true);
-            }
+			$DB->Query("delete from b_catalog_store_product where STORE_ID = ".$id, true);
+			$DB->Query("delete from b_catalog_store where ID = ".$id, true);
+			if ($store['IMAGE_ID'] !== null)
+			{
+				CFile::Delete($store['IMAGE_ID']);
+			}
 
-            if (!empty($productIds)) {
-                $products = [];
-                $iterator = Catalog\Model\Product::getList([
-                    'select' => ['ID', 'QUANTITY_RESERVED', 'IBLOCK_ID' => 'IBLOCK_ELEMENT.IBLOCK_ID'],
-                    'filter' => ['@ID' => $productIds],
-                    'order' => ['ID' => 'ASC'],
-                ]);
-                while ($row = $iterator->fetch()) {
-                    if (null === $row['IBLOCK_ID']) {
-                        continue;
-                    }
-                    $rowId = (int) $row['ID'];
-                    $iblock = (int) $row['IBLOCK_ID'];
-                    $iblockIds[$iblock] = $iblock;
-                    $products[$rowId] = [
-                        'QUANTITY_RESERVED' => (float) $row['QUANTITY_RESERVED'],
-                        'IBLOCK_ID' => $iblock,
-                    ];
-                }
-                unset($row, $iterator);
+			$USER_FIELD_MANAGER->Delete(Catalog\StoreTable::getUfId(), $id);
 
-                if (!empty($products)) {
-                    $query = 'select SUM(CSP.AMOUNT) as PRODUCT_QUANTITY, CSP.PRODUCT_ID '.
-                        'from b_catalog_store_product CSP inner join b_catalog_store CS on CS.ID = CSP.STORE_ID '.
-                        'where CSP.PRODUCT_ID in ('.implode(',', array_keys($products)).') and CS.ACTIVE = "Y" '.
-                        'group by CSP.PRODUCT_ID';
-                    $iterator = $connection->query($query);
-                    while ($row = $iterator->fetch()) {
-                        $rowId = (int) $row['PRODUCT_ID'];
-                        $data = [
-                            'fields' => [
-                                'QUANTITY' => (float) $row['PRODUCT_QUANTITY'] - $products[$rowId]['QUANTITY_RESERVED'],
-                            ],
-                            'external_fields' => [
-                                'IBLOCK_ID' => $products[$rowId]['IBLOCK_ID'],
-                            ],
-                        ];
-                        $resultInternal = Catalog\Model\Product::update($rowId, $data);
-                        if (!$resultInternal->isSuccess()) {
-                            $errors[$rowId] = $resultInternal->getErrorMessages();
-                        }
+			Catalog\StoreTable::cleanCache();
 
-                        unset($products[$rowId]);
-                    }
-                    unset($row, $iterator, $query);
-                }
+			foreach(GetModuleEvents("catalog", "OnCatalogStoreDelete", true) as $arEvent)
+				ExecuteModuleEventEx($arEvent, array($id));
 
-                if (!empty($products)) {
-                    foreach ($products as $rowId => $rowData) {
-                        $data = [
-                            'fields' => [
-                                'QUANTITY' => (0 !== $rowData['QUANTITY_RESERVED'] ? -$rowData['QUANTITY_RESERVED'] : 0),
-                            ],
-                            'external_fields' => [
-                                'IBLOCK_ID' => $rowData['IBLOCK_ID'],
-                            ],
-                        ];
-                        $resultInternal = Catalog\Model\Product::update($rowId, $data);
-                        if (!$resultInternal->isSuccess()) {
-                            $errors[$rowId] = $resultInternal->getErrorMessages();
-                        }
+			self::recalculateStoreBalances($id);
+			CCatalogStoreControlUtil::clearStoreName($id);
+			return true;
+		}
+		return false;
+	}
 
-                        unset($products[$rowId]);
-                    }
-                    unset($rowId, $rowData);
-                }
-                unset($products);
-            }
-            unset($productIds);
-        } while ($found);
+	/**
+	 * Recalculate quantity for store.
+	 */
+	public static function recalculateStoreBalances(int $storeId): void
+	{
+		if ($storeId <= 0)
+		{
+			return;
+		}
 
-        unset($connection);
+		if (!Catalog\Config\State::isUsedInventoryManagement())
+		{
+			return;
+		}
 
-        Catalog\Product\Sku::disableDeferredCalculation();
-        Catalog\Product\Sku::calculate();
+		$store = Catalog\StoreTable::getList([
+			'select' => ['ID'],
+			'filter' => ['=ID' => $storeId],
+		])->fetch();
+		if (!$store)
+		{
+			return;
+		}
 
-        Iblock\PropertyIndex\Manager::disableDeferredIndexing();
-        if (!empty($iblockIds)) {
-            foreach ($iblockIds as $iblock) {
-                Iblock\PropertyIndex\Manager::runDeferredIndexing($iblock);
-            }
-        }
-        unset($iblockIds);
+		Iblock\PropertyIndex\Manager::enableDeferredIndexing();
+		Catalog\Product\Sku::enableDeferredCalculation();
 
-        Catalog\Model\Product::clearCache();
+		$iblockIds = [];
+		$startId = 0;
+		do
+		{
+			$hasMore = false;
+			$productIds = [];
 
-        return empty($errors);
-    }
+			$storeProductList = Catalog\StoreProductTable::getList([
+				'select' => ['ID', 'PRODUCT_ID'],
+				'filter' => [
+					'>ID' => $startId,
+					'=STORE_ID' => $storeId,
+					'!=AMOUNT' => 0,
+				],
+				'order' => ['ID' => 'ASC'],
+				'limit' => 200,
+			]);
+			while ($row = $storeProductList->fetch())
+			{
+				$hasMore = true;
+				$startId = (int)$row['ID'];
+				$productIds[] = (int)$row['PRODUCT_ID'];
+			}
 
-    protected static function CheckFields($action, &$arFields)
-    {
-        global $DB;
-        global $USER;
+			if (!empty($productIds))
+			{
+				Main\Type\Collection::normalizeArrayValuesByInt($productIds);
+			}
 
-        if ('ADD' !== $action && 'UPDATE' !== $action) {
-            return false;
-        }
+			self::recalculateProductsBalancesInternal($productIds, $iblockIds);
+		} while ($hasMore);
 
-        $currentUserId = false;
-        if (isset($USER) && $USER instanceof CUser) {
-            $currentUserId = (int) $USER->GetID();
-            if ($currentUserId <= 0) {
-                $currentUserId = false;
-            }
-        }
+		Catalog\Product\Sku::disableDeferredCalculation();
+		Catalog\Product\Sku::calculate();
 
-        if ('ADD' === $action) {
-            $arFields += [
-                'ACTIVE' => 'Y',
-                'IMAGE_ID' => false,
-                'LOCATION_ID' => false,
-                'ISSUING_CENTER' => 'N',
-                'SHIPPING_CENTER' => 'N',
-                'SITE_ID' => false,
-                'CODE' => false,
-                'IS_DEFAULT' => 'N',
-            ];
+		Iblock\PropertyIndex\Manager::disableDeferredIndexing();
+		if (!empty($iblockIds))
+		{
+			foreach ($iblockIds as $iblock)
+			{
+				Iblock\PropertyIndex\Manager::runDeferredIndexing($iblock);
+			}
+		}
 
-            $allowList = [
-                'TITLE' => true,
-                'ACTIVE' => true,
-                'ADDRESS' => true,
-                'DESCRIPTION' => true,
-                'GPS_N' => true,
-                'GPS_S' => true,
-                'IMAGE_ID' => true,
-                'LOCATION_ID' => true,
-                'USER_ID' => true,
-                'MODIFIED_BY' => true,
-                'PHONE' => true,
-                'SCHEDULE' => true,
-                'XML_ID' => true,
-                'SORT' => true,
-                'EMAIL' => true,
-                'ISSUING_CENTER' => true,
-                'SHIPPING_CENTER' => true,
-                'SITE_ID' => true,
-                'CODE' => true,
-                'IS_DEFAULT' => true,
-            ];
-        } else {
-            $allowList = [
-                'TITLE' => true,
-                'ACTIVE' => true,
-                'ADDRESS' => true,
-                'DESCRIPTION' => true,
-                'GPS_N' => true,
-                'GPS_S' => true,
-                'IMAGE_ID' => true,
-                'LOCATION_ID' => true,
-                'MODIFIED_BY' => true,
-                'PHONE' => true,
-                'SCHEDULE' => true,
-                'XML_ID' => true,
-                'SORT' => true,
-                'EMAIL' => true,
-                'ISSUING_CENTER' => true,
-                'SHIPPING_CENTER' => true,
-                'SITE_ID' => true,
-                'CODE' => true,
-                'IS_DEFAULT' => true,
-            ];
-        }
+		Catalog\Model\Product::clearCache();
+	}
 
-        $arFields = array_intersect_key($arFields, $allowList);
-        $arFields['~DATE_MODIFY'] = $DB->GetNowFunction();
-        $arFields['MODIFIED_BY'] = $arFields['MODIFIED_BY'] ?? $currentUserId;
-        if ('ADD' === $action) {
-            $arFields['~DATE_CREATE'] = $DB->GetNowFunction();
-            $arFields['USER_ID'] = $arFields['USER_ID'] ?? $currentUserId;
-        }
+	/**
+	 * Recalculate quantity for specified product ids
+	 */
+	public static function recalculateProductsBalances(array $productIds): void
+	{
+		if (!Catalog\Config\State::isUsedInventoryManagement())
+		{
+			return;
+		}
 
-        if (array_key_exists('ADDRESS', $arFields) && '' === (string) $arFields['ADDRESS']) {
-            $GLOBALS['APPLICATION']->ThrowException(GetMessage('CS_EMPTY_ADDRESS'));
+		Iblock\PropertyIndex\Manager::enableDeferredIndexing();
+		Catalog\Product\Sku::enableDeferredCalculation();
 
-            return false;
-        }
+		$iblockIds = [];
+		self::recalculateProductsBalancesInternal($productIds, $iblockIds);
 
-        if (array_key_exists('IMAGE_ID', $arFields)) {
-            self::prepareImage($arFields, 'IMAGE_ID');
-        }
+		Catalog\Product\Sku::disableDeferredCalculation();
+		Catalog\Product\Sku::calculate();
 
-        if (isset($arFields['ISSUING_CENTER']) && 'Y' !== $arFields['ISSUING_CENTER']) {
-            $arFields['ISSUING_CENTER'] = 'N';
-        }
-        if (isset($arFields['SHIPPING_CENTER']) && 'Y' !== $arFields['SHIPPING_CENTER']) {
-            $arFields['SHIPPING_CENTER'] = 'N';
-        }
-        if (isset($arFields['SITE_ID']) && ('0' === $arFields['SITE_ID'] || '' === $arFields['SITE_ID'])) {
-            $arFields['SITE_ID'] = false;
-        }
-        if (isset($arFields['CODE']) && '' === $arFields['CODE']) {
-            $arFields['CODE'] = false;
-        }
-        if (isset($arFields['IS_DEFAULT']) && 'Y' !== $arFields['IS_DEFAULT']) {
-            $arFields['IS_DEFAULT'] = 'N';
-        }
+		Iblock\PropertyIndex\Manager::disableDeferredIndexing();
+		if (!empty($iblockIds))
+		{
+			foreach ($iblockIds as $iblock)
+			{
+				Iblock\PropertyIndex\Manager::runDeferredIndexing($iblock);
+			}
+		}
 
-        return true;
-    }
+		Catalog\Model\Product::clearCache();
+	}
 
-    private static function prepareImage(array &$fields, $fieldName): void
-    {
-        if (
-            null === $fields[$fieldName]
-            || 'null' === $fields[$fieldName]
-            || '' === $fields[$fieldName]
-            || false === $fields[$fieldName]
-        ) {
-            $fields[$fieldName] = false;
-        } elseif (
-            is_string($fields[$fieldName])
-            || is_int($fields[$fieldName])
-        ) {
-            $fields[$fieldName] = (int) $fields[$fieldName];
-            if ($fields[$fieldName] <= 0) {
-                unset($fields[$fieldName]);
-            }
-        } elseif (is_array($fields[$fieldName])) {
-            self::prepareImageArray($fields, $fieldName);
-        } else {
-            unset($fields[$fieldName]);
-        }
-    }
+	private static function recalculateProductsBalancesInternal(array $productIds, array &$iblockIds): void
+	{
+		if (empty($productIds))
+		{
+			return;
+		}
 
-    private static function prepareImageArray(array &$fields, $fieldName): void
-    {
-        if (empty($fields[$fieldName])) {
-            unset($fields[$fieldName]);
+		$products = [];
+		$foundedProductIds = [];
 
-            return;
-        }
+		$productsList = Catalog\Model\Product::getList([
+			'select' => [
+				'ID',
+				'QUANTITY_RESERVED',
+				'IBLOCK_ID' => 'IBLOCK_ELEMENT.IBLOCK_ID',
+			],
+			'filter' => ['@ID' => $productIds],
+			'order' => ['ID' => 'ASC'],
+		]);
+		while ($row = $productsList->fetch())
+		{
+			if ($row['IBLOCK_ID'] === null)
+			{
+				continue;
+			}
 
-        if (!isset($fields[$fieldName]['name']) && !isset($fields[$fieldName]['del'])) {
-            unset($fields[$fieldName]);
+			$id = (int)$row['ID'];
 
-            return;
-        }
+			$iblockId = (int)$row['IBLOCK_ID'];
+			$iblockIds[$iblockId] = $iblockId;
+			$products[$id] = [
+				'QUANTITY_RESERVED' => (float)$row['QUANTITY_RESERVED'],
+				'IBLOCK_ID' => $iblockId,
+			];
+			$foundedProductIds[] = $id;
+		}
+		unset($row, $productsList);
 
-        $fields[$fieldName]['MODULE_ID'] = 'catalog';
-    }
+		if (empty($products))
+		{
+			return;
+		}
+
+		$storeProductQuantityList = Main\Application::getConnection()->query("
+			SELECT
+				SUM(CSP.AMOUNT) AS PRODUCT_QUANTITY,
+				CSP.PRODUCT_ID
+			FROM b_catalog_store_product CSP
+			INNER JOIN b_catalog_store CS ON CS.ID = CSP.STORE_ID
+			WHERE
+				CSP.PRODUCT_ID IN (" . implode(',', $foundedProductIds) . ")
+				AND CS.ACTIVE = 'Y'
+			GROUP BY CSP.PRODUCT_ID
+		");
+		while ($row = $storeProductQuantityList->fetch())
+		{
+			$productId = (int)$row['PRODUCT_ID'];
+
+			Catalog\Model\Product::update(
+				$productId,
+				[
+					'fields' => [
+						'QUANTITY' => (float)$row['PRODUCT_QUANTITY'] - $products[$productId]['QUANTITY_RESERVED'],
+					],
+					'external_fields' => [
+						'IBLOCK_ID' => $products[$productId]['IBLOCK_ID'],
+					],
+				]
+			);
+
+			unset($products[$productId]);
+		}
+		unset($row, $storeProductQuantityList);
+		unset($foundedProductIds);
+
+		if (!empty($products))
+		{
+			foreach ($products as $rowId => $rowData)
+			{
+				Catalog\Model\Product::update(
+					$rowId,
+					[
+						'fields' => [
+							'QUANTITY' => ($rowData['QUANTITY_RESERVED'] != 0 ? -$rowData['QUANTITY_RESERVED'] : 0),
+						],
+						'external_fields' => [
+							'IBLOCK_ID' => $rowData['IBLOCK_ID'],
+						],
+					]
+				);
+			}
+		}
+
+		Catalog\Model\Product::clearCache();
+	}
 }

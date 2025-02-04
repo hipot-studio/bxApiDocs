@@ -29,7 +29,7 @@ class CSaleTfpdf extends tFPDF
 	{
 		try
 		{
-			return parent::Image($file, $x, $y, $w, $h, $type, $link);
+			parent::Image($file, $x, $y, $w, $h, $type, $link);
 		}
 		catch (Exception $e)
 		{
@@ -315,9 +315,6 @@ class CSalePdf
 
 	public static function isPdfAvailable()
 	{
-		if (!extension_loaded("mbstring"))
-			return false;
-
 		if (!file_exists(FPDF_FONTPATH.'/pt_serif-regular.ttf') || !file_exists(FPDF_FONTPATH.'/pt_serif-bold.ttf'))
 			return false;
 
@@ -327,7 +324,6 @@ class CSalePdf
 	public static function prepareToPdf($string)
 	{
 		$string = htmlspecialcharsback($string);
-		$string = CharsetConverter::ConvertCharset($string, SITE_CHARSET, 'UTF-8');
 		$string = html_entity_decode($string, ENT_QUOTES, 'UTF-8');
 
 		return $string;
@@ -429,15 +425,15 @@ class CSalePdf
 
 	public function Image($file, $x = null, $y = null, $w = 0, $h = 0, $type = '', $link = '')
 	{
-		return $this->generator->Image($this->GetImagePath($file), $x, $y, $w, $h, $type, $link);
+		$this->generator->Image($this->GetImagePath($file), $x, $y, $w, $h, $type, $link);
 	}
 
 	public static function CheckImage(array $file)
 	{
 		$pdf = new \tFPDF();
 
-		$pos = mb_strrpos($file['name'],'.',0,'8bit');
-		$type = mb_substr($file['name'],$pos+1,mb_strlen($file['name'],'8bit'),'8bit');
+		$pos = strrpos($file['name'], '.');
+		$type = substr($file['name'], $pos+1, strlen($file['name']));
 
 		try
 		{

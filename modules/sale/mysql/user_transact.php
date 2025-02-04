@@ -1,4 +1,7 @@
-<?
+<?php
+
+use Bitrix\Main\Application;
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/user_transact.php");
 
 class CSaleUserTransact extends CAllSaleUserTransact
@@ -19,7 +22,7 @@ class CSaleUserTransact extends CAllSaleUserTransact
 			"FROM b_sale_user_transact UT ".
 			"WHERE UT.ID = ".$ID." ";
 
-		$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$db_res = $DB->Query($strSql);
 		if ($res = $db_res->Fetch())
 			return $res;
 
@@ -72,7 +75,7 @@ class CSaleUserTransact extends CAllSaleUserTransact
 
 			//echo "!1!=".htmlspecialcharsbx($strSql)."<br>";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			if ($arRes = $dbRes->Fetch())
 				return $arRes["CNT"];
 			else
@@ -104,7 +107,7 @@ class CSaleUserTransact extends CAllSaleUserTransact
 
 			//echo "!2.1!=".htmlspecialcharsbx($strSql_tmp)."<br>";
 
-			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql_tmp);
 			$cnt = 0;
 			if ($arSqls["GROUPBY"] == '')
 			{
@@ -132,7 +135,7 @@ class CSaleUserTransact extends CAllSaleUserTransact
 
 			//echo "!3!=".htmlspecialcharsbx($strSql)."<br>";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 		}
 
 		return $dbRes;
@@ -142,7 +145,7 @@ class CSaleUserTransact extends CAllSaleUserTransact
 	{
 		global $DB;
 
-		$arFields1 = array();
+		$arFields1 = [];
 		foreach ($arFields as $key => $value)
 		{
 			if (mb_substr($key, 0, 1) == "=")
@@ -153,7 +156,18 @@ class CSaleUserTransact extends CAllSaleUserTransact
 		}
 
 		if (!CSaleUserTransact::CheckFields("ADD", $arFields, 0))
+		{
 			return false;
+		}
+
+		if (!isset($arFields1['TIMESTAMP_X']))
+		{
+			$connection = Application::getConnection();
+			$helper = $connection->getSqlHelper();
+			unset($arFields['TIMESTAMP_X']);
+			$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+			unset($helper, $connection);
+		}
 
 		$arInsert = $DB->PrepareInsert("b_sale_user_transact", $arFields);
 
@@ -168,7 +182,7 @@ class CSaleUserTransact extends CAllSaleUserTransact
 		$strSql =
 			"INSERT INTO b_sale_user_transact(".$arInsert[0].") ".
 			"VALUES(".$arInsert[1].")";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$ID = intval($DB->LastID());
 
@@ -181,9 +195,11 @@ class CSaleUserTransact extends CAllSaleUserTransact
 
 		$ID = intval($ID);
 		if ($ID <= 0)
-			return False;
+		{
+			return false;
+		}
 
-		$arFields1 = array();
+		$arFields1 = [];
 		foreach ($arFields as $key => $value)
 		{
 			if (mb_substr($key, 0, 1) == "=")
@@ -194,7 +210,18 @@ class CSaleUserTransact extends CAllSaleUserTransact
 		}
 
 		if (!CSaleUserTransact::CheckFields("UPDATE", $arFields, $ID))
+		{
 			return false;
+		}
+
+		if (!isset($arFields1['TIMESTAMP_X']))
+		{
+			$connection = Application::getConnection();
+			$helper = $connection->getSqlHelper();
+			unset($arFields['TIMESTAMP_X']);
+			$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+			unset($helper, $connection);
+		}
 
 		$strUpdate = $DB->PrepareUpdate("b_sale_user_transact", $arFields);
 
@@ -205,7 +232,7 @@ class CSaleUserTransact extends CAllSaleUserTransact
 		}
 
 		$strSql = "UPDATE b_sale_user_transact SET ".$strUpdate." WHERE ID = ".$ID." ";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		return $ID;
 	}

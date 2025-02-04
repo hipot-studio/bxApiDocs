@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Application;
+
 IncludeModuleLangFile(__FILE__);
 
 /***********************************************************************/
@@ -31,7 +33,7 @@ class CAllSaleAuxiliary
 			return False;
 
 		$periodType = Trim($periodType);
-		$periodType = ToUpper($periodType);
+		$periodType = mb_strtoupper($periodType);
 		if ($periodType == '')
 			return False;
 
@@ -110,7 +112,12 @@ class CAllSaleAuxiliary
 			}
 		}
 
-		return True;
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+		unset($arFields['TIMESTAMP_X']);
+		$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+
+		return true;
 	}
 
 	public static function Delete($ID)

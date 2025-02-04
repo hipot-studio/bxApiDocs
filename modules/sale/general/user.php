@@ -2,7 +2,7 @@
 
 IncludeModuleLangFile(__FILE__);
 
-define("SALE_TIME_LOCK_USER", 600);
+const SALE_TIME_LOCK_USER = 600;
 $GLOBALS["SALE_USER_ACCOUNT"] = array();
 
 /***********************************************************************/
@@ -99,8 +99,7 @@ class CAllSaleUserAccount
 		if ($ID <= 0)
 			return False;
 
-		$db_events = GetModuleEvents("sale", "OnBeforeUserAccountDelete");
-		while ($arEvent = $db_events->Fetch())
+		foreach (GetModuleEvents('sale', 'OnBeforeUserAccountDelete', true) as $arEvent)
 		{
 			if (ExecuteModuleEventEx($arEvent, array($ID))===false)
 			{
@@ -125,8 +124,7 @@ class CAllSaleUserAccount
 
 		$res = $DB->Query("DELETE FROM b_sale_user_account WHERE ID = ".$ID." ", true);
 
-		$dbEvents = GetModuleEvents("sale", "OnAfterUserAccountDelete");
-		while ($arEvent = $dbEvents->Fetch())
+		foreach (GetModuleEvents('sale', 'OnAfterUserAccountDelete', true) as $arEvent)
 		{
 			ExecuteModuleEventEx($arEvent, Array($ID));
 		}
@@ -401,7 +399,7 @@ class CAllSaleUserAccount
 						"ORDER_ID" => ($orderID > 0 ? $orderID : false),
 						"PAYMENT_ID" => ($paymentId > 0 ? $paymentId : false),
 						"DESCRIPTION" => "CC_CHARGE_OFF",
-						"EMPLOYEE_ID" => ($USER->IsAuthorized() ? $USER->GetID() : false)
+						"EMPLOYEE_ID" => self::getEmployeeId()
 					);
 				CTimeZone::Disable();
 				CSaleUserTransact::Add($arFields);
@@ -455,7 +453,7 @@ class CAllSaleUserAccount
 					"ORDER_ID" => ($orderID > 0 ? $orderID : false),
 					"PAYMENT_ID" => ($paymentId > 0 ? $paymentId : false),
 					"DESCRIPTION" => "ORDER_PAY",
-					"EMPLOYEE_ID" => ($USER->IsAuthorized() ? $USER->GetID() : False)
+					"EMPLOYEE_ID" => self::getEmployeeId()
 				);
 			CTimeZone::Disable();
 			CSaleUserTransact::Add($arFields);
@@ -567,7 +565,7 @@ class CAllSaleUserAccount
 						"DEBIT" => "N",
 						"ORDER_ID" => ($orderID > 0 ? $orderID : false),
 						"DESCRIPTION" => "ORDER_PAY",
-						"EMPLOYEE_ID" => ($USER->IsAuthorized() ? $USER->GetID() : false)
+						"EMPLOYEE_ID" => self::getEmployeeId()
 					);
 				CTimeZone::Disable();
 				CSaleUserTransact::Add($arFields);
@@ -681,7 +679,7 @@ class CAllSaleUserAccount
 					"PAYMENT_ID" => ($paymentId > 0 ? $paymentId : false),
 					"DESCRIPTION" => (($description <> '') ? $description : null),
 					"NOTES" => (($notes <> '') ? $notes : False),
-					"EMPLOYEE_ID" => ($USER->IsAuthorized() ? $USER->GetID() : false)
+					"EMPLOYEE_ID" => self::getEmployeeId()
 				);
 			CTimeZone::Disable();
 			CSaleUserTransact::Add($arFields);
@@ -690,6 +688,26 @@ class CAllSaleUserAccount
 
 		CSaleUserAccount::UnLock($userID, $currency);
 		return $result;
+	}
+
+	private static function getEmployeeId(): bool|int
+	{
+		global $USER;
+
+		if (
+			isset($USER)
+			&& $USER instanceof \CUser
+			&& $USER->IsAuthorized()
+		)
+		{
+			$userId = (int)$USER->GetID();
+			if ($userId > 0)
+			{
+				return $userId;
+			}
+		}
+
+		return false;
 	}
 
 	//********** EVENTS **************//

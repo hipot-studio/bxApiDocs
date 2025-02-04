@@ -52,7 +52,7 @@ class CSaleLocation extends CAllSaleLocation
 
 			//echo "!1!=".htmlspecialcharsbx($strSql)."<br>";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			if ($arRes = $dbRes->Fetch())
 				return $arRes["CNT"];
 			else
@@ -83,7 +83,7 @@ class CSaleLocation extends CAllSaleLocation
 
 			//echo "!2.1!=".htmlspecialcharsbx($strSql_tmp)."<br>";
 
-			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql_tmp);
 			$cnt = 0;
 			if ($arSqls["GROUPBY"] == '')
 			{
@@ -109,40 +109,30 @@ class CSaleLocation extends CAllSaleLocation
 
 			//echo "!3!=".htmlspecialcharsbx($strSql)."<br>";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 		}
 
 		return $dbRes;
 	}
 
-	public static function GetByID($ID, $strLang = LANGUAGE_ID)
+	public static function GetByID($primary, $strLang = LANGUAGE_ID)
 	{
-		if(self::isLocationProMigrated())
-			return parent::GetByID($ID, $strLang);
+		if (self::isLocationProMigrated())
+		{
+			return parent::GetByID($primary, $strLang);
+		}
 
 		global $DB;
 
-		$ID = intval($ID);
-		/*$strSql =
-			"SELECT L.ID, L.COUNTRY_ID, L.CITY_ID, L.SORT, ".
-			"	LC.NAME as COUNTRY_NAME_ORIG, LC.SHORT_NAME as COUNTRY_SHORT_NAME, LCL.NAME as COUNTRY_NAME_LANG, ".
-			"	LG.NAME as CITY_NAME_ORIG, LG.SHORT_NAME as CITY_SHORT_NAME, LGL.NAME as CITY_NAME_LANG, ".
-			"	IF(LCL.ID IS NULL, LC.NAME, LCL.NAME) as COUNTRY_NAME, ".
-			"	IF(LGL.ID IS NULL, LG.NAME, LGL.NAME) as CITY_NAME ".
-			"FROM b_sale_location L ".
-			"	LEFT JOIN b_sale_location_country LC ON (L.COUNTRY_ID = LC.ID) ".
-			"	LEFT JOIN b_sale_location_city LG ON (L.CITY_ID = LG.ID) ".
-			"	LEFT JOIN b_sale_location_country_lang LCL ON (LC.ID = LCL.COUNTRY_ID AND LCL.LID = '".$DB->ForSql($strLang, 2)."') ".
-			"	LEFT JOIN b_sale_location_city_lang LGL ON (LG.ID = LGL.CITY_ID AND LGL.LID = '".$DB->ForSql($strLang, 2)."') ".
-			"WHERE L.ID = ".$ID." ";*/
+		$primary = (int)$primary;
 
 		$strSql = "
 		SELECT L.ID, L.COUNTRY_ID, L.CITY_ID, L.SORT, LC.NAME as COUNTRY_NAME_ORIG, LC.SHORT_NAME as COUNTRY_SHORT_NAME, LCL.NAME as COUNTRY_NAME_LANG,
 		LG.NAME as CITY_NAME_ORIG, LG.SHORT_NAME as CITY_SHORT_NAME, LGL.NAME as CITY_NAME_LANG,
 		L.REGION_ID, LR.NAME as REGION_NAME_ORIG, LR.SHORT_NAME as REGION_SHORT_NAME, LRL.NAME as REGION_NAME_LANG,
-		IF(LCL.ID IS NULL, LC.NAME, LCL.NAME) as COUNTRY_NAME,
-		IF(LGL.ID IS NULL, LG.NAME, LGL.NAME) as CITY_NAME,
-		IF(LRL.ID IS NULL, LR.NAME, LRL.NAME) as REGION_NAME
+		CASE WHEN LCL.ID IS NULL THEN LC.NAME ELSE LCL.NAME END as COUNTRY_NAME,
+		CASE WHEN LGL.ID IS NULL IS NULL THEN LG.NAME ELSE LGL.NAME END as CITY_NAME,
+		CASE WHEN LRL.ID IS NULL THEN LR.NAME ELSE LRL.NAME END as REGION_NAME
 		FROM b_sale_location L
 			LEFT JOIN b_sale_location_country LC ON (L.COUNTRY_ID = LC.ID)
 			LEFT JOIN b_sale_location_city LG ON (L.CITY_ID = LG.ID)
@@ -150,15 +140,16 @@ class CSaleLocation extends CAllSaleLocation
 			LEFT JOIN b_sale_location_city_lang LGL ON (LG.ID = LGL.CITY_ID AND LGL.LID = '".$DB->ForSql($strLang, 2)."')
 			LEFT JOIN b_sale_location_region LR ON (L.REGION_ID = LR.ID)
 			LEFT JOIN b_sale_location_region_lang LRL ON (LR.ID = LRL.REGION_ID AND LRL.LID = '".$DB->ForSql($strLang, 2)."')
-		WHERE L.ID = ".$ID." ";
+		WHERE L.ID = ".$primary." ";
 
-		$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$db_res = $DB->Query($strSql);
 
 		if ($res = $db_res->Fetch())
 		{
 			return $res;
 		}
-		return False;
+
+		return false;
 	}
 
 	public static function GetCountryList($arOrder = Array("NAME_LANG"=>"ASC"), $arFilter=Array(), $strLang = LANGUAGE_ID)
@@ -189,7 +180,7 @@ class CSaleLocation extends CAllSaleLocation
 			else
 				$bInvert = false;
 
-			switch(ToUpper($key))
+			switch(mb_strtoupper($key))
 			{
 			case "ID":
 				$arSqlSearch[] = "C.ID ".($bInvert?"<>":"=")." ".intval($val)." ";
@@ -210,11 +201,11 @@ class CSaleLocation extends CAllSaleLocation
 
 		$strSql =
 			"SELECT DISTINCT C.ID, C.NAME as NAME_ORIG, C.SHORT_NAME, CL.NAME as NAME, ".
-			"	IF(CL.ID IS NULL, C.NAME, CL.NAME) as NAME_LANG ".
+			"	CASE WHEN CL.ID IS NULL THEN C.NAME ELSE CL.NAME END as NAME_LANG ".
 			"FROM b_sale_location_country C ".
 			"	LEFT JOIN b_sale_location_country_lang CL ON (C.ID = CL.COUNTRY_ID AND CL.LID = '".$DB->ForSql($strLang, 2)."') ".
 			(
-				$arOrder["SORT"] <> ''
+				($arOrder['SORT'] ?? '') !== ''
 				?
 				"	LEFT JOIN b_sale_location SL ON (SL.COUNTRY_ID = C.ID AND (SL.CITY_ID = 0 OR ISNULL(SL.CITY_ID))) "
 				:
@@ -226,8 +217,8 @@ class CSaleLocation extends CAllSaleLocation
 		$arSqlOrder = Array();
 		foreach ($arOrder as $by=>$order)
 		{
-			$by = ToUpper($by);
-			$order = ToUpper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			if ($order!="ASC") $order = "DESC";
 
 			if ($by == "SORT") $arSqlOrder[] = " SL.SORT ".$order;
@@ -256,8 +247,7 @@ class CSaleLocation extends CAllSaleLocation
 
 		$strSql .= $strSqlOrder;
 
-		$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
-		return $db_res;
+		return $DB->Query($strSql);
 	}
 
 	/**
@@ -296,7 +286,7 @@ class CSaleLocation extends CAllSaleLocation
 			else
 				$bInvert = false;
 
-			switch(ToUpper($key))
+			switch(mb_strtoupper($key))
 			{
 				case "ID":
 					$arSqlSearch[] = "C.ID ".($bInvert?"<>":"=")." ".intval($val)." ";
@@ -320,7 +310,7 @@ class CSaleLocation extends CAllSaleLocation
 
 		$strSql =
 			"SELECT C.ID, C.NAME as NAME_ORIG, C.SHORT_NAME, CL.NAME as NAME, ".
-			"	IF(CL.ID IS NULL, C.NAME, CL.NAME) as NAME_LANG ".
+			"	CASE WHEN CL.ID IS NULL THEN C.NAME ELSE CL.NAME END as NAME_LANG ".
 			"FROM b_sale_location_region C ".
 			"	LEFT JOIN b_sale_location_region_lang CL ON (C.ID = CL.REGION_ID AND CL.LID = '".$DB->ForSql($strLang, 2)."') ".
 			"	LEFT JOIN b_sale_location SL ON (SL.REGION_ID = C.ID AND (SL.CITY_ID = 0 OR ISNULL(SL.CITY_ID))) ".
@@ -330,8 +320,8 @@ class CSaleLocation extends CAllSaleLocation
 		$arSqlOrder = Array();
 		foreach ($arOrder as $by=>$order)
 		{
-			$by = ToUpper($by);
-			$order = ToUpper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			if ($order!="ASC") $order = "DESC";
 
 			if ($by == "SORT") $arSqlOrder[] = " SL.SORT ".$order;
@@ -360,7 +350,7 @@ class CSaleLocation extends CAllSaleLocation
 
 		$strSql .= $strSqlOrder;
 
-		$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$db_res = $DB->Query($strSql);
 		return $db_res;
 	}
 
@@ -400,7 +390,7 @@ class CSaleLocation extends CAllSaleLocation
 			else
 				$bInvert = false;
 
-			switch(ToUpper($key))
+			switch(mb_strtoupper($key))
 			{
 				case "ID":
 					$arSqlSearch[] = "C.ID ".($bInvert?"<>":"=")." ".intval($val)." ";
@@ -424,7 +414,7 @@ class CSaleLocation extends CAllSaleLocation
 
 		$strSql =
 			"SELECT C.ID, C.NAME as NAME_ORIG, C.SHORT_NAME, CL.NAME as NAME, ".
-			"	IF(CL.ID IS NULL, C.NAME, CL.NAME) as NAME_LANG ".
+			"	CASE WHEN CL.ID IS NULL THEN C.NAME ELSE CL.NAME END as NAME_LANG ".
 			"FROM b_sale_location_city C ".
 			"	LEFT JOIN b_sale_location_city_lang CL ON (C.ID = CL.CITY_ID AND CL.LID = '".$DB->ForSql($strLang, 2)."') ".
 			"	LEFT JOIN b_sale_location SL ON (SL.CITY_ID = C.ID) ".
@@ -434,8 +424,8 @@ class CSaleLocation extends CAllSaleLocation
 		$arSqlOrder = Array();
 		foreach ($arOrder as $by=>$order)
 		{
-			$by = ToUpper($by);
-			$order = ToUpper($order);
+			$by = mb_strtoupper($by);
+			$order = mb_strtoupper($order);
 			if ($order!="ASC") $order = "DESC";
 
 			if ($by == "SORT") $arSqlOrder[] = " SL.SORT ".$order;
@@ -464,7 +454,7 @@ class CSaleLocation extends CAllSaleLocation
 
 		$strSql .= $strSqlOrder;
 
-		$db_res = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$db_res = $DB->Query($strSql);
 		return $db_res;
 	}
 
@@ -491,7 +481,7 @@ class CSaleLocation extends CAllSaleLocation
 		$strSql =
 			"INSERT INTO b_sale_location_country(".$arInsert[0].") ".
 			"VALUES(".$arInsert[1].")";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$ID = intval($DB->LastID());
 
@@ -504,7 +494,7 @@ class CSaleLocation extends CAllSaleLocation
 				$strSql =
 					"INSERT INTO b_sale_location_country_lang(COUNTRY_ID, ".$arInsert[0].") ".
 					"VALUES(".$ID.", ".$arInsert[1].")";
-				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql);
 			}
 		}
 
@@ -537,7 +527,7 @@ class CSaleLocation extends CAllSaleLocation
 		$strSql =
 			"INSERT INTO b_sale_location_city(".$arInsert[0].") ".
 			"VALUES(".$arInsert[1].")";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$ID = intval($DB->LastID());
 
@@ -550,7 +540,7 @@ class CSaleLocation extends CAllSaleLocation
 				$strSql =
 					"INSERT INTO b_sale_location_city_lang(CITY_ID, ".$arInsert[0].") ".
 					"VALUES(".$ID.", ".$arInsert[1].")";
-				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql);
 			}
 		}
 
@@ -583,7 +573,7 @@ class CSaleLocation extends CAllSaleLocation
 		$strSql =
 			"INSERT INTO b_sale_location_region(".$arInsert[0].") ".
 			"VALUES(".$arInsert[1].")";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$ID = intval($DB->LastID());
 
@@ -596,7 +586,7 @@ class CSaleLocation extends CAllSaleLocation
 				$strSql =
 					"INSERT INTO b_sale_location_region_lang(REGION_ID, ".$arInsert[0].") ".
 					"VALUES(".$ID.", ".$arInsert[1].")";
-				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql);
 			}
 		}
 
@@ -631,7 +621,7 @@ class CSaleLocation extends CAllSaleLocation
 		$strSql =
 			"INSERT INTO b_sale_location(".$arInsert[0].") ".
 			"VALUES(".$arInsert[1].")";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$ID = intval($DB->LastID());
 

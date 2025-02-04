@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Application;
+
 IncludeModuleLangFile(__FILE__);
 
 class CAllSaleUserCards
@@ -108,7 +110,12 @@ class CAllSaleUserCards
 			}
 		}
 
-		return True;
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+		unset($arFields['TIMESTAMP_X']);
+		$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+
+		return true;
 	}
 
 	public static function Delete($ID)
@@ -149,7 +156,7 @@ class CAllSaleUserCards
 
 	public static function CryptData($data, $type)
 	{
-		$type = ToUpper($type);
+		$type = mb_strtoupper($type);
 		if ($type != "D")
 			$type = "E";
 

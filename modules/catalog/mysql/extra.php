@@ -2,133 +2,127 @@
 
 use Bitrix\Catalog;
 
-require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/catalog/general/extra.php';
+require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/catalog/general/extra.php");
 
-class extra extends CAllExtra
+class CExtra extends CAllExtra
 {
-    public static function Add($arFields)
-    {
-        global $DB;
+	public static function Add($arFields)
+	{
+		global $DB;
 
-        if (!static::CheckFields('ADD', $arFields)) {
-            return false;
-        }
+		if (!static::CheckFields('ADD', $arFields))
+			return false;
 
-        $arInsert = $DB->PrepareInsert('b_catalog_extra', $arFields);
+		$arInsert = $DB->PrepareInsert("b_catalog_extra", $arFields);
 
-        $strSql = 'INSERT INTO b_catalog_extra('.$arInsert[0].') VALUES('.$arInsert[1].')';
-        $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
+		$strSql = "INSERT INTO b_catalog_extra(".$arInsert[0].") VALUES(".$arInsert[1].")";
+		$DB->Query($strSql);
 
-        static::ClearCache();
-        Catalog\ExtraTable::cleanCache();
-        Catalog\Model\Price::clearSettings();
+		static::ClearCache();
+		Catalog\ExtraTable::cleanCache();
+		Catalog\Model\Price::clearSettings();
 
-        return (int) $DB->LastID();
-    }
+		return (int)$DB->LastID();
+	}
 
-    /**
-     * @param array      $arOrder
-     * @param array      $arFilter
-     * @param array|bool $arGroupBy
-     * @param array|bool $arNavStartParams
-     * @param array      $arSelectFields
-     *
-     * @return bool|CDBResult
-     */
-    public static function GetList($arOrder = [], $arFilter = [], $arGroupBy = false, $arNavStartParams = false, $arSelectFields = [])
-    {
-        global $DB;
+	/**
+	 * @param array $arOrder
+	 * @param array $arFilter
+	 * @param bool|array $arGroupBy
+	 * @param bool|array $arNavStartParams
+	 * @param array $arSelectFields
+	 * @return bool|CDBResult
+	 */
+	public static function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
+	{
+		global $DB;
 
-        // for old execution style
-        if (!is_array($arOrder) && !is_array($arFilter)) {
-            $arOrder = (string) $arOrder;
-            $arFilter = (string) $arFilter;
-            if ('' !== $arOrder && '' !== $arFilter) {
-                $arOrder = [$arOrder => $arFilter];
-            } else {
-                $arOrder = [];
-            }
-            $arFilter = [];
-            $arGroupBy = false;
-        }
+		// for old execution style
+		if (!is_array($arOrder) && !is_array($arFilter))
+		{
+			$arOrder = strval($arOrder);
+			$arFilter = strval($arFilter);
+			if ('' != $arOrder && '' != $arFilter)
+				$arOrder = array($arOrder => $arFilter);
+			else
+				$arOrder = array();
+			$arFilter = array();
+			$arGroupBy = false;
+		}
 
-        if (empty($arSelectFields)) {
-            $arSelectFields = ['ID', 'NAME', 'PERCENTAGE'];
-        }
+		if (empty($arSelectFields))
+			$arSelectFields = array("ID", "NAME", "PERCENTAGE");
 
-        $arFields = [
-            'ID' => ['FIELD' => 'E.ID', 'TYPE' => 'int'],
-            'NAME' => ['FIELD' => 'E.NAME', 'TYPE' => 'string'],
-            'PERCENTAGE' => ['FIELD' => 'E.PERCENTAGE', 'TYPE' => 'double'],
-        ];
+		$arFields = array(
+			"ID" => array("FIELD" => "E.ID", "TYPE" => "int"),
+			"NAME" => array("FIELD" => "E.NAME", "TYPE" => "string"),
+			"PERCENTAGE" => array("FIELD" => "E.PERCENTAGE", "TYPE" => "double"),
+		);
 
-        $arSqls = CCatalog::PrepareSql($arFields, $arOrder, $arFilter, $arGroupBy, $arSelectFields);
+		$arSqls = CCatalog::PrepareSql($arFields, $arOrder, $arFilter, $arGroupBy, $arSelectFields);
 
-        $arSqls['SELECT'] = str_replace('%%_DISTINCT_%%', '', $arSqls['SELECT']);
+		$arSqls["SELECT"] = str_replace("%%_DISTINCT_%%", "", $arSqls["SELECT"]);
 
-        if (empty($arGroupBy) && is_array($arGroupBy)) {
-            $strSql = 'SELECT '.$arSqls['SELECT'].' FROM b_catalog_extra E '.$arSqls['FROM'];
-            if (!empty($arSqls['WHERE'])) {
-                $strSql .= ' WHERE '.$arSqls['WHERE'];
-            }
-            if (!empty($arSqls['GROUPBY'])) {
-                $strSql .= ' GROUP BY '.$arSqls['GROUPBY'];
-            }
+		if (empty($arGroupBy) && is_array($arGroupBy))
+		{
+			$strSql = "SELECT ".$arSqls["SELECT"]." FROM b_catalog_extra E ".$arSqls["FROM"];
+			if (!empty($arSqls["WHERE"]))
+				$strSql .= " WHERE ".$arSqls["WHERE"];
+			if (!empty($arSqls["GROUPBY"]))
+				$strSql .= " GROUP BY ".$arSqls["GROUPBY"];
 
-            $dbRes = $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
-            if ($arRes = $dbRes->Fetch()) {
-                return $arRes['CNT'];
-            }
+			$dbRes = $DB->Query($strSql);
+			if ($arRes = $dbRes->Fetch())
+				return $arRes["CNT"];
+			else
+				return false;
+		}
 
-            return false;
-        }
+		$strSql = "SELECT ".$arSqls["SELECT"]." FROM b_catalog_extra E ".$arSqls["FROM"];
+		if (!empty($arSqls["WHERE"]))
+			$strSql .= " WHERE ".$arSqls["WHERE"];
+		if (!empty($arSqls["GROUPBY"]))
+			$strSql .= " GROUP BY ".$arSqls["GROUPBY"];
+		if (!empty($arSqls["ORDERBY"]))
+			$strSql .= " ORDER BY ".$arSqls["ORDERBY"];
 
-        $strSql = 'SELECT '.$arSqls['SELECT'].' FROM b_catalog_extra E '.$arSqls['FROM'];
-        if (!empty($arSqls['WHERE'])) {
-            $strSql .= ' WHERE '.$arSqls['WHERE'];
-        }
-        if (!empty($arSqls['GROUPBY'])) {
-            $strSql .= ' GROUP BY '.$arSqls['GROUPBY'];
-        }
-        if (!empty($arSqls['ORDERBY'])) {
-            $strSql .= ' ORDER BY '.$arSqls['ORDERBY'];
-        }
+		$intTopCount = 0;
+		$boolNavStartParams = (!empty($arNavStartParams) && is_array($arNavStartParams));
+		if ($boolNavStartParams && array_key_exists('nTopCount', $arNavStartParams))
+		{
+			$intTopCount = intval($arNavStartParams["nTopCount"]);
+		}
+		if ($boolNavStartParams && 0 >= $intTopCount)
+		{
+			$strSql_tmp = "SELECT COUNT('x') as CNT FROM b_catalog_extra E ".$arSqls["FROM"];
+			if (!empty($arSqls["WHERE"]))
+				$strSql_tmp .= " WHERE ".$arSqls["WHERE"];
+			if (!empty($arSqls["GROUPBY"]))
+				$strSql_tmp .= " GROUP BY ".$arSqls["GROUPBY"];
 
-        $intTopCount = 0;
-        $boolNavStartParams = (!empty($arNavStartParams) && is_array($arNavStartParams));
-        if ($boolNavStartParams && array_key_exists('nTopCount', $arNavStartParams)) {
-            $intTopCount = (int) $arNavStartParams['nTopCount'];
-        }
-        if ($boolNavStartParams && 0 >= $intTopCount) {
-            $strSql_tmp = "SELECT COUNT('x') as CNT FROM b_catalog_extra E ".$arSqls['FROM'];
-            if (!empty($arSqls['WHERE'])) {
-                $strSql_tmp .= ' WHERE '.$arSqls['WHERE'];
-            }
-            if (!empty($arSqls['GROUPBY'])) {
-                $strSql_tmp .= ' GROUP BY '.$arSqls['GROUPBY'];
-            }
+			$dbRes = $DB->Query($strSql_tmp);
+			$cnt = 0;
+			if (empty($arSqls["GROUPBY"]))
+			{
+				if ($arRes = $dbRes->Fetch())
+					$cnt = $arRes["CNT"];
+			}
+			else
+			{
+				$cnt = $dbRes->SelectedRowsCount();
+			}
 
-            $dbRes = $DB->Query($strSql_tmp, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
-            $cnt = 0;
-            if (empty($arSqls['GROUPBY'])) {
-                if ($arRes = $dbRes->Fetch()) {
-                    $cnt = $arRes['CNT'];
-                }
-            } else {
-                $cnt = $dbRes->SelectedRowsCount();
-            }
+			$dbRes = new CDBResult();
 
-            $dbRes = new CDBResult();
+			$dbRes->NavQuery($strSql, $cnt, $arNavStartParams);
+		}
+		else
+		{
+			if ($boolNavStartParams && 0 < $intTopCount)
+				$strSql .= " LIMIT ".$intTopCount;
 
-            $dbRes->NavQuery($strSql, $cnt, $arNavStartParams);
-        } else {
-            if ($boolNavStartParams && 0 < $intTopCount) {
-                $strSql .= ' LIMIT '.$intTopCount;
-            }
-
-            $dbRes = $DB->Query($strSql, false, 'File: '.__FILE__.'<br>Line: '.__LINE__);
-        }
-
-        return $dbRes;
-    }
+			$dbRes = $DB->Query($strSql);
+		}
+		return $dbRes;
+	}
 }

@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Application;
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/affiliate_transact.php");
 
 class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
@@ -64,7 +66,7 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 			if ($arSqls["GROUPBY"] <> '')
 				$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			if ($arRes = $dbRes->Fetch())
 				return $arRes["CNT"];
 			else
@@ -100,7 +102,7 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 			if ($arSqls["GROUPBY"] <> '')
 				$strSql_tmp .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
-			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql_tmp);
 			$cnt = 0;
 			if ($arSqls["GROUPBY"] == '')
 			{
@@ -124,7 +126,7 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 				$strSql .= 'LIMIT ' . $topCount;
 			}
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 		}
 
 		return $dbRes;
@@ -134,7 +136,7 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 	{
 		global $DB;
 
-		$arFields1 = array();
+		$arFields1 = [];
 		foreach ($arFields as $key => $value)
 		{
 			if (mb_substr($key, 0, 1) == "=")
@@ -145,7 +147,18 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 		}
 
 		if (!CSaleAffiliateTransact::CheckFields("ADD", $arFields, 0))
+		{
 			return false;
+		}
+
+		if (!isset($arFields1['TIMESTAMP_X']))
+		{
+			$connection = Application::getConnection();
+			$helper = $connection->getSqlHelper();
+			unset($arFields['TIMESTAMP_X']);
+			$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+			unset($helper, $connection);
+		}
 
 		$arInsert = $DB->PrepareInsert("b_sale_affiliate_transact", $arFields);
 
@@ -160,7 +173,7 @@ class CSaleAffiliateTransact extends CAllSaleAffiliateTransact
 		$strSql =
 			"INSERT INTO b_sale_affiliate_transact(".$arInsert[0].") ".
 			"VALUES(".$arInsert[1].")";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$ID = intval($DB->LastID());
 

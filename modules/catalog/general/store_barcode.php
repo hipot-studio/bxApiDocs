@@ -2,84 +2,76 @@
 
 IncludeModuleLangFile(__FILE__);
 
-class store_barcode
+class CAllCatalogStoreBarCode
 {
-    public static function Update($id, $arFields)
-    {
-        global $DB;
-        $id = (int) $id;
+	protected static function CheckFields($action, &$arFields)
+	{
+		if((($action == 'ADD') || isset($arFields["PRODUCT_ID"])) && intval($arFields["PRODUCT_ID"]) <= 0)
+		{
+			return false;
+		}
 
-        foreach (GetModuleEvents('catalog', 'OnBeforeCatalogStoreBarCodeUpdate', true) as $arEvent) {
-            if (false === ExecuteModuleEventEx($arEvent, [$id, &$arFields])) {
-                return false;
-            }
-        }
+		if((($action == 'ADD') || isset($arFields["BARCODE"])) && $arFields["BARCODE"] == '')
+		{
+			return false;
+		}
 
-        if (array_key_exists('DATE_CREATE', $arFields)) {
-            unset($arFields['DATE_CREATE']);
-        }
-        if (array_key_exists('DATE_MODIFY', $arFields)) {
-            unset($arFields['DATE_MODIFY']);
-        }
-        if (array_key_exists('DATE_STATUS', $arFields)) {
-            unset($arFields['DATE_STATUS']);
-        }
-        if (array_key_exists('CREATED_BY', $arFields)) {
-            unset($arFields['CREATED_BY']);
-        }
+		return true;
+	}
 
-        $arFields['~DATE_MODIFY'] = $DB->GetNowFunction();
+	public static function Update($id, $arFields)
+	{
+		global $DB;
+		$id = (int)$id;
 
-        if ($id <= 0 || !self::CheckFields('UPDATE', $arFields)) {
-            return false;
-        }
-        $strUpdate = $DB->PrepareUpdate('b_catalog_store_barcode', $arFields);
+		foreach(GetModuleEvents("catalog", "OnBeforeCatalogStoreBarCodeUpdate", true) as $arEvent)
+			if(ExecuteModuleEventEx($arEvent, array($id, &$arFields)) === false)
+				return false;
 
-        if (!empty($strUpdate)) {
-            $strSql = 'UPDATE b_catalog_store_barcode SET '.$strUpdate.' WHERE ID = '.$id.' ';
-            if (!$DB->Query($strSql, true, 'File: '.__FILE__.'<br>Line: '.__LINE__)) {
-                return false;
-            }
-        }
+		if(array_key_exists('DATE_CREATE',$arFields))
+			unset($arFields['DATE_CREATE']);
+		if(array_key_exists('DATE_MODIFY', $arFields))
+			unset($arFields['DATE_MODIFY']);
+		if(array_key_exists('DATE_STATUS', $arFields))
+			unset($arFields['DATE_STATUS']);
+		if(array_key_exists('CREATED_BY', $arFields))
+			unset($arFields['CREATED_BY']);
 
-        foreach (GetModuleEvents('catalog', 'OnCatalogStoreBarCodeUpdate', true) as $arEvent) {
-            ExecuteModuleEventEx($arEvent, [$id, $arFields]);
-        }
+		$arFields['~DATE_MODIFY'] = $DB->GetNowFunction();
 
-        return $id;
-    }
+		if($id <= 0 || !self::CheckFields('UPDATE',$arFields))
+			return false;
+		$strUpdate = $DB->PrepareUpdate("b_catalog_store_barcode", $arFields);
 
-    public static function Delete($id)
-    {
-        global $DB;
-        $id = (int) $id;
-        if ($id > 0) {
-            foreach (GetModuleEvents('catalog', 'OnBeforeCatalogStoreBarCodeDelete', true) as $event) {
-                ExecuteModuleEventEx($event, [$id]);
-            }
+		if(!empty($strUpdate))
+		{
+			$strSql = "UPDATE b_catalog_store_barcode SET ".$strUpdate." WHERE ID = ".$id." ";
+			if(!$DB->Query($strSql, true))
+				return false;
+		}
 
-            $DB->Query('DELETE FROM b_catalog_store_barcode WHERE ID = '.$id.' ', true);
+		foreach(GetModuleEvents("catalog", "OnCatalogStoreBarCodeUpdate", true) as $arEvent)
+			ExecuteModuleEventEx($arEvent, array($id, $arFields));
 
-            foreach (GetModuleEvents('catalog', 'OnCatalogStoreBarCodeDelete', true) as $arEvent) {
-                ExecuteModuleEventEx($arEvent, [$id]);
-            }
+		return $id;
+	}
 
-            return true;
-        }
+	public static function Delete($id)
+	{
+		global $DB;
+		$id = intval($id);
+		if ($id > 0)
+		{
+			foreach(GetModuleEvents("catalog", "OnBeforeCatalogStoreBarCodeDelete", true) as $event)
+				ExecuteModuleEventEx($event, array($id));
 
-        return false;
-    }
+			$DB->Query("DELETE FROM b_catalog_store_barcode WHERE ID = ".$id." ", true);
 
-    protected static function CheckFields($action, &$arFields)
-    {
-        if ((('ADD' === $action) || isset($arFields['PRODUCT_ID'])) && (int) $arFields['PRODUCT_ID'] <= 0) {
-            return false;
-        }
+			foreach(GetModuleEvents("catalog", "OnCatalogStoreBarCodeDelete", true) as $arEvent)
+				ExecuteModuleEventEx($arEvent, array($id));
 
-        if ((('ADD' === $action) || isset($arFields['BARCODE'])) && '' === $arFields['BARCODE']) {
-            return false;
-        }
-
-        return true;
-    }
+			return true;
+		}
+		return false;
+	}
 }

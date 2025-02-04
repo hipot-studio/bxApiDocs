@@ -1,5 +1,8 @@
 <?php
 
+use Bitrix\Main\Application;
+use Bitrix\Sale;
+
 IncludeModuleLangFile(__FILE__);
 
 /***********************************************************************/
@@ -63,7 +66,12 @@ class CAllSaleRecurring
 		if ((is_set($arFields, "CANCELED") || $ACTION=="ADD") && $arFields["CANCELED"] != "Y")
 			$arFields["CANCELED"] = "N";
 
-		return True;
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+		unset($arFields['TIMESTAMP_X']);
+		$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+
+		return true;
 	}
 
 	public static function Update($ID, $arFields)
@@ -79,7 +87,7 @@ class CAllSaleRecurring
 
 		$strUpdate = $DB->PrepareUpdate("b_sale_recurring", $arFields);
 		$strSql = "UPDATE b_sale_recurring SET ".$strUpdate." WHERE ID = ".$ID." ";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		unset($GLOBALS["SALE_RECURRING"]["SALE_RECURRING_CACHE_".$ID]);
 
@@ -426,21 +434,7 @@ class CAllSaleRecurring
 				$DB->StartTransaction();
 
 				// Saving
-				$arSaleUser = CSaleUser::GetList(Array(), Array("USER_ID" => $arOrder["USER_ID"]));
-				if(!empty($arSaleUser))
-				{
-					$currentFUser = $arSaleUser["ID"];
-				}
-				else
-				{
-					$currentFUser = CSaleUser::_Add(
-							array(
-									"=DATE_INSERT" => $DB->GetNowFunction(),
-									"=DATE_UPDATE" => $DB->GetNowFunction(),
-									"USER_ID" => $arOrder["USER_ID"]
-								)
-						);
-				}
+				$currentFUser = Sale\Fuser::getIdByUserId((int)$arOrder['USER_ID']);
 
 				$arFields = array(
 						"FUSER_ID" => $currentFUser,

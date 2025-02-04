@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Application;
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/affiliate.php");
 
 class CSaleAffiliate extends CAllSaleAffiliate
@@ -89,7 +91,7 @@ class CSaleAffiliate extends CAllSaleAffiliate
 			if ($arSqls["GROUPBY"] <> '')
 				$strSql .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			if ($arRes = $dbRes->Fetch())
 				return $arRes["CNT"];
 			else
@@ -125,7 +127,7 @@ class CSaleAffiliate extends CAllSaleAffiliate
 			if ($arSqls["GROUPBY"] <> '')
 				$strSql_tmp .= "GROUP BY ".$arSqls["GROUPBY"]." ";
 
-			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql_tmp);
 			$cnt = 0;
 			if ($arSqls["GROUPBY"] == '')
 			{
@@ -149,7 +151,7 @@ class CSaleAffiliate extends CAllSaleAffiliate
 				$strSql .= 'LIMIT ' . $topCount;
 			}
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 		}
 
 		return $dbRes;
@@ -159,7 +161,7 @@ class CSaleAffiliate extends CAllSaleAffiliate
 	{
 		global $DB;
 
-		$arFields1 = array();
+		$arFields1 = [];
 		foreach ($arFields as $key => $value)
 		{
 			if (mb_substr($key, 0, 1) == "=")
@@ -170,12 +172,26 @@ class CSaleAffiliate extends CAllSaleAffiliate
 		}
 
 		if (!CSaleAffiliate::CheckFields("ADD", $arFields, 0))
+		{
 			return false;
+		}
 
-		$db_events = GetModuleEvents("sale", "OnBeforeBAffiliateAdd");
-		while ($arEvent = $db_events->Fetch())
-			if (ExecuteModuleEventEx($arEvent, Array(&$arFields))===false)
+		foreach (GetModuleEvents('sale', 'OnBeforeBAffiliateAdd', true) as $arEvent)
+		{
+			if (ExecuteModuleEventEx($arEvent, array(&$arFields)) === false)
+			{
 				return false;
+			}
+		}
+
+		if (!isset($arFields1['TIMESTAMP_X']))
+		{
+			$connection = Application::getConnection();
+			$helper = $connection->getSqlHelper();
+			unset($arFields['TIMESTAMP_X']);
+			$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+			unset($helper, $connection);
+		}
 
 		$arInsert = $DB->PrepareInsert("b_sale_affiliate", $arFields);
 
@@ -193,13 +209,14 @@ class CSaleAffiliate extends CAllSaleAffiliate
 		$strSql =
 			"INSERT INTO b_sale_affiliate(".$arInsert[0].") ".
 			"VALUES(".$arInsert[1].")";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$ID = intval($DB->LastID());
 
-		$events = GetModuleEvents("sale", "OnAfterBAffiliateAdd");
-		while ($arEvent = $events->Fetch())
-			ExecuteModuleEventEx($arEvent, Array($ID, $arFields));
+		foreach (GetModuleEvents('sale', 'OnAfterBAffiliateAdd', true) as $arEvent)
+		{
+			ExecuteModuleEventEx($arEvent, array($ID, $arFields));
+		}
 
 		return $ID;
 	}
@@ -210,7 +227,9 @@ class CSaleAffiliate extends CAllSaleAffiliate
 
 		$ID = intval($ID);
 		if ($ID <= 0)
-			return False;
+		{
+			return false;
+		}
 
 		$arFields1 = array();
 		foreach ($arFields as $key => $value)
@@ -223,12 +242,26 @@ class CSaleAffiliate extends CAllSaleAffiliate
 		}
 
 		if (!CSaleAffiliate::CheckFields("UPDATE", $arFields, $ID))
+		{
 			return false;
+		}
 
-		$db_events = GetModuleEvents("sale", "OnBeforeAffiliateUpdate");
-		while ($arEvent = $db_events->Fetch())
-			if (ExecuteModuleEventEx($arEvent, Array($ID, &$arFields))===false)
+		foreach (GetModuleEvents('sale', 'OnBeforeAffiliateUpdate', true) as $arEvent)
+		{
+			if (ExecuteModuleEventEx($arEvent, array($ID, &$arFields)) === false)
+			{
 				return false;
+			}
+		}
+
+		if (!isset($arFields1['TIMESTAMP_X']))
+		{
+			$connection = Application::getConnection();
+			$helper = $connection->getSqlHelper();
+			unset($arFields['TIMESTAMP_X']);
+			$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+			unset($helper, $connection);
+		}
 
 		$strUpdate = $DB->PrepareUpdate("b_sale_affiliate", $arFields);
 
@@ -240,13 +273,14 @@ class CSaleAffiliate extends CAllSaleAffiliate
 		}
 
 		$strSql = "UPDATE b_sale_affiliate SET ".$strUpdate." WHERE ID = ".$ID." ";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		unset($GLOBALS["SALE_AFFILIATE"]["SALE_AFFILIATE_CACHE_".$ID]);
 
-		$events = GetModuleEvents("sale", "OnAfterAffiliateUpdate");
-		while ($arEvent = $events->Fetch())
-			ExecuteModuleEventEx($arEvent, Array($ID, $arFields));
+		foreach (GetModuleEvents('sale', 'OnAfterAffiliateUpdate', true) as $arEvent)
+		{
+			ExecuteModuleEventEx($arEvent, array($ID, $arFields));
+		}
 
 		return $ID;
 	}

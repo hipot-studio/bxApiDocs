@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Application;
+
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/general/user.php");
 
 class CSaleUserAccount extends CAllSaleUserAccount
@@ -19,14 +21,14 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		}
 		else
 		{
-			$strSql = 
+			$strSql =
 				"SELECT UA.ID, UA.USER_ID, UA.CURRENT_BUDGET, UA.CURRENCY, UA.NOTES, UA.LOCKED, ".
 				"	".$DB->DateToCharFunction("UA.TIMESTAMP_X", "FULL")." as TIMESTAMP_X, ".
 				"	".$DB->DateToCharFunction("UA.DATE_LOCKED", "FULL")." as DATE_LOCKED ".
 				"FROM b_sale_user_account UA ".
 				"WHERE UA.ID = ".$ID." ";
 
-			$dbUserAccount = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbUserAccount = $DB->Query($strSql);
 			if ($arUserAccount = $dbUserAccount->Fetch())
 			{
 				$GLOBALS["SALE_USER_ACCOUNT"]["SALE_USER_ACCOUNT_CACHE_".$ID] = $arUserAccount;
@@ -56,7 +58,7 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		}
 		else
 		{
-			$strSql = 
+			$strSql =
 				"SELECT UA.ID, UA.USER_ID, UA.CURRENT_BUDGET, UA.CURRENCY, UA.NOTES, UA.LOCKED, ".
 				"	".$DB->DateToCharFunction("UA.TIMESTAMP_X", "FULL")." as TIMESTAMP_X, ".
 				"	".$DB->DateToCharFunction("UA.DATE_LOCKED", "FULL")." as DATE_LOCKED ".
@@ -64,7 +66,7 @@ class CSaleUserAccount extends CAllSaleUserAccount
 				"WHERE UA.USER_ID = ".$userID." ".
 				"	AND UA.CURRENCY = '".$DB->ForSql($currency)."' ";
 
-			$dbUserAccount = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbUserAccount = $DB->Query($strSql);
 			if ($arUserAccount = $dbUserAccount->Fetch())
 			{
 				$GLOBALS["SALE_USER_ACCOUNT"]["SALE_USER_ACCOUNT_CACHE_".$userID."_".$currency] = $arUserAccount;
@@ -118,14 +120,14 @@ class CSaleUserAccount extends CAllSaleUserAccount
 
 			//echo "!1!=".htmlspecialcharsbx($strSql)."<br>";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 			if ($arRes = $dbRes->Fetch())
 				return $arRes["CNT"];
 			else
 				return false;
 		}
 
-		$strSql = 
+		$strSql =
 			"SELECT ".$arSqls["SELECT"]." ".
 			"FROM b_sale_user_account UA ".
 			"	".$arSqls["FROM"]." ";
@@ -149,7 +151,7 @@ class CSaleUserAccount extends CAllSaleUserAccount
 
 			//echo "!2.1!=".htmlspecialcharsbx($strSql_tmp)."<br>";
 
-			$dbRes = $DB->Query($strSql_tmp, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql_tmp);
 			$cnt = 0;
 			if ($arSqls["GROUPBY"] == '')
 			{
@@ -175,7 +177,7 @@ class CSaleUserAccount extends CAllSaleUserAccount
 
 			//echo "!3!=".htmlspecialcharsbx($strSql)."<br>";
 
-			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$dbRes = $DB->Query($strSql);
 		}
 
 		return $dbRes;
@@ -185,7 +187,7 @@ class CSaleUserAccount extends CAllSaleUserAccount
 	{
 		global $DB;
 
-		$arFields1 = array();
+		$arFields1 = [];
 		foreach ($arFields as $key => $value)
 		{
 			if (mb_substr($key, 0, 1) == "=")
@@ -196,15 +198,25 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		}
 
 		if (!CSaleUserAccount::CheckFields("ADD", $arFields, 0))
+		{
 			return false;
+		}
 
-		$dbEvents = GetModuleEvents("sale", "OnBeforeUserAccountAdd");
-		while ($arEvent = $dbEvents->Fetch())
+		foreach (GetModuleEvents('sale', 'OnBeforeUserAccountAdd', true) as $arEvent)
 		{
 			if (ExecuteModuleEventEx($arEvent, array(&$arFields))===false)
 			{
 				return false;
 			}
+		}
+
+		if (!isset($arFields1['TIMESTAMP_X']))
+		{
+			$connection = Application::getConnection();
+			$helper = $connection->getSqlHelper();
+			unset($arFields['TIMESTAMP_X']);
+			$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+			unset($helper, $connection);
 		}
 
 		$arInsert = $DB->PrepareInsert("b_sale_user_account", $arFields);
@@ -218,12 +230,11 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		}
 
 		$strSql = "INSERT INTO b_sale_user_account(".$arInsert[0].") VALUES(".$arInsert[1].")";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$ID = (int)$DB->LastID();
 
-		$dbEvents = GetModuleEvents("sale", "OnAfterUserAccountAdd");
-		while ($arEvent = $dbEvents->Fetch())
+		foreach (GetModuleEvents('sale', 'OnAfterUserAccountAdd', true) as $arEvent)
 		{
 			ExecuteModuleEventEx($arEvent, Array($ID, $arFields));
 		}
@@ -250,10 +261,11 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		}
 
 		if (!CSaleUserAccount::CheckFields("UPDATE", $arFields, $ID))
+		{
 			return false;
+		}
 
-		$dbEvents = GetModuleEvents("sale", "OnBeforeUserAccountUpdate");
-		while ($arEvent = $dbEvents->Fetch())
+		foreach (GetModuleEvents('sale', 'OnBeforeUserAccountUpdate', true) as $arEvent)
 		{
 			if (ExecuteModuleEventEx($arEvent, array($ID, &$arFields))===false)
 			{
@@ -262,6 +274,15 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		}
 
 		$arOldUserAccount = CSaleUserAccount::GetByID($ID);
+
+		if (!isset($arFields1['TIMESTAMP_X']))
+		{
+			$connection = Application::getConnection();
+			$helper = $connection->getSqlHelper();
+			unset($arFields['TIMESTAMP_X']);
+			$arFields['~TIMESTAMP_X'] = $helper->getCurrentDateTimeFunction();
+			unset($helper, $connection);
+		}
 
 		$strUpdate = $DB->PrepareUpdate("b_sale_user_account", $arFields);
 
@@ -272,13 +293,12 @@ class CSaleUserAccount extends CAllSaleUserAccount
 		}
 
 		$strSql = "UPDATE b_sale_user_account SET ".$strUpdate." WHERE ID = ".$ID." ";
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		unset($GLOBALS["SALE_USER_ACCOUNT"]["SALE_USER_ACCOUNT_CACHE_".$ID]);
 		unset($GLOBALS["SALE_USER_ACCOUNT"]["SALE_USER_ACCOUNT_CACHE_".$arOldUserAccount["USER_ID"]."_".$arOldUserAccount["CURRENCY"]]);
 
-		$dbEvents = GetModuleEvents("sale", "OnAfterUserAccountUpdate");
-		while ($arEvent = $dbEvents->Fetch())
+		foreach (GetModuleEvents('sale', 'OnAfterUserAccountUpdate', true) as $arEvent)
 		{
 			ExecuteModuleEventEx($arEvent, array($ID, $arFields));
 		}

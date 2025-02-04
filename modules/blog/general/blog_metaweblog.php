@@ -2,60 +2,64 @@
 
 IncludeModuleLangFile(__FILE__);
 
-class blog_metaweblog
+use Bitrix\Main\Text\HtmlFilter;
+
+class CBlogMetaWeblog
 {
-    public static function Authorize($user, $password)
-    {
-        global $USER, $APPLICATION;
+	public static function Authorize($user, $password)
+	{
+		global $USER, $APPLICATION;
 
-        $arAuthResult = $USER->Login($user, $password, 'Y');
-        $APPLICATION->arAuthResult = $arAuthResult;
-        if ($USER->IsAuthorized() && '' === $arAuthResult['MESSAGE']) {
-            return true;
-        }
+		$arAuthResult = $USER->Login($user, $password, "Y");
+		$APPLICATION->arAuthResult = $arAuthResult;
+		if($USER->IsAuthorized() && $arAuthResult["MESSAGE"] == '')
+			return true;
+		else
+			return false;
+	}
 
-        return false;
-    }
+	public static function DecodeParams($value)
+	{
+		foreach($value as $t => $v)
+		{
+			if($t == "base64")
+				return base64_decode($v[0]["#"]);
+			else
+				return $v[0]["#"];
+		}
+	}
 
-    public static function DecodeParams($value)
-    {
-        foreach ($value as $t => $v) {
-            if ('base64' === $t) {
-                return base64_decode($v[0]['#'], true);
-            }
+	public static function GetUsersBlogs($params, $arPath)
+	{
+		global $USER;
+		$blog = CBlogMetaWeblog::DecodeParams($params[0]["#"]["value"][0]["#"]);
+		$user = CBlogMetaWeblog::DecodeParams($params[1]["#"]["value"][0]["#"]);
+		$password = CBlogMetaWeblog::DecodeParams($params[2]["#"]["value"][0]["#"]);
 
-            return $v[0]['#'];
-        }
-    }
+		if(CBlogMetaWeblog::Authorize($user, $password))
+		{
+			$result = '';
+			$userId = $USER->GetID();
 
-    public static function GetUsersBlogs($params, $arPath)
-    {
-        global $USER;
-        $blog = CBlogMetaWeblog::DecodeParams($params[0]['#']['value'][0]['#']);
-        $user = CBlogMetaWeblog::DecodeParams($params[1]['#']['value'][0]['#']);
-        $password = CBlogMetaWeblog::DecodeParams($params[2]['#']['value'][0]['#']);
+			$dbBlog = CBlog::GetList(Array(), Array("OWNER_ID" => $userId, "GROUP_SITE_ID" => SITE_ID, "ACTIVE" => "Y"), false, false, Array("ID", "URL", "NAME", "OWNER_ID"));
+			while($arBlog = $dbBlog->GetNext())
+			{
 
-        if (CBlogMetaWeblog::Authorize($user, $password)) {
-            $result = '';
-            $userId = $USER->GetID();
+				if($arPath["PATH_TO_BLOG"] <> '')
+				{
+					if (defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> '')
+						$serverName = SITE_SERVER_NAME;
+					else
+						$serverName = COption::GetOptionString("main", "server_name", "");
+					if ($serverName == '')
+						$serverName = $_SERVER["SERVER_NAME"];
+					$serverName = HtmlFilter::encode($serverName);
 
-            $dbBlog = CBlog::GetList([], ['OWNER_ID' => $userId, 'GROUP_SITE_ID' => SITE_ID, 'ACTIVE' => 'Y'], false, false, ['ID', 'URL', 'NAME', 'OWNER_ID']);
-            while ($arBlog = $dbBlog->GetNext()) {
-                if ('' !== $arPath['PATH_TO_BLOG']) {
-                    if (defined('SITE_SERVER_NAME') && SITE_SERVER_NAME !== '') {
-                        $serverName = SITE_SERVER_NAME;
-                    } else {
-                        $serverName = COption::GetOptionString('main', 'server_name', '');
-                    }
-                    if ('' === $serverName) {
-                        $serverName = $_SERVER['SERVER_NAME'];
-                    }
-
-                    $path2Blog = 'http://'.$serverName.CComponentEngine::MakePathFromTemplate($arPath['PATH_TO_BLOG'], ['blog' => $arBlog['URL'], 'user_id' => $arBlog['OWNER_ID']]);
-                } else {
-                    $path2Blog = $arBlog['URL'];
-                }
-                $result .= '
+					$path2Blog = "http://".$serverName.CComponentEngine::MakePathFromTemplate($arPath["PATH_TO_BLOG"], array("blog" => $arBlog["URL"], "user_id" => $arBlog["OWNER_ID"]));
+				}
+				else
+					$path2Blog = $arBlog["URL"];
+				$result .= '
 						<value>
 							<struct>
 								<member>
@@ -64,82 +68,87 @@ class blog_metaweblog
 								</member>
 								<member>
 									<name>blogid</name>
-									<value>'.$arBlog['ID'].'</value>
+									<value>'.$arBlog["ID"].'</value>
 								</member>
 								<member>
 									<name>blogName</name>
-									<value>'.$arBlog['NAME'].'</value>
+									<value>'.$arBlog["NAME"].'</value>
 								</member>
 							</struct>
 						</value>
 					';
-            }
+			}
 
-            if (CModule::IncludeModule('socialnetwork')) {
-                $arGroupFilter = [
-                    'USER_ID' => $userId,
-                    '<=ROLE' => SONET_ROLES_USER,
-                    'GROUP_SITE_ID' => SITE_ID,
-                    'GROUP_ACTIVE' => 'Y',
-                ];
+			if (CModule::IncludeModule("socialnetwork"))
+			{
+				$arGroupFilter = array(
+					"USER_ID" => $userId,
+					"<=ROLE" => SONET_ROLES_USER,
+					"GROUP_SITE_ID" => SITE_ID,
+					"GROUP_ACTIVE" => "Y"
+				);
 
-                $dbGroups = CSocNetUserToGroup::GetList(
-                    ['GROUP_NAME' => 'ASC'],
-                    $arGroupFilter,
-                    false,
-                    false,
-                    ['ID', 'GROUP_ID', 'GROUP_OWNER_ID', 'GROUP_NAME', 'GROUP_SITE_ID']
-                );
-                while ($arGroups = $dbGroups->GetNext()) {
-                    $perms = BLOG_PERMS_DENY;
+				$dbGroups = CSocNetUserToGroup::GetList(
+					array("GROUP_NAME" => "ASC"),
+					$arGroupFilter,
+					false,
+					false,
+					array("ID", "GROUP_ID","GROUP_OWNER_ID", "GROUP_NAME", "GROUP_SITE_ID")
+				);
+				while ($arGroups = $dbGroups->GetNext())
+				{
+					$perms = BLOG_PERMS_DENY;
 
-                    if (CSocNetFeaturesPerms::CanPerformOperation($userId, SONET_ENTITY_GROUP, $arGroups['GROUP_ID'], 'blog', 'write_post', CSocNetUser::IsCurrentUserModuleAdmin($arGroups['GROUP_SITE_ID']))) {
-                        $perms = BLOG_PERMS_WRITE;
-                    } elseif (CSocNetFeaturesPerms::CanPerformOperation($userId, SONET_ENTITY_GROUP, $arGroups['GROUP_ID'], 'blog', 'full_post')) {
-                        $perms = BLOG_PERMS_FULL;
-                    }
+					if (CSocNetFeaturesPerms::CanPerformOperation($userId, SONET_ENTITY_GROUP, $arGroups["GROUP_ID"], "blog", "write_post", CSocNetUser::IsCurrentUserModuleAdmin($arGroups["GROUP_SITE_ID"])))
+						$perms = BLOG_PERMS_WRITE;
+					elseif (CSocNetFeaturesPerms::CanPerformOperation($userId, SONET_ENTITY_GROUP, $arGroups["GROUP_ID"], "blog", "full_post"))
+						$perms = BLOG_PERMS_FULL;
 
-                    if ($perms >= BLOG_PERMS_WRITE) {
-                        $dbBlog = CBlog::GetList([], ['SOCNET_GROUP_ID' => $arGroups['GROUP_ID'], 'GROUP_SITE_ID' => SITE_ID, 'ACTIVE' => 'Y'], false, false, ['ID', 'URL', 'NAME']);
-                        if ($arBlog = $dbBlog->GetNext()) {
-                            $result .= '
+					if($perms >= BLOG_PERMS_WRITE)
+					{
+						$dbBlog = CBlog::GetList(Array(), Array("SOCNET_GROUP_ID" => $arGroups["GROUP_ID"], "GROUP_SITE_ID" => SITE_ID, "ACTIVE" => "Y"), false, false, Array("ID", "URL", "NAME"));
+						if($arBlog = $dbBlog->GetNext())
+						{
+							$result .= '
 									<value>
 										<struct>
 											<member>
 												<name>url</name>
-												<value>'.$arBlog['URL'].'</value>
+												<value>'.$arBlog["URL"].'</value>
 											</member>
 											<member>
 												<name>blogid</name>
-												<value>'.$arBlog['ID'].'</value>
+												<value>'.$arBlog["ID"].'</value>
 											</member>
 											<member>
 												<name>blogName</name>
-												<value>'.$arBlog['NAME'].'</value>
+												<value>'.$arBlog["NAME"].'</value>
 											</member>
 										</struct>
 									</value>
 								';
-                        }
-                    }
-                }
-            }
+						}
+					}
+				}
+			}
 
-            if ('' !== $result) {
-                return '<params>
+			if($result <> '')
+			{
+				return '<params>
 							<param>
 								<value>
 									<array>
 										<data>'
-                                            .$result.
-                                        '</data>
+											.$result.
+										'</data>
 									</array>
 								</value>
 							</param>
 						</params>';
-            }
-
-            return '<fault>
+			}
+			else
+			{
+				return '<fault>
 					<value>
 						<struct>
 							<member>
@@ -153,9 +162,11 @@ class blog_metaweblog
 							</struct>
 						</value>
 					</fault>';
-        }
-
-        return '<fault>
+			}
+		}
+		else
+		{
+			return '<fault>
 				<value>
 					<struct>
 						<member>
@@ -164,60 +175,68 @@ class blog_metaweblog
 							</member>
 						<member>
 							<name>faultString</name>
-							<value><string>'.$arAuthResult['MESSAGE'].'</string></value>
+							<value><string>'.$arAuthResult["MESSAGE"].'</string></value>
 							</member>
 						</struct>
 					</value>
 				</fault>';
-    }
+		}
+	}
 
-    public static function GetCategories($params)
-    {
-        global $USER;
-        $blog = CBlogMetaWeblog::DecodeParams($params[0]['#']['value'][0]['#']);
-        $user = CBlogMetaWeblog::DecodeParams($params[1]['#']['value'][0]['#']);
-        $password = CBlogMetaWeblog::DecodeParams($params[2]['#']['value'][0]['#']);
+	public static function GetCategories($params)
+	{
+		global $USER;
+		$blog = CBlogMetaWeblog::DecodeParams($params[0]["#"]["value"][0]["#"]);
+		$user = CBlogMetaWeblog::DecodeParams($params[1]["#"]["value"][0]["#"]);
+		$password = CBlogMetaWeblog::DecodeParams($params[2]["#"]["value"][0]["#"]);
 
-        if (CBlogMetaWeblog::Authorize($user, $password)) {
-            $result = '';
-            $userId = $USER->GetID();
+		if(CBlogMetaWeblog::Authorize($user, $password))
+		{
+			$result = '';
+			$userId = $USER->GetID();
 
-            $dbBlog = CBlog::GetList([], ['GROUP_SITE_ID' => SITE_ID, 'ACTIVE' => 'Y', 'ID' => $blog], false, false, ['ID', 'URL', 'NAME']);
-            if ($arBlog = $dbBlog->GetNext()) {
-                $dbCategory = CBlogCategory::GetList(['NAME' => 'ASC'], ['BLOG_ID' => $arBlog['ID']]);
-                while ($arCategory = $dbCategory->GetNext()) {
-                    $result .= '
+			$dbBlog = CBlog::GetList(Array(), Array("GROUP_SITE_ID" => SITE_ID, "ACTIVE" => "Y", "ID" => $blog), false, false, Array("ID", "URL", "NAME"));
+			if($arBlog = $dbBlog->GetNext())
+			{
+				$dbCategory = CBlogCategory::GetList(Array("NAME" => "ASC"), Array("BLOG_ID" => $arBlog["ID"]));
+				while($arCategory = $dbCategory->GetNext())
+				{
+
+					$result .= '
 							<value>
 								<struct>
 									<member>
 										<name>description</name>
-										<value>'.$arCategory['NAME'].'</value>
+										<value>'.$arCategory["NAME"].'</value>
 									</member>
 									<member>
 										<name>title</name>
-										<value>'.$arCategory['NAME'].'</value>
+										<value>'.$arCategory["NAME"].'</value>
 									</member>
 								</struct>
 							</value>
 						';
-                }
-            }
+				}
+			}
 
-            if ('' !== $result) {
-                return '<params>
+
+			if($result <> '')
+			{
+				return '<params>
 							<param>
 								<value>
 									<array>
 										<data>'
-                                            .$result.
-                                        '</data>
+											.$result.
+										'</data>
 									</array>
 								</value>
 							</param>
 						</params>';
-            }
-
-            return '<fault>
+			}
+			else
+			{
+				return '<fault>
 					<value>
 						<struct>
 							<member>
@@ -231,9 +250,11 @@ class blog_metaweblog
 							</struct>
 						</value>
 					</fault>';
-        }
-
-        return '<fault>
+			}
+		}
+		else
+		{
+			return '<fault>
 				<value>
 					<struct>
 						<member>
@@ -242,76 +263,89 @@ class blog_metaweblog
 							</member>
 						<member>
 							<name>faultString</name>
-							<value><string>'.$arAuthResult['MESSAGE'].'</string></value>
+							<value><string>'.$arAuthResult["MESSAGE"].'</string></value>
 							</member>
 						</struct>
 					</value>
 				</fault>';
-    }
+		}
 
-    public static function GetRecentPosts($params, $arPath)
-    {
-        global $USER;
-        $blogId = (int) CBlogMetaWeblog::DecodeParams($params[0]['#']['value'][0]['#']);
-        $user = CBlogMetaWeblog::DecodeParams($params[1]['#']['value'][0]['#']);
-        $password = CBlogMetaWeblog::DecodeParams($params[2]['#']['value'][0]['#']);
-        $numPosts = (int) CBlogMetaWeblog::DecodeParams($params[3]['#']['value'][0]['#']);
-        if ($numPosts <= 0) {
-            $numPosts = 1;
-        } elseif ($numPosts > 20) {
-            $numPosts = 20;
-        }
+	}
 
-        if (CBlogMetaWeblog::Authorize($user, $password)) {
-            $result = '';
-            $userId = $USER->GetID();
+	public static function GetRecentPosts($params, $arPath)
+	{
+		global $USER;
+		$blogId = intval(CBlogMetaWeblog::DecodeParams($params[0]["#"]["value"][0]["#"]));
+		$user = CBlogMetaWeblog::DecodeParams($params[1]["#"]["value"][0]["#"]);
+		$password = CBlogMetaWeblog::DecodeParams($params[2]["#"]["value"][0]["#"]);
+		$numPosts = intval(CBlogMetaWeblog::DecodeParams($params[3]["#"]["value"][0]["#"]));
+		if($numPosts <= 0)
+			$numPosts = 1;
+		elseif($numPosts > 20)
+			$numPosts = 20;
 
-            if ((int) $blogId > 0) {
-                $dbBlog = CBlog::GetList([], ['GROUP_SITE_ID' => SITE_ID, 'ACTIVE' => 'Y', 'ID' => $blogId], false, false, ['ID', 'URL', 'NAME']);
-                if ($arBlog = $dbBlog->GetNext()) {
-                    $parser = new blogTextParser();
-                    $arSelectedFields = ['ID', 'BLOG_ID', 'TITLE', 'DATE_PUBLISH', 'AUTHOR_ID', 'DETAIL_TEXT', 'DETAIL_TEXT_TYPE'];
-                    $dbPost = CBlogPost::GetList(['DATE_PUBLISH' => 'DESC', 'ID' => 'DESC'], ['BLOG_ID' => $blogId], false, ['nTopCount' => $numPosts], $arSelectedFields);
-                    while ($arPost = $dbPost->GetNext()) {
-                        $dateISO = date('Y-m-d\\TH:i:s', MakeTimeStamp($arPost['DATE_PUBLISH']));
-                        $title = htmlspecialcharsEx($arPost['TITLE']);
-                        $arImages = [];
-                        $res = CBlogImage::GetList(['ID' => 'ASC'], ['POST_ID' => $arPost['ID'], 'BLOG_ID' => $arPost['BLOG_ID'], 'IS_COMMENT' => 'N']);
-                        while ($arImage = $res->Fetch()) {
-                            $arImages[$arImage['ID']] = $arImage['FILE_ID'];
-                        }
+		if(CBlogMetaWeblog::Authorize($user, $password))
+		{
+			$result = '';
+			$userId = $USER->GetID();
 
-                        if ('html' === $arPost['DETAIL_TEXT_TYPE']) {
-                            $arAllow = ['HTML' => 'Y', 'ANCHOR' => 'Y', 'IMG' => 'Y', 'SMILES' => 'Y', 'NL2BR' => 'N', 'VIDEO' => 'N', 'QUOTE' => 'N', 'CODE' => 'N'];
+			if(intval($blogId) > 0)
+			{
+				$dbBlog = CBlog::GetList(Array(), Array("GROUP_SITE_ID" => SITE_ID, "ACTIVE" => "Y", "ID" => $blogId), false, false, Array("ID", "URL", "NAME"));
+				if($arBlog = $dbBlog->GetNext())
+				{
+					$parser = new blogTextParser();
+					$arSelectedFields = array("ID", "BLOG_ID", "TITLE", "DATE_PUBLISH", "AUTHOR_ID", "DETAIL_TEXT", "DETAIL_TEXT_TYPE");
+					$dbPost = CBlogPost::GetList(Array("DATE_PUBLISH" => "DESC", "ID" => "DESC"), Array("BLOG_ID" => $blogId), false, Array("nTopCount" => $numPosts), $arSelectedFields);
+					while($arPost = $dbPost->GetNext())
+					{
+						if (!empty($arPost['DETAIL_TEXT']))
+						{
+							$arPost['DETAIL_TEXT'] = \Bitrix\Main\Text\Emoji::decode($arPost['DETAIL_TEXT']);
+						}
 
-                            $text = $parser->convert_to_rss($arPost['DETAIL_TEXT'], $arImages, $arAllow, false);
-                        } else {
-                            $arAllow = ['HTML' => 'N', 'ANCHOR' => 'Y', 'BIU' => 'Y', 'IMG' => 'Y', 'QUOTE' => 'N', 'CODE' => 'N', 'FONT' => 'Y', 'LIST' => 'Y', 'SMILES' => 'Y', 'NL2BR' => 'N', 'VIDEO' => 'N'];
-                            $text = $parser->convert_to_rss(htmlspecialcharsEx($arPost['DETAIL_TEXT']), $arImages, $arAllow, false);
-                        }
-                        $text = '<![CDATA['.$text.']]>';
+						$dateISO = date("Y-m-d\TH:i:s", MakeTimeStamp($arPost["DATE_PUBLISH"]));
+						$title = htmlspecialcharsEx($arPost["TITLE"]);
+						$arImages = Array();
+						$res = CBlogImage::GetList(array("ID"=>"ASC"),array("POST_ID"=>$arPost["ID"], "BLOG_ID"=>$arPost["BLOG_ID"], "IS_COMMENT" => "N"));
+						while ($arImage = $res->Fetch())
+									$arImages[$arImage['ID']] = $arImage['FILE_ID'];
 
-                        $category = '';
-                        $dbCategory = CBlogPostCategory::GetList([], ['BLOG_ID' => $arPost['BLOG_ID'], 'POST_ID' => $arPost['ID']]);
-                        while ($arCategory = $dbCategory->Fetch()) {
-                            $category .= '<value>'.htmlspecialcharsEx($arCategory['NAME']).'</value>';
-                        }
+						if($arPost["DETAIL_TEXT_TYPE"] == "html")
+						{
+							$arAllow = array("HTML" => "Y", "ANCHOR" => "Y", "IMG" => "Y", "SMILES" => "Y", "NL2BR" => "N", "VIDEO" => "N", "QUOTE" => "N", "CODE" => "N");
 
-                        $path2Post = '';
-                        if ('' !== $arPath['PATH_TO_POST']) {
-                            if (defined('SITE_SERVER_NAME') && SITE_SERVER_NAME !== '') {
-                                $serverName = SITE_SERVER_NAME;
-                            } else {
-                                $serverName = COption::GetOptionString('main', 'server_name', 'www.bitrixsoft.com');
-                            }
-                            $path2Post = 'http://'.$serverName.CComponentEngine::MakePathFromTemplate($arPath['PATH_TO_POST'], ['blog' => $arBlog['URL'], 'user_id' => $arBlog['OWNER_ID'], 'post_id' => $arPost['ID']]);
-                        }
+							$text = $parser->convert_to_rss($arPost["DETAIL_TEXT"], $arImages, $arAllow, false);
+						}
+						else
+						{
+							$arAllow = array("HTML" => "N", "ANCHOR" => "Y", "BIU" => "Y", "IMG" => "Y", "QUOTE" => "N", "CODE" => "N", "FONT" => "Y", "LIST" => "Y", "SMILES" => "Y", "NL2BR" => "N", "VIDEO" => "N");
+							$text = $parser->convert_to_rss(htmlspecialcharsEx($arPost["DETAIL_TEXT"]), $arImages, $arAllow, false);
+						}
+						$text = "<![CDATA[".$text."]]>";
 
-                        $result .= '
+						$category="";
+						$dbCategory = CBlogPostCategory::GetList(Array(), Array("BLOG_ID" => $arPost["BLOG_ID"], "POST_ID" => $arPost["ID"]));
+						while($arCategory = $dbCategory->Fetch())
+						{
+							$category .= '<value>'.htmlspecialcharsEx($arCategory["NAME"]).'</value>';
+						}
+
+						$path2Post = "";
+						if($arPath["PATH_TO_POST"] <> '')
+						{
+							if (defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> '')
+								$serverName = SITE_SERVER_NAME;
+							else
+								$serverName = COption::GetOptionString("main", "server_name", "www.bitrixsoft.com");
+							$path2Post = "http://".$serverName.CComponentEngine::MakePathFromTemplate($arPath["PATH_TO_POST"], array("blog" => $arBlog["URL"], "user_id" => $arBlog["OWNER_ID"], "post_id" => $arPost["ID"]));
+						}
+
+						$result .= '
 							<value>
 								<struct>';
-                        if ('' !== $category) {
-                            $result .= '<member>
+						if($category <> '')
+							$result .= '<member>
 										<name>categories</name>
 										<value>
 										<array>
@@ -322,8 +356,7 @@ class blog_metaweblog
 										</value>
 									</member>
 								';
-                        }
-                        $result .= '
+						$result .= '
 									<member>
 										<name>dateCreated</name>
 										<value>
@@ -341,7 +374,7 @@ class blog_metaweblog
 									<member>
 										<name>postid</name>
 										<value>
-										<i4>'.$arPost['ID'].'</i4>
+										<i4>'.$arPost["ID"].'</i4>
 										</value>
 									</member>
 									<member>
@@ -351,30 +384,31 @@ class blog_metaweblog
 									<member>
 										<name>publish</name>
 										<value>
-										<boolean>'.(('D' === $arPost['PUBLISH_STATUS']) ? '0' : '1').'</boolean>
+										<boolean>'.(($arPost["PUBLISH_STATUS"] == "D") ? "0" : "1").'</boolean>
 										</value>
 									</member>
 								</struct>
 							</value>
 							';
-                    }
-                }
-            }
+					}
+				}
+			}
 
-            return '<params>
+			return '<params>
 						<param>
 							<value>
 								<array>
 									<data>'
-                                        .$result.
-                                    '</data>
+										.$result.
+									'</data>
 								</array>
 							</value>
 						</param>
 					</params>';
-        }
-
-        return '<fault>
+		}
+		else
+		{
+			return '<fault>
 				<value>
 					<struct>
 						<member>
@@ -383,44 +417,56 @@ class blog_metaweblog
 							</member>
 						<member>
 							<name>faultString</name>
-							<value><string>'.$arAuthResult['MESSAGE'].'</string></value>
+							<value><string>'.$arAuthResult["MESSAGE"].'</string></value>
 							</member>
 						</struct>
 					</value>
 				</fault>';
-    }
+		}
 
-    public static function NewMediaObject($params)
-    {
-        global $USER, $DB;
-        $blogId = (int) CBlogMetaWeblog::DecodeParams($params[0]['#']['value'][0]['#']);
-        $user = CBlogMetaWeblog::DecodeParams($params[1]['#']['value'][0]['#']);
-        $password = CBlogMetaWeblog::DecodeParams($params[2]['#']['value'][0]['#']);
-        $arImage = $params[3]['#']['value'][0]['#']['struct'][0]['#']['member'];
+	}
 
-        foreach ($arImage as $val) {
-            $arImageInfo[$val['#']['name'][0]['#']] = CBlogMetaWeblog::DecodeParams($val['#']['value'][0]['#']);
-        }
+	public static function NewMediaObject($params)
+	{
+		global $USER, $DB;
+		$blogId = intval(CBlogMetaWeblog::DecodeParams($params[0]["#"]["value"][0]["#"]));
+		$user = CBlogMetaWeblog::DecodeParams($params[1]["#"]["value"][0]["#"]);
+		$password = CBlogMetaWeblog::DecodeParams($params[2]["#"]["value"][0]["#"]);
+		$arImage = $params[3]["#"]["value"][0]["#"]["struct"][0]["#"]["member"];
 
-        if (CBlogMetaWeblog::Authorize($user, $password)) {
-            $result = '';
-            $userId = $USER->GetID();
 
-            if ((int) $blogId > 0) {
-                $dbBlog = CBlog::GetList([], ['GROUP_SITE_ID' => SITE_ID, 'ACTIVE' => 'Y', 'ID' => $blogId], false, false, ['ID', 'URL', 'NAME']);
-                if ($arBlog = $dbBlog->GetNext()) {
-                    $filename = trim(str_replace('\\', '/', trim($arImageInfo['name'])), '/');
-                    if ('' !== $filename) {
-                        $TEMP_FILE_NAME = CTempFile::GetFileName(md5($filename).'.'.GetFileExtension($filename));
-                        CheckDirPath($TEMP_FILE_NAME);
-                    } else {
-                        $TEMP_FILE_NAME = '';
-                    }
+		foreach($arImage as $val)
+		{
+			$arImageInfo[$val["#"]["name"][0]["#"]] = CBlogMetaWeblog::DecodeParams($val["#"]["value"][0]["#"]);
+		}
 
-                    if (('' !== $TEMP_FILE_NAME) && ($fp = fopen($TEMP_FILE_NAME, 'a'))) {
-                        $result = fwrite($fp, $arImageInfo['bits']);
-                        if ($result !== CUtil::BinStrlen($arImageInfo['bits'])) {
-                            return '<fault>
+		if(CBlogMetaWeblog::Authorize($user, $password))
+		{
+			$result = '';
+			$userId = $USER->GetID();
+
+			if(intval($blogId) > 0)
+			{
+				$dbBlog = CBlog::GetList(Array(), Array("GROUP_SITE_ID" => SITE_ID, "ACTIVE" => "Y", "ID" => $blogId), false, false, Array("ID", "URL", "NAME"));
+				if($arBlog = $dbBlog->GetNext())
+				{
+					$filename = trim(str_replace("\\", "/", trim($arImageInfo["name"])), "/");
+					if ($filename <> '')
+					{
+						$TEMP_FILE_NAME = CTempFile::GetFileName(md5($filename).'.'.GetFileExtension($filename));
+						CheckDirPath($TEMP_FILE_NAME);
+					}
+					else
+					{
+						$TEMP_FILE_NAME = '';
+					}
+
+					if(($TEMP_FILE_NAME <> '') && ($fp = fopen($TEMP_FILE_NAME, "ab")))
+					{
+						$result = fwrite($fp, $arImageInfo["bits"]);
+						if($result !== strlen($arImageInfo["bits"]))
+						{
+							return '<fault>
 									<value>
 										<struct>
 											<member>
@@ -434,10 +480,12 @@ class blog_metaweblog
 										</struct>
 									</value>
 								</fault>';
-                        }
-                        fclose($fp);
-                    } else {
-                        return '<fault>
+						}
+						fclose($fp);
+					}
+					else
+					{
+						return '<fault>
 								<value>
 									<struct>
 										<member>
@@ -451,37 +499,38 @@ class blog_metaweblog
 									</struct>
 								</value>
 							</fault>';
-                    }
+					}
 
-                    $arFields = [
-                        'BLOG_ID' => $arBlog['ID'],
-                        'USER_ID' => $userId,
-                        '=TIMESTAMP_X' => $DB->GetNowFunction(),
-                        'FILE_ID' => [
-                            'name' => $arImageInfo['name'],
-                            'tmp_name' => $TEMP_FILE_NAME,
-                            'MODULE_ID' => 'blog',
-                            'type' => $arImageInfo['type'],
-                        ],
-                    ];
-                    $imageId = CBlogImage::Add($arFields);
-                    $arImg = CBlogImage::GetByID($imageId);
-                    $arFile = CFile::GetFileArray($arImg['FILE_ID']);
-                    $path = $arFile['SRC'];
+					$arFields = array(
+						"BLOG_ID"	=> $arBlog["ID"],
+						"USER_ID"	=> $userId,
+						"=TIMESTAMP_X"	=> $DB->GetNowFunction(),
+						"FILE_ID" => Array(
+							"name" => $arImageInfo["name"],
+							"tmp_name" => $TEMP_FILE_NAME,
+							"MODULE_ID" => "blog",
+							"type" => $arImageInfo["type"],
+						)
+					);
+					$imageId = CBlogImage::Add($arFields);
+					$arImg = CBlogImage::GetByID($imageId);
+					$arFile = CFile::GetFileArray($arImg["FILE_ID"]);
+					$path = $arFile["SRC"];
 
-                    $dbSite = CSite::GetByID(SITE_ID);
-                    $arSite = $dbSite->Fetch();
-                    $serverName = htmlspecialcharsEx($arSite['SERVER_NAME']);
-                    if ('' === $serverName) {
-                        if (defined('SITE_SERVER_NAME') && SITE_SERVER_NAME !== '') {
-                            $serverName = SITE_SERVER_NAME;
-                        } else {
-                            $serverName = COption::GetOptionString('main', 'server_name', 'www.bitrixsoft.com');
-                        }
-                    }
+					$dbSite = CSite::GetByID(SITE_ID);
+					$arSite = $dbSite -> Fetch();
+					$serverName = htmlspecialcharsEx($arSite["SERVER_NAME"]);
+					if ($serverName == '')
+					{
+						if (defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> '')
+							$serverName = SITE_SERVER_NAME;
+						else
+							$serverName = COption::GetOptionString("main", "server_name", "www.bitrixsoft.com");
+					}
 
-                    if ('' !== $path) {
-                        return '<params>
+					if($path <> '')
+					{
+						return '<params>
 							<param>
 								<value>
 									<struct>
@@ -495,11 +544,10 @@ class blog_metaweblog
 								</value>
 							</param>
 							</params>';
-                    }
-                }
-            }
-
-            return '<fault>
+					}
+				}
+			}
+			return '<fault>
 				<value>
 					<struct>
 						<member>
@@ -513,9 +561,10 @@ class blog_metaweblog
 					</struct>
 				</value>
 				</fault>';
-        }
-
-        return '<fault>
+		}
+		else
+		{
+			return '<fault>
 				<value>
 					<struct>
 						<member>
@@ -524,147 +573,163 @@ class blog_metaweblog
 						</member>
 						<member>
 							<name>faultString</name>
-							<value><string>'.$arAuthResult['MESSAGE'].'</string></value>
+							<value><string>'.$arAuthResult["MESSAGE"].'</string></value>
 						</member>
 					</struct>
 				</value>
 				</fault>';
-    }
+		}
 
-    public static function NewPost($params)
-    {
-        global $USER, $DB;
-        $blogId = (int) CBlogMetaWeblog::DecodeParams($params[0]['#']['value'][0]['#']);
-        $user = CBlogMetaWeblog::DecodeParams($params[1]['#']['value'][0]['#']);
-        $password = CBlogMetaWeblog::DecodeParams($params[2]['#']['value'][0]['#']);
-        $arPostInfo = $params[3]['#']['value'][0]['#']['struct'][0]['#']['member'];
-        $publish = $params[4]['#']['value'][0]['#']['boolean'][0]['#'];
+	}
 
-        foreach ($arPostInfo as $val) {
-            ${$val['#']['name'][0]['#']} = CBlogMetaWeblog::DecodeParams($val['#']['value'][0]['#']);
-        }
+	public static function NewPost($params)
+	{
+		global $USER, $DB;
+		$blogId = intval(CBlogMetaWeblog::DecodeParams($params[0]["#"]["value"][0]["#"]));
+		$user = CBlogMetaWeblog::DecodeParams($params[1]["#"]["value"][0]["#"]);
+		$password = CBlogMetaWeblog::DecodeParams($params[2]["#"]["value"][0]["#"]);
+		$arPostInfo = $params[3]["#"]["value"][0]["#"]["struct"][0]["#"]["member"];
+		$publish = $params[4]["#"]["value"][0]["#"]["boolean"][0]["#"];
 
-        $arCategory = [];
-        if (is_array($categories['data'][0]['#']['value'])) {
-            foreach ($categories['data'][0]['#']['value'] as $val) {
-                $catTmp = CBlogMetaWeblog::DecodeParams($val['#']);
-                if ('' !== $catTmp) {
-                    $arCategory[] = $catTmp;
-                }
-            }
-        }
+		foreach($arPostInfo as $val)
+		{
+			${$val["#"]["name"][0]["#"]} = CBlogMetaWeblog::DecodeParams($val["#"]["value"][0]["#"]);
+		}
+//		security
+		if(!empty($description))
+			$description = HtmlFilter::encode($description);
 
-        if (CBlogMetaWeblog::Authorize($user, $password)) {
-            $result = '';
-            $userId = $USER->GetID();
+		$arCategory = Array();
+		if(is_array($categories["data"][0]["#"]["value"]))
+		{
+			foreach($categories["data"][0]["#"]["value"] as $val)
+			{
+				$catTmp = CBlogMetaWeblog::DecodeParams($val["#"]);
+				if($catTmp <> '')
+					$arCategory[] = $catTmp;
+			}
+		}
 
-            if ((int) $blogId > 0) {
-                $dbBlog = CBlog::GetList([], ['GROUP_SITE_ID' => SITE_ID, 'ACTIVE' => 'Y', 'ID' => $blogId], false, false, ['ID', 'URL', 'NAME', 'GROUP_ID', 'SOCNET_GROUP_ID']);
-                if ($arBlog = $dbBlog->GetNext()) {
-                    $CATEGORYtmp = [];
-                    $dbCategory = CBlogCategory::GetList([], ['BLOG_ID' => $blogId]);
-                    while ($arCat = $dbCategory->Fetch()) {
-                        $arCatBlog[ToLower($arCat['NAME'])] = $arCat['ID'];
-                    }
+		if(CBlogMetaWeblog::Authorize($user, $password))
+		{
+			$result = '';
+			$userId = $USER->GetID();
 
-                    if ((int) $arBlog['SOCNET_GROUP_ID'] > 0 && CModule::IncludeModule('socialnetwork') && method_exists('CSocNetGroup', 'GetSite')) {
-                        $arSites = [];
-                        $rsGroupSite = CSocNetGroup::GetSite($arBlog['SOCNET_GROUP_ID']);
-                        while ($arGroupSite = $rsGroupSite->Fetch()) {
-                            $arSites[] = $arGroupSite['LID'];
-                        }
-                    } else {
-                        $arSites = [SITE_ID];
-                    }
+			if(intval($blogId) > 0)
+			{
+				$dbBlog = CBlog::GetList(Array(), Array("GROUP_SITE_ID" => SITE_ID, "ACTIVE" => "Y", "ID" => $blogId), false, false, Array("ID", "URL", "NAME", "GROUP_ID", "SOCNET_GROUP_ID"));
+				if($arBlog = $dbBlog->GetNext())
+				{
+					$CATEGORYtmp = Array();
+					$dbCategory = CBlogCategory::GetList(Array(), Array("BLOG_ID" => $blogId));
+					while($arCat = $dbCategory->Fetch())
+					{
+						$arCatBlog[mb_strtolower($arCat["NAME"])] = $arCat["ID"];
+					}
 
-                    foreach ($arCategory as $tg) {
-                        $tg = trim($tg);
-                        if (!in_array($arCatBlog[ToLower($tg)], $CATEGORYtmp, true)) {
-                            if ((int) $arCatBlog[ToLower($tg)] > 0) {
-                                $CATEGORYtmp[] = $arCatBlog[ToLower($tg)];
-                            } else {
-                                $CATEGORYtmp[] = CBlogCategory::Add(['BLOG_ID' => $blogId, 'NAME' => $tg]);
+					if (intval($arBlog["SOCNET_GROUP_ID"]) > 0 && CModule::IncludeModule("socialnetwork") && method_exists("CSocNetGroup", "GetSite"))
+					{
+						$arSites = array();
+						$rsGroupSite = CSocNetGroup::GetSite($arBlog["SOCNET_GROUP_ID"]);
+						while($arGroupSite = $rsGroupSite->Fetch())
+							$arSites[] = $arGroupSite["LID"];
+					}
+					else
+						$arSites = array(SITE_ID);
 
-                                foreach ($arSites as $site_id_tmp) {
-                                    BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/category/');
-                                }
-                            }
-                        }
-                    }
+					foreach($arCategory as $tg)
+					{
+						$tg = trim($tg);
+						if(!in_array($arCatBlog[mb_strtolower($tg)], $CATEGORYtmp))
+						{
+							if(intval($arCatBlog[mb_strtolower($tg)]) > 0)
+								$CATEGORYtmp[] = $arCatBlog[mb_strtolower($tg)];
+							else
+							{
+								$CATEGORYtmp[] = CBlogCategory::Add(array("BLOG_ID" => $blogId, "NAME" => $tg));
 
-                    $dbSite = CSite::GetByID(SITE_ID);
-                    $arSite = $dbSite->Fetch();
-                    $serverName = htmlspecialcharsEx($arSite['SERVER_NAME']);
-                    if ('' === $serverName) {
-                        if (defined('SITE_SERVER_NAME') && SITE_SERVER_NAME !== '') {
-                            $serverName = SITE_SERVER_NAME;
-                        } else {
-                            $serverName = COption::GetOptionString('main', 'server_name', 'www.bitrixsoft.com');
-                        }
-                    }
+								foreach ($arSites as $site_id_tmp)
+									BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/category/");
+							}
+						}
+					}
 
-                    $arImgRepl = [];
-                    $dbImage = CBlogImage::GetList([], ['POST_ID' => false, 'BLOG_ID' => $blogId, 'IS_COMMENT' => 'N']);
-                    while ($arImage = $dbImage->Fetch()) {
-                        $path = '';
-                        $path = CFile::GetPath($arImage['FILE_ID']);
-                        $path = 'http://'.$serverName.$path;
+					$dbSite = CSite::GetByID(SITE_ID);
+					$arSite = $dbSite -> Fetch();
+					$serverName = htmlspecialcharsEx($arSite["SERVER_NAME"]);
+					if ($serverName == '')
+					{
+						if (defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> '')
+							$serverName = SITE_SERVER_NAME;
+						else
+							$serverName = COption::GetOptionString("main", "server_name", "www.bitrixsoft.com");
+					}
 
-                        if (str_contains($description, $path)) {
-                            $description = str_replace('<img src="'.$path.'" alt=""/>', '[IMG ID='.$arImage['ID'].']', $description);
-                            $arImgRepl[] = $arImage['ID'];
-                        }
-                    }
+					$arImgRepl = Array();
+					$dbImage = CBlogImage::GetList(array(), Array("POST_ID" => false, "BLOG_ID" => $blogId, "IS_COMMENT" => "N"));
+					while($arImage = $dbImage->Fetch())
+					{
+						$path = "";
+						$path = CFile::GetPath($arImage["FILE_ID"]);
+						$path = "http://".$serverName.$path;
 
-                    $arFields = [
-                        'BLOG_ID' => $blogId,
-                        'AUTHOR_ID' => $userId,
-                        'TITLE' => $title,
-                        'DETAIL_TEXT' => $description,
-                        'DETAIL_TEXT_TYPE' => 'html',
-                        '=DATE_PUBLISH' => $DB->GetNowFunction(),
-                        '=DATE_CREATE' => $DB->GetNowFunction(),
-                        'PUBLISH_STATUS' => ((1 === $publish) ? 'P' : 'D'),
-                        'ENABLE_TRACKBACK' => 'N',
-                        'ENABLE_COMMENTS' => 'Y',
-                        'CATEGORY_ID' => implode(',', $CATEGORYtmp),
-                        'PERMS_POST' => [],
-                        'PERMS_COMMENT' => [],
-                    ];
-                    $postId = CBlogPost::Add($arFields);
-                    if ((int) $postId > 0) {
-                        foreach ($CATEGORYtmp as $v) {
-                            CBlogPostCategory::Add(['BLOG_ID' => $arBlog['ID'], 'POST_ID' => $postId, 'CATEGORY_ID' => $v]);
-                        }
-                        foreach ($arImgRepl as $v) {
-                            CBlogImage::Update($v, ['POST_ID' => $postId]);
-                        }
+						if(mb_strpos($description, $path) !== false)
+						{
+							$description = str_replace(('<img src="'.$path.'" alt=""/>'), "[IMG ID=".$arImage["ID"]."]", $description);
+							$arImgRepl[] = $arImage["ID"];
+						}
+					}
 
-                        foreach ($arSites as $site_id_tmp) {
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/first_page/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/calendar/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/last_messages/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/commented_posts/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/popular_posts/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/last_comments/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/groups/'.$arBlog['GROUP_ID'].'/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/rss_out/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/rss_all/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/rss_sonet/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/rss_all/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/favorite/');
-                        }
+					$arFields=array(
+							"BLOG_ID"			=> $blogId,
+							"AUTHOR_ID"			=> $userId,
+							"TITLE"				=> $title,
+							"DETAIL_TEXT"		=> $description,
+							"DETAIL_TEXT_TYPE"	=> "html",
+							"=DATE_PUBLISH"		=> $DB->GetNowFunction(),
+							"=DATE_CREATE"		=> $DB->GetNowFunction(),
+							"PUBLISH_STATUS"	=> (($publish == 1) ? "P" : "D"),
+							"ENABLE_TRACKBACK"	=> "N",
+							"ENABLE_COMMENTS"	=> "Y",
+							"CATEGORY_ID"		=> implode(",", $CATEGORYtmp),
+							"PERMS_POST" => array(),
+							"PERMS_COMMENT" => array(),
+						);
+					$postId = CBlogPost::Add($arFields);
+					if(intval($postId) > 0)
+					{
+						foreach($CATEGORYtmp as $v)
+							CBlogPostCategory::Add(Array("BLOG_ID" => $arBlog["ID"], "POST_ID" => $postId, "CATEGORY_ID"=>$v));
+						foreach($arImgRepl as $v)
+							CBlogImage::Update($v, Array("POST_ID" => $postId));
 
-                        return '<params>
+						foreach ($arSites as $site_id_tmp)
+						{
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/first_page/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/calendar/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/last_messages/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/commented_posts/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/popular_posts/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/last_comments/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/groups/".$arBlog["GROUP_ID"]."/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/rss_out/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/rss_all/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/rss_sonet/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/rss_all/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/favorite/");
+						}
+
+						return '<params>
 									<param>
 										<value>
 											<i4>'.$postId.'</i4>
 										</value>
 									</param>
 								</params>';
-                    }
-
-                    return '<fault>
+					}
+					else
+					{
+						return '<fault>
 							<value>
 								<struct>
 									<member>
@@ -678,10 +743,14 @@ class blog_metaweblog
 									</struct>
 								</value>
 							</fault>';
-                }
-            }
-        } else {
-            return '<fault>
+					}
+				}
+			}
+
+		}
+		else
+		{
+			return '<fault>
 				<value>
 					<struct>
 						<member>
@@ -690,143 +759,165 @@ class blog_metaweblog
 							</member>
 						<member>
 							<name>faultString</name>
-							<value><string>'.$arAuthResult['MESSAGE'].'</string></value>
+							<value><string>'.$arAuthResult["MESSAGE"].'</string></value>
 							</member>
 						</struct>
 					</value>
 				</fault>';
-        }
-    }
+		}
+	}
 
-    public static function EditPost($params)
-    {
-        global $USER, $DB;
-        $postId = (int) CBlogMetaWeblog::DecodeParams($params[0]['#']['value'][0]['#']);
-        $user = CBlogMetaWeblog::DecodeParams($params[1]['#']['value'][0]['#']);
-        $password = CBlogMetaWeblog::DecodeParams($params[2]['#']['value'][0]['#']);
-        $arPostInfo = $params[3]['#']['value'][0]['#']['struct'][0]['#']['member'];
-        $publish = $params[4]['#']['value'][0]['#']['boolean'][0]['#'];
+	public static function EditPost($params)
+	{
+		global $USER, $DB;
+		$postId = intval(CBlogMetaWeblog::DecodeParams($params[0]["#"]["value"][0]["#"]));
+		$user = CBlogMetaWeblog::DecodeParams($params[1]["#"]["value"][0]["#"]);
+		$password = CBlogMetaWeblog::DecodeParams($params[2]["#"]["value"][0]["#"]);
+		$arPostInfo = $params[3]["#"]["value"][0]["#"]["struct"][0]["#"]["member"];
+		$publish = $params[4]["#"]["value"][0]["#"]["boolean"][0]["#"];
 
-        foreach ($arPostInfo as $val) {
-            ${$val['#']['name'][0]['#']} = CBlogMetaWeblog::DecodeParams($val['#']['value'][0]['#']);
-        }
+		foreach($arPostInfo as $val)
+		{
+			${$val["#"]["name"][0]["#"]} = CBlogMetaWeblog::DecodeParams($val["#"]["value"][0]["#"]);
+		}
+		
+//		security
+		if(!empty($description))
+			$description = HtmlFilter::encode($description);
+		
+		$arCategory = Array();
+		if(is_array($categories["data"][0]["#"]["value"]))
+		{
+			foreach($categories["data"][0]["#"]["value"] as $val)
+			{
+				$catTmp = CBlogMetaWeblog::DecodeParams($val["#"]);
+				if($catTmp <> '')
+					$arCategory[] = $catTmp;
+			}
+		}
 
-        $arCategory = [];
-        if (is_array($categories['data'][0]['#']['value'])) {
-            foreach ($categories['data'][0]['#']['value'] as $val) {
-                $catTmp = CBlogMetaWeblog::DecodeParams($val['#']);
-                if ('' !== $catTmp) {
-                    $arCategory[] = $catTmp;
-                }
-            }
-        }
+		if(CBlogMetaWeblog::Authorize($user, $password))
+		{
+			$result = '';
+			$userId = $USER->GetID();
 
-        if (CBlogMetaWeblog::Authorize($user, $password)) {
-            $result = '';
-            $userId = $USER->GetID();
+			if(intval($postId) > 0)
+			{
+				$arSelectedFields = array("ID", "BLOG_ID", "TITLE", "DATE_PUBLISH", "AUTHOR_ID", "DETAIL_TEXT", "DETAIL_TEXT_TYPE");
+				$dbPost = CBlogPost::GetList(Array(), Array("AUTHOR_ID" => $userId, "ID" => $postId), false, Array("nTopCount" => 1), $arSelectedFields);
+				if($arPost = $dbPost->Fetch())
+				{
+					if (!empty($arPost['DETAIL_TEXT']))
+					{
+						$arPost['DETAIL_TEXT'] = \Bitrix\Main\Text\Emoji::decode($arPost['DETAIL_TEXT']);
+					}
 
-            if ((int) $postId > 0) {
-                $arSelectedFields = ['ID', 'BLOG_ID', 'TITLE', 'DATE_PUBLISH', 'AUTHOR_ID', 'DETAIL_TEXT', 'DETAIL_TEXT_TYPE'];
-                $dbPost = CBlogPost::GetList([], ['AUTHOR_ID' => $userId, 'ID' => $postId], false, ['nTopCount' => 1], $arSelectedFields);
-                if ($arPost = $dbPost->Fetch()) {
-                    $arBlog = CBlog::GetByID($arPost['BLOG_ID']);
+					$arBlog = CBlog::GetByID($arPost["BLOG_ID"]);
 
-                    if ((int) $arBlog['SOCNET_GROUP_ID'] > 0 && CModule::IncludeModule('socialnetwork') && method_exists('CSocNetGroup', 'GetSite')) {
-                        $arSites = [];
-                        $rsGroupSite = CSocNetGroup::GetSite($arBlog['SOCNET_GROUP_ID']);
-                        while ($arGroupSite = $rsGroupSite->Fetch()) {
-                            $arSites[] = $arGroupSite['LID'];
-                        }
-                    } else {
-                        $arSites = [SITE_ID];
-                    }
+					if (intval($arBlog["SOCNET_GROUP_ID"]) > 0 && CModule::IncludeModule("socialnetwork") && method_exists("CSocNetGroup", "GetSite"))
+					{
+						$arSites = array();
+						$rsGroupSite = CSocNetGroup::GetSite($arBlog["SOCNET_GROUP_ID"]);
+						while($arGroupSite = $rsGroupSite->Fetch())
+							$arSites[] = $arGroupSite["LID"];
+					}
+					else
+						$arSites = array(SITE_ID);
 
-                    $CATEGORYtmp = [];
-                    $dbCategory = CBlogCategory::GetList([], ['BLOG_ID' => $arPost['BLOG_ID']]);
-                    while ($arCat = $dbCategory->Fetch()) {
-                        $arCatBlog[ToLower($arCat['NAME'])] = $arCat['ID'];
-                    }
+					$CATEGORYtmp = Array();
+					$dbCategory = CBlogCategory::GetList(Array(), Array("BLOG_ID" => $arPost["BLOG_ID"]));
+					while($arCat = $dbCategory->Fetch())
+					{
+						$arCatBlog[mb_strtolower($arCat["NAME"])] = $arCat["ID"];
+					}
 
-                    foreach ($arCategory as $tg) {
-                        $tg = trim($tg);
-                        if (!in_array($arCatBlog[ToLower($tg)], $CATEGORYtmp, true)) {
-                            if ((int) $arCatBlog[ToLower($tg)] > 0) {
-                                $CATEGORYtmp[] = $arCatBlog[ToLower($tg)];
-                            } else {
-                                $CATEGORYtmp[] = CBlogCategory::Add(['BLOG_ID' => $arPost['BLOG_ID'], 'NAME' => $tg]);
+					foreach($arCategory as $tg)
+					{
+						$tg = trim($tg);
+						if(!in_array($arCatBlog[mb_strtolower($tg)], $CATEGORYtmp))
+						{
+							if(intval($arCatBlog[mb_strtolower($tg)]) > 0)
+								$CATEGORYtmp[] = $arCatBlog[mb_strtolower($tg)];
+							else
+							{
+								$CATEGORYtmp[] = CBlogCategory::Add(array("BLOG_ID" => $arPost["BLOG_ID"], "NAME" => $tg));
 
-                                foreach ($arSites as $site_id_tmp) {
-                                    BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/category/');
-                                }
-                            }
-                        }
-                    }
+								foreach ($arSites as $site_id_tmp)
+									BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/category/");
+							}
+						}
+					}
 
-                    $dbSite = CSite::GetByID(SITE_ID);
-                    $arSite = $dbSite->Fetch();
-                    $serverName = htmlspecialcharsEx($arSite['SERVER_NAME']);
-                    if ('' === $serverName) {
-                        if (defined('SITE_SERVER_NAME') && SITE_SERVER_NAME !== '') {
-                            $serverName = SITE_SERVER_NAME;
-                        } else {
-                            $serverName = COption::GetOptionString('main', 'server_name', 'www.bitrixsoft.com');
-                        }
-                    }
+					$dbSite = CSite::GetByID(SITE_ID);
+					$arSite = $dbSite -> Fetch();
+					$serverName = htmlspecialcharsEx($arSite["SERVER_NAME"]);
+					if ($serverName == '')
+					{
+						if (defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> '')
+							$serverName = SITE_SERVER_NAME;
+						else
+							$serverName = COption::GetOptionString("main", "server_name", "www.bitrixsoft.com");
+					}
 
-                    $dbImage = CBlogImage::GetList([], ['POST_ID' => false, 'BLOG_ID' => $arBlog['ID'], 'IS_COMMENT' => 'N']);
-                    while ($arImage = $dbImage->Fetch()) {
-                        $path = '';
-                        $path = CFile::GetPath($arImage['FILE_ID']);
-                        $path = 'http://'.$serverName.$path;
+					$dbImage = CBlogImage::GetList(array(), Array("POST_ID" => false, "BLOG_ID" => $arBlog["ID"], "IS_COMMENT" => "N"));
+					while($arImage = $dbImage->Fetch())
+					{
+						$path = "";
+						$path = CFile::GetPath($arImage["FILE_ID"]);
+						$path = "http://".$serverName.$path;
 
-                        if (str_contains($description, $path)) {
-                            $description = str_replace('<img src="'.$path.'" alt=""/>', '[IMG ID='.$arImage['ID'].']', $description);
-                            CBlogImage::Update($arImage['ID'], ['POST_ID' => $arPost['ID']]);
-                        }
-                    }
+						if(mb_strpos($description, $path) !== false)
+						{
+							$description = str_replace(('<img src="'.$path.'" alt=""/>'), "[IMG ID=".$arImage["ID"]."]", $description);
+							CBlogImage::Update($arImage["ID"], Array("POST_ID" => $arPost["ID"]));
+						}
+					}
 
-                    $arFields = [
-                        'TITLE' => $title,
-                        'DETAIL_TEXT' => $description,
-                        'DETAIL_TEXT_TYPE' => 'html',
-                        'PUBLISH_STATUS' => ((1 === $publish) ? 'P' : 'D'),
-                        'CATEGORY_ID' => implode(',', $CATEGORYtmp),
-                    ];
-                    $postId = CBlogPost::Update($arPost['ID'], $arFields);
 
-                    CBlogPostCategory::DeleteByPostID($arPost['ID']);
-                    foreach ($CATEGORYtmp as $v) {
-                        CBlogPostCategory::Add(['BLOG_ID' => $arPost['BLOG_ID'], 'POST_ID' => $arPost['ID'], 'CATEGORY_ID' => $v]);
-                    }
-                    if ((int) $postId > 0) {
-                        foreach ($arSites as $site_id_tmp) {
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/first_page/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/calendar/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/last_messages/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/commented_posts/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/popular_posts/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/last_comments/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/groups/'.$arBlog['GROUP_ID'].'/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/trackback/'.$arPost['ID'].'/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/comment/'.$arPost['ID'].'/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/rss_out/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/rss_all/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/rss_sonet/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/rss_all/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/favorite/');
-                            BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/post/'.$arPost['ID'].'/');
-                        }
+					$arFields=array(
+							"TITLE"				=> $title,
+							"DETAIL_TEXT"		=> $description,
+							"DETAIL_TEXT_TYPE"	=> "html",
+							"PUBLISH_STATUS"	=> (($publish == 1) ? "P" : "D"),
+							"CATEGORY_ID"		=> implode(",", $CATEGORYtmp),
+						);
+					$postId = CBlogPost::Update($arPost["ID"], $arFields);
 
-                        return '<params>
+					CBlogPostCategory::DeleteByPostID($arPost["ID"]);
+					foreach($CATEGORYtmp as $v)
+						CBlogPostCategory::Add(Array("BLOG_ID" => $arPost["BLOG_ID"], "POST_ID" => $arPost["ID"], "CATEGORY_ID"=>$v));
+					if(intval($postId) > 0)
+					{
+						foreach ($arSites as $site_id_tmp)
+						{
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/first_page/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/calendar/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/last_messages/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/commented_posts/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/popular_posts/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/last_comments/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/groups/".$arBlog["GROUP_ID"]."/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/trackback/".$arPost["ID"]."/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/comment/".$arPost["ID"]."/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/rss_out/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/rss_all/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/rss_sonet/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/rss_all/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/favorite/");
+							BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/post/".$arPost["ID"]."/");
+						}
+
+						return '<params>
 									<param>
 										<value>
 											<i4>'.$postId.'</i4>
 										</value>
 									</param>
 								</params>';
-                    }
-
-                    return '<fault>
+					}
+					else
+					{
+						return '<fault>
 							<value>
 								<struct>
 									<member>
@@ -840,10 +931,14 @@ class blog_metaweblog
 									</struct>
 								</value>
 							</fault>';
-                }
-            }
-        } else {
-            return '<fault>
+					}
+				}
+			}
+
+		}
+		else
+		{
+			return '<fault>
 				<value>
 					<struct>
 						<member>
@@ -852,69 +947,80 @@ class blog_metaweblog
 							</member>
 						<member>
 							<name>faultString</name>
-							<value><string>'.$arAuthResult['MESSAGE'].'</string></value>
+							<value><string>'.$arAuthResult["MESSAGE"].'</string></value>
 							</member>
 						</struct>
 					</value>
 				</fault>';
-        }
-    }
+		}
+	}
 
-    public static function GetPost($params, $arPath)
-    {
-        global $USER;
-        $postId = (int) CBlogMetaWeblog::DecodeParams($params[0]['#']['value'][0]['#']);
-        $user = CBlogMetaWeblog::DecodeParams($params[1]['#']['value'][0]['#']);
-        $password = CBlogMetaWeblog::DecodeParams($params[2]['#']['value'][0]['#']);
+	public static function GetPost($params, $arPath)
+	{
+		global $USER;
+		$postId = intval(CBlogMetaWeblog::DecodeParams($params[0]["#"]["value"][0]["#"]));
+		$user = CBlogMetaWeblog::DecodeParams($params[1]["#"]["value"][0]["#"]);
+		$password = CBlogMetaWeblog::DecodeParams($params[2]["#"]["value"][0]["#"]);
 
-        if (CBlogMetaWeblog::Authorize($user, $password)) {
-            $result = '';
-            $userId = $USER->GetID();
+		if(CBlogMetaWeblog::Authorize($user, $password))
+		{
+			$result = '';
+			$userId = $USER->GetID();
 
-            if ((int) $postId > 0) {
-                $arSelectedFields = ['ID', 'BLOG_ID', 'TITLE', 'DATE_PUBLISH', 'AUTHOR_ID', 'DETAIL_TEXT', 'DETAIL_TEXT_TYPE', 'BLOG_URL', 'BLOG_OWNER_ID'];
-                $dbPost = CBlogPost::GetList([], ['AUTHOR_ID' => $userId, 'ID' => $postId], false, ['nTopCount' => 1], $arSelectedFields);
-                if ($arPost = $dbPost->Fetch()) {
-                    $parser = new blogTextParser();
-                    $dateISO = date('Y-m-d\\TH:i:s', MakeTimeStamp($arPost['DATE_PUBLISH']));
-                    $title = htmlspecialcharsEx($arPost['TITLE']);
-                    $arImages = [];
-                    $res = CBlogImage::GetList(['ID' => 'ASC'], ['POST_ID' => $arPost['ID'], 'BLOG_ID' => $arPost['BLOG_ID'], 'IS_COMMENT' => 'N']);
-                    while ($arImage = $res->Fetch()) {
-                        $arImages[$arImage['ID']] = $arImage['FILE_ID'];
-                    }
+			if(intval($postId) > 0)
+			{
+				$arSelectedFields = array("ID", "BLOG_ID", "TITLE", "DATE_PUBLISH", "AUTHOR_ID", "DETAIL_TEXT", "DETAIL_TEXT_TYPE", "BLOG_URL", "BLOG_OWNER_ID");
+				$dbPost = CBlogPost::GetList(Array(), Array("AUTHOR_ID" => $userId, "ID" => $postId), false, Array("nTopCount" => 1), $arSelectedFields);
+				if($arPost = $dbPost->Fetch())
+				{
+					if (!empty($arPost['DETAIL_TEXT']))
+					{
+						$arPost['DETAIL_TEXT'] = \Bitrix\Main\Text\Emoji::decode($arPost['DETAIL_TEXT']);
+					}
 
-                    if ('html' === $arPost['DETAIL_TEXT_TYPE']) {
-                        $arAllow = ['HTML' => 'Y', 'ANCHOR' => 'Y', 'IMG' => 'Y', 'SMILES' => 'Y', 'NL2BR' => 'N', 'VIDEO' => 'N', 'QUOTE' => 'N', 'CODE' => 'N'];
+					$parser = new blogTextParser();
+					$dateISO = date("Y-m-d\TH:i:s", MakeTimeStamp($arPost["DATE_PUBLISH"]));
+					$title = htmlspecialcharsEx($arPost["TITLE"]);
+					$arImages = Array();
+					$res = CBlogImage::GetList(array("ID"=>"ASC"),array("POST_ID"=>$arPost["ID"], "BLOG_ID"=>$arPost["BLOG_ID"], "IS_COMMENT" => "N"));
+					while ($arImage = $res->Fetch())
+								$arImages[$arImage['ID']] = $arImage['FILE_ID'];
 
-                        $text = $parser->convert_to_rss($arPost['DETAIL_TEXT'], $arImages, $arAllow, false);
-                    } else {
-                        $arAllow = ['HTML' => 'N', 'ANCHOR' => 'Y', 'BIU' => 'Y', 'IMG' => 'Y', 'QUOTE' => 'N', 'CODE' => 'N', 'FONT' => 'Y', 'LIST' => 'Y', 'SMILES' => 'Y', 'NL2BR' => 'N', 'VIDEO' => 'N'];
-                        $text = $parser->convert_to_rss(htmlspecialcharsEx($arPost['DETAIL_TEXT']), $arImages, $arAllow, false);
-                    }
-                    $text = '<![CDATA['.$text.']]>';
+					if($arPost["DETAIL_TEXT_TYPE"] == "html")
+					{
+						$arAllow = array("HTML" => "Y", "ANCHOR" => "Y", "IMG" => "Y", "SMILES" => "Y", "NL2BR" => "N", "VIDEO" => "N", "QUOTE" => "N", "CODE" => "N");
 
-                    $category = '';
-                    $dbCategory = CBlogPostCategory::GetList([], ['BLOG_ID' => $arPost['BLOG_ID'], 'POST_ID' => $arPost['ID']]);
-                    while ($arCategory = $dbCategory->Fetch()) {
-                        $category .= '<value>'.htmlspecialcharsEx($arCategory['NAME']).'</value>';
-                    }
+						$text = $parser->convert_to_rss($arPost["DETAIL_TEXT"], $arImages, $arAllow, false);
+					}
+					else
+					{
+						$arAllow = array("HTML" => "N", "ANCHOR" => "Y", "BIU" => "Y", "IMG" => "Y", "QUOTE" => "N", "CODE" => "N", "FONT" => "Y", "LIST" => "Y", "SMILES" => "Y", "NL2BR" => "N", "VIDEO" => "N");
+						$text = $parser->convert_to_rss(htmlspecialcharsEx($arPost["DETAIL_TEXT"]), $arImages, $arAllow, false);
+					}
+					$text = "<![CDATA[".($text)."]]>";
 
-                    $path2Post = '';
-                    if ('' !== $arPath['PATH_TO_POST']) {
-                        if (defined('SITE_SERVER_NAME') && SITE_SERVER_NAME !== '') {
-                            $serverName = SITE_SERVER_NAME;
-                        } else {
-                            $serverName = COption::GetOptionString('main', 'server_name', 'www.bitrixsoft.com');
-                        }
-                        $path2Post = 'http://'.$serverName.CComponentEngine::MakePathFromTemplate($arPath['PATH_TO_POST'], ['blog' => $arPost['BLOG_URL'], 'user_id' => $arPost['BLOG_OWNER_ID'], 'post_id' => $arPost['ID']]);
-                    }
+					$category="";
+					$dbCategory = CBlogPostCategory::GetList(Array(), Array("BLOG_ID" => $arPost["BLOG_ID"], "POST_ID" => $arPost["ID"]));
+					while($arCategory = $dbCategory->Fetch())
+					{
+						$category .= '<value>'.htmlspecialcharsEx($arCategory["NAME"]).'</value>';
+					}
 
-                    $result .= '
+					$path2Post = "";
+					if($arPath["PATH_TO_POST"] <> '')
+					{
+						if (defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> '')
+							$serverName = SITE_SERVER_NAME;
+						else
+							$serverName = COption::GetOptionString("main", "server_name", "www.bitrixsoft.com");
+						$path2Post = "http://".$serverName.CComponentEngine::MakePathFromTemplate($arPath["PATH_TO_POST"], array("blog" => $arPost["BLOG_URL"], "user_id" => $arPost["BLOG_OWNER_ID"], "post_id" => $arPost["ID"]));
+					}
+
+					$result .= '
 						<value>
 							<struct>';
-                    if ('' !== $category) {
-                        $result .= '<member>
+					if($category <> '')
+						$result .= '<member>
 									<name>categories</name>
 									<value>
 									<array>
@@ -925,8 +1031,7 @@ class blog_metaweblog
 									</value>
 								</member>
 							';
-                    }
-                    $result .= '
+					$result .= '
 								<member>
 									<name>dateCreated</name>
 									<value>
@@ -944,7 +1049,7 @@ class blog_metaweblog
 								<member>
 									<name>postid</name>
 									<value>
-									<i4>'.$arPost['ID'].'</i4>
+									<i4>'.$arPost["ID"].'</i4>
 									</value>
 								</member>
 								<member>
@@ -954,29 +1059,30 @@ class blog_metaweblog
 								<member>
 									<name>publish</name>
 									<value>
-									<boolean>'.(('D' === $arPost['PUBLISH_STATUS']) ? '0' : '1').'</boolean>
+									<boolean>'.(($arPost["PUBLISH_STATUS"] == "D") ? "0" : "1").'</boolean>
 									</value>
 								</member>
 							</struct>
 						</value>
 						';
-                }
-            }
+				}
+			}
 
-            return '<params>
+			return '<params>
 						<param>
 							<value>
 								<array>
 									<data>'
-                                        .$result.
-                                    '</data>
+										.$result.
+									'</data>
 								</array>
 							</value>
 						</param>
 					</params>';
-        }
-
-        return '<fault>
+		}
+		else
+		{
+			return '<fault>
 				<value>
 					<struct>
 						<member>
@@ -985,70 +1091,76 @@ class blog_metaweblog
 							</member>
 						<member>
 							<name>faultString</name>
-							<value><string>'.$arAuthResult['MESSAGE'].'</string></value>
+							<value><string>'.$arAuthResult["MESSAGE"].'</string></value>
 							</member>
 						</struct>
 					</value>
 				</fault>';
-    }
+		}
+	}
 
-    public static function DeletePost($params)
-    {
-        global $USER;
-        $postId = (int) CBlogMetaWeblog::DecodeParams($params[1]['#']['value'][0]['#']);
-        $user = CBlogMetaWeblog::DecodeParams($params[2]['#']['value'][0]['#']);
-        $password = CBlogMetaWeblog::DecodeParams($params[3]['#']['value'][0]['#']);
+	public static function DeletePost($params)
+	{
+		global $USER;
+		$postId = intval(CBlogMetaWeblog::DecodeParams($params[1]["#"]["value"][0]["#"]));
+		$user = CBlogMetaWeblog::DecodeParams($params[2]["#"]["value"][0]["#"]);
+		$password = CBlogMetaWeblog::DecodeParams($params[3]["#"]["value"][0]["#"]);
 
-        if (CBlogMetaWeblog::Authorize($user, $password)) {
-            $result = '';
-            $userId = $USER->GetID();
+		if(CBlogMetaWeblog::Authorize($user, $password))
+		{
+			$result = '';
+			$userId = $USER->GetID();
 
-            if ((int) $postId > 0) {
-                $dbPost = CBlogPost::GetList([], ['AUTHOR_ID' => $userId, 'ID' => $postId], false, ['nTopCount' => 1], ['ID', 'BLOG_ID', 'AUTHOR_ID']);
-                if ($arPost = $dbPost->Fetch()) {
-                    CBlogPost::Delete($postId);
+			if(intval($postId) > 0)
+			{
+				$dbPost = CBlogPost::GetList(Array(), Array("AUTHOR_ID" => $userId, "ID" => $postId), false, Array("nTopCount" => 1), Array("ID", "BLOG_ID", "AUTHOR_ID"));
+				if($arPost = $dbPost->Fetch())
+				{
+					CBlogPost::Delete($postId);
 
-                    $arBlog = CBlog::GetByID($arPost['BLOG_ID']);
+					$arBlog = CBlog::GetByID($arPost["BLOG_ID"]);
 
-                    if ((int) $arBlog['SOCNET_GROUP_ID'] > 0 && CModule::IncludeModule('socialnetwork') && method_exists('CSocNetGroup', 'GetSite')) {
-                        $arSites = [];
-                        $rsGroupSite = CSocNetGroup::GetSite($arBlog['SOCNET_GROUP_ID']);
-                        while ($arGroupSite = $rsGroupSite->Fetch()) {
-                            $arSites[] = $arGroupSite['LID'];
-                        }
-                    } else {
-                        $arSites = [SITE_ID];
-                    }
+					if (intval($arBlog["SOCNET_GROUP_ID"]) > 0 && CModule::IncludeModule("socialnetwork") && method_exists("CSocNetGroup", "GetSite"))
+					{
+						$arSites = array();
+						$rsGroupSite = CSocNetGroup::GetSite($arBlog["SOCNET_GROUP_ID"]);
+						while($arGroupSite = $rsGroupSite->Fetch())
+							$arSites[] = $arGroupSite["LID"];
+					}
+					else
+						$arSites = array(SITE_ID);
 
-                    foreach ($arSites as $site_id_tmp) {
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/first_page/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/pages/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/calendar/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/post/'.$postId.'/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/last_messages/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/commented_posts/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/popular_posts/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/last_comments/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/groups/'.$arResult['BLOG']['GROUP_ID'].'/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/trackback/'.$postId.'/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/rss_out/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/'.$arBlog['URL'].'/rss_all/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/rss_sonet/');
-                        BXClearCache(true, '/'.$site_id_tmp.'/blog/rss_all/');
-                    }
-                }
-            }
+					foreach ($arSites as $site_id_tmp)
+					{
+						BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/first_page/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/pages/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/calendar/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/post/".$postId."/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/last_messages/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/commented_posts/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/popular_posts/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/last_comments/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/groups/".$arResult["BLOG"]["GROUP_ID"]."/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/trackback/".$postId."/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/rss_out/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/".$arBlog["URL"]."/rss_all/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/rss_sonet/");
+						BXClearCache(True, "/".$site_id_tmp."/blog/rss_all/");
+					}
+				}
+			}
 
-            return '<params>
+			return '<params>
 						<param>
 							<value>
 								<boolean>1</boolean>
 							</value>
 						</param>
 					</params>';
-        }
-
-        return '<fault>
+		}
+		else
+		{
+			return '<fault>
 				<value>
 					<struct>
 						<member>
@@ -1057,32 +1169,34 @@ class blog_metaweblog
 							</member>
 						<member>
 							<name>faultString</name>
-							<value><string>'.$arAuthResult['MESSAGE'].'</string></value>
+							<value><string>'.$arAuthResult["MESSAGE"].'</string></value>
 							</member>
 						</struct>
 					</value>
 				</fault>';
-    }
+		}
+	}
 
-    public static function GetUserInfo($params)
-    {
-        global $USER;
-        $user = CBlogMetaWeblog::DecodeParams($params[1]['#']['value'][0]['#']);
-        $password = CBlogMetaWeblog::DecodeParams($params[2]['#']['value'][0]['#']);
+	public static function GetUserInfo($params)
+	{
+		global $USER;
+		$user = CBlogMetaWeblog::DecodeParams($params[1]["#"]["value"][0]["#"]);
+		$password = CBlogMetaWeblog::DecodeParams($params[2]["#"]["value"][0]["#"]);
 
-        if (CBlogMetaWeblog::Authorize($user, $password)) {
-            $result = '';
-            $userId = $USER->GetID();
+		if(CBlogMetaWeblog::Authorize($user, $password))
+		{
+			$result = '';
+			$userId = $USER->GetID();
 
-            $dbUser = CUser::GetByID($userId);
-            if ($arUser = $dbUser->Fetch()) {
-                $BlogUser = CBlogUser::GetByID($userId, BLOG_BY_USER_ID);
-                if ('' !== $BlogUser['ALIAS']) {
-                    $nick = htmlspecialcharsEx($BlogUser['ALIAS']);
-                } else {
-                    $nick = htmlspecialcharsEx($arUser['LOGIN']);
-                }
-                $result .= '
+			$dbUser = CUser::GetByID($userId);
+			if($arUser = $dbUser->Fetch())
+			{
+				$BlogUser = CBlogUser::GetByID($userId, BLOG_BY_USER_ID);
+				if($BlogUser["ALIAS"] <> '')
+					$nick = htmlspecialcharsEx($BlogUser["ALIAS"]);
+				else
+					$nick = htmlspecialcharsEx($arUser["LOGIN"]);
+				$result .= '
 						<value>
 							<struct>
 								<member>
@@ -1091,36 +1205,39 @@ class blog_metaweblog
 								</member>
 								<member>
 									<name>email</name>
-									<value>'.htmlspecialcharsEx($arUser['EMAIL']).'</value>
+									<value>'.htmlspecialcharsEx($arUser["EMAIL"]).'</value>
 								</member>
 								<member>
 									<name>lastname</name>
-									<value>'.htmlspecialcharsEx($arUser['LAST_NAME']).'</value>
+									<value>'.htmlspecialcharsEx($arUser["LAST_NAME"]).'</value>
 								</member>
 								<member>
 									<name>firstname</name>
-									<value>'.htmlspecialcharsEx($arUser['NAME']).'</value>
+									<value>'.htmlspecialcharsEx($arUser["NAME"]).'</value>
 								</member>
 							</struct>
 						</value>
 					';
-            }
+			}
 
-            if ('' !== $result) {
-                return '<params>
+
+			if($result <> '')
+			{
+				return '<params>
 							<param>
 								<value>
 									<array>
 										<data>'
-                                            .$result.
-                                        '</data>
+											.$result.
+										'</data>
 									</array>
 								</value>
 							</param>
 						</params>';
-            }
-
-            return '<fault>
+			}
+			else
+			{
+				return '<fault>
 					<value>
 						<struct>
 							<member>
@@ -1134,9 +1251,11 @@ class blog_metaweblog
 							</struct>
 						</value>
 					</fault>';
-        }
-
-        return '<fault>
+			}
+		}
+		else
+		{
+			return '<fault>
 				<value>
 					<struct>
 						<member>
@@ -1145,10 +1264,12 @@ class blog_metaweblog
 							</member>
 						<member>
 							<name>faultString</name>
-							<value><string>'.$arAuthResult['MESSAGE'].'</string></value>
+							<value><string>'.$arAuthResult["MESSAGE"].'</string></value>
 							</member>
 						</struct>
 					</value>
 				</fault>';
-    }
+		}
+
+	}
 }

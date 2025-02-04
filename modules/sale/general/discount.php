@@ -1273,7 +1273,7 @@ class CAllSaleDiscount
 	* @deprecated deprecated since sale 14.11.0
 	* @see \Bitrix\Sale\Internals\DiscountTable::delete
 	*/
-	public function Delete($ID)
+	public static function Delete($ID)
 	{
 		$ID = (int)$ID;
 		if ($ID <= 0)
@@ -1407,7 +1407,7 @@ class CAllSaleDiscount
 			'PRICE_TO',
 		);
 
-		$strAction = ToUpper($strAction);
+		$strAction = mb_strtoupper($strAction);
 		if (!array_key_exists('CONDITIONS', $arFields) && !array_key_exists('ACTIONS', $arFields))
 		{
 			$strSiteCurrency = '';
@@ -1662,7 +1662,7 @@ class CAllSaleDiscount
 		$arMsg = array();
 		$boolResult = true;
 
-		$strAction = ToUpper($strAction);
+		$strAction = mb_strtoupper($strAction);
 		if (array_key_exists('CONDITIONS', $arFields) && !empty($arFields['CONDITIONS']))
 		{
 			$arConditions = false;
