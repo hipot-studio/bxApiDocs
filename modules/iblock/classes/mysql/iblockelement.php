@@ -649,7 +649,6 @@ class CIBlockElement extends CAllIBlockElement
 	 * @param array $arSelectFields
 	 * @return integer|CIBlockResult
 	 */
-
 	/**
 	 * <p>Возвращает список элементов по фильтру <i>arFilter</i>. Метод статический.</p><br>
 	 *
