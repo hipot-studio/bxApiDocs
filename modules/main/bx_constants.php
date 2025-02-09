@@ -392,10 +392,6 @@ define('SITE_ID', $arLang["LID"]);
  */
 define('SITE_DIR', $arLang["DIR"]);
 
-/**
- * SITE_SERVER_NAME
- */
-define('SITE_SERVER_NAME', $arLang["SERVER_NAME"]);
 
 /**
  * SITE_CHARSET

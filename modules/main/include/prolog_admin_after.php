@@ -1,8 +1,15 @@
 <?
 if(!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true) die();
 
-define("START_EXEC_PROLOG_AFTER_1", microtime());
+if (!defined('START_EXEC_PROLOG_AFTER_1'))
+{
+	define("START_EXEC_PROLOG_AFTER_1", microtime(true));
+}
+
 $GLOBALS["BX_STATE"] = "PA";
+
+if(!defined("BX_ROOT"))
+	define("BX_ROOT", "/bitrix");
 
 require_once($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/interface/init_admin.php");
 
@@ -21,6 +28,10 @@ else
 	}
 }
 
-define("START_EXEC_PROLOG_AFTER_2", microtime());
+if (!defined('START_EXEC_PROLOG_AFTER_2'))
+{
+	define("START_EXEC_PROLOG_AFTER_2", microtime(true));
+}
+
 $GLOBALS["BX_STATE"] = "WA";
 ?>

@@ -258,7 +258,7 @@ class KpiManager
 					$sessionObject = new Session();
 					$sessionObject->loadByArray($sessionFields, $config, $chat);
 
-					$interval = null;
+					$interval = 0;
 					if (
 						$addFields['IS_FIRST_MESSAGE'] == 'Y'
 						&& intval($config['KPI_FIRST_ANSWER_TIME']) > 0
@@ -271,24 +271,18 @@ class KpiManager
 						$interval = $config['KPI_FURTHER_ANSWER_TIME'];
 					}
 
-					if (!$interval)
+					if ($interval > 0)
 					{
-						return false;
-					}
+						$nextWorkdayStart = time();
 
-					$nextWorkdayStart = time();
+						$workTime = new AutomaticAction\WorkTime($sessionObject);
+						if (!$workTime->isWorkTimeLine())
+						{
+							$nextWorkdayStart = $workTime->getNextWorkDayStart()->getTimestamp();
+						}
 
-					$workTime = new AutomaticAction\WorkTime($sessionObject);
-					if (!$workTime->isWorkTimeLine())
-					{
-						$nextWorkdayStart = $workTime->getNextWorkDayStart()->getTimestamp();
-					}
-
-					if ($interval)
-					{
 						$addFields['TIME_EXPIRED'] = DateTime::createFromTimestamp($nextWorkdayStart + $interval);
 					}
-
 				}
 			}
 

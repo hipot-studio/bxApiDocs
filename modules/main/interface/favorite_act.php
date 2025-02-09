@@ -1,16 +1,18 @@
-<?
-// define("NO_KEEP_STATISTIC", true);
-// define("NO_AGENT_STATISTIC", true);
-// define("NOT_CHECK_PERMISSIONS", true);
-// define("NO_AGENT_CHECK", true);
-// define("DisableEventsCheck", true);
+<?php
+
+use Bitrix\Main\Web\Uri;
+use Bitrix\Main\Web\Json;
+
+define("NO_KEEP_STATISTIC", true);
+define("NO_AGENT_STATISTIC", true);
+define("NOT_CHECK_PERMISSIONS", true);
+define("NO_AGENT_CHECK", true);
+define("DisableEventsCheck", true);
 
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 
 if($USER->IsAuthorized() && check_bitrix_sessid())
 {
-	CUtil::JSPostUnescape();
-
 	$res = false;
 	$uid = $USER->GetID();
 	$now = $DB->GetNowFunction();
@@ -30,6 +32,10 @@ if($USER->IsAuthorized() && check_bitrix_sessid())
 							"~DATE_CREATE"	=>	$now,
 							);
 
+			$_REQUEST["addurl"] = (new Uri($_REQUEST["addurl"]))
+				->deleteParams(["IFRAME", "IFRAME_TYPE"])
+				->getUri()
+			;
 			if(isset($_REQUEST["menu_id"]))
 			{
 				$arFields["MENU_ID"] = $_REQUEST["menu_id"];
@@ -94,7 +100,7 @@ if($USER->IsAuthorized() && check_bitrix_sessid())
 					$res[] = array("NAME" => $arFav["NAME"], "URL" => $arFav["URL"], "LANGUAGE_ID" => $arFav["LANGUAGE_ID"]);
 
 			if($res)
-				$res = CUtil::PhpToJSObject($res);
+				$res = Json::encode($res);
 
 			break;
 
@@ -111,4 +117,3 @@ if($USER->IsAuthorized() && check_bitrix_sessid())
 }
 
 require($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/include/epilog_admin_after.php");
-?>

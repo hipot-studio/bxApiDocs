@@ -32,7 +32,7 @@ class CJSPopup
 		if ($title != '') $this->SetTitle($title);
 		if (is_set($arConfig, 'TITLE')) $this->SetTitle($arConfig['TITLE']);
 		if (is_set($arConfig, 'ARGS')) $this->SetAdditionalArgs($arConfig['ARGS']);
-		if (is_set($arConfig, 'SUFFIX') && strlen($arConfig['SUFFIX']) > 0) $this->SetSuffix($arConfig['SUFFIX']);
+		if (is_set($arConfig, 'SUFFIX') && $arConfig['SUFFIX'] <> '') $this->SetSuffix($arConfig['SUFFIX']);
 	}
 
 	function InitSystem()
@@ -40,7 +40,7 @@ class CJSPopup
 		/** @global CMain $APPLICATION */
 		global $APPLICATION;
 
-		if (!$this->bInited && $_REQUEST['bxsender'] != 'core_window_cauthdialog')
+		if (!$this->bInited && (!isset($_REQUEST['bxsender']) || $_REQUEST['bxsender'] != 'core_window_cauthdialog'))
 		{
 			$this->InitScripts();
 
@@ -57,9 +57,9 @@ class CJSPopup
 	{
 		$adminPage = new CAdminPage();
 
-		echo $adminPage->ShowPopupCSS();
-		echo $adminPage->ShowScript();
-
+		return
+		 	$adminPage->ShowPopupCSS().
+			$adminPage->ShowScript();
 	}
 
 	function InitScripts()
@@ -95,13 +95,17 @@ class CJSPopup
 		if ($title == '')
 			$title = $this->title;
 		?>
-		<script type="text/javascript">
+		<script>
 			var currentWindow = top.window;
-			if (top.BX.SidePanel.Instance && top.BX.SidePanel.Instance.getTopSlider())
+			if (top.BX.SidePanel && top.BX.SidePanel.Instance && top.BX.SidePanel.Instance.getTopSlider())
 			{
 				currentWindow = top.BX.SidePanel.Instance.getTopSlider().getWindow();
 			}
-			currentWindow.<?=$this->jsPopup?>.SetTitle('<?echo CUtil::JSEscape($title)?>');
+			var currentPopup = currentWindow.<?=$this->jsPopup; ?>;
+			if (currentPopup)
+			{
+				currentPopup.SetTitle('<?echo CUtil::JSEscape($title)?>');
+			}
 		</script>
 		<?
 	}
@@ -112,8 +116,8 @@ class CJSPopup
 
 		$this->bDescriptionStarted = true;
 ?>
-<script type="text/javascript"><?if ($icon):?>
-	<?if (strpos($icon, '/') === false):?>
+<script><?if ($icon):?>
+	<?if (!str_contains($icon, '/')):?>
 
 		<?=$this->jsPopup?>.SetIcon('<?echo CUtil::JSEscape($icon)?>');
 	<?else:?>
@@ -147,7 +151,7 @@ class CJSPopup
 		$this->EndDescription();
 		$this->bContentStarted = true;
 
-		if ($arAdditional['buffer'])
+		if (isset($arAdditional['buffer']) && $arAdditional['buffer'])
 		{
 			$this->bContentBuffered = true;
 			//ob_start();
@@ -174,12 +178,12 @@ class CJSPopup
 
 			if ($this->bContentBuffered)
 			{
-?></div><script type="text/javascript">BX.ready(function() {<?=$this->jsPopup?>.SwapContent(BX('<?echo $this->cont_id?>'))});</script><?
+?></div><script>BX.ready(function() {<?=$this->jsPopup?>.SwapContent(BX('<?echo $this->cont_id?>'))});</script><?
 			}
 
 			if (!defined('BX_PUBLIC_MODE') || BX_PUBLIC_MODE == false)
 			{
-?><script type="text/javascript"><?echo "BX.adminFormTools.modifyFormElements(".$this->jsPopup.".DIV);"?></script><?
+?><script><?echo "BX.adminFormTools.modifyFormElements(".$this->jsPopup.".DIV);"?></script><?
 			}
 
 			$this->bContentStarted = false;
@@ -205,7 +209,7 @@ class CJSPopup
 			$buttons = ob_get_contents();
 			ob_end_clean();
 ?>
-		<script type="text/javascript"><?=$this->jsPopup?>.SetButtons('<?echo CUtil::JSEscape($buttons)?>');</script>
+		<script><?=$this->jsPopup?>.SetButtons('<?echo CUtil::JSEscape($buttons)?>');</script>
 <?
 			$this->bButtonsStarted = false;
 		}
@@ -229,7 +233,7 @@ class CJSPopup
 		$arButtons = array_values($arButtons);
 
 ?>
-<script type="text/javascript"><?=$this->jsPopup?>.SetButtons([<?
+<script><?=$this->jsPopup?>.SetButtons([<?
 	foreach ($arButtons as $key => $btn)
 		echo ($key ? ',' : '').$arSB[$btn];
 ?>]);</script><?
@@ -262,7 +266,7 @@ class CJSPopup
 		if (!$back_url && is_set($_REQUEST, 'back_url'))
 			$back_url = $_REQUEST['back_url'];
 
-		if(substr($back_url, 0, 1) != "/" || substr($back_url, 1, 1) == "/")
+		if(!str_starts_with($back_url, "/") || substr($back_url,1,1) == "/")
 		{
 			//only local /url is allowed
 			$back_url = '';

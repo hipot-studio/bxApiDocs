@@ -3,8 +3,10 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2016 Bitrix
+ * @copyright 2001-2024 Bitrix
  */
+
+use Bitrix\Main\Web\Json;
 
 class CAdminTabControlDrag extends CAdminTabControl
 {
@@ -50,7 +52,7 @@ class CAdminTabControlDrag extends CAdminTabControl
 			echo '
 			<script>
 				BX.ready(function(){
-					var orderObj = new BX.Admin.DraggableTab('.CUtil::PhpToJSObject($arJsParams).');
+					var orderObj = new BX.Admin.DraggableTab(' . Json::encode($arJsParams) . ');
 				});
 			</script>';
 		}
@@ -100,19 +102,32 @@ class CAdminTabControlDrag extends CAdminTabControl
 	function getTabSettings($tabIdx)
 	{
 		if (isset($this->tabs[$tabIdx]["SETTINGS"]))
+		{
 			return $this->tabs[$tabIdx]["SETTINGS"];
+		}
 
 		$tabSettings = CUserOptions::getOption($this->moduleId, $this->getCurrentTabOptionName($tabIdx));
 
-		$tabSettings["order"] = isset($tabSettings["order"]) ? $tabSettings["order"] : array();
 		if (!empty($tabSettings["order"]))
+		{
 			$tabSettings["order"] = explode(",", $tabSettings["order"]);
+		}
+		else
+		{
+			$tabSettings["order"] = [];
+		}
 
-		$tabSettings["hidden"] = isset($tabSettings["hidden"]) ? $tabSettings["hidden"] : array();
 		if (!empty($tabSettings["hidden"]))
+		{
 			$tabSettings["hidden"] = explode(",", $tabSettings["hidden"]);
+		}
+		else
+		{
+			$tabSettings["hidden"] = [];
+		}
 
 		$this->tabs[$tabIdx]["SETTINGS"] = $tabSettings;
+
 		return $tabSettings;
 	}
 
@@ -222,7 +237,7 @@ class CAdminDraggableBlockEngine
  	 */
 	public function check()
 	{
-		$result = True;
+		$result = true;
 
 		foreach ($this->engines as $value)
 		{
@@ -243,7 +258,7 @@ class CAdminDraggableBlockEngine
 	 */
 	public function action()
 	{
-		$result = True;
+		$result = true;
 
 		foreach ($this->engines as $value)
 		{
@@ -252,7 +267,7 @@ class CAdminDraggableBlockEngine
 				$resultTmp = call_user_func_array($value["action"], array($this->args));
 
 				if ($result && !$resultTmp)
-					$result = False;
+					$result = false;
 			}
 		}
 

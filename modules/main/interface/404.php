@@ -1,18 +1,23 @@
 <?
 if($_SERVER["REDIRECT_STATUS"]=="404")
-	;// define("ERROR_404","Y");
+	define("ERROR_404","Y");
 
-// define('BX_ADMIN_SECTION_404', 'Y');
+define('BX_ADMIN_SECTION_404', 'Y');
 
-if (($pos = strpos($_SERVER["REQUEST_URI"], "?")) !== false)
+if (($pos = mb_strpos($_SERVER["REQUEST_URI"], "?")) !== false)
 {
-	$params = substr($_SERVER["REQUEST_URI"], $pos+1);
+	$params = mb_substr($_SERVER["REQUEST_URI"], $pos + 1);
 	parse_str($params, $_GET);
-	$GLOBALS += $_GET;
-	$HTTP_GET_VARS = $_GET;
+	foreach ($_GET as $key => $val)
+	{
+		if (!isset($GLOBALS[$key]))
+		{
+			$GLOBALS[$key] = $val;
+		}
+	}
 }
 
-require_once(dirname(__FILE__)."/../include/prolog_admin_before.php");
+require_once(__DIR__."/../include/prolog_admin_before.php");
 IncludeModuleLangFile(__FILE__);
 
 $APPLICATION->SetTitle(GetMessage("404_title"));

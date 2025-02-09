@@ -429,7 +429,7 @@ class CUpdateClient
 			COption::SetOptionString("main", "~license_name", $_12549049["LICENSE"]);
 		}
 		foreach ($_12549049 as $_1307000183 => $_593850248) {
-			if (substr($_1307000183, 0, 3) == "UT_") {
+			if (str_starts_with($_1307000183, "UT_")) {
 				COption::SetOptionString("main", "~" . substr($_1307000183, 3), $_593850248);
 			}
 		}
@@ -520,17 +520,17 @@ class CUpdateClient
 		}
 		if ($_2136808367 == "") {
 			$_1590613717 = $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH . "/modules/main";
-			CUpdateClient::CheckDirPath($_1590613717 . "/");
+			self::CheckDirPath($_1590613717 . "/");
 			if (!file_exists($_1590613717) || !is_dir($_1590613717)) $_2136808367 .= "[UUK04] " . str_replace("#MODULE_DIR#", $_1590613717, GetMessage("SUPP_UK_NO_MODIR")) . ". ";
 			if ($_2136808367 == "") if (!is_writable($_1590613717)) $_2136808367 .= "[UUK05] " . str_replace("#MODULE_DIR#", $_1590613717, GetMessage("SUPP_UK_WR_MODIR")) . ". ";
 		}
 		if ($_2136808367 == "") {
-			CUpdateClient::CopyDirFiles($_1370972511 . "/main", $_1590613717, $_2136808367);
+			self::CopyDirFiles($_1370972511 . "/main", $_1590613717, $_2136808367);
 		}
 		if ($_2136808367 == "") {
-			CUpdateClient::AddMessage2Log("Update updated successfully!", "CURV");
-			CUpdateClient::DeleteDirFilesEx($_1370972511);
-			CUpdateClient::resetAccelerator();
+			self::AddMessage2Log("Update updated successfully!", "CURV");
+			self::DeleteDirFilesEx($_1370972511);
+			self::resetAccelerator();
 		}
 		if ($_2136808367 <> "") {
 			CUpdateClient::AddMessage2Log($_2136808367, "UU");
@@ -731,29 +731,30 @@ class CUpdateClient
 	{
 		$_2136808367 = '';
 		$_1596961748 = "";
-		CUpdateClient::AddMessage2Log("exec CUpdateClient::GetNextStepLangUpdates");
-		$_1622907824 = CUpdateClient::CollectRequestData($_2136808367, $_1530138095, "N", array(), $_1523107763);
+		self::AddMessage2Log("exec CUpdateClient::GetNextStepLangUpdates");
+		$_1622907824 = self::CollectRequestData($_2136808367, $_1530138095, "N", array(), $_1523107763);
 		if ($_1622907824 == "" || $_2136808367 <> "") {
 			if ($_2136808367 == "") $_2136808367 = "[GNSU01] " . GetMessage("SUPZ_NO_QSTRING") . ". ";
 		}
 		if ($_2136808367 == "") {
-			CUpdateClient::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
+			self::AddMessage2Log(preg_replace("/LICENSE_KEY=[^&]*/i", "LICENSE_KEY=X", $_1622907824));
 			$_418914584  = microtime(true);
-			$_1596961748 = CUpdateClient::GetHTTPPage("STEPL", $_1622907824, $_2136808367);
+			$_1596961748 = self::GetHTTPPage("STEPL", $_1622907824, $_2136808367);
 			if ($_1596961748 == "") {
 				if ($_2136808367 == "") $_2136808367 = "[GNSU02] " . GetMessage("SUPZ_EMPTY_ANSWER") . ". ";
 			}
-			CUpdateClient::AddMessage2Log("TIME GetNextStepLangUpdates(request) " . round(microtime(true) - $_418914584, 3) . " sec");
+			self::AddMessage2Log("TIME GetNextStepLangUpdates(request) " . round(microtime(true) - $_418914584, 3) . " sec");
 		}
 		if ($_2136808367 == "") {
-			if (!($_1069261324 = fopen($_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz", "wb"))) $_2136808367 = "[GNSU03] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates", GetMessage("SUPP_RV_ER_TEMP_FILE")) . ". ";
+			if (!($_1069261324 = fopen($_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates/update_archive.gz", "wb")))
+				$_2136808367 = "[GNSU03] " . str_replace("#FILE#", $_SERVER["DOCUMENT_ROOT"] . "/bitrix/updates", GetMessage("SUPP_RV_ER_TEMP_FILE")) . ". ";
 		}
 		if ($_2136808367 == "") {
 			fwrite($_1069261324, $_1596961748);
 			fclose($_1069261324);
 		}
 		if ($_2136808367 <> "") {
-			CUpdateClient::AddMessage2Log($_2136808367, "GNSLU00");
+			self::AddMessage2Log($_2136808367, "GNSLU00");
 			$_753204024 .= $_2136808367;
 			return false;
 		} else return true;

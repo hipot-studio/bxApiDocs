@@ -1,12 +1,12 @@
 <?
-// define("NO_KEEP_STATISTIC", true);
-// define("NO_AGENT_STATISTIC", true);
-// define("NOT_CHECK_PERMISSIONS", true);
-// define("BX_SEARCH_ADMIN", true);
+define("NO_KEEP_STATISTIC", true);
+define("NO_AGENT_STATISTIC", true);
+define("NOT_CHECK_PERMISSIONS", true);
+define("BX_SEARCH_ADMIN", true);
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_js.php");
 
-$start = getmicrotime();
+$start = microtime(true);
 
 $query = ltrim($_POST["q"]);
 if(
@@ -15,79 +15,76 @@ if(
 	&& CModule::IncludeModule("search")
 ):
 
-CUtil::decodeURIComponent($query);
-
+/**
+ * @var CAdminPage $adminPage
+ * @var CAdminMenu $adminMenu
+ */
 $adminPage->Init();
-//$adminMenu->AddOpenedSections("global_menu_content, global_menu_services, global_menu_store, global_menu_statistics, global_menu_settings");
 $adminMenu->Init($adminPage->aModules);
 
-$arResult = array("CATEGORIES"=>array(
-			"global_menu_content"=>array("ITEMS"=>array(), "TITLE"=>GetMessage('admin_lib_menu_content')),
-			"global_menu_services"=>array("ITEMS"=>array(), "TITLE"=>GetMessage('admin_lib_menu_services')),
-			"global_menu_store"=>array("ITEMS"=>array(), "TITLE"=>GetMessage('admin_lib_menu_store')),
-			"global_menu_statistics"=>array("ITEMS"=>array(), "TITLE"=>GetMessage('admin_lib_menu_stat')),
-			"global_menu_settings"=>array("ITEMS"=>array(), "TITLE"=>GetMessage('admin_lib_menu_settings')),
-		)
-	);
+$arResult = array(
+	"CATEGORIES"=>array(
+		"global_menu_content"=>array("ITEMS"=>array(), "TITLE"=>GetMessage('admin_lib_menu_content')),
+		"global_menu_services"=>array("ITEMS"=>array(), "TITLE"=>GetMessage('admin_lib_menu_services')),
+		"global_menu_store"=>array("ITEMS"=>array(), "TITLE"=>GetMessage('admin_lib_menu_store')),
+		"global_menu_statistics"=>array("ITEMS"=>array(), "TITLE"=>GetMessage('admin_lib_menu_stat')),
+		"global_menu_settings"=>array("ITEMS"=>array(), "TITLE"=>GetMessage('admin_lib_menu_settings')),
+	)
+);
 
 $arStemFunc = stemming_init(LANGUAGE_ID);
 
 $arPhrase = stemming_split($query, LANGUAGE_ID);
 
-$preg_template = "/(^|[^".$arStemFunc["pcre_letters"]."])(".str_replace("/", "\\/", implode("|", array_map('preg_quote', array_keys($arPhrase)))).")/i".BX_UTF_PCRE_MODIFIER;
+$preg_template = "/(^|[^".$arStemFunc["pcre_letters"]."])(".str_replace("/", "\\/", implode("|", array_map('preg_quote', array_keys($arPhrase)))).")/iu";
 $bFound  = false;
 
 function GetStrings(&$item, $key, $p)
 {
+	global $arStemFunc, $arPhrase, $preg_template, $arResult, $bFound;
+
 	$category = $p[0];
 	$icon = $p[1];
-	global $arStemFunc, $arPhrase, $preg_template, $arResult, $bFound;
-	$searchstring = '';
-	if($item["text"])
+	$arRes = null;
+
+	if($item["url"] <> '')
 	{
-		if(preg_match_all($preg_template, ToUpper($item["text"]), $arMatches, PREG_OFFSET_CAPTURE))
+		$searchstring = '';
+		if($item["text"])
 		{
-			$c = count($arMatches[2]);
-			if(defined("BX_UTF"))
+			if(preg_match_all($preg_template, mb_strtoupper($item["text"]), $arMatches, PREG_OFFSET_CAPTURE))
 			{
-				for($j = $c-1; $j >= 0; $j--)
-				{
-					$prefix = mb_substr($item["text"], 0, $arMatches[2][$j][1], 'latin1');
-					$instr  = mb_substr($item["text"], $arMatches[2][$j][1], mb_strlen($arMatches[2][$j][0], 'latin1'), 'latin1');
-					$suffix = mb_substr($item["text"], $arMatches[2][$j][1] + mb_strlen($arMatches[2][$j][0], 'latin1'), mb_strlen($item["text"], 'latin1'), 'latin1');
-					$item["text"] = $prefix."<b>".$instr."</b>".$suffix;
-				}
-			}
-			else
-			{
+				$c = count($arMatches[2]);
 				for($j = $c-1; $j >= 0; $j--)
 				{
 					$prefix = substr($item["text"], 0, $arMatches[2][$j][1]);
 					$instr  = substr($item["text"], $arMatches[2][$j][1], strlen($arMatches[2][$j][0]));
-					$suffix = substr($item["text"], $arMatches[2][$j][1]+strlen($arMatches[2][$j][0]));
+					$suffix = substr($item["text"], (int)$arMatches[2][$j][1] + strlen($arMatches[2][$j][0]), strlen($item["text"]));
 					$item["text"] = $prefix."<b>".$instr."</b>".$suffix;
 				}
 			}
+			$searchstring .= $item["text"];
 		}
-		$searchstring .= $item["text"];
-	}
 
-	if($item["title"])
-		$searchstring .= " ".$item["title"];
+		if($item["title"])
+			$searchstring .= " ".$item["title"];
 
-	if($item["keywords"])
-		$searchstring .= " ".$item["keywords"];
+		if($item["keywords"])
+			$searchstring .= " ".$item["keywords"];
 
-	if($item["icon"]=='')
-		$item["icon"] = $icon;
+		if($item["icon"]=='')
+			$item["icon"] = $icon;
 
-	if(preg_match_all($preg_template, ToUpper($searchstring), $arMatches, PREG_OFFSET_CAPTURE))
-	{
-		$ar = Array();
-		foreach($arMatches[0] as $m)
-			$ar[] = trim($m[0], " ,;>");
-		if(count(array_unique($ar))==count($arPhrase))
-			$arRes = array("NAME"=>$item["text"], "URL"=>$item["url"], "TITLE"=>$item["title"], "ICON"=>$item['icon']);
+		if(preg_match_all($preg_template, mb_strtoupper($searchstring), $arMatches, PREG_OFFSET_CAPTURE))
+		{
+			$ar = Array();
+			foreach($arMatches[0] as $m)
+				$ar[] = trim($m[0], " ,;>");
+			if(count(array_unique($ar)) == count($arPhrase))
+			{
+				$arRes = array("NAME"=>$item["text"], "URL"=>$item["url"], "TITLE"=>$item["title"], "ICON"=>$item['icon']);
+			}
+		}
 	}
 
 	if(is_array($arRes))
@@ -118,7 +115,7 @@ if($bFound)
 ?>
 	<table class="adm-search-result">
 		<?foreach($arResult["CATEGORIES"] as $category_id => $arCategory):
-			if(count($arCategory["ITEMS"])==0)
+			if(empty($arCategory["ITEMS"]))
 				continue;
 			?>
 			<?foreach($arCategory["ITEMS"] as $i => $arItem):
@@ -143,8 +140,6 @@ if($bFound)
 
 
 endif;
-
-//echo (getmicrotime()-$start);
 
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/epilog_admin_js.php");
 ?>

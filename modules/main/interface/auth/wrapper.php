@@ -33,7 +33,7 @@ function dump_post_var($vname, $vvalue, $var_stack=array())
 	}
 	else
 	{
-		if(count($var_stack)>0)
+		if(!empty($var_stack))
 		{
 			$var_name=$var_stack[0];
 			$varStackCount = count($var_stack);
@@ -49,8 +49,7 @@ function dump_post_var($vname, $vvalue, $var_stack=array())
 }
 
 //last login from cookie
-$last_login = ${COption::GetOptionString("main", "cookie_name", "BITRIX_SM")."_LOGIN"};
-
+$last_login = ${COption::GetOptionString("main", "cookie_name", "BITRIX_SM")."_LOGIN"} ?? '';
 if (isset($_REQUEST['bxsender']))
 {
 	if ($_REQUEST['bxsender'] != 'core_autosave')
@@ -59,11 +58,17 @@ if (isset($_REQUEST['bxsender']))
 	return;
 }
 
-if ($arAuthResult && defined('ADMIN_SECTION_LOAD_AUTH') && ADMIN_SECTION_LOAD_AUTH || $_REQUEST['AUTH_FORM'])
+$bOnHit = false;
+
+if(
+	$arAuthResult
+	&& defined('ADMIN_SECTION_LOAD_AUTH')
+	&& ADMIN_SECTION_LOAD_AUTH || !empty($_REQUEST['AUTH_FORM'])
+)
 {
 	$APPLICATION->RestartBuffer();
 	include($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/interface/auth/wrapper_auth_result.php");
-	die();
+	CMain::FinalActions();
 }
 
 $post_data = '';
@@ -88,7 +93,7 @@ if(!CMain::IsHTTPS() && COption::GetOptionString('main', 'use_encrypted_auth', '
 $sDocPath = $APPLICATION->GetCurPage();
 $authUrl = (defined('BX_ADMIN_SECTION_404') && BX_ADMIN_SECTION_404 == 'Y') ? '/bitrix/admin/' : $sDocPath;
 ?>
-<script type="text/javascript">
+<script>
 BX.message({
 	'admin_authorize_error': '<?=GetMessageJS("admin_authorize_error")?>',
 	'admin_forgot_password_error': '<?=GetMessageJS("admin_forgot_password_error")?>',
@@ -122,7 +127,7 @@ new BX.adminLogin({
 				<div class="login-footer">
 					<div class="login-footer-left"><?=$sCopyright?></div>
 					<div class="login-footer-right">
-						<?if(file_exists($_SERVER["DOCUMENT_ROOT"].BX_PERSONAL_ROOT."/php_interface/this_site_support.php")):?><?include($_SERVER["DOCUMENT_ROOT"].BX_PERSONAL_ROOT."/php_interface/this_site_support.php");?><?else:?><?echo $sLinks?><?endif;?>
+						<?if(($siteSupport = getLocalPath("php_interface/this_site_support.php", BX_PERSONAL_ROOT)) !== false):?><?include($_SERVER["DOCUMENT_ROOT"].$siteSupport);?><?else:?><?echo $sLinks?><?endif;?>
 					</div>
 				</div>
 				<form name="form_auth" method="post" target="auth_frame" class="bx-admin-auth-form" action="" novalidate>

@@ -456,6 +456,11 @@ class Container
 		return static::getService('sign.service.tour');
 	}
 
+	public function getActionStatusService(): Service\B2e\MyDocumentsGrid\ActionStatusService
+	{
+		return static::getService('sign.service.b2e.myDocumentsGrid.actionStatus');
+	}
+
 	public function getAnalyticService(): Service\Analytic\AnalyticService
 	{
 		return static::getService('sign.service.analytic.analytic');
