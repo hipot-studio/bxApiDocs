@@ -55,19 +55,25 @@ class Scope
 	 * @param string|null $moduleId
 	 * @return array
 	 */
-	public function getUserScopes(string $entityTypeId, ?string $moduleId = null): array
+	public function getUserScopes(string $entityTypeId, ?string $moduleId = null, bool $loadMetadata = true): array
 	{
-		return $this->getScopes($entityTypeId, $moduleId);
+		return $this->getScopes($entityTypeId, $moduleId, $loadMetadata);
 	}
 
-	public function getAllUserScopes(string $entityTypeId, ?string $moduleId = null): array
+	public function getAllUserScopes(string $entityTypeId, ?string $moduleId = null, bool $loadMetadata = true): array
 	{
-		return $this->getScopes($entityTypeId, $moduleId, false);
+		return $this->getScopes($entityTypeId, $moduleId, false, $loadMetadata);
 	}
-	private function getScopes(string $entityTypeId, ?string $moduleId = null, bool $excludeEmptyAccessCode = true): array
+
+	private function getScopes(
+		string $entityTypeId,
+		?string $moduleId = null,
+		bool $excludeEmptyAccessCode = true,
+		bool $loadMetadata = true,
+	): array
 	{
 		static $results = [];
-		$key = $entityTypeId . '-' . $moduleId;
+		$key = $entityTypeId . '-' . $moduleId . '-' . ($loadMetadata ? 'Y' : 'N');
 
 		if (!isset($results[$key]))
 		{
@@ -77,10 +83,12 @@ class Scope
 					($scopeAccess = ScopeAccess::getInstance($moduleId))
 					&& $scopeAccess->isAdminForEntityTypeId($entityTypeId)
 				);
+
 			if (!$isAdminForEntity)
 			{
 				$filter['@ID'] = $this->getScopesIdByUser();
 			}
+
 			$filter['@ENTITY_TYPE_ID'] = ($this->getEntityTypeIdMap()[$entityTypeId] ?? [$entityTypeId]);
 
 			if ($excludeEmptyAccessCode)
@@ -99,15 +107,22 @@ class Scope
 					],
 					'filter' => $filter,
 				]);
+
 				foreach ($scopes as $scope)
 				{
 					$result[$scope['ID']]['NAME'] = HtmlFilter::encode($scope['NAME']);
 					$result[$scope['ID']]['AUTO_APPLY_SCOPE'] = $scope['AUTO_APPLY_SCOPE'];
-					if (!isset($result[$scope['ID']]['ACCESS_CODES'][$scope['ACCESS_CODE']]) && isset($scope['ACCESS_CODE']))
+					if (
+						$loadMetadata
+						&& !isset($result[$scope['ID']]['ACCESS_CODES'][$scope['ACCESS_CODE']])
+						&& isset($scope['ACCESS_CODE'])
+					)
 					{
 						$accessCode = new AccessCode($scope['ACCESS_CODE']);
-						$member = (new DataProvider())->getEntity($accessCode->getEntityType(),
-																  $accessCode->getEntityId());
+						$member = (new DataProvider())->getEntity(
+							$accessCode->getEntityType(),
+							$accessCode->getEntityId()
+						);
 						$result[$scope['ID']]['ACCESS_CODES'][$scope['ACCESS_CODE']] = $scope['ACCESS_CODE'];
 						$result[$scope['ID']]['MEMBERS'][$scope['ACCESS_CODE']] = $member->getMetaData();
 					}
@@ -116,6 +131,7 @@ class Scope
 
 			$results[$key] = $result;
 		}
+
 		return $results[$key];
 	}
 
