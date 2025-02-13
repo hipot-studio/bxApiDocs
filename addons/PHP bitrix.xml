@@ -1,0 +1,264 @@
+<templateSet group="PHP bitrix">
+  <template name="var_glob" value="/**&#10; * @global $APPLICATION \CMain&#10; * @global $USER \CUser&#10; * @global $DB \CDatabase&#10; * @global $USER_FIELD_MANAGER \CUserTypeManager&#10; * @global $BX_MENU_CUSTOM \CMenuCustom&#10; * @global $stackCacheManager \CStackCacheManager &#10; */&#10;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="$A" value="$APPLICATION-&gt;" description="$APPLICATION-&gt;" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="$U" value="$USER-&gt;" description="$USER-&gt;" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="301 Moved Permanently" value="301 Moved Permanently" description="301 Moved Permanently" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP String Literal" value="true" />
+    </context>
+  </template>
+  <template name="ajax_perform_bx" value="// performance fixs&#10;define(&quot;STOP_STATISTICS&quot;,       true);&#10;define(&quot;NO_KEEP_STATISTIC&quot;,     true);&#10;define(&quot;NO_AGENT_STATISTIC&quot;,    &quot;Y&quot;);&#10;define(&quot;NOT_CHECK_PERMISSIONS&quot;, true);&#10;define(&quot;DisableEventsCheck&quot;,    true);&#10;define(&quot;BX_SECURITY_SHOW_MESSAGE&quot;, true);" description="фиксы на аякс перед прологом" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="b_invoice_vars" value="/**&#10; * @var int $ORDER_ID&#10; * @var array $arOrder&#10; * @var array $arParams&#10; *&#10; * @var array  $arOrderProps = [&quot;мнемонический код (или ID если мнемонический код пуст) свойства&quot; =&gt; &quot;значение свойства&quot;]&#10; * @var $arUser - массив из настроек пользователя, совершившего заказ&#10; */" description="b_invoice_vars" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="OTHER" value="true" />
+    </context>
+  </template>
+  <template name="b_page" value="&lt;?&#10;require($_SERVER[&quot;DOCUMENT_ROOT&quot;].&quot;/bitrix/header.php&quot;);&#10;$APPLICATION-&gt;SetTitle(&quot;О сервисе&quot;);&#10;?&gt;&#10;&#10;&lt;?require($_SERVER[&quot;DOCUMENT_ROOT&quot;].&quot;/bitrix/footer.php&quot;);?&gt;&#10;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="OTHER" value="true" />
+    </context>
+  </template>
+  <template name="b_sys_epilog" value="require $_SERVER[&quot;DOCUMENT_ROOT&quot;] . &quot;/bitrix/modules/main/include/epilog_after.php&quot;;" description="служебный пролог" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="b_sys_prolog" value="// performance fixs&#10;define(&quot;STOP_STATISTICS&quot;,       true);&#10;define(&quot;NO_KEEP_STATISTIC&quot;,     true);&#10;define(&quot;NO_AGENT_STATISTIC&quot;,    &quot;Y&quot;);&#10;define(&quot;NOT_CHECK_PERMISSIONS&quot;, true);&#10;define(&quot;DisableEventsCheck&quot;,    true);&#10;define(&quot;BX_SECURITY_SHOW_MESSAGE&quot;, true);&#10;// Виртуальная сессия&#10;if (PHP_SAPI == 'cli') {&#10;&#9;define('BX_SECURITY_SESSION_VIRTUAL', true);&#10;}&#10;require $_SERVER[&quot;DOCUMENT_ROOT&quot;] . &quot;/bitrix/modules/main/include/prolog_before.php&quot;;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bprchk" value="if(!defined(&quot;B_PROLOG_INCLUDED&quot;) || B_PROLOG_INCLUDED!==true)die();" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bprchk_opt" value="defined('B_PROLOG_INCLUDED') || die();" description="короткая проверка на пролог" toReformat="true" toShortenFQNames="true">
+    <context>
+      <option name="PHP Expression" value="true" />
+      <option name="PHP Statement" value="true" />
+    </context>
+  </template>
+  <template name="buf_res" value="// subbuf reset&#10;set_time_limit(0);&#10;while (ob_get_level()) {&#10;&#9;ob_end_flush();&#10;}&#10;" description="subbuffer reset" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_cache_path_example" value="'user_data/'.substr(md5($userId),2,2).'/'.$userId" description="cluster filesystem cache path example" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_conn" value="\Bitrix\Main\Application::getConnection()?-&gt;" description="get db connection" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_menu" value="&lt;?&#10;// @see https://dev.1c-bitrix.ru/user_help/components/sluzhebnie/navigation/menu.php&#10;$APPLICATION-&gt;IncludeComponent(&quot;bitrix:menu&quot;, &quot;.default&quot;, [&#10;&#9;// cache&#10;&#9;&quot;CACHE_TYPE&quot; =&gt; &quot;A&quot;,&#10;&#9;&quot;MENU_CACHE_TYPE&quot; =&gt; &quot;A&quot;,&#10;&#9;&quot;CACHE_TIME&quot; =&gt; 3600,&#10;&#9;&quot;MENU_CACHE_TIME&quot; =&gt; 3600,&#10;&#9;&quot;MENU_CACHE_USE_GROUPS&quot; =&gt; &quot;N&quot;,&#10;&#9;&quot;MENU_CACHE_GET_VARS&quot; =&gt; &quot;&quot;, // comma-separated GETs&#10;&#9;&quot;CACHE_SELECTED_ITEMS&quot; =&gt; &quot;N&quot;,&#10;&#9;&quot;MENU_CACHE_USE_USERS&quot; =&gt; &quot;N&quot;,&#10;&#9;// select&#10;&#9;&quot;ROOT_MENU_TYPE&quot; =&gt; &quot;catalog_left&quot;,&#10;&#9;&quot;CHILD_MENU_TYPE&quot; =&gt; &quot;catalog_left_dummy&quot;,&#10;&#9;&quot;MAX_LEVEL&quot; =&gt; 4, // max 4&#10;&#9;&quot;USE_EXT&quot; =&gt; &quot;Y&quot;,&#10;&#9;&quot;DELAY&quot; =&gt; &quot;N&quot;,&#10;&#9;&quot;ALLOW_MULTI_SELECT&quot; =&gt; &quot;N&quot;,&#10;]);?&gt;" description="подключение компонента меню" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="HTML" value="true" />
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_print_r" value="\Bitrix\Main\Diag\Debug::dump($END$);" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_request" value="\Bitrix\Main\Application::getInstance()?-&gt;getContext()?-&gt;getRequest()-&gt;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_var_dump" value="echo '&lt;pre&gt;', htmlspecialcharsEx( \Bitrix\Main\Diag\Debug::dump($VAR$, &quot;&quot;, true) ), '&lt;/pre&gt;';" description="escaped bitrix var dump" toReformat="true" toShortenFQNames="true">
+    <variable name="VAR" expression="phpVar" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="PHP Expression" value="true" />
+      <option name="PHP Statement" value="true" />
+    </context>
+  </template>
+  <template name="cache_orm" value="&quot;cache&quot; =&gt; [&quot;ttl&quot; =&gt; 3600 * 24 * 7, &quot;cache_joins&quot; =&gt; true]" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="var_templ" value="// region var_templ&#10;/** &#10; * @var array $arParams&#10; * @var array $arResult &#10; * @global CMain $APPLICATION&#10; * @global CUser $USER&#10; * @global CDatabase $DB&#10; * @var CBitrixComponentTemplate $this&#10; * @var string $componentPath&#10; * @var string $templateName&#10; * @var string $templateFile&#10; * @var string $templateFolder&#10; * @var array $templateData&#10; * @var CBitrixComponent $component&#10; */&#10;// endregion&#10;$this-&gt;setFrameMode(true);" description="variables in result_modifier.php*, template.php, component_epilog.php*" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="HIDE_ICONS" value="HIDE_ICONS" description="include component params" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="frame_composite" value="$frame = $this-&gt;createFrame()-&gt;begin(&quot;Loading...&quot;);&#10;//динамический контент &#10;$frame-&gt;end();" description="component template frame" toReformat="true" toShortenFQNames="true">
+    <context>
+      <option name="PHP Expression" value="true" />
+      <option name="PHP Statement" value="true" />
+    </context>
+  </template>
+  <template name="pri_" value="if (\Bitrix\Main\Engine\CurrentUser::get()?-&gt;isAdmin()) {&#10;&#9;echo '&lt;pre&gt;';&#10;&#9;\Bitrix\Main\Diag\Debug::dump($END$);&#10;&#9;echo '&lt;/pre&gt;';&#10;}" description="print_r if admin" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="var_glob_arr" value="/** @var $GLOBALS array{'DB':\CDatabase, 'APPLICATION':\CMain, 'USER':\CUser, 'USER_FIELD_MANAGER':\CUserTypeManager, 'CACHE_MANAGER':\CCacheManager, 'stackCacheManager':\CStackCacheManager} */" description="$GLOBALS local keys" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="menu_item" value="array(&#10;&#9;&quot;&quot;,         // заголовок пункта меню&#10;&#9;&quot;&quot;,         // ссылка на пункте меню&#10;&#9;array(),    // массив дополнительных ссылок для подсветки пункта меню: [&quot;ссылка 1&quot;, &quot;ссылка 2&quot;]&#10;&#9;array(),    // массив дополнительных переменных передаваемых в шаблон меню: [&quot;имя переменной 1&quot; =&gt; &quot;значение переменной 1&quot;, ...]&#10;&#9;&quot;&quot;          // условие, при котором пункт меню появляется - это PHP выражение, которое должно вернуть &quot;true&quot;&#10;)" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+      <option name="PHP Class Member" value="false" />
+      <option name="PHP Comment" value="false" />
+      <option name="PHP Trait Member" value="false" />
+    </context>
+  </template>
+  <template name="menu_top_template" value="$curDir = $APPLICATION-&gt;GetCurPage(false);?&gt;&#10;&lt;ul&gt;&#10;&lt;?foreach ($arResult as $arItem):?&gt;&#10;&#9;&lt;li&gt;&#10;&#9;&#9;&lt;?if ($curDir == $arItem[&quot;LINK&quot;]):?&gt;&#10;&#9;&#9;&#9;&lt;?=$arItem[&quot;TEXT&quot;];?&gt;&#10;&#9;&#9;&lt;?elseif ($arItem[&quot;SELECTED&quot;]):?&gt;&#10;&#9;&#9;&#9;&lt;a href=&quot;&lt;?=$arItem[&quot;LINK&quot;];?&gt;&quot;&gt;&lt;b&gt;&lt;?=$arItem[&quot;TEXT&quot;];?&gt;&lt;/b&gt;&lt;/a&gt;&#10;&#9;&#9;&lt;?else:?&gt;&#10;&#9;&#9;&#9;&lt;a href=&quot;&lt;?=$arItem[&quot;LINK&quot;];?&gt;&quot;&gt;&lt;?=$arItem[&quot;TEXT&quot;];?&gt;&lt;/a&gt;&#10;&#9;&#9;&lt;?endif?&gt;&#10;&#9;&lt;/li&gt;&#10;&lt;?endforeach;?&gt;&#10;&lt;/ul&gt;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+      <option name="PHP Class Member" value="false" />
+      <option name="PHP Comment" value="false" />
+      <option name="PHP Interface Member" value="false" />
+      <option name="PHP String Literal" value="false" />
+      <option name="PHP Trait Member" value="false" />
+    </context>
+  </template>
+  <template name="bx_include" value="$APPLICATION-&gt;IncludeFile(&quot;$filename$&quot;, [], [&quot;MODE&quot; =&gt; &quot;html&quot;]);" description="" toReformat="false" toShortenFQNames="true">
+    <variable name="filename" expression="fileRelativePath()" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="PHP" value="true" />
+      <option name="PHP Class Member" value="false" />
+      <option name="PHP Comment" value="false" />
+      <option name="PHP Interface Member" value="false" />
+      <option name="PHP String Literal" value="false" />
+      <option name="PHP Trait Member" value="false" />
+    </context>
+  </template>
+  <template name="bx_log_config" value="[&#10;&#9;'settings' =&gt; [&#10;&#9;&#9;'file' =&gt; 'bitrix/modules/error.log',&#10;&#9;&#9;'log_size' =&gt; 1000000,&#10;&#9;],&#10;]&#10;// https://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;LESSON_ID=2795#exception_handling&#10;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+      <option name="PHP Class Member" value="false" />
+      <option name="PHP Comment" value="false" />
+      <option name="PHP Interface Member" value="false" />
+      <option name="PHP String Literal" value="false" />
+      <option name="PHP Trait Member" value="false" />
+    </context>
+  </template>
+  <template name="CACHE_SELECTED_ITEMS_N" value="&quot;CACHE_SELECTED_ITEMS&quot; =&gt; &quot;N&quot;" description="CACHE_SELECTED_ITEMS =&gt; N (избежать большого кеша меню)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+      <option name="PHP Class Member" value="false" />
+      <option name="PHP Interface Member" value="false" />
+      <option name="PHP Trait Member" value="false" />
+    </context>
+  </template>
+  <template name="def_currency" value="\Bitrix\Main\Config\Option::get(&quot;sale&quot;, &quot;default_currency&quot;, &quot;RUB&quot;)" description="валюта из настроект ИМ" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP Expression" value="true" />
+    </context>
+  </template>
+  <template name="bx_app" value="\Bitrix\Main\Application::getInstance()?-&gt;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_context" value="\Bitrix\Main\Application::getInstance()?-&gt;getContext()?-&gt;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_asset" value="\Bitrix\Main\Page\Asset::getInstance()?-&gt;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_user" value="\Bitrix\Main\Engine\CurrentUser::get()-&gt;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_evt_hdl" value="\Bitrix\Main\EventManager::getInstance()?-&gt;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_sess" value="\Bitrix\Main\Application::getInstance()-&gt;getSession()" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_router" value="\Bitrix\Main\Application::getRouter()?-&gt;" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_cur_u_admin" value="\Bitrix\Main\Engine\CurrentUser::get()-&gt;isAdmin()" description="CurrentUser" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="bx_local_sess" value="\Bitrix\Main\Application::getInstance()-&gt;getLocalSession('" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="edit_button_block" value="// edit buttons block&#10;IblockUtils::setElementPanelButtons($arItem);&#10;$this-&gt;AddEditAction($arItem['ID'], $arItem['EDIT_LINK'], CIBlock::GetArrayByID($arItem[&quot;IBLOCK_ID&quot;], &quot;ELEMENT_EDIT&quot;));&#10;$this-&gt;AddDeleteAction($arItem['ID'], $arItem['DELETE_LINK'], CIBlock::GetArrayByID($arItem[&quot;IBLOCK_ID&quot;], &quot;ELEMENT_DELETE&quot;), [&quot;CONFIRM&quot; =&gt; GetMessage('CT_BNL_ELEMENT_DELETE_CONFIRM')]);" description="in template of iblock.list" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="pri_memory" value="if (IS_BETA_TESTER) {&#10;&#9;d( \CFile::FormatSize(memory_get_peak_usage(true)) );&#10;}" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP Expression" value="true" />
+    </context>
+  </template>
+  <template name="bx_composite_frame" value="$frame = $this-&gt;createFrame()-&gt;begin(&quot;&quot;);" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP Expression" value="true" />
+    </context>
+  </template>
+  <template name="var_comp" value="// region var_comp&#10;/** @var array $arParams */&#10;/** @var array $arResult */&#10;/** @global CMain $APPLICATION */&#10;/** @global CUser $USER */&#10;/** @global CDatabase $DB */&#10;/** @var CBitrixComponent $this */&#10;/** @var string $componentPath */&#10;/** @var string $componentName */&#10;/** @var string $componentTemplate */&#10;/** @var array $parentComponentPath */&#10;/** @var string $parentComponentName */&#10;/** @var string $parentComponentTemplate */&#10;/** @var CBitrixComponent $component */&#10;// endregion&#10;" description="variables in component.php, class.php" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="not_show_nav_chain" value="not_show_nav_chain" description="" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="CACHE_SELECTED_ITEMS" value="CACHE_SELECTED_ITEMS" description="Если меню в подпапках не переопределяется, то N, иначе Y (умолчание N)" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="var_component_epilog" value="// region var_component_epilog&#10;/** &#10; * @var array $arParams&#10; * @var array $arResult &#10; * @global CMain $APPLICATION&#10; * @global CUser $USER&#10; * @global CDatabase $DB&#10; * @var string $componentPath — путь к папке с компонентом от DOCUMENT_ROOT (например /bitrix/components/bitrix/iblock.list)&#10; * @var string $templateName&#10; * @var string $templateFile&#10; * @var string $templateFolder&#10; * @var array $templateData&#10; */&#10;// endregion" description="variables in component_epilog.php" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+  <template name="var_res_mod" value="// region var_res_mod&#10;/** &#10; * @var array $arParams&#10; * @var array $arResult &#10; * @global CMain $APPLICATION&#10; * @global CUser $USER&#10; * @global CDatabase $DB&#10; * @var CBitrixComponentTemplate $this&#10; */&#10;// endregion&#10;" description="variables in result_modifier.php" toReformat="false" toShortenFQNames="true">
+    <context>
+      <option name="PHP" value="true" />
+    </context>
+  </template>
+</templateSet>

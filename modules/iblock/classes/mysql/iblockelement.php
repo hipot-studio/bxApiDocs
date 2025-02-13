@@ -649,7 +649,7 @@ class CIBlockElement extends CAllIBlockElement
 	 * @param array $arSelectFields
 	 * @return integer|CIBlockResult
 	 */
-
+	
 	/**
 	 * <p>Возвращает список элементов по фильтру <i>arFilter</i>. Метод статический.</p><br>
 	 *
@@ -682,7 +682,7 @@ class CIBlockElement extends CAllIBlockElement
 	 * @return integer|CIBlockResult
 	 *
 	 * @link https://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockelement/getlist.php
-	 * @author phpDoc author - generator by hipot at 04.02.2025
+	 * @author phpDoc author - generator by hipot
 	 */
 	public static function GetList($arOrder=array("SORT"=>"ASC"), $arFilter=array(), $arGroupBy=false, $arNavStartParams=false, $arSelectFields=array())
 	{

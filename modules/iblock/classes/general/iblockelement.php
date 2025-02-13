@@ -124,6 +124,26 @@ class CAllIBlockElement
 	 * @param $arFilter
 	 * @return CIBlockElement|null
 	 */
+			
+	/**
+	 * <p>Позволяет использовать подзапросы. Метод статический.</p><p></p><div class="note"> <b>Примечание</b>: применимо только к полю <b>ID</b> элемента основного запроса.</div>
+	 *
+	 *
+	 *
+	 *
+	 * @param string $strField  Название поля, по которому будет осуществляться фильтрация. <br> Возможные значения: <br> <ul> <li> <b>ID</b> - по идентификатору элемента </li> </ul> <ul> <li> <b>PROPERTY_&lt;PROPERTY_CODE&gt;</b> - по значению свойства, где <b>PROPERTY_CODE</b> - это ID или символьный код свойства привязки. Свойство должно быть типа "привязка к элементам". </li> </ul><br /><br /><hr /><br /><br />
+	 *
+	 *
+	 *
+	 * @param array $arFilter  Фильтр элементов тот же, что и в методе <a class="link" href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockelement/getlist.php">CIBlockElement::GetList</a> за исключением того, что с версии 23.0.0 принимается ключ <code>IBLOCK_ID</code> либо <code>=IBLOCK_ID</code>. Значение - одиночное (ID одного инфоблока)
+	 *
+	 *
+	 *
+	 * @return CIBlockElement|null Объект подзапроса
+	 *
+	 * @link https://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockelement/SubQuery.php
+	 * @author phpDoc author - generator by hipot at 13.02.2025
+	 */
 	public static function SubQuery($strField, $arFilter)
 	{
 		if(mb_substr($strField, 0, 9) == "PROPERTY_")
