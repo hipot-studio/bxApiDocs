@@ -34,10 +34,15 @@ class Chat extends AbstractEntity
 			throw new ArgumentException("Invalid chat id {$entityId}");
 		}
 
-		$result = \CIMChat::GetChatData([
-			'ID' => $chatId,
-			'USER_ID' => $this->getCurrentUserId(),
-		]);
+		$params = ['ID' => $chatId];
+
+		global $USER;
+		if ($USER instanceof \CUser)
+		{
+			$params['USER_ID'] = (int)$USER->getId();
+		}
+
+		$result = \CIMChat::GetChatData($params);
 
 		if ($result['chat'][$chatId])
 		{

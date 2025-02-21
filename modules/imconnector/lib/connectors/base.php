@@ -423,16 +423,14 @@ class Base
 	protected function processingLastMessage(array $message): array
 	{
 		if (
-			!empty($message['extra']['last_message_id']) &&
-			!empty($message['chat']['id'])
+			!empty($message['extra']['last_message_id'])
+			&& !empty($message['chat']['id'])
 		)
 		{
 			Chat::setLastMessage(
-				[
-					'EXTERNAL_CHAT_ID' => $message['chat']['id'],
-					'CONNECTOR' => $this->idConnector,
-					'EXTERNAL_MESSAGE_ID' => $message['extra']['last_message_id']
-				]
+				externalChatId: $message['chat']['id'],
+				externalMessageId: $message['extra']['last_message_id'],
+				connector: $this->idConnector
 			);
 
 			unset($message['extra']['last_message_id']);
@@ -998,6 +996,7 @@ class Base
 	//region Error
 
 	/**
+	 * @see \Bitrix\ImConnector\Provider\Base\Input::receivingError
 	 * @param $paramsError
 	 * @return bool
 	 */
@@ -1005,11 +1004,12 @@ class Base
 	{
 		$result = false;
 
-		switch($paramsError['code'])
+		switch ($paramsError['code'])
 		{
 			case Library::ERROR_CONNECTOR_NOT_SEND_MESSAGE_CHAT:
 				$result = $this->receivedErrorNotSendMessageChat($paramsError);
 				break;
+
 			case Library::ERROR_CONNECTOR_DELETE_MESSAGE:
 				$result = $this->receivedErrorNotDeleteMessageChat($paramsError);
 				break;
@@ -1257,24 +1257,14 @@ class Base
 	}
 
 	/**
-	 * @param int $idLine
+	 * @param int $lineId
 	 * @return bool
 	 */
-	protected function isHumanAgent($idLine): bool
+	protected function isHumanAgent($lineId): bool
 	{
-		$result = false;
+		$statusData = Status::getInstance($this->idConnector, (int)$lineId)->getData();
 
-		$statusData = Status::getInstance($this->idConnector, (int)$idLine)->getData();
-
-		if (
-			!empty($statusData)
-			&& $statusData['HUMAN_AGENT'] === true
-		)
-		{
-			$result = true;
-		}
-
-		return $result;
+		return !empty($statusData) && $statusData['HUMAN_AGENT'] === true;
 	}
 
 	/**
