@@ -1137,11 +1137,11 @@ abstract class CAllMain
 	 *
 	 *
 	 *
-	 * @param array $arFunctionParams = array() Массив, содержащий дополнительные параметры отображения компонента: <br> "HIDE_ICONS"=&gt;"Y" - не показывать панель настройки компонента в режиме редактировани/разработки; <br> "ACTIVE_COMPONENT"=&gt;"N" - отключить компонент (код компонента не подключается). <br><br /><br /><hr /><br /><br />
+	 * @param array{'HIDE_ICONS':string, 'ACTIVE_COMPONENT':string} $arFunctionParams = array() Массив, содержащий дополнительные параметры отображения компонента: <br> "HIDE_ICONS"=&gt;"Y" - не показывать панель настройки компонента в режиме редактировани/разработки; <br> "ACTIVE_COMPONENT"=&gt;"N" - отключить компонент (код компонента не подключается). <br><br /><br /><hr /><br /><br />
 	 *
 	 *
 	 *
-	 * @param $returnResul $t = false По умолчанию - <code>false</code> позволяет получить на выходе arResult компонента.
+	 * @param bool $returnResul $t = false По умолчанию - <code>false</code> позволяет получить на выходе arResult компонента.
 	 *
 	 *
 	 *

@@ -17,12 +17,7 @@ if (extension_loaded("zlib")) {
 		}
 	}
 }
-if (!function_exists("htmlspecialcharsbx")) {
-	function htmlspecialcharsbx($_1296951786, $_1302320733 = ENT_COMPAT)
-	{
-		return htmlspecialchars($_1296951786, $_1302320733, (defined("BX_UTF") ? "UTF-8" : "ISO-8859-1"));
-	}
-}
+
 
 if (!defined("US_SHARED_KERNEL_PATH"))
 	define("US_SHARED_KERNEL_PATH", "/bitrix");
