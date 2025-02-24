@@ -529,6 +529,22 @@ abstract class CAllMain
 		}
 	}
 
+	/**
+	 * <p>Отображает заголовок страницы.<br><br>Метод использует технологию <a class="link" href="http://dev.1c-bitrix.ruhttp://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=43&amp;LESSON_ID=3489" target="_blank">отложенных функций</a>, позволяющую, помимо всего прочего, задавать заголовок страницы (например, внутри компонента) уже после того как был выведен пролог сайта. Нестатический метод.</p>
+	 * <pre>
+	 *  $APPLICATION->SetTitle("title h1");
+	 *  $APPLICATION->SetPageProperty('title', "title browser");    // opt set to title
+	 *  // <title><?$APPLICATION->ShowTitle()?></title>
+	 *  // <h1 id="pagetitle"><?$APPLICATION->ShowTitle(false)?></h1>
+	 *  </pre>
+	 *
+	 * @param string $property_name = "title" Идентификатор свойства страницы, значение которого будет выведено в качестве заголовка (если это значение задано например, с помощью метода <a class="link" href="http://dev.1c-bitrix.ru/api_help/main/reference/cmain/setpageproperty.php">CMain::SetPageProperty</a>).<br>Необязательный. По умолчанию "title".<br /><br /><hr /><br /><br />
+	 * @param bool $strip_tags = true Если значение - "true", то из заголовка страницы будут удалены все HTML теги.<br>Необязательный. По умолчанию - "true".
+	 * @return void
+	 *
+	 * @link https://dev.1c-bitrix.ru/api_help/main/reference/cmain/showtitle.php
+	 * @author phpDoc author - generator by hipot at 24.02.2025
+	 */
 	public function ShowTitle($property_name = "title", $strip_tags = true)
 	{
 		$this->AddBufferContent([&$this, "GetTitle"], $property_name, $strip_tags);
