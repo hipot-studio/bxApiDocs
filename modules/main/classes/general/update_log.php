@@ -6,6 +6,15 @@
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 define("HELP_FILE", "marketplace/sysupdate.php");
 
+if (!function_exists('htmlspecialcharsbx'))
+{
+	function htmlspecialcharsbx($string, $flags=ENT_COMPAT)
+	{
+		//shitty function for php 5.4 where default encoding is UTF-8
+		return htmlspecialchars($string, $flags, (defined("BX_UTF")? "UTF-8" : "ISO-8859-1"));
+	}
+}
+
 if(!$USER->CanDoOperation('view_other_settings') && !$USER->CanDoOperation('install_updates'))
 	$APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
 

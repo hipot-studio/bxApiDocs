@@ -26,11 +26,9 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Event;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Main\UI\Viewer\FilePreviewTable;
 use CFile;
 
 Loc::loadMessages(__FILE__);
@@ -1295,6 +1293,9 @@ class File extends BaseObject
 				$this->errorCollection->addFromResult($changeStorageIdResult);
 				return false;
 			}
+
+			$this->storage = $folder->getRealObject()->getStorage();
+			$this->storageId = $folder->getRealObject()->getStorageId();
 		}
 
 		$success = $this->update(array(

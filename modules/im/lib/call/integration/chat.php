@@ -137,23 +137,27 @@ class Chat extends AbstractEntity
 		}
 
 		if (
-			\CIMSettings::GetPrivacy(\CIMSettings::PRIVACY_CALL) == \CIMSettings::PRIVACY_RESULT_CONTACT
-			&& \CModule::IncludeModule('socialnetwork')
-			&& \CSocNetUser::IsFriendsAllowed()
-			&& !\CSocNetUserRelations::IsFriends($this->entityId, $userId)
+			!\Bitrix\Main\ModuleManager::isModuleInstalled('intranet')
+			&& \Bitrix\Main\Loader::includeModule('socialnetwork')
 		)
 		{
-			return false;
-		}
+			if (
+				\CIMSettings::GetPrivacy(\CIMSettings::PRIVACY_CALL) == \CIMSettings::PRIVACY_RESULT_CONTACT
+				&& \CSocNetUser::IsFriendsAllowed()
+				&& !\CSocNetUserRelations::IsFriends($this->entityId, $userId)
+			)
+			{
+				return false;
+			}
 
-		if (
-			\CIMSettings::GetPrivacy(\CIMSettings::PRIVACY_CALL, $this->entityId) === \CIMSettings::PRIVACY_RESULT_CONTACT
-			&& \CModule::IncludeModule('socialnetwork')
-			&& \CSocNetUser::IsFriendsAllowed()
-			&& !\CSocNetUserRelations::IsFriends($this->entityId, $userId)
-		)
-		{
-			return false;
+			if (
+				\CIMSettings::GetPrivacy(\CIMSettings::PRIVACY_CALL, $this->entityId) === \CIMSettings::PRIVACY_RESULT_CONTACT
+				&& \CSocNetUser::IsFriendsAllowed()
+				&& !\CSocNetUserRelations::IsFriends($this->entityId, $userId)
+			)
+			{
+				return false;
+			}
 		}
 
 		return true;
