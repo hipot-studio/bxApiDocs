@@ -12,7 +12,10 @@ use Bitrix\Main\ORM\Data\Internal\MergeTrait;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\ORM\Query\Filter\Expressions\ColumnExpression;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Type\DateTime;
 
 /**
@@ -143,5 +146,18 @@ class MessageUnreadTable extends DataManager
 
 		$sql = 'UPDATE ' . $tableName . ' SET ' . $update[0] . ' WHERE ' . $where;
 		$connection->queryExecute($sql, $update[1]);
+	}
+
+	public static function withRelationReference(\Bitrix\Main\ORM\Query\Query $query): void
+	{
+		$query->registerRuntimeField(
+			new Reference(
+				'RELATION',
+				RelationTable::class,
+				Join::on('this.CHAT_ID', 'ref.CHAT_ID')
+					->where('ref.USER_ID', new ColumnExpression('this.USER_ID')),
+				['join_type' => Join::TYPE_INNER]
+			)
+		);
 	}
 }

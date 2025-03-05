@@ -35,7 +35,7 @@ class CounterService
 	protected const CACHE_TTL = 86400; // 1 month
 	protected const CACHE_NAME = 'counter_v5';
 	protected const CACHE_CHATS_COUNTERS_NAME = 'chats_counter_v6';
-	protected const CACHE_PATH = '/bx/im/v3/counter/';
+	protected const CACHE_PATH = '/bx/im/v4/counter/';
 
 	protected const DEFAULT_COUNTERS = [
 		'TYPE' => [
@@ -806,7 +806,9 @@ class CounterService
 			->setSelect(['CHAT_ID', 'IS_MUTED', 'CHAT_TYPE', 'COUNT'])
 			->setGroup(['CHAT_ID', 'CHAT_TYPE', 'IS_MUTED'])
 			->registerRuntimeField('COUNT', new ExpressionField('COUNT', 'COUNT(*)'))
+			->withRelationReference()
 		;
+
 		if (isset($chatIds) && !empty($chatIds))
 		{
 			$query->whereIn('CHAT_ID', $chatIds);
@@ -850,6 +852,7 @@ class CounterService
 			->where('IS_MUTED', false)
 			->whereNot('CHAT_TYPE', Chat::IM_TYPE_COPILOT)
 			->registerRuntimeField('COUNT', new ExpressionField('COUNT', 'COUNT(*)'))
+			->withRelationReference()
 			->fetch()['COUNT']
 		;
 	}
@@ -862,7 +865,7 @@ class CounterService
 			->setGroup(['USER_ID'])
 			->registerRuntimeField('COUNT', new ExpressionField('COUNT', 'COUNT(*)'))
 		;
-		if (isset($userIds) && !empty($userIds))
+		if (!empty($userIds))
 		{
 			$query->whereIn('USER_ID', $userIds);
 		}

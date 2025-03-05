@@ -8,16 +8,15 @@ use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
-use Bitrix\Im\V2\Relation\Reason;
+use Bitrix\Im\V2\Relation\DeleteUserConfig;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Result;
 use Bitrix\ImOpenLines\Config;
 use Bitrix\ImOpenLines\Model\ChatIndexTable;
-use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\ImOpenLines;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Pull\Event;
 
 class OpenLineChat extends EntityChat
 {
@@ -86,19 +85,7 @@ class OpenLineChat extends EntityChat
 
 	public function readAllMessages(bool $byEvent = false, bool $forceRead = false): Result
 	{
-		$result = $this->readMessages(null, $byEvent, $forceRead);
-
-		$userId = $this->getContext()->getUserId();
-		Application::getInstance()->addBackgroundJob(function () use ($byEvent, $forceRead, $userId) {
-			$chat = $this->withContextUser($userId);
-
-			if ($chat->getSelfRelation() === null)
-			{
-				$chat->readMessages(null, $byEvent, $forceRead);
-			}
-		});
-
-		return $result;
+		return $this->readMessages(null, $byEvent, $forceRead);
 	}
 
 	public function readMessages(?MessageCollection $messages, bool $byEvent = false, bool $forceRead = false): Result
@@ -383,11 +370,21 @@ class OpenLineChat extends EntityChat
 	protected function getFieldsForRecent(int $userId, Message $message): array
 	{
 		$fields = parent::getFieldsForRecent($userId, $message);
-		if (empty($fields))
+		if (!empty($fields))
 		{
-			return [];
+			$fields['ITEM_OLID'] = $this->getSessionIdByEntityData();
 		}
-		$fields['ITEM_OLID'] = $this->getSessionId();
+
+		return $fields;
+	}
+
+	protected function getUpdatedFieldsForRecent(Message $message): array
+	{
+		$fields = parent::getUpdatedFieldsForRecent($message);
+		if (!empty($fields))
+		{
+			$fields['ITEM_OLID'] = $this->getSessionIdByEntityData();
+		}
 
 		return $fields;
 	}
@@ -475,5 +472,49 @@ class OpenLineChat extends EntityChat
 		}
 
 		return $popupData;
+	}
+
+	protected function prepareMessageParamsFromUserDelete(string $message, bool $skipRecent): array
+	{
+		return [
+			'TO_CHAT_ID' => $this->getId(),
+			'MESSAGE' => $message,
+			'FROM_USER_ID' => $this->getContext()->getUserId(),
+			'SYSTEM' => 'Y',
+			'RECENT_ADD' => $skipRecent ? 'N' : 'Y',
+			'PARAMS' => ['CODE' => 'CHAT_LEAVE', 'NOTIFY' => 'Y'],
+			"PUSH" => 'N',
+			'SKIP_USER_CHECK' => 'Y',
+		];
+	}
+
+	protected function sendNotificationUserDelete(int $userId, DeleteUserConfig $config): void
+	{
+		return;
+	}
+
+	protected function sendPushOnChangeUsers(RelationCollection $relations, array $pushMessage): void
+	{
+		if (!\Bitrix\Main\Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		$userIds = $relations->getUserIds();
+
+		foreach ($relations as $relation)
+		{
+			if ($relation->getUser()->getExternalAuthId() === 'imconnector')
+			{
+				unset($relations[$relation->getUserId()]);
+			}
+		}
+
+		Event::add(array_values($userIds), $pushMessage);
+
+		if ($this->needToSendPublicPull())
+		{
+			\CPullWatch::AddToStack('IM_PUBLIC_' . $this->getId(), $pushMessage);
+		}
 	}
 }
