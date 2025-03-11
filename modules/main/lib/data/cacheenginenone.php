@@ -1,21 +1,26 @@
 <?php
 namespace Bitrix\Main\Data;
 
-class CacheEngineNone implements CacheEngineInterface, CacheEngineStatInterface
+class CacheEngineNone extends CacheEngine
 {
-	public function getReadBytes()
+	public function getConnectionName(): string
 	{
-		return 0;
+		return '';
 	}
 
-	public function getWrittenBytes()
+	public static function getConnectionClass(): string
 	{
-		return 0;
+		return CacheEngineNone::class;
 	}
 
-	public function getCachePath()
+	protected function configure($options = []): array
 	{
-		return "";
+		return [];
+	}
+
+	protected function connect($config)
+	{
+
 	}
 
 	public function isAvailable()
@@ -30,6 +35,7 @@ class CacheEngineNone implements CacheEngineInterface, CacheEngineStatInterface
 
 	public function read(&$vars, $baseDir, $initDir, $filename, $ttl)
 	{
+		$vars = false;
 		return false;
 	}
 
@@ -37,8 +43,43 @@ class CacheEngineNone implements CacheEngineInterface, CacheEngineStatInterface
 	{
 	}
 
-	public function isCacheExpired($path)
+	public function set($key, $ttl, $value)
 	{
-		return true;
+		return false;
+	}
+
+	public function get($key)
+	{
+		return false;
+	}
+
+	public function del($key)
+	{
+	}
+
+	public function setNotExists($key, $ttl, $value)
+	{
+	}
+
+	public function checkInSet($key, $value): bool
+	{
+		return false;
+	}
+
+	public function addToSet($key, $value)
+	{
+	}
+
+	public function getSet($key): array
+	{
+		return [];
+	}
+
+	public function delFromSet($key, $member)
+	{
+	}
+
+	public function deleteBySet($key, $prefix = '')
+	{
 	}
 }
