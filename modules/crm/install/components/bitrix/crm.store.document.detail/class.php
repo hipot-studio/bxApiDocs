@@ -578,7 +578,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 					'type' => 'order_property_wrapper',
 					'transferable' => false,
 					'editable' => true,
-					'isDragEnabled' => $this->userPermissions->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE'),
+					'isDragEnabled' => $this->userPermissionsService->isCrmAdmin(),
 					'elements' => [],
 					'sortedElements' => [
 						'active' => is_array($this->arResult['SHIPMENT_PROPERTIES']['ACTIVE']) ? $this->arResult['SHIPMENT_PROPERTIES']['ACTIVE'] : [],
@@ -1102,7 +1102,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 				],
 				$this->entityData
 			);
-			$isEntityReadPermitted = \CCrmCompany::CheckReadPermission($companyId, $this->userPermissions);
+			$isEntityReadPermitted = $this->userPermissionsService->item()->canRead(\CCrmOwnerType::Company, $companyId);
 			$companyInfo = \CCrmEntitySelectorHelper::PrepareEntityInfo(
 				\CCrmOwnerType::CompanyName,
 				$companyId,
@@ -1130,7 +1130,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 		);
 		foreach ($contactIds as $contactID)
 		{
-			$isEntityReadPermitted = \CCrmContact::CheckReadPermission($contactID, $this->userPermissions);
+			$isEntityReadPermitted = $this->userPermissionsService->item()->canRead(\CCrmOwnerType::Contact, $contactID);
 			$clientInfo['CONTACT_DATA'][] = \CCrmEntitySelectorHelper::PrepareEntityInfo(
 				\CCrmOwnerType::ContactName,
 				$contactID,

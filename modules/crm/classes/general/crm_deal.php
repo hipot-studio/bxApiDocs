@@ -37,6 +37,7 @@ use Bitrix\Crm\UserField\Visibility\VisibilityManager;
 use Bitrix\Crm\UtmTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type;
 
 class CAllCrmDeal
 {
@@ -55,7 +56,6 @@ class CAllCrmDeal
 	public $LAST_ERROR = '';
 	protected $checkExceptions = array();
 
-	public $cPerms = null;
 	protected $bCheckPermission = true;
 	const TABLE_ALIAS = 'L';
 	protected static $TYPE_NAME = 'DEAL';
@@ -64,6 +64,7 @@ class CAllCrmDeal
 
 	private static ?Crm\Entity\Compatibility\Adapter $lastActivityAdapter = null;
 	private static ?Crm\Entity\Compatibility\Adapter $commentsAdapter = null;
+	private static ?Crm\Entity\Compatibility\Adapter\Permissions $permissionsAdapter = null;
 
 	/** @var \Bitrix\Crm\Entity\Compatibility\Adapter */
 	private $compatibilityAdapter;
@@ -71,7 +72,6 @@ class CAllCrmDeal
 	function __construct($bCheckPermission = true)
 	{
 		$this->bCheckPermission = $bCheckPermission;
-		$this->cPerms = CCrmPerms::GetCurrentUserPermissions();
 	}
 
 	/**
@@ -168,6 +168,16 @@ class CAllCrmDeal
 		}
 
 		return self::$commentsAdapter;
+	}
+
+	private static function getPermissionsAdapter(): Crm\Entity\Compatibility\Adapter\Permissions
+	{
+		if (!self::$permissionsAdapter)
+		{
+			self::$permissionsAdapter = new Crm\Entity\Compatibility\Adapter\Permissions(\CCrmOwnerType::Deal);
+		}
+
+		return self::$permissionsAdapter;
 	}
 
 	// Service -->
@@ -507,7 +517,7 @@ class CAllCrmDeal
 				$result['C_ACTIVITY_TYPE_ID'] = array('FIELD' => 'AC.TYPE_ID', 'TYPE' => 'int', 'FROM' => $commonActivityJoin);
 				$result['C_ACTIVITY_PROVIDER_ID'] = array('FIELD' => 'AC.PROVIDER_ID', 'TYPE' => 'string', 'FROM' => $commonActivityJoin);
 
-				$userID = CCrmPerms::GetCurrentUserID();
+				$userID = self::getPermissionsAdapter()->getCurrentUserFromOptions();
 				if($userID > 0)
 				{
 					$activityJoin = CCrmActivity::PrepareJoin($userID, CCrmOwnerType::Deal, 'L', 'A', 'UA', '');
@@ -986,7 +996,7 @@ class CAllCrmDeal
 
 				if($ID > 0)
 				{
-					if(!self::CheckReadPermission($ID))
+					if(!self::getPermissionsAdapter()->canRead($ID))
 					{
 						if(is_array($arGroupBy) && count($arGroupBy) == 0)
 						{
@@ -1235,7 +1245,8 @@ class CAllCrmDeal
 		$arSqlSearch = array();
 		// check permissions
 		$sSqlPerm = '';
-		if (!CCrmPerms::IsAdmin()
+		if (
+			!self::getPermissionsAdapter()->isAdmin()
 			&& (!array_key_exists('CHECK_PERMISSIONS', $arFilter) || $arFilter['CHECK_PERMISSIONS'] !== 'N')
 		)
 		{
@@ -1569,7 +1580,7 @@ class CAllCrmDeal
 			$ID = (int)$ID;
 		}
 
-		if($bCheckPerms && !self::CheckReadPermission($ID))
+		if($bCheckPerms && !self::getPermissionsAdapter()->canRead($ID))
 		{
 			return null;
 		}
@@ -1600,7 +1611,7 @@ class CAllCrmDeal
 		return is_array($dbRes->Fetch());
 	}
 
-	public static function GetTopIDs($top, $sortType = 'ASC', $userPermissions = null)
+	public static function GetTopIDs($top, $sortType = 'ASC')
 	{
 		$top = (int)$top;
 		if ($top <= 0)
@@ -1613,7 +1624,6 @@ class CAllCrmDeal
 		return \Bitrix\Crm\Entity\Deal::getInstance()->getTopIDs([
 			'order' => ['ID' => $sortType],
 			'limit' => $top,
-			'userPermissions' => $userPermissions
 		]);
 	}
 
@@ -1721,7 +1731,8 @@ class CAllCrmDeal
 
 		$queryBuilder = Container::getInstance()
 			->getUserPermissions($userId)
-			->createListQueryBuilder($entityTypes, $builderOptions)
+			->itemsList()
+			->createQueryBuilder($entityTypes, $builderOptions)
 		;
 
 		return $queryBuilder->buildCompatible();
@@ -1746,8 +1757,7 @@ class CAllCrmDeal
 			return $this->getCompatibilityAdapter()->performAdd($arFields, $options);
 		}
 
-		$userID = isset($options['CURRENT_USER'])
-			? (int)$options['CURRENT_USER'] : CCrmSecurityHelper::GetCurrentUserID();
+		$userID = self::getPermissionsAdapter()->getCurrentUserFromOptions($options);
 
 		if($userID <= 0 && $this->bCheckPermission)
 		{
@@ -1757,10 +1767,17 @@ class CAllCrmDeal
 
 		unset($arFields['ID']);
 
+		$movedToBinDateTime = $options['MOVED_TO_BIN_DATETIME'] ?? null;
+		$recyclebinDateTimeConverter = new Crm\Integration\Recyclebin\DateTimeConverter($movedToBinDateTime);
+
 		if(!($isRestoration && isset($arFields['DATE_CREATE'])))
 		{
 			unset($arFields['DATE_CREATE']);
 			$arFields['~DATE_CREATE'] = $DB->CurrentTimeFunction();
+		}
+		elseif ($isRestoration)
+		{
+			$arFields['DATE_CREATE'] = $recyclebinDateTimeConverter->convert($arFields['DATE_CREATE']);
 		}
 
 		if(!($isRestoration && isset($arFields['DATE_MODIFY'])))
@@ -1768,11 +1785,20 @@ class CAllCrmDeal
 			unset($arFields['DATE_MODIFY']);
 			$arFields['~DATE_MODIFY'] = $DB->CurrentTimeFunction();
 		}
+		elseif ($isRestoration)
+		{
+			$arFields['DATE_MODIFY'] = $recyclebinDateTimeConverter->convert($arFields['DATE_MODIFY']);
+		}
 
 		if(!($isRestoration && isset($arFields['MOVED_TIME'])))
 		{
 			unset($arFields['MOVED_TIME']);
 		}
+		elseif ($isRestoration)
+		{
+			$arFields['MOVED_TIME'] = $recyclebinDateTimeConverter->convert($arFields['MOVED_TIME']);
+		}
+
 		if(!($isRestoration && isset($arFields['MOVED_BY_ID'])))
 		{
 			unset($arFields['MOVED_BY_ID']);
@@ -1840,29 +1866,34 @@ class CAllCrmDeal
 			//endregion
 
 			//region StageID, SemanticID and IsNew
-			$permissionTypeId = (
-				$this->bCheckPermission
-					? Bitrix\Crm\Security\EntityPermissionType::CREATE
-					: Bitrix\Crm\Security\EntityPermissionType::UNDEFINED
-			);
 
 			$arFields['STAGE_ID'] ??= '';
 
 			$viewMode = ($options['ITEM_OPTIONS']['VIEW_MODE'] ?? null);
 
+			$needDetectStage = false;
 			if (
 				( empty($arFields['STAGE_ID']) || !self::IsStageExists($arFields['STAGE_ID'], $categoryID) )
 				&& $viewMode !== ViewMode::MODE_ACTIVITIES
 			)
 			{
-				$arFields['STAGE_ID'] = self::GetStartStageID($categoryID, $permissionTypeId);
+				$needDetectStage = true;
 			}
 
 			$viewModeActivitiesStageId = null;
 			if ($viewMode === ViewMode::MODE_ACTIVITIES)
 			{
 				$viewModeActivitiesStageId = $arFields['STAGE_ID'];
-				$arFields['STAGE_ID'] = self::GetStartStageID($categoryID, $permissionTypeId);
+				$needDetectStage = true;
+
+			}
+
+			if ($needDetectStage)
+			{
+				$arFields['STAGE_ID'] = $this->bCheckPermission
+					? self::getPermissionsAdapter()->getFirstAvailableStageIdForAdd($categoryID, array_keys(self::GetStages($categoryID)), $userID)
+					: self::GetStartStageID($categoryID)
+				;
 			}
 
 			$isStageExist = self::IsStageExists($arFields['STAGE_ID'], $categoryID);
@@ -1878,57 +1909,34 @@ class CAllCrmDeal
 				? $arFields['OBSERVER_IDS'] : null;
 			unset($arFields['OBSERVER_IDS']);
 
-			$arAttr = array();
-			if (!empty($arFields['STAGE_ID']))
-			{
-				$arAttr['STAGE_ID'] = $arFields['STAGE_ID'];
-			}
-			if (!empty($arFields['OPENED']))
-			{
-				$arAttr['OPENED'] = $arFields['OPENED'];
-			}
-			if(!empty($observerIDs))
-			{
-				$arAttr['CONCERNED_USER_IDS'] = $observerIDs;
-			}
-
-			$permissionEntityType = DealCategory::convertToPermissionEntityType($arFields['CATEGORY_ID']);
-			$sPermission = 'ADD';
+			$sPermission = Crm\Service\UserPermissions::OPERATION_ADD;
 			if (isset($arFields['PERMISSION']))
 			{
-				if ($arFields['PERMISSION'] == 'IMPORT')
-					$sPermission = 'IMPORT';
+				if ($arFields['PERMISSION'] == Crm\Service\UserPermissions::OPERATION_IMPORT)
+				{
+					$sPermission = Crm\Service\UserPermissions::OPERATION_IMPORT;
+				}
 				unset($arFields['PERMISSION']);
 			}
+			$permissionAttributesHelper = self::getPermissionsAdapter()->getAttributesHelper($userID, $sPermission);
+			$permissionAttributesHelper
+				->setCategoryId((int)$arFields['CATEGORY_ID'])
+				->setAssignedById($arFields['ASSIGNED_BY_ID'])
+				->setOpened($arFields['OPENED'] ?? null)
+				->setStageId($arFields['STAGE_ID'])
+				->setConcernedUserIds($observerIDs)
+			;
 
-			$assignedByID = (int)$arFields['ASSIGNED_BY_ID'];
-			if($this->bCheckPermission)
+			if ($this->bCheckPermission)
 			{
-				$arEntityAttr = self::BuildEntityAttr($userID, $arAttr);
-				$userPerms =  $userID == CCrmPerms::GetCurrentUserID() ? $this->cPerms : CCrmPerms::GetUserPermissions($userID);
-				$sEntityPerm = $userPerms->GetPermType($permissionEntityType, $sPermission, $arEntityAttr);
-				if ($sEntityPerm == BX_CRM_PERM_NONE)
+				if (!$permissionAttributesHelper->hasAccess())
 				{
 					$this->LAST_ERROR = GetMessage('CRM_PERMISSION_DENIED');
 					$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
 					return false;
 				}
-
-				if ($sEntityPerm == BX_CRM_PERM_SELF && $assignedByID != $userID)
-				{
-					$arFields['ASSIGNED_BY_ID'] = $assignedByID = $userID;
-				}
-				if ($sEntityPerm == BX_CRM_PERM_OPEN && $userID == $assignedByID)
-				{
-					$arFields['OPENED'] = 'Y';
-				}
+				$permissionAttributesHelper->prepareFields($arFields);
 			}
-
-			$assignedByID = (int)$arFields['ASSIGNED_BY_ID'];
-			$arEntityAttr = self::BuildEntityAttr($assignedByID, $arAttr);
-			$userPerms =  $assignedByID == CCrmPerms::GetCurrentUserID() ? $this->cPerms : CCrmPerms::GetUserPermissions($assignedByID);
-			$sEntityPerm = $userPerms->GetPermType($permissionEntityType, $sPermission, $arEntityAttr);
-			self::PrepareEntityAttrs($arEntityAttr, $sEntityPerm);
 
 			//Prepare currency & exchange rate
 			if(!isset($arFields['CURRENCY_ID']))
@@ -2112,12 +2120,7 @@ class CAllCrmDeal
 			}
 			//endregion
 
-			$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
-				->setEntityAttributes($arEntityAttr)
-			;
-			Crm\Security\Manager::getEntityController(CCrmOwnerType::Deal)
-				->register($permissionEntityType, $ID, $securityRegisterOptions)
-			;
+			$permissionAttributesHelper->registerEntityAttributes($ID);
 
 			//region Save contacts
 			if (!empty($contactBindings))
@@ -2638,40 +2641,17 @@ class CAllCrmDeal
 				continue;
 			}
 
-			$attrs = [];
-			if(isset($fields['OPENED']))
-			{
-				$attrs['OPENED'] = $fields['OPENED'];
-			}
-
-			if(isset($fields['STAGE_ID']))
-			{
-				$attrs['STAGE_ID'] = $fields['STAGE_ID'];
-			}
-
-			$entityAttrs = self::BuildEntityAttr($assignedByID, $attrs);
-			$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
-				->setEntityAttributes($entityAttrs)
-				->setEntityFields($fields)
-			;
-			Crm\Security\Manager::getEntityController(CCrmOwnerType::Deal)
-				->register(
-					DealCategory::convertToPermissionEntityType(
-						isset($fields['CATEGORY_ID']) ? (int)$fields['CATEGORY_ID'] : 0
-					),
-					$ID,
-					$securityRegisterOptions
+			self::getPermissionsAdapter()
+				->getAttributesHelper(
+					self::getPermissionsAdapter()->getCurrentUserFromOptions(),
+					Crm\Service\UserPermissions::OPERATION_READ
 				)
+				->setAssignedById($assignedByID)
+				->setOpened($fields['OPENED'])
+				->setCategoryId($fields['CATEGORY_ID'])
+				->setStageId($fields['STAGE_ID'])
+				->registerEntityAttributes($ID, $fields)
 			;
-		}
-	}
-
-	static private function PrepareEntityAttrs(&$arEntityAttr, $entityPermType)
-	{
-		// Ensure that entity accessable for user restricted by BX_CRM_PERM_OPEN
-		if($entityPermType === BX_CRM_PERM_OPEN && !in_array('O', $arEntityAttr, true))
-		{
-			$arEntityAttr[] = 'O';
 		}
 	}
 
@@ -2810,14 +2790,7 @@ class CAllCrmDeal
 			return $this->getCompatibilityAdapter()->performUpdate($ID, $arFields, $options);
 		}
 
-		if(isset($options['CURRENT_USER']))
-		{
-			$userID = intval($options['CURRENT_USER']);
-		}
-		else
-		{
-			$userID = CCrmSecurityHelper::GetCurrentUserID();
-		}
+		$userID = self::getPermissionsAdapter()->getCurrentUserFromOptions($options);
 
 		$arFilterTmp = array('ID' => $ID);
 		if (!$this->bCheckPermission)
@@ -2907,8 +2880,8 @@ class CAllCrmDeal
 			}
 			//endregion
 
-			$permissionEntityType = DealCategory::convertToPermissionEntityType($arRow['CATEGORY_ID']);
-			if($this->bCheckPermission && !CCrmAuthorizationHelper::CheckUpdatePermission($permissionEntityType, $ID, $this->cPerms))
+			$categoryID = isset($arRow['CATEGORY_ID']) ? (int)$arRow['CATEGORY_ID'] : 0;
+			if ($this->bCheckPermission && !self::getPermissionsAdapter()->canUpdateInCategory($ID, $categoryID, $userID))
 			{
 				$this->LAST_ERROR = GetMessage('CRM_PERMISSION_DENIED');
 				$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
@@ -2927,15 +2900,11 @@ class CAllCrmDeal
 			}
 
 			$stageId = $arFields['STAGE_ID'] ?? $arRow['STAGE_ID'];
-			$categoryID = isset($arRow['CATEGORY_ID']) ? (int)$arRow['CATEGORY_ID'] : 0;
+
 			if (
 				$this->bCheckPermission
 				&& $stageId !== $arRow['STAGE_ID']
-				&& !Container::getInstance()->getUserPermissions($userID)->isStageTransitionAllowed(
-					$arRow['STAGE_ID'],
-					$stageId,
-					new Crm\ItemIdentifier(CCrmOwnerType::Deal, $ID, $categoryID)
-				)
+				&& !self::getPermissionsAdapter()->canChangeStage($ID, $categoryID, $arRow['STAGE_ID'], $stageId, $userID)
 			)
 			{
 				$this->LAST_ERROR = Loc::getMessage('CRM_PERMISSION_STAGE_TRANSITION_NOT_ALLOWED');
@@ -2972,33 +2941,26 @@ class CAllCrmDeal
 			}
 			//endregion
 
-			$arAttr = array();
-			$arAttr['STAGE_ID'] = !empty($arFields['STAGE_ID']) ? $arFields['STAGE_ID'] : $arRow['STAGE_ID'];
-			$arAttr['OPENED'] = !empty($arFields['OPENED']) ? $arFields['OPENED'] : $arRow['OPENED'];
+			$permissionAttributesHelper = self::getPermissionsAdapter()
+				->getAttributesHelper($userID, Crm\Service\UserPermissions::OPERATION_UPDATE)
+			;
+			$permissionAttributesHelper
+				->setCategoryId($categoryID)
+				->setOpened(!empty($arFields['OPENED']) ? $arFields['OPENED'] : $arRow['OPENED'])
+				->setStageId(!empty($arFields['STAGE_ID']) ? $arFields['STAGE_ID'] : $arRow['STAGE_ID'])
+				->setAssignedById($assignedByID)
+			;
 
 			$originalObserverIDs = Crm\Observer\ObserverManager::getEntityObserverIDs(CCrmOwnerType::Deal, $ID);
 			$observerIDs = isset($arFields['OBSERVER_IDS']) && is_array($arFields['OBSERVER_IDS'])
 				? $arFields['OBSERVER_IDS'] : null;
 			if($observerIDs !== null && count($observerIDs) > 0)
 			{
-				$arAttr['CONCERNED_USER_IDS'] = $observerIDs;
+				$permissionAttributesHelper->setConcernedUserIds($observerIDs);
 			}
 			elseif($observerIDs === null && count($originalObserverIDs) > 0)
 			{
-				$arAttr['CONCERNED_USER_IDS'] = $originalObserverIDs;
-			}
-
-			$arEntityAttr = self::BuildEntityAttr($assignedByID, $arAttr);
-			if($this->bCheckPermission)
-			{
-				$sEntityPerm = $this->cPerms->GetPermType($permissionEntityType, 'WRITE', $arEntityAttr);
-				//HACK: Ensure that entity accessible for user restricted by BX_CRM_PERM_OPEN
-				self::PrepareEntityAttrs($arEntityAttr, $sEntityPerm);
-				//HACK: Prevent 'OPENED' field change by user restricted by BX_CRM_PERM_OPEN permission
-				if($sEntityPerm === BX_CRM_PERM_OPEN && isset($arFields['OPENED']) && $arFields['OPENED'] !== 'Y' && $assignedByID !== $userID)
-				{
-					$arFields['OPENED'] = 'Y';
-				}
+				$permissionAttributesHelper->setConcernedUserIds($originalObserverIDs);
 			}
 
 			//region Preparation of contacts
@@ -3367,15 +3329,7 @@ class CAllCrmDeal
 			}
 			//endregion
 
-			//region Save access rights for owner and observers
-			$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
-				->setEntityAttributes($arEntityAttr)
-				->setEntityFields($currentFields)
-			;
-			Crm\Security\Manager::getEntityController(CCrmOwnerType::Deal)
-				->register($permissionEntityType, $ID, $securityRegisterOptions)
-			;
-			//endregion
+			$permissionAttributesHelper->registerEntityAttributes($ID);
 
 			self::SynchronizeCustomerData($ID, $arRow, array('ENABLE_SOURCE' => false));
 			self::SynchronizeCustomerData($ID, $currentFields);
@@ -3790,14 +3744,7 @@ class CAllCrmDeal
 			return $this->getCompatibilityAdapter()->performDelete($ID, $arOptions);
 		}
 
-		if(isset($arOptions['CURRENT_USER']))
-		{
-			$iUserId = intval($arOptions['CURRENT_USER']);
-		}
-		else
-		{
-			$iUserId = CCrmSecurityHelper::GetCurrentUserID();
-		}
+		$iUserId = self::getPermissionsAdapter()->getCurrentUserFromOptions($arOptions);
 
 		$dbResult = \CCrmDeal::GetListEx(
 			array(),
@@ -3809,17 +3756,9 @@ class CAllCrmDeal
 			return false;
 		}
 
-		$assignedByID = isset($arFields['ASSIGNED_BY_ID']) ? (int)$arFields['ASSIGNED_BY_ID'] : 0;
 		$categoryID = isset($arFields['CATEGORY_ID']) ? (int)$arFields['CATEGORY_ID'] : 0;
 
-		$permissionEntityType = DealCategory::convertToPermissionEntityType($categoryID);
-
-		$hasDeletePerm = Container::getInstance()
-			->getUserPermissions($iUserId)
-			->checkDeletePermissions(CCrmOwnerType::Deal, $ID, $categoryID)
-		;
-
-		if ($this->bCheckPermission && !$hasDeletePerm)
+		if ($this->bCheckPermission && !self::getPermissionsAdapter()->canDeleteInCategory($ID, $categoryID, $iUserId))
 		{
 			$this->LAST_ERROR = Loc::getMessage('CRM_DEAL_NO_PERMISSIONS_TO_DELETE', [
 				'#DEAL_NAME#' => htmlspecialcharsbx($arFields['TITLE'] ?? $arFields['ID']),
@@ -3861,8 +3800,13 @@ class CAllCrmDeal
 
 		$enableRecycleBin = \Bitrix\Crm\Recycling\DealController::isEnabled()
 			&& \Bitrix\Crm\Settings\DealSettings::getCurrent()->isRecycleBinEnabled();
-		if($enableRecycleBin)
+
+		if ($enableRecycleBin)
 		{
+			$arFields['DATE_CREATE'] = (Type\DateTime::createFromUserTime($arFields['DATE_CREATE']))->disableUserTime()->toString();
+			$arFields['DATE_MODIFY'] = (Type\DateTime::createFromUserTime($arFields['DATE_MODIFY']))->disableUserTime()->toString();
+			$arFields['MOVED_TIME'] = (Type\DateTime::createFromUserTime($arFields['MOVED_TIME']))->disableUserTime()->toString();
+
 			\Bitrix\Crm\Recycling\DealController::getInstance()->moveToBin($ID, array('FIELDS' => $arFields));
 		}
 
@@ -3886,11 +3830,9 @@ class CAllCrmDeal
 
 			Bitrix\Crm\Kanban\SortTable::clearEntity($ID, \CCrmOwnerType::DealName);
 
-			Crm\Security\Manager::getEntityController(CCrmOwnerType::Deal)
-				->unregister(
-					$permissionEntityType,
-					$ID
-				)
+			self::getPermissionsAdapter()
+				->getAttributesHelper($iUserId, Crm\Service\UserPermissions::OPERATION_DELETE)
+				->unregisterEntityAttributes($ID)
 			;
 
 			$GLOBALS['USER_FIELD_MANAGER']->Delete(self::$sUFEntityID, $ID);
@@ -4559,339 +4501,148 @@ class CAllCrmDeal
 		Container::getInstance()->getFactory(CCrmOwnerType::Deal)->clearItemStageCache((int)$ID);
 	}
 
-	protected static function GetPermittedCategoryIDs($permissionType, CCrmPerms $userPermissions = null)
-	{
-		if(!($userPermissions instanceof CCrmPerms))
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		$categoryIDs = array();
-		$allCategoryIDs = DealCategory::getAllIDs();
-		foreach($allCategoryIDs as $categoryID)
-		{
-			$permissionEntity = DealCategory::convertToPermissionEntityType($categoryID);
-			if($permissionType === 'CREATE')
-			{
-				$result = CCrmAuthorizationHelper::CheckCreatePermission($permissionEntity, $userPermissions);
-			}
-			elseif($permissionType === 'UPDATE')
-			{
-				$result = CCrmAuthorizationHelper::CheckUpdatePermission($permissionEntity, 0, $userPermissions);
-			}
-			else
-			{
-				$result = CCrmAuthorizationHelper::CheckReadPermission($permissionEntity, 0, $userPermissions);
-			}
-
-			if($result)
-			{
-				$categoryIDs[] = $categoryID;
-			}
-		}
-		return $categoryIDs;
-	}
-
-	public static function GetPermittedToMoveCategoryIDs(CCrmPerms $userPermissions = null)
-	{
-		return self::GetPermittedCategoryIDs('CREATE', $userPermissions);
-	}
-
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->category()->getAvailableForAddingCategoriesIds
+	 */
 	public static function GetPermittedToCreateCategoryIDs(CCrmPerms $userPermissions = null)
 	{
-		return self::GetPermittedCategoryIDs('CREATE', $userPermissions);
+		return \Bitrix\Crm\Service\Container::getInstance()
+			->getUserPermissions($userPermissions?->GetUserID())
+			->category()
+			->getAvailableForAddingCategoriesIds(CCrmOwnerType::Deal)
+		;
 	}
 
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->category()->getAvailableForReadingCategoriesIds
+	 */
 	public static function GetPermittedToReadCategoryIDs(CCrmPerms $userPermissions = null)
 	{
-		return self::GetPermittedCategoryIDs('READ', $userPermissions);
+		return \Bitrix\Crm\Service\Container::getInstance()
+			->getUserPermissions($userPermissions?->GetUserID())
+			->category()
+			->getAvailableForReadingCategoriesIds(CCrmOwnerType::Deal)
+		;
 	}
 
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->category()->getAvailableForUpdatingCategoriesIds
+	 */
 	public static function GetPermittedToUpdateCategoryIDs(CCrmPerms $userPermissions = null)
 	{
-		return self::GetPermittedCategoryIDs('UPDATE', $userPermissions);
+		return \Bitrix\Crm\Service\Container::getInstance()
+			->getUserPermissions($userPermissions?->GetUserID())
+			->category()
+			->getAvailableForUpdatingCategoriesIds(CCrmOwnerType::Deal)
+		;
 	}
 
-	public static function GetPermissionEntityTypeName($categoryID = 0)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->entityType()->canAddItems()
+	 */
+	public static function CheckCreatePermission($userPermissions = null, ?int $categoryId = null)
 	{
-		return  DealCategory::convertToPermissionEntityType($categoryID);
+		return
+			(is_null($categoryId) || ($categoryId === -1))
+			? self::getPermissionsAdapter()->canAdd($userPermissions?->GetUserId())
+			: self::getPermissionsAdapter()->canAddInCategory($categoryId, $userPermissions?->GetUserId())
+		;
 	}
 
-	public static function GetStageCreatePermissionType($stageID, CCrmPerms $userPermissions = null, $categoryID = 0)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canUpdate()
+	 */
+	public static function CheckUpdatePermission($id, $userPermissions = null, ?int $categoryId = null)
 	{
-		if($userPermissions === null)
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		return $userPermissions->GetPermType(
-			DealCategory::convertToPermissionEntityType($categoryID),
-			'ADD',
-			array("STAGE_ID{$stageID}")
-		);
-	}
-
-	public static function GetStageUpdatePermissionType($stageID, CCrmPerms $userPermissions = null, $categoryID = 0)
-	{
-		if($userPermissions === null)
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();;
-		}
-
-		return $userPermissions->GetPermType(
-			DealCategory::convertToPermissionEntityType($categoryID),
-			'WRITE',
-			array("STAGE_ID{$stageID}")
-		);
-	}
-
-	public static function GetPermissionAttributes(array $IDs, $categoryID = -1)
-	{
-		if($categoryID >= 0)
-		{
-			$permEntity = DealCategory::convertToPermissionEntityType($categoryID);
-
-			return \Bitrix\Crm\Security\Manager::resolveController($permEntity)
-				->getPermissionAttributes($permEntity, $IDs)
+		return
+			(is_null($categoryId) || ($categoryId === -1))
+				? self::getPermissionsAdapter()->canUpdate((int)$id, $userPermissions?->GetUserId())
+				: self::getPermissionsAdapter()->canUpdateInCategory((int)$id, $categoryId, $userPermissions?->GetUserId())
 			;
-		}
+	}
 
-		$results = [];
-		foreach($IDs as $ID)
-		{
-			$permEntity = DealCategory::convertToPermissionEntityType(self::GetCategoryID($ID));
-			$results += \Bitrix\Crm\Security\Manager::resolveController($permEntity)
-				->getPermissionAttributes($permEntity, [$ID])
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canDelete()
+	 */
+	public static function CheckDeletePermission($id, $userPermissions = null, ?int $categoryId = null)
+	{
+		return
+			(is_null($categoryId) || ($categoryId === -1))
+				? self::getPermissionsAdapter()->canDelete((int)$id, $userPermissions?->GetUserId())
+				: self::getPermissionsAdapter()->canDeleteInCategory((int)$id, $categoryId, $userPermissions?->GetUserId())
 			;
-		}
-
-		return $results;
 	}
 
-	public static function IsAccessEnabled(CCrmPerms $userPermissions = null)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canRead()
+	 */
+	public static function CheckReadPermission($id = 0, $userPermissions = null, ?int $categoryId = null)
 	{
-		return self::CheckReadPermission(0, $userPermissions, -1);
+		return
+			(is_null($categoryId) || ($categoryId === -1))
+				? self::getPermissionsAdapter()->canRead((int)$id, $userPermissions?->GetUserId())
+				: self::getPermissionsAdapter()->canReadInCategory((int)$id, $categoryId, $userPermissions?->GetUserId())
+			;
 	}
 
-	public static function CheckImportPermission($userPermissions = null, $categoryID = -1)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->entityType()->canImportItems()
+	 */
+	public static function CheckImportPermission($userPermissions = null, int $categoryId = 0)
 	{
-		if($categoryID >= 0)
-		{
-			$categoryIDs = array($categoryID);
-		}
-		else
-		{
-			$categoryIDs = DealCategory::getAllIDs();
-		}
-
-		foreach($categoryIDs as $curCategoryID)
-		{
-			$permissionEntity = DealCategory::convertToPermissionEntityType($curCategoryID);
-			if(CCrmAuthorizationHelper::CheckImportPermission($permissionEntity, $userPermissions))
-			{
-				return true;
-			}
-		}
-		return false;
+		return
+			(is_null($categoryId) || ($categoryId === -1))
+				? self::getPermissionsAdapter()->canImport($userPermissions?->GetUserId())
+				: self::getPermissionsAdapter()->canImportInCategory($categoryId, $userPermissions?->GetUserId())
+			;
 	}
 
-	public static function CheckExportPermission($userPermissions = null, $categoryID = -1)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->entityType()->canExportItems()
+	 */
+	public static function CheckExportPermission($userPermissions = null, int $categoryId = 0)
 	{
-		if($categoryID >= 0)
-		{
-			$categoryIDs = array($categoryID);
-		}
-		else
-		{
-			$categoryIDs = DealCategory::getAllIDs();
-		}
-
-		foreach($categoryIDs as $curCategoryID)
-		{
-			$permissionEntity = DealCategory::convertToPermissionEntityType($curCategoryID);
-			if(CCrmAuthorizationHelper::CheckExportPermission($permissionEntity, $userPermissions))
-			{
-				return true;
-			}
-		}
-		return false;
+		return
+			(is_null($categoryId) || ($categoryId === -1))
+				? self::getPermissionsAdapter()->canExport($userPermissions?->GetUserId())
+				: self::getPermissionsAdapter()->canExportInCategory($categoryId, $userPermissions?->GetUserId())
+			;
 	}
 
-	public static function CheckCreatePermission($userPermissions = null, $categoryID = -1)
+	public static function PrepareConversionPermissionFlags($ID, array &$params)
 	{
-		if($categoryID >= 0)
-		{
-			$categoryIDs = array($categoryID);
-		}
-		else
-		{
-			$categoryIDs = DealCategory::getAllIDs();
-		}
+		$entityPermissions = Container::getInstance()->getUserPermissions()->entityType();
 
-		foreach($categoryIDs as $curCategoryID)
-		{
-			$permissionEntity = DealCategory::convertToPermissionEntityType($curCategoryID);
-			if(CCrmAuthorizationHelper::CheckCreatePermission($permissionEntity, $userPermissions))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
+		$invoiceSettings = \Bitrix\Crm\Settings\InvoiceSettings::getCurrent();
 
-	public static function CheckUpdatePermission($ID, $userPermissions = null, $categoryID = -1, array $options = null)
-	{
-		if($categoryID < 0 && $ID > 0)
-		{
-			$categoryID = self::GetCategoryID($ID);
-		}
+		$canCreateInvoice =
+			IsModuleInstalled('sale')
+			&& $entityPermissions->canAddItems(CCrmOwnerType::Invoice)
+			&& $invoiceSettings->isOldInvoicesEnabled()
+		;
 
-		if($categoryID >= 0)
-		{
-			$categoryIDs = array($categoryID);
-		}
-		else
-		{
-			$categoryIDs = DealCategory::getAllIDs();
-			if($ID > 0)
-			{
-				$ID = 0;
-			}
-		}
+		$canCreateSmartInvoice =
+			$entityPermissions->canAddItems(\CCrmOwnerType::SmartInvoice)
+			&& $invoiceSettings->isSmartInvoiceEnabled()
+		;
 
-		$entityAttrs = $ID > 0 && is_array($options) && isset($options['ENTITY_ATTRS']) ? $options['ENTITY_ATTRS'] : null;
-		foreach($categoryIDs as $curCategoryID)
-		{
-			$permissionEntity = DealCategory::convertToPermissionEntityType($curCategoryID);
-			if(CCrmAuthorizationHelper::CheckUpdatePermission($permissionEntity, $ID, $userPermissions, $entityAttrs))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	public static function CheckDeletePermission($ID, $userPermissions = null, $categoryID = -1, array $options = null)
-	{
-		if(!($userPermissions instanceof CCrmPerms))
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		if($categoryID < 0 && $ID > 0)
-		{
-			$categoryID = self::GetCategoryID($ID);
-		}
-
-		if($categoryID >= 0)
-		{
-			$categoryIDs = array($categoryID);
-		}
-		else
-		{
-			$categoryIDs = DealCategory::getAllIDs();
-			if($ID > 0)
-			{
-				$ID = 0;
-			}
-		}
-
-		$entityAttrs = $ID > 0 && is_array($options) && isset($options['ENTITY_ATTRS']) ? $options['ENTITY_ATTRS'] : null;
-		foreach($categoryIDs as $curCategoryID)
-		{
-			$permissionEntity = DealCategory::convertToPermissionEntityType($curCategoryID);
-			if(CCrmAuthorizationHelper::CheckDeletePermission($permissionEntity, $ID, $userPermissions, $entityAttrs))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	public static function CheckReadPermission($ID = 0, $userPermissions = null, $categoryID = -1, array $options = null)
-	{
-		if(!($userPermissions instanceof CCrmPerms))
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		if($categoryID < 0 && $ID > 0)
-		{
-			$categoryID = self::GetCategoryID($ID);
-		}
-
-		if($categoryID >= 0)
-		{
-			$categoryIDs = array($categoryID);
-		}
-		else
-		{
-			$categoryIDs = DealCategory::getAllIDs();
-			if($ID > 0)
-			{
-				$ID = 0;
-			}
-		}
-
-		$entityAttrs = $ID > 0 && is_array($options) && isset($options['ENTITY_ATTRS']) ? $options['ENTITY_ATTRS'] : null;
-		foreach($categoryIDs as $curCategoryID)
-		{
-			$permissionEntity = DealCategory::convertToPermissionEntityType($curCategoryID);
-			if(CCrmAuthorizationHelper::CheckReadPermission($permissionEntity, $ID, $userPermissions, $entityAttrs))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	public static function CheckConvertPermission($ID = 0, $entityTypeID = 0, $userPermissions = null)
-	{
-		if(!$userPermissions)
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		if($entityTypeID === CCrmOwnerType::Invoice)
-		{
-			return CCrmInvoice::CheckCreatePermission($userPermissions);
-		}
-		elseif($entityTypeID === CCrmOwnerType::Quote)
-		{
-			return CCrmQuote::CheckCreatePermission($userPermissions);
-		}
-
-		return (CCrmInvoice::CheckCreatePermission($userPermissions)
-			|| CCrmQuote::CheckCreatePermission($userPermissions));
-	}
-
-	public static function PrepareConversionPermissionFlags($ID, array &$params, $userPermissions = null)
-	{
-		if(!$userPermissions)
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		$canCreateInvoice = IsModuleInstalled('sale') && CCrmInvoice::CheckCreatePermission($userPermissions);
-		$userPermissions = Container::getInstance()->getUserPermissions($userPermissions->GetUserID());
-		$canCreateSmartInvoice = $userPermissions->checkAddPermissions(\CCrmOwnerType::SmartInvoice);
-		$canCreateQuote = $userPermissions->checkAddPermissions(\CCrmOwnerType::Quote);
+		$canCreateQuote = $entityPermissions->canAddItems(\CCrmOwnerType::Quote);
 
 		$params['CAN_CONVERT_TO_INVOICE'] = $canCreateInvoice;
 		$params['CAN_CONVERT_TO_SMART_INVOICE'] = $canCreateSmartInvoice;
 		$params['CAN_CONVERT_TO_QUOTE'] = $canCreateQuote;
-		$params['CAN_CONVERT'] = $params['CONVERT'] = ($canCreateInvoice || $canCreateQuote || $canCreateSmartInvoice);
+		$params['CAN_CONVERT'] = ($canCreateInvoice || $canCreateQuote || $canCreateSmartInvoice);
+		$params['CONVERT'] = $params['CAN_CONVERT'];
 		$params['CONVERSION_PERMITTED'] = true;
-	}
-
-	public static function ResolvePermissionEntityType($ID)
-	{
-		return DealCategory::convertToPermissionEntityType(self::GetCategoryID($ID));
-	}
-
-	public static function HasPermissionEntityType($permissionEntityType)
-	{
-		return DealCategory::hasPermissionEntity($permissionEntityType);
 	}
 
 	public static function PrepareFilter(&$arFilter, $arFilter2Logic = null)
@@ -5007,14 +4758,11 @@ class CAllCrmDeal
 	}
 
 	/**
-	 * Get start Stage ID for specified Permission Type.
-	 * If Permission Type is not defined permission check will be disabled.
+	 * Get start Stage ID for specified $categoryID.
 	 * @param int $categoryID Category ID.
-	 * @param int $permissionTypeID Permission Type (see \Bitrix\Crm\Security\EntityPermissionType).
-	 * @param CCrmPerms $userPermissions User Permissions
 	 * @return string
 	 */
-	public static function GetStartStageID($categoryID = 0, $permissionTypeID = 0, CCrmPerms $userPermissions = null)
+	public static function GetStartStageID($categoryID = 0)
 	{
 		$categoryID = (int)$categoryID;
 		$stageIDs = array_keys(self::GetStages($categoryID));
@@ -5023,27 +4771,7 @@ class CAllCrmDeal
 			return '';
 		}
 
-		$permissionType = Bitrix\Crm\Security\EntityPermissionType::resolveName($permissionTypeID);
-		if($permissionType === '')
-		{
-			return $stageIDs[0];
-		}
-
-		if($userPermissions === null)
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		$permissionEntity = DealCategory::convertToPermissionEntityType($categoryID);
-		foreach($stageIDs as $stageID)
-		{
-			$permission = $userPermissions->GetPermType($permissionEntity, $permissionType, array("STAGE_ID{$stageID}"));
-			if($permission !== BX_CRM_PERM_NONE)
-			{
-				return $stageID;
-			}
-		}
-		return '';
+		return $stageIDs[0];
 	}
 
 	public static function GetFinalStageID($categoryID = 0)
@@ -5390,40 +5118,32 @@ class CAllCrmDeal
 			'CURRENT_FIELDS' => $currentFields,
 		]);
 
-		//region Update Permissions
-		$permissionEntityController = Crm\Security\Manager::getEntityController(CCrmOwnerType::Deal);
-		$permissionEntityController->unregister(DealCategory::convertToPermissionEntityType($categoryID), $ID);
+		$permissionAttributesHelper = self::getPermissionsAdapter()->getAttributesHelper(
+			$userID,
+			Crm\Service\UserPermissions::OPERATION_UPDATE
+		);
+
+		$permissionAttributesHelper->unregisterEntityAttributes($ID);
 
 		self::clearCategoryCache($ID);
 		self::clearStageCache($ID);
 		Container::getInstance()->getDealBroker()?->deleteCache($ID);
 
-		$entityAttrs = self::BuildEntityAttr(
-			$assignedByID,
-				array(
-					'STAGE_ID' => $newStageID,
-					'OPENED' => isset($fields['OPENED']) ? $fields['OPENED'] : 'N'
-				)
-		);
-		$userPermissions = CCrmPerms::GetUserPermissions($assignedByID);
-		$permissionEntityType = DealCategory::convertToPermissionEntityType($newCategoryID);
-		self::PrepareEntityAttrs(
-			$entityAttrs,
-			$userPermissions->GetPermType($permissionEntityType, 'WRITE', $entityAttrs)
-		);
-
-		$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
-			->setEntityAttributes($entityAttrs)
-			->setEntityFields($currentFields)
+		$permissionAttributesHelper
+			->setCategoryId($newCategoryID)
+			->setAssignedById($assignedByID)
+			->setStageId($newStageID)
+			->setOpened($fields['OPENED'])
+			->setConcernedUserIds(Crm\Observer\ObserverManager::getEntityObserverIDs(CCrmOwnerType::Deal, $ID))
+			->registerEntityAttributes($ID)
 		;
-		$permissionEntityController->register($permissionEntityType, $ID, $securityRegisterOptions);
 
 		\Bitrix\Crm\Counter\Monitor::getInstance()->onEntityUpdate(
 			CCrmOwnerType::Deal,
 			$fields,
 			$currentFields
 		);
-		//endregion
+
 		if(!isset($options['REGISTER_STATISTICS']) || $options['REGISTER_STATISTICS'] === true)
 		{
 			DealStageHistoryEntry::processCagegoryChange($ID);
@@ -6110,7 +5830,7 @@ class CAllCrmDeal
 		return (string)$this->LAST_ERROR;
 	}
 
-	public static function filterIdsByReadPermission(array $ids, int $userId): array
+	private static function filterIdsByReadPermission(array $ids, int $userId): array
 	{
 		if (empty($ids))
 		{

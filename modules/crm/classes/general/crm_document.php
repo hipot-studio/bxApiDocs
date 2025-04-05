@@ -1282,7 +1282,7 @@ class CCrmDocument
 			? CCrmOwnerType::GetEntityShowPath($entityTypeID, $entityID, false) : null;
 	}
 
-	public static function GetDocument($documentId)
+	public static function GetDocument($documentId, $documentType = null, array $select = [])
 	{
 		$arDocumentID = static::GetDocumentInfo($documentId);
 		if (empty($arDocumentID))
@@ -1297,7 +1297,8 @@ class CCrmDocument
 		{
 			return new Crm\Integration\BizProc\Document\ValueCollection\Item(
 				$entityTypeId,
-				$arDocumentID['ID']
+				$arDocumentID['ID'],
+				$select
 			);
 		}
 
@@ -1509,7 +1510,9 @@ class CCrmDocument
 			$entityTypeId = \CCrmOwnerType::ResolveID($entityTypeName);
 			if ($entityTypeId > 0)
 			{
-				return Service\UserPermissions::getPermissionEntityType($entityTypeId, (int)$parameters['DocumentCategoryId']);
+				return (new \Bitrix\Crm\Category\PermissionEntityTypeHelper($entityTypeId))
+					->getPermissionEntityTypeForCategory((int)$parameters['DocumentCategoryId'])
+				;
 			}
 		}
 
@@ -1643,7 +1646,11 @@ class CCrmDocument
 				? (int)$arParameters['DocumentCategoryId']
 				: null;
 
-			return Service\Container::getInstance()->getUserPermissions($userId)->canEditAutomation($entityTypeId, $categoryId);
+			return Service\Container::getInstance()
+				->getUserPermissions($userId)
+				->automation()
+				->canEdit($entityTypeId, $categoryId)
+			;
 		}
 
 		if( $operation === CBPCanUserOperateOperation::ViewWorkflow
@@ -1653,7 +1660,8 @@ class CCrmDocument
 			return
 				Container::getInstance()
 							->getUserPermissions($userId)
-							->canReadType(CCrmOwnerType::ResolveID($documentType))
+							->entityType()
+							->canReadItems(CCrmOwnerType::ResolveID($documentType))
 				;
 		}
 
@@ -1734,7 +1742,8 @@ class CCrmDocument
 
 		$arGroupsID = array(1);
 		$arUsersID = array();
-		$arRelations = CCrmPerms::GetEntityRelations($documentType, BX_CRM_PERM_SELF);
+
+		$arRelations = \Bitrix\Crm\Security\Role\Model\RoleRelationTable::getRelationsWithPermissionsOfType($documentType, Service\UserPermissions::OPERATION_READ);
 		foreach($arRelations as $relation)
 		{
 			$preffix = mb_substr($relation, 0, 1);

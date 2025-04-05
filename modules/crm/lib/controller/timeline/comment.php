@@ -526,7 +526,7 @@ class Comment extends Base
 	protected function hasReadEntityPermission(int $ownerTypeId, int $ownerId): bool
 	{
 		$userPermissions = Container::getInstance()->getUserPermissions();
-		if (!$userPermissions->checkReadPermissions($ownerTypeId, $ownerId))
+		if (!$userPermissions->item()->canRead($ownerTypeId, $ownerId))
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 			return false;
@@ -536,7 +536,7 @@ class Comment extends Base
 	protected function hasUpdateEntityPermission(int $ownerTypeId, int $ownerId): bool
 	{
 		$userPermissions = Container::getInstance()->getUserPermissions();
-		if (!$userPermissions->checkUpdatePermissions($ownerTypeId, $ownerId))
+		if (!$userPermissions->item()->canUpdate($ownerTypeId, $ownerId))
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 			return false;

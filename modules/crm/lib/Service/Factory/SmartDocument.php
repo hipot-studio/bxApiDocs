@@ -329,4 +329,9 @@ class SmartDocument extends Dynamic
 	{
 		return false;
 	}
+
+	public function hasCustomPermissionsUI(): bool
+	{
+		return true;
+	}
 }

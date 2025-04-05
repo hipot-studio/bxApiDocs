@@ -864,7 +864,7 @@ class Chat
 	private static function getOpenLineLastActivity(string $code): array
 	{
 		$session = new Session();
-		$sessionLoadResult = $session->getLast(['USER_CODE' => $code]);
+		$sessionLoadResult = $session->getLast(['USER_CODE' => $code], true);
 		if (!$sessionLoadResult->isSuccess())
 		{
 			return [];

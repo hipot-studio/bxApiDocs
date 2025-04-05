@@ -46,7 +46,7 @@ class Item extends \Bitrix\Crm\Controller\Base
 	): array
 	{
 		$permissions = Container::getInstance()->getUserPermissions();
-		if (!$permissions->checkReadPermissions($ownerTypeId, $ownerId))
+		if (!$permissions->item()->canRead($ownerTypeId, $ownerId))
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -113,7 +113,7 @@ class Item extends \Bitrix\Crm\Controller\Base
 		}
 
 		$permissions = Container::getInstance()->getUserPermissions();
-		if (!$permissions->checkUpdatePermissions($ownerTypeId, $ownerId))
+		if (!$permissions->item()->canUpdate($ownerTypeId, $ownerId))
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 

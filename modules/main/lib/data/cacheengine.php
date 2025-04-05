@@ -10,7 +10,7 @@ abstract class CacheEngine implements CacheEngineInterface, CacheEngineStatInter
 	const BX_BASE_LIST = 'BL:';
 	const BX_INIT_DIR_LIST = 'IL:';
 
-	protected static \Redis|\Memcache|\Memcached $engine;
+	protected static $engine = null;
 	protected static array $locks = [];
 	protected static bool $isConnected = false;
 	protected static array $cleanQueue = [];

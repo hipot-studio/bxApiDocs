@@ -3,20 +3,6 @@
 namespace Bitrix\Crm\Badge;
 
 use Bitrix\Crm\Badge\Model\BadgeTable;
-use Bitrix\Crm\Badge\Type\AiCallFieldsFillingResult;
-use Bitrix\Crm\Badge\Type\AiCallScoringStatus;
-use Bitrix\Crm\Badge\Type\BizprocWorkflowStatus;
-use Bitrix\Crm\Badge\Type\CalendarSharingStatus;
-use Bitrix\Crm\Badge\Type\CallStatus;
-use Bitrix\Crm\Badge\Type\CopilotCallAssessmentStatus;
-use Bitrix\Crm\Badge\Type\MailMessageDeliveryStatus;
-use Bitrix\Crm\Badge\Type\OpenLineStatus;
-use Bitrix\Crm\Badge\Type\PaymentStatus;
-use Bitrix\Crm\Badge\Type\RestAppStatus;
-use Bitrix\Crm\Badge\Type\SmsStatus;
-use Bitrix\Crm\Badge\Type\TaskStatus;
-use Bitrix\Crm\Badge\Type\TodoStatus;
-use Bitrix\Crm\Badge\Type\WorkflowCommentStatus;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Result;
@@ -24,6 +10,7 @@ use Bitrix\Main\Result;
 abstract class Badge
 {
 	protected string $value;
+	protected ?array $settings = null;
 
 	public const CALL_STATUS_TYPE = 'call_status';
 	public const PAYMENT_STATUS_TYPE = 'payment_status';
@@ -42,82 +29,7 @@ abstract class Badge
 
 	public static function createByType(string $type, string $value): Badge
 	{
-		return self::getInstance($type, $value);
-	}
-
-	protected static function getInstance(string $type, string $value): Badge
-	{
-		if ($type === self::CALL_STATUS_TYPE)
-		{
-			return new CallStatus($value);
-		}
-
-		if ($type === self::PAYMENT_STATUS_TYPE)
-		{
-			return new PaymentStatus($value);
-		}
-
-		if ($type === self::OPENLINE_STATUS_TYPE)
-		{
-			return new OpenLineStatus($value);
-		}
-
-		if ($type === self::REST_APP_TYPE)
-		{
-			return new RestAppStatus($value);
-		}
-
-		if ($type === self::SMS_STATUS_TYPE)
-		{
-			return new SmsStatus($value);
-		}
-
-		if ($type === self::CALENDAR_SHARING_STATUS_TYPE)
-		{
-			return new CalendarSharingStatus($value);
-		}
-
-		if ($type === self::TASK_STATUS_TYPE)
-		{
-			return new TaskStatus($value);
-		}
-
-		if ($type === self::MAIL_MESSAGE_DELIVERY_STATUS_TYPE)
-		{
-			return new MailMessageDeliveryStatus($value);
-		}
-
-		if ($type === self::AI_CALL_FIELDS_FILLING_RESULT)
-		{
-			return new AiCallFieldsFillingResult($value);
-		}
-
-		if ($type === self::BIZPROC_WORKFLOW_STATUS_TYPE)
-		{
-			return new BizprocWorkflowStatus($value);
-		}
-
-		if ($type === self::WORKFLOW_COMMENT_STATUS_TYPE)
-		{
-			return new WorkflowCommentStatus($value);
-		}
-
-		if ($type === self::TODO_STATUS_TYPE)
-		{
-			return new TodoStatus($value);
-		}
-
-		if ($type === self::COPILOT_CALL_ASSESSMENT_STATUS_TYPE)
-		{
-			return new CopilotCallAssessmentStatus($value);
-		}
-
-		if ($type === self::AI_CALL_SCORING_STATUS)
-		{
-			return new AiCallScoringStatus($value);
-		}
-
-		throw new ArgumentException('Unknown badge type: ' . $type);
+		return Factory::getBadgeInstance($type, $value);
 	}
 
 	public function __construct(string $value)
@@ -157,6 +69,13 @@ abstract class Badge
 			if ($value === $valueItem->getValue())
 			{
 				$result = array_merge($result, $valueItem->toArray());
+
+				$hint = $this->getSettings()['HINT'] ?? null;
+				if (!empty($hint))
+				{
+					$result['hint'] = $hint;
+				}
+
 				break;
 			}
 		}
@@ -286,11 +205,24 @@ abstract class Badge
 			'SOURCE_PROVIDER_ID' => $sourceIdentifier->getProviderId(),
 			'SOURCE_ENTITY_TYPE_ID' => $sourceIdentifier->getEntityTypeId(),
 			'SOURCE_ENTITY_ID' => $sourceIdentifier->getEntityId(),
+			'SETTINGS' => $this->getSettings(),
 		];
 	}
 
 	public function getValue(): string
 	{
 		return $this->value;
+	}
+
+	public function setSettings(?array $settings): Badge
+	{
+		$this->settings = $settings;
+
+		return $this;
+	}
+
+	public function getSettings(): ?array
+	{
+		return $this->settings;
 	}
 }

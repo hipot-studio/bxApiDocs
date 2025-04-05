@@ -54,7 +54,7 @@ class ProductRow extends Base
 			return null;
 		}
 
-		if (!Container::getInstance()->getUserPermissions()->canUpdateItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canUpdateItem($item))
 		{
 			$this->addError(
 				ErrorCode::getAccessDeniedError()
@@ -156,7 +156,7 @@ class ProductRow extends Base
 			return null;
 		}
 
-		if (!Container::getInstance()->getUserPermissions()->canReadItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canReadItem($item))
 		{
 			$this->addError(
 				ErrorCode::getAccessDeniedError()
@@ -190,7 +190,7 @@ class ProductRow extends Base
 			return;
 		}
 
-		if (!Container::getInstance()->getUserPermissions()->canUpdateItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canUpdateItem($item))
 		{
 			$this->addError(
 				ErrorCode::getAccessDeniedError()
@@ -228,7 +228,7 @@ class ProductRow extends Base
 			return null;
 		}
 
-		if (!Container::getInstance()->getUserPermissions()->canUpdateItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canUpdateItem($item))
 		{
 			$this->addError(
 				ErrorCode::getAccessDeniedError()
@@ -360,7 +360,7 @@ class ProductRow extends Base
 			return false;
 		}
 
-		$isReadPermitted = Container::getInstance()->getUserPermissions()->checkReadPermissions(
+		$isReadPermitted = Container::getInstance()->getUserPermissions()->item()->canRead(
 			\CCrmOwnerTypeAbbr::ResolveTypeID($ownerType),
 			(int)$ownerId
 		);
@@ -420,7 +420,7 @@ class ProductRow extends Base
 			return null;
 		}
 
-		if (!Container::getInstance()->getUserPermissions()->canUpdateItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canUpdateItem($item))
 		{
 			$this->addError(
 				ErrorCode::getAccessDeniedError()
@@ -629,7 +629,7 @@ class ProductRow extends Base
 			return null;
 		}
 
-		if (!Container::getInstance()->getUserPermissions()->canReadItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canReadItem($item))
 		{
 			$this->addError(
 				ErrorCode::getAccessDeniedError()

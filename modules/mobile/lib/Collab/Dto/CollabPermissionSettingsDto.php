@@ -7,8 +7,9 @@ class CollabPermissionSettingsDto
 	public function __construct(
 		public CollabSettingsUserDto $owner,
 		public array $moderators,
-		public string $inviters,
-		public string $messageWriters,
+		public string $inviters = 'K',
+		public string $messageWriters = 'K',
+		public string $showHistory = 'Y',
 	)
 	{
 	}

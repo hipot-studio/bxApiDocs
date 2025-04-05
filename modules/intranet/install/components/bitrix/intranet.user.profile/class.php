@@ -130,8 +130,6 @@ class CIntranetUserProfileComponent extends UserProfile
 		$this->arResult["IsOwnProfile"] = $currentUserId === $ownerUserId;
 		$this->arResult["StressLevel"] = $this->getStressLevelInstance()->getStub();
 
-		$title = \CUser::FormatName(\CSite::GetNameFormat(), $this->arResult["User"], true);
-
 		$this->filterHiddenFields();
 		$this->checkNumAdminRestrictions();
 
@@ -169,7 +167,10 @@ class CIntranetUserProfileComponent extends UserProfile
 
 		$this->arResult["DISK_INFO"] = $this->getDiskInfo();
 
-		$APPLICATION->SetTitle($title);
+		if ($this->arResult["Permissions"]['view'])
+		{
+			$APPLICATION->SetTitle(\CUser::FormatName(\CSite::GetNameFormat(), $this->arResult["User"], true));
+		}
 
 		$this->includeComponentTemplate();
 	}

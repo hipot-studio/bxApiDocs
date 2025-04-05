@@ -79,51 +79,6 @@ class ExternalConnectionComponent extends CBitrixComponent implements Controller
 		$this->includeComponentTemplate();
 	}
 
-	public function checkConnectionAction(array $data): ?bool
-	{
-		$checkAccessResult = $this->checkAccess();
-		if (!$checkAccessResult->isSuccess())
-		{
-			$this->errorCollection[] = $checkAccessResult->getError();
-
-			return null;
-		}
-
-		if (
-			!isset($data['type'], $data['host'], $data['username'], $data['password'])
-			|| !$data['type']
-			|| !$data['host']
-			|| !$data['username']
-			|| !$data['password']
-		)
-		{
-			$this->errorCollection[] = new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE'));
-
-			return null;
-		}
-
-		$type = ExternalSource\Type::tryFrom($data['type']);
-		if (!$type)
-		{
-			$this->errorCollection[] = new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_UNKNOWN_TYPE', [
-				'#CONNECTION_TYPE#' => htmlspecialcharsbx($data['type']),
-			]));
-
-			return null;
-		}
-
-		$source = ExternalSource\Source\Factory::getSource($type, 0);
-		$connectionResult = $source->connect(trim($data['host']), $data['username'], $data['password']);
-		if (!$connectionResult->isSuccess())
-		{
-			$this->errorCollection[] = $connectionResult->getError();
-
-			return null;
-		}
-
-		return true;
-	}
-
 	private function checkAccess(): Result
 	{
 		$result = new Result();

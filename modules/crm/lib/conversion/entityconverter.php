@@ -1069,10 +1069,10 @@ class EntityConverter
 			return false;
 		}
 
-		return Crm\Service\Container::getInstance()->getUserPermissions($this->getUserPermissions()->GetUserID())->isStageTransitionAllowed(
+		return Crm\Service\Container::getInstance()->getUserPermissions($this->getUserPermissions()->GetUserID())->item()->canChangeStage(
+			Crm\ItemIdentifier::createByItem($item),
 			$item->getStageId(),
 			$successfulStageId,
-			Crm\ItemIdentifier::createByItem($item),
 		);
 	}
 	//endregion

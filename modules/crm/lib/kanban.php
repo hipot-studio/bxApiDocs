@@ -456,7 +456,7 @@ abstract class Kanban
 
 			$sort = 0;
 			$winColumn = [];
-			$userPerms = $this->getCurrentUserPermissions();
+
 			// prepare each status
 			$isFirstDropZone = false;
 			foreach($this->getStatuses($clear) as $status)
@@ -491,7 +491,7 @@ abstract class Kanban
 					'currency' => $baseCurrency,
 					'dropzone' => $isDropZone,
 					'alwaysShowInDropzone' => $this->isAlwaysShowInDropzone($status),
-					'canAddItem' => $this->entity->canAddItemToStage($status['STATUS_ID'], $userPerms, $status['SEMANTICS']),
+					'canAddItem' => $this->entity->canAddItemToStage($status['STATUS_ID'], $status['SEMANTICS']),
 					'blockedIncomingMoving' => ($status['BLOCKED_INCOMING_MOVING'] ?? false),
 				];
 
@@ -1109,8 +1109,8 @@ abstract class Kanban
 	}
 
 	/**
-	 * Gets current user perms.
-	 * @return \CCrmPerms
+	 * @deprecated
+	 * @see \Bitrix\Crm\Kanban::getEntity()->getUserPermissions()
 	 */
 	public function getCurrentUserPermissions(): \CCrmPerms
 	{
@@ -1372,8 +1372,6 @@ abstract class Kanban
 
 		$activeAutomationDebugEntityIds = \CCrmBizProcHelper::getActiveDebugEntityIds($this->entity->getTypeId());
 
-		$userPermissions = Container::getInstance()->getUserPermissions()->getCrmPermissions();
-
 		foreach($rows as $rowId => $row)
 		{
 			if (is_array($renderedRows[$rowId]))
@@ -1524,27 +1522,6 @@ abstract class Kanban
 				'calendarSettings' => $calendarSettings,
 				'draggable' => (bool)($row['DRAGGABLE'] ?? true),
 			];
-
-			/*
-			 * Perhaps in the future we will want to hide the amount in each element, then it will be enough
-			 * for this option to be set to true for the elements in which the amounts need to be hidden.
-			 *
-			 * if (!$entity->havePermissionToDisplayColumnSum($columnId, $userPermissions))
-			 * {
-			 *	$result[$rowId]['price'] = null;
-			 *	$result[$rowId]['price_formatted'] = $entity->getHiddenPriceFormattedText($row['CURRENCY_FORMAT']);
-			 *	$result[$rowId]['entity_price'] = null;
-			 *
-			 *	foreach ($result[$rowId]['fields'] as &$field)
-			 *	{
-			 *		if ($field['code'] === Item::FIELD_NAME_OPPORTUNITY)
-			 *		{
-			 *			$field['value'] = null;
-			 *		}
-			 *	}
-			 *	unset($field);
-			 * }
-			 */
 
 			$result[$rowId] = array_merge($result[$rowId], $this->prepareAdditionalFields($row));
 			$isRestricted = (!empty($restrictedItemIds) && in_array($row['ID'], $restrictedItemIds));
@@ -1992,7 +1969,7 @@ abstract class Kanban
 	 */
 	public function isCrmAdmin(): bool
 	{
-		return Container::getInstance()->getUserPermissions($this->currentUserId)->isAdminForEntity($this->getEntity()->getTypeId());
+		return $this->getEntity()->getUserPermissions()->isAdminForEntity($this->getEntity()->getTypeId());
 	}
 
 	public function removeUserAdditionalSelectFields(): void

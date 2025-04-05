@@ -1,16 +1,17 @@
 <?php
 namespace Bitrix\ImConnector\Connectors;
 
+use Bitrix\ImConnector\DeliveryMark;
 use Bitrix\Main;
 use Bitrix\Main\Web;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\Text\Emoji;
-use Bitrix\Main\Application;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Localization\Loc;
 
+use Bitrix\Im;
 use Bitrix\ImConnector\Chat;
 use Bitrix\ImConnector\Error;
 use Bitrix\ImConnector\Status;
@@ -1013,6 +1014,13 @@ class Base
 			case Library::ERROR_CONNECTOR_DELETE_MESSAGE:
 				$result = $this->receivedErrorNotDeleteMessageChat($paramsError);
 				break;
+
+			default:
+				if (!empty($paramsError['messageId']) && !empty($paramsError['chatId']))
+				{
+					$this->markMessageUndelivered((int)$paramsError['messageId']);
+					$this->removeMessageDeliveryMark((int)$paramsError['messageId'], (int)$paramsError['chatId']);
+				}
 		}
 
 		return $result;
@@ -1063,7 +1071,7 @@ class Base
 
 		if (
 			!empty($paramsError['chatId'])
-			&& $paramsError['chatId'] > 0
+			&& (int)$paramsError['chatId'] > 0
 			&& Loader::includeModule('imopenlines')
 		)
 		{
@@ -1076,11 +1084,10 @@ class Base
 			if (
 				!empty($paramsError['messageId'])
 				&& $paramsError['messageId'] > 0
-				&& Loader::includeModule('im')
 			)
 			{
-				\CIMMessageParam::Set((int)$paramsError['messageId'], ['SENDING_TS' => (time() - 86400)]);
-				\CIMMessageParam::SendPull((int)$paramsError['messageId'], ['SENDING_TS']);
+				$this->markMessageUndelivered((int)$paramsError['messageId']);
+				$this->removeMessageDeliveryMark((int)$paramsError['messageId'], (int)$paramsError['chatId']);
 			}
 
 			if (empty($message))
@@ -1094,6 +1101,54 @@ class Base
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Updates message with undelivered mark.
+	 * @param int $messageId Message Id.
+	 * @return void
+	 */
+	public function markMessageUndelivered(int $messageId): void
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return;
+		}
+		if ($messageId)
+		{
+			$message = new Im\V2\Message($messageId);
+			if ($message->getMessageId() !== $messageId)
+			{
+				return;
+			}
+
+			$messageParams = $message->getParams();
+
+			$pullParams = [
+				Im\V2\Message\Params::IS_DELIVERED => false,
+				Im\V2\Message\Params::SENDING => false,
+				Im\V2\Message\Params::SENDING_TS => 0
+			];
+			$messageParams->fill($pullParams);
+			$messageParams->save();
+
+			\CIMMessageParam::sendPull($message->getMessageId(), array_keys($pullParams));
+			if (Loader::includeModule('pull'))
+			{
+				\Bitrix\Pull\Event::send();
+			}
+		}
+	}
+
+	/**
+	 * Unsets waiting delidery mark.
+	 * @param int $messageId
+	 * @param int $chatId
+	 * @return void
+	 */
+	public function removeMessageDeliveryMark(int $messageId, int $chatId): void
+	{
+		DeliveryMark::unsetDeliveryMark($messageId, $chatId);
 	}
 
 	//endregion

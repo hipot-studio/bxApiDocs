@@ -29,7 +29,6 @@ class Manager
 
 	private Tab\Copilot $copilot;
 	private Tab\Messenger $messenger;
-	private Tab\Notifications $notifications;
 	private Tab\OpenLines $openLines;
 	private Tab\Channel $channel;
 	private Tab\Collab $collab;
@@ -41,7 +40,6 @@ class Manager
 		$this->messenger = new Tab\Messenger();
 		$this->copilot = new Tab\Copilot();
 		$this->openLines = new Tab\OpenLines($context);
-		$this->notifications = new Tab\Notifications($context);
 		$this->channel = new Tab\Channel();
 		$this->collab = new Tab\Collab();
 	}
@@ -162,7 +160,6 @@ class Manager
 		return [
 			$this->openLines,
 			$this->messenger,
-			$this->notifications,
 			$this->copilot,
 			$this->channel,
 			$this->collab,
@@ -174,7 +171,6 @@ class Manager
 		return [
 			$this->messenger,
 			$this->openLines,
-			$this->notifications,
 			$this->copilot,
 			$this->channel,
 			$this->collab,
@@ -186,7 +182,6 @@ class Manager
 		return [
 			$this->messenger,
 			$this->copilot,
-			$this->notifications,
 			$this->channel,
 			$this->collab,
 			$this->openLines,

@@ -2,7 +2,8 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\Factory;
 
-use Bitrix\Crm\Activity\Provider\Booking;
+use Bitrix\Crm\Activity\Provider\Booking\Booking;
+use Bitrix\Crm\Activity\Provider\Booking\WaitListItem;
 use Bitrix\Crm\Activity\Provider\CalendarSharing;
 use Bitrix\Crm\Activity\Provider\ConfigurableRestApp;
 use Bitrix\Crm\Activity\Provider\Delivery;
@@ -165,7 +166,12 @@ class ConfigurableActivity
 
 			if ($providerId === Booking::getId())
 			{
-				return new Item\Activity\Booking($context, $model);
+				return new Item\Activity\Booking\Booking($context, $model);
+			}
+
+			if ($providerId === WaitListItem::getId())
+			{
+				return new Item\Activity\Booking\WaitListItem($context, $model);
 			}
 
 			if ($providerId === Zoom::getId())

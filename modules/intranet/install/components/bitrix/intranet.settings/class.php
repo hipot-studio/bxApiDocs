@@ -31,8 +31,8 @@ use Bitrix\Main\Result;
 use Bitrix\Main;
 use Bitrix\Intranet;
 use Bitrix\Main\Analytics\AnalyticsEvent;
-use Bitrix\Intranet\User;
 use Bitrix\Intranet\Settings\SettingsPermission;
+use Bitrix\Intranet\MainPage;
 
 class SettingsComponent extends CBitrixComponent implements Controllerable, Errorable
 {
@@ -61,9 +61,10 @@ class SettingsComponent extends CBitrixComponent implements Controllerable, Erro
 		];
 
 		// todo: remove after open Vibe for all
+		$access = new MainPage\Access;
 		if (
-			Loader::includeModule('landing')
-			&& \Bitrix\Landing\Mainpage\Manager::isAvailable()
+			$access->canView()
+			&& $access->canEdit()
 		)
 		{
 			array_splice($providerClasses, 2, 0, MainPageSettings::class);

@@ -139,6 +139,32 @@ class FormLanding
 		// site is not exist, create new one
 		if (!$storedSiteId)
 		{
+			$filter = [
+				'=CODE' => '/' . \Bitrix\Landing\Site\Type::PSEUDO_SCOPE_CODE_FORMS . '/',
+				'=ACTIVE' => 'Y',
+				'=DELETED' => 'N'
+			];
+
+			Rights::setGlobalOff();
+			$sites = \Bitrix\Landing\Site::getList([
+				'select' => ['ID'],
+				'filter' => $filter,
+				'order' => ['ID' => 'ASC'],
+			]);
+			Rights::setGlobalOn();
+
+			$existingSite = $sites->fetch();
+
+			if ($existingSite)
+			{
+				$this->siteId = (int)$existingSite['ID'];
+				Main\Config\Option::set(
+					'crm', $this::OPT_CODE_LANDINGS_SITE_ID, $this->siteId
+				);
+
+				return $this->siteId;
+			}
+
 			Rights::setGlobalOff();
 			$res = \Bitrix\Landing\Site::add([
 				'TITLE' => 'CRM Forms',

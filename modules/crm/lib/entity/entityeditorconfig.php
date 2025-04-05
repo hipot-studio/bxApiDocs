@@ -194,7 +194,7 @@ class EntityEditorConfig
 
 		if (empty($optionName) && \CCrmOwnerType::isUseDynamicTypeBasedApproach($this->entityTypeID))
 		{
-			$componentName = Crm\Service\Container::getInstance()->getRouter()->getItemDetailComponentName($this->entityTypeID);
+			$componentName = Container::getInstance()->getRouter()->getItemDetailComponentName($this->entityTypeID);
 			if ($componentName)
 			{
 				$componentClassName = \CBitrixComponent::includeComponentClass($componentName);
@@ -241,8 +241,7 @@ class EntityEditorConfig
 		{
 			if($this->scope === Crm\Entity\EntityEditorConfigScope::PERSONAL)
 			{
-				return ($this->userID > 0 && $this->userID === \CCrmSecurityHelper::GetCurrentUserID())
-					|| \CCrmAuthorizationHelper::CanEditOtherSettings();
+				return Container::getInstance()->getUserPermissions()->entityEditor()->canEditPersonalViewForUser((int)$this->userID);
 			}
 			elseif($this->scope === Crm\Entity\EntityEditorConfigScope::COMMON)
 			{
@@ -255,17 +254,16 @@ class EntityEditorConfig
 		{
 			if($this->scope === Crm\Entity\EntityEditorConfigScope::PERSONAL)
 			{
-				return ($this->userID > 0 && $this->userID === \CCrmSecurityHelper::GetCurrentUserID())
-					|| \CCrmAuthorizationHelper::CanEditOtherSettings();
+				return Container::getInstance()->getUserPermissions()->entityEditor()->canEditPersonalViewForUser((int)$this->userID);
 			}
 			elseif($this->scope === Crm\Entity\EntityEditorConfigScope::COMMON)
 			{
-				return \CCrmAuthorizationHelper::CheckConfigurationUpdatePermission();
+				return Container::getInstance()->getUserPermissions()->entityEditor()->canEditCommonView();
 			}
 		}
 		elseif(strcasecmp($operation, EntityEditorConfigOperation::FORCE_COMMON_SCOPE_FOR_ALL) === 0)
 		{
-			return \CCrmAuthorizationHelper::CanEditOtherSettings();
+			return Container::getInstance()->getUserPermissions()->entityEditor()->canEditCommonView();
 		}
 
 		return false;
@@ -596,7 +594,9 @@ class EntityEditorConfig
 
 		$isPersonalViewAllowed = Container::getInstance()
 			->getUserPermissions($this->userID)
-			->isPersonalViewAllowed($this->entityTypeID, $categoryId) ;
+			->entityEditor()
+			->canSwitchToPersonalView($this->entityTypeID, $categoryId)
+		;
 
 		if ($configScope === EntityEditorConfigScope::PERSONAL && !$isPersonalViewAllowed)
 		{

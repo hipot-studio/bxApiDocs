@@ -52,22 +52,58 @@ class WorkflowCompleted extends Base
 		$efficiency = $settings['EFFICIENCY'] ?? null;
 		$executionTime = $settings['EXECUTION_TIME'] ?? null;
 		$workflowAuthor = $settings['WORKFLOW_AUTHOR'] ?? [];
-		$workflowResult = \CBPViewHelper::getWorkflowResult($workflowId, $this->getContext()->getUserId()) ?? [];
+		$userId = $this->getContext()->getUserId();
 
-		if (empty($workflowResult) && empty($workflowAuthor))
+		{ //TODO has a dependency on bizproc, delete after update
+			$mobileConstant = \CBPViewHelper::class . '::MOBILE_CONTEXT';
+			$mobileContext = defined($mobileConstant) ? \CBPViewHelper::MOBILE_CONTEXT : null;
+		}
+
+		$webResult = \CBPViewHelper::getWorkflowResult($workflowId, $userId) ?? [];
+		if ($mobileContext)
+		{
+			$mobileResult = \CBPViewHelper::getWorkflowResult($workflowId, $userId, $mobileContext) ?? [];
+		}
+
+		$helperHasMethod = method_exists(\CBPViewHelper::class, 'getUserFullNameById');
+		if (empty($workflowAuthor) && !$helperHasMethod)
 		{
 			$authorId = $this->getModel()->getAuthorId();
 			$workflowAuthor = $this->getUser($authorId);
 		}
 
-		$result['workflowEfficiencyBlock'] =
+		$webBlock =
 			(new Layout\Body\ContentBlock\WorkflowEfficiency())
 				->setAverageDuration($averageDuration)
 				->setEfficiency($efficiency)
 				->setExecutionTime($executionTime)
-				->setWorkflowResult($workflowResult)
-				->setAuthor($workflowAuthor)
+				->setWorkflowResult($webResult)
+				->setScopeWeb()
 		;
+		if (!$helperHasMethod)
+		{
+			$webBlock->setAuthor($workflowAuthor);
+		}
+
+		$result['workflowEfficiencyBlockWeb'] = $webBlock;
+
+		if ($mobileContext)
+		{
+			$mobileBlock =
+				(new Layout\Body\ContentBlock\WorkflowEfficiency())
+					->setAverageDuration($averageDuration)
+					->setEfficiency($efficiency)
+					->setExecutionTime($executionTime)
+					->setWorkflowResult($mobileResult)
+					->setScopeMobile()
+			;
+			if (!$helperHasMethod)
+			{
+				$mobileBlock->setAuthor($workflowAuthor);
+			}
+
+			$result['workflowEfficiencyBlockMobile'] = $mobileBlock;
+		}
 
 		return $result;
 	}
@@ -89,6 +125,7 @@ class WorkflowCompleted extends Base
 			'timeline' =>
 				$this->createTimelineButton($workflowId)
 					->setState(!$this->isBizprocEnabled() ? 'hidden' : null)
+					->setScopeWeb()
 			,
 		];
 	}
@@ -106,5 +143,20 @@ class WorkflowCompleted extends Base
 			Loc::getMessage('CRM_TIMELINE_ACTIVITY_BIZPROC_COMPLETED') ?? '',
 			Tag::TYPE_SUCCESS
 		);
+	}
+
+	public function getMenuItems(): array
+	{
+		$settings = $this->getActivityModel()?->get('SETTINGS');
+		$workflowId = $settings['WORKFLOW_ID'] ?? null;
+		if (empty($workflowId))
+		{
+			return [];
+		}
+
+		return [
+			'log' => $this->createLogMenuItem($workflowId)?->setScopeWeb(),
+			'timeline' => $this->createTimelineMenuItem($workflowId)?->setScopeMobile()
+		];
 	}
 }

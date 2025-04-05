@@ -7,9 +7,9 @@ class EmailMessage
 	public function __construct(
 		private string $eventName,
 		private string $siteId,
-		private array  $templateParams,
-		private ?int   $messageId,
-		private ?bool  $isDuplicate = null,
+		private array $templateParams,
+		private ?int $messageId,
+		private ?bool $isDuplicate = null,
 	)
 	{
 
@@ -22,7 +22,7 @@ class EmailMessage
 			$this->siteId,
 			$this->templateParams,
 			$this->isDuplicate,
-			$this->messageId
+			$this->messageId,
 		);
 	}
 
@@ -33,7 +33,7 @@ class EmailMessage
 			$this->siteId,
 			$this->templateParams,
 			$this->isDuplicate,
-			$this->messageId
+			$this->messageId,
 		);
 	}
 }

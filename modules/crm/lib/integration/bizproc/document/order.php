@@ -243,7 +243,7 @@ class Order extends \CCrmDocument implements \IBPWorkflowDocument
 		}
 	}
 
-	public static function GetDocument($documentId)
+	public static function GetDocument($documentId, $documentType = null, array $select = [])
 	{
 		$arDocumentID = static::GetDocumentInfo($documentId);
 		if (empty($arDocumentID))
@@ -253,7 +253,8 @@ class Order extends \CCrmDocument implements \IBPWorkflowDocument
 
 		return new Crm\Integration\BizProc\Document\ValueCollection\Order(
 			\CCrmOwnerType::Order,
-			$arDocumentID['ID']
+			$arDocumentID['ID'],
+			$select
 		);
 	}
 
@@ -574,7 +575,8 @@ class Order extends \CCrmDocument implements \IBPWorkflowDocument
 			throw new \CBPArgumentNullException('documentId');
 		}
 
-		$userPermissions = \CCrmPerms::GetUserPermissions($userId);
+		$userPermissions = Crm\Service\Container::getInstance()->getUserPermissions($userId);
+
 		$result = false;
 
 		if ($arDocumentID['ID'] > 0)
@@ -585,11 +587,11 @@ class Order extends \CCrmDocument implements \IBPWorkflowDocument
 				$operation == \CBPCanUserOperateOperation::ReadDocument
 			)
 			{
-				$result = Permissions\Order::checkReadPermission($arDocumentID['ID'], $userPermissions);
+				$result = $userPermissions->item()->canRead(\CCrmOwnerType::Order, $arDocumentID['ID']);
 			}
 			else
 			{
-				$result = Permissions\Order::checkUpdatePermission($arDocumentID['ID'], $userPermissions);
+				$result = $userPermissions->item()->canUpdate(\CCrmOwnerType::Order, $arDocumentID['ID']);
 			}
 		}
 
@@ -598,7 +600,7 @@ class Order extends \CCrmDocument implements \IBPWorkflowDocument
 
 	public static function CanUserOperateDocumentType($operation, $userId, $documentType, $arParameters = array())
 	{
-		$userPermissions = \CCrmPerms::GetUserPermissions($userId);
+		$userPermissions = Crm\Service\Container::getInstance()->getUserPermissions($userId);
 
 		if (
 			$operation == \CBPCanUserOperateOperation::CreateWorkflow
@@ -606,7 +608,7 @@ class Order extends \CCrmDocument implements \IBPWorkflowDocument
 			|| $operation === \CBPCanUserOperateOperation::DebugAutomation
 		)
 		{
-			return (\CCrmAuthorizationHelper::CheckConfigurationUpdatePermission($userPermissions));
+			return ($userPermissions->isCrmAdmin());
 		}
 
 		if (
@@ -615,9 +617,9 @@ class Order extends \CCrmDocument implements \IBPWorkflowDocument
 			$operation === \CBPCanUserOperateOperation::ReadDocument
 		)
 		{
-			return Permissions\Order::checkReadPermission(0, $userPermissions);
+			return $userPermissions->entityType()->canReadItems(\CCrmOwnerType::Order);
 		}
 
-		return Permissions\Order::checkCreatePermission($userPermissions);
+		return $userPermissions->entityType()->canAddItems(\CCrmOwnerType::Order);
 	}
 }

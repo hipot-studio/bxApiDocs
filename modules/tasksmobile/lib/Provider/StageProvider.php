@@ -573,6 +573,7 @@ final class StageProvider
 		$taskProvider = new TaskProvider(
 			$this->userId,
 			TaskProvider::ORDER_ACTIVITY,
+			null,
 			$this->extra,
 			$this->searchParams,
 			null,

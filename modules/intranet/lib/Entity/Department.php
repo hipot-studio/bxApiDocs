@@ -60,7 +60,7 @@ class Department
 
 	public function setIsGlobalActive(bool $isGlobalActive): void
 	{
-		$this->isGlobalActive = $isActive;
+		$this->isGlobalActive = $isGlobalActive;
 	}
 
 	public function getId(): ?int

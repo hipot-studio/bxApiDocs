@@ -22,7 +22,7 @@ class Access
 				$this->checkRequiredModules()
 				&& $this->checkUserPermissions()
 				&& $this->isAvailableByLanding()
-				;
+			;
 		}
 
 		return
@@ -44,6 +44,7 @@ class Access
 			return !\CBitrix24::IsExtranetUser(CurrentUser::get()->getId());
 		}
 
+		//todo: tmp hiding. Set true for non-bitrix24 at version 25.0.0
 		return false;
 	}
 
@@ -54,11 +55,13 @@ class Access
 			return Feature::isFeatureEnabled('main_page') && $this->isAvailableByLanding();
 		}
 
-		return Landing\Mainpage\Manager::isAvailable();
+		return $this->isAvailableByLanding();
 	}
 
 	private function isAvailableByLanding(): bool
 	{
-		return Landing\Mainpage\Manager::isAvailable();
+		return Loader::includeModule('intranet');
+		// tmp hide, open and add version_control to landing 25.0.0
+		// return Landing\Mainpage\Manager::isAvailable();
 	}
 }

@@ -131,11 +131,13 @@ class CPullChannel
 
 		if(!is_array($arResult) || !isset($arResult['CHANNEL_ID']) || ($userId > 0 && !isset($arResult['CHANNEL_PUBLIC_ID'])))
 		{
+			CTimeZone::Disable();
 			$strSql = "
 					SELECT C.CHANNEL_ID, C.CHANNEL_PUBLIC_ID, C.CHANNEL_TYPE, ".$DB->DatetimeToTimestampFunction('C.DATE_CREATE')." AS DATE_CREATE, C.LAST_ID
 					FROM b_pull_channel C
 					WHERE C.USER_ID = ".$userId." AND C.CHANNEL_TYPE = '".$DB->ForSQL($channelType)."'
 			";
+			CTimeZone::Enable();
 			$res = $DB->Query($strSql);
 			$arResult = $res->Fetch();
 		}

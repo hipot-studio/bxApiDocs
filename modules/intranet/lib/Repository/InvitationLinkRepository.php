@@ -15,23 +15,32 @@ use Bitrix\Main\Type\DateTime;
 
 class InvitationLinkRepository implements InvitationLinkRepositoryContract
 {
-	public function getByEntity(LinkEntityType $entitytype, int $entityId): ?InvitationLink
+	private static array $entityCache = [];
+
+	public function getByEntity(LinkEntityType $entityType, int $entityId): ?InvitationLink
 	{
+		$cacheKey = $entityType->value.$entityId;
+		if (isset(static::$entityCache[$cacheKey]) && static::$entityCache[$cacheKey] instanceof InvitationLink)
+		{
+			return static::$entityCache[$cacheKey];
+		}
 		$model = InvitationLinkTable::query()
-			->where('ENTITY_TYPE', $entitytype->value)
+			->where('ENTITY_TYPE', $entityType->value)
 			->where('ENTITY_ID', $entityId)
 			->setLimit(1)
 			->fetchObject();
 
 		if ($model)
 		{
-			return $this->makeEntityByModel($model);
+			static::$entityCache[$cacheKey] = $this->makeEntityByModel($model);
+
+			return static::$entityCache[$cacheKey];
 		}
 
 		return null;
 	}
 
-	public function getActualByEntity(LinkEntityType $entitytype, int $entityId): ?InvitationLink
+	public function getActualByEntity(LinkEntityType $entityType, int $entityId): ?InvitationLink
 	{
 		$subFilter = Query::filter()
 			->logic('or')
@@ -39,7 +48,7 @@ class InvitationLinkRepository implements InvitationLinkRepositoryContract
 			->whereNull('EXPIRED_AT');
 
 		$model = InvitationLinkTable::query()
-			->where('ENTITY_TYPE', $entitytype->value)
+			->where('ENTITY_TYPE', $entityType->value)
 			->where('ENTITY_ID', $entityId)
 			->where($subFilter)
 			->setLimit(1)
@@ -77,6 +86,8 @@ class InvitationLinkRepository implements InvitationLinkRepositoryContract
 	{
 		$result = InvitationLinkTable::delete($id);
 
+		static::$entityCache = [];
+
 		return $result->isSuccess();
 	}
 
@@ -107,12 +118,17 @@ class InvitationLinkRepository implements InvitationLinkRepositoryContract
 		;
 		$createdAt = $entity->getCreatedAt() !== null ? $entity->getCreatedAt() : new DateTime();
 
-		return $model->setEntityId($entity->getEntityId())
+		$model->setEntityId($entity->getEntityId())
 			->setEntityType($entity->getEntityType()->value)
 			->setCode($entity->getCode())
-			->setId($entity->getId())
 			->setCreatedBy($createdBy)
 			->setCreatedAt($createdAt)
 			->setExpiredAt($entity->getExpiredAt());
+		 if ((int)$entity->getId() > 0)
+		 {
+			 $model->setId($entity->getId());
+		 }
+
+		 return $model;
 	}
 }

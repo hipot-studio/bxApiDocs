@@ -407,7 +407,6 @@ class CBPFixResultActivity extends BaseActivity
 	{
 		if (!self::checkResultViewRights($result, $workflowId, $userId))
 		{
-
 			return RenderedResult::makeNoRights();
 		}
 
@@ -417,7 +416,6 @@ class CBPFixResultActivity extends BaseActivity
 				$user = UserTable::getById($result['USER_ID'])->fetchObject();
 				if (!$user)
 				{
-
 					return RenderedResult::makeNoResult();
 				}
 

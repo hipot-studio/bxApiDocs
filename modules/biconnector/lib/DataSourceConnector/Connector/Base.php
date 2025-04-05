@@ -124,7 +124,14 @@ abstract class Base
 		{
 			foreach ($parameters['fields'] as $field)
 			{
-				$fieldName = trim($field['name'], " \t\n\r");
+				if (!is_array($field))
+				{
+					$result->addError(new Error('INVALID_SELECT_FIELDS_FORMAT'));
+
+					return $result;
+				}
+
+				$fieldName = trim($field['name'] ?? '', " \t\n\r");
 				if ($fieldName && isset($tableFields[$fieldName]))
 				{
 					$tableField = $tableFields[$fieldName];

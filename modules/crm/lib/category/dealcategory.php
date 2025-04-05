@@ -1155,21 +1155,6 @@ class DealCategory
 		return $results;
 	}
 
-	/**
-	 * Check if user may read deal categories.
-	 * @param \CCrmPerms|null $userPermissions
-	 * @return bool
-	 */
-	public static function checkReadPermission($userPermissions = null)
-	{
-		if(!$userPermissions)
-		{
-			$userPermissions =  \CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		return $userPermissions->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE');
-	}
-
 	public static function getPermissionById(int $id)
 	{
 		$permissionEntity = DealCategory::convertToPermissionEntityType($id);

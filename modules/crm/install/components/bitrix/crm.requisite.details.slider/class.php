@@ -154,11 +154,14 @@ class CrmRequisiteDetailsSliderComponent extends Bitrix\Crm\Component\Base
 
 	protected function checkPermissions(): void
 	{
-		$canRead = $this->userPermissions->checkReadPermissions(
-			$this->entityTypeId,
-			$this->entityId,
-			$this->entityId <= 0 ? $this->categoryId : null,
-		);
+		if ($this->entityId > 0)
+		{
+			$canRead = $this->userPermissions->item()->canRead($this->entityTypeId, $this->entityId);
+		}
+		else
+		{
+			$canRead = $this->userPermissions->entityType()->canReadItemsInCategory($this->entityTypeId, (int)$this->categoryId);
+		}
 
 		$permissionToken = $this->request->get('permissionToken') ?? '';
 		$canEdit = PermissionToken::canEditRequisites(

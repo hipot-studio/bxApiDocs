@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Service;
 use Bitrix\Crm\Activity\Provider\ProviderManager;
 use Bitrix\Crm\Activity\TodoCreateNotification;
 use Bitrix\Crm\Category\Entity\Category;
+use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Cleaning\CleaningManager;
 use Bitrix\Crm\Conversion\EntityConversionConfig;
 use Bitrix\Crm\Counter\EntityCounterSettings;
@@ -481,7 +482,7 @@ abstract class Factory
 			}
 		}
 
-		$parameters = $userPermissions->applyAvailableItemsGetListParameters(
+		$parameters = $userPermissions->itemsList()->applyAvailableItemsGetListParameters(
 			$parameters,
 			$entityTypes,
 			$operation,
@@ -493,7 +494,10 @@ abstract class Factory
 	protected function collectEntityTypesForPermissions(array &$filter, ?int $userId = null): array
 	{
 		$userPermissions = Container::getInstance()->getUserPermissions($userId);
-		$entityTypes = [$userPermissions::getPermissionEntityType($this->getEntityTypeId())];
+		$permissionEntityTypeHelper = new PermissionEntityTypeHelper($this->getEntityTypeId());
+		$entityTypes = [
+			$permissionEntityTypeHelper->getPermissionEntityTypeForCategory(0)
+		];
 		if ($this->isCategoriesSupported())
 		{
 			$entityTypes = [];
@@ -515,10 +519,7 @@ abstract class Factory
 				{
 					if($categoryId >= 0)
 					{
-						$entityTypes[] = $userPermissions::getPermissionEntityType(
-							$this->getEntityTypeId(),
-							$categoryId
-						);
+						$entityTypes[] = $permissionEntityTypeHelper->getPermissionEntityTypeForCategory($categoryId);
 					}
 				}
 			}
@@ -529,7 +530,7 @@ abstract class Factory
 				$availableCategoriesIds = [];
 				foreach ($categories as $category)
 				{
-					if (!$userPermissions->canReadTypeInCategory($this->getEntityTypeId(), $category->getId()))
+					if (!$userPermissions->entityType()->canReadItemsInCategory($this->getEntityTypeId(), $category->getId()))
 					{
 						$shouldStrictByCategories = true;
 					}
@@ -537,10 +538,7 @@ abstract class Factory
 					{
 						$availableCategoriesIds[] = $category->getId();
 					}
-					$entityTypes[] = $userPermissions::getPermissionEntityType(
-						$this->getEntityTypeId(),
-						$category->getId()
-					);
+					$entityTypes[] = $permissionEntityTypeHelper->getPermissionEntityTypeForCategory($category->getId());
 				}
 
 				if ($shouldStrictByCategories && !empty($availableCategoriesIds))
@@ -627,7 +625,7 @@ abstract class Factory
 		$filter = $params['filter'] ?? [];
 
 		$entityTypes = $this->collectEntityTypesForPermissions($filter, $userId);
-		$filter = Container::getInstance()->getUserPermissions($userId)->applyAvailableItemsFilter(
+		$filter = Container::getInstance()->getUserPermissions($userId)->itemsList()->applyAvailableItemsFilter(
 			$filter,
 			$entityTypes,
 			$operation
@@ -888,13 +886,17 @@ abstract class Factory
 		{
 			return null;
 		}
+		if (!$item->isNew()) // for existing items stage shouldn't be changed
+		{
+			return $item->getStageId();
+		}
+
 		$categoryId = $this->isCategoriesSupported() ? $item->getCategoryId() : 0;
 		$stages = $this->getStages($categoryId);
-		$startStageId = $userPermissions->getStartStageId(
+		$startStageId = $userPermissions->stage()->getFirstAvailableForAddStageId(
 			$this->getEntityTypeId(),
-			$stages,
 			$categoryId,
-			$item->isNew() ? $userPermissions::OPERATION_ADD : $userPermissions::OPERATION_UPDATE
+			$stages
 		);
 
 		if ($startStageId)
@@ -2082,7 +2084,7 @@ abstract class Factory
 		$filter = $parameters['filter'] ?? [];
 		$select = $parameters['select'] ?? [];
 
-		if (count($filter) === 1 && $this->isFilterContainField($filter, Item::FIELD_NAME_ID))
+		if (count($filter) === 1 && $this->isFilterContainStrictFilterByField($filter, Item::FIELD_NAME_ID))
 		{
 			return true;
 		}
@@ -2095,15 +2097,26 @@ abstract class Factory
 		return false;
 	}
 
-	private function isFilterContainField(array $array, string $field): bool
+	private function isFilterContainStrictFilterByField(array $array, string $field): bool
 	{
 		$keys = array_keys($array);
+
+		$sqlWhere = new \CSQLWhere();
 		foreach ($keys as $key)
 		{
-			// remove any special symbols from $key
-			$key = preg_replace('/[^a-zA-Z0-9_]/', '', $key);
-
-			if ($key === $field)
+			$filterCondition = $sqlWhere->MakeOperation($key);
+			if (
+				$filterCondition['FIELD'] === $field
+				&& in_array(
+					$filterCondition['OPERATION'],
+					[
+						'I', // '=ID'
+						'SE', // '==ID'
+						'E', // 'ID'
+						'IN', // '@ID'
+					]
+				)
+			)
 			{
 				return true;
 			}
@@ -2129,6 +2142,15 @@ abstract class Factory
 	}
 
 	public function isCommunicationRoutingSupported(): bool
+	{
+		return false;
+	}
+
+	/**
+	 * returns true if entity does not use crm permissions interfaces to manage roles and permissions
+	 * @return bool
+	 */
+	public function hasCustomPermissionsUI(): bool
 	{
 		return false;
 	}

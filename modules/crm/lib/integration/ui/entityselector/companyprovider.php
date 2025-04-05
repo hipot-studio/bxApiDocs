@@ -46,7 +46,7 @@ class CompanyProvider extends EntityProvider
 
 	public function getRecentItemIds(string $context): array
 	{
-		if($this->enableMyCompanyOnly || $this->excludeMyCompany || $this->isFilterByIds())
+		if ($this->enableMyCompanyOnly || $this->excludeMyCompany || $this->isFilterByIds())
 		{
 			$ids = CompanyTable::getList([
 				'select' => ['ID'],
@@ -55,6 +55,10 @@ class CompanyProvider extends EntityProvider
 				],
 				'filter' => $this->getCompanyFilter(),
 			])->fetchCollection()->getIdList();
+		}
+		elseif ($this->notLinkedOnly)
+		{
+			$ids = $this->getNotLinkedEntityIds();
 		}
 		else
 		{
@@ -90,7 +94,14 @@ class CompanyProvider extends EntityProvider
 			'=CATEGORY_ID' =>  $this->categoryId,
 		];
 
-		return array_merge($filter, $this->getCompanyFilter(), $this->getEmailFilters());
+		$filter = array_merge($filter, $this->getCompanyFilter(), $this->getEmailFilters());
+
+		if ($this->notLinkedOnly)
+		{
+			$filter = $this->getNotLinkedFilter();
+		}
+
+		return $filter;
 	}
 
 	private function getCompanyFilter(): array

@@ -124,7 +124,7 @@ class DashboardDataProvider extends EntityDataProvider
 				],
 				'items' => [
 					'SYSTEM' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TYPE_SYSTEM'),
-					'MARKET' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TYPE_MARKET'),
+					'MARKET' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TYPE_MARKET_MSGVER_1'),
 					'CUSTOM' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TYPE_CUSTOM'),
 				],
 			];

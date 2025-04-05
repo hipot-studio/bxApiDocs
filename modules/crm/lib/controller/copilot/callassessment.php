@@ -35,7 +35,7 @@ final class CallAssessment extends Base
 		?string $eventId = null
 	): Result
 	{
-		if (!Container::getInstance()->getUserPermissions()->canEditCopilotCallAssessmentSettings())
+		if (!Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canEdit())
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 
@@ -142,7 +142,7 @@ final class CallAssessment extends Base
 
 	public function activeAction(int $id, string $isEnabled): Result
 	{
-		if (!Container::getInstance()->getUserPermissions()->canEditCopilotCallAssessmentSettings())
+		if (!Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canEdit())
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 
@@ -174,7 +174,7 @@ final class CallAssessment extends Base
 
 	public function deleteAction(int $id): Result
 	{
-		if (!Container::getInstance()->getUserPermissions()->canEditCopilotCallAssessmentSettings())
+		if (!Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canEdit())
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 

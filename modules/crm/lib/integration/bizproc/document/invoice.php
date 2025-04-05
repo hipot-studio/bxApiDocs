@@ -286,7 +286,7 @@ class Invoice extends \CCrmDocument implements \IBPWorkflowDocument
 		return $arResult;
 	}
 
-	static public function GetDocument($documentId)
+	static public function GetDocument($documentId, $documentType = null, array $select = [])
 	{
 		$arDocumentID = static::GetDocumentInfo($documentId);
 		if (empty($arDocumentID))
@@ -295,7 +295,10 @@ class Invoice extends \CCrmDocument implements \IBPWorkflowDocument
 		$arResult = null;
 
 		//TODO: use new API
-		$invoiceFields = \CCrmInvoice::GetByID($arDocumentID['ID'], false);
+		$invoiceFields = \CCrmInvoice::GetList(
+			arFilter: ['ID' => $arDocumentID['ID'], 'CHECK_PERMISSIONS' => 'N'],
+			arSelectFields: $select
+		);
 
 		if ($invoiceFields)
 		{

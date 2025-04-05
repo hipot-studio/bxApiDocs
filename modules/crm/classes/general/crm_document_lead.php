@@ -21,13 +21,14 @@ class CCrmDocumentLead extends CCrmDocument
 		return $arResult;
 	}
 
-	public static function GetDocument($documentId)
+	public static function GetDocument($documentId, $documentType = null, array $select = [])
 	{
 		$documentInfo = static::GetDocumentInfo($documentId);
 
 		return new Crm\Integration\BizProc\Document\ValueCollection\Lead(
 			CCrmOwnerType::Lead,
-			$documentInfo['ID']
+			$documentInfo['ID'],
+			$select
 		);
 	}
 

@@ -33,7 +33,16 @@ final class DeleteFromTopMenuAction extends BaseAction
 			return null;
 		}
 
-		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.deleteFromTopMenu({$dashboardId})";
+		$url = $rawFields['DETAIL_URL'];
+		if (!$url)
+		{
+			return null;
+		}
+
+		$url .= (str_contains($url, '?') ? '&' : '?')
+			. 'openFrom=menu';
+
+		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.deleteFromTopMenu({$dashboardId}, `{$url}`)";
 
 		$result = parent::getControl($rawFields);
 		$result['ACTION_ID'] = self::getId();

@@ -19,15 +19,29 @@ class MarketAppUpdater
 
 	private function needToCheckUpdates(): bool
 	{
+		if (Option::get('biconnector', MarketDashboardManager::DASHBOARD_INSTALLING_IN_PROGRESS_OPTION_NAME, 'N') === 'Y')
+		{
+			return false;
+		}
+
 		$lastChecked = Option::get('biconnector', 'last_time_dashboard_check_update', 0);
 		if ($lastChecked <= 0)
 		{
 			return true;
 		}
 
+		$isNoDashboards = !SupersetDashboardTable::getList([
+			'select' => ['ID'],
+			'filter' => ['=TYPE' => SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM]
+		])->fetch();
+		if ($isNoDashboards)
+		{
+			return true;
+		}
+
 		$time = DateTime::createFromTimestamp((int)$lastChecked);
 
-		return (new DateTime())->getDiff($time)->d > 1;
+		return (new DateTime())->getDiff($time)->d >= 1;
 	}
 
 	/**
@@ -87,6 +101,7 @@ class MarketAppUpdater
 			'filter' => [
 				'=APP.ACTIVE' => 'Y',
 				'=APP.INSTALLED' => 'Y',
+				'=STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_READY,
 			],
 			'cache' => ['ttl' => 3600],
 		])->fetchAll();

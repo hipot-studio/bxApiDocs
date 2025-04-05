@@ -9,28 +9,37 @@ class Deal extends Base
 	protected $contactDocument;
 	protected $companyDocument;
 
-	public function loadValue(string $fieldId): void
+	protected function processField(string $fieldId): bool
 	{
 		if ($fieldId === 'CONTACT_IDS')
 		{
 			$this->document['CONTACT_IDS'] = Crm\Binding\DealContactTable::getDealContactIDs($this->id);
+
+			return true;
 		}
-		elseif ($fieldId === 'ORDER_IDS')
+
+		if ($fieldId === 'ORDER_IDS')
 		{
 			$this->loadOrderIdValues();
+
+			return true;
 		}
-		elseif (strpos($fieldId, 'CONTACT.') === 0)
+
+		if (strpos($fieldId, 'CONTACT.') === 0)
 		{
 			$this->loadContactFieldValue($fieldId);
+
+			return true;
 		}
-		elseif (strpos($fieldId, 'COMPANY.') === 0)
+
+		if (strpos($fieldId, 'COMPANY.') === 0)
 		{
 			$this->loadCompanyFieldValue($fieldId);
+
+			return true;
 		}
-		else
-		{
-			$this->loadEntityValues();
-		}
+
+		return false;
 	}
 
 	protected function loadEntityValues(): void
@@ -48,7 +57,7 @@ class Deal extends Base
 			],
 			false,
 			false,
-			['*']
+			$this->select
 		);
 
 		$this->document = array_merge($this->document, $result->fetch() ?: []);

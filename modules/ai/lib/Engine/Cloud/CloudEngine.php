@@ -3,26 +3,38 @@ declare(strict_types=1);
 
 namespace Bitrix\AI\Engine\Cloud;
 
+use Bitrix\AI\Container;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Cache\EngineResultCache;
 use Bitrix\AI\Cloud;
 use Bitrix\AI\Engine\IEngine;
+use Bitrix\AI\Integration\Baas\BaasTokenService;
+use Bitrix\AI\Limiter\Enums\ErrorLimit;
 use Bitrix\AI\Payload\Prompt;
 use Bitrix\AI\Payload\Text;
 use Bitrix\AI\QueueJob;
 use Bitrix\AI\Result;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Loader;
 use function call_user_func;
 use function is_callable;
 
 abstract class CloudEngine extends Engine\Engine implements IEngine
 {
-
 	public const CLOUD_REGISTRATION_NOT_FOUND = 'CLOUD_REGISTRATION_DATA_NOT_FOUND';
 
 	protected const AGREEMENT_CODE = 'AI_BOX_AGREEMENT';
+
+	protected const SLIDER_CODE_REQUESTS = 'limit_copilot_requests_box';
+	protected const SLIDER_CODE_BOOST = 'limit_boost_copilot_box';
+	protected const SLIDER_CODE_BOX = 'limit_copilot_box';
+
+	protected const ERROR_CODE_LIMIT_STANDARD = 'LIMIT_IS_EXCEEDED_MONTHLY';
+	protected const ERROR_CODE_LIMIT_BAAS = 'LIMIT_IS_EXCEEDED_BAAS';
 
 	public function checkLimits(): bool
 	{
@@ -60,6 +72,11 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 		return $data;
 	}
 
+	/**
+	 * @throws LoaderException
+	 * @throws SystemException
+	 * @throws ArgumentException
+	 */
 	final public function completionsInQueue(): void
 	{
 		if ($this->payload->shouldUseCache())
@@ -105,6 +122,7 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 			'url' => $this->getCompletionsUrl(),
 			'params' => $this->makeRequestParams(),
 		]);
+
 		if ($responseResult->isSuccess())
 		{
 			if (is_callable($this->onSuccessCallback))
@@ -125,28 +143,15 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 
 		$errorCollection = $responseResult->getErrorCollection();
 		/** @see \Bitrix\AiProxy\Controller\Query::ERROR_CODE_EXCEEDED_LIMIT */
-		if ($errorCollection->getErrorByCode('exceeded_limit'))
+		$errorLimit = $errorCollection->getErrorByCode('exceeded_limit');
+		if ($errorLimit !== null)
 		{
-			$this->queueJob->cancel();
-
-			$error = new Error(
-				Loc::getMessage('AI_ENGINE_ERROR_LIMIT_IS_EXCEEDED'),
-				'LIMIT_IS_EXCEEDED_MONTHLY',
-				[
-					'sliderCode' => 'limit_copilot_requests_box',
-				]
-			);
-
-			call_user_func(
-				$this->onErrorCallback,
-				$error
-			);
+			$this->initErrorLimit($errorLimit);
+			return;
 		}
-		else
-		{
-			$error = $errorCollection[0];
-			$this->onResponseError($error->getMessage(), (string)$error->getCode());
-		}
+
+		$error = $errorCollection[0];
+		$this->onResponseError($error->getMessage(), (string)$error->getCode());
 	}
 
 	final public function completions(): void
@@ -173,6 +178,87 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 		);
 
 		return $name->getValue() ?? $this->getDefaultModel();
+	}
+
+	/**
+	 * @throws LoaderException
+	 */
+	protected function initErrorLimit(Error $errorLimit): void
+	{
+		$this->queueJob->cancel();
+
+		[$showSliderWithMsg, $sliderCode, $errorCode, $msgForIm] = $this->getErrorsLimitRules($errorLimit);
+
+		$error = new Error(
+			Loc::getMessage('AI_ENGINE_ERROR_LIMIT_IS_EXCEEDED'),
+			$errorCode,
+			[
+				'sliderCode' => $sliderCode,
+				'showSliderWithMsg' => $showSliderWithMsg,
+				'msgForIm' => $msgForIm,
+			]
+		);
+
+		call_user_func(
+			$this->onErrorCallback,
+			$error
+		);
+	}
+
+	/**
+	 * @param Error $errorLimit
+	 * @return array
+	 */
+	protected function getErrorsLimitRules(Error $errorLimit): array
+	{
+		$errorData = $errorLimit->getCustomData();
+		$isAvailableBaas = $this->isAvailableBaas();
+		$errorCode = $this->getSliderCode($errorData, $isAvailableBaas);
+		$sliderCode = static::SLIDER_CODE_REQUESTS;
+
+		$msgForIm = Loc::getMessage(
+			'AI_ENGINE_ERROR_LIMIT_IS_EXCEEDED_WITH_MORE',
+			[
+				'#LINK#' => '/online/?FEATURE_PROMOTER=' . $sliderCode,
+			]
+		);
+
+		if (empty($errorData['baasAvailable'])) {
+			return [false, $sliderCode, $errorCode, $msgForIm];
+		}
+
+		$sliderCode = $isAvailableBaas ? static::SLIDER_CODE_BOOST : static::SLIDER_CODE_BOX;
+
+		$msgForIm = Loc::getMessage(
+			'AI_ENGINE_ERROR_LIMIT_BAAS',
+			[
+				'#LINK#' => '/online/?FEATURE_PROMOTER=' . $sliderCode,
+			]
+		);
+
+		return [!$isAvailableBaas, $sliderCode, $errorCode, $msgForIm];
+	}
+
+	protected function isAvailableBaas(): bool
+	{
+		/** @var BaasTokenService $baasTokenService */
+		$baasTokenService = Container::init()->getItem(BaasTokenService::class);
+
+		return $baasTokenService->isAvailable();
+	}
+
+	protected function getSliderCode(array $errorData, bool $isAvailableBaas)
+	{
+		if (empty($errorData['errorLimitType']))
+		{
+			return static::ERROR_CODE_LIMIT_STANDARD;
+		}
+
+		if ($isAvailableBaas) {
+			return static::ERROR_CODE_LIMIT_BAAS;
+		}
+
+		return $errorData['errorLimitType'];
 	}
 
 	abstract protected function getDefaultModel(): string;

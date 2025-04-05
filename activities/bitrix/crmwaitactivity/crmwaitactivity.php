@@ -58,9 +58,15 @@ class CBPCrmWaitActivity extends CBPActivity
 
 		if ($waitType === static::WAIT_TYPE_BEFORE)
 		{
-			$document = CBPRuntime::GetRuntime()
-				->GetService('DocumentService')
-				->GetDocument($documentId);
+			$documentService = CBPRuntime::GetRuntime()->GetService('DocumentService');
+			if (defined('\CBPDocument::PARAM_USED_DOCUMENT_FIELDS'))
+			{
+				$document = $documentService->GetDocument($documentId, select: [$targetField]);
+			}
+			else
+			{
+				$document = $documentService->GetDocument($documentId);
+			}
 
 			if (!isset($document[$targetField]))
 			{

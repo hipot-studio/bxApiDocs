@@ -1003,7 +1003,7 @@ class CCrmAdminPageController extends \CBitrixComponent implements Controllerabl
 			];
 		}
 
-		if ($isAdmin || !$userPermissions->havePerm('WEBFORM', BX_CRM_PERM_NONE, 'READ'))
+		if ($isAdmin ||	\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->webForm()->canRead())
 		{
 			$webformsUrl = SITE_DIR . 'crm/webform/';
 

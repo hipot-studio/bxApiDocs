@@ -11,39 +11,62 @@ class Order extends Base
 	protected $contactDocument;
 	protected $companyDocument;
 
-	public function loadValue(string $fieldId): void
+	protected function processField(string $fieldId): bool
 	{
 		if (strpos($fieldId, 'CONTACT.') === 0)
 		{
 			$this->loadContactFieldValue($fieldId);
+
+			return true;
 		}
-		elseif (strpos($fieldId, 'COMPANY.') === 0)
+
+		if (strpos($fieldId, 'COMPANY.') === 0)
 		{
 			$this->loadCompanyFieldValue($fieldId);
+
+			return true;
 		}
-		elseif (strpos($fieldId, 'SHOP_') === 0)
+
+		if (strpos($fieldId, 'SHOP_') === 0)
 		{
 			$this->loadShopValues();
+
+			return true;
 		}
-		elseif (strpos($fieldId, 'SHIPPING.') === 0)
+
+		if (strpos($fieldId, 'SHIPPING.') === 0)
 		{
 			$this->loadShippingValues();
+
+			return true;
 		}
-		elseif (strpos($fieldId, 'RESPONSIBLE_ID.') === 0)
+
+		if (strpos($fieldId, 'RESPONSIBLE_ID.') === 0)
 		{
 			$this->loadAssignedByValues('RESPONSIBLE_ID', 'RESPONSIBLE_ID', false);
+
+			return true;
 		}
-		else
-		{
-			$this->loadEntityValues();
-		}
+
+		return false;
 	}
 
 	protected function getOrder(): ?Crm\Order\Order
 	{
 		if ($this->order === null)
 		{
-			$this->order = Crm\Order\Order::load($this->id);
+			$list = Crm\Order\Order::loadByFilter([
+				'filter' => ['ID' => $this->id],
+				'select' => $this->select
+			]);
+			if (!empty($list) && is_array($list))
+			{
+				$this->order = reset($list);
+
+				return $this->order;
+			}
+
+			$this->order = null;
 		}
 
 		return $this->order;

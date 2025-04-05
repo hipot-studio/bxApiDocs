@@ -15,6 +15,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Workflow\PaymentStage;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
 
 class CCrmViewHelper
@@ -1990,7 +1991,6 @@ class CCrmViewHelper
 
 		$isTresholdPassed = false;
 
-		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
 		$successStageID = CCrmDeal::GetSuccessStageID($categoryId);
 		$failureStageID = CCrmDeal::GetFailureStageID($categoryId);
 		$preparedDealStages = self::PrepareDealStages($categoryId);
@@ -2006,7 +2006,7 @@ class CCrmViewHelper
 				'sort' => intval($stage['SORT']),
 				'color' => isset($stage['COLOR']) ? $stage['COLOR'] : '',
 				'stagesToMove' => $stage['STAGES_TO_MOVE'] ?? [],
-				'allowMoveToAnyStage' => $canWriteConfig,
+				'allowMoveToAnyStage' => Container::getInstance()->getUserPermissions()->item()->canChangeStageToAny(CCrmOwnerType::Deal),
 			);
 
 			if($stage['STATUS_ID'] === $successStageID)
@@ -2109,7 +2109,6 @@ class CCrmViewHelper
 	{
 		$result = array();
 		$isThresholdPassed = false;
-		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
 
 		$preparedLeadStatuses = self::PrepareLeadStatuses();
 		(new StagePermissions(CCrmOwnerType::Lead, null))
@@ -2124,7 +2123,7 @@ class CCrmViewHelper
 				'sort' => intval($status['SORT']),
 				'color' => isset($status['COLOR']) ? $status['COLOR'] : '',
 				'stagesToMove' => $status['STAGES_TO_MOVE'] ?? [],
-				'allowMoveToAnyStage' => $canWriteConfig,
+				'allowMoveToAnyStage' => Container::getInstance()->getUserPermissions()->item()->canChangeStageToAny(CCrmOwnerType::Lead),
 			);
 
 			if($status['STATUS_ID'] === 'CONVERTED')
@@ -2185,7 +2184,6 @@ class CCrmViewHelper
 	{
 		$result = array();
 		$isTresholdPassed = false;
-		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
 
 		foreach(self::PrepareInvoiceStatuses() as $status)
 		{
@@ -2217,7 +2215,7 @@ class CCrmViewHelper
 			}
 
 			$info['stagesToMove'] = ($status['STAGES_TO_MOVE'] ?? []);
-			$info['allowMoveToAnyStage'] = $canWriteConfig;
+			$info['allowMoveToAnyStage'] = Container::getInstance()->getUserPermissions()->item()->canChangeStageToAny(CCrmOwnerType::Invoice);
 
 			$result[] = $info;
 		}
@@ -2678,6 +2676,8 @@ class CCrmViewHelper
 			$converterId = $arParams['CONVERTER_ID'];
 		}
 
+		$loadingMessage = Loc::getMessage('CRM_STAGE_UPDATE_LOADING_NOTIFICATION_MESSAGE');
+
 		return $registrationScript.'<div class="crm-list-stage-bar'.$wrapperClass.'" '.$wrapperStyle.' id="'.htmlspecialcharsbx($controlID).'"><table class="crm-list-stage-bar-table"><tr>'
 			.$stepHtml
 			.'</tr></table>'
@@ -2700,6 +2700,7 @@ class CCrmViewHelper
 			.', "readOnly":'.($isReadOnly ? 'true' : 'false')
 			.', "enableCustomColors":'.($enableCustomColors ? 'true' : 'false')
 			.', "converterId":"' . CUtil::JSEscape($converterId) . '"'
+			.', "loadingNotificationMessage":"' . CUtil::JSEscape($loadingMessage) . '"'
 			.' }));})})</script>'
 			.'</div>'.$legendHtml;
 	}
@@ -2997,7 +2998,7 @@ class CCrmViewHelper
 	{
 		$result = array();
 		$isTresholdPassed = false;
-		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
+		$isAdmin = Container::getInstance()->getUserPermissions()->isCrmAdmin();
 
 		$preparedOrderShipmentStatuses = self::PrepareOrderShipmentStatuses();
 		StagePermissions::fillAllPermissionsByStages($preparedOrderShipmentStatuses);
@@ -3010,7 +3011,7 @@ class CCrmViewHelper
 				'sort' => intval($status['SORT']),
 				'color' => isset($status['COLOR']) ? $status['COLOR'] : '',
 				'stagesToMove' => $status['STAGES_TO_MOVE'] ?? [],
-				'allowMoveToAnyStage' => $canWriteConfig,
+				'allowMoveToAnyStage' => $isAdmin,
 			);
 
 			if($status['STATUS_ID'] === 'DF')
@@ -3052,7 +3053,7 @@ class CCrmViewHelper
 	{
 		$result = array();
 		$isTresholdPassed = false;
-		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
+		$isAdmin = Container::getInstance()->getUserPermissions()->isCrmAdmin();
 
 		$preparedOrderStatuses = self::PrepareOrderStatuses();
 		StagePermissions::fillAllPermissionsByStages($preparedOrderStatuses);
@@ -3065,7 +3066,7 @@ class CCrmViewHelper
 				'sort' => intval($status['SORT']),
 				'color' => isset($status['COLOR']) ? $status['COLOR'] : '',
 				'stagesToMove' => $status['STAGES_TO_MOVE'] ?? [],
-				'allowMoveToAnyStage' => $canWriteConfig,
+				'allowMoveToAnyStage' => $isAdmin,
 			);
 
 			if($status['STATUS_ID'] === 'F')
@@ -3118,7 +3119,6 @@ class CCrmViewHelper
 	{
 		$result = array();
 		$isTresholdPassed = false;
-		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
 
 		$preparedQuoteStatuses = self::PrepareQuoteStatuses();
 		(new StagePermissions(CCrmOwnerType::Quote, null))
@@ -3133,7 +3133,7 @@ class CCrmViewHelper
 				'sort' => intval($status['SORT']),
 				'color' => isset($status['COLOR']) ? $status['COLOR'] : '',
 				'stagesToMove' => $status['STAGES_TO_MOVE'] ?? [],
-				'allowMoveToAnyStage' => $canWriteConfig,
+				'allowMoveToAnyStage' => Container::getInstance()->getUserPermissions()->item()->canChangeStageToAny(CCrmOwnerType::Quote),
 			);
 
 			if($status['STATUS_ID'] === 'APPROVED')
@@ -3171,17 +3171,18 @@ class CCrmViewHelper
 			.'</script>';
 	}
 
-	private static function PrepareItemStatusesByCategoryId($entityTypeId, $categoryId): array
+	private static function prepareItemStatusesByCategoryId($entityTypeId, $categoryId): array
 	{
 		$result = [];
 
 		$isFinalFailurePassed = false;
-		$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
 
 		$preparedItemsStatuses = self::PrepareItemsStatuses($entityTypeId, $categoryId);
 		(new StagePermissions($entityTypeId, $categoryId))
 			->fill($preparedItemsStatuses)
 		;
+
+		$allowMoveToAnyStage = Container::getInstance()->getUserPermissions()->item()->canChangeStageToAny($entityTypeId);
 
 		foreach ($preparedItemsStatuses as $status)
 		{
@@ -3192,7 +3193,7 @@ class CCrmViewHelper
 				'color' => $status['COLOR'] ?? '',
 				'semantics' => $status['SEMANTICS'],
 				'stagesToMove' => $status['STAGES_TO_MOVE'] ?? [],
-				'allowMoveToAnyStage' => $canWriteConfig || UserPermissions::isAlwaysAllowedEntity($entityTypeId),
+				'allowMoveToAnyStage' => $allowMoveToAnyStage,
 			];
 
 			if ($status['SEMANTICS'] === 'F')
@@ -3211,28 +3212,23 @@ class CCrmViewHelper
 		}
 		return $result;
 	}
-	public static function RenderItemStatusSettings($entityTypeId, $categoryId): string
+	public static function RenderItemStatusSettings(int $entityTypeId, ?int $categoryId): string
 	{
-		if (!isset($categoryId))
-		{
-			$categoryId = '0';
-		}
-
 		$result = [];
 		$factory = Container::getInstance()->getFactory($entityTypeId);
-		if ($categoryId === '0')
+		if (is_null($categoryId))
 		{
 			foreach ($factory->getCategories() as $category)
 			{
 				$categoryId = $category->getId();
 				$typeId = 'category_'.$categoryId;
-				$result[$typeId] = self::PrepareItemStatusesByCategoryId($entityTypeId, $categoryId);
+				$result[$typeId] = self::prepareItemStatusesByCategoryId($entityTypeId, $categoryId);
 			}
 		}
 		else
 		{
 			$typeId = 'category_'.$categoryId;
-			$result[$typeId] = self::PrepareItemStatusesByCategoryId($entityTypeId, $categoryId);
+			$result[$typeId] = self::prepareItemStatusesByCategoryId($entityTypeId, $categoryId);
 		}
 
 		$messages = [

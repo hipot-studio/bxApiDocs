@@ -1,34 +1,40 @@
 <?php
 
-use Bitrix\Main\Localization\Loc;
+use Bitrix\Intranet\CurrentUser;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Intranet\License;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\Config\Option;
-use \Bitrix\Main\Type\Date;
-use Bitrix\Bitrix24;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
+{
 	die();
+}
 
-class CIntranetLicenseWidgetComponent extends CBitrixComponent
+class IntranetLicenseWidgetComponent extends \CBitrixComponent
 {
 	public function executeComponent(): void
 	{
-		//This task is frozen for now
-		return;
-		if (!(
-			CurrentUser::get()->getId() > 0
-			&& !(Loader::includeModule('extranet') && \CExtranet::isExtranetSite())
-			&& ($license = \Bitrix\Main\Application::getInstance()->getLicense())
-			&& ($license->isDemo() || $license->isTimeBound())
-		))
+		if (!CurrentUser::get()->canDoOperation('bitrix24_config'))
 		{
 			return;
 		}
 
-		$this->arResult['isDemo'] = $license->isDemo();
-		$this->arResult['expireDate'] = $license->getExpireDate();
+		if (Loader::includeModule('extranet') && \CExtranet::IsExtranetSite())
+		{
+			return;
+		}
 
+		try
+		{
+			$this->arResult['CONTENT'] = (new License\Widget())->getContentCollection();
+		}
+		catch (ArgumentException)
+		{
+			return;
+		}
+
+		global $APPLICATION;
+		$APPLICATION->SetPageProperty('HeaderClass', 'intranet-header--with-controls');
 		$this->includeComponentTemplate();
 	}
 }

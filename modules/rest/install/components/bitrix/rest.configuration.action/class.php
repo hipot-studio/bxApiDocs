@@ -61,8 +61,14 @@ class CRestConfigurationActionComponent extends CBitrixComponent
 
 		if ($this->arParams['MP_LOAD_PATH'])
 		{
+			$langMarket = Loc::getMessage('REST_CONFIGURATION_ACTION_TITLE_LOAD_MARKETPLACE_2');
+			if (\Bitrix\Rest\Integration\Market\Label::isRenamedMarket())
+			{
+				$langMarket = Loc::getMessage('REST_CONFIGURATION_ACTION_TITLE_LOAD_MARKETPLACE_2_MSGVER_1');
+			}
+
 			$result['ITEMS'][] = [
-				'title' => Loc::getMessage('REST_CONFIGURATION_ACTION_TITLE_LOAD_MARKETPLACE_2'),
+				'title' => $langMarket,
 				'link' => $this->arParams['MP_LOAD_PATH'],
 				'icon' => '/bitrix/images/rest/configuration/rest-market-site-download.svg'
 			];

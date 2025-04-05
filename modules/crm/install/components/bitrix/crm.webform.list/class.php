@@ -196,36 +196,6 @@ class CCrmWebFormListComponent extends \CBitrixComponent
 			'description' => Loc::getMessage('TASKS_GRID_STUB_NO_DATA_DESCRIPTION'),
 		];
 		$this->arResult['SHOW_PLUGINS'] = false;
-		$this->arResult['USER_CONSENT_EMAIL'] = '';
-
-		$userOptionViewType = 'webform_list_view';
-		$userViewTypes = \CUserOptions::GetOption('crm', $userOptionViewType, array());
-		$this->arResult['HIDE_DESC'] = ($userViewTypes['hide-desc'] ?? 'N') == 'Y';
-
-		$this->arResult['HIDE_DESC_FZ152'] = true;
-		if (in_array(Main\Application::getInstance()->getLicense()->getRegion(), ['ru', 'by']))
-		{
-			$notifyOptions = \CUserOptions::GetOption('crm', 'notify_webform', array());
-			$this->arResult['HIDE_DESC_FZ152'] = (is_array($notifyOptions) && $notifyOptions['ru_fz_152'] == 'Y');
-
-			$user = UserTable::getList(array(
-				'select' => array('EMAIL'),
-				'filter' => array(
-					'=ID' => array_slice(\CGroup::getGroupUser(1), 0, 200),
-					'=ACTIVE' => 'Y'
-				),
-				'limit' => 1
-			))->fetch();
-			if ($user && $user['EMAIL'])
-			{
-				$email = $user['EMAIL'];
-			}
-			else
-			{
-				$email = Option::get('main', 'email_from', '');
-			}
-			$this->arResult['USER_CONSENT_EMAIL'] = $email;
-		}
 		$this->arResult['RESTRICTION_POPUP'] = \Bitrix\Crm\Restriction\RestrictionManager::getWebformLimitRestriction()->preparePopupScript();
 	}
 
@@ -1060,15 +1030,13 @@ class CCrmWebFormListComponent extends \CBitrixComponent
 			return;
 		}
 
-		/**@var $USER \CUser*/
-		global $USER;
-		$CrmPerms = new CCrmPerms($USER->GetID());
-		if($CrmPerms->HavePerm('WEBFORM', BX_CRM_PERM_NONE))
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->webForm()->canRead())
 		{
 			ShowError(Loc::getMessage('CRM_PERMISSION_DENIED'));
 			return;
 		}
-		$this->arResult['PERM_CAN_EDIT'] = !$CrmPerms->HavePerm('WEBFORM', BX_CRM_PERM_NONE, 'WRITE');
+
+		$this->arResult['PERM_CAN_EDIT'] = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->webForm()->canEdit();
 
 		$this->prepareParams();
 

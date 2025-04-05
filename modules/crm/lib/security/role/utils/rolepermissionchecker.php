@@ -27,7 +27,7 @@ class RolePermissionChecker
 		$isMinAttribute = $isFirstLevelPermission && $permissionModel->attribute() === $permissionEntity->getMinAttributeValue();
 		$isMinSettings =
 			($isFirstLevelPermission && $permissionModel->settings() === $permissionEntity->getMinSettingsValue())
-			|| (!$isFirstLevelPermission && $permissionModel->settings() === [Transition::TRANSITION_INHERIT])
+			|| (!$isFirstLevelPermission && $permissionModel->settings() === [\Bitrix\Crm\Service\UserPermissions::SETTINGS_INHERIT])
 		;
 
 		return

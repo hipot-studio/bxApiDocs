@@ -9,7 +9,6 @@ use Bitrix\Crm;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Category\EditorHelper;
 use Bitrix\Crm\Component\EntityDetails\Traits;
-use Bitrix\Crm\Controller\Action\Entity\SearchAction;
 use Bitrix\Crm\Conversion\LeadConversionWizard;
 use Bitrix\Crm\EntityAddress;
 use Bitrix\Crm\Format\AddressFormatter;
@@ -1025,7 +1024,6 @@ class CCrmContactDetailsComponent
 					'info' => 'CLIENT_INFO',
 					'fixedLayoutType' => 'COMPANY',
 					'enableCompanyMultiplicity' => true,
-					'lastCompanyInfos' => 'LAST_COMPANY_INFOS',
 					'companyLegend' => Loc::getMessage('CRM_CONTACT_FIELD_COMPANY_LEGEND'),
 					'loaders' => array(
 						'primary' => array(
@@ -1937,24 +1935,6 @@ class CCrmContactDetailsComponent
 			);
 		}
 		$this->entityData['CLIENT_INFO'] = array('COMPANY_DATA' => $companyData);
-
-		if ($this->enableSearchHistory)
-		{
-			$categoryParams = CCrmComponentHelper::getEntityClientFieldCategoryParams(
-				CCrmOwnerType::Contact,
-				(int)($this->arResult['CATEGORY_ID'] ?? $this->getCategoryId())
-			);
-			$this->entityData['LAST_COMPANY_INFOS'] = SearchAction::prepareSearchResultsJson(
-				Crm\Controller\Entity::getRecentlyUsedItems(
-					'crm.contact.details',
-					'company',
-					[
-						'EXPAND_ENTITY_TYPE_ID' => CCrmOwnerType::Company,
-						'EXPAND_CATEGORY_ID' => $categoryParams[CCrmOwnerType::Company]['categoryId'],
-					]
-				)
-			);
-		}
 
 		//endregion
 

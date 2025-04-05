@@ -284,7 +284,7 @@ class Sign
 			?->getId()
 		;
 
-		return (new UserPermissions($userId))->checkAddPermissions(
+		return \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions($userId)->entityType()->canAddItemsInCategory(
 			\CCrmOwnerType::SmartDocument,
 			$defaultSmartDocumentCategory
 		);
@@ -298,11 +298,10 @@ class Sign
 		}
 
 		$documentGeneratorDriver = \Bitrix\DocumentGenerator\Driver::getInstance();
-		if (!$documentGeneratorDriver->getUserPermissions()->canViewDocuments())
+		if (!$documentGeneratorDriver->getUserPermissions($userId)->canViewDocuments())
 		{
 			return false;
 		}
-		$userPermission = new UserPermissions($userId);
 
 		$dealId = $this->getDealIdByDocument($documentId);
 		if ($dealId === null)
@@ -310,7 +309,7 @@ class Sign
 			return false;
 		}
 
-		return $userPermission->checkUpdatePermissions(
+		return \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions($userId)->item()->canUpdate(
 			\CCrmOwnerType::Deal,
 			$dealId,
 		);

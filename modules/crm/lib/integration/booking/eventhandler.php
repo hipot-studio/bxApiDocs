@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\Integration\Booking;
 
-use Bitrix\Booking\Integration\Booking\ProviderInterface;
+use Bitrix\Booking\Interfaces\ProviderInterface;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Crm\Activity;
@@ -28,7 +28,7 @@ class EventHandler
 			return;
 		}
 
-		Activity\Provider\Booking::onBookingAdded($event->getParameter('booking')->toArray());
+		Activity\Provider\Booking\Booking::onBookingAdded($event->getParameter('booking')->toArray());
 	}
 
 	public static function onBookingUpdate(Event $event): void
@@ -40,7 +40,7 @@ class EventHandler
 
 		$updatedBooking = $event->getParameter('booking');
 
-		Activity\Provider\Booking::onBookingUpdated($updatedBooking->toArray());
+		Activity\Provider\Booking\Booking::onBookingUpdated($updatedBooking->toArray());
 	}
 
 	public static function onBookingDelete(Event $event): void
@@ -50,6 +50,43 @@ class EventHandler
 			return;
 		}
 
-		Activity\Provider\Booking::onBookingDeleted($event->getParameter('bookingId'));
+		Activity\Provider\Booking\Booking::onBookingDeleted($event->getParameter('bookingId'));
+	}
+
+	public static function onWaitListItemAdd(Event $event): void
+	{
+		if (!Loader::includeModule('booking'))
+		{
+			return;
+		}
+
+		Activity\Provider\Booking\WaitListItem::onWaitListItemAdded(
+			$event->getParameter('waitListItem')->toArray()
+		);
+	}
+
+	public static function onWaitListItemUpdate(Event $event): void
+	{
+		if (!Loader::includeModule('booking'))
+		{
+			return;
+		}
+
+		Activity\Provider\Booking\WaitListItem::onWaitListItemUpdated(
+			$event->getParameter('waitListItem')->toArray()
+		);
+	}
+
+	public static function onWaitListItemDelete(Event $event): void
+	{
+		if (!Loader::includeModule('booking'))
+		{
+			return;
+		}
+
+		Activity\Provider\Booking\WaitListItem::onWaitListItemDeleted(
+			$event->getParameter('waitListItem')->toArray(),
+			$event->getParameter('removedBy'),
+		);
 	}
 }

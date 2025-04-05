@@ -7,6 +7,7 @@ use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment;
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessmentTable;
 use Bitrix\Crm\Copilot\PullManager;
+use Bitrix\Crm\Copilot\CallAssessment\EntitySelector\PullManager as ScriptSelectorPullManager;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
@@ -64,6 +65,8 @@ final class CopilotCallAssessmentController
 					'eventId' => $context->getEventId(),
 				]);
 			}
+
+			(new ScriptSelectorPullManager())->dispatchUpdateById($id);
 		}
 
 		return $result;

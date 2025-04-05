@@ -2,10 +2,8 @@
 
 namespace Bitrix\Intranet\Settings;
 
-use Bitrix\Bitrix24\Feature;
 use Bitrix\Intranet\Integration;
 use Bitrix\Intranet\MainPage;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 
 class MainPageSettings extends AbstractSettings
@@ -22,7 +20,7 @@ class MainPageSettings extends AbstractSettings
 		$mainPageUrl = new MainPage\Url();
 		$integrationManager = new Integration\Landing\MainPage\Manager();
 		$publisher = new MainPage\Publisher();
-		$isMainpageEnable = Loader::includeModule('bitrix24') && Feature::isFeatureEnabled('main_page');
+		$isMainpageEnable = (new MainPage\Access)->canView();
 
 		$componentClass = \CBitrixComponent::includeComponentClass('bitrix:landing.base');
 		if ($componentClass)

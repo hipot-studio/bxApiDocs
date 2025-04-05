@@ -6,20 +6,23 @@ use Bitrix\Crm;
 
 class Lead extends Base
 {
-	protected function loadValue(string $fieldId): void
+	protected function processField(string $fieldId): bool
 	{
 		if ($fieldId === 'CONTACT_IDS')
 		{
 			$this->document['CONTACT_IDS'] = Crm\Binding\LeadContactTable::getLeadContactIDs($this->id);
+
+			return true;
 		}
-		elseif ($fieldId === 'COMPANY_TITLE')
+
+		if ($fieldId === 'COMPANY_TITLE')
 		{
 			$this->loadCompanyTitle();
+
+			return true;
 		}
-		else
-		{
-			$this->loadEntityValues();
-		}
+
+		return false;
 	}
 
 	protected function loadEntityValues(): void
@@ -37,7 +40,7 @@ class Lead extends Base
 			],
 			false,
 			false,
-			['*']
+			$this->select
 		);
 
 
@@ -56,15 +59,20 @@ class Lead extends Base
 			Crm\LeadAddress::mapEntityFields($this->document)
 		);
 
-		$statuses = \CCrmStatus::GetStatusList('STATUS');
-		$statusId = $this->document['STATUS_ID'] ?? '';
-		$this->document['STATUS_ID_PRINTABLE'] = $statusId && isset($statuses[$statusId]) ? $statuses[$statusId] : '';
+		if (isset($this->document['STATUS_ID']))
+		{
+			$statuses = \CCrmStatus::GetStatusList('STATUS');
+			$statusId = $this->document['STATUS_ID'] ?? '';
+			$this->document['STATUS_ID_PRINTABLE'] = $statusId && isset($statuses[$statusId]) ? $statuses[$statusId] : '';
+		}
 
 		$this->loadFmValues();
 		$this->loadUserFieldValues();
 
 		$this->document = Crm\Entity\CommentsHelper::prepareFieldsFromBizProc($this->typeId, $this->id, $this->document);
 	}
+
+
 
 	protected function loadCompanyTitle(): void
 	{

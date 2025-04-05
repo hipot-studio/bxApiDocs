@@ -715,6 +715,7 @@ class ActivityController extends EntityController
 			Activity\Provider\Bizproc\Workflow::getId(),
 			Activity\Provider\Bizproc\Comment::getId(),
 			Activity\Provider\Bizproc\Task::getId(),
+			Activity\Provider\Booking\WaitListItem::getId(),
 		];
 	}
 

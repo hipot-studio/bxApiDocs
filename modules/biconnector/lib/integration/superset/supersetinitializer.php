@@ -16,12 +16,15 @@ use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\DashboardManager;
 use Bitrix\BIConnector\ExternalSource\DatasetManager;
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetTable;
+use Bitrix\BIConnector\ExternalSource\Source\Csv;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Rest\AppTable;
 
 final class SupersetInitializer
@@ -155,12 +158,12 @@ final class SupersetInitializer
 					SupersetDashboardTable::update($dashboardInfo['ID'], [
 						'STATUS' => SupersetDashboardTable::DASHBOARD_STATUS_LOAD,
 					]);
-				}
 
-				$notifyList[] = [
-					'id' => $dashboardInfo['ID'],
-					'status' => SupersetDashboardTable::DASHBOARD_STATUS_LOAD,
-				];
+					$notifyList[] = [
+						'id' => $dashboardInfo['ID'],
+						'status' => SupersetDashboardTable::DASHBOARD_STATUS_LOAD,
+					];
+				}
 			}
 
 			DashboardManager::notifyBatchDashboardStatus($notifyList);
@@ -489,10 +492,24 @@ final class SupersetInitializer
 
 		foreach (DatasetManager::getList() as $dataset)
 		{
-			$deleteDatasetResult = DatasetManager::delete($dataset->getId());
-			if (!$deleteDatasetResult->isSuccess())
+			// Don't use DatasetManager::delete because it uses events
+			$datasetDeleteResult = ExternalDatasetTable::delete($dataset->getId());
+			if ($datasetDeleteResult->isSuccess())
 			{
-				Logger::logErrors($deleteDatasetResult->getErrors(), ['clearSupersetData, deleting dataset ' . $dataset->getId()]);
+				$connection = Application::getInstance()->getConnection();
+				$tableName = Csv::TABLE_NAME_PREFIX . $dataset->getName();
+				try
+				{
+					$connection->query(sprintf('DROP TABLE IF EXISTS `%s`;', $tableName));
+				}
+				catch (SqlQueryException $exception)
+				{
+					Logger::logErrors([new Error($exception->getMessage())], ['clearSupersetData, deleting dataset ' . $dataset->getId()]);
+				}
+			}
+			else
+			{
+				Logger::logErrors($datasetDeleteResult->getErrors(), ['clearSupersetData, deleting dataset ' . $dataset->getId()]);
 			}
 		}
 

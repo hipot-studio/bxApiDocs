@@ -103,14 +103,14 @@ abstract class ItemList extends Base
 
 		if ($this->category)
 		{
-			$canReadThisCategory = $this->userPermissions->canReadTypeInCategory(
+			$canReadThisCategory = $this->userPermissions->entityType()->canReadItemsInCategory(
 				$this->entityTypeId,
 				$this->category->getId()
 			);
 		}
 		else
 		{
-			$canReadThisCategory = $this->userPermissions->canReadType($this->entityTypeId);
+			$canReadThisCategory = $this->userPermissions->entityType()->canReadItems($this->entityTypeId);
 		}
 		if (!$canReadThisCategory)
 		{
@@ -119,7 +119,7 @@ abstract class ItemList extends Base
 				// if user can not read current category, but can read some another - make the redirect there.
 				foreach ($this->factory->getCategories() as $category)
 				{
-					if ($this->userPermissions->canReadTypeInCategory($this->entityTypeId, $category->getId()))
+					if ($this->userPermissions->entityType()->canReadItemsInCategory($this->entityTypeId, $category->getId()))
 					{
 						LocalRedirect(
 							$this->router->getItemListUrlInCurrentView(
@@ -229,7 +229,7 @@ abstract class ItemList extends Base
 			$isDefaultCategory = true;
 		}
 
-		$isEnabled = $container->getUserPermissions()->checkAddPermissions(
+		$isEnabled = $container->getUserPermissions()->entityType()->canAddItemsInCategory(
 			$this->entityTypeId,
 			$category?->getId()
 		);
@@ -253,7 +253,7 @@ abstract class ItemList extends Base
 
 		if ($this->factory->isCategoriesEnabled())
 		{
-			$categories = $this->userPermissions->filterAvailableForReadingCategories(
+			$categories = $this->userPermissions->category()->filterAvailableForReadingCategories(
 				$this->factory->getCategories()
 			);
 			if (
@@ -295,7 +295,7 @@ abstract class ItemList extends Base
 		// a bit of hardcode to avoid components copying
 		if (
 			$this->entityTypeId === \CCrmOwnerType::SmartInvoice
-			&& Container::getInstance()->getUserPermissions()->canReadType(\CCrmOwnerType::Invoice)
+			&& Container::getInstance()->getUserPermissions()->entityType()->canReadItems(\CCrmOwnerType::Invoice)
 		)
 		{
 			if (!InvoiceSettings::getCurrent()->isOldInvoicesEnabled())
@@ -382,7 +382,7 @@ abstract class ItemList extends Base
 	{
 		$categories = $this->factory->getCategories();
 
-		return array_values(array_filter($categories, [$this->userPermissions, 'canAddItemsInCategory']));
+		return $this->userPermissions->category()->filterAvailableForAddingCategories($categories);
 	}
 
 	protected function getToolbarSettingsItems(): array
@@ -390,7 +390,7 @@ abstract class ItemList extends Base
 		$settingsItems = [];
 
 		$userPermissions = $this->userPermissions;
-		if ($userPermissions->canUpdateType((int)$this->entityTypeId))
+		if ($userPermissions->dynamicType()->canUpdate((int)$this->entityTypeId))
 		{
 			$settingsItems[] = [
 				'text' => Loc::getMessage('CRM_TYPE_TYPE_SETTINGS'),
@@ -788,7 +788,7 @@ abstract class ItemList extends Base
 
 		if ($this->category && $this->category->getCode())
 		{
-			$builder->setP2WithValueNormalization('category', $this->category->getCode());
+			$builder->setP3WithValueNormalization('category', $this->category->getCode());
 		}
 	}
 	//@codingStandardsIgnoreEnd

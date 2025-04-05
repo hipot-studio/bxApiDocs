@@ -109,7 +109,7 @@ final class SetStage extends Base
 		if ($this->progress->hasSuccessIds())
 		{
 			$successStatus = $builder
-				->setP2('ids', implode(',', $this->progress->getSuccessIds()))
+				->setP2('id', implode(',', $this->progress->getSuccessIds()))
 				->setStatus(Dictionary::STATUS_SUCCESS)
 			;
 
@@ -119,7 +119,7 @@ final class SetStage extends Base
 		if ($this->progress->hasErrorIds())
 		{
 			$errorStatus = $builder
-				->setP2('ids', implode(',', $this->progress->getErrorIds()))
+				->setP2('id', implode(',', $this->progress->getErrorIds()))
 				->setStatus(Dictionary::STATUS_ERROR)
 			;
 

@@ -9,6 +9,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UserGroupTable;
 use Bitrix\Main\Web\Json;
+use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 
 final class SystemDashboardManager
 {
@@ -109,7 +110,16 @@ final class SystemDashboardManager
 		if (Loader::includeModule('im'))
 		{
 			$title = htmlspecialcharsbx($dashboard->getTitle());
-			$link = "<a href='/bi/dashboard/detail/{$dashboard->getId()}/'>{$title}</a>";
+			$urlService = new UrlParameter\Service($dashboard);
+			if ($urlService->isExistScopeParams())
+			{
+				$link = $title;
+			}
+			else
+			{
+				$url = $urlService->getEmbeddedUrl();
+				$link = "<a href='{$url}' target='_blank'>{$title}</a>";
+			}
 
 			$notificationCode = $isModification
 				? 'BICONNECTOR_USER_NOTIFICATION_SYSTEM_DASHBOARD_MODIFICATION'

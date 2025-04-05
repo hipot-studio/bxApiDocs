@@ -61,9 +61,6 @@ class EditorAdapter
 	public const FIELD_PARENT_PREFIX = 'PARENT_ID_';
 	public const FIELD_MY_COMPANY_DATA_NAME = 'MYCOMPANY_ID_DATA';
 	public const FIELD_MY_COMPANY_DATA_INFO = 'MYCOMPANY_ID_INFO';
-
-	public const LAST_COMPANY_INFOS = 'LAST_COMPANY_INFOS';
-	public const LAST_CONTACT_INFOS = 'LAST_CONTACT_INFOS';
 	public const LAST_MYCOMPANY_INFOS = 'LAST_MYCOMPANY_INFOS';
 
 	public const CONTROLLER_PRODUCT_LIST = 'PRODUCT_LIST';
@@ -608,7 +605,7 @@ class EditorAdapter
 						if ($info['SETTINGS']['enableCreationByOwnerEntity'] ?? false)
 						{
 							$myCompanyFieldWithEditor['data']['enableCreation'] =
-								Container::getInstance()->getUserPermissions()->getMyCompanyPermissions()->canAddByOwnerEntity($ownerEntityTypeId);
+								Container::getInstance()->getUserPermissions()->myCompany()->canAddByOwnerEntity($ownerEntityTypeId);
 						}
 					}
 					if (($info['SETTINGS']['usePermissionToken'] ?? false) && $ownerEntityTypeId)
@@ -738,7 +735,7 @@ class EditorAdapter
 			{
 				$field['placeholders']['creation'] = $number;
 			}
-			if (Container::getInstance()->getUserPermissions()->canWriteConfig())
+			if (Container::getInstance()->getUserPermissions()->isCrmAdmin())
 			{
 				$numerator = $fieldObject->getNumerator();
 				if ($numerator)
@@ -901,8 +898,6 @@ class EditorAdapter
 				'categoryParams' => $categoryParams,
 				'map' => ['data' => $fieldDataName],
 				'info' => $fieldName . '_INFO',
-				'lastCompanyInfos' => static::LAST_COMPANY_INFOS,
-				'lastContactInfos' => static::LAST_CONTACT_INFOS,
 				'loaders' => [
 					'primary' => [
 						CCrmOwnerType::CompanyName => [
@@ -1649,7 +1644,7 @@ class EditorAdapter
 
 		if ($entityTypeId === \CCrmOwnerType::Company && \CCrmCompany::isMyCompany($entityId))
 		{
-			$canRead = Container::getInstance()->getUserPermissions()->getMyCompanyPermissions()->canReadBaseFields($entityId);
+			$canRead = Container::getInstance()->getUserPermissions()->myCompany()->canReadBaseFields($entityId);
 		}
 		else
 		{
@@ -1928,18 +1923,6 @@ class EditorAdapter
 					$isFirstContact
 				);
 				$isFirstContact = false;
-			}
-		}
-
-		if ($this->isSearchHistoryEnabled)
-		{
-			$lastClientInfoMap = [
-				static::LAST_COMPANY_INFOS => CCrmOwnerType::Company,
-				static::LAST_CONTACT_INFOS => CCrmOwnerType::Contact,
-			];
-			foreach ($lastClientInfoMap as $arrayKey => $entityTypeId)
-			{
-				$clientEntityData[$arrayKey] = $this->getRecentlyUsedItems($entityTypeId, $componentName, $item->getEntityTypeId());
 			}
 		}
 
@@ -2478,7 +2461,7 @@ class EditorAdapter
 				'affectedFields' => [$infoName],
 				'enableMyCompanyOnly' => true,
 				'enableRequisiteSelection' => true,
-				'enableCreation' => Container::getInstance()->getUserPermissions()->getMyCompanyPermissions()->canAdd(),
+				'enableCreation' => Container::getInstance()->getUserPermissions()->myCompany()->canAdd(),
 				'typeId' => CCrmOwnerType::Company,
 				'compound' => [
 					[
@@ -2592,7 +2575,7 @@ class EditorAdapter
 	 */
 	public function saveMyCompanyDataFromEmbeddedEditor(Item $item, string $json): Result
 	{
-		$myCompanyPermissions = Container::getInstance()->getUserPermissions()->getMyCompanyPermissions();
+		$myCompanyPermissions = Container::getInstance()->getUserPermissions()->myCompany();
 		$canEditMyCompany = $item->isNew()
 			? $myCompanyPermissions->canAddByOwnerEntity($item->getEntityTypeId())
 			: $myCompanyPermissions->canUpdateByOwnerEntity($item->getEntityTypeId(), $item->getId())

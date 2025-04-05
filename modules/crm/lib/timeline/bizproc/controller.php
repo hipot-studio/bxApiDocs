@@ -13,12 +13,11 @@ use Bitrix\Crm\Timeline\Bizproc\Data\CommentStatus;
 use Bitrix\Crm\Timeline\TimelineEntry\Facade;
 use Bitrix\Crm\Activity\Provider;
 use Bitrix\Crm\Service\Timeline\Item\Bizproc\Workflow;
+use Bitrix\Main\Analytics\AnalyticsEvent;
 
 final class Controller extends Timeline\Controller
 {
 	use Workflow;
-
-	private ?int $responsibleId = null;
 
 	public function onWorkflowStatusChange(Timeline\Bizproc\Dto\WorkflowStatusChangedDto $request): void
 	{
@@ -396,6 +395,34 @@ final class Controller extends Timeline\Controller
 			$data = $this->prepareWorkflowData($changedWorkflowStatus->workflow->id);
 			$this->onCreate($data, CategoryType::WORKFLOW_STARTED);
 		}
+
+		$this->sendCreateWorkflowAnalytics($changedWorkflowStatus);
+	}
+
+	private function sendCreateWorkflowAnalytics(ChangedWorkflowStatus $changedWorkflowStatus): void
+	{
+		$trackable = [
+			\CBPDocumentEventType::Manual,
+			\CBPDocumentEventType::Create,
+			\CBPDocumentEventType::Edit,
+		];
+
+		if (!in_array($changedWorkflowStatus->documentEventType, $trackable, true))
+		{
+			return;
+		}
+
+		[$entityTypeId] = \CCrmBizProcHelper::resolveEntityId($changedWorkflowStatus->documentId);
+
+		$event = new AnalyticsEvent('process_run', 'crm', 'bizproc_operations');
+		$event
+			->setSection(strtolower(\CCrmOwnerType::resolveName($entityTypeId)))
+			->setType(
+				$changedWorkflowStatus->documentEventType === \CBPDocumentEventType::Manual ? 'manual' : 'auto'
+			)
+			->setP1('timelineMode_' . ($changedWorkflowStatus->workflow->isWorkflowShowInTimeline() ? 'yes' : 'no'))
+			->send()
+		;
 	}
 
 	public function onCompleteWorkflow(ChangedWorkflowStatus $changedWorkflowStatus): void
@@ -668,13 +695,6 @@ final class Controller extends Timeline\Controller
 
 	private function getResponsibleId(array $documentId): int
 	{
-		if ($this->responsibleId !== null)
-		{
-			return $this->responsibleId;
-		}
-
-		$this->responsibleId = \CCrmBizProcHelper::getDocumentResponsibleId($documentId);
-
-		return $this->responsibleId;
+		return \CCrmBizProcHelper::getDocumentResponsibleId($documentId);
 	}
 }

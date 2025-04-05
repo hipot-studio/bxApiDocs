@@ -839,6 +839,7 @@ class Input
 	}
 
 	/**
+	 * @see \Bitrix\ImOpenLines\Connector::OnReceivedError
 	 * @param $data
 	 * @return Result
 	 */

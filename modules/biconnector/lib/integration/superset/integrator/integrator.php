@@ -57,6 +57,7 @@ final class Integrator
 	private const PROXY_ACTION_LIST_DATASET = '/dataset/list';
 	private const PROXY_ACTION_GET_DATASET = '/dataset/get';
 	private const PROXY_ACTION_CREATE_DATASET = '/dataset/create';
+	private const PROXY_ACTION_UPDATE_DATASET = '/dataset/update';
 	private const PROXY_ACTION_DELETE_DATASET = '/dataset/delete';
 	private const PROXY_ACTION_GET_DATASET_URL = '/dataset/getUrl';
 
@@ -1027,6 +1028,39 @@ final class Integrator
 	}
 
 	/**
+	 * Updates dataset
+	 *
+	 * @param array $fields
+	 * @return IntegratorResponse
+	 */
+	public function updateDataset(int $id, array $fields): IntegratorResponse
+	{
+		$parameters = [];
+
+		if (isset($fields['table_name']))
+		{
+			$parameters['table_name'] = $fields['table_name'];
+		}
+
+		if (isset($fields['columns']))
+		{
+			$parameters['columns'] = $fields['columns'];
+		}
+
+		return
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_UPDATE_DATASET)
+				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
+				->setParams([
+					'id' => $id,
+					'fields' => $parameters,
+				])
+				->perform()
+			;
+	}
+
+	/**
 	 * Deletes dataset
 	 *
 	 * @param int $id
@@ -1115,6 +1149,7 @@ final class Integrator
 			self::PROXY_ACTION_LIST_DATASET => false,
 			self::PROXY_ACTION_GET_DATASET => false,
 			self::PROXY_ACTION_CREATE_DATASET => true,
+			self::PROXY_ACTION_UPDATE_DATASET => true,
 			self::PROXY_ACTION_DELETE_DATASET => true,
 		];
 

@@ -307,6 +307,13 @@ class HrDepartmentRepository implements DepartmentRepositoryContract
 		}
 	}
 
+	/**
+	 * @param int $departmentId
+	 * @return void
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
 	public function delete(int $departmentId): void
 	{
 		Container::getNodeRepository()
@@ -380,7 +387,6 @@ class HrDepartmentRepository implements DepartmentRepositoryContract
 		);
 	}
 
-
 	/**
 	 * @throws ArgumentException
 	 */
@@ -417,7 +423,7 @@ class HrDepartmentRepository implements DepartmentRepositoryContract
 				return NodeActiveFilter::ONLY_GLOBAL_ACTIVE;
 				break;
 		}
-				
+
 		throw new ArgumentException("Unknown active filter");
 	}
 

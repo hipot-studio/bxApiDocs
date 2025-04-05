@@ -313,13 +313,17 @@ class CBPWorkflow
 	/**
 	* Resume the workflow instance and transfer the specified event to it.
 	*
-	* @param mixed $eventName - Event name.
-	* @param mixed $arEventParameters - Event parameters.
+	* @param string $eventName - Event name.
+	* @param array $eventParameters - Event parameters.
 	*/
-	public function sendExternalEvent($eventName, $arEventParameters = array())
+	public function sendExternalEvent(string $eventName, array $eventParameters = [])
 	{
-		$this->AddEventToQueue($eventName, $arEventParameters);
-		$this->Resume();
+		$this->addEventToQueue($eventName, $eventParameters);
+
+		if ($this->getWorkflowStatus() !== CBPWorkflowStatus::Running)
+		{
+			$this->resume();
+		}
 	}
 
 	/***********************  SEARCH ACTIVITY BY NAME  ****************************************************/
@@ -496,7 +500,10 @@ class CBPWorkflow
 
 	protected function runStep(): bool
 	{
-		$this->ProcessQueuedEvents();
+		if (empty($this->activitiesQueue))
+		{
+			$this->ProcessQueuedEvents();
+		}
 
 		$item = array_shift($this->activitiesQueue);
 		if ($item === null)
@@ -762,10 +769,14 @@ class CBPWorkflow
 	public function addEventHandler($eventName, IBPActivityExternalEventListener $eventHandler)
 	{
 		if (!is_array($this->rootActivity->arEventsMap))
-			$this->rootActivity->arEventsMap = array();
+		{
+			$this->rootActivity->arEventsMap = [];
+		}
 
 		if (!array_key_exists($eventName, $this->rootActivity->arEventsMap))
-			$this->rootActivity->arEventsMap[$eventName] = array();
+		{
+			$this->rootActivity->arEventsMap[$eventName] = [];
+		}
 
 		$this->rootActivity->arEventsMap[$eventName][] = $eventHandler;
 	}
@@ -784,17 +795,25 @@ class CBPWorkflow
 	public function removeEventHandler($eventName, IBPActivityExternalEventListener $eventHandler)
 	{
 		if (!is_array($this->rootActivity->arEventsMap))
-			$this->rootActivity->arEventsMap = array();
+		{
+			$this->rootActivity->arEventsMap = [];
+		}
 
 		if (!array_key_exists($eventName, $this->rootActivity->arEventsMap))
-			$this->rootActivity->arEventsMap[$eventName] = array();
+		{
+			$this->rootActivity->arEventsMap[$eventName] = [];
+		}
 
 		$idx = array_search($eventHandler, $this->rootActivity->arEventsMap[$eventName], true);
 		if ($idx !== false)
+		{
 			unset($this->rootActivity->arEventsMap[$eventName][$idx]);
+		}
 
 		if (count($this->rootActivity->arEventsMap[$eventName]) <= 0)
+		{
 			unset($this->rootActivity->arEventsMap[$eventName]);
+		}
 	}
 
 	public function getAvailableStateEvents()

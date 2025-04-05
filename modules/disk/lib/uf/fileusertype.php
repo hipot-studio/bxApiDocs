@@ -352,7 +352,11 @@ final class FileUserType
 
 			$collabService = new CollabService();
 			$collabStorage = $collabService->getCollabStorageByEntity($userField['VALUE_ID'], $userField['ENTITY_ID']);
-			if ($collabStorage)
+
+			if (
+				$collabStorage
+				&& $collabStorage->getFolderForUploadedFiles()?->getId() !== $fileModel->getParentId()
+			)
 			{
 				if (self::isNewUploadedFile($fileModel))
 				{

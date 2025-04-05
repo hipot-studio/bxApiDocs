@@ -1596,8 +1596,8 @@ final class CheckManager
 		}
 
 		$filter = array(
-			'STATUS' => 'Y',
-			'ENTITY_REGISTRY_TYPE' => $entity::getRegistryType()
+			'=STATUS' => 'Y',
+			'=ENTITY_REGISTRY_TYPE' => $entity::getRegistryType()
 		);
 		if ($entity instanceof Sale\Payment)
 		{
@@ -1684,7 +1684,7 @@ final class CheckManager
 	 */
 	public static function getCheckInfoByExternalUuid($uuid)
 	{
-		$dbRes = self::getList(array('filter' => array('EXTERNAL_UUID' => $uuid)));
+		$dbRes = self::getList(array('filter' => array('=EXTERNAL_UUID' => $uuid)));
 		return $dbRes->fetch();
 	}
 

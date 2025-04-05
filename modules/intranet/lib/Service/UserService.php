@@ -30,7 +30,8 @@ class UserService
 		{
 			$ids = $this->intranetUserRepository
 				->findUsersByUserGroup(1)
-				->getIds();
+				->getIds()
+			;
 
 			if ($this->cache->startDataCache())
 			{
@@ -55,7 +56,8 @@ class UserService
 			{
 				$ids = $this->intranetUserRepository
 					->findUsersByUserGroup(\CBitrix24::getIntegratorGroupId())
-					->getIds();
+					->getIds()
+				;
 			}
 
 			if ($this->cache->startDataCache())
@@ -65,6 +67,41 @@ class UserService
 		}
 
 		return $ids;
+	}
+
+	/**
+	 * return timestamp value
+	 *
+	 * @param int $userId
+	 * @return int|null
+	 */
+	public function getLastAuthFromWebTimestamp(int $userId): ?int
+	{
+		$time = (int)\CUserOptions::GetOption('intranet', 'lastWebAuthorizeTime', 0, $userId);
+		if ($time <= 0)
+		{
+			return null;
+		}
+
+		return $time;
+	}
+
+	public function setLastAuthFromWebTimestamp(int $userId): void
+	{
+		\CUserOptions::SetOption('intranet', 'lastWebAuthorizeTime', time(), false, $userId);
+	}
+
+	public function logAuthTimeForNonMobile(int $userId): void
+	{
+		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
+		$clientType = \Bitrix\Intranet\Enum\UserAgentType::fromRequest($request);
+		if (
+			$clientType === \Bitrix\Intranet\Enum\UserAgentType::BROWSER
+			|| $clientType === \Bitrix\Intranet\Enum\UserAgentType::DESKTOP
+		)
+		{
+			$this->setLastAuthFromWebTimestamp($userId);
+		}
 	}
 
 	public function clearCache(): void

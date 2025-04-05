@@ -727,7 +727,7 @@ class Engine
 	 */
 	public function completions(bool $queue = false): void
 	{
-		if (Config::getValue('force_queue') === 'Y' && $this->isNotTranslatePicturePrompt())
+		if (Option::get('ai', 'force_queue', 'Y') === 'Y' && $this->isNotTranslatePicturePrompt())
 		{
 			$queue = true;
 		}

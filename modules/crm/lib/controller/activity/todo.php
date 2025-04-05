@@ -41,9 +41,7 @@ class ToDo extends Base
 			return null;
 		}
 
-		if (!Container::getInstance()->getUserPermissions()->checkReadPermissions(
-			$itemIdentifier->getEntityTypeId(),
-			$itemIdentifier->getEntityId())
+		if (!Container::getInstance()->getUserPermissions()->item()->canReadItemIdentifier($itemIdentifier)
 		)
 		{
 			$this->setAccessDenied();
@@ -136,7 +134,7 @@ class ToDo extends Base
 	// @todo refactor this
 	public function getClientConfigAction(Item $entity): ?array
 	{
-		if (!Container::getInstance()->getUserPermissions()->canReadItem($entity))
+		if (!Container::getInstance()->getUserPermissions()->item()->canReadItem($entity))
 		{
 			$this->addError(new Error(Loc::getMessage('CRM_ACCESS_DENIED')));
 
@@ -166,7 +164,7 @@ class ToDo extends Base
 		{
 			$clientEntityTypeId = \CCrmOwnerType::Contact;
 			$clientEntityId = $contact->getId();
-			$canReadClient = Container::getInstance()->getUserPermissions()->checkReadPermissions($clientEntityTypeId, $clientEntityId);
+			$canReadClient = Container::getInstance()->getUserPermissions()->item()->canRead($clientEntityTypeId, $clientEntityId);
 
 			if (!$canReadClient)
 			{
@@ -193,7 +191,7 @@ class ToDo extends Base
 		{
 			$clientEntityTypeId = \CCrmOwnerType::Company;
 			$clientEntityId = $company->getId();
-			$canReadClient = Container::getInstance()->getUserPermissions()->checkReadPermissions($clientEntityTypeId, $clientEntityId);
+			$canReadClient = Container::getInstance()->getUserPermissions()->item()->canRead($clientEntityTypeId, $clientEntityId);
 
 			if (!$canReadClient)
 			{
@@ -218,7 +216,8 @@ class ToDo extends Base
 			$clientEntityId = $companyId;
 			$canReadCompany = Container::getInstance()
 				->getUserPermissions()
-				->checkReadPermissions($clientEntityTypeId, $clientEntityId)
+				->item()
+				->canRead($clientEntityTypeId, $clientEntityId)
 			;
 
 			if ($canReadCompany)

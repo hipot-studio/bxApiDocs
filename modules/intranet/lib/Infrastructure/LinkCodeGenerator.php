@@ -11,7 +11,7 @@ use Bitrix\Main\Type\DateTime;
 
 class LinkCodeGenerator
 {
-	const LENGTH_СODE = 15;
+	const LENGTH_CODE = 15;
 	private InvitationLinkRepositoryContract $invitationLinkRepository;
 
 	public function __construct(
@@ -48,7 +48,7 @@ class LinkCodeGenerator
 		$entity = new InvitationLink(
 			$this->entityId,
 			$this->entityType,
-			Random::getString(self::LENGTH_СODE),
+			Random::getString(self::LENGTH_CODE),
 			expiredAt: $expiredDate
 		);
 

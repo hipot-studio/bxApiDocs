@@ -9,6 +9,8 @@ class CBPStateService extends CBPRuntimeService
 {
 	const COUNTERS_CACHE_TAG_PREFIX = 'b_bp_wfi_cnt_';
 
+	protected static array $statesCache = [];
+
 	public function setStateTitle($workflowId, $stateTitle)
 	{
 		$workflowId = trim($workflowId);
@@ -136,6 +138,7 @@ class CBPStateService extends CBPRuntimeService
 		{
 			self::cleanRunningCountersCache($starterUserId);
 		}
+		self::clearStatesCache();
 	}
 
 	public static function deleteWorkflow($workflowId)
@@ -161,6 +164,7 @@ class CBPStateService extends CBPRuntimeService
 		);
 
 		WorkflowStateTable::delete($workflowId);
+		self::clearStatesCache();
 	}
 
 	public function deleteAllDocumentWorkflows($documentId)
@@ -168,8 +172,9 @@ class CBPStateService extends CBPRuntimeService
 		self::DeleteByDocument($documentId);
 	}
 
-	public function onStatusChange($workflowId, $status)
+	public function onStatusChange(string $workflowId, int $status): void
 	{
+		self::clearStatesCache();
 		if ($status == CBPWorkflowStatus::Completed || $status == CBPWorkflowStatus::Terminated)
 		{
 			$info = $this->getWorkflowStateInfo($workflowId);
@@ -239,61 +244,78 @@ class CBPStateService extends CBPRuntimeService
 		]);
 	}
 
-	public static function getDocumentStates($documentId, $workflowId = "")
+	public static function getDocumentStates(array $documentId, array|string $workflowId = ''): array
 	{
 		global $DB;
 
 		[$moduleId, $entity, $ids] = $documentId;
 
-		$idsCondition = [];
-		foreach ((array)$ids as $id)
-		{
-			$idsCondition[] = 'WS.DOCUMENT_ID = \''.$DB->ForSql($id).'\'';
-		}
+		$cacheKey = self::getStatesCacheKey($documentId, $workflowId);
 
-		if (empty($idsCondition))
+		if (!isset(static::$statesCache[$cacheKey]))
 		{
-			return [];
-		}
-
-		$sqlAdditionalFilter = "";
-		if (is_array($workflowId) && count($workflowId) > 0)
-		{
-			$workflowId = array_map(function ($id) use ($DB)
+			$idsCondition = [];
+			foreach ((array)$ids as $id)
 			{
-				return '\''.$DB->ForSql((string)$id).'\'';
-			}, $workflowId);
-			$sqlAdditionalFilter = " AND WS.ID IN (".implode(',', $workflowId).")";
-		}
-		elseif (is_string($workflowId) && $workflowId)
-		{
-			$sqlAdditionalFilter = " AND WS.ID = '".$DB->ForSql(trim($workflowId))."' ";
+				$idsCondition[] = "WS.DOCUMENT_ID = '{$DB->ForSql($id)}'";
+			}
+
+			if (empty($idsCondition))
+			{
+				static::$statesCache[$cacheKey] = [];
+
+				return [];
+			}
+
+			$sqlAdditionalFilter = "";
+			if (is_array($workflowId) && count($workflowId) > 0)
+			{
+				$workflowId = array_map(function($id) use ($DB) {
+					return "'{$DB->ForSql((string)$id)}'";
+				}, $workflowId);
+				$sqlAdditionalFilter = " AND WS.ID IN (" . implode(',', $workflowId) . ")";
+			}
+			elseif (is_string($workflowId) && $workflowId)
+			{
+				$sqlAdditionalFilter = " AND WS.ID = '{$DB->ForSql(trim($workflowId))}' ";
+			}
+
+			$dbResult = $DB->Query(
+				"SELECT WS.ID, WS.WORKFLOW_TEMPLATE_ID, WS.STATE, WS.STATE_TITLE, WS.STATE_PARAMETERS, "
+				. "	"
+				. $DB->DateToCharFunction("WS.MODIFIED", "FULL")
+				. " as MODIFIED, "
+				. "	WS.MODULE_ID, WS.ENTITY, WS.DOCUMENT_ID, "
+				. "	WT.NAME, WT.DESCRIPTION, WP.OBJECT_ID, WP.PERMISSION, WI.STATUS, "
+				. "	WS.STARTED, "
+				. $DB->DateToCharFunction("WS.STARTED", "FULL")
+				. " as STARTED_FORMATTED, WS.STARTED_BY "
+				. "FROM b_bp_workflow_state WS "
+				. "	LEFT JOIN b_bp_workflow_permissions WP ON (WS.ID = WP.WORKFLOW_ID) "
+				. "	LEFT JOIN b_bp_workflow_template WT ON (WS.WORKFLOW_TEMPLATE_ID = WT.ID) "
+				. "	LEFT JOIN b_bp_workflow_instance WI ON (WS.ID = WI.ID) "
+				. "WHERE ("
+				. implode(' OR ', $idsCondition)
+				. ") "
+				. "	AND WS.ENTITY = '"
+				. $DB->ForSql($entity)
+				. "' "
+				. "	AND WS.MODULE_ID "
+				. ($moduleId ? "= '" . $DB->ForSql($moduleId) . "'" : "IS NULL")
+				. " "
+				. $sqlAdditionalFilter
+			);
+
+			$states = [];
+			while ($row = $dbResult->Fetch())
+			{
+				self::extractState($states, $row);
+			}
+
+			static::$statesCache[$cacheKey] = $states;
 		}
 
-		$dbResult = $DB->Query(
-			"SELECT WS.ID, WS.WORKFLOW_TEMPLATE_ID, WS.STATE, WS.STATE_TITLE, WS.STATE_PARAMETERS, ".
-			"	".$DB->DateToCharFunction("WS.MODIFIED", "FULL")." as MODIFIED, ".
-			"	WS.MODULE_ID, WS.ENTITY, WS.DOCUMENT_ID, ".
-			"	WT.NAME, WT.DESCRIPTION, WP.OBJECT_ID, WP.PERMISSION, WI.STATUS, ".
-			"	WS.STARTED, ". $DB->DateToCharFunction("WS.STARTED", "FULL")
-			. " as STARTED_FORMATTED, WS.STARTED_BY ".
-			"FROM b_bp_workflow_state WS ".
-			"	LEFT JOIN b_bp_workflow_permissions WP ON (WS.ID = WP.WORKFLOW_ID) ".
-			"	LEFT JOIN b_bp_workflow_template WT ON (WS.WORKFLOW_TEMPLATE_ID = WT.ID) ".
-			"	LEFT JOIN b_bp_workflow_instance WI ON (WS.ID = WI.ID) ".
-			"WHERE (".implode(' OR ', $idsCondition).") ".
-			"	AND WS.ENTITY = '" . $DB->ForSql($entity) . "' " .
-			"	AND WS.MODULE_ID " . ($moduleId ? "= '" . $DB->ForSql($moduleId) . "'" : "IS NULL") . " ".
-			$sqlAdditionalFilter
-		);
-
-		$arStates = array();
-		while ($arResult = $dbResult->Fetch())
-		{
-			self::extractState($arStates, $arResult);
-		}
-
-		return $arStates;
+		return static::$statesCache[$cacheKey];
 	}
 
 	public static function getIdsByDocument(array $documentId, int $limit = null)
@@ -435,33 +457,39 @@ class CBPStateService extends CBPRuntimeService
 		return false;
 	}
 
-	public static function deleteByDocument($documentId)
+	public static function deleteByDocument(array $documentId): void
 	{
 		global $DB;
 
-		$arDocumentId = CBPHelper::ParseDocumentId($documentId);
-		$users = array();
+		[$moduleId, $entity, $docId] = CBPHelper::ParseDocumentId($documentId);
+		$users = [];
 
-		$dbRes = $DB->Query(
-			"SELECT ID, STARTED_BY ".
-			"FROM b_bp_workflow_state ".
-			"WHERE DOCUMENT_ID = '".$DB->ForSql($arDocumentId[2])."' ".
-			"	AND ENTITY = '".$DB->ForSql($arDocumentId[1])."' ".
-			"	AND MODULE_ID ".(($arDocumentId[0] <> '') ? "= '".$DB->ForSql($arDocumentId[0])."'" : "IS NULL")." "
+		$workflows = $DB->Query(
+			"SELECT ID, STARTED_BY "
+			. "FROM b_bp_workflow_state "
+			. "WHERE DOCUMENT_ID = '"
+			. $DB->ForSql($docId)
+			. "' "
+			. "	AND ENTITY = '"
+			. $DB->ForSql($entity)
+			. "' "
+			. "	AND MODULE_ID "
+			. (($moduleId <> '') ? "= '" . $DB->ForSql($moduleId) . "'" : "IS NULL")
+			. " "
 		);
-		while ($arRes = $dbRes->Fetch())
+		while ($row = $workflows->Fetch())
 		{
 			$DB->Query(
-				"DELETE FROM b_bp_workflow_permissions ".
-				"WHERE WORKFLOW_ID = '".$DB->ForSql($arRes["ID"])."' "
+				"DELETE FROM b_bp_workflow_permissions WHERE WORKFLOW_ID = '{$DB->ForSql($row["ID"])}' "
 			);
 
-			WorkflowStateTable::delete($arRes["ID"]);
+			WorkflowStateTable::delete($row["ID"]);
 
-			if (!empty($arRes['STARTED_BY']))
+			if (!empty($row['STARTED_BY']))
 			{
-				$users[] = $arRes['STARTED_BY'];
+				$users[] = $row['STARTED_BY'];
 			}
+			self::clearStatesCache();
 		}
 
 		self::cleanRunningCountersCache($users);
@@ -484,6 +512,7 @@ class CBPStateService extends CBPRuntimeService
 			"	AND ENTITY = '".$DB->ForSql($arSecondDocumentId[1])."' ".
 			"	AND MODULE_ID = '".$DB->ForSql($arSecondDocumentId[0])."' "
 		);
+		self::clearStatesCache();
 	}
 
 	public static function migrateDocumentType($oldType, $newType, $workflowTemplateIds)
@@ -567,6 +596,7 @@ class CBPStateService extends CBPRuntimeService
 				}
 			}
 		}
+		self::clearStatesCache();
 	}
 
 	public function setStateParameters($workflowId, $arStateParameters = array())
@@ -591,73 +621,56 @@ class CBPStateService extends CBPRuntimeService
 
 	public function addStateParameter($workflowId, $arStateParameter)
 	{
-		global $DB;
-
 		$workflowId = trim($workflowId);
-		if ($workflowId == '')
-			throw new Exception("workflowId");
-
-		$dbResult = $DB->Query(
-			"SELECT STATE_PARAMETERS ".
-			"FROM b_bp_workflow_state ".
-			"WHERE ID = '".$DB->ForSql($workflowId)."' "
-		);
-
-		if ($arResult = $dbResult->Fetch())
+		if (empty($workflowId))
 		{
-			$stateParameters = array();
-			if ($arResult["STATE_PARAMETERS"] <> '')
-				$stateParameters = unserialize($arResult["STATE_PARAMETERS"], ['allowed_classes' => false]);
+			throw new Exception('workflowId');
+		}
+
+		$state = WorkflowStateTable::getByPrimary($workflowId, ['select' => ['STATE_PARAMETERS']])->fetch();
+		if ($state)
+		{
+			$stateParameters = [];
+			if (!empty($state['STATE_PARAMETERS']))
+			{
+				$stateParameters = unserialize($state['STATE_PARAMETERS'], ['allowed_classes' => false]);
+			}
 
 			$stateParameters[] = $arStateParameter;
 
-			$stateParameters = serialize($stateParameters);
-
-			$DB->Query(
-				"UPDATE b_bp_workflow_state SET ".
-				"	STATE_PARAMETERS = ".($stateParameters <> '' ? "'".$DB->ForSql($stateParameters)."'" : "NULL").", ".
-				"	MODIFIED = ".$DB->CurrentTimeFunction()." ".
-				"WHERE ID = '".$DB->ForSql($workflowId)."' "
-			);
+			WorkflowStateTable::update($workflowId, ['STATE_PARAMETERS' => serialize($stateParameters)]);
 		}
 	}
 
 	public function deleteStateParameter($workflowId, $name)
 	{
-		global $DB;
-
 		$workflowId = trim($workflowId);
-		if ($workflowId == '')
-			throw new Exception("workflowId");
-
-		$dbResult = $DB->Query(
-			"SELECT STATE_PARAMETERS ".
-			"FROM b_bp_workflow_state ".
-			"WHERE ID = '".$DB->ForSql($workflowId)."' "
-		);
-
-		if ($arResult = $dbResult->Fetch())
+		if (empty($workflowId))
 		{
-			$stateParameters = array();
-			if ($arResult["STATE_PARAMETERS"] <> '')
-				$stateParameters = unserialize($arResult["STATE_PARAMETERS"], ['allowed_classes' => false]);
+			throw new Exception('workflowId');
+		}
 
-			$ar = array();
-			foreach ($stateParameters as $v)
+		$state = WorkflowStateTable::getByPrimary($workflowId, ['select' => ['STATE_PARAMETERS']])->fetch();
+		if ($state)
+		{
+			$stateParameters = [];
+			if (!empty($state['STATE_PARAMETERS']))
 			{
-				if ($v["NAME"] != $name)
-					$ar[] = $v;
+				$stateParameters = unserialize($state['STATE_PARAMETERS'], ['allowed_classes' => false]);
 			}
 
-			$stateParameters = "";
-			if (count($ar) > 0)
-				$stateParameters = serialize($ar);
+			$newStateParameters = [];
+			foreach ($stateParameters as $parameter)
+			{
+				if ($parameter['NAME'] !== $name)
+				{
+					$newStateParameters[] = $parameter;
+				}
+			}
 
-			$DB->Query(
-				"UPDATE b_bp_workflow_state SET ".
-				"	STATE_PARAMETERS = ".($stateParameters <> '' ? "'".$DB->ForSql($stateParameters)."'" : "NULL").", ".
-				"	MODIFIED = ".$DB->CurrentTimeFunction()." ".
-				"WHERE ID = '".$DB->ForSql($workflowId)."' "
+			WorkflowStateTable::update(
+				$workflowId,
+				['STATE_PARAMETERS' => $newStateParameters ? serialize($newStateParameters) : null]
 			);
 		}
 	}
@@ -708,6 +721,33 @@ class CBPStateService extends CBPRuntimeService
 		{
 			$cache->clean(self::COUNTERS_CACHE_TAG_PREFIX.$userId);
 		}
+	}
+
+	private static function getStatesCacheKey(array $documentId, array|string $workflowId = ''): string
+	{
+		[$moduleId, $entity, $ids] = $documentId;
+		$cacheKey = "$moduleId@$entity@";
+
+		foreach ((array)$ids as $id)
+		{
+			$cacheKey .= "$id@";
+		}
+
+		if (is_array($workflowId))
+		{
+			$cacheKey .= implode('@', $workflowId);
+		}
+		else
+		{
+			$cacheKey .= $workflowId;
+		}
+
+		return $cacheKey;
+	}
+
+	private static function clearStatesCache(): void
+	{
+		static::$statesCache = [];
 	}
 
 	private function fillWorkflowDurationStat(array $workflowStateInfo, int $status)

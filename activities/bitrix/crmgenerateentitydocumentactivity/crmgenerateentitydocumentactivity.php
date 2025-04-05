@@ -285,33 +285,36 @@ class CBPCrmGenerateEntityDocumentActivity
 
 	public function OnExternalEvent($arEventParameters = array())
 	{
-		if($this->DocumentId != $arEventParameters[0])
+		$eventDocumentId = $arEventParameters[0] ?? null;
+		if ((int)$this->DocumentId !== (int)$eventDocumentId)
 		{
 			return;
 		}
-		if ($this->executionStatus != CBPActivityExecutionStatus::Closed)
+
+		if ((int)$this->executionStatus === CBPActivityExecutionStatus::Closed)
 		{
-			$documentData = $arEventParameters[1];
-			if(empty($documentData))
-			{
-				$this->WriteToTrackingService('Transformation Error', 0, CBPTrackingType::Error);
-				$this->Unsubscribe($this);
-				$this->workflow->CloseActivity($this);
-			}
-			else
-			{
-				$bFileId = null;
-				$pdfId = $documentData['pdfId'];
-				if($pdfId > 0)
-				{
-					$bFileId = DocumentGenerator\Model\FileTable::getBFileId($pdfId);
-				}
-				$this->DocumentPdf = $bFileId;
-				$this->WriteToTrackingService(GetMessage("CRM_GEDA_NAME_WAIT_FOR_EVENT_LOG_COMPLETE"));
-				$this->Unsubscribe($this);
-				$this->workflow->CloseActivity($this);
-			}
+			return;
 		}
+
+		$documentData = $arEventParameters[1] ?? [];
+		if (empty($documentData))
+		{
+			$this->WriteToTrackingService('Transformation Error', 0, CBPTrackingType::Error);
+		}
+		else
+		{
+			$bFileId = null;
+			$pdfId = $documentData['pdfId'] ?? null;
+			if ($pdfId > 0)
+			{
+				$bFileId = DocumentGenerator\Model\FileTable::getBFileId($pdfId);
+			}
+			$this->DocumentPdf = $bFileId;
+			$this->WriteToTrackingService(GetMessage('CRM_GEDA_NAME_WAIT_FOR_EVENT_LOG_COMPLETE'));
+		}
+
+		$this->Unsubscribe($this);
+		$this->workflow->CloseActivity($this);
 	}
 
 	public static function GetPropertiesDialog($documentType, $activityName, $arWorkflowTemplate, $arWorkflowParameters, $arWorkflowVariables, $arCurrentValues = null, $formName = '', $popupWindow = null, $siteId = '')

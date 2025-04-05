@@ -7,7 +7,9 @@ use Bitrix\BIConnector\ExternalSource\Internal\EO_ExternalSource;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetField;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetFieldTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetTable;
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsCollection;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
+use Bitrix\BIConnector\ExternalSource\SourceManager;
 use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
@@ -47,11 +49,11 @@ class Source1C extends Base
 		$this->source = $source;
 	}
 
-	public function connect(string $host, string $username, string $password): Result
+	public function connect(ExternalSourceSettingsCollection $settings): Result
 	{
-		$this->host = $host;
-		$this->username = $username;
-		$this->password = $password;
+		$this->host = $settings->getValueByCode('host');
+		$this->username = $settings->getValueByCode('username');
+		$this->password = $settings->getValueByCode('password');
 		$this->requestTimeout = 5;
 
 		$connectResult = $this->get(self::CHECK_CONNECTION_ENDPOINT);
@@ -318,12 +320,6 @@ class Source1C extends Base
 								}
 								$fieldCondition .= '(' . implode(' or ', $valueConditions) . ')';
 							}
-							elseif ($value === false)
-							{
-								// TODO Null operator
-								// $fieldCondition .= $datasetField->getName() . ' is null';
-								// $fieldCondition .=  "isof({$datasetField->getName()}, 'Null')";
-							}
 						}
 						$fieldConditions[] = $fieldCondition;
 					}
@@ -402,13 +398,23 @@ class Source1C extends Base
 	private function getHttpClient(): HttpClient
 	{
 		$client = new HttpClient();
-		$username = $this->username ?? $this->source?->getSettings()->getValueByCode('username');
-		$password = $this->password ?? $this->source?->getSettings()->getValueByCode('password');
+
+		$settings = null;
+		if ($this->source)
+		{
+			$settings = SourceManager::getSourceSettings($this->source);
+		}
+		$username = $this->username ?? $settings?->getValueByCode('username');
+		$password = $this->password ?? $settings?->getValueByCode('password');
 		if ($username && $password)
 		{
 			$client->setAuthorization($username, $password);
 		}
 		$client->setTimeout($this->requestTimeout);
+		if (\Bitrix\Main\Config\Option::get('biconnector', 'allow_local_connections', 'N') !== 'Y')
+		{
+			$client->setPrivateIp(false);
+		}
 
 		return $client;
 	}
@@ -420,7 +426,12 @@ class Source1C extends Base
 			return $this->host;
 		}
 
-		$host = $this->source?->getSettings()->getValueByCode('host') ?? '';
+		$settings = null;
+		if ($this->source)
+		{
+			$settings = SourceManager::getSourceSettings($this->source);
+		}
+		$host = $settings?->getValueByCode('host') ?? '';
 		$this->host = $host;
 
 		return $this->host;

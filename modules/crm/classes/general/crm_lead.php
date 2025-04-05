@@ -30,6 +30,7 @@ use Bitrix\Crm\Tracking;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
 use Bitrix\Crm\UtmTable;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type;
 
 class CAllCrmLead
 {
@@ -50,11 +51,11 @@ class CAllCrmLead
 
 	private static ?\Bitrix\Crm\Entity\Compatibility\Adapter $lastActivityAdapter = null;
 	private static ?Crm\Entity\Compatibility\Adapter $commentsAdapter = null;
+	private static ?Crm\Entity\Compatibility\Adapter\Permissions $permissionsAdapter = null;
 
 	/** @var \Bitrix\Crm\Entity\Compatibility\Adapter */
 	private $compatibilityAdapter;
 
-	public $cPerms = null;
 	protected $bCheckPermission = true;
 	const TABLE_ALIAS = 'L';
 	protected static $TYPE_NAME = 'LEAD';
@@ -66,7 +67,6 @@ class CAllCrmLead
 	function __construct($bCheckPermission = true)
 	{
 		$this->bCheckPermission = $bCheckPermission;
-		$this->cPerms = CCrmPerms::GetCurrentUserPermissions();
 	}
 
 	/**
@@ -172,6 +172,16 @@ class CAllCrmLead
 		}
 
 		return self::$commentsAdapter;
+	}
+
+	private static function getPermissionsAdapter(): Crm\Entity\Compatibility\Adapter\Permissions
+	{
+		if (!self::$permissionsAdapter)
+		{
+			self::$permissionsAdapter = new Crm\Entity\Compatibility\Adapter\Permissions(\CCrmOwnerType::Lead);
+		}
+
+		return self::$permissionsAdapter;
 	}
 
 	// Service -->
@@ -528,7 +538,7 @@ class CAllCrmLead
 				$result['C_ACTIVITY_TYPE_ID'] = ['FIELD' => 'AC.TYPE_ID', 'TYPE' => 'int', 'FROM' => $commonActivityJoin];
 				$result['C_ACTIVITY_PROVIDER_ID'] = ['FIELD' => 'AC.PROVIDER_ID', 'TYPE' => 'string', 'FROM' => $commonActivityJoin];
 
-				$userID = CCrmPerms::GetCurrentUserID();
+				$userID = self::getPermissionsAdapter()->getCurrentUserFromOptions();
 				if($userID > 0)
 				{
 					$activityJoin = CCrmActivity::PrepareJoin($userID, CCrmOwnerType::Lead, 'L', 'A', 'UA', '');
@@ -786,7 +796,7 @@ class CAllCrmLead
 		return is_array($dbRes->Fetch());
 	}
 
-	public static function GetTopIDs($top, $sortType = 'ASC', $userPermissions = null)
+	public static function GetTopIDs($top, $sortType = 'ASC')
 	{
 		$top = (int)$top;
 		if ($top <= 0)
@@ -799,7 +809,6 @@ class CAllCrmLead
 		return \Bitrix\Crm\Entity\Lead::getInstance()->getTopIDs([
 			'order' => ['ID' => $sortType],
 			'limit' => $top,
-			'userPermissions' => $userPermissions
 		]);
 	}
 
@@ -1068,7 +1077,8 @@ class CAllCrmLead
 		$arSqlSearch = array();
 		// check permissions
 		$sSqlPerm = '';
-		if (!CCrmPerms::IsAdmin()
+		if (
+			!self::getPermissionsAdapter()->isAdmin()
 			&& (!array_key_exists('CHECK_PERMISSIONS', $arFilter) ||  $arFilter['CHECK_PERMISSIONS'] !== 'N')
 		)
 		{
@@ -1389,7 +1399,8 @@ class CAllCrmLead
 
 		$queryBuilder = Crm\Service\Container::getInstance()
 			->getUserPermissions($userId)
-			->createListQueryBuilder(self::$TYPE_NAME, $builderOptions)
+			->itemsList()
+			->createQueryBuilder(self::$TYPE_NAME, $builderOptions)
 		;
 
 		return $queryBuilder->buildCompatible();
@@ -1413,8 +1424,7 @@ class CAllCrmLead
 
 		$isRestoration = isset($options['IS_RESTORATION']) && $options['IS_RESTORATION'];
 
-		$userID = isset($options['CURRENT_USER'])
-			? (int)$options['CURRENT_USER'] : CCrmSecurityHelper::GetCurrentUserID();
+		$userID = self::getPermissionsAdapter()->getCurrentUserFromOptions($options);
 
 		if($userID <= 0 && $this->bCheckPermission)
 		{
@@ -1424,10 +1434,17 @@ class CAllCrmLead
 
 		unset($arFields['ID']);
 
+		$movedToBinDateTime = $options['MOVED_TO_BIN_DATETIME'] ?? null;
+		$recyclebinDateTimeConverter = new Crm\Integration\Recyclebin\DateTimeConverter($movedToBinDateTime);
+
 		if(!($isRestoration && isset($arFields['DATE_CREATE'])))
 		{
 			unset($arFields['DATE_CREATE']);
 			$arFields['~DATE_CREATE'] = $DB->CurrentTimeFunction();
+		}
+		elseif ($isRestoration)
+		{
+			$arFields['DATE_CREATE'] = $recyclebinDateTimeConverter->convert($arFields['DATE_CREATE']);
 		}
 
 		if(!($isRestoration && isset($arFields['DATE_MODIFY'])))
@@ -1435,11 +1452,20 @@ class CAllCrmLead
 			unset($arFields['DATE_MODIFY']);
 			$arFields['~DATE_MODIFY'] = $DB->CurrentTimeFunction();
 		}
+		elseif ($isRestoration)
+		{
+			$arFields['DATE_MODIFY'] = $recyclebinDateTimeConverter->convert($arFields['DATE_MODIFY']);
+		}
 
 		if(!($isRestoration && isset($arFields['MOVED_TIME'])))
 		{
 			unset($arFields['MOVED_TIME']);
 		}
+		elseif ($isRestoration)
+		{
+			$arFields['MOVED_TIME'] = $recyclebinDateTimeConverter->convert($arFields['MOVED_TIME']);
+		}
+
 		if(!($isRestoration && isset($arFields['MOVED_BY_ID'])))
 		{
 			unset($arFields['MOVED_BY_ID']);
@@ -1516,29 +1542,32 @@ class CAllCrmLead
 		self::getLastActivityAdapter()->performAdd($arFields, $options);
 		self::getCommentsAdapter()->normalizeFields(null, $arFields);
 
-		$permissionTypeId = (
-			$this->bCheckPermission
-				? Bitrix\Crm\Security\EntityPermissionType::CREATE
-				: Bitrix\Crm\Security\EntityPermissionType::UNDEFINED
-		);
-
 		$arFields['STATUS_ID'] ??= null;
 
 		$viewMode = ($options['ITEM_OPTIONS']['VIEW_MODE'] ?? null);
 
+		$needDetectStage = false;
 		if (
 			$viewMode !== ViewMode::MODE_ACTIVITIES
 			&& !self::IsStatusExists($arFields['STATUS_ID'])
 		)
 		{
-			$arFields['STATUS_ID'] = self::GetStartStatusID($permissionTypeId);
+			$needDetectStage = true;
 		}
 
 		$viewModeActivitiesStatusId = null;
 		if ($viewMode === ViewMode::MODE_ACTIVITIES)
 		{
 			$viewModeActivitiesStatusId = $arFields['STATUS_ID'];
-			$arFields['STATUS_ID'] = self::GetStartStatusID($permissionTypeId);
+			$needDetectStage = true;
+		}
+
+		if ($needDetectStage)
+		{
+			$arFields['STATUS_ID'] = $this->bCheckPermission
+				? self::getPermissionsAdapter()->getFirstAvailableStageIdForAdd(null, array_keys(self::GetStatuses()), $userID)
+				: self::GetStartStatusID()
+			;
 		}
 
 		$isStatusExist = self::IsStatusExists($arFields['STATUS_ID']);
@@ -1557,55 +1586,33 @@ class CAllCrmLead
 			? $arFields['OBSERVER_IDS'] : null;
 		unset($arFields['OBSERVER_IDS']);
 
-		$arAttr = array();
-
-		$arAttr['STATUS_ID'] = $arFields['STATUS_ID'];
-		if (!empty($arFields['OPENED']))
-		{
-			$arAttr['OPENED'] = $arFields['OPENED'];
-		}
-
-		if(!empty($observerIDs))
-		{
-			$arAttr['CONCERNED_USER_IDS'] = $observerIDs;
-		}
-
-		$sPermission = 'ADD';
+		$sPermission = Crm\Service\UserPermissions::OPERATION_ADD;
 		if (isset($arFields['PERMISSION']))
 		{
-			if ($arFields['PERMISSION'] == 'IMPORT')
-				$sPermission = 'IMPORT';
+			if ($arFields['PERMISSION'] == Crm\Service\UserPermissions::OPERATION_IMPORT)
+			{
+				$sPermission = Crm\Service\UserPermissions::OPERATION_IMPORT;
+			}
 			unset($arFields['PERMISSION']);
 		}
+		$permissionAttributesHelper = self::getPermissionsAdapter()->getAttributesHelper($userID, $sPermission);
+		$permissionAttributesHelper
+			->setAssignedById($arFields['ASSIGNED_BY_ID'])
+			->setOpened($arFields['OPENED'] ?? null)
+			->setStageId($arFields['STATUS_ID'])
+			->setConcernedUserIds($observerIDs)
+		;
 
-		$assignedByID = (int)$arFields['ASSIGNED_BY_ID'];
-		if($this->bCheckPermission)
+		if ($this->bCheckPermission)
 		{
-			$arEntityAttr = self::BuildEntityAttr($userID, $arAttr);
-			$userPerms =  $userID == CCrmPerms::GetCurrentUserID() ? $this->cPerms : CCrmPerms::GetUserPermissions($userID);
-			$sEntityPerm = $userPerms->GetPermType('LEAD', $sPermission, $arEntityAttr);
-			if ($sEntityPerm == BX_CRM_PERM_NONE)
+			if (!$permissionAttributesHelper->hasAccess())
 			{
 				$this->LAST_ERROR = GetMessage('CRM_PERMISSION_DENIED');
 				$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
 				return false;
 			}
-
-			if ($sEntityPerm == BX_CRM_PERM_SELF && $assignedByID != $userID)
-			{
-				$arFields['ASSIGNED_BY_ID'] = $assignedByID = $userID;
-			}
-			if ($sEntityPerm == BX_CRM_PERM_OPEN && $userID == $assignedByID)
-			{
-				$arFields['OPENED'] = 'Y';
-			}
+			$permissionAttributesHelper->prepareFields($arFields);
 		}
-
-		$assignedByID = (int)$arFields['ASSIGNED_BY_ID'];
-		$arEntityAttr = self::BuildEntityAttr($assignedByID, $arAttr);
-		$userPerms =  $assignedByID == CCrmPerms::GetCurrentUserID() ? $this->cPerms : CCrmPerms::GetUserPermissions($assignedByID);
-		$sEntityPerm = $userPerms->GetPermType(self::$TYPE_NAME, $sPermission, $arEntityAttr);
-		$this->PrepareEntityAttrs($arEntityAttr, $sEntityPerm);
 
 		//Prepare currency & exchange rate
 		if(!isset($arFields['CURRENCY_ID']))
@@ -1764,12 +1771,7 @@ class CAllCrmLead
 		}
 		//endregion
 
-		$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
-			->setEntityAttributes($arEntityAttr)
-		;
-		Crm\Security\Manager::getEntityController(CCrmOwnerType::Lead)
-			->register(self::$TYPE_NAME, $ID, $securityRegisterOptions)
-		;
+		$permissionAttributesHelper->registerEntityAttributes($ID);
 
 		$addressFields = array(
 			'ADDRESS_1' => isset($arFields['ADDRESS']) ? $arFields['ADDRESS'] : null,
@@ -2051,39 +2053,16 @@ class CAllCrmLead
 			{
 				continue;
 			}
-
-			$attrs = [];
-			if(isset($fields['OPENED']))
-			{
-				$attrs['OPENED'] = $fields['OPENED'];
-			}
-
-			if(isset($fields['STATUS_ID']))
-			{
-				$attrs['STATUS_ID'] = $fields['STATUS_ID'];
-			}
-
-			$entityAttrs = self::BuildEntityAttr($assignedByID, $attrs);
-			$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
-				->setEntityAttributes($entityAttrs)
-				->setEntityFields($fields)
-			;
-			Crm\Security\Manager::getEntityController(CCrmOwnerType::Lead)
-				->register(
-					self::$TYPE_NAME,
-					$ID,
-					$securityRegisterOptions
+			self::getPermissionsAdapter()
+				->getAttributesHelper(
+					self::getPermissionsAdapter()->getCurrentUserFromOptions(),
+					Crm\Service\UserPermissions::OPERATION_READ
 				)
+				->setAssignedById($assignedByID)
+				->setOpened($fields['OPENED'])
+				->setStageId($fields['STATUS_ID'])
+				->registerEntityAttributes($ID, $fields)
 			;
-		}
-	}
-
-	private function PrepareEntityAttrs(&$arEntityAttr, $entityPermType)
-	{
-		// Ensure that entity accessable for user restricted by BX_CRM_PERM_OPEN
-		if($entityPermType === BX_CRM_PERM_OPEN && !in_array('O', $arEntityAttr, true))
-		{
-			$arEntityAttr[] = 'O';
 		}
 	}
 
@@ -2109,14 +2088,7 @@ class CAllCrmLead
 
 		$isSystemAction = isset($options['IS_SYSTEM_ACTION']) && $options['IS_SYSTEM_ACTION'];
 
-		if(isset($options['CURRENT_USER']))
-		{
-			$iUserId = intval($options['CURRENT_USER']);
-		}
-		else
-		{
-			$iUserId = CCrmSecurityHelper::GetCurrentUserID();
-		}
+		$iUserId = self::getPermissionsAdapter()->getCurrentUserFromOptions($options);
 
 		$arRow = $this->getCurrentFields($ID);
 		if ($arRow === false)
@@ -2179,22 +2151,17 @@ class CAllCrmLead
 		}
 		else
 		{
-			if($this->bCheckPermission && !CCrmAuthorizationHelper::CheckUpdatePermission(self::$TYPE_NAME, $ID, $this->cPerms))
+			if ($this->bCheckPermission && !self::getPermissionsAdapter()->canUpdate($ID, $iUserId))
 			{
 				$this->LAST_ERROR = GetMessage('CRM_PERMISSION_DENIED');
 				$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
 				return false;
 			}
 
-
 			if (
 				$this->bCheckPermission
 				&& $statusID !== $arRow['STATUS_ID']
-				&& !Container::getInstance()->getUserPermissions($iUserId)->isStageTransitionAllowed(
-					$arRow['STATUS_ID'],
-					$statusID,
-					new Crm\ItemIdentifier(CCrmOwnerType::Lead, $ID)
-				)
+				&& !self::getPermissionsAdapter()->canChangeStage($ID, null, $arRow['STATUS_ID'], $statusID, $iUserId)
 			)
 			{
 				$this->LAST_ERROR = Loc::getMessage('CRM_PERMISSION_STAGE_TRANSITION_NOT_ALLOWED');
@@ -2231,19 +2198,25 @@ class CAllCrmLead
 			}
 			//endregion
 
-			$arAttr = array();
-			$arAttr['STATUS_ID'] = !empty($arFields['STATUS_ID']) ? $arFields['STATUS_ID'] : $arRow['STATUS_ID'];
+			$permissionAttributesHelper = self::getPermissionsAdapter()
+				->getAttributesHelper($iUserId, Crm\Service\UserPermissions::OPERATION_UPDATE)
+			;
+			$permissionAttributesHelper
+				->setOpened(!empty($arFields['OPENED']) ? $arFields['OPENED'] : $arRow['OPENED'])
+				->setStageId(!empty($arFields['STATUS_ID']) ? $arFields['STATUS_ID'] : $arRow['STATUS_ID'])
+				->setAssignedById($assignedByID)
+			;
 
 			$originalObserverIDs = Crm\Observer\ObserverManager::getEntityObserverIDs(CCrmOwnerType::Lead, $ID);
 			$observerIDs = isset($arFields['OBSERVER_IDS']) && is_array($arFields['OBSERVER_IDS'])
 				? $arFields['OBSERVER_IDS'] : null;
-			if($observerIDs !== null && count($observerIDs) > 0)
+			if ($observerIDs !== null && count($observerIDs) > 0)
 			{
-				$arAttr['CONCERNED_USER_IDS'] = $observerIDs;
+				$permissionAttributesHelper->setConcernedUserIds($observerIDs);
 			}
-			elseif($observerIDs === null && count($originalObserverIDs) > 0)
+			elseif ($observerIDs === null && count($originalObserverIDs) > 0)
 			{
-				$arAttr['CONCERNED_USER_IDS'] = $originalObserverIDs;
+				$permissionAttributesHelper->setConcernedUserIds($originalObserverIDs);
 			}
 
 			//region Semantic ID depends on Status ID and can't be assigned directly
@@ -2265,20 +2238,6 @@ class CAllCrmLead
 				unset($arFields['STATUS_SEMANTIC_ID']);
 			}
 			//endregion
-
-			$arAttr['OPENED'] = !empty($arFields['OPENED']) ? $arFields['OPENED'] : $arRow['OPENED'];
-			$arEntityAttr = self::BuildEntityAttr($assignedByID, $arAttr);
-			if($this->bCheckPermission)
-			{
-				$sEntityPerm = $this->cPerms->GetPermType(self::$TYPE_NAME, 'WRITE', $arEntityAttr);
-				//HACK: Ensure that entity accessible for user restricted by BX_CRM_PERM_OPEN
-				$this->PrepareEntityAttrs($arEntityAttr, $sEntityPerm);
-				//HACK: Prevent 'OPENED' field change by user restricted by BX_CRM_PERM_OPEN permission
-				if($sEntityPerm === BX_CRM_PERM_OPEN && isset($arFields['OPENED']) && $arFields['OPENED'] !== 'Y' && $assignedByID !== $iUserId)
-				{
-					$arFields['OPENED'] = 'Y';
-				}
-			}
 
 			//region Preparation of contacts
 			$originalContactBindings = LeadContactTable::getLeadBindings($ID);
@@ -2646,14 +2605,7 @@ class CAllCrmLead
 			}
 			//endregion
 
-			//region Save access rights for owner and observers
-			$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
-				->setEntityAttributes($arEntityAttr)
-			;
-			Crm\Security\Manager::getEntityController(CCrmOwnerType::Lead)
-				->register(self::$TYPE_NAME, $ID, $securityRegisterOptions)
-			;
-			//endregion
+			$permissionAttributesHelper->registerEntityAttributes($ID);
 
 			//region Address
 			if(isset($arFields['ADDRESS_DELETE']) && ($arFields['ADDRESS_DELETE'] === 'Y'))
@@ -3187,14 +3139,7 @@ class CAllCrmLead
 			return $this->getCompatibilityAdapter()->performDelete($ID, $arOptions);
 		}
 
-		if(isset($arOptions['CURRENT_USER']))
-		{
-			$iUserId = intval($arOptions['CURRENT_USER']);
-		}
-		else
-		{
-			$iUserId = CCrmSecurityHelper::GetCurrentUserID();
-		}
+		$iUserId = self::getPermissionsAdapter()->getCurrentUserFromOptions($arOptions);
 
 		$dbRes = self::GetListEx(
 			array(),
@@ -3227,11 +3172,7 @@ class CAllCrmLead
 			$contactID = 0;
 		}
 
-		$hasDeletePerm = \Bitrix\Crm\Service\Container::getInstance()
-			->getUserPermissions($iUserId)
-			->checkDeletePermissions(CCrmOwnerType::Lead, $ID);
-
-		if ($this->bCheckPermission && !$hasDeletePerm)
+		if ($this->bCheckPermission && !self::getPermissionsAdapter()->canDelete($ID, $iUserId))
 		{
 			$this->LAST_ERROR = Loc::getMessage('CRM_LEAD_NO_PERMISSIONS_TO_DELETE', [
 				'#LEAD_NAME#' => htmlspecialcharsbx($arFields['TITLE'] ?? $arFields['ID']),
@@ -3268,8 +3209,13 @@ class CAllCrmLead
 
 		$enableRecycleBin = \Bitrix\Crm\Recycling\LeadController::isEnabled()
 			&& \Bitrix\Crm\Settings\LeadSettings::getCurrent()->isRecycleBinEnabled();
-		if($enableRecycleBin)
+
+		if ($enableRecycleBin)
 		{
+			$arFields['DATE_CREATE'] = (Type\DateTime::createFromUserTime($arFields['DATE_CREATE']))->disableUserTime()->toString();
+			$arFields['DATE_MODIFY'] = (Type\DateTime::createFromUserTime($arFields['DATE_MODIFY']))->disableUserTime()->toString();
+			$arFields['MOVED_TIME'] = (Type\DateTime::createFromUserTime($arFields['MOVED_TIME']))->disableUserTime()->toString();
+
 			\Bitrix\Crm\Recycling\LeadController::getInstance()->moveToBin($ID, array('FIELDS' => $arFields));
 		}
 
@@ -3293,8 +3239,9 @@ class CAllCrmLead
 
 			Bitrix\Crm\Kanban\SortTable::clearEntity($ID, \CCrmOwnerType::LeadName);
 
-			Crm\Security\Manager::getEntityController(CCrmOwnerType::Lead)
-				->unregister(self::$TYPE_NAME, $ID)
+			self::getPermissionsAdapter()
+				->getAttributesHelper($iUserId, Crm\Service\UserPermissions::OPERATION_DELETE)
+				->unregisterEntityAttributes($ID)
 			;
 
 			$GLOBALS['USER_FIELD_MANAGER']->Delete(self::$sUFEntityID, $ID);
@@ -3633,10 +3580,7 @@ class CAllCrmLead
 		if ($allowSetSystemFields)
 		{
 			$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory(CCrmOwnerType::Lead);
-			$currentUserId =  isset($options['CURRENT_USER'])
-				? (int)$options['CURRENT_USER']
-				: CCrmSecurityHelper::GetCurrentUserID()
-			;
+			$currentUserId = self::getPermissionsAdapter()->getCurrentUserFromOptions($options);
 
 			$checkSystemFieldsResult = (new \Bitrix\Crm\Service\Operation\Import(
 				$factory->createItem(),
@@ -4111,122 +4055,70 @@ class CAllCrmLead
 		}
 	}
 
-	public static function GetStatusCreatePermissionType($statusID, CCrmPerms $userPermissions = null)
-	{
-		if($userPermissions === null)
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		return $userPermissions->GetPermType(
-			self::$TYPE_NAME,
-			'ADD',
-			array("STATUS_ID{$statusID}")
-		);
-	}
-
-	public static function GetStatusUpdatePermissionType($statusID, CCrmPerms $userPermissions = null)
-	{
-		if($userPermissions === null)
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		return $userPermissions->GetPermType(
-			self::$TYPE_NAME,
-			'WRITE',
-			array("STATUS_ID{$statusID}")
-		);
-	}
-
-	public static function GetPermissionAttributes(array $IDs)
-	{
-		return
-			\Bitrix\Crm\Security\Manager::resolveController(self::$TYPE_NAME)
-				->getPermissionAttributes(self::$TYPE_NAME, $IDs)
-		;
-	}
-
-	public static function IsAccessEnabled(CCrmPerms $userPermissions = null)
-	{
-		return self::CheckReadPermission(0, $userPermissions);
-	}
-
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->entityType()->canImportItems()
+	 */
 	public static function CheckImportPermission($userPermissions = null)
 	{
-		return CCrmAuthorizationHelper::CheckImportPermission(self::$TYPE_NAME, $userPermissions);
+		return self::getPermissionsAdapter()->canImport($userPermissions?->GetUserId());
 	}
 
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->entityType()->canAddItems()
+	 */
 	public static function CheckCreatePermission($userPermissions = null)
 	{
-		return CCrmAuthorizationHelper::CheckCreatePermission(self::$TYPE_NAME, $userPermissions);
+		return self::getPermissionsAdapter()->canAdd($userPermissions?->GetUserId());
 	}
 
-	public static function CheckUpdatePermission($ID, $userPermissions = null, array $options = null)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canUpdate()
+	 */
+	public static function CheckUpdatePermission($id, $userPermissions = null)
 	{
-		$entityAttrs = $ID > 0 && is_array($options) && isset($options['ENTITY_ATTRS']) ? $options['ENTITY_ATTRS'] : null;
-		return CCrmAuthorizationHelper::CheckUpdatePermission(self::$TYPE_NAME, $ID, $userPermissions, $entityAttrs);
+		return self::getPermissionsAdapter()->canUpdate((int)$id, $userPermissions?->GetUserId());
 	}
 
-	public static function CheckDeletePermission($ID, $userPermissions = null, array $options = null)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canDelete()
+	 */
+	public static function CheckDeletePermission($id, $userPermissions = null)
 	{
-		$entityAttrs = $ID > 0 && is_array($options) && isset($options['ENTITY_ATTRS']) ? $options['ENTITY_ATTRS'] : null;
-		return CCrmAuthorizationHelper::CheckDeletePermission(self::$TYPE_NAME, $ID, $userPermissions, $entityAttrs);
+		return self::getPermissionsAdapter()->canDelete((int)$id, $userPermissions?->GetUserId());
 	}
 
-	public static function CheckReadPermission($ID = 0, $userPermissions = null)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canRead()
+	 */
+	public static function CheckReadPermission($id = 0, $userPermissions = null)
 	{
-		return CCrmAuthorizationHelper::CheckReadPermission(self::$TYPE_NAME, $ID, $userPermissions);
+		return self::getPermissionsAdapter()->canRead((int)$id, $userPermissions?->GetUserId());
 	}
 
-	public static function CheckConvertPermission($ID = 0, $entityTypeID = 0, $userPermissions = null)
+	public static function PrepareConversionPermissionFlags($ID, array &$params)
 	{
-		if(!$userPermissions)
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		if($entityTypeID === CCrmOwnerType::Contact)
-		{
-			return CCrmContact::CheckCreatePermission($userPermissions)
-				&& CCrmAuthorizationHelper::CheckUpdatePermission(self::$TYPE_NAME, $ID, $userPermissions);
-		}
-		elseif($entityTypeID === CCrmOwnerType::Company)
-		{
-			return CCrmCompany::CheckCreatePermission($userPermissions)
-				&& CCrmAuthorizationHelper::CheckUpdatePermission(self::$TYPE_NAME, $ID, $userPermissions);
-		}
-		elseif($entityTypeID === CCrmOwnerType::Deal)
-		{
-			return CCrmDeal::CheckCreatePermission($userPermissions)
-				&& CCrmAuthorizationHelper::CheckUpdatePermission(self::$TYPE_NAME, $ID, $userPermissions);
-		}
-
-		return CCrmAuthorizationHelper::CheckUpdatePermission(self::$TYPE_NAME, $ID, $userPermissions)
-			&& (CCrmContact::CheckCreatePermission($userPermissions)
-			|| CCrmCompany::CheckCreatePermission($userPermissions)
-			|| CCrmDeal::CheckCreatePermission($userPermissions));
-	}
-	public static function PrepareConversionPermissionFlags($ID, array &$params, $userPermissions = null)
-	{
-		if(!$userPermissions)
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
+		$userPermissionsService = Container::getInstance()->getUserPermissions();
 
 		$canTransitionLeadToFinalStage = (
 			$ID <= 0 // backwards compatibility
-			|| self::canTransitionItemToFinalStage((int)$ID, $userPermissions->GetUserID())
+			|| self::canTransitionItemToFinalStage((int)$ID, $userPermissionsService->getUserId())
 		);
 
-		$canEdit =
-			CCrmAuthorizationHelper::CheckUpdatePermission(self::$TYPE_NAME, $ID, $userPermissions)
-			&& $canTransitionLeadToFinalStage
+		$canEdit = ($ID > 0)
+			? $userPermissionsService->item()->canUpdate(CCrmOwnerType::Lead, $ID)
+			: $userPermissionsService->entityType()->canUpdateItems(CCrmOwnerType::Lead)
 		;
 
-		$canCreateContact = CCrmContact::CheckCreatePermission($userPermissions);
-		$canCreateCompany = CCrmCompany::CheckCreatePermission($userPermissions);
-		$canCreateDeal = CCrmDeal::CheckCreatePermission($userPermissions);
+		$canEdit = $canEdit && $canTransitionLeadToFinalStage;
+
+		$canCreateContact = $userPermissionsService->entityType()->canAddItems(CCrmOwnerType::Contact);
+		$canCreateCompany = $userPermissionsService->entityType()->canAddItems(CCrmOwnerType::Company);
+		$canCreateDeal = $userPermissionsService->entityType()->canAddItems(CCrmOwnerType::Deal);
 
 		$params['CAN_CONVERT_TO_CONTACT'] = $canEdit && $canCreateContact;
 		$params['CAN_CONVERT_TO_COMPANY'] = $canEdit && $canCreateCompany;
@@ -4265,10 +4157,10 @@ class CAllCrmLead
 			return false;
 		}
 
-		return Crm\Service\Container::getInstance()->getUserPermissions($userId)->isStageTransitionAllowed(
+		return Crm\Service\Container::getInstance()->getUserPermissions($userId)->item()->canChangeStage(
+			new Crm\ItemIdentifier(\CCrmOwnerType::Lead, $entityId),
 			$currentStageId,
 			$successfulStageId,
-			new Crm\ItemIdentifier(\CCrmOwnerType::Lead, $entityId),
 		);
 	}
 
@@ -4509,13 +4401,10 @@ class CAllCrmLead
 	}
 
 	/**
-	 * Get start Status ID for specified Permission Type.
-	 * If Permission Type is not defined permission check will be disabled.
-	 * @param int $permissionTypeID Permission Type (see \Bitrix\Crm\Security\EntityPermissionType).
-	 * @param CCrmPerms $userPermissions User Permissions
+	 * Get start Status ID.
 	 * @return string
 	 */
-	public static function GetStartStatusID($permissionTypeID = 0, CCrmPerms $userPermissions = null)
+	private static function GetStartStatusID()
 	{
 		$statusIDs = array_keys(self::GetStatuses());
 		if(empty($statusIDs))
@@ -4523,26 +4412,7 @@ class CAllCrmLead
 			return '';
 		}
 
-		$permissionType = Bitrix\Crm\Security\EntityPermissionType::resolveName($permissionTypeID);
-		if($permissionType === '')
-		{
-			return $statusIDs[0];
-		}
-
-		if($userPermissions === null)
-		{
-			$userPermissions = CCrmPerms::GetCurrentUserPermissions();
-		}
-
-		foreach($statusIDs as $statusID)
-		{
-			$permission = $userPermissions->GetPermType(self::$TYPE_NAME, $permissionType, array("STATUS_ID{$statusID}"));
-			if($permission !== BX_CRM_PERM_NONE)
-			{
-				return $statusID;
-			}
-		}
-		return '';
+		return $statusIDs[0];
 	}
 
 	public static function GetAssociatedIDs($entityTypeID, $entityID)

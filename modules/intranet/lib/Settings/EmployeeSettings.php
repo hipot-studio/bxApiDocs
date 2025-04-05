@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\Settings;
 
+use Bitrix\Extranet;
 use Bitrix\Intranet\Settings\Controls\Section;
 use Bitrix\Intranet\Settings\Controls\Selector;
 use Bitrix\Intranet\Settings\Controls\Switcher;
@@ -33,8 +34,8 @@ class EmployeeSettings extends AbstractSettings
 	public function __construct(array $data = [])
 	{
 		parent::__construct($data);
-		$this->isBitrix24 = IsModuleInstalled("bitrix24");
-		$this->isExtranetInstalled = IsModuleInstalled("extranet");
+		$this->isBitrix24 = Loader::includeModule('bitrix24');
+		$this->isExtranetInstalled = Loader::includeModule('extranet');
 	}
 
 	public function validate(): ErrorCollection
@@ -156,6 +157,20 @@ class EmployeeSettings extends AbstractSettings
 			}
 		}
 
+		if (isset($this->data['allow_invite_collabers']) && $this->isExtranetInstalled)
+		{
+			$collaberInvitation = new Extranet\Settings\CollaberInvitation();
+
+			if ($this->data['allow_invite_collabers'] === 'Y')
+			{
+				$collaberInvitation->enable();
+			}
+			else
+			{
+				$collaberInvitation->disable();
+			}
+		}
+
 		if ($this->data['general_chat_message_join'] <> 'N')
 		{
 			Option::set('im', 'general_chat_message_join', true);
@@ -253,6 +268,20 @@ class EmployeeSettings extends AbstractSettings
 			}
 		}
 
+		if (false && $this->isExtranetInstalled)
+		{
+			$data['allow_invite_collabers'] = new Switcher(
+				'settings-employee-field-allow_invite_collabers',
+				'allow_invite_collabers',
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLABERS_INVITE'),
+				(new Extranet\Settings\CollaberInvitation())->isEnabled() ? 'Y' : 'N',
+				[
+					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_COLLABERS_INVITE_ON'),
+				],
+				helpDesk: 'redirect=detail&code=22706836',
+			);
+		}
+
 		$data['show_fired_employees'] = new Switcher(
 			'settings-employee-field-show_fired_employees',
 			'show_fired_employees',
@@ -283,17 +312,7 @@ class EmployeeSettings extends AbstractSettings
 			]
 		);
 
-		$allowCompanyPulseValue = Option::get('intranet', 'allow_company_pulse', null);
-		if (is_null($allowCompanyPulseValue))
-		{
-			Option::set('intranet', 'allow_company_pulse', "Y");
-			$allowCompanyPulseValue = "Y";
-		}
-		$url = "";
-		if (Loader::includeModule('ui'))
-		{
-			$url = \Bitrix\UI\Util::getArticleUrlByCode('6474093');
-		}
+		$allowCompanyPulseValue = Option::get('intranet', 'allow_company_pulse', 'Y');
 
 		$data['allow_company_pulse'] = new Switcher(
 			'settings-employee-field-allow_company_pulse',
@@ -301,11 +320,9 @@ class EmployeeSettings extends AbstractSettings
 			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SHOW_MESSAGE_COMPANY_PULSE'),
 			$allowCompanyPulseValue,
 			[
-				'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SHOW_WIDGET', [
-					'[helpdesklink]' => '<a class=\'more\' href=\'' . $url . '\'>',
-					'[/helpdesklink]' => '</a>'
-				])
+				'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COMPANY_PULSE_DESCRIPTION')
 			],
+			helpDesk: 'redirect=detail&code=17983050'
 		);
 
 		$values = [];
@@ -445,6 +462,7 @@ class EmployeeSettings extends AbstractSettings
 		}
 
 		$searchEngine = SearchEngine::initWithDefaultFormatter($index + [
+			'allow_invite_collabers' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLABERS_INVITE'),
 			'phone_number_default_country' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COUNTRY_PHONE_NUMBER'),
 			'FORMAT_NAME_selector' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_NAME_FORMAT'),
 			'show_fired_employees' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SHOW_QUIT_EMPLOYEE'),

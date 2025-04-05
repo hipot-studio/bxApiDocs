@@ -806,7 +806,6 @@ class CounterService
 			->setSelect(['CHAT_ID', 'IS_MUTED', 'CHAT_TYPE', 'COUNT'])
 			->setGroup(['CHAT_ID', 'CHAT_TYPE', 'IS_MUTED'])
 			->registerRuntimeField('COUNT', new ExpressionField('COUNT', 'COUNT(*)'))
-			->withRelationReference()
 		;
 
 		if (isset($chatIds) && !empty($chatIds))
@@ -852,7 +851,6 @@ class CounterService
 			->where('IS_MUTED', false)
 			->whereNot('CHAT_TYPE', Chat::IM_TYPE_COPILOT)
 			->registerRuntimeField('COUNT', new ExpressionField('COUNT', 'COUNT(*)'))
-			->withRelationReference()
 			->fetch()['COUNT']
 		;
 	}

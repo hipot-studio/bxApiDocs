@@ -394,51 +394,6 @@ class Network
 		return $result;
 	}
 
-	/**
-	 * Prepares and shows popup offerring current user to attach bitrix24.net account
-	 */
-	public static function displayAdminPopup(array $params = array())
-	{
-		global $USER;
-		if(static::getAdminPopupSession()) // duplicated check, just to be clear
-		{
-			$dbRes = UserTable::getList(array(
-				'filter' => array(
-					'=USER_ID' => $USER->GetID(),
-					'=EXTERNAL_AUTH_ID' => \CSocServBitrix24Net::ID
-				)
-			));
-			if(!$dbRes->fetch())
-			{
-				static::initAdminPopup($params);
-			}
-			else
-			{
-				static::setAdminPopupSession();
-			}
-		}
-	}
-
-	public static function initAdminPopup(array $params = array())
-	{
-		$option = static::getShowOptions();
-		\CJSCore::registerExt("socialservices_admin", array(
-			'js' => "/bitrix/js/socialservices/ss_admin.js",
-			'css' => "/bitrix/js/socialservices/css/ss_admin.css",
-			'rel' => array("ajax", "window"),
-			'lang_additional' => array(
-				"SS_NETWORK_DISPLAY" => $params["SHOW"] ? "Y" : "N",
-				"SS_NETWORK_URL" => static::getAuthUrl("popup", array("admin")),
-				"SS_NETWORK_POPUP_TITLE" => Loc::getMessage('B24NET_POPUP_TITLE'),
-				"SS_NETWORK_POPUP_CONNECT" => Loc::getMessage('B24NET_POPUP_CONNECT'),
-				"SS_NETWORK_POPUP_TEXT" => Loc::getMessage('B24NET_POPUP_TEXT'),
-				"SS_NETWORK_POPUP_DONTSHOW" => Loc::getMessage('B24NET_POPUP_DONTSHOW'),
-				"SS_NETWORK_POPUP_COUNT" => $option["showcount"],
-			)
-		));
-		\CJSCore::init(array("socialservices_admin"));
-	}
-
 	public static function getAuthUrl($mode = "page", $addScope = null)
 	{
 		if(Option::get("socialservices", "bitrix24net_id", "") != "")

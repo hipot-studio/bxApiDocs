@@ -23,12 +23,7 @@ final class MenuItemCreatorShop extends BaseMenuItemCreator
 				'parent_menu' => 'menu_bic_dashboards',
 				'text' => $dashboard->getTitle(),
 				'title' => $dashboard->getTitle(),
-				'url' => $this->getDetailUrl(
-					$dashboard,
-					$params,
-					['openFrom' => 'menu']
-				),
-				'url_constant' => true,
+				'on_click' => $this->createDashboardOpenEventFromMenu($dashboard, $params),
 			];
 		}
 

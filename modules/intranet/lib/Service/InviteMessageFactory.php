@@ -35,7 +35,7 @@ class InviteMessageFactory
 
 		$siteIdByDepartmentId = \CIntranetInviteDialog::getUserSiteId([
 			"UF_DEPARTMENT" => $user->getDepartmetnsIds(),
-			"SITE_ID" => SITE_ID
+			"SITE_ID" => SITE_ID,
 		]);
 
 		if ($this->collab)
@@ -50,7 +50,7 @@ class InviteMessageFactory
 				"USER_TEXT" => $this->message,
 				"COLLAB_NAME" => $this->collab->getName(),
 				"ACTIVE_USER" => $user->getInviteStatus() === InvitationStatus::ACTIVE,
-				'COLLAB_INVITATION_SUBJECT' => $this->createCollabSubject()
+				'COLLAB_INVITATION_SUBJECT' => $this->createCollabSubject(),
 			];
 		}
 		elseif ($bExtranet)
@@ -62,7 +62,7 @@ class InviteMessageFactory
 				"USER_ID_FROM" => CurrentUser::get()->getId(),
 				"CHECKWORD" => $user->getConfirmCode(),
 				"EMAIL" => $emailTo,
-				"USER_TEXT" => $this->message
+				"USER_TEXT" => $this->message,
 			];
 		}
 		elseif ($isCloud)
@@ -93,13 +93,13 @@ class InviteMessageFactory
 			$eventName,
 			$siteIdByDepartmentId,
 			$params,
-			$messageId
+			$messageId,
 		);
 	}
 
 	private function createCollabSubject()
 	{
-		Loc::loadLanguageFile($_SERVER["DOCUMENT_ROOT"].'/bitrix/components/bitrix/intranet.template.mail/templates/.default/collab.php');
+		Loc::loadLanguageFile($_SERVER["DOCUMENT_ROOT"] . '/bitrix/components/bitrix/intranet.template.mail/templates/.default/collab.php');
 
 		if (Loader::includeModule('bitrix24') && \CBitrix24::isLicenseNeverPayed())
 		{
@@ -110,9 +110,9 @@ class InviteMessageFactory
 			'NAME' => CurrentUser::get()->getFirstName(),
 			'LAST_NAME' => CurrentUser::get()->getLastName(),
 			'SECOND_NAME' => CurrentUser::get()->getSecondName(),
-			'LOGIN' => CurrentUser::get()->getLogin()
+			'LOGIN' => CurrentUser::get()->getLogin(),
 		], true);
 
-		return $formattedName.' '.Loc::getMessage('INTRANET_INVITATION_COLLAB_INVITE_YOU').' '.$this->collab->getName();
+		return $formattedName . ' ' . Loc::getMessage('INTRANET_INVITATION_COLLAB_INVITE_YOU') . ' ' . $this->collab->getName();
 	}
 }

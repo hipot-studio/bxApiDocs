@@ -775,14 +775,19 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		return array_combine($commonFieldNames, array_values($data));
 	}
 
-	public function getCompatibleData(int $valuesType = Values::ALL): array
+	public function getCompatibleData(int $valuesType = Values::ALL, bool $useServerTime = false): array
 	{
 		$data = $this->collectValues($this->getExternalizableFieldNames(), $valuesType);
 
 		$externalData = [];
 		foreach ($data as $entityFieldName => $value)
 		{
-			$externalData[$entityFieldName] = $this->transformToExternalValue($entityFieldName, $value, $valuesType);
+			$externalData[$entityFieldName] = $this->transformToExternalValue(
+				$entityFieldName,
+				$value,
+				$valuesType,
+				['useServerTime' => $useServerTime],
+			);
 		}
 
 		return $externalData;
@@ -1653,7 +1658,12 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		return $data;
 	}
 
-	protected function transformToExternalValue(string $entityFieldName, $fieldValue, int $valuesType = Values::ALL)
+	protected function transformToExternalValue(
+		string $entityFieldName,
+		$fieldValue,
+		int $valuesType = Values::ALL,
+		array $params = [],
+	)
 	{
 		$commonFieldName = $this->getCommonFieldNameByMap($entityFieldName);
 		$implementation = $this->getImplementation($commonFieldName);
@@ -1662,12 +1672,17 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 			return $implementation->transformToExternalValue($commonFieldName, $fieldValue, $valuesType);
 		}
 
+		$useServerTime = (bool) ($params['useServerTime'] ?? false);
 		if (is_array($fieldValue))
 		{
 			$result = [];
 			foreach ($fieldValue as $key => $singleValue)
 			{
-				if ($singleValue instanceof Date)
+				if ($singleValue instanceof DateTime)
+				{
+					$result[$key] = $this->getStringValueFromDateTime($singleValue, $useServerTime);
+				}
+				elseif ($singleValue instanceof Date)
 				{
 					$result[$key] = $singleValue->toString();
 				}
@@ -1679,6 +1694,12 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 
 			return $result;
 		}
+
+		if ($fieldValue instanceof DateTime)
+		{
+			return $this->getStringValueFromDateTime($fieldValue, $useServerTime);
+		}
+
 		if ($fieldValue instanceof Date)
 		{
 			return $fieldValue->toString();
@@ -1707,6 +1728,25 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		}
 
 		return $fieldValue;
+	}
+
+	private function getStringValueFromDateTime(DateTime $fieldValue, bool $useServerTime = false): string
+	{
+		$enableUserTime = false;
+		if ($useServerTime && $fieldValue->isUserTimeEnabled())
+		{
+			$enableUserTime = true;
+			$fieldValue->disableUserTime();
+		}
+
+		$value = $fieldValue->toString();
+
+		if ($enableUserTime)
+		{
+			$fieldValue->enableUserTime();
+		}
+
+		return $value;
 	}
 
 	protected function setFromExternalValue(string $commonFieldName, $value): self

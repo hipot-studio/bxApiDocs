@@ -213,6 +213,36 @@ class ControllerClient extends BaseSender
 	}
 
 	/**
+	 * @see \Bitrix\CallController\Controller\InternalApi::destroyTrackAction
+	 * @param Call $call
+	 * @return Result
+	 */
+	public function destroyTrack(Call $call): Result
+	{
+		$data = [
+			'uuid' => $call->getUuid(),
+			'actionUserId' => $call->getActionUserId() ?? 0,
+		];
+
+		$this->httpClientParameters = [
+			'socketTimeout' => 10,
+			'streamTimeout' => 10,
+		];
+
+		$action = 'callcontroller.InternalApi.destroyTrack';
+		if ($call instanceof ConferenceCall)
+		{
+			$data['callType'] = 'conference';
+		}
+		if ($call instanceof PlainCall)
+		{
+			$data['callType'] = 'plain';
+		}
+
+		return $this->performRequest($action, $data);
+	}
+
+	/**
 	 * @see \Bitrix\CallController\Controller\InternalApi::dropTrackAction
 	 * @param Track $track
 	 * @return Result

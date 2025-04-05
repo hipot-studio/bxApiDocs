@@ -4,16 +4,13 @@ namespace Bitrix\Intranet\Service;
 
 use Bitrix\Intranet\Command;
 use Bitrix\Intranet\CurrentUser;
-use Bitrix\Intranet\Entity\Collection\EmailCollection;
-use Bitrix\Intranet\Entity\Collection\PhoneCollection;
-use Bitrix\Intranet\Entity\Type\Email;
+use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\Entity\Type\InvitationsContainer;
-use Bitrix\Intranet\Entity\Type\Phone;
 use Bitrix\Intranet\Entity\Invitation;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Enum\InvitationType;
 use Bitrix\Intranet\Contract\Repository\UserRepository as UserRepositoryContract;
-use Bitrix\Main\Analytics\AnalyticsEvent;
+use Bitrix\Intranet\Exception\InvitationFailedException;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
@@ -22,6 +19,7 @@ use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Error;
 use Bitrix\Intranet\Invitation\Register;
+use Bitrix\SocialNetwork\Collab\Analytics\CollabAnalytics;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 
@@ -47,6 +45,24 @@ class InviteService
 			originatorId: CurrentUser::get()->getId(),
 			type: $type,
 		));
+	}
+
+	public function inviteUsers(InvitationsContainer $invitationsContainer): UserCollection
+	{
+		$invitationItems = $invitationsContainer->backwardsCompatibility();
+
+		$result = Register::inviteNewUsers(
+			SITE_ID,
+			$invitationItems,
+			'email',
+		);
+
+		if (!$result->isSuccess())
+		{
+			throw new InvitationFailedException($result->getErrorCollection());
+		}
+
+		return $this->userRepository->findUsersByIds($result->getData());
 	}
 
 	/**
@@ -82,7 +98,7 @@ class InviteService
 		$result = Register::inviteNewUsers(
 			SITE_ID,
 			$invitationItems,
-			'email'
+			'email',
 		);
 
 		if (!$result->isSuccess())
@@ -93,7 +109,7 @@ class InviteService
 		$userCollection = $this->userRepository->findUsersByIds($result->getData());
 		$inviteCommand = new Command\Invitation\InviteUserCollectionToGroupCommand(
 			groupId: $groupId,
-			userCollection: $userCollection
+			userCollection: $userCollection,
 		);
 		$inviteToGroupResult = $inviteCommand->execute();
 
@@ -114,25 +130,6 @@ class InviteService
 
 	private function sendAnalyticsInvitationsCollabs(int $groupId, Result $inviteToGroupResult, array $invitationItems): void
 	{
-		$analyticEvent = new AnalyticsEvent('invitation', 'Invitation', 'Invitation');
-
-		$p2 = 'user_intranet';
-		$currentUser = \Bitrix\Main\Engine\CurrentUser::get();
-		$isCollaber = Loader::includeModule('extranet')
-			&& \Bitrix\Extranet\Service\ServiceContainer::getInstance()->getCollaberService()->isCollaberById($currentUser->getId());
-		if ($isCollaber)
-		{
-			$p2 = 'user_collaber';
-		}
-		else
-		{
-			$isExtranet = \Bitrix\Intranet\Util::isExtranetUser($currentUser->getId());
-			if ($isExtranet)
-			{
-				$p2 = 'user_extranet';
-			}
-		}
-
 		/** @var InvitationType $type */
 		$type = null;
 
@@ -146,11 +143,7 @@ class InviteService
 				$type = InvitationType::EMAIL;
 			}
 
-			$analyticEvent->setType($type->value)
-				->setP2($p2)
-				->setP4('collabId_' . $groupId)
-				->setP5('userId_' . $user->getId())
-				->send();
+			CollabAnalytics::getInstance()->onUserInvitation($user->getId(), $groupId, $type->value);
 		}
 	}
 

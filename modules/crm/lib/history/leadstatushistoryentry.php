@@ -299,7 +299,7 @@ class LeadStatusHistoryEntry
 			return [];
 		}
 
-		$parameters['filter'] = $userPermissions->applyAvailableItemsFilter(
+		$parameters['filter'] = $userPermissions->itemsList()->applyAvailableItemsFilter(
 			$parameters['filter'] ?? [],
 			[\CCrmOwnerType::LeadName],
 			$operation,
@@ -322,7 +322,7 @@ class LeadStatusHistoryEntry
 			return 0;
 		}
 
-		$filter = $userPermissions->applyAvailableItemsFilter(
+		$filter = $userPermissions->itemsList()->applyAvailableItemsFilter(
 			$filter,
 			[\CCrmOwnerType::LeadName],
 			$operation,

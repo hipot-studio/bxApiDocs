@@ -72,7 +72,7 @@ final class CallList
 
 		if ($checkPermissions && !$userPermissions->isAdmin() && (int)$callList->getEntityTypeId() !== 0)
 		{
-			$canReadType = $userPermissions->canReadType((int)$callList->getEntityTypeId());
+			$canReadType = $userPermissions->entityType()->canReadItems((int)$callList->getEntityTypeId());
 			if (!$canReadType)
 			{
 				throw new \Bitrix\Main\SystemException('Access Denied', 403);
@@ -106,7 +106,7 @@ final class CallList
 
 				if ($checkPermissions)
 				{
-					$canReadItem = $userPermissions->checkReadPermissions($callList->entityTypeId, $item->getElementId());
+					$canReadItem = $userPermissions->item()->canRead($callList->entityTypeId, $item->getElementId());
 					if (!$canReadItem)
 					{
 						unset($callList->items[$key]);

@@ -38,7 +38,7 @@ final class ExternalSourceGrid extends Grid
 				'ACTIVE',
 				'DATE_CREATE',
 				'CREATED_BY_ID',
-				'DESCRIPTION'
+				'DESCRIPTION',
 			],
 			$this->getSettings()
 		);
@@ -58,5 +58,4 @@ final class ExternalSourceGrid extends Grid
 			),
 		);
 	}
-
 }

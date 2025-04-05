@@ -1,21 +1,18 @@
 <?php
 IncludeModuleLangFile(__FILE__);
 
+use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Feature;
 use Bitrix\Crm\Security\Role\Manage\DTO\PermissionModel;
 use Bitrix\Crm\Security\Role\Model\RolePermissionTable;
 use Bitrix\Crm\Security\Role\Model\RoleRelationTable;
 use Bitrix\Crm\Security\Role\RolePermission;
-use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
 
 class CCrmRole
 {
 	protected $cdb = null;
-
-	private const CACHE_TIME = 8640000; // 100 days
-	private const CACHE_PATH = '/crm/user_permission_roles/';
 
 	function __construct()
 	{
@@ -218,70 +215,9 @@ class CCrmRole
 		return $result;
 	}
 
-	// BX_CRM_PERM_NONE  - not supported
-	static public function GetRoleByAttr($permEntity, $permAttr = CCrmPerms::PERM_SELF, $permType = 'READ')
-	{
-		$dbRes = RolePermissionTable::getList([
-			'select' => [
-				'ROLE_ID',
-			],
-			'filter' => [
-				'=ENTITY' => (string)$permEntity,
-				'=PERM_TYPE' => (string)$permType,
-				'>=ATTR' => (string)$permAttr,
-			],
-			'cache' => [
-				'ttl' => 84600,
-			],
-		]);
-		$result = [];
-		while ($row = $dbRes->fetch())
-		{
-			$result[] = $row['ROLE_ID'];
-		}
-
-		return $result;
-	}
-
-	static public function GetCalculateRolePermsByRelation($arRel)
-	{
-		global $DB;
-		static $arResult = array();
-
-		if (empty($arRel))
-			return $arRel;
-
-		foreach ($arRel as &$sRel)
-			$sRel = $DB->ForSql(mb_strtoupper($sRel));
-		$sin = implode("','", $arRel);
-
-		if (isset($arResult[$sin]))
-			return $arResult[$sin];
-
-		$sSql = "
-			SELECT RP.*
-			FROM b_crm_role_perms RP, b_crm_role_relation RR
-			WHERE RP.ROLE_ID = RR.ROLE_ID AND RR.RELATION IN('$sin')";
-		$obRes = $DB->Query($sSql);
-		$_arResult = array();
-		while ($arRow = $obRes->Fetch())
-		{
-			$arRow['ATTR'] = trim($arRow['ATTR']);
-			if ($arRow['FIELD'] == '-')
-			{
-				if (!isset($_arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']])
-					|| $arRow['ATTR'] > $_arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']])
-					$_arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']] = $arRow['ATTR'];
-			}
-			else
-				if (!isset($_arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']][$arRow['FIELD_VALUE']])
-					|| $arRow['ATTR'] > $_arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']][$arRow['FIELD_VALUE']])
-					$_arResult[$arRow['ENTITY']][$arRow['PERM_TYPE']][$arRow['FIELD']][$arRow['FIELD_VALUE']] = $arRow['ATTR'];
-		}
-		$arResult[$sin] = $_arResult;
-		return $_arResult;
-	}
-
+	/**
+	 * @deprecated Do not use permission attributes directly!
+	 */
 	static public function GetUserPerms($userId)
 	{
 		$userId = intval($userId);
@@ -295,42 +231,7 @@ class CCrmRole
 		{
 			return $memoryCache[$userId];
 		}
-
-		$userAccessCodes = \Bitrix\Crm\Service\Container::getInstance()
-			->getUserPermissions($userId)
-			->getAttributesProvider()
-			->getUserAttributesCodes()
-		;
-
-		$cache = Main\Application::getInstance()->getCache();
-		$cacheId = 'crm_user_permission_roles_' . $userId . '_' . md5(serialize($userAccessCodes));
-
-		if ($cache->initCache(self::CACHE_TIME, $cacheId, self::CACHE_PATH))
-		{
-			$roles = $cache->getVars();
-		}
-		else
-		{
-			$cache->startDataCache();
-			$roles = [];
-
-			if (!empty($userAccessCodes))
-			{
-				$rolesRelations = RoleRelationTable::getList([
-					'filter' => [
-						'@RELATION' => $userAccessCodes,
-					],
-					'select' => [
-						'ROLE_ID'
-					]
-				]);
-				while ($roleRelation = $rolesRelations->fetch())
-				{
-					$roles[] = $roleRelation['ROLE_ID'];
-				}
-			}
-			$cache->endDataCache($roles);
-		}
+		$roles = \Bitrix\Crm\Security\Role\PermissionsManager::getInstance($userId)->getUserRoles();
 
 		$result = RolePermission::getPermissionsByRoles($roles);
 		$memoryCache[$userId] = $result;
@@ -338,11 +239,11 @@ class CCrmRole
 		return $result;
 	}
 
-	public static function ClearCache()
+	public static function ClearCache(): void
 	{
 		// Clean up cached permissions
-		Main\Application::getInstance()->getCache()->cleanDir(self::CACHE_PATH);
-		RolePermissionTable::getEntity()->cleanCache();
+		RoleRelationTable::cleanCache();
+		RolePermissionTable::cleanCache();
 
 		CrmClearMenuCache();
 	}
@@ -498,7 +399,7 @@ class CCrmRole
 	{
 		if (Feature::enabled(\Bitrix\Crm\Feature\PermissionsLayoutV2::class))
 		{
-			$entityTypeId = \CCrmOwnerType::ResolveID((string)Container::getInstance()->getUserPermissions()->getEntityNameByPermissionEntityType($entity));
+			$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($entity)?->getEntityTypeId();
 			$adminRoleIds = \Bitrix\Crm\Security\Role\RolePermission::getAdminRolesIds($entityTypeId);
 		}
 		else

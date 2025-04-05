@@ -17,6 +17,7 @@ use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\PhoneNumber;
 use Bitrix\Main\Text\Emoji;
+use Bitrix\Socialnetwork\Collab\CollabFeature;
 use Bitrix\Socialnetwork\UserToGroupTable;
 
 class CIntranetSearchTitleComponent extends CBitrixComponent
@@ -239,13 +240,13 @@ class CIntranetSearchTitleComponent extends CBitrixComponent
 		if ($extranetUser)
 		{
 			$userGroupList = [];
-			$res = UserToGroupTable::getList(array(
-				'filter' => array(
-				   'USER_ID' => $USER->getId(),
-				   '@ROLE' => UserToGroupTable::getRolesMember()
-				),
-				'select' => array('GROUP_ID')
-			));
+			$res = UserToGroupTable::getList([
+				'filter' => [
+					'USER_ID' => $USER->getId(),
+					'@ROLE' => UserToGroupTable::getRolesMember()
+				],
+				'select' => ['GROUP_ID']
+			]);
 
 			while($relation = $res->fetch())
 			{
@@ -320,14 +321,14 @@ class CIntranetSearchTitleComponent extends CBitrixComponent
 			}
 			elseif (!empty($groupIdList))
 			{
-				$res = UserToGroupTable::getList(array(
-																		   'filter' => array(
-																			   'USER_ID' => $USER->getId(),
-																			   '@GROUP_ID' => $groupIdList,
-																			   '@ROLE' => UserToGroupTable::getRolesMember()
-																		   ),
-																		   'select' => array('GROUP_ID')
-																	   ));
+				$res = UserToGroupTable::getList([
+					'filter' => [
+						'USER_ID' => $USER->getId(),
+						'@GROUP_ID' => $groupIdList,
+						'@ROLE' => UserToGroupTable::getRolesMember()
+					],
+					'select' => ['GROUP_ID']
+				]);
 				while($relation = $res->fetch())
 				{
 					$memberGroupIdList[] = $relation['GROUP_ID'];
@@ -418,7 +419,7 @@ class CIntranetSearchTitleComponent extends CBitrixComponent
 		}
 
 		$result = array();
-		if ($entityType === 'sonetgroups')
+		if ($entityType === 'sonetgroups' || $entityType === 'collabs')
 		{
 			$result = array(
 				'id' => 'G'.$arEntity["ID"],
@@ -565,9 +566,11 @@ class CIntranetSearchTitleComponent extends CBitrixComponent
 			$bSocialnetworkIncluded = Loader::includeModule('socialnetwork');
 		}
 
+		$extranetIncluded = Bitrix\Main\Loader::includeModule('extranet');
+
 		if ($bExtranetSite === null)
 		{
-			$bExtranetSite = (Loader::includeModule('extranet') && CExtranet::IsExtranetSite());
+			$bExtranetSite = $extranetIncluded && CExtranet::IsExtranetSite();
 		}
 
 		for($i = 0; $i < $this->arParams["NUM_CATEGORIES"]; $i++)
@@ -615,7 +618,10 @@ class CIntranetSearchTitleComponent extends CBitrixComponent
 				)
 				{
 					$this->arResult["customSonetGroupsCategoryId"] = $i;
-					$this->arResult["CATEGORIES"][$i]["ITEMS"] = $this->getSonetGroups($searchString);
+					$this->arResult["CATEGORIES"][$i]["ITEMS"] = array_filter(
+						$this->getSonetGroups($searchString),
+						fn ($group) => $group['GROUP_TYPE'] !== 'collab'
+					);
 
 					if ($this->arResult["customResultEmpty"] && !empty($this->arResult["CATEGORIES"][$i]["ITEMS"]))
 					{
@@ -625,6 +631,29 @@ class CIntranetSearchTitleComponent extends CBitrixComponent
 					foreach($this->arResult["CATEGORIES"][$i]["ITEMS"] as $key => $arItem)
 					{
 						$clientDbItem = $this->convertAjaxToClientDb($arItem, 'sonetgroups');
+						$this->arResult["CATEGORIES"][$i]["ITEMS"][$key]['CHECKSUM'] = $clientDbItem['checksum'];
+					}
+				}
+				elseif (
+					$categoryCode === 'custom_collabs'
+					&& $bSocialnetworkIncluded
+					&& $extranetIncluded
+					&& CollabFeature::isOn()
+				)
+				{
+					$this->arResult["CATEGORIES"][$i]["ITEMS"] = array_filter(
+						$this->getSonetGroups($searchString),
+						fn ($group) => $group['GROUP_TYPE'] === 'collab'
+					);
+
+					if ($this->arResult["customResultEmpty"] && !empty($this->arResult["CATEGORIES"][$i]["ITEMS"]))
+					{
+						$this->arResult["customResultEmpty"] = false;
+					}
+
+					foreach($this->arResult["CATEGORIES"][$i]["ITEMS"] as $key => $arItem)
+					{
+						$clientDbItem = $this->convertAjaxToClientDb($arItem, 'collabs');
 						$this->arResult["CATEGORIES"][$i]["ITEMS"][$key]['CHECKSUM'] = $clientDbItem['checksum'];
 					}
 				}

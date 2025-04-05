@@ -65,7 +65,8 @@ abstract class BIBuilderDataset extends Dataset
 			$fieldInfo['AGGREGATION_TYPE'] ?? null,
 			$fieldInfo['GROUP_KEY'] ?? null,
 			$fieldInfo['GROUP_CONCAT'] ?? null,
-			$fieldInfo['GROUP_COUNT'] ?? null
+			$fieldInfo['GROUP_COUNT'] ?? null,
+			$fieldInfo['IS_VALUE_SPLITABLE'] ?? null,
 		);
 	}
 

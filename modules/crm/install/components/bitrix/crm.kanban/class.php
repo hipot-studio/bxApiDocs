@@ -119,11 +119,15 @@ class CrmKanbanComponent extends \CBitrixComponent
 
 		if (!$skipCheckPermissions)
 		{
-			$isReadPermissions = Container::getInstance()->getUserPermissions()->checkReadPermissions(
-				$entityTypeId,
-				0,
-				$categoryId >= 0 ? $categoryId : null
-			);
+			$entityTypePermissions = $this->getEntity()
+				->getUserPermissions()
+				->entityType()
+			;
+
+			$isReadPermissions = ($categoryId >= 0)
+				? $entityTypePermissions->canReadItemsInCategory($entityTypeId, $categoryId)
+				: $entityTypePermissions->canReadItems($entityTypeId)
+			;
 
 			if (!$isReadPermissions)
 			{
@@ -412,9 +416,8 @@ class CrmKanbanComponent extends \CBitrixComponent
 
 		if ($this->arParams['EMPTY_RESULT'] !== 'Y')
 		{
-			$userPermissions = $this->getKanban()->getCurrentUserPermissions();
 			$this->arResult['ACCESS_CONFIG_PERMS'] = $this->getKanban()->isCrmAdmin();
-			$this->arResult = array_merge($this->arResult, $this->getEntity()->getPermissionParameters($userPermissions));
+			$this->arResult = array_merge($this->arResult, $this->getEntity()->getPermissionParameters());
 
 			//output
 			if ($this->arParams['ONLY_COLUMNS'] === 'Y')
@@ -497,7 +500,7 @@ class CrmKanbanComponent extends \CBitrixComponent
 
 			if ($this->getEntity()->isCategoriesSupported())
 			{
-				$this->arResult['CATEGORIES'] = $this->getEntity()->getCategoriesWithAddPermissions($userPermissions);
+				$this->arResult['CATEGORIES'] = $this->getEntity()->getCategoriesWithAddPermissions();
 			}
 		}
 
@@ -1128,7 +1131,7 @@ class CrmKanbanComponent extends \CBitrixComponent
 
 		try
 		{
-			$result = $this->getEntity()->deleteItemsV2($ids, $ignore, $this->getKanban()->getCurrentUserPermissions(), $params);
+			$result = $this->getEntity()->deleteItemsV2($ids, $ignore, $params);
 		}
 		catch (\Exception $exception)
 		{
@@ -1162,23 +1165,17 @@ class CrmKanbanComponent extends \CBitrixComponent
 	 */
 	private function actionUpdateEntityStatus($id, $status, array $statuses = [])
 	{
-		$userPerms = $this->getKanban()->getCurrentUserPermissions();
 		$request = Application::getInstance()->getContext()->getRequest();
 
 		$result = new Result();
 
-		if (!\CCrmPerms::IsAuthorized())
+		if (!$this->getEntity()->checkUpdatePermissions($id))
 		{
 			return $result->addError(new Error(Loc::getMessage('CRM_KANBAN_ERROR_ACCESS_DENIED')));
 		}
 
 		$item = $this->getEntity()->getItem($id, [$this->getEntity()->getDbStageFieldName()]);
-		if(!$item)
-		{
-			return $result->addError(new Error(Loc::getMessage('CRM_KANBAN_ERROR_ACCESS_DENIED')));
-		}
-
-		if(!$this->getEntity()->checkUpdatePermissions($id, $userPerms))
+		if (!$item)
 		{
 			return $result->addError(new Error(Loc::getMessage('CRM_KANBAN_ERROR_ACCESS_DENIED')));
 		}
@@ -1246,11 +1243,9 @@ class CrmKanbanComponent extends \CBitrixComponent
 			return [];
 		}
 		$idForUpdate = [];
-		$userPermissions = $this->getKanban()->getCurrentUserPermissions();
 		foreach ($ids as $id)
 		{
-			$categoryId = $this->getEntity()->getCategoryId();
-			if (\CCrmDeal::checkUpdatePermission($id, $userPermissions, $categoryId))
+			if ($this->getEntity()->checkUpdatePermissions($id))
 			{
 				$idForUpdate[] = $id;
 			}
@@ -1275,9 +1270,7 @@ class CrmKanbanComponent extends \CBitrixComponent
 		{
 			return [];
 		}
-		$userPerms = $this->getKanban()->getCurrentUserPermissions();
-
-		$this->getEntity()->setItemsAssigned($ids, $assignedId, $userPerms);
+		$this->getEntity()->setItemsAssigned($ids, $assignedId);
 
 		return [];
 	}
@@ -1312,8 +1305,7 @@ class CrmKanbanComponent extends \CBitrixComponent
 			return [];
 		}
 		$categoryId = (int)$this->request('category');
-		$userPermissions = $this->getKanban()->getCurrentUserPermissions();
-		$result = $this->getEntity()->updateItemsCategory($ids, $categoryId, $userPermissions);
+		$result = $this->getEntity()->updateItemsCategory($ids, $categoryId);
 
 		if (!$result->isSuccess())
 		{

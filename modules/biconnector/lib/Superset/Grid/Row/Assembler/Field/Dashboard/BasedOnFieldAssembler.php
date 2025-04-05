@@ -16,7 +16,7 @@ class BasedOnFieldAssembler extends FieldAssembler
 
 		if ($type === SupersetDashboardTable::DASHBOARD_TYPE_MARKET)
 		{
-			return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_SOURCE_TYPE_MARKET');
+			return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_SOURCE_TYPE_MARKET_MSGVER_1');
 		}
 
 		if ($type === SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM)

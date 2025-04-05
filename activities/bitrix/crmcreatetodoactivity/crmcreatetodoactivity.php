@@ -40,7 +40,7 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 			'Colleagues' => [],
 			'Client' => '',
 			'Link' => '',
-			'Notification' => [],
+			'Notification' => null,
 			'Duration' => null,
 			//return
 			"Id" => null,
@@ -73,7 +73,7 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 		$colleaguesIds = (array)CBPHelper::extractUsers($this->Colleagues, $this->getDocumentId());
 		$colleaguesIds[] = (string)$responsibleId;
 		$duration = $this->getNumFromProperty($this->Duration);
-		$notification = $this->getIntValuesArray($this->Notification);
+		$notification = !is_null($this->Notification) ? $this->getIntValuesArray($this->Notification) : null;
 		if (!isset(self::getDurationOptions()[$duration]))
 		{
 			$duration = null;

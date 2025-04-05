@@ -104,6 +104,40 @@ class Track extends Engine\Controller
 	}
 
 	/**
+	 * @restMethod call.Track.destroy
+	 * @param int $callId
+	 * @return array|null
+	 */
+	public function destroyAction(int $callId): ?array
+	{
+		$call = $this->getCall($callId);
+		if (!$call)
+		{
+			return null;
+		}
+
+		$result = (new ControllerClient)->destroyTrack($call);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+			return null;
+		}
+
+		$call
+			->setActionUserId($this->getCurrentUser()->getId())
+			->disableAudioRecord()
+			->disableAiAnalyze()
+			->save()
+		;
+
+		$this->sendSwitchTrackRecordStatus($call, false);
+
+		return ['destroyed' => true];
+	}
+
+
+
+	/**
 	 * @restMethod call.Track.start
 	 * @param int $callId
 	 * @return array|null
@@ -226,6 +260,7 @@ class Track extends Engine\Controller
 		if (!$track->getFileId())
 		{
 			$this->addError(new Error("track_file_not_found", "Track file not found"));
+			return null;
 		}
 
 		return BFile::createByFileId($track->getFileId(), $track->getFileName())->showInline(!$forceDownload);

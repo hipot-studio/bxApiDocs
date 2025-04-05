@@ -435,11 +435,9 @@ class CBPCrmSendEmailActivity extends CBPActivity
 		// Try add event to entity
 		$CCrmEvent = new CCrmEvent();
 
-		$eventText = '';
-		$eventText .= GetMessage('CRM_SEMA_EMAIL_SUBJECT').': '.$subject."\n\r";
+		$eventText = GetMessage('CRM_SEMA_EMAIL_SUBJECT').': '.$subject."\n\r";
 		$eventText .= GetMessage('CRM_SEMA_EMAIL_FROM').': '.$from."\n\r";
 		$eventText .= GetMessage('CRM_SEMA_EMAIL_TO').': '.$to."\n\r\n\r";
-		$eventText .= $messageHtml;
 
 		$eventBindings = [];
 		foreach ($bindings as $item)
@@ -456,10 +454,10 @@ class CBPCrmSendEmailActivity extends CBPActivity
 
 		$CCrmEvent->Add(
 			[
+				'EVENT_TYPE'   => CCrmEvent::TYPE_EMAIL,
 				'ENTITY' => $eventBindings,
 				'EVENT_ID' => 'MESSAGE',
 				'EVENT_TEXT_1' => $eventText,
-				'FILES' => $arRawFiles
 			]
 		);
 

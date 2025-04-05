@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mobile\Controller;
 
+use Bitrix\Extranet\PortalSettings;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Mobile\Collab\ActionFilter\CollabAccessControl;
 use Bitrix\Mobile\Collab\Dto\CollabPermissionSettingsDto;
@@ -9,6 +10,7 @@ use Bitrix\Mobile\Collab\Dto\CollabSecuritySettingsDto;
 use Bitrix\Mobile\Collab\Dto\CollabSettingsUserDto;
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\Loader;
+use Bitrix\Mobile\Collab\Dto\CollabTaskPermissionsSettingsDto;
 use Bitrix\Mobile\Trait\PublicErrorsTrait;
 use Bitrix\Intranet\Service\InviteLinkGenerator;
 use Bitrix\SocialNetwork\Collab\Access\CollabAccessController;
@@ -74,10 +76,17 @@ final class Collab extends JsonController
 			$inviteLink = empty($linkGenerator) ? '' : $linkGenerator->getShortCollabLink();
 		}
 
+		$canInviteCollabers = false;
+		if (Loader::includeModule('extranet'))
+		{
+			$canInviteCollabers = PortalSettings::getInstance()->isEnabledCollabersInvitation();
+		}
+
 		return [
 			'canCurrentUserInvite' => $canCurrentUserInvite,
 			'inviteLink' => $inviteLink,
 			'isBitrix24Included' => $isBitrix24Included,
+			'canInviteCollabers' => $canInviteCollabers,
 		];
 	}
 
@@ -89,6 +98,7 @@ final class Collab extends JsonController
 	{
 		$result = [
 			'permissions' => null,
+			'taskPermissions' => null,
 			'security' => new CollabSecuritySettingsDto(),
 		];
 		$user = $this->getCurrentUser();
@@ -103,9 +113,8 @@ final class Collab extends JsonController
 					$user->getFullName(),
 				),
 				$moderators = [],
-				$inviters = 'K',
-				$messageWriters = 'K',
 			);
+			$result['taskPermissions'] = new CollabTaskPermissionsSettingsDto();
 		}
 
 		return $result;

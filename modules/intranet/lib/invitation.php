@@ -627,6 +627,23 @@ class Invitation
 			return $result->addError(new Main\Error('The bitrix24 module is not installed'));
 		}
 		$currentUser = CurrentUser::get();
+		$user = \Bitrix\Intranet\UserTable::query()
+			->where('ID', $userId)
+			->where('ACTIVE', 'N')
+			->whereNotNull('CONFIRM_CODE')
+			->whereNot('CONFIRM_CODE', '')
+			->setSelect([
+				'ID',
+				'ACTIVE',
+				'CONFIRM_CODE',
+			])
+			->setLimit(1)
+			->fetchObject()
+		;
+		if (!$user)
+		{
+			return $result->addError(new Main\Error('', 'USER_CONFIRMED'));
+		}
 		$sql = "
 			SELECT M.*
 			FROM b_im_relation R, b_im_message M

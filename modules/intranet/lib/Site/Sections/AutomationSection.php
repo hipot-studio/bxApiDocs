@@ -195,7 +195,6 @@ class AutomationSection
 				'menu_item_id' => self::MENU_ITEMS_ID['smart_process'],
 				'top_menu_id' => 'top_menu_id_crm_dynamic',
 				'sub_menu' => $menuSubItems,
-				'is_new' => true,
 			],
 		];
 	}
@@ -329,7 +328,6 @@ class AutomationSection
 			$menuItems[] = [
 				'TEXT' => Loc::getMessage('AUTOMATION_SECTION_CRM_DYNAMIC_AUTOMATED_SOLUTION_LIST'),
 				'URL' => $router->getAutomatedSolutionListUrl(),
-				'IS_NEW' => true,
 			];
 		}
 

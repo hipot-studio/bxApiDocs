@@ -119,6 +119,11 @@ final class ToolsManager
 		;
 	}
 
+	public function checkOnlyBizprocAvailability(): bool
+	{
+		return $this->check(self::BIZPROC_TOOL_ID);
+	}
+
 	public function checkBizprocScriptAvailability(): bool
 	{
 		return

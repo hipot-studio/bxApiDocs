@@ -142,12 +142,8 @@ class CCrmNotifierSchemeType
 					'XMPP' => 'Y',
 					'PUSH' => 'N',
 				],
-				'post' => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_LIVEFEED_POST'),
-					'PUSH' => 'N',
-				],
 				'mention' => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_LIVEFEED_MENTION'),
+					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_MENTION'),
 					'PUSH' => 'N',
 				],
 				self::WebFormName => [

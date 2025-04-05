@@ -73,7 +73,6 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		$this->initCreateButton();
 		$this->initToolbar();
 		$this->arResult['SHOW_DELETE_INSTANCE_BUTTON'] = UIHelper::needShowDeleteInstanceButton();
-		$this->arResult['NEED_SHOW_TOP_MENU_GUIDE'] = $this->isNeedShowGuide('top_menu_guide');
 		$this->arResult['NEED_SHOW_DRAFT_GUIDE'] = $this->isNeedShowGuide('draft_guide');
 	}
 
@@ -213,7 +212,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 		$menuItems = [
 			[
-				'text' => Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DASHBOARD_LIST_MENU_ITEM_CREATE_DASHBOARD'),
+				'text' => Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DASHBOARD_LIST_MENU_ITEM_CREATE_DASHBOARD_MSGVER_1'),
 				'onclick' => new JsCode($openMarketScript),
 			],
 		];

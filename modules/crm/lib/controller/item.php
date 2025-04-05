@@ -19,12 +19,12 @@ use Bitrix\Main\Engine\Response\Component;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Error;
+use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotSupportedException;
 use Bitrix\Main\ORM\Fields\Relations\Relation;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\UI\PageNavigation;
-use Bitrix\Main\InvalidOperationException;
 
 class Item extends Base
 {
@@ -62,17 +62,15 @@ class Item extends Base
 
 	/**
 	 * Return data about item by $id.
-	 *
-	 * @param int $id
-	 * @return array|null
 	 */
-	public function getAction(int $id, int $entityTypeId): ?array
+	public function getAction(int $id, int $entityTypeId, string $useOriginalUfNames = 'N'): ?array
 	{
 		$factory = $this->getFactory($entityTypeId);
 		if (!$factory)
 		{
 			return null;
 		}
+
 		$select = ['*'];
 		if ($factory->isMultiFieldsEnabled())
 		{
@@ -81,6 +79,7 @@ class Item extends Base
 				$this->getMultiFields(),
 			);
 		}
+
 		try
 		{
 			$item = $factory->getItems([
@@ -93,6 +92,7 @@ class Item extends Base
 			$this->addError(new Error(
 				$e->getMessage()
 			));
+
 			return null;
 		}
 
@@ -102,36 +102,33 @@ class Item extends Base
 				Loc::getMessage('CRM_TYPE_ITEM_NOT_FOUND'),
 				ErrorCode::NOT_FOUND
 			));
+
 			return null;
 		}
-		if (!Container::getInstance()->getUserPermissions()->canReadItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canReadItem($item))
 		{
 			$this->addError(new Error(
 				Loc::getMessage('CRM_COMMON_READ_ACCESS_DENIED'),
 				ErrorCode::ACCESS_DENIED
 			));
+
 			return null;
 		}
 
+		$items = $this->getJsonForItems($factory, [$item], null, $useOriginalUfNames === 'Y');
+
 		return [
-			'item' => $this->getJsonForItems($factory, [$item])[$item->getId()],
+			'item' => $items[$item->getId()],
 		];
 	}
 
-	/**
-	 * Return list of items.
-	 *
-	 * @param array|null $order
-	 * @param array|null $filter
-	 * @param PageNavigation|null $pageNavigation
-	 * @return Page|null
-	 */
 	public function listAction(
 		int $entityTypeId,
 		array $select = ['*'],
 		array $order = null,
 		array $filter = null,
-		PageNavigation $pageNavigation = null
+		PageNavigation $pageNavigation = null,
+		string $useOriginalUfNames = 'N',
 	): ?Page
 	{
 		$factory = $this->getFactory($entityTypeId);
@@ -141,19 +138,28 @@ class Item extends Base
 		}
 		$parameters = [];
 
-		$select = array_map(static function($fieldName) {
-			return Container::getInstance()->getOrmObjectConverter()->convertFieldNameFromCamelCaseToUpperCase($fieldName);
-		}, $select);
+		$isUseOriginalFieldNames = $useOriginalUfNames === 'Y';
+		$select = array_combine($select, $select);
+		$select = $this->convertFieldNamesToUpper($select, $isUseOriginalFieldNames);
+		$select = array_keys($select);
+
 		$select = $this->prepareSelect($factory, $select);
 		$parameters['select'] = $select;
-		$parameters['filter'] = $this->convertKeysToUpper((array)$filter);
+
+		$parameters['filter'] = $this->convertFieldNamesToUpper((array)$filter, $isUseOriginalFieldNames, true);
 		$parameters['filter'] = $this->prepareFilter($factory, $parameters['filter']);
 
 		$allowedFields = $factory->getFieldsCollection()->getFieldNameList();
 
 		$dataClassFields = $factory->getDataClass()::getEntity()->getFields();
+		$hasContactIdsField = false;
 		foreach ($dataClassFields as $field)
 		{
+			if ($field->getName() === \Bitrix\Crm\Item::FIELD_NAME_CONTACT_BINDINGS)
+			{
+				$hasContactIdsField = true;
+			}
+
 			if (!($field instanceof Relation) && !in_array($field->getName(), $allowedFields))
 			{
 				$allowedFields[] = $field->getName();
@@ -170,18 +176,27 @@ class Item extends Base
 			$parameters['filter']['OBSERVERS.USER_ID'] = is_null($parameters['filter']['OBSERVERS']) ? null : (array)$parameters['filter']['OBSERVERS'];
 			unset($parameters['filter']['OBSERVERS']);
 		}
-
-		if(is_array($order))
+		if ($hasContactIdsField && !empty($parameters['filter']['CONTACT_IDS']))
 		{
-			$parameters['order'] = $this->convertKeysToUpper($order);
-			$parameters['order'] = $this->convertValuesToUpper($parameters['order'], Converter::TO_UPPER | Converter::VALUES);
+			$parameters['filter']['CONTACT_BINDINGS.CONTACT_ID'] = (array)$parameters['filter']['CONTACT_IDS'];
+			unset($parameters['filter']['CONTACT_IDS']);
+		}
+
+		if (is_array($order))
+		{
+			$parameters['order'] = $this->convertFieldNamesToUpper($order, $isUseOriginalFieldNames);
+			$parameters['order'] = $this->convertValuesToUpper(
+				$parameters['order'],
+				Converter::TO_UPPER | Converter::VALUES
+			);
+
 			if (!$this->validateOrder($parameters['order'], $allowedFields))
 			{
 				return null;
 			}
 		}
 
-		if($pageNavigation)
+		if ($pageNavigation)
 		{
 			$parameters['offset'] = $pageNavigation->getOffset();
 			$parameters['limit'] = $pageNavigation->getLimit();
@@ -190,7 +205,7 @@ class Item extends Base
 		try
 		{
 			$items = $factory->getItemsFilteredByPermissions($parameters);
-			$items = array_values($this->getJsonForItems($factory, $items, $select));
+			$items = array_values($this->getJsonForItems($factory, $items, $select, $isUseOriginalFieldNames));
 		}
 		catch (InvalidOperationException $e)
 		{
@@ -242,7 +257,7 @@ class Item extends Base
 			));
 			return null;
 		}
-		if (!Container::getInstance()->getUserPermissions()->canDeleteItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canDeleteItem($item))
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -426,30 +441,33 @@ class Item extends Base
 
 	/**
 	 * Add new item with $fields.
-	 *
-	 * @param array $fields
-	 * @return array|null
 	 */
-	public function addAction(int $entityTypeId, array $fields): ?array
+	public function addAction(int $entityTypeId, array $fields, string $useOriginalUfNames = 'N'): ?array
 	{
 		$factory = $this->getFactory($entityTypeId);
 		if (!$factory)
 		{
 			return null;
 		}
+
 		try
 		{
 			$item = $factory->createItem();
+			if (isset($fields['categoryId']))
+			{
+				$item->setCategoryId((int)$fields['categoryId']);
+			}
 		}
 		catch (InvalidOperationException $e)
 		{
 			$this->addError(new Error(
 				$e->getMessage()
 			));
+
 			return null;
 		}
 
-		if (!Container::getInstance()->getUserPermissions()->canAddItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canAddItem($item))
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -464,23 +482,26 @@ class Item extends Base
 			unset($fields['fm']);
 		}
 
-		$fields = $this->convertKeysToUpper($fields);
+		$isUseOriginalUfNames = ($useOriginalUfNames === 'Y');
+		$fields = $this->convertFieldNamesToUpper($fields, $isUseOriginalUfNames);
 		$this->processFields($item, $fields, $factory->getFieldsCollection());
-
 
 		$operation = $factory->getAddOperation($item);
 		if (
 			$this->getScope() === static::SCOPE_REST
-			&& !RestSettings::getCurrent()->isRequiredUserFieldCheckEnabled()
+			&& !RestSettings::getCurrent()?->isRequiredUserFieldCheckEnabled()
 		)
 		{
 			$operation->disableCheckRequiredUserFields();
 		}
+
 		$result = $operation->launch();
 		if ($result->isSuccess())
 		{
+			$items = $this->getJsonForItems($factory, [$operation->getItem()], null, $isUseOriginalUfNames);
+
 			return [
-				'item' => $this->getJsonForItems($factory, [$operation->getItem()])[$item->getId()],
+				'item' => $items[$item->getId()],
 			];
 		}
 
@@ -491,18 +512,15 @@ class Item extends Base
 
 	/**
 	 * Update item by $id with $fields.
-	 *
-	 * @param int $id
-	 * @param array $fields
-	 * @return array|null
 	 */
-	public function updateAction(int $entityTypeId, int $id, array $fields): ?array
+	public function updateAction(int $entityTypeId, int $id, array $fields, string $useOriginalUfNames = 'N'): ?array
 	{
 		$factory = $this->getFactory($entityTypeId);
 		if (!$factory)
 		{
 			return null;
 		}
+
 		try
 		{
 			$item = $factory->getItem($id);
@@ -512,6 +530,7 @@ class Item extends Base
 			$this->addError(new Error(
 				$e->getMessage()
 			));
+
 			return null;
 		}
 
@@ -521,9 +540,10 @@ class Item extends Base
 				Loc::getMessage('CRM_TYPE_ITEM_NOT_FOUND'),
 				ErrorCode::NOT_FOUND
 			));
+
 			return null;
 		}
-		if (!Container::getInstance()->getUserPermissions()->canUpdateItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canUpdateItem($item))
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -538,23 +558,26 @@ class Item extends Base
 			unset($fields['fm']);
 		}
 
-		$fields = $this->convertKeysToUpper($fields);
+		$isUseOriginalUfNames = ($useOriginalUfNames === 'Y');
+		$fields = $this->convertFieldNamesToUpper($fields, $isUseOriginalUfNames);
 		$this->processFields($item, $fields, $factory->getFieldsCollection());
+
 		$operation = $factory->getUpdateOperation($item);
 		if (
 			$this->getScope() === static::SCOPE_REST
-			&& !RestSettings::getCurrent()->isRequiredUserFieldCheckEnabled()
+			&& !RestSettings::getCurrent()?->isRequiredUserFieldCheckEnabled()
 		)
 		{
 			$operation->disableCheckRequiredUserFields();
 		}
+
 		$result = $operation->launch();
 		if ($result->isSuccess())
 		{
-			$item = $operation->getItem();
+			$items = $this->getJsonForItems($factory, [$operation->getItem()], null, $isUseOriginalUfNames);
 
 			return [
-				'item' => $this->getJsonForItems($factory, [$operation->getItem()])[$item->getId()],
+				'item' => $items[$item->getId()],
 			];
 		}
 
@@ -567,11 +590,8 @@ class Item extends Base
 	 * Import new item with $fields.
 	 * Allow to set some system fields (CREATED_BY, UPDATED_BY, CREATED_DATE, UPDATED_DATE) for admins
 	 * Automation will not be executed for created items
-	 *
-	 * @param array $fields
-	 * @return array|null
 	 */
-	public function importAction(int $entityTypeId, array $fields): ?array
+	public function importAction(int $entityTypeId, array $fields, string $useOriginalUfNames = 'N'): ?array
 	{
 		$factory = $this->getFactory($entityTypeId);
 		if (!$factory)
@@ -603,9 +623,10 @@ class Item extends Base
 			}
 		}
 
+		$isUseOriginalUfNames = $useOriginalUfNames === 'Y';
 		if ($this->shouldUseDeprecatedImportApi($entityTypeId))
 		{
-			return $this->importViaDeprecatedApi($entityTypeId, $fields);
+			return $this->importViaDeprecatedApi($entityTypeId, $fields, $isUseOriginalUfNames);
 		}
 
 		try
@@ -617,10 +638,11 @@ class Item extends Base
 			$this->addError(new Error(
 				$e->getMessage()
 			));
+
 			return null;
 		}
 
-		$fields = $this->convertKeysToUpper($fields);
+		$fields = $this->convertFieldNamesToUpper($fields, $isUseOriginalUfNames);
 		$this->processFields($item, $fields, $factory->getFieldsCollection());
 
 		if (!empty($fmValues) && $item->hasField(\Bitrix\Crm\Item::FIELD_NAME_FM))
@@ -630,7 +652,7 @@ class Item extends Base
 			$item->set(\Bitrix\Crm\Item::FIELD_NAME_FM, $fmCollection);
 		}
 
-		if (!Container::getInstance()->getUserPermissions()->canImportItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canImportItem($item))
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -640,11 +662,12 @@ class Item extends Base
 		$operation = $factory->getImportOperation($item);
 		if (
 			$this->getScope() === static::SCOPE_REST
-			&& !RestSettings::getCurrent()->isRequiredUserFieldCheckEnabled()
+			&& !RestSettings::getCurrent()?->isRequiredUserFieldCheckEnabled()
 		)
 		{
 			$operation->disableCheckRequiredUserFields();
 		}
+
 		$result = $operation->launch();
 		if ($result->isSuccess())
 		{
@@ -660,7 +683,7 @@ class Item extends Base
 		return null;
 	}
 
-	public function batchImportAction(int $entityTypeId, array $data): ?array
+	public function batchImportAction(int $entityTypeId, array $data, string $useOriginalUfNames = 'N'): ?array
 	{
 		$factory = $this->getFactory($entityTypeId);
 		if (!$factory)
@@ -683,7 +706,7 @@ class Item extends Base
 		foreach ($data as $itemKey => $itemData)
 		{
 			$itemData = is_array($itemData) ? $itemData : [];
-			$itemResult = $this->importAction($entityTypeId, $itemData);
+			$itemResult = $this->importAction($entityTypeId, $itemData, $useOriginalUfNames);
 
 			$error = $this->getErrors()[0] ?? null;
 
@@ -938,14 +961,14 @@ class Item extends Base
 	 *
 	 * @return array|null
 	 */
-	public function fieldsAction(int $entityTypeId): ?array
+	public function fieldsAction(int $entityTypeId, string $useOriginalUfNames = 'N'): ?array
 	{
 		$factory = $this->getFactory($entityTypeId);
 		if (!$factory)
 		{
 			return null;
 		}
-		if (!Container::getInstance()->getUserPermissions()->checkReadPermissions($entityTypeId))
+		if (!Container::getInstance()->getUserPermissions()->entityType()->canReadItems($entityTypeId))
 		{
 			$this->addError(new Error(
 				Loc::getMessage('CRM_COMMON_READ_ACCESS_DENIED'),
@@ -958,7 +981,7 @@ class Item extends Base
 		$fieldsInfo = $factory->getFieldsInfo() + $factory->getUserFieldsInfo();
 
 		return [
-			'fields' => $this->prepareFieldsInfo($fieldsInfo),
+			'fields' => $this->prepareFieldsInfo($fieldsInfo, $useOriginalUfNames === 'Y'),
 		];
 	}
 
@@ -993,7 +1016,7 @@ class Item extends Base
 			));
 			return null;
 		}
-		if (!Container::getInstance()->getUserPermissions()->canReadItem($item))
+		if (!Container::getInstance()->getUserPermissions()->item()->canReadItem($item))
 		{
 			$this->addError(new Error(
 				Loc::getMessage('CRM_COMMON_READ_ACCESS_DENIED'),
@@ -1030,16 +1053,38 @@ class Item extends Base
 	 * @param \Bitrix\Crm\Item[] $items
 	 * @return array
 	 */
-	protected function getJsonForItems(Service\Factory $factory, array $items, array $select = null): array
+	protected function getJsonForItems(
+		Service\Factory $factory,
+		array $items,
+		array $select = null,
+		bool $useOriginalUfNames = false,
+	): array
 	{
 		$result = [];
 
 		$isCheckSelect = (is_array($select) && !in_array('*', $select, true));
 
+		if ($useOriginalUfNames)
+		{
+			$converter = Container::getInstance()->getOrmObjectConverter();
+		}
+
 		foreach ($items as $item)
 		{
 			$itemId = $item->getId();
 			$result[$itemId] = $item->jsonSerialize();
+
+			if ($useOriginalUfNames)
+			{
+				foreach ($result[$itemId] as $fieldName => $value)
+				{
+					if (str_starts_with($fieldName, 'uf'))
+					{
+						unset($result[$itemId][$fieldName]);
+						$result[$itemId][$converter->convertFieldNameFromCamelCaseToUpperCase($fieldName)] = $value;
+					}
+				}
+			}
 
 			if ($factory->isMultiFieldsEnabled())
 			{
@@ -1049,7 +1094,12 @@ class Item extends Base
 
 		if ($isCheckSelect)
 		{
-			$select = $this->convertKeysToCamelCase(array_flip($select));
+			$select = array_flip($select);
+			if (!$useOriginalUfNames)
+			{
+				$select = $this->convertKeysToCamelCase($select);
+			}
+
 			foreach ($result as &$item)
 			{
 				$item = array_intersect_key($item, $select);
@@ -1095,24 +1145,14 @@ class Item extends Base
 	/**
 	 * @deprecated This method will be removed when operations will be supported for all entity types
 	 */
-	private function importViaDeprecatedApi(int $entityTypeId, array $fields): ?array
+	private function importViaDeprecatedApi(int $entityTypeId, array $fields, bool $useOriginalUfNames = false): ?array
 	{
-		switch ($entityTypeId)
-		{
-			case \CCrmOwnerType::Lead:
-				$restEntity = new \CCrmLeadRestProxy();
-				break;
-
-			case \CCrmOwnerType::Contact:
-				$restEntity = new \CCrmContactRestProxy();
-				break;
-
-			case \CCrmOwnerType::Company:
-				$restEntity = new \CCrmCompanyRestProxy();
-				break;
-			default:
-				throw new NotSupportedException("Entity type {$entityTypeId} is not supported");
-		}
+		$restEntity = match ($entityTypeId) {
+			\CCrmOwnerType::Lead => new \CCrmLeadRestProxy(),
+			\CCrmOwnerType::Contact => new \CCrmContactRestProxy(),
+			\CCrmOwnerType::Company => new \CCrmCompanyRestProxy(),
+			default => throw new NotSupportedException("Entity type {$entityTypeId} is not supported"),
+		};
 
 		if (!\CCrmAuthorizationHelper::CheckImportPermission($entityTypeId))
 		{
@@ -1124,7 +1164,7 @@ class Item extends Base
 			return null;
 		}
 
-		$fields = $this->convertKeysToUpper($fields);
+		$fields = $this->convertFieldNamesToUpper($fields, $useOriginalUfNames);
 		$fieldsMap = Container::getInstance()->getFactory($entityTypeId)->getFieldsMap();
 		foreach ($fieldsMap as $commonFieldName => $fieldName)
 		{
@@ -1134,6 +1174,7 @@ class Item extends Base
 				unset($fields[$commonFieldName]);
 			}
 		}
+
 		try
 		{
 			$id = $restEntity->add($fields, [ 'IMPORT' => true ]);
@@ -1150,7 +1191,7 @@ class Item extends Base
 		return [
 			'item' => [
 				'id' => (int)$id,
-			]
+			],
 		];
 	}
 
@@ -1231,5 +1272,39 @@ class Item extends Base
 			Assembler::updateCollectionByArray($fmCollection, $fmValues);
 			$item->set(\Bitrix\Crm\Item::FIELD_NAME_FM, $fmCollection);
 		}
+	}
+
+	private function convertFieldNamesToUpper(
+		array $data,
+		bool $useOriginalUfNames = false,
+		bool $useFilterPrefix = false
+	): array
+	{
+		$converter = Container::getInstance()->getOrmObjectConverter();
+
+		if (!$useOriginalUfNames)
+		{
+			return $converter->convertKeysToUpperCase($data);
+		}
+
+		$result = [];
+		foreach ($data as $fieldName => $fieldValue)
+		{
+			$filterCondition = (new \CSQLWhere())->MakeOperation($fieldName);
+			$originalFieldName = $useFilterPrefix ? $filterCondition['FIELD'] : $fieldName;
+
+			if (!str_starts_with($originalFieldName, 'UF_'))
+			{
+				$fieldName = $converter->convertFieldNameFromCamelCaseToUpperCase($fieldName);
+			}
+
+			$result[$fieldName] = (
+				is_array($fieldValue)
+					? $this->convertFieldNamesToUpper($fieldValue, $useOriginalUfNames)
+					: $fieldValue
+			);
+		}
+
+		return $result;
 	}
 }

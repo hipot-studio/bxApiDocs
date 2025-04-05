@@ -928,7 +928,15 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			}
 		}
 
-		return parent::onBeforeDelete($event);
+		$result = parent::onBeforeDelete($event);
+		if (empty($result->getErrors()))
+		{
+			$oldData = static::getTemporaryStorage()->getData($id);
+			static::update($id, ['IS_INITIALIZED' => false]); // hide smart-process before delete to avoid race conditions in TypesCollectionCache
+			static::getTemporaryStorage()->saveData($id, $oldData);
+		}
+
+		return $result;
 	}
 
 	public static function compileEntity($type): Entity

@@ -17,13 +17,10 @@ use Bitrix\Crm\Exclusion;
 use Bitrix\Crm\Filter;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Observer\Entity\ObserverTable;
-use Bitrix\Crm\PhaseSemantics;
-use Bitrix\Crm\Security\EntityAuthorization;
-use Bitrix\Crm\Security\EntityPermission\ApproveCustomPermsToExistRole;
-use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Display\Field;
+use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Statistics\StatisticEntryManager;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
@@ -41,7 +38,6 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Filter\FieldAdapter;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\UI\Form\EntityEditorConfiguration;
-use CCrmPerms;
 
 abstract class Entity
 {
@@ -99,6 +95,8 @@ abstract class Entity
 	/** @var $companyDataProvider KanbanDataProvider */
 	protected $companyDataProvider;
 
+	protected UserPermissions $userPermissions;
+
 	public function __construct()
 	{
 		Service\Container::getInstance()->getLocalization()->loadMessages();
@@ -109,6 +107,7 @@ abstract class Entity
 		);
 
 		$this->initFactory();
+		$this->userPermissions = Container::getInstance()->getUserPermissions();
 	}
 
 	public function initFactory(): void
@@ -921,12 +920,16 @@ abstract class Entity
 	/**
 	 * Returns additional permission parameters for the crm.kanban component.
 	 *
-	 * @param CCrmPerms $permissions
 	 * @return array
 	 */
-	public function getPermissionParameters(CCrmPerms $permissions): array
+	public function getPermissionParameters(): array
 	{
 		return [];
+	}
+
+	public function getUserPermissions(): UserPermissions
+	{
+		return $this->userPermissions;
 	}
 
 	protected function hasStageDependantRequiredFields(): bool
@@ -1038,22 +1041,21 @@ abstract class Entity
 		return $requiredFields;
 	}
 
-	protected function getAddItemToStagePermissionType(string $stageId, CCrmPerms $userPermissions): ?string
-	{
-		return null;
-	}
-
 	/**
-	 * Returns true if user with $userPermissions can add item to stage with identifier $stageId.
+	 * Returns true if user with can add item to stage with identifier $stageId.
 	 */
-	public function canAddItemToStage(string $stageId, CCrmPerms $userPermissions, string $semantics = PhaseSemantics::UNDEFINED): bool
+	public function canAddItemToStage(string $stageId, string $semantics): bool
 	{
 		if (!$this->isInlineEditorSupported())
 		{
 			return false;
 		}
 
-		return ($this->getAddItemToStagePermissionType($stageId, $userPermissions) !== BX_CRM_PERM_NONE);
+		return $this->userPermissions->stage()->canAddInStage(
+			$this->getTypeId(),
+			$this->categoryId,
+			$stageId
+		);
 	}
 
 	protected function getDataToCalculateTotalSums(string $fieldSum, array $filter, array $runtime): array
@@ -1163,15 +1165,11 @@ abstract class Entity
 		$currencyId = $this->getCurrency();
 		$currencyFormat = $this->getCurrencyFormat($currencyId);
 
-		$userPermissions = Container::getInstance()->getUserPermissions()->getCrmPermissions();
-
-		$isDefaultPermissionsApplied = (new ApproveCustomPermsToExistRole())->hasWaitingPermission(new HideSum());
-
 		foreach ($stages as &$stage)
 		{
 			$stage['currencyFormat'] = $currencyFormat;
 
-			if (!$isDefaultPermissionsApplied && !$this->havePermissionToDisplayColumnSum($stage['id'], $userPermissions))
+			if (!$this->havePermissionToDisplayColumnSum($stage['id']))
 			{
 				$stage['hiddenTotalSum'] = true;
 
@@ -1182,20 +1180,14 @@ abstract class Entity
 		unset($stage);
 	}
 
-	public function havePermissionToDisplayColumnSum(string $stageId, CCrmPerms $userPermissions): bool
+	public function havePermissionToDisplayColumnSum(string $stageId): bool
 	{
-		$entityTypeId = $this->factory->getEntityTypeId();
-		if (Container::getInstance()->getUserPermissions()->isAdminForEntity($entityTypeId))
-		{
-			return true;
-		}
+		$entityTypeId = $this->getTypeId();
 
-		return ($this->getHideSumForStagePermissionType($stageId, $userPermissions) === BX_CRM_PERM_ALL);
-	}
-
-	protected function getHideSumForStagePermissionType(string $stageId, CCrmPerms $userPermissions): ?string
-	{
-		return null;
+		return $this->userPermissions
+			->kanban()
+			->canReadKanbanSumInStage($entityTypeId, $this->categoryId, $stageId)
+		;
 	}
 
 	public function getHiddenPriceFormattedText(string $currencyFormat): string
@@ -1387,17 +1379,13 @@ abstract class Entity
 	 * @deprecated since crm 24.0.0. Use deleteItemsV2
 	 * Delete items of this entity with $ids.
 	 *
-	 * @param array $ids
-	 * @param bool $isIgnore
-	 * @param CCrmPerms|null $permissions
-	 * @param array $params
 	 */
-	public function deleteItems(array $ids, bool $isIgnore = false, CCrmPerms $permissions = null, array $params = []): void
+	public function deleteItems(array $ids, bool $isIgnore = false, $permissions = null, array $params = []): void
 	{
-		$this->deleteItemsV2($ids, $isIgnore, $permissions, $params);
+		$this->deleteItemsV2($ids, $isIgnore, $params);
 	}
 
-	public function deleteItemsV2(array $ids, bool $isIgnore = false, CCrmPerms $permissions = null, array $params = []): Result
+	public function deleteItemsV2(array $ids, bool $isIgnore = false, array $params = []): Result
 	{
 		$result = new Result();
 
@@ -1484,7 +1472,7 @@ abstract class Entity
 		{
 			$item = $factory->getItem($id, $fieldsToSelect);
 
-			if (!$item || !Container::getInstance()->getUserPermissions()->canReadItem($item))
+			if (!$item || !$this->userPermissions->item()->canReadItem($item))
 			{
 				return null;
 			}
@@ -1499,24 +1487,22 @@ abstract class Entity
 	 * Returns true if user with $permissions can update item with $id.
 	 *
 	 * @param int $id
-	 * @param CCrmPerms $permissions
 	 * @return bool
 	 */
-	public function checkUpdatePermissions(int $id, ?CCrmPerms $permissions = null): bool
+	public function checkUpdatePermissions(int $id): bool
 	{
-		return EntityAuthorization::checkUpdatePermission($this->getTypeId(), $id, $permissions);
+		return $this->userPermissions->item()->canUpdate($this->getTypeId(), $id);
 	}
 
 	/**
 	 * Returns true if user with $permissions can read item with $id.
 	 *
 	 * @param int $id
-	 * @param CCrmPerms $permissions
 	 * @return bool
 	 */
-	public function checkReadPermissions(int $id = 0, ?CCrmPerms $permissions = null): bool
+	public function checkReadPermissions(): bool
 	{
-		return EntityAuthorization::checkReadPermission($this->getTypeId(), $id, $permissions);
+		return $this->userPermissions->entityType()->canReadItemsInCategory($this->getTypeId(), $this->categoryId);
 	}
 
 	/**
@@ -1524,10 +1510,9 @@ abstract class Entity
 	 *
 	 * @param array $ids
 	 * @param int $assignedId
-	 * @param CCrmPerms $permissions
 	 * @return Result
 	 */
-	public function setItemsAssigned(array $ids, int $assignedId, CCrmPerms $permissions): Result
+	public function setItemsAssigned(array $ids, int $assignedId): Result
 	{
 		$result = new Result();
 
@@ -1536,7 +1521,7 @@ abstract class Entity
 		$fieldName = $this->getAssignedByFieldName();
 		foreach ($ids as $id)
 		{
-			if (!$this->checkUpdatePermissions($id, $permissions))
+			if (!$this->checkUpdatePermissions($id))
 			{
 				continue;
 			}
@@ -1672,23 +1657,11 @@ abstract class Entity
 	 *
 	 * @param array $ids
 	 * @param int $categoryId
-	 * @param CCrmPerms $permissions
 	 * @return Result
 	 */
-	public function updateItemsCategory(array $ids, int $categoryId, CCrmPerms $permissions): Result
+	public function updateItemsCategory(array $ids, int $categoryId): Result
 	{
 		return new Result();
-	}
-
-	/**
-	 * Returns categories to which user with $permissions has access.
-	 *
-	 * @param CCrmPerms $permissions
-	 * @return array
-	 */
-	public function getCategories(CCrmPerms $permissions): array
-	{
-		return [];
 	}
 
 	/**
@@ -2953,14 +2926,13 @@ abstract class Entity
 			return [];
 		}
 
-		$categories = $this->getCategories(CCrmPerms::getCurrentUserPermissions());
-		if (empty($categories))
+		$categoryIds = $this->userPermissions->category()->getAvailableForReadingCategoriesIds($this->getTypeId());
+		if (empty($categoryIds))
 		{
 			return [];
 		}
 
 		$result = [];
-		$categoryIds = array_column($categories, 'ID');
 		foreach ($categoryIds as $categoryId)
 		{
 			$result[$categoryId] = (new TodoPingSettingsProvider($entityTypeId, $categoryId))
@@ -3030,8 +3002,26 @@ abstract class Entity
 		// may implement in child class
 	}
 
-	public function getCategoriesWithAddPermissions(CCrmPerms $permissions): array
+	public function getCategoriesWithAddPermissions(): array
 	{
-		return [];
+		$result = [];
+		if (!$this->factory->isCategoriesSupported())
+		{
+			return $result;
+		}
+
+		$router = Container::getInstance()->getRouter();
+		$categories = $this->factory->getCategories();
+		foreach ($categories as $category)
+		{
+			$categoryId = $category->getId();
+			if ($this->userPermissions->category()->canAddItems($category))
+			{
+				$result[$categoryId] = $category->getData();
+				$result[$categoryId]['url'] = $router->getKanbanUrl($this->getTypeId(), $categoryId);
+			}
+		}
+
+		return $result;
 	}
 }

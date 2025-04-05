@@ -209,7 +209,8 @@ class CrmDocumentViewComponent extends ViewComponent
 				($provider instanceof \Bitrix\Crm\Integration\DocumentGenerator\DataProvider\Deal)
 				&& \Bitrix\Crm\Service\Container::getInstance()
 					->getUserPermissions()
-					->checkAddPermissions(\CCrmOwnerType::SmartDocument)
+					->entityType()
+					->canAddItems(\CCrmOwnerType::SmartDocument)
 				&& \Bitrix\Crm\Settings\Crm::isDocumentSigningEnabled()
 				&& \Bitrix\Sign\Config\Storage::instance()->isAvailable()
 			;

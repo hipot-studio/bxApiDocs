@@ -38,6 +38,11 @@ class EventHandler
 			AutomatedSolutionMapping::getMapping($languageId),
 			DynamicItemsProductMapping::getMapping($helper, $languageId),
 		);
+		$crmQuoteUf = QuoteUserFieldsMapping::getMapping($languageId);
+		if ($crmQuoteUf)
+		{
+			$result['crm_quote_uf'] = $crmQuoteUf;
+		}
 
 		self::addDescriptions([
 			'crm_smart_proc',

@@ -10,16 +10,16 @@ class Item extends Base
 {
 	protected $item;
 
-	protected function loadValue(string $fieldId): void
+	protected function processField(string $fieldId): bool
 	{
 		if ($fieldId === 'CONTACTS')
 		{
 			$this->loadContactValues();
+
+			return true;
 		}
-		else
-		{
-			$this->loadEntityValues();
-		}
+
+		return false;
 	}
 
 	protected function getItem(): ?Crm\Item
@@ -27,7 +27,10 @@ class Item extends Base
 		if ($this->item === null)
 		{
 			$factory = Crm\Service\Container::getInstance()->getFactory($this->typeId);
-			$this->item = $factory->getItem($this->id);
+			if ($factory)
+			{
+				$this->item = $factory->getItem($this->id, $this->select);
+			}
 		}
 
 		return $this->item;

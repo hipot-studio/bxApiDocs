@@ -387,4 +387,9 @@ class SmartB2eDocument extends Dynamic
 	{
 		return false;
 	}
+
+	public function hasCustomPermissionsUI(): bool
+	{
+		return true;
+	}
 }

@@ -767,6 +767,14 @@ class RelationManager
 				;
 			}
 
+			$predefinedRelations[] =
+				(new Relation(
+					new RelationIdentifier($type->getEntityTypeId(), \CCrmOwnerType::SmartB2eDocument),
+					clone $bindingSettings,
+				))
+					->setStorageStrategy(new StorageStrategy\EntityRelationTable())
+			;
+
 			if (!$type->getIsClientEnabled())
 			{
 				continue;

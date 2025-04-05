@@ -70,7 +70,7 @@ final class Sender
 
 		if (
 			$checkUserPermissions
-			&& !Container::getInstance()->getUserPermissions()->checkUpdatePermissions($ownerTypeId, $ownerId)
+			&& !Container::getInstance()->getUserPermissions()->item()->canUpdate($ownerTypeId, $ownerId)
 		)
 		{
 			$result->addError(new Error('CRM_PERMISSION_DENIED'));

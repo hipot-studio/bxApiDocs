@@ -47,7 +47,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		}
 		elseif (empty($value['HAS_ZONE_URL_PARAMS']))
 		{
-			$link = "<a href='{$value['DETAIL_URL']}'>{$title}</a>";
+			$link = "<a href='{$value['DETAIL_URL']}' target='_blank'>{$title}</a>";
 		}
 		else
 		{

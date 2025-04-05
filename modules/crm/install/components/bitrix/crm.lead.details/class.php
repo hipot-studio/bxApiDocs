@@ -9,7 +9,6 @@ use Bitrix\Crm;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Component\EntityDetails\ComponentMode;
 use Bitrix\Crm\Component\EntityDetails\Traits;
-use Bitrix\Crm\Controller\Action\Entity\SearchAction;
 use Bitrix\Crm\Conversion\LeadConversionDispatcher;
 use Bitrix\Crm\Conversion\LeadConversionScheme;
 use Bitrix\Crm\CustomerType;
@@ -56,8 +55,7 @@ class CCrmLeadDetailsComponent
 	protected $guid = '';
 	/** @var int */
 	private $userID = 0;
-	/** @var  CCrmPerms|null */
-	private $userPermissions = null;
+	private Bitrix\Crm\Service\UserPermissions $userPermissionsService;
 	/** @var string */
 	private $userFieldEntityID;
 	/** @var CCrmUserType|null  */
@@ -119,8 +117,8 @@ class CCrmLeadDetailsComponent
 
 		parent::__construct($component);
 
-		$this->userID = CCrmSecurityHelper::GetCurrentUserID();
-		$this->userPermissions = CCrmPerms::GetCurrentUserPermissions();
+		$this->userID = Container::getInstance()->getContext()->getUserId();
+		$this->userPermissionsService = Container::getInstance()->getUserPermissions($this->userID);
 		$this->userFieldEntityID = \CCrmLead::GetUserFieldEntityID();
 		$this->userType = new \CCrmUserType($USER_FIELD_MANAGER, $this->userFieldEntityID);
 		$this->userFieldDispatcher = \Bitrix\Main\UserField\Dispatcher::instance();
@@ -182,13 +180,13 @@ class CCrmLeadDetailsComponent
 
 		if ($this->isCopyMode)
 		{
-			if (!\CCrmLead::CheckReadPermission($this->entityID, $this->userPermissions))
+			if (!$this->userPermissionsService->item()->canRead(CCrmOwnerType::Lead, $this->entityID))
 			{
 				Crm\Component\EntityDetails\Error::showError(Crm\Component\EntityDetails\Error::NoReadPermission, CCrmOwnerType::Lead);
 
 				return;
 			}
-			elseif (!\CCrmLead::CheckCreatePermission($this->userPermissions))
+			elseif (!$this->userPermissionsService->entityType()->canAddItems(CCrmOwnerType::Lead))
 			{
 				Crm\Component\EntityDetails\Error::showError(Crm\Component\EntityDetails\Error::NoAddPermission, CCrmOwnerType::Lead);
 
@@ -198,8 +196,8 @@ class CCrmLeadDetailsComponent
 		elseif ($this->isEditMode)
 		{
 			if (
-				!\CCrmLead::CheckUpdatePermission(0)
-				&& !\CCrmLead::CheckReadPermission()
+				!$this->userPermissionsService->entityType()->canUpdateItems(CCrmOwnerType::Lead)
+				&& !$this->userPermissionsService->entityType()->canReadItems(CCrmOwnerType::Lead)
 			)
 			{
 				Crm\Component\EntityDetails\Error::showError(Crm\Component\EntityDetails\Error::NoAccessToEntityType, CCrmOwnerType::Lead);
@@ -207,8 +205,8 @@ class CCrmLeadDetailsComponent
 				return;
 			}
 			elseif (
-				!\CCrmLead::CheckUpdatePermission($this->entityID, $this->userPermissions)
-				&& !\CCrmLead::CheckReadPermission($this->entityID, $this->userPermissions)
+				!$this->userPermissionsService->item()->canUpdate(CCrmOwnerType::Lead, $this->entityID)
+				&& !$this->userPermissionsService->item()->canRead(CCrmOwnerType::Lead, $this->entityID)
 			)
 			{
 				Crm\Component\EntityDetails\Error::showError(Crm\Component\EntityDetails\Error::NoReadPermission, CCrmOwnerType::Lead);
@@ -216,7 +214,7 @@ class CCrmLeadDetailsComponent
 				return;
 			}
 		}
-		elseif (!\CCrmLead::CheckCreatePermission($this->userPermissions))
+		elseif (!$this->userPermissionsService->entityType()->canAddItems(CCrmOwnerType::Lead))
 		{
 			Crm\Component\EntityDetails\Error::showError(Crm\Component\EntityDetails\Error::NoAddPermission, CCrmOwnerType::Lead);
 
@@ -262,7 +260,7 @@ class CCrmLeadDetailsComponent
 
 		//region Conversion
 		$this->arResult['PERMISSION_ENTITY_TYPE'] = 'LEAD';
-		\CCrmLead::PrepareConversionPermissionFlags($this->entityID, $this->arResult, $this->userPermissions);
+		\CCrmLead::PrepareConversionPermissionFlags($this->entityID, $this->arResult);
 		if ($this->isCopyMode || $this->entityID <= 0)
 		{
 			$this->arResult['CAN_CONVERT'] = false;
@@ -778,6 +776,7 @@ class CCrmLeadDetailsComponent
 
 		$prohibitedStatusIDs = [];
 		$allStatuses = CCrmStatus::GetStatusList('STATUS');
+		$stagePermissions = $this->userPermissionsService->stage();
 		foreach(array_keys($allStatuses) as $statusID)
 		{
 			if (isset($this->arResult['READ_ONLY']) && $this->arResult['READ_ONLY'])
@@ -786,11 +785,10 @@ class CCrmLeadDetailsComponent
 			}
 			else
 			{
-				$permissionType = $this->isEditMode
-					? \CCrmLead::GetStatusUpdatePermissionType($statusID, $this->userPermissions)
-					: \CCrmLead::GetStatusCreatePermissionType($statusID, $this->userPermissions);
-
-				if($permissionType == BX_CRM_PERM_NONE)
+				if (!($this->isEditMode
+					? $stagePermissions->canUpdateInStage(CCrmOwnerType::Lead, null, $statusID)
+					: $stagePermissions->canAddInStage(CCrmOwnerType::Lead, null, $statusID)
+				))
 				{
 					$prohibitedStatusIDs[] = $statusID;
 				}
@@ -1115,8 +1113,6 @@ class CCrmLeadDetailsComponent
 				'categoryParams' => $categoryParams,
 				'map' => ['data' => 'CLIENT_DATA'],
 				'info' => 'CLIENT_INFO',
-				'lastCompanyInfos' => 'LAST_COMPANY_INFOS',
-				'lastContactInfos' => 'LAST_CONTACT_INFOS',
 				'loaders' => [
 					'primary' => [
 						CCrmOwnerType::CompanyName => [
@@ -1748,6 +1744,10 @@ class CCrmLeadDetailsComponent
 			if(is_object($dbResult))
 			{
 				$this->entityData = $dbResult->Fetch();
+				if (is_null($this->entityData['OPPORTUNITY']))
+				{
+					$this->entityData['OPPORTUNITY'] = 0.0;
+				}
 			}
 
 			if(!is_array($this->entityData))
@@ -1989,14 +1989,13 @@ class CCrmLeadDetailsComponent
 		$companyID = (int)($this->entityData['COMPANY_ID'] ?? 0);
 		if ($companyID > 0)
 		{
-			$isEntityReadPermitted = \CCrmCompany::CheckReadPermission($companyID, $this->userPermissions);
+			$isEntityReadPermitted = $this->userPermissionsService->item()->canRead(CCrmOwnerType::Company, $companyID);
 			$companyInfo = \CCrmEntitySelectorHelper::PrepareEntityInfo(
 				CCrmOwnerType::CompanyName,
 				$companyID,
 				array(
 					'ENTITY_EDITOR_FORMAT' => true,
 					'IS_HIDDEN' => !$isEntityReadPermitted,
-					'USER_PERMISSIONS' => $this->userPermissions,
 					'REQUIRE_REQUISITE_DATA' => true,
 					'REQUIRE_EDIT_REQUISITE_DATA' => true,
 					'REQUIRE_MULTIFIELDS' => true,
@@ -2029,14 +2028,13 @@ class CCrmLeadDetailsComponent
 		$iteration= 0;
 		foreach($contactIDs as $contactID)
 		{
-			$isEntityReadPermitted = CCrmContact::CheckReadPermission($contactID, $this->userPermissions);
+			$isEntityReadPermitted = $this->userPermissionsService->item()->canRead(CCrmOwnerType::Contact, $contactID);
 			$clientInfo['CONTACT_DATA'][] = CCrmEntitySelectorHelper::PrepareEntityInfo(
 				CCrmOwnerType::ContactName,
 				$contactID,
 				array(
 					'ENTITY_EDITOR_FORMAT' => true,
 					'IS_HIDDEN' => !$isEntityReadPermitted,
-					'USER_PERMISSIONS' => $this->userPermissions,
 					'REQUIRE_REQUISITE_DATA' => true,
 					'REQUIRE_EDIT_REQUISITE_DATA' => ($iteration === 0), // load full requisite data for first item only (due to performance optimisation)
 					'REQUIRE_MULTIFIELDS' => true,
@@ -2048,31 +2046,6 @@ class CCrmLeadDetailsComponent
 			$iteration++;
 		}
 		$this->entityData['CLIENT_INFO'] = $clientInfo;
-
-		if ($this->enableSearchHistory)
-		{
-			$categoryParams = CCrmComponentHelper::getEntityClientFieldCategoryParams(CCrmOwnerType::Lead);
-			$this->entityData['LAST_COMPANY_INFOS'] = SearchAction::prepareSearchResultsJson(
-				Crm\Controller\Entity::getRecentlyUsedItems(
-					'crm.lead.details',
-					'company',
-					[
-						'EXPAND_ENTITY_TYPE_ID' => CCrmOwnerType::Company,
-						'EXPAND_CATEGORY_ID' => $categoryParams[CCrmOwnerType::Company]['categoryId'],
-					]
-				)
-			);
-			$this->entityData['LAST_CONTACT_INFOS'] = SearchAction::prepareSearchResultsJson(
-				Crm\Controller\Entity::getRecentlyUsedItems(
-					'crm.lead.details',
-					'contact',
-					[
-						'EXPAND_ENTITY_TYPE_ID' => CCrmOwnerType::Contact,
-						'EXPAND_CATEGORY_ID' => $categoryParams[CCrmOwnerType::Contact]['categoryId'],
-					]
-				)
-			);
-		}
 
 		//endregion
 		//region Multifield Data
@@ -2267,14 +2240,14 @@ class CCrmLeadDetailsComponent
 		if($this->statuses === null)
 		{
 			$this->statuses = [];
+			$stagePermissions = $this->userPermissionsService->stage();
 			$allStatuses = CCrmStatus::GetStatusList('STATUS');
 			foreach ($allStatuses as $statusID => $statusTitle)
 			{
-				$permissionType = $this->isEditMode
-					? \CCrmLead::GetStatusUpdatePermissionType($statusID, $this->userPermissions)
-					: \CCrmLead::GetStatusCreatePermissionType($statusID, $this->userPermissions);
-
-				if ($permissionType > BX_CRM_PERM_NONE)
+				if ($this->isEditMode
+					? $stagePermissions->canUpdateInStage(CCrmOwnerType::Lead, null, $statusID)
+					: $stagePermissions->canAddInStage(CCrmOwnerType::Lead, null, $statusID)
+				)
 				{
 					$this->statuses[$statusID] = $statusTitle;
 				}
@@ -2389,12 +2362,12 @@ class CCrmLeadDetailsComponent
 
 		if ($this->isEditMode)
 		{
-			if (\CCrmLead::CheckUpdatePermission($this->entityID, $this->userPermissions))
+			if ($this->userPermissionsService->item()->canUpdate(CCrmOwnerType::Lead, $this->entityID))
 			{
 				$this->arResult['READ_ONLY'] = false;
 			}
 		}
-		elseif (\CCrmLead::CheckCreatePermission($this->userPermissions))
+		elseif ($this->userPermissionsService->entityType()->canAddItems(CCrmOwnerType::Lead))
 		{
 			$this->arResult['READ_ONLY'] = false;
 		}

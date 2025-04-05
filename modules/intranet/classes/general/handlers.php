@@ -1101,24 +1101,33 @@ class CIntranetEventHandlers
 	/*
 	RegisterModuleDependences("main", "OnBeforeUserUpdate", "intranet", "CIntranetEventHandlers", "OnBeforeUserUpdate");
 	*/
-	public static function OnBeforeUserUpdate(&$fields)
+	public static function OnBeforeUserUpdate(&$fields): void
 	{
-		if (
-			!is_array($fields)
-			|| !isset($fields['ID'])
-			|| intval($fields['ID']) <= 0
-		)
+		$userId = (int)($fields['ID'] ?? null);
+		if ($userId <= 0)
 		{
 			return;
 		}
 
-		$userId = intval($fields['ID']);
-
-		$res = CUser::getList("id", "asc", array("ID_EQUAL_EXACT" => $userId), array("SELECT" => array("UF_DEPARTMENT"), "FIELDS" => array("ID", "ACTIVE")));
-		if ($user = $res->fetch())
+		$userResult = CUser::getList(
+			'id',
+			'asc',
+			[
+				'ID_EQUAL_EXACT' => $userId,
+			],
+			[
+				'SELECT' => ['UF_DEPARTMENT'],
+				'FIELDS' => ['ID', 'ACTIVE'],
+			]
+		);
+		if ($user = $userResult->fetch())
 		{
-			self::$userDepartmentCache[$userId] = $user["UF_DEPARTMENT"];
-			self::$userActiveCache = $user["ACTIVE"];
+			self::$userDepartmentCache[$userId] = $user['UF_DEPARTMENT'];
+			self::$userActiveCache = $user['ACTIVE'];
+		}
+		else
+		{
+			return;
 		}
 
 		if (!defined('BX_COMP_MANAGED_CACHE') || !BX_COMP_MANAGED_CACHE)
@@ -1128,33 +1137,25 @@ class CIntranetEventHandlers
 
 		global $CACHE_MANAGER;
 
-		$queryObject = CUser::getList(
-			"id", "asc",
-			["ID_EQUAL_EXACT" => intval($fields['ID'])],
-			['SELECT' => ['UF_DEPARTMENT']]
-		);
-		if ($oldFields = $queryObject->fetch())
+		if (
+			isset($fields['UF_DEPARTMENT'])
+			&& is_array($fields['UF_DEPARTMENT'])
+			&& $fields['UF_DEPARTMENT'] != ($user['UF_DEPARTMENT'] ?? null)
+		)
 		{
-			if (
-				isset($fields['UF_DEPARTMENT'])
-				&& is_array($fields['UF_DEPARTMENT'])
-				&& $fields['UF_DEPARTMENT'] != $oldFields['UF_DEPARTMENT']
-			)
+			if (!is_array($user['UF_DEPARTMENT']))
 			{
-				if (!is_array($oldFields['UF_DEPARTMENT']))
-				{
-					$oldFields['UF_DEPARTMENT'] = [];
-				}
+				$user['UF_DEPARTMENT'] = [];
+			}
 
-				$arDepts = array_merge($fields['UF_DEPARTMENT'], $oldFields['UF_DEPARTMENT']);
-				if (count($arDepts) > 0)
-				{
-					$CACHE_MANAGER->ClearByTag('intranet_department_structure');
+			$departmentsIds = array_merge($fields['UF_DEPARTMENT'], $user['UF_DEPARTMENT']);
+			if (count($departmentsIds) > 0)
+			{
+				$CACHE_MANAGER->ClearByTag('intranet_department_structure');
 
-					foreach ($arDepts as $dpt)
-					{
-						$CACHE_MANAGER->ClearByTag('intranet_department_'.$dpt);
-					}
+				foreach ($departmentsIds as $departmentId)
+				{
+					$CACHE_MANAGER->ClearByTag('intranet_department_'.$departmentId);
 				}
 			}
 		}
@@ -1881,6 +1882,14 @@ RegisterModuleDependences('main', 'OnBeforeProlog', 'intranet', 'CIntranetEventH
 		{
 			$user = new CUser();
 			$user->Update($arParams["user_fields"]["ID"], array("CONFIRM_CODE" => ""));
+		}
+		$userId = (int)$arParams["user_fields"]["ID"];
+		if ($userId > 0 && (!defined('BX_SECURITY_SESSION_VIRTUAL') || BX_SECURITY_SESSION_VIRTUAL !== true))
+		{
+			\Bitrix\Intranet\Service\ServiceContainer::getInstance()
+				->getUserService()
+				->logAuthTimeForNonMobile($userId)
+			;
 		}
 	}
 

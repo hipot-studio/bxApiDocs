@@ -128,8 +128,6 @@ class ShareRole extends Controller
 		}
 
 		$event->send(Status::Success);
-
-//		$ownerService->unsetDeletedFlagsForUsers($requestDTO->usersIdsInAccessCodes, $requestDTO->roleId);
 	}
 
 
@@ -168,10 +166,9 @@ class ShareRole extends Controller
 	public function showAvatarAction(
 		RoleService $roleService,
 		int $roleId,
+		string $avatarSize
 	): BFile
 	{
-		$fileId = $roleService->getAvatarIdByRoleId($roleId);
-
-		return BFile::createByFileId($fileId)->showInline(true);
+		return $roleService->getAvatarByRoleId($roleId, $avatarSize);
 	}
 }

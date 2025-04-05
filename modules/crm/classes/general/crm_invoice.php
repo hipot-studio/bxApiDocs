@@ -31,6 +31,10 @@ class CAllCrmInvoice
 	const CACHE_TTL = 3600;
 
 	public $LAST_ERROR = '';
+
+	/**
+	 * @deprecated
+	 */
 	public $cPerms = null;
 
 	protected $bCheckPermission = true;
@@ -43,6 +47,8 @@ class CAllCrmInvoice
 	private static $arCurrentPermType = null;
 	private static $arinvoicePropertiesAllowed = [];
 	private static $LIST_CALLBACK_PARAMS = null;
+
+	private static ?\Bitrix\Crm\Entity\Compatibility\Adapter\Permissions $permissionsAdapter = null;
 
 	function __construct($bCheckPermission = true)
 	{
@@ -459,7 +465,8 @@ class CAllCrmInvoice
 			unset($arFilter['__CONDITIONS']);
 		}
 
-		if (!(is_object($USER) && $USER->IsAdmin())
+		if (
+			!self::getPermissionsAdapter()->isAdmin()
 			&& (!array_key_exists('CHECK_PERMISSIONS', $arFilter) || $arFilter['CHECK_PERMISSIONS'] !== 'N')
 		)
 		{
@@ -543,26 +550,14 @@ class CAllCrmInvoice
 				continue;
 			}
 
-			$entityAttrs = self::BuildEntityAttr($assignedByID);
-			$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
-				->setEntityAttributes($entityAttrs)
-				->setEntityFields($fields)
-			;
-			\Bitrix\Crm\Security\Manager::getEntityController(CCrmOwnerType::Invoice)
-				->register(
-					self::$TYPE_NAME,
-					$ID,
-					$securityRegisterOptions
+			self::getPermissionsAdapter()
+				->getAttributesHelper(
+					self::getPermissionsAdapter()->getCurrentUserFromOptions(),
+					\Bitrix\Crm\Service\UserPermissions::OPERATION_READ
 				)
+				->setAssignedById($assignedByID)
+				->registerEntityAttributes($ID, $fields)
 			;
-		}
-	}
-	private function PrepareEntityAttrs(&$arEntityAttr, $entityPermType)
-	{
-		// Ensure that entity accessable for user restricted by BX_CRM_PERM_OPEN
-		if($entityPermType === BX_CRM_PERM_OPEN && !in_array('O', $arEntityAttr, true))
-		{
-			$arEntityAttr[] = 'O';
 		}
 	}
 
@@ -582,7 +577,8 @@ class CAllCrmInvoice
 
 		$queryBuilder = \Bitrix\Crm\Service\Container::getInstance()
 			->getUserPermissions($userId)
-			->createListQueryBuilder(self::$TYPE_NAME, $builderOptions)
+			->itemsList()
+			->createQueryBuilder(self::$TYPE_NAME, $builderOptions)
 		;
 
 		$result = $queryBuilder->build();
@@ -970,8 +966,7 @@ class CAllCrmInvoice
 
 		$arPrevOrder = ($tmpOrderId !== 0) ? CCrmInvoice::GetByID($tmpOrderId, $this->bCheckPermission) : null;
 
-		$userId = isset($options['CURRENT_USER'])
-			? (int)$options['CURRENT_USER'] : CCrmSecurityHelper::GetCurrentUserID();
+		$userId = self::getPermissionsAdapter()->getCurrentUserFromOptions($options);
 
 		if (!isset($arFields['RESPONSIBLE_ID']) || (int)$arFields['RESPONSIBLE_ID'] <= 0)
 		{
@@ -993,40 +988,28 @@ class CAllCrmInvoice
 		}
 
 		// prepare entity permissions
-		$arAttr = [];
-		if (!empty($arFields['OPENED']))
-		{
-			$arAttr['OPENED'] = $arFields['OPENED'];
-		}
+		$permissionAttributesHelper = self::getPermissionsAdapter()->getAttributesHelper(
+			$userId,
+			($tmpOrderId > 0)
+				? \Bitrix\Crm\Service\UserPermissions::OPERATION_UPDATE
+				: \Bitrix\Crm\Service\UserPermissions::OPERATION_ADD
+		);
+		$permissionAttributesHelper
+			->setAssignedById($arFields['RESPONSIBLE_ID'])
+			->setOpened($arFields['OPENED'] ?? null)
+			->setStageId($arFields['STATUS_ID'])
+		;
 
-		$sPermission = ($tmpOrderId > 0) ? 'WRITE' : 'ADD';
-		if($this->bCheckPermission)
+		if ($this->bCheckPermission)
 		{
-			$arEntityAttr = self::BuildEntityAttr($userId, $arAttr);
-			$userPerms = ($userId == CCrmPerms::GetCurrentUserID()) ? $this->cPerms : CCrmPerms::GetUserPermissions($userId);
-			$sEntityPerm = $userPerms->GetPermType(self::$TYPE_NAME, $sPermission, $arEntityAttr);
-			if ($sEntityPerm == BX_CRM_PERM_NONE)
+			if (!$permissionAttributesHelper->hasAccess())
 			{
 				$this->LAST_ERROR = GetMessage('CRM_PERMISSION_DENIED');
 				$GLOBALS['APPLICATION']->ThrowException($this->LAST_ERROR);
 				return false;
 			}
-
-			$responsibleID = intval($arFields['RESPONSIBLE_ID']);
-			if ($tmpOrderId === 0 && $sEntityPerm == BX_CRM_PERM_SELF && $responsibleID != $userId)
-			{
-				$arFields['RESPONSIBLE_ID'] = $userId;
-			}
-			if ($sEntityPerm == BX_CRM_PERM_OPEN && $userId == $responsibleID)
-			{
-				$arFields['OPENED'] = 'Y';
-			}
+			$permissionAttributesHelper->prepareFields($arFields);
 		}
-		$responsibleID = intval($arFields['RESPONSIBLE_ID']);
-		$arEntityAttr = self::BuildEntityAttr($responsibleID, $arAttr);
-		$userPerms = ($responsibleID == CCrmPerms::GetCurrentUserID()) ? $this->cPerms : CCrmPerms::GetUserPermissions($responsibleID);
-		$sEntityPerm = $userPerms->GetPermType(self::$TYPE_NAME, $sPermission, $arEntityAttr);
-		$this->PrepareEntityAttrs($arEntityAttr, $sEntityPerm);
 
 		// date fields
 		if ($tmpOrderId === 0)
@@ -1787,12 +1770,7 @@ class CAllCrmInvoice
 				Compatible\Helper::payOrder($tmpOrderId, true);
 			}
 
-			$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
-				->setEntityAttributes($arEntityAttr)
-			;
-			\Bitrix\Crm\Security\Manager::getEntityController(CCrmOwnerType::Invoice)
-				->register(self::$TYPE_NAME, $orderID, $securityRegisterOptions)
-			;
+			$permissionAttributesHelper->registerEntityAttributes($orderID);
 
 			$newDealID = isset($arFields['UF_DEAL_ID']) ? (int)$arFields['UF_DEAL_ID'] : 0;
 			$oldDealID = is_array($arPrevOrder) && isset($arPrevOrder['UF_DEAL_ID']) ? (int)$arPrevOrder['UF_DEAL_ID'] : 0;
@@ -1923,8 +1901,12 @@ class CAllCrmInvoice
 				Bitrix\Crm\Statistics\DealInvoiceStatisticEntry::register($dealID);
 			}
 
-			\Bitrix\Crm\Security\Manager::getEntityController(CCrmOwnerType::Invoice)
-				->unregister(self::$TYPE_NAME, $ID)
+			self::getPermissionsAdapter()
+				->getAttributesHelper(
+					Container::getInstance()->getContext()->getUserId(),
+					\Bitrix\Crm\Service\UserPermissions::OPERATION_DELETE
+				)
+				->unregisterEntityAttributes($ID)
 			;
 
 			CCrmSearch::DeleteSearch('INVOICE', $ID);
@@ -2153,29 +2135,40 @@ class CAllCrmInvoice
 		return CCrmCurrency::getInvoiceDefault();
 	}
 
-	public static function IsAccessEnabled(CCrmPerms $userPermissions = null)
-	{
-		return self::CheckReadPermission(0, $userPermissions);
-	}
-
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->entityType()->canAddItems()
+	 */
 	public static function CheckCreatePermission($userPermissions = null)
 	{
-		return CCrmAuthorizationHelper::CheckCreatePermission(self::$TYPE_NAME, $userPermissions);
+		return self::getPermissionsAdapter()->canAdd($userPermissions?->GetUserId());
 	}
 
-	public static function CheckUpdatePermission($ID, $userPermissions = null)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canUpdate()
+	 */
+	public static function CheckUpdatePermission($id, $userPermissions = null)
 	{
-		return CCrmAuthorizationHelper::CheckUpdatePermission(self::$TYPE_NAME, $ID, $userPermissions);
+		return self::getPermissionsAdapter()->canUpdate((int)$id, $userPermissions?->GetUserId());
 	}
 
-	public static function CheckDeletePermission($ID, $userPermissions = null)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canDelete()
+	 */
+	public static function CheckDeletePermission($id, $userPermissions = null)
 	{
-		return CCrmAuthorizationHelper::CheckDeletePermission(self::$TYPE_NAME, $ID, $userPermissions);
+		return self::getPermissionsAdapter()->canDelete((int)$id, $userPermissions?->GetUserId());
 	}
 
-	public static function CheckReadPermission($ID = 0, $userPermissions = null)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canRead()
+	 */
+	public static function CheckReadPermission($id = 0, $userPermissions = null)
 	{
-		return CCrmAuthorizationHelper::CheckReadPermission(self::$TYPE_NAME, $ID, $userPermissions);
+		return self::getPermissionsAdapter()->canRead((int)$id, $userPermissions?->GetUserId());
 	}
 
 	public static function GetProductRows($ID)
@@ -4756,10 +4749,6 @@ class CAllCrmInvoice
 			)
 		);
 
-		$_arAttr = \Bitrix\Crm\Security\Manager::resolveController($sEntityType)
-			->getPermissionAttributes($sEntityType, [$arInvoice['ID']])
-		;
-
 		if (empty($arSite))
 		{
 			$rsSite = $site->GetList();
@@ -4767,48 +4756,6 @@ class CAllCrmInvoice
 				$arSite[] = $_arSite['ID'];
 		}
 		unset($site);
-
-		$sattr_d = '';
-		$sattr_s = '';
-		$sattr_u = '';
-		$sattr_o = '';
-		$sattr2 = '';
-		$arAttr = array();
-		if (!isset($_arAttr[$arInvoice['ID']]))
-			$_arAttr[$arInvoice['ID']] = array();
-
-		$arAttr[] = $sEntityType; // for perm X
-		foreach ($_arAttr[$arInvoice['ID']] as $_s)
-		{
-			if ($_s[0] == 'U')
-				$sattr_u = $_s;
-			else if ($_s[0] == 'D')
-				$sattr_d = $_s;
-			else if ($_s[0] == 'S')
-				$sattr_s = $_s;
-			else if ($_s[0] == 'O')
-				$sattr_o = $_s;
-			$arAttr[] = $sEntityType.'_'.$_s;
-		}
-		$sattr = $sEntityType.'_'.$sattr_u;
-		if (!empty($sattr_d))
-		{
-			$sattr .= '_'.$sattr_d;
-			$arAttr[] = $sattr;
-		}
-		if (!empty($sattr_s))
-		{
-			$sattr2 = $sattr.'_'.$sattr_s;
-			$arAttr[] = $sattr2;
-			$arAttr[] = $sEntityType.'_'.$sattr_s;  // for perm X in status
-		}
-		if (!empty($sattr_o))
-		{
-			$sattr  .= '_'.$sattr_o;
-			$sattr3 = $sattr2.'_'.$sattr_o;
-			$arAttr[] = $sattr3;
-			$arAttr[] = $sattr;
-		}
 
 		$arSitePath = array();
 		foreach ($arSite as $sSite)
@@ -4821,7 +4768,6 @@ class CAllCrmInvoice
 			'PARAM1' => $sEntityType,
 			'PARAM2' => $arInvoice['ID'],
 			'SITE_ID' => $arSitePath,
-			'PERMISSIONS' => $arAttr,
 			'BODY' => $sBody,
 			'TAGS' => 'crm,'.mb_strtolower($sEntityType).','.GetMessage('CRM_'.$sEntityType)
 		);
@@ -5723,7 +5669,7 @@ class CAllCrmInvoice
 			$filter = array('ID' => $myCompanyId);
 			if (
 				$isPublicLinkMode
-				|| Container::getInstance()->getUserPermissions()->getMyCompanyPermissions()->canReadBaseFields()
+				|| Container::getInstance()->getUserPermissions()->myCompany()->canReadBaseFields()
 			)
 			{
 				$filter['CHECK_PERMISSIONS'] = 'N';
@@ -5906,7 +5852,7 @@ class CAllCrmInvoice
 			return false;
 		}
 
-		if (!\CCrmInvoice::checkReadPermission($invoice_id))
+		if (!self::getPermissionsAdapter()->canRead($invoice_id))
 		{
 			$error = 'PERMISSION DENIED!';
 			return false;
@@ -6039,4 +5985,15 @@ class CAllCrmInvoice
 
 		return (bool) $queryObject->fetch();
 	}
+
+	private static function getPermissionsAdapter(): \Bitrix\Crm\Entity\Compatibility\Adapter\Permissions
+	{
+		if (!self::$permissionsAdapter)
+		{
+			self::$permissionsAdapter = new \Bitrix\Crm\Entity\Compatibility\Adapter\Permissions(\CCrmOwnerType::Invoice);
+		}
+
+		return self::$permissionsAdapter;
+	}
+
 }

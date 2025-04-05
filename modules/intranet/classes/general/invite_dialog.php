@@ -22,6 +22,8 @@ use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Bitrix24\Integration;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Socialnetwork\Collab\Provider\CollabProvider;
+use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 
 Loc::loadMessages(__FILE__);
 
@@ -1342,28 +1344,43 @@ class CIntranetInviteDialog
 		return false;
 	}
 
-	public static function ReinviteExtranetUser($SITE_ID, $USER_ID)
+	public static function ReinviteExtranetUser($siteId, $userId)
 	{
-		global $USER;
+		$userId = (int)$userId;
 
-		$USER_ID = (int)$USER_ID;
-
-		$rsUser = CUser::GetList(
+		$resultUser = CUser::GetList(
 			"ID",
 			"DESC",
-			array("ID_EQUAL_EXACT" => $USER_ID)
+			array("ID_EQUAL_EXACT" => $userId)
 		);
 
-		if($arUser = $rsUser->Fetch())
+		if($userData = $resultUser->Fetch())
 		{
-			$arFields = Array(
-				"USER_ID" => $USER_ID,
-				"USER_ID_FROM" => $USER->GetID(),
-				"CHECKWORD" => $arUser["CONFIRM_CODE"],
-				"EMAIL" => $arUser["EMAIL"],
-				"USER_TEXT" => self::getInviteMessageText()
-			);
-			CEvent::SendImmediate("EXTRANET_INVITATION", $SITE_ID, $arFields);
+			$user = \Bitrix\Intranet\Entity\User::initByArray($userData);
+			$firstUserCollab = null;
+			if (Loader::includeModule('socialnetwork'))
+			{
+				$provider = \Bitrix\Socialnetwork\Collab\Provider\CollabProvider::getInstance();
+				$filter = \Bitrix\Main\ORM\Query\Query::filter()
+					->where('MEMBERS.ROLE', \Bitrix\Socialnetwork\Collab\Permission\UserRole::REQUEST)
+					->where('MEMBERS.USER_ID', $userId)
+				;
+				$query = (new \Bitrix\Socialnetwork\Collab\Provider\CollabQuery($userId))
+					->setWhere($filter)
+					->setSelect(['ID', 'NAME'])
+				;
+
+				$firstUserCollab = $provider->getList($query)->getFirst();
+			}
+
+			$message = (new \Bitrix\Intranet\Service\InviteMessageFactory(
+				self::getInviteMessageText(),
+				$firstUserCollab
+			))
+				->create($user)
+			;
+			$message->sendImmediately();
+
 			return true;
 		}
 		return false;

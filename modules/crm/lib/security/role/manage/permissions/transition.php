@@ -11,7 +11,7 @@ class Transition extends Permission
 	public const CODE = 'TRANSITION';
 
 	public const TRANSITION_ANY = 'ANY';
-	public const TRANSITION_INHERIT = 'INHERIT';
+	public const TRANSITION_INHERIT = \Bitrix\Crm\Service\UserPermissions::SETTINGS_INHERIT;
 	public const TRANSITION_BLOCKED = 'BLOCKED';
 
 	public function code(): string
@@ -46,7 +46,7 @@ class Transition extends Permission
 
 	public function getDefaultSettings(): array
 	{
-		return [self::TRANSITION_ANY];
+		return [self::TRANSITION_BLOCKED];
 	}
 
 	public function getMaxSettingsValue(): array

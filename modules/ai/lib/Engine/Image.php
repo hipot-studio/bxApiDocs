@@ -59,7 +59,7 @@ abstract class Image extends Engine implements IEngine
 		$fileId = File::saveImageByBase64Content($imageBase64, 'ai');
 		if ($fileId && ($fileArray = \CFile::GetFileArray($fileId)) && !empty($fileArray['SRC']))
 		{
-			return $fileArray['SRC'];
+			return File::getAbsoluteUri($fileArray['SRC']);
 		}
 
 		return null;

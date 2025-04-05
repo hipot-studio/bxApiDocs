@@ -21,7 +21,8 @@ abstract class Mailbox
 	const SYNC_TIMEOUT = 300;
 	const SYNC_TIME_QUOTA = 280;
 	const MESSAGE_RESYNCHRONIZATION_TIME = 360;
-	const MESSAGE_DELETION_LIMIT_AT_A_TIME = 1000;
+	const MESSAGE_DELETION_LIMIT_AT_A_TIME = 500;
+	const MESSAGE_SET_OLD_STATUS_LIMIT_AT_A_TIME = 500;
 	const NUMBER_OF_BROKEN_MESSAGES_TO_RESYNCHRONIZE = 2;
 
 	const MAIL_SERVICES_ONLY_FOR_THE_RU_ZONE = [
@@ -468,8 +469,7 @@ abstract class Mailbox
 		);
 	}
 
-	//Finds completely missing messages
-	private function findIncompleteMessages(int $count)
+	private function findIncompleteMessages(int $count, array $additionalFilters = []): Main\ORM\Query\Result
 	{
 		$resyncTime = new Main\Type\DateTime();
 		$resyncTime->add('- '.static::MESSAGE_RESYNCHRONIZATION_TIME.' seconds');
@@ -479,39 +479,61 @@ abstract class Mailbox
 				'MSG_UID',
 				'DIR_MD5',
 			),
-			'filter' => array(
+			'filter' => array_merge([
 				'=MAILBOX_ID' => $this->mailbox['ID'],
 				'=MESSAGE_ID' => '0',
 				'=IS_OLD' => 'D',
-				/*We give the message time to load.
-				In order not to catch the message that are in the process of downloading*/
 				'<=DATE_INSERT' => $resyncTime,
-			),
+			], $additionalFilters),
 			'limit' => $count,
 		]);
 	}
 
-	private function syncIncompleteMessages($messages)
+	private function syncIncompleteMessages(Main\ORM\Query\Result $messages): void
 	{
+		$mailboxId = $this->mailbox['ID'];
+
 		while ($item = $messages->fetch())
 		{
 			$dirPath = $this->getDirsHelper()->getDirPathByHash($item['DIR_MD5']);
-			$this->syncMessages($this->mailbox['ID'], $dirPath, [$item['MSG_UID']]);
+			$this->syncMessages($mailboxId, $dirPath, [$item['MSG_UID']]);
+
+			if(Main\Loader::includeModule('pull'))
+			{
+				\CPullWatch::addToStack(
+					'mail_mailbox_' . $mailboxId,
+					[
+						'params' => [
+							'dir' => $dirPath,
+							'mailboxId' => $mailboxId,
+						],
+						'module_id' => 'mail',
+						'command' => 'new_message_is_synchronized',
+					]
+				);
+				\Bitrix\Pull\Event::send();
+			}
 		}
 	}
 
-	public function reSyncStartPage()
+	public function reSyncStartPage(): void
 	{
 		$this->resyncDir($this->getDirsHelper()->getDefaultDirPath(),25);
 	}
 
-	public function restoringConsistency()
+	public function restoringConsistency(): void
 	{
-		$this->syncIncompleteMessages($this->findIncompleteMessages(static::NUMBER_OF_BROKEN_MESSAGES_TO_RESYNCHRONIZE));
-		\Bitrix\Mail\Helper\Message::reSyncBody($this->mailbox['ID'],$this->findMessagesWithAnEmptyBody(static::NUMBER_OF_BROKEN_MESSAGES_TO_RESYNCHRONIZE, $this->mailbox['ID']));
+		$dirsSync = $this->getDirsHelper()->getSyncDirsOrderByTime();
+
+		foreach ($dirsSync as $dir)
+		{
+			$this->syncIncompleteMessages($this->findIncompleteMessages(static::NUMBER_OF_BROKEN_MESSAGES_TO_RESYNCHRONIZE, $this->getMessageInFolderFilter($dir)));
+		}
+
+		\Bitrix\Mail\Helper\Message::reSyncBody($this->mailbox['ID'], $this->findMessagesWithAnEmptyBody(static::NUMBER_OF_BROKEN_MESSAGES_TO_RESYNCHRONIZE, $this->mailbox['ID']));
 	}
 
-	public function syncCounters()
+	public function syncCounters(): void
 	{
 		Helper::setMailboxUnseenCounter($this->mailbox['ID'],Helper::updateMailCounters($this->mailbox));
 
@@ -761,59 +783,76 @@ abstract class Mailbox
 			)
 		);
 
-		$where = sprintf(
-			' (%s) AND NOT EXISTS (SELECT 1 FROM %s WHERE (%s) AND (%s)) ',
-			ORM\Query\Query::buildFilterSql(
-				$entity,
-				array(
+		$sqlHelper = $connection->getSqlHelper();
+
+		while (true)
+		{
+			$oldMessages = \Bitrix\Mail\MailMessageUidTable::query()
+				->setSelect([
+					'ID',
+					'MAILBOX_ID',
+					'MESSAGE_ID',
+				])
+				->setFilter([
 					'=MAILBOX_ID' => $this->mailbox['ID'],
 					'>MESSAGE_ID' => 0,
-					'<INTERNALDATE' => Main\Type\DateTime::createFromTimestamp(strtotime(sprintf('-%u days', Mail\Helper\LicenseManager::getSyncOldLimit()))),
-				)
-			),
-			$connection->getSqlHelper()->quote(Mail\Internals\MessageAccessTable::getTableName()),
-			ORM\Query\Query::buildFilterSql(
-				$entity,
-				array(
-					'=MAILBOX_ID' => new Main\DB\SqlExpression('?#', 'MAILBOX_ID'),
-					'=MESSAGE_ID' => new Main\DB\SqlExpression('?#', 'MESSAGE_ID'),
-				)
-			),
-			ORM\Query\Query::buildFilterSql(
-				Mail\Internals\MessageAccessTable::getEntity(),
-				array(
-					'=ENTITY_TYPE' => array(
-						Mail\Internals\MessageAccessTable::ENTITY_TYPE_TASKS_TASK,
-						Mail\Internals\MessageAccessTable::ENTITY_TYPE_BLOG_POST,
-					),
-				)
-			)
-		);
+					'<INTERNALDATE' => \Bitrix\Main\Type\Date::createFromTimestamp(strtotime(sprintf('-%u days', \Bitrix\Mail\Helper\LicenseManager::getSyncOldLimit()))),
+				])
+				->whereNotExists(
+					new \Bitrix\Main\DB\SqlExpression("
+						SELECT 1
+						FROM " . \Bitrix\Mail\Internals\MessageAccessTable::getTableName() . "
+						WHERE
+							MAILBOX_ID = " . \Bitrix\Mail\MailMessageUidTable::query()->getInitAlias() . ".MAILBOX_ID
+							AND MESSAGE_ID = " . \Bitrix\Mail\MailMessageUidTable::query()->getInitAlias() . ".MESSAGE_ID
+							AND ENTITY_TYPE IN ('" . \Bitrix\Mail\Internals\MessageAccessTable::ENTITY_TYPE_TASKS_TASK . "','" . \Bitrix\Mail\Internals\MessageAccessTable::ENTITY_TYPE_BLOG_POST . "')"
+					)
+				)->setLimit(static::MESSAGE_DELETION_LIMIT_AT_A_TIME)->exec()
+			;
 
-		$sqlHelper = $connection->getSqlHelper();
-		$messageDeleteTable = $sqlHelper->quote(Mail\Internals\MessageDeleteQueueTable::getTableName());
-		$entityTable = $sqlHelper->quote($entity->getDbTableName());
-		do
-		{
-			$selectFrom = sprintf(
-				'SELECT ID, MAILBOX_ID, MESSAGE_ID FROM %s WHERE %s ORDER BY ID LIMIT 1000',
-				$entityTable,
-				$where
+			$messageAsStringForSql = [];
+			$oldMessageIds = [];
+
+			while ($oldMessage = $oldMessages->fetch())
+			{
+				$id = $oldMessage['ID'];
+				$oldMessageIds[] = $id;
+
+				[, $insert] = $sqlHelper->prepareInsert(\Bitrix\Mail\Internals\MessageDeleteQueueTable::getTableName(),
+					[
+						'ID' => $id,
+						'MAILBOX_ID' => (int)$oldMessage['MAILBOX_ID'],
+						'MESSAGE_ID' => (int)$oldMessage['MESSAGE_ID'],
+					]
+				);
+
+				$messageAsStringForSql[] = "($insert)";
+			}
+
+			if (empty($oldMessageIds))
+			{
+				break;
+			}
+
+			\Bitrix\Mail\MailMessageUidTable::updateList(
+				[
+					'!=MESSAGE_ID' => 0,
+					'=MAILBOX_ID' => $this->mailbox['ID'],
+					'@ID' => $oldMessageIds,
+				],
+				[
+					'MESSAGE_ID' => 0,
+				],
+				sendEvent: false,
 			);
-			$connection->query($sqlHelper
-				->getInsertIgnore($messageDeleteTable, ' (ID, MAILBOX_ID, MESSAGE_ID) ', "($selectFrom)"));
 
-			$connection->query(sprintf(
-				"UPDATE %s SET IS_OLD = 'Y', IS_SEEN = 'Y' WHERE %s ORDER BY ID LIMIT 1000",
-				$connection->getSqlHelper()->quote($entity->getDbTableName()),
-				$whereConditionForOldMessages
-			));
-
-			$connection->query(sprintf(
-				'UPDATE %s SET MESSAGE_ID = 0 WHERE %s ORDER BY ID LIMIT 1000',
-				$connection->getSqlHelper()->quote($entity->getDbTableName()),
-				$where
-			));
+			$connection->queryExecute(
+				$sqlHelper->getInsertIgnore(
+					\Bitrix\Mail\Internals\MessageDeleteQueueTable::getTableName(),
+					'(ID, MAILBOX_ID, MESSAGE_ID)',
+					'VALUES ' . implode(', ', $messageAsStringForSql)
+				)
+			);
 
 			if ($this->isTimeQuotaExceeded() || time() - $this->checkpoint > 15)
 			{
@@ -822,7 +861,27 @@ abstract class Mailbox
 				break;
 			}
 		}
-		while ($connection->getAffectedRowsCount() >= 1000);
+
+		if ($result !== false)
+		{
+			do
+			{
+				$connection->query(sprintf(
+					"UPDATE %s SET IS_OLD = 'Y', IS_SEEN = 'Y' WHERE %s ORDER BY ID LIMIT " . static::MESSAGE_SET_OLD_STATUS_LIMIT_AT_A_TIME,
+					$connection->getSqlHelper()->quote($entity->getDbTableName()),
+					$whereConditionForOldMessages
+				));
+
+				if ($this->isTimeQuotaExceeded() || time() - $this->checkpoint > 15)
+				{
+					$result = false;
+
+					break;
+				}
+
+			}
+			while ($connection->getAffectedRowsCount() >= static::MESSAGE_SET_OLD_STATUS_LIMIT_AT_A_TIME);
+		}
 
 		$unlockSql = sprintf(
 			"UPDATE b_mail_mailbox SET SYNC_LOCK = %d WHERE ID = %u AND SYNC_LOCK = %u",
@@ -979,7 +1038,7 @@ abstract class Mailbox
 		]);
 	}
 
-	protected function registerMessage(&$fields, $replaces = null, $isOutgoing = false, string $idFromHeaderMessage = ''): bool
+	protected function registerMessage(&$fields, $replaces = null, $isOutgoing = false, string $idFromHeaderMessage = '', $redefineInsertDate = true): bool
 	{
 		$now = new Main\Type\DateTime();
 
@@ -1078,9 +1137,13 @@ abstract class Mailbox
 					'MAILBOX_ID'  => $this->mailbox['ID'],
 					'SESSION_ID'  => $this->session,
 					'TIMESTAMP_X' => $now,
-					'DATE_INSERT' => $now,
 				]
 			);
+
+			if ($redefineInsertDate || !array_key_exists('DATE_INSERT', $fields))
+			{
+				$addFields['DATE_INSERT'] = $now;
+			}
 
 			MailMessageUidTable::checkFields($checkResult, null, $addFields);
 			if (!$checkResult->isSuccess())
@@ -1155,7 +1218,6 @@ abstract class Mailbox
 				'filter' => $filterForCheck,
 				'limit' => 100,
 			])->fetchAll();
-
 
 			if (!empty($messagesForRemove))
 			{

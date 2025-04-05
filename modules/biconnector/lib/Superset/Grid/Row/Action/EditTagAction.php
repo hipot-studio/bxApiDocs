@@ -28,7 +28,7 @@ final class EditTagAction extends BaseAction
 	public function getControl(array $rawFields): ?array
 	{
 		$tagId = (int)$rawFields['ID'];
-		$this->onclick = "BX.BIConnector.SupersetDashboardTagGridManager.Instance.renameTag({$tagId}, 'grid_menu')";
+		$this->onclick = "BX.BIConnector.Grid.EditableColumnManager.editCell('TITLE', {$tagId})";
 
 		return parent::getControl($rawFields);
 	}

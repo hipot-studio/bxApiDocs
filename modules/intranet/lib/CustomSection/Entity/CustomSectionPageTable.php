@@ -247,5 +247,6 @@ class CustomSectionPageTable extends DataManager
 	protected static function clearCache(): void
 	{
 		ServiceLocator::getInstance()->get('intranet.customSection.manager')->clearLeftMenuCache();
+		ServiceLocator::getInstance()->get('intranet.customSection.repository')->clearCache();
 	}
 }

@@ -6,16 +6,16 @@ use Bitrix\Crm;
 
 class Contact extends Base
 {
-	protected function loadValue(string $fieldId): void
+	protected function processField(string $fieldId): bool
 	{
 		if ($fieldId === 'COMPANY_IDS')
 		{
 			$this->document['COMPANY_IDS'] = Crm\Binding\ContactCompanyTable::getContactCompanyIDs($this->id);
+
+			return true;
 		}
-		else
-		{
-			$this->loadEntityValues();
-		}
+
+		return false;
 	}
 
 	protected function loadEntityValues(): void
@@ -33,7 +33,7 @@ class Contact extends Base
 			],
 			false,
 			false,
-			['*']
+			$this->select
 		);
 
 		$this->document = array_merge($this->document, $result->fetch() ?: []);

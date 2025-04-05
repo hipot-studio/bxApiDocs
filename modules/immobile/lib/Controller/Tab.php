@@ -2,6 +2,7 @@
 
 namespace Bitrix\ImMobile\Controller;
 
+use Bitrix\Im\Department;
 use Bitrix\Im\Promotion;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Message\CounterService;
@@ -115,22 +116,30 @@ abstract class Tab extends BaseController
 		return $userData;
 	}
 
-	protected function getDepartmentColleagues(CurrentUser $CurrentUser): array
+	protected function getDepartmentColleagues(CurrentUser $currentUser): array
 	{
-		$user = User::getInstance($CurrentUser->getId());
+		$user = User::getInstance($currentUser->getId());
 
-		if ($user->isExtranet() || $user->isBot())
+		if (!$user->isExist() || $user->isExtranet() || $user->isBot())
 		{
 			return [];
 		}
 
-		$params = [
-			'OFFSET' => self::OFFSET,
-			'LIMIT' => self::LIMIT,
-		];
-		return \Bitrix\Im\Department::getColleagues(
-			null, ['JSON' => 'Y', 'USER_DATA' => 'Y', 'LIST' => $params]
-		);
+		//Todo: delete this in next updates
+		if (!method_exists(Department::class, 'getColleaguesSimple'))
+		{
+			$params = [
+				'OFFSET' => self::OFFSET,
+				'LIMIT' => self::LIMIT,
+			];
+			$colleagues = Department::getColleagues(
+				null, ['JSON' => 'Y', 'USER_DATA' => 'Y', 'LIST' => $params]
+			);
+
+			return $colleagues['result'] ?? [];
+		}
+
+		return Department::getColleaguesSimple($user, self::LIMIT);
 	}
 
 	protected function getImCounters(): array

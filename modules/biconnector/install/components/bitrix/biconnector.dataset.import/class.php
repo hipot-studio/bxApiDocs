@@ -49,6 +49,7 @@ class DatasetImportComponent extends CBitrixComponent
 	public function executeComponent()
 	{
 		$this->fillInitialData();
+		$this->fillHelpdeskCode();
 		if ($this->arParams['datasetId'] > 0)
 		{
 			$this->loadDataset();
@@ -76,6 +77,19 @@ class DatasetImportComponent extends CBitrixComponent
 				],
 			],
 		];
+	}
+
+	private function fillHelpdeskCode(): void
+	{
+		$datasetType = $this->arParams['sourceId'];
+		if ($datasetType === ExternalSource\Type::Csv->value)
+		{
+			$this->arResult['helpdeskCode'] = 23378680;
+		}
+		elseif ($datasetType === ExternalSource\Type::Source1C->value)
+		{
+			$this->arResult['helpdeskCode'] = 23508958;
+		}
 	}
 
 	private function loadDataset(): void
@@ -130,14 +144,6 @@ class DatasetImportComponent extends CBitrixComponent
 					'tableName' => $dataset->getExternalName(),
 				];
 			}
-			if ($dataset->getEnumType() === ExternalSource\Type::Source1C)
-			{
-				$this->arResult['helpdeskCode'] = 23508958;
-			}
-		}
-		else
-		{
-			$this->arResult['helpdeskCode'] = 23378680;
 		}
 
 		$this->arResult['initialData']['config'] = [
@@ -259,7 +265,7 @@ class DatasetImportComponent extends CBitrixComponent
 	{
 		$result = [];
 
-		foreach ($row as $value)
+		foreach (array_values($row) as $index => $value)
 		{
 			if ($value instanceof Type\DateTime)
 			{
@@ -268,6 +274,10 @@ class DatasetImportComponent extends CBitrixComponent
 			elseif ($value instanceof Type\Date)
 			{
 				$result[] = $value->format('Y-m-d');
+			}
+			elseif ($this->arResult['initialData']['config']['fieldsSettings'][$index]['type'] === FieldType::Money->value)
+			{
+				$result[] = number_format($value, 2, '.', '');
 			}
 			else
 			{
@@ -305,6 +315,13 @@ class DatasetImportComponent extends CBitrixComponent
 				'value' => $dateTime,
 			];
 		}
+
+		$dateTimeFormat[] = [
+			'title' => 'YYYY-MM-DDThh:mm:ss (ISO 8601)',
+			'type' => 'value',
+			'value' => 'Y-m-d\TH:i:s',
+		];
+
 		$this->arResult['appParams'] = [
 			'dataFormatTemplates' => [
 				FieldType::Date->value => $dateFormat,

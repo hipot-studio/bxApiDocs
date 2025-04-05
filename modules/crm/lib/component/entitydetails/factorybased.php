@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Component\EntityDetails;
 
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Category\Entity\Category;
+use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Component\ComponentError;
 use Bitrix\Crm\Component\EntityDetails\Files\CopyFilesOnItemClone;
 use Bitrix\Crm\Controller\Entity;
@@ -193,6 +194,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				//@codingStandardsIgnoreStart
 				$categoryId = $this->arParams['categoryId'] ?? $this->categoryId;
 				//@codingStandardsIgnoreEnd
+
 				if($categoryId > 0)
 				{
 					$this->category = $this->factory->getCategory($categoryId);
@@ -204,8 +206,14 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				}
 				else
 				{
-					$this->category = $this->factory->createDefaultCategoryIfNotExist();
+					$this->category = $this->findBestCategoryAvailableForAdding();
+					if(!$this->category)
+					{
+						$this->errorCollection[] = new Error(Loc::getMessage('CRM_COMMON_ERROR_ACCESS_DENIED'));
+						return;
+					}
 				}
+
 				$this->item->setCategoryId($this->category->getId());
 			}
 			else
@@ -245,6 +253,27 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		}
 
 		$this->editorAdapter = $this->factory->getEditorAdapter();
+	}
+
+	private function findBestCategoryAvailableForAdding(): ?Category
+	{
+		$permittedCategories = Container::getInstance()->getUserPermissions()->category()->filterAvailableForAddingCategories(
+			$this->factory->getCategories(),
+		);
+		if (empty($permittedCategories))
+		{
+			return null;
+		}
+
+		foreach ($permittedCategories as $category)
+		{
+			if ($category->getIsDefault())
+			{
+				return $category;
+			}
+		}
+
+		return current($permittedCategories);
 	}
 
 	public function setCategoryId(int $categoryId): void
@@ -339,7 +368,6 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		if ($this->factory->isStagesEnabled())
 		{
 			$converter = Container::getInstance()->getStageConverter();
-			$canWriteConfig = Container::getInstance()->getUserPermissions()->canWriteConfig();
 			$stages = $this->factory->getStages($this->categoryId);
 			$stagePermissions = new StagePermissions(
 				$this->getEntityTypeID(),
@@ -348,6 +376,9 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 			$stageId = $this->item->getStageId();
 			$currentStage = null;
+
+			$allowMoveToAnyStage = Container::getInstance()->getUserPermissions()->item()->canChangeStageToAny($this->item->getEntityTypeId());
+
 			foreach($stages as $stage)
 			{
 				if(!$currentStage)
@@ -361,7 +392,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 				$jsParamStage = $converter->toJson($stage);
 				$jsParamStage['stagesToMove'] = $stagePermissions->getPermissionsByStatusId($stage->getStatusId());
-				$jsParamStage['allowMoveToAnyStage'] =  $canWriteConfig || UserPermissions::isAlwaysAllowedEntity($this->getEntityTypeID());
+				$jsParamStage['allowMoveToAnyStage'] = $allowMoveToAnyStage;
 
 				$this->arResult['jsParams']['stages'][] = $jsParamStage;
 			}
@@ -458,7 +489,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		{
 			$params['categoryId'] = $this->categoryId;
 			$params['categories'] = $this->getToolbarCategories(
-				Container::getInstance()->getUserPermissions()->filterAvailableForAddingCategories(
+				Container::getInstance()->getUserPermissions()->category()->filterAvailableForAddingCategories(
 					$this->factory->getCategories()
 				)
 			);
@@ -507,6 +538,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			'crmTimelineHistoryStub' => $this->getTimelineHistoryStubMessage(),
 			'partialEditorTitle' => Loc::getMessage('CRM_TYPE_ITEM_PARTIAL_EDITOR_TITLE'),
 			'onCreateUserFieldAddMessage' => Loc::getMessage('CRM_TYPE_ITEM_SAVE_EDITOR_AND_RELOAD'),
+			'stageLoadingMessage' => Loc::getMessage('CRM_STAGE_UPDATE_LOADING_NOTIFICATION_MESSAGE'),
 		];
 	}
 
@@ -589,11 +621,11 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		{
 			if ($this->item->isNew())
 			{
-				$this->isReadOnly = !Container::getInstance()->getUserPermissions()->canAddItem($this->item);
+				$this->isReadOnly = !Container::getInstance()->getUserPermissions()->item()->canAddItem($this->item);
 			}
 			else
 			{
-				$this->isReadOnly = !Container::getInstance()->getUserPermissions()->canUpdateItem($this->item);
+				$this->isReadOnly = !Container::getInstance()->getUserPermissions()->item()->canUpdateItem($this->item);
 			}
 		}
 
@@ -873,7 +905,8 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				'PREFIX' => $this->getProductEditorId(),
 				'FORM_ID' => '',
 				'PERMISSION_TYPE' => $this->isReadOnly() ? 'READ' : 'WRITE',
-				'PERMISSION_ENTITY_TYPE' => $userPermissions::getPermissionEntityType($this->getEntityTypeID(), $this->categoryId),
+				'PERMISSION_ENTITY_TYPE' => (new PermissionEntityTypeHelper($this->getEntityTypeID()))
+					->getPermissionEntityTypeForCategory($this->categoryId),
 				'PERSON_TYPE_ID' => $accountingService->resolvePersonTypeId($this->item),
 				'CURRENCY_ID' => $this->item->getCurrencyId(),
 				'ALLOW_LD_TAX' => Container::getInstance()->getAccounting()->isTaxMode() ? 'Y' : 'N',
@@ -983,7 +1016,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			$this->item->getId(),
 		);
 		$userPermissions = Container::getInstance()->getUserPermissions();
-		if ($itemCopyUrl && $userPermissions->canUpdateItem($this->item))
+		if ($itemCopyUrl && $userPermissions->item()->canUpdateItem($this->item))
 		{
 			$analyticsEventBuilder = \Bitrix\Crm\Integration\Analytics\Builder\Entity\CopyOpenEvent::createDefault($this->getEntityTypeID())
 				->setSubSection(\Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS)
@@ -1000,7 +1033,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				'href' => $analyticsEventBuilder->buildUri($itemCopyUrl),
 			];
 		}
-		if ($userPermissions->canDeleteItem($this->item))
+		if ($userPermissions->item()->canDeleteItem($this->item))
 		{
 			$items[] = [
 				'text' => $this->getDeleteMessage(),
@@ -2026,20 +2059,41 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 		if ($this->entityID <= 0)
 		{
-			if (!$userPermission->checkAddPermissions($this->entityTypeId, $this->category?->getId()))
+			if ($this->category)
 			{
-				EntityDetails\Error::showError(EntityDetails\Error::NoAddPermission, $this->entityTypeId);
+				if (!$userPermission->entityType()->canAddItemsInCategory($this->entityTypeId, $this->category->getId()))
+				{
+					EntityDetails\Error::showError(EntityDetails\Error::NoAddPermission, $this->entityTypeId);
 
-				return true;
+					return true;
+				}
+				elseif (
+					!$userPermission->entityType()->canReadItemsInCategory($this->entityTypeId, $this->category->getId())
+					|| $this->isIframe()
+				)
+				{
+					EntityDetails\Error::showError(EntityDetails\Error::NoAccessToEntityType, $this->entityTypeId);
+
+					return true;
+				}
 			}
-			elseif (
-				!$userPermission->checkReadPermissions($this->entityTypeId, $this->entityID, $this->category?->getId())
-				|| $this->isIframe()
-			)
+			else
 			{
-				EntityDetails\Error::showError(EntityDetails\Error::NoAccessToEntityType, $this->entityTypeId);
+				if (!$userPermission->entityType()->canAddItems($this->entityTypeId))
+				{
+					EntityDetails\Error::showError(EntityDetails\Error::NoAddPermission, $this->entityTypeId);
 
-				return true;
+					return true;
+				}
+				elseif (
+					!$userPermission->entityType()->canReadItems($this->entityTypeId)
+					|| $this->isIframe()
+				)
+				{
+					EntityDetails\Error::showError(EntityDetails\Error::NoAccessToEntityType, $this->entityTypeId);
+
+					return true;
+				}
 			}
 		}
 		else
@@ -2053,13 +2107,13 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 			if ($this->isCopyMode())
 			{
-				if (!$userPermission->checkReadPermissions($this->entityTypeId, $this->entityID, $this->category?->getId()))
+				if (!$userPermission->item()->canReadItemIdentifier(new ItemIdentifier($this->entityTypeId, $this->entityID, $this->category?->getId())))
 				{
 					EntityDetails\Error::showError(EntityDetails\Error::NoReadPermission, $this->entityTypeId);
 
 					return true;
 				}
-				elseif (!$userPermission->checkAddPermissions($this->entityTypeId, $this->category?->getId()))
+				elseif (!$userPermission->entityType()->canAddItemsInCategory($this->entityTypeId, $this->category?->getId()))
 				{
 					EntityDetails\Error::showError(EntityDetails\Error::NoAddPermission, $this->entityTypeId);
 
@@ -2068,13 +2122,13 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			}
 			else
 			{
-				if (!$userPermission->checkReadPermissions($this->entityTypeId))
+				if (!$userPermission->entityType()->canReadItems($this->entityTypeId))
 				{
 					EntityDetails\Error::showError(EntityDetails\Error::NoAccessToEntityType, $this->entityTypeId);
 
 					return true;
 				}
-				elseif (!$userPermission->canReadItem($this->item))
+				elseif (!$userPermission->item()->canReadItem($this->item))
 				{
 					EntityDetails\Error::showError(EntityDetails\Error::NoReadPermission, $this->entityTypeId);
 

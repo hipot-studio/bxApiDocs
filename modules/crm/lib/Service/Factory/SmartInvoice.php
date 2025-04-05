@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Factory;
 
+use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\CategoryIdentifier;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider;
@@ -217,12 +218,12 @@ class SmartInvoice extends Dynamic
 			{
 				// copy permissions
 				$defaultCategoryId = $factory->createDefaultCategoryIfNotExist()->getId();
-				$userPermissions = Container::getInstance()->getUserPermissions();
-				$smartInvoicePermissionEntity = $userPermissions::getPermissionEntityType(
-					\CCrmOwnerType::SmartInvoice,
-					$defaultCategoryId
-				);
-				$oldInvoicePermissionEntity = $userPermissions::getPermissionEntityType(\CCrmOwnerType::Invoice);
+
+				$smartInvoicePermissionEntity = (new PermissionEntityTypeHelper(\CCrmOwnerType::SmartInvoice))
+					->getPermissionEntityTypeForCategory($defaultCategoryId);
+				$oldInvoicePermissionEntity = (new PermissionEntityTypeHelper(\CCrmOwnerType::Invoice))
+					->getPermissionEntityTypeForCategory(0);
+
 				$permissions = RolePermission::getByEntityId($oldInvoicePermissionEntity);
 
 				$roles = [];

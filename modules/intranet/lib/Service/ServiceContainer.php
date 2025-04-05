@@ -39,7 +39,7 @@ class ServiceContainer implements ContainerInterface
 
 	public function has(string $id): bool
 	{
-		return $this->serviceLocator->has($this->prefix.$id);
+		return $this->serviceLocator->has($this->prefix . $id);
 	}
 
 	/**
@@ -48,7 +48,7 @@ class ServiceContainer implements ContainerInterface
 	 */
 	public function get(string $id): mixed
 	{
-		return $this->serviceLocator->get($this->prefix.$id);
+		return $this->serviceLocator->get($this->prefix . $id);
 	}
 
 	/**

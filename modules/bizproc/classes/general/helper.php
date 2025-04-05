@@ -895,6 +895,11 @@ class CBPHelper
 			throw new CBPArgumentNullException("entity");
 		}
 
+		if ($moduleId && !Main\ModuleManager::isValidModule($moduleId))
+		{
+			throw new CBPArgumentNullException("moduleId");
+		}
+
 		return [$moduleId, $entity, $documentId];
 	}
 

@@ -226,6 +226,19 @@ abstract class Base
 				$value = (int)$value;
 			}
 		}
+		elseif($type === DataType::TYPE_BOOLEAN)
+		{
+			$boolean = $this->internalizeBooleanValue($value);
+
+			if ($boolean->isSuccess())
+			{
+				$value = $boolean->getData()[0];
+			}
+			else
+			{
+				$r->addErrors($boolean->getErrors());
+			}
+		}
 		elseif($type === DataType::TYPE_DATETIME)
 		{
 			$date = $this->internalizeDateTimeValue($value);
@@ -269,6 +282,26 @@ abstract class Base
 		{
 			$r->setData([$value]);
 		}
+
+		return $r;
+	}
+
+	protected function internalizeBooleanValue($value): Result
+	{
+		$r = new Result();
+
+		if (
+			!is_string($value)
+			|| !in_array($value, ['Y', 'N'])
+		)
+		{
+			$r->addError(new Error('Boolean value must be Y or N'));
+
+			return $r;
+		}
+
+		$value = $value === 'Y';
+		$r->setData([$value]);
 
 		return $r;
 	}
@@ -472,6 +505,10 @@ abstract class Base
 
 		foreach ($fields as $name)
 		{
+			if (!is_scalar($name))
+			{
+				continue;
+			}
 			$info = isset($listFieldsInfo[$name]) ? $listFieldsInfo[$name]:null;
 			if (!$info)
 			{
@@ -535,7 +572,7 @@ abstract class Base
 
 		$type = isset($fieldsInfo[$name]['TYPE']) ? $fieldsInfo[$name]['TYPE']:'';
 
-		if(empty($value))
+		if($this->isEmptyValue($value, $type))
 		{
 			$value = $this->externalizeEmptyValue($name, $value, $fields, $fieldsInfo);
 		}
@@ -548,6 +585,19 @@ abstract class Base
 			elseif($type === DataType::TYPE_INT)
 			{
 				$value = (int)$value;
+			}
+			elseif($type === DataType::TYPE_BOOLEAN)
+			{
+				$externalizedValue = $this->externalizeBooleanValue($value);
+
+				if($externalizedValue->isSuccess())
+				{
+					$value = $externalizedValue->getData()[0];
+				}
+				else
+				{
+					$r->addErrors($externalizedValue->getErrors());
+				}
 			}
 			elseif($type === DataType::TYPE_DATE)
 			{
@@ -597,6 +647,19 @@ abstract class Base
 		return $r;
 	}
 
+	private function isEmptyValue(mixed $value, string $type): bool
+	{
+		if (
+			$type === DataType::TYPE_BOOLEAN
+			&& $value === false
+		)
+		{
+			return false;
+		}
+
+		return empty($value);
+	}
+
 	final protected function externalizeFields($fields, $fieldsInfo): array
 	{
 		$result = [];
@@ -629,6 +692,23 @@ abstract class Base
 	protected function externalizeEmptyValue($name, $value, $fields, $fieldsInfo)
 	{
 		return null;
+	}
+
+	final protected function externalizeBooleanValue($value): Result
+	{
+		$r = new Result();
+
+		if (!is_bool($value))
+		{
+			$r->addError(new Error('Boolean value must be true of false'));
+
+			return $r;
+		}
+
+		$value = $value ? 'Y' : 'N';
+		$r->setData([$value]);
+
+		return $r;
 	}
 
 	final protected function externalizeDateValue($value): Result
@@ -762,7 +842,7 @@ abstract class Base
 		return new Result();
 	}
 
-	final protected function checkRequiredFieldsAdd($fields): Result
+	protected function checkRequiredFieldsAdd($fields): Result
 	{
 		return $this->checkRequiredFields($fields, $this->getListFieldInfo(
 			$this->getFields(),
@@ -770,7 +850,7 @@ abstract class Base
 		));
 	}
 
-	final protected function checkRequiredFieldsUpdate($fields): Result
+	protected function checkRequiredFieldsUpdate($fields): Result
 	{
 		return $this->checkRequiredFields($fields, $this->getListFieldInfo(
 			$this->getFields(),

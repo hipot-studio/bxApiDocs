@@ -112,6 +112,11 @@ class RoleSync extends BaseSync
 		$roleDisplayRuleService->updateRulesForRole((int)$roleInDB['ID'], $rules, true);
 		unset($fields['DEFAULT_NAME'], $fields['DEFAULT_DESCRIPTION']);
 
+		if(empty($fields['AVATAR']['fileIds']['medium']) && isset($fields['AVATAR']))
+		{
+			unset($fields['AVATAR']);
+		}
+
 		return $this->update($roleInDB['ID'], $fields);
 	}
 

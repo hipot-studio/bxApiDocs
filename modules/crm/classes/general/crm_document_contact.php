@@ -21,13 +21,14 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 		return $arResult;
 	}
 
-	public static function GetDocument($documentId)
+	public static function GetDocument($documentId, $documentType = null, array $select = [])
 	{
 		$documentInfo = static::GetDocumentInfo($documentId);
 
 		return new Crm\Integration\BizProc\Document\ValueCollection\Contact(
 			CCrmOwnerType::Contact,
-			$documentInfo['ID']
+			$documentInfo['ID'],
+			$select
 		);
 	}
 

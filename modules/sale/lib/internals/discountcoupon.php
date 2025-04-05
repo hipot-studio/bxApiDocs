@@ -959,6 +959,10 @@ class DiscountCouponTable extends Main\Entity\DataManager
 		$result = new Main\Entity\Result();
 		if (!empty($fields) && is_array($fields))
 		{
+			if (isset($fields['COUPON']) && is_string($fields['COUPON']))
+			{
+				$fields['COUPON'] = trim($fields['COUPON']);
+			}
 			if (isset($fields['ACTIVE_FROM']) && is_string($fields['ACTIVE_FROM']))
 			{
 				$fields['ACTIVE_FROM'] = trim($fields['ACTIVE_FROM']);

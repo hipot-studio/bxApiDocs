@@ -19,6 +19,7 @@ class Settings
 			'bitrixCallsEnabled' => Im\Call\Call::isBitrixCallEnabled(),
 			'callBetaIosEnabled' => Im\Call\Call::isIosBetaEnabled(),
 			'isAIServiceEnabled' => static::isAIServiceEnabled(),
+			'isNewMobileGridEnabled' => static::isNewMobileGridEnabled(),
 		], self::getAdditionalMobileOptions());
 	}
 
@@ -109,5 +110,33 @@ class Settings
 		}
 
 		return (bool)\CUserOptions::GetOption('call', 'call_new_qos_enabled', false);
+	}
+
+	/**
+	 * New mobile grid is enabled.
+	 * @return bool
+	 */
+	public static function isNewMobileGridEnabled(): bool
+	{
+		if (Option::get('call', 'call_new_mobile_grid', false))
+		{
+			return true;
+		}
+
+		return (bool)\CUserOptions::GetOption('call', 'call_new_mobile_grid', false);
+	}
+
+	/**
+	 * New copilot follow up is enabled.
+	 * @return bool
+	 */
+	public static function isNewFollowUpSliderEnabled(): bool
+	{
+		if (Option::get('call', 'call_new_followup_slider', false))
+		{
+			return true;
+		}
+
+		return (bool)\CUserOptions::GetOption('call', 'call_new_followup_slider', false);
 	}
 }

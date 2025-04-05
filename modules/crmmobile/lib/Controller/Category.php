@@ -318,7 +318,7 @@ class Category extends Base
 				return false;
 			}
 		}
-		elseif (!Container::getInstance()->getUserPermissions()->canUpdateType($factory->getEntityTypeId()))
+		elseif (!Container::getInstance()->getUserPermissions()->isAdminForEntity($factory->getEntityTypeId()))
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 			return false;

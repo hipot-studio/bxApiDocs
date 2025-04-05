@@ -10,6 +10,8 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Rest\APAuth\PermissionTable;
+use Bitrix\Rest\Engine\Access\HoldEntity;
+use Bitrix\Rest\Enum\Integration\ElementCodeType;
 use Bitrix\Rest\Lang;
 use Bitrix\Rest\PlacementLangTable;
 use Bitrix\Rest\Preset\Data\Element;
@@ -62,7 +64,9 @@ class Provider
 					'APP_ID',
 					'BOT_ID',
 					'PASSWORD_ID',
-					'USER_ID'
+					'USER_ID',
+					'ELEMENT_CODE',
+					'PASS' => 'PASSWORD.PASSWORD'
 				],
 				'limit' => 1
 			]
@@ -165,6 +169,13 @@ class Provider
 					if (!$res->isSuccess())
 					{
 						$errorList[] = $res->getErrorMessages();
+					}
+					else if (ElementCodeType::IN_WEBHOOK->value === $integration['ELEMENT_CODE'])
+					{
+						if (HoldEntity::is(HoldEntity::TYPE_WEBHOOK, $integration['PASS']))
+						{
+							HoldEntity::delete(HoldEntity::TYPE_WEBHOOK, $integration['PASS']);
+						}
 					}
 				}
 			}

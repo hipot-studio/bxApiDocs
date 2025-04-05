@@ -147,7 +147,7 @@ class IblockDepartmentRepository implements DepartmentRepositoryContract
 	}
 
 	/**
-	 * @throws \Exception
+	 * @throws ArgumentException
 	 */
 	public function setHead(int $departmentId, int $userId): void
 	{
@@ -331,6 +331,11 @@ class IblockDepartmentRepository implements DepartmentRepositoryContract
 		return $this->create($department);
 	}
 
+	/**
+	 * @param int $departmentId
+	 * @return void
+	 * @throws ArgumentException
+	 */
 	public function delete(int $departmentId): void
 	{
 		$result = \CIBlockSection::Delete($departmentId);

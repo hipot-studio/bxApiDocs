@@ -458,19 +458,26 @@ class ConfigurationSettings extends AbstractSettings
 			$isEmployeesLeft = \Bitrix\Bitrix24\License\UserActive::getInstance()->getCount() > 1;
 			$isFreeLicense = \CBitrix24::isLicenseNeverPayed();
 			$verificationOptions = null;
+			$isBound = \Bitrix\Bitrix24\Holding\CurrentPortal::getInstance()->isBound();
 
-			if ($isFreeLicense)
+			if ($isFreeLicense && !$isBound)
 			{
 				$verificationOptions = $this->getVerificationOptions();
 			}
 
+			$networkUrl = Loader::includeModule('socialservices')
+				? rtrim(\CSocServBitrix24Net::NETWORK_URL, '/') . '/passport/view/'
+				: null;
+
 			$data['deletePortalOptions'] = [
+				'isBound' => $isBound,
 				'isEmployeesLeft' => $isEmployeesLeft,
 				'portalUrl' => \Bitrix\Bitrix24\PortalSettings::getInstance()->getDomain()->getHostname(),
 				'isFreeLicense' => $isFreeLicense,
 				'mailForRequest' => Portal\Remove\RemoveValidator::getMailToRequest(),
 				'verificationOptions' => $verificationOptions,
-				'isAdmin' => \Bitrix\Bitrix24\CurrentUser::get()->isAdmin() && !\Bitrix\Bitrix24\CurrentUser::get()->isIntegrator()
+				'isAdmin' => \Bitrix\Bitrix24\CurrentUser::get()->isAdmin() && !\Bitrix\Bitrix24\CurrentUser::get()->isIntegrator(),
+				'networkUrl' => $networkUrl,
 			];
 		}
 

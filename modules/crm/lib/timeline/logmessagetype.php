@@ -35,4 +35,6 @@ final class LogMessageType
 
 	public const BOOKING_CREATED = 28;
 	public const RESTART_AUTOMATION = 29;
+	public const WAIT_LIST_ITEM_CREATED = 30;
+	public const WAIT_LIST_ITEM_DELETED = 31;
 }

@@ -15,11 +15,10 @@ use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\CallType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\ClientType;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
-use Bitrix\Crm\Router\ResponseHelper;
+use Bitrix\Crm\Integration\Bitrix24Manager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\LayoutSettings;
 use Bitrix\Crm\WebForm\Internals\PageNavigation;
@@ -30,7 +29,6 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 use Bitrix\UI;
-use const Bitrix\Crm\Copilot\AiQualityAssessment\RatingCalculator;
 
 class CrmCopilotCallAssessmentListComponent extends Base
 {
@@ -43,9 +41,16 @@ class CrmCopilotCallAssessmentListComponent extends Base
 
 	public function executeComponent(): void
 	{
+		if (!Bitrix24Manager::isFeatureEnabled(AIManager::AI_COPILOT_FEATURE_NAME))
+		{
+			$this->includeComponentTemplate('restrictions');
+
+			return;
+		}
+
 		if (
 			!AIManager::isAiCallProcessingEnabled()
-			|| !Container::getInstance()->getUserPermissions()->canReadCopilotCallAssessmentSettings()
+			|| !Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canRead()
 		)
 		{
 			$this->showError();
@@ -119,7 +124,7 @@ class CrmCopilotCallAssessmentListComponent extends Base
 
 	private function getRowActions(int $id): array
 	{
-		if (!Container::getInstance()->getUserPermissions()->canEditCopilotCallAssessmentSettings())
+		if (!Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canEdit())
 		{
 			return [];
 		}
@@ -262,16 +267,17 @@ class CrmCopilotCallAssessmentListComponent extends Base
 	{
 		if ($this->pageNavigation === null)
 		{
+			$recordCount = CopilotCallAssessmentController::getInstance()->getTotalCount($this->getFilterConditions());
+
 			$pageNavigation = new PageNavigation($this->getPageNavigationId());
 			$pageNavigation
 				->allowAllRecords(false)
 				->setPageSize($this->getPageSize())
-				->initFromUri();
+				->setRecordCount($recordCount)
+				->initFromUri()
+			;
 
 			$this->pageNavigation = $pageNavigation;
-			$this->pageNavigation->setRecordCount(
-				CopilotCallAssessmentController::getInstance()->getTotalCount($this->getFilterConditions())
-			);
 		}
 
 		return $this->pageNavigation;
@@ -750,11 +756,19 @@ HTML;
 
 	private function isReadOnly(): bool
 	{
-		return !Container::getInstance()->getUserPermissions()->canEditCopilotCallAssessmentSettings();
+		return !Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canEdit();
 	}
 
 	private function needShowGistColumn(): bool
 	{
 		return !is_null($this->request->get('criteria'));
+	}
+
+	protected function getTopPanelParameters(): array
+	{
+		return array_merge(
+			parent::getTopPanelParameters(),
+			['ACTIVE_ITEM_ID' => 'CALL_ASSESSMENT'],
+		);
 	}
 }

@@ -496,7 +496,7 @@ class AI extends Activity
 			return null;
 		}
 
-		if (!$this->permissions->canUpdateItem($item))
+		if (!$this->permissions->item()->canUpdateItem($item))
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 
@@ -656,7 +656,7 @@ class AI extends Activity
 			return;
 		}
 
-		if (!$this->permissions->canUpdateItem($item))
+		if (!$this->permissions->item()->canUpdateItem($item))
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 
@@ -792,10 +792,7 @@ class AI extends Activity
 
 		if (
 			!$result->getTarget()
-			|| !$this->permissions->checkUpdatePermissions(
-				$result->getTarget()->getEntityTypeId(),
-				$result->getTarget()->getEntityId()
-			)
+			|| !$this->permissions->item()->canUpdateItemIdentifier($result->getTarget())
 		)
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());

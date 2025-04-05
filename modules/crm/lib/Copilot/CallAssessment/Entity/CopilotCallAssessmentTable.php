@@ -13,6 +13,22 @@ use Bitrix\Main\ORM\Fields\Validators\RangeValidator;
 use Bitrix\Main\SystemException;
 use Psr\Container\NotFoundExceptionInterface;
 
+/**
+ * Class CopilotCallAssessmentTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_CopilotCallAssessment_Query query()
+ * @method static EO_CopilotCallAssessment_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_CopilotCallAssessment_Result getById($id)
+ * @method static EO_CopilotCallAssessment_Result getList(array $parameters = [])
+ * @method static EO_CopilotCallAssessment_Entity getEntity()
+ * @method static \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment createObject($setDefaultValues = true)
+ * @method static \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessment_Collection createCollection()
+ * @method static \Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment wakeUpObject($row)
+ * @method static \Bitrix\Crm\Copilot\CallAssessment\Entity\EO_CopilotCallAssessment_Collection wakeUpCollection($rows)
+ */
 class CopilotCallAssessmentTable extends Main\ORM\Data\DataManager
 {
 	public static function getTableName(): string

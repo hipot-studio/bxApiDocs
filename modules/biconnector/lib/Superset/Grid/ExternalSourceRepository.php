@@ -75,13 +75,12 @@ class ExternalSourceRepository
 
 	public function getRawData(): array
 	{
-		return ExternalSourceTable::query()
+		$result = ExternalSourceTable::query()
 			->setSelect($this->getBiconnectorSourceSelect())
 			->addSelect(new ExpressionField('MODULE', '\'BI\''))
 			->setFilter($this->grid->getOrmFilter())
 			->unionAll(SourceTable::query()
 				->setSelect($this->getCrmSourceTableSelect())
-				->addSelect(new ExpressionField('CREATED_BY_ID', 'NULL'))
 				->addSelect(new ExpressionField('DESCRIPTION', 'NULL'))
 				->addSelect(new ExpressionField('MODULE', '\'CRM\''))
 				->setFilter($this->grid->getOrmFilter())
@@ -91,6 +90,13 @@ class ExternalSourceRepository
 			->setUnionLimit($this->grid->getOrmParams()['limit'])
 			->setUnionOffset($this->grid->getOrmParams()['offset'])
 			->fetchAll();
+
+		foreach ($result as &$row)
+		{
+			$row['ID'] .= '.' . $row['MODULE'];
+		}
+
+		return $result;
 	}
 
 	private function getBiconnectorSourceSelect(): array
@@ -100,6 +106,6 @@ class ExternalSourceRepository
 
 	private function getCrmSourceTableSelect(): array
 	{
-		return ['ID', 'TITLE' => 'NAME', 'TYPE' => 'CODE', 'ACTIVE', 'DATE_CREATE'];
+		return ['ID', 'TITLE' => 'NAME', 'TYPE' => 'CODE', 'ACTIVE', 'DATE_CREATE', 'CREATED_BY_ID', 'DESCRIPTION'];
 	}
 }

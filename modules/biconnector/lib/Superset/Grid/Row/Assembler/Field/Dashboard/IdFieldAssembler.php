@@ -31,7 +31,7 @@ class IdFieldAssembler extends DetailLinkFieldAssembler
 		}
 		elseif (empty($value['HAS_ZONE_URL_PARAMS']))
 		{
-			$link = "<a href='{$value['DETAIL_URL']}'>{$id}</a>";
+			$link = "<a href='{$value['DETAIL_URL']}' target='_blank'>{$id}</a>";
 		}
 		else
 		{

@@ -399,9 +399,7 @@ class CrmClientPortraitComponent extends \CBitrixComponent
 			}
 		}
 
-		$curUser = CCrmSecurityHelper::GetCurrentUser();
-		$CrmPerms = new CCrmPerms($curUser->GetID());
-		$this->arResult['CAN_WRITE_CONFIG'] = $CrmPerms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE');
+		$this->arResult['CAN_WRITE_CONFIG'] = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin();
 
 		$this->includeComponentTemplate();
 	}

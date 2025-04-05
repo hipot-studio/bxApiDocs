@@ -121,25 +121,13 @@ class Notification
 					$url = \Bitrix\Rest\Marketplace\Url::getSubscriptionBuyUrl();
 				}
 			}
-			$urlBtn = '';
-			if ($url !== '')
-			{
-				$urlBtn = '<a target="_blank" href="'
-					. $url
-					. '">'
-					. Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_BTN')
-					. '</a>';
-			}
 
-			$message = Loc::getMessage(
-				'REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS',
-				[
-					'#BTN#' => $urlBtn
-				]
-			);
+			$message = Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS_MSGVER_1');
 			if ($message !== '')
 			{
 				$result = [
+					'BUTTON_TEXT' => $url !== '' ? Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_BTN') : null,
+					'PANEL_LINK' => $url ?? null,
 					'PANEL_MESSAGE' => $message
 				];
 			}

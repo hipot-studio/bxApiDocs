@@ -430,9 +430,19 @@ class CCrmTimelineComponent extends CBitrixComponent
 				$documentId = \CCrmBizProcHelper::ResolveDocumentId($this->entityTypeID, $this->entityID);
 				$runningIds = \Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable::getIdsByDocument($documentId);
 
+				$bpTaskAddInTimelineOption = CUserOptions::getOption(
+					'crm.tour',
+					\Bitrix\Crm\Tour\Bizproc\WorkflowTaskAddInTimeline::OPTION_NAME,
+				);
+
 				if (!empty($runningIds))
 				{
 					$this->arResult['DOCUMENT_HAS_RUNNING_WORKFLOW'] = true;
+
+					if ($bpTaskAddInTimelineOption['closed'] === 'Y')
+					{
+						return;
+					}
 
 					$taskIterator = CBPTaskService::GetList(
 						['ID' => 'ASC'],

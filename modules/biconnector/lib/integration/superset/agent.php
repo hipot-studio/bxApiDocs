@@ -4,44 +4,14 @@ namespace Bitrix\BIConnector\Integration\Superset;
 
 use Bitrix\BIConnector\Access\Install\AccessInstaller;
 use Bitrix\BIConnector\Access\Role\RoleTable;
-use Bitrix\Main;
 use Bitrix\BIConnector\Integration\Superset;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
-use Bitrix\Rest;
 
 class Agent
 {
 	private const IS_ACCESS_ROLES_REINSTALLED_OPTION = 'is_access_roles_reinstalled';
-
-	public static function sendRestStatistic(): string
-	{
-		if (
-			Main\Loader::includeModule('rest')
-			&& is_callable(['\Bitrix\Rest\UsageStatTable', 'logBISuperset'])
-			&& Superset\SupersetInitializer::isSupersetReady()
-		)
-		{
-			$dashboardIterator = Superset\Model\SupersetDashboardTable::getList([
-				'select' => [
-					'TYPE',
-					'REST_APP_CLIENT_ID' => 'APP.CLIENT_ID'
-				],
-			]);
-			while ($dashboard = $dashboardIterator->fetch())
-			{
-				if ($dashboard['REST_APP_CLIENT_ID'])
-				{
-					Rest\UsageStatTable::logBISuperset($dashboard['REST_APP_CLIENT_ID'], $dashboard['TYPE']);
-				}
-			}
-
-			Rest\UsageStatTable::finalize();
-		}
-
-		return __CLASS__ . '::' . __FUNCTION__ . '();';
-	}
 
 	public static function setDashboardOwners(): string
 	{

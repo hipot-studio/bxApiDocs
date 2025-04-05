@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Security\Role;
 
+use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\CategoryIdentifier;
 use Bitrix\Crm\Feature;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
@@ -16,6 +17,9 @@ class RolePermission
 {
 	private static $cache = null;
 
+	/**
+	 * @deprecated Do not use permission attributes directly!
+	 */
 	public static function getPermissionsByRoles(array $roleIds): array
 	{
 		if (empty($roleIds))
@@ -150,7 +154,7 @@ class RolePermission
 		$needSplitByRoleGroup = Feature::enabled(\Bitrix\Crm\Feature\PermissionsLayoutV2::class);
 		if ($needSplitByRoleGroup)
 		{
-			$entityTypeId = \CCrmOwnerType::ResolveID((string)Container::getInstance()->getUserPermissions()->getEntityNameByPermissionEntityType($permissionEntityId));
+			$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($permissionEntityId)?->getEntityTypeId();
 			$strictByRoleGroupCode = (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($entityTypeId);
 			$rolesIdsInGroup = self::getRolesByGroupCode($strictByRoleGroupCode);
 		}
@@ -193,7 +197,7 @@ class RolePermission
 		$needSplitByRoleGroup = Feature::enabled(\Bitrix\Crm\Feature\PermissionsLayoutV2::class);
 		if ($needSplitByRoleGroup)
 		{
-			$entityTypeId = \CCrmOwnerType::ResolveID((string)Container::getInstance()->getUserPermissions()->getEntityNameByPermissionEntityType($permissionEntityId));
+			$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($permissionEntityId)?->getEntityTypeId();
 			$strictByRoleGroupCode = (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($entityTypeId);
 			$rolesIdsInGroup = self::getRolesByGroupCode($strictByRoleGroupCode);
 			$adminRolesIds = self::getAdminRolesIds($entityTypeId);

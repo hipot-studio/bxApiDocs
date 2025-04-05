@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\ActionFilter;
 
+use Bitrix\Extranet;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Engine\ActionFilter;
@@ -24,6 +25,18 @@ class InviteToCollabAccessControl extends ActionFilter\Base
 		{
 			$this->addError(new Error(
 				Loc::getMessage('INTRANET_COLLAB_ACCESS_CONTROL_PORTAL_ACCESS_DENIED')
+			));
+
+			return new EventResult(EventResult::ERROR, null, null, $this);
+		}
+
+		if (
+			Loader::includeModule('extranet')
+			&& !Extranet\PortalSettings::getInstance()->isEnabledCollabersInvitation()
+		)
+		{
+			$this->addError(new Error(
+				Loc::getMessage('INTRANET_COLLAB_ACCESS_CONTROL_PORTAL_INVITATION_COLLABERS_DISABLED')
 			));
 
 			return new EventResult(EventResult::ERROR, null, null, $this);

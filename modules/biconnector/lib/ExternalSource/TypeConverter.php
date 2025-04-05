@@ -69,20 +69,22 @@ final class TypeConverter
 	 *
 	 * @example '08/18/1960 15:45:20 (m/d/Y H:i:s)
 	 *
-	 * @param string $value
+	 * @param string|null $value
 	 * @param string $format
 	 * @return Main\Type\DateTime|bool
 	 */
 	public static function convertToDateTime(?string $value, string $format): Main\Type\DateTime|bool
 	{
-		if (!$value)
-		{
-			return false;
-		}
-
 		$date = \DateTime::createFromFormat($format, $value);
 		if ($date)
 		{
+			$errors = \DateTime::getLastErrors();
+
+			if ($errors['error_count'] > 0 || $errors['warning_count'] > 0)
+			{
+				return false;
+			}
+
 			return Main\Type\DateTime::createFromPhp($date);
 		}
 
@@ -94,15 +96,22 @@ final class TypeConverter
 	 *
 	 * @example '08/18/1960 (m/d/Y)
 	 *
-	 * @param string $value
+	 * @param string|null $value
 	 * @param string $format
 	 * @return Main\Type\Date|bool
 	 */
-	public static function convertToDate(string $value, string $format): Main\Type\Date|bool
+	public static function convertToDate(?string $value, string $format): Main\Type\Date|bool
 	{
 		$date = \DateTime::createFromFormat($format, $value);
 		if ($date)
 		{
+			$errors = \DateTime::getLastErrors();
+
+			if ($errors['error_count'] > 0 || $errors['warning_count'] > 0)
+			{
+				return false;
+			}
+
 			$date->setTime(0, 0, 0);
 			return Main\Type\DateTime::createFromPhp($date);
 		}
@@ -132,7 +141,9 @@ final class TypeConverter
 
 	private static function prepareNumberForMoney(string $value, string $delimiter = '.'): float
 	{
-		$number = preg_replace('/[^-\d' . preg_quote($delimiter, '/') . ']/', '', $value);
+		$decodedValue = html_entity_decode($value);
+
+		$number = preg_replace('/[^-\d' . preg_quote($delimiter, '/') . ']/', '', $decodedValue);
 		if ($delimiter !== '.')
 		{
 			$number = str_replace($delimiter, '.', $number);

@@ -66,7 +66,7 @@ class MailMessageUidTable extends Entity\DataManager
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public static function updateList(array $filter, array $fields, array $eventData = [])
+	public static function updateList(array $filter, array $fields, array $eventData = [], bool $sendEvent = true)
 	{
 		$entity = static::getEntity();
 		$connection = $entity->getConnection();
@@ -83,13 +83,17 @@ class MailMessageUidTable extends Entity\DataManager
 			'onMailMessageModified',
 			array(MessageEventManager::class, 'onMailMessageModified')
 		);
-		$event = new \Bitrix\Main\Event('mail', 'onMailMessageModified', array(
-			'MAIL_FIELDS_DATA' => $eventData,
-			'UPDATED_FIELDS_VALUES' => $fields,
-			'UPDATED_BY_FILTER' => $filter,
-		));
-		$event->send();
-		EventManager::getInstance()->removeEventHandler('mail', 'onMailMessageModified', $eventKey);
+
+		if ($sendEvent)
+		{
+			$event = new \Bitrix\Main\Event('mail', 'onMailMessageModified', array(
+				'MAIL_FIELDS_DATA' => $eventData,
+				'UPDATED_FIELDS_VALUES' => $fields,
+				'UPDATED_BY_FILTER' => $filter,
+			));
+			$event->send();
+			EventManager::getInstance()->removeEventHandler('mail', 'onMailMessageModified', $eventKey);
+		}
 
 		return $result;
 	}
@@ -204,6 +208,55 @@ class MailMessageUidTable extends Entity\DataManager
 		EventManager::getInstance()->removeEventHandler('mail', 'onMailMessageDeleted', $eventKey);
 
 		return true;
+	}
+
+	public static function getLocalUID(int $mailboxId, string $dirPath, string $dirUIDv, string $order): int
+	{
+		$additionalFilter = [];
+
+		if (\Bitrix\Mail\Helper\LicenseManager::getSyncOldLimit() !== -1)
+		{
+			$additionalFilter = [
+				'>INTERNALDATE' => \Bitrix\Main\Type\Date::createFromTimestamp(strtotime(sprintf('-%u days', \Bitrix\Mail\Helper\LicenseManager::getSyncOldLimit()))),
+			];
+		}
+
+		$row = self::getRow(
+			[
+				'select' => [
+					'MSG_UID'
+				],
+				'filter' => array_merge([
+					'=MAILBOX_ID' => $mailboxId,
+					'=DIR_MD5' => md5($dirPath),
+					'=DIR_UIDV' => $dirUIDv,
+					'>MSG_UID' => 0,
+					'=IS_OLD' => 'N',
+					'!=MESSAGE_ID' => 0,
+					'==DELETE_TIME' => 0,
+				], $additionalFilter),
+				'order' => [
+					'MSG_UID' => $order,
+				],
+			]
+		);
+
+		if (!isset($row['MSG_UID']))
+		{
+			return 0;
+		}
+
+		return (int)$row['MSG_UID'];
+	}
+
+	public static function getLastLocalUID(int $mailboxId, string $dirPath, string $dirUIDv): int
+	{
+		return self::getLocalUID($mailboxId, $dirPath, $dirUIDv, 'DESC');
+	}
+
+	public static function getFirstLocalUID(int $mailboxId, string $dirPath, string $dirUIDv): int
+	{
+		return self::getLocalUID($mailboxId, $dirPath, $dirUIDv, 'ASC');
 	}
 
 	public static function getMessage(

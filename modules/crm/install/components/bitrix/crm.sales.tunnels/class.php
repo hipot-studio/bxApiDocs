@@ -6,6 +6,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Crm;
+use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Integration\Sender\Rc;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Main\Engine\Contract\Controllerable;
@@ -189,10 +190,9 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 			$category['STAGES'] = $reducedStages;
 
 			$categoryId = $this->factory->isCategoriesSupported() ? $category['ID'] : 0;
-			$permissionEntityName = $this->userPermissions::getPermissionEntityType(
-				$this->factory->getEntityTypeId(),
-				$categoryId
-			);
+			$permissionEntityName = (new PermissionEntityTypeHelper($this->factory->getEntityTypeId()))
+				->getPermissionEntityTypeForCategory($categoryId)
+			;
 
 			$permissions = Crm\Security\Role\RolePermission::getByEntityId($permissionEntityName);
 			$access = null;
@@ -318,7 +318,7 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 
 	public static function canCurrentUserEditTunnels(): bool
 	{
-		return Crm\Service\Container::getInstance()->getUserPermissions()->canWriteConfig();
+		return Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin();
 	}
 
 	private function isCategoryEditable()

@@ -63,7 +63,14 @@ class SourceExpensesConnector extends Base
 		$aggregator = new ExpensesAggregator(
 			...ProviderFactory::getAvailableProviders()
 		);
-		$expenses = $aggregator->buildDailyExpensesReport($startDate, $endDate);
+		$dailyExpensesResult = $aggregator->buildDailyExpensesReport($startDate, $endDate);
+
+		if (!$dailyExpensesResult->isSuccess())
+		{
+			return $result->addErrors($dailyExpensesResult->getErrors());
+		}
+
+		$expenses = $dailyExpensesResult->getData();
 
 		$summaryExpenses = [];
 		foreach ($expenses as $expense)

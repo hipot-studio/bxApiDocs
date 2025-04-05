@@ -329,10 +329,9 @@ class PullManager
 				$userId = (int)$userId;
 				if($userId > 0)
 				{
-					if (Container::getInstance()->getUserPermissions($userId)->checkReadPermissions(
+					if (Container::getInstance()->getUserPermissions($userId)->item()->canRead(
 						$entityTypeId,
-						$item['id'],
-						$item['data']['categoryId'] ?? null
+						$item['id']
 					))
 					{
 						$result[$userId] = $userId;

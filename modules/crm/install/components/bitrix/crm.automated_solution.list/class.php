@@ -39,7 +39,7 @@ class CrmAutomatedSolutionListComponent extends Base
 	{
 		parent::init();
 
-		if (!$this->userPermissions->canEditAutomatedSolutions())
+		if (!$this->userPermissions->automatedSolution()->canEdit())
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -70,7 +70,7 @@ class CrmAutomatedSolutionListComponent extends Base
 	protected function getToolbarParameters(): array
 	{
 		$buttons = [];
-		if ($this->userPermissions->canEditAutomatedSolutions())
+		if ($this->userPermissions->automatedSolution()->canEdit())
 		{
 			$createUrl = $this->router->getAutomatedSolutionDetailUrl(0);
 

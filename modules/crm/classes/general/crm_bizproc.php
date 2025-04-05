@@ -144,7 +144,7 @@ class CCrmBizProc
 		if(!CModule::IncludeModule('bizproc') || !CBPRuntime::isFeatureEnabled())
 			return true;
 
-		$userID = CCrmSecurityHelper::GetCurrentUserID();
+		$userID = \Bitrix\Crm\Service\Container::getInstance()->getContext()->getUserId();
 		$bDeleteError = !CBPDocument::CanUserOperateDocument(
 			CBPCanUserOperateOperation::WriteDocument,
 			$userID,
@@ -152,7 +152,7 @@ class CCrmBizProc
 			array_merge(
 				array(
 					'UserGroups' => $this->arCurrentUserGroups,
-					'UserIsAdmin' => CCrmPerms::IsAdmin($userID),
+					'UserIsAdmin' => \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions($userID)->isAdmin(),
 					'CRMEntityAttr' => $arEntityAttr
 				),
 				$arParameters

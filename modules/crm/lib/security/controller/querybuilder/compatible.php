@@ -2,15 +2,14 @@
 
 namespace Bitrix\Crm\Security\Controller\QueryBuilder;
 
+use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Security\AccessAttribute\Collection;
 use Bitrix\Crm\Security\Controller\QueryBuilder;
 use Bitrix\Crm\Security\QueryBuilder\QueryBuilderOptions;
-use Bitrix\Crm\Security\QueryBuilder\Result\InConditionResult;
 use Bitrix\Crm\Security\QueryBuilder\Result\JoinResult;
 use Bitrix\Crm\Security\QueryBuilder\Result\RawQueryResult;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\ArgumentException;
 use CCrmOwnerType;
 use CCrmPerms;
@@ -369,12 +368,12 @@ class Compatible extends QueryBuilder
 	protected function getScopeRegexForEntity(string $permissionEntityType): string
 	{
 		$scopeRegex = '';
-		$entityName = UserPermissions::getEntityNameByPermissionEntityType($permissionEntityType);
-		$factory = Container::getInstance()->getFactory(CCrmOwnerType::ResolveID($entityName));
+		$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($permissionEntityType)?->getEntityTypeId();
+		$factory = Container::getInstance()->getFactory($entityTypeId);
 		if ($factory && $factory->isStagesSupported())
 		{
 			$stageFieldName = $factory->getEntityFieldNameByMap(Item::FIELD_NAME_STAGE_ID);
-			if ($entityName === CCrmOwnerType::QuoteName)
+			if ($entityTypeId === CCrmOwnerType::Quote)
 			{
 				$stageFieldName = 'QUOTE_ID'; // strange but true
 			}

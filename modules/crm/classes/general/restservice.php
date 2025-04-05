@@ -31,6 +31,7 @@ use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Text\StringHelper;
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\RestException;
 use Bitrix\Rest\UserFieldProxy;
@@ -508,7 +509,7 @@ final class CCrmRestService extends IRestService
 	}
 	public static function onRestServiceMethod($arParams, $nav, CRestServer $server)
 	{
-		if(!CCrmPerms::IsAccessEnabled())
+		if(!Service\Container::getInstance()->getUserPermissions()->entityType()->canReadSomeItemsInCrmOrAutomatedSolutions())
 		{
 			throw new RestException('Access denied.');
 		}
@@ -4813,8 +4814,7 @@ class CCrmProductPropertyRestProxy extends CCrmRestProxyBase
 			throw new RestException('Could not load iblock module.');
 		}
 
-		$userPerms = CCrmPerms::GetCurrentUserPermissions();
-		if (!$userPerms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE'))
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin())
 		{
 			$errors[] = 'Access denied.';
 			return false;
@@ -4919,10 +4919,7 @@ class CCrmProductPropertyRestProxy extends CCrmRestProxyBase
 		{
 			throw new RestException('Could not load iblock module.');
 		}
-
-		/** @var CCrmPerms $userPerms */
-		$userPerms = CCrmPerms::GetCurrentUserPermissions();
-		if (!$userPerms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'READ'))
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->product()->canRead())
 		{
 			$errors[] = 'Access denied.';
 			return false;
@@ -4978,10 +4975,7 @@ class CCrmProductPropertyRestProxy extends CCrmRestProxyBase
 		{
 			throw new RestException('Could not load iblock module.');
 		}
-
-		/** @var CCrmPerms $userPerms */
-		$userPerms = CCrmPerms::GetCurrentUserPermissions();
-		if (!$userPerms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'READ'))
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->product()->canRead())
 		{
 			$errors[] = 'Access denied.';
 			return false;
@@ -5032,9 +5026,7 @@ class CCrmProductPropertyRestProxy extends CCrmRestProxyBase
 			throw new RestException('Could not load iblock module.');
 		}
 
-		/** @var CCrmPerms $userPerms */
-		$userPerms = CCrmPerms::GetCurrentUserPermissions();
-		if (!$userPerms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE'))
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin())
 		{
 			$errors[] = 'Access denied.';
 			return false;
@@ -5120,9 +5112,7 @@ class CCrmProductPropertyRestProxy extends CCrmRestProxyBase
 			throw new RestException('Could not load iblock module.');
 		}
 
-		/** @var CCrmPerms $userPerms */
-		$userPerms = CCrmPerms::GetCurrentUserPermissions();
-		if (!$userPerms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE'))
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin())
 		{
 			$errors[] = 'Access denied.';
 			return false;
@@ -6676,8 +6666,7 @@ class CCrmDealCategoryProxy extends CCrmRestProxyBase
 	}
 	protected function innerAdd(&$fields, &$errors, array $params = null)
 	{
-		$userPermissions = \CCrmPerms::GetCurrentUserPermissions();
-		if (!$userPermissions->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE'))
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin())
 		{
 			$errors[] = 'Access denied.';
 			return false;
@@ -6695,8 +6684,7 @@ class CCrmDealCategoryProxy extends CCrmRestProxyBase
 	}
 	protected function innerUpdate($ID, &$fields, &$errors, array $params = null)
 	{
-		$userPermissions = \CCrmPerms::GetCurrentUserPermissions();
-		if (!$userPermissions->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE'))
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin())
 		{
 			$errors[] = 'Access denied.';
 			return false;
@@ -6721,8 +6709,7 @@ class CCrmDealCategoryProxy extends CCrmRestProxyBase
 	}
 	protected function innerDelete($ID, &$errors, array $params = null)
 	{
-		$userPermissions = \CCrmPerms::GetCurrentUserPermissions();
-		if (!$userPermissions->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE'))
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin())
 		{
 			$errors[] = 'Access denied.';
 			return false;
@@ -11561,10 +11548,9 @@ class CCrmUserFieldRestProxy extends UserFieldProxy implements ICrmRestProxy
 	{
 		if($this->isAuthorizedUser === null)
 		{
-			/**@var \CCrmPerms $userPermissions @**/
-			$userPermissions = CCrmPerms::GetUserPermissions($this->user->GetID());
-			$this->isAuthorizedUser = $userPermissions->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE');
+			$this->isAuthorizedUser = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions($this->user->GetID())->isCrmAdmin();
 		}
+
 		return $this->isAuthorizedUser;
 	}
 	protected function checkCreatePermission()
@@ -13779,12 +13765,335 @@ class CCrmAddressRestProxy extends CCrmRestProxyBase
 		}
 		return $this->FIELDS_INFO;
 	}
+
+	protected function prepareListResult(
+		Main\ORM\Query\Result|array $result,
+		int|false $page, int|false $limit
+	) : CDBResult
+	{
+		if (is_array($result))
+		{
+			$dbResult = new CDBResult();
+			$dbResult->InitFromArray($result);
+		}
+		else
+		{
+			$dbResult = new CDBResult($result);
+		}
+
+		if ($page === false)
+		{
+			$limit = $result->getSelectedRowsCount();
+		}
+
+		$dbResult->NavStart($limit, false, $page);
+
+		return $dbResult;
+
+	}
+
+	private function parseEntityTypeIdElement(array $filter, string $entityTypeIdKey, string $resultName): Main\Result
+	{
+		$result = new Main\Result();
+
+		if (isset($filter[$entityTypeIdKey]))
+		{
+			$id = CCrmOwnerType::Undefined;
+			$value = $filter[$entityTypeIdKey];
+			if (is_int($value))
+			{
+				$id = $value;
+			}
+			elseif (is_string($value))
+			{
+				$id = (int)$value;
+			}
+			else // array
+			{
+				$result->addError(new Main\Error('Multiple value', 'MULTIPLE_VALUE'));
+			}
+
+			if ($result->isSuccess())
+			{
+				$validEntityTypeIds = [
+					CCrmOwnerType::Lead,
+					CCrmOwnerType::Contact,
+					CCrmOwnerType::Company,
+					CCrmOwnerType::Requisite,
+				];
+
+				if (in_array($id, $validEntityTypeIds, true))
+				{
+					$result->setData([$resultName => $id]);
+				}
+				else
+				{
+					$result->addError(new Main\Error('Invalid value', 'INVALID_VALUE'));
+				}
+			}
+		}
+		else
+		{
+			$result->addError(new Main\Error('Value is not set', 'VALUE_IS_NOT_SET'));
+		}
+
+		return $result;
+	}
+
+	private function parseEntityIdElement(array $filter, string $entityIdKey, string $resultName): Main\Result
+	{
+		$result = new Main\Result();
+
+		if (isset($filter[$entityIdKey]))
+		{
+			$id = 0;
+			$value = $filter[$entityIdKey];
+			if (is_int($value))
+			{
+				$id = $value;
+			}
+			elseif (is_string($value))
+			{
+				$id = (int)$value;
+			}
+			else // array
+			{
+				$result->addError(new Main\Error('Multiple value', 'MULTIPLE_VALUE'));
+			}
+
+			if ($result->isSuccess())
+			{
+				if ($id > 0)
+				{
+					$result->setData([$resultName => $id]);
+				}
+				else
+				{
+					$result->addError(new Main\Error('Invalid value', 'INVALID_VALUE'));
+				}
+			}
+		}
+		else
+		{
+			$result->addError(new Main\Error('Value is not set', 'VALUE_IS_NOT_SET'));
+		}
+
+		return $result;
+	}
+
+	private function parseIdent(array $filter, callable $identMethod, string $identName): Main\Result
+	{
+		$result = new Main\Result();
+
+		$resultName = lcfirst(StringHelper::snake2camel($identName));
+		$idResult1 = $identMethod($filter, '=' . $identName, $resultName);
+		$isSetId1 = $idResult1->isSuccess();
+		$idResult2 = $identMethod($filter, $identName, $resultName);
+		$isSetId2 = $idResult2->isSuccess();
+		$id = 0;
+
+		if ($isSetId1 && !$isSetId2)
+		{
+			$id = $idResult1->getData()[$resultName];
+		}
+		elseif (!$isSetId1 && $isSetId2)
+		{
+			$id = $idResult2->getData()[$resultName];
+		}
+		elseif ($isSetId1 && $isSetId2)
+		{
+			$id1 = $idResult1->getData()[$resultName];
+			$id2 = $idResult2->getData()[$resultName];
+
+			if ($id1 === $id2)
+			{
+				$id = $id1;
+			}
+			else
+			{
+				$result->addError(new Main\Error('Invalid value', 'INVALID_VALUE'));
+			}
+		}
+		else
+		{
+			$result->addError(new Main\Error('Value is not set', 'VALUE_IS_NOT_SET'));
+		}
+
+		if ($result->isSuccess())
+		{
+			if ($id > 0)
+			{
+				$result->setData([$resultName => $id]);
+			}
+			else
+			{
+				$result->addError(new Main\Error('Invalid value', 'INVALID_VALUE'));
+			}
+		}
+
+		return $result;
+	}
+
+	private function parseEntityTypeId(array $filter): Main\Result
+	{
+		return $this->parseIdent($filter, [$this, 'parseEntityTypeIdElement'], 'ENTITY_TYPE_ID');
+	}
+
+	private function parseEntityId(array $filter): Main\Result
+	{
+		return $this->parseIdent($filter, [$this, 'parseEntityIdElement'], 'ENTITY_ID');
+	}
+
+	private function parseAnchorTypeId(array $filter): Main\Result
+	{
+		return $this->parseIdent($filter, [$this, 'parseEntityTypeIdElement'], 'ANCHOR_TYPE_ID');
+	}
+
+	private function parseAnchorId(array $filter): Main\Result
+	{
+		return $this->parseIdent($filter, [$this, 'parseEntityIdElement'], 'ANCHOR_ID');
+	}
+
+	private function parseIdents(
+		array $filter,
+		callable $parseTypeId,
+		callable $parseId,
+		string $typeIdKey,
+		string $idKey,
+		string $errorMessage,
+		string $errorCode
+	): Main\Result
+	{
+		$result = new Main\Result();
+
+		$typeId = 0;
+		$typeIdResult = $parseTypeId($filter);
+		$isTypeIdParsed = $typeIdResult->isSuccess();
+		if ($isTypeIdParsed)
+		{
+			$typeId = $typeIdResult->getData()[$typeIdKey];
+		}
+
+		$id = 0;
+		$idResult = $parseId($filter);
+		$isIdParsed = $idResult->isSuccess();
+		if ($isIdParsed)
+		{
+			$id = $idResult->getData()[$idKey];
+		}
+
+		if ($isTypeIdParsed && $isIdParsed)
+		{
+			$result->setData(
+				[
+					$typeIdKey => $typeId,
+					$idKey => $id,
+				]
+			);
+		}
+		else
+		{
+			$result->addError(new Main\Error($errorMessage, $errorCode));
+		}
+
+		return $result;
+	}
+
+	private function parseEntityIdents(array $filter): Main\Result
+	{
+		return $this->parseIdents(
+			$filter,
+			[$this, 'parseEntityTypeId'],
+			[$this, 'parseEntityId'],
+			'entityTypeId',
+			'entityId',
+			'Entity idents is not parsed',
+			'ENTITY_IDENTS_IS_NOT_PARSED',
+		);
+	}
+
+	private function parseAnchorIdents(array $filter): Main\Result
+	{
+		return $this->parseIdents(
+			$filter,
+			[$this, 'parseAnchorTypeId'],
+			[$this, 'parseAnchorId'],
+			'anchorTypeId',
+			'anchorId',
+			'Anchor idents is not parsed',
+			'ANCHOR_IDENTS_IS_NOT_PARSED',
+		);
+	}
+
+	private function getIdents(array $filter): Main\Result
+	{
+		$result = new Main\Result();
+
+		$entityIdentsResult = $this->parseEntityIdents($filter);
+		$isEntityIdentsParsed = $entityIdentsResult->isSuccess();
+		$isEntityIdentsAbsent = !(
+			array_key_exists('=ENTITY_TYPE_ID', $filter)
+			|| array_key_exists('ENTITY_TYPE_ID', $filter)
+		);
+		$anchorIdentsResult = $this->parseAnchorIdents($filter);
+		$isAnchorIdentsParsed = $anchorIdentsResult->isSuccess();
+		$isAnchorIdentsAbsent = !(
+			array_key_exists('=ANCHOR_TYPE_ID', $filter)
+			|| array_key_exists('ANCHOR_TYPE_ID', $filter)
+		);
+		if ($isEntityIdentsParsed && $isAnchorIdentsAbsent && !$isAnchorIdentsParsed)
+		{
+			$result->setData(
+				[
+					'entityTypeId' => $entityIdentsResult->getData()['entityTypeId'],
+					'entityId' => $entityIdentsResult->getData()['entityId'],
+				]
+			);
+		}
+		elseif ($isAnchorIdentsParsed && $isEntityIdentsAbsent && !$isEntityIdentsParsed)
+		{
+			$result->setData(
+				[
+					'entityTypeId' => $anchorIdentsResult->getData()['anchorTypeId'],
+					'entityId' => $anchorIdentsResult->getData()['anchorId'],
+				]
+			);
+		}
+		else
+		{
+			$result->addError(new Main\Error('Identifiers is not parsed', 'IDENTS_IN_NOT_PARSED'));
+		}
+
+		return $result;
+	}
+
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
-		if(!EntityAddress::checkReadPermissionOwnerEntity())
+		$oldRightsCheck = true;
+		$identsResult = $this->getIdents($filter);
+		if ($identsResult->isSuccess())
 		{
-			$errors[] = 'Access denied.';
-			return false;
+			$oldRightsCheck = false;
+			$identFields = $identsResult->getData();
+			if (
+				!EntityAddress::checkReadPermissionOwnerEntity(
+					$identFields['entityTypeId'],
+					$identFields['entityId']
+				)
+			)
+			{
+				$errors[] = 'Access denied.';
+				return false;
+			}
+		}
+
+		if ($oldRightsCheck)
+		{
+			if(!EntityAddress::checkReadPermissionOwnerEntity())
+			{
+				$errors[] = 'Access denied.';
+				return false;
+			}
 		}
 
 		$entity = self::getEntity();
@@ -13828,24 +14137,12 @@ class CCrmAddressRestProxy extends CCrmRestProxyBase
 
 		$result = $entity->getList($listParams);
 
-		if (is_object($result))
+		if (!is_object($result))
 		{
-			$dbResult = new CDBResult($result);
-		}
-		else
-		{
-			$dbResult = new CDBResult();
-			$dbResult->InitFromArray(array());
+			$result = [];
 		}
 
-		if ($page === false)
-		{
-			$limit = $result->getSelectedRowsCount();
-		}
-
-		$dbResult->NavStart($limit, false, $page);
-
-		return $dbResult;
+		return $this->prepareListResult($result, $page, $limit);
 	}
 
 	public function processMethodRequest($name, $nameDetails, $arParams, $nav, $server)
@@ -14775,8 +15072,7 @@ class CCrmPersonTypeRestProxy extends CCrmRestProxyBase
 
 		$result = array();
 
-		$crmPerms = new CCrmPerms($USER->GetID());
-		if (!$crmPerms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'READ'))
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->product()->canRead())
 		{
 			$errors[] = 'Access denied.';
 			return false;
@@ -14910,20 +15206,16 @@ class CCrmPaySystemRestProxy extends CCrmRestProxyBase
 	}
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
-		global $USER;
-
 		$result = array();
-
-		$crmPerms = new CCrmPerms($USER->GetID());
-		if (!$crmPerms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'READ'))
-		{
-			$errors[] = 'Access denied.';
-			return false;
-		}
 
 		if (!CModule::IncludeModule('sale'))
 		{
 			$errors[] = 'Sale module is not installed.';
+			return false;
+		}
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->product()->canRead())
+		{
+			$errors[] = 'Access denied.';
 			return false;
 		}
 

@@ -86,8 +86,9 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 	protected function filterPresetRequisiteFields(array $requisiteFieldsValues)
 	{
 		$requisiteFieldsIds = EntityRequisite::getSingleInstance()->getRqFields();
+		$presetFields = EntityPreset::getSingleInstance()->getById($this->getRequisitePresetId())['SETTINGS']['FIELDS'] ?? [];
 		$presetFieldsIds = array_column(
-			EntityPreset::getSingleInstance()->getById($this->getRequisitePresetId())['SETTINGS']['FIELDS'],
+			$presetFields,
 			null,
 			'FIELD_NAME'
 		);

@@ -97,8 +97,14 @@ class User
 				],
 				'DEPARTMENT_ID' => [
 					'FIELD_NAME' => 'SN.DEP_ID',
-					'JOIN' => $departmentJoin,
-					'LEFT_JOIN' => $departmentLeftJoin,
+					'JOIN' => [
+						$dshrJoin,
+						$departmentJoin,
+					],
+					'LEFT_JOIN' => [
+						$dshrLeftJoin,
+						$departmentLeftJoin,
+					],
 				],
 				'DEPARTMENT_NAME' => [
 					'IS_METRIC' => 'N',

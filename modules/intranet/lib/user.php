@@ -128,28 +128,16 @@ class User
 			return self::$cacheAdmin[$this->userId];
 		}
 
-		if ($this->currentUser->getId() === $this->userId && $this->currentUser->isAdmin())
+		if ((int)$this->currentUser->getId() !== $this->userId)
 		{
-			self::$cacheAdmin[$this->userId] = true;
-
-			return self::$cacheAdmin[$this->userId];
+			self::$cacheAdmin[$this->userId] = in_array(1, $this->getGroups())
+			|| Loader::includeModule('bitrix24')
+			&& \CBitrix24::IsPortalAdmin($this->userId);
 		}
-
-		$groups = $this->getGroups();
-		if (
-			in_array(1, $groups)
-			||
-			Loader::includeModule('bitrix24')
-			&&
-			\CBitrix24::IsPortalAdmin($this->userId)
-		)
+		else
 		{
-			self::$cacheAdmin[$this->userId] = true;
-
-			return self::$cacheAdmin[$this->userId];
+			self::$cacheAdmin[$this->userId] = $this->currentUser->isAdmin();
 		}
-
-		self::$cacheAdmin[$this->userId] = false;
 
 		return self::$cacheAdmin[$this->userId];
 	}

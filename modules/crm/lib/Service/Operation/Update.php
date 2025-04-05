@@ -37,6 +37,7 @@ class Update extends Operation
 			->getUserPermissions(
 				$this->getContext()->getUserId()
 			)
+			->item()
 			->canUpdateItem(
 				$this->item
 			)
@@ -394,52 +395,5 @@ class Update extends Operation
 		$factory = Container::getInstance()->getFactory($this->getItem()->getEntityTypeId());
 
 		return $factory?->isStagesEnabled() && $this->wasItemMovedToFinalStage();
-	}
-
-	private function isTransitionAllowed(): bool
-	{
-		if ($this->item->getStageId() === $this->item->remindActual('STAGE_ID'))
-		{
-			return true;
-		}
-
-		if ($this->item->isCategoriesSupported() && ($this->item->getCategoryId() !== $this->item->remindActual('CATEGORY_ID')))
-		{
-			return true;
-		}
-
-		return Container::getInstance()->getUserPermissions($this->getContext()->getUserId())->isStageTransitionAllowed(
-			$this->item->remindActual('STAGE_ID'),
-			$this->item->getStageId(),
-			ItemIdentifier::createByItem($this->item),
-		);
-	}
-
-	protected function preSaveChecks(): ?Result
-	{
-		$checkResult = parent::preSaveChecks();
-		if ($checkResult)
-		{
-			return $checkResult;
-		}
-
-		if (!$this->isCheckAccessEnabled())
-		{
-			return null;
-		}
-
-		$userPermissions = Container::getInstance()->getUserPermissions($this->getContext()->getUserId());
-
-		if ($userPermissions->isAdminForEntity($this->item->getEntityTypeId()))
-		{
-			return null;
-		}
-
-		if ($this->item->isStagesEnabled() && !$this->isTransitionAllowed())
-		{
-			return (new Result())->addError(new Error(Loc::getMessage('CRM_PERMISSION_STAGE_TRANSITION_NOT_ALLOWED')));
-		}
-
-		return null;
 	}
 }

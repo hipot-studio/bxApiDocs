@@ -80,6 +80,68 @@ class Invite extends Main\Engine\Controller
 					return $collection;
 				}
 			),
+			new ExactParameter(
+				Entity\Type\Collection\InvitationCollection::class,
+				'emailInvitations',
+				function($className, array $emailInvitations) {
+					$collection = new Entity\Type\Collection\InvitationCollection();
+					foreach ($emailInvitations as $invitation)
+					{
+						$email = $invitation['email'] ?? null;
+						if (!$email)
+						{
+							continue;
+						}
+						$emailInvitation = new Entity\Type\EmailInvitation(
+							$email,
+							$invitation['name'] ?? null,
+							$invitation['lastName'] ?? null,
+						);
+						$collection->add($emailInvitation);
+					}
+
+					return $collection;
+				}
+			),
+			new ExactParameter(
+				Entity\Type\Collection\InvitationCollection::class,
+				'phoneInvitations',
+				function($className, array $phoneInvitations) {
+					$collection = new Entity\Type\Collection\InvitationCollection();
+					foreach ($phoneInvitations as $invitation)
+					{
+						$phoneNumber = $invitation['phoneNumber'] ?? null;
+						if (!$phoneNumber)
+						{
+							continue;
+						}
+						$emailInvitation = new Entity\Type\PhoneInvitation(
+							$invitation['phoneNumber'] ?? null,
+							$invitation['name'] ?? null,
+							$invitation['lastName'] ?? null,
+							$invitation['phoneCountry'] ?? null,
+						);
+						$collection->add($emailInvitation);
+					}
+
+					return $collection;
+				}
+			),
+			new ExactParameter(
+				Entity\Collection\DepartmentCollection::class,
+				'departmentCollection',
+				function($className, ?array $departmentIds = null) {
+					if (!$departmentIds)
+					{
+						return null;
+					}
+
+					return Intranet\Service\ServiceContainer::getInstance()
+						->departmentRepository()
+						->findAllByIds($departmentIds)
+						;
+				}
+			),
 		];
 	}
 
@@ -145,6 +207,16 @@ class Invite extends Main\Engine\Controller
 					Intranet\ActionFilter\InviteIntranetAccessControl::class,
 				],
 			],
+			'inviteUsersByEmail' => [
+				'+prefilters' => [
+					new Intranet\ActionFilter\InviteLimitControl(),
+				],
+			],
+			'inviteUsersByPhoneNumber' => [
+				'+prefilters' => [
+					new Intranet\ActionFilter\InviteLimitControl(),
+				],
+			],
 		];
 	}
 
@@ -158,6 +230,108 @@ class Invite extends Main\Engine\Controller
 		}
 
 		return $result->getData();
+	}
+
+	private function inviteUsers(Entity\Type\InvitationsContainer $invitationsContainer): ?array
+	{
+		try
+		{
+			$userCollection = Intranet\Service\ServiceContainer::getInstance()
+				->inviteService()
+				->inviteUsers($invitationsContainer);
+			;
+			$response = [];
+			foreach ($userCollection as $user)
+			{
+				$response[] = [
+					'id' => $user->getId(),
+					'login' => $user->getLogin(),
+					'email' => $user->getEmail(),
+					'authPhoneNumber' => $user->getAuthPhoneNumber(),
+					'name' => $user->getName(),
+					'lastName' => $user->getLastName(),
+					'invitationStatus' => $user->getInviteStatus()->value,
+				];
+			}
+
+			return $response;
+		}
+		catch (Intranet\Exception\InvitationFailedException $exception)
+		{
+			$this->addErrors($exception->getErrors()->toArray());
+
+			return null;
+		}
+	}
+
+	/**
+	 * @restMethod intranet.invite.inviteUsersByEmail
+	 */
+	public function inviteUsersByEmailAction(
+		Entity\Type\Collection\InvitationCollection $emailInvitations,
+		?Entity\Collection\DepartmentCollection $departmentCollection,
+	): ?array
+	{
+		$invitationsContainer = new Entity\Type\InvitationsContainer($emailInvitations, $departmentCollection);
+
+		return $this->inviteUsers($invitationsContainer);
+	}
+
+	/**
+	 * @restMethod intranet.invite.inviteUsersByPhoneNumber
+	 */
+	public function inviteUsersByPhoneNumberAction(
+		Entity\Type\Collection\InvitationCollection $phoneInvitations,
+		?Entity\Collection\DepartmentCollection $departmentCollection,
+	): ?array
+	{
+		if (!Loader::includeModule('bitrix24'))
+		{
+			$this->addError(new Error('This method is not available'));
+			return null;
+		}
+
+		$invitationsContainer = new Entity\Type\InvitationsContainer($phoneInvitations, $departmentCollection);
+
+		return $this->inviteUsers($invitationsContainer);
+	}
+
+	/**
+	 * @restMethod intranet.invite.getLinkByDepartments
+	 */
+	public function getLinkByDepartmentsAction(
+		?Entity\Collection\DepartmentCollection $departmentCollection
+	): ?string
+	{
+		if (!Loader::includeModule('bitrix24'))
+		{
+			$this->addError(new Error('This method is not available'));
+
+			return null;
+		}
+
+		if (!$departmentCollection)
+		{
+			$departmentCollection = new Entity\Collection\DepartmentCollection();
+		}
+		$departmentRepository = Intranet\Service\ServiceContainer::getInstance()->departmentRepository();
+		if ($departmentCollection->empty())
+		{
+			$departmentCollection->add($departmentRepository->getRootDepartment());
+		}
+
+		$linkGenerator = InviteLinkGenerator::createByDepartmentsIds(
+			$departmentCollection->map(fn(Entity\Department $department) => $department->getId())
+		);
+
+		if (!$linkGenerator)
+		{
+			$this->addError(new Error('Failed to create a link generator'));
+
+			return null;
+		}
+
+		return $linkGenerator->getShortCollabLink();
 	}
 
 	/**

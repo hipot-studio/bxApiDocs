@@ -42,6 +42,7 @@ class PartGridRoleService extends GridRoleService
 	{
 		$accessRightsDataProvider = $this->getAccessRightsDataProvider();
 		$userGroups = array_flip($this->userAccessRepository->getCodesForUserGroup($userId));
+
 		$result = [];
 		$userIdList = [];
 		foreach ($codesData as $codeDate)
@@ -52,7 +53,7 @@ class PartGridRoleService extends GridRoleService
 			}
 
 			$code = $codeDate['ACCESS_CODE'];
-			if (UserAccessRepository::CODE_ALL_USER == $code)
+			if (UserAccessRepository::CODE_ALL_USER === $code)
 			{
 				$result = [
 					new ShareDto($this->getAllUsersEntityName(), $code)

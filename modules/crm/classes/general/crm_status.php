@@ -1752,27 +1752,22 @@ class CCrmStatus
 	//region user permissions
 	public static function CheckCreatePermission(): bool
 	{
-		$perms = CCrmPerms::GetCurrentUserPermissions();
-
-		return $perms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE');
+		return \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin();
 	}
 
 	public static function CheckUpdatePermission($ID): bool
 	{
-		$perms = CCrmPerms::GetCurrentUserPermissions();
-		return $perms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE');
+		return \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin();
 	}
 
 	public static function CheckDeletePermission($ID): bool
 	{
-		$perms = CCrmPerms::GetCurrentUserPermissions();
-		return $perms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE');
+		return \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin();
 	}
 
 	public static function CheckReadPermission($ID = 0): bool
 	{
-		$perms = CCrmPerms::GetCurrentUserPermissions();
-		return $perms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'READ');
+		return \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->entityType()->canReadSomeItemsInCrmOrAutomatedSolutions();
 	}
 	//endregion
 }

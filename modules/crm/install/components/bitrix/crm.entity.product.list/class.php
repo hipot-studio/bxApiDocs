@@ -899,8 +899,7 @@ final class CCrmEntityProductListComponent
 	protected function loadMeasures(): void
 	{
 		$this->measures['LIST'] = [];
-		// TODO: remove limit after creation new measure control
-		foreach (Crm\Measure::getMeasures(100) as $row)
+		foreach (Crm\Measure::getMeasures() as $row)
 		{
 			$this->measures['LIST'][self::PREFIX_MEASURE_INDEX . $row['CODE']] = [
 				'CODE' => (string)$row['CODE'],

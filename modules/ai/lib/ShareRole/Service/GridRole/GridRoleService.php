@@ -4,6 +4,7 @@ namespace Bitrix\AI\ShareRole\Service\GridRole;
 
 use Bitrix\AI\Entity\TranslateTrait;
 use Bitrix\AI\Facade\User;
+use Bitrix\AI\Integration\Intranet\DepartmentService;
 use Bitrix\AI\Integration\Socialnetwork\GroupService;
 use Bitrix\AI\ShareRole\Repository\GridRoleRepository;
 use Bitrix\AI\ShareRole\Repository\ShareRepository;
@@ -47,7 +48,8 @@ class GridRoleService
 		protected UserRepository $userRepository,
 		protected DateFormatService $dateFormatService,
 		protected UserAccessRepository $userAccessRepository,
-		protected GroupService $groupService
+		protected GroupService $groupService,
+		protected DepartmentService $departmentService
 	)
 	{
 	}
@@ -294,31 +296,51 @@ class GridRoleService
 				continue;
 			}
 
-			if (!in_array($code, $this->getExistingGroupCodes(), true))
+
+			if ($accessCode->getEntityType() === AccessCode::TYPE_SOCNETGROUP)
 			{
-				$gridRoleDto->decreaseCountShare();
+				if (!in_array($code, $this->getExistingGroupCodes(), true))
+				{
+					$gridRoleDto->decreaseCountShare();
+					continue;
+				}
+
+				$sharingInfoDto->addForCodes(
+					$this->getShareDTO($entity, $userGroups, $code)
+				);
+
+				$gridRoleDto->addInShare($code, $sharingInfoDto->getByCode($code));
 				continue;
 			}
 
-			$sharingInfoDto->addForCodes(
-				$this->getShareDTO($entity, $userGroups, $code)
-			);
+			if ($accessCode->getEntityType() === AccessCode::TYPE_DEPARTMENT)
+			{
+				if (!in_array($code, $this->getExistingDepartmentCodes(), true))
+				{
+					$gridRoleDto->decreaseCountShare();
+					continue;
+				}
 
-			$gridRoleDto->addInShare($code, $sharingInfoDto->getByCode($code));
+				$sharingInfoDto->addForCodes(
+					$this->getShareDTO($entity, $userGroups, $code)
+				);
+
+				$gridRoleDto->addInShare($code, $sharingInfoDto->getByCode($code));
+			}
 		}
 	}
 
 	protected function getShareDTO(AccessRightEntityInterface $entity, array $userGroups, string $code): ShareDto
 	{
-		if (!array_key_exists($entity->getId(), $this->groupService->getNotVisibleGroupListInKeys()))
-		{
-			return new ShareDto($entity->getName(), $code, $entity->getAvatar());
-		}
-
+		$accessCode = new AccessCode($code);
 		$name = $entity->getName();
 		$img = $entity->getAvatar();
 
-		if (!array_key_exists($code, $userGroups))
+		if (
+			$accessCode->getEntityType() === AccessCode::TYPE_SOCNETGROUP
+			&& !array_key_exists($code, $userGroups)
+			&& array_key_exists($entity->getId(), $this->groupService->getNotVisibleGroupListInKeys())
+		)
 		{
 			$name = $this->getHiddenName();
 			$img = null;
@@ -401,6 +423,10 @@ class GridRoleService
 		return 'SG' . $groupId;
 	}
 
+	protected function getCodeForDepartment(int $departmentId): string
+	{
+		return 'DR' . $departmentId;
+	}
 
 	protected function getIdsFromList(array $list): array
 	{
@@ -436,9 +462,25 @@ class GridRoleService
 		if (empty($this->existingGroupCodes))
 		{
 			$this->existingGroupCodes = $this->groupService->getAllGroupCodes();
-			$this->existingGroupCodes = array_map(fn($value) => $this->getCodeForGroup($value), $this->existingGroupCodes);
+			$this->existingGroupCodes = array_map(
+				fn($value) => $this->getCodeForGroup($value), $this->existingGroupCodes
+			);
 		}
+
 		return $this->existingGroupCodes;
+	}
+
+	protected function getExistingDepartmentCodes(): array
+	{
+		if (empty($this->existingDepartmentCodes))
+		{
+			$this->existingDepartmentCodes = $this->departmentService->getDepartments();
+			$this->existingDepartmentCodes = array_map(
+				fn($value) => $this->getCodeForDepartment($value), $this->existingDepartmentCodes
+			);
+		}
+
+		return $this->existingDepartmentCodes;
 	}
 
 	protected function log(string $text): void

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Scenario;
 
+use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\CategoryIdentifier;
 use Bitrix\Crm\Feature;
 use Bitrix\Crm\Security\Role\RolePreset;
@@ -35,8 +36,8 @@ class DefaultCategoryPermissions extends Service\Scenario
 		$categoryIdentifier = new CategoryIdentifier($this->entityTypeId, $this->categoryId);
 		$defaultPermissionSet =
 			$this->needSetOpenPermissions
-			? RolePreset::getDefaultPermissionSetForEntity($categoryIdentifier)
-			: RolePreset::getBasePermissionSetForEntity($categoryIdentifier)
+			? RolePreset::getMaxPermissionSetForEntity($categoryIdentifier)
+			: RolePreset::getMinPermissionSetForEntity($categoryIdentifier)
 		;
 
 		if (empty($defaultPermissionSet))
@@ -50,10 +51,7 @@ class DefaultCategoryPermissions extends Service\Scenario
 
 	public function addPermissionsForNewCategory(): void
 	{
-		$permissionEntity = Service\UserPermissions::getPermissionEntityType(
-			$this->entityTypeId,
-			$this->categoryId
-		);
+		$permissionEntity = (new PermissionEntityTypeHelper($this->entityTypeId))->getPermissionEntityTypeForCategory($this->categoryId);
 		Service\Container::getInstance()->getFactory($this->entityTypeId)?->clearCategoriesCache();
 
 		/** @var \CCrmRole $role */
@@ -65,8 +63,8 @@ class DefaultCategoryPermissions extends Service\Scenario
 		$categoryIdentifier = new CategoryIdentifier($this->entityTypeId, $this->categoryId);
 		$defaultPermissionSet =
 			$this->needSetOpenPermissions
-				? RolePreset::getDefaultPermissionSetForEntity($categoryIdentifier)
-				: RolePreset::getBasePermissionSetForEntity($categoryIdentifier)
+				? RolePreset::getMaxPermissionSetForEntity($categoryIdentifier)
+				: RolePreset::getMinPermissionSetForEntity($categoryIdentifier)
 		;
 
 		if (empty($defaultPermissionSet))

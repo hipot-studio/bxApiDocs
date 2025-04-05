@@ -15,6 +15,7 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 
 class Source extends Controller
 {
@@ -56,28 +57,15 @@ class Source extends Controller
 
 	public function changeActivityAction(int $id, string $moduleId): ?bool
 	{
-		$source = null;
-		if ($moduleId === 'BI')
+		$sourceResult = $this->getSource($id, $moduleId);
+		if (!$sourceResult->isSuccess())
 		{
-			$source = BIConnector\ExternalSource\Internal\ExternalSourceTable::getById($id)->fetchObject();
-		}
-		elseif ($moduleId === 'CRM')
-		{
-			if (!Loader::includeModule('crm'))
-			{
-				$this->addError(new Error('Module crm is not installed'));
-
-				return null;
-			}
-			$source = Crm\Tracking\Internals\SourceTable::getById($id)->fetchObject();
-		}
-
-		if (!$source)
-		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND')));
+			$this->addErrors($sourceResult->getErrors());
 
 			return null;
 		}
+
+		$source = $sourceResult->getData()['source'];
 
 		if ($source->getActive())
 		{
@@ -127,7 +115,7 @@ class Source extends Controller
 		return true;
 	}
 
-	public function checkConnectionAction(int $sourceId): ?bool
+	public function checkExistingConnectionAction(int $sourceId): ?bool
 	{
 		$sourceEntity = BIConnector\ExternalSource\Internal\ExternalSourceTable::getById($sourceId)->fetchObject();
 		if (!$sourceEntity)
@@ -138,17 +126,65 @@ class Source extends Controller
 		}
 
 		$source = ExternalSource\Source\Factory::getSource($sourceEntity->getEnumType(), $sourceEntity->getId());
-		$settings = $sourceEntity->getSettings();
+		$settings = SourceManager::getSourceSettings($sourceEntity);
 
-		$connectResult = $source->connect(
-			$settings->getValueByCode('host') ?? '',
-			$settings->getValueByCode('username') ?? '',
-			$settings->getValueByCode('password') ?? '',
-		);
+		$connectResult = $source->connect($settings);
 
 		if (!$connectResult->isSuccess())
 		{
 			$this->addErrors($connectResult->getErrors());
+
+			return null;
+		}
+
+		return true;
+	}
+
+	public function checkConnectionByDataAction(array $data): ?bool
+	{
+		if (!isset($data['type']) || !$data['type'])
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_FIELDS_INCOMPLETE')));
+
+			return null;
+		}
+
+		$requiredFields = ExternalSource\SourceManager::getFieldsConfig()[$data['type']];
+		$settings = ExternalSource\Internal\ExternalSourceSettingsTable::createCollection();
+		foreach ($requiredFields as $requiredField)
+		{
+			if (!isset($data[$requiredField['code']]) || !$data[$requiredField['code']])
+			{
+				$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_FIELDS_INCOMPLETE')));
+
+				return null;
+			}
+
+			$settingItem = ExternalSource\Internal\ExternalSourceSettingsTable::createObject();
+			$settingItem
+				->setName($requiredField['name'])
+				->setType($requiredField['type'])
+				->setCode($requiredField['code'])
+				->setValue($data[$requiredField['code']])
+			;
+			$settings->add($settingItem);
+		}
+
+		$type = ExternalSource\Type::tryFrom($data['type']);
+		if (!$type)
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_UNKNOWN_TYPE', [
+				'#CONNECTION_TYPE#' => htmlspecialcharsbx($data['type']),
+			])));
+
+			return null;
+		}
+
+		$source = ExternalSource\Source\Factory::getSource($type, 0);
+		$connectionResult = $source->connect($settings);
+		if (!$connectionResult->isSuccess())
+		{
+			$this->addErrors($connectionResult->getErrors());
 
 			return null;
 		}
@@ -181,5 +217,64 @@ class Source extends Controller
 		}
 
 		return $saveResult->getData();
+	}
+
+	public function updateCommentAction(string $id, string $value): ?bool
+	{
+		[$id, $moduleId] = explode('.', $id);
+
+		$sourceResult = $this->getSource((int)$id, $moduleId);
+		if (!$sourceResult->isSuccess())
+		{
+			$this->addErrors($sourceResult->getErrors());
+
+			return null;
+		}
+
+		$source = $sourceResult->getData()['source'];
+
+		$source->setDescription($value);
+
+		$saveResult = $source->save();
+		if (!$saveResult->isSuccess())
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_SAVED')));
+
+			return null;
+		}
+
+		return true;
+	}
+
+	private function getSource(int $id, string $moduleId): Result
+	{
+		$result = new Result();
+		$source = null;
+
+		if ($moduleId === 'BI')
+		{
+			$source = BIConnector\ExternalSource\Internal\ExternalSourceTable::getById($id)->fetchObject();
+		}
+		elseif ($moduleId === 'CRM')
+		{
+			if (!Loader::includeModule('crm'))
+			{
+				$result->addError(new Error('Module crm is not installed'));
+
+				return $result;
+			}
+			$source = Crm\Tracking\Internals\SourceTable::getById($id)->fetchObject();
+		}
+
+		if (!$source)
+		{
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND')));
+
+			return $result;
+		}
+
+		$result->setData(['source' => $source]);
+
+		return $result;
 	}
 }

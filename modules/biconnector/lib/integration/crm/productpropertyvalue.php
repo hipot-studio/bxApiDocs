@@ -78,6 +78,7 @@ class ProductPropertyValue
 				],
 				'FIELDS' => [
 					'ID' => [
+						'IS_PRIMARY' => 'Y',
 						'FIELD_NAME' => 'IEP.ID',
 						'FIELD_TYPE' => 'string',
 					],

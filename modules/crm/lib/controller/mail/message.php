@@ -1340,20 +1340,17 @@ class Message extends Controller
 			$mailboxHelper->uploadMessage($outgoing);
 		}
 
-		// Try add event to entity
+		// Try to add event to entity
 		$CCrmEvent = new \CCrmEvent();
 
-		$eventText  = '';
-		$eventText .= GetMessage('CRM_TITLE_EMAIL_SUBJECT').': '.$subject."\n\r";
-		$eventText .= GetMessage('CRM_TITLE_EMAIL_FROM').': '.$from."\n\r";
+		$eventText = Loc::getMessage('CRM_MAIL_CONTROLLER_EVENT_TITLE_EMAIL_SUBJECT').$subject."\n\r";
+		$eventText .= Loc::getMessage('CRM_MAIL_CONTROLLER_EVENT_TITLE_EMAIL_FROM').$from."\n\r";
 		if (!empty($to))
-			$eventText .= getMessage('CRM_TITLE_EMAIL_TO').': '.implode(',', $to)."\n\r";
+			$eventText .= Loc::getMessage('CRM_MAIL_CONTROLLER_EVENT_TITLE_EMAIL_TO').implode(',', $to)."\n\r";
 		if (!empty($rawCc))
 			$eventText .= 'Cc: '.implode(',', $rawCc)."\n\r";
 		if (!empty($bcc))
 			$eventText .= 'Bcc: '.implode(',', $bcc)."\n\r";
-		$eventText .= "\n\r";
-		$eventText .= $description;
 
 		$eventBindings = array();
 		foreach($arBindings as $item)
@@ -1369,10 +1366,10 @@ class Message extends Controller
 		}
 		$CCrmEvent->Add(
 			array(
+				'EVENT_TYPE'   => \CCrmEvent::TYPE_EMAIL,
 				'ENTITY' => $eventBindings,
 				'EVENT_ID' => 'MESSAGE',
 				'EVENT_TEXT_1' => $eventText,
-				'FILES' => array_values($arRawFiles),
 			)
 		);
 		// <-- Sending Email
@@ -1657,7 +1654,7 @@ class Message extends Controller
 
 		foreach ($contactIDs as $id)
 		{
-			if(Container::getInstance()->getUserPermissions()->checkReadPermissions(\CCrmOwnerType::Contact, $id))
+			if(Container::getInstance()->getUserPermissions()->item()->canRead(\CCrmOwnerType::Contact, $id))
 			{
 				$contactIdsPermissions[] = $id;
 			};
@@ -1775,7 +1772,7 @@ class Message extends Controller
 
 	protected function checkOwnerReadPermission(int $typeId, int $id): bool
 	{
-		if(!Container::getInstance()->getUserPermissions()->checkReadPermissions($typeId, $id))
+		if(!Container::getInstance()->getUserPermissions()->item()->canRead($typeId, $id))
 		{
 			$this->addError(new Error(Loc::getMessage('CRM_MAIL_CONTROLLER_PERMISSION_DENIED', 'activity_not_specified')));
 			return false;

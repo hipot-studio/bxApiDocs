@@ -3,9 +3,9 @@
 namespace Bitrix\Crm\Integration\BizProc\Document\ValueCollection;
 
 use Bitrix\Bizproc\Document\ValueCollection;
+use Bitrix\Crm;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
-use Bitrix\Crm;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 
@@ -18,18 +18,32 @@ abstract class Base extends ValueCollection
 {
 	protected $typeId;
 	protected $id;
+	protected array $select = [];
 
-	public function __construct(int $typeId, int $id)
+	public function __construct(int $typeId, int $id, array $select = ['*'])
 	{
 		$this->typeId = $typeId;
 		$this->id = $id;
+		$this->select = $select;
+
+		$this->loadEntityValues();
 	}
 
-	abstract protected function loadValue(string $fieldId): void;
+	abstract protected function processField(string $fieldId): bool;
+
+	protected function loadValue(string $fieldId): void
+	{
+		$fieldProcessed = $this->processField($fieldId);
+
+		if (!$fieldProcessed)
+		{
+			$this->loadEntityValues();
+		}
+	}
 
 	abstract protected function loadEntityValues(): void;
 
-	public function offsetGet($offset)
+	public function offsetGet($offset): mixed
 	{
 		if (!array_key_exists($offset, $this->document))
 		{
@@ -39,7 +53,7 @@ abstract class Base extends ValueCollection
 		return parent::offsetGet($offset);
 	}
 
-	public function offsetExists($offset)
+	public function offsetExists($offset): bool
 	{
 		if (!array_key_exists($offset, $this->document))
 		{
@@ -47,6 +61,11 @@ abstract class Base extends ValueCollection
 		}
 
 		return parent::offsetExists($offset);
+	}
+
+	public function toArray(): array
+	{
+		return $this->document;
 	}
 
 	protected function loadCommonValue($fieldId): void
@@ -227,8 +246,14 @@ abstract class Base extends ValueCollection
 
 	protected function loadUserFieldValues(): void
 	{
+		$userFields = $this->findUserFields($this->select);
+		if (empty($userFields) && !empty($this->select))
+		{
+			return;
+		}
+
 		$entity = \CCrmOwnerType::ResolveUserFieldEntityID($this->typeId);
-		$userFieldsList = Application::getUserTypeManager()->getUserFields($entity, $this->id);
+		$userFieldsList = Application::getUserTypeManager()->getUserFields($entity, $this->id, selectFields: $userFields);
 
 		if (is_array($userFieldsList))
 		{
@@ -342,6 +367,21 @@ abstract class Base extends ValueCollection
 		}
 	}
 
+	protected function findUserFields(array $fields): ?array
+	{
+		$userFields = array_filter($fields, static function($field)
+		{
+			return strpos($field, 'UF_') === 0;
+		});
+
+		if (count($userFields) === 0)
+		{
+			return null;
+		}
+
+		return $userFields;
+	}
+
 	private static function prepareResourceBookingField(array &$document, $fieldId): void
 	{
 		if (empty($document[$fieldId]) || !\Bitrix\Main\Loader::includeModule('calendar'))
@@ -421,32 +461,35 @@ abstract class Base extends ValueCollection
 			;
 		}
 
-		$multiFieldTypes = \CCrmFieldMulti::GetEntityTypeList();
-		foreach ($multiFieldTypes as $typeId => $fields)
+		if (!empty($multiFields))
 		{
-			if (!isset($this->document[$typeId]))
+			$multiFieldTypes = \CCrmFieldMulti::GetEntityTypeList();
+			foreach ($multiFieldTypes as $typeId => $fields)
 			{
-				$this->document[$typeId] = [];
-			}
-
-			$printableFieldName = $typeId . '_PRINTABLE';
-			if (!isset($this->document[$printableFieldName]))
-			{
-				$this->document[$printableFieldName] = '';
-			}
-
-			foreach ($fields as $valueType => $valueName)
-			{
-				$fieldName = $typeId . '_' . $valueType;
-				if (!isset($this->document[$fieldName]))
+				if (!isset($this->document[$typeId]))
 				{
-					$this->document[$fieldName] = [''];
+					$this->document[$typeId] = [];
 				}
 
-				$printableFieldName = $fieldName . '_PRINTABLE';
+				$printableFieldName = $typeId . '_PRINTABLE';
 				if (!isset($this->document[$printableFieldName]))
 				{
 					$this->document[$printableFieldName] = '';
+				}
+
+				foreach ($fields as $valueType => $valueName)
+				{
+					$fieldName = $typeId . '_' . $valueType;
+					if (!isset($this->document[$fieldName]))
+					{
+						$this->document[$fieldName] = [''];
+					}
+
+					$printableFieldName = $fieldName . '_PRINTABLE';
+					if (!isset($this->document[$printableFieldName]))
+					{
+						$this->document[$printableFieldName] = '';
+					}
 				}
 			}
 		}

@@ -22,6 +22,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 
 Loader::includeModule("biconnector");
 
@@ -35,7 +36,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 	{
 		$arParams['DASHBOARD_ID'] = (int)($arParams['DASHBOARD_ID'] ?? 0);
 		$arParams['CODE'] = $arParams['CODE'] ?? '';
-		$arParams['URL_PARAMS'] = $arParams['URL_PARAMS'] ?? [];
+		$arParams['URL_PARAMS'] = $this->getUrlParams();
 
 		return parent::onPrepareComponentParams($arParams);
 	}
@@ -69,6 +70,24 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 	public function executeComponent()
 	{
+		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED)
+		{
+			LocalRedirect('/bi/dashboard/');
+		}
+
+		if (Loader::includeModule('bitrix24') && !\Bitrix\Bitrix24\Feature::isFeatureEnabled('bi_constructor'))
+		{
+			LocalRedirect('/bi/dashboard/');
+		}
+
+		if (
+			class_exists('Bitrix\Intranet\Settings\Tools\ToolsManager')
+			&& !ToolsManager::getInstance()->checkAvailabilityByMenuId('crm_bi')
+		)
+		{
+			LocalRedirect('/bi/dashboard/');
+		}
+
 		$dashboardId = (int)$this->arParams['DASHBOARD_ID'];
 		$dashboard = SupersetDashboardTable::getByPrimary($dashboardId)->fetch();
 		if (!$dashboard)
@@ -159,6 +178,10 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->prepareNativeFilters();
 
 		$this->prepareUrlParams();
+
+		$this->arResult['CAN_SEND_STARTUP_METRIC'] = self::canSendStartupSupersetMetric();
+
+		$this->logDashboardApp();
 
 		$this->includeComponentTemplate();
 	}
@@ -265,5 +288,49 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			$canEdit = $accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem);
 		}
 		$this->arResult['CAN_EDIT'] = $canEdit ? 'Y' : 'N';
+	}
+
+	private function getUrlParams(): ?array
+	{
+		return
+			$this->request->get('params') && is_string($this->request->get('params'))
+				? Bitrix\BIConnector\Superset\Dashboard\UrlParameter\Service::decode($this->request->get('params'))
+				: null;
+	}
+
+	private static function canSendStartupSupersetMetric(): bool
+	{
+		$supersetStatus = SupersetInitializer::getSupersetStatus();
+		$metricAlreadySend = Option::get('biconnector', 'superset_startup_metric_send', false);
+
+		return (
+			$supersetStatus === SupersetInitializer::SUPERSET_STATUS_READY
+			&& !$metricAlreadySend
+		);
+	}
+
+	private function logDashboardApp(): void
+	{
+		if (!$this->dashboard->getAppId())
+		{
+			return;
+		}
+
+		$clientId = SupersetDashboardTable::getList([
+			'select' => [
+				'REST_APP_CLIENT_ID' => 'APP.CLIENT_ID'
+			],
+			'filter' => [
+				'=APP_ID' => $this->dashboard->getAppId()
+			],
+			'limit' => 1,
+		])->fetch()['REST_APP_CLIENT_ID'] ?? '';
+
+		if ($clientId)
+		{
+			\Bitrix\Rest\UsageStatTable::logBISuperset($clientId, $this->dashboard->getType());
+		}
+
+		\Bitrix\Rest\UsageStatTable::finalize();
 	}
 }

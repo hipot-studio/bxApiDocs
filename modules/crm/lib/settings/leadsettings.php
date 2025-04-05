@@ -327,8 +327,7 @@ class LeadSettings
 		\CJSCore::Init(array('popup', 'sidepanel'));
 
 		$isCrmAdmin = "N";
-		$crmPerms = \CCrmPerms::GetCurrentUserPermissions();
-		if ($crmPerms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE'))
+		if (Container::getInstance()->getUserPermissions()->isCrmAdmin())
 		{
 			$isCrmAdmin = "Y";
 		}

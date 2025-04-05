@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\ExternalSource;
 
 use Bitrix\BIConnector\ExternalSource;
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsCollection;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\Main\Application;
@@ -28,19 +29,19 @@ class SourceManager
 			$result['1c'] = [
 				[
 					'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_HOST'),
-					'type' => ExternalSourceSettingsTable::SETTING_TYPE_STRING,
+					'type' => ExternalSource\SourceSettingType::String->value,
 					'code' => 'host',
 					'placeholder' => 'http://localhost_23740259475',
 				],
 				[
 					'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_USERNAME'),
-					'type' => ExternalSourceSettingsTable::SETTING_TYPE_STRING,
+					'type' => ExternalSource\SourceSettingType::String->value,
 					'code' => 'username',
 					'placeholder' => 'user@mail.com',
 				],
 				[
 					'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD'),
-					'type' => ExternalSourceSettingsTable::SETTING_TYPE_STRING,
+					'type' => ExternalSource\SourceSettingType::String->value,
 					'code' => 'password',
 					'placeholder' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD'),
 				],
@@ -280,7 +281,7 @@ class SourceManager
 	{
 		$result = new Result();
 
-		$source->removeAllSettings();
+		self::deleteConnectionSettings($source);
 
 		$checkResult = self::prepareConnectionSettings($source, $data);
 		if (!$checkResult->isSuccess())
@@ -344,5 +345,23 @@ class SourceManager
 		]);
 
 		return $result;
+	}
+
+	public static function deleteConnectionSettings(ExternalSource\Internal\ExternalSource $source): void
+	{
+		ExternalSourceSettingsTable::deleteByFilter([
+			'=SOURCE_ID' => $source->getId(),
+		]);
+	}
+
+	public static function getSourceSettings(ExternalSource\Internal\ExternalSource $source): ExternalSourceSettingsCollection
+	{
+		return ExternalSourceSettingsTable::getList([
+			'filter' => [
+				'=SOURCE_ID' => $source->getId(),
+			],
+		])
+			->fetchCollection()
+		;
 	}
 }

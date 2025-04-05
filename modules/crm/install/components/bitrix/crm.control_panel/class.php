@@ -169,6 +169,7 @@ class CrmControlPanel extends CBitrixComponent
 					],
 					['ID' => 'SALES_CENTER_PAYMENT', 'SLIDER_MODE' => true],
 					['ID' => 'SALES_CENTER_DELIVERY', 'SLIDER_MODE' => true],
+					['ID' => 'FEATURES_LIST', 'SLIDER_MODE' => false],
 				],
 			],
 			['ID' => 'RECYCLE_BIN'],
@@ -224,7 +225,7 @@ class CrmControlPanel extends CBitrixComponent
 			if (
 				$category->getIsSystem()
 				|| $category->getIsDefault()
-				|| !$userPermissionsService->canViewItemsInCategory($category)
+				|| !$userPermissionsService->category()->canReadItems($category)
 			)
 			{
 				continue;
@@ -241,7 +242,7 @@ class CrmControlPanel extends CBitrixComponent
 			);
 			$menuId = CCrmOwnerType::ResolveName($entityTypeId) . '_C' . $categoryId;
 			$actions = [];
-			if ($userPermissionsService->checkAddPermissions($entityTypeId, $categoryId))
+			if ($userPermissionsService->entityType()->canAddItemsInCategory($entityTypeId, $categoryId))
 			{
 				$actions[] = [
 					'ID' => 'CREATE',
@@ -283,6 +284,11 @@ class CrmControlPanel extends CBitrixComponent
 			return null;
 		}
 		$categoryId = $this->contractorCategories[$entityTypeId];
+
+		if (!Container::getInstance()->getUserPermissions()->entityType()->canReadItemsInCategory($entityTypeId, $categoryId))
+		{
+			return null;
+		}
 
 		$counter = EntityCounterFactory::create(
 			$entityTypeId,

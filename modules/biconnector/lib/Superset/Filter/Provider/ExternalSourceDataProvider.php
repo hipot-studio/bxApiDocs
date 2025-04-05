@@ -53,12 +53,12 @@ class ExternalSourceDataProvider extends EntityDataProvider
 					],
 				],
 			]),
-//			'CREATED_BY_ID' => $this->createField('CREATED_BY_ID', [
-//				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_FILTER_TITLE_CREATED_BY'),
-//				'default' => true,
-//				'type' => 'entity_selector',
-//				'partial' => true,
-//			]),
+			'CREATED_BY_ID' => $this->createField('CREATED_BY_ID', [
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_FILTER_TITLE_CREATED_BY'),
+				'default' => true,
+				'type' => 'entity_selector',
+				'partial' => true,
+			]),
 		];
 	}
 
@@ -92,13 +92,13 @@ class ExternalSourceDataProvider extends EntityDataProvider
 			];
 		}
 
-//		if ($fieldID === 'CREATED_BY_ID')
-//		{
-//			return $this->getUserEntitySelectorParams(
-//				$fieldID . '_filter',
-//				['fieldName' => $fieldID]
-//			);
-//		}
+		if ($fieldID === 'CREATED_BY_ID')
+		{
+			return $this->getUserEntitySelectorParams(
+				$fieldID . '_filter',
+				['fieldName' => $fieldID]
+			);
+		}
 
 		return null;
 	}

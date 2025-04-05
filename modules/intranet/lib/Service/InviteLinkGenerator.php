@@ -5,7 +5,6 @@ namespace Bitrix\Intranet\Service;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Infrastructure\LinkCodeGenerator;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Intranet\Command\AttachJwtTokenToUrlCommand;
@@ -83,6 +82,6 @@ class InviteLinkGenerator
 	{
 		$uri = $this->create();
 
-		return $uri->getScheme().'://'.$uri->getHost().\CBXShortUri::GetShortUri($uri->getUri());
+		return $uri->getScheme() . '://' . $uri->getHost() . \CBXShortUri::GetShortUri($uri->getUri());
 	}
 }

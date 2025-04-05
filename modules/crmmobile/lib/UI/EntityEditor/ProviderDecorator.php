@@ -299,7 +299,9 @@ final class ProviderDecorator implements ReturnsEditorFields
 
 				$field['type'] = $fieldItem->getType();
 
-				if (isset(self::IMMUTABLE_COLLECTION_FIELDS[$field['type']]))
+				$canEditInList = $fieldItem->getUserField()['EDIT_IN_LIST'] ?? 'Y';
+
+				if (isset(self::IMMUTABLE_COLLECTION_FIELDS[$field['type']]) || $canEditInList === 'N')
 				{
 					$field['editable'] = false;
 				}

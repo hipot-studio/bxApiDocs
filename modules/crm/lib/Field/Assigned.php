@@ -18,12 +18,9 @@ class Assigned extends Field
 	{
 		if($item->isNew())
 		{
-			$permissionType = $userPermissions->getPermissionType(
-				$item,
-				UserPermissions::OPERATION_ADD
-			);
-
-			if($permissionType === UserPermissions::PERMISSION_SELF)
+			if (
+				$userPermissions->item()->canAddOnlySelfAssignedItems($item)
+			)
 			{
 				$item->set($this->getName(), $userPermissions->getUserId());
 			}

@@ -118,7 +118,7 @@ class Document extends Base
 		}
 		if (
 			(isset($filter['entityTypeId']) && is_scalar($filter['entityTypeId']))
-			&& !Container::getInstance()->getUserPermissions()->checkReadPermissions($filter['entityTypeId'])
+			&& !Container::getInstance()->getUserPermissions()->entityType()->canReadItems($filter['entityTypeId'])
 		)
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());

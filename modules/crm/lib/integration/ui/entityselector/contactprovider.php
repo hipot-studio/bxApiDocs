@@ -62,12 +62,19 @@ class ContactProvider extends EntityProvider
 			'=CATEGORY_ID' =>  $this->categoryId,
 		];
 
-		return array_merge($filter, $this->getFilterIds(), $this->getEmailFilters());
+		$filter = array_merge($filter, $this->getFilterIds(), $this->getEmailFilters());
+
+		if ($this->notLinkedOnly)
+		{
+			$filter = $this->getNotLinkedFilter();
+		}
+
+		return $filter;
 	}
 
 	public function getRecentItemIds(string $context): array
 	{
-		if($this->isFilterByIds())
+		if ($this->isFilterByIds())
 		{
 			$ids = ContactTable::getList([
 				'select' => ['ID'],
@@ -76,6 +83,10 @@ class ContactProvider extends EntityProvider
 				],
 				'filter' => $this->getFilterIds(),
 			])->fetchCollection()->getIdList();
+		}
+		elseif ($this->notLinkedOnly)
+		{
+			$ids = $this->getNotLinkedEntityIds();
 		}
 		else
 		{

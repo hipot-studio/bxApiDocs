@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\ExternalSource\Source;
 
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsCollection;
 use Bitrix\Main;
 
 abstract class Base
@@ -19,7 +20,7 @@ abstract class Base
 	/**
 	 * Connects to external source
 	 */
-	abstract public function connect(string $host, string $username, string $password): Main\Result;
+	abstract public function connect(ExternalSourceSettingsCollection $settings): Main\Result;
 
 	/**
 	 * @return array

@@ -34,7 +34,7 @@ class Add extends Operation
 		$result = new Result();
 
 		$userPermissions = Container::getInstance()->getUserPermissions($this->getContext()->getUserId());
-		$canAddItem = $userPermissions->canAddItem($this->item);
+		$canAddItem = $userPermissions->item()->canAddItem($this->item);
 
 		if(!$canAddItem)
 		{

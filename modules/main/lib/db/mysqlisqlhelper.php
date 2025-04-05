@@ -18,13 +18,6 @@ use Bitrix\Main\ORM\Fields\ScalarField;
  */
 class MysqliSqlHelper extends SqlHelper
 {
-	private array $bigFieldTypes = [
-		MYSQLI_TYPE_TINY_BLOB,
-		MYSQLI_TYPE_MEDIUM_BLOB,
-		MYSQLI_TYPE_LONG_BLOB,
-		MYSQLI_TYPE_BLOB,
-		MYSQLI_TYPE_JSON
-	];
 	/**
 	 * @inheritdoc
 	 */
@@ -658,6 +651,17 @@ class MysqliSqlHelper extends SqlHelper
 	 */
 	public function isBigType($type): bool
 	{
-		return in_array($type, $this->bigFieldTypes);
+		$result = match ($type)
+		{
+			MYSQLI_TYPE_TINY_BLOB, MYSQLI_TYPE_MEDIUM_BLOB, MYSQLI_TYPE_LONG_BLOB, MYSQLI_TYPE_BLOB => true,
+			default => false,
+		};
+
+		if (!$result && defined('MYSQLI_TYPE_JSON'))
+		{
+			$result = ($type === MYSQLI_TYPE_JSON);
+		}
+
+		return $result;
 	}
 }

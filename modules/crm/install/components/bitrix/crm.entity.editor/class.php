@@ -504,7 +504,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 
 		$this->prepareConfig();
 
-		$this->arResult['ENABLE_SETTINGS_FOR_ALL'] = CCrmAuthorizationHelper::CanEditOtherSettings();
+		$this->arResult['ENABLE_SETTINGS_FOR_ALL'] = Container::getInstance()->getUserPermissions()->entityEditor()->canEditCommonView();
 
 		//region CAN_UPDATE_PERSONAL_CONFIGURATION && CAN_UPDATE_COMMON_CONFIGURATION
 		$this->arResult['CAN_UPDATE_PERSONAL_CONFIGURATION'] = true;
@@ -981,9 +981,10 @@ class CCrmEntityEditorComponent extends UIFormComponent
 		$userScopes = null;
 		if (isset($scopeConfigId))
 		{
+			$moduleId = ($this->arParams['MODULE_ID'] ?? null);
 			$userScopes = method_exists(\Bitrix\Ui\EntityForm\Scope::class, 'getAllUserScopes')
-				? Scope::getInstance()->getAllUserScopes($scopeConfigId, ($this->arParams['MODULE_ID'] ?? null))
-				: Scope::getInstance()->getUserScopes($scopeConfigId, ($this->arParams['MODULE_ID'] ?? null))
+				? Scope::getInstance()->getAllUserScopes($scopeConfigId, $moduleId, false)
+				: Scope::getInstance()->getUserScopes($scopeConfigId, $moduleId, false)
 			;
 		}
 
@@ -1008,7 +1009,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 
 	private function rewriteConfigScopeByUserPermission(?string $configScope): ?string
 	{
-		$isPersonalViewAllowed = Container::getInstance()->getUserPermissions()->isPersonalViewAllowed($this->entityTypeID, $this->categoryId);
+		$isPersonalViewAllowed = Container::getInstance()->getUserPermissions()->entityEditor()->canSwitchToPersonalView($this->entityTypeID, $this->categoryId);
 
 		if ($configScope === EntityEditorConfigScope::PERSONAL && !$isPersonalViewAllowed)
 		{

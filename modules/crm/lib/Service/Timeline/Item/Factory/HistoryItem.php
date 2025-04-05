@@ -193,6 +193,10 @@ class HistoryItem
 					return new Item\LogMessage\Binding\Moved($context, $model);
 				case LogMessageType::BOOKING_CREATED:
 					return new Item\LogMessage\Booking\BookingCreated($context, $model);
+				case LogMessageType::WAIT_LIST_ITEM_CREATED:
+					return new Item\LogMessage\Booking\WaitListItemCreated($context, $model);
+				case LogMessageType::WAIT_LIST_ITEM_DELETED:
+					return new Item\LogMessage\Booking\WaitListItemDeleted($context, $model);
 				case LogMessageType::RESTART_AUTOMATION:
 					return new Item\LogMessage\RecordRestartAutomation($context, $model);
 			}
@@ -565,7 +569,7 @@ class HistoryItem
 
 		return new class($context, $model) extends Item
 		{
-			public function jsonSerialize()
+			public function jsonSerialize(): ?array
 			{
 				return null;
 			}

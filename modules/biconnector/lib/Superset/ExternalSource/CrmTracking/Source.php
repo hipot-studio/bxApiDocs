@@ -44,7 +44,7 @@ final class Source implements ExternalSource\Source
 
 		$link = "/crm/tracking/source/edit/{$sourceCode}/";
 
-		return "BX.SidePanel.Instance.open('{$link}', {width: 735, cacheable: false});";
+		return "BX.SidePanel.Instance.open('{$link}', {width: 735, cacheable: false, events: {onClose: BX.BIConnector.TrackingAnalyticsHandler.handleSliderClose}});";
 	}
 
 	/**

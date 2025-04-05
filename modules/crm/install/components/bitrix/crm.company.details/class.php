@@ -9,7 +9,6 @@ use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Category\EditorHelper;
 use Bitrix\Crm\CompanyAddress;
 use Bitrix\Crm\Component\EntityDetails\Traits;
-use Bitrix\Crm\Controller\Action\Entity\SearchAction;
 use Bitrix\Crm\Conversion\LeadConversionWizard;
 use Bitrix\Crm\EntityAddressType;
 use Bitrix\Crm\Format\AddressFormatter;
@@ -207,7 +206,7 @@ class CCrmCompanyDetailsComponent
 
 		if ($this->isMyCompany())
 		{
-			if (!$this->userPermissions->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE'))
+			if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->myCompany()->canUpdate())
 			{
 				Crm\Component\EntityDetails\Error::showError(Crm\Component\EntityDetails\Error::NoAddPermission, CCrmOwnerType::Company);
 
@@ -377,6 +376,8 @@ class CCrmCompanyDetailsComponent
 										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
 										'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SUB_SECTION_DETAILS,
 									],
+									'PARENT_ENTITY_TYPE_ID' => CCrmOwnerType::Company,
+									'PARENT_ENTITY_ID' => $this->entityID,
 								], 'crm.quote.list'),
 							],
 						],
@@ -1012,7 +1013,6 @@ class CCrmCompanyDetailsComponent
 					'map' => array('data' => 'CLIENT_DATA'),
 					'info' => 'CLIENT_INFO',
 					'fixedLayoutType' => 'CONTACT',
-					'lastContactInfos' => 'LAST_CONTACT_INFOS',
 					'contactLegend' => Loc::getMessage('CRM_COMPANY_FIELD_CONTACT_LEGEND'),
 					'loaders' => array(
 						'primary' => array(
@@ -1941,23 +1941,6 @@ class CCrmCompanyDetailsComponent
 		}
 		$this->entityData['CLIENT_INFO'] = array('CONTACT_DATA' => $contactData);
 
-		if ($this->enableSearchHistory)
-		{
-			$categoryParams = CCrmComponentHelper::getEntityClientFieldCategoryParams(
-				CCrmOwnerType::Company,
-				(int)($this->arResult['CATEGORY_ID'] ?? $this->getCategoryId())
-			);
-			$this->entityData['LAST_CONTACT_INFOS'] = SearchAction::prepareSearchResultsJson(
-				Crm\Controller\Entity::getRecentlyUsedItems(
-					'crm.company.details',
-					'contact',
-					[
-						'EXPAND_ENTITY_TYPE_ID' => CCrmOwnerType::Contact,
-						'EXPAND_CATEGORY_ID' => $categoryParams[CCrmOwnerType::Contact]['categoryId'],
-					]
-				)
-			);
-		}
 		//endregion
 
 		//region Images

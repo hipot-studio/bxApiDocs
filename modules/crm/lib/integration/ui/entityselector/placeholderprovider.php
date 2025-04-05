@@ -87,7 +87,8 @@ final class PlaceholderProvider extends BaseProvider
 	{
 		return Container::getInstance()
 			->getUserPermissions()
-			->checkReadPermissions($this->entityTypeId, $this->entityId, $this->categoryId)
+			->entityType()
+			->canReadItems($this->entityTypeId)
 		;
 	}
 

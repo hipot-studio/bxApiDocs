@@ -17,7 +17,10 @@ final class Source1C implements Provider
 		/* @var ExternalSource\Source\Source1C $source */
 		$source = Source\Factory::getSource(ExternalSource\Type::Source1C, $this->sourceId);
 
-		$source->activateEntity($this->settings['dataset']['ID']);
+		if (isset($this->settings['dataset']['ID']))
+		{
+			$source->activateEntity($this->settings['dataset']['ID']);
+		}
 
 		$headers = [];
 		$externalCodes = [];

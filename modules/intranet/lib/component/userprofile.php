@@ -1304,6 +1304,7 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 				$subUser = [];
 
 				$subUser["ID"] = $preparedUser->id;
+				$subUser["WORK_POSITION"] = $preparedUser->workPosition;
 				$subUser["PERSONAL_PHOTO"] = $userService->getUserAvatar($preparedUser, 100);
 				$subUser["FULL_NAME"] = $userService->getUserName($preparedUser);
 				$subUser["PHOTO"] = $userService->getUserAvatar($preparedUser, 100);

@@ -290,7 +290,18 @@ class Order extends Sale\Order
 
 		if($this->fields->isChanged('RESPONSIBLE_ID'))
 		{
-			Permissions\Order::updatePermission($this->getId(), $this->getField('RESPONSIBLE_ID'));
+			$responsibleId = (int)$this->getField('RESPONSIBLE_ID');
+			if($responsibleId > 0)
+			{
+				$entityAttrs = (new Crm\Security\Controller\OrderPermissionAttributesMaker())->make($responsibleId);
+				$registerOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
+					->setEntityAttributes($entityAttrs)
+				;
+
+				\Bitrix\Crm\Security\Manager::resolveController(\CCrmOwnerType::OrderName)
+					->register(\CCrmOwnerType::OrderName, $this->getId(), $registerOptions)
+				;
+			}
 		}
 
 		if ($this->isNew())

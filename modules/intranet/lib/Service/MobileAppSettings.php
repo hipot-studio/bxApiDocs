@@ -3,12 +3,11 @@
 namespace Bitrix\Intranet\Service;
 
 use Bitrix\Intranet\Contract\OptionContract;
-use Bitrix\Main\Config\Option;
 
 class MobileAppSettings
 {
 	public function __construct(
-		private OptionContract $option
+		private OptionContract $option,
 	)
 	{
 	}
@@ -32,7 +31,7 @@ class MobileAppSettings
 	{
 		$this->option->set(
 			'copy_screenshot_disabled',
-			$allow ? 'N' : 'Y'
+			$allow ? 'N' : 'Y',
 		);
 	}
 
@@ -40,7 +39,7 @@ class MobileAppSettings
 	{
 		$this->option->set(
 			'copy_text_disabled',
-			$allow ? 'N' : 'Y'
+			$allow ? 'N' : 'Y',
 		);
 	}
 }

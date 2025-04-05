@@ -50,7 +50,7 @@ final class Communications
 		$contacts = $item->getContacts();
 		foreach ($contacts as $contact)
 		{
-			if ($this->userPermissions->checkReadPermissions(CCrmOwnerType::Contact, $contact->getId()))
+			if ($this->userPermissions->item()->canRead(CCrmOwnerType::Contact, $contact->getId()))
 			{
 				$this->appendClientPhones(
 					CCrmOwnerType::Contact,
@@ -74,7 +74,7 @@ final class Communications
 		$companies = $item->getCompanies();
 		foreach ($companies as $company)
 		{
-			if ($this->userPermissions->checkReadPermissions(CCrmOwnerType::Company, $company->getId()))
+			if ($this->userPermissions->item()->canRead(CCrmOwnerType::Company, $company->getId()))
 			{
 				$this->appendClientPhones(
 					CCrmOwnerType::Company,
@@ -98,7 +98,7 @@ final class Communications
 			return;
 		}
 
-		if ($this->userPermissions->checkReadPermissions(CCrmOwnerType::Contact, $company->getId()))
+		if ($this->userPermissions->item()->canRead(CCrmOwnerType::Company, $company->getId()))
 		{
 			$this->appendClientPhones(
 				CCrmOwnerType::Company,

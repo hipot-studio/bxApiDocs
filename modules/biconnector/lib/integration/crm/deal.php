@@ -560,6 +560,16 @@ class Deal
 					'JOIN' => 'INNER JOIN b_crm_requisite_link RL_T ON RL_T.ENTITY_TYPE_ID = ' . \CCrmOwnerType::Deal . ' AND RL_T.ENTITY_ID = D.ID',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_requisite_link RL_T ON RL_T.ENTITY_TYPE_ID = ' . \CCrmOwnerType::Deal . ' AND RL_T.ENTITY_ID = D.ID',
 				],
+				'CONTACT_IDS' => [
+					'GROUP_CONCAT' => ', ',  // delimiter for an array represented by a string
+					'GROUP_KEY' => 'CONTACT_IDS',
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'CDC.CONTACT_ID',
+					'FIELD_TYPE' => 'array_string',
+					'TABLE_ALIAS' => 'CDC',
+					'JOIN' => 'INNER JOIN b_crm_deal_contact CDC ON CDC.DEAL_ID = D.ID',
+					'LEFT_JOIN' => 'LEFT JOIN b_crm_deal_contact CDC ON CDC.DEAL_ID = D.ID',
+				],
 			],
 		];
 

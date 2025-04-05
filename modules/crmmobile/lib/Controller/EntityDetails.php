@@ -144,16 +144,15 @@ class EntityDetails extends Controller
 		return $this->getConfigurator()->toArray();
 	}
 
-	public function loadTabCountersAction(Item $entity): array
+	public function loadTabCountersAction(int $entityTypeId, int $entityId): array
 	{
-		return $this->getConfigurator()->mapTabs(function (Tabs\Base $tab) use ($entity) {
+		return $this->getConfigurator()->mapTabs(function (Tabs\Base $tab) use ($entityTypeId, $entityId)  {
 			$value = 0;
 
 			switch ($tab->getId())
 			{
 				case 'timeline':
-					$entityId = $entity->getId();
-					$counter = new EntityActivityCounter($entity->getEntityTypeId(), [$entityId]);
+					$counter = new EntityActivityCounter($entityTypeId, [$entityId]);
 					$deadlinesCount = $counter->getDeadlinesCount($entityId);
 					$incomingCount = $counter->getIncomingCount($entityId);
 					$value = $deadlinesCount + $incomingCount;

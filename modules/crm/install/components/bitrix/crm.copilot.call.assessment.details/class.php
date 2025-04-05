@@ -31,7 +31,7 @@ class CCrmCopilotCallAssessmentDetailsComponent extends Base
 
 		if (
 			!AIManager::isAiCallProcessingEnabled()
-			|| !Container::getInstance()->getUserPermissions()->canReadCopilotCallAssessmentSettings())
+			|| !Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canRead())
 		{
 			$this->showError(
 				'CRM_COPILOT_CALL_ASSESSMENT_DETAILS_ACCESS_DENIED_MSGVER_1',
@@ -83,7 +83,7 @@ class CCrmCopilotCallAssessmentDetailsComponent extends Base
 		$this->arResult['copilotSettings'] = $this->getCopilotSettings();
 		$this->arResult['baasSettings'] = $this->getBaasSettings();
 		$this->arResult['readOnly'] =
-			!Container::getInstance()->getUserPermissions()->canEditCopilotCallAssessmentSettings()
+			!Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canEdit()
 			|| !AIManager::isEnabledInGlobalSettings(GlobalSetting::CallAssessment)
 		;
 		$this->arResult['isEnabled'] = AIManager::isEnabledInGlobalSettings(GlobalSetting::CallAssessment);

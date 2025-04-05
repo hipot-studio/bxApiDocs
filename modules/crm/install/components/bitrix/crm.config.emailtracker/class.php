@@ -27,8 +27,7 @@ class CCrmConfigEmailtrackerComponent extends CBitrixComponent
 			return;
 		}
 
-		$crmPerms = new \CCrmPerms($USER->getId());
-		if (!$crmPerms->havePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE'))
+		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin())
 		{
 			showError(getMessage('CRM_PERMISSION_DENIED'));
 			return;

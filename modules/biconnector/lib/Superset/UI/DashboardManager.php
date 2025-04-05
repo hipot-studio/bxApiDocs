@@ -52,4 +52,17 @@ final class DashboardManager
 			]
 		);
 	}
+
+	/**
+	 * Notify client side when all system dashboards had installed to reload grid.
+	 *
+	 * @return void
+	 */
+	public static function notifyInitialDashboardsInstalled(): void
+	{
+		PullManager::getNotifyer()->notifyByTag(
+			self::DASHBOARD_NOTIFY_TAG,
+			'onInitialDashboardsInstalled',
+		);
+	}
 }

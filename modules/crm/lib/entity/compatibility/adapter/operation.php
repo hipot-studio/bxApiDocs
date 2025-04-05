@@ -131,6 +131,10 @@ final class Operation extends Adapter
 		if (isset($compatibleOptions['IS_RESTORATION']) && $compatibleOptions['IS_RESTORATION'])
 		{
 			$operation = $this->factory->getRestoreOperation($item);
+			if (isset($compatibleOptions['MOVED_TO_BIN_DATETIME']))
+			{
+				$operation->registerConvertDateTimesAction($compatibleOptions['MOVED_TO_BIN_DATETIME']);
+			}
 		}
 		elseif (isset($fields['PERMISSION']) && $fields['PERMISSION'] === 'IMPORT')
 		{

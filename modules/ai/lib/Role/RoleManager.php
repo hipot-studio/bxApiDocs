@@ -6,7 +6,7 @@ namespace Bitrix\AI\Role;
 
 use Bitrix\AI\Container;
 use Bitrix\AI\Entity\TranslateTrait;
-use Bitrix\AI\Facade\User;
+use Bitrix\AI\Model\EO_Role_Query;
 use Bitrix\AI\Model\RoleTranslateDescriptionTable;
 use Bitrix\AI\Model\RoleTranslateNameTable;
 use Bitrix\AI\Prompt;
@@ -15,17 +15,15 @@ use Bitrix\AI\Dto\PromptType;
 use Bitrix\AI\Entity\Role;
 use Bitrix\AI\Model\EO_Role_Collection;
 use Bitrix\AI\Model\RoleFavoriteTable;
-use Bitrix\AI\Model\RoleIndustryTable;
 use Bitrix\AI\Model\RecentRoleTable;
 use Bitrix\AI\Model\RoleTable;
 use Bitrix\AI\Repository\PromptRepository;
 use Bitrix\AI\Services\AvailableRuleService;
 use Bitrix\AI\ShareRole\Model\OwnerTable;
-use Bitrix\AI\ShareRole\Model\ShareTable;
 use Bitrix\AI\ShareRole\Repository\UserAccessRepository;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\DateTime;
@@ -62,12 +60,13 @@ class RoleManager
 	 */
 	public function getRolesByCode(array $roleCodes): array
 	{
-		$roles = RoleTable::query()
+		$query = RoleTable::query()
 			->setSelect([
 				'CODE',
 				'AVATAR',
 				'INDUSTRY_CODE',
 				'IS_NEW',
+				'HASH',
 				'IS_RECOMMENDED',
 				'IS_SYSTEM',
 				'IS_ACTIVE',
@@ -82,10 +81,9 @@ class RoleManager
 			])
 		;
 
-		$roles = $this->addTranslateReferenceFields($roles);
-		$roles = $roles->fetchCollection();
+		$query = $this->addTranslateReferenceFields($query);
 
-		return $this->convertToArrayOnlyAvailableRoles($roles);
+		return $this->convertToArrayOnlyAvailableRoles($query->fetchCollection());
 	}
 
 	/**
@@ -97,7 +95,7 @@ class RoleManager
 	 */
 	public function getRoleByCode(string $roleCode): array|null
 	{
-		$role = RoleTable::query()
+		$query = RoleTable::query()
 			->setSelect([
 				'CODE',
 				'AVATAR',
@@ -105,6 +103,7 @@ class RoleManager
 				'IS_NEW',
 				'IS_RECOMMENDED',
 				'IS_SYSTEM',
+				'HASH',
 				'IS_ACTIVE',
 				'DEFAULT_NAME',
 				'DEFAULT_DESCRIPTION',
@@ -116,8 +115,8 @@ class RoleManager
 				'=CODE' => $roleCode,
 			])
 		;
-		$role = $this->addTranslateReferenceFields($role);
-		$role = $role->fetchObject();
+		$query = $this->addTranslateReferenceFields($query);
+		$role = $query->fetchObject();
 
 		if (!$role || !$this->getAvailableRuleService()->isAvailableRules($role->getRules(), $this->languageCode))
 		{
@@ -134,12 +133,12 @@ class RoleManager
 	 */
 	public function getIndustriesWithRoles(): array
 	{
-		$result = [];
-		$roles = RoleTable::query()
+		$query = RoleTable::query()
 			->setSelect([
 				'CODE',
 				'AVATAR',
 				'INDUSTRY_CODE',
+				'HASH',
 				'IS_NEW',
 				'IS_RECOMMENDED',
 				'IS_SYSTEM',
@@ -161,20 +160,9 @@ class RoleManager
 			->setOrder(['INDUSTRY.SORT' => 'ASC', 'IS_NEW' => 'DESC', 'SORT' => 'ASC'])
 		;
 
-		$roles = $this->addTranslateReferenceFields($roles);
-		$roles = $roles->fetchCollection();
+		$query = $this->addTranslateReferenceFields($query);
 
-		foreach ($roles as $role) {
-			$industryCode = $role->get('INDUSTRY_CODE');
-			$industryName = $role->get('INDUSTRY')->getNameTranslates();
-			$industryIsNew = $role->get('INDUSTRY')->getIsNew();
-			$result[$industryCode]['name'] = $industryName[$this->languageCode] ?? $industryName['en'];
-			$result[$industryCode]['isNew'] = $industryIsNew;
-			$result[$industryCode]['code'] = $industryCode;
-			$result[$industryCode]['roles'][] = $this->convertRoleToArray($role);
-		}
-
-		return array_values($result);
+		return array_values($this->mapRolesToIndustries($query->fetchCollection()));
 	}
 
 	/**
@@ -191,11 +179,12 @@ class RoleManager
 			$limit = 10;
 		}
 
-		$roles = RoleTable::query()
+		$query = RoleTable::query()
 			->setSelect([
 				'CODE',
 				'AVATAR',
 				'INDUSTRY_CODE',
+				'HASH',
 				'IS_NEW',
 				'IS_RECOMMENDED',
 				'IS_SYSTEM',
@@ -211,10 +200,9 @@ class RoleManager
 			->setLimit($limit * 2)
 		;
 
-		$roles = $this->addTranslateReferenceFields($roles);
-		$roles = $roles->fetchCollection();
+		$query = $this->addTranslateReferenceFields($query);
 
-		return $this->convertToArrayOnlyAvailableRoles($roles);
+		return $this->convertToArrayOnlyAvailableRoles($query->fetchCollection());
 	}
 
 	/**
@@ -224,22 +212,13 @@ class RoleManager
 	 */
 	public function getCustomRoles(): array
 	{
-		$userId = User::getCurrentUserId();
-
-		$userAccessRepository = new UserAccessRepository();
-		$accessGroups = $userAccessRepository->getCodesForUserGroup($userId);
-		$accessCodes = array_merge($accessGroups, [UserAccessRepository::CODE_ALL_USER]);
-
-		$userAccessSubQuery = UserAccessTable::query()
-			->setSelect(['ACCESS_CODE'])
-			->where('USER_ID', $userId);
-
-		$roles = RoleTable::query()
+		$query = RoleTable::query()
 			->setSelect([
 				'CODE',
 				'DEFAULT_NAME',
 				'DEFAULT_DESCRIPTION',
 				'AVATAR',
+				'HASH',
 				'INDUSTRY_CODE',
 				'IS_NEW',
 				'IS_RECOMMENDED',
@@ -247,37 +226,21 @@ class RoleManager
 				'IS_ACTIVE',
 				'ROLE_TRANSLATE_DESCRIPTION.TEXT',
 				'ROLE_TRANSLATE_NAME.TEXT',
+				'ROLE_SHARES'
 			])
-			->registerRuntimeField(new Reference(
-				'ROLE_SHARE',
-				ShareTable::class,
-				Join::on('this.ID', 'ref.ROLE_ID'),
-				['join_type' => Join::TYPE_LEFT]
-			))
 			->registerRuntimeField(new Reference(
 				'ROLE_OWNERS',
 				OwnerTable::class,
 				Join::on('this.ID', 'ref.ROLE_ID')
-					->where('ref.USER_ID', '=', $userId)
+					->where('ref.USER_ID', '=', $this->userId)
 			))
 			->where('IS_SYSTEM', self::FLAG_IS_NOT_SYSTEM)
 			->where('IS_ACTIVE', self::FLAG_IS_ACTIVE)
-			->where(
-				Query::filter()
-					->logic('or')
-					->whereIn('ROLE_SHARE.ACCESS_CODE', $accessCodes)
-					->whereIn('ROLE_SHARE.ACCESS_CODE', $userAccessSubQuery)
-			)
-			->where(
-				Query::filter()
-					->logic('or')
-					->where('ROLE_OWNERS.IS_DELETED', 0)
-					->whereNull('ROLE_OWNERS.ID')
-			)
+			->where($this->getRoleAccessCondition())
 		;
 
-		$roles = $this->addTranslateReferenceFields($roles);
-		$roles = $roles->fetchCollection();
+		$query = $this->addTranslateReferenceFields($query);
+		$roles = $query->fetchCollection();
 
 		$result = [];
 
@@ -424,13 +387,14 @@ class RoleManager
 	 */
 	public function getRecentRoles(): array
 	{
-		$recentsRoles = RoleTable::query()
+		$query = RoleTable::query()
 			->setSelect([
 				'CODE',
 				'AVATAR',
 				'INDUSTRY_CODE',
 				'IS_NEW',
 				'IS_RECOMMENDED',
+				'HASH',
 				'IS_SYSTEM',
 				'DEFAULT_NAME',
 				'DEFAULT_DESCRIPTION',
@@ -453,9 +417,9 @@ class RoleManager
 			])
 			->setOrder(['RECENT_ROLE.DATE_TOUCH' => 'DESC']);
 
-		$recentsRoles = $this->addTranslateReferenceFields($recentsRoles)->fetchCollection();
+		$query = $this->addTranslateReferenceFields($query);
 
-		return $this->convertToArrayOnlyAvailableRoles($recentsRoles);
+		return $this->convertToArrayOnlyAvailableRoles($query->fetchCollection());
 	}
 
 	/**
@@ -509,11 +473,12 @@ class RoleManager
 	 */
 	public function getFavoriteRoles(): array
 	{
-		$favoriteRoles = RoleTable::query()
+		$query = RoleTable::query()
 			->setSelect([
 				'CODE',
 				'AVATAR',
 				'INDUSTRY_CODE',
+				'HASH',
 				'IS_NEW',
 				'IS_RECOMMENDED',
 				'IS_SYSTEM',
@@ -537,9 +502,9 @@ class RoleManager
 			])
 			->setOrder(['ROLE_FAVORITE.DATE_CREATE' => 'DESC']);
 
-		$favoriteRoles = $this->addTranslateReferenceFields($favoriteRoles)->fetchCollection();
+		$query = $this->addTranslateReferenceFields($query);
 
-		return $this->convertToArrayOnlyAvailableRoles($favoriteRoles);
+		return $this->convertToArrayOnlyAvailableRoles($query->fetchCollection());
 	}
 
 	/**
@@ -630,16 +595,20 @@ class RoleManager
 		return $prompt;
 	}
 
+	/**
+	 * @param Query|EO_Role_Query $query
+	 * @return Query|EO_Role_Query
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\SystemException
+	 */
 	private function addTranslateReferenceFields(Query $query): Query
 	{
-		$userLanguage = User::getUserLanguage();
-
 		return $query
 			->registerRuntimeField(new Reference(
 					'ROLE_TRANSLATE_DESCRIPTION',
 					RoleTranslateDescriptionTable::class,
 					Join::on('this.ID', 'ref.ROLE_ID')
-						->where('ref.LANG', $userLanguage),
+						->where('ref.LANG', $this->languageCode),
 					['join_type' => Join::TYPE_LEFT]
 				)
 			)
@@ -647,11 +616,67 @@ class RoleManager
 					'ROLE_TRANSLATE_NAME',
 					RoleTranslateNameTable::class,
 					Join::on('this.ID', 'ref.ROLE_ID')
-						->where('ref.LANG', $userLanguage),
+						->where('ref.LANG', $this->languageCode),
 					['join_type' => Join::TYPE_LEFT]
 				)
 			)
 		;
+	}
+
+	private function getRoleAccessCondition(): ConditionTree
+	{
+		$userAccessRepository = $this->getUserAccessRepository();
+
+		$accessCodes = $userAccessRepository->getCodesForUserGroup($this->userId);
+		$accessCodes[] = UserAccessRepository::CODE_ALL_USER;
+
+		$userAccessSubQuery = UserAccessTable::query()
+			->setSelect(['ACCESS_CODE'])
+			->where('USER_ID', $this->userId)
+		;
+
+		return Query::filter()
+			->logic('and')
+			->where(
+				Query::filter()
+					->logic('or')
+					->whereIn('ROLE_SHARES.ACCESS_CODE', $accessCodes)
+					->whereIn('ROLE_SHARES.ACCESS_CODE', $userAccessSubQuery)
+			)
+			->where(
+				Query::filter()
+					->logic('or')
+					->where('ROLE_OWNERS.IS_DELETED', 0)
+					->whereNull('ROLE_OWNERS.ID')
+			)
+		;
+	}
+
+	private function mapRolesToIndustries(EO_Role_Collection $roles): array
+	{
+		$result = [];
+
+		foreach ($roles as $role) {
+			$industryCode = $role->getIndustryCode();
+
+			if(isset($result[$industryCode]['code']))
+			{
+				$result[$industryCode]['roles'][] = $this->convertRoleToArray($role);
+				continue;
+			}
+
+			$industryName = $role->get('INDUSTRY')->getNameTranslates();
+			$industryIsNew = $role->get('INDUSTRY')->getIsNew();
+
+			$result[$industryCode] = [
+				'name' => $industryName[$this->languageCode] ?? $industryName['en'],
+				'isNew' => $industryIsNew,
+				'code' => $industryCode,
+				'roles' => [$this->convertRoleToArray($role)],
+			];
+		}
+
+		return $result;
 	}
 
 	private function getPromptRepository(): PromptRepository
@@ -662,5 +687,10 @@ class RoleManager
 	private function getAvailableRuleService(): AvailableRuleService
 	{
 		return Container::init()->getItem(AvailableRuleService::class);
+	}
+
+	private function getUserAccessRepository(): UserAccessRepository
+	{
+		return Container::init()->getItem(UserAccessRepository::class);
 	}
 }

@@ -63,6 +63,7 @@ final class TaskDto extends Dto
 
 	public ?int $deadline = null;
 	public ?int $activityDate = null;
+	public ?int $updateDate = null;
 	public ?int $startDatePlan = null;
 	public ?int $endDatePlan = null;
 	public ?int $startDate = null;
@@ -84,8 +85,6 @@ final class TaskDto extends Dto
 
 	/** @var array<string, boolean> */
 	public array $actions = [];
-	/** @var array<string, boolean> */
-	public array $actionsOld = [];
 
 	public bool $areUserFieldsLoaded;
 	/** @var UserFieldDto[] */
@@ -112,12 +111,6 @@ final class TaskDto extends Dto
 				{
 					$converter = new Converter(Converter::KEYS | Converter::TO_CAMEL | Converter::LC_FIRST);
 					$fields['actions'] = $converter->process($fields['actions']);
-				}
-
-				if (!empty($fields['actionsOld']))
-				{
-					$converter = new Converter(Converter::KEYS | Converter::TO_CAMEL | Converter::LC_FIRST);
-					$fields['actionsOld'] = $converter->process($fields['actionsOld']);
 				}
 
 				return $fields;

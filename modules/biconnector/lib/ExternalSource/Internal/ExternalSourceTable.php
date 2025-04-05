@@ -91,7 +91,7 @@ class ExternalSourceTable extends DataManager
 					'required' => true,
 					'validation' => function()
 					{
-						return[
+						return [
 							new LengthValidator(null, 50),
 						];
 					},
@@ -104,7 +104,7 @@ class ExternalSourceTable extends DataManager
 					'required' => true,
 					'validation' => function()
 					{
-						return[
+						return [
 							new LengthValidator(null, 512),
 						];
 					},
@@ -117,7 +117,7 @@ class ExternalSourceTable extends DataManager
 					'required' => true,
 					'validation' => function()
 					{
-						return[
+						return [
 							new LengthValidator(null, 512),
 						];
 					},

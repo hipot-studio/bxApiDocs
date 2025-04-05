@@ -66,9 +66,15 @@ class Sql extends Base
 					{
 						if ($fieldInfo['TYPE'] === 'ARRAY_STRING')
 						{
+							$delimiter = null;
+							if ($fieldInfo['IS_VALUE_SPLITABLE'] ?? false)
+							{
+								$delimiter = $fieldInfo['GROUP_CONCAT'];
+							}
+
 							$groupFields[$i] = [
 								'unique_id' => $j,
-								'state' => new Aggregate\ArrayStringState($fieldInfo['GROUP_CONCAT']),
+								'state' => new Aggregate\ArrayStringState($delimiter),
 							];
 						}
 						else

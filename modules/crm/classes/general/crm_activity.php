@@ -2638,7 +2638,7 @@ class CAllCrmActivity
 				continue;
 			}
 
-			if (!$userPermissions->canReadType($factory->getEntityTypeId()))
+			if (!$userPermissions->entityType()->canReadItems($factory->getEntityTypeId()))
 			{
 				continue;
 			}
@@ -7010,7 +7010,9 @@ class CAllCrmActivity
 		if (isset($arFields['IS_MEETING']))
 		{
 			$arCalEventFields['IS_MEETING'] = $arFields['IS_MEETING'];
-			$arCalEventFields['MEETING_HOST'] = $responsibleID;
+
+			$meetingHostUserId = Container::getInstance()->getContext()->getUserId();
+			$arCalEventFields['MEETING_HOST'] = $meetingHostUserId > 0 ? $meetingHostUserId : $responsibleID;
 
 			if ($arCalEventFields['IS_MEETING'] === true)
 			{
@@ -9244,17 +9246,15 @@ class CCrmActivityEmailSender
 			}
 		}
 
-		// Try add event to entity
+		// Try to add event to entity
 		$CCrmEvent = new CCrmEvent();
 
 		$bindings = \CCrmActivity::GetBindings($ID);
 		if(!empty($bindings))
 		{
-			$eventText  = '';
-			$eventText .= GetMessage('CRM_ACTIVITY_EMAIL_SUBJECT').': '.$subject."\n\r";
+			$eventText = GetMessage('CRM_ACTIVITY_EMAIL_SUBJECT').': '.$subject."\n\r";
 			$eventText .= GetMessage('CRM_ACTIVITY_EMAIL_FROM').': '.$from."\n\r";
 			$eventText .= GetMessage('CRM_ACTIVITY_EMAIL_TO').': '.implode(',', $to)."\n\r\n\r";
-			$eventText .= $description;
 
 			$eventBindings = array();
 			foreach($bindings as $item)
@@ -9271,10 +9271,10 @@ class CCrmActivityEmailSender
 
 			$CCrmEvent->Add(
 				array(
+					'EVENT_TYPE'   => CCrmEvent::TYPE_EMAIL,
 					'ENTITY' => $eventBindings,
 					'EVENT_ID' => 'MESSAGE',
 					'EVENT_TEXT_1' => $eventText,
-					'FILES' => $arRawFiles
 				)
 			);
 		}

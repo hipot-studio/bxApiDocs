@@ -63,7 +63,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 	public function getTotalCountAction(int $entityTypeId, array $listFilter = [])
 	{
 		$userPermission = Container::getInstance()->getUserPermissions();
-		if (!$userPermission->canReadType($entityTypeId))
+		if (!$userPermission->entityType()->canReadItems($entityTypeId))
 		{
 			return;
 		}
@@ -174,7 +174,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 					->buildParams()
 		];
 		$this->arResult['entityTypeName'] = $entityTypeName;
-		$this->arResult['categoryId'] = $this->category ? $this->category->getId() : 0;
+		$this->arResult['categoryId'] = $this->getCategoryId();
 		$this->arResult['entityTypeDescription'] = $this->factory->getEntityDescription();
 
 		$params = [
@@ -339,6 +339,10 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		$grid['SHOW_ROW_CHECKBOXES'] = true;
 		$grid['SHOW_SELECTED_COUNTER'] = true;
 		$grid['SHOW_CHECK_ALL_CHECKBOXES'] = true;
+		$grid['SHOW_MORE_BUTTON'] = true;
+		$grid['NAV_PARAM_NAME'] = $this->navParamName;
+		$grid['CURRENT_PAGE'] = $pageNavigation->getCurrentPage();
+		$grid['ENABLE_NEXT_PAGE'] = $this->enableNextPage;
 
 		$actionPanel = $this->getPanel()->getControls();
 		$showActionPanel = !empty($actionPanel) && !$this->isEmbedded();
@@ -440,17 +444,44 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			}
 
 			$entityIdentity = CCrmOwnerType::ResolveName($this->entityTypeId);
+			$addButtonText = Loc::getMessage('CRM_ITEM_LIST_NEW_CHILDREN_ELEMENT');
 			$addButton = [
-				'TEXT' => $entityTypeDescription,
-				'TITLE' => Loc::getMessage(
-					'CRM_ITEM_LIST_ADD_CHILDREN_ELEMENT',
-					[
-						'#CHILDREN_ELEMENT#' => $entityTypeDescription,
-					]
-				),
-				'ICON' => 'btn-new',
+				'TEXT' => $addButtonText,
+				'TITLE' => $addButtonText,
 				'ONCLICK' => "BX.CrmEntityManager.createEntity('" . $entityIdentity . "', { urlParams: " . Json::encode($parentParams) ." })",
+				'HIGHLIGHT' => true,
+				'SQUARE' => true,
 			];
+
+			$linkButtonText = Loc::getMessage('CRM_ITEM_LIST_LINK_CHILDREN_ELEMENT');
+
+			$relationCode = $this->getParentItemIdentifier()->getEntityTypeId(). '-' . $this->getParentItemIdentifier()->getEntityId() . '-' . $this->entityTypeId;
+			$targetId = 'relation-button-' . $relationCode;
+			$linkButton = [
+				'ATTRIBUTES' => [
+					'ID' => $targetId,
+				],
+				'TEXT' => $linkButtonText,
+				'TITLE' => $linkButtonText,
+				'SQUARE' => true,
+				'ONCLICK' => sprintf(
+<<<js
+(function() {
+	const selector = BX.Crm.Binder.Manager.Instance.createRelatedSelector(
+		'%s',
+		'%s'
+	);
+	if (selector)
+	{
+		selector.show();
+	}
+})()
+js,
+					\CUtil::JSEscape('relation-' . $relationCode),
+					\CUtil::JSEscape($targetId),
+				),
+			];
+
 
 			$relation = Container::getInstance()->getRelationManager()->getRelation(new \Bitrix\Crm\RelationIdentifier(
 				$this->parentEntityTypeId,
@@ -463,6 +494,14 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 				];
 			}
 			$toolbar['buttons'] = [$addButton];
+			if (!in_array(
+				$this->parentEntityTypeId,
+				[\CCrmOwnerType::Contact, \CCrmOwnerType::Company, \CCrmOwnerType::Order],
+				true
+			))
+			{
+				$toolbar['buttons'] = [$addButton, $linkButton];
+			}
 		}
 
 		return $toolbar;
@@ -473,7 +512,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		$pageNavigation = new PageNavigation($this->getPageNavigationId());
 		$pageNavigation->allowAllRecords(false)->setPageSize($this->getPageSize())->initFromUri();
 
-		if (isset($this->request['grid_action']) && $this->request['grid_action'] === 'pagination')
+		if (isset($this->request['grid_action']) && !empty($this->request->get('page')))
 		{
 			$pageNavigation->setCurrentPage($this->getPageFromRequest($this->request));
 		}
@@ -930,11 +969,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			$this->nearestActivityManager = ManagerFactory::getInstance()->getManager($this->entityTypeId);
 		}
 
-		$itemData['EDIT'] = $this->userPermissions->checkUpdatePermissions(
-			$this->entityTypeId,
-			$item->getId(),
-			$item->getCategoryId(),
-		);
+		$itemData['EDIT'] = $this->userPermissions->item()->canUpdateItem($item);
 
 		$itemData = $this->nearestActivityManager->appendNearestActivityBlock([$itemData], true)[0];
 		$rendered = $itemData['ACTIVITY_BLOCK']->render($this->getGridId());
@@ -955,7 +990,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 				'HREF' => $itemDetailUrl,
 			],
 		];
-		if ($userPermissions->canUpdateItem($item) && $itemDetailUrl)
+		if ($userPermissions->item()->canUpdateItem($item) && $itemDetailUrl)
 		{
 			$editUrl = clone $itemDetailUrl;
 			$editUrl->addParams([
@@ -966,7 +1001,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 				'HREF' => $editUrl,
 			];
 		}
-		if ($userPermissions->canUpdateItem($item))
+		if ($userPermissions->item()->canUpdateItem($item))
 		{
 			$analyticsEventBuilder = CopyOpenEvent::createDefault($this->entityTypeId);
 			$this->configureAnalyticsEventBuilder($analyticsEventBuilder);
@@ -992,7 +1027,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 				'HREF' => $analyticsEventBuilder->buildUri($copyUrl),
 			];
 		}
-		if ($userPermissions->canDeleteItem($item))
+		if ($userPermissions->item()->canDeleteItem($item))
 		{
 			$actions[] = [
 				'TEXT' => Loc::getMessage('CRM_COMMON_ACTION_DELETE'),
@@ -1107,7 +1142,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		if ($this->factory->isStagesEnabled())
 		{
 			$userPermissions = Container::getInstance()->getUserPermissions();
-			$isReadOnly = !$userPermissions->canUpdateItem($item);
+			$isReadOnly = !$userPermissions->item()->canUpdateItem($item);
 			if ($this->isColumnVisible(Item::FIELD_NAME_STAGE_ID))
 			{
 				if ($this->isExportMode())
@@ -1244,7 +1279,12 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 		$permissions = Container::getInstance()->getUserPermissions();
 
-		if ($permissions->checkExportPermissions($this->entityTypeId, 0, $this->getCategoryId()))
+		$categoryId = $this->getCategoryId();
+		if (
+			is_null($categoryId)
+				? $permissions->entityType()->canExportItems($this->entityTypeId)
+				: $permissions->entityType()->canExportItemsInCategory($this->entityTypeId, $categoryId)
+		)
 		{
 			$settingsItems[] = ['delimiter' => true];
 			$settingsItems[] = [

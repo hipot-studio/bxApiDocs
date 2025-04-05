@@ -2,7 +2,10 @@
 
 namespace Bitrix\BIConnector\ExternalSource\Source;
 
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsCollection;
 use Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\BIConnector;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDataset;
 use Bitrix\BIConnector\ExternalSource\DatasetManager;
 
@@ -26,7 +29,7 @@ class Csv extends Base
 	/**
 	 * @inheritDoc
 	 */
-	public function connect(string $host, string $username, string $password): Main\Result
+	public function connect(ExternalSourceSettingsCollection $settings): Main\Result
 	{
 		$this->dataset = DatasetManager::getById($this->id);
 
@@ -113,6 +116,68 @@ class Csv extends Base
 		catch (Main\DB\SqlQueryException $exception)
 		{
 			return new Main\EventResult(Main\EventResult::ERROR, new Main\Error($exception->getMessage()));
+		}
+
+		return new Main\EventResult(Main\EventResult::SUCCESS);
+	}
+
+	/**
+	 * @see DatasetManager::EVENT_ON_BEFORE_UPDATE_DATASET
+	 *
+	 * @param Main\Event $event
+	 * @return Main\EventResult
+	 */
+	public static function onBeforeUpdateDataset(Main\Event $event): Main\EventResult
+	{
+		$id = (int)$event->getParameter('id');
+		if ($id <= 0)
+		{
+			return new Main\EventResult(Main\EventResult::SUCCESS);
+		}
+
+		$fields = $event->getParameter('fields');
+		if (empty($fields) || !is_array($fields))
+		{
+			return new Main\EventResult(Main\EventResult::SUCCESS);
+		}
+
+		$dataset = DatasetManager::getById($id);
+		if (!$dataset)
+		{
+			return new Main\EventResult(Main\EventResult::SUCCESS);
+		}
+
+		if ($dataset->getEnumType() !== BIConnector\ExternalSource\Type::Csv)
+		{
+			return new Main\EventResult(Main\EventResult::SUCCESS);
+		}
+
+		$fieldsToAdd = array_filter($fields, static function ($field) {
+			return !isset($field['ID']);
+		});
+		if ($fieldsToAdd)
+		{
+			return new Main\EventResult(
+				Main\EventResult::ERROR,
+				new Main\Error(
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_SOURCE_CSV_UPDATE_ERROR')
+				)
+			);
+		}
+
+		$currentFields = DatasetManager::getDatasetFieldsById($id)->collectValues();
+		$fieldsToDelete = array_diff(
+			array_keys($currentFields),
+			array_map('intval', array_column($fields, 'ID'))
+		);
+		if ($fieldsToDelete)
+		{
+			return new Main\EventResult(
+				Main\EventResult::ERROR,
+				new Main\Error(
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_SOURCE_CSV_UPDATE_ERROR')
+				)
+			);
 		}
 
 		return new Main\EventResult(Main\EventResult::SUCCESS);

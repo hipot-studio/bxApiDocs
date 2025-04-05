@@ -15,6 +15,7 @@ class Logo extends Base
 	public const ICON_TYPE_PURPLE = 'purple';
 	public const ICON_TYPE_ORANGE = 'orange';
 	public const ICON_TYPE_SECONDARY = 'secondary';
+	public const ICON_TYPE_PALE_BLUE = 'pale-blue';
 
 	public const ADDITIONAL_ICON_CODE_PROGRESS = 'progress';
 	public const ADDITIONAL_ICON_CODE_PENCIL = 'pencil';

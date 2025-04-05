@@ -367,7 +367,7 @@ class DealStageHistoryEntry
 			],
 			DealCategory::getPermissionEntityTypeList()
 		);
-		$parameters['filter'] = $userPermissions->applyAvailableItemsFilter(
+		$parameters['filter'] = $userPermissions->itemsList()->applyAvailableItemsFilter(
 			$parameters['filter'] ?? [],
 			$entityTypes,
 			$operation,
@@ -395,7 +395,7 @@ class DealStageHistoryEntry
 			],
 			DealCategory::getPermissionEntityTypeList()
 		);
-		$filter = $userPermissions->applyAvailableItemsFilter(
+		$filter = $userPermissions->itemsList()->applyAvailableItemsFilter(
 			$filter,
 			$entityTypes,
 			$operation,

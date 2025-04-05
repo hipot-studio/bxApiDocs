@@ -17,7 +17,7 @@ use Bitrix\UI\EntitySelector\SearchQuery;
 class SupersetDashboardProvider extends BaseProvider
 {
 	public const ENTITY_ID = 'biconnector-superset-dashboard';
-	protected const ELEMENTS_LIMIT = 20;
+	protected const ELEMENTS_LIMIT = 50;
 
 	public function __construct(array $options = [])
 	{

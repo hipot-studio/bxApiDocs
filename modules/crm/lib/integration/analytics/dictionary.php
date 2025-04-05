@@ -19,13 +19,16 @@ final class Dictionary
 	// region Event const
 	public const EVENT_ENTITY_ADD_OPEN = 'entity_add_open';
 	public const EVENT_ENTITY_ADD = 'entity_add';
+	public const EVENT_ENTITY_CREATE = 'entity_create';
 	public const EVENT_ENTITY_UPDATE = 'entity_update';
+	public const EVENT_ENTITY_EDIT = 'entity_edit';
 	public const EVENT_ENTITY_COPY_OPEN = 'entity_copy_open';
 	public const EVENT_ENTITY_COPY = 'entity_copy';
 	public const EVENT_ENTITY_CONVERT = 'entity_convert';
 	public const EVENT_ENTITY_CONVERT_BATCH = 'entity_convert_batch';
 	public const EVENT_ENTITY_CONVERT_OPEN = 'entity_convert_open';
 	public const EVENT_ENTITY_CLOSE = 'entity_close';
+	public const EVENT_ENTITY_COMPLETE = 'entity_complete';
 
 	public const EVENT_CALL_PARSING = 'call_parsing';
 	public const EVENT_AUDIO_TO_TEXT = 'audio_to_text';
@@ -139,6 +142,7 @@ final class Dictionary
 	public const STATUS_SUCCESS = 'success';
 	public const STATUS_ERROR = 'error';
 	public const STATUS_CANCEL = 'cancel';
+	public const STATUS_EXIST = 'exist';
 
 	public const STATUS_SUCCESS_FIELDS = 'success_fields';
 	public const STATUS_SUCCESS_COMMENT = 'success_comment_only';

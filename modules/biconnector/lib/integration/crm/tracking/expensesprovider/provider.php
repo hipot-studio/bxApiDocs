@@ -2,6 +2,8 @@
 
 namespace Bitrix\BIConnector\Integration\Crm\Tracking\ExpensesProvider;
 
+use Bitrix\Main\Error;
+use Bitrix\Main\Result;
 use Bitrix\Main\Type\Date;
 use Bitrix\Seo;
 
@@ -22,44 +24,53 @@ final class Provider
 	}
 
 	/**
-	 * @return array<array{
-	 *      SOURCE_ID: int,
-	 *      EXPENSES: float,
-	 *      DATE?: ?Date,
-	 *      CAMPAIGN_NAME: string,
-	 *      CAMPAIGN_ID: string,
-	 *      CURRENCY: string,
-	 *      CPM: float,
-	 *      CPC: float,
-	 *      CLICKS: int,
-	 *      IMPRESSIONS: int,
-	 *      ACTIONS: int,
-	 *  }>
+	 * Result data: array<array{
+	 *       SOURCE_ID: int,
+	 *       EXPENSES: float,
+	 *       DATE?: ?Date,
+	 *       CAMPAIGN_NAME: string,
+	 *       CAMPAIGN_ID: string,
+	 *       CURRENCY: string,
+	 *       CPM: float,
+	 *       CPC: float,
+	 *       CLICKS: int,
+	 *       IMPRESSIONS: int,
+	 *       ACTIONS: int,
+	 *   }>
+	 *
+	 * @return Result
 	 */
-	public function getDailyExpenses(?Date $dateFrom, ?Date $dateTo): array
+	public function getDailyExpenses(?Date $dateFrom, ?Date $dateTo): Result
 	{
+		$result = new Result();
 		if ($this->account->hasAccounts() && !$this->accountId)
 		{
-			return [];
+			return $result->setData([]);
 		}
 
 		if (!$this->account->hasDailyExpensesReport())
 		{
-			return [];
+			return $result->setData([]);
 		}
 
 		Seo\Analytics\Service::getInstance()->setClientId($this->clientId);
-		$result = $this->account->getDailyExpensesReport($this->accountId, $dateFrom, $dateTo);
-		if (!$result->isSuccess())
+		$accountResult = $this->account->getDailyExpensesReport($this->accountId, $dateFrom, $dateTo);
+		if (!$accountResult->isSuccess())
 		{
-			return [];
+			$result->addErrors($accountResult->getErrors());
+
+			return $result;
 		}
 
 		/** @var Seo\Analytics\Internals\ExpensesCollection $expensesCollection */
-		$expensesCollection = $result->getData()['expenses'] ?? null;
+		$expensesCollection = $accountResult->getData()['expenses'] ?? null;
 		if (!$expensesCollection instanceof Seo\Analytics\Internals\ExpensesCollection)
 		{
-			return [];
+			$collectionClassName = get_class($expensesCollection);
+			$error = new Error("[{$this->name}] Daily expenses result data expected 'Bitrix\Seo\Analytics\Internals\ExpensesCollection' instance, '{$collectionClassName}' got");
+			$result->addError($error);
+
+			return $result;
 		}
 
 		$expensesResult = [];
@@ -69,7 +80,7 @@ final class Provider
 			$expensesResult[] = $this->parseRow($expenses);
 		}
 
-		return $expensesResult;
+		return $result->setData($expensesResult);
 	}
 
 	/**

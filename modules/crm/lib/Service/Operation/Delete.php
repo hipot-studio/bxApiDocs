@@ -32,7 +32,7 @@ class Delete extends Operation
 		$result = new Result();
 
 		$userId = $this->getContext()->getUserId();
-		if (!Container::getInstance()->getUserPermissions($userId)->canDeleteItem($this->item))
+		if (!Container::getInstance()->getUserPermissions($userId)->item()->canDeleteItem($this->item))
 		{
 			$title =  $this->item->getHeading() ?? '';
 			$message = Loc::getMessage(
@@ -225,7 +225,7 @@ class Delete extends Operation
 	protected function updatePermissions(): void
 	{
 		$item = $this->getItemBeforeSave();
-		$permissionEntityType = \Bitrix\Crm\Service\UserPermissions::getItemPermissionEntityType($item);
+		$permissionEntityType = \Bitrix\Crm\Category\PermissionEntityTypeHelper::getPermissionEntityTypeForItem($item);
 
 		$controller = \Bitrix\Crm\Security\Manager::resolveController($permissionEntityType);
 		$controller

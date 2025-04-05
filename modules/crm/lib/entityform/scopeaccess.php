@@ -26,7 +26,7 @@ class ScopeAccess extends \Bitrix\Ui\EntityForm\ScopeAccess
 	 */
 	public function canAdd(): bool
 	{
-		return Container::getInstance()->getUserPermissions($this->userId)->canWriteConfig();
+		return Container::getInstance()->getUserPermissions($this->userId)->isCrmAdmin();
 	}
 
 	public function canAddByEntityTypeId(string $entityTypeId): bool

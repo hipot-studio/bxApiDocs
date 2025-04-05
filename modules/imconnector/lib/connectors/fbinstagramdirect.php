@@ -176,7 +176,7 @@ class FbInstagramDirect extends InstagramBase
 				}
 				else
 				{
-					$message = Loc::getMessage('IMCONNECTOR_FBINSTAGRAMDIRECT_NOT_SEND_MESSAGE_FOR_COMMENT');
+					$message = Loc::getMessage('IMCONNECTOR_FBINSTAGRAMDIRECT_NOT_SEND_MESSAGE_FOR_COMMENT_MSGVER_1');
 				}
 			}
 

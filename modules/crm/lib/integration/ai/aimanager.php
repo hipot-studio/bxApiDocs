@@ -30,15 +30,17 @@ use Psr\Log\LoggerInterface;
 
 final class AIManager
 {
+	public const AI_COPILOT_FEATURE_NAME = 'crm_copilot';
+	
 	public const SUPPORTED_ENTITY_TYPE_IDS = FillItemFieldsFromCallTranscription::SUPPORTED_TARGET_ENTITY_TYPE_IDS;
 	public const AI_LICENCE_FEATURE_NAME = 'ai_available_by_version';
 	public const AI_PACKAGES_EMPTY_SLIDER_CODE = 'limit_boost_crm_automation';
+	public const AI_COPILOT_FEATURE_RESTRICTED_SLIDER_CODE = 'limit_v2_crm_copilot_call_assessment';
 
 	public const AI_LIMIT_CODE_DAILY = 'Daily';
 	public const AI_LIMIT_CODE_MONTHLY = 'Monthly';
 	public const AI_LIMIT_BAAS = 'BAAS';
 
-	private const AI_COPILOT_FEATURE_NAME = 'crm_copilot';
 	private const AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME = 'AI_CALL_PROCESSING_ALLOWED_AUTO_V2';
 	private const AI_IGNORE_BAAS = 'AI_IGNORE_BAAS';
 	private const AI_LIMIT_SLIDERS_MAP = [
@@ -378,6 +380,19 @@ final class AIManager
 			return null;
 		}
 
+		$customData = $error->getCustomData();
+		if (!empty($customData['sliderCode']))
+		{
+			$sliderCode = $customData['sliderCode'];
+
+			if (!empty($customData['showSliderWithMsg']))
+			{
+				return ErrorCode::getAILimitOfRequestsExceededError([
+					'sliderCode' => $sliderCode,
+				]);
+			}
+		}
+
 		return match ($errorCode)
 		{
 			'LIMIT_IS_EXCEEDED_BAAS' => ErrorCode::getAILimitOfRequestsExceededError([
@@ -385,7 +400,7 @@ final class AIManager
 				'limitCode' => self::AI_LIMIT_BAAS,
 			]),
 			'LIMIT_IS_EXCEEDED_MONTHLY' => ErrorCode::getAILimitOfRequestsExceededError([
-				'sliderCode' => self::AI_LIMIT_SLIDERS_MAP[self::AI_LIMIT_CODE_MONTHLY],
+				'sliderCode' => $sliderCode ?? self::AI_LIMIT_SLIDERS_MAP[self::AI_LIMIT_CODE_MONTHLY],
 				'limitCode' => self::AI_LIMIT_CODE_MONTHLY,
 			]),
 			'LIMIT_IS_EXCEEDED_DAILY' => ErrorCode::getAILimitOfRequestsExceededError([

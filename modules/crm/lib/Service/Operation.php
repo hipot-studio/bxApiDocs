@@ -1127,9 +1127,9 @@ abstract class Operation
 	{
 		$userPermissions = Container::getInstance()->getUserPermissions($this->getContext()->getUserId());
 
-		$permissionEntityType = UserPermissions::getItemPermissionEntityType($this->item);
+		$permissionEntityType = \Bitrix\Crm\Category\PermissionEntityTypeHelper::getPermissionEntityTypeForItem($this->item);
 		$securityRegisterOptions = (new \Bitrix\Crm\Security\Controller\RegisterOptions())
-			->setEntityAttributes($userPermissions->prepareItemPermissionAttributes($this->item))
+			->setEntityAttributes($userPermissions->item()->prepareItemPermissionAttributes($this->item))
 		;
 
 		$controller = \Bitrix\Crm\Security\Manager::resolveController($permissionEntityType);

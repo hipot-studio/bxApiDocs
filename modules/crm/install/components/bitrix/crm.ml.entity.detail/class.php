@@ -51,16 +51,10 @@ class CCrmMlEntityDetailComponent extends CBitrixComponent
 	{
 		$this->setEntity($this->arParams['TYPE'], $this->arParams['ID']);
 
-		$categoryId = Container::getInstance()
-			->getFactory($this->entityTypeId)
-			?->getItemCategoryId($this->entityId)
-		;
-		
 		if (
-			!Container::getInstance()->getUserPermissions()->checkReadPermissions(
+			!Container::getInstance()->getUserPermissions()->item()->canRead(
 				$this->entityTypeId,
-				$this->entityId,
-				$categoryId
+				$this->entityId
 			)
 		)
 		{

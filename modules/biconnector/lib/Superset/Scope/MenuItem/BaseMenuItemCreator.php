@@ -48,11 +48,30 @@ abstract class BaseMenuItemCreator
 		array $external = []
 	): string
 	{
+		$external = array_merge(
+			$external,
+			['scope' => $this->getScopeCode()],
+		);
+
 		return (new Service($dashboard))->getEmbeddedUrl($urlValues, $external);
 	}
 
 	protected function needShowMenuItem(): bool
 	{
 		return true;
+	}
+
+	protected function createDashboardOpenEventFromMenu(
+		SupersetDashboard $dashboard,
+		array $params = [],
+	): string
+	{
+		$url = $this->getDetailUrl(
+			$dashboard,
+			$params,
+			['openFrom' => 'menu'],
+		);
+
+		return "window.open(`{$url}`, '_blank');";
 	}
 }

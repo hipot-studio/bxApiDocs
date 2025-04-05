@@ -197,7 +197,7 @@ class Form extends Main\Engine\JsonController
 		return WebForm\Options\Dictionary::instance()->toArray() + [
 			'permissions' => [
 				'userField' => [
-					'add' => Crm\Service\Container::getInstance()->getUserPermissions()->canWriteConfig(),
+					'add' => Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin(),
 				],
 				'form' => [
 					'edit' => $this->getFormAccess(true),

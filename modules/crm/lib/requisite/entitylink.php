@@ -1822,7 +1822,7 @@ class EntityLink
 		{
 			foreach (static::getAvailableEntityTypeIds() as $entityTypeId)
 			{
-				if ($userPermissions->canReadType($entityTypeId))
+				if ($userPermissions->entityType()->canReadItems($entityTypeId))
 				{
 					return true;
 				}
@@ -1831,7 +1831,7 @@ class EntityLink
 			return false;
 		}
 
-		return $userPermissions->checkReadPermissions($entityTypeID, $entityID);
+		return $userPermissions->item()->canRead($entityTypeID, $entityID);
 	}
 
 	/**
@@ -1841,7 +1841,7 @@ class EntityLink
 	 */
 	public static function checkUpdatePermissionOwnerEntity($entityTypeID = 0, $entityID = 0)
 	{
-		return Service\Container::getInstance()->getUserPermissions()->checkUpdatePermissions((int)$entityTypeID, (int)$entityID);
+		return Service\Container::getInstance()->getUserPermissions()->item()->canUpdate((int)$entityTypeID, (int)$entityID);
 	}
 
 	public static function moveDependencies(

@@ -19,7 +19,7 @@ class CreatedByFieldAssembler extends UserFieldAssembler
 
 		if ($type === SupersetDashboardTable::DASHBOARD_TYPE_MARKET)
 		{
-			$authorText = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_AUTHOR_MARKET');
+			$authorText = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_AUTHOR_MARKET_MSGVER_1');
 
 			return "<span class=\"biconnector-grid-market-cell\">
 				<img src=\"/bitrix/images/biconnector/superset-dashboard-grid/icon-type-market.png\" width='24' height='24' alt=\"{$authorText}\"> 

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Security\Role\Manage\Entity;
 
+use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Security\Role\Manage\DTO\EntityDTO;
 use Bitrix\Crm\Security\Role\Manage\PermissionAttrPresets;
 use Bitrix\Crm\Service;
@@ -35,7 +36,9 @@ class Company implements PermissionEntity, FilterableByCategory
 
 		foreach ($categories as $category)
 		{
-			$entityName = Service\UserPermissions::getPermissionEntityType($factory->getEntityTypeId(), $category->getId());
+			$entityName = (new PermissionEntityTypeHelper($factory->getEntityTypeId()))
+				->getPermissionEntityTypeForCategory($category->getId())
+			;
 			$entityTitle = $category->getSingleNameIfPossible();
 
 			if ($category->getIsDefault())

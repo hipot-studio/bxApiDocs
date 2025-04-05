@@ -22,6 +22,10 @@ else
 
 class CCrmEMail
 {
+
+	/**
+	 * @deprecated No longer used by internal code and not recommended.
+	 */
 	public static function OnGetFilterList()
 	{
 		return array(
@@ -1386,8 +1390,6 @@ class CCrmEMail
 			$eventText .= PHP_EOL;
 		}
 
-		$eventText .= preg_replace('/(\r\n|\n|\r)+/', PHP_EOL, htmlspecialcharsbx($body));
-
 		$crmEvent = new \CCrmEvent();
 		$crmEvent->add(
 			array(
@@ -1396,9 +1398,8 @@ class CCrmEMail
 				'ENTITY_TYPE'  => \CCrmOwnerType::resolveName($ownerTypeId),
 				'ENTITY_ID'    => $ownerId,
 				'EVENT_NAME'   => getMessage('CRM_EMAIL_GET_EMAIL'),
-				'EVENT_TYPE'   => 2,
+				'EVENT_TYPE'   => \CCrmEvent::TYPE_EMAIL,
 				'EVENT_TEXT_1' => $eventText,
-				'FILES'        => $filesData,
 			),
 			false
 		);
@@ -1659,6 +1660,9 @@ class CCrmEMail
 		return true;
 	}
 
+	/**
+	 * @deprecated No longer used by internal code and not recommended.
+	 */
 	public static function EmailMessageAdd($arMessageFields, $ACTION_VARS)
 	{
 		if(!CModule::IncludeModule('crm'))
@@ -2443,8 +2447,7 @@ class CCrmEMail
 		}
 		unset($arBinding);
 
-		$eventText  = '';
-		$eventText .= '<b>'.GetMessage('CRM_EMAIL_SUBJECT').'</b>: '.$subject.PHP_EOL;
+		$eventText = '<b>' . GetMessage('CRM_EMAIL_SUBJECT') . '</b>: ' . $subject . PHP_EOL;
 		$eventText .= '<b>'.GetMessage('CRM_EMAIL_FROM').'</b>: '.$addresserInfo['EMAIL'].PHP_EOL;
 		$eventText .= '<b>'.GetMessage('CRM_EMAIL_TO').'</b>: '.implode('; ', $addresseeEmails).PHP_EOL;
 		if(!empty($arBannedAttachments))
@@ -2463,7 +2466,6 @@ class CCrmEMail
 			unset($attachmentInfo);
 			$eventText .= PHP_EOL;
 		}
-		$eventText .= $encodedBody;
 
 		$CCrmEvent = new CCrmEvent();
 		$CCrmEvent->Add(
@@ -2473,9 +2475,8 @@ class CCrmEMail
 				'ENTITY_TYPE' => CCrmOwnerType::ResolveName($ownerTypeID),
 				'ENTITY_ID' => $ownerID,
 				'EVENT_NAME' => GetMessage('CRM_EMAIL_GET_EMAIL'),
-				'EVENT_TYPE' => 2,
+				'EVENT_TYPE' =>  \CCrmEvent::TYPE_EMAIL,
 				'EVENT_TEXT_1' => $eventText,
-				'FILES' => $arFilesData,
 			),
 			false
 		);
@@ -2843,8 +2844,7 @@ class CCrmEMail
 		// Try add event to entity
 		$crmEvent = new \CCrmEvent();
 
-		$eventText = '';
-		$eventText .= getMessage('CRM_EMAIL_SUBJECT').': '.$subject."\n\r";
+		$eventText = getMessage('CRM_EMAIL_SUBJECT').': '.$subject."\n\r";
 		$eventText .= getMessage('CRM_EMAIL_FROM').': '.$from."\n\r";
 		if (!empty($to))
 		{
@@ -2858,8 +2858,6 @@ class CCrmEMail
 		{
 			$eventText .= 'Bcc: '.implode(',', $bcc)."\n\r";
 		}
-		$eventText .= "\n\r";
-		$eventText .= $body;
 
 		$eventBindings = array();
 		foreach($arBindings as $item)
@@ -2876,11 +2874,11 @@ class CCrmEMail
 
 		$crmEvent->Add(
 			array(
+				'EVENT_TYPE'   => \CCrmEvent::TYPE_EMAIL,
 				'ENTITY' => $eventBindings,
 				'EVENT_ID' => 'MESSAGE',
 				'EVENT_NAME' => $subject,
 				'EVENT_TEXT_1' => $eventText,
-				'FILES' => array_values($arRawFiles),
 			)
 		);
 

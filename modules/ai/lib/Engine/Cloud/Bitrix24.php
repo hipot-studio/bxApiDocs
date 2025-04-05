@@ -156,6 +156,11 @@ final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 			return false;
 		}
 
+		if (array_intersect($quality->getRequired(), [Quality::QUALITIES['ai_site']]))
+		{
+			return false;
+		}
+
 		return true;
 	}
 

@@ -50,7 +50,7 @@ final class OpenAction extends BaseAction
 			}
 		}
 
-		$this->href = $rawFields['DETAIL_URL'];
+		$this->onclick = "window.open(`{$rawFields['DETAIL_URL']}`, '_blank');";
 
 		return parent::getControl($rawFields);
 	}

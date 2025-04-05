@@ -21,13 +21,14 @@ class CCrmDocumentCompany extends CCrmDocument implements IBPWorkflowDocument
 		return $arResult;
 	}
 
-	public static function GetDocument($documentId)
+	public static function GetDocument($documentId, $documentType = null, array $select = [])
 	{
 		$documentInfo = static::GetDocumentInfo($documentId);
 
 		return new Crm\Integration\BizProc\Document\ValueCollection\Company(
 			CCrmOwnerType::Company,
-			$documentInfo['ID']
+			$documentInfo['ID'],
+			$select
 		);
 	}
 

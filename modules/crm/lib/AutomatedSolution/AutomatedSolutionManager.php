@@ -110,7 +110,7 @@ final class AutomatedSolutionManager
 
 		$overallResult = new Result();
 		$userPermissions = Container::getInstance()->getUserPermissions();
-		if (!empty($typesToBind) && !$userPermissions->canEditAutomatedSolutions())
+		if (!empty($typesToBind) && !$userPermissions->automatedSolution()->canEdit())
 		{
 			$overallResult->addError(ErrorCode::getAccessDeniedError());
 
@@ -307,7 +307,7 @@ final class AutomatedSolutionManager
 		$result = [];
 		foreach ($this->getExistingAutomatedSolutions() as $intranetCustomSectionId => $existingAutomatedSolution)
 		{
-			if ($userPermissions->isAutomatedSolutionAdmin($existingAutomatedSolution['ID']))
+			if ($userPermissions->automatedSolution()->isAutomatedSolutionAdmin($existingAutomatedSolution['ID']))
 			{
 				$result[$intranetCustomSectionId] = $existingAutomatedSolution;
 			}

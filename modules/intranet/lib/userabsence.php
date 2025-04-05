@@ -1,9 +1,10 @@
 <?
 namespace Bitrix\Intranet;
 
-use \Bitrix\Main\Data\Cache,
-	\Bitrix\Main\Config\Option,
-	\Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Data\Cache;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Loader;
 
 class UserAbsence
 {
@@ -98,15 +99,19 @@ class UserAbsence
 		$defaultVacationTypes = self::getActiveVacationTypes();
 
 		$types = [];
-		$res = \CIBlockPropertyEnum::GetList(Array('DEF'=>'DESC', 'SORT'=>'ASC'), Array('IBLOCK_ID'=>self::getIblockId(), 'CODE'=>'ABSENCE_TYPE'));
-		while ($row = $res->GetNext())
+
+		if (Loader::includeModule('iblock'))
 		{
-			$types[$row['EXTERNAL_ID']] = [
-				'ID' => $row['EXTERNAL_ID'],
-				'ENUM_ID' => $row['ID'],
-				'NAME' => self::getTypeCaption($row['EXTERNAL_ID']),
-				'ACTIVE' => in_array($row['EXTERNAL_ID'], $defaultVacationTypes),
-			];
+			$res = \CIBlockPropertyEnum::GetList(Array('DEF'=>'DESC', 'SORT'=>'ASC'), Array('IBLOCK_ID'=>self::getIblockId(), 'CODE'=>'ABSENCE_TYPE'));
+			while ($row = $res->GetNext())
+			{
+				$types[$row['EXTERNAL_ID']] = [
+					'ID' => $row['EXTERNAL_ID'],
+					'ENUM_ID' => $row['ID'],
+					'NAME' => self::getTypeCaption($row['EXTERNAL_ID']),
+					'ACTIVE' => in_array($row['EXTERNAL_ID'], $defaultVacationTypes),
+				];
+			}
 		}
 
 		return $types;
@@ -123,7 +128,7 @@ class UserAbsence
 		static $result;
 
 		$iblockId = self::getIblockId();
-		if ($iblockId <= 0)
+		if ($iblockId <= 0 || !Loader::includeModule('iblock'))
 		{
 			return array();
 		}

@@ -201,6 +201,15 @@ class File extends BaseObject
 	}
 
 	/**
+	 * Returns file name without extension.
+	 * @return string
+	 */
+	public function getNameWithoutExtension(): string
+	{
+		return GetFileNameWithoutExtension($this->getName());;
+	}
+
+	/**
 	 * Returns external hash.
 	 * @return string
 	 */
@@ -1435,7 +1444,7 @@ class File extends BaseObject
 			return false;
 		}
 
-		Document\OnlyOffice\Models\DocumentSessionTable::deleteBatch([
+		Document\Models\DocumentSessionTable::deleteBatch([
 			'OBJECT_ID' => $this->id,
 		]);
 

@@ -403,9 +403,15 @@ class CrmQuoteDetailsComponent extends FactoryBased
 
 		if(!$this->item->isNew())
 		{
-			$buttons[ButtonLocation::AFTER_TITLE][] = $this->getActionsToolbarButton();
+			if (\CCrmQuote::allowLegacyPrintDocuments())
+			{
+				$buttons[ButtonLocation::AFTER_TITLE][] = $this->getActionsToolbarButton();
+			}
 
-			$buttons[ButtonLocation::AFTER_TITLE][] = $this->getConversionToolbarButton();
+			if (ConversionManager::isConversionPossible($this->item))
+			{
+				$buttons[ButtonLocation::AFTER_TITLE][] = $this->getConversionToolbarButton();
+			}
 		}
 
 		$parameters['buttons'] = $buttons;

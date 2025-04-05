@@ -85,7 +85,19 @@ class OpenLineChat extends EntityChat
 
 	public function readAllMessages(bool $byEvent = false, bool $forceRead = false): Result
 	{
-		return $this->readMessages(null, $byEvent, $forceRead);
+		$result = $this->readMessages(null, $byEvent, $forceRead);
+
+		$userId = $this->getContext()->getUserId();
+		Application::getInstance()->addBackgroundJob(function () use ($byEvent, $forceRead, $userId) {
+			$chat = $this->withContextUser($userId);
+
+			if ($chat->getSelfRelation() === null)
+			{
+				$chat->readMessages(null, $byEvent, $forceRead);
+			}
+		});
+
+		return $result;
 	}
 
 	public function readMessages(?MessageCollection $messages, bool $byEvent = false, bool $forceRead = false): Result

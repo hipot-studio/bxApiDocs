@@ -12,6 +12,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 
 class ApacheSupersetControlPanel extends CBitrixComponent
 {
@@ -32,7 +33,7 @@ class ApacheSupersetControlPanel extends CBitrixComponent
 			...$this->getDashboardsForTopMenu(),
 			[
 				'ID' => 'MARKET',
-				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_MARKET'),
+				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_MARKET_MSGVER_1'),
 				'ON_CLICK' => "BX.BIConnector.ApacheSupersetMarketManager.openMarket({$isMarketExists}, '{$marketUrl}', 'menu')",
 				'IS_DISABLED' => false,
 			],
@@ -151,10 +152,12 @@ class ApacheSupersetControlPanel extends CBitrixComponent
 
 		foreach ($sortedDashboards as $dashboard)
 		{
+			$url = (new UrlParameter\Service($dashboard))->getEmbeddedUrl([], ['openFrom' => 'menu']);
 			$result[] = [
 				'ID' => "DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),
-				'URL' => "/bi/dashboard/detail/{$dashboard->getId()}/?openFrom=menu"
+				'URL' => $url,
+				'ON_CLICK' => "window.open(`{$url}`, '_blank');"
 			];
 		}
 

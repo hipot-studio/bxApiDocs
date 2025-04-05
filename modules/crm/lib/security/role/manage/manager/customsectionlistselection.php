@@ -36,7 +36,7 @@ class CustomSectionListSelection implements RoleSelectionManager
 
 	public function hasPermissionsToEditRights(): bool
 	{
-		return Container::getInstance()->getUserPermissions()->isAutomatedSolutionsAdmin();
+		return Container::getInstance()->getUserPermissions()->automatedSolution()->isAllAutomatedSolutionsAdmin();
 	}
 
 	public function prohibitToSaveRoleWithoutAtLeastOneRight(): bool
@@ -72,5 +72,20 @@ class CustomSectionListSelection implements RoleSelectionManager
 	public function getGroupCode(): ?string
 	{
 		return GroupCodeGenerator::getAutomatedSolutionListCode();
+	}
+
+	public function getMenuId(): ?string
+	{
+		return self::CRITERION;
+	}
+
+	public function getControllerData(): array
+	{
+		return [
+			'criterion' => self::CRITERION,
+			'sectionCode' => null,
+			'isAutomation' => true,
+			'menuId' => $this->getMenuId(),
+		];
 	}
 }
