@@ -30,7 +30,7 @@ class Http
 	const CONNECTION_ERROR = 'no connection with controller';
 
 	/**
-	 * @deprecated \Bitrix\Transformer\Http\ControllerResolver::getDefaultCloudControllerUrl
+	 * @deprecated \Bitrix\Transformer\Service\Http\ControllerResolver::getDefaultCloudControllerUrl
 	 */
 	public const CLOUD_CONVERTER_URL = 'https://transformer-de.bitrix.info/bitrix/tools/transformercontroller/add_queue.php';
 
@@ -129,7 +129,7 @@ class Http
 			throw new ArgumentTypeException('params', 'array');
 		}
 
-		$controllerUrl = ServiceLocator::getInstance()->get('transformer.http.controllerResolver')->resolveControllerUrl(
+		$controllerUrl = ServiceLocator::getInstance()->get('transformer.service.http.controllerResolver')->resolveControllerUrl(
 			$command,
 			$params['queue'] ?? null,
 		);

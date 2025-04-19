@@ -27,8 +27,6 @@ class EventService
 			&& $call->isAiAnalyzeEnabled()
 		)
 		{
-			$chat = Chat::getInstance($call->getChatId());
-
 			$minDuration = CallAISettings::getRecordMinDuration();
 			if ($call->getDuration() < $minDuration)
 			{
@@ -40,18 +38,21 @@ class EventService
 				return;
 			}
 
+			// Setup result waiting agent
+			CallAIService::getInstance()->setupExpectation($call->getId());
+
+			$chat = Chat::getInstance($call->getChatId());
 			$message = ChatMessage::generateCallFinishedMessage($call, $chat);
 			if ($message)
 			{
 				$message->setAuthorId($call->getInitiatorId());
-				$notifyService = \Bitrix\Call\NotifyService::getInstance();
-				$notifyService->sendMessageDeferred($chat, $message);
+				NotifyService::getInstance()->sendMessageDeferred($chat, $message);
 			}
 		}
 	}
 
 	/**
-	 * @see \Bitrix\Call\Integration\AI\CallAIService::fireCallAiTaskEvent
+	 * @see CallAIService::fireCallAiTaskEvent
 	 */
 	public static function onCallAiTaskStart(\Bitrix\Main\Event $event): void
 	{
@@ -79,7 +80,7 @@ class EventService
 	}
 
 	/**
-	 * @see \Bitrix\Call\Integration\AI\CallAIService::fireCallOutcomeEvent
+	 * @see CallAIService::fireCallOutcomeEvent
 	 */
 	public static function onCallAiTaskComplete(\Bitrix\Main\Event $event): void
 	{
@@ -111,8 +112,9 @@ class EventService
 			if ($messageOutcome)
 			{
 				$messageOutcome->setAuthorId($call->getInitiatorId());
-				$notifyService = \Bitrix\Call\NotifyService::getInstance();
-				$notifyService->sendMessageDeferred($chat, $messageOutcome);
+				NotifyService::getInstance()->sendMessageDeferred($chat, $messageOutcome);
+
+				CallAIService::getInstance()->removeExpectation($call->getId());
 
 				$callInstance = \Bitrix\Im\Call\Registry::getCallWithId($outcome->getCallId());
 				(new \Bitrix\Call\Analytics\FollowUpAnalytics($callInstance))->addFollowUpResultMessage();
@@ -121,7 +123,7 @@ class EventService
 	}
 
 	/**
-	 * @see \Bitrix\Call\Integration\AI\CallAIService::fireCallAiFailedEvent
+	 * @see CallAIService::fireCallAiFailedEvent
 	 */
 	public static function onCallAiTaskFailed(\Bitrix\Main\Event $event): void
 	{
@@ -136,6 +138,7 @@ class EventService
 		if (
 			$task instanceof \Bitrix\Call\Integration\AI\Task\AITask
 			&& $error instanceof \Bitrix\Main\Error
+			&& $task->allowNotifyTaskFailed()
 		)
 		{
 			$call = Registry::getCallWithId($task->getCallId());

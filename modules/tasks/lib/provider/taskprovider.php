@@ -8,6 +8,7 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Access\Model\UserModel;
 use Bitrix\Tasks\Access\Permission\PermissionDictionary;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
+use Bitrix\Tasks\DI\Container;
 use Bitrix\Tasks\Internals\Task\TimeUnitType;
 use Bitrix\Tasks\Internals\UserOption;
 use \CDBResult;
@@ -266,7 +267,7 @@ class TaskProvider
 		{
 			try
 			{
-				$list = new TaskList();
+				$list = Container::getInstance()->getTaskProvider();
 				$tasks = $list->getList($query);
 				$dbResult = $list->getLastDbResult();
 			}
@@ -370,7 +371,7 @@ class TaskProvider
 
 		try
 		{
-			$list = new TaskList();
+			$list = Container::getInstance()->getTaskProvider();
 			$count = $list->getCount($query);
 			$dbResult = $list->getLastDbResult();
 		}

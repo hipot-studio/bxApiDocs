@@ -2,8 +2,11 @@
 
 namespace Bitrix\Tasks\Internals\Log;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
+use Bitrix\Main\SystemException;
+use ReflectionClass;
 use Throwable;
 
 final class LogFacade
@@ -36,6 +39,35 @@ final class LogFacade
 	public static function logError(Error $error): void
 	{
 		self::getLogger()->collect($error->getMessage());
+	}
+
+	public static function handle(string|Throwable|Error $error, string $wrapperClass = SystemException::class): void
+	{
+		$exceptionHandler = Application::getInstance()->getExceptionHandler();
+
+		if ($error instanceof Throwable)
+		{
+			$exceptionHandler->writeToLog($error);
+
+			return;
+		}
+
+		$errorMessage = match (true)
+		{
+			$error instanceof Error => $error->getMessage(),
+			is_string($error) => $error,
+		};
+
+		$reflector = new ReflectionClass($wrapperClass);
+
+		if (!$reflector->isInstantiable() || !$reflector->isSubclassOf(Throwable::class))
+		{
+			return;
+		}
+
+		$exception = $reflector->newInstance($errorMessage);
+
+		$exceptionHandler->writeToLog($exception);
 	}
 
 	private static function getLogger(string $marker = Log::DEFAULT_MARKER): Log

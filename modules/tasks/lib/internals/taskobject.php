@@ -193,6 +193,11 @@ class TaskObject extends EO_Task implements Arrayable
 		return Status::COMPLETED === (int)$this->getStatus();
 	}
 
+	public function isPending(): bool
+	{
+		return Status::PENDING === (int)$this->getStatus();
+	}
+
 	/**
 	 * @throws ObjectPropertyException
 	 * @throws SystemException

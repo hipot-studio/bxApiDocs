@@ -78,34 +78,27 @@ class TaskStatusChanged extends BaseCase
 		);
 		while ($log = $dbRes->Fetch())
 		{
-			if (SpaceService::useNotificationStrategy())
-			{
-				\CSocNetLog::Update($log['ID'], $arSoFields);
-			}
-			else
-			{
-				$logId = $log['ID'];
-				$authorId = $task->getCreatedBy();
+			$logId = $log['ID'];
+			$authorId = $task->getCreatedBy();
 
-				\CSocNetLog::Update($logId, $arSoFields);
+			\CSocNetLog::Update($logId, $arSoFields);
 
-				// Add author to list of users that view log about task in livefeed
-				// But only when some other person change task
-				if ($authorId !== $loggedInUserId)
+			// Add author to list of users that view log about task in livefeed
+			// But only when some other person change task
+			if ($authorId !== $loggedInUserId)
+			{
+				$authorGroupCode = 'U' . $authorId;
+
+				$rightsResult = \CSocNetLogRights::GetList([], [
+					'LOG_ID' => $logId,
+					'GROUP_CODE' => $authorGroupCode,
+				]);
+
+				// If task's author hasn't rights yet, give them
+				if (!$rightsResult->fetch())
 				{
-					$authorGroupCode = 'U'.$authorId;
-
-					$rightsResult = \CSocNetLogRights::GetList([], [
-						'LOG_ID' => $logId,
-						'GROUP_CODE' => $authorGroupCode,
-					]);
-
-					// If task's author hasn't rights yet, give them
-					if (!$rightsResult->fetch())
-					{
-						$follow = !UserOption::isOptionSet($task->getId(), $authorId, UserOption\Option::MUTED);
-						\CSocNetLogRights::Add($logId, [$authorGroupCode], false, $follow);
-					}
+					$follow = !UserOption::isOptionSet($task->getId(), $authorId, UserOption\Option::MUTED);
+					\CSocNetLogRights::Add($logId, [$authorGroupCode], false, $follow);
 				}
 			}
 		}

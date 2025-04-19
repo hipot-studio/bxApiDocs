@@ -275,7 +275,7 @@ class Task implements \IBPWorkflowDocument
 				'Type' => 'datetime',
 			],
 			'MARK' => [
-				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_MARK'),
+				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_MARK_MSGVER_1'),
 				'Type' => 'select',
 				'Editable' => true,
 				'Options' => [
@@ -856,7 +856,7 @@ class Task implements \IBPWorkflowDocument
 		return 0;
 	}
 
-	private static function convertFieldsToDocument(array &$fields)
+	public static function convertFieldsToDocument(array &$fields, array $required = []): void
 	{
 		$fields['IS_IMPORTANT'] = ($fields['PRIORITY'] > Priority::AVERAGE) ? 'Y' : 'N';
 
@@ -902,7 +902,7 @@ class Task implements \IBPWorkflowDocument
 		}
 
 		$fields['GROUP_ID_PRINTABLE'] = Loc::getMessage('TASKS_BP_DOCUMENT_GROUP_ID_PRINTABLE_DEFAULT');
-		if ($fields['GROUP_ID'] > 0)
+		if (($fields['GROUP_ID'] > 0) && (isset($required['GROUP_ID_PRINTABLE']) || empty($required)))
 		{
 			$fields['GROUP_ID_PRINTABLE'] = $fields['GROUP_ID'];
 			if (Main\Loader::includeModule('socialnetwork'))
@@ -921,7 +921,7 @@ class Task implements \IBPWorkflowDocument
 			$fields['GROUP_ID'] = null;
 		}
 
-		if (isset($fields['FLOW_ID']) && $fields['FLOW_ID'] > 0)
+		if ((isset($fields['FLOW_ID']) && $fields['FLOW_ID'] > 0) && (isset($required['FLOW_OWNER']) || empty($required)))
 		{
 			$flowOwnerId = FlowRegistry::getInstance()->get($fields['FLOW_ID'])->getOwnerId();
 			$fields['FLOW_OWNER'] =  'user_' . $flowOwnerId;
@@ -932,7 +932,7 @@ class Task implements \IBPWorkflowDocument
 			$fields['PARENT_ID'] = null;
 		}
 
-		if (is_array($fields['COMMENT_RESULT']))
+		if (isset($fields['COMMENT_RESULT']) && (is_array($fields['COMMENT_RESULT'])))
 		{
 			$results = [];
 			/** @var \Bitrix\Tasks\Internals\Task\Result\Result $result */
@@ -945,7 +945,7 @@ class Task implements \IBPWorkflowDocument
 			unset($results, $result);
 		}
 
-		if (is_array($fields['COMMENT_RESULT_LAST']))
+		if (isset($fields['COMMENT_RESULT_LAST']) && (is_array($fields['COMMENT_RESULT_LAST'])))
 		{
 			$fields['COMMENT_RESULT_LAST'] = htmlspecialcharsback($fields['COMMENT_RESULT_LAST']['TEXT']);
 		}
@@ -1053,7 +1053,7 @@ class Task implements \IBPWorkflowDocument
 		return $multiple ? $result : reset($result);
 	}
 
-	private static function setFlowMessages(array $fields): array
+	public static function setFlowMessages(array $fields): array
 	{
 		$flowId = (int)($fields['FLOW_ID'] ?? 0);
 

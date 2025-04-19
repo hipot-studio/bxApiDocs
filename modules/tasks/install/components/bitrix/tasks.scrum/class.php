@@ -1415,7 +1415,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 
 		if (!$taskId || !$responsibleId)
 		{
-			$this->setError(Loc::getMessage('TASKS_SCRUM_TASK_RESPONSIBLE_UPDATE_ERROR'));
+			$this->setError(Loc::getMessage('TASKS_SCRUM_TASK_RESPONSIBLE_UPDATE_ERROR_MSGVER_1'));
 
 			return null;
 		}
@@ -1426,7 +1426,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 		]);
 		if ($taskService->getErrors())
 		{
-			$this->setError(Loc::getMessage('TASKS_SCRUM_TASK_RESPONSIBLE_UPDATE_ERROR'), $taskService->getErrors());
+			$this->setError(Loc::getMessage('TASKS_SCRUM_TASK_RESPONSIBLE_UPDATE_ERROR_MSGVER_1'), $taskService->getErrors());
 
 			return null;
 		}

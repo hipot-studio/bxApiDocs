@@ -24,6 +24,23 @@ final class FlowBIAnalytics
 		return self::$instance;
 	}
 
+	public function getFlowsDashboardsMenuItems(): array
+	{
+		if (!Loader::includeModule('biconnector'))
+		{
+			return [];
+		}
+
+		if (!class_exists(MenuItemCreatorTasksFlows::class))
+		{
+			return [];
+		}
+
+		return ScopeService::getInstance()->prepareScopeMenuItem(
+			ScopeService::BIC_SCOPE_TASKS_FLOWS,
+		);
+	}
+
 	public function getFlowsDashboards(): array
 	{
 		if (!Loader::includeModule('biconnector'))

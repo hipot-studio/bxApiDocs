@@ -30,6 +30,13 @@ class ExternalConnectionComponent extends CBitrixComponent implements Controller
 		$this->errorCollection = new \Bitrix\Main\ErrorCollection();
 	}
 
+	public function onPrepareComponentParams($arParams)
+	{
+		$arParams['CLOSE_AFTER_CREATE'] = $arParams['CLOSE_AFTER_CREATE'] === 'Y' ? 'Y' : 'N';
+
+		return parent::onPrepareComponentParams($arParams);
+	}
+
 	public function executeComponent($component = null)
 	{
 		$checkAccessResult = $this->checkAccess();
@@ -50,6 +57,7 @@ class ExternalConnectionComponent extends CBitrixComponent implements Controller
 					'id' => $source->getId(),
 					'title' => htmlspecialcharsbx($source->getTitle()),
 					'type' => $source->getType(),
+					'active' => $source->getActive(),
 				];
 				$settings = ExternalSourceSettingsTable::getList([
 					'filter' => [

@@ -48,26 +48,24 @@ class Product extends Controller implements EventBindInterface
 	 */
 	protected function processBeforeAction(Engine\Action $action)
 	{
-		$r = new Result();
+		$result = new Result();
 
 		if ($action->getName() === 'add')
 		{
-			$r = $this->processBeforeAdd($action);
+			$result = $this->processBeforeAdd($action);
 		}
 		else if ($action->getName() === 'update')
 		{
-			$r = $this->processBeforeUpdate($action);
+			$result = $this->processBeforeUpdate($action);
 		}
 		else if ($action->getName() === 'getfieldsbyfilter')
 		{
-			$arguments = $action->getArguments();
-			$arguments['filter']['productType'] = static::TYPE;
-			$action->setArguments($arguments);
+			$result = $this->processBeforeGetFieldsByFilter($action);
 		}
 
-		if (!$r->isSuccess())
+		if (!$result->isSuccess())
 		{
-			$this->addErrors($r->getErrors());
+			$this->addErrors($result->getErrors());
 
 			return null;
 		}
@@ -148,6 +146,25 @@ class Product extends Controller implements EventBindInterface
 	protected function processBeforeAdd(Engine\Action $action): Result
 	{
 		return new Result();
+	}
+
+	protected function processBeforeGetFieldsByFilter(Engine\Action $action): Result
+	{
+		$result = new Result();
+		$arguments = $action->getArguments();
+
+		$filter = $arguments['filter'] ?? [];
+		if (!is_array($filter))
+		{
+			$result->addError(new Error('Incorrect filter format'));
+
+			return $result;
+		}
+		$filter['productType'] = static::TYPE;
+		$arguments['filter'] = $filter;
+		$action->setArguments($arguments);
+
+		return $result;
 	}
 
 	//region Actions
@@ -450,6 +467,12 @@ class Product extends Controller implements EventBindInterface
 
 				return null;
 			}
+		}
+
+		$fields = $this->prepareFieldsForUpdate($fields);
+		if ($fields === null)
+		{
+			return null;
 		}
 
 		$groupFields = $this->splitFieldsByEntity($fields);
@@ -1022,14 +1045,35 @@ class Product extends Controller implements EventBindInterface
 		return $r;
 	}
 
+	protected function prepareDateAliases(array $fields): array
+	{
+		$dateAlias = [
+			'DATE_ACTIVE_FROM' => 'ACTIVE_FROM',
+			'DATE_ACTIVE_TO' => 'ACTIVE_TO',
+		];
+
+		foreach ($dateAlias as $alias => $name)
+		{
+			if (!isset($fields[$name]) && isset($fields[$alias]))
+			{
+				$fields[$name] = $fields[$alias];
+				unset(
+					$fields[$alias],
+				);
+			}
+		}
+
+		return $fields;
+	}
+
 	protected function prepareFieldsForAdd(array $fields): ?array
 	{
-		return $fields;
+		return $this->prepareDateAliases($fields);
 	}
 
 	protected function prepareFieldsForUpdate(array $fields): ?array
 	{
-		return $fields;
+		return $this->prepareDateAliases($fields);
 	}
 
 	protected static function attachIblockSections(array &$result): void

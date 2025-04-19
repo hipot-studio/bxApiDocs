@@ -73,7 +73,7 @@ abstract class CommandHandler
 		return $flow
 			->setResponsibleList($responsibleList)
 			->setOptions($options)
-		;
+			;
 	}
 
 	/**

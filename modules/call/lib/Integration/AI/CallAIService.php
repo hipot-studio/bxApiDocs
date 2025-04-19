@@ -22,6 +22,9 @@ use Bitrix\Call\Model\CallOutcomeTable;
 
 final class CallAIService
 {
+	private const DELAY_WAIT_FOR_RESULT = 900; // 15 minutes
+	private const FINISH_TASK_DEPTH_DAYS = 60;
+
 	private static ?CallAIService $service = null;
 
 	private function __construct()
@@ -255,23 +258,15 @@ final class CallAIService
 						function (Error $processingError)
 						use (&$result, &$task)
 						{
-							$errorCode = $processingError->getCode();
-							$errorMessage = $processingError->getMessage();
-							if (
-								!in_array($errorCode, ['HASH_EXPIRED'])
-								&& ($errorRow = $task->detectRowError($errorMessage))
-							)
-							{
-								$errorMessage = $errorRow;
-							}
+							$error = CallAIError::constructTaskError(CallAIError::AI_TASK_START_FAIL, $processingError, $task);
 
 							$task
 								->setStatus($task::STATUS_FAILED)
-								->setErrorCode($errorCode)
-								->setErrorMessage($errorMessage)
+								->setErrorCode($error->getCode())
+								->setErrorMessage($error->getDescription() ?: $error->getMessage())
 								->save();
 
-							$result->addError(new CallAIError($errorCode, $errorMessage));
+							$result->addError($error);
 						}
 					)
 					->completionsInQueue();
@@ -280,7 +275,7 @@ final class CallAIService
 
 		if (!$result->isSuccess())
 		{
-			$log && $logger->error('AI processing has failed. Task Id:'.$task->getId().' Error: '.$result->getError()->getMessage());
+			$log && $logger->error('AI processing has failed. Task Id:'.$task->getId().' Error: '.$result->getError()?->getMessage());
 			$this->fireCallAiFailedEvent($task, $result->getError());
 		}
 		else
@@ -453,22 +448,13 @@ final class CallAIService
 			return;
 		}
 
-		$error = $event->getParameter('error');
-
-		$errorCode = $error ? $error->getCode() : 'AI_FAILED';
-		$errorMessage = $error ? $error->getMessage() : 'AI job failed';
-		if (
-			!in_array($errorCode, ['HASH_EXPIRED'])
-			&& ($errorRow = $task->detectRowError($errorMessage))
-		)
-		{
-			$error = new Error($errorRow, $errorCode);
-		}
+		$processingError = $event->getParameter('error');
+		$error = CallAIError::constructTaskError(CallAIError::AI_TASK_FAILED, $processingError, $task);
 
 		$task
 			->setStatus(AITask::STATUS_FAILED)
 			->setDateFinished(new DateTime)
-			->setErrorMessage($error->getMessage())
+			->setErrorMessage($error->getDescription() ?: $error->getMessage())
 			->setErrorCode($error->getCode())
 			->save()
 		;
@@ -481,7 +467,7 @@ final class CallAIService
 				. ' TaskId:' . $task->getId()
 				. ' Hash: ' . $hash
 				. ' Code: ' . $error->getCode()
-				. ' Error: ' . $error->getMessage()
+				. ' Error: ' . ($error->getDescription() ?: $error->getMessage())
 			);
 		}
 
@@ -569,10 +555,11 @@ final class CallAIService
 		return $event;
 	}
 
-	public static function finishTasks(int $depthDays = 7): string
+	public static function finishTasks(): string
 	{
 		$service = self::getInstance();
 
+		$depthDays = self::FINISH_TASK_DEPTH_DAYS;
 		$taskList = CallAITaskTable::getList([
 			'filter' => [
 				'<DATE_CREATE' => (new DateTime())->add("-{$depthDays} days")
@@ -584,6 +571,156 @@ final class CallAIService
 			$service->finishTask($task);
 		}
 
-		return __METHOD__. "({$depthDays});";
+		return __METHOD__. "();";
 	}
+
+	//region Expectation
+
+	/**
+	 * Adds agent to checkup ai tasks.
+	 * @param int $callId
+	 * @return void
+	 */
+	public function setupExpectation(int $callId): void
+	{
+		/** @see self::expectCallAiTask */
+		\CAgent::AddAgent(
+			"Bitrix\\Call\\Integration\\AI\\CallAIService::expectCallAiTask({$callId});",
+			'call',
+			'N',
+			self::DELAY_WAIT_FOR_RESULT,
+			'',
+			'Y',
+			\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + self::DELAY_WAIT_FOR_RESULT, 'FULL')
+		);
+	}
+	/**
+	 * Removes agent expecting for ai tasks.
+	 * @param int $callId
+	 * @return void
+	 */
+	public function removeExpectation(int $callId): void
+	{
+		/** @see self::expectCallAiTask */
+		\CAgent::RemoveAgent(
+			"Bitrix\\Call\\Integration\\AI\\CallAIService::expectCallAiTask({$callId});",
+			'call'
+		);
+	}
+
+	/**
+	 * Agent to run ai tasks check.
+	 * @param int $callId
+	 * @return string
+	 */
+	public static function expectCallAiTask(int $callId): string
+	{
+		Loader::includeModule('im');
+
+		$call = Registry::getCallWithId($callId);
+		if (!$call)
+		{
+			return '';
+		}
+
+		$service = self::getInstance();
+
+		$result = $service->checkCallAiTask($callId);
+		if (!$result->isSuccess())
+		{
+			$notifyService = NotifyService::getInstance();
+			$notifyService->sendTaskFailedMessage($result->getError(), $call);
+		}
+
+		if ($result->getData()['repeat'] === true)
+		{
+			return __METHOD__. "({$callId});"; // wait more
+		}
+
+		return '';
+	}
+
+	/**
+	 * @param int $callId
+	 * @return Result
+	 */
+	public function checkCallAiTask(int $callId): Result
+	{
+		$result = new Result();
+		$result->setData(['repeat' => false]);
+
+		$log = function (string $mess)
+		{
+			if (CallAISettings::isLoggingEnable())
+			{
+				Logger::getInstance()->error($mess);
+			}
+		};
+
+		// Check call overview
+		$overview = Outcome::getOutcomeForCall($callId, SenseType::OVERVIEW);
+		if ($overview)
+		{
+			return $result; // ok
+		}
+
+		// Check overview Task
+		$overviewTask = AITask::getTaskForCall($callId, SenseType::OVERVIEW);
+		if ($overviewTask)
+		{
+			if ($overviewTask->isPending())
+			{
+				$log("Check ai task: Call #{$callId}, Overview is still pending.");
+
+				return $result->setData(['repeat' => true]);// wait more
+			}
+			if (!$overviewTask->isFinished())
+			{
+				$log("Check ai task: Call #{$callId}, Overview task has failed.");
+
+				return $result->addError(new CallAIError(CallAIError::AI_OVERVIEW_TASK_ERROR));
+			}
+		}
+
+		// Check transcribe
+		$transcribe = Outcome::getOutcomeForCall($callId, SenseType::TRANSCRIBE);
+		if ($transcribe)
+		{
+			$log("Check ai task: Call #{$callId}, Overview task has failed.");
+
+			return $result->addError(new CallAIError(CallAIError::AI_OVERVIEW_TASK_ERROR));
+		}
+
+		// Check transcribe Task
+		$transcribeTask = AITask::getTaskForCall($callId, SenseType::TRANSCRIBE);
+		if ($transcribeTask)
+		{
+			if ($transcribeTask->isPending())
+			{
+				$log("Check ai task: Call #{$callId}, Transcription is still pending.");
+
+				return $result->setData(['repeat' => true]);// wait more
+			}
+			if ($transcribeTask->isFinished())
+			{
+				$log("Check ai task: Call #{$callId}, Transcription task has failed.");
+
+				return $result->addError(new CallAIError(CallAIError::AI_TRANSCRIBE_TASK_ERROR));
+			}
+		}
+
+		// Check track_pack
+		$trackPack = Track::getTrackForCall($callId, Track::TYPE_TRACK_PACK);
+		if ($trackPack)
+		{
+			$log("Check ai task: Call #{$callId}, Transcription task has failed.");
+
+			return $result->addError(new CallAIError(CallAIError::AI_TRANSCRIBE_TASK_ERROR));
+		}
+
+		$log("Check ai task: Call #{$callId}, Trackpack not received.");
+
+		return $result->addError(new CallAIError(CallAIError::AI_TRACKPACK_NOT_RECEIVED));
+	}
+	//endregion
 }

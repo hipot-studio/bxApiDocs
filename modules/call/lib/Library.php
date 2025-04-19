@@ -29,7 +29,7 @@ class Library
 
 	public static function getCallSliderUrl(int $callId): string
 	{
-		return "/call/?callId={$callId}";
+		return "/call/detail/{$callId}";
 	}
 
 	public static function getCallAiFeedbackUrl(int $callId): string

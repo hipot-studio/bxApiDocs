@@ -2,6 +2,8 @@
 
 namespace Bitrix\Socialnetwork\Integration\UI\EntitySelector;
 
+use Bitrix\Extranet\Enum\User\ExtranetRole;
+use Bitrix\Extranet\Model\ExtranetUserTable;
 use Bitrix\Extranet\Service\ServiceContainer;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Util\StructureHelper;
@@ -161,6 +163,12 @@ class UserProvider extends BaseProvider
 		if (isset($options['lockGuestLink']) && is_bool($options['lockGuestLink']))
 		{
 			$this->options['lockGuestLink'] = $options['lockGuestLink'];
+		}
+
+		$this->options['collabers'] = true;
+		if (isset($options['collabers']) && is_bool($options['collabers']))
+		{
+			$this->options['collabers'] = $options['collabers'];
 		}
 
 		// User Whitelist
@@ -476,7 +484,16 @@ class UserProvider extends BaseProvider
 			$options['userId'] = $dialogOptions['userId'];
 		}
 
-		return static::getUsers($options);
+		static $usersCache = [];
+
+		$cacheKey = md5(serialize($options));
+
+		if (!isset($usersCache[$cacheKey]))
+		{
+			$usersCache[$cacheKey] = static::getUsers($options);
+		}
+
+		return $usersCache[$cacheKey];
 	}
 
 	public function getUserItems(array $options = []): array
@@ -954,6 +971,19 @@ class UserProvider extends BaseProvider
 			$query->addFilter('!=EXTERNAL_AUTH_ID', UserTable::getExternalUserTypes());
 		}
 
+		if (!($options['collabers'] ?? true) && Loader::includeModule('extranet'))
+		{
+			$query->registerRuntimeField(
+				new Reference(
+					'EXTRANET_USER',
+					ExtranetUserTable::class,
+					Join::on('this.ID', 'ref.USER_ID'),
+					['join_type' => Join::TYPE_LEFT]
+				),
+			);
+			$query->addFilter('!=EXTRANET_USER.ROLE', ExtranetRole::Collaber->value);
+		}
+
 		$userIds = self::prepareUserIds($options['userId'] ?? []);
 		$notUserIds = self::prepareUserIds($options['!userId'] ?? []);
 
@@ -1210,7 +1240,7 @@ class UserProvider extends BaseProvider
 					$type = 'integrator';
 				}
 				else if (
-					ModuleManager::isModuleInstalled('extranet')
+					Loader::includeModule('extranet')
 					&& ServiceContainer::getInstance()->getCollaberService()->isCollaberById($user->getId())
 				)
 				{

@@ -208,6 +208,33 @@ abstract class AITask
 
 	abstract public function getAISenseType(): string;
 
+	/**
+	 * Allows to output thw chat error message then task failed.
+	 * @return bool
+	 */
+	public function allowNotifyTaskFailed(): bool
+	{
+		return false;
+	}
+
+	/**
+	 * Check pending state of the task.
+	 * @return bool
+	 */
+	public function isPending(): bool
+	{
+		return $this->getStatus() == self::STATUS_PENDING;
+	}
+
+	/**
+	 * Check pending state of the task.
+	 * @return bool
+	 */
+	public function isFinished(): bool
+	{
+		return $this->getStatus() == self::STATUS_FINISHED;
+	}
+
 	public function getAIEngineCode(): string
 	{
 		return '';
@@ -290,28 +317,6 @@ abstract class AITask
 		}
 
 		return $jsonData;
-	}
-
-	public function detectRowError(string $againstError): string
-	{
-		$history = \Bitrix\AI\Model\HistoryTable::getList([
-			'filter' => [
-				'=CONTEXT_MODULE' => 'call',
-				'=CONTEXT_ID' => $this->getContextId()
-			],
-			'order' => ['ID' => 'DESC'],
-			'limit' => 1,
-		]);
-		if (
-			($row = $history->fetch())
-			&& !empty($row['RESULT_TEXT'])
-			&& $row['RESULT_TEXT'] != $againstError
-		)
-		{
-			return $row['RESULT_TEXT'];
-		}
-
-		return '';
 	}
 
 	public function decodePayload(string $str): string

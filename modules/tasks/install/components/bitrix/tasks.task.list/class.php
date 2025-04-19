@@ -37,6 +37,7 @@ use Bitrix\Tasks\Grid\Task;
 use Bitrix\Tasks\TourGuide;
 use Bitrix\Tasks\Ui\Controls\Column;
 use Bitrix\Tasks\Util\Error\Collection;
+use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ProjectLimit;
 use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Tasks\Access\TaskAccessController;
@@ -148,6 +149,8 @@ class TasksTaskListComponent extends TasksBaseComponent
 					'LAST_EXPORTED_ID' => end($this->arResult['LIST'])['id'],
 				];
 			}
+
+			$this->handleAnalytics();
 
 			return $result;
 		}
@@ -568,20 +571,15 @@ class TasksTaskListComponent extends TasksBaseComponent
 
 			if (!$canViewGroup)
 			{
-				if (isset($arParams['CONTEXT']) && $arParams['CONTEXT'] === Context::getCollab())
-				{
-					$errors->add(
-						'ACCESS_TO_GROUP_DENIED',
-						Loc::getMessage('TASKS_TL_ACCESS_TO_COLLAB_DENIED')
-					);
-				}
-				else
-				{
-					$errors->add(
-						'ACCESS_TO_GROUP_DENIED',
-						Loc::getMessage('TASKS_TL_ACCESS_TO_GROUP_DENIED')
-					);
-				}
+				$message =
+					isset($arParams['CONTEXT']) && $arParams['CONTEXT'] === Context::getCollab()
+					? Loc::getMessage('TASKS_TL_ACCESS_TO_COLLAB_DENIED')
+					: Loc::getMessage('TASKS_TL_ACCESS_TO_GROUP_DENIED');
+
+				$errors->add(
+					'ACCESS_TO_GROUP_DENIED',
+					$message
+				);
 			}
 		}
 
@@ -613,7 +611,7 @@ class TasksTaskListComponent extends TasksBaseComponent
 		{
 			$context =\Bitrix\Main\Context::getCurrent()->getRequest();
 
-			if ( $context->get('ALL_COLUMNS') === 'Y')
+			if ( $context->get('EXPORT_COLUMNS') === 'ALL_COLUMNS')
 			{
 				$this->exportAllColumns = true;
 			}
@@ -1925,6 +1923,19 @@ class TasksTaskListComponent extends TasksBaseComponent
 		return $tasks;
 	}
 
+	private function handleAnalytics()
+	{
+		$section = $this->request->get('ta_sec');
 
+		if ($section === 'left_menu')
+		{
+			$isDemoEnabled = ProjectLimit::isFeatureEnabledByTrial();
+			$analytics = Analytics::getInstance();
+			$analytics->onTaskListView(
+				event: $analytics::EVENT['tasks_projects_view'],
+				params: ['p1' => 'isDemo_' . ($isDemoEnabled ? 'Y' : 'N')],
+			);
+		}
+	}
 
 }

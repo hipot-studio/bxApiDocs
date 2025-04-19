@@ -7,7 +7,9 @@ use Bitrix\Tasks\Internals\Task\RelatedTable;
 
 class Dependence
 {
-	use BaseControlTrait;
+	public function __construct(private int $userId, private int $taskId)
+	{
+	}
 
 	/**
 	 * @param array $depends
@@ -20,8 +22,6 @@ class Dependence
 	 */
 	public function setPrevious($depends = [])
 	{
-		$this->loadTask();
-
 		$this->deleteByTask();
 
 		if (

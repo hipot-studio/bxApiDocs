@@ -7,7 +7,9 @@ use Bitrix\Tasks\Internals\Task\ParameterTable;
 
 class Parameter
 {
-	use BaseControlTrait;
+	public function __construct(private int $userId, private int $taskId)
+	{
+	}
 
 	private const DEFAULT_VALUE = 'N';
 

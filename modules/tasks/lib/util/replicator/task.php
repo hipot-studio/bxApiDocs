@@ -286,7 +286,7 @@ abstract class Task
 			$taskModel = TaskModel::createFromTaskItem($dstInstance);
 			if (!TaskAccessController::can($userId, ActionDictionary::ACTION_TASK_SAVE, null, $taskModel))
 			{
-				$creationResult->getErrors()->add('ACCESS_DENIED.RESPONSIBLE_AND_ORIGINATOR_NOT_ALLOWED', Loc::getMessage('TASKS_REPLICATOR_ACCESS_DENIED'));
+				$creationResult->getErrors()->add('ACCESS_DENIED.RESPONSIBLE_AND_ORIGINATOR_NOT_ALLOWED', Loc::getMessage('TASKS_REPLICATOR_ACCESS_DENIED_MSGVER_1'));
 				return $creationResult;
 			}
 

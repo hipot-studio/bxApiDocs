@@ -49,7 +49,7 @@ $data = [
 		'alfabank' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_ALFABANK'),
 		'cash' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_CASH'),
 		'embedded' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_EMBEDDED'),
-		'tinkoff_bank' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_TINKOFF_BANK'),
+		'tinkoff_bank' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_TBANK'),
 		'installments' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_INSTALLMENTS'),
 		'sbp' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_SBP'),
 	],
@@ -87,8 +87,8 @@ $data = [
 			'PUBLIC' => '',
 		],
 		'tinkoff_bank' => [
-			'MAIN' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_TINKOFF_BANK_DESCRIPTION'),
-			'PUBLIC' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_TINKOFF_BANK_PUBLIC_DESCRIPTION'),
+			'MAIN' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_TBANK_DESCRIPTION'),
+			'PUBLIC' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_TBANK_PUBLIC_DESCRIPTION'),
 		],
 		'installments' => [
 			'MAIN' => Loc::getMessage('SALE_HPS_YANDEX_CHECKOUT_INSTALLMENTS_DESCRIPTION'),

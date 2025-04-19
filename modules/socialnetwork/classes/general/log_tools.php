@@ -6896,7 +6896,7 @@ class CSocNetLogComponent
 				else
 				{
 					$arSubStructure = CIntranetUtils::getSubStructure($siteRootDepartmentId);
-					$arSiteDepartmentId = array_keys($arSubStructure["DATA"]);
+					$arSiteDepartmentId = array_keys($arSubStructure["DATA"] ?? []);
 
 					foreach($arDepartmentId as $userDepartmentId)
 					{

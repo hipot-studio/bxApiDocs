@@ -510,7 +510,10 @@ class PushWatchingManager
 			$link = $this->mapperFactory->getSectionConnection()->getById($row['ID']);
 			try
 			{
-				$manager->subscribeSection($link);
+				if ($link !== null)
+				{
+					$manager->subscribeSection($link);
+				}
 			}
 			catch (Exception $e)
 			{

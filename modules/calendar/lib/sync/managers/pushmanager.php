@@ -83,6 +83,11 @@ class PushManager
 		$data['ENTITY_TYPE'] = $entityType;
 		$data['ENTITY_ID'] = $entityId;
 
+		if (empty($data['RESOURCE_ID']))
+		{
+			return $result->addError(new Error('Resource ID is required.'));
+		}
+
 		/** @var EO_Push $addRsult */
 		if ($addResult = PushTable::add($data)->getObject())
 		{

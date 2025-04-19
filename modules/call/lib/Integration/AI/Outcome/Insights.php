@@ -40,7 +40,5 @@ class Insights
 				$this->isEmpty = empty($this->insights);
 			}
 		}
-
-		return $this;
 	}
 }

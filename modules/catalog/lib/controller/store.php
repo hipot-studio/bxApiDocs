@@ -11,7 +11,6 @@ use CCatalogStore;
 final class Store extends Controller
 {
 	use ListAction; // default listAction realization
-	use GetAction; // default getAction realization
 	use CheckExists; // default implementation of existence check
 
 	//region Actions
@@ -25,10 +24,28 @@ final class Store extends Controller
 	 * @see ListAction::listAction
 	 */
 
-	/**
-	 * public function getAction
-	 * @see GetAction::getAction
-	 */
+	public function getAction($id): ?array
+	{
+		$id = (int)$id;
+
+		if (!$this->exists($id)->isSuccess())
+		{
+			$this->addErrorEntityNotExists();
+
+			return null;
+		}
+
+		if (!$this->checkSpecificStoreReadRight($id))
+		{
+			$this->addError($this->getErrorReadAccessDenied());
+
+			return null;
+		}
+
+		return [
+			$this->getServiceItemName() => $this->get($id),
+		];
+	}
 
 	public function addAction(array $fields)
 	{
@@ -59,6 +76,13 @@ final class Store extends Controller
 			return null;
 		}
 
+		if (!$this->checkSpecificStoreModifyRights($id))
+		{
+			$this->addError($this->getErrorModifyAccessDenied());
+
+			return null;
+		}
+
 		$result = CCatalogStore::Update($id, $fields);
 		if (!$result)
 		{
@@ -82,6 +106,13 @@ final class Store extends Controller
 		if (!$existsResult->isSuccess())
 		{
 			$this->addErrors($existsResult->getErrors());
+
+			return null;
+		}
+
+		if (!$this->checkSpecificStoreModifyRights($id))
+		{
+			$this->addError($this->getErrorModifyAccessDenied());
 
 			return null;
 		}
@@ -126,7 +157,6 @@ final class Store extends Controller
 			!(
 				$this->accessController->check(ActionDictionary::ACTION_CATALOG_READ)
 				|| $this->accessController->check(ActionDictionary::ACTION_STORE_VIEW)
-				|| $this->accessController->check(ActionDictionary::ACTION_STORE_MODIFY)
 			)
 		)
 		{
@@ -160,5 +190,18 @@ final class Store extends Controller
 	protected function getErrorCodeEntityNotExists(): string
 	{
 		return ErrorCode::STORE_ENTITY_NOT_EXISTS;
+	}
+
+	protected function checkSpecificStoreReadRight(int $storeId): bool
+	{
+		return $this->accessController->checkByValue(ActionDictionary::ACTION_STORE_VIEW, (string)$storeId);
+	}
+
+	protected function checkSpecificStoreModifyRights(int $storeId): bool
+	{
+		return
+			$this->accessController->check(ActionDictionary::ACTION_STORE_MODIFY)
+			&& $this->checkSpecificStoreReadRight($storeId)
+		;
 	}
 }

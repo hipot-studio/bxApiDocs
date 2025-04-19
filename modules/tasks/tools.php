@@ -2,6 +2,7 @@
 
 use Bitrix\Tasks\Internals\Task\MetaStatus;
 use Bitrix\Tasks\Internals\Task\Status;
+use Bitrix\Main\Localization\Loc;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -791,7 +792,7 @@ function templatesRenderListItem($template, $arPaths, $depth = 0, $plain = false
 		<td class="task-title-column">
 			<div class="task-title-container">
 				<div class="task-title-info">
-					<?php if ($template["MULTITASK"] == "Y"):?><span class="task-title-multiple" title="<?php echo GetMessage("TASKS_MULTITASK")?>"></span><?php endif?><a href="<?php echo CComponentEngine::MakePathFromTemplate($arPaths["PATH_TO_TEMPLATES_TEMPLATE"], array("template_id" => $template["ID"], "action" => "edit"))?>" class="task-title-link" title=""><?php echo $template["TITLE"]?></a>
+					<?php if ($template["MULTITASK"] == "Y"):?><span class="task-title-multiple" title="<?=Loc::getMessage("TASKS_MULTITASK_MSGVER_1")?>"></span><?php endif?><a href="<?php echo CComponentEngine::MakePathFromTemplate($arPaths["PATH_TO_TEMPLATES_TEMPLATE"], array("template_id" => $template["ID"], "action" => "edit"))?>" class="task-title-link" title=""><?php echo $template["TITLE"]?></a>
 				</div>
 			</div>
 		</td>

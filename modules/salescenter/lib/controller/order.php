@@ -1501,16 +1501,15 @@ class Order extends Base
 		}
 
 		$clientInfo = $this->getClientInfo($options);
-		if (
-			isset($clientInfo['OWNER_ID'])
-			&& isset($clientInfo['OWNER_TYPE_ID'])
-			&& CrmManager::getInstance()->isOwnerEntityExists($clientInfo['OWNER_ID'], $clientInfo['OWNER_TYPE_ID'])
-		)
+		if (isset($clientInfo['OWNER_ID'], $clientInfo['OWNER_TYPE_ID']))
 		{
 			if (
 				!isset($options['context'])
 				|| $options['context'] !== SalesCenter\Component\ContextDictionary::CHAT
-				|| !CrmManager::getInstance()->isOwnerEntityInFinalStage($clientInfo['OWNER_ID'], $clientInfo['OWNER_TYPE_ID'])
+				|| !CrmManager::getInstance()->isOwnerEntityInFinalStage(
+					$clientInfo['OWNER_ID'],
+					$clientInfo['OWNER_TYPE_ID']
+				)
 			)
 			{
 				$result['OWNER_ID'] = $clientInfo['OWNER_ID'];
@@ -1576,7 +1575,11 @@ class Order extends Base
 
 	protected function obtainPaymentFields(array $data)
 	{
+		$ownerId = $data['OWNER_ID'] ?? null;
+		$ownerTypeId = $data['OWNER_TYPE_ID'] ?? null;
+
 		$result = [
+			'DATE_PAY_BEFORE' => $this->getDatePayBefore($ownerId, $ownerTypeId),
 			'PRODUCT' => []
 		];
 
@@ -1618,6 +1621,19 @@ class Order extends Base
 		$result['SUM'] = $sum;
 
 		return $result;
+	}
+
+	protected function getDatePayBefore(?int $ownerId, ?int $ownerTypeId): ?Main\Type\Date
+	{
+		if (
+			!$ownerId
+			|| $ownerTypeId !== CCrmOwnerType::SmartInvoice
+		)
+		{
+			return null;
+		}
+
+		return CrmManager::getInstance()->getSmartInvoiceDateExpired($ownerId);
 	}
 
 	protected function needObtainShipmentFields(array $params) : bool

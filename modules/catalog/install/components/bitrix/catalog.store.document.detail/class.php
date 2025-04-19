@@ -44,8 +44,8 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 	public const COLLECT_RIGHT_COLUMN_EVENT = 'DocumentCard:onCollectRightColumnContent';
 	public const CONDUCT_FAILURE_AFTER_SAVE_EVENT = 'DocumentCard:onConductFailureAfterSave';
 
-	/** @var int $documentId */
-	private $documentId;
+	/** @var null|int $documentId */
+	private ?int $documentId;
 
 	private ?string $documentType = null;
 	/** @var array $document */
@@ -800,13 +800,22 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 	 */
 	private function saveDocument($fields): Main\Result
 	{
+		$result = new Main\Result();
 		$contractorProviderSaveResult = null;
 		if ($this->contractorsProvider)
 		{
+			$contractorProviderAccessResult = $this->contractorsProvider::checkAccessRights(
+				(int)$this->documentId,
+				$fields,
+			);
+			if (!$contractorProviderAccessResult->isSuccess())
+			{
+				return $result->addErrors($contractorProviderAccessResult->getErrors());
+			}
+
 			$contractorProviderSaveResult = $this->contractorsProvider::onBeforeDocumentSave($fields);
 		}
 
-		$result = new Main\Result();
 		$entityId = null;
 		if ($this->isNew())
 		{
@@ -1479,10 +1488,8 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 			}
 
 			if (
-				$existElement
-				&& $this->isChangedElement($existElement, $elementFields)
-				&& $elementFields['STORE_TO'] !== null
-				&& $elementFields['STORE_FROM'] !== null
+				!$existElement
+				|| $this->isChangedElement($existElement, $elementFields)
 			)
 			{
 				$can = $this->accessController->check(

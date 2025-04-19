@@ -14,6 +14,7 @@ use Bitrix\Main\ORM\Query\Filter;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Search\Content;
+use Bitrix\Socialnetwork\Collab\CollabFeature;
 use Bitrix\Socialnetwork\Collab\Integration\IM;
 use Bitrix\Socialnetwork\EO_Workgroup;
 use Bitrix\Socialnetwork\EO_Workgroup_Collection;
@@ -196,8 +197,8 @@ class ProjectProvider extends BaseProvider
 		$projects = $this->getProjectCollection(['limit' => $limit]);
 		$dialog->addItems($this->makeProjectItems($projects, ['tabs' => 'projects']));
 		$currentUserId = UserProvider::getCurrentUserId();
-		$userService = new User($currentUserId);
-		$isCollaber = $userService->isCollaber();
+		$user = new User($currentUserId);
+		$isCollaber = $user->isCollaber();
 /*
 		if ($projects->count() < $limit)
 		{
@@ -386,6 +387,16 @@ class ProjectProvider extends BaseProvider
 		if (isset($options['project']) && is_bool(isset($options['project'])))
 		{
 			$query->where('PROJECT', $options['project'] ? 'Y' : 'N');
+		}
+
+		if (!CollabFeature::isFeatureEnabledInPortalSettings())
+		{
+			$options['!type'] ??= [];
+
+			if (is_array($options['!type']) && !in_array(Type::Collab->value, $options['!type']))
+			{
+				$options['!type'][] = Type::Collab->value;
+			}
 		}
 
 		if (!empty($options['!type']) && is_array($options['!type']))

@@ -14,8 +14,10 @@ class Analytics extends Common
 	public const TOOL = 'tasks';
 
 	public const TASK_CATEGORY = 'task_operations';
+	public const CATEGORY = 'tasks';
 	public const COMMENT_CATEGORY = 'comments_operations';
 	public const FLOW_CATEGORY = 'flows';
+	public const LEAD_CATEGORY = 'lead';
 
 	public const TASK_TYPE = 'task';
 	public const COMMENT_TYPE = 'comment';
@@ -34,11 +36,16 @@ class Analytics extends Common
 		'comments_counters_on' => 'comments_counters_on',
 		'flow_create_start' => 'flow_create_start',
 		'flow_create_finish' => 'flow_create_finish',
+		'flow_edit_start' => 'flow_edit_start',
+		'flow_edit_finish' => 'flow_edit_finish',
 		'flows_view' => 'flows_view',
+		'lead_view' => 'lead_view',
+		'tasks_projects_view' => 'tasks_projects_view',
 	];
 
 	public const SECTION = [
 		'tasks' => 'tasks',
+		'lead' => 'lead',
 		'project' => 'project',
 		'scrum' => 'scrum',
 		'crm' => 'crm',
@@ -50,6 +57,7 @@ class Analytics extends Common
 		'comment' => 'comment',
 		'flows' => 'flows',
 		'collab' => 'collab',
+		'onboarding_notification' => 'onboarding_notification',
 	];
 
 	public const SUB_SECTION = [
@@ -69,10 +77,13 @@ class Analytics extends Common
 		'flows_grid' => 'flows_grid',
 		'group_card' => 'group_card',
 		'flow_guide' => 'flow_guide',
+		'copilot_advice' => 'copilot_advice',
 	];
 
 	public const ELEMENT = [
 		'create_button' => 'create_button',
+		'edit_button' => 'edit_button',
+		'save_changes_button' => 'save_changes_button',
 		'quick_button' => 'quick_button',
 		'left_menu' => 'left_menu',
 		'horizontal_menu' => 'horizontal_menu',
@@ -191,6 +202,31 @@ class Analytics extends Common
 		);
 	}
 
+	public function onTaskListView(
+		string $event,
+		?string $section = null,
+		?string $element = null,
+		?string $subSection = null,
+		array $params = [],
+	): void
+	{
+		$analyticsEvent = new AnalyticsEvent(
+			$event,
+			self::TOOL,
+			self::CATEGORY,
+		);
+
+		$this->sendAnalytics(
+			$analyticsEvent,
+			$section,
+			$element,
+			$subSection,
+			true,
+			self::TASK_TYPE,
+			$params,
+		);
+	}
+
 	public function onFlowCreate(
 		string $event,
 		string $section,
@@ -202,6 +238,40 @@ class Analytics extends Common
 		$availableEvents = [
 			'flow_create_start',
 			'flow_create_finish',
+		];
+		if (!in_array($event, $availableEvents, true))
+		{
+			return;
+		}
+
+		$analyticsEvent = new AnalyticsEvent(
+			$event,
+			self::TOOL,
+			self::FLOW_CATEGORY,
+		);
+
+		$this->sendAnalytics(
+			$analyticsEvent,
+			$section,
+			$element,
+			$subSection,
+			true,
+			self::TASK_TYPE,
+			$params,
+		);
+	}
+
+	public function onFlowEdit(
+		string $event,
+		string $section,
+		?string $element = null,
+		?string $subSection = null,
+		array $params = []
+	): void
+	{
+		$availableEvents = [
+			'flow_edit_start',
+			'flow_edit_finish',
 		];
 		if (!in_array($event, $availableEvents, true))
 		{
@@ -314,6 +384,30 @@ class Analytics extends Common
 		);
 
 		$this->sendAnalytics($analyticsEvent, $section, $element, $subSection);
+	}
+
+	public function onLeadView(
+		string $section,
+		?string $element = null,
+		?string $subSection = null,
+		array $params = []
+	): void
+	{
+		$analyticsEvent = new AnalyticsEvent(
+			self::EVENT['lead_view'],
+			self::TOOL,
+			self::LEAD_CATEGORY,
+		);
+
+		$this->sendAnalytics(
+			$analyticsEvent,
+			$section,
+			$element,
+			$subSection,
+			true,
+			'',
+			$params,
+		);
 	}
 
 	public function onFirstProjectCreation(): void

@@ -349,6 +349,24 @@ class CrmManager extends Base
 		return true;
 	}
 
+	public function getExistingOwnerEntityIds(int $ownerTypeId, array $ownerIds): array
+	{
+		$factory = Crm\Service\Container::getInstance()->getFactory($ownerTypeId);
+		if (!$factory)
+		{
+			return [];
+		}
+
+		$existingEntities = [];
+		$items = $factory->getItems(['select' => ['ID'], 'filter' => ['=ID' => $ownerIds]]);
+		foreach ($items as $item)
+		{
+			$existingEntities[] = $item->getId();
+		}
+
+		return $existingEntities;
+	}
+
 
 	/**
 	 * @param int $ownerId
@@ -1658,5 +1676,22 @@ class CrmManager extends Base
 				? Container::getInstance()->getTerminalPaymentService()->getRuntimeReferenceField()
 				: null
 		;
+	}
+
+	public function getSmartInvoiceDateExpired(int $id): ?Main\Type\Date
+	{
+		$factory = Crm\Service\Container::getInstance()->getFactory(CCrmOwnerType::SmartInvoice);
+		if (!$factory)
+		{
+			return null;
+		}
+
+		$item = $factory->getItem($id);
+		if (!$item)
+		{
+			return null;
+		}
+
+		return $item->getClosedate();
 	}
 }

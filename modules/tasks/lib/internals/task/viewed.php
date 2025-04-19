@@ -19,6 +19,7 @@ use Bitrix\Tasks\Integration\Pull\PushService;
 use Bitrix\Tasks\Internals\Counter\CounterService;
 use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\Internals\Log\Logger;
+use Bitrix\Tasks\Internals\Task\Event\View\OnTaskFirstViewEvent;
 use Bitrix\Tasks\Internals\TaskDataManager;
 use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\MemberTable;
@@ -444,5 +445,9 @@ class ViewedTable extends TaskDataManager
 			->setUserId($userId)
 			->onTaskViewed()
 			->save();
+
+		$event = new OnTaskFirstViewEvent($userId, $taskId);
+
+		$event->send();
 	}
 }

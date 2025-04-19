@@ -290,6 +290,12 @@ class CExtranet
 					}
 				}
 
+
+				if (self::isVoteResultUrl($curPage))
+				{
+					$URLToRedirect = self::replaceVoteResultUrl($curPage, $arExtranetSite['DIR'] ?? '');
+				}
+
 				if (!$URLToRedirect)
 				{
 					$URLToRedirect = ($arExtranetSite["SERVER_NAME"] <> '' ? (CMain::IsHTTPS() ? "https" : "http") . "://" . $arExtranetSite["SERVER_NAME"] : "") . $arExtranetSite["DIR"];
@@ -1649,6 +1655,21 @@ class CExtranet
 				$CACHE_MANAGER->clearByTag('extranet_user_' . $userId);
 			}
 		}
+	}
+
+	private static function isVoteResultUrl(string $currentUrl): bool
+	{
+		return str_starts_with($currentUrl, '/vote-result/');
+	}
+
+	private static function replaceVoteResultUrl(string $currentUrl, string $extranetSiteDir): string
+	{
+		$extranetUrl = rtrim($extranetSiteDir, '/') . $currentUrl;
+
+		return (new \Bitrix\Main\Web\Uri($extranetUrl))
+			->deleteParams(['signedAttachId'])
+			->getUri()
+		;
 	}
 }
 

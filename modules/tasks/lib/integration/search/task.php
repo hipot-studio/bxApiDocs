@@ -74,7 +74,7 @@ final class Task extends \Bitrix\Tasks\Integration
 					$task["AUDITORS"]
 				)
 			);
-			$usersData = User::getData($participants);
+			$usersData = User::getData($participants, ['ID', 'LID']);
 
 			foreach ($usersData as $data)
 			{

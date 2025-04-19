@@ -687,6 +687,13 @@ class TaskService implements Errorable
 	{
 		if (!$taskId)
 		{
+			$this->errorCollection->setError(
+				new Error(
+					'Task id not specified',
+					self::ERROR_COULD_NOT_CHECK_COMPLETED_TASK
+				)
+			);
+
 			return false;
 		}
 
@@ -701,7 +708,7 @@ class TaskService implements Errorable
 				],
 				['ID']
 			);
-			return ($queryObject->fetch() ? true : false);
+			return (bool)$queryObject->fetch();
 		}
 		catch (\Exception $exception)
 		{
@@ -1366,6 +1373,11 @@ class TaskService implements Errorable
 
 	public function getTasksInfo(array $taskIds): array
 	{
+		if (empty($taskIds))
+		{
+			return [];
+		}
+
 		try
 		{
 			$tasksInfo = [];

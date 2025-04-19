@@ -26,6 +26,7 @@ use Bitrix\Socialnetwork\Collab\CollabFeature;
 use Bitrix\Socialnetwork\EO_WorkgroupPin;
 use Bitrix\Socialnetwork\FeatureTable;
 use Bitrix\Socialnetwork\FeaturePermTable;
+use Bitrix\Socialnetwork\Integration\Intranet\Settings;
 use Bitrix\Socialnetwork\Integration\Pull\PushService;
 use Bitrix\Socialnetwork\Integration\Pull;
 use Bitrix\Socialnetwork\WorkgroupPinTable;
@@ -395,6 +396,11 @@ class Workgroup
 			)
 			{
 				$query->addFilter('!=CLOSED', 'Y');
+			}
+
+			if (\Bitrix\Socialnetwork\Integration\Extranet\User::isCollaber($userId))
+			{
+				$query->where('TYPE', Item\Workgroup\Type::Collab->value);
 			}
 
 			$query->addSelect('ID');
@@ -1765,6 +1771,11 @@ class Workgroup
 					'SCRUM_PROJECT' => 'N',
 					'EXTERNAL' => 'Y',
 				];
+
+				if (!CollabFeature::isFeatureEnabledInPortalSettings())
+				{
+					$result['collab']['LIMIT_FEATURE'] = Settings::LIMIT_FEATURES['collab'];
+				}
 			}
 
 			$result['group'] = [

@@ -68,6 +68,8 @@ class TaskPathMaker extends PathMaker
 				break;
 		}
 
-		return str_replace($search, $replace, $subject);
+		$path = str_replace($search, $replace, $subject);
+
+		return $path . $this->queryParams;
 	}
 }

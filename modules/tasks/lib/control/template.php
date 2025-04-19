@@ -6,6 +6,7 @@ use Bitrix\Main\Application;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\Control\Exception\TemplateAddException;
 use Bitrix\Tasks\Control\Exception\TemplateUpdateException;
+use Bitrix\Tasks\Control\Exception\UserFieldTemplateAddException;
 use Bitrix\Tasks\Control\Handler\Exception\TemplateFieldValidateException;
 use Bitrix\Tasks\Control\Handler\TemplateFieldHandler;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
@@ -95,6 +96,8 @@ class Template
 	 */
 	public function add(array $fields): TemplateObject
 	{
+		$this->reset();
+
 		try
 		{
 			$fields = $this->prepareFields($fields);
@@ -117,7 +120,8 @@ class Template
 		if (!$this->ufManager->CheckFields(\Bitrix\Tasks\Util\UserField\Task\Template::getEntityCode(), 0, $fields, $this->userId))
 		{
 			$msg = $this->getApplicationError();
-			throw new TemplateAddException($msg);
+
+			throw new UserFieldTemplateAddException($msg);
 		}
 
 		try
@@ -157,6 +161,8 @@ class Template
 		{
 			return false;
 		}
+
+		$this->reset();
 
 		$this->templateId = $id;
 
@@ -224,6 +230,8 @@ class Template
 		{
 			throw new TemplateUpdateException();
 		}
+
+		$this->reset();
 
 		$this->templateId = $id;
 		$template = $this->getTemplateData();
@@ -829,5 +837,11 @@ class Template
 		$this->application = $APPLICATION;
 
 		$this->replicator = new RegularTemplateTaskReplicator($this->userId);
+	}
+
+	private function reset(): void
+	{
+		$this->templateId = null;
+		$this->template = null;
 	}
 }

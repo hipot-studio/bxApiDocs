@@ -60,6 +60,7 @@ use Bitrix\Tasks\Flow\Provider\TaskProvider;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
 use Bitrix\Tasks\Internals\Routes\RouteDictionary;
 use Bitrix\Tasks\Integration\Extranet\User;
+use Bitrix\Tasks\Integration\Intranet\Settings;
 
 final class TasksFlowListComponent extends CBitrixComponent implements Controllerable, Errorable
 {
@@ -203,6 +204,7 @@ final class TasksFlowListComponent extends CBitrixComponent implements Controlle
 
 		$this->arResult['guidePhotoClass'] = $this->getGuidePhotoClass();
 
+		$this->arResult['isBiAnalyticsAvailable'] = (new Settings())->isToolAvailable('crm_bi');
 		$this->sendAnalytics();
 
 		$this->includeComponentTemplate();

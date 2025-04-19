@@ -32,6 +32,7 @@ use Bitrix\Socialnetwork\Collab\Provider\CollabProvider;
 use Bitrix\Socialnetwork\Collab\Log\Entry\CopyInvitationLinkLogEntry;
 use Bitrix\Socialnetwork\Collab\Registry\CollabRegistry;
 use Bitrix\Socialnetwork\Collab\User\Stepper\SendCollabLeaveMessageStepper;
+use Bitrix\Socialnetwork\ComponentHelper;
 use Bitrix\Socialnetwork\Integration\Disk\ObjectType;
 use Bitrix\Socialnetwork\Integration\Tasks\TaskStatus;
 
@@ -344,7 +345,7 @@ final class EventDispatcher
 
 		ActionMessageFactory::getInstance()
 			->getActionMessage(ActionType::CopyLink, $collabId, $userId)
-			->runAction()
+			->send()
 		;
 
 		$logEntry = new CopyInvitationLinkLogEntry(userId: $userId, collabId: $collabId);
@@ -364,8 +365,14 @@ final class EventDispatcher
 
 		ActionMessageFactory::getInstance()
 			->getActionMessage(ActionType::RegenerateLink, $collabId, $userId)
-			->runAction()
+			->send()
 		;
+	}
+
+	public static function onCollabToolSettingUpdate(Event $event): void
+	{
+		global $CACHE_MANAGER;
+		$CACHE_MANAGER->ClearByTag(ComponentHelper::MAIN_SELECTOR_GROUPS_CACHE_TAG);
 	}
 
 	private static function sendAddEvent(CollabEntity $entity): void

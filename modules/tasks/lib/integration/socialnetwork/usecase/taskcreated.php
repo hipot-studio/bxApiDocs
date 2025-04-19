@@ -130,35 +130,20 @@ class TaskCreated extends BaseCase
 
 			\CSocNetLog::Update($logId, $logFields);
 
+			$taskMembers = $message->getMetaData()->getUserRepository()->getRecepients(
+				$task,
+				$message->getSender()
+			);
+			$rights = $this->recepients2Rights($taskMembers);
 
-			if (SpaceService::useNotificationStrategy())
+			if ($task->getGroupId())
 			{
-				if ($task->getGroupId())
-				{
-					$this->addGroupRights($message, $task->getGroupId(), $logId);
-				}
-
-				$this->addUserRights($message, $message->getSender(), $logId);
-				$this->addUserRights($message, $message->getRecepient(), $logId);
-			}
-			else
-			{
-				$taskMembers = $message->getMetaData()->getUserRepository()->getRecepients(
-					$task,
-					$message->getSender()
+				$rights = array_merge(
+					$rights, ['SG' . $task->getGroupId()]
 				);
-				$rights = $this->recepients2Rights($taskMembers);
-
-				if ($task->getGroupId())
-				{
-					$rights = array_merge(
-						$rights,
-						['SG' . $task->getGroupId()]
-					);
-				}
-
-				\CSocNetLogRights::Add($logId, $rights);
 			}
+
+			\CSocNetLogRights::Add($logId, $rights);
 
 			\CSocNetLog::SendEvent($logId, 'SONET_NEW_EVENT', $logId);
 		}

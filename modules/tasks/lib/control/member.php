@@ -11,10 +11,20 @@ use Bitrix\Tasks\Control\Exception\TaskNotFoundException;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
 use Bitrix\Tasks\Integration\Pull\PushService;
 use Bitrix\Tasks\Internals\Task\MemberTable;
+use Bitrix\Tasks\Internals\TaskObject;
+use Bitrix\Tasks\Internals\TaskTable;
 
 class Member
 {
-	use BaseControlTrait;
+	private int $userId;
+	private int $taskId;
+	private ?TaskObject $task = null;
+
+	public function __construct(int $userId, int $taskId)
+	{
+		$this->userId = $userId;
+		$this->taskId = $taskId;
+	}
 
 	private const FIELD_CREATED_BY = 'CREATED_BY';
 	private const FIELD_RESPONSIBLE_ID = 'RESPONSIBLE_ID';
@@ -30,7 +40,7 @@ class Member
 	 */
 	public function set(array $data, array $changes = []): void
 	{
-		$this->loadTask();
+		$this->loadTaskMembers();
 		$members = $this->getCurrentMembers();
 		$this->deleteByTask();
 
@@ -124,6 +134,29 @@ class Member
 		Application::getConnection()->query($sql);
 
 		$this->unsubscribeExcludedUsers($changes, $members);
+	}
+
+	/**
+	 * @throws TaskNotFoundException
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	private function loadTaskMembers(): void
+	{
+		if ($this->task)
+		{
+			return;
+		}
+
+		$select = ['CREATED_BY', 'RESPONSIBLE_ID'];
+		$this->task = TaskTable::getByPrimary($this->taskId, ['select' => $select])->fetchObject();
+		if (!$this->task)
+		{
+			throw new TaskNotFoundException();
+		}
+
+		$this->task->fillMemberList();
 	}
 
 	/**

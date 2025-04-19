@@ -65,11 +65,11 @@ class MainButton extends BaseContent
 
 	private function isExpired(): bool
 	{
-		return $this->license->getExpireDate() < new Date();
+		return $this->license->isTimeBound() && $this->license->getExpireDate() < new Date();
 	}
 
 	private function isAlmostExpired(): bool
 	{
-		return $this->expirationNotifier->shouldNotifyAboutAlmostExpiration();
+		return $this->license->isTimeBound() && $this->expirationNotifier->shouldNotifyAboutAlmostExpiration();
 	}
 }

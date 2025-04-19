@@ -367,8 +367,9 @@ class BasketComponentHelper
 
 			if ($updateSessionData)
 			{
-				static::clearFUserBasketPrice($fuserId, SITE_ID);
-				static::clearFUserBasketQuantity($fuserId, SITE_ID);
+				$siteId = $basket->getSiteId();
+				static::clearFUserBasketPrice($fuserId, $siteId);
+				static::clearFUserBasketQuantity($fuserId, $siteId);
 			}
 		}
 

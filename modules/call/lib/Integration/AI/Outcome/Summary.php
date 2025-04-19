@@ -51,7 +51,5 @@ class Summary
 				$this->isEmpty = empty($this->summary);
 			}
 		}
-
-		return $this;
 	}
 }

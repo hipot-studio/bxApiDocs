@@ -27,6 +27,28 @@ CBitrixComponent::includeComponentClass("bitrix:tasks.base");
 
 class TasksDepartmentsOverviewComponent extends TasksBaseComponent
 {
+	public function executeComponent()
+	{
+		$this->sendAnalytics();
+
+		return parent::executeComponent();
+	}
+
+	private function sendAnalytics(): void
+	{
+		$request = Main\Context::getCurrent()?->getRequest();
+
+		if (!empty($request->get('ta_sec')))
+		{
+			\Bitrix\Tasks\Helper\Analytics::getInstance($this->userId)->onLeadView(
+				$request->get('ta_sec'),
+				$request->get('ta_el'),
+				$request->get('ta_sub'),
+				['p1' => $request->get('p1')]
+			);
+		}
+	}
+
 	protected static function checkRequiredModules(array &$arParams, array &$arResult, Collection $errors, array $auxParams = [])
 	{
 		if (!Loader::includeModule('intranet'))

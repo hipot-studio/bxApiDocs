@@ -72,14 +72,14 @@ class SharingEventManager
 
 		if (!$this->doesEventHasCorrectTime())
 		{
-			$result->addError(new Error(Loc::getMessage('EC_SHARINGAJAX_USER_BUSY')));
+			$result->addError(new Error('Incorrect time has given'));
 
 			return $result;
 		}
 
 		if (!$this->doesEventSatisfyRule())
 		{
-			$result->addError(new Error(Loc::getMessage('EC_SHARINGAJAX_USER_BUSY')));
+			$result->addError(new Error('Event time does not satisfy owner rule'));
 
 			return $result;
 		}
@@ -103,7 +103,7 @@ class SharingEventManager
 		}
 
 		$eventId = (new Mappers\Event())->create($this->event, [
-			'sendInvitations' => $sendInvitations
+			'sendInvitations' => $sendInvitations,
 		])?->getId();
 
 		$this->event->setId($eventId);
@@ -407,7 +407,7 @@ class SharingEventManager
 			'guestId' => $userId,
 			'eventId' => $event['PARENT_ID'],
 			'userId' => $eventLink->getOwnerId(),
-			'fields' => $event
+			'fields' => $event,
 		]);
 	}
 
@@ -695,13 +695,11 @@ class SharingEventManager
 
 	private function doesEventSatisfyRule(): bool
 	{
-		$start = new DateTime($this->event->getStart()->toString());
-		$end = new DateTime($this->event->getEnd()->toString());
-		$fromTs = Util::getDateTimestampUtc($start, $this->event->getStartTimeZone());
-		$toTs = Util::getDateTimestampUtc($end, $this->event->getEndTimeZone());
+		$start = new DateTime($this->event->getStart()->toString(), null, new \DateTimeZone('UTC'));
+		$end = new DateTime($this->event->getEnd()->toString(), null, new \DateTimeZone('UTC'));
 
 		$rule = $this->link->getSharingRule();
-		$eventDurationMinutes = ($toTs - $fromTs) / 60;
+		$eventDurationMinutes = ($end->getTimestamp() - $start->getTimestamp()) / 60;
 		if ($eventDurationMinutes !== $rule->getSlotSize())
 		{
 			return false;
@@ -738,13 +736,22 @@ class SharingEventManager
 			}
 		}
 
-		$offset = $this->getOffset() / 60;
+
+		$eventOffset = Util::getTimezoneOffsetUTC($this->event->getStartTimeZone()?->getTimeZone()->getName());
+		$userOffset = $this->getOffset();
+
+		// Calculated as time of event in owner timezone
+		$fromTs = $start->getTimestamp() - ($eventOffset - $userOffset);
+		$toTs = $end->getTimestamp() - ($eventOffset - $userOffset);
+
+		//Minutes and range are in owner time so we can check them
 		$minutesFrom = ($fromTs % 86400) / 60;
 		$minutesTo = ($toTs % 86400) / 60;
 		$weekday = (int)gmdate('N', $fromTs) % 7;
+
 		foreach ($availableTime[$weekday] as $range)
 		{
-			if ($minutesFrom >= $range['from'] - $offset && $minutesTo <= $range['to'] - $offset)
+			if ($minutesFrom >= $range['from'] && $minutesTo <= $range['to'])
 			{
 				return true;
 			}
@@ -785,8 +792,8 @@ class SharingEventManager
 			'arFilter' => [
 				'OWNER_ID' => $userId,
 				'CAL_TYPE' => 'user',
-				'ACTIVE' => 'Y'
-			]
+				'ACTIVE' => 'Y',
+			],
 		]);
 
 		if (!$result)
@@ -843,7 +850,7 @@ class SharingEventManager
 					'arFields' => $event,
 					'userId' => $eventLink->getOwnerId(),
 					'checkPermission' => false,
-					'sendInvitations' => true
+					'sendInvitations' => true,
 				]);
 			}
 		}
@@ -868,7 +875,7 @@ class SharingEventManager
 			'arFilter' => [
 				'OWNER_ID' => $groupId,
 				'CAL_TYPE' => Dictionary::CALENDAR_TYPE['group'],
-				'ACTIVE' => 'Y'
+				'ACTIVE' => 'Y',
 			],
 			'checkPermissions' => false,
 			'getPermissions' => false,
@@ -914,7 +921,10 @@ class SharingEventManager
 			'OWNER_ID' => $userId,
 			'SECTIONS' => [$sectionId],
 			'ATTENDEES_CODES' => $attendeesCodes,
-			'EVENT_TYPE' => Dictionary::EVENT_TYPE['shared'],
+			'EVENT_TYPE' => $link instanceof Sharing\Link\CrmDealLink
+				? Dictionary::EVENT_TYPE['shared_crm']
+				: Dictionary::EVENT_TYPE['shared']
+			,
 		];
 	}
 

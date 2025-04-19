@@ -930,6 +930,10 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			foreach ($payableItemCollection as $payableItem)
 			{
 				$entity = $payableItem->getEntityObject();
+				if (!$entity)
+				{
+					continue;
+				}
 
 				$item = $entity->getFieldValues();
 				$item['BASKET_CODE'] = $entity->getBasketCode();
@@ -2223,9 +2227,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 				Main\Loader::includeModule('salescenter');
 				Main\Loader::includeModule('crm');
 
-				global $USER;
-				$crmPerms = new \CCrmPerms($USER->GetID());
-				if (!$crmPerms->HavePerm('CONFIG', BX_CRM_PERM_CONFIG, 'WRITE'))
+				if (!Container::getInstance()->getUserPermissions()->isCrmAdmin())
 				{
 					$this->addError(new Main\Error(
 						Loc::getMessage('SALESCENTER_CRM_PERMISSION_DENIED'),

@@ -120,7 +120,7 @@ class Product
 		$defaultDescription = [
 			'IS_METRIC' => 'N',
 			'FIELD_NAME' => 'null',
-			'FILED_TYPE' => 'int',
+			'FIELD_TYPE' => 'int',
 		];
 		if (!$crmCatalogIblockOfferId)
 		{

@@ -7,10 +7,12 @@ use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Text\Emoji;
+use Bitrix\Socialnetwork\FeatureTable;
 use Bitrix\Socialnetwork\Helper\Workgroup;
 use Bitrix\Socialnetwork\Helper\Path;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
+use Bitrix\Socialnetwork\Site\Site;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ProjectLimit;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ScrumLimit;
@@ -249,6 +251,11 @@ class CAllSocNetGroup
 			$arFields['TYPE'] = Type::getValue($arFields['TYPE']);
 		}
 
+		if (!is_string($arFields['KEYWORDS'] ?? ''))
+		{
+			unset($arFields['KEYWORDS']);
+		}
+
 		return true;
 	}
 
@@ -422,6 +429,7 @@ class CAllSocNetGroup
 			unset($sonetGroupCache[$ID]);
 			self::setStaticCache($sonetGroupCache);
 			GroupRegistry::getInstance()->invalidate($ID);
+			FeatureTable::cleanCache();
 		}
 
 		if ($bSuccess)
@@ -1545,16 +1553,17 @@ class CAllSocNetGroup
 				$arIDs[] = $arRequests["ID"];
 			}
 
-			$userId = \Bitrix\Socialnetwork\Helper\User::getCurrentUserId();
-			if ($userId)
+			if (!$currentUserId)
 			{
-				CSocNetUserToGroup::ConfirmRequestToBeMember(
-					$userId,
-					$groupId,
-					$arIDs,
-					$bAutoSubscribe,
-				);
+				$currentUserId = \Bitrix\Socialnetwork\Helper\User::getCurrentUserId();
 			}
+
+			CSocNetUserToGroup::ConfirmRequestToBeMember(
+				$currentUserId,
+				$groupId,
+				$arIDs,
+				$bAutoSubscribe,
+			);
 		}
 	}
 

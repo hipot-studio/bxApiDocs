@@ -5,6 +5,7 @@ namespace Bitrix\Tasks\Flow\Demo;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Tasks\Control\Exception\UserFieldTemplateAddException;
 use Bitrix\Tasks\Control\Template;
 use Bitrix\Tasks\Flow\Control\Command\AddDemoCommand;
 use Bitrix\Tasks\Flow\Control\Exception\CommandNotFoundException;
@@ -65,7 +66,14 @@ class Service
 		$data['RESPONSIBLE_ID'] = $this->creatorId;
 		$data['CREATED_BY'] = $this->creatorId;
 
-		$template = $templateService->add($data);
+		try
+		{
+			$template = $templateService->add($data);
+		}
+		catch (UserFieldTemplateAddException)
+		{
+			return 0;
+		}
 
 		return $template->getId();
 	}

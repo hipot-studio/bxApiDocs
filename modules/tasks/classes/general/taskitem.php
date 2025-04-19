@@ -3457,6 +3457,13 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		{
 			$parentId = (int)($fields['PARENT_ID'] ?? null);
 			$event = $parentId ? Analytics::EVENT['subtask_add'] : Analytics::EVENT['task_create'];
+			$params = array_merge(
+				$fields['TASKS_ANALYTICS_PARAMS'] ?? [],
+				[
+					'p3' => 'auditorsCount_' . count($fields['AUDITORS'] ?? []),
+					'p5' => 'accomplicesCount_' . count($fields['ACCOMPLICES'] ?? []),
+				]
+			);
 
 			Analytics::getInstance($userId)->onTaskCreate(
 				$fields['TASKS_ANALYTICS_CATEGORY'] ?: Analytics::TASK_CATEGORY,
@@ -3465,7 +3472,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 				$fields['TASKS_ANALYTICS_ELEMENT'] ?? null,
 				$fields['TASKS_ANALYTICS_SUB_SECTION'] ?? null,
 				$status,
-				$fields['TASKS_ANALYTICS_PARAMS'] ?? [],
+				$params,
 			);
 		}
 	}

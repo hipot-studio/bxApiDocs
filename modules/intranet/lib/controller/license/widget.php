@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\Controller\license;
 
+use Bitrix\Intranet\ActionFilter\AdminUser;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Intranet\License;
@@ -10,6 +11,14 @@ use Bitrix\Main\Error;
 
 class Widget extends Controller
 {
+	public function getDefaultPreFilters(): array
+	{
+		$prefilters = parent::getDefaultPreFilters();
+		$prefilters[] = new AdminUser();
+
+		return $prefilters;
+	}
+
 	public function getDynamicContentAction(): AjaxJson
 	{
 		try

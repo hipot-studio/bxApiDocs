@@ -370,25 +370,34 @@ class SprintService implements Errorable
 
 			foreach ($taskIdsToComplete as $taskIdToComplete)
 			{
-				if (!$taskService->isCompletedTask($taskIdToComplete))
+				$isCompletedTask = $taskService->isCompletedTask($taskIdToComplete);
+				if ($taskService->getErrors())
+				{
+					$this->errorCollection->add($taskService->getErrors());
+
+					return $sprint;
+				}
+
+				if (!$isCompletedTask)
 				{
 					$unFinishedTaskIds[] = $taskIdToComplete;
 				}
 			}
 
 			$itemIds = $itemService->getItemIdsBySourceIds($unFinishedTaskIds, [$sprint->getId()]);
-
-			if (!$itemService->getErrors() && !$this->getErrors())
-			{
-				$itemService->moveItemsToEntity($itemIds, $entity->getId(), $pushService);
-			}
-
 			if ($itemService->getErrors())
 			{
 				$this->errorCollection->add($itemService->getErrors());
 
 				return $sprint;
 			}
+
+			if ($this->getErrors())
+			{
+				return $sprint;
+			}
+
+			$itemService->moveItemsToEntity($itemIds, $entity->getId(), $pushService);
 
 			$result = EntityTable::update($sprint->getId(), $sprint->getFieldsToUpdateEntity());
 

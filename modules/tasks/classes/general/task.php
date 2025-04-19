@@ -3160,6 +3160,14 @@ class CTasks
 				'type' => 'integer',
 				'default' => 0,
 			],
+			'SPRINT_ID' => [
+				'type' => 'integer',
+				'default' => 0,
+			],
+			'BACKLOG_ID' => [
+				'type' => 'integer',
+				'default' => 0,
+			],
 			'CREATED_BY' => [
 				'type' => 'integer',
 				'required' => true,

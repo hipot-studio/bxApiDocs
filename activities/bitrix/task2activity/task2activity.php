@@ -490,7 +490,6 @@ class CBPTask2Activity extends CBPActivity implements
 
 		if (
 			$this->TaskId
-			&& (bool)\Bitrix\Main\Config\Option::get('bizproc', 'release_preview_2024')
 			&& method_exists($this, 'fixResult')
 		)
 		{

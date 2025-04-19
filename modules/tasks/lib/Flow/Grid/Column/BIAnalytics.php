@@ -2,10 +2,12 @@
 
 namespace Bitrix\Tasks\Flow\Grid\Column;
 
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Flow\Flow;
 use Bitrix\Tasks\Flow\Integration\BIConnector\FlowBIAnalytics;
 use Bitrix\Tasks\Flow\Provider\FlowProvider;
+use Bitrix\Tasks\Integration\Intranet\Settings;
 
 final class BIAnalytics extends Column
 {
@@ -32,5 +34,18 @@ final class BIAnalytics extends Column
 		$this->editable = false;
 		$this->resizeable = false;
 		$this->width = null;
+	}
+
+	public function isAvailable(): bool
+	{
+		if (
+			Loader::includeModule('biconnector')
+			&& (new Settings())->isToolAvailable('crm_bi')
+		)
+		{
+			return true;
+		}
+
+		return false;
 	}
 }

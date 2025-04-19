@@ -622,7 +622,10 @@ class CAllSocNetFeaturesPerms
 				return false;
 			}
 
-			$arGroupTmp = CSocNetGroup::GetByID($id);
+			$arGroupTmp = WorkgroupTable::getList([
+				'select' => ['CLOSED', 'VISIBLE'],
+				'filter' => ['ID' => $id],
+			])->fetch();
 
 			if (
 				$arGroupTmp["CLOSED"] === "Y"

@@ -13,6 +13,10 @@ final class Settings
 		'scrum' => 'limit_tasks_scrum_off',
 	];
 
+	public const LIMIT_FEATURES = [
+		'collab' => 'socialnetwork_collab_off',
+	];
+
 	public const TASKS_TOOLS = [
 		'base_tasks' => 'base_tasks',
 		'projects' => 'projects',
@@ -26,6 +30,7 @@ final class Settings
 	public const SONET_TOOLS = [
 		'news' => 'news',
 		'workgroups' => 'workgroups',
+		'collab' => 'collab',
 	];
 
 	public const CALENDAR_TOOLS = [

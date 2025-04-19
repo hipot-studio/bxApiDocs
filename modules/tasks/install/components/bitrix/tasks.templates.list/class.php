@@ -540,14 +540,20 @@ class TasksTemplatesListComponent extends TasksBaseComponent
 			$filter['SCENARIO'] = $this->arParams['SCENARIO'];
 		}
 
-		if (
-			\Bitrix\Main\Grid\Context::isInternalRequest()
-			&& check_bitrix_sessid()
-			&& (($_REQUEST['action'] ?? null) == \Bitrix\Main\Grid\Actions::GRID_GET_CHILD_ROWS))
+		$request = \Bitrix\Main\Context::getCurrent()?->getRequest();
+
+		if (\Bitrix\Main\Grid\Context::isInternalRequest() && check_bitrix_sessid())
 		{
-			if (!empty($_REQUEST['parent_id']))
+			if (
+				!empty($request?->get('parent_id'))
+				&& $request?->get('action') === \Bitrix\Main\Grid\Actions::GRID_GET_CHILD_ROWS
+			)
 			{
-				$filter['BASE_TEMPLATE_ID'] = $_REQUEST['parent_id'];
+				$filter['BASE_TEMPLATE_ID'] = (int)$request?->get('parent_id');
+			}
+			elseif (!empty($request?->get('BASE_TEMPLATE_ID')))
+			{
+				$filter['BASE_TEMPLATE_ID'] = (int)$request?->get('BASE_TEMPLATE_ID');
 			}
 		}
 

@@ -61,39 +61,5 @@ class NotificationProvider implements ProviderInterface
 
 	public function pushMessages(): void
 	{
-		if (!SpaceService::useNotificationStrategy())
-		{
-			return;
-		}
-
-		$rightsData = [];
-		foreach ($this->messages as $message)
-		{
-			$rights = $message->getMetaData()->getParams()['rights'] ?? null;
-			if (is_null($rights))
-			{
-				continue;
-			}
-
-			$rightsData = array_merge($rightsData, $rights);
-		}
-
-		$rightsData = array_unique($rightsData);
-		foreach ($rightsData as $right)
-		{
-			[$rightId, $logId] = explode('_', $right);
-			/**
-			 * In the case of fatal Postgres error, e.g. duplicate key,
-			 * we should catch a fatal error to compatability.
-			 */
-			try
-			{
-				CSocNetLogRights::Add($logId, $rightId, false, true, false);
-			}
-			catch (Error $error)
-			{
-				LogFacade::logThrowable($error);
-			}
-		}
 	}
 }

@@ -171,6 +171,7 @@ class TaskRegistry
 			->addSelect('RESPONSIBLE_ID')
 			->addSelect('CREATED_BY')
 			->addSelect('CLOSED_DATE')
+			->addSelect('CREATED_DATE')
 			->addSelect('START_DATE_PLAN')
 			->addSelect('END_DATE_PLAN')
 			->whereIn('ID', $taskIds)

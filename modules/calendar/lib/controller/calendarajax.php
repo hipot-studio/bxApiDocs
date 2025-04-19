@@ -398,15 +398,6 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			$sections = [];
 		}
 
-		if ($type === 'groups')
-		{
-			UserSettings::setTrackingGroups($userId, $request->get('groupIdList'));
-		}
-		else if ($type === 'collabs')
-		{
-			UserSettings::setTrackingCollabs($userId, $request->get('collabIdList'));
-		}
-
 		\CCalendar::setDisplayedSuperposed($userId, $sections);
 
 		return [];

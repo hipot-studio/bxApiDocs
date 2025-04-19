@@ -773,6 +773,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 		$lastTimer = $timer->getLastTimer();
 		if (
 			!$stopPrevious
+			&& $lastTimer
 			&& $lastTimer['TASK_ID']
 			&& $lastTimer['TIMER_STARTED_AT'] > 0
 			&& intval($lastTimer['TASK_ID'])
@@ -2284,7 +2285,7 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			// Crutch.
 			// Temporary stub to disable creation subtask if user has no access.
 			// It's make me cry.
-			if (count($newTask->getMembers(RoleDictionary::ROLE_RESPONSIBLE)) <= 1)
+			if ($newTask !== null && count($newTask->getMembers(RoleDictionary::ROLE_RESPONSIBLE)) <= 1)
 			{
 				$error->setType(Util\Error::TYPE_ERROR);
 			}
@@ -4867,8 +4868,8 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 	private function fillWithIMData(): void
 	{
 		$request = Main\Context::getCurrent()->getRequest();
-		$chatId = (int)($request['IM_CHAT_ID'] ?? null);
-		$messageId = (int)($request['IM_MESSAGE_ID'] ?? null);
+		$chatId = (int)($this->arResult['DATA']['TASK']['IM_CHAT_ID'] ?? $request['IM_CHAT_ID'] ?? null);
+		$messageId = (int)($this->arResult['DATA']['TASK']['IM_MESSAGE_ID'] ?? $request['IM_MESSAGE_ID'] ?? null);
 		if ($chatId > 0)
 		{
 			$this->arResult['immutable']['IM_CHAT_ID'] = $chatId;

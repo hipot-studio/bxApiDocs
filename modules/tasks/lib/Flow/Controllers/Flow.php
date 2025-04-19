@@ -2,13 +2,12 @@
 
 namespace Bitrix\Tasks\Flow\Controllers;
 
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\ActionFilter\Scope;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\EntitySelector\Converter;
-use Bitrix\Main\Web\Json;
 use Bitrix\Tasks\Flow\Access\FlowAccessController;
 use Bitrix\Tasks\Flow\Access\FlowAction;
 use Bitrix\Tasks\Flow\Access\FlowModel;
@@ -51,6 +50,15 @@ class Flow extends Controller
 	protected FlowMemberFacade $memberFacade;
 	protected Converter $converter;
 	protected int $userId;
+
+	public function configureActions(): array
+	{
+		return [
+			'getFeatureParams' => [
+				'+prefilters' => [new Scope(Scope::AJAX)]
+			],
+		];
+	}
 
 	protected function init(): void
 	{
@@ -117,7 +125,7 @@ class Flow extends Controller
 	/**
 	 * @restMethod tasks.flow.flow.create
 	 */
-	public function createAction(FlowDto $flowData, string $guideFlow = ''): ?\Bitrix\Tasks\Flow\Flow
+	public function createAction(FlowDto $flowData, array $analyticsParams = []): ?\Bitrix\Tasks\Flow\Flow
 	{
 		$trialFeatureEnabled = false;
 
@@ -182,18 +190,27 @@ class Flow extends Controller
 			return $this->buildErrorResponse($this->getUnknownError(__LINE__));
 		}
 
-		$element = $guideFlow === 'Y' ? 'guide_button' : 'create_button';
-		$subSection = $guideFlow === 'Y' ? 'flow_guide' : 'flows_grid';
-
-		$this->sendFlowCreateFinishAnalytics($element, $subSection);
+		[$element, $subSection] = $this->handleFlowCreateAnalytics($analyticsParams);
+		$this->sendFlowCreateFinishAnalytics($flow, $element, $subSection);
 
 		return $flow;
+	}
+
+	private function handleFlowCreateAnalytics(array $analyticsParams): array
+	{
+		$context = empty($analyticsParams['context']) ? 'flows_grid' : $analyticsParams['context'];
+
+		$guideFlow = $analyticsParams['guideFlow'] ?? '';
+		$element = $guideFlow === 'Y' ? 'guide_button' : 'create_button';
+		$subSection = $guideFlow === 'Y' ? 'flow_guide' : $context;
+
+		return [$element, $subSection];
 	}
 
 	/**
 	 * @restMethod tasks.flow.Flow.update
 	 */
-	public function updateAction(FlowDto $flowData): ?\Bitrix\Tasks\Flow\Flow
+	public function updateAction(FlowDto $flowData, array $analyticsParams = []): ?\Bitrix\Tasks\Flow\Flow
 	{
 		if (!FlowFeature::isFeatureEnabled())
 		{
@@ -235,7 +252,21 @@ class Flow extends Controller
 			return $this->buildErrorResponse($this->getUnknownError(__LINE__));
 		}
 
+		[$element, $subSection] = $this->handleFlowEditAnalytics($analyticsParams);
+		if (!empty($subSection))
+		{
+			$this->sendFlowEditFinishAnalytics($flow, $element, $subSection);
+		}
+
 		return $flow;
+	}
+
+	private function handleFlowEditAnalytics(array $analyticsParams): array
+	{
+		$element = Analytics::ELEMENT['save_changes_button'];
+		$subSection = $analyticsParams['context'] ?? '';
+
+		return [$element, $subSection];
 	}
 
 	/**
@@ -341,9 +372,19 @@ class Flow extends Controller
 			return $this->buildErrorResponse($this->getUnknownError(__LINE__));
 		}
 
-		$this->sendFlowCreateFinishAnalytics(Analytics::ELEMENT['create_demo_button']);
+		$this->sendFlowCreateFinishAnalytics($flow, Analytics::ELEMENT['create_demo_button']);
 
 		return $flow;
+	}
+
+	/**
+	 * @restMethod tasks.flow.Flow.getFeatureParams
+	 */
+	public function getFeatureParamsAction(): array
+	{
+		return [
+			'isFeatureTrialable' => FlowFeature::isFeatureEnabledByTrial(),
+		];
 	}
 
 	/**
@@ -473,16 +514,46 @@ class Flow extends Controller
 		return $countMap;
 	}
 
-	private function sendFlowCreateFinishAnalytics(string $element, string $subSection = 'flows_grid'): void
+	private function sendFlowCreateFinishAnalytics(
+		\Bitrix\Tasks\Flow\Flow $flow,
+		string $element,
+		string $subSection = 'flows_grid'
+	): void
 	{
-		$demoSuffix = FlowFeature::isFeatureEnabledByTrial() ? 'Y' : 'N';
-
 		Analytics::getInstance($this->userId)->onFlowCreate(
 			Analytics::EVENT['flow_create_finish'],
 			Analytics::SECTION['tasks'],
 			Analytics::ELEMENT[$element],
 			Analytics::SUB_SECTION[$subSection],
-			['p1' => 'isDemo_' . $demoSuffix]
+			$this->getFlowAnalyticsAdditionalParams($flow),
 		);
+	}
+
+	private function sendFlowEditFinishAnalytics(
+		\Bitrix\Tasks\Flow\Flow $flow,
+		string $element,
+		string $subSection = 'flows_grid'
+	): void
+	{
+		Analytics::getInstance($this->userId)->onFlowEdit(
+			Analytics::EVENT['flow_edit_finish'],
+			Analytics::SECTION['tasks'],
+			Analytics::ELEMENT[$element],
+			Analytics::SUB_SECTION[$subSection],
+			$this->getFlowAnalyticsAdditionalParams($flow),
+		);
+	}
+
+	private function getFlowAnalyticsAdditionalParams(\Bitrix\Tasks\Flow\Flow $flow): array
+	{
+		$demoSuffix = FlowFeature::isFeatureEnabledByTrial() ? 'Y' : 'N';
+
+		return [
+			'p1' => 'isDemo_' . $demoSuffix,
+			'p2' => 'distributionType_' . $flow->getDistributionType()->value,
+			'p3' => 'useTemplate_' . (($flow->getTemplateId() !== 0) ? 'Y' : 'N'),
+			'p4' => 'changeDeadline_' . ($flow->canResponsibleChangeDeadline() ? 'Y' : 'N'),
+			'p5' => 'flowId_' . $flow->getId(),
+		];
 	}
 }

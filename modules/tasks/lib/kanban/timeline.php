@@ -1,7 +1,9 @@
 <?php
 namespace Bitrix\Tasks\Kanban;
 
+use Bitrix\Main\Engine\CurrentUser;
 use \Bitrix\Main\Type\DateTime;
+use Bitrix\Tasks\Internals\Log\Logger;
 use \Bitrix\Tasks\Util\Calendar;
 
 class TimeLineTable// *Table for unity structure
@@ -216,14 +218,31 @@ class TimeLineTable// *Table for unity structure
 			$dateTime->setTime($calendarSettings['HOURS']['END']['H'], $calendarSettings['HOURS']['END']['M']);
 		}
 
+		$count = 0;
+		$start = clone $dateTime;
 		$result = date(self::getDatePhpFormat(), $dateTime->getTimestamp());
 		while (
 			$dateTime->checkLT($now)
 			|| !$calendar->isWorkTime(\Bitrix\Tasks\Util\Type\DateTime::createFromUserTimeGmt($result))
 		)
 		{
+			$count++;
 			$dateTime->addDay(1);
 			$result = date(self::getDatePhpFormat(), $dateTime->getTimestamp());
+
+			if ($count >= 30)
+			{
+				// prevent infinite loop
+				$log = [
+					'message' => 'Infinity loop prevented',
+					'ts' => $timeStamp,
+					'tz' => \CTimeZone::GetOffset(),
+					'id' => CurrentUser::get()->getId(),
+				];
+				Logger::log($log, 'TASKS_TIMELINE_LOOP');
+
+				return date(self::getDatePhpFormat(), $start->getTimestamp());
+			}
 		}
 
 		return $result;

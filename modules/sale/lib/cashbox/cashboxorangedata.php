@@ -39,6 +39,7 @@ class CashboxOrangeData
 	const CODE_CALC_VAT_20 = 3;
 
 	private const MAX_TEXT_LENGTH = 128;
+	protected const MAX_UUID_LENGTH = 64;
 
 	/**
 	 * @return string

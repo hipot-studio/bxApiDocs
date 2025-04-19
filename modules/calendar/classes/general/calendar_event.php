@@ -25,6 +25,7 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Text\Emoji;
@@ -54,7 +55,10 @@ class CCalendarEvent
 		$eventUserFields = [],
 		$attendeeBelongingToEvent = [],
 		$collabIdByParent = [],
-		$isAddIcalFailEmailError = false
+		$isAddIcalFailEmailError = false,
+		/** @var $openEventSection Section|null|false */
+		$openEventSection = false,
+		$getListAccessCheck = []
 	;
 
 	public static $defaultSelectEvent = [
@@ -80,6 +84,7 @@ class CCalendarEvent
 		'SECTION_ID',
 		'CAL_TYPE',
 		'MEETING_STATUS',
+		'MEETING_HOST',
 		'IS_MEETING',
 		'DT_LENGTH',
 		'PRIVATE_EVENT',
@@ -173,7 +178,8 @@ class CCalendarEvent
 			}
 
 			if (
-				!empty($currentEvent['IS_MEETING']) && !isset($entryFields['ATTENDEES'])
+				!empty($currentEvent['IS_MEETING'])
+				&& !isset($entryFields['ATTENDEES'])
 				&& $currentEvent['PARENT_ID'] === $currentEvent['ID']
 				&& !empty($entryFields['IS_MEETING'])
 			)
@@ -448,17 +454,11 @@ class CCalendarEvent
 
 			CTimeZone::Disable();
 
-			$parentEventId = $entryFields['PARENT_ID'];
 			$isOpenEvent = ($entryFields['CAL_TYPE'] ?? null) === Dictionary::CALENDAR_TYPE['open_event'];
 
 			if ($isNewEvent) // Add
 			{
 				$eventId = $DB->Add("b_calendar_event", $dbFields, ['DESCRIPTION', 'MEETING', 'EXDATE']);
-
-				if ($dbFields['CAL_TYPE'] === 'user' || $parentEventId)
-				{
-					self::storeEventAttendee((int)($eventId), $dbFields);
-				}
 			}
 			else // Update
 			{
@@ -475,7 +475,10 @@ class CCalendarEvent
 					'EXDATE' => $entryFields['EXDATE'] ?? null,
 				));
 				// update separated attendee fields
-				self::updateEventAttendee($eventId, $userId, $changedFields, $dbFields);
+				if ($isOpenEvent)
+				{
+					self::updateEventAttendee($eventId, $userId, $changedFields, $dbFields);
+				}
 			}
 
 			CTimeZone::Enable();
@@ -641,7 +644,7 @@ class CCalendarEvent
 							"location" => CCalendar::GetTextLocation($entryFields["LOCATION"] ?? null),
 							"guestId" => $entryFields['OWNER_ID'] ?? null,
 							"eventId" => $entryFields['PARENT_ID'] ?? null,
-							"userId" => \CCalendar::GetUserId(),
+							"userId" => $entryFields['MEETING_HOST'] ?? \CCalendar::GetUserId(),
 							"isSharing" => ($entryFields['EVENT_TYPE'] ?? null) === Dictionary::EVENT_TYPE['shared'],
 							"fields" => $entryFields,
 						));
@@ -711,26 +714,6 @@ class CCalendarEvent
 						]
 					);
 				}
-
-				if (($entryFields['PARENT_ID'] ?? null) === $eventId)
-				{
-					$attendeeListBeforeUpdate =
-						!empty($currentEvent['ATTENDEE_LIST'])
-							? array_map(fn($attendee) => $attendee['id'] ?? 0, $currentEvent['ATTENDEE_LIST'])
-							: []
-					;
-					$attendeesAfterUpdate = !empty($attendees) ? $attendees : [(int)($entryFields['MEETING_HOST'] ?? null)];
-					(new \Bitrix\Calendar\Integration\SocialNetwork\SpaceService())->addEvent(
-						'onAfterCalendarEventUpdate',
-						[
-							'ATTENDEES_CODES_BEFORE_UPDATE' => $currentEvent['ATTENDEES_CODES'] ?? [],
-							'ATTENDEES_CODES_AFTER_UPDATE' => $attendeesCodes,
-							'ATTENDEES_BEFORE_UPDATE' => $attendeeListBeforeUpdate,
-							'ATTENDEES_AFTER_UPDATE' => $attendeesAfterUpdate ?? [],
-							'ID' => $eventId,
-						],
-					);
-				}
 			}
 
 			$pullUserId = (isset($entryFields['OWNER_ID']) && (int)$entryFields['OWNER_ID'] > 0)
@@ -745,10 +728,15 @@ class CCalendarEvent
 			)
 			{
 				$entryFields['ID'] = $result;
+				$parentEventId = $entryFields['PARENT_ID'] ?? $result;
 
 				$entryFields = self::calculateUserOffset($pullUserId, $entryFields);
-				$attendeeListResult = self::getAttendeeList([$result]);
-				$attendeeList = $attendeeListResult['attendeeList'][$entryFields['PARENT_ID']] ?? [];
+
+				$attendeeListResult = $dbFields['CAL_TYPE'] === Dictionary::CALENDAR_TYPE['open_event']
+					? self::getAttendeeList([], [$parentEventId])
+					: self::getAttendeeList([$parentEventId])
+				;
+				$attendeeList = $attendeeListResult['attendeeList'][$parentEventId] ?? [];
 				$entryFields  = self::PreHandleEvent($entryFields);
 				$skipTime = $entryFields['DT_SKIP_TIME'] === 'Y';
 				$dateFromFormatted = self::getDateInJsFormat(
@@ -759,6 +747,10 @@ class CCalendarEvent
 					CCalendar::createDateTimeObjectFromString($entryFields['DATE_TO']),
 					$skipTime,
 				);
+				$isDaylightSavingTimezone = !empty($entryFields['TZ_FROM'])
+					? CCalendar::isDaylightSavingTimezone($entryFields['TZ_FROM'])
+					: ''
+				;
 
 				$collabId = 0;
 
@@ -782,6 +774,7 @@ class CCalendarEvent
 							'ATTENDEE_LIST' => $attendeeList,
 							'DATE_FROM_FORMATTED' => $dateFromFormatted,
 							'DATE_TO_FORMATTED' => $dateToFormatted,
+							'IS_DAYLIGHT_SAVING_TZ' => $isDaylightSavingTimezone,
 							'COLLAB_ID' => $collabId,
 							'permissions' => self::getEventPermissions($entryFields, $pullUserId),
 						]),
@@ -827,6 +820,8 @@ class CCalendarEvent
 
 	public static function GetList($params = [])
 	{
+		$originalParams = $params;
+
 		$isIntranetEnabled = CCalendar::IsIntranetEnabled();
 		$checkPermissions = ($params['checkPermissions'] ?? null) !== false;
 		$bCache = CCalendar::CacheTime() > 0;
@@ -868,11 +863,12 @@ class CCalendarEvent
 			$arFilter = $params['arFilter'];
 			$resultEntryList = [];
 
-			[$eventList, $parentMeetingIdList, $involvedUsersIdList] = self::getListOrm($params);
+			$listResult = self::getListOrm($params);
+			[$eventList, $parentMeetingIdList, $involvedUsersIdList, $openEventParentIdList] = $listResult;
 
 			if (!empty($params['fetchAttendees']) && !empty($parentMeetingIdList))
 			{
-				$attendeeListData = self::getAttendeeList($parentMeetingIdList);
+				$attendeeListData = self::getAttendeeList($parentMeetingIdList, $openEventParentIdList);
 				$attendeeList = $attendeeListData['attendeeList'];
 				$involvedUsersIdList = array_unique(array_merge($involvedUsersIdList, $attendeeListData['userIdList']));
 			}
@@ -892,7 +888,7 @@ class CCalendarEvent
 					if ($isOpenEvent)
 					{
 						// keep only STATUS=Y attendees for open events
-						// cause there is no logic for disline user of open event
+						// cause there is no logic for decline user of open event
 						$event['ATTENDEE_LIST'] = array_filter(
 							$attendeeList[$event['PARENT_ID']],
 							static fn (array $a) => $a['status'] === 'Y'
@@ -938,20 +934,12 @@ class CCalendarEvent
 					{
 						$checkPermissionsForEvent = false;
 					}
-					if (
-						$checkPermissionsForEvent
-						&& $event['IS_MEETING']
-						&& ($event['USER_MEETING'] ?? null)
-						&& (int)$event['USER_MEETING']['ATTENDEE_ID'] === $userId
-					)
-					{
-						$checkPermissionsForEvent = false;
-					}
 
 					if (
 						$checkPermissionsForEvent
 						&& $event['IS_MEETING']
 						&& is_array($event['ATTENDEE_LIST'] ?? null)
+						&& !empty($event['ATTENDEE_LIST'])
 					)
 					{
 						foreach($event['ATTENDEE_LIST'] as $attendee)
@@ -999,11 +987,38 @@ class CCalendarEvent
 			if ($bCache)
 			{
 				$cache->StartDataCache(CCalendar::CacheTime(), $cacheId, $cachePath);
-				$cache->EndDataCache([
-					"resultEntryList" => $resultEntryList,
-					"userIndex" => $userIndex,
-					"dateTimeFormat" => FORMAT_DATETIME,
-				]);
+
+				try
+				{
+					$cache->EndDataCache(
+						[
+							'resultEntryList' => $resultEntryList,
+							'userIndex' => $userIndex,
+							'dateTimeFormat' => FORMAT_DATETIME,
+						]
+					);
+				}
+				catch (\Exception $e)
+				{
+					// A temporary fix for http://jabber.bx/view.php?id=215935
+					$logger = new \Bitrix\Main\Diag\EventLogger('calendar', 'REMIND_DEBUG');
+
+					$logger->debug('Found Closure. Message: ' . $e->getMessage());
+
+					try
+					{
+						$logger->debug('Found Closure. Params: ' . \Bitrix\Main\Web\Json::encode($originalParams));
+						$logger->debug(
+							'Found Closure. To cache: ' . \Bitrix\Main\Web\Json::encode([
+								'resultEntryList' => $resultEntryList,
+								'userIndex' => $userIndex,
+								'dateTimeFormat' => FORMAT_DATETIME,
+							])
+						);
+					}
+					catch (\Throwable)
+					{}
+				}
 			}
 		}
 
@@ -1057,7 +1072,6 @@ class CCalendarEvent
 		$query = Internals\EventTable::query();
 		$attendeesQuery = Internals\EventTable::query();
 		$attendeeIds = [$userId];
-		$openEventSection = self::getOpenEventSection();
 		$joinOpenEvents = !empty(
 			array_intersect(['ID', 'PARENT_ID', 'RECURRENCE_ID', 'CAL_TYPE', 'SECTION'], array_keys($filterFields))
 		);
@@ -1189,6 +1203,7 @@ class CCalendarEvent
 
 							if (!empty($sections))
 							{
+								$openEventSection = self::getOpenEventSection($userId);
 								$joinOpenEvents = $joinOpenEvents && in_array($openEventSection?->getId(), $sections, true);
 								$sections = array_diff($sections, [$openEventSection?->getId()]);
 
@@ -1302,6 +1317,7 @@ class CCalendarEvent
 
 		$queryResult = $query->exec();
 		$hasAttendees = $query->getEntity()->hasField('ATTENDEES');
+		$hasOriginalRecursion = $query->getEntity()->hasField('ORIGINAL_RECURSION');
 
 		$parentMeetingIdList = [];
 		$involvedUsersIdList = [];
@@ -1310,10 +1326,15 @@ class CCalendarEvent
 
 		while ($eventObject = $queryResult->fetchObject())
 		{
-			[$event, $parentMeetings, $involvedUsers] = self::prepareEventObject($userId, $eventObject, $hasAttendees);
+			[$event, $parentMeetings, $involvedUsers] = self::prepareEventObject(
+				$userId,
+				$eventObject,
+				$hasAttendees,
+				$hasOriginalRecursion
+			);
 
-			$parentMeetingIdList = array_merge($parentMeetingIdList, $parentMeetings);
-			$involvedUsersIdList = array_merge($involvedUsersIdList, $involvedUsers);
+			$parentMeetingIdList = [...$parentMeetingIdList, ...$parentMeetings];
+			$involvedUsersIdList = [...$involvedUsersIdList, ...$involvedUsers];
 
 			$eventList[] = $event;
 
@@ -1327,7 +1348,7 @@ class CCalendarEvent
 
 		if (!$joinOpenEvents)
 		{
-			return [$eventList, array_unique($parentMeetingIdList), array_unique($involvedUsersIdList)];
+			return [$eventList, array_unique($parentMeetingIdList), array_unique($involvedUsersIdList), []];
 		}
 
 		$attendeesQuery
@@ -1357,13 +1378,15 @@ class CCalendarEvent
 
 		$attendeesQueryResult = $attendeesQuery->exec();
 		$hasAttendees = $attendeesQuery->getEntity()->hasField('ATTENDEES');
+		$openEventParentMeetingIdList = [];
 
 		while ($eventObject = $attendeesQueryResult->fetchObject())
 		{
 			[$event, $parentMeetings, $involvedUsers] = self::prepareEventObject($userId, $eventObject, $hasAttendees);
 
-			$parentMeetingIdList = array_merge($parentMeetingIdList, $parentMeetings);
-			$involvedUsersIdList = array_merge($involvedUsersIdList, $involvedUsers);
+			$parentMeetingIdList = [...$parentMeetingIdList, ...$parentMeetings];
+			$involvedUsersIdList = [...$involvedUsersIdList, ...$involvedUsers];
+			$openEventParentMeetingIdList = [...$openEventParentMeetingIdList, ...$parentMeetings];
 
 			// replace same open_event from previous query with attendee field from current query to prevent duplicates
 			// or add as new
@@ -1377,15 +1400,26 @@ class CCalendarEvent
 			}
 		}
 
-		return [$eventList, array_unique($parentMeetingIdList), array_unique($involvedUsersIdList)];
+		return [
+			$eventList,
+			array_unique($parentMeetingIdList),
+			array_unique($involvedUsersIdList),
+			array_unique($openEventParentMeetingIdList),
+		];
 	}
 
-	private static function prepareEventObject(int $userId, Internals\EO_Event $eventObject, bool $hasAttendees): array
+	private static function prepareEventObject(
+		int $userId,
+		Internals\EO_Event $eventObject,
+		bool $hasAttendees,
+		bool $hasOriginalRecursion = false
+	): array
 	{
 		$event = $eventObject->collectValues();
 
 		//we don't need it here
 		unset($event['UTS_OBJECT']);
+		unset($event['SECTION']);
 
 		// transform types from fetchObject-style to fetch-style
 		// next booleans and strings fields sensitive for frontend
@@ -1476,6 +1510,11 @@ class CCalendarEvent
 		{
 			$event['DATE_CREATE'] = (string)$event['DATE_CREATE'];
 		}
+
+		$event['IS_DAYLIGHT_SAVING_TZ'] = !empty($event['TZ_FROM'])
+			? CCalendar::isDaylightSavingTimezone($event['TZ_FROM'])
+			: ''
+		;
 
 		$event['SECT_ID'] = $event['SECTION_ID'] ?? null;
 		if (
@@ -1588,6 +1627,15 @@ class CCalendarEvent
 			}
 			$event['CURRENT_ATTENDEE_ID'] = $currentAttendee->getId();
 			$parentMeetingIdList[] = $event['ID'];
+		}
+
+		/** @var Internals\EO_EventOriginalRecursion $originalRecursion */
+		if (
+			$hasOriginalRecursion
+			&& $originalRecursion = $eventObject->get('ORIGINAL_RECURSION')
+		)
+		{
+			$event['ORIGINAL_RECURSION_ID'] = $originalRecursion->getOriginalRecursionEventId();
 		}
 
 		return [$event, $parentMeetingIdList, $involvedUsersIdList];
@@ -1749,111 +1797,131 @@ class CCalendarEvent
 
 	/**
 	 * selects all participants of the event by parentId
-	 * @param array $entryIdList
-	 * @return array
 	 */
-	public static function getAttendeeList($entryIdList = []): array
+	public static function getAttendeeList($entryIdList = [], array $openEventIdList = []): array
 	{
-		global $DB;
 		$attendeeList = [];
 		$userIdList = [];
 
-		if (CCalendar::IsSocNet())
+		if (!CCalendar::IsSocNet())
 		{
-			$entryIdList =
-				is_array($entryIdList)
-					? array_map(
-					function($entryId) {return (int)$entryId;} ,
-					array_unique($entryIdList)
-				)
-					: [(int)$entryIdList]
+			return [
+				'attendeeList' => $attendeeList,
+				'userIdList' => $userIdList,
+			];
+		}
+
+		$entryIdList = is_array($entryIdList)
+			? array_map('intval', array_unique($entryIdList))
+			: [(int)$entryIdList]
+		;
+
+		if (empty($entryIdList) && empty($openEventIdList))
+		{
+			return [
+				'attendeeList' => $attendeeList,
+				'userIdList' => $userIdList,
+			];
+		}
+
+		$queries = [];
+		if (!empty($entryIdList))
+		{
+			$queries[] = Internals\EventTable::query()
+				->setSelect([
+					'USER_ID' => 'OWNER_ID',
+					'ID',
+					'PARENT_ID',
+					'EVENT_MEETING_STATUS' => 'MEETING_STATUS',
+					'MEETING_HOST',
+				])
+				->where('ACTIVE', 'Y')
+				->where('CAL_TYPE', 'user')
+				->where('DELETED', 'N')
+				->whereIn('PARENT_ID', $entryIdList)
+				->exec()
 			;
+		}
 
-			if (!empty($entryIdList))
+		if (!empty($openEventIdList))
+		{
+			// for event which stored with external attendees in b_calendar_event_attendee
+			$queries[] = Internals\EventTable::query()
+				->registerRuntimeField(
+					(new ReferenceField(
+						'EVENT_ATTENDEE',
+						Internals\EventAttendeeTable::getEntity(),
+						Join::on('this.ID', 'ref.EVENT_ID')
+					))->configureJoinType(Join::TYPE_INNER),
+				)
+				->setSelect([
+					'USER_ID' => 'EVENT_ATTENDEE.OWNER_ID',
+					'ID',
+					'PARENT_ID',
+					'EVENT_MEETING_STATUS' => 'EVENT_ATTENDEE.MEETING_STATUS',
+					'MEETING_HOST',
+					'ATTENDEE_ID' => 'EVENT_ATTENDEE.ID',
+				])
+				->where('ACTIVE', 'Y')
+				->where('DELETED', 'N')
+				->whereIn('PARENT_ID', $openEventIdList)
+				->where(
+					(new ConditionTree())
+						->logic(ConditionTree::LOGIC_OR)
+						->where('EVENT_ATTENDEE.MEETING_STATUS', 'Y')
+						->whereNot('CAL_TYPE', Dictionary::CALENDAR_TYPE['open_event'])
+				)
+				->exec()
+			;
+		}
+
+		// generator for union-like joining queries
+		$queryCombineGenerator = static function (array $queryResults): \Generator
+		{
+			foreach ($queryResults as $queryResult)
 			{
-				$strSql = "
-					SELECT
-						CE.OWNER_ID AS USER_ID,
-						CE.ID, CE.PARENT_ID, CE.MEETING_STATUS, CE.MEETING_HOST
-					FROM
-						b_calendar_event CE
-					WHERE
-						CE.ACTIVE = 'Y' AND
-						CE.CAL_TYPE = 'user' AND
-						CE.DELETED = 'N' AND
-						CE.PARENT_ID in (".implode(',', $entryIdList).")"
-				;
-
-				$res = $DB->Query($strSql);
-
-				// for event which stored with external attendees in b_calendar_event_attendee
-				$strSqlExternalAttendees = "
-					SELECT
-						CEA.OWNER_ID AS USER_ID,
-						CE.ID,
-						CE.PARENT_ID,
-						CEA.MEETING_STATUS,
-						CE.MEETING_HOST,
-						CEA.ID AS ATTENDEE_ID
-					FROM
-						b_calendar_event CE
-					INNER JOIN b_calendar_event_attendee CEA ON CEA.EVENT_ID = CE.ID
-					WHERE
-						CE.ACTIVE = 'Y' AND
-						CE.DELETED = 'N' AND
-						CE.PARENT_ID in (".implode(',', $entryIdList).") AND
-						(CEA.MEETING_STATUS = 'Y' OR CE.CAL_TYPE != '" . Dictionary::CALENDAR_TYPE['open_event'] . "')"
-				;
-				$resExternalAttendees = $DB->Query($strSqlExternalAttendees);
-				// generator for union-line joining two queries
-				$queryCombineGenerator = function ($queryResults): \Generator
+				while($item = $queryResult->fetch())
 				{
-					foreach ($queryResults as $queryResult)
-					{
-						while($item = $queryResult->Fetch())
-						{
-							yield $item;
-						}
-					}
-				};
-
-				// combine query result in one virtual set
-				$combinedQuery = $queryCombineGenerator([$res, $resExternalAttendees]);
-
-				while($entry = $combinedQuery->current())
-				{
-					$combinedQuery->next();
-					$entry['USER_ID'] = (int)$entry['USER_ID'];
-					if (!isset($attendeeList[$entry['PARENT_ID']]))
-					{
-						$attendeeList[$entry['PARENT_ID']] = [];
-					}
-					$entry["STATUS"] = trim($entry["MEETING_STATUS"]);
-					if (
-						($entry['PARENT_ID'] === $entry['ID'] || $entry['USER_ID'] === $entry['MEETING_HOST'])
-						&& !isset($entry['ATTENDEE_ID'])
-					)
-					{
-						$entry["STATUS"] = "H";
-					}
-					if (!isset($attendeeList[$entry['PARENT_ID']][$entry['USER_ID']])) {
-						$attendeeList[$entry['PARENT_ID']][$entry['USER_ID']] = [
-							'id' => $entry['USER_ID'],
-							'entryId' => $entry['ID'],
-							'status' => $entry["STATUS"],
-						];
-					}
-
-					if (!in_array($entry['USER_ID'], $userIdList, true))
-					{
-						$userIdList[] = $entry['USER_ID'];
-					}
+					yield $item;
 				}
-				// remove doubles attendees from events
-				// which stored in both b_calendar_event & b_calendar_event_attendee tables
-				$attendeeList = array_map(static fn($itemList) => array_values($itemList), $attendeeList);
+			}
+		};
+
+		// combine query result in one virtual set
+		$combinedQuery = $queryCombineGenerator($queries);
+
+		while($entry = $combinedQuery->current())
+		{
+			$combinedQuery->next();
+			$entry['USER_ID'] = (int)$entry['USER_ID'];
+			if (!isset($attendeeList[$entry['PARENT_ID']]))
+			{
+				$attendeeList[$entry['PARENT_ID']] = [];
+			}
+			$entry["STATUS"] = trim($entry['EVENT_MEETING_STATUS']);
+			if (
+				($entry['PARENT_ID'] === $entry['ID'] || $entry['USER_ID'] === $entry['MEETING_HOST'])
+				&& !isset($entry['ATTENDEE_ID'])
+			)
+			{
+				$entry["STATUS"] = "H";
+			}
+			if (!isset($attendeeList[$entry['PARENT_ID']][$entry['USER_ID']])) {
+				$attendeeList[$entry['PARENT_ID']][$entry['USER_ID']] = [
+					'id' => $entry['USER_ID'],
+					'entryId' => $entry['ID'],
+					'status' => $entry["STATUS"],
+				];
+			}
+
+			if (!in_array($entry['USER_ID'], $userIdList, true))
+			{
+				$userIdList[] = $entry['USER_ID'];
 			}
 		}
+		// remove doubles attendees from events
+		// which stored in both b_calendar_event & b_calendar_event_attendee tables
+		$attendeeList = array_map(static fn($itemList) => array_values($itemList), $attendeeList);
 
 		return [
 			'attendeeList' => $attendeeList,
@@ -1865,30 +1933,17 @@ class CCalendarEvent
 	{
 		$users = [];
 		$userList = [];
-		if ($userIdList)
+		if (!empty($userIdList))
 		{
-			$userIdList = array_unique($userIdList);
-			$userList = UserTable::getList([
-				'select' => [
-					'ID',
-					'NAME',
-					'LAST_NAME',
-					'SECOND_NAME',
-					'LOGIN',
-					'PERSONAL_PHOTO',
-					'EMAIL',
-					'EXTERNAL_AUTH_ID',
-				],
-				'filter' => [
-					'=ID' => $userIdList,
-				],
-			]);
+			$userIdList = array_unique(array_map(static fn($userId) => (int)$userId, $userIdList));
+
+			$userList = CCalendar::GetUserList($userIdList);
 		}
 
 		foreach ($userList as $userData)
 		{
 			$id = (int)$userData['ID'];
-			if (!in_array($id, $userIdList))
+			if (!in_array($id, $userIdList, true))
 			{
 				continue;
 			}
@@ -1900,7 +1955,7 @@ class CCalendarEvent
 				'AVATAR' => CCalendar::GetUserAvatarSrc($userData, $params),
 				'EMAIL_USER' => $userData['EXTERNAL_AUTH_ID'] === 'email',
 				'SHARING_USER' => $userData['EXTERNAL_AUTH_ID'] === Sharing\SharingUser::EXTERNAL_AUTH_ID,
-				'COLLAB_USER' => Util::isCollabUser($userData['ID']),
+				'COLLAB_USER' => $userData['COLLAB_USER'],
 			];
 		}
 
@@ -1997,9 +2052,14 @@ class CCalendarEvent
 		return $attendeeIds;
 	}
 
-	public static function ApplyAccessRestrictions($event, $userId = false)
+	public static function ApplyAccessRestrictions($event, $userId = null)
 	{
-		$sectId = $event['SECT_ID'];
+		if (!$userId)
+		{
+			$userId = CCalendar::GetUserId();
+		}
+
+		$sectId = (int)$event['SECT_ID'];
 		if (empty($event['ACCESSIBILITY']))
 		{
 			$event['ACCESSIBILITY'] = 'busy';
@@ -2020,49 +2080,25 @@ class CCalendarEvent
 			}
 		}
 
-		if (!$userId)
-		{
-			$userId = CCalendar::GetUserId();
-		}
-
-
 		if (
             ($event['CAL_TYPE'] ?? null) === 'user'
 			&& !empty($event['IS_MEETING'])
 			&& (int)$event['OWNER_ID'] !== (int)$userId
+			&& $isAttendee
 		)
 		{
-			if ($isAttendee)
-			{
-				$sectId = CCalendar::GetMeetingSection($userId);
-			}
-			elseif (
-				isset($event['USER_MEETING']['ATTENDEE_ID'])
-				&& $event['USER_MEETING']['ATTENDEE_ID'] !== $userId
-			)
-			{
-				$sectId = CCalendar::GetMeetingSection($event['USER_MEETING']['ATTENDEE_ID']);
-				$event['SECT_ID'] = $sectId;
-				$event['OWNER_ID'] = $event['USER_MEETING']['ATTENDEE_ID'];
-			}
+			$sectId = (int)CCalendar::GetMeetingSection($userId);
 		}
 
-		$accessController = new EventAccessController($userId);
-		$eventModel = self::getEventModelForPermissionCheck((int)($event['ID'] ?? 0), $event, $userId);
-		$eventModel->setSectionId((int)$sectId);
-		$request = [
-			ActionDictionary::ACTION_EVENT_VIEW_FULL => [],
-			ActionDictionary::ACTION_EVENT_VIEW_TIME => [],
-			ActionDictionary::ACTION_EVENT_VIEW_TITLE => [],
-		];
-		$accessResult = $accessController->batchCheck($request, $eventModel);
+		$accessResult = self::checkEventAccessFromGetList($event, $sectId, $userId);
 
 		if ($private || (!$accessResult[ActionDictionary::ACTION_EVENT_VIEW_FULL] && !$isAttendee))
 		{
 			if ($private)
 			{
-				$event['NAME'] = '['.GetMessage('EC_ACCESSIBILITY_'.mb_strtoupper($event['ACCESSIBILITY'])).']';
+				$event['NAME'] = '[' . Loc::getMessage('EC_ACCESSIBILITY_' . mb_strtoupper($event['ACCESSIBILITY'])) . ']';
 				$event['IS_ACCESSIBLE_TO_USER'] = false;
+
 				if (!$accessResult[ActionDictionary::ACTION_EVENT_VIEW_TIME])
 				{
 					return false;
@@ -2072,7 +2108,7 @@ class CCalendarEvent
 			{
 				if ($accessResult[ActionDictionary::ACTION_EVENT_VIEW_TIME])
 				{
-					$event['NAME'] = '['.GetMessage('EC_ACCESSIBILITY_'.mb_strtoupper($event['ACCESSIBILITY'])).']';
+					$event['NAME'] = '[' . Loc::getMessage('EC_ACCESSIBILITY_' . mb_strtoupper($event['ACCESSIBILITY'])) . ']';
 					$event['IS_ACCESSIBLE_TO_USER'] = false;
 				}
 				else
@@ -2082,7 +2118,7 @@ class CCalendarEvent
 			}
 			else
 			{
-				$event['NAME'] .= ' ['.GetMessage('EC_ACCESSIBILITY_'.mb_strtoupper($event['ACCESSIBILITY'])).']';
+				$event['NAME'] .= ' [' . Loc::getMessage('EC_ACCESSIBILITY_' . mb_strtoupper($event['ACCESSIBILITY'])) . ']';
 			}
 
 			// Clear information about
@@ -2090,7 +2126,6 @@ class CCalendarEvent
 				$event['DESCRIPTION'],
 				$event['LOCATION'],
 				$event['REMIND'],
-				$event['USER_MEETING'],
 				$event['ATTENDEE_LIST'],
 				$event['ATTENDEES_CODES'],
                 $event['UF_CRM_CAL_EVENT'],
@@ -2855,7 +2890,10 @@ class CCalendarEvent
 			$res['~UNTIL'] = '';
 		}
 
-		$res['UNTIL_TS'] = CCalendar::TimestampUTC($res['UNTIL']);
+		$res['UNTIL_TS'] = !empty($res['UNTIL']) && is_string($res['UNTIL'])
+			? CCalendar::TimestampUTC($res['UNTIL'])
+			: null
+		;
 
 		return $res;
 	}
@@ -4261,14 +4299,6 @@ class CCalendarEvent
 					(new \Bitrix\Calendar\Integration\Intranet\Absence())->cleanCache();
 				}
 
-				(new \Bitrix\Calendar\Integration\SocialNetwork\SpaceService())->addEvent(
-					'onAfterCalendarEventDelete',
-					[
-						'ID' => $id,
-						'ATTENDEE_LIST' => $entry['ATTENDEE_LIST'] ?? null,
-					],
-				);
-
 				$pullUserId = (int)$entry['OWNER_ID'] > 0 ? (int)$entry['OWNER_ID'] : $userId;
 				if (
 					$pullUserId
@@ -4795,25 +4825,8 @@ class CCalendarEvent
 
 		CTimeZone::Enable();
 		CCalendar::ClearCache(['attendees_list', 'event_list']);
-	}
 
-	private static function storeEventAttendee(int $parentEventId, array $dbFields): void
-	{
-		$addResult = Internals\EventAttendeeTable::add([
-			'OWNER_ID' => $dbFields['OWNER_ID'],
-			'CREATED_BY' => $dbFields['CREATED_BY'],
-			'MEETING_STATUS' => $dbFields['MEETING_STATUS'],
-			'SECTION_ID' => $dbFields['SECTION_ID'],
-			'COLOR' => $dbFields['COLOR'],
-			'REMIND' => $dbFields['REMIND'],
-			'DAV_EXCH_LABEL' => $dbFields['DAV_EXCH_LABEL'] ?? null,
-			'SYNC_STATUS' => $dbFields['SYNC_STATUS'] ?? null,
-			'EVENT_ID' => $parentEventId,
-		]);
-		if ($addResult->isSuccess())
-		{
-			$eventAttendeeId = $addResult->getId();
-		}
+		(new \Bitrix\Calendar\Event\Event\AfterMeetingStatusChanged($eventId, $userId, $status))->emit();
 	}
 
 	private static function updateEventAttendeeMeetingStatus(int $eventAttendeeId, string $meetingStatus): void
@@ -4892,7 +4905,7 @@ class CCalendarEvent
 		if (in_array('COLOR', $changedFields, true) && isset($dbFields['COLOR']))
 		{
 			// color changed in all child events
-			$allChildEventAttendees = $eventAttendeesResult = Internals\EventAttendeeTable::getList([
+			$allChildEventAttendees = Internals\EventAttendeeTable::getList([
 				'select' => ['ID'],
 				'filter' => [
 					'EVENT_ID' => $parentEventId,
@@ -5127,7 +5140,7 @@ class CCalendarEvent
 				|| !$accessController->check(ActionDictionary::ACTION_EVENT_VIEW_TITLE, $eventModel)
 			)
 			{
-				$name = '['.GetMessage('EC_ACCESSIBILITY_'.mb_strtoupper($event['ACCESSIBILITY'])).']';
+				$name = '[' . Loc::getMessage('EC_ACCESSIBILITY_' . mb_strtoupper($event['ACCESSIBILITY'])) . ']';
 			}
 
 			$accessibility[$event['OWNER_ID']][] = [
@@ -6109,13 +6122,8 @@ class CCalendarEvent
 
 					foreach ($uf as $item)
 					{
-						$crmElement = explode('_', $item);
-						$type = $crmElement[ 0 ];
-
-						$typeId = \CCrmOwnerType::ResolveID(\CCrmOwnerTypeAbbr::ResolveName($type));
-						$title = \CCrmOwnerType::GetCaption($typeId, $crmElement[ 1 ]);
-
-						$content .= ' '.static::prepareToken($title);
+						$title = self::getCrmElementTitle($item);
+						$content .= ' ' . static::prepareToken($title);
 					}
 				}
 			}
@@ -6125,6 +6133,15 @@ class CCalendarEvent
 		}
 
 		return $content;
+	}
+
+	public static function getCrmElementTitle(string $item)
+	{
+		$crmElement = explode('_', $item);
+		$type = $crmElement[0];
+		$typeId = \CCrmOwnerType::ResolveID(\CCrmOwnerTypeAbbr::ResolveName($type));
+
+		return \CCrmOwnerType::GetCaption($typeId, $crmElement[1]);
 	}
 
 	public static function GetCount()
@@ -6178,7 +6195,7 @@ class CCalendarEvent
 		$params['timezoneOffset'] = ($params['timezoneOffset'] ?? null);
 		$params['userId'] = ($params['userId'] ?? null);
 
-		$fromTs = \CCalendar::Timestamp($params['eventDate']) - $params['timezoneOffset'];
+		$fromTs = \CCalendar::Timestamp($params['eventDate'], true, false) - $params['timezoneOffset'];
 		$userDateFrom = \CCalendar::Date($fromTs);
 
 		$entry = self::GetList([
@@ -7063,6 +7080,7 @@ class CCalendarEvent
 		}
 		$accessController = new EventAccessController($userId);
 		$eventModel = self::getEventModelForPermissionCheck((int)($event['ID'] ?? 0), $event, $userId);
+
 		$request = [
 			ActionDictionary::ACTION_EVENT_VIEW_FULL => [],
 			ActionDictionary::ACTION_EVENT_VIEW_TIME => [],
@@ -7094,63 +7112,17 @@ class CCalendarEvent
 			$userId = CCalendar::GetUserId();
 		}
 
-		$select = [
-			'ID',
-			'OWNER_ID',
-			'SECTION_ID',
-			'CAL_TYPE',
-			'EVENT_TYPE',
-			'RRULE',
-			'DT_SKIP_TIME',
-			'DT_LENGTH',
-			'PARENT_ID',
-			'DATE_FROM',
-			'DATE_TO',
-			'PARENT_ID',
-			'TZ_FROM',
-			'TZ_TO',
-			'TZ_OFFSET_FROM',
-			'TZ_OFFSET_TO',
-			'DATE_FROM_TS_UTC',
-			'DATE_TO_TS_UTC',
-			'CREATED_BY',
-			'ACCESSIBILITY',
-			'REMIND',
-			'MEETING_HOST',
-			'MEETING_STATUS',
-			'IMPORTANCE',
-		];
-
-		$userEvent = self::GetList(
-			[
+		$userEvent = false;
+		if ($eventId > 0)
+		{
+			$userEventResult = self::GetList([
 				'arFilter' => [
 					'PARENT_ID' => $eventId,
 					'OWNER_ID' => $userId,
 					'CAL_TYPE' => [Dictionary::CALENDAR_TYPE['user'], Dictionary::CALENDAR_TYPE['open_event']],
 					'DELETED' => 'N',
 				],
-				'arSelect' => $select,
-				'parseRecursion' => false,
-				'fetchMeetings' => false,
-				'userId' => $userId,
-				'checkPermissions' => false,
-				'getPermissions' => false,
-			]
-		);
-
-		if ($userEvent)
-		{
-			$userEvent = $userEvent[0];
-		}
-
-		if (!$userEvent && (empty($event) || ((int)($event['ID'] ?? 0) !== $eventId)))
-		{
-			$event = self::GetList([
-				'arFilter' => [
-					'ID' => $eventId,
-					'DELETED' => 'N',
-				],
-				'arSelect' => $select,
+				'arSelect' => self::$defaultSelectEvent,
 				'parseRecursion' => false,
 				'fetchMeetings' => false,
 				'userId' => $userId,
@@ -7158,9 +7130,36 @@ class CCalendarEvent
 				'getPermissions' => false,
 			]);
 
-			if ($event)
+			if ($userEventResult)
 			{
-				$event = $event[0];
+				$userEvent = $userEventResult[0];
+			}
+		}
+
+		if (
+			!$userEvent
+			&& (
+				empty($event)
+				|| ((int)($event['ID'] ?? 0) !== $eventId)
+			)
+		)
+		{
+			$currentEventResult = self::GetList([
+				'arFilter' => [
+					'ID' => $eventId,
+					'DELETED' => 'N',
+				],
+				'arSelect' => self::$defaultSelectEvent,
+				'parseRecursion' => false,
+				'fetchMeetings' => false,
+				'userId' => $userId,
+				'checkPermissions' => false,
+				'getPermissions' => false,
+			]);
+
+			if ($currentEventResult)
+			{
+				$event = $currentEventResult[0];
 			}
 		}
 
@@ -7209,8 +7208,18 @@ class CCalendarEvent
 		];
 	}
 
-	private static function getOpenEventSection(): ?\Bitrix\Calendar\Core\Section\Section
+	private static function getOpenEventSection(?int $userId = null): ?Section
 	{
+		if (!(OpenEvents\Feature::getInstance()->isAvailable($userId)))
+		{
+			return null;
+		}
+
+		if (self::$openEventSection !== false)
+		{
+			return self::$openEventSection;
+		}
+
 		/** @var Factory $mapperFactory */
 		$mapperFactory = ServiceLocator::getInstance()->get('calendar.service.mappers.factory');
 
@@ -7218,10 +7227,7 @@ class CCalendarEvent
 			'=CAL_TYPE' => Dictionary::CALENDAR_TYPE['open_event'],
 		])->fetch();
 
-		if (!$openEventSection)
-		{
-			return null;
-		}
+		self::$openEventSection = $openEventSection;
 
 		return $openEventSection;
 	}
@@ -7318,5 +7324,35 @@ class CCalendarEvent
 		self::$collabIdByParent[$parentId] = (int)($result['OWNER_ID'] ?? 0);
 
 		return self::$collabIdByParent[$parentId];
+	}
+
+	/**
+	 * @param array $event
+	 * @param int $sectionId
+	 * @param int $userId
+	 *
+	 * @return array
+	 * @throws \Bitrix\Main\Access\Exception\UnknownActionException
+	 */
+	private static function checkEventAccessFromGetList(array $event, int $sectionId, int $userId): array
+	{
+		if (isset(self::$getListAccessCheck[$sectionId]))
+		{
+			return self::$getListAccessCheck[$sectionId];
+		}
+
+		$eventModel = EventModel::createFromArray($event);
+		$eventModel->setSectionId($sectionId);
+
+		$accessController = new EventAccessController($userId);
+		$request = [
+			ActionDictionary::ACTION_EVENT_VIEW_FULL => [],
+			ActionDictionary::ACTION_EVENT_VIEW_TIME => [],
+			ActionDictionary::ACTION_EVENT_VIEW_TITLE => [],
+		];
+
+		self::$getListAccessCheck[$sectionId] = $accessController->batchCheck($request, $eventModel);
+
+		return self::$getListAccessCheck[$sectionId];
 	}
 }

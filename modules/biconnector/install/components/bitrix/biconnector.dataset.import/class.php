@@ -35,6 +35,19 @@ class DatasetImportComponent extends CBitrixComponent
 
 		$arParams['datasetId'] = (int)($arParams['datasetId'] ?? 0);
 		$arParams['sourceId'] = (string)($arParams['sourceId'] ?? '');
+		if (!is_array($arParams['connection'] ?? null))
+		{
+			$arParams['connection'] = [];
+		}
+		elseif (!empty($arParams['connection']))
+		{
+			$connection = [
+				'connectionId' => (int)($arParams['connection']['connectionId'] ?? 0),
+				'connectionType' => (string)($arParams['connection']['connectionType'] ?? ''),
+				'tableName' => (string)($arParams['connection']['tableName'] ?? ''),
+			];
+			$arParams['connection'] = $connection;
+		}
 
 		if (empty($arParams['sourceId']))
 		{
@@ -77,6 +90,11 @@ class DatasetImportComponent extends CBitrixComponent
 				],
 			],
 		];
+
+		if (!empty($this->arParams['connection']))
+		{
+			$this->arResult['initialData']['config']['connectionProperties'] = $this->arParams['connection'];
+		}
 	}
 
 	private function fillHelpdeskCode(): void

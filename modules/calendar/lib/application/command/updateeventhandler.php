@@ -224,7 +224,10 @@ class UpdateEventHandler implements CommandHandler
 
 	private function getEventAccessModel(int $eventId, int $userId): EventModel
 	{
-		return \CCalendarEvent::getEventModelForPermissionCheck($eventId, [], $userId);
+		return \CCalendarEvent::getEventModelForPermissionCheck(
+			eventId: $eventId,
+			userId: $userId
+		);
 	}
 
 	private function getSection(Factory $mapperFactory, UpdateEventCommand $command): Section

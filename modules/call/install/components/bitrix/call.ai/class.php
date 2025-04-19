@@ -5,6 +5,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Im\Call\Call;
 use Bitrix\Call\Track\TrackCollection;
+use Bitrix\Call\Integration\AI;
 use Bitrix\Call\Integration\AI\SenseType;
 use Bitrix\Call\Integration\AI\MentionService;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
@@ -77,6 +78,7 @@ class CallAiComponent extends \CBitrixComponent
 			switch ($outcome->getType())
 			{
 				case SenseType::TRANSCRIBE->value:
+					/** @var AI\Outcome\Transcription $content */
 					foreach ($content->transcriptions as $i => &$row)
 					{
 						if (!empty($row->text))
@@ -88,6 +90,7 @@ class CallAiComponent extends \CBitrixComponent
 					break;
 
 				case SenseType::SUMMARY->value:
+					/** @var AI\Outcome\Summary $content */
 					foreach ($content->summary as $i => &$row)
 					{
 						if (!empty($row->title) || !empty($row->summary))
@@ -100,6 +103,12 @@ class CallAiComponent extends \CBitrixComponent
 					break;
 
 				case SenseType::OVERVIEW->value:
+					/** @var AI\Outcome\Overview $content */
+					if ($content?->detailedTakeaways)
+					{
+						$content->detailedTakeaways = $mentionService->replaceBBMentions($content->detailedTakeaways);
+						$isEmpty = false;
+					}
 					if ($content?->topic)
 					{
 						$content->topic = $mentionService->replaceBBMentions($content->topic);
@@ -142,6 +151,23 @@ class CallAiComponent extends \CBitrixComponent
 								$meeting = $row->meeting;
 								$row->meeting = $mentionService->replaceBbMentions($meeting);
 								$row->meetingMentionLess = $mentionService->removeBbMentions($meeting);
+								$isEmpty = false;
+								if ($row?->quote)
+								{
+									$row->quote = $mentionService->replaceBbMentions($row->quote);
+								}
+							}
+						}
+					}
+					if ($content?->actionItems)
+					{
+						foreach ($content->actionItems as &$row)
+						{
+							if ($row?->action_item)
+							{
+								$actionItem = $row->action_item;
+								$row->action_item = $mentionService->replaceBbMentions($actionItem);
+								$row->actionItemMentionLess = $mentionService->removeBbMentions($actionItem);
 								$isEmpty = false;
 								if ($row?->quote)
 								{

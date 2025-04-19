@@ -44,21 +44,24 @@ class ChatMessage
 		$errorMessage = '';
 		$errorCode = $error->getCode();
 
-		if (
-			$error instanceof CallAIError
-			&& $error->isAiGeneratedError()
-		)
+		if ($error instanceof CallAIError)
 		{
-			$errorMessage = $error->getMessage();
+			if ($error->isAiGeneratedError())
+			{
+				$errorMessage = $error->getMessage();
+			}
+			else
+			{
+				$errCodes = (new \ReflectionClass(CallAIError::class))->getConstants();
+				if (in_array($errorCode, $errCodes, true))
+				{
+					$errorMessage = $error->getMessage();
+				}
+			}
 		}
 
 		switch ($errorCode)
 		{
-			case CallAIError::AI_RECORD_TOO_SHORT:
-			case CallAIError::AI_EMPTY_PAYLOAD_ERROR:
-				$errorMessage = $error->getMessage();
-				break;
-
 			case 'AI_ENGINE_ERROR_PROVIDER':
 			case 'AI_ENGINE_ERROR_OTHER':
 				//$helpUrl = CallAISettings::getHelpUrl();
@@ -188,7 +191,7 @@ class ChatMessage
 					25 => Loc::getMessage('CALL_NOTIFY_COPILOT_EFFICIENCY_25')
 				}
 			);
-			$attach->AddMessage(Loc::getMessage('CALL_NOTIFY_COPILOT_EFFICIENCY', ['#EFFICIENCY#' => $efficiency]));
+			$attach->AddMessage('[br][b]' . Loc::getMessage('CALL_NOTIFY_COPILOT_EFFICIENCY', ['#EFFICIENCY#' => $efficiency]) . '[/b]');
 		}
 
 		if ($overview?->agenda)
@@ -205,7 +208,7 @@ class ChatMessage
 			}
 		}
 
-		if ($overview?->agreements || $overview?->meetings || $overview?->tasks)
+		if ($overview?->agreements || $overview?->meetings || $overview?->tasks || $overview?->actionItems)
 		{
 			//$attach->AddMessage('[b]' . Loc::getMessage('CALL_NOTIFY_COPILOT_AGREEMENTS') . '[/b]');
 			$attach->AddDelimiter($delimiter);
@@ -228,6 +231,19 @@ class ChatMessage
 				}
 			}
 
+			if (!empty($overview->actionItems))
+			{
+				$attach->AddMessage('[b]' . Loc::getMessage('CALL_NOTIFY_COPILOT_AGREEMENTS_TASKS') . '[/b]');
+				$number = 0;
+				foreach ($overview->actionItems as $action)
+				{
+					if (!empty($action->action_item))
+					{
+						$number++;
+						$attach->AddMessage("{$number}. " . $action->action_item);
+					}
+				}
+			}
 			if (!empty($overview->tasks))
 			{
 				$attach->AddMessage('[b]' . Loc::getMessage('CALL_NOTIFY_COPILOT_AGREEMENTS_TASKS') . '[/b]');

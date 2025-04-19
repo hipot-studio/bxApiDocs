@@ -1332,15 +1332,22 @@ class Workgroup extends Base
 		string $signedParameters = ''
 	): ?array
 	{
+		if ($groupId <= 0)
+		{
+			$this->addEmptyGroupIdError();
+
+			return null;
+		}
+
 		if (
-			$groupId <= 0
-			|| !Helper\Workgroup\Access::canView([
+			!Helper\Workgroup\Access::canView([
 				'groupId' => $groupId,
 				'checkAdminSession' => ($this->getScope() !== Controller::SCOPE_REST),
 			])
 		)
 		{
-			$this->addEmptyGroupIdError();
+			$this->addError(new Error('Access denied'));
+
 			return null;
 		}
 

@@ -795,6 +795,16 @@ final class CatalogStoreDocumentProductListComponent
 			$calculatedPrice = (float)($document[$this->getDefaultTotalCalculationField()] ?? 0.0);
 			$totalPrice = $amount * $calculatedPrice;
 
+			$iblockId = null;
+			if (isset($product['IBLOCK_ID']))
+			{
+				$iblockId = $product['IBLOCK_ID'];
+			}
+			elseif (isset($this->arParams['IBLOCK_ID']))
+			{
+				$iblockId = $this->arParams['IBLOCK_ID'];
+			}
+
 			$additionalData = [
 				'ROW_ID' => $this->getRowIdPrefix($document['ID']),
 				'BARCODE' => $barcode,
@@ -802,7 +812,7 @@ final class CatalogStoreDocumentProductListComponent
 				'STORE_TO_AVAILABLE_AMOUNT' => $availableAmountTo,
 				'STORE_FROM_AVAILABLE_AMOUNT' => $availableAmountFrom,
 				'STORE_AMOUNT_MAP' => $productStoreInfo[$productId] ?? null,
-				'IBLOCK_ID' => $product['IBLOCK_ID'] ?? $this->arParams['IBLOCK_ID'],
+				'IBLOCK_ID' => $iblockId,
 				'BASE_PRICE_ID' => $product['BASE_PRICE_ID'] ?? $this->getStorageItem('BASE_PRICE_ID'),
 				'PARENT_PRODUCT_ID' => $product['PARENT_PRODUCT_ID'] ?? null,
 				'OFFERS_IBLOCK_ID' => $product['OFFERS_IBLOCK_ID'] ?? null,

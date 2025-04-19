@@ -626,13 +626,7 @@ class Tag
 			return;
 		}
 
-		LabelTable::add([
-			'NAME' => $tagName,
-			'USER_ID' => $this->userId,
-			'GROUP_ID' => 0,
-		]);
-
-		self::invalidate();
+		$this->saveTag($tagName, $this->userId);
 	}
 
 	/**
@@ -676,13 +670,7 @@ class Tag
 			return;
 		}
 
-		LabelTable::add([
-			'NAME' => $tagName,
-			'USER_ID' => 0,
-			'GROUP_ID' => $groupId,
-		]);
-
-		self::invalidate();
+		$this->saveTag($tagName, 0, $groupId);
 	}
 
 	/**
@@ -998,5 +986,20 @@ class Tag
 	private function getSqlHelper(): SqlHelper
 	{
 		return Application::getConnection()->getSqlHelper();
+	}
+
+	private function saveTag(string $name, int $userId = 0, int $groupId = 0): void
+	{
+		$sql = $this->getSqlHelper()->getInsertIgnore(
+			LabelTable::getTableName(),
+			' (NAME, USER_ID, GROUP_ID)',
+			" VALUES ('{$name}', {$userId}, {$groupId})"
+		);
+
+		Application::getConnection()->query($sql);
+
+		LabelTable::cleanCache();
+
+		self::invalidate();
 	}
 }

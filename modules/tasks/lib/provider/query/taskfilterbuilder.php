@@ -438,6 +438,14 @@ class TaskFilterBuilder
 
 					$tagsCount = count($tags);
 
+					if ($tagsCount === 1) // simplify in case of 1 tag
+					{
+						$this->registerRuntimeField(TaskQueryBuilder::ALIAS_TASK_TAG_NAME);
+						$conditionTree->where(TaskQueryBuilder::ALIAS_TASK_TAG_NAME . '.NAME', $tags[0]);
+
+						break;
+					}
+
 					$subQuery = TaskQueryBuilder::createQuery(
 						TaskQueryBuilder::ALIAS_TASK_TAG,
 						LabelTable::getEntity()
@@ -490,6 +498,34 @@ class TaskFilterBuilder
 					$conditionTree->where($subFilter);
 					break;
 
+				case 'SPRINT_ID':
+				case 'BACKLOG_ID':
+					$subFilter = $this->createSubfilter(
+						TaskQueryBuilder::ALIAS_SCRUM_ITEM . ".ENTITY_ID",
+						$val,
+						$operation,
+						self::CAST_NUMBER
+					);
+
+					if (!$subFilter)
+					{
+						break;
+					}
+
+					$entityForm = $field === 'SPRINT_ID' ? EntityForm::SPRINT_TYPE : EntityForm::BACKLOG_TYPE;
+
+					$condition = new Condition(
+						TaskQueryBuilder::ALIAS_SCRUM_ENTITY.'.ENTITY_TYPE',
+						'=',
+						$entityForm);
+
+					$subFilter->logic('and');
+					$subFilter->addCondition($condition);
+
+					$conditionTree->where($subFilter);
+					$this->registerRuntimeField(TaskQueryBuilder::ALIAS_SCRUM_ITEM);
+					break;
+
 				case 'REAL_STATUS':
 					$containCompletedSprint =
 						is_array($val) && in_array(EntityForm::STATE_COMPLETED_IN_ACTIVE_SPRINT, $val, true);
@@ -500,6 +536,7 @@ class TaskFilterBuilder
 						$scrumFilter = Query::filter()
 							->logic('and')
 							->whereNotNull(TaskQueryBuilder::ALIAS_SCRUM_ITEM . '.ID')
+							->where(TaskQueryBuilder::ALIAS_SCRUM_ENTITY . '.STATUS', EntityForm::SPRINT_ACTIVE)
 							->where('STATUS', Status::COMPLETED);
 
 						if ($subFilter)

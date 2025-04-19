@@ -17,11 +17,19 @@ final class Settings
 		'report' => 'report',
 		'templates' => 'templates',
 		'flows' => 'flows',
+		'crm_bi' => 'crm_bi',
 	];
 
-	private function isAvailable(): bool
+	private static ?self $instance = null;
+
+	public static function getInstance(): self
 	{
-		return Loader::includeModule('intranet') && class_exists(ToolsManager::class);
+		if (self::$instance === null)
+		{
+			self::$instance = new self();
+		}
+
+		return self::$instance;
 	}
 
 	public function isToolAvailable(string $tool): bool
@@ -32,5 +40,20 @@ final class Settings
 		}
 
 		return (new ToolsManager())->checkAvailabilityByToolId($tool);
+	}
+
+	public function isToolAvailableByMenuId(string $menuItemId): bool
+	{
+		if (!$this->isAvailable())
+		{
+			return true;
+		}
+
+		return (new ToolsManager())->checkAvailabilityByMenuId($menuItemId);
+	}
+
+	private function isAvailable(): bool
+	{
+		return Loader::includeModule('intranet');
 	}
 }

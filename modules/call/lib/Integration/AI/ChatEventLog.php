@@ -137,7 +137,11 @@ class ChatEventLog
 
 				$attach = new \CIMMessageParamAttach();
 				$attach->AddMessage(
-					"Error: ".$error->getMessage()
+					"Error: ".(
+						$error instanceof CallAIError && $error->getDescription()
+							? $error->getDescription()
+							: $error->getMessage()
+						)
 					. "[br]Error code: ".$error->getCode()
 					. "[br]File name: {$track->getFileName()}"
 					. "[br]Type: {$track->getType()}"
@@ -216,7 +220,11 @@ class ChatEventLog
 				$attach->AddMessage(
 					"AI task hash: ".$task->getHash()
 					. "[br]Error code: ".$error->getCode()
-					. "[br]Error: ".$error->getMessage()
+					. "[br]Error: ". (
+						$error instanceof CallAIError && $error->getDescription()
+							? $error->getDescription()
+							: $error->getMessage()
+					)
 				);
 				$message->setAttach($attach);
 

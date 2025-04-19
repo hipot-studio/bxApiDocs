@@ -45,7 +45,5 @@ class Transcription
 				$this->isEmpty = empty($this->transcriptions);
 			}
 		}
-
-		return $this;
 	}
 }

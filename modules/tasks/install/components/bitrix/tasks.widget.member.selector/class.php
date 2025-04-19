@@ -18,6 +18,7 @@ use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\Access\TemplateAccessController;
 use Bitrix\Tasks\Access\Model\TemplateModel;
 use Bitrix\Tasks\Integration\Extranet;
+use Bitrix\Tasks\Validation\Validator\SerializedValidator;
 
 Loc::loadMessages(__FILE__);
 
@@ -286,7 +287,7 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 		else
 		{
 			$oldTask = TaskModel::createFromId(($taskId));
-			$newTask = TaskModel::createFromRequest(['GROUP_ID' => $groupId]);
+			$newTask = TaskModel::createFromArray(['GROUP_ID' => $groupId]);
 
 			$isAccess = (new TaskAccessController($this->userId))->check(ActionDictionary::ACTION_TASK_SAVE, $oldTask, $newTask);
 		}
@@ -763,14 +764,22 @@ class TasksWidgetMemberSelectorComponent extends TasksBaseComponent
 		}
 		catch (TasksException $e)
 		{
-			LogFacade::logThrowable($e, 'TASKS_DEBUG_MEMBER_SELECTOR');
-			$messages = @unserialize($e->getMessage(), ['allowed_classes' => false]);
-			if (is_array($messages))
+			$isSerialized = (new SerializedValidator())->validate($e->getMessage())->isSuccess();
+			if ($isSerialized)
 			{
-				foreach ($messages as $message)
+				$messages = unserialize($e->getMessage(), ['allowed_classes' => false]);
+				if (is_array($messages))
 				{
-					$this->errorCollection->add('TASK_EXCEPTION', $message['text'], false, ['ui' => 'notification']);
+					foreach ($messages as $message)
+					{
+						$this->errorCollection->add('TASK_EXCEPTION', $message['text'], false, ['ui' => 'notification']
+						);
+					}
 				}
+			}
+			elseif (is_string($e->getMessage()))
+			{
+				$this->errorCollection->add('TASK_EXCEPTION', $e->getMessage(), false, ['ui' => 'notification']);
 			}
 		}
 		catch (\Exception $e)

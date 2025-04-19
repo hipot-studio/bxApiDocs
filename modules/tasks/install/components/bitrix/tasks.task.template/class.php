@@ -45,6 +45,8 @@ class TasksTaskTemplateComponent extends TasksBaseComponent implements Errorable
 
 	protected $errorCollection;
 
+	private const GRID_ID = 'TASKS_TEMPLATES_FILTER_ID';
+
 	public function configureActions()
 	{
 		if (!\Bitrix\Main\Loader::includeModule('tasks'))
@@ -352,7 +354,7 @@ class TasksTaskTemplateComponent extends TasksBaseComponent implements Errorable
 
 	protected function getData()
 	{
-		//$this->getFlagStateInstance()->remove();
+		$this->arResult['GRID_ID'] = static::GRID_ID;
 
 		$formSubmitted = $this->formData !== false;
 		$id = $this->template->getId();

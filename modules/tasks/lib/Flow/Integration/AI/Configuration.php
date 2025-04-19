@@ -45,7 +45,7 @@ class Configuration
 
 	public static function getMaxValueForLowEfficiency(): int
 	{
-		return 80;
+		return 79;
 	}
 
 	public static function getPrecisionOfValues(): int

@@ -472,14 +472,14 @@ class Task
 			return false;
 		}
 
-		$safeDelete = $this->proceedSafeDelete($taskData);
-
-		CounterService::getInstance()->collectData($this->taskId);
-
 		if (!$this->onBeforeDelete())
 		{
 			return false;
 		}
+
+		$safeDelete = $this->proceedSafeDelete($taskData);
+
+		CounterService::getInstance()->collectData($this->taskId);
 
 		$taskObject = TaskRegistry::getInstance()->getObject($taskId, true)?->fillAllMemberIds();
 		$timeLineManager = new TimeLineManager($taskId, $this->userId);
@@ -769,6 +769,7 @@ class Task
 		$after['GROUP_ID'] = (int)$taskData['GROUP_ID'];
 
 		$lastResult = ResultManager::getLastResult($this->taskId);
+		$isLastResultOpened = $lastResult && (int)$lastResult['STATUS'] === ResultTable::STATUS_OPENED;
 
 		$params = [
 			'TASK_ID' => $this->taskId,
@@ -782,10 +783,10 @@ class Task
 				'updateCommentExists' => $updateComment,
 				'removedParticipants' => array_values($removedParticipants),
 			],
-			'taskRequireResult' => ResultManager::requireResult($this->taskId) ? "Y" : "N",
-			'taskHasResult' => $lastResult ? "Y" : "N",
-			'taskHasOpenResult' => ($lastResult && (int)$lastResult['STATUS'] === ResultTable::STATUS_OPENED) ? "Y"
-				: "N",
+			'taskRequireResult' => ResultManager::requireResult($this->taskId) ? 'Y' : 'N',
+			'taskHasResult' => $lastResult ? 'Y' : 'N',
+			'taskHasOpenResult' => $isLastResultOpened ? 'Y' : 'N',
+			'updateDate' => strtotime($taskData['CHANGED_DATE'] ?? '') ?: null,
 		];
 
 		try
@@ -1032,6 +1033,7 @@ class Task
 		$this->sourceTaskData = null;
 		$this->legacyOperationResultData = null;
 		$this->changes = null;
+		$this->taskId = null;
 	}
 
 	/**
@@ -2759,6 +2761,13 @@ class Task
 		{
 			$parentId = (int)($fields['PARENT_ID'] ?? null);
 			$event = $parentId ? Analytics::EVENT['subtask_add'] : Analytics::EVENT['task_create'];
+			$params = array_merge(
+				$fields['TASKS_ANALYTICS_PARAMS'] ?? [],
+				[
+					'p3' => 'auditorsCount_' . count($fields['AUDITORS'] ?? []),
+					'p5' => 'accomplicesCount_' . count($fields['ACCOMPLICES'] ?? []),
+				]
+			);
 
 			Analytics::getInstance($this->userId)->onTaskCreate(
 				$fields['TASKS_ANALYTICS_CATEGORY'] ?: Analytics::TASK_CATEGORY,
@@ -2767,7 +2776,7 @@ class Task
 				$fields['TASKS_ANALYTICS_ELEMENT'] ?? null,
 				$fields['TASKS_ANALYTICS_SUB_SECTION'] ?? null,
 				$status,
-				$fields['TASKS_ANALYTICS_PARAMS'] ?? [],
+				$params,
 			);
 		}
 	}

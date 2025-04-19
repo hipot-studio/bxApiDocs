@@ -348,7 +348,8 @@ class CCalendarSect
 
 							$queryFilter
 								->where('TYPE.ACTIVE', 'Y')
-								->whereIn('CAL_TYPE', $value);
+								->whereIn('CAL_TYPE', $value)
+							;
 						}
 						else
 						{
@@ -358,7 +359,14 @@ class CCalendarSect
 					default:
 						if (in_array($key, $sectionFields, true))
 						{
-							$queryFilter->where($key, $value);
+							if (is_array($value))
+							{
+								$queryFilter->whereIn($key, $value);
+							}
+							else
+							{
+								$queryFilter->where($key, $value);
+							}
 						}
 						break;
 				}
@@ -1154,7 +1162,7 @@ class CCalendarSect
 				PushCommand::EditSection,
 				$pullUserId,
 				[
-					'fields' => $sectionFields,
+					'fields' => [...$sectionFields, 'ID' => $id],
 					'newSection' => $isNewSection,
 				]
 			);

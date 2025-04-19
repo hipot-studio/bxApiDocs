@@ -56,8 +56,12 @@ class Group extends \Bitrix\Tasks\Integration\SocialNetwork
 		}
 
 		return \CSocNetFeaturesPerms::canPerformOperation(
-			$userId, SONET_ENTITY_GROUP,
-			$id, 'tasks', $actionCode
+			$userId,
+			SONET_ENTITY_GROUP,
+			$id,
+			'tasks',
+			$actionCode,
+			User::isAdmin($userId),
 		);
 	}
 

@@ -19,7 +19,7 @@ class TranscriptionInsights extends AITask
 			{
 				"insights": [
 					{
-						"insight_type": "string or null",
+						"speaker": "string or null",
 						"detailed_insight": "string or null"
 					}
 				]
@@ -146,7 +146,7 @@ class TranscriptionInsights extends AITask
 				{
 					$findFieldToConvert($field);
 				}
-				elseif (is_string($field) && $field == 'string or null')
+				elseif (is_string($field) && str_contains($field, 'string or null'))
 				{
 					$fieldsConvert[$code] = true;
 				}

@@ -90,16 +90,6 @@ class BaseCase
 		return $this->dateFormat;
 	}
 
-	protected function addUserRights(Message $message, User $user, int $logId): void
-	{
-		$message->addMetaData('rights', ['U' . $user->getId() . '_' . $logId]);
-	}
-
-	protected function addGroupRights(Message $message, int $groupId, int $logId): void
-	{
-		$message->addMetaData('rights', ['SG' . $groupId . '_' . $logId]);
-	}
-
 	protected function recepients2Rights(array $recepients): array
 	{
 		$rights = [];

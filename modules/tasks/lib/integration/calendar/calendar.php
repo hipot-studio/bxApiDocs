@@ -28,7 +28,7 @@ class Calendar
 		return match($feature)
 		{
 			'flow' => Option::get('tasks', 'tasks_flow_use_calendar', 'Y') === 'Y',
-			'regular_template' => Option::get('tasks', 'tasks_regular_template_use_calendar', 'N') === 'Y',
+			'regular_template' => Option::get('tasks', 'tasks_regular_template_use_calendar', 'Y') === 'Y',
 			default => false,
 		};
 	}

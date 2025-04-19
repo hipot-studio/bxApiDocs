@@ -139,7 +139,9 @@ abstract class Service
 	 */
 	protected function getAttendeesList(): array
 	{
-		return \CCalendarEvent::getAttendeeList($this->event->getId())['attendeeList'][$this->event->getId()];
+		$attendeeListResult = \CCalendarEvent::getAttendeeList([$this->event->getId()]);
+
+		return $attendeeListResult['attendeeList'][$this->event->getId()];
 	}
 
 	/**

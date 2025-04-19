@@ -934,7 +934,8 @@ class CTaskNotifications
 			if ((int)$status === Status::PENDING)
 				$message = GetMessage("TASKS_SONET_TASK_STATUS_MESSAGE_" . Status::NEW);
 			else
-				$message = GetMessage("TASKS_SONET_TASK_STATUS_MESSAGE_" . $status);
+				$message = Loc::getMessage("TASKS_SONET_TASK_STATUS_MESSAGE_" . $status . '_MSGVER_1')
+							?? Loc::getMessage("TASKS_SONET_TASK_STATUS_MESSAGE_" . $status);
 
 			if ((int)$status === Status::DECLINED)
 				$message = str_replace("#TASK_DECLINE_REASON#", $arTask["DECLINE_REASON"], $message);
@@ -3316,8 +3317,8 @@ class CTaskNotifications
 				}
 				else
 				{
-					$userDataDb = \CUser::GetList('', '', ['ID' => $arUser['ID']], ['FIELDS' => ['ID', 'LID']]);
-					if ($userData = $userDataDb->Fetch())
+					$userData = static::getUser($arUser['ID']);
+					if (isset($userData['LID']))
 					{
 						$siteID = $userData['LID'];
 					}
@@ -3613,7 +3614,7 @@ class CTaskNotifications
 				'ID',
 				'ASC',
 				array('ID' => implode('|', $absent)),
-				array('FIELDS' => array('NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL', 'ID', 'PERSONAL_GENDER', 'EXTERNAL_AUTH_ID'))
+				array('FIELDS' => array('NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL', 'ID', 'PERSONAL_GENDER', 'EXTERNAL_AUTH_ID', 'LID'))
 			);
 			while($item = $res->fetch())
 			{
@@ -3860,7 +3861,13 @@ class CTaskNotifications
 		foreach($arFields as $field)
 		{
 			$field = $locMap[$field] ?? $field;
-			$arNames[] = GetMessage("TASKS_SONET_LOG_".$field);
+			$message = Loc::getMessage('TASKS_SONET_LOG_' . $field);
+			if(empty($message))
+			{
+				$message = Loc::getMessage('TASKS_SONET_LOG_' . $field . '_MSGVER_1');
+			}
+
+			$arNames[] = $message;
 		}
 
 		return array_unique(array_filter($arNames));

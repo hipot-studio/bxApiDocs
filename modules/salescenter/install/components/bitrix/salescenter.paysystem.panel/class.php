@@ -296,6 +296,7 @@ class SalesCenterPaySystemPanel extends CBitrixComponent implements Controllerab
 				'samsung_pay' => '#1429A1',
 			],
 			'platon' => '#EC6125',
+			'tbankbusiness' => '#FFDD2D',
 		];
 	}
 

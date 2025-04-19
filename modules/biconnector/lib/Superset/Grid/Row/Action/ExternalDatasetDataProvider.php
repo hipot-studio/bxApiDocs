@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Superset\Grid\Row\Action;
 
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Grid\Settings\ExternalDatasetSettings;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\Dataset\CreateChartAction;
 use Bitrix\Main\Grid\Row\Action\DataProvider;
 
 /**
@@ -20,6 +21,7 @@ class ExternalDatasetDataProvider extends DataProvider
 
 		return [
 			new OpenDatasetAction(),
+			new CreateChartAction(),
 			new DeleteDatasetAction(),
 		];
 	}

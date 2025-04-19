@@ -24,10 +24,4 @@ class SpaceService
 
 		return Service::isAvailable($isPublic);
 	}
-
-	public static function useNotificationStrategy(): bool
-	{
-		return static::isAvailable(true)
-			&& Option::get('tasks', 'use_notification_strategy', 'N') === 'Y';
-	}
 }

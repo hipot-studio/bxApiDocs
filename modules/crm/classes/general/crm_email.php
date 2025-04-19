@@ -22,6 +22,8 @@ else
 
 class CCrmEMail
 {
+	public const ACTIVITY_SETTINGS_NOT_LOADED_ATTACHMENTS_FIELD = 'NOT_LOADED_ATTACHMENTS';
+
 
 	/**
 	 * @deprecated No longer used by internal code and not recommended.
@@ -298,7 +300,7 @@ class CCrmEMail
 
 		return $arFields ? self::GetResponsibleID($arFields) : 0;
 	}
-	private static function TryImportVCard(&$fileData, $responsible = null)
+	public static function TryImportVCard(&$fileData, $responsible = null)
 	{
 		$CCrmVCard = new CCrmVCard();
 		$arContact = $CCrmVCard->ReadCard(false, $fileData);
@@ -1304,9 +1306,6 @@ class CCrmEMail
 		$ownerTypeId = $emailFacility->getOwnerTypeId();
 		$ownerId     = $emailFacility->getOwnerId();
 
-		$attachmentMaxSizeMb = (int) \COption::getOptionString('crm', 'email_attachment_max_size', 24);
-		$attachmentMaxSize = $attachmentMaxSizeMb > 0 ? $attachmentMaxSizeMb*1024*1024 : 0;
-
 		// @TODO: update $msgFields
 		if (\Bitrix\Mail\Helper\Message::ensureAttachments($msgFields) > 0)
 		{
@@ -1316,48 +1315,8 @@ class CCrmEMail
 			}
 		}
 
-		$body = isset($msgFields['BODY']) ? $msgFields['BODY'] : '';
-		$body_html = isset($msgFields['BODY_HTML']) ? $msgFields['BODY_HTML'] : '';
-
-		$filesData = array();
-		$bannedAttachments = array();
-		$res = \CMailAttachment::getList(array(), array('MESSAGE_ID' => $messageId));
-		while ($attachment = $res->fetch())
-		{
-			$attachment['FILE_NAME'] = str_replace("\0", '', $attachment['FILE_NAME']);
-
-			if (getFileExtension(mb_strtolower($attachment['FILE_NAME'])) == 'vcf' && !$denyNewContact)
-			{
-				if ($attachment['FILE_ID'])
-					$attachment['FILE_DATA'] = \CMailAttachment::getContents($attachment);
-				self::tryImportVCard($attachment['FILE_DATA'], $userId);
-			}
-
-			$fileSize = isset($attachment['FILE_SIZE']) ? intval($attachment['FILE_SIZE']) : 0;
-			if ($fileSize <= 0)
-				continue;
-
-			if ($attachmentMaxSize > 0 && $fileSize > $attachmentMaxSize)
-			{
-				$bannedAttachments[] = array(
-					'name' => $attachment['FILE_NAME'],
-					'size' => $fileSize
-				);
-
-				continue;
-			}
-
-			if ($attachment['FILE_ID'] && empty($attachment['FILE_DATA']))
-				$attachment['FILE_DATA'] = \CMailAttachment::getContents($attachment);
-
-			$filesData[] = array(
-				'name'      => $attachment['FILE_NAME'],
-				'type'      => $attachment['CONTENT_TYPE'],
-				'content'   => $attachment['FILE_DATA'],
-				'MODULE_ID' => 'crm',
-				'attachment_id' => $attachment['ID'],
-			);
-		}
+		$attachmentSaver = new \Bitrix\Crm\Activity\Mail\Attachment\MailActivityAttachmentSaver();
+		$attachmentSaveResult = $attachmentSaver->saveAttachmentFiles($messageId, $denyNewContact, $userId);
 
 		$eventBindings = array();
 		foreach ($emailFacility->getBindings() as $item)
@@ -1373,19 +1332,12 @@ class CCrmEMail
 		$eventText .= '<b>'.getMessage('CRM_EMAIL_FROM').'</b>: '.join(', ', $sender).PHP_EOL;
 		$eventText .= '<b>'.getMessage('CRM_EMAIL_TO').'</b>: '.join(', ', $rcpt).PHP_EOL;
 
-		if (!empty($bannedAttachments))
+		if (!$attachmentSaveResult->bannedAttachments->isEmpty())
 		{
-			$eventText .= '<b>'.getMessage('CRM_EMAIL_BANNENED_ATTACHMENTS', array('%MAX_SIZE%' => $attachmentMaxSizeMb)).'</b>: ';
-			foreach ($bannedAttachments as $attachmentInfo)
-			{
-				$eventText .= getMessage(
-					'CRM_EMAIL_BANNENED_ATTACHMENT_INFO',
-					array(
-						'%NAME%' => $attachmentInfo['name'],
-						'%SIZE%' => round($attachmentInfo['size']/1024/1024, 1)
-					)
-				);
-			}
+			$eventText .= self::getBannedAttachmentErrorMessage(
+				$attachmentSaveResult->bannedAttachments,
+				$attachmentSaver->getAttachmentMaxSizeInMb(),
+			);
 
 			$eventText .= PHP_EOL;
 		}
@@ -1404,40 +1356,12 @@ class CCrmEMail
 			false
 		);
 
-		$storageTypeId = \CCrmActivity::getDefaultStorageTypeID();
-		$elementIds = array();
-		foreach ($filesData as $i => $fileData)
-		{
-			$fileId = \CFile::saveFile($fileData, 'crm', true);
-			if (!($fileId > 0))
-				continue;
-
-			$fileData = \CFile::getFileArray($fileId);
-			if (empty($fileData))
-				continue;
-
-			if (trim($fileData['ORIGINAL_NAME']) == '')
-				$fileData['ORIGINAL_NAME'] = $fileData['FILE_NAME'];
-			$elementId = StorageManager::saveEmailAttachment(
-				$fileData, $storageTypeId, '',
-				array('USER_ID' => $userId)
-			);
-			if ($elementId > 0)
-			{
-				$elementIds[] = (int) $elementId;
-				$filesData[$i]['element_id'] = (int) $elementId;
-			}
-		}
-
-		if (!empty($body_html))
-		{
-			$checkInlineFiles = true;
-			$descr = $body_html;
-		}
-		else
-		{
-			$descr = preg_replace('/\r\n|\n|\r/', '<br>', htmlspecialcharsbx($body));
-		}
+		$description = (new Bitrix\Crm\Activity\Mail\Attachment\MailActivityDescriptionFactory())
+			->makeFromBody(
+				textBody: (string)($msgFields['BODY'] ?? ''),
+				htmlBody: (string)($msgFields['BODY_HTML'] ?? ''),
+			)
+		;
 
 		$isIncomingChannel = false;
 		if ($isIncome)
@@ -1501,13 +1425,13 @@ class CCrmEMail
 			'RESPONSIBLE_ID'       => $userId,
 			'EDITOR_ID' => $userId,
 			'PRIORITY'             => \CCrmActivityPriority::Medium,
-			'DESCRIPTION'          => \Bitrix\Main\Text\Emoji::encode($descr),
+			'DESCRIPTION'          => \Bitrix\Main\Text\Emoji::encode($description->description),
 			'DESCRIPTION_TYPE'     => \CCrmContentType::Html,
 			'DIRECTION'            => $direction,
 			'LOCATION'             => '',
 			'NOTIFY_TYPE'          => \CCrmActivityNotifyType::None,
-			'STORAGE_TYPE_ID'      => $storageTypeId,
-			'STORAGE_ELEMENT_IDS'  => $elementIds,
+			'STORAGE_TYPE_ID'      => $attachmentSaver->getStorageTypeId(),
+			'STORAGE_ELEMENT_IDS'  => $attachmentSaveResult->storageAttachmentIds->getStorageElementIds(),
 			'SETTINGS'             => array(
 				'EMAIL_META' => array(
 					'__email' => $mailbox['__email'],
@@ -1518,6 +1442,10 @@ class CCrmEMail
 					'bcc'     => $bcc,
 				),
 				'SANITIZE_ON_VIEW' => (int)($msgFields['SANITIZE_ON_VIEW'] ?? 0),
+				self::ACTIVITY_SETTINGS_NOT_LOADED_ATTACHMENTS_FIELD => (int)($msgFields['OPTIONS']['attachments'] ?? 0)
+					- $attachmentSaveResult->bannedAttachments->count()
+					- $attachmentSaveResult->storageAttachmentIds->count()
+				,
 			),
 			'UF_MAIL_MESSAGE' => $messageId,
 			'IS_INCOMING_CHANNEL' => $isIncomingChannel ? 'Y' : 'N',
@@ -1572,31 +1500,15 @@ class CCrmEMail
 				)
 			);
 
-			if (!empty($checkInlineFiles))
+			if ($description->mayContainInlineFiles)
 			{
-				foreach ($filesData as $item)
-				{
-					$info = \Bitrix\Crm\Integration\DiskManager::getFileInfo(
-						$item['element_id'], false,
-						array('OWNER_TYPE_ID' => \CCrmOwnerType::Activity, 'OWNER_ID' => $activityId)
-					);
-
-					$descr = preg_replace(
-						sprintf('/<img([^>]+)src\s*=\s*(\'|\")?\s*(aid:%u)\s*\2([^>]*)>/is', $item['attachment_id']),
-						sprintf('<img\1src="%s"\4>', $info['VIEW_URL']),
-						$descr, -1, $count
-					);
-
-					if ($count > 0)
-						$descrUpdated = true;
-				}
-
-				if (!empty($descrUpdated))
-				{
-					\CCrmActivity::update($activityId, array(
-						'DESCRIPTION' => $descr,
-					), false, false);
-				}
+				(new \Bitrix\Crm\Activity\Mail\Attachment\MailActivityDiskLinkReplacer())
+					->replaceLinksAndUpdateDescription(
+						$activityId,
+						$description->description,
+						$attachmentSaveResult->storageAttachmentIds,
+					)
+				;
 			}
 
 			\Bitrix\Crm\Activity\MailMetaTable::add(array(
@@ -1658,6 +1570,31 @@ class CCrmEMail
 		}
 
 		return true;
+	}
+
+	public static function getBannedAttachmentErrorMessage(
+		\Bitrix\Crm\Activity\Mail\Attachment\Dto\BannedAttachmentCollection $bannedAttachments,
+		int $maxSizeMb
+	): ?string
+	{
+		if (!$bannedAttachments->isEmpty())
+		{
+			$eventText = '<b>'.getMessage('CRM_EMAIL_BANNENED_ATTACHMENTS', ['%MAX_SIZE%' => $maxSizeMb]).'</b>: ';
+			foreach ($bannedAttachments as $attachmentInfo)
+			{
+				$eventText .= getMessage(
+					'CRM_EMAIL_BANNENED_ATTACHMENT_INFO',
+					[
+						'%NAME%' => $attachmentInfo->name,
+						'%SIZE%' => round($attachmentInfo->size/1024/1024, 1),
+					],
+				);
+			}
+
+			return $eventText;
+		}
+
+		return null;
 	}
 
 	/**

@@ -19,6 +19,7 @@ use Bitrix\Tasks\Integration\Extranet;
 use Bitrix\Tasks\Integration\SocialNetwork;
 use Bitrix\Tasks\Integration\SocialNetwork\Collab\Provider\CollabDefaultProvider;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
+use Bitrix\Tasks\Integration\SocialNetwork\GroupProvider;
 use Bitrix\Tasks\Internals\Helper\Task\Dependence;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Task\Mark;
@@ -38,6 +39,7 @@ use Bitrix\Tasks\Util;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
 use CTimeZone;
+use CUser;
 use Throwable;
 
 class TaskFieldHandler
@@ -719,17 +721,30 @@ class TaskFieldHandler
 
 		if (array_key_exists('RESPONSIBLE_ID', $this->fields))
 		{
-			$newResponsibleId = (int) $this->fields['RESPONSIBLE_ID'];
+			$newResponsibleId = (int)$this->fields['RESPONSIBLE_ID'];
 
-			$userResult = \CUser::GetList(
-				'id',
-				'asc',
-				['ID_EQUAL_EXACT' => $newResponsibleId],
-				[
-					'FIELDS' => ['ID'],
-					'SELECT' => ['UF_DEPARTMENT'],
-				]
-			);
+			if ($newResponsibleId === $this->userId)
+			{
+				$userResult = CUser::GetByID($this->userId);
+			}
+			else
+			{
+				$userResult = CUser::GetList(
+					'id',
+					'asc',
+					['ID_EQUAL_EXACT' => $newResponsibleId],
+					[
+						'FIELDS' => ['ID'],
+						'SELECT' => ['UF_DEPARTMENT'],
+					]
+				);
+			}
+
+			if (!$userResult)
+			{
+				throw new TaskFieldValidateException(Loc::getMessage('TASKS_BAD_ASSIGNEE_EX'));
+			}
+
 			$user = $userResult->Fetch();
 			if (!$user)
 			{
@@ -768,7 +783,10 @@ class TaskFieldHandler
 
 						if (!$responsibleRoleInGroup[$this->fields['GROUP_ID']])
 						{
-							throw new TaskFieldValidateException(Loc::getMessage('TASKS_BAD_ASSIGNEE_IN_GROUP'));
+							$isCollab = GroupProvider::isCollab($this->fields['GROUP_ID']);
+
+							$messageKey = $isCollab ? 'TASKS_BAD_ASSIGNEE_IN_COLLAB' : 'TASKS_BAD_ASSIGNEE_IN_GROUP';
+							throw new TaskFieldValidateException(Loc::getMessage($messageKey));
 						}
 					}
 				}

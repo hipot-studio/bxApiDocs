@@ -18,15 +18,16 @@ use Bitrix\Call\Integration\AI\Task\TranscriptionOverview;
 		"is_exception_meeting": "bool",
 		"explanation": "string or null"
 	},
+	"detailed_takeaways": "long string or null",
 	"agreements": [
 		{
 			"agreement": "string or null",
 			"quote": "string or null"
 		}
 	],
-	"tasks": [
+	"action_items": [
 		{
-			"task": "string or null",
+			"action_item": "string or null",
 			"quote": "string or null"
 		}
 	],
@@ -66,10 +67,12 @@ class Overview
 	public int $efficiencyValue = -1;
 	public ?\stdClass $calendar = null;/** @see TranscriptionOverview::buildOutcome */
 	public array $tasks = [];
+	public array $actionItems = [];
 	public array $meetings = [];
 	public array $agreements = [];
 	public ?\stdClass $meetingDetails = null;
 	public bool $isExceptionMeeting = false;
+	public string $detailedTakeaways = '';
 
 
 	public function __construct(?Integration\AI\Outcome $outcome = null)
@@ -93,10 +96,17 @@ class Overview
 				return $output;
 			};
 
-			$value = $outcome->getProperty('topic');
-			if ($value)
+			$fieldsMap = [
+				'topic' => 'topic',
+				'detailedTakeaways' => 'detailed_takeaways',
+			];
+			foreach ($fieldsMap as $field => $prop)
 			{
-				$this->topic = $value->getContent();
+				$value = $outcome->getProperty($prop);
+				if ($value)
+				{
+					$this->{$field} = $value->getContent();
+				}
 			}
 
 			$fieldsMap = [
@@ -116,6 +126,7 @@ class Overview
 
 			$fieldsMap = [
 				'tasks' => 'tasks',
+				'actionItems' => 'action_items',
 				'meetings' => 'meetings',
 				'agreements' => 'agreements',
 			];
@@ -143,8 +154,6 @@ class Overview
 		}
 
 		$this->calcEfficiency();
-
-		return $this;
 	}
 
 	public function calcEfficiency(): int

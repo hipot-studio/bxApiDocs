@@ -29,7 +29,15 @@ class License extends BaseContent
 
 	public function getConfiguration(): array
 	{
+		if (!$this->license->isTimeBound() && !$this->license->isDemo())
+		{
+			return [
+				'isAvailable' => false,
+			];
+		}
+
 		return [
+			'isAvailable' => true,
 			'button' => $this->getButtonConfiguration(),
 			'more' => $this->getMoreInformationConfiguration(),
 			'messages' => [
@@ -47,12 +55,12 @@ class License extends BaseContent
 
 	private function isExpired(): bool
 	{
-		return $this->license->getExpireDate() < new Date();
+		return $this->license->isTimeBound() && $this->license->getExpireDate() < new Date();
 	}
 
 	private function isAlmostExpired(): bool
 	{
-		return $this->expirationNotifier->shouldNotifyAboutAlmostExpiration();
+		return $this->license->isTimeBound() && $this->expirationNotifier->shouldNotifyAboutAlmostExpiration();
 	}
 
 	private function isAlmostBlocked(): bool

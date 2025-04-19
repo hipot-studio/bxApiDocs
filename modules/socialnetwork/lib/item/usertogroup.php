@@ -13,8 +13,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
-use Bitrix\Main\ObjectException;
-use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageSender;
+use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageFactory;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\WorkgroupTable;
@@ -537,17 +536,14 @@ class UserToGroup
 
 		if ($group->isCollab() && ActionType::isValid($action))
 		{
-			try
-			{
-				$sender = new ActionMessageSender($groupId, $userId);
-			}
-			catch (ObjectException)
-			{
-				return false;
-			}
+			$factory = ActionMessageFactory::getInstance();
+			$message = $factory->getActionMessage(ActionType::from($action), $groupId, $userId);
 
-			return $sender->sendActionMessage(ActionType::tryFrom($action), $params);
+			$recipientIds = (array)($params['recipientIds'] ?? []);
+
+			return $message->send($recipientIds, $params);
 		}
+
 		if (!in_array($action, self::getChatActionList(), true))
 		{
 			return false;

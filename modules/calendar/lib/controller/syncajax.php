@@ -3,6 +3,7 @@ namespace Bitrix\Calendar\Controller;
 
 use Bitrix\Calendar\Access\ActionDictionary;
 use Bitrix\Calendar\Access\Model\TypeModel;
+use Bitrix\Calendar\Access\SyncAccessController;
 use Bitrix\Calendar\Access\TypeAccessController;
 use Bitrix\Calendar\Controller\Filter\RestrictExternalUser;
 use Bitrix\Calendar\Core\Role\Helper;
@@ -57,6 +58,18 @@ class SyncAjax extends \Bitrix\Main\Engine\Controller
 	public function removeConnectionAction($connectionId, $removeCalendars)
 	{
 		$userId = \CCalendar::GetUserId();
+
+		if (
+			!SyncAccessController::can(
+				$userId,
+				ActionDictionary::ACTION_SYNC_DELETE,
+				$connectionId,
+			)
+		)
+		{
+			return false;
+		}
+
 		\CCalendar::setOwnerId($userId);
 		\CCalendar::RemoveConnection(['id' => (int)$connectionId, 'del_calendars' => $removeCalendars === 'Y']);
 		CounterService::addEvent(EventDictionary::SYNC_CHANGED, ['user_ids' => [$userId]]);
