@@ -328,7 +328,6 @@ class ListsElementCreationGuide extends CBitrixComponent implements Errorable
 					$this->getIBlockId(),
 					CBPDocumentEventType::Create,
 					false,
-					false,
 				)
 			);
 			if ($response->isSuccess())

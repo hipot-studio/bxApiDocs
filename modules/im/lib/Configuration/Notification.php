@@ -509,7 +509,29 @@ class Notification extends Base
 
 		$settings = static::decodeSettings($settings);
 
-		return array_replace_recursive($defaultSettings, $settings);
+		return self::filterGroupSettingsByDefault($settings);
+	}
+
+	public static function filterGroupSettingsByDefault(array $settings): array
+	{
+		$result = [];
+		$defaultSettings = self::getDefaultSettings();
+
+		foreach ($defaultSettings as $moduleId => $defaultModuleSettings)
+		{
+			$moduleSettings = $settings[$moduleId]['NOTIFY'] ?? [];
+
+			foreach ($defaultModuleSettings['NOTIFY'] ?? [] as $notifyKey => $notifyValue)
+			{
+				$defaultModuleSettings['NOTIFY'][$notifyKey] =
+					array_replace_recursive($notifyValue, $moduleSettings[$notifyKey] ?? [])
+				;
+			}
+
+			$result[$moduleId] = $defaultModuleSettings;
+		}
+
+		return $result;
 	}
 
 	/**

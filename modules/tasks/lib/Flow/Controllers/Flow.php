@@ -161,8 +161,8 @@ class Flow extends Controller
 			->setActivity();
 
 		$addCommand = AddCommand::createFromArray($flowData)
-			->setTaskCreators($this->converter::convertToFinderCodes($flowData->taskCreators))
-			->setResponsibleList($this->converter::convertToFinderCodes($flowData->responsibleList));
+			->setTaskCreators($this->converter::convertToFinderCodes($flowData->taskCreators ?? []))
+			->setResponsibleList($this->converter::convertToFinderCodes($flowData->responsibleList ?? []));
 
 		try
 		{
@@ -219,19 +219,26 @@ class Flow extends Controller
 
 		$flowData->checkPrimary();
 
-		if (!FlowAccessController::can($this->userId, FlowAction::UPDATE, $flowData->id))
+		if (
+			!FlowAccessController::can(
+				$this->userId,
+				FlowAction::SAVE,
+				$flowData->id,
+				FlowModel::createFromArray($flowData)
+			)
+		)
 		{
 			return $this->buildErrorResponse($this->getAccessDeniedError());
 		}
 
 		$updateCommand = UpdateCommand::createFromArray($flowData);
 
-		if ($flowData->hasTaskCreators())
+		if ($flowData->isTaskCreatorsFilled())
 		{
 			$updateCommand->setTaskCreators($this->converter::convertToFinderCodes($flowData->taskCreators));
 		}
 
-		if ($flowData->hasResponsibleList())
+		if ($flowData->isResponsibleListFilled())
 		{
 			$updateCommand->setResponsibleList($this->converter::convertToFinderCodes($flowData->responsibleList));
 		}

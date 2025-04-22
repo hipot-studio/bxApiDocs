@@ -157,4 +157,14 @@ class NullChat extends Chat
 	{
 		return false;
 	}
+
+	public function getUserCount(): int
+	{
+		return 0;
+	}
+
+	public function getPrevMessageId(): int
+	{
+		return 0;
+	}
 }

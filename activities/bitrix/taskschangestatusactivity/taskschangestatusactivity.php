@@ -29,7 +29,15 @@ class CBPTasksChangeStatusActivity extends CBPActivity
 		/** @var CBPDocumentService $ds */
 		$ds = $this->workflow->GetService('DocumentService');
 
-		$document = $ds->GetDocument($documentId);
+		if (defined('\CBPDocument::PARAM_USED_DOCUMENT_FIELDS'))
+		{
+			$document = $ds->GetDocument($documentId, select: ['STATUS']);
+		}
+		else
+		{
+			$document = $ds->GetDocument($documentId);
+		}
+
 		if ($document && (int)$document['STATUS'] === $targetStatus)
 		{
 			return CBPActivityExecutionStatus::Closed;

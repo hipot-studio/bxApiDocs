@@ -4,10 +4,13 @@ namespace Bitrix\Tasks\Flow\Filter;
 
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Tasks\Filter\Trait\FilterApplied;
 use Bitrix\Tasks\Flow\Provider\UserProvider;
 
 class Filter
 {
+	use FilterApplied;
+
 	public const MY_PRESET = 'filter_flow_my';
 	public const ACTIVE_PRESET = 'filter_flow_active';
 
@@ -51,20 +54,6 @@ class Filter
 	public function getCurrentFilterValues(): array
 	{
 		return $this->filterOptions->getFilter($this->getFieldArrays());
-	}
-
-	public function isUserFilterApplied(): bool
-	{
-		$currentPreset = $this->filterOptions->getCurrentFilterId();
-		$isDefaultPreset = ($this->filterOptions->getDefaultFilterId() === $currentPreset);
-		$additionalFields = $this->filterOptions->getAdditionalPresetFields($currentPreset);
-		$isSearchStringEmpty = ($this->filterOptions->getSearchString() === '');
-
-		return (
-			!$isSearchStringEmpty
-			|| !$isDefaultPreset
-			|| !empty($additionalFields)
-		);
 	}
 
 	public function getPresets(): array

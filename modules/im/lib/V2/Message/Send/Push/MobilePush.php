@@ -87,28 +87,12 @@ class MobilePush
 	protected function needToSend(): bool
 	{
 		$chat = $this->message->getChat();
-
-		if ($chat instanceof CopilotChat)
-		{
-			return $this->needToSendFromCopilot();
-		}
 		if ($chat instanceof CommentChat)
 		{
 			return false;
 		}
 
 		return true;
-	}
-
-	protected function needToSendFromCopilot(): bool
-	{
-		if (!\Bitrix\Main\Loader::includeModule('mobile'))
-		{
-			return false;
-		}
-
-		/** @see \Bitrix\Mobile\AppTabs\Chat::isCopilotMobileEnabled */
-		return \Bitrix\Main\Config\Option::get('immobile', 'copilot_mobile_chat_enabled', 'N') === 'Y';
 	}
 
 	protected function getPushUsers(): array

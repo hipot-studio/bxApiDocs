@@ -35,6 +35,7 @@ class Features
 		public readonly bool $documentSignAvailable,
 		public readonly bool $intranetInviteAvailable,
 		public readonly bool $voteCreationAvailable,
+		public readonly bool $autoDeleteMessagesAvailable,
 	){}
 
 	public static function get(): self
@@ -58,6 +59,7 @@ class Features
 			DocumentSign::isAvailable(),
 			Invitation::isAvailable(),
 			self::isVoteCreationAvailable(),
+			self::isAutoDeleteMessagesAvailable(),
 		);
 	}
 
@@ -97,5 +99,10 @@ class Features
 			&& class_exists('\\Bitrix\\Vote\\Config\\Feature')
 			&& \Bitrix\Vote\Config\Feature::instance()->isImIntegrationEnabled()
 		;
+	}
+
+	private static function isAutoDeleteMessagesAvailable(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('im', 'auto_delete_messages_activated', 'N') === 'Y';
 	}
 }

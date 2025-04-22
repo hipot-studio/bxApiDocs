@@ -77,6 +77,7 @@ class Permission
 			Action::UpdateInviteLink->value => Chat::ROLE_NONE,
 			Action::CreateDocumentSign->value => Chat::ROLE_NONE,
 			Action::CreateCalendarSlots->value => Chat::ROLE_NONE,
+			Action::ChangeMessageDisappearing->value => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[self::TYPE_DEFAULT] = $default;
@@ -88,6 +89,7 @@ class Permission
 			Action::Leave->value => Chat::ROLE_NONE,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
 			Action::UserList->value => Chat::ROLE_NONE,
+			Action::ChangeMessageDisappearing->value => Chat::ROLE_MEMBER,
 		];
 
 		self::$permissionsByChatTypes[Type::General->value] = [
@@ -185,6 +187,7 @@ class Permission
 			Action::UpdateInviteLink->value => Chat::ROLE_OWNER,
 			Action::CreateDocumentSign->value => Chat::ROLE_MEMBER,
 			Action::CreateCalendarSlots->value => Chat::ROLE_MEMBER,
+			Action::ChangeMessageDisappearing->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[Type::Tasks->value] = $default;
@@ -208,11 +211,13 @@ class Permission
 		self::$permissionsByChatTypes[Type::Chat->value] = [
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
+			Action::ChangeMessageDisappearing->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[Type::OpenChat->value] = [
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
+			Action::ChangeMessageDisappearing->value => Chat::ROLE_MANAGER,
 		];
 
 		self::$permissionsByChatTypes[Type::Videoconference->value] = [

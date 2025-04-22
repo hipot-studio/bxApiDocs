@@ -394,9 +394,12 @@ class WorktimeService extends BaseService
 
 	private function runAfterRecordSave(WorktimeRecord $record, ?Schedule $schedule, ?Shift $shift, $eventType)
 	{
-		if ($schedule && $schedule->isAutoClosing() &&
-			$record->getRecordedStopTimestamp() === 0 &&
-			$record->getAutoClosingAgentId() === 0)
+		if (
+			$schedule
+			&& $schedule->isAutoClosing()
+			&& $record->getRecordedStopTimestamp() === 0
+			&& $record->getAutoClosingAgentId() === 0
+		)
 		{
 			switch ($eventType)
 			{

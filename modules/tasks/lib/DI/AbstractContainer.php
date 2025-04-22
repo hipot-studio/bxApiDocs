@@ -12,7 +12,7 @@ abstract class AbstractContainer
 {
 	use SingletonTrait;
 
-	protected ServiceLocator $locator;
+	private ServiceLocator $locator;
 
 	public function getValidationService(): ValidationService
 	{
@@ -24,7 +24,7 @@ abstract class AbstractContainer
 		return $this->locator->get($idOrClass);
 	}
 
-	protected function getRuntimeObject(string|callable $classOrConstructor, ?string $id = null, array $args = []): object
+	protected function getRuntimeObject(string|callable $classOrConstructor, string $id, array $args = []): object
 	{
 		if (!$this->locator->has($id))
 		{

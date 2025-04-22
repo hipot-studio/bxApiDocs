@@ -990,6 +990,8 @@ class Tag
 
 	private function saveTag(string $name, int $userId = 0, int $groupId = 0): void
 	{
+		$name = Application::getConnection()->getSqlHelper()->forSql($name);
+
 		$sql = $this->getSqlHelper()->getInsertIgnore(
 			LabelTable::getTableName(),
 			' (NAME, USER_ID, GROUP_ID)',

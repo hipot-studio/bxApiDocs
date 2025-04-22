@@ -290,6 +290,12 @@ class CounterService
 		CounterOverflowService::deleteByChatIdForAll($chatId);
 	}
 
+	public static function deleteByChatIdsForAll(array $chatIds): void
+	{
+		MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatIds]);
+		CounterOverflowService::deleteByChatIds($chatIds);
+	}
+
 	public function deleteByChatIds(array $chatIds): void
 	{
 		if (empty($chatIds) || $this->getContext()->getUserId() <= 0)

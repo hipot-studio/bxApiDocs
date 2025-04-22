@@ -3471,6 +3471,7 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 					'FROM_USER_ID' => $this->userId,
 					'NOTIFY_TYPE' => IM_NOTIFY_FROM,
 					'NOTIFY_MODULE' => 'tasks',
+					'NOTIFY_EVENT' => 'admin_notification',
 					'NOTIFY_TAG' => 'TASKS|NOTIFY_ADMIN|'.$userId.'|'.$this->userId,
 					'NOTIFY_MESSAGE' => Loc::getMessage('TASK_ACCESS_NOTIFY_MESSAGE', array(
 						'#URL#' => $groupId > 0

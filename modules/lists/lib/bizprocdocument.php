@@ -15,6 +15,7 @@ class BizprocDocument extends CIBlockDocument
 	const DOCUMENT_TYPE_PREFIX = 'iblock_';
 	private static $cachedTasks;
 	private static $elements = [];
+	private static $cachedGroups = [];
 
 	public static function getEntityName()
 	{
@@ -117,7 +118,9 @@ class BizprocDocument extends CIBlockDocument
 	 */
 	public static function getDocument($documentId)
 	{
-		$documentId = intval($documentId);
+		$args = func_get_args();
+		$select = $args[2] ?? [];
+		$documentId = (int)$documentId;
 		if ($documentId <= 0)
 		{
 			throw new CBPArgumentNullException('documentId');
@@ -127,9 +130,22 @@ class BizprocDocument extends CIBlockDocument
 		$element = [];
 		$elementProperty = [];
 
+		if (!empty($select))
+		{
+			$select = array_merge(['ID', 'IBLOCK_ID'], $select);
+		}
+
+		$userNameFields = [
+			'CREATED_BY_PRINTABLE' => 'CREATED_USER_NAME',
+			'MODIFIED_BY_PRINTABLE' => 'USER_NAME',
+		];
+
+		$select = array_map(static fn($selectField) => $userNameFields[$selectField] ?? $selectField, $select);
+
 		$queryElement = CIBlockElement::getList(
 			[],
-			['ID' => $documentId, 'SHOW_NEW' => 'Y', 'SHOW_HISTORY' => 'Y']
+			['ID' => $documentId, 'SHOW_NEW' => 'Y', 'SHOW_HISTORY' => 'Y'],
+			arSelectFields: $select
 		);
 		while ($queryResult = $queryElement->fetch())
 		{
@@ -2054,49 +2070,70 @@ class BizprocDocument extends CIBlockDocument
 	 * @param bool $withExtended
 	 * @return array|bool
 	 */
-	public static function GetAllowableUserGroups($documentType, $withExtended = false)
+	public static function GetAllowableUserGroups($documentType, $withExtended = false): array|bool
 	{
 		$documentType = trim($documentType);
-		if ($documentType == '')
+		if ($documentType === '')
+		{
 			return false;
+		}
 
-		$iblockId = intval(mb_substr($documentType, mb_strlen("iblock_")));
+		$groupsKey = $documentType . ($withExtended ? '@withExtended' : '');
 
-		$result = array("Author" => GetMessage("IBD_DOCUMENT_AUTHOR"));
+		if (isset(self::$cachedGroups[$groupsKey]))
+		{
+			return self::$cachedGroups[$groupsKey];
+		}
 
-		$groupsId = array(1);
-		$extendedGroupsCode = array();
-		if(CIBlock::getArrayByID($iblockId, "RIGHTS_MODE") === "E")
+		$iblockId = (int)mb_substr($documentType, mb_strlen("iblock_"));
+
+		$groups = ["Author" => GetMessage("IBD_DOCUMENT_AUTHOR")];
+
+		$groupsId = [1];
+		$extendedGroupsCode = [];
+		if (CIBlock::getArrayByID($iblockId, "RIGHTS_MODE") === "E")
 		{
 			$rights = new CIBlockRights($iblockId);
-			foreach($rights->getGroups(/*"element_bizproc_start"*/) as $iblockGroupCode)
-				if(preg_match("/^G(\\d+)\$/", $iblockGroupCode, $match))
+			foreach ($rights->getGroups(/*"element_bizproc_start"*/) as $iblockGroupCode)
+			{
+				if (preg_match("/^G(\\d+)\$/", $iblockGroupCode, $match))
+				{
 					$groupsId[] = $match[1];
+				}
 				else
+				{
 					$extendedGroupsCode[] = $iblockGroupCode;
+				}
+			}
 		}
 		else
 		{
-			foreach(CIBlock::getGroupPermissions($iblockId) as $groupId => $perm)
+			foreach (CIBlock::getGroupPermissions($iblockId) as $groupId => $perm)
 			{
 				if ($perm > "R")
+				{
 					$groupsId[] = $groupId;
+				}
 			}
 		}
 
 		$groupsIterator = CGroup::getListEx(array("NAME" => "ASC"), array("ID" => $groupsId));
 		while ($group = $groupsIterator->fetch())
-			$result[$group["ID"]] = $group["NAME"];
+		{
+			$groups[$group["ID"]] = $group["NAME"];
+		}
 
 		if ($withExtended && $extendedGroupsCode)
 		{
 			foreach ($extendedGroupsCode as $groupCode)
 			{
-				$result['group_'.$groupCode] = CBPHelper::getExtendedGroupName($groupCode);
+				$groups['group_'.$groupCode] = CBPHelper::getExtendedGroupName($groupCode);
 			}
 		}
 
-		return $result;
+		self::$cachedGroups[$groupsKey] = $groups;
+
+		return $groups;
 	}
 
 	public static function SetPermissions($documentId, $workflowId, $permissions, $rewrite = true)

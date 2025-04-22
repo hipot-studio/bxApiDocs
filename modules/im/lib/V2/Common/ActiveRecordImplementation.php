@@ -555,7 +555,7 @@ trait ActiveRecordImplementation
 	 * Returns object state as array.
 	 * @return array
 	 */
-	public function toArray(): array
+	public function toArray(bool $recursive = false): array
 	{
 		$result = [];
 		$fields = static::mirrorDataEntityFields();
@@ -580,11 +580,11 @@ trait ActiveRecordImplementation
 				$value = $this->{$field['field']};
 			}
 
-			if (is_object($value))
+			if (is_object($value) && !($value instanceof DateTime))
 			{
-				if (method_exists($value, 'toArray'))
+				if ($recursive && method_exists($value, 'toArray'))
 				{
-					$value = $value->toArray();
+					$value = $value->toArray($recursive);
 				}
 				else
 				{
@@ -592,10 +592,7 @@ trait ActiveRecordImplementation
 				}
 			}
 
-			if ($value !== null)
-			{
-				$result[$offset] = $value;
-			}
+			$result[$offset] = $value;
 		}
 
 		return $result;

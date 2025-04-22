@@ -284,6 +284,12 @@ class ReadService
 		$this->viewedService->deleteByMessageIdForAll($message->getMessageId());
 	}
 
+	public function deleteByMessages(MessageCollection $messages, ?array $invalidateCacheUsers = null): void
+	{
+		$this->counterService->deleteByMessagesForAll($messages, $invalidateCacheUsers);
+		$this->viewedService->deleteByMessagesIdsForAll($messages->getIds());
+	}
+
 	public function deleteByChatId(int $chatId): void
 	{
 		$this->counterService->deleteByChatId($chatId);

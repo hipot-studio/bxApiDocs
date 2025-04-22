@@ -79,7 +79,7 @@ class UpdateService
 
 		if ($this->message->isCompletelyEmpty())
 		{
-			return (new Message\Delete\DeleteService($this->message))->delete();
+			return (DeleteService::getInstanceByMessage($this->message))->delete();
 		}
 
 		if ($this->message->isViewedByOthers())

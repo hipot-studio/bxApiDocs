@@ -295,6 +295,12 @@ class Manager
 				'INSTALLED_MODULES' => ModuleManager::getInstalledModules(),
 				'PERMISSIONS' => $permissions,
 				'MULTIPLE_ACTION_MESSAGE_LIMIT' => Settings::getMultipleActionMessageLimit(),
+				'AVAILABLE_MESSENGER_COMPONENTS' => [
+					$this->messenger->getComponentCode() => $this->messenger->isAvailable(),
+					$this->copilot->getComponentCode() => $this->copilot->isAvailable(),
+					$this->channel->getComponentCode() => $this->channel->isAvailable(),
+					$this->openLines->getComponentCode() => $this->openLines->isAvailable(),
+				],
 			],
 			$this->getInvitationParams(),
 		);

@@ -9,12 +9,6 @@ IncludeModuleLangFile(__FILE__);
 
 class CAllVoteChannel
 {
-	public static function err_mess()
-	{
-		$module_id = "vote";
-		return "<br>Module: ".$module_id."<br>Class: CAllVoteChannel<br>File: ".__FILE__;
-	}
-
 	public static function CheckFields($ACTION, &$arFields, $ID = 0)
 	{
 		global $DB, $APPLICATION;
@@ -117,7 +111,7 @@ class CAllVoteChannel
 		$strSql = "INSERT INTO b_vote_channel (".$arInsert[0].", TIMESTAMP_X) ".
 			"VALUES(".$arInsert[1].", ".$DB->GetNowFunction().")";
 
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		$ID = intval($DB->type == "ORACLE" ? $arFields["ID"] : $DB->LastID());
 
@@ -127,7 +121,7 @@ class CAllVoteChannel
 			{
 				$strSql = "INSERT INTO b_vote_channel_2_site (CHANNEL_ID, SITE_ID) ".
 					"VALUES ($ID, '".$DB->ForSql($sid, 2)."')";
-				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql);
 			}
 		}
 		if (is_array($arFields["GROUP_ID"]) && !empty($arFields["GROUP_ID"]))
@@ -155,16 +149,16 @@ class CAllVoteChannel
 		$strUpdate = $DB->PrepareUpdate("b_vote_channel", $arFields);
 
 		$strSql = "UPDATE b_vote_channel SET ".$strUpdate." WHERE ID=".$ID;
-		$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$DB->Query($strSql);
 
 		if (!empty($arFields["SITE"]))
 		{
-			$DB->Query("DELETE FROM b_vote_channel_2_site WHERE CHANNEL_ID=".$ID, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+			$DB->Query("DELETE FROM b_vote_channel_2_site WHERE CHANNEL_ID=".$ID);
 			foreach ($arFields["SITE"] as $sid)
 			{
 				$strSql = "INSERT INTO b_vote_channel_2_site (CHANNEL_ID, SITE_ID) ".
 					"VALUES ($ID, '".$DB->ForSql($sid, 2)."')";
-				$DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				$DB->Query($strSql);
 			}
 		}
 		if (is_array($arFields["GROUP_ID"]) && !empty($arFields["GROUP_ID"]))
@@ -196,8 +190,7 @@ class CAllVoteChannel
 			$arGroups = array_intersect_key($arGroups, $arMainGroups);
 
 			$DB->Query(
-				"DELETE FROM b_vote_channel_2_group WHERE CHANNEL_ID=".$ID,
-				false, "File: ".__FILE__."<br>Line: ".__LINE__);
+				"DELETE FROM b_vote_channel_2_group WHERE CHANNEL_ID=".$ID);
 
 			foreach ($arGroups as $key => $val)
 			{
@@ -216,8 +209,8 @@ class CAllVoteChannel
 
 	public static function GetList($by = 's_id', $order = 'desc', $arFilter = [])
 	{
-		$err_mess = (CVoteChannel::err_mess())."<br>Function: GetList<br>Line: ";
 		global $DB;
+
 		$arSqlSearch = Array();
 		$left_join = "";
 		if (is_array($arFilter))
@@ -305,7 +298,7 @@ class CAllVoteChannel
 
 		if (VOTE_CACHE_TIME===false || mb_strpos($_SERVER['REQUEST_URI'], '/bitrix/admin/') !== false)
 		{
-			$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+			$res = $DB->Query($strSql);
 			return $res;
 		}
 		else
@@ -319,7 +312,7 @@ class CAllVoteChannel
 			}
 			else
 			{
-				$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+				$res = $DB->Query($strSql);
 				while($ar = $res->Fetch())
 					$arCache[] = $ar;
 
@@ -335,8 +328,8 @@ class CAllVoteChannel
 
 	public static function GetSiteArray($CHANNEL_ID)
 	{
-		$err_mess = (CAllVoteChannel::err_mess())."<br>Function: GetSiteArray<br>Line: ";
 		global $DB;
+
 		$CHANNEL_ID = intval($CHANNEL_ID);
 		if ($CHANNEL_ID<=0) return false;
 
@@ -345,7 +338,7 @@ class CAllVoteChannel
 		if (VOTE_CACHE_TIME===false)
 		{
 			$arrRes = array();
-			$rs = $DB->Query("SELECT CS.SITE_ID FROM b_vote_channel_2_site CS WHERE CS.CHANNEL_ID = ".$CHANNEL_ID, false, $err_mess.__LINE__);
+			$rs = $DB->Query("SELECT CS.SITE_ID FROM b_vote_channel_2_site CS WHERE CS.CHANNEL_ID = ".$CHANNEL_ID);
 			while ($ar = $rs->Fetch()) $arrRes[] = $ar["SITE_ID"];
 			return $arrRes;
 		}
@@ -358,7 +351,7 @@ class CAllVoteChannel
 			}
 			else
 			{
-				$rs = $DB->Query('SELECT * '.'FROM b_vote_channel_2_site', false, $err_mess.__LINE__);
+				$rs = $DB->Query('SELECT * '.'FROM b_vote_channel_2_site');
 				while ($ar = $rs->Fetch()) 
 					$arCache[$ar["CHANNEL_ID"]][] = $ar["SITE_ID"];
 
@@ -375,7 +368,7 @@ class CAllVoteChannel
 	public static function Delete($ID)
 	{
 		global $DB;
-		$err_mess = (CAllVoteChannel::err_mess())."<br>Function: Delete<br>Line: ";
+
 		$ID = intval($ID);
 		if ($ID <= 0):
 			return true;
@@ -387,12 +380,12 @@ class CAllVoteChannel
 		/***************** /Event ******************************************/
 
 		// drop votes
-		$z = $DB->Query("SELECT ID FROM b_vote WHERE CHANNEL_ID='$ID'", false, $err_mess.__LINE__);
+		$z = $DB->Query("SELECT ID FROM b_vote WHERE CHANNEL_ID='$ID'");
 		while ($zr = $z->Fetch()) CVote::Delete($zr["ID"]);
 		
-		$DB->Query("DELETE FROM b_vote_channel_2_group WHERE CHANNEL_ID=".$ID, false, $err_mess.__LINE__);
-		$DB->Query("DELETE FROM b_vote_channel_2_site WHERE CHANNEL_ID=".$ID, false, $err_mess.__LINE__);
-		$res = $DB->Query("DELETE FROM b_vote_channel WHERE ID=".$ID, false, $err_mess.__LINE__);
+		$DB->Query("DELETE FROM b_vote_channel_2_group WHERE CHANNEL_ID=".$ID);
+		$DB->Query("DELETE FROM b_vote_channel_2_site WHERE CHANNEL_ID=".$ID);
+		$res = $DB->Query("DELETE FROM b_vote_channel WHERE ID=".$ID);
 		/***************** Event onAfterVoteChannelDelete ******************/
 		foreach (GetModuleEvents("vote", "onAfterVoteChannelDelete", true) as $arEvent)
 			ExecuteModuleEventEx($arEvent, array($ID));
@@ -418,7 +411,7 @@ class CAllVoteChannel
 			"FROM b_vote_channel_2_group ".
 			"WHERE CHANNEL_ID = '".intval($channel_id)."'";
 
-		$dbres = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+		$dbres = $DB->Query($strSql);
 		$arRes = Array();
 		while($res = $dbres->Fetch())
 			$arRes[$res["GROUP_ID"]] = $res["PERMISSION"];
@@ -430,7 +423,7 @@ class CAllVoteChannel
 	public static function GetGroupPermission($channel_id, $arGroups=false, $params = array())
 	{
 		global $DB, $USER, $CACHE_MANAGER, $APPLICATION;
-		$err_mess = (CAllVoteChannel::err_mess())."<br>Function: GetGroupPermission<br>Line: ";
+
 		$channel_id = trim($channel_id);
 		$arGroups = ($arGroups === false ? $USER->GetUserGroupArray() : $arGroups);
 		$arGroups = ((!is_array($arGroups) || empty($arGroups)) ? array(2) : $arGroups);
@@ -462,7 +455,7 @@ class CAllVoteChannel
 				WHERE ".((!isset($params["CHANNEL_SID"]) || $params["CHANNEL_SID"] !== "Y") ? "BVC2G.CHANNEL_ID" : "BVC.SYMBOLIC_NAME").
 						"='".$DB->ForSql($channel_id)."' and GROUP_ID in ($groups)
 				GROUP BY BVC2G.CHANNEL_ID, BVC.SYMBOLIC_NAME";
-				$db_res = $DB->Query($strSql, false, $err_mess.__LINE__);
+				$db_res = $DB->Query($strSql);
 				if ($db_res && ($res = $db_res->Fetch()))
 				{
 					$permission = intval($res["PERMISSION"]);

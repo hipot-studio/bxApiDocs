@@ -99,6 +99,56 @@ class PinService
 		return $result;
 	}
 
+	public function unpinMessages(MessageCollection $messages, bool $clearParams = true): Result
+	{
+		$result = new Result();
+
+		$pinCollection = PinCollection::getByMessages($messages);
+
+		if ($pinCollection->count() === 0)
+		{
+			return $result;
+		}
+
+		$deleteResult = $pinCollection->delete();
+
+		if (!$deleteResult->isSuccess())
+		{
+			return $result->addErrors($deleteResult->getErrors());
+		}
+
+		if ($clearParams)
+		{
+			$deleteParamResult = $this->deleteFromParams($messages);
+
+			if (!$deleteParamResult->isSuccess())
+			{
+				return $result->addErrors($deleteParamResult->getErrors());
+			}
+		}
+
+
+		$chat = Chat::getInstance($pinCollection->getRelatedChatId());
+		$chatType = $chat->getType();
+
+		/** @var PinItem $pin */
+		foreach ($pinCollection as $pin)
+		{
+			Sync\Logger::getInstance()->add(
+				new Sync\Event(Sync\Event::DELETE_EVENT, Sync\Event::PIN_MESSAGE_ENTITY, $pin->getId()),
+				fn () => $chat->getRelations()->getUserIds(),
+				$chatType
+			);
+
+			Push::getInstance()
+				->setContext($this->context)
+				->sendIdOnly($pin, static::DELETE_PIN_EVENT, ['CHAT_ID' => $pin->getChatId()])
+			;
+		}
+
+		return $result;
+	}
+
 	public function getCount(int $chatId, ?int $startId = null): int
 	{
 		$filter = Query::filter()->where('CHAT_ID', $chatId);
@@ -137,6 +187,18 @@ class PinService
 		//todo replace this with new api
 		\CIMMessageParam::Set($message->getMessageId(), ['IS_PINNED' => 'N']);
 		\CIMMessageParam::SendPull($message->getMessageId(), ['IS_PINNED']);
+
+		return new Result();
+	}
+
+	protected function deleteFromParams(MessageCollection $messages): Result
+	{
+		$pushService = new Message\Param\PushService();
+		foreach ($messages as $message)
+		{
+			$message->getParams(true)->load([Message\Params::IS_PINNED => 'N']);
+			$pushService->sendPull($message, ['IS_PINNED']);
+		}
 
 		return new Result();
 	}

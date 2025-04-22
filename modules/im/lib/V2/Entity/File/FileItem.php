@@ -2,11 +2,19 @@
 
 namespace Bitrix\Im\V2\Entity\File;
 
+use Bitrix\Disk;
+use Bitrix\Disk\Controller\Integration\Flipchart;
+use Bitrix\Disk\Document\Flipchart\Configuration;
 use Bitrix\Disk\Document\OnlyOffice\Templates\CreateDocumentByCallTemplateScenario;
+use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Security\ParameterSigner;
+use Bitrix\Disk\Storage;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\FileAttributes;
+use Bitrix\Disk\UI\Viewer\Renderer\Board;
+use Bitrix\Im\Common;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\User;
@@ -23,6 +31,9 @@ use Bitrix\Main\Localization\Loc;
 class FileItem implements RestEntity, PopupDataAggregatable
 {
 	use ContextCustomer;
+
+	private const MAX_PREVIEW_IMAGE_SIZE = 1280;
+	private const ANIMATED_IMAGE_EXTENSIONS = ['gif', 'webp'];
 
 	protected ?int $chatId = null;
 	protected ?int $diskFileId = null;
@@ -216,19 +227,19 @@ class FileItem implements RestEntity, PopupDataAggregatable
 	public function toRestFormat(array $option = []): array
 	{
 		$diskFile = $this->getDiskFile();
-		$author = User::getInstance((int)$diskFile->getCreatedBy());
+		$author = User::getInstance((int)$diskFile?->getCreatedBy());
 		return [
-			'id' => (int)$diskFile->getId(),
+			'id' => (int)$diskFile?->getId(),
 			'chatId' => (int)$this->getChatId(),
-			'date' => $diskFile->getCreateTime()->format('c'),
+			'date' => $diskFile?->getCreateTime()?->format('c'),
 			'type' => $this->getContentType(),
-			'name' => $diskFile->getName(),
-			'extension' => mb_strtolower($diskFile->getExtension()),
-			'size' => (int)$diskFile->getSize(),
+			'name' => $diskFile?->getName(),
+			'extension' => mb_strtolower($diskFile?->getExtension() ?? ''),
+			'size' => (int)$diskFile?->getSize(),
 			'image' => $this->getPreviewSizes() ?? false,
-			'status' => $diskFile->getGlobalContentVersion() > 1? 'done': 'upload',
-			'progress' => $diskFile->getGlobalContentVersion() > 1? 100: -1,
-			'authorId' => (int)$diskFile->getCreatedBy(),
+			'status' => $diskFile?->getGlobalContentVersion() > 1? 'done': 'upload',
+			'progress' => $diskFile?->getGlobalContentVersion() > 1? 100: -1,
+			'authorId' => (int)$diskFile?->getCreatedBy(),
 			'authorName' => $author->getName(),
 			'urlPreview' => $this->getPreviewLink(),
 			'urlShow' => $this->getShowLink(),
@@ -303,65 +314,93 @@ class FileItem implements RestEntity, PopupDataAggregatable
 
 	private function getPreviewLink(): string
 	{
-		$urlManager = UrlManager::getInstance();
 		$diskFile = $this->getDiskFile();
-
-		if ($diskFile->getView()->getPreviewData())
-		{
-			$linkType = 'disk.api.file.showPreview';
-			$fileName = 'preview.jpg';
-		}
-		elseif (TypeFile::isImage($diskFile))
-		{
-			$linkType = 'disk.api.file.showImage';
-			$fileName = $diskFile->getName();
-		}
-		else
+		if (!$diskFile)
 		{
 			return '';
 		}
 
-		return \Bitrix\Im\Common::getPublicDomain() . $urlManager->create($linkType, [
-			'humanRE' => 1,
-			'width' => 640,
-			'height' => 640,
-			'signature' => \Bitrix\Disk\Security\ParameterSigner::getImageSignature($diskFile->getId(), 640, 640),
-			'fileId' => $diskFile->getId(),
-			'fileName' => $fileName
-		])->getUri();
+		if ($this->isAnimatedImage())
+		{
+			return $this->getDownloadLink();
+		}
+
+		if (TypeFile::isImage($diskFile))
+		{
+			return $this->isOversized()
+				? $this->getShowLink()
+				: $this->getDownloadLink()
+			;
+		}
+
+		if ($diskFile->getView()->getPreviewData())
+		{
+			return $this->getLink('disk.api.file.showPreview', true, 'preview.jpg');
+		}
+
+		return '';
+	}
+
+	private function isOversized(): bool
+	{
+		$fileData = $this->getDiskFile()?->getFile() ?? [];
+		$sourceImageWidth = $fileData['WIDTH'] ?? 0;
+		$sourceImageHeight = $fileData['HEIGHT'] ?? 0;
+
+		return $sourceImageHeight > self::MAX_PREVIEW_IMAGE_SIZE || $sourceImageWidth > self::MAX_PREVIEW_IMAGE_SIZE;
+	}
+
+	private function isAnimatedImage(): bool
+	{
+		return in_array($this->getDiskFile()?->getExtension(), self::ANIMATED_IMAGE_EXTENSIONS, true);
 	}
 
 	private function getShowLink(): string
 	{
-		$urlManager = UrlManager::getInstance();
-		$diskFile = $this->getDiskFile();
-
-		if (TypeFile::isImage($diskFile))
+		if (TypeFile::isImage($this->getDiskFile() ?? ''))
 		{
-			$linkType = 'disk.api.file.showImage';
-		}
-		else
-		{
-			$linkType = 'disk.api.file.download';
+			return $this->getLink('disk.api.file.showImage', true);
 		}
 
-		return \Bitrix\Im\Common::getPublicDomain() . $urlManager->create($linkType, [
-			'humanRE' => 1,
-			'fileId' => $diskFile->getId(),
-			'fileName' => $diskFile->getName()
-		])->getUri();
+		return $this->getLink('disk.api.file.download', false);
 	}
 
 	private function getDownloadLink(): string
 	{
-		$urlManager = UrlManager::getInstance();
-		$diskFile = $this->getDiskFile();
+		return $this->getLink('disk.api.file.download', false);
+	}
 
-		return \Bitrix\Im\Common::getPublicDomain() . $urlManager->create('disk.api.file.download', [
+	private function getLink(string $action, bool $shouldResize, ?string $forceFileName = null): string
+	{
+		$diskFile = $this->getDiskFile();
+		if (!$diskFile)
+		{
+			return '';
+		}
+
+		$urlManager = UrlManager::getInstance();
+		$params = [
 			'humanRE' => 1,
 			'fileId' => $diskFile->getId(),
-			'fileName' => $diskFile->getName()
-		])->getUri();
+		];
+
+		if ($shouldResize)
+		{
+			$params['width'] = self::MAX_PREVIEW_IMAGE_SIZE;
+			$params['height'] = self::MAX_PREVIEW_IMAGE_SIZE;
+			$params['signature'] = ParameterSigner::getImageSignature(
+				$diskFile->getId(),
+				self::MAX_PREVIEW_IMAGE_SIZE,
+				self::MAX_PREVIEW_IMAGE_SIZE
+			);
+		}
+
+		// Adding the file extension to the end of the URL to ensure that various parsers and clients
+		// can correctly identify the type of resource (e.g., .jpg, .png, .pdf).
+		// This helps avoid issues where the absence of an extension might cause incorrect handling of the link.
+		$params['fileName'] = $forceFileName ?? $diskFile->getName();
+
+		return Common::getPublicDomain() . $urlManager->create($action, $params)->getUri();
 	}
 
 	private function getViewerAttributes(): ?array
@@ -369,7 +408,13 @@ class FileItem implements RestEntity, PopupDataAggregatable
 		$diskFile = $this->getDiskFile();
 		try
 		{
-			$viewerType = FileAttributes::buildByFileData($diskFile->getFile() ?? [], $this->getDownloadLink())
+			$fileData = $diskFile->getFile() ?? [];
+			if ($fileData && $fileData['CONTENT_TYPE'] === 'application/octet-stream' && GetFileExtension($diskFile->getName()) === 'board')
+			{
+				$fileData['CONTENT_TYPE'] = 'application/board';
+			}
+
+			$viewerType = FileAttributes::buildByFileData($fileData, $this->getDownloadLink())
 				->setObjectId($diskFile->getId())
 				->setGroupBy($this->getChatId() ?? $diskFile->getParentId())
 				->setAttribute('data-im-chat-id', $this->getChatId())
@@ -402,6 +447,20 @@ class FileItem implements RestEntity, PopupDataAggregatable
 
 				$viewerType->setExtension('im.integration.viewer');
 			}
+
+			if ($viewerType->getViewerType() === Board::JS_TYPE_BOARD && Configuration::isBoardsEnabled())
+			{
+				$uri = Driver::getInstance()->getUrlManager()->getUrlForViewBoard($diskFile->getId());
+				$viewerType->addAction([
+					'type' => 'open',
+					'buttonIconClass' => ' ',
+					'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
+					'params' => [
+						'url' => $uri,
+					],
+				]);
+			}
+
 			if ($viewerType->getViewerType() !== \Bitrix\Main\UI\Viewer\Renderer\Renderer::JS_TYPE_UNKNOWN)
 			{
 				return $viewerType->toDataSet();

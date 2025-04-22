@@ -614,7 +614,14 @@ class CTimeManUser
 		$time_start = $ts_start - $ts_start_day;
 
 		// server timezone diff with server that was at the day start
-		$timezone_diff = CTimeManUser::$LAST_ENTRY[$this->USER_ID]['TIME_START'] - $time_start;
+		if (!empty(CTimeManUser::$LAST_ENTRY[$this->USER_ID]))
+		{
+			$timezone_diff = CTimeManUser::$LAST_ENTRY[$this->USER_ID]['TIME_START'] - $time_start;
+		}
+		else
+		{
+			$timezone_diff = 0;
+		}
 
 		// current date with such timezone_diff;
 		$t = time();

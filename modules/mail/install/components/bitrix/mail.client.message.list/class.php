@@ -185,7 +185,23 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			}
 		}
 
-		$this->mailboxHelper = Mailbox::createInstance($this->mailbox['ID']);
+		try
+		{
+			$this->mailboxHelper = Mailbox::createInstance($this->mailbox['ID']);
+		}
+		catch (Main\ObjectException $exception)
+		{
+			if (isset($_REQUEST['strict']) && 'N' == $_REQUEST['strict'])
+			{
+				localRedirect($this->arParams['PATH_TO_MAIL_HOME'], true);
+			}
+			else
+			{
+				showError(Loc::getMessage('MAIL_CLIENT_ELEMENT_NOT_FOUND'));
+
+				return;
+			}
+		}
 
 		if (empty($this->mailboxHelper->getDirsHelper()->getDirs()))
 		{

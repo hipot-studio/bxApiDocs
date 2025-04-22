@@ -28,4 +28,5 @@ enum Action: string
 	case UpdateInviteLink = 'UPDATE_INVITE_LINK';
 	case CreateDocumentSign = 'CREATE_DOCUMENT_SIGN';
 	case CreateCalendarSlots = 'CREATE_CALENDAR_SLOTS';
+	case ChangeMessageDisappearing = 'CHANGE_MESSAGE_DISAPPEARING';
 }

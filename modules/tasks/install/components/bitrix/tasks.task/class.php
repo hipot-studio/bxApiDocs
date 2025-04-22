@@ -17,6 +17,7 @@ use Bitrix\Disk\Driver;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\Response\Component;
 use Bitrix\Main\Errorable;
@@ -33,6 +34,7 @@ use Bitrix\Socialnetwork\Internals\Registry\FeaturePermRegistry;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
+use Bitrix\Tasks\Deadline\Internals\Repository\Cache\Managed\CacheDeadlineUserOptionRepository;
 use Bitrix\Tasks\Integration\SocialNetwork\Collab\Provider\CollabProvider;
 use Bitrix\Tasks\Access\TemplateAccessController;
 use Bitrix\Tasks\AccessDeniedException;
@@ -2935,6 +2937,26 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 	{
 		$stateFlags = $this->arResult['COMPONENT_DATA']['STATE']['FLAGS'];
 
+		$matchWorkTime = (bool)($stateFlags['MATCH_WORK_TIME'] ?? false);
+
+		$deadline = null;
+
+		$isAlreadyTriedToAdd = isset($this->arResult['ACTION_RESULT']['task_action']);
+
+		if (!$isAlreadyTriedToAdd)
+		{
+			$groupId = (int)($this->arParams['GROUP_ID'] ?? 0);
+			$group = SocialNetwork\Group::getById($groupId);
+			$isScrumTask = ($group && $group->isScrumProject());
+
+			if (!$isScrumTask)
+			{
+				$deadlineUserOption = $this->arResult['DATA']['DEADLINE_USER_OPTION'] ?? null;
+
+				$deadline = $deadlineUserOption?->getDefaultDeadlineDate($matchWorkTime);
+			}
+		}
+
 		$rights = Task::getFullRights($this->userId);
 		$data = [
 			'CREATED_BY' => $this->userId,
@@ -2945,13 +2967,14 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 			'REPLICATE' => 'N',
 			'IS_REGULAR' => 'N',
 			'FLOW_ID' => 0,
+			'DEADLINE' => $deadline?->format(Main\Type\DateTime::getFormat()),
 
 			'REQUIRE_RESULT' => $stateFlags['REQUIRE_RESULT'] ? 'Y' : 'N',
 			'TASK_PARAM_3' => $stateFlags['TASK_PARAM_3'] ? 'Y' : 'N',
 			'ALLOW_CHANGE_DEADLINE' => $stateFlags['ALLOW_CHANGE_DEADLINE'] ? 'Y' : 'N',
 			'ALLOW_TIME_TRACKING' => $stateFlags['ALLOW_TIME_TRACKING'] ? 'Y' : 'N',
 			'TASK_CONTROL' => $stateFlags['TASK_CONTROL'] ? 'Y' : 'N',
-			'MATCH_WORK_TIME' => $stateFlags['MATCH_WORK_TIME'] ? 'Y' : 'N',
+			'MATCH_WORK_TIME' => $matchWorkTime ? 'Y' : 'N',
 
 			'DESCRIPTION_IN_BBCODE' => 'Y', // new tasks should be always in bbcode
 			'DURATION_TYPE' => TimeUnitType::DAY,
@@ -3209,6 +3232,13 @@ class TasksTaskComponent extends TasksBaseComponent implements Errorable, Contro
 	private function getTaskDataForNewTask(): ?array
 	{
 		$this->arResult['DATA']['CHECKLIST_CONVERTED'] = true;
+
+		$serviceLocator = ServiceLocator::getInstance();
+
+		$deadlineUserOptionRepository = $serviceLocator->get(CacheDeadlineUserOptionRepository::class);
+		$deadlineUserOption = $deadlineUserOptionRepository->getByUserId($this->userId);
+
+		$this->arResult['DATA']['DEADLINE_USER_OPTION'] = $deadlineUserOption;
 
 		$data = $this->getDataDefaults();
 

@@ -97,6 +97,10 @@ class RequestSender
 		$engine
 			->setPayload($payload)
 			->setParameters(['flowId' => $flowId])
+			->onError(function ($error) use ($flowId) {
+				$handler = new RequestHandler();
+				$handler->onQueueJobFail($error, $flowId);
+			})
 		;
 
 		$engine->completionsInQueue();

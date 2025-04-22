@@ -8,6 +8,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Bizproc\BaseType\Value;
 use Bitrix\Crm\EntityBankDetail;
 use Bitrix\Crm\EntityRequisite;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\DocumentGenerator;
 use Bitrix\Main\Loader;
@@ -195,6 +196,13 @@ class CBPCrmGenerateEntityDocumentActivity
 			}
 		}
 
+		// Send Operations Analytics
+		\CCrmBizProcHelper::sendOperationsAnalytics(
+			Dictionary::EVENT_ENTITY_CREATE,
+			$this,
+			'document',
+		);
+
 		if ($this->CreateActivity === 'Y')
 		{
 			$createActivityResult = DocumentGeneratorManager::getInstance()->createDocumentActivity(
@@ -230,7 +238,8 @@ class CBPCrmGenerateEntityDocumentActivity
 				0,
 				CBPTrackingType::Error
 			);
-			return CBPActivityExecutionStatus::Faulting;
+
+			return CBPActivityExecutionStatus::Closed;
 		}
 
 		//Subscribe for PDF generation event.

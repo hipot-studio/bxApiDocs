@@ -116,10 +116,11 @@ class OpenChannelChat extends ChannelChat
 		return true;
 	}
 
-	public static function sendSharedPull(array $pull): void
+	public static function sendSharedPull(array $pull): bool
 	{
 		$pull['extra']['is_shared_event'] = true;
-		\CPullWatch::AddToStack(\Bitrix\Im\V2\Chat\OpenChannelChat::PULL_TAG_SHARED_LIST, $pull);
+
+		return \CPullWatch::AddToStack(\Bitrix\Im\V2\Chat\OpenChannelChat::PULL_TAG_SHARED_LIST, $pull);
 	}
 
 	public function isNew(): bool

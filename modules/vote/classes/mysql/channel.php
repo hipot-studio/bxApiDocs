@@ -11,17 +11,11 @@ require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/vote/classes/general/cha
 
 class CVoteChannel extends CAllVoteChannel
 {
-	public static function err_mess()
-	{
-		$module_id = "vote";
-		return "<br>Module: ".$module_id."<br>Class: CVoteChannel<br>File: ".__FILE__;
-	}
-
 	public static function GetDropDownList()
 	{
 		global $DB;
+
 		$sqlHelper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
-		$err_mess = (CVoteChannel::err_mess())."<br>Function: GetDropDownList<br>Line: ";
 		$strSql = "
 			SELECT
 				ID as REFERENCE_ID,
@@ -29,7 +23,7 @@ class CVoteChannel extends CAllVoteChannel
 			FROM b_vote_channel
 			ORDER BY C_SORT
 			";
-		$res = $DB->Query($strSql, false, $err_mess.__LINE__);
+		$res = $DB->Query($strSql);
 		return $res;
 	}
 }

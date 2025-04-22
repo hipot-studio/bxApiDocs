@@ -165,7 +165,7 @@ class CVoteCacheManager
 		if (array_key_exists("QUESTION_ID", $arFields))
 		{
 			global $DB;
-			$res = $DB->Query("SELECT QUESTION_ID FROM b_vote_answer WHERE ID=".$ID, false, "File:".__FILE__." Line: ".__LINE__);
+			$res = $DB->Query("SELECT QUESTION_ID FROM b_vote_answer WHERE ID=".$ID);
 			if ($row = $res->Fetch())
 				self::ClearTag("Q", $row["QUESTION_ID"]);
 		}
@@ -180,7 +180,7 @@ class CVoteCacheManager
 		else
 		{
 			global $DB;
-			$db_res = $DB->Query("SELECT QUESTION_ID FROM b_vote_answer WHERE ID=".$ID, false, "File:".__FILE__." Line: ".__LINE__);
+			$db_res = $DB->Query("SELECT QUESTION_ID FROM b_vote_answer WHERE ID=".$ID);
 			if ($res = $db_res->Fetch())
 				self::ClearTag("Q", $res["QUESTION_ID"]);
 		}

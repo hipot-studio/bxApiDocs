@@ -41,7 +41,7 @@ class Result extends \Bitrix\Main\Result
 	public static function merge(Result ...$results): Result
 	{
 		$mergedResult = new Result();
-		$mergedData = [];
+		$dataResults = [];
 
 		foreach ($results as $result)
 		{
@@ -51,13 +51,13 @@ class Result extends \Bitrix\Main\Result
 			}
 			elseif ($result->hasResult)
 			{
-				$mergedData = array_merge($mergedData, $result->getResult());
+				$dataResults[] = $result->getResult();
 			}
 		}
 
-		if (!empty($mergedData))
+		if (!empty($dataResults))
 		{
-			$mergedResult->setResult($mergedData);
+			$mergedResult->setResult(array_merge(...$dataResults));
 		}
 
 		return $mergedResult;

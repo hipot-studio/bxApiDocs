@@ -916,6 +916,21 @@ class Params extends Registry
 		return $this;
 	}
 
+	public function clear(): self
+	{
+		$keysToUnset = [];
+		foreach ($this as $paramName => $param)
+		{
+			$keysToUnset[$paramName] = $paramName;
+		}
+		$this->unsetByKeys($keysToUnset);
+
+		$this->droppedItems = [];
+		$this->isLoaded = true;
+
+		return $this;
+	}
+
 	/**
 	 * @param string $offset
 	 * @return void

@@ -6,6 +6,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Crm;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Main;
 use Bitrix\Main\Config;
 use Bitrix\Main\Mail;
@@ -459,6 +460,14 @@ class CBPCrmSendEmailActivity extends CBPActivity
 				'EVENT_ID' => 'MESSAGE',
 				'EVENT_TEXT_1' => $eventText,
 			]
+		);
+
+		// Send Operations Analytics
+		$documentType = $this->getDocumentType();
+		\CCrmBizProcHelper::sendOperationsAnalytics(
+			Dictionary::EVENT_ENTITY_SOCIAL,
+			$this,
+			$documentType[2] ?? '',
 		);
 
 		// <-- Sending Email

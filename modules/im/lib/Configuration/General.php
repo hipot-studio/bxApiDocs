@@ -431,7 +431,20 @@ class General extends Base
 
 		$settings = static::decodeSettings($settings);
 
-		return array_replace_recursive($defaultSettings, $settings);
+		return self::filterGroupSettingsByDefault($settings);
+	}
+
+	public static function filterGroupSettingsByDefault(array $settings): array
+	{
+		$result = [];
+		$defaultSettings = self::getDefaultSettings();
+
+		foreach ($defaultSettings as $name => $value)
+		{
+			$result[$name] = $settings[$name] ?? $value;
+		}
+
+		return $result;
 	}
 
 	/**

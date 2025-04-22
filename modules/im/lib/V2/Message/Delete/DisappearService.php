@@ -101,6 +101,7 @@ class DisappearService
 		if ((int)$prevDisappearingTime === 0 && $hours > 0)
 		{
 			\CIMMessage::Add([
+				'FROM_USER_ID' => $chat->getContext()->getUserId(),
 				'MESSAGE_TYPE' => $chat->getType(),
 				'TO_CHAT_ID' => $chat->getChatId(),
 				'MESSAGE' => self::getDisappearingMessage($hours),
@@ -111,6 +112,7 @@ class DisappearService
 		elseif ($prevDisappearingTime > 0 && $hours === 0)
 		{
 			\CIMMessage::Add([
+				'FROM_USER_ID' => $chat->getContext()->getUserId(),
 				'MESSAGE_TYPE' => $chat->getType(),
 				'TO_CHAT_ID' => $chat->getChatId(),
 				'MESSAGE' => Loc::getMessage('DISAPPEAR_MESSAGES_OFF'),
@@ -121,6 +123,7 @@ class DisappearService
 		elseif ($prevDisappearingTime > 0 && $hours > 0)
 		{
 			\CIMMessage::Add([
+				'FROM_USER_ID' => $chat->getContext()->getUserId(),
 				'MESSAGE_TYPE' => $chat->getType(),
 				'TO_CHAT_ID' => $chat->getChatId(),
 				'MESSAGE' => self::getDisappearingMessage($hours, true),

@@ -67,4 +67,9 @@ class Registry extends \ArrayObject
 
 		return null;
 	}
+
+	public function isEmpty(): bool
+	{
+		return $this->count() === 0;
+	}
 }

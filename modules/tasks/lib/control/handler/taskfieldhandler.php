@@ -2,10 +2,14 @@
 
 namespace Bitrix\Tasks\Control\Handler;
 
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Entity\DatetimeField;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectException;
+use Bitrix\Main\ObjectNotFoundException;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Tasks\Control\Handler\Exception\TaskFieldValidateException;
 use Bitrix\Main\Localization\Loc;
@@ -13,7 +17,6 @@ use Bitrix\Tasks\Flow\Control\Task\Exception\FlowTaskException;
 use Bitrix\Tasks\Flow\Control\Task\Field\FlowFieldHandler;
 use Bitrix\Tasks\Flow\FlowFeature;
 use Bitrix\Tasks\Flow\Provider\Exception\FlowNotFoundException;
-use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Integration\Intranet\Department;
 use Bitrix\Tasks\Integration\Extranet;
 use Bitrix\Tasks\Integration\SocialNetwork;
@@ -40,6 +43,8 @@ use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
 use CTimeZone;
 use CUser;
+use Bitrix\Tasks\Deadline\Control\Task\Field\DeadlineFieldHandler;
+use Psr\Container\NotFoundExceptionInterface;
 use Throwable;
 
 class TaskFieldHandler
@@ -383,7 +388,8 @@ class TaskFieldHandler
 			throw new TaskFieldValidateException(Loc::getMessage('TASKS_BAD_TITLE'));
 		}
 
-		$title = Emoji::encode(mb_substr($title, 0, 250));
+		// we can break emoji here, but that's the price
+		$title = mb_substr(Emoji::encode($title), 0, 250);
 		$this->fields['TITLE'] = $title;
 
 		return $this;
@@ -736,7 +742,7 @@ class TaskFieldHandler
 					[
 						'FIELDS' => ['ID'],
 						'SELECT' => ['UF_DEPARTMENT'],
-					]
+					],
 				);
 			}
 
@@ -830,7 +836,7 @@ class TaskFieldHandler
 			{
 				$subordinateDepartments = Department::getSubordinateIds(
 					($this->fields['CREATED_BY'] ?? null),
-					true
+					true,
 				);
 
 				$userDepartment = $user['UF_DEPARTMENT'];
@@ -963,8 +969,8 @@ class TaskFieldHandler
 
 	/**
 	 * @return array
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\SystemException
+	 * @throws ArgumentException
+	 * @throws SystemException
 	 */
 	public function getFieldsToDb(): array
 	{
@@ -1298,10 +1304,22 @@ class TaskFieldHandler
 
 	/**
 	 * @throws TaskFieldValidateException
+	 * @throws ArgumentException
+	 * @throws ObjectNotFoundException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 * @throws NotFoundExceptionInterface
 	 */
 	private function prepareDeadLine(): void
 	{
-		if ($this->isNewTask() || $this->isRegularTask())
+		$isNewTask = $this->isNewTask();
+		if ($isNewTask)
+		{
+			$handler = new DeadlineFieldHandler($this->userId);
+			$handler->modify($this->fields);
+		}
+
+		if ($isNewTask || $this->isRegularTask())
 		{
 			if (is_null($this->fields['IS_REGULAR'] ?? null))
 			{
@@ -1317,7 +1335,7 @@ class TaskFieldHandler
 			$regularity = RegularParametersObject::createFromParams($regularParams);
 
 			$taskFields = $this->fields;
-			if ($this->isNewTask())
+			if ($isNewTask)
 			{
 				$taskFields['ID'] = 0;
 			}

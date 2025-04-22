@@ -169,7 +169,7 @@ class Chat extends BaseController
 			'setDisappearingDuration' => [
 				'+prefilters' => [
 					new CheckChatAccess(),
-					new CheckActionAccess(Permission\Action::ChangeRight),
+					new CheckActionAccess(Permission\Action::ChangeMessageDisappearing),
 				]
 			],
 			'setManageMessages' => [

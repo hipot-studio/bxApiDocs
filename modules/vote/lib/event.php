@@ -150,9 +150,9 @@ class EventQuestionTable extends Entity\DataManager
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_EventAnswer_Query query()
- * @method static EO_EventAnswer_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_EventAnswer_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_EventAnswer_Result getById($id)
- * @method static EO_EventAnswer_Result getList(array $parameters = array())
+ * @method static EO_EventAnswer_Result getList(array $parameters = [])
  * @method static EO_EventAnswer_Entity getEntity()
  * @method static \Bitrix\Vote\EO_EventAnswer createObject($setDefaultValues = true)
  * @method static \Bitrix\Vote\EO_EventAnswer_Collection createCollection()

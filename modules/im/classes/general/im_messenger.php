@@ -2301,16 +2301,16 @@ class CIMMessenger
 			return false;
 		}
 
-		$deleteService = new \Bitrix\Im\V2\Message\Delete\DeleteService($messageObject);
+		$deleteService = \Bitrix\Im\V2\Message\Delete\DeleteService::getInstanceByMessage($messageObject);
 		$deleteService->setContext((new \Bitrix\Im\V2\Service\Context())->setUserId($userId));
 		$deleteService->setByEvent($byEvent);
 		if ($completeDelete)
 		{
-			$deleteService->setMode(\Bitrix\Im\V2\Message\Delete\DeleteService::DELETE_COMPLETE);
+			$deleteService->setMode(\Bitrix\Im\V2\Message\Delete\DeletionMode::Complete);
 		}
 		else
 		{
-			$deleteService->setMode(\Bitrix\Im\V2\Message\Delete\DeleteService::DELETE_SOFT);
+			$deleteService->setMode(\Bitrix\Im\V2\Message\Delete\DeletionMode::Soft);
 		}
 
 		$deleteService->delete();
@@ -3982,104 +3982,19 @@ class CIMMessenger
 		{
 			$dialogId = intval($dialogId);
 		}
-		if (!$userName)
-		{
-			$userName = \Bitrix\Im\User::getInstance($userId)->getFullName();
-		}
 
-		if ($userId > 0 && $dialogId <> '' && CModule::IncludeModule("pull"))
-		{
-			$chat = Array();
-			$relation = Array();
-			if (mb_substr($dialogId, 0, 4) == 'chat')
-			{
-				$orm = \Bitrix\Im\Model\ChatTable::getById(mb_substr($dialogId, 4));
-				$chat = $orm->fetch();
+		$chatId = \Bitrix\Im\Dialog::getChatId($dialogId, $userId);
+		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
 
-				$arRelation = CIMChat::GetRelationById(mb_substr($dialogId, 4), false, true, false);
-				$relation = $arRelation;
+		$action = new \Bitrix\Im\V2\Chat\InputAction\Action($chat, \Bitrix\Im\V2\Chat\InputAction\Type::Writing);
+		$action = $action->withContextUser($userId);
+		$action->setCustomUserName($userName);
+		$action->setByEvent($byEvent);
+		$action->setLinesSilentMode($linesSilentMode);
 
-				if ($chat['ENTITY_TYPE'] != 'LIVECHAT' && !isset($arRelation[$userId]))
-				{
-					return false;
-				}
+		$result = $action->notify();
 
-				unset($arRelation[$userId]);
-
-				$pullMessage = Array(
-					'module_id' => 'im',
-					'command' => 'startWriting',
-					'expiry' => 60,
-					'params' => Array(
-						'dialogId' => $dialogId,
-						'userId' => $userId,
-						'userName' => $userName
-					),
-					'extra' => \Bitrix\Im\Common::getPullExtra()
-				);
-
-				$chatId = $chat['ID'];
-				$entityType = $chat['ENTITY_TYPE'];
-				$entityId = $chat['ENTITY_ID'];
-				if ($chat['ENTITY_TYPE'] == 'LINES')
-				{
-					foreach ($arRelation as $rel)
-					{
-						if ($rel["EXTERNAL_AUTH_ID"] == 'imconnector')
-						{
-							unset($arRelation[$rel["USER_ID"]]);
-						}
-					}
-				}
-				if ($chat['TYPE'] === \Bitrix\Im\V2\Chat::IM_TYPE_COMMENT)
-				{
-					CPullWatch::AddToStack('IM_PUBLIC_COMMENT_'.$chat['PARENT_ID'], $pullMessage);
-				}
-				else
-				{
-					\Bitrix\Pull\Event::add(array_keys($arRelation), $pullMessage);
-				}
-
-				if (self::needToSendPublicPull($chat['TYPE']))
-				{
-					CPullWatch::AddToStack('IM_PUBLIC_'.$chatId, $pullMessage);
-				}
-				if ($chat['TYPE'] === \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_CHANNEL)
-				{
-					\Bitrix\Im\V2\Chat\OpenChannelChat::sendSharedPull($pullMessage);
-				}
-			}
-			else if (intval($dialogId) > 0)
-			{
-				\Bitrix\Pull\Event::add($dialogId, Array(
-					'module_id' => 'im',
-					'command' => 'startWriting',
-					'expiry' => 60,
-					'params' => Array(
-						'dialogId' => $userId,
-						'userId' => $userId,
-						'userName' => $userName
-					),
-					'extra' => \Bitrix\Im\Common::getPullExtra()
-				));
-			}
-
-			foreach(GetModuleEvents("im", "OnStartWriting", true) as $arEvent)
-			{
-				ExecuteModuleEventEx($arEvent, array(array(
-					'DIALOG_ID' => $dialogId,
-					'CHAT' => $chat,
-					'RELATION' => $relation,
-					'USER_ID' => $userId,
-					'USER_NAME' => $userName,
-					'BY_EVENT' => $byEvent,
-					'LINES_SILENT_MODE' => $linesSilentMode
-				)));
-			}
-
-			return true;
-		}
-		return false;
+		return $result->isSuccess();
 	}
 
 	public static function PrepareSmiles()

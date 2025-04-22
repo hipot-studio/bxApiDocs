@@ -124,12 +124,11 @@ class Member
 			);
 		}
 
-		$sql = "
-			INSERT INTO " . MemberTable::getTableName() . "
-			(USER_ID, TASK_ID, TYPE)
-			VALUES
-			(" . implode("),(", $insertRows) . ")
-		";
+		$sql = $sqlHelper->getInsertIgnore(
+			MemberTable::getTableName(),
+			' (USER_ID, TASK_ID, TYPE)',
+			' VALUES (' . implode("),(", $insertRows) . ')'
+		);
 
 		Application::getConnection()->query($sql);
 

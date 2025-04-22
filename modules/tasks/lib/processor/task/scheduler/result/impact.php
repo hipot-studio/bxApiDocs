@@ -103,13 +103,18 @@ final class Impact extends \Bitrix\Tasks\Processor\Task\Result\Impact
 			$this->data['SE_PARAMETER'] = $data['SE_PARAMETER'];
 		}
 
+		if(array_key_exists('MATCH_WORK_TIME', $data))
+		{
+			$this->data['MATCH_WORK_TIME'] = $data['MATCH_WORK_TIME'] ? 'Y' : 'N';
+		}
+
 		if(array_key_exists('START_DATE_PLAN', $data) || array_key_exists('END_DATE_PLAN', $data) || array_key_exists('MATCH_WORK_TIME', $data))
 		{
 			// $startDate and $endDate are dates that were changed, not just actual dates!
 			$startDate = null;
 			$endDate = null;
 
-			if(($data['MATCH_WORK_TIME'] ?? null) == 'Y')
+			if($this->getMatchWorkTime())
 			{
 				// MATCH_WORK_TIME was set to Y, we have to reschedule and re-check existing dates even if no actual date change required
 				$startDate = isset($data['START_DATE_PLAN']) ? $data['START_DATE_PLAN'] : $this->data['START_DATE_PLAN'];

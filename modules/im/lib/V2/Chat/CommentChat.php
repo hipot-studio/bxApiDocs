@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message\Send\MentionService;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\Message\Send\SendingService;
+use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Result;
@@ -54,6 +55,35 @@ class CommentChat extends GroupChat
 		}
 
 		return static::create($message);
+	}
+
+	/**
+	 * @param MessageCollection $messages
+	 * @return Result<Chat[]>
+	 */
+	public static function getChatsByMessages(MessageCollection $messages): Result
+	{
+		$result = new Result();
+
+		$chatIds = static::getIdsByMessages($messages);
+		if (empty($chatIds))
+		{
+			return $result;
+		}
+
+		$chats = [];
+
+		foreach ($chatIds as $chatInfo)
+		{
+			$chat = Chat::getInstance((int)$chatInfo['ID']);
+			if ($chat instanceof self)
+			{
+				$chat->parentMessage = $messages[(int)$chatInfo['PARENT_MID']];
+				$chats[] = $chat;
+			}
+		}
+
+		return $result->setResult($chats);
 	}
 
 	protected function getMentionService(SendingConfig $config): MentionService
@@ -431,6 +461,25 @@ class CommentChat extends GroupChat
 		;
 
 		return (int)($row['ID'] ?? 0);
+	}
+
+	public static function getIdsByMessages(MessageCollection $messages): array
+	{
+		$chatId = $messages->getCommonChatId();
+
+		if (!isset($chatId))
+		{
+			return [];
+		}
+
+		$result = ChatTable::query()
+			->setSelect(['ID', 'PARENT_MID'])
+			->where('PARENT_ID', $chatId)
+			->whereIn('PARENT_MID', $messages->getIds())
+			->fetchAll()
+		;
+
+		return $result;
 	}
 
 	protected function sendPushChatCreate(): void

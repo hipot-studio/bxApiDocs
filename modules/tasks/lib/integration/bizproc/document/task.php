@@ -17,6 +17,7 @@ use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Slider\Path\TaskPathMaker;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
 use Bitrix\Socialnetwork;
+use Bitrix\Tasks\Util\UserField;
 
 if (!Main\Loader::includeModule('bizproc'))
 {
@@ -395,7 +396,7 @@ class Task implements \IBPWorkflowDocument
 			],
 			'filter' => [
 				'=ENTITY_ID' => 'TASKS_TASK',
-				'%=FIELD_NAME' => 'UF_AUTO_%'
+				'!@FIELD_NAME' => UserField::getSystemFields(),
 			],
 			'runtime' => [
 				\Bitrix\Main\UserFieldTable::getLabelsReference('LABELS', LANGUAGE_ID),
@@ -435,7 +436,17 @@ class Task implements \IBPWorkflowDocument
 	{
 		//$task = \Bitrix\Tasks\Item\Task::getInstance($documentId, 1);
 		//$fields = $task->getData();
-		$res = \CTasks::GetByID($documentId, false);
+		$args = func_get_args();
+		$select = $args[2] ?? [];
+		if (empty($select))
+		{
+			$res = \CTasks::GetByID($documentId, false);
+		}
+		else
+		{
+			$res = \CTasks::GetByID($documentId, false, ['select' => $select]);
+		}
+
 		$fields = $res ? $res->fetch() : null;
 
 		if (!$fields)
@@ -981,7 +992,12 @@ class Task implements \IBPWorkflowDocument
 			&& TaskLimit::isLimitExceeded()
 		)
 		{
-			throw new \Exception(Loc::getMessage('TASKS_BP_DOCUMENT_RESUME_RESTRICTED'));
+			$code =
+				defined('\CBPRuntime::EXCEPTION_CODE_INSTANCE_TARIFF_LIMIT_EXCEED')
+					? \CBPRuntime::EXCEPTION_CODE_INSTANCE_TARIFF_LIMIT_EXCEED
+					: 402
+			;
+			throw new \Exception(Loc::getMessage('TASKS_BP_DOCUMENT_RESUME_RESTRICTED'), $code);
 		}
 	}
 

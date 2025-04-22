@@ -111,6 +111,36 @@ class CalendarService
 		return new Result();
 	}
 
+	public function updateCalendarLinks(CalendarCollection $calendarCollection): Result
+	{
+		$result = new Result();
+
+		if ($calendarCollection->count() === 0)
+		{
+			return $result;
+		}
+
+		$saveResult = $calendarCollection->save();
+
+		if (!$saveResult->isSuccess())
+		{
+			return $result->addErrors($saveResult->getErrors());
+		}
+
+		$calendarCollection->fillEntities();
+
+		foreach ($calendarCollection as $calendarItem)
+		{
+			$pushRecipient = ['RECIPIENT' => $calendarItem->getEntity()->getMembersIds()];
+			Push::getInstance()
+				->setContext($this->context)
+				->sendFull($calendarItem, self::UPDATE_CALENDAR_EVENT, $pushRecipient)
+			;
+		}
+
+		return new Result();
+	}
+
 	public function prepareDataForCreateSlider(Chat $chat, ?Message $message = null): Result
 	{
 		$currentUserId = $this->getContext()->getUserId();

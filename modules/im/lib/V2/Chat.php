@@ -1770,7 +1770,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 		return $result;
 	}
 
-	public function getDialogId(): ?string
+	public function getDialogId(?int $contextUserId = null): ?string
 	{
 		if ($this->dialogId || !$this->getChatId())
 		{
@@ -3384,6 +3384,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, Im\V2\Rest\RestEntit
 			'public' => $this->getPublicOption() ?? '',
 			'unreadId' => $this->getUnreadId(),
 			'userCounter' => $this->getUserCount(),
+			'disappearDuration' => $this->getDisappearingTime() ?? 0,
 		];
 
 		return array_merge($commonFields, $additionalFields);

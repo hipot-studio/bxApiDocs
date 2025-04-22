@@ -113,9 +113,6 @@ class Calendar
 		return $date->setTime($date->getHour(), $date->getMinute() + $restOfMinutes);
 	}
 
-	/**
-	 * Will be removed soon.
-	 */
 	protected function getNextWorkdayDate(DateTime $start): DateTime
 	{
 		$currentDate = DateTime::createFromTimestamp($start->getTimestamp());

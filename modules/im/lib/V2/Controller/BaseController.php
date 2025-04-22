@@ -204,7 +204,16 @@ abstract class BaseController extends Controller
 		}
 		$ids = array_map('intval', $ids);
 
-		return new MessageCollection($ids);
+		$messageCollection = new MessageCollection($ids);
+
+		if ($messageCollection->isEmpty())
+		{
+			$this->addError(new MessageError(MessageError::NOT_FOUND));
+
+			return null;
+		}
+
+		return $messageCollection;
 	}
 
 	protected function convertCharToBool(string $char, bool $default = false): bool

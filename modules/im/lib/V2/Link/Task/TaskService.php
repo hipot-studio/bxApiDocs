@@ -131,6 +131,36 @@ class TaskService
 		return $result;
 	}
 
+	public function updateTaskLinks(TaskCollection $taskCollection): Result
+	{
+		$result = new Result();
+
+		if ($taskCollection->count() === 0)
+		{
+			return $result;
+		}
+
+		$saveResult = $taskCollection->save();
+
+		if (!$saveResult->isSuccess())
+		{
+			return $result->addErrors($saveResult->getErrors());
+		}
+
+		$taskCollection->fillEntities();
+
+		foreach ($taskCollection as $task)
+		{
+			$pushRecipient = ['RECIPIENT' => $task->getEntity()->getMembersIds()];
+			Push::getInstance()
+				->setContext($this->context)
+				->sendFull($task, self::UPDATE_TASK_EVENT, $pushRecipient)
+			;
+		}
+
+		return $result;
+	}
+
 	public function deleteLinkByTaskId(int $taskId): Result
 	{
 		LinkTaskTable::deleteByFilter(['=TASK_ID' => $taskId]);

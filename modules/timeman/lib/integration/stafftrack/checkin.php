@@ -23,4 +23,9 @@ class CheckIn
 
 		return self::$isCheckInEnabled;
 	}
+
+	public static function isCheckInStartEnabled(): bool
+	{
+		return self::isEnabled() && Feature::isCheckInStartEnabled();
+	}
 }

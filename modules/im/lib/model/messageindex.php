@@ -5,6 +5,7 @@ use Bitrix\Main,
 	Bitrix\Main\Application,
 	Bitrix\Main\Entity,
 	Bitrix\Main\Error;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 
 
 /**
@@ -34,6 +35,8 @@ use Bitrix\Main,
 
 class MessageIndexTable extends Main\Entity\DataManager
 {
+	use DeleteByFilterTrait;
+
 	/**
 	 * Returns DB table name for entity.
 	 *

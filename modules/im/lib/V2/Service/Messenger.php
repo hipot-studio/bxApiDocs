@@ -15,6 +15,7 @@ use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Delete\DeleteService;
+use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Permission\Action;
@@ -155,8 +156,8 @@ class Messenger
 	{
 		$result = new Result();
 
-		$deleteService = new Message\Delete\DeleteService($message);
-		$deleteService->setMode($mode);
+		$deleteService = DeleteService::getInstanceByMessage($message);
+		$deleteService->setMode(DeletionMode::tryFrom($mode));
 		$deleteService->delete();
 
 		return $result;
@@ -171,8 +172,8 @@ class Messenger
 	 */
 	public function disappearMessage(Message $message, int $hours): Result
 	{
-		$deleteService = new DeleteService($message);
-		if ($deleteService->canDelete() < DeleteService::DELETE_HARD)
+		$deleteService = DeleteService::getInstanceByMessage($message);
+		if ($deleteService->canDelete($message->getId()) !== DeletionMode::Complete)
 		{
 			return (new Result())->addError(new MessageError(MessageError::ACCESS_DENIED));
 		}

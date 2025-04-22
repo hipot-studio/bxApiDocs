@@ -29,16 +29,35 @@ class BizprocDocumentLists extends \BizprocDocument
 	 */
 	public static function getDocument($documentId)
 	{
-		$documentId = intval($documentId);
+		$args = func_get_args();
+		$select = $args[2] ?? [];
+		$documentId = (int)$documentId;
 		if ($documentId <= 0)
+		{
 			throw new \CBPArgumentNullException('documentId');
+		}
 
-		$result = array();
-		$element = array();
-		$elementProperty = array();
+		$result = [];
+		$element = [];
+		$elementProperty = [];
 
-		$queryElement = \CIBlockElement::getList(array(),
-			array('ID' => $documentId, 'SHOW_NEW'=>'Y', 'SHOW_HISTORY' => 'Y'));
+		if (!empty($select))
+		{
+			$select = array_merge(['ID', 'IBLOCK_ID'], $select);
+		}
+
+		$userNameFields = [
+			'CREATED_BY_PRINTABLE' => 'CREATED_USER_NAME',
+			'MODIFIED_BY_PRINTABLE' => 'USER_NAME',
+		];
+
+		$select = array_map(static fn($selectField) => $userNameFields[$selectField] ?? $selectField, $select);
+
+		$queryElement = \CIBlockElement::getList(
+			[],
+			['ID' => $documentId, 'SHOW_NEW'=>'Y', 'SHOW_HISTORY' => 'Y'],
+			arSelectFields: $select
+		);
 		while($queryResult= $queryElement->fetch())
 		{
 			$element = $queryResult;

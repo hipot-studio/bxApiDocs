@@ -33,7 +33,15 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 		/** @var CBPDocumentService $ds */
 		$ds = $runtime->GetService('DocumentService');
 
-		$document = $ds->GetDocument($documentId);
+		if (defined('\CBPDocument::PARAM_USED_DOCUMENT_FIELDS'))
+		{
+			$document = $ds->GetDocument($documentId, select: ['RESPONSIBLE_ID']);
+		}
+		else
+		{
+			$document = $ds->GetDocument($documentId);
+		}
+
 		$responsibleFieldName = 'RESPONSIBLE_ID';
 		if (isset($document[$responsibleFieldName]))
 		{

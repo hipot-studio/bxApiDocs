@@ -1569,8 +1569,6 @@ class CIMDisk
 			return false;
 		}
 
-		$skipViewer = isset($options['SKIP_VIEWER']) && ($options['SKIP_VIEWER'] === true);
-
 		if ($fileModel instanceof \Bitrix\Disk\File)
 		{
 		}
@@ -1588,117 +1586,11 @@ class CIMDisk
 			return false;
 		}
 
-		/** @var \Bitrix\Disk\File $fileModel */
-		$contentType = 'file';
-		$imageParams = false;
-		if ($fileModel->getCode() === IM\V2\Link\File\FileItem::MEDIA_ORIGINAL_CODE)
-		{
-			// skip
-		}
-		else if (\Bitrix\Disk\TypeFile::isImage($fileModel))
-		{
-			$contentType = 'image';
-			$params = $fileModel->getFile();
-			$width = isset($params['WIDTH']) ? (int)$params['WIDTH'] : 0;
-			$height = isset($params['HEIGHT']) ? (int)$params['HEIGHT'] : 0;
-			$imageParams = Array(
-				'width' => $width,
-				'height' => $height,
-			);
-		}
-		else if (\Bitrix\Disk\TypeFile::isVideo($fileModel->getName()))
-		{
-			$contentType = 'video';
-			$params = $fileModel->getView()->getPreviewData();
-			$width = isset($params['WIDTH']) ? (int)$params['WIDTH'] : 0;
-			$height = isset($params['HEIGHT']) ? (int)$params['HEIGHT'] : 0;
-			$imageParams = Array(
-				'width' => $width,
-				'height' => $height,
-			);
-		}
-		else if (\Bitrix\Disk\TypeFile::isAudio($fileModel->getName()))
-		{
-			$contentType = 'audio';
-		}
-		$author = IM\V2\Entity\User\User::getInstance($fileModel->getCreatedBy());
+		$file = new IM\V2\Entity\File\FileItem($fileModel, $chatId);
+		$params = $file->toRestFormat();
+		$params['date'] = $fileModel->getCreateTime(); // backward compatibility
 
-		$fileData = Array(
-			'id' => (int)$fileModel->getId(),
-			'chatId' => (int)$chatId,
-			'date' => $fileModel->getCreateTime(),
-			'type' => $contentType,
-			'name' => $fileModel->getName(),
-			'extension' => mb_strtolower($fileModel->getExtension()),
-			'size' => (int)$fileModel->getSize(),
-			'image' => $imageParams,
-			'status' => $fileModel->getGlobalContentVersion() > 1? 'done': 'upload',
-			'progress' => $fileModel->getGlobalContentVersion() > 1? 100: -1,
-			'authorId' => (int)$fileModel->getCreatedBy(),
-			'authorName' => $author->getName(),
-			'urlPreview' => self::GetPublicPath(self::PATH_TYPE_PREVIEW, $fileModel),
-			'urlShow' => self::GetPublicPath(self::PATH_TYPE_SHOW, $fileModel),
-			'urlDownload' => self::GetPublicPath(self::PATH_TYPE_DOWNLOAD, $fileModel),
-		);
-
-		if ($skipViewer)
-		{
-			$fileData['viewerAttrs'] = null;
-		}
-		else
-		{
-			try
-			{
-				$viewerType = Disk\Ui\FileAttributes::buildByFileId($fileModel->getFileId(), $fileData['urlDownload'])
-					->setObjectId($fileModel->getId())
-					->setGroupBy($chatId)
-					->setAttribute('data-im-chat-id', $chatId)
-					->setTitle($fileModel->getName())
-					->addAction([
-						'type' => 'download',
-					])
-					->addAction([
-						'type' => 'copyToMe',
-						'text' => Loc::getMessage('IM_DISK_ACTION_SAVE_TO_OWN_FILES_MSGVER_1'),
-						'action' => 'BXIM.disk.saveToDiskAction',
-						'params' => [
-							'fileId' => $fileModel->getId(),
-						],
-						'extension' => 'disk.viewer.actions',
-						'buttonIconClass' => 'ui-btn-icon-cloud',
-					])
-				;
-
-				if ($viewerType->getTypeClass() === Disk\Ui\FileAttributes::JS_TYPE_CLASS_ONLYOFFICE)
-				{
-					$viewerType->setTypeClass('BX.Messenger.Integration.Viewer.OnlyOfficeChatItem');
-					if (
-						$fileModel->getCode() === CreateDocumentByCallTemplateScenario::CODE_RESUME
-						|| $fileModel->getRealObject()->getCode() === CreateDocumentByCallTemplateScenario::CODE_RESUME
-					)
-					{
-						$viewerType->setTypeClass('BX.Messenger.Integration.Viewer.OnlyOfficeResumeItem');
-					}
-
-					$viewerType->setExtension('im.integration.viewer');
-				}
-				if ($viewerType->getViewerType() !== \Bitrix\Main\UI\Viewer\Renderer\Renderer::JS_TYPE_UNKNOWN)
-				{
-					$fileData['viewerAttrs'] = $viewerType->toDataSet();
-				}
-				else
-				{
-					$fileData['viewerAttrs'] = null;
-				}
-			}
-			catch (\Bitrix\Main\ArgumentException $exception)
-			{
-				$fileData['viewerAttrs'] = null;
-			}
-		}
-
-
-		return $fileData;
+		return $params;
 	}
 
 	/**

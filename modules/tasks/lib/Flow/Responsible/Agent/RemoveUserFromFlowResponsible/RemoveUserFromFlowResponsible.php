@@ -15,7 +15,7 @@ final class RemoveUserFromFlowResponsible implements AgentInterface
 
 	public static function bindAgent(int $userId): void
 	{
-		\CAgent::AddAgent(self::getAgentName($userId), 'tasks', 'N', 5);
+		\CAgent::AddAgent(self::getAgentName($userId), 'tasks', 'N', 5, existError: false);
 	}
 
 	private static function getAgentName(int $userId): string

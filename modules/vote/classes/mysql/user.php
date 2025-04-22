@@ -11,9 +11,4 @@ require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/vote/classes/general/use
 
 class CVoteUser extends CAllVoteUser
 {
-	public static function err_mess()
-	{
-		$module_id = "vote";
-		return "<br>Module: ".$module_id."<br>Class: CVoteUser<br>File: ".__FILE__;
-	}
 }

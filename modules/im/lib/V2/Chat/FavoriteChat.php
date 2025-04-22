@@ -24,7 +24,7 @@ class FavoriteChat extends PrivateChat
 		return User::getInstance($this->getAuthorId());
 	}
 
-	public function getDialogId(): ?string
+	public function getDialogId(?int $contextUserId = null): ?string
 	{
 		if ($this->dialogId || !$this->getChatId())
 		{

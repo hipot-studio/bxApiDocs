@@ -1418,6 +1418,11 @@ class TaskService implements Errorable
 
 	public function getActualParentIds(array $parentIds, int $groupId): array
 	{
+		if (empty($parentIds))
+		{
+			return [];
+		}
+
 		[$rows, $queryObject] = $this->getList([
 			'select' => ['ID'],
 			'filter' => [

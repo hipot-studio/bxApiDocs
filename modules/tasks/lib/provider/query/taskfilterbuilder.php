@@ -26,6 +26,7 @@ use Bitrix\Tasks\Comments\Internals\Comment;
 use Bitrix\Tasks\Internals\Counter\CounterDictionary;
 use Bitrix\Tasks\Internals\Counter\CounterTable;
 use Bitrix\Tasks\Internals\Counter\Deadline;
+use Bitrix\Tasks\Internals\Log\Logger;
 use Bitrix\Tasks\Internals\Task\LabelTable;
 use Bitrix\Tasks\Internals\Task\MemberTable;
 use Bitrix\Tasks\Internals\Task\MetaStatus;
@@ -273,6 +274,10 @@ class TaskFilterBuilder
 					if ($subFilter)
 					{
 						$conditionTree->where($subFilter);
+					}
+					elseif ($field === 'ID')
+					{
+						Logger::logWarn('Pay attention! Providing an empty ID filter may fetch all tasks.');
 					}
 					break;
 

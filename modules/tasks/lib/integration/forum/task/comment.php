@@ -667,8 +667,10 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 				)
 			);
 
-			if (!$bCrmTask)
-			{
+			// 1. commented in 2025 because of http://jabber.bx/view.php?id=192038
+			// 2. added in 2014 because of http://jabber.bx/view.php?id=48069
+			// if (!$bCrmTask)
+			// {
 				$dbRes = \CSocNetLog::getList(
 					array("ID" => "DESC"),
 					array(
@@ -724,7 +726,7 @@ final class Comment extends \Bitrix\Tasks\Integration\Forum\Comment
 						}
 					}
 				}
-			}
+			// }
 
 			if ((int)($log_id ?? null) > 0)
 			{

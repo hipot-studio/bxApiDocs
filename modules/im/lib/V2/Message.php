@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2;
 
 use ArrayAccess;
+use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Reaction\ReactionMessage;
 use Bitrix\Im\V2\TariffLimit\DateFilterable;
@@ -2014,22 +2015,15 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public function deleteSoft(): Result
 	{
-		$service = new Im\V2\Message\Delete\DeleteService($this);
-		$service->setMode(Im\V2\Message\Delete\DeleteService::MODE_SOFT);
-		return $service->delete();
-	}
-
-	public function deleteHard(): Result
-	{
-		$service = new Im\V2\Message\Delete\DeleteService($this);
-		$service->setMode(Im\V2\Message\Delete\DeleteService::MODE_HARD);
+		$service = Im\V2\Message\Delete\DeleteService::getInstanceByMessage($this);
+		$service->setMode(DeletionMode::Soft);
 		return $service->delete();
 	}
 
 	public function deleteComplete(): Result
 	{
-		$service = new Im\V2\Message\Delete\DeleteService($this);
-		$service->setMode(Im\V2\Message\Delete\DeleteService::MODE_COMPLETE);
+		$service = Im\V2\Message\Delete\DeleteService::getInstanceByMessage($this);
+		$service->setMode(DeletionMode::Complete);
 		return $service->delete();
 	}
 

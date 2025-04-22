@@ -9,6 +9,7 @@ use Bitrix\Bizproc;
 use Bitrix\Crm;
 use Bitrix\Crm\Activity\Provider\ToDo\BlocksManager;
 use Bitrix\Crm\Entity\MessageBuilder\ProcessToDoActivityResponsible;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\Disk\HiddenStorage;
 use Bitrix\Crm\Integration\Im\ProcessEntity\ToDoResponsibleNotification;
 use Bitrix\Crm\Item;
@@ -193,6 +194,13 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 
 		$this->Id = $todo->getId();
 		$this->notifyAboutResponsible($todo);
+
+		// Send Operations Analytics
+		\CCrmBizProcHelper::sendOperationsAnalytics(
+			Dictionary::EVENT_ENTITY_CREATE,
+			$this,
+			'todo',
+		);
 
 		return CBPActivityExecutionStatus::Closed;
 	}

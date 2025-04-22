@@ -76,14 +76,9 @@ class PrivateChat extends Chat implements PopupDataAggregatable
 		return $this;
 	}
 
-	public function getDialogId(): ?string
+	public function getDialogId(?int $contextUserId = null): ?string
 	{
-		if ($this->dialogId || !$this->getChatId())
-		{
-			return $this->dialogId;
-		}
-
-		$this->dialogId = $this->getCompanion()->getId();
+		$this->dialogId = $this->getCompanion($contextUserId)->getId();
 
 		return $this->dialogId;
 	}
@@ -160,28 +155,6 @@ class PrivateChat extends Chat implements PopupDataAggregatable
 		return $result;
 	}
 
-	/**
-	 * @return int
-	 */
-	public function getOpponentId(): int
-	{
-		/** @var Relation $relation */
-		$opponentUserId = 0;
-		foreach ($this->getRelations() as $relation)
-		{
-			if (
-				User::getInstance($relation->getUserId())->isActive()
-				&& $this->getAuthorId() != $relation->getUserId()
-			)
-			{
-				$opponentUserId = $relation->getUserId();
-				break;
-			}
-		}
-
-		return $opponentUserId;
-	}
-
 	public function getCompanion(?int $userId = null): \Bitrix\Im\V2\Entity\User\User
 	{
 		$userId = $userId ?? $this->getContext()->getUserId();
@@ -202,6 +175,11 @@ class PrivateChat extends Chat implements PopupDataAggregatable
 		}
 
 		return new NullUser();
+	}
+
+	public function getCompanionId(?int $userId = null): ?int
+	{
+		return $this->getCompanion($userId)->getId();
 	}
 
 	protected function getFieldsForRecent(int $userId, Message $message): array

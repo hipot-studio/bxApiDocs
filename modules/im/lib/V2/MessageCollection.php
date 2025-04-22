@@ -238,8 +238,13 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 	 */
 	public function fillParams(): self
 	{
+		if ($this->isParamsFilled)
+		{
+			return $this;
+		}
+
 		$messageIds = $this->getIds();
-		if (!$this->isParamsFilled && !empty($messageIds))
+		if (!empty($messageIds))
 		{
 			foreach ($this as $message)
 			{
@@ -259,6 +264,103 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 			}
 
 			$this->isParamsFilled = true;
+		}
+
+		return $this;
+	}
+
+	public function isParamsFilled(): bool
+	{
+		return $this->isParamsFilled;
+	}
+
+	public function deleteParams(): self
+	{
+		if (!empty($this->getIds()))
+		{
+			$filter = [
+				'=MESSAGE_ID' => $this->getIds(),
+			];
+
+			MessageParamTable::deleteBatch($filter);
+		}
+
+		foreach ($this as $message)
+		{
+			$message->getParams(true)->clear();
+		}
+
+		$this->isParamsFilled = true;
+
+		return $this;
+	}
+
+	/**
+	 * @param array $params
+	 * @return self
+	 */
+	public function resetParams($params): self
+	{
+		if (empty($this->getIds()))
+		{
+			return $this;
+		}
+
+		return $this
+			->deleteParams()
+			->multiAddParams($params)
+		;
+	}
+
+	protected function multiAddParams($params): self
+	{
+		$rows = $this->getParamsFieldsForMultiAdd($params);
+
+		if (empty($rows))
+		{
+			return $this;
+		}
+
+		$result = Param::getDataClass()::addMulti($rows, true);
+		if (!$result->isSuccess())
+		{
+			return $this;
+		}
+
+		$this->isParamsFilled = false;
+		$this->fillParams();
+
+		return $this;
+	}
+
+	protected function getParamsFieldsForMultiAdd(array $params): array
+	{
+		$fields = [];
+
+		foreach ($this as $message)
+		{
+			foreach ($params as $paramName => $paramValue)
+			{
+				$fields[] = [
+					'MESSAGE_ID' => $message->getId(),
+					'PARAM_NAME' => $paramName,
+					'PARAM_VALUE' => $paramValue,
+				];
+			}
+		}
+
+		return $fields;
+	}
+
+	/**
+	 * @param array $params
+	 * @return self
+	 */
+	public function setParams($params): self
+	{
+		foreach ($this as $message)
+		{
+			$message->setParams($params);
 		}
 
 		return $this;
@@ -620,6 +722,14 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 	}
 
 	//endregion
+
+	public function unpin(bool $clearParams = true): Result
+	{
+		$pinService = new PinService();
+		$pinService->setContext($this->context);
+
+		return $pinService->unpinMessages($this, $clearParams);
+	}
 
 	protected static function processFilters(Query $query, array $filter, array $order): void
 	{

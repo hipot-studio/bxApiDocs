@@ -2,12 +2,14 @@
 
 namespace Bitrix\Rest\Marketplace;
 
+use Bitrix\Bitrix24\License\Market;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Type\Date;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
+use CBitrix24;
 
 Loc::loadMessages(__FILE__);
 
@@ -122,6 +124,15 @@ class Notification
 				}
 			}
 
+			if (
+				$option === 'SUBSCRIPTION_MARKET_DEMO_END'
+				&& Loader::includeModule('bitrix24')
+				&& \Bitrix\Bitrix24\License::getCurrent()->getRegion() === 'ru'
+			)
+			{
+				return self::getSubscriptionMarketDemoEndNotifyData($option);
+			}
+
 			$message = Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS_MSGVER_1');
 			if ($message !== '')
 			{
@@ -138,6 +149,16 @@ class Notification
 		}
 
 		return $result;
+	}
+
+	private static function getSubscriptionMarketDemoEndNotifyData(string $option): array
+	{
+		$url = CBitrix24::isLicensePaid()? Market::getDefaultBuyPath() : Market::PATH_MARKET_BUT_WITHOUT_TARIFF;
+		return [
+			'BUTTON_TEXT' => Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_BTN_MSGVER_1'),
+			'PANEL_LINK' => $url,
+			'PANEL_MESSAGE' => Loc::getMessage('REST_MARKETPLACE_NOTIFICATION_' . $option . '_MESS_MSGVER_2')
+		];
 	}
 
 	public static function setLastCheckTimestamp($timestamp)

@@ -1109,17 +1109,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			}
 		}
 
-		$entity = Mail\Internals\MailboxAccessTable::getEntity();
-		$entity->getConnection()->query(sprintf(
-			'DELETE FROM %s WHERE %s',
-			$entity->getConnection()->getSqlHelper()->quote($entity->getDbTableName()),
-			Main\Entity\Query::buildFilterSql(
-				$entity,
-				array(
-					'=MAILBOX_ID' => $mailboxId,
-				)
-			)
-		));
+		Mail\Internals\MailboxAccessTable::deleteByFilter(['=MAILBOX_ID' => $mailboxId,]);
 
 		$ownerAccessCode = 'U' . (empty($mailbox) ? $USER->getId() : $mailbox['USER_ID']);
 		$access = array($ownerAccessCode);

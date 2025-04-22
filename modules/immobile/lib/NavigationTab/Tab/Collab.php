@@ -48,7 +48,7 @@ class Collab extends BaseRecent
 		return Loc::getMessage('IMMOBILE_NAVIGATION_TAB_COLLAB_TAB_TITLE');
 	}
 
-	protected function getComponentCode(): string
+	public function getComponentCode(): string
 	{
 		return 'im.collab.messenger';
 	}

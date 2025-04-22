@@ -58,6 +58,7 @@ class Group extends Controller
 	private int $processedItems = 0;
 	private bool $isProcessCompleted = false;
 	private int $userId;
+	private int $lastProcessedId = 0;
 	private Collection $errors;
 	private array $actionNotAvailable;
 	public const DEADLINE_EXTENSION_TYPE = ['day', 'week', 'month'];
@@ -420,6 +421,11 @@ class Group extends Controller
 			$this->setProcessedItems((int)$data['processedItems']);
 		}
 
+		if (isset($data['lastProcessedId']))
+		{
+			$this->setLastProcessedId((int)$data['lastProcessedId']);
+		}
+
 		if (isset($data['totalItems']))
 		{
 			$this->setTotalItems((int)$data['totalItems']);
@@ -444,6 +450,12 @@ class Group extends Controller
 		$ownerId = $this->getOwnerId($data);
 
 		$filter = Filter::getInstance($ownerId, $data['groupId'])->process();
+
+		if ($this->lastProcessedId)
+		{
+			$filter['::SUBFILTER-ID']['>ID'] =  $this->lastProcessedId;
+		}
+
 		unset($filter['ONLY_ROOT_TASKS']);
 
 		$select = [
@@ -453,9 +465,11 @@ class Group extends Controller
 		$query = (new TaskQuery($this->userId))
 			->setBehalfUser($ownerId)
 			->setSelect($select)
+			->setOrder([
+					'ID' => 'ASC'
+				])
 			->setWhere($filter)
-			->setLimit($data['nPageSize'])
-			->setOffset($this->processedItems);
+			->setLimit($data['nPageSize']);
 
 		$list = new TaskList();
 		$tasks = $list->getList($query);
@@ -464,6 +478,8 @@ class Group extends Controller
 		{
 			$taskIds[] = $item['ID'];
 		}
+
+		$this->lastProcessedId = end($taskIds);
 
 		return $taskIds;
 	}
@@ -818,6 +834,7 @@ class Group extends Controller
 			$actionResult['ERRORS'] = $errorsText;
 			$actionResult['WARNING_TEXT'] = $warningText;
 			$actionResult['STATUS'] = $this->getStatus();
+			$actionResult['LAST_PROCESSED_ID'] = $this->lastProcessedId;
 		}
 
 		return $actionResult;
@@ -859,6 +876,11 @@ class Group extends Controller
 	private function setProcessedItems(int $processedItems): void
 	{
 		$this->processedItems = $processedItems;
+	}
+
+	private function setLastProcessedId(int $lastProcessedId): void
+	{
+		$this->lastProcessedId = $lastProcessedId;
 	}
 
 	private function incrementProcessedItems(int $incrementItems): void

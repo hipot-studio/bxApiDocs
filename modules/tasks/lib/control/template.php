@@ -24,6 +24,7 @@ use Bitrix\Tasks\Internals\Task\TemplateTable;
 use Bitrix\Tasks\Item\SystemLog;
 use Bitrix\Tasks\Member\Service\TemplateMemberService;
 use Bitrix\Tasks\Replication\Replicator\RegularTemplateTaskReplicator;
+use Bitrix\Tasks\Replication\Template\Option\Options;
 
 class Template
 {
@@ -236,23 +237,11 @@ class Template
 		$this->templateId = $id;
 		$template = $this->getTemplateData();
 
+		$isReplicateParamsChanged = $this->isReplicateParametersChanged($template, $fields);
+
 		if ((int)($template['BASE_TEMPLATE_ID'] ?? null) > 0)
 		{
 			unset($fields['REPLICATE'], $fields['PARENT_ID']);
-			$isReplicateParamsChanged = false;
-		}
-		else
-		{
-			$isReplicateParamsChanged =
-				(
-					isset($fields['REPLICATE'])
-					&& $template['REPLICATE'] !== $fields['REPLICATE']
-				)
-				||
-				(
-					isset($fields['REPLICATE_PARAMS'])
-					&& $template['REPLICATE_PARAMS'] !== $fields['REPLICATE_PARAMS']
-				);
 		}
 
 		try
@@ -843,5 +832,35 @@ class Template
 	{
 		$this->templateId = null;
 		$this->template = null;
+	}
+
+	private function isReplicateParametersChanged(array $template, array $fields): bool
+	{
+		if ((int)($template['BASE_TEMPLATE_ID'] ?? null) > 0)
+		{
+			return false;
+		}
+
+		if (isset($fields['REPLICATE']) && $template['REPLICATE'] !== $fields['REPLICATE'])
+		{
+			return true;
+		}
+
+		if (!isset($fields['REPLICATE_PARAMS']))
+		{
+			return false;
+		}
+
+		$before = $template['REPLICATE_PARAMS'];
+		$before = is_string($before) ? unserialize($before, ['allowed_classes' => false]) : $before;
+
+		$after = $fields['REPLICATE_PARAMS'];
+		$after = is_string($after) ? unserialize($after, ['allowed_classes' => false]) : $after;
+		if (!is_array($before))
+		{
+			return is_array($after);
+		}
+
+		return !Options::isNewAndCurrentOptionsEquals($before, $after);
 	}
 }
