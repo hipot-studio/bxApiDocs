@@ -6281,10 +6281,12 @@ class CCalendarEvent
 				$parentEntryList = self::GetList([
 					'arFilter' => [
 						"ID" => (int)$entry['PARENT_ID'],
+						"FROM_LIMIT" => $userDateFrom,
+						"TO_LIMIT" => $userDateFrom,
 					],
-					'parseRecursion' => false,
+					'parseRecursion' => true,
 					'maxInstanceCount' => 1,
-					'preciseLimits' => false,
+					'preciseLimits' => true,
 					'fetchAttendees' => true,
 					'checkPermissions' => true,
 					'setDefaultLimit' => false,

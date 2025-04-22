@@ -2040,10 +2040,18 @@ class CCalendar
 		$accessController = new EventAccessController($userId);
 
 		$result = [];
-		$sectionId =
-			(!empty($arFields['SECTIONS']) && is_array($arFields['SECTIONS']))
-				? $arFields['SECTIONS'][0]
-				: (int)($arFields['SECTIONS'] ?? null);
+		if (isset($arFields['SECTION_ID']))
+		{
+			$sectionId = (int)$arFields['SECTION_ID'];
+		}
+		else
+		{
+			$sectionId =
+				(!empty($arFields['SECTIONS']) && is_array($arFields['SECTIONS']))
+					? $arFields['SECTIONS'][0]
+					: (int)($arFields['SECTIONS'] ?? null);
+		}
+
 		$bPersonal = self::IsPersonal($arFields['CAL_TYPE'] ?? null, $arFields['OWNER_ID'] ?? null, $userId);
 		$checkPermission = !isset($params['checkPermission']) || $params['checkPermission'] !== false;
 		$silentErrorModePrev = self::$silentErrorMode;
@@ -2302,6 +2310,9 @@ class CCalendar
 				$params['currentEvent'] = $curEvent;
 			}
 		}
+		// $bPersonal should not be reason to skip section rights check
+		// but if it removed, extranet users can not create events in groups, cause EventAddRule:42
+		// there section model creation contains bug, which not respect owner_id specific for groups
 		elseif ($checkPermission && $sectionId > 0 && !$bPersonal)
 		{
 			$section = CCalendarSect::GetList(['arFilter' => ['ID' => $sectionId],
@@ -2318,16 +2329,26 @@ class CCalendar
 				return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
 			}
 
-			$newEventModel =
-				EventModel::createNew()
-					->setOwnerId((int)$arFields['OWNER_ID'])
-					->setSectionId((int)$sectionId)
-					->setSectionType($arFields['CAL_TYPE'])
-			;
-
-			if (!$accessController->check(ActionDictionary::ACTION_EVENT_ADD, $newEventModel))
+			if (($section['IS_COLLAB'] ?? null) && Util::isCollabUser($userId))
 			{
-				return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
+				$userCollabIds = UserCollabs::getInstance()->getIds($userId);
+				if (!in_array((int)$section['OWNER_ID'], $userCollabIds, true))
+				{
+					return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
+				}
+			}
+			else
+			{
+				$newEventModel =
+					EventModel::createNew()
+						->setOwnerId((int)$arFields['OWNER_ID'])
+						->setSectionId((int)$sectionId)
+						->setSectionType($arFields['CAL_TYPE']);
+
+				if (!$accessController->check(ActionDictionary::ACTION_EVENT_ADD, $newEventModel))
+				{
+					return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
+				}
 			}
 		}
 
@@ -3575,15 +3596,8 @@ class CCalendar
 
 		$eventsList = CCalendarEvent::GetList([
 			'arSelect' => [
-				'ID',
-				'CAL_TYPE',
-				'PARENT_ID',
+				...CCalendarEvent::$defaultSelectEvent,
 				'RECURRENCE_ID',
-				'DATE_TO',
-				'DATE_FROM',
-				'TZ_FROM',
-				'DATE_TO_TS_UTC',
-				'DATE_FROM_TS_UTC',
 				'DAV_XML_ID',
 				'DAV_EXCH_LABEL',
 				'CAL_DAV_LABEL',
@@ -6439,13 +6453,14 @@ class CCalendar
 		return $eventDate;
 	}
 
-	public static function getSectionListAvailableForUser($userId, $additionalSectionIdList = [])
+	public static function getSectionListAvailableForUser($userId, $additionalSectionIdList = [], $params = [])
 	{
 		return self::GetSectionList([
 			'CAL_TYPE' => 'user',
 			'OWNER_ID' => $userId,
 			'ACTIVE' => 'Y',
 			'ADDITIONAL_IDS' => array_merge($additionalSectionIdList, UserSettings::getFollowedSectionIdList($userId)),
+			...$params,
 		]);
 	}
 

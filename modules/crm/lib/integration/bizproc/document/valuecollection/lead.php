@@ -55,9 +55,13 @@ class Lead extends Base
 			unset($this->document['COMPANY_TITLE']);
 		}
 
-		$this->document['FULL_ADDRESS'] = Crm\Format\AddressFormatter::getSingleInstance()->formatTextComma(
-			Crm\LeadAddress::mapEntityFields($this->document)
-		);
+		$addressFields = Crm\LeadAddress::mapEntityFields($this->document);
+		if (!empty(array_filter($addressFields)))
+		{
+			$this->document['FULL_ADDRESS'] = Crm\Format\AddressFormatter::getSingleInstance()->formatTextComma(
+				$addressFields
+			);
+		}
 
 		if (isset($this->document['STATUS_ID']))
 		{

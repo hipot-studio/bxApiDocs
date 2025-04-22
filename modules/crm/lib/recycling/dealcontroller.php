@@ -413,6 +413,17 @@ class DealController extends BaseController
 		$this->startRecoveryWorkflows($newEntityID);
 		//TODO: start automation???
 
+		$event = new \Bitrix\Main\Event(
+			'crm',
+			'OnCrmDealRecoverFromRecycleBin',
+			[
+				'entityId' => $entityID,
+				'newEntityId' => $newEntityID,
+				'recyclingEntityId' => $recyclingEntityID,
+			],
+		);
+		$event->send();
+
 		return $newEntityID;
 	}
 
@@ -469,6 +480,16 @@ class DealController extends BaseController
 		);
 
 		Relation::deleteByRecycleBin($recyclingEntityID);
+
+		$event = new \Bitrix\Main\Event(
+			'crm',
+			'OnCrmDealEraseFromRecycleBin',
+			[
+				'entityId' => $entityID,
+				'recyclingEntityId' => $recyclingEntityID,
+			],
+		);
+		$event->send();
 	}
 
 	/**

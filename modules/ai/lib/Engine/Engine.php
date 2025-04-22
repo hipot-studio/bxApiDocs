@@ -669,13 +669,19 @@ abstract class Engine
 			'messages' => $postParams['messages'] ?? $this->getPostParams()['messages'],
 		];
 
+		if (isset($postParams['reasoning_effort']))
+		{
+			$returnArray['reasoning_effort'] = $postParams['reasoning_effort'];
+		}
+
 		if (isset($postParams['max_tokens']))
 		{
 			$returnArray['max_tokens'] = $postParams['max_tokens'];
 		}
+
 		if (isset($postParams['response_format']))
 		{
-			$returnArray['response_format']['type'] = $postParams['response_format']['type'];
+			$returnArray['response_format'] = $postParams['response_format'];
 		}
 
 		return $returnArray;

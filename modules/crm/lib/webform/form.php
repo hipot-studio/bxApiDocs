@@ -1541,18 +1541,27 @@ class Form
 					'DISCOUNT' => $item['discount'] ?: 0,
 					'QUANTITY' => $productValue['quantity'],
 				];
-				if ($productId && ($productData = \CCrmProduct::GetByID($productId)))
+				if ($productId)
 				{
-					$product['TYPE'] = $productData['TYPE'];
-					$product['VAT_INCLUDED'] = $productData['VAT_INCLUDED'];
-					if ($productData['VAT_ID'])
+					$iterator = \CCrmProduct::getList([], ['ID' => $productId], ['*'], ['nTopCount' => 1]);
+					$productData = $iterator->getNext();
+					if ($productData)
 					{
-						$vatData = \CCrmVat::GetByID($productData['VAT_ID']);
-						if ($vatData && $vatData['RATE'])
+						$product['TYPE'] = $productData['TYPE'];
+						$product['VAT_INCLUDED'] = $productData['VAT_INCLUDED'];
+						if ($productData['VAT_ID'])
 						{
-							$product['VAT_RATE'] = floatval($vatData['RATE']) / 100;
+							$vatData = \CCrmVat::GetByID($productData['VAT_ID']);
+							if ($vatData && $vatData['RATE'])
+							{
+								$product['VAT_RATE'] = floatval($vatData['RATE']) / 100;
+							}
 						}
 					}
+					unset(
+						$productData,
+						$iterator
+					);
 				}
 				$resultProducts[] = $product;
 			}

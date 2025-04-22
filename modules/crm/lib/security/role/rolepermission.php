@@ -155,6 +155,10 @@ class RolePermission
 		if ($needSplitByRoleGroup)
 		{
 			$entityTypeId = PermissionEntityTypeHelper::extractEntityAndCategoryFromPermissionEntityType($permissionEntityId)?->getEntityTypeId();
+			if (!$entityTypeId)
+			{
+				return $result;
+			}
 			$strictByRoleGroupCode = (string)\Bitrix\Crm\Security\Role\GroupCodeGenerator::getGroupCodeByEntityTypeId($entityTypeId);
 			$rolesIdsInGroup = self::getRolesByGroupCode($strictByRoleGroupCode);
 		}

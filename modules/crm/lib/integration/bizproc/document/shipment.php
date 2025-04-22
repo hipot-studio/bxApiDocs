@@ -54,7 +54,7 @@ class Shipment extends \CCrmDocument
 		];
 	}
 
-	public static function GetDocument($documentId, $documentType = null, array $select = [])
+	public static function GetDocument($documentId)
 	{
 		//TODO make real document
 		return [

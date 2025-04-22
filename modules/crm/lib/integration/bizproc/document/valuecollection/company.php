@@ -52,12 +52,26 @@ class Company extends Base
 	{
 		parent::loadAddressValues();
 
-		$this->document['ADDRESS'] = Crm\Format\AddressFormatter::getSingleInstance()->formatTextComma(
-			Crm\CompanyAddress::mapEntityFields($this->document, ['TYPE_ID' => Crm\EntityAddressType::Delivery])
+		$deliveryFields = Crm\CompanyAddress::mapEntityFields(
+			$this->document,
+			['TYPE_ID' => Crm\EntityAddressType::Delivery]
 		);
+		if (!empty(array_filter($deliveryFields)))
+		{
+			$this->document['ADDRESS'] = Crm\Format\AddressFormatter::getSingleInstance()->formatTextComma(
+				$deliveryFields
+			);
+		}
 
-		$this->document['ADDRESS_LEGAL'] = Crm\Format\AddressFormatter::getSingleInstance()->formatTextComma(
-			Crm\CompanyAddress::mapEntityFields($this->document, ['TYPE_ID' => Crm\EntityAddressType::Registered])
+		$registeredFields = Crm\CompanyAddress::mapEntityFields(
+			$this->document,
+			['TYPE_ID' => Crm\EntityAddressType::Registered]
 		);
+		if (!empty(array_filter($deliveryFields)))
+		{
+			$this->document['ADDRESS_LEGAL'] = Crm\Format\AddressFormatter::getSingleInstance()->formatTextComma(
+				$registeredFields
+			);
+		}
 	}
 }

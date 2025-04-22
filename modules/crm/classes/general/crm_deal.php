@@ -1933,9 +1933,9 @@ class CAllCrmDeal
 				{
 					$this->LAST_ERROR = GetMessage('CRM_PERMISSION_DENIED');
 					$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
+
 					return false;
 				}
-				$permissionAttributesHelper->prepareFields($arFields);
 			}
 
 			//Prepare currency & exchange rate
@@ -2068,6 +2068,18 @@ class CAllCrmDeal
 			if(!isset($arFields['COMPANY_ID']))
 			{
 				$arFields['COMPANY_ID'] = 0;
+			}
+
+			if ($this->bCheckPermission)
+			{
+				$relatedEntitiesPermissionsCheckResult = self::getPermissionsAdapter()->checkRelatedEntitiesPermissions($arFields, $userID);
+				if (!$relatedEntitiesPermissionsCheckResult->isSuccess())
+				{
+					$this->LAST_ERROR = implode(',', $relatedEntitiesPermissionsCheckResult->getErrorMessages());
+					$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
+
+					return false;
+				}
 			}
 
 			unset($arFields['ID']);
@@ -2885,6 +2897,7 @@ class CAllCrmDeal
 			{
 				$this->LAST_ERROR = GetMessage('CRM_PERMISSION_DENIED');
 				$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
+
 				return false;
 			}
 
@@ -3232,6 +3245,18 @@ class CAllCrmDeal
 			{
 				$arFields['__CLOSEDATE'] = $arFields['CLOSEDATE'];
 				unset($arFields['CLOSEDATE']);
+			}
+
+			if ($this->bCheckPermission)
+			{
+				$relatedEntitiesPermissionsCheckResult = self::getPermissionsAdapter()->checkRelatedEntitiesPermissions($arFields, $userID);
+				if (!$relatedEntitiesPermissionsCheckResult->isSuccess())
+				{
+					$this->LAST_ERROR = implode(',', $relatedEntitiesPermissionsCheckResult->getErrorMessages());
+					$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
+
+					return false;
+				}
 			}
 
 			unset($arFields['ID']);

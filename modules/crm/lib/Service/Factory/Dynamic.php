@@ -181,16 +181,19 @@ class Dynamic extends Service\Factory
 				'SETTINGS' => [
 					'parentEntityTypeId' => \CCrmOwnerType::Company,
 				],
+				'CLASS' => Field\CompanyId::class,
 			];
 
 			$info[Item::FIELD_NAME_CONTACT_ID] = [
 				'TYPE' => Field::TYPE_CRM_CONTACT,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Deprecated],
+				'CLASS' => Field\ContactId::class,
 			];
 
 			$info[Item::FIELD_NAME_CONTACT_IDS] = [
 				'TYPE' => Field::TYPE_CRM_CONTACT,
-				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Multiple]
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Multiple],
+				'CLASS' => Field\ContactIds::class,
 			];
 
 			$info[Item::FIELD_NAME_CONTACTS] = [
@@ -326,6 +329,7 @@ class Dynamic extends Service\Factory
 					'parentEntityTypeId' => \CCrmOwnerType::Company,
 					'isEmbeddedEditorEnabled' => true,
 				],
+				'CLASS' => Field\MyCompanyId::class,
 			];
 		}
 

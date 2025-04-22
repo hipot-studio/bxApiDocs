@@ -1282,8 +1282,10 @@ class CCrmDocument
 			? CCrmOwnerType::GetEntityShowPath($entityTypeID, $entityID, false) : null;
 	}
 
-	public static function GetDocument($documentId, $documentType = null, array $select = [])
+	public static function GetDocument($documentId)
 	{
+		$args = func_get_args();
+		$select = $args[2] ?? [];
 		$arDocumentID = static::GetDocumentInfo($documentId);
 		if (empty($arDocumentID))
 		{
@@ -2488,7 +2490,12 @@ class CCrmDocument
 			&& !self::isResumeWorkflowAvailable($documentId, $rootActivity->getDocumentEventType())
 		)
 		{
-			throw new \Bitrix\Main\SystemException(GetMessage('CRM_DOCUMENT_RESUME_RESTRICTED'));
+			$code =
+				defined('CBPRuntime::EXCEPTION_CODE_INSTANCE_TARIFF_LIMIT_EXCEED')
+					? CBPRuntime::EXCEPTION_CODE_INSTANCE_TARIFF_LIMIT_EXCEED
+					: 402
+			;
+			throw new \Bitrix\Main\SystemException(Loc::getMessage('CRM_DOCUMENT_RESUME_RESTRICTED'), $code);
 		}
 
 		if ($status === CBPWorkflowStatus::Running && $rootActivity->workflow->isNew())

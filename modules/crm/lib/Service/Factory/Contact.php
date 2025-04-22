@@ -312,10 +312,12 @@ class Contact extends Service\Factory
 			Item::FIELD_NAME_COMPANY_ID => [
 				'TYPE' => Field::TYPE_CRM_COMPANY,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Deprecated],
+				'CLASS' => Field\CompanyId::class,
 			],
 			Item\Contact::FIELD_NAME_COMPANY_IDS => [
 				'TYPE' => Field::TYPE_CRM_COMPANY,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Multiple],
+				'CLASS' => Field\CompanyIds::class,
 			],
 			Item\Contact::FIELD_NAME_COMPANIES => [
 				'TYPE' => Field::TYPE_CRM_COMPANY,
@@ -326,6 +328,7 @@ class Contact extends Service\Factory
 				'SETTINGS' => [
 					'parentEntityTypeId' => \CCrmOwnerType::Lead,
 				],
+				'CLASS' => Field\LeadId::class,
 			],
 			Item::FIELD_NAME_ORIGINATOR_ID => [
 				'TYPE' => Field::TYPE_STRING,

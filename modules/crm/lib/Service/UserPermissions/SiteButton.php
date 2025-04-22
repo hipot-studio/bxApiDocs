@@ -8,7 +8,7 @@ use Bitrix\Crm\Service\UserPermissions;
 
 /**
  * @internal
- * Do not use directly, only through \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->webForm()
+ * Do not use directly, only through \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->siteButton()
  */
 
 final class SiteButton

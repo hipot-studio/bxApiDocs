@@ -418,6 +418,18 @@ class Calendar
 		return self::$calendarEvents[$id] ?? null;
 	}
 
+	public static function getUserTimeZone(int $userId, bool $getDefault = true): ?string
+	{
+		if (Loader::includeModule('calendar'))
+		{
+			$userTimeZone = \CCalendar::GetUserTimezoneName($userId, $getDefault);
+
+			return is_string($userTimeZone) ? $userTimeZone : null;
+		}
+
+		return null;
+	}
+
 	public static function getSectionListAvailableForUser(int $userId): array
 	{
 		if (!Loader::includeModule('calendar'))

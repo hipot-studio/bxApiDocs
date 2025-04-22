@@ -243,8 +243,10 @@ class Order extends \CCrmDocument implements \IBPWorkflowDocument
 		}
 	}
 
-	public static function GetDocument($documentId, $documentType = null, array $select = [])
+	public static function GetDocument($documentId)
 	{
+		$args = func_get_args();
+		$select = $args[2] ?? [];
 		$arDocumentID = static::GetDocumentInfo($documentId);
 		if (empty($arDocumentID))
 		{

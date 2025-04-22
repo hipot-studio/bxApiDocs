@@ -12,7 +12,7 @@ use Bitrix\Main\ArgumentOutOfRangeException;
  * Do not use directly, only through \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->automatedSolution()
  */
 
-final class AutomatedSolution
+class AutomatedSolution
 {
 	public function __construct(
 		private readonly PermissionsManager $permissionsManager,

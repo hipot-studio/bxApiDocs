@@ -37,11 +37,13 @@ class CallAISettings
 	;
 
 	private const
-		AI_FEATURE_NAME = 'ai_available_by_version';
+		AI_FEATURE_NAME = 'ai_available_by_version',
+		AI_BOX_AGREEMENT_CODE = 'AI_BOX_AGREEMENT'
+	;
 
 	private const
 		AI_TASK_WEIGHT = 10,
-		CALL_RECORD_MIN_USERS = 4,
+		CALL_RECORD_MIN_USERS = ['B24' => 4, 'BOX' => 0],
 		CALL_RECORD_MIN_LENGTH = 59
 	;
 
@@ -82,10 +84,9 @@ class CallAISettings
 			// box
 			if (\Bitrix\AI\Facade\Bitrix24::shouldUseB24() === false)
 			{
-				return true;//todo: Review agreement in box
 				$userId = $userId ?? CurrentUser::get()->getId();
 
-				return \Bitrix\AI\Agreement::get('AI_BOX_AGREEMENT')?->isAcceptedByUser($userId) ?? false;
+				return \Bitrix\AI\Agreement::get(self::AI_BOX_AGREEMENT_CODE)?->isAcceptedByUser((int)$userId) ?? false;
 			}
 
 			// b24
@@ -135,7 +136,16 @@ class CallAISettings
 	 */
 	public static function getRecordMinUsers(): int
 	{
-		return (int)Option::get('call', 'call_record_min_users', self::CALL_RECORD_MIN_USERS);
+		if (\Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24'))
+		{
+			$defaultValue = self::CALL_RECORD_MIN_USERS['B24'];
+		}
+		else
+		{
+			$defaultValue = self::CALL_RECORD_MIN_USERS['BOX'];
+		}
+
+		return (int)Option::get('call', 'call_record_min_users', $defaultValue);
 	}
 
 	public static function isBaasServiceAvailable(): bool

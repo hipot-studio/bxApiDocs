@@ -376,6 +376,7 @@ class ParentFieldManager
 					'parentEntityTypeId' => $parentEntityTypeId,
 				],
 				'TITLE' => \CCrmOwnerType::GetDescription($parentEntityTypeId),
+				'CLASS' => Field\ParentEntityId::class,
 			];
 		}
 

@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Integration\Report;
 use Bitrix\Crm\Agent\History\DealStageSupposedHistory;
 use Bitrix\Crm\Agent\History\LeadStatusSupposedHistory;
 use Bitrix\Crm\Integration\Intranet\ToolsManager;
+use Bitrix\Crm\Integration\Market\Label;
 use Bitrix\Crm\Integration\Report\AnalyticBoard\MyReports\ActivityAnalyticBoard;
 use Bitrix\Crm\Integration\Report\AnalyticBoard\MyReports\CompanyAnalyticBoard;
 use Bitrix\Crm\Integration\Report\AnalyticBoard\MyReports\ContactAnalyticBoard;
@@ -1248,7 +1249,11 @@ class EventHandler
 
 		$marketplaceExternalLink = new AnalyticBoard();
 		$marketplaceExternalLink->setBoardKey('crm_marketplace_external_link');
-		$marketplaceExternalLink->setTitle(Loc::getMessage('CRM_REPORT_EXTERNAL_LINK_MARKETPLACE_BOARD_TITLE'));
+		$marketplaceExternalLink->setTitle(
+			Label::isRenamedMarket()
+			? Loc::getMessage('CRM_REPORT_EXTERNAL_LINK_MARKETPLACE_BOARD_TITLE_MSGVER_1')
+			: Loc::getMessage('CRM_REPORT_EXTERNAL_LINK_MARKETPLACE_BOARD_TITLE')
+		);
 		$marketplaceExternalLink->setExternal(true);
 		$marketplaceExternalLink->setExternalUrl(
 			Url::getCategoryByPlacement('CRM_ANALYTICS_MENU')

@@ -1830,6 +1830,10 @@ class EntityLink
 
 			return false;
 		}
+		if (intval($entityID) <= 0)
+		{
+			return $userPermissions->entityType()->canReadItems($entityTypeID);
+		}
 
 		return $userPermissions->item()->canRead($entityTypeID, $entityID);
 	}

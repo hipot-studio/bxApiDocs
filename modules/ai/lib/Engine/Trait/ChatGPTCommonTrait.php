@@ -1,7 +1,9 @@
 <?php
 namespace Bitrix\AI\Engine\Trait;
 
+use Bitrix\AI\Config;
 use Bitrix\AI\Context\Message;
+use Bitrix\AI\Payload\Prompt;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Result;
 use Bitrix\AI\Tokenizer\GPT;
@@ -14,6 +16,16 @@ trait ChatGPTCommonTrait
 		'gpt-3.5-turbo-16k-0613',
 		'gpt-3.5-turbo-instruct',
 	];
+
+	protected array $reasoningModels = [
+		'o3-mini-2025-01-31',
+		'o1-2024-12-17',
+	];
+
+	private function shouldUseReasoning(): bool
+	{
+		return Config::getValue('should_use_reasoning') === 'Y';
+	}
 
 	private function isGpt4(): bool
 	{
@@ -100,6 +112,14 @@ trait ChatGPTCommonTrait
 		if ($this->isModeResponseJson)
 		{
 			$postParams['response_format'] = ['type' => 'json_object'];
+		}
+
+		if ($this->getPayload() instanceof Prompt && $this->getPayload()->getJsonSchema() !== null)
+		{
+			$postParams['response_format'] = [
+				'type' => 'json_schema',
+				'json_schema' => $this->getPayload()->getJsonSchema(),
+			];
 		}
 
 		return $postParams;

@@ -2296,7 +2296,7 @@ final class CCalendarRestService extends IRestService
 		$entries = CCalendar::GetEventList([
 			'type' => $type,
 			'userId' => $userId,
-			'section' => $resourceTypeIdList,
+			'section' => array_map('intval', $resourceTypeIdList),
 			'fromLimit' => $from,
 			'toLimit' => $to
 		], $attendees);

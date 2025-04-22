@@ -195,7 +195,10 @@ final class CallAIService
 		{
 			$payload->setCost($task->getCost());
 
-			if (CallAISettings::isAutoStartRecordingEnable())
+			if (
+				Loader::includeModule('bitrix24')
+				&& CallAISettings::isAutoStartRecordingEnable()
+			)
 			{
 				$call = Registry::getCallWithId($task->getCallId());
 				if ($call->autoStartRecording())

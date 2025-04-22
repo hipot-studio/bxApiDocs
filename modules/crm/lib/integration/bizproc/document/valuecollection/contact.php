@@ -52,8 +52,12 @@ class Contact extends Base
 	{
 		parent::loadAddressValues();
 
-		$this->document['FULL_ADDRESS'] = Crm\Format\AddressFormatter::getSingleInstance()->formatTextComma(
-			Crm\ContactAddress::mapEntityFields($this->document)
-		);
+		$addressFields = Crm\ContactAddress::mapEntityFields($this->document);
+		if (!empty(array_filter($addressFields)))
+		{
+			$this->document['FULL_ADDRESS'] = Crm\Format\AddressFormatter::getSingleInstance()->formatTextComma(
+				$addressFields
+			);
+		}
 	}
 }

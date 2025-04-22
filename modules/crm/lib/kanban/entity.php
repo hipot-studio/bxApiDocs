@@ -2853,9 +2853,10 @@ abstract class Entity
 
 	/**
 	 * @param Array<Array<string, mixed>> $rawRows
+	 * @param bool $shortUserInfo
 	 * @return Array<int, Array<string, mixed>>
 	 */
-	final public function prepareMultipleItemsLastActivity(array $rawRows): array
+	final public function prepareMultipleItemsLastActivity(array $rawRows, bool $shortUserInfo = false): array
 	{
 		$allUserIds = [];
 		$result = [];
@@ -2909,9 +2910,15 @@ abstract class Entity
 				{
 					$result[$rowId]['user'] = [
 						'id' => $userId,
-						'link' => $user['SHOW_URL'] ?? null,
-						'picture' => $user['PHOTO_URL'] ?? null,
 					];
+
+					if ($shortUserInfo)
+					{
+						continue;
+					}
+
+					$result[$rowId]['user']['link'] = $user['SHOW_URL'] ?? null;
+					$result[$rowId]['user']['picture'] = $user['PHOTO_URL'] ?? null;
 				}
 			}
 		}
@@ -2919,7 +2926,7 @@ abstract class Entity
 		return $result;
 	}
 
-	final public function prepareMultipleItemsPingSettings(int $entityTypeId): array
+	final public function prepareMultipleItemsPingSettings(int $entityTypeId, ?int $categoryId = null): array
 	{
 		if ($entityTypeId <= 0)
 		{
@@ -2927,9 +2934,13 @@ abstract class Entity
 		}
 
 		$categoryIds = $this->userPermissions->category()->getAvailableForReadingCategoriesIds($this->getTypeId());
-		if (empty($categoryIds))
+		if (empty($categoryIds) || $categoryId > 0)
 		{
-			return [];
+			$categoryId = $categoryId ?? 0;
+
+			return [
+				$categoryId => (new TodoPingSettingsProvider($entityTypeId, $categoryId))->fetchForJsComponent(),
+			];
 		}
 
 		$result = [];

@@ -9,7 +9,6 @@ use Bitrix\Crm\Badge;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Controller\AiQualityAssessmentController;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Entity\AiQualityAssessmentItem;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Entity\AiQualityAssessmentTable;
-use Bitrix\Crm\Copilot\CallAssessment\AssessmentClientTypeResolver;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItemChecker;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
@@ -23,6 +22,7 @@ use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
+use Bitrix\Crm\Integration\AI\Operation\Payload\PayloadFactory;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\CallScoring;
@@ -122,17 +122,12 @@ final class ScoreCall extends AbstractOperation
 			return (new Main\Result())->addError($checkerResult->getError());
 		}
 
-		$clientType = (new AssessmentClientTypeResolver())->resolveByActivityId($this->target->getEntityId());
-
-		return (new Main\Result())->setData([
-			'payload' => (new \Bitrix\AI\Payload\Prompt('call_scoring'))
-				->setMarkers([
-					'transcript' => $this->transcription,
-					'criteria' => $this->assessmentSettings->getGist(),
-					'client_type' => $clientType?->name ?? '',
-				])
-			,
-		]);
+		return PayloadFactory::build(self::TYPE_ID, $this->userId, $this->target)
+			->setMarkers([
+				'transcript' => $this->transcription,
+				'criteria' => $this->assessmentSettings->getGist(),
+			])->getResult()
+		;
 	}
 
 	protected function getStubPayload(): mixed

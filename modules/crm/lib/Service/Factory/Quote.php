@@ -167,12 +167,14 @@ class Quote extends Factory
 				'SETTINGS' => [
 					'parentEntityTypeId' => \CCrmOwnerType::Deal,
 				],
+				'CLASS' => Field\DealId::class,
 			],
 			Item::FIELD_NAME_LEAD_ID => [
 				'TYPE' => Field::TYPE_CRM_LEAD,
 				'SETTINGS' => [
 					'parentEntityTypeId' => \CCrmOwnerType::Lead,
 				],
+				'CLASS' => Field\LeadId::class,
 			],
 			Item\Quote::FIELD_NAME_STORAGE_TYPE => [
 				'TYPE' => Field::TYPE_INTEGER,
@@ -196,6 +198,7 @@ class Quote extends Factory
 				'SETTINGS' => [
 					'parentEntityTypeId' => \CCrmOwnerType::Company,
 				],
+				'CLASS' => Field\CompanyId::class,
 			];
 
 			$info[Item::FIELD_NAME_CONTACT_ID] = [
@@ -205,7 +208,8 @@ class Quote extends Factory
 
 			$info[Item::FIELD_NAME_CONTACT_IDS] = [
 				'TYPE' => Field::TYPE_CRM_CONTACT,
-				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Multiple]
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Multiple],
+				'CLASS' => Field\ContactIds::class,
 			];
 
 			$info[Item::FIELD_NAME_CONTACTS] = [
@@ -337,6 +341,7 @@ class Quote extends Factory
 					'parentEntityTypeId' => \CCrmOwnerType::Company,
 					'isEmbeddedEditorEnabled' => true,
 				],
+				'CLASS' => Field\MyCompanyId::class,
 			];
 		}
 

@@ -8,7 +8,6 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Crm\Component\Base;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\EventHandler;
@@ -71,6 +70,15 @@ class CCrmCopilotCallAssessmentDetailsComponent extends Base
 			}
 
 			$this->arResult['data']['users'] = Container::getInstance()->getUserBroker()->getBunchByIds($userIds);
+			
+			$availabilityData = $this->arResult['data']['availabilityData'] ?? [];
+			array_walk($availabilityData,
+				static function (&$row) {
+					$row['startPoint'] = substr($row['startPoint']->toString(), 0, -3);
+					$row['endPoint'] = substr($row['endPoint']->toString(), 0, -3);
+				}
+			);
+			$this->arResult['data']['availabilityData'] = $availabilityData;
 		}
 		else
 		{

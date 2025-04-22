@@ -634,22 +634,13 @@ class CCrmConfigOrderProps extends \CBitrixComponent
 			);
 		}
 
-		$this->arResult['CONFIG_ASSIGNED_BY'] = array(
-			'valueInputName' => 'ASSIGNED_BY_ID',
-			'selected' => array(),
-			'multiple' => true,
-			'required' => true,
-		);
+		$this->arResult['CONFIG_ASSIGNED_BY'] = [
+			'selected' => [],
+			'isMultiple' => true,
+		];
 		foreach ($this->arResult['ASSIGNED_BY']['LIST'] as $assignedBy)
 		{
-			$this->arResult['CONFIG_ASSIGNED_BY']['selected'][] = array(
-				'id' => 'U'.(int)$assignedBy['ID'],
-				'entityId' => (int)$assignedBy['ID'],
-				'entityType' => 'users',
-				'name' => htmlspecialcharsBx($assignedBy['NAME']),
-				'avatar' => '',
-				'desc' => '&nbsp;'
-			);
+			$this->arResult['CONFIG_ASSIGNED_BY']['selected'][] = (int)$assignedBy['ID'];
 		}
 	}
 
@@ -801,46 +792,6 @@ class CCrmConfigOrderProps extends \CBitrixComponent
 		static::sendJsonAnswer(['requiredFieldCodes' => $requiredFields]);
 	}
 
-	protected function getDestinationDataAjaxAction()
-	{
-		$result = ['LAST' => []];
-
-		if ($this->checkPostRequest() && $this->checkEditPermission())
-		{
-			if (\Bitrix\Main\Loader::includeModule('socialnetwork'))
-			{
-				$arStructure = CSocNetLogDestination::GetStucture([]);
-				$result['DEPARTMENT'] = $arStructure['department'];
-				$result['DEPARTMENT_RELATION'] = $arStructure['department_relation'];
-				$result['DEPARTMENT_RELATION_HEAD'] = $arStructure['department_relation_head'];
-
-				$result['DEST_SORT'] = CSocNetLogDestination::GetDestinationSort([
-					'DEST_CONTEXT' => 'CRM_AUTOMATION',
-				]);
-
-				CSocNetLogDestination::fillLastDestination(
-					$result['DEST_SORT'],
-					$result['LAST']
-				);
-
-				$destinationUser = [];
-
-				if (!empty($result['LAST']['USERS']) && is_array($result['LAST']['USERS']))
-				{
-					foreach ($result['LAST']['USERS'] as $value)
-					{
-						$destinationUser[] = str_replace('U', '', $value);
-					}
-				}
-
-				$result['USERS'] = \CSocNetLogDestination::getUsers(['id' => $destinationUser]);
-				$result['ROLES'] = [];
-			}
-		}
-
-		static::sendJsonAnswer(['DATA' => $result]);
-	}
-
 	protected function saveForm()
 	{
 		$personTypeId = $this->arParams['PERSON_TYPE_ID'];
@@ -860,12 +811,11 @@ class CCrmConfigOrderProps extends \CBitrixComponent
 			$this->errors = array_merge($this->errors, $result->getErrorMessages());
 		}
 
-		$assignedById = explode(',', $this->request->get('ASSIGNED_BY_ID') ?: '');
-		$assignedById = is_array($assignedById) ? $assignedById : [$assignedById];
+		$assignedByList = $this->request->get('assignedBy') ?? [];
 		$assignedWorkTime = $this->request->get('ASSIGNED_WORK_TIME') === 'Y';
 
 		$responsibleQueue = new ResponsibleQueue($personTypeId);
-		$responsibleQueue->setList($assignedById, $assignedWorkTime);
+		$responsibleQueue->setList($assignedByList, $assignedWorkTime);
 
 		$duplicateMode = $this->request->get('DUPLICATE_MODE');
 		FieldSynchronizer::updateDuplicateMode($personTypeId, $duplicateMode);

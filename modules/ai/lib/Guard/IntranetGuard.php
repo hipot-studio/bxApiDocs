@@ -6,6 +6,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Intranet\Util;
 use Bitrix\Main\LoaderException;
+use Exception;
 
 class IntranetGuard implements Guard
 {
@@ -30,14 +31,19 @@ class IntranetGuard implements Guard
 		}
 		catch (LoaderException $exception)
 		{
-			Application::getInstance()
-				->getExceptionHandler()
-				->writeToLog($exception)
-			;
+			$this->writeExceptionToLog($exception);
 
 			return false;
 		}
 
 		return true;
+	}
+
+	private function writeExceptionToLog(Exception $exception): void
+	{
+		Application::getInstance()
+			->getExceptionHandler()
+			->writeToLog($exception)
+		;
 	}
 }

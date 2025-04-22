@@ -4,6 +4,7 @@ use Bitrix\Crm\Component\EntityList\FieldRestrictionManager;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
 use Bitrix\Crm\Component\EntityList\NearestActivity;
 use Bitrix\Crm\Component\EntityList\NearestActivity\ManagerFactory;
+use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Filter\FieldsTransform;
 use Bitrix\Crm\Filter\UiFilterOptions;
 use Bitrix\Crm\Integration;
@@ -21,6 +22,7 @@ use Bitrix\Crm\WebForm\Internals\PageNavigation;
 use Bitrix\Main\Grid;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\Web\Json;
 use Bitrix\UI\Buttons;
 
@@ -34,6 +36,7 @@ Loader::includeModule('crm');
 class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bitrix\Main\Engine\Contract\Controllerable
 {
 	protected const DEFAULT_PAGE_SIZE = 10;
+	private const SIGNED_PARAMS_SALT = 'CrmItemListSalt';
 
 	protected $defaultGridSort = [
 		'ID' => 'desc',
@@ -60,17 +63,20 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		return [];
 	}
 
-	public function getTotalCountAction(int $entityTypeId, array $listFilter = [])
+	public function getTotalCountAction(int $entityTypeId, string $listFilter = ''): ?string
 	{
 		$userPermission = Container::getInstance()->getUserPermissions();
 		if (!$userPermission->entityType()->canReadItems($entityTypeId))
 		{
-			return;
+			$this->addError(ErrorCode::getAccessDeniedError());
+
+			return null;
 		}
 		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory($entityTypeId);
+		$listFilter = $this->unsignParams($listFilter);
 		$totalCountRow = $factory->getItemsCountFilteredByPermissions($listFilter);
 
-		return new \Bitrix\Main\Engine\Response\Json(['DATA' => ['TEXT' => Loc::getMessage('CRM_LIST_ALL_COUNT', ['#COUNT#' => $totalCountRow])]]);
+		return Loc::getMessage('CRM_LIST_ALL_COUNT', ['#COUNT#' => $totalCountRow]);
 	}
 
 	protected function init(): void
@@ -299,24 +305,26 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			}
 			$rows = $this->prepareGridRows($list);
 		}
-		$getTotalCountActionUrl = \Bitrix\Main\Engine\UrlManager::getInstance()->createByBitrixComponent(
-			$this,
-			'getTotalCount',
-			[
+
+		$params = [
+			'componentName' => 'bitrix:crm.item.list',
+			'actionName' => 'getTotalCount',
+			'data' => [
 				'entityTypeId' => $this->factory->getEntityTypeId(),
-				'listFilter' => $listFilter,
-				'sessid' => bitrix_sessid(),
+				'listFilter' => $this->signParams($listFilter),
 			]
-		);
+		];
+		$params = Json::encode($params);
+
 		$rowCountHtml = str_replace(
-			['%prefix%', '%all%', '%getTotalCountActionUrl%', '%show%'],
+			['%prefix%', '%all%', '%params%', '%show%'],
 			[
 				htmlspecialcharsbx(mb_strtolower($this->getGridId())),
 				Loc::getMessage('CRM_LIST_ALL'),
-				$getTotalCountActionUrl,
+				$params,
 				Loc::getMessage('CRM_LIST_SHOW_ROW_COUNT'),
 			],
-			'<div id="%prefix%_row_count_wrapper">%all%: <a id="%prefix%_row_count" onclick=\'BX.CrmUIGridExtension.getCountRow("%prefix%", "%getTotalCountActionUrl%")\' style="cursor: pointer">%show%</a></div>'
+			'<div id="%prefix%_row_count_wrapper">%all%: <a id="%prefix%_row_count" onclick=\'BX.CrmUIGridExtension.getCountRow("%prefix%", %params%)\' style="cursor: pointer">%show%</a></div>'
 		);
 
 		$grid['ROWS'] = $rows;
@@ -1301,5 +1309,17 @@ js,
 		}
 
 		return $settingsItems;
+	}
+
+	private function signParams(array $params): string
+	{
+		return (new Signer())->sign(Json::encode($params), self::SIGNED_PARAMS_SALT);
+	}
+
+	private function unsignParams(string $signedParams): array
+	{
+		$eventParams = (new Signer())->unsign($signedParams, self::SIGNED_PARAMS_SALT);
+
+		return Json::decode($eventParams);
 	}
 }

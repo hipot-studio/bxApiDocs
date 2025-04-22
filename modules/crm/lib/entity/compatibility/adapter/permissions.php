@@ -3,8 +3,12 @@
 namespace Bitrix\Crm\Entity\Compatibility\Adapter;
 
 use Bitrix\Crm\Entity\Compatibility\Adapter\Permissions\AttributesManager;
+use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 
 /**
  * @internal Do not use!
@@ -185,5 +189,84 @@ class Permissions
 		}
 
 		return '';
+	}
+
+	public function checkRelatedEntitiesPermissions(array $arFields, int $userId): Result
+	{
+		Container::getInstance()->getLocalization()->loadMessages();
+
+		$userPermissions = Container::getInstance()->getUserPermissions($userId);
+
+		$result = new Result();
+
+		$fieldCandidates = [
+			Item::FIELD_NAME_CONTACT_ID => \CCrmOwnerType::Contact,
+			Item::FIELD_NAME_CONTACT_IDS => \CCrmOwnerType::Contact,
+			Item::FIELD_NAME_COMPANY_ID => \CCrmOwnerType::Company,
+			Item::FIELD_NAME_LEAD_ID => \CCrmOwnerType::Lead,
+			Item\Quote::FIELD_NAME_DEAL_ID => \CCrmOwnerType::Deal,
+			Item\Deal::FIELD_NAME_QUOTE_ID => \CCrmOwnerType::Quote,
+			Item\Contact::FIELD_NAME_COMPANY_IDS => \CCrmOwnerType::Company,
+		];
+
+		$parentEntityFields = Container::getInstance()->getParentFieldManager()->getParentFieldsInfo($this->entityTypeId);
+		foreach ($parentEntityFields as $parentFieldName => $parentFieldParams)
+		{
+			$fieldCandidates[$parentFieldName] = $parentFieldParams['SETTINGS']['parentEntityTypeId'];
+		}
+
+		$factory = Container::getInstance()->getFactory($this->entityTypeId);
+		$entityFieldsCollection = $factory->getFieldsCollection();
+
+		foreach ($fieldCandidates as $fieldName => $relatedEntityTypeId)
+		{
+			if ($factory->isFieldExists($fieldName) && isset($arFields[$fieldName]))
+			{
+				if ( // to avoid duplicated errors in CONTACT_ID and CONTACT_IDS fields
+					$fieldName === Item::FIELD_NAME_CONTACT_ID
+					&& $factory->isFieldExists(Item::FIELD_NAME_CONTACT_IDS)
+					&& in_array($arFields[$fieldName], (array)$arFields[Item::FIELD_NAME_CONTACT_IDS])
+				)
+				{
+					continue;
+				}
+				if (  // to avoid duplicated errors in COMPANY_ID and COMPANY_IDS fields
+					$fieldName === Item::FIELD_NAME_COMPANY_ID
+					&& $factory->isFieldExists(Item\Contact::FIELD_NAME_COMPANY_IDS)
+					&& in_array($arFields[$fieldName], (array)$arFields[Item\Contact::FIELD_NAME_COMPANY_IDS])
+				)
+				{
+					continue;
+				}
+
+				$values = (array)$arFields[$fieldName];
+
+				foreach ($values as $value)
+				{
+					$value = (int)$value;
+
+					if ($value < 0)
+					{
+						$result->addError($entityFieldsCollection->getField($fieldName)?->getValueNotValidError() ?? new Error('Wrong value'));
+					}
+
+					if ($value > 0 && !$userPermissions->item()->canRead($relatedEntityTypeId, $value))
+					{
+						$result->addError(
+							new Error(
+								sprintf(
+									'[%s #%s] %s',
+									\CCrmOwnerType::GetDescription($relatedEntityTypeId),
+									$value,
+									Loc::getMessage('CRM_COMMON_READ_ACCESS_DENIED')
+								)
+							)
+						);
+					}
+				}
+			}
+		}
+
+		return $result;
 	}
 }

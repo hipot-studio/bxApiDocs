@@ -11,7 +11,7 @@ use Bitrix\Main\Loader;
  * Do not use directly, only through \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->admin()
  */
 
-final class Admin
+class Admin
 {
 	private const ADMIN_GROUP_ID = 1;
 

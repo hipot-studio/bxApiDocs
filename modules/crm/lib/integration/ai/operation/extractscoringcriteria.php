@@ -11,6 +11,7 @@ use Bitrix\Crm\Integration\AI\Dto\ExtractScoringCriteriaPayload;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
+use Bitrix\Crm\Integration\AI\Operation\Payload\PayloadFactory;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\ExtractScoringCriteriaEvent;
@@ -48,13 +49,11 @@ final class ExtractScoringCriteria extends AbstractOperation
 
 	protected function getAIPayload(): \Bitrix\Main\Result
 	{
-		return (new \Bitrix\Main\Result())->setData([
-			'payload' => (new \Bitrix\AI\Payload\Prompt('scoring_criteria_extraction'))
-				->setMarkers([
-					'user_input' => $this->prompt,
-				])
-			,
-		]);
+		return PayloadFactory::build(self::TYPE_ID, $this->userId, $this->target)
+			->setMarkers([
+				'user_input' => $this->prompt,
+			])->getResult()
+		;
 	}
 
 	protected function getStubPayload(): mixed

@@ -369,6 +369,8 @@ class Type extends Base
 			}
 		}
 
+		$isTitleChanged = $type->isChanged('TITLE');
+
 		$result = $type->save();
 		if($result->isSuccess())
 		{
@@ -384,7 +386,7 @@ class Type extends Base
 			}
 
 			$typeFromContainer = Container::getInstance()->getDynamicTypesMap()->getTypesCollection()->getByPrimary($type->getId());  // to avoid inconsistent with data from \Bitrix\Crm\Service\Container::getTypeByEntityTypeId
-			$customSectionsResult = $this->saveCustomSections($typeFromContainer, $fields);
+			$customSectionsResult = $this->saveCustomSections($typeFromContainer, $fields, $isTitleChanged);
 			if (!$customSectionsResult->isSuccess())
 			{
 				$this->addErrors($customSectionsResult->getErrors());
@@ -658,8 +660,17 @@ class Type extends Base
 	 * - if page exists and there is not sectionId - delete record
 	 * - if page does not exist - add record.
 	 */
-	protected function saveCustomSections(Dynamic\Type $type, array $fields): Result
+	protected function saveCustomSections(Dynamic\Type $type, array $fields, bool $isTypeTitleChanged): Result
 	{
-		return Container::getInstance()->getAutomatedSolutionManager()->setAutomatedSolutions($type, $fields);
+		static $whitelist = [
+			'CUSTOM_SECTION_ID' => true,
+			'CUSTOM_SECTIONS' => true,
+		];
+
+		$whitelistedFields = array_intersect_key($fields, $whitelist);
+
+		$whitelistedFields['IS_TYPE_TITLE_CHANGED'] = $isTypeTitleChanged;
+
+		return Container::getInstance()->getAutomatedSolutionManager()->setAutomatedSolutions($type, $whitelistedFields);
 	}
 }

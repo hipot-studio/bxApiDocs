@@ -7,7 +7,6 @@ use Bitrix\AI\Engine;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning;
 use Bitrix\Crm\Activity\Provider\Call;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\AutoLauncher;
@@ -19,6 +18,7 @@ use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\CallActivityWithAudioRecordingEvent;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\Integration\VoxImplant;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Main\Event;
@@ -383,6 +383,7 @@ final class EventHandler
 			->setActivityId($nullSafeInt($activityFields, 'ID'))
 			->setActivityDirection($nullSafeInt($activityFields, 'DIRECTION'))
 			->setCallDuration(VoxImplantManager::getCallDuration($callId) ?? 0)
+			->setTelephonyType(((new VoxImplant\Call($callId))->getTelephonyType()))
 		;
 		$builder->buildEvent()->send();
 		// send the same analytics only with different TOOL and CATEGORY

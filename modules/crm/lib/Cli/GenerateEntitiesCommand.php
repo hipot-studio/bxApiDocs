@@ -17,7 +17,7 @@ final class GenerateEntitiesCommand extends Command
 {
 	protected static $defaultName = 'crm:generate-entities';
 	protected static $defaultDescription = 'Generate multiple CRM entities';
-	
+
 	public function isEnabled(): bool
 	{
 		return Loader::includeModule('crm');
@@ -26,6 +26,7 @@ final class GenerateEntitiesCommand extends Command
 	protected function configure(): void
 	{
 		$this
+			->setName('crm:generate-entities')
 			->addArgument(
 				'number',
 				InputArgument::REQUIRED,
@@ -56,7 +57,7 @@ final class GenerateEntitiesCommand extends Command
 
 			return Command::FAILURE;
 		}
-		
+
 		$entityTypeId = (int)$input->getOption('entity-type-id');
 		$factory = Container::getInstance()->getFactory($entityTypeId);
 		if (!$factory)
@@ -65,7 +66,7 @@ final class GenerateEntitiesCommand extends Command
 
 			return Command::FAILURE;
 		}
-		
+
 		$entityCategoryId = $input->getOption('entity-category-id');
 		if (
 			$factory->isCategoriesEnabled()
@@ -83,55 +84,55 @@ final class GenerateEntitiesCommand extends Command
 		{
 			$ioHandler->info("Let's start creating '$entityName' entities");
 		}
-		
+
 		if (isset($entityCategoryId))
 		{
 			$addFields = [
 				'CATEGORY_ID' => $entityCategoryId,
 			];
 		}
-		
+
 		$progressBar = $this->createProgressBar($output, $number);
 		$progressBar->start();
-		
+
 		for ($i = 0; $i < $number; $i++)
 		{
 			$item = $factory->createItem($addFields ?? []);
 			$operation = $factory->getAddOperation($item);
 			$operation->disableAllChecks();
-			
+
 			$connection->startTransaction();
 			$result = $operation->launch();
 			if ($result->isSuccess())
 			{
 				$connection->commitTransaction();
-				
+
 				$successNumber++;
 			}
 			else
 			{
 				$connection->rollbackTransaction();
-				
+
 				$ioHandler->error("Error creating item $i out of $number: " . $result->getError()?->getMessage());
 			}
-			
+
 			$progressBar->advance();
 		}
 
 		$progressBar->finish();
 		$ioHandler->newLine(2);
 		$ioHandler->success("$successNumber out of $number item(s) of entities '$entityName' generated");
-		
+
 		return Command::SUCCESS;
 	}
-	
+
 	private function createProgressBar(OutputInterface $output, int $count): ProgressBar
 	{
 		$progress = new ProgressBar($output, $count);
 		$progress->setBarCharacter('<fg=magenta>=</>');
 		$progress->setRedrawFrequency(floor($count / 100));
 		$progress->start();
-		
+
 		return $progress;
 	}
 }

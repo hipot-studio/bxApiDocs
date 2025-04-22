@@ -262,7 +262,7 @@ class MailRecipientProvider extends BaseProvider
 
 		$itemsToAdd = self::getEmailItems($dataItems)->getAll();
 
-		$itemsCollection = [];
+		$itemsCollection = new ItemCollection();
 
 		if (!empty($dataItems))
 		{

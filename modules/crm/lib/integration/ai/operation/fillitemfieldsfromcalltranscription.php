@@ -14,6 +14,7 @@ use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
+use Bitrix\Crm\Integration\AI\Operation\Payload\PayloadFactory;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\ExtractFieldsEvent;
@@ -87,31 +88,11 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 
 	protected function getAIPayload(): \Bitrix\Main\Result
 	{
-		$fields = [
-			// unallocated data
-			'comment' => 'list[string]',
-		];
-
-		// sent to AI all available fields, regardless of user
-		foreach (self::getAllSuitableFields($this->target->getEntityTypeId()) as $fieldDescription)
-		{
-			if ($fieldDescription['MULTIPLE'])
-			{
-				$type = 'list[' . $fieldDescription['TYPE'] . ']';
-			}
-			else
-			{
-				$type = $fieldDescription['TYPE'];
-			}
-
-			$fields[$fieldDescription['NAME']] = "{$type} or null";
-		}
-
-		return (new \Bitrix\Main\Result())->setData([
-			'payload' => (new \Bitrix\AI\Payload\Prompt('extract_form_fields'))
-				->setMarkers(['original_message' => $this->summary, 'fields' => $fields])
-			,
-		]);
+		return PayloadFactory::build(self::TYPE_ID, $this->userId, $this->target)
+			->setMarkers([
+				'original_message' => $this->summary,
+			])->getResult()
+		;
 	}
 
 	protected function getStubPayload(): mixed
@@ -130,7 +111,7 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 			'comment' => [
 				'This is stub of an unallocated data',
 				'Imagine that it was returned by AI',
-				'(Some supermagic info here)',
+				'(Some super magic info here)',
 			],
 		];
 		foreach (self::getAllSuitableFields($this->target->getEntityTypeId()) as $fieldDescription)

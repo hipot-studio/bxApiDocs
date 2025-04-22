@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Kanban\Entity;
 
-use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManager;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
 use Bitrix\Crm\Filter;
@@ -10,7 +9,6 @@ use Bitrix\Crm\Filter\ItemDataProvider;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Kanban;
 use Bitrix\Crm\Merger\EntityMergerFactory;
-use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Search\SearchEnvironment;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
@@ -19,7 +17,6 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\UI\Filter\Options;
-use CCrmPerms;
 
 class Dynamic extends Kanban\Entity
 {
@@ -196,6 +193,7 @@ class Dynamic extends Kanban\Entity
 		}
 		$data = [];
 
+		$this->factory->createItem();
 		$res = $this->factory->getDataClass()::getList($queryParameters);
 		while ($row = $res->fetch())
 		{

@@ -10,7 +10,6 @@ namespace Bitrix\Crm\Binding;
 use Bitrix\Crm\LeadTable;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
-use Bitrix\Main\Entity;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 
@@ -30,8 +29,10 @@ use Bitrix\Main\ORM\Query\Join;
  * @method static \Bitrix\Crm\Binding\EO_LeadContact wakeUpObject($row)
  * @method static \Bitrix\Crm\Binding\EO_LeadContact_Collection wakeUpCollection($rows)
  */
-class LeadContactTable extends Entity\DataManager
+class LeadContactTable extends Main\ORM\Data\DataManager
 {
+//	use AddStrategy\Trait\MergeByDefaultTrait;
+
 	/**
 	 * Get table name.
 	 * @return string
@@ -40,6 +41,7 @@ class LeadContactTable extends Entity\DataManager
 	{
 		return 'b_crm_lead_contact';
 	}
+
 	/**
 	 * Get table fields map.
 	 * @return array

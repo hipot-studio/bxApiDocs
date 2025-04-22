@@ -303,14 +303,17 @@ final class Deal extends Factory
 				'SETTINGS' => [
 					'parentEntityTypeId' => \CCrmOwnerType::Company,
 				],
+				'CLASS' => Field\CompanyId::class,
 			],
 			Item::FIELD_NAME_CONTACT_ID => [
 				'TYPE' => Field::TYPE_CRM_CONTACT,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Deprecated],
+				'CLASS' => Field\ContactId::class,
 			],
 			Item::FIELD_NAME_CONTACT_IDS => [
 				'TYPE' => Field::TYPE_CRM_CONTACT,
-				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Multiple]
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Multiple],
+				'CLASS' => Field\ContactIds::class,
 			],
 			Item::FIELD_NAME_CONTACTS => [
 				'TYPE' => Field::TYPE_CRM_CONTACT,
@@ -321,6 +324,7 @@ final class Deal extends Factory
 				'SETTINGS' => [
 					'parentEntityTypeId' => \CCrmOwnerType::Quote,
 				],
+				'CLASS' => Field\QuoteId::class,
 			],
 			Item::FIELD_NAME_BEGIN_DATE => [
 				'TYPE' => Field::TYPE_DATE,
@@ -407,6 +411,7 @@ final class Deal extends Factory
 				'SETTINGS' => [
 					'parentEntityTypeId' => \CCrmOwnerType::Lead,
 				],
+				'CLASS' => Field\LeadId::class,
 			],
 			Item\Deal::FIELD_NAME_ADDITIONAL_INFO => [
 				'TYPE' => Field::TYPE_STRING,

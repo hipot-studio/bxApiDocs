@@ -25,6 +25,7 @@ use Bitrix\Main\ORM\Fields\UserTypeField;
 use Bitrix\Main\ORM\Fields\UserTypeUtsMultipleField;
 use Bitrix\Main\ORM\Objectify\Collection;
 use Bitrix\Main\ORM\Objectify\EntityObject;
+use Bitrix\Main\ORM\Objectify\State;
 use Bitrix\Main\ORM\Objectify\Values;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
@@ -1196,6 +1197,8 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	 */
 	public function addToProductRows(ProductRow $product): Result
 	{
+		$this->fillProducts();
+
 		$normalizationResult = $this->normalizeProduct($product);
 
 		if ($normalizationResult->isSuccess())
@@ -1218,6 +1221,8 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	 */
 	public function updateProductRow(int $productRowId, array $productRowArray): Result
 	{
+		$this->fillProducts();
+
 		$originalProduct = $this->getProductRows() ? $this->getProductRows()->getByPrimary($productRowId) : null;
 		if (!$originalProduct)
 		{
@@ -1250,6 +1255,8 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	 */
 	public function removeFromProductRows(ProductRow $product): void
 	{
+		$this->fillProducts();
+
 		$entityFieldName = $this->getEntityFieldNameByMap(static::FIELD_NAME_PRODUCTS);
 		$this->entityObject->removeFrom($entityFieldName, $product);
 	}
@@ -1283,6 +1290,8 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	 */
 	public function setProductRows($products): Result
 	{
+		$this->fillProducts();
+
 		$results = [];
 		foreach ($products as $product)
 		{
@@ -1395,6 +1404,39 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		}
 		else
 		{
+			$logger = Container::getInstance()->getLogger('Default');
+
+			if ($product->state !== State::RAW)
+			{
+				$logger->critical(
+					'{method}: refuse to add new product row that is already saved to DB or deleted. Product row state: {productRowState}',
+					[
+						'method' => __METHOD__,
+						'productRowState' => $product->state,
+						'productRow' => $product->toArray(),
+						'id' => $this->getId(),
+						'entityTypeId' => $this->getEntityTypeId(),
+					]
+				);
+
+				return;
+			}
+
+			if ((int)$product->getId() > 0)
+			{
+				$logger->critical(
+					'{method}: attempt to add new product row that already has an ID. ID will be reset',
+					[
+						'method' => __METHOD__,
+						'productRow' => $product->toArray(),
+						'id' => $this->getId(),
+						'entityTypeId' => $this->getEntityTypeId(),
+					]
+				);
+
+				$product->unset('ID');
+			}
+
 			$this->addToProductsCollection($product);
 		}
 	}
@@ -1486,6 +1528,14 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		}
 
 		return false;
+	}
+
+	private function fillProducts(): void
+	{
+		if (!$this->isNew() && $this->hasField(self::FIELD_NAME_PRODUCTS))
+		{
+			$this->entityObject->fill($this->getEntityFieldNameByMap(self::FIELD_NAME_PRODUCTS));
+		}
 	}
 	//endregion
 

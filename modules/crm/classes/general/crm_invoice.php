@@ -3004,6 +3004,53 @@ class CAllCrmInvoice
 		$errMsg = array();
 		$bError = false;
 
+		$clearRoleAutomatedSolutionListOption = '~CRM_CLEAR_ROLE_AUTOMATED_SOLUTION_LIST';
+		if (
+			(string)COption::GetOptionString('crm', $clearRoleAutomatedSolutionListOption, 'N') === 'N'
+			&& Loader::includeModule('bitrix24')
+		)
+		{
+			COption::SetOptionString('crm', $clearRoleAutomatedSolutionListOption, 'Y');
+
+			$logger = \Bitrix\Crm\Service\Container::getInstance()->getLogger('Permissions');
+
+			$automatedSolutionsListRoles = \Bitrix\Crm\Security\Role\Model\RoleTable::query()
+				->where('GROUP_CODE', 'AUTOMATED_SOLUTION_LIST')
+				->setSelect(['ID'])
+				->exec()
+				->fetchCollection()
+				->getIdList()
+			;
+			if (!empty($automatedSolutionsListRoles))
+			{
+				$wrongPermissions = \Bitrix\Crm\Security\Role\Model\RolePermissionTable::query()
+					->whereIn('ROLE_ID', $automatedSolutionsListRoles)
+					->whereIn('PERM_TYPE', ['HIDE_SUM', 'TRANSITION', 'MYCARDVIEW'])
+					->setSelect(['ID', 'ENTITY', 'FIELD', 'FIELD_VALUE', 'ATTR', 'SETTINGS', 'ROLE_ID'])
+					->exec()
+					->fetchAll()
+				;
+
+				if (!empty($wrongPermissions))
+				{
+					$logger->info(
+						"Try fix automated solution list roles",
+						[
+							'roleIds' => $automatedSolutionsListRoles,
+							'wrong permissions' => $wrongPermissions,
+						]
+					);
+
+					foreach ($wrongPermissions as $wrongPermission)
+					{
+						\Bitrix\Crm\Security\Role\Model\RolePermissionTable::delete($wrongPermission['ID']);
+					}
+
+					\CCrmRole::ClearCache();
+				}
+			}
+		}
+
 		$reFillDynamicTypesAttrTable = '~CRM_REFILL_DYNAMIC_TYPES_ATTR_TABLE_V2';
 		if ((string)COption::GetOptionString('crm', $reFillDynamicTypesAttrTable, 'N') === 'N') {
 			COption::SetOptionString('crm', $reFillDynamicTypesAttrTable, 'Y');

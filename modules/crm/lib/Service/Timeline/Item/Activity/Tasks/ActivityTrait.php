@@ -99,7 +99,7 @@ trait ActivityTrait
 			return '';
 		}
 
-		return Container::getInstance()->getUserBroker()->getName($userId);
+		return (string)Container::getInstance()->getUserBroker()->getName($userId);
 	}
 
 	private function getUserUrl(?int $userId): string

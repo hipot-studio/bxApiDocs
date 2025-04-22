@@ -1609,6 +1609,7 @@ class CAllCrmLead
 			{
 				$this->LAST_ERROR = GetMessage('CRM_PERMISSION_DENIED');
 				$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
+
 				return false;
 			}
 			$permissionAttributesHelper->prepareFields($arFields);
@@ -1737,6 +1738,18 @@ class CAllCrmLead
 			}
 		}
 		//endregion
+
+		if ($this->bCheckPermission)
+		{
+			$relatedEntitiesPermissionsCheckResult = self::getPermissionsAdapter()->checkRelatedEntitiesPermissions($arFields, $userID);
+			if (!$relatedEntitiesPermissionsCheckResult->isSuccess())
+			{
+				$this->LAST_ERROR = implode(',', $relatedEntitiesPermissionsCheckResult->getErrorMessages());
+				$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
+
+				return false;
+			}
+		}
 
 		unset($arFields['ID']);
 
@@ -2155,6 +2168,7 @@ class CAllCrmLead
 			{
 				$this->LAST_ERROR = GetMessage('CRM_PERMISSION_DENIED');
 				$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
+
 				return false;
 			}
 
@@ -2520,6 +2534,18 @@ class CAllCrmLead
 			if(isset($arFields['HAS_IMOL']))
 			{
 				unset($arFields['HAS_IMOL']);
+			}
+
+			if ($this->bCheckPermission)
+			{
+				$relatedEntitiesPermissionsCheckResult = self::getPermissionsAdapter()->checkRelatedEntitiesPermissions($arFields, $iUserId);
+				if (!$relatedEntitiesPermissionsCheckResult->isSuccess())
+				{
+					$this->LAST_ERROR = implode(',', $relatedEntitiesPermissionsCheckResult->getErrorMessages());
+					$arFields['RESULT_MESSAGE'] = &$this->LAST_ERROR;
+
+					return false;
+				}
 			}
 
 			unset($arFields['ID']);

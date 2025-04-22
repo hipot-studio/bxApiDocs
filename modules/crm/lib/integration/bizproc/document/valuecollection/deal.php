@@ -65,10 +65,16 @@ class Deal extends Base
 		$this->appendDefaultUserPrefixes();
 
 		$categoryId = isset($this->document['CATEGORY_ID']) ? (int)$this->document['CATEGORY_ID'] : 0;
-		$this->document['CATEGORY_ID_PRINTABLE'] = Crm\Category\DealCategory::getName($categoryId);
+		if (isset($this->document['CATEGORY_ID']))
+		{
+			$this->document['CATEGORY_ID_PRINTABLE'] = Crm\Category\DealCategory::getName($categoryId);
+		}
 
 		$stageId = $this->document['STAGE_ID'] ?? '';
-		$this->document['STAGE_ID_PRINTABLE'] = Crm\Category\DealCategory::getStageName($stageId, $categoryId);
+		if (!empty($stageId))
+		{
+			$this->document['STAGE_ID_PRINTABLE'] = Crm\Category\DealCategory::getStageName($stageId, $categoryId);
+		}
 
 		$this->normalizeEntityBindings(['COMPANY_ID', 'CONTACT_ID']);
 		$this->loadUserFieldValues();

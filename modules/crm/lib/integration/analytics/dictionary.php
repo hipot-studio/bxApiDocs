@@ -30,6 +30,8 @@ final class Dictionary
 	public const EVENT_ENTITY_CLOSE = 'entity_close';
 	public const EVENT_ENTITY_COMPLETE = 'entity_complete';
 
+	public const EVENT_ENTITY_SOCIAL = 'entity_social';
+
 	public const EVENT_CALL_PARSING = 'call_parsing';
 	public const EVENT_AUDIO_TO_TEXT = 'audio_to_text';
 	public const EVENT_SUMMARY = 'summary';

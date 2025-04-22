@@ -50,15 +50,6 @@ class Assigned extends Field
 
 		if ($itemBeforeSave->remindActual($this->getName()) !== $item->get($this->getName()))
 		{
-			$updateResult = EventRelationsTable::setAssignedByItem(
-				ItemIdentifier::createByItem($item),
-				(int)$item->get($this->getName()),
-			);
-			if (!$updateResult->isSuccess())
-			{
-				$result->addErrors($updateResult->getErrors());
-			}
-
 			\Bitrix\Crm\Entity\EntityEditor::registerSelectedUser($item->get($this->getName()));
 		}
 

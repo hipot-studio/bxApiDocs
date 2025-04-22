@@ -8,11 +8,11 @@ use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Integration\AI\Config;
 use Bitrix\Crm\Integration\AI\Dto\SummarizeCallTranscriptionPayload;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
+use Bitrix\Crm\Integration\AI\Operation\Payload\PayloadFactory;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\SummaryEvent;
 use Bitrix\Crm\ItemIdentifier;
-use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\AI\Call\Controller;
 
@@ -57,15 +57,11 @@ class SummarizeCallTranscription extends AbstractOperation
 
 	protected function getAIPayload(): \Bitrix\Main\Result
 	{
-		return (new \Bitrix\Main\Result())->setData([
-			'payload' => (new \Bitrix\AI\Payload\Prompt('summarize_transcript'))
-				->setMarkers([
-					'original_message' => $this->transcription,
-					'company_name' => Container::getInstance()->getCompanyBroker()->getTitle(EntityLink::getDefaultMyCompanyId()),
-					'manager_name' => Container::getInstance()->getUserBroker()->getName($this->userId),
-				])
-			,
-		]);
+		return PayloadFactory::build(self::TYPE_ID, $this->userId, $this->target)
+			->setMarkers([
+				'original_message' => $this->transcription,
+			])->getResult()
+		;
 	}
 
 	protected function getStubPayload(): string

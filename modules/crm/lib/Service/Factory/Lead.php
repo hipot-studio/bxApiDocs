@@ -356,14 +356,17 @@ final class Lead extends Service\Factory
 				'SETTINGS' => [
 					'parentEntityTypeId' => \CCrmOwnerType::Company,
 				],
+				'CLASS' => Field\CompanyId::class,
 			],
 			Item::FIELD_NAME_CONTACT_ID => [
 				'TYPE' => Field::TYPE_CRM_CONTACT,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Deprecated],
+				'CLASS' => Field\ContactId::class,
 			],
 			Item::FIELD_NAME_CONTACT_IDS => [
 				'TYPE' => Field::TYPE_CRM_CONTACT,
-				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Multiple]
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Multiple],
+				'CLASS' => Field\ContactIds::class,
 			],
 			Item::FIELD_NAME_CONTACTS => [
 				'TYPE' => Field::TYPE_CRM_CONTACT,

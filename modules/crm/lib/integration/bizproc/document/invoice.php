@@ -286,8 +286,10 @@ class Invoice extends \CCrmDocument implements \IBPWorkflowDocument
 		return $arResult;
 	}
 
-	static public function GetDocument($documentId, $documentType = null, array $select = [])
+	static public function GetDocument($documentId)
 	{
+		$args = func_get_args();
+		$select = $args[2] ?? [];
 		$arDocumentID = static::GetDocumentInfo($documentId);
 		if (empty($arDocumentID))
 			throw new \CBPArgumentNullException('documentId');

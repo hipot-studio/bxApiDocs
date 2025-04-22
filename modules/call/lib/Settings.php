@@ -47,6 +47,14 @@ class Settings
 	 */
 	public static function isAIServiceEnabled(): bool
 	{
+		if (!\Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24'))
+		{
+			// box
+			$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?: 'us';
+
+			return in_array($region, ['ru', 'by', 'kz'], true);
+		}
+
 		return (bool)Option::get('call', 'call_ai_enabled', false);
 	}
 

@@ -261,7 +261,8 @@ final class Company extends Service\Factory
 			],
 			Item::FIELD_NAME_CONTACT_IDS => [
 				'TYPE' => Field::TYPE_CRM_CONTACT,
-				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Multiple]
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed, \CCrmFieldInfoAttr::Multiple],
+				'CLASS' => Field\ContactIds::class,
 			],
 			Item::FIELD_NAME_CONTACTS => [
 				'TYPE' => Field::TYPE_CRM_CONTACT,
@@ -272,6 +273,7 @@ final class Company extends Service\Factory
 				'SETTINGS' => [
 					'parentEntityTypeId' => \CCrmOwnerType::Lead,
 				],
+				'CLASS' => Field\LeadId::class,
 			],
 			Item::FIELD_NAME_ORIGINATOR_ID => [
 				'TYPE' => Field::TYPE_STRING,

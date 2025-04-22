@@ -47,12 +47,11 @@ class CopilotCallAssessmentClientTypeTable extends Main\ORM\Data\DataManager
 				->configureSize(1)
 				->configureRequired()
 			,
-			(new Reference(
+			new Reference(
 				'ASSESSMENT',
 				CopilotCallAssessmentTable::class,
 				Join::on('this.ASSESSMENT_ID', 'ref.ID')
-			))
-			,
+			),
 		];
 	}
 }

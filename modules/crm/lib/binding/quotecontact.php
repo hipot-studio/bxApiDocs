@@ -34,6 +34,8 @@ use Bitrix\Main\ORM\Query\Join;
  */
 class QuoteContactTable extends DataManager
 {
+//	use AddStrategy\Trait\MergeByDefaultTrait;
+
 	/**
 	 * Get table name.
 	 * @return string
@@ -42,6 +44,7 @@ class QuoteContactTable extends DataManager
 	{
 		return 'b_crm_quote_contact';
 	}
+
 	/**
 	 * Get table fields map.
 	 * @return array
