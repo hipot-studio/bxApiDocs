@@ -3,8 +3,10 @@
 namespace Bitrix\AI\Tuning;
 
 use Bitrix\AI\Config;
+use Bitrix\AI\Engine;
 use Bitrix\Main\Event;
 use Bitrix\Main\ORM;
+use Bitrix\Main\Web\Json;
 
 /**
  * Class for manage tuning options
@@ -23,6 +25,8 @@ class Manager
 
 		$this->loadExternal();
 		$this->loadInternal();
+
+		$this->onAfterLoad();
 	}
 
 	/**
@@ -108,6 +112,47 @@ class Manager
 	}
 
 	/**
+	 * Special preparatory operations on setting items. F.e. hiding some elements from lists
+	 * @return void
+	 */
+	private function onAfterLoad(): void
+	{
+		// hide BitrixGPT from all items, except...
+		$option = Config::getValue('bitrixgpt_options');
+		if (is_null($option))
+		{
+			return;
+		}
+
+		$bitrixGPTAvailableInItems = Json::decode($option)['availableIn'] ?? [];
+		foreach ($this->groups as $group)
+		{
+			/**
+			 * @var Group $group
+			 */
+			foreach ($group->getItems() as $item)
+			{
+				if (!$item->isList())
+				{
+					continue;
+				}
+
+				if (in_array($item->getCode(), $bitrixGPTAvailableInItems, true))
+				{
+					continue;
+				}
+
+				$options = $item->getOptions();
+				$options = array_filter($options, static function ($code)
+				{
+					return $code !== Engine\Cloud\Bitrix24::ENGINE_CODE;
+				}, ARRAY_FILTER_USE_KEY);
+				$item->setOptions($options);
+			}
+		}
+	}
+
+	/**
 	 * Get default internal groups and add to store
 	 * @return void
 	 */
@@ -137,7 +182,7 @@ class Manager
 	 *
 	 * @return GroupCollection|array
 	 */
-	public function getList(bool $toArray = false): GroupCollection | array
+	public function getList(bool $toArray = false): GroupCollection|array
 	{
 		$this->groups->sort();
 		foreach ($this->groups as $group)
@@ -154,7 +199,6 @@ class Manager
 		;
 	}
 
-
 	/**
 	 * Returns tuning item by code.
 	 *
@@ -165,6 +209,9 @@ class Manager
 	{
 		foreach ($this->groups as $group)
 		{
+			/**
+			 * @var Group $group
+			 */
 			if ($group->getItems()->get($code))
 			{
 				return $group->getItems()->get($code);

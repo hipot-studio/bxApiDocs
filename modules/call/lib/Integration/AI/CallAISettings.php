@@ -341,4 +341,33 @@ class CallAISettings
 
 		return false;
 	}
+
+	public static function isAIAvailableInCall(): ?CallAIError
+	{
+		$error = null;
+		if (
+			!Settings::isAIServiceEnabled()
+			|| !self::isTariffAvailable()
+		)
+		{
+			$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR, 'Module AI is unavailable');
+		}
+		elseif (!self::isEnableBySettings())
+		{
+			$error = new CallAIError(CallAIError::AI_SETTINGS_ERROR, 'Module AI is disabled by settings');
+		}
+		elseif (!self::isAgreementAccepted())
+		{
+			$error = new CallAIError(CallAIError::AI_AGREEMENT_ERROR, 'AI service agreement must be accepted');
+		}
+		elseif (!self::isAutoStartRecordingEnable())
+		{
+			if (!self::isBaasServiceHasPackage())
+			{
+				$error = new CallAIError(CallAIError::AI_NOT_ENOUGH_BAAS_ERROR, 'It is not enough baas packages');
+			}
+		}
+
+		return $error;
+	}
 }

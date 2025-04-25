@@ -3,11 +3,16 @@ declare(strict_types=1);
 
 namespace Bitrix\AI\Agents;
 
+use Bitrix\AI\Config;
 use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
+use Bitrix\Ai\Engine\ThirdParty;
+use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Im\V2\Integration\AI\Restriction;
+use Bitrix\Main\Web\Json;
+use Bitrix\Bitrix24\Integration\AI\Engine as CloudEngine;
 
 /**
  * Class EngineSettings
@@ -92,5 +97,86 @@ final class EngineSettings
 		self::resetUserEngineChoiceWhenBitrixGPTAgent();
 
 		$manager->save();
+	}
+
+	public static function resetToBitrixGPTInCloudAgent(): string
+	{
+		self::resetToBitrixGPTInCloud();
+
+		return '\Bitrix\AI\Agents\EngineSettings::resetToBitrixGPTInCloudAgent();';
+	}
+
+	public static function resetToBitrixGPTInCloud(): void
+	{
+		$options = Config::getValue('bitrixgpt_options');
+		if (is_null($options))
+		{
+			return;
+		}
+
+		$decodedOptions = Json::decode($options);
+		$itemsToForceChange = $decodedOptions['portalSettingsItemsToForceReset'];
+		if (
+			empty($itemsToForceChange)
+			|| Config::getValue('bitrixgpt_enabled') !== 'Y'
+			|| !Bitrix24::shouldUseB24()
+		)
+		{
+			return;
+		}
+
+		$manager = new Manager();
+
+		$preferredEngine = self::getEngine(CloudEngine\Bitrix24::ENGINE_CODE);
+		if (is_null($preferredEngine))
+		{
+			return;
+		}
+
+		$preferredCode = $preferredEngine->getIEngine()->getCode();
+
+		foreach ($itemsToForceChange as $item)
+		{
+			self::updateEngineCode($manager, $preferredCode, $item);
+		}
+
+		$manager->save();
+
+		$decodedOptions['portalSettingsItemsToForceReset'] = [];
+		Config::setOptionsValue('bitrixgpt_options', Json::encode($decodedOptions));
+	}
+
+	private static function getEngine(string $engineCode): ?Engine
+	{
+		return Engine::getByCode($engineCode, Context::getFake());
+	}
+
+	private static function updateEngineCode(Manager $manager, string $preferredCode, string $itemName): void
+	{
+		$item = $manager->getItem($itemName);
+		if (is_null($item))
+		{
+			return;
+		}
+
+		$engineCode = $item->getValue();
+		$engine = Engine::getByCode($engineCode, Context::getFake());
+		if (is_null($engine))
+		{
+			return;
+		}
+
+		if (
+			$engineCode !== $preferredCode
+			&& !self::isThirdPartyEngine($engine->getIEngine())
+		)
+		{
+			$item->setValue($preferredCode);
+		}
+	}
+
+	private static function isThirdPartyEngine(Engine\IEngine $engine): bool
+	{
+		return $engine instanceof ThirdParty;
 	}
 }

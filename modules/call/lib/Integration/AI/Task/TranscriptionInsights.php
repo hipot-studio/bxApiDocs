@@ -22,7 +22,23 @@ class TranscriptionInsights extends AITask
 						"speaker": "string or null",
 						"detailed_insight": "string or null"
 					}
-				]
+				],
+				"meeting_strengths": [
+					{
+						"strength_title": "string",
+						"strength_explanation": "string"
+					}
+				],
+				"meeting_weaknesses": [
+					{
+						"weakness_title": "string",
+						"weakness_explanation": "string"
+					}
+				],
+				"speech_style_influence": "string or null",
+				"engagement_level": "string or null",
+				"areas_of_responsibility": "string or null",
+				"final_recommendations": "string"
 			}
 		JSON
 	;
@@ -138,7 +154,7 @@ class TranscriptionInsights extends AITask
 
 		$fields = static::getAIPromptFields();
 		$fieldsConvert = [];
-		($findFieldToConvert = function(array $fields) use (&$findFieldToConvert, &$fieldsConvert)
+		($findFieldToConvert = static function (array $fields) use (&$findFieldToConvert, &$fieldsConvert)
 		{
 			foreach ($fields as $code => $field)
 			{
@@ -146,14 +162,14 @@ class TranscriptionInsights extends AITask
 				{
 					$findFieldToConvert($field);
 				}
-				elseif (is_string($field) && str_contains($field, 'string or null'))
+				elseif (is_string($field) && str_contains($field, 'string'))
 				{
 					$fieldsConvert[$code] = true;
 				}
 			}
 		})($fields);
 
-		($convert = function(array &$jsonData) use (&$convert, $fieldsConvert, $mentionService)
+		($convert = static function (array &$jsonData) use (&$convert, $fieldsConvert, $mentionService)
 		{
 			foreach ($jsonData as $code => &$field)
 			{

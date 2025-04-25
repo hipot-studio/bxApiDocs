@@ -2,10 +2,10 @@
 
 namespace Bitrix\Call\DTO;
 
-class TrackErrorRequest extends Hydrator
+class CallTokenRequest extends Hydrator
 {
-	public string $callUuid = '';
-	public string $errorCode = '';
+	public int $chatId = 0;
+	public array|null $additionalData = null;
 
 	public function __construct(?array $fields = null)
 	{

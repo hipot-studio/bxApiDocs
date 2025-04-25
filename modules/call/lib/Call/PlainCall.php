@@ -15,6 +15,11 @@ class PlainCall extends Call
 
 	protected function initCall(): void
 	{
+		if (\Bitrix\Call\Settings::isNewCallsEnabled())
+		{
+			return;
+		}
+
 		if ($this->getState() == static::STATE_NEW)
 		{
 			if (empty($this->uuid))

@@ -9,7 +9,6 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type\Date;
-use Bitrix\Market\Subscription;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Bitrix24\Feature;
@@ -83,11 +82,13 @@ class Client
 		);
 	}
 
-	public static function getImmuneApp()
+	public static function getImmuneApp(): array
 	{
-		return Transport::instance()->call(
-			Transport::METHOD_GET_IMMUNE
+		$immuneAppList = Transport::instance()->getDictionary(
+			Transport::DICTIONARY_IMMUNE_LIST,
 		);
+
+		return is_array($immuneAppList) ? $immuneAppList : [];
 	}
 
 	public static function getUpdates($codeList)

@@ -245,6 +245,7 @@ class CExtranet
 			&& (mb_strpos($curPage, "/mobileapp/") !== 0)
 			&& (mb_strpos($curPage, "/pub/") !== 0)
 			&& (mb_strpos($curPage, "/rest/") !== 0)
+			&& (mb_strpos($curPage, "/disk/boards/") !== 0)
 			&& (!self::IsExtranetSite())
 			&& self::GetExtranetSiteID() <> ''
 			&& $USER->IsAuthorized()

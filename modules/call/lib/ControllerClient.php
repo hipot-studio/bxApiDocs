@@ -63,7 +63,7 @@ class ControllerClient extends BaseSender
 	 *
 	 * @return string
 	 */
-	protected function getServiceUrl(): string
+	public function getServiceUrl(): string
 	{
 		$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?: 'ru';
 
@@ -260,6 +260,28 @@ class ControllerClient extends BaseSender
 		];
 
 		return $this->performRequest('callcontroller.InternalApi.dropTrack', $data);
+	}
+
+	/**
+	 * @see \Bitrix\CallController\Controller\Settings::registerKeyAction
+	 * @param string $key
+	 * @return Result
+	 */
+	public function registerCallKey(string $key): Result
+	{
+		$data = [
+			'privateKey' => $key,
+		];
+
+		$this->httpClientParameters = [
+			'waitResponse' => true,
+			'socketTimeout' => 5,
+			'streamTimeout' => 5,
+		];
+
+		$action = 'callcontroller.Settings.registerKey';
+
+		return $this->performRequest($action, $data);
 	}
 
 	public function getHttpClientParameters(): array

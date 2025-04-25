@@ -9,7 +9,9 @@ class Error extends \Bitrix\Main\Error
 {
 	public const
 		CALL_NOT_FOUND = 'CALL_NOT_FOUND',
-		SEND_PULL_ERROR = 'SEND_PULL_ERROR'
+		SEND_PULL_ERROR = 'SEND_PULL_ERROR',
+		WRONG_JWT = 'WRONG_JWT',
+		BALANCER_ERROR = 'BALANCER_ERROR'
 	;
 
 	protected string $description = '';

@@ -134,20 +134,55 @@ abstract class Base
 		throw new NotImplementedException('Internalize arguments. The method '.$name.' is not implemented.');
 	}
 
-	public function internalizeFieldsList($arguments, $fieldsInfo=[]): array
+	public function internalizeFieldsList($arguments, $fieldsInfo = []): array
 	{
-		$fieldsInfo = empty($fieldsInfo) ? $this->getFields():$fieldsInfo;
+		$fieldsInfo = empty($fieldsInfo) ? $this->getFields() : $fieldsInfo;
+		$filterFields = $fieldsInfo;
+		$orderFields = $fieldsInfo;
 
-		$fieldsInfo = $this->getListFieldInfo($fieldsInfo, ['filter'=>['ignoredAttributes'=>[Attributes::HIDDEN]]]);
+		$fieldsInfo = $this->getListFieldInfo(
+			$fieldsInfo,
+			[
+				'filter' => [
+					'ignoredAttributes' => [
+						Attributes::HIDDEN,
+					],
+				],
+			]
+		);
+		$filterFields = $this->getListFieldInfo(
+			$filterFields,
+			[
+				'filter' => [
+					'ignoredAttributes' => [
+						Attributes::HIDDEN,
+						Attributes::DISABLED_FILTER,
+						Attributes::SELECT_ONLY,
+					],
+				],
+			]
+		);
+		$orderFields = $this->getListFieldInfo(
+			$orderFields,
+			[
+				'filter' => [
+					'ignoredAttributes' => [
+						Attributes::HIDDEN,
+						Attributes::DISABLED_ORDER,
+						Attributes::SELECT_ONLY,
+					],
+				],
+			]
+		);
 
-		$filter = isset($arguments['filter']) ? $this->internalizeFilterFields($arguments['filter'], $fieldsInfo):[];
-		$select = isset($arguments['select']) ? $this->internalizeSelectFields($arguments['select'], $fieldsInfo):[];
-		$order = isset($arguments['order']) ? $this->internalizeOrderFields($arguments['order'], $fieldsInfo):[];
+		$filter = isset($arguments['filter']) ? $this->internalizeFilterFields($arguments['filter'], $filterFields) : [];
+		$select = isset($arguments['select']) ? $this->internalizeSelectFields($arguments['select'], $fieldsInfo) : [];
+		$order = isset($arguments['order']) ? $this->internalizeOrderFields($arguments['order'], $orderFields) : [];
 
 		return [
-			'filter'=>$filter,
-			'select'=>$select,
-			'order'=>$order,
+			'filter' => $filter,
+			'select' => $select,
+			'order' => $order,
 		];
 	}
 
@@ -454,7 +489,18 @@ abstract class Base
 
 		if (is_array($fields) && !empty($fields))
 		{
-			$listFieldsInfo = $this->getListFieldInfo($fieldsInfo, ['filter'=>['ignoredAttributes'=>[Attributes::HIDDEN]]]);
+			$listFieldsInfo = $this->getListFieldInfo(
+				$fieldsInfo,
+				[
+					'filter' => [
+						'ignoredAttributes' => [
+							Attributes::HIDDEN,
+							Attributes::DISABLED_FILTER,
+							Attributes::SELECT_ONLY,
+						],
+					],
+				]
+			);
 
 			foreach ($fields as $rawName=>$value)
 			{
@@ -529,7 +575,18 @@ abstract class Base
 
 		if (is_array($fields) && count($fields)>0)
 		{
-			$listFieldsInfo = $this->getListFieldInfo($fieldsInfo, ['filter'=>['ignoredAttributes'=>[Attributes::HIDDEN]]]);
+			$listFieldsInfo = $this->getListFieldInfo(
+				$fieldsInfo,
+				[
+					'filter' => [
+						'ignoredAttributes' => [
+							Attributes::HIDDEN,
+							Attributes::DISABLED_ORDER,
+							Attributes::SELECT_ONLY,
+						],
+					],
+				]
+			);
 
 			foreach ($fields as $field => $order)
 			{
