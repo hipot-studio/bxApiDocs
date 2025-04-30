@@ -196,30 +196,15 @@ class CallAiComponent extends \CBitrixComponent
 					break;
 
 				case SenseType::INSIGHTS->value:
-					$fields = [
-						'insights' => 'detailed_insight',
-						'meetingStrengths' => 'strength_explanation',
-						'meetingWeaknesses' => 'weakness_explanation',
-					];
-					foreach ($fields as $field => $subField)
+					if ($content?->insights)
 					{
-						if ($content?->{$field})
+						foreach ($content->insights as &$row)
 						{
-							foreach ($content->{$field} as &$row)
+							if ($row?->detailed_insight)
 							{
-								if ($row?->{$subField})
-								{
-									$row->{$subField} = $mentionService->replaceBbMentions($row->{$subField});
-									$isEmpty = false;
-								}
+								$row->detailed_insight = $mentionService->replaceBbMentions($row->detailed_insight);
+								$isEmpty = false;
 							}
-						}
-					}
-					foreach (['speechStyleInfluence', 'engagementLevel', 'areasOfResponsibility', 'finalRecommendations'] as $field)
-					{
-						if ($content?->{$field})
-						{
-							$content->{$field} = $mentionService->replaceBbMentions($content->{$field});
 						}
 					}
 					break;

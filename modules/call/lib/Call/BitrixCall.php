@@ -20,11 +20,6 @@ class BitrixCall extends Call
 	 */
 	protected function initCall(): void
 	{
-		if (\Bitrix\Call\Settings::isNewCallsEnabled())
-		{
-			return;
-		}
-
 		if (!$this->endpoint)
 		{
 			$this->uuid = Util::generateUUID();

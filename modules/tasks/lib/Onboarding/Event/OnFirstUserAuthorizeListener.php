@@ -20,8 +20,19 @@ final class OnFirstUserAuthorizeListener extends AbstractEventListener
 	{
 		$eventResult = new EventResult(EventResult::SUCCESS);
 
+		if (defined('BX_SECURITY_SESSION_VIRTUAL') && BX_SECURITY_SESSION_VIRTUAL === true)
+		{
+			return $eventResult;
+		}
+
 		$fields = $data['user_fields'] ?? [];
 		$userId = (int)($fields['ID'] ?? 0);
+
+		$isUpdate = $data['update'] ?? false;
+		if (!$isUpdate)
+		{
+			return $eventResult;
+		}
 
 		if (!empty($fields['LAST_LOGIN']))
 		{

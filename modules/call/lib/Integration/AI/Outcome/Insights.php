@@ -9,96 +9,35 @@ use Bitrix\Call\Integration\AI\Task\TranscriptionOverview;
 {
 	"insights": [
 		{
-			"speaker": "string or null",
+			"insight_type": "string or null",
 			"detailed_insight": "string or null"
 		}
-	],
-	"meeting_strengths": [
-		{
-			"strength_title": "string",
-			"strength_explanation": "string"
-		}
-	],
-	"meeting_weaknesses": [
-		{
-			"weakness_title": "string",
-			"weakness_explanation": "string"
-		}
-	],
-	"speech_style_influence": "string or null",
-	"engagement_level": "string or null",
-	"areas_of_responsibility": "string or null",
-	"final_recommendations": "string"
+	]
 }
 */
 
 class Insights
 {
 	public array $insights = [];
-	public array $meetingStrengths = [];
-	public array $meetingWeaknesses = [];
-	public string $speechStyleInfluence = '';
-	public string $engagementLevel = '';
-	public string $areasOfResponsibility = '';
-	public string $finalRecommendations = '';
 	public bool $isEmpty = true;
 
 	public function __construct(?Integration\AI\Outcome $outcome = null)
 	{
 		if ($outcome)
 		{
-			$convertObj = static function ($input) use (&$convertObj)
+			$insights = $outcome->getProperty('insights')?->getStructure();
+			if (is_array($insights))
 			{
-				$output = new \stdClass();
-				foreach ($input as $key => $val)
+				foreach ($insights as $row)
 				{
-					if (is_array($val) && !empty($val))
+					if (!empty($row['detailed_insight']))
 					{
-						$val = $convertObj($val);
-					}
-					if (!is_null($val))
-					{
-						$output->{$key} = $val;
+						$obj = new \stdClass;
+						$obj->detailed_insight = $row['detailed_insight'];
+						$this->insights[] = $obj;
 					}
 				}
-				return $output;
-			};
-
-			$fieldsMap = [
-				'insights' => 'insights',
-				'meetingStrengths' => 'meeting_strengths',
-				'meetingWeaknesses' => 'meeting_weaknesses',
-			];
-			foreach ($fieldsMap as $field => $prop)
-			{
-				$values = $outcome->getProperty($prop)?->getStructure();
-				if (is_array($values))
-				{
-					$this->{$field} = [];
-					foreach ($values as $row)
-					{
-						$obj = $convertObj($row);
-						if (!empty($obj))
-						{
-							$this->{$field}[] = $obj;
-						}
-					}
-				}
-			}
-
-			$fieldsMap = [
-				'speechStyleInfluence' => 'speech_style_influence',
-				'engagementLevel' => 'engagement_level',
-				'areasOfResponsibility' => 'areas_of_responsibility',
-				'finalRecommendations' => 'final_recommendations',
-			];
-			foreach ($fieldsMap as $field => $prop)
-			{
-				$value = $outcome->getProperty($prop);
-				if ($value)
-				{
-					$this->{$field} = $value->getContent();
-				}
+				$this->isEmpty = empty($this->insights);
 			}
 		}
 	}

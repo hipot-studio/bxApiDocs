@@ -150,7 +150,29 @@ class Track extends Engine\Controller
 			return null;
 		}
 
-		$error = CallAISettings::isAIAvailableInCall();
+		$error = null;
+		if (
+			!Settings::isAIServiceEnabled()
+			|| !CallAISettings::isTariffAvailable()
+		)
+		{
+			$error = new CallAIError(CallAIError::AI_UNAVAILABLE_ERROR);// AI service unavailable by tariff
+		}
+		elseif (!CallAISettings::isEnableBySettings())
+		{
+			$error = new CallAIError(CallAIError::AI_SETTINGS_ERROR);// Module AI is disabled by settings
+		}
+		elseif (!CallAISettings::isAgreementAccepted())
+		{
+			$error = new CallAIError(CallAIError::AI_AGREEMENT_ERROR);// AI service agreement must be accepted
+		}
+		elseif (!CallAISettings::isAutoStartRecordingEnable())
+		{
+			if (!CallAISettings::isBaasServiceHasPackage())
+			{
+				$error = new CallAIError(CallAIError::AI_NOT_ENOUGH_BAAS_ERROR);// It's not enough baas packages
+			}
+		}
 		if ($error)
 		{
 			$this->addError($error);

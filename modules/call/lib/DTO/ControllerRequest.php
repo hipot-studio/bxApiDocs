@@ -2,16 +2,30 @@
 
 namespace Bitrix\Call\DTO;
 
-class ControllerRequest extends Hydrator
+
+class ControllerRequest
 {
 	public string $callUuid = '';
 	public int $userId = 0;
 
 	public function __construct(?array $fields = null)
 	{
-		if ($fields)
+		if ($fields !== null)
 		{
-			parent::__construct((object) $fields);
+			$this->hydrate($fields);
 		}
+	}
+
+	public function hydrate(array $fields): self
+	{
+		if (isset($fields['callUuid']))
+		{
+			$this->callUuid = $fields['callUuid'];
+		}
+		if (isset($fields['userId']))
+		{
+			$this->userId = (int)$fields['userId'];
+		}
+		return $this;
 	}
 }
