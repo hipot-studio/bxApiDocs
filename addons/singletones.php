@@ -1,7 +1,7 @@
 <?php
 
 /** @noinspection GlobalVariableUsageInspection */
-global $DB,$APPLICATION,$USER,$USER_FIELD_MANAGER,$CACHE_MANAGER,$stackCacheManager;
+global $DB, $APPLICATION, $USER, $USER_FIELD_MANAGER, $CACHE_MANAGER, $stackCacheManager, $obUsersCache, $INTRANET_TOOLBAR;
 
 /** @var CDatabase $DB */
 /** @xglobal $DB CDatabase */
@@ -35,6 +35,22 @@ $CACHE_MANAGER = $GLOBALS['CACHE_MANAGER'] = $GLOBALS['CACHE_MANAGER'] = new CCa
 
 /** @var CStackCacheManager $stackCacheManager */
 $stackCacheManager = $GLOBALS['stackCacheManager'] = new CStackCacheManager();
+
+/**
+ * extranet module
+ * @xglobal CUsersInMyGroupsCache $obUsersCache
+ * @global CUsersInMyGroupsCache $obUsersCache
+ * @var CUsersInMyGroupsCache $obUsersCache
+ */
+$obUsersCache = new CUsersInMyGroupsCache();
+
+/**
+ * intranet module
+ * @xglobal CIntranetToolbar $INTRANET_TOOLBAR
+ * @global CIntranetToolbar $INTRANET_TOOLBAR
+ * @var CIntranetToolbar $INTRANET_TOOLBAR
+ */
+$INTRANET_TOOLBAR = new CIntranetToolbar();
 
 // @var $GLOBALS array{'DB' : \CDatabase, 'APPLICATION' : \CMain, 'USER' : \CUser, 'USER_FIELD_MANAGER' : \CUserTypeManager, 'CACHE_MANAGER' : \CCacheManager, 'stackCacheManager' : \CStackCacheManager}
 
