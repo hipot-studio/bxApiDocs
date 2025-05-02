@@ -6934,6 +6934,21 @@ class CAllIBlockElement
 		}
 	}
 
+			
+	/**
+	 * <p>Метод возвращает значения свойства для элемента <i>element_id</i>. Метод статический.</p><h4>Смотрите также</h4><ul> <li> <a class="link" href="https://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a> </li> <li> <a class="link" href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fproperty">Поля свойств </a> </li> </ul>
+	 *
+	 * @param int $IBLOCK_ID  Код инфоблока.<hr />
+	 * @param int $ELEMENT_ID  Код элемента.<hr />
+	 * @param array $by = $arOrder = Array() Массив вида Array(<i>by1</i>=&gt;<i>order1</i>[, <i>by2</i>=&gt;<i>order2</i> [, ..]]), где <i>by</i> - поле для сортировки, может принимать значения: <ul> <li> <b>id</b> - код свойства; </li> <li> <b>sort</b> - индекс сортировки; </li> <li> <b>name</b> - имя свойства; </li> <li> <span style="font-weight: bold;">active</span> - активность свойства;</li> <li> <span style="font-weight: bold;">value_id</span> - код значения свойства;</li> <li> <span style="font-weight: bold;">enum_sort</span> - индекс сортировки варианта списочного свойства; </li> </ul> <i>order</i> - порядок сортировки, может принимать значения: <ul> <li> <b>asc</b> - по возрастанию; </li> <li> <b>desc</b> - по убыванию; </li> </ul> Необязательный. По умолчанию равен <i>Array("sort"=&gt;"asc")</i><br> <div class="note"> <b>Примечание:</b> параметр не должен быть <i>false</i>, иначе метод отработает неправильно и результат не будет отобран по заданным критериям.</div><br /><br /><hr /><br /><br />
+	 * @param array $order = $arFilter = Array() Массив вида array("фильтруемое поле"=&gt;"значения фильтра" [, ...]) "фильтруемое поле" может принимать значения: ACTIVE - активность (Y/N), <br> <ul> <li> <span style="font-weight: bold;">NAME</span> - название свойства (можно использовать маску %|_),</li> <li> <span style="font-weight: bold;">ID</span> - код свойства,</li> <li> <span style="font-weight: bold;">ACTIVE</span> - активность (Y|N),</li> <li> <span style="font-weight: bold;">SEARCHABLE</span> - участвует в поиске или нет (Y|N),</li> <li> <span style="font-weight: bold;">PROPERTY_TYPE</span> - тип свойства,</li> <li> <span style="font-weight: bold;">CODE</span> - символьный код свойства,</li> <li> <span style="font-weight: bold;">EMPTY</span> - пустота свойства (Y|N).</li> </ul> Не обязательный параметр, по умолчанию равен array().
+	 * @param array $arFilter для использования старой сигнатуры функции
+	 *
+	 * @return \CDBResult содержит <pre>PROPERTY_VALUE_ID - код значения свойства, VALUE - значение свойства, DESCRIPTION - описание значения свойства, VALUE_ENUM - текстовое значение элемента списочного свойства, VALUE_XML_ID - внешний код значения свойства типа "список".</code>
+	 *
+	 * @link https://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockelement/getproperty.php
+	 * @author phpDoc author - generator by hipot at 02.05.2025
+	 */
 	public static function GetProperty($IBLOCK_ID, $ELEMENT_ID, $by="sort", $order="asc", $arFilter = Array())
 	{
 		global $DB;

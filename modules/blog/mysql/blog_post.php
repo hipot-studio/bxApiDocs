@@ -5,6 +5,18 @@ require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/blog/general/blog_post.p
 class CBlogPost extends CAllBlogPost
 {
 	/*************** ADD, UPDATE, DELETE *****************/
+		
+	/**
+	 * <p>Метод добавляет новое сообщение в блог. Метод статический.</p>
+	 * @param array $arFields  Массив вида <i>array("поле"=&gt;"значение"[, ...])</i>, содержащий значения <a class="link" href="https://dev.1c-bitrix.ru/api_help/blogs/fields.php#post">полей сообщения блога</a>.<br> <br> Также, можно задать отдельный уровень доступа на сообщение и комментарии. Для этого необходимо задать массив вида <code class="syntax">array(
+	 * "PERMS_POST" =&gt; array("userGroupID" =&gt; "Permission"[, ...]),
+	 * "PERMS_COMMENT" =&gt; array("userGroupID" =&gt; "Permission"[, ...])
+	 * )</pre> где <i>userGroupID</i> - группа пользователей блога, <i>Permission</i> - уровень доступа.
+	 * @return int|false Метод возвращает идентификатор добавленного сообщения, если добавление прошло успешно. При возникновении ошибки метод вернет false, а в исключениях будут содержаться ошибки.
+	 *
+	 * @link https://dev.1c-bitrix.ru/api_help/blogs/classes/cblogpost/add.php
+	 * @author phpDoc author - generator by hipot at 02.05.2025
+	 */
 	public static function Add($arFields)
 	{
 		global $DB, $USER_FIELD_MANAGER;
@@ -551,6 +563,20 @@ class CBlogPost extends CAllBlogPost
 		return False;
 	}
 
+		
+	/**
+	 * <p>Возвращает список сообщений по фильтру <i>arFilter</i>, отсортированный в порядке <i>arOrder</i>. Метод нестатический.</p><p></p><div class="note"> <b>Примечание: </b>фильтрация по ID категорий делается так: <b>CATEGORY_ID_F</b>. В результате ID категорий будут выведены через запятую.</div>
+	 *
+	 * @param array $arOrder = Array("ID"=>"DESC") Массив для сортировки результата. Массив вида <i> array("поле сортировки"=&gt;"направление сортировки" [, ...])</i> Поле для сортировки может принимать значения: <ul> <li> <b>ID </b> - идентификатор сообщения;</li> <li> <b>TITLE </b> - заголовок сообщения;</li> <li> <b>BLOG_ID </b> - идентификатор блога;</li> <li> <b>AUTHOR_ID </b> - идентификатор автора сообщения;</li> <li> <b>DETAIL_TEXT </b> - текст сообщения;</li> <li> <b>DATE_CREATE </b> - дата создания сообщения;</li> <li> <b>DATE_PUBLISH </b> - дата публикации сообщения;</li> <li> <b>KEYWORDS </b> - ключевые слова сообщения;</li> <li> <b>PUBLISH_STATUS </b> - статус публикации сообщения;</li> <li> <b>ATRIBUTE </b> - атрибуты сообщения;</li> <li> <b>ENABLE_TRACKBACK </b> - разрешены ли trackback'и к сообщению;</li> <li> <b>ENABLE_COMMENTS </b> - разрешены ли комментарии к сообщению;</li> <li> <b>NUM_COMMENTS </b> - количество комментариев;</li> <li> <b>NUM_TRACKBACKS </b> - количество trackback'ов;</li> <li> <b>AUTHOR_LOGIN </b> - логин автора сообщения;</li> <li> <b>AUTHOR_NAME </b> - имя автора сообщения;</li> <li> <b>AUTHOR_LAST_NAME </b> - фамилия автора сообщения;</li> <li> <b>AUTHOR_EMAIL </b> - Email автора сообщения;</li> <li> <b>VIEWS</b> — сортировка по количеству просмотров.</li> </ul> Необязательный. По умолчанию фильтруется по убыванию идентификатора сообщения.<br /><br /><hr /><br /><br />
+	 * @param array $arFilter = Array() Массив вида <i> array("фильтруемое поле"=&gt;"значение фильтра" [, ...])</i>. Фильтруемое поле может принимать значения: <ul> <li> <b>ID </b> - идентификатор сообщения;</li> <li> <b>TITLE</b> - заголовок сообщения;</li> <li> <b>BLOG_ID</b> - идентификатор блога;</li> <li> <b>BLOG_ACTIVE</b> - <span class="learning-lesson-detail-block js-detail-info-block"> <span class="learning-lesson-detail-word js-detail-info-word">признак активности блога</span> <span class="learning-lesson-detail-body js-detail-info-body"> <span class="learning-lesson-detail-body-inner js-detail-info-body-inner"> <button class="learning-lesson-detail-close-button js-detail-close-button" type="button"></button> Стандартный GetList выбирает записи и из неактивных блогов. Чтобы выборка не включала в себя неактивные блоги нужно указать:<br> <code>$arFilter = Array ( "BLOG_ACTIVE" =&gt; "Y" );</code> </span> </span> </span> ;</li> <li> <b>AUTHOR_ID </b> - идентификатор автора сообщения;</li> <li> <b>DETAIL_TEXT </b> - текст сообщения;</li> <li> <b>DATE_CREATE </b> - дата создания сообщения;</li> <li> <b>DATE_PUBLISH </b> - дата публикации сообщения;</li> <li> <b>DATE_PUBLISH_DAY </b> - день публикации сообщения;</li> <li> <b>DATE_PUBLISH_MONTH </b> - месяц публикации сообщения;</li> <li> <b>DATE_PUBLISH_YEAR </b> - год публикации сообщения;</li> <li> <b>KEYWORDS </b> - ключевые слова сообщения;</li> <li> <b>PUBLISH_STATUS </b> - <a class="link" href="http://dev.1c-bitrix.ru/api_help/blogs/constant.php">статус публикации</a> сообщения;</li> <li> <b>CATEGORY_ID_F </b> - идентификатор категории сообщения;</li> <li> <b>ATRIBUTE </b> - атрибуты сообщения;</li> <li> <b>ENABLE_TRACKBACK </b> - разрешены ли trackback'и к сообщению;</li> <li> <b>ENABLE_COMMENTS </b> - разрешены ли комментарии к сообщению;</li> <li> <b>NUM_COMMENTS </b> - количество комментариев;</li> <li> <b>NUM_TRACKBACKS </b> - количество trackback'ов;</li> <li> <b>AUTHOR_LOGIN </b> - логин автора сообщения;</li> <li> <b>AUTHOR_NAME </b> - имя автора сообщения;</li> <li> <b>AUTHOR_LAST_NAME </b> - фамилия автора сообщения;</li> <li> <b>AUTHOR_EMAIL </b> - Email автора сообщения;</li> <li> <b>VIEWS</b> — сортировка по количеству просмотров.</li> </ul> Перед названием фильтруемого поля может указать тип фильтрации: <ul> <li>"!" - не равно</li> <li>"&lt;" - меньше</li> <li>"&lt;=" - меньше либо равно</li> <li>"&gt;" - больше</li> <li>"&gt;=" - больше либо равно</li> </ul> <br> "<i>значения фильтра</i>" - одиночное значение или массив.<br> <br> Необязательный. По умолчанию записи не фильтруются.<br /><br /><hr /><br /><br />
+	 * @param bool $arGroupBy = false Массив полей, по которым группируются записи. Массив имеет вид: <pre class="syntax">array( "название_поля1", "группирующая_функция2" =&gt; "название_поля2", ... )</pre> В качестве "название_поля<i>N</i>" может стоять любое поле. В качестве группирующей функции могут стоять: <ul> <li> <b> COUNT</b> - подсчет количества;</li> <li> <b>AVG</b> - вычисление среднего значения;</li> <li> <b>MIN</b> - вычисление минимального значения;</li> <li> <b> MAX</b> - вычисление максимального значения;</li> <li> <b>SUM</b> - вычисление суммы.</li> </ul> Если массив пустой, то метод вернет число записей, удовлетворяющих фильтру.<br> <br> Необязательный. По умолчанию - <i>false</i> - означает, что результат группироваться не будет.<br /><br /><hr /><br /><br />
+	 * @param bool $arNavStartParams = false Массив параметров выборки. Может содержать следующие ключи: <ul> <li>"<b>nTopCount</b>" - количество возвращаемых методом записей будет ограничено сверху значением этого ключа</li> <li>любой ключ, принимаемый методом <b> CDBResult::NavQuery</b> в качестве третьего параметра.</li> </ul> Необязательный. По умолчанию - <i>false</i> - означает, что параметров выборки нет.<br /><br /><hr /><br /><br />
+	 * @param array $arSelectFields = Array() Массив полей записей, которые будут возвращены методом. Можно указать только те поля, которые необходимы. Если в массиве присутствует значение "*", то будут возвращены все доступные поля.<br> <br> Необязательный. По умолчанию - пустой массив array() - означает, что будут возвращены все поля основной таблицы запроса.
+	 * @return \CDBResult <p></p><div class="note"> <b>Примечание: </b>в компонент <b>blog.blog</b> невозможно передать фильтрацию по опубликованности. Для этого необходимо скопировать стандартный компонент в своё пространство имён и вручную дописать проверку на опубликованность.</div><a class="link" href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a>
+	 *
+	 * @link https://dev.1c-bitrix.ru/api_help/blogs/classes/cblogpost/getlist.php
+	 * @author phpDoc author - generator by hipot at 02.05.2025
+	 */
 	public static function GetList(
 		$arOrder = ["ID" => "DESC"],
 		$arFilter = [],

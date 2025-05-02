@@ -11,6 +11,16 @@ class CAllIBlockProperty
 {
 	public string $LAST_ERROR = '';
 
+		
+	/**
+	 * <p>Возвращает список свойств по фильтру <i>arFilter</i> отсортированные в порядке <i>arOrder</i>. Метод статический.</p><h4>Смотрите также</h4><ul> <li> <a class="link" href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a> </li> <li> <a class="link" href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fproperty">Поля свойства</a> </li> </ul>
+	 * @param array $arOrder = Array() Массив для сортировки, имеющий вид <i>by1=&gt;order1[,by2=&gt;order2 [, ..]]</i>, где:<i> by</i> - поле сортировки, может принимать значения: <ul> <li> <b>id</b> - код;</li> <li> <b>block_id</b> - код информационного блока, которому принадлежит свойство; <b>name</b> - название;</li> <li> <b>name</b> - название;</li> <li> <b>active</b> - активность;</li> <li> <b>sort</b> - индекс сортировки;</li> <li> <b>timestamp_x</b> - дата последнего изменения</li> <li> <b>searchable</b> - по признаку участия значения свойства в поиске; </li> <li> <b>filtrable</b> - по признаку участия свойства в фильре на странице списка элементов; </li> <li> <b>order</b> - порядок сортировки, может принимать значения: <ul> <li> <b>asc</b> - по возрастанию;</li> <li> <b>desc</b> - по убыванию;</li> </ul> </li> </ul><br /><br /><hr /><br /><br />
+	 * @param array $arFilter = Array() Массив вида <i> array("фильтруемое поле"=&gt;"значение" [, ...])</i>. <b><u>Ни один параметр фильтра не принимает массивы.</u></b> <br><br> <i>Фильтруемое поле</i> может принимать значения: <ul> <li> <b>ACTIVE</b> - фильтр по активности (Y|N);</li> <li> <b>ID</b> - по ID свойства, только число;</li> <li> <b>CODE</b> - по символьному коду (по шаблону [%_]), только строка;</li> <li> <b>NAME</b> - по названию свойства (по шаблону [%_]);</li> <li> <b>EXTERNAL_ID</b> или <b>XML_ID </b>- по внешнему коду(по шаблону [%_]). Возможно использование отрицания, указав <i>!EXTERNAL_ID</i>;</li> <li> <b>PROPERTY_TYPE</b> - по типу свойства: <ul> <li> <b>S</b> - строка</li> <li> <b>N</b> - число</li> <li> <b>L</b> - список</li> <li> <b>F</b> - файл</li> <li> <b>G</b> - привязка к разделу</li> <li> <b>E</b> - привязка к элементу</li> </ul> </li> <li> <b>USER_TYPE</b> - по пользовательскому типу свойства; <ul> <li> <b>UserID</b> - Привязка к пользователю</li> <li> <b>DateTime</b> - Дата/Время</li> <li> <b>EList</b> - Привязка к элементам в виде списка</li> <li> <b>FileMan</b> - Привязка к файлу (на сервере)</li> <li> <b>map_yandex</b> - Привязка к Яndex.Карте</li> <li> <b>HTML</b> - HTML/текст</li> <li> <b>map_google</b> - Привязка к карте Google Maps</li> <li> <b>ElementXmlID</b> - Привязка к элементам по XML_ID</li> <li> <b>Sequence</b> - Счетчик</li> <li> <b>EAutocomplete</b> - Привязка к элементам с автозаполнением</li> <li> <b>SKU</b> - Привязка к товарам (SKU)</li> <li> <b>video</b> - Видео</li> <li> <b>TopicID</b> - Привязка к теме форума</li> </ul> Кроме того, можно использовать идентификаторы пользовательских типов свойств инфоблока, добавленных сторонними модулями. </li> <li> <b>SEARCHABLE</b> - по признаку участия значения свойства в поиске (Y|N); </li> <li> <b>FILTRABLE</b> - по признаку участия свойства в фильре на странице списка элементов (Y|N);</li> <li> <b>VERSION</b> - по флагу хранения значений свойств элементов инфоблока;</li> <li> <b>MIN_PERMISSION</b> - фильтр по правам доступа, по умолчанию принимает <i>R</i> (уровень доступа <i>Чтение</i>);</li> <li> <b>CHECK_PERMISSIONS</b> - если установлено значение "N", то проверки прав не происходит; <br> </li> <li> <b>IBLOCK_ID</b> - по коду информационного блока, которому принадлежит свойство (фильтр <a class="link" href="http://dev.1c-bitrix.ru/api_help/iblock/filters/number.php">Число</a>);</li> <li> <b>IBLOCK_CODE</b> - по символьному коду информационного блока, которому принадлежит свойство;</li> <li> <b>LINK_IBLOCK_ID</b> - по коду связанного информационного блока (может быть указан для свойств типа "E" и "G");</li> <li> <b>MULTIPLE</b> - Проверка на множественность. по умолчанию N.</li> </ul> Необязательное. По умолчанию записи не фильтруются.
+	 * @return CDBResult
+	 *
+	 * @link https://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/getlist.php
+	 * @author phpDoc author - generator by hipot at 02.05.2025
+	 */
 	public static function GetList($arOrder=Array(), $arFilter=Array())
 	{
 		global $DB;
@@ -237,6 +247,15 @@ class CAllIBlockProperty
 	///////////////////////////////////////////////////////////////////
 	// Add
 	///////////////////////////////////////////////////////////////////
+			
+	/**
+	 * <p>Метод добавляет новое свойство. Отменить добавление или изменить поля свойства можно в обработчике события <a class="link" href="http://dev.1c-bitrix.ru/api_help/iblock/events/onbeforeiblockpropertyadd.php">OnBeforeIBlockPropertyAdd</a>. После добавления нового свойства вызываются обработчики события <a class="link" href="http://dev.1c-bitrix.ru/api_help/iblock/events/onafteriblockpropertyadd.php">OnAfterIBlockPropertyAdd</a>. Нестатический метод.</p>*
+	 * @param array $arFields  Массив Array("поле"=&gt;"значение", ...). <br> Содержит значения <a class="link" href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fproperty">всех полей</a> свойства. Кроме того, с помощью поля "VALUES", значением которого должен быть массив структуры <pre class="syntax">array( array( "VALUE"=&gt;"значение", "DEF"=&gt;"по умолчанию (Y/N)", "SORT"=&gt;"индекс сортировки" ... ), )</pre>, можно установить варианты выбора для свойств типа "список" (подробнее смотрите метод <a class="link" href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/index.php">CIBlockProperty</a>::<a class="link" href="http://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/updateenum.php">UpdateEnum()</a>).
+	 * @return int
+	 *
+	 * @link https://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockproperty/add.php
+	 * @author phpDoc author - generator by hipot at 02.05.2025
+	 */
 	public function Add($arFields)
 	{
 		global $DB;
