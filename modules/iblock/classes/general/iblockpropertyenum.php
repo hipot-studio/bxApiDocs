@@ -15,7 +15,18 @@ class CIBlockPropertyEnumResult extends CDBResult
 
 class CIBlockPropertyEnum
 {
-	public static function GetList($arOrder = array("SORT"=>"ASC", "VALUE"=>"ASC"), $arFilter = array())
+			
+	/**
+	 * <p>Возвращает список вариантов значений свойств типа "список" по фильтру <i>arFilter</i> отсортированные в порядке <i>arOrder</i>. Метод статический.</p><h4>Возвращаемое значение</h4><a class="link" href="https://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a><h4>Смотрите также</h4><ul> <li> <a class="link" href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a> </li> <li> <a class="link" href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fproperty">Поля варианта значений свойства типа "список"</a> </li> </ul>
+	 * @param array $arOrder = Array("SORT"=>"ASC" Массив для сортировки, имеющий вид <i>by1</i>=&gt;<i>order1</i>[, <i>by2</i>=&gt;<i>order2</i> [, ..]], где <i> <br> by</i> - поле сортировки, может принимать значения: <br> <ul> <li> <i>id</i> - код варианта значения; </li> <li> <i>value</i> - значение варианта; </li> <li> <i>sort</i> - индекс сортировки варианта; </li> <li> <i>xml_id </i>или <i>external_id</i> - внешний код варианта значения; </li> <li> <i> def </i>- по признаку "значение по умолчанию"; </li> <li> <i>property_id</i> - код свойства; </li> <li> <i>property_sort</i> - индекс сортировки свойства; </li> <li> <i>property_code</i> - символьный код свойства;</li> </ul> <i> order</i> - порядок сортировки, может принимать значения: <br> <ul> <li> <i>asc</i> - по возрастанию; </li> <li> <i>desc</i> - по убыванию; </li> </ul><br /><br /><hr /><br /><br />
+	 * @param "VALUE"=>"ASC"), $array  Массив вида array("фильтруемое поле"=&gt;"значение" [, ...]) <br> "фильтруемое поле" может принимать значения: <br> <ul> <li> <i>VALUE</i> - по значению (по шаблону [%_]); </li> <li> <i>ID</i> - по коду значения варианта свойства; </li> <li> <i>SORT</i> - по индексу сортировки варианта свойства; </li> <li> <i>DEF</i> - по параметру "значение по умолчанию" (Y|N); </li> <li> <i>XML_ID</i> - по внешнему коду(по шаблону [%_]); </li> <li> <i>EXTERNAL_ID</i> - по внешнему коду; </li> <li> <i>CODE</i> - по символьному коду свойства (по шаблону [%_]); </li> <li> <i>PROPERTY_ID</i> - по числовому или символьному коду свойства; </li> <li> <i>IBLOCK_ID</i> - фильтр по коду информационного блока, которому принадлежит свойство; </li> </ul> Необязательное. По умолчанию записи не фильтруются.<br /><br /><hr /><br /><br />
+	 * @param array $arFilter = Array()
+	 * @return \CIBlockPropertyEnumResult <a class="link" href="https://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a><h4>Смотрите также</h4><ul> <li> <a class="link" href="https://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/index.php">CDBResult</a> </li> <li> <a class="link" href="http://dev.1c-bitrix.ru/api_help/iblock/fields.php#fproperty">Поля варианта значений свойства типа "список"</a> </li> </ul>
+	 *
+	 * @link https://dev.1c-bitrix.ru/api_help/iblock/classes/ciblockpropertyenum/getlist.php
+	 * @author phpDoc author - generator by hipot at 14.05.2025
+	 */
+	public static function GetList(	$arOrder = array("SORT"=>"ASC", "VALUE"=>"ASC"), $arFilter = array())
 	{
 		global $DB;
 

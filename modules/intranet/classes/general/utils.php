@@ -1222,8 +1222,11 @@ class CIntranetUtils
 
 		if(count($arManagerIDs) > 0)
 		{
-			$dbRes = CUser::GetList('ID', 'ASC', array('ID' => implode('|', array_unique($arManagerIDs))));
-			while($arUser = $dbRes->GetNext())
+			$res = new \CDBResult(\Bitrix\Main\UserTable::getList([
+				'select' => ['*', 'UF_*'],
+				'filter' => ['@ID' => array_unique($arManagerIDs)],
+			]));
+			while($arUser = $res->GetNext())
 			{
 				$arManagers[$arUser['ID']] = $arUser;
 			}

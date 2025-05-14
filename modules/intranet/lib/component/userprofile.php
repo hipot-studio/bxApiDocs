@@ -701,8 +701,16 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 				$manager["LINK"] = \CComponentEngine::MakePathFromTemplate($this->arParams['PATH_TO_USER'], [
 					'user_id' => $manager['ID'],
 				]);
+				$preparedManager = [
+					'ID' => $manager['ID'],
+					'FULL_NAME' => $manager['FULL_NAME'],
+					'PHOTO' => $manager['PHOTO'],
+					'LINK' => $manager['LINK'],
+					'PERSONAL_PHOTO' => $manager['PERSONAL_PHOTO'],
+					'WORK_POSITION' => $manager['WORK_POSITION'],
+				];
 
-				$user['MANAGERS'][$key] = $manager;
+				$user['MANAGERS'][$key] = $preparedManager;
 			}
 
 			if ($this->arParams["CACHE_TIME"] > 0)
