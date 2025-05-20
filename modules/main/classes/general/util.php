@@ -626,6 +626,17 @@ class CUtil
 		}
 	}
 
+			
+	/**
+	 * <p>Метод для транслитерации строки текста. Статический метод.</p>
+	 * @param string $str  Строка текста для транслитерации<hr />
+	 * @param string $lang  Язык с которого производится транслитерация<hr />
+	 * @param array{'max_len':int, 'change_case':string, 'replace_space':string, 'replace_other':string, 'delete_repeat_replace':bool, 'safe_chars':string} $params  Массив параметров: <ul> <li> <b>max_len</b> ограничение количества символов, по умолчанию - 100</li> <li> <b>change_case</b> к какому регистру приводить: L - к нижнему, U - к верхнему, false - не изменять. По умолчанию - "L"</li> <li> <b>replace_space</b> чем заменять пробел, по умолчанию: "_"</li> <li> <b>replace_other</b> чем заменять прочие символы, по умолчанию: "_"</li> <li> <b>delete_repeat_replace</b> удалять повторяющиеся пробелы, по умолчанию - "true"</li> <li> <b>safe_chars</b> строка из символов, замена которых не производится</li> </ul>
+	 * @return string
+	 *
+	 * @link https://dev.1c-bitrix.ru/api_help/main/reference/cutil/translit.php
+	 * @author phpDoc author - generator by hipot at 19.05.2025
+	 */
 	public static function translit($str, $lang, $params = [])
 	{
 		static $search = [];
