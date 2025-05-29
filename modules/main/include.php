@@ -103,7 +103,7 @@ $GLOBALS["ALL_LANG_FILES"] = [];
 IncludeModuleLangFile(__DIR__."/tools.php");
 IncludeModuleLangFile(__FILE__);
 
-error_reporting(COption::GetOptionInt("main", "error_reporting", E_COMPILE_ERROR | E_ERROR | E_CORE_ERROR | E_PARSE) & ~E_STRICT & ~E_DEPRECATED & ~E_WARNING & ~E_NOTICE);
+error_reporting(COption::GetOptionInt("main", "error_reporting", E_COMPILE_ERROR | E_ERROR | E_CORE_ERROR | E_PARSE) & ~E_DEPRECATED & ~E_WARNING & ~E_NOTICE);
 
 if (!defined("BX_COMP_MANAGED_CACHE") && COption::GetOptionString("main", "component_managed_cache_on", "Y") != "N")
 {
@@ -608,5 +608,5 @@ if ((!defined("NOT_CHECK_PERMISSIONS") || NOT_CHECK_PERMISSIONS !== true) && (!d
 	}
 }
 
-       //Do not remove this
+// ..... // Do not remove this
 

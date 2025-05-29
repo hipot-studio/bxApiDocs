@@ -405,6 +405,29 @@ abstract class DataManager
 	/**
 	 * Executes the query and returns selection by parameters of the query. This function is an alias to the Query object functions
 	 *
+	 * @param array $parameters An array of query parameters, available keys are:<br>
+	 * 		"select" => array of fields in the SELECT part of the query, aliases are possible in the form of "alias"=>"field";<br>
+	 * 		"filter" => array of filters in the WHERE/HAVING part of the query in the form of "(condition)field"=>"value";
+	 * 			also could be an instance of Filter;<br>
+	 * 		"group" => array of fields in the GROUP BY part of the query;<br>
+	 * 		"order" => array of fields in the ORDER BY part of the query in the form of "field"=>"asc|desc";<br>
+	 * 		"limit" => integer indicating maximum number of rows in the selection (like LIMIT n in MySql);<br>
+	 * 		"offset" => integer indicating first row number in the selection (like LIMIT n, 100 in MySql);<br>
+	 *		"runtime" => array of entity fields created dynamically;<br>
+	 * 		"cache => array of cache options:<br>
+	 * 			"ttl" => integer indicating cache TTL;<br>
+	 * 			"cache_joins" => boolean enabling to cache joins, false by default.
+	 * @see Query::filter()
+	 *
+	 * @return QueryResult
+	 * @throws Main\ArgumentException
+	 * @throws Main\ObjectPropertyException
+	 * @throws Main\SystemException
+	 */
+	
+	/**
+	 * Executes the query and returns selection by parameters of the query. This function is an alias to the Query object functions
+	 *
 	 * @param array{'select':array,'filter':array,'group':array,'order':array,'limit':int,'offset':int,'runtime':array,'cache':array} $parameters An array of query parameters, available keys are:<br>
 	 * 		"select" => array of fields in the SELECT part of the query, aliases are possible in the form of "alias"=>"field";<br>
 	 * 		"filter" => array of filters in the WHERE/HAVING part of the query in the form of "(condition)field"=>"value";
