@@ -24,8 +24,8 @@ Loc::loadMessages(__FILE__);
  */
 class AudioCall
 {
-	const AUDIO_DIR = 'http://dl.bitrix24.com/sender/audiocall/';
-	const METADATA_FILE = 'http://dl.bitrix24.com/sender/audiocall/metadata.json';
+	const AUDIO_DIR = 'https://dl.bitrix24.com/sender/audiocall/';
+	const METADATA_FILE = 'https://dl.bitrix24.com/sender/audiocall/metadata.json';
 
 	/**
 	 * Get supported lang codes

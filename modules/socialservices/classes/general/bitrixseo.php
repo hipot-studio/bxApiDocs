@@ -1,14 +1,15 @@
-<?
+<?php
+
 use \Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
-if(!defined("BITRIX_CLOUD_ADV_URL"))
+if (!defined("BITRIX_CLOUD_ADV_URL"))
 {
 	define("BITRIX_CLOUD_ADV_URL", 'https://cloud-adv.bitrix.info');
 }
 
-if(!defined('BITRIXSEO_URL'))
+if (!defined('BITRIXSEO_URL'))
 {
 	define('BITRIXSEO_URL', BITRIX_CLOUD_ADV_URL);
 }
@@ -19,6 +20,7 @@ class CBitrixSeoOAuthInterface extends CBitrixServiceOAuthInterface
 
 	const URL = BITRIXSEO_URL;
 
+	/** @var CBitrixSeoTransport */
 	protected $transport = null;
 
 	protected $scope = array(
@@ -40,6 +42,9 @@ class CBitrixSeoOAuthInterface extends CBitrixServiceOAuthInterface
 		parent::__construct($appID, $appSecret, $code);
 	}
 
+	/**
+	 * @return CBitrixSeoTransport
+	 */
 	public function getTransport()
 	{
 		if($this->transport === null)

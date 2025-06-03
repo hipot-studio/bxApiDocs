@@ -182,6 +182,11 @@ class SectionType extends ElementType
 		}
 		$filter['ACTIVE'] = $userField['SETTINGS']['ACTIVE_FILTER'] === 'Y';
 
+		if (isset($additionalParameters['SKIP_CHECK_PERMISSIONS']) && $additionalParameters['SKIP_CHECK_PERMISSIONS'])
+		{
+			$filter['CHECK_PERMISSIONS'] = 'N';
+		}
+
 		$sections = self::getElements(
 			(int)$userField['SETTINGS']['IBLOCK_ID'],
 			$filter
@@ -219,7 +224,7 @@ class SectionType extends ElementType
 
 		$filter = [
 			'IBLOCK_ID' => $iblockId,
-			'CHECK_PERMISSIONS' => 'Y',
+			'CHECK_PERMISSIONS' => $additionalFilter['CHECK_PERMISSIONS'] ?? 'Y',
 			'MIN_PERMISSION' => \CIBlockRights::PUBLIC_READ,
 		];
 		if ($additionalFilter['ACTIVE'])

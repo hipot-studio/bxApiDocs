@@ -16,6 +16,7 @@ use Bitrix\Sender\Internals\Model\GroupStateTable;
 use Bitrix\Sender\Internals\Model\GroupThreadTable;
 use Bitrix\Sender\Internals\Model\LetterSegmentTable;
 use Bitrix\Sender\Internals\Model\LetterTable;
+use Bitrix\Sender\Internals\SqlBatch;
 use Bitrix\Sender\Recipient\Type;
 use Bitrix\Sender\Runtime\SegmentDataBuilderJob;
 use Bitrix\Sender\SegmentDataTable;
@@ -1216,17 +1217,19 @@ INNER JOIN (
 		}
 
 		GroupCounterTable::deleteByGroupId($this->groupId);
+		$insertRows = [];
 		foreach ($rowsDataCounter as $groupId => $dataCounter)
 		{
 			foreach ($dataCounter as $typeId => $count)
 			{
-				GroupCounterTable::add(array(
+				$insertRows[] = [
 					'GROUP_ID' => $groupId,
 					'TYPE_ID' => $typeId,
 					'CNT' => $count,
-				));
+				];
 			}
 		}
+		SqlBatch::insert(GroupCounterTable::getTableName(), $insertRows);
 		Locker::unlock(self::SEGMENT_LOCK_KEY, $this->groupId);
 
 		$groupState = $this->getCurrentGroupState();

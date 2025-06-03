@@ -2,11 +2,12 @@
 
 namespace Bitrix\Iblock\UI\Input;
 
+use Bitrix\Iblock\Integration\UI\EntitySelector\IblockPropertySectionProvider;
+use Bitrix\Iblock\PropertyTable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type;
 use Bitrix\Main\UI;
-use Bitrix\Iblock;
-use Bitrix\Iblock\Integration\UI\EntitySelector\IblockPropertySectionProvider;
+use Bitrix\Main\Web\Json;
 
 class Section
 {
@@ -19,7 +20,7 @@ class Section
 			return '';
 		}
 
-		if (($property['PROPERTY_TYPE'] ?? '') !== Iblock\PropertyTable::TYPE_SECTION)
+		if (($property['PROPERTY_TYPE'] ?? '') !== PropertyTable::TYPE_SECTION)
 		{
 			return '';
 		}
@@ -56,26 +57,21 @@ class Section
 			$config['CHANGE_EVENTS'] = is_string($config['CHANGE_EVENTS']) ? [$config['CHANGE_EVENTS']] : [];
 		}
 
-		$config = \CUtil::PhpToJSObject(
-			[
-				'containerId' => $containerId,
-				'fieldName' => $fieldName . ($multiple ? '[]' : ''),
-				'multiple' => $multiple,
-				'collectionType' => 'int',
-				'selectedItems' => $values,
-				'iblockId' => (int)($property['LINK_IBLOCK_ID'] ?? 0),
-				'userType' => (string)($property['USER_TYPE'] ?? ''),
-				'entityId' => $config['ENTITY_ID'],
-				'searchMessages' => [
-					'title' => $config['SEARCH_TITLE'],
-					'subtitle' => $config['SEARCH_SUBTITLE'],
-				],
-				'changeEvents' => $config['CHANGE_EVENTS'],
+		$config = Json::encode([
+			'containerId' => $containerId,
+			'fieldName' => $fieldName . ($multiple ? '[]' : ''),
+			'multiple' => $multiple,
+			'collectionType' => 'int',
+			'selectedItems' => $values,
+			'iblockId' => (int)($property['LINK_IBLOCK_ID'] ?? 0),
+			'userType' => (string)($property['USER_TYPE'] ?? ''),
+			'entityId' => $config['ENTITY_ID'],
+			'searchMessages' => [
+				'title' => $config['SEARCH_TITLE'],
+				'subtitle' => $config['SEARCH_SUBTITLE'],
 			],
-			false,
-			true,
-			true
-		);
+			'changeEvents' => $config['CHANGE_EVENTS'],
+		]);
 
 		UI\Extension::load('iblock.field-selector');
 
@@ -87,6 +83,7 @@ class Section
 				selector.render();
 			})();
 			</script>
-HTML;
+			HTML
+		;
 	}
 }

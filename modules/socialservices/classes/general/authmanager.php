@@ -1237,7 +1237,7 @@ class CSocServAuth
 			$taskCounter = count($arData['TASKS']);
 		}
 
-		$arResult['USER_ID'] = intval($USER->GetID());
+		$arResult['USER_ID'] = intval($USER?->GetID());
 		if($arResult['USER_ID'] > 0)
 		{
 			$enabledSendMessage = CUserOptions::GetOption("socialservices", "user_socserv_enable", "N", $arResult['USER_ID']);

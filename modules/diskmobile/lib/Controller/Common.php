@@ -39,16 +39,29 @@ class Common extends Base
 			['objectId' => $id],
 		);
 
-		if ($this->errorCollection->isEmpty())
+		if (!$this->errorCollection->isEmpty())
 		{
-			$diskObject['rights'] = $rightsResult['rights'];
-
-			return [
-				'diskObject'=> $diskObject,
-			];
+			return null;
 		}
 
-		return null;
+		$diskObject['rights'] = $rightsResult['rights'];
+
+		$externalLinkResult = $this->forward(
+			\Bitrix\Disk\Controller\CommonActions::class,
+			'getExternalLink',
+			['objectId' => $id],
+		);
+
+		if (!$this->errorCollection->isEmpty())
+		{
+			return null;
+		}
+
+		$diskObject['links']['external'] = $externalLinkResult['externalLink'];
+
+		return [
+			'diskObject'=> $diskObject,
+		];
 	}
 
 	public function getFolderByPathAction(string $entityType, string $entityId, string $path): ?array

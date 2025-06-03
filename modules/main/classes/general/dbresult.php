@@ -860,6 +860,16 @@ abstract class CAllDBResult
 		$this->add_anchor = $add_anchor;
 	}
 
+	
+	/**
+	 * <p>Метод разбивает результат выборки на страницы.</p><p> Для встраивания системы автоматической постраничной навигации необходимо сначала вызвать данный метод <a class="link" href="https://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/navstart.php">CDBResult::NavStart</a>. После ее вызова, методы </p><ul> <li> <a class="link" href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/fetch.php">CDBResult::Fetch</a> </li> <li> <a class="link" href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/getnext.php">CDBResult::GetNext</a> </li> <li> <a class="link" href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/extractfields.php">CDBResult::ExtractFields</a> </li> <li> <a class="link" href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/navnext.php">CDBResult::NavNext</a> </li> </ul><a class="link" href="http://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/navprint.php">CDBResult::NavPrint</a><p>Нестатический метод.</p>
+	 * @param int $nPageSize = 10 Размер страницы (от 1 и более). Необязательный. По умолчанию 10.<hr />
+	 * @param bool $bShowAll = true Разрешить показывать все записи (и выводить ссылку "Все" в навигации).<br>Необязательный. По умолчанию - "true".<hr />
+	 * @param bool|int $iNumPage = false Принудительно всегда открывать страницу с этим номером (не зависящую от параметров в URL). Необязательный. По умолчанию - "false" (показывать автоматически).
+	 * @return void
+	 * @link https://dev.1c-bitrix.ru/api_help/main/reference/cdbresult/navstart.php
+	 * @author phpDoc author - generator by hipot at 03.06.2025
+	 */
 	public function NavStart($nPageSize = 0, $bShowAll = true, $iNumPage = false)
 	{
 		if ($this->bFromLimited)

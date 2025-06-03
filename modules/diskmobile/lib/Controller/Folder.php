@@ -91,11 +91,7 @@ class Folder extends BaseFileList
 		);
 		$items = $storageFileFinder->findModelsByText($search);
 
-		$response = [
-			'items' => [],
-			'users' => [],
-			'storages' => [],
-		];
+		$response = $this->getDefaultResponse();;
 
 		if (!empty($items))
 		{
@@ -123,11 +119,7 @@ class Folder extends BaseFileList
 			return null;
 		}
 
-		$response = [
-			'items' => [],
-			'users' => [],
-			'storages' => [],
-		];
+		$response = $this->getDefaultResponse();
 
 		if (isset($page['items']))
 		{
@@ -172,9 +164,7 @@ class Folder extends BaseFileList
 		}
 
 		$response = [
-			'items' => [],
-			'users' => [],
-			'storages' => [],
+			...$this->getDefaultResponse(),
 			'currentFolderRights' => [],
 		];
 
@@ -184,6 +174,7 @@ class Folder extends BaseFileList
 			$response = $this->withUsers($response);
 			$response = $this->withRealStorageIds($response);
 			$response = $this->withStorages($response);
+			$response['items'] = $this->withExternalLink($response['items']);
 
 			$tag = "object_$id";
 			$this->subscribeToPullEvents($response['items'], [ $tag ]);

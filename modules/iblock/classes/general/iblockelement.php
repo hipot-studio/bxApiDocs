@@ -6,6 +6,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Iblock;
 use Bitrix\Iblock\ElementTable;
+use Bitrix\Iblock\IblockTable;
 use Bitrix\Catalog;
 use Bitrix\Main\ORM\Query\Filter\Helper;
 
@@ -3478,7 +3479,7 @@ class CAllIBlockElement
 				elseif($by == "SHOW_COUNTER") $arSqlOrder[$by] = CIBlock::_Order("BE.SHOW_COUNTER", $order, "desc");
 				elseif($by == "SHOW_COUNTER_START") $arSqlOrder[$by] = CIBlock::_Order("BE.SHOW_COUNTER_START", $order, "desc");
 				elseif($by == "RAND") $arSqlOrder[$by] = CIBlockElement::GetRandFunction();
-				elseif($by == "SHOWS") $arSqlOrder[$by] = CIBlock::_Order(CIBlockElement::GetShowedFunction(), $order, "desc", false);
+				elseif($by == "SHOWS") $arSqlOrder[$by] = CIBlock::_Order('SHOWS', $order, "desc", false);
 				elseif($by == "HAS_PREVIEW_PICTURE") $arSqlOrder[$by] = CIBlock::_Order(CIBlock::_NotEmpty("BE.PREVIEW_PICTURE"), $order, "desc", false);
 				elseif($by == "HAS_DETAIL_PICTURE") $arSqlOrder[$by] = CIBlock::_Order(CIBlock::_NotEmpty("BE.DETAIL_PICTURE"), $order, "desc", false);
 				elseif($by == "RATING_TOTAL_VALUE")
@@ -3602,6 +3603,7 @@ class CAllIBlockElement
 				}
 				elseif ($by == "SHOWS")
 				{
+					$arSelectFields[] = 'SHOWS';
 					$arSelectFields[] = "SHOW_COUNTER";
 					$arSelectFields[] = "SHOW_COUNTER_START_X";
 				}
@@ -3826,6 +3828,11 @@ class CAllIBlockElement
 					{
 						$sSelect.=",0 as ".$val;
 					}
+				}
+				elseif ($val === 'SHOWS')
+				{
+					$arSelectFields[$key] = $val;
+					$sSelect .= ',' . CIBlockElement::GetShowedFunction() . ' as ' . $val;
 				}
 			}
 
@@ -7208,28 +7215,31 @@ class CAllIBlockElement
 
 	public static function DeletePropertySQL($property, $iblock_element_id)
 	{
-		global $DB;
-
-		if($property["VERSION"]==2)
+		$propertyId = (int)$property['ID'];
+		$elementId = (int)$iblock_element_id;
+		if ((int)$property['VERSION'] === IblockTable::PROPERTY_STORAGE_SEPARATE)
 		{
-			if($property["MULTIPLE"]=="Y")
+			$iblockId = (int)$property['IBLOCK_ID'];
+			if ($property['MULTIPLE'] === 'Y')
+			{
 				return "
 					DELETE
-					FROM b_iblock_element_prop_m".intval($property["IBLOCK_ID"])."
+					FROM b_iblock_element_prop_m" . $iblockId . "
 					WHERE
-						IBLOCK_ELEMENT_ID=".intval($iblock_element_id)."
-						AND IBLOCK_PROPERTY_ID=".intval($property["ID"])."
+						IBLOCK_ELEMENT_ID=" . $elementId . "
+						AND IBLOCK_PROPERTY_ID=" . $propertyId . "
 				";
+			}
 			else
 			{
 				return "
 					UPDATE
-						b_iblock_element_prop_s".intval($property["IBLOCK_ID"])."
+						b_iblock_element_prop_s" . $iblockId . "
 					SET
-						PROPERTY_".intval($property["ID"])."=null
-						".self::__GetDescriptionUpdateSql($property["IBLOCK_ID"], $property["ID"])."
+						PROPERTY_" . $propertyId . "=null
+						" . self::__GetDescriptionUpdateSql($iblockId, $propertyId) . "
 					WHERE
-						IBLOCK_ELEMENT_ID=".intval($iblock_element_id)."
+						IBLOCK_ELEMENT_ID=" . $elementId . "
 				";
 			}
 		}
@@ -7239,8 +7249,8 @@ class CAllIBlockElement
 				DELETE FROM
 					b_iblock_element_property
 				WHERE
-					IBLOCK_ELEMENT_ID=".intval($iblock_element_id)."
-					AND IBLOCK_PROPERTY_ID=".intval($property["ID"])."
+					IBLOCK_ELEMENT_ID=" . $elementId . "
+					AND IBLOCK_PROPERTY_ID=" . $propertyId . "
 			";
 		}
 	}

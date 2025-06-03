@@ -4,7 +4,7 @@ namespace Bitrix\Sender\Internals\Dto;
 
 use Bitrix\Main\Type\DateTime;
 
-class UpdateContactDTO implements UpdateContact
+class UpdateBlacklistDTO implements UpdateContact
 {
 	public function __construct(
 		public ?int $typeId = null,
@@ -12,6 +12,7 @@ class UpdateContactDTO implements UpdateContact
 		public ?string $name = null,
 		public ?DateTime $dateInsert = null,
 		public ?DateTime $dateUpdate = null,
+		private readonly bool $blacklisted = true
 	)
 	{
 	}
@@ -23,6 +24,7 @@ class UpdateContactDTO implements UpdateContact
 			'NAME' => $this->name,
 			'DATE_INSERT' => $this->dateInsert,
 			'DATE_UPDATE' => $this->dateUpdate,
+			'BLACKLISTED' => $this->blacklisted ? 'Y' : 'N',
 		];
 	}
 
@@ -31,6 +33,7 @@ class UpdateContactDTO implements UpdateContact
 		return [
 			'NAME',
 			'DATE_UPDATE',
+			'BLACKLISTED'
 		];
 	}
 }

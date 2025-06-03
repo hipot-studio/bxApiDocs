@@ -1192,7 +1192,7 @@ class CCloudStorage
 				}
 
 				$pos = $obUpload->GetPos();
-				if ($pos > filesize($temp_fileX))
+				if ($pos >= filesize($temp_fileX))
 				{
 					if ($obUpload->Finish())
 					{

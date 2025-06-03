@@ -1,4 +1,7 @@
 <?
+
+use Bitrix\Main\Web\Json;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocServLiveIDOAuth extends CSocServAuth
@@ -536,7 +539,7 @@ class CLiveIDOAuthInterface
 			"grant_type"=>"refresh_token",
 		), array(), $this->httpTimeout);
 
-		$arResult = CUtil::JsObjectToPhp($result);
+		$arResult = Json::decode($result);
 
 		if(isset($arResult["access_token"]) && $arResult["access_token"] <> '')
 		{
