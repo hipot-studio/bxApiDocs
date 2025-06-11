@@ -12,6 +12,8 @@ interface FlowTeamProviderInterface
 	 */
 	public function getTeamMembers(Flow $flow, ?int $offset = null, ?int $limit = null): array;
 
+	public function getFlowTeam(Flow $flow, ?int $offset = null, ?int $limit = null): array;
+
 	/**
 	 * @return array [
 	 * 		flowId => usersCount

@@ -12,6 +12,12 @@ class NullFlowTeamProvider implements FlowTeamProviderInterface
 		return [];
 	}
 
+
+	public function getFlowTeam(Flow $flow, ?int $offset = null, ?int $limit = null): array
+	{
+		return [];
+	}
+
 	public function getTeamCount(FlowCollection $flows): array
 	{
 		return [];

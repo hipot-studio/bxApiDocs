@@ -49,6 +49,14 @@ class QueueFlowTeamProvider implements FlowTeamProviderInterface
 	}
 
 	/**
+	 * @throws ProviderException
+	 */
+	public function getFlowTeam(Flow $flow, ?int $offset = null, ?int $limit = null): array
+	{
+		return $this->getTeamMembers($flow, $offset, $limit);
+	}
+
+	/**
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 * @throws ArgumentException

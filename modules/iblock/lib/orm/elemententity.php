@@ -17,7 +17,7 @@ use Bitrix\Main\ORM\Entity;
  * @package    bitrix
  * @subpackage iblock
  */
-/*abstract */class ElementEntity extends Entity
+abstract class ElementEntity extends Entity
 {
 	/** @var Iblock */
 	protected $iblock;
@@ -44,7 +44,7 @@ use Bitrix\Main\ORM\Entity;
 		return $this->iblock;
 	}
 
-	/*abstract public function getSingleValueTableName();
+	abstract public function getSingleValueTableName();
 
-	abstract public function getMultiValueTableName();*/
+	abstract public function getMultiValueTableName();
 }

@@ -2,160 +2,175 @@
 
 namespace Bitrix\Crm\Controller\Order;
 
-use Bitrix\Crm;
 use Bitrix\Main;
+use Bitrix\Crm;
 use Bitrix\Sale;
 
 Main\Localization\Loc::loadLanguageFile(__FILE__);
 Main\Loader::requireModule('sale');
 
-class terminalpayment extends Entity
+class TerminalPayment extends Entity
 {
-    private const TERMINAL_PAYMENT_ACCESS_DENIED_ERROR_CODE = 'TERMINAL_PAYMENT_ACCESS_DENIED';
+	private const TERMINAL_PAYMENT_ACCESS_DENIED_ERROR_CODE = 'TERMINAL_PAYMENT_ACCESS_DENIED';
 
-    public function getAutoWiredParameters()
-    {
-        $autoWiredParameters = parent::getAutoWiredParameters();
+	protected function processBeforeAction(Main\Engine\Action $action)
+	{
+		$this->checkPermissions($action);
+		if ($this->getErrors())
+		{
+			return false;
+		}
 
-        $autoWiredParameters[] = new Main\Engine\AutoWire\ExactParameter(
-            Crm\Order\Payment::class,
-            'payment',
-            function ($className, int $id) {
-                $payment = Sale\Repository\PaymentRepository::getInstance()->getById($id);
+		$this->temporarilyDisableAutomationIfNeeded();
 
-                if ($payment) {
-                    return $payment;
-                }
+		return parent::processBeforeAction($action);
+	}
 
-                $this->addError(new Main\Error('payment not found'));
+	protected function processAfterAction(Main\Engine\Action $action, $result)
+	{
+		$this->restoreDisabledAutomationIfNeeded();
 
-                return null;
-            }
-        );
+		parent::processAfterAction($action, $result);
+	}
 
-        $autoWiredParameters[] = new Main\Engine\AutoWire\ExactParameter(
-            Main\Type\Dictionary::class,
-            'paymentList',
-            function ($className, array $ids) {
-                $paymentList = [];
+	public function getAutoWiredParameters()
+	{
+		$autoWiredParameters = parent::getAutoWiredParameters();
 
-                foreach ($ids as $id) {
-                    $payment = Sale\Repository\PaymentRepository::getInstance()->getById($id);
+		$autoWiredParameters[] = new Main\Engine\AutoWire\ExactParameter(
+			Crm\Order\Payment::class,
+			'payment',
+			function($className, int $id) {
+				$payment = Sale\Repository\PaymentRepository::getInstance()->getById($id);
 
-                    if ($payment) {
-                        $paymentList[] = $payment;
-                    } else {
-                        $this->addError(new Main\Error('payment not found'));
-                    }
-                }
+				if ($payment)
+				{
+					return $payment;
+				}
 
-                $paymentDictionary = new Main\Type\Dictionary();
-                $paymentDictionary->setValues($paymentList);
+				$this->addError(new Main\Error('payment not found'));
+				return null;
+			}
+		);
 
-                return $paymentDictionary;
-            }
-        );
+		$autoWiredParameters[] = new Main\Engine\AutoWire\ExactParameter(
+			Main\Type\Dictionary::class,
+			'paymentList',
+			function($className, array $ids) {
+				$paymentList = [];
 
-        return $autoWiredParameters;
-    }
+				foreach ($ids as $id)
+				{
+					$payment = Sale\Repository\PaymentRepository::getInstance()->getById($id);
 
-    public function deleteAction(Crm\Order\Payment $payment): void
-    {
-        if ($payment->isPaid()) {
-            $this->addError(
-                new Main\Error(
-                    Main\Localization\Loc::getMessage(
-                        'CRM_CONTROLLER_TERMINAL_PAYMENT_DOCUMENT_ERROR_DELETE',
-                        [
-                            '#ID#' => $payment->getField('ACCOUNT_NUMBER'),
-                        ]
-                    )
-                )
-            );
+					if ($payment)
+					{
+						$paymentList[] = $payment;
+					}
+					else
+					{
+						$this->addError(new Main\Error('payment not found'));
+					}
+				}
 
-            return;
-        }
+				$paymentDictionary = new Main\Type\Dictionary();
+				$paymentDictionary->setValues($paymentList);
 
-        $deleteResult = Crm\Order\Order::delete($payment->getOrderId());
-        if (!$deleteResult->isSuccess()) {
-            $this->addErrors($deleteResult->getErrors());
-        }
-    }
+				return $paymentDictionary;
+			}
+		);
 
-    public function deleteListAction(Main\Type\Dictionary $paymentList): void
-    {
-        /** @var Crm\Order\Payment $payment */
-        foreach ($paymentList as $payment) {
-            if ($payment->isPaid()) {
-                $this->addError(
-                    new Main\Error(
-                        Main\Localization\Loc::getMessage(
-                            'CRM_CONTROLLER_TERMINAL_PAYMENT_DOCUMENT_ERROR_DELETE',
-                            [
-                                '#ID#' => $payment->getField('ACCOUNT_NUMBER'),
-                            ]
-                        )
-                    )
-                );
+		return $autoWiredParameters;
+	}
 
-                continue;
-            }
+	private function checkPermissions(Main\Engine\Action $action): void
+	{
+		$userPermissions = \CCrmPerms::GetCurrentUserPermissions();
+		$actionArguments = $action->getArguments();
 
-            $deleteResult = Crm\Order\Order::delete($payment->getOrderId());
-            if (!$deleteResult->isSuccess()) {
-                $this->addErrors($deleteResult->getErrors());
-            }
-        }
-    }
+		$ids = [];
 
-    protected function processBeforeAction(Main\Engine\Action $action)
-    {
-        $this->checkPermissions($action);
-        if ($this->getErrors()) {
-            return false;
-        }
+		if ($action->getName() === 'delete')
+		{
+			$ids[] = $actionArguments['payment'] ? $actionArguments['payment']->getId() : 0;
+		}
+		elseif ($action->getName() === 'deleteList')
+		{
+			$paymentList = $actionArguments['paymentList'] ?: [];
+			/** @var Crm\Order\Payment $payment */
+			foreach ($paymentList as $payment)
+			{
+				$ids[] = $payment->getId();
+			}
+		}
 
-        $this->temporarilyDisableAutomationIfNeeded();
+		foreach ($ids as $id)
+		{
+			if (!Crm\Order\Permissions\Payment::checkDeletePermission($id, $userPermissions))
+			{
+				$this->addError(
+					new Main\Error(
+						Main\Localization\Loc::getMessage('CRM_CONTROLLER_TERMINAL_PAYMENT_DOCUMENT_ACCESS_DENIED'),
+						self::TERMINAL_PAYMENT_ACCESS_DENIED_ERROR_CODE
+					)
+				);
 
-        return parent::processBeforeAction($action);
-    }
+				return;
+			}
+		}
+	}
 
-    protected function processAfterAction(Main\Engine\Action $action, $result)
-    {
-        $this->restoreDisabledAutomationIfNeeded();
+	public function deleteAction(Crm\Order\Payment $payment): void
+	{
+		if ($payment->isPaid())
+		{
+			$this->addError(
+				new Main\Error(
+					Main\Localization\Loc::getMessage(
+						'CRM_CONTROLLER_TERMINAL_PAYMENT_DOCUMENT_ERROR_DELETE',
+						[
+							'#ID#' => $payment->getField('ACCOUNT_NUMBER'),
+						]
+					)
+				)
+			);
 
-        parent::processAfterAction($action, $result);
-    }
+			return;
+		}
 
-    private function checkPermissions(Main\Engine\Action $action): void
-    {
-        $userPermissions = \CCrmPerms::GetCurrentUserPermissions();
-        $actionArguments = $action->getArguments();
+		$deleteResult = Crm\Order\Order::delete($payment->getOrderId());
+		if (!$deleteResult->isSuccess())
+		{
+			$this->addErrors($deleteResult->getErrors());
+		}
+	}
 
-        $ids = [];
+	public function deleteListAction(Main\Type\Dictionary $paymentList): void
+	{
+		/** @var Crm\Order\Payment $payment */
+		foreach ($paymentList as $payment)
+		{
+			if ($payment->isPaid())
+			{
+				$this->addError(
+					new Main\Error(
+						Main\Localization\Loc::getMessage(
+							'CRM_CONTROLLER_TERMINAL_PAYMENT_DOCUMENT_ERROR_DELETE',
+							[
+								'#ID#' => $payment->getField('ACCOUNT_NUMBER'),
+							]
+						)
+					)
+				);
 
-        if ('delete' === $action->getName()) {
-            $ids[] = $actionArguments['payment'] ? $actionArguments['payment']->getId() : 0;
-        } elseif ('deleteList' === $action->getName()) {
-            $paymentList = $actionArguments['paymentList'] ?: [];
+				continue;
+			}
 
-            /** @var Crm\Order\Payment $payment */
-            foreach ($paymentList as $payment) {
-                $ids[] = $payment->getId();
-            }
-        }
-
-        foreach ($ids as $id) {
-            if (!Crm\Order\Permissions\Payment::checkDeletePermission($id, $userPermissions)) {
-                $this->addError(
-                    new Main\Error(
-                        Main\Localization\Loc::getMessage('CRM_CONTROLLER_TERMINAL_PAYMENT_DOCUMENT_ACCESS_DENIED'),
-                        self::TERMINAL_PAYMENT_ACCESS_DENIED_ERROR_CODE
-                    )
-                );
-
-                return;
-            }
-        }
-    }
+			$deleteResult = Crm\Order\Order::delete($payment->getOrderId());
+			if (!$deleteResult->isSuccess())
+			{
+				$this->addErrors($deleteResult->getErrors());
+			}
+		}
+	}
 }

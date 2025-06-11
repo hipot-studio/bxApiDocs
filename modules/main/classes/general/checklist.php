@@ -853,7 +853,7 @@ class CAutoCheck
 		{
 			if(empty($NS["FILE_LIST"]))
 			{
-				$sHost = COption::GetOptionString("main", "update_site", "www.bitrixsoft.com");
+				$sHost = COption::GetOptionString("main", "update_site", "www.1c-bitrix.ru");
 				$proxyAddr = COption::GetOptionString("main", "update_site_proxy_addr", "");
 				$proxyPort = COption::GetOptionString("main", "update_site_proxy_port", "");
 				$proxyUserName = COption::GetOptionString("main", "update_site_proxy_user", "");

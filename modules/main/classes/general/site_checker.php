@@ -818,16 +818,27 @@ class CSiteCheckerTest
 			return $this->Result(null, GetMessage('SC_ERR_DNS', ['#DOMAIN#' => $domain]));
 		}
 
+		$region = Application::getInstance()->getLicense()->getRegion();
+
+		if (in_array($region, ['ru', 'by', 'kz']))
+		{
+			$host = "mail-001.bitrix24.ru";
+		}
+		else
+		{
+			$host = "mail-us.bitrix24.com";
+		}
+
 		foreach ($mxhosts as $mx)
 		{
-			if ($mx != 'mail-001.bitrix24.com')
+			if ($mx != $host)
 			{
 				print_r($mxhosts);
 				return $this->Result(null, GetMessage('SC_ERR_DNS_WRONG', ['#DOMAIN#' => $mx]));
 			}
 		}
 
-		if (!$res = $this->ConnectToHost('mail-001.bitrix24.com', 25))
+		if (!$res = $this->ConnectToHost($host, 25))
 		{
 			return $this->Result(null, GetMessage('SC_ERR_CONNECT_MAIL001'));
 		}
@@ -1369,7 +1380,7 @@ class CSiteCheckerTest
 
 	function check_update()
 	{
-		$ServerIP = COption::GetOptionString("main", "update_site", "www.bitrixsoft.com");
+		$ServerIP = COption::GetOptionString("main", "update_site", "www.1c-bitrix.ru");
 		$ServerPort = 80;
 
 		$proxyAddr = COption::GetOptionString("main", "update_site_proxy_addr", "");
@@ -1637,7 +1648,7 @@ class CSiteCheckerTest
 
 	function check_turn()
 	{
-		if (!IsModuleInstalled('im'))
+		if (!IsModuleInstalled('im') || !IsModuleInstalled('call'))
 		{
 			return $this->Result(null, GetMessage("MAIN_SC_NO_IM"));
 		}
@@ -1654,13 +1665,22 @@ class CSiteCheckerTest
 			}
 		}
 
-		if (COption::GetOptionString("im", "turn_server_self") == 'Y')
+		if (COption::GetOptionString("call", "turn_server_self") == 'Y')
 		{
-			$host = COption::GetOptionString("im", "turn_server");
+			$host = COption::GetOptionString("call", "turn_server");
 		}
 		else
 		{
-			$host = 'turn.calls.bitrix24.com';
+			$region = Application::getInstance()->getLicense()->getRegion();
+
+			if (in_array($region, ['ru', 'by', 'kz']))
+			{
+				$host = "turn.bitrix24.tech";
+			}
+			else
+			{
+				$host = 'turn.calls.bitrix24.com';
+			}
 		}
 		$port = 3478;
 
@@ -1693,7 +1713,17 @@ class CSiteCheckerTest
 			return $this->Result(false, GetMessage("MAIN_SC_NO_EXTERNAL_ACCESS_MOB"));
 		}
 
-		$host = 'cloud-messaging.bitrix24.com';
+		$region = Application::getInstance()->getLicense()->getRegion();
+
+		if (in_array($region, ['ru', 'by', 'kz']))
+		{
+			$host = 'cloud-messaging.bitrix24.tech';
+		}
+		else
+		{
+			$host = 'cloud-messaging.bitrix24.com';
+		}
+
 		$POST = 'Action=SendMessage&MessageBody=batch';
 
 		$strRequest = "POST /send/?key=" . md5('key') . " HTTP/1.1\r\n";
@@ -1844,7 +1874,17 @@ class CSiteCheckerTest
 
 	function check_access_mobile()
 	{
-		$checker = 'checker.internal.bitrix24.com';
+		$region = Application::getInstance()->getLicense()->getRegion();
+
+		if (in_array($region, ['ru', 'by', 'kz']))
+		{
+			$checker = 'checker.bitrix24.tech';
+		}
+		else
+		{
+			$checker = 'checker.internal.bitrix24.com';
+		}
+
 		$retVal = null;
 		$strRes = '';
 

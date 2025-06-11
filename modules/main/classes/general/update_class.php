@@ -3292,7 +3292,7 @@ class CUpdateSystem
 
 		CUpdateSystem::AddMessage2Log("exec CUpdateSystem::getHTTPPage");
 
-		$ServerIP = COption::GetOptionString("main", "update_site", "www.bitrixsoft.com");
+		$ServerIP = COption::GetOptionString("main", "update_site", "www.1c-bitrix.ru");
 		$ServerPort = 80;
 
 		$proxyAddr = COption::GetOptionString("main", "update_site_proxy_addr", "");

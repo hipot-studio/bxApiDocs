@@ -44,6 +44,12 @@ class ManuallyFlowTeamProvider implements FlowTeamProviderInterface
 		}
 	}
 
+
+	public function getFlowTeam(Flow $flow, ?int $offset = null, ?int $limit = null): array
+	{
+		return [$flow->getManualDistributorId()];
+	}
+
 	/**
 	 * @throws SystemException
 	 * @throws ArgumentException

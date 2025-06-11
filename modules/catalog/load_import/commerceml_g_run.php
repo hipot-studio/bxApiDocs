@@ -40,18 +40,6 @@ global $strImportErrorMessage, $strImportOKMessage;
 $strImportErrorMessage = '';
 $strImportOKMessage = '';
 
-// FUNCTIONS
-if (!function_exists('file_get_contents')) {
-    function file_get_contents($filename)
-    {
-        $fd = fopen("{$filename}", 'r');
-        $content = fread($fd, filesize($filename));
-        fclose($fd);
-
-        return $content;
-    }
-}
-
 function cmlStartElement($parser, $name, $attrs)
 {
     global $DB;

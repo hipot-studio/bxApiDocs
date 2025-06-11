@@ -1,8 +1,8 @@
 <?php
-
 /**
- * Bitrix Framework.
- *
+ * Bitrix Framework
+ * @package    bitrix
+ * @subpackage main
  * @copyright  2001-2020 Bitrix
  */
 
@@ -10,4 +10,11 @@ namespace Bitrix\Main\Routing\Exceptions;
 
 use Bitrix\Main\SystemException;
 
-class ParameterNotFoundException extends SystemException {}
+/**
+ * @package    bitrix
+ * @subpackage main
+ */
+class ParameterNotFoundException extends SystemException
+{
+ 
+}

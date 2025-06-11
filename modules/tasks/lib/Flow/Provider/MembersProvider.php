@@ -3,6 +3,7 @@
 namespace Bitrix\Tasks\Flow\Provider;
 
 use Bitrix\Main\SystemException;
+use Bitrix\Tasks\Flow\Creator\TaskCreatorCollection;
 use Bitrix\Tasks\Flow\Distribution\FlowDistributionServicesFactory;
 use Bitrix\Tasks\Flow\Flow;
 use Bitrix\Tasks\Flow\FlowCollection;
@@ -52,6 +53,18 @@ class MembersProvider
 	/**
 	 * @throws ProviderException
 	 */
+	public function getTeam(int $flowId, ?int $offset = null, ?int $limit = null): array
+	{
+		$flow = $this->flowProvider->getFlow($flowId, ['*', 'OPTIONS']);
+		$flowType = $flow->getDistributionType();
+		$flowDistributionServicesFactory = new FlowDistributionServicesFactory($flowType);
+
+		return $flowDistributionServicesFactory->getFlowTeamProvider()->getFlowTeam($flow, $offset, $limit);
+	}
+
+	/**
+	 * @throws ProviderException
+	 */
 	public function getTaskCreators(int $flowId, ?int $offset = null, ?int $limit = null): array
 	{
 		try
@@ -69,6 +82,14 @@ class MembersProvider
 		{
 			throw new ProviderException($e->getMessage());
 		}
+	}
+
+	/**
+	 * @throws ProviderException
+	 */
+	public function getTaskCreatorCollection(int $flowId, ?int $offset = null, ?int $limit = null): TaskCreatorCollection
+	{
+		return new TaskCreatorCollection(...$this->getTaskCreators($flowId, $offset, $limit));
 	}
 
 	private function init(): void

@@ -2,39 +2,69 @@
 
 namespace Bitrix\Crm\Controller\Timeline;
 
+use Bitrix\Main;
 use Bitrix\Main\Engine\Controller;
+use Bitrix\Catalog;
 
 /**
- * Class EncourageBuyProducts.
+ * Class EncourageBuyProducts
+ * @package Bitrix\SalesCenter\Controller
  */
-class encouragebuyproducts extends Controller
+class EncourageBuyProducts extends Controller
 {
-    public function addProductToDealAction(int $dealId, int $productId, array $options = [])
-    {
-        if (!\CCrmDeal::CheckUpdatePermission($dealId, \CCrmPerms::GetCurrentUserPermissions())) {
-            return;
-        }
+	/**
+	 * @param int $dealId
+	 * @param int $productId
+	 * @param array $options
+	 */
+	public function addProductToDealAction(int $dealId, int $productId, array $options = [])
+	{
+		if (!\CCrmDeal::CheckUpdatePermission($dealId, \CCrmPerms::GetCurrentUserPermissions()))
+		{
+			return;
+		}
 
-        $row = [
-            'PRODUCT_ID' => $productId,
-            'QUANTITY' => 1,
-        ];
+		$productField = null;
+		if ($productId > 0 && Main\Loader::includeModule('catalog'))
+		{
+			$productField = Catalog\ProductTable::getRow([
+				'select' => [
+					'PRODUCT_NAME' => 'IBLOCK_ELEMENT.NAME',
+					'TYPE',
+				],
+				'filter' => [
+					'=ID' => $productId,
+				],
+			]);
+		}
 
-        if (isset($options['price'])) {
-            $price = $options['price'];
+		$row = [
+			'PRODUCT_ID' => $productId,
+			'QUANTITY' => 1,
+		];
 
-            $row = array_merge(
-                $row,
-                [
-                    'PRICE' => $price,
-                    'PRICE_ACCOUNT' => $price,
-                    'PRICE_EXCLUSIVE' => $price,
-                    'PRICE_NETTO' => $price,
-                    'PRICE_BRUTTO' => $price,
-                ]
-            );
-        }
+		if ($productField)
+		{
+			$row = array_merge($row, $productField);
+		}
 
-        \CCrmDeal::addProductRows($dealId, [$row]);
-    }
+		if (isset($options['price']))
+		{
+			$price = $options['price'];
+
+			$row = array_merge(
+				$row,
+				[
+					'PRICE' => $price,
+					'PRICE_ACCOUNT' => $price,
+					'PRICE_EXCLUSIVE' => $price,
+					'PRICE_NETTO' => $price,
+					'PRICE_BRUTTO' => $price,
+				]
+			);
+		}
+
+		\CCrmDeal::addProductRows($dealId, [$row]);
+
+	}
 }
