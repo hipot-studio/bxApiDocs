@@ -922,3 +922,4 @@ define('DEMO', 'Y');
 define('ENCODE', 'Y');
 define('WIZARD_DEFAULT_TONLY', 'Y');
 define('INSTALL_CHARSET', 'utf8');
+define('REPOSITORY_ROOT', '/bitrix/modules/');
