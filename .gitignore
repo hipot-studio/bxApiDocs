@@ -9,3 +9,4 @@ _tests
 *.min.css
 .php-cs-fixer.cache
 .php-cs-fixer.dist.php
+/modules/main/classes/general/update_log.php
