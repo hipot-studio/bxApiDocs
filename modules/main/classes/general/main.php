@@ -1158,7 +1158,7 @@ abstract class CAllMain
 	 *
 	 *
 	 *
-	 * @param bool $returnResul $t = false По умолчанию - <code>false</code> позволяет получить на выходе arResult компонента.
+	 * @param bool $returnResult $t = false По умолчанию - <code>false</code> позволяет получить на выходе arResult компонента.
 	 *
 	 *
 	 *
